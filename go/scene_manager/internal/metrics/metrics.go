@@ -160,6 +160,45 @@ var (
 		Buckets:   []float64{0.0005, 0.001, 0.002, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
 	}, []string{"zone_id", "stage"})
 
+	// ── Agones 高密度容量预占 ────────────────────────────────────────
+	// 标签一律只用低基数维度。scene_id / player_id 绝不能进 label。
+	agonesAllocationTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "agones_allocation_total",
+		Help:      "GameServerAllocation attempts by outcome (ok|no_capacity|error|mapping_failed).",
+	}, []string{"zone", "role", "outcome"})
+
+	agonesAllocationLatency = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: subsystem,
+		Name:      "agones_allocation_latency_seconds",
+		Help:      "GameServerAllocation round-trip latency.",
+		Buckets:   []float64{0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5},
+	}, []string{"zone", "role"})
+
+	agonesCounterRollbackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "agones_counter_rollback_total",
+		Help:      "rooms counter rollback attempts by outcome (ok|failed). failed means the counter is now drifted and needs reconcile.",
+	}, []string{"outcome"})
+
+	agonesMappingFailureTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "agones_mapping_failure_total",
+		Help:      "Allocations whose PodIP could not be mapped to a registered scene node, by reason (no_pod_ip|unknown_pod_ip|zone_mismatch|role_mismatch).",
+	}, []string{"zone", "reason"})
+
+	agonesCounterDrift = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "agones_counter_drift",
+		Help:      "Per-zone count of GameServers whose Agones rooms counter disagrees with the Redis scene mapping.",
+	}, []string{"zone"})
+
+	worldAutoscaleTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "world_autoscale_total",
+		Help:      "World-channel autoscale actions by action (scale_out|scale_in) and outcome (ok|drained|error|max_reached).",
+	}, []string{"zone_id", "action", "outcome"})
+
 	registerOnce sync.Once
 )
 
@@ -185,8 +224,55 @@ func register() {
 			enterSceneRejectedTotal, sceneOrphansReconciledTotal,
 			mirrorSourceMissingTotal, mirrorDedupTotal,
 			releasePlayerTotal, enterSceneStageSeconds,
+			agonesAllocationTotal, agonesAllocationLatency,
+			agonesCounterRollbackTotal, agonesMappingFailureTotal,
+			agonesCounterDrift, worldAutoscaleTotal,
 		)
 	})
+}
+
+// ObserveWorldAutoscale 记一次大世界频道扩缩容动作。
+// action: scale_out|scale_in;outcome: ok|drained|error|max_reached。
+func ObserveWorldAutoscale(zoneID uint32, action, outcome string) {
+	register()
+	worldAutoscaleTotal.WithLabelValues(
+		strconv.FormatUint(uint64(zoneID), 10), action, outcome,
+	).Inc()
+}
+
+// Agones allocation outcome 标签取值。
+const (
+	AgonesOutcomeOK            = "ok"
+	AgonesOutcomeNoCapacity    = "no_capacity"
+	AgonesOutcomeError         = "error"
+	AgonesOutcomeMappingFailed = "mapping_failed"
+)
+
+// ObserveAgonesAllocation 记一次 GSA 结果及其耗时。
+func ObserveAgonesAllocation(zone, role, outcome string, d time.Duration) {
+	register()
+	agonesAllocationTotal.WithLabelValues(zone, role, outcome).Inc()
+	agonesAllocationLatency.WithLabelValues(zone, role).Observe(d.Seconds())
+}
+
+// ObserveAgonesCounterRollback 记一次 rooms 计数回滚结果。
+// outcome=="failed" 表示计数已经漂移,需要 reconcile 才能发现,
+// 应当配一条告警而不是只留日志。
+func ObserveAgonesCounterRollback(outcome string) {
+	register()
+	agonesCounterRollbackTotal.WithLabelValues(outcome).Inc()
+}
+
+// ObserveAgonesMappingFailure 记一次 "GSA 成功但映射不回本地节点" 的失败。
+func ObserveAgonesMappingFailure(zone, reason string) {
+	register()
+	agonesMappingFailureTotal.WithLabelValues(zone, reason).Inc()
+}
+
+// SetAgonesCounterDrift 设置某 zone 当前的计数漂移条数(reconcile 写入)。
+func SetAgonesCounterDrift(zone string, count int) {
+	register()
+	agonesCounterDrift.WithLabelValues(zone).Set(float64(count))
 }
 
 // ObserveEnterSceneStage records one sub-stage latency for the EnterScene

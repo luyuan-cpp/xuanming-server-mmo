@@ -13,6 +13,27 @@
 void EtcdManager::Shutdown()
 {
 	leaseKeepAliveTimer.Cancel();
+	pendingTxnKey_.clear();
+}
+
+void EtcdManager::SetPendingTxnKey(const std::string &key)
+{
+	if (!pendingTxnKey_.empty() && pendingTxnKey_ != key)
+	{
+		// 注册流是串行的,这里非空说明上一个 CAS 的响应从来没回来(etcd RPC 失败时
+		// 生成的 client 不会调 handler)。把它打出来 —— 以前这种情况是静默地在队列里
+		// 多压一个 key,从此所有响应错位一格。
+		LOG_ERROR << "Overwriting an unanswered pending etcd txn key: old=" << pendingTxnKey_
+				  << " new=" << key;
+	}
+	pendingTxnKey_ = key;
+}
+
+std::string EtcdManager::TakePendingTxnKey()
+{
+	std::string key;
+	key.swap(pendingTxnKey_);
+	return key;
 }
 
 std::string EtcdManager::GetServiceName(uint32_t type)
@@ -74,7 +95,7 @@ void EtcdManager::RegisterNodeService()
 	const auto allocKey = MakeNodeAllocationKey(info);
 	LOG_INFO << "Claiming global node-id allocation: " << allocKey;
 	EtcdHelper::PutIfAbsent(allocKey, info.node_uuid(), 0, gNode->GetLeaseId());
-	pendingKeys.push_back(allocKey);
+	SetPendingTxnKey(allocKey);
 }
 
 void EtcdManager::PublishNodeInfoAfterAllocation()
@@ -87,7 +108,7 @@ void EtcdManager::PublishNodeInfoAfterAllocation()
 	const auto serviceKey = MakeNodeEtcdKey(info);
 	LOG_INFO << "Registering node service to etcd with key: " << serviceKey;
 	EtcdHelper::PutIfAbsent(serviceKey, info, gNode->GetLeaseId());
-	pendingKeys.push_back(serviceKey);
+	SetPendingTxnKey(serviceKey);
 	LOG_INFO << "Registered node to etcd: " << info.DebugString();
 }
 
@@ -102,7 +123,7 @@ void EtcdManager::RegisterNodePort()
 	const auto portKey = MakeNodePortEtcdKey(gNode->GetNodeInfo());
 	LOG_INFO << "Registering node port to etcd with key: " << portKey;
 	EtcdHelper::PutIfAbsent(portKey, "", 0, gNode->GetLeaseId());
-	pendingKeys.push_back(portKey);
+	SetPendingTxnKey(portKey);
 	LOG_INFO << "Registered node port to etcd: " << gNode->GetNodeInfo().endpoint().port();
 }
 
@@ -128,9 +149,19 @@ void EtcdManager::StartLeaseKeepAlive()
 		gNode->GetEtcdManager().WriteSnowFlakeGuard(); });
 }
 
+// guard key 必须与 node_id 的唯一域一致 —— 也就是 MakeNodeAllocationKey 用的
+// 全局 (node_type, node_id),**不带 zone**。旧 key 里带了 zone_id,于是
+// "zone 1 的 node_id=3 退出、zone 2 抢到 node_id=3" 这种正常的跨 zone 回收
+// 会读到一把不存在的 guard,新持有者直接从 step=0 开始发号,与旧持有者在同一秒
+// 发出的号逐位重复。
+//
+// 注意:guard 值本身仍然写在**分 zone 的 Redis 实例**里,所以跨 zone 时新持有者
+// 依然读不到旧值。这条路径由 ActivateSnowFlakeAfterGuard 的"无条件按本机当前秒
+// 兜底"覆盖;这里去掉 zone 段是为了同一 zone 内回收时不再漏读,并让 key 语义
+// 与唯一域对齐。
 std::string EtcdManager::MakeSnowFlakeGuardKey(const NodeInfo &info)
 {
-	return "snowflake_guard:" + std::to_string(info.zone_id()) + ":" + std::to_string(info.node_type()) + ":" + std::to_string(info.node_id());
+	return "snowflake_guard:" + std::to_string(info.node_type()) + ":" + std::to_string(info.node_id());
 }
 
 void EtcdManager::WriteSnowFlakeGuard()

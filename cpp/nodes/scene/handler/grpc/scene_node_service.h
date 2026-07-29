@@ -11,6 +11,12 @@
 // IMPORTANT: Handle* methods run on the event loop thread.
 //   - Do NOT perform blocking I/O or long-running operations.
 //   - Always return grpc::Status::OK; communicate errors via response fields.
+//
+// Exception: CreateScene may return a non-OK status BEFORE dispatching to the
+// loop, when the Agones lifecycle has not confirmed Allocated. That check runs
+// on the gRPC thread on purpose (POST /allocate must never enter the loop), and
+// fail-closed is required -- CreateSceneResponse has no error field, so a
+// non-OK gRPC status is the only honest way to tell SceneManager to roll back.
 class SceneNodeGrpcImpl final : public scene_node::SceneNodeGrpc::Service
 {
 public:

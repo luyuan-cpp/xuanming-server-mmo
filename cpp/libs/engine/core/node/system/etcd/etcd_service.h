@@ -15,6 +15,11 @@ public:
     void Shutdown();
     void RequestNodeLease();
     void RequestReRegistration();
+
+    // 永久停掉注册流的所有重试(端口 / node_id / txn 超时兜底)。
+    // 身份冲突收尾期间必须调用:这台节点已经不是 node_id 的合法持有者了,
+    // 再去重抢端口 / 重占 node_id 只会干扰正在接手的那个进程。
+    void StopRegistrationRetries();
     void RegisterService();
     void StartLeaseKeepAlive();
 
@@ -46,6 +51,17 @@ private:
     void OnTxnSucceeded(const std::string& key);
     void OnTxnFailed(const std::string& key);
     void ActivateSnowFlakeAfterGuard();
+    // Allocates the RPC port and retries with backoff while none is available.
+    // Reuses acquirePortTimer so there is a single retry path for the port phase.
+    void AcquirePortWithRetry();
+
+    // 注册流的 CAS 响应超时兜底。挂在已有的 grpcHandlerTimer 上,不新建定时器。
+    //
+    // 为什么需要:生成的 etcd grpc client 只在 `status.ok()` 时才调 handler,
+    // RPC 失败时**什么都不做** —— 于是注册流会永久停在某一阶段(没 node_id、
+    // 不发布服务发现、也不重试)。到期后重查权威(重发同一个幂等 CAS 链),
+    // 不是"假设成功继续往下走"。
+    void CheckPendingTxnDeadline();
     void SetRegistrationMode(RegistrationMode mode, const char* reason);
     const char* RegistrationModeName(RegistrationMode mode) const;
     bool IsNodePortKey(const std::string& key) const;
@@ -65,10 +81,13 @@ private:
     bool hasSentWatch = false;
     bool hasSentRange = false;
     bool leaseRequestInFlight_ = false;
+    bool registrationStopped_ = false;
     RegistrationMode registrationMode_ = RegistrationMode::kInitialBoot;
     int64_t leaseId = 0;
     int64_t leaseTtlSeconds_ = 0;
     std::chrono::steady_clock::time_point lastKeepAliveAckTime_{};
+    // 零值 = 当前没有在等 CAS 响应(或刚收到响应)。
+    std::chrono::steady_clock::time_point txnDeadline_{};
     std::unordered_map<std::string, int64_t> revision;
     TimerTaskComp grpcHandlerTimer;
     TimerTaskComp acquireNodeTimer;

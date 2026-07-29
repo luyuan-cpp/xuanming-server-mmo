@@ -44,9 +44,9 @@ type ServiceContext struct {
 	// Queue.Enabled=false in config — handlers MUST tolerate nil and fall
 	// back to the legacy fast path. The dispatcher goroutine is owned by
 	// this struct and started in Start() when LoginQueue != nil.
-	LoginQueue        *loginqueue.Queue
-	QueueDispatcher   *loginqueue.Dispatcher
-	queueCapProvider  loginqueue.CapacityProvider
+	LoginQueue       *loginqueue.Queue
+	QueueDispatcher  *loginqueue.Dispatcher
+	queueCapProvider loginqueue.CapacityProvider
 
 	// PreloadPool runs background tasks (e.g. Kafka DB-preload) without spawning
 	// an unbounded number of goroutines per login. Configured non-blocking so
@@ -82,9 +82,9 @@ func NewServiceContext() *ServiceContext {
 	redisDB := int(config.AppConfig.Node.RedisClient.DB)
 
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:            redisHost,
-		Password:        redisPassword,
-		DB:              redisDB,
+		Addr:             redisHost,
+		Password:         redisPassword,
+		DB:               redisDB,
 		DisableIndentity: true, // suppress CLIENT SETINFO on Redis < 7.2
 	})
 
@@ -165,14 +165,14 @@ func NewServiceContext() *ServiceContext {
 	}
 
 	sc := &ServiceContext{
-		RedisClient:         redisClient,
-		KafkaClient:         kafkaClient,
-		ExpandMonitor:       monitor,
-		PlayerLocatorClient: plClient,
-		SceneManagerClient:  smClient,
-		GateWatcher:         gateWatcher,
-		TokenManager:        tokenMgr,
-		PreloadPool:         preloadPool,
+		RedisClient:          redisClient,
+		KafkaClient:          kafkaClient,
+		ExpandMonitor:        monitor,
+		PlayerLocatorClient:  plClient,
+		SceneManagerClient:   smClient,
+		GateWatcher:          gateWatcher,
+		TokenManager:         tokenMgr,
+		PreloadPool:          preloadPool,
 		TaskResultDispatcher: dispatcher.NewTaskResultDispatcher(redisClient, 30*time.Second),
 	}
 	sc.initLoginQueue()
@@ -202,9 +202,12 @@ func (s *ServiceContext) QueueCapacityProvider() loginqueue.CapacityProvider {
 type gateWatcherCapacityProvider struct {
 	watcher *node.NodeWatcher
 	caps    map[string]uint32 // zone_id (decimal string) → capacity ceiling
+	// rdb 用来查 gate 排空标记。缩容前被标记 draining 的 gate 不再接新玩家。
+	// nil 时跳过过滤(队列关闭 / 早期初始化路径)。
+	rdb *redis.Client
 }
 
-func (g *gateWatcherCapacityProvider) CandidatesForZone(_ context.Context, zoneID uint32) ([]loginqueue.GateCandidate, error) {
+func (g *gateWatcherCapacityProvider) CandidatesForZone(ctx context.Context, zoneID uint32) ([]loginqueue.GateCandidate, error) {
 	nodes, err := g.watcher.FetchAllNodes()
 	if err != nil {
 		return nil, err
@@ -224,6 +227,15 @@ func (g *gateWatcherCapacityProvider) CandidatesForZone(_ context.Context, zoneI
 			PlayerCount: n.PlayerCount,
 			ZoneID:      n.ZoneId,
 		})
+	}
+
+	// 剔除正在排空的 gate。放在这里而不是 PickGate 里,是因为这是**所有**
+	// gate 选择路径的唯一收口(队列 dispatcher 与非队列快路径都经过它),
+	// 而 PickGate 是个纯函数、拿不到 Redis。
+	//
+	// 失败方向是放行不是拦截,全部被标记时也会放行 —— 见 FilterDrainingGates。
+	if g.rdb != nil {
+		out = loginqueue.FilterDrainingGates(out, loginqueue.DrainingGates(ctx, g.rdb, out))
 	}
 	return out, nil
 }
@@ -247,6 +259,7 @@ func (s *ServiceContext) initLoginQueue() {
 	s.queueCapProvider = &gateWatcherCapacityProvider{
 		watcher: s.GateWatcher,
 		caps:    cfg.ZoneCapacityOverride,
+		rdb:     s.RedisClient,
 	}
 
 	if !cfg.Enabled {

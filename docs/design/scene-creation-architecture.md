@@ -27,6 +27,11 @@ The role is published into etcd as part of `NodeInfo`, mirrored by
 correct pool. This matches the classic industry split — WoW has dedicated
 "world server" vs. "instance server" processes, FFXIV / TW3 do the same.
 
+部署侧怎么落成两个池(`scene-world` / `scene-instance` 两个 Deployment、
+`SCENE_NODE_TYPE` env 覆盖、legacy `scene: N` 的兼容规则)见
+`docs/ops/scene-node-role-split.md` §3.2 / §3.2.1,实现在
+`tools/scripts/k8s_deploy.ps1::Resolve-SceneDeploymentPlan`。
+
 **StrictNodeTypeSeparation** (config flag):
 - `true` (production default) — purposes must match. No instance-hosting
   node in a zone? Instance creation returns `ErrNoNodeForPurpose`.

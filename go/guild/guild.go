@@ -109,6 +109,16 @@ func main() {
 	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
 	defer s.Stop()
 
+	// Snowflake worker id 的 etcd 租约丢了 = 本进程不再是这个 worker id 的合法持有者,
+	// etcd 随时会把它分给别的进程。再用 sf 发一个公会 ID 就是确定性撞号,所以主动停服,
+	// 让编排把进程拉起来 —— 重启会拿一个新租约,并被 snowflake 的启动 guard 兜住。
+	// s.Stop() 让下面的 s.Start() 返回,defer 链正常收尾。
+	go func() {
+		<-sfHandle.Lost()
+		logx.Error("Guild snowflake worker id lease lost; stopping the server to avoid minting colliding ids")
+		s.Stop()
+	}()
+
 	logx.Infof("Starting Guild RPC server at %s...", config.AppConfig.ListenOn)
 	s.Start()
 }

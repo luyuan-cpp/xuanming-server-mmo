@@ -1,7 +1,8 @@
-#include "muduo/net/EventLoop.h"
+﻿#include "muduo/net/EventLoop.h"
 #include "muduo/base/Logging.h"
 
 #include "node/system/node/node_entry.h"
+#include "agones/agones_scene_lifecycle.h"
 #include "handler/rpc/scene_handler.h"
 #include "handler/grpc/scene_node_service.h"
 #include "core/config/config.h"
@@ -66,6 +67,15 @@ int main(int argc, char *argv[])
         // HandleExitGameNode for each player before triggering Shutdown().
         auto exitAllPlayers = [](Node &)
         {
+            // 先停 Agones lifecycle worker 并 join,再动玩家数据。
+            // 顺序不能反:worker 还在跑的时候进程正在退出,health / ready 请求
+            // 会打到一个正在拆的对象上。
+            //
+            // 刻意**不**在这里调 POST /shutdown —— SIGTERM 通常正是 Agones
+            // 删 Pod 发出来的,再回敬一个 /shutdown 就是递归触发删除。
+            // 只有进程自己决定自我终止时才调 RequestShutdown()。
+            agones::SceneLifecycle::Instance().Stop();
+
             auto view = tlsEcs.actorRegistry.view<Player>();
             LOG_INFO << "Emergency save: exiting " << view.size() << " online players before shutdown...";
             for (auto entity : view)
@@ -75,10 +85,55 @@ int main(int argc, char *argv[])
             LOG_INFO << "All players exited.";
         };
         node.SetBeforeShutdown(exitAllPlayers);
-        node.SetOnConflictShutdown([exitAllPlayers](Node &n, NodeIdConflictReason)
-                                   { exitAllPlayers(n); });
+
+        // 身份冲突(etcd 租约过期 / node_id 被别人抢走)和普通 SIGTERM 不是一回事:
+        // 这台节点马上就不再是 node_id 的合法持有者,但玩家的 gate 会话还连着。
+        // 所以除了存盘,还要把玩家改派到别的 scene node 的大世界频道 ——
+        // 否则他们的会话指着一具尸体,只能等自己发现掉线再重登。
+        //
+        // 顺序由 PlayerLifecycleSystem 保证:抄会话 -> 存盘 -> 存盘落地后才发改派请求。
+        // 反过来做的话,新节点会从 Redis 读到存盘前的旧数据(回档)。
+        node.SetOnConflictShutdown([](Node &, NodeIdConflictReason)
+                                   {
+            // 先停 Agones lifecycle worker(理由同 exitAllPlayers 里的注释),
+            // 再动玩家数据。Stop() 幂等。
+            agones::SceneLifecycle::Instance().Stop();
+            PlayerLifecycleSystem::BeginEmergencyRelocateAll(); });
+
+        // 有界 drain:存盘全部落地、改派全部派发完才退出。
+        // 到期兜底(Redis / SceneManager 卡住时)由 Node 的看门狗负责,不会无限等。
+        node.SetConflictDrainComplete([](Node &)
+                                      { return PlayerLifecycleSystem::IsEmergencyRelocateDrained(); });
 
         node.SetAfterStart([&context](Node& n) {
+            // Agones 生命周期。放在 SetAfterStart 里是有意的:此时 gRPC server
+            // 已监听、依赖已初始化、etcd 注册已完成,进程确实可以接活了,
+            // 这时候才有资格 POST /ready。提前 Ready 会让 Agones 把还没准备好的
+            // 进程标成可分配。
+            //
+            // 非 Agones 环境(本地开发 / 普通 Deployment):ReadAgonesEnv() 读不到
+            // AGONES_SDK_HTTP_PORT,或 Windows 构建拿不到 curl 传输层,
+            // 都会退化成 Disabled —— 不起线程、不发 HTTP、所有 gate 直接放行。
+            {
+                const auto agonesEnv = agones::ReadAgonesEnv();
+                std::unique_ptr<agones::HttpTransport> transport;
+                if (agonesEnv.enabled)
+                {
+                    transport = agones::MakeDefaultHttpTransport();
+                }
+                if (transport == nullptr)
+                {
+                    LOG_INFO << "Agones lifecycle disabled (enabled=" << agonesEnv.enabled
+                             << ", transport=" << (agonesEnv.enabled ? "unavailable" : "n/a") << ")";
+                    agones::SceneLifecycle::Instance().StartDisabled();
+                }
+                else
+                {
+                    agones::SceneLifecycle::Instance().Start(
+                        std::move(transport), agonesEnv.BaseUrl(), agones::LifecycleOptions{});
+                }
+            }
+
             // Subscribe cross-zone migration topics.
             //
             // `player_migrate`     — destination side: receive players migrating
@@ -132,5 +187,9 @@ int main(int argc, char *argv[])
                 }, "Scene");
         });
 
-        loop.loop(); });
+        loop.loop();
+
+        // loop 退出后的兜底 join。SetBeforeShutdown 已经调过一次,Stop() 幂等;
+        // 但走 conflict-shutdown 之类的分支时不保证走过那条路径。
+        agones::SceneLifecycle::Instance().Stop(); });
 }

@@ -25,10 +25,11 @@ void EtcdService::Init() {
 
 	InitGrpcNode(channel, tlsNodeContextManager.GetRegistry(EtcdNodeService), tlsNodeContextManager.GetGlobalEntity(EtcdNodeService));
 
-	grpcHandlerTimer.RunEvery(0.005, [] {
+	grpcHandlerTimer.RunEvery(0.005, [this] {
 		for (auto& registry : tlsNodeContextManager.GetAllRegistries()) {
 			HandleCompletedQueueMessage(registry);
 		}
+		CheckPendingTxnDeadline();
 		});
 
 	LOG_INFO << "EtcdService initialized with etcd: " << etcdAddr;
@@ -103,15 +104,13 @@ void EtcdService::InitTxnHandlers() {
 	{
 		LOG_TRACE << "Txn response: " << reply.DebugString();
 
-		auto& pendingKeys = gNode->GetEtcdManager().GetPendingKeys();
-		if (pendingKeys.empty())
+		std::string key = gNode->GetEtcdManager().TakePendingTxnKey();
+		if (key.empty())
 		{
-			LOG_WARN << "Ignore txn response because pending key queue is empty.";
+			LOG_WARN << "Ignore txn response: no CAS is currently pending.";
 			return;
 		}
-
-		std::string key = std::move(pendingKeys.front());
-		pendingKeys.pop_front();
+		txnDeadline_ = std::chrono::steady_clock::time_point{}; // 响应到了,撤销超时
 
 		if (reply.succeeded())
 		{
@@ -226,16 +225,21 @@ void EtcdService::PublishDiscoveryAfterGrpcReady()
 
 void EtcdService::OnTxnFailed(const std::string &key)
 {
+	if (registrationStopped_)
+	{
+		LOG_INFO << "Ignoring txn failure for " << key << ": registration retries already stopped.";
+		return;
+	}
+
 	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
 	{
 		SetRegistrationMode(RegistrationMode::kInitialBoot, "re-registration failed");
-		gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kReRegistrationFailed);
-		LOG_FATAL << "Node re-registration FAILED for key: " << key
+		LOG_ERROR << "Node re-registration FAILED for key: " << key
 				  << ", node_id=" << gNode->GetNodeInfo().node_id()
-				  << ". Another node has claimed this ID — SnowFlake collision is inevitable. "
-					 "Active players on this node will be disconnected and must reconnect "
-					 "through the normal login flow to be routed to a healthy node. "
-					 "This process must terminate now.";
+				  << ". Another node has claimed this ID - SnowFlake collision is inevitable if we "
+					 "keep minting. Fencing ID generation, persisting and relocating players, "
+					 "then terminating.";
+		gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kReRegistrationFailed);
 		return;
 	}
 
@@ -260,7 +264,7 @@ void EtcdService::OnTxnFailed(const std::string &key)
 		return;
 	}
 
-	acquirePortTimer.RunAfter(1, [] { NodeAllocator::AcquireNodePort(); });
+	acquirePortTimer.RunAfter(1, [this] { AcquirePortWithRetry(); });
 }
 
 void EtcdService::StartWatchingPrefixes()
@@ -312,10 +316,10 @@ void EtcdService::HandlePutEvent(const std::string &key, const std::string &valu
 				{
 					LOG_ERROR << "Node ID hijack detected via Watch! key=" << key
 							  << " my_uuid=" << myInfo.node_uuid()
-							  << " remote_uuid=" << remoteInfo.node_uuid();
+							  << " remote_uuid=" << remoteInfo.node_uuid()
+							  << ". Fencing ID generation, persisting and relocating players, "
+								 "then terminating.";
 					gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kReRegistrationFailed);
-					LOG_FATAL << "Another node has claimed our node_id=" << myInfo.node_id()
-							  << " via etcd Watch. Terminating to prevent SnowFlake collision.";
 					return;
 				}
 			}
@@ -414,6 +418,7 @@ void EtcdService::Shutdown()
 	acquirePortTimer.Cancel();
 	watchReconnectTimer.Cancel();
 	leaseRequestInFlight_ = false;
+	txnDeadline_ = std::chrono::steady_clock::time_point{};
 	SetRegistrationMode(RegistrationMode::kInitialBoot, "service shutdown");
 
 	auto emptyHandler = [](const ClientContext &, const ::google::protobuf::Message &) {};
@@ -462,19 +467,96 @@ void EtcdService::OnLeaseGranted(const etcdserverpb::LeaseGrantResponse &reply)
 	}
 	else
 	{
-		NodeAllocator::AcquireNodePort(); // Only acquire port initially
+		AcquirePortWithRetry(); // Only acquire port initially
 	}
+}
+
+void EtcdService::StopRegistrationRetries()
+{
+	registrationStopped_ = true;
+	acquireNodeTimer.Cancel();
+	acquirePortTimer.Cancel();
+	gNode->GetEtcdManager().TakePendingTxnKey();
+	txnDeadline_ = std::chrono::steady_clock::time_point{};
+	LOG_INFO << "Registration retries stopped (node identity is no longer ours).";
+}
+
+void EtcdService::CheckPendingTxnDeadline()
+{
+	if (registrationStopped_)
+	{
+		return;
+	}
+
+	// 预算推导:一次 etcd CAS 的正常往返是毫秒级;10s 覆盖 etcd 短暂重启 / 主从切换
+	// 后客户端重连的时间,又不会让一次真正丢掉的响应把节点挂很久。
+	// TODO: 待压测实测复核。
+	constexpr auto kTxnResponseBudget = std::chrono::seconds(10);
+
+	const auto &pending = gNode->GetEtcdManager().PendingTxnKey();
+	if (pending.empty())
+	{
+		txnDeadline_ = std::chrono::steady_clock::time_point{};
+		return;
+	}
+
+	const auto now = std::chrono::steady_clock::now();
+	if (txnDeadline_ == std::chrono::steady_clock::time_point{})
+	{
+		txnDeadline_ = now + kTxnResponseBudget;
+		return;
+	}
+	if (now < txnDeadline_)
+	{
+		return;
+	}
+
+	const std::string lost = gNode->GetEtcdManager().TakePendingTxnKey();
+	txnDeadline_ = std::chrono::steady_clock::time_point{};
+	LOG_ERROR << "No etcd txn response for key " << lost << " within the budget; "
+			  << "restarting the registration phase. mode=" << RegistrationModeName(registrationMode_);
+
+	// 到期后**重查权威**(重发同一条幂等 CAS 链),不是假设成功继续往下走。
+	// 重注册路径保留原 node_id 与原端口;初始引导路径从端口阶段重来。
+	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
+	{
+		NodeAllocator::ReRegisterExistingNode();
+		return;
+	}
+	AcquirePortWithRetry();
+}
+
+void EtcdService::AcquirePortWithRetry()
+{
+	if (registrationStopped_)
+	{
+		return;
+	}
+	if (NodeAllocator::AcquireNodePort())
+	{
+		return;
+	}
+
+	// 端口暂时分配不到(本机端口被占 / 区间耗尽)。这里刻意什么都不发布:
+	// 旧实现会把 port=0 注册进 etcd,于是这个节点以 "ip:0" 出现在服务发现里,
+	// 别的节点拿 0 端口去连,只会得到一串莫名其妙的连接失败,而且它还占着 node_id。
+	// 退避重试,复用 acquirePortTimer,不新开一套定时器状态机。
+	LOG_ERROR << "RPC port allocation failed for node_type=" << gNode->GetNodeType()
+			  << "; nothing published to etcd, retrying in 1s";
+	acquirePortTimer.RunAfter(1, [this]
+							  { AcquirePortWithRetry(); });
 }
 
 void EtcdService::OnKeepAliveResponse(const etcdserverpb::LeaseKeepAliveResponse &reply)
 {
 	if (reply.ttl() <= 0)
 	{
-		gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kLeaseExpiredByEtcd);
-		LOG_FATAL << "Lease keepalive returned TTL=0, lease has expired on etcd server. "
+		LOG_ERROR << "Lease keepalive returned TTL=0, lease has expired on etcd server. "
 					 "node_id="
 				  << gNode->GetNodeInfo().node_id()
-				  << ". Another node may claim this ID — terminating to prevent SnowFlake collision.";
+				  << ". Another node may claim this ID - fencing ID generation, persisting and "
+					 "relocating players, then terminating.";
+		gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kLeaseExpiredByEtcd);
 		return;
 	}
 
@@ -494,42 +576,65 @@ bool EtcdService::IsLeasePresumablyExpired() const
 	return elapsedSeconds > leaseTtlSeconds_;
 }
 
+// 激活本进程的业务发号器,并在此之前 **无条件** 打一个启动 guard。
+//
+// 为什么必须无条件:node_id 的唯一域是全局 (node_type, node_id)(见
+// MakeNodeAllocationKey),而 guard 是写在**分 zone 的 Redis**里的。所以
+//   * 跨 zone 复用同一个 node_id 时,新持有者根本读不到旧持有者写的 guard;
+//   * Redis 没连上时旧代码直接"不 guard"就开始发号。
+// 这两条路径下,只要旧持有者在同一日历秒里发过号(优雅退出 + 立刻重启就会发生),
+// 新持有者从 step=0 重新发,产出的 ID 与旧的**逐位相同**。
+//
+// 因此这里的规则改成:
+//   1. guard 底线 = 当前秒,永远生效(Redis 挂了、key 不存在都一样);
+//   2. 读到上一任写的 last_ts 时,取 max(last_ts, now) —— 覆盖"旧持有者所在机器
+//      时钟比本机快"的情况。
+// 代价是本进程第一个 ID 最多晚 1 秒发出,换掉一整类静默重号。
 void EtcdService::ActivateSnowFlakeAfterGuard()
 {
 	const auto &info = gNode->GetNodeInfo();
-	std::string guardKey = EtcdManager::MakeSnowFlakeGuardKey(info);
+	const std::string guardKey = EtcdManager::MakeSnowFlakeGuardKey(info);
+
+	auto activate = [](uint32_t nodeId, uint64_t guardSeconds, const char *source)
+	{
+		tlsSnowflakeManager.OnNodeStart(nodeId);
+		tlsSnowflakeManager.SetGuardTime(guardSeconds);
+		LOG_INFO << "SnowFlake activated: node_id=" << nodeId
+				 << ", guard_to=" << guardSeconds
+				 << " (" << source << "). First ID lands after that second.";
+		gNode->StartRpcServer();
+	};
 
 	auto &redis = tlsRedis.GetZoneRedis();
 	if (!redis || !redis->connected())
 	{
-		LOG_WARN << "Redis not connected, activating SnowFlake without guard for node_id=" << info.node_id();
-		tlsSnowflakeManager.OnNodeStart(info.node_id());
-		gNode->StartRpcServer();
+		LOG_WARN << "Redis not connected; applying local-clock SnowFlake guard for node_id=" << info.node_id();
+		activate(info.node_id(), TimeSystem::NowSecondsUTC(), "local clock, redis unavailable");
 		return;
 	}
 
 	redis->command(
-		[nodeId = info.node_id(), guardKey](hiredis::Hiredis *, redisReply *reply)
+		[nodeId = info.node_id(), guardKey, activate](hiredis::Hiredis *, redisReply *reply)
 		{
-			tlsSnowflakeManager.OnNodeStart(nodeId);
+			const uint64_t now = TimeSystem::NowSecondsUTC();
+			uint64_t guardSeconds = now;
+			const char *source = "local clock, no previous holder";
 
 			if (reply != nullptr && reply->type == REDIS_REPLY_STRING)
 			{
-				uint64_t lastTs = std::strtoull(reply->str, nullptr, 10);
-				uint64_t now = TimeSystem::NowSecondsUTC();
-				tlsSnowflakeManager.SetGuardTime(now);
-				LOG_INFO << "SnowFlake guard applied: last_ts=" << lastTs
-						 << ", guard_to=" << now
-						 << ", node_id=" << nodeId
-						 << ". Generator will skip current second.";
-			}
-			else
-			{
-				LOG_INFO << "No SnowFlake guard found for " << guardKey
-						 << ", node_id=" << nodeId;
+				const uint64_t lastTs = std::strtoull(reply->str, nullptr, 10);
+				if (lastTs > guardSeconds)
+				{
+					guardSeconds = lastTs;
+					source = "previous holder last-seen (ahead of local clock)";
+				}
+				else
+				{
+					source = "local clock, previous holder seen";
+				}
 			}
 
-			gNode->StartRpcServer();
+			activate(nodeId, guardSeconds, source);
 		},
 		"GET %s", guardKey.c_str());
 }

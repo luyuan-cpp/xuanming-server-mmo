@@ -32,7 +32,13 @@ param(
     [string]$TableSource = "generated/tables",
     [int]$CentreReplicas = 1,
     [int]$GateReplicas = 2,
+    # Scene 角色拆分,-1 = 未指定(走 legacy 单池)。见 k8s_deploy.ps1 Resolve-SceneDeploymentPlan。
     [int]$SceneReplicas = 4,
+    [int]$SceneWorldReplicas = -1,
+    [int]$SceneInstanceReplicas = -1,
+    # Scene Node 编排方式:deployment(默认) | agones。见 docs/design/agones-scene-node-high-density.md。
+    [ValidateSet("deployment", "agones")]
+    [string]$SceneOrchestrator = "deployment",
     [ValidateSet("ClusterIP", "NodePort", "LoadBalancer")]
     [string]$GateServiceType = "NodePort",
     [int]$GateServicePort = 18000,
@@ -341,6 +347,9 @@ function Invoke-K8sDeploy {
         CentreReplicas = $CentreReplicas
         GateReplicas = $GateReplicas
         SceneReplicas = $SceneReplicas
+        SceneWorldReplicas = $SceneWorldReplicas
+        SceneInstanceReplicas = $SceneInstanceReplicas
+        SceneOrchestrator = $SceneOrchestrator
         GateServiceType = $GateServiceType
         GateServicePort = $GateServicePort
         WaitTimeoutSeconds = $WaitTimeoutSeconds
@@ -509,6 +518,9 @@ function Invoke-K8sImage {
         CentreReplicas = $CentreReplicas
         GateReplicas = $GateReplicas
         SceneReplicas = $SceneReplicas
+        SceneWorldReplicas = $SceneWorldReplicas
+        SceneInstanceReplicas = $SceneInstanceReplicas
+        SceneOrchestrator = $SceneOrchestrator
         GateServiceType = $GateServiceType
         GateServicePort = $GateServicePort
         WaitTimeoutSeconds = $WaitTimeoutSeconds

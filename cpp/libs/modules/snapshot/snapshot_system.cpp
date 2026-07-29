@@ -49,6 +49,17 @@ uint64_t SnapshotSystem::CaptureAndSend(entt::entity player, SnapshotTrigger tri
 
     // ── Build snapshot entry ─────────────────────────────────────────────
     const uint64_t snapshotId = tlsSnowflakeManager.GenerateItemGuid();
+    if (snapshotId == kInvalidGuid)
+    {
+        // 发号器已被 fence(本节点丢了 node_id 身份)或该线程从未 OnNodeStart。
+        // 快照只是回滚兜底,宁可少一条也不能写 snapshot_id=0 —— 那会和别的节点、
+        // 别的时刻的 0 号快照互相覆盖,反而毁掉回滚链路。真正的存盘走
+        // SavePlayerToRedis,不受影响。
+        LOG_ERROR << "[SnapshotSystem] snowflake unavailable (fenced or uninitialized); "
+                  << "skipping snapshot for player " << playerId
+                  << " trigger=" << static_cast<int>(trigger);
+        return 0;
+    }
     const uint64_t nowSec = TimeSystem::NowSecondsUTC();
 
     PlayerSnapshotEntry entry;

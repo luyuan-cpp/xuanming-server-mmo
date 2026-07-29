@@ -167,7 +167,7 @@ uint32_t AllocatePortInRange(const std::unordered_set<uint32_t> &usedPorts,
 	return 0; // No available port
 }
 
-void NodeAllocator::AcquireNodePort()
+bool NodeAllocator::AcquireNodePort()
 {
 	auto &nodeList = tlsEcs.nodeGlobalRegistry.get_or_emplace<ServiceNodeList>(tlsEcs.GrpcNodeEntity())[gNode->GetNodeType()];
 	auto &existingNodes = *nodeList.mutable_node_list();
@@ -228,20 +228,24 @@ void NodeAllocator::AcquireNodePort()
 		LOG_INFO << "Assigned TCP port: " << assignedPort;
 	}
 
-	if (assignedPort != 0)
+	if (assignedPort == 0)
 	{
-		tryPortId = assignedPort + 1;
+		// fail-closed:绝不把 port=0 写进 NodeInfo 再注册到 etcd。
+		// 旧实现照样 set_port(0) + RegisterNodePort(),于是这个节点会以
+		// "endpoint=ip:0" 出现在服务发现里,别的节点拿着 0 端口去连,只会得到
+		// 一串无法解释的连接失败,而且该节点仍然占着一个 node_id。
+		LOG_ERROR << "No available RPC port found (TryPortId was " << tryPortId
+				  << "); nothing published to etcd, caller must retry";
+		tryPortId = 0; // 下轮从区间头重扫
+		return false;
 	}
-	else
-	{
-		LOG_WARN << "No available RPC port found. TryPortId was: " << tryPortId;
-		tryPortId = 0; // fallback or signal failure
-	}
+
+	tryPortId = assignedPort + 1;
 
 	GetNodeInfo().mutable_endpoint()->set_port(assignedPort);
 
 	// gRPC port = TCP port + 30000 (deterministic, separate range).
-	if (!gNode->GetGrpcServices().empty() && assignedPort != 0)
+	if (!gNode->GetGrpcServices().empty())
 	{
 		const uint32_t grpcPort = assignedPort + kGrpcPortOffset;
 		if (!IsLocalPortAvailable(static_cast<uint16_t>(grpcPort)))
@@ -263,4 +267,5 @@ void NodeAllocator::AcquireNodePort()
 			 << " Port: " << assignedPort;
 
 	gNode->GetEtcdManager().RegisterNodePort();
+	return true;
 }

@@ -94,6 +94,7 @@
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>../../../../third_party/boost/;../../../../third_party/muduo/;../../....//third_party/redis/;../../../../third_party/sol2/include/;../../../../third_party/lua/src/;../../../../third_party/muduo/contrib/windows/include/;../../../../third_party/zlib/;../../../../third_party/grpc/include/;../../../../third_party/grpc/third_party/abseil-cpp/;../../../generated/;../../../../third_party/grpc/third_party/;../../../../third_party/;../../../../third_party/grpc/third_party/protobuf/src/;./;../../../../third_party/redis/deps/;../../../../third_party/redis/;../;../infra/;../../../../third_party/librdkafka/src-cpp/;../config/;../../../generated/grpc_client/;../../;../../../../third_party/openssl/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <ForceSynchronousPDBWrites>true</ForceSynchronousPDBWrites>
       <DisableSpecificWarnings>4200;4819;4146;4244;4267;4018;</DisableSpecificWarnings>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <TreatWarningAsError>true</TreatWarningAsError>
@@ -193,9 +194,9 @@
     <ClCompile Include="utils\encode\base64.cpp" />
     <ClCompile Include="utils\encode\sha256.cpp" />
     <ClCompile Include="utils\file\file2string.cpp">
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MultiThreadedDLL</RuntimeLibrary>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
       <SupportJustMyCode>false</SupportJustMyCode>
       <AssemblerOutput>NoListing</AssemblerOutput>
       <AssemblerListingLocation>../../../../build/cpp/intermediate/lib/core/</AssemblerListingLocation>
@@ -230,9 +231,9 @@
       <OmitDefaultLibName>false</OmitDefaultLibName>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <WholeProgramOptimization>false</WholeProgramOptimization>
-      <ObjectFileName>../../../../build/cpp/intermediate/lib/core/%(RelativeDir)</ObjectFileName>
+      <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
       <CallingConvention>Cdecl</CallingConvention>
-      <ProgramDataBaseFileName>../../../../lib/core.pdb</ProgramDataBaseFileName>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile>../../../../build/cpp/intermediate/lib/core/common.pch</PrecompiledHeaderOutputFile>
@@ -273,9 +274,9 @@
       <LibCompiled>true</LibCompiled>
     </ClCompile>
     <ClCompile Include="utils\log\spdlog_file.cpp">
-      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <RuntimeLibrary Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MultiThreadedDLL</RuntimeLibrary>
       <BasicRuntimeChecks>Default</BasicRuntimeChecks>
-      <Optimization>MaxSpeed</Optimization>
+      <Optimization Condition="'$(Configuration)|$(Platform)'=='Release|x64'">MaxSpeed</Optimization>
       <SupportJustMyCode>false</SupportJustMyCode>
       <AssemblerOutput>NoListing</AssemblerOutput>
       <AssemblerListingLocation>../../../../build/cpp/intermediate/lib/core/</AssemblerListingLocation>
@@ -310,9 +311,9 @@
       <OmitDefaultLibName>false</OmitDefaultLibName>
       <FavorSizeOrSpeed>Neither</FavorSizeOrSpeed>
       <WholeProgramOptimization>false</WholeProgramOptimization>
-      <ObjectFileName>../../../../build/cpp/intermediate/lib/core/%(RelativeDir)</ObjectFileName>
+      <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
       <CallingConvention>Cdecl</CallingConvention>
-      <ProgramDataBaseFileName>../../../../lib/core.pdb</ProgramDataBaseFileName>
+      <ProgramDataBaseFileName>$(OutDir)$(TargetName).pdb</ProgramDataBaseFileName>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
       <PrecompiledHeaderFile>stdafx.h</PrecompiledHeaderFile>
       <PrecompiledHeaderOutputFile>../../../../build/cpp/intermediate/lib/core/common.pch</PrecompiledHeaderOutputFile>

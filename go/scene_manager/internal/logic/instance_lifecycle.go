@@ -191,6 +191,9 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	//   - whether we were a mirror (for the Prometheus kind label)
 	sceneNodeKey := fmt.Sprintf("scene:%d:node", sceneId)
 	nodeId, _ := svcCtx.Redis.Get(sceneNodeKey)
+	// Agones 模式:这个 Scene 占用的是哪个 GameServer 的房间名额。
+	// 非 Agones 模式下这个键不存在,后续归还是 no-op。
+	agonesGs, _ := svcCtx.Redis.Get(sceneAgonesGsKey(sceneId))
 	residualStr, _ := svcCtx.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneId))
 	residual, _ := strconv.ParseInt(residualStr, 10, 64)
 	sourceStr, _ := svcCtx.Redis.Get(sceneSourceKey(sceneId))
@@ -231,7 +234,7 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	// up a player in the meantime.
 	destroyed := true
 	if !force {
-		atomicNode, err := AtomicDestroyIfIdle(svcCtx, zoneId, sceneId)
+		atomicNode, atomicGs, err := AtomicDestroyIfIdle(svcCtx, zoneId, sceneId)
 		if err != nil {
 			logx.Errorf("[InstanceLifecycle] AtomicDestroy failed for scene %d: %v", sceneId, err)
 			return
@@ -243,6 +246,11 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 			destroyed = false
 		} else {
 			nodeId = atomicNode
+			// 脚本读到的值才是权威:上面那次快照读和脚本之间可能被别的
+			// 路径改过。
+			if atomicGs != "" {
+				agonesGs = atomicGs
+			}
 		}
 	} else {
 		// Force path: wipe unconditionally.
@@ -252,6 +260,7 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 		svcCtx.Redis.Del(sceneMirrorFlagKey(sceneId))
 		svcCtx.Redis.Del(sceneSourceKey(sceneId))
 		svcCtx.Redis.Del(sceneZoneKey(sceneId))
+		svcCtx.Redis.Del(sceneAgonesGsKey(sceneId))
 	}
 
 	if !destroyed {
@@ -288,6 +297,19 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 				svcCtx.Redis.Set(playerCountKey, "0")
 			}
 		}
+	}
+
+	// 归还 Agones 房间名额。
+	//
+	// 走到这里说明这次 destroy 真的执行了(destroyed==true),所以名额只会
+	// 被还一次:重复 Destroy 的第二次调用在脚本里读不到 scene:{id}:node,
+	// 拿不到 agonesGs,也就不会重复减。
+	//
+	// 节点已经死了的情况同样要还:GameServer 对象可能还在(Agones 还没判
+	// Unhealthy),它身上的 rooms 计数不减就会一直占着容量。ReleaseRoom 对
+	// "GameServer 已消失" 返回成功,所以这里无脑调用是安全的。
+	if agonesGs != "" {
+		ReleaseAgonesRoomForScene(ctx, svcCtx, sceneId, agonesGs, reason)
 	}
 
 	metrics.ObserveInstanceDestroyed(zoneId, kind, reason)

@@ -1,5 +1,6 @@
 ﻿#include <gtest/gtest.h>
 #include <algorithm>
+#include <cstdlib>
 #include <array>
 #include <functional>
 #include <iostream>
@@ -17,7 +18,21 @@ using Guid = uint64_t;
 using GuidVector = std::vector<Guid>;
 using GuidSet = std::unordered_set<Guid>;
 
-constexpr size_t kTotal = 40'000'000;
+// 规模由环境变量控制。原来硬编码 40'000'000:单个用例就是分钟级,`UniqueIds_*`
+// 那几个还要乘以 5 个 node —— 整套根本跑不完,于是这套单测事实上从来没人跑。
+// 默认给一个秒级的冒烟量,压测口径用 SNOWFLAKE_TEST_TOTAL=40000000 显式打开。
+inline size_t SnowFlakeTestTotal()
+{
+	if (const char* env = std::getenv("SNOWFLAKE_TEST_TOTAL"); env != nullptr && env[0] != '\0') {
+		const auto parsed = std::strtoull(env, nullptr, 10);
+		if (parsed > 0) {
+			return static_cast<size_t>(parsed);
+		}
+	}
+	return 200'000;
+}
+
+const size_t kTotal = SnowFlakeTestTotal();
 constexpr size_t kThreadCount = 3;
 
 SnowFlakeAtomic idGenAtomic;
@@ -499,6 +514,98 @@ TEST(SnowFlakeTest, DifferentNodeNoDuplicate)
 	}
 
 	EXPECT_EQ(all_ids.size(), kCount * 2);
+}
+
+// ---------------------------------------------------------------------------
+// 回归用例:唯一性 / 单调性在异常时钟与混用接口下仍然成立
+// ---------------------------------------------------------------------------
+
+// Generate 与 GenerateBatch 必须共用同一条序列。
+// 修复前:Generate 里 step_ 表示"最后用掉的",GenerateBatch 里当成"下一个可用的",
+// 于是批量的第一个 ID 与上一次 Generate 的返回值逐位相同。
+TEST(SnowFlakeRegression, GenerateAndGenerateBatchShareOneSequence)
+{
+	SnowFlake sf;
+	sf.set_node_id(4);
+
+	std::unordered_set<Guid> ids;
+	Guid prev = 0;
+
+	for (int32_t i = 0; i < 8; ++i) {
+		const Guid id = sf.Generate();
+		ASSERT_TRUE(ids.insert(id).second) << "Generate replayed an ID at i=" << i;
+		ASSERT_GT(id, prev);
+		prev = id;
+	}
+
+	for (const Guid id : sf.GenerateBatch(8)) {
+		ASSERT_TRUE(ids.insert(id).second)
+			<< "GenerateBatch replayed an ID already handed out by Generate: " << id;
+		ASSERT_GT(id, prev);
+		prev = id;
+	}
+
+	for (int32_t i = 0; i < 8; ++i) {
+		const Guid id = sf.Generate();
+		ASSERT_TRUE(ids.insert(id).second) << "Generate replayed an ID after a batch at i=" << i;
+		ASSERT_GT(id, prev);
+		prev = id;
+	}
+}
+
+// 时钟停摆(或大幅回拨)时,高水位秒绝不能被写回更小的值 ——
+// 写回就等于把已经发出去的 (秒, step) 组合重新发一遍。
+// 修复前:WaitNextTime 耗尽重试后 LOG_FATAL(muduo 的 FATAL 直接 abort 进程),
+// 而它写的 `break` 路径会让调用方执行 last_time_ = now(更小)。
+TEST(SnowFlakeRegression, StalledClockNeverReplaysIds)
+{
+	SnowFlake sf;
+	sf.set_node_id(3);
+	sf.set_epoch(0);
+	sf.set_mock_static_time(1000); // 时钟冻在第 1000 秒
+	sf.SetGuardTime(1000);         // 这一秒的 step 池直接置满,下一次 Generate 必然走等待分支
+
+	Guid prev = 0;
+	for (int32_t i = 0; i < 64; ++i) {
+		const Guid id = sf.Generate();
+		ASSERT_GT(id, prev) << "ID regressed at iteration " << i;
+		prev = id;
+	}
+
+	// 借了逻辑秒继续发号,时间段只能前进,不能退回 1000。
+	EXPECT_GT(prev >> kTimeShift, 1000ULL);
+}
+
+// guard 时间早于 epoch 时,uint64 减法会下溢成天文数字,把 last_time_ 顶到远未来,
+// 之后所有 ID 的时间段都是错的且再也不推进。必须被识别并忽略。
+TEST(SnowFlakeRegression, GuardTimeBeforeEpochIsIgnored)
+{
+	SnowFlake sf;
+	sf.set_node_id(5);
+	sf.set_epoch(1000);
+	sf.set_mock_static_time(1005); // now_epoch == 5
+
+	sf.SetGuardTime(10); // 早于 epoch,非法
+
+	const Guid id = sf.Generate();
+	EXPECT_EQ(id >> kTimeShift, 5ULL) << "guard underflow poisoned the time segment";
+}
+
+// 原子版同样不允许把高水位往回写。
+TEST(SnowFlakeRegression, AtomicStalledClockNeverReplaysIds)
+{
+	SnowFlakeAtomic sf;
+	sf.set_node_id(6);
+	sf.set_epoch(0);
+	sf.set_mock_static_time(2000);
+
+	Guid prev = 0;
+	for (int32_t i = 0; i < 64; ++i) {
+		const Guid id = sf.Generate();
+		ASSERT_GT(id, prev) << "ID regressed at iteration " << i;
+		prev = id;
+	}
+	EXPECT_GE(prev >> kTimeShift, 2000ULL);
 }
 
 int32_t main(int32_t argc, char** argv)

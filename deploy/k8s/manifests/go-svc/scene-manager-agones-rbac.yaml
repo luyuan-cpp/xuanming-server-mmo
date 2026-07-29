@@ -1,0 +1,61 @@
+# SceneManager 访问 Agones 所需的最小权限。
+#
+# 只在 `-SceneOrchestrator agones` 且 scene_manager_service.yaml 里
+# Agones.Enabled=true 时才需要 apply。默认部署用不到。
+#
+# 刻意**不**给 cluster-admin,也刻意全部是 namespace 级(Role 而不是
+# ClusterRole):Fleet 和 GameServer 都在 zone 命名空间里,SceneManager
+# 没有任何理由能看到别的命名空间。
+#
+# 用法(namespace 换成对应 zone 的命名空间):
+#   kubectl -n mmorpg-zone-<zone> apply -f deploy/k8s/manifests/go-svc/scene-manager-agones-rbac.yaml
+#
+# 注意:ServiceAccount 名字必须与 scene-manager Deployment 的
+# spec.template.spec.serviceAccountName 一致。默认部署没有显式指定
+# ServiceAccount(用的是 default),启用 Agones 时应当改成这里的
+# scene-manager,避免把权限挂到整个命名空间的 default SA 上。
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scene-manager
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: scene-manager-agones
+rules:
+  # GameServerAllocation 是一次性资源:create 之后从返回对象的 status
+  # 里读结果。只需要 create。
+  - apiGroups: ["allocation.agones.dev"]
+    resources: ["gameserverallocations"]
+    verbs: ["create"]
+
+  # rooms Counter 的回滚 / 共置预占走 GameServer 的 status 子资源,
+  # 用 read-modify-write + resourceVersion 乐观并发。
+  # reconcile 需要 list。
+  - apiGroups: ["agones.dev"]
+    resources: ["gameservers"]
+    verbs: ["get", "list"]
+  - apiGroups: ["agones.dev"]
+    resources: ["gameservers/status"]
+    verbs: ["get", "update", "patch"]
+
+  # Pod IP 反查:Agones 老版本的 GameServer status 里没有 Pod 地址,
+  # 需要按 GameServer 名字 GET 同名 Pod 读 status.podIP。
+  # 只读,且只在这个命名空间内。
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scene-manager-agones
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: scene-manager-agones
+subjects:
+  - kind: ServiceAccount
+    name: scene-manager

@@ -6,7 +6,12 @@
 class NodeAllocator {
 public:
 	static void AcquireNode();
-	static void AcquireNodePort();
+
+	// Returns false when no RPC port could be allocated. The caller must retry;
+	// nothing is published to etcd on failure. Publishing port=0 would advertise
+	// an endpoint peers cannot connect to and is never a valid outcome.
+	static bool AcquireNodePort();
+
 	static void ReRegisterExistingNode();
 
 	// CAS losers: ids we tried and lost. Persists across the

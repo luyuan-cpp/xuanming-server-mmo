@@ -11,6 +11,7 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <atomic>
+#include <chrono>
 #include <functional>
 #include <network/node_utils.h>
 #include "infra/messaging/kafka/kafka_manager.h"
@@ -50,6 +51,9 @@ public:
     using KafkaHandlersFn = std::function<bool(Node &)>;
     using BeforeShutdownFn = std::function<void(Node &)>;
     using OnConflictShutdownFn = std::function<void(Node &, NodeIdConflictReason)>;
+    // 返回 true 表示"身份冲突后的收尾(存盘 / 迁移玩家)已经全部落地,可以退出了"。
+    // 不设置时视为收尾是同步的,hook 返回即退出(gate 就是这种)。
+    using ConflictDrainCompleteFn = std::function<bool(Node &)>;
 
     explicit Node(muduo::net::EventLoop *loop, const std::string &logFilePath);
 
@@ -100,6 +104,11 @@ public:
     Node &SetOnConflictShutdown(OnConflictShutdownFn fn)
     {
         onConflictShutdownFn_ = std::move(fn);
+        return *this;
+    }
+    Node &SetConflictDrainComplete(ConflictDrainCompleteFn fn)
+    {
+        conflictDrainCompleteFn_ = std::move(fn);
         return *this;
     }
     bool HasDiscoveredServiceNode(uint32_t nodeType) const
@@ -157,9 +166,11 @@ public:
     void RegisterGrpcService(grpc::Service *service);
     const std::vector<grpc::Service *> &GetGrpcServices() const { return grpcServices_; }
 
-    // Called before LOG_FATAL when this node's identity is no longer valid.
-    // Override in subclasses to flush players, save state, etc.
-    // After this returns, the process will terminate.
+    // 本节点的 etcd 身份(node_id 租约)已经失效时调用。
+    //
+    // 关键约束:调用点**不得**紧接着 LOG_FATAL / abort。玩家存盘是异步的
+    // (Redis 命令 + Kafka DBTask 都在发送缓冲里),abort 会把它们全部丢掉。
+    // 这里的顺序是:fence 发号 -> 跑业务收尾 hook -> 有界等待收尾完成 -> 正常退出。
     virtual void OnNodeIdConflictShutdown(NodeIdConflictReason reason);
 
     // Graceful shutdown (public so OS signal handlers can invoke it).
@@ -193,6 +204,7 @@ protected:
     static void AsyncOutput(const char *msg, int len);
     void StartNodeRegistrationHealthMonitor();
     void ExecuteNodeRemoval(const NodeInfo &stoppedNode);
+    void StartConflictDrainWatchdog();
 
     // Event handling
     void OnServerConnected(const OnConnected2TcpServerEvent &connectedEvent);
@@ -205,8 +217,10 @@ protected:
     RpcServerPtr rpcServer;
     TimerTaskComp grpcHandlerTimer;
     TimerTaskComp serviceHealthMonitorTimer;
-    TimerTaskComp acquireNodeTimer;
-    TimerTaskComp acquirePortTimer;
+    // 注意:node_id / 端口的重试定时器住在 EtcdService(它才是驱动注册流的那个类)。
+    // Node 这里曾经有一份同名成员,但从来没被 RunAfter 过,只在 Shutdown 里被 Cancel ——
+    // 纯粹是影子成员,读代码的人会以为取消它就停住了重试,其实什么也没停。已删除。
+    TimerTaskComp conflictDrainTimer;
     // Kafka consumption is driven by KafkaConsumer::startBackgroundPolling
     // (a dedicated thread that queueInLoop's callbacks back into eventLoop).
     // The producer is non-blocking and flushes via KafkaManager::Shutdown.
@@ -234,6 +248,9 @@ protected:
     KafkaHandlersFn kafkaHandlersFn_;
     BeforeShutdownFn beforeShutdownFn_;
     OnConflictShutdownFn onConflictShutdownFn_;
+    ConflictDrainCompleteFn conflictDrainCompleteFn_;
+    bool conflictShutdownStarted_{false};
+    std::chrono::steady_clock::time_point conflictDrainDeadline_{};
 
     // gRPC server (optional, started only when services are registered via RegisterGrpcService).
     std::vector<grpc::Service *> grpcServices_;

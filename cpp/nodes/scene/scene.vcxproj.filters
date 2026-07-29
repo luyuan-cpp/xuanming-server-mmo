@@ -32,6 +32,8 @@
     <ClCompile Include="rpc_replies\player\player_rpc_response_handler.cpp" />
     <ClCompile Include="rpc_replies\player\player_state_attribute_sync_response_handler.cpp" />
     <ClCompile Include="rpc_replies\register_response_handler.cpp" />
+    <ClCompile Include="agones\agones_rest_client.cpp" />
+    <ClCompile Include="agones\agones_scene_lifecycle.cpp" />
     <ClCompile Include="handler\event\scene_kafka_command_router.cpp" />
     <ClCompile Include="handler\rpc\player\player_currency_handler.cpp" />
     <ClCompile Include="rpc_replies\player\player_currency_response_handler.cpp" />
@@ -67,6 +69,8 @@
     <ClInclude Include="rpc_replies\player\player_lifecycle_response_handler.h" />
     <ClInclude Include="rpc_replies\player\s2s_player_scene_response_handler.h" />
     <ClInclude Include="rpc_replies\player\player_state_attribute_sync_response_handler.h" />
+    <ClInclude Include="agones\agones_rest_client.h" />
+    <ClInclude Include="agones\agones_scene_lifecycle.h" />
     <ClInclude Include="handler\event\scene_kafka_command_router.h" />
     <ClInclude Include="handler\rpc\player\player_currency_handler.h" />
     <ClInclude Include="rpc_replies\player\player_currency_response_handler.h" />

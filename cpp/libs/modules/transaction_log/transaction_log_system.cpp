@@ -37,6 +37,17 @@ static uint64_t NowUnixSeconds()
 
 void TransactionLogSystem::SendEntry(const TransactionLogEntry &entry)
 {
+    if (entry.tx_id() == kInvalidGuid || entry.tx_id() == 0)
+    {
+        // GenerateTxId 返回 kInvalidGuid 说明发号器被 fence(节点失去 node_id 身份)
+        // 或该线程未初始化。流水的价值全在 tx_id 唯一,写一条 0 号流水会与其它
+        // 0 号流水混在一起,比不写更糟。fail-closed。
+        LOG_ERROR << "TransactionLogSystem: refusing to emit entry with invalid tx_id"
+                  << " from_player=" << entry.from_player()
+                  << " to_player=" << entry.to_player();
+        return;
+    }
+
     std::string bytes;
     if (!entry.SerializeToString(&bytes))
     {

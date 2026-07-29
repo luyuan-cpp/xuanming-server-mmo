@@ -72,6 +72,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 }
 
+// SnowflakeLost 在本进程不再持有 Snowflake worker id 的 etcd 租约时关闭。
+// 此时 etcd 可以把同一个 worker id 分给别的进程,继续用 SceneIDGen 发号就是确定性撞号,
+// 主流程必须停止服务。见 snowflakealloc.Handle.Lost 的说明。
+func (sc *ServiceContext) SnowflakeLost() <-chan struct{} {
+	if sc.snowflakeHd == nil {
+		return nil
+	}
+	return sc.snowflakeHd.Lost()
+}
+
 // Stop 释放 Snowflake worker id 的 etcd lease(以及 KeepAlive goroutine)。
 // scene_manager 主流程在退出时应当调用,否则 worker id 要等 lease TTL 自然过期才能复用。
 func (sc *ServiceContext) Stop() {

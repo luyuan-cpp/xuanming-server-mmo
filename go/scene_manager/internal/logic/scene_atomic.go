@@ -115,8 +115,14 @@ return {tostring(bestIdx), ARGV[bestIdx], tostring(newCount)}
 // KEYS[4] = scene:{id}:mirror
 // KEYS[5] = scene:{id}:source
 // KEYS[6] = scene:{id}:zone
+// KEYS[7] = scene:{id}:agones_gs
 // ARGV[1] = sceneId as string (for ZREM)
-// Return: (string) nodeId on destroy, "" on abort (still has players).
+// Return: {nodeId, agonesGsName} on destroy, {"", ""} on abort.
+//
+// scene:{id}:agones_gs 必须和其余 scene 状态在**同一个脚本里**删除,
+// 并且它的值要在删之前读出来返回给调用方:
+//   - 不一起删 -> 留下悬空映射,下次同 id 复用时会把计数减到别人头上
+//   - 不返回   -> 删完就再也不知道该向哪个 GameServer 归还 rooms 名额
 //
 // Note: we do NOT touch node:{nodeId}:scenes inside the script because we
 // don't know the node id until after we read it (and the key name is
@@ -126,15 +132,19 @@ return {tostring(bestIdx), ARGV[bestIdx], tostring(newCount)}
 const luaAtomicDestroyInstance = `
 local pc = redis.call('GET', KEYS[2])
 if pc and pc ~= '0' and pc ~= '' then
-    return ''
+    return {'', ''}
 end
 local nodeId = redis.call('GET', KEYS[1])
-redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6])
+local agonesGs = redis.call('GET', KEYS[7])
+redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
 redis.call('ZREM', KEYS[3], ARGV[1])
-if nodeId then
-    return nodeId
+if not nodeId then
+    nodeId = ''
 end
-return ''
+if not agonesGs then
+    agonesGs = ''
+end
+return {nodeId, agonesGs}
 `
 
 // AtomicIncrPlayerCountIfSceneExists is the race-safe replacement for
@@ -224,10 +234,14 @@ func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChann
 // wipes the scene's Redis state and returns the nodeId the scene was on
 // so the caller can notify C++ and fix counters.
 //
-// Returns ("", nil) when the destroy was aborted because the scene picked
-// up a player in the meantime; callers must skip further work in that
-// case (no RPC, no counter decrement).
-func AtomicDestroyIfIdle(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (string, error) {
+// 第二个返回值是这个 Scene 所在的 Agones GameServer 名字(非 Agones 模式
+// 下为空)。它和 scene 状态在同一个脚本里被读出并删除,调用方拿它去精确
+// 归还 rooms 名额 —— 先删后读会永久丢失回滚依据。
+//
+// Returns ("", "", nil) when the destroy was aborted because the scene
+// picked up a player in the meantime; callers must skip further work in
+// that case (no RPC, no counter decrement, no room release).
+func AtomicDestroyIfIdle(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (string, string, error) {
 	keys := []string{
 		sceneNodeKey(sceneId),
 		fmt.Sprintf(InstancePlayerCountKey, sceneId),
@@ -235,12 +249,17 @@ func AtomicDestroyIfIdle(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint
 		sceneMirrorFlagKey(sceneId),
 		sceneSourceKey(sceneId),
 		sceneZoneKey(sceneId),
+		sceneAgonesGsKey(sceneId),
 	}
 	raw, err := svcCtx.Redis.Eval(luaAtomicDestroyInstance, keys, fmt.Sprintf("%d", sceneId))
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return toString(raw), nil
+	parts := toSlice(raw)
+	if len(parts) < 2 {
+		return "", "", nil
+	}
+	return toString(parts[0]), toString(parts[1]), nil
 }
 
 // toInt64 converts the untyped return of Redis.Eval to int64.

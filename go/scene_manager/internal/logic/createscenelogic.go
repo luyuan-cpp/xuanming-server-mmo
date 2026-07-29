@@ -220,10 +220,12 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 		}
 	}
 
-	targetNode, err := l.pickInstanceNode(in)
+	// 选节点。Agones 模式下这一步同时在 Agones 侧原子预占一个 rooms 名额,
+	// 返回的 placement 带 GameServerName —— 后面所有回滚都靠它。
+	targetNode, placement, err := l.resolveInstancePlacement(in)
 	if err != nil {
-		l.Logger.Errorf("[Instance] No instance-hosting node for zone %d (strict=%v): %v",
-			in.ZoneId, l.svcCtx.Config.StrictNodeTypeSeparation, err)
+		l.Logger.Errorf("[Instance] No instance-hosting node for zone %d (strict=%v agones=%v): %v",
+			in.ZoneId, l.svcCtx.Config.StrictNodeTypeSeparation, AgonesEnabled(l.svcCtx), err)
 		// Use ErrNoNodeForPurpose when strict mode rejected the request — it
 		// tells operators the pool was empty by policy, not by outage.
 		code := constants.ErrNoAvailableNode
@@ -235,7 +237,19 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 
 	sceneId, err := l.allocateScene(in.SceneConfId, targetNode, in.ZoneId)
 	if err != nil {
+		// scene id 都没拿到,Redis 还没写任何东西,只需要把 Agones 名额还回去。
+		if placement != nil {
+			ReleaseAgonesRoom(l.ctx, l.svcCtx, placement.Namespace, placement.GameServerName, "allocate_scene_failed")
+		}
 		return &scene_manager.CreateSceneResponse{ErrorCode: constants.ErrRedis, ErrorMessage: err.Error()}, nil
+	}
+
+	// 记住这个 Scene 开在哪个 GameServer 上。必须在调 C++ CreateScene **之前**
+	// 写:如果 RPC 失败后才写,进程正好在中间崩溃就永远找不回该减哪个计数。
+	if placement != nil {
+		if err := l.svcCtx.Redis.Set(sceneAgonesGsKey(sceneId), placement.GameServerName); err != nil {
+			l.Logger.Errorf("[Instance] Failed to record agones gs for scene %d: %v", sceneId, err)
+		}
 	}
 
 	// Track in active instances sorted set (score = creation timestamp).
@@ -272,12 +286,24 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 	}
 
 	// Notify the C++ scene node to instantiate the ECS scene entity.
+	//
+	// 这一步失败必须回滚,不能像以前那样只打一条 "(Redis state committed)"
+	// 然后照样返回成功 —— 那会留下一个 phantom scene:Redis 里有映射、
+	// 节点上没有实体,玩家被路由进去后 EnterScene 永远成功不了。
+	//
+	// Agones 模式下同时把刚预占的 rooms 名额还回去,否则容量永久漂移。
 	if _, err := RequestNodeCreateSceneWithOptions(
 		l.ctx, l.svcCtx, targetNode,
 		uint32(in.SceneConfId), sceneId,
 		in.MirrorConfigId, in.CreatorIds,
 	); err != nil {
-		l.Logger.Errorf("[Instance] Failed to call CreateScene on node %s for instance %d: %v (Redis state committed)", targetNode, sceneId, err)
+		l.Logger.Errorf("[Instance] CreateScene RPC failed on node %s for instance %d: %v; rolling back",
+			targetNode, sceneId, err)
+		l.rollbackInstanceAllocation(sceneId, targetNode, in, placement)
+		return &scene_manager.CreateSceneResponse{
+			ErrorCode:    constants.ErrNoAvailableNode,
+			ErrorMessage: fmt.Sprintf("scene node %s rejected CreateScene: %v", targetNode, err),
+		}, nil
 	}
 
 	if in.MirrorConfigId > 0 || in.SourceSceneId > 0 {
@@ -294,6 +320,117 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 		NodeId:     targetNode,
 		CreatorIds: in.CreatorIds,
 	}, nil
+}
+
+// resolveInstancePlacement 决定实例开在哪个节点上,并在 Agones 模式下
+// 顺带预占一个房间名额。
+//
+// 两种模式的边界很关键:
+//
+//   - Agones 关闭:完全走老路(TargetNodeId / 镜像共置 / Redis 负载分数),
+//     placement 返回 nil,后续所有 Agones 相关动作都是 no-op。
+//
+//   - Agones 打开:容量的权威是 Agones,不是 Redis 负载分数。
+//     GSA 拿不到名额时**必须 fail-closed**,不允许"退回 Redis 选节点"——
+//     那等于绕过容量约束,把房间塞进一个 Agones 认为已经满了的进程,
+//     阶段 C 的整套计数会从此对不上。
+//
+// 镜像共置的例外:镜像必须和源 Scene 同进程(复用已驻留的地图/AI/spawn),
+// 这条约束比"由 Agones 挑进程"更硬。所以 Agones 模式下镜像仍然按源节点
+// 共置,但仍然要向那个**具体的** GameServer 预占名额 —— 见
+// acquireRoomOnSpecificNode。共置失败时才回落到 GSA 自由选择。
+func (l *CreateSceneLogic) resolveInstancePlacement(in *scene_manager.CreateSceneRequest) (string, *agonesPlacement, error) {
+	if !AgonesEnabled(l.svcCtx) {
+		node, err := l.pickInstanceNode(in)
+		return node, nil, err
+	}
+
+	// 显式指定节点 / 镜像共置:目标节点是被业务规则钉死的,不能交给 GSA 挑。
+	if pinned, reason := l.pinnedInstanceNode(in); pinned != "" {
+		placement, err := l.acquireRoomOnSpecificNode(pinned, in.ZoneId)
+		if err == nil {
+			return pinned, placement, nil
+		}
+		// 钉住的节点没容量:镜像失去共置优化,但不能因此把玩家卡死。
+		// 退回 GSA 自由选择,并把降级记在日志里(共置命中率指标已有)。
+		l.Logger.Infof("[Agones] pinned node %s (%s) has no room capacity (%v), falling back to free allocation",
+			pinned, reason, err)
+	}
+
+	placement, err := AcquireAgonesPlacement(l.ctx, l.svcCtx, in.ZoneId, constants.NodePurposeInstance)
+	if err != nil {
+		return "", nil, err
+	}
+	return placement.NodeID, placement, nil
+}
+
+// pinnedInstanceNode 返回被业务规则钉死的目标节点(显式 TargetNodeId 或
+// 镜像共置的源节点)。没有钉死时返回 ""。
+func (l *CreateSceneLogic) pinnedInstanceNode(in *scene_manager.CreateSceneRequest) (string, string) {
+	if in.TargetNodeId != "" {
+		return in.TargetNodeId, "explicit target"
+	}
+	if in.SourceSceneId > 0 {
+		if node, reason := l.resolveMirrorSourceNode(in.SourceSceneId, in.ZoneId); node != "" {
+			metrics.ObserveMirrorColocate(in.ZoneId, "hit", "ok")
+			l.Logger.Infof("[Mirror] Co-locating mirror (conf=%d mirror_conf=%d) with source scene %d on node %s (agones)",
+				in.SceneConfId, in.MirrorConfigId, in.SourceSceneId, node)
+			return node, "mirror co-location"
+		} else {
+			metrics.ObserveMirrorColocate(in.ZoneId, "fallback", reason)
+		}
+	}
+	return "", ""
+}
+
+// acquireRoomOnSpecificNode 在一个**指定**的 scene node 上预占房间名额。
+//
+// GameServerAllocation 无法指向某一个具体 GameServer,所以这里的做法是:
+// 反查该 node 对应的 GameServer 名字(通过 PodIP),再直接对它的 rooms
+// 计数做一次带 CAS 的 +1。反查不到就当作"这个节点不受 Agones 管理",
+// fail-closed 交给调用方回落。
+func (l *CreateSceneLogic) acquireRoomOnSpecificNode(nodeID string, zoneID uint32) (*agonesPlacement, error) {
+	return AcquireAgonesRoomOnNode(l.ctx, l.svcCtx, nodeID, zoneID)
+}
+
+// rollbackInstanceAllocation 精确撤销一次失败的实例创建。
+//
+// 只撤销"本次未交付"的写:Redis 里这个 scene 的全部状态 + 节点计数 +
+// 反向索引 + Agones 房间名额。不碰任何已经交付给玩家的东西。
+//
+// 顺序:先删 scene:{id}:node(其它路径判断"这个 scene 还在不在"看的就是它),
+// 再清剩下的,最后还 Agones 名额。
+func (l *CreateSceneLogic) rollbackInstanceAllocation(
+	sceneId uint64,
+	targetNode string,
+	in *scene_manager.CreateSceneRequest,
+	placement *agonesPlacement,
+) {
+	sceneIdStr := fmt.Sprintf("%d", sceneId)
+
+	l.svcCtx.Redis.Del(sceneNodeKey(sceneId))
+	l.svcCtx.Redis.Del(sceneZoneKey(sceneId))
+	l.svcCtx.Redis.Del(fmt.Sprintf(InstancePlayerCountKey, sceneId))
+	l.svcCtx.Redis.Del(sceneMirrorFlagKey(sceneId))
+	l.svcCtx.Redis.Del(sceneSourceKey(sceneId))
+	l.svcCtx.Redis.Del(sceneAgonesGsKey(sceneId))
+	l.svcCtx.Redis.Zrem(activeInstancesKey(in.ZoneId), sceneIdStr)
+	l.svcCtx.Redis.Srem(nodeScenesKey(targetNode), sceneIdStr)
+
+	if in.SourceSceneId > 0 {
+		l.svcCtx.Redis.Srem(sceneMirrorsKey(in.SourceSceneId), sceneIdStr)
+	}
+
+	// 节点 scene_count 是 allocateScene 加上去的,必须原样减回。
+	if _, err := l.svcCtx.Redis.Decr(fmt.Sprintf(NodeSceneCountKey, targetNode)); err != nil {
+		l.Logger.Errorf("[Instance] rollback: failed to decrement scene count for node %s: %v", targetNode, err)
+	}
+
+	if placement != nil {
+		ReleaseAgonesRoom(l.ctx, l.svcCtx, placement.Namespace, placement.GameServerName, "create_rpc_failed")
+	}
+
+	l.Logger.Infof("[Instance] rolled back scene %d on node %s (no phantom scene left behind)", sceneId, targetNode)
 }
 
 // pickInstanceNode decides which scene node should host a new instance.

@@ -3,6 +3,7 @@
 
 ///<<< BEGIN WRITING YOUR CODE
 
+#include "agones/agones_scene_lifecycle.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "node/system/node/node.h"
 #include "player/system/player_lifecycle.h"
@@ -650,6 +651,23 @@ void SceneHandler::CreateScene(::google::protobuf::RpcController* controller, co
 		return;
 	}
 
+	// Agones high-density mode: allocate gate.
+	//
+	// This handler runs ON the muduo EventLoop, so the blocking variant is NOT
+	// allowed here -- one HTTP hiccup would stall the whole logic frame. The
+	// non-blocking variant kicks an async allocate and returns false right
+	// away; this create fails closed and the caller's retry normally lands
+	// after the process is already Allocated. (SceneManager uses the gRPC
+	// path, which does get the bounded blocking variant.)
+	auto createPermit = agones::SceneLifecycle::Instance().AcquireCreatePermitNonBlocking();
+	if (!createPermit)
+	{
+		LOG_ERROR << "CreateScene: rejected, Agones allocate not confirmed yet (state="
+				  << agones::ToString(agones::SceneLifecycle::Instance().State())
+				  << "), scene_id=" << request->scene_id() << "; retry expected";
+		return;
+	}
+
 	// Idempotent: deduplicate by scene_id (Go-allocated, globally unique).
 	{
 		auto view = tlsEcs.sceneRegistry.view<SceneInfoComp>();
@@ -726,6 +744,15 @@ void SceneHandler::DestroyScene(::google::protobuf::RpcController* controller, c
 	if (targetEntity == entt::null)
 	{
 		LOG_WARN << "DestroyScene: scene entity not found for scene_id=" << sceneId;
+		return;
+	}
+
+	// Drain-then-destroy. Keep in sync with SceneNodeGrpcImpl::HandleDestroyScene
+	// -- see the long comment there for why we return without destroying.
+	if (const std::size_t relocating = PlayerLifecycleSystem::BeginSceneDrain(targetEntity); relocating > 0)
+	{
+		LOG_WARN << "DestroyScene: scene_id=" << sceneId << " still has residents; relocating "
+				 << relocating << " player(s) to the main world, entity kept until drained";
 		return;
 	}
 

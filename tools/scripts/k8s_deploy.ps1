@@ -23,7 +23,51 @@ param(
 	[string]$KafkaHeapOpts = "",
 	[int]$CentreReplicas = 1,
 	[int]$GateReplicas = 2,
+	# Scene 角色拆分(见 docs/ops/scene-node-role-split.md):
+	#   -SceneReplicas        legacy 单池,生成一个名为 scene 的 Deployment(SCENE_NODE_TYPE=0)
+	#   -SceneWorldReplicas   拆分池 scene-world    (SCENE_NODE_TYPE=0)
+	#   -SceneInstanceReplicas拆分池 scene-instance (SCENE_NODE_TYPE=1)
+	# 兼容规则:只要 -SceneWorldReplicas / -SceneInstanceReplicas 任一 > 0(或 zones
+	# 配置里出现 scene_world / scene_instance 任一键),就进入拆分模式,legacy scene 被忽略。
+	# -1 表示"未指定",用于区分「显式写 0(缩到零副本)」和「压根没配」。
 	[int]$SceneReplicas = 4,
+	[int]$SceneWorldReplicas = -1,
+	[int]$SceneInstanceReplicas = -1,
+	# Scene Node 的编排方式。
+	#   deployment - 普通 K8s Deployment(默认,行为与接 Agones 之前一致)
+	#   agones     - agones.dev/v1 Fleet,由 Agones 管理进程生命周期
+	# 刻意**不**做"检测集群装没装 Agones 就自动切换":自动切换会让同一条命令
+	# 在两个集群上产出不同的工作负载类型,出事时无法从命令还原现场。
+	[ValidateSet("deployment", "agones")]
+	[string]$SceneOrchestrator = "deployment",
+	# Agones GameServer 的优雅退出预算。Scene Node 收到 SIGTERM 后要把在场玩家
+	# 全量存盘(main.cpp 的 exitAllPlayers),给够时间,否则会丢存档。
+	[int]$SceneTerminationGracePeriodSeconds = 60,
+	# Agones health 探测。periodSeconds 必须大于 C++ 侧的 health 心跳间隔
+	# (LifecycleOptions::healthInterval,默认 2s),否则正常心跳也会被判失败。
+	[int]$AgonesHealthPeriodSeconds = 10,
+	[int]$AgonesHealthFailureThreshold = 3,
+	[int]$AgonesHealthInitialDelaySeconds = 30,
+	# 高密度容量:给每个 GameServer 挂一个 rooms Counter,SceneManager 通过
+	# GameServerAllocation 原子预占名额。
+	#
+	# Counters and Lists 在 Agones 里是 **beta**,需要集群侧显式打开 FeatureGate
+	# (CountsAndLists=true),所以这里默认关闭,由运维确认版本后再开。
+	[switch]$AgonesHighDensity,
+	# 每个 Scene Node 进程能承载多少个房间。
+	# **没有默认值是有意的**:C++ Scene Node 是单 EventLoop,实际容量必须按
+	# 帧耗时、AOI、玩家数和内存压测确定(压测口径见 CLAUDE.md §6)。
+	# 开了 -AgonesHighDensity 却不给这个值,脚本会直接报错而不是替你猜一个。
+	[int]$AgonesRoomCapacity = 0,
+	# FleetAutoscaler:按剩余房间容量自动增减 Fleet replicas。
+	# 需要 -AgonesHighDensity(依赖 rooms Counter)。
+	[switch]$AgonesAutoscale,
+	# 集群里始终保持的**空闲房间**数量。低于它就扩 Pod,高于上界就缩。
+	# 这是缓冲区,不是容量:太小会让高峰期玩家等 Pod 调度(几十秒),
+	# 太大是白烧钱。取值应当覆盖"一个调度周期内可能新增的房间数"。
+	[int]$AgonesBufferRooms = 5,
+	[int]$AgonesMinReplicas = 1,
+	[int]$AgonesMaxReplicas = 0,
 	[int]$GrpcThreadPoolReserveThreads = 1,
 	[int]$GrpcServerMaxPollers = 2,
 	[ValidateSet("ClusterIP", "NodePort", "LoadBalancer")]
@@ -69,6 +113,10 @@ $JavaSvcCatalogue = @{
 	gateway = @{ ConfigMap = "java-svc-gateway-config"; Manifest = "gateway.yaml"; HttpPort = 8081; GrpcPort = 0;    ImageName = "mmorpg-gateway" }
 }
 
+# 注意:OpsProfile 的副本数下限只作用于 legacy 单池参数 $SceneReplicas。
+# 拆分池(scene_world / scene_instance)一律以调用方 / zones 配置写的值为准,
+# 不做静默抬高 —— 拆分模式下副本比例是运维显式决策(world ≈ 1.2x instance),
+# 被脚本改写会让"实际部署 != 配置文件"。
 function Apply-OpsProfileDefaults {
 	switch ($OpsProfile) {
 		"managed-cloud" {
@@ -168,9 +216,24 @@ function Invoke-KubectlWithInputFile {
 		[string]$InputContent
 	)
 
+	$sanitized = $InputContent -replace "`t", "    "
+
+	# DryRun 下把真正会送进 kubectl 的 YAML 打出来。之前只打印临时文件路径,
+	# 而临时文件在 finally 里就被删了 —— 等于 DryRun 无法验证任何生成结果。
+	if ($DryRun) {
+		$baseArgs = Build-KubectlBaseArgs
+		$allArgs = @()
+		$allArgs += $baseArgs
+		$allArgs += $Args
+		Write-Host "[dry-run] kubectl $($allArgs -join ' ') -f -"
+		Write-Host "--- BEGIN MANIFEST ---"
+		Write-Host $sanitized
+		Write-Host "--- END MANIFEST ---"
+		return
+	}
+
 	$tempFile = [System.IO.Path]::GetTempFileName()
 	try {
-		$sanitized = $InputContent -replace "`t", "    "
 		Set-Content -Path $tempFile -Value $sanitized -NoNewline -Encoding utf8NoBOM
 		Invoke-Kubectl -Args ($Args + @("-f", $tempFile))
 	}
@@ -237,6 +300,11 @@ Kafka:
   AutoOffsetReset: "earliest"
 "@) -replace "`t", "  "
 
+	# SceneNodeType 在这里只是**文件基线**,gate / scene 共用同一份 ConfigMap。
+	# 真正决定 scene pod 角色的是 Deployment 上的 SCENE_NODE_TYPE 环境变量:
+	# cpp/libs/engine/config/config.cpp::readGameConfig 先读 yaml,再用 env 覆盖
+	# (last-wins)。所以拆分模式不需要两份 ConfigMap,只需要两个 Deployment 各自
+	# 带不同的 SCENE_NODE_TYPE。详见 docs/ops/scene-node-role-split.md §2。
 	$gameConfig = @"
 SceneNodeType: 0
 ZoneId: $CurrentZoneId
@@ -269,22 +337,32 @@ function New-NodeDeploymentYaml {
 		[Parameter(Mandatory = $true)][int]$Replicas,
 		[Parameter(Mandatory = $true)][int]$RpcPort,
 		[Parameter(Mandatory = $true)][string]$StartCommand,
-		[Parameter(Mandatory = $true)][string]$ConfigMapName
+		[Parameter(Mandatory = $true)][string]$ConfigMapName,
+		# -1 = 不写 SCENE_NODE_TYPE(gate 等非 scene 角色)。
+		[int]$SceneNodeType = -1
 	)
 
-	$grpcEnvBlock = ""
+	# 用数组逐行拼,最后 join 换行。
+	# 旧写法是 `$block += @"..."@` 连续追加两个 here-string —— here-string 内容不含
+	# 结尾换行,第二次追加会直接接在上一行尾部,生成
+	#   value: "1"            - name: GRPC_SERVER_MAX_POLLERS
+	# 这种非法 YAML。默认参数(ReserveThreads=1 且 MaxPollers=2)就会命中,
+	# 也就是说 gate Deployment 在本次修复前一直生成不出可 apply 的 YAML。
+	$extraEnvLines = @()
 	if ($NodeName -eq "gate" -and $GrpcThreadPoolReserveThreads -gt 0) {
-		$grpcEnvBlock += @"
-			- name: GRPC_THREAD_POOL_RESERVE_THREADS
-			  value: "$GrpcThreadPoolReserveThreads"
-"@
+		$extraEnvLines += "`t`t`t- name: GRPC_THREAD_POOL_RESERVE_THREADS"
+		$extraEnvLines += "`t`t`t  value: `"$GrpcThreadPoolReserveThreads`""
 	}
 	if ($GrpcServerMaxPollers -gt 0) {
-		$grpcEnvBlock += @"
-			- name: GRPC_SERVER_MAX_POLLERS
-			  value: "$GrpcServerMaxPollers"
-"@
+		$extraEnvLines += "`t`t`t- name: GRPC_SERVER_MAX_POLLERS"
+		$extraEnvLines += "`t`t`t  value: `"$GrpcServerMaxPollers`""
 	}
+	if ($SceneNodeType -ge 0) {
+		# 覆盖 ConfigMap 里的 SceneNodeType 基线,是角色拆分真正生效的那一步。
+		$extraEnvLines += "`t`t`t- name: SCENE_NODE_TYPE"
+		$extraEnvLines += "`t`t`t  value: `"$SceneNodeType`""
+	}
+	$grpcEnvBlock = $extraEnvLines -join "`n"
 
 	return @"
 apiVersion: apps/v1
@@ -336,6 +414,221 @@ $grpcEnvBlock
 "@
 }
 
+# 把镜像引用里的 tag 抽出来当 build 标签用。K8s label value 只允许
+# 字母数字和 - _ .,且不超过 63 字符,所以其余字符一律替换成 '-'。
+function Get-ImageBuildLabel {
+	param([Parameter(Mandatory = $true)][string]$Image)
+
+	$tag = "unknown"
+	# 只看最后一个冒号后面的部分,并且要求它不含 '/',否则那是端口号不是 tag
+	# (registry:5000/foo 这种)。
+	$lastColon = $Image.LastIndexOf(':')
+	if ($lastColon -ge 0) {
+		$candidate = $Image.Substring($lastColon + 1)
+		if ($candidate -notmatch '/' -and -not [string]::IsNullOrWhiteSpace($candidate)) {
+			$tag = $candidate
+		}
+	}
+
+	$sanitized = ($tag -replace '[^A-Za-z0-9._-]', '-')
+	if ($sanitized.Length -gt 63) { $sanitized = $sanitized.Substring(0, 63) }
+	$sanitized = $sanitized.Trim('-', '.', '_')
+	if ([string]::IsNullOrWhiteSpace($sanitized)) { $sanitized = "unknown" }
+	return $sanitized
+}
+
+<#
+.SYNOPSIS
+生成一个 Scene Node 的 agones.dev/v1 Fleet。
+
+.DESCRIPTION
+模型是 Agones 官方的 high-density GameServer:
+
+    1 Agones GameServer = 1 个 Scene Node Pod / C++ 进程 = N 个动态创建的 ECS Scene 房间
+
+**不是**一个 Scene 一个 GameServer。Scene 的创建/销毁/镜像共置/玩家路由仍然
+全部由 Go SceneManager 负责,Agones 只负责进程级的 Ready / Allocated /
+Unhealthy / Shutdown 和故障替换。
+
+内部服务,不需要 UDP LB / HostPort / NodePort:portPolicy 用 None,
+SceneManager 继续通过 etcd 里注册的 PodIP 找到 gRPC 地址。
+#>
+function New-SceneFleetYaml {
+	param(
+		[Parameter(Mandatory = $true)][string]$FleetName,
+		[Parameter(Mandatory = $true)][int]$Replicas,
+		[Parameter(Mandatory = $true)][int]$RpcPort,
+		[Parameter(Mandatory = $true)][string]$StartCommand,
+		[Parameter(Mandatory = $true)][string]$ConfigMapName,
+		[Parameter(Mandatory = $true)][int]$SceneNodeType,
+		[Parameter(Mandatory = $true)][string]$RoleLabel,
+		[Parameter(Mandatory = $true)][string]$ZoneLabel,
+		[Parameter(Mandatory = $true)][int]$ZoneIdLabel
+	)
+
+	$buildLabel = Get-ImageBuildLabel -Image $NodeImage
+
+	$countersBlock = ""
+	if ($AgonesHighDensity) {
+		if ($AgonesRoomCapacity -le 0) {
+			throw "-AgonesHighDensity requires -AgonesRoomCapacity <N>. 不要拍一个数字:每进程房间容量必须来自压测(帧耗时/AOI/玩家数/内存),见 docs/design/agones-scene-node-high-density.md §8。"
+		}
+		# rooms Counter。SceneManager 侧 internal/agones 的 CounterName 常量
+		# 必须与这里同名,改一个就要改另一个。
+		$countersBlock = @"
+
+      counters:
+        rooms:
+          count: 0
+          capacity: $AgonesRoomCapacity
+"@
+	}
+
+	$grpcPollersEnv = ""
+	if ($GrpcServerMaxPollers -gt 0) {
+		$grpcPollersEnv = @"
+
+                - name: GRPC_SERVER_MAX_POLLERS
+                  value: "$GrpcServerMaxPollers"
+"@
+	}
+
+	return @"
+apiVersion: agones.dev/v1
+kind: Fleet
+metadata:
+  name: $FleetName
+  labels:
+    app: $FleetName
+    mmorpg.io/role: $RoleLabel
+    mmorpg.io/zone: $ZoneLabel
+    mmorpg.io/zone-id: "$ZoneIdLabel"
+    mmorpg.io/build: $buildLabel
+spec:
+  replicas: $Replicas
+  scheduling: Packed
+  strategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: $FleetName
+        mmorpg.io/role: $RoleLabel
+        mmorpg.io/zone: $ZoneLabel
+        mmorpg.io/zone-id: "$ZoneIdLabel"
+        mmorpg.io/build: $buildLabel
+    spec:
+      ports:
+        - name: rpc
+          portPolicy: None
+          containerPort: $RpcPort
+          protocol: TCP
+      health:
+        disabled: false
+        initialDelaySeconds: $AgonesHealthInitialDelaySeconds
+        periodSeconds: $AgonesHealthPeriodSeconds
+        failureThreshold: $AgonesHealthFailureThreshold$countersBlock
+      template:
+        metadata:
+          labels:
+            app: $FleetName
+            mmorpg.io/role: $RoleLabel
+            mmorpg.io/zone: $ZoneLabel
+            mmorpg.io/zone-id: "$ZoneIdLabel"
+            mmorpg.io/build: $buildLabel
+        spec:
+          terminationGracePeriodSeconds: $SceneTerminationGracePeriodSeconds
+          containers:
+            - name: $FleetName
+              image: $NodeImage
+              imagePullPolicy: IfNotPresent
+              workingDir: /app/bin
+              command: ["/bin/sh", "-lc"]
+              args: ["$StartCommand"]
+              env:
+                - name: POD_IP
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: status.podIP
+                - name: RPC_PORT
+                  value: "$RpcPort"
+                - name: NODE_PORT
+                  value: "$RpcPort"
+                - name: SCENE_NODE_TYPE
+                  value: "$SceneNodeType"
+                - name: AGONES_ENABLED
+                  value: "1"$grpcPollersEnv
+              volumeMounts:
+                - name: node-config
+                  mountPath: /app/bin/etc
+                  readOnly: true
+                - name: node-logs
+                  mountPath: /app/bin/logs
+              ports:
+                - containerPort: $RpcPort
+                  name: rpc
+          volumes:
+            - name: node-config
+              configMap:
+                name: $ConfigMapName
+            - name: node-logs
+              emptyDir: {}
+"@
+}
+
+<#
+.SYNOPSIS
+生成一个基于 rooms Counter 的 Agones FleetAutoscaler。
+
+.DESCRIPTION
+管的是**进程数(Pod)**,不是频道数。两件事分开:
+
+  - 频道数(大世界一张图开几个频道)由 Go SceneManager 按玩家人数决定,
+    见 docs/design/world-channel-autoscale.md。
+  - 进程数由这里决定:房间总需求上来了就多开 Scene Node,空闲太多就回收。
+
+用 Counter 策略而不是 Buffer 策略:高密度模型下"还剩几个 Ready 的
+GameServer"没有意义(一个进程能装 N 个房间),真正该看的是"还剩几个空闲
+**房间名额**"。
+
+缩容风险:Agones 缩 Fleet 时会挑 Ready(未分配)的 GameServer 下手,
+Allocated 的不会被动。但一个进程只要还有 1 个房间就是 Allocated,所以
+缩容不会踢掉在玩的房间。空进程被回收是预期行为。
+#>
+function New-SceneFleetAutoscalerYaml {
+	param(
+		[Parameter(Mandatory = $true)][string]$FleetName,
+		[Parameter(Mandatory = $true)][string]$RoleLabel,
+		[Parameter(Mandatory = $true)][string]$ZoneLabel,
+		[Parameter(Mandatory = $true)][int]$ZoneIdLabel
+	)
+
+	$maxLine = ""
+	if ($AgonesMaxReplicas -gt 0) {
+		$maxLine = "`n      maxCapacity: $AgonesMaxReplicas"
+	}
+
+	return @"
+apiVersion: autoscaling.agones.dev/v1
+kind: FleetAutoscaler
+metadata:
+  name: $FleetName
+  labels:
+    app: $FleetName
+    mmorpg.io/role: $RoleLabel
+    mmorpg.io/zone: $ZoneLabel
+    mmorpg.io/zone-id: "$ZoneIdLabel"
+spec:
+  fleetName: $FleetName
+  policy:
+    type: Counter
+    counter:
+      key: rooms
+      bufferSize: $AgonesBufferRooms
+      minCapacity: $AgonesMinReplicas$maxLine
+"@
+}
+
 function New-GateServiceYaml {
 	param(
 		[Parameter(Mandatory = $true)][string]$ServiceName
@@ -381,7 +674,12 @@ function Wait-ForDeploymentReady {
 }
 
 function Wait-ForZoneReady {
-	param([Parameter(Mandatory = $true)][string]$Namespace)
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		# 本 zone 实际生成的 scene Deployment 名字(legacy 单池 = @("scene"),
+		# 拆分模式 = @("scene-world","scene-instance"))。副本数为 0 的池不等。
+		[string[]]$SceneDeploymentNames = @("scene")
+	)
 
 	if (-not $WaitReady) {
 		return
@@ -389,7 +687,22 @@ function Wait-ForZoneReady {
 
 	Write-Host "Waiting for zone workloads to become ready: namespace=$Namespace"
 	Wait-ForDeploymentReady -Namespace $Namespace -DeploymentName "gate"
-	Wait-ForDeploymentReady -Namespace $Namespace -DeploymentName "scene"
+
+	if ($SceneOrchestrator -eq "agones") {
+		# Fleet 不是 Deployment,`kubectl rollout status` 对它无效(会直接报
+		# "no matches for kind")。这里不假装等过,而是把该看的命令打出来。
+		# 真正的就绪判据是 Fleet 的 status.readyReplicas。
+		foreach ($fleetName in $SceneDeploymentNames) {
+			Write-Host "  [agones] scene fleet '$fleetName' readiness is NOT waited on by this script."
+			Write-Host "           kubectl -n $Namespace get fleet $fleetName -o jsonpath='{.status.readyReplicas}'"
+			Write-Host "           kubectl -n $Namespace get gameservers -l app=$fleetName"
+		}
+	}
+	else {
+		foreach ($sceneDeployment in $SceneDeploymentNames) {
+			Wait-ForDeploymentReady -Namespace $Namespace -DeploymentName $sceneDeployment
+		}
+	}
 
 	if (-not $SkipGoSvc -and -not [string]::IsNullOrWhiteSpace($GoSvcRegistry)) {
 		foreach ($svcName in $GoSvcCatalogue.Keys) {
@@ -555,7 +868,7 @@ Kafka:
   CompressionType: 0
   Idempotent: true
   MaxOpenRequests: 1
-	RetentionMs: ${dbTaskRetentionMs}
+  RetentionMs: ${dbTaskRetentionMs}
 "@
 		}
 		"player-locator" {
@@ -804,6 +1117,8 @@ function Get-ZonesFromJson {
 						centre = $null
 						gate = $null
 						scene = $null
+						scene_world = $null
+						scene_instance = $null
 					}
 				}
 				continue
@@ -818,7 +1133,8 @@ function Get-ZonesFromJson {
 				continue
 			}
 
-			if ($trimmed -match "^(centre|gate|scene)\s*:\s*(\d+)$") {
+			# 长 key 必须排在 scene 前面,否则 "scene_world: 2" 会先命中 scene 分支。
+			if ($trimmed -match "^(scene_world|scene_instance|centre|gate|scene)\s*:\s*(\d+)$") {
 				$currentZone.replicas[$matches[1]] = [int]$matches[2]
 				continue
 			}
@@ -875,12 +1191,19 @@ function Get-ZonesFromJson {
 		$zoneCentre = $CentreReplicas
 		$zoneGate = $GateReplicas
 		$zoneScene = $SceneReplicas
+		# -1 = zones 配置里没写这个键,交给 Resolve-SceneDeploymentPlan 判定模式。
+		$zoneSceneWorld = $SceneWorldReplicas
+		$zoneSceneInstance = $SceneInstanceReplicas
 
 		if ($null -ne $zone.replicas) {
 			if ($null -ne $zone.replicas.centre) { $zoneCentre = [int]$zone.replicas.centre }
 			if ($null -ne $zone.replicas.gate) { $zoneGate = [int]$zone.replicas.gate }
 			if ($null -ne $zone.replicas.scene) { $zoneScene = [int]$zone.replicas.scene }
+			if ($null -ne $zone.replicas.scene_world) { $zoneSceneWorld = [int]$zone.replicas.scene_world }
+			if ($null -ne $zone.replicas.scene_instance) { $zoneSceneInstance = [int]$zone.replicas.scene_instance }
 		}
+
+		$sceneLegacyExplicit = ($null -ne $zone.replicas -and $null -ne $zone.replicas.scene)
 
 		$result += [pscustomobject]@{
 			name = [string]$zone.name
@@ -888,10 +1211,88 @@ function Get-ZonesFromJson {
 			centre = $zoneCentre
 			gate = $zoneGate
 			scene = $zoneScene
+			scene_world = $zoneSceneWorld
+			scene_instance = $zoneSceneInstance
+			scene_legacy_explicit = $sceneLegacyExplicit
 		}
 	}
 
 	return ,$result
+}
+
+# eSceneNodeType(proto common/base/config.proto,详见 docs/design/scene-creation-architecture.md
+# "Node Role Separation")。这里只用到前两个;跨服角色 2/3 目前没有部署形态。
+$SceneNodeTypeMainWorld = 0
+$SceneNodeTypeInstance = 1
+
+<#
+.SYNOPSIS
+决定一个 zone 要生成哪些 scene Deployment。
+
+.DESCRIPTION
+兼容规则(唯一权威,文档以此为准):
+
+1. 只要 scene_world / scene_instance 任一被显式指定(>= 0),进入**拆分模式**:
+     scene-world     replicas=scene_world     SCENE_NODE_TYPE=0
+     scene-instance  replicas=scene_instance  SCENE_NODE_TYPE=1
+   未指定的那一侧按 0 副本生成(保留 Deployment 便于后续 kubectl scale,
+   同时对应 role-split runbook §3.4 的回滚动作"把 instance 池缩到 0")。
+   此时 legacy 的 scene 键被**忽略**,不会再生成名为 scene 的 Deployment。
+2. 否则进入 **legacy 单池模式**:生成一个名为 scene 的 Deployment,
+   SCENE_NODE_TYPE=0(与 zones.sample.yaml 注释"所有 scene pod 都是 SceneNodeType=0"一致)。
+
+两种模式互斥,永远不会同时产出 scene 和 scene-world/scene-instance。
+#>
+function Resolve-SceneDeploymentPlan {
+	param(
+		[Parameter(Mandatory = $true)][int]$LegacySceneReplicas,
+		[Parameter(Mandatory = $true)][int]$WorldReplicas,
+		[Parameter(Mandatory = $true)][int]$InstanceReplicas,
+		[bool]$LegacyExplicit = $false,
+		[string]$ZoneLabel = ""
+	)
+
+	$splitMode = ($WorldReplicas -ge 0 -or $InstanceReplicas -ge 0)
+
+	if (-not $splitMode) {
+		return ,@([pscustomobject]@{
+			Name = "scene"
+			Replicas = $LegacySceneReplicas
+			SceneNodeType = $SceneNodeTypeMainWorld
+			Role = "world (legacy single pool)"
+			RoleLabel = "world"
+		})
+	}
+
+	$world = if ($WorldReplicas -ge 0) { $WorldReplicas } else { 0 }
+	$instance = if ($InstanceReplicas -ge 0) { $InstanceReplicas } else { 0 }
+
+	if ($LegacyExplicit) {
+		Write-Warning "zone ${ZoneLabel}: replicas.scene 与 scene_world/scene_instance 同时存在,拆分模式生效,legacy scene=$LegacySceneReplicas 被忽略。请从 zones 配置里删掉 scene 键。"
+	}
+	if ($world -le 0) {
+		Write-Warning "zone ${ZoneLabel}: scene_world=0 —— 该 zone 没有主世界承载节点。StrictNodeTypeSeparation=true 时主世界场景创建会返回 ErrNoNodeForPurpose。"
+	}
+	if ($instance -le 0) {
+		Write-Warning "zone ${ZoneLabel}: scene_instance=0 —— 该 zone 没有副本承载节点。StrictNodeTypeSeparation=true 时副本/战场创建会返回 ErrNoNodeForPurpose。"
+	}
+
+	return ,@(
+		[pscustomobject]@{
+			Name = "scene-world"
+			Replicas = $world
+			SceneNodeType = $SceneNodeTypeMainWorld
+			Role = "world"
+			RoleLabel = "world"
+		},
+		[pscustomobject]@{
+			Name = "scene-instance"
+			Replicas = $instance
+			SceneNodeType = $SceneNodeTypeInstance
+			Role = "instance"
+			RoleLabel = "instance"
+		}
+	)
 }
 
 function Apply-Zone {
@@ -900,12 +1301,28 @@ function Apply-Zone {
 		[Parameter(Mandatory = $true)][int]$CurrentZoneId,
 		[Parameter(Mandatory = $true)][int]$CurrentCentreReplicas,
 		[Parameter(Mandatory = $true)][int]$CurrentGateReplicas,
-		[Parameter(Mandatory = $true)][int]$CurrentSceneReplicas
+		[Parameter(Mandatory = $true)][int]$CurrentSceneReplicas,
+		[int]$CurrentSceneWorldReplicas = -1,
+		[int]$CurrentSceneInstanceReplicas = -1,
+		[bool]$CurrentSceneLegacyExplicit = $false
 	)
 
 	$namespace = Get-ZoneNamespace -Name $CurrentZoneName
+	$scenePlan = Resolve-SceneDeploymentPlan `
+		-LegacySceneReplicas $CurrentSceneReplicas `
+		-WorldReplicas $CurrentSceneWorldReplicas `
+		-InstanceReplicas $CurrentSceneInstanceReplicas `
+		-LegacyExplicit $CurrentSceneLegacyExplicit `
+		-ZoneLabel $CurrentZoneName
+
+	$sceneSummary = ($scenePlan | ForEach-Object { "$($_.Name)=$($_.Replicas)(SCENE_NODE_TYPE=$($_.SceneNodeType))" }) -join " "
+
+	$sceneKind = if ($SceneOrchestrator -eq "agones") { "agones.dev/v1 Fleet" } else { "apps/v1 Deployment" }
+
 	Write-Host "Applying zone deployment: zone=$CurrentZoneName zone_id=$CurrentZoneId namespace=$namespace"
-	Write-Host "Ops profile resolved: profile=$OpsProfile gate_service_type=$GateServiceType centre=$CurrentCentreReplicas gate=$CurrentGateReplicas scene=$CurrentSceneReplicas"
+	Write-Host "Ops profile resolved: profile=$OpsProfile gate_service_type=$GateServiceType centre=$CurrentCentreReplicas gate=$CurrentGateReplicas"
+	Write-Host "Scene orchestrator: $SceneOrchestrator -> $sceneKind"
+	Write-Host "Scene pools resolved: $sceneSummary"
 
 	Ensure-Namespace -Namespace $namespace
 
@@ -915,18 +1332,66 @@ function Apply-Zone {
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $configMapYaml
 
 	$gateYaml = New-NodeDeploymentYaml -NodeName "gate" -Replicas $CurrentGateReplicas -RpcPort 18000 -StartCommand "./gate" -ConfigMapName $configMapName
-	$sceneYaml = New-NodeDeploymentYaml -NodeName "scene" -Replicas $CurrentSceneReplicas -RpcPort 19000 -StartCommand "./scene" -ConfigMapName $configMapName
-	$gateServiceYaml = New-GateServiceYaml -ServiceName $gateServiceName
-
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $gateYaml
-	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $sceneYaml
+
+	foreach ($scenePool in $scenePlan) {
+		if ($SceneOrchestrator -eq "agones") {
+			$sceneYaml = New-SceneFleetYaml `
+				-FleetName $scenePool.Name `
+				-Replicas $scenePool.Replicas `
+				-RpcPort 19000 `
+				-StartCommand "./scene" `
+				-ConfigMapName $configMapName `
+				-SceneNodeType $scenePool.SceneNodeType `
+				-RoleLabel $scenePool.RoleLabel `
+				-ZoneLabel $CurrentZoneName `
+				-ZoneIdLabel $CurrentZoneId
+		}
+		else {
+			$sceneYaml = New-NodeDeploymentYaml `
+				-NodeName $scenePool.Name `
+				-Replicas $scenePool.Replicas `
+				-RpcPort 19000 `
+				-StartCommand "./scene" `
+				-ConfigMapName $configMapName `
+				-SceneNodeType $scenePool.SceneNodeType
+		}
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $sceneYaml
+
+		if ($SceneOrchestrator -eq "agones" -and $AgonesAutoscale) {
+			if (-not $AgonesHighDensity) {
+				throw "-AgonesAutoscale requires -AgonesHighDensity: the Counter policy scales on the rooms Counter, which only exists in high-density mode."
+			}
+			$autoscalerYaml = New-SceneFleetAutoscalerYaml `
+				-FleetName $scenePool.Name `
+				-RoleLabel $scenePool.RoleLabel `
+				-ZoneLabel $CurrentZoneName `
+				-ZoneIdLabel $CurrentZoneId
+			Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $autoscalerYaml
+		}
+	}
+
+	$gateServiceYaml = New-GateServiceYaml -ServiceName $gateServiceName
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $gateServiceYaml
 
 	Apply-GoSvcManifests -Namespace $namespace -CurrentZoneId $CurrentZoneId
 
 	Apply-JavaSvcManifests -Namespace $namespace
 
-	Wait-ForZoneReady -Namespace $namespace
+	$sceneDeploymentNames = @($scenePlan | Where-Object { $_.Replicas -gt 0 } | ForEach-Object { $_.Name })
+	Wait-ForZoneReady -Namespace $namespace -SceneDeploymentNames $sceneDeploymentNames
+
+	if ($scenePlan.Count -gt 1) {
+		Write-Host "NOTE: 从 legacy 单池切到拆分模式时,旧的 'scene' 工作负载不会被 apply 自动删除。确认新池 Ready 后手动执行: kubectl -n $namespace delete deployment scene"
+	}
+	if ($SceneOrchestrator -eq "agones") {
+		# 换编排方式会换 kind:apply 只会新建 Fleet,不会回收同名 Deployment,
+		# 两者同时在线 = 同一个 zone 里有两套 scene 进程、两套容量语义。
+		Write-Host "NOTE: 切到 Agones 编排后,同名的旧 Deployment 不会被自动删除。确认 Fleet 就绪后手动执行:"
+		foreach ($scenePool in $scenePlan) {
+			Write-Host "        kubectl -n $namespace delete deployment $($scenePool.Name) --ignore-not-found"
+		}
+	}
 
 	Write-Host "Zone deployment applied: namespace=$namespace"
 }
@@ -1009,7 +1474,7 @@ switch ($Command) {
 		Show-InfraStatus
 	}
 	"zone-up" {
-		Apply-Zone -CurrentZoneName $ZoneName -CurrentZoneId $ZoneId -CurrentCentreReplicas $CentreReplicas -CurrentGateReplicas $GateReplicas -CurrentSceneReplicas $SceneReplicas
+		Apply-Zone -CurrentZoneName $ZoneName -CurrentZoneId $ZoneId -CurrentCentreReplicas $CentreReplicas -CurrentGateReplicas $GateReplicas -CurrentSceneReplicas $SceneReplicas -CurrentSceneWorldReplicas $SceneWorldReplicas -CurrentSceneInstanceReplicas $SceneInstanceReplicas
 	}
 	"zone-down" {
 		Remove-Zone -CurrentZoneName $ZoneName
@@ -1024,7 +1489,7 @@ switch ($Command) {
 		$zonesPath = Resolve-ZonesConfigPath
 		$zones = Get-ZonesFromJson -Path $zonesPath
 		foreach ($zone in $zones) {
-			Apply-Zone -CurrentZoneName $zone.name -CurrentZoneId $zone.zoneId -CurrentCentreReplicas $zone.centre -CurrentGateReplicas $zone.gate -CurrentSceneReplicas $zone.scene
+			Apply-Zone -CurrentZoneName $zone.name -CurrentZoneId $zone.zoneId -CurrentCentreReplicas $zone.centre -CurrentGateReplicas $zone.gate -CurrentSceneReplicas $zone.scene -CurrentSceneWorldReplicas $zone.scene_world -CurrentSceneInstanceReplicas $zone.scene_instance -CurrentSceneLegacyExplicit $zone.scene_legacy_explicit
 		}
 	}
 	"all-down" {

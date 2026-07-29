@@ -26,6 +26,7 @@ cpp/
 | Player save pipeline | `libs/services/scene/player/system/player_lifecycle.cpp` | `SavePlayerToRedis`: marshals → stamps probe → Redis cache → Kafka |
 | Data-consistency stress probe | `libs/services/scene/player/system/stress_test_probe.{h,cpp}` | Gated by `STRESS_TEST_PROBE=1` env var. Go mirror: `go/db/internal/stresstest/probe.go` |
 | Scene node role config | `libs/engine/config/config.cpp` `readGameConfig` | Honours `SCENE_NODE_TYPE` / `ZONE_ID` / `GAME_CONFIG_PATH` env overrides |
+| Agones lifecycle (high-density) | `nodes/scene/agones/` | Ready/Allocated state machine + room counting. HTTP only on the lifecycle worker thread, never on the EventLoop. Design: `docs/design/agones-scene-node-high-density.md` |
 | Static analysis rule | `.clang-tidy` | Custom `myplugin-no-member-pointer` check only |
 
 ## CONVENTIONS
@@ -66,6 +67,11 @@ clang-tidy <file.cpp> --config-file=cpp\.clang-tidy
 ```
 
 ## NOTES
+- **Agones lifecycle** (`nodes/scene/agones/`):
+  - All HTTP runs on a dedicated lifecycle worker thread. Create handlers use RAII permits: gRPC uses `AcquireCreatePermitBlocking`; muduo EventLoop uses `AcquireCreatePermitNonBlocking` and fails closed. The permit must live until the request finishes so an in-flight create prevents a premature return to Ready.
+  - Room counting hooks `SceneEventHandler::OnSceneCreatedHandler` / `OnSceneDestroyedHandler` only. Do NOT add a second counter in the RPC handlers; both RPC paths fire those events exactly when an entity is really created/destroyed.
+  - libcurl is Linux-only and gated on `MMORPG_AGONES_CURL`; Windows builds get a no-op transport (`MakeDefaultHttpTransport()` returns nullptr → `Disabled`). Do not add cpp-httplib / CPR / Boost.Beast, and do not vendor curl into `third_party/`.
+  - Added to `scene.vcxproj`, `scene.vcxproj.filters`, and `CMakeLists.txt`; tests live in `cpp/tests/agones_lifecycle_test/` and compile the two sources directly with an injected fake transport (no sidecar needed).
 - `libs/services/scene/` is the highest-value subtree for durable domain fixes.
 - Tests are native binaries/projects under `cpp/tests/`; run the relevant target rather than assuming a single root test runner.
 - **Stress test probe** (`libs/services/scene/player/system/stress_test_probe.{h,cpp}`):

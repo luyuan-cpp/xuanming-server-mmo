@@ -47,6 +47,21 @@ func SetNodeDialerForTest(d func(context.Context, string) (*grpc.ClientConn, err
 	return func() { nodeDialer = prev }
 }
 
+// nodeEndpointOverride, when non-nil, replaces the etcd/knownNodes endpoint
+// lookup. Same rationale as nodeDialer: tests need the whole RPC pipeline to
+// reach an in-process fake without registering a knownNodes entry for every
+// synthetic node id (several tests use non-numeric ids like "hot"/"A").
+// Production never sets this.
+var nodeEndpointOverride func(nodeId string) (string, bool)
+
+// SetNodeEndpointResolverForTest installs an endpoint resolver override and
+// returns a restore func. MUST be paired with t.Cleanup.
+func SetNodeEndpointResolverForTest(r func(nodeId string) (string, bool)) (restore func()) {
+	prev := nodeEndpointOverride
+	nodeEndpointOverride = r
+	return func() { nodeEndpointOverride = prev }
+}
+
 // ResetNodeConnCacheForTest evicts every cached gRPC ClientConn. Integration
 // tests reuse nodeIDs across sub-tests (node-A in test 1 is an unrelated
 // bufconn in test 2); without eviction the second test would dial the
@@ -177,6 +192,12 @@ func getOrDialNode(ctx context.Context, svcCtx *svc.ServiceContext, nodeId strin
 // It first checks the in-memory knownNodes map (maintained by the watch loop),
 // then falls back to a fresh etcd query.
 func resolveNodeEndpoint(ctx context.Context, svcCtx *svc.ServiceContext, nodeId string) (string, error) {
+	if nodeEndpointOverride != nil {
+		if ep, ok := nodeEndpointOverride(nodeId); ok {
+			return ep, nil
+		}
+	}
+
 	// Fast path: use the watch-maintained in-memory registry.
 	if ep, ok := resolveFromKnownNodes(nodeId); ok {
 		return ep, nil

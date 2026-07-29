@@ -247,6 +247,11 @@ func newTestSvcCtxWithWorldScenes(t *testing.T) (*svc.ServiceContext, *miniredis
 	c.InstanceIdleTimeoutSeconds = 300
 	c.InstanceCheckIntervalSeconds = 10
 
+	// CreateScene 在 C++ CreateScene RPC 失败时会回滚(不再留 phantom scene),
+	// 所以本包里几乎所有"创建一个场景再断言点什么"的用例都需要一个能应答的
+	// 节点。默认装上,个别要验证 RPC 失败的用例再自己覆盖 createShouldFail。
+	installDefaultFakeSceneNode(t)
+
 	return &svc.ServiceContext{
 		Config:     c,
 		Redis:      rds,
@@ -341,6 +346,9 @@ func TestCreateScene_Instance_UniquIds(t *testing.T) {
 	ctx := context.Background()
 
 	mr.ZAdd(testLoadKey(), 0, "10")
+	// CreateScene 现在会在 C++ CreateScene RPC 失败时回滚(不再留 phantom
+	// scene),所以想断言"创建成功"的用例必须给一个真的能应答的节点。
+	withReachableSceneNode(t, sc, "10")
 
 	logic := NewCreateSceneLogic(ctx, sc)
 
@@ -365,6 +373,7 @@ func TestCreateScene_Instance_TrackedInActiveSet(t *testing.T) {
 	ctx := context.Background()
 
 	mr.ZAdd(testLoadKey(), 0, "10")
+	withReachableSceneNode(t, sc, "10")
 
 	logic := NewCreateSceneLogic(ctx, sc)
 	resp, _ := logic.CreateScene(&scene_manager.CreateSceneRequest{
@@ -390,6 +399,7 @@ func TestEnterScene_IncrementsPlayerCount(t *testing.T) {
 
 	// Setup: create an instance scene so there's a scene->node mapping.
 	mr.ZAdd(testLoadKey(), 0, "10")
+	withReachableSceneNode(t, sc, "10")
 	logic := NewCreateSceneLogic(ctx, sc)
 	resp, err := logic.CreateScene(&scene_manager.CreateSceneRequest{SceneConfId: 2001, ZoneId: testZoneId})
 	require.NoError(t, err)
@@ -418,6 +428,7 @@ func TestLeaveScene_DecrementsPlayerCount(t *testing.T) {
 	ctx := context.Background()
 
 	mr.ZAdd(testLoadKey(), 0, "10")
+	withReachableSceneNode(t, sc, "10")
 	logic := NewCreateSceneLogic(ctx, sc)
 	resp, _ := logic.CreateScene(&scene_manager.CreateSceneRequest{SceneConfId: 2001, ZoneId: testZoneId})
 	sceneId := resp.SceneId
@@ -648,6 +659,7 @@ func TestCreateScene_Mirror_SingleNode_Trivial(t *testing.T) {
 	// test makes sure the single-node path doesn't regress when we evolve
 	// the decision logic later.
 	mr.ZAdd(testLoadKey(), 0, "7")
+	withReachableSceneNode(t, sc, "7")
 	sc.Redis.Set(fmt.Sprintf(SceneNodeKeyFmt, uint64(55555)), "7")
 
 	logic := NewCreateSceneLogic(ctx, sc)
@@ -670,6 +682,7 @@ func TestCreateScene_Mirror_NoSourceMapping_FallsBackToBestNode(t *testing.T) {
 	// (different from "node is dead"). Expect clean fallback to GetBestNode.
 	mr.ZAdd(testLoadKey(), 5, "1")
 	mr.ZAdd(testLoadKey(), 50, "2")
+	withReachableSceneNode(t, sc, "1", "2")
 
 	logic := NewCreateSceneLogic(ctx, sc)
 	resp, err := logic.CreateScene(&scene_manager.CreateSceneRequest{
@@ -692,6 +705,7 @@ func TestCreateScene_Mirror_SourceUnderLoadCap_StillColocates(t *testing.T) {
 	// co-location still wins even though "cool" has a lower best-node score.
 	mr.ZAdd(testLoadKey(), 100, "hot")
 	mr.ZAdd(testLoadKey(), 0, "cool")
+	withReachableSceneNode(t, sc, "hot", "cool")
 	sc.Redis.Set(fmt.Sprintf(SceneNodeKeyFmt, uint64(33334)), "hot")
 	sc.Redis.Set(fmt.Sprintf(NodeSceneCountKey, "hot"), "3")
 
@@ -716,6 +730,7 @@ func TestCreateScene_Instance_NonMirror_UsesGetBestNode(t *testing.T) {
 	sc.Redis.Set(fmt.Sprintf(SceneNodeKeyFmt, uint64(11111)), "A")
 	mr.ZAdd(testLoadKey(), 100, "A")
 	mr.ZAdd(testLoadKey(), 0, "B")
+	withReachableSceneNode(t, sc, "A", "B")
 
 	logic := NewCreateSceneLogic(ctx, sc)
 	resp, err := logic.CreateScene(&scene_manager.CreateSceneRequest{
@@ -740,6 +755,7 @@ func TestCreateScene_Mirror_SetsMirrorFlag(t *testing.T) {
 	ctx := context.Background()
 
 	mr.ZAdd(testLoadKey(), 0, "10")
+	withReachableSceneNode(t, sc, "10")
 	sc.Redis.Set(fmt.Sprintf(SceneNodeKeyFmt, uint64(77777)), "10")
 
 	logic := NewCreateSceneLogic(ctx, sc)
@@ -1401,7 +1417,7 @@ func TestAtomicDestroyIfIdle_AbortsOnPlayers(t *testing.T) {
 	sc.Redis.Set(fmt.Sprintf(InstancePlayerCountKey, sceneId), "1")
 	sc.Redis.Zadd(activeInstancesKey(testZoneId), nowUnix(), fmt.Sprintf("%d", sceneId))
 
-	nodeId, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+	nodeId, _, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
 	require.NoError(t, err)
 	assert.Equal(t, "", nodeId, "must abort when player_count > 0")
 
@@ -1425,7 +1441,7 @@ func TestAtomicDestroyIfIdle_DestroysWhenIdle(t *testing.T) {
 	sc.Redis.Set(sceneZoneKey(sceneId), "1")
 	sc.Redis.Zadd(activeInstancesKey(testZoneId), nowUnix(), fmt.Sprintf("%d", sceneId))
 
-	nodeId, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+	nodeId, _, err := AtomicDestroyIfIdle(sc, testZoneId, sceneId)
 	require.NoError(t, err)
 	assert.Equal(t, "10", nodeId)
 
@@ -2031,7 +2047,7 @@ func TestStress_EnterDestroyRace_NoOrphanPlayerCount(t *testing.T) {
 		}()
 		go func() {
 			defer wg.Done()
-			_, _ = AtomicDestroyIfIdle(sc, testZoneId, sceneId)
+			_, _, _ = AtomicDestroyIfIdle(sc, testZoneId, sceneId)
 		}()
 	}
 	wg.Wait()

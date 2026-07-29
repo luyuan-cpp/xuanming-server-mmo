@@ -253,6 +253,83 @@ func reconcileDeadNodeScenes(svcCtx *svc.ServiceContext, entry nodeEntry) {
 	}
 }
 
+// FindNodeByPodIP maps a Pod IP back to a registered scene node.
+//
+// Agones 分配链路需要这个:GameServerAllocation 给回来的是
+// gameServerName + PodIP,而 SceneManager 下游(Redis 映射、CreateScene RPC)
+// 一律用 C++ 侧自己注册的 nodeID。两者唯一的公共键就是 Pod IP ——
+// C++ 节点注册进 etcd 的 endpoint/grpcEndpoint IP 就是容器里的 POD_IP
+// (Fleet 模板通过 downward API 注入)。
+//
+// 返回 (nodeID, zoneID, sceneNodeType, ok)。ok==false 表示这个 Pod 还没
+// 把自己注册进 etcd(启动竞态),调用方必须 fail-closed。
+//
+// gRPC 与普通 endpoint 都比对:两者在 K8s 里是同一个 Pod IP,但不同版本
+// 的 C++ 节点可能只填其中一个。
+func FindNodeByPodIP(podIP string) (string, uint32, uint32, bool) {
+	if podIP == "" {
+		return "", 0, 0, false
+	}
+
+	knownNodesMu.RLock()
+	defer knownNodesMu.RUnlock()
+	for _, entry := range knownNodes {
+		if entry.reg.GrpcEndpoint.IP == podIP || entry.reg.Endpoint.IP == podIP {
+			return entry.nodeID, entry.reg.ZoneId, entry.reg.SceneNodeType, true
+		}
+	}
+	return "", 0, 0, false
+}
+
+// FindPodIPByNodeID 是 FindNodeByPodIP 的反向查询,供镜像共置路径把
+// "要共置的 nodeID" 翻回 Pod IP,再去反查对应的 Agones GameServer。
+func FindPodIPByNodeID(nodeID string) (string, bool) {
+	if nodeID == "" {
+		return "", false
+	}
+
+	knownNodesMu.RLock()
+	defer knownNodesMu.RUnlock()
+	for _, entry := range knownNodes {
+		if entry.nodeID != nodeID {
+			continue
+		}
+		if ip := entry.reg.GrpcEndpoint.IP; ip != "" {
+			return ip, true
+		}
+		if ip := entry.reg.Endpoint.IP; ip != "" {
+			return ip, true
+		}
+		return "", false
+	}
+	return "", false
+}
+
+// SetKnownNodeForTest 让单元测试在不起 etcd 的情况下往 knownNodes 里塞条目。
+// 返回的 restore 必须配合 t.Cleanup 调用,否则会污染后续用例。
+func SetKnownNodeForTest(etcdKey, nodeID, podIP string, zoneID, sceneNodeType uint32) func() {
+	knownNodesMu.Lock()
+	defer knownNodesMu.Unlock()
+
+	prev, existed := knownNodes[etcdKey]
+	entry := nodeEntry{nodeID: nodeID}
+	entry.reg.ZoneId = zoneID
+	entry.reg.SceneNodeType = sceneNodeType
+	entry.reg.GrpcEndpoint.IP = podIP
+	entry.reg.Endpoint.IP = podIP
+	knownNodes[etcdKey] = entry
+
+	return func() {
+		knownNodesMu.Lock()
+		defer knownNodesMu.Unlock()
+		if existed {
+			knownNodes[etcdKey] = prev
+		} else {
+			delete(knownNodes, etcdKey)
+		}
+	}
+}
+
 // rebuildActiveZones derives activeZones from knownNodes.
 func rebuildActiveZones() {
 	knownNodesMu.RLock()

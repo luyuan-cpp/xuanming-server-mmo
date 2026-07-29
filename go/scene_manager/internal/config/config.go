@@ -127,6 +127,15 @@ type Config struct {
 	// Default 300s (5 min). Set to 0 to disable — event-driven only.
 	RebalanceCheckIntervalSeconds int64 `json:",default=300"`
 
+	// Agones: 高密度 GameServer 容量预占。默认整体关闭 —— 不配就是接入
+	// Agones 之前的行为(按 Redis 负载分数挑节点)。
+	// 设计文档:docs/design/agones-scene-node-high-density.md。
+	Agones AgonesConfig `json:",optional"`
+
+	// WorldAutoscale: 大世界频道按人数自动扩缩容。默认关闭。
+	// 设计文档:docs/design/world-channel-autoscale.md。
+	WorldAutoscale WorldAutoscaleConfig `json:",optional"`
+
 	// CleanupOrphanChannelsOnStartup: when true (default), SceneManager
 	// scans Redis on fullSync for world_channels:* sets whose confId is
 	// not in World.json and deletes them. This removes drift left by
@@ -136,6 +145,96 @@ type Config struct {
 	// NB: cleanup is refused when worldConfIds() returns empty (a
 	// defensive check against a table-load failure nuking prod data).
 	CleanupOrphanChannelsOnStartup bool `json:",default=true"`
+}
+
+// AgonesConfig 控制 SceneManager 是否通过 Agones GameServerAllocation
+// 预占房间容量。
+//
+// 两个开关是分开的,不要合并:
+//   - Enabled=false        完全不碰 Agones,选节点走原来的 Redis 负载分数。
+//   - Enabled=true 且 HighDensityEnabled=false
+//     走 GSA 选 GameServer,但不使用 Counters and Lists —— 一个进程一次
+//     只接一个房间。可用于在 beta 能力打开之前先验证分配链路。
+//   - Enabled=true 且 HighDensityEnabled=true
+//     完整高密度:rooms Counter 参与筛选并在 GSA 内原子 +1。
+//
+// Counters and Lists 在 Agones 里是 **beta** 能力,需要集群侧显式打开
+// FeatureGate。所以 HighDensityEnabled 默认 false,由运维在确认 Agones
+// 版本与 FeatureGate 之后再开。
+type AgonesConfig struct {
+	Enabled            bool `json:",default=false"`
+	HighDensityEnabled bool `json:",default=false"`
+
+	// Namespace 是 Fleet 所在命名空间。留空则用 POD_NAMESPACE 环境变量,
+	// 再不行就用 "default"。
+	Namespace string `json:",optional"`
+
+	// RoomCapacity 只用于**生成部署模板时**的参考值,SceneManager 运行时
+	// 不依赖它(容量是 GameServer 对象上的 status.counters.rooms.capacity)。
+	// 这里保留一个字段是为了让配置与压测结论有个落点。
+	//
+	// 注意:不要硬编码"一个 Scene Node 能承载多少房间"。C++ Scene Node 是
+	// 单 EventLoop,实际容量必须按帧耗时、AOI、玩家数和内存压测确定
+	// (压测口径见 CLAUDE.md §6)。
+	RoomCapacity int64 `json:",default=0"`
+
+	// BuildLabel 为空表示分配时不按 mmorpg.io/build 过滤。
+	// 滚动升级期间通常留空,否则新旧版本会互相看不见。
+	BuildLabel string `json:",optional"`
+
+	// CounterRollbackRetries / CounterRollbackBackoffMs 控制回滚 rooms 计数
+	// 时的乐观并发重试(409 冲突是正常现象)。
+	CounterRollbackRetries   int   `json:",default=5"`
+	CounterRollbackBackoffMs int64 `json:",default=100"`
+
+	// RequestTimeoutMs 单次 K8s API 调用超时。
+	RequestTimeoutMs int64 `json:",default=5000"`
+
+	// ReconcileIntervalSeconds: 周期性比对 Agones rooms 计数、Redis Scene
+	// 映射与节点上报数量。0 = 关闭。
+	// 第一版发现不一致**只告警和记指标**,不自动覆盖计数 —— 证据不完整时
+	// 自动"修正"很可能把对的一方改错。
+	ReconcileIntervalSeconds int64 `json:",default=60"`
+}
+
+// WorldAutoscaleConfig 控制大世界频道按人数自动扩缩容。
+//
+// 口径全部**按频道**算(`instance:{sceneId}:player_count`),不是按进程。
+// 进程数量由 Agones FleetAutoscaler 管,两件事分开。
+type WorldAutoscaleConfig struct {
+	Enabled bool `json:",default=false"`
+
+	// CheckIntervalSeconds: 多久跑一轮扩缩容决策。
+	CheckIntervalSeconds int64 `json:",default=30"`
+
+	// ScaleOutPlayerThreshold: 该地图**所有**频道人数都 >= 这个值才扩容。
+	//
+	// 要求"所有"而不是"任一":负载不均时(刚扩出来的新频道是空的、老频道
+	// 还满着),按"任一"会连续触发扩容,扩出一堆空频道。
+	ScaleOutPlayerThreshold int64 `json:",default=2000"`
+
+	// ScaleInPlayerThreshold: 某频道人数 < 这个值就把它排空并销毁,
+	// 玩家被强制改派到同图其它频道。
+	//
+	// 与扩容线之间必须留足够宽的带(默认 100 vs 2000),否则缩容把人并过去
+	// 立刻触发扩容,扩容又让某个频道掉到线下 —— 自激振荡,玩家被反复改派。
+	ScaleInPlayerThreshold int64 `json:",default=100"`
+
+	// MinChannelsPerMap: 每个大世界地图保留的最小频道数。
+	// **硬下限是 1**,配成 0 也会被钳回 1:缩到 0 会让该地图无法进入。
+	MinChannelsPerMap int `json:",default=1"`
+
+	// MaxChannelsPerMap: 每个大世界地图的频道数上限,防止异常流量把频道
+	// 扩到失控。0 = 不限(不推荐)。到顶时只记 ERROR + 指标,不再扩。
+	MaxChannelsPerMap int `json:",default=16"`
+
+	// CooldownSeconds: 一次伸缩之后该 (zone, map) 的静默期。
+	// 伸缩的效果(玩家重新分布)需要时间体现,不等就会连续误判。
+	CooldownSeconds int64 `json:",default=120"`
+
+	// DrainTimeoutSeconds: 排空标记的 TTL。进程在排空中途挂掉时标记会过期,
+	// 下一轮 sweep 重新接手,不会留下永久"半死"频道。
+	DrainTimeoutSeconds int64 `json:",default=300"`
 }
 
 // ChannelCountFor returns the effective world-channel count for a confId,

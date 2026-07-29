@@ -45,6 +45,12 @@ The scene container reads two environment variables in addition to
 
 `bin/etc/game_config_instance.yaml` is shipped as a minimal reference file.
 
+K8s 部署走的是 **env 覆盖**这一条路,不是两份 ConfigMap:`k8s_deploy.ps1` 只生成
+一个 `node-config` ConfigMap(gate / scene 共用),里面的 `SceneNodeType: 0` 只是
+文件基线;角色由 Deployment 上的 `SCENE_NODE_TYPE` 环境变量决定。生效点在
+`cpp/libs/engine/config/config.cpp::readGameConfig` —— 先读 yaml,再用 env 覆盖
+(last-wins),非法值只告警并保留 yaml 值。
+
 ## 3. Rollout order (zero-downtime)
 
 The safe order is: loosen Go routing → bring up the new pool → tighten Go
@@ -70,16 +76,54 @@ routing again. This way the switch does not race with pod readiness.
      scene_world: 2
      scene_instance: 2
    ```
-2. Re-run your `k8s-zone-up` / `k8s-all-up` command. The orchestration
-   script is expected to emit two Deployments per zone:
+2. Re-run your `k8s-zone-up` / `k8s-all-up` command. `tools/scripts/k8s_deploy.ps1`
+   emits two Deployments per zone:
    - `scene-world`    with `env.SCENE_NODE_TYPE=0`
    - `scene-instance` with `env.SCENE_NODE_TYPE=1`
+
+   先用 DryRun 确认生成结果再连集群(不访问集群、不构建镜像):
+   ```bash
+   pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-up \
+     -ZonesConfigPath deploy/k8s/zones.ops-recommended.yaml \
+     -DryRun -SkipInfra -NodeImage ghcr.io/luyuancpp/mmorpg-node:test
+   ```
+   DryRun 会把每份将要 apply 的 manifest 原样打印在
+   `--- BEGIN MANIFEST --- / --- END MANIFEST ---` 之间,并在每个 zone 前打印
+   `Scene pools resolved: scene-world=2(SCENE_NODE_TYPE=0) scene-instance=2(SCENE_NODE_TYPE=1)`。
 3. Wait for both Deployments to report ready. Verify:
    ```bash
    kubectl -n mmorpg-zone-<zone> get deploy
    redis-cli SMEMBERS scene_nodes:zone:<zoneId>
    redis-cli HGETALL node:<nodeId>:scene_node_type  # expect "0" or "1"
    ```
+4. **删掉旧的单池 Deployment**。`kubectl apply` 不会删除上一版留下的
+   `scene` Deployment,不删的话这个 zone 会同时存在「拆分池」和「未分角色的
+   legacy 池」,`GetBestNodeForPurpose` 的容量统计出现两套语义:
+   ```bash
+   kubectl -n mmorpg-zone-<zone> delete deployment scene
+   ```
+   脚本在拆分模式下会打印同样内容的 NOTE 提醒。
+
+### 3.2.1 副本数来源与兼容规则(唯一权威)
+
+实现在 `tools/scripts/k8s_deploy.ps1::Resolve-SceneDeploymentPlan`,文档以代码为准:
+
+| zones 配置 / 命令行 | 生成的 Deployment | SCENE_NODE_TYPE |
+|---|---|---|
+| 出现 `scene_world` 或 `scene_instance` 任一键 | `scene-world` + `scene-instance` | 0 / 1 |
+| 只有 `scene`(或什么都没写,取 `-SceneReplicas`) | `scene` | 0 |
+
+- 两种模式**互斥**:拆分模式下不会再生成名为 `scene` 的 Deployment;
+  legacy 模式下不会生成 `scene-world` / `scene-instance`。
+- 拆分模式里没写的那一侧按 **0 副本**生成(Deployment 仍然创建),对应 §3.4
+  回滚动作"把 instance 池缩到零";脚本会 `Write-Warning` 提示该池为空时
+  `StrictNodeTypeSeparation: true` 会返回 `ErrNoNodeForPurpose`。
+- 同一个 zone 里 `scene` 与 `scene_world`/`scene_instance` 同时存在时,拆分模式
+  生效、`scene` 被忽略,并 `Write-Warning` 要求把 `scene` 键删掉。
+- 命令行等价开关:`-SceneWorldReplicas` / `-SceneInstanceReplicas`(`-1` = 未指定,
+  `0` = 显式缩到零副本),`dev_tools.ps1` / `k8s_image.ps1` 均已透传。
+- `OpsProfile` 的副本下限(`managed-cloud` / `bare-metal` 把 scene 抬到 4)**只作用于
+  legacy 的 `-SceneReplicas`**。拆分池不做静默抬高,避免"实际部署 ≠ 配置文件"。
 
 ### 3.3 Phase 3 — Tighten routing
 1. Set `StrictNodeTypeSeparation: true` in `scene_manager_service.yaml`,

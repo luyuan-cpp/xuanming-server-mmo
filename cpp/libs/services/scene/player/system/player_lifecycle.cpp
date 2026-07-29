@@ -41,6 +41,9 @@
 #include "thread_context/node_context_manager.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
 #include "table/proto/tip/scene_error_tip.pb.h"
+#include "proto/scene_manager/scene_manager_service.pb.h"
+#include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
+#include <vector>
 
 thread_local PendingEnterMap tlsPendingEnterMap;
 
@@ -48,6 +51,18 @@ PendingEnterMap& PlayerLifecycleSystem::GetPendingEnterMap()
 {
 	return tlsPendingEnterMap;
 }
+
+// 紧急疏散票据:实体销毁后就再也拿不到 gate / session 了,所以必须在存盘前抄一份。
+struct EmergencyRelocateTicket
+{
+	Guid playerId{kInvalidGuid};
+	SessionId sessionId{kInvalidSessionId};
+	NodeId gateNodeId{0};
+	std::string gateInstanceId;
+};
+
+thread_local bool tlsEmergencyRelocating = false;
+thread_local std::unordered_map<Guid, EmergencyRelocateTicket> tlsEmergencyRelocateTickets;
 
 namespace
 {
@@ -241,11 +256,7 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 
 		LOG_INFO << "Player marked for unregistration: " << playerId;
 
-		// Must complete save before deleting session; consider better ordering
-		RemovePlayerSession(playerId);
-		LOG_INFO << "Player session removed";
-		// TODO: Verify no race condition on destroy-after-save ordering
-		DestroyPlayer(playerId);
+		FinishExitAfterPersist(playerId);
 	}
 
 	// Update last-persisted snapshot (todo.md #204 / #226 slice B).
@@ -405,14 +416,16 @@ void PlayerLifecycleSystem::DestroyPlayer(Guid playerId)
 
 void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player)
 {
-	const auto* g = tlsEcs.actorRegistry.try_get<Guid>(player);
-	LOG_INFO << "HandleExitGameNode: Player " << (g ? *g : 0) << " is exiting the scene node";
-
+	// valid() 必须在 try_get 之前:对已销毁的实体调 try_get 是 entt 的未定义行为,
+	// 旧顺序是先 try_get 再判 valid,等于先踩了再检查。
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
 		LOG_ERROR << "HandleExitGameNode: Player entity is not valid";
 		return;
 	}
+
+	const auto* g = tlsEcs.actorRegistry.try_get<Guid>(player);
+	LOG_INFO << "HandleExitGameNode: Player " << (g ? *g : 0) << " is exiting the scene node";
 
 	if (tlsEcs.actorRegistry.all_of<UnregisterPlayer>(player))
 	{
@@ -436,7 +449,25 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player)
 	// Capture a logout snapshot before persisting (safety net for rollback).
 	SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGOUT);
 
-	PlayerLifecycleSystem::SavePlayerToRedis(player);
+	const Guid exitingPlayerId = (g != nullptr) ? *g : kInvalidGuid;
+	const bool savePending = PlayerLifecycleSystem::SavePlayerToRedis(player);
+
+	if (!savePending)
+	{
+		// proto-compare 快路径判定"Redis 里已经是同一份数据",于是本次不写盘,
+		// HandlePlayerAsyncSaved **永远不会**被调用。
+		//
+		// 旧实现到这里就 return 了,于是 UnregisterPlayer 标记的实体、SessionMap 条目、
+		// tlsEcs.playerList 条目全部留在内存里再也不清 —— 玩家看起来"还在线",
+		// 重连时还得靠别的兜底路径。AFK 踢下线是最容易命中的场景:玩家挂机不动,
+		// 数据与上一次周期存盘逐字节相同,快路径必然跳过。
+		//
+		// 数据已经在盘上,直接跑与存盘回调相同的收尾。
+		LOG_INFO << "HandleExitGameNode: player " << exitingPlayerId
+				 << " already persisted (dirty-save fast path); finishing exit inline";
+		FinishExitAfterPersist(exitingPlayerId);
+		return;
+	}
 
 	// Re-login race protection (todo.md #280). The save is now in flight.
 	// THREE layers cover the read-stale-data window between SavePlayerToRedis
@@ -460,6 +491,179 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player)
 	//
 	// IsSaveInFlight() exposes layers 1–2 for callers that want to query
 	// rather than rely on the implicit ECS-marker convention.
+}
+
+void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
+{
+	if (playerId == kInvalidGuid)
+	{
+		LOG_ERROR << "FinishExitAfterPersist: invalid player id";
+		return;
+	}
+
+	// 顺序不能反:先改派再摘 session 的话,改派用到的 session 已经没了;
+	// 先销毁实体再改派的话,票据里的 gate/session 也拿不到。
+	// 改派只需要票据里抄下来的信息,所以放在最前面。
+	DispatchEmergencyRelocate(playerId);
+
+	RemovePlayerSession(playerId);
+	LOG_INFO << "Player session removed";
+	DestroyPlayer(playerId);
+}
+
+// 抄一份改派票据并把玩家推进退出流程。
+//
+// 票据必须在实体销毁前抄:改派要用的 gate / session 挂在实体上,
+// HandleExitGameNode 的存盘回调会把实体销毁掉。
+//
+// 返回 true 表示登记了票据(玩家有活着的 gate 会话,稍后会被改派);
+// false 表示玩家已经断线,只存盘不改派。
+//
+// 供两条路径共用:整节点疏散(身份冲突)与单场景排空(频道缩容)。
+// 两者对玩家的处理完全一样 —— 存盘、改派到大世界、销毁本地实体 ——
+// 区别只在于**范围**,以及节点自己要不要跟着退出。所以逻辑只写一份。
+bool PlayerLifecycleSystem::EnqueueRelocateTicket(entt::entity playerEntity, const char *reasonTag)
+{
+	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		return false;
+	}
+	const auto *guid = tlsEcs.actorRegistry.try_get<Guid>(playerEntity);
+	if (guid == nullptr || *guid == kInvalidGuid)
+	{
+		return false;
+	}
+
+	bool ticketed = false;
+	const auto *session = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity);
+	if (session != nullptr && session->gate_session_id() != kInvalidSessionId)
+	{
+		auto &gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
+
+		EmergencyRelocateTicket ticket;
+		ticket.playerId = *guid;
+		ticket.sessionId = session->gate_session_id();
+		ticket.gateNodeId = GetGateNodeId(session->gate_session_id());
+		if (auto gateEntityOpt = ResolveLocalZoneGateEntity(session->gate_session_id()); gateEntityOpt)
+		{
+			if (const auto *gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt))
+			{
+				ticket.gateInstanceId = gateNodeInfo->node_uuid();
+			}
+		}
+		tlsEmergencyRelocateTickets.insert_or_assign(*guid, std::move(ticket));
+		ticketed = true;
+	}
+	else
+	{
+		// 没有 gate 会话就没法改派(玩家已经断线),存盘仍然要做。
+		LOG_INFO << "[" << reasonTag << "] player " << *guid
+				 << " has no live gate session; persisting only";
+	}
+
+	// 已经在退出流程中的玩家这里是 no-op,票据仍然登记着,
+	// 等它自己的存盘回调到达时一样会被消费。
+	HandleExitGameNode(playerEntity);
+	return ticketed;
+}
+
+void PlayerLifecycleSystem::BeginEmergencyRelocateAll()
+{
+	if (tlsEmergencyRelocating)
+	{
+		return;
+	}
+	tlsEmergencyRelocating = true;
+
+	// 存盘链路会在回调里销毁实体,先把实体列表固化下来再遍历。
+	auto view = tlsEcs.actorRegistry.view<Player>();
+	std::vector<entt::entity> players(view.begin(), view.end());
+
+	LOG_WARN << "[EmergencyRelocate] node identity lost; persisting and relocating "
+			 << players.size() << " online player(s) to the main world";
+
+	for (auto entity : players)
+	{
+		EnqueueRelocateTicket(entity, "EmergencyRelocate");
+	}
+}
+
+std::size_t PlayerLifecycleSystem::BeginSceneDrain(entt::entity sceneEntity)
+{
+	auto *scenePlayers = tlsEcs.sceneRegistry.try_get<ScenePlayers>(sceneEntity);
+	if (scenePlayers == nullptr || scenePlayers->empty())
+	{
+		return 0;
+	}
+
+	// 退出流程会把玩家从 ScenePlayers 里摘掉,边遍历边改会失效迭代器,
+	// 所以先固化一份快照。
+	std::vector<entt::entity> residents(scenePlayers->begin(), scenePlayers->end());
+
+	LOG_WARN << "[SceneDrain] draining scene entity " << entt::to_integral(sceneEntity)
+			 << ": relocating " << residents.size() << " player(s) to the main world";
+
+	std::size_t relocating = 0;
+	for (auto entity : residents)
+	{
+		if (EnqueueRelocateTicket(entity, "SceneDrain"))
+		{
+			++relocating;
+		}
+	}
+	return relocating;
+}
+
+bool PlayerLifecycleSystem::IsEmergencyRelocateDrained()
+{
+	if (!tlsEmergencyRelocating)
+	{
+		return true;
+	}
+	// 票据清空 = 每个有会话的玩家都已存盘落地并派发过改派;
+	// 实体清空 = 本地不再持有任何玩家状态。
+	return tlsEmergencyRelocateTickets.empty() &&
+		   tlsEcs.actorRegistry.view<Player>().size() == 0;
+}
+
+void PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
+{
+	auto it = tlsEmergencyRelocateTickets.find(playerId);
+	if (it == tlsEmergencyRelocateTickets.end())
+	{
+		return; // 不在疏散中,或者已经派发过
+	}
+	const EmergencyRelocateTicket ticket = it->second;
+	tlsEmergencyRelocateTickets.erase(it);
+
+	const auto smEntity = GetSceneManagerEntity(playerId);
+	if (smEntity == entt::null)
+	{
+		LOG_ERROR << "[EmergencyRelocate] no SceneManager node reachable; player " << playerId
+				  << " keeps its gate session and has to re-enter through the normal login flow";
+		return;
+	}
+	auto &smRegistry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
+
+	::scene_manager::EnterSceneRequest req;
+	req.set_player_id(playerId);
+	// scene_id / scene_conf_id 都留 0:让 SceneManager 按它自己的世界频道表挑一个
+	// **存活节点**上的大世界频道。C++ 侧不复制一份地图/频道选择规则(权威只有一份),
+	// 于是"副本节点挂了"与"大世界节点挂了"落到完全相同的一条路径。
+	req.set_session_id(ticket.sessionId);
+	req.set_gate_id(std::to_string(ticket.gateNodeId));
+	req.set_gate_instance_id(ticket.gateInstanceId);
+	req.set_gate_zone_id(GetZoneId());
+	req.set_zone_id(GetZoneId());
+	// 刻意不设 request_id。SceneManager 的 request_id 去重是 60s SETNX,一旦填一个
+	// 按 (node, player) 稳定的键,同一个玩家在 60s 内被排空第二次(频道缩容会发生)
+	// 就会被静默丢掉,玩家卡在原地。这里本来也不需要去重:票据在发送前就已经从
+	// tlsEmergencyRelocateTickets 里删掉了,每张票最多发一次,也没有重试。
+	// 其它 EnterScene 调用点(player_scene.cpp)同样不带 request_id。
+	scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, req);
+
+	LOG_INFO << "[EmergencyRelocate] requested main-world re-home for player " << playerId
+			 << " (session=" << ticket.sessionId << ", gate=" << ticket.gateNodeId << ")";
 }
 
 void PlayerLifecycleSystem::HandleCrossZoneTransfer(entt::entity playerEntity)
@@ -773,12 +977,12 @@ entt::entity PlayerLifecycleSystem::InitPlayerFromAllData(const PlayerAllData &p
 	return player;
 }
 
-void PlayerLifecycleSystem::SavePlayerToRedis(entt::entity player)
+bool PlayerLifecycleSystem::SavePlayerToRedis(entt::entity player)
 {
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
 		LOG_ERROR << "[SavePlayerToRedis] Invalid player entity";
-		return;
+		return false;
 	}
 
 	auto playerId = tlsEcs.actorRegistry.get<Guid>(player);
@@ -833,8 +1037,9 @@ void PlayerLifecycleSystem::SavePlayerToRedis(entt::entity player)
 	{
 		dirty_save_stats::IncSkipped();
 		LOG_DEBUG << "[SavePlayerToRedis] no-op for player " << playerId
-				  << " — proto-compare clean, last_save_ms=" << snap->saved_at_ms;
-		return;
+				  << " -- proto-compare clean, last_save_ms=" << snap->saved_at_ms;
+		// false = 本次没有写盘,调用方不能再指望 HandlePlayerAsyncSaved 回调。
+		return false;
 	}
 
 	// Stamp the data-consistency stress probe (no-op when STRESS_TEST_PROBE
@@ -888,6 +1093,7 @@ void PlayerLifecycleSystem::SavePlayerToRedis(entt::entity player)
 	sendSubTableTask(message->player_database_1_data());
 
 	LOG_INFO << "[SavePlayerToRedis] Player " << playerId << " saved to Redis, DB write tasks enqueued";
+	return true;
 }
 
 bool PlayerLifecycleSystem::IsSaveInFlight(Guid playerId)

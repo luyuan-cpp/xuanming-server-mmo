@@ -1,6 +1,5 @@
 #pragma once
 #include <string>
-#include <deque>
 #include "time/comp/timer_task_comp.h"
 
 class NodeInfo;
@@ -8,7 +7,17 @@ class NodeInfo;
 class EtcdManager
 {
 public:
-	std::deque<std::string> &GetPendingKeys() { return pendingKeys; }
+	// 注册流程里"当前正在等响应的那一个 CAS key"。
+	//
+	// 这里是**单槽**而不是队列,因为注册流严格串行:port CAS -> alloc CAS -> info CAS,
+	// 每一步都由上一步的响应驱动。原来用 std::deque 按 FIFO 弹出来猜"这个 txn 响应对应
+	// 哪个 key",但生成的 grpc client 在 `!status.ok()` 时**根本不会调 handler** ——
+	// 一次 etcd RPC 失败队列就永久错位,之后端口 key 的成功会被解释成 alloc key 成功,
+	// 于是节点没占住 node_id 就激活了发号器,直接撞号。
+	// 单槽让"响应对不上"变成可检测、可恢复的状态,而不是静默错位。
+	const std::string &PendingTxnKey() const { return pendingTxnKey_; }
+	void SetPendingTxnKey(const std::string &key);
+	std::string TakePendingTxnKey();
 
 	void Shutdown();
 
@@ -49,5 +58,5 @@ public:
 
 private:
 	TimerTaskComp leaseKeepAliveTimer;
-	std::deque<std::string> pendingKeys;
+	std::string pendingTxnKey_;
 };

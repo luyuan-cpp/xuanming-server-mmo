@@ -4,10 +4,10 @@ zones:
     replicas:
       centre: 1
       gate: 2
-      # scene: N  - legacy single-pool (all scene pods run with SceneNodeType=0).
-      #           The orchestration script still accepts this field for backwards
-      #           compatibility; prefer the split form below when StrictNodeTypeSeparation
-      #           is true in scene_manager_service.yaml (recommended in production).
+      # scene: N  - legacy single-pool. 生成一个名为 scene 的 Deployment,
+      #           显式带 env SCENE_NODE_TYPE=0(全部 pod 都是主世界角色)。
+      #           脚本仍然接受这个字段;当 scene_manager_service.yaml 里
+      #           StrictNodeTypeSeparation=true(生产默认)时改用下面的拆分形式。
       scene: 4
 
   - name: today
@@ -23,5 +23,9 @@ zones:
       # Recommended baseline: world ~= 1.2x instance, scaling instance first when
       # dungeon/arena traffic rises. Monitor Redis keys
       # scene_nodes:zone:{zoneId}:load and node:{id}:player_count.
+      #
+      # 只要这两个键出现任意一个,就进入拆分模式:legacy 的 scene 键被忽略,
+      # 也不会再生成名为 scene 的 Deployment。完整规则见
+      # docs/ops/scene-node-role-split.md §3.2.1。
       scene_world: 2
       scene_instance: 2

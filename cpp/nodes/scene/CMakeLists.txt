@@ -42,7 +42,14 @@ include_directories(
     /usr/local/include
 )
 
+# Agones 生命周期适配器只在 Linux 构建里接 libcurl。
+# MMORPG_AGONES_CURL 没定义时,MakeDefaultHttpTransport() 返回 nullptr,
+# 整套逻辑退化成 Disabled(Windows / 本地开发构建走的就是这条路)。
+add_definitions(-DMMORPG_AGONES_CURL=1)
+
 set(SOURCE_FILES
+    agones/agones_rest_client.cpp
+    agones/agones_scene_lifecycle.cpp
     handler/event/scene_kafka_command_router.cpp
     handler/event/actor_combat_state_event_handler.cpp
     handler/event/actor_event_handler.cpp
@@ -84,6 +91,10 @@ set(SOURCE_FILES
 find_package(absl CONFIG REQUIRED)
 find_package(protobuf CONFIG REQUIRED)
 find_package(gRPC CONFIG REQUIRED)
+# 用系统 libcurl(deps 阶段 apt 装的 libcurl4-openssl-dev)。
+# 刻意不 vendor curl 源码:third_party/curl 子模块当前未初始化,而且
+# Agones REST 只需要几个回环 GET/POST,再引一份第三方源码得不偿失。
+find_package(CURL REQUIRED)
 
 link_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/../../../lib"
@@ -114,6 +125,7 @@ target_link_libraries(scene
     gRPC::grpc++_reflection
     gRPC::grpc
     gRPC::gpr
+    CURL::libcurl
     protobuf::libprotobuf
     muduo_net
     muduo_base

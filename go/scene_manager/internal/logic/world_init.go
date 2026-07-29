@@ -69,7 +69,10 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 
 	for _, confId := range confIds {
 		channelSetKey := worldChannelsKey(zoneId, confId)
-		channelCount := svcCtx.Config.ChannelCountFor(confId)
+		// 期望频道数的权威在 Redis,不是配置 —— 配置只是首次播种的种子。
+		// 直接读 ChannelCountFor 的话,自动缩容刚摘掉的频道会在这里被
+		// 重新补出来,缩容根本不成立。见 world_autoscale.go 顶部注释。
+		channelCount := DesiredWorldChannelCount(svcCtx, zoneId, confId)
 
 		// Get existing channels for this confId.
 		existingMembers, _ := svcCtx.Redis.Smembers(channelSetKey)
@@ -357,7 +360,25 @@ func GetAllWorldChannels(ctx context.Context, svcCtx *svc.ServiceContext, confId
 }
 
 // worldConfIds extracts base scene config IDs from the loaded World table.
+// worldConfIdsOverride, when non-nil, replaces the World-table lookup.
+// Same test-seam pattern as nodeDialer / nodeEndpointOverride: the World
+// table is empty in unit tests, so anything that iterates world maps
+// (autoscaler, orphan cleanup) would be a no-op without this.
+// Production never sets it.
+var worldConfIdsOverride []uint64
+
+// SetWorldConfIdsForTest installs a fake World-table id list and returns a
+// restore func. MUST be paired with t.Cleanup.
+func SetWorldConfIdsForTest(ids []uint64) (restore func()) {
+	prev := worldConfIdsOverride
+	worldConfIdsOverride = ids
+	return func() { worldConfIdsOverride = prev }
+}
+
 func worldConfIds() []uint64 {
+	if worldConfIdsOverride != nil {
+		return worldConfIdsOverride
+	}
 	rows := table.WorldTableManagerInstance.FindAll()
 	ids := make([]uint64, 0, len(rows))
 	for _, row := range rows {

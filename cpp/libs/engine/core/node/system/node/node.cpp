@@ -22,6 +22,7 @@
 #include "rpc/service_metadata/gate_service_service_metadata.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "thread_context/redis_manager.h"
+#include "thread_context/snow_flake_manager.h"
 #include "time/system/time.h"
 #include "core/utils/debug/stacktrace_system.h"
 #include "build_info/build_info.h"
@@ -634,14 +635,77 @@ void Node::ShutdownGrpcServer()
 
 void Node::OnNodeIdConflictShutdown(NodeIdConflictReason reason)
 {
-	LOG_WARN << "Node identity conflict detected (reason="
-			 << static_cast<int>(reason) << "), node_id=" << GetNodeId();
+	// 四个触发点(keepalive TTL=0 / 本地租约 deadline / 重注册 CAS 失败 / Watch 发现
+	// 身份被抢)都可能重复触发,而且 keepalive 定时器还在跑,必须幂等。
+	if (conflictShutdownStarted_)
+	{
+		return;
+	}
+	conflictShutdownStarted_ = true;
 
+	LOG_ERROR << "Node identity conflict detected (reason=" << static_cast<int>(reason)
+			  << "), node_id=" << GetNodeId()
+			  << ". Fencing ID generation and draining before exit.";
+
+	// 1) 立刻停止发号。etcd 已经可以把这个 node_id 交给别的进程,再发一个号就是
+	//    确定性撞号。fence 必须在业务收尾之前 —— 收尾只需要存盘和路由,不需要新 ID。
+	tlsSnowflakeManager.Fence();
+
+	// 2) 停掉所有会再次触发注册 / 冲突判定的重试,避免收尾期间又跑一遍分配流程 ——
+	//    这台节点已经不是 node_id 的合法持有者,重抢端口 / 重占 node_id 只会干扰接手的进程。
+	//    注意重试定时器住在 EtcdService 里,不是 Node 里。
+	serviceHealthMonitorTimer.Cancel();
+	serviceDiscoveryManager.etcdService.StopRegistrationRetries();
+
+	// 3) 业务收尾:scene 节点在这里存盘并把玩家改派到别的 scene node。
 	if (onConflictShutdownFn_)
 	{
-		LOG_INFO << "Running conflict-shutdown hook before termination...";
+		LOG_INFO << "Running conflict-shutdown hook...";
 		onConflictShutdownFn_(*this, reason);
 	}
+
+	// 4) 有界等待收尾落地后再退出。
+	//    旧实现是 hook 返回后立刻 LOG_FATAL(muduo 的 FATAL 会 abort),而存盘是异步的
+	//    (Redis 命令还在发送缓冲、DBTask 还在 Kafka producer 队列),abort 等于把这一
+	//    批玩家数据直接丢掉。
+	StartConflictDrainWatchdog();
+}
+
+void Node::StartConflictDrainWatchdog()
+{
+	// 收尾预算。推导:收尾要等的是"每个在线玩家一次 Redis 存盘往返 + 一次
+	// SceneManager EnterScene 改派";正常情况下几百玩家在百毫秒级完成,15s 是给
+	// Redis / SceneManager 抖动留的保守上限。到期即退出,不无限等下去 ——
+	// 这是有界兜底,不是"等一会儿就当成功"(到期会明确打 ERROR 并报告未落地的数量)。
+	// TODO: 待压测实测复核该预算。
+	constexpr double kDrainPollIntervalSec = 0.1;
+	constexpr auto kDrainBudget = std::chrono::seconds(15);
+
+	conflictDrainDeadline_ = std::chrono::steady_clock::now() + kDrainBudget;
+
+	conflictDrainTimer.RunEvery(kDrainPollIntervalSec, [this]
+								{
+		const bool drained = !conflictDrainCompleteFn_ || conflictDrainCompleteFn_(*this);
+		const bool expired = std::chrono::steady_clock::now() >= conflictDrainDeadline_;
+		if (!drained && !expired)
+		{
+			return;
+		}
+
+		conflictDrainTimer.Cancel();
+		if (drained)
+		{
+			LOG_INFO << "Conflict drain complete, shutting down. node_id=" << GetNodeId();
+		}
+		else
+		{
+			LOG_ERROR << "Conflict drain budget exceeded; shutting down with work still in flight. node_id="
+					  << GetNodeId();
+		}
+
+		// 走正常关闭路径:它会跑 before-shutdown hook、关 gRPC、flush Kafka producer、
+		// 释放 etcd 租约,最后 quit 事件循环 —— 这些正是 abort 会跳过的东西。
+		Shutdown(); });
 }
 
 void Node::StartRpcServer()
@@ -807,8 +871,9 @@ void Node::ShutdownInLoop()
 	ShutdownGrpcServer();
 	grpcHandlerTimer.Cancel();
 	serviceHealthMonitorTimer.Cancel();
-	acquireNodeTimer.Cancel();
-	acquirePortTimer.Cancel();
+	conflictDrainTimer.Cancel();
+	// node_id / 端口的重试定时器由 serviceDiscoveryManager.Shutdown() -> EtcdService::Shutdown()
+	// 取消,不在这里。
 	ReleaseNodeId();
 	serviceDiscoveryManager.Shutdown();
 	kafkaManager.Shutdown();
@@ -1125,13 +1190,12 @@ void Node::StartNodeRegistrationHealthMonitor()
 										   // the watch stream is dead and the local ServiceNodeList is stale.
 										   if (serviceDiscoveryManager.etcdService.IsLeasePresumablyExpired())
 										   {
-											   OnNodeIdConflictShutdown(NodeIdConflictReason::kLeaseDeadlineExceeded);
-											   LOG_FATAL << "Lease deadline exceeded: no keepalive ACK from etcd within TTL. "
+											   LOG_ERROR << "Lease deadline exceeded: no keepalive ACK from etcd within TTL. "
 															"node_id="
 														 << GetNodeInfo().node_id()
 														 << ". Etcd has likely expired our lease; another node may claim this ID. "
-															"Terminating to prevent SnowFlake collision. "
-															"Active players will reconnect through the normal login flow.";
+															"Fencing ID generation, persisting and relocating players, then terminating.";
+											   OnNodeIdConflictShutdown(NodeIdConflictReason::kLeaseDeadlineExceeded);
 											   return;
 										   }
 

@@ -76,15 +76,38 @@ Considered unifying Go to use C++ pure-scan approach. Decided to **keep both as-
 | Code | Simpler (one key) | Slightly more (two keys) |
 | Restart identity | Not guaranteed same ID | Same hostname -> same ID |
 | Log correlation | ID may drift across restarts | Stable ID, easier to grep |
-| Extra protection | Has `SnowFlakeGuard` (Redis SETEX 600s) | Not needed -- hostname key is the guard |
+| Extra protection | Has `SnowFlakeGuard` (Redis SETEX 600s) | ~~Not needed -- hostname key is the guard~~ **(错，见下)** → 生成器内置启动 guard |
 | Correctness | Equal | Equal |
+
+> ### ⚠️ 2026-07-29 更正：「hostname key 就是 guard」是反的
+>
+> hostname 亲和保证的是"同一台机器重启**必然**拿回同一个 worker id"。它不但不构成 guard，
+> 反而把撞号从偶然变成必然 —— 叠加另外三件事：
+> - `Handle.Close()` / `internal/node.Close()` 退出时立刻 `Delete` + `Revoke`，worker id 秒级可复用；
+> - `shared/snowflake` 是**秒级**时间戳；
+> - 新进程的 `Node` 从 `lastTime=0, step=0` 重新开始。
+>
+> 结果：进程在同一日历秒内重启，新老两个进程发出的号**逐位相同**。已用探针实测确认
+> （同秒构造两个 `Node(7)`，第一个 ID 都是 `50960585831186432`）。
+>
+> **修法**：`snowflake.NewNode` 内置启动 guard —— 构造时把 `lastTime` 置为当前秒、`step` 置满，
+> 于是第一个 ID 一定落在下一秒。语义与 C++ 的 `SetGuardTime(now)` 完全一致，
+> 代价是第一个 ID 最多晚 1 秒。回归用例见 `go/shared/snowflake/snowflake_test.go`
+> 的 `TestNewNode_BootGuardSkipsRestartSecond`。
+>
+> **另一个缺口(同日修复)**：`snowflakealloc` 的 KeepAlive goroutine 原来只 drain 响应，
+> 租约真丢了也只打一条 ERROR，进程**继续用那个 worker id 发号**，而 etcd 已经可以把它
+> 分给别人 —— 启动 guard 挡不住这种情况（它只覆盖"旧进程已退出"的窗口）。
+> 现在 `Handle.Lost()` 会在失租时关闭，`guild` / `scene_manager` 收到后 `s.Stop()` 停服，
+> 由编排重拉（重启拿新租约 + 启动 guard 兜底）。C++ 侧对应的是
+> `OnNodeIdConflictShutdown` 里的 `SnowFlakeManager::Fence()`。
 
 ### Why not change Go to match C++
 
 - Go has no etcd watch snapshot -- `mustAllocNodeID` runs once at startup, must self-scan.
 - Losing hostname idempotency degrades observability with no offsetting benefit.
-- Go lacks the `SnowFlakeGuard` Redis mechanism that C++ uses to protect ID reuse windows.
 - Dual-key code is already written, compiled, and clear.
+- ID 复用窗口的防护现在由**生成器内置的启动 guard**承担（见上），与用哪种 key scheme 无关。
 
 ### Why not change C++ to match Go
 

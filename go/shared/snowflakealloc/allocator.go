@@ -29,6 +29,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -233,6 +235,33 @@ type Handle struct {
 	WorkerID uint64
 	cancel   context.CancelFunc
 	cli      *clientv3.Client
+
+	closing  atomic.Bool
+	lost     chan struct{}
+	lostOnce sync.Once
+}
+
+// Lost 在本进程**不再持有** worker id 的 etcd 租约时关闭。
+//
+// 为什么必须暴露:租约一过期,etcd 就可以把同一个 worker id 分给别的进程,
+// 而本进程的 snowflake.Node 完全不知道,会继续用这个 worker id 发号 —— 两边
+// 同一秒发出的号逐位相同。启动 guard 挡不住这种情况(它只覆盖"旧进程已经退出"
+// 的重启窗口)。
+//
+// C++ 侧对同一个问题的处理是 Node::OnNodeIdConflictShutdown:立刻 fence 发号器,
+// 存盘,然后退出。Go 服务没有"局内状态"要抢救,所以正确动作就是停止服务、
+// 让编排把它拉起来 —— 重启后会拿一个新租约,并被启动 guard 兜住。
+//
+// Close() 引起的正常关闭**不会**触发本 channel。
+func (h *Handle) Lost() <-chan struct{} {
+	if h == nil {
+		return nil
+	}
+	return h.lost
+}
+
+func (h *Handle) markLost() {
+	h.lostOnce.Do(func() { close(h.lost) })
 }
 
 // AllocateWithKeepAlive 调用 Allocate 并在后台启动 KeepAlive。
@@ -254,20 +283,36 @@ func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, prefix, ho
 		_, _ = cli.Revoke(context.Background(), leaseID)
 		return nil, fmt.Errorf("snowflakealloc: keepalive: %w", err)
 	}
-	go func() {
-		for range ch {
-			// drain
-		}
-		logx.Errorf("[snowflakealloc] keepalive channel closed (prefix=%s, host=%s, worker_id=%d)",
-			prefix, hostname, workerID)
-	}()
 
-	return &Handle{
+	h := &Handle{
 		LeaseID:  leaseID,
 		WorkerID: workerID,
 		cancel:   cancel,
 		cli:      cli,
-	}, nil
+		lost:     make(chan struct{}),
+	}
+
+	go func() {
+		for range ch {
+			// drain
+		}
+		h.onKeepAliveEnded(prefix, hostname)
+	}()
+
+	return h, nil
+}
+
+// onKeepAliveEnded 在 KeepAlive 响应流结束时调用。
+// 结束有两种可能:Close() 主动取消,或者租约真的没了(etcd 不可达超过 TTL /
+// 租约被撤销)。只有后者是"身份丢失",要通知调用方停止发号。多次调用安全。
+func (h *Handle) onKeepAliveEnded(prefix, hostname string) {
+	if h.closing.Load() {
+		return
+	}
+	logx.Errorf("[snowflakealloc] keepalive channel closed (prefix=%s, host=%s, worker_id=%d); "+
+		"this process no longer owns the worker id and MUST stop minting IDs",
+		prefix, hostname, h.WorkerID)
+	h.markLost()
 }
 
 // Close 停止 KeepAlive 并 Revoke lease。
@@ -277,6 +322,8 @@ func (h *Handle) Close() {
 	if h == nil {
 		return
 	}
+	// 先置标记再取消 keepalive,否则 goroutine 会把正常关闭误判成失租。
+	h.closing.Store(true)
 	if h.cancel != nil {
 		h.cancel()
 		h.cancel = nil
