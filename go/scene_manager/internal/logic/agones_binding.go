@@ -267,6 +267,91 @@ func AcquireAgonesRoomOnNode(
 	}, nil
 }
 
+// ReserveAgonesRoomForWorldChannel 为一个**世界频道**预占房间名额,并把
+// scene:{id}:agones_gs 记下来。
+//
+// 世界频道与副本的分配策略不同,不能直接复用 AcquireAgonesPlacement:
+// 频道的落点是 assignNodeByHash 的一致性哈希结果,rebalance 依赖这个分布
+// 保持稳定;让 GSA 自由挑会和 rebalance 互相打架(它挑一个、rebalance 又
+// 想搬回哈希目标)。所以这里先按**指定节点**预占,只有那个节点没容量时
+// 才回落到自由分配,并把实际落点返回给调用方。
+//
+// 返回 (实际节点, 是否成功)。Agones 未启用时返回 (preferredNode, true) —— 不做任何事。
+//
+// 没有这一步的后果:世界频道不占 rooms 名额 -> Counter 少算 ->
+// FleetAutoscaler(policy=Counter,key=rooms)对大世界的人数增长完全无感,
+// Pod 永远不会为世界负载扩容。
+func ReserveAgonesRoomForWorldChannel(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	sceneID uint64,
+	preferredNode string,
+	zoneID uint32,
+) (string, bool) {
+	if !AgonesEnabled(svcCtx) {
+		return preferredNode, true
+	}
+
+	placement, err := AcquireAgonesRoomOnNode(ctx, svcCtx, preferredNode, zoneID)
+	if err != nil {
+		logx.Infof("[Agones] world channel %d: hash-target node %s cannot take a room (%v), "+
+			"falling back to free allocation (rebalance will re-home it later)", sceneID, preferredNode, err)
+
+		placement, err = AcquireAgonesPlacement(ctx, svcCtx, zoneID, constants.NodePurposeWorld)
+		if err != nil {
+			logx.Errorf("[Agones] world channel %d: no room capacity in zone %d: %v", sceneID, zoneID, err)
+			return "", false
+		}
+	}
+
+	// 必须在调 C++ CreateScene 之前写:中途崩溃时这是唯一能找回
+	// "该向哪个 GameServer 归还名额" 的依据。
+	if err := svcCtx.Redis.Set(sceneAgonesGsKey(sceneID), placement.GameServerName); err != nil {
+		logx.Errorf("[Agones] world channel %d: failed to record agones gs: %v", sceneID, err)
+	}
+	return placement.NodeID, true
+}
+
+// TransferAgonesRoomForScene 把一个场景的房间名额从旧节点转到新节点。
+//
+// 世界频道 rebalance 会把频道从 oldNode 搬到 newNode。不转移名额的话:
+// 旧 GameServer 的计数永远不还(容量凭空蒸发),新 GameServer 没记账
+// (容量被超卖)。两个方向都会让 FleetAutoscaler 算错。
+//
+// 顺序是**先占新的再还旧的**:反过来的话,中间窗口里新节点可能已经没容量了,
+// 于是名额两头都不在,频道变成"不占任何容量"的幽灵。
+func TransferAgonesRoomForScene(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	sceneID uint64,
+	newNode string,
+	zoneID uint32,
+) {
+	if !AgonesEnabled(svcCtx) {
+		return
+	}
+
+	oldGs, _ := svcCtx.Redis.Get(sceneAgonesGsKey(sceneID))
+
+	placement, err := AcquireAgonesRoomOnNode(ctx, svcCtx, newNode, zoneID)
+	if err != nil {
+		// 新节点占不到名额。**不**释放旧的 —— 释放了就等于这个频道不占任何
+		// 容量,比多占一份更糟。留给 reconcile 去暴露漂移。
+		logx.Errorf("[Agones] scene %d: migrated to node %s but could not reserve a room there (%v); "+
+			"keeping the old reservation on %s, watch scene_manager_agones_counter_drift",
+			sceneID, newNode, err, oldGs)
+		return
+	}
+
+	if err := svcCtx.Redis.Set(sceneAgonesGsKey(sceneID), placement.GameServerName); err != nil {
+		logx.Errorf("[Agones] scene %d: failed to update agones gs mapping: %v", sceneID, err)
+	}
+
+	if oldGs != "" && oldGs != placement.GameServerName {
+		ReleaseAgonesRoom(ctx, svcCtx, agonesNamespace(svcCtx), oldGs, "world_channel_migrated")
+	}
+}
+
 // ReleaseAgonesRoom 把一个房间名额还给 Agones。
 //
 // 最终失败**不是**只打条日志就算了:计数从此漂移,只有 reconcile 才能发现。

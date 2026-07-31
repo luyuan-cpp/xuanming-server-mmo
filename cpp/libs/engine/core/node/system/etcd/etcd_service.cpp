@@ -25,11 +25,10 @@ void EtcdService::Init() {
 
 	InitGrpcNode(channel, tlsNodeContextManager.GetRegistry(EtcdNodeService), tlsNodeContextManager.GetGlobalEntity(EtcdNodeService));
 
-	grpcHandlerTimer.RunEvery(0.005, [this] {
+	grpcHandlerTimer.RunEvery(0.005, [] {
 		for (auto& registry : tlsNodeContextManager.GetAllRegistries()) {
 			HandleCompletedQueueMessage(registry);
 		}
-		CheckPendingTxnDeadline();
 		});
 
 	LOG_INFO << "EtcdService initialized with etcd: " << etcdAddr;
@@ -110,7 +109,7 @@ void EtcdService::InitTxnHandlers() {
 			LOG_WARN << "Ignore txn response: no CAS is currently pending.";
 			return;
 		}
-		txnDeadline_ = std::chrono::steady_clock::time_point{}; // 响应到了,撤销超时
+		// 超时定时器已由 TakePendingTxnKey 一并取消(两者成对维护)。
 
 		if (reply.succeeded())
 		{
@@ -417,8 +416,8 @@ void EtcdService::Shutdown()
 	acquireNodeTimer.Cancel();
 	acquirePortTimer.Cancel();
 	watchReconnectTimer.Cancel();
+	txnTimeoutTimer.Cancel();
 	leaseRequestInFlight_ = false;
-	txnDeadline_ = std::chrono::steady_clock::time_point{};
 	SetRegistrationMode(RegistrationMode::kInitialBoot, "service shutdown");
 
 	auto emptyHandler = [](const ClientContext &, const ::google::protobuf::Message &) {};
@@ -476,12 +475,11 @@ void EtcdService::StopRegistrationRetries()
 	registrationStopped_ = true;
 	acquireNodeTimer.Cancel();
 	acquirePortTimer.Cancel();
-	gNode->GetEtcdManager().TakePendingTxnKey();
-	txnDeadline_ = std::chrono::steady_clock::time_point{};
+	gNode->GetEtcdManager().TakePendingTxnKey(); // 顺带取消超时定时器
 	LOG_INFO << "Registration retries stopped (node identity is no longer ours).";
 }
 
-void EtcdService::CheckPendingTxnDeadline()
+void EtcdService::ArmTxnTimeout()
 {
 	if (registrationStopped_)
 	{
@@ -491,28 +489,31 @@ void EtcdService::CheckPendingTxnDeadline()
 	// 预算推导:一次 etcd CAS 的正常往返是毫秒级;10s 覆盖 etcd 短暂重启 / 主从切换
 	// 后客户端重连的时间,又不会让一次真正丢掉的响应把节点挂很久。
 	// TODO: 待压测实测复核。
-	constexpr auto kTxnResponseBudget = std::chrono::seconds(10);
+	constexpr double kTxnResponseBudgetSec = 10.0;
 
-	const auto &pending = gNode->GetEtcdManager().PendingTxnKey();
-	if (pending.empty())
-	{
-		txnDeadline_ = std::chrono::steady_clock::time_point{};
-		return;
-	}
+	txnTimeoutTimer.RunAfter(kTxnResponseBudgetSec, [this] { OnTxnTimeout(); });
+}
 
-	const auto now = std::chrono::steady_clock::now();
-	if (txnDeadline_ == std::chrono::steady_clock::time_point{})
-	{
-		txnDeadline_ = now + kTxnResponseBudget;
-		return;
-	}
-	if (now < txnDeadline_)
+void EtcdService::CancelTxnTimeout()
+{
+	txnTimeoutTimer.Cancel();
+}
+
+void EtcdService::OnTxnTimeout()
+{
+	if (registrationStopped_)
 	{
 		return;
 	}
 
+	// TakePendingTxnKey 会顺带 Cancel 本定时器 —— TimerTaskComp::OnTimer 对
+	// "回调里取消自己"是安全的(one-shot 先清 timerId 再拷贝 callback 调用)。
 	const std::string lost = gNode->GetEtcdManager().TakePendingTxnKey();
-	txnDeadline_ = std::chrono::steady_clock::time_point{};
+	if (lost.empty())
+	{
+		return;
+	}
+
 	LOG_ERROR << "No etcd txn response for key " << lost << " within the budget; "
 			  << "restarting the registration phase. mode=" << RegistrationModeName(registrationMode_);
 

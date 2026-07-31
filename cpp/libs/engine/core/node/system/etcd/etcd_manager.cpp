@@ -13,7 +13,9 @@
 void EtcdManager::Shutdown()
 {
 	leaseKeepAliveTimer.Cancel();
-	pendingTxnKey_.clear();
+	// 走 Take 而不是直接 clear,维持"有 pending key ⟺ 超时定时器在跑"这个不变量。
+	// 调用方是 EtcdService::Shutdown,此时 EtcdService 还活着,回调进去只是 Cancel,安全。
+	TakePendingTxnKey();
 }
 
 void EtcdManager::SetPendingTxnKey(const std::string &key)
@@ -27,12 +29,15 @@ void EtcdManager::SetPendingTxnKey(const std::string &key)
 				  << " new=" << key;
 	}
 	pendingTxnKey_ = key;
+	// 不变量:有 pending key ⟺ 超时定时器在跑。
+	gNode->GetServiceDiscoveryManager().etcdService.ArmTxnTimeout();
 }
 
 std::string EtcdManager::TakePendingTxnKey()
 {
 	std::string key;
 	key.swap(pendingTxnKey_);
+	gNode->GetServiceDiscoveryManager().etcdService.CancelTxnTimeout();
 	return key;
 }
 

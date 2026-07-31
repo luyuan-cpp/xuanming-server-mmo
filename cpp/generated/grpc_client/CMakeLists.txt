@@ -17,10 +17,20 @@ add_definitions(-D__linux__)
 add_definitions(-DNOMINMAX)
 add_definitions(-DENTT_ID_TYPE=uint64_t)
 add_definitions(-DABSL_PROPAGATE_CXX_STD=TRUE)
+add_definitions(-DMMORPG_AGONES_CURL=1)
 
 include_directories(
+    ../
+    ../../../third_party/
+    ../../../third_party/boost/
+    ../../../third_party/entt/single_include
+    ../../../third_party/fmt/include
+    ../../../third_party/muduo-linux/
+    ../../../third_party/spdlog/include
+    ../../libs/engine/
     ../third_party/protobuf/src/
     ../third_party/protobuf/third_party/abseil-cpp/
+    ./
     ./src/
     /usr/local/include
 )
@@ -28,12 +38,14 @@ include_directories(
 set(SOURCE_FILES
     chat/chat_grpc_client.cpp
     data_service/data_service_grpc_client.cpp
+    db/db_grpc_client.cpp
     etcd/etcd_grpc_client.cpp
     friend/friend_grpc_client.cpp
     grpc_init_client.cpp
     guild/guild_grpc_client.cpp
     login/login_grpc_client.cpp
     scene_manager/scene_manager_service_grpc_client.cpp
+    scene_manager/scene_node_service_grpc_client.cpp
 )
 
 add_library(grpc_client STATIC ${SOURCE_FILES})

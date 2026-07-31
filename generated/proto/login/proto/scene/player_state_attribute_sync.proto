@@ -2,6 +2,7 @@ syntax = "proto3";
 option go_package = "login/proto/scene";
 
 import "proto/db/proto_option.proto";
+import "proto/common/options/attribute_sync_option.proto";
 import "proto/common/component/actor_comp.proto";
 import "proto/common/base/empty.proto";
 import "proto/common/component/actor_attribute_state_comp.proto";

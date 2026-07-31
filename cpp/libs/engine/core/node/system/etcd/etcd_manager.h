@@ -15,6 +15,9 @@ public:
 	// 一次 etcd RPC 失败队列就永久错位,之后端口 key 的成功会被解释成 alloc key 成功,
 	// 于是节点没占住 node_id 就激活了发号器,直接撞号。
 	// 单槽让"响应对不上"变成可检测、可恢复的状态,而不是静默错位。
+	//
+	// 这两个函数与 EtcdService 的超时定时器成对维护,不变量是
+	// **有 pending key ⟺ 超时定时器在跑**;响应丢了由定时器重发同一条幂等 CAS 链。
 	const std::string &PendingTxnKey() const { return pendingTxnKey_; }
 	void SetPendingTxnKey(const std::string &key);
 	std::string TakePendingTxnKey();

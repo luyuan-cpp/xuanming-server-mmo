@@ -17,8 +17,21 @@ add_definitions(-D__linux__)
 add_definitions(-DNOMINMAX)
 add_definitions(-DENTT_ID_TYPE=uint64_t)
 add_definitions(-DABSL_PROPAGATE_CXX_STD=TRUE)
+add_definitions(-DMMORPG_AGONES_CURL=1)
 
 include_directories(
+    ../../../third_party/
+    ../../../third_party/boost/
+    ../../../third_party/entt/single_include
+    ../../../third_party/exprtk/
+    ../../../third_party/fmt/include
+    ../../../third_party/muduo-linux
+    ../../../third_party/spdlog/include
+    ../../generated/
+    ../../libs/
+    ../../libs/base/common/
+    ../../libs/engine/
+    ../../libs/engine/config/
     ../third_party/protobuf/src/
     ../third_party/protobuf/third_party/abseil-cpp/
     ./src/
@@ -29,39 +42,42 @@ set(SOURCE_FILES
     code/actoractioncombatstate_table.cpp
     code/actoractionstate_table.cpp
     code/all_table.cpp
+    code/basescene_table.cpp
     code/buff_table.cpp
     code/class_table.cpp
     code/condition_table.cpp
     code/cooldown_table.cpp
+    code/dungeon_table.cpp
     code/globalvariable_table.cpp
     code/item_table.cpp
-    code/mainscene_table.cpp
     code/messagelimiter_table.cpp
+    code/mirror_table.cpp
     code/mission_table.cpp
-    code/monsterbase_table.cpp
+    code/monster_table.cpp
     code/reward_table.cpp
-    code/scene_table.cpp
     code/skillpermission_table.cpp
     code/skill_table.cpp
     code/testmultikey_table.cpp
     code/test_table.cpp
+    code/world_table.cpp
     proto/actoractioncombatstate_table.pb.cc
     proto/actoractionstate_table.pb.cc
+    proto/basescene_table.pb.cc
     proto/buff_table.pb.cc
     proto/class_table.pb.cc
     proto/condition_table.pb.cc
     proto/cooldown_table.pb.cc
+    proto/dungeon_table.pb.cc
     proto/globalvariable_table.pb.cc
     proto/item_table.pb.cc
-    proto/mainscene_table.pb.cc
     proto/messagelimiter_table.pb.cc
+    proto/mirror_table.pb.cc
     proto/mission_table.pb.cc
-    proto/monsterbase_table.pb.cc
+    proto/monster_table.pb.cc
     proto/operator/ability_operator.pb.cc
     proto/operator/bag_operator.pb.cc
     proto/operator/scene_operator.pb.cc
     proto/reward_table.pb.cc
-    proto/scene_table.pb.cc
     proto/skillpermission_table.pb.cc
     proto/skill_table.pb.cc
     proto/testmultikey_table.pb.cc
@@ -79,6 +95,7 @@ set(SOURCE_FILES
     proto/tip/scene_error_tip.pb.cc
     proto/tip/skill_error_tip.pb.cc
     proto/tip/team_error_tip.pb.cc
+    proto/world_table.pb.cc
 )
 
 add_library(table STATIC ${SOURCE_FILES})

@@ -40,6 +40,18 @@ robot/
 data/
 test/
 
+# ...but the navmesh binaries under data/ ARE a build input:
+# deploy/k8s/Dockerfile.cpp stage 3 does
+#   COPY data/scene_nav_bin/ /app/data/scene_nav_bin/
+# and the blanket `data/` above made that fail with
+#   failed to compute cache key: "/data/scene_nav_bin": not found
+# BuildKit resolves stage-3 COPYs in parallel with the builder stage, so this
+# aborted the whole image build before any C++ was compiled -- which is why it
+# looked like a compiler problem rather than a context problem.
+# Re-include only the navmesh data; the .xlsx design tables next to it stay out.
+!data/scene_nav_bin/
+!data/scene_nav_bin/**
+
 # Logs
 *.log
 bin/logs/

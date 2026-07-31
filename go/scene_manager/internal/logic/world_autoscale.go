@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"scene_manager/internal/config"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 
@@ -212,14 +213,14 @@ func autoscaleOneWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 	// 且其余频道装得下它的人(不能把人并过去反而把别人推过扩容线)。
 	lightest := loads[0]
 	if len(loads) > minCh && lightest.players < cfg.ScaleInPlayerThreshold {
-		if hasHeadroomFor(loads, lightest, cfg.ScaleOutPlayerThreshold) {
-			if beginDrainWorldChannel(ctx, svcCtx, zoneID, confID, lightest) {
+		if victim, ok := pickScaleInVictim(svcCtx, loads, cfg); ok {
+			if beginDrainWorldChannel(ctx, svcCtx, zoneID, confID, victim) {
 				markCooldown(svcCtx, zoneID, confID)
 				return 0, 1
 			}
 		} else {
-			logx.Infof("[WorldAutoscale] zone=%d conf=%d: channel %s has %d players (<%d) but the "+
-				"remaining channels cannot absorb them; keeping it",
+			logx.Infof("[WorldAutoscale] zone=%d conf=%d: channel %s has %d players (<%d) but no channel "+
+				"is safe to drain (no headroom, or it is a mirror source); keeping them all",
 				zoneID, confID, lightest.sceneID, lightest.players, cfg.ScaleInPlayerThreshold)
 		}
 	}
@@ -272,6 +273,49 @@ func hasHeadroomFor(loads []channelLoad, victim channelLoad, scaleOutThreshold i
 // 顺序是**先摘路由再排空**:先从 world_channels 集合里 SREM,新玩家就不会再被
 // 路由进来;然后才让 C++ 把残留玩家改派走。反过来做的话,刚被改派出去的玩家
 // 有可能又被分回这个正在销毁的频道。
+// channelHasMirrors 报告是否有镜像 Scene 以这个频道为源。
+//
+// 查询失败时返回 true(当作"有镜像")—— 这是刻意的 fail-closed 方向:
+// 缩容是可选的省钱动作,查不清就别动,比误伤镜像里的玩家划算。
+func channelHasMirrors(svcCtx *svc.ServiceContext, sceneID uint64) bool {
+	members, err := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneID))
+	if err != nil {
+		logx.Errorf("[WorldAutoscale] cannot read mirrors of scene %d (%v); treating it as a mirror source",
+			sceneID, err)
+		return true
+	}
+	return len(members) > 0
+}
+
+// pickScaleInVictim 在升序的 loads 里挑第一个可以安全排空的频道。
+//
+// 三个条件都要满足:
+//  1. 人数低于缩容线;
+//  2. **不是镜像源**。镜像与源共置(见 scene-creation-architecture.md 的
+//     mirror co-location),源频道被销毁的话镜像会变成谁也进不去的孤儿。
+//     节点死亡那条路径是强制级联销毁镜像的,但缩容是可选动作 —— 宁可少省
+//     一个频道,也不要把镜像里的玩家踢下线;
+//  3. 其余频道装得下它的人,且不会因此把某个频道推过扩容线(否则缩完立刻扩,来回抖)。
+//
+// 不是只看 loads[0]:最闲的那个恰好托着镜像时,继续往下找仍然能缩容。
+func pickScaleInVictim(svcCtx *svc.ServiceContext, loads []channelLoad, cfg config.WorldAutoscaleConfig) (channelLoad, bool) {
+	for _, candidate := range loads {
+		if candidate.players >= cfg.ScaleInPlayerThreshold {
+			// loads 升序,后面的只会更多人。
+			break
+		}
+		if channelHasMirrors(svcCtx, candidate.sceneID64) {
+			logx.Infof("[WorldAutoscale] channel %s is a mirror source; not draining it", candidate.sceneID)
+			continue
+		}
+		if !hasHeadroomFor(loads, candidate, cfg.ScaleOutPlayerThreshold) {
+			continue
+		}
+		return candidate, true
+	}
+	return channelLoad{}, false
+}
+
 func beginDrainWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, confID uint64, victim channelLoad) bool {
 	channelSetKey := worldChannelsKey(zoneID, confID)
 
@@ -379,6 +423,28 @@ func finishDrainedChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 
 	// Agones 名额要在删映射之前读出来,否则就找不到该向谁归还了。
 	agonesGs, _ := svcCtx.Redis.Get(sceneAgonesGsKey(sceneID))
+
+	// 级联兜底:排空窗口里可能又有镜像以这个频道为源建起来了
+	// (pickScaleInVictim 只保证**开始排空那一刻**没有镜像)。
+	// 源频道马上要没了,留着镜像就是谁也进不去的孤儿,而且 scene:{id}:mirrors
+	// 这个键会永久泄漏。既有的两条销毁路径都级联了
+	// (destroyInstanceInternal 的 cascade、migrateWorldChannel 的
+	// cascadeMirrorsOnSourceMigration),这里必须对齐。
+	mirrorChildren, _ := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneID))
+	for _, mid := range mirrorChildren {
+		childID, err := strconv.ParseUint(mid, 10, 64)
+		if err != nil || childID == sceneID {
+			continue
+		}
+		childZone := GetSceneZone(svcCtx, childID)
+		if childZone == 0 {
+			childZone = zoneID
+		}
+		logx.Infof("[WorldAutoscale] cascade-destroying mirror %d whose source channel %d is being scaled in",
+			childID, sceneID)
+		destroyInstanceForce(ctx, svcCtx, childZone, childID, "source_scaled_in")
+	}
+	svcCtx.Redis.Del(sceneMirrorsKey(sceneID))
 
 	svcCtx.Redis.Del(sceneNodeKey(sceneID))
 	svcCtx.Redis.Del(sceneZoneKey(sceneID))

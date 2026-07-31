@@ -17,6 +17,7 @@ add_definitions(-D__linux__)
 add_definitions(-DNOMINMAX)
 add_definitions(-DENTT_ID_TYPE=uint64_t)
 add_definitions(-DABSL_PROPAGATE_CXX_STD=TRUE)
+add_definitions(-DMMORPG_AGONES_CURL=1)
 
 include_directories(
     ../
@@ -24,6 +25,8 @@ include_directories(
     ../../....//third_party/redis/
     ../../../../third_party/
     ../../../../third_party/boost/
+    ../../../../third_party/entt/single_include
+    ../../../../third_party/fmt/include
     ../../../../third_party/grpc/third_party/
     ../../../../third_party/librdkafka/src-cpp/
     ../../../../third_party/lua/src/
@@ -32,10 +35,12 @@ include_directories(
     ../../../../third_party/redis/
     ../../../../third_party/redis/deps/
     ../../../../third_party/sol2/include/
+    ../../../../third_party/spdlog/include
     ../../../../third_party/zlib/
     ../../../generated/
     ../../../generated/grpc_client/
     ../config/
+    ../configs/
     ../infra/
     ./
     /usr/local/include
@@ -53,6 +58,7 @@ set(SOURCE_FILES
     network/player_message_utils.cpp
     network/process_info.cpp
     network/rpc_server.cc
+    network/traffic_statistics.cpp
     node/system/etcd/etcd_helper.cpp
     node/system/etcd/etcd_manager.cpp
     node/system/etcd/etcd_service.cpp
@@ -69,13 +75,12 @@ set(SOURCE_FILES
     utils/encode/base64.cpp
     utils/encode/sha256.cpp
     utils/file/file2string.cpp
-    utils/log/async_log_file.cpp
+    utils/log/spdlog_file.cpp
     utils/proto/message_util.cpp
     utils/proto/proto_field_checker.cpp
     utils/random/random.cpp
     utils/registry/game_registry.cpp
     utils/stat/stat.cpp
-    utils/utility/utility.cpp
 )
 
 add_library(core STATIC ${SOURCE_FILES})

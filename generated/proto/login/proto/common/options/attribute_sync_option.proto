@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "login/proto/common/options";
+
+// 属性同步属于游戏业务，不属于 proto2mysql 的数据库建表选项。
+// 为兼容已经生成和使用的协议，扩展完整名、类型和编号保持不变。
+extend google.protobuf.MessageOptions {
+  optional bool OptionAttributeSync = 700000;
+}

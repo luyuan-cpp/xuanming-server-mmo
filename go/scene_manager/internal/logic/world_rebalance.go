@@ -225,6 +225,11 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 		return false
 	}
 
+	// Agones 名额跟着频道走。不转移的话旧 GameServer 的计数永远不还
+	// (容量凭空蒸发)、新的没记账(容量被超卖),两个方向都会让
+	// FleetAutoscaler 算错。先占新的再还旧的,见 TransferAgonesRoomForScene。
+	TransferAgonesRoomForScene(ctx, svcCtx, sceneId, newNode, zoneId)
+
 	if oldNode != "" {
 		if _, err := svcCtx.Redis.Decr(fmt.Sprintf(NodeSceneCountKey, oldNode)); err != nil {
 			logx.Errorf("[Rebalance] failed to decrement scene_count on old node %s: %v", oldNode, err)

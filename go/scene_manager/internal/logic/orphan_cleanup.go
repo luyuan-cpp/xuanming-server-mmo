@@ -31,8 +31,8 @@ import (
 //     Redis doesn't block the LoadReporter goroutine.
 
 const (
-	orphanScanBatch   int64 = 256
-	orphanKeyPrefix         = "world_channels:zone:"
+	orphanScanBatch int64 = 256
+	orphanKeyPrefix       = "world_channels:zone:"
 )
 
 // CleanupOrphanWorldChannels scans Redis for world_channels:* keys whose
@@ -121,6 +121,15 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 		return false
 	}
 
+	// 正在排空的频道已经从 world_channels 摘掉了,只看 setKey 会把它们整个漏掉:
+	// scene:{id}:node、Agones 名额、排空标记全都留成永久垃圾,而且这个 confId
+	// 已经不在 World 表里,sweepDrainingWorldChannels 也不会再扫到它。
+	if draining, err := svcCtx.Redis.Smembers(worldDrainingSetKey(zone, confId)); err == nil && len(draining) > 0 {
+		logx.Infof("[OrphanCleanup] zone=%d conf=%d: also cleaning %d draining channel(s)",
+			zone, confId, len(draining))
+		members = append(members, draining...)
+	}
+
 	for _, m := range members {
 		sceneId, err := strconv.ParseUint(m, 10, 64)
 		if err != nil || sceneId == 0 {
@@ -156,7 +165,20 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 		svcCtx.Redis.Del(fmt.Sprintf(SceneMirrorFlagKeyFmt, sceneId))
 		svcCtx.Redis.Del(sceneSourceKey(sceneId))
 		svcCtx.Redis.Del(sceneMirrorsKey(sceneId))
+
+		// Agones 名额必须在删映射之前读出来并归还,否则这份容量在 GameServer 的
+		// rooms Counter 上永久占着 —— 映射一删就再没人知道该向谁还了。
+		if gs, _ := svcCtx.Redis.Get(sceneAgonesGsKey(sceneId)); gs != "" {
+			ReleaseAgonesRoomForScene(ctx, svcCtx, sceneId, gs, "orphan_channel_cleanup")
+		}
+		svcCtx.Redis.Del(sceneAgonesGsKey(sceneId))
+		svcCtx.Redis.Del(sceneDrainingKey(sceneId))
 	}
+
+	// 期望频道数是自动伸缩的权威。不清的话这张图将来被加回 World 表时,
+	// 会直接复活上次伸缩到的数量(比如伸到过 8),而不是回到配置种子。
+	svcCtx.Redis.Hdel(worldDesiredChannelsKey(zone), strconv.FormatUint(confId, 10))
+	svcCtx.Redis.Del(worldDrainingSetKey(zone, confId))
 
 	if _, err := svcCtx.Redis.Del(setKey); err != nil {
 		logx.Errorf("[OrphanCleanup] del(%s) failed: %v", setKey, err)

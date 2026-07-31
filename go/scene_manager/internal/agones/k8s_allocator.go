@@ -251,7 +251,15 @@ func podIPFromAddresses(obj map[string]any) string {
 		if !ok {
 			continue
 		}
-		if t, _ := entry["type"].(string); t == "Pod" {
+		// 类型名实测是 "PodIP",不是 "Pod"。
+		// Agones 1.58 的 GameServer.status.addresses 长这样:
+		//   [{address:192.168.58.2, type:InternalIP},
+		//    {address:pandora-agones, type:Hostname},
+		//    {address:10.244.43.202, type:PodIP}]
+		// 之前只认 "Pod",主路径永远匹配不上,每次分配都白走一次退化的
+		// GET Pod —— 功能上看不出来(退化路径能work),但请求量翻倍,
+		// 而且注释里"零额外请求"是假的。两个都认,兼容将来改名。
+		if t, _ := entry["type"].(string); t == "PodIP" || t == "Pod" {
 			if addr, _ := entry["address"].(string); addr != "" {
 				return addr
 			}
@@ -336,8 +344,23 @@ func (a *K8sAllocator) adjustRoomCount(ctx context.Context, namespace, gameServe
 			return fmt.Errorf("agones: set rooms count: %w", err)
 		}
 
+		// 必须用 Update 而不是 UpdateStatus。
+		//
+		// GameServer 的 CRD **没有声明 status 子资源** —— 实测
+		// (Agones 1.58,kubectl get crd gameservers.agones.dev):
+		//   subresources = {"scale":{...}}
+		// 只有 scale,没有 status。所以 /status 端点不存在,UpdateStatus 会直接
+		// 报 "the server could not find the requested resource",整条归还名额的
+		// 路径(创建失败回滚、排空归还、孤儿清理归还)全部失效 —— 而 rooms
+		// Counter 只增不减就是持续超卖。
+		//
+		// 单测抓不到这个:fake allocator 不建模 API 表面,UpdateStatus 和
+		// Update 在它眼里没区别。
+		//
+		// 换成 Update 仍然是安全的 read-modify-write:gs 带着 GET 回来的
+		// resourceVersion,并发改动会拿到 409,由下面的有界重试处理。
 		_, err = a.dyn.Resource(gsGVR).Namespace(namespace).
-			UpdateStatus(callCtx, gs, metav1.UpdateOptions{})
+			Update(callCtx, gs, metav1.UpdateOptions{})
 		cancel()
 		if err == nil {
 			logx.Infof("[Agones] rooms %s/%s: %d -> %d (delta=%d)", namespace, gameServerName, count, newCount, delta)

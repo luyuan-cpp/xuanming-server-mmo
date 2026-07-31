@@ -87,9 +87,6 @@ extend google.protobuf.MessageOptions {
 	optional string OptionUniqueKey			= 500012	;   // Unique key
 	optional bool OptionIsPlayerDatabase = 500013;  // Whether this is a player database
 	optional OPERATE_TYPE OptionOperateType = 500014;
-
-	// ---------- Attribute sync related ----------
-	optional bool OptionAttributeSync   = 700000;  // Base attribute sync
 }
 
 // Field-level options (database related)

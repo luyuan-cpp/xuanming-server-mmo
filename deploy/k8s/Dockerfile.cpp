@@ -35,7 +35,16 @@ WORKDIR /src
 
 # Clone and build gRPC FIRST so that this heavy layer (~10 min) is cached
 # independently of the other third-party sources.
-RUN git clone --depth 1 --branch v1.78.x --recurse-submodules --shallow-submodules \
+# gRPC version MUST match the checked-out third_party/grpc submodule, which is
+# what the Windows build (and therefore the source tree) actually compiles
+# against. Evidence, not preference:
+#   git -C third_party/grpc describe --tags   -> v1.80.0
+#   git submodule status third_party/grpc     -> (v1.80.0)
+#   .gitmodules                               -> branch = v1.80.x
+# This line used to say v1.78.x -- the only place in the repo that disagreed,
+# so the Docker image would have been built against a different gRPC major
+# than the code was developed on.
+RUN git clone --depth 1 --branch v1.80.x --recurse-submodules --shallow-submodules \
     https://github.com/grpc/grpc.git third_party/grpc \
     && mkdir -p third_party/grpc/.build_linux \
     && cmake -S third_party/grpc -B third_party/grpc/.build_linux \

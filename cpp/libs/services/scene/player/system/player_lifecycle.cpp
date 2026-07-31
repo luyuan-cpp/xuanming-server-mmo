@@ -438,11 +438,26 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player)
 
 	// Remove entity from AOI grid immediately so the AOI system stops
 	// sending messages to the (already-disconnected) gate session.
-	if (tlsEcs.actorRegistry.any_of<SceneEntityComp>(player))
+	if (auto *sceneComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player))
 	{
 		BeforeLeaveScene leaveEvent;
 		leaveEvent.set_entity(entt::to_integral(player));
 		tlsEcs.dispatcher.trigger(leaveEvent);
+
+		// 把玩家从所在场景的 ScenePlayers 里摘掉。
+		//
+		// 之前这里只删了玩家身上的 SceneEntityComp,场景那一侧的集合从来没清过;
+		// 换场景那条路径(player_scene.cpp)手工 erase 了,退出这条路径没有。
+		// ScenePlayers 是弱引用集合、以前没有真正的消费者,所以这个泄漏一直是静默的。
+		//
+		// 现在 BeginSceneDrain 会遍历它来决定这个场景还有谁要改派,泄漏就变成了
+		// 会伤到玩家的 bug:entt 会复用实体 id,场景 A 里的一个陈旧 id 过一阵子
+		// 可能正好是场景 B 里某个活着的玩家,排空 A 会把那个不相干的玩家从 B 踢走。
+		if (auto *scenePlayers = tlsEcs.sceneRegistry.try_get<ScenePlayers>(sceneComp->sceneEntity))
+		{
+			scenePlayers->erase(player);
+		}
+
 		tlsEcs.actorRegistry.remove<SceneEntityComp>(player);
 	}
 
@@ -498,6 +513,19 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 	if (playerId == kInvalidGuid)
 	{
 		LOG_ERROR << "FinishExitAfterPersist: invalid player id";
+		return;
+	}
+
+	// 跨 zone 迁移在途的实体不能在这里销毁 —— 它要活到目的地 ACK 到达
+	// (或者 reaper 判定迁移失败把它解冻)为止,否则玩家两边都没了。
+	// 这条判定原本只写在 HandlePlayerAsyncSaved 里,而"存盘快路径跳过"那条
+	// 收尾路径绕过了它;两条路径既然共用本函数,判定就必须放在这里,否则会漂移。
+	const auto playerEntity = tlsEcs.GetPlayer(playerId);
+	if (tlsEcs.actorRegistry.valid(playerEntity) &&
+		tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(playerEntity))
+	{
+		LOG_INFO << "FinishExitAfterPersist: player " << playerId
+				 << " is frozen for cross-zone migration; deferring destroy until ACK or reaper.";
 		return;
 	}
 

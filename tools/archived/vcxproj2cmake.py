@@ -163,10 +163,34 @@ def write_cmake(vcxproj_dir, project_name, source_files, include_dirs, target_ty
     bin_dir = root_rel + "bin"
 
     lines = []
+    # Mark the output as generated.
+    #
+    # These CMakeLists.txt files are checked into the repo AND rewritten from
+    # scratch by this script on every Linux build (build_linux.sh runs it unless
+    # --skip-generate). Without a banner they look like ordinary hand-maintained
+    # files, and a hand edit here disappears silently on the next build.
+    #
+    # That already bit us once: -DMMORPG_AGONES_CURL=1 was hand-added to
+    # cpp/nodes/scene/CMakeLists.txt. It would have been wiped, and because the
+    # macro only *enables* the curl transport, the Linux binary would still have
+    # linked and started -- with the Agones lifecycle permanently Disabled and
+    # every GameServer stuck in Scheduled. Project-wide flags belong in THIS
+    # file (see EXTERNAL_LIBS / add_definitions above), never in the output.
+    lines.append("# === GENERATED FILE -- DO NOT EDIT ===")
+    lines.append("# Produced by tools/archived/vcxproj2cmake.py from %s.vcxproj."
+                 % project_name)
+    lines.append("# Every Linux build regenerates it; hand edits are lost without warning.")
+    lines.append("# Change the generator instead.")
+    lines.append("")
     lines.append("cmake_minimum_required(VERSION 3.22)")
     lines.append("project(%s)" % project_name)
     lines.append("")
     lines.append("set(CMAKE_VERBOSE_MAKEFILE ON)")
+    # C++23 is the ceiling for the current toolchain, not a conservative choice:
+    # deploy/k8s/Dockerfile.cpp builds on `gcc:13`, which implements C++23 as
+    # -std=c++2b but only fragments of C++26 (-std=c++2c). Asking for 26 here
+    # makes CMake's compiler-feature check fail on that image. Bump the base
+    # image to gcc:14+ FIRST, then raise this. MSVC side uses `stdcpplatest`.
     lines.append("set(CMAKE_CXX_STANDARD 23)")
     lines.append("set(CMAKE_CXX_STANDARD_REQUIRED ON)")
     lines.append("")
@@ -192,6 +216,20 @@ def write_cmake(vcxproj_dir, project_name, source_files, include_dirs, target_ty
     lines.append("add_definitions(-DNOMINMAX)")
     lines.append("add_definitions(-DENTT_ID_TYPE=uint64_t)")
     lines.append("add_definitions(-DABSL_PROPAGATE_CXX_STD=TRUE)")
+    # Agones lifecycle: enable the libcurl transport on Linux.
+    #
+    # MUST be emitted here, not only hand-written into a checked-in
+    # CMakeLists.txt: write_cmake() overwrites CMakeLists.txt unconditionally,
+    # so anything hand-added there is lost on the next generation.
+    #
+    # Losing this macro does NOT break the build -- that is exactly why it is
+    # dangerous. MakeDefaultHttpTransport() would return nullptr and the whole
+    # Agones lifecycle would silently degrade to Disabled: the Linux binary
+    # links fine, starts fine, and never talks to the SDK sidecar. Every
+    # GameServer would stay in Scheduled forever.
+    #
+    # "curl" is already in EXTERNAL_LIBS so the link side is covered.
+    lines.append("add_definitions(-DMMORPG_AGONES_CURL=1)")
     lines.append("")
 
     # Include directories (transformed for Linux)

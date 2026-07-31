@@ -17,14 +17,20 @@ add_definitions(-D__linux__)
 add_definitions(-DNOMINMAX)
 add_definitions(-DENTT_ID_TYPE=uint64_t)
 add_definitions(-DABSL_PROPAGATE_CXX_STD=TRUE)
+add_definitions(-DMMORPG_AGONES_CURL=1)
 
 include_directories(
     ../../../third_party/
     ../../../third_party/boost/
+    ../../../third_party/entt/single_include
+    ../../../third_party/fmt/include
+    ../../../third_party/grpc/third_party/boringssl-with-bazel/include/
     ../../../third_party/librdkafka/src-cpp/
     ../../../third_party/muduo-linux/
+    ../../../third_party/openssl/include/
     ../../../third_party/redis/
     ../../../third_party/redis/deps/
+    ../../../third_party/spdlog/include
     ../../../third_party/spdlog/include/
     ../../../third_party/ue5navmesh/Public/
     ../../../third_party/xxhash/
@@ -38,6 +44,16 @@ include_directories(
     ../../libs/engine/modules/
     ../../libs/services/gate/
     ../../libs/services/player/
+    ../common/
+    ../common/src/pb/pbc/
+    ../common/src/pb/pbc/common_proto/
+    ../third_party/
+    ../third_party/boost/
+    ../third_party/muduo-linux/
+    ../third_party/protobuf/src/
+    ../third_party/protobuf/third_party/abseil-cpp/
+    ../third_party/redis/deps/
+    ../third_party/zlib/
     ./
     /usr/local/include
 )
@@ -93,13 +109,17 @@ target_link_libraries(gate
     gRPC::grpc
     gRPC::gpr
     protobuf::libprotobuf
+    muduo_protobuf_codec
+    muduo_hiredis
     muduo_net
     muduo_base
     rdkafka++
     rdkafka
     yaml-cpp
     hiredis
+    curl
     z
+    zstd
     ssl
     crypto
     pthread

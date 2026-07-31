@@ -17,10 +17,20 @@ add_definitions(-D__linux__)
 add_definitions(-DNOMINMAX)
 add_definitions(-DENTT_ID_TYPE=uint64_t)
 add_definitions(-DABSL_PROPAGATE_CXX_STD=TRUE)
+add_definitions(-DMMORPG_AGONES_CURL=1)
 
 include_directories(
+    ../
+    ../../../third_party/
+    ../../../third_party/boost/
+    ../../../third_party/entt/single_include
+    ../../../third_party/fmt/include
+    ../../../third_party/muduo-linux/
+    ../../../third_party/spdlog/include
+    ../../libs/engine/
     ../third_party/protobuf/src/
     ../third_party/protobuf/third_party/abseil-cpp/
+    ./
     ./src/
     /usr/local/include
 )

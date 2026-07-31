@@ -88,7 +88,13 @@
 
 跨服务必须保持的不变量,违反 → PR review 直接拒。
 
-1. **SnowFlake 节点隔离**:每种 SnowFlake ID 只能由一种 node 类型生产(17-bit worker 字段,不同 node 类型共享 node_id 范围会撞)
+1. **SnowFlake 节点隔离**:每种 SnowFlake ID 只能由一种 node 类型生产(不同 node 类型共享 node_id 范围会撞)。
+   注意**全系统有两套互不兼容的位布局**,不要混用解析函数:
+   - `shared/snowflake` 与 C++ `SnowFlake`:**17-bit** worker / 15-bit step / **秒**级 epoch(1773446400)。
+     scene_id、guild_id、instance_id、GuidId 等走这套,可以用 C++ `ParseGuid` 解。
+   - login 的 **PlayerId**:`bwmarrin/snowflake`,**13-bit** node / 9-bit step / **毫秒**级 epoch
+     (见 `login/etc/login.yaml` 的 `Snowflake` 段)。**拿 `ParseGuid` 解 player_id 得到的是垃圾。**
+     改布局会作废存量 player_id,所以这是既成事实,不是待修项。
 2. **Kafka 防僵尸**:发往 `{type}-{id}` topic 的消息必须填 `target_instance_id`(目标节点 UUID),空值则关闭过滤
 3. **kafka topic key = 业务实体 ID**(同一玩家 / 同一对局事件有序)
 4. **proto 字段编号上线后不复用**(见 §4)

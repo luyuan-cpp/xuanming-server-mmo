@@ -66,6 +66,17 @@ param(
 	# 这是缓冲区,不是容量:太小会让高峰期玩家等 Pod 调度(几十秒),
 	# 太大是白烧钱。取值应当覆盖"一个调度周期内可能新增的房间数"。
 	[int]$AgonesBufferRooms = 5,
+	# Fleet 的 Pod 副本数下界 / 上界。
+	#
+	# 注意单位换算:Agones 的 Counter 策略里 minCapacity / maxCapacity 是**整个
+	# Fleet 的总房间容量**,不是副本数。所以要乘 -AgonesRoomCapacity 才是要写进
+	# YAML 的值。之前直接把副本数塞进容量字段,差了 RoomCapacity 倍
+	# (MaxReplicas=8 + RoomCapacity=6 本该是 48 个房间的容量,却写成了 8,
+	# 等于把 Fleet 钉死在 2 个 Pod)。
+	#
+	# maxCapacity 在 Agones 1.58 里是**必填且 >= 1**,所以 -AgonesAutoscale
+	# 必须显式给 -AgonesMaxReplicas —— 不替运维猜上界(猜小了高峰期扩不上去,
+	# 猜大了烧钱),与 -AgonesRoomCapacity 同一个口径。
 	[int]$AgonesMinReplicas = 1,
 	[int]$AgonesMaxReplicas = 0,
 	[int]$GrpcThreadPoolReserveThreads = 1,
@@ -603,9 +614,29 @@ function New-SceneFleetAutoscalerYaml {
 		[Parameter(Mandatory = $true)][int]$ZoneIdLabel
 	)
 
-	$maxLine = ""
-	if ($AgonesMaxReplicas -gt 0) {
-		$maxLine = "`n      maxCapacity: $AgonesMaxReplicas"
+	# 副本数 -> 总房间容量。Counter 策略的 min/maxCapacity 单位是"整个 Fleet 的
+	# 房间总数",不是 Pod 数。实测(Agones 1.58,kubectl apply --dry-run=server):
+	# 缺 maxCapacity 会被 CRD 校验直接拒掉 ——
+	#   spec.policy.counter.maxCapacity: Invalid value: 0: should be >= 1
+	if ($AgonesMaxReplicas -le 0) {
+		throw "-AgonesAutoscale requires -AgonesMaxReplicas <N>. Agones 的 Counter 策略里 maxCapacity 必填(>=1),而且它是总房间容量而不是副本数;上界必须由运维显式给,脚本不替你猜。"
+	}
+
+	$minReplicas = $AgonesMinReplicas
+	if ($minReplicas -lt 1) {
+		# 每个大世界地图至少要有一个频道可落地,所以容量下界至少是一个进程。
+		$minReplicas = 1
+	}
+
+	$minCapacity = $minReplicas * $AgonesRoomCapacity
+	$maxCapacity = $AgonesMaxReplicas * $AgonesRoomCapacity
+	if ($maxCapacity -lt $minCapacity) {
+		throw "-AgonesMaxReplicas ($AgonesMaxReplicas) 小于 -AgonesMinReplicas ($minReplicas):maxCapacity($maxCapacity) < minCapacity($minCapacity),Agones 会拒绝。"
+	}
+	# bufferSize 必须留在容量上界之内,否则 autoscaler 永远满足不了缓冲区、
+	# 会一直顶着 maxCapacity 扩容失败。
+	if ($AgonesBufferRooms -ge $maxCapacity) {
+		throw "-AgonesBufferRooms ($AgonesBufferRooms) 不小于总容量上界 ($maxCapacity = $AgonesMaxReplicas 副本 x $AgonesRoomCapacity 房间):缓冲区永远填不满,autoscaler 会一直顶在上界。"
 	}
 
 	return @"
@@ -625,7 +656,64 @@ spec:
     counter:
       key: rooms
       bufferSize: $AgonesBufferRooms
-      minCapacity: $AgonesMinReplicas$maxLine
+      minCapacity: $minCapacity
+      maxCapacity: $maxCapacity
+"@
+}
+
+<#
+.SYNOPSIS
+生成 Agones SDK sidecar 在本 namespace 所需的 ServiceAccount + RoleBinding。
+
+.DESCRIPTION
+**没有这个,Agones 模式整套部署跑不起来。**
+
+Agones 的 SDK sidecar 以 `agones-sdk` ServiceAccount 身份运行,而 Agones 的
+helm 安装只在它自己那个 namespace(默认 `default`)里建了这套 RBAC。
+zone namespace 是我们自己建的,里面没有 —— GameServer 控制器建 Pod 时会被
+API server 拒掉,GameServer 直接进 Error:
+
+    pods "scene-instance-xxxxx-yyyyy" is forbidden:
+    error looking up service account mmorpg-zone-today/agones-sdk:
+    serviceaccount "agones-sdk" not found
+
+这一条**只有真集群能发现**:Fleet 对象本身完全合法,`kubectl apply
+--dry-run=server` 一路绿灯,失败发生在控制器随后建 Pod 的时候。
+(实测环境:Agones 1.58.0。)
+
+ClusterRole `agones-sdk` 由 Agones 安装时创建,这里只做 namespace 级绑定,
+不新建也不修改任何 ClusterRole —— 权限范围与 Agones 官方一致(events:
+create/patch + gameservers:list),不额外放权。
+#>
+function New-AgonesSdkRbacYaml {
+	param([Parameter(Mandatory = $true)][string]$Namespace)
+
+	return @"
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agones-sdk
+  namespace: $Namespace
+  labels:
+    app: agones
+    mmorpg.io/managed-by: k8s_deploy.ps1
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agones-sdk-access
+  namespace: $Namespace
+  labels:
+    app: agones
+    mmorpg.io/managed-by: k8s_deploy.ps1
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: agones-sdk
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: User
+    name: system:serviceaccount:$Namespace`:agones-sdk
 "@
 }
 
@@ -1328,6 +1416,14 @@ function Apply-Zone {
 
 	$configMapName = "node-config"
 	$gateServiceName = "gate-entry"
+	# Agones 模式:必须先在本 namespace 里建 agones-sdk 的 SA + RoleBinding,
+	# 否则 GameServer 控制器建 Pod 会被 API server 拒掉,GameServer 全进 Error。
+	# 必须在 Fleet 之前 apply —— 反过来的话第一批 GameServer 会先失败一轮。
+	if ($SceneOrchestrator -eq "agones") {
+		$rbacYaml = New-AgonesSdkRbacYaml -Namespace $namespace
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $rbacYaml
+	}
+
 	$configMapYaml = New-NodeConfigMapYaml -CurrentZoneId $CurrentZoneId -ConfigName $configMapName
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $configMapYaml
 

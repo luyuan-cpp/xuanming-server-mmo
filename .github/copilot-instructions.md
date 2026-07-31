@@ -6,9 +6,37 @@
 - Kubernetes external gate exposure guidance: managed cloud K8s should generally prefer `LoadBalancer`; self-hosted / bare metal K8s should generally prefer `NodePort` behind an external L4 load balancer. Do not recommend `LoadBalancer` as a one-size-fits-all default when the cluster lacks a mature LB implementation.
 
 ## C++ Source File Encoding (MSVC / Code Page 936)
-- MSVC on Windows with code page 936 (GBK) reads source files without BOM using the system codepage, **not** UTF-8.
-- **Always add a UTF-8 BOM** (`EF BB BF`) to `.cpp`/`.h` files containing non-ASCII characters (Chinese comments, special symbols like `→` `—`). Without BOM, multi-byte UTF-8 sequences (e.g., `→` = `E2 86 92`) get misinterpreted as GBK, corrupting the C++ parser and causing cascading errors on later lines.
-- Prefer ASCII-only characters in string literals. Use `--` instead of `—`, `->` instead of `→`, etc.
+
+**The authoritative mechanism is the `/utf-8` compiler switch, not the BOM.**
+`/utf-8` makes MSVC read sources as UTF-8 regardless of the system codepage, so
+a project that sets it needs no BOM at all. Measured state (2026-07-29): 27
+`.cpp`/`.h` files under `cpp/` contain Chinese and have no BOM, and the full
+`game.sln` Debug|x64 build is green — because the projects that compile them
+pass `/utf-8`.
+
+Rules, in priority order:
+
+1. **Every `.vcxproj` MUST pass `/utf-8`** in `<AdditionalOptions>` for each
+   `ItemDefinitionGroup/ClCompile`. This is the fix that scales; per-file BOMs
+   are not.
+   - **Known gap**: only 17 of 54 `.vcxproj` currently set it. Find the rest with
+     `grep -L "/utf-8" $(find cpp third_party -maxdepth 4 -name '*.vcxproj' -not -path '*muduo_windows*')`.
+     A non-ASCII source compiled by one of those projects **is** at risk on a
+     CP936 machine: multi-byte UTF-8 (e.g. `→` = `E2 86 92`) is misread as GBK
+     and corrupts the parser, with cascading errors on later lines.
+2. **BOM is a belt-and-braces fallback**, useful for a brand-new standalone file
+   or when you cannot confirm the owning project's flags. Adding one is harmless;
+   relying on it *instead* of `/utf-8` is not.
+   - Do NOT hand-add a BOM to a file whose `CMakeLists.txt` is generated — see
+     the generated-output rule below; the same applies to encoding.
+3. Prefer ASCII in **string literals** regardless (`--` over `—`, `->` over `→`):
+   those cross into runtime output and log pipelines, where the codepage story
+   starts over.
+4. Linux/CMake builds are unaffected: GCC assumes UTF-8.
+
+History: this section previously said "always add a UTF-8 BOM" and did not
+mention `/utf-8` at all, which caused at least one agent to rewrite Chinese
+comments as English to dodge a hazard the build already handled.
 
 ## ECS Component Access Rules (`get` vs `try_get` vs `get_or_emplace`)
 - `get<T>(entity)`: asserts existence — crashes if absent. Only safe inside `view<T,...>` iterations or after an `any_of<T>`/`all_of<T>` guard.

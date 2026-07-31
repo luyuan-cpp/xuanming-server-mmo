@@ -11,10 +11,14 @@ import (
 	"text/template"
 
 	"github.com/iancoleman/strcase"
-	messageoption "github.com/luyuancpp/protooption"
 	"go.uber.org/zap"
-	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/reflect/protoreflect"
 	"google.golang.org/protobuf/types/descriptorpb"
+)
+
+const (
+	attributeSyncOptionName   = protoreflect.FullName("OptionAttributeSync")
+	attributeSyncOptionNumber = protoreflect.FieldNumber(700000)
 )
 
 // BuildOption registers callbacks for message options and extension fields.
@@ -67,22 +71,24 @@ func registerCallbacks(log *zap.Logger) {
 			}
 			protoHeaderFile := strings.TrimSuffix(protoFileName, ".proto") + ".pb.h"
 
-			rawValue := proto.GetExtension(
-				opts.(*descriptorpb.MessageOptions),
-				messageoption.E_OptionAttributeSync,
+			messageOptions, ok := opts.(*descriptorpb.MessageOptions)
+			if !ok {
+				return fmt.Errorf("属性同步 option 类型错误: 期望 *descriptorpb.MessageOptions，实际为 %T", opts)
+			}
+			enabled, found, err := prototools.ReadBoolExtension(
+				messageOptions.ProtoReflect(),
+				attributeSyncOptionName,
+				attributeSyncOptionNumber,
 			)
-			if rawValue == nil {
+			if err != nil {
+				return fmt.Errorf("消息 [%s] 的属性同步 option 无效: %w", msgDesc.GetName(), err)
+			}
+			if !found {
 				logger.Global.Debug("Message has no attribute sync option, skipping generation",
 					zap.String("message_name", msgDesc.GetName()),
 					zap.String("proto_file", protoFileName),
 				)
 				return nil
-			}
-
-			enabled, ok := rawValue.(bool)
-			if !ok {
-				return fmt.Errorf("attribute sync option type error for message [%s]: expected bool, got %T",
-					msgDesc.GetName(), rawValue)
 			}
 			if !enabled {
 				logger.Global.Debug("Attribute sync option is false, skipping generation",

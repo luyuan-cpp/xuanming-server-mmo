@@ -23,6 +23,16 @@ public:
     void RegisterService();
     void StartLeaseKeepAlive();
 
+    // 注册流 CAS 的响应超时。由 EtcdManager 在设置 / 取走 pendingTxnKey_ 时成对调用,
+    // 维持不变量:**有 pending key ⟺ 超时定时器在跑**。
+    //
+    // 为什么需要:生成的 etcd grpc client 只在 `status.ok()` 时才调 handler,
+    // RPC 失败时**什么都不做** —— 于是注册流会永久停在某一阶段(没 node_id、
+    // 不发布服务发现、也不重试)。到期后重查权威(重发同一条幂等 CAS 链),
+    // 不是"假设成功继续往下走"。
+    void ArmTxnTimeout();
+    void CancelTxnTimeout();
+
     // Called by Node::StartGrpcServer after the gRPC port is bound and accepting
     // connections. Publishes the discovery key (NodeInfo) that peers watch.
     // The publish was deliberately deferred from OnTxnSucceeded(allocKey) so
@@ -55,13 +65,7 @@ private:
     // Reuses acquirePortTimer so there is a single retry path for the port phase.
     void AcquirePortWithRetry();
 
-    // 注册流的 CAS 响应超时兜底。挂在已有的 grpcHandlerTimer 上,不新建定时器。
-    //
-    // 为什么需要:生成的 etcd grpc client 只在 `status.ok()` 时才调 handler,
-    // RPC 失败时**什么都不做** —— 于是注册流会永久停在某一阶段(没 node_id、
-    // 不发布服务发现、也不重试)。到期后重查权威(重发同一个幂等 CAS 链),
-    // 不是"假设成功继续往下走"。
-    void CheckPendingTxnDeadline();
+    void OnTxnTimeout();
     void SetRegistrationMode(RegistrationMode mode, const char* reason);
     const char* RegistrationModeName(RegistrationMode mode) const;
     bool IsNodePortKey(const std::string& key) const;
@@ -86,11 +90,10 @@ private:
     int64_t leaseId = 0;
     int64_t leaseTtlSeconds_ = 0;
     std::chrono::steady_clock::time_point lastKeepAliveAckTime_{};
-    // 零值 = 当前没有在等 CAS 响应(或刚收到响应)。
-    std::chrono::steady_clock::time_point txnDeadline_{};
     std::unordered_map<std::string, int64_t> revision;
     TimerTaskComp grpcHandlerTimer;
     TimerTaskComp acquireNodeTimer;
 	TimerTaskComp acquirePortTimer;
 	TimerTaskComp watchReconnectTimer;
+	TimerTaskComp txnTimeoutTimer;
 };

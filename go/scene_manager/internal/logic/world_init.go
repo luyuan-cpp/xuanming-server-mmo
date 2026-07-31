@@ -90,6 +90,23 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 			// Vary hash input per channel so channels may land on different nodes.
 			targetNode := assignNodeByHash(confId*1000+uint64(i), liveNodes)
 
+			// Agones 高密度模式:世界频道也要占一个 rooms 名额。
+			//
+			// 漏掉这一步的话 rooms Counter 只统计副本,而 FleetAutoscaler 用的
+			// 正是 Counter=rooms —— 大世界人数涨到要开新频道时,Pod 完全不会
+			// 跟着扩。优先按哈希目标节点占,占不到才回落自由分配(落点可能偏离
+			// 哈希目标,rebalance 之后会把它搬回去)。
+			//
+			// 占不到任何容量时 fail-closed:不建这个频道。建了也没有进程承载,
+			// 只会得到一个 Agones 不认账的房间。
+			if actualNode, ok := ReserveAgonesRoomForWorldChannel(ctx, svcCtx, sceneId, targetNode, zoneId); ok {
+				targetNode = actualNode
+			} else {
+				logx.Errorf("[World] zone=%d conf=%d: no Agones room capacity for a new channel, skipping",
+					zoneId, confId)
+				break
+			}
+
 			sceneNodeKey := fmt.Sprintf("scene:%d:node", sceneId)
 			if err := svcCtx.Redis.Set(sceneNodeKey, targetNode); err != nil {
 				logx.Errorf("[World] Failed to store scene mapping for scene %d: %v", sceneId, err)
@@ -141,6 +158,11 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 				newNode := assignNodeByHash(confId*1000+uint64(ensured), liveNodes)
 				logx.Infof("[World] Reassigning scene %d from dead node %s to live node %s", sceneId, targetNode, newNode)
 				reassignSceneNode(svcCtx, sceneId, targetNode, newNode)
+				// 频道换了节点,Agones 名额必须跟着走。旧节点已死,它的 GameServer
+				// 迟早被 Agones 回收、计数随对象一起消失,所以释放是尽力而为;
+				// 但**在新节点上占一份**不能省 —— 不占的话这个频道在新进程上
+				// 不记账,rooms Counter 少算,FleetAutoscaler 会欠配。
+				TransferAgonesRoomForScene(ctx, svcCtx, sceneId, newNode, zoneId)
 				targetNode = newNode
 			}
 
@@ -154,6 +176,8 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 						newNode := assignNodeByHash(confId*1000+uint64(ensured), liveNodes)
 						logx.Infof("[World] Retrying scene %d on live node %s after dead node %s", sceneId, newNode, targetNode)
 						reassignSceneNode(svcCtx, sceneId, targetNode, newNode)
+						// 同上:重试落到新节点,名额也要跟过去。
+						TransferAgonesRoomForScene(ctx, svcCtx, sceneId, newNode, zoneId)
 						if _, err := RequestNodeCreateScene(ctx, svcCtx, newNode, uint32(confId), sceneId); err != nil {
 							logx.Errorf("[World] Retry also failed for conf %d scene %d on node %s: %v", confId, sceneId, newNode, err)
 						}

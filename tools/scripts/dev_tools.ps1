@@ -39,6 +39,15 @@ param(
     # Scene Node 编排方式:deployment(默认) | agones。见 docs/design/agones-scene-node-high-density.md。
     [ValidateSet("deployment", "agones")]
     [string]$SceneOrchestrator = "deployment",
+    # Agones 高密度 / FleetAutoscaler 开关。
+    # 这些以前只存在于 k8s_deploy.ps1,dev_tools.ps1 没透传 —— 而 dev_tools.ps1
+    # 才是文档里的入口,等于这些功能从文档路径**完全不可达**。
+    [switch]$AgonesHighDensity,
+    [int]$AgonesRoomCapacity = 0,
+    [switch]$AgonesAutoscale,
+    [int]$AgonesBufferRooms = 5,
+    [int]$AgonesMinReplicas = 1,
+    [int]$AgonesMaxReplicas = 0,
     [ValidateSet("ClusterIP", "NodePort", "LoadBalancer")]
     [string]$GateServiceType = "NodePort",
     [int]$GateServicePort = 18000,
@@ -350,6 +359,10 @@ function Invoke-K8sDeploy {
         SceneWorldReplicas = $SceneWorldReplicas
         SceneInstanceReplicas = $SceneInstanceReplicas
         SceneOrchestrator = $SceneOrchestrator
+        AgonesRoomCapacity = $AgonesRoomCapacity
+        AgonesBufferRooms = $AgonesBufferRooms
+        AgonesMinReplicas = $AgonesMinReplicas
+        AgonesMaxReplicas = $AgonesMaxReplicas
         GateServiceType = $GateServiceType
         GateServicePort = $GateServicePort
         WaitTimeoutSeconds = $WaitTimeoutSeconds
@@ -387,6 +400,16 @@ function Invoke-K8sDeploy {
     if (-not [string]::IsNullOrWhiteSpace($JavaSvcRegistry)) {
         $args.JavaSvcRegistry = $JavaSvcRegistry
         $args.JavaSvcTag = $JavaSvcTag
+    }
+
+    # switch 只在被指定时传下去。无条件传 $false 会让 k8s_deploy.ps1 里
+    # "开了高密度却没给容量就报错" 那些判定失去意义。
+    if ($AgonesHighDensity) {
+        $args.AgonesHighDensity = $true
+    }
+
+    if ($AgonesAutoscale) {
+        $args.AgonesAutoscale = $true
     }
 
     if ($DryRun) {
@@ -521,6 +544,10 @@ function Invoke-K8sImage {
         SceneWorldReplicas = $SceneWorldReplicas
         SceneInstanceReplicas = $SceneInstanceReplicas
         SceneOrchestrator = $SceneOrchestrator
+        AgonesRoomCapacity = $AgonesRoomCapacity
+        AgonesBufferRooms = $AgonesBufferRooms
+        AgonesMinReplicas = $AgonesMinReplicas
+        AgonesMaxReplicas = $AgonesMaxReplicas
         GateServiceType = $GateServiceType
         GateServicePort = $GateServicePort
         WaitTimeoutSeconds = $WaitTimeoutSeconds

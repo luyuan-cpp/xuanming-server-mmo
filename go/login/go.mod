@@ -9,6 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/panjf2000/ants/v2 v2.12.0
 	github.com/redis/go-redis/v9 v9.16.0
+	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.9.2
 	go.etcd.io/etcd/client/v3 v3.6.5
 	golang.org/x/net v0.48.0
@@ -63,6 +64,7 @@ require (
 	github.com/openzipkin/zipkin-go v0.4.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.21.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.62.0 // indirect
