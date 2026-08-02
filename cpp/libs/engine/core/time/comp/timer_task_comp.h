@@ -13,6 +13,13 @@ using muduo::net::TimerId;
 class TimerTaskComp
 {
 public:
+    // muduo 回调捕获本组件地址。EnTT 默认的 swap-and-pop 删除会把末尾组件
+    // 移入被删除位置；由于回调仍指向源地址，移动操作必须取消源定时器。
+    // 将直接存入 ECS 的 TimerTaskComp 固定为原地删除，避免删除一个实体时
+    // 取消或搬移另一个实体的定时器。作为 EnTT 存储之外的普通成员使用时，
+    // 此标记不影响 TimerTaskComp 的行为。
+    static constexpr bool in_place_delete = true;
+
     TimerTaskComp();
     ~TimerTaskComp();
 

@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "entt/src/entt/entity/registry.hpp"
 #include "muduo/net/EventLoopThread.h"
 
 #include <atomic>
@@ -7,10 +8,20 @@
 #include <chrono>
 #include <utility>
 
+#include "combat/skill/comp/skill_comp.h"
 #include "time/comp/timer_task_comp.h"
 
 using namespace muduo;
 using namespace muduo::net;
+
+// 所有直接交给 EnTT 存储的生产 TimerTaskComp 组件都必须使用稳定地址。
+// 内嵌组件需要独立声明；EnTT 不会通过包装成员传播
+// TimerTaskComp::in_place_delete。
+static_assert(entt::component_traits<TimerTaskComp>::in_place_delete);
+static_assert(entt::component_traits<CastingTimerComp>::in_place_delete);
+static_assert(entt::component_traits<RecoveryTimerComp>::in_place_delete);
+static_assert(entt::component_traits<ChannelFinishTimerComp>::in_place_delete);
+static_assert(entt::component_traits<ChannelIntervalTimerComp>::in_place_delete);
 
 class GameTimerTest
 {
@@ -112,6 +123,56 @@ TEST(TimerQueueTest, MoveAndCopyAreSafe)
 	TimerTaskComp moved(std::move(source));
 	EXPECT_FALSE(moved.IsActive());
 	EXPECT_EQ(moved.GetEndTime(), 0U);
+}
+
+TEST(TimerQueueTest, EnTTDeletePreservesRawTimerOfSurvivingEntity)
+{
+	EventLoop loop;
+	entt::registry registry;
+
+	const entt::entity removed = registry.create();
+	const entt::entity survivor = registry.create();
+	auto& removedTimer = registry.emplace<TimerTaskComp>(removed);
+	auto& survivorTimer = registry.emplace<TimerTaskComp>(survivor);
+	TimerTaskComp* const survivorAddress = &survivorTimer;
+
+	removedTimer.RunAfter(60.0, []() {});
+	survivorTimer.RunAfter(60.0, []() {});
+	ASSERT_TRUE(removedTimer.IsActive());
+	ASSERT_TRUE(survivorTimer.IsActive());
+
+	// `removed` 先插入，因此不是紧凑存储中的末尾组件。若未启用原地删除，
+	// EnTT 会把 `survivor` 移入这个空位，而 TimerTaskComp 必需的移动语义
+	// 会取消 survivor 的定时器。
+	registry.remove<TimerTaskComp>(removed);
+
+	auto& preserved = registry.get<TimerTaskComp>(survivor);
+	EXPECT_EQ(&preserved, survivorAddress);
+	EXPECT_TRUE(preserved.IsActive());
+}
+
+TEST(TimerQueueTest, EnTTDeletePreservesSkillWrapperTimerOfSurvivingEntity)
+{
+	EventLoop loop;
+	entt::registry registry;
+
+	const entt::entity removed = registry.create();
+	const entt::entity survivor = registry.create();
+	auto& removedComp = registry.emplace<CastingTimerComp>(removed);
+	auto& survivorComp = registry.emplace<CastingTimerComp>(survivor);
+	CastingTimerComp* const survivorAddress = &survivorComp;
+
+	removedComp.timer.RunAfter(60.0, []() {});
+	survivorComp.timer.RunAfter(60.0, []() {});
+	ASSERT_TRUE(removedComp.timer.IsActive());
+	ASSERT_TRUE(survivorComp.timer.IsActive());
+
+	// 玩家退出通过 registry.destroy() 进入同一条组件删除路径。
+	registry.destroy(removed);
+
+	auto& preserved = registry.get<CastingTimerComp>(survivor);
+	EXPECT_EQ(&preserved, survivorAddress);
+	EXPECT_TRUE(preserved.timer.IsActive());
 }
 
 int main(int argc, char **argv)
