@@ -22,7 +22,9 @@
 .PARAMETER Jobs
     Parallel build jobs passed to the build system (-j). Default: number of logical CPUs.
 .PARAMETER Clean
-    If set, removes existing build directories before building.
+    设置后，在构建前同时删除已有 build 与 install 目录。
+    新版 gRPC/Abseil 的安装清单不会主动删除上游已移除的库，因此 install
+    目录也必须清理，避免旧库残留掩盖依赖错误。
 .PARAMETER UseVSGenerator
     Use Visual Studio generator instead of Ninja. Useful when CMake + Ninja
     has compatibility issues (e.g. CMake 4.2.0 recompact bug).
@@ -332,9 +334,13 @@ function Invoke-GrpcBuild {
     Write-Host "  Install dir: $installPath"
     Write-Host "==============================================`n"
 
-    if ($Clean -and (Test-Path $buildPath)) {
-        Write-Host "[clean] Removing $buildPath ..."
-        Remove-DirectoryRobust $buildPath
+    if ($Clean) {
+        foreach ($pathToRemove in @($buildPath, $installPath)) {
+            if (Test-Path $pathToRemove) {
+                Write-Host "[clean] Removing $pathToRemove ..."
+                Remove-DirectoryRobust $pathToRemove
+            }
+        }
     }
 
     $cachePath = Join-Path $buildPath 'CMakeCache.txt'
