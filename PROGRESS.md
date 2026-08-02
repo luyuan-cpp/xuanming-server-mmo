@@ -1513,3 +1513,40 @@ master:
 差异无法评估(旧 commit 已不可达,无法 diff)。Windows 侧用的是
 `cpp/libs/engine/muduo_windows`(另一套源码),因此 Linux 与 Windows 两边的 muduo
 **本来就不是同一份** —— 这次变更没有让这个事实变得更糟,但也没有改善它。
+
+### 2026-08-02:P0/P1 审计修复(静态验收完成,编译门禁未执行)
+
+- 本轮未发现可确认的 P0；已修复审计确认的 P1：Scene 停机先封 Kafka consumer，
+  再让 gRPC drain 与 Redis/Kafka 持久化 barrier 并行，二者同时完成后才拆运行时；
+  业务 barrier 有 15 秒上限并保留明确失败日志。POSIX signal handler 只写
+  `sig_atomic_t`，实际停机回到 EventLoop。
+- 固定析构顺序为 Hiredis -> MessageAsyncClient -> EventLoop；Kafka producer 改为
+  有界真实 flush，析构不再无限 poll。Windows 与 Linux muduo overlay 保持同一
+  Hiredis Channel cleanup 行为。
+- EnTT 中五种直接承载 `TimerTaskComp` 的组件启用原地删除，并补双实体回归源码，
+  防止 swap-and-pop 搬移幸存组件时取消其活跃定时器。
+- K8s gRPC poller 默认统一为 8；Windows clean 同时清 build/install；Linux
+  gRPC/protobuf 使用精确 SHA stamp，muduo 使用源码身份加完整 overlay 哈希，
+  缓存不再只凭某个归档文件存在就跳过。
+- 已通过 PowerShell AST、vcxproj XML、v1.83 install manifest 差集、stamp/overlay
+  一致性和目标文件 `git diff --check`。按 `AGENTS.md` 编译协作门禁，本轮没有
+  Claude 给出的目标/命令/环境/产物/通过标准，因此未编译、未跑测试，也未宣称
+  运行时或跨平台构建验证通过。
+- 当前工作树仍是大规模混合 WIP；本轮未 stage/commit/push。最终交付必须把现有
+  gRPC v1.83 gitlink、生成的 AttributeSync 文件、gRPC patch 和 muduo overlay
+  一并纳入人工确认的提交，否则新 clone/default submodule update 仍会回到旧指针。
+
+### 2026-08-02：P0/P1 修复本地交付边界（已拆分提交，未 push）
+
+- 在 `codex/fix-p0-p1-audit` 分支按主题完成四个本地提交：Scene/Node 优雅停机与
+  Redis/Kafka/Hiredis 生命周期、EnTT 定时器稳定地址、K8s gRPC poller 配置、
+  Windows gRPC `-Clean` 同时清理 build/install。
+- 每个提交均使用精确路径或 hunk 暂存；`client/`、AttributeSync 全量生成物、
+  TimerTask 代际/TimerQueue 旧 WIP 以及其他子模块漂移均未纳入。
+- gRPC v1.83/protobuf v35.1 主升级没有提交：当前 HEAD 的 C++ 生成头硬校验
+  `PROTOBUF_VERSION == 6031001`，而 v1.83 运行时要求 `7035001`。只提交 gitlink、
+  vcxproj 和构建脚本会让全新 checkout 必然编译失败；完整闭包会卷入 330+ 生成文件
+  及尚未完成的 AttributeSync 再生成轨道，不能伪装成独立修复提交。
+- 已完成 staged diff、PowerShell AST、XML/manifest/哈希等静态检查；仍未执行 C++
+  编译、新增单测、Linux shell 语法检查、K8s apply 或玩家 E2E。
+- 仓库规则要求 push 由人手动执行，因此本轮停在本地提交，未更新任何远端引用。
