@@ -245,8 +245,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - Node pods use:
   - `POD_IP` from Kubernetes Downward API.
   - `RPC_PORT`/`NODE_PORT` env vars (fixed per role: centre `17000`, gate `18000`, scene `19000`).
-  - `GRPC_SERVER_MAX_POLLERS` env var to limit gRPC server thread pool (default: `2`).
-  - `GRPC_THREAD_POOL_RESERVE_THREADS` env var on gate nodes for gRPC client pool.
+  - `GRPC_SERVER_MAX_POLLERS` 用于限制 gRPC server poller 数（默认 `8`，与 C++ 进程默认值一致）。传 `-GrpcServerMaxPollers 0` 时，Deployment 与 Fleet 都不写该环境变量，交给进程默认值。
 - A `gate-entry` Service is created per zone namespace for external TCP access.
 
 ## Optional Flags
@@ -259,8 +258,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - `-KubeConfig`: pass an explicit kubeconfig path.
 - `-NamespacePrefix`: change namespace prefix.
 - `-CentreReplicas`, `-GateReplicas`, `-SceneReplicas`: per-zone replica overrides for `k8s-zone-up`.
-- `-GrpcThreadPoolReserveThreads`: gRPC client thread pool reserve for gate nodes (default: `1`).
-- `-GrpcServerMaxPollers`: max gRPC server poller threads per C++ node (default: `2`). Control-plane RPCs are dispatched to the muduo loop, so 1-2 pollers suffice for most workloads.
+- `-GrpcServerMaxPollers`：每个 C++ 节点的 gRPC server poller 上限（默认 `8`，与进程默认值一致）。设为 `0` 时，Deployment 与 Fleet 都不写环境变量覆盖。
 - `-GateServiceType`: `ClusterIP`, `NodePort`, or `LoadBalancer`.
 - `-GateServicePort`: external gate service port.
 - `-OpsProfile`: `managed-cloud`, `bare-metal`, or `custom`.

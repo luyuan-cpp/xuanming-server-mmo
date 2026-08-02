@@ -79,8 +79,9 @@ param(
 	# 猜大了烧钱),与 -AgonesRoomCapacity 同一个口径。
 	[int]$AgonesMinReplicas = 1,
 	[int]$AgonesMaxReplicas = 0,
-	[int]$GrpcThreadPoolReserveThreads = 1,
-	[int]$GrpcServerMaxPollers = 2,
+	# 与 C++ gRPC server 的默认值保持一致。传 0 时 Deployment / Fleet
+	# 都不注入环境变量,由进程默认值接管；正数则两种编排写入同一个值。
+	[int]$GrpcServerMaxPollers = 8,
 	[ValidateSet("ClusterIP", "NodePort", "LoadBalancer")]
 	[string]$GateServiceType = "NodePort",
 	[int]$GateServicePort = 18000,
@@ -355,15 +356,8 @@ function New-NodeDeploymentYaml {
 
 	# 用数组逐行拼,最后 join 换行。
 	# 旧写法是 `$block += @"..."@` 连续追加两个 here-string —— here-string 内容不含
-	# 结尾换行,第二次追加会直接接在上一行尾部,生成
-	#   value: "1"            - name: GRPC_SERVER_MAX_POLLERS
-	# 这种非法 YAML。默认参数(ReserveThreads=1 且 MaxPollers=2)就会命中,
-	# 也就是说 gate Deployment 在本次修复前一直生成不出可 apply 的 YAML。
+	# 结尾换行,第二次追加会直接接在上一行尾部,生成非法 YAML。
 	$extraEnvLines = @()
-	if ($NodeName -eq "gate" -and $GrpcThreadPoolReserveThreads -gt 0) {
-		$extraEnvLines += "`t`t`t- name: GRPC_THREAD_POOL_RESERVE_THREADS"
-		$extraEnvLines += "`t`t`t  value: `"$GrpcThreadPoolReserveThreads`""
-	}
 	if ($GrpcServerMaxPollers -gt 0) {
 		$extraEnvLines += "`t`t`t- name: GRPC_SERVER_MAX_POLLERS"
 		$extraEnvLines += "`t`t`t  value: `"$GrpcServerMaxPollers`""
