@@ -45,6 +45,9 @@
 namespace
 {
 	std::atomic<Node *> gNodeAtomic{nullptr};
+	constexpr std::chrono::seconds kGrpcDrainTimeout{2};
+	constexpr std::chrono::seconds kShutdownDrainBudget{15};
+	constexpr std::chrono::seconds kShutdownCompletionWaitTimeout{20};
 
 	// Diagnostic stack-dump signal handler (todo.md #216).
 	//
@@ -384,6 +387,46 @@ Node::Node(muduo::net::EventLoop *loop,
 Node::~Node()
 {
 	Shutdown();
+
+	// Node 通常在 loop.loop() 返回后离开作用域。若该返回不是由正常
+	// FinalizeShutdownInLoop() 触发,Shutdown() 会在本线程启动异步 gRPC drain,
+	// 但已经退出的 loop 不会再消费 worker 投递回来的完成回调。此时重新驱动
+	// 同一个 loop,直到既有 finalizer 调 quit(),避免析构 joinable thread 或让
+	// 捕获 this 的完成回调落到已销毁对象上。
+	if (eventLoop != nullptr && eventLoop->isInLoopThread())
+	{
+		eventLoop->assertInLoopThread();
+		bool fallbackLogged = false;
+		for (;;)
+		{
+			std::unique_lock<std::mutex> lock(shutdownCompletionMutex_);
+			if (shutdownComplete_)
+			{
+				break;
+			}
+			lock.unlock();
+			if (!fallbackLogged)
+			{
+				LOG_WARN << "EventLoop exited before node shutdown completed; running fallback drain loop";
+				fallbackLogged = true;
+			}
+			eventLoop->loop();
+		}
+	}
+
+	// EventLoop 外销毁时,Shutdown() 的公开等待预算只用于向调用方报告卡顿;
+	// 析构本身不能在仍有捕获 this 的回调/worker 时继续释放成员。
+	if (eventLoop != nullptr)
+	{
+		std::unique_lock<std::mutex> lock(shutdownCompletionMutex_);
+		shutdownCompletionCv_.wait(lock, [this]
+								   { return shutdownComplete_; });
+	}
+	if (grpcShutdownThread_.joinable())
+	{
+		grpcShutdownThread_.join();
+	}
+
 	if (gNode == this)
 	{
 		gNodeAtomic.store(nullptr, std::memory_order_release);
@@ -603,11 +646,12 @@ void Node::StartGrpcServer()
 		return;
 	}
 
-	grpcServerThread_ = std::thread([this, serverAddress]
-									{
-		LOG_INFO << "gRPC server thread started, listening on " << serverAddress;
-		grpcServer_->Wait(); });
-
+	// 这里刻意**不**起线程调 grpcServer_->Wait()。
+	// BuildAndStart() 返回时 sync server 的 ThreadManager 已经在自己的线程上收请求了,
+	// Wait() 本身不干活 —— 它的实现只是 `while (started_ && !shutdown_notified_)
+	// shutdown_cv_.Wait(&mu_);`(src/cpp/server/server_cc.cc),真正的排空全部发生在
+	// Shutdown() 内部(逐个 ThreadManager Shutdown + Wait)。
+	// 所以那条专职线程整个生命周期只是躺在条件变量上,纯粹是白占一个线程。
 	LOG_INFO << "gRPC server started on " << serverAddress;
 
 	// gRPC port is now bound and accepting connections (BuildAndStart returns
@@ -620,17 +664,59 @@ void Node::StartGrpcServer()
 
 void Node::ShutdownGrpcServer()
 {
-	if (grpcServer_)
+	eventLoop->assertInLoopThread();
+	if (!grpcServer_)
 	{
-		LOG_INFO << "Shutting down gRPC server...";
-		grpcServer_->Shutdown();
-		if (grpcServerThread_.joinable())
-		{
-			grpcServerThread_.join();
-		}
-		grpcServer_.reset();
-		LOG_INFO << "gRPC server shut down.";
+		shutdownGrpcDrainComplete_ = true;
+		MaybeFinalizeShutdownInLoop();
+		return;
 	}
+
+	LOG_INFO << "Shutting down gRPC server...";
+
+	// Server::Shutdown() 最后会同步 ThreadManager::Wait()。不能在 muduo loop
+	// 线程上直接调用:Scene gRPC handler 正阻塞在 future.get(),等的就是该 loop
+	// 执行 runInLoop 任务。两边互等会永久死锁。
+	//
+	// 仅给 Shutdown() 加 deadline 仍不够。gRPC 在 grace deadline 到期后会
+	// cancel_all_calls(),但随后照样 ThreadManager::Wait();取消 call 不会把正在
+	// 执行且卡在 std::future 上的用户 handler 强行弹栈。
+	//
+	// 因此只在关机窗口临时起一条协调线程跑同步 Shutdown(),muduo loop 继续消费
+	// 已排队的 handler。Shutdown 返回后再 queueInLoop 回来完成其余 teardown。
+	grpc::Server *const server = grpcServer_.get();
+
+	grpcShutdownThread_ = std::thread([this, server]
+									 {
+		const auto drainStart = std::chrono::steady_clock::now();
+		server->Shutdown(std::chrono::system_clock::now() + kGrpcDrainTimeout);
+		const auto drainElapsed = std::chrono::steady_clock::now() - drainStart;
+
+		eventLoop->queueInLoop([this, drainElapsed]
+							   {
+			eventLoop->assertInLoopThread();
+
+			// gRPC 不返回"是否打到 grace deadline"的布尔值。耗时达到预算时只能
+			// 诚实记录为"预算已耗尽或 handler 自身退场更慢",不能断言取消一定发生。
+			if (drainElapsed >= kGrpcDrainTimeout)
+			{
+				LOG_WARN << "gRPC drain consumed its grace budget; calls may have been cancelled. timeout_ms="
+						 << std::chrono::duration_cast<std::chrono::milliseconds>(kGrpcDrainTimeout).count();
+			}
+
+			// queueInLoop 已经由协调线程发出;join 只等它从 queueInLoop 返回并退栈,
+			// 不再等待任何 gRPC handler,所以不会重新制造 loop/poller 互等。
+			if (grpcShutdownThread_.joinable())
+			{
+				grpcShutdownThread_.join();
+			}
+			grpcServer_.reset();
+			LOG_INFO << "gRPC server shut down. drain_ms="
+					 << std::chrono::duration_cast<std::chrono::milliseconds>(drainElapsed).count();
+
+			shutdownGrpcDrainComplete_ = true;
+			MaybeFinalizeShutdownInLoop(); });
+	});
 }
 
 void Node::OnNodeIdConflictShutdown(NodeIdConflictReason reason)
@@ -825,8 +911,15 @@ void Node::StartRpcServer()
 		afterStartFn_(*this);
 }
 
-void Node::Shutdown()
+void Node::RequestShutdown()
 {
+	// 已开始(包括已完成)时不要再向可能已经退出的 EventLoop 投递捕获 this 的
+	// 重复任务。EventLoop 外的 Shutdown() 仍会在本调用返回后等待完成条件。
+	if (shutdownStarted.load(std::memory_order_acquire))
+	{
+		return;
+	}
+
 	if (eventLoop == nullptr)
 	{
 		return;
@@ -838,17 +931,30 @@ void Node::Shutdown()
 		return;
 	}
 
-	std::promise<void> shutdownPromise;
-	auto shutdownFuture = shutdownPromise.get_future();
-	eventLoop->runInLoop([this, &shutdownPromise]()
-						 {
-		ShutdownInLoop();
-		shutdownPromise.set_value(); });
-	constexpr auto kShutdownWaitTimeout = std::chrono::seconds(5);
-	if (shutdownFuture.wait_for(kShutdownWaitTimeout) != std::future_status::ready)
+	eventLoop->queueInLoop([this]
+						   { ShutdownInLoop(); });
+}
+
+void Node::Shutdown()
+{
+	if (eventLoop == nullptr)
+	{
+		return;
+	}
+
+	RequestShutdown();
+	if (eventLoop->isInLoopThread())
+	{
+		return;
+	}
+
+	std::unique_lock<std::mutex> lock(shutdownCompletionMutex_);
+	if (!shutdownCompletionCv_.wait_for(lock, kShutdownCompletionWaitTimeout,
+										[this]
+										{ return shutdownComplete_; }))
 	{
 		LOG_ERROR << "Node shutdown timed out waiting for loop thread. timeout_s="
-				  << std::chrono::duration_cast<std::chrono::seconds>(kShutdownWaitTimeout).count();
+				  << std::chrono::duration_cast<std::chrono::seconds>(kShutdownCompletionWaitTimeout).count();
 	}
 }
 
@@ -862,21 +968,89 @@ void Node::ShutdownInLoop()
 
 	LOG_DEBUG << "Node shutting down...";
 
+	// 先封住 Kafka 入站并 join 后台 poller,避免 drain 期间继续向 loop 投递
+	// command / migration。producer 保持可用,供玩家存盘继续发送 DBTask。
+	kafkaManager.StopConsumers();
+
 	if (beforeShutdownFn_)
 	{
 		LOG_INFO << "Running before-shutdown hook...";
 		beforeShutdownFn_(*this);
 	}
 
+	// 业务 barrier 与 gRPC drain 并行推进。先执行 hook 生成待落地工作,随后立刻
+	// 关闭 gRPC 入口;EventLoop 保持运行,让在途 handler 与 Redis 回调完成。
+	StartShutdownDrainWatchdog();
 	ShutdownGrpcServer();
+	MaybeFinalizeShutdownInLoop();
+}
+
+void Node::StartShutdownDrainWatchdog()
+{
+	eventLoop->assertInLoopThread();
+
+	if (!shutdownDrainCompleteFn_)
+	{
+		return;
+	}
+
+	constexpr double kDrainPollIntervalSec = 0.1;
+	shutdownDrainDeadline_ = std::chrono::steady_clock::now() + kShutdownDrainBudget;
+	LOG_INFO << "Waiting for before-shutdown work to drain. timeout_s="
+			 << std::chrono::duration_cast<std::chrono::seconds>(kShutdownDrainBudget).count();
+
+	// 即使 predicate 暂时为 true 也不能锁存:在 gRPC 完全退场前,某个在途
+	// handler 仍可能向业务侧追加工作。每 100ms 都现场重查,grpc 回调也会重查。
+	shutdownDrainTimer.RunEvery(kDrainPollIntervalSec, [this]
+								{ MaybeFinalizeShutdownInLoop(); });
+}
+
+void Node::MaybeFinalizeShutdownInLoop()
+{
+	eventLoop->assertInLoopThread();
+	if (shutdownFinalizationStarted_)
+	{
+		return;
+	}
+
+	const bool businessDrained = !shutdownDrainCompleteFn_ || shutdownDrainCompleteFn_(*this);
+	const bool businessExpired = shutdownDrainCompleteFn_ &&
+		std::chrono::steady_clock::now() >= shutdownDrainDeadline_;
+	if (!shutdownGrpcDrainComplete_ || (!businessDrained && !businessExpired))
+	{
+		return;
+	}
+
+	shutdownFinalizationStarted_ = true;
+	shutdownDrainTimer.Cancel();
+	if (businessDrained)
+	{
+		LOG_INFO << "Before-shutdown drain complete.";
+	}
+	else
+	{
+		LOG_ERROR << "Before-shutdown drain budget exceeded; continuing with work still in flight. timeout_s="
+				  << std::chrono::duration_cast<std::chrono::seconds>(kShutdownDrainBudget).count();
+	}
+	FinalizeShutdownInLoop();
+}
+
+void Node::FinalizeShutdownInLoop()
+{
+	eventLoop->assertInLoopThread();
+
 	grpcHandlerTimer.Cancel();
 	serviceHealthMonitorTimer.Cancel();
 	conflictDrainTimer.Cancel();
+	shutdownDrainTimer.Cancel();
 	// node_id / 端口的重试定时器由 serviceDiscoveryManager.Shutdown() -> EtcdService::Shutdown()
 	// 取消,不在这里。
 	ReleaseNodeId();
 	serviceDiscoveryManager.Shutdown();
 	kafkaManager.Shutdown();
+	// Hiredis 持有 muduo Channel 和待回调命令;必须在 EventLoop 与 Scene
+	// MessageAsyncClient 回调目标都存活时释放。
+	tlsRedis.Shutdown();
 	// Cleared by tlsEcs.Clear() below.
 	tlsEcs.Clear();
 #ifdef WIN32
@@ -885,6 +1059,11 @@ void Node::ShutdownInLoop()
 	logSystem.stop();
 	LOG_DEBUG << "Node shutdown complete.";
 
+	{
+		std::lock_guard<std::mutex> lock(shutdownCompletionMutex_);
+		shutdownComplete_ = true;
+	}
+	shutdownCompletionCv_.notify_all();
 	eventLoop->quit();
 }
 

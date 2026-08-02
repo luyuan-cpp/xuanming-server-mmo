@@ -12,8 +12,11 @@
 #include <boost/uuid/uuid_generators.hpp>
 #include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <functional>
+#include <mutex>
 #include <network/node_utils.h>
+#include <thread>
 #include "infra/messaging/kafka/kafka_manager.h"
 #include "node/system/etcd/etcd_service.h"
 #include "node/system/etcd/etcd_manager.h"
@@ -21,7 +24,6 @@
 #include "node/system/discovery/service_discovery_manager.h"
 #include "node/system/grpc_channel_cache.h"
 #include <grpcpp/grpcpp.h>
-#include <thread>
 
 // Tracks a pending node removal that can be cancelled if the node re-registers.
 struct PendingNodeRemoval
@@ -50,6 +52,9 @@ public:
     using AfterStartFn = std::function<void(Node &)>;
     using KafkaHandlersFn = std::function<bool(Node &)>;
     using BeforeShutdownFn = std::function<void(Node &)>;
+    // 返回 true 表示普通停机前的业务收尾已经落地,可以开始拆网络和运行时。
+    // 不设置时视为 before-shutdown hook 是同步的。
+    using ShutdownDrainCompleteFn = std::function<bool(Node &)>;
     using OnConflictShutdownFn = std::function<void(Node &, NodeIdConflictReason)>;
     // 返回 true 表示"身份冲突后的收尾(存盘 / 迁移玩家)已经全部落地,可以退出了"。
     // 不设置时视为收尾是同步的,hook 返回即退出(gate 就是这种)。
@@ -99,6 +104,11 @@ public:
     Node &SetBeforeShutdown(BeforeShutdownFn fn)
     {
         beforeShutdownFn_ = std::move(fn);
+        return *this;
+    }
+    Node &SetShutdownDrainComplete(ShutdownDrainCompleteFn fn)
+    {
+        shutdownDrainCompleteFn_ = std::move(fn);
         return *this;
     }
     Node &SetOnConflictShutdown(OnConflictShutdownFn fn)
@@ -173,7 +183,12 @@ public:
     // 这里的顺序是:fence 发号 -> 跑业务收尾 hook -> 有界等待收尾完成 -> 正常退出。
     virtual void OnNodeIdConflictShutdown(NodeIdConflictReason reason);
 
-    // Graceful shutdown (public so OS signal handlers can invoke it).
+    // 非阻塞地把停机请求投递到 EventLoop。适合 RPC handler / 信号转发器:
+    // 它们不能等待整个 drain,否则会与 gRPC Server::Shutdown 互相等待。
+    void RequestShutdown();
+
+    // 优雅停机。EventLoop 外调用会等待有界时间;异步入口优先用
+    // RequestShutdown()。
     void Shutdown();
 
     // Utility and state queries
@@ -197,6 +212,7 @@ protected:
     // gRPC server lifecycle (called automatically if services registered).
     void StartGrpcServer();
     void ShutdownGrpcServer();
+    void FinalizeShutdownInLoop();
 
     void ReleaseNodeId();
     void RegisterHandlers();
@@ -205,6 +221,8 @@ protected:
     void StartNodeRegistrationHealthMonitor();
     void ExecuteNodeRemoval(const NodeInfo &stoppedNode);
     void StartConflictDrainWatchdog();
+    void StartShutdownDrainWatchdog();
+    void MaybeFinalizeShutdownInLoop();
 
     // Event handling
     void OnServerConnected(const OnConnected2TcpServerEvent &connectedEvent);
@@ -221,6 +239,7 @@ protected:
     // Node 这里曾经有一份同名成员,但从来没被 RunAfter 过,只在 Shutdown 里被 Cancel ——
     // 纯粹是影子成员,读代码的人会以为取消它就停住了重试,其实什么也没停。已删除。
     TimerTaskComp conflictDrainTimer;
+    TimerTaskComp shutdownDrainTimer;
     // Kafka consumption is driven by KafkaConsumer::startBackgroundPolling
     // (a dedicated thread that queueInLoop's callbacks back into eventLoop).
     // The producer is non-blocking and flushes via KafkaManager::Shutdown.
@@ -237,6 +256,11 @@ protected:
     ServiceDiscoveryManager serviceDiscoveryManager;
     grpc_channel_cache::GrpcChannelCache grpcChannelCache;
     std::atomic<bool> shutdownStarted{false};
+    std::mutex shutdownCompletionMutex_;
+    std::condition_variable shutdownCompletionCv_;
+    bool shutdownComplete_{false};
+    bool shutdownGrpcDrainComplete_{false};
+    bool shutdownFinalizationStarted_{false};
     bool kafkaPollingStarted{false};
 
     // Grace-period pending removals: node_uuid -> pending removal state.
@@ -247,15 +271,19 @@ protected:
     AfterStartFn afterStartFn_;
     KafkaHandlersFn kafkaHandlersFn_;
     BeforeShutdownFn beforeShutdownFn_;
+    ShutdownDrainCompleteFn shutdownDrainCompleteFn_;
     OnConflictShutdownFn onConflictShutdownFn_;
     ConflictDrainCompleteFn conflictDrainCompleteFn_;
     bool conflictShutdownStarted_{false};
     std::chrono::steady_clock::time_point conflictDrainDeadline_{};
+    std::chrono::steady_clock::time_point shutdownDrainDeadline_{};
 
     // gRPC server (optional, started only when services are registered via RegisterGrpcService).
     std::vector<grpc::Service *> grpcServices_;
     std::unique_ptr<grpc::Server> grpcServer_;
-    std::thread grpcServerThread_;
+    // 不再为 Server::Wait() 常驻一条线程。只在关机期间临时起线程跑同步
+    // Server::Shutdown(),让 muduo loop 保持可运行并完成已在途的 runInLoop handler。
+    std::thread grpcShutdownThread_;
 };
 
 // DependencyGate — polls for required service-discovery dependencies before

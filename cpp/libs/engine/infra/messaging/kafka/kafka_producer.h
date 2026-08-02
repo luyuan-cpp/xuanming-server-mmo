@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include <chrono>
+#include <cstddef>
 #include <string>
 #include <memory>
 #include <functional>
@@ -27,6 +29,10 @@ public:
 	RdKafka::ErrorCode send(const std::string& topic, const std::string& message, const std::string& key = "", int32_t partition = RdKafka::Topic::PARTITION_UA);
 
 	void poll();
+	// 驱动投递回调,直到 producer 队列为空或超时;只有 librdkafka
+	// 报告 flush 完成时才返回 true。
+	bool flush(std::chrono::milliseconds timeout);
+	std::size_t pendingMessageCount() const;
 
 	void dr_cb(RdKafka::Message& message) override;
 

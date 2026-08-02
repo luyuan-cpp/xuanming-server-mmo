@@ -14,6 +14,11 @@
 #include "kafka/system/kafka.h"
 #include "proto/contracts/kafka/scene_command.pb.h"
 
+#include <chrono>
+#include <limits>
+#include <unordered_set>
+#include <vector>
+
 using namespace muduo;
 using namespace muduo::net;
 
@@ -25,6 +30,11 @@ namespace
         TimerTaskComp worldTimer;
         DependencyGate dependencyGate;
         SceneNodeGrpcImpl grpcService;
+        std::unordered_set<Guid> shutdownPlayerIds;
+        std::size_t lastPendingPlayerSaves = std::numeric_limits<std::size_t>::max();
+        std::size_t lastPendingKafkaMessages = std::numeric_limits<std::size_t>::max();
+        std::size_t lastRemainingPlayers = std::numeric_limits<std::size_t>::max();
+        bool shutdownDrainLogged = false;
 
         explicit SceneRuntimeContext(EventLoop& loop) : grpcService(loop) {}
     };
@@ -49,6 +59,7 @@ int main(int argc, char *argv[])
         auto context = std::make_unique<SceneRuntimeContext>(loop);
 
         SceneHandler handler;
+		{
         Node node(&loop, SceneNodeService,
                   Node::CanConnectNodeTypeList{ SceneManagerNodeService },
                   &handler);
@@ -62,10 +73,9 @@ int main(int argc, char *argv[])
         tlsRedisSystem.Initialize(&loop);
         World::InitializeSystemBeforeConnect();
 
-        // SIGTERM / conflict safety net: save all players via the full exit flow.
-        // The preferred shutdown path is GmGracefulShutdown RPC, which also calls
-        // HandleExitGameNode for each player before triggering Shutdown().
-        auto exitAllPlayers = [](Node &)
+        // SIGTERM / GM 共用这一个唯一的普通停机玩家存盘入口;
+        // 先复制实体列表,再逐个走完整 HandleExitGameNode 流程。
+        auto exitAllPlayers = [&context](Node &)
         {
             // 先停 Agones lifecycle worker 并 join,再动玩家数据。
             // 顺序不能反:worker 还在跑的时候进程正在退出,health / ready 请求
@@ -75,16 +85,100 @@ int main(int argc, char *argv[])
             // 删 Pod 发出来的,再回敬一个 /shutdown 就是递归触发删除。
             // 只有进程自己决定自我终止时才调 RequestShutdown()。
             agones::SceneLifecycle::Instance().Stop();
+			context->dependencyGate.probeTimer.Cancel();
+			context->worldTimer.Cancel();
+			CrossZoneReaper::StopTick();
+			tlsRedisSystem.BeginShutdown();
 
             auto view = tlsEcs.actorRegistry.view<Player>();
-            LOG_INFO << "Emergency save: exiting " << view.size() << " online players before shutdown...";
+			std::vector<entt::entity> players;
+			players.reserve(view.size());
             for (auto entity : view)
             {
-                PlayerLifecycleSystem::HandleExitGameNode(entity);
+				players.push_back(entity);
+				if (const auto *playerId = tlsEcs.actorRegistry.try_get<Guid>(entity))
+				{
+					context->shutdownPlayerIds.insert(*playerId);
+				}
             }
-            LOG_INFO << "All players exited.";
+
+			LOG_INFO << "Shutdown save: initiating exit for " << players.size() << " online players.";
+			for (const auto entity : players)
+			{
+				if (tlsEcs.actorRegistry.valid(entity))
+				{
+					PlayerLifecycleSystem::HandleExitGameNode(entity);
+				}
+			}
+			LOG_INFO << "Shutdown save initiated; waiting for Redis ACK and Kafka producer flush.";
         };
         node.SetBeforeShutdown(exitAllPlayers);
+
+		// 每次轮询都重新扫描在线实体。gRPC / Kafka 入口已经由 Node 封住,但停机
+		// 瞬间已经排入 EventLoop 的请求仍可能晚一拍创建玩家;不能只信首次快照。
+		node.SetShutdownDrainComplete([&context](Node &n)
+									  {
+			auto view = tlsEcs.actorRegistry.view<Player>();
+			std::vector<entt::entity> playersNeedingExit;
+			for (auto entity : view)
+			{
+				const auto *playerId = tlsEcs.actorRegistry.try_get<Guid>(entity);
+				if (playerId == nullptr)
+				{
+					continue;
+				}
+				context->shutdownPlayerIds.insert(*playerId);
+				if (!PlayerLifecycleSystem::IsSaveInFlight(*playerId))
+				{
+					playersNeedingExit.push_back(entity);
+				}
+			}
+
+			for (const auto entity : playersNeedingExit)
+			{
+				if (tlsEcs.actorRegistry.valid(entity))
+				{
+					PlayerLifecycleSystem::HandleExitGameNode(entity);
+				}
+			}
+
+			std::size_t pendingPlayerSaves = 0;
+			for (const Guid playerId : context->shutdownPlayerIds)
+			{
+				if (PlayerLifecycleSystem::IsSaveInFlight(playerId))
+				{
+					++pendingPlayerSaves;
+				}
+			}
+
+			const std::size_t remainingPlayers = tlsEcs.actorRegistry.view<Player>().size();
+			const bool kafkaDrained = n.GetKafkaManager().FlushProducer(std::chrono::milliseconds(0));
+			const std::size_t pendingKafkaMessages = n.GetKafkaManager().PendingProducerMessages();
+			if (pendingPlayerSaves != context->lastPendingPlayerSaves ||
+				pendingKafkaMessages != context->lastPendingKafkaMessages ||
+				remainingPlayers != context->lastRemainingPlayers)
+			{
+				LOG_INFO << "Shutdown drain progress: redis_player_saves=" << pendingPlayerSaves
+						 << " kafka_messages=" << pendingKafkaMessages
+						 << " remaining_players=" << remainingPlayers;
+				context->lastPendingPlayerSaves = pendingPlayerSaves;
+				context->lastPendingKafkaMessages = pendingKafkaMessages;
+				context->lastRemainingPlayers = remainingPlayers;
+			}
+
+			const bool drained = remainingPlayers == 0 && pendingPlayerSaves == 0 && kafkaDrained;
+			if (drained && !context->shutdownDrainLogged)
+			{
+				context->shutdownDrainLogged = true;
+				LOG_INFO << "Shutdown persistence barrier complete: Redis ACKs observed and Kafka producer flushed.";
+			}
+			else if (!drained)
+			{
+				// gRPC 完全退场前 predicate 可能短暂为 true,后续在途任务又
+				// 追加玩家。重置后只有最终稳定状态才会保留 complete 日志。
+				context->shutdownDrainLogged = false;
+			}
+			return drained; });
 
         // 身份冲突(etcd 租约过期 / node_id 被别人抢走)和普通 SIGTERM 不是一回事:
         // 这台节点马上就不再是 node_id 的合法持有者,但玩家的 gate 会话还连着。
@@ -188,8 +282,14 @@ int main(int argc, char *argv[])
         });
 
         loop.loop();
+		} // 异常 quit 时先让 Node 析构兜底完成业务 drain,Redis 此时仍保持可用。
 
-        // loop 退出后的兜底 join。SetBeforeShutdown 已经调过一次,Stop() 幂等;
-        // 但走 conflict-shutdown 之类的分支时不保证走过那条路径。
+		// Node 正常 finalizer 已先 free Hiredis;这里是幂等兜底,随后才销毁
+		// 仍由 SceneRuntimeContext 持有的 MessageAsyncClient。
+		tlsRedis.Shutdown();
+		tlsRedisSystem.Shutdown();
+
+		// loop 退出后的兜底 join。SetBeforeShutdown 已经调过一次,Stop() 幂等;
+		// 但走 conflict-shutdown 之类的分支时不保证走过那条路径。
         agones::SceneLifecycle::Instance().Stop(); });
 }

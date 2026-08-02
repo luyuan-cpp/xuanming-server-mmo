@@ -1,6 +1,10 @@
 ﻿#include "kafka_producer.h"
 #include "muduo/base/Logging.h"
 
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+
 void KafkaProducer::setBrokers(const std::string& brokers) {
 	if (producer_) return; // already created
 	pendingBrokers_ = brokers;
@@ -44,10 +48,9 @@ bool KafkaProducer::ensureInitialized() {
 }
 
 KafkaProducer::~KafkaProducer() {
-	// Flush pending messages before destruction
-	while (producer_ && producer_->outq_len() > 0) {
-		producer_->poll(100);
-	}
+	// broker 不可用时不允许进程析构无限挂起;正常停机的
+	// KafkaManager 也复用同一条有界 flush 路径。
+	flush(std::chrono::seconds(5));
 }
 
 RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::string& message,
@@ -104,4 +107,32 @@ void KafkaProducer::poll() {
 	}
 
 	producer_->poll(0); // 0 = non-blocking
+}
+
+bool KafkaProducer::flush(std::chrono::milliseconds timeout) {
+	if (!producer_) {
+		return true;
+	}
+
+	const auto timeoutCount = std::clamp<std::int64_t>(
+		static_cast<std::int64_t>(timeout.count()), 0, std::numeric_limits<int>::max());
+	const RdKafka::ErrorCode error = producer_->flush(static_cast<int>(timeoutCount));
+	const std::size_t pending = pendingMessageCount();
+	const bool complete = error == RdKafka::ERR_NO_ERROR && pending == 0;
+
+	// 零超时是停机 barrier 每 100ms 调用的非阻塞轮询;中间状态不刷屏,
+	// 最终的有界 flush 再记录一次失败。
+	if (!complete && timeoutCount > 0) {
+		LOG_ERROR << "Kafka producer flush timed out or failed: timeout_ms=" << timeoutCount
+			<< " pending=" << pending << " error=" << RdKafka::err2str(error);
+	}
+	return complete;
+}
+
+std::size_t KafkaProducer::pendingMessageCount() const {
+	if (!producer_) {
+		return 0;
+	}
+	const int pending = producer_->outq_len();
+	return pending > 0 ? static_cast<std::size_t>(pending) : 0;
 }

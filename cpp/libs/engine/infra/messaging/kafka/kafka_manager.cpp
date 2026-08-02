@@ -31,7 +31,9 @@ std::vector<std::string> CollectTopics(const KafkaConfig& config) {
 
 KafkaManager::KafkaManager() = default;
 
-KafkaManager::~KafkaManager() = default;
+KafkaManager::~KafkaManager() {
+	Shutdown();
+}
 
 bool KafkaManager::Init(const KafkaConfig& config) {
 	// The deploy yaml intentionally leaves Kafka.GroupID empty so each node
@@ -66,6 +68,10 @@ bool KafkaManager::Subscribe(const KafkaConfig& config,
 	const std::string& groupId,
 	const std::vector<int32_t>& partitions,
 	KafkaMessageCallback callback) {
+	if (consumersStopped_ || shutdown_) {
+		LOG_WARN << "KafkaManager: shutdown has started; rejecting new consumer subscription.";
+		return false;
+	}
 	if (!callback) {
 		LOG_DEBUG << "KafkaManager: No message callback provided, skipping subscribe.";
 		return false;
@@ -131,6 +137,10 @@ void KafkaManager::Poll() {
 }
 
 void KafkaManager::StartBackgroundPolling(muduo::net::EventLoop* dispatchLoop) {
+	if (consumersStopped_ || shutdown_) {
+		LOG_WARN << "KafkaManager::StartBackgroundPolling ignored after shutdown started.";
+		return;
+	}
 	if (!dispatchLoop) {
 		LOG_ERROR << "KafkaManager::StartBackgroundPolling requires a non-null dispatch loop.";
 		return;
@@ -143,17 +153,43 @@ void KafkaManager::StartBackgroundPolling(muduo::net::EventLoop* dispatchLoop) {
 	}
 }
 
-void KafkaManager::Shutdown() {
+bool KafkaManager::FlushProducer(std::chrono::milliseconds timeout) {
+	return KafkaProducer::Instance().flush(timeout);
+}
+
+std::size_t KafkaManager::PendingProducerMessages() const {
+	return KafkaProducer::Instance().pendingMessageCount();
+}
+
+void KafkaManager::StopConsumers() {
+	if (consumersStopped_) {
+		return;
+	}
+	consumersStopped_ = true;
 	for (auto& consumer : consumers_) {
 		if (consumer) {
 			consumer->stop();
 		}
 	}
 	consumers_.clear();
+}
 
-	if (KafkaProducer::Instance().initialized()) {
-		KafkaProducer::Instance().poll(); // flush if needed
+bool KafkaManager::Shutdown(std::chrono::milliseconds producerFlushTimeout) {
+	if (shutdown_) {
+		return shutdownResult_;
 	}
+	shutdown_ = true;
 
-	LOG_INFO << "KafkaManager has been shut down.";
+	StopConsumers();
+
+	shutdownResult_ = FlushProducer(producerFlushTimeout);
+
+	if (shutdownResult_) {
+		LOG_INFO << "KafkaManager has been shut down; producer queue drained.";
+	}
+	else {
+		LOG_ERROR << "KafkaManager shut down with producer messages still in flight. pending="
+			<< PendingProducerMessages();
+	}
+	return shutdownResult_;
 }

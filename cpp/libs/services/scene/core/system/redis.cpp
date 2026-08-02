@@ -16,6 +16,7 @@ using namespace muduo::net;
 
 void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 {
+	shutdownBegun_ = false;
     loop_ = std::ref(*loop);
     playerRedis = std::make_unique<PlayerDataRedis::element_type>(tlsRedis.GetZoneRedis());
     playerRedis->SetLoadCallback(PlayerLifecycleSystem::HandlePlayerAsyncLoaded);
@@ -111,10 +112,29 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     }
 }
 
+void RedisSystem::BeginShutdown()
+{
+	if (shutdownBegun_)
+	{
+		return;
+	}
+	shutdownBegun_ = true;
+
+	// 停掉会制造新写入的周期全量存盘。retry timer 与 RedisManager 的重连
+	// 必须继续活到 barrier 结束,否则 Redis 短暂抖动会必然拖到超时。
+	if (loop_.has_value() && periodicSaveTimerActive_)
+	{
+		loop_->get().cancel(periodicSaveTimerId_);
+		periodicSaveTimerActive_ = false;
+	}
+}
+
 void RedisSystem::Shutdown()
 {
-    // Cancel timers BEFORE dropping playerRedis so a pending fire cannot deref
-    // a half-destroyed unique_ptr. Guard on loop_ in case Initialize() never ran.
+	BeginShutdown();
+
+	// 先取消定时器与 RedisManager 回调,再释放 MessageAsyncClient,避免后续
+	// 重连回调命中已经销毁的 this。
     if (loop_.has_value())
     {
         muduo::net::EventLoop &loop = loop_->get();
@@ -128,13 +148,10 @@ void RedisSystem::Shutdown()
             loop.cancel(snapshotTimerId_);
             snapshotTimerActive_ = false;
         }
-        if (periodicSaveTimerActive_)
-        {
-            loop.cancel(periodicSaveTimerId_);
-            periodicSaveTimerActive_ = false;
-        }
     }
+	tlsRedis.SetReconnectCallback({});
     playerRedis.reset();
+	loop_.reset();
 }
 
 RedisSystem::~RedisSystem()

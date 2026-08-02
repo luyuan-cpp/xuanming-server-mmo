@@ -35,9 +35,11 @@ public:
 
     void Initialize(muduo::net::EventLoop *loop);
 
-    // Cancel timers and drop the playerRedis instance. Idempotent. Call before
-    // the EventLoop is destroyed when ordering matters (the destructor also
-    // calls this).
+    // 进入停机 drain:只停止会制造新存盘的周期任务,保留 Redis 重连与重试定时器,
+    // 让已经发起的玩家退出存盘仍有机会收到 ACK。
+    void BeginShutdown();
+
+    // 取消全部定时器并释放 playerRedis。幂等;必须在 EventLoop 析构前调用。
     void Shutdown();
 
 private:
@@ -52,6 +54,7 @@ private:
     bool retryTimerActive_ = false;
     bool snapshotTimerActive_ = false;
     bool periodicSaveTimerActive_ = false;
+    bool shutdownBegun_ = false;
 };
 
 

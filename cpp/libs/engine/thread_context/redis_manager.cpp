@@ -14,18 +14,16 @@ thread_local RedisManager tlsRedis;
 
 RedisManager::~RedisManager()
 {
-	// Cancel the reconnect timer so the EventLoop does not later fire DoReconnect()
-	// against destroyed `this`. Safe to call when no timer is active or the loop
-	// is already gone (CancelReconnectTimer guards on reconnectTimerActive_,
-	// and EventLoop teardown ordering is the caller's responsibility).
-	if (loop_ != nullptr)
-	{
-		CancelReconnectTimer();
-	}
+	Shutdown();
 }
 
 void RedisManager::Connect(muduo::net::EventLoop *loop, const muduo::net::InetAddress &addr)
 {
+	if (loop_ != nullptr)
+	{
+		CancelReconnectTimer();
+	}
+	ResetConnection();
 	loop_ = loop;
 	redisAddr_ = addr;
 
@@ -33,10 +31,23 @@ void RedisManager::Connect(muduo::net::EventLoop *loop, const muduo::net::InetAd
 	// guaranteed registered BEFORE the first connect attempt. This closes the
 	// hole where the very first SYN failure could go unnoticed (no disconnect
 	// callback registered yet -> reconnect timer never started).
-	zoneRedis_.reset();
 	zoneRedis_ = std::make_unique<HiredisPtr::element_type>(loop_, redisAddr_);
 	InstallCallbacks();
 	zoneRedis_->connect();
+}
+
+void RedisManager::Shutdown()
+{
+	if (loop_ != nullptr)
+	{
+		CancelReconnectTimer();
+	}
+
+	// 先切断 RedisManager 自身的回调,否则 redisAsyncFree 触发 disconnect
+	// callback 时会在停机过程中重新挂一条重连定时器。
+	reconnectCb_ = {};
+	ResetConnection();
+	loop_ = nullptr;
 }
 
 void RedisManager::SetupReconnect(muduo::net::EventLoop *loop, const muduo::net::InetAddress &addr)
@@ -99,7 +110,7 @@ void RedisManager::InstallCallbacks()
 void RedisManager::ScheduleReconnect()
 {
 	static constexpr double kReconnectIntervalSec = 3.0;
-	if (reconnectTimerActive_)
+	if (loop_ == nullptr || reconnectTimerActive_)
 	{
 		return; // Timer already running; avoid stacking duplicate timers.
 	}
@@ -110,7 +121,7 @@ void RedisManager::ScheduleReconnect()
 
 void RedisManager::CancelReconnectTimer()
 {
-	if (reconnectTimerActive_)
+	if (loop_ != nullptr && reconnectTimerActive_)
 	{
 		loop_->cancel(reconnectTimerId_);
 		reconnectTimerActive_ = false;
@@ -121,11 +132,27 @@ void RedisManager::DoReconnect()
 {
 	LOG_INFO << "Attempting Redis reconnect to " << redisAddr_.toIpPort();
 
-	// Destroy the old (disconnected) Hiredis instance.
-	zoneRedis_.reset();
+	// 销毁旧连接前清掉 connect/disconnect 回调,避免显式替换又触发重连;
+	// command 回调保留,redisAsyncFree 会用 null reply 让上层把写入放回重试队列。
+	ResetConnection();
+	if (loop_ == nullptr)
+	{
+		return;
+	}
 
 	// Create a new Hiredis, install callbacks BEFORE connect(), then connect.
 	zoneRedis_ = std::make_unique<HiredisPtr::element_type>(loop_, redisAddr_);
 	InstallCallbacks();
 	zoneRedis_->connect();
+}
+
+void RedisManager::ResetConnection()
+{
+	if (!zoneRedis_)
+	{
+		return;
+	}
+	zoneRedis_->setConnectCallback({});
+	zoneRedis_->setDisconnectCallback({});
+	zoneRedis_.reset();
 }

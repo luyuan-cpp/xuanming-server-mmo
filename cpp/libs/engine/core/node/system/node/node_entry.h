@@ -12,6 +12,7 @@
 #include "node/system/node/node_kafka_command_handler.h"
 #include "table/code/all_table.h"
 #include "thread_context/ecs_context.h"
+#include "thread_context/redis_manager.h"
 
 #include <google/protobuf/stubs/common.h>
 
@@ -75,18 +76,40 @@ void ApplyPostConstructionHooks(Node& node)
 namespace detail
 {
 
-    // Install OS signal handlers so SIGTERM/SIGINT trigger graceful shutdown
-    // via gNode->Shutdown() + loop.quit().
+#ifdef __linux__
+    inline volatile std::sig_atomic_t gShutdownSignalPending = 0;
+
+    // POSIX 信号上下文只允许异步信号安全操作;Node::Shutdown()、
+    // 日志、内存分配和 EventLoop 唤醒都禁止在 handler 内执行。
+    inline void HandleShutdownSignal(int) noexcept
+    {
+        gShutdownSignalPending = 1;
+    }
+#endif
+
+    // 安装操作系统信号 handler, SIGTERM/SIGINT 转入优雅停机。
     inline void InstallSignalHandlers(muduo::net::EventLoop &loop)
     {
 #ifdef __linux__
-        auto handler = [](int sig)
-        {
+        // 在正常 EventLoop 上下文轮询 sig_atomic_t 标志。100ms 有界延迟
+        // 换来实际信号 handler 严格异步信号安全。
+        loop.runEvery(0.1, [&loop]
+                      {
+            if (gShutdownSignalPending == 0)
+            {
+                return;
+            }
+            gShutdownSignalPending = 0;
             if (gNode)
-                gNode->Shutdown();
-        };
-        ::signal(SIGTERM, handler);
-        ::signal(SIGINT, handler);
+            {
+                gNode->RequestShutdown();
+            }
+            else
+            {
+                loop.quit();
+            } });
+        ::signal(SIGTERM, &HandleShutdownSignal);
+        ::signal(SIGINT, &HandleShutdownSignal);
 #else
         // Windows: use SetConsoleCtrlHandler for Ctrl+C / service stop.
         static muduo::net::EventLoop *sLoop = &loop;
@@ -94,8 +117,14 @@ namespace detail
                                 {
         if (ctrlType == CTRL_C_EVENT || ctrlType == CTRL_CLOSE_EVENT ||
             ctrlType == CTRL_SHUTDOWN_EVENT) {
-            if (gNode) gNode->Shutdown();
-            if (sLoop) sLoop->quit();
+            // Node::Shutdown() 会在 gRPC drain 与其余 teardown 都完成后 quit。
+            // 这里不能紧接着提前 quit,否则 loop 不再消费在途 gRPC handler 的
+            // runInLoop 任务,关机协调线程会重新卡住。
+            if (gNode) {
+                gNode->Shutdown();
+            } else if (sLoop) {
+                sLoop->quit();
+            }
             return TRUE;
         }
         return FALSE; }, TRUE);
@@ -110,6 +139,9 @@ int RunNodeMain(StartNodeFn&& startNode)
     absl::InitializeLog();
     muduo::net::EventLoop loop;
     startNode(loop);
+    // 兜底处理未经 Node::FinalizeShutdownInLoop() 就离开 loop 的入口;
+    // 调用幂等,Hiredis Channel 必须在 EventLoop 析构前释放。
+    tlsRedis.Shutdown();
     tlsEcs.Clear();
     google::protobuf::ShutdownProtobufLibrary();
     return 0;

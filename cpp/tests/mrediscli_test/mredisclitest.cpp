@@ -138,6 +138,20 @@ void loadPbCallback(hiredis::Hiredis* c, redisReply* reply, google::protobuf::Me
 // Protobuf 序列化存取 Redis（异步回调模式）
 // ---------------------------------------------------------------------------
 
+TEST(HiredisLifecycleTest, DestructorRemovesActiveChannelBeforeEventLoopDestruction)
+{
+	EventLoop loop;
+	InetAddress serverAddr("127.0.0.1", 1);
+	{
+		// 不运行 loop,故意让 Hiredis 在 Channel 仍注册时析构。
+		// 回归点是 redisAsyncFree -> ev.cleanup 必须先注销 Channel,
+		// 不能触发旧析构顺序的 active-channel 断言。
+		hiredis::Hiredis client(&loop, serverAddr);
+		client.connect();
+	}
+	SUCCEED();
+}
+
 TEST(HiredisAsyncTest, SaveAndLoadProtobuf)
 {
     Logger::setLogLevel(Logger::DEBUG);

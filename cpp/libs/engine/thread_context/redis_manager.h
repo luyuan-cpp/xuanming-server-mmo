@@ -38,6 +38,10 @@ public:
 	// Prefer Connect() in new code.
 	void SetupReconnect(muduo::net::EventLoop *loop, const muduo::net::InetAddress &addr);
 
+	// 显式取消重连并释放 Hiredis Channel。必须在 EventLoop 析构前调用;
+	// 幂等,Node 正常停机与入口函数兜底可以重复执行。
+	void Shutdown();
+
 	// Register a callback to be invoked after a successful reconnect.
 	void SetReconnectCallback(const ReconnectCallback &cb) { reconnectCb_ = cb; }
 
@@ -46,6 +50,7 @@ private:
 	void CancelReconnectTimer();
 	void DoReconnect();
 	void InstallCallbacks();
+	void ResetConnection();
 
 	HiredisPtr zoneRedis_;
 	muduo::net::EventLoop *loop_ = nullptr;
