@@ -32,23 +32,45 @@ public:
     void RunAt(const Timestamp &time, const TimerCallback &cb);
     void RunAfter(double delay, const TimerCallback &cb);
     void RunEvery(double interval, const TimerCallback &cb);
-    void Run() const;
 
     void Cancel();
 
+    // "Is a timer currently armed", nothing more. Deliberately does not expose
+    // a deadline: remaining time is entity data that must survive save/load,
+    // reach the client, and be restored on reconnect, and muduo's Timer can do
+    // none of those. The old GetEndTime() read it out of muduo's private Timer
+    // and was removed -- put the deadline on the entity's protobuf component
+    // instead, which is what already gets synced and persisted.
     bool IsActive() const;
-
-    uint64_t GetEndTime() const;
-
-    void SetCallBack(const TimerCallback &cb);
 
 private:
     // Common guard + schedule logic shared by RunAt/RunAfter/RunEvery.
+    // Takes cb by value so it can be moved into the closure handed to muduo.
     template <typename ScheduleFn>
-    void ScheduleTimer(const TimerCallback &cb, ScheduleFn &&schedule);
+    void ScheduleTimer(TimerCallback cb, bool repeating, ScheduleFn &&schedule);
 
-    void OnTimer();
+    // Everything it needs is bound at schedule time and lives in muduo's Timer,
+    // not in this component.
+    //
+    // `firedGeneration` lets a firing left over from a superseded arming
+    // recognise itself and bail out -- see the .cpp for the use-after-free it
+    // prevents. `repeating` replaces asking muduo's Timer what kind it is; we
+    // scheduled it, so we already know. `cb` used to be a member: keeping it in
+    // the closure instead means Cancel() cannot destroy the callable while it
+    // is executing, so re-arming from inside one's own callback needs no
+    // defensive copy. It also drops sizeof(TimerTaskComp) from 88 to 24 on
+    // MSVC (56 to 24 on libstdc++) and removes one std::function copy per
+    // firing, which was a heap allocation on Linux for any callable larger
+    // than the 16-byte inline buffer.
+    void OnTimer(uint32_t firedGeneration, bool repeating, const TimerCallback &cb);
 
     TimerId timerId;
-    TimerCallback callback;
+    // Bumped on every Cancel() -- and therefore on every re-arm, since
+    // ScheduleTimer() cancels first. Only ever compared for equality, so
+    // wrapping is harmless. uint32 rather than uint64 so that `armed` fits in
+    // the same 8 bytes of tail padding.
+    uint32_t generation = 0;
+    // Backs IsActive(). True from a successful arming until the one-shot fires
+    // or Cancel() runs; a repeating timer stays armed.
+    bool armed = false;
 };

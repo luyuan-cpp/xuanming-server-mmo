@@ -50,6 +50,18 @@ class TimerQueue : noncopyable
   void cancel(TimerId timerId);
 
   void loop();
+
+  // Milliseconds until the earliest pending timer is due, clamped to
+  // [0, fallbackMs]; fallbackMs when no timer is pending.
+  //
+  // Windows has no timerfd, so nothing in the poller fires when a timer comes
+  // due -- EventLoop::loop() polls with a constant timeout and only then calls
+  // loop() above to sweep the queue. With a constant, every timer is rounded up
+  // to that poll period (measured: RunEvery(0.01) actually ticked at ~108ms).
+  // Feeding this value to the poller instead is what libevent/libuv/asio do on
+  // platforms without timerfd, and restores millisecond-ish granularity.
+  int nextTimeoutMs(int fallbackMs) const;
+
  private:
 
   // FIXME: use unique_ptr<Timer> instead of raw pointers.

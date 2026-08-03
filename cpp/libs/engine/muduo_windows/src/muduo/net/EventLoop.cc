@@ -123,7 +123,16 @@ void EventLoop::loop()
   while (!quit_)
   {
     activeChannels_.clear();
+#ifdef WIN32
+    // No timerfd here, so the poller holds nothing that becomes readable when
+    // a timer comes due -- timerQueue_->loop() below is what actually sweeps
+    // the queue, and it only runs once per poll. Blocking for a constant
+    // kPollTimeMs therefore rounds every timer up to that period. Derive the
+    // timeout from the queue instead.
+    pollReturnTime_ = poller_->poll(timerQueue_->nextTimeoutMs(kPollTimeMs), &activeChannels_);
+#else
     pollReturnTime_ = poller_->poll(kPollTimeMs, &activeChannels_);
+#endif // WIN32
     ++iteration_;
     if (Logger::logLevel() <= Logger::TRACE)
     {

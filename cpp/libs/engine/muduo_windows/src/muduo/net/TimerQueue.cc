@@ -177,6 +177,26 @@ void TimerQueue::loop()
 {
     handleRead();
 }
+
+int TimerQueue::nextTimeoutMs(int fallbackMs) const
+{
+  if (timers_.empty())
+  {
+    return fallbackMs;
+  }
+
+  const int64_t microseconds = timers_.begin()->first.microSecondsSinceEpoch()
+                             - Timestamp::now().microSecondsSinceEpoch();
+  if (microseconds <= 0)
+  {
+    return 0;   // already due; poll must not block
+  }
+
+  // Round up: sleeping a hair short only wakes the loop to find nothing due,
+  // and it would spin until the timestamp is actually reached.
+  const int64_t milliseconds = (microseconds + 999) / 1000;
+  return milliseconds < fallbackMs ? static_cast<int>(milliseconds) : fallbackMs;
+}
 void TimerQueue::handleRead()
 {
   loop_->assertInLoopThread();
