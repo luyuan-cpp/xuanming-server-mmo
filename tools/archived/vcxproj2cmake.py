@@ -216,6 +216,22 @@ def write_cmake(vcxproj_dir, project_name, source_files, include_dirs, target_ty
     lines.append("add_definitions(-DNOMINMAX)")
     lines.append("add_definitions(-DENTT_ID_TYPE=uint64_t)")
     lines.append("add_definitions(-DABSL_PROPAGATE_CXX_STD=TRUE)")
+    # muduo's legacy protobuf logging macros.
+    #
+    # cpp/libs/engine/core/network/codec/codec.cpp includes
+    # muduo/net/protorpc/google-inl.h, and game_channel.h includes
+    # muduo/net/protobuf/ProtobufCodecLite.h.  Both still call
+    # GOOGLE_CHECK_EQ / GOOGLE_LOG / GOOGLE_DCHECK, which protobuf removed in
+    # v22 when it moved to abseil; we build against protobuf 6.31.1.
+    #
+    # These three aliases are exactly what the Windows build already passes
+    # (<PreprocessorDefinitions> in cpp/libs/engine/core/core.vcxproj), so the
+    # two platforms stay on one shim.  They are needed here *in addition to*
+    # the copy in tools/archived/setup_dependencies.sh: that one only covers
+    # muduo's own translation units, this one covers ours.
+    lines.append("add_definitions(-DGOOGLE_CHECK_EQ=ABSL_CHECK_EQ)")
+    lines.append("add_definitions(-DGOOGLE_LOG=ABSL_LOG)")
+    lines.append("add_definitions(-DGOOGLE_DCHECK=ABSL_DCHECK)")
     # Agones lifecycle: enable the libcurl transport on Linux.
     #
     # MUST be emitted here, not only hand-written into a checked-in

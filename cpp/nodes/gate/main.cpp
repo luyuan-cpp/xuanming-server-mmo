@@ -1,4 +1,11 @@
+// Windows only, and it must stay first: this header pulls <WS2tcpip.h> ahead of
+// <Windows.h> so the winsock2 declarations win over winsock.h's, and it supplies
+// the POSIX shims muduo's Windows port needs. It ships in the vendored Windows
+// muduo tree (third_party/muduo), which the Linux image does not copy; its whole
+// body is #ifdef WIN32, so on Linux it would contribute nothing but a missing file.
+#ifdef WIN32
 #include "muduo/base/CrossPlatformAdapterFunction.h"
+#endif
 #include "muduo/base/Logging.h"
 #include "muduo/net/EventLoopThreadPool.h"
 
