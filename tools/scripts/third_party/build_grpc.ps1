@@ -65,6 +65,66 @@ if (-not (Test-Path (Join-Path $GrpcRoot 'CMakeLists.txt'))) {
     Write-Error "Cannot find grpc CMakeLists.txt at $GrpcRoot."
 }
 
+$ExpectedGrpcSha = 'c876f4da50f7da2f331888b88b2a7243514139fe'
+$ExpectedBoringSslSha = '2b44a3701a4788e1ef866ddc7f143060a3d196c9'
+$BoringSslRoot = Join-Path $GrpcRoot 'third_party\boringssl-with-bazel'
+$BoringSslPatch = Join-Path $RepoRoot 'tools\patches\grpc\v1.83.0-boringssl-windows-x509-name.patch'
+
+function Get-GitHead([string]$RepositoryPath) {
+    $git = Get-Command git -ErrorAction SilentlyContinue
+    if (-not $git) {
+        Write-Error "git is not available on PATH."
+    }
+
+    $output = & $git.Source -C $RepositoryPath rev-parse HEAD 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Cannot resolve git HEAD for ${RepositoryPath}: $($output -join [Environment]::NewLine)"
+    }
+
+    return ($output | Select-Object -Last 1).ToString().Trim()
+}
+
+function Initialize-BoringSslWindowsPatch {
+    if (-not (Test-Path -LiteralPath $BoringSslRoot -PathType Container)) {
+        Write-Error "BoringSSL submodule is missing: $BoringSslRoot"
+    }
+    if (-not (Test-Path -LiteralPath $BoringSslPatch -PathType Leaf)) {
+        Write-Error "Required BoringSSL patch is missing: $BoringSslPatch"
+    }
+
+    $actualGrpcSha = Get-GitHead $GrpcRoot
+    if ($actualGrpcSha -ne $ExpectedGrpcSha) {
+        Write-Error "Unexpected gRPC revision. Expected $ExpectedGrpcSha, got $actualGrpcSha."
+    }
+
+    $actualBoringSslSha = Get-GitHead $BoringSslRoot
+    if ($actualBoringSslSha -ne $ExpectedBoringSslSha) {
+        Write-Error "Unexpected BoringSSL revision. Expected $ExpectedBoringSslSha, got $actualBoringSslSha."
+    }
+
+    $git = (Get-Command git -ErrorAction Stop).Source
+    $null = & $git -C $BoringSslRoot apply --check $BoringSslPatch 2>$null
+    $forwardCheckExitCode = $LASTEXITCODE
+    if ($forwardCheckExitCode -eq 0) {
+        & $git -C $BoringSslRoot apply $BoringSslPatch
+        if ($LASTEXITCODE -ne 0) {
+            Write-Error "Failed to apply BoringSSL Windows X509_NAME patch: $BoringSslPatch"
+        }
+        Write-Host "[patch] Applied BoringSSL Windows X509_NAME compatibility patch."
+        return
+    }
+
+    $null = & $git -C $BoringSslRoot apply --reverse --check $BoringSslPatch 2>$null
+    if ($LASTEXITCODE -eq 0) {
+        Write-Host "[patch] BoringSSL Windows X509_NAME compatibility patch is already applied."
+        return
+    }
+
+    Write-Error "BoringSSL patch is neither applicable nor already applied. Refusing to build: $BoringSslPatch"
+}
+
+Initialize-BoringSslWindowsPatch
+
 function Ensure-WingetAvailable {
     $wg = Get-Command winget -ErrorAction SilentlyContinue
     if (-not $wg) {

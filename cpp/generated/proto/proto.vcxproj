@@ -74,9 +74,9 @@
     <ClCompile Include="common\event\scene_event.pb.cc" />
     <ClCompile Include="common\event\server_event.pb.cc" />
     <ClCompile Include="common\event\skill_event.pb.cc" />
+    <ClCompile Include="common\options\attribute_sync_option.pb.cc" />
     <ClCompile Include="common\rollback\player_snapshot.pb.cc" />
     <ClCompile Include="common\rollback\transaction_log.pb.cc" />
-    <ClCompile Include="contracts\kafka\centre_command.pb.cc" />
     <ClCompile Include="contracts\kafka\gate_command.pb.cc" />
     <ClCompile Include="contracts\kafka\gate_event.pb.cc" />
     <ClCompile Include="contracts\kafka\player_event.pb.cc" />
@@ -102,7 +102,6 @@
     <ClCompile Include="guild\guild.pb.cc" />
     <ClCompile Include="login\login.grpc.pb.cc" />
     <ClCompile Include="login\login.pb.cc" />
-    <ClCompile Include="player\player.pb.cc" />
     <ClCompile Include="scene\client_player_common.pb.cc" />
     <ClCompile Include="scene\player_lifecycle.pb.cc" />
     <ClCompile Include="scene\player_movement.pb.cc" />
@@ -177,9 +176,9 @@
     <ClInclude Include="common\event\scene_event.pb.h" />
     <ClInclude Include="common\event\server_event.pb.h" />
     <ClInclude Include="common\event\skill_event.pb.h" />
+    <ClInclude Include="common\options\attribute_sync_option.pb.h" />
     <ClInclude Include="common\rollback\player_snapshot.pb.h" />
     <ClInclude Include="common\rollback\transaction_log.pb.h" />
-    <ClInclude Include="contracts\kafka\centre_command.pb.h" />
     <ClInclude Include="contracts\kafka\gate_command.pb.h" />
     <ClInclude Include="contracts\kafka\gate_event.pb.h" />
     <ClInclude Include="contracts\kafka\player_event.pb.h" />
@@ -205,7 +204,6 @@
     <ClInclude Include="guild\guild.pb.h" />
     <ClInclude Include="login\login.grpc.pb.h" />
     <ClInclude Include="login\login.pb.h" />
-    <ClInclude Include="player\player.pb.h" />
     <ClInclude Include="scene\client_player_common.pb.h" />
     <ClInclude Include="scene\player_lifecycle.pb.h" />
     <ClInclude Include="scene\player_movement.pb.h" />

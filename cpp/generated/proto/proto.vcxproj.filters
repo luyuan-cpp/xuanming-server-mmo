@@ -30,9 +30,6 @@
     <ClCompile Include="login\login.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="player\player.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="etcd\etcd.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -246,9 +243,6 @@
     <ClCompile Include="scene_manager\storage.grpc.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="contracts\kafka\centre_command.pb.cc">
-      <Filter>源文件</Filter>
-    </ClCompile>
     <ClCompile Include="contracts\kafka\gate_command.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -297,6 +291,9 @@
     <ClCompile Include="common\database\rollback_database_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="common\options\attribute_sync_option.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="common\rollback\player_snapshot.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -333,9 +330,6 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="login\login.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="player\player.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="etcd\etcd.grpc.pb.h">
@@ -551,9 +545,6 @@
     <ClInclude Include="scene_manager\storage.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="contracts\kafka\centre_command.pb.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="contracts\kafka\gate_command.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -600,6 +591,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="common\database\rollback_database_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\options\attribute_sync_option.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="common\rollback\player_snapshot.pb.h">

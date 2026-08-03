@@ -87,9 +87,9 @@ set(SOURCE_FILES
     common/event/scene_event.pb.cc
     common/event/server_event.pb.cc
     common/event/skill_event.pb.cc
+    common/options/attribute_sync_option.pb.cc
     common/rollback/player_snapshot.pb.cc
     common/rollback/transaction_log.pb.cc
-    contracts/kafka/centre_command.pb.cc
     contracts/kafka/gate_command.pb.cc
     contracts/kafka/gate_event.pb.cc
     contracts/kafka/player_event.pb.cc
@@ -115,7 +115,6 @@ set(SOURCE_FILES
     guild/guild.pb.cc
     login/login.grpc.pb.cc
     login/login.pb.cc
-    player/player.pb.cc
     scene/client_player_common.pb.cc
     scene/player_lifecycle.pb.cc
     scene/player_movement.pb.cc
@@ -137,4 +136,3 @@ set(SOURCE_FILES
 )
 
 add_library(proto STATIC ${SOURCE_FILES})
-

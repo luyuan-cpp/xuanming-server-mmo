@@ -4,13 +4,17 @@
 
 Every C++ node automatically runs a **ThreadMonitor** that periodically samples the process thread count and logs warnings when sustained growth is detected. Go services rely on goroutine scheduling and per-partition worker pools for concurrency control.
 
+A single muduo EventLoop means **single-threaded ownership of business state**,
+not a single-threaded process. gRPC, Kafka, logging, and lifecycle components
+have background threads.
+
 ---
 
 ## C++ Nodes — ThreadMonitor (Automatic, All Nodes)
 
 ### Implementation
 - **File**: `cpp/libs/engine/core/node/system/node/thread_observability.h`
-- **Registration**: `SimpleNode` constructor calls `RegisterThreadObservability()` — enabled by default for every node
+- **Registration**: Node initialization calls `RegisterThreadObservability()` — enabled by default for every node
 - **Mechanism**: Timer on main EventLoop samples thread count every N seconds
   - Windows: `CreateToolhelp32Snapshot` + `Thread32First/Next`
   - Linux: `readdir("/proc/self/task")`
@@ -36,29 +40,52 @@ Every C++ node automatically runs a **ThreadMonitor** that periodically samples 
 
 ---
 
-## C++ Thread Pools by Node Type
+## C++ Runtime Thread Composition
 
-### Gate Node — Expected ~5–14 threads
+A fixed process-wide range such as “5–14 threads” is not valid. The default
+gRPC EventEngine alone can eagerly start 17 threads on a host with 16 or more
+logical CPUs, and its pool may grow when work backs up.
 
-| Thread Category | Count | Config Env Var | Notes |
+| Thread Category | Count / Limit | Configuration | Notes |
 |---|---|---|---|
-| muduo EventLoop (main) | 1 | — | Single reactor loop |
-| gRPC ResourceQuota max threads | 2 (default) | `GRPC_MAX_THREADS` | Hard limit on gRPC server thread pool |
-| gRPC EventEngine reserve | 2 (debug profile) | `GRPC_THREAD_POOL_RESERVE_THREADS` | Pre-allocated threads |
-| gRPC EventEngine max | 8 (debug profile) | `GRPC_THREAD_POOL_MAX_THREADS` | Hard cap on event engine threads |
-| Kafka consumer (librdkafka) | 2–4 | librdkafka internal | Opaque; not directly configurable |
+| muduo EventLoop (business main thread) | 1 | — | Owns ECS and serialized business-state changes |
+| gRPC v1.83 default EventEngine reserve | `Clamp(gpr_cpu_num_cores(), 4, 16)` workers + 1 Lifeguard | No public reserve/max env | Eagerly started; elastic under backlog; 16 is not a hard maximum |
+| gRPC sync server pollers (nodes that register a server) | minimum 1, configured maximum 8 by default | `GRPC_SERVER_MAX_POLLERS` | Separate from the EventEngine pool |
+| Client channel `ResourceQuota` thread setting | 2 by project default | `GRPC_MAX_THREADS` | Applies to the quota attached by `GrpcChannelCache`; does not cap EventEngine, server pollers, or total process threads |
+| Kafka consumer / librdkafka | implementation-dependent | librdkafka internal | Background threads; measure rather than assume a fixed count |
+| Async logging and lifecycle workers | component-dependent | component-specific | Includes Scene Agones lifecycle work where enabled |
+| gRPC shutdown worker | 1, shutdown only | — | Temporary joinable worker; absent during steady state |
 
-- gRPC env config utility: `cpp/libs/engine/core/node/system/grpc_channel_cache.h`
-- Debug profile env vars set in: `cpp/nodes/gate/gate.vcxproj` `<LocalDebuggerEnvironment>`
+`GRPC_THREAD_POOL_RESERVE_THREADS` and `GRPC_THREAD_POOL_MAX_THREADS` are not
+public controls for gRPC v1.83's built-in EventEngine. Legacy project/debug
+settings with those names must be treated as inert and must not be used for
+capacity planning.
 
-### Scene Node — Expected ~3–5 threads
+### Gate Node
 
-| Thread Category | Count | Config Env Var | Notes |
-|---|---|---|---|
-| muduo EventLoop (main, runs `World::Update`) | 1 | — | Game simulation loop |
-| Kafka consumer (librdkafka) | 2–4 | librdkafka internal | Opaque |
+Gate keeps business-state ownership separate from transport work. When it
+creates gRPC client channels, the process also initializes gRPC runtime and the
+default EventEngine. Kafka and logging add their own background threads.
 
-Scene node does not host a gRPC server; fewer threads than Gate.
+### Scene Node
+
+Scene owns ECS and `World::Update` on one muduo EventLoop, but it also hosts the
+Scene control-plane gRPC sync server. Its handlers enter on sync pollers and use
+`runInLoop` plus promise/future to execute their business portion on the
+EventLoop. Therefore “Scene logic is single-threaded” must never be interpreted
+as “the Scene process has only one thread.”
+
+### gRPC Shutdown
+
+The EventLoop must not synchronously call `grpc::Server::Shutdown()` while a
+sync handler is waiting for `runInLoop` work. Shutdown runs on the temporary
+worker while the EventLoop continues servicing queued handlers. Once
+`Shutdown()` returns, finalization is queued back to the EventLoop, which joins
+the completed worker and tears down the remaining resources.
+
+The shutdown deadline is a transport grace deadline. It may cancel pending
+calls, but it does not forcibly terminate an already-running C++ sync handler,
+so it is not a hard handler-duration or process-shutdown bound.
 
 ---
 
@@ -93,13 +120,13 @@ Scene node does not host a gRPC server; fewer threads than Gate.
 ## Key Design Points
 
 1. **C++ monitoring is passive** — logs and warns but does not kill or cap threads.
-2. **gRPC thread cap is the only hard limit** — `GRPC_MAX_THREADS` (default 2) caps the server-side thread pool via `ResourceQuota`.
-3. **Go services have no goroutine hard limit** — rely on OS thread scheduling via `GOMAXPROCS`.
-4. **Kafka internal threads are opaque** — librdkafka manages its own threads (typically 2–4 per consumer instance).
-5. **To enforce hard limits in production**, options include:
-   - gRPC `ResourceQuota` (already in use)
-   - Go `runtime.SetMaxThreads()` for OS-level thread cap
-   - K8s cgroup CPU/memory limits (indirectly constrains thread creation)
+2. **Business single-threading is an ownership rule** — it does not describe the total process thread count.
+3. **The EventEngine has no supported reserve/max env control** — its eager reserve is CPU-based and its pool can expand.
+4. **`GRPC_SERVER_MAX_POLLERS` defaults to 8** — it controls sync server pollers, not EventEngine workers.
+5. **`GRPC_MAX_THREADS` is scoped ResourceQuota configuration** — it is not a process-wide or EventEngine hard cap.
+6. **Go services have no goroutine hard limit** — they rely on scheduling via `GOMAXPROCS`; `runtime.SetMaxThreads()` concerns OS threads, not goroutine count.
+7. **Kafka internal threads are implementation-managed** — production baselines must come from ThreadMonitor measurements.
+8. **K8s cgroup CPU/memory limits do not directly cap thread count** — use monitoring and component-specific supported controls rather than assuming an indirect hard limit.
 
 ---
 
@@ -108,7 +135,7 @@ Scene node does not host a gRPC server; fewer threads than Gate.
 | File | Purpose |
 |------|---------|
 | `cpp/libs/engine/core/node/system/node/thread_observability.h` | ThreadMonitor class, env var parsing, `RegisterThreadObservability()` |
-| `cpp/libs/engine/core/node/system/node/simple_node.h` | Auto-registers ThreadMonitor for all SimpleNode instances |
-| `cpp/libs/engine/core/node/system/grpc_channel_cache.h` | gRPC thread config readers (`GRPC_MAX_THREADS`, etc.) |
-| `cpp/nodes/gate/gate.vcxproj` | Debug env vars for gRPC thread pool |
+| `cpp/libs/engine/core/node/system/node/node.cpp` | Registers ThreadMonitor; configures sync server pollers and shutdown lifecycle |
+| `cpp/libs/engine/core/node/system/grpc_channel_cache.h` | Client channel ResourceQuota configuration (`GRPC_MAX_THREADS`) |
+| `cpp/nodes/gate/gate.vcxproj` | Contains legacy EventEngine-like debug env names; they do not configure gRPC v1.83's built-in pool |
 | `go/db/internal/kafka/key_ordered_consumer.go` | Kafka partition worker pool (structured goroutine control) |

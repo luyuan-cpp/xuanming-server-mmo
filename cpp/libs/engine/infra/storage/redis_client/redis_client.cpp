@@ -54,7 +54,16 @@ void MessageSyncRedisClient::Save(const google::protobuf::Message& message, cons
 	}
 
 	MessageCachedArray message_cached_array(message.ByteSizeLong());
-	message.SerializeWithCachedSizesToArray(message_cached_array.data());
+	// protobuf v35 marks SerializeWithCachedSizesToArray [[nodiscard]]; it returns the
+	// one-past-the-end pointer. Anything short of the full buffer means the payload we
+	// are about to persist is truncated, so refuse the write instead of storing it.
+	const uint8_t* const serialized_end = message.SerializeWithCachedSizesToArray(message_cached_array.data());
+	if (serialized_end != message_cached_array.data() + message_cached_array.size())
+	{
+		const auto* desc = message.GetDescriptor();
+		LOG_ERROR << "Message Serialize To Redis Truncated : " << desc->full_name().data();
+		return;
+	}
 
 	auto* reply = static_cast<redisReply*>(redisCommand(context_.get(),
 		"EVAL %s 1 %b %b",
@@ -106,7 +115,11 @@ void MessageSyncRedisClient::Load(google::protobuf::Message& message, const std:
         return;
     }
 
-    message.ParsePartialFromArray(reply->str, static_cast<int32_t>(reply->len));
+    if (!message.ParsePartialFromArray(reply->str, static_cast<int32_t>(reply->len)))
+    {
+        const auto* desc = message.GetDescriptor();
+        LOG_ERROR << "Message Load From Redis Parse Failed : " << desc->full_name().data() << " key : " << key;
+    }
 }
 
 void MessageSyncRedisClient::OnDisconnect()

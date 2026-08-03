@@ -32,11 +32,13 @@
     </Link>
   </ItemDefinitionGroup>
 
-  <!-- Suppress C4996 from gRPC v1.80 deprecated-but-still-used types in headers
+  <!-- Suppress C4996 from gRPC v1.83 deprecated-but-still-used types in headers
        (IdentityKeyCertPair, set_certificate_provider, etc.). -->
   <ItemDefinitionGroup
       Condition="'$(MSBuildProjectExtension)' == '.vcxproj'">
     <ClCompile>
+      <!-- protobuf v35.1 parse_context.h includes utf8_validity.h directly. -->
+      <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)third_party\grpc\third_party\utf8_range\;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4996;%(DisableSpecificWarnings)</DisableSpecificWarnings>
     </ClCompile>
   </ItemDefinitionGroup>

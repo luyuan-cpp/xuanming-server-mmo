@@ -468,8 +468,7 @@ void Node::Initialize()
 
 	LOG_INFO << "gRPC client config: ResourceQuota max threads=" << grpc_channel_cache::ConfiguredMaxThreads()
 			 << ", backup poll interval ms=" << grpc_channel_cache::ConfiguredBackupPollIntervalMs()
-			 << ", EventEngine pool reserve=" << (grpc_channel_cache::ConfiguredThreadPoolReserveThreads() > 0 ? std::to_string(grpc_channel_cache::ConfiguredThreadPoolReserveThreads()) : std::string("default"))
-			 << ", EventEngine pool max=" << (grpc_channel_cache::ConfiguredThreadPoolMaxThreads() > 0 ? std::to_string(grpc_channel_cache::ConfiguredThreadPoolMaxThreads()) : std::string("unlimited"));
+			 << ", EventEngine pool=grpc internal (no public reserve/max setting)";
 
 	LOG_DEBUG << "Node initialization complete.";
 }

@@ -1,13 +1,14 @@
 ﻿#pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 // IDs are transient; invalidated on server restart
-template <class T, size_t kNodeBit>
+template <class T, std::size_t kNodeBit>
 class TransientNodeCompositeIdGenerator
 {
 public:
-	static size_t node_bit() { return kNodeBit; }
+	static std::size_t node_bit() { return kNodeBit; }
 
 	void set_node_id(T node_id)
 	{

@@ -1,6 +1,7 @@
 # Scene Node gRPC Server Design
 
 **Date:** 2026-04-15
+**Last updated:** 2026-07-31
 **Status:** Implemented
 
 ## Problem
@@ -107,13 +108,19 @@ This imports the existing Scene request/response messages from the legacy Scene 
 
 - `RegisterGrpcService(grpc::Service*)` — register before `StartRpcServer()`
 - `StartGrpcServer()` / `ShutdownGrpcServer()` — lifecycle methods
-- `grpcServer_` (unique_ptr), `grpcServerThread_` (std::thread), `grpcServices_` (vector)
+- `grpcServer_` (unique_ptr), `grpcServices_` (vector)
+- No dedicated thread calls `grpcServer_->Wait()`; `Wait()` is only a passive
+  join point and does not drive request processing
 
 **File:** `cpp/libs/engine/core/node/system/node/node.cpp`
 
 - `StartGrpcServer()` called in `StartRpcServer()` after TCP server, only if services registered
-- `ShutdownGrpcServer()` called first in `ShutdownInLoop()`
-- gRPC server runs on its own thread (`grpcServer_->Wait()`)
+- The sync server owns its poller threads; `GRPC_SERVER_MAX_POLLERS` defaults to 8
+- Shutdown temporarily runs `grpc::Server::Shutdown()` on a Node-owned worker so
+  the muduo EventLoop remains available to complete queued handlers
+- After `Shutdown()` returns, the worker queues finalization back to the
+  EventLoop; the EventLoop joins the completed worker and tears down the
+  remaining Node resources
 - Banner updated to include gRPC endpoint
 
 ### 4. C++ Node allocator: gRPC port allocation
@@ -124,17 +131,55 @@ After TCP port allocation, if node has gRPC services, allocates gRPC port = TCP 
 
 ### 5. C++ Scene Node: gRPC service implementation
 
-**File:** `cpp/nodes/scene/handler/grpc/scene_grpc_service.h/.cpp`
+**File:** `cpp/nodes/scene/handler/grpc/scene_node_service.h/.cpp`
 
-Implements `Scene::Service` from generated `scene.grpc.pb.h`:
+Implements `SceneNodeGrpc::Service` from generated
+`scene_node_service.grpc.pb.h`:
 - `CreateScene` — dispatches to muduo event loop via promise/future for thread safety
 - `DestroyScene` — same dispatch pattern
+- `ReleasePlayer` — same dispatch pattern
 - Idempotent, matches existing muduo handler logic
 
 **File:** `cpp/nodes/scene/main.cpp`
 
-Registers `SceneGrpcServiceImpl` via `node.RegisterGrpcService()` before startup.
+Registers `SceneNodeGrpcImpl` via `node.RegisterGrpcService()` before startup.
 Changed from `RunSimpleNodeMainWithOwnedContext` to `RunNodeMain` to support constructing `SceneRuntimeContext` with `EventLoop*`.
+
+## Threading and Shutdown Contract
+
+“Scene gameplay logic is single-threaded” does not mean the Scene process has
+only one thread:
+
+- ECS and gameplay state are owned by the muduo EventLoop.
+- gRPC sync handlers enter on gRPC poller threads, dispatch their `Handle*`
+  business work with `runInLoop`, and wait on a promise/future.
+- gRPC v1.83's built-in EventEngine eagerly reserves
+  `Clamp(gpr_cpu_num_cores(), 4, 16)` workers plus one Lifeguard thread. The pool
+  may grow under backlog; 16 is not a hard maximum.
+- The built-in EventEngine exposes no public reserve/max environment variable.
+  Project variables named `GRPC_THREAD_POOL_RESERVE_THREADS` or
+  `GRPC_THREAD_POOL_MAX_THREADS` must not be documented as controlling it.
+
+Because sync handlers may be waiting for EventLoop work, calling
+`grpc::Server::Shutdown()` synchronously on that same EventLoop creates a
+shutdown cycle. The required state flow is:
+
+```text
+Running -> GrpcDraining -> Finalizing -> Done
+```
+
+1. The EventLoop marks shutdown and runs the pre-shutdown business hook.
+2. A temporary, joinable worker calls `grpc::Server::Shutdown(deadline)`.
+3. The EventLoop continues servicing already queued handler work.
+4. When `Shutdown()` returns, the worker queues finalization to the EventLoop.
+5. The EventLoop joins the completed worker, releases the remaining resources,
+   and quits.
+
+The deadline is a transport grace deadline. gRPC can cancel pending calls when
+it expires, but it does not forcibly terminate a C++ sync handler that has
+already started. It therefore must not be treated as a hard handler-duration or
+process-shutdown bound. A truly bounded handler must implement its own
+cancellation-aware or bounded wait.
 
 ### 6. Go scene_manager: Uses gRPC endpoint
 
@@ -162,8 +207,8 @@ Added `GrpcEndpoint` field to `sceneNodeRegistration` struct.
 | `cpp/libs/engine/core/node/system/node/node.h` | gRPC server members and methods |
 | `cpp/libs/engine/core/node/system/node/node.cpp` | gRPC server lifecycle, banner update |
 | `cpp/libs/engine/core/node/system/node/node_allocator.cpp` | gRPC port allocation |
-| `cpp/nodes/scene/handler/grpc/scene_grpc_service.h` | **New** — gRPC service header |
-| `cpp/nodes/scene/handler/grpc/scene_grpc_service.cpp` | **New** — gRPC service implementation |
+| `cpp/nodes/scene/handler/grpc/scene_node_service.h` | **New** — gRPC service header |
+| `cpp/nodes/scene/handler/grpc/scene_node_service.cpp` | **New** — gRPC service implementation |
 | `cpp/nodes/scene/main.cpp` | Register gRPC service, use RunNodeMain |
 | `go/scene_manager/internal/logic/scene_node_client.go` | Use grpcEndpoint and SceneNodeGrpc client |
 | `go/scene_manager/internal/logic/load_reporter.go` | Parse grpcEndpoint |
@@ -199,6 +244,7 @@ This design does **not** recreate the old full-mesh explosion problem.
 | Per-Scene steady-state connections | Usually single-digit to low double-digit |
 | Per-request connection creation | No — connections are cached and reused |
 | Concurrency model | HTTP/2 multiplexing over a small number of TCP connections |
+| Process threads | Includes sync pollers and EventEngine workers; business state still stays on one EventLoop |
 | High-fanout traffic | Still stays on Kafka or existing TCP(RPC0), not this gRPC path |
 
 So the cost is acceptable because this path is for **low-caller-count, request/response orchestration**, not for Gate-scale fanout.

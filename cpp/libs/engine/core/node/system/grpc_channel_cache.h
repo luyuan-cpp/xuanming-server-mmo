@@ -27,24 +27,6 @@ inline int GetGrpcBackupPollIntervalMs() {
     return parsed >= 0 ? parsed : 5000;
 }
 
-inline int GetGrpcThreadPoolReserveThreads() {
-    const char* env = std::getenv("GRPC_THREAD_POOL_RESERVE_THREADS");
-    if (env == nullptr || env[0] == '\0') {
-        return 0;
-    }
-    const int parsed = std::atoi(env);
-    return parsed > 0 ? parsed : 0;
-}
-
-inline int GetGrpcThreadPoolMaxThreads() {
-    const char* env = std::getenv("GRPC_THREAD_POOL_MAX_THREADS");
-    if (env == nullptr || env[0] == '\0') {
-        return 0;
-    }
-    const int parsed = std::atoi(env);
-    return parsed > 0 ? parsed : 0;
-}
-
 // ── HTTP/2 keepalive tunables ─────────────────────────────────────────
 // Defaults chosen for long-lived cross-service gRPC channels on Linux
 // hosts behind NAT / cloud LBs (AWS NLB idles at 350s, most k8s Service
@@ -94,22 +76,12 @@ inline int ConfiguredBackupPollIntervalMs() {
     return GetGrpcBackupPollIntervalMs();
 }
 
-inline int ConfiguredThreadPoolReserveThreads() {
-    return GetGrpcThreadPoolReserveThreads();
-}
-
-inline int ConfiguredThreadPoolMaxThreads() {
-    return GetGrpcThreadPoolMaxThreads();
-}
-
 class GrpcChannelCache {
 public:
     GrpcChannelCache()
         : resourceQuota_("node-grpc-client-rq"),
           maxThreads_(GetGrpcMaxThreads()),
           backupPollIntervalMs_(GetGrpcBackupPollIntervalMs()),
-          reserveThreads_(GetGrpcThreadPoolReserveThreads()),
-          maxThreadPoolThreads_(GetGrpcThreadPoolMaxThreads()),
           keepaliveTimeMs_(GetGrpcKeepaliveTimeMs()),
           keepaliveTimeoutMs_(GetGrpcKeepaliveTimeoutMs()),
           keepalivePermitWithoutCalls_(GetGrpcKeepalivePermitWithoutCalls()) {
@@ -122,14 +94,6 @@ public:
 
     int ConfiguredBackupPollIntervalMs() const {
         return backupPollIntervalMs_;
-    }
-
-    int ConfiguredThreadPoolReserveThreads() const {
-        return reserveThreads_;
-    }
-
-    int ConfiguredThreadPoolMaxThreads() const {
-        return maxThreadPoolThreads_;
     }
 
     size_t CachedTargetCount() {
@@ -179,8 +143,6 @@ private:
     grpc::ResourceQuota resourceQuota_;
     int maxThreads_;
     int backupPollIntervalMs_;
-    int reserveThreads_;
-    int maxThreadPoolThreads_;
     int keepaliveTimeMs_;
     int keepaliveTimeoutMs_;
     int keepalivePermitWithoutCalls_;

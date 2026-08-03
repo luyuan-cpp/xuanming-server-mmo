@@ -57,7 +57,11 @@ void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Mess
 	NodeRouteMessageRequest request;
 	const size_t byteSize = message.ByteSizeLong();
 	request.mutable_message_content()->mutable_serialized_message()->resize(byteSize);
-	message.SerializePartialToArray(request.mutable_message_content()->mutable_serialized_message()->data(), static_cast<int>(byteSize));
+	if (!message.SerializePartialToArray(request.mutable_message_content()->mutable_serialized_message()->data(), static_cast<int>(byteSize)))
+	{
+		LOG_ERROR << "Failed to serialize message.";
+		return;
+	}
 	request.mutable_header()->set_session_id(sessionId);
 	request.mutable_message_content()->set_message_id(messageId);
 	gate.SendRequest(GateSendMessageToPlayerMessageId, request);
@@ -421,7 +425,11 @@ void SendMessageToPlayerOnNode(uint32_t wrappedMessageId,
 
 	NodeRouteMessageRequest request;
 	request.mutable_message_content()->set_message_id(messageId);
-	message.SerializeToString(request.mutable_message_content()->mutable_serialized_message());
+	if (!message.SerializeToString(request.mutable_message_content()->mutable_serialized_message()))
+	{
+		LOG_ERROR << "Failed to serialize message.";
+		return;
+	}
 	request.mutable_header()->set_session_id(playerSessionSnapshotPB->gate_session_id());
 
 	session->SendRequest(wrappedMessageId, request);

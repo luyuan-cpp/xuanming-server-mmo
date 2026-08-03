@@ -106,9 +106,18 @@ comments as English to dodge a hazard the build already handled.
 
 ## gRPC Server Thread Pool (C++ Nodes)
 - C++ nodes embed a gRPC sync server for control-plane RPCs (CreateScene, DestroyScene, etc.).
-- All RPC handlers dispatch to the muduo EventLoop via `runInLoop` + `promise/future`; business logic stays single-threaded.
-- **Toggle**: env `GRPC_SERVER_MAX_POLLERS` (default `2`). Controls the max gRPC server poller threads. 1-2 is enough for control-plane operations.
+- RPC transport work runs on gRPC threads. Handlers dispatch their business portion to the muduo EventLoop via `runInLoop` + `promise/future`, so ECS and gameplay state remain single-thread-owned. “Business logic is single-threaded” does **not** mean the process has only one thread.
+- **Sync poller setting**: env `GRPC_SERVER_MAX_POLLERS` (default `8`) controls the maximum sync server pollers. It does not control EventEngine workers.
+- gRPC v1.83's built-in EventEngine eagerly starts `Clamp(gpr_cpu_num_cores(), 4, 16)` reserve workers plus one Lifeguard, and may add workers under backlog. `16` is not a hard maximum.
+- The built-in EventEngine has no public reserve/max environment variable. Do not claim that `GRPC_THREAD_POOL_RESERVE_THREADS` or `GRPC_THREAD_POOL_MAX_THREADS` configures it; legacy settings with those names are currently inert.
+- `GRPC_MAX_THREADS` is the `ResourceQuota` setting attached to client channels by `GrpcChannelCache`; it is not a cap on EventEngine workers, sync server pollers, or total process threads.
 - Multiple gRPC services (scene, mail, guild, etc.) share the same port and thread pool.
+
+### gRPC Sync Server Shutdown
+- Never call `grpc::Server::Shutdown()` synchronously on the muduo EventLoop while sync handlers can be waiting for `runInLoop` work; that creates a loop-thread ↔ poller-thread wait cycle.
+- Use a temporary Node-owned, joinable worker to run `Shutdown()`. Keep the EventLoop running so queued handler work can finish. When the worker returns, queue finalization back to the EventLoop, join the completed worker there, then tear down the remaining Node resources and quit.
+- Do not immediately join the shutdown worker on the EventLoop, and do not detach it past the lifetime of `Node` or the registered gRPC services.
+- A shutdown deadline is only a transport grace deadline. It may cancel pending calls but cannot forcibly terminate an already-running C++ sync handler; it is not a hard handler-duration or process-shutdown bound.
 
 ## Recent Architectural Decisions (2025-03-09)
 
