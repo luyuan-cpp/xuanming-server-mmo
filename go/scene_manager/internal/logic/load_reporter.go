@@ -18,13 +18,13 @@ import (
 
 const (
 	NodeLoadKeyFmt     = "scene_nodes:zone:%d:load"
-	NodeSceneCountKey  = "node:%s:scene_count"
-	NodePlayerCountKey = "node:%s:player_count"
+	NodeSceneCountKey  = "node:zone:%d:%s:scene_count"
+	NodePlayerCountKey = "node:zone:%d:%s:player_count"
 	// NodeSceneNodeTypeKey mirrors the scene_node_type declared by the C++
 	// node (0=MainWorld, 1=Instance, 2=MainWorldCross, 3=InstanceCross). The
 	// load reporter writes this when a node registers so selection logic can
 	// filter by purpose without hitting etcd.
-	NodeSceneNodeTypeKey = "node:%s:scene_node_type"
+	NodeSceneNodeTypeKey = "node:zone:%d:%s:scene_node_type"
 	LoadReportInterval   = 5 * time.Second
 	sceneNodePrefix      = "SceneNodeService.rpc/"
 )
@@ -47,6 +47,18 @@ func GetActiveZones() []uint32 {
 // nodeLoadKey returns the zone-scoped Redis sorted-set key.
 func nodeLoadKey(zoneID uint32) string {
 	return fmt.Sprintf(NodeLoadKeyFmt, zoneID)
+}
+
+func nodeSceneCountKey(zoneID uint32, nodeID string) string {
+	return fmt.Sprintf(NodeSceneCountKey, zoneID, nodeID)
+}
+
+func nodePlayerCountKey(zoneID uint32, nodeID string) string {
+	return fmt.Sprintf(NodePlayerCountKey, zoneID, nodeID)
+}
+
+func nodeSceneNodeTypeKey(zoneID uint32, nodeID string) string {
+	return fmt.Sprintf(NodeSceneNodeTypeKey, zoneID, nodeID)
 }
 
 // sceneNodeRegistration mirrors the JSON that C++ scene nodes write to etcd.
@@ -80,6 +92,26 @@ var (
 	knownNodesMu sync.RWMutex
 	knownNodes   = make(map[string]nodeEntry)
 )
+
+// knownNodeIdentityMatchCount 返回当前 watch 快照中同一 (zone,node) 身份的
+// 注册条数。node_id 只在 zone 内唯一；同一身份出现两条及以上注册意味着租约、
+// 部署或注册链已经分叉，任何一个 endpoint / Kafka 目标都不能被安全选中。
+func knownNodeIdentityMatchCount(zoneID uint32, nodeID string) int {
+	knownNodesMu.RLock()
+	defer knownNodesMu.RUnlock()
+
+	matches := 0
+	for _, entry := range knownNodes {
+		if entry.reg.ZoneId == zoneID && entry.nodeID == nodeID {
+			matches++
+		}
+	}
+	return matches
+}
+
+func isKnownNodeIdentityAmbiguous(zoneID uint32, nodeID string) bool {
+	return knownNodeIdentityMatchCount(zoneID, nodeID) > 1
+}
 
 // parseNodeEntry parses a raw etcd value into a nodeEntry. Also validates
 // scene_node_type: anything outside constants.SceneNodeType* is a
@@ -118,8 +150,8 @@ func isKnownSceneNodeType(t uint32) bool {
 // scene_node_type so downstream purpose-based selection doesn't need to hit
 // etcd. Score = α·scene_count + β·player_count; see Config weights.
 func updateNodeLoad(svcCtx *svc.ServiceContext, entry nodeEntry) {
-	sceneCount := readInt64(svcCtx, fmt.Sprintf(NodeSceneCountKey, entry.nodeID))
-	playerCount := readInt64(svcCtx, fmt.Sprintf(NodePlayerCountKey, entry.nodeID))
+	sceneCount := readInt64(svcCtx, nodeSceneCountKey(entry.reg.ZoneId, entry.nodeID))
+	playerCount := readInt64(svcCtx, nodePlayerCountKey(entry.reg.ZoneId, entry.nodeID))
 	score := computeNodeLoadScore(svcCtx, sceneCount, playerCount)
 
 	loadKey := nodeLoadKey(entry.reg.ZoneId)
@@ -129,7 +161,7 @@ func updateNodeLoad(svcCtx *svc.ServiceContext, entry nodeEntry) {
 
 	// Mirror scene_node_type into Redis so getNodesForPurpose can filter
 	// without touching etcd on every CreateScene request.
-	if err := svcCtx.Redis.Set(fmt.Sprintf(NodeSceneNodeTypeKey, entry.nodeID),
+	if err := svcCtx.Redis.Set(nodeSceneNodeTypeKey(entry.reg.ZoneId, entry.nodeID),
 		strconv.FormatUint(uint64(entry.reg.SceneNodeType), 10)); err != nil {
 		logx.Errorf("[LoadReporter] failed to mirror scene_node_type for node %s: %v", entry.nodeID, err)
 	}
@@ -179,8 +211,8 @@ func readInt64(svcCtx *svc.ServiceContext, key string) int64 {
 func removeNodeFromRedis(svcCtx *svc.ServiceContext, entry nodeEntry) {
 	loadKey := nodeLoadKey(entry.reg.ZoneId)
 	svcCtx.Redis.Zrem(loadKey, entry.nodeID)
-	svcCtx.Redis.Del(fmt.Sprintf(NodeSceneNodeTypeKey, entry.nodeID))
-	RemoveNodeConn(entry.nodeID)
+	svcCtx.Redis.Del(nodeSceneNodeTypeKey(entry.reg.ZoneId, entry.nodeID))
+	RemoveNodeConn(entry.reg.ZoneId, entry.nodeID)
 	metrics.ForgetNode(entry.nodeID, entry.reg.ZoneId, entry.reg.SceneNodeType)
 	logx.Infof("[LoadReporter] removed node %s from Redis load set (zone %d)", entry.nodeID, entry.reg.ZoneId)
 
@@ -188,19 +220,20 @@ func removeNodeFromRedis(svcCtx *svc.ServiceContext, entry nodeEntry) {
 }
 
 // reconcileDeadNodeScenes is invoked when a node disappears from etcd.
-// Walks node:{id}:scenes and force-destroys any orphaned instance scenes
+// Walks node:zone:{zoneId}:{nodeId}:scenes and force-destroys orphaned instance scenes
 // whose scene:{id}:node mapping still points at this dead node. Main
 // world channels are left for the rebalance path; stale set entries for
 // scenes that already got moved elsewhere are quietly dropped.
 //
 // Why not destroy world channels here:
-//   Rebalance already has the logic to pick a replacement node AND tell
-//   it to recreate the channel's ECS entity. Destroying a world channel
-//   here would force players to re-enter a different scene and lose
-//   their in-world context. Instances are per-run disposable, so
-//   destroying an orphan is the right default.
+//
+//	Rebalance already has the logic to pick a replacement node AND tell
+//	it to recreate the channel's ECS entity. Destroying a world channel
+//	here would force players to re-enter a different scene and lose
+//	their in-world context. Instances are per-run disposable, so
+//	destroying an orphan is the right default.
 func reconcileDeadNodeScenes(svcCtx *svc.ServiceContext, entry nodeEntry) {
-	setKey := nodeScenesKey(entry.nodeID)
+	setKey := nodeScenesKey(entry.reg.ZoneId, entry.nodeID)
 	members, err := svcCtx.Redis.Smembers(setKey)
 	if err != nil {
 		logx.Errorf("[Reconcile] Smembers %s failed: %v", setKey, err)
@@ -273,36 +306,55 @@ func FindNodeByPodIP(podIP string) (string, uint32, uint32, bool) {
 
 	knownNodesMu.RLock()
 	defer knownNodesMu.RUnlock()
+	var found nodeEntry
+	matches := 0
 	for _, entry := range knownNodes {
 		if entry.reg.GrpcEndpoint.IP == podIP || entry.reg.Endpoint.IP == podIP {
-			return entry.nodeID, entry.reg.ZoneId, entry.reg.SceneNodeType, true
+			matches++
+			found = entry
 		}
+	}
+	// 即使两条记录声称同一 (zone,node) 且 endpoint 相同，也不能把重复注册
+	// 当作一个健康节点。Agones rooms 预占一旦落到错误实例就无法精确归还。
+	if matches == 1 {
+		return found.nodeID, found.reg.ZoneId, found.reg.SceneNodeType, true
 	}
 	return "", 0, 0, false
 }
 
 // FindPodIPByNodeID 是 FindNodeByPodIP 的反向查询,供镜像共置路径把
 // "要共置的 nodeID" 翻回 Pod IP,再去反查对应的 Agones GameServer。
-func FindPodIPByNodeID(nodeID string) (string, bool) {
+func FindPodIPByNodeID(zoneID uint32, nodeID string) (string, bool) {
 	if nodeID == "" {
 		return "", false
 	}
 
 	knownNodesMu.RLock()
 	defer knownNodesMu.RUnlock()
+	var podIP string
+	matches := 0
 	for _, entry := range knownNodes {
-		if entry.nodeID != nodeID {
+		if entry.reg.ZoneId != zoneID || entry.nodeID != nodeID {
 			continue
 		}
+		matches++
 		if ip := entry.reg.GrpcEndpoint.IP; ip != "" {
-			return ip, true
+			if podIP != "" && podIP != ip {
+				return "", false
+			}
+			podIP = ip
+			continue
 		}
 		if ip := entry.reg.Endpoint.IP; ip != "" {
-			return ip, true
+			if podIP != "" && podIP != ip {
+				return "", false
+			}
+			podIP = ip
+			continue
 		}
 		return "", false
 	}
-	return "", false
+	return podIP, matches == 1 && podIP != ""
 }
 
 // SetKnownNodeForTest 让单元测试在不起 etcd 的情况下往 knownNodes 里塞条目。
@@ -427,8 +479,8 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 		for _, p := range pairs {
 			if _, ok := seen[p.Key]; !ok {
 				svcCtx.Redis.Zrem(loadKey, p.Key)
-				svcCtx.Redis.Del(fmt.Sprintf(NodeSceneNodeTypeKey, p.Key))
-				RemoveNodeConn(p.Key)
+				svcCtx.Redis.Del(nodeSceneNodeTypeKey(zoneId, p.Key))
+				RemoveNodeConn(zoneId, p.Key)
 			}
 		}
 	}
@@ -561,7 +613,12 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 		}
 
 		// Clear stale gRPC connection: endpoint may have changed after restart.
-		RemoveNodeConn(entry.nodeID)
+		RemoveNodeConn(entry.reg.ZoneId, entry.nodeID)
+		if existed && prev.reg.ZoneId != entry.reg.ZoneId {
+			RemoveNodeConn(prev.reg.ZoneId, prev.nodeID)
+			svcCtx.Redis.Zrem(nodeLoadKey(prev.reg.ZoneId), prev.nodeID)
+			svcCtx.Redis.Del(nodeSceneNodeTypeKey(prev.reg.ZoneId, prev.nodeID))
+		}
 
 		updateNodeLoad(svcCtx, entry)
 		rebuildActiveZones()
@@ -630,7 +687,6 @@ func refreshLoadScores(svcCtx *svc.ServiceContext) {
 	metrics.SetNodesByRole(counts)
 }
 
-
 // GetBestNode selects the instance-hosting node with the lowest load from
 // the given zone. Kept as the default selector for historical callers that
 // request instance-style nodes (mirror fallbacks, ad-hoc instances).
@@ -640,8 +696,12 @@ func GetBestNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32)
 	return GetBestNodeForPurpose(ctx, svcCtx, zoneId, constants.NodePurposeInstance)
 }
 
-// IsNodeAlive checks whether a node is present in the zone's Redis load sorted set.
+// IsNodeAlive checks whether a node is present in the zone's Redis load sorted set
+// and has no duplicate (zone,node) registration in the current etcd snapshot.
 func IsNodeAlive(svcCtx *svc.ServiceContext, zoneId uint32, nodeId string) bool {
+	if isKnownNodeIdentityAmbiguous(zoneId, nodeId) {
+		return false
+	}
 	_, err := svcCtx.Redis.Zscore(nodeLoadKey(zoneId), nodeId)
 	return err == nil
 }

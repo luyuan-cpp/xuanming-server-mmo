@@ -53,7 +53,7 @@ return redis.call('INCR', KEYS[2])
 //
 //	KEYS[1..2N] = scene:{id}:node, instance:{id}:player_count, ...
 //	              (interleaved per candidate)
-//	KEYS[2N+1]  = node:{bestNode}:player_count (one per candidate, packed
+//	KEYS[2N+1]  = node:zone:{zoneId}:{bestNode}:player_count (one per candidate, packed
 //	              starting at index 2N+1 so the script can look up the
 //	              chosen candidate's node counter without string-building
 //	              a key from data).
@@ -124,7 +124,7 @@ return {tostring(bestIdx), ARGV[bestIdx], tostring(newCount)}
 //   - 不一起删 -> 留下悬空映射,下次同 id 复用时会把计数减到别人头上
 //   - 不返回   -> 删完就再也不知道该向哪个 GameServer 归还 rooms 名额
 //
-// Note: we do NOT touch node:{nodeId}:scenes inside the script because we
+// Note: we do NOT touch node:zone:{zoneId}:{nodeId}:scenes inside the script because we
 // don't know the node id until after we read it (and the key name is
 // dynamic). The caller does that SREM outside, which is fine: the
 // reconciliation loop double-checks scene:{id}:node before destroying so
@@ -176,7 +176,7 @@ func AtomicIncrPlayerCountIfSceneExists(svcCtx *svc.ServiceContext, sceneId uint
 //
 //	KEYS[1..2N]   = scene:{id}:node, instance:{id}:player_count, ...
 //	                interleaved per candidate (N candidates total)
-//	KEYS[2N+1..3N] = node:{candidateNode}:player_count, one per candidate,
+//	KEYS[2N+1..3N] = node:zone:{zoneId}:{candidateNode}:player_count, one per candidate,
 //	                 indexed identically to ARGV so the script can pick
 //	                 the winner's node key without string-building.
 //
@@ -199,7 +199,7 @@ func ReserveBestWorldChannel(svcCtx *svc.ServiceContext, candidates []WorldChann
 	}
 	// Trailing N entries: per-candidate node player_count keys.
 	for _, c := range candidates {
-		keys = append(keys, fmt.Sprintf(NodePlayerCountKey, c.NodeID))
+		keys = append(keys, nodePlayerCountKey(c.ZoneID, c.NodeID))
 	}
 
 	args := make([]any, 0, n)

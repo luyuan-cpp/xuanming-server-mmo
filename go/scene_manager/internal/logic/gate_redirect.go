@@ -21,7 +21,7 @@ import (
 
 const (
 	redirectTokenTTLSeconds = 300
-	gateEtcdPrefix         = "GateNodeService.rpc"
+	gateEtcdPrefix          = "GateNodeService.rpc"
 )
 
 // AssignGateForZone picks the least-loaded Gate in the target zone and signs
@@ -52,8 +52,8 @@ func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZo
 	// Build and sign the token (same format as Login service).
 	expireTS := time.Now().Unix() + redirectTokenTTLSeconds
 	payload := &commonpb.GateTokenPayload{
-		GateNodeId:     best.NodeId,
-		ZoneId:         best.ZoneId,
+		GateNodeId:      best.NodeId,
+		ZoneId:          best.ZoneId,
 		ExpireTimestamp: expireTS,
 	}
 	payloadBytes, err := proto.Marshal(payload)

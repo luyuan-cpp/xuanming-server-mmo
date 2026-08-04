@@ -20,7 +20,8 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-// nodeConnCache caches gRPC connections to C++ scene nodes, keyed by nodeId.
+// nodeConnCache caches gRPC connections to C++ scene nodes, keyed by
+// (zoneId,nodeId). Node IDs are allocated independently in every zone.
 // Connections are reused across calls and cleaned up on node removal.
 var (
 	nodeConnMu    sync.RWMutex
@@ -52,11 +53,11 @@ func SetNodeDialerForTest(d func(context.Context, string) (*grpc.ClientConn, err
 // reach an in-process fake without registering a knownNodes entry for every
 // synthetic node id (several tests use non-numeric ids like "hot"/"A").
 // Production never sets this.
-var nodeEndpointOverride func(nodeId string) (string, bool)
+var nodeEndpointOverride func(zoneId uint32, nodeId string) (string, bool)
 
 // SetNodeEndpointResolverForTest installs an endpoint resolver override and
 // returns a restore func. MUST be paired with t.Cleanup.
-func SetNodeEndpointResolverForTest(r func(nodeId string) (string, bool)) (restore func()) {
+func SetNodeEndpointResolverForTest(r func(zoneId uint32, nodeId string) (string, bool)) (restore func()) {
 	prev := nodeEndpointOverride
 	nodeEndpointOverride = r
 	return func() { nodeEndpointOverride = prev }
@@ -79,8 +80,8 @@ func ResetNodeConnCacheForTest() {
 // CreateScene to instantiate the ECS scene entity.
 // sceneId is the Go-allocated unique ID; C++ uses it for per-scene idempotency.
 // If the node is unreachable, the error is returned but Redis state is already committed.
-func RequestNodeCreateScene(ctx context.Context, svcCtx *svc.ServiceContext, nodeId string, configId uint32, sceneId uint64) (*scenepb.CreateSceneResponse, error) {
-	return RequestNodeCreateSceneWithOptions(ctx, svcCtx, nodeId, configId, sceneId, 0, nil)
+func RequestNodeCreateScene(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string, configId uint32, sceneId uint64) (*scenepb.CreateSceneResponse, error) {
+	return RequestNodeCreateSceneWithOptions(ctx, svcCtx, zoneId, nodeId, configId, sceneId, 0, nil)
 }
 
 // RequestNodeCreateSceneWithOptions is the full-featured variant that also
@@ -90,13 +91,14 @@ func RequestNodeCreateScene(ctx context.Context, svcCtx *svc.ServiceContext, nod
 func RequestNodeCreateSceneWithOptions(
 	ctx context.Context,
 	svcCtx *svc.ServiceContext,
+	zoneId uint32,
 	nodeId string,
 	configId uint32,
 	sceneId uint64,
 	mirrorConfigId uint32,
 	creatorIds []uint64,
 ) (*scenepb.CreateSceneResponse, error) {
-	conn, err := getOrDialNode(ctx, svcCtx, nodeId)
+	conn, err := getOrDialNode(ctx, svcCtx, zoneId, nodeId)
 	if err != nil {
 		return nil, fmt.Errorf("dial scene node %s: %w", nodeId, err)
 	}
@@ -117,8 +119,8 @@ func RequestNodeCreateSceneWithOptions(
 
 // RequestNodeDestroyScene dials the C++ scene node and calls DestroyScene
 // to remove the ECS scene entity.
-func RequestNodeDestroyScene(ctx context.Context, svcCtx *svc.ServiceContext, nodeId string, sceneId uint64) error {
-	conn, err := getOrDialNode(ctx, svcCtx, nodeId)
+func RequestNodeDestroyScene(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string, sceneId uint64) error {
+	conn, err := getOrDialNode(ctx, svcCtx, zoneId, nodeId)
 	if err != nil {
 		return fmt.Errorf("dial scene node %s: %w", nodeId, err)
 	}
@@ -135,8 +137,8 @@ func RequestNodeDestroyScene(ctx context.Context, svcCtx *svc.ServiceContext, no
 // (the player's previous scene node) and asks it to release the player so
 // the new node can load fresh state from Redis. Used during cross-node
 // scene switches; same-node switches do not need this.
-func RequestNodeReleasePlayer(ctx context.Context, svcCtx *svc.ServiceContext, nodeId string, playerId uint64, targetSceneId uint64, targetNodeId string) error {
-	conn, err := getOrDialNode(ctx, svcCtx, nodeId)
+func RequestNodeReleasePlayer(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string, playerId uint64, targetSceneId uint64, targetNodeId string) error {
+	conn, err := getOrDialNode(ctx, svcCtx, zoneId, nodeId)
 	if err != nil {
 		return fmt.Errorf("dial scene node %s: %w", nodeId, err)
 	}
@@ -155,16 +157,26 @@ func RequestNodeReleasePlayer(ctx context.Context, svcCtx *svc.ServiceContext, n
 
 // getOrDialNode returns a cached connection or discovers the node endpoint
 // from etcd and dials it.
-func getOrDialNode(ctx context.Context, svcCtx *svc.ServiceContext, nodeId string) (*grpc.ClientConn, error) {
+func nodeIdentity(zoneId uint32, nodeId string) string {
+	return fmt.Sprintf("%d/%s", zoneId, nodeId)
+}
+
+func getOrDialNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string) (*grpc.ClientConn, error) {
+	identity := nodeIdentity(zoneId, nodeId)
+	// 不能让既有 cache 命中掩盖后来出现的重复注册。Create/Destroy/Release
+	// 发到任意一个同号进程都会破坏 scene ownership，必须先拒绝身份歧义。
+	if matches := knownNodeIdentityMatchCount(zoneId, nodeId); matches > 1 {
+		return nil, fmt.Errorf("ambiguous scene node identity zone=%d node=%s has %d registrations", zoneId, nodeId, matches)
+	}
 	nodeConnMu.RLock()
-	conn, ok := nodeConnCache[nodeId]
+	conn, ok := nodeConnCache[identity]
 	nodeConnMu.RUnlock()
 	if ok {
 		return conn, nil
 	}
 
 	// Discover endpoint from etcd.
-	endpoint, err := resolveNodeEndpoint(ctx, svcCtx, nodeId)
+	endpoint, err := resolveNodeEndpoint(ctx, svcCtx, zoneId, nodeId)
 	if err != nil {
 		return nil, err
 	}
@@ -176,12 +188,12 @@ func getOrDialNode(ctx context.Context, svcCtx *svc.ServiceContext, nodeId strin
 
 	nodeConnMu.Lock()
 	// Double-check: another goroutine may have added it.
-	if existing, ok := nodeConnCache[nodeId]; ok {
+	if existing, ok := nodeConnCache[identity]; ok {
 		nodeConnMu.Unlock()
 		conn.Close()
 		return existing, nil
 	}
-	nodeConnCache[nodeId] = conn
+	nodeConnCache[identity] = conn
 	nodeConnMu.Unlock()
 
 	logx.Infof("[SceneNodeClient] Connected to scene node %s at %s", nodeId, endpoint)
@@ -191,15 +203,17 @@ func getOrDialNode(ctx context.Context, svcCtx *svc.ServiceContext, nodeId strin
 // resolveNodeEndpoint returns the "ip:port" gRPC address for a scene node.
 // It first checks the in-memory knownNodes map (maintained by the watch loop),
 // then falls back to a fresh etcd query.
-func resolveNodeEndpoint(ctx context.Context, svcCtx *svc.ServiceContext, nodeId string) (string, error) {
+func resolveNodeEndpoint(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, nodeId string) (string, error) {
 	if nodeEndpointOverride != nil {
-		if ep, ok := nodeEndpointOverride(nodeId); ok {
+		if ep, ok := nodeEndpointOverride(zoneId, nodeId); ok {
 			return ep, nil
 		}
 	}
 
 	// Fast path: use the watch-maintained in-memory registry.
-	if ep, ok := resolveFromKnownNodes(nodeId); ok {
+	if ep, ok, knownErr := resolveFromKnownNodes(zoneId, nodeId); knownErr != nil {
+		return "", knownErr
+	} else if ok {
 		return ep, nil
 	}
 
@@ -213,48 +227,74 @@ func resolveNodeEndpoint(ctx context.Context, svcCtx *svc.ServiceContext, nodeId
 		return "", fmt.Errorf("etcd get %s: %w", prefix, err)
 	}
 
+	var matchedEndpoint string
+	matched := 0
 	for _, kv := range resp.Kvs {
 		var reg sceneNodeRegistration
 		if err := json.Unmarshal(kv.Value, &reg); err != nil {
 			continue
 		}
-		if fmt.Sprintf("%d", reg.NodeId) == nodeId {
+		if reg.ZoneId == zoneId && fmt.Sprintf("%d", reg.NodeId) == nodeId {
+			matched++
 			if reg.GrpcEndpoint.Port > 0 {
-				return fmt.Sprintf("%s:%d", reg.GrpcEndpoint.IP, reg.GrpcEndpoint.Port), nil
+				endpoint := fmt.Sprintf("%s:%d", reg.GrpcEndpoint.IP, reg.GrpcEndpoint.Port)
+				if matchedEndpoint != "" && matchedEndpoint != endpoint {
+					return "", fmt.Errorf("ambiguous scene node identity zone=%d node=%s has multiple grpc endpoints", zoneId, nodeId)
+				}
+				matchedEndpoint = endpoint
+				continue
 			}
 			return "", fmt.Errorf("scene node %s has no grpc_endpoint (would fall back to raw TCP port, causing protocol mismatch)", nodeId)
 		}
+	}
+	if matched > 1 {
+		return "", fmt.Errorf("ambiguous scene node identity zone=%d node=%s has %d registrations", zoneId, nodeId, matched)
+	}
+	if matchedEndpoint != "" {
+		return matchedEndpoint, nil
 	}
 
 	return "", fmt.Errorf("scene node %s not found in etcd", nodeId)
 }
 
 // resolveFromKnownNodes checks the in-memory node registry for the endpoint.
-func resolveFromKnownNodes(nodeId string) (string, bool) {
+func resolveFromKnownNodes(zoneId uint32, nodeId string) (string, bool, error) {
 	knownNodesMu.RLock()
 	defer knownNodesMu.RUnlock()
+	var endpoint string
+	matches := 0
 	for _, entry := range knownNodes {
-		if entry.nodeID == nodeId {
+		if entry.reg.ZoneId == zoneId && entry.nodeID == nodeId {
+			matches++
 			if entry.reg.GrpcEndpoint.Port > 0 {
-				return fmt.Sprintf("%s:%d", entry.reg.GrpcEndpoint.IP, entry.reg.GrpcEndpoint.Port), true
+				candidate := fmt.Sprintf("%s:%d", entry.reg.GrpcEndpoint.IP, entry.reg.GrpcEndpoint.Port)
+				if endpoint != "" && endpoint != candidate {
+					return "", false, fmt.Errorf("ambiguous scene node identity zone=%d node=%s has conflicting endpoints", zoneId, nodeId)
+				}
+				endpoint = candidate
+				continue
 			}
 			// Do NOT fall back to entry.reg.Endpoint -- that is the raw TCP protobuf
 			// port. Dialing it with gRPC sends an HTTP/2 preface which the protobuf
 			// codec rejects as InvalidLength.
-			return "", false
+			return "", false, fmt.Errorf("scene node zone=%d node=%s has no grpc endpoint", zoneId, nodeId)
 		}
 	}
-	return "", false
+	if matches > 1 {
+		return "", false, fmt.Errorf("ambiguous scene node identity zone=%d node=%s has %d registrations", zoneId, nodeId, matches)
+	}
+	return endpoint, matches == 1, nil
 }
 
 // RemoveNodeConn closes and removes the cached connection for a node.
 // Called when a node is removed from etcd.
-func RemoveNodeConn(nodeId string) {
+func RemoveNodeConn(zoneId uint32, nodeId string) {
+	identity := nodeIdentity(zoneId, nodeId)
 	nodeConnMu.Lock()
 	defer nodeConnMu.Unlock()
-	if conn, ok := nodeConnCache[nodeId]; ok {
+	if conn, ok := nodeConnCache[identity]; ok {
 		conn.Close()
-		delete(nodeConnCache, nodeId)
+		delete(nodeConnCache, identity)
 		logx.Infof("[SceneNodeClient] Removed connection to scene node %s", nodeId)
 	}
 }
@@ -280,15 +320,15 @@ func RemoveNodeConn(nodeId string) {
 //
 // Failures are non-fatal — the C++ scene node's AFK sweeper is the final
 // safety net for any player who is never released.
-func dispatchReleasePlayer(svcCtx *svc.ServiceContext, log logx.Logger, zoneID uint32,
+func dispatchReleasePlayer(svcCtx *svc.ServiceContext, log logx.Logger, oldZoneID uint32,
 	oldNodeId string, playerId uint64, targetSceneId uint64, targetNodeId string) {
 	go func() {
 		attemptCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-		err := RequestNodeReleasePlayer(attemptCtx, svcCtx, oldNodeId, playerId, targetSceneId, targetNodeId)
+		err := RequestNodeReleasePlayer(attemptCtx, svcCtx, oldZoneID, oldNodeId, playerId, targetSceneId, targetNodeId)
 		cancel()
 
 		if err == nil {
-			metrics.ObserveReleasePlayer(zoneID, "ok")
+			metrics.ObserveReleasePlayer(oldZoneID, "ok")
 			return
 		}
 
@@ -300,11 +340,11 @@ func dispatchReleasePlayer(svcCtx *svc.ServiceContext, log logx.Logger, zoneID u
 		for i, backoff := range backoffs {
 			time.Sleep(backoff)
 			retryCtx, retryCancel := context.WithTimeout(context.Background(), 1*time.Second)
-			lastErr = RequestNodeReleasePlayer(retryCtx, svcCtx, oldNodeId, playerId, targetSceneId, targetNodeId)
+			lastErr = RequestNodeReleasePlayer(retryCtx, svcCtx, oldZoneID, oldNodeId, playerId, targetSceneId, targetNodeId)
 			retryCancel()
 			if lastErr == nil {
 				logx.Infof("[ReleasePlayer] Retry %d succeeded for player %d on old node %s", i+1, playerId, oldNodeId)
-				metrics.ObserveReleasePlayer(zoneID, "retry_ok")
+				metrics.ObserveReleasePlayer(oldZoneID, "retry_ok")
 				return
 			}
 			logx.Errorf("[ReleasePlayer] Retry %d failed for player %d on old node %s: %v", i+1, playerId, oldNodeId, lastErr)
@@ -313,7 +353,7 @@ func dispatchReleasePlayer(svcCtx *svc.ServiceContext, log logx.Logger, zoneID u
 		if errors.Is(lastErr, context.DeadlineExceeded) {
 			outcome = "timeout"
 		}
-		metrics.ObserveReleasePlayer(zoneID, outcome)
+		metrics.ObserveReleasePlayer(oldZoneID, outcome)
 		logx.Errorf("[ReleasePlayer] All retries exhausted for player %d on old node %s; relying on AFK cleanup. last_err=%v",
 			playerId, oldNodeId, lastErr)
 	}()

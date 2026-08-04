@@ -243,6 +243,9 @@ Counters and Lists 在 Agones 里是 **beta**,需要集群侧显式打开
 4/5 任一步失败都会把刚预占的名额还回去并拒绝请求。**不允许**"找不到就放行":
 那等于绕过容量约束。
 
+PodIP 反查必须唯一命中一条 `(zoneId,nodeId)` 注册；同一身份有重复 etcd
+记录时也按映射失败处理，不能任取一个同号进程。gRPC 连接缓存使用同一复合身份。
+
 `scene:{id}:agones_gs` 必须在第 8 步**之前**写。放到 RPC 成功之后写,进程正好
 在中间崩溃就永远找不回该减哪个 GameServer 的计数。
 
@@ -252,7 +255,7 @@ Counters and Lists 在 Agones 里是 **beta**,需要集群侧显式打开
 `(Redis state committed)` 然后**照样返回成功**。结果是 Redis 里有映射、节点上
 没有实体,玩家被路由进去后 `EnterScene` 永远成功不了。
 
-现在失败一律回滚(Redis scene 全部键 + `node:{id}:scene_count` + 反向索引 +
+现在失败一律回滚(Redis scene 全部键 + `node:zone:{zoneId}:{nodeId}:scene_count` + 反向索引 +
 Agones 名额)并返回错误码。**这一条与 Agones 无关**,非 Agones 模式同样生效。
 
 代价:本包里原先"创建一个场景再断言点什么"的单测都依赖 RPC 失败被忽略,
@@ -283,7 +286,7 @@ GameServer 的 rooms 做带 CAS 的 +1`。
 ### 8.6 reconcile 只告警,不自动改
 
 `StartAgonesReconcile` 周期性比对 Agones `rooms.count` 与 Redis
-`node:{id}:scene_count`,把差异写进 `scene_manager_agones_counter_drift{zone}`。
+`node:zone:{zoneId}:{nodeId}:scene_count`,把差异写进 `scene_manager_agones_counter_drift{zone}`。
 
 **第一版不自动改写任何一方。** 三方任意一方都可能是错的那个;在证据不完整时
 自动"修正"很可能把对的一方改错,还会掩盖真正的 bug。先让漂移可见。
@@ -331,7 +334,7 @@ RBAC 见 `deploy/k8s/manifests/go-svc/scene-manager-agones-rbac.yaml`:
 
 1. 两个 Fleet 都能 Ready:`kubectl -n <ns> get fleet`
 2. world/instance 注册的节点类型分别正确:
-   `redis-cli GET node:<id>:scene_node_type` 期望 `0` / `1`
+   `redis-cli GET node:zone:<zoneId>:<nodeId>:scene_node_type` 期望 `0` / `1`
 3. 同一个 Scene Node 内能创建至少两个 Scene
 4. 第一个 Scene:GameServer `Ready -> Allocated`
 5. 第二个 Scene:仍是同一个 Allocated GameServer,**不新建 Pod**

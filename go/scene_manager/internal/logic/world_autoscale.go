@@ -389,6 +389,11 @@ func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone
 		finishDrainedChannel(ctx, svcCtx, zoneID, confID, sceneID, "")
 		return
 	}
+	if isKnownNodeIdentityAmbiguous(zoneID, nodeID) {
+		logx.Errorf("[WorldAutoscale] draining channel %d: zone=%d node=%s has duplicate registrations; refusing cleanup",
+			sceneID, zoneID, nodeID)
+		return
+	}
 
 	if !IsNodeAlive(svcCtx, zoneID, nodeID) {
 		// 节点已死:实体随进程一起没了,玩家会走各自的掉线/重连路径。
@@ -403,7 +408,7 @@ func drainOrDestroyChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone
 
 	// 无论有没有人都调:有人时 C++ 会把他们改派到大世界并保留实体,
 	// 没人时才真正销毁。幂等,可以每拍调。
-	if err := RequestNodeDestroyScene(ctx, svcCtx, nodeID, sceneID); err != nil {
+	if err := RequestNodeDestroyScene(ctx, svcCtx, zoneID, nodeID, sceneID); err != nil {
 		logx.Errorf("[WorldAutoscale] draining channel %d: DestroyScene on node %s failed: %v",
 			sceneID, nodeID, err)
 		return
@@ -453,8 +458,8 @@ func finishDrainedChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 	svcCtx.Redis.Del(sceneDrainingKey(sceneID))
 	svcCtx.Redis.Srem(worldDrainingSetKey(zoneID, confID), sceneIDStr)
 	if nodeID != "" {
-		svcCtx.Redis.Srem(nodeScenesKey(nodeID), sceneIDStr)
-		svcCtx.Redis.Incrby(fmt.Sprintf(NodeSceneCountKey, nodeID), -1)
+		svcCtx.Redis.Srem(nodeScenesKey(zoneID, nodeID), sceneIDStr)
+		svcCtx.Redis.Incrby(nodeSceneCountKey(zoneID, nodeID), -1)
 	}
 	if agonesGs != "" {
 		ReleaseAgonesRoomForScene(ctx, svcCtx, sceneID, agonesGs, "world_channel_scale_in")

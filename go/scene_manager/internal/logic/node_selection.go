@@ -14,7 +14,7 @@ import (
 // getNodesForPurpose returns the subset of the zone's registered nodes that
 // can host the given purpose (world vs instance), preserving the ascending
 // load-score order from the Redis sorted set. Classification reads
-// `node:{id}:scene_node_type` mirrored by load_reporter.
+// `node:zone:{zoneId}:{nodeId}:scene_node_type` mirrored by load_reporter.
 //
 // Filtering rules:
 //   - A node with a KNOWN scene_node_type is included only if it matches
@@ -43,9 +43,14 @@ func getNodesForPurpose(svcCtx *svc.ServiceContext, zoneId uint32, purpose const
 	allNodes := make([]string, 0, len(pairs))
 	preferred := make([]string, 0, len(pairs))
 	for _, p := range pairs {
+		if isKnownNodeIdentityAmbiguous(zoneId, p.Key) {
+			logx.Errorf("[NodeSelection] zone %d node %s has duplicate registrations; refusing this identity",
+				zoneId, p.Key)
+			continue
+		}
 		allNodes = append(allNodes, p.Key)
 
-		typ, classified := readNodeSceneType(svcCtx, p.Key)
+		typ, classified := readNodeSceneType(svcCtx, zoneId, p.Key)
 		switch {
 		case !classified:
 			// Unclassified node — include in every pool so freshly-registered
@@ -86,8 +91,8 @@ func GetBestNodeForPurpose(ctx context.Context, svcCtx *svc.ServiceContext, zone
 // readNodeSceneType reads the mirrored scene_node_type for a node.
 // Returns (type, true) when a value is stored, (0, false) otherwise so
 // callers can distinguish "unclassified" from "classified as 0".
-func readNodeSceneType(svcCtx *svc.ServiceContext, nodeId string) (uint32, bool) {
-	s, err := svcCtx.Redis.Get(fmt.Sprintf(NodeSceneNodeTypeKey, nodeId))
+func readNodeSceneType(svcCtx *svc.ServiceContext, zoneId uint32, nodeId string) (uint32, bool) {
+	s, err := svcCtx.Redis.Get(nodeSceneNodeTypeKey(zoneId, nodeId))
 	if err != nil || s == "" {
 		return 0, false
 	}

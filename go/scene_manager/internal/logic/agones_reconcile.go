@@ -14,7 +14,7 @@ import (
 // StartAgonesReconcile 周期性比对三方计数:
 //
 //	Agones GameServer.status.counters.rooms.count   <- Agones 认为的房间数
-//	Redis node:{id}:scene_count                     <- SceneManager 认为的房间数
+//	Redis node:zone:{zoneId}:{nodeId}:scene_count   <- SceneManager 认为的房间数
 //	(节点上报的实际 Scene 数由 C++ 侧维护,已经反映在 scene_count 里)
 //
 // **第一版只告警,不自动改写任何一方。**
@@ -99,7 +99,7 @@ func ReconcileAgonesRoomsForZone(ctx context.Context, svcCtx *svc.ServiceContext
 			continue
 		}
 
-		redisCount := readNodeSceneCount(svcCtx, nodeID)
+		redisCount := readNodeSceneCount(svcCtx, zoneID, nodeID)
 		if redisCount != gs.Count {
 			logx.Errorf("[AgonesReconcile] DRIFT zone=%d gs=%s node=%s: agones_rooms=%d redis_scene_count=%d capacity=%d",
 				zoneID, gs.Name, nodeID, gs.Count, redisCount, gs.Capacity)
@@ -114,11 +114,11 @@ func ReconcileAgonesRoomsForZone(ctx context.Context, svcCtx *svc.ServiceContext
 	return drift
 }
 
-// readNodeSceneCount 读 node:{id}:scene_count。读不到当 0 处理 —— 对
+// readNodeSceneCount 读 node:zone:{zoneId}:{nodeId}:scene_count。读不到当 0 处理 —— 对
 // reconcile 来说"读不到"和"是 0"都会体现为与 Agones 计数的差异,
 // 这正是我们想暴露的。
-func readNodeSceneCount(svcCtx *svc.ServiceContext, nodeID string) int64 {
-	s, err := svcCtx.Redis.Get(nodeSceneCountKey(nodeID))
+func readNodeSceneCount(svcCtx *svc.ServiceContext, zoneID uint32, nodeID string) int64 {
+	s, err := svcCtx.Redis.Get(nodeSceneCountKey(zoneID, nodeID))
 	if err != nil || s == "" {
 		return 0
 	}

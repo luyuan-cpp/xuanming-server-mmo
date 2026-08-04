@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"os"
 	"scene_manager/internal/config"
+	"scene_manager/internal/metrics"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"shared/generated/table"
@@ -17,13 +20,23 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
+// KafkaWriter 把同步发布与关闭收进同一接口，使 Stop 能统一释放 writer，
+// 也让生命周期测试无需连接真实 broker。
+type KafkaWriter interface {
+	WriteMessages(context.Context, ...kafka.Message) error
+	Close() error
+}
+
 type ServiceContext struct {
 	Config      config.Config
 	Redis       *redis.Redis
-	Kafka       *kafka.Writer
+	Kafka       KafkaWriter
 	Etcd        *clientv3.Client
 	SceneIDGen  *snowflake.Node
 	snowflakeHd *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
+	stopOnce    sync.Once
+	// kafkaDeliveryFailures 统计 writer Completion 给出的终态失败。
+	kafkaDeliveryFailures atomic.Uint64
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -55,21 +68,66 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 	logx.Infof("[scene_manager] snowflake worker id = %d (host=%s)", hd.WorkerID, host)
 
-	return &ServiceContext{
+	sc := &ServiceContext{
 		Config: c,
 		Redis:  redis.MustNewRedis(c.Redis.RedisConf),
-		Kafka: &kafka.Writer{
-			Addr:                   kafka.TCP(c.Kafka.Brokers...),
-			Balancer:               &kafka.LeastBytes{},
-			AllowAutoTopicCreation: true,
-			BatchTimeout:           10 * time.Millisecond,
-			WriteTimeout:           1 * time.Second,
-			Async:                  true,
-		},
-		Etcd:        etcdCli,
-		SceneIDGen:  snowflake.NewNode(hd.WorkerID),
+		Etcd:   etcdCli,
+		// Handle.NewNode 会注入前任高水位作地板(见 snowflakealloc),
+		// 裸 snowflake.NewNode 只有"不在构造秒发号"的点排除,顶不住时钟偏斜接管。
+		SceneIDGen:  hd.NewNode(),
 		snowflakeHd: hd,
 	}
+	kafkaWriteTimeout := time.Duration(c.KafkaWriteTimeoutSeconds) * time.Second
+	if kafkaWriteTimeout <= 0 {
+		kafkaWriteTimeout = 5 * time.Second
+	}
+	sc.Kafka = &kafka.Writer{
+		Addr: kafka.TCP(c.Kafka.Brokers...),
+		// Hash 按消息 Key 选分区。这里的 Key 都是 player_id(项目不变量:
+		// kafka key = 业务实体 ID,同一玩家的事件必须有序),LeastBytes
+		// 按字节量选分区、完全忽略 Key —— 玩家连续两次切场景的两条
+		// RoutePlayer 会落到不同分区被 gate 乱序消费,最终应用旧路由。
+		Balancer:               &kafka.Hash{},
+		AllowAutoTopicCreation: true,
+		BatchTimeout:           10 * time.Millisecond,
+		// WriteMessages 的调用 context 不可用超时取消：kafka-go 明确允许
+		// context 返回后批次继续投递，那会让 EnterScene 回滚后 Gate 又收到
+		// 旧路由。改由 writer 自身的一次有界 produce 决定终态。
+		MaxAttempts:  1,
+		WriteTimeout: kafkaWriteTimeout,
+		// kafka.Writer 结构体的 RequiredAcks 零值是 RequireNone(协议级
+		// fire-and-forget),显式提到 RequireOne:路由命令丢了玩家就进不去
+		// 场景,只能靠客户端重试兜底。
+		RequiredAcks: kafka.RequireOne,
+		// 路由与重定向属于控制面提交点：只有 broker ACK 后 EnterScene 才能
+		// 返回并缓存成功。Async=true 会让 WriteMessages 恒返回 nil，导致
+		// broker 故障也被去重缓存成成功，故必须同步等待 RequireOne ACK。
+		Async:      false,
+		Completion: sc.handleKafkaCompletion,
+	}
+	return sc
+}
+
+func (sc *ServiceContext) handleKafkaCompletion(messages []kafka.Message, err error) {
+	if err == nil {
+		metrics.ObserveKafkaDelivery("acked", len(messages))
+		return
+	}
+
+	sc.kafkaDeliveryFailures.Add(uint64(len(messages)))
+	metrics.ObserveKafkaDelivery("failed", len(messages))
+	for _, m := range messages {
+		// 同步 writer 会把该错误返给调用方；Completion 额外提供低基数指标
+		// 与逐消息日志，但不在这里递归重试，避免 broker 故障形成热循环。
+		logx.Errorf("[scene_manager] kafka delivery failed before EnterScene commit: topic=%s key=%s err=%v",
+			m.Topic, string(m.Key), err)
+	}
+}
+
+// KafkaDeliveryFailures 返回进程生命周期内的终态投递失败数。
+// 这里只保留低基数计数；player id 进日志，不进入指标 label。
+func (sc *ServiceContext) KafkaDeliveryFailures() uint64 {
+	return sc.kafkaDeliveryFailures.Load()
 }
 
 // SnowflakeLost 在本进程不再持有 Snowflake worker id 的 etcd 租约时关闭。
@@ -82,12 +140,22 @@ func (sc *ServiceContext) SnowflakeLost() <-chan struct{} {
 	return sc.snowflakeHd.Lost()
 }
 
-// Stop 释放 Snowflake worker id 的 etcd lease(以及 KeepAlive goroutine)。
-// scene_manager 主流程在退出时应当调用,否则 worker id 要等 lease TTL 自然过期才能复用。
+// Stop 先关闭 Kafka writer并等待 Completion 返回；之后才释放 Snowflake
+// worker lease。幂等保证
+// 正常 defer 与失租强退路径可以安全共用。
 func (sc *ServiceContext) Stop() {
-	if sc.snowflakeHd != nil {
-		sc.snowflakeHd.Close()
-		sc.snowflakeHd = nil
-	}
+	sc.stopOnce.Do(func() {
+		if sc.Kafka != nil {
+			if err := sc.Kafka.Close(); err != nil {
+				logx.Errorf("[scene_manager] Kafka writer close/flush failed: %v", err)
+			}
+		}
+		if failures := sc.KafkaDeliveryFailures(); failures > 0 {
+			logx.Errorf("[scene_manager] stopping with %d terminal Kafka delivery failures", failures)
+		}
+		if sc.snowflakeHd != nil {
+			sc.snowflakeHd.Close()
+			sc.snowflakeHd = nil
+		}
+	})
 }
-

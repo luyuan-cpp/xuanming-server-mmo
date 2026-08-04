@@ -21,29 +21,38 @@ func GateTopicName(gateId string) string {
 	return fmt.Sprintf("gate-%s", gateId)
 }
 
-
 // GetPlayerLocation retrieves the current scene and node for a player
 func GetPlayerLocation(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64) (*smpb.PlayerLocation, error) {
+	loc, _, err := getPlayerLocationWithRaw(svcCtx, playerId)
+	return loc, err
+}
+
+func getPlayerLocationWithRaw(svcCtx *svc.ServiceContext, playerId uint64) (*smpb.PlayerLocation, string, error) {
 	key := getPlayerLocationKey(playerId)
 	val, err := svcCtx.Redis.Get(key)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if val == "" {
-		return nil, nil
+		return nil, "", nil
 	}
-	
+
 	loc := &smpb.PlayerLocation{}
 	if err := proto.Unmarshal([]byte(val), loc); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return loc, nil
+	return loc, val, nil
 }
 
 // UpdatePlayerLocation updates the player's location using protobuf
 func UpdatePlayerLocation(ctx context.Context, svcCtx *svc.ServiceContext, playerId uint64, sceneId uint64, nodeId string, zoneId uint32) error {
+	_, err := updatePlayerLocationWithRaw(svcCtx, playerId, sceneId, nodeId, zoneId)
+	return err
+}
+
+func updatePlayerLocationWithRaw(svcCtx *svc.ServiceContext, playerId uint64, sceneId uint64, nodeId string, zoneId uint32) (string, error) {
 	key := getPlayerLocationKey(playerId)
-	
+
 	loc := &smpb.PlayerLocation{
 		SceneId:    sceneId,
 		NodeId:     nodeId,
@@ -53,10 +62,11 @@ func UpdatePlayerLocation(ctx context.Context, svcCtx *svc.ServiceContext, playe
 
 	data, err := proto.Marshal(loc)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return svcCtx.Redis.Set(key, string(data))
+	raw := string(data)
+	return raw, svcCtx.Redis.Set(key, raw)
 }
 
 // DeletePlayerLocation removes the player's location from Redis

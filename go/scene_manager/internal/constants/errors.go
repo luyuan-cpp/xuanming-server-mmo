@@ -25,4 +25,14 @@ const (
 	// never resolve. Caller should pick a fresh source or fall back to a
 	// non-mirror create.
 	ErrSourceSceneGone uint32 = 13
+	// ErrUnsafeCrossNodeHandoff: 当前请求需要跨节点交接，或已有位置记录的
+	// 玩家需要跨区重定向，但系统尚未实现旧节点落盘完成到新节点加载之间的
+	// epoch/持久化屏障。默认拒绝，避免加载陈旧状态造成进度回档。
+	ErrUnsafeCrossNodeHandoff uint32 = 14
+	// ErrEnterSceneInProgress: 相同 request_id 的首个请求仍在执行，尚未产生
+	// 可安全重放的完整成功响应。调用方应稍后用同一 request_id 重试。
+	ErrEnterSceneInProgress uint32 = 15
+	// ErrEnterSceneIdempotencyConflict: 同一玩家复用了 request_id，但请求内容
+	// 与首个请求不同。不得重放旧路由/redirect，也不得覆盖正在执行的 owner。
+	ErrEnterSceneIdempotencyConflict uint32 = 16
 )

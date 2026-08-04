@@ -13,6 +13,11 @@ type Config struct {
 		Brokers []string
 	}
 
+	// AllowUnsafeCrossNodeHandoff 仅用于开发环境临时复现旧流程。
+	// 默认 false：跨节点切场景，以及已有位置记录时的跨区重定向，必须
+	// 在具备持久化交接屏障前拒绝，避免新节点加载到旧节点尚未落盘的状态。
+	AllowUnsafeCrossNodeHandoff bool `json:",default=false"`
+
 	// ZoneId: zone identifier for this SceneManager instance.
 	// Used for C++ convention etcd registration so Scene nodes can discover this service.
 	ZoneId uint32 `json:",default=1"`
@@ -79,8 +84,10 @@ type Config struct {
 	// for idle instances. Default 30s.
 	InstanceCheckIntervalSeconds int64 `json:",default=30"`
 
-	// KafkaWriteTimeoutSeconds: timeout for best-effort Kafka pushes to Gate.
-	// These writes use a detached context (not tied to the gRPC request).
+	// KafkaWriteTimeoutSeconds: writer-side timeout for the single synchronous
+	// Gate command produce attempt. EnterScene only commits success after
+	// RequireOne broker ACK; the caller context does not cancel an already
+	// queued kafka-go batch because that can return before delivery actually ends.
 	// Default 5 seconds.
 	KafkaWriteTimeoutSeconds int64 `json:",default=5"`
 

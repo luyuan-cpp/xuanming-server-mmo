@@ -33,7 +33,7 @@ func NewDestroySceneLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Dest
 // It still:
 //   - Cascades into any mirrors whose source is this scene (destroying an
 //     active world would otherwise leave dangling mirrors).
-//   - Removes the scene from both reverse indexes (node:{id}:scenes and
+//   - Removes the scene from both reverse indexes (node:zone:{zoneId}:{nodeId}:scenes and
 //     scene:{src}:mirrors when this is itself a mirror).
 //   - Drains the per-node player counter by the residual, to keep
 //     GetBestNode's composite score accurate.
@@ -74,7 +74,7 @@ func (l *DestroySceneLogic) DestroyScene(in *scene_manager.DestroySceneRequest) 
 
 	// Notify C++ node to destroy the ECS scene entity (skip if node is already dead).
 	if nodeId != "" && IsNodeAlive(l.svcCtx, in.ZoneId, nodeId) {
-		if err := RequestNodeDestroyScene(l.ctx, l.svcCtx, nodeId, in.SceneId); err != nil {
+		if err := RequestNodeDestroyScene(l.ctx, l.svcCtx, in.ZoneId, nodeId, in.SceneId); err != nil {
 			l.Logger.Errorf("Failed to call DestroyScene on node %s for scene %d: %v", nodeId, in.SceneId, err)
 		}
 	}
@@ -95,7 +95,7 @@ func (l *DestroySceneLogic) DestroyScene(in *scene_manager.DestroySceneRequest) 
 
 	// Unlink reverse indexes.
 	if nodeId != "" {
-		l.svcCtx.Redis.Srem(nodeScenesKey(nodeId), sceneIdStr)
+		l.svcCtx.Redis.Srem(nodeScenesKey(in.ZoneId, nodeId), sceneIdStr)
 	}
 	if sourceId > 0 {
 		l.svcCtx.Redis.Srem(sceneMirrorsKey(sourceId), sceneIdStr)
@@ -103,12 +103,12 @@ func (l *DestroySceneLogic) DestroyScene(in *scene_manager.DestroySceneRequest) 
 
 	// Drain node counters.
 	if nodeId != "" {
-		sceneCountKey := fmt.Sprintf(NodeSceneCountKey, nodeId)
+		sceneCountKey := nodeSceneCountKey(in.ZoneId, nodeId)
 		if _, countErr := l.svcCtx.Redis.Incrby(sceneCountKey, -1); countErr != nil {
 			l.Logger.Errorf("Failed to decrement scene count for node %s: %v", nodeId, countErr)
 		}
 		if residual > 0 {
-			playerCountKey := fmt.Sprintf(NodePlayerCountKey, nodeId)
+			playerCountKey := nodePlayerCountKey(in.ZoneId, nodeId)
 			if newVal, err := l.svcCtx.Redis.Incrby(playerCountKey, -residual); err == nil && newVal < 0 {
 				l.svcCtx.Redis.Set(playerCountKey, "0")
 			}

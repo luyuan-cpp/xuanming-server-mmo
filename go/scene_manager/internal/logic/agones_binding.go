@@ -28,10 +28,6 @@ func sceneAgonesGsKey(sceneID uint64) string {
 	return fmt.Sprintf(SceneAgonesGsKeyFmt, sceneID)
 }
 
-func nodeSceneCountKey(nodeID string) string {
-	return fmt.Sprintf(NodeSceneCountKey, nodeID)
-}
-
 // 全局分配器句柄。用 setter 而不是塞进 ServiceContext,是为了让单元测试
 // 能在不构造整个 svc.ServiceContext 的前提下注入 fake。
 var (
@@ -222,7 +218,7 @@ func AcquireAgonesRoomOnNode(
 		return nil, agones.ErrNotConfigured
 	}
 
-	podIP, ok := FindPodIPByNodeID(nodeID)
+	podIP, ok := FindPodIPByNodeID(zoneID, nodeID)
 	if !ok || podIP == "" {
 		return nil, fmt.Errorf("agones: node %s has no known pod ip", nodeID)
 	}

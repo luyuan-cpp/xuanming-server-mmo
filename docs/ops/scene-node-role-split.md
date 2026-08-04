@@ -18,7 +18,7 @@ K8s Deployment (scene-world)     K8s Deployment (scene-instance)
            \                               /
             \                             /
        SceneManager LoadReporter
-         mirrors scene_node_type → redis node:{id}:scene_node_type
+         mirrors scene_node_type → redis node:zone:{zoneId}:{nodeId}:scene_node_type
                      |
                      v
        GetBestNodeForPurpose(world|instance)
@@ -94,7 +94,7 @@ routing again. This way the switch does not race with pod readiness.
    ```bash
    kubectl -n mmorpg-zone-<zone> get deploy
    redis-cli SMEMBERS scene_nodes:zone:<zoneId>
-   redis-cli HGETALL node:<nodeId>:scene_node_type  # expect "0" or "1"
+   redis-cli GET node:zone:<zoneId>:<nodeId>:scene_node_type  # expect "0" or "1"
    ```
 4. **删掉旧的单池 Deployment**。`kubectl apply` 不会删除上一版留下的
    `scene` Deployment,不删的话这个 zone 会同时存在「拆分池」和「未分角色的
@@ -150,8 +150,8 @@ Keys worth a Grafana / redis-cli dashboard:
 |-----|---------|
 | `scene_nodes:zone:{zoneId}` | Live node IDs in the zone |
 | `scene_nodes:zone:{zoneId}:load` | ZSET, lowest score = most attractive |
-| `node:{id}:player_count` | Aggregate online players on that pod |
-| `node:{id}:scene_node_type` | 0=world, 1=instance, 2=world-cross, 3=instance-cross |
+| `node:zone:{zoneId}:{nodeId}:player_count` | Aggregate online players on that pod |
+| `node:zone:{zoneId}:{nodeId}:scene_node_type` | 0=world, 1=instance, 2=world-cross, 3=instance-cross |
 | `scene:{id}:player_count` | Per-scene online players (subset of the above) |
 
 ### 4.2 Prometheus metrics
@@ -161,15 +161,15 @@ Set `MetricsListenAddr: ":9150"` in `scene_manager_service.yaml` to expose
 
 | Metric | Meaning |
 |--------|---------|
-| `scene_manager_node_player_count` | Mirrors `node:{id}:player_count` |
-| `scene_manager_node_scene_count` | Mirrors `node:{id}:scene_count` |
+| `scene_manager_node_player_count` | Mirrors `node:zone:{zoneId}:{nodeId}:player_count` |
+| `scene_manager_node_scene_count` | Mirrors `node:zone:{zoneId}:{nodeId}:scene_count` |
 | `scene_manager_node_load_score` | Composite score actually used for scheduling |
 | `scene_manager_nodes_by_role{zone_id,role}` | Live-node count per role — use for alerting when a role pool empties |
 
 Recommended alerts:
 - `sum by (zone_id) (scene_manager_nodes_by_role{role="instance"}) == 0`
   while strict mode is on — paging alert.
-- `node:{id}:player_count` stays ≥ 90% of expected cap for > 5 min on
+- `node:zone:{zoneId}:{nodeId}:player_count` stays ≥ 90% of expected cap for > 5 min on
   any world pod → consider bumping `WorldChannelCountByConfId`.
 - ZSET score dispersion on `scene_nodes:zone:{zoneId}:load` < 10% →
   consider raising `NodeLoadWeightPlayerCount` so live players carry

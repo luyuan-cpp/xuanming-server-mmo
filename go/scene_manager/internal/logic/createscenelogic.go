@@ -37,7 +37,7 @@ const (
 	// NodeScenesKeyFmt is the Redis SET of scene ids currently hosted by a
 	// scene node. Populated by allocateScene, drained by every destroy path.
 	// Used by the node-death reconciliation loop to find orphan instances.
-	NodeScenesKeyFmt = "node:%s:scenes"
+	NodeScenesKeyFmt = "node:zone:%d:%s:scenes"
 )
 
 func sceneMirrorFlagKey(sceneID uint64) string {
@@ -52,8 +52,8 @@ func sceneMirrorsKey(sourceSceneID uint64) string {
 	return fmt.Sprintf(SceneMirrorsKeyFmt, sourceSceneID)
 }
 
-func nodeScenesKey(nodeID string) string {
-	return fmt.Sprintf(NodeScenesKeyFmt, nodeID)
+func nodeScenesKey(zoneID uint32, nodeID string) string {
+	return fmt.Sprintf(NodeScenesKeyFmt, zoneID, nodeID)
 }
 
 func sceneZoneKey(sceneID uint64) string {
@@ -293,7 +293,7 @@ func (l *CreateSceneLogic) createInstance(in *scene_manager.CreateSceneRequest) 
 	//
 	// Agones 模式下同时把刚预占的 rooms 名额还回去,否则容量永久漂移。
 	if _, err := RequestNodeCreateSceneWithOptions(
-		l.ctx, l.svcCtx, targetNode,
+		l.ctx, l.svcCtx, in.ZoneId, targetNode,
 		uint32(in.SceneConfId), sceneId,
 		in.MirrorConfigId, in.CreatorIds,
 	); err != nil {
@@ -415,14 +415,14 @@ func (l *CreateSceneLogic) rollbackInstanceAllocation(
 	l.svcCtx.Redis.Del(sceneSourceKey(sceneId))
 	l.svcCtx.Redis.Del(sceneAgonesGsKey(sceneId))
 	l.svcCtx.Redis.Zrem(activeInstancesKey(in.ZoneId), sceneIdStr)
-	l.svcCtx.Redis.Srem(nodeScenesKey(targetNode), sceneIdStr)
+	l.svcCtx.Redis.Srem(nodeScenesKey(in.ZoneId, targetNode), sceneIdStr)
 
 	if in.SourceSceneId > 0 {
 		l.svcCtx.Redis.Srem(sceneMirrorsKey(in.SourceSceneId), sceneIdStr)
 	}
 
 	// 节点 scene_count 是 allocateScene 加上去的,必须原样减回。
-	if _, err := l.svcCtx.Redis.Decr(fmt.Sprintf(NodeSceneCountKey, targetNode)); err != nil {
+	if _, err := l.svcCtx.Redis.Decr(nodeSceneCountKey(in.ZoneId, targetNode)); err != nil {
 		l.Logger.Errorf("[Instance] rollback: failed to decrement scene count for node %s: %v", targetNode, err)
 	}
 
@@ -474,9 +474,9 @@ func (l *CreateSceneLogic) pickInstanceNode(in *scene_manager.CreateSceneRequest
 // On fallback returns ("", <reason>) where reason is one of:
 //   - "no_mapping":   source scene has no scene:{id}:node entry
 //   - "zone_mismatch": source scene lives in a different zone (would punch
-//                     a hole in zone isolation, e.g. mirror request from
-//                     zone 2 pointing at a zone 1 source — co-location
-//                     would route the mirror onto zone 1's node)
+//     a hole in zone isolation, e.g. mirror request from
+//     zone 2 pointing at a zone 1 source — co-location
+//     would route the mirror onto zone 1's node)
 //   - "node_dead":    source node is not in the requested zone's load set
 //   - "overloaded":   source node is at/over MirrorSourceNodeLoadCap
 //
@@ -514,7 +514,7 @@ func (l *CreateSceneLogic) resolveMirrorSourceNode(sourceSceneId uint64, zoneId 
 
 	loadCap := l.svcCtx.Config.MirrorSourceNodeLoadCap
 	if loadCap > 0 {
-		if load, ok := l.getNodeSceneCount(nodeId); ok && load >= loadCap {
+		if load, ok := l.getNodeSceneCount(zoneId, nodeId); ok && load >= loadCap {
 			l.Logger.Infof("[Mirror] source node %s load=%d >= cap=%d, falling back to GetBestNode",
 				nodeId, load, loadCap)
 			return "", "overloaded"
@@ -527,8 +527,8 @@ func (l *CreateSceneLogic) resolveMirrorSourceNode(sourceSceneId uint64, zoneId 
 // getNodeSceneCount reads the per-node scene_count counter used for soft load
 // estimation. Returns (0, false) if the key is missing or unreadable so the
 // caller treats the node as unknown-load rather than zero-load.
-func (l *CreateSceneLogic) getNodeSceneCount(nodeId string) (int64, bool) {
-	countStr, err := l.svcCtx.Redis.Get(fmt.Sprintf(NodeSceneCountKey, nodeId))
+func (l *CreateSceneLogic) getNodeSceneCount(zoneId uint32, nodeId string) (int64, bool) {
+	countStr, err := l.svcCtx.Redis.Get(nodeSceneCountKey(zoneId, nodeId))
 	if err != nil || countStr == "" {
 		return 0, false
 	}
@@ -542,7 +542,12 @@ func (l *CreateSceneLogic) getNodeSceneCount(nodeId string) (int64, bool) {
 // allocateScene generates a scene ID and registers it in Redis.
 // Shared by both main-world and instance creation.
 func (l *CreateSceneLogic) allocateScene(confId uint64, targetNode string, zoneId uint32) (uint64, error) {
-	sceneId := l.svcCtx.SceneIDGen.Generate()
+	// 失租后发号器被 fence,建场景整体失败。scene_id 撞号的后果比建帮更重:
+	// 下面是裸 Redis SET(无 CAS),两个场景共用一个 id 会互相覆盖路由,玩家被静默送错节点。
+	sceneId, err := l.svcCtx.SceneIDGen.Generate()
+	if err != nil {
+		return 0, fmt.Errorf("scene id generator unavailable: %w", err)
+	}
 
 	// scene -> node mapping.
 	if err := l.svcCtx.Redis.Set(sceneNodeKey(sceneId), targetNode); err != nil {
@@ -552,14 +557,14 @@ func (l *CreateSceneLogic) allocateScene(confId uint64, targetNode string, zoneI
 	l.svcCtx.Redis.Set(sceneZoneKey(sceneId), fmt.Sprintf("%d", zoneId))
 
 	// Increment node scene count for load tracking.
-	sceneCountKey := fmt.Sprintf(NodeSceneCountKey, targetNode)
+	sceneCountKey := nodeSceneCountKey(zoneId, targetNode)
 	if _, err := l.svcCtx.Redis.Incr(sceneCountKey); err != nil {
 		l.Logger.Errorf("Failed to increment scene count for node %s: %v", targetNode, err)
 	}
 
 	// Reverse index: node -> scenes. The node-death reconciliation loop
 	// uses this to find orphan scenes without scanning the entire keyspace.
-	if _, err := l.svcCtx.Redis.Sadd(nodeScenesKey(targetNode), fmt.Sprintf("%d", sceneId)); err != nil {
+	if _, err := l.svcCtx.Redis.Sadd(nodeScenesKey(zoneId, targetNode), fmt.Sprintf("%d", sceneId)); err != nil {
 		l.Logger.Errorf("Failed to add scene %d to node %s scenes set: %v", sceneId, targetNode, err)
 	}
 

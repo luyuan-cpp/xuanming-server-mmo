@@ -9,9 +9,7 @@
 `scene_manager_service.yaml`:
 ```yaml
 WorldChannelCount: 3   # 每个主世界场景的线数，默认 1（向后兼容）
-WorldConfIds:
-  - 1001
-  - 1002
+# 地图列表来自 generated World 表；自动伸缩启用后，Redis desired 值是运行期权威。
 ```
 
 ## Redis 数据结构
@@ -21,6 +19,8 @@ WorldConfIds:
 | `world_channels:zone:{zoneId}:{confId}` | SET | 该地图所有线的 sceneId |
 | `instance:{sceneId}:player_count` | STRING | 每条线的玩家数（与副本共用） |
 | `scene:{sceneId}:node` | STRING | sceneId → nodeId 映射 |
+| `scene:{sceneId}:zone` | STRING | sceneId → zoneId 映射 |
+| `node:zone:{zoneId}:{nodeId}:player_count` | STRING | 节点玩家聚合（nodeId 仅 zone 内唯一） |
 
 ## 核心流程
 
@@ -30,7 +30,7 @@ initWorldScenesForZone(zoneId, confIds)
   for each confId:
     existing = SMEMBERS(world_channels:zone:{zoneId}:{confId})
     for i = len(existing) to WorldChannelCount-1:
-      sceneId = INCR(scene:id_counter)
+      sceneId = SceneIDGen.Generate()  # etcd 租约保护的 Snowflake；失租后 fail-closed
       SET scene:{sceneId}:node = assignNodeByHash(confId*1000+i, nodes)
       SADD world_channels:zone:{zoneId}:{confId} sceneId
       SET instance:{sceneId}:player_count = 0
@@ -48,8 +48,13 @@ GetBestWorldChannel(confId, zoneId)
 ```
 
 ### 玩家进出
-- `EnterScene` → `IncrInstancePlayerCount(sceneId)` — 已有机制，无需修改
-- `LeaveScene` → `DecrInstancePlayerCount(sceneId)` — 已有机制，无需修改
+- `EnterScene` → `IncrInstancePlayerCount(zoneId, sceneId)`；自动选线走原子预留
+- `LeaveScene` → `DecrInstancePlayerCount(zoneId, sceneId)`
+
+有在线玩家的频道不会在活节点之间热迁移；当前没有跨节点玩家状态传输协议。
+节点确认死亡后的 urgent 路径只重建场景映射，玩家仍需走重连恢复。
+同一 `(zoneId,nodeId)` 出现重复 etcd 注册也不是“节点死亡”；选线、懒重分配和
+rebalance 都会跳过该歧义身份并保持原 ownership，直到注册唯一性恢复。
 
 ## Proto 变更
 

@@ -142,17 +142,17 @@ func deleteOrphanChannel(ctx context.Context, svcCtx *svc.ServiceContext, zone u
 		// Best-effort DestroyScene on the hosting node. If the node is
 		// dead the RPC would hang on the gRPC dial timeout; skip.
 		if nodeId != "" && IsNodeAlive(svcCtx, zone, nodeId) {
-			if err := RequestNodeDestroyScene(ctx, svcCtx, nodeId, sceneId); err != nil {
+			if err := RequestNodeDestroyScene(ctx, svcCtx, zone, nodeId, sceneId); err != nil {
 				logx.Infof("[OrphanCleanup] DestroyScene(node=%s, scene=%d) failed (ignored): %v",
 					nodeId, sceneId, err)
 			}
-			svcCtx.Redis.Decr(fmt.Sprintf(NodeSceneCountKey, nodeId))
+			svcCtx.Redis.Decr(nodeSceneCountKey(zone, nodeId))
 		}
 
 		// Drop everything scene-scoped, including the reverse indexes and
 		// mirror flags introduced for co-location / cascade destroy.
 		if nodeId != "" {
-			svcCtx.Redis.Srem(nodeScenesKey(nodeId), sceneStr)
+			svcCtx.Redis.Srem(nodeScenesKey(zone, nodeId), sceneStr)
 		}
 		if src, _ := svcCtx.Redis.Get(sceneSourceKey(sceneId)); src != "" {
 			if srcId, err := strconv.ParseUint(src, 10, 64); err == nil {

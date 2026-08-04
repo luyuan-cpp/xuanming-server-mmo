@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -123,13 +124,29 @@ func main() {
 
 	// Snowflake worker id 的 etcd 租约丢了 = 本进程不再是这个 worker id 的合法持有者,
 	// etcd 随时会把它分给别的进程。再用 SceneIDGen 发一个 scene_id 就是确定性撞号,
-	// 所以这里主动停服,让编排把进程拉起来 —— 重启会拿一个新租约,并被 snowflake 的
-	// 启动 guard 兜住。s.Stop() 会让下面的 s.Start() 返回,defer 链正常收尾。
+	// 所以这里先 fence 发号器、显式 flush Kafka，再退出让编排拉起新进程。
+	// os.Exit 不执行 defer，因此 flush 必须在强退分支里直接调用。
+	//
+	// ⏱ 时间预算(§租约与重启时间预算必须闭合):Lost() 由 snowflakealloc 的**自 fencing**
+	// 提前触发 —— 距上次成功续租超过 TTL 的 2/3(TTL=60s ⇒ 40s)就报信,而不是干等
+	// KeepAlive channel 关闭(那恒晚于服务端过期点)。收到信号时服务端 lease 通常还有
+	// 约 TTL/3(≈20s)才过期,这段余量用来让在途请求干净失败。
+	//
+	// ⚠️ 顺序不能反,而且**不能只调 s.Stop()**:go-zero 的 zrpc.RpcServer.Stop() 实测
+	// (v1.9.2 / v1.10.0 同)只有一行 logx.Close(),既不拒新请求也不排空在途。
+	// 更要命的是 scene_id 有一半发号点根本不在 gRPC 请求链上(load_reporter /
+	// world_autoscale 的后台 ticker → world_init.go),就算 gRPC 真能停也拦不住它们。
+	// 所以正确性只能由 Fence() 保证:此后 Generate 一律 ErrFenced,建场景与铺频道整体失败。
+	// scene_id 撞号后果比建帮更重 —— createscenelogic 拿到 id 后是裸 Redis SET
+	// (scene:{id}:node 无 CAS),两个场景共用一个 id 会互相覆盖路由且静默。
 	if lost := svcCtx.SnowflakeLost(); lost != nil {
 		go func() {
 			<-lost
-			logx.Error("[scene_manager] snowflake worker id lease lost; stopping the server to avoid minting colliding scene ids")
-			s.Stop()
+			svcCtx.SceneIDGen.Fence() // ① 先关闸,后台 ticker 也一并失效
+			logx.Error("[scene_manager] snowflake worker id lease lost; generator fenced, flushing Kafka before exit")
+			svcCtx.Stop() // ② Close/flush Async Kafka pending batches,再释放 worker lease
+			logx.Close()  // ③ 冲掉日志缓冲
+			os.Exit(1)    // ④ 退出;重启后拿新 worker id
 		}()
 	}
 

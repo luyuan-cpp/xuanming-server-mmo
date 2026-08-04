@@ -93,7 +93,7 @@ var (
 	enterSceneRejectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_rejected_total",
-		Help:      "EnterScene rejections by reason (scene_gone is the only one currently emitted).",
+		Help:      "EnterScene rejections by reason (scene_gone|unsafe_handoff).",
 	}, []string{"zone_id", "reason"})
 
 	// sceneOrphansReconciledTotal tracks scenes destroyed by the
@@ -199,6 +199,15 @@ var (
 		Help:      "World-channel autoscale actions by action (scale_out|scale_in) and outcome (ok|drained|error|max_reached).",
 	}, []string{"zone_id", "action", "outcome"})
 
+	// kafkaDeliveryTotal 只由 kafka.Writer.Completion 更新，不看
+	// WriteMessages：Async 模式只有回调能拿到 broker 终态。failed 表示
+	// kafka-go 已耗尽内部投递尝试且 RPC 调用方早已返回，告警必须盯此指标。
+	kafkaDeliveryTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "kafka_delivery_total",
+		Help:      "Terminal async Kafka message delivery outcomes (acked|failed).",
+	}, []string{"outcome"})
+
 	registerOnce sync.Once
 )
 
@@ -227,8 +236,19 @@ func register() {
 			agonesAllocationTotal, agonesAllocationLatency,
 			agonesCounterRollbackTotal, agonesMappingFailureTotal,
 			agonesCounterDrift, worldAutoscaleTotal,
+			kafkaDeliveryTotal,
 		)
 	})
+}
+
+// ObserveKafkaDelivery 记录异步 writer 回报的终态；count 是批内消息数，
+// 零消息回调直接忽略。
+func ObserveKafkaDelivery(outcome string, count int) {
+	if count <= 0 {
+		return
+	}
+	register()
+	kafkaDeliveryTotal.WithLabelValues(outcome).Add(float64(count))
 }
 
 // ObserveWorldAutoscale 记一次大世界频道扩缩容动作。

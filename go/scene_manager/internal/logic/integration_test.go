@@ -53,6 +53,7 @@ type fakeSceneNode struct {
 
 	createCalls      atomic.Int64
 	destroyCalls     atomic.Int64
+	releaseCalls     atomic.Int64
 	lastCreateConf   atomic.Uint64
 	lastCreateScene  atomic.Uint64
 	lastDestroyScene atomic.Uint64
@@ -76,6 +77,11 @@ func (f *fakeSceneNode) CreateScene(_ context.Context, req *scenepb.CreateSceneR
 func (f *fakeSceneNode) DestroyScene(_ context.Context, req *scenepb.DestroySceneRequest) (*basepb.Empty, error) {
 	f.destroyCalls.Add(1)
 	f.lastDestroyScene.Store(req.SceneId)
+	return &basepb.Empty{}, nil
+}
+
+func (f *fakeSceneNode) ReleasePlayer(_ context.Context, _ *scenenodepb.ReleasePlayerRequest) (*basepb.Empty, error) {
+	f.releaseCalls.Add(1)
 	return &basepb.Empty{}, nil
 }
 
@@ -215,17 +221,17 @@ func registerWorldNodeFromHarness(t *testing.T, sc *svc.ServiceContext, zoneId u
 func killNode(sc *svc.ServiceContext, zoneId uint32, nodeID string) {
 	loadKey := nodeLoadKey(zoneId)
 	sc.Redis.Zrem(loadKey, nodeID)
-	sc.Redis.Del(fmt.Sprintf(NodeSceneNodeTypeKey, nodeID))
+	sc.Redis.Del(nodeSceneNodeTypeKey(zoneId, nodeID))
 
 	knownNodesMu.Lock()
 	for k, v := range knownNodes {
-		if v.nodeID == nodeID {
+		if v.reg.ZoneId == zoneId && v.nodeID == nodeID {
 			delete(knownNodes, k)
 		}
 	}
 	knownNodesMu.Unlock()
 	rebuildActiveZones()
-	RemoveNodeConn(nodeID)
+	RemoveNodeConn(zoneId, nodeID)
 }
 
 // clearKnownNodesForTest resets the package-level registry between tests
@@ -253,6 +259,106 @@ func findSceneIdHashingTo(t *testing.T, sortedNodes []string, want string, limit
 	return 0
 }
 
+func TestSceneNodeConnectionCacheIsScopedByZoneAndNodeID(t *testing.T) {
+	ResetNodeConnCacheForTest()
+	t.Cleanup(ResetNodeConnCacheForTest)
+	sc, _ := newIntegrationSvcCtx(t)
+	zone1Node10 := startFakeSceneNode(t, "10")
+	zone2Node10 := startFakeSceneNode(t, "10")
+
+	restoreResolver := SetNodeEndpointResolverForTest(func(zoneID uint32, nodeID string) (string, bool) {
+		if nodeID != "10" {
+			return "", false
+		}
+		switch zoneID {
+		case 1:
+			return "bufnet:zone-1-node-10", true
+		case 2:
+			return "bufnet:zone-2-node-10", true
+		default:
+			return "", false
+		}
+	})
+	t.Cleanup(restoreResolver)
+	restoreDialer := SetNodeDialerForTest(func(_ context.Context, endpoint string) (*grpc.ClientConn, error) {
+		var lis *bufconn.Listener
+		switch endpoint {
+		case "bufnet:zone-1-node-10":
+			lis = zone1Node10.lis
+		case "bufnet:zone-2-node-10":
+			lis = zone2Node10.lis
+		default:
+			return nil, fmt.Errorf("unknown scoped endpoint %q", endpoint)
+		}
+		return grpc.NewClient("passthrough://bufnet",
+			grpc.WithTransportCredentials(insecure.NewCredentials()),
+			grpc.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+				return lis.DialContext(ctx)
+			}),
+		)
+	})
+	t.Cleanup(restoreDialer)
+
+	_, err := RequestNodeCreateScene(context.Background(), sc, 1, "10", 1001, 9001)
+	require.NoError(t, err)
+	_, err = RequestNodeCreateScene(context.Background(), sc, 2, "10", 2001, 9002)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, zone1Node10.fake.createCalls.Load())
+	require.EqualValues(t, 1, zone2Node10.fake.createCalls.Load(),
+		"zone 2 的同号节点不能复用 zone 1 的连接")
+}
+
+func TestResolveKnownNodeRejectsDuplicateZoneNodeIdentity(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	first := nodeEntry{nodeID: "10"}
+	first.reg.ZoneId = 1
+	first.reg.GrpcEndpoint.IP = "10.0.0.1"
+	first.reg.GrpcEndpoint.Port = 7001
+	second := nodeEntry{nodeID: "10"}
+	second.reg.ZoneId = 1
+	second.reg.GrpcEndpoint.IP = "10.0.0.2"
+	second.reg.GrpcEndpoint.Port = 7001
+	knownNodesMu.Lock()
+	knownNodes["SceneNodeService.rpc/a"] = first
+	knownNodes["SceneNodeService.rpc/b"] = second
+	knownNodesMu.Unlock()
+
+	endpoint, ok, err := resolveFromKnownNodes(1, "10")
+	require.Error(t, err)
+	require.False(t, ok)
+	require.Empty(t, endpoint)
+}
+
+func TestCachedConnectionRejectsLaterDuplicateZoneNodeIdentity(t *testing.T) {
+	clearKnownNodesForTest()
+	ResetNodeConnCacheForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	t.Cleanup(ResetNodeConnCacheForTest)
+
+	sc, _ := newIntegrationSvcCtx(t)
+	h := startFakeSceneNode(t, "10")
+	installBufconnDialer(t, h)
+	registerWorldNodeFromHarness(t, sc, 1, h)
+
+	_, err := RequestNodeCreateScene(context.Background(), sc, 1, "10", 1001, 9001)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, h.fake.createCalls.Load())
+
+	duplicate := nodeEntry{nodeID: "10"}
+	duplicate.reg.ZoneId = 1
+	duplicate.reg.SceneNodeType = constants.SceneNodeTypeMainWorld
+	duplicate.reg.GrpcEndpoint.IP = "duplicate"
+	duplicate.reg.GrpcEndpoint.Port = 7010
+	knownNodesMu.Lock()
+	knownNodes["SceneNodeService.rpc/duplicate"] = duplicate
+	knownNodesMu.Unlock()
+
+	_, err = RequestNodeCreateScene(context.Background(), sc, 1, "10", 1001, 9002)
+	require.Error(t, err, "既有 cache 命中不得掩盖后来出现的重复身份")
+	require.EqualValues(t, 1, h.fake.createCalls.Load(), "歧义身份不得收到第二次 RPC")
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -260,10 +366,10 @@ func findSceneIdHashingTo(t *testing.T, sortedNodes []string, want string, limit
 // TestIntegration_Rebalance_NodeGone_EndToEnd exercises the urgent
 // migration path all the way through gRPC:
 //
-//   1. Two world-hosting scene nodes (A, B) come up.
-//   2. A world channel (conf=100, scene=42) is bound to A.
-//   3. A disappears (process crash / pod evicted).
-//   4. SceneManager runs RebalanceWorldChannelsForZone.
+//  1. Two world-hosting scene nodes (A, B) come up.
+//  2. A world channel (conf=100, scene=42) is bound to A.
+//  3. A disappears (process crash / pod evicted).
+//  4. SceneManager runs RebalanceWorldChannelsForZone.
 //
 // Expected: CreateScene(conf=100, scene=42) was actually received by the
 // surviving node B, Redis flips scene:42:node -> B, A's scene_count is
@@ -291,7 +397,7 @@ func TestIntegration_Rebalance_NodeGone_EndToEnd(t *testing.T) {
 	mr.SAdd(worldChannelsKey(zoneId, confId), strconv.FormatUint(sceneId, 10))
 	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sceneId), hA.nodeID))
 	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:zone", sceneId), strconv.FormatUint(uint64(zoneId), 10)))
-	_, _ = sc.Redis.Incr(fmt.Sprintf(NodeSceneCountKey, hA.nodeID)) // A now owns 1 scene
+	_, _ = sc.Redis.Incr(nodeSceneCountKey(zoneId, hA.nodeID)) // A now owns 1 scene
 
 	// Kill A.
 	killNode(sc, zoneId, hA.nodeID)
@@ -316,8 +422,8 @@ func TestIntegration_Rebalance_NodeGone_EndToEnd(t *testing.T) {
 	require.Equal(t, hB.nodeID, got)
 
 	// A's scene_count went from 1 -> 0, B's went from 0 -> 1.
-	require.EqualValues(t, 0, readInt64(sc, fmt.Sprintf(NodeSceneCountKey, hA.nodeID)))
-	require.EqualValues(t, 1, readInt64(sc, fmt.Sprintf(NodeSceneCountKey, hB.nodeID)))
+	require.EqualValues(t, 0, readInt64(sc, nodeSceneCountKey(zoneId, hA.nodeID)))
+	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(zoneId, hB.nodeID)))
 }
 
 // TestIntegration_Rebalance_BetterHome_EndToEnd exercises the
@@ -349,12 +455,12 @@ func TestIntegration_Rebalance_BetterHome_EndToEnd(t *testing.T) {
 	mr.SAdd(worldChannelsKey(zoneId, confId), strconv.FormatUint(sceneId, 10))
 	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sceneId), hA.nodeID))
 	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:zone", sceneId), strconv.FormatUint(uint64(zoneId), 10)))
-	_, _ = sc.Redis.Incr(fmt.Sprintf(NodeSceneCountKey, hA.nodeID))
+	_, _ = sc.Redis.Incr(nodeSceneCountKey(zoneId, hA.nodeID))
 	// Seed the reverse index the way a real allocateScene would. The
 	// migration must move the sceneId from hA's set to hB's set; otherwise
 	// node-death reconciliation later on will either miss the scene (if
 	// hB dies) or force-destroy a still-live scene (if hA dies).
-	_, _ = sc.Redis.Sadd(nodeScenesKey(hA.nodeID), strconv.FormatUint(sceneId, 10))
+	_, _ = sc.Redis.Sadd(nodeScenesKey(zoneId, hA.nodeID), strconv.FormatUint(sceneId, 10))
 	// No players on this channel, so it's eligible for opportunistic move.
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -370,8 +476,8 @@ func TestIntegration_Rebalance_BetterHome_EndToEnd(t *testing.T) {
 	require.Equal(t, hB.nodeID, got)
 
 	// Reverse index must have been rewritten in lockstep with scene:{id}:node.
-	oldMembers, _ := sc.Redis.Smembers(nodeScenesKey(hA.nodeID))
-	newMembers, _ := sc.Redis.Smembers(nodeScenesKey(hB.nodeID))
+	oldMembers, _ := sc.Redis.Smembers(nodeScenesKey(zoneId, hA.nodeID))
+	newMembers, _ := sc.Redis.Smembers(nodeScenesKey(zoneId, hB.nodeID))
 	require.NotContains(t, oldMembers, strconv.FormatUint(sceneId, 10),
 		"migrated sceneId must be removed from old node's :scenes set")
 	require.Contains(t, newMembers, strconv.FormatUint(sceneId, 10),
@@ -402,7 +508,7 @@ func TestIntegration_Rebalance_CreateSceneFailure_KeepsOldMapping(t *testing.T) 
 
 	mr.SAdd(worldChannelsKey(zoneId, confId), strconv.FormatUint(sceneId, 10))
 	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sceneId), hA.nodeID))
-	_, _ = sc.Redis.Incr(fmt.Sprintf(NodeSceneCountKey, hA.nodeID))
+	_, _ = sc.Redis.Incr(nodeSceneCountKey(zoneId, hA.nodeID))
 
 	killNode(sc, zoneId, hA.nodeID) // urgent scenario: A is dead, only B is available
 
@@ -421,8 +527,8 @@ func TestIntegration_Rebalance_CreateSceneFailure_KeepsOldMapping(t *testing.T) 
 
 	// Scene counts unchanged from pre-migration: A still shows 1 (we never
 	// decremented because the move didn't complete); B still shows 0.
-	require.EqualValues(t, 1, readInt64(sc, fmt.Sprintf(NodeSceneCountKey, hA.nodeID)))
-	require.EqualValues(t, 0, readInt64(sc, fmt.Sprintf(NodeSceneCountKey, hB.nodeID)))
+	require.EqualValues(t, 1, readInt64(sc, nodeSceneCountKey(zoneId, hA.nodeID)))
+	require.EqualValues(t, 0, readInt64(sc, nodeSceneCountKey(zoneId, hB.nodeID)))
 }
 
 // TestIntegration_Rebalance_ActivePlayersBlockMigration guards the hottest
@@ -494,11 +600,11 @@ func TestIntegration_Rebalance_ActivePlayersBlockMigration(t *testing.T) {
 //
 // End-to-end assertions:
 //
-//   1. CreateScene fires on the new node for the migrated channel.
-//   2. DestroyScene fires on the old node for BOTH the migrated channel
-//      AND every co-located mirror (best-effort cleanup).
-//   3. scene:{mirrorId}:node mappings are wiped from Redis.
-//   4. scene:{source}:mirrors set is drained.
+//  1. CreateScene fires on the new node for the migrated channel.
+//  2. DestroyScene fires on the old node for BOTH the migrated channel
+//     AND every co-located mirror (best-effort cleanup).
+//  3. scene:{mirrorId}:node mappings are wiped from Redis.
+//  4. scene:{source}:mirrors set is drained.
 func TestIntegration_Rebalance_CascadesDependentMirrors(t *testing.T) {
 	clearKnownNodesForTest()
 	ResetNodeConnCacheForTest()
@@ -524,8 +630,8 @@ func TestIntegration_Rebalance_CascadesDependentMirrors(t *testing.T) {
 	mr.SAdd(worldChannelsKey(zoneId, confId), strconv.FormatUint(sourceSceneId, 10))
 	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:node", sourceSceneId), hA.nodeID))
 	require.NoError(t, sc.Redis.Set(fmt.Sprintf("scene:%d:zone", sourceSceneId), strconv.FormatUint(uint64(zoneId), 10)))
-	_, _ = sc.Redis.Incr(fmt.Sprintf(NodeSceneCountKey, hA.nodeID))
-	_, _ = sc.Redis.Sadd(nodeScenesKey(hA.nodeID), strconv.FormatUint(sourceSceneId, 10))
+	_, _ = sc.Redis.Incr(nodeSceneCountKey(zoneId, hA.nodeID))
+	_, _ = sc.Redis.Sadd(nodeScenesKey(zoneId, hA.nodeID), strconv.FormatUint(sourceSceneId, 10))
 
 	// Spawn three mirrors co-located on hA. Routing through the real
 	// CreateSceneLogic exercises pickInstanceNode -> resolveMirrorSourceNode

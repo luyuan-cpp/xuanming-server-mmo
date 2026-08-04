@@ -3,9 +3,9 @@ package scenemanagerlogic
 import (
 	"context"
 
+	"proto/scene_manager"
 	"scene_manager/internal/logic"
 	"scene_manager/internal/svc"
-	"proto/scene_manager"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )

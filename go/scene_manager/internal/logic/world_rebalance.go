@@ -40,9 +40,10 @@ type channelMigration struct {
 // from scratch, then moves channels that diverge from the expected mapping
 // subject to two safety rules:
 //
-//  1. Never migrate a channel with online players. Live migration would
-//     require cross-node state transfer which this codebase does not have.
-//     Hot channels stay put and migrate naturally as players drain.
+//  1. Never migrate a channel with online players while its old process is
+//     still registered. Live migration would require cross-node state transfer
+//     which this codebase does not have. A truly dead node may retain a stale
+//     player_count; that mapping is already unusable and is rebuilt urgently.
 //  2. Respect MaxRebalanceMigrationsPerTick so a big scale event (say, +4
 //     pods) does not trigger N*channels simultaneous CreateScene/DestroyScene
 //     RPCs and knock the cluster over.
@@ -152,7 +153,22 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 			if curNode == target {
 				continue
 			}
+			if curNode != "" && isKnownNodeIdentityAmbiguous(zoneId, curNode) {
+				logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d old node %s has duplicate registrations; refusing ownership migration",
+					zoneId, confId, sceneId, curNode)
+				continue
+			}
 			if _, alive := liveSet[curNode]; !alive {
+				// "不在 world pool" 同时包含两种情况：进程真死了，以及进程
+				// 仍活着但 role 刚被改成非 world。后者若还有玩家，直接换
+				// scene:{id}:node 就是未实现的跨节点热迁移，必须 fail-closed。
+				if count := readInt64(svcCtx, fmt.Sprintf(InstancePlayerCountKey, sceneId)); count > 0 {
+					if _, err := svcCtx.Redis.Zscore(nodeLoadKey(zoneId), curNode); err == nil {
+						logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d old node %s is still registered with %d players; refusing cross-node hot migration",
+							zoneId, confId, sceneId, curNode, count)
+						continue
+					}
+				}
 				urgent = append(urgent, channelMigration{
 					ConfId: confId, SceneId: sceneId,
 					OldNode: curNode, NewNode: target, Reason: reasonNodeGone,
@@ -199,7 +215,7 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 		return false
 	}
 
-	if _, err := RequestNodeCreateScene(ctx, svcCtx, newNode, uint32(confId), sceneId); err != nil {
+	if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, newNode, uint32(confId), sceneId); err != nil {
 		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: CreateScene on new node %s failed (%s): %v",
 			zoneId, confId, sceneId, newNode, reason, err)
 		return false
@@ -211,11 +227,11 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	// already-existing mirrors on oldNode are now stranded.
 	dependentMirrors, _ := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
 
-	// Use reassignSceneNode so node:{id}:scenes reverse index stays in sync
+	// Use reassignSceneNode so node:zone:{zoneId}:{nodeId}:scenes stays in sync
 	// (otherwise node-death reconciliation would miss migrated channels).
 	// reassignSceneNode logs its own Set error but doesn't surface it; verify
 	// the mapping landed before declaring success.
-	reassignSceneNode(svcCtx, sceneId, oldNode, newNode)
+	reassignSceneNode(svcCtx, zoneId, sceneId, oldNode, newNode)
 	if cur, _ := svcCtx.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId)); cur != newNode {
 		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: scene->node mapping did not stick (got %q, want %q)",
 			zoneId, confId, sceneId, cur, newNode)
@@ -231,11 +247,11 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	TransferAgonesRoomForScene(ctx, svcCtx, sceneId, newNode, zoneId)
 
 	if oldNode != "" {
-		if _, err := svcCtx.Redis.Decr(fmt.Sprintf(NodeSceneCountKey, oldNode)); err != nil {
+		if _, err := svcCtx.Redis.Decr(nodeSceneCountKey(zoneId, oldNode)); err != nil {
 			logx.Errorf("[Rebalance] failed to decrement scene_count on old node %s: %v", oldNode, err)
 		}
 	}
-	if _, err := svcCtx.Redis.Incr(fmt.Sprintf(NodeSceneCountKey, newNode)); err != nil {
+	if _, err := svcCtx.Redis.Incr(nodeSceneCountKey(zoneId, newNode)); err != nil {
 		logx.Errorf("[Rebalance] failed to increment scene_count on new node %s: %v", newNode, err)
 	}
 
@@ -243,7 +259,7 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	// is already gone — nothing to clean up — or when oldNode appears dead
 	// to avoid long RPC timeouts during the urgent path.
 	if oldNode != "" && IsNodeAlive(svcCtx, zoneId, oldNode) {
-		if err := RequestNodeDestroyScene(ctx, svcCtx, oldNode, sceneId); err != nil {
+		if err := RequestNodeDestroyScene(ctx, svcCtx, zoneId, oldNode, sceneId); err != nil {
 			logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: DestroyScene on old node %s failed (%s, ignored): %v",
 				zoneId, confId, sceneId, oldNode, reason, err)
 		}

@@ -1,6 +1,6 @@
 # Scene Creation Architecture
 
-**Updated:** 2026-04-23 (rev 3 — defensive checks + dedup + observability)
+**Updated:** 2026-08-03 (rev 4 — zone-scoped node identity + safe EnterScene commit)
 
 ## Overview
 
@@ -22,7 +22,7 @@ constants `SceneNodeType*`):
 | 3 | `kSceneSceneCrossNode` | cross-server instance |
 
 The role is published into etcd as part of `NodeInfo`, mirrored by
-`LoadReporter` into `node:{id}:scene_node_type`, and consumed by
+`LoadReporter` into `node:zone:{zoneId}:{nodeId}:scene_node_type`, and consumed by
 `getNodesForPurpose` (Go) to route world vs. instance creation to the
 correct pool. This matches the classic industry split — WoW has dedicated
 "world server" vs. "instance server" processes, FFXIV / TW3 do the same.
@@ -73,7 +73,7 @@ Client/System → Go SceneManager.CreateScene(scene_conf_id)
 ├─ Main World path:
 │  ├─ Check Redis hash → return existing (idempotent)
 │  ├─ getNodesForPurpose(World)  # filters by scene_node_type
-│  ├─ allocateScene → INCR scene:id_counter, SET scene:{id}:node
+│  ├─ allocateScene → SceneIDGen.Generate(Snowflake), SET scene:{id}:node
 │  ├─ HSET world_channels:zone:{zoneId} confId → sceneId
 │  └─ RequestNodeCreateScene → gRPC → C++ Scene.CreateScene(config_id)
 │
@@ -82,7 +82,7 @@ Client/System → Go SceneManager.CreateScene(scene_conf_id)
    │    1. TargetNodeId (explicit override)
    │    2. Mirror co-location (bypasses purpose filter)
    │    3. GetBestNodeForPurpose(Instance)  # filters by scene_node_type
-   ├─ allocateScene → INCR scene:id_counter, SET scene:{id}:node
+   ├─ allocateScene → SceneIDGen.Generate(Snowflake), SET scene:{id}:node
    ├─ ZADD instances:zone:{zoneId}:active (score = timestamp)
    ├─ SET instance:{id}:player_count = 0
    └─ RequestNodeCreateSceneWithOptions → gRPC → C++ Scene.CreateScene(config_id, mirror_config_id, creator_ids)
@@ -118,8 +118,9 @@ Defaults treat one scene ≈ 100 players — an empty scene still burns CPU
 on tick/AOI scaffolding, so it dominates. Shift β up if your scenes are
 cheap but players are expensive (heavy physics, per-player AI).
 
-Counters are maintained in Redis as `node:{id}:scene_count` and
-`node:{id}:player_count`. The player aggregate is piggy-backed on the
+Counters are maintained in Redis as `node:zone:{zoneId}:{nodeId}:scene_count` and
+`node:zone:{zoneId}:{nodeId}:player_count`. Node IDs are only unique inside a
+zone, so no node-scoped key or connection cache may omit `zoneId`. The player aggregate is piggy-backed on the
 existing `IncrInstancePlayerCount` / `DecrInstancePlayerCount` hooks:
 each scene enter/leave also touches the per-node counter, and
 `destroyInstance` drains the residual so force-destroys don't leak
@@ -133,11 +134,13 @@ hash distribution (`assignNodeByHash(sceneId, sortedWorldNodes)`).
 
 Two safety rules keep this cheap:
 
-1. **Urgent migration** (`reasonNodeGone`) — channels whose current node
-   is dead or no longer world-hosting are moved immediately. The C++
-   `CreateScene` handler is idempotent by `sceneId`, so the move is a
-   create-on-new → swap Redis mapping → best-effort destroy-on-old
-   sequence that never drops the channel.
+1. **Urgent recovery** (`reasonNodeGone`) — a channel whose old process is
+   confirmed absent from the zone load set is recreated on a live node. This
+   restores the scene mapping; it is **not** live player handoff. Players whose
+   old process died reconnect through the normal login path. If the old process
+   is still registered but merely changed to a non-world role, a non-empty
+   channel is left in place until it drains; moving it hot would require the
+   cross-node state-transfer protocol that is not implemented.
 2. **Opportunistic migration** (`reasonBetterHome`) — channels on a live
    node but mapped to a non-ideal hash target are moved only when empty
    (`player_count == 0`). Hot channels stay put until they naturally
@@ -160,6 +163,27 @@ End-to-end coverage of the executor (dial → `CreateScene` / `DestroyScene`
 using in-process bufconn fake scene nodes and miniredis. Operational
 context, alerts, and the CI checklist are in `docs/ops/scene-node-role-split.md`
 (§8 "Verifying the pipeline in CI").
+
+### EnterScene ownership and Gate-route commit
+
+`EnterScene` treats the existing `player:{id}:location` as ownership state, not
+as a best-effort hint:
+
+- It reads and decodes the existing location before reserving a target. A Redis
+  read or protobuf decode failure rejects the request without changing counts.
+- Scene-node identity is `(zoneId,nodeId)`. Redis node keys and the gRPC cache
+  include both fields; multiple live registrations for the same identity are
+  ambiguous and fail closed before RPC or Kafka routing. An ambiguous mapping
+  is not treated as a dead node and must not trigger automatic ownership
+  reassignment.
+- First landing and same-physical-node scene switches remain enabled. An
+  existing player's cross-node/cross-zone handoff is rejected by default with
+  `ErrUnsafeCrossNodeHandoff` until a per-player persistence epoch is available.
+  `AllowUnsafeCrossNodeHandoff` is a development-only compatibility switch.
+- A Gate route is committed only after the synchronous Kafka writer receives a
+  `RequireOne` broker ACK. On terminal write failure, location is restored with
+  an exact-value Lua compare-and-set and this request's counters are compensated;
+  a concurrent newer location is never overwritten.
 
 ### Mirror co-location
 
@@ -192,7 +216,7 @@ pickInstanceNode(in):
 
 **Guardrails**:
 - Soft cap: `MirrorSourceNodeLoadCap` in scene_manager config. When the source
-  node's `node:{id}:scene_count` is at or above the cap, the mirror falls back
+  node's `node:zone:{zoneId}:{nodeId}:scene_count` is at or above the cap, the mirror falls back
   to `GetBestNode` so a popular world can't hotspot one node. Default 0 disables
   the cap (always co-locate).
 - Zone isolation: if `scene:{sourceSceneId}:zone` differs from the request's
@@ -210,7 +234,7 @@ pickInstanceNode(in):
   idle timeout. See `TestIntegration_Rebalance_CascadesDependentMirrors`.
 - Explicit override: `TargetNodeId` still wins, so ops can pin mirrors when
   required (e.g. diagnostic sessions, canary deploys).
-- Load accounting: mirrors increment `node:{nodeId}:scene_count` like any other
+- Load accounting: mirrors increment `node:zone:{zoneId}:{nodeId}:scene_count` like any other
   instance, so subsequent `GetBestNode` decisions correctly reflect the mirror
   weight on the source node.
 
@@ -315,9 +339,9 @@ Go SceneManager.DestroyScene(scene_id) or InstanceLifecycleManager
 ├─ [atomic] EVAL destroy-if-idle (see "Destroy-while-entering race")
 │    └─ DEL scene:{id}:{node, player_count, mirror, source, zone}
 │       + ZREM instances:zone:{zoneId}:active
-├─ SREM node:{nodeId}:scenes
+├─ SREM node:zone:{zoneId}:{nodeId}:scenes
 ├─ [if mirror] SREM scene:{sourceId}:mirrors
-└─ INCRBY node:{nodeId}:scene_count -1 + drain residual from player_count
+└─ INCRBY node:zone:{zoneId}:{nodeId}:scene_count -1 + drain residual from player_count
 ```
 
 ### Destroy-while-entering race (fixed 2026-04-23)
@@ -363,7 +387,7 @@ Two Redis SETs make the destroy paths O(1) lookups instead of keyspace scans:
 
 | Key | Populated at | Used by |
 |-----|--------------|---------|
-| `node:{nodeId}:scenes` | every `allocateScene` / reassign | node-death reconciliation (`reconcileDeadNodeScenes`) |
+| `node:zone:{zoneId}:{nodeId}:scenes` | every `allocateScene` / reassign | node-death reconciliation (`reconcileDeadNodeScenes`) |
 | `scene:{sourceId}:mirrors` | mirror create with `source_scene_id > 0` | cascade destroy in lifecycle + `DestroyScene` RPC |
 
 Companion scalar `scene:{mirrorId}:source` lets a dying mirror `SREM`
@@ -383,7 +407,7 @@ Covered by `TestDestroyScene_CascadesToMirrors`,
 `TestDestroyMirror_UnlinksFromSourceSet`. The
 `TestReconcileDeadNode_DestroysCoLocatedMirrors` test pins that mirrors
 co-located on a dying instance node are reaped by the node-death
-reconciliation loop (each mirror's `node:{id}:scenes` membership is
+reconciliation loop (each mirror's `node:zone:{zoneId}:{nodeId}:scenes` membership is
 walked alongside the source's). The
 `TestIntegration_Rebalance_CascadesDependentMirrors` integration test
 pins the source-migration path: when the rebalancer moves a source
@@ -398,13 +422,13 @@ correctly on newNode.
 `load_reporter.go::removeNodeFromRedis` now finishes with
 `reconcileDeadNodeScenes`:
 
-1. `SMEMBERS node:{deadNodeId}:scenes`.
+1. `SMEMBERS node:zone:{zoneId}:{deadNodeId}:scenes`.
 2. For each sceneId: if `scene:{id}:node` still points at the dead node
    AND the scene is in `instances:zone:{z}:active` (i.e. it's an
    instance, not a world channel) → `destroyInstanceForce(reason="node_death")`.
 3. Reassigned scenes (mapping already points at a live node) and world
    channels are skipped — the rebalance pipeline handles them.
-4. `DEL node:{id}:scenes`.
+4. `DEL node:zone:{zoneId}:{nodeId}:scenes`.
 
 World channels are intentionally excluded here; destroying them would
 drop every player in that shard. The existing rebalance path already
@@ -491,7 +515,7 @@ Operators choose one mirror semantics regime per deployment:
 
 ## Player Count Tracking
 
-- `EnterScene` → `IncrInstancePlayerCount(sceneId)` — Redis INCR on `instance:{sceneId}:player_count`.
+- `EnterScene` → `IncrInstancePlayerCount(zoneId, sceneId)` — Redis INCR on `instance:{sceneId}:player_count` plus the zone-scoped node aggregate.
 - `LeaveScene` → `DecrInstancePlayerCount(sceneId)` — Redis INCRBY -1, clamped to 0 (guards against double-leave or disconnect without leave).
 - Instance lifecycle manager periodically scans active instances. If player count is 0 for longer than `InstanceIdleTimeoutSeconds`, the instance is destroyed.
 
@@ -518,9 +542,16 @@ Mirrors and regular instances use **separate** idle timeouts because their state
 
 ## gRPC Connection Cache (Go → C++ SceneNode)
 
-- `scene_node_client.go` maintains a `nodeConnCache` (`sync.RWMutex`-guarded `map[string]*grpc.ClientConn`).
+- `scene_node_client.go` maintains a `nodeConnCache` (`sync.RWMutex`-guarded
+  `map[string]*grpc.ClientConn`) keyed by `(zoneId,nodeId)`, not `nodeId` alone.
 - Node endpoint discovered from etcd: `SceneNodeService.rpc/` prefix scan (all zones), JSON parsing of `sceneNodeRegistration.Endpoint`.
-- `RemoveNodeConn(nodeId)` called by `load_reporter.go` when a node's grace period expires.
+- Only `grpc_endpoint` is accepted; falling back to the raw RPC0 TCP endpoint
+  would create a protocol mismatch.
+- Both the watch cache and direct etcd fallback require exactly one registration
+  for `(zoneId,nodeId)`. A duplicate identity is rejected even when a connection
+  was already cached.
+- `RemoveNodeConn(zoneId,nodeId)` is called by `load_reporter.go` when a node's
+  grace period expires or its registration changes.
 
 ## Idempotent Convergence (Node Reconnect/Restart Safety)
 
@@ -663,7 +694,6 @@ etcd Watch (事件驱动，不轮询)
 
 | Key | Type | Purpose |
 |-----|------|---------|
-| `scene:id_counter` | String (int) | Auto-increment scene ID |
 | `scene:{id}:node` | String | Scene → node mapping |
 | `scene:{id}:zone` | String (int) | Scene → zone mapping for cross-zone lookups |
 | `scene:{id}:mirror` | String | `"1"` marker for mirror scenes (shorter idle timeout) |
@@ -673,10 +703,16 @@ etcd Watch (事件驱动，不轮询)
 | `instances:zone:{zoneId}:active` | ZSet | Active instances (score = create/last-active timestamp) |
 | `instance:{id}:player_count` | String (int) | Player count per instance |
 | `scene_nodes:zone:{zoneId}:load` | ZSet | Node load balancing (score = α·scene_count + β·player_count) |
-| `node:{nodeId}:scene_count` | String (int) | Node's hosted scene count |
-| `node:{nodeId}:player_count` | String (int) | Node's aggregate player count (sum across hosted scenes) |
-| `node:{nodeId}:scene_node_type` | String (int) | Mirrored `eSceneNodeType` value for purpose filtering |
-| `node:{nodeId}:scenes` | Set | Scene ids currently hosted by this node (node-death reconciliation) |
+| `node:zone:{zoneId}:{nodeId}:scene_count` | String (int) | Node's hosted scene count |
+| `node:zone:{zoneId}:{nodeId}:player_count` | String (int) | Node's aggregate player count (sum across hosted scenes) |
+| `node:zone:{zoneId}:{nodeId}:scene_node_type` | String (int) | Mirrored `eSceneNodeType` value for purpose filtering |
+| `node:zone:{zoneId}:{nodeId}:scenes` | Set | Scene ids currently hosted by this node (node-death reconciliation) |
+
+Scene IDs are generated by the etcd-leased Snowflake worker and therefore have
+no Redis counter key. Legacy `node:{nodeId}:*` keys are no longer read: `nodeId`
+can repeat across zones, so dual-reading them would reintroduce cross-zone state
+aliasing. Rollouts must rebuild/expire those derived counters and reverse indexes
+rather than copy an unscopeable legacy value into every zone.
 
 ## Configuration
 
@@ -695,6 +731,10 @@ MirrorIdleTimeoutSeconds: 30        # Mirrors die faster — every entry re-init
 InstanceCheckIntervalSeconds: 30
 MirrorSourceNodeLoadCap: 0          # Soft cap on co-located mirrors per source node (0 = always co-locate)
 MirrorDedupBySource: false          # When true, CreateScene with source_scene_id reuses an existing mirror instead of allocating a fresh one. OFF by default — typical mirrors are per-player phasing where independent copies are intentional. Turn ON for "shared instance" semantics (raid lockouts, world bosses).
+
+# Player ownership / Gate route safety
+AllowUnsafeCrossNodeHandoff: false  # production invariant until handoff epoch exists
+KafkaWriteTimeoutSeconds: 5         # one synchronous RequireOne produce attempt, writer-side timeout
 
 # Node role routing
 StrictNodeTypeSeparation: true      # production default; set false in dev / single-node
@@ -721,12 +761,12 @@ MetricsListenAddr: ":9150"
 | `go/scene_manager/internal/logic/instance_lifecycle.go` | Auto-destroy idle instances + player count helpers. Per-type timeout (mirror vs. regular) via `resolveMirrorTimeout` + `scene:{id}:mirror` flag. Also: atomic CAS destroy, cascade to mirrors, node-death force path |
 | `go/scene_manager/internal/logic/scene_atomic.go` | Redis Lua scripts for the race-safe enter / destroy CAS paths |
 | `go/scene_manager/internal/logic/scene_node_client.go` | gRPC client cache + RequestNodeCreateScene/DestroyScene |
-| `go/scene_manager/internal/logic/enterscenelogic.go` | EnterScene: location update, gate routing, player count |
+| `go/scene_manager/internal/logic/enterscenelogic.go` | EnterScene: ownership gate, exact-value location rollback, broker-ACKed Gate routing, player count |
 | `go/scene_manager/internal/logic/leavescenelogic.go` | LeaveScene: location cleanup, player count decrement |
 | `go/scene_manager/internal/logic/destroyscenelogic.go` | Admin DestroyScene RPC handler |
 | `go/scene_manager/internal/logic/load_reporter.go` | etcd → Redis node discovery, load sync, grace period |
 | `go/scene_manager/internal/logic/logic_test.go` | Unit tests incl. `TestCreateScene_Mirror_*` co-location suite |
-| `go/scene_manager/internal/logic/world_rebalance.go` | World channel migration. `migrateWorldChannel` uses `reassignSceneNode` to keep `node:{id}:scenes` in sync with `scene:{id}:node` |
+| `go/scene_manager/internal/logic/world_rebalance.go` | World channel migration. `migrateWorldChannel` uses `reassignSceneNode` to keep `node:zone:{zoneId}:{nodeId}:scenes` in sync with `scene:{id}:node` |
 | `go/scene_manager/internal/logic/orphan_cleanup.go` | Drops world-channel sets whose confId is no longer in the World table; cleans all scene-scoped keys + reverse indexes |
 | `go/scene_manager/internal/metrics/metrics.go` | Prometheus gauges + counters for nodes, mirrors, lifecycle, dedup, source-missing, orphans |
 | `proto/scene/scene.proto` | C++ Scene service (CreateScene, DestroyScene) |

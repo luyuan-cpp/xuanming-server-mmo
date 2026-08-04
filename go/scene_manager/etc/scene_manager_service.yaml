@@ -20,6 +20,14 @@ Kafka:
   Brokers:
     - 127.0.0.1:9092
 
+# Gate 路由/重定向的一次同步 produce 使用 RequireOne ACK；该值是 writer 侧
+# 超时（秒）。不使用 caller context 取消，避免 WriteMessages 返回后仍继续投递。
+KafkaWriteTimeoutSeconds: 5
+
+# 仅供开发环境临时复现旧交接流程。生产必须保持 false，直到跨 Go/C++/db
+# 的 per-player epoch/落盘屏障落地；否则跨节点进入可能加载到陈旧玩家状态。
+AllowUnsafeCrossNodeHandoff: false
+
 # Directory containing exported table JSON files (e.g. World.json).
 # World config IDs are loaded from World.json automatically.
 # Default: ../../generated/tables (relative to service working directory).

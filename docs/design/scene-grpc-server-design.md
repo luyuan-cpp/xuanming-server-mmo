@@ -185,7 +185,9 @@ cancellation-aware or bounded wait.
 
 **File:** `go/scene_manager/internal/logic/scene_node_client.go`
 
-Updated `resolveNodeEndpoint()` to prefer `grpcEndpoint` from etcd JSON, with fallback to `endpoint` for backward compatibility.
+`resolveNodeEndpoint()` only accepts `grpcEndpoint` from etcd JSON. It does not
+fall back to `endpoint`: that field is the raw RPC0 TCP port and dialing it with
+gRPC recreates the protocol mismatch this design fixes.
 
 **File:** `go/scene_manager/internal/logic/load_reporter.go`
 
@@ -194,9 +196,14 @@ Added `GrpcEndpoint` field to `sceneNodeRegistration` struct.
 ## Cross-Server Implications
 
 - Any zone's scene_manager can discover remote Scene nodes from shared etcd
-- Direct gRPC dial to remote Scene nodes for cross-server dungeon creation
+- Direct gRPC dial to remote Scene nodes can execute control-plane
+  CreateScene/DestroyScene commands
 - No Kafka topic routing or cross-zone stream management needed
 - Same `CreateScene` RPC works for local and cross-zone requests
+
+This does **not** make existing-player cross-node handoff safe. The player data
+path still needs a durable handoff epoch; SceneManager therefore rejects that
+flow by default even though the control-plane socket is reachable.
 
 ## Files Changed
 
@@ -231,7 +238,9 @@ etcd keys (example):
 | Multi-zone | No | Each zone's Scene nodes register independently, scene_manager filters by zone |
 
 - gRPC port = TCP port + 1 (convention, unique per node via etcd CAS port allocation).
-- scene_manager's existing per-nodeId connection cache handles multi-node/multi-zone.
+- scene_manager caches by `(zoneId,nodeId)`, because the same numeric node ID can
+  exist in multiple zones. Endpoint resolution requires exactly one live etcd
+  registration for that pair; duplicates fail closed, including cache hits.
 - gRPC port is **internal cluster communication only** — no LoadBalancer/NodePort exposure needed.
 
 ## Connection Scale / Cost Assessment

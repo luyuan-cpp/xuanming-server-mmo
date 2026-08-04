@@ -1,4 +1,4 @@
-# EnterScene Zone Routing Design (2026-04-17)
+# EnterScene Zone Routing Design (updated 2026-08-03)
 
 ## Problem
 `EnterSceneRequest` had `zone_id` and `gate_zone_id` fields but:
@@ -31,19 +31,35 @@ Cross-zone check: `GateZoneId != 0 && targetZoneId != 0 && GateZoneId != targetZ
 - `player:{id}:location` — protobuf `PlayerLocation` (scene_id, node_id, update_time, zone_id)
 - `world_channels:zone:{zoneId}:{confId}` — SET of sceneId strings per zone/conf
 
-## Cross-Zone Flow: Player in zone B → wants zone C scene
-1. Client on zone B Gate → `EnterScene(ZoneId=C, GateZoneId=B)`
-2. SceneManager: `targetZoneId=C`, `B != C` → cross-zone redirect
-3. Returns `RedirectToGateInfo` with zone C gate address
-4. Client disconnects B, connects C gate, re-logins
-5. Login(C): `EnterScene(ZoneId=C, GateZoneId=C)` → same zone → normal entry
+## Cross-Zone Flow and Current Safety Gate
+
+The redirect transport exists, but it is not a persistence handoff protocol.
+
+- **First landing (no `PlayerLocation`)**: a request received on a zone B Gate
+  for zone C may return `RedirectToGateInfo`; no old Scene ownership exists to
+  transfer. The redirect is successful only after its Gate Kafka command gets a
+  broker ACK.
+- **Existing location**: production defaults to fail-closed with
+  `ErrUnsafeCrossNodeHandoff`. SceneManager releases any target reservation and
+  does not release the old entity, update location, or report a successful
+  route/redirect. `ReleasePlayer` only queues an asynchronous save and cannot
+  prove the old snapshot is durable before another node loads it.
+- `AllowUnsafeCrossNodeHandoff=true` restores the legacy flow for development
+  protocol exercises only. It is not a production capability claim.
+
+Re-enabling existing-player cross-zone travel requires a per-player handoff
+epoch: the old node publishes the epoch only after durable save, and the target
+node verifies that epoch before loading.
 
 ## Offline-Return Behavior
-Player belongs to zone A, was in zone C, goes offline long time:
-- Client reconnects → picks zone A gate → Login(A)
-- Login passes `ZoneId=A` (from config) → SceneManager uses it directly
-- Player enters zone A scene → **returns to home zone**
-- This is intentional: cross-zone content (instances) may have been destroyed
+Player belongs to zone A and previously had a location in zone C:
+
+- A clean logout removes the location; the next login is a first landing and can
+  enter zone A normally.
+- If a crash left the zone C location behind, Login(A)'s explicit `ZoneId=A`
+  resolves the desired target but the ownership gate rejects the cross-node
+  transition. It does **not** silently return the player home. Recovery must
+  clear/reconcile stale ownership or complete the handoff-epoch protocol.
 
 ## Merge-Server (合服)
 `zone_id` is a **runtime routing identifier**, not a permanent identity:

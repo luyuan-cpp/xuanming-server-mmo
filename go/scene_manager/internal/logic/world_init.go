@@ -26,6 +26,7 @@ const (
 type WorldChannelCandidate struct {
 	SceneID uint64
 	NodeID  string
+	ZoneID  uint32
 }
 
 func worldChannelsKey(zoneID uint32, confId uint64) string {
@@ -85,7 +86,14 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 				break
 			}
 
-			sceneId := svcCtx.SceneIDGen.Generate()
+			// 这条路径由后台 goroutine(load_reporter / world_autoscale)周期驱动,
+			// 不在 gRPC 请求链上。失租后发号器被 fence,这里必须停止铺频道 ——
+			// 否则会用一个已被别人接管的 worker id 继续铸 scene_id。
+			sceneId, genErr := svcCtx.SceneIDGen.Generate()
+			if genErr != nil {
+				logx.Errorf("[World] scene id generator unavailable for zone %d: %v; stopping allocation", zoneId, genErr)
+				break
+			}
 
 			// Vary hash input per channel so channels may land on different nodes.
 			targetNode := assignNodeByHash(confId*1000+uint64(i), liveNodes)
@@ -123,14 +131,14 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 			// Initialize player count.
 			svcCtx.Redis.Set(fmt.Sprintf(InstancePlayerCountKey, sceneId), "0")
 
-			sceneCountKey := fmt.Sprintf(NodeSceneCountKey, targetNode)
+			sceneCountKey := nodeSceneCountKey(zoneId, targetNode)
 			svcCtx.Redis.Incr(sceneCountKey)
 
 			// Reverse index so node-death reconciliation knows about this
 			// world channel. World scenes are filtered out by the orphan
 			// cleanup loop (they get rebalanced instead of destroyed), but
 			// the set still needs to be accurate for diagnostics.
-			svcCtx.Redis.Sadd(nodeScenesKey(targetNode), fmt.Sprintf("%d", sceneId))
+			svcCtx.Redis.Sadd(nodeScenesKey(zoneId, targetNode), fmt.Sprintf("%d", sceneId))
 
 			created++
 			logx.Infof("[World] Allocated channel %d (scene=%d, conf=%d) on node %s in zone %d",
@@ -157,7 +165,7 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 				}
 				newNode := assignNodeByHash(confId*1000+uint64(ensured), liveNodes)
 				logx.Infof("[World] Reassigning scene %d from dead node %s to live node %s", sceneId, targetNode, newNode)
-				reassignSceneNode(svcCtx, sceneId, targetNode, newNode)
+				reassignSceneNode(svcCtx, zoneId, sceneId, targetNode, newNode)
 				// 频道换了节点,Agones 名额必须跟着走。旧节点已死,它的 GameServer
 				// 迟早被 Agones 回收、计数随对象一起消失,所以释放是尽力而为;
 				// 但**在新节点上占一份**不能省 —— 不占的话这个频道在新进程上
@@ -166,7 +174,7 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 				targetNode = newNode
 			}
 
-			if _, err := RequestNodeCreateScene(ctx, svcCtx, targetNode, uint32(confId), sceneId); err != nil {
+			if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, targetNode, uint32(confId), sceneId); err != nil {
 				logx.Errorf("[World] Failed to call CreateScene for conf %d scene %d: %v", confId, sceneId, err)
 				// Mark node as dead so we don't keep retrying it for remaining scenes.
 				if isNodeUnreachableError(err) {
@@ -175,10 +183,10 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 					if len(liveNodes) > 0 {
 						newNode := assignNodeByHash(confId*1000+uint64(ensured), liveNodes)
 						logx.Infof("[World] Retrying scene %d on live node %s after dead node %s", sceneId, newNode, targetNode)
-						reassignSceneNode(svcCtx, sceneId, targetNode, newNode)
+						reassignSceneNode(svcCtx, zoneId, sceneId, targetNode, newNode)
 						// 同上:重试落到新节点,名额也要跟过去。
 						TransferAgonesRoomForScene(ctx, svcCtx, sceneId, newNode, zoneId)
-						if _, err := RequestNodeCreateScene(ctx, svcCtx, newNode, uint32(confId), sceneId); err != nil {
+						if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, newNode, uint32(confId), sceneId); err != nil {
 							logx.Errorf("[World] Retry also failed for conf %d scene %d on node %s: %v", confId, sceneId, newNode, err)
 						}
 					}
@@ -220,6 +228,11 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 
 		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
 		nid, _ := svcCtx.Redis.Get(nodeKey)
+		if nid != "" && isKnownNodeIdentityAmbiguous(zoneId, nid) {
+			logx.Errorf("[World] scene %d maps to duplicate identity zone=%d node=%s; refusing stale-channel reassignment",
+				sceneId, zoneId, nid)
+			continue
+		}
 		if nid == "" || !IsNodeAlive(svcCtx, zoneId, nid) {
 			staleSceneIds = append(staleSceneIds, sceneId)
 			continue
@@ -263,11 +276,11 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 			continue
 		}
 		if oldNode != "" && oldNode != targetNode {
-			svcCtx.Redis.Srem(nodeScenesKey(oldNode), fmt.Sprintf("%d", sceneId))
+			svcCtx.Redis.Srem(nodeScenesKey(zoneId, oldNode), fmt.Sprintf("%d", sceneId))
 		}
-		svcCtx.Redis.Sadd(nodeScenesKey(targetNode), fmt.Sprintf("%d", sceneId))
+		svcCtx.Redis.Sadd(nodeScenesKey(zoneId, targetNode), fmt.Sprintf("%d", sceneId))
 
-		if _, err := RequestNodeCreateScene(ctx, svcCtx, targetNode, uint32(confId), sceneId); err != nil {
+		if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, targetNode, uint32(confId), sceneId); err != nil {
 			logx.Errorf("[World] Lazy-reassign: CreateScene failed for scene %d on node %s: %v", sceneId, targetNode, err)
 			continue
 		}
@@ -301,11 +314,16 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 
 		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
 		nid, _ := svcCtx.Redis.Get(nodeKey)
+		if nid != "" && isKnownNodeIdentityAmbiguous(zoneId, nid) {
+			logx.Errorf("[World] scene %d maps to duplicate identity zone=%d node=%s; refusing reservation-time reassignment",
+				sceneId, zoneId, nid)
+			continue
+		}
 		if nid == "" || !IsNodeAlive(svcCtx, zoneId, nid) {
 			staleSceneIds = append(staleSceneIds, sceneId)
 			continue
 		}
-		candidates = append(candidates, WorldChannelCandidate{SceneID: sceneId, NodeID: nid})
+		candidates = append(candidates, WorldChannelCandidate{SceneID: sceneId, NodeID: nid, ZoneID: zoneId})
 	}
 
 	if len(candidates) == 0 {
@@ -329,15 +347,15 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 				continue
 			}
 			if oldNode != "" && oldNode != targetNode {
-				svcCtx.Redis.Srem(nodeScenesKey(oldNode), fmt.Sprintf("%d", sceneId))
+				svcCtx.Redis.Srem(nodeScenesKey(zoneId, oldNode), fmt.Sprintf("%d", sceneId))
 			}
-			svcCtx.Redis.Sadd(nodeScenesKey(targetNode), fmt.Sprintf("%d", sceneId))
+			svcCtx.Redis.Sadd(nodeScenesKey(zoneId, targetNode), fmt.Sprintf("%d", sceneId))
 
-			if _, err := RequestNodeCreateScene(ctx, svcCtx, targetNode, uint32(confId), sceneId); err != nil {
+			if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, targetNode, uint32(confId), sceneId); err != nil {
 				logx.Errorf("[World] Reserve lazy-reassign: CreateScene failed for scene %d on node %s: %v", sceneId, targetNode, err)
 				continue
 			}
-			candidates = append(candidates, WorldChannelCandidate{SceneID: sceneId, NodeID: targetNode})
+			candidates = append(candidates, WorldChannelCandidate{SceneID: sceneId, NodeID: targetNode, ZoneID: zoneId})
 		}
 	}
 
@@ -350,10 +368,10 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 
 // reassignSceneNode moves a scene's node mapping atomically from the
 // caller's perspective: updates scene:{id}:node, fixes the reverse
-// node:{id}:scenes membership on both sides. Errors are logged and
+// node:zone:{zoneId}:{nodeId}:scenes membership on both sides. Errors are logged and
 // swallowed — the reverse index is best-effort and the node-death
 // reconciliation loop double-checks scene:{id}:node before destroying.
-func reassignSceneNode(svcCtx *svc.ServiceContext, sceneId uint64, oldNode, newNode string) {
+func reassignSceneNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, oldNode, newNode string) {
 	nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
 	if err := svcCtx.Redis.Set(nodeKey, newNode); err != nil {
 		logx.Errorf("[reassign] Failed to update scene %d -> node %s: %v", sceneId, newNode, err)
@@ -361,9 +379,9 @@ func reassignSceneNode(svcCtx *svc.ServiceContext, sceneId uint64, oldNode, newN
 	}
 	sceneStr := fmt.Sprintf("%d", sceneId)
 	if oldNode != "" && oldNode != newNode {
-		svcCtx.Redis.Srem(nodeScenesKey(oldNode), sceneStr)
+		svcCtx.Redis.Srem(nodeScenesKey(zoneId, oldNode), sceneStr)
 	}
-	svcCtx.Redis.Sadd(nodeScenesKey(newNode), sceneStr)
+	svcCtx.Redis.Sadd(nodeScenesKey(zoneId, newNode), sceneStr)
 }
 
 // GetAllWorldChannels returns all channel sceneIds for a confId in a zone.
@@ -466,7 +484,7 @@ func markNodeDead(svcCtx *svc.ServiceContext, zoneId uint32, nodeId string, dead
 	svcCtx.Redis.Zrem(loadKey, nodeId)
 
 	// Remove cached gRPC connection (stale endpoint).
-	RemoveNodeConn(nodeId)
+	RemoveNodeConn(zoneId, nodeId)
 
 	logx.Infof("[World] Marked node %s as dead (zone %d), removed from load set", nodeId, zoneId)
 }

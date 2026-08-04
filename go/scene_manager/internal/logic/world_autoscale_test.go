@@ -211,8 +211,8 @@ func TestAutoscale_DrainedChannelIsCleanedUp(t *testing.T) {
 	sc, mr := newAutoscaleCtx(t)
 	sc.Redis.Zadd(testLoadKey(), 0, "10")
 	seedChannels(t, sc, testZoneId, autoscaleTestConfID, map[uint64]int64{101: 1500, 102: 40})
-	sc.Redis.Sadd(nodeScenesKey("10"), "102")
-	sc.Redis.Set(fmt.Sprintf(NodeSceneCountKey, "10"), "2")
+	sc.Redis.Sadd(nodeScenesKey(testZoneId, "10"), "102")
+	sc.Redis.Set(nodeSceneCountKey(testZoneId, "10"), "2")
 
 	ctx := context.Background()
 	AutoscaleWorldChannelsForZone(ctx, sc, testZoneId)
@@ -228,10 +228,10 @@ func TestAutoscale_DrainedChannelIsCleanedUp(t *testing.T) {
 	draining, _ := sc.Redis.Smembers(worldDrainingSetKey(testZoneId, autoscaleTestConfID))
 	assert.NotContains(t, draining, "102")
 
-	nodeScenes, _ := sc.Redis.Smembers(nodeScenesKey("10"))
+	nodeScenes, _ := sc.Redis.Smembers(nodeScenesKey(testZoneId, "10"))
 	assert.NotContains(t, nodeScenes, "102")
 
-	cnt, _ := sc.Redis.Get(fmt.Sprintf(NodeSceneCountKey, "10"))
+	cnt, _ := sc.Redis.Get(nodeSceneCountKey(testZoneId, "10"))
 	assert.Equal(t, "1", cnt, "node scene_count 必须减回去")
 }
 

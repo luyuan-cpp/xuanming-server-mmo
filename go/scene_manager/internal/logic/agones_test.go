@@ -205,12 +205,12 @@ func TestMain(m *testing.M) {
 	scenenodepb.RegisterSceneNodeGrpcServer(srv, sharedFakeSceneNode)
 	go func() { _ = srv.Serve(lis) }()
 
-	restoreResolver := SetNodeEndpointResolverForTest(func(nodeId string) (string, bool) {
+	restoreResolver := SetNodeEndpointResolverForTest(func(zoneId uint32, nodeId string) (string, bool) {
 		// 已经在 knownNodes 里注册过的节点走真实解析 —— integration 用例
 		// 靠 "bufnet:<nodeId>" 把不同节点路由到各自的 bufconn listener,
 		// 一律 catch-all 会把它们的路由拍平,断言"CreateScene 打到了新节点"
 		// 之类的用例就失去意义了。
-		if ep, ok := resolveFromKnownNodes(nodeId); ok {
+		if ep, ok, err := resolveFromKnownNodes(zoneId, nodeId); err == nil && ok {
 			return ep, true
 		}
 		return "bufnet:" + nodeId, true
@@ -448,7 +448,7 @@ func TestCreateScene_NodeRpcFails_RollsBackRedisAndCounter(t *testing.T) {
 	assert.False(t, mr.Exists(fmt.Sprintf(SceneNodeKeyFmt, resp.SceneId)))
 
 	// 节点 scene_count 必须减回去,否则负载分数永久偏高。
-	cnt, _ := sc.Redis.Get(fmt.Sprintf(NodeSceneCountKey, "10"))
+	cnt, _ := sc.Redis.Get(nodeSceneCountKey(testZoneId, "10"))
 	assert.Contains(t, []string{"0", ""}, cnt, "node scene_count must be restored, got %q", cnt)
 }
 
@@ -676,7 +676,7 @@ func TestReconcile_DetectsCounterDrift(t *testing.T) {
 	)
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeInstance)
-	sc.Redis.Set(fmt.Sprintf(NodeSceneCountKey, "10"), "1")
+	sc.Redis.Set(nodeSceneCountKey(testZoneId, "10"), "1")
 
 	drift := ReconcileAgonesRoomsForZone(context.Background(), sc, testZoneId)
 	assert.Equal(t, 1, drift)
@@ -691,7 +691,7 @@ func TestReconcile_NoDriftWhenConsistent(t *testing.T) {
 	)
 	withAgones(t, sc, alloc, true)
 	bindPodIP(t, "10", "10.0.0.8", testZoneId, constants.SceneNodeTypeInstance)
-	sc.Redis.Set(fmt.Sprintf(NodeSceneCountKey, "10"), "2")
+	sc.Redis.Set(nodeSceneCountKey(testZoneId, "10"), "2")
 
 	assert.Equal(t, 0, ReconcileAgonesRoomsForZone(context.Background(), sc, testZoneId))
 }

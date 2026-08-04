@@ -154,7 +154,7 @@ func cleanupZoneIdleInstances(ctx context.Context, svcCtx *svc.ServiceContext, z
 //     return early without issuing the C++ DestroyScene RPC.
 //   - Cascades into any mirrors whose source is this scene (reads
 //     scene:{id}:mirrors BEFORE destroying so the set is still live).
-//   - Un-links this scene from node:{nodeId}:scenes and (if it is itself
+//   - Un-links this scene from node:zone:{zoneId}:{nodeId}:scenes and (if it is itself
 //     a mirror) from scene:{sourceId}:mirrors.
 //
 // force=true skips the atomic idle check and forcibly destroys even
@@ -270,16 +270,16 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	// Notify C++ node to destroy the ECS scene entity (skip if node is
 	// already dead — the entity died with the process).
 	if nodeId != "" && IsNodeAlive(svcCtx, zoneId, nodeId) {
-		if err := RequestNodeDestroyScene(ctx, svcCtx, nodeId, sceneId); err != nil {
+		if err := RequestNodeDestroyScene(ctx, svcCtx, zoneId, nodeId, sceneId); err != nil {
 			logx.Errorf("[InstanceLifecycle] Failed to call DestroyScene on node %s for scene %d: %v", nodeId, sceneId, err)
 		}
 	}
 
 	// Unlink reverse indexes. Both SREMs are best-effort: the node-death
 	// reconciliation loop double-checks scene:{id}:node before destroying
-	// again, so a stale entry in node:{id}:scenes is harmless.
+	// again, so a stale entry in node:zone:{zoneId}:{nodeId}:scenes is harmless.
 	if nodeId != "" {
-		svcCtx.Redis.Srem(nodeScenesKey(nodeId), sceneIdStr)
+		svcCtx.Redis.Srem(nodeScenesKey(zoneId, nodeId), sceneIdStr)
 	}
 	if sourceId > 0 {
 		svcCtx.Redis.Srem(sceneMirrorsKey(sourceId), sceneIdStr)
@@ -287,11 +287,11 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 
 	// Decrement node counters.
 	if nodeId != "" {
-		sceneCountKey := fmt.Sprintf(NodeSceneCountKey, nodeId)
+		sceneCountKey := nodeSceneCountKey(zoneId, nodeId)
 		svcCtx.Redis.Incrby(sceneCountKey, -1)
 
 		if residual > 0 {
-			playerCountKey := fmt.Sprintf(NodePlayerCountKey, nodeId)
+			playerCountKey := nodePlayerCountKey(zoneId, nodeId)
 			newVal, err := svcCtx.Redis.Incrby(playerCountKey, -residual)
 			if err == nil && newVal < 0 {
 				svcCtx.Redis.Set(playerCountKey, "0")
@@ -323,17 +323,17 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 // Call order matters: scene counter first, then per-node aggregate. The
 // two writes are not atomic — a crash between them skews the per-node
 // counter by at most one, which the zset score refresher smooths out.
-func IncrInstancePlayerCount(svcCtx *svc.ServiceContext, sceneId uint64) {
+func IncrInstancePlayerCount(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) {
 	svcCtx.Redis.Incr(fmt.Sprintf(InstancePlayerCountKey, sceneId))
 	if nodeId := lookupSceneNode(svcCtx, sceneId); nodeId != "" {
-		svcCtx.Redis.Incr(fmt.Sprintf(NodePlayerCountKey, nodeId))
+		svcCtx.Redis.Incr(nodePlayerCountKey(zoneId, nodeId))
 	}
 }
 
 // DecrInstancePlayerCount mirrors IncrInstancePlayerCount. Both counters
 // are clamped to 0 so a missed EnterScene or a stale LeaveScene can't drive
 // them negative.
-func DecrInstancePlayerCount(svcCtx *svc.ServiceContext, sceneId uint64) {
+func DecrInstancePlayerCount(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) {
 	key := fmt.Sprintf(InstancePlayerCountKey, sceneId)
 	val, err := svcCtx.Redis.Incrby(key, -1)
 	if err == nil && val < 0 {
@@ -341,7 +341,7 @@ func DecrInstancePlayerCount(svcCtx *svc.ServiceContext, sceneId uint64) {
 	}
 
 	if nodeId := lookupSceneNode(svcCtx, sceneId); nodeId != "" {
-		nodeKey := fmt.Sprintf(NodePlayerCountKey, nodeId)
+		nodeKey := nodePlayerCountKey(zoneId, nodeId)
 		nodeVal, err := svcCtx.Redis.Incrby(nodeKey, -1)
 		if err == nil && nodeVal < 0 {
 			svcCtx.Redis.Set(nodeKey, "0")

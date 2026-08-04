@@ -17,10 +17,10 @@ type rebalanceDebugResponse struct {
 }
 
 type zoneRebalanceDebug struct {
-	ZoneID        uint32              `json:"zone_id"`
-	Budget        int                 `json:"budget"`
-	Urgent        []migrationDebug    `json:"urgent"`
-	Opportunistic []migrationDebug    `json:"opportunistic"`
+	ZoneID        uint32           `json:"zone_id"`
+	Budget        int              `json:"budget"`
+	Urgent        []migrationDebug `json:"urgent"`
+	Opportunistic []migrationDebug `json:"opportunistic"`
 }
 
 type migrationDebug struct {
