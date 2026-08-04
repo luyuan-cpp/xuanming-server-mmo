@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 	"testing"
+	"time"
 
 	"data_service/internal/config"
 	"data_service/internal/constants"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
@@ -173,6 +175,68 @@ func TestSavePlayerData_VersionCheck_Mismatch(t *testing.T) {
 	assert.Equal(t, constants.ErrCodeVersionMismatch, resp.ErrorCode)
 }
 
+func TestSaveFieldsAtomic_ExpiredOwnerCannotWrite(t *testing.T) {
+	svcCtx, mr := newTestSvcCtx(t)
+	ctx := context.Background()
+	setupPlayer(t, svcCtx, 31, 1)
+	client, err := svcCtx.Router.ClientForPlayer(ctx, 31)
+	require.NoError(t, err)
+
+	staleToken, locked, err := svcCtx.Router.AcquirePlayerLock(ctx, client, 31)
+	require.NoError(t, err)
+	require.True(t, locked)
+
+	// 让双锁都过期，再由后来者取得同一玩家的锁。
+	mr.FastForward(4 * time.Second)
+	currentToken, locked, err := svcCtx.Router.AcquirePlayerLock(ctx, client, 31)
+	require.NoError(t, err)
+	require.True(t, locked)
+	t.Cleanup(func() { _ = svcCtx.Router.ReleasePlayerLock(ctx, client, 31, currentToken) })
+
+	status, _, err := saveFieldsAtomic(ctx, client, 31, staleToken, 0,
+		map[string][]byte{"hp": []byte("stale")})
+	require.NoError(t, err)
+	assert.Equal(t, saveFieldsLockLost, status)
+
+	value, err := GetPlayerField(ctx, svcCtx, 31, "hp")
+	require.NoError(t, err)
+	assert.Nil(t, value, "TTL 后恢复的旧持锁者不得写入任何字段")
+
+	status, _, err = saveFieldsAtomic(ctx, client, 31, currentToken, 0,
+		map[string][]byte{"hp": []byte("current")})
+	require.NoError(t, err)
+	assert.Equal(t, saveFieldsOK, status)
+}
+
+func TestInternalLockFieldCannotBeReadOrOverwritten(t *testing.T) {
+	svcCtx, _ := newTestSvcCtx(t)
+	ctx := context.Background()
+	setupPlayer(t, svcCtx, 32, 1)
+	client, err := svcCtx.Router.ClientForPlayer(ctx, 32)
+	require.NoError(t, err)
+	token, locked, err := svcCtx.Router.AcquirePlayerLock(ctx, client, 32)
+	require.NoError(t, err)
+	require.True(t, locked)
+	t.Cleanup(func() { _ = svcCtx.Router.ReleasePlayerLock(ctx, client, 32, token) })
+
+	loaded, err := LoadPlayerData(ctx, svcCtx, &LoadPlayerDataReq{PlayerID: 32})
+	require.NoError(t, err)
+	assert.NotContains(t, loaded.Data, "__lock", "distributed-lock token must never leak as player data")
+
+	explicit, err := LoadPlayerData(ctx, svcCtx, &LoadPlayerDataReq{PlayerID: 32, Fields: []string{"__lock"}})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrCodeInvalidRequest, explicit.ErrorCode)
+
+	saveResp, err := SavePlayerData(ctx, svcCtx, &SavePlayerDataReq{
+		PlayerID: 32,
+		Data:     map[string][]byte{"__lock": []byte("attacker")},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrCodeInvalidRequest, saveResp.ErrorCode)
+	assert.Equal(t, token, client.Get(ctx, routing.PlayerDataLockKey(32)).Val(),
+		"reserved-field validation must leave the real lock token untouched")
+}
+
 // ── GetPlayerField / SetPlayerField ────────────────────────────
 
 func TestGetSetPlayerField(t *testing.T) {
@@ -266,4 +330,43 @@ func TestDeletePlayerData_WithZoneMapping(t *testing.T) {
 	// Zone mapping should be gone
 	_, err = svcCtx.Router.GetPlayerHomeZone(ctx, 70)
 	assert.Error(t, err)
+}
+
+func TestDeletePlayerData_ExpiredOwnerCannotDeleteDataOrMapping(t *testing.T) {
+	svcCtx, mr := newTestSvcCtx(t)
+	ctx := context.Background()
+	setupPlayer(t, svcCtx, 71, 2)
+
+	_, err := SavePlayerData(ctx, svcCtx, &SavePlayerDataReq{
+		PlayerID: 71,
+		Data:     map[string][]byte{"inventory": []byte("current")},
+	})
+	require.NoError(t, err)
+	client, err := svcCtx.Router.ClientForPlayer(ctx, 71)
+	require.NoError(t, err)
+
+	staleToken, locked, err := svcCtx.Router.AcquirePlayerLock(ctx, client, 71)
+	require.NoError(t, err)
+	require.True(t, locked)
+	mr.FastForward(4 * time.Second)
+	currentToken, locked, err := svcCtx.Router.AcquirePlayerLock(ctx, client, 71)
+	require.NoError(t, err)
+	require.True(t, locked)
+	t.Cleanup(func() { _ = svcCtx.Router.ReleasePlayerLock(ctx, client, 71, currentToken) })
+
+	owned, err := deletePlayerKeysAtomic(ctx, client, routing.PlayerDataLockKey(71), staleToken,
+		[]string{playerField(71, "inventory")})
+	require.NoError(t, err)
+	assert.False(t, owned)
+
+	owned, _, err = svcCtx.Router.DeletePlayerZoneIfLocked(ctx, 71, staleToken)
+	require.NoError(t, err)
+	assert.False(t, owned)
+
+	value, err := GetPlayerField(ctx, svcCtx, 71, "inventory")
+	require.NoError(t, err)
+	assert.Equal(t, []byte("current"), value)
+	zone, err := svcCtx.Router.GetPlayerHomeZone(ctx, 71)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(2), zone)
 }

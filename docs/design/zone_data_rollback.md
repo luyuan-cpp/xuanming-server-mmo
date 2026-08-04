@@ -3,8 +3,13 @@
 ## 概述
 
 Zone 数据回档分两个层面：
-1. **应用级回档**（已实现）：通过 `RollbackZone` RPC，从快照恢复玩家数据
+1. **应用级回档**（RPC/逻辑骨架已实现，生产执行暂停）：通过 `RollbackZone` RPC，从快照恢复玩家数据
 2. **灾难恢复级**（Ops 操作）：MySQL PITR + Redis flush + Kafka offset reset
+
+> **当前安全状态（2026-08-03）**：应用级 `RollbackPlayer` / `RollbackZone` /
+> `RollbackAll` 在生产 `ServiceContext` 中没有可用的跨服务离线 epoch 栅栏，
+> 因此会以 `error_code=16 (NotImplemented)` **fail-closed**，不修改任何玩家
+> 数据。这不是“先查一次玩家是否在线”能代替的问题。
 
 ---
 
@@ -20,6 +25,29 @@ Zone 数据回档分两个层面：
 
 ## 2. 整 Zone 应用级回档（`RollbackZone` RPC）
 
+### 必须先闭合的在线写栅栏
+
+当前 Scene 的后续存盘会经 Kafka 进入 `go/db` 并落 MySQL，而
+`data_service` 的应用级回档修改 Redis。如果只在回档前查一次
+“当前离线”，会同时存在两个窗口：
+
+- 查完后玩家可以重新登录/Scene 激活（TOCTOU）；
+- 旧 Scene epoch 在回档前已发出、但尚未落库的存盘，会在回档后
+  再次覆盖结果。
+
+因此 `RollbackFence` 的契约必须是原子的跨服务离线 epoch：
+
+1. 阻止目标 player/zone 的新登录和 Scene 激活；
+2. 让当前 Scene 下线并排空它已发出的 Kafka/DB 写；
+3. 存盘消息携带 epoch，DB 落库端拒绝旧 epoch；
+4. 栅栏覆盖“意图审计 → pre-rollback 安全快照 → 恢复 → 结果审计”
+   全过程，持久化完成后才释放。
+
+当前仓库尚没有 login / player_locator / Scene / db 共同实现这个协议。
+`data_service` 仅保留了可注入的契约接口；生产不注入实现，所以执行路径
+默认禁用。单元测试可注入 fake fence，验证缺栅栏、安全快照失败、
+审计失败时均不会静默继续。
+
 ### 设计决策：Guild/Friend 不回档
 
 **结论：Guild/Friend 数据不需要回档。**
@@ -31,31 +59,30 @@ Zone 数据回档分两个层面：
 - 即使存在时间差异（如玩家回档到加入公会前，但 guild_member 表仍有记录），
   这类不一致通过正常的 guild/friend 操作即可自愈（退出重进、重新申请等）
 
-### 孤儿角色处理
+### 无快照角色处理（fail-closed）
 
-> 回档的话新创建角色这种你回档了角色还在吗？
-
-**不在，也不重新创建。**
+`RollbackZone` **不会再自动删除任何无快照角色**。快照只在 GM、事件和回档
+安全点产生，仓库内没有周期性快照任务；因此“目标时间前没有快照”不能证明
+“角色是在目标时间后创建的”。把两者等同会删除大量正常老玩家。
 
 | 情况 | 处理 |
 |------|------|
 | T 之前创建的角色 | 从 player_snapshot 恢复数据 ✅ |
-| T 之后创建的角色（孤儿） | 无快照 → 删除 zone mapping → 玩家下次登录重新创建角色 |
-| 孤儿角色的 Redis 数据 | 通过 `DeletePlayerData` 清理（zone mapping + Redis keys） |
-| 孤儿角色的 guild/friend | 留原样，自然自愈；公会踢人/解散时自动清理不存在的成员 |
+| 目标时间前没有快照的角色 | 仅列入 `orphan_player_ids` 候选名单，不恢复、不删除 |
+| 候选角色的 Redis / zone mapping | 保持原样 |
+| 候选角色的账号 / guild / friend | 保持原样 |
 
-**不创建孤儿角色的理由**：
-- 孤儿角色的数据在回档目标时间点不存在，没有有效数据可恢复
-- 自动创建空角色 = 创建一个 0 级空数据角色，没有实际意义
-- 让玩家正常走创建角色流程更合理（选职业、名字等）
+字段名 `orphan_player_ids` 为保持 wire compatibility 暂不改名；它的当前语义是
+“需要人工核对的无快照候选”，**不是已确认的新建角色，更不是已清理结果**。
+`orphans_cleaned` 恒为 0。若以后恢复自动清理，必须先引入权威角色创建时间，
+并走独立审批、pre-delete 快照和可恢复删除流程。
 
-**不创建可能的问题**：
-- 如果 zone mapping 未清理，login 路由到空数据 → C++ LoadPlayerData 可能崩溃
-- 解决方案：orphan cleanup 阶段必须清理 zone mapping
-
-### 执行流程（2 阶段）
+### 执行流程（栅栏落地后，2 阶段）
 
 ```
+Preflight: 获取跨服务离线 epoch 栅栏 + 写 STARTED 审计
+→ 任一前置失败则停止，零玩家数据变更
+
 Phase 1: 恢复 player 数据
 ────────────────────────
 遍历 zone 内所有有快照的 player
@@ -63,42 +90,34 @@ Phase 1: 恢复 player 数据
 → 创建 pre-rollback 安全快照
 → 用 snapshot 数据覆盖 Redis
 
-Phase 2: 清理孤儿角色
+Phase 2: 报告无快照候选
 ──────────────────────
 SCAN mapping Redis, 找到该 zone 下所有有 zone mapping 的 player
-→ 对比 snapshot 中的 player 列表，得到差集（孤儿）
-→ 删除孤儿的 Redis 数据 + zone mapping
-→ 玩家下次登录时因 zone mapping 不存在而走创建角色流程
+→ 对比 snapshot 中的 player 列表，得到差集（候选）
+→ 将候选写入响应，所有数据和映射保持不变
+
+Finalize: 写 RESULT 审计 → 释放 epoch 栅栏
 ```
 
 ### 代码位置
 
 | 文件 | 作用 |
 |------|------|
-| `go/data_service/internal/logic/rollback_logic.go` | RollbackZone（player 回档 + 孤儿清理 + 调用 login 清理账号） |
+| `go/data_service/internal/logic/rollback_logic.go` | RollbackZone（player 回档 + 无快照候选报告） |
 | `go/data_service/internal/routing/router.go` | GetAllPlayerIDsInZone（SCAN mapping Redis） |
 | `go/data_service/internal/store/snapshot_store.go` | player_snapshot + rollback_audit_log CRUD |
-| `go/data_service/internal/svc/servicecontext.go` | LoginAdminClient gRPC（通过 etcd 发现 login 服务） |
 | `proto/data_service/data_service.proto` | RollbackZone RPC 定义 |
-| `go/login/internal/logic/admin/remove_players_from_accounts.go` | 从账号记录中批量移除孤儿 player ID |
-| `go/login/internal/server/loginadmin/loginadminserver.go` | LoginAdmin gRPC server handler |
-| `go/login/internal/constants/login_constants.go` | player→account 反向索引 key |
-| `proto/login/login.proto` | LoginAdmin / RemovePlayersFromAccounts RPC 定义 |
 
 ### 跨服务调用链
 
 ```
 RollbackZone (data_service)
+  ├── RollbackFence: 阻断新会话 + 排空/拒绝旧 epoch 存盘（尚未落地）
   ├── Phase 1: 恢复每个 player 的 Redis 数据（从 snapshot）
-  ├── Phase 2: 删除孤儿角色的 Redis 数据 + zone mapping
-  └── Phase 2b: gRPC → login.RemovePlayersFromAccounts
-                  ├── 查 player_to_account:{pid} 反向索引 → 获取 account name
-                  ├── 从 account:{name} 的 SimplePlayers 列表中移除孤儿 pid
-                  └── 删除 player_to_account:{pid} 反向索引
+  └── Phase 2: 返回无快照候选名单（零删除、零账号变更）
 ```
 
-> **容错设计**：Phase 2b 为 non-fatal。如果 LoginAdminClient 未配置或 RPC 失败，
-> 孤儿 ID 仍会在 RollbackZoneResponse.orphan_player_ids 中返回，供外部工具手动重试。
+> **安全边界**：候选名单只能用于人工核对，调用方不得把它解释成“已经清理”。
 
 ---
 
@@ -173,6 +192,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up \
 | Kafka offset 回档工具 | ✅ **已落地 (2026-05-15)** | `tools/scripts/kafka_offset_reset.ps1`(支持 to-datetime / to-earliest / to-latest / delete-and-recreate-topic 4 种模式,默认 dry-run),注册为 `dev_tools.ps1 -Command kafka-offset-reset` | ~~中~~ |
 | 一键 zone 回档脚本 | ✅ **已落地 (2026-05-15)** | `tools/scripts/k8s_zone_rollback.ps1`(7 步:zone-down / Kafka drain / MySQL PITR 提示暂停 / Redis FLUSHDB / kafka-offset-reset / zone-up / 验证清单),注册为 `dev_tools.ps1 -Command k8s-zone-rollback`,默认 dry-run | ~~中~~ |
 | 备份异地归档(S3/OSS) | 未做 | PVC 只防 pod 重启,不防整个集群 / 机房挂 | 高(生产前必做) |
+| 跨服务离线 epoch 回档栅栏 | 未做（应用级回档 fail-closed） | login/player_locator 阻断新会话，Scene 排空存盘，Kafka/db 携带并校验 epoch | P0（重启应用级回档前） |
 
 ---
 

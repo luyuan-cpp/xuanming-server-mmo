@@ -8,6 +8,7 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/stores/redis"
 )
 
@@ -141,21 +142,54 @@ func TestRemapHomeZoneForMerge_Apply(t *testing.T) {
 func TestAcquireAndReleasePlayerLock(t *testing.T) {
 	r, _ := newTestRouter(t)
 	ctx := context.Background()
+	client, err := r.ClientForZone(1)
+	require.NoError(t, err)
 
-	ok, err := r.AcquirePlayerLock(ctx, 123)
+	token, ok, err := r.AcquirePlayerLock(ctx, client, 123)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+	assert.NotEmpty(t, token)
+
+	// Second acquire should fail
+	token2, ok2, err := r.AcquirePlayerLock(ctx, client, 123)
+	assert.NoError(t, err)
+	assert.False(t, ok2)
+	assert.Empty(t, token2)
+
+	// Release and re-acquire should succeed
+	err = r.ReleasePlayerLock(ctx, client, 123, token)
+	assert.NoError(t, err)
+
+	token3, ok3, err := r.AcquirePlayerLock(ctx, client, 123)
+	assert.NoError(t, err)
+	assert.True(t, ok3)
+	assert.NotEmpty(t, token3)
+}
+
+// TestReleasePlayerLock_WrongTokenDoesNotUnlock 覆盖修复本身:
+// 前任持锁者(锁已过期/被顶替)的释放不得删掉现任的锁。
+func TestReleasePlayerLock_WrongTokenDoesNotUnlock(t *testing.T) {
+	r, _ := newTestRouter(t)
+	ctx := context.Background()
+	client, err := r.ClientForZone(1)
+	require.NoError(t, err)
+
+	staleToken := "not-the-owner"
+	token, ok, err := r.AcquirePlayerLock(ctx, client, 456)
 	assert.NoError(t, err)
 	assert.True(t, ok)
 
-	// Second acquire should fail
-	ok2, err := r.AcquirePlayerLock(ctx, 123)
-	assert.NoError(t, err)
-	assert.False(t, ok2)
-
-	// Release and re-acquire should succeed
-	err = r.ReleasePlayerLock(ctx, 123)
+	// 拿着错 token 释放:不报错,但锁必须还在
+	err = r.ReleasePlayerLock(ctx, client, 456, staleToken)
 	assert.NoError(t, err)
 
-	ok3, err := r.AcquirePlayerLock(ctx, 123)
+	_, ok2, err := r.AcquirePlayerLock(ctx, client, 456)
+	assert.NoError(t, err)
+	assert.False(t, ok2, "lock must survive a release attempt with a stale token")
+
+	// 正主释放后才可再次获取
+	assert.NoError(t, r.ReleasePlayerLock(ctx, client, 456, token))
+	_, ok3, err := r.AcquirePlayerLock(ctx, client, 456)
 	assert.NoError(t, err)
 	assert.True(t, ok3)
 }

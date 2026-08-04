@@ -31,27 +31,23 @@ Zone 数据回档分两个层面：
 - 即使存在时间差异（如玩家回档到加入公会前，但 guild_member 表仍有记录），
   这类不一致通过正常的 guild/friend 操作即可自愈（退出重进、重新申请等）
 
-### 孤儿角色处理
+### 无快照角色处理（fail-closed）
 
-> 回档的话新创建角色这种你回档了角色还在吗？
-
-**不在，也不重新创建。**
+`RollbackZone` **不会再自动删除任何无快照角色**。快照只在 GM、事件和回档
+安全点产生，仓库内没有周期性快照任务；因此“目标时间前没有快照”不能证明
+“角色是在目标时间后创建的”。把两者等同会删除大量正常老玩家。
 
 | 情况 | 处理 |
 |------|------|
 | T 之前创建的角色 | 从 player_snapshot 恢复数据 ✅ |
-| T 之后创建的角色（孤儿） | 无快照 → 删除 zone mapping → 玩家下次登录重新创建角色 |
-| 孤儿角色的 Redis 数据 | 通过 `DeletePlayerData` 清理（zone mapping + Redis keys） |
-| 孤儿角色的 guild/friend | 留原样，自然自愈；公会踢人/解散时自动清理不存在的成员 |
+| 目标时间前没有快照的角色 | 仅列入 `orphan_player_ids` 候选名单，不恢复、不删除 |
+| 候选角色的 Redis / zone mapping | 保持原样 |
+| 候选角色的账号 / guild / friend | 保持原样 |
 
-**不创建孤儿角色的理由**：
-- 孤儿角色的数据在回档目标时间点不存在，没有有效数据可恢复
-- 自动创建空角色 = 创建一个 0 级空数据角色，没有实际意义
-- 让玩家正常走创建角色流程更合理（选职业、名字等）
-
-**不创建可能的问题**：
-- 如果 zone mapping 未清理，login 路由到空数据 → C++ LoadPlayerData 可能崩溃
-- 解决方案：orphan cleanup 阶段必须清理 zone mapping
+字段名 `orphan_player_ids` 为保持 wire compatibility 暂不改名；它的当前语义是
+“需要人工核对的无快照候选”，**不是已确认的新建角色，更不是已清理结果**。
+`orphans_cleaned` 恒为 0。若以后恢复自动清理，必须先引入权威角色创建时间，
+并走独立审批、pre-delete 快照和可恢复删除流程。
 
 ### 执行流程（2 阶段）
 
@@ -63,42 +59,31 @@ Phase 1: 恢复 player 数据
 → 创建 pre-rollback 安全快照
 → 用 snapshot 数据覆盖 Redis
 
-Phase 2: 清理孤儿角色
+Phase 2: 报告无快照候选
 ──────────────────────
 SCAN mapping Redis, 找到该 zone 下所有有 zone mapping 的 player
-→ 对比 snapshot 中的 player 列表，得到差集（孤儿）
-→ 删除孤儿的 Redis 数据 + zone mapping
-→ 玩家下次登录时因 zone mapping 不存在而走创建角色流程
+→ 对比 snapshot 中的 player 列表，得到差集（候选）
+→ 将候选写入响应，所有数据和映射保持不变
 ```
 
 ### 代码位置
 
 | 文件 | 作用 |
 |------|------|
-| `go/data_service/internal/logic/rollback_logic.go` | RollbackZone（player 回档 + 孤儿清理 + 调用 login 清理账号） |
+| `go/data_service/internal/logic/rollback_logic.go` | RollbackZone（player 回档 + 无快照候选报告） |
 | `go/data_service/internal/routing/router.go` | GetAllPlayerIDsInZone（SCAN mapping Redis） |
 | `go/data_service/internal/store/snapshot_store.go` | player_snapshot + rollback_audit_log CRUD |
-| `go/data_service/internal/svc/servicecontext.go` | LoginAdminClient gRPC（通过 etcd 发现 login 服务） |
 | `proto/data_service/data_service.proto` | RollbackZone RPC 定义 |
-| `go/login/internal/logic/admin/remove_players_from_accounts.go` | 从账号记录中批量移除孤儿 player ID |
-| `go/login/internal/server/loginadmin/loginadminserver.go` | LoginAdmin gRPC server handler |
-| `go/login/internal/constants/login_constants.go` | player→account 反向索引 key |
-| `proto/login/login.proto` | LoginAdmin / RemovePlayersFromAccounts RPC 定义 |
 
 ### 跨服务调用链
 
 ```
 RollbackZone (data_service)
   ├── Phase 1: 恢复每个 player 的 Redis 数据（从 snapshot）
-  ├── Phase 2: 删除孤儿角色的 Redis 数据 + zone mapping
-  └── Phase 2b: gRPC → login.RemovePlayersFromAccounts
-                  ├── 查 player_to_account:{pid} 反向索引 → 获取 account name
-                  ├── 从 account:{name} 的 SimplePlayers 列表中移除孤儿 pid
-                  └── 删除 player_to_account:{pid} 反向索引
+  └── Phase 2: 返回无快照候选名单（零删除、零账号变更）
 ```
 
-> **容错设计**：Phase 2b 为 non-fatal。如果 LoginAdminClient 未配置或 RPC 失败，
-> 孤儿 ID 仍会在 RollbackZoneResponse.orphan_player_ids 中返回，供外部工具手动重试。
+> **安全边界**：候选名单只能用于人工核对，调用方不得把它解释成“已经清理”。
 
 ---
 

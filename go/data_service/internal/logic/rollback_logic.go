@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,7 +11,6 @@ import (
 	"data_service/internal/metrics"
 	"data_service/internal/store"
 	"data_service/internal/svc"
-	loginpb "proto/login"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -21,6 +21,80 @@ const (
 	rollbackTypeZone        uint32 = 2
 	rollbackTypeServer      uint32 = 3
 )
+
+func validateRollbackDependencies(svcCtx *svc.ServiceContext) (uint32, error) {
+	if svcCtx == nil {
+		return constants.ErrCodeSnapshotDBError, fmt.Errorf("service context is unavailable")
+	}
+	if svcCtx.SnapshotStore == nil {
+		return constants.ErrCodeSnapshotDBError, fmt.Errorf("snapshot/audit store is unavailable")
+	}
+	if svcCtx.Router == nil {
+		return constants.ErrCodeRedis, fmt.Errorf("player data router is unavailable")
+	}
+	return constants.ErrCodeOK, nil
+}
+
+func rollbackFenceErrorCode(err error) uint32 {
+	if errors.Is(err, svc.ErrRollbackTargetOnline) {
+		return constants.ErrCodePlayerOnline
+	}
+	return constants.ErrCodeRollbackFailed
+}
+
+func validateRollbackRelease(release func(), scope string) (func(), uint32, error) {
+	if release == nil {
+		return nil, constants.ErrCodeRollbackFailed,
+			fmt.Errorf("rollback fence for %s returned a nil release function", scope)
+	}
+	return release, constants.ErrCodeOK, nil
+}
+
+func acquirePlayerRollbackFence(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64) (func(), uint32, error) {
+	if svcCtx.RollbackFence == nil {
+		logx.Errorf("[Rollback] player %d rejected: cross-service offline epoch fence is not configured", playerID)
+		return nil, constants.ErrCodeNotImplemented, nil
+	}
+	release, err := svcCtx.RollbackFence.AcquirePlayer(ctx, playerID)
+	if err != nil {
+		return nil, rollbackFenceErrorCode(err), fmt.Errorf("acquire rollback fence for player %d: %w", playerID, err)
+	}
+	return validateRollbackRelease(release, fmt.Sprintf("player %d", playerID))
+}
+
+func acquireZoneRollbackFence(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32) (func(), uint32, error) {
+	if svcCtx.RollbackFence == nil {
+		logx.Errorf("[Rollback] zone %d rejected: cross-service offline epoch fence is not configured", zoneID)
+		return nil, constants.ErrCodeNotImplemented, nil
+	}
+	release, err := svcCtx.RollbackFence.AcquireZone(ctx, zoneID)
+	if err != nil {
+		return nil, rollbackFenceErrorCode(err), fmt.Errorf("acquire rollback fence for zone %d: %w", zoneID, err)
+	}
+	return validateRollbackRelease(release, fmt.Sprintf("zone %d", zoneID))
+}
+
+func acquireServerRollbackFence(ctx context.Context, svcCtx *svc.ServiceContext, zoneIDs []uint32) (func(), uint32, error) {
+	if svcCtx.RollbackFence == nil {
+		logx.Errorf("[Rollback] server rollback rejected: cross-service offline epoch fence is not configured")
+		return nil, constants.ErrCodeNotImplemented, nil
+	}
+	release, err := svcCtx.RollbackFence.AcquireServer(ctx, zoneIDs)
+	if err != nil {
+		return nil, rollbackFenceErrorCode(err), fmt.Errorf("acquire server rollback fence: %w", err)
+	}
+	return validateRollbackRelease(release, "server")
+}
+
+func insertRollbackAudit(ctx context.Context, svcCtx *svc.ServiceContext, row *store.AuditLogRow) error {
+	if svcCtx == nil || svcCtx.SnapshotStore == nil {
+		return fmt.Errorf("snapshot/audit store is unavailable")
+	}
+	if err := svcCtx.SnapshotStore.InsertAuditLog(ctx, row); err != nil {
+		return fmt.Errorf("insert rollback audit: %w", err)
+	}
+	return nil
+}
 
 // ── RollbackPlayer ─────────────────────────────────────────────
 
@@ -42,38 +116,70 @@ type RollbackPlayerResp struct {
 }
 
 func RollbackPlayer(ctx context.Context, svcCtx *svc.ServiceContext, req *RollbackPlayerReq) (*RollbackPlayerResp, error) {
-	if req.PlayerID == 0 {
+	if req == nil || req.PlayerID == 0 {
 		return &RollbackPlayerResp{ErrorCode: constants.ErrCodeInvalidRequest}, nil
 	}
 	if req.SnapshotID == 0 && req.TargetTime == 0 {
 		return &RollbackPlayerResp{ErrorCode: constants.ErrCodeInvalidRequest}, nil
 	}
-
-	resp, err := rollbackSinglePlayer(ctx, svcCtx, req)
-	if err != nil {
-		metrics.ObserveRollback("player", "failed", 0, 0)
-		logx.Errorf("[Rollback] player %d failed: %v", req.PlayerID, err)
-		return resp, err
+	if code, err := validateRollbackDependencies(svcCtx); err != nil {
+		return &RollbackPlayerResp{ErrorCode: code}, err
 	}
-	if resp.ErrorCode != constants.ErrCodeOK {
-		metrics.ObserveRollback("player", "failed", 0, 0)
+
+	release, code, err := acquirePlayerRollbackFence(ctx, svcCtx, req.PlayerID)
+	if code != constants.ErrCodeOK || err != nil {
+		return &RollbackPlayerResp{ErrorCode: code}, err
+	}
+	defer release()
+
+	// 先写请求意图再做任何修改：审计库不可用时，高风险回档必须零变更。
+	if err := insertRollbackAudit(ctx, svcCtx, &store.AuditLogRow{
+		PlayerID:     req.PlayerID,
+		RollbackType: rollbackTypePlayer,
+		TargetTime:   req.TargetTime,
+		Reason:       fmt.Sprintf("STARTED: %s", req.Reason),
+		Operator:     req.Operator,
+		CreatedAt:    uint64(time.Now().Unix()),
+	}); err != nil {
+		return &RollbackPlayerResp{ErrorCode: constants.ErrCodeSnapshotDBError},
+			fmt.Errorf("write player rollback intent audit: %w", err)
+	}
+
+	resp, rollbackErr := rollbackSinglePlayer(ctx, svcCtx, req)
+	if resp == nil {
+		resp = &RollbackPlayerResp{ErrorCode: constants.ErrCodeRollbackFailed}
+	}
+
+	var affected, failed uint32
+	if rollbackErr == nil && resp.ErrorCode == constants.ErrCodeOK {
+		affected = 1
 	} else {
-		metrics.ObserveRollback("player", "ok", 1, 0)
+		failed = 1
 	}
 
-	// Write audit log
-	now := uint64(time.Now().Unix())
-	_ = svcCtx.SnapshotStore.InsertAuditLog(ctx, &store.AuditLogRow{
+	if err := insertRollbackAudit(ctx, svcCtx, &store.AuditLogRow{
 		PlayerID:              req.PlayerID,
 		RollbackType:          rollbackTypePlayer,
 		SnapshotIDUsed:        resp.SnapshotIDUsed,
 		PreRollbackSnapshotID: resp.PreRollbackSnapshotID,
 		TargetTime:            req.TargetTime,
-		PlayersAffected:       1,
-		Reason:                req.Reason,
+		PlayersAffected:       affected,
+		PlayersFailed:         failed,
+		Reason:                fmt.Sprintf("RESULT code=%d: %s", resp.ErrorCode, req.Reason),
 		Operator:              req.Operator,
-		CreatedAt:             now,
-	})
+		CreatedAt:             uint64(time.Now().Unix()),
+	}); err != nil {
+		resp.ErrorCode = constants.ErrCodeSnapshotDBError
+		metrics.ObserveRollback("player", "failed", 0, 0)
+		return resp, fmt.Errorf("write player rollback result audit: %w", err)
+	}
+
+	if rollbackErr != nil || resp.ErrorCode != constants.ErrCodeOK {
+		metrics.ObserveRollback("player", "failed", 0, 0)
+		logx.Errorf("[Rollback] player %d failed: err=%v code=%d", req.PlayerID, rollbackErr, resp.ErrorCode)
+		return resp, rollbackErr
+	}
+	metrics.ObserveRollback("player", "ok", 1, 0)
 
 	logx.Infof("[Rollback] player %d restored from snapshot %d (pre-rollback=%d) by %s: %s",
 		req.PlayerID, resp.SnapshotIDUsed, resp.PreRollbackSnapshotID, req.Operator, req.Reason)
@@ -82,6 +188,10 @@ func RollbackPlayer(ctx context.Context, svcCtx *svc.ServiceContext, req *Rollba
 }
 
 func rollbackSinglePlayer(ctx context.Context, svcCtx *svc.ServiceContext, req *RollbackPlayerReq) (*RollbackPlayerResp, error) {
+	if code, err := validateRollbackDependencies(svcCtx); err != nil {
+		return &RollbackPlayerResp{ErrorCode: code}, err
+	}
+
 	// 1. Resolve target snapshot
 	snap, err := resolveSnapshot(ctx, svcCtx, req.PlayerID, req.SnapshotID, req.TargetTime)
 	if err != nil {
@@ -106,13 +216,26 @@ func rollbackSinglePlayer(ctx context.Context, svcCtx *svc.ServiceContext, req *
 		Operator:     req.Operator,
 	})
 	if err != nil {
-		logx.Errorf("[Rollback] failed to create pre-rollback snapshot for player %d: %v", req.PlayerID, err)
-		// Non-fatal — continue with rollback
+		code := constants.ErrCodeSnapshotDBError
+		if preSnap != nil && preSnap.ErrorCode != constants.ErrCodeOK {
+			code = preSnap.ErrorCode
+		}
+		return &RollbackPlayerResp{ErrorCode: code, SnapshotIDUsed: snap.ID},
+			fmt.Errorf("create pre-rollback safety snapshot for player %d: %w", req.PlayerID, err)
 	}
-	var preRollbackID uint64
-	if preSnap != nil && preSnap.ErrorCode == constants.ErrCodeOK {
-		preRollbackID = preSnap.SnapshotID
+	if preSnap == nil {
+		return &RollbackPlayerResp{ErrorCode: constants.ErrCodeSnapshotDBError, SnapshotIDUsed: snap.ID},
+			fmt.Errorf("create pre-rollback safety snapshot for player %d returned nil response", req.PlayerID)
 	}
+	if preSnap.ErrorCode != constants.ErrCodeOK {
+		return &RollbackPlayerResp{ErrorCode: preSnap.ErrorCode, SnapshotIDUsed: snap.ID},
+			fmt.Errorf("create pre-rollback safety snapshot for player %d failed with code %d", req.PlayerID, preSnap.ErrorCode)
+	}
+	if preSnap.SnapshotID == 0 {
+		return &RollbackPlayerResp{ErrorCode: constants.ErrCodeSnapshotDBError, SnapshotIDUsed: snap.ID},
+			fmt.Errorf("create pre-rollback safety snapshot for player %d returned snapshot id 0", req.PlayerID)
+	}
+	preRollbackID := preSnap.SnapshotID
 
 	// 4. Determine which fields to restore
 	fieldsToRestore := sd.Fields
@@ -171,18 +294,83 @@ type RollbackZoneReq struct {
 }
 
 type RollbackZoneResp struct {
-	ErrorCode        uint32
-	PlayersAffected  uint32
-	PlayersFailed    uint32
-	FailedPlayerIDs  []uint64
-	OrphanPlayerIDs  []uint64 // characters created after target_time, cleaned up
-	OrphansCleaned   uint32
+	ErrorCode       uint32
+	PlayersAffected uint32
+	PlayersFailed   uint32
+	FailedPlayerIDs []uint64
+	// OrphanPlayerIDs 是**候选**名单:zone 内当前存在、但在 target_time 之前没有
+	// 任何快照的玩家。它不代表这些角色确实是 target_time 之后创建的,也不代表
+	// 它们被删除了 —— 见 reportOrphanCandidates。
+	OrphanPlayerIDs []uint64
+	// OrphansCleaned 恒为 0:本服务不再自动删除孤儿候选。字段保留是为了不破坏
+	// 已有调用方与 proto 兼容性(只减少语义、不改编号)。
+	OrphansCleaned uint32
 }
 
 func RollbackZone(ctx context.Context, svcCtx *svc.ServiceContext, req *RollbackZoneReq) (*RollbackZoneResp, error) {
-	if req.ZoneID == 0 || req.TargetTime == 0 {
+	if req == nil || req.ZoneID == 0 || req.TargetTime == 0 {
 		return &RollbackZoneResp{ErrorCode: constants.ErrCodeInvalidRequest}, nil
 	}
+	if code, err := validateRollbackDependencies(svcCtx); err != nil {
+		return &RollbackZoneResp{ErrorCode: code}, err
+	}
+
+	release, code, err := acquireZoneRollbackFence(ctx, svcCtx, req.ZoneID)
+	if code != constants.ErrCodeOK || err != nil {
+		return &RollbackZoneResp{ErrorCode: code}, err
+	}
+	defer release()
+
+	resp, rollbackErr := rollbackZoneWithFenceHeld(ctx, svcCtx, req)
+	outcome := "ok"
+	if rollbackErr != nil || resp.ErrorCode != constants.ErrCodeOK {
+		outcome = "failed"
+	} else if resp.PlayersFailed > 0 && resp.PlayersAffected > 0 {
+		outcome = "partial"
+	} else if resp.PlayersFailed > 0 {
+		outcome = "failed"
+	}
+	metrics.ObserveRollback("zone", outcome, resp.PlayersAffected, resp.OrphansCleaned)
+	return resp, rollbackErr
+}
+
+// rollbackZoneWithFenceHeld 只能在上层持有 zone 或 server 级跨服务
+// 离线 epoch 栅栏时调用。它不会自行做一次有 TOCTOU 窗口的“在线查询”。
+func rollbackZoneWithFenceHeld(ctx context.Context, svcCtx *svc.ServiceContext, req *RollbackZoneReq) (result *RollbackZoneResp, retErr error) {
+	result = &RollbackZoneResp{}
+	if err := insertRollbackAudit(ctx, svcCtx, &store.AuditLogRow{
+		ZoneID:       req.ZoneID,
+		RollbackType: rollbackTypeZone,
+		TargetTime:   req.TargetTime,
+		Reason:       fmt.Sprintf("STARTED: %s", req.Reason),
+		Operator:     req.Operator,
+		CreatedAt:    uint64(time.Now().Unix()),
+	}); err != nil {
+		result.ErrorCode = constants.ErrCodeSnapshotDBError
+		return result, fmt.Errorf("write zone rollback intent audit: %w", err)
+	}
+
+	var affected, failed uint32
+	defer func() {
+		if result == nil {
+			result = &RollbackZoneResp{ErrorCode: constants.ErrCodeRollbackFailed}
+		}
+		auditErr := insertRollbackAudit(ctx, svcCtx, &store.AuditLogRow{
+			ZoneID:          req.ZoneID,
+			RollbackType:    rollbackTypeZone,
+			TargetTime:      req.TargetTime,
+			PlayersAffected: affected,
+			PlayersFailed:   failed,
+			OrphansCleaned:  0,
+			Reason:          fmt.Sprintf("RESULT code=%d: %s", result.ErrorCode, req.Reason),
+			Operator:        req.Operator,
+			CreatedAt:       uint64(time.Now().Unix()),
+		})
+		if auditErr != nil {
+			result.ErrorCode = constants.ErrCodeSnapshotDBError
+			retErr = fmt.Errorf("write zone rollback result audit: %w", auditErr)
+		}
+	}()
 
 	logx.Infof("[Rollback] zone=%d target_time=%d operator=%s reason=%s",
 		req.ZoneID, req.TargetTime, req.Operator, req.Reason)
@@ -201,10 +389,6 @@ func RollbackZone(ctx context.Context, svcCtx *svc.ServiceContext, req *Rollback
 		return &RollbackZoneResp{ErrorCode: constants.ErrCodeSnapshotDBError}, err
 	}
 
-	if len(playerIDs) == 0 {
-		return &RollbackZoneResp{ErrorCode: constants.ErrCodeZoneNotFound}, nil
-	}
-
 	logx.Infof("[Rollback] zone %d: found %d players to rollback", req.ZoneID, len(playerIDs))
 
 	// Build set for fast lookup
@@ -214,7 +398,6 @@ func RollbackZone(ctx context.Context, svcCtx *svc.ServiceContext, req *Rollback
 	}
 
 	// 2. Rollback each player
-	var affected, failed uint32
 	var failedIDs []uint64
 
 	for _, pid := range playerIDs {
@@ -234,113 +417,74 @@ func RollbackZone(ctx context.Context, svcCtx *svc.ServiceContext, req *Rollback
 		affected++
 	}
 
-	// ── Phase 2: Clean up orphan characters ────────────────────
-	// Characters created after target_time have no snapshot.
-	// Delete their zone mapping so login doesn't route to empty data.
-	orphanIDs, orphansCleaned := cleanupOrphanCharacters(ctx, svcCtx, req.ZoneID, snapshotPlayerSet)
-
-	// ── Phase 2b: Remove orphans from login accounts ───────────
-	// Call login admin to strip orphan player IDs from account records.
-	if len(orphanIDs) > 0 && svcCtx.LoginAdminClient != nil {
-		removeOrphansFromLoginAccounts(ctx, svcCtx, req.ZoneID, orphanIDs)
-	} else if len(orphanIDs) > 0 {
-		logx.Infof("[Rollback] zone %d: %d orphans found but LoginAdminClient not configured — account cleanup skipped (orphan IDs returned in response for external handling)",
-			req.ZoneID, len(orphanIDs))
+	// ── Phase 2: 报告孤儿候选(只报告,不删除)────────────────
+	orphanIDs, err := reportOrphanCandidates(ctx, svcCtx, req.ZoneID, snapshotPlayerSet)
+	if err != nil {
+		return &RollbackZoneResp{ErrorCode: constants.ErrCodeRedis}, err
 	}
-
-	// 3. Audit log
-	now := uint64(time.Now().Unix())
-	_ = svcCtx.SnapshotStore.InsertAuditLog(ctx, &store.AuditLogRow{
-		ZoneID:          req.ZoneID,
-		RollbackType:    rollbackTypeZone,
-		TargetTime:      req.TargetTime,
-		PlayersAffected: affected,
-		PlayersFailed:   failed,
-		OrphansCleaned:  orphansCleaned,
-		Reason:          req.Reason,
-		Operator:        req.Operator,
-		CreatedAt:       now,
-	})
+	// “无快照”不能提前等价成“zone 不存在”。先扫描当前映射，才能把整个
+	// 无快照 zone 的玩家全部作为候选返回。只有快照与当前映射都为空时才是空 zone。
+	if len(playerIDs) == 0 && len(orphanIDs) == 0 {
+		return &RollbackZoneResp{ErrorCode: constants.ErrCodeZoneNotFound}, nil
+	}
+	var orphansCleaned uint32 // 恒为 0:本服务不再据此删除任何玩家数据,见下方说明
 
 	logx.Infof("[Rollback] zone %d complete: affected=%d failed=%d orphans_cleaned=%d",
 		req.ZoneID, affected, failed, orphansCleaned)
 
-	// Metrics: outcome=ok if everyone succeeded, partial if any failures, failed if all failed
-	rbOutcome := "ok"
-	if failed > 0 && affected == 0 {
-		rbOutcome = "failed"
-	} else if failed > 0 {
-		rbOutcome = "partial"
-	}
-	metrics.ObserveRollback("zone", rbOutcome, affected, orphansCleaned)
-
 	return &RollbackZoneResp{
-		PlayersAffected:  affected,
-		PlayersFailed:    failed,
-		FailedPlayerIDs:  failedIDs,
-		OrphanPlayerIDs:  orphanIDs,
-		OrphansCleaned:   orphansCleaned,
+		PlayersAffected: affected,
+		PlayersFailed:   failed,
+		FailedPlayerIDs: failedIDs,
+		OrphanPlayerIDs: orphanIDs,
+		OrphansCleaned:  orphansCleaned,
 	}, nil
 }
 
-// cleanupOrphanCharacters removes Redis data and zone mappings for characters
-// that were created after the rollback target time (they have no snapshot).
-// Returns the list of orphan player IDs and the count of successfully cleaned.
-// The orphan list is needed for cross-service cleanup (e.g. login account removal).
-func cleanupOrphanCharacters(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, snapshotPlayerSet map[uint64]bool) ([]uint64, uint32) {
+// reportOrphanCandidates 列出「zone 内当前存在、但在 target_time 之前没有任何快照」
+// 的玩家,**只报告,不做任何删除**。
+//
+// 为什么改成只报告(这里原来会硬删,是一条 P0):
+//
+//	判定依据 GetSnapshotPlayerIDsByZone 查的是 `player_snapshot WHERE zone_id=? AND
+//	created_at<=?`,也就是"该玩家在这个 zone 有一份 target_time 之前的快照"。
+//	而快照**只在显式触发时才产生** —— CreatePlayerSnapshot / CreateEventSnapshot 的
+//	GM 调用,加上回档自己打的 pre-rollback 安全快照;全仓没有任何周期性快照任务。
+//	于是"没有快照"根本不等于"target_time 之后才创建":
+//	  * 从没触发过快照事件的普通老玩家 —— 绝大多数玩家都是这一类;
+//	  * 快照已被 DeleteOldSnapshots 按保留期删掉的老玩家;
+//	  * 从别的 zone 迁过来、历史快照的 zone_id 还停在旧 zone 的玩家。
+//
+//	旧实现对这些人执行 DeletePlayerData(DeleteZoneMapping=true) 并调 login
+//	RemovePlayersFromAccounts 把角色从账号里摘掉,而且**不走** rollbackSinglePlayer
+//	的 pre-rollback 安全快照 —— 删完无从恢复。一次例行的 zone 回档就能把整个 zone
+//	的老玩家抹掉。
+//
+// 要恢复自动清理,前提是拿到**权威的角色创建时间**(login/account 记录,或玩家数据
+// 里的 created_at 字段)并按它判定,而不是拿快照存在性当代理;在那之前这里 fail-closed。
+// 候选名单仍然通过响应的 OrphanPlayerIDs 返回,供人工核对后走单独的删除工具。
+func reportOrphanCandidates(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, snapshotPlayerSet map[uint64]bool) ([]uint64, error) {
 	currentPlayers, err := svcCtx.Router.GetAllPlayerIDsInZone(ctx, zoneID)
 	if err != nil {
-		logx.Errorf("[Rollback] zone %d: failed to scan current players for orphan cleanup: %v", zoneID, err)
-		return nil, 0
+		logx.Errorf("[Rollback] zone %d: failed to scan current players for orphan report: %v", zoneID, err)
+		return nil, fmt.Errorf("scan zone %d orphan candidates: %w", zoneID, err)
 	}
 
 	var orphanIDs []uint64
-	var cleaned uint32
 	for _, pid := range currentPlayers {
 		if snapshotPlayerSet[pid] {
-			continue // existed at snapshot time — not an orphan
+			continue // 在 target_time 之前有快照,肯定不是新建角色
 		}
-
 		orphanIDs = append(orphanIDs, pid)
-
-		// This player was created after the snapshot time → orphan
-		logx.Infof("[Rollback] zone %d: cleaning up orphan character %d", zoneID, pid)
-
-		// Delete player Redis data + zone mapping
-		delResp, err := DeletePlayerData(ctx, svcCtx, &DeletePlayerDataReq{
-			PlayerID:          pid,
-			DeleteZoneMapping: true,
-		})
-		if err != nil {
-			logx.Errorf("[Rollback] zone %d: failed to delete orphan %d: %v", zoneID, pid, err)
-			continue
-		}
-		logx.Infof("[Rollback] zone %d: orphan %d cleaned — keys_deleted=%d", zoneID, pid, delResp.KeysDeleted)
-		cleaned++
 	}
 
-	if cleaned > 0 {
-		logx.Infof("[Rollback] zone %d: cleaned %d orphan characters (total orphans=%d)", zoneID, cleaned, len(orphanIDs))
+	if len(orphanIDs) > 0 {
+		logx.Errorf("[Rollback] zone %d: %d players have no snapshot at or before target_time. "+
+			"NOT deleted — snapshot absence does not prove the character was created after target_time. "+
+			"Candidate IDs are returned in OrphanPlayerIDs for manual review.",
+			zoneID, len(orphanIDs))
 	}
-	return orphanIDs, cleaned
-}
-
-// removeOrphansFromLoginAccounts calls the login admin RPC to remove orphan
-// player IDs from their parent account records. This is non-fatal — if it fails,
-// the orphan IDs are still returned in the response for external retry.
-func removeOrphansFromLoginAccounts(ctx context.Context, svcCtx *svc.ServiceContext, zoneID uint32, orphanIDs []uint64) {
-	logx.Infof("[Rollback] zone %d: calling login RemovePlayersFromAccounts for %d orphans", zoneID, len(orphanIDs))
-
-	resp, err := svcCtx.LoginAdminClient.RemovePlayersFromAccounts(ctx, &loginpb.RemovePlayersFromAccountsRequest{
-		PlayerIds: orphanIDs,
-	})
-	if err != nil {
-		logx.Errorf("[Rollback] zone %d: login RemovePlayersFromAccounts RPC failed: %v (orphan IDs returned in response for manual retry)", zoneID, err)
-		return
-	}
-
-	logx.Infof("[Rollback] zone %d: login orphan account cleanup: removed=%d not_found=%d failed=%d",
-		zoneID, resp.RemovedCount, resp.NotFoundCount, resp.FailedCount)
+	return orphanIDs, nil
 }
 
 // ── RollbackAll (full server) ──────────────────────────────────
@@ -359,45 +503,87 @@ type RollbackAllResp struct {
 }
 
 func RollbackAll(ctx context.Context, svcCtx *svc.ServiceContext, req *RollbackAllReq) (*RollbackAllResp, error) {
-	if req.TargetTime == 0 {
+	if req == nil || req.TargetTime == 0 {
 		return &RollbackAllResp{ErrorCode: constants.ErrCodeInvalidRequest}, nil
+	}
+	if code, err := validateRollbackDependencies(svcCtx); err != nil {
+		return &RollbackAllResp{ErrorCode: code}, err
+	}
+
+	zoneIDs := svcCtx.Router.AllZoneIDs()
+	release, code, err := acquireServerRollbackFence(ctx, svcCtx, zoneIDs)
+	if code != constants.ErrCodeOK || err != nil {
+		return &RollbackAllResp{ErrorCode: code}, err
+	}
+	defer release()
+
+	if err := insertRollbackAudit(ctx, svcCtx, &store.AuditLogRow{
+		RollbackType: rollbackTypeServer,
+		TargetTime:   req.TargetTime,
+		Reason:       fmt.Sprintf("STARTED: %s", req.Reason),
+		Operator:     req.Operator,
+		CreatedAt:    uint64(time.Now().Unix()),
+	}); err != nil {
+		return &RollbackAllResp{ErrorCode: constants.ErrCodeSnapshotDBError},
+			fmt.Errorf("write server rollback intent audit: %w", err)
 	}
 
 	logx.Infof("[Rollback] FULL SERVER rollback target_time=%d operator=%s reason=%s",
 		req.TargetTime, req.Operator, req.Reason)
 
-	// Get all zones from config
-	zoneIDs := svcCtx.Router.AllZoneIDs()
-
 	var totalAffected, totalFailed, zonesProcessed uint32
+	var rollbackErr error
+	resultCode := constants.ErrCodeOK
 
 	for _, zoneID := range zoneIDs {
-		resp, err := RollbackZone(ctx, svcCtx, &RollbackZoneReq{
+		// server 级栅栏已覆盖全部 zone，不再逐 zone 重复 Acquire。
+		resp, zoneErr := rollbackZoneWithFenceHeld(ctx, svcCtx, &RollbackZoneReq{
 			ZoneID:     zoneID,
 			TargetTime: req.TargetTime,
 			Reason:     fmt.Sprintf("server rollback: %s", req.Reason),
 			Operator:   req.Operator,
 		})
-		if err != nil {
-			logx.Errorf("[Rollback] zone %d error during server rollback: %v", zoneID, err)
-			continue
+		if resp != nil {
+			totalAffected += resp.PlayersAffected
+			totalFailed += resp.PlayersFailed
+		}
+		if zoneErr != nil {
+			resultCode = constants.ErrCodeRollbackFailed
+			if resp != nil && resp.ErrorCode != constants.ErrCodeOK {
+				resultCode = resp.ErrorCode
+			}
+			rollbackErr = fmt.Errorf("zone %d failed during server rollback: %w", zoneID, zoneErr)
+			logx.Errorf("[Rollback] %v", rollbackErr)
+			// 任一 zone 的审计/存储前置失败都不能被“继续下一个”吞掉。
+			break
 		}
 		zonesProcessed++
-		totalAffected += resp.PlayersAffected
-		totalFailed += resp.PlayersFailed
 	}
 
-	// Audit log
-	now := uint64(time.Now().Unix())
-	_ = svcCtx.SnapshotStore.InsertAuditLog(ctx, &store.AuditLogRow{
+	resp := &RollbackAllResp{
+		ErrorCode:       resultCode,
+		ZonesProcessed:  zonesProcessed,
+		PlayersAffected: totalAffected,
+		PlayersFailed:   totalFailed,
+	}
+	if err := insertRollbackAudit(ctx, svcCtx, &store.AuditLogRow{
 		RollbackType:    rollbackTypeServer,
 		TargetTime:      req.TargetTime,
 		PlayersAffected: totalAffected,
 		PlayersFailed:   totalFailed,
-		Reason:          req.Reason,
+		Reason:          fmt.Sprintf("RESULT code=%d: %s", resultCode, req.Reason),
 		Operator:        req.Operator,
-		CreatedAt:       now,
-	})
+		CreatedAt:       uint64(time.Now().Unix()),
+	}); err != nil {
+		resp.ErrorCode = constants.ErrCodeSnapshotDBError
+		metrics.ObserveRollback("server", "failed", totalAffected, 0)
+		return resp, fmt.Errorf("write server rollback result audit: %w", err)
+	}
+
+	if rollbackErr != nil {
+		metrics.ObserveRollback("server", "failed", totalAffected, 0)
+		return resp, rollbackErr
+	}
 
 	logx.Infof("[Rollback] FULL SERVER complete: zones=%d affected=%d failed=%d",
 		zonesProcessed, totalAffected, totalFailed)
@@ -410,9 +596,5 @@ func RollbackAll(ctx context.Context, svcCtx *svc.ServiceContext, req *RollbackA
 	}
 	metrics.ObserveRollback("server", rbOutcome, totalAffected, 0)
 
-	return &RollbackAllResp{
-		ZonesProcessed:  zonesProcessed,
-		PlayersAffected: totalAffected,
-		PlayersFailed:   totalFailed,
-	}, nil
+	return resp, nil
 }

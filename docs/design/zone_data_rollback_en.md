@@ -31,27 +31,26 @@ See [single_player_rollback.md](single_player_rollback.md) for details.
 - Even if temporal discrepancies exist (e.g., a player is rolled back to before joining a guild, but the guild_member table still has the record),
   such inconsistencies self-heal through normal guild/friend operations (leave and rejoin, reapply, etc.)
 
-### Orphan Character Handling
+### Players Without Snapshots (Fail Closed)
 
-> If we roll back, what happens to characters created after the rollback target time — do they still exist?
-
-**No, and they are not recreated.**
+`RollbackZone` no longer deletes any player merely because no snapshot exists at
+or before the target time. Snapshots are event/GM/rollback driven; the repository
+has no periodic snapshot job. Snapshot absence therefore does not prove that a
+character was created after the target time.
 
 | Scenario | Handling |
 |----------|----------|
 | Characters created before T | Restored from player_snapshot ✅ |
-| Characters created after T (orphans) | No snapshot → delete zone mapping → player creates a new character on next login |
-| Orphan character Redis data | Cleaned up via `DeletePlayerData` (zone mapping + Redis keys) |
-| Orphan character guild/friend data | Left as-is, self-heals naturally; guild kick/disband auto-cleans non-existent members |
+| No snapshot at or before T | Report in `orphan_player_ids` as a review candidate; do not restore or delete |
+| Candidate Redis data / zone mapping | Left unchanged |
+| Candidate account / guild / friend data | Left unchanged |
 
-**Reasons for not recreating orphan characters**:
-- Orphan character data did not exist at the rollback target time — there is no valid data to restore
-- Auto-creating an empty character = creating a level-0 character with no data, which has no practical value
-- It's more reasonable to let the player go through the normal character creation flow (choose class, name, etc.)
-
-**Potential issues if orphans are not cleaned up**:
-- If zone mapping is not cleared, login routes to empty data → C++ `LoadPlayerData` may crash
-- Solution: orphan cleanup phase must clear zone mapping
+The field name `orphan_player_ids` is retained for wire compatibility. Its
+current meaning is “players without a qualifying snapshot that require manual
+review”, not “confirmed post-T characters” and not “players already cleaned”.
+`orphans_cleaned` is always zero. Automated deletion requires an authoritative
+character creation timestamp plus approval, a pre-delete snapshot, and a
+recoverable deletion workflow.
 
 ### Execution Flow (2 Phases)
 
@@ -63,42 +62,32 @@ Iterate over all players in the zone that have snapshots
 → Create a pre-rollback safety snapshot
 → Overwrite Redis with snapshot data
 
-Phase 2: Clean up orphan characters
-────────────────────────────────────
+Phase 2: Report no-snapshot candidates
+──────────────────────────────────────
 SCAN mapping Redis to find all players with zone mapping in this zone
-→ Compare against the player list from snapshots to get the difference set (orphans)
-→ Delete orphan Redis data + zone mapping
-→ On next login, the player enters the character creation flow since zone mapping no longer exists
+→ Compare against the player list from snapshots to get the candidate set
+→ Return candidates while leaving every data record and mapping unchanged
 ```
 
 ### Code Locations
 
 | File | Purpose |
 |------|---------|
-| `go/data_service/internal/logic/rollback_logic.go` | RollbackZone (player rollback + orphan cleanup + call login to clean accounts) |
+| `go/data_service/internal/logic/rollback_logic.go` | RollbackZone (player rollback + no-snapshot candidate report) |
 | `go/data_service/internal/routing/router.go` | GetAllPlayerIDsInZone (SCAN mapping Redis) |
 | `go/data_service/internal/store/snapshot_store.go` | player_snapshot + rollback_audit_log CRUD |
-| `go/data_service/internal/svc/servicecontext.go` | LoginAdminClient gRPC (discovers login service via etcd) |
 | `proto/data_service/data_service.proto` | RollbackZone RPC definition |
-| `go/login/internal/logic/admin/remove_players_from_accounts.go` | Batch-remove orphan player IDs from account records |
-| `go/login/internal/server/loginadmin/loginadminserver.go` | LoginAdmin gRPC server handler |
-| `go/login/internal/constants/login_constants.go` | player→account reverse index key |
-| `proto/login/login.proto` | LoginAdmin / RemovePlayersFromAccounts RPC definition |
 
 ### Cross-Service Call Chain
 
 ```
 RollbackZone (data_service)
   ├── Phase 1: Restore each player's Redis data (from snapshot)
-  ├── Phase 2: Delete orphan character Redis data + zone mapping
-  └── Phase 2b: gRPC → login.RemovePlayersFromAccounts
-                  ├── Look up player_to_account:{pid} reverse index → get account name
-                  ├── Remove orphan pid from account:{name}'s SimplePlayers list
-                  └── Delete player_to_account:{pid} reverse index
+  └── Phase 2: Return no-snapshot candidates (no deletes or account changes)
 ```
 
-> **Fault tolerance design**: Phase 2b is non-fatal. If LoginAdminClient is not configured or the RPC fails,
-> orphan IDs are still returned in RollbackZoneResponse.orphan_player_ids for external tools to retry manually.
+> **Safety boundary**: callers may use the candidate list for manual review only;
+> they must not interpret it as a completed cleanup result.
 
 ---
 

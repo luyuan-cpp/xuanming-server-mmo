@@ -35,14 +35,26 @@ type CreateSnapshotResp struct {
 }
 
 func CreatePlayerSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, req *CreateSnapshotReq) (*CreateSnapshotResp, error) {
-	if req.PlayerID == 0 {
+	if req == nil || req.PlayerID == 0 {
 		return &CreateSnapshotResp{ErrorCode: constants.ErrCodeInvalidRequest}, nil
+	}
+	if svcCtx == nil || svcCtx.SnapshotStore == nil {
+		return &CreateSnapshotResp{ErrorCode: constants.ErrCodeSnapshotDBError},
+			fmt.Errorf("snapshot store is unavailable")
+	}
+	if svcCtx.Router == nil {
+		return &CreateSnapshotResp{ErrorCode: constants.ErrCodeRedis},
+			fmt.Errorf("player data router is unavailable")
 	}
 
 	// 1. Load current player data from Redis
 	loadResp, err := LoadPlayerData(ctx, svcCtx, &LoadPlayerDataReq{PlayerID: req.PlayerID})
 	if err != nil {
 		return &CreateSnapshotResp{ErrorCode: constants.ErrCodeRedis}, err
+	}
+	if loadResp == nil {
+		return &CreateSnapshotResp{ErrorCode: constants.ErrCodeRedis},
+			fmt.Errorf("load player %d returned nil response", req.PlayerID)
 	}
 	if loadResp.ErrorCode != constants.ErrCodeOK {
 		return &CreateSnapshotResp{ErrorCode: loadResp.ErrorCode}, nil
@@ -59,7 +71,11 @@ func CreatePlayerSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, req *
 	}
 
 	// 3. Look up zone
-	zoneID, _ := svcCtx.Router.GetPlayerHomeZone(ctx, req.PlayerID)
+	zoneID, err := svcCtx.Router.GetPlayerHomeZone(ctx, req.PlayerID)
+	if err != nil {
+		return &CreateSnapshotResp{ErrorCode: constants.ErrCodeRedis},
+			fmt.Errorf("resolve home zone for snapshot player %d: %w", req.PlayerID, err)
+	}
 
 	// 4. Persist to MySQL
 	now := uint64(time.Now().Unix())
@@ -110,8 +126,12 @@ type ListSnapshotsResp struct {
 }
 
 func ListPlayerSnapshots(ctx context.Context, svcCtx *svc.ServiceContext, req *ListSnapshotsReq) (*ListSnapshotsResp, error) {
-	if req.PlayerID == 0 {
+	if req == nil || req.PlayerID == 0 {
 		return &ListSnapshotsResp{ErrorCode: constants.ErrCodeInvalidRequest}, nil
+	}
+	if svcCtx == nil || svcCtx.SnapshotStore == nil {
+		return &ListSnapshotsResp{ErrorCode: constants.ErrCodeSnapshotDBError},
+			fmt.Errorf("snapshot store is unavailable")
 	}
 
 	metas, err := svcCtx.SnapshotStore.ListSnapshotsMeta(ctx, req.PlayerID, req.BeforeTime, req.Limit)
@@ -161,8 +181,16 @@ type SnapshotDiffResp struct {
 }
 
 func GetPlayerSnapshotDiff(ctx context.Context, svcCtx *svc.ServiceContext, req *SnapshotDiffReq) (*SnapshotDiffResp, error) {
-	if req.PlayerID == 0 {
+	if req == nil || req.PlayerID == 0 {
 		return &SnapshotDiffResp{ErrorCode: constants.ErrCodeInvalidRequest}, nil
+	}
+	if svcCtx == nil || svcCtx.SnapshotStore == nil {
+		return &SnapshotDiffResp{ErrorCode: constants.ErrCodeSnapshotDBError},
+			fmt.Errorf("snapshot store is unavailable")
+	}
+	if svcCtx.Router == nil {
+		return &SnapshotDiffResp{ErrorCode: constants.ErrCodeRedis},
+			fmt.Errorf("player data router is unavailable")
 	}
 
 	// 1. Resolve snapshot
@@ -184,6 +212,13 @@ func GetPlayerSnapshotDiff(ctx context.Context, svcCtx *svc.ServiceContext, req 
 	loadResp, err := LoadPlayerData(ctx, svcCtx, &LoadPlayerDataReq{PlayerID: req.PlayerID})
 	if err != nil {
 		return &SnapshotDiffResp{ErrorCode: constants.ErrCodeRedis}, err
+	}
+	if loadResp == nil {
+		return &SnapshotDiffResp{ErrorCode: constants.ErrCodeRedis},
+			fmt.Errorf("load player %d returned nil response", req.PlayerID)
+	}
+	if loadResp.ErrorCode != constants.ErrCodeOK {
+		return &SnapshotDiffResp{ErrorCode: loadResp.ErrorCode}, nil
 	}
 
 	// 4. Compute diff
@@ -234,6 +269,9 @@ func computeDiff(snapshotFields, currentFields map[string][]byte) []*FieldDiffIt
 
 // resolveSnapshot finds a snapshot by ID or by target_time.
 func resolveSnapshot(ctx context.Context, svcCtx *svc.ServiceContext, playerID, snapshotID, targetTime uint64) (*store.SnapshotRow, error) {
+	if svcCtx == nil || svcCtx.SnapshotStore == nil {
+		return nil, fmt.Errorf("snapshot store is unavailable")
+	}
 	if snapshotID > 0 {
 		snap, err := svcCtx.SnapshotStore.GetSnapshotByID(ctx, snapshotID)
 		if err != nil {

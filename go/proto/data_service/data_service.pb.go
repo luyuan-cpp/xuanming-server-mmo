@@ -1864,8 +1864,11 @@ type RollbackZoneResponse struct {
 	PlayersAffected uint32                 `protobuf:"varint,2,opt,name=players_affected,json=playersAffected,proto3" json:"players_affected,omitempty"`
 	PlayersFailed   uint32                 `protobuf:"varint,3,opt,name=players_failed,json=playersFailed,proto3" json:"players_failed,omitempty"`
 	FailedPlayerIds []uint64               `protobuf:"varint,4,rep,packed,name=failed_player_ids,json=failedPlayerIds,proto3" json:"failed_player_ids,omitempty"`
-	OrphanPlayerIds []uint64               `protobuf:"varint,5,rep,packed,name=orphan_player_ids,json=orphanPlayerIds,proto3" json:"orphan_player_ids,omitempty"` // characters created after target_time, cleaned up
-	OrphansCleaned  uint32                 `protobuf:"varint,6,opt,name=orphans_cleaned,json=orphansCleaned,proto3" json:"orphans_cleaned,omitempty"`
+	// Compatibility name: players currently mapped to the zone but without a
+	// snapshot at or before target_time. Candidates are reported only; no player
+	// data, zone mapping, or account relationship is deleted.
+	OrphanPlayerIds []uint64 `protobuf:"varint,5,rep,packed,name=orphan_player_ids,json=orphanPlayerIds,proto3" json:"orphan_player_ids,omitempty"`
+	OrphansCleaned  uint32   `protobuf:"varint,6,opt,name=orphans_cleaned,json=orphansCleaned,proto3" json:"orphans_cleaned,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }

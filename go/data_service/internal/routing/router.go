@@ -2,9 +2,12 @@ package routing
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 	"sync"
+	"time"
 
 	"data_service/internal/config"
 
@@ -16,9 +19,9 @@ import (
 // Router resolves player_id → home_zone_id → Redis client.
 // It is the ONLY component that knows about cross-realm topology.
 type Router struct {
-	mappingRedis *redis.Redis       // global mapping: player_id → home_zone_id
+	mappingRedis *redis.Redis                      // global mapping: player_id → home_zone_id
 	zoneToClient map[uint32]*goredis.ClusterClient // zone_id → Redis Cluster
-	devClient    *goredis.Client    // non-nil in dev mode (single Redis for all)
+	devClient    *goredis.Client                   // non-nil in dev mode (single Redis for all)
 	mu           sync.RWMutex
 	lockTTLSec   int
 }
@@ -246,20 +249,98 @@ func (r *Router) RemapHomeZoneForMerge(ctx context.Context, sourceZone, targetZo
 
 // ── Player lock (distributed) ──────────────────────────────────
 
-func playerLockKey(playerID uint64) string {
+func mappingPlayerLockKey(playerID uint64) string {
 	return "lock:player:" + strconv.FormatUint(playerID, 10)
 }
 
-// AcquirePlayerLock attempts to acquire a per-player distributed lock.
-func (r *Router) AcquirePlayerLock(ctx context.Context, playerID uint64) (bool, error) {
-	ok, err := r.mappingRedis.SetnxExCtx(ctx, playerLockKey(playerID), "1", r.lockTTLSec)
-	return ok, err
+// PlayerDataLockKey 返回和 player:{id}:* 数据位于同一 Redis Cluster slot 的锁键。
+// data_service 的写/删 Lua 会在同一条脚本内校验该键的 token。
+func PlayerDataLockKey(playerID uint64) string {
+	return fmt.Sprintf("player:{%d}:__lock", playerID)
 }
 
-// ReleasePlayerLock releases the per-player lock.
-func (r *Router) ReleasePlayerLock(ctx context.Context, playerID uint64) error {
-	_, err := r.mappingRedis.DelCtx(ctx, playerLockKey(playerID))
-	return err
+// AcquirePlayerLock attempts to acquire a per-player distributed lock in both
+// the global mapping Redis and the player's data Redis.
+// 成功时返回本次持锁身份 token,释放时必须原样回传。
+//
+// 双锁不是为了提高并发,而是为了跨两个 Redis 实例保持同一份所有权证明:
+//   - mapping Redis 锁保护 player:zone:* 的删除;
+//   - 玩家数据 Redis 锁与 player:{id}:* 同 slot,可被写/删 Lua 原子校验。
+//
+// 只做 token 校验释放还不够:旧持锁者在 TTL 后恢复执行时仍可能覆盖新持锁者。
+// 数据侧 Lua 必须同时验证 PlayerDataLockKey 的 token,才能真正 fence 掉旧写者。
+func (r *Router) AcquirePlayerLock(ctx context.Context, dataClient goredis.Cmdable, playerID uint64) (token string, ok bool, err error) {
+	buf := make([]byte, 16)
+	if _, err = rand.Read(buf); err != nil {
+		return "", false, err
+	}
+	token = hex.EncodeToString(buf)
+
+	ok, err = r.mappingRedis.SetnxExCtx(ctx, mappingPlayerLockKey(playerID), token, r.lockTTLSec)
+	if err != nil || !ok {
+		return "", ok, err
+	}
+
+	ttl := time.Duration(r.lockTTLSec) * time.Second
+	ok, err = dataClient.SetNX(ctx, PlayerDataLockKey(playerID), token, ttl).Result()
+	if err != nil || !ok {
+		// 第二把锁失败时必须释放第一把；token 校验保证不会误删后来者。
+		_, releaseErr := r.mappingRedis.EvalCtx(ctx, releasePlayerLockScript,
+			[]string{mappingPlayerLockKey(playerID)}, token)
+		if err == nil && releaseErr != nil {
+			err = releaseErr
+		}
+		return "", ok, err
+	}
+	return token, true, nil
+}
+
+// releasePlayerLockScript 仅当锁仍属于该 token 时才删除(原子)。
+const releasePlayerLockScript = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then
+	return redis.call('DEL', KEYS[1])
+end
+return 0`
+
+// ReleasePlayerLock releases both lock copies if they are still owned by token.
+func (r *Router) ReleasePlayerLock(ctx context.Context, dataClient goredis.Cmdable, playerID uint64, token string) error {
+	if token == "" {
+		return nil
+	}
+	_, dataErr := dataClient.Eval(ctx, releasePlayerLockScript,
+		[]string{PlayerDataLockKey(playerID)}, token).Result()
+	_, mappingErr := r.mappingRedis.EvalCtx(ctx, releasePlayerLockScript,
+		[]string{mappingPlayerLockKey(playerID)}, token)
+	if dataErr != nil {
+		return dataErr
+	}
+	return mappingErr
+}
+
+// deletePlayerZoneIfLockedScript 在 mapping Redis 内原子校验锁所有权并删除映射。
+const deletePlayerZoneIfLockedScript = `
+if redis.call('GET', KEYS[1]) ~= ARGV[1] then
+	return -1
+end
+return redis.call('DEL', KEYS[2])`
+
+// DeletePlayerZoneIfLocked 仅在 token 仍拥有 mapping 锁时删除玩家 zone 映射。
+// owned=false 表示锁已过期或已被后来者接管；deleted=false 且 owned=true 表示
+// 映射本来就不存在（幂等成功）。
+func (r *Router) DeletePlayerZoneIfLocked(ctx context.Context, playerID uint64, token string) (owned, deleted bool, err error) {
+	if token == "" {
+		return false, false, nil
+	}
+	res, err := r.mappingRedis.EvalCtx(ctx, deletePlayerZoneIfLockedScript,
+		[]string{mappingPlayerLockKey(playerID), mappingKey(playerID)}, token)
+	if err != nil {
+		return false, false, err
+	}
+	value, ok := res.(int64)
+	if !ok {
+		return false, false, fmt.Errorf("unexpected deletePlayerZoneIfLocked reply: %T %v", res, res)
+	}
+	return value >= 0, value == 1, nil
 }
 
 // Close shuts down all Redis connections.

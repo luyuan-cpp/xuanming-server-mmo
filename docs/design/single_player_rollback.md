@@ -10,10 +10,10 @@
 >
 > | 子系统 | 状态 | 落地位置 |
 > |---|---|---|
-> | `RollbackPlayer` / `RollbackZone` / `RollbackAll` RPC | ✅ 已实现 | `go/data_service/internal/logic/rollback_logic.go`(394 行) |
+> | `RollbackPlayer` / `RollbackZone` / `RollbackAll` RPC | ⚠️ RPC/逻辑骨架存在；生产执行 fail-closed | `go/data_service/internal/logic/rollback_logic.go`；缺跨服务离线 epoch 栅栏时返回 `error_code=16` |
 > | `transaction_log` 协议 + 双向操作类型 | ✅ enum 已加完(含 TX_ITEM_AWARD 等 4 个 replay 用 op) | `proto/common/rollback/transaction_log.proto` |
 > | `transaction_log` 业务侧 hook 点 | 🟡 部分 — currency 已 hook;**bag/quest/mail/skill 未 hook** | `cpp/libs/modules/currency/system/currency_system.cpp` |
-> | `BatchRecallItems` GM 工具 | ✅ 已实现 | `go/data_service/internal/logic/recall_logic.go` |
+> | `BatchRecallItems` GM 工具 | ⚠️ dry-run 查询可用；真实回收未实现 | 非 dry-run 返回 `error_code=16`；候选数超过 10000 返回 `error_code=17` 且零变更 |
 > | 补缴 (Deferred Clawback) | ✅ 已实现并防旁路审计 PASS | `cpp/libs/modules/currency/system/currency_system.cpp` |
 > | 物品 UUID (SnowFlake) | ✅ 已实现 | `cpp/libs/engine/core/utils/id/snow_flake.h` |
 > | 跨服节点崩溃后的 PostCrashReplay 工具 | ❌ **未实现** — 设计文档级,工具骨架未写 | (待) |
@@ -30,6 +30,25 @@
 > - 文档第 100 行的 transaction_log 字段都已经在 proto 里 ✅
 >
 > **如果你正在排期这份文档相关的工作**,先核对上面的状态表;表里 ❌ 的项是真正的工作量。
+
+### 当前应用级回档安全门（2026-08-03）
+
+`data_service` 现在要求回档全程持有 `RollbackFence`。该栅栏必须原子地
+阻止新登录/Scene 激活，排空目标玩家旧 Scene epoch 已发出的 Kafka/DB
+存盘，并让落库端拒绝迟到的旧 epoch 写。单次 `IsOnline`/location 查询
+会有 TOCTOU 窗口，不满足契约。
+
+这个跨 login / player_locator / Scene / Kafka / db 的协议尚未落地，所以
+生产 `ServiceContext.RollbackFence` 故意保持 `nil`：三个回档 RPC 明确拒绝，
+而不是冒险让在线 Scene 的后续存盘覆盖回档结果。即使将来注入栅栏，
+下列前置也都是 fail-closed：
+
+- SnapshotStore / Router 缺失；
+- `STARTED` 意图审计写入失败；
+- pre-rollback 安全快照创建失败或返回空 ID；
+- `RESULT` 结果审计失败（不再吞错，调用方会收到失败）。
+
+详细协议边界见 [zone_data_rollback.md](zone_data_rollback.md)。
 
 ---
 
