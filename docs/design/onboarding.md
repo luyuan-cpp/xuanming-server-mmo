@@ -88,7 +88,11 @@ mvn spring-boot:run         # 启 Java Gateway(:8081)
 ```bash
 # robot/etc/robot.yaml 关键开关
 # use_http_login: true              # 走新 /api/login 路径(推荐)
-# auth_type: "password"             # 或 "satoken"
+# auth_type: "password"             # 仅配合 login.DevPasswordAuth 的 robot_ 前缀账号
+# 生产 password 已实现但默认关闭；启用前须完成 MySQL schema/Argon2id 迁移并从环境变量注入只读 DSN
+
+# 本地启用 DevPasswordAuth 时，共享密钥只放环境变量，不写入 YAML：
+# $env:LOGIN_DEV_PASSWORD_SHARED_SECRET='<local-only-secret>'
 
 dev.bat robot               # 默认 1000 机器人
 # 或单跑:

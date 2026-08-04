@@ -8,15 +8,15 @@ import (
 	"shared/kafkautil"
 
 	"github.com/IBM/sarama"
-	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
-// ExpandMonitor detects external partition expansions.
+// ExpandMonitor detects external partition drift and fences the producer.
+// It deliberately never mutates the hash ring: online expansion cannot
+// preserve the db service's per-player partition cursor.
 type ExpandMonitor struct {
 	client            sarama.Client
 	topic             string
-	redisClient       redis.Cmdable
 	producer          *KeyOrderedKafkaProducer
 	checkInterval     time.Duration
 	oldPartitionCount int32
@@ -27,7 +27,6 @@ type ExpandMonitor struct {
 // NewExpandMonitor creates an ExpandMonitor.
 func NewExpandMonitor(
 	brokers []string, topic string,
-	redisClient redis.Cmdable,
 	producer *KeyOrderedKafkaProducer,
 	checkInterval time.Duration,
 ) (*ExpandMonitor, error) {
@@ -51,7 +50,6 @@ func NewExpandMonitor(
 	return &ExpandMonitor{
 		client:            client,
 		topic:             topic,
-		redisClient:       redisClient,
 		producer:          producer,
 		checkInterval:     checkInterval,
 		oldPartitionCount: oldPartitionCount,
@@ -99,29 +97,19 @@ func (m *ExpandMonitor) checkAndHandleExpand() {
 		return
 	}
 
-	logx.Infof("detected partition expand: topic=%s, old=%d, current=%d",
+	logx.Errorf("DATA-ORDERING: detected forbidden live partition change: topic=%s, configured-at-start=%d, current=%d",
 		m.topic, m.oldPartitionCount, currentPartitionCount)
-
-	if err := kafkautil.SetExpandStatus(m.ctx, m.redisClient, m.topic, kafkautil.ExpandStatusExpanding, currentPartitionCount); err != nil {
-		logx.Errorf("set expanding status failed: topic=%s, err=%v", m.topic, err)
+	partitions, err := m.client.Partitions(m.topic)
+	if err != nil {
+		logx.Errorf("read drifted partition IDs failed: topic=%s, err=%v", m.topic, err)
 		return
 	}
-
-	newPartitions := kafkautil.GetNewPartitionIDs(m.oldPartitionCount, currentPartitionCount)
-	m.producer.AddPartitions(newPartitions)
-
-	if err := kafkautil.WaitOldPartitionsConsumed(m.ctx, m.client, m.topic, m.oldPartitionCount); err != nil {
-		logx.Errorf("wait old partitions consumed failed: topic=%s, err=%v", m.topic, err)
-		return
+	if err := m.producer.verifyPartitionContract(partitions); err != nil {
+		logx.Errorf("%v", err)
 	}
-
-	if err := kafkautil.SetExpandStatus(m.ctx, m.redisClient, m.topic, kafkautil.ExpandStatusCompleted, currentPartitionCount); err != nil {
-		logx.Errorf("set completed status failed: topic=%s, err=%v", m.topic, err)
-		return
-	}
-
+	// Avoid logging the same immutable drift every second. The producer fence
+	// is irreversible; a process restart still fails the startup contract.
 	m.oldPartitionCount = currentPartitionCount
-	logx.Infof("handle expand success: topic=%s, currentPartitionCount=%d", m.topic, currentPartitionCount)
 }
 
 // Stop stops the monitor.

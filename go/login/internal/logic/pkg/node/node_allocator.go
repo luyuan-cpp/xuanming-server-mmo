@@ -5,6 +5,8 @@ import (
 	"fmt"
 	login_proto "proto/common/base"
 
+	"login/internal/logic/pkg/etcd"
+
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -13,10 +15,19 @@ import (
 type NodeAllocator struct {
 	Client *clientv3.Client
 	Prefix string
+	// Registry 用来把 CAS 直写的 allocKey / infoKey 补登记进重注册清单。
+	// 可为 nil(测试),此时只是失去失租后的重注册能力。
+	Registry *etcd.NodeRegistry
 }
 
 func NewNodeAllocator(client *clientv3.Client, prefix string) *NodeAllocator {
 	return &NodeAllocator{Client: client, Prefix: prefix}
+}
+
+// WithRegistry 绑定 NodeRegistry,让分配成功的 key 进入重注册清单。
+func (na *NodeAllocator) WithRegistry(reg *etcd.NodeRegistry) *NodeAllocator {
+	na.Registry = reg
+	return na
 }
 
 // buildAllocationKey returns the global-uniqueness CAS key for (nodeType, nodeID).
@@ -112,6 +123,13 @@ func (na *NodeAllocator) putIfAbsent(ctx context.Context, nodeID uint32, info *l
 
 	if err != nil {
 		return false, err
+	}
+	if txnResp.Succeeded && na.Registry != nil {
+		// 这两个 key 是上面那次 Txn 直接写的(CAS 本身就是 node_id 唯一性的闸,不能拆成两次 Put),
+		// 绕过了 NodeRegistry.RegisterNode。这里补登记,否则失租后 reRegister 无东西可重放,
+		// 节点会从服务发现里永久消失而无人知情。
+		na.Registry.TrackKey(allocKey, info.NodeUuid)
+		na.Registry.TrackKey(infoKey, resultStr)
 	}
 	return txnResp.Succeeded, nil
 }

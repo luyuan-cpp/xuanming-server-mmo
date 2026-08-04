@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	plpb "proto/player_locator"
 	commonbase "proto/common/base"
+	plpb "proto/player_locator"
 
 	"google.golang.org/grpc"
 )
@@ -24,6 +24,12 @@ type fakePlayerLocatorClient struct {
 	lastSetDisconnecting *plpb.SetDisconnectingRequest
 	setDisconnectErr     error
 	setDisconnectCalls   int
+	getSessionResponse   *plpb.GetSessionResponse
+	getSessionErr        error
+	getSessionCalls      int
+	lastMarkOffline      *plpb.MarkOfflineRequest
+	markOfflineErr       error
+	markOfflineCalls     int
 }
 
 func (f *fakePlayerLocatorClient) SetLocation(context.Context, *plpb.PlayerLocation, ...grpc.CallOption) (*commonbase.Empty, error) {
@@ -32,14 +38,20 @@ func (f *fakePlayerLocatorClient) SetLocation(context.Context, *plpb.PlayerLocat
 func (f *fakePlayerLocatorClient) GetLocation(context.Context, *plpb.PlayerId, ...grpc.CallOption) (*plpb.PlayerLocation, error) {
 	panic("GetLocation not used in this test")
 }
-func (f *fakePlayerLocatorClient) MarkOffline(context.Context, *plpb.PlayerId, ...grpc.CallOption) (*commonbase.Empty, error) {
-	panic("MarkOffline not used in this test")
+func (f *fakePlayerLocatorClient) MarkOffline(_ context.Context, in *plpb.MarkOfflineRequest, _ ...grpc.CallOption) (*commonbase.Empty, error) {
+	f.markOfflineCalls++
+	f.lastMarkOffline = in
+	return &commonbase.Empty{}, f.markOfflineErr
 }
 func (f *fakePlayerLocatorClient) SetSession(context.Context, *plpb.SetSessionRequest, ...grpc.CallOption) (*commonbase.Empty, error) {
 	panic("SetSession not used in this test")
 }
 func (f *fakePlayerLocatorClient) GetSession(context.Context, *plpb.GetSessionRequest, ...grpc.CallOption) (*plpb.GetSessionResponse, error) {
-	panic("GetSession not used in this test")
+	f.getSessionCalls++
+	if f.getSessionResponse == nil {
+		return &plpb.GetSessionResponse{}, f.getSessionErr
+	}
+	return f.getSessionResponse, f.getSessionErr
 }
 func (f *fakePlayerLocatorClient) SetDisconnecting(_ context.Context, in *plpb.SetDisconnectingRequest, _ ...grpc.CallOption) (*commonbase.Empty, error) {
 	f.setDisconnectCalls++
@@ -98,6 +110,54 @@ func TestSetSessionDisconnecting_WrapsRpcError(t *testing.T) {
 	// future formatting tweaks don't break the test brittlely.
 	if got := err.Error(); got == "" || !contains(got, "player_locator SetDisconnecting") {
 		t.Errorf("error message did not include wrap prefix; got %q", got)
+	}
+}
+
+func TestDeleteSession_DelayedOldLeaveGameDoesNotDeleteReplacement(t *testing.T) {
+	mock := &fakePlayerLocatorClient{
+		getSessionResponse: &plpb.GetSessionResponse{
+			Found: true,
+			Session: &plpb.PlayerSession{
+				PlayerId:       12345,
+				SessionId:      200,
+				SessionVersion: 7,
+			},
+		},
+	}
+
+	// session=100 的 LeaveGame 到达时，权威会话已经被 session=200 替换。
+	if err := DeleteSession(context.Background(), mock, 12345, 100); err != nil {
+		t.Fatalf("expected stale LeaveGame to be a successful no-op, got %v", err)
+	}
+	if mock.getSessionCalls != 1 {
+		t.Fatalf("expected one GetSession call, got %d", mock.getSessionCalls)
+	}
+	if mock.markOfflineCalls != 0 {
+		t.Fatalf("stale LeaveGame must not call MarkOffline, got %d calls", mock.markOfflineCalls)
+	}
+}
+
+func TestDeleteSession_PassesObservedSessionVersion(t *testing.T) {
+	mock := &fakePlayerLocatorClient{
+		getSessionResponse: &plpb.GetSessionResponse{
+			Found: true,
+			Session: &plpb.PlayerSession{
+				PlayerId:       12345,
+				SessionId:      200,
+				SessionVersion: 7,
+			},
+		},
+	}
+
+	if err := DeleteSession(context.Background(), mock, 12345, 200); err != nil {
+		t.Fatalf("expected nil error, got %v", err)
+	}
+	if mock.markOfflineCalls != 1 {
+		t.Fatalf("expected one MarkOffline call, got %d", mock.markOfflineCalls)
+	}
+	got := mock.lastMarkOffline
+	if got.PlayerId != 12345 || got.ExpectedSessionId != 200 || got.ExpectedSessionVersion != 7 {
+		t.Fatalf("unexpected MarkOffline request: %+v", got)
 	}
 }
 

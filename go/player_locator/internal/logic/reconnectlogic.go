@@ -44,6 +44,23 @@ func (l *ReconnectLogic) Reconnect(in *pb.ReconnectRequest) (*pb.ReconnectRespon
 	if err := proto.Unmarshal(data, session); err != nil {
 		return nil, err
 	}
+	if session.State == pb.PlayerSessionState_SESSION_STATE_ONLINE &&
+		session.SessionId == in.NewSessionId && session.RequestId == in.RequestId {
+		// RPC response 丢失后的同请求重放。
+		return &pb.ReconnectResponse{Success: true, Session: session}, nil
+	}
+	if session.State != pb.PlayerSessionState_SESSION_STATE_DISCONNECTING {
+		return &pb.ReconnectResponse{
+			Success:      false,
+			ErrorMessage: "session is no longer disconnecting",
+		}, nil
+	}
+	if in.Account != "" && session.Account != "" && in.Account != session.Account {
+		return &pb.ReconnectResponse{
+			Success:      false,
+			ErrorMessage: "session account mismatch",
+		}, nil
+	}
 
 	// Update session with new connection info
 	session.SessionId = in.NewSessionId
@@ -61,13 +78,19 @@ func (l *ReconnectLogic) Reconnect(in *pb.ReconnectRequest) (*pb.ReconnectRespon
 		return nil, err
 	}
 
-	// Persist without TTL — cancels disconnect lease effectively
-	if err := l.svcCtx.RedisClient.Set(l.ctx, key, updated, 0).Err(); err != nil {
+	// ONLINE 写入、ready ZREM、processing claim 撤销在同一 Lua 里完成。
+	// monitor 若已 claim 旧会话，其 token/payload 会在这里一起失效。
+	result, err := replaceSessionAndCancelLease(l.ctx, l.svcCtx, in.PlayerId, data, updated, 0)
+	if err != nil {
 		return nil, err
 	}
-
-	// Remove from lease tracking
-	l.svcCtx.RedisClient.ZRem(l.ctx, LeaseZSetKey, in.PlayerId)
+	if result != replaceSessionApplied {
+		// 不自动重放读改写；调用方重新走登录决策，避免基于陈旧 session 生成新会话。
+		return &pb.ReconnectResponse{
+			Success:      false,
+			ErrorMessage: "session changed concurrently",
+		}, nil
+	}
 
 	l.Infof("Reconnect: player=%d new_session=%d gate=%s version=%d",
 		in.PlayerId, in.NewSessionId, in.GateId, session.SessionVersion)

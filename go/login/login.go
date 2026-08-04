@@ -19,7 +19,9 @@ import (
 	login_proto_login "proto/login"
 	"shared/grpcstats"
 	"shared/kafkautil"
+	"shared/snowflakealloc"
 	"strconv"
+	"time"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -43,7 +45,8 @@ func main() {
 	conf.MustLoad(*configFile, &config.AppConfig)
 
 	// Derive zone-specific Kafka topic from ZoneId
-	config.AppConfig.Kafka.Topic = config.DbTaskTopic(config.AppConfig.Node.ZoneId)
+	config.AppConfig.Kafka.Topic = config.DbTaskTopicForGeneration(
+		config.AppConfig.Node.ZoneId, config.AppConfig.Kafka.TopicGeneration)
 
 	// Ensure db_task topic exists with configured retention.
 	// Ephemeral topics (gate-*, scene-*) use broker default (short retention).
@@ -54,7 +57,7 @@ func main() {
 			RetentionMs: config.AppConfig.Kafka.RetentionMs,
 		},
 	}); err != nil {
-		logx.Errorf("EnsureTopics: %v (non-fatal, continuing)", err)
+		panic(fmt.Sprintf("Kafka db-task partition contract rejected: %v", err))
 	}
 
 	ctx := svc.NewServiceContext()
@@ -102,8 +105,58 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 		}
 	}()
 
-	ctx.SetNodeId(int64(loginNode.Info.NodeId))
 	logx.Infof("Login node registered: %+v", loginNode.Info.String())
+
+	// PlayerId 的机器位由 shared/snowflakealloc 独立分配,**不再用 NodeInfo.NodeId**。
+	//
+	// 旧做法的问题:NodeInfo.NodeId 与它的 etcd 租约绑在一起,租约一丢 etcd 就把
+	// allocKey 删掉、别的副本随时可以抢走同一个号;而 login 这边既不停发也不重夺
+	// (reRegister 是空操作,见下),于是会永久用一个已被释放的机器位继续铸 PlayerId。
+	// login 是 replicas=2 部署,两副本拿到同一机器位时 bwmarrin 在新毫秒把 step 归零,
+	// 同毫秒的首个号逐位相同 —— 而 player_database.player_id 上没有唯一索引兜底。
+	//
+	// 与 guild / scene_manager 同一套机制:独立 lease + hostname 亲和 + 失租自 fencing。
+	// ⚠️ MaxWorkerID 必须显式钳到 bwmarrin 的 node 位宽(13 bit ⇒ 8191):
+	// snowflakealloc 默认上界取 shared/snowflake.NodeMask(131071),超出会让
+	// snowflake.NewNode 直接失败。
+	etcdCli, err := node.NewEtcdClient() // 复用 login 既有的 etcd 客户端工厂,不另拼一份配置
+	if err != nil {
+		logx.Errorf("Failed to create etcd client for snowflake worker id: %v", err)
+		return err
+	}
+	defer etcdCli.Close()
+
+	hostname, err := os.Hostname()
+	if err != nil {
+		logx.Errorf("Failed to get hostname: %v", err)
+		return err
+	}
+	maxWorkerID := uint64(1)<<uint(config.AppConfig.Snowflake.NodeBits) - 1
+	sfCtx, sfCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	sfHandle, err := snowflakealloc.AllocateWithKeepAlive(sfCtx, etcdCli, "/login", hostname,
+		snowflakealloc.Options{LeaseTTL: 60, MaxWorkerID: maxWorkerID})
+	sfCancel()
+	if err != nil {
+		logx.Errorf("Failed to allocate snowflake worker id: %v", err)
+		return err
+	}
+	defer sfHandle.Close()
+	logx.Infof("Login snowflake worker id = %d (host=%s, max=%d)", sfHandle.WorkerID, hostname, maxWorkerID)
+
+	ctx.SetNodeId(int64(sfHandle.WorkerID))
+
+	// 失租 = 本进程不再拥有这个机器位,必须立刻停止铸 PlayerId。
+	// **不能只靠停服**:go-zero 的 zrpc.RpcServer.Stop() 实测只有一行 logx.Close(),
+	// 既不拒新请求也不排空在途。所以正确性由 Fence() 保证(之后 Generate 一律失败,
+	// 建角整体失败),可用性由进程退出 + 编排重拉保证。
+	go func() {
+		<-sfHandle.Lost()
+		ctx.SnowFlake.Fence() // ① 先关闸
+		logx.Error("Login snowflake worker id lease lost; player id generator fenced, exiting to let the " +
+			"orchestrator restart (zrpc Stop() only closes the logger and cannot stop serving)")
+		logx.Close() // ② 冲掉日志缓冲
+		os.Exit(1)   // ③ 退出;重启后拿新 worker id
+	}()
 
 	// Start gRPC server
 	if err := startServer(cfg, ctx); err != nil {

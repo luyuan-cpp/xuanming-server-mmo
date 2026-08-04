@@ -123,6 +123,12 @@ kafkautil.EnsureTopics(brokers, []TopicSpec{{
 }})
 ```
 
+> **分区数不可在线修改。** `db_task_zone_*` 已把 origin partition 写进永久
+> applied cursor。`EnsureTopics` 现在只接受精确 partition 契约并创建不可变 marker，
+> 不再调用 `CreatePartitions`。扩容须按
+> [`db-task-kafka-partition-contract.md`](../design/db-task-kafka-partition-contract.md)
+> 停写、排空，并同时切换 login/db 的 `TopicGeneration`。
+
 ### Step 4: 旧数据迁移(只在切换时做)
 
 如果之前有单 broker 跑过的数据需要保留:

@@ -76,8 +76,8 @@ public class LoginRpcClient {
     /**
      * Zone-aware routing map: {@code zoneId -> channel}. Populated when an
      * endpoint is configured as {@code "<zoneId>=host:port"}; left empty when
-     * all endpoints are bare {@code host:port} (in which case we fall back to
-     * round-robin over {@link #channels}).
+     * all endpoints are bare {@code host:port}. Bare endpoints are only valid
+     * for truly zone-less calls such as RefreshToken.
      *
      * <p><b>Why zone-aware routing matters.</b> Each {@code login.rpc} instance
      * watches only its own zone's gate registrations in etcd
@@ -135,8 +135,8 @@ public class LoginRpcClient {
             // Two accepted shapes:
             //   "host:port"            — bare endpoint, joins the round-robin pool only
             //   "<zoneId>=host:port"   — also indexed by zone for zone-aware routing
-            // Mixing both is allowed: zone-tagged endpoints route AssignGate by
-            // zone, unzoned ones still serve RefreshToken (which has no zone).
+            // Mixing both is allowed: zone-tagged endpoints route all zone-bound
+            // calls, unzoned ones only serve RefreshToken (which has no zone).
             Integer zoneTag = null;
             int eq = ep.indexOf('=');
             if (eq > 0) {
@@ -189,28 +189,25 @@ public class LoginRpcClient {
         }
     }
 
-    /** Calls {@code ClientPlayerLogin.Login}. Throws on terminal failure. */
-    public LoginResponseProto login(LoginRequestProto req) {
-        return unaryCall(loginMethod, req);
-    }
-
     /**
      * Zone-aware Login: routes to the {@code login.rpc} instance that watches
-     * gates for the given zone. Falls back to round-robin when no zone-tagged
-     * channel is configured.
+     * gates for the given zone. A missing zone mapping is a configuration error
+     * and never falls back to another zone.
      */
     public LoginResponseProto login(LoginRequestProto req, int zoneId) {
-        return unaryCall(loginMethod, req, zoneId);
+        // Login 可能创建账号壳并签发 access/refresh token。响应丢失时结果
+        // 不确定；没有幂等键就自动重试会重复执行这些副作用。
+        return unaryCall(loginMethod, req, zoneId, true, false);
     }
 
     /** Calls {@code ClientPlayerLogin.RefreshToken}. Throws on terminal failure. */
     public RefreshTokenResponseProto refreshToken(RefreshTokenRequestProto req) {
-        return unaryCall(refreshTokenMethod, req);
-    }
-
-    /** Calls {@code LoginPreGate.AssignGate}. Throws on terminal failure. */
-    public AssignGateResponseProto assignGate(AssignGateRequestProto req) {
-        return unaryCall(assignGateMethod, req);
+        // RefreshToken 是**非幂等**的一次性轮换:服务端每次成功调用都会签发新
+        // access/refresh 对并原子删除旧 refresh token。响应在回程丢失(典型:
+        // DEADLINE_EXCEEDED)时服务端可能已经消费掉旧 token —— 自动重试会拿着
+        // 已作废的 token 再打一次,得到鉴权失败,把玩家会话彻底烧掉。
+        // 所以这条方法禁用自动重试,失败直接上抛,由客户端走完整登录兜底。
+        return unaryCall(refreshTokenMethod, req, 0, false, false);
     }
 
     /**
@@ -218,12 +215,8 @@ public class LoginRpcClient {
      * routing semantics.
      */
     public AssignGateResponseProto assignGate(AssignGateRequestProto req, int zoneId) {
-        return unaryCall(assignGateMethod, req, zoneId);
-    }
-
-    /** Calls {@code LoginPreGate.QueryQueueStatus}. Throws on terminal failure. */
-    public QueryQueueStatusResponseProto queryQueueStatus(QueryQueueStatusRequestProto req) {
-        return unaryCall(queueStatusMethod, req);
+        // AssignGate 可能入队/放行账号并签发 Gate token，因此不是纯读。
+        return unaryCall(assignGateMethod, req, zoneId, true, false);
     }
 
     /**
@@ -232,46 +225,54 @@ public class LoginRpcClient {
      * instance — otherwise the lookup can't find the queue entry.
      */
     public QueryQueueStatusResponseProto queryQueueStatus(QueryQueueStatusRequestProto req, int zoneId) {
-        return unaryCall(queueStatusMethod, req, zoneId);
+        // QueryQueueStatus 也不是纯读：轮询已放行条目可能消费/推进队列状态，
+        // 并返回新签发的 Gate 连接材料。
+        return unaryCall(queueStatusMethod, req, zoneId, true, false);
     }
 
-    private <Q, R> R unaryCall(MethodDescriptor<Q, R> method, Q req) {
-        return unaryCall(method, req, 0);
-    }
-
-    private <Q, R> R unaryCall(MethodDescriptor<Q, R> method, Q req, int zoneId) {
+    private <Q, R> R unaryCall(
+            MethodDescriptor<Q, R> method,
+            Q req,
+            int zoneId,
+            boolean zoneRequired,
+            boolean retrySafe) {
         if (channels.isEmpty()) {
             throw new IllegalStateException("login.rpc no endpoint");
         }
-        // Pick a zone-pinned channel when possible; otherwise round-robin.
-        // zoneId == 0 means "caller doesn't know / doesn't care" (e.g.
-        // RefreshToken — the access_token doesn't carry a zone).
-        ManagedChannel ch = null;
-        if (zoneId != 0) {
+
+        ManagedChannel ch;
+        if (zoneRequired) {
+            if (zoneId <= 0) {
+                throw new IllegalArgumentException("login.rpc zone-aware call requires a positive zone id: "
+                        + method.getFullMethodName());
+            }
             ch = channelByZone.get(zoneId);
             if (ch == null) {
-                // Configured channels don't cover this zone — fail loud
-                // instead of silently falling back to round-robin, which is
-                // exactly the behaviour the round-robin-only client had before
-                // and the one that produced "no gate available" in stress.
-                log.warn("login.rpc no zone-pinned channel for zone={}, falling back to round-robin (config drift?)", zoneId);
+                String message = "login.rpc no zone-pinned endpoint for zone=" + zoneId
+                        + " method=" + method.getFullMethodName();
+                log.error("{}; refusing cross-zone round-robin fallback", message);
+                throw new IllegalStateException(message);
             }
-        }
-        if (ch == null) {
+        } else {
+            // RefreshToken 的 token 当前不携带 zone，才允许在全部 channel 间轮询。
             ch = channels.get(Math.floorMod(rr.getAndIncrement(), channels.size()));
         }
-        CallOptions opts = CallOptions.DEFAULT.withDeadlineAfter(props.getTimeoutMs(), TimeUnit.MILLISECONDS);
 
-        int attempts = 1 + Math.max(0, props.getRetry());
+        int attempts = retrySafe ? 1 + Math.max(0, props.getRetry()) : 1;
         StatusRuntimeException last = null;
         for (int i = 0; i < attempts; i++) {
+            // deadline 必须**每次尝试**单独计算:withDeadlineAfter 产出的是绝对
+            // 时间点,若在循环外只算一次,首次 DEADLINE_EXCEEDED 时预算已经
+            // 耗尽,后续所有重试都会瞬时再报 DEADLINE_EXCEEDED —— 重试形同虚设,
+            // 还向调用方伪装成"重试过了"。
+            CallOptions opts = CallOptions.DEFAULT.withDeadlineAfter(props.getTimeoutMs(), TimeUnit.MILLISECONDS);
             try {
                 return ClientCalls.blockingUnaryCall(ch, method, opts, req);
             } catch (StatusRuntimeException e) {
                 last = e;
                 Status.Code c = e.getStatus().getCode();
-                if (c != Status.Code.UNAVAILABLE && c != Status.Code.DEADLINE_EXCEEDED) {
-                    throw e;        // non-retriable: don't waste budget
+                if (!retrySafe || (c != Status.Code.UNAVAILABLE && c != Status.Code.DEADLINE_EXCEEDED)) {
+                    throw e;
                 }
                 log.warn("login.rpc retriable error on {} attempt {}/{}: {}",
                         method.getFullMethodName(), i + 1, attempts, c);

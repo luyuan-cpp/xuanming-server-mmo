@@ -49,14 +49,15 @@ type RedisConfig struct {
 
 // KafkaConfig holds Kafka consumer settings.
 type KafkaConfig struct {
-	Brokers         []string `json:"Brokers"`                    // Broker addresses
-	GroupID         string   `json:"GroupID"`                    // Consumer group ID
-	Topic           string   `json:"Topic,optional"`             // Derived from ZoneId at startup
-	PartitionCnt    int32    `json:"PartitionCnt"`               // Partition count
+	Brokers         []string `json:"Brokers"`                      // Broker addresses
+	GroupID         string   `json:"GroupID"`                      // Consumer group ID
+	Topic           string   `json:"Topic,optional"`               // Derived from ZoneId at startup
+	TopicGeneration uint32   `json:"TopicGeneration,default=1"`    // Immutable routing generation; partition changes require a new topic
+	PartitionCnt    int32    `json:"PartitionCnt"`                 // Partition count
 	RetentionMs     int64    `json:"RetentionMs,default=86400000"` // Topic retention in ms (default 24h; matches login)
-	                                                                // P1 数据安全加固 2026-06-03: 旧值 300000 (5min)
-	                                                                // db service 卡 5min+ 会丢数据,24h 给运维事故充足窗口
-	IsOfflineExpand bool     `json:"IsOfflineExpand"`            // Offline expansion: true = maintenance mode
+	// P1 数据安全加固 2026-06-03: 旧值 300000 (5min)
+	// db service 卡 5min+ 会丢数据,24h 给运维事故充足窗口
+	IsOfflineExpand bool `json:"IsOfflineExpand"` // Offline expansion: true = maintenance mode
 
 	// SubShardCount controls intra-partition parallelism. 0 or 1 = legacy
 	// behaviour (single goroutine per partition, max parallelism =
@@ -76,6 +77,14 @@ var AppConfig Config
 // DbTaskTopic returns the zone-specific Kafka topic for DB tasks.
 func DbTaskTopic(zoneId uint32) string {
 	return fmt.Sprintf("db_task_zone_%d", zoneId)
+}
+
+func DbTaskTopicForGeneration(zoneId, generation uint32) string {
+	base := DbTaskTopic(zoneId)
+	if generation <= 1 {
+		return base
+	}
+	return fmt.Sprintf("%s_g%d", base, generation)
 }
 
 // ZoneDBName returns the zone-specific MySQL database name.

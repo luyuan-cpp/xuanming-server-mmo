@@ -28,7 +28,7 @@ func (s *PlayerLocatorServer) GetLocation(ctx context.Context, in *pb.PlayerId) 
 	return l.GetLocation(in)
 }
 
-func (s *PlayerLocatorServer) MarkOffline(ctx context.Context, in *pb.PlayerId) (*common.Empty, error) {
+func (s *PlayerLocatorServer) MarkOffline(ctx context.Context, in *pb.MarkOfflineRequest) (*common.Empty, error) {
 	l := logic.NewMarkOfflineLogic(ctx, s.svcCtx)
 	return l.MarkOffline(in)
 }

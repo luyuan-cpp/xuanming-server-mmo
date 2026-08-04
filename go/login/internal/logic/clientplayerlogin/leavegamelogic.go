@@ -33,7 +33,7 @@ func (l *LeaveGameLogic) LeaveGame(in *login_proto.LeaveGameRequest) (*login_pro
 	cleanupLoginSessionState(l.ctx, l.svcCtx, sessionDetails.SessionId, "leave")
 
 	// Remove player session from Redis (replaces Centre notification)
-	deletePlayerSession(l.ctx, l.svcCtx, sessionDetails.PlayerId)
+	deletePlayerSession(l.ctx, l.svcCtx, sessionDetails.PlayerId, sessionDetails.SessionId)
 
 	return resp, nil
 }

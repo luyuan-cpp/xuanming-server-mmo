@@ -26,9 +26,10 @@ CREATE TABLE IF NOT EXISTS user_password (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='user_password';
 
 CREATE TABLE IF NOT EXISTS user_accounts (
-  account MEDIUMTEXT,
-  password MEDIUMTEXT,
-  simple_players MEDIUMBLOB
+	account VARCHAR(191) NOT NULL,
+	password VARCHAR(255) NULL COMMENT 'Argon2id PHC; NULL means password login disabled for this account',
+	simple_players MEDIUMBLOB,
+	PRIMARY KEY (account)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='user_accounts';
 
 CREATE TABLE IF NOT EXISTS account_share_database (

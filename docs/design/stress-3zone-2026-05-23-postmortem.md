@@ -451,6 +451,12 @@ partition 修完跑首次 3-zone × 15000 时,smoke 直接报 `code=500 error="n
 
 **Java 侧** `LoginRpcClient`:加 `Map<Integer, ManagedChannel> channelByZone`,endpoint 配置语法支持 `<zoneId>=host:port`,`unaryCall` 加 `zoneId` 重载。RefreshToken 没 zone 字段(access_token 不携带 zone)→ 走 round-robin fallback。
 
+**2026-08-03 fail-closed 补强：** `Login`、`AssignGate`、`QueryQueueStatus` 都是
+zone-bound 调用；zone 非正数或 `<zoneId>=host:port` mapping 缺失时必须在发 RPC
+前报错，不能回退 round-robin。无 zone 的公开重载已移除；只有当前 token 不携带
+zone 的 `RefreshToken` 保留 round-robin。这样配置漂移表现为明确的 Gateway 500/
+错误日志，而不是跨区请求或偶发的 `no gate available`。
+
 **配置侧** `application.yaml`:
 ```yaml
 login:
@@ -863,7 +869,6 @@ v9 是 26 player/s,v10 是 11 player/s — **降了 58%**。partition 翻倍让�
 **今天高水位线**: v9 — 26 player/s 稳态,18.8k 真进游戏 player。这是单机 dev 在不动 Redis 拓扑前提下的天花板。
 
 下一步要超过这个数字,**必须动 Redis 锁那一段**(异步化 / 分片 / 容错),不再是配置 tuning。
-
 
 
 

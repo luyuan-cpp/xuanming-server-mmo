@@ -13,10 +13,11 @@ ServerConfig:
       - "127.0.0.1:9092" # Kafka broker address
     GroupID: "db_rpc_consumer_group" # Kafka consumer group ID (must be unique)
     # Topic and DBName are derived from ZoneId at startup (db_task_zone_{ZoneId}, zone_{ZoneId}_db)
+    # Partition count is immutable within one generation. Expansion requires
+    # an offline drain and a new generation in login/db together.
+    TopicGeneration: 1
     PartitionCnt: 10 # ⚠️ MIRROR of go/login/etc/login.yaml Kafka.PartitionCnt.
-                     # broker 端真实 partition 数由 login 启动时 EnsureTopics
-                     # 决定(login.go:50)。此处只控制 db_rpc consumer worker 数。
-                     # 两边必须一致:不一致就 worker 空转或 partition 没人消费。
+                     # 两边不一致或 broker 已漂移时启动直接 fail-closed。
     IsOfflineExpand: false # Default false; dynamic expansion mode
     SubShardCount: 8 # 2026-05-28 stress §5: partition=10 × 1 worker per
                      # partition was the real throughput cap (not MySQL

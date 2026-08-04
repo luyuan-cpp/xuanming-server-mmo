@@ -35,8 +35,10 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 
 	w := &kafkago.Writer{
-		Addr:     kafkago.TCP(c.Kafka.Brokers...),
-		Balancer: &kafkago.LeastBytes{},
+		Addr: kafkago.TCP(c.Kafka.Brokers...),
+		// Hash 按 Key(player_id)选分区,保证同一玩家的事件有序
+		// (项目不变量:kafka key = 业务实体 ID)。LeastBytes 忽略 Key。
+		Balancer: &kafkago.Hash{},
 	}
 
 	// SceneManager zrpc client (via etcd discovery).

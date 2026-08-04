@@ -220,8 +220,16 @@ func TestAllocateDifferentPrefixIsolated(t *testing.T) {
 	}
 }
 
-// TestAllocateReclaimAfterRevoke: 关闭 host-A 后,host-B 可以立即抢到原 worker id。
-func TestAllocateReclaimAfterRevoke(t *testing.T) {
+// TestAllocateNoImmediateReclaimAfterClose: host-A 优雅退出后,host-B **不得**在 TTL 内
+// 拿到同一个 worker id。
+//
+// ⚠️ 本用例此前断言的是**相反**的行为("Close 后 host-B 可以立即抢到原 worker id"),
+// 并把它当作卖点。那正是一个真实缺陷:分配器取最小空闲 id ⇒ 刚释放的 id 就是下一个
+// 启动者优先拿到的;而 snowflake.NewNode 的启动 guard 只是"绝不在构造那一秒发号"的
+// **点排除**,不是"以前任高水位为地板"。新持有者若时钟落后于前任(NTP 漂移 / 快照恢复),
+// 它的 now+1 仍可能 ≤ 前任最后发号的那一秒,于是静默重发前任已发出的号。
+// lease TTL 是唯一能吸收这种跨机时钟偏斜的缓冲,Close() 因此刻意不再 Revoke。
+func TestAllocateNoImmediateReclaimAfterClose(t *testing.T) {
 	cli := newTestClient(t)
 	defer cli.Close()
 	prefix := uniquePrefix(t)
@@ -241,8 +249,38 @@ func TestAllocateReclaimAfterRevoke(t *testing.T) {
 	}
 	defer hdB.Close()
 
-	if hdB.WorkerID != idA {
-		t.Fatalf("expected B reclaims A's worker_id=%d, got %d", idA, hdB.WorkerID)
+	if hdB.WorkerID == idA {
+		t.Fatalf("host-B 在 TTL 内拿到了 host-A 刚释放的 worker_id=%d:"+
+			"隔离期没生效(Close 是不是又 Revoke 了?),跨机时钟偏斜下会静默重号", idA)
+	}
+}
+
+// TestAllocateSameHostnameStillReusesAfterClose: 去掉 Revoke 不能破坏 hostname 亲和。
+// nodeKey 仍挂在旧 lease 上,复用分支用 Value CAS 把它改挂到新 lease,
+// 因此同 hostname 重启必须仍然拿回同一个 worker id(不消耗新槽位)。
+func TestAllocateSameHostnameStillReusesAfterClose(t *testing.T) {
+	cli := newTestClient(t)
+	defer cli.Close()
+	prefix := uniquePrefix(t)
+	defer cleanupPrefix(t, cli, prefix)
+
+	hdA, err := AllocateWithKeepAlive(context.Background(), cli, prefix, "host-same", Options{LeaseTTL: 30})
+	if err != nil {
+		t.Fatalf("alloc first: %v", err)
+	}
+	idFirst := hdA.WorkerID
+	hdA.Close()
+	time.Sleep(100 * time.Millisecond)
+
+	hdB, err := AllocateWithKeepAlive(context.Background(), cli, prefix, "host-same", Options{LeaseTTL: 30})
+	if err != nil {
+		t.Fatalf("alloc second: %v", err)
+	}
+	defer hdB.Close()
+
+	if hdB.WorkerID != idFirst {
+		t.Fatalf("同 hostname 重启应复用 worker_id=%d, got %d(hostname 亲和被破坏)",
+			idFirst, hdB.WorkerID)
 	}
 }
 
@@ -289,5 +327,61 @@ func TestAllocateExhaustion(t *testing.T) {
 	_, err = AllocateWithKeepAlive(context.Background(), cli, prefix, "h3", opts)
 	if err == nil {
 		t.Fatalf("expected exhaustion error, got nil")
+	}
+}
+
+// TestOwnershipLostWhenAnotherHostTakesOver: 所有权由 **key** 表达,而 KeepAlive 只观测 **lease**。
+//
+// hostname 复用分支是无条件抢占(只 CAS nodeKey 的 value),别人接管时把 nodeKey/idKey 直接
+// Put 到自己的 lease 上。etcd 的 Put 只把 key 从旧 lease 摘下改挂新 lease,**不撤销也不通知旧 lease**
+// —— 被抢的一方 KeepAlive 仍然成功、channel 不关、自 fencing 也不触发(它续租得好好的),
+// 却已经不再拥有这个 worker id。两个进程于是用同一个 worker id 同时发号,全程零告警。
+//
+// 修复:额外 watch nodeKey,发现它改挂到别的 lease 就 markLost。本用例钉住这条通道。
+func TestOwnershipLostWhenAnotherHostTakesOver(t *testing.T) {
+	cli := newTestClient(t)
+	defer cli.Close()
+	prefix := uniquePrefix(t)
+	defer cleanupPrefix(t, cli, prefix)
+
+	const host = "host-shared"
+	victim, err := AllocateWithKeepAlive(context.Background(), cli, prefix, host, Options{LeaseTTL: 30})
+	if err != nil {
+		t.Fatalf("alloc victim: %v", err)
+	}
+	defer victim.Close()
+
+	select {
+	case <-victim.Lost():
+		t.Fatal("刚分配就报失去所有权")
+	default:
+	}
+
+	// 同 hostname 的第二个进程走复用分支,把两个 key 抢到自己的 lease 上。
+	// 受害者的 lease 依旧存活、KeepAlive 依旧成功。
+	taker, err := AllocateWithKeepAlive(context.Background(), cli, prefix, host, Options{LeaseTTL: 30})
+	if err != nil {
+		t.Fatalf("alloc taker: %v", err)
+	}
+	defer taker.Close()
+	if taker.WorkerID != victim.WorkerID {
+		t.Fatalf("前提不成立:接管者应复用同一个 worker id, victim=%d taker=%d",
+			victim.WorkerID, taker.WorkerID)
+	}
+
+	// 受害者必须察觉。修复前这里会超时 —— lease 还活着,没有任何通道会通知它。
+	select {
+	case <-victim.Lost():
+	case <-time.After(10 * time.Second):
+		t.Fatal("被抢占后 Lost() 未触发:两个进程会用同一个 worker id 同时发号")
+	}
+
+	// 受害者的 lease 确实还活着,证明"只监 lease 就是盲区"这一点。
+	ttlResp, err := cli.TimeToLive(context.Background(), victim.LeaseID)
+	if err != nil {
+		t.Fatalf("time to live: %v", err)
+	}
+	if ttlResp.TTL <= 0 {
+		t.Logf("注意:受害者 lease 已过期(TTL=%d),本次未能覆盖'lease 仍活着'那一支", ttlResp.TTL)
 	}
 }

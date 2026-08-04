@@ -63,15 +63,29 @@ func (o Options) maxWorkerID() uint64 {
 }
 
 // nodeKey 是 hostname → workerID 映射,用来支持 "同 hostname 重启复用同 id"。
-//   <prefix>/snowflake_nodes/<hostname> = <id>
+//
+//	<prefix>/snowflake_nodes/<hostname> = <id>
 func nodeKey(prefix, hostname string) string {
 	return fmt.Sprintf("%s/snowflake_nodes/%s", prefix, hostname)
 }
 
 // idKey 是 workerID 占位 key,反向映射回 hostname,用于扫描已占 ID。
-//   <prefix>/snowflake_ids/<id> = <hostname>
+//
+//	<prefix>/snowflake_ids/<id> = <hostname>
 func idKey(prefix string, id uint64) string {
 	return fmt.Sprintf("%s/snowflake_ids/%d", prefix, id)
+}
+
+// guardKey 记录某个 worker id **最近一次发号所在的秒**(自 snowflake.Epoch 起)。
+//
+//	<prefix>/snowflake_guard/<id> = <epochSec>
+//
+// 刻意**不挂 lease**:它必须比持有者活得久 —— 下一任拿到同一个 worker id 时要靠它
+// 把发号起点抬到前任高水位之上。挂了 lease 就会随前任一起消失,等于没有。
+// 量级是每个 worker id 一行,被池上界(NodeMask)封死,不会无界增长。
+// 这是 C++ 侧 `SETEX snowflake_guard:{node_type}:{node_id} 600 {now}` 的等价物。
+func guardKey(prefix string, id uint64) string {
+	return fmt.Sprintf("%s/snowflake_guard/%d", prefix, id)
 }
 
 func nodeKeyPrefix(prefix string) string {
@@ -233,8 +247,12 @@ func scanUsedWorkerIDs(ctx context.Context, cli *clientv3.Client, prefix string)
 type Handle struct {
 	LeaseID  clientv3.LeaseID
 	WorkerID uint64
-	cancel   context.CancelFunc
-	cli      *clientv3.Client
+	// GuardEpochSec 是**前任持有者**在这个 worker id 上最后记录的发号秒(自 snowflake.Epoch 起)。
+	// 用 NewNode() 构造发号器时会被当作地板注入;0 表示这个 id 此前没人用过。
+	GuardEpochSec uint64
+	prefix        string
+	cancel        context.CancelFunc
+	cli           *clientv3.Client
 
 	closing  atomic.Bool
 	lost     chan struct{}
@@ -284,22 +302,211 @@ func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, prefix, ho
 		return nil, fmt.Errorf("snowflakealloc: keepalive: %w", err)
 	}
 
-	h := &Handle{
-		LeaseID:  leaseID,
-		WorkerID: workerID,
-		cancel:   cancel,
-		cli:      cli,
-		lost:     make(chan struct{}),
+	// 读前任在这个 worker id 上留下的高水位。读不到(首次使用 / 被运维清过)就是 0,
+	// 退化成只有启动 guard 的旧强度,不阻断启动。
+	guardSec, gerr := readGuard(ctx, cli, prefix, workerID)
+	if gerr != nil {
+		logx.Errorf("[snowflakealloc] read guard watermark failed (prefix=%s, worker_id=%d): %v; "+
+			"falling back to boot-guard only — a clock-skewed takeover could replay the previous holder's ids",
+			prefix, workerID, gerr)
 	}
 
+	h := &Handle{
+		LeaseID:       leaseID,
+		WorkerID:      workerID,
+		GuardEpochSec: guardSec,
+		prefix:        prefix,
+		cancel:        cancel,
+		cli:           cli,
+		lost:          make(chan struct{}),
+	}
+
+	// 所有权由 **key** 表达,而 KeepAlive 只观测 **lease** —— 两者错配就是静默双发号盲区:
+	// Allocate 的 hostname 复用分支是无条件抢占(只 CAS nodeKey 的 value),
+	// 别人接管时会把 nodeKey/idKey 直接 Put 到他自己的 lease 上。etcd 的 Put 只是把 key
+	// 从旧 lease 摘下改挂新 lease,**不会撤销也不会通知旧 lease** —— 于是被抢的一方
+	// KeepAlive 仍然成功、channel 不关、自 fencing 也不触发(它续租得好好的),
+	// 却已经不再拥有这个 worker id。运维直接 etcdctl del 同理。
+	// 所以必须补一条按 key 归属判定的通道:watch nodeKey,发现它改挂到别的 lease 或被删,
+	// 立刻 markLost。起点 revision 取自下面这次 Get,并在同一次 Get 里先校验一遍当前归属,
+	// 堵住"抢占发生在 Allocate 与 watch 之间"的窗口。
+	nKey := nodeKey(prefix, hostname)
+	ownershipRev, err := verifyKeyOwnership(ctx, cli, nKey, leaseID)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("snowflakealloc: verify ownership: %w", err)
+	}
+	watchCh := cli.Watch(kaCtx, nKey, clientv3.WithRev(ownershipRev+1))
+
+	fenceAfter := selfFenceAfter(opts.ttl())
 	go func() {
-		for range ch {
-			// drain
+		// 自 fencing 看门狗:只靠"KeepAlive channel 关闭"感知失租**恒晚于服务端过期点**。
+		// clientv3(v3.5.x / v3.6.x 同)把 ka.deadline 设成 **收到响应的时刻** + TTL
+		// (lease.go 的 recvKeepAlive),而服务端的过期点是它**处理续租的时刻** + TTL,
+		// 前者恒晚一个 RTT;再叠加 deadlineLoop 每 1s 才扫一轮,channel 关闭时
+		// worker id 可能已经被 etcd 判过期、并分给别的进程了。
+		//
+		// 更关键的是:本包的消费方(guild / scene_manager)收到 Lost() 后走的是
+		// **优雅停** s.Stop(),排空在途请求期间仍会继续 Generate()。所以光"早点知道"不够,
+		// 还得留出足够排空的余量 —— 这里按 **发出请求侧的单调时间** 判定:距上一次成功续租
+		// 超过 fenceAfter(TTL 的 2/3)就主动认定失去身份。TTL=60s 时即 40s 触发,
+		// 此时服务端 lease 仍有约 20s 才过期,这 20s 就是留给优雅排空的预算(§租约与
+		// 重启时间预算必须闭合)。
+		//
+		// 不会误报:clientv3 的续租间隔是 TTL/3(20s),健康时距上次续租恒 ≤ ~20s < 40s。
+		ticker := time.NewTicker(fenceAfter / 4)
+		defer ticker.Stop()
+		lastRenew := time.Now() // 带单调读数,time.Since 不受墙钟跳变影响
+
+		for {
+			select {
+			case _, ok := <-ch:
+				if !ok {
+					h.onKeepAliveEnded(prefix, hostname)
+					return
+				}
+				lastRenew = time.Now()
+			case <-ticker.C:
+				if h.closing.Load() {
+					return
+				}
+				if since := time.Since(lastRenew); since >= fenceAfter {
+					h.onSelfFenced(prefix, hostname, since, fenceAfter)
+					return
+				}
+				// 顺带推进持久水位。复用这个已有的 ticker,不另起 goroutine / 第二套定时器。
+				// 水位只需"不晚于真实发号时刻"即可作为下一任的地板,故按 tick 粒度写足够。
+				h.advanceGuard(kaCtx)
+			case wr, ok := <-watchCh:
+				if h.closing.Load() {
+					return
+				}
+				if !ok || wr.Err() != nil {
+					// watch 断了就再也看不见被抢占,不能假装还持有所有权。
+					// fail-closed:按失去身份处理,交给编排重拉重新抢号。
+					h.onOwnershipLost(prefix, hostname,
+						fmt.Sprintf("ownership watch ended (closed=%v, err=%v)", !ok, wr.Err()))
+					return
+				}
+				for _, ev := range wr.Events {
+					if ev.Type == clientv3.EventTypeDelete {
+						h.onOwnershipLost(prefix, hostname, "node key deleted")
+						return
+					}
+					// 被接管时 value 不变(还是同一个 worker id),**变的是 lease** ——
+					// 所以只能比 lease,比 value 是看不出来的。
+					if ev.Kv != nil && clientv3.LeaseID(ev.Kv.Lease) != h.LeaseID {
+						h.onOwnershipLost(prefix, hostname,
+							fmt.Sprintf("node key re-attached to lease %x (ours is %x)",
+								ev.Kv.Lease, h.LeaseID))
+						return
+					}
+				}
+			}
 		}
-		h.onKeepAliveEnded(prefix, hostname)
 	}()
 
 	return h, nil
+}
+
+// selfFenceAfter 是"距上次成功续租多久就主动认定失去 worker id"。
+// 取 TTL 的 2/3:既远大于 clientv3 的续租间隔(TTL/3)不会误报,
+// 又在服务端过期点之前留下约 TTL/3 的余量给调用方优雅排空。
+// TTL 极小时钳一个下界,避免 fenceAfter 退化到与续租间隔同量级而误报。
+func selfFenceAfter(ttlSec int64) time.Duration {
+	d := time.Duration(ttlSec) * time.Second * 2 / 3
+	if d < 2*time.Second {
+		d = 2 * time.Second
+	}
+	return d
+}
+
+// NewNode 用本 Handle 的 worker id 构造发号器,并把前任高水位作为**地板**注入。
+//
+// 请一律用它取代裸 snowflake.NewNode(h.WorkerID):裸构造只有"不在构造秒发号"的点排除,
+// 顶不住跨机时钟偏斜接管、本机时钟回拨、前任借过逻辑秒这三类情况。
+func (h *Handle) NewNode() *snowflake.Node {
+	n := snowflake.NewNode(h.WorkerID)
+	if h.GuardEpochSec > 0 {
+		n.SetGuardTime(h.GuardEpochSec)
+	}
+	return n
+}
+
+// readGuard 读某个 worker id 的持久高水位。key 不存在返回 0(此前没人用过)。
+func readGuard(ctx context.Context, cli *clientv3.Client, prefix string, id uint64) (uint64, error) {
+	resp, err := cli.Get(ctx, guardKey(prefix, id))
+	if err != nil {
+		return 0, err
+	}
+	if len(resp.Kvs) == 0 {
+		return 0, nil
+	}
+	sec, perr := strconv.ParseUint(string(resp.Kvs[0].Value), 10, 64)
+	if perr != nil {
+		return 0, fmt.Errorf("malformed guard value %q: %w", resp.Kvs[0].Value, perr)
+	}
+	return sec, nil
+}
+
+// advanceGuard 把本 worker id 的持久高水位推到当前秒。写失败只告警不阻断:
+// 水位是"下一任的地板",本进程自己的唯一性不依赖它。
+func (h *Handle) advanceGuard(ctx context.Context) {
+	now := snowflake.NowEpochSec()
+	if now <= h.GuardEpochSec {
+		return // 时钟没前进(或回拨),不把水位往回写
+	}
+	putCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	_, err := h.cli.Put(putCtx, guardKey(h.prefix, h.WorkerID), strconv.FormatUint(now, 10))
+	cancel()
+	if err != nil {
+		logx.Errorf("[snowflakealloc] advance guard watermark failed (prefix=%s, worker_id=%d): %v",
+			h.prefix, h.WorkerID, err)
+		return
+	}
+	h.GuardEpochSec = now
+}
+
+// verifyKeyOwnership 确认 nodeKey 当前确实挂在 leaseID 上,并返回可用作 watch 起点的 revision。
+// 堵住"Allocate 成功之后、watch 建立之前被人抢走"的窗口。
+func verifyKeyOwnership(ctx context.Context, cli *clientv3.Client, nKey string,
+	leaseID clientv3.LeaseID) (int64, error) {
+	resp, err := cli.Get(ctx, nKey)
+	if err != nil {
+		return 0, err
+	}
+	if len(resp.Kvs) != 1 {
+		return 0, fmt.Errorf("node key %s missing right after allocation", nKey)
+	}
+	if got := clientv3.LeaseID(resp.Kvs[0].Lease); got != leaseID {
+		return 0, fmt.Errorf("node key %s already re-attached to lease %x (ours is %x)", nKey, got, leaseID)
+	}
+	return resp.Header.Revision, nil
+}
+
+// onOwnershipLost 在"key 归属已经不是自己"时调用。与失租不同,这里 lease 可能仍然活着、
+// KeepAlive 也仍在成功 —— 但 worker id 已经被别人接管,继续发号就是确定性撞号。
+func (h *Handle) onOwnershipLost(prefix, hostname, reason string) {
+	if h.closing.Load() {
+		return
+	}
+	logx.Errorf("[snowflakealloc] worker id ownership lost (prefix=%s, host=%s, worker_id=%d): %s; "+
+		"the lease may still be alive but another process now owns this id — MUST stop minting IDs now",
+		prefix, hostname, h.WorkerID, reason)
+	h.markLost()
+}
+
+// onSelfFenced 在"距上次成功续租超过安全余量"时调用:此时**还没有**收到 channel 关闭,
+// 但已经无法证明自己仍持有 worker id,按 fail-closed 立即报信,不等 etcd 的确认。
+func (h *Handle) onSelfFenced(prefix, hostname string, since, budget time.Duration) {
+	if h.closing.Load() {
+		return
+	}
+	logx.Errorf("[snowflakealloc] no keepalive ack for %v (budget %v; prefix=%s, host=%s, worker_id=%d); "+
+		"cannot prove this process still owns the worker id — MUST stop minting IDs now, "+
+		"the etcd lease will expire shortly and the id may be handed to another process",
+		since, budget, prefix, hostname, h.WorkerID)
+	h.markLost()
 }
 
 // onKeepAliveEnded 在 KeepAlive 响应流结束时调用。
@@ -315,9 +522,26 @@ func (h *Handle) onKeepAliveEnded(prefix, hostname string) {
 	h.markLost()
 }
 
-// Close 停止 KeepAlive 并 Revoke lease。
-// 调用后 etcd 会立即清掉 nodeKey + idKey,worker id 可被立即复用。
-// 多次调用安全。
+// Close 停止 KeepAlive。**刻意不 Revoke lease**:worker id 会在 lease 自然过期(TTL)
+// 之后才被释放,给下一个持有者留出一段隔离期。多次调用安全。
+//
+// 为什么不能 Revoke(这里曾经 Revoke,是一个真实缺陷):
+//   - 分配器取的是**最小空闲 id**(见 Allocate 第 2 步),所以刚被释放的 id 正是下一个
+//     启动者优先拿到的那个 —— 不是"可能撞",是"优先撞";
+//   - snowflake.NewNode 的启动 guard 只保证"绝不在构造那一秒发号"(**点排除**),
+//     它不是"以前任高水位为地板"。新持有者用的是**自己机器的时钟**:若它比前任慢
+//     (NTP 漂移 / 快照恢复 / 未同步),它的 now+1 可能仍 ≤ 前任最后发号的那一秒,
+//     于是逐位重发前任已经发出去的号,且全程静默无告警;
+//   - 立即 Revoke 恰好删掉了 lease TTL 这个唯一能吸收跨机时钟偏斜的缓冲,导致
+//     **优雅退出比崩溃退出更危险**(崩溃不走本函数,反而有 ≤TTL 的天然隔离)。
+//     去掉 Revoke 后两条退出路径行为一致。
+//
+// 代价:优雅退出后该 worker id 多占 ≤TTL(默认 60s)。池上界是 NodeMask=131071,
+// 且同 hostname 重启走 Allocate 的复用分支(nodeKey 仍在 ⇒ Value CAS 换新 lease,
+// 不消耗新槽位),所以耗尽需要 TTL 内出现十万级不同 hostname,现实中不可达。
+//
+// 注意这不是彻底修复,只是把可容忍的时钟偏斜从"数秒"抬到"≤TTL"。要在任意偏斜下都不撞,
+// 需要补 C++ 侧那套持久化水位(SETEX snowflake_guard + SetGuardTime 的地板语义)。
 func (h *Handle) Close() {
 	if h == nil {
 		return
@@ -328,10 +552,5 @@ func (h *Handle) Close() {
 		h.cancel()
 		h.cancel = nil
 	}
-	if h.cli != nil && h.LeaseID != 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-		defer cancel()
-		_, _ = h.cli.Revoke(ctx, h.LeaseID)
-		h.LeaseID = 0
-	}
+	h.LeaseID = 0
 }

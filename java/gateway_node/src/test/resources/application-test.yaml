@@ -40,7 +40,7 @@ login:
 
 zone-probe:
   interval-ms: 60000
+  status-ttl-ms: 180000
 
 cdn:
   base-url: "https://cdn.example.com"
-

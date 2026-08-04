@@ -30,8 +30,10 @@ import (
 )
 
 type ServiceContext struct {
-	RedisClient         *redis.Client
-	SnowFlake           *snowflake.Node
+	RedisClient *redis.Client
+	// SnowFlake 是 PlayerId 发号器。包了一层 fence 闸(见 player_id_gen.go):
+	// 失去 worker id 所有权后必须一个号都发不出去,不能靠"停服"兜底。
+	SnowFlake           *PlayerIDGen
 	NodeInfo            login_proto.NodeInfo
 	KafkaClient         *kafka.KeyOrderedKafkaProducer
 	ExpandMonitor       *kafka.ExpandMonitor
@@ -102,7 +104,6 @@ func NewServiceContext() *ServiceContext {
 	monitor, err := kafka.NewExpandMonitor(
 		config.AppConfig.Kafka.Brokers, // Kafka broker addresses
 		config.AppConfig.Kafka.Topic,   // Consumer group ID
-		redisClient,
 		kafkaClient,
 		1*time.Second,
 	)
@@ -336,7 +337,7 @@ func (c *ServiceContext) SetNodeId(nodeId int64) {
 		panic(fmt.Errorf("snowflake.NewNode(%d): %w", nodeId, err))
 	}
 
-	c.SnowFlake = node
+	c.SnowFlake = NewPlayerIDGen(node)
 }
 
 // SendBindSessionToGate sends a BindSession command to the target Gate via Kafka.

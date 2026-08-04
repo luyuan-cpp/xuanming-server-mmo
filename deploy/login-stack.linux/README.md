@@ -34,6 +34,13 @@ The same Dockerfiles ship to k8s in `../k8s/` unchanged once staging exists.
    docker compose -f deploy/docker-compose.yml up -d redis etcd mysql kafka
    ```
 3. Free host ports 8081 / 18090 / 51000 / 9101.
+4. Export a local-only robot login secret without echo or shell-history exposure;
+   Compose refuses to start when it is absent:
+   ```bash
+   read -rsp 'Local robot login secret: ' LOGIN_DEV_PASSWORD_SHARED_SECRET
+   echo
+   export LOGIN_DEV_PASSWORD_SHARED_SECRET
+   ```
 
 ## Up
 
@@ -48,10 +55,11 @@ all three layers.
 ## Smoke
 
 ```
-# 1) verify gateway up + reaches login + auth-providers loaded
-curl -s -X POST http://localhost:8081/api/login \
-  -H 'Content-Type: application/json' \
-  -d '{"zone_id":1,"account":"linux_smoke","password":"x"}' | jq .
+# 1) verify gateway up + reaches login + guarded dev auth loaded.
+# jq reads the secret from its environment; the plaintext is not placed in argv.
+jq -nc '{zone_id:1,account:"robot_linux_smoke",password:env.LOGIN_DEV_PASSWORD_SHARED_SECRET}' | \
+  curl -s -X POST http://localhost:8081/api/login \
+    -H 'Content-Type: application/json' --data-binary @- | jq .
 
 # expected: {"code":0,"players":[],"access_token":"…","refresh_token":"…",…}
 ```
@@ -104,9 +112,10 @@ GATE_RATE_LIMIT_ZONE_DEFAULT_BURST=4 \
 
 # then burst 10 reqs and confirm 4 pass + 6 QUEUEING (code:100)
 for i in $(seq 1 10); do
-  curl -s -X POST http://localhost:8081/api/login \
-    -H 'Content-Type: application/json' \
-    -d "{\"zone_id\":1,\"account\":\"limit_$i\",\"password\":\"x\"}"
+  jq -nc --arg account "robot_limit_$i" \
+    '{zone_id:1,account:$account,password:env.LOGIN_DEV_PASSWORD_SHARED_SECRET}' | \
+    curl -s -X POST http://localhost:8081/api/login \
+      -H 'Content-Type: application/json' --data-binary @-
   echo
 done | grep -oE '"code":[0-9]*' | sort | uniq -c
 ```

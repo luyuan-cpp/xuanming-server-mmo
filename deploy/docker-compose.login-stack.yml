@@ -27,9 +27,9 @@
 #   docker compose -f deploy/docker-compose.login-stack.yml up -d --build
 #
 #   # 3) smoke:
-#   curl -s -X POST http://localhost:8081/api/login \
-#     -H 'Content-Type: application/json' \
-#     -d '{"zone_id":1,"account":"linux_smoke","password":"x"}'
+#   jq -nc '{zone_id:1,account:"robot_linux_smoke",password:env.LOGIN_DEV_PASSWORD_SHARED_SECRET}' | \
+#     curl -s -X POST http://localhost:8081/api/login \
+#       -H 'Content-Type: application/json' --data-binary @-
 #
 #   # 4) stress (from host, hits the containerized gateway):
 #   PER_TIER_SEC=10 tools/scripts/gateway-mock-stress.sh 500 1000 2000
@@ -98,6 +98,9 @@ services:
     # ${INFRA_HOST:-host.docker.internal} so both work.
     environment:
       - INFRA_HOST=${INFRA_HOST:-host.docker.internal}
+      # Required local-only shared secret for the dev-gated robot_ password
+      # provider. Compose fails before startup when the host did not inject it.
+      - LOGIN_DEV_PASSWORD_SHARED_SECRET=${LOGIN_DEV_PASSWORD_SHARED_SECRET:?set LOGIN_DEV_PASSWORD_SHARED_SECRET}
     extra_hosts:
       # On Linux this is what makes host.docker.internal resolvable.
       - "host.docker.internal:host-gateway"

@@ -133,7 +133,7 @@ WHERE s.zone_id = SOURCE
 | `user.id` | `mysql_database_table.proto:19` | PK,Snowflake 全局唯一 | ❌ 不撞 |
 | `user.display_name` | `mysql_database_table.proto:20` | 未声明 UNIQUE — 允许同名 | ❌ **同名也能共存,本来就不是 ID** |
 | `user_accounts.account` (Redis) | `login_constants.go:14` `account:{account}` 全服共享前缀 | **login 服务层强制全服唯一** | ❌ **物理上不允许两个 zone 注册同 account** |
-| `user_accounts.account` (MySQL) | `go/login/model/mysql_database_table.sql:1` `MEDIUMTEXT` | 未声明 UNIQUE,但 **被 Redis 层兜底** | ❌ 同上 |
+| `user_accounts.account` (MySQL) | `go/login/model/mysql_database_table.sql:1` `VARCHAR(191)` | 新库为 PK；存量库须先跑 `model/migrations/20260803_password_auth.sql` 的非空/重复/超长 fail-closed 门禁 | ❌ 门禁通过后不撞 |
 | `AccountSimplePlayer` | `proto/common/base/user_accounts.proto:6-9` | 只有 `player_id` 一个字段 | N/A —— **没有 name 字段可撞** |
 | `player_database` | `mysql_database_table.proto:90-107` | `player_id` PK,无 name 字段 | N/A |
 | `player_id` | Snowflake `[time:32][node_id:17][step:15]` | 全局唯一 | ❌ 不撞 |

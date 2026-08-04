@@ -146,7 +146,7 @@
 ## 4. Token 体系(三层)
 
 ```
-Layer 1: 第三方鉴权 (WeChat OAuth / QQ Connect / Sa-Token / password)
+Layer 1: 首次鉴权 (WeChat OAuth / QQ Connect / Sa-Token；或显式启用的 MySQL Argon2id password)
               │
               │ 仅首次登录,验过一次
               ▼
@@ -270,7 +270,7 @@ Bound        15470→  2704    (5.7x 缓解)
 
 | auth_type | 实现 | 状态 | 账号映射 |
 |---|---|---|---|
-| `password` | `PasswordProvider` | ✅ | 直接用 account 字段 |
+| `password` | `ProductionPasswordProvider`（MySQL Argon2id） | ✅ 已实现、默认关闭 | 每次查询权威 `user_accounts`；禁止直接采信 account。存量库须先跑 schema 与哈希迁移；开发机器人另走前缀+环境密钥门 |
 | `satoken` | `SaTokenProvider` | ✅ | 查 SaToken Redis key |
 | `wechat` | `WeChatProvider` | ✅ | `wx_<unionid\|openid>` |
 | `qq` | `QQProvider` | ✅ | `qq_<unionid\|openid>` |
@@ -318,6 +318,7 @@ Sa-Token **不直接服务 C++ gate**,只在 Java Gateway 这一层发挥作用:
 ### 现状(已落地)
 - `RedisLocker` 防同账号并发登录冲突
 - `KeyOrderedKafkaProducer` 防同玩家消息乱序
+- `db_task_zone_*` 的 partition 数在同一 `TopicGeneration` 内不可变；扩容必须停写排空并切新 topic，见 [DB Task Kafka 分区不可变契约](./db-task-kafka-partition-contract.md)
 - `loginstep` 状态机防非法状态转移
 
 ### 缺口(任务 #10)

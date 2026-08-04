@@ -18,14 +18,18 @@ type Config struct {
 	Registry           RegistryConf       `json:"Registry"`
 	Timeouts           TimeoutConf        `json:"Timeouts"`
 	Kafka              KafkaConfig        `json:"Kafka"`
-	PlayerLocatorRpc   zrpc.RpcClientConf `json:"PlayerLocatorRpc"`   // player_locator gRPC client
-	SceneManagerRpc    zrpc.RpcClientConf `json:"SceneManagerRpc"`    // scene_manager gRPC client
-	GateTokenSecret    string             `json:"GateTokenSecret"`    // HMAC secret for gate connection tokens
+	PlayerLocatorRpc   zrpc.RpcClientConf `json:"PlayerLocatorRpc"` // player_locator gRPC client
+	SceneManagerRpc    zrpc.RpcClientConf `json:"SceneManagerRpc"`  // scene_manager gRPC client
+	GateTokenSecret    string             `json:"GateTokenSecret"`  // HMAC secret for gate connection tokens
 	TableDir           string             `json:",default=../../generated/tables"`
 	AuthProviders      AuthConfig         `json:"AuthProviders,optional"` // Third-party auth provider config
-	DevSkipAuth        bool               `json:"DevSkipAuth,optional"` // Dev mode: skip auth provider validation, use account field directly
-	TokenConfig        TokenConf          `json:"TokenConfig,optional"` // Access/refresh token TTL settings
-	PreloadPool        PreloadPoolConf    `json:"PreloadPool,optional"` // Background goroutine pool for player data preload
+	// DevSkipAuth 是已废弃的不安全开关。保留字段只为让旧配置在启动时
+	// 明确失败,不能因为结构体删字段而静默忽略、让开发者误以为仍生效。
+	DevSkipAuth     bool                `json:"DevSkipAuth,optional"`
+	PasswordAuth    PasswordAuthConf    `json:"PasswordAuth,optional"`
+	DevPasswordAuth DevPasswordAuthConf `json:"DevPasswordAuth,optional"`
+	TokenConfig     TokenConf           `json:"TokenConfig,optional"` // Access/refresh token TTL settings
+	PreloadPool     PreloadPoolConf     `json:"PreloadPool,optional"` // Background goroutine pool for player data preload
 
 	// LegacyGateLoginEnabled controls whether the deprecated path
 	// "Client → cpp gate (TCP) → ClientPlayerLogin.Login" is still served.
@@ -72,14 +76,14 @@ type Config struct {
 //     largest observed PlayerCount when no explicit ZoneCapacityOverride is
 //     set, so freshly-deployed zones aren't capped at "current load".
 type QueueConf struct {
-	Enabled              bool          `json:"Enabled,default=false"`
-	DispatchInterval     time.Duration `json:"DispatchInterval,default=1s"`
-	AdmitTTL             time.Duration `json:"AdmitTTL,default=60s"`
-	QueueEntryTTL        time.Duration `json:"QueueEntryTTL,default=1h"`
-	SoftCapMultiplier    float64       `json:"SoftCapMultiplier,default=1.5"`
-	DefaultRetryAfterMs  uint32        `json:"DefaultRetryAfterMs,default=2000"`
-	DispatcherLockTTL    time.Duration `json:"DispatcherLockTTL,default=30s"`
-	DispatcherLockKey    string        `json:"DispatcherLockKey,default=dispatcher:lock:login_queue"`
+	Enabled             bool          `json:"Enabled,default=false"`
+	DispatchInterval    time.Duration `json:"DispatchInterval,default=1s"`
+	AdmitTTL            time.Duration `json:"AdmitTTL,default=60s"`
+	QueueEntryTTL       time.Duration `json:"QueueEntryTTL,default=1h"`
+	SoftCapMultiplier   float64       `json:"SoftCapMultiplier,default=1.5"`
+	DefaultRetryAfterMs uint32        `json:"DefaultRetryAfterMs,default=2000"`
+	DispatcherLockTTL   time.Duration `json:"DispatcherLockTTL,default=30s"`
+	DispatcherLockKey   string        `json:"DispatcherLockKey,default=dispatcher:lock:login_queue"`
 	// ZoneCapacityOverride lets ops pin the per-zone admission ceiling
 	// without trusting gate-side soft caps. Key is zone_id (string for YAML),
 	// value is the absolute number of concurrent online players permitted.
@@ -92,16 +96,43 @@ type QueueConf struct {
 // more than the Kafka SyncProducer can drain (it is mutex-serialized), so
 // the pool acts as a bounded queue + backpressure / overload shield.
 type PreloadPoolConf struct {
-	Size           int           `json:"Size,default=256"`           // Worker count
-	StatsInterval  time.Duration `json:"StatsInterval,default=30s"` // Periodic snapshot log interval (0 = disabled)
+	Size          int           `json:"Size,default=256"`          // Worker count
+	StatsInterval time.Duration `json:"StatsInterval,default=30s"` // Periodic snapshot log interval (0 = disabled)
 }
 
 // AuthConfig holds third-party auth provider settings.
 type AuthConfig struct {
-	SaToken  *SaTokenAuthConf  `json:"SaToken,optional"`
-	WeChat   *WeChatAuthConf   `json:"WeChat,optional"`
-	QQ       *QQAuthConf       `json:"QQ,optional"`
-	NetEase  *NeteaseAuthConf  `json:"NetEase,optional"`
+	SaToken *SaTokenAuthConf `json:"SaToken,optional"`
+	WeChat  *WeChatAuthConf  `json:"WeChat,optional"`
+	QQ      *QQAuthConf      `json:"QQ,optional"`
+	NetEase *NeteaseAuthConf `json:"NetEase,optional"`
+}
+
+// PasswordAuthConf 配置生产口令认证。MySQL DSN 含凭证，只允许通过命名的
+// 环境变量注入，不能把 DSN/密码直接写进 YAML；运行时账号只需
+// user_accounts 的 SELECT 权限。password 必须已由离线工具迁移为 Argon2id
+// PHC 字符串；空值和旧明文都会 fail-closed。
+type PasswordAuthConf struct {
+	Enabled      bool   `json:"Enabled,default=false"`
+	DSNEnv       string `json:"DSNEnv,optional"`
+	MaxOpenConns int    `json:"MaxOpenConns,default=20"`
+	MaxIdleConns int    `json:"MaxIdleConns,default=10"`
+	// 单次 Argon2id 默认使用 64 MiB；并发 2 约占 128 MiB。代码硬上限为 8。
+	KDFConcurrency int `json:"KDFConcurrency,default=2"`
+	// 只约束等待 semaphore 的时间；调用方 context 更早取消时立即失败。
+	KDFWaitTimeout time.Duration `json:"KDFWaitTimeout,default=500ms"`
+}
+
+// DevPasswordAuthConf 是唯一允许“不接账号库口令体系”的开发登录路径。
+// 默认关闭；只有 go-zero Mode=dev/test 才允许开启，并同时要求共享密钥
+// 和账号前缀白名单，避免重新引入
+// “报上任意 account 即登录”的生产漏洞。共享密钥必须从环境变量注入，
+// 不得写入受管配置文件。
+type DevPasswordAuthConf struct {
+	Enabled bool `json:"Enabled,default=false"`
+	// SharedSecretEnv 只能填写环境变量名；共享密钥本身不得进入受管配置。
+	SharedSecretEnv        string   `json:"SharedSecretEnv,optional"`
+	AllowedAccountPrefixes []string `json:"AllowedAccountPrefixes,optional"`
 }
 
 // SaTokenAuthConf holds SA-Token Redis lookup settings.
@@ -139,7 +170,7 @@ type NeteaseAuthConf struct {
 
 // TokenConf holds access/refresh token TTL settings.
 type TokenConf struct {
-	AccessTokenTTL  time.Duration `json:"AccessTokenTTL,default=2h"`  // Access token lifetime (default 2 hours)
+	AccessTokenTTL  time.Duration `json:"AccessTokenTTL,default=2h"`    // Access token lifetime (default 2 hours)
 	RefreshTokenTTL time.Duration `json:"RefreshTokenTTL,default=720h"` // Refresh token lifetime (default 30 days)
 }
 
@@ -168,9 +199,13 @@ type RedisConf struct {
 
 // KafkaConfig holds Kafka producer and consumer settings.
 type KafkaConfig struct {
-	Brokers          []string                `json:"Brokers"`
-	GroupID          string                  `json:"GroupID"`
-	Topic            string                  `json:"Topic,optional"` // Derived from Node.ZoneId at startup
+	Brokers []string `json:"Brokers"`
+	GroupID string   `json:"GroupID"`
+	Topic   string   `json:"Topic,optional"` // Derived from Node.ZoneId at startup
+	// TopicGeneration is part of the immutable routing identity. Keep 1 for
+	// db_task_zone_{ZoneId}; a partition-count change requires an offline drain
+	// and a higher generation, which creates a new topic namespace.
+	TopicGeneration  uint32                  `json:"TopicGeneration,default=1"`
 	PartitionCnt     int32                   `json:"PartitionCnt"`
 	InitialPartition int                     `json:"InitialPartition"` // Should match PartitionCnt
 	DialTimeout      time.Duration           `json:"DialTimeout"`
@@ -183,10 +218,10 @@ type KafkaConfig struct {
 	StatsInterval    time.Duration           `json:"StatsInterval"`
 	CompressionType  sarama.CompressionCodec `json:"CompressionType"` // none/gzip/snappy
 	Idempotent       bool                    `json:"Idempotent"`
-	MaxOpenRequests  int                     `json:"MaxOpenRequests"` // Must be 1 when idempotent
+	MaxOpenRequests  int                     `json:"MaxOpenRequests"`              // Must be 1 when idempotent
 	RetentionMs      int64                   `json:"RetentionMs,default=86400000"` // Topic retention in ms (default 24h)
-	                                                                                  // P1 数据安全加固 2026-06-03: 旧值 300000 (5min)
-	                                                                                  // 太短,db service 卡住会丢数据
+	// P1 数据安全加固 2026-06-03: 旧值 300000 (5min)
+	// 太短,db service 卡住会丢数据
 }
 
 // SnowflakeConf holds snowflake ID generator settings.
@@ -235,4 +270,12 @@ var AppConfig Config
 // DbTaskTopic returns the zone-specific Kafka topic for DB tasks.
 func DbTaskTopic(zoneId uint32) string {
 	return fmt.Sprintf("db_task_zone_%d", zoneId)
+}
+
+func DbTaskTopicForGeneration(zoneId, generation uint32) string {
+	base := DbTaskTopic(zoneId)
+	if generation <= 1 {
+		return base
+	}
+	return fmt.Sprintf("%s_g%d", base, generation)
 }

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "player_locator/proto/player_locator";
+option go_package = "proto/player_locator";
 
 package playerlocator;
 
@@ -59,6 +59,14 @@ message GetSessionResponse {
   bool found = 2;
 }
 
+// 正常登出必须带上 Login 观察到的精确会话。会话已被替换或版本已推进后，
+// 迟到的旧 Gate LeaveGame 只能成为无操作，不能删除新会话。
+message MarkOfflineRequest {
+  uint64 player_id = 1;
+  uint32 expected_session_id = 2;
+  uint32 expected_session_version = 3;
+}
+
 // Disconnect request: mark DISCONNECTING + start TTL lease
 message SetDisconnectingRequest {
   uint64 player_id = 1;
@@ -97,7 +105,7 @@ message LeaseExpiredEvent {
 service PlayerLocator {
   rpc SetLocation(PlayerLocation) returns (Empty);
   rpc GetLocation(PlayerId) returns (PlayerLocation);
-  rpc MarkOffline(PlayerId) returns (Empty);
+  rpc MarkOffline(MarkOfflineRequest) returns (Empty);
 
   // Session management
   rpc SetSession(SetSessionRequest) returns (Empty);

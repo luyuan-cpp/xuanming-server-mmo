@@ -151,12 +151,38 @@ PreloadPool:
   Size: 256
   StatsInterval: 30s
 
-# Dev mode: skip all auth provider validation (use account field directly).
-# WARNING: Never enable in production!
-# DevSkipAuth: true
+# Production password auth is opt-in and reads Argon2id PHC hashes from the
+# authoritative MySQL user_accounts.password column on EVERY password login.
+# The DSN (including DB credentials) must come from the named environment
+# variable and should grant SELECT on user_accounts only; never put the DSN
+# itself in this file. Disabled means fail-closed, while third-party/access-token
+# auth remains available.
+PasswordAuth:
+  Enabled: false
+  DSNEnv: "LOGIN_PASSWORD_AUTH_DSN"
+  MaxOpenConns: 20
+  MaxIdleConns: 10
+  # Each Argon2id verification uses 64 MiB. Per-process KDF working set is
+  # approximately KDFConcurrency * 64 MiB. Default 2 = ~128 MiB; hard max 8.
+  KDFConcurrency: 2
+  # Waiting for a KDF slot is bounded and context-aware; overload fails closed.
+  KDFWaitTimeout: 500ms
+
+# Local robots may use this explicit development-only gate instead:
+# the shared secret must come from an environment variable and only the listed
+# account prefixes are accepted. It is rejected at startup unless go-zero
+# Mode is dev or test; production mode cannot enable it. PasswordAuth and
+# DevPasswordAuth are mutually exclusive.
+# DevPasswordAuth:
+#   Enabled: true
+#   SharedSecretEnv: "LOGIN_DEV_PASSWORD_SHARED_SECRET"
+#   AllowedAccountPrefixes:
+#     - "robot_"
+#     - "dev_"
 
 # Third-party auth provider config (all optional).
-# "password" provider is always available. Others are enabled by uncommenting.
+# Password is disabled by default (see PasswordAuth above). Third-party
+# providers can still be enabled independently.
 #
 # Roll-out order for a new provider (e.g. WeChat):
 #   1. Provision AppId/AppSecret on the 3rd-party platform.
@@ -237,9 +263,12 @@ Kafka:
     - "127.0.0.1:9092"
   GroupID: "db_rpc_consumer_group"
   # Topic is derived from Node.ZoneId at startup (db_task_zone_{ZoneId})
+  # Partition count is immutable for one topic generation. To expand, stop
+  # writers, drain the old topic + retry ready/processing queues, then raise
+  # TopicGeneration and PartitionCnt in login/db together.
+  TopicGeneration: 1
   PartitionCnt: 10  # 2026-05-26 stress §10part: 5->10 to lift db worker pool
-  # ⚠️ AUTHORITY: login.go:50 EnsureTopics 启动时按这里调 CreatePartitions
-  # 扩 broker。db/etc/db.yaml 的 PartitionCnt 必须与此一致。
+  # ⚠️ login/db 两边必须完全一致；启动门禁不会原地扩 broker。
   # 2026-05-25 stress §N: db worker count = partition count (per
   # go/db/internal/kafka/key_ordered_consumer.go workers map). 5 partition
   # 在 45k 浪涌下端到端 100-500ms / task,稳态吞吐 50-100/s 远低于浪涌

@@ -179,15 +179,13 @@ Client B → Gate B(TCP) → Login(gRPC EnterGame)
 player_locator LeaseMonitor 轮询 Redis ZSET:
     │
     ├─ 发现 lease 过期的 playerId
-    ├─ player_locator.MarkOffline(playerId)
-    │     └─ state = Offline
-    │
-    └─ Kafka → gate-{gateId}: GateCommand{PlayerLeaseExpired, sessionId, playerId}
-         │
-         └─ Gate 收到 PlayerLeaseExpiredEvent:
-              ├─ 校验 playerId 匹配（防止 zombie 消息）
-              ├─ 断开连接 / 清理 SessionInfo
-              └─ 可选: 通知 Scene 清理玩家实体
+    ├─ ready → processing token claim（30s deadline，10s heartbeat）
+    ├─ 完整 PlayerSession protobuf CAS：只删除 claim 对应的 DISCONNECTING 版本
+    ├─ Kafka → gate-{gateId}: GateCommand{PlayerLeaseExpired, sessionId, playerId}
+    ├─ gRPC → SceneManager.LeaveScene(playerId, authoritative sceneId)
+    └─ 两个外部副作用都成功后才 ack processing
+         ├─ 失败/进程退出：保留 payload，deadline 后换 token 重试
+         └─ commit 后尚未 ack：SetSession fail-closed，禁止新会话抢走旧清理权
 
 Scene 侧:
     └─ 收到 ExitGame 或超时检测:
@@ -195,6 +193,16 @@ Scene 侧:
               ├─ SavePlayerToRedis (持久化)
               └─ 销毁玩家实体
 ```
+
+正常 `LeaveGame` 调用 `MarkOffline{player_id, expected_session_id,
+expected_session_version}`；Locator 只在 session id/version 仍匹配时以 Lua CAS
+删除。迟到的旧连接请求是成功 no-op，不能删掉替换登录后的新会话。
+
+清理 receipt 的 fail-closed 边界：只要 Redis 中仍能确认权威 scene，
+`SceneManagerClient` 未配置或 `LeaveScene` 失败都视为外部副作用失败，processing
+token/payload 保留到 deadline 后换 token 重试，不能 ACK。claim member 与 payload
+内 `player_id` 不一致时同样禁止通知、删除和 ACK；不可信身份修复前保留 receipt，
+避免把损坏状态静默固化成永久 `DISCONNECTING`。
 
 ---
 

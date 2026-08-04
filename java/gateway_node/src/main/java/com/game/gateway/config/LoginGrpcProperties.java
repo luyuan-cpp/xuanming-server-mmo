@@ -9,13 +9,14 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * use go-zero's etcd resolver here: jetcd is already on the classpath, but
  * piping go-zero's URI scheme into grpc-java requires extra glue. Instead we
  * resolve via the existing {@link com.game.gateway.etcd.GateWatcher}-style
- * pattern when needed; for now a direct host:port (or comma-separated list)
- * is the simplest reliable path. Multiple endpoints fall back round-robin.
+ * pattern when needed; for now a direct endpoint list is the simplest reliable
+ * path. Zone-bound RPCs require {@code zoneId=host:port}; bare endpoints only
+ * participate in the genuinely zone-less RefreshToken round-robin pool.
  */
 @ConfigurationProperties(prefix = "login.grpc")
 public class LoginGrpcProperties {
 
-    /** {@code host:port[,host:port...]}. Required when /api/login is used. */
+    /** {@code zoneId=host:port[,zoneId=host:port...]}; bare entries are RefreshToken-only. */
     private String endpoints = "127.0.0.1:50000";
 
     /** Per-call timeout. */

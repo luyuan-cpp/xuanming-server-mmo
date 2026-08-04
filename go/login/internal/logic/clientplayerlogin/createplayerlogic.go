@@ -102,7 +102,16 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		logx.Infof("Account player limit reached: %s", account)
 		return resp, nil
 	}
-	newPlayerId := uint64(l.svcCtx.SnowFlake.Generate())
+	// 失去 worker id 所有权后发号器被 fence,建角整体失败。
+	// 绝不能吞掉错误再用 0 或自造 id —— 那会与接管了同一 worker id 的进程
+	// 发出逐位相同的 PlayerId,而 player_database 上并没有唯一索引兜底。
+	generatedID, err := l.svcCtx.SnowFlake.Generate()
+	if err != nil {
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginDataSerializeFailed)}
+		logx.Errorf("Refusing to create player: id generator unavailable (account=%s): %v", account, err)
+		return resp, nil
+	}
+	newPlayerId := uint64(generatedID)
 	newPlayer := &login_proto_common.AccountSimplePlayer{PlayerId: newPlayerId}
 	userAccount.SimplePlayers.Players = append(userAccount.SimplePlayers.Players, newPlayer)
 

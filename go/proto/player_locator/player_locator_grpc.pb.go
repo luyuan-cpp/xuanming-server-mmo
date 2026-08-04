@@ -35,7 +35,7 @@ const (
 type PlayerLocatorClient interface {
 	SetLocation(ctx context.Context, in *PlayerLocation, opts ...grpc.CallOption) (*base.Empty, error)
 	GetLocation(ctx context.Context, in *PlayerId, opts ...grpc.CallOption) (*PlayerLocation, error)
-	MarkOffline(ctx context.Context, in *PlayerId, opts ...grpc.CallOption) (*base.Empty, error)
+	MarkOffline(ctx context.Context, in *MarkOfflineRequest, opts ...grpc.CallOption) (*base.Empty, error)
 	// Session management
 	SetSession(ctx context.Context, in *SetSessionRequest, opts ...grpc.CallOption) (*base.Empty, error)
 	GetSession(ctx context.Context, in *GetSessionRequest, opts ...grpc.CallOption) (*GetSessionResponse, error)
@@ -71,7 +71,7 @@ func (c *playerLocatorClient) GetLocation(ctx context.Context, in *PlayerId, opt
 	return out, nil
 }
 
-func (c *playerLocatorClient) MarkOffline(ctx context.Context, in *PlayerId, opts ...grpc.CallOption) (*base.Empty, error) {
+func (c *playerLocatorClient) MarkOffline(ctx context.Context, in *MarkOfflineRequest, opts ...grpc.CallOption) (*base.Empty, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(base.Empty)
 	err := c.cc.Invoke(ctx, PlayerLocator_MarkOffline_FullMethodName, in, out, cOpts...)
@@ -127,7 +127,7 @@ func (c *playerLocatorClient) Reconnect(ctx context.Context, in *ReconnectReques
 type PlayerLocatorServer interface {
 	SetLocation(context.Context, *PlayerLocation) (*base.Empty, error)
 	GetLocation(context.Context, *PlayerId) (*PlayerLocation, error)
-	MarkOffline(context.Context, *PlayerId) (*base.Empty, error)
+	MarkOffline(context.Context, *MarkOfflineRequest) (*base.Empty, error)
 	// Session management
 	SetSession(context.Context, *SetSessionRequest) (*base.Empty, error)
 	GetSession(context.Context, *GetSessionRequest) (*GetSessionResponse, error)
@@ -149,7 +149,7 @@ func (UnimplementedPlayerLocatorServer) SetLocation(context.Context, *PlayerLoca
 func (UnimplementedPlayerLocatorServer) GetLocation(context.Context, *PlayerId) (*PlayerLocation, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetLocation not implemented")
 }
-func (UnimplementedPlayerLocatorServer) MarkOffline(context.Context, *PlayerId) (*base.Empty, error) {
+func (UnimplementedPlayerLocatorServer) MarkOffline(context.Context, *MarkOfflineRequest) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method MarkOffline not implemented")
 }
 func (UnimplementedPlayerLocatorServer) SetSession(context.Context, *SetSessionRequest) (*base.Empty, error) {
@@ -222,7 +222,7 @@ func _PlayerLocator_GetLocation_Handler(srv interface{}, ctx context.Context, de
 }
 
 func _PlayerLocator_MarkOffline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PlayerId)
+	in := new(MarkOfflineRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
@@ -234,7 +234,7 @@ func _PlayerLocator_MarkOffline_Handler(srv interface{}, ctx context.Context, de
 		FullMethod: PlayerLocator_MarkOffline_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(PlayerLocatorServer).MarkOffline(ctx, req.(*PlayerId))
+		return srv.(PlayerLocatorServer).MarkOffline(ctx, req.(*MarkOfflineRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }

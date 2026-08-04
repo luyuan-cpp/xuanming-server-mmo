@@ -2,6 +2,7 @@ package logic
 
 import (
 	"context"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -60,25 +61,52 @@ func (l *SetDisconnectingLogic) SetDisconnecting(in *pb.SetDisconnectingRequest)
 		ttl = 30 * time.Second
 	}
 
-	// Update state to disconnecting
+	if session.State == pb.PlayerSessionState_SESSION_STATE_DISCONNECTING {
+		// 同一断线事件的 RPC 重放不延长原租约，保持第一次调用的清理 deadline。
+		return &common.Empty{}, nil
+	}
+	if session.State != pb.PlayerSessionState_SESSION_STATE_ONLINE {
+		l.Infof("SetDisconnecting: player=%d state=%v, ignoring", in.PlayerId, session.State)
+		return &common.Empty{}, nil
+	}
+
+	// 状态变化也是 session 的真实变化，必须推进版本；monitor 的完整 protobuf
+	// CAS 会因此同时约束 session_id 与 session_version。
 	session.State = pb.PlayerSessionState_SESSION_STATE_DISCONNECTING
+	session.SessionVersion++
 	updated, err := proto.Marshal(session)
 	if err != nil {
 		return nil, err
 	}
 
-	// Set with TTL — Redis auto-deletes when lease expires
-	if err := l.svcCtx.RedisClient.Set(l.ctx, key, updated, ttl).Err(); err != nil {
+	// 会话载荷不再靠 Redis TTL 删除，清理时机只由可靠的 lease ZSET 决定。
+	//
+	// 旧实现让会话 TTL 与 lease deadline 相等,于是 monitor claim 该玩家时,承载
+	// GateId/GateInstanceId/SceneId/SceneNodeId 的会话键往往已被 Redis 删掉:
+	// tick 相位与批量积压都保证 monitor 晚于 TTL。静态宽限也无法覆盖大规模断线。
+	// 现在 ready -> processing claim 会保留载荷，外部副作用全部成功后才 ack；
+	// 因此 session 必须活到显式 CAS 清理，不能再有独立的提前过期时钟。
+	playerID := strconv.FormatUint(in.PlayerId, 10)
+	swapped, err := setDisconnectingScript.Run(
+		l.ctx,
+		l.svcCtx.RedisClient,
+		sessionLifecycleKeys(in.PlayerId),
+		data,
+		updated,
+		0,
+		time.Now().Add(ttl).Unix(),
+		playerID,
+	).Int()
+	if err != nil {
 		return nil, err
 	}
+	if swapped != 1 {
+		l.Infof("SetDisconnecting: session changed during CAS player=%d session=%d, ignoring stale disconnect",
+			in.PlayerId, in.SessionId)
+		return &common.Empty{}, nil
+	}
 
-	// Add to lease tracking ZSET for the monitor to detect expiry
-	expiry := float64(time.Now().Add(ttl).Unix())
-	l.svcCtx.RedisClient.ZAdd(l.ctx, LeaseZSetKey, redis.Z{
-		Score:  expiry,
-		Member: in.PlayerId,
-	})
-
-	l.Infof("SetDisconnecting: player=%d session=%d ttl=%v", in.PlayerId, in.SessionId, ttl)
+	l.Infof("SetDisconnecting: player=%d session=%d version=%d ttl=%v",
+		in.PlayerId, in.SessionId, session.SessionVersion, ttl)
 	return &common.Empty{}, nil
 }

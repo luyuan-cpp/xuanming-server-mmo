@@ -3,37 +3,43 @@
 //
 // SCOPE — what these tests do, and what they don't:
 //
-//   * They test `worker.processTaskBatch` and the `dbOpHandlers` dispatch path
+//   - They test `worker.processTaskBatch` and the `dbOpHandlers` dispatch path
 //     IN ISOLATION: no real Kafka, no real MySQL, no real consumer-group setup.
-//   * They use miniredis for the Redis side (write-back, retry queue).
-//   * They REPLACE `dbOpHandlers` with recording handlers so tests can assert
+//   - They use miniredis for the Redis side (write-back, retry queue).
+//   - They REPLACE `dbOpHandlers` with recording handlers so tests can assert
 //     "what would have been written to the DB, in what order".
 //
 // CONSISTENCY CONTRACT BEING TESTED
 //
-//   For any (player_id, msg_type), if Scene emits writes W1, W2, ..., Wn
-//   through the key-ordered Kafka producer (key = player_id), the final
-//   side effect on MySQL+Redis MUST equal Wn — regardless of how the
-//   consumer batches, coalesces, or retries them.
+//	For any (player_id, msg_type), if Scene emits writes W1, W2, ..., Wn
+//	through the key-ordered Kafka producer (key = player_id), the final
+//	side effect on MySQL+Redis MUST equal Wn — regardless of how the
+//	consumer batches, coalesces, or retries them.
 //
 // HISTORY — three bugs that these tests originally caught (now FIXED in
 // key_ordered_consumer.go; kept here as regression tests):
 //
-//   * TC3 (read-as-barrier): a read between W1 and W2 used to coalesce W1
+//   - TC3 (read-as-barrier): a read between W1 and W2 used to coalesce W1
 //     away, leaving the read to observe the pre-W1 row. Fixed by reverse-
 //     pass coalescing that treats reads as segment barriers.
-//   * TC5a (kafka-origin failure data loss): a failed Kafka-origin write
+//   - TC5a (kafka-origin failure data loss): a failed Kafka-origin write
 //     used to be silently dropped while its offset was committed. Fixed by
 //     extracting dbTask from kafkaMsg up front in handleTask so the retry
 //     queue path applies to both forms.
-//   * TC5b (stale retry overwrite): a retry of W2 that arrived after W3 had
+//   - TC5b (stale retry overwrite): a retry of W2 that arrived after W3 had
 //     already persisted used to overwrite W3. Fixed by a per-key applied-seq
 //     guard in Redis: every successful write records its seq, and any
 //     subsequent task with a smaller seq is dropped.
+//   - TC5c (same-batch retry inversion): a stale retry that entered the batch
+//     after a newer fresh delivery used to win coalescing by queue position,
+//     ACK the fresh offset, and regress MySQL. Coalescing now compares
+//     (origin partition, offset+1) and ACKs skipped retry receipts.
 package kafka
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -44,6 +50,7 @@ import (
 
 	db_locker "db/internal/locker"
 	db_proto "proto/db"
+	"shared/kafkautil"
 
 	"github.com/IBM/sarama"
 	"github.com/alicebob/miniredis/v2"
@@ -66,6 +73,36 @@ type recordedCall struct {
 	msgType string
 	taskID  string
 	body    []byte
+}
+
+type recordingSession struct {
+	ctx           context.Context
+	claims        map[string][]int32
+	mu            sync.Mutex
+	markedOffsets []int64
+}
+
+func (s *recordingSession) Claims() map[string][]int32               { return s.claims }
+func (s *recordingSession) MemberID() string                         { return "test-member" }
+func (s *recordingSession) GenerationID() int32                      { return 1 }
+func (s *recordingSession) MarkOffset(string, int32, int64, string)  {}
+func (s *recordingSession) Commit()                                  {}
+func (s *recordingSession) ResetOffset(string, int32, int64, string) {}
+func (s *recordingSession) MarkMessage(msg *sarama.ConsumerMessage, _ string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.markedOffsets = append(s.markedOffsets, msg.Offset)
+}
+func (s *recordingSession) Context() context.Context {
+	if s.ctx != nil {
+		return s.ctx
+	}
+	return context.Background()
+}
+func (s *recordingSession) marked() []int64 {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return append([]int64(nil), s.markedOffsets...)
 }
 
 // recordingHarness installs replacement dbOpHandlers and lets the test inject
@@ -168,14 +205,16 @@ func newTestWorker(t *testing.T, partition int32) (*worker, *miniredis.Miniredis
 	t.Cleanup(cancel)
 
 	w := &worker{
-		partition:     partition,
-		taskCh:        make(chan *workerTask, 1024),
-		ctx:           ctx,
-		redisClient:   rc,
-		locker:        db_locker.NewRedisLocker(rc),
-		topic:         "test-db-task",
-		retryQueueKey: "kafka:retry:queue:test-db-task",
-		wg:            &sync.WaitGroup{},
+		partition:          partition,
+		taskCh:             make(chan *workerTask, 1024),
+		ctx:                ctx,
+		redisClient:        rc,
+		locker:             db_locker.NewRedisLocker(rc),
+		topic:              "test-db-task",
+		retryQueueKey:      "kafka:retry:queue:test-db-task",
+		retryProcessingKey: "kafka:retry:processing:test-db-task",
+		retryDeadQueueKey:  "kafka:dead:queue:test-db-task",
+		wg:                 &sync.WaitGroup{},
 	}
 	return w, mr, newHarness(t)
 }
@@ -205,7 +244,12 @@ func makeWriteTask(t *testing.T, key uint64, msgType string, seq uint64) *worker
 	}
 	// Populate workerTask.seq so the per-key applied-seq guard in
 	// handleTask can reject stale retries (TC5b regression coverage).
-	return &workerTask{dbTask: dbTask, seq: seq}
+	return &workerTask{
+		dbTask:             dbTask,
+		seq:                seq,
+		originPartition:    0,
+		hasOriginPartition: true,
+	}
 }
 
 func makeReadTask(t *testing.T, key uint64, msgType string, tag string) *workerTask {
@@ -213,14 +257,18 @@ func makeReadTask(t *testing.T, key uint64, msgType string, tag string) *workerT
 	dummy := &db_proto.TaskResult{}
 	bodyBytes, err := proto.Marshal(dummy)
 	require.NoError(t, err)
-	return &workerTask{dbTask: &db_proto.DBTask{
-		Key:       key,
-		Op:        "read",
-		MsgType:   msgType,
-		Body:      bodyBytes,
-		TaskId:    fmt.Sprintf("k=%d:t=%s:read=%s", key, msgType, tag),
-		WhereCase: fmt.Sprintf("player_id='%d'", key),
-	}}
+	return &workerTask{
+		dbTask: &db_proto.DBTask{
+			Key:       key,
+			Op:        "read",
+			MsgType:   msgType,
+			Body:      bodyBytes,
+			TaskId:    fmt.Sprintf("k=%d:t=%s:read=%s", key, msgType, tag),
+			WhereCase: fmt.Sprintf("player_id='%d'", key),
+		},
+		originPartition:    0,
+		hasOriginPartition: true,
+	}
 }
 
 // makeKafkaWriteTask wraps the same payload but as a Kafka-origin task so we
@@ -243,7 +291,9 @@ func makeKafkaWriteTask(t *testing.T, key uint64, msgType string, seq uint64) *w
 		},
 		// Production code in ConsumeClaim sets seq = offset + 1 so that
 		// seq=0 stays reserved as "no version info"; mirror that here.
-		seq: seq + 1,
+		seq:                seq + 1,
+		originPartition:    0,
+		hasOriginPartition: true,
 		// session intentionally nil: handleTask guards `if task.session != nil`.
 	}
 }
@@ -444,8 +494,11 @@ func TestProcessTaskBatch_KafkaFailure_MustEnterRetryQueue(t *testing.T) {
 	// the per-key applied-seq guard is preserved across retries.
 	popped, err := w.redisClient.RPop(w.ctx, w.retryQueueKey).Bytes()
 	require.NoError(t, err)
-	gotSeq, taskBytes := unwrapRetryPayload(popped)
+	gotSeq, gotPartition, hasPartition, taskBytes := unwrapRetryPayload(popped)
 	require.NotZero(t, gotSeq, "retry payload must carry the original kafka seq, not 0")
+	require.True(t, hasPartition, "retry payload must carry the origin partition (v2 format)")
+	assert.Equal(t, w.partition, gotPartition,
+		"retry payload must record the worker's own partition so the retry routes back to it")
 
 	var retried db_proto.DBTask
 	require.NoError(t, proto.Unmarshal(taskBytes, &retried))
@@ -454,6 +507,26 @@ func TestProcessTaskBatch_KafkaFailure_MustEnterRetryQueue(t *testing.T) {
 	assert.Equal(t, msgType, retried.MsgType)
 
 	_ = mr
+}
+
+func TestWriteBackDBCacheReturnsRedisFailure(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rc := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rc.Close() })
+	task := makeWriteTask(t, 5005, "taskpb.TaskResult", 1)
+	msg := &db_proto.TaskResult{Success: true, Timestamp: 1}
+
+	if err := writeBackDBCache(context.Background(), rc, task.dbTask, msg); err != nil {
+		t.Fatalf("healthy cache publication: %v", err)
+	}
+	if _, err := rc.Get(context.Background(), buildCacheKey(task.dbTask)).Bytes(); err != nil {
+		t.Fatalf("published cache value missing: %v", err)
+	}
+
+	mr.Close()
+	if err := writeBackDBCache(context.Background(), rc, task.dbTask, msg); err == nil {
+		t.Fatal("Redis publication failure must propagate so Kafka/retry is not ACKed")
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -494,17 +567,25 @@ func TestProcessTaskBatch_RetryAfterNewerWrite_MustNotRegress(t *testing.T) {
 	// what `consumeRetryQueue` does: pop, parse the wrapped payload to
 	// recover the original seq, increment retry_count, deliver as a dbTask
 	// workerTask carrying the original seq.
-	popped, err := w.redisClient.RPop(w.ctx, w.retryQueueKey).Bytes()
+	popped, err := w.redisClient.RPopLPush(w.ctx, w.retryQueueKey, w.retryProcessingKey).Bytes()
 	require.NoError(t, err, "W2 must be in retry queue after its initial failure")
 
-	retrySeq, taskBytes := unwrapRetryPayload(popped)
+	retrySeq, retryPartition, hasPartition, taskBytes := unwrapRetryPayload(popped)
 	require.Equal(t, uint64(2), retrySeq,
 		"retry payload must carry W2's original seq=2 so the applied-seq guard can compare")
+	require.True(t, hasPartition)
 
 	var retryTask db_proto.DBTask
 	require.NoError(t, proto.Unmarshal(taskBytes, &retryTask))
 	retryTask.RetryCount++
-	w.processTaskBatch([]*workerTask{{dbTask: &retryTask, seq: retrySeq}}, true)
+	w.processTaskBatch([]*workerTask{{
+		dbTask:             &retryTask,
+		seq:                retrySeq,
+		originPartition:    retryPartition,
+		hasOriginPartition: hasPartition,
+		fromRetry:          true,
+		retryReceipt:       popped,
+	}}, true)
 
 	// Final state: the LAST applied call for this key must still be W3,
 	// and there must be NO call for W2 after W3 (the retry is dropped).
@@ -524,6 +605,306 @@ func TestProcessTaskBatch_RetryAfterNewerWrite_MustNotRegress(t *testing.T) {
 	assert.Equal(t, 1, bySeq[1], "W1 must apply exactly once")
 	assert.Equal(t, 0, bySeq[2], "W2 must never be applied (initial failed, retry dropped as stale)")
 	assert.Equal(t, 1, bySeq[3], "W3 must apply exactly once")
+	processingLen, err := w.redisClient.LLen(w.ctx, w.retryProcessingKey).Result()
+	require.NoError(t, err)
+	assert.Zero(t, processingLen, "stale retry must ACK its reliable processing receipt")
+}
+
+// TC5c — a delayed retry can be queued after a newer fresh delivery in the
+// same sub-shard drain. Queue position is not causal order: the greatest seq
+// from the same proven origin partition must win, and the skipped retry's
+// reliable ready->processing receipt must be removed.
+func TestProcessTaskBatch_DelayedRetryAfterFreshInSameBatchDoesNotRegress(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	const key uint64 = 5003
+	const msgType = "taskpb.TaskResult"
+
+	newerFresh := makeWriteTask(t, key, msgType, 101)
+	staleRetry := makeWriteTask(t, key, msgType, 100)
+	staleRetry.fromRetry = true
+	staleRetry.retryReceipt = []byte("retry-receipt-seq-100")
+	require.NoError(t, w.redisClient.LPush(w.ctx, w.retryProcessingKey, staleRetry.retryReceipt).Err())
+
+	// This is the bug-triggering order: the old retry is later in the queue.
+	w.processTaskBatch([]*workerTask{newerFresh, staleRetry}, true)
+
+	calls := h.callsForKey(key)
+	require.Len(t, calls, 1, "same-partition coalescing must retain exactly one write")
+	assert.Equal(t, uint64(101), extractSeqFromTaskID(calls[0].taskID),
+		"delayed retry must not supersede a causally newer fresh write")
+	rawCursor, err := w.redisClient.Get(w.ctx, appliedSeqKey(w.topic, key, msgType)).Result()
+	require.NoError(t, err)
+	assert.Equal(t, "v2:0:101", rawCursor)
+	processingLen, err := w.redisClient.LLen(w.ctx, w.retryProcessingKey).Result()
+	require.NoError(t, err)
+	assert.Zero(t, processingLen, "superseded retry must ACK its processing receipt")
+}
+
+func TestProcessTaskBatch_DifferentOriginPartitionsAreNotCoalesced(t *testing.T) {
+	w, _, h := newTestWorker(t, 5)
+	const key uint64 = 5004
+	const msgType = "taskpb.TaskResult"
+
+	first := makeWriteTask(t, key, msgType, 1)
+	first.originPartition = 5
+	second := makeWriteTask(t, key, msgType, 999)
+	second.originPartition = 0
+	w.processTaskBatch([]*workerTask{first, second}, true)
+
+	calls := h.callsForKey(key)
+	require.Len(t, calls, 1, "first partition writes once; incomparable delivery is quarantined")
+	assert.Equal(t, first.dbTask.TaskId, calls[0].taskID)
+	deadLen, err := w.redisClient.LLen(w.ctx, w.retryDeadQueueKey).Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deadLen,
+		"cross-partition writes must reach the ordering guard, not disappear in coalescing")
+}
+
+func TestClaimAcker_LowerHoleBlocksLaterSuccess(t *testing.T) {
+	t.Run("out-of-order success waits for contiguous prefix", func(t *testing.T) {
+		session := &recordingSession{}
+		_, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		acker := newClaimAcker(session, 10, cancel)
+		m10 := &sarama.ConsumerMessage{Topic: "test", Partition: 0, Offset: 10}
+		m11 := &sarama.ConsumerMessage{Topic: "test", Partition: 0, Offset: 11}
+		acker.track(m10)
+		acker.track(m11)
+
+		acker.ack(m11)
+		assert.Empty(t, session.marked(), "offset 11 must not jump over unfinished offset 10")
+		acker.ack(m10)
+		assert.Equal(t, []int64{10, 11}, session.marked())
+	})
+
+	t.Run("failed lower hole never marks later success", func(t *testing.T) {
+		claimCtx, cancel := context.WithCancel(context.Background())
+		session := &recordingSession{ctx: claimCtx}
+		acker := newClaimAcker(session, 20, cancel)
+		m20 := &sarama.ConsumerMessage{Topic: "test", Partition: 0, Offset: 20}
+		m21 := &sarama.ConsumerMessage{Topic: "test", Partition: 0, Offset: 21}
+		acker.track(m20)
+		acker.track(m21)
+
+		acker.fail(m20, errors.New("retry queue unavailable"))
+		acker.ack(m21)
+		assert.Empty(t, session.marked(), "offset 21 must remain unmarked behind failed offset 20")
+		assert.Error(t, claimCtx.Err(), "a durability failure must cancel all old-claim work immediately")
+	})
+}
+
+func TestConsumerSetupRejectsPartitionsOutsideImmutableContract(t *testing.T) {
+	w, _, _ := newTestWorker(t, 0)
+	c := &KeyOrderedKafkaConsumer{
+		topic:          w.topic,
+		groupID:        "test-group",
+		partitionCount: 3,
+	}
+	h := &consumerGroupHandler{consumer: c}
+
+	validSubset := &recordingSession{claims: map[string][]int32{w.topic: {0, 2}}}
+	if err := h.Setup(validSubset); err != nil {
+		t.Fatalf("a consumer-group member may own a valid subset of partitions: %v", err)
+	}
+
+	drifted := &recordingSession{claims: map[string][]int32{w.topic: {1, 3}}}
+	if err := h.Setup(drifted); err == nil {
+		t.Fatal("claiming a live-expanded partition must fail the rebalance")
+	}
+}
+
+func TestEnsureWorkerRejectsPartitionOutsideImmutableContract(t *testing.T) {
+	w, _, _ := newTestWorker(t, 0)
+	c := &KeyOrderedKafkaConsumer{
+		topic:          w.topic,
+		partitionCount: 2,
+		workers:        map[int32]*worker{0: w},
+	}
+	if _, err := c.ensureWorker(2); err == nil {
+		t.Fatal("worker creation must not normalize a broker partition drift into supported routing")
+	}
+	if _, exists := c.workers[2]; exists {
+		t.Fatal("out-of-contract worker must not be created")
+	}
+}
+
+func TestHandleTask_CanceledClaimCannotReachDB(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	claimCtx, cancel := context.WithCancel(context.Background())
+	session := &recordingSession{ctx: claimCtx}
+	acker := newClaimAcker(session, 30, cancel)
+	msg := &sarama.ConsumerMessage{Topic: w.topic, Partition: 0, Offset: 30}
+	acker.track(msg)
+
+	task := makeWriteTask(t, 5100, "taskpb.TaskResult", 31)
+	task.kafkaMsg = msg
+	task.acker = acker
+	task.claimCtx = claimCtx
+	cancel()
+	w.handleTask(task, true)
+
+	assert.Empty(t, h.callsForKey(5100), "revoked claim must be rejected before business DB I/O")
+	assert.Empty(t, session.marked(), "revoked claim must not mark its old Sarama session")
+	select {
+	case <-acker.failureCh:
+	default:
+		t.Fatal("canceled queued task must close the acker hole")
+	}
+}
+
+func TestHandleTask_ExpansionLockBusyDoesNotMarkApplied(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	const key uint64 = 5200
+	require.NoError(t, kafkautil.SetExpandStatus(w.ctx, w.redisClient, w.topic,
+		kafkautil.ExpandStatusExpanding, 1))
+	expansionLockKey := "distributed:lock:" + fmt.Sprintf("kafka:consumer:lock:%d", key)
+	require.NoError(t, w.redisClient.Set(w.ctx, expansionLockKey, "other-owner", time.Minute).Err())
+
+	w.handleTask(makeWriteTask(t, key, "taskpb.TaskResult", 1), false)
+
+	assert.Empty(t, h.callsForKey(key))
+	_, err := w.redisClient.Get(w.ctx, appliedSeqKey(w.topic, key, "taskpb.TaskResult")).Result()
+	assert.ErrorIs(t, err, redis.Nil, "deferred task must not publish an applied cursor")
+	readyLen, err := w.redisClient.LLen(w.ctx, w.retryQueueKey).Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), readyLen, "deferred Kafka work must have one durable retry copy")
+}
+
+func TestOrderingGuard_NewP5ThenDelayedOldP0IsQuarantined(t *testing.T) {
+	w, _, h := newTestWorker(t, 5)
+	const key uint64 = 5300
+	const msgType = "taskpb.TaskResult"
+
+	newP5 := makeWriteTask(t, key, msgType, 5)
+	newP5.originPartition = 5
+	w.handleTask(newP5, true)
+
+	claimCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	session := &recordingSession{ctx: claimCtx}
+	acker := newClaimAcker(session, 100, cancel)
+	msg := &sarama.ConsumerMessage{Topic: w.topic, Partition: 0, Offset: 100}
+	acker.track(msg)
+	delayedOldP0 := makeWriteTask(t, key, msgType, 100)
+	delayedOldP0.originPartition = 0
+	delayedOldP0.kafkaMsg = msg
+	delayedOldP0.acker = acker
+	delayedOldP0.claimCtx = claimCtx
+	w.handleTask(delayedOldP0, true)
+
+	calls := h.callsForKey(key)
+	require.Len(t, calls, 1, "a numerically larger offset from another partition is not causally newer")
+	assert.Equal(t, newP5.dbTask.TaskId, calls[0].taskID)
+	rawCursor, err := w.redisClient.Get(w.ctx, appliedSeqKey(w.topic, key, msgType)).Result()
+	require.NoError(t, err)
+	assert.Equal(t, "v2:5:5", rawCursor, "quarantined old-partition delivery must not replace the applied cursor")
+	ttl, err := w.redisClient.TTL(w.ctx, appliedSeqKey(w.topic, key, msgType)).Result()
+	require.NoError(t, err)
+	assert.Equal(t, time.Duration(-1), ttl, "ordering cursor must survive business-cache TTL expiry")
+	deadLen, err := w.redisClient.LLen(w.ctx, w.retryDeadQueueKey).Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deadLen, "cross-partition conflict must be durably quarantined")
+	assert.Equal(t, []int64{100}, session.marked(), "Kafka may ACK only after the quarantine copy is durable")
+}
+
+func TestOrderingGuard_ExistingP0QuarantinesFirstP5Delivery(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	const key uint64 = 5301
+	const msgType = "taskpb.TaskResult"
+
+	p0 := makeWriteTask(t, key, msgType, 500)
+	p0.originPartition = 0
+	w.handleTask(p0, true)
+	p5 := makeWriteTask(t, key, msgType, 1)
+	p5.originPartition = 5
+	w.handleTask(p5, true)
+
+	calls := h.callsForKey(key)
+	require.Len(t, calls, 1)
+	assert.Equal(t, p0.dbTask.TaskId, calls[0].taskID)
+	deadLen, err := w.redisClient.LLen(w.ctx, w.retryDeadQueueKey).Result()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), deadLen, "first delivery on a new partition needs an explicit migration epoch")
+}
+
+func TestRetryConsumer_LegacyPayloadWithoutPartitionGoesToDeadQueue(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	task := makeWriteTask(t, 5400, "taskpb.TaskResult", 7).dbTask
+	payload, err := encodeRetryPayload(task, 7, 0, false)
+	require.NoError(t, err)
+	require.NoError(t, w.redisClient.LPush(w.ctx, w.retryQueueKey, payload).Err())
+
+	c := &KeyOrderedKafkaConsumer{
+		redisClient:        w.redisClient,
+		topic:              w.topic,
+		partitionCount:     4,
+		workers:            map[int32]*worker{0: w},
+		ctx:                w.ctx,
+		retryQueueKey:      w.retryQueueKey,
+		retryProcessingKey: w.retryProcessingKey,
+		retryDeadQueueKey:  w.retryDeadQueueKey,
+		retryMaxTimes:      3,
+	}
+	c.consumeRetryQueue()
+
+	assert.Empty(t, h.callsForKey(task.Key), "unknown-provenance legacy retry must never execute")
+	readyLen, err := w.redisClient.LLen(w.ctx, w.retryQueueKey).Result()
+	require.NoError(t, err)
+	processingLen, err := w.redisClient.LLen(w.ctx, w.retryProcessingKey).Result()
+	require.NoError(t, err)
+	deadLen, err := w.redisClient.LLen(w.ctx, w.retryDeadQueueKey).Result()
+	require.NoError(t, err)
+	assert.Zero(t, readyLen)
+	assert.Zero(t, processingLen)
+	assert.Equal(t, int64(1), deadLen)
+}
+
+func TestRecoverRetryProcessingRestoresEveryReceipt(t *testing.T) {
+	w, _, _ := newTestWorker(t, 0)
+	for _, payload := range [][]byte{[]byte("one"), []byte("two")} {
+		require.NoError(t, w.redisClient.LPush(w.ctx, w.retryProcessingKey, payload).Err())
+	}
+	c := &KeyOrderedKafkaConsumer{
+		redisClient:        w.redisClient,
+		ctx:                w.ctx,
+		retryQueueKey:      w.retryQueueKey,
+		retryProcessingKey: w.retryProcessingKey,
+	}
+	require.NoError(t, c.recoverRetryProcessing())
+	processingLen, err := w.redisClient.LLen(w.ctx, w.retryProcessingKey).Result()
+	require.NoError(t, err)
+	assert.Zero(t, processingLen)
+	ready, err := w.redisClient.LRange(w.ctx, w.retryQueueKey, 0, -1).Result()
+	require.NoError(t, err)
+	assert.ElementsMatch(t, []string{"one", "two"}, ready)
+}
+
+func TestPoisonKafkaPayloadIsPersistedBeforeAck(t *testing.T) {
+	w, _, _ := newTestWorker(t, 0)
+	claimCtx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	session := &recordingSession{ctx: claimCtx}
+	acker := newClaimAcker(session, 60, cancel)
+	msg := &sarama.ConsumerMessage{
+		Topic: w.topic, Partition: 0, Offset: 60,
+		Key: []byte("player-raw-key"), Value: []byte{0xff, 0x00, 0xff},
+	}
+	acker.track(msg)
+	w.handleTask(&workerTask{kafkaMsg: msg, acker: acker, claimCtx: claimCtx}, true)
+
+	assert.Equal(t, []int64{60}, session.marked(), "poison offset may ACK only after DLQ persistence")
+	stored, err := w.redisClient.LIndex(w.ctx, w.retryDeadQueueKey, 0).Bytes()
+	require.NoError(t, err)
+	require.NotEmpty(t, stored)
+	assert.Equal(t, poisonPayloadMagic, stored[0])
+	var record poisonMessageRecord
+	require.NoError(t, json.Unmarshal(stored[1:], &record))
+	assert.Equal(t, msg.Topic, record.Topic)
+	assert.Equal(t, msg.Partition, record.Partition)
+	assert.Equal(t, msg.Offset, record.Offset)
+	assert.Equal(t, msg.Key, record.Key)
+	assert.Equal(t, msg.Value, record.Value)
+	assert.NotEmpty(t, record.Error)
 }
 
 // ---------------------------------------------------------------------------
@@ -558,14 +939,16 @@ func TestConcurrentWorkers_FinalStateIsGlobalMax(t *testing.T) {
 	workers := make([]*worker, partitions)
 	for i := int32(0); i < partitions; i++ {
 		workers[i] = &worker{
-			partition:     i,
-			taskCh:        make(chan *workerTask, 4096),
-			ctx:           ctx,
-			redisClient:   rc,
-			locker:        db_locker.NewRedisLocker(rc),
-			topic:         "soak",
-			retryQueueKey: "kafka:retry:queue:soak",
-			wg:            &sync.WaitGroup{},
+			partition:          i,
+			taskCh:             make(chan *workerTask, 4096),
+			ctx:                ctx,
+			redisClient:        rc,
+			locker:             db_locker.NewRedisLocker(rc),
+			topic:              "soak",
+			retryQueueKey:      "kafka:retry:queue:soak",
+			retryProcessingKey: "kafka:retry:processing:soak",
+			retryDeadQueueKey:  "kafka:dead:queue:soak",
+			wg:                 &sync.WaitGroup{},
 		}
 	}
 
@@ -615,6 +998,7 @@ func TestConcurrentWorkers_FinalStateIsGlobalMax(t *testing.T) {
 			for seq := uint64(1); seq <= writesPerPlayer; seq++ {
 				wt := makeWriteTask(t, key, msgType, seq)
 				w := workers[key%uint64(partitions)]
+				wt.originPartition = w.partition
 				select {
 				case w.taskCh <- wt:
 					produced.Add(1)
@@ -627,17 +1011,23 @@ func TestConcurrentWorkers_FinalStateIsGlobalMax(t *testing.T) {
 	}
 	produceWG.Wait()
 
-	// Wait for drain.
-	deadline := time.Now().Add(10 * time.Second)
+	// Wait for the final write of every key, not merely len(taskCh)==0: a
+	// sub-worker may already have drained the channel while its last DB/Redis
+	// critical section is still in flight.
+	deadline := time.Now().Add(30 * time.Second)
 	for time.Now().Before(deadline) {
-		idle := true
-		for _, w := range workers {
-			if len(w.taskCh) > 0 {
-				idle = false
+		lastByKey := make(map[uint64]uint64, int(totalKeys))
+		for _, call := range h.snapshot() {
+			lastByKey[call.key] = extractSeqFromTaskID(call.taskID)
+		}
+		converged := true
+		for key := uint64(1); key <= totalKeys; key++ {
+			if lastByKey[key] != writesPerPlayer {
+				converged = false
 				break
 			}
 		}
-		if idle {
+		if converged {
 			break
 		}
 		time.Sleep(20 * time.Millisecond)

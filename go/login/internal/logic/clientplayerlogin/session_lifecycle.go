@@ -26,12 +26,12 @@ func cleanupLoginSessionState(ctx context.Context, svcCtx *svc.ServiceContext, s
 	loginsession.Cleanup(ctx, svcCtx.RedisClient, sessionID, logicTag)
 }
 
-func deletePlayerSession(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64) {
-	if playerID == 0 {
+func deletePlayerSession(ctx context.Context, svcCtx *svc.ServiceContext, playerID uint64, sessionID uint32) {
+	if playerID == 0 || sessionID == 0 {
 		return
 	}
 
-	if err := sessionmanager.DeleteSession(ctx, svcCtx.PlayerLocatorClient, playerID); err != nil {
+	if err := sessionmanager.DeleteSession(ctx, svcCtx.PlayerLocatorClient, playerID, sessionID); err != nil {
 		logx.Errorf("Failed to delete session for player %d: %v", playerID, err)
 	}
 }

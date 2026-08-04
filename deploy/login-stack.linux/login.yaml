@@ -25,6 +25,7 @@
 # ────────────────────────────────────────────────────────────────
 
 Name: login.rpc
+Mode: dev
 ListenOn: 0.0.0.0:51000
 Timeout: 100000
 
@@ -102,6 +103,14 @@ TokenConfig:
   AccessTokenTTL: 2h
   RefreshTokenTTL: 720h
 
+# 只供这个本地 compose 栈的 robot_ 冒烟/压测账号使用。共享密钥本身由
+# compose 从宿主环境传入，绝不能写进此文件；Mode=dev 是第二道启动门禁。
+DevPasswordAuth:
+  Enabled: true
+  SharedSecretEnv: "LOGIN_DEV_PASSWORD_SHARED_SECRET"
+  AllowedAccountPrefixes:
+    - "robot_"
+
 # Prometheus scrape — exposed to the host via port 9101 in compose.
 Prometheus:
   Host: 0.0.0.0
@@ -126,6 +135,7 @@ Kafka:
   Brokers:
     - host.docker.internal:9092
   GroupID: "db_rpc_consumer_group"
+  TopicGeneration: 1
   PartitionCnt: 5
   InitialPartition: 5
   DialTimeout: 10s

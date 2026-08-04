@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -27,11 +28,50 @@ func httpClientOrDefault(c *http.Client) *http.Client {
 	return &http.Client{Timeout: defaultHTTPTimeout}
 }
 
-// PasswordProvider authenticates using the account/password fields directly.
-// The account is passed as the token parameter (no external validation needed).
-type PasswordProvider struct{}
+// DevelopmentPasswordProvider 是受控的开发/机器人登录入口，不是生产账号
+// 口令实现：所有允许的测试账号共用一个仅由环境变量注入的密钥，并且账号必须
+// 命中显式前缀白名单。生产默认不构造它；生产 PasswordAuth 走独立的 MySQL
+// Argon2id 实现，也不会把“没有口令记录”的存量账号自动认领给首次调用者。
+type DevelopmentPasswordProvider struct {
+	sharedSecret           string
+	allowedAccountPrefixes []string
+}
 
-func (p *PasswordProvider) Validate(_ context.Context, account string) (*AuthResult, error) {
+func NewDevelopmentPasswordProvider(sharedSecret string, allowedAccountPrefixes []string) (*DevelopmentPasswordProvider, error) {
+	if sharedSecret == "" {
+		return nil, fmt.Errorf("development password auth requires a non-empty shared secret")
+	}
+	prefixes := make([]string, 0, len(allowedAccountPrefixes))
+	for _, prefix := range allowedAccountPrefixes {
+		prefix = strings.TrimSpace(prefix)
+		if prefix == "" {
+			return nil, fmt.Errorf("development password auth contains an empty account prefix")
+		}
+		prefixes = append(prefixes, prefix)
+	}
+	if len(prefixes) == 0 {
+		return nil, fmt.Errorf("development password auth requires at least one account prefix")
+	}
+	return &DevelopmentPasswordProvider{
+		sharedSecret:           sharedSecret,
+		allowedAccountPrefixes: prefixes,
+	}, nil
+}
+
+func (p *DevelopmentPasswordProvider) ValidatePassword(_ context.Context, account, password string) (*AuthResult, error) {
+	if account == "" || account != strings.TrimSpace(account) {
+		return nil, ErrInvalidCredentials
+	}
+	allowed := false
+	for _, prefix := range p.allowedAccountPrefixes {
+		if strings.HasPrefix(account, prefix) {
+			allowed = true
+			break
+		}
+	}
+	if !allowed || subtle.ConstantTimeCompare([]byte(password), []byte(p.sharedSecret)) != 1 {
+		return nil, ErrInvalidCredentials
+	}
 	return &AuthResult{Account: account}, nil
 }
 
@@ -76,12 +116,13 @@ func (p *SaTokenProvider) Validate(ctx context.Context, tokenValue string) (*Aut
 // WeChatProvider validates a WeChat OAuth2 authorization code.
 //
 // Flow (already done by the client SDK before calling us):
-//   1. Client SDK pulls up WeChat auth UI (SendAuth.Req, scope=snsapi_userinfo).
-//   2. WeChat returns a short-lived (~5min) `code` to the client.
-//   3. Client sends LoginRequest{auth_type:"wechat", auth_token: code}.
+//  1. Client SDK pulls up WeChat auth UI (SendAuth.Req, scope=snsapi_userinfo).
+//  2. WeChat returns a short-lived (~5min) `code` to the client.
+//  3. Client sends LoginRequest{auth_type:"wechat", auth_token: code}.
 //
 // We exchange `code` for openid/unionid via the official endpoint:
-//   GET https://api.weixin.qq.com/sns/oauth2/access_token
+//
+//	GET https://api.weixin.qq.com/sns/oauth2/access_token
 //
 // Account key uses unionid when available (so the same player keeps the
 // same account across multiple apps under the same WeChat Open Platform
@@ -163,19 +204,20 @@ func (p *WeChatProvider) Validate(ctx context.Context, code string) (*AuthResult
 // QQProvider validates a QQ Connect access_token (NOT a code).
 //
 // Flow (already done by the client SDK before calling us):
-//   1. Client SDK pulls up QQ auth UI (Tencent.login).
-//   2. QQ returns access_token + openid to the client.
-//   3. Client sends LoginRequest{auth_type:"qq", auth_token: access_token}.
+//  1. Client SDK pulls up QQ auth UI (Tencent.login).
+//  2. QQ returns access_token + openid to the client.
+//  3. Client sends LoginRequest{auth_type:"qq", auth_token: access_token}.
 //
 // We verify the token + extract openid/unionid via:
-//   GET https://graph.qq.com/oauth2.0/me?access_token=...&unionid=1&fmt=json
+//
+//	GET https://graph.qq.com/oauth2.0/me?access_token=...&unionid=1&fmt=json
 //
 // We never trust openid sent by the client — we always re-derive it from
 // the token. ClientId in the response must equal our AppId.
 type QQProvider struct {
 	AppId  string
-	AppKey string        // Reserved for future server-side WebOAuth code->token exchange; unused here.
-	HTTP   *http.Client  // optional, injected for tests
+	AppKey string       // Reserved for future server-side WebOAuth code->token exchange; unused here.
+	HTTP   *http.Client // optional, injected for tests
 
 	// Endpoint overrides the graph.qq.com base URL. Same purpose as
 	// WeChatProvider.Endpoint — point at a sandbox-mock server for

@@ -70,7 +70,7 @@ func NewNode(nodeType uint32, ip string, port uint32, ttl int64) *Node {
 		NodeUuid:     uuid.New().String(),
 	}
 
-	allocator := NewNodeAllocator(client, GetRpcPrefix(nodeType))
+	allocator := NewNodeAllocator(client, GetRpcPrefix(nodeType)).WithRegistry(reg)
 	nodeID, err := allocator.TryAllocateNodeID(context.Background(), info, reg.Lease)
 	if err != nil {
 		return nil

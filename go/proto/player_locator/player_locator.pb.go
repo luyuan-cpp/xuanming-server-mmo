@@ -491,6 +491,68 @@ func (x *GetSessionResponse) GetFound() bool {
 	return false
 }
 
+// 正常登出必须带上 Login 观察到的精确会话。会话已被替换或版本已推进后，
+// 迟到的旧 Gate LeaveGame 只能成为无操作，不能删除新会话。
+type MarkOfflineRequest struct {
+	state                  protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId               uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	ExpectedSessionId      uint32                 `protobuf:"varint,2,opt,name=expected_session_id,json=expectedSessionId,proto3" json:"expected_session_id,omitempty"`
+	ExpectedSessionVersion uint32                 `protobuf:"varint,3,opt,name=expected_session_version,json=expectedSessionVersion,proto3" json:"expected_session_version,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
+func (x *MarkOfflineRequest) Reset() {
+	*x = MarkOfflineRequest{}
+	mi := &file_proto_player_locator_player_locator_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MarkOfflineRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MarkOfflineRequest) ProtoMessage() {}
+
+func (x *MarkOfflineRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_player_locator_player_locator_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MarkOfflineRequest.ProtoReflect.Descriptor instead.
+func (*MarkOfflineRequest) Descriptor() ([]byte, []int) {
+	return file_proto_player_locator_player_locator_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *MarkOfflineRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *MarkOfflineRequest) GetExpectedSessionId() uint32 {
+	if x != nil {
+		return x.ExpectedSessionId
+	}
+	return 0
+}
+
+func (x *MarkOfflineRequest) GetExpectedSessionVersion() uint32 {
+	if x != nil {
+		return x.ExpectedSessionVersion
+	}
+	return 0
+}
+
 // Disconnect request: mark DISCONNECTING + start TTL lease
 type SetDisconnectingRequest struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
@@ -503,7 +565,7 @@ type SetDisconnectingRequest struct {
 
 func (x *SetDisconnectingRequest) Reset() {
 	*x = SetDisconnectingRequest{}
-	mi := &file_proto_player_locator_player_locator_proto_msgTypes[6]
+	mi := &file_proto_player_locator_player_locator_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -515,7 +577,7 @@ func (x *SetDisconnectingRequest) String() string {
 func (*SetDisconnectingRequest) ProtoMessage() {}
 
 func (x *SetDisconnectingRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_locator_player_locator_proto_msgTypes[6]
+	mi := &file_proto_player_locator_player_locator_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -528,7 +590,7 @@ func (x *SetDisconnectingRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetDisconnectingRequest.ProtoReflect.Descriptor instead.
 func (*SetDisconnectingRequest) Descriptor() ([]byte, []int) {
-	return file_proto_player_locator_player_locator_proto_rawDescGZIP(), []int{6}
+	return file_proto_player_locator_player_locator_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *SetDisconnectingRequest) GetPlayerId() uint64 {
@@ -569,7 +631,7 @@ type ReconnectRequest struct {
 
 func (x *ReconnectRequest) Reset() {
 	*x = ReconnectRequest{}
-	mi := &file_proto_player_locator_player_locator_proto_msgTypes[7]
+	mi := &file_proto_player_locator_player_locator_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -581,7 +643,7 @@ func (x *ReconnectRequest) String() string {
 func (*ReconnectRequest) ProtoMessage() {}
 
 func (x *ReconnectRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_locator_player_locator_proto_msgTypes[7]
+	mi := &file_proto_player_locator_player_locator_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -594,7 +656,7 @@ func (x *ReconnectRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconnectRequest.ProtoReflect.Descriptor instead.
 func (*ReconnectRequest) Descriptor() ([]byte, []int) {
-	return file_proto_player_locator_player_locator_proto_rawDescGZIP(), []int{7}
+	return file_proto_player_locator_player_locator_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ReconnectRequest) GetPlayerId() uint64 {
@@ -664,7 +726,7 @@ type ReconnectResponse struct {
 
 func (x *ReconnectResponse) Reset() {
 	*x = ReconnectResponse{}
-	mi := &file_proto_player_locator_player_locator_proto_msgTypes[8]
+	mi := &file_proto_player_locator_player_locator_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -676,7 +738,7 @@ func (x *ReconnectResponse) String() string {
 func (*ReconnectResponse) ProtoMessage() {}
 
 func (x *ReconnectResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_locator_player_locator_proto_msgTypes[8]
+	mi := &file_proto_player_locator_player_locator_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -689,7 +751,7 @@ func (x *ReconnectResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReconnectResponse.ProtoReflect.Descriptor instead.
 func (*ReconnectResponse) Descriptor() ([]byte, []int) {
-	return file_proto_player_locator_player_locator_proto_rawDescGZIP(), []int{8}
+	return file_proto_player_locator_player_locator_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *ReconnectResponse) GetSuccess() bool {
@@ -728,7 +790,7 @@ type LeaseExpiredEvent struct {
 
 func (x *LeaseExpiredEvent) Reset() {
 	*x = LeaseExpiredEvent{}
-	mi := &file_proto_player_locator_player_locator_proto_msgTypes[9]
+	mi := &file_proto_player_locator_player_locator_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -740,7 +802,7 @@ func (x *LeaseExpiredEvent) String() string {
 func (*LeaseExpiredEvent) ProtoMessage() {}
 
 func (x *LeaseExpiredEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_player_locator_player_locator_proto_msgTypes[9]
+	mi := &file_proto_player_locator_player_locator_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -753,7 +815,7 @@ func (x *LeaseExpiredEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LeaseExpiredEvent.ProtoReflect.Descriptor instead.
 func (*LeaseExpiredEvent) Descriptor() ([]byte, []int) {
-	return file_proto_player_locator_player_locator_proto_rawDescGZIP(), []int{9}
+	return file_proto_player_locator_player_locator_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *LeaseExpiredEvent) GetPlayerId() uint64 {
@@ -836,7 +898,11 @@ const file_proto_player_locator_player_locator_proto_rawDesc = "" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\"b\n" +
 	"\x12GetSessionResponse\x126\n" +
 	"\asession\x18\x01 \x01(\v2\x1c.playerlocator.PlayerSessionR\asession\x12\x14\n" +
-	"\x05found\x18\x02 \x01(\bR\x05found\"\x81\x01\n" +
+	"\x05found\x18\x02 \x01(\bR\x05found\"\x9b\x01\n" +
+	"\x12MarkOfflineRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12.\n" +
+	"\x13expected_session_id\x18\x02 \x01(\rR\x11expectedSessionId\x128\n" +
+	"\x18expected_session_version\x18\x03 \x01(\rR\x16expectedSessionVersion\"\x81\x01\n" +
 	"\x17SetDisconnectingRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
@@ -868,11 +934,11 @@ const file_proto_player_locator_player_locator_proto_rawDesc = "" +
 	"\x15SESSION_STATE_UNKNOWN\x10\x00\x12\x18\n" +
 	"\x14SESSION_STATE_ONLINE\x10\x01\x12\x1f\n" +
 	"\x1bSESSION_STATE_DISCONNECTING\x10\x02\x12\x19\n" +
-	"\x15SESSION_STATE_OFFLINE\x10\x032\xdb\x03\n" +
+	"\x15SESSION_STATE_OFFLINE\x10\x032\xe5\x03\n" +
 	"\rPlayerLocator\x124\n" +
 	"\vSetLocation\x12\x1d.playerlocator.PlayerLocation\x1a\x06.Empty\x12E\n" +
-	"\vGetLocation\x12\x17.playerlocator.PlayerId\x1a\x1d.playerlocator.PlayerLocation\x12.\n" +
-	"\vMarkOffline\x12\x17.playerlocator.PlayerId\x1a\x06.Empty\x126\n" +
+	"\vGetLocation\x12\x17.playerlocator.PlayerId\x1a\x1d.playerlocator.PlayerLocation\x128\n" +
+	"\vMarkOffline\x12!.playerlocator.MarkOfflineRequest\x1a\x06.Empty\x126\n" +
 	"\n" +
 	"SetSession\x12 .playerlocator.SetSessionRequest\x1a\x06.Empty\x12Q\n" +
 	"\n" +
@@ -893,7 +959,7 @@ func file_proto_player_locator_player_locator_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_player_locator_player_locator_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_player_locator_player_locator_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_proto_player_locator_player_locator_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_player_locator_player_locator_proto_goTypes = []any{
 	(PlayerSessionState)(0),         // 0: playerlocator.PlayerSessionState
 	(*PlayerLocation)(nil),          // 1: playerlocator.PlayerLocation
@@ -902,11 +968,12 @@ var file_proto_player_locator_player_locator_proto_goTypes = []any{
 	(*SetSessionRequest)(nil),       // 4: playerlocator.SetSessionRequest
 	(*GetSessionRequest)(nil),       // 5: playerlocator.GetSessionRequest
 	(*GetSessionResponse)(nil),      // 6: playerlocator.GetSessionResponse
-	(*SetDisconnectingRequest)(nil), // 7: playerlocator.SetDisconnectingRequest
-	(*ReconnectRequest)(nil),        // 8: playerlocator.ReconnectRequest
-	(*ReconnectResponse)(nil),       // 9: playerlocator.ReconnectResponse
-	(*LeaseExpiredEvent)(nil),       // 10: playerlocator.LeaseExpiredEvent
-	(*base.Empty)(nil),              // 11: Empty
+	(*MarkOfflineRequest)(nil),      // 7: playerlocator.MarkOfflineRequest
+	(*SetDisconnectingRequest)(nil), // 8: playerlocator.SetDisconnectingRequest
+	(*ReconnectRequest)(nil),        // 9: playerlocator.ReconnectRequest
+	(*ReconnectResponse)(nil),       // 10: playerlocator.ReconnectResponse
+	(*LeaseExpiredEvent)(nil),       // 11: playerlocator.LeaseExpiredEvent
+	(*base.Empty)(nil),              // 12: Empty
 }
 var file_proto_player_locator_player_locator_proto_depIdxs = []int32{
 	0,  // 0: playerlocator.PlayerSession.state:type_name -> playerlocator.PlayerSessionState
@@ -915,18 +982,18 @@ var file_proto_player_locator_player_locator_proto_depIdxs = []int32{
 	3,  // 3: playerlocator.ReconnectResponse.session:type_name -> playerlocator.PlayerSession
 	1,  // 4: playerlocator.PlayerLocator.SetLocation:input_type -> playerlocator.PlayerLocation
 	2,  // 5: playerlocator.PlayerLocator.GetLocation:input_type -> playerlocator.PlayerId
-	2,  // 6: playerlocator.PlayerLocator.MarkOffline:input_type -> playerlocator.PlayerId
+	7,  // 6: playerlocator.PlayerLocator.MarkOffline:input_type -> playerlocator.MarkOfflineRequest
 	4,  // 7: playerlocator.PlayerLocator.SetSession:input_type -> playerlocator.SetSessionRequest
 	5,  // 8: playerlocator.PlayerLocator.GetSession:input_type -> playerlocator.GetSessionRequest
-	7,  // 9: playerlocator.PlayerLocator.SetDisconnecting:input_type -> playerlocator.SetDisconnectingRequest
-	8,  // 10: playerlocator.PlayerLocator.Reconnect:input_type -> playerlocator.ReconnectRequest
-	11, // 11: playerlocator.PlayerLocator.SetLocation:output_type -> Empty
+	8,  // 9: playerlocator.PlayerLocator.SetDisconnecting:input_type -> playerlocator.SetDisconnectingRequest
+	9,  // 10: playerlocator.PlayerLocator.Reconnect:input_type -> playerlocator.ReconnectRequest
+	12, // 11: playerlocator.PlayerLocator.SetLocation:output_type -> Empty
 	1,  // 12: playerlocator.PlayerLocator.GetLocation:output_type -> playerlocator.PlayerLocation
-	11, // 13: playerlocator.PlayerLocator.MarkOffline:output_type -> Empty
-	11, // 14: playerlocator.PlayerLocator.SetSession:output_type -> Empty
+	12, // 13: playerlocator.PlayerLocator.MarkOffline:output_type -> Empty
+	12, // 14: playerlocator.PlayerLocator.SetSession:output_type -> Empty
 	6,  // 15: playerlocator.PlayerLocator.GetSession:output_type -> playerlocator.GetSessionResponse
-	11, // 16: playerlocator.PlayerLocator.SetDisconnecting:output_type -> Empty
-	9,  // 17: playerlocator.PlayerLocator.Reconnect:output_type -> playerlocator.ReconnectResponse
+	12, // 16: playerlocator.PlayerLocator.SetDisconnecting:output_type -> Empty
+	10, // 17: playerlocator.PlayerLocator.Reconnect:output_type -> playerlocator.ReconnectResponse
 	11, // [11:18] is the sub-list for method output_type
 	4,  // [4:11] is the sub-list for method input_type
 	4,  // [4:4] is the sub-list for extension type_name
@@ -945,7 +1012,7 @@ func file_proto_player_locator_player_locator_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_player_locator_player_locator_proto_rawDesc), len(file_proto_player_locator_player_locator_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

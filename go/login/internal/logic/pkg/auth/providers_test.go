@@ -2,11 +2,57 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+func TestDevelopmentPasswordProviderRequiresSecretAndPrefix(t *testing.T) {
+	if _, err := NewDevelopmentPasswordProvider("", []string{"robot_"}); err == nil {
+		t.Fatal("expected empty shared secret to be rejected")
+	}
+	if _, err := NewDevelopmentPasswordProvider("secret", nil); err == nil {
+		t.Fatal("expected missing account prefixes to be rejected")
+	}
+	if _, err := NewDevelopmentPasswordProvider("secret", []string{""}); err == nil {
+		t.Fatal("expected empty account prefix to be rejected")
+	}
+}
+
+func TestDevelopmentPasswordProviderIsPrefixAndSecretRestricted(t *testing.T) {
+	p, err := NewDevelopmentPasswordProvider("dev-secret", []string{"robot_", "dev_"})
+	if err != nil {
+		t.Fatalf("new provider: %v", err)
+	}
+
+	result, err := p.ValidatePassword(context.Background(), "robot_42", "dev-secret")
+	if err != nil {
+		t.Fatalf("expected valid development credentials: %v", err)
+	}
+	if result.Account != "robot_42" {
+		t.Fatalf("account = %q, want robot_42", result.Account)
+	}
+
+	cases := []struct {
+		name     string
+		account  string
+		password string
+	}{
+		{name: "real account prefix is forbidden", account: "alice", password: "dev-secret"},
+		{name: "wrong shared secret", account: "robot_42", password: "wrong"},
+		{name: "empty account", account: "", password: "dev-secret"},
+		{name: "surrounding whitespace", account: " robot_42", password: "dev-secret"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, gotErr := p.ValidatePassword(context.Background(), tc.account, tc.password); !errors.Is(gotErr, ErrInvalidCredentials) {
+				t.Fatalf("error = %v, want ErrInvalidCredentials", gotErr)
+			}
+		})
+	}
+}
 
 func newTestClient(handler http.Handler) (*http.Client, *httptest.Server) {
 	srv := httptest.NewServer(handler)

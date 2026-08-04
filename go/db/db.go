@@ -17,7 +17,6 @@ import (
 	"syscall"
 
 	"github.com/zeromicro/go-zero/core/conf"
-	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
@@ -36,16 +35,16 @@ func main() {
 	if config.AppConfig.ZoneId == 0 {
 		panic("ZoneId must be set in config (> 0)")
 	}
-	config.AppConfig.ServerConfig.Kafka.Topic = config.DbTaskTopic(config.AppConfig.ZoneId)
+	config.AppConfig.ServerConfig.Kafka.Topic = config.DbTaskTopicForGeneration(
+		config.AppConfig.ZoneId, config.AppConfig.ServerConfig.Kafka.TopicGeneration)
 	config.AppConfig.ServerConfig.Database.DBName = config.ZoneDBName(config.AppConfig.ZoneId)
 
 	// Ensure the db_task topic exists with the desired partition count BEFORE
 	// the sarama consumer joins. If the topic doesn't exist when sarama
 	// connects, the broker auto-creates it with num.partitions=1 and sarama
 	// permanently assigns this consumer partition 0 only — any later
-	// partition expansion (e.g. login's EnsureTopics call growing it to 10)
-	// strands the other 9 partitions with no consumer until the next process
-	// restart. Round 10 of the 45k stress (2026-05-31) caught this with
+	// partition expansion strands the other partitions with no consumer until
+	// the next process restart. Round 10 of the 45k stress (2026-05-31) caught this with
 	// ~19.5k preload tasks stuck on partitions 1..9 while only ~764 on
 	// partition 0 drained, capping SceneManager.EnterScene throughput at
 	// ~4/s and timing out 78% of robots on "scene ready".
@@ -57,10 +56,16 @@ func main() {
 			RetentionMs: config.AppConfig.ServerConfig.Kafka.RetentionMs,
 		}},
 	); err != nil {
-		logx.Errorf("EnsureTopics: %v (non-fatal, continuing)", err)
+		panic(fmt.Sprintf("Kafka db-task partition contract rejected: %v", err))
 	}
 
 	ctx := svc.NewServiceContext()
+
+	// Initialize database BEFORE the Kafka consumer starts pulling tasks:
+	// 消费任务落到 worker 就会碰 proto_sql.DB,若此时还是 nil,启动窗口内的
+	// 每条消息都 panic-recover 一次(offset 不提交,重启可恢复,但整个窗口在
+	// 空转打错误日志)。先建库连接再放消费者进来,窗口从机制上不存在。
+	proto_sql.InitDB()
 
 	// Initialize Kafka consumer
 	kafkaConsumer, err := kafka.NewKeyOrderedKafkaConsumer(
@@ -76,9 +81,6 @@ func main() {
 	if err := kafkaConsumer.Start(); err != nil {
 		panic(fmt.Sprintf("failed to start Kafka consumer: %v", err))
 	}
-
-	// Initialize database
-	proto_sql.InitDB()
 
 	// Start Prometheus /metrics endpoint (no-op when MetricsListenAddr empty).
 	metrics.Start(config.AppConfig.MetricsListenAddr)

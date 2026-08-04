@@ -38,6 +38,10 @@ type KeyOrderedKafkaProducer struct {
 
 	successCount int64
 	errorCount   int64
+	// routingFenced is irreversible for this process. Broker partition drift
+	// changes consistent-hash ownership, so continuing would violate the
+	// per-player ordering cursor in db service.
+	routingFenced atomic.Bool
 
 	// fault-tolerance state
 	unavailablePartitions map[int32]time.Time // partition → time marked unavailable
@@ -75,17 +79,32 @@ func NewKeyOrderedKafkaProducer(cfg config.KafkaConfig) (*KeyOrderedKafkaProduce
 		return nil, fmt.Errorf("failed to create client: %w", err)
 	}
 
+	consistentHash := consistent.NewConsistent(20)
+	initialPartition := cfg.InitialPartition
+	if initialPartition <= 0 {
+		initialPartition = int(cfg.PartitionCnt)
+	}
+	if cfg.PartitionCnt <= 0 || initialPartition != int(cfg.PartitionCnt) {
+		_ = client.Close()
+		return nil, fmt.Errorf("Kafka partition contract mismatch in config: PartitionCnt=%d InitialPartition=%d",
+			cfg.PartitionCnt, initialPartition)
+	}
+	actualPartitions, err := client.Partitions(cfg.Topic)
+	if err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("read Kafka partition contract for %s: %w", cfg.Topic, err)
+	}
+	if !partitionsMatchContract(actualPartitions, initialPartition) {
+		_ = client.Close()
+		return nil, fmt.Errorf("Kafka partition contract drift at startup: topic=%s configured=%d actual=%v; use an offline-drained new TopicGeneration",
+			cfg.Topic, initialPartition, actualPartitions)
+	}
+
 	producer, err := sarama.NewSyncProducerFromClient(client)
 	if err != nil {
 		client.Close()
 		logx.Errorf("failed to create Kafka sync producer: %v", err)
 		return nil, fmt.Errorf("failed to create producer: %w", err)
-	}
-
-	consistentHash := consistent.NewConsistent(20)
-	initialPartition := cfg.InitialPartition
-	if initialPartition <= 0 {
-		initialPartition = int(cfg.PartitionCnt)
 	}
 	for i := int32(0); i < int32(initialPartition); i++ {
 		consistentHash.AddPartition(i)
@@ -139,6 +158,9 @@ func NewKeyOrderedKafkaProducer(cfg config.KafkaConfig) (*KeyOrderedKafkaProduce
 
 // SendTasks sends a batch of tasks using SyncProducer.SendMessages.
 func (p *KeyOrderedKafkaProducer) SendTasks(ctx context.Context, tasks []*db_proto.DBTask, key string) error {
+	if p.routingFenced.Load() {
+		return fmt.Errorf("producer routing fenced: Kafka partition contract drifted for topic=%s", p.topic)
+	}
 	if p.closed {
 		return fmt.Errorf("producer closed: batch send failed")
 	}
@@ -230,6 +252,9 @@ func (p *KeyOrderedKafkaProducer) SendTasks(ctx context.Context, tasks []*db_pro
 
 // SendTask sends a single task using SyncProducer.SendMessage.
 func (p *KeyOrderedKafkaProducer) SendTask(ctx context.Context, task *db_proto.DBTask, key string) error {
+	if p.routingFenced.Load() {
+		return fmt.Errorf("producer routing fenced: Kafka partition contract drifted for topic=%s", p.topic)
+	}
 	if p.closed {
 		return fmt.Errorf("producer closed: task=%s", task.TaskId)
 	}
@@ -312,35 +337,27 @@ func (p *KeyOrderedKafkaProducer) SendTask(ctx context.Context, task *db_proto.D
 	}
 }
 
-// AddPartitions adds new partitions to the consistent hash ring.
-func (p *KeyOrderedKafkaProducer) AddPartitions(newPartitions []int32) error {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if p.closed {
-		return fmt.Errorf("producer closed: cannot add partitions")
+func partitionsMatchContract(partitions []int32, expected int) bool {
+	if expected <= 0 || len(partitions) != expected {
+		return false
 	}
-	if len(newPartitions) == 0 {
-		return fmt.Errorf("empty partition list")
-	}
-
-	added := 0
-	existing := make(map[int32]bool)
-	for _, part := range p.consistent.GetPartitions() {
-		existing[part] = true
-	}
-	for _, part := range newPartitions {
-		if !existing[part] {
-			p.consistent.AddPartition(part)
-			existing[part] = true
-			added++
+	seen := make([]bool, expected)
+	for _, partition := range partitions {
+		if partition < 0 || int(partition) >= expected || seen[partition] {
+			return false
 		}
+		seen[partition] = true
 	}
-	p.partitionCnt += added
+	return true
+}
 
-	logx.Infof("partitions added: topic=%s, previous=%d, added=%d, total=%d",
-		p.topic, p.partitionCnt-added, added, p.partitionCnt)
-	return nil
+func (p *KeyOrderedKafkaProducer) verifyPartitionContract(partitions []int32) error {
+	if partitionsMatchContract(partitions, p.partitionCnt) {
+		return nil
+	}
+	p.routingFenced.Store(true)
+	return fmt.Errorf("DATA-ORDERING: Kafka partition contract drifted: topic=%s configured=%d actual=%v; producer permanently fenced until an offline-drained TopicGeneration switch",
+		p.topic, p.partitionCnt, partitions)
 }
 
 // SendToTopic sends raw bytes to an arbitrary Kafka topic using the non-transactional producer.
@@ -429,8 +446,8 @@ func (p *KeyOrderedKafkaProducer) syncPartitions(interval time.Duration) {
 				logx.Errorf("failed to get Kafka partitions: topic=%s, err=%v", p.topic, err)
 				continue
 			}
-			if err := p.AddPartitions(partitions); err != nil {
-				logx.Errorf("failed to sync partitions: %v", err)
+			if err := p.verifyPartitionContract(partitions); err != nil {
+				logx.Errorf("%v", err)
 			}
 		case <-p.ctx.Done():
 			logx.Debug("context done: exiting partition sync")

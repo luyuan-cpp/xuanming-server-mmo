@@ -268,18 +268,15 @@ func GetOrInitUserAccount(ctx context.Context, rdb *redis.Client, account string
 }
 
 // resolveAccount determines the account identifier based on the auth type.
-// For "password" (or empty), the account comes directly from the request.
-// For third-party providers, the auth_token is validated via the registered provider.
+// Empty auth_type is the legacy spelling of "password" and therefore follows
+// the same fail-closed path. Third-party auth_token values use the registry.
 func (l *LoginLogic) resolveAccount(in *login_proto.LoginRequest) (string, error) {
-	// Dev mode: skip all auth provider validation
-	if config.AppConfig.DevSkipAuth {
-		logx.Infow("DevSkipAuth enabled, using account field directly", logx.Field("account", in.Account))
-		return in.Account, nil
-	}
-
 	authType := in.AuthType
-	if authType == "" || authType == "password" {
-		return in.Account, nil
+	if authType == "" {
+		authType = "password"
+	}
+	if authType == "password" {
+		return resolvePasswordAccount(l.ctx, in, auth.GetPassword())
 	}
 
 	provider := auth.Get(authType)
@@ -290,6 +287,20 @@ func (l *LoginLogic) resolveAccount(in *login_proto.LoginRequest) (string, error
 	result, err := provider.Validate(l.ctx, in.AuthToken)
 	if err != nil {
 		return "", err
+	}
+	return result.Account, nil
+}
+
+func resolvePasswordAccount(ctx context.Context, in *login_proto.LoginRequest, provider auth.PasswordAuthenticator) (string, error) {
+	if provider == nil {
+		return "", auth.ErrPasswordAuthDisabled
+	}
+	result, err := provider.ValidatePassword(ctx, in.Account, in.Password)
+	if err != nil {
+		return "", err
+	}
+	if result == nil || result.Account == "" {
+		return "", auth.ErrInvalidCredentials
 	}
 	return result.Account, nil
 }

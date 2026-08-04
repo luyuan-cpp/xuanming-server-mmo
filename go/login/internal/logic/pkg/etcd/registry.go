@@ -4,6 +4,7 @@ package etcd
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/logx"
@@ -40,6 +41,17 @@ func (r *NodeRegistry) RegisterNode(key string, value string) error {
 	}
 	r.registeredKeys[key] = value
 	return nil
+}
+
+// TrackKey 登记一个**已经由别处写进 etcd**的 key,只记进重注册清单,不重复写。
+//
+// 为什么需要它:login 的 allocKey / infoKey 是 NodeAllocator 用一次 Txn 直接 CAS 写的
+// (那次 CAS 本身就是 node_id 唯一性的闸,不能拆成两次 Put),因此绕过了 RegisterNode。
+// 结果是 registeredKeys 恒空,reRegister 遍历 0 个 key、却打印 "completed successfully" ——
+// 失租后本节点从服务发现里永久消失,而 gRPC 端口仍在、livenessProbe 仍过,k8s 不会重启它,
+// 日志里还写着成功。TrackKey 就是把这两个 key 补登记进来,让重注册真的有东西可重放。
+func (r *NodeRegistry) TrackKey(key, value string) {
+	r.registeredKeys[key] = value
 }
 
 func (r *NodeRegistry) KeepAlive(ctx context.Context) {
@@ -93,13 +105,46 @@ func (r *NodeRegistry) reRegister(ctx context.Context) {
 		r.Lease = resp.ID
 		logx.Infof("Re-registration: new lease granted, id=%d", r.Lease)
 
+		// 没有任何待重放的 key,说明登记链断了(TrackKey 没被调到)。
+		// 这时候什么都不做却打印"成功"是最坏的结果:节点已经从服务发现里消失,
+		// 而所有人都以为它恢复了。fail-closed 报错退出,交给编排重拉重新注册。
+		if len(r.registeredKeys) == 0 {
+			logx.Error("Re-registration: nothing to re-register — the node is gone from service discovery " +
+				"and cannot recover in-process; exiting to let the orchestrator restart it")
+			logx.Close()
+			os.Exit(1)
+		}
+
 		allOk := true
 		for key, value := range r.registeredKeys {
-			_, err := r.client.Put(ctx, key, value, clientv3.WithLease(r.Lease))
+			// **不能无条件 Put**:租约过期期间别的副本可能已经抢走了这个 node_id。
+			// 无条件覆盖会把别人的槽位改成自己,制造真正的双占(两个进程同一个 node_id)。
+			// 只在"key 不存在"或"还是自己写的那份"时才重新挂上新租约。
+			txnResp, err := r.client.Txn(ctx).
+				If(clientv3.Compare(clientv3.Version(key), "=", 0)).
+				Then(clientv3.OpPut(key, value, clientv3.WithLease(r.Lease))).
+				Else(clientv3.OpGet(key)).
+				Commit()
 			if err != nil {
 				logx.Errorf("Re-registration: failed to re-put key=%s: %v", key, err)
 				allOk = false
 				break
+			}
+			if !txnResp.Succeeded {
+				// key 还在。是自己的残留就改挂新租约,是别人的就必须退让。
+				existing := txnResp.Responses[0].GetResponseRange()
+				if len(existing.Kvs) == 1 && string(existing.Kvs[0].Value) == value {
+					if _, perr := r.client.Put(ctx, key, value, clientv3.WithLease(r.Lease)); perr != nil {
+						logx.Errorf("Re-registration: failed to re-attach own key=%s: %v", key, perr)
+						allOk = false
+						break
+					}
+				} else {
+					logx.Errorf("Re-registration: key=%s is now held by someone else; this node_id was taken over. "+
+						"Exiting so the orchestrator restarts us and we allocate a fresh one.", key)
+					logx.Close()
+					os.Exit(1)
+				}
 			}
 			logx.Infof("Re-registration: key=%s re-registered with new lease", key)
 		}

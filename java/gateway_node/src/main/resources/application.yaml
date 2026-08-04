@@ -66,8 +66,9 @@ gate:
 #
 # Endpoint syntax: "<zoneId>=host:port" pins the channel to a zone (used by
 # AssignGate / Login / queue-status, all of which know their target zone).
-# Bare "host:port" still works for round-robin fallback (RefreshToken takes
-# this path because the access_token doesn't carry a zone). Mixing is allowed.
+# Bare "host:port" only joins the round-robin pool used by RefreshToken because
+# its token currently carries no zone. Login / AssignGate / queue-status require
+# an exact tagged mapping and fail before network I/O when it is missing.
 #
 # Why zone-pinning matters: each go-zero login.rpc only watches its own zone's
 # gate registrations in etcd. A round-robin client misroutes 2-in-3
@@ -82,6 +83,9 @@ login:
 # Zone health probe
 zone-probe:
   interval-ms: 5000
+  # 探测失败时只在此 TTL 内提供最近一次完整成功快照；冷启动与过期快照
+  # 都显式返回 UNKNOWN，不能伪装成全区 DOWN/维护。
+  status-ttl-ms: 15000
   gate-stale-threshold-seconds: 30
 
 # CDN
@@ -102,4 +106,3 @@ management:
 # CI smoke: this trailing comment exists only to dirty the file enough
 # to fire .github/workflows/login-path-tests.yml on a verification PR.
 # It can be reverted before merge — content is documentation-only.
-

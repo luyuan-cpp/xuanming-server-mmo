@@ -70,19 +70,23 @@ pwsh -File tools/scripts/k8s_deploy.ps1 -Command all-up -KafkaProfile prod
 | `gate-{id}` | 60s (broker default) | No | Routing/bind/kick commands — consume immediately |
 | `scene-{id}` | 60s (broker default) | No | Scene commands — consume immediately |
 | `player-events` | 60s (broker default) | No | Disconnect/lease events — consume immediately |
-| `db_task_zone_{id}` | **5~15 min** (configurable) | **Yes** | DB write-behind pipeline — survive consumer restart; config `Kafka.RetentionMs` |
+| `db_task_zone_{id}` | **24h** (configurable) | **Yes** | DB write-behind pipeline — survive consumer/operator recovery; config `Kafka.RetentionMs` |
 | Future: payment | **longer** (explicit) | **Yes** | Critical financial messages — set per-topic |
 
 ## Topic Initialization
 
 `go/shared/kafkautil/topic_init.go` provides `EnsureTopics(brokers, specs)`:
 - Creates topics if they don't exist (with specified partition count and retention)
+- Enforces an immutable broker-side partition marker; existing topics are never expanded in place
 - Updates `retention.ms` for existing topics to match spec
 - Uses sarama `ClusterAdmin` API
 
+For `db_task_zone_*`, a partition change requires an offline drain and a new
+`TopicGeneration`; see [db-task-kafka-partition-contract.md](./db-task-kafka-partition-contract.md).
+
 ### Wiring
 
-- **Login service** (`go/login/login.go`): calls `EnsureTopics` at startup, retention read from `Kafka.RetentionMs` config (default 5 min).
+- **Login and DB services**: both call `EnsureTopics` before producer/consumer startup; any topic/count/marker mismatch is fatal. Retention defaults to 24h.
 - **All other topics**: auto-created by Kafka broker on first produce, inherit 60s default retention.
 
 ### Config
@@ -90,11 +94,11 @@ pwsh -File tools/scripts/k8s_deploy.ps1 -Command all-up -KafkaProfile prod
 ```yaml
 # Dev (login.yaml)
 Kafka:
-  RetentionMs: 300000  # 5 minutes
+  RetentionMs: 86400000  # 24 hours
 
 # Production (k8s_deploy.ps1 template, KafkaProfile=prod)
 Kafka:
-  RetentionMs: 900000  # 15 minutes
+  RetentionMs: 86400000  # 24 hours
 ```
 
 ## Adding a New Persistent Topic

@@ -44,7 +44,7 @@ public class ServerListService {
         ZoneDisplayStatus displayStatus = resolveDisplayStatus(manualStatus, autoStatus);
         dto.setStatus(displayStatus);
 
-        if (displayStatus == ZoneDisplayStatus.OPEN) {
+        if (displayStatus == ZoneDisplayStatus.OPEN && autoStatus != AutoZoneStatus.UNKNOWN) {
             dto.setLoadLevel(loadLevel);
         }
 
@@ -78,6 +78,14 @@ public class ServerListService {
             case OPEN -> {
                 if (auto == AutoZoneStatus.DOWN) {
                     yield ZoneDisplayStatus.MAINTENANCE;
+                }
+                if (auto == AutoZoneStatus.UNKNOWN) {
+                    // 对外 status 是既有四值协议（OPEN/MAINTENANCE/CLOSED/PREVIEW），
+                    // 不能把内部探测态 UNKNOWN 直接扩成新的 wire enum；旧客户端会
+                    // 无法解析。探测面不可用不等于区服 DOWN，因此保持手工 OPEN，
+                    // 同时 getLoadLevel() 在 UNKNOWN 时返回 null，不发布伪造负载。
+                    // 真正不可登录仍由 AssignGate 的实时节点选择 fail-closed。
+                    yield ZoneDisplayStatus.OPEN;
                 }
                 yield ZoneDisplayStatus.OPEN;
             }

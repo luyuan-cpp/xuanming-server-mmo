@@ -58,6 +58,20 @@ class ServerListServiceTest {
     }
 
     @Test
+    void openZoneWithUnknownProbe_preservesWireStatusWithoutStaleLoad() {
+        ZoneConfig zone = makeZone(1L, "zone-1", 0);
+        when(zoneConfigRepo.findAll()).thenReturn(List.of(zone));
+        when(probeService.getAutoStatus(1L)).thenReturn(AutoZoneStatus.UNKNOWN);
+        when(probeService.getLoadLevel(1L)).thenReturn(LoadLevel.FULL);
+
+        ZoneInfoDto dto = serverListService.getServerList().getZones().getFirst();
+
+        assertEquals(ZoneDisplayStatus.OPEN, dto.getStatus(),
+                "internal UNKNOWN must preserve the existing four-value wire contract");
+        assertNull(dto.getLoadLevel(), "stale load must not be shown for UNKNOWN health");
+    }
+
+    @Test
     void manualMaintenanceOverridesHealthy() {
         ZoneConfig zone = makeZone(1L, "zone-1", 1); // manual MAINTENANCE
         zone.setMaintenanceMsg("Updating to v2.0");

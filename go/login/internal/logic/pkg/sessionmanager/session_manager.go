@@ -142,9 +142,22 @@ func Reconnect(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID 
 	return fromProto(resp.Session), nil
 }
 
-// DeleteSession removes the session (player fully logged off) via player_locator MarkOffline.
-func DeleteSession(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID uint64) error {
-	_, err := plClient.MarkOffline(ctx, &plpb.PlayerId{Uid: int64(playerID)})
+// DeleteSession removes only the exact Gate session that issued LeaveGame.
+// A delayed request from a replaced connection is intentionally a successful no-op.
+func DeleteSession(ctx context.Context, plClient plpb.PlayerLocatorClient, playerID uint64, expectedSessionID uint32) error {
+	current, err := GetSession(ctx, plClient, playerID)
+	if err != nil {
+		return err
+	}
+	if current == nil || current.SessionID != expectedSessionID {
+		return nil
+	}
+
+	_, err = plClient.MarkOffline(ctx, &plpb.MarkOfflineRequest{
+		PlayerId:               playerID,
+		ExpectedSessionId:      expectedSessionID,
+		ExpectedSessionVersion: current.SessionVersion,
+	})
 	if err != nil {
 		return fmt.Errorf("player_locator MarkOffline: %w", err)
 	}

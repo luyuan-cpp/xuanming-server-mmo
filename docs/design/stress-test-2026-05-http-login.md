@@ -112,12 +112,14 @@ java \
 
 ### 关键证据(curl 实际响应片段)
 
+> 历史压测凭据已经脱敏；该片段只证明当时的限流行为，不代表当前 password 认证可使用示例口令。
+
 ```http
 # Account cooldown 命中
 $ curl -s -X POST http://127.0.0.1:8081/api/login \
        -H "X-Forwarded-For: 10.88.88.88" \
        -d '{"zone_id":1,"account":"acct_dup","password":"x"}'
-{"code":0,"players":[],"access_token":"JORVAq_3jLXm39ArRYNOcLi3u5ASae8SQ1VB73OG6Rg","refresh_token":"gQl-2TLmrPzOQ4LChFTPGSCqN1ez9R3TLyzWPMfHaVw","access_token_expire":1778410845,"refresh_token_expire":1780995645}
+{"code":0,"players":[],"access_token":"<redacted>","refresh_token":"<redacted>","access_token_expire":1778410845,"refresh_token_expire":1780995645}
 
 $ curl -s -X POST http://127.0.0.1:8081/api/login \
        -H "X-Forwarded-For: 10.88.88.88" \

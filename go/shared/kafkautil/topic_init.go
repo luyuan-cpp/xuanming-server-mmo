@@ -1,7 +1,10 @@
 package kafkautil
 
 import (
+	"crypto/sha256"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/IBM/sarama"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -15,8 +18,11 @@ type TopicSpec struct {
 	ReplicaFactor int16 // 0 = use default (1)
 }
 
-// EnsureTopics creates topics if they don't exist and applies retention config.
-// For existing topics, it updates the retention.ms config to match the spec.
+// EnsureTopics creates missing topics, verifies an immutable partition-count
+// contract, and applies retention config. Existing topics are never expanded in
+// place: changing the partition count remaps keyed messages and breaks the
+// per-player ordering cursor used by db service. A planned expansion must use a
+// new topic generation after the old topic and retry queues are fully drained.
 func EnsureTopics(brokers []string, specs []TopicSpec) error {
 	cfg := sarama.NewConfig()
 	cfg.Version = sarama.V3_0_0_0
@@ -33,21 +39,22 @@ func EnsureTopics(brokers []string, specs []TopicSpec) error {
 	}
 
 	for _, spec := range specs {
+		if strings.TrimSpace(spec.Name) == "" {
+			return fmt.Errorf("kafka topic name is empty")
+		}
+		if spec.Partitions <= 0 {
+			return fmt.Errorf("kafka topic %s has invalid partition contract %d", spec.Name, spec.Partitions)
+		}
 		replica := spec.ReplicaFactor
 		if replica <= 0 {
 			replica = 1
-		}
-		partitions := spec.Partitions
-		if partitions <= 0 {
-			partitions = 1
 		}
 
 		retentionStr := fmt.Sprintf("%d", spec.RetentionMs)
 
 		if _, exists := existing[spec.Name]; !exists {
-			// Create topic
 			topicDetail := &sarama.TopicDetail{
-				NumPartitions:     partitions,
+				NumPartitions:     spec.Partitions,
 				ReplicationFactor: replica,
 			}
 			if spec.RetentionMs > 0 {
@@ -55,57 +62,75 @@ func EnsureTopics(brokers []string, specs []TopicSpec) error {
 					"retention.ms": &retentionStr,
 				}
 			}
-			if err := admin.CreateTopic(spec.Name, topicDetail, false); err != nil {
-				logx.Errorf("kafka create topic %s: %v", spec.Name, err)
+			if err := admin.CreateTopic(spec.Name, topicDetail, false); err != nil && !errors.Is(err, sarama.ErrTopicAlreadyExists) {
 				return fmt.Errorf("kafka create topic %s: %w", spec.Name, err)
 			}
-			logx.Infof("kafka topic created: %s (partitions=%d, retention=%dms)", spec.Name, partitions, spec.RetentionMs)
-		} else {
-			// Topic exists — update retention AND grow partitions if our spec
-			// asks for more than the broker currently has.
-			//
-			// History: this branch used to update only retention.ms. The first
-			// boot ever auto-created topics with the broker default
-			// num.partitions=1 (we were on sarama auto-create back then), so
-			// every subsequent run found the topic and skipped partition
-			// allocation forever. db_task_zone_N silently stayed at 1
-			// partition no matter what the spec said, which serialized every
-			// db worker onto a single partition and capped EnterGame
-			// throughput at one db SELECT at a time. Stress run 2026-05-24
-			// surfaced this when 5000-robot smoke runs piled 22k tasks on
-			// partition 0 and timed out (see
-			// docs/design/stress-3zone-2026-05-23-postmortem.md §G.4).
-			//
-			// Note: Kafka does NOT rebalance existing keys when partitions
-			// grow. New keys hash across the larger space, but messages
-			// already in the log stay where they were. That's fine for
-			// db_task (work queue, no per-key ordering survives a partition
-			// add anyway), but be careful applying this to topics where
-			// per-key ordering matters across boots — in those cases the
-			// safer fix is to rename the topic.
-			existingDetail := existing[spec.Name]
-			if spec.Partitions > 0 && existingDetail.NumPartitions < spec.Partitions {
-				if err := admin.CreatePartitions(spec.Name, spec.Partitions, nil, false); err != nil {
-					logx.Errorf("kafka grow partitions %s %d->%d: %v",
-						spec.Name, existingDetail.NumPartitions, spec.Partitions, err)
-				} else {
-					logx.Infof("kafka topic %s partitions grown: %d -> %d",
-						spec.Name, existingDetail.NumPartitions, spec.Partitions)
-				}
-			}
+			logx.Infof("kafka topic create requested: %s (partitions=%d, retention=%dms)",
+				spec.Name, spec.Partitions, spec.RetentionMs)
 
-			if spec.RetentionMs > 0 {
-				entries := map[string]*string{
-					"retention.ms": &retentionStr,
-				}
-				if err := admin.AlterConfig(sarama.TopicResource, spec.Name, entries, false); err != nil {
-					logx.Errorf("kafka alter topic %s retention: %v", spec.Name, err)
-				} else {
-					logx.Infof("kafka topic %s retention updated to %dms", spec.Name, spec.RetentionMs)
-				}
+			// login and db can race on first boot. Refresh metadata even when
+			// CreateTopic returned TopicAlreadyExists, then verify that the
+			// winner created the exact same routing contract.
+			var err error
+			existing, err = admin.ListTopics()
+			if err != nil {
+				return fmt.Errorf("kafka refresh topics after creating %s: %w", spec.Name, err)
 			}
+		}
+
+		detail, exists := existing[spec.Name]
+		if !exists {
+			return fmt.Errorf("kafka topic %s is still absent after create", spec.Name)
+		}
+		if detail.NumPartitions != spec.Partitions {
+			return fmt.Errorf("kafka topic %s partition contract mismatch: broker=%d config=%d; in-place expansion is forbidden, drain the old topic/retry queues and switch both login+db to a new TopicGeneration",
+				spec.Name, detail.NumPartitions, spec.Partitions)
+		}
+
+		markerPrefix, expectedMarker := partitionContractMarker(spec.Name, spec.Partitions)
+		markerExists := false
+		for topicName := range existing {
+			if !strings.HasPrefix(topicName, markerPrefix) {
+				continue
+			}
+			if topicName != expectedMarker {
+				return fmt.Errorf("kafka topic %s immutable partition marker conflicts: found=%s expected=%s; use a new TopicGeneration",
+					spec.Name, topicName, expectedMarker)
+			}
+			markerExists = true
+		}
+		if !markerExists {
+			cleanupPolicy := "compact"
+			markerDetail := &sarama.TopicDetail{
+				NumPartitions:     1,
+				ReplicationFactor: replica,
+				ConfigEntries: map[string]*string{
+					"cleanup.policy": &cleanupPolicy,
+				},
+			}
+			if err := admin.CreateTopic(expectedMarker, markerDetail, false); err != nil && !errors.Is(err, sarama.ErrTopicAlreadyExists) {
+				return fmt.Errorf("create immutable partition marker %s: %w", expectedMarker, err)
+			}
+			logx.Infof("kafka immutable partition marker ensured: topic=%s partitions=%d marker=%s",
+				spec.Name, spec.Partitions, expectedMarker)
+		}
+
+		if spec.RetentionMs > 0 {
+			entries := map[string]*string{
+				"retention.ms": &retentionStr,
+			}
+			if err := admin.AlterConfig(sarama.TopicResource, spec.Name, entries, false); err != nil {
+				return fmt.Errorf("kafka alter topic %s retention: %w", spec.Name, err)
+			}
+			logx.Infof("kafka topic %s retention updated to %dms", spec.Name, spec.RetentionMs)
 		}
 	}
 
 	return nil
+}
+
+func partitionContractMarker(topic string, partitions int32) (prefix, name string) {
+	sum := sha256.Sum256([]byte(topic))
+	prefix = fmt.Sprintf("__mmorpg_partition_contract_%x_p", sum)
+	return prefix, fmt.Sprintf("%s%d", prefix, partitions)
 }

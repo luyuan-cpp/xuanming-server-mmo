@@ -179,15 +179,13 @@ Client B → Gate B(TCP) → Login(gRPC EnterGame)
 player_locator LeaseMonitor polls Redis ZSET:
     │
     ├─ Discover playerId with expired lease
-    ├─ player_locator.MarkOffline(playerId)
-    │     └─ state = Offline
-    │
-    └─ Kafka → gate-{gateId}: GateCommand{PlayerLeaseExpired, sessionId, playerId}
-         │
-         └─ Gate receives PlayerLeaseExpiredEvent:
-              ├─ Verify playerId matches (guard against zombie messages)
-              ├─ Disconnect / clean up SessionInfo
-              └─ Optional: notify Scene to clean up player entity
+    ├─ ready → processing token claim (30s deadline, 10s heartbeat)
+    ├─ CAS the complete PlayerSession protobuf; delete only the claimed DISCONNECTING version
+    ├─ Kafka → gate-{gateId}: GateCommand{PlayerLeaseExpired, sessionId, playerId}
+    ├─ gRPC → SceneManager.LeaveScene(playerId, authoritative sceneId)
+    └─ Ack processing only after both external side effects succeed
+         ├─ Failure/process exit: retain payload and retry with a new token after the deadline
+         └─ Committed but not acked: SetSession fails closed so a new login cannot steal cleanup ownership
 
 Scene side:
     └─ Receives ExitGame or timeout detection:
@@ -195,6 +193,10 @@ Scene side:
               ├─ SavePlayerToRedis (persist)
               └─ Destroy player entity
 ```
+
+A graceful `LeaveGame` calls `MarkOffline{player_id, expected_session_id,
+expected_session_version}`. Locator deletes with a Lua CAS only while both values
+still match; a delayed request from an old connection is a successful no-op.
 
 ---
 
