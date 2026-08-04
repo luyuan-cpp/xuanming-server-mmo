@@ -76,6 +76,9 @@ public:
 		if (guardEpoch > last_time_) {
 			last_time_ = guardEpoch;
 			step_ = kStepMask; // 耗尽这一秒,Generate() 只能推进到下一秒
+			// 这次"耗尽"是 guard 有意预置的,不是撞到容量墙。标记一下,
+			// 让紧随其后的第一次 Generate() 不要误报成容量告警(见 Generate 的耗尽分支)。
+			guardPending_ = true;
 		}
 	}
 
@@ -85,6 +88,12 @@ public:
 	Guid Generate()
 	{
 		const uint64_t now = NowEpoch();
+
+		// guard 预置只影响**紧随其后的第一次**发号,所以标记由第一次 Generate 无条件消化 ——
+		// 不能只在耗尽分支里清:若时钟在首次发号前就已跨秒,这里走的是"换新秒"分支,
+		// 标记会一直留着,把之后一次**真实**的容量耗尽静音掉。
+		const bool guardPending = guardPending_;
+		guardPending_ = false;
 
 		if (now > last_time_) {
 			clockRollbackLogged_ = false;
@@ -112,6 +121,24 @@ public:
 		// 高水位这一秒的 32768 个 step 用完了,必须等真实时钟越过它。
 		// 等待有界;超时也绝不把 last_time_ 往回写,而是借下一个逻辑秒继续发,
 		// 保证"停摆的时钟"最多影响时间字段精度,不会破坏唯一性。
+		//
+		// 耗尽本身必须记 ERROR:它意味着本节点撞到了 32768/s 的容量墙,或处在时钟回拨
+		// 窗口内(回拨期间整个窗口共享同一个 step 池,是耗尽的主要放大因素)。
+		// clock_behind>0 即可判定是回拨叠加而非纯粹量大,两种成因处置完全不同。
+		// 不需要额外限频:耗尽后 last_time_ 必然前进,同一个逻辑秒不可能耗尽两次。
+		//
+		// ⚠️ 唯一的例外是 SetGuardTime 预置的那一次:guard 特意把 step 池置满,好让启动后的
+		// 第一个号必然落到 guard 秒之后。那次"耗尽"是设计动作而非容量问题,**每次进程启动
+		// 都会发生**;若也报 ERROR,运维会被训练成忽略这条告警,真正撞容量墙时反而看不见。
+		if (!guardPending) {
+			LOG_ERROR << "Snowflake step pool exhausted: node_id=" << node_id_
+				<< " logical_second=" << last_time_
+				<< " cap=" << (kStepMask + 1)
+				<< " clock_behind=" << (now < last_time_ ? last_time_ - now : 0) << "s"
+				<< "; waiting up to " << kWaitBudget.count()
+				<< "s for the clock, then borrowing the next logical second";
+		}
+
 		const uint64_t advanced = WaitNextTime(last_time_);
 		last_time_ = (advanced > last_time_) ? advanced : (last_time_ + 1);
 		step_ = 0;
@@ -212,6 +239,9 @@ private:
 	uint64_t last_time_ = 0;
 	uint64_t step_ = 0;
 	bool clockRollbackLogged_ = false;
+	// SetGuardTime 刚把 step 池预置满、且那一次预置尚未被首个 Generate() 消化。
+	// 只用来抑制"guard 造成的首次耗尽"的误报,不影响发号语义。
+	bool guardPending_ = false;
 #ifdef ENABLE_SNOWFLAKE_TESTING
 	uint64_t mock_now_ = 0;
 	bool use_mock_time_ = false;
@@ -267,6 +297,7 @@ public:
 			else {
 				// 高水位这一秒发满了,等真实时钟越过;等不到就借下一个逻辑秒,
 				// 绝不把高水位往回写。
+				LogStepPoolExhausted(last_time, now);
 				const uint64_t advanced = WaitUntilTimeAdvance(last_time);
 				mint_time = (advanced > last_time) ? advanced : (last_time + 1);
 				step_to_use = 0;
@@ -305,6 +336,7 @@ public:
 				step_count = std::min(static_cast<size_t>(kStepMask - last_step), count);
 			}
 			else {
+				LogStepPoolExhausted(last_time, now);
 				const uint64_t advanced = WaitUntilTimeAdvance(last_time);
 				mint_time = (advanced > last_time) ? advanced : (last_time + 1);
 				step_start = 0;
@@ -328,6 +360,25 @@ private:
 		return (time << kTimeShift) |
 			(static_cast<uint64_t>(node_id_) << kNodeShift) |
 			step;
+	}
+
+	// 记录"某个逻辑秒的 step 池耗尽"。含义与 SnowFlake::Generate 里那条一致:
+	// 撞到 32768/s 容量墙,或处在时钟回拨窗口(整个窗口共享一个 step 池)。
+	//
+	// 与非原子版不同,这里**必须限频**:耗尽分支位于 CAS 重试循环内,多个线程会同时
+	// 撞进来、且 CAS 失败还会重跑,直接打就会按并发度刷屏。用一次 exchange 选出该逻辑秒
+	// 的唯一记录者,其余线程静默。+1 是为了让"逻辑秒 0"也能被正常记录一次。
+	void LogStepPoolExhausted(uint64_t last_time, uint64_t now) {
+		const uint64_t token = last_time + 1;
+		if (exhaust_logged_sec_.exchange(token, std::memory_order_relaxed) == token) {
+			return;
+		}
+		LOG_ERROR << "Snowflake step pool exhausted: node_id=" << node_id_
+			<< " logical_second=" << last_time
+			<< " cap=" << (kStepMask + 1)
+			<< " clock_behind=" << (now < last_time ? last_time - now : 0) << "s"
+			<< "; waiting up to " << kWaitBudget.count()
+			<< "s for the clock, then borrowing the next logical second";
 	}
 
 	uint64_t NowEpoch() {
@@ -375,6 +426,8 @@ private:
 
 	uint32_t node_id_{ 0 };
 	std::atomic<uint64_t> time_step_{ 0 };
+	// 已为哪个逻辑秒打过耗尽日志(存的是 logical_second+1,0 表示还没打过)。
+	std::atomic<uint64_t> exhaust_logged_sec_{ 0 };
 
 #ifdef ENABLE_SNOWFLAKE_TESTING
 	std::atomic<uint64_t> mock_now_{ 0 };

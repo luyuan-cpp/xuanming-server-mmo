@@ -52,14 +52,19 @@ public:
 				<< "); refusing to mint";
 			return kInvalidGuid;
 		}
-		lastGeneratedItemGuid_ = itemIdGenerator_.Generate();
-		return lastGeneratedItemGuid_;
+		return itemIdGenerator_.Generate();
 	}
 
-	[[nodiscard]] Guid GetLastGeneratedItemGuid() const { return lastGeneratedItemGuid_; }
-
+	// 注意:这里曾经有 lastGeneratedItemGuid_ + GetLastGeneratedItemGuid(),
+	// 供 Bag/BagService "发完号再回读上一个号"当作隐式返回值。已删除,原因有二:
+	//   ① 本发号器**同时**铸 item guid、tx_id(TransactionLogSystem::GenerateTxId)
+	//      与 snapshot_id(SnapshotSystem),后两者会把残值覆盖掉 ——
+	//      于是流水里的 item_uuid 可能根本不是任何一件物品的 guid,而是某条流水的 tx_id;
+	//   ② 并堆、以及"单件沿用调用方预设 guid"这两条路径根本不铸号,
+	//      读到的是上一件物品留下的残值,张冠李戴。
+	// 正确做法是让写入方显式回执(见 Bag::AddItem 的 writtenGuidsOut),
+	// **不要**再引入任何"发完再回读"的隐式通道。
 private:
-	Guid lastGeneratedItemGuid_{ kInvalidGuid };
 	SnowFlake itemIdGenerator_;
 	uint32_t nodeId_{ 0 };
 	bool initialized_{ false };

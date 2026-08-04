@@ -22,6 +22,7 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     playerRedis->SetLoadCallback(PlayerLifecycleSystem::HandlePlayerAsyncLoaded);
     playerRedis->SetLoadFailedCallback(PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed);
     playerRedis->SetSaveCallback(PlayerLifecycleSystem::HandlePlayerAsyncSaved);
+    playerRedis->SetSaveFailedCallback(PlayerLifecycleSystem::HandlePlayerAsyncSaveFailed);
 
     tlsRedis.SetReconnectCallback([this]()
                                   {

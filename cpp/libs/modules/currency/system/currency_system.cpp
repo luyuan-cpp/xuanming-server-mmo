@@ -1,6 +1,7 @@
 #include "currency_system.h"
 
 #include <algorithm>
+#include <limits>
 
 #include <muduo/base/Logging.h>
 
@@ -278,6 +279,14 @@ void CurrencySystem::AttachDebt(entt::entity player, CurrencyType type, int64_t 
     }
 
     auto &debt = comp->debts[static_cast<uint32_t>(type)];
+    if (debt.owed > std::numeric_limits<uint64_t>::max() - debtToAdd)
+    {
+        LOG_ERROR << "CurrencySystem::AttachDebt: owed overflow rejected, current=" << debt.owed
+                  << " add=" << debtToAdd
+                  << " CurrencyType=" << static_cast<uint32_t>(type)
+                  << " entity=" << entt::to_integral(player);
+        return;
+    }
     debt.owed += debtToAdd;
     debt.reason = reason;
     debt.gmOperator = gmOperator;
@@ -364,13 +373,33 @@ void CurrencySystem::AdjustDebt(entt::entity player, CurrencyType type, int64_t 
     auto &debt = it->second;
     if (delta > 0)
     {
-        debt.owed += static_cast<uint64_t>(delta);
+        const uint64_t increase = static_cast<uint64_t>(delta);
+        if (debt.owed > std::numeric_limits<uint64_t>::max() - increase)
+        {
+            LOG_ERROR << "CurrencySystem::AdjustDebt: owed overflow rejected, current=" << debt.owed
+                      << " add=" << increase
+                      << " CurrencyType=" << static_cast<uint32_t>(type)
+                      << " entity=" << entt::to_integral(player);
+            return;
+        }
+        debt.owed += increase;
     }
     else
     {
-        uint64_t decrease = static_cast<uint64_t>(-delta);
-        // Clamp so owed never goes below paid
-        if (debt.owed - decrease < debt.paid)
+        // -delta 对 INT64_MIN 是有符号溢出(UB),先在 uint64 域里取绝对值。
+        const uint64_t decrease = (delta == std::numeric_limits<int64_t>::min())
+                                      ? (static_cast<uint64_t>(std::numeric_limits<int64_t>::max()) + 1u)
+                                      : static_cast<uint64_t>(-delta);
+
+        // 钳制:owed 不得低于 paid。
+        //
+        // 判定里**不能出现 `debt.owed - decrease`** —— decrease > owed 时该减法
+        // 在 uint64 域环绕成约 2^64 的巨值,钳制条件恒为假,于是落进 else 再减
+        // 一次、owed 变成天文数字。后果不是数字难看:Remaining() 随之巨大,
+        // AddCurrency 的补缴 hook 会把该玩家该币种的**每一笔后续收入**全额扣走,
+        // 每笔还都记一条看似正常的 TX_DEFERRED_CLAWBACK 流水。
+        // GM 想清债时随手多减一点(owed=100 却发 delta=-200)就会触发。
+        if (decrease >= debt.owed || debt.owed - decrease < debt.paid)
         {
             debt.owed = debt.paid; // effectively zeroes remaining
         }

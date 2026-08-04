@@ -32,6 +32,18 @@ bool PlayerItemBlockList::IsBlocked(uint32_t configId) const
 // BagService
 // ---------------------------------------------------------------------------
 
+// 一条 transaction_log 记录一次"玩家获得了 N 个 config C",item_uuid 用来标识这批数量
+// **主要落在哪个实例**上。Bag::AddItem 的回执按写入顺序给出本次真实写入的实例:
+// 单件装备 / 单堆物品只有一个,取它即可;并堆或跨多格时取第一个作为主实例。
+//
+// 回执为空 = 本次没有任何实例被写入。这在成功路径上不该发生(能返回 kSuccess 就一定写了东西),
+// 所以这里返回 kInvalidGuid 而不是硬编一个看起来合法的号 —— 宁可让追溯查不到,
+// 也不能把别的物品的 guid 写进流水(那正是旧的"回读上一次发号"实现干的事)。
+static Guid PrimaryWrittenGuid(const std::vector<Guid> &writtenGuids)
+{
+	return writtenGuids.empty() ? kInvalidGuid : writtenGuids.front();
+}
+
 uint32_t BagService::AddItem(
 	entt::entity playerEntity,
 	Bag &bag,
@@ -71,13 +83,17 @@ uint32_t BagService::AddItem(
 	}
 
 	// ── Delegate to pure container ───────────────────────────────────────
-	auto result = bag.AddItem(param);
+	// writtenGuids 是 AddItem 的显式回执:本次真实写入的实例 guid。
+	// 不能再回读发号器的"上一个号"—— 同一个发号器还在铸 tx_id / snapshot_id,
+	// 而且并堆 / 沿用预设 guid 的路径根本不铸号,残值属于上一件物品。
+	std::vector<Guid> writtenGuids;
+	auto result = bag.AddItem(param, &writtenGuids);
 
 	// ── Post-success: transaction log + anomaly detection ────────────────
 	if (result == kSuccess)
 	{
 		TransactionLogSystem::LogItemCreate(
-			playerEntity, Bag::LastGeneratedItemGuid(),
+			playerEntity, PrimaryWrittenGuid(writtenGuids),
 			param.itemPBComp.config_id(),
 			param.itemPBComp.size(),
 			TX_SYSTEM_GRANT);
@@ -134,14 +150,15 @@ uint32_t BagService::AddItems(
 		param.itemPBComp.set_config_id(configId);
 		param.itemPBComp.set_size(count);
 
-		auto result = bag.AddItem(param);
+		std::vector<Guid> writtenGuids;
+		auto result = bag.AddItem(param, &writtenGuids);
 		if (result != kSuccess)
 		{
 			return result;
 		}
 
 		TransactionLogSystem::LogItemCreate(
-			playerEntity, Bag::LastGeneratedItemGuid(),
+			playerEntity, PrimaryWrittenGuid(writtenGuids),
 			configId, count, TX_SYSTEM_GRANT);
 
 		AnomalyDetector::RecordItemGain(playerEntity, configId, count);
@@ -196,25 +213,20 @@ uint32_t BagService::AddItems(
 	RETURN_ON_ERROR(bag.CheckSpaceFor(requiredSpace));
 
 	// ── Apply per piece, interleaving the transaction log ────────────────
-	// Add one piece at a time so LastGeneratedItemGuid() yields the guid
-	// actually minted for that piece. Equipment with a preassigned guid keeps
-	// it; stackables / multi-piece adds use the freshly minted guid. One
-	// transaction_log + anomaly record per piece, matching single AddItem.
+	// 逐件添加,每件拿自己的写入回执,于是一条流水对应一件物品。
+	// 回执已经覆盖"沿用预设 guid"的情形(AddNonStackableItem 对沿用与新铸一视同仁地记录),
+	// 所以这里不必再单独判断 preassignedGuid —— 那个分支正是旧实现为了绕开残值不准而打的补丁。
 	for (const auto &param : itemsToAdd)
 	{
-		auto result = bag.AddItem(param);
+		std::vector<Guid> writtenGuids;
+		auto result = bag.AddItem(param, &writtenGuids);
 		if (result != kSuccess)
 		{
 			return result;
 		}
 
-		const auto preassignedGuid = param.itemPBComp.item_id();
-		const auto loggedGuid = (preassignedGuid != kInvalidGuid && preassignedGuid > 0)
-									 ? preassignedGuid
-									 : Bag::LastGeneratedItemGuid();
-
 		TransactionLogSystem::LogItemCreate(
-			playerEntity, loggedGuid,
+			playerEntity, PrimaryWrittenGuid(writtenGuids),
 			param.itemPBComp.config_id(),
 			param.itemPBComp.size(),
 			TX_SYSTEM_GRANT);

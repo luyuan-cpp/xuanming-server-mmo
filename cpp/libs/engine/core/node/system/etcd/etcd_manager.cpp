@@ -123,11 +123,31 @@ void EtcdManager::UpdateNodeInfo()
 	EtcdHelper::PutServiceNodeInfo(gNode->GetNodeInfo(), serviceKey, gNode->GetLeaseId());
 }
 
-void EtcdManager::RegisterNodePort()
+void EtcdManager::RegisterNodePort(bool reRegistering)
 {
 	const auto portKey = MakeNodePortEtcdKey(gNode->GetNodeInfo());
 	LOG_INFO << "Registering node port to etcd with key: " << portKey;
-	EtcdHelper::PutIfAbsent(portKey, "", 0, gNode->GetLeaseId());
+
+	// 重注册(临时失租后拿了新租约)时**必须**用无条件 Put,不能再 PutIfAbsent。
+	//
+	// 原因:RequestReRegistration 只在旧租约仍健康时才触发,此刻 portKey 还挂在旧租约上,
+	// VERSION==0 的 CAS 必然失败;而 OnTxnFailed 在 kReRegisterExisting 模式下把**任何**
+	// key 的失败一律判成"身份被抢",直接 OnNodeIdConflictShutdown —— fence 发号器、
+	// 清退玩家、进程退出。也就是说每一次重注册都会确定性地把自己杀掉。
+	//
+	// 为什么无条件 Put 是安全的:portKey = /service/<ip>/port/<port>,按 **IP+端口** 作用域。
+	// 本进程正是绑在这个 IP:端口 上的那个进程,别的节点不可能产生同一个 key
+	// (换机器 IP 不同,同机换实例端口不同)。所以"key 还在"只可能是自己旧租约的残留,
+	// 重新挂到新租约即可,不存在覆盖别人的可能。
+	// 与之相对,node_id / 分配键那两把是**跨进程竞争**的,仍然保持 CAS 语义不变。
+	if (reRegistering)
+	{
+		EtcdHelper::PutWithLease(portKey, "", gNode->GetLeaseId());
+	}
+	else
+	{
+		EtcdHelper::PutIfAbsent(portKey, "", 0, gNode->GetLeaseId());
+	}
 	SetPendingTxnKey(portKey);
 	LOG_INFO << "Registered node port to etcd: " << gNode->GetNodeInfo().endpoint().port();
 }

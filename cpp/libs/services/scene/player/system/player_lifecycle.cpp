@@ -31,6 +31,7 @@
 #include "player/constants/player.h"
 #include "proto/db/db_task.pb.h"
 #include "modules/snapshot/snapshot_system.h"
+#include "modules/transaction_log/anomaly_detector.h"
 #include <proto/scene/scene_info.pb.h>
 #include "player/comp/afk_comp.h"
 #include "frame/manager/frame_time.h"
@@ -132,6 +133,37 @@ void PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed(Guid playerId,
 			SessionMap().erase(sessionId);
 		}
 		tlsPendingEnterMap.erase(pendingIt);
+	}
+}
+
+void PlayerLifecycleSystem::HandlePlayerAsyncSaveFailed(Guid playerId, const std::string &redisKey, int retryCount)
+{
+	// 这条日志代表**真实的数据持久化风险**,不是可以忽略的抖动:
+	// scene 的 PlayerAllData key 与 db 服务回写的分表 key 是两套命名空间
+	// (见 docs/design/player-async-save-loss-windows.md §2),没有任何下游
+	// 会把它修回来。玩家下次进场从这个 key 加载 = 回档到上一次成功存盘。
+	LOG_ERROR << "HandlePlayerAsyncSaveFailed: DATA-DURABILITY RISK — player " << playerId
+			  << " could not be persisted after " << retryCount << " retries, key=" << redisKey
+			  << ". The latest payload remains queued with capped backoff; Redis still holds the previous save.";
+
+	const auto playerEntity = tlsEcs.GetPlayer(playerId);
+	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		return;
+	}
+
+	// 刻意**不**碰 PlayerLastPersistedSnapshotComp:它的语义是"确实落过盘"。
+	// 保持旧值 → 下一次 SavePlayerToRedis 的 proto-compare 必然判不等 → 会重写
+	// 整份数据,这正是我们要的自愈。若在这里更新它,快路径会永久跳过存盘。
+
+	// fail-closed:绝不在 Redis 尚未接收最新值时销毁唯一内存态。MessageAsyncClient
+	// 会继续保留最新 payload 重试;若玩家正在退出,UnregisterPlayer 标记让
+	// IsSaveInFlight 保持为 true,由节点已有的有界 drain 看门狗决定最终停机边界。
+	// 这可能暂时保留实体,但不会把一次 Redis 抖动确定性地升级成玩家回档。
+	if (tlsEcs.actorRegistry.any_of<UnregisterPlayer>(playerEntity))
+	{
+		LOG_ERROR << "HandlePlayerAsyncSaveFailed: retaining exiting player " << playerId
+				  << " until the queued save succeeds; node drain remains bounded by its watchdog.";
 	}
 }
 
@@ -410,8 +442,17 @@ void PlayerLifecycleSystem::DestroyPlayer(Guid playerId)
 {
 	LOG_INFO << "Destroying player: " << playerId;
 
+	const auto playerEntity = tlsEcs.GetPlayer(playerId);
+
+	// 异常检测的滑动窗口桶按 entt::entity 建键,而它自己没有任何回收挂钩:
+	// 玩家销毁后桶永远留在 thread_local map 里(entt 复用槽位会递增 version,
+	// 新实体的 key 与旧的不等,旧桶永不再命中也永不释放)。长期运行的场景节点
+	// 上,每个下线玩家在每个碰过的币种/物品 config 上各留一个死桶 —— 违反
+	// 「数据增长有界」。这里是玩家实体销毁的唯一出口,顺手清掉。
+	AnomalyDetector::ClearPlayer(playerEntity);
+
 	defer(tlsEcs.playerList.erase(playerId));
-	DestroyEntity(tlsEcs.actorRegistry, tlsEcs.GetPlayer(playerId));
+	DestroyEntity(tlsEcs.actorRegistry, playerEntity);
 }
 
 void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player)

@@ -1,8 +1,10 @@
 ﻿#pragma once
 
+#include <algorithm>
 #include <chrono>
 #include <string>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 #include <limits>
 
@@ -30,6 +32,10 @@ namespace google
 
 
 using MessageCachedArray = std::vector<uint8_t>;
+
+// 仅供单测在不连接真实 Redis 的情况下驱动异步回包；生产代码不定义或使用。
+template <class MessageKey, class MessageValue>
+struct MessageAsyncClientTestPeer;
 
 class SyncRedisContext_Deleter
 {
@@ -78,6 +84,10 @@ public:
 		// retry path doesn't have to re-serialize the protobuf message.
 		std::vector<uint8_t> serialized_payload;
 		int retry_count = 0;
+		// Save retries continue after the alert threshold. This flag ensures the
+		// owner receives one high-severity notification per pending value instead
+		// of one notification every capped-backoff tick.
+		bool save_failure_notified = false;
 		// Earliest time this element is allowed to be retried (steady_clock).
 		// Set when the element is enqueued into pending_retry_queue_ /
 		// pending_save_queue_.
@@ -99,6 +109,15 @@ public:
 	};
 	using FailedCallback = std::function<void(MessageKey, LoadFailureReason)>;
 
+	// 存盘连续失败达到告警阈值的通知。通知后仍保留最新值并继续重试。
+	//
+	// 为什么必须有:异步存盘的调用方普遍依赖"成功回调迟早会来"来收尾
+	// (销毁实体、清 session、解锁)。旧实现在重试耗尽时只打一条 LOG_ERROR
+	// 就 return,没有任何人被通知 —— 退出流程于是永久悬挂,而且数据只留在
+	// 内存里,盘上还是上一次成功存盘的旧值。加载路径早就有
+	// load_failed_callback_,存盘路径缺这一半是接口级的不对称。
+	using SaveFailedCallback = std::function<void(MessageKey, const std::string& redisKey, int retryCount)>;
+
 	using HiredisPtr = std::unique_ptr<hiredis::Hiredis>;
 
 	explicit MessageAsyncClient(HiredisPtr& hiredis)
@@ -111,6 +130,7 @@ public:
 	void SetSaveCallback(const EventCallback& cb) { save_callback_ = cb; }
 	void SetLoadCallback(const EventCallback& cb) { load_callback_ = cb; }
 	void SetLoadFailedCallback(const FailedCallback& cb) { load_failed_callback_ = cb; }
+	void SetSaveFailedCallback(const SaveFailedCallback& cb) { save_failed_callback_ = cb; }
 
 
 	void Save(const MessageValuePtr& message, const MessageKey& key)
@@ -126,6 +146,16 @@ public:
 		if (size > 0 && !message->SerializeToArray(element->serialized_payload.data(), static_cast<int>(size)))
 		{
 			LOG_ERROR << "SerializeToArray failed for key " << key;
+			return;
+		}
+
+		// A key may have only one write in flight. If a periodic save is still
+		// waiting for its reply when logout produces a newer full snapshot, keep
+		// only that newer value and do not let the older completion finish logout.
+		// This also prevents an old failed retry from overwriting a later success.
+		if (saving_queue_.find(element->redis_key) != saving_queue_.end())
+		{
+			pending_save_queue_[element->redis_key] = element;
 			return;
 		}
 
@@ -210,9 +240,25 @@ public:
 			return;
 		}
 
+		// A disconnected async command will not reliably deliver its callback.
+		// Move each in-flight save back to pending, unless Save() already placed a
+		// newer full snapshot for the same key there. Full snapshots are
+		// superseding, so retaining the newest pending value is sufficient.
+		for (auto &[k, v] : saving_queue_)
+		{
+			if (pending_save_queue_.find(k) == pending_save_queue_.end())
+			{
+				v->next_retry_at = std::chrono::steady_clock::now();
+				pending_save_queue_[k] = v;
+			}
+		}
+		saving_queue_.clear();
+
 		// Cached EVALSHA hash is bound to the previous server connection;
-		// drop it so we re-SCRIPT LOAD on the new connection.
+		// drop it so we re-SCRIPT LOAD on the new connection. A SCRIPT LOAD that
+		// was in flight on the dead connection will never clear this flag.
 		script_sha1_.clear();
+		script_load_in_flight_ = false;
 		EnsureScriptLoaded();
 
 		const auto now = std::chrono::steady_clock::now();
@@ -264,17 +310,21 @@ public:
 	size_t pending_load_count() const { return pending_retry_queue_.size(); }
 	// Number of saves waiting in the failure/disconnect retry queue.
 	size_t pending_save_count() const { return pending_save_queue_.size(); }
+	// Number of SETs whose reply has not yet been received.
+	size_t in_flight_save_count() const { return saving_queue_.size(); }
 
 	// Convenience: log a one-shot snapshot of all three queue lengths. Useful
 	// when bolting MessageAsyncClient onto a periodic reporter.
 	void LogQueueSnapshot(const char *tag) const
 	{
-		if (in_flight_load_count() == 0 && pending_load_count() == 0 && pending_save_count() == 0)
+		if (in_flight_load_count() == 0 && in_flight_save_count() == 0 &&
+			pending_load_count() == 0 && pending_save_count() == 0)
 		{
 			return;
 		}
 		LOG_INFO << "[" << tag << "] " << full_name()
 				 << " in_flight_loads=" << in_flight_load_count()
+				 << " in_flight_saves=" << in_flight_save_count()
 				 << " pending_loads=" << pending_load_count()
 				 << " pending_saves=" << pending_save_count();
 	}
@@ -387,6 +437,15 @@ private:
 
 	void IssueSave(const ElementPtr &element)
 	{
+		// Save() and the completion path serialize writes per key. Treat a second
+		// issue defensively as a coalesced successor instead of allowing two SETs
+		// whose retry order could roll Redis backwards.
+		if (saving_queue_.find(element->redis_key) != saving_queue_.end())
+		{
+			pending_save_queue_[element->redis_key] = element;
+			return;
+		}
+
 		if (!hiredis_ || !hiredis_->connected())
 		{
 			pending_save_queue_[element->redis_key] = element;
@@ -395,6 +454,7 @@ private:
 
 		EnsureScriptLoaded();
 
+		saving_queue_[element->redis_key] = element;
 		int ret = REDIS_OK;
 		if (!script_sha1_.empty())
 		{
@@ -417,6 +477,7 @@ private:
 		if (ret != REDIS_OK)
 		{
 			LOG_ERROR << "Redis Save command failed (ret=" << ret << ") for key: " << element->redis_key;
+			saving_queue_.erase(element->redis_key);
 			QueueSaveForRetry(element);
 		}
 	}
@@ -425,13 +486,36 @@ private:
 
 	void QueueSaveForRetry(const ElementPtr &element)
 	{
-		if (element->retry_count >= kMaxSaveRetries)
+		// A later full snapshot supersedes this failed value. Issue the newer one
+		// immediately; retrying the older payload first would both waste work and
+		// create a stale-overwrite window.
+		if (auto newer = pending_save_queue_.find(element->redis_key);
+			newer != pending_save_queue_.end() && newer->second != element)
 		{
-			LOG_ERROR << "Save exhausted " << kMaxSaveRetries << " retries for key: " << element->redis_key
-					  << " -- giving up; cache will be stale until dbservice rewrites";
+			auto next = newer->second;
+			pending_save_queue_.erase(newer);
+			IssueSave(next);
 			return;
 		}
-		const int nextRetry = element->retry_count + 1;
+
+		if (element->retry_count >= kMaxSaveRetries && !element->save_failure_notified)
+		{
+			// 注意:这里**不能**指望 db 服务把缓存修回来。
+			// scene 存的是 "<PlayerAllData full_name>:{id}",而 db 服务写回的是
+			// login 读的分表 key("player_database:{id}" 等),两组 key 互不覆盖。
+			// 所以不能在阈值处丢掉最新 payload 或让调用方销毁唯一内存态。
+			// 这里只通知一次,随后以封顶退避继续重试,直到 Redis 恢复或进程
+			// 进入有界停机流程。
+			LOG_ERROR << "Save exhausted " << kMaxSaveRetries << " retries for key: " << element->redis_key
+					  << " -- retaining the latest payload and retrying indefinitely with capped backoff. "
+					  << "This key is NOT repaired by dbservice (different key space).";
+			element->save_failure_notified = true;
+			if (save_failed_callback_)
+			{
+				save_failed_callback_(element->message_key, element->redis_key, element->retry_count);
+			}
+		}
+		const int nextRetry = std::min(element->retry_count + 1, kMaxSaveRetries);
 		const auto backoff = BackoffForRetry(nextRetry);
 		element->retry_count = nextRetry;
 		element->next_retry_at = std::chrono::steady_clock::now() + backoff;
@@ -443,9 +527,19 @@ private:
 
 	void OnSaved(hiredis::Hiredis * /*c*/, redisReply *reply, ElementPtr element)
 	{
+		// Ignore a callback from a connection that was superseded during
+		// reconnect. The current in-flight/pending value owns this key now.
+		auto inFlight = saving_queue_.find(element->redis_key);
+		if (inFlight == saving_queue_.end() || inFlight->second != element)
+		{
+			LOG_WARN << "Ignoring stale Redis Save callback for key: " << element->redis_key;
+			return;
+		}
+
 		if (!reply)
 		{
 			LOG_ERROR << "Redis Save: null reply for key: " << element->redis_key;
+			saving_queue_.erase(inFlight);
 			QueueSaveForRetry(element);
 			return;
 		}
@@ -466,12 +560,28 @@ private:
 												  element->serialized_payload.data(), element->serialized_payload.size());
 				if (ret != REDIS_OK)
 				{
+					saving_queue_.erase(element->redis_key);
 					QueueSaveForRetry(element);
 				}
 				return;
 			}
 			LOG_ERROR << "Redis Save error for key: " << element->redis_key << " err=" << err;
+			saving_queue_.erase(inFlight);
 			QueueSaveForRetry(element);
+			return;
+		}
+
+		saving_queue_.erase(inFlight);
+		// Do not publish completion for an older full snapshot when a newer one
+		// is waiting. In the Scene lifecycle that callback may destroy an exiting
+		// entity, so only the newest successfully persisted snapshot may complete
+		// the chain.
+		if (auto newer = pending_save_queue_.find(element->redis_key);
+			newer != pending_save_queue_.end())
+		{
+			auto next = newer->second;
+			pending_save_queue_.erase(newer);
+			IssueSave(next);
 			return;
 		}
 		if (save_callback_)
@@ -480,18 +590,28 @@ private:
 		}
 	}
 
-	void OnLoaded(hiredis::Hiredis* c, redisReply* reply, ElementPtr element)
+	void OnLoaded(hiredis::Hiredis* /*c*/, redisReply* reply, ElementPtr element)
 	{
-		loading_queue_.erase(element->redis_key);
+		// 重连可能淘汰旧 GET，并为同一 key 发出新请求；旧连接的迟到回包
+		// 不能删除或完成这个替代请求。
+		auto inFlight = loading_queue_.find(element->redis_key);
+		if (inFlight == loading_queue_.end() || inFlight->second != element)
+		{
+			LOG_WARN << "Ignoring stale Redis Load callback for key: " << element->redis_key;
+			return;
+		}
+		loading_queue_.erase(inFlight);
 
 		if (!reply || reply->type == REDIS_REPLY_ERROR)
 		{
+			const std::string errorDetail = reply == nullptr
+				? " (null reply)"
+				: std::string(" err=") + (reply->str != nullptr
+					? std::string(reply->str, reply->len)
+					: std::string("<missing error text>"));
 			LOG_ERROR << "Redis GET error for key: " << element->redis_key
-					  << (reply ? (std::string(" err=") + reply->str) : " (null reply)");
-			if (load_failed_callback_)
-			{
-				load_failed_callback_(element->message_key, LoadFailureReason::RedisError);
-			}
+					  << errorDetail;
+			FailLoad(element, LoadFailureReason::RedisError);
 			return;
 		}
 
@@ -512,33 +632,42 @@ private:
 
 			LOG_ERROR << "Redis GET returned NIL for key: " << element->redis_key
 					  << ", exhausted all " << kMaxLoadRetries << " retries";
-			if (load_failed_callback_)
-			{
-				load_failed_callback_(element->message_key, LoadFailureReason::DataNotFound);
-			}
+			FailLoad(element, LoadFailureReason::DataNotFound);
 			return;
 		}
 
 		if (reply->type == REDIS_REPLY_STRING)
 		{
-			element->message_value = CreateMessage();
 			if (reply->len > static_cast<size_t>(std::numeric_limits<int>::max()))
 			{
 				LOG_ERROR << "Redis payload too large for ParseFromArray, key: " << element->redis_key
 						  << ", len=" << reply->len;
+				FailLoad(element, LoadFailureReason::RedisError);
+				return;
 			}
-			else if (!element->message_value->ParseFromArray(reply->str, static_cast<int>(reply->len)))
+			if (reply->len == 0 || reply->str == nullptr)
+			{
+				// Scene 保存的 PlayerAllData 必含 player_id；已存在的零字节值是损坏，
+				// 不是“新玩家”信号。只有有界重试后的 REDIS_REPLY_NIL 才表示不存在。
+				LOG_ERROR << "Redis payload is empty/invalid for key: " << element->redis_key;
+				FailLoad(element, LoadFailureReason::RedisError);
+				return;
+			}
+
+			element->message_value = CreateMessage();
+			if (!element->message_value->ParseFromArray(reply->str, static_cast<int>(reply->len)))
 			{
 				LOG_ERROR << "ParseFromArray failed for key: " << element->redis_key;
+				// 默认或部分解析的 proto 绝不能作为成功结果发布。Scene 会把
+				// player_id=0 当作新角色，随后可能用默认值覆盖权威玩家状态。
+				FailLoad(element, LoadFailureReason::RedisError);
+				return;
 			}
 		}
 		else
 		{
 			LOG_ERROR << "Redis GET unexpected reply type=" << reply->type << " for key: " << element->redis_key;
-			if (load_failed_callback_)
-			{
-				load_failed_callback_(element->message_key, LoadFailureReason::RedisError);
-			}
+			FailLoad(element, LoadFailureReason::RedisError);
 			return;
 		}
 
@@ -548,15 +677,31 @@ private:
 		}
 	}
 
+	void FailLoad(const ElementPtr &element, LoadFailureReason reason)
+	{
+		// 终态回包不应再持有重试项；回调前防御性清理，保证回调若重入重试，
+		// 也是从干净状态开始。
+		pending_retry_queue_.erase(element->redis_key);
+		element->message_value.reset();
+		if (load_failed_callback_)
+		{
+			load_failed_callback_(element->message_key, reason);
+		}
+	}
+
 private:
+	template <class, class>
+	friend struct MessageAsyncClientTestPeer;
+
 	HiredisPtr& hiredis_;
 	LoadingQueue loading_queue_;
 	LoadingQueue pending_retry_queue_;
+	LoadingQueue saving_queue_;
 	LoadingQueue pending_save_queue_;
 	std::string script_sha1_;
 	bool script_load_in_flight_ = false;
 	EventCallback save_callback_;
+	SaveFailedCallback save_failed_callback_;
 	EventCallback load_callback_;
 	FailedCallback load_failed_callback_;
 };
-

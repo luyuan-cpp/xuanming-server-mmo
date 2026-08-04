@@ -591,6 +591,32 @@ TEST(SnowFlakeRegression, GuardTimeBeforeEpochIsIgnored)
 	EXPECT_EQ(id >> kTimeShift, 5ULL) << "guard underflow poisoned the time segment";
 }
 
+// SetGuardTime 把 step 池预置为满,好让启动后的首个号必然落在 guard 秒之后 ——
+// 于是**每次进程启动**的第一次 Generate() 都必然走进"step 池耗尽"分支。
+// 那是设计动作,不是撞容量墙:若也报 ERROR,运维会被启动噪声训练成忽略这条告警,
+// 真正撞到 32768/s 上限时反而看不见。
+//
+// 本用例钉住的是**消化时机**:guard 标记必须由第一次 Generate 无条件消化,而不是只在
+// 耗尽分支里清。否则时钟若在首次发号前就已跨秒(走"换新秒"分支),标记会一直留着,
+// 把之后一次真实的容量耗尽静音掉。
+TEST(SnowFlakeRegression, GuardPrimedExhaustionIsConsumedByFirstGenerate)
+{
+	SnowFlake sf;
+	sf.set_node_id(5);
+	sf.set_epoch(1000);
+
+	sf.set_mock_static_time(1005); // now_epoch == 5
+	sf.SetGuardTime(1005);         // guard 秒 == 5,step 池被预置为满
+	sf.set_mock_static_time(1006); // 时钟先跨到 6 ⇒ 首次发号走"换新秒"分支
+	const Guid first = sf.Generate();
+	EXPECT_EQ(first >> kTimeShift, 6ULL) << "first id must land past the guard second";
+
+	// 标记已被消化:后续行为回到常规路径,序列严格递增。
+	sf.set_mock_static_time(1007);
+	const Guid second = sf.Generate();
+	EXPECT_GT(second, first) << "ids must stay strictly increasing";
+}
+
 // 原子版同样不允许把高水位往回写。
 TEST(SnowFlakeRegression, AtomicStalledClockNeverReplaysIds)
 {

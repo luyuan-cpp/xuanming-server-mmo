@@ -94,6 +94,20 @@ void EtcdHelper::PutIfAbsent(const std::string &key, const std::string &newValue
 	SendKVTxn(tlsNodeContextManager.GetRegistry(EtcdNodeService), tlsNodeContextManager.GetGlobalEntity(EtcdNodeService), txn);
 }
 
+void EtcdHelper::PutWithLease(const std::string &key, const std::string &newValue, int64_t lease)
+{
+	etcdserverpb::TxnRequest txn;
+
+	// 不加任何 compare:txn 恒成功。走 txn 而不是裸 Put,是为了让响应仍然落进
+	// OnTxnSucceeded / pendingTxnKey 这套既有回调链,不必再造一条并行路径。
+	auto &successOp = *txn.add_success()->mutable_request_put();
+	successOp.set_key(key);
+	successOp.set_value(newValue);
+	successOp.set_lease(lease);
+
+	SendKVTxn(tlsNodeContextManager.GetRegistry(EtcdNodeService), tlsNodeContextManager.GetGlobalEntity(EtcdNodeService), txn);
+}
+
 void EtcdHelper::PutIfAbsent(const std::string &key, const NodeInfo &nodeInfo, int64_t lease)
 {
 	std::string jsonValue;

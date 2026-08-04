@@ -49,7 +49,11 @@ public:
 
 	void UpdateNodeInfo();
 
-	void RegisterNodePort();
+	// reRegistering=true 表示"临时失租后拿新租约重新注册":此时端口 key 还挂在旧租约上,
+	// 必须无条件 Put 改挂新租约。用 PutIfAbsent 会必然 CAS 失败,而 OnTxnFailed 在重注册
+	// 模式下把任何失败都判成"身份被抢"并自杀 —— 那会让每次重注册都确定性地杀掉自己。
+	// 端口 key 按 IP+端口作用域,别的节点产生不了同一个 key,所以无条件 Put 不会覆盖别人。
+	void RegisterNodePort(bool reRegistering = false);
 
 	void RequestNodeLease();
 

@@ -55,8 +55,22 @@ void TimerTaskComp::ScheduleTimer(TimerCallback cb, bool repeating, ScheduleFn&&
     // heap-allocated. Capturing the callback pushes this past the buffer again,
     // but that allocation replaces two others -- the old `callback = cb` member
     // copy and the defensive copy that used to happen on every firing.
+    // 懒创建存活令牌;重新武装时复用同一个(旧的过期开火由 generation 挡掉,
+    // 那条路径要求 this 仍然有效,而令牌 lock 成功恰好证明了这一点)。
+    if (!aliveToken) {
+        aliveToken = std::make_shared<char>();
+    }
+
     const uint32_t gen = generation;
-    timerId = schedule(loop, [this, gen, repeating, cb = std::move(cb)]() {
+    timerId = schedule(loop, [this, weakAlive = std::weak_ptr<char>(aliveToken), gen, repeating,
+                              cb = std::move(cb)]() {
+        // 宿主可能已经在同一批到期回调里被销毁 —— muduo 仍会 run() 本定时器
+        // (见头文件里 aliveToken 的说明)。lock() 失败即代表这块内存已经不是
+        // 当初那个组件了,直接放弃,绝不能再碰 this。
+        const auto alive = weakAlive.lock();
+        if (!alive) {
+            return;
+        }
         OnTimer(gen, repeating, cb);
     });
     armed = true;

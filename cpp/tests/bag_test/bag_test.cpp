@@ -1,6 +1,7 @@
 ﻿#include <gtest/gtest.h>
 
 #include "engine/core/type_define/type_define.h"
+#include "engine/thread_context/snow_flake_manager.h"
 
 #include "table/code/item_table.h"
 #include "modules/bag/bag_system.h"
@@ -32,10 +33,23 @@ InitItemParam MakeItem(uint32_t configId)
     return MakeItem(configId, MaxStack(configId));
 }
 
-/// Verify the last added item is at `pos` with expected config and size.
-void VerifyLastAdded(Bag &bag, uint32_t pos, uint32_t configId, uint32_t size)
+/// AddItem 并返回本次写入的**最后一个**实例 guid(即最新占用的那一格)。
+///
+/// 取代旧的 Bag::LastGeneratedItemGuid():那是回读发号器里的"上一个号"的残值通道,
+/// 已随生产代码一起删除 —— 同一发号器还铸 tx_id / snapshot_id 会覆盖它,
+/// 且并堆、沿用预设 guid 这些不铸号的路径读到的是上一件物品的号。
+Guid AddItemAndGetLastWritten(Bag &bag, const InitItemParam &item)
 {
-    const auto guid = Bag::LastGeneratedItemGuid();
+    std::vector<Guid> written;
+    EXPECT_EQ(kSuccess, bag.AddItem(item, &written));
+    EXPECT_FALSE(written.empty()) << "successful AddItem must report at least one written instance";
+    return written.empty() ? kInvalidGuid : written.back();
+}
+
+/// Verify the last added item is at `pos` with expected config and size.
+/// `guid` 来自 AddItem 的写入回执,断言"回执说写了 X"与"背包里 pos 处就是 X"一致。
+void VerifyLastAdded(Bag &bag, uint32_t pos, uint32_t configId, uint32_t size, Guid guid)
+{
     auto *byPos = bag.GetItemCompByPos(pos);
     auto *byGuid = bag.GetItemCompByGuid(guid);
     ASSERT_NE(nullptr, byPos);
@@ -80,10 +94,10 @@ TEST(BagTest, AddNewGridItem)
 {
     Bag bag;
     auto item = MakeItem(kNonStack1);
-    EXPECT_EQ(kSuccess, bag.AddItem(item));
+    const Guid written = AddItemAndGetLastWritten(bag, item);
     EXPECT_EQ(1, bag.OccupiedGridCount());
     EXPECT_EQ(1, bag.GridSlotCount());
-    VerifyLastAdded(bag, 0, kNonStack1, item.itemPBComp.size());
+    VerifyLastAdded(bag, 0, kNonStack1, item.itemPBComp.size(), written);
 }
 
 TEST(BagTest, AddNewGridItemFull)
@@ -94,10 +108,10 @@ TEST(BagTest, AddNewGridItemFull)
     // Fill initial capacity
     for (uint32_t i = 0; i < (uint32_t)kDefaultCapacity; i++)
     {
-        EXPECT_EQ(kSuccess, bag.AddItem(item));
+        const Guid written = AddItemAndGetLastWritten(bag, item);
         EXPECT_EQ(i + 1, bag.OccupiedGridCount());
         EXPECT_EQ(i + 1, bag.GridSlotCount());
-        VerifyLastAdded(bag, i, kNonStack1, item.itemPBComp.size());
+        VerifyLastAdded(bag, i, kNonStack1, item.itemPBComp.size(), written);
     }
     EXPECT_EQ(kDefaultCapacity, bag.OccupiedGridCount());
     EXPECT_EQ(kDefaultCapacity, bag.GridSlotCount());
@@ -109,11 +123,11 @@ TEST(BagTest, AddNewGridItemFull)
     bag.ExpandCapacity(kDefaultCapacity);
     for (uint32_t i = 0; i < (uint32_t)kDefaultCapacity; i++)
     {
-        EXPECT_EQ(kSuccess, bag.AddItem(item));
+        const Guid written = AddItemAndGetLastWritten(bag, item);
         uint32_t idx = i + (uint32_t)kDefaultCapacity;
         EXPECT_EQ(idx + 1, bag.OccupiedGridCount());
         EXPECT_EQ(idx + 1, bag.GridSlotCount());
-        VerifyLastAdded(bag, idx, kNonStack1, item.itemPBComp.size());
+        VerifyLastAdded(bag, idx, kNonStack1, item.itemPBComp.size(), written);
     }
     EXPECT_EQ(kDefaultCapacity * 2, bag.OccupiedGridCount());
     EXPECT_EQ(kDefaultCapacity * 2, bag.GridSlotCount());
@@ -149,10 +163,15 @@ TEST(BagTest, AddStackItem12121212)
         auto item = MakeItem(kStack9, addSize);
         totalSize += addSize;
 
-        auto ret = bag.AddItem(item);
+        std::vector<Guid> written;
+        auto ret = bag.AddItem(item, &written);
         if (ret != kSuccess)
             break;
         EXPECT_EQ(kSuccess, ret);
+        ASSERT_FALSE(written.empty());
+        // 回执的最后一个 = 本次数量最终落到的那一格(并堆时是被并入的既有堆,
+        // 溢出时是新开的那一格),正是下面按 lastIdx 断言的实例。
+        const Guid lastWritten = written.back();
 
         auto gridSize = Bag::GridsNeededFor(totalSize, maxStack);
         uint32_t lastIdx = uint32_t(gridSize - 1);
@@ -167,13 +186,13 @@ TEST(BagTest, AddStackItem12121212)
         else
         {
             EXPECT_EQ(halfStack, (uint32_t)bag.GetItemCompByPos(lastIdx)->size());
-            EXPECT_EQ(halfStack, bag.GetItemCompByGuid(Bag::LastGeneratedItemGuid())->size());
+            EXPECT_EQ(halfStack, bag.GetItemCompByGuid(lastWritten)->size());
         }
 
-        EXPECT_EQ(kStack9, bag.GetItemCompByGuid(Bag::LastGeneratedItemGuid())->config_id());
-        EXPECT_EQ(lastIdx, bag.GetItemPosByGuid(Bag::LastGeneratedItemGuid()));
-        EXPECT_EQ(Bag::LastGeneratedItemGuid(), bag.GetItemCompByPos(lastIdx)->item_id());
-        EXPECT_EQ(Bag::LastGeneratedItemGuid(), bag.GetItemCompByGuid(Bag::LastGeneratedItemGuid())->item_id());
+        EXPECT_EQ(kStack9, bag.GetItemCompByGuid(lastWritten)->config_id());
+        EXPECT_EQ(lastIdx, bag.GetItemPosByGuid(lastWritten));
+        EXPECT_EQ(lastWritten, bag.GetItemCompByPos(lastIdx)->item_id());
+        EXPECT_EQ(lastWritten, bag.GetItemCompByGuid(lastWritten)->item_id());
     }
 
     EXPECT_EQ(kDefaultCapacity, bag.OccupiedGridCount());
@@ -188,10 +207,10 @@ TEST(BagTest, AddStackItemUnlock)
     // Fill initial capacity with full stacks
     for (uint32_t i = 0; i < (uint32_t)kDefaultCapacity; i++)
     {
-        EXPECT_EQ(kSuccess, bag.AddItem(item));
+        const Guid written = AddItemAndGetLastWritten(bag, item);
         EXPECT_EQ(i + 1, bag.OccupiedGridCount());
         EXPECT_EQ(i + 1, bag.GridSlotCount());
-        VerifyLastAdded(bag, i, kStack10, item.itemPBComp.size());
+        VerifyLastAdded(bag, i, kStack10, item.itemPBComp.size(), written);
     }
     EXPECT_EQ(kDefaultCapacity, bag.OccupiedGridCount());
     EXPECT_EQ(kDefaultCapacity, bag.GridSlotCount());
@@ -201,11 +220,11 @@ TEST(BagTest, AddStackItemUnlock)
     bag.ExpandCapacity(kDefaultCapacity);
     for (uint32_t i = 0; i < (uint32_t)kDefaultCapacity; i++)
     {
-        EXPECT_EQ(kSuccess, bag.AddItem(item));
+        const Guid written = AddItemAndGetLastWritten(bag, item);
         uint32_t idx = i + (uint32_t)kDefaultCapacity;
         EXPECT_EQ(idx + 1, bag.OccupiedGridCount());
         EXPECT_EQ(idx + 1, bag.GridSlotCount());
-        VerifyLastAdded(bag, idx, kStack10, item.itemPBComp.size());
+        VerifyLastAdded(bag, idx, kStack10, item.itemPBComp.size(), written);
     }
     EXPECT_EQ(kDefaultCapacity * 2, bag.OccupiedGridCount());
     EXPECT_EQ(kDefaultCapacity * 2, bag.GridSlotCount());
@@ -483,11 +502,11 @@ TEST(BagTest, DelItem)
 TEST(BagTest, Del)
 {
     Bag bag;
-    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+    const Guid written = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
     EXPECT_EQ(1, bag.OccupiedGridCount());
     EXPECT_EQ(1, bag.GridSlotCount());
 
-    EXPECT_EQ(kSuccess, bag.RemoveItem(Bag::LastGeneratedItemGuid()));
+    EXPECT_EQ(kSuccess, bag.RemoveItem(written));
     EXPECT_EQ(0, bag.OccupiedGridCount());
     EXPECT_EQ(0, bag.GridSlotCount());
 }
@@ -496,7 +515,13 @@ TEST(BagTest, RemoveItemByPos)
 {
     Bag bag;
     auto maxStack = MaxStack(kStack10);
-    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10)));
+    // 取本次写入的实例 guid 用 AddItem 的显式回执。
+    // 旧写法是 Bag::LastGeneratedItemGuid() 回读发号器残值,该通道已删除
+    // (同一发号器还铸 tx_id / snapshot_id 会覆盖它,且不铸号的路径读到的是上一件物品)。
+    std::vector<Guid> written;
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10), &written));
+    ASSERT_EQ(1u, written.size()) << "single stackable add must report exactly one instance";
+    const Guid addedGuid = written.front();
     EXPECT_EQ(1, bag.OccupiedGridCount());
     EXPECT_EQ(1, bag.GridSlotCount());
 
@@ -507,7 +532,7 @@ TEST(BagTest, RemoveItemByPos)
     dp.pos = 0;
     EXPECT_EQ(kBagDelItemGuid, bag.RemoveItemByPos(dp));
 
-    dp.item_guid = Bag::LastGeneratedItemGuid();
+    dp.item_guid = addedGuid;
     EXPECT_EQ(kBagDelItemConfig, bag.RemoveItemByPos(dp));
 
     // Remove 1 unit
@@ -522,7 +547,7 @@ TEST(BagTest, RemoveItemByPos)
     EXPECT_EQ(1, bag.OccupiedGridCount());
     EXPECT_EQ(1, bag.GridSlotCount());
     EXPECT_EQ(0, bag.GetItemCompByPos(0)->size());
-    EXPECT_EQ(0, bag.GetItemCompByGuid(Bag::LastGeneratedItemGuid())->size());
+    EXPECT_EQ(0, bag.GetItemCompByGuid(addedGuid)->size());
 }
 
 /// Helper: fill `count` slots of `configId`, then reduce each to 1 unit.
@@ -1036,6 +1061,9 @@ int main(int argc, char **argv)
 {
     if (!test_config::FindAndLoadTestConfig(argc, argv))
         return 1;
+    // 生产线程由 EtcdService 在节点身份分配成功后初始化发号器；单测没有该启动链，
+    // 必须显式给当前测试线程一个非零节点号，不能依赖未初始化时的保留 node_id=0。
+    tlsSnowflakeManager.OnNodeStart(1);
     ItemTableManager::Instance().Load();
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();

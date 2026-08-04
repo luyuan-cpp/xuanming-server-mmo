@@ -79,13 +79,24 @@ public:
         return Capacity() - items.size() < gridCount;
     }
 
-    uint32_t AddItem(const InitItemParam &initItemParam);
+    // writtenGuidsOut(可为 nullptr)按写入顺序收集**本次调用实际落到背包里的实例 guid**。
+    //
+    // 这是取代 LastGeneratedItemGuid() 那条隐式返回通道的显式回执。旧做法是发完号再回读
+    // 发号器里的"上一个号"残值,有两个硬伤:①同一个 tls 发号器还在铸 tx_id / snapshot_id,
+    // 它们会把残值覆盖掉,于是流水里的 item_uuid 可能根本不是任何一件物品的 guid;
+    // ②纯并堆(remaining==0)与"单件沿用预设 guid"这两条路径**根本不铸号**,残值是上一件
+    // 物品留下的,直接张冠李戴。显式回执把"这次写了哪些实例"变成返回值,两个问题一起消失。
+    uint32_t AddItem(const InitItemParam &initItemParam,
+                     std::vector<Guid> *writtenGuidsOut = nullptr);
     uint32_t RemoveItem(Guid guid);
 
     bool MergeAndCompact();
     void ExpandCapacity(std::size_t additionalSize);
 
-    static Guid LastGeneratedItemGuid();
+    // 注意:这里曾经有一个 static LastGeneratedItemGuid(),回读发号器里的"上一个号"当作
+    // AddItem 的隐式返回值。它已被 AddItem 的 writtenGuidsOut 回执取代并删除 ——
+    // 那条通道会被同一发号器铸出的 tx_id / snapshot_id 覆盖,且不铸号的路径读到的是上一件
+    // 物品的残值。新增代码一律用回执,不要再引入任何"发完再回读"的隐式通道。
 
     static std::size_t GridsNeededFor(std::size_t totalSize, std::size_t maxStackSize);
 
@@ -192,8 +203,12 @@ private:
     // full stacks before partials within each group.
     bool IsAlreadyMergedAndCompact() const;
 
-    uint32_t AddNonStackableItem(ItemComp itemProto);
-    uint32_t AddStackableItem(ItemComp itemProto, uint32_t maxStackSize);
+    // writtenGuidsOut(可为 nullptr)按写入顺序收集**本次调用实际落到背包里的实例 guid**:
+    // 新铸的、沿用调用方预设的、以及被并入的既有堆,都算。调用方据此写流水,
+    // 不必再回读任何"上一次发号"的残值。
+    uint32_t AddNonStackableItem(ItemComp itemProto, std::vector<Guid> *writtenGuidsOut);
+    uint32_t AddStackableItem(ItemComp itemProto, uint32_t maxStackSize,
+                              std::vector<Guid> *writtenGuidsOut);
 
     // ── CheckSpaceFor helper ──────────────────────────────────────────
     // For every config in itemsToAdd, sum the spare room left in the bag's
@@ -216,12 +231,14 @@ private:
                                          std::vector<StackFill> &outFillPlan) const;
 
     // Execute a plan from PlanStackIntoExistingStacks (mutates stack sizes).
-    void ApplyStackFill(const std::vector<StackFill> &fillPlan);
+    void ApplyStackFill(const std::vector<StackFill> &fillPlan,
+                        std::vector<Guid> *writtenGuidsOut);
 
     // Place `remaining` leftover units into `newGridCount` freshly created
     // grids, maxStackSize units per grid.
     uint32_t SpillIntoNewGrids(ItemComp proto, uint32_t maxStackSize,
-                               uint32_t remaining, std::size_t newGridCount);
+                               uint32_t remaining, std::size_t newGridCount,
+                               std::vector<Guid> *writtenGuidsOut);
 
     // Drain `count` units of one config from its stacks. The quantity may be
     // spread across several stacks; each drained stack keeps its grid slot

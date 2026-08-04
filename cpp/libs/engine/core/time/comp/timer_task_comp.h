@@ -1,5 +1,7 @@
 ﻿#pragma once
 
+#include <memory>
+
 #include "muduo/net/Callbacks.h"
 #include "muduo/net/EventLoop.h"
 
@@ -58,11 +60,31 @@ private:
     // scheduled it, so we already know. `cb` used to be a member: keeping it in
     // the closure instead means Cancel() cannot destroy the callable while it
     // is executing, so re-arming from inside one's own callback needs no
-    // defensive copy. It also drops sizeof(TimerTaskComp) from 88 to 24 on
-    // MSVC (56 to 24 on libstdc++) and removes one std::function copy per
-    // firing, which was a heap allocation on Linux for any callable larger
-    // than the 16-byte inline buffer.
+    // defensive copy. It also shrank the component substantially (88 -> 24 on
+    // MSVC, 56 -> 24 on libstdc++ at the time) and removes one std::function
+    // copy per firing, which was a heap allocation on Linux for any callable
+    // larger than the 16-byte inline buffer. (`aliveToken` has since added one
+    // pointer pair back — see its comment; correctness over 16 bytes.)
     void OnTimer(uint32_t firedGeneration, bool repeating, const TimerCallback &cb);
+
+    // 存活令牌:定时器闭包只持有它的 weak_ptr,开火时先 lock() 再碰 this。
+    //
+    // 为什么 generation 挡不住这一类:muduo 的 TimerQueue::handleRead 先把到期
+    // 定时器整批取出(getExpired 已把它们从 activeTimers_ 摘掉),再逐个 run()。
+    // 此后调 cancel() 只会记进 cancelingTimers_ —— 那只影响重复定时器要不要重挂,
+    // **run() 照常发生**。于是批内前一个回调若销毁了后一个定时器的宿主,后者的
+    // 闭包仍会以已释放的 this 进入 OnTimer,而 generation 本身就住在那块内存里,
+    // 读它就已经是 use-after-free。
+    //
+    // 可达路径(2026-08-03 审计):同一实体上两个 buff 同批到期,buff1 的
+    // OnBuffExpire → RemoveSubBuff → RemoveBuff → OnBuffExpire →
+    // buffList.erase(buff2) 同步析构 buff2 的 BuffEntry(内含 expireTimerTaskComp),
+    // 而 buff2 的定时器就在同一批里等着 run()。实体整体销毁(DestroyEntity 连带
+    // 析构 BuffListComp)同理。
+    //
+    // 懒创建:只有真正挂过定时器的组件才付这次控制块分配,未武装的
+    // TimerTaskComp(数量很大:每 buff / 每技能一个)不受影响。
+    std::shared_ptr<char> aliveToken;
 
     TimerId timerId;
     // Bumped on every Cancel() -- and therefore on every re-arm, since

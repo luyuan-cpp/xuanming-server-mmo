@@ -22,6 +22,16 @@ public:
 	static void HandlePlayerAsyncLoadFailed(Guid player_id,
 											MessageAsyncClient<Guid, PlayerAllData>::LoadFailureReason reason);
 	static void HandlePlayerAsyncSaved(Guid player_id, PlayerAllData& message);
+
+	// 存盘连续失败达到告警阈值后的通知。底层仍保留最新 payload 继续重试。
+	//
+	// 必须存在的理由:退出流程在 SavePlayerToRedis 返回 true 后,把"销毁实体、
+	// 清 session、清 playerList"整段收尾都挂在 HandlePlayerAsyncSaved 上。
+	// 旧实现达到上限后丢弃最新值且不通知调用方;调用方既无法告警,也无法
+	// 区分"仍在重试"与"已经没有任何最新副本"。现在回调只用于高危告警,
+	// **绝不**更新 PlayerLastPersistedSnapshotComp,也不在失败点销毁唯一内存态。
+	// 详见 docs/design/player-async-save-loss-windows.md §4.1。
+	static void HandlePlayerAsyncSaveFailed(Guid player_id, const std::string& redisKey, int retryCount);
 	static void EnterScene(const entt::entity player, const PlayerGameNodeEntryInfoComp& enter_info);
 	static void HandleBindPlayerToGateOK(entt::entity player);
 	static void RemovePlayerSession(Guid player_id);
@@ -126,4 +136,3 @@ private:
 	// 返回 true 表示登记了票据(玩家有活着的 gate 会话)。
 	static bool EnqueueRelocateTicket(entt::entity playerEntity, const char *reasonTag);
 };
-

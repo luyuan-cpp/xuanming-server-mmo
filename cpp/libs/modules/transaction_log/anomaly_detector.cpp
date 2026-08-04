@@ -12,8 +12,8 @@
 // Static storage (thread-local — each Scene/Gate thread has its own copy)
 // ---------------------------------------------------------------------------
 
-thread_local std::unordered_map<AnomalyDetector::BucketKey, PlayerAnomalyBucket,
-                                AnomalyDetector::BucketKeyHash>
+thread_local std::unordered_map<entt::entity, AnomalyDetector::PlayerBuckets,
+                                AnomalyDetector::EntityHash>
     AnomalyDetector::buckets_;
 
 thread_local std::unordered_map<uint32_t, AnomalyThreshold>
@@ -71,10 +71,9 @@ const AnomalyThreshold &AnomalyDetector::GetItemThreshold(uint32_t configId)
 // Core: RecordAndCheck — sliding-window prune + threshold check
 // ---------------------------------------------------------------------------
 
-bool AnomalyDetector::RecordAndCheck(const BucketKey &key, uint64_t amount,
+bool AnomalyDetector::RecordAndCheck(PlayerAnomalyBucket &bucket, uint64_t amount,
                                      const AnomalyThreshold &threshold)
 {
-    auto &bucket = buckets_[key];
     const uint64_t now = NowSeconds();
     const uint64_t windowStart = (now > threshold.windowSeconds) ? (now - threshold.windowSeconds) : 0;
 
@@ -148,12 +147,11 @@ bool AnomalyDetector::RecordCurrencyGain(entt::entity player, CurrencyType type,
         return false; // anomaly detection disabled for this type
     }
 
-    BucketKey key{player, static_cast<uint32_t>(type)};
-    bool triggered = RecordAndCheck(key, amount, threshold);
+    auto &bucket = buckets_[player].currencies[static_cast<uint32_t>(type)];
+    bool triggered = RecordAndCheck(bucket, amount, threshold);
 
     if (triggered)
     {
-        auto &bucket = buckets_[key];
         EmitAlert(player, "currency", static_cast<uint32_t>(type),
                   static_cast<uint64_t>(bucket.events.size()), bucket.cumulativeAmount,
                   threshold);
@@ -169,12 +167,11 @@ bool AnomalyDetector::RecordItemGain(entt::entity player, uint32_t configId, uin
         return false;
     }
 
-    BucketKey key{player, configId};
-    bool triggered = RecordAndCheck(key, static_cast<uint64_t>(quantity), threshold);
+    auto &bucket = buckets_[player].items[configId];
+    bool triggered = RecordAndCheck(bucket, static_cast<uint64_t>(quantity), threshold);
 
     if (triggered)
     {
-        auto &bucket = buckets_[key];
         EmitAlert(player, "item", configId,
                   static_cast<uint64_t>(bucket.events.size()), bucket.cumulativeAmount,
                   threshold);
@@ -188,9 +185,14 @@ bool AnomalyDetector::RecordItemGain(entt::entity player, uint32_t configId, uin
 
 uint32_t AnomalyDetector::GetCurrencyGainCount(entt::entity player, CurrencyType type)
 {
-    BucketKey key{player, static_cast<uint32_t>(type)};
-    auto it = buckets_.find(key);
-    if (it == buckets_.end())
+    auto playerIt = buckets_.find(player);
+    if (playerIt == buckets_.end())
+    {
+        return 0;
+    }
+
+    auto it = playerIt->second.currencies.find(static_cast<uint32_t>(type));
+    if (it == playerIt->second.currencies.end())
     {
         return 0;
     }
@@ -213,17 +215,7 @@ uint32_t AnomalyDetector::GetCurrencyGainCount(entt::entity player, CurrencyType
 
 void AnomalyDetector::ClearPlayer(entt::entity player)
 {
-    for (auto it = buckets_.begin(); it != buckets_.end();)
-    {
-        if (it->first.entity == player)
-        {
-            it = buckets_.erase(it);
-        }
-        else
-        {
-            ++it;
-        }
-    }
+    buckets_.erase(player);
 }
 
 void AnomalyDetector::ClearAll()

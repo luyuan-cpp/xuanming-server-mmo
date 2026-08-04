@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdint>
 #include <deque>
+#include <functional>
 #include <string>
 #include <unordered_map>
 
@@ -73,25 +74,20 @@ public:
     static void ClearAll();
 
 private:
-    // Composite key: entity + sub-category (currency type / item config).
-    struct BucketKey
+    // Keep player as the outer key so logout cleanup is O(1), not a full scan
+    // of every player's buckets. Currency and item maps are intentionally
+    // separate: a currency enum value may equal an item config id.
+    struct PlayerBuckets
     {
-        entt::entity entity;
-        uint32_t subKey; // CurrencyType or item_config_id
-
-        bool operator==(const BucketKey &o) const
-        {
-            return entity == o.entity && subKey == o.subKey;
-        }
+        std::unordered_map<uint32_t, PlayerAnomalyBucket> currencies;
+        std::unordered_map<uint32_t, PlayerAnomalyBucket> items;
     };
 
-    struct BucketKeyHash
+    struct EntityHash
     {
-        size_t operator()(const BucketKey &k) const
+        size_t operator()(entt::entity entity) const noexcept
         {
-            size_t h = std::hash<uint32_t>{}(entt::to_integral(k.entity));
-            h ^= std::hash<uint32_t>{}(k.subKey) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            return h;
+            return std::hash<uint32_t>{}(entt::to_integral(entity));
         }
     };
 
@@ -99,7 +95,7 @@ private:
     static const AnomalyThreshold &GetItemThreshold(uint32_t configId);
 
     // Prune events outside the window and return whether threshold exceeded.
-    static bool RecordAndCheck(const BucketKey &key, uint64_t amount,
+    static bool RecordAndCheck(PlayerAnomalyBucket &bucket, uint64_t amount,
                                const AnomalyThreshold &threshold);
 
     // Emit alert to Kafka for the Go anomaly-query service.
@@ -108,7 +104,7 @@ private:
                           const AnomalyThreshold &threshold);
 
     // Storage — thread-local via TLS, no mutex needed.
-    static thread_local std::unordered_map<BucketKey, PlayerAnomalyBucket, BucketKeyHash> buckets_;
+    static thread_local std::unordered_map<entt::entity, PlayerBuckets, EntityHash> buckets_;
     static thread_local std::unordered_map<uint32_t, AnomalyThreshold> currencyThresholds_;
     static thread_local std::unordered_map<uint32_t, AnomalyThreshold> itemThresholds_;
     static thread_local AnomalyThreshold defaultThreshold_;

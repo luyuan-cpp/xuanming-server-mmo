@@ -101,7 +101,10 @@ void NodeAllocator::ReRegisterExistingNode()
 	// and avoid mid-flight identity change after temporary lease loss.
 	LOG_INFO << "Re-registering existing node with node_id=" << GetNodeInfo().node_id()
 			 << " port=" << GetNodeInfo().endpoint().port();
-	gNode->GetEtcdManager().RegisterNodePort();
+	// reRegistering=true:端口 key 仍挂在旧租约上,必须无条件改挂新租约。
+	// 见 EtcdManager::RegisterNodePort 的注释 —— 用 PutIfAbsent 会必然 CAS 失败,
+	// 而重注册模式下的 OnTxnFailed 会把它判成"身份被抢"并自杀。
+	gNode->GetEtcdManager().RegisterNodePort(/*reRegistering=*/true);
 }
 
 bool IsGateNodeType(uint32_t type)

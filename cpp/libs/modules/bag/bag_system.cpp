@@ -400,7 +400,7 @@ bool Bag::MergeAndCompact()
 	return true;
 }
 
-uint32_t Bag::AddNonStackableItem(ItemComp itemProto)
+uint32_t Bag::AddNonStackableItem(ItemComp itemProto, std::vector<Guid> *writtenGuidsOut)
 {
 	// 不可叠加物品(装备等):每一件都独占一格,size 即"要放几件"。
 	// 统一处理:把 itemProto 拆成 pieceCount 件、每件 size=1 单独入格。
@@ -438,6 +438,12 @@ uint32_t Bag::AddNonStackableItem(ItemComp itemProto)
 		}
 
 		AllocateGridSlot(guid); // 给这一件分配一个空格子
+
+		// 回执:无论 guid 是新铸的还是沿用调用方预设的,这一件都是本次真实写入的实例。
+		if (writtenGuidsOut != nullptr)
+		{
+			writtenGuidsOut->push_back(guid);
+		}
 	}
 	return kSuccess;
 }
@@ -474,17 +480,26 @@ uint32_t Bag::PlanStackIntoExistingStacks(const ItemComp &proto, uint32_t maxSta
 	return remaining;
 }
 
-void Bag::ApplyStackFill(const std::vector<StackFill> &fillPlan)
+void Bag::ApplyStackFill(const std::vector<StackFill> &fillPlan,
+						 std::vector<Guid> *writtenGuidsOut)
 {
 	for (const auto &plan : fillPlan)
 	{
 		auto &item = itemRegistry.get<ItemComp>(plan.entity);
 		item.set_size(item.size() + plan.amount);
+
+		// 回执:并入既有堆没有铸新号,但这一堆确实是本次数量的去处,
+		// 流水按它记录才能追溯到"东西进了哪个实例"。
+		if (writtenGuidsOut != nullptr)
+		{
+			writtenGuidsOut->push_back(item.item_id());
+		}
 	}
 }
 
 uint32_t Bag::SpillIntoNewGrids(ItemComp proto, uint32_t maxStackSize,
-								uint32_t remaining, std::size_t newGridCount)
+								uint32_t remaining, std::size_t newGridCount,
+								std::vector<Guid> *writtenGuidsOut)
 {
 	for (std::size_t i = 0; i < newGridCount; ++i)
 	{
@@ -501,11 +516,17 @@ uint32_t Bag::SpillIntoNewGrids(ItemComp proto, uint32_t maxStackSize,
 			return PrintStackAndReturnError(kBagDeleteItemAlreadyHasGuid);
 		}
 		AllocateGridSlot(guid);
+
+		if (writtenGuidsOut != nullptr)
+		{
+			writtenGuidsOut->push_back(guid);
+		}
 	}
 	return kSuccess;
 }
 
-uint32_t Bag::AddStackableItem(ItemComp itemProto, uint32_t maxStackSize)
+uint32_t Bag::AddStackableItem(ItemComp itemProto, uint32_t maxStackSize,
+							   std::vector<Guid> *writtenGuidsOut)
 {
 	// 事务性:先把"怎么放"全部规划好(PlanStackIntoExistingStacks 不改背包),
 	// 确认放得下后再真正写入(ApplyStackFill / SpillIntoNewGrids)。
@@ -523,16 +544,17 @@ uint32_t Bag::AddStackableItem(ItemComp itemProto, uint32_t maxStackSize)
 		}
 	}
 
-	ApplyStackFill(fillPlan);
+	ApplyStackFill(fillPlan, writtenGuidsOut);
 
 	if (remaining == 0)
 	{
 		return kSuccess;
 	}
-	return SpillIntoNewGrids(std::move(itemProto), maxStackSize, remaining, newGridCount);
+	return SpillIntoNewGrids(std::move(itemProto), maxStackSize, remaining, newGridCount,
+							 writtenGuidsOut);
 }
 
-uint32_t Bag::AddItem(const InitItemParam &initItemParam)
+uint32_t Bag::AddItem(const InitItemParam &initItemParam, std::vector<Guid> *writtenGuidsOut)
 {
 	auto itemProto = initItemParam.itemPBComp;
 	// config_id / size 都是无符号:== 0 即"没指定物品"或"数量为 0",均属非法入参。
@@ -551,10 +573,10 @@ uint32_t Bag::AddItem(const InitItemParam &initItemParam)
 
 	if (itemRow->max_stack_size() == 1)
 	{
-		return AddNonStackableItem(std::move(itemProto));
+		return AddNonStackableItem(std::move(itemProto), writtenGuidsOut);
 	}
 
-	return AddStackableItem(std::move(itemProto), itemRow->max_stack_size());
+	return AddStackableItem(std::move(itemProto), itemRow->max_stack_size(), writtenGuidsOut);
 }
 
 uint32_t Bag::AddItems(const ItemCountMap &itemsToAdd)
@@ -619,11 +641,6 @@ void Bag::ExpandCapacity(std::size_t sz)
 Guid Bag::GenerateItemGuid()
 {
 	return tlsSnowflakeManager.GenerateItemGuid();
-}
-
-Guid Bag::LastGeneratedItemGuid()
-{
-	return tlsSnowflakeManager.GetLastGeneratedItemGuid();
 }
 
 bool Bag::IsInvalidItemGuid(const ItemComp &item) const
