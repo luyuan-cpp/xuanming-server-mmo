@@ -52,21 +52,42 @@ dirty-flag 解决的是"写太频繁，需要攒批"的问题。Friend/Guild 每
 ### 选择: 同步硬检查
 "同意"时用 FOR UPDATE 行锁原子检查 + 写入，代价是多一次事务（低频操作可接受）。
 
-### 实现: MySQL 事务 + FOR UPDATE
+### 实现: migration ready gate + 显式容量锁行
 ```sql
 BEGIN;
-SELECT COUNT(*) FROM friend WHERE player_id = A FOR UPDATE;  -- 锁 A 的行
--- 检查 A 未满
-SELECT COUNT(*) FROM friend WHERE player_id = B FOR UPDATE;  -- 锁 B 的行
--- 检查 B 未满
+SELECT state FROM guild_schema_migration
+ WHERE migration_key='friend_capacity_backfill_v1' FOR SHARE;
+-- state 必须为 ready；共享锁持有到事务结束，迁移改 pending 必须等待
+SELECT player_id, friend_count FROM friend_capacity
+ WHERE player_id IN (A, B) ORDER BY player_id FOR UPDATE;
+-- 检查双方未满
 UPDATE friend_request SET status=2 WHERE ...;
 INSERT IGNORE INTO friend ... (双向);
+-- 每个实际新插入的方向只给该方向的 player_id 加 1；历史单向边不会重复计数
+UPDATE friend_capacity SET friend_count=friend_count+1 WHERE player_id=<新边的 player_id>;
 COMMIT;
 ```
 
-- FOR UPDATE 锁住双方的 friend 行，防止并发 accept 超限
+- `friend_capacity` 的固定主键行让共享任一玩家的 accept 串行化，不依赖
+  `COUNT ... FOR UPDATE` 在不同隔离级别下不稳定的 gap-lock 语义
 - 单 MySQL 实例，一个事务搞定，不需要分布式事务
 - 低频操作(每天几次)，行锁开销可忽略
+
+### 存量容量回填门禁
+
+MySQL DDL 会隐式提交，因此 `friend_capacity` 表存在不代表历史 `friend` 已回填。
+迁移先持久化 `friend_capacity_backfill_v1=pending`，再在一个事务里完成：
+
+1. 现有容量归零；
+2. 按 `friend.player_id` 权威边数重算；
+3. gate 更新为 `ready`。
+
+任一步中止都会回滚容量 DML，gate 保持 pending。Friend 服务在对外注册前以及每个
+容量写事务内都检查 gate；缺失或 pending 直接拒绝。ready 库若仍缺某玩家的容量行，
+运行期按 `COUNT(*) FROM friend WHERE player_id=?` 建行，绝不默认 0。
+
+部署顺序必须是：停止所有旧版 Friend 写实例 → 完整执行迁移脚本并确认 gate 为
+`ready` → 启动新版 Friend。旧二进制没有该 gate，迁移期间与旧版混跑不构成安全部署。
 
 ### 错误处理
 - `ErrSenderFriendsFull` -> 告诉 B: "对方好友已满"

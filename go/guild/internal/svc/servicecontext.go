@@ -17,12 +17,12 @@ import (
 )
 
 type ServiceContext struct {
-	Config              config.Config
-	RedisClient         *redis.Client
+	Config                   config.Config
+	RedisClient              *redis.Client
 	PlayerLocatorRedisClient *redis.Client
-	DB                  *sql.DB
-	KafkaWriter         *kafkago.Writer
-	GateCommandBuilder  kafkautil.GateCommandBuilder
+	DB                       *sql.DB
+	KafkaWriter              *kafkago.Writer
+	GateCommandBuilder       kafkautil.GateCommandBuilder
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
@@ -63,18 +63,20 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	var w *kafkago.Writer
 	if len(c.Kafka.Brokers) > 0 {
 		w = &kafkago.Writer{
-			Addr:     kafkago.TCP(c.Kafka.Brokers...),
-			Balancer: &kafkago.LeastBytes{},
+			Addr: kafkago.TCP(c.Kafka.Brokers...),
+			// Hash 按 Key(player_id/gate_id)选分区,保证同一实体的推送有序
+			// (项目不变量:kafka key = 业务实体 ID)。LeastBytes 忽略 Key。
+			Balancer: &kafkago.Hash{},
 		}
 	}
 
 	return &ServiceContext{
-		Config:                  c,
-		RedisClient:             rdb,
+		Config:                   c,
+		RedisClient:              rdb,
 		PlayerLocatorRedisClient: plRdb,
-		DB:                      db,
-		KafkaWriter:             w,
-		GateCommandBuilder:      guildkafka.NewGateCommandBuilder(),
+		DB:                       db,
+		KafkaWriter:              w,
+		GateCommandBuilder:       guildkafka.NewGateCommandBuilder(),
 	}
 }
 

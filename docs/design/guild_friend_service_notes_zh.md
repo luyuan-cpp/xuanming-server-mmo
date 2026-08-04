@@ -30,6 +30,18 @@
 - `guild_member`（主键 guild_id+player_id）
 - `friend`（主键 player_id+friend_player_id）
 - `friend_request`（主键 from_player_id+to_player_id，索引 to_player_id+status）
+- `friend_capacity`（好友硬上限的权威计数与显式锁行）
+- `guild_schema_migration`（数据迁移 durable readiness gate）
+
+## 一致性与授权门禁（2026-08-03）
+
+- `friend_capacity_backfill_v1` 必须经历 `pending → ready`。全表归零、从
+  `friend` 权威边回填以及 ready 标记在同一事务提交；服务启动和每个容量写事务
+  都检查 gate。表存在但 gate 缺失/pending 时 fail-closed，缺失容量行也按
+  `COUNT(friend)` 初始化，绝不猜 0。
+- Redis 公会快照仅用于展示。`SetAnnouncement` 在一个 MySQL 事务内依次锁
+  `guild` 与操作者的 `guild_member`，只允许权威 role 为 officer/leader 时更新；
+  降权、退会后的陈旧 Redis 成员缓存不能继续授权。
 
 ## 架构决策：不单独拆分排行榜服务
 - 公会使用全局 Redis → 单个 `guild_rank` ZSET 天然就是全服的

@@ -3,10 +3,12 @@ module guild
 go 1.24.5
 
 require (
+	github.com/alicebob/miniredis/v2 v2.35.0
 	github.com/go-sql-driver/mysql v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/segmentio/kafka-go v0.4.47
+	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.9.2
 	go.etcd.io/etcd/client/v3 v3.6.5
 	google.golang.org/grpc v1.79.3
@@ -29,7 +31,9 @@ require (
 	github.com/jcmturner/gokrb5/v8 v8.4.4 // indirect
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
+	github.com/yuin/gopher-lua v1.1.1 // indirect
 	golang.org/x/crypto v0.46.0 // indirect
 )
 

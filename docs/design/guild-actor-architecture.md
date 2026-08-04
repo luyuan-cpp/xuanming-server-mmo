@@ -838,6 +838,11 @@ docs/design/guild-actor-architecture.md   # 本文档
 **推荐: 方案 B**, 理由: 公会读操作通常对实时性要求不高, "100ms 前的成员列表"完全够用。
 关键写后立即读自己(如转账后立刻看余额) → 让 handler 在写返回时直接拿 actor 内存的最新值塞进 response。
 
+**权限例外**：快照滞后只适用于展示读，不能用于授权。公告、踢人、角色调整等
+权限写在落 MySQL 前必须在同一事务内锁定并复核权威 `guild_member.role`；否则
+操作者降权/退会后的 Redis 或 actor 旧快照仍会放行写操作。当前
+`SetAnnouncement` 已采用 `guild → guild_member` 的固定锁序完成该门禁。
+
 ---
 
 ## 11. 监控指标

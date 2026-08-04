@@ -26,7 +26,6 @@ import (
 	base "proto/common/base"
 	pb "proto/guild"
 	"shared/grpcstats"
-	"shared/snowflake"
 	"shared/snowflakealloc"
 )
 
@@ -92,10 +91,23 @@ func main() {
 	defer sfHandle.Close()
 	logx.Infof("Guild snowflake worker id = %d (host=%s)", sfHandle.WorkerID, host_name)
 
-	sf := snowflake.NewNode(sfHandle.WorkerID)
+	// 用 Handle.NewNode 而不是裸 snowflake.NewNode:它会把**前任在这个 worker id 上的
+	// 高水位**当地板注入(etcd 里的持久水位),顶住跨机时钟偏斜接管、本机时钟回拨、
+	// 前任借过逻辑秒这三类"启动 guard 挡不住"的重号。
+	sf := sfHandle.NewNode()
 
 	// Initialize data repo with singleflight + cache-aside
 	repo := data.NewGuildRepo(svcCtx.RedisClient, svcCtx.DB, config.AppConfig.Cache.DefaultTTL)
+
+	// 先执行一次性的 Redis -> MySQL 存量分数回填，再从 MySQL 权威快照完整重建
+	// 全局/分区榜。迁移或重建失败必须阻止服务启动，否则新写会把尚未回填的
+	// 历史分数覆盖掉，或继续向不完整榜单提供结果。
+	if err := repo.MigrateLegacyRankScores(context.Background()); err != nil {
+		panic(fmt.Errorf("migrate legacy guild rank scores: %w", err))
+	}
+	if err := repo.RebuildRanks(context.Background()); err != nil {
+		panic(fmt.Errorf("rebuild guild ranks from MySQL: %w", err))
+	}
 	onlineResolver := logic.NewOnlineStatusResolver(svcCtx.PlayerLocatorRedisClient)
 	guildLogic := logic.NewGuildLogic(repo, sf, onlineResolver)
 
@@ -113,10 +125,24 @@ func main() {
 	// etcd 随时会把它分给别的进程。再用 sf 发一个公会 ID 就是确定性撞号,所以主动停服,
 	// 让编排把进程拉起来 —— 重启会拿一个新租约,并被 snowflake 的启动 guard 兜住。
 	// s.Stop() 让下面的 s.Start() 返回,defer 链正常收尾。
+	//
+	// ⏱ 时间预算(§租约与重启时间预算必须闭合):Lost() 由 snowflakealloc 的**自 fencing**
+	// 提前触发 —— 距上次成功续租超过 TTL 的 2/3(TTL=60s ⇒ 40s)就报信,而不是干等
+	// KeepAlive channel 关闭(那恒晚于服务端过期点)。收到信号时服务端 lease 通常还有
+	// 约 TTL/3(≈20s)才过期,这段余量用来让在途请求干净失败。
+	//
+	// ⚠️ 顺序不能反,而且**不能只调 s.Stop()**:go-zero 的 zrpc.RpcServer.Stop() 实测
+	// (v1.9.2 / v1.10.0 同)只有一行 logx.Close(),既不拒新请求也不排空在途 ——
+	// 靠它"停服"等于什么都没做,进程会带着已失效的 worker id 一直服务下去。
+	// 所以正确性由 Fence() 保证(之后 Generate 一律 ErrFenced,建帮整体失败),
+	// 可用性由进程退出 + 编排重拉保证。
 	go func() {
 		<-sfHandle.Lost()
-		logx.Error("Guild snowflake worker id lease lost; stopping the server to avoid minting colliding ids")
-		s.Stop()
+		sf.Fence() // ① 先关闸:此后一个号都发不出去,撞号从机制上不可能
+		logx.Error("Guild snowflake worker id lease lost; generator fenced, exiting to let the orchestrator restart " +
+			"(zrpc Stop() only closes the logger and cannot stop serving)")
+		logx.Close() // ② 冲掉日志缓冲,别把上面这条 ERROR 丢了
+		os.Exit(1)   // ③ 退出;重启后拿新租约,并被 snowflake 的启动 guard 兜住
 	}()
 
 	logx.Infof("Starting Guild RPC server at %s...", config.AppConfig.ListenOn)

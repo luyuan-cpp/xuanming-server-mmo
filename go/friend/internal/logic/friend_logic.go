@@ -85,6 +85,10 @@ func (l *FriendLogic) AcceptFriend(ctx context.Context, req *pb.AcceptFriendRequ
 			return &pb.AcceptFriendResponse{
 				ErrorMessage: tipErr(constants.ErrFriendListFull, "your friend list full"),
 			}, nil
+		case errors.Is(err, data.ErrRequestNotFound):
+			return &pb.AcceptFriendResponse{
+				ErrorMessage: tipErr(constants.ErrNoPendingRequest, "no pending friend request"),
+			}, nil
 		default:
 			return nil, fmt.Errorf("accept friend: %w", err)
 		}
@@ -94,7 +98,11 @@ func (l *FriendLogic) AcceptFriend(ctx context.Context, req *pb.AcceptFriendRequ
 }
 
 func (l *FriendLogic) RejectFriend(ctx context.Context, req *pb.RejectFriendRequest) (*pb.RejectFriendResponse, error) {
-	if err := l.repo.RejectFriend(ctx, req.FromPlayerId, req.PlayerId); err != nil {
+	if err := l.repo.RejectFriend(ctx, req.FromPlayerId, req.PlayerId); errors.Is(err, data.ErrRequestNotFound) {
+		return &pb.RejectFriendResponse{
+			ErrorMessage: tipErr(constants.ErrNoPendingRequest, "no pending friend request"),
+		}, nil
+	} else if err != nil {
 		return nil, fmt.Errorf("reject friend: %w", err)
 	}
 	return &pb.RejectFriendResponse{}, nil

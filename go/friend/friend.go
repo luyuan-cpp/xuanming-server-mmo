@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net"
@@ -35,6 +36,13 @@ func main() {
 	svcCtx := svc.NewServiceContext(config.AppConfig)
 	defer svcCtx.Stop()
 
+	// friend_capacity 的 DDL 与历史回填不是一个原子动作。只有 durable ready
+	// 标记与回填事务一起提交后才能对外注册服务，避免半迁移库把存量容量当 0。
+	repo := data.NewFriendRepo(svcCtx.RedisClient, svcCtx.DB, config.AppConfig.Cache.DefaultTTL)
+	if err := repo.RequireFriendCapacityReady(context.Background()); err != nil {
+		logx.Must(fmt.Errorf("friend capacity migration gate: %w", err))
+	}
+
 	// Register node with etcd
 	host, port, err := splitHostPort(config.AppConfig.ListenOn)
 	if err != nil {
@@ -52,8 +60,7 @@ func main() {
 	}
 	logx.Infof("Friend node registered: id=%d uuid=%s", n.Info.NodeId, n.Info.NodeUuid)
 
-	// Initialize data repo with singleflight + cache-aside
-	repo := data.NewFriendRepo(svcCtx.RedisClient, svcCtx.DB, config.AppConfig.Cache.DefaultTTL)
+	// Initialize logic after the durable schema/data gate has passed.
 	friendLogic := logic.NewFriendLogic(repo)
 
 	// Start gRPC server

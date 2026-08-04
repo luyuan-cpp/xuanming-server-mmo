@@ -17,6 +17,9 @@ const (
 	ErrNotLeader       uint32 = 6
 	ErrNoPermission    uint32 = 7
 	ErrNotRanked       uint32 = 8
+	// ErrIDGenUnavailable:发号器已被 fence(worker id 的 etcd 租约丢了),
+	// 本次建帮整体失败。客户端重试即可 —— 进程会退出并由编排重拉、重新拿号。
+	ErrIDGenUnavailable uint32 = 9
 )
 
 // Default limits.
