@@ -1550,3 +1550,87 @@ master:
 - 已完成 staged diff、PowerShell AST、XML/manifest/哈希等静态检查；仍未执行 C++
   编译、新增单测、Linux shell 语法检查、K8s apply 或玩家 E2E。
 - 仓库规则要求 push 由人手动执行，因此本轮停在本地提交，未更新任何远端引用。
+
+### 2026-08-03:第二轮审计 —— 玩家异步存盘丢失窗口 + 定时器 UAF
+
+- 新增 `docs/design/player-async-save-loss-windows.md`。区别于既有的
+  `db_write_behind_dirty_flag_race.md`(那份讲 Go db 服务的写回选型),本份记录
+  **scene 节点自己**的"置脏 + 异步存盘"链:proto-compare 快路径、
+  `PlayerLastPersistedSnapshotComp`、hiredis 异步回调,以及各自的丢失窗口。
+  含"已经安全、别重复修"的清单,避免下一轮审计重复推导。
+- **关键前提被记录下来**:scene 存 `<PlayerAllData full_name>:{id}`,而 db 服务
+  回写的是 login 读的 `player_database:{id}` 等分表 key —— **两套 key 互不覆盖**。
+  `redis_client.h` 原先那句 "cache will be stale until dbservice rewrites" 的兜底
+  假设因此不成立。
+- 修:存盘退避重试耗尽后只打一条 LOG_ERROR 就 return,没有任何人被通知。后果
+  是(a)`PlayerAllData:{id}` 停在上一次成功存盘的内容,玩家下次进场直接回档;
+  (b)退出流程把收尾整段挂在 `HandlePlayerAsyncSaved` 上,回调不来则实体带着
+  `UnregisterPlayer` 永久滞留,`IsSaveInFlight` 恒为 true。新增与
+  `SetLoadFailedCallback` 对称的 `SetSaveFailedCallback`,scene 侧接
+  `HandlePlayerAsyncSaveFailed`:打明确的 DATA-LOSS 日志、**不**更新快照
+  (保证下次存盘必然重写整份数据)、非跨 zone 冻结态则推进 `FinishExitAfterPersist`。
+- 修:`TimerTaskComp` 的 use-after-free。muduo `TimerQueue::handleRead` 先整批
+  取出到期定时器再逐个 `run()`,此后 `cancel()` 只写 `cancelingTimers_`(仅影响
+  重复定时器重挂),**run() 照常发生**。批内前一个回调销毁后一个定时器的宿主时,
+  后者的闭包以已释放的 `this` 进入 `OnTimer`,而 `generation` 守卫本身就住在那块
+  内存里。可达路径:同实体两个 buff 同批到期,buff1 的 `OnBuffExpire` →
+  `RemoveSubBuff` → `buffList.erase(buff2)` **同步**析构 buff2 的 BuffEntry
+  (内含 `expireTimerTaskComp`)。改为闭包持 `weak_ptr` 存活令牌,开火先 lock。
+  令牌懒创建,未武装的组件不付分配成本。
+- 按新的协作分工(CLAUDE.md §10.1 / AGENTS.md §4.1),本轮 C++ 改动**未编译**,
+  待 Codex 验证:`modules` → `scene` lib → `core` → 两个节点,MSBuild 串行 `/m:1`。
+
+### 2026-08-03:服务端全链审计修复最终收口(Codex 动态验证)
+
+先更正上一段已经失效的描述:`HandlePlayerAsyncSaveFailed` 当前**不会**推进
+`FinishExitAfterPersist`。最终实现保留冻结实体、脏快照和退出上下文并继续有界退避
+重试,避免在 Redis 持久化未成功时销毁唯一内存副本。上一段“失败后推进退出”的记录
+只反映中间版本,不得再作为当前行为依据。
+
+**认证与跨区边界:**生产 password 认证已落地为 MySQL 权威查询 + Argon2id PHC,
+未知账号走 dummy KDF,并发/等待都有硬上限；默认关闭,DSN 只从环境变量读取。新增
+只允许既有账号的隐藏终端 `password_admin` 和 fail-closed schema 迁移,不再允许客户端
+自报 account 自动创建/接管账号。Java 的 Login/AssignGate/QueueStatus 必须命中精确
+zone endpoint,缺映射在网络前失败；RefreshToken 因 wire 中尚无 zone,仍只保留原有
+无 zone 路径。历史压测文档中的真实形态 access/refresh token 已脱敏。
+
+**数据一致性:**data_service 的 zone/全服/单人应用回档在跨服务 offline-epoch
+`RollbackFence` 未落地前统一 code=16、零写；缺 store/router、意图审计、安全快照或
+结果审计均显式失败。recall dry-run 检测 10000 行截断并返回 code=17、零执行；
+non-dry-run 继续 code=16。db consumer 改为 durable ready/processing/dead receipt、
+连续 offset 提交、原分区重试、同 key 租约和 poison DLQ；MySQL 已提交但 Redis cache
+发布失败时不得 ACK。Kafka partition 在同一 TopicGeneration 内严格不可变,broker
+漂移会启动失败,扩容只能停写排空后切新 generation/topic。
+
+**在线状态与社交:**player_locator 的 session/version CAS、TTL 宽限、正常下线清理和
+lease receipt 已补齐；SceneManager 缺失、claim 身份不匹配或通知失败都保留 processing
+回执重试。Friend 接受申请必须有 pending 记录,容量以 MySQL 锁行计数；迁移先持久化
+pending,再单事务归零/权威回填/ready,半迁移和缺 marker 全部失败关闭。Guild membership
+唯一约束、role/score 权威列和缓存 generation 已补齐；公告授权在同一 MySQL 事务按
+guild→member 锁序重新校验,降权/退会后不能利用陈旧 Redis officer 快照写公告。
+
+**Scene/C++:**SceneManager 的节点键统一为 `(zone_id,node_id)`,重复身份、跨区已有
+location、缺 writer/client 均在变更前失败；Kafka route 单次有界同步写,失败用精确值
+Lua CAS 回滚。跨节点切场景在 epoch 交接协议完成前默认拒绝。C++ 修复货币债务无符号
+下溢/溢出、欠款持久化、异常桶回收和 Redis 空/损坏/超长 payload 误报加载成功；加载
+失败清空队列并只走 failure callback。
+
+**Codex 实际门禁:**Go 的 data_service、db、player_locator、guild、friend、login、
+scene_manager、proto 均完成对应 `build/vet/test`;shared 的 kafkautil/snowflake/
+snowflakealloc 三个受影响包通过。Java Gateway 在本机 JDK 21 下 46/46(8 reports,
+0 failure/error/skip)。C++ 按 `/m:1` 串行通过 modules→scene lib→scene node→gate node,
+新增 Redis 损坏载荷 2/2,完整 currency 24/24。临时 MySQL 8.4 验证 password migration
+正反例、Friend 并发/半迁移、Guild 陈旧权限及社交 SQL 连跑两次；临时 Kafka 7.9.7
+验证 partition marker 会拒绝配置漂移和 broker 外部扩容。所有本轮临时容器已删除。
+
+**仍是部署门槛而非“已上线”:**目标库必须停旧写实例后执行 password 与
+guild/friend 迁移并检查 gate；guild score Redis backfill 完成前 marker 保持 pending。
+生产 password 开启前还要注入只读 DSN 并由管理命令迁移 hash；没有公开注册/找回/
+改密 API。offline-epoch 回档、跨节点 scene handoff 和 Kafka 新 generation 切换仍需
+跨服务部署协议。机器只有 JDK 21,项目声明的 JDK 23 编译未验证；Go `-race` 因无 gcc
+未运行；全 shared `./...` 仍被既有 `generated/bit_index` 同目录双 package 阻断；
+no-raw-pointer checker 因工具不存在而跳过。未跑生产/K8s/完整 E2E。
+
+本次是用户在已知 30+ 红线后再次明确要求“修复完毕”的大范围混合工作树收口；最终
+状态远超 30 个文件,必须人工按主题拆分审阅。全程未读 `client/`,未 stage/commit/push,
+并保留既有的四个脏 third_party 子模块状态。
