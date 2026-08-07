@@ -7,6 +7,7 @@
 #include "actor/action_state/constants/actor_state.h"
 #include "engine/core/macros/return_define.h"
 #include "engine/core/macros/error_return.h"
+#include "engine/core/type_define/type_define.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/event/actor_event.pb.h"
 
@@ -61,11 +62,21 @@ uint32_t ActorActionStateSystem::TryPerformAction(entt::entity actorEntity, uint
         RETURN_ON_ERROR(CheckForStateConflict(actorActionStateRow, actorState));
     }
 
+    // 打断分支会走 RemoveState -> state_list()->erase(actorState),而 protobuf Map
+    // 的 erase 会让指向被删元素的迭代器失效 —— 正好就是 range-for 手里那一个,
+    // 下一次 ++it 就是 UB。这条路径挂在每次释放技能的 CheckState 上,必须先把
+    // 状态键快照出来再遍历。快照同时也切断了对 actorStatePbComponent 指针的依赖
+    // (InterruptCurrentStateEvent 的下游 handler 可以任意增删组件)。
+    UInt32Vector currentStates;
+    currentStates.reserve(actorStatePbComponent->state_list().size());
     for (const auto &actorState : actorStatePbComponent->state_list() | std::views::keys)
     {
-        if (InterruptAndPerformAction(actorActionStateRow, actorState, actorEntity)) {
-            continue;
-        }
+        currentStates.emplace_back(actorState);
+    }
+
+    for (const auto actorState : currentStates)
+    {
+        InterruptAndPerformAction(actorActionStateRow, actorState, actorEntity);
     }
 
     RETURN_ON_ERROR(AddState(actorEntity, successState));

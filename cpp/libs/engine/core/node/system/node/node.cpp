@@ -281,6 +281,11 @@ namespace
 
 	std::string ResolveNodeIp()
 	{
+		// 这里返回的是节点的**集群内**身份地址:写进 NodeInfo.endpoint、发布到 etcd,
+		// 供服务间互相拨号。它不是 bind 地址(bind 见 Node::StartRpcServer),更**不是**
+		// 对外通告地址 —— 进程没有、也不应该有办法知道自己在集群外长什么样。
+		// 外部客户端要用的地址由下发方(go/login 的 CandidatesForZone)翻译,不在这里解决。
+		//
 		// Prefer K8s Downward API pod IP, then explicit override, then legacy hostname resolve.
 		if (const char *podIp = GetNonEmptyEnv("POD_IP"))
 		{
@@ -479,7 +484,9 @@ void Node::InitRpcServer()
 	const std::string endpointIp = ResolveNodeIp();
 	localNodeInfo.mutable_endpoint()->set_ip(endpointIp);
 
-	// Port is resolved later by AcquireNodePort() via etcd, unless overridden by env.
+	// 显式给了 RPC_PORT / NODE_PORT 就以它为准:AcquireNodePort() 看到 endpoint 上
+	// 已有非零端口时会尊重这个预设值,只做可用性校验、不再扫区间(见 node_allocator.cpp)。
+	// 没给才留 0,由 AcquireNodePort() 从角色区间里扫一个出来。
 	if (const auto envPort = TryResolveNodePortFromEnv(); envPort)
 	{
 		localNodeInfo.mutable_endpoint()->set_port(*envPort);
@@ -803,7 +810,19 @@ void Node::StartRpcServer()
 	}
 
 	NodeInfo &localNodeInfo = GetNodeInfo();
-	muduo::net::InetAddress rpcListenAddress(localNodeInfo.endpoint().ip(), localNodeInfo.endpoint().port());
+
+	// bind 地址与注册地址是两回事。endpoint().ip() 是**注册**地址(见 ResolveNodeIp),
+	// 拿它去 bind 就等于要求"我只收发到这一个 IP 上的包" —— 在 K8s 里这既没必要
+	// (pod 网络命名空间本来就只有它自己),又挡掉了经 hostPort / NodePort 之类
+	// 转发进来的流量。默认 bind 0.0.0.0 收全部网卡;裸机多网卡确实要钉一张时,
+	// 用 BIND_IP 显式指定。
+	const auto listenPort = static_cast<uint16_t>(localNodeInfo.endpoint().port());
+	const char *bindIp = GetNonEmptyEnv("BIND_IP");
+	const muduo::net::InetAddress rpcListenAddress =
+		bindIp != nullptr ? muduo::net::InetAddress(bindIp, listenPort)
+						  : muduo::net::InetAddress(listenPort);
+	LOG_INFO << "RPC server listen addr=" << rpcListenAddress.toIpPort()
+			 << " registered endpoint=" << localNodeInfo.endpoint().ip() << ":" << listenPort;
 
 	rpcServer = std::make_unique<RpcServerPtr::element_type>(eventLoop, rpcListenAddress);
 	rpcServer->start();

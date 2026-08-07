@@ -251,8 +251,10 @@ namespace
             return false;
         }
 
+        // partition 留空(PARTITION_UA,按 key=playerId 哈希)。zone 不是
+        // partition 号 —— 论证见 HandleCrossZoneTransfer 的发布注释。
         const auto err = KafkaProducer::Instance().send(
-            "player_migrate", bytes, std::to_string(playerId), toZone);
+            "player_migrate", bytes, std::to_string(playerId));
         if (err != RdKafka::ERR_NO_ERROR)
         {
             LOG_ERROR << "[CrossZoneReaper] Kafka republish failed for player " << playerId

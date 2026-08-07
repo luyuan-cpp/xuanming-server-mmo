@@ -1634,3 +1634,409 @@ no-raw-pointer checker 因工具不存在而跳过。未跑生产/K8s/完整 E2E
 本次是用户在已知 30+ 红线后再次明确要求“修复完毕”的大范围混合工作树收口；最终
 状态远超 30 个文件,必须人工按主题拆分审阅。全程未读 `client/`,未 stage/commit/push,
 并保留既有的四个脏 third_party 子模块状态。
+
+### 2026-08-05:配置表投影 API + 导表器三项修复(Claude 落码,未跑导表器)
+
+**起因:**「生成的表访问代码该不该加『取全部 id / 取某列全部取值』的接口」。结论是
+**不进代码生成器**:这两件事只依赖「每行都有 uint32 主键」这一全表共有形状,泛型一次
+写完即覆盖全部表、加新表零成本;渲染进模板则是 20 份逐表副本,还没等到第一个消费者
+就先摊 20 份死代码,而且每次改动都要全量重导。生成器只该生成手写不出来的东西 ——
+索引结构与类型安全的按键查询。Pandora 后端同结论、同实现(`pkg/configtable/query.go`)。
+
+**新增 `go/shared/tablequery`(手写包):**`IDs`(全部主键,加载序)/ `Values`(某列投影,
+加载序、不去重)/ `DistinctValues`(某列键集合,升序去重)。返回值一律是调用方独占的新
+切片,可随意 sort / 持有,不会打乱表内部状态;刻意不返回 `iter.Seq`(惰性求值会把旧快照
+无声钉死在一个看起来像「查询」的值里),也不返回预计算共享切片(只读约定压在注释上守不住)。
+没放进 `go/shared/generated/` 是因为 CLAUDE.md §3 禁止手改生成树;本包与 `table` 零耦合,
+不 import table 也不 import pb。
+
+**关闭上一轮记录的遗留阻断:`generated/bit_index` 同目录双 package。**根因不是陈旧残留,
+是 `bit_index_gen._gen_go` **至今仍**把每张表平铺写进同一个 `bit_index/`,而模板声明
+`package <sheet>` —— 每次导表都会复发;`mission/` `reward/` 子目录版是有人手工 gofmt 后
+挪进去的。已改为写 `bit_index/<包名>/`,Environment 加 `keep_trailing_newline`(Jinja 默认
+吃掉行尾换行),模板按 `name_width` 显式补齐。原模板「每条常量之间插空行」其实是在规避
+gofmt 的 `=` 对齐,只有 ID_1 与 ID_10 不等长时才现形。两个碰撞的扁平副本已删。
+
+**TableManager 快照改 `atomic.Pointer`。**原 `m.snap = snap` 是裸赋值、读侧无同步;今天
+不是竞态只因为 `LoadTables` 在各服务 `servicecontext.go` 构造时调用一次、早于任何读,
+一旦有第二次 Load(热更的本质)立刻是真实 data race。**关键:不能把 `m.snap.X` 无脑换成
+`m.snap.Load().X`** —— `RandOne` 一个方法里读三次、`FindByIds` 在循环里读,多次 Load 可能
+拿到不同快照,表缩小时 `data[rand.IntN(len(data))]` 越界,等于用新 bug 换潜在 bug。正确
+形状是每个访问方法开头取一次本地快照。265 处 × 20 文件由一次性变换器完成,模板
+`go_config.go.j2` 同步改成同一形状。
+
+**deploy 陈旧产物检查。**`md5_copy_dir` 只覆盖不删除,导表器一改输出布局旧产物就永久残留
+(上面的 bit_index 双 package 正是这么来的)。`file_utils.report_orphans` +
+`orchestrator._deploy` 接线,**只告警不自动删**(目标树里合法混着手写文件,`_DEPLOY_KEEP`
+已登记 `table/table_test.go`)。判定必须按 dst 归并全部 src:Java 有两个不同 src 部署到
+同一个包目录,逐对判定会把另一对的产物全报成陈旧。
+
+**已验证(Go 侧):**`go/shared` 全模块 `go build ./...` 由 exit=1 转 **exit=0**(即上一轮
+记录的 bit_index 阻断已消除);`go vet ./generated/table/...` exit=0;残留裸 `m.snap.` 访问
+grep 为空;`gofmt -l generated/bit_index/` 干净;`go test ./generated/table/... ./tablequery/...`
+通过(前者是手写 `table_test.go`,会真加载 `generated/tables/` 数据);login / friend / guild /
+player_locator / scene_manager / db / data_service 七个服务模块 build 全绿。
+
+**未验证:**本机没有 Python(`py.exe` 只是 Store 存根)也没有 protoc,**导表器一次都没跑过**。
+五处 Python / Jinja 改动(`bit_index_gen.py`、`file_utils.py`、`orchestrator.py`、
+`go_bit_index.go.j2`、`go_config.go.j2`)全是静态写出、未运行。Go `-race` 同样因无 gcc 未运行
+(与前几轮同因)。
+
+**Codex 执行清单:**
+1. 装依赖跑一次导表器:`cd tools/data_table_exporter && python run.py`;
+2. `git diff go/shared/generated/` **预期为零** —— 产物是照模板渲染结果手工对齐的(含
+   TableManager 结构体上的注释块)。**有 diff 一律以导表器输出为准**,按 diff 改模板或产物,
+   不要反过来把 `atomic.Pointer` 改回裸指针,也不要恢复 bit_index 扁平布局;
+3. 确认 `generated/code/go/generated/bit_index/` 下只有 `<包名>/` 子目录、无扁平 `.go`;
+4. 看导表器日志有无「陈旧产物?」告警,逐条确认后手工删;确属手写的登记进 `_DEPLOY_KEEP`;
+5. `cd go/shared && go build ./...` 应 exit=0;有 gcc 的环境补跑
+   `go test -race ./generated/table/... ./tablequery/...`。
+
+未 stage/commit/push;既有四个脏 third_party 子模块状态保持不动。
+
+### 2026-08-03(续):gate 会话链 + 玩家进场 handler 审计
+
+本轮首次审这两块(此前零覆盖)。
+
+**gate — P0:`GateHandler::BindSessionToGate` 整体覆盖在线会话。**
+`sessions()[id] = SessionInfo{...}` 会把 conn(TCP 连接)、verified、entityIds
+(scene 绑定)、sceneId 一并冲成默认值。后果:conn 变空指针而
+SendMessageToPlayer / BroadcastToPlayers / PushToPlayer 都不检查就 `conn->send()`
+→ 崩;verified 归 false → 该客户端后续消息全被判未验证并 shutdown;scene 绑定丢失。
+生产实际走的是 Kafka 的 `BindSessionEventHandler`(实现是对的,就地更新),这个
+gRPC 版是 Centre 退役后的遗留、全仓无调用方,但**仍是 gate 上一个活的 RPC 端点**。
+已改为就地更新;会话不存在时返回错误而不是凭空建一条无 conn 的僵尸会话
+(那种会话永远等不到 TCP 断开回调,只会永久泄漏)。
+
+**gate — P0:共享请求原型跨会话残留。** `gRpcMethodRegistry[msgId].requestProto`
+是进程级单例,`ParseMessageFromRequestBody` 旧实现对空 body 直接 return、
+解析失败也只 return void。于是上一个玩家的请求参数会挂着当前会话的 player_id
+被原样转发到后端 —— 故意发空 body 即可重放他人参数。已改为先 Clear() 再解析,
+并返回 bool;解析失败回 kRequestMessageParseError 且不转发。
+
+**gate — P1:两处错误应答绕过 codec 造成分帧错位。** CheckMessageSize 与
+CheckMessageLimit 用 `conn->send(msg.SerializeAsString())` 直发无帧字节,客户端会
+把 protobuf 字段字节当长度头读,此后整条连接的分帧全部错位 —— 一次限流应答
+就毁掉整条连接。改走 `protobufCodec.send`。
+
+**gate — P1:token 签名用 `!=` 比较。** 首个不匹配字节即返回,可计时侧信道逐字节
+猜签名。改 `CRYPTO_memcmp` 常数时间比较(长度不等仍可直接拒,长度不是秘密)。
+
+**gate — P1:`RoutePlayerMessage` 把业务 node_id 当 entt 实体整数。**
+`entt::entity{nextNode.node_id()}` —— uuid 主键重构后两者不再相等,轻则撞不上
+有效槽位静默丢消息,重则撞上无关的有效实体、把玩家消息路由到错误节点。这正是
+`session_info_comp.h` 注释里警告的坑,全仓仅此一处漏网。改走
+`NodeUtils::FindNodeEntityByNodeId`。
+
+**gate — P2:** 补齐 SendMessageToPlayer / BroadcastToPlayers / PushToPlayer 的
+空 conn 判定(BroadcastToScene/BroadcastToAll 一直有,这几处漏了)。
+
+**scene — P1:`EnterScene` 找不到场景时 fail-open。** 旧实现只打 ERROR 就继续
+置登录态并触发 PlayerLoginEvent:玩家被算作"已登录"、任务/每日奖励开始结算,
+但他不在任何场景里,客户端也收不到 NotifyEnterScene,永远停在加载界面。更糟的是
+enter_gs_type 已写入,重试进场时 `alreadyLoggedIn` 为真,**登录事件再也不会补触发**,
+这一次的登录结算永久丢失。已改为 fail-closed:发 kEnterSceneFailed 提示后直接返回,
+不置登录态,让重试仍能正常触发登录事件。
+顺带定位到上游不一致:`GateHandler::PlayerEnterGameNode` 只设 scene 实体绑定、
+**没设 session.sceneId**,于是 BindSession 那条路径会转发 `scene_id=0`。该 RPC 同属
+Centre 遗留,未改,待确认是否可整体退役。
+
+本轮 C++ 改动**未编译**,待 Codex 验证。
+
+### 2026-08-03(续二):etcd 注册状态机 + 节点关停审计
+
+**P0:两个 GM 优雅停机 handler 必崩。**
+`GameChannel::CallMethod` 给 handler 传的 `done` **恒为 nullptr**
+(game_channel.cpp:451,应答是 CallMethod 返回后由框架序列化 response 再发的)。
+而 `GateHandler::GmGracefulShutdown` 与 `SceneAdminHandler::GmGracefulShutdown`
+都写了 `done->Run()` —— 确定性空指针解引用。后果不是"少发一个应答":
+gate 那份在崩之前已经把所有客户端 forceClose 了,然后进程当场崩在这一行,
+`gNode->Shutdown()` 的租约注销与优雅收尾完全没机会跑;scene 那份同理,
+存盘 barrier 不执行。**"优雅停机"实际退化成硬杀 + 崩溃。**
+修法:删掉 `done->Run()`,并把停机投递改成
+`gNode->GetLoop()->queueInLoop([]{ ... })` —— 排到当前事件循环回合末尾,
+此时 CallMethod 已返回、应答已写进发送缓冲,既拿到应答又不会在 handler
+返回前就开始拆运行时。仍是非阻塞投递,不会形成
+"gRPC Server::Shutdown 等 handler 退出 / handler 等 Shutdown 完成" 的闭环。
+全仓 `done->Run()` 只有这两处,已全部修掉。
+
+**审过并确认健康、别重复查的(这轮没改一行):**
+- lease 看门狗闭环:`OnKeepAliveResponse` 只覆盖"收到 TTL=0 的应答";
+  网络分区导致应答**永远不来**的情况由 `Node::StartNodeRegistrationHealthMonitor`
+  每个 health_check_interval 调 `IsLeasePresumablyExpired()` 兜住,
+  超时即 `kLeaseDeadlineExceeded` fence 自杀。`leaseTtlSeconds_<=0` 的早期返回
+  保证首次授租前不会误判。
+- etcd txn 响应丢失闭环:`SetPendingTxnKey`/`TakePendingTxnKey` 维持
+  "有 pending key ⟺ 超时定时器在跑"的不变量,`OnTxnTimeout` 到期后**重发幂等
+  CAS 链重查权威**(重注册保留原 node_id/端口,初始引导从端口阶段重来),
+  不是假设成功往下走。
+- 重注册模式下任何 key 的 CAS 失败都判定为身份被抢并 fence 自杀,
+  `RegisterNodePort(reRegistering=true)` 用无条件 Put 避开"每次重注册
+  都确定性自杀"的老坑(portKey 按 IP+端口作用域,不存在覆盖别人的可能)。
+- Watch 劫持检测用 `node_id != 0` 门控,避开同 zone 并发启动的误杀。
+
+本轮 C++ 改动未编译,待 Codex 验证。
+
+### 2026-08-03(续三):网络/RPC 层 + scene 进出场审计
+
+**修(4 处):**
+- `codec.h/.cpp`:客户端-facing ProtobufCodec 的单条消息上限从 64MB 收到
+  64KB(可配构造参数)。合法客户端消息 ≤1KB(CheckMessageSize),而旧上限意味着
+  恶意客户端一条消息就能让 gate 在任何业务检查之前全量缓冲 63MB、跑 adler32、
+  按 typeName 反射建任意 proto 再 parse;单连接 64MB × N 连接 = OOM。
+  节点间 RpcCodec(ProtobufCodecLite)不受影响,仍 64MB。
+- `rpc_client.h` + `rpc_server.cc`:节点间连接补上高水位保护(64MB forceClose)。
+  客户端连接早有(gate 2MB),节点间之前完全没有 —— scene→gate AOI 推送是全系统
+  最大流量路径,一个卡死的 gate 能把 scene 拖到 OOM。断开是安全的:enableRetry
+  自动重连,注册状态机已审计过能收敛。
+- `player_lifecycle.cpp` RemovePlayerSession:defer 求值错位。defer 宏是 [&]
+  捕获、作用域结束才求值,旧写法先把 gate_session_id 改成 kInvalidSessionId,
+  defer 再拿着 kInvalidSessionId 去 erase —— 真 session 从没被删过,SessionMap
+  每断线泄漏一条,无界。全仓其余 defer 用法审过无同类错位。
+- (并行会话已修)CheckMessageSize/CheckMessageLimit 的错误应答改走 codec 帧,
+  旧裸 conn->send 会让客户端流永久错位。
+
+**审过健康(别重复查):** gate Kafka 事件链(RoutePlayer/BindSession/Kick/
+Redirect/Push/Broadcast 全部有 session/conn 守卫,ForwardPlayerToScene 参数名
+sceneNodeId 实为 entity 整数,命名误导但语义正确);PlayerEnterGameNode 的重连
+竞态(pendingMap 覆盖+旧 session 清理+AsyncLoad 在途去重);EnterScene fail-closed
+(场景缺失不置登录态);RpcServer 的 channel 生命周期(单线程 loop 内安全);
+gate dispatcher 对未知类型 shutdown。
+
+**P2 记录未修:** PlayerLeaseExpiredEventHandler / PlayerDisconnectedEventHandler
+空实现(player_locator 发的租约过期通知 gate 不消费 —— 假死连接不会被清);
+NODE_ROUTE 消息类型是死代码(HandleNodeRouteMessage 空,仅 RouteMessageToNode
+API 面残留);ProtobufCodec::defaultErrorCallback 只 shutdown 不 forceClose
+(对端不配合关闭时连接可挂半开)。
+
+本轮 C++ 改动未编译,待 Codex:core(codec/rpc_client/rpc_server)→ scene lib
+(player_lifecycle)→ gate/scene 两节点,MSBuild 串行。
+
+### 2026-08-03(续四):C++ Kafka infra 审计 —— 跨 zone 迁移链两处 P0 级缺陷
+
+**P0-a:zone id 被当成 Kafka partition 号(4 处 send)。**
+`HandleCrossZoneTransfer` / `HandlePlayerMigration` 的 3 处 ACK / reaper republish
+都把 `toZoneId`/`from_zone` 传进 `send()` 的 partition 参数。topic 自动创建默认
+1 个 partition,`produce(partition=zoneId≥1)` 直接 ERR__UNKNOWN_PARTITION ——
+**迁移消息根本发不出去**,玩家冻结到 reaper 判弃解冻。全部改回 PARTITION_UA
+(按 key=playerId 哈希),zone 路由不编码在 partition 上。
+
+**P0-b:`HandlePlayerMigration` 无目标过滤 × per-node 消费组全量扇出。**
+订阅是 per-node-id 消费组(每节点收到 topic 全部消息),而 handler 从不检查
+`to_zone`:一次迁移会让**集群所有 scene 节点**各建一份玩家实体、各自
+SavePlayerToRedis、各自 ACK —— 幽灵实体 + 幽灵节点周期存盘反复覆盖真实进度
+(表现为随机回档)。加两级过滤:①to_zone != 本 zone → DEBUG 跳过;
+②scene_info.guid 有值则要求目标场景在本节点。
+**顺带查实:目标场景标识在协议里从来就是缺的** —— scene_info.guid 全仓无赋值点,
+且是 uint32 装不下 64 位 snowflake scene_id。guid==0(现状)放行但 WARN:
+zone 内单节点 dev 行为不变;多节点拓扑前必须先给 PlayerMigrationEvent 补
+64 位目标场景字段(跨 zone 能力未完成清单+1)。生产侧本就被 scene_manager 的
+AllowUnsafeCrossNodeHandoff=false 上游 fail-closed,这两级过滤是纵深防御。
+
+ACK 消费侧免疫扇出(实体不在/未冻结/toZoneId 不匹配三层守卫,审过没改)。
+kafka.cpp 头部"topic 没被订阅"的过时注释已改写(订阅 5 月就接上了)。
+
+**审过健康:** consumer 后台线程 + queueInLoop 主线程回调的结构;stop() 的
+双 flag 退出;producer 有界 flush;db 写乱序有 Go 侧 appliedSeq+版本比较守卫。
+
+**P2 记录未修:** consumer enable.auto.commit=true + 异步投递 = at-most-once
+(crash 窗口丢命令;gate 命令有客户端重试、migrate 有 reaper 重发兜底,故 P2);
+producer 未开 enable.idempotence(重试可乱序,下游有守卫);
+奇怪的 fetch.min.bytes=1 注释与值不符(写着 coalesce 实为最低延迟)。
+
+本轮改动:player_lifecycle.cpp(4 处)、cross_zone_reaper.cpp、kafka.cpp。
+待编译验证:scene lib + scene 节点。
+
+## 2026-08-05 gate 对外接入两条断链:预设端口被无条件覆盖 + 通告 PodIP
+
+排查"本地单独起 gate/scene"时顺带查实的两个既有缺陷,均只在 K8s 侧发作,
+本地 dev(裸进程、不注入 RPC_PORT)撞不到,in-cluster 的 robot 也验不出来。
+
+**断链 1:`RPC_PORT` / `NODE_PORT` 是死代码。**
+`node.cpp` 的注释写着 "unless overridden by env",实际不成立:初始引导路径
+`etcd_service.cpp AcquirePortWithRetry() -> NodeAllocator::AcquireNodePort()` 是无条件
+调用的,而 `AcquireNodePort()` 从不读 endpoint 上已有的端口,扫描游标 `tryPortId`
+是初值 0 的全局,最后无条件 `set_port(assignedPort)` 覆盖。env 值被读取、打了一行
+`Node port from environment: 18000` 日志,然后丢弃 —— **日志骗人**,etcd 里和真实
+bind 的都是扫出来的 10000 段。连带后果:Deployment 的 containerPort 与
+`gate-entry` Service 的 `targetPort: rpc` 都按 18000 声明,Service 转发到一个
+没人监听的端口。
+
+修法:`AcquireNodePort()` 认 endpoint 上的非零预设端口,只做 etcd 占用 +
+`IsLocalPortAvailable` 两项校验,**fail-closed**(拿不到就 return false 让调用方退避
+重试,绝不静默回落扫描区间 —— 回落正是这次要修的病)。扫描游标只在真扫过区间时推进。
+
+顺带修一个同源潜伏 bug:`usedPorts` 没排除自己。端口注册成功后 etcd watch 会把
+本节点 fan 回快照,而 `AcquirePortWithRetry()` 的"到期后重查权威"分支会再跑一次
+`AcquireNodePort()` —— 旧代码此时会把自己刚注册的端口当成别人占用的,扫描路径
+悄悄换一个端口(etcd 端口与首次注册劈叉),预设端口路径则会永远失败重试。
+按 node_uuid 排除自己。
+
+**断链 2:即便修好 Service,外部客户端仍连不上。**
+login 的 `CandidatesForZone` 把 etcd 里的 `n.Endpoint.Ip/Port` **原样**下发给客户端,
+而那个 IP 来自 Downward API 注入的 `POD_IP` —— 集群内地址。也就是说客户端的
+gate 地址根本不经过 Service,两条路都断,**说明还没人拿真实外部客户端跑过 K8s 部署**
+(in-cluster robot 用 PodIP 是通的,历次压测发现不了)。
+
+**第一版修法已废弃,记录下来免得有人重走:** 曾给 gate 注入 `ADVERTISE_IP`
+(`k8s_deploy.ps1 -GateAdvertiseIp` + `ResolveNodeIp()` 最高优先级读它),让进程把
+对外地址写进 etcd。两条否决理由:①那是个部署期填死的静态串,`gate` 默认 2 副本,
+两个 gate 会通告同一个地址 —— login 按 `player_count` 挑最闲 gate 的逻辑当场作废,
+客户端连过去被 LB 随机分;②**pod 本来就不该去推断自己在集群外长什么样**,这是平台
+的职责,不是数据面进程的。相关改动已全部回退。
+
+**本轮实际只落了与外部地址无关的两项**(都独立成立,任何暴露方案都需要):
+- `Node::StartRpcServer()` 默认 bind `0.0.0.0`。原来 bind 的是 `endpoint().ip()`,
+  等于要求"只收发到这一个 IP 的包" —— pod 网络命名空间里本就多余,还挡掉经
+  hostPort / NodePort 转发进来的流量。裸机多网卡要钉一张时用 `BIND_IP`。
+  注:`IsLocalPortAvailable()` 本来就按 INADDR_ANY 试 bind,改完反而与真实 bind 一致了。
+- `Show-ExposureProfileWarning` 在任何非 ClusterIP 设置下告警,指明 Service 暴露了
+  但客户端拿到的仍是 POD_IP。
+
+**真正的修法待定(未落码):** 地址翻译放在**下发地址的那一环**,也就是 login 的
+`CandidatesForZone`(`go/login/internal/svc/servicecontext.go`)—— 那里把 etcd 的
+`n.Endpoint.Ip/Port` 填进 `GateCandidate` 后原样穿到客户端。`GateCandidate` 的注释
+(`loginqueue/gatetoken.go:41-43`)本来就写着"刻意保持最小,好让它从任意来源构建",
+接缝是现成的。gate 继续注册 POD_IP(集群内互相拨号仍靠它,in-cluster robot 不受影响),
+login 在下发前做一次 `node_id -> 对外地址` 翻译;裸金属与托管云的差异全部收在
+login 一处配置里。
+
+**顺带重写 `localip()`**(`cpp/libs/engine/core/network/process_info.cpp`)。旧实现是
+`inet_ntoa(*(in_addr*)gethostbyname(hostname())->h_addr)` 三行,两个毛病:
+①取地址列表**第一个**,顺序由接口 metric / 绑定顺序决定 —— 开发机上装了
+VMware / Hyper-V / WSL / Docker / VPN 虚拟网卡时经常选中一张连不通的;
+②`gethostbyname` 失败返回 nullptr 却没有空检查,直接解引用 `h_addr`,主机名解析
+不了时表现为进程无日志崩溃。
+新实现改用**路由表探测**:给 UDP socket 调 `connect()`(不发任何包,只让内核按路由表
+选出口接口)再 `getsockname()`,拿到的正是别的节点看到我们时的那个地址。不枚举网卡
+是因为枚举完仍然要猜哪张对,而路由表本来就存着答案;顺带避开了
+`GetAdaptersAddresses` / `getifaddrs` 两套平台 API 的 #ifdef 分叉。
+三档兜底:路由探测 → 主机名解析(旧行为,留给无默认路由的隔离环境)→ `127.0.0.1`,
+任何一档都不崩。想绕开全部自动判断仍可设 `NODE_IP`。
+唯一调用点是 `ResolveNodeIp()` 的兜底档,即"本地裸进程启动时注册进 etcd 的地址"。
+注:`cpp/libs/engine/muduo_windows/src/muduo/base/process_info.cpp` 里还有一份同名
+`localip()` 旧实现,但没被任何 vcxproj / CMakeLists 引用(否则早就重复符号了),
+**别改错文件**。
+
+**连带必改:scene 的 `-RpcPort` 19000 -> 20000。** 端口 env 一旦真生效,scene 就会
+去 bind 19000 —— 而 19000 落在引擎给 gate 划的 10000-19999 区间里(非 gate 角色是
+20000-35535,见 node_allocator.cpp),破坏"看端口就知道角色"的约定和按区间写的防火墙
+规则;gRPC 也会从 50000 变成 49000,撞进 gate 的 gRPC 段。改成 20000 之后 scene 在
+K8s 里的实际端口**与修复前完全一致**(旧代码扫描也是从 20000 起、每个 pod 独立 netns
+所以都拿 20000),等于零变化。gate 则是 10000 -> 18000,那正是本次要修的目标,且 18000
+本就在 gate 区间内。README.md / AGENTS.md 里的角色端口表同步更新。
+
+**本轮改动:** `cpp/libs/engine/core/node/system/node/node.cpp`(ResolveNodeIp /
+InitRpcServer 注释 / StartRpcServer)、`.../node_allocator.cpp`(AcquireNodePort)、
+`cpp/libs/engine/core/network/process_info.cpp`(localip)、
+`tools/scripts/k8s_deploy.ps1`、`deploy/k8s/README.md`、`deploy/k8s/AGENTS.md`。
+**待编译验证:** engine core lib + gate / scene 节点。未跑任何构建。
+
+### 2026-08-05:战斗/空间 ECS + 多服务扇出审计(P0/P1/P2,Claude 落码,未编译)
+
+本轮分两段:①我自己深审此前零覆盖的 C++ scene 战斗/空间/状态域;②用 workflow 扇出
+8 个维度做对抗性复核审计(每条发现两个独立视角尝试证伪,两票都不证伪才算确认)。
+
+**第一段 —— C++ 战斗/空间/状态(此前从未审过),修 13 处:**
+
+P0-a:`buff.cpp` 周期 tick 的 UAF + 迭代器失效。`ProcessBuffs` 直接 range-for 遍历
+`BuffListComp`(unordered_map),而 `OnIntervalThink` 会顺着
+TickCombatIdleBuff → AddSubBuffs → AddOrUpdateBuff 往同一张表 emplace 子 buff(扩容
+使迭代器失效),也会顺着 AddOrUpdateBuff → DispelBuffsOnAwake → OnBuffExpire 把正在
+tick 的这条 buff 自己 erase 掉 —— 旧写法把 `BuffEntry&` 和 `periodic` 引用一路端着
+穿过回调,buff 被驱散后下一句 `set_ticks_done` 就是写已释放内存。改为快照 id + 每轮
+重查,并在回调前先落盘 periodic_timer。`AddSubBuffsWithoutCheck` 同类问题(跨
+AddOrUpdateBuff 持 owner 引用)一并收口。注:代码里本来就有
+MarkBuffForRemoval/RemovePendingBuffs 这套延迟删除,但 MarkBuffForRemoval **全仓无
+调用方**,所有删除都走 OnBuffExpire 的立即 erase,正是上面这条路径。
+
+P0-b:`actor_action_state.cpp` `TryPerformAction` 边遍历 protobuf Map 边 erase。
+打断分支走 RemoveState → `state_list()->erase(actorState)`,protobuf Map 的 erase 让
+指向被删元素的迭代器失效 —— 正是 range-for 手里那个,下次 ++it 即 UB。这条路径挂在
+**每一次释放技能**的 CheckState 上。改为先快照状态键。
+
+P1:①`HandleChannelSkillSpell` 拿技能**实例 id**(雪花)去查 SkillTable,永远查不到行
+→ 必然早退,吟唱类技能从来没真正跑起来过;改为先用实例 id 取 SkillContext 再用
+skilltableid 查表。②施法被打断时 SkillContext 永久泄漏(定时器组件被摘掉后
+HandleSkillFinish 再也不会触发),玩家每打断一次泄漏一条、无上界;给三个相位定时器
+组件加 skillId 字段,打断时先收口。③`IsTargetImmune` 用 `LookupBuffOrReturnError`
+(`return buffResult`,uint32)当 bool 返回 —— 身上任何一条 buff 掉表行就被判成"对
+一切 buff 免疫",后续加 buff 全部静默失败;改 LookupBuffOrContinue。④冻结目标的
+"buff drop" 判定写在 OnBuffStart 里,而那时 buff 已经 emplace 进列表了,所谓丢弃实际是
+"条目在、启动效果全没跑、到期定时器照挂",还会被 marshal 到目的 zone 复活;上移到
+AddOrUpdateBuff 入口。⑤AOI 离场只把离场者从**观察者**列表里摘掉,从不清离场者
+**自己**的 AoiListComp;换场景实体不销毁,旧场景条目原样带进新场景且再无路径删除 ——
+既是无上界泄漏,又占满 AOI 容量让新场景实体全被 AddAoiEntity 拒收(客户端表现为
+"进了新场景但世界是空的"),而且 `ActorStateAttributeSyncSystem` 每帧拿这张表当属性
+广播收件人,entt 复用 id 后会把属性同步发给另一个场景里不相干的玩家。
+
+P2:RemovePendingBuffs 的 per-tick `get_or_emplace`(违反 §7.5,给每个带 buff 的实体
+永久挂一个空集合);OnIntervalThink / DispelBuffsOnAwake 跨实体用 `get` 不用
+`try_get`;`CanUseSkillInCurrentState` 拿 `1 << skill` 位掩码当数组下标(表里是按序号
+平铺的 6 格,序号 ≥3 一律越界被兜成 kInvalidTableData);critchance 是 uint64 却直接当
+[0,1) 概率比较(今天全仓无写入点故恒 0=永不暴击,一旦有人按字面填 5 就变 100% 暴击),
+按整数百分比换算并夹取,`rand()` 换 tlsRandom;CombatState 的两个事件 handler 先
+get_or_emplace 再校验(对已销毁实体 get_or_emplace 在 EnTT 是 UB),且
+ValidateSkillUsage 用配置决定的 stateKey 无边界检查索引 repeated 字段。
+
+**第二段 —— workflow 扇出(8 维度 / 42 agent),确认 15 条、已修 11 条:**
+
+P1:①`SendTipToPendingSession` 把 gate 业务 node_id 当 entt 实体句柄
+(`entt::entity{GetGateNodeId(sessionId)}`)—— network_utils.h:27-30 明文禁止,同文件
+其它 7 处早已改用 ResolveLocalZoneGateEntity,只有这个 namespace-local 函数漏改;它是
+"玩家实体还没建好时"唯一的客户端通知出口,单 gate 部署下 100% 发不出去,玩家永久卡
+加载界面。②`resolveScene` 把"scene_id 不存在"当成"活场景映射到死节点"自愈 ——
+go-zero 的 Redis.Get 对缺失 key 返回 ("", nil),空 nodeId 一路走到 IsNodeAlive(zone,"")
+被判 false,于是无 TTL 写出一条 `scene:{id}:node` 幽灵映射,而 CreateScene 又被
+sceneConfId==0 挡掉,后续 AtomicIncrPlayerCountIfSceneExists 的存在性守卫正好看到这把
+伪造的 key 而失效。③gate `session_id` 的 node 段在依赖就绪前是 0(set_node_id 在
+dependencyGate 回调里,而 connection 回调在它之前就装上了),这段窗口连进来的玩家
+scene 侧永远解析不出归属 gate、整局静默不可用;把 set_node_id 提到装回调之前
+(node_id 在 afterStartFn_ 时已是终值,node.cpp:928),并在发号处加 fail-closed。
+④未知/未授权 message_id 的拒绝分支排在鉴权闸门**之前**,且只 LOG_ERROR + 裸 return:
+未认证客户端可无限发不存在的 message_id,每包一条 ERROR 级日志(同步磁盘 I/O),
+永远碰不到踢人阈值、连接永不断开 —— 不需要任何凭证的日志放大 DoS。
+⑤db 重试队列每 tick 只 RPopLPush 一条 × 1 秒 ticker = 排空上限 1 条/秒,而稳态入流
+~90/s,MySQL 抖一下就只涨不落,超 retryMaxTimes 的任务进 `kafka:dead:queue:*`
+(全仓无消费者=静默丢盘);改成有预算的循环排空。
+
+P2:`OnGetLeaderLocation` 从 actorRegistry 取 SceneInfoComp(该组件只存在于
+sceneRegistry)导致队伍跟随链恒早退;`HandleExitGameNode` 摘 SceneEntityComp 却把 Hex
+留着(换场景路径显式删了,退出路径漏了),存盘在途重连会让 AOI 走"位置更新"分支、
+原地重连时 hex_distance==0 直接 return,实体再也进不了任何格子;
+`destroyInstanceInternal` 在原子幂等校验**之前**就级联销毁全部镜像并 Del 索引,CAS
+放弃销毁时源场景活下来、镜像全没了且再也发现不了(代码注释声称"原子脚本会抹掉
+scene:{id}:mirrors"是错的 —— 脚本 KEYS 里是 `scene:%d:mirror` 标志位,不是
+`scene:%d:mirrors` 子集合);`readVersion` 把 Redis 读错误静默降级成 version=0,而 0 在
+saveFieldsScript 里的语义是**跳过版本校验**,等于把乐观锁静默关掉(同函数其它读失败
+都会置 ErrCodeRedis);`HandleTcpNodeMessage` 跨实体用 `get<RpcClientPtr>`(违反不变量
+5,组件未挂/shared_ptr 为空时分别是抛异常和空指针解引用,gate 崩=该节点全员掉线);
+`CheckMessageSize` 排在 CheckMessageLimit 之前且不计非法包,超长包既不占限流额度也
+永远触发不了踢人。
+
+**确认但**未**修,需要拍板:**
+- `enterscenelogic.go` 排空/疏散的"改派回大世界"被 unsafe-handoff 闸门拒绝(P1):
+  C++ 已存盘并销毁实体,但 currentLoc 仍指向旧节点 → crossNodeHandoff=true → 拒绝,
+  玩家卡死。**没有擅自放宽这个闸门** —— 它挡的正是回档,用"旧场景 key 不存在"当逃生口
+  并不能证明存盘已落地(场景可能在存盘任务还在重试队列里时就被销毁)。建议走
+  EnterSceneRequest 加 `handoff_barrier_satisfied` 显式标志,由疏散路径设置。
+- `gate_instance_id` 缺失(违反不变量 2)当前只报 ERROR 未拒绝:C++ 侧 6 个
+  EnterSceneRequest 构造点里 `s2s_player_scene_handler.cpp` 与
+  `s2s_player_scene_response_handler.cpp` 还没填这个字段,现在 fail-closed 会打死这两条
+  正常链路;补齐后(并给 logic_test.go 里 13 处 GateId 用例补上该字段)再翻成拒绝。
+- `load_reporter.go` 死节点残留 player_count 无路径清零(P2)。
+- `key_ordered_consumer.go` read 任务缓存回写与 write 任务共用缓存键,但两类任务由
+  两个不同分区器的生产者投递(P2,需统一分区函数 + 契约测试)。
+
+**覆盖缺口:**扇出的 8 个维度里有 4 个因 API 断连整个丢失,**完全没有覆盖**:
+scene-spatial-movement(movement/grid/navigation/recast/scene_crowd)、
+scene-actor-attribute、go-player-locator、cpp-engine-timer-kafka。下一轮应补。
+
+本轮改动**全部未编译**,待 Codex 验证。编译顺序(MSBuild 串行 `/m:1`):
+scene lib(combat / combat_state / actor / spatial / player)→ gate 节点
+(client_message_processor + main)→ scene 节点;Go 侧
+`cd go && go build ./...`,并跑 `go test ./scene_manager/... ./db/... ./data_service/...`
+(注意 instance_lifecycle 的级联顺序调整与 data_logic 的 readVersion 签名变更可能影响
+既有用例)。C++ 侧新增 include:player_lifecycle.cpp 加 hexagons_grid.h、
+skill.cpp 加 <algorithm> 与 <utils/random/random.h>、actor_action_state.cpp 加
+engine/core/type_define/type_define.h;`CheckMessageSize` 签名多了 `SessionInfo&`。

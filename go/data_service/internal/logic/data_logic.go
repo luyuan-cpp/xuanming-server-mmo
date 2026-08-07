@@ -110,8 +110,12 @@ func LoadPlayerData(ctx context.Context, svcCtx *svc.ServiceContext, req *LoadPl
 		}
 	}
 
-	// Read version
-	ver := readVersion(ctx, client, req.PlayerID)
+	// Read version. 读不到版本必须 fail-closed:回一个 Version=0 的"成功"会让
+	// 调用方以为可以跳过版本校验(见 readVersion 注释),等于关掉乐观锁。
+	ver, err := readVersion(ctx, client, req.PlayerID)
+	if err != nil {
+		return &LoadPlayerDataResp{ErrorCode: constants.ErrCodeRedis}, err
+	}
 
 	return &LoadPlayerDataResp{Data: result, Version: ver}, nil
 }
@@ -320,13 +324,31 @@ type redisScanner interface {
 
 // ── Helpers ────────────────────────────────────────────────────
 
-func readVersion(ctx context.Context, client goredis.Cmdable, playerID uint64) uint64 {
+// readVersion 读乐观锁版本号。
+//
+// 必须把「版本 key 不存在」和「读失败」分开返回:saveFieldsScript 里
+// expected_version==0 的语义是**跳过版本校验**(见该脚本 ARGV[2] 注释)。
+// 旧写法把 Redis 读错误(超时、连接抖动、类型异常)一律降级成 0 并且不带错误,
+// LoadPlayerData 又把它当成正常结果返回(同函数里其它读失败都会置 ErrCodeRedis),
+// 于是调用方拿着 version=0 去存盘 —— 乐观锁被静默关掉,变成无条件覆盖。
+// 两个 scene 节点并发存同一个玩家时,后到的那次会直接盖掉前一次,表现为随机回档。
+// key 不存在(首次存盘)仍然合法返回 0。
+func readVersion(ctx context.Context, client goredis.Cmdable, playerID uint64) (uint64, error) {
 	val, err := getString(ctx, client, versionKey(playerID))
-	if err != nil || val == "" {
-		return 0
+	if err != nil {
+		if err == goredis.Nil {
+			return 0, nil
+		}
+		return 0, err
 	}
-	v, _ := strconv.ParseUint(val, 10, 64)
-	return v
+	if val == "" {
+		return 0, nil
+	}
+	v, err := strconv.ParseUint(val, 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("corrupt version value %q for player %d: %w", val, playerID, err)
+	}
+	return v, nil
 }
 
 func getString(ctx context.Context, c goredis.Cmdable, key string) (string, error) {

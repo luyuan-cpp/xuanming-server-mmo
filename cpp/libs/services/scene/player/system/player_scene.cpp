@@ -108,7 +108,12 @@ void PlayerSceneSystem::OnGetLeaderLocation(entt::entity player, void* replyVoid
 		return;
 	}
 
-	const auto sceneInfo = tlsEcs.actorRegistry.try_get<SceneInfoComp>(sceneEntity->sceneEntity);
+	// SceneEntityComp::sceneEntity 是 sceneRegistry 的句柄,不是 actorRegistry 的。
+	// 全仓 SceneInfoComp 只在 sceneRegistry 上 emplace(scene_node_service.cpp /
+	// scene_handler.cpp,都紧跟 sceneRegistry.create()),本文件 167/261 行以及
+	// s2s_player_scene_handler.cpp 也都是从 sceneRegistry 读。这里查 actorRegistry
+	// 恒为 nullptr,于是队伍跟随链在这一行就永远早退 —— 队员从来不会被拉去队长的场景。
+	const auto sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(sceneEntity->sceneEntity);
 	if (!sceneInfo) {
 		return;
 	}
@@ -128,12 +133,17 @@ void PlayerSceneSystem::OnGetLeaderLocation(entt::entity player, void* replyVoid
 		// Resolve gate info
 		NodeId gateNodeId = GetGateNodeId(playerSessionPB->gate_session_id());
 
+		// 同 player_lifecycle.cpp:同样不能拿 node_id 当 entt 实体句柄
+		// (network_utils.h:27-30 的禁令)。走 ResolveLocalZoneGateEntity,
+		// 否则 gateInstanceId 会是空串,而 scene_manager 侧要靠它做 gate 防僵尸过滤。
 		std::string gateInstanceId;
 		auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
-		entt::entity gateEntity{ gateNodeId };
-		if (const auto* gateNodeInfo = gateRegistry.try_get<NodeInfo>(gateEntity))
+		if (const auto gateEntityOpt = ResolveLocalZoneGateEntity(playerSessionPB->gate_session_id()))
 		{
-			gateInstanceId = gateNodeInfo->node_uuid();
+			if (const auto* gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt))
+			{
+				gateInstanceId = gateNodeInfo->node_uuid();
+			}
 		}
 
 		// Find a SceneManager gRPC node

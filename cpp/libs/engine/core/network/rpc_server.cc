@@ -47,6 +47,19 @@ void RpcServer::onConnection(const TcpConnectionPtr& conn)
         << (conn->connected() ? "UP" : "DOWN");
   if (conn->connected())
   {
+    // 与 RpcClient 对称的节点间高水位保护(那边的注释有完整论证):
+    // 对端不消费时输出缓冲无界,64MB 说明对端已追不上,断开让它走重连,
+    // 好过本进程 OOM。服务端侧断开后由对端的 enableRetry 负责恢复。
+    constexpr size_t kInterNodeHighWaterMark = 64 * 1024 * 1024;
+    conn->setHighWaterMarkCallback(
+        [](const TcpConnectionPtr& c, size_t queuedBytes)
+        {
+          LOG_ERROR << "Inter-node output buffer exceeded high water mark (queued="
+                    << queuedBytes << ") to peer " << c->peerAddress().toIpPort()
+                    << "; peer is not draining — forcing close.";
+          c->forceClose();
+        },
+        kInterNodeHighWaterMark);
     GameChannelPtr channel(new GameChannel(conn));
     channel->SetServiceMap(&services_);
     conn->setMessageCallback(

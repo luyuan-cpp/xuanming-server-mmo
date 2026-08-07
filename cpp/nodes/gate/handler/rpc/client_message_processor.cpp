@@ -9,6 +9,7 @@
 #include <optional>
 #include <sstream>
 #include <string_view>
+#include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
 
@@ -214,17 +215,33 @@ void RpcClientSessionHandler::SendTipToClient(const muduo::net::TcpConnectionPtr
 	LOG_TRACE << "Sent tip message to session id: " << GetSessionId(conn) << ", tip id: " << tipId;
 }
 
-bool RpcClientSessionHandler::CheckMessageSize(const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn) const
+bool RpcClientSessionHandler::CheckMessageSize(SessionInfo &session, const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn) const
 {
 	constexpr size_t kMaxClientMessageSize = 1024;
 	if (request->ByteSizeLong() > kMaxClientMessageSize)
 	{
-		LOG_ERROR << "Message size exceeds 1KB. Message ID: " << request->message_id();
+		LOG_WARN << "Message size exceeds 1KB. Message ID: " << request->message_id()
+				 << ", player_id: " << session.playerId;
 		MessageContent errResponse;
 		errResponse.set_id(request->id());
 		errResponse.set_message_id(request->message_id());
 		errResponse.mutable_error_message()->set_id(kMessageSizeExceeded);
-		conn->send(errResponse.SerializeAsString());
+		// 必须走 codec(长度头+类型名+校验和)。裸 conn->send 序列化字节会以
+		// 无帧形式插进客户端的解析流:客户端把 protobuf 字段字节当长度头读,
+		// 之后整条连接的分帧全部错位 —— 一次限流/超限应答就毁掉整条连接。
+		protobufCodec.send(conn, errResponse);
+
+		// 超限包同样计入非法包闸门。旧写法只回错误不计数,而且这一检查排在
+		// CheckMessageLimit 之前 —— 于是超长包既不占限流额度、也永远触发不了
+		// 踢人阈值:客户端可以无限发 1KB+ 的包,gate 每包都要序列化一次应答、
+		// 打一条 ERROR 级日志,CPU 与磁盘被白白吃掉,连接永不关闭。
+		if (IllegalPacketCounter::RegisterAndShouldKill(session.illegalPacketCount))
+		{
+			LOG_WARN << "Session illegal-packet threshold exceeded (oversized) — forceClose."
+					 << " count=" << session.illegalPacketCount
+					 << " message_id=" << request->message_id();
+			conn->forceClose();
+		}
 		return false;
 	}
 	return true;
@@ -239,7 +256,8 @@ bool RpcClientSessionHandler::CheckMessageLimit(SessionInfo &session, const RpcC
 		errResponse.set_id(request->id());
 		errResponse.set_message_id(request->message_id());
 		errResponse.mutable_error_message()->set_id(err);
-		conn->send(errResponse.SerializeAsString());
+		// 同 CheckMessageSize:必须带帧,裸 send 会让客户端流错位。
+		protobufCodec.send(conn, errResponse);
 
 		// todo.md #236: count this rejection toward the per-session illegal-
 		// packet kill switch. A misbehaving / hostile client that keeps
@@ -271,20 +289,34 @@ bool RpcClientSessionHandler::CheckMessageLimit(SessionInfo &session, const RpcC
 	return true;
 }
 
+// 返回 false 表示本次请求体不可用,调用方**必须**放弃转发。
+//
+// message 是 gRpcMethodRegistry 里按 message_id 共享的**进程级单例原型**,
+// 上一次任何玩家的同类请求解析结果都还留在里面。因此:
+//   - 必须先 Clear() 再解析 —— 旧实现空包直接 return,共享原型里残留的
+//     上一个玩家的参数会被原样转发到后端(挂着当前会话的 player_id)。
+//     攻击者故意发空 body 就能重放别人的请求参数;
+//   - 解析失败必须让调用方知道 —— 旧实现返回 void,调用方拿着
+//     Clear 后部分填充(攻击者可控前缀)的消息照样转发。
 template <typename Message, typename Request>
-void ParseMessageFromRequestBody(Message &message, const Request &request, const SessionId sessionId)
+bool ParseMessageFromRequestBody(Message &message, const Request &request, const SessionId sessionId)
 {
+	message.Clear();
+
 	const std::string &requestBody = request->body();
 	if (requestBody.empty())
 	{
-		return;
+		// 空体是合法的(无参 RPC),Clear 之后就是干净的默认消息。
+		return true;
 	}
 
 	if (!message.ParseFromString(requestBody))
 	{
 		LOG_ERROR << "Failed to parse client message body for session id: " << sessionId;
-		return;
+		message.Clear();
+		return false;
 	}
+	return true;
 }
 
 void RpcClientSessionHandler::HandleConnectionDisconnection(const muduo::net::TcpConnectionPtr &conn)
@@ -374,6 +406,18 @@ static void OnClientHighWaterMark(const muduo::net::TcpConnectionPtr &conn, size
 
 void RpcClientSessionHandler::HandleConnectionEstablished(const muduo::net::TcpConnectionPtr &conn)
 {
+	// fail-closed:node 段没种好就绝不发号。带 node 段 0 的 session_id 是"坏号" ——
+	// scene 侧 GetGateNodeId() 得到 0、永远解析不出归属 gate,玩家整局静默不可用,
+	// 且无任何自愈路径。宁可当场拒连让客户端重连,也不要放一个坏号进系统。
+	// 正常路径下 main.cpp 已在装 connection 回调之前 set_node_id,这里是纵深防御。
+	if (tlsSessionManager.session_id_gen().node_id_prefix() == 0)
+	{
+		LOG_ERROR << "Rejecting connection: session id generator has no node id yet, peer="
+				  << conn->peerAddress().toIpPort();
+		conn->forceClose();
+		return;
+	}
+
 	auto sessionId = tlsSessionManager.session_id_gen().Generate();
 	while (tlsSessionManager.sessions().find(sessionId) != tlsSessionManager.sessions().end())
 	{
@@ -422,13 +466,30 @@ void HandleTcpNodeMessage(const SessionInfo &session, const RpcClientMessagePtr 
 		return;
 	}
 
-	auto &tcpNode = registry.get<RpcClientPtr>(targetNodeEntity);
+	// 跨实体查询用 try_get 不用 get(CLAUDE.md §7 不变量 5)。
+	// registry.valid() 只保证实体活着,不保证 RpcClientPtr 已经挂上去:
+	// 节点实体在握手/发现阶段就被 create() 出来,RpcClientPtr 是随后才 emplace 的,
+	// 而且组件在但 shared_ptr 为空同样可能(连接已断开正在重连)。
+	// 这两种情况下旧写法分别是 get 抛异常和空指针解引用 —— 都是把 gate 打崩,
+	// 而 gate 崩 = 该节点上所有在线玩家一起掉线。
+	// 本文件 333 行、gate_service_handler.cpp:143 已经是 try_get + 判空的写法。
+	const auto *tcpNode = registry.try_get<RpcClientPtr>(targetNodeEntity);
+	if (tcpNode == nullptr || !*tcpNode)
+	{
+		LOG_WARN << "[TCP Node] RpcClient not attached, dropping message_id: " << request->message_id()
+				 << ", session_id: " << sessionId
+				 << ", node_type: " << handlerMeta.targetNodeType;
+
+		RpcClientSessionHandler::SendTipToClient(conn, kServiceUnavailable);
+		return;
+	}
+
 	ProcessClientPlayerMessageRequest message;
 	message.mutable_message_content()->set_serialized_message(request->body());
 	message.set_session_id(sessionId);
 	message.mutable_message_content()->set_id(request->id());
 	message.mutable_message_content()->set_message_id(request->message_id());
-	tcpNode->CallRemoteMethod(SceneProcessClientPlayerMessageMessageId, message);
+	(*tcpNode)->CallRemoteMethod(SceneProcessClientPlayerMessageMessageId, message);
 
 	LOG_TRACE << "Sent message to game node, session id: " << sessionId << ", message id: " << request->message_id();
 }
@@ -437,7 +498,12 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 {
 	assert(request->message_id() < gRpcMethodRegistry.size());
 	auto &rpcHandlerMeta = gRpcMethodRegistry[request->message_id()];
-	ParseMessageFromRequestBody(*rpcHandlerMeta.requestProto, request, sessionId);
+	if (!ParseMessageFromRequestBody(*rpcHandlerMeta.requestProto, request, sessionId))
+	{
+		// 坏包不转发。共享原型已被清空,不会把残留数据递给后端。
+		RpcClientSessionHandler::SendTipToClient(conn, kRequestMessageParseError);
+		return;
+	}
 
 	SessionDetails sessionDetails;
 	sessionDetails.set_session_id(sessionId);
@@ -492,7 +558,7 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 
 bool RpcClientSessionHandler::ValidateClientMessage(SessionInfo &session, const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn) const
 {
-	if (!CheckMessageSize(request, conn))
+	if (!CheckMessageSize(session, request, conn))
 		return false;
 	if (!CheckMessageLimit(session, request, conn))
 		return false;
@@ -513,12 +579,6 @@ void RpcClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpConn
 		return;
 	}
 
-	if (request->message_id() >= gRpcMethodRegistry.size() || !IsClientMessageId(request->message_id()))
-	{
-		LOG_ERROR << "Invalid or unauthorized message ID: " << request->message_id();
-		return;
-	}
-
 	auto &session = sessionIt->second;
 
 	// Reject all game messages until the client passes token verification.
@@ -528,6 +588,29 @@ void RpcClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpConn
 		LOG_WARN << "[Token] Unverified session rejected message_id: " << request->message_id()
 				 << ", session_id: " << sessionId;
 		conn->shutdown();
+		return;
+	}
+
+	// 白名单校验必须排在鉴权闸门之后,并且要计入非法包闸门。
+	//
+	// 旧写法把这一段放在 `!session.verified` 之前,而且只 LOG_ERROR + 裸 return:
+	// 既不计数、也不关连接。于是一个**未认证**的客户端可以无限发不存在的
+	// message_id —— 每一个包都让 gate 写一条 ERROR 级日志(同步磁盘 I/O),
+	// 却永远碰不到 GATE_ILLEGAL_PACKET_THRESHOLD 的踢人阈值,连接也永不断开。
+	// 这是一条不需要任何凭证就能打的日志放大 DoS。
+	// SessionInfo::illegalPacketCount 的注释本来就把 "unknown messageId" 和
+	// "unauthenticated send" 列为应当计数的情形,这里只是把它真正接上。
+	if (request->message_id() >= gRpcMethodRegistry.size() || !IsClientMessageId(request->message_id()))
+	{
+		LOG_DEBUG << "Invalid or unauthorized message ID: " << request->message_id()
+				  << ", session_id: " << sessionId;
+		if (IllegalPacketCounter::RegisterAndShouldKill(session.illegalPacketCount))
+		{
+			LOG_WARN << "Session illegal-packet threshold exceeded (bad message_id) — forceClose."
+					 << " count=" << session.illegalPacketCount
+					 << " message_id=" << request->message_id();
+			conn->forceClose();
+		}
 		return;
 	}
 
@@ -590,7 +673,12 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 	auto expectedHex = HmacSha256Hex(secret, payloadBytes);
 	std::string clientSigStr(clientSig.begin(), clientSig.end());
 
-	if (expectedHex != clientSigStr)
+	// 常数时间比较。std::string 的 != 在首个不匹配字节处提前返回,
+	// 攻击者可用计时差逐字节猜签名。长度不等可以直接拒(长度不是秘密)。
+	const bool sigMatches =
+		expectedHex.size() == clientSigStr.size() && !expectedHex.empty() &&
+		CRYPTO_memcmp(expectedHex.data(), clientSigStr.data(), expectedHex.size()) == 0;
+	if (!sigMatches)
 	{
 		LOG_WARN << "[Token] HMAC mismatch for session_id: " << sessionId;
 		sendReply(false, "invalid token signature");

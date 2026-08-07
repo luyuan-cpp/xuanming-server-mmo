@@ -8,7 +8,7 @@ import sys
 
 from core.config_loader import ExporterConfig, LangConfig, load_config
 from core.excel_reader import read_all_tables
-from core.file_utils import ensure_dirs, md5_copy
+from core.file_utils import ensure_dirs, md5_copy, report_orphans
 from core.foreign_key import validate_foreign_keys
 from core.generators.bit_index_gen import generate_bit_indexes
 from core.generators.comp_gen import generate_comp_headers
@@ -106,14 +106,32 @@ def _deploy(cfg: ExporterConfig) -> None:
         tasks.extend((d["src"], d["dst"]) for d in cfg.java.deploy)
 
     ok, fail = 0, 0
+    # 同一个 dst 可能有多个 src(Java 的代码树与 proto 产物树就部署到同一个包目录),
+    # 陈旧判定必须按 dst 归并全部 src 后再做,否则会把另一对的产物全报成陈旧。
+    srcs_by_dst: dict[Path, list[Path]] = {}
     for src, dst in tasks:
         try:
             md5_copy(src, dst)
             ok += 1
+            srcs_by_dst.setdefault(Path(dst), []).append(Path(src))
         except Exception as exc:
             logger.error("Deploy failed %s -> %s: %s", src, dst, exc)
             fail += 1
     logger.info("Deploy: %d OK, %d failed", ok, fail)
+
+    orphans: list[Path] = []
+    for dst, srcs in srcs_by_dst.items():
+        orphans.extend(report_orphans(srcs, dst))
+
+    # 陈旧产物:md5_copy 只覆盖不删除,布局一变旧文件就永久残留(详见 file_utils.report_orphans)。
+    # 只告警不自动删——目标树里合法混着手写文件。确认无用后手工删,手写文件登记进 _DEPLOY_KEEP。
+    if orphans:
+        logger.warning(
+            "发现 %d 个疑似陈旧产物(源树已无、目标树仍在)。确认无用请手工删除;"
+            "若是手写文件请登记到 core/file_utils.py 的 _DEPLOY_KEEP:", len(orphans)
+        )
+        for path in orphans:
+            logger.warning("  陈旧产物? %s", path)
 
 
 # ---------------------------------------------------------------------------

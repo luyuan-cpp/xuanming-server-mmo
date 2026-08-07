@@ -32,7 +32,7 @@ public:
 
     static void SendTipToClient(const muduo::net::TcpConnectionPtr &conn, uint32_t tip_id);
 
-    bool CheckMessageSize(const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn) const;
+    bool CheckMessageSize(SessionInfo &session, const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn) const;
 
     bool CheckMessageLimit(SessionInfo &session, const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn) const;
 

@@ -6,6 +6,7 @@ import (
     "math/rand/v2"
     "os"
     "path/filepath"
+    "sync/atomic"
 
     "google.golang.org/protobuf/encoding/protojson"
     "google.golang.org/protobuf/proto"
@@ -22,17 +23,22 @@ type globalvariableSnapshot struct {
 }
 
 type GlobalVariableTableManager struct {
-    snap *globalvariableSnapshot
+    // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
+    // 并发读就是数据竞争(go test -race 会报)。
+    // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
+    // 表缩小时 data[rand.IntN(len(data))] 会越界。
+    snap atomic.Pointer[globalvariableSnapshot]
 }
 
 var GlobalVariableTableManagerInstance = NewGlobalVariableTableManager()
 
 func NewGlobalVariableTableManager() *GlobalVariableTableManager {
-    return &GlobalVariableTableManager{
-        snap: &globalvariableSnapshot{
-            kvData: make(map[uint32]*pb.GlobalVariableTable),
-        },
-    }
+    m := &GlobalVariableTableManager{}
+    m.snap.Store(&globalvariableSnapshot{
+        kvData: make(map[uint32]*pb.GlobalVariableTable),
+    })
+    return m
 }
 
 func (m *GlobalVariableTableManager) Load(configDir string, useBinary bool) error {
@@ -67,16 +73,18 @@ func (m *GlobalVariableTableManager) Load(configDir string, useBinary bool) erro
     }
 
     snap.data = container.Data
-    m.snap = snap
+    m.snap.Store(snap)
     return nil
 }
 
 func (m *GlobalVariableTableManager) FindAll() []*pb.GlobalVariableTable {
-    return m.snap.data
+    snap := m.snap.Load()
+    return snap.data
 }
 
 func (m *GlobalVariableTableManager) FindById(id uint32) (*pb.GlobalVariableTable, bool) {
-    row, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    row, ok := snap.kvData[id]
     return row, ok
 }
 
@@ -85,7 +93,8 @@ func (m *GlobalVariableTableManager) FindById(id uint32) (*pb.GlobalVariableTabl
 // ---- Exists ----
 
 func (m *GlobalVariableTableManager) Exists(id uint32) bool {
-    _, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    _, ok := snap.kvData[id]
     return ok
 }
 
@@ -94,7 +103,8 @@ func (m *GlobalVariableTableManager) Exists(id uint32) bool {
 // ---- Count ----
 
 func (m *GlobalVariableTableManager) Count() int {
-    return len(m.snap.data)
+    snap := m.snap.Load()
+    return len(snap.data)
 }
 
 
@@ -102,9 +112,10 @@ func (m *GlobalVariableTableManager) Count() int {
 // ---- FindByIds (IN) ----
 
 func (m *GlobalVariableTableManager) FindByIds(ids []uint32) []*pb.GlobalVariableTable {
+    snap := m.snap.Load()
     result := make([]*pb.GlobalVariableTable, 0, len(ids))
     for _, id := range ids {
-        if row, ok := m.snap.kvData[id]; ok {
+        if row, ok := snap.kvData[id]; ok {
             result = append(result, row)
         }
     }
@@ -114,10 +125,11 @@ func (m *GlobalVariableTableManager) FindByIds(ids []uint32) []*pb.GlobalVariabl
 // ---- RandOne ----
 
 func (m *GlobalVariableTableManager) RandOne() (*pb.GlobalVariableTable, bool) {
-    if len(m.snap.data) == 0 {
+    snap := m.snap.Load()
+    if len(snap.data) == 0 {
         return nil, false
     }
-    return m.snap.data[rand.IntN(len(m.snap.data))], true
+    return snap.data[rand.IntN(len(snap.data))], true
 }
 
 
@@ -125,8 +137,9 @@ func (m *GlobalVariableTableManager) RandOne() (*pb.GlobalVariableTable, bool) {
 // ---- Where / First ----
 
 func (m *GlobalVariableTableManager) Where(pred func(*pb.GlobalVariableTable) bool) []*pb.GlobalVariableTable {
+    snap := m.snap.Load()
     var result []*pb.GlobalVariableTable
-    for _, row := range m.snap.data {
+    for _, row := range snap.data {
         if pred(row) {
             result = append(result, row)
         }
@@ -135,7 +148,8 @@ func (m *GlobalVariableTableManager) Where(pred func(*pb.GlobalVariableTable) bo
 }
 
 func (m *GlobalVariableTableManager) First(pred func(*pb.GlobalVariableTable) bool) (*pb.GlobalVariableTable, bool) {
-    for _, row := range m.snap.data {
+    snap := m.snap.Load()
+    for _, row := range snap.data {
         if pred(row) {
             return row, true
         }

@@ -10,6 +10,9 @@ struct CastingTimerComp
     // 传播给外层类型，因此每个包装组件都必须显式固定为原地删除。
     static constexpr bool in_place_delete = true;
     TimerTaskComp timer;
+    // 这一相位正在跑的技能实例 id(不是技能表 id)。被打断时要靠它把
+    // SkillContextCompMap 里的在途上下文摘掉,否则永远没人删。
+    uint64_t skillId{0};
 };
 
 // Post-cast recovery timer
@@ -17,6 +20,7 @@ struct RecoveryTimerComp
 {
     static constexpr bool in_place_delete = true;
     TimerTaskComp timer;
+    uint64_t skillId{0};
 };
 
 // Channel finish timer
@@ -24,6 +28,7 @@ struct ChannelFinishTimerComp
 {
     static constexpr bool in_place_delete = true;
     TimerTaskComp timer;
+    uint64_t skillId{0};
 };
 // Channel interval timer
 struct ChannelIntervalTimerComp

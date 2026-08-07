@@ -75,6 +75,50 @@ def md5_copy(src: str | Path, dst: str | Path) -> None:
         logger.warning("md5_copy: source does not exist: %s", src)
 
 
+# 手写文件白名单:这些文件本就该只存在于部署目标树、源树里没有,不算陈旧产物。
+# 路径是相对目标目录的 posix 形式。新增手写文件必须登记在这里,否则每次导表都会告警。
+_DEPLOY_KEEP: frozenset[str] = frozenset({
+    "table/table_test.go",  # 手写的表加载冒烟测试
+})
+
+# 只对这些后缀查陈旧产物(编译单元;.json/.pb 等数据产物由 manifest 与业务自行管理)。
+_ORPHAN_SUFFIXES: frozenset[str] = frozenset({".go", ".h", ".hpp", ".cpp", ".java"})
+
+
+def report_orphans(src_dirs: list[Path] | tuple[Path, ...], dst_dir: Path | str) -> list[Path]:
+    """报告部署目标树里「所有源树都已经没有、但目标树还留着」的生成产物。
+
+    src_dirs 必须是**部署到同一个 dst_dir 的全部源目录**,不能逐对调用:
+    exporter_config.yaml 里 Java 就有两个不同的 src 部署到同一个
+    `java/config_node/src/main/java/com/game/table`(代码树 + proto 产物树),
+    逐对判定会把另一对的产物全报成陈旧。
+
+    md5_copy_dir 只覆盖同名文件、**从不删除多余文件**。这带来一类会反复发生的事故:
+    导表器一改输出布局(重命名、换目录、某张表下线),旧产物就永久留在目标树里,
+    而且看起来和新产物一模一样。真实案例——Go 位序常量曾从平铺改为按包分子目录,
+    平铺副本没人删,导致 `go/shared` 整模块 `go build ./...` 直接失败
+    (一个目录两个 package),而各服务模块因为没 import 它反而是绿的,坑一直藏到 CI 全模块构建。
+
+    **只报告不删除**:目标树里合法地混着手写文件(见 _DEPLOY_KEEP),自动删除的爆炸半径
+    远大于收益。返回可疑文件列表供调用方打日志 / 在 CI 里升级为失败。
+    """
+    dst_dir = Path(dst_dir)
+    sources = [Path(s) for s in src_dirs if Path(s).is_dir()]
+    if not sources or not dst_dir.is_dir():
+        return []
+
+    orphans: list[Path] = []
+    for dst_file in sorted(dst_dir.rglob("*")):
+        if not dst_file.is_file() or dst_file.suffix not in _ORPHAN_SUFFIXES:
+            continue
+        rel = dst_file.relative_to(dst_dir)
+        if rel.as_posix() in _DEPLOY_KEEP:
+            continue
+        if not any((src / rel).exists() for src in sources):
+            orphans.append(dst_file)
+    return orphans
+
+
 def ensure_dirs(*dirs: Path | str) -> None:
     """Create directories if they do not already exist."""
     for d in dirs:

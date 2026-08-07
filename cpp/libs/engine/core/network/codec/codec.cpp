@@ -140,8 +140,11 @@ void ProtobufCodec::onMessage(const TcpConnectionPtr& conn,
   while (buf->readableBytes() >= kMinMessageLen + kHeaderLen)
   {
     const int32_t len = buf->peekInt32();
-    if (len > kMaxMessageLen || len < kMinMessageLen)
+    if (len > maxMessageLen_ || len < kMinMessageLen)
     {
+      LOG_ERROR << "ProtobufCodec::onMessage InvalidLength len=" << len
+                << " (min=" << kMinMessageLen << " max=" << maxMessageLen_ << ")"
+                << " peer=" << (conn ? conn->peerAddress().toIpPort() : "N/A");
       errorCallback_(conn, buf, receiveTime, kInvalidLength);
       break;
     }

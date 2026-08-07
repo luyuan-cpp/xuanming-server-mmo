@@ -187,18 +187,65 @@ bool NodeAllocator::AcquireNodePort()
 
 	// Only exclude ports from nodes on the SAME IP — nodes on different
 	// machines can safely reuse the same port numbers.
+	//
+	// 还要排除自己:端口注册成功后 etcd watch 会把本节点自己 fan 回这份快照,而
+	// EtcdService::AcquirePortWithRetry() 在"等待到期后重查权威"的分支里会再跑一次。
+	// 不排除自己的话,重跑时会把自己刚注册的端口当成别人占用的 —— 扫描路径会莫名
+	// 其妙换一个端口(etcd 里的端口从此和第一次注册的劈叉),预设端口路径则会永远
+	// 失败重试。
 	const auto &localIp = GetNodeInfo().endpoint().ip();
+	const auto &selfUuid = GetNodeInfo().node_uuid();
 	std::unordered_set<uint32_t> usedPorts;
 	for (const auto &node : existingNodes)
 	{
-		if (node.endpoint().ip() == localIp)
+		if (node.endpoint().ip() != localIp)
 		{
-			usedPorts.insert(node.endpoint().port());
+			continue;
 		}
+
+		if (!selfUuid.empty() && node.node_uuid() == selfUuid)
+		{
+			continue;
+		}
+
+		usedPorts.insert(node.endpoint().port());
 	}
 
 	uint32_t assignedPort = 0;
 
+	// 显式配置优先于自动扫描:InitRpcServer() 若从 RPC_PORT / NODE_PORT 读到了端口,
+	// 这里就以它为准,只做可用性校验,不再扫区间。
+	//
+	// 这条分支是必需的而不是锦上添花:K8s 的 Deployment / Fleet 用同一个值同时声明
+	// containerPort 和 Service 的 targetPort,进程要是自作主张换一个端口,Service 就会
+	// 把流量转发到一个没人监听的端口上;而日志里偏偏还留着一行
+	// "Node port from environment: <预设值>",排查时极具误导性。
+	//
+	// 刻意 fail-closed:预设端口拿不到就返回 false 让调用方退避重试,绝不静默回落到
+	// 扫描区间 —— 回落等于把"我按你指定的端口起"悄悄变成"我随便挑了一个",
+	// 正是这次要修的病。
+	const uint32_t presetPort = GetNodeInfo().endpoint().port();
+	if (presetPort != 0)
+	{
+		if (usedPorts.find(presetPort) != usedPorts.end())
+		{
+			LOG_ERROR << "Preset RPC port " << presetPort
+					  << " is already registered in etcd for ip=" << localIp
+					  << "; nothing published to etcd, caller must retry";
+			return false;
+		}
+
+		if (!IsLocalPortAvailable(static_cast<uint16_t>(presetPort)))
+		{
+			LOG_ERROR << "Preset RPC port " << presetPort
+					  << " is not bindable on this host"
+					  << "; nothing published to etcd, caller must retry";
+			return false;
+		}
+
+		assignedPort = presetPort;
+		LOG_INFO << "Using preset RPC port from environment: " << assignedPort;
+	}
 	// Ops convention: Gate and non-Gate nodes use separate TCP ranges so
 	// that port numbers alone reveal the node role.  Firewall / LB rules
 	// can target each range independently.
@@ -208,7 +255,7 @@ bool NodeAllocator::AcquireNodePort()
 	//
 	// Protocol isolation comes from the +30000 offset, not the ranges;
 	// the ranges are purely an operational convenience.
-	if (IsGateNodeType(GetNodeInfo().node_type()))
+	else if (IsGateNodeType(GetNodeInfo().node_type()))
 	{
 		constexpr uint32_t GATE_MIN = 10000;
 		constexpr uint32_t GATE_MAX = 19999;
@@ -243,7 +290,12 @@ bool NodeAllocator::AcquireNodePort()
 		return false;
 	}
 
-	tryPortId = assignedPort + 1;
+	// 扫描游标只在真的扫过区间时才推进。预设端口路径没参与扫描,推进它只会让同机
+	// 下一个节点无缘无故跳过一段区间。
+	if (presetPort == 0)
+	{
+		tryPortId = assignedPort + 1;
+	}
 
 	GetNodeInfo().mutable_endpoint()->set_port(assignedPort);
 

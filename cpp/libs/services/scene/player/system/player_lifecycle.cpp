@@ -27,6 +27,7 @@
 #include <engine/infra/messaging/kafka/kafka_producer.h>
 #include "core/system/redis.h"
 #include "player_scene.h"
+#include "hexagons_grid.h"  // Hex —— 退出场景时要和 SceneEntityComp 成对摘掉
 #include "stress_test_probe.h"
 #include "player/constants/player.h"
 #include "proto/db/db_task.pb.h"
@@ -76,14 +77,22 @@ namespace
 		{
 			return;
 		}
-		entt::entity gateEntity{GetGateNodeId(sessionId)};
-		auto &gateNodeRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
-		if (!gateNodeRegistry.valid(gateEntity))
+		// 不能写 `entt::entity{GetGateNodeId(sessionId)}` —— node_id 是业务编号,
+		// 而 gate 实体槽位是 registry.create() 按发现顺序分配的(node_connector.cpp:118 /
+		// registration_manager.cpp),两者早在 uuid 主键重构后就不再相等。
+		// network_utils.h:27-30 明文禁止这种写法。单 gate 部署时 node_id 从 1 起、
+		// 实体槽位从 0 起,valid() 必假,这条提示 100% 发不出去;多 gate 时更糟,
+		// 会命中另一个 gate 的槽位、把提示发给没有这个会话的节点。
+		// 本文件 EnqueueRelocateTicket 与 SendMessageToClientViaGate 都已走
+		// ResolveLocalZoneGateEntity,只有这个 namespace-local 函数漏改。
+		const auto gateEntityOpt = ResolveLocalZoneGateEntity(sessionId);
+		if (!gateEntityOpt)
 		{
 			LOG_WARN << "SendTipToPendingSession: gate not found for session " << sessionId;
 			return;
 		}
-		auto *gateSessionPtr = gateNodeRegistry.try_get<RpcSession>(gateEntity);
+		auto &gateNodeRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
+		auto *gateSessionPtr = gateNodeRegistry.try_get<RpcSession>(*gateEntityOpt);
 		if (gateSessionPtr == nullptr)
 		{
 			LOG_WARN << "SendTipToPendingSession: RpcSession missing for session " << sessionId;
@@ -369,11 +378,28 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerGa
 		}
 	}
 
-	// 3. Enter the scene: bind player to scene entity and send client notification.
-	if (targetScene != entt::null)
+	// 放不进场景就必须 fail-closed,不能继续往下走。
+	//
+	// 旧实现只打一条 ERROR 就接着执行第 4/5 步:玩家被标记成"已登录"、
+	// PlayerLoginEvent 照常触发(任务、每日奖励等业务系统开始结算),但他不在
+	// 任何场景里 —— 没有 AOI、收不到广播,客户端也没收到 NotifyEnterScene,
+	// 会永远停在加载界面。更糟的是 enter_gs_type 已被写入,玩家重试进场时
+	// `alreadyLoggedIn` 为真,登录事件**再也不会补触发**,这一次的登录结算
+	// 就永久丢了。
+	//
+	// 这里既不置登录态也不触发事件,只给客户端一个明确的失败提示,让它走
+	// 正常重试路径(与 HandlePlayerAsyncLoadFailed 的 RedisError 分支同款处理)。
+	if (targetScene == entt::null)
 	{
-		PlayerSceneSystem::HandleEnterScene(player, targetScene);
+		SendTipToPendingSession(enterInfo.session_id(), kEnterSceneFailed);
+		LOG_ERROR << "EnterScene: aborting entry for player " << playerId
+		          << " (scene_id=" << enterInfo.scene_id()
+		          << " unavailable); login state NOT set so a retry can still fire PlayerLoginEvent.";
+		return;
 	}
+
+	// 3. Enter the scene: bind player to scene entity and send client notification.
+	PlayerSceneSystem::HandleEnterScene(player, targetScene);
 
 	// 4. Set login state for downstream systems (reconnect, first-login logic, etc.).
 	if (enterInfo.enter_gs_type() != 0)
@@ -422,10 +448,18 @@ void PlayerLifecycleSystem::RemovePlayerSession(entt::entity player)
 		return;
 	}
 
-	LOG_INFO << "Removing player session: sessionId = " << playerSessionSnapshotPB->gate_session_id();
+	// 必须**先取值**再改字段,不能用 defer:defer 宏是 [&] 捕获、作用域结束才求值,
+	// 旧写法 `defer(erase(snapshot->gate_session_id())); snapshot->set(kInvalid)` 的
+	// 实际执行序是先把字段改成 kInvalidSessionId、defer 再拿着 kInvalidSessionId 去
+	// erase —— 真正的旧 session 从来没被删掉过。后果:每次断线/顶号在 SessionMap
+	// 残留一条 session→player 映射,长期运行的节点上无界增长;残留映射还会让
+	// 已死 session 的消息一路查到玩家实体(幸有 PlayerSessionSnapshotComp 的
+	// stale-session 守卫拦下投递,但那层守卫从来不是为兜这个漏设计的)。
+	const auto sessionIdToErase = playerSessionSnapshotPB->gate_session_id();
+	LOG_INFO << "Removing player session: sessionId = " << sessionIdToErase;
 
-	defer(SessionMap().erase(playerSessionSnapshotPB->gate_session_id()));
 	playerSessionSnapshotPB->set_gate_session_id(kInvalidSessionId);
+	SessionMap().erase(sessionIdToErase);
 }
 
 void PlayerLifecycleSystem::RemovePlayerSessionSilently(Guid playerId)
@@ -500,6 +534,13 @@ void PlayerLifecycleSystem::HandleExitGameNode(entt::entity player)
 		}
 
 		tlsEcs.actorRegistry.remove<SceneEntityComp>(player);
+		// Hex 必须和 SceneEntityComp 成对回收。换场景那条路径(player_scene.cpp:194)
+		// 显式删了 Hex 并注明"让 AOI 把新场景当成一次全新进场",退出这条路径漏了。
+		// 留着 Hex 的后果:存盘在途(savePending)期间玩家重连、实体被复用时,
+		// AoiSystem::UpdateGridState 会走"位置更新"分支而不是"首次进场"分支;
+		// 若重连点与旧 hex 相同,hex_distance==0 直接 return,实体再也不会被插进
+		// 任何格子 —— 谁都看不见他,他也看不见任何人,且没有任何路径能自愈。
+		tlsEcs.actorRegistry.remove<Hex>(player);
 	}
 
 	// Capture a logout snapshot before persisting (safety net for rollback).
@@ -778,7 +819,14 @@ void PlayerLifecycleSystem::HandleCrossZoneTransfer(entt::entity playerEntity)
 	request.set_payload_sha256(Sha256::HashToBytes(serializedPlayerData));
 	request.set_serialized_player_data(serializedPlayerData);
 
-	KafkaProducer::Instance().send("player_migrate", request.SerializeAsString(), std::to_string(playerId), toZoneId);
+	// partition 参数**必须留空**(PARTITION_UA,按 key=playerId 哈希)。
+	// 旧代码把 toZoneId 直接当 Kafka partition 号传:topic 自动创建时只有
+	// 1 个 partition,produce(partition=zoneId≥1) 直接 ERR__UNKNOWN_PARTITION,
+	// 消息根本发不出去 —— 跨 zone 迁移 100% 失败,玩家冻结到 reaper 判弃。
+	// 就算运维手工建了多 partition,zone 路由也不该编码在 partition 上:
+	// 订阅侧是 per-node 消费组、全 partition 消费,真正的目标过滤在
+	// HandlePlayerMigration 的 to_zone/场景归属检查里。
+	KafkaProducer::Instance().send("player_migrate", request.SerializeAsString(), std::to_string(playerId));
 
 	LOG_INFO << "[CrossZone] Sent player transfer to zone " << toZoneId << ": " << playerId;
 
@@ -819,6 +867,65 @@ void PlayerLifecycleSystem::HandleCrossZoneTransfer(entt::entity playerEntity)
 
 void PlayerLifecycleSystem::HandlePlayerMigration(const PlayerMigrationEvent &msg)
 {
+	// ── 目标过滤:必须最先做 ─────────────────────────────────────────────
+	//
+	// 订阅拓扑是 per-node-id 消费组(scene-cross-zone-{nodeId},见 scene/main.cpp),
+	// 即 **每个 scene 节点都会收到 topic 里的每一条消息** —— 不分 zone、不分节点。
+	// 这里若不过滤,一次跨 zone 迁移会让集群里**所有** scene 节点各建一份该玩家的
+	// 实体、各自 SavePlayerToRedis、各自 ACK:玩家在 N 个节点同时"在线",
+	// 每个幽灵节点的周期存盘还会持续用陈旧数据覆盖真实节点写入的 PlayerAllData
+	// —— 表现为玩家进度反复回档。这是 CLAUDE.md 不变量 2(共享 topic 消息必须
+	// 带目标标识并在消费侧过滤)在 player_migrate 上的落地。
+	//
+	// 第一级:zone 过滤。别的 zone 的迁移与本节点无关,静默跳过(DEBUG——
+	// 这是共享 topic 扇出的正常现象,不是异常)。
+	if (msg.to_zone() != GetZoneId())
+	{
+		LOG_DEBUG << "[CrossZone] HandlePlayerMigration: ignoring migration for zone "
+				  << msg.to_zone() << " (we are zone " << GetZoneId() << "), player "
+				  << msg.player_id();
+		return;
+	}
+
+	// 第二级:节点归属。同 zone 内有多台 scene 节点时,理想判据是"目标场景在
+	// 本节点"。但当前 PlayerMigrationEvent 里**没有可用的目标场景标识**:
+	// scene_info.guid 全仓无赋值点(grep set_guid 仅 view.cpp 的另一消息),
+	// 且它是 uint32,装不下 64 位 snowflake scene_id —— 这是跨 zone 能力
+	// 未完成清单的一部分(cross-zone-readiness-audit.md;生产侧本就由
+	// scene_manager 的 AllowUnsafeCrossNodeHandoff=false 在上游 fail-closed)。
+	//
+	// 因此这里的策略:guid 有值(未来发布侧修好后)→ 严格按场景归属认领;
+	// guid==0(现状)→ 放行但 WARN。zone 内单 scene 节点的开发环境行为不变;
+	// 多节点开发环境会有抢建风险,WARN 就是给那种局面留的证据。
+	{
+		const uint64_t targetSceneId = msg.scene_info().guid();
+		if (targetSceneId != 0)
+		{
+			bool sceneIsLocal = false;
+			for (const auto entity : tlsEcs.sceneRegistry.view<SceneInfoComp>())
+			{
+				if (tlsEcs.sceneRegistry.get<SceneInfoComp>(entity).scene_id() == targetSceneId)
+				{
+					sceneIsLocal = true;
+					break;
+				}
+			}
+			if (!sceneIsLocal)
+			{
+				LOG_DEBUG << "[CrossZone] HandlePlayerMigration: target scene " << targetSceneId
+						  << " not on this node, ignoring (player " << msg.player_id() << ").";
+				return;
+			}
+		}
+		else
+		{
+			LOG_WARN << "[CrossZone] HandlePlayerMigration: no target-scene id in event for player "
+					 << msg.player_id() << " — claiming by zone only. With multiple scene nodes "
+					 << "in this zone every node will claim this player (ghost entities); "
+					 << "the migration protocol needs a 64-bit target scene id before that topology.";
+		}
+	}
+
 	// Idempotency guard — see cross-zone-failure-test-runbook.md §失败 D and
 	// task #32. Kafka rebalance can redeliver player_migrate after we already
 	// processed it (or the source's reaper republishes during a slow ACK
@@ -890,7 +997,7 @@ void PlayerLifecycleSystem::HandlePlayerMigration(const PlayerMigrationEvent &ms
 				if (ackEvent.SerializeToString(&ackBytes))
 				{
 					KafkaProducer::Instance().send(
-						"player_migrate_ack", ackBytes, std::to_string(msg.player_id()), msg.from_zone());
+						"player_migrate_ack", ackBytes, std::to_string(msg.player_id()));
 				}
 				return;
 			}
@@ -914,7 +1021,7 @@ void PlayerLifecycleSystem::HandlePlayerMigration(const PlayerMigrationEvent &ms
 			if (ackEvent.SerializeToString(&ackBytes))
 			{
 				KafkaProducer::Instance().send(
-					"player_migrate_ack", ackBytes, std::to_string(msg.player_id()), msg.from_zone());
+					"player_migrate_ack", ackBytes, std::to_string(msg.player_id()));
 			}
 			return;
 		}
@@ -973,7 +1080,7 @@ void PlayerLifecycleSystem::HandlePlayerMigration(const PlayerMigrationEvent &ms
 	}
 
 	auto ackErr = KafkaProducer::Instance().send(
-		"player_migrate_ack", ackBytes, std::to_string(msg.player_id()), msg.from_zone());
+		"player_migrate_ack", ackBytes, std::to_string(msg.player_id()));
 	if (ackErr != RdKafka::ERR_NO_ERROR)
 	{
 		LOG_ERROR << "[CrossZone] Failed to publish ACK for player " << msg.player_id()

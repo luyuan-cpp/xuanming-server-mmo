@@ -186,6 +186,22 @@ void AoiSystem::BeforeLeaveSceneHandler(const BeforeLeaveScene& message) {
         return;
     }
 
+    // 把离场者自己的兴趣列表清空。
+    //
+    // 下面的 BroadcastEntityLeave 只做了反方向 —— 把离场者从各观察者的 AoiListComp
+    // 里摘掉;离场者自己那张表从来没人清过。换场景时实体不销毁(player_scene.cpp
+    // 只删了 Hex),于是旧场景的条目会原样带进新场景,而新场景的格子永远不会出现在
+    // gridsToLeave 里,这些陈旧条目再也没有机会被删掉:
+    //   1) 无上界泄漏,每换一次场景涨一截;
+    //   2) 更要命的是它们占着 AOI 容量 —— 旧场景人多时列表直接是满的,
+    //      新场景的实体在 AddAoiEntity 里因为权重不够被全部拒收,
+    //      entitiesEnteringView 恒空 => 客户端收不到 ActorListCreate,
+    //      表现为"进了新场景但世界是空的"。
+    // 登出那条路径(player_lifecycle.cpp)实体随后就销毁,清一下也无副作用。
+    if (auto* leaverAoiList = tlsEcs.actorRegistry.try_get<AoiListComp>(entity)) {
+        leaverAoiList->entries.clear();
+    }
+
     ECS_GET_OR_VOID(hex, Hex, entity);
 
     const auto *sceneEntityComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(entity);

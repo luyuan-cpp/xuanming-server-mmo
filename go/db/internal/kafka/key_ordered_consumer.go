@@ -39,6 +39,13 @@ const (
 	// Payload: the task_id string. Subscriber LPOPs the per-task list to fetch
 	// the actual TaskResult bytes.
 	taskResultNotifyChannel = "task:result:notify"
+
+	// retryDrainBudgetPerTick 限定一次 tick 最多认领多少条重试任务。
+	// 有预算是为了不让重试排空长期霸占单个 goroutine、把新写饿死;
+	// 取 200 是让排空能力(200/s)明显高于稳态入流(压测记录 ~90/s),
+	// 这样一次 MySQL 抖动产生的积压能在秒级追平,而不是像每 tick 一条
+	// 那样只涨不落。真要长期调优应提到 KafkaConfig 里。
+	retryDrainBudgetPerTick = 200
 )
 
 // buildCacheKey builds the same Redis key as login's cache.BuildRedisKey:
@@ -811,30 +818,55 @@ func (c *KeyOrderedKafkaConsumer) moveClaimedRetryToDead(receipt, payload []byte
 	logx.Errorf("retry task moved to dead queue: topic=%s reason=%s deadQueue=%s", c.topic, reason, c.retryDeadQueueKey)
 }
 
+// consumeRetryQueue 每个 tick 排空重试队列,直到队列空、达到本轮预算或进程退出。
+//
+// 旧实现每个 tick 只 RPopLPush 一条,而 ticker 是 1 秒 —— 重试队列的排空上限
+// 被硬钉在 1 条/秒。稳态入流是 PartitionCnt × SubShardCount 量级(压测记录 ~90/s),
+// 于是 MySQL 抖一下产生的失败批次根本追不平:队列只涨不落,玩家存盘卡在里面,
+// 而 retryMaxTimes=3 又会把超限的任务推进 kafka:dead:queue:* —— 那个 key 全仓
+// 没有任何消费者,等于静默丢盘。
+// 单条 claim 的原子性语义不变,只是把它放进有界循环里。
 func (c *KeyOrderedKafkaConsumer) consumeRetryQueue() {
+	for i := 0; i < retryDrainBudgetPerTick; i++ {
+		select {
+		case <-c.ctx.Done():
+			return
+		default:
+		}
+		if !c.consumeOneRetryTask() {
+			return
+		}
+	}
+	logx.Infof("retry drain budget reached this tick: topic=%s budget=%d readyQueue=%s",
+		c.topic, retryDrainBudgetPerTick, c.retryQueueKey)
+}
+
+// consumeOneRetryTask 认领并处理一条重试任务。返回 false 表示队列已空(或认领失败),
+// 调用方应结束本轮排空。
+func (c *KeyOrderedKafkaConsumer) consumeOneRetryTask() bool {
 	// Atomic ready -> processing claim. A process crash after this point leaves
 	// the only receipt in processing; Start() restores it before consuming again.
 	msgBytes, err := c.redisClient.RPopLPush(c.ctx, c.retryQueueKey, c.retryProcessingKey).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
-			return
+			return false
 		}
 		logx.Errorf("claim retry queue failed: ready=%s processing=%s err=%v",
 			c.retryQueueKey, c.retryProcessingKey, err)
-		return
+		return false
 	}
 
 	seq, storedPartition, hasPartition, taskBytes := unwrapRetryPayload(msgBytes)
 	var task db_proto.DBTask
 	if err := proto.Unmarshal(taskBytes, &task); err != nil {
 		c.moveClaimedRetryToDead(msgBytes, msgBytes, fmt.Sprintf("malformed payload: %v", err))
-		return
+		return true
 	}
 
 	if task.RetryCount >= int32(c.retryMaxTimes) {
 		c.moveClaimedRetryToDead(msgBytes, msgBytes,
 			fmt.Sprintf("max retries exceeded taskID=%s retryCount=%d", task.TaskId, task.RetryCount))
-		return
+		return true
 	}
 	if !hasPartition {
 		// v1/raw legacy payloads have no trustworthy producer partition. Key%N
@@ -842,7 +874,7 @@ func (c *KeyOrderedKafkaConsumer) consumeRetryQueue() {
 		// race or regress fresh writes. Preserve the payload for operator repair.
 		c.moveClaimedRetryToDead(msgBytes, msgBytes,
 			fmt.Sprintf("ORDERING: legacy retry has no proven origin partition taskID=%s key=%d", task.TaskId, task.Key))
-		return
+		return true
 	}
 
 	task.RetryCount++
@@ -854,13 +886,13 @@ func (c *KeyOrderedKafkaConsumer) consumeRetryQueue() {
 	if partition < 0 {
 		c.moveClaimedRetryToDead(msgBytes, msgBytes,
 			fmt.Sprintf("invalid origin partition=%d taskID=%s", partition, task.TaskId))
-		return
+		return true
 	}
 	w, err := c.ensureWorker(partition)
 	if err != nil {
 		c.moveClaimedRetryToDead(msgBytes, msgBytes,
 			fmt.Sprintf("ORDERING: retry partition outside immutable contract: %v taskID=%s", err, task.TaskId))
-		return
+		return true
 	}
 
 	retryTask := &workerTask{
@@ -875,8 +907,9 @@ func (c *KeyOrderedKafkaConsumer) consumeRetryQueue() {
 	case w.taskCh <- retryTask:
 		logx.Debugf("retry task routed to worker: taskID=%s, partition=%d, retryCount=%d", task.TaskId, partition, task.RetryCount)
 	case <-c.ctx.Done():
-		return
+		return false
 	}
+	return true
 }
 
 func (w *worker) start(isOfflineExpand bool) {

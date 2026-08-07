@@ -4,30 +4,14 @@
 #include "player/system/player_lifecycle.h"
 #include "proto/common/event/player_migration_event.pb.h"
 
-// ⚠️ NOTE — Topic subscription wiring status (2026-05-16):
-//
-// This handler dispatches `player_migrate` and `player_migrate_ack` topics,
-// but **neither topic is currently subscribed** by any scene-node start-up
-// path. Verify with:
-//   grep -rn "RegisterKafkaMessageHandler" cpp/  # only the engine impl + the
-//                                                # SceneCommand command-handler
-//                                                # template show up.
-//
-// The cross-zone migration code (player_lifecycle.cpp:HandleCrossZoneTransfer
-// → KafkaProducer::send("player_migrate", ...)) publishes events nobody
-// consumes. The audit doc cross-zone-readiness-audit.md §1 already captured
-// this as part of the "cross-zone unfit for production" finding.
-//
-// Wiring options (to be picked in task #25 — ACK + reaper):
-//   A) Add a Node::RegisterKafkaMessageHandler call in cpp/nodes/scene/main.cpp
-//      that subscribes BOTH "player_migrate" and "player_migrate_ack" with
-//      KafkaSystem::KafkaMessageHandler as the dispatch fn.
-//   B) Wrap PlayerMigrationEvent / PlayerMigrationAckEvent inside SceneCommand
-//      and ride the existing scene-{nodeId} command topic. Lower risk if the
-//      project standardizes on SceneCommand for everything.
-//
-// I'm leaving this dispatcher in place because it's the right shape; the
-// missing piece is the subscription side, not the message handling.
+// Subscription wiring: cpp/nodes/scene/main.cpp registers BOTH topics with a
+// per-node-id consumer group (`scene-cross-zone-{nodeId}`) — option A of the
+// 2026-05-16 note that used to live here. Per-node groups mean EVERY scene
+// node receives EVERY message on these topics; target filtering happens
+// inside HandlePlayerMigration (zone check + scene-ownership check) and via
+// HandlePlayerMigrationAck's frozen-entity guards. Do NOT remove those
+// filters — without them one migration fans out into ghost entities on
+// every node in the cluster.
 void KafkaSystem::KafkaMessageHandler(const std::string& topic, const std::string& message)
 {
 	if (topic == kPlayerMigrateEventName)

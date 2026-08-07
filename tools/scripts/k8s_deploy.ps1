@@ -181,6 +181,14 @@ function Show-ExposureProfileWarning {
 	if ($OpsProfile -eq "custom" -and $GateServiceType -eq "LoadBalancer") {
 		Write-Warning "Using OpsProfile=custom with GateServiceType=LoadBalancer. Ensure your cluster has a mature LB implementation; otherwise prefer NodePort + external L4 load balancer or use -OpsProfile bare-metal."
 	}
+	if ($GateServiceType -ne "ClusterIP") {
+		# 暴露 Service 只是一半:客户端的 gate 地址不是从 Service 拿的,而是 login 从
+		# etcd 读到 endpoint 后原样下发的(go/login internal/svc/servicecontext.go
+		# CandidatesForZone)。那个 endpoint 是 POD_IP —— 集群内地址,只有 in-cluster 的
+		# robot 连得上。所以 Service 暴露出去了,客户端拿到的仍是集群内地址。
+		# 翻译要在 login 侧做,不在这个脚本里。
+		Write-Warning "GateServiceType=$GateServiceType exposes the Service, but clients do not get gate's address from the Service: login hands out the etcd-registered endpoint, which is the cluster-internal POD_IP. External clients will still fail to connect until login is configured to translate node_id -> external address. See deploy/k8s/README.md."
+	}
 }
 
 function Build-KubectlBaseArgs {
@@ -1429,7 +1437,7 @@ function Apply-Zone {
 			$sceneYaml = New-SceneFleetYaml `
 				-FleetName $scenePool.Name `
 				-Replicas $scenePool.Replicas `
-				-RpcPort 19000 `
+				-RpcPort 20000 `
 				-StartCommand "./scene" `
 				-ConfigMapName $configMapName `
 				-SceneNodeType $scenePool.SceneNodeType `
@@ -1441,7 +1449,7 @@ function Apply-Zone {
 			$sceneYaml = New-NodeDeploymentYaml `
 				-NodeName $scenePool.Name `
 				-Replicas $scenePool.Replicas `
-				-RpcPort 19000 `
+				-RpcPort 20000 `
 				-StartCommand "./scene" `
 				-ConfigMapName $configMapName `
 				-SceneNodeType $scenePool.SceneNodeType

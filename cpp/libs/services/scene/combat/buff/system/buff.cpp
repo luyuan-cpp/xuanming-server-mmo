@@ -35,7 +35,11 @@ uint64_t GenerateUniqueBuffId(const BuffListComp& buffList)
 bool IsTargetImmune(const BuffListComp& buffList, const BuffTable* buffTableParam)
 {
     for (const auto& buff : buffList | std::views::values) {
-        LookupBuffOrReturnError(buff.buffPb.buff_table_id());
+        // 这里原来用的是 LookupBuffOrReturnError —— 它 `return buffResult`(uint32
+        // 错误码),在这个返回 bool 的函数里会被隐式转成 true。于是身上任何一条
+        // buff 掉了表行,目标就被判成"对一切 buff 免疫",后续所有加 buff 静默失败。
+        // 查不到行只应该跳过这一条。
+        LookupBuffOrContinue(buff.buffPb.buff_table_id());
         for (const auto& tag : buffTableParam->tag() | std::views::keys) {
             if (buffRow->immune_tag().contains(tag)) {
                 return true;
@@ -83,6 +87,21 @@ std::tuple<uint32_t, uint64_t> BuffSystem::AddOrUpdateBuff(
     if (!tlsEcs.actorRegistry.valid(parent))
     {
         return {kThisEntityIsInvalid, UINT64_MAX};
+    }
+
+    // 冻结中的目标(跨 zone 迁移在途):buff 列表已经在 HandleCrossZoneTransfer
+    // 打进 PlayerAllData,目的 zone 会照快照重建。源端此时再加 buff,只会造出一条
+    // 只有这个将死的源端实体看得见的孤儿。cross-zone-readiness-audit.md §11.4 的
+    // 默认策略是 "buff drop"。
+    //
+    // 这个判定原来写在 OnBuffStart 里 —— 但那时 buff 已经 emplace 进 buffList 了,
+    // 所谓"丢弃"实际是:条目在、OnBuffStart 的效果一个没跑、到期定时器照挂,而且
+    // 它还会被 marshal 到目的 zone 复活成一条从没启动过的 buff。必须在插入前拒掉。
+    if (tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(parent))
+    {
+        LOG_INFO << "[CrossZone] Buff on frozen target dropped. parent="
+                 << entt::to_integral(parent) << " buff_table=" << buffTableId;
+        return {kSuccess, UINT64_MAX};
     }
 
     LookupBuffOrReturn(buffTableId, (std::make_tuple(buffResult, UINT64_MAX)));
@@ -172,14 +191,21 @@ void BuffSystem::MarkBuffForRemoval(const entt::entity parent, uint64_t buffId) 
 
 // Remove pending buffs at end of frame
 void BuffSystem::RemovePendingBuffs(const entt::entity parent, BuffListComp& buffListComp) {
-    auto& pendingRemoveBuffs = tlsEcs.actorRegistry.get_or_emplace<BuffPendingRemoveBuffs>(parent);
+    // 这里原来是 get_or_emplace:BuffSystem::Update 每帧对每个带 buff 的实体都调一次,
+    // 于是所有带 buff 的实体都会被永久挂上一个空的 unordered_set 组件(而且
+    // MarkBuffForRemoval 全仓无调用方,这个集合永远是空的)。CLAUDE.md §7.5 明确
+    // 禁止 per-tick 路径用 get_or_emplace,改 try_get + 早退。
+    auto* pendingRemoveBuffs = tlsEcs.actorRegistry.try_get<BuffPendingRemoveBuffs>(parent);
+    if (pendingRemoveBuffs == nullptr || pendingRemoveBuffs->empty()) {
+        return;
+    }
 
-    for (const auto& buffId : pendingRemoveBuffs) {
+    for (const auto& buffId : *pendingRemoveBuffs) {
         buffListComp.erase(buffId);
         LOG_TRACE << "Buff with ID " << buffId << " removed from entity at end of frame.\n";
     }
 
-    pendingRemoveBuffs.clear();
+    pendingRemoveBuffs->clear();
 }
 
 // Buff expiry handler
@@ -261,7 +287,11 @@ bool BuffSystem::DispelBuffsOnAwake(const entt::entity parent, const uint32_t bu
     }
 
     UInt64Vector dispelBuffIdList;
-    auto &buffList = tlsEcs.actorRegistry.get<BuffListComp>(parent);
+    auto *buffListPtr = tlsEcs.actorRegistry.try_get<BuffListComp>(parent);
+    if (buffListPtr == nullptr) {
+        return addBuffRow->buff_type() == kBuffTypeDispel;
+    }
+    auto &buffList = *buffListPtr;
     for (auto& [buffId, entry] : buffList) {
         LookupBuffOrContinue(entry.buffPb.buff_table_id());
         for (const auto& dispelTag : addBuffRow->dispel_tag() | std::views::keys) {
@@ -281,19 +311,8 @@ bool BuffSystem::DispelBuffsOnAwake(const entt::entity parent, const uint32_t bu
 
 void BuffSystem::OnBuffStart(entt::entity parent, BuffEntry& buff, const BuffTable* buffTable)
 {
-    // Frozen target: buff applied to a player who is mid cross-zone migration.
-    // The buff state was captured into PlayerAllData at HandleCrossZoneTransfer
-    // and the destination zone will recreate the buff list from the snapshot.
-    // Adding a buff on the source side now produces a buff that nobody but
-    // this dying source-side entity can see - a leak. Default policy per
-    // cross-zone-readiness-audit.md §11.4 is "buff drop".
-    if (tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(parent))
-    {
-        LOG_INFO << "[CrossZone] Buff on frozen target dropped. parent="
-                 << entt::to_integral(parent)
-                 << " buff_table=" << (buffTable ? buffTable->id() : 0);
-        return;
-    }
+    // 冻结目标的 "buff drop" 判定已上移到 AddOrUpdateBuff 的入口(插入之前),
+    // 见那里的注释。
 
     // Maintain stealth tag cache
     if (buffTable && buffTable->buff_type() == kBuffTypeStealth)
@@ -333,7 +352,13 @@ void BuffSystem::OnBuffDestroy(entt::entity parent, const uint64_t buffId, const
 // Buff periodic interval handler
 void BuffSystem::OnIntervalThink(entt::entity parent, uint64_t buffId)
 {
-    auto &buffList = tlsEcs.actorRegistry.get<BuffListComp>(parent);
+    // 跨实体查询一律 try_get,不用 get(CLAUDE.md §7.5):get 在组件缺失时是抛异常/UB,
+    // 而这是个公开入口,调用方不保证 parent 一定有 buff 列表。
+    auto *buffListPtr = tlsEcs.actorRegistry.try_get<BuffListComp>(parent);
+    if (buffListPtr == nullptr) {
+        return;
+    }
+    auto &buffList = *buffListPtr;
     const auto buffIt = buffList.find(buffId);
 
     if (buffIt == buffList.end()) {
@@ -433,15 +458,30 @@ void BuffSystem::AddSubBuffsWithoutCheck(entt::entity parent,
     const BuffTable* buffTable,
     BuffEntry& buffComp)
 {
+    // AddOrUpdateBuff 会往同一张 buffList 里插入子 buff,也可能顺着
+    // DispelBuffsOnAwake 把 buffComp 自己驱散掉,所以不能端着 buffComp 的引用
+    // 跨调用。记下 owner 的 id 和上下文强引用,每轮重查;owner 没了就停手。
+    const auto ownerBuffId = buffComp.buffPb.buff_id();
+    const SkillContextPtrComp ownerContext = buffComp.skillContext;
+
     for (const auto& subBuff : buffTable->sub_buff()) {
-        auto [result, newBuffId] = BuffSystem::AddOrUpdateBuff(parent, subBuff, buffComp.skillContext);
+        auto [result, newBuffId] = BuffSystem::AddOrUpdateBuff(parent, subBuff, ownerContext);
 
         if (result != kSuccess || newBuffId == UINT64_MAX) {
             continue;
         }
 
+        auto* buffList = tlsEcs.actorRegistry.try_get<BuffListComp>(parent);
+        if (buffList == nullptr) {
+            return;
+        }
+        const auto ownerIt = buffList->find(ownerBuffId);
+        if (ownerIt == buffList->end()) {
+            return;
+        }
+
         // Add to sub-buff list (false = not yet activated)
-        buffComp.buffPb.mutable_sub_buff_list_id()->emplace(newBuffId, false);
+        ownerIt->second.buffPb.mutable_sub_buff_list_id()->emplace(newBuffId, false);
     }
 }
 
@@ -449,32 +489,66 @@ bool CanApplyMoreTicks(const BuffPeriodicBuffComp& periodicBuff, const BuffTable
     return (buffTable->interval_count() == 0) || (periodicBuff.ticks_done() + 1 <= buffTable->interval_count());
 }
 
-void UpdatePeriodicBuff(const entt::entity target, const uint64_t buffId, BuffEntry& buffComp, double delta) {
-    LookupBuffOrReturnVoid(buffComp.buffPb.buff_table_id());
+// 单个 buff 一帧最多补几次 tick(掉帧后不要一次性把攒下的 tick 全放完)。
+constexpr uint32_t kMaxPeriodicTicksPerFrame = 5;
+
+void UpdatePeriodicBuff(const entt::entity target, const uint64_t buffId, BuffListComp& buffListComp, double delta) {
+    auto buffIt = buffListComp.find(buffId);
+    if (buffIt == buffListComp.end()) {
+        return;
+    }
+
+    LookupBuffOrReturnVoid(buffIt->second.buffPb.buff_table_id());
 
     if (buffRow->interval() <= 0) {
         return;
     }
 
-    auto& periodicBuff = *buffComp.buffPb.mutable_periodic();
-    double periodicTimer = periodicBuff.periodic_timer() + delta;
+    double periodicTimer = buffIt->second.buffPb.periodic().periodic_timer() + delta;
 
-    for (uint32_t i = 0; i < 5 && CanApplyMoreTicks(periodicBuff, buffRow); ++i ) {
-        if (periodicTimer < buffRow->interval()) {
+    for (uint32_t i = 0; i < kMaxPeriodicTicksPerFrame; ++i) {
+        // 每一轮都重新 find:OnIntervalThink 会顺着
+        // TickCombatIdleBuff -> AddSubBuffs -> AddOrUpdateBuff 往同一张 buffList
+        // 里 emplace 子 buff(unordered_map 扩容),也会顺着 AddOrUpdateBuff ->
+        // DispelBuffsOnAwake -> OnBuffExpire 把这条 buff 自己 erase 掉。
+        // 旧写法把 BuffEntry& / periodic 的引用一路端着穿过回调,buff 被驱散后
+        // 下一句 set_ticks_done 就是写已释放内存。
+        buffIt = buffListComp.find(buffId);
+        if (buffIt == buffListComp.end()) {
+            return;  // buff 在 tick 过程中被销毁,后面什么都不能再碰
+        }
+
+        auto& periodicBuff = *buffIt->second.buffPb.mutable_periodic();
+        if (!CanApplyMoreTicks(periodicBuff, buffRow) || periodicTimer < buffRow->interval()) {
             break;
         }
-        
+
         periodicTimer -= buffRow->interval();
         periodicBuff.set_ticks_done(periodicBuff.ticks_done() + 1);
+        // 先落盘再回调:回调里 buff 可能被销毁,那时就没机会写回了。
+        periodicBuff.set_periodic_timer(periodicTimer);
+
         BuffSystem::OnIntervalThink(target, buffId);
     }
 
-    periodicBuff.set_periodic_timer(periodicTimer);
+    buffIt = buffListComp.find(buffId);
+    if (buffIt == buffListComp.end()) {
+        return;
+    }
+    buffIt->second.buffPb.mutable_periodic()->set_periodic_timer(periodicTimer);
 }
 
 void ProcessBuffs(const entt::entity target, BuffListComp& buffListComp, const double delta) {
-    for (auto& [buffId, buffComp] : buffListComp) {
-        UpdatePeriodicBuff(target, buffId, buffComp, delta);
+    // 同上:tick 回调会往这张表里增删条目,直接 range-for 遍历时持有的迭代器
+    // 会在扩容 / erase 时失效。先快照 id,再逐个按 id 重查。
+    UInt64Vector buffIds;
+    buffIds.reserve(buffListComp.size());
+    for (const auto& buffId : buffListComp | std::views::keys) {
+        buffIds.emplace_back(buffId);
+    }
+
+    for (const auto buffId : buffIds) {
+        UpdatePeriodicBuff(target, buffId, buffListComp, delta);
     }
 }
 

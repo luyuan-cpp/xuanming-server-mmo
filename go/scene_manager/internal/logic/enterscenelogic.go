@@ -95,6 +95,21 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		if _, err := strconv.ParseUint(in.GateId, 10, 32); err != nil {
 			return errResp(constants.ErrInvalidGateID, fmt.Sprintf("invalid gate id %q: %v", in.GateId, err)), nil
 		}
+		// CLAUDE.md §7 不变量 2:发往 {type}-{id} topic 的消息必须填 target_instance_id
+		// （目标节点 UUID），空值等于关闭防僵尸过滤。gate-{id} 这个 topic 名只带业务
+		// node_id，而 node_id 会被回收复用：老 gate 崩了、新 gate 顶上同一个 id，
+		// 老 gate 若还没彻底退出就会把这条 GateCommand 一起消费掉，把玩家踢/重定向到
+		// 一个已经不属于它的会话上。GateInstanceId 是唯一能区分两代进程的字段。
+		//
+		// 这里**故意只报警不拒绝**：C++ 侧 6 个 EnterSceneRequest 构造点里
+		// s2s_player_scene_handler.cpp 与 s2s_player_scene_response_handler.cpp
+		// 目前还没有填这个字段，现在就 fail-closed 会把这两条正常链路打死。
+		// 待 C++ 补齐后（并给 logic_test.go 里 13 处 GateId 用例补上该字段），
+		// 把下面这段换成 errResp(constants.ErrInvalidGateID, ...) 直接拒绝。
+		if in.GateInstanceId == "" {
+			l.Logger.Errorf("INVARIANT: EnterScene 缺少 gate_instance_id，gate 防僵尸过滤已失效: player=%d gate=%s",
+				in.PlayerId, in.GateId)
+		}
 	}
 
 	var dedupeKey string
@@ -531,6 +546,21 @@ func (l *EnterSceneLogic) resolveScene(sceneId uint64, sceneConfId uint64, zoneI
 		if err != nil {
 			return 0, "", fmt.Errorf("scene lookup failed: %w", err)
 		}
+		// go-zero 的 Redis.Get 对「key 不存在」返回 ("", nil)（内部把 redis.Nil 吞掉），
+		// 所以 err==nil 并不代表场景存在。必须在这里把「查无此场景」拦下来。
+		//
+		// 漏了这一句的后果不是"查不到"，而是"凭空造出一个幽灵场景"：
+		// 空 nodeId 会一路走到下面的 IsNodeAlive(zone, "")——成员不存在返回 false——
+		// 被当成「场景活着但它所在的节点死了」，于是进 dead-node 自愈分支，
+		// 挑一个活节点并 Set(scene:{id}:node, newNode) 把映射无 TTL 地写出来。
+		// 而 CreateScene 又被 sceneConfId==0 挡掉（follow / 客户端路径正是 0），
+		// 结果是：映射有了、ECS 实体没有。随后 AtomicIncrPlayerCountIfSceneExists
+		// 的存在性守卫（EXISTS scene:{id}:node）正好看到这把刚被伪造出来的 key，
+		// 守卫失效并继续 INCR 出 player_count —— 一个不在任何活跃集合里、
+		// 永远不会被回收的幽灵场景，玩家被派进去后无人接收。
+		if nodeId == "" {
+			return 0, "", fmt.Errorf("scene %d does not exist", sceneId)
+		}
 		// 重复 (zone,node) 注册是身份歧义，不是普通节点死亡。若继续走
 		// dead-node 自愈会静默改写 scene ownership，等于在两个同号进程中
 		// 随机选一个并把现有场景迁走；必须保持映射不动并拒绝本次请求。
@@ -542,8 +572,14 @@ func (l *EnterSceneLogic) resolveScene(sceneId uint64, sceneConfId uint64, zoneI
 			// Pick a replacement of the correct purpose so a world scene
 			// never gets moved onto an instance-only node (C++ EnterScene
 			// would then reject the request on type mismatch).
+			// 拿不到 scene_conf_id 就发不出 CreateScene（见下面的 if），
+			// 那样只会改写映射而不建实体 —— 同样是造幽灵场景。宁可拒绝本次请求，
+			// 让上游带着 conf id 重试，也不要留下一条指向空节点的映射。
+			if sceneConfId == 0 {
+				return 0, "", fmt.Errorf("scene %d is on dead node %s and cannot be recreated without scene_conf_id", sceneId, nodeId)
+			}
 			purpose := constants.NodePurposeInstance
-			if sceneConfId != 0 && IsWorldConf(sceneConfId) {
+			if IsWorldConf(sceneConfId) {
 				purpose = constants.NodePurposeWorld
 			}
 			newNodeId, err := GetBestNodeForPurpose(l.ctx, l.svcCtx, zoneId, purpose)

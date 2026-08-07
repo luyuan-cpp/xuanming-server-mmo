@@ -4,17 +4,11 @@ package reward
 
 const (
 	ID_1 = 0
-
 	ID_2 = 1
-
 	ID_3 = 2
-
 	ID_4 = 3
-
 	ID_5 = 4
-
 	ID_6 = 5
-
 	ID_7 = 6
 )
 

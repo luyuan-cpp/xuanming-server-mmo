@@ -6,6 +6,7 @@ import (
     "math/rand/v2"
     "os"
     "path/filepath"
+    "sync/atomic"
 
     "google.golang.org/protobuf/encoding/protojson"
     "google.golang.org/protobuf/proto"
@@ -23,18 +24,23 @@ type dungeonSnapshot struct {
 }
 
 type DungeonTableManager struct {
-    snap *dungeonSnapshot
+    // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
+    // 并发读就是数据竞争(go test -race 会报)。
+    // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
+    // 表缩小时 data[rand.IntN(len(data))] 会越界。
+    snap atomic.Pointer[dungeonSnapshot]
 }
 
 var DungeonTableManagerInstance = NewDungeonTableManager()
 
 func NewDungeonTableManager() *DungeonTableManager {
-    return &DungeonTableManager{
-        snap: &dungeonSnapshot{
-            kvData: make(map[uint32]*pb.DungeonTable),
-            idxSceneId: make(map[uint32][]*pb.DungeonTable),
-        },
-    }
+    m := &DungeonTableManager{}
+    m.snap.Store(&dungeonSnapshot{
+        kvData: make(map[uint32]*pb.DungeonTable),
+        idxSceneId: make(map[uint32][]*pb.DungeonTable),
+    })
+    return m
 }
 
 func (m *DungeonTableManager) Load(configDir string, useBinary bool) error {
@@ -71,22 +77,25 @@ func (m *DungeonTableManager) Load(configDir string, useBinary bool) error {
     }
 
     snap.data = container.Data
-    m.snap = snap
+    m.snap.Store(snap)
     return nil
 }
 
 func (m *DungeonTableManager) FindAll() []*pb.DungeonTable {
-    return m.snap.data
+    snap := m.snap.Load()
+    return snap.data
 }
 
 func (m *DungeonTableManager) FindById(id uint32) (*pb.DungeonTable, bool) {
-    row, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    row, ok := snap.kvData[id]
     return row, ok
 }
 
 
 func (m *DungeonTableManager) GetBySceneId(key uint32) []*pb.DungeonTable {
-    return m.snap.idxSceneId[key]
+    snap := m.snap.Load()
+    return snap.idxSceneId[key]
 }
 
 
@@ -94,7 +103,8 @@ func (m *DungeonTableManager) GetBySceneId(key uint32) []*pb.DungeonTable {
 // ---- Exists ----
 
 func (m *DungeonTableManager) Exists(id uint32) bool {
-    _, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    _, ok := snap.kvData[id]
     return ok
 }
 
@@ -103,12 +113,14 @@ func (m *DungeonTableManager) Exists(id uint32) bool {
 // ---- Count ----
 
 func (m *DungeonTableManager) Count() int {
-    return len(m.snap.data)
+    snap := m.snap.Load()
+    return len(snap.data)
 }
 
 
 func (m *DungeonTableManager) CountBySceneIdIndex(key uint32) int {
-    return len(m.snap.idxSceneId[key])
+    snap := m.snap.Load()
+    return len(snap.idxSceneId[key])
 }
 
 
@@ -116,9 +128,10 @@ func (m *DungeonTableManager) CountBySceneIdIndex(key uint32) int {
 // ---- FindByIds (IN) ----
 
 func (m *DungeonTableManager) FindByIds(ids []uint32) []*pb.DungeonTable {
+    snap := m.snap.Load()
     result := make([]*pb.DungeonTable, 0, len(ids))
     for _, id := range ids {
-        if row, ok := m.snap.kvData[id]; ok {
+        if row, ok := snap.kvData[id]; ok {
             result = append(result, row)
         }
     }
@@ -128,10 +141,11 @@ func (m *DungeonTableManager) FindByIds(ids []uint32) []*pb.DungeonTable {
 // ---- RandOne ----
 
 func (m *DungeonTableManager) RandOne() (*pb.DungeonTable, bool) {
-    if len(m.snap.data) == 0 {
+    snap := m.snap.Load()
+    if len(snap.data) == 0 {
         return nil, false
     }
-    return m.snap.data[rand.IntN(len(m.snap.data))], true
+    return snap.data[rand.IntN(len(snap.data))], true
 }
 
 
@@ -139,8 +153,9 @@ func (m *DungeonTableManager) RandOne() (*pb.DungeonTable, bool) {
 // ---- Where / First ----
 
 func (m *DungeonTableManager) Where(pred func(*pb.DungeonTable) bool) []*pb.DungeonTable {
+    snap := m.snap.Load()
     var result []*pb.DungeonTable
-    for _, row := range m.snap.data {
+    for _, row := range snap.data {
         if pred(row) {
             result = append(result, row)
         }
@@ -149,7 +164,8 @@ func (m *DungeonTableManager) Where(pred func(*pb.DungeonTable) bool) []*pb.Dung
 }
 
 func (m *DungeonTableManager) First(pred func(*pb.DungeonTable) bool) (*pb.DungeonTable, bool) {
-    for _, row := range m.snap.data {
+    snap := m.snap.Load()
+    for _, row := range snap.data {
         if pred(row) {
             return row, true
         }

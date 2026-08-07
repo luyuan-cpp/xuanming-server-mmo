@@ -62,7 +62,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-push-image -ImageRepository 
 - `zones.ops-recommended.yaml` is the best starting point for multi-zone ops.
 - `-SkipInfra`, `-DryRun`, and `-WaitReady` are the high-signal operational flags.
 - `k8s-all-up` deploys infra first, then all zones. Use `-SkipInfra` to skip infra.
-- Current manifests assume `/app/bin` runtime layout and fixed role ports (`gate` 18000, `scene` 19000).
+- Current manifests assume `/app/bin` runtime layout and fixed role ports (`gate` 18000, `scene` 20000). These must stay inside the engine's per-role TCP ranges — gate `10000-19999`, everything else `20000-35535` (`cpp/.../node_allocator.cpp`) — because gRPC is derived as TCP+30000 and the two ranges are what keeps TCP and gRPC from overlapping. `scene` was 19000 until the port env vars actually took effect; 19000 sits in gate's range.
 
 ## SCENE NODE ROLE SPLIT
 - Production scene pods run in two Deployments per zone:

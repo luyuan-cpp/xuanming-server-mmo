@@ -6,6 +6,7 @@ import (
     "math/rand/v2"
     "os"
     "path/filepath"
+    "sync/atomic"
 
     "google.golang.org/protobuf/encoding/protojson"
     "google.golang.org/protobuf/proto"
@@ -26,21 +27,26 @@ type missionSnapshot struct {
 }
 
 type MissionTableManager struct {
-    snap *missionSnapshot
+    // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
+    // 并发读就是数据竞争(go test -race 会报)。
+    // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
+    // 表缩小时 data[rand.IntN(len(data))] 会越界。
+    snap atomic.Pointer[missionSnapshot]
 }
 
 var MissionTableManagerInstance = NewMissionTableManager()
 
 func NewMissionTableManager() *MissionTableManager {
-    return &MissionTableManager{
-        snap: &missionSnapshot{
-            kvData: make(map[uint32]*pb.MissionTable),
-            idxCondition_id: make(map[uint32][]*pb.MissionTable),
-            idxNext_mission_id: make(map[uint32][]*pb.MissionTable),
-            idxTarget_count: make(map[uint32][]*pb.MissionTable),
-            idxRewardId: make(map[uint32][]*pb.MissionTable),
-        },
-    }
+    m := &MissionTableManager{}
+    m.snap.Store(&missionSnapshot{
+        kvData: make(map[uint32]*pb.MissionTable),
+        idxCondition_id: make(map[uint32][]*pb.MissionTable),
+        idxNext_mission_id: make(map[uint32][]*pb.MissionTable),
+        idxTarget_count: make(map[uint32][]*pb.MissionTable),
+        idxRewardId: make(map[uint32][]*pb.MissionTable),
+    })
+    return m
 }
 
 func (m *MissionTableManager) Load(configDir string, useBinary bool) error {
@@ -89,37 +95,43 @@ func (m *MissionTableManager) Load(configDir string, useBinary bool) error {
     }
 
     snap.data = container.Data
-    m.snap = snap
+    m.snap.Store(snap)
     return nil
 }
 
 func (m *MissionTableManager) FindAll() []*pb.MissionTable {
-    return m.snap.data
+    snap := m.snap.Load()
+    return snap.data
 }
 
 func (m *MissionTableManager) FindById(id uint32) (*pb.MissionTable, bool) {
-    row, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    row, ok := snap.kvData[id]
     return row, ok
 }
 
 
 func (m *MissionTableManager) FindByCondition_idIndex(key uint32) []*pb.MissionTable {
-    return m.snap.idxCondition_id[key]
+    snap := m.snap.Load()
+    return snap.idxCondition_id[key]
 }
 
 
 func (m *MissionTableManager) FindByNext_mission_idIndex(key uint32) []*pb.MissionTable {
-    return m.snap.idxNext_mission_id[key]
+    snap := m.snap.Load()
+    return snap.idxNext_mission_id[key]
 }
 
 
 func (m *MissionTableManager) FindByTarget_countIndex(key uint32) []*pb.MissionTable {
-    return m.snap.idxTarget_count[key]
+    snap := m.snap.Load()
+    return snap.idxTarget_count[key]
 }
 
 
 func (m *MissionTableManager) GetByRewardId(key uint32) []*pb.MissionTable {
-    return m.snap.idxRewardId[key]
+    snap := m.snap.Load()
+    return snap.idxRewardId[key]
 }
 
 
@@ -127,7 +139,8 @@ func (m *MissionTableManager) GetByRewardId(key uint32) []*pb.MissionTable {
 // ---- Exists ----
 
 func (m *MissionTableManager) Exists(id uint32) bool {
-    _, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    _, ok := snap.kvData[id]
     return ok
 }
 
@@ -136,27 +149,32 @@ func (m *MissionTableManager) Exists(id uint32) bool {
 // ---- Count ----
 
 func (m *MissionTableManager) Count() int {
-    return len(m.snap.data)
+    snap := m.snap.Load()
+    return len(snap.data)
 }
 
 
 func (m *MissionTableManager) CountByCondition_idIndex(key uint32) int {
-    return len(m.snap.idxCondition_id[key])
+    snap := m.snap.Load()
+    return len(snap.idxCondition_id[key])
 }
 
 
 func (m *MissionTableManager) CountByNext_mission_idIndex(key uint32) int {
-    return len(m.snap.idxNext_mission_id[key])
+    snap := m.snap.Load()
+    return len(snap.idxNext_mission_id[key])
 }
 
 
 func (m *MissionTableManager) CountByTarget_countIndex(key uint32) int {
-    return len(m.snap.idxTarget_count[key])
+    snap := m.snap.Load()
+    return len(snap.idxTarget_count[key])
 }
 
 
 func (m *MissionTableManager) CountByRewardIdIndex(key uint32) int {
-    return len(m.snap.idxRewardId[key])
+    snap := m.snap.Load()
+    return len(snap.idxRewardId[key])
 }
 
 
@@ -164,9 +182,10 @@ func (m *MissionTableManager) CountByRewardIdIndex(key uint32) int {
 // ---- FindByIds (IN) ----
 
 func (m *MissionTableManager) FindByIds(ids []uint32) []*pb.MissionTable {
+    snap := m.snap.Load()
     result := make([]*pb.MissionTable, 0, len(ids))
     for _, id := range ids {
-        if row, ok := m.snap.kvData[id]; ok {
+        if row, ok := snap.kvData[id]; ok {
             result = append(result, row)
         }
     }
@@ -176,10 +195,11 @@ func (m *MissionTableManager) FindByIds(ids []uint32) []*pb.MissionTable {
 // ---- RandOne ----
 
 func (m *MissionTableManager) RandOne() (*pb.MissionTable, bool) {
-    if len(m.snap.data) == 0 {
+    snap := m.snap.Load()
+    if len(snap.data) == 0 {
         return nil, false
     }
-    return m.snap.data[rand.IntN(len(m.snap.data))], true
+    return snap.data[rand.IntN(len(snap.data))], true
 }
 
 
@@ -187,8 +207,9 @@ func (m *MissionTableManager) RandOne() (*pb.MissionTable, bool) {
 // ---- Where / First ----
 
 func (m *MissionTableManager) Where(pred func(*pb.MissionTable) bool) []*pb.MissionTable {
+    snap := m.snap.Load()
     var result []*pb.MissionTable
-    for _, row := range m.snap.data {
+    for _, row := range snap.data {
         if pred(row) {
             result = append(result, row)
         }
@@ -197,7 +218,8 @@ func (m *MissionTableManager) Where(pred func(*pb.MissionTable) bool) []*pb.Miss
 }
 
 func (m *MissionTableManager) First(pred func(*pb.MissionTable) bool) (*pb.MissionTable, bool) {
-    for _, row := range m.snap.data {
+    snap := m.snap.Load()
+    for _, row := range snap.data {
         if pred(row) {
             return row, true
         }

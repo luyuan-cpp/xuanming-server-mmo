@@ -150,6 +150,20 @@ int main(int argc, char *argv[])
             // which would cause kUnknownMessageType errors.
             node.SetAfterStart([&context](Node &n)
                                {
+                        // session_id 的 node 段必须在装 connection 回调之前种好。
+                        //
+                        // 原来这一行在 dependencyGate.WaitAndRun 的 ready 回调里,而
+                        // setConnectionCallback 在它之前就装上了 —— 于是在等待
+                        // Login/Scene 被发现的这段窗口里连进来的客户端,拿到的
+                        // session_id 里 node 段是 0(TransientNodeCompositeIdGenerator
+                        // 的 node_id_ 默认 0)。scene 侧 GetGateNodeId(session_id) 得到 0,
+                        // ResolveLocalZoneGateEntity 永远解析不出归属 gate,这个玩家
+                        // 整局都收不到任何服务端下行,而且没有任何自愈路径。
+                        //
+                        // node_id 在这里已经是终值:Node 打完启动 banner(banner 里就
+                        // 打印了 GetNodeId())紧接着才调 afterStartFn_,见 node.cpp:928。
+                        tlsSessionManager.session_id_gen().set_node_id(n.GetNodeId());
+
                         n.GetTcpServer().setConnectionCallback(
                             [&context](const TcpConnectionPtr& conn) {
                                 context.rpcClientHandler.OnConnection(conn);
@@ -161,8 +175,6 @@ int main(int argc, char *argv[])
 
                         context.dependencyGate.WaitAndRun(n, {LoginNodeService, SceneNodeService}, [&context](Node &n)
                                                                    {
-                        tlsSessionManager.session_id_gen().set_node_id(n.GetNodeId());
-
                         // Report player_count to etcd every 10 seconds for load balancing
                         context.playerCountReportTimer.RunEvery(10.0, [&n] {
                             auto count = static_cast<uint32_t>(tlsSessionManager.sessions().size());

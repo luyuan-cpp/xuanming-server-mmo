@@ -204,32 +204,6 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 		kind = "mirror"
 	}
 
-	// Cascade destroy: any mirror whose source is this scene has to die
-	// with its source. We read the set BEFORE the atomic destroy (the
-	// atomic script wipes it) and then destroy each mirror in turn.
-	mirrorChildren, _ := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
-	for _, mid := range mirrorChildren {
-		childId, err := strconv.ParseUint(mid, 10, 64)
-		if err != nil || childId == sceneId {
-			continue
-		}
-		// Mirrors usually live in the same zone as their source but read
-		// scene:{child}:zone to be safe — cross-zone mirroring is uncommon
-		// but we don't want cascade to silently skip ZREM from the wrong
-		// active set.
-		childZoneStr, _ := svcCtx.Redis.Get(sceneZoneKey(childId))
-		childZone, _ := strconv.ParseUint(childZoneStr, 10, 32)
-		if childZone == 0 {
-			childZone = uint64(zoneId)
-		}
-		logx.Infof("[InstanceLifecycle] Cascade-destroying mirror %d (source %d)", childId, sceneId)
-		// Force-destroy: the source is going away, "still has players"
-		// doesn't rescue the mirror.
-		destroyInstanceInternal(ctx, svcCtx, uint32(childZone), childId, true, "cascade")
-	}
-	// Drop the mirrors index for this scene now that its children are gone.
-	svcCtx.Redis.Del(sceneMirrorsKey(sceneId))
-
 	// Core atomic destroy — unless force=true, aborts if the scene picked
 	// up a player in the meantime.
 	destroyed := true
@@ -266,6 +240,42 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 	if !destroyed {
 		return
 	}
+
+	// Cascade destroy: any mirror whose source is this scene has to die with
+	// its source.
+	//
+	// 这一段原来放在 AtomicDestroyIfIdle **之前**,理由写的是"原子脚本会把
+	// scene:{id}:mirrors 抹掉,所以必须先读"。这个前提是错的:脚本的 KEYS 里
+	// 是 scene:{id}:mirror(是不是镜像的**标志位**),不是 scene:{id}:mirrors
+	// (镜像**子集合**),见 scene_atomic.go:245-252。脚本从不碰子集合。
+	//
+	// 而放在前面的代价是实打实的:CAS 会在"检查到销毁之间有玩家进场"时放弃销毁
+	// (destroyed=false 直接 return),但那时所有镜像已经被 force 销毁、
+	// mirrors 索引也已经被 Del —— 源场景活下来了,它的镜像却全没了,而且
+	// 因为索引也没了,再也没有任何路径能发现这些镜像曾经存在。镜像里的玩家
+	// 就此成为孤儿。挪到确认销毁之后,放弃销毁时镜像原样保留。
+	mirrorChildren, _ := svcCtx.Redis.Smembers(sceneMirrorsKey(sceneId))
+	for _, mid := range mirrorChildren {
+		childId, err := strconv.ParseUint(mid, 10, 64)
+		if err != nil || childId == sceneId {
+			continue
+		}
+		// Mirrors usually live in the same zone as their source but read
+		// scene:{child}:zone to be safe — cross-zone mirroring is uncommon
+		// but we don't want cascade to silently skip ZREM from the wrong
+		// active set.
+		childZoneStr, _ := svcCtx.Redis.Get(sceneZoneKey(childId))
+		childZone, _ := strconv.ParseUint(childZoneStr, 10, 32)
+		if childZone == 0 {
+			childZone = uint64(zoneId)
+		}
+		logx.Infof("[InstanceLifecycle] Cascade-destroying mirror %d (source %d)", childId, sceneId)
+		// Force-destroy: the source is going away, "still has players"
+		// doesn't rescue the mirror.
+		destroyInstanceInternal(ctx, svcCtx, uint32(childZone), childId, true, "cascade")
+	}
+	// Drop the mirrors index for this scene now that its children are gone.
+	svcCtx.Redis.Del(sceneMirrorsKey(sceneId))
 
 	// Notify C++ node to destroy the ECS scene entity (skip if node is
 	// already dead — the entity died with the process).

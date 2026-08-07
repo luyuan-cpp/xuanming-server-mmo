@@ -262,6 +262,12 @@ if (sessionIt == tlsSessionManager.sessions().end())
     LOG_WARN << "PushToPlayer: session already gone (disconnect race), session_id=" << event.session_id();
     return;
 }
+// conn 为空即空指针解引用(同 gate_service_handler 的推送路径)。
+if (!sessionIt->second.conn)
+{
+    LOG_ERROR << "PushToPlayer: session has no connection, session_id=" << event.session_id();
+    return;
+}
 GetGateCodec().send(sessionIt->second.conn, event.message_content());
 ///<<< END WRITING YOUR CODE
 }
@@ -272,6 +278,8 @@ auto sendToSession = [&](uint32_t sessionId)
 {
     auto sessionIt = tlsSessionManager.sessions().find(sessionId);
     if (sessionIt == tlsSessionManager.sessions().end())
+        return;
+    if (!sessionIt->second.conn)
         return;
     GetGateCodec().send(sessionIt->second.conn, event.message_content());
 };

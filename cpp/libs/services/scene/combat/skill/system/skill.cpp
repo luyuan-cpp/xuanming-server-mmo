@@ -29,7 +29,9 @@
 #include "time/comp/timer_task_comp.h"
 #include "time/system/time_cooldown.h"
 #include "time/system/time.h"
+#include <algorithm>
 #include <core/system/id_generator.h>
+#include <utils/random/random.h>
 
 uint64_t GenerateUniqueSkillId(const SkillContextCompMap& casterSkillContexts, const SkillContextCompMap& targetSkillContexts) {
 	uint64_t newSkillId;
@@ -164,7 +166,12 @@ uint32_t CheckPlayerLevel(const entt::entity casterEntity, const SkillTable* ski
 uint32_t CanUseSkillInCurrentState(const uint32_t state, const uint32_t skill) {
 	LookupSkillPermissionOrReturnError(state);
 
-	const auto skillTypeIndex = (1 << skill);
+	// skill 是 SkillTable.skill_type 里的原始序号(eSkillType 的位号 0..5),
+	// 而 SkillPermission.skill_type 这一列正是按序号平铺的(整表 6 格 = 6 种技能类型)。
+	// 旧写法拿 (1 << skill) 这个位掩码当下标:序号 0/1/2 读到 1/2/4 号错位格子,
+	// 序号 ≥3 一律越界、被下面的守卫兜成 kInvalidTableData —— 切换/激活/普攻
+	// 这三类技能在任何战斗状态下都恒定报"表数据错误"。
+	const auto skillTypeIndex = static_cast<int32_t>(skill);
 	if (skillTypeIndex >= skillPermissionRow->skill_type_size())
 	{
 		return MAKE_ERROR_MSG(kInvalidTableData,
@@ -264,8 +271,9 @@ void SkillSystem::HandleSkillRecovery(const entt::entity casterEntity, uint64_t 
 
 	LookupSkillOrReturnVoid(skillContext->skilltableid());
 
-	auto& recoveryTimer = tlsEcs.actorRegistry.get_or_emplace<RecoveryTimerComp>(casterEntity).timer;
-	recoveryTimer.RunAfter(skillRow->recovery_time(), [casterEntity, skillId] {
+	auto& recoveryTimerComp = tlsEcs.actorRegistry.get_or_emplace<RecoveryTimerComp>(casterEntity);
+	recoveryTimerComp.skillId = skillId;
+	recoveryTimerComp.timer.RunAfter(skillRow->recovery_time(), [casterEntity, skillId] {
 		return HandleSkillFinish(casterEntity, skillId);
 		});
 }
@@ -303,15 +311,28 @@ void SkillSystem::HandleChannelSkillSpell(entt::entity casterEntity, uint64_t sk
         return;
     }
 
-	LookupSkillOrReturnVoid(skillId);
+	// skillId 是 tlsIdGeneratorManager 发的技能实例 id,不是技能表 id。
+	// 旧写法直接拿它查 SkillTable,雪花 id 永远查不到行 —— 于是这里必然
+	// 早退,吟唱类技能从来没真正跑起来过。要先用实例 id 找上下文,
+	// 再用上下文里的 skilltableid 查表(与 HandleSkillRecovery 一致)。
+	const auto skillContext = FindCasterSkillContext(casterEntity, skillId);
+	if (!skillContext)
+	{
+		LOG_ERROR << "Channel skill context not found. caster=" << entt::to_integral(casterEntity)
+			<< " skill_id=" << skillId;
+		return;
+	}
+
+	LookupSkillOrReturnVoid(skillContext->skilltableid());
 
 	LOG_INFO << "Handling channel skill spell. Caster: " << entt::to_integral(casterEntity)
 		<< ", Skill ID: " << skillId;
 
 	HandleSkillSpell(casterEntity, skillId);
 
-	auto& channelFinishTimer = tlsEcs.actorRegistry.get_or_emplace<ChannelFinishTimerComp>(casterEntity).timer;
-	channelFinishTimer.RunAfter(skillRow->channel_finish(), [casterEntity, skillId] {
+	auto& channelFinishTimerComp = tlsEcs.actorRegistry.get_or_emplace<ChannelFinishTimerComp>(casterEntity);
+	channelFinishTimerComp.skillId = skillId;
+	channelFinishTimerComp.timer.RunAfter(skillRow->channel_finish(), [casterEntity, skillId] {
 		return HandleChannelFinish(casterEntity, skillId);
 		});
 
@@ -388,6 +409,11 @@ uint32_t CheckTimerPhase(const entt::entity casterEntity, const SkillTable* skil
 			LOG_INFO << "Immediate skill: " << skillTable->id()
 				<< " is currently in phase. Sending interrupt message.";
 			SkillSystem::SendSkillInterruptedMessage(casterEntity, skillTable->id());
+			// 被打断的那一次施法,它的 SkillContext 是在 ReleaseSkill 里建的,
+			// 只有 HandleSkillFinish 会删。这里把定时器组件摘掉之后回调再也不会
+			// 触发,上下文就永久留在 caster / target 的 SkillContextCompMap 里 ——
+			// 玩家每打断一次泄漏一条,无上界。先收口再摘定时器。
+			SkillSystem::HandleSkillFinish(casterEntity, timerComp->skillId);
 			tlsEcs.actorRegistry.remove<TimerComp>(casterEntity);
 			return kSuccess;
 		}
@@ -442,7 +468,9 @@ void SkillSystem::BroadcastSkillUsedMessage(const entt::entity casterEntity, con
 }
 
 void SkillSystem::SetupCastingTimer(entt::entity casterEntity, const SkillTable* skillTable, uint64_t skillId) {
-	auto& castingTimer = tlsEcs.actorRegistry.get_or_emplace<CastingTimerComp>(casterEntity).timer;
+	auto& castingTimerComp = tlsEcs.actorRegistry.get_or_emplace<CastingTimerComp>(casterEntity);
+	castingTimerComp.skillId = skillId;
+	auto& castingTimer = castingTimerComp.timer;
 	if (IsSkillOfType(skillTable->id(), kGeneralSkill)) {
 		castingTimer.RunAfter(skillTable->cast_point(), [casterEntity, skillId] {
 			return HandleGeneralSkillSpell(casterEntity, skillId);
@@ -495,7 +523,11 @@ double CalculateFinalDamage(const entt::entity casterEntity, const entt::entity 
 	if (!casterAttributes || !targetAttributes)
 		return 0.0;
 
-	double critChance = casterAttributes->critchance();
+	// critchance 是 uint64(见 CLAUDE.md §4),装不下 0~1 的小数,口径只能是
+	// 整数百分比。旧写法把它直接当概率跟 [0,1) 的均匀随机数比:今天全系统
+	// 没有任何一处写 critchance,所以恒为 0 = 永不暴击;一旦有人按字面填 5(5%),
+	// 就会变成 5.0 > 随机数恒成立 = 100% 暴击。这里显式按百分比换算并夹到 [0,1]。
+	const double critChance = std::clamp(static_cast<double>(casterAttributes->critchance()) / 100.0, 0.0, 1.0);
 	double strength = casterAttributes->strength();
 	double armor = targetAttributes->armor();
 	double resistance = targetAttributes->resistance();
@@ -505,7 +537,8 @@ double CalculateFinalDamage(const entt::entity casterEntity, const entt::entity 
     finalDamage = finalDamage - armor;
     finalDamage *= (1 - resistance * 0.01);
 
-    if (rand() / static_cast<double>(RAND_MAX) < critChance) {
+    // rand() 是全局非线程安全且未播种的 C 运行时状态,战斗判定统一走 tlsRandom。
+    if (critChance > 0.0 && tlsRandom.RandReal<double>(0.0, 1.0) < critChance) {
         finalDamage *= 2;
     }
 

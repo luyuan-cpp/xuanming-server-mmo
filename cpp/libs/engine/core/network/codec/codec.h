@@ -51,15 +51,31 @@ class ProtobufCodec : muduo::noncopyable
                                 muduo::Timestamp,
                                 ErrorCode)> ErrorCallback;
 
-  explicit ProtobufCodec(const ProtobufMessageCallback& messageCb)
+  // maxMessageLen:单条消息的硬上限,超过即 kInvalidLength → 断连。
+  //
+  // 默认值刻意收紧到 64KB 而不是老的 64MB。本 codec 的唯一使用者是 gate 的
+  // **客户端-facing** 监听(节点间走 RpcCodec,与此无关),而客户端合法消息
+  // 上限是 1KB(CheckMessageSize 对 ClientRequest 的限制)。老的 64MB 意味着:
+  // 长度检查放行之后,恶意客户端一条消息就能让 gate 全量缓冲 63MB、跑一遍
+  // adler32、按 typeName 反射建任意已注册 proto 对象再 parse —— 都发生在
+  // CheckMessageSize 之前。单连接 64MB × N 条连接,接收缓冲直接把 gate 推到
+  // OOM。64KB 给 ClientTokenVerifyRequest 之类的握手报文留了充分余量,
+  // 又把单连接的预验证内存占用压回两个数量级。
+  static constexpr int kDefaultMaxMessageLen = 64*1024;
+
+  explicit ProtobufCodec(const ProtobufMessageCallback& messageCb,
+                         int maxMessageLen = kDefaultMaxMessageLen)
     : messageCallback_(messageCb),
-      errorCallback_(defaultErrorCallback)
+      errorCallback_(defaultErrorCallback),
+      maxMessageLen_(maxMessageLen)
   {
   }
 
-  ProtobufCodec(const ProtobufMessageCallback& messageCb, const ErrorCallback& errorCb)
+  ProtobufCodec(const ProtobufMessageCallback& messageCb, const ErrorCallback& errorCb,
+                int maxMessageLen = kDefaultMaxMessageLen)
     : messageCallback_(messageCb),
-      errorCallback_(errorCb)
+      errorCallback_(errorCb),
+      maxMessageLen_(maxMessageLen)
   {
   }
 
@@ -89,10 +105,10 @@ class ProtobufCodec : muduo::noncopyable
 
   ProtobufMessageCallback messageCallback_;
   ErrorCallback errorCallback_;
+  int maxMessageLen_{kDefaultMaxMessageLen};
 
   const static int kHeaderLen = sizeof(int32_t);
   const static int kMinMessageLen = 2*kHeaderLen + 2; // nameLen + typeName + checkSum
-  const static int kMaxMessageLen = 64*1024*1024; // same as codec_stream.h kDefaultTotalBytesLimit
 };
 
 #endif  // MUDUO_EXAMPLES_PROTOBUF_CODEC_CODEC_H
