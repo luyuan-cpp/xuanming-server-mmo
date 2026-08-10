@@ -84,6 +84,57 @@ func (l *MarkOfflineLogic) MarkOffline(in *pb.MarkOfflineRequest) (*common.Empty
 	if !deleted {
 		// GET 之后已有新版本写入：旧 MarkOffline 不能删除它。
 		l.Infof("MarkOffline: session changed during CAS for player %d; stale cleanup ignored", playerID)
+		return &common.Empty{}, nil
 	}
+
+	// 会话删除成功后必须清理 SceneManager 侧的权威位置与实例人数。
+	//
+	// 此前正常登出从不走这一步:全仓 SceneManager.LeaveScene 的唯一调用点在
+	// LeaseMonitor(断线租约到期路径),而正常登出删掉会话后 SetDisconnecting
+	// 因 redis.Nil no-op,租约链永远不会启动 —— 权威键 player:{id}:location
+	// 无 TTL 永久残留,实例 player_count 幽灵 +1(destroy-on-empty 永不触发),
+	// 多世界节点区服下次登录选到别的节点还会被 unsafe-handoff 闸门确定性拒绝,
+	// 玩家永久进不了游戏。
+	l.notifySceneManagerLeaveOrEnqueue(playerID, current)
 	return &common.Empty{}, nil
+}
+
+// notifySceneManagerLeaveOrEnqueue 先同步调 LeaveScene(快路径);失败则把
+// 会话快照(改成 DISCONNECTING 态)入租约 ready 队列,交 LeaseMonitor 的
+// at-least-once 机制重试 —— 与断线路径共用同一条清理通道,不能只打日志吞掉。
+func (l *MarkOfflineLogic) notifySceneManagerLeaveOrEnqueue(
+	playerID uint64,
+	session *pb.PlayerSession,
+) {
+	leaveErr := notifySceneManagerLeave(l.ctx, l.svcCtx, session)
+	if leaveErr == nil {
+		return
+	}
+	l.Errorf("MarkOffline: LeaveScene failed for player %d, enqueueing for lease-monitor retry: %v",
+		playerID, leaveErr)
+
+	// 入队的快照必须是 DISCONNECTING 态:LeaseMonitor 对 State!=DISCONNECTING
+	// 的条目按"历史残留"直接 ack 丢弃。原字节是 ONLINE 态,不能直接用。
+	retrySession := proto.Clone(session).(*pb.PlayerSession)
+	retrySession.State = pb.PlayerSessionState_SESSION_STATE_DISCONNECTING
+	retryBytes, err := proto.Marshal(retrySession)
+	if err != nil {
+		l.Errorf("MarkOffline: marshal retry session for player %d failed, scene cleanup LOST: %v",
+			playerID, err)
+		return
+	}
+
+	enqueued, err := enqueueOfflineCleanup(l.ctx, l.svcCtx, playerID, retryBytes)
+	if err != nil {
+		// 双重失败(LeaveScene RPC + Redis 入队都挂):此时只剩日志可依赖。
+		// 位置残留的后果与修复手段见 PROGRESS.md 2026-08-09 节。
+		l.Errorf("MarkOffline: enqueue cleanup retry for player %d failed, scene cleanup LOST: %v",
+			playerID, err)
+		return
+	}
+	if !enqueued {
+		// 玩家已瞬间重登(会话键重新出现):新登录的 EnterScene 会改写位置,
+		// 旧清理不再需要。
+		l.Infof("MarkOffline: player %d re-logged in before cleanup enqueue; skip", playerID)
+	}
 }

@@ -50,7 +50,12 @@ C++ 侧的"存盘→改派"顺序只保护**它自己驱动的那条改派**;它
 
 ## 3. 修法(两层,可分阶段上)
 
-### 3.1 前置(P0,已就绪的小修):IsNodeAlive 三态,unknown 一律 fail-closed
+### 3.1 前置(P0):IsNodeAlive 三态,unknown 一律 fail-closed —— ✅ 已落码
+
+状态:**已完成**(`load_reporter.go` `IsNodeAlive`),含两条成对回归测试
+`TestIsNodeAliveTreatsRedisOutageAsAlive` / `TestIsNodeAliveReportsDeadWhenMemberMissing`
+(`logic_test.go`)。已验证前者在修复前必失败、修复后通过;`go build` / `go vet` /
+`go test ./...` 全绿。
 
 `IsNodeAlive` 现在 `return err == nil`,把"成员不在集合(确实死)"和"Redis 连不上(状态未知)"折叠成同一个"死"。一次 Redis 抖动 → 活节点被判死 → 触发改派 → 叠加 §2 就是双写。
 
@@ -99,21 +104,24 @@ SceneReentryBarrier = C++ drain 预算(15s) + 时钟/调度余量(建议 5s) = 2
 
 屏障靠时间估算,极端情况(drain 超 15s 预算、时钟余量估低)仍可能擦碰。epoch 是不依赖时间的兜底:每次归属变更单调 +1,老 epoch 的写被原子拒绝。这与 `session_cas.go` 已有的 `session_version` CAS 是同一范式。
 
-设计(**不改 proto,用 sidecar key 避免动 Go/C++/Java 三端生成码**):
+存储用 sidecar key `player:{id}:owner_epoch`(纯整数),与 `player:{id}:location` 同一原子域,不进 `PlayerAllData` blob。
 
-- 新增 `player:{id}:owner_epoch`(纯整数),与 `player:{id}:location` 同一原子域,用 Lua 写:
-  - Go 改派玩家到新节点时,`INCR owner_epoch` 并把新值随改派请求下发给新的 C++ 节点。
-  - C++ 节点在 `SavePlayerToRedis` 落 `PlayerAllData` 前,用 Lua 做 `expect_epoch == owner_epoch` 才写;不等就丢弃并打 `stale_owner_write_rejected`(这条日志是健康信号,压测期应恒 0)。
-  - Go 的 `updatePlayerLocationWithRaw`(`changesceneutil.go:53`,**此文件当前干净,可改**)同样走 epoch CAS。
+- **铸造(Go,唯一写者)**:`EnterScene` 是唯一的归属变更闸口(见 §6.1),每次把玩家(重新)分配到某节点时 `INCR player:{id}:owner_epoch`,拿到新值 N。
+- **传递(必须随路由事件下发,不能让节点自己读 Redis)**:把 N 写进 `RoutePlayerEvent` 的新字段 `owner_epoch`,随 Kafka 路由给目标节点。
+  - ⚠️ **为什么不能让 C++ 节点在 load 时自己 `GET owner_epoch`**:两次改派挨得近时(先派 A 再派 B),A 若在 Go 已 `INCR` 到 N+1 之后才去读,就会读到 N+1 并与 B 一样自认为最新 → **双主**。epoch 必须跟着"这一次路由决策"走:Go 给 A 的事件带 N、给 B 的带 N+1,只有最新的 B 的缓存值与 Redis 相等。这需要给 `RoutePlayerEvent` 加一个 proto 字段(见 §6)。
+- **校验(C++)**:节点在 `SavePlayerToRedis` 落 `PlayerAllData` 时,用 Lua 原子做 `GET owner_epoch == 我缓存的 epoch` 才写;不等就丢弃并打 `stale_owner_write_rejected`(健康信号,压测期应恒 0),并销毁本地实体(我已被废黜,不能再存也不能再改派)。
 - 老节点 emergency relocate 时,它手里是**旧 epoch**;一旦 Go 已经因屏障到期改派并 `INCR`,老节点的 `S_final` 写就被 CAS 拒——即使时间估算失手也不回档。
+- Go 的 `updatePlayerLocationWithRaw`(`changesceneutil.go:53`,**此文件当前干净,可改**)写 `player:{id}:location` 时同样走 epoch CAS,别让两条通道各写各的。
 
 ⚠️ **半接线警告**:只在 Go 侧写 epoch、C++ 不校验,等于假防护(会给人"已经防住了"的错觉,实际 `PlayerAllData` 仍被老节点覆盖)。第二层**必须 Go 写 + C++ 校验同时上**,否则不如不上。所以它排在屏障之后、作为一个完整的跨语言小项单独做。
 
 ## 4. 与并发编辑者的协调
 
-本次会话发现 `load_reporter.go` / `enterscenelogic.go` / `logic_test.go` 有未提交的并发改动(gate_instance_id 改 fail-closed、死节点计数残留清理),不是本人所改。§3.1 的 IsNodeAlive 与 §3.2 的屏障落点都在这几个文件里,**按仓库"逐文件确认归属"的协作纪律,须等这些改动落定或与作者协调后再动**,不要盲改造成冲突。
+本仓有活跃的并发编辑者(本文写作期间 `player_locator`、`cpp/` 多处、`go/shared/` 均有未提交改动,并新增了 `session_reconciler.go`),按仓库"逐文件确认归属"的纪律,动手前先看 `git status` 确认目标文件没有他人未提交的改动。
 
-`changesceneutil.go`(§3.3 的 Go epoch 写路径)当前干净,可独立推进。
+§3.1 落码时 `load_reporter.go` / `logic_test.go` 已确认干净(先前观察到的 ` M` 是 `core.autocrlf=true` 造成的 stat-cache 假象,`git diff` 为空),故已安全落码。
+
+§3.2 屏障的落点在 `load_reporter.go`(记 `death_at`)与 `enterscenelogic.go`(改派前检查屏障),动手前需重新确认这两个文件的归属。`changesceneutil.go`(§3.3 的 Go epoch 写路径)当前干净。
 
 ## 5. 分阶段落地顺序
 
@@ -122,3 +130,46 @@ SceneReentryBarrier = C++ drain 预算(15s) + 时钟/调度余量(建议 5s) = 2
 3. **P1** owner_epoch CAS(§3.3)—— Go 写 + C++ 校验,一次性做完,别只做半边。
 
 前两步就能把 §2 的分区双写窗口关掉;第三步是时间估算失手时的确定性兜底。
+
+## 6. C++ 侧落地(第三层 owner_epoch 的 C++ 半边,精确到 file:line)
+
+读代码确认的三个事实,决定了 C++ 侧比预想的干净:
+
+1. **改派唯一走 `EnterScene`**:老节点紧急疏散时 `DispatchEmergencyRelocate` 最终调 `scene_manager::SendSceneManagerEnterScene`([player_lifecycle.cpp:773](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp)),`scene_id`/`scene_conf_id` 都留 0,让 Go 按世界频道表挑存活节点。也就是说无论"Go 独立判死改派"还是"老节点自己驱动改派",都汇聚到 Go 的 `EnterScene` 这一个闸口——epoch 在那里 `INCR` 一次即可覆盖两条路径。
+2. **存盘本来就走 Lua**:`SavePlayerToRedis` 的实际写入是 `tlsRedisSystem.GetPlayerDataRedis()->Save(message, playerId)`([player_lifecycle.cpp:1228](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp)),底层 `MessageAsyncClient::Save` 走 EVALSHA 脚本 `kSaveAndMarkLuaScript`([redis_client.h:18](../../cpp/libs/engine/infra/storage/redis_client/redis_client.h)):`SET KEYS[1] ARGV[1]` + `SADD dirty_keys_set`。**epoch CAS 塞进这段 Lua 就是原子的,没有 TOCTOU。**
+3. **组件模式现成**:玩家实体上已有 `PlayerSessionSnapshotComp`、`PlayerLastPersistedSnapshotComp`,新增 `PlayerOwnerEpochComp` 是同一范式。
+
+### 6.1 收 epoch:load 时缓存
+
+`HandlePlayerAsyncLoaded`([player_lifecycle.cpp:179](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp))从 `tlsPendingEnterMap` 取本次 EnterScene 的待入场信息、建玩家实体。在建实体处 `get_or_emplace<PlayerOwnerEpochComp>(player).epoch = enterInfo.owner_epoch()` —— epoch 来自 `RoutePlayerEvent`/`EnterSceneRequest` 里新加的字段(Go 铸造后带下来,§3.3)。新玩家首登 Go 的 `INCR` 建键得 1,一样带下来。
+
+### 6.2 校验 epoch:save 时原子 CAS
+
+两种改法,推荐前者:
+
+- **(a) 原子 Lua(推荐)**:因为 `kSaveAndMarkLuaScript` 是泛型 `MessageAsyncClient<K,V>` 共用的,不要直接改它污染别的类型。给 `Save` 加一个可选重载 `Save(message, key, guardKey, expectedValue)`,内部换用带 epoch 校验的变体脚本:
+  ```lua
+  -- KEYS[1]=PlayerAllData key, KEYS[2]=owner_epoch key
+  -- ARGV[1]=payload, ARGV[2]=expected_epoch
+  if redis.call('GET', KEYS[2]) ~= ARGV[2] then return 0 end
+  redis.call('SET', KEYS[1], ARGV[1])
+  redis.call('SADD', 'dirty_keys_set', KEYS[1])
+  return 1
+  ```
+  返回 0 时走 `save_failed_callback_`,`SavePlayerToRedis` 的调用方据此判定"已被废黜":停止对该玩家的存盘重试、销毁本地实体、**不发 relocate**。
+- **(b) GET 比对 + 屏障兜底(次选)**:`SavePlayerToRedis` 顶部同步 `GET owner_epoch` 比对缓存,不等就 bail。有 GET→异步 SET 之间的 TOCTOU,靠屏障(新主延迟接管)+ 一个 ≤ 屏障的周期自检来关。比 (a) 简单但不是原子的。
+
+### 6.3 别漏掉 Kafka→MySQL 这条持久化通道
+
+`SavePlayerToRedis` 除了写 Redis,还给每张分表发 `DBTask` 到 Kafka([player_lifecycle.cpp:1260](../../cpp/libs/services/scene/player/system/player_lifecycle.cpp))→ db 服务 key-ordered consumer 落 MySQL。**只在 Redis 侧做 epoch CAS,被废黜节点的 DBTask 仍可能后到并覆盖 MySQL**。两个办法:①DBTask 带上 `owner_epoch`,db 的 `key_ordered_consumer` 落库前比对(它已有 applied-seq 单调守卫,天然是挂载点);②直接复用现有 applied-seq——只要保证 epoch 变更时 seq 也跳变。这一条不做,等于关了 Redis 的门却留了 MySQL 的窗。
+
+### 6.4 C++ 改动清单(供 Codex 编译验证)
+
+- proto:`RoutePlayerEvent`(及承载它的 `EnterSceneRequest`)加 `uint64 owner_epoch`;按 §5 的 buf 纪律留号不复用。
+- 新增 `PlayerOwnerEpochComp`(`libs/services/scene/player/comp/`)。
+- `HandlePlayerAsyncLoaded`:建实体处缓存 epoch(§6.1)。
+- `MessageAsyncClient::Save` 加带 guard 的重载 + 变体 Lua(§6.2a);`SavePlayerToRedis` 传 `player:{id}:owner_epoch` 与缓存 epoch。
+- save 被拒的 callback:停重试 + 销毁实体 + 不 relocate。
+- DBTask 带 epoch 或复用 applied-seq(§6.3)。
+
+以上全部依赖 Go 侧先把 epoch 铸出来并带进 `RoutePlayerEvent`(§3.3),否则 C++ 单独上就是校验一个永远不变的 0 —— 假防护。所以 P1 必须 Go+C++ 同一批做。

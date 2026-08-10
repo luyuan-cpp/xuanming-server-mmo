@@ -313,6 +313,46 @@ func TestNodeSelectionRejectsDuplicateZoneNodeIdentity(t *testing.T) {
 	assert.False(t, IsNodeAlive(sc, 1, "10"), "重复注册不能被 Kafka 路由视为存活目标")
 }
 
+// IsNodeAlive 的三态契约:只有「成员确实不在负载集」才算已死,Redis 本身不可用
+// 必须按存活处理。这两个用例是成对的,少任何一个都挡不住回归:
+//
+//   - 只钉「故障按存活」→ 有人可以把函数改成恒 true 让它通过,判死能力全失;
+//   - 只钉「缺成员判死」→ 就是修复前的 `return err == nil`,Redis 抖动即误判死。
+//
+// 误判死的代价不是「查不到」:它会驱动 resolveScene 改写 scene:{id}:node 并让新
+// 节点 CreateScene,而 C++ 老节点丢租约后还有 15s emergency relocate drain 仍在
+// SavePlayerToRedis —— 同一玩家双写 / 回档。详见
+// docs/design/scene-owner-reentry-barrier.md。
+func TestIsNodeAliveTreatsRedisOutageAsAlive(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+
+	sc, mr := newTestSvcCtx(t, "1")
+	registerTypedNode(mr, testZoneId, "10", constants.SceneNodeTypeInstance, 0)
+	require.True(t, IsNodeAlive(sc, testZoneId, "10"), "前置条件:节点在负载集里应判存活")
+
+	// 模拟 Redis 不可用(连接被拒),而不是「成员不存在」。
+	mr.Close()
+
+	assert.True(t, IsNodeAlive(sc, testZoneId, "10"),
+		"Redis 不可用时状态未知,必须按存活处理,绝不能触发场景改派(修复前此处返回 false)")
+}
+
+func TestIsNodeAliveReportsDeadWhenMemberMissing(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+
+	sc, mr := newTestSvcCtx(t, "1")
+	registerTypedNode(mr, testZoneId, "10", constants.SceneNodeTypeInstance, 0)
+	require.True(t, IsNodeAlive(sc, testZoneId, "10"))
+
+	// Redis 健在,但节点已从负载集摘除 —— 这是唯一可以断言「已死」的证据。
+	mr.ZRem(nodeLoadKey(testZoneId), "10")
+
+	assert.False(t, IsNodeAlive(sc, testZoneId, "10"),
+		"Redis 可用且成员不在负载集时必须判死,否则死节点永远不会被自愈")
+}
+
 func TestFindNodeByPodIPRejectsDuplicateRegistration(t *testing.T) {
 	clearKnownNodesForTest()
 	t.Cleanup(clearKnownNodesForTest)

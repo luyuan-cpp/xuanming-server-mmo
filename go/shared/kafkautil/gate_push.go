@@ -42,6 +42,14 @@ type GateCommandBuilder interface {
 func PushToPlayer(ctx context.Context, w *kafkago.Writer, builder GateCommandBuilder,
 	info PlayerGateInfo, messageID uint32, body []byte,
 ) error {
+	// 不变量 2(CLAUDE.md §7):发往 gate-{id} topic 的命令必须带目标实例 uuid,
+	// 空值 = 消费端 ValidateCommandTarget 的防僵尸过滤被关闭 —— gate 业务 node_id
+	// 会被回收复用,老 gate 未彻底退出时会把发给新 gate 的命令一并消费。
+	// 这里是所有 Go 服务推送的唯一共享收口,必须 fail-closed。
+	if info.GateInstanceID == "" {
+		return fmt.Errorf("push to player %d rejected: empty gate_instance_id (gate=%s), anti-zombie filtering would be disabled",
+			info.PlayerID, info.GateID)
+	}
 	cmdBytes, err := builder.BuildPushCommand(info.SessionID, info.GateInstanceID, messageID, body)
 	if err != nil {
 		return fmt.Errorf("build push command: %w", err)
@@ -55,40 +63,57 @@ func PushToPlayer(ctx context.Context, w *kafkago.Writer, builder GateCommandBui
 	})
 }
 
-// BroadcastToPlayers groups players by gate_id and sends one Kafka message per Gate.
-// The message body is serialized once per gate group.
+// BroadcastToPlayers groups players by (gate_id, gate_instance_id) and sends one
+// Kafka message per group. The message body is serialized once per group.
+//
+// 分组键必须带 instance id:gate 业务 node_id 会被回收复用,滚动重启窗口内同一个
+// gate_id 下可能同时存在新旧两代实例的会话。旧实现按 gate_id 分组并取**组内第一个
+// 玩家**的 instance id —— 另一代实例的玩家被折进同一条命令,消费端
+// ValidateCommandTarget 按 instance 过滤时那一半玩家的消息静默丢失。
 func BroadcastToPlayers(ctx context.Context, w *kafkago.Writer, builder GateCommandBuilder,
 	players []PlayerGateInfo, messageID uint32, body []byte,
 ) error {
 	type gateGroup struct {
+		gateID     string
 		instanceID string
 		sessions   []uint32
 	}
 	grouped := make(map[string]*gateGroup)
+	var firstErr error
 	for _, p := range players {
-		g, ok := grouped[p.GateID]
+		// 不变量 2:空 instance id 的条目不允许出去(理由见 PushToPlayer)。
+		// 单个坏条目不拖垮整批,但必须向调用方报错,不能静默降级。
+		if p.GateInstanceID == "" {
+			logx.Errorf("BroadcastToPlayers: player %d dropped: empty gate_instance_id (gate=%s)",
+				p.PlayerID, p.GateID)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("player %d has empty gate_instance_id", p.PlayerID)
+			}
+			continue
+		}
+		key := p.GateID + "\x00" + p.GateInstanceID
+		g, ok := grouped[key]
 		if !ok {
-			g = &gateGroup{instanceID: p.GateInstanceID}
-			grouped[p.GateID] = g
+			g = &gateGroup{gateID: p.GateID, instanceID: p.GateInstanceID}
+			grouped[key] = g
 		}
 		g.sessions = append(g.sessions, p.SessionID)
 	}
 
-	var firstErr error
-	for gateID, g := range grouped {
+	for _, g := range grouped {
 		cmdBytes, err := builder.BuildBroadcastCommand(g.sessions, g.instanceID, messageID, body)
 		if err != nil {
-			logx.Errorf("BroadcastToPlayers: build command for gate-%s: %v", gateID, err)
+			logx.Errorf("BroadcastToPlayers: build command for gate-%s: %v", g.gateID, err)
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
 
-		topic := fmt.Sprintf("gate-%s", gateID)
+		topic := fmt.Sprintf("gate-%s", g.gateID)
 		if err := w.WriteMessages(ctx, kafkago.Message{
 			Topic: topic,
-			Key:   []byte(gateID),
+			Key:   []byte(g.gateID),
 			Value: cmdBytes,
 		}); err != nil {
 			logx.Errorf("BroadcastToPlayers: send to %s failed: %v", topic, err)
@@ -114,6 +139,14 @@ func BroadcastToScene(ctx context.Context, w *kafkago.Writer, builder GateComman
 ) error {
 	var firstErr error
 	for _, g := range gates {
+		// 不变量 2:理由见 PushToPlayer。
+		if g.GateInstanceID == "" {
+			logx.Errorf("BroadcastToScene: gate-%s dropped: empty gate_instance_id", g.GateID)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("gate %s has empty gate_instance_id", g.GateID)
+			}
+			continue
+		}
 		cmdBytes, err := builder.BuildBroadcastToSceneCommand(sceneID, g.GateInstanceID, messageID, body)
 		if err != nil {
 			logx.Errorf("BroadcastToScene: build command for gate-%s: %v", g.GateID, err)
@@ -144,6 +177,14 @@ func BroadcastToAll(ctx context.Context, w *kafkago.Writer, builder GateCommandB
 ) error {
 	var firstErr error
 	for _, g := range gates {
+		// 不变量 2:理由见 PushToPlayer。
+		if g.GateInstanceID == "" {
+			logx.Errorf("BroadcastToAll: gate-%s dropped: empty gate_instance_id", g.GateID)
+			if firstErr == nil {
+				firstErr = fmt.Errorf("gate %s has empty gate_instance_id", g.GateID)
+			}
+			continue
+		}
 		cmdBytes, err := builder.BuildBroadcastToAllCommand(g.GateInstanceID, messageID, body)
 		if err != nil {
 			logx.Errorf("BroadcastToAll: build command for gate-%s: %v", g.GateID, err)

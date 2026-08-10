@@ -142,22 +142,29 @@ func handleLeaseExpiry(ctx context.Context, svcCtx *svc.ServiceContext, claim le
 
 	// AFK 判断必须在确认 claim 对应同一 DISCONNECTING session 后执行；rearm Lua
 	// 还会再次比较完整载荷，堵住探测期间发生的 Reconnect。
-	switch afkState := afkPassState(ctx, svcCtx, claim.playerID); afkState {
-	case afkPassActive:
-		if err := rearmLeaseClaim(ctx, svcCtx, claim, afkPassLeaseTTLSeconds); err != nil {
-			logx.Errorf("LeaseMonitor: re-arm AFK lease player=%d failed: %v", claim.playerID, err)
+	// 合成的登出清理条目(MarkOffline 的 LeaveScene 失败后入队)没有活会话键。
+	// 挂机月卡只保护**断线未重连**的玩家,显式登出不适用;而且对无会话键的
+	// claim 走 rearm,Lua 会因 `not current` 判成换代把 claim 静默丢弃,
+	// 清理就永久丢了。所以只在会话键仍然存在时才走 AFK 探测;读键失败
+	// (非 Nil)按"存在"处理 —— 宁可多探一次,不能误清月卡玩家。
+	if _, sessErr := svcCtx.RedisClient.Get(ctx, sessionKey(claim.playerID)).Result(); !errors.Is(sessErr, redis.Nil) {
+		switch afkState := afkPassState(ctx, svcCtx, claim.playerID); afkState {
+		case afkPassActive:
+			if err := rearmLeaseClaim(ctx, svcCtx, claim, afkPassLeaseTTLSeconds); err != nil {
+				logx.Errorf("LeaseMonitor: re-arm AFK lease player=%d failed: %v", claim.playerID, err)
+				return
+			}
+			logx.Infof("LeaseMonitor: player %d has active AFK pass, lease extended", claim.playerID)
+			return
+		case afkPassUnknown:
+			if err := rearmLeaseClaim(ctx, svcCtx, claim, afkPassProbeRetrySeconds); err != nil {
+				logx.Errorf("LeaseMonitor: defer AFK probe player=%d failed: %v", claim.playerID, err)
+				return
+			}
+			logx.Errorf("LeaseMonitor: AFK pass probe failed for player %d, deferring cleanup by %ds",
+				claim.playerID, afkPassProbeRetrySeconds)
 			return
 		}
-		logx.Infof("LeaseMonitor: player %d has active AFK pass, lease extended", claim.playerID)
-		return
-	case afkPassUnknown:
-		if err := rearmLeaseClaim(ctx, svcCtx, claim, afkPassProbeRetrySeconds); err != nil {
-			logx.Errorf("LeaseMonitor: defer AFK probe player=%d failed: %v", claim.playerID, err)
-			return
-		}
-		logx.Errorf("LeaseMonitor: AFK pass probe failed for player %d, deferring cleanup by %ds",
-			claim.playerID, afkPassProbeRetrySeconds)
-		return
 	}
 
 	result, err := commitLeaseExpiry(ctx, svcCtx, claim)

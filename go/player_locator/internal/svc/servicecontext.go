@@ -39,6 +39,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		// Hash 按 Key(player_id)选分区,保证同一玩家的事件有序
 		// (项目不变量:kafka key = 业务实体 ID)。LeastBytes 忽略 Key。
 		Balancer: &kafkago.Hash{},
+		// 必须显式设置:kafka-go 直接构造 Writer 时 RequiredAcks 零值是
+		// RequireNone(fire-and-forget,写进 socket 即返回 nil,broker 端
+		// leader 切换/落盘前崩溃全都不可见)。而 LeaseMonitor 的受理协议
+		// 恰恰以 WriteMessages 返回 nil 作为"gate 副作用已完成"的凭据去
+		// ack claim —— acks=0 时这个凭据是假的,清理命令会静默丢失且无重试。
+		// 兄弟服务 scene_manager 的 servicecontext 已修过同一个坑(RequireOne),
+		// 这里对齐。
+		RequiredAcks: kafkago.RequireOne,
 	}
 
 	// SceneManager zrpc client (via etcd discovery).

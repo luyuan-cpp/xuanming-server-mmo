@@ -3,6 +3,7 @@ package logic
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"sync"
@@ -13,6 +14,7 @@ import (
 	"scene_manager/internal/svc"
 
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/stores/redis"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -720,10 +722,42 @@ func GetBestNode(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32)
 
 // IsNodeAlive checks whether a node is present in the zone's Redis load sorted set
 // and has no duplicate (zone,node) registration in the current etcd snapshot.
+//
+// 三态语义:Redis 查询有三种结果,但本函数只能返回 bool,所以「状态未知」必须
+// 被映射到**不会触发破坏性动作**的那一侧。
+//
+//	err == nil        节点在负载集里            → 存活
+//	errors.Is(redis.Nil) 成员确实不在负载集     → 已死
+//	其它 err(超时/连不上/EOF) 状态未知         → 按存活处理(见下)
+//
+// 为什么未知按「存活」:本函数的返回值驱动的是场景改派(enterscenelogic
+// resolveScene / world_rebalance)、场景销毁(destroyscenelogic)与孤儿清理
+// (orphan_cleanup)。判「死」是**破坏性**的一侧——它会改写 scene:{id}:node
+// 并让新节点 CreateScene。而 C++ 老节点在丢租约后还有 15s 的 emergency
+// relocate drain(node.cpp kDrainBudget),期间仍在 SavePlayerToRedis。
+// 一次 Redis 抖动若被当成「节点已死」,就会在老节点还在存盘时把玩家改派到
+// 新节点,造成同一玩家双写 / 回档。
+//
+// 反过来,未知按「存活」的代价只是本轮不改派 / 不清理:若节点真的死了,下一轮
+// (Redis 恢复后)会正确判死并自愈;若只是 Redis 抖动,则什么都没发生 —— 这是
+// 可自愈的瞬时降级,不是数据损坏。两害相权,fail-closed against 改派。
+//
+// 完整修复见 docs/design/scene-owner-reentry-barrier.md:本函数只挡住「误判死」,
+// 「判死后立刻改派、不等老节点停笔」那半边要靠再入屏障(§3.2)。
 func IsNodeAlive(svcCtx *svc.ServiceContext, zoneId uint32, nodeId string) bool {
 	if isKnownNodeIdentityAmbiguous(zoneId, nodeId) {
 		return false
 	}
 	_, err := svcCtx.Redis.Zscore(nodeLoadKey(zoneId), nodeId)
-	return err == nil
+	if err == nil {
+		return true
+	}
+	if errors.Is(err, redis.Nil) {
+		// 成员确实不在负载集 —— 这是唯一可以断言「已死」的证据。
+		return false
+	}
+	// 状态未知:绝不能据此触发改派 / 销毁 / 清理。
+	logx.Errorf("[LoadReporter] IsNodeAlive 状态未知,按存活处理以免误改派: zone=%d node=%s err=%v",
+		zoneId, nodeId, err)
+	return true
 }

@@ -63,6 +63,16 @@ func main() {
 		config.AppConfig.Lease.BatchSize,
 	)
 
+	// 会话对账扫描:兜住 gate 整机崩溃(断线回调不执行)导致的永久 ONLINE 会话,
+	// 恢复「所有会话终点必经租约链」的闭环。见 session_reconciler.go 顶部注释。
+	go logic.StartSessionReconciler(
+		leaseCtx,
+		svcCtx,
+		config.AppConfig.Registry.Etcd.Hosts,
+		config.AppConfig.Registry.Etcd.DialTimeout,
+		config.AppConfig.Lease.ReconcileIntervalSeconds,
+	)
+
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
 		pb.RegisterPlayerLocatorServer(grpcServer, server.NewPlayerLocatorServer(svcCtx))

@@ -192,6 +192,38 @@ type leaseClaim struct {
 	payload  []byte
 }
 
+// enqueueOfflineCleanupScript 给"会话已 CAS 删除、但 SceneManager.LeaveScene
+// 同步调用失败"的正常登出路径提供持久重试通道:把(改成 DISCONNECTING 态的)
+// 会话快照写进 claim payload 哈希并加入 ready ZSET,复用 LeaseMonitor 既有的
+// at-least-once 机制驱动重试。
+//
+// 守卫:会话键已经重新出现(玩家瞬间重登)时放弃入队 —— claim 脚本会优先读
+// 活会话作为 payload,旧清理会被 State=ONLINE 分支安全丢弃,而新登录的
+// EnterScene 自会改写位置;此时入队只会白白触发一次 SetSession fail-closed。
+var enqueueOfflineCleanupScript = redis.NewScript(`
+if redis.call("GET", KEYS[1]) then return 0 end
+redis.call("ZADD", KEYS[2], ARGV[1], ARGV[2])
+redis.call("HSET", KEYS[3], ARGV[2], ARGV[3])
+return 1
+`)
+
+func enqueueOfflineCleanup(
+	ctx context.Context,
+	svcCtx *svc.ServiceContext,
+	playerID uint64,
+	payload []byte,
+) (bool, error) {
+	result, err := enqueueOfflineCleanupScript.Run(
+		ctx,
+		svcCtx.RedisClient,
+		[]string{sessionKey(playerID), LeaseZSetKey, leaseClaimPayloadHashKey},
+		time.Now().Unix(),
+		strconv.FormatUint(playerID, 10),
+		payload,
+	).Int()
+	return result == 1, err
+}
+
 func sessionLifecycleKeys(playerID uint64) []string {
 	return []string{
 		sessionKey(playerID),

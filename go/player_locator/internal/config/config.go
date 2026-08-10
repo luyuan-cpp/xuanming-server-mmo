@@ -45,6 +45,11 @@ type LeaseConf struct {
 	DefaultTTLSeconds uint32        `json:"DefaultTTLSeconds"` // disconnect lease, default 30
 	PollInterval      time.Duration `json:"PollInterval"`      // lease monitor poll interval, default 1s
 	BatchSize         int           `json:"BatchSize"`         // max expired leases per tick, default 100
+	// ReconcileIntervalSeconds 是会话对账扫描的周期(默认 60,0=默认,-1=关闭)。
+	// 对账扫描兜住"gate 整机崩溃 → 断线回调不执行 → 会话永久 ONLINE"的缺口:
+	// State==ONLINE 且 gate_instance_id 连续两轮不在 etcd 存活集内的会话,
+	// 补投 DISCONNECTING + 租约,恢复「所有会话终点必经租约链」的闭环。
+	ReconcileIntervalSeconds int64 `json:"ReconcileIntervalSeconds,optional"`
 }
 
 var AppConfig Config

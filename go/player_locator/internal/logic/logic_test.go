@@ -39,17 +39,51 @@ func newTestSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Miniredis) {
 // Location tests
 // ---------------------------------------------------------------------------
 
-func TestSetAndGetLocation(t *testing.T) {
+// seedLegacyLocation 直接往 Redis 种历史遗留的 player:location:{uid} 键。
+// SetLocation RPC 已停用(绕过 CAS 链的裸写,见 setlocationlogic.go),
+// 但 MarkOffline/commitLeaseExpiry 仍会原子清掉这个 legacy 键,相关断言
+// 需要它在场 —— 测试改为直接种键,不再经由被禁用的端点。
+func seedLegacyLocation(t *testing.T, sc *svc.ServiceContext, loc *pb.PlayerLocation) {
+	t.Helper()
+	loc.Online = true
+	if loc.Ts == 0 {
+		loc.Ts = time.Now().Unix()
+	}
+	data, err := proto.Marshal(loc)
+	require.NoError(t, err)
+	require.NoError(t, sc.RedisClient.Set(context.Background(), locationKey(loc.Uid), data, 0).Err())
+}
+
+func TestSetLocation_DeprecatedRejected(t *testing.T) {
 	sc, _ := newTestSvcCtx(t)
 	ctx := context.Background()
 
+	// 端点必须 fail-closed:它是绕过会话 CAS 链的裸写,与 MarkOffline 的
+	// 原子删除存在复活竞态,不允许再有任何调用方成功写入。
 	setLogic := NewSetLocationLogic(ctx, sc)
 	_, err := setLogic.SetLocation(&pb.PlayerLocation{
 		Uid:      1001,
 		ServerId: "scene-node-1",
 		SceneId:  42,
 	})
+	require.Error(t, err)
+
+	// 拒绝必须发生在任何写入之前。
+	getLogic := NewGetLocationLogic(ctx, sc)
+	loc, err := getLogic.GetLocation(&pb.PlayerId{Uid: 1001})
 	require.NoError(t, err)
+	assert.False(t, loc.Online)
+}
+
+func TestSeededLegacyLocationRoundtrip(t *testing.T) {
+	sc, _ := newTestSvcCtx(t)
+	ctx := context.Background()
+
+	seedLegacyLocation(t, sc, &pb.PlayerLocation{
+		Uid:      1001,
+		ServerId: "scene-node-1",
+		SceneId:  42,
+	})
 
 	getLogic := NewGetLocationLogic(ctx, sc)
 	loc, err := getLogic.GetLocation(&pb.PlayerId{Uid: 1001})
@@ -78,17 +112,15 @@ func TestMarkOffline(t *testing.T) {
 	sc, _ := newTestSvcCtx(t)
 	ctx := context.Background()
 
-	// Set location first
-	setLogic := NewSetLocationLogic(ctx, sc)
-	_, err := setLogic.SetLocation(&pb.PlayerLocation{Uid: 2001, ServerId: "node-1"})
-	require.NoError(t, err)
+	// Seed legacy location first
+	seedLegacyLocation(t, sc, &pb.PlayerLocation{Uid: 2001, ServerId: "node-1"})
 
 	// Verify it exists
 	getLogic := NewGetLocationLogic(ctx, sc)
 	loc, _ := getLogic.GetLocation(&pb.PlayerId{Uid: 2001})
 	assert.True(t, loc.Online)
 
-	_, err = NewSetSessionLogic(ctx, sc).SetSession(&pb.SetSessionRequest{
+	_, err := NewSetSessionLogic(ctx, sc).SetSession(&pb.SetSessionRequest{
 		Session: makeTestSession(2001),
 	})
 	require.NoError(t, err)
@@ -112,15 +144,14 @@ func TestMarkOffline_DelayedOldLeaveGameDoesNotDeleteReplacement(t *testing.T) {
 	ctx := context.Background()
 	playerID := uint64(2002)
 
-	_, err := NewSetLocationLogic(ctx, sc).SetLocation(&pb.PlayerLocation{
+	seedLegacyLocation(t, sc, &pb.PlayerLocation{
 		Uid:      int64(playerID),
 		ServerId: "scene-new",
 		SceneId:  88,
 	})
-	require.NoError(t, err)
 
 	oldSession := makeTestSession(playerID)
-	_, err = NewSetSessionLogic(ctx, sc).SetSession(&pb.SetSessionRequest{Session: oldSession})
+	_, err := NewSetSessionLogic(ctx, sc).SetSession(&pb.SetSessionRequest{Session: oldSession})
 	require.NoError(t, err)
 
 	newSession := proto.Clone(oldSession).(*pb.PlayerSession)
@@ -344,17 +375,15 @@ func TestFullSessionLifecycle(t *testing.T) {
 	playerID := uint64(10001)
 
 	// 1. Set location (player enters game)
-	setLocLogic := NewSetLocationLogic(ctx, sc)
-	_, err := setLocLogic.SetLocation(&pb.PlayerLocation{
+	seedLegacyLocation(t, sc, &pb.PlayerLocation{
 		Uid:      int64(playerID),
 		ServerId: "scene-1",
 		SceneId:  100,
 	})
-	require.NoError(t, err)
 
 	// 2. Set session (gate binds session)
 	setSessionLogic := NewSetSessionLogic(ctx, sc)
-	_, err = setSessionLogic.SetSession(&pb.SetSessionRequest{
+	_, err := setSessionLogic.SetSession(&pb.SetSessionRequest{
 		Session: &pb.PlayerSession{
 			PlayerId:       playerID,
 			SessionId:      500,
