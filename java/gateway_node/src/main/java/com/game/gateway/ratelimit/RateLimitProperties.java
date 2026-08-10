@@ -41,6 +41,16 @@ public class RateLimitProperties {
     private long queueTimeoutMs = 300_000;
 
     /**
+     * 可信反向代理的 CIDR 列表(如 10.0.0.0/8)。**只有**当 socket 对端落在这些网段内,
+     * 才解析 X-Forwarded-For;否则一律用 socket 对端地址。
+     *
+     * <p>默认空 = 完全不信任 XFF。这是 fail-closed:XFF 是客户端可任意书写的头,
+     * 无条件采信会让 IP 维度限流被随机头绕过(见 {@link ClientIpResolver} 类注释)。
+     * 部署在 ingress / LB 之后时**必须**配置,否则所有请求共用 LB 那一个 IP 桶。
+     */
+    private List<String> trustedProxies = List.of();
+
+    /**
      * Open-server wave schedule. When present, zones outside the current wave
      * are forced to queue regardless of remaining token count.
      *
@@ -103,6 +113,11 @@ public class RateLimitProperties {
     public void setAccountCooldownMs(long accountCooldownMs) { this.accountCooldownMs = accountCooldownMs; }
     public long getQueueTimeoutMs() { return queueTimeoutMs; }
     public void setQueueTimeoutMs(long queueTimeoutMs) { this.queueTimeoutMs = queueTimeoutMs; }
+
+    public List<String> getTrustedProxies() { return trustedProxies; }
+    public void setTrustedProxies(List<String> trustedProxies) {
+        this.trustedProxies = trustedProxies == null ? List.of() : trustedProxies;
+    }
     public WaveSchedule getWave() { return wave; }
     public void setWave(WaveSchedule wave) { this.wave = wave; }
 }

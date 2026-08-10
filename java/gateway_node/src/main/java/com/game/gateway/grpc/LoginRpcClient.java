@@ -155,11 +155,31 @@ public class LoginRpcClient {
                 log.warn("login.grpc endpoint malformed, skipped: {}", ep);
                 continue;
             }
+            // keepAliveWithoutCalls 必须是 false —— 空闲时发 ping 会被服务端当成滥用踢断。
+            //
+            // 对端是 go-zero(grpc-go)的 zrpc server,全仓没有配任何
+            // keepalive.EnforcementPolicy,即沿用 grpc-go 默认强制策略。它的 handlePing
+            // 在「无 active stream 且 !PermitWithoutStream」时,只要距上次 ping 不足
+            // defaultPingTimeout(**2 小时**)就记一次 strike;而 strike 只有服务端真正
+            // 写 header/data 时才清零(PING ACK 不算)。strike 超过 maxPingStrikes=2 就发
+            // GOAWAY(ENHANCE_YOUR_CALM, "too_many_pings") 并关连接。
+            // 于是任何一条空闲约两分钟的 channel 都会被反复踢断,grpc-java 收到
+            // too_many_pings 后还会按 AtomicBackoff 把 keepAliveTime 永久翻倍,
+            // 几次之后探活间隔被顶到实际失效 —— 恰好毁掉这几行想要的能力。
+            //
+            // ⚠️ 注意「把 keepAliveTime 提到 5 分钟」修不了:空闲分支比的是 2 小时那个常量,
+            // 不是 MinTime(5min)。只有停掉空闲 ping(本行),或在服务端显式设
+            // KeepaliveEnforcementPolicy{PermitWithoutStream: true} 才行 —— 后者要改
+            // Go 侧 zrpc 启动参数,两端口径得一起动,这里先按单端安全的做法收口。
+            //
+            // 停掉空闲探活不会留下盲区:go-zero 服务端本就设了 MaxConnectionIdle=5min
+            // 会主动关空闲连接,且每个调用都有 timeout-ms 的 deadline,死连接在下一次
+            // 真实调用时即被发现并重连。
             ManagedChannel ch = ManagedChannelBuilder.forAddress(hp[0], Integer.parseInt(hp[1]))
                     .usePlaintext()
                     .keepAliveTime(30, TimeUnit.SECONDS)
                     .keepAliveTimeout(10, TimeUnit.SECONDS)
-                    .keepAliveWithoutCalls(true)
+                    .keepAliveWithoutCalls(false)
                     .build();
             channels.add(ch);
             if (zoneTag != null) {
