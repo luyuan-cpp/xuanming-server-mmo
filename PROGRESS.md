@@ -1926,9 +1926,25 @@ K8s 里的实际端口**与修复前完全一致**(旧代码扫描也是从 2000
 所以都拿 20000),等于零变化。gate 则是 10000 -> 18000,那正是本次要修的目标,且 18000
 本就在 gate 区间内。README.md / AGENTS.md 里的角色端口表同步更新。
 
+**本地启动改为不依赖地址探测。** `cpp_nodes.ps1` 新增 `-NodeIp`,按
+「显式参数 > 已导出的 NODE_IP > 默认 127.0.0.1」三级决定注册地址,`auto` 表示不设
+NODE_IP、让引擎自己探测;`dev_tools.ps1` 的 `cpp-node-start` / `dev-start` /
+`dev-start-exe` / `dev-start-zones` 四个入口全部透传。
+**刻意不把某台机器的 LAN IP 写进脚本** —— 那对其他机器全是错的。默认 127.0.0.1 的
+理由:单机栈(gate/scene/go/robot/Java gateway)全在本机,且切 WiFi、VPN 上下线、
+DHCP 续约都不会让它失效;要让另一台设备上的客户端连进来时再传 `-NodeIp <LAN IP>`。
+背后是 listen/advertise 二元:bind 恒 `0.0.0.0`(`BIND_IP` 可钉),NODE_IP 只管
+「注册进 etcd 给别人拨的地址」,同 etcd 的 --listen-client-urls / --advertise-client-urls
+与 Kafka 的 listeners / advertised.listeners。**注册地址绝不能填 0.0.0.0**:
+Linux 内核把 connect(0.0.0.0) 当 127.0.0.1、Windows 直接 WSAEADDRNOTAVAIL,
+两边还不一致;而 login 是把 endpoint 原样下发给客户端的(servicecontext.go:226-227)。
+已验证:两脚本 parse 通过、`cpp_nodes.ps1 -Command list` 可跑、`Resolve-AdvertiseIp`
+四条优先级用例(默认/继承 env/参数压 env/auto)全 PASS。
+
 **本轮改动:** `cpp/libs/engine/core/node/system/node/node.cpp`(ResolveNodeIp /
 InitRpcServer 注释 / StartRpcServer)、`.../node_allocator.cpp`(AcquireNodePort)、
 `cpp/libs/engine/core/network/process_info.cpp`(localip)、
+`tools/scripts/cpp_nodes.ps1`、`tools/scripts/dev_tools.ps1`、
 `tools/scripts/k8s_deploy.ps1`、`deploy/k8s/README.md`、`deploy/k8s/AGENTS.md`。
 **待编译验证:** engine core lib + gate / scene 节点。未跑任何构建。
 

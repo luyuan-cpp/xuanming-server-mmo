@@ -22,6 +22,11 @@
 .PARAMETER SceneCount
     Number of scene.exe instances to launch (default: 1).
 
+.PARAMETER NodeIp
+    Address these nodes advertise into etcd (NODE_IP). Default 127.0.0.1.
+    Pass a LAN address when a client on another device must reach them, or
+    'auto' to let the engine probe for one. See the parameter block below.
+
 .EXAMPLE
     # Start all nodes with default counts
     pwsh -File tools/scripts/cpp_nodes.ps1 -Command start
@@ -31,6 +36,9 @@
 
     # Start only scene nodes
     pwsh -File tools/scripts/cpp_nodes.ps1 -Command start -Nodes scene
+
+    # Let a client on another device connect to this machine's gate
+    pwsh -File tools/scripts/cpp_nodes.ps1 -Command start -NodeIp 192.168.2.28
 
     # Check what's running
     pwsh -File tools/scripts/cpp_nodes.ps1 -Command status
@@ -54,7 +62,31 @@ param(
     #   * Each child process inherits ZONE_ID=<Zone>, which the C++ engine
     #     honours via libs/engine/config/config.cpp readGameConfig() override.
     # Zone=0 (default) keeps legacy single-zone behaviour.
-    [int]$Zone = 0
+    [int]$Zone = 0,
+
+    # Address these nodes publish into etcd for other nodes and clients to dial,
+    # passed to the child process as NODE_IP (see Node::ResolveNodeIp).
+    #
+    # This is the *advertise* address, not the bind address: nodes always listen
+    # on 0.0.0.0 (override with BIND_IP). The two are separate on purpose, the
+    # same way etcd splits --listen-client-urls from --advertise-client-urls and
+    # Kafka splits listeners from advertised.listeners. Publishing an address
+    # that is local-but-wrong is the classic failure mode here — every process
+    # reports healthy and nothing can connect.
+    #
+    #   <ip>   advertise exactly this address
+    #   auto   leave NODE_IP unset and let the engine pick one by probing the
+    #          routing table (libs/engine/core/network/process_info.cpp localip())
+    #
+    # 127.0.0.1 is the right default for the usual single-box dev stack — gate,
+    # scene, the Go services, robot and the Java gateway all run on this machine
+    # — and unlike a detected address it survives switching WiFi, bringing a VPN
+    # up or down, and DHCP lease renewals. Deliberately not a hard-coded LAN
+    # address: that would be wrong on every other machine.
+    #
+    # Pass -NodeIp <lan-ip> when a client on another device has to reach these
+    # nodes. An already-exported NODE_IP beats the default but loses to -NodeIp.
+    [string]$NodeIp = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -98,6 +130,15 @@ function Get-InstanceCount {
         "scene" { return $SceneCount }
         default { return 1 }
     }
+}
+
+function Resolve-AdvertiseIp {
+    # Precedence: explicit -NodeIp > already-exported NODE_IP > safe default.
+    # Returns $null to mean "leave NODE_IP unset and let the engine detect".
+    if ($NodeIp -eq "auto") { return $null }
+    if (-not [string]::IsNullOrWhiteSpace($NodeIp)) { return $NodeIp.Trim() }
+    if (-not [string]::IsNullOrWhiteSpace($env:NODE_IP)) { return $env:NODE_IP.Trim() }
+    return "127.0.0.1"
 }
 
 function Wait-ForStartupBanner {
@@ -162,6 +203,14 @@ function Invoke-Start {
     $pids  = Read-PidFile
     $launchedInstances = @()
 
+    # Resolved once so every instance in this batch advertises the same address.
+    $advertiseIp = Resolve-AdvertiseIp
+    if ($null -eq $advertiseIp) {
+        Write-Host "[addr]  NODE_IP unset - nodes will detect their own address" -ForegroundColor DarkGray
+    } else {
+        Write-Host "[addr]  advertising NODE_IP=$advertiseIp (listen stays 0.0.0.0)" -ForegroundColor DarkGray
+    }
+
     if (-not (Test-Path $LogDir)) { New-Item -ItemType Directory -Path $LogDir -Force | Out-Null }
 
     # muduo AsyncLogging fopen("a") does NOT create intermediate directories on
@@ -207,12 +256,16 @@ function Invoke-Start {
 
             Write-Host "[start] $instanceKey  ($($info.Desc))" -ForegroundColor Cyan
 
-            # ZONE_ID env var is read by libs/engine/config/config.cpp at startup
-            # and overrides the YAML ZoneId. Temporarily mutate the parent shell
-            # env so the child process inherits it; Start-Process has no native
-            # per-process env override on Windows PowerShell.
-            $prevZoneEnv = $env:ZONE_ID
+            # ZONE_ID and NODE_IP are read by the C++ engine at startup and
+            # override the YAML ZoneId / detected address respectively. Temporarily
+            # mutate the parent shell env so the child process inherits them;
+            # Start-Process has no native per-process env override on Windows
+            # PowerShell. Both are restored in the finally block, including the
+            # "was not set before" case.
+            $prevZoneEnv   = $env:ZONE_ID
+            $prevNodeIpEnv = $env:NODE_IP
             if ($Zone -gt 0) { $env:ZONE_ID = "$Zone" }
+            if ($null -ne $advertiseIp) { $env:NODE_IP = $advertiseIp }
             try {
                 $proc = Start-Process -FilePath $exePath `
                     -WorkingDirectory $BinDir `
@@ -223,6 +276,8 @@ function Invoke-Start {
             } finally {
                 if ($null -eq $prevZoneEnv) { Remove-Item Env:ZONE_ID -ErrorAction SilentlyContinue }
                 else { $env:ZONE_ID = $prevZoneEnv }
+                if ($null -eq $prevNodeIpEnv) { Remove-Item Env:NODE_IP -ErrorAction SilentlyContinue }
+                else { $env:NODE_IP = $prevNodeIpEnv }
             }
 
             $pids | Add-Member -NotePropertyName $instanceKey -NotePropertyValue $proc.Id -Force

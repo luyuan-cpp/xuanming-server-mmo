@@ -417,6 +417,17 @@ uint32_t Bag::AddNonStackableItem(ItemComp itemProto, std::vector<Guid> *written
 	// 只有"单件"才允许沿用调用方预设的 guid;多件无法共用一个 guid,必须各自铸新。
 	const bool honorPreassignedGuid = (pieceCount == 1);
 
+	// 本次会铸号(非"单件沿用预设 guid")而发号器已不可用:在写入任何一件之前整体拒绝。
+	// 见 CanMintItemGuid 注释——放行会把 kInvalidGuid 哨兵当 item_id 持久化。
+	const bool willMint = !honorPreassignedGuid || IsInvalidItemGuid(itemProto);
+	if (willMint && !CanMintItemGuid())
+	{
+		LOG_ERROR << "AddNonStackableItem: item guid generator unavailable (fenced or uninitialised), "
+			<< "refusing to add config " << itemProto.config_id() << " x" << pieceCount
+			<< " for player " << PlayerGuid();
+		return PrintStackAndReturnError(kBagAddItemInvalidParam);
+	}
+
 	for (uint32_t i = 0; i < pieceCount; ++i) // 逐件创建并入格
 	{
 		ItemComp piece = itemProto; // 复制一份作为这一件
@@ -426,6 +437,14 @@ uint32_t Bag::AddNonStackableItem(ItemComp itemProto, std::vector<Guid> *written
 		if (!honorPreassignedGuid || IsInvalidItemGuid(piece))
 		{
 			piece.set_item_id(GenerateItemGuid());
+			// 入口门(willMint && !CanMintItemGuid)已挡掉可预见的失败;这里是最后防线,
+			// 铸出哨兵值绝不能落进 InsertItemEntity。tls 单线程下理论不可达,达了就是新 bug。
+			if (IsInvalidItemGuid(piece))
+			{
+				LOG_ERROR << "AddNonStackableItem: minted an invalid guid mid-loop (piece " << i
+					<< "), player " << PlayerGuid();
+				return PrintStackAndReturnError(kBagAddItemInvalidParam);
+			}
 		}
 		const auto guid = piece.item_id();
 
@@ -505,6 +524,14 @@ uint32_t Bag::SpillIntoNewGrids(ItemComp proto, uint32_t maxStackSize,
 	{
 		ItemComp piece = proto;
 		piece.set_item_id(GenerateItemGuid());
+		// 入口门(AddStackableItem 在 ApplyStackFill 前已查 CanMintItemGuid)挡掉可预见的
+		// 失败;这里是最后防线,哨兵 guid 绝不能落进 InsertItemEntity。
+		if (IsInvalidItemGuid(piece))
+		{
+			LOG_ERROR << "SpillIntoNewGrids: minted an invalid guid mid-loop (grid " << i
+				<< "), player " << PlayerGuid();
+			return PrintStackAndReturnError(kBagAddItemInvalidParam);
+		}
 		const uint32_t put = maxStackSize < remaining ? maxStackSize : remaining;
 		piece.set_size(put);
 		remaining -= put;
@@ -541,6 +568,16 @@ uint32_t Bag::AddStackableItem(ItemComp itemProto, uint32_t maxStackSize,
 		if (IsSpaceInsufficient(newGridCount))
 		{
 			return PrintStackAndReturnError(kBagAddItemBagFull);
+		}
+		// 溢出到新格要铸号。发号器不可用时必须**在 ApplyStackFill 之前**拒绝 ——
+		// 一旦先灌了旧堆才在 SpillIntoNewGrids 里失败,就违反了本函数开头声明的
+		// "先规划后写入"事务纪律,留下半完成的脏状态。见 CanMintItemGuid 注释。
+		if (!CanMintItemGuid())
+		{
+			LOG_ERROR << "AddStackableItem: item guid generator unavailable (fenced or uninitialised), "
+				<< "refusing to add config " << itemProto.config_id() << " x" << itemProto.size()
+				<< " for player " << PlayerGuid();
+			return PrintStackAndReturnError(kBagAddItemInvalidParam);
 		}
 	}
 
@@ -641,6 +678,17 @@ void Bag::ExpandCapacity(std::size_t sz)
 Guid Bag::GenerateItemGuid()
 {
 	return tlsSnowflakeManager.GenerateItemGuid();
+}
+
+bool Bag::CanMintItemGuid() const
+{
+	// 发号器被 fence(失去 node_id 所有权)或本线程从未 OnNodeStart 时,
+	// GenerateItemGuid() 只会返回 kInvalidGuid。铸号型写入必须在**改动任何背包状态之前**
+	// 用它把整个操作拒掉:kInvalidGuid 恰好等于"0=无效"哨兵,一旦被 set 进 item_id 并
+	// InsertItemEntity,就是一件 guid 为哨兵值的物品被持久化进玩家 blob(数据完整性破坏),
+	// 且第二件同样的插入会撞 DuplicateGuid,报错方向完全误导排障。
+	// tls 单线程,本调用与后续铸号之间状态不会被并发翻转,先查后铸没有 TOCTOU。
+	return tlsSnowflakeManager.IsInitialized() && !tlsSnowflakeManager.IsFenced();
 }
 
 bool Bag::IsInvalidItemGuid(const ItemComp &item) const

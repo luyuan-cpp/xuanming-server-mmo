@@ -33,6 +33,11 @@ func newMysqlConfig() *mysql.Config {
 	myCnf.Addr = config.AppConfig.ServerConfig.Database.Hosts
 	myCnf.Net = config.AppConfig.ServerConfig.Database.Net
 	myCnf.DBName = config.AppConfig.ServerConfig.Database.DBName
+	// 强制会话级严格模式:玩家权威数据是 MEDIUMBLOB 里的 protobuf,非严格模式下超长写入
+	// 会 err=nil 静默截断,下次 proto.Unmarshal 必失败且无任何日志可追溯,损失面是整个 zone。
+	// 用连接参数在每条连接建立时 SET(会话级覆盖 global),而非仅做启动断言——这样即使
+	// MySQL 服务端 global 未配严格模式,本服务的写入路径依然是严格的。
+	myCnf.Params = map[string]string{"sql_mode": "'STRICT_TRANS_TABLES'"}
 	return myCnf
 }
 

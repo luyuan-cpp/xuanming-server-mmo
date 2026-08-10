@@ -199,9 +199,7 @@ func readInt64(svcCtx *svc.ServiceContext, key string) int64 {
 }
 
 // removeNodeFromRedis cleans up a node's load-set entry, cached connection,
-// and mirrored scene_node_type. scene_count / player_count counters are
-// intentionally left alone: they may still be referenced by in-flight
-// instance destroys; the next node that reuses the id will overwrite them.
+// and mirrored scene_node_type.
 //
 // It also kicks off orphan scene reconciliation — instance scenes that
 // were hosted on this dead node are force-destroyed, since the C++
@@ -217,6 +215,27 @@ func removeNodeFromRedis(svcCtx *svc.ServiceContext, entry nodeEntry) {
 	logx.Infof("[LoadReporter] removed node %s from Redis load set (zone %d)", entry.nodeID, entry.reg.ZoneId)
 
 	reconcileDeadNodeScenes(svcCtx, entry)
+
+	// scene_count / player_count 必须在 reconcile **之后**清掉。
+	// 这两个键全仓只有 Incr/Decr,没有任何"节点重新上线时归零"的路径 ——
+	// 旧注释声称"下一个复用 id 的节点会覆盖它们"是不成立的:死节点残留的
+	// 正计数会被复用同 id 的新节点原样继承,负载分永久虚高,调度一直躲着它。
+	// 顺序放在 reconcile 之后,是因为 reconcile 里的 destroyInstanceForce
+	// 自己还会对这两个键做减法;先删会被它们重新建出来。删完之后若还有
+	// 极晚到的在途 destroy 把键重建成小负数,player_count 有 <0 归零钳制,
+	// scene_count 的 -1 会被新节点的第一次 Incr 冲平 —— 都是有界的,
+	// 与无界的正残留不同。
+	deleteNodeCounters(svcCtx, entry.reg.ZoneId, entry.nodeID)
+}
+
+// deleteNodeCounters 清掉一个已判死节点的负载计数键。
+func deleteNodeCounters(svcCtx *svc.ServiceContext, zoneID uint32, nodeID string) {
+	if _, err := svcCtx.Redis.Del(nodeSceneCountKey(zoneID, nodeID)); err != nil {
+		logx.Errorf("[LoadReporter] failed to delete scene_count for dead node %s (zone %d): %v", nodeID, zoneID, err)
+	}
+	if _, err := svcCtx.Redis.Del(nodePlayerCountKey(zoneID, nodeID)); err != nil {
+		logx.Errorf("[LoadReporter] failed to delete player_count for dead node %s (zone %d): %v", nodeID, zoneID, err)
+	}
 }
 
 // reconcileDeadNodeScenes is invoked when a node disappears from etcd.
@@ -481,6 +500,9 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 				svcCtx.Redis.Zrem(loadKey, p.Key)
 				svcCtx.Redis.Del(nodeSceneNodeTypeKey(zoneId, p.Key))
 				RemoveNodeConn(zoneId, p.Key)
+				// SceneManager 停机期间死掉的节点走不到 watch DELETE,
+				// 计数残留同样要在这里清(理由见 removeNodeFromRedis)。
+				deleteNodeCounters(svcCtx, zoneId, p.Key)
 			}
 		}
 	}

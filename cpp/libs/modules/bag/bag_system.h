@@ -189,6 +189,9 @@ private:
     void ClearAllItems();
 
     Guid GenerateItemGuid();
+    // 发号器当前能否铸出合法 guid(未 fence 且本线程已 OnNodeStart)。
+    // 铸号型写入必须在改动任何背包状态之前用它 fail-closed,见 cpp 内注释。
+    bool CanMintItemGuid() const;
     bool IsInvalidItemGuid(const ItemComp &item) const;
     uint32_t AllocateGridSlot(Guid guid);
     static bool CanStack(const ItemComp &leftItem, const ItemComp &rightItem);

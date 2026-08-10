@@ -90,6 +90,10 @@ param(
     [string[]]$CppNodes = @(),
     [int]$GateCount = 1,
     [int]$SceneCount = 1,
+    # Address the C++ nodes advertise into etcd (forwarded to cpp_nodes.ps1 as
+    # -NodeIp -> NODE_IP). Empty = that script's default of 127.0.0.1; pass a LAN
+    # address for off-box clients, or 'auto' to let the engine detect one.
+    [string]$NodeIp = "",
     [switch]$UseVSGenerator,
 
     # Local multi-zone stress launch (dev-start-zones).
@@ -629,7 +633,7 @@ Java service Docker image commands:
     -Command java-svc-push-image  [-JavaSvcRegistry <registry> -JavaSvcTag <tag>]
 
 C++ node commands (local dev):
-    -Command cpp-node-start [-CppNodes gate,scene] [-GateCount N] [-SceneCount N]
+    -Command cpp-node-start [-CppNodes gate,scene] [-GateCount N] [-SceneCount N] [-NodeIp <ip>|auto]
     -Command cpp-node-stop  [-CppNodes gate,...]
     -Command cpp-node-status
     -Command cpp-node-list
@@ -705,7 +709,7 @@ switch ($Command) {
     "go-svc-push-images"  { & (Join-Path $ScriptDir "go_svc_image.ps1") -Command push-all  -Registry $GoSvcRegistry -Tag $GoSvcTag -DryRun:$DryRun }
     "java-svc-build-image" { & (Join-Path $ScriptDir "java_svc_image.ps1") -Command build -Registry $JavaSvcRegistry -Tag $JavaSvcTag -DryRun:$DryRun }
     "java-svc-push-image"  { & (Join-Path $ScriptDir "java_svc_image.ps1") -Command push  -Registry $JavaSvcRegistry -Tag $JavaSvcTag -DryRun:$DryRun }
-    "cpp-node-start"  { & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command start  -Nodes $CppNodes -GateCount $GateCount -SceneCount $SceneCount -Zone $Zone }
+    "cpp-node-start"  { & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command start  -Nodes $CppNodes -GateCount $GateCount -SceneCount $SceneCount -Zone $Zone -NodeIp $NodeIp }
     "cpp-node-stop"   { & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command stop   -Nodes $CppNodes }
     "cpp-node-status" { & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command status }
     "cpp-node-list"   { & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command list   }
@@ -713,13 +717,13 @@ switch ($Command) {
         Write-Host "=== Starting Go services ===" -ForegroundColor Cyan
         & (Join-Path $ScriptDir "go_services.ps1") -Command start -Services $GoServices -Counts $GoCounts -PortStride $GoPortStride -NoTier:$NoTier -TierReadySeconds $TierReadySeconds
         Write-Host "`n=== Starting C++ nodes ==="  -ForegroundColor Cyan
-        & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command start -Nodes $CppNodes -GateCount $GateCount -SceneCount $SceneCount
+        & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command start -Nodes $CppNodes -GateCount $GateCount -SceneCount $SceneCount -NodeIp $NodeIp
     }
     "dev-start-exe" {
         Write-Host "=== Starting Go services (exe) ===" -ForegroundColor Cyan
         & (Join-Path $ScriptDir "go_services.ps1") -Command start-exe -Services $GoServices -Counts $GoCounts -PortStride $GoPortStride -NoTier:$NoTier -TierReadySeconds $TierReadySeconds
         Write-Host "`n=== Starting C++ nodes ==="  -ForegroundColor Cyan
-        & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command start -Nodes $CppNodes -GateCount $GateCount -SceneCount $SceneCount
+        & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command start -Nodes $CppNodes -GateCount $GateCount -SceneCount $SceneCount -NodeIp $NodeIp
     }
     "dev-start-zones" {
         # Multi-zone local stress launch. Each zone gets its own go services
@@ -733,7 +737,7 @@ switch ($Command) {
             Write-Host "`n>>> Zone ${z}: starting Go services (exe) ..." -ForegroundColor Cyan
             & (Join-Path $ScriptDir "go_services.ps1") -Command start-exe -Services $GoServices -Counts $GoCounts -PortStride $GoPortStride -NoTier:$NoTier -TierReadySeconds $TierReadySeconds -Zone $z -ZonePortShift $ZonePortShift
             Write-Host "`n>>> Zone ${z}: starting C++ nodes ..." -ForegroundColor Cyan
-            & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command start -Nodes $CppNodes -GateCount $GateCount -SceneCount $SceneCount -Zone $z
+            & (Join-Path $ScriptDir "cpp_nodes.ps1") -Command start -Nodes $CppNodes -GateCount $GateCount -SceneCount $SceneCount -Zone $z -NodeIp $NodeIp
         }
         Write-Host "`nAll zones launched. Use 'dev status' to inspect." -ForegroundColor Green
     }

@@ -101,14 +101,14 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		// 老 gate 若还没彻底退出就会把这条 GateCommand 一起消费掉，把玩家踢/重定向到
 		// 一个已经不属于它的会话上。GateInstanceId 是唯一能区分两代进程的字段。
 		//
-		// 这里**故意只报警不拒绝**：C++ 侧 6 个 EnterSceneRequest 构造点里
-		// s2s_player_scene_handler.cpp 与 s2s_player_scene_response_handler.cpp
-		// 目前还没有填这个字段，现在就 fail-closed 会把这两条正常链路打死。
-		// 待 C++ 补齐后（并给 logic_test.go 里 13 处 GateId 用例补上该字段），
-		// 把下面这段换成 errResp(constants.ErrInvalidGateID, ...) 直接拒绝。
+		// fail-closed 是安全的:全部真实调用方都已填该字段 —— gate C++ 在
+		// client_message_processor.cpp 两处 set_gate_instance_id(node_uuid),
+		// login 透传 sessionDetails.GetGateInstanceId(),场景侧 4 个
+		// EnterSceneRequest 构造点也都填了(此前审计记录里说"还有两处没填"
+		// 是把 GsEnterSceneRequest(scene↔scene S2S)误认成了本 RPC 的请求)。
 		if in.GateInstanceId == "" {
-			l.Logger.Errorf("INVARIANT: EnterScene 缺少 gate_instance_id，gate 防僵尸过滤已失效: player=%d gate=%s",
-				in.PlayerId, in.GateId)
+			return errResp(constants.ErrInvalidGateID,
+				"missing gate_instance_id (required for gate anti-zombie filtering)"), nil
 		}
 	}
 

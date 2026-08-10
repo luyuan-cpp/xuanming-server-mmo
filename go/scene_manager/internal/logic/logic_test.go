@@ -579,7 +579,7 @@ func TestEnterScene_CrossNodeRejectedWithoutSideEffectsAndRetryStaysRejected(t *
 	releasesBefore := fake.releaseCalls.Load()
 	request := &scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneConfId: confID, ZoneId: testZoneId,
-		GateZoneId: testZoneId, GateId: "1", RequestId: "cross-node-retry",
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test", RequestId: "cross-node-retry",
 	}
 
 	for attempt := 1; attempt <= 2; attempt++ {
@@ -631,7 +631,7 @@ func TestEnterScene_ExistingLocationCrossZoneRejectedAndReservationRolledBack(t 
 
 	resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneConfId: confID, ZoneId: 2,
-		GateZoneId: 1, GateId: "1",
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode)
@@ -673,7 +673,7 @@ func TestEnterScene_ZoneScopedNodeIDCollisionStillRejected(t *testing.T) {
 
 	resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneId: targetID, ZoneId: 2,
-		GateZoneId: 2, GateId: "1",
+		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode)
@@ -713,7 +713,7 @@ func TestEnterScene_SameNodeSwitchStillSucceeds(t *testing.T) {
 	releasesBefore := fake.releaseCalls.Load()
 	resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
-		GateZoneId: testZoneId, GateId: "1",
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, uint32(0), resp.ErrorCode)
@@ -739,7 +739,7 @@ func TestEnterScene_FirstLandingStillSucceeds(t *testing.T) {
 
 	resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: 5104, SceneId: targetID, ZoneId: testZoneId,
-		GateZoneId: testZoneId, GateId: "1",
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, uint32(0), resp.ErrorCode)
@@ -767,7 +767,7 @@ func TestEnterScene_CorruptPlayerLocationFailsClosedBeforeReservation(t *testing
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
-		GateZoneId: testZoneId, GateId: "1", RequestId: "corrupt-location",
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test", RequestId: "corrupt-location",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrRedis, resp.ErrorCode)
@@ -801,7 +801,7 @@ func TestEnterScene_KafkaRouteFailureRollsBackFirstLanding(t *testing.T) {
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
-		GateZoneId: testZoneId, GateId: "1", RequestId: "route-broker-failure",
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test", RequestId: "route-broker-failure",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
@@ -860,7 +860,7 @@ func TestEnterScene_InvalidSceneNodeIDReleasesAutoReservation(t *testing.T) {
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneConfId: confID, ZoneId: testZoneId,
-		GateZoneId: testZoneId, GateId: "1",
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrInvalidNodeID, resp.ErrorCode)
@@ -898,7 +898,7 @@ func TestEnterScene_RouteFailureRestoresResolvedOldZoneCounters(t *testing.T) {
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneId: newScene, ZoneId: testZoneId,
-		GateZoneId: testZoneId, GateId: "1",
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
@@ -942,7 +942,7 @@ func TestEnterScene_RouteFailureCASDoesNotOverwriteConcurrentLocation(t *testing
 
 	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneId: newScene, ZoneId: testZoneId,
-		GateZoneId: testZoneId, GateId: "1",
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
@@ -975,7 +975,7 @@ func TestEnterScene_RedirectKafkaFailureIsNotCached(t *testing.T) {
 	}
 	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneConfId: confID, ZoneId: 2, GateZoneId: 1,
-		GateId: "1", RequestId: "redirect-broker-failure",
+		GateId: "1", GateInstanceId: "gate-uuid-test", RequestId: "redirect-broker-failure",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
@@ -1001,7 +1001,7 @@ func TestEnterScene_DirectSuccessReplaysFullCachedResponse(t *testing.T) {
 	mr.Set(fmt.Sprintf(InstancePlayerCountKey, targetID), "0")
 	request := &scene_manager.EnterSceneRequest{
 		PlayerId: 5110, SceneId: targetID, ZoneId: testZoneId,
-		GateZoneId: testZoneId, GateId: "1", RequestId: "direct-success-replay",
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test", RequestId: "direct-success-replay",
 	}
 	dedupeKey := fmt.Sprintf("enter_scene:dedup:%d:%s", request.PlayerId, request.RequestId)
 

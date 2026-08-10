@@ -1057,6 +1057,45 @@ TEST(GainBlockServiceTest, GlobalAndPerPlayerBlockCombo)
     GainBlockService::ClearAllGlobalBlocks();
 }
 
+// ⚠️ 本套件必须保持在**文件最后**:Fence() 是单向的,tlsSnowflakeManager 是进程级 tls 单例,
+// fence 之后本线程再也铸不出合法 guid —— 在它后面声明的任何铸号型用例都会被连坐挂掉。
+// (gtest 默认按声明序执行;请勿对本文件开 --gtest_shuffle。)
+//
+// 钉住的契约:发号器被 fence(失去 node_id 所有权)后,铸号型入包必须在**改动任何背包状态
+// 之前**整体拒绝 —— 绝不能把 kInvalidGuid 哨兵当 item_id 写进背包持久化;
+// 而不需要铸号的路径(纯并堆)不受影响。修复前:AddItem 会静默插入一件 guid=0 的物品。
+TEST(BagFencedGeneratorTest, MintingPathsFailClosedWhileMergeStillWorks)
+{
+    // 堆叠上限从表读(kStack10 的 10 是 config_id,不是上限),所有数量按它推导,不硬编码。
+    const uint32_t maxStack = MaxStack(kStack10);
+    ASSERT_GE(maxStack, 4u) << "用例前提:该物品堆叠上限至少 4";
+
+    Bag bag;
+    bag.ExpandCapacity(kBagMaxCapacity);
+
+    // 铺底:一堆差 3 满(留出"能并 2 还剩 1 空位"的余量)。
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, maxStack - 3)));
+    EXPECT_EQ(1, bag.OccupiedGridCount());
+
+    tlsSnowflakeManager.Fence();
+
+    // ① 纯并堆不铸号:fence 后必须照常成功(门的作用域只限"会铸号"的路径)。并 2,还剩 1 空位。
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, 2)));
+    EXPECT_EQ(1, bag.OccupiedGridCount());
+
+    // ② 并 1 + 溢 1 要铸号:必须整体失败,且旧堆**一点都不能动**——
+    //    若先灌了旧堆再失败,就留下"满堆 + 丢 1 个"的半写脏状态。
+    //    判据:失败后再并 1 个仍能成功 ⇒ 旧堆刚才没被灌,空位还在。
+    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kStack10, 2)));
+    EXPECT_EQ(1, bag.OccupiedGridCount());
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, 1))); // 恰好装满旧堆
+    EXPECT_EQ(1, bag.OccupiedGridCount());
+
+    // ③ 不可堆叠必铸号:整体失败,零写入。
+    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kNonStack1, 1)));
+    EXPECT_EQ(1, bag.OccupiedGridCount());
+}
+
 int main(int argc, char **argv)
 {
     if (!test_config::FindAndLoadTestConfig(argc, argv))

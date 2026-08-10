@@ -55,7 +55,10 @@ type SnapshotStore struct {
 
 // NewSnapshotStore creates a new SnapshotStore and ensures tables exist.
 func NewSnapshotStore(cfg MySQLConfig) (*SnapshotStore, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4",
+	// sql_mode=%27STRICT_TRANS_TABLES%27 强制会话级严格模式(%27 是被 URL 转义的单引号,
+	// 驱动会还原成 SET sql_mode = 'STRICT_TRANS_TABLES')。玩家快照是 LONGBLOB 里的序列化
+	// 数据,非严格模式下超长写入会静默截断且无报错;这里在连接层兜底,与 go/db 同口径。
+	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4&sql_mode=%%27STRICT_TRANS_TABLES%%27",
 		cfg.User, cfg.Password, cfg.Host, cfg.DBName)
 
 	db, err := sql.Open("mysql", dsn)

@@ -886,7 +886,7 @@ Etcd:
   Key: login.rpc
 Node:
   ZoneId: ${CurrentZoneId}
-  SessionExpireMin: 1
+  SessionExpireMin: 30
   MaxLoginDevices: 3
   LeaseTTL: 500
   QueueShardCount: 50

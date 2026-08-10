@@ -22,6 +22,12 @@ metadata:
     tier: go-svc
 spec:
   replicas: 1
+  # scene-manager 跑着 world_autoscale / agones_reconcile 两个无选主的单写者循环,
+  # 默认 RollingUpdate 在 1 副本上仍会 maxSurge 出第二个 pod,滚动期间两份 autoscaler
+  # 会对同一批 zone 并发做伸缩决策。Recreate 先关旧 pod 再起新 pod,消除重叠窗口。
+  # 正解是把 loginqueue/dispatcher.go 的选主抽到 go/shared/leader 后复用;在那之前用它兜底。
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: scene-manager
