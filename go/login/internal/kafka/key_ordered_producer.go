@@ -11,6 +11,7 @@ import (
 
 	"login/internal/logic/pkg/consistent"
 	db_proto "proto/db"
+	"shared/safego"
 
 	"github.com/IBM/sarama"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -149,9 +150,12 @@ func NewKeyOrderedKafkaProducer(cfg config.KafkaConfig) (*KeyOrderedKafkaProduce
 		return make([]byte, 0, 1024)
 	}
 
-	go kp.syncPartitions(cfg.SyncInterval)
-	go kp.monitorStats(cfg.StatsInterval)
-	go kp.checkUnavailablePartitions()
+	// safego:这三条后台循环任意一条 panic,旧写法都会直接打死 login 进程,
+	// 而日志里只剩一段 runtime 栈。换成命名点位后,
+	// safego_panic_total{point="login.kafka_*"} 能直接指出是哪条。
+	safego.Go("login.kafka_sync_partitions", func() { kp.syncPartitions(cfg.SyncInterval) })
+	safego.Go("login.kafka_monitor_stats", func() { kp.monitorStats(cfg.StatsInterval) })
+	safego.Go("login.kafka_check_unavailable_partitions", kp.checkUnavailablePartitions)
 
 	return kp, nil
 }

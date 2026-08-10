@@ -41,6 +41,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
+
+	"shared/safego"
 )
 
 // Dispatcher coordinates queue draining across login replicas.
@@ -112,7 +114,10 @@ func (d *Dispatcher) Start() {
 	// pod looks "missing" in Grafana for ~lockTTL/3 seconds.
 	dispatcherIsLeaderGauge.Set(0, d.podLabel())
 
-	go d.electAndRun(ctx)
+	// safego:选主循环 panic 会让这个副本永远不再参选,而队列没有 leader 时
+	// 所有排队玩家都晾在那里。裸 go func 的旧写法是"炸了就整进程死",
+	// 现在换成"记点位 + 计数",故障可见且不牵连其它链路。
+	safego.Go("login.queue_dispatcher", func() { d.electAndRun(ctx) })
 }
 
 // SetPodID supplies the metric label for dispatcher_is_leader. Optional;

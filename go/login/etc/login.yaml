@@ -110,10 +110,68 @@ SceneManagerRpc:
   Middlewares:
     Breaker: false
 
-# Shared HMAC secret for Gate connection tokens.
-# Login signs tokens with this secret; Gate verifies them.
-# Must match GateTokenSecret in bin/etc/base_deploy_config.yaml.
-GateTokenSecret: "change-me-in-production-use-a-strong-random-key"
+# ─────────────────────────────────────────────────────────────────────────
+# HMAC 密钥治理(见 internal/config/secrets.go 包注释)
+#
+# 一个用途一把钥匙,每把都支持三段式不停服轮换:
+#   ① 新密钥先进 Additional/AdditionalEnv(全部实例都能"验") →
+#   ② 提升为 Env/Value(开始用新密钥"签") →
+#   ③ 旧密钥从 Additional 摘掉。
+# 每一步都能单独滚动发布,任意时刻新旧凭据都验得过。
+#
+# ⚠️ 生产模式(Mode 不是 dev/test)的启动门禁:
+#   - 密钥不得为空、不得是占位串、不得短于 32 字节;
+#   - 三把密钥的主密钥两两不得相同;
+#   - 违反任意一条 **直接拒绝启动**(见 login.go 里的 ResolveSecrets)。
+# 生产请只填 Env(环境变量名),把密钥留在 K8s Secret 里,别写进本文件
+# —— 与 PasswordAuth.DSNEnv / DevPasswordAuth.SharedSecretEnv 同一套纪律。
+#
+# ⚠️ 本文件里的 Value 一律以 "local-dev-" 开头,而 "local-dev" 被登记在
+# secrets.go 的占位前缀表里 —— 也就是说**这些值在生产模式下必定被拒绝**。
+# 这是刻意的:凡是进过 git 的密钥都等于公开值,不能有任何路径让它上生产。
+# 生产写法是把 Env 这行取消注释、Value 删掉:
+#     GateToken:
+#       Env: "LOGIN_GATE_TOKEN_SECRET"
+# 注意 Env 一旦填了,对应环境变量缺失会**直接报错**(不会静默回落到 Value),
+# 所以本地默认配置里保持注释状态。
+Secrets:
+  # GateToken:签发给客户端、由 cpp gate 校验的连接票据。
+  # 换这把密钥必须和 bin/etc/base_deploy_config.yaml 的 gate_token_secret
+  # 同步(gate 侧目前只认单把,所以顺序是"先让 gate 认新密钥,再切这里")。
+  GateToken:
+    # Env: "LOGIN_GATE_TOKEN_SECRET"
+    Value: "local-dev-gate-token-secret-0123456789abcdef"
+    # 轮换期把上一把密钥放这里,只验不签:
+    # AdditionalEnv:
+    #   - "LOGIN_GATE_TOKEN_SECRET_PREV"
+  # QueueToken:登录排队的不透明 token,login 自签自验。
+  # 原来它复用 GateTokenSecret(见 docs/design/login-queue-2026-05.md:194),
+  # 信任域没拆 —— 现在拆开,一处泄露不再牵连另一处。
+  QueueToken:
+    # Env: "LOGIN_QUEUE_TOKEN_SECRET"
+    Value: "local-dev-queue-token-secret-0123456789abcdef"
+  # InternalAuth:内部调用方身份声明(x-session-detail-bin)的验签密钥。
+  # 上游(cpp gate / Java gateway)必须用同一把密钥按 callerauth 规范签名。
+  InternalAuth:
+    # Env: "LOGIN_INTERNAL_AUTH_SECRET"
+    Value: "local-dev-internal-auth-secret-0123456789abcdef"
+
+# 内部调用方验签策略。
+# **生产模式恒强制验签,这里没有任何开关能关掉它**;
+# ForceEnforce 只是让 dev/test 提前进入强制档,方便上游接完签名后联调。
+InternalAuth:
+  ForceEnforce: false
+  MaxClockSkew: 30s
+  MaxNonceEntries: 500000
+  # 留空表示不限制调用方名字(签名仍然必须验过)。
+  # AllowedCallers:
+  #   - "gate"
+  #   - "gateway"
+
+# ⚠️ 已废弃:单个 string 无法不停服轮换,而且 gate/queue 两种 token 共用它。
+# 保留只为兼容仓外的 deploy/*.yaml 与 tools/scripts/k8s_deploy.ps1;
+# 配了 Secrets.GateToken 之后这行就不再生效。新部署不要再写它。
+# GateTokenSecret: ""
 
 # Access/refresh token TTL (WeChat/QQ game login style dual-token)
 # Access token: used for reconnect without re-auth from third-party (default 2h)

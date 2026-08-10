@@ -2,12 +2,11 @@
 package main
 
 import (
-	"encoding/base64"
 	"errors"
 	"flag"
 	"fmt"
 	"login/internal/config"
-	"login/internal/logic/pkg/ctxkeys"
+	"login/internal/logic/pkg/callerauth"
 	"login/internal/logic/pkg/node"
 	loginserver "login/internal/server/clientplayerlogin"
 	loginadminserver "login/internal/server/loginadmin"
@@ -19,6 +18,8 @@ import (
 	login_proto_login "proto/login"
 	"shared/grpcstats"
 	"shared/kafkautil"
+	"shared/safego"
+	"shared/serverbase"
 	"shared/snowflakealloc"
 	"strconv"
 	"time"
@@ -29,9 +30,7 @@ import (
 	"github.com/zeromicro/go-zero/zrpc"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/reflection"
-	"google.golang.org/protobuf/proto"
 )
 
 var configFile = flag.String("loginService", "etc/login.yaml", "the config file path")
@@ -43,6 +42,18 @@ func main() {
 
 	// Load config file
 	conf.MustLoad(*configFile, &config.AppConfig)
+
+	// 密钥门禁必须跑在**任何外部连接之前**(Kafka / Redis / etcd 都在下面)。
+	// 生产模式下密钥为空、等于占位串、短于 32 字节、或不同用途复用同一把,
+	// 一律拒绝启动 —— 一个用占位密钥起来的 login,比起不来危险得多。
+	secrets, warnings, err := config.ResolveSecrets(&config.AppConfig, os.LookupEnv)
+	for _, w := range warnings {
+		logx.Errorf("SECURITY WARNING: %s", w)
+	}
+	if err != nil {
+		panic(fmt.Sprintf("HMAC 密钥配置不合格,拒绝启动: %v", err))
+	}
+	config.ActiveSecrets = secrets
 
 	// Derive zone-specific Kafka topic from ZoneId
 	config.AppConfig.Kafka.Topic = config.DbTaskTopicForGeneration(
@@ -179,7 +190,7 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 	// 水位值,继任者只需等墙钟越过水位即可,无需再加猜测性余量。
 	// 写失败只告警(与 snowflakealloc.advanceGuard 同理:水位是下一任的地板,
 	// 本进程自己的唯一性不依赖它),连续失败会让地板变陈旧,靠告警可见。
-	go func() {
+	safego.Go("login.player_id_watermark", func() {
 		const playerIDWatermarkLeadMs = 2000
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
@@ -194,20 +205,20 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 				}
 			}
 		}
-	}()
+	})
 
 	// 失租 = 本进程不再拥有这个机器位,必须立刻停止铸 PlayerId。
 	// **不能只靠停服**:go-zero 的 zrpc.RpcServer.Stop() 实测只有一行 logx.Close(),
 	// 既不拒新请求也不排空在途。所以正确性由 Fence() 保证(之后 Generate 一律失败,
 	// 建角整体失败),可用性由进程退出 + 编排重拉保证。
-	go func() {
+	safego.Go("login.snowflake_lease_fence", func() {
 		<-sfHandle.Lost()
 		ctx.SnowFlake.Fence() // ① 先关闸
 		logx.Error("Login snowflake worker id lease lost; player id generator fenced, exiting to let the " +
 			"orchestrator restart (zrpc Stop() only closes the logger and cannot stop serving)")
 		logx.Close() // ② 冲掉日志缓冲
 		os.Exit(1)   // ③ 退出;重启后拿新 worker id
-	}()
+	})
 
 	// Start gRPC server
 	if err := startServer(cfg, ctx); err != nil {
@@ -218,46 +229,42 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 	return nil
 }
 
-func SessionInterceptor(
-	ctx context.Context,
-	req interface{},
-	info *grpc.UnaryServerInfo,
-	handler grpc.UnaryHandler,
-) (interface{}, error) {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if ok {
-		if vals, exists := md["x-session-detail-bin"]; exists && len(vals) > 0 {
-			// Decode Base64
-			bin, err := base64.StdEncoding.DecodeString(vals[0])
-			if err != nil {
-				logx.Error("Base64 decode error:", err)
-			} else {
-				var detail login_proto.SessionDetails
-				if err := proto.Unmarshal(bin, &detail); err != nil {
-					logx.Error("Protobuf unmarshal error:", err)
-				} else {
-					ctx = ctxkeys.WithSessionDetails(ctx, &detail)
-				}
-			}
-		}
+// newSessionInterceptor 构造身份声明闸门。
+//
+// 这里替换掉的旧实现是全仓最严重的 P0:它把 metadata 里的
+// x-session-detail-bin 解出来就当可信身份写进 ctx,没有任何校验 ——
+// 任何能连到 login gRPC 端口的进程都可以自称是任意会话的任意玩家。
+// 现在改成 fail-closed:带了身份声明就必须带 HMAC 签名,验不过直接
+// Unauthenticated;不带声明的调用(Java Gateway 新链路)行为不变。
+//
+// 强制档由**运行模式**决定,配置关不掉(见 config.EnforceInternalAuth):
+// dev/test 放行并打 WARN,给上游 cpp gate / Java gateway 留出接签名的窗口;
+// 其余模式一律强制。
+func newSessionInterceptor(cfg config.Config) grpc.UnaryServerInterceptor {
+	enforce := config.EnforceInternalAuth(&cfg)
+	var secrets callerauth.SecretVerifier
+	if config.ActiveSecrets != nil {
+		secrets = config.ActiveSecrets.InternalAuth
 	}
 
-	// Execute the actual handler
-	resp, err := handler(ctx, req)
-
-	// ---- Attach session detail header to response ----
-	if detail, ok := ctxkeys.GetSessionDetails(ctx); ok {
-		if bin, err := proto.Marshal(detail); err == nil {
-			logx.Infof("Session info: %+v", detail)
-			val := base64.StdEncoding.EncodeToString(bin)
-			header := metadata.Pairs("x-session-detail-bin", val)
-			grpc.SendHeader(ctx, header)
-		} else {
-			logx.Error("Protobuf marshal error:", err)
-		}
+	if enforce {
+		logx.Info("内部调用方验签:强制档(验不过的身份声明一律拒绝)")
+	} else {
+		logx.Errorf("SECURITY WARNING: 内部调用方验签处于宽松档(Mode=%s),"+
+			"验不过的身份声明只告警不拦截;生产模式无法进入这一档", cfg.Mode)
 	}
 
-	return resp, err
+	return callerauth.UnaryServerInterceptor(callerauth.NewVerifier(callerauth.Options{
+		Secrets:         secrets,
+		Enforce:         enforce,
+		MaxClockSkew:    cfg.InternalAuth.MaxClockSkew,
+		MaxNonceEntries: cfg.InternalAuth.MaxNonceEntries,
+		AllowedCallers:  cfg.InternalAuth.AllowedCallers,
+		OnNonceOverflow: func() {
+			callerauth.RecordNonceOverflow()
+			logx.Error("callerauth nonce 表超过 MaxNonceEntries 被迫提前翻代,重放窗口临时缩短;请调大 InternalAuth.MaxNonceEntries")
+		},
+	}))
 }
 
 // startServer configures and starts the gRPC server.
@@ -272,8 +279,17 @@ func startServer(cfg config.Config, ctx *svc.ServiceContext) error {
 		}
 	})
 
+	// 拦截器顺序有讲究:
+	//   ① 身份闸门必须最先跑 —— 后面的观测层不该看到未认证请求带来的身份;
+	//   ② serverbase 把 in-band 业务码翻成日志 + 指标(本仓 handler 一律
+	//      `return resp, nil`,失败塞在响应体里,不挂这层监控上全是"成功");
+	//   ③ grpcstats 记调用量与耗时。
+	//
+	// login 的响应用的是 TipInfoMessage 这套 tip 码表,serverbase 默认就按
+	// TipVerdict 定性,不需要额外传 ErrorCodeClassifier。
 	server.AddUnaryInterceptors(
-		SessionInterceptor,
+		newSessionInterceptor(cfg),
+		serverbase.UnaryInterceptor(serverbase.Options{}),
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
 	)
 

@@ -20,9 +20,18 @@ type Config struct {
 	Kafka              KafkaConfig        `json:"Kafka"`
 	PlayerLocatorRpc   zrpc.RpcClientConf `json:"PlayerLocatorRpc"` // player_locator gRPC client
 	SceneManagerRpc    zrpc.RpcClientConf `json:"SceneManagerRpc"`  // scene_manager gRPC client
-	GateTokenSecret    string             `json:"GateTokenSecret"`  // HMAC secret for gate connection tokens
-	TableDir           string             `json:",default=../../generated/tables"`
-	AuthProviders      AuthConfig         `json:"AuthProviders,optional"` // Third-party auth provider config
+	// GateTokenSecret 已废弃:单个 string 无法不停服轮换,而且 gate token 与
+	// 排队 token 共用同一把密钥,信任域没拆。保留字段只为让 deploy/*.yaml 与
+	// tools/scripts/k8s_deploy.ps1 这些**仓外**部署产物在过渡期仍能起服
+	// (ResolveSecrets 会按兼容路径读它并打 WARN)。新配置请写 Secrets 块。
+	GateTokenSecret string `json:"GateTokenSecret,optional"`
+	// Secrets 是按用途隔离的 HMAC 密钥集合,支持三段式不停服轮换。
+	// 详见 secrets.go 的包注释。
+	Secrets SecretsConf `json:"Secrets,optional"`
+	// InternalAuth 是内部调用方身份声明(x-session-detail-bin)的验签策略。
+	InternalAuth  InternalAuthConf `json:"InternalAuth,optional"`
+	TableDir      string           `json:",default=../../generated/tables"`
+	AuthProviders AuthConfig       `json:"AuthProviders,optional"` // Third-party auth provider config
 	// DevSkipAuth 是已废弃的不安全开关。保留字段只为让旧配置在启动时
 	// 明确失败,不能因为结构体删字段而静默忽略、让开发者误以为仍生效。
 	DevSkipAuth     bool                `json:"DevSkipAuth,optional"`
@@ -88,6 +97,33 @@ type QueueConf struct {
 	// without trusting gate-side soft caps. Key is zone_id (string for YAML),
 	// value is the absolute number of concurrent online players permitted.
 	ZoneCapacityOverride map[string]uint32 `json:"ZoneCapacityOverride,optional"`
+}
+
+// InternalAuthConf 控制内部调用方身份声明的验签闸门(见
+// internal/logic/pkg/callerauth)。
+//
+// **生产模式恒强制验签,这里没有任何开关能关掉它** —— 唯一能放宽的是
+// go-zero Mode=dev/test,而那是编排层的决定,不是业务配置。
+type InternalAuthConf struct {
+	// ForceEnforce 让 dev/test 也走强制档。上游(cpp gate / Java gateway)
+	// 接完签名后,先在本地把它打开做联调,再上生产。
+	ForceEnforce bool `json:"ForceEnforce,default=false"`
+
+	// MaxClockSkew 是允许的时间戳偏移窗口(双向)。签名里带毫秒时间戳,
+	// 超出这个窗口一律拒绝 —— 这是防重放的第一道闸,nonce 是第二道。
+	//
+	// 30s 的取法:内网 NTP 偏差通常在毫秒级,30s 已经给足容错;
+	// 再放大只会线性放大重放窗口和 nonce 表的内存占用。
+	MaxClockSkew time.Duration `json:"MaxClockSkew,default=30s"`
+
+	// MaxNonceEntries 是 nonce 表的硬上限。超出后强制翻代(丢掉最旧的一代),
+	// 重放窗口会临时缩短但**绝不会**放行验签失败的请求。
+	// 默认 500000 ≈ 4000 QPS × 2×MaxClockSkew 的用量。
+	MaxNonceEntries int `json:"MaxNonceEntries,default=500000"`
+
+	// AllowedCallers 是调用方标识白名单(如 ["gate","gateway"])。
+	// 留空表示不限制调用方名字,但签名仍然必须验过。
+	AllowedCallers []string `json:"AllowedCallers,optional"`
 }
 
 // PreloadPoolConf controls the bounded goroutine pool used to fan out

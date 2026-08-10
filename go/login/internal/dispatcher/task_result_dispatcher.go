@@ -16,6 +16,16 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
+
+	"shared/safego"
+)
+
+// safego 点位名。它们会直接变成 Prometheus label,必须是常量
+// —— 绝不能把 taskID 之类的运行期值拼进去(仓库 CLAUDE.md §9)。
+const (
+	pointSubscriber = "login.task_result_subscriber"
+	pointWorker     = "login.task_result_worker"
+	pointCallback   = "login.task_result_callback"
 )
 
 // TaskResultNotifyChannel must match the channel published by the DB consumer.
@@ -97,9 +107,9 @@ func NewTaskResultDispatcher(rc redis.UniversalClient, defaultTTL time.Duration)
 func (d *TaskResultDispatcher) Start() {
 	for i := 0; i < dispatchWorkerCount; i++ {
 		d.workersWg.Add(1)
-		go d.dispatchWorker()
+		safego.Go(pointWorker, d.dispatchWorker)
 	}
-	go d.run()
+	safego.Go(pointSubscriber, d.run)
 }
 
 // Stop terminates background goroutines and fires every pending callback with
@@ -114,7 +124,8 @@ func (d *TaskResultDispatcher) Stop() {
 	for {
 		select {
 		case job := <-d.dispatchJobs:
-			go job.cb(nil, fmt.Errorf("dispatcher stopped"))
+			cb := job.cb
+			safego.Go(pointCallback, func() { cb(nil, fmt.Errorf("dispatcher stopped")) })
 		default:
 			goto drained
 		}
@@ -122,7 +133,8 @@ func (d *TaskResultDispatcher) Stop() {
 drained:
 	d.mu.Lock()
 	for _, e := range d.pending {
-		go e.cb(nil, fmt.Errorf("dispatcher stopped"))
+		cb := e.cb
+		safego.Go(pointCallback, func() { cb(nil, fmt.Errorf("dispatcher stopped")) })
 	}
 	d.pending = nil
 	d.mu.Unlock()
@@ -138,7 +150,7 @@ func (d *TaskResultDispatcher) Register(taskID string, ttl time.Duration, cb Res
 	d.mu.Lock()
 	if d.pending == nil {
 		d.mu.Unlock()
-		go cb(nil, fmt.Errorf("dispatcher stopped"))
+		safego.Go(pointCallback, func() { cb(nil, fmt.Errorf("dispatcher stopped")) })
 		return
 	}
 	d.pending[taskID] = pendingEntry{cb: cb, expiresAt: time.Now().Add(ttl)}
@@ -168,10 +180,10 @@ func (d *TaskResultDispatcher) run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go func() {
+	safego.Go(pointSubscriber+".cancel_watch", func() {
 		<-d.stopCh
 		cancel()
-	}()
+	})
 
 	// GC tick interval. Originally `defaultTTL / 2` (so 15s when defaultTTL
 	// is the default 30s). That made per-entry TTL effectively rounded UP to
@@ -284,11 +296,15 @@ func (d *TaskResultDispatcher) dispatch(ctx context.Context, taskID string) {
 		// and replay the Round 13 "notify dropped, data present" failure
 		// mode. Better to occasionally pay a goroutine-spawn at the tail
 		// of a burst than stall the subscriber.
-		go d.runDispatchJob(ctx, job)
+		safego.Go(pointWorker, func() { d.runDispatchJob(ctx, job) })
 	}
 }
 
 // dispatchWorker drains the bounded job channel until shutdown.
+//
+// 每个 job 各自 recover(safego.Run):一个业务回调 panic 只丢掉那一次投递,
+// 不会让这个 worker 退出把池子缩小 —— 池子悄悄从 16 缩到 0 的话,
+// 所有 EnterGame 都会卡到 TTL 超时才醒,故障现象和根因隔得极远。
 func (d *TaskResultDispatcher) dispatchWorker() {
 	defer d.workersWg.Done()
 	ctx := context.Background()
@@ -297,7 +313,7 @@ func (d *TaskResultDispatcher) dispatchWorker() {
 		case <-d.stopCh:
 			return
 		case job := <-d.dispatchJobs:
-			d.runDispatchJob(ctx, job)
+			safego.Run(pointWorker, func() { d.runDispatchJob(ctx, job) })
 		}
 	}
 }
@@ -346,7 +362,8 @@ func (d *TaskResultDispatcher) sweepExpired(ctx context.Context) {
 	d.mu.Unlock()
 
 	for _, item := range expired {
-		go func(it expiredItem) {
+		it := item
+		safego.Go(pointCallback, func() {
 			// Last-chance LPop: notify may have been dropped but data is
 			// already in Redis. Bounded by Redis client timeout (typically
 			// ~3s) so worst-case the player waits ttl + ~3s.
@@ -361,6 +378,6 @@ func (d *TaskResultDispatcher) sweepExpired(ctx context.Context) {
 				}
 			}
 			it.cb(nil, fmt.Errorf("task result wait timed out"))
-		}(item)
+		})
 	}
 }

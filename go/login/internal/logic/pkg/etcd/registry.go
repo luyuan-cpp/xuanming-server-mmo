@@ -9,6 +9,8 @@ import (
 
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
+
+	"shared/safego"
 )
 
 type NodeRegistry struct {
@@ -61,7 +63,9 @@ func (r *NodeRegistry) KeepAlive(ctx context.Context) {
 		return
 	}
 
-	go func() {
+	// safego:这条 goroutine 一旦 panic,旧写法会直接打死进程,而且日志里
+	// 只剩一段 runtime 栈看不出是租约续期炸的。
+	safego.Go("login.etcd_lease_keepalive", func() {
 		for {
 			select {
 			case ka := <-ch:
@@ -76,7 +80,7 @@ func (r *NodeRegistry) KeepAlive(ctx context.Context) {
 				return
 			}
 		}
-	}()
+	})
 }
 
 // reRegister grants a new lease, re-puts all registered keys, and restarts KeepAlive.
