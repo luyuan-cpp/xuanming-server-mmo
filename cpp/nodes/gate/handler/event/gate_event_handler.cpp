@@ -173,6 +173,54 @@ void GateEventHandler::PlayerDisconnectedEventHandler(const contracts::kafka::Pl
 void GateEventHandler::PlayerLeaseExpiredEventHandler(const contracts::kafka::PlayerLeaseExpiredEvent& event)
 {
 ///<<< BEGIN WRITING YOUR CODE
+    // player_locator 的 LeaseMonitor 判定该玩家的断线租约已到期(30s 内没有
+    // 重连),后端会话与场景侧位置已经/即将清理。gate 这边若还挂着同一个
+    // session 的 TCP 连接,那就是一条**假死连接**:后端已经不认这个会话,
+    // 客户端却还占着 fd 和 SessionInfo,永远等不到任何下行 —— 必须收口。
+    //
+    // 这个 handler 此前是空实现,而 LeaseMonitor 把"这条通知投递成功"当作
+    // ack claim 的必要副作用(至少一次投递) —— 空实现等于把 no-op 当成了
+    // 必须成功的清理动作,也是老账"假死连接不会被清"(PROGRESS P2)的根因。
+    //
+    // 幂等性:正常情况下 TCP 断开回调早已把 session 摘掉,这里 find 不到,
+    // 直接返回;只有"连接假死未触发断开回调"的场景才会真正走到 forceClose。
+    const auto sessionId = event.session_id();
+    auto &sessions = tlsSessionManager.sessions();
+    const auto it = sessions.find(sessionId);
+    if (it == sessions.end())
+    {
+        LOG_DEBUG << "LeaseExpired: session already gone. session_id=" << sessionId
+                  << " player_id=" << event.player_id();
+        return;
+    }
+
+    // 会话已被复用给别的玩家时绝不能踢(session_id 是 gate 本地发号,
+    // 理论上不复用,但 fail-safe 校验便宜)。
+    if (event.player_id() != 0 && it->second.playerId != kInvalidGuid &&
+        it->second.playerId != event.player_id())
+    {
+        LOG_WARN << "LeaseExpired: session player mismatch, skip kick. session_id=" << sessionId
+                 << " event_player=" << event.player_id()
+                 << " session_player=" << it->second.playerId;
+        return;
+    }
+
+    auto conn = it->second.conn;
+    if (conn)
+    {
+        // forceClose(而非 shutdown):对端已经假死,不能指望它配合四次挥手。
+        // 关闭会触发正常的 TCP 断开回调,由它统一走会话摘除 + Disconnect 通知,
+        // 不在这里重复清理。
+        LOG_INFO << "LeaseExpired: force closing zombie connection. session_id=" << sessionId
+                 << " player_id=" << event.player_id();
+        conn->forceClose();
+        return;
+    }
+
+    // 无 conn 的残留会话:断开回调永远不会来,只能就地摘除。
+    LOG_INFO << "LeaseExpired: removing connectionless session. session_id=" << sessionId
+             << " player_id=" << event.player_id();
+    sessions.erase(it);
 ///<<< END WRITING YOUR CODE
 }
 void GateEventHandler::BindSessionEventHandler(const contracts::kafka::BindSessionEvent& event)

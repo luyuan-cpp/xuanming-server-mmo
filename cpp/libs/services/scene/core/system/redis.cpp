@@ -71,11 +71,17 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
 
     // Periodically save all online players to Redis to bound the data-loss
     // window if the scene node crashes. Default 300s; set
-    // SCENE_PLAYER_SAVE_INTERVAL_SECONDS=0 to disable. Each tick scans
-    // tlsEcs.playerList and calls SavePlayerToRedis for every player.
-    // Cost grows linearly with online count; the default interval is sized
-    // to keep amortized Redis/Kafka load modest (e.g. 10k players over 300s
-    // = ~33 saves/sec).
+    // SCENE_PLAYER_SAVE_INTERVAL_SECONDS=0 to disable.
+    //
+    // 分摊而不是一口气扫完:定时器每秒跑一次,只处理
+    // playerId % interval == 当前槽位 的玩家 —— 每个玩家每个周期仍然被存
+    // 恰好一次,但单次回调的工作量是 N/interval 而不是 N。
+    // 旧实现每 interval 秒在**单个回调里**全量遍历 playerList 逐个
+    // SavePlayerToRedis(每次都是整份 PlayerAllData 的 marshal + 脏比较),
+    // 回调跑在游戏 tick 同一个 EventLoop 线程上:几千在线就是每 300 秒一次
+    // 数百毫秒级的全服停顿,World::Update 的固定步长累加器 clamp 在 1s,
+    // 超过即直接丢模拟时间。注释里 "10k players over 300s = ~33 saves/sec"
+    // 的摊销口径,现在才真的成立。
     int periodicSaveSec = 300;
     if (const char* env = std::getenv("SCENE_PLAYER_SAVE_INTERVAL_SECONDS"))
     {
@@ -87,25 +93,39 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     }
     if (periodicSaveSec > 0)
     {
-        const double interval = static_cast<double>(periodicSaveSec);
-        periodicSaveTimerId_ = loop->runEvery(interval, []()
+        const auto slotCount = static_cast<uint64_t>(periodicSaveSec);
+        periodicSaveTimerId_ = loop->runEvery(1.0, [slotCount, slot = uint64_t{0}]() mutable
                                               {
+            const uint64_t currentSlot = slot;
+            slot = (slot + 1) % slotCount;
+
             if (tlsEcs.playerList.empty())
             {
                 return;
             }
-            const std::size_t before = tlsEcs.playerList.size();
+            std::size_t saved = 0;
             for (const auto& [playerId, player] : tlsEcs.playerList)
             {
+                if (playerId % slotCount != currentSlot)
+                {
+                    continue;
+                }
                 if (!tlsEcs.actorRegistry.valid(player))
                 {
                     continue;
                 }
                 PlayerLifecycleSystem::SavePlayerToRedis(player);
+                ++saved;
             }
-            LOG_INFO << "[RedisSystem] Periodic save scanned " << before << " online players"; });
+            // 只在整个周期的最后一个槽位打一条汇总,避免每秒刷日志。
+            if (currentSlot == slotCount - 1 && saved > 0)
+            {
+                LOG_INFO << "[RedisSystem] Periodic save slot " << currentSlot
+                         << " saved " << saved << " players (online=" << tlsEcs.playerList.size() << ")";
+            } });
         periodicSaveTimerActive_ = true;
-        LOG_INFO << "[RedisSystem] Periodic player save enabled, interval=" << periodicSaveSec << "s";
+        LOG_INFO << "[RedisSystem] Periodic player save enabled, interval=" << periodicSaveSec
+                 << "s (sharded per-second by playerId)";
     }
     else
     {

@@ -11,7 +11,7 @@
 
 void ModifierBuffImplSystem::OnBuffStart(entt::entity parent, BuffEntry& buff, const BuffTable* buffTable) {
     if (buffTable && IsMovementSpeedBuff(buffTable)) {
-        ActorAttributeCalculatorSystem::MarkAttributeForUpdate(parent, kVelocity);
+        ActorAttributeCalculatorSystem::MarkAttributeForUpdate(parent, kMoveSpeed);
     }
 }
 
@@ -21,7 +21,7 @@ void ModifierBuffImplSystem::OnBuffRefresh(entt::entity parent, uint32_t buffTab
 
 void ModifierBuffImplSystem::OnBuffRemove(const entt::entity parent, BuffEntry& buff, const BuffTable* buffTable) {
     if (buffTable && IsMovementSpeedBuff(buffTable)) {
-        ActorAttributeCalculatorSystem::MarkAttributeForUpdate(parent, kVelocity);
+        ActorAttributeCalculatorSystem::MarkAttributeForUpdate(parent, kMoveSpeed);
     }
 }
 

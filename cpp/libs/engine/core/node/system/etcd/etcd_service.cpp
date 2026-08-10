@@ -23,7 +23,15 @@ void EtcdService::Init() {
 	LOG_INFO << "gRPC client config: ResourceQuota max threads=" << grpcChannelCache.ConfiguredMaxThreads()
 		<< ", backup poll interval ms=" << grpcChannelCache.ConfiguredBackupPollIntervalMs();
 
-	InitGrpcNode(channel, tlsNodeContextManager.GetRegistry(EtcdNodeService), tlsNodeContextManager.GetGlobalEntity(EtcdNodeService));
+	// GetOrCreateGlobalEntity(不是 GetGlobalEntity):etcd 客户端的全部状态
+	// (CompletionQueue / KV / Watch / Lease stub / watch 流)都挂在这个全局
+	// 实体上,它必须真正经 registry.create() 诞生。此前配合 globalEntities_
+	// 未初始化的 bug,这里拿到的是零残留的幽灵 entity 0,从未 create 过,
+	// 全靠 EnTT 池语义宽容才能跑;修掉初始化后若仍用 GetGlobalEntity,
+	// 拿到的会是 entt::null,emplace 直接 UB。后续 etcd_helper / etcd_manager
+	// 的发送路径都在 Init 之后执行,继续用 GetGlobalEntity 拿的就是这里
+	// 创建好的实体。
+	InitGrpcNode(channel, tlsNodeContextManager.GetRegistry(EtcdNodeService), tlsNodeContextManager.GetOrCreateGlobalEntity(EtcdNodeService));
 
 	grpcHandlerTimer.RunEvery(0.005, [] {
 		for (auto& registry : tlsNodeContextManager.GetAllRegistries()) {

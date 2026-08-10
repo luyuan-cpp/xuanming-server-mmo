@@ -1,10 +1,12 @@
 #include "actor_attribute_calculator.h"
 
+#include <algorithm>
 #include <array>
 #include <ranges>
 
 #include "actor/attribute/comp/actor_attribute_comp.h"
 #include "macros/return_define.h"
+#include "proto/common/component/actor_attribute_state_comp.pb.h"
 
 #include "table/code/buff_table.h"
 #include "actor/attribute/constants/actor_state_attribute_calculator_constants.h"
@@ -15,26 +17,30 @@
 #include <generated/attribute/actorbaseattributess2c_attribute_sync.h>
 #include <thread_context/ecs_context.h>  // tlsEcs + entt::exclude (see movement.cpp pattern)
 
-void UpdateVelocity(entt::entity entity) {
-    auto& velocity = tlsEcs.actorRegistry.get_or_emplace<Velocity>(entity);
-    velocity.Clear();
+// 重算移速**属性**(标量)。
+//
+// 旧实现把 buff 的加减速标量灌进 Velocity 的 x/y/z 三轴 —— 而 MovementSystem
+// 把 Velocity 当运动学矢量每 tick 积分进 Transform,于是挂移速 buff 的角色
+// 沿 (1,1,1) 方向匀速漂移(减速则为负、钻入地下),几秒内被 AOI 划出所有
+// 观察者视野,漂移后的位置还会随存盘落库。属性写进独立的 MoveSpeedComp,
+// Velocity 留给真实的运动矢量(由未来的移动输入/AI 写入)。
+// 移速属性目前无 S2C 通道(ActorBaseAttributesS2C.velocity 语义是运动矢量,
+// 不能复用),接通道时再补脏位。
+void UpdateMoveSpeed(entt::entity entity) {
+    auto& moveSpeedComp = tlsEcs.actorRegistry.get_or_emplace<MoveSpeedComp>(entity);
+    double moveSpeed = 0.0;
 
     ECS_GET_OR_VOID(buffListPtr, BuffListComp, entity);
     for (const auto &buffCompPb : *buffListPtr | std::views::values)
     {
         LookupBuffOrContinue(buffCompPb.buffPb.buff_table_id());
 
-        velocity.set_x(velocity.x() + buffRow->movement_speed_boost());
-        velocity.set_y(velocity.y() + buffRow->movement_speed_boost());
-        velocity.set_z(velocity.z() + buffRow->movement_speed_boost());
-
-        velocity.set_x(velocity.x() - buffRow->movement_speed_reduction());
-        velocity.set_y(velocity.y() - buffRow->movement_speed_reduction());
-        velocity.set_z(velocity.z() - buffRow->movement_speed_reduction());
+        moveSpeed += buffRow->movement_speed_boost();
+        moveSpeed -= buffRow->movement_speed_reduction();
     }
 
-    // Set runtime dirty bit (do not write dirty bits back to persisted proto)
-    SetActorBaseAttributesS2CAttrDirtyBit(entity, static_cast<std::size_t>(ActorBaseAttributesS2C::kVelocityFieldNumber));
+    // 减速叠满也不能变成倒着走。
+    moveSpeedComp.moveSpeed = std::max(moveSpeed, 0.0);
 }
 
 void UpdateHealth(entt::entity actorEntity) {
@@ -45,10 +51,19 @@ void UpdateEnergy(entt::entity actorEntity) {
     // TODO: Implement energy recalculation from base stats + buff modifiers
 }
 
+// 把 CombatStateCollectionComp 的当前状态投影成客户端同步用的
+// CombatStateFlagsComp,并置同步脏位。
+//
+// 旧实现三层皆错,任何一层都足以让眩晕/沉默永远同步不到客户端:
+//   1) 写进 get_or_emplace<ActorBaseAttributesS2C>(实体上的一个死组件,
+//      全仓零读者)—— 而生成序列化器读的是 try_get<CombatStateFlagsComp>;
+//   2) 从不置 kCombatStateFlagsFieldNumber 脏位,序列化分支根本不执行;
+//   3) 值写 false —— 而 CombatStateCollectionComp 键存在即代表状态激活
+//      (RemoveCombatState 在 sources 清空时删键),语义是反的。
 void ResetCombatStateFlags(entt::entity actorEntity) {
     const auto *combatStates = tlsEcs.actorRegistry.try_get<CombatStateCollectionComp>(actorEntity);
-    auto& syncData = tlsEcs.actorRegistry.get_or_emplace<ActorBaseAttributesS2C>(actorEntity);
-    auto* stateFlags = syncData.mutable_combat_state_flags()->mutable_state_flags();
+    auto& stateFlagsComp = tlsEcs.actorRegistry.get_or_emplace<CombatStateFlagsComp>(actorEntity);
+    auto* stateFlags = stateFlagsComp.mutable_state_flags();
 
     stateFlags->clear();
 
@@ -56,13 +71,20 @@ void ResetCombatStateFlags(entt::entity actorEntity) {
     {
         for (const auto &stateKey : combatStates->states() | std::views::keys)
         {
-            stateFlags->emplace(stateKey, false);
+            stateFlags->emplace(stateKey, true);
         }
     }
+
+    SetActorBaseAttributesS2CAttrDirtyBit(actorEntity, static_cast<std::size_t>(ActorBaseAttributesS2C::kCombatStateFlagsFieldNumber));
+    // entity_id 是这条消息里唯一的归属标识(信封层不带主体 actor):
+    // 不一并置位的话,观察者会收到一条不知道是谁的状态更新。
+    // 序列化器从 Guid(uint64_t)组件取值,客户端在 ActorCreateS2C.guid
+    // 建立过 guid → actor 的映射,能够归属。
+    SetActorBaseAttributesS2CAttrDirtyBit(actorEntity, static_cast<std::size_t>(ActorBaseAttributesS2C::kEntityIdFieldNumber));
 }
 
 std::array<AttributeCalculatorConfig, kAttributeCalculatorMax> kAttributeConfigs = { {
-    {kVelocity, UpdateVelocity},
+    {kMoveSpeed, UpdateMoveSpeed},
     {kHealth, UpdateHealth},
     {kEnergy, UpdateEnergy},
     {kCombatState, ResetCombatStateFlags}

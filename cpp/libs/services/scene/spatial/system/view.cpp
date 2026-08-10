@@ -140,14 +140,22 @@ void ViewSystem::LookAtPosition(entt::entity entity, const Vector3 &pos)
 
     dtVnormalize(direction);
 
-    // Compute rotation Euler angles (radians)
-    float yaw = atan2(direction[0], direction[2]); // Rotation around Y axis
-    float pitch = asin(direction[1]);              // Rotation around X axis
+    // Compute rotation Euler angles (radians).
+    //
+    // 本项目世界是 z-up:格子/AOI 全部拿 (x, y) 当地面平面(见 grid.cpp
+    // GetGridId 只取 x、y),客户端 UE 同为 z-up。旧写法照抄 Detour 的 y-up
+    // 约定(yaw = atan2(x, z)、pitch = asin(y)):同高度目标 direction 的
+    // z 恒为 0,yaw 恒等于 ±π/2 与实际方位无关,真实方位角全落进 pitch ——
+    // 写出的朝向是垃圾值。按 z-up 重算:偏航绕 z 轴(地面方位角),
+    // 俯仰用垂直轴 z。
+    const float yaw = atan2(direction[1], direction[0]);   // Rotation around Z axis (ground azimuth)
+    const float pitch = asin(direction[2]);                // Elevation from ground plane
 
-    // Update transform rotation
+    // Update transform rotation (欧拉角约定:x=pitch, z=yaw,与 UE 的
+    // Pitch/Yaw 命名对齐;roll 恒 0)
     transform.mutable_rotation()->set_x(pitch);
-    transform.mutable_rotation()->set_y(yaw);
-    transform.mutable_rotation()->set_z(0); // Keep Z rotation at 0
+    transform.mutable_rotation()->set_y(0);
+    transform.mutable_rotation()->set_z(yaw);
 }
 
 bool ViewSystem::IsStealthed(entt::entity entity)
