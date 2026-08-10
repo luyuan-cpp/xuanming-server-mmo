@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	db_config "db/internal/config"
+	"db/internal/dbguard"
 	"db/internal/logic/pkg/proto_sql"
 	"db/internal/metrics"
 	"encoding/binary"
@@ -546,12 +547,53 @@ func encodePoisonMessage(msg *sarama.ConsumerMessage, decodeErr error) ([]byte, 
 	return payload, nil
 }
 
+// blobGuard 是落库前的大字段三档闸,由 InitBlobGuard 在启动时装配。
+//
+// 用包级变量而不是塞进 worker:handleDBWriteOp 是 dbOpHandlers 里的函数值,
+// 签名被 dbOpHandler 钉死,而这道闸必须卡在**每一条**写路径上(包括测试替换
+// handler 之外的真实路径)。默认值保证即使忘了 InitBlobGuard 也有闸在。
+var blobGuard = dbguard.NewGuard(dbguard.Limits{}, metrics.BlobObserver{})
+
+// InitBlobGuard 按配置装配大字段闸。启动时调用一次。
+func InitBlobGuard(cfg db_config.BlobGuardConfig) {
+	perTable := make(map[string]dbguard.TableLimit, len(cfg.PerTable))
+	for table, limit := range cfg.PerTable {
+		perTable[table] = dbguard.TableLimit{
+			MaxColumnBytes: limit.MaxColumnBytes,
+			MaxRowBytes:    limit.MaxRowBytes,
+		}
+	}
+	blobGuard = dbguard.NewGuard(dbguard.Limits{
+		MaxColumnBytes: cfg.MaxColumnBytes,
+		MaxRowBytes:    cfg.MaxRowBytes,
+		WarnRatio:      cfg.WarnRatio,
+		ReportOnly:     cfg.ReportOnly,
+		PerTable:       perTable,
+	}, metrics.BlobObserver{})
+	limits := blobGuard.Limits()
+	logx.Infof("blob size gate: maxColumn=%dB maxRow=%dB warnRatio=%.2f reportOnly=%v perTable=%d",
+		limits.MaxColumnBytes, limits.MaxRowBytes, limits.WarnRatio, limits.ReportOnly, len(limits.PerTable))
+}
+
 func handleDBWriteOp(
 	ctx context.Context,
 	redisClient redis.Cmdable,
 	task *db_proto.DBTask,
 	msg proto.Message,
 ) string {
+	// 大字段闸必须卡在 Save **之前**:一旦写进 MEDIUMBLOB,后面 Redis 写回、
+	// login 侧读取、下一次全量存盘都要原样搬运同一坨字节,拒不拒已经不重要了。
+	// 超限的任务照常走 deferFailedTask → 重试队列 → 死信,payload 不会丢,
+	// 由人工决定是裁剪数据还是调高上限。
+	guardResult, guardErr := blobGuard.Check(task.MsgType, msg)
+	if warnings := guardResult.Warnings(); len(warnings) > 0 {
+		logx.Errorf("BLOB-SIZE %s key=%d taskID=%s: %s",
+			guardResult.Level, task.Key, task.TaskId, strings.Join(warnings, "; "))
+	}
+	if guardErr != nil {
+		return fmt.Sprintf("db write rejected by blob size gate: %v", guardErr)
+	}
+
 	if err := proto_sql.DB.SqlModel.Save(msg); err != nil {
 		return fmt.Sprintf("db write failed: %v", err)
 	}

@@ -53,13 +53,68 @@ var (
 		Help:      "Terminal outcome of each processed task. op: read | write | unknown; result: ok | error.",
 	}, []string{"op", "result"})
 
+	blobBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: subsystem,
+		Name:      "blob_bytes",
+		Help:      "Stored (base64-encoded) byte size of each pb blob column on the write path. Read p99, not max.",
+		Buckets:   blobBuckets,
+	}, []string{"table", "column"})
+
+	blobRowBytes = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: subsystem,
+		Name:      "blob_row_bytes",
+		Help:      "Sum of all stored pb blob column bytes per written row. Read p99, not max.",
+		Buckets:   blobBuckets,
+	}, []string{"table"})
+
+	blobGuardTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "blob_guard_total",
+		Help:      "Blob size gate hits. level: warn (>= WarnRatio of limit) | reject (over limit). column=__row__ means the per-row total.",
+	}, []string{"table", "column", "level"})
+
 	registerOnce sync.Once
 )
 
+// blobBuckets 覆盖 256B ~ 8MiB(每档 ×4)。
+//
+// 之所以要 histogram 而不是 gauge/max:max 只会告诉你「有过一次 3MB 的写入」,
+// 既定位不到是哪条业务线在涨,也分不清是常态还是孤例。p99 才是「设计上限该
+// 定在哪」以及「本周有没有变胖」的唯一可读信号。上界给到 8MiB 是为了在
+// MEDIUMBLOB 的 16MiB 天花板之前还能看见分布,而不是全挤在 +Inf 桶里。
+var blobBuckets = []float64{
+	256, 1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 8388608,
+}
+
 func register() {
 	registerOnce.Do(func() {
-		prometheus.MustRegister(taskStageSeconds, taskResultTotal)
+		prometheus.MustRegister(taskStageSeconds, taskResultTotal, blobBytes, blobRowBytes, blobGuardTotal)
 	})
+}
+
+// BlobObserver 把 dbguard 的量测结果接到 prometheus 上。
+//
+// label 基数是有界的:table 来自 mysql_database_table_list.json(11 张),
+// column 来自 proto 声明(每表 ≤ 10 列)—— 不含 player_id 之类的高基数维度
+// (见仓库 CLAUDE.md §9)。
+type BlobObserver struct{}
+
+// ObserveBlobBytes 记录单列入库字节。
+func (BlobObserver) ObserveBlobBytes(table, column string, bytes int64) {
+	register()
+	blobBytes.WithLabelValues(table, column).Observe(float64(bytes))
+}
+
+// ObserveRowBytes 记录整行 blob 入库字节之和。
+func (BlobObserver) ObserveRowBytes(table string, bytes int64) {
+	register()
+	blobRowBytes.WithLabelValues(table).Observe(float64(bytes))
+}
+
+// CountGate 记录一次 warn / reject。
+func (BlobObserver) CountGate(table, column, level string) {
+	register()
+	blobGuardTotal.WithLabelValues(table, column, level).Inc()
 }
 
 // ObserveStage records one sub-stage latency. Use one of the StageXxx

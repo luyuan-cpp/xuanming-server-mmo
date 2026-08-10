@@ -3,30 +3,30 @@
 //
 // The contract being verified, per (msg_type, player_id):
 //
-//   1. PERSISTENCE CONVERGENCE (I1)
-//      MySQL row's seq field == expected_seq.
+//  1. PERSISTENCE CONVERGENCE (I1)
+//     MySQL row's seq field == expected_seq.
 //
-//   2. CACHE CONVERGENCE (I2)
-//      Redis cache "<msg_type>:<player_id>" exists and its decoded seq field
-//      == expected_seq. (May be absent if the row was never read since being
-//      written; we treat that as a soft-pass and report it separately.)
+//  2. CACHE CONVERGENCE (I2)
+//     Redis cache "<msg_type>:<player_id>" exists and its decoded seq field
+//     == expected_seq. (May be absent if the row was never read since being
+//     written; we treat that as a soft-pass and report it separately.)
 //
-//   3. KAFKA NO BACKLOG (I3)
-//      Best-effort: we don't read consumer-group lag here; pair this with
-//      `kafka-consumer-groups.sh --describe` for that signal.
+//  3. KAFKA NO BACKLOG (I3)
+//     Best-effort: we don't read consumer-group lag here; pair this with
+//     `kafka-consumer-groups.sh --describe` for that signal.
 //
 // SEQ ENCODING
 //
-//   We read `player_database.stress_test_probe.test_seq` (matching
-//   data_stress / robot data-stress mode) and re-validate
-//   `stress_test_probe.test_sig` to detect torn / mis-routed payloads.
+//	We read `player_database.stress_test_probe.test_seq` (matching
+//	data_stress / robot data-stress mode) and re-validate
+//	`stress_test_probe.test_sig` to detect torn / mis-routed payloads.
 //
 // USAGE
 //
-//   go run ./cmd/verifier \
-//     -config etc/db.yaml \
-//     -redis 127.0.0.1:6379 \
-//     -wait 60s -interval 2s
+//	go run ./cmd/verifier \
+//	  -config etc/db.yaml \
+//	  -redis 127.0.0.1:6379 \
+//	  -wait 60s -interval 2s
 //
 // Exits non-zero if any mismatch persists beyond the deadline.
 package main
@@ -88,14 +88,14 @@ var (
 )
 
 type mismatch struct {
-	playerID     uint64
-	expectedSeq  uint64
-	mysqlSeq     uint64
-	cacheSeq     uint64
-	cacheMissed  bool
-	mysqlMissed  bool
-	mysqlSigBad  bool // mysql row has a probe but its test_sig is wrong
-	cacheSigBad  bool // redis cache has a probe but its test_sig is wrong
+	playerID    uint64
+	expectedSeq uint64
+	mysqlSeq    uint64
+	cacheSeq    uint64
+	cacheMissed bool
+	mysqlMissed bool
+	mysqlSigBad bool // mysql row has a probe but its test_sig is wrong
+	cacheSigBad bool // redis cache has a probe but its test_sig is wrong
 }
 
 func main() {
@@ -117,13 +117,17 @@ func main() {
 	}
 
 	conf.MustLoad(*configFile, &db_config.AppConfig)
+	db_config.AppConfig.Normalize()
 	if db_config.AppConfig.ZoneId == 0 {
 		log.Fatalf("ZoneId must be set in %s", *configFile)
 	}
 	db_config.AppConfig.ServerConfig.Database.DBName = db_config.ZoneDBName(db_config.AppConfig.ZoneId)
 
 	// Initialize MySQL access via the same proto2mysql layer the consumer uses.
-	proto_sql.InitDB()
+	// 与业务服务同一条路径:只连接 + 注册表,不跑 DDL,并过库名白名单。
+	if err := proto_sql.InitDB(); err != nil {
+		log.Fatalf("database init rejected: %v", err)
+	}
 
 	rc := redis.NewClient(&redis.Options{
 		Addr: *redisAddr, Password: *redisPassword, DB: *redisDB,

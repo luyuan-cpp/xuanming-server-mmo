@@ -30,6 +30,8 @@ func main() {
 
 	// Load config
 	conf.MustLoad(*configFile, &config.AppConfig)
+	// 回填 optional 段的默认值(迁移超时、大字段闸上限)。见 config.Normalize 注释。
+	config.AppConfig.Normalize()
 
 	// Derive zone-specific Kafka topic and MySQL database name from ZoneId
 	if config.AppConfig.ZoneId == 0 {
@@ -65,7 +67,17 @@ func main() {
 	// 消费任务落到 worker 就会碰 proto_sql.DB,若此时还是 nil,启动窗口内的
 	// 每条消息都 panic-recover 一次(offset 不提交,重启可恢复,但整个窗口在
 	// 空转打错误日志)。先建库连接再放消费者进来,窗口从机制上不存在。
-	proto_sql.InitDB()
+	//
+	// InitDB 默认**不跑任何 DDL**,并且会断言实际连上的 DATABASE() 落在外部
+	// 注入的白名单里 —— 不在就拒启,而不是静默建库把玩家数据写进去。
+	// 建表/补列由部署阶段的 `go run ./cmd/migrate -command up` 负责,
+	// 运维步骤见 go/db/README.md。
+	if err := proto_sql.InitDB(); err != nil {
+		panic(fmt.Sprintf("database init rejected: %v", err))
+	}
+
+	// 装配大字段三档闸(必须在消费者启动之前:第一条消息落到 worker 就要过闸)
+	kafka.InitBlobGuard(config.AppConfig.ServerConfig.BlobGuard)
 
 	// Initialize Kafka consumer
 	kafkaConsumer, err := kafka.NewKeyOrderedKafkaConsumer(
