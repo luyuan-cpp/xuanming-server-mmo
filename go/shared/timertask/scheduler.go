@@ -154,6 +154,14 @@ func (t *Task) schedule(d time.Duration, repeating bool, cb func()) {
 // 两边职责在这里合并了：C++ 是组件调 loop->cancel() 再由 TimerQueue 从
 // timers_/activeTimers_ 里摘除，Go 侧直接 heap.Remove。
 func (t *Task) Cancel() {
+	// 零值 Task(未经 NewTask 构造)的 index 是 0 而合法空闲态是 -1,
+	// 直接走下面的 heap.Remove 会解引用 nil sched 崩溃。schedule() 里那个
+	// nil-sched 守卫排在 Cancel 之后,救不了这里 —— 守卫必须放在第一步,
+	// 让零值 Task 的所有方法都安全 no-op(与 C++ TimerTaskComp 值内嵌
+	// 组件的使用习惯对齐,移植方按同样习惯声明 var t Task 不该炸进程)。
+	if t.sched == nil {
+		return
+	}
 	if t.index >= 0 {
 		heap.Remove(&t.sched.h, t.index)
 		t.index = -1

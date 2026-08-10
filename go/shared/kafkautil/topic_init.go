@@ -116,10 +116,19 @@ func EnsureTopics(brokers []string, specs []TopicSpec) error {
 		}
 
 		if spec.RetentionMs > 0 {
-			entries := map[string]*string{
-				"retention.ms": &retentionStr,
+			// 必须用增量接口:sarama 的 AlterConfig 走的是 Kafka 遗留 AlterConfigs
+			// 协议,语义是**全量替换**该 topic 的动态配置 —— 只提交 retention.ms
+			// 会把运维在 broker 上手工设过的其它覆盖项(cleanup.policy、
+			// max.message.bytes 等)全部抹回默认值,而且每次服务启动都抹一遍。
+			// IncrementalAlterConfigs(KIP-339,broker ≥2.3;上面 cfg.Version
+			// 已声明 3.0)按条目 SET,只动列出的键。
+			entries := map[string]sarama.IncrementalAlterConfigsEntry{
+				"retention.ms": {
+					Operation: sarama.IncrementalAlterConfigsOperationSet,
+					Value:     &retentionStr,
+				},
 			}
-			if err := admin.AlterConfig(sarama.TopicResource, spec.Name, entries, false); err != nil {
+			if err := admin.IncrementalAlterConfig(sarama.TopicResource, spec.Name, entries, false); err != nil {
 				return fmt.Errorf("kafka alter topic %s retention: %w", spec.Name, err)
 			}
 			logx.Infof("kafka topic %s retention updated to %dms", spec.Name, spec.RetentionMs)
