@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true)]
     [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-grpc-build", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "kafka-offset-reset")]
     [string]$Command,
@@ -20,11 +20,18 @@ param(
     [string]$NamespacePrefix = "mmorpg-zone",
     [string]$InfraNamespace = "mmorpg-infra",
     [string]$ZonesConfigPath = "",
-    [string]$NodeImage = "ghcr.io/luyuancpp/mmorpg-node:latest",
+    # 留空 = 由 k8s_deploy.ps1 / k8s_image.ps1 用 git 短 sha 组出不可变 tag。
+    # 以前这里默认 "…:latest",导致 build 出来的和部署引用的可能是两个不同产物,
+    # 而 rollout undo 又退不回去(见 tools/scripts/lib/release_common.ps1 注释)。
+    [string]$NodeImage = "",
     [ValidateSet("custom", "managed-cloud", "bare-metal")]
     [string]$OpsProfile = "custom",
+    # 发布档位,透传给 k8s_image.ps1 / k8s_deploy.ps1。
+    [ValidateSet("dev", "staging", "prod")]
+    [string]$ReleaseProfile = "dev",
+    [switch]$AllowDirty,
     [string]$ImageRepository = "ghcr.io/luyuancpp/mmorpg-node",
-    [string]$ImageTag = "latest",
+    [string]$ImageTag = "",
     [string]$RuntimeRoot = "deploy/k8s/runtime/linux",
     [string]$DockerfilePath = "deploy/k8s/Dockerfile.runtime",
     [string]$BinarySourceRoot = "",
@@ -54,10 +61,11 @@ param(
     [switch]$SkipInfra,
     [switch]$SkipGoSvc,
     [string]$GoSvcRegistry = "ghcr.io/luyuancpp",
-    [string]$GoSvcTag = "latest",
+    # 同 NodeImage:留空 = git 短 sha。
+    [string]$GoSvcTag = "",
     [switch]$SkipJavaSvc,
     [string]$JavaSvcRegistry = "ghcr.io/luyuancpp",
-    [string]$JavaSvcTag = "latest",
+    [string]$JavaSvcTag = "",
     [bool]$BuildRelease = $true,
     [bool]$BuildDebug = $true,
     # iwyu-run
@@ -91,8 +99,9 @@ param(
     [int]$GateCount = 1,
     [int]$SceneCount = 1,
     # Address the C++ nodes advertise into etcd (forwarded to cpp_nodes.ps1 as
-    # -NodeIp -> NODE_IP). Empty = that script's default of 127.0.0.1; pass a LAN
-    # address for off-box clients, or 'auto' to let the engine detect one.
+    # -NodeIp -> NODE_IP). Empty = that script's default, which detects this
+    # machine's physical-NIC IPv4 and needs no configuration. Also accepts an
+    # explicit address, 'loopback', or 'engine'.
     [string]$NodeIp = "",
     [switch]$UseVSGenerator,
 
@@ -154,6 +163,36 @@ $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
 $ProtoGenDir = Join-Path $RepoRoot "tools\proto_generator\protogen"
 $ProtoGenEnablePprofEnvVar = "PROTOGEN_ENABLE_PPROF"
 $LegacyProtoGenEnablePprofEnvVar = "PBGEN_ENABLE_PPROF"
+
+. (Join-Path $ScriptDir "lib\release_common.ps1")
+
+# ─────────────────────────────────────────────────────────────────
+# 镜像版本戳:留空的镜像参数一律回落到 git 短 sha,不再默认 latest
+# ─────────────────────────────────────────────────────────────────
+#
+# 这样 `k8s-build-all` 打出来的 tag 和 `k8s-zone-up` 引用的 tag 在同一份
+# 工作树状态下必然相同;版本之间必然不同,rollout undo 才真的换 digest。
+$script:ReleaseStamp = Get-GitReleaseStamp -RepoRoot $RepoRoot
+
+function Resolve-DevImageTag {
+    param([Parameter(Mandatory = $true)][string]$Purpose)
+
+    if (-not $script:ReleaseStamp.Ok) {
+        throw "无法生成不可变镜像 tag($Purpose):$($script:ReleaseStamp.Reason)。请显式传入 tag。"
+    }
+    if ($script:ReleaseStamp.Dirty -and $ReleaseProfile -ne 'dev' -and -not $AllowDirty) {
+        throw "工作树是脏的,ReleaseProfile=$ReleaseProfile 下拒绝自动生成 tag($Purpose)。提交/清理工作树,或显式加 -AllowDirty / -ImageTag。"
+    }
+    return $script:ReleaseStamp.Tag
+}
+
+# 调用方有没有显式指定镜像 —— 灾难回滚必须显式指定,不能拿当前工作树的 sha 顶上
+$script:NodeImageExplicit = $PSBoundParameters.ContainsKey('NodeImage') -and (-not [string]::IsNullOrWhiteSpace($NodeImage))
+
+if ([string]::IsNullOrWhiteSpace($ImageTag)) { $ImageTag = Resolve-DevImageTag -Purpose "ImageTag" }
+if ([string]::IsNullOrWhiteSpace($GoSvcTag)) { $GoSvcTag = Resolve-DevImageTag -Purpose "GoSvcTag" }
+if ([string]::IsNullOrWhiteSpace($JavaSvcTag)) { $JavaSvcTag = Resolve-DevImageTag -Purpose "JavaSvcTag" }
+if ([string]::IsNullOrWhiteSpace($NodeImage)) { $NodeImage = "{0}:{1}" -f $ImageRepository, $ImageTag }
 
 function Invoke-ProtoGenBuild {
     Push-Location $ProtoGenDir
@@ -356,6 +395,7 @@ function Invoke-K8sDeploy {
         NamespacePrefix = $NamespacePrefix
         InfraNamespace = $InfraNamespace
         NodeImage = $NodeImage
+        ReleaseProfile = $ReleaseProfile
         OpsProfile = $OpsProfile
         CentreReplicas = $CentreReplicas
         GateReplicas = $GateReplicas
@@ -538,6 +578,7 @@ function Invoke-K8sImage {
         DockerfilePath = $DockerfilePath
         ImageRepository = $ImageRepository
         ImageTag = $ImageTag
+        ReleaseProfile = $ReleaseProfile
         ZoneName = $ZoneName
         ZoneId = $ZoneId
         NamespacePrefix = $NamespacePrefix
@@ -633,7 +674,7 @@ Java service Docker image commands:
     -Command java-svc-push-image  [-JavaSvcRegistry <registry> -JavaSvcTag <tag>]
 
 C++ node commands (local dev):
-    -Command cpp-node-start [-CppNodes gate,scene] [-GateCount N] [-SceneCount N] [-NodeIp <ip>|auto]
+    -Command cpp-node-start [-CppNodes gate,scene] [-GateCount N] [-SceneCount N] [-NodeIp <ip>|loopback|engine]
     -Command cpp-node-stop  [-CppNodes gate,...]
     -Command cpp-node-status
     -Command cpp-node-list
@@ -822,23 +863,31 @@ switch ($Command) {
         if ($RollbackTargetTime -eq "") {
             throw "k8s-zone-rollback requires -RollbackTargetTime (ISO 8601 UTC, e.g. '2026-05-15T14:23:00Z')"
         }
-        $rbArgs = @(
-            "-ZoneName", $ZoneName,
-            "-ZoneId", $ZoneId,
-            "-TargetTime", $RollbackTargetTime,
-            "-KafkaBootstrap", $KafkaBootstrapServer,
-            "-KafkaTopic", $RollbackKafkaTopic,
-            "-KafkaGroup", $RollbackKafkaGroup,
-            "-NodeImage", $NodeImage,
-            "-NamespacePrefix", $NamespacePrefix,
-            "-KafkaDrainTimeoutSec", $RollbackKafkaDrainTimeoutSec
-        )
-        if ($RollbackRedisHost -ne "")     { $rbArgs += @("-RedisHost", $RollbackRedisHost) }
-        if ($RollbackRedisPort -ne "6379") { $rbArgs += @("-RedisPort", $RollbackRedisPort) }
-        if ($RollbackRedisPassword -ne "") { $rbArgs += @("-RedisPassword", $RollbackRedisPassword) }
-        if ($RollbackRedisDB -ne 0)        { $rbArgs += @("-RedisDB", $RollbackRedisDB) }
-        if ($RollbackSkipMySqlPause)       { $rbArgs += "-SkipMySqlPause" }
-        if ($RollbackApply)                { $rbArgs += "-Apply" }
+        # 回滚目标版本必须显式给。默认的 git 短 sha 是**当前工作树**的版本,
+        # 拿它回滚等于"把数据回档到过去、把代码留在现在",比不回滚更危险。
+        if (-not $script:NodeImageExplicit) {
+            throw "k8s-zone-rollback requires an explicit -NodeImage (回滚目标版本的镜像引用,如 ghcr.io/luyuancpp/mmorpg-node:<回滚目标 sha>)。默认值是当前工作树的 sha,不是回滚目标。"
+        }
+        # 必须 hashtable splatting:数组 splatting 会按**位置**绑定,
+        # "-ZoneName" 这个字符串本身会被绑到 ZoneName、"$ZoneName" 绑到 [int]$ZoneId,
+        # 于是灾难回滚脚本连第一步都进不去。
+        $rbArgs = @{
+            ZoneName             = $ZoneName
+            ZoneId               = $ZoneId
+            TargetTime           = $RollbackTargetTime
+            KafkaBootstrap       = $KafkaBootstrapServer
+            KafkaTopic           = $RollbackKafkaTopic
+            KafkaGroup           = $RollbackKafkaGroup
+            NodeImage            = $NodeImage
+            NamespacePrefix      = $NamespacePrefix
+            KafkaDrainTimeoutSec = $RollbackKafkaDrainTimeoutSec
+        }
+        if ($RollbackRedisHost -ne "")     { $rbArgs.RedisHost = $RollbackRedisHost }
+        if ($RollbackRedisPort -ne "6379") { $rbArgs.RedisPort = $RollbackRedisPort }
+        if ($RollbackRedisPassword -ne "") { $rbArgs.RedisPassword = $RollbackRedisPassword }
+        if ($RollbackRedisDB -ne 0)        { $rbArgs.RedisDB = $RollbackRedisDB }
+        if ($RollbackSkipMySqlPause)       { $rbArgs.SkipMySqlPause = $true }
+        if ($RollbackApply)                { $rbArgs.Apply = $true }
         & (Join-Path $ScriptDir "k8s_zone_rollback.ps1") @rbArgs
     }
     "dev-robot-zones" {

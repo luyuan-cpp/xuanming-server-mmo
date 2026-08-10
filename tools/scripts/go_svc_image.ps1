@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Build and push Docker images for Go micro-services.
 
@@ -26,7 +26,9 @@ param(
     [string]$Command,
 
     [string]$Registry = "ghcr.io/luyuancpp",
-    [string]$Tag = "latest",
+    # 留空 = git 短 sha(脏树带 -dirty)。不再默认 latest:
+    # 可变 tag 会让 `kubectl rollout undo` 退回同一个 digest。
+    [string]$Tag = "",
     [switch]$DryRun
 )
 
@@ -36,6 +38,20 @@ $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot  = Resolve-Path (Join-Path $ScriptDir "..\..")
 $GoRoot    = Join-Path $RepoRoot "go"
 $Dockerfile = Join-Path $RepoRoot "deploy\k8s\Dockerfile.go-svc"
+
+. (Join-Path $ScriptDir "lib\release_common.ps1")
+
+$script:ReleaseStamp = Get-GitReleaseStamp -RepoRoot $RepoRoot
+if ([string]::IsNullOrWhiteSpace($Tag)) {
+    if (-not $script:ReleaseStamp.Ok) {
+        throw "无法生成不可变镜像 tag:$($script:ReleaseStamp.Reason)。请显式传 -Tag。"
+    }
+    $Tag = $script:ReleaseStamp.Tag
+}
+
+# 注入到镜像里的版本戳(ldflags + OCI label + /app/BUILD_INFO)
+$BuildCommit = if ($script:ReleaseStamp.Ok) { $script:ReleaseStamp.Commit } else { "unknown" }
+$BuildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
 # Service catalogue: name → { Dir (in go/), Entry (.go file), ImageName }
 $Catalogue = [ordered]@{
@@ -68,6 +84,9 @@ function Invoke-BuildAll {
             "-f", $Dockerfile,
             "--build-arg", "SERVICE=$($info.Dir)",
             "--build-arg", "ENTRY=$($info.Entry)",
+            "--build-arg", "BUILD_VERSION=$Tag",
+            "--build-arg", "BUILD_COMMIT=$BuildCommit",
+            "--build-arg", "BUILD_TIME=$BuildTime",
             "-t", $fullImage,
             $GoRoot
         )
@@ -105,7 +124,7 @@ function Invoke-PushAll {
 }
 
 function Invoke-List {
-    Write-Host "`nGo service images (registry=$Registry tag=$Tag):`n" -ForegroundColor Cyan
+    Write-Host "`nGo service images (registry=$Registry tag=$Tag commit=$BuildCommit):`n" -ForegroundColor Cyan
     Write-Host ("{0,-18} {1,-30} {2}" -f "SERVICE", "IMAGE", "FULL") -ForegroundColor White
     Write-Host ("{0,-18} {1,-30} {2}" -f "-------", "-----", "----")
     foreach ($kv in $Catalogue.GetEnumerator()) {

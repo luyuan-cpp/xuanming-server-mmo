@@ -1,4 +1,4 @@
-param(
+﻿param(
 	[Parameter(Mandatory = $true)]
 	[ValidateSet("zone-up", "zone-down", "zone-status", "all-up", "all-down", "all-status", "infra-up", "infra-down", "infra-status")]
 	[string]$Command,
@@ -10,7 +10,24 @@ param(
 
 	[string]$ZonesConfigPath = "",
 
-	[string]$NodeImage = "ghcr.io/luyuancpp/mmorpg-node:latest",
+	# 留空 = 用 $NodeImageRepository + git 短 sha 组出**不可变** tag。
+	# 以前这里硬编码 ":latest",而 latest 在 registry 上会被覆盖:新旧
+	# Deployment revision 指向同一个 digest,`kubectl rollout undo`
+	# (docs/ops/release-checklist.md §E.2 三级回滚)就退回同一个镜像,
+	# 等于什么都没换。要显式发某个版本时直接传完整引用。
+	[string]$NodeImage = "",
+	[string]$NodeImageRepository = "ghcr.io/luyuancpp/mmorpg-node",
+	# 发布档位。dev 允许占位密钥回落 + 可变 tag;staging/prod 一律要求
+	# 从环境变量注入密钥、且 tag 必须不可变,查不到就 fail-closed。
+	[ValidateSet("dev", "staging", "prod")]
+	[string]$ReleaseProfile = "dev",
+	# 留空 = 按 tag 是否可变自动推导(不可变 tag -> IfNotPresent,可变 tag -> Always)。
+	# 以前无条件写死 IfNotPresent,配上 latest 就是"节点上有旧层就永远不拉新的"。
+	[ValidateSet("", "Always", "IfNotPresent", "Never")]
+	[string]$ImagePullPolicy = "",
+	# 跳过发布预检。只给契约测试和"明知配置未就绪的演练"用,
+	# staging/prod 真发布加这个开关等于把门禁拆了。
+	[switch]$SkipPreflight,
 	[ValidateSet("custom", "managed-cloud", "bare-metal")]
 	[string]$OpsProfile = "custom",
 	[ValidateSet("dev", "prod-like", "prod")]
@@ -89,10 +106,11 @@ param(
 	[switch]$SkipInfra,
 	[switch]$SkipGoSvc,
 	[string]$GoSvcRegistry = "",
-	[string]$GoSvcTag = "latest",
+	# 同 NodeImage:留空 = git 短 sha,不再默认 latest。
+	[string]$GoSvcTag = "",
 	[switch]$SkipJavaSvc,
 	[string]$JavaSvcRegistry = "",
-	[string]$JavaSvcTag = "latest",
+	[string]$JavaSvcTag = "",
 	[switch]$DryRun,
 	[switch]$WaitReady,
 	[int]$WaitTimeoutSeconds = 180,
@@ -109,6 +127,158 @@ $K8sRoot = Join-Path $RepoRoot "deploy\k8s"
 $InfraManifestsDir = Join-Path $K8sRoot "manifests\infra"
 $GoSvcManifestsDir = Join-Path $K8sRoot "manifests\go-svc"
 $JavaSvcManifestsDir = Join-Path $K8sRoot "manifests\java-svc"
+
+. (Join-Path $ScriptDir "lib\release_common.ps1")
+
+# ─────────────────────────────────────────────────────────────────
+# 不可变版本戳
+# ─────────────────────────────────────────────────────────────────
+
+# 留空的镜像参数一律回落到 git 短 sha(脏树带 -dirty 后缀)。
+# 这样"构建出来的 tag"和"部署引用的 tag"在同一份工作树状态下必然相同,
+# 而不同版本之间必然不同 —— 这是 rollout undo 能真的回滚的前提。
+$script:ReleaseStamp = Get-GitReleaseStamp -RepoRoot $RepoRoot
+
+function Resolve-ReleaseTag {
+    param([Parameter(Mandatory = $true)][string]$Purpose)
+
+    if (-not $script:ReleaseStamp.Ok) {
+        throw "无法生成不可变镜像 tag($Purpose):$($script:ReleaseStamp.Reason)。请显式传入 tag / 完整镜像引用。"
+    }
+    return $script:ReleaseStamp.Tag
+}
+
+$script:NodeImageExplicit = -not [string]::IsNullOrWhiteSpace($NodeImage)
+if (-not $script:NodeImageExplicit) {
+	$NodeImage = "{0}:{1}" -f $NodeImageRepository, (Resolve-ReleaseTag -Purpose "NodeImage")
+}
+
+# 调用方显式指定了 NodeImage 却没指定 go/java tag 时,跟随 NodeImage 的 tag。
+# 否则会出现"C++ 节点是版本 X、Go 服务是当前工作树版本"这种半新半旧的部署,
+# 正是本轮要消灭的那类版本错配。
+$script:FollowTag = Get-ImageTagFromRef -ImageRef $NodeImage
+if ([string]::IsNullOrWhiteSpace($GoSvcTag)) {
+	$GoSvcTag = if ($script:NodeImageExplicit -and -not [string]::IsNullOrWhiteSpace($script:FollowTag)) { $script:FollowTag } else { Resolve-ReleaseTag -Purpose "GoSvcTag" }
+}
+if ([string]::IsNullOrWhiteSpace($JavaSvcTag)) {
+	$JavaSvcTag = if ($script:NodeImageExplicit -and -not [string]::IsNullOrWhiteSpace($script:FollowTag)) { $script:FollowTag } else { Resolve-ReleaseTag -Purpose "JavaSvcTag" }
+}
+
+if ([string]::IsNullOrWhiteSpace($ImagePullPolicy)) {
+	$ImagePullPolicy = Resolve-ImagePullPolicy -ImageRef $NodeImage
+}
+
+<#
+.SYNOPSIS
+	staging/prod 路径显式拒绝可变 tag。
+#>
+function Assert-ImmutableReleaseImages {
+	if ($ReleaseProfile -eq 'dev') { return }
+
+	$refs = @($NodeImage)
+	if (-not $SkipGoSvc -and -not [string]::IsNullOrWhiteSpace($GoSvcRegistry)) { $refs += "$GoSvcRegistry/mmorpg-*:$GoSvcTag" }
+	if (-not $SkipJavaSvc -and -not [string]::IsNullOrWhiteSpace($JavaSvcRegistry)) { $refs += "$JavaSvcRegistry/mmorpg-*:$JavaSvcTag" }
+
+	foreach ($ref in $refs) {
+		$tag = Get-ImageTagFromRef -ImageRef $ref
+		$chk = Test-ImmutableImageTag -Tag $tag -RejectDirty:($ReleaseProfile -eq 'prod')
+		if (-not $chk.Ok) {
+			throw "ReleaseProfile=$ReleaseProfile 拒绝该镜像引用 '$ref':$($chk.Reason)"
+		}
+	}
+}
+
+<#
+.SYNOPSIS
+	staging/prod 部署前跑发布预检,非 0 退出码直接阻断。
+
+.DESCRIPTION
+	"有检查器但没人调用"是最常见的失效模式,所以门禁挂在生成器入口而不是文档里。
+#>
+function Invoke-ReleasePreflight {
+	if ($ReleaseProfile -eq 'dev') { return }
+	if ($SkipPreflight) {
+		Write-Warning "已通过 -SkipPreflight 跳过发布预检(ReleaseProfile=$ReleaseProfile)。真实发布不应该走到这里。"
+		return
+	}
+
+	$preflight = Join-Path $ScriptDir "release_preflight.ps1"
+	if (-not (Test-Path $preflight)) {
+		throw "release_preflight.ps1 不存在: $preflight(fail-closed:预检脚本缺失不等于预检通过)"
+	}
+
+	$refs = @($NodeImage)
+	& $preflight -ReleaseProfile $ReleaseProfile -ImageTag (Get-ImageTagFromRef -ImageRef $NodeImage) -ImageRef $refs
+	if ($LASTEXITCODE -ne 0) {
+		throw "release preflight 未通过(exit=$LASTEXITCODE),部署被阻断。修完配置再重跑,或用 -SkipPreflight 明确承担风险。"
+	}
+}
+
+# ─────────────────────────────────────────────────────────────────
+# 密钥注入(替代以前写死在生成器里的占位常量)
+# ─────────────────────────────────────────────────────────────────
+
+<#
+.SYNOPSIS
+	解析要写进 ConfigMap 的密钥。只在写操作(*-up)前调用。
+
+.DESCRIPTION
+	以前这两处是生成器**自己**把占位串写进生产 ConfigMap:
+	  GateTokenSecret: "change-me-in-production-use-a-strong-random-key"
+	  gate.token-secret: change-me-in-production-use-a-strong-random-key
+	也就是说,就算运维把仓库里 7 个文件全改对了,部署出来的还是公开常量。
+
+	**必须是懒解析**:prod 档位下缺环境变量会 throw,如果在脚本顶层就解析,
+	`zone-down` / `zone-status` 这些止血和排查命令也会被一起打死 —— 出事的时候
+	连状态都看不了是灾难。
+#>
+function Initialize-InjectedSecrets {
+	$script:GateTokenSecret = Resolve-InjectedSecret -EnvName "MMORPG_GATE_TOKEN_SECRET" `
+		-DevFallback "change-me-in-production-use-a-strong-random-key" `
+		-ReleaseProfile $ReleaseProfile -Purpose "Gate 连接令牌 HMAC 共享密钥" -MinLength 32
+
+	# db 服务连 MySQL 的凭据。生成器以前写死 root/root,而
+	# deploy/k8s/manifests/infra/mysql.yaml 的 MYSQL_ROOT_PASSWORD 根本不是 root
+	# —— 也就是说这份 ConfigMap 在真集群里连不上库。
+	$script:MysqlUser = Resolve-InjectedSecret -EnvName "MMORPG_MYSQL_USER" `
+		-DevFallback "root" -ReleaseProfile $ReleaseProfile -Purpose "MySQL 用户名" -MinLength 1
+	$script:MysqlPassword = Resolve-InjectedSecret -EnvName "MMORPG_MYSQL_PASSWORD" `
+		-DevFallback "Mmorpg#2026db" -ReleaseProfile $ReleaseProfile -Purpose "MySQL 密码" -MinLength 12
+	$script:RedisPassword = Resolve-InjectedSecret -EnvName "MMORPG_REDIS_PASSWORD" `
+		-DevFallback "" -ReleaseProfile $ReleaseProfile -Purpose "Redis 密码" -MinLength 12
+	$script:GatewayDbUser = Resolve-InjectedSecret -EnvName "MMORPG_GATEWAY_DB_USER" `
+		-DevFallback "root" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 数据源用户名" -MinLength 1
+	$script:GatewayDbPassword = Resolve-InjectedSecret -EnvName "MMORPG_GATEWAY_DB_PASSWORD" `
+		-DevFallback "123456" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 数据源密码" -MinLength 12
+}
+
+# ─────────────────────────────────────────────────────────────────
+# 权威配置值(跨文件单一真相)
+# ─────────────────────────────────────────────────────────────────
+
+<#
+.SYNOPSIS
+	从各服务 etc/*.yaml 读一个"契约关键值",查不到直接 throw。
+
+.DESCRIPTION
+	这些值以前在生成器里各写各的常数,于是漂移出过一堆压测期已知会炸的值
+	(Locker.PlayerLockTTL 5 vs 120、Kafka.PartitionCnt 5 vs 10、
+	 Database.MaxOpenConn 10 vs 60 …)。产物又不入库,漂移只能在线上炸出来。
+	现在改成运行期从服务自己的 etc/*.yaml 取,单一真相在服务侧。
+#>
+function Get-AuthoritativeScalar {
+	param(
+		[Parameter(Mandatory = $true)][string]$RelativePath,
+		[Parameter(Mandatory = $true)][string]$KeyPath
+	)
+
+	$full = Join-Path $RepoRoot ($RelativePath -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+	$r = Get-YamlScalar -Path $full -KeyPath $KeyPath
+	if (-not $r.Found) {
+		throw "生成 ConfigMap 失败:$RelativePath 里查不到 $KeyPath。$($r.Reason)(fail-closed:不替你猜一个常数)"
+	}
+	return $r.Value
+}
 
 # Go micro-service catalogue: name → { configMapName, manifestFile, port, configFlag, configFileName }
 $GoSvcCatalogue = @{
@@ -395,7 +565,7 @@ spec:
 	  containers:
 		- name: $NodeName
 		  image: $NodeImage
-		  imagePullPolicy: IfNotPresent
+		  imagePullPolicy: $ImagePullPolicy
 		  workingDir: /app/bin
 		  command: ["/bin/sh", "-lc"]
 		  args: ["$StartCommand"]
@@ -554,7 +724,7 @@ spec:
           containers:
             - name: $FleetName
               image: $NodeImage
-              imagePullPolicy: IfNotPresent
+              imagePullPolicy: $ImagePullPolicy
               workingDir: /app/bin
               command: ["/bin/sh", "-lc"]
               args: ["$StartCommand"]
@@ -818,6 +988,31 @@ function New-GoSvcConfigMapYaml {
 	$configFileName = $info.ConfigFile
 	$dbTaskRetentionMs = $script:KafkaDbTaskRetentionMs
 
+	# 契约关键值一律从服务自己的 etc/*.yaml 取,不在这里再写一份常数。
+	$dbPartitionCnt    = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Kafka.PartitionCnt'
+	$dbTopicGeneration = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Kafka.TopicGeneration'
+	$dbSubShardCount   = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Kafka.SubShardCount'
+	$dbMaxOpenConn     = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Database.MaxOpenConn'
+	$dbMaxIdleConn     = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Database.MaxIdleConn'
+
+	$loginPartitionCnt      = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Kafka.PartitionCnt'
+	$loginInitialPartition  = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Kafka.InitialPartition'
+	$loginTopicGeneration   = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Kafka.TopicGeneration'
+	$loginSessionExpireMin  = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.SessionExpireMin'
+	$loginMaxLoginDevices   = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.MaxLoginDevices'
+	$loginNodeLeaseTTL      = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.LeaseTTL'
+	$loginQueueShardCount   = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.QueueShardCount'
+	$loginAccountLockTTL    = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Locker.AccountLockTTL'
+	$loginPlayerLockTTL     = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Locker.PlayerLockTTL'
+
+	$locatorNodeLeaseTTL    = Get-AuthoritativeScalar -RelativePath 'go/player_locator/etc/player_locator.yaml' -KeyPath 'Node.LeaseTTL'
+	$locatorLeaseTTLSeconds = Get-AuthoritativeScalar -RelativePath 'go/player_locator/etc/player_locator.yaml' -KeyPath 'Lease.DefaultTTLSeconds'
+
+	$mysqlUser = $script:MysqlUser
+	$mysqlPassword = $script:MysqlPassword
+	$redisPassword = $script:RedisPassword
+	$gateTokenSecret = $script:GateTokenSecret
+
 	$svcConfig = switch ($SvcName) {
 		"db" {
 @"
@@ -834,19 +1029,21 @@ ServerConfig:
     Brokers:
       - "kafka.${InfraNamespace}:9092"
     GroupID: "db_rpc_consumer_group"
-    PartitionCnt: 5
+    TopicGeneration: ${dbTopicGeneration}
+    PartitionCnt: ${dbPartitionCnt}
+    SubShardCount: ${dbSubShardCount}
     IsOfflineExpand: false
   Database:
     Hosts: "mysql.${InfraNamespace}:3306"
-    User: "root"
-    Passwd: "root"
-    MaxOpenConn: 10
-    MaxIdleConn: 3
+    User: "${mysqlUser}"
+    Passwd: "${mysqlPassword}"
+    MaxOpenConn: ${dbMaxOpenConn}
+    MaxIdleConn: ${dbMaxIdleConn}
     Net: ""
   RedisClient:
     Hosts: "redis.${InfraNamespace}:6379"
     DefaultTTLSeconds: 3600
-    Password: ""
+    Password: "${redisPassword}"
     DB: 0
 "@
 		}
@@ -886,15 +1083,15 @@ Etcd:
   Key: login.rpc
 Node:
   ZoneId: ${CurrentZoneId}
-  SessionExpireMin: 30
-  MaxLoginDevices: 3
-  LeaseTTL: 500
-  QueueShardCount: 50
+  SessionExpireMin: ${loginSessionExpireMin}
+  MaxLoginDevices: ${loginMaxLoginDevices}
+  LeaseTTL: ${loginNodeLeaseTTL}
+  QueueShardCount: ${loginQueueShardCount}
   MaxLoginDuration: 5m
   LogoutGraceTime: 5s
   RedisClient:
     Host: redis.${InfraNamespace}:6379
-    Password: ""
+    Password: "${redisPassword}"
     DB: 0
     DefaultTTL: 24h
     DialTimeout: 3s
@@ -905,8 +1102,8 @@ Snowflake:
   NodeBits: 13
   StepBits: 9
 Locker:
-  AccountLockTTL: 10
-  PlayerLockTTL: 5
+  AccountLockTTL: ${loginAccountLockTTL}
+  PlayerLockTTL: ${loginPlayerLockTTL}
 Account:
   MaxDevicesPerAccount: 3
   CacheExpire: 12h
@@ -940,13 +1137,14 @@ SceneManagerRpc:
   Timeout: 5000
   Middlewares:
     Breaker: false
-GateTokenSecret: "change-me-in-production-use-a-strong-random-key"
+GateTokenSecret: "${gateTokenSecret}"
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
   GroupID: "db_rpc_consumer_group"
-  PartitionCnt: 5
-  InitialPartition: 5
+  TopicGeneration: ${loginTopicGeneration}
+  PartitionCnt: ${loginPartitionCnt}
+  InitialPartition: ${loginInitialPartition}
   DialTimeout: 10s
   ReadTimeout: 30s
   WriteTimeout: 10s
@@ -972,21 +1170,21 @@ Etcd:
   Key: playerlocator.rpc
 RedisClient:
   Host: redis.${InfraNamespace}:6379
-  Password: ""
+  Password: "${redisPassword}"
   DB: 0
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
 Node:
   ZoneId: ${CurrentZoneId}
-  LeaseTTL: 500
+  LeaseTTL: ${locatorNodeLeaseTTL}
 Registry:
   Etcd:
     Hosts:
       - "etcd.${InfraNamespace}:2379"
     DialTimeout: 5s
 Lease:
-  DefaultTTLSeconds: 30
+  DefaultTTLSeconds: ${locatorLeaseTTLSeconds}
   PollInterval: 1s
   BatchSize: 100
 "@
@@ -1007,6 +1205,9 @@ Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
 NodeID: "node-1"
+# 跨 zone 重定向签发 gate 令牌要用,缺了 gate_redirect.go 直接返回
+# "GateTokenSecret not configured"。以前这份 ConfigMap 压根没有这一项。
+GateTokenSecret: "${gateTokenSecret}"
 "@
 		}
 		default {
@@ -1053,10 +1254,12 @@ function Apply-GoSvcManifests {
 			Write-Warning "Go service manifest not found: $manifestPath – skipping $svcName"
 			continue
 		}
+		$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
 		$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
+		$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
 
-		Write-Host "  [applied] $svcName -> $svcImage (port $($info.Port))"
+		Write-Host "  [applied] $svcName -> $svcImage (port $($info.Port) pullPolicy=$svcPullPolicy)"
 	}
 }
 
@@ -1067,6 +1270,10 @@ function New-JavaSvcConfigMapYaml {
 
 	$info = $JavaSvcCatalogue[$SvcName]
 	$configMapName = $info.ConfigMap
+
+	$gateTokenSecret = $script:GateTokenSecret
+	$gatewayDbUser = $script:GatewayDbUser
+	$gatewayDbPassword = $script:GatewayDbPassword
 
 	$svcConfig = switch ($SvcName) {
 		"auth" {
@@ -1098,8 +1305,8 @@ spring:
     name: gateway-node
   datasource:
     url: jdbc:mysql://mysql.${InfraNamespace}:3306/mmorpg?useSSL=false&allowPublicKeyRetrieval=true
-    username: root
-    password: 123456
+    username: "${gatewayDbUser}"
+    password: "${gatewayDbPassword}"
   data:
     redis:
       host: redis.${InfraNamespace}
@@ -1107,7 +1314,7 @@ spring:
 etcd:
   endpoints: http://etcd.${InfraNamespace}:2379
 gate:
-  token-secret: change-me-in-production-use-a-strong-random-key
+  token-secret: "${gateTokenSecret}"
 zone:
   probe:
     interval-ms: 5000
@@ -1156,10 +1363,12 @@ function Apply-JavaSvcManifests {
 			Write-Warning "Java service manifest not found: $manifestPath – skipping $svcName"
 			continue
 		}
+		$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
 		$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
+		$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
 
-		Write-Host "  [applied] $svcName -> $svcImage (http=$($info.HttpPort) grpc=$($info.GrpcPort))"
+		Write-Host "  [applied] $svcName -> $svcImage (http=$($info.HttpPort) grpc=$($info.GrpcPort) pullPolicy=$svcPullPolicy)"
 	}
 }
 
@@ -1560,6 +1769,18 @@ Ensure-KubectlAvailable
 Apply-OpsProfileDefaults
 Apply-KafkaProfileDefaults
 Show-ExposureProfileWarning
+
+Write-Host "Release: profile=$ReleaseProfile image=$NodeImage pullPolicy=$ImagePullPolicy go_tag=$GoSvcTag java_tag=$JavaSvcTag"
+if ($script:ReleaseStamp.Ok -and $script:ReleaseStamp.Dirty) {
+	Write-Warning "工作树是脏的(git status 非空),镜像 tag 带 -dirty 后缀。生产发布(-ReleaseProfile prod)会拒绝这种 tag。"
+}
+
+# 写操作才需要门禁;*-down / *-status 是止血和排查路径,不能被预检或密钥缺失挡住。
+if ($Command -in @("zone-up", "all-up", "infra-up")) {
+	Assert-ImmutableReleaseImages
+	Invoke-ReleasePreflight
+	Initialize-InjectedSecrets
+}
 
 switch ($Command) {
 	"infra-up" {

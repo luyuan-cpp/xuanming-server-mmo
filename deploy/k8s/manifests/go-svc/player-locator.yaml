@@ -34,7 +34,7 @@ spec:
       containers:
         - name: player-locator
           image: PLACEHOLDER_IMAGE
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
           env:
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn

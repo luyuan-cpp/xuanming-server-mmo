@@ -1,0 +1,145 @@
+name: 部署配置契约测试
+
+# 这个 workflow 存在的理由：
+#   服务配置分散在 go/<svc>/etc/*.yaml、deploy/k8s/manifests/**、以及
+#   tools/scripts/ 下的一堆部署脚本里。三者之间的一致性（端口、服务名、
+#   etcd key、镜像 tag 口径）以前全靠人肉核对，改一处漏两处是这个仓库
+#   反复出现的事故形态。tools/scripts/tests/ 下的 pwsh 契约测试就是把
+#   这些核对固化下来，本 workflow 负责在 PR 上跑它们。
+#
+#   顺带补上另一个空洞：仓库里已有的 pwsh 测试从来没被任何 workflow
+#   调用过（tools/scripts/test_stress_summarize.ps1 的注释甚至写着
+#   "this can wire into CI later"，但一直没 wire）。
+#
+# ── 测试脚本契约（写测试的人请遵守）───────────────────────────────────
+#   * 测试脚本放 tools/scripts/tests/ **一级目录**下，扩展名 .ps1；
+#     能被 `pwsh -NoProfile -File <path>` 直接执行，通过 exit 0、
+#     失败 exit 非 0（沿用 tools/scripts/tests/lib/test_harness.ps1 的
+#     `exit (Complete-TestRun)` 口径，也是 test_stress_summarize.ps1 的口径）
+#   * 共享辅助放 tools/scripts/tests/lib/ 子目录（已有 test_harness.ps1 /
+#     deploy_capture.ps1）。本 job 只扫一级目录，子目录天然不会被当成用例
+#     单独执行；一级目录里的辅助文件请用下划线开头，例如 _fixtures.ps1
+#   * 一律用 `pwsh -File` 跑，不走 Pester——这是 test_harness.ps1 自己定的
+#     调（"不依赖 Pester，运维机器上装不了模块"），本 job 跟着走
+#   * 必须在 Linux pwsh 下可跑：路径用 Join-Path，别写反斜杠字面量。
+#     （tools/scripts/test_stress_summarize.ps1 就是反例——它用了
+#      `Join-Path $ScriptDir "..\.."`，在 Linux 上反斜杠是普通字符，
+#      Resolve-Path 会失败，所以刻意不把它纳入本 job。）
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/scripts/**"
+      - "go/*/etc/**"
+      - "deploy/k8s/manifests/**"
+      - ".github/workflows/deploy-config-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/scripts/**"
+      # 各 go 服务的运行时配置——契约测试的另一半输入
+      - "go/*/etc/**"
+      # k8s 清单：端口/服务名/镜像 tag 与 etc/*.yaml 对账的对面
+      - "deploy/k8s/manifests/**"
+      - ".github/workflows/deploy-config-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-config-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pwsh-contract-tests:
+    name: tools/scripts/tests (pwsh)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 环境自检
+        shell: bash
+        run: |
+          set -euo pipefail
+          # ubuntu-latest runner 预装 PowerShell 7；万一镜像调整导致缺失，
+          # 要明确报出来，而不是让整个 job 变成"没测试可跑"的假绿。
+          if ! command -v pwsh >/dev/null 2>&1; then
+            echo "::error::runner 上没有 pwsh，无法执行契约测试"
+            exit 1
+          fi
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+
+      - name: 执行契约测试
+        shell: bash
+        run: |
+          set -uo pipefail
+          DIR=tools/scripts/tests
+
+          if [ ! -d "$DIR" ]; then
+            # 测试脚本本体由另一条并行改动落地。workflow 定义先行合入时目录
+            # 可能还不存在——此时给 warning 并放行，而不是判红：一个必然红的
+            # job 会立刻被所有人加进忽略名单，之后真回归也没人看。
+            # 脚本出现后本 job 自动开始真正判红，不需要再改这个文件。
+            echo "::warning::$DIR 尚不存在，本次跳过（契约测试随另一条改动落地后自动生效）"
+            echo "- tools/scripts/tests 尚不存在，跳过" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # -maxdepth 1 是有意的：tests/lib/ 里放的是 test_harness.ps1 /
+          # deploy_capture.ps1 这类被 dot-source 的辅助，单独执行没有意义
+          # （harness 单跑会报 0 个用例通过）。
+          mapfile -t ALL < <(find "$DIR" -maxdepth 1 -type f -name '*.ps1' | sort)
+          if [ "${#ALL[@]}" -eq 0 ]; then
+            echo "::warning::$DIR 一级目录下还没有 .ps1 测试脚本，本次跳过"
+            echo "- tools/scripts/tests 一级目录暂无测试脚本，跳过" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          # 刻意不做 Pester 分支：tools/scripts/tests/lib/test_harness.ps1 的
+          # 头注释已经把话说死了——"不依赖 Pester（运维机器上装不了模块）"。
+          # 再加一条按文件名路由到 Invoke-Pester 的分支，只会让某天有人把用
+          # 自研骨架的文件命名成 *.Tests.ps1 时被静默送错跑法。统一 `-File`。
+          PLAIN=()
+          for f in "${ALL[@]}"; do
+            case "$(basename "$f")" in
+              _*) echo "跳过辅助脚本 $f" ;;
+              *)  PLAIN+=("$f") ;;
+            esac
+          done
+
+          FAILED=()
+          for t in ${PLAIN[@]+"${PLAIN[@]}"}; do
+            echo "=== $t ==="
+            if pwsh -NoProfile -File "$t"; then
+              echo "PASS $t"
+            else
+              echo "::error file=$t::契约测试失败（退出码 $?）"
+              FAILED+=("$t")
+            fi
+          done
+
+          # ── 汇总 ────────────────────────────────────────────────────
+          RAN=${#PLAIN[@]}
+          {
+            echo "### 部署配置契约测试"
+            echo ""
+            echo "- 发现 .ps1：${#ALL[@]}，实际执行：$RAN（其余为下划线辅助脚本）"
+            echo "- 失败：${#FAILED[@]}"
+            for f in ${FAILED[@]+"${FAILED[@]}"}; do
+              echo "  - \`$f\`"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::${#FAILED[@]} 个契约测试失败"
+            exit 1
+          fi
+          if [ "$RAN" -eq 0 ]; then
+            # 全是下划线辅助脚本 = 一个测试都没跑，不能算绿。
+            echo "::error::$DIR 下没有可执行的测试脚本（全部被当成辅助跳过）"
+            exit 1
+          fi
+          echo "全部 $RAN 个契约测试通过"

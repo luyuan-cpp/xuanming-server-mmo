@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 <#
 .SYNOPSIS
     Disaster-recovery rollback for a single zone — orchestrates
@@ -63,7 +63,12 @@ param(
     [string]$KafkaGroup = "db_rpc_consumer_group",
 
     # Zone restart args.
-    [string]$NodeImage = "ghcr.io/luyuancpp/mmorpg-node:latest",
+    #
+    # 必填且必须是不可变 tag。以前这里默认 "…:latest" —— 灾难回滚脚本自己
+    # 默认了一个可变 tag,等于"回档到某个时间点"时把 zone 拉回了**当前**
+    # 镜像,而不是那个时间点在跑的版本。回滚必须由操作者显式指定回到哪一版。
+    [Parameter(Mandatory = $true)]
+    [string]$NodeImage,
     [string]$NamespacePrefix = "mmorpg-zone",
 
     # Skip the manual MySQL prompt (use only when PITR was done OOB earlier).
@@ -78,6 +83,15 @@ param(
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
+
+. (Join-Path $ScriptDir "lib\release_common.ps1")
+
+# 回滚目标必须是不可变 tag,否则"回到旧版本"根本没发生。
+$rollbackTag = Get-ImageTagFromRef -ImageRef $NodeImage
+$rollbackChk = Test-ImmutableImageTag -Tag $rollbackTag
+if (-not $rollbackChk.Ok) {
+    throw "灾难回滚拒绝该 -NodeImage '$NodeImage':$($rollbackChk.Reason)。请传回滚目标版本的 git sha tag 或 repo@sha256:… digest。"
+}
 
 $verb = if ($Apply) { "APPLY" } else { "DRY-RUN" }
 Write-Host "" -ForegroundColor Cyan
@@ -170,29 +184,37 @@ Write-Host ""
 
 # ── Step 5: Kafka offset reset ───────────────────────────────────
 Write-Host "── Step 5: Kafka offset reset ($KafkaTopic) ──" -ForegroundColor Cyan
-$kArgs = @(
-    "-BootstrapServer", $KafkaBootstrap,
-    "-Topic", $KafkaTopic,
-    "-Group", $KafkaGroup,
-    "-ToDatetime", $TargetTime
-)
-if ($Apply) { $kArgs += "-Apply" }
-Write-Host "  kafka_offset_reset.ps1 $($kArgs -join ' ')"
-& "$ScriptDir/kafka_offset_reset.ps1" @kArgs
-if ($LASTEXITCODE -ne 0) { throw "kafka_offset_reset.ps1 failed" }
+# 必须用 hashtable splatting。之前用的是数组 splatting —— PowerShell 会把数组
+# 元素当**位置参数**依次绑定,于是 "-BootstrapServer" 这个字符串本身被绑到
+# BootstrapServer、"kafka:9092" 绑到 Group、…… 最后 "-Group" 撞上 [int]$Partitions
+# 直接类型转换失败。结果是这个灾难恢复脚本连 dry-run 都跑不到第 6 步。
+$kArgs = @{
+    BootstrapServer = $KafkaBootstrap
+    Topic           = $KafkaTopic
+    Group           = $KafkaGroup
+    ToDatetime      = $TargetTime
+}
+if ($Apply) { $kArgs.Apply = $true }
+Write-Host ("  kafka_offset_reset.ps1 " + (($kArgs.GetEnumerator() | Sort-Object Name | ForEach-Object { "-$($_.Key) $($_.Value)" }) -join ' '))
+if ($Apply) {
+    & "$ScriptDir/kafka_offset_reset.ps1" @kArgs
+    if ($LASTEXITCODE -ne 0) { throw "kafka_offset_reset.ps1 failed" }
+}
 Write-Host ""
 
 # ── Step 6: k8s-zone-up ──────────────────────────────────────────
 Write-Host "── Step 6: k8s-zone-up ──" -ForegroundColor Cyan
-$upArgs = @(
-    "-Command", "k8s-zone-up",
-    "-ZoneName", $ZoneName,
-    "-ZoneId", $ZoneId,
-    "-NodeImage", $NodeImage,
-    "-NamespacePrefix", $NamespacePrefix,
-    "-WaitReady"
-)
-Write-Host "  dev_tools.ps1 $($upArgs -join ' ')"
+# 同 Step 5:必须 hashtable splatting,数组 splatting 会按位置绑定,
+# "-Command" 这个字符串会直接撞上 dev_tools.ps1 的 ValidateSet。
+$upArgs = @{
+    Command         = "k8s-zone-up"
+    ZoneName        = $ZoneName
+    ZoneId          = $ZoneId
+    NodeImage       = $NodeImage
+    NamespacePrefix = $NamespacePrefix
+    WaitReady       = $true
+}
+Write-Host ("  dev_tools.ps1 " + (($upArgs.GetEnumerator() | Sort-Object Name | ForEach-Object { "-$($_.Key) $($_.Value)" }) -join ' '))
 if ($Apply) {
     & "$ScriptDir/dev_tools.ps1" @upArgs
     if ($LASTEXITCODE -ne 0) { throw "k8s-zone-up failed" }

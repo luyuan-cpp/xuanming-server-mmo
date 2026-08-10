@@ -1,0 +1,262 @@
+name: Go 全模块门禁
+
+# 这个 workflow 存在的理由：
+#   仓库有 10 个互相独立的 go.mod（go/ 下 9 个 + robot/），但在此之前
+#   只有 login-path-tests.yml 覆盖了 go/login 与 robot 两个。
+#   也就是说 data_service / db / friend / guild / player_locator /
+#   proto / scene_manager / shared 八个模块**没有任何 CI 构建**，
+#   scene_manager/internal/logic/logic_test.go 这种 2800+ 行的测试
+#   从来没在 CI 上跑过。任何人改了 go/shared 都可能悄悄编译不过下游。
+#
+# 与 login-path-tests.yml 的关系：
+#   那个 workflow 是**契约维度**的（Java Gateway + go/login + robot 三方
+#   联合验证 /api/login 链路），本 workflow 是**模块维度**的（每个 go.mod
+#   都能 build 能 test）。go/login 与 robot 会被两边各跑一次，这是刻意的
+#   冗余：契约门禁挂了要看三方，模块门禁挂了只看一个模块，定位成本不同。
+#
+# 关键设计——清单自动发现：
+#   模块列表不硬编码。discover job 用 `find` 扫 go/ 与 robot/ 下的 go.mod，
+#   新增服务只要落一个 go.mod 就自动进门禁，不需要改这个文件。
+#   仓库没有 go.work，每个模块是独立 module，所以 setup-go 必须逐模块
+#   设置 go-version-file / cache-dependency-path（共用一份缓存键会串味）。
+
+on:
+  push:
+    # push 到 main 刻意不加 paths 过滤（与 login-path-tests.yml 同口径）：
+    # 两个分别通过 paths 过滤的 PR 各自绿、合到一起才炸，是跨模块 replace
+    # 依赖最容易出的事故形态，main 上必须有一次无条件的全量确认。
+    branches: [main]
+  pull_request:
+    branches: [main]
+    paths:
+      - "go/**"
+      - "robot/**"
+      # proto/ 是 Go 侧生成物的源契约，改了它必然波及 go/proto 及全部下游
+      - "proto/**"
+      - ".github/workflows/go-modules-ci.yml"
+  # 手动触发：新增/移出排除清单后可以立刻复检，不用推空提交。
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: go-modules-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── 阶段 1：发现所有 Go 模块 ────────────────────────────────────────────
+  discover:
+    name: 发现 Go 模块
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      modules: ${{ steps.scan.outputs.modules }}
+      excluded: ${{ steps.scan.outputs.excluded }}
+      count: ${{ steps.scan.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 扫描 go.mod 并套用排除清单
+        id: scan
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # ── 排除清单 ──────────────────────────────────────────────────
+          # 只登记「当前基线就是红的」模块，每条必须写明红在哪、怎么复检。
+          # 原则同 go/test.ps1 的 L1 白名单：**只登记当前绿的**，宁可少收
+          # 也不能让流水线长期红——长期红等于门禁失效，真回归会被淹没。
+          #
+          # 2026-08-10 在本地（Windows / go1.26.5）逐模块实测 `go build ./...`
+          # 与 `go test -count=1 ./...`：
+          #   go/data_service / go/db / go/friend / go/guild / go/login /
+          #   go/player_locator / go/proto / go/scene_manager / go/shared /
+          #   robot —— build 与 test 全部 exit 0。
+          #   （go/proto 所有包都是 no test files；robot 走 vendor/ 免联网。）
+          # 全绿，所以排除清单为空。需要外部 Kafka/MySQL/etcd 的用例都挂在
+          # `//go:build integration` 后面，默认 `go test ./...` 不会跑到。
+          #
+          # 排除条目的写法（真需要时照抄）：
+          #   EXCLUDED=(
+          #     # go/xxx —— 2026-mm-dd 起 TestYyy 红，原因：……
+          #     #           复检：cd go/xxx && go test -count=1 ./...
+          #     "go/xxx"
+          #   )
+          # 被排除的模块仍会在下面的 excluded-watch job 里跑（不判红），
+          # 转绿了能直接从日志看见，然后把条目删掉即可收回门禁。
+          EXCLUDED=()
+
+          # ── 自动发现 ──────────────────────────────────────────────────
+          # 排除 vendor/ 下的嵌套（robot/vendor 目前不含 go.mod，但 go mod
+          # vendor 的行为随版本变过，这里防一手）。
+          mapfile -t FOUND < <(
+            find go robot \
+              -name go.mod \
+              -not -path '*/vendor/*' \
+              -not -path '*/third_party/*' \
+              -not -path '*/node_modules/*' \
+            | xargs -n1 dirname | sort
+          )
+
+          if [ "${#FOUND[@]}" -eq 0 ]; then
+            echo "::error::没有发现任何 go.mod，find 的路径假设已经失效"
+            exit 1
+          fi
+
+          # 路径要原样进 matrix 表达式，白名单卡一道：既防目录名里的引号/
+          # 空格把 JSON 拼坏，也防有人往仓库塞怪路径做表达式注入。
+          for m in "${FOUND[@]}"; do
+            case "$m" in
+              *[!A-Za-z0-9_/.-]*)
+                echo "::error::模块路径含意外字符，拒绝进入门禁：$m"
+                exit 1 ;;
+            esac
+          done
+
+          # 排除清单里的条目如果已经不存在（模块被删/改名），直接判红，
+          # 逼着人清理陈旧条目——否则排除清单会变成永远没人看的坟场。
+          for e in ${EXCLUDED[@]+"${EXCLUDED[@]}"}; do
+            if [ ! -f "$e/go.mod" ]; then
+              echo "::error::排除清单里的 $e 已不存在，请从 EXCLUDED 中删掉"
+              exit 1
+            fi
+          done
+
+          KEPT=()
+          for m in "${FOUND[@]}"; do
+            skip=0
+            for e in ${EXCLUDED[@]+"${EXCLUDED[@]}"}; do
+              [ "$m" = "$e" ] && skip=1
+            done
+            [ "$skip" -eq 0 ] && KEPT+=("$m")
+          done
+
+          if [ "${#KEPT[@]}" -eq 0 ]; then
+            echo "::error::排除清单把所有模块都排掉了，门禁形同虚设"
+            exit 1
+          fi
+
+          # 手拼 JSON 而不是用 jq：模块路径已被上面的白名单卡成
+          # [A-Za-z0-9_/.-]，不存在需要转义的字符；少一个外部工具依赖，
+          # self-hosted runner 上没装 jq 也能跑。
+          json_array() {
+            local out='[' first=1 x
+            for x in "$@"; do
+              if [ "$first" -eq 1 ]; then first=0; else out="$out,"; fi
+              out="$out\"$x\""
+            done
+            printf '%s]' "$out"
+          }
+
+          MODULES_JSON=$(json_array "${KEPT[@]}")
+          EXCLUDED_JSON=$(json_array ${EXCLUDED[@]+"${EXCLUDED[@]}"})
+
+          echo "modules=$MODULES_JSON"   >> "$GITHUB_OUTPUT"
+          echo "excluded=$EXCLUDED_JSON" >> "$GITHUB_OUTPUT"
+          echo "count=${#KEPT[@]}"       >> "$GITHUB_OUTPUT"
+
+          {
+            echo "### 本次进入门禁的 Go 模块（${#KEPT[@]} 个）"
+            printf '  - `%s`\n' "${KEPT[@]}"
+            if [ "${#EXCLUDED[@]}" -gt 0 ]; then
+              echo ""
+              echo "### 排除（基线红，见 workflow 内注释）"
+              printf '  - `%s`\n' "${EXCLUDED[@]}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  # ── 阶段 2：逐模块 build + test ─────────────────────────────────────────
+  build-test:
+    name: ${{ matrix.module }}
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      # fail-fast: false —— 一个模块红了要能看到其余模块的结果，
+      # 否则修一轮只能暴露一个问题。整体红由下面的 gate job 兜底。
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.discover.outputs.modules) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 安装 Go
+        uses: actions/setup-go@v5
+        with:
+          # 用模块自己的 go.mod 定版：go.mod 里 bump go 指令时门禁会一起
+          # 换 toolchain，不会出现"本地 1.24 能过、CI 用 1.22 编不过"。
+          go-version-file: ${{ matrix.module }}/go.mod
+          # 每个模块有各自的 go.sum，缓存键必须逐模块设，
+          # 否则十个模块共享一个 key，命中的是别人的依赖集。
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      # 注意：go/* 各模块都有 `replace proto => ../proto` /
+      # `replace shared => ../shared`（robot 是 ../go/proto、../go/shared），
+      # 所以必须是整仓 checkout，不能用 sparse-checkout 只取单模块目录。
+      - name: go build ./...
+        working-directory: ${{ matrix.module }}
+        run: go build ./...
+
+      - name: go test -count=1 ./...
+        working-directory: ${{ matrix.module }}
+        # -count=1 关掉测试缓存，保证每次真跑（沿用 login-path-tests.yml
+        # 的口径）。不加 -race：go-zero 自身有已知可容忍的竞态，门禁不该
+        # 被三方噪声搞红；查竞态请在本地手动 `go test -race`。
+        # 挂 `//go:build integration` 的用例（friend/guild/player_locator/
+        # scene_manager/shared 各有一份）默认不参与，它们要真 etcd/Kafka。
+        run: go test -count=1 ./...
+
+  # ── 阶段 3：观察窗口——排除清单里的模块跑但不判红 ──────────────────────
+  # 让"什么时候能把某个模块收回门禁"这件事有数据，而不是靠人记。
+  excluded-watch:
+    name: "观察（不判红）: ${{ matrix.module }}"
+    needs: discover
+    if: needs.discover.outputs.excluded != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ fromJSON(needs.discover.outputs.excluded) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+      - name: go build ./...
+        working-directory: ${{ matrix.module }}
+        run: go build ./...
+      - name: go test -count=1 ./...
+        working-directory: ${{ matrix.module }}
+        run: go test -count=1 ./...
+
+  # ── 阶段 4：汇总 ───────────────────────────────────────────────────────
+  # 给分支保护规则一个稳定的 required check 名字。矩阵 job 的名字会随
+  # 模块数量变化，直接勾矩阵 job 会在新增模块时漏掉新腿。
+  #
+  # ⚠ 要把「Go 门禁汇总」设成 required status check 之前，必须先把上面
+  # pull_request 的 paths 过滤去掉。GitHub 对「因 paths 未命中而根本没跑」
+  # 的 required check 是判 pending 而不是判过，只改动 docs/ 的 PR 会被永远
+  # 卡住。取舍：现在留着 paths 省 runner 时间，代价是它只能当参考检查。
+  gate:
+    name: Go 门禁汇总
+    needs: [discover, build-test]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: 判定
+        shell: bash
+        run: |
+          set -euo pipefail
+          d='${{ needs.discover.result }}'
+          b='${{ needs.build-test.result }}'
+          echo "discover=$d build-test=$b"
+          if [ "$d" != "success" ] || [ "$b" != "success" ]; then
+            echo "::error::Go 全模块门禁未通过（discover=$d build-test=$b）"
+            exit 1
+          fi
+          echo "全部 ${{ needs.discover.outputs.count }} 个 Go 模块 build + test 通过"
