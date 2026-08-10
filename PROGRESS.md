@@ -2596,3 +2596,14 @@ scene_comp 玩家集合增删配对未审)、Java 网关 etcd watch 重建 / 节
 - Java 网关测试未执行完成:本机 JDK 21 不支持项目要求的 release 23。表导出器
   测试未执行:现有 Python 环境缺少 pytest/PyYAML,未擅自安装或修改系统环境。
 - 根仓库改动按主题提交到 `main`,未推送远端;第三方子模块内部工作区保持原样。
+
+### 2026-08-10:Codex 合并剩余远端分支
+
+- `origin/claude/run-tools-proto-generator-pbgen` 已通过 merge commit 纳入 `main`。
+  该分支基于 2026 年 3 月的旧“每服务复制 proto 树”,与当前 `_unified` 生成结构
+  冲突;合并保留分支历史,生成文件统一采用当前主线版本/删除状态,未复活 77 个旧副本。
+- `origin/copilot/track-code-commits` 已通过 merge commit 纳入 `main`。冲突处理保留
+  当前 `dev_tools.ps1` 的完整部署门禁,并接入 `git-stats` 命令。
+- 验证时发现 PowerShell 统计器用空白正则解析 `--numstat`,会漏掉带空格的路径;
+  改为按 TAB 三列解析后,PowerShell/Bash 的提交数、文件数及增删行完全一致。
+- 合并后部署契约重跑 20/20 通过。远端分支删除需要 push,本轮按项目禁令未执行。
