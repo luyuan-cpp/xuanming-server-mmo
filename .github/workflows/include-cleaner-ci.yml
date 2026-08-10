@@ -1,5 +1,11 @@
 name: Include Cleaner CI
 
+# 定位：C++ 侧的**附加检查**（头文件卫生 / misc-include-cleaner），
+# 不编译任何代码。真正的编译门禁在 .github/workflows/cpp-build-ci.yml
+# （工程清单契约 + gate/scene 全量编译）。
+# 2026-08-10 之前这是 C++ 唯一的 CI，导致编译错误在 PR 阶段完全不可见；
+# 现在两者分工：本 workflow 管 include 卫生，cpp-build-ci.yml 管能不能编。
+
 on:
   pull_request:
     paths:

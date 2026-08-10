@@ -3,17 +3,14 @@
 #include <algorithm>
 #include <cassert>
 #include <functional>
-#include <iomanip>
 #include <memory>
 #include <unordered_map>
 #include <optional>
 #include <sstream>
 #include <string_view>
-#include <openssl/crypto.h>
-#include <openssl/evp.h>
-#include <openssl/hmac.h>
 
 #include "gate_codec.h"
+#include "gate_security.h"
 #include "message_limiter/illegal_packet_counter.h"
 #include "error_reporter/error_reporter.h"
 #include "node/system/node/node.h"
@@ -32,37 +29,9 @@
 #include <network/node_utils.h>
 #include <node_config_manager.h>
 
-namespace
-{
-	std::string BytesToHex(const unsigned char *data, unsigned int size)
-	{
-		std::ostringstream stream;
-		stream << std::hex << std::setfill('0');
-		for (unsigned int index = 0; index < size; ++index)
-		{
-			stream << std::setw(2) << static_cast<unsigned int>(data[index]);
-		}
-		return stream.str();
-	}
-
-	std::string HmacSha256Hex(std::string_view secret, std::string_view payload)
-	{
-		unsigned char digest[EVP_MAX_MD_SIZE];
-		unsigned int digestLength = 0;
-		const auto *result = HMAC(EVP_sha256(),
-								  secret.data(),
-								  static_cast<int>(secret.size()),
-								  reinterpret_cast<const unsigned char *>(payload.data()),
-								  payload.size(),
-								  digest,
-								  &digestLength);
-		if (result == nullptr)
-		{
-			return {};
-		}
-		return BytesToHex(digest, digestLength);
-	}
-}
+// BytesToHex / HmacSha256Hex 原来是本文件匿名 namespace 里的两个静态函数,
+// 已经提到 gate_security.h —— GM 面鉴权(gate_service_handler.cpp)要复用同一份
+// 实现,两份 HMAC 拼装代码迟早会漂移。
 
 static std::optional<entt::entity> PickRandomNode(uint32_t nodeType)
 {
@@ -418,6 +387,33 @@ void RpcClientSessionHandler::HandleConnectionEstablished(const muduo::net::TcpC
 		return;
 	}
 
+	// fail-closed(其二):空 gate_token_secret 不再等于"放行"。
+	//
+	// 旧写法唯一的判据是"密钥是不是空字符串",注释写着 Dev mode,可代码里根本
+	// 没有任何 dev/prod 判别。于是生产上只要 GateTokenSecret 忘配、或 ConfigMap
+	// 挂载失败读成空,gate 就把**每一条**连接直接标成 verified —— 整条令牌校验
+	// 链路静默失效,任何人裸连这个端口就能当作已登录玩家发消息,而日志里连一
+	// 条异常都没有。这类"降级成不设防"必须由显式运行模式授权,不能由一个配置
+	// 项恰好为空来隐式触发。
+	//
+	// 现在的判据是 GATE_RUN_MODE(见 gate_security.h,默认 prod):
+	//   * 配了密钥          -> 正常校验;
+	//   * 空密钥 + dev/test -> 放行,但打醒目 WARN 留痕;
+	//   * 空密钥 + prod     -> 当场拒连。
+	// main.cpp 的启动门禁已经会在这种配置下直接 LOG_FATAL 拒绝启动,这里是
+	// 纵深防御(比如有人把启动门禁改掉了,连接层仍然不会放行)。
+	const auto runMode = gate_security::CurrentRunMode();
+	const auto &tokenSecret = gNodeConfigManager.GetBaseDeployConfig().gate_token_secret();
+	const auto secretVerdict = gate_security::ClassifyTokenSecret(tokenSecret, runMode);
+	if (secretVerdict == gate_security::TokenSecretVerdict::kRefuse)
+	{
+		LOG_ERROR << "Rejecting connection: gate_token_secret is empty while run_mode="
+				  << gate_security::RunModeName(runMode)
+				  << " (fail-closed), peer=" << conn->peerAddress().toIpPort();
+		conn->forceClose();
+		return;
+	}
+
 	auto sessionId = tlsSessionManager.session_id_gen().Generate();
 	while (tlsSessionManager.sessions().find(sessionId) != tlsSessionManager.sessions().end())
 	{
@@ -432,10 +428,20 @@ void RpcClientSessionHandler::HandleConnectionEstablished(const muduo::net::TcpC
 	SessionInfo session;
 	session.conn = conn;
 
-	// Dev mode: if no gate_token_secret configured, auto-verify all connections
-	const auto &secret = gNodeConfigManager.GetBaseDeployConfig().gate_token_secret();
-	if (secret.empty())
+	if (secretVerdict == gate_security::TokenSecretVerdict::kDevBypass)
 	{
+		// 明确授权的降级路径:非生产环境且没配密钥,自动标记已验证。
+		// WARN 只打一次 —— 每条连接都打会在压测/开服洪峰里把日志刷爆,
+		// 而这条信息是进程级常量,一次就够定性。
+		static bool sBypassWarned = false;
+		if (!sBypassWarned)
+		{
+			sBypassWarned = true;
+			LOG_WARN << "SECURITY WARNING: gate_token_secret is EMPTY and " << gate_security::kRunModeEnv
+					 << "=" << gate_security::RunModeName(runMode)
+					 << " — every client connection is auto-verified without a token."
+					 << " NEVER run this configuration in production.";
+		}
 		session.verified = true;
 	}
 
@@ -582,7 +588,9 @@ void RpcClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpConn
 	auto &session = sessionIt->second;
 
 	// Reject all game messages until the client passes token verification.
-	// If gate_token_secret is empty (dev mode), all sessions are auto-verified on connect.
+	// 唯一会跳过令牌校验的情形:gate_token_secret 为空**且** GATE_RUN_MODE 是
+	// dev/test —— 那种情况下 HandleConnectionEstablished 会在建连时就标记
+	// verified 并打一条 SECURITY WARNING。生产模式下空密钥根本连不进来。
 	if (!session.verified)
 	{
 		LOG_WARN << "[Token] Unverified session rejected message_id: " << request->message_id()
@@ -657,12 +665,26 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 		return;
 	}
 
+	// 与 HandleConnectionEstablished 同一条判据:空密钥的处置由显式运行模式
+	// 决定,不能只看"密钥是不是空字符串"。这条路径尤其致命 —— 旧写法下客户端
+	// 只要发一条 ClientTokenVerifyRequest,不带任何签名,就能拿到 success=true
+	// 并被标成已验证。
+	const auto runMode = gate_security::CurrentRunMode();
 	const auto &secret = gNodeConfigManager.GetBaseDeployConfig().gate_token_secret();
-	if (secret.empty())
+	const auto secretVerdict = gate_security::ClassifyTokenSecret(secret, runMode);
+	if (secretVerdict == gate_security::TokenSecretVerdict::kDevBypass)
 	{
-		// Dev mode: no secret configured, accept all
 		session.verified = true;
 		sendReply(true, "");
+		return;
+	}
+	if (secretVerdict == gate_security::TokenSecretVerdict::kRefuse)
+	{
+		LOG_ERROR << "[Token] Refusing verification: gate_token_secret is empty while run_mode="
+				  << gate_security::RunModeName(runMode)
+				  << " (fail-closed), session_id: " << sessionId;
+		sendReply(false, "gate token secret not configured");
+		conn->shutdown();
 		return;
 	}
 
@@ -670,15 +692,12 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 	const auto &payloadBytes = message->payload();
 	const auto &clientSig = message->signature();
 
-	auto expectedHex = HmacSha256Hex(secret, payloadBytes);
+	auto expectedHex = gate_security::HmacSha256Hex(secret, payloadBytes);
 	std::string clientSigStr(clientSig.begin(), clientSig.end());
 
 	// 常数时间比较。std::string 的 != 在首个不匹配字节处提前返回,
 	// 攻击者可用计时差逐字节猜签名。长度不等可以直接拒(长度不是秘密)。
-	const bool sigMatches =
-		expectedHex.size() == clientSigStr.size() && !expectedHex.empty() &&
-		CRYPTO_memcmp(expectedHex.data(), clientSigStr.data(), expectedHex.size()) == 0;
-	if (!sigMatches)
+	if (!gate_security::ConstantTimeEquals(expectedHex, clientSigStr))
 	{
 		LOG_WARN << "[Token] HMAC mismatch for session_id: " << sessionId;
 		sendReply(false, "invalid token signature");

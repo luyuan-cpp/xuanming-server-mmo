@@ -68,10 +68,19 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <!--
+    F5 必须从 bin\ 启动,且跑的是 bin\scene.exe 而不是 OutDir 里的产物。
+    配置路径是硬编码的相对路径("etc/base_deploy_config.yaml",见 node.cpp),而
+    YAML::LoadFile 没有 try/catch —— 工作目录不对就抛 YAML::BadFile 穿出 main,
+    std::terminate,**一行日志都不会有**。gate.vcxproj 一直配着这三项,scene 漏了。
+  -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>../../../build/cpp/nodes/</OutDir>
     <IntDir>../../../build/cpp/intermediate/nodes/$(ProjectName)/</IntDir>
     <GenerateManifest>false</GenerateManifest>
+    <LocalDebuggerCommand>$(ProjectDir)..\..\..\bin\scene.exe</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\..\bin</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <GenerateManifest>false</GenerateManifest>
@@ -81,6 +90,9 @@
     <IntDir>../../../build/cpp/intermediate/nodes/$(ProjectName)/</IntDir>
     <GenerateManifest>false</GenerateManifest>
     <LinkIncremental>false</LinkIncremental>
+    <LocalDebuggerCommand>$(ProjectDir)..\..\..\bin\scene.exe</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\..\bin</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>

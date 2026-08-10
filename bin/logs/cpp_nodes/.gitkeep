@@ -1,0 +1,7 @@
+muduo 的 AsyncLogging 用 fopen("a") 打开 logs/cpp_nodes/<node> 这个相对路径,
+不会创建中间目录。目录不在时会命中 FileUtil::AppendFile 的 assert(fp_),
+gate.exe / scene.exe 直接 abort,且没有任何日志落盘 —— 从 Visual Studio 按 F5
+或手工 cd bin 跑 exe 时最容易踩。
+
+所以这个空目录必须留在版本库里。tools/scripts/cpp_nodes.ps1 启动前也会预建一次
+(见该脚本 Invoke-Start 里的 $MuduoLogDir),两处是互为兜底,别删其中任何一个。
