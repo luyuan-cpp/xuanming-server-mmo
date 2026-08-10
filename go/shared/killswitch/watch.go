@@ -111,38 +111,53 @@ func (s *Switch) watch(ctx context.Context, cli *clientv3.Client, rules map[stri
 				return
 			}
 
-			changed := false
-			for _, ev := range resp.Events {
-				key := string(ev.Kv.Key)
-				switch ev.Type {
-				case clientv3.EventTypePut:
-					pattern, rule, valid := s.parseKV(key, ev.Kv.Value)
-					if !valid {
-						continue
-					}
-					rules[pattern] = rule
-					changed = true
-					logx.Infof("[killswitch] 规则更新: %s deny=%v reason=%q",
-						pattern, rule.Deny, rule.Reason)
-
-				case clientv3.EventTypeDelete:
-					pattern, ok := PatternFromKey(prefix, key)
-					if !ok {
-						continue
-					}
-					if _, exists := rules[pattern]; exists {
-						delete(rules, pattern)
-						changed = true
-						logx.Infof("[killswitch] 规则移除: %s", pattern)
-					}
-				}
-			}
-
-			if changed {
+			if s.applyEvents(rules, resp.Events) {
 				s.setRules(rules, s.now())
 			}
 		}
 	}
+}
+
+// applyEvents 把一批 etcd 事件**就地**应用到 rules 上,返回内容是否真的变了。
+//
+// 单独抽出来是为了可测:etcd 的连接、重连、revision 推进都无法在单测里复现,
+// 但"一批事件怎么改规则表"是纯逻辑,而它恰恰是会出错的那一块。
+func (s *Switch) applyEvents(rules map[string]Rule, events []*clientv3.Event) bool {
+	changed := false
+	for _, ev := range events {
+		if ev == nil || ev.Kv == nil {
+			continue
+		}
+		key := string(ev.Kv.Key)
+
+		switch ev.Type {
+		case clientv3.EventTypePut:
+			pattern, rule, valid := s.parseKV(key, ev.Kv.Value)
+			if !valid {
+				// 值坏了就当这条事件没发生,保留原有规则 —— fail-open。
+				continue
+			}
+			if old, exists := rules[pattern]; exists && old == rule {
+				continue
+			}
+			rules[pattern] = rule
+			changed = true
+			logx.Infof("[killswitch] 规则更新: %s deny=%v reason=%q",
+				pattern, rule.Deny, rule.Reason)
+
+		case clientv3.EventTypeDelete:
+			pattern, ok := PatternFromKey(s.cfg.prefix(), key)
+			if !ok {
+				continue
+			}
+			if _, exists := rules[pattern]; exists {
+				delete(rules, pattern)
+				changed = true
+				logx.Infof("[killswitch] 规则移除: %s", pattern)
+			}
+		}
+	}
+	return changed
 }
 
 // parseKV 把一个 etcd 键值对翻成 (匹配模式, 规则)。
