@@ -6,11 +6,14 @@ import logging
 from pathlib import Path
 import sys
 
+import argparse
+
 from core.config_loader import ExporterConfig, LangConfig, load_config
 from core.excel_reader import read_all_tables
 from core.file_utils import ensure_dirs, md5_copy, report_orphans
-from core.foreign_key import validate_foreign_keys
-from core.generators.bit_index_gen import generate_bit_indexes
+from core.foreign_key import ForeignKeyReport, validate_foreign_keys
+from core.manifest import generate_manifest
+from core.generators.bit_index_gen import BitIndexStateError, generate_bit_indexes
 from core.generators.comp_gen import generate_comp_headers
 from core.generators.config_gen import generate_config_classes
 from core.generators.constants_gen import generate_constants
@@ -43,9 +46,16 @@ def run(cfg: ExporterConfig) -> None:
     tables: list[TableSchema] = read_all_tables(cfg)
     logger.info("Read %d table schema(s)", len(tables))
 
-    warnings: list[str] = validate_foreign_keys(tables)
-    if warnings:
-        logger.warning("FK validation: %d warning(s)", len(warnings))
+    # 外键校验必须跑在所有生成之前:失配一律**产出不落盘**,
+    # 否则一批带坏引用的表会先覆盖掉上一批好产物,再让人去查运行时的空指针。
+    report: ForeignKeyReport = validate_foreign_keys(tables, cfg)
+    for msg in report.warnings:
+        logger.warning("FK: %s", msg)
+    if not report.ok:
+        for msg in report.errors:
+            logger.error("FK: %s", msg)
+        logger.error("外键校验失败:%d 条错误,导表中止,产出未落盘", len(report.errors))
+        sys.exit(1)
 
     # Generate
     generate_json(cfg, tables)
@@ -62,6 +72,9 @@ def run(cfg: ExporterConfig) -> None:
     generate_table_ids(cfg, tables)
     generate_constants(cfg, tables)
     generate_bit_indexes(cfg, tables)
+
+    # 批次清单必须在所有表数据产物写完之后生成——它记的是产物 sha256,早一步就对不上。
+    generate_manifest(cfg, tables)
 
     # Deploy
     _deploy(cfg)
@@ -138,14 +151,38 @@ def _deploy(cfg: ExporterConfig) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="data_table_exporter",
+        description="Excel 配置表导出器",
+    )
+    parser.add_argument(
+        "config", nargs="?", default=None,
+        help="配置文件路径,省略则用 exporter_config.yaml",
+    )
+    parser.add_argument(
+        "--bitindex-bootstrap", action="store_true",
+        help="允许位序状态文件缺失时从空初始化。"
+             "**只有确认该表从未发布过**才可以用:位序是存量玩家位图的下标口径,"
+             "重新分配会让所有存量玩家的位图整体错位。",
+    )
+    return parser.parse_args(argv)
+
+
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     )
-    config_path: str | None = sys.argv[1] if len(sys.argv) > 1 else None
-    cfg: ExporterConfig = load_config(config_path)
-    run(cfg)
+    args: argparse.Namespace = _parse_args()
+    cfg: ExporterConfig = load_config(args.config)
+    cfg.bit_index_bootstrap = args.bitindex_bootstrap
+    try:
+        run(cfg)
+    except BitIndexStateError as exc:
+        # 位序状态不可用是"必须人工处理"的错,给一句能照着做的话,不要甩一整屏 traceback。
+        logger.error("位序状态校验失败,导表中止:%s", exc)
+        sys.exit(1)
 
 
 if __name__ == "__main__":

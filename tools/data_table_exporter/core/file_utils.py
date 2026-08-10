@@ -40,6 +40,23 @@ def md5_hash(file_path: Path | str, block_size: int = 2 ** 20) -> str | None:
         return None
 
 
+def sha256_hash(file_path: Path | str, block_size: int = 2 ** 20) -> str | None:
+    """Return the hex SHA-256 digest of a file, or ``None`` on error.
+
+    产物清单(manifest.json)用 sha256 而不是上面的 md5:清单是给 Go / C++ 双端做
+    「两边加载的是不是同一批表」校验用的,属于一致性凭据,不该再用 md5。
+    """
+    try:
+        digest = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            while chunk := f.read(block_size):
+                digest.update(chunk)
+        return digest.hexdigest()
+    except Exception as exc:
+        logger.error("SHA-256 error for %s: %s", file_path, exc)
+        return None
+
+
 def md5_copy_file(src: Path, dst: Path) -> None:
     """Copy *src* → *dst* only when content differs (by MD5)."""
     dst.parent.mkdir(parents=True, exist_ok=True)
