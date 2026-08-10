@@ -113,10 +113,10 @@ type QueueState struct {
 // Queue wraps Redis ZSET operations behind a small typed surface. The zero
 // value is unusable; construct via New.
 type Queue struct {
-	rdb           *redis.Client
-	entryTTL      time.Duration
-	admitTTL      time.Duration
-	hmacSecret    []byte // signs queue tokens; same secret as gate tokens is fine
+	rdb        *redis.Client
+	entryTTL   time.Duration
+	admitTTL   time.Duration
+	hmacSecret []byte // signs queue tokens; same secret as gate tokens is fine
 }
 
 // New constructs a Queue. hmacSecret is used to sign opaque queue tokens —
@@ -135,11 +135,11 @@ func New(rdb *redis.Client, entryTTL, admitTTL time.Duration, hmacSecret []byte)
 
 // ── Key helpers ────────────────────────────────────────────────────────
 
-func zoneZSetKey(zoneID uint32) string  { return fmt.Sprintf("queue:zone:%d", zoneID) }
+func zoneZSetKey(zoneID uint32) string    { return fmt.Sprintf("queue:zone:%d", zoneID) }
 func admittedSetKey(zoneID uint32) string { return fmt.Sprintf("admitted:zone:%d", zoneID) }
-func admitKey(queueID string) string    { return "admit:" + queueID }
-func metaKey(queueID string) string     { return "queue:meta:" + queueID }
-func tokenIndexKey(token string) string { return "queue:token:" + token }
+func admitKey(queueID string) string      { return "admit:" + queueID }
+func metaKey(queueID string) string       { return "queue:meta:" + queueID }
+func tokenIndexKey(token string) string   { return "queue:token:" + token }
 
 // ── Enqueue ────────────────────────────────────────────────────────────
 
@@ -446,6 +446,39 @@ func (q *Queue) AdmittedCount(ctx context.Context, zoneID uint32) (uint32, error
 		return 0, err
 	}
 	return uint32(n), nil
+}
+
+// reserveFastPathSlotScript 原子占位:仅当 admitted 计数 < budget 时,把一枚
+// 一次性占位成员塞进 admitted 集合并刷新 TTL。budget = cap - online,即"在当前
+// 在线数之上还允许多少在途准入"。这让并发的快速通道调用彼此可见 —— check(SCARD)
+// 与 act(SADD)在同一脚本里原子完成,堵住"N 个并发各读同一 free>0 快照、全部
+// 旁路队列签发 gate token"的超发窗口。
+var reserveFastPathSlotScript = redis.NewScript(`
+local admitted = tonumber(redis.call('SCARD', KEYS[1]))
+if admitted >= tonumber(ARGV[1]) then return 0 end
+redis.call('SADD', KEYS[1], ARGV[2])
+redis.call('EXPIRE', KEYS[1], ARGV[3])
+return 1
+`)
+
+// TryReserveFastPathSlot 尝试为快速通道原子占用一个准入名额。budget 传 cap-online。
+// 返回 true 表示占用成功(调用方可直接签发 gate token);false 表示已满(应入队)。
+// 占位成员按 admitTTL 过期,与 dispatcher 准入的在途语义一致(快速通道无 consume
+// 回收步骤,靠 TTL 自然回收)。
+func (q *Queue) TryReserveFastPathSlot(ctx context.Context, zoneID uint32, budget uint32) (bool, error) {
+	if budget == 0 {
+		return false, nil
+	}
+	member := "fast:" + uuid.NewString()
+	res, err := reserveFastPathSlotScript.Run(
+		ctx, q.rdb,
+		[]string{admittedSetKey(zoneID)},
+		budget, member, int64(q.admitTTL.Seconds()),
+	).Int()
+	if err != nil {
+		return false, err
+	}
+	return res == 1, nil
 }
 
 // QueueLen is a thin wrapper over ZCARD for capacity decisions.

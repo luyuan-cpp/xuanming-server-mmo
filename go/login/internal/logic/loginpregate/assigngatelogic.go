@@ -9,8 +9,8 @@ import (
 	"login/internal/logic/pkg/loginqueue"
 	"login/internal/logic/pkg/sessionmanager"
 	"login/internal/svc"
-	loginpb "proto/login"
 	loginproto_database "proto/common/database"
+	loginpb "proto/login"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
@@ -45,15 +45,15 @@ func NewAssignGateLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Assign
 //
 // Decision tree (top to bottom; first match wins):
 //
-//	1. Reentry: req.queue_token already in queue
-//	     → ParseAndVerifyQueueToken, Lookup, return current state
-//	     (returns ADMITTED if dispatcher already promoted, else QUEUEING).
-//	2. Reconnect/replace exemption: caller already has a live PlayerSession
-//	     → bypass queue, sign gate token bound to the existing gate.
-//	     (Disabled when Queue.Enabled=false; reconnect handling is unchanged.)
-//	3. Queue disabled (kill switch): legacy behavior, sign and return.
-//	4. Queue enabled + capacity available + queue empty: sign and return.
-//	5. Otherwise: enqueue, return QUEUEING.
+//  1. Reentry: req.queue_token already in queue
+//     → ParseAndVerifyQueueToken, Lookup, return current state
+//     (returns ADMITTED if dispatcher already promoted, else QUEUEING).
+//  2. Reconnect/replace exemption: caller already has a live PlayerSession
+//     → bypass queue, sign gate token bound to the existing gate.
+//     (Disabled when Queue.Enabled=false; reconnect handling is unchanged.)
+//  3. Queue disabled (kill switch): legacy behavior, sign and return.
+//  4. Queue enabled + capacity available + queue empty: sign and return.
+//  5. Otherwise: enqueue, return QUEUEING.
 //
 // Errors are surfaced via AssignGateResponse.error (HTTP 200 with body) so
 // the Java Gateway shim doesn't need separate error-mapping plumbing.
@@ -92,7 +92,7 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 		return l.signFastPath(in.ZoneId)
 	}
 
-	free, _, online, admitted, err := loginqueue.FreeSlots(
+	free, capacity, online, admitted, err := loginqueue.FreeSlots(
 		l.ctx,
 		l.svcCtx.QueueCapacityProvider(),
 		l.svcCtx.LoginQueue,
@@ -108,9 +108,24 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 
 	queueLen, _ := l.svcCtx.LoginQueue.QueueLen(l.ctx, in.ZoneId)
 	if free > 0 && queueLen == 0 {
-		logx.Debugf("[loginqueue] fast-path zone=%d free=%d online=%d admitted=%d",
-			in.ZoneId, free, online, admitted)
-		return l.signFastPath(in.ZoneId)
+		// 快速通道也必须原子占位,否则 free>0 只是一个瞬时快照:N 个并发请求会各读
+		// 到同一个 free>0/queueLen==0、全部旁路队列签发 gate token,开服洪峰下把
+		// cap 旁路超发。budget = cap-online = 在当前在线之上还允许的在途准入数;
+		// TryReserveFastPathSlot 用 Lua 把"判定 admitted<budget + 占位"合成一步。
+		budget := uint32(0)
+		if capacity > online {
+			budget = capacity - online
+		}
+		reserved, rErr := l.svcCtx.LoginQueue.TryReserveFastPathSlot(l.ctx, in.ZoneId, budget)
+		if rErr != nil {
+			logx.Errorf("[loginqueue] reserve fast-path slot zone=%d err=%v", in.ZoneId, rErr)
+			// 占位失败(Redis 抖动)不放行快速通道 —— 落到下面入队,fail-closed。
+		} else if reserved {
+			logx.Debugf("[loginqueue] fast-path zone=%d free=%d online=%d admitted=%d budget=%d",
+				in.ZoneId, free, online, admitted, budget)
+			return l.signFastPath(in.ZoneId)
+		}
+		// 占位没抢到 = 名额已被并发请求占满,改走入队。
 	}
 
 	// 5. Enqueue.
