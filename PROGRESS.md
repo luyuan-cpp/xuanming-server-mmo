@@ -2056,3 +2056,405 @@ scene lib(combat / combat_state / actor / spatial / player)→ gate 节点
 既有用例)。C++ 侧新增 include:player_lifecycle.cpp 加 hexagons_grid.h、
 skill.cpp 加 <algorithm> 与 <utils/random/random.h>、actor_action_state.cpp 加
 engine/core/type_define/type_define.h;`CheckMessageSize` 签名多了 `SessionInfo&`。
+
+### 2026-08-09:补审断连丢失的 4 维度(round 2,Claude 落码,未编译)
+
+上一轮扇出 8 维度里 4 个因 API 断连全灭,本轮补审(4 find + 每条发现 2 视角对抗证伪)。
+产出:10 条候选 → 确认 7(3 P1 + 4 P2,其中 1 条 P1 单票因复核 agent 断连)→ 证伪 3。
+**go-player-locator 的 find agent 又一次死于断连,该维度至今零覆盖,round 3 必须补。**
+
+**已修(7 条全部落码):**
+
+P1-a:**移速 buff 让角色漂移**。全仓 Velocity 唯一写入点是 UpdateVelocity,把
+buff 的 movement_speed_boost/reduction 这个**标量**灌进 velocity 的 x/y/z 三轴;而
+MovementSystem 把同一组件当**运动学矢量**每固定步长 location += velocity*delta ——
+挂移速 buff 的角色沿 (1,1,1) 匀速漂移(减速为负则钻地),几秒即被 AOI(kMaxViewRadius=10)
+划出所有观察者视野,漂移位置还随存盘落库。修法:语义拆分 —— 新增 MoveSpeedComp(标量,
+夹到 ≥0),UpdateVelocity 改名 UpdateMoveSpeed 只写它;Velocity 留给未来真实移动来源。
+属性枚举 kVelocity 一并改名 kMoveSpeed(留着旧名就是给下一个人埋回同一个坑);
+movement.cpp 落警示注释(含"接真实移动时必须补 kTransformFieldNumber 脏位")。
+
+P1-b:**导航网格浅拷贝 → 悬垂指针 + 停服必现 double free**。NavComp 按值持有
+dtNavMesh/dtNavMeshQuery(用户声明析构、无 move、未删 copy → emplace(std::move) 实为
+逐成员浅拷贝),LoadNavBins 栈局部装好再 AddNav,map 副本与栈局部共享 m_tiles/节点池
+裸指针且 navQuery.m_nav 指向栈地址;每轮循环局部析构即释放(DT_TILE_FREE_DATA),
+线程退出时 thread_local SceneNavManager 再对同批指针二次析构。修法:NavComp 显式删除
+拷贝/移动,SceneNavMapComp 改存 unique_ptr<NavComp>,堆上定址后再 LoadNavMesh +
+navQuery.init;LoadNavMesh 改返回 bool,失败 fail-closed 不注册空网格。
+
+P1-c:**眩晕/沉默永远同步不到客户端(三层皆断)**。ResetCombatStateFlags ①写进
+get_or_emplace<ActorBaseAttributesS2C>(实体上的死组件,全仓零读者)而生成序列化器读的
+是 try_get<CombatStateFlagsComp>(全仓零写入点);②从不置 kCombatStateFlagsFieldNumber
+脏位,序列化分支不可达;③值写 false 而 CombatStateCollectionComp 的语义是键存在即激活。
+修法:改写 CombatStateFlagsComp、激活写 true、置状态脏位。
+
+P1-d:**属性同步消息不带 entity_id**。SetActorBaseAttributesS2CAttrDirtyBit 全仓唯一
+调用点只置 velocity 位,kEntityIdFieldNumber 永不置 → proto3 默认 0 不序列化,观察者收到
+无主更新。信封层(BroadcastToPlayersRequest)不带主体 actor,payload 的 entity_id 是唯一
+归属通道;序列化器从 Guid(uint64_t)组件取值,客户端在 ActorCreateS2C.guid 建过映射,
+可归属。修法:ResetCombatStateFlags 一并置 kEntityIdFieldNumber(velocity 通道随
+P1-a 语义拆分后暂无写方,接通道时按同规则补)。
+
+P2-a:**LookAtPosition 坐标系抄错**。世界是 z-up(grid/AOI 拿 x,y 当地面),这里照抄
+Detour y-up 公式(yaw=atan2(x,z)、pitch=asin(y)):同高度目标 yaw 恒 ±π/2、真实方位角
+落进 pitch。每次带 position/target_id 的技能释放都会写坏施法者 rotation;当前被
+"rotation 全仓零读者"掩盖。修法:按 z-up 重算(yaw=atan2(y,x) 绕 z 轴、pitch=asin(z)),
+写 rotation 的 z/x,roll 恒 0。
+
+P2-b:**周期全量存盘单回调停顿**。redis.cpp 的 300s 定时器在游戏 tick 同线程单个回调里
+全量遍历 playerList 逐个 SavePlayerToRedis(每个都是整份 PlayerAllData marshal+脏比较,
+项目自估几 KB 快照近 100µs)—— 几千在线即数百 ms 级全服停顿,world.cpp 固定步长累加器
+clamp 1s,超了直接丢模拟时间。修法:定时器改每秒跑,按 playerId % interval == 当前槽位
+分摊,每玩家每周期仍恰好存一次,单回调工作量 N/interval;周期末槽位打一条汇总日志。
+
+P2-c:**etcd 客户端状态挂在幽灵实体上**。NodeContextManager 的 globalEntities_ 无初始化器
+(thread_local 零残留 = entity{0},而 64 位 entt::null 是全 1),GetOrCreateGlobalEntity 的
+懒创建判断永不成立,etcd 全部 gRPC 状态(CQ/stub/watch 流)emplace 在从未 create() 的
+句柄上,仅靠 EnTT 3.13 池语义宽容"碰巧能跑";未来任何对该 registry 的首次 create() 必铸出
+同号实体互踩。修法:构造函数 fill(entt::null) + etcd_service.cpp Init 处改
+GetOrCreateGlobalEntity(修了初始化后不改这处会变成对 entt::null emplace,更糟,两处必须
+同批上)。复核方还纠正了原发现的两处细节:EnTT 3.13.2 的 emplace 无 valid 断言,Debug 构建
+同样能跑(不是"release 关断言掩盖");现存代码无路径触发 create() 碰撞,引爆需未来代码。
+
+**证伪 3 条(记录省得下轮重报):**dtCrowd 三处断链(AfterEnterScene 全仓无生产者,
+handler 现网从不执行,纯未接线脚手架 —— 但其中"用 actor 句柄查 sceneRegistry"是真隐患,
+接线时按 player_scene.cpp:111 的警告走 SceneEntityComp);delta 通道分级饿死(五个
+AttributeDelta* 通道零调用点,缺陷依赖假想的未来接线);kafka enable.auto.commit(两类消息
+都有上层设计兜底:命令 topic 有 TargetInstanceId 过滤,迁移链有 reaper 重发)。
+
+**另:**本轮开工前顺手闭环了上一轮 4 条遗留:①gate_instance_id 已翻成 fail-closed
+拒绝(上轮"两处 C++ 没填"系误判 —— 那两处是 GsEnterSceneRequest,scene↔scene S2S,
+不是发 scene_manager 的 EnterSceneRequest;真实调用方全链已填;logic_test.go 12 处用例
+补了字段,"not-a-number"用例在 ParseUint 就被拒不需要);②load_reporter 死节点
+scene_count/player_count 残留 —— 全仓只有 Incr/Decr 无清零路径,"复用 id 的新节点会
+覆盖"的旧注释不成立,已在 reconcile 之后 + fullSync 陈旧清理路径删除计数键(顺序重要:
+reconcile 里的 destroyInstanceForce 自己还会减这两个键);③"read/write 两个分区器"
+P2 查实**不成立**(login 是唯一 DBTask 生产者,读写同走一个 KeyOrderedKafkaProducer
+同一 key),不修;④unsafe-handoff 疏散卡死 —— 并行协作方正在写
+docs/design/scene-owner-reentry-barrier.md(owner_epoch 方案,工作区有未提交改动),
+归属他们,本轮不动。
+
+本轮 C++ 改动**未编译**,待 Codex(MSBuild 串行 /m:1):
+1. scene lib:actor(attribute comp/constants/calculator)+ spatial(nav_comp/scene_nav/
+   navigation/recast/view/movement)+ combat(modifier_buff_impl)+ core(redis);
+2. engine:thread_context/node_context_manager.h + node/system/etcd/etcd_service.cpp
+   (头文件改动会波及所有 include 方,gate/scene 两节点都要重链);
+3. 注意:recast.h 的 LoadNavMesh 签名 void→bool;scene_nav.h 的 SceneNavMapComp 值类型
+   NavComp→unique_ptr<NavComp>(全仓消费方仅 navigation.cpp,已同批改);
+   eAttributeCalculator::kVelocity→kMoveSpeed(消费方 calculator+modifier_buff_impl,已改)。
+Go 侧无新改动(上轮 Go 改动已随 bf76a2e7d 入库)。
+
+### 2026-08-09(续):第三轮审计 —— player_locator 会话/租约链(Claude 落码,未编译)
+
+前两轮全灭的 player_locator 维度单独成批补审(3 个聚焦切片 + 两视角对抗证伪)。
+产出:7 条候选 → 确认 6(2 P1 + 4 P2)→ 证伪 1(Redis Cluster CROSSSLOT —— 单机
+Redis 是刻意架构分工,无触发路径)。**shared 基础件切片(snowflake/snowflakealloc/
+timertask/kafkautil/cache)的 finder 第三次死于 API 断连,至今零覆盖,round 4 必须再补。**
+
+**已修(6 条全部落码):**
+
+P1-a:**正常登出从不清理场景侧位置/人数**。全仓 SceneManager.LeaveScene 唯一调用点
+在 LeaseMonitor(断线租约到期路径);正常登出链 LeaveGame→MarkOffline→
+deleteSessionIfUnchanged 只删会话键和 legacy location 键,不碰权威键
+player:{id}:location(无 TTL),也永远进不了租约链(会话已删,SetDisconnecting 因
+redis.Nil no-op)。后果:权威位置永久残留 + 实例 player_count 幽灵 +1(destroy-on-empty
+永不触发,孤儿实例);多世界节点区服下次登录选到别的节点被 unsafe-handoff 闸门
+**确定性永久拒绝**。修法:MarkOffline CAS 删除成功后同步调 notifySceneManagerLeave
+(复用 LeaseMonitor 的实现,含 SceneId=0 时读权威键回退);失败则把改成 DISCONNECTING
+态的会话快照经新增 enqueueOfflineCleanup(Lua:会话键已重现=玩家瞬间重登则放弃)入
+租约 ready 队列,复用既有 at-least-once 机制重试。连带堵一个边角:合成条目无活会话键,
+AFK 月卡分支的 rearm Lua 会把它判成换代静默丢弃 —— 月卡只保护断线玩家,显式登出
+不适用;handleLeaseExpiry 现在只在会话键仍存在时才走 AFK 探测(读键失败按存在处理,
+宁可多探一次不误清月卡玩家)。
+
+P1-b:**断线事件一次性且失败即吞**。会话进 DISCONNECTING 的唯一写入点是
+SetDisconnecting RPC,而 login 的 markPlayerSessionDisconnecting 失败只打日志就放弃,
+gate 侧发通知前就删了本地会话、无 login 节点时直接跳过、gate 崩溃则回调根本不执行 ——
+会话键无 TTL,LeaseMonitor 只消费 SetDisconnecting 写入的 ZSET,无任何对账路径:
+受影响玩家会话**永久 ONLINE**(公会永久在线、LeaveScene 永不执行、叠加 P1-a 的泄漏)。
+修法(login 侧):带退避重试 4 次(吃掉 locator 发版/重启量级的窗口),穷尽后
+logx.Severef CRITICAL 留人工线索(对应 release-checklist #B-1 巡检)。
+**架构级残留缺口未修需拍板**:gate 整机崩溃时其承载的全部会话仍会滞留 ONLINE,
+系统性收口需要 locator 侧对账扫描(State==ONLINE 且 gate_instance_id 不在 etcd 存活集
+→ 补投 DISCONNECTING),涉及给 locator 加 gate 注册表 watch,本轮未动。
+
+P2-a:**SetLocation 是绕过 CAS 链的裸写 RPC**(无会话/版本校验、无 TTL、强制
+Online=true,与 MarkOffline 的原子 DEL 有复活竞态)。全仓无生产调用方(连 GetLocation
+也没有),属历史遗留但端点注册可达。已 fail-closed 停用(返回明确错误);
+logic_test.go 4 处用例改为 seedLegacyLocation 直接种键(保留"MarkOffline 会删 legacy
+键"的断言),新增 TestSetLocation_DeprecatedRejected 钉住拒绝契约。
+
+P2-b:**节点租约丢失后永不重注册**。KeepAlive channel 关闭只打一条 INFO 就放弃,
+etcd 抖动超过 LeaseTTL(500s)该实例就从服务发现永久消失且无告警。scene_manager 的
+同源副本早已实现 reRegister 自愈(绝不盲 Put 老 key,CAS Version(allocKey)==0 重夺,
+失败换新 node_id),四副本注释里写着要同步却漏了三份。已移植到 player_locator
+(watchKeepAlive/reRegister);**guild/friend 两份同缺口已开后台任务**(结构已漂移,
+需各自适配,不能整段照抄)。
+
+P2-c:**gate 的 PlayerLeaseExpiredEventHandler 空实现**。LeaseMonitor 把"通知 gate"
+当作 ack claim 的必要副作用,gate 收到却什么都不做 —— 也是老账"假死连接不会被清"
+的根因。已实现:按 session_id 查会话,player_id 不匹配跳过(fail-safe);有 conn 则
+forceClose(对端假死不能指望四次挥手,关闭触发正常断开回调统一走清理),无 conn 的
+残留会话就地摘除。幂等:正常断开早已摘会话,find 不到直接返回。
+
+P2-d:**KafkaWriter 未设 RequiredAcks**。kafka-go 直接构造 Writer 时零值是
+RequireNone(fire-and-forget),broker 端失败结构性不可见 —— LeaseMonitor 拿
+WriteMessages==nil 当投递凭据去 ack claim,凭据是假的。scene_manager 的
+servicecontext 早修过同一个坑,locator 漏了。已对齐 RequireOne。
+
+本轮 Go 改动**未编译**,待 Codex:`cd go && go build ./player_locator/... ./login/...`,
+`go test ./player_locator/...`(注意 logic_test 的 4 处用例已改种键方式,MarkOffline
+成功路径现在会往 LeaseZSetKey 入队重试条目 —— 若有用例断言 MarkOffline 后 ZSET 为空
+会翻,已核对现有断言无此假设)。C++ 侧 gate_event_handler.cpp 待编译(gate 节点)。
+guild/friend 的 reRegister 移植在独立后台任务里,不在本批。
+
+### 2026-08-09/10:round 3+4 —— player_locator 本体 + go/shared 基础件(Claude 落码,未编译)
+
+前两轮 player_locator/shared 的 finder 反复死于 API 断连,本两轮切小单跑补齐。
+
+**Round 3(player_locator 会话CAS链 + 租约监控),确认 6:**
+
+P1:①**正常登出永不清 SceneManager 位置**。LeaveGame→MarkOffline 只走
+deleteSessionIfUnchanged(删会话键 + 历史遗留 player:location),而权威键
+player:{id}:location 无 TTL、全仓唯一删除点是 scene_manager LeaveScene handler,
+其唯一生产调用点又是 LeaseMonitor —— 正常登出根本不进租约链。后果:权威位置永久残留、
+实例 phantom +1(destroy-on-empty 永不触发=孤儿实例占 Agones 名额)、多世界节点区服
+下次登录选到不同节点被 unsafe-handoff 门禁拒绝、玩家确定性锁死。②**断线事件一次性且
+失败即吞**:SetDisconnecting RPC 失败/gate 崩溃/断线瞬间无 login 节点 → 会话永久
+ONLINE(无 TTL),唯一清理状态机不启动;guild 在线判定直读会话键,对公会永久显示在线。
+docs/ops/release-checklist.md 已把这类 leak 列为人工 SCAN 巡检项 = 确认无自愈。
+
+P2(已落码):③**SetLocation 是绕过 CAS 链的裸写**(无会话/版本校验、无 TTL、强制
+Online=true),与 MarkOffline 原子删除有复活竞态;全仓无生产调用方 → 端点改
+fail-closed 拒绝(logic_test.go 相应用例改直接种 legacy 键)。④**node.go lease 丢失
+不自愈**(ka==nil 只打一条日志就 return,进程活着但注册蒸发);已移植 scene_manager 的
+reRegister(CAS 重夺原 id / 失败换新 id / 重启 KeepAlive)—— 见下 guild/friend 同款。
+⑤**KafkaWriter 未设 RequiredAcks**(kafka-go 零值=RequireNone fire-and-forget),
+租约过期通知的 fail-closed 受理协议对 Kafka 腿形同虚设;已补 RequireOne。
+
+**未修待拍板(架构级):**gate **整机崩溃**时其承载的全部会话仍永久 ONLINE ——
+login 侧退避重试只吃掉 locator 重启窗口,系统性收口需 locator 加对账扫描
+(周期扫 State==ONLINE 且 gate_instance_id 不在 etcd 存活集 → 补投 DISCONNECTING+租约),
+涉及 watch gate 注册表。这是新增子系统,单列。
+
+**Round 4(go/shared 基础件),确认 2 + 顺带 1,证伪 6:**
+
+P2:①**snowflakealloc 持久水位写墙钟而非发号高水位**。advanceGuard 只写
+NowEpochSec 且回拨时 early-return 冻结,而发号器借位(step 耗尽/时钟停摆,
+Generate 的 default 分支)会让 lastTime 跑到墙钟前面 → 水位低于真实已发号秒;
+前任借位窗口内崩溃,同 hostname 继任者以低地板+step=0 重发,与前任借位期的号逐位
+撞号(scene id 裸 SET 无 CAS,路由互相覆盖)。这正是 snowflake.go SetGuardTime
+注释点名要 guard 覆盖的第三类情况,实现没兑现。修法:snowflake.Node 加
+HighWaterEpochSec();Handle 持 atomic.Pointer[Node] 引用,advanceGuard 写
+max(墙钟, 高水位)。窗口从"整个借位期"缩到"单个 keepalive tick"。
+②**timertask 零值 Task 首次调用即 nil 崩溃**。零值 index=0(合法空闲态是 -1),
+schedule 首行 t.Cancel() 走 heap.Remove(&t.sched.h,...) 解引用 nil sched;
+schedule 里的 nil-sched 守卫排在 Cancel 之后=死守卫。C++ TimerTaskComp 是值内嵌
+组件,移植方按同习惯声明 var t Task 即炸进程。修法:Cancel 首行加 nil-sched 早退。
+③(顺带,一验证方确认另一方证伪于"暂无调用方")**friend/guild KafkaWriter 同款
+RequiredAcks 零值**;既然 scene_manager/player_locator 都已显式 RequireOne,
+对齐补上(gate_push 是刻意预接线基础设施)。
+
+**证伪 6(记录防重报):**Redis Cluster CROSSSLOT(单机是刻意架构,config 指不到
+Cluster);allocator nodeKey 中毒热循环(key 带 lease ≤60s 自愈,越界/非数字值无
+写入路径);timertask loop.go Stop 竞态(通道语义实为设计内);login PlayerId 水位、
+topic_init AlterConfig、gate_push GateInstanceID 三条**复核 agent 死于额度耗尽、
+未真正证伪**,round 5 需补验(前两条涉及 DB 唯一索引/sarama IncrementalAlterConfig,
+是架构级,不擅动;第三条在无调用方的死 infra 上)。
+
+**guild/friend reRegister 移植(round 3 衍生,已落码):**两服务 node.go 的
+KeepAlive 原来都是 ka 通道关闭只打一条日志就永久放弃 = 进程活着但注册蒸发、无自愈。
+按 scene_manager noderegistry/registry.go 的三步式移植:CAS 重夺原 node_id →
+失败则 allocateNodeID 换全新 id → 重启 KeepAlive,指数退避封顶 30s。换 id 安全因为
+Snowflake worker id 由 snowflakealloc 独立分配、与 NodeInfo.NodeId 解耦(见各自
+启动注释)。同源第四份 player_locator 本轮③已修。
+
+本两轮改动:Go 侧 gofmt 干净但**未编译**,待 Codex:
+`cd go && go build ./...` + `go test ./player_locator/... ./shared/...`
+(注意 player_locator logic_test.go 改了 SetLocation 用例:TestSetLocation_DeprecatedRejected
+断言拒绝、其余改 seedLegacyLocation 直接种键;snowflakealloc/timertask 若有既有单测
+需确认 HighWaterEpochSec 新方法与 Cancel 早退不破坏断言)。C++ 侧本两轮无改动。
+
+### 2026-08-10(续):locator 会话对账扫描落码 + snowflake 借位预算(Claude 落码,未编译)
+
+**1. 会话对账扫描(round 3 那条架构级缺口,已拍板实现)。**
+新增 go/player_locator/internal/logic/session_reconciler.go,player_locator.go 接线,
+config.Lease 加 ReconcileIntervalSeconds(默认 60s,-1 关闭)。兜住「gate 整机崩溃 →
+TCP 断开回调不执行 → SetDisconnecting 永远不来 → 会话永久 ONLINE」:
+- 存活集以 etcd GateNodeService.rpc/ 前缀为准(C++ gate 以 lease 注册 NodeInfo,
+  node_uuid 即会话里的 GateInstanceId);etcd 列举失败 → 本轮整体跳过(fail-closed);
+- SCAN player:session:*,State==ONLINE 且 GateInstanceId 连续**两轮**不在存活集才动手
+  (单轮缺席可能是 etcd 视图抖动/gate 重启重注册);
+- 动手 = 与 SetDisconnecting 完全相同的 Lua(整字节 CAS + 版本递进 + ZADD 租约),
+  玩家期间重连/重登改写会话字节则 CAS 失败 no-op,绝不误杀活人;多 locator 并扫无害。
+之后由既有 LeaseMonitor 链完成 gate 通知 + SceneManager.LeaveScene,
+「所有会话终点必经租约链」闭环恢复。release-checklist 里 #B-1 的人工 SCAN 巡检
+可在观察一个版本周期后降级。
+
+**2. snowflake 借位预算(用户拍板:可借下秒,超前墙钟 >10s 必须出错)。**
+shared/snowflake 新增 maxBorrowAheadSec=10 与 ErrBorrowLimitExceeded(**暂态**错误,
+墙钟 1s/s 追赶自愈,与 ErrFenced 的永久性不同):Generate 借位分支在
+lastTime+1 > 墙钟+10 时拒绝发号,不再无界借位。要点:
+- 判定用 waitNextTime 的返回值(即最后一次墙钟观测),不额外读钟;
+- 覆盖 guard 注入的超前:接管时前任高水位比本机墙钟快超过预算,同样 fail-closed
+  等墙钟追进预算圈(唯一性优先);
+- 拒绝日志按墙钟秒限频(持续过载时每次调用都会进拒绝分支,不能每次都刷 ERROR);
+- 与持久水位修复(advanceGuard 写 max(墙钟,高水位))互补:预算钉死了水位最多落后
+  高水位 10s,继任者 SetGuardTime 的地板缺口有了硬上界。
+调用方核查:guild_logic / createscenelogic / world_init 三处均已正确处理 error
+(fail-closed 不吞);login 的 PlayerId 走 bwmarrin 另一型,不受影响。
+
+待 Codex:`cd go && go build ./...`;`go test ./player_locator/... ./shared/...`
+(snowflake 若有借位相关既有单测,需按新预算语义调整:虚拟时钟注入下连续借位
+超过 10 逻辑秒会开始返回 ErrBorrowLimitExceeded)。
+
+### 2026-08-10(续二):round 4 三条未复核项自行核实并落码(Claude 落码,未编译)
+
+上轮三条因复核 agent 额度耗尽而悬置的发现,本轮逐条人工核实,全部成立,全部修掉:
+
+**1. gate_push 防僵尸收口(shared/kafkautil/gate_push.go)。**核实:BroadcastToPlayers
+按 GateID 分组但 instance id 取组内**第一个玩家**的;四个入口都不校验空 instance id
+(空值 = 消费端 ValidateCommandTarget 防僵尸过滤被关,违反不变量 2)。gate 业务
+node_id 会回收复用,滚动重启窗口内同一 gate_id 下有新旧两代实例的会话,旧实现把
+两代折进一条命令 → 挂错代 instance 的那一半玩家消息被消费端静默丢弃。修:
+PushToPlayer 空 instance 直接拒(fail-closed);Broadcast 分组键改
+(GateID, InstanceID) 复合;三个广播入口空 instance 逐条剔除 + 报错不静默。
+
+**2. topic_init 换增量配置接口(shared/kafkautil/topic_init.go)。**核实:sarama 的
+AlterConfig 走 Kafka 遗留 AlterConfigs 协议,语义是**全量替换** topic 动态配置 ——
+只提交 retention.ms 会把运维手工设的其它覆盖项(cleanup.policy 等)每次服务启动
+抹回默认。修:换 IncrementalAlterConfig(KIP-339,按条目 SET;broker 需 ≥2.3,
+本仓 cfg.Version 已声明 V3_0_0_0,sarama v1.43.1 支持)。
+
+**3. login PlayerId 毫秒级水位地板(防"墙钟回拨+重启"跨进程重放)。**核实:bwmarrin
+进程内靠单调时钟免疫回拨,但跨重启以当前墙钟重新锚定;hostname 亲和复用同 worker id,
+回拨 N 秒后重启即重走旧进程最后 N 秒的毫秒序列。snowflakealloc 的 GuardEpochSec 是
+shared/snowflake 秒级 epoch 口径,bwmarrin 毫秒层用不上。修(三件套):
+- snowflakealloc 加 guard_ms/{id} 键(值=Unix 毫秒,与两套自定义 epoch 解耦)与
+  ReadMsWatermark/PutMsWatermark(读失败必须报错让调用方 fail-closed);
+- PlayerIDGen 加 NowUnixMs()(锚点墙钟+单调流逝 = 发号器时钟口径,墙钟回拨后
+  直接读 time.Now 会低估);
+- login.go 启动时把前任水位当硬地板:墙钟没越过就不构造发号器(等待时长=实际
+  回拨幅度,正常重启恒零等待);运行期 1s 节拍**前推 2s** 写水位(前推量>写入
+  间隔,保证前任崩溃前可能发出的最大时间戳恒<最后一次写入值,继任者无需猜测性余量)。
+  刻意没搭 snowflakealloc 的 keepalive ticker(fenceAfter/4=10s,会让每次快速重启
+  都白等 10s)。
+
+**衍生发现(核实 3 时挖出,已修):DB 主键漂移
+
+### 2026-08-10(续二):round 4 三条未复核项补验 + 落码(Claude,未编译)
+
+上一续因额度耗尽没复核完的三条,本轮自核并全部修掉:
+
+**1. gate_push 不校验 GateInstanceID 空值 + 广播分组丢 instance(shared/kafkautil/gate_push.go)。**
+四个发送口(PushToPlayer/BroadcastToPlayers/BroadcastToScene/BroadcastToAll)是全 Go
+服务推送的唯一共享收口,却都不检查 GateInstanceID 非空 —— 违反不变量 2(空值=消费端
+ValidateCommandTarget 防僵尸过滤被关)。更重的是 BroadcastToPlayers 按 gate_id 分组、
+取组内**第一个**玩家的 instance id:滚动重启窗口内同 gate_id 下新旧两代实例的玩家被
+折进同一条命令,另一代那半静默丢消息。修:①四处全部空值 fail-closed(单个坏条目不拖垮
+整批但必返错,不静默降级);②分组键改成 (gate_id, gate_instance_id) 复合键。
+
+**2. topic_init 用遗留 AlterConfig 全量替换(shared/kafkautil/topic_init.go)。**
+sarama 的 AlterConfig 走 Kafka 遗留 AlterConfigs 协议 = 全量替换该 topic 动态配置,
+只提交 retention.ms 会把运维手工设的 cleanup.policy / max.message.bytes 等覆盖项**每次
+服务启动都抹回默认**。改用 IncrementalAlterConfig(KIP-339,broker≥2.3;cfg.Version
+已声明 3.0),按条目 SET 只动 retention.ms。sarama v1.43.1 已带该 API。
+
+**3. login PlayerId 无 ms 级持久水位 —— 跨重启回拨重放(架构级,已整链落码)。**
+bwmarrin 进程内单调时钟免疫回拨,但**跨重启**以当前墙钟重锚:墙钟回拨 N 秒后重启,
+同 worker id(hostname 亲和)重走最后 N 秒的毫秒序列 → 逐位相同 PlayerId。
+snowflakealloc 的秒级 GuardEpochSec 是 shared/snowflake epoch 口径,塞不进 bwmarrin
+毫秒层。落码三段:
+- snowflakealloc 新增独立的毫秒水位通道:guardMsKey(/guard_ms/{id},值=Unix ms,
+  不带任何自定义 epoch)+ Handle.ReadMsWatermark/PutMsWatermark;与秒级 guardKey 完全
+  隔离,不混 epoch。
+- PlayerIDGen 新增 anchor(构造时捕获的单调墙钟)+ NowUnixMs()=锚点+单调流逝 ——
+  取"发号器时钟"而非 time.Now(),墙钟回拨后照样单调,当水位才关得住重放窗口。
+- login.go:①启动读水位,墙钟没越过水位就阻塞等待(fail-closed,等待时长=实际回拨幅度;
+  正常重启恒零);②起 1s 节拍 goroutine,把 NowUnixMs()+2000ms(前推量>写入间隔)
+  写水位,保证前任崩溃前可能发出的最大时间戳 < 最后写入的水位,继任者只需等墙钟越过。
+  写失败只告警(水位是下一任的地板,本进程唯一性不依赖它),Lost() 时退出。
+
+**顺带核实并修正 DB 兜底口径:**player_database 的 proto **声明了** PRIMARY KEY(player_id)
+(OptionPrimaryKey),旧注释"没有唯一索引"只对按陈旧 go/db/model/mysql_database_table.sql
+预建表的环境成立 —— 那份手工 SQL 4 张表(player_database / player_database_1 /
+player_centre_database / 及注错列型的 account_share_database)缺主键,而运行时
+CreateOrUpdateTable 只补列不补主键 → 存量表永久缺 PK。已给该 SQL 补齐主键并加文件头
+警告(权威 DDL 是 proto2mysql,此文件仅历史导出)。**注意:即便有 PK,写路径是
+INSERT...ON DUPLICATE KEY UPDATE,重复 PlayerId 不报错而是静默改写另一玩家的行(串档),
+比报错更糟 —— 所以唯一性必须在铸号侧(上面的 ms 水位)保证,DB PK 只是纵深防御。**
+
+待 Codex:`cd go && go build ./...`;`go test ./login/... ./shared/...`。
+存量 MySQL 环境需 `SHOW KEYS FROM player_database` 核对主键,缺失则
+`ALTER TABLE player_database ADD PRIMARY KEY (player_id)`(四张表同理)。
+etcd 会多出 /login/guard_ms/{worker_id} 键(login 自建,无需预置)。
+
+### 2026-08-10(续三):proto2mysql 根因修复(上游库,E:\work\proto2mysql)
+
+上一续给 go/db/model/*.sql 补主键只救了"新建环境";真正让**存量表**永久缺主键的
+根因在 proto2mysql 库:CreateOrUpdateTable → syncTableSchema → buildAlterClauses
+只对齐**列**(ADD/MODIFY/CHANGE COLUMN),从不看主键。表已存在且无主键就永远补不上,
+而写路径 INSERT ... ON DUPLICATE KEY UPDATE 依赖主键判重 —— 无主键时退化成每次
+INSERT 新行,同一 player_id 多行、读取任取其一 = 静默串档/回档。
+
+已在 E:\work\proto2mysql(github.com/luyuan-cpp/proto2mysql,mmorpg 用 v0.0.18,
+该版本也缺此修复)落码:syncTableSchema 补一段主键回填 + 新增 tableHasPrimaryKey。
+安全设计(注释里钉死):①单独一条 ALTER(与列变更分离,失败互不牵连);②只在
+**当前无主键**时 ADD(改主键要 DROP+ADD 是破坏性操作,绝不自动做,只补"从无到有");
+③失败硬报错 fail-closed(ADD PRIMARY KEY 在已有重复行的表上会失败 —— 那正是缺主键
+期间攒下的腐败数据,应让启动失败顶到人脸上去重后重试,而不是继续用判重失效的表)。
+加了集成测试 TestCreateOrUpdateTableBackfillsMissingPrimaryKey(建无主键表→同步→断言
+主键补上→再同步验幂等;需 PROTO2MYSQL_INTEGRATION=1 + 真 MySQL)。
+
+**发布路径(库是独立 repo,mmorpg 不会自动拿到)**:
+1. E:\work\proto2mysql:提交 + 打新 tag(如 v0.0.19)+ push;
+2. mmorpg go/db/go.mod:`require github.com/luyuancpp/proto2mysql v0.0.19` + `go mod tidy`;
+   ⚠️ 注意 go.mod 里是 `luyuancpp`(无连字符)而 git remote 是 `luyuan-cpp`,
+   发布时确认 module path 与 go.mod require 路径一致,否则拉不到。
+3. 存量 MySQL:库升级后 db 服务下次启动会自动补主键;但**若表里已有重复 player_id**
+   (缺主键期间攒下的),ADD PRIMARY KEY 会失败并阻塞启动 —— 必须先人工去重
+   (保留权威那一行)再拉起。上线前用 `SELECT player_id,COUNT(*) FROM player_database
+   GROUP BY player_id HAVING COUNT(*)>1` 排查。
+
+Claude 不执行编译;库侧 `go test -run PrimaryKey`(带集成开关)交人验证。
+
+### 2026-08-10(续四):round 5 未覆盖面审计(login业务/friend/货币/背包,Claude 落码未编译)
+
+扇出 5 切片,确认 2 + 自核补 1(复核 agent 双双断连那条),证伪 6。
+
+**P1(已修):①login refresh token 集合无上界泄漏(token.go)。**
+`account_refresh:{account}` 是无 score 的 SET,每次 Issue SAdd 新 token 并把集合 TTL
+续 30d;只有 Refresh 对当次 token SRem、RevokeAll 全仓零调用。Redis 集合成员不随对应
+refresh_token 键 TTL 过期而消失 → 死成员无上界累积,客户端反复 Login 即触发 Redis
+内存泄漏。修:集合改 **ZSET,score=refresh 过期 unix 秒**,每次 Issue 先
+ZREMRANGEBYSCORE 清死成员(score<now 即键已过期)再 ZADD;另加
+maxRefreshTokensPerAccount=32 封顶活跃成员(超出淘汰最旧并删其 token 键)。
+Refresh 的 SRem→ZRem、RevokeAll 的 SMembers→ZRange 同步改。全仓无别处消费该集合。
+
+**P1(自核确认,复核 agent 断连未验;已修):②friend_request 无上界增长(friend)。**
+AddFriend 只挡"已接受好友数<MaxFriends"和精确 (from,to) 去重,**从不限制出站
+pending 条数**;MaxPendingRequests(配 50)全仓零引用;reject/accept 只翻 status 不删行、
+无 GC。单客户端用互不相同 TargetPlayerId 循环 AddFriend 即可无上界撑大 friend_request
+表。修:新增 repo.CountOutgoingPending(status=1 计数),AddFriend 在插入前强制
+MaxPendingRequests 上限(fail-closed,新增 ErrTooManyPending=7)。附带建议(未做):
+TargetPlayerId 存在性校验需跨服务查,单列;terminal 行的 GC/TTL 回收也可后续加。
+
+**P2(已修):③login 快速通道容量 check-then-act 超发(assigngatelogic/queue)。**
+fast-path 在 free>0&&queueLen==0 时直接 signFastPath,**不占位**;N 个并发各读同一
+free>0 快照全部旁路队列签发 gate token,开服洪峰旁路 cap 超发。修:queue 新增
+TryReserveFastPathSlot(Lua 原子把"SCARD admitted<budget + SADD 占位"合成一步,
+budget=cap-online,占位按 admitTTL 回收),fast-path 改为先原子占位、抢到才签发、
+抢不到入队;占位 Redis 出错也 fail-closed 入队。当前 Queue.Enabled=false 屏蔽故本是
+P2,但队列是灰度目标,启用即生效。
+
+**证伪 6(记录防重报):**queue admitted 幻影泄漏(free→0 时停刷新、集合按自身 60s TTL
+自愈,非无界);CreatePlayer 无幂等(CreatePlayerRequest 是空消息无 request_id 可去重,
+本质"每次建新角",且 MaxPlayersPerAccount 封顶,login RPC 无自动重试);currency ADD
+流水 before+delta≠after(补债路径,全仓无逐条对账消费者);currency 余额 +gain 无溢出
+上限(要连发到 2^64 才回绕,仅 GM 路径,现实到不了 —— 用户与我均已注意,低优先);
+bag AddItems 非原子(两个批量重载全仓零调用方=死 API,thread_local fence 同步循环内
+不会翻转);friend 那条本身成立(见上,已归入自核确认)。
+
+待 Codex:`cd go && go build ./...`;`go test ./login/... ./friend/...`
+(token_test 若断言 SET 语义需改 ZSET;loginqueue TryReserveFastPathSlot 建议补并发占位
+单测:budget=N 时并发 reserve 恰好成功 N 次)。C++ 侧本轮无改动。
