@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"guild/internal/config"
+	"guild/internal/constants"
 	"guild/internal/data"
 	"guild/internal/logic"
 	"guild/internal/node"
@@ -26,6 +27,8 @@ import (
 	base "proto/common/base"
 	pb "proto/guild"
 	"shared/grpcstats"
+	"shared/safego"
+	"shared/serverbase"
 	"shared/snowflakealloc"
 )
 
@@ -119,6 +122,15 @@ func main() {
 		}
 	})
 	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
+	// in-band 故障拦截器:本服务的 handler 一律 `return resp, nil`,把失败塞进
+	// 响应体的 TipInfoMessage —— gRPC status 恒 OK,go-zero 自带的指标拦截器会把
+	// 每一次「发号器被 fence」都记成一次成功请求。这层把响应体里的码读出来定性,
+	// 故障打日志 + 计数,业务拒绝只计数。它不改响应内容、不吞错,对客户端无感。
+	// TipClassifier 必须传:公会码在 200-219 私有段,serverbase 的全局判定
+	// (只认已生成的 0-129 数轴)会把它们全判成 unknown_code。
+	s.AddUnaryInterceptors(serverbase.UnaryInterceptor(serverbase.Options{
+		TipClassifier: constants.TipClassifier(),
+	}))
 	defer s.Stop()
 
 	// Snowflake worker id 的 etcd 租约丢了 = 本进程不再是这个 worker id 的合法持有者,
@@ -136,14 +148,19 @@ func main() {
 	// 靠它"停服"等于什么都没做,进程会带着已失效的 worker id 一直服务下去。
 	// 所以正确性由 Fence() 保证(之后 Generate 一律 ErrFenced,建帮整体失败),
 	// 可用性由进程退出 + 编排重拉保证。
-	go func() {
+	//
+	// 用 safego.Go 而不是裸 `go func`:这条看门狗一旦 panic(比如 Lost() 通道被
+	// 重复关闭),裸 goroutine 会把整个进程当场打死,日志里只剩一段 runtime 栈;
+	// safego 兜住后会打稳定事件名 + 计 safego_panic_total{point="guild.snowflake_fence_watch"},
+	// 看门狗失效这件事变成可告警的,而不是伪装成一次"正常"的进程退出。
+	safego.Go("guild.snowflake_fence_watch", func() {
 		<-sfHandle.Lost()
 		sf.Fence() // ① 先关闸:此后一个号都发不出去,撞号从机制上不可能
 		logx.Error("Guild snowflake worker id lease lost; generator fenced, exiting to let the orchestrator restart " +
 			"(zrpc Stop() only closes the logger and cannot stop serving)")
 		logx.Close() // ② 冲掉日志缓冲,别把上面这条 ERROR 丢了
 		os.Exit(1)   // ③ 退出;重启后拿新租约,并被 snowflake 的启动 guard 兜住
-	}()
+	})
 
 	logx.Infof("Starting Guild RPC server at %s...", config.AppConfig.ListenOn)
 	s.Start()

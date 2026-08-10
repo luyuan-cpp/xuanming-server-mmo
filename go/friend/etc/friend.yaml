@@ -35,3 +35,20 @@ Cache:
 Kafka:
   Brokers:
     - "localhost:9092"
+
+# Prometheus 抓取端点,由 go-zero core/service 自带的 agent 暴露(不要另起 promhttp)。
+# 端口分工:login 9101 / scene_manager 9150 / db 9160 / guild 9170 / friend 9180 /
+# player_locator 9190。dev 下绑 127.0.0.1,避免指标泄到本机以外;
+# staging/prod 改绑 0.0.0.0 让 Prometheus / Grafana 抓得到。
+# 留空 Host 即彻底关闭 /metrics(go-zero 的 StartAgent 直接 return)。
+#
+# 除 go-zero 自带的 rpc_server_* 外,本服务还暴露 shared/serverbase 的一组指标:
+#   rpc_inband_fault_total{method,source,code}  - 响应体业务码判定为服务端故障
+#   rpc_inband_reject_total{method,source}      - 正常业务拒绝(好友列表满、重复申请……)
+#   rpc_inband_unknown_code_total{method,source}- 码表漂移信号,正常应恒 0
+#   rpc_duration_seconds{method,status}         - 把 in-band 定性算进去的耗时/成功率
+# 以及 shared/safego 的 safego_panic_total{point}(压测期应恒 0)。
+Prometheus:
+  Host: 127.0.0.1
+  Port: 9180
+  Path: /metrics

@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"friend/internal/config"
+	"friend/internal/constants"
 	"friend/internal/data"
 	"friend/internal/logic"
 	"friend/internal/node"
@@ -23,6 +24,7 @@ import (
 	base "proto/common/base"
 	pb "proto/friend"
 	"shared/grpcstats"
+	"shared/serverbase"
 )
 
 var configFile = flag.String("f", "etc/friend.yaml", "config file path")
@@ -71,6 +73,16 @@ func main() {
 		}
 	})
 	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
+	// in-band 故障拦截器:本服务的 handler 一律 `return resp, nil`,把业务失败塞进
+	// 响应体的 TipInfoMessage —— gRPC status 恒 OK,go-zero 自带的指标拦截器把每一次
+	// 业务拒绝都记成一次成功请求,监控上看不出任何比例变化。这层把响应体里的码读出来
+	// 定性后单独计数;真正的依赖故障(Redis / MySQL)在 friend_logic 里是
+	// `return nil, err`,由同一个拦截器记成 transport_error。
+	// TipClassifier 必须传:好友码在 220-239 私有段,serverbase 的全局判定
+	// (只认已生成的 0-129 数轴)会把它们全判成 unknown_code。
+	s.AddUnaryInterceptors(serverbase.UnaryInterceptor(serverbase.Options{
+		TipClassifier: constants.TipClassifier(),
+	}))
 	defer s.Stop()
 
 	logx.Infof("Starting Friend RPC server at %s...", config.AppConfig.ListenOn)
