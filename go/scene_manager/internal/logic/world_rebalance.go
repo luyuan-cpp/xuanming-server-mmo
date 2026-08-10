@@ -169,6 +169,16 @@ func PlanWorldChannelRebalance(svcCtx *svc.ServiceContext, zoneId uint32, confId
 						continue
 					}
 				}
+				// 再入屏障:老节点刚判死时,它还在 emergency relocate drain 里
+				// SavePlayerToRedis(C++ kDrainBudget)。此刻迁频道 = 新节点
+				// CreateScene 并接管归属,与老节点的最终存盘互相覆盖。
+				// 屏障未到就本轮不排进迁移计划,下一拍(事件或周期 tick)再来。
+				// 放在计划阶段而不是执行阶段,是为了连那次白跑的 CreateScene RPC
+				// 都省掉;migrateWorldChannel 里的 reassignSceneNode 还有第二道
+				// 同样的判定兜住竞态。
+				if reentryBarrierBlocks(svcCtx, zoneId, curNode, barrierSiteRebalance) {
+					continue
+				}
 				urgent = append(urgent, channelMigration{
 					ConfId: confId, SceneId: sceneId,
 					OldNode: curNode, NewNode: target, Reason: reasonNodeGone,
@@ -231,7 +241,14 @@ func migrateWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, zoneId
 	// (otherwise node-death reconciliation would miss migrated channels).
 	// reassignSceneNode logs its own Set error but doesn't surface it; verify
 	// the mapping landed before declaring success.
-	reassignSceneNode(svcCtx, zoneId, sceneId, oldNode, newNode)
+	// 计划阶段到这里之间隔了一次 CreateScene RPC,老节点的死亡时刻可能刚写进
+	// Redis。reassignSceneNode 里的第二道屏障判定挡住这个竞态:返回 false 时
+	// 归属一个字节没改,本次迁移作废(newNode 上那个幂等的实体留到下一拍复用)。
+	if !reassignSceneNode(svcCtx, zoneId, sceneId, oldNode, newNode) {
+		logx.Infof("[Rebalance] zone=%d conf=%d scene=%d: 归属未改写(再入屏障或 Redis 写失败),本次迁移作废",
+			zoneId, confId, sceneId)
+		return false
+	}
 	if cur, _ := svcCtx.Redis.Get(fmt.Sprintf("scene:%d:node", sceneId)); cur != newNode {
 		logx.Errorf("[Rebalance] zone=%d conf=%d scene=%d: scene->node mapping did not stick (got %q, want %q)",
 			zoneId, confId, sceneId, cur, newNode)

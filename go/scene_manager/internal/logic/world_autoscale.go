@@ -10,6 +10,7 @@ import (
 	"scene_manager/internal/config"
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -128,25 +129,21 @@ func StartWorldAutoscaler(ctx context.Context, svcCtx *svc.ServiceContext) {
 		interval = 30
 	}
 
-	go func() {
-		ticker := time.NewTicker(time.Duration(interval) * time.Second)
-		defer ticker.Stop()
-		logx.Infof("[WorldAutoscale] started: interval=%ds scale_out>=%d scale_in<%d min=%d max=%d",
-			interval, cfg.ScaleOutPlayerThreshold, cfg.ScaleInPlayerThreshold,
-			cfg.MinChannelsPerMap, cfg.MaxChannelsPerMap)
+	logx.Infof("[WorldAutoscale] started: interval=%ds scale_out>=%d scale_in<%d min=%d max=%d",
+		interval, cfg.ScaleOutPlayerThreshold, cfg.ScaleInPlayerThreshold,
+		cfg.MinChannelsPerMap, cfg.MaxChannelsPerMap)
 
-		for {
-			select {
-			case <-ctx.Done():
-				logx.Info("[WorldAutoscale] stopped")
-				return
-			case <-ticker.C:
-				for _, zoneID := range GetActiveZones() {
-					AutoscaleWorldChannelsForZone(ctx, svcCtx, zoneID)
-				}
+	// 用 safego.Loop 而不是裸 go func:recover 的作用域精确到"一轮",某一轮
+	// panic 只丢掉那一轮,循环本身继续按节拍跑;panic 会带着点位名进
+	// safego_panic_total{point="scene_manager.world_autoscale"}(压测期恒 0 是
+	// 健康判据)。裸写法一轮炸掉,要么打死整个进程,要么循环从此静默停摆 ——
+	// 而伸缩停摆在外面看起来只是"人多了不扩频道",没人会联想到 goroutine。
+	safego.Loop(ctx, SafePointWorldAutoscale, time.Duration(interval)*time.Second,
+		func(ctx context.Context) {
+			for _, zoneID := range GetActiveZones() {
+				AutoscaleWorldChannelsForZone(ctx, svcCtx, zoneID)
 			}
-		}
-	}()
+		})
 }
 
 // channelLoad 是一个频道的人数快照。

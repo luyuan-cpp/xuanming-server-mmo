@@ -19,6 +19,7 @@ import (
 	"time"
 
 	base "proto/common/base"
+	"shared/safego"
 	"shared/snowflake"
 
 	"github.com/google/uuid"
@@ -26,6 +27,10 @@ import (
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/protobuf/encoding/protojson"
 )
+
+// safePointNodeKeepAlive 是 etcd 租约续租 watcher 的 safego 点位名。
+// 它会变成 safego_panic_total{point="..."} 的 label,必须是常量。
+const safePointNodeKeepAlive = "scene_manager.node_keepalive"
 
 // nodeIDMin 是合法 node_id 的下界。0 永远作为 "未分配 / 非法值" 保留。
 const nodeIDMin uint32 = 1
@@ -218,7 +223,11 @@ func (nr *NodeRegistration) KeepAlive() {
 		return
 	}
 
-	go func() {
+	// safego.Go:这条 goroutine 里的 reRegister 会做 etcd Txn 与 protojson
+	// 序列化,panic 打死进程的话,连"租约丢了"这条最关键的诊断信息都留不下。
+	// 兜住之后至少能在 safego_panic_total{point="scene_manager.node_keepalive"}
+	// 上看见,并知道本进程已经失去续租能力。
+	safego.Go(safePointNodeKeepAlive, func() {
 		for {
 			select {
 			case ka := <-ch:
@@ -231,7 +240,7 @@ func (nr *NodeRegistration) KeepAlive() {
 				return
 			}
 		}
-	}()
+	})
 }
 
 // reRegister 在 lease 丢失后重新注册到 etcd。
@@ -322,7 +331,7 @@ func (nr *NodeRegistration) reRegister(ctx context.Context) {
 			return
 		}
 
-		go func() {
+		safego.Go(safePointNodeKeepAlive, func() {
 			for {
 				select {
 				case ka := <-ch:
@@ -335,7 +344,7 @@ func (nr *NodeRegistration) reRegister(ctx context.Context) {
 					return
 				}
 			}
-		}()
+		})
 
 		logx.Info("[NodeRegistry] re-registration completed")
 		return

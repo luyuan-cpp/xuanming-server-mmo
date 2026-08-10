@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	kafkacontracts "proto/contracts/kafka"
 	game "scene_manager/generated/pb/game"
@@ -250,6 +251,11 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(in.SceneId, in.SceneConfId, targetZoneId)
 	metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageSceneResolve, time.Since(resolveStart))
 	if err != nil {
+		// 再入屏障未到是**可重试**的瞬时拒绝,不是"没有可用节点"。用独立错误码
+		// 下发,上游才能区分「退避重试」与「这张图真的没节点了」。
+		if errors.Is(err, ErrReentryBarrierPending) {
+			return errResp(constants.ErrSceneReentryBarrier, err.Error()), nil
+		}
 		return errResp(constants.ErrNoAvailableNode, err.Error()), nil
 	}
 	if in.GateId != "" {
@@ -569,6 +575,16 @@ func (l *EnterSceneLogic) resolveScene(sceneId uint64, sceneConfId uint64, zoneI
 		}
 		// Validate the mapped node is still alive; reassign if dead.
 		if !IsNodeAlive(l.svcCtx, zoneId, nodeId) {
+			// 再入屏障:节点刚从 etcd 消失不代表它已经停笔。C++ 老节点丢租约后
+			// 还有 kDrainBudget(15s)的 emergency relocate,期间仍在
+			// SavePlayerToRedis。此刻改写 scene:{id}:node 并让新节点
+			// CreateScene + load,就是同一玩家双写 / 回档。
+			// 屏障没走完时**一个字节都不改**,返回可重试错误让上游带着同样的
+			// scene_conf_id 退避重试。见 docs/design/scene-owner-reentry-barrier.md §3.2。
+			if reentryBarrierBlocks(l.svcCtx, zoneId, nodeId, barrierSiteResolveScene) {
+				return 0, "", fmt.Errorf("scene %d 的属主节点 %s 刚判死,再入屏障未到: %w",
+					sceneId, nodeId, ErrReentryBarrierPending)
+			}
 			// Pick a replacement of the correct purpose so a world scene
 			// never gets moved onto an instance-only node (C++ EnterScene
 			// would then reject the request on type mismatch).

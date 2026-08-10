@@ -13,6 +13,7 @@ import (
 
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -322,7 +323,11 @@ func RemoveNodeConn(zoneId uint32, nodeId string) {
 // safety net for any player who is never released.
 func dispatchReleasePlayer(svcCtx *svc.ServiceContext, log logx.Logger, oldZoneID uint32,
 	oldNodeId string, playerId uint64, targetSceneId uint64, targetNodeId string) {
-	go func() {
+	// safego.Go 而不是裸 go func:这条链路挂在 EnterScene 热路径上,45k 并发时
+	// 每次跨节点交接都会派生一条。裸写法里任何一次 panic(比如 nil svcCtx.Kafka、
+	// 节点连接缓存被并发改坏)都会当场打死整个进程,而日志里只剩一段 runtime 栈,
+	// 看不出是哪条后台链路炸的。
+	safego.Go(SafePointReleasePlayer, func() {
 		attemptCtx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 		err := RequestNodeReleasePlayer(attemptCtx, svcCtx, oldZoneID, oldNodeId, playerId, targetSceneId, targetNodeId)
 		cancel()
@@ -356,6 +361,6 @@ func dispatchReleasePlayer(svcCtx *svc.ServiceContext, log logx.Logger, oldZoneI
 		metrics.ObserveReleasePlayer(oldZoneID, outcome)
 		logx.Errorf("[ReleasePlayer] All retries exhausted for player %d on old node %s; relying on AFK cleanup. last_err=%v",
 			playerId, oldNodeId, lastErr)
-	}()
+	})
 	_ = log // logger no longer used on hot path — kept in signature for ABI stability
 }

@@ -22,6 +22,8 @@ import (
 	proto_common "proto/common/base"
 	pb "proto/player_locator"
 	"shared/grpcstats"
+	"shared/safego"
+	"shared/serverbase"
 )
 
 var configFile = flag.String("f", "etc/player_locator.yaml", "config file path")
@@ -56,22 +58,31 @@ func main() {
 	leaseCtx, leaseCancel := context.WithCancel(context.Background())
 	defer leaseCancel()
 
-	go logic.StartLeaseMonitor(
-		leaseCtx,
-		svcCtx,
-		config.AppConfig.Lease.PollInterval,
-		config.AppConfig.Lease.BatchSize,
-	)
+	// 这两条后台链路都用 safego.Go 而不是裸 `go`:它们各自的循环体已经在内部
+	// 逐轮 recover,这里的外层只是最后一道兜底 —— 万一循环体外的部分(初始化、
+	// ticker、通道收尾)panic,裸 goroutine 会把整个进程当场打死,而租约清理与
+	// 会话对账正是"进程活着但后台已停摆"最难被发现的两处。兜住之后至少留下
+	// 稳定事件名 + safego_panic_total{point} 可以告警。
+	safego.Go("player_locator.lease_monitor", func() {
+		logic.StartLeaseMonitor(
+			leaseCtx,
+			svcCtx,
+			config.AppConfig.Lease.PollInterval,
+			config.AppConfig.Lease.BatchSize,
+		)
+	})
 
 	// 会话对账扫描:兜住 gate 整机崩溃(断线回调不执行)导致的永久 ONLINE 会话,
 	// 恢复「所有会话终点必经租约链」的闭环。见 session_reconciler.go 顶部注释。
-	go logic.StartSessionReconciler(
-		leaseCtx,
-		svcCtx,
-		config.AppConfig.Registry.Etcd.Hosts,
-		config.AppConfig.Registry.Etcd.DialTimeout,
-		config.AppConfig.Lease.ReconcileIntervalSeconds,
-	)
+	safego.Go("player_locator.session_reconciler", func() {
+		logic.StartSessionReconciler(
+			leaseCtx,
+			svcCtx,
+			config.AppConfig.Registry.Etcd.Hosts,
+			config.AppConfig.Registry.Etcd.DialTimeout,
+			config.AppConfig.Lease.ReconcileIntervalSeconds,
+		)
+	})
 
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
@@ -81,6 +92,12 @@ func main() {
 		}
 	})
 	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
+	// in-band 故障拦截器。PlayerLocator 的响应里没有业务码字段(Empty /
+	// GetSessionResponse.found / ReconnectResponse.success + 自由文本 error_message),
+	// 所以 serverbase 在这里只会把每次调用记进 rpc_duration_seconds:
+	// handler 返 error 的记 status=transport_error,否则记 ok。
+	// 零值 Options 即可 —— 没有码表就不该配任何 Classifier,免得凭空判故障。
+	s.AddUnaryInterceptors(serverbase.UnaryInterceptor(serverbase.Options{}))
 	defer s.Stop()
 
 	fmt.Println("\n=============================================================")

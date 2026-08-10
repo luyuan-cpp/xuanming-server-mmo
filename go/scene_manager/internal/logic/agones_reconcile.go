@@ -7,6 +7,7 @@ import (
 
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -36,23 +37,16 @@ func StartAgonesReconcile(ctx context.Context, svcCtx *svc.ServiceContext) {
 		return
 	}
 
-	go func() {
-		ticker := time.NewTicker(time.Duration(interval) * time.Second)
-		defer ticker.Stop()
-		logx.Infof("[AgonesReconcile] started, interval=%ds", interval)
+	logx.Infof("[AgonesReconcile] started, interval=%ds", interval)
 
-		for {
-			select {
-			case <-ctx.Done():
-				logx.Info("[AgonesReconcile] stopped")
-				return
-			case <-ticker.C:
-				for _, zoneID := range GetActiveZones() {
-					ReconcileAgonesRoomsForZone(ctx, svcCtx, zoneID)
-				}
+	// safego.Loop:单轮 panic 只丢那一轮(比对逻辑要读 K8s API,反序列化出意外
+	// 结构是现实风险),循环继续;点位名进 safego_panic_total。
+	safego.Loop(ctx, SafePointAgonesReconcile, time.Duration(interval)*time.Second,
+		func(ctx context.Context) {
+			for _, zoneID := range GetActiveZones() {
+				ReconcileAgonesRoomsForZone(ctx, svcCtx, zoneID)
 			}
-		}
-	}()
+		})
 }
 
 // ReconcileAgonesRoomsForZone 跑一轮比对并写 scene_manager_agones_counter_drift。
