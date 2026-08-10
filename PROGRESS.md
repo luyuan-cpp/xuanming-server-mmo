@@ -1926,20 +1926,34 @@ K8s 里的实际端口**与修复前完全一致**(旧代码扫描也是从 2000
 所以都拿 20000),等于零变化。gate 则是 10000 -> 18000,那正是本次要修的目标,且 18000
 本就在 gate 区间内。README.md / AGENTS.md 里的角色端口表同步更新。
 
-**本地启动改为不依赖地址探测。** `cpp_nodes.ps1` 新增 `-NodeIp`,按
-「显式参数 > 已导出的 NODE_IP > 默认 127.0.0.1」三级决定注册地址,`auto` 表示不设
-NODE_IP、让引擎自己探测;`dev_tools.ps1` 的 `cpp-node-start` / `dev-start` /
-`dev-start-exe` / `dev-start-zones` 四个入口全部透传。
-**刻意不把某台机器的 LAN IP 写进脚本** —— 那对其他机器全是错的。默认 127.0.0.1 的
-理由:单机栈(gate/scene/go/robot/Java gateway)全在本机,且切 WiFi、VPN 上下线、
-DHCP 续约都不会让它失效;要让另一台设备上的客户端连进来时再传 `-NodeIp <LAN IP>`。
+**本地启动地址改为零配置自动探测。** `cpp_nodes.ps1` 新增 `-NodeIp`,优先级
+「显式参数 > 已导出的 NODE_IP > 探测物理网卡 IPv4 > 回落 127.0.0.1」;
+`loopback` 强制回环,`engine` 表示不设 NODE_IP、交给 C++ 侧 `localip()`。
+`dev_tools.ps1` 的 `cpp-node-start` / `dev-start` / `dev-start-exe` /
+`dev-start-zones` 四个入口全部透传。**谁都不用配,默认就对。**
+
+探测靠 `Get-NetAdapter -Physical` 问系统要物理网卡,**不是按名字匹配**:一把滤掉
+Hyper-V / WSL / Docker Desktop 的 vEthernet、VMware、VirtualBox 和 VPN 隧道,再排除
+link-local(169.254)与 PrefixOrigin=WellKnown,多张物理网卡同时 up 时取
+InterfaceMetric 最小的那张(Windows 自己偏好的那张)。这一步是必须的:开发机
+DESKTOP-I6DK28J 上 `gethostbyname` 顺序是 tun107 → 192.168.2.28 → 两张 vEthernet,
+而路由表探测会跟着默认路由钻进 VPN 隧道 —— **两种朴素做法都会选中 198.0.2.1 而不是
+192.168.2.28**,实测确认;`-Physical` 过滤后干净落在 192.168.2.28。
+
+之所以敢在这里"猜",是因为 bind 已经恒为 `0.0.0.0`:**探错也只影响跨机客户端**,
+本机内任何本地地址都连得通,而跨机场景本来就该显式传 `-NodeIp`。
+刻意不把某台机器的 LAN IP 写进脚本 —— 那对其他机器全是错的。
+纯单机栈想要绝对稳定(不受切 WiFi / VPN / DHCP 续约影响)可以传 `-NodeIp loopback`。
+
 背后是 listen/advertise 二元:bind 恒 `0.0.0.0`(`BIND_IP` 可钉),NODE_IP 只管
 「注册进 etcd 给别人拨的地址」,同 etcd 的 --listen-client-urls / --advertise-client-urls
 与 Kafka 的 listeners / advertised.listeners。**注册地址绝不能填 0.0.0.0**:
 Linux 内核把 connect(0.0.0.0) 当 127.0.0.1、Windows 直接 WSAEADDRNOTAVAIL,
 两边还不一致;而 login 是把 endpoint 原样下发给客户端的(servicecontext.go:226-227)。
-已验证:两脚本 parse 通过、`cpp_nodes.ps1 -Command list` 可跑、`Resolve-AdvertiseIp`
-四条优先级用例(默认/继承 env/参数压 env/auto)全 PASS。
+
+已验证(本机实跑):两脚本 parse 通过、`cpp_nodes.ps1 -Command list` 可跑、
+`Resolve-AdvertiseIp` 六条用例全 PASS —— 默认探测 / 继承 env / `auto` 忽略 env /
+显式参数压 env / `loopback` / `engine`。
 
 **本轮改动:** `cpp/libs/engine/core/node/system/node/node.cpp`(ResolveNodeIp /
 InitRpcServer 注释 / StartRpcServer)、`.../node_allocator.cpp`(AcquireNodePort)、
@@ -2458,3 +2472,127 @@ bag AddItems 非原子(两个批量重载全仓零调用方=死 API,thread_local
 待 Codex:`cd go && go build ./...`;`go test ./login/... ./friend/...`
 (token_test 若断言 SET 语义需改 ZSET;loginqueue TryReserveFastPathSlot 建议补并发占位
 单测:budget=N 时并发 reserve 恰好成功 N 次)。C++ 侧本轮无改动。
+
+### 2026-08-10(续五):round 6 剩余未覆盖面(shared基础件/C++ mission-world/Java网关)
+
+扇出 5 切片。**Java 网关首次纳入审计**,确认 2 条 P1(同一条攻击链的两环),
+外加自核 shared/cache 1 条;C++ mission 5 条全证伪;2 个 find agent 断连。
+
+**P1(已修):①Java 网关 X-Forwarded-For 无条件采信且取最左元素。**
+LoginController.extractIp 直接读 XFF 取第一段当客户端 IP,而 XFF 是**任何客户端都能
+自己写**的头、最左元素恰恰是客户端填的那一段。该值直接当 Bucket4j 桶 key
+(AssignGateRateLimiter 的 ipKey),于是每请求带一个随机 XFF 就命中全新空桶 ——
+ip-rps/ip-burst 这一层对任何会改 header 的客户端**等于不存在**,同时把 rl:ip:* 的
+key 空间变成攻击者可控的无限集合(与下面②叠加放大)。方法自己的 javadoc 声称
+"只在 server.forward-headers-strategy=native 时采信",但代码从不查该设置、配置里
+也没有该项 —— 契约与实现脱节。全仓无 ingress/nginx 配置,compose 直接暴露 8081,
+即 getRemoteAddr() 分支在带头时永不可达。
+修:新增 ClientIpResolver(Spring bean)替代静态 extractIp,两个 Controller 注入使用。
+语义:①默认(未配可信代理)完全忽略 XFF、只用 socket 对端 —— fail-closed;
+②只有 socket 对端落在配置的 trusted-proxies CIDR 内才解析 XFF,且**从右往左**剥
+连续可信跳、取第一个不可信地址(从左取等于直接采信客户端输入);③只接受字面量地址,
+绝不做 DNS 解析(否则畸形 XFF 能把 Tomcat 线程拖进名称解析);④畸形 CIDR 被忽略且
+不会把白名单变成放行。新增 gate.rate-limit.trusted-proxies 配置项(默认空)。
+⚠️ 部署在 ingress/LB 之后时**必须**配置该项,否则所有请求共用 LB 那一个 IP 桶。
+新增 ClientIpResolverTest 钉死该安全属性(8 个用例含边界与畸形输入)。
+
+**P1(已修):②Bucket4j ProxyManager 未设过期策略,rl:ip:*/rl:zone:* 永不过期。**
+裸 builderFor(conn).build() 时 AbstractRedisProxyManagerBuilder 取不到
+expirationStrategy → 落到 ExpirationAfterWriteStrategy.none() → calculateTimeToLiveMillis
+恒 -1 → LettuceBasedProxyManager 在 ttl<=0 分支走**不带 px 的 SET NX**,写永久 key。
+(复核方反编译了本机 8.10.1 jar 逐环验证,不是推断。)每个新 IP 一个永久 key、无自愈,
+只能人工 SCAN/DEL;而这个 Redis 与 login 的 access_token/refresh_token 是**同一实例**,
+撑到 maxmemory 会连带把登录态淘汰掉。修:显式
+withExpirationStrategy(basedOnTimeForRefillingBucketUpToMax(1h)) —— TTL=重填到满所需
+时间+余量,保证还可能用到的桶绝不被提前回收。已用 javap 核对 8.10.1 的工厂方法签名。
+
+**P2(自核,已修):③go/shared/cache 的 singleflight 收尾未走 defer。**
+`c.val, c.err = fn()` 之后才 wg.Done()+delete:dbLoader 一旦 panic,两步都不执行 ——
+该 key 的 sfCall 永久留在 map 且 WaitGroup 永不归零,此后每个同 key 调用都在
+wg.Wait() 永久阻塞(功能性永久失效 + goroutine 无上界泄漏,只能重启)。改 defer 收尾;
+顺带把 `raw.(T)` 裸断言改 comma-ok(不同 T 撞同一 sfKey 时返错而非 panic)。
+该包目前**零调用方**(friend 自有 loadVersionedFriendCache),同 round 4 的 timertask
+零值 Task 一样属"共享库里给下一个接线者埋的雷",故 P2。
+
+**证伪(记录防重报):**C++ mission 全部 5 条 —— 任务系统是**无入口的自循环死代码**:
+ConditionEvent 在整个 cpp 树零构造零派发,AcceptMissionEvent 唯一 enqueue 点是
+mission.cpp 自身链式续接(需先有已完成任务=自举死锁),proto 无 mission RPC,
+CompleteAllMissions/AbandonMission/GetMissionReward 均只被单测调用。其中
+"mission.cpp:90 宏内 continue 跳过 add_progress" 一条机理本身也错:宏体是
+do{...}while(0),C++ [stmt.cont] 规定 continue 绑定最内层迭代语句即该 do-while,
+不会跳过外层 for 的剩余语句。另证伪 AssignGateController queue_token 短路绕过限流
+(总开关默认 false 且兄弟入口 QueueStatusController 明文设计就不限流)、
+AssignGateRateLimiter account cooldown 非原子(该层明文 best-effort,权威串行化在
+go login 的 account_lock Redis 锁)。
+**go/shared/cache+grpcstats 的 finder 返回零发现**(grpcstats 无 player_id 标签等问题)。
+
+**未覆盖(2 个 find agent 断连):**C++ scene world 域(world.cpp 调度/固定步长累加器)、
+Java 网关的 RPC 与服务发现(LoginRpcClient 730 行 / GateWatcher / ZoneHealthProbeService)。
+round 7 补。
+
+待 Codex:Java `cd java/gateway_node && mvn -q test`(新增 ClientIpResolverTest;
+RateLimitConfig 新增 import io.github.bucket4j.distributed.ExpirationAfterWriteStrategy
+与 java.time.Duration;两个 Controller 构造函数各多一个 ClientIpResolver 参数 ——
+若有 @WebMvcTest/手工 new 的用例需同步)。Go `go build ./shared/...`。
+
+### 2026-08-10(续六):round 7 补审(4 个 finder 死 3 个,仅 java-login-rpc 存活)
+
+本轮目标是补 round 6 断连丢的两块。**结果 4 个 finder 断连 3 个**
+(cpp-world-tick / cpp-scene-comp / java-etcd-health),仅 java-login-rpc 完成。
+确认 1 条 P2 已修,另 1 条 P1 被证伪。
+
+**P2(已修):Java 网关 gRPC channel 的空闲 keepalive 被服务端当滥用踢断。**
+LoginRpcClient 建 channel 时设了 keepAliveTime(30s) + keepAliveWithoutCalls(**true**),
+即空闲也每 30s 发 HTTP/2 PING。对端 go-zero(grpc-go v1.79.3)zrpc server 全仓没配
+任何 keepalive.EnforcementPolicy,沿用默认强制策略:handlePing 在「无 active stream 且
+!PermitWithoutStream」时,只要距上次 ping 不足 **defaultPingTimeout=2 小时**就记一次
+strike,而 strike 只有服务端真正写 header/data 才清零(PING ACK 不算);
+strike > maxPingStrikes=2 即发 GOAWAY(ENHANCE_YOUR_CALM,"too_many_pings")关连接。
+于是任何空闲约 120s 的 channel 被反复踢断,且 grpc-java 收到 too_many_pings 后按
+AtomicBackoff 把 keepAliveTime 永久翻倍,几次后探活间隔顶到失效 —— 恰好毁掉这几行
+想要的能力。3-zone 部署低峰期 z2/z3 天然满足,单 zone 夜间同样满足。
+修:keepAliveWithoutCalls 改 false。
+⚠️ **关键事实(复核方纠正了原发现)**:空闲分支比的是 2 小时那个常量而**不是**
+MinTime(5min),所以"把 keepAliveTime 提到 5 分钟"这个直觉修法**根本不管用**;
+只有停掉空闲 ping,或在 Go 侧 zrpc 显式设 PermitWithoutStream:true(要动两端口径)。
+停掉空闲探活不留盲区:go-zero 服务端本就设 MaxConnectionIdle=5min 会主动关空闲连接,
+且每次调用都有 deadline,死连接在下一次真实调用时即被发现并重连。
+
+**证伪:**"3s 客户端 deadline 掐死服务端 30s gate 发现预算"(P1)。复核指出:
+①那个 30s 不是给客户端留的预算 —— postmortem 记载它是为绕开 docker-compose
+ETCD_ADVERTISE_CLIENT_URLS 通告不可达 URL 导致 etcd Sync() 每次等 30s 的环境 bug,
+该 bug 已在 deploy/docker-compose.yml 修掉,login.yaml 注释自己写明"prod 亚 100ms";
+②触发前提是 etcd 已经病了,此时 login 全链同样瘫痪,3s 不是致害因子,且两种配置下
+玩家侧同为 500;③隐含修法(把 timeout-ms 提到 30s)**反而有害** —— LoginRpcClient 走
+blockingUnaryCall 占用 Tomcat 请求线程,洪峰下 30s 阻塞会连 /api/login 一起拖死,
+3s 是刻意的卸载边界。残留的真实隐患只是 watcher.go 用 context.Background() 不随请求
+取消、FetchAllNodes 无缓存每请求一次 etcd Get —— 记录备查,未修。
+
+**自查(未上报):**world.cpp:34 `tlsIdGeneratorManager.SetNodeId(GetNodeInfo().node_id())`
+在 scene main.cpp:74 调用,而 node_id 要等事件循环里的 etcd 注册才是终值
+(SetAfterStart 在 202、loop.loop() 在 284)—— 该处取到的**确定是 0**,与此前修过的
+gate session_id node 段为 0 是同一形态。但影响需如实评估:它只给 buffIdGenerator /
+skillIdGenerator 设 node 段,而这两类 id 都是**按玩家作用域**的运行时 id
+(GenerateUniqueBuffId / GenerateUniqueSkillId 生成时已在本玩家表内去重),不进 DB、
+不跨节点比较,故 node 段今天是装饰性的,**不构成缺陷,未改**。若将来有人开始跨节点
+比较这两类 id,需先把 SetNodeId 移到 node_id 终值之后(仿 gate main.cpp 的做法)。
+
+**仍未覆盖(累计三轮断连):**C++ scene world 域(world.cpp 调度已由我自查、
+scene_comp 玩家集合增删配对未审)、Java 网关 etcd watch 重建 / 节点缓存陈旧读 /
+健康探测(GateWatcher、ZoneHealthProbeService、ServerListService)。
+
+待 Codex:`cd java/gateway_node && mvn -q test`(仅改了一个布尔参数 + 注释,无 API 变更)。
+
+### 2026-08-10:Codex 提交验证
+
+- Go 侧 10 个模块逐一执行 `go build ./...` 与 `go test -count=1 ./...`,全部通过;
+  `gofmt` 检查通过。
+- C++ 使用 VS MSBuild 对 `game.sln` 执行 Debug/x64 串行 `/m:1` 构建,成功产出
+  gate/scene;`no-raw-pointer-member` 因本机缺少检查器而明确跳过。独立的
+  `gate_security_test.cpp` 仍需 Linux/g++ 环境执行。
+- Linux 构建脚本通过 bash 语法、16 项工程 dry-run 清单和非法参数返回码契约。
+- 部署契约首次运行发现 zone rollback 的 dry-run 仍调用 Kafka CLI;修为 dry-run
+  只打印计划后重跑,20/20 通过。
+- Java 网关测试未执行完成:本机 JDK 21 不支持项目要求的 release 23。表导出器
+  测试未执行:现有 Python 环境缺少 pytest/PyYAML,未擅自安装或修改系统环境。
+- 根仓库改动按主题提交到 `main`,未推送远端;第三方子模块内部工作区保持原样。
