@@ -52,6 +52,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			// Hash 按 Key(player_id/gate_id)选分区,保证同一实体的推送有序
 			// (项目不变量:kafka key = 业务实体 ID)。LeastBytes 忽略 Key。
 			Balancer: &kafkago.Hash{},
+			// kafka-go 的 RequiredAcks 零值是 RequireNone(fire-and-forget):
+			// 写进 socket 即返回 nil,broker 端 leader 切换/落盘前崩溃全部不可见,
+			// 于是 gate_push 依赖 WriteMessages 返回值的 fail-closed 语义形同虚设。
+			// 与 scene_manager / player_locator 的 servicecontext 对齐,显式 RequireOne。
+			RequiredAcks: kafkago.RequireOne,
 		}
 	}
 

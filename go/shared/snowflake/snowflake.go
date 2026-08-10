@@ -29,6 +29,21 @@ const waitBudget = 3 * time.Second
 
 // Node generates unique 64-bit IDs using the Snowflake algorithm.
 // Thread-safe via mutex.
+// maxBorrowAheadSec 是借位预算:ID 时间字段最多允许超前墙钟这么多秒。
+// 借下一个逻辑秒是容量墙/时钟停摆下保唯一性的正常手段,但无上限的借位会让
+// ID 时间字段越漂越远 —— 一旦进程在深度借位中崩溃,持久水位若没追平,
+// 继任者的撞号窗口就有多深(见 snowflakealloc.advanceGuard);且时间字段
+// 本身也会失去参考价值。超出预算 Generate 直接返回 ErrBorrowLimitExceeded,
+// fail-closed 交给调用方:墙钟以 1s/s 追赶,预算内的超前会自愈,错误是暂态的、
+// 可重试的(与 ErrFenced 的永久性不同)。
+const maxBorrowAheadSec = 10
+
+// ErrBorrowLimitExceeded 表示发号器已把逻辑秒借到墙钟前面 maxBorrowAheadSec 秒,
+// 本次发号被拒。这是**暂态**错误:等墙钟追上来(最多 maxBorrowAheadSec 秒)即恢复。
+// 调用方与 ErrFenced 同样处理 —— 这次操作整体失败,不得用 0 或自造 id 继续。
+var ErrBorrowLimitExceeded = errors.New(
+	"snowflake: logical second borrowed too far ahead of wall clock; retry after the clock catches up")
+
 // ErrFenced 表示本进程已经失去 worker id 的所有权,发号器被永久停用。
 // 调用方必须把它当成"这次操作做不了",fail-closed 返回错误,**不得**降级成 0 或自己编一个 id。
 var ErrFenced = errors.New("snowflake: node fenced (worker id lease lost); refusing to mint")
@@ -38,6 +53,9 @@ type Node struct {
 	nodeID   uint64
 	lastTime uint64
 	step     uint64
+	// lastBorrowRejectLogSec 限制借位预算耗尽的 ERROR 日志为每墙钟秒一条
+	// (持续过载时 Generate 每次调用都会走到拒绝分支)。mu 保护下读写。
+	lastBorrowRejectLogSec uint64
 
 	// fenced 是失租后的硬闸。用 atomic 是为了让 Fence() 能从 keepalive 的 goroutine 调,
 	// 而不必跟发号路径抢 mu(失租时发号可能正阻塞在 waitNextTime 里)。
@@ -119,6 +137,17 @@ func (n *Node) SetGuardTime(guardEpochSec uint64) {
 	n.bootGuardPending = true
 }
 
+// HighWaterEpochSec 返回当前发号高水位所在的逻辑秒(自 Epoch 起)。
+//
+// 供 snowflakealloc 的持久水位使用:水位的契约是"不早于最后一次发号的秒",
+// 而借位(step 耗尽 / 时钟停摆时 lastTime 跑到墙钟前面)会让墙钟低于真实
+// 高水位 —— 只持久化墙钟就关不上"前任借过逻辑秒"的重号窗口。
+func (n *Node) HighWaterEpochSec() uint64 {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	return n.lastTime
+}
+
 // Fence 永久停用本发号器。失去 worker id 的 etcd 租约后必须立刻调用:
 // 此刻另一个进程可能已经拿着同一个 worker id 在发号,再发一个就是确定性撞号。
 //
@@ -191,8 +220,23 @@ func (n *Node) Generate() (uint64, error) {
 		if advanced > n.lastTime {
 			n.lastTime = advanced
 		} else {
-			// 等不到真实时钟:借位。此时 ID 的时间段会超前真实时钟,单独再记一条,
-			// 便于把"容量不足"与"时钟停摆"区分开。
+			// 等不到真实时钟:借位。此时 ID 的时间段会超前真实时钟。
+			// waitNextTime 的返回值就是最后一次观测的墙钟秒,直接拿它做预算判定。
+			//
+			// 超出借位预算则拒绝发号(见 maxBorrowAheadSec 注释)。注意这也覆盖
+			// guard 注入的超前:接管时前任高水位(SetGuardTime)比本机墙钟快超过
+			// 预算的话,这里会 fail-closed 到墙钟追进预算圈内为止 —— 唯一性优先,
+			// 且绝不把 lastTime 借得比水位能追平的速度还快。
+			if n.lastTime+1 > advanced+maxBorrowAheadSec {
+				// 限频:同一墙钟秒只喊一次,免得持续过载时每次调用都刷 ERROR。
+				if n.lastBorrowRejectLogSec != advanced {
+					n.lastBorrowRejectLogSec = advanced
+					logx.Errorf("[snowflake] borrow budget exhausted: worker_id=%d high_water=%d wall_clock=%d "+
+						"ahead_limit=%ds; refusing to mint until the clock catches up",
+						n.nodeID, n.lastTime, advanced, maxBorrowAheadSec)
+				}
+				return 0, ErrBorrowLimitExceeded
+			}
 			logx.Errorf("[snowflake] clock did not advance within %v: worker_id=%d borrowing logical second %d "+
 				"(ID time field now runs ahead of the wall clock)", waitBudget, n.nodeID, n.lastTime+1)
 			n.lastTime++

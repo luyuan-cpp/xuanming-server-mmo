@@ -3,6 +3,7 @@ package svc
 import (
 	"errors"
 	"sync/atomic"
+	"time"
 
 	"github.com/bwmarrin/snowflake"
 )
@@ -25,11 +26,23 @@ var ErrPlayerIDGenFenced = errors.New("login: player id generator fenced (worker
 type PlayerIDGen struct {
 	node   *snowflake.Node
 	fenced atomic.Bool
+	// anchor 是与 node 几乎同刻捕获的 time.Now()(带单调读数)。
+	// bwmarrin 构造后内部时间 = 构造时刻 + 单调流逝,墙钟被回拨也照走 ——
+	// 所以"发号器现在到几点了"不能看墙钟,要看 NowUnixMs()。
+	anchor time.Time
 }
 
 // NewPlayerIDGen 包装一个已构造好的 bwmarrin 节点。
 func NewPlayerIDGen(node *snowflake.Node) *PlayerIDGen {
-	return &PlayerIDGen{node: node}
+	return &PlayerIDGen{node: node, anchor: time.Now()}
+}
+
+// NowUnixMs 返回发号器时钟口径下的当前 Unix 毫秒:锚点墙钟 + 单调流逝。
+// 它是"到此刻为止可能已发出的最大时间戳"的上界(±µs 级捕获误差,由水位前推量
+// 覆盖),供毫秒级持久水位使用;直接读 time.Now().UnixMilli() 在墙钟被回拨后
+// 会低于发号器实际用的时间,当水位就关不住重放窗口。
+func (g *PlayerIDGen) NowUnixMs() uint64 {
+	return uint64(g.anchor.UnixMilli()) + uint64(time.Since(g.anchor).Milliseconds())
 }
 
 // Fence 永久停用发号器。失去 worker id 的 etcd 租约后必须立刻调用:

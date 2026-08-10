@@ -196,22 +196,109 @@ func (n *Node) KeepAlive() error {
 		return fmt.Errorf("keep alive failed: %w", err)
 	}
 
-	go func() {
-		for {
-			select {
-			case ka, ok := <-ch:
-				if !ok {
-					logx.Error("friend etcd keep alive channel closed")
-					return
-				}
-				_ = ka
-			case <-ctx.Done():
+	go n.watchKeepAlive(ctx, ch)
+	return nil
+}
+
+// watchKeepAlive 消费 keep-alive 应答;channel 关闭(= lease 终态丢失,etcd
+// 不可达超过 TTL 或 lease 被撤销)时进入重注册,而不是旧实现那样只打一条日志
+// 就永远放弃 —— 那会让进程活着但注册已蒸发:服务发现再也看不到本实例,
+// 且无任何自愈或告警路径。与 scene_manager(noderegistry/registry.go)、
+// player_locator(internal/node/node.go)的同源副本对齐。
+func (n *Node) watchKeepAlive(ctx context.Context, ch <-chan *clientv3.LeaseKeepAliveResponse) {
+	for {
+		select {
+		case ka := <-ch:
+			if ka == nil {
+				logx.Error("friend node lease lost, attempting re-registration")
+				n.reRegister(ctx)
 				return
 			}
+		case <-ctx.Done():
+			return
 		}
-	}()
+	}
+}
 
-	return nil
+// reRegister 在 lease 丢失后重新注册。安全点与 scene_manager 版一致:
+//
+//	lease 丢失 → 老 allocationKey/rpcKey 已被 etcd 自动清掉 → 期间别的实例
+//	可能已抢占同一个 node_id。绝不能盲 Put 老 key(会覆盖别人的 NodeInfo,
+//	把流量路由到错误节点);只能 CAS "allocationKey 仍不存在" 重夺,
+//	失败就换一个全新 node_id —— friend 没有"我必须是 node N"的持久化语义,
+//	换 ID 安全(Snowflake worker id 由 shared/snowflakealloc 独立分配,
+//	与 NodeInfo.NodeId 解耦)。
+func (n *Node) reRegister(ctx context.Context) {
+	prefix := rpcPrefix(n.Info.NodeType)
+	backoff := time.Second
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		grant, err := n.client.Grant(ctx, config.AppConfig.Node.LeaseTTL)
+		if err != nil {
+			logx.Errorf("friend re-grant lease failed: %v, retrying in %v", err, backoff)
+			time.Sleep(backoff)
+			backoff = min(backoff*2, 30*time.Second)
+			continue
+		}
+		n.leaseID = grant.ID
+
+		allocKey := allocationKey(prefix, n.Info.NodeType, n.Info.NodeId)
+		rpcKey := rpcPath(prefix, n.Info.ZoneId, n.Info.NodeType, n.Info.NodeId)
+		value, merr := protojson.Marshal(n.Info)
+		if merr != nil {
+			logx.Errorf("friend re-register marshal node info failed: %v", merr)
+			return
+		}
+
+		// 步骤 1:CAS 重夺原 node_id —— 只有 allocationKey 仍不存在才能写。
+		txnResp, err := n.client.Txn(ctx).
+			If(clientv3.Compare(clientv3.Version(allocKey), "=", 0)).
+			Then(
+				clientv3.OpPut(allocKey, n.Info.NodeUuid, clientv3.WithLease(n.leaseID)),
+				clientv3.OpPut(rpcKey, string(value), clientv3.WithLease(n.leaseID)),
+			).
+			Commit()
+		if err != nil {
+			logx.Errorf("friend re-claim txn failed: %v, retrying in %v", err, backoff)
+			_, _ = n.client.Revoke(context.Background(), n.leaseID)
+			time.Sleep(backoff)
+			backoff = min(backoff*2, 30*time.Second)
+			continue
+		}
+
+		if !txnResp.Succeeded {
+			// 步骤 2:原 node_id 已被别的实例占用,分配全新 id。
+			logx.Errorf("friend original node_id=%d taken by another instance, allocating new one",
+				n.Info.NodeId)
+			newID, err := allocateNodeID(ctx, n.client, prefix, n.Info, n.leaseID)
+			if err != nil {
+				logx.Errorf("friend re-allocate node_id failed: %v, retrying in %v", err, backoff)
+				_, _ = n.client.Revoke(context.Background(), n.leaseID)
+				time.Sleep(backoff)
+				backoff = min(backoff*2, 30*time.Second)
+				continue
+			}
+			n.Info.NodeId = newID
+			logx.Infof("friend re-registered with new node_id=%d", newID)
+		} else {
+			logx.Infof("friend re-claimed original node_id=%d", n.Info.NodeId)
+		}
+
+		// 步骤 3:重启 keep-alive 看护(channel 再断会再次走 reRegister)。
+		ch, err := n.client.KeepAlive(ctx, n.leaseID)
+		if err != nil {
+			logx.Errorf("friend restart keepalive failed: %v", err)
+			return
+		}
+		go n.watchKeepAlive(ctx, ch)
+		logx.Info("friend re-registration completed")
+		return
+	}
 }
 
 func (n *Node) Close() {

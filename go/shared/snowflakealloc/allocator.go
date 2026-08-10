@@ -254,6 +254,12 @@ type Handle struct {
 	cancel        context.CancelFunc
 	cli           *clientv3.Client
 
+	// node 是经 NewNode() 构造出的发号器(为空 = 调用方还没构造)。
+	// advanceGuard 靠它读真实高水位:发号器借位(step 耗尽 / 时钟停摆)时
+	// lastTime 会跑到墙钟前面,只写墙钟的水位对下一任就是低地板。
+	// 单写单读:NewNode 在启动期调用一次,之后只有 keepalive goroutine 读。
+	node atomic.Pointer[snowflake.Node]
+
 	closing  atomic.Bool
 	lost     chan struct{}
 	lostOnce sync.Once
@@ -375,7 +381,9 @@ func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, prefix, ho
 					return
 				}
 				// 顺带推进持久水位。复用这个已有的 ticker,不另起 goroutine / 第二套定时器。
-				// 水位只需"不晚于真实发号时刻"即可作为下一任的地板,故按 tick 粒度写足够。
+				// 地板契约:水位必须**不早于**最后一次发号所在的逻辑秒(见 advanceGuard
+				// 取 max 的注释);按 tick 粒度写意味着借位后最多一个 tick 内水位追平,
+				// 该窗口内前任崩溃仍有残余风险,但已从"整个借位期"缩到"单个 tick"。
 				h.advanceGuard(kaCtx)
 			case wr, ok := <-watchCh:
 				if h.closing.Load() {
@@ -430,6 +438,8 @@ func (h *Handle) NewNode() *snowflake.Node {
 	if h.GuardEpochSec > 0 {
 		n.SetGuardTime(h.GuardEpochSec)
 	}
+	// 留一份引用给 advanceGuard 读高水位(见 Handle.node 注释)。
+	h.node.Store(n)
 	return n
 }
 
@@ -449,22 +459,69 @@ func readGuard(ctx context.Context, cli *clientv3.Client, prefix string, id uint
 	return sec, nil
 }
 
-// advanceGuard 把本 worker id 的持久高水位推到当前秒。写失败只告警不阻断:
-// 水位是"下一任的地板",本进程自己的唯一性不依赖它。
+// advanceGuard 把本 worker id 的持久高水位推进到"墙钟秒与发号器真实高水位的较大者"。
+// 写失败只告警不阻断:水位是"下一任的地板",本进程自己的唯一性不依赖它。
+//
+// 必须取 max 而不能只写墙钟:发号器在 step 耗尽 / 时钟停摆时会**借位**
+// (snowflake.Generate 的 default 分支,lastTime 跑到墙钟前面),此时只写墙钟
+// 的水位低于真实已发号的秒;若前任在借位窗口内崩溃,继任者以低地板 + step=0
+// 重发,与前任借位期间的号逐位相同。这正是 snowflake.go SetGuardTime 注释里
+// 点名要 guard 覆盖的第三类情况("前任因发满 step 池借过逻辑秒")。
+// 同理,回拨窗口内墙钟 <= GuardEpochSec 时也不能直接冻结 —— 高水位可能仍在涨。
 func (h *Handle) advanceGuard(ctx context.Context) {
-	now := snowflake.NowEpochSec()
-	if now <= h.GuardEpochSec {
-		return // 时钟没前进(或回拨),不把水位往回写
+	target := snowflake.NowEpochSec()
+	if n := h.node.Load(); n != nil {
+		if hw := n.HighWaterEpochSec(); hw > target {
+			target = hw
+		}
+	}
+	if target <= h.GuardEpochSec {
+		return // 水位没有前进,不重复写
 	}
 	putCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	_, err := h.cli.Put(putCtx, guardKey(h.prefix, h.WorkerID), strconv.FormatUint(now, 10))
+	_, err := h.cli.Put(putCtx, guardKey(h.prefix, h.WorkerID), strconv.FormatUint(target, 10))
 	cancel()
 	if err != nil {
 		logx.Errorf("[snowflakealloc] advance guard watermark failed (prefix=%s, worker_id=%d): %v",
 			h.prefix, h.WorkerID, err)
 		return
 	}
-	h.GuardEpochSec = now
+	h.GuardEpochSec = target
+}
+
+// guardMsKey 是毫秒级持久水位 key,给 **bwmarrin 布局**的消费方(login PlayerId)用。
+// 与 guardKey 的秒级/snowflake.Epoch 口径完全独立:bwmarrin 是毫秒 epoch,秒级地板
+// 塞不进去;值统一存 **Unix 毫秒**(不带任何自定义 epoch),避免两套 epoch 换算错位。
+func guardMsKey(prefix string, id uint64) string {
+	return fmt.Sprintf("%s/guard_ms/%d", prefix, id)
+}
+
+// ReadMsWatermark 读本 worker id 的毫秒级持久水位(Unix ms)。key 不存在返回 0。
+// 读失败必须返回错误让调用方 fail-closed —— 水位是防跨重启重放的唯一地板,
+// 读不到就当 0 启动等于没有地板。
+func (h *Handle) ReadMsWatermark(ctx context.Context) (uint64, error) {
+	resp, err := h.cli.Get(ctx, guardMsKey(h.prefix, h.WorkerID))
+	if err != nil {
+		return 0, err
+	}
+	if len(resp.Kvs) == 0 {
+		return 0, nil
+	}
+	ms, perr := strconv.ParseUint(string(resp.Kvs[0].Value), 10, 64)
+	if perr != nil {
+		return 0, fmt.Errorf("malformed ms watermark %q: %w", resp.Kvs[0].Value, perr)
+	}
+	return ms, nil
+}
+
+// PutMsWatermark 写毫秒级持久水位。写入节奏与前推量由调用方决定(它才知道
+// 自己发号器的时钟语义);本方法只保证单键覆盖写。写失败与 advanceGuard 同理
+// 只回错误不重试 —— 水位是"下一任的地板",本进程自己的唯一性不依赖它。
+func (h *Handle) PutMsWatermark(ctx context.Context, ms uint64) error {
+	putCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	_, err := h.cli.Put(putCtx, guardMsKey(h.prefix, h.WorkerID), strconv.FormatUint(ms, 10))
+	return err
 }
 
 // verifyKeyOwnership 确认 nodeKey 当前确实挂在 leaseID 上,并返回可用作 watch 起点的 revision。

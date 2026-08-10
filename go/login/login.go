@@ -113,7 +113,10 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 	// allocKey 删掉、别的副本随时可以抢走同一个号;而 login 这边既不停发也不重夺
 	// (reRegister 是空操作,见下),于是会永久用一个已被释放的机器位继续铸 PlayerId。
 	// login 是 replicas=2 部署,两副本拿到同一机器位时 bwmarrin 在新毫秒把 step 归零,
-	// 同毫秒的首个号逐位相同 —— 而 player_database.player_id 上没有唯一索引兜底。
+	// 同毫秒的首个号逐位相同。DB 也兜不住:proto 声明了 PRIMARY KEY(player_id)
+	// (旧注释说"没有唯一索引"仅对按陈旧 go/db/model/*.sql 预建表的环境成立),
+	// 但写路径是 INSERT ... ON DUPLICATE KEY UPDATE —— 重复 PlayerId 不报错,
+	// 而是**静默改写另一个玩家的行**(串档),比报错更糟。唯一性必须在铸号侧保证。
 	//
 	// 与 guild / scene_manager 同一套机制:独立 lease + hostname 亲和 + 失租自 fencing。
 	// ⚠️ MaxWorkerID 必须显式钳到 bwmarrin 的 node 位宽(13 bit ⇒ 8191):
@@ -143,7 +146,55 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 	defer sfHandle.Close()
 	logx.Infof("Login snowflake worker id = %d (host=%s, max=%d)", sfHandle.WorkerID, hostname, maxWorkerID)
 
+	// 毫秒级水位地板:防"墙钟回拨 + 重启"跨进程重放 PlayerId。
+	//
+	// bwmarrin 进程内靠单调时钟免疫回拨,但**跨重启**会以当前墙钟重新锚定:
+	// 墙钟被回拨 N 秒后重启,新进程以同一 worker id(hostname 亲和)重走旧进程
+	// 最后 N 秒的毫秒序列,同毫秒 step 从 0 重数 —— 逐位相同的 PlayerId,
+	// 而 player_database.player_id 没有唯一索引兜底。snowflakealloc 的秒级
+	// GuardEpochSec 是 shared/snowflake epoch 口径,塞不进 bwmarrin 毫秒层,
+	// 所以这里用独立的 Unix 毫秒水位:启动时把前任写的水位当硬地板,
+	// 墙钟没越过它就不许构造发号器(fail-closed,等待时长 = 实际回拨幅度)。
+	// 水位由下面的 goroutine 以 1s 节拍**前推** playerIDWatermarkLeadMs 写入,
+	// 正常重启(墙钟没回拨)时启动等待恒为零。
+	wm, err := sfHandle.ReadMsWatermark(context.Background())
+	if err != nil {
+		logx.Errorf("Failed to read player id ms watermark: %v", err)
+		return err
+	}
+	for {
+		nowMs := uint64(time.Now().UnixMilli())
+		if nowMs > wm {
+			break
+		}
+		logx.Errorf("PlayerId watermark floor not passed yet: wall_clock_ms=%d watermark_ms=%d (clock was "+
+			"rolled back?); waiting %dms before minting", nowMs, wm, wm-nowMs+1)
+		time.Sleep(time.Duration(min(wm-nowMs+1, 2000)) * time.Millisecond)
+	}
+
 	ctx.SetNodeId(int64(sfHandle.WorkerID))
+
+	// 水位写入循环:每秒把"发号器时钟 + 前推量"写进 etcd。前推量(2s)>
+	// 写入间隔(1s),保证前任崩溃前可能发出的最大时间戳恒 < 最后一次写入的
+	// 水位值,继任者只需等墙钟越过水位即可,无需再加猜测性余量。
+	// 写失败只告警(与 snowflakealloc.advanceGuard 同理:水位是下一任的地板,
+	// 本进程自己的唯一性不依赖它),连续失败会让地板变陈旧,靠告警可见。
+	go func() {
+		const playerIDWatermarkLeadMs = 2000
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-sfHandle.Lost():
+				return
+			case <-ticker.C:
+				target := ctx.SnowFlake.NowUnixMs() + playerIDWatermarkLeadMs
+				if err := sfHandle.PutMsWatermark(context.Background(), target); err != nil {
+					logx.Errorf("PlayerId ms watermark write failed (floor for the next holder is getting stale): %v", err)
+				}
+			}
+		}
+	}()
 
 	// 失租 = 本进程不再拥有这个机器位,必须立刻停止铸 PlayerId。
 	// **不能只靠停服**:go-zero 的 zrpc.RpcServer.Stop() 实测只有一行 logx.Close(),
