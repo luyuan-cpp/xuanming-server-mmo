@@ -467,6 +467,20 @@ func (r *FriendRepo) HasPendingRequest(ctx context.Context, fromID, toID uint64)
 	return count > 0, nil
 }
 
+// CountOutgoingPending 返回该玩家发出的、仍处于 pending(status=1)的申请条数。
+// 用于 AddFriend 强制 MaxPendingRequests 上限 —— reject/accept 只翻 status 不删行,
+// 只统计 status=1 才不会把历史 terminal 行算进去。
+func (r *FriendRepo) CountOutgoingPending(ctx context.Context, fromID uint64) (uint32, error) {
+	var count uint32
+	err := r.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM friend_request WHERE from_player_id=? AND status=1",
+		fromID).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // ── Online status (Redis key with TTL) ─────────────────────────
 
 func (r *FriendRepo) SetPlayerOnline(ctx context.Context, playerID uint64, gateNodeID uint32) error {

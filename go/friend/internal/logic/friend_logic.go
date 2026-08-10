@@ -66,6 +66,22 @@ func (l *FriendLogic) AddFriend(ctx context.Context, req *pb.AddFriendRequest) (
 		}, nil
 	}
 
+	// 强制 MaxPendingRequests 上限。旧实现只按精确 (from,to) 去重,不限制**出站
+	// 申请条数**;而 reject/accept 只翻 status 不删行、没有任何 GC/TTL,于是单个
+	// 客户端用互不相同的 TargetPlayerId 循环 AddFriend 就能把 friend_request 表
+	// 无上界撑大(config 里声明了 MaxPendingRequests=50 却从没被读过)。fail-closed。
+	if maxPending := config.AppConfig.Cache.MaxPendingRequests; maxPending > 0 {
+		outgoing, err := l.repo.CountOutgoingPending(ctx, req.PlayerId)
+		if err != nil {
+			return nil, fmt.Errorf("count outgoing pending: %w", err)
+		}
+		if outgoing >= maxPending {
+			return &pb.AddFriendResponse{
+				ErrorMessage: tipErr(constants.ErrTooManyPending, "too many pending friend requests"),
+			}, nil
+		}
+	}
+
 	if err := l.repo.AddFriendRequest(ctx, req.PlayerId, req.TargetPlayerId); err != nil {
 		return nil, fmt.Errorf("add friend request: %w", err)
 	}
