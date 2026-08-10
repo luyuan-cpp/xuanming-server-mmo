@@ -8,4 +8,5 @@ const (
 	ErrRequestAlreadySent   uint32 = 4
 	ErrTargetFriendListFull uint32 = 5
 	ErrNoPendingRequest     uint32 = 6
+	ErrTooManyPending       uint32 = 7
 )
