@@ -1,9 +1,13 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-grpc-build", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "kafka-offset-reset")]
+    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-grpc-build", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "kafka-offset-reset", "git-stats")]
     [string]$Command,
 
     [string]$ConfigPath = "",
+
+    [int]$StatsYear = (Get-Date).Year,
+    [int]$StatsMonth = (Get-Date).Month,
+    [string]$StatsAuthor = "",
 
     [switch]$EnablePprof,
     [switch]$UseBinary,
@@ -637,6 +641,23 @@ function Invoke-K8sStageRuntime {
         -TableSource $TableSource
 }
 
+function Invoke-GitStats {
+    $scriptPath = Join-Path $ScriptDir "git_stats.ps1"
+    if (-not (Test-Path $scriptPath)) {
+        throw "git_stats.ps1 not found: $scriptPath"
+    }
+
+    $statsArgs = @{
+        Year  = $StatsYear
+        Month = $StatsMonth
+    }
+    if (-not [string]::IsNullOrWhiteSpace($StatsAuthor)) {
+        $statsArgs.Author = $StatsAuthor
+    }
+
+    & $scriptPath @statsArgs
+}
+
 function Invoke-Help {
     @"
 dev_tools.ps1 command help
@@ -686,6 +707,7 @@ Unified dev commands (C++ nodes + Go services):
     -Command dev-status
 
 Other common commands:
+    -Command git-stats [-StatsYear <year> -StatsMonth <month> -StatsAuthor <author>]
     -Command tree
     -Command naming-audit
     -Command naming-apply
@@ -948,5 +970,6 @@ switch ($Command) {
             Write-Host "[zone $z] robot launched (window title: $title)" -ForegroundColor Green
         }
     }
+    "git-stats" { Invoke-GitStats }
     default { throw "Unsupported command: $Command" }
 }
