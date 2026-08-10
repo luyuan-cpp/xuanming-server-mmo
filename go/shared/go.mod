@@ -8,6 +8,7 @@ require (
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/segmentio/kafka-go v0.4.47
 	github.com/zeromicro/go-zero v1.9.2
+	go.etcd.io/etcd/api/v3 v3.5.15
 	go.etcd.io/etcd/client/v3 v3.5.15
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
@@ -45,7 +46,6 @@ require (
 	github.com/prometheus/common v0.62.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20201227073835-cf1acfcdf475 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	go.etcd.io/etcd/api/v3 v3.5.15 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.15 // indirect
 	go.opentelemetry.io/otel v1.39.0 // indirect
 	go.opentelemetry.io/otel/trace v1.39.0 // indirect
