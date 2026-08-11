@@ -20,6 +20,7 @@ import (
 	"scene_manager/internal/svc"
 	"shared/generated/table"
 	"shared/grpcstats"
+	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
 
@@ -113,6 +114,18 @@ func main() {
 	// 大世界频道按人数自动扩缩容(默认关闭)。
 	logic.StartWorldAutoscaler(ctx, svcCtx)
 
+	// RPC 级热关停(shared/killswitch):线上某个方法把依赖打爆时,往 etcd 写一个
+	// key 就能秒级把它短路掉,不必走一遍构建-发布-滚动更新。
+	//
+	// 复用 svcCtx.Etcd(服务上下文里那条已有的连接),不另开第二条 ——
+	// 连的是同一个集群,而且它的生存期与进程一致。ctx 是上面那个进程级
+	// 后台 ctx,main 返回时 cancel,watch 循环随之收尾。
+	//
+	// Start 非阻塞:客户端为 nil、etcd 连不上、前缀下没有 key,一律放行
+	// (fail-open),因此这里既不需要判错也不需要 panic。
+	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix})
+	ks.Start(ctx, svcCtx.Etcd)
+
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		scene_manager.RegisterSceneManagerServer(grpcServer, server.NewSceneManagerServer(svcCtx))
 
@@ -120,37 +133,7 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
-	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
-	// in-band 故障拦截器:本服务的失败**几乎全部**塞在响应体的 error_code 里,
-	// handler 返回的 gRPC status 恒 OK。不挂这一层的话,监控看到的成功率永远是
-	// 100%,而玩家正在被拒进场。它只观测,不改响应内容、不吞错、不把业务码翻成
-	// gRPC status,挂上对客户端完全无感。
-	//
-	// 码表是 scene_manager 私有的(internal/constants/errors.go),与 tip 码表
-	// 数值区间重叠,所以必须显式给 Classifier —— 留 nil 会把所有非 0 码都记成
-	// "正常业务拒绝",故障就此隐身。
-	//
-	// 判定原则:码指向**服务端自身或其依赖出错**才算 fault;客户端参数错误、
-	// 幂等冲突、以及"这次先别改"的可重试拒绝都不算。
-	s.AddUnaryInterceptors(serverbase.UnaryInterceptor(serverbase.Options{
-		ErrorCodeClassifier: serverbase.FaultCodeSet(
-			constants.ErrNoAvailableNode,   // 整个 zone 没有可用场景节点 —— 容量/调度故障
-			constants.ErrSceneLookupFailed, // 场景映射查不到 —— 服务端状态缺失
-			constants.ErrUpdateLocation,    // 写 PlayerLocation 失败 —— 存储依赖
-			constants.ErrEncodeEvent,       // 服务端自己序列化不出来
-			constants.ErrKafkaRoute,        // 路由命令发不出去 —— 依赖故障
-			constants.ErrRedis,             // Redis 不可用
-			constants.ErrNoNodeForPurpose,  // 该用途没有任何节点 —— 部署/调度故障
-			// 刻意**不算**故障,记在这里免得下个人反复纠结:
-			//   ErrInvalidNodeID / ErrInvalidGateID / ErrInvalidSceneType /
-			//   ErrNoSceneConfId            请求参数问题
-			//   ErrDuplicateScene           幂等冲突,不是故障
-			//   ErrSourceSceneGone          源场景已销毁,业务规则拒绝
-			//   ErrUnsafeCrossNodeHandoff   安全门禁按设计拒绝,拒得越多越说明它在工作
-			//   ErrEnterSceneInProgress / ErrEnterSceneIdempotencyConflict  去重语义
-			//   ErrSceneReentryBarrier      屏障未到的可重试拒绝(见再入屏障)
-		),
-	}))
+	s.AddUnaryInterceptors(buildUnaryInterceptors(ks)...)
 	defer s.Stop()
 
 	// Register with etcd in C++ NodeInfo convention so Scene nodes can discover us.
@@ -216,6 +199,66 @@ func main() {
 	}
 
 	s.Start()
+}
+
+// buildUnaryInterceptors 组装本服务的一元拦截器链。
+//
+// 返回的切片顺序**就是执行顺序**:go-zero 把它们原样交给
+// grpc.ChainUnaryInterceptor,第一个是最外层。
+//
+// 抽成函数而不是直接在 main 里连着调 AddUnaryInterceptors,是为了让链本身可测 ——
+// main() 没法在单测里跑起来,而"哪次重构顺手把 killswitch 那行删了"是最容易发生、
+// 又最难被发现的回归:开关删掉之后一切照常工作,只有真出事那天才发现止血阀是假的。
+// 见 scene_manager_service_test.go。
+func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor {
+	return []grpc.UnaryServerInterceptor{
+		// ① 流量统计放最外层:被热关停短路掉的请求也必须被统计到。
+		//    否则"关停生效后这个方法的 QPS 归零"会被误读成客户端不再调用了。
+		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
+
+		// ② 热关停紧跟其后,尽早短路:命中之后 in-band 定性、handler、
+		//    以及 handler 里的 Redis / Kafka / Agones 访问统统不做 —— 止血阀的
+		//    全部意义就是"别为一个已经关停的方法做任何无谓的工作"。
+		//    它放在 serverbase 之前也意味着被关停的调用不进 rpc_duration_seconds:
+		//    那条指标衡量的是业务链路,而关停请求根本没走业务链路,
+		//    它们的账记在 killswitch_blocked_total{method} 上。
+		//
+		//    ⚠️ 关停范围要克制:它只挡得住 gRPC 入口,挡不住后台 ticker
+		//    (load_reporter / world_autoscale 也会建场景发 scene_id)。
+		//    把 CreateScene 关掉不等于"没有场景再被创建"。
+		ks.UnaryServerInterceptor(),
+
+		// ③ in-band 故障拦截器:本服务的失败**几乎全部**塞在响应体的 error_code 里,
+		//    handler 返回的 gRPC status 恒 OK。不挂这一层的话,监控看到的成功率永远是
+		//    100%,而玩家正在被拒进场。它只观测,不改响应内容、不吞错、不把业务码翻成
+		//    gRPC status,挂上对客户端完全无感。
+		//
+		//    码表是 scene_manager 私有的(internal/constants/errors.go),与 tip 码表
+		//    数值区间重叠,所以必须显式给 Classifier —— 留 nil 会把所有非 0 码都记成
+		//    "正常业务拒绝",故障就此隐身。
+		//
+		//    判定原则:码指向**服务端自身或其依赖出错**才算 fault;客户端参数错误、
+		//    幂等冲突、以及"这次先别改"的可重试拒绝都不算。
+		serverbase.UnaryInterceptor(serverbase.Options{
+			ErrorCodeClassifier: serverbase.FaultCodeSet(
+				constants.ErrNoAvailableNode,   // 整个 zone 没有可用场景节点 —— 容量/调度故障
+				constants.ErrSceneLookupFailed, // 场景映射查不到 —— 服务端状态缺失
+				constants.ErrUpdateLocation,    // 写 PlayerLocation 失败 —— 存储依赖
+				constants.ErrEncodeEvent,       // 服务端自己序列化不出来
+				constants.ErrKafkaRoute,        // 路由命令发不出去 —— 依赖故障
+				constants.ErrRedis,             // Redis 不可用
+				constants.ErrNoNodeForPurpose,  // 该用途没有任何节点 —— 部署/调度故障
+				// 刻意**不算**故障,记在这里免得下个人反复纠结:
+				//   ErrInvalidNodeID / ErrInvalidGateID / ErrInvalidSceneType /
+				//   ErrNoSceneConfId            请求参数问题
+				//   ErrDuplicateScene           幂等冲突,不是故障
+				//   ErrSourceSceneGone          源场景已销毁,业务规则拒绝
+				//   ErrUnsafeCrossNodeHandoff   安全门禁按设计拒绝,拒得越多越说明它在工作
+				//   ErrEnterSceneInProgress / ErrEnterSceneIdempotencyConflict  去重语义
+				//   ErrSceneReentryBarrier      屏障未到的可重试拒绝(见再入屏障)
+			),
+		}),
+	}
 }
 
 // parseListenOn splits "host:port" into its components.

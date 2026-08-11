@@ -29,9 +29,11 @@ type Config struct {
 	// 详见 secrets.go 的包注释。
 	Secrets SecretsConf `json:"Secrets,optional"`
 	// InternalAuth 是内部调用方身份声明(x-session-detail-bin)的验签策略。
-	InternalAuth  InternalAuthConf `json:"InternalAuth,optional"`
-	TableDir      string           `json:",default=../../generated/tables"`
-	AuthProviders AuthConfig       `json:"AuthProviders,optional"` // Third-party auth provider config
+	InternalAuth InternalAuthConf `json:"InternalAuth,optional"`
+	// KillSwitch 是 RPC 级热关停闸门(shared/killswitch)的配置。
+	KillSwitch    KillSwitchConf `json:"KillSwitch,optional"`
+	TableDir      string         `json:",default=../../generated/tables"`
+	AuthProviders AuthConfig     `json:"AuthProviders,optional"` // Third-party auth provider config
 	// DevSkipAuth 是已废弃的不安全开关。保留字段只为让旧配置在启动时
 	// 明确失败,不能因为结构体删字段而静默忽略、让开发者误以为仍生效。
 	DevSkipAuth     bool                `json:"DevSkipAuth,optional"`
@@ -124,6 +126,39 @@ type InternalAuthConf struct {
 	// AllowedCallers 是调用方标识白名单(如 ["gate","gateway"])。
 	// 留空表示不限制调用方名字,但签名仍然必须验过。
 	AllowedCallers []string `json:"AllowedCallers,optional"`
+}
+
+// KillSwitchConf 配置 RPC 级热关停闸门(见 shared/killswitch 包注释)。
+//
+// **整块字段的零值就是期望行为**,这不是偷懒而是刻意的:go-zero 的
+// conf.MustLoad 走的是 mapping.UnmarshalJsonMap(没开 WithDefault),
+// 一个标了 optional 的结构体字段整块缺失时**不会**递归填内层 default
+// (见 core/mapping/unmarshaler.go:processNamedFieldWithoutValue)。
+// 于是任何一份没写 KillSwitch 块的 yaml —— 包括仓外的 deploy/*.yaml ——
+// 都会拿到零值。所以这里绝不能用 `Enabled bool default=true`:那种写法
+// 会让老配置静默地把止血阀关掉,而且要等到线上出事才发现。
+//
+// 零值 = 开着 watch + 库默认前缀/时限。这不会拒绝任何请求:killswitch
+// 铁律 fail-open,etcd 连不上、前缀下没 key、值写坏了一律放行,只有运维
+// 显式往 etcd 写 deny 才会关停。反过来默认不开才是危险的 —— 真出事时
+// 没有止血阀可用。
+type KillSwitchConf struct {
+	// Disabled 完全不起 etcd watch,也不把拦截器挂进链(全部放行)。
+	// 刻意用反向命名,理由见上:缺配置必须等于"开着"。
+	// 只有在热关停机制自身出问题时才需要打开这个逃生阀。
+	Disabled bool `json:"Disabled,default=false"`
+
+	// Prefix 是规则在 etcd 里的前缀,留空用 killswitch.DefaultPrefix
+	// ("/mmorpg/killswitch/")。改它等于换一套规则命名空间,必须与运维
+	// 下发规则的路径一致,否则规则永远命不中(而且是静默命不中)。
+	Prefix string `json:"Prefix,optional"`
+
+	// StaleAfter 与 etcd 失联多久后主动作废本地规则快照、退回全放行。
+	// 0 = 用库默认(1 分钟);负数 = 永不作废。
+	StaleAfter time.Duration `json:"StaleAfter,optional"`
+
+	// ResyncBackoff 全量同步失败后的重试间隔,<=0 用库默认(3s)。
+	ResyncBackoff time.Duration `json:"ResyncBackoff,optional"`
 }
 
 // PreloadPoolConf controls the bounded goroutine pool used to fan out

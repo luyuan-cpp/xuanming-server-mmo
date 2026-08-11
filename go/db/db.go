@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"db/internal/config"
 	"db/internal/kafka"
 	"db/internal/logic/pkg/proto_sql"
@@ -14,16 +15,26 @@ import (
 	db_grpc "proto/db"
 	"shared/grpcstats"
 	"shared/kafkautil"
+	"shared/killswitch"
+	"shared/serverbase"
 	"syscall"
+	"time"
 
 	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/discov"
+	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
 
 var configFile = flag.String("f", "etc/db.yaml", "the config file")
+
+// killSwitchEtcdDialTimeout 与 scene_manager 建 etcd 客户端时的取值一致(5s)。
+// 只影响 killswitch 自己的 watch 连接,拨不通也只是退回全放行。
+const killSwitchEtcdDialTimeout = 5 * time.Second
 
 func main() {
 	flag.Parse()
@@ -97,6 +108,22 @@ func main() {
 	// Start Prometheus /metrics endpoint (no-op when MetricsListenAddr empty).
 	metrics.Start(config.AppConfig.MetricsListenAddr)
 
+	// ── 热关停(killswitch)────────────────────────────────────────────
+	// db 是玩家权威数据的写入方,真出事时最缺的是"秒级止血阀":往 etcd 前缀
+	// /mmorpg/killswitch/ 下写一个 key 就能把某个方法立刻短路掉,而不必走一遍
+	// 构建-发布-滚动更新。规则布局与优先级见 shared/killswitch 包注释。
+	//
+	// New 出来立刻可用(规则为空 = 全放行),Start 非阻塞、etcd 为 nil 也合法,
+	// 所以整段接线不会让 db 的启动多出任何一个失败点。
+	ks := killswitch.New(killswitch.Config{})
+	ksCtx, ksCancel := context.WithCancel(context.Background())
+	defer ksCancel()
+	etcdCli := newKillSwitchEtcdClient(config.AppConfig.Etcd)
+	if etcdCli != nil {
+		defer etcdCli.Close()
+	}
+	ks.Start(ksCtx, etcdCli)
+
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
 		db_grpc.RegisterDbServer(grpcServer, server.NewDbServer(ctx))
@@ -104,7 +131,29 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
+	// 拦截器顺序是有意的(先加的在外层):
+	//   grpcstats → killswitch → serverbase → handler
+	// grpcstats 放最外层,被关停的请求也照样计入总量(否则一开闸就像"没人调用");
+	// killswitch 命中即短路,handler 根本不会被调用;
+	// serverbase 放最内层,只观测真正跑过 handler 的结果,不会把"被人为关停"
+	// 误记成一次业务故障。
 	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
+	s.AddUnaryInterceptors(ks.UnaryServerInterceptor())
+	// in-band 故障拦截器。
+	//
+	// 这里**刻意不传任何 Classifier**,依据是 proto 事实而不是照抄别的服务:
+	// db 的 gRPC 面只有 db.Test 一个方法(见 proto/db/db.proto),它的
+	// TestResponse 里既没有 `uint32 error_code`,也没有 `TipInfoMessage
+	// error_message` —— 压根没有 in-band 业务码字段,serverbase 会判成
+	// SourceNone 一律记成成功。传 Classifier 只会是自欺欺人的装饰。
+	//
+	// 那为什么还挂?两条真实收益:
+	//   1. handler 返回 error 时记一条 transport_error + 耗时,与其他服务同口径;
+	//   2. 以后 db 真加出带业务码的 RPC 时,这层已经在链上,不会再漏一遍
+	//      "gRPC status 恒 OK、故障全部静默"的老坑。
+	// db 真正的业务失败走的是 Kafka db_task 那条链,由 internal/metrics 的
+	// db_task_result_total 统计,不在本拦截器的观测范围内。
+	s.AddUnaryInterceptors(serverbase.UnaryInterceptor(serverbase.Options{}))
 	defer s.Stop()
 
 	// Wait for shutdown signal
@@ -126,4 +175,39 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	fmt.Println("Shutting down gracefully...")
+}
+
+// newKillSwitchEtcdClient 按 RpcServerConf.Etcd 建一个只给热关停 watch 用的
+// etcd 客户端。**返回 nil 是合法结果**,调用方直接把 nil 传给
+// killswitch.Start 即可(它会打一条 Info 后全部放行)。
+//
+// 为什么不复用 go-zero 服务注册内部那个客户端:go-zero 没把它暴露出来。
+//
+// 为什么任何失败都只记日志不 panic:fail-open 是 killswitch 的铁律 ——
+// 管控组件自身故障绝不能拖垮业务。db 是玩家权威数据的写入方,
+// 因为一个"止血阀连不上 etcd"就拒启,等于用小故障换一次全服停写。
+//
+// 注意 clientv3.New 不带 WithBlock,不会在这里真的去拨号,因此也不会拖慢启动;
+// 连不通的后果只是 killswitch 的全量同步失败并按 ResyncBackoff 重试(期间放行)。
+func newKillSwitchEtcdClient(cfg discov.EtcdConf) *clientv3.Client {
+	if len(cfg.Hosts) == 0 {
+		logx.Info("[killswitch] db 未配置 etcd Hosts,热关停不生效(全部放行)")
+		return nil
+	}
+
+	c := clientv3.Config{
+		Endpoints:   cfg.Hosts,
+		DialTimeout: killSwitchEtcdDialTimeout,
+	}
+	if cfg.HasAccount() {
+		c.Username = cfg.User
+		c.Password = cfg.Pass
+	}
+
+	cli, err := clientv3.New(c)
+	if err != nil {
+		logx.Errorf("[killswitch] db 建 etcd 客户端失败,热关停不生效(全部放行): %v", err)
+		return nil
+	}
+	return cli
 }

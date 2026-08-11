@@ -41,6 +41,13 @@ Kafka:
   Brokers:
     - "localhost:9092"
 
+# RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
+# 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。
+# 关停某个方法:etcdctl put /mmorpg/killswitch/guildpb.GuildService/CreateGuild '{"deny":true,"reason":"..."}'
+# 关停整个服务:etcdctl put /mmorpg/killswitch/guildpb.GuildService/'*' true
+# 恢复:etcdctl del 对应的 key。
+KillSwitchPrefix: ""
+
 # Prometheus 抓取端点,由 go-zero core/service 自带的 agent 暴露(不要另起 promhttp)。
 # 端口分工:login 9101 / scene_manager 9150 / db 9160 / guild 9170 / friend 9180 /
 # player_locator 9190。dev 下绑 127.0.0.1,避免指标泄到本机以外;

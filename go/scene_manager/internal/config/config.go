@@ -153,6 +153,12 @@ type Config struct {
 	// 只有在 C++ 侧真的把 kDrainBudget 调大之后,才需要在这里跟着调。
 	SceneReentryBarrierSeconds int64 `json:",optional"`
 
+	// KillSwitchPrefix: RPC 级热关停规则在 etcd 里的前缀(shared/killswitch)。
+	// 留空即用 killswitch.DefaultPrefix(/mmorpg/killswitch/)—— 这是安全默认值:
+	// 前缀下没有任何 key 就是全部放行。只有多套环境共用一个 etcd 集群、需要各自
+	// 独立的止血阀时才需要改它。
+	KillSwitchPrefix string `json:",optional"`
+
 	// CleanupOrphanChannelsOnStartup: when true (default), SceneManager
 	// scans Redis on fullSync for world_channels:* sets whose confId is
 	// not in World.json and deletes them. This removes drift left by

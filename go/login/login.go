@@ -18,6 +18,7 @@ import (
 	login_proto_login "proto/login"
 	"shared/grpcstats"
 	"shared/kafkautil"
+	"shared/killswitch"
 	"shared/safego"
 	"shared/serverbase"
 	"shared/snowflakealloc"
@@ -28,6 +29,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
+	clientv3 "go.etcd.io/etcd/client/v3"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
@@ -220,8 +222,19 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 		os.Exit(1)   // ③ 退出;重启后拿新 worker id
 	})
 
+	// 热关停 watch 的生命周期:随本函数返回而结束。
+	// startServer 里的 server.Start() 是阻塞的,它返回就意味着服务在停,
+	// watch goroutine 必须跟着退出。
+	//
+	// defer 是 LIFO,这一句注册在 etcdCli.Close()(上面)之后,所以停机时
+	// **先**取消 watch、**后**关 etcd 客户端,不会让 watch 撞上已关闭的连接。
+	ksCtx, ksCancel := context.WithCancel(context.Background())
+	defer ksCancel()
+
 	// Start gRPC server
-	if err := startServer(cfg, ctx); err != nil {
+	// etcdCli 直接复用上面为 snowflake 建的那一个 —— login 到 etcd 只该有
+	// 这一条业务连接,再 New 一个既多一份 keepalive 心跳,也多一处会漏关的资源。
+	if err := startServer(ksCtx, cfg, ctx, etcdCli); err != nil {
 		logx.Errorf("Failed to start gRPC server: %v", err)
 		return err
 	}
@@ -267,8 +280,37 @@ func newSessionInterceptor(cfg config.Config) grpc.UnaryServerInterceptor {
 	}))
 }
 
+// newKillSwitch 构造 RPC 级热关停闸门,并挂上 etcd list-watch。
+//
+// 返回 nil 表示这一层不挂(配置里显式关掉了),调用方跳过即可。
+//
+// 三条不变量都由 shared/killswitch 保证,这里只负责别把它们破坏掉:
+//   - 非阻塞:Start 内部用 safego.Go 起 watch,绝不拖慢启动;
+//   - fail-open:cli 为 nil / etcd 连不上 / 规则值写坏,一律放行;
+//   - 绝不 fatal:etcd 拿不到不是启动错误,login 照常起。
+//
+// 所以这里**不检查 cli 是否为 nil 就直接传下去**是刻意的 —— 库里对 nil
+// 的处理(打一条 Info 然后全放行)正是我们要的语义,在外面再补一个
+// "拿不到 etcd 就报错返回"只会把 fail-open 改成 fail-closed。
+func newKillSwitch(watchCtx context.Context, cfg config.Config, cli *clientv3.Client) *killswitch.Switch {
+	if cfg.KillSwitch.Disabled {
+		logx.Error("SECURITY/OPS WARNING: RPC 热关停闸门被配置显式关闭(KillSwitch.Disabled=true)," +
+			"线上出事时无法用 etcd 秒级关停单个方法,只能走发布流程")
+		return nil
+	}
+
+	ks := killswitch.New(killswitch.Config{
+		Prefix:        cfg.KillSwitch.Prefix,
+		StaleAfter:    cfg.KillSwitch.StaleAfter,
+		ResyncBackoff: cfg.KillSwitch.ResyncBackoff,
+	})
+	ks.Start(watchCtx, cli)
+	return ks
+}
+
 // startServer configures and starts the gRPC server.
-func startServer(cfg config.Config, ctx *svc.ServiceContext) error {
+func startServer(watchCtx context.Context, cfg config.Config, ctx *svc.ServiceContext,
+	etcdCli *clientv3.Client) error {
 	server := zrpc.MustNewServer(cfg.RpcServerConf, func(grpcServer *grpc.Server) {
 		login_proto_login.RegisterClientPlayerLoginServer(grpcServer, loginserver.NewClientPlayerLoginServer(ctx))
 		login_proto_login.RegisterLoginAdminServer(grpcServer, loginadminserver.NewLoginAdminServer(ctx))
@@ -279,19 +321,61 @@ func startServer(cfg config.Config, ctx *svc.ServiceContext) error {
 		}
 	})
 
-	// 拦截器顺序有讲究:
-	//   ① 身份闸门必须最先跑 —— 后面的观测层不该看到未认证请求带来的身份;
-	//   ② serverbase 把 in-band 业务码翻成日志 + 指标(本仓 handler 一律
+	// 拦截器顺序有讲究(go-zero 把它们交给 grpc.ChainUnaryInterceptor,
+	// **排在前面的在外层、先执行**;注意 recover/timeout/stat 等 go-zero
+	// 内建中间件在 MustNewServer 里就已经排在我们前面了,动不了):
+	//   ① 热关停闸门(killswitch)—— 见下面的取舍论证;
+	//   ② 身份闸门 —— 后面的观测层不该看到未认证请求带来的身份;
+	//   ③ serverbase 把 in-band 业务码翻成日志 + 指标(本仓 handler 一律
 	//      `return resp, nil`,失败塞在响应体里,不挂这层监控上全是"成功");
-	//   ③ grpcstats 记调用量与耗时。
+	//   ④ grpcstats 记调用量与耗时。
 	//
 	// login 的响应用的是 TipInfoMessage 这套 tip 码表,serverbase 默认就按
 	// TipVerdict 定性,不需要额外传 ErrorCodeClassifier。
-	server.AddUnaryInterceptors(
+	//
+	// ── 为什么热关停放在验签**之前** ──────────────────────────────────
+	// 结论:放在最外层。理由与逐条证伪如下(这是安全相关的位置选择,
+	// 改动前请先把这三条推翻)。
+	//
+	// 1) 止血阀挂在负载后面就止不了血。热关停存在的唯一意义是线上出事时
+	//    秒级掐掉一个方法;而"出事"往往正是某条链路在烧 CPU / 涨内存。
+	//    验签这一层自己就有成本:HMAC 计算 + nonce 表插入(上限
+	//    InternalAuth.MaxNonceEntries,默认 50 万条常驻内存)。若把闸门放在
+	//    验签之后,那么当 nonce 表正是被打爆的那一块时,关停规则救不了它
+	//    —— 每个被"关停"的请求仍然先往表里写一条。
+	//
+	// 2) 它是**只拒不放**的闸门,不可能削弱后面任何一层。killswitch 的
+	//    拦截器只有两种出口:命中 deny 规则 → 直接返回错误;否则原样
+	//    handler(ctx, req) 交给下一层。它不改 ctx、不动 metadata、不写
+	//    任何身份,后面的验签逻辑收到的东西与没有这一层时逐字节相同。
+	//    也就是说,它无法让任何一个本该被②拒掉的请求通过。
+	//
+	// 3) "未鉴权方能借此探测方法是否存在"这条顾虑在 login 不成立:
+	//    - ②不是全局鉴权层。按 callerauth.UnaryServerInterceptor 的不变量①,
+	//      它只校验**带了** x-session-detail-bin 的调用;不带身份声明的调用
+	//      (Java Gateway 的 /api/login 新链路)本来就原样直达 handler。
+	//      login 是登录入口,天然对外接受未鉴权调用 —— 这里没有"先鉴权
+	//      才能知道方法存在"这一层遮蔽可言。
+	//    - 未注册的方法由 gRPC 运行时在**进入拦截器链之前**就回
+	//      Unimplemented(grpc-go server.go: 服务/方法查不到时直接
+	//      WriteStatus,processUnaryRPC 根本不会被调用),方法存在性从来
+	//      就不是秘密。
+	//    - 因此①多暴露的信息只有一条:"这个方法此刻被运维关停了"。而这
+	//      恰恰是要主动告诉调用方、好让它别再重试的信息(denyMessage 里
+	//      还刻意带上了原因文本)。
+	//
+	// 代价写在这里备查:被①短路的请求不进③④的指标,关停期间该方法在常规
+	// 面板上 QPS 直接归零;想看还有多少流量在撞墙,看 killswitch_blocked_total。
+	interceptors := make([]grpc.UnaryServerInterceptor, 0, 4)
+	if ks := newKillSwitch(watchCtx, cfg, etcdCli); ks != nil {
+		interceptors = append(interceptors, ks.UnaryServerInterceptor())
+	}
+	interceptors = append(interceptors,
 		newSessionInterceptor(cfg),
 		serverbase.UnaryInterceptor(serverbase.Options{}),
 		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
 	)
+	server.AddUnaryInterceptors(interceptors...)
 
 	defer server.Stop()
 
