@@ -485,6 +485,32 @@ void PlayerLifecycleSystem::DestroyPlayer(Guid playerId)
 	// 「数据增长有界」。这里是玩家实体销毁的唯一出口,顺手清掉。
 	AnomalyDetector::ClearPlayer(playerEntity);
 
+	// 把玩家从所在场景的 ScenePlayers 里摘掉 —— 必须在 DestroyEntity 之前。
+	//
+	// HandleExitGameNode(正常登出)那条路径已经在摘 SceneEntityComp 时一并
+	// 摘了 ScenePlayers,但**跨 zone 迁移**这条路径没有:HandleCrossZoneTransfer
+	// 只挂 PlayerFrozenComp、保留实体和 SceneEntityComp,随后 ACK 成功
+	// (HandlePlayerMigrationAck)或目的端重建(HandlePlayerMigration 的
+	// payload 变更分支)直接调 DestroyPlayer —— 于是源场景的 ScenePlayers
+	// 里留下一个悬垂 entity id。DestroyEntity 只动 actorRegistry,而
+	// ScenePlayers 在 sceneRegistry,没有任何 on_destroy 钩子会替它清。
+	//
+	// 后果与 HandleExitGameNode 注释里写的完全一样:entt 会复用实体 id,
+	// 源场景残留的陈旧 id 过一阵子可能正好是另一个场景里某个活着的玩家,
+	// 一旦源场景被 BeginSceneDrain 排空,就会给那个不相干的玩家错发改派票、
+	// 把他从当前场景踢走。
+	//
+	// 放在这个"唯一销毁出口"里做,一次覆盖全部销毁路径:正常登出路径此时
+	// SceneEntityComp 已被摘除,下面的 try_get 拿不到、自然跳过(idempotent);
+	// 两条跨 zone 路径实体还带着 SceneEntityComp,正好在这里补上。
+	if (const auto *sceneComp = tlsEcs.actorRegistry.try_get<SceneEntityComp>(playerEntity))
+	{
+		if (auto *scenePlayers = tlsEcs.sceneRegistry.try_get<ScenePlayers>(sceneComp->sceneEntity))
+		{
+			scenePlayers->erase(playerEntity);
+		}
+	}
+
 	defer(tlsEcs.playerList.erase(playerId));
 	DestroyEntity(tlsEcs.actorRegistry, playerEntity);
 }
