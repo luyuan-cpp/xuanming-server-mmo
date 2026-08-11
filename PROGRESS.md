@@ -2607,3 +2607,156 @@ scene_comp 玩家集合增删配对未审)、Java 网关 etcd watch 重建 / 节
 - 验证时发现 PowerShell 统计器用空白正则解析 `--numstat`,会漏掉带空格的路径;
   改为按 TAB 三列解析后,PowerShell/Bash 的提交数、文件数及增删行完全一致。
 - 合并后部署契约重跑 20/20 通过。远端分支删除需要 push,本轮按项目禁令未执行。
+
+### 2026-08-10(续七):跨 zone 迁移在源场景 ScenePlayers 留悬垂 id(P1,已修)
+
+改用「单维度、范围切半、自己精读」代替扇出后,一次就挖出了前三轮扇出都没审到的
+scene_comp 面上的真缺陷。
+
+**P1:跨 zone 迁移路径不摘 ScenePlayers,源场景留悬垂 entity id。**
+
+`ScenePlayers`(scene_node_comp.h)自身注释就写明是 weak refs,增删必须手工配对。
+三条路径里只有两条摘了:
+- 换场景 `HandleEnterScene`(player_scene.cpp:206-210)手工 erase 旧场景 —— 有;
+- 正常登出 `HandleExitGameNode`(player_lifecycle.cpp:531)—— 有(此前修过);
+- **跨 zone 迁移 —— 没有**。`HandleCrossZoneTransfer` 只挂 `PlayerFrozenComp`、
+  刻意保留实体与 `SceneEntityComp`(为的是 ACK/reaper 两条终态都能收拾),随后
+  `HandlePlayerMigrationAck`(1362)与 `HandlePlayerMigration` 的 payload 变更分支
+  (982)直接调 `DestroyPlayer`。
+
+`DestroyEntity` 只 `registry.destroy` 且只动 actorRegistry,而 `ScenePlayers` 在
+**sceneRegistry**,全仓对这两个组件零 `on_destroy` 观察者 —— 没有任何路径会替它清。
+
+后果与 HandleExitGameNode:528-530 那段注释警告的一字不差:entt 复用实体 id,
+源场景残留的陈旧 id 过一阵子可能正好是另一个场景里某个活着的玩家;一旦源场景被
+`BeginSceneDrain`(703)排空,就会给那个不相干的玩家错发改派票、把他从当前场景踢走。
+当年那条注释只修了登出路径,跨 zone 这条漏了。
+
+**修法**:摘除动作下沉到 `DestroyPlayer` —— 它自称也确实是「玩家实体销毁的唯一出口」
+(全仓 3 个调用点 647/1008/1388 全覆盖)。正常登出路径此时 `SceneEntityComp` 已摘除,
+`try_get` 拿不到自然跳过(idempotent);两条跨 zone 路径实体还带着该组件,正好补上。
+放在 `DestroyEntity` 之前,否则实体已销毁就取不到它所在的场景了。
+
+**自查已排除**:`SceneRegistryComp`/`NodeStateComp` 等其余 scene comp 无同类配对问题;
+`DestroyEntity` 无隐藏钩子(game_registry.cpp:9-17 就三行)。
+
+待 Codex:scene lib + scene 节点重编(MSBuild 串行 /m:1);
+`cpp/tests/scene_test/scene_test.cpp` 已有 `ScenePlayers` 计数断言(624/628/897/901
+断言排空后为 0),本改动只会让这些断言更容易成立,不应有回归。
+
+### 2026-08-10(续八):Java 网关区服健康判据 —— 网关全挂却显示「开放·流畅」(P1,已修)
+
+沿用「单维度 + 范围切半 + 单 agent」策略,把连续三轮断连丢失的 Java etcd/health 切片
+(GateWatcher / NodeInfoRecord / ZoneHealthProbeService / ServerListService,约 500 行)
+一次跑通,零断连。确认 2 条。
+
+**P1(已修):无 gate 的区服被判 DEGRADED 而非 DOWN,对外显示成最诱人的状态。**
+
+`evaluateHealth`(ZoneHealthProbeService.java:126-135)用 `hasGate || hasScene` 把两种
+性质完全不同的残缺态合并成 DEGRADED。但 gate 是玩家**唯一**的对外入口(AssignGate 要
+从 GateNodeService.rpc/ 选出 gate 才能给客户端 ip/port/token),gates 为空在玩家侧
+等价于完全不可登录。
+
+合并的后果是彻底反向而非「少报一档」:
+- `ServerListService.resolveDisplayStatus`(78-91)只对 **DOWN** 做降级(→MAINTENANCE),
+  DEGRADED 没有任何分支、静默落到默认 `yield OPEN`;
+- 同时 `calculateLoadLevel` 的分子只统计**存活 gate** 的 playerCount(97 行),
+  gates 为空 ⇒ totalPlayers=0 ⇒ ratio=0 ⇒ **SMOOTH**;
+- 且 `autoStatus != UNKNOWN` 使 ServerListService:47-49 把这个 SMOOTH 真写进 DTO。
+
+于是一个 100% 连不上的区服对外呈现「开放 · 流畅」,玩家点进去 AssignGate 零候选、
+登录失败并反复重试;运维侧拿不到任何自动降级信号(maintenanceMsg 也不下发),
+只能人工改 zone_config.manual_status。违反「失败路径必须 fail-closed」。
+
+触发:某 zone 的 gate Deployment 滚更失败 / pod 全被驱逐 / 崩溃循环 → gate 以 lease
+注册的键随租约过期消失,而 scene 节点键仍在 → 下一轮 probe 得 gates=[] scenes=[...]。
+
+修法:`evaluateHealth` 开头加 `if (!hasGate) return DOWN;`,让 DEGRADED 只保留唯一
+含义「有 gate 但无 scene」。无 gate 即无入口,本就该走已有的 DOWN → MAINTENANCE 路径,
+不需要新增 wire enum(对外 status 是既有四值协议,加值会让旧客户端解析失败)。
+
+**P2(未修,需拍板):负载等级的分子分母不同源,gate 挂得越多显示越空闲。**
+
+`calculateLoadLevel` 的分子是「存活 gate 的 playerCount 之和」,分母是
+`ZoneConfig.capacity` 这个 DB 静态值(默认 5000)。gate 掉一台,它承载的玩家从分子里
+整体消失,比值直接下降一档:4 副本满载 4×1200/5000=0.96(FULL)→ 掉 1 台
+3600/5000=0.72(BUSY)→ 掉 2 台 2400/5000=0.48(**SMOOTH**)。正在发生容量收缩的区
+在选服列表上显示得比实际更空,把新玩家往仅存的、已超载的 gate 上引,局部故障被
+正反馈放大。运维 dashboard 的在线数(同一分子)也会在故障期凭空缩水,易误判为
+「玩家流失」而非「节点丢失」。
+
+**为什么没直接修**:两种正解都需要新增契约,不该由我单方面拍板 ——
+①分母随存活 gate 数缩放,需要一个「期望 gate 副本数」配置项(ZoneProbeProperties
+已有 zone-probe 命名空间可挂);②分母改为「存活 gate 的容量之和」,语义最干净
+(load = 玩家数 / 可用容量),但 `NodeInfoRecord`/`NodeInfo` proto **没有** per-gate
+容量字段(已核:只有 nodeId/nodeType/launchTime/sceneNodeType/endpoint/zoneId/
+protocolType/nodeUuid/playerCount),要加就是跨 C++/Go/Java 三端的 proto 改动。
+请拍板走 ① 还是 ②。注:P1 修完后最坏情况(gates=0)已被 DOWN→MAINTENANCE 兜住,
+本条只剩「部分 gate 丢失」这一档,故 P2。
+
+**已证伪(别重查)**:①GateWatcher 名不副实,**没有 watch** —— 每轮 @Scheduled
+(fixedDelay=5000)做一次全新的 prefix get(67-78),没有长连接状态可断,Go/C++ 侧那类
+watch 泄漏坑在 Java 侧不适用(docs/design/gateway-k8s-deployment.md:22 的 "etcd watcher"
+是过时文档);②并发可见性干净:snapshot 是 volatile + Map.copyOf 不可变整体发布
+(40, 102-106),三张表原子换代;consecutiveProbeFailures 只被 scheduler 单线程读写;
+③异常吞掉已修好:fetchNodesByPrefix 在查询/解析失败时抛 NodeDiscoveryException 而非
+返空列表,probe() 的 catch 只保留 last-known-good、不写缓存,连续 3 次升 ERROR;
+④死节点常驻不成立:gate 以 lease 注册,键随租约过期消失,靠键存在性判活站得住;
+⑤etcd 前缀 Java(NodeType.java:14 无前导斜杠)与 Go(gate_redirect.go:24)一致,
+bin/etc/base_deploy_config.yaml:38 注释里的前导斜杠是注释笔误。
+
+待 Codex:`cd java/gateway_node && mvn -q test`(evaluateHealth 是 private,
+仅改判定分支;若既有测试断言过「gates 空 → DEGRADED」需同步改成 DOWN)。
+
+### 2026-08-10(续九):负载等级 P2 —— 深查后**自我证伪**,不修(记录以免下轮重报)
+
+上一条(续八)留了个 P2 待拍板:「负载分子只算存活 gate、分母是静态 capacity,
+gate 挂得越多显示越空闲」。用户拍板「按最标准的做法做」,我按 ② (给 NodeInfo 加
+per-gate 容量字段) 动手前先查了三件事,结论是**这条 P2 站不住,两个方案都不该做**。
+
+**查证 1:Go 侧(真正的准入权威)把容量建模成静态的每-zone 上限,不是每-gate 容量。**
+`gateWatcherCapacityProvider.ZoneCapacity`(servicecontext.go:274)读的是配置来的
+`caps map[string]uint32`(zone_id → capacity ceiling),与 Java 的 `ZoneConfig.capacity`
+同构。`CandidatesForZone`(241-272)从 NodeInfo 只取 PlayerCount,**从不取容量**。
+→ 方案 ② 会引入一个全系统不存在的概念,并与登录队列的容量模型分叉。
+
+**查证 2:全仓 gate 没有任何连接数上限概念。**
+grep `kMaxSession|maxSession|MaxConnections|kMaxConn|LimitSession` 在 cpp/nodes/gate、
+cpp/libs/services/gate、cpp/libs/engine/core/session 下**零命中**;
+proto/common/base/config.proto 的 BaseDeployConfig/GameConfig 也没有容量项。
+→ 方案 ② 不是"补一个已有字段",而是由我凭空发明容量语义,还要跨 C++/Go/Java 三端
+改 proto + 加配置,违反「不擅自新增契约」。
+
+**查证 3(决定性):分子本来就是诚实的。**
+`player_count` 的唯一写入点是 gate main.cpp:251-252
+`static_cast<uint32_t>(tlsSessionManager.sessions().size())` —— **当前活着的 TCP 会话数**。
+gate 一死,它承载的玩家**真的断线了**,不再在线。所以「4 gate 满载 4800 → 掉 2 台后
+2400」这个读数是对的:区里此刻确实只剩 2400 人。显示 SMOOTH 反映的是真实在线密度,
+不是"伪造的空闲"。原发现默认那些玩家还在,但他们已经不在了。
+残留的唯一合理担忧是「幸存 gate 还能不能吃下新玩家」—— 那取决于 gate 容量是否为
+瓶颈,而这正是系统**刻意不建模**的东西(见查证 2),不能靠猜。
+
+**流程教训(重要)**:这条 P2 是我用**单 Agent** 跑出来的,**没有经过对抗性复核** ——
+这正是它没被当场证伪的原因。前几轮凡是走两视角证伪的,类似的"前提默认"都被逮住了
+(如 mission 全系列死代码、LoginRpcClient 3s deadline)。
+→ 结论:单 agent 窄切片确实解决了断连问题,但**发现仍必须过一遍对抗复核**才能落码;
+单 agent 的产出只能当"候选",不能直接当结论。续八的 P1(无 gate 判 DOWN)我是自己
+逐行对着磁盘核过 evaluateHealth + resolveDisplayStatus + calculateLoadLevel 三处才修的,
+不受此影响;本条没有那样的独立核对,故降为证伪。
+
+**结论:两个方案都不做,代码不动。**「gate 部分丢失后幸存 gate 的承载余量」若将来真要
+建模,应当先决定 gate 容量到底是不是瓶颈(需要压测数据),再决定是否引入容量契约 ——
+那是一个独立的容量规划课题,不是本轮审计能顺手带出的修复。
+
+### 2026-08-10:Codex 本轮提交验证
+
+- Go 侧 `data_service`、`db`、`friend`、`guild`、`login`、`player_locator`、
+  `scene_manager`、`shared` 共 8 个模块逐一执行 `go build ./...` 与
+  `go test -count=1 ./...`,全部通过;新增热关停门禁测试通过。
+- C++ 使用 VS MSBuild 对 `game.sln` 执行 Debug/x64 串行 `/m:1` 构建,通过;
+  scene lib 与 scene node 均重新编译。独立 `cpp/tests/scene_test` 工程因既有
+  include 配置找不到 `scene/system/scene.h` 而未能编译,测试程序未运行。
+- Java 网关 `mvnw.cmd -q test` 在编译前被本机环境阻断:项目要求 Java release 23,
+  当前仅有 JDK 21,未宣称测试通过。
+- 部署脚本 AST 解析通过,`k8s_deploy_contract.tests.ps1` 20/20 通过。
+- 根仓库改动按主题提交到 `main`,不推送远端;第三方子模块内部工作区保持原样。
