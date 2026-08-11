@@ -15,19 +15,77 @@ Set-StrictMode -Off
 # $PSScriptRoot 在被 dot-source 的文件里指向**它自己**所在目录(tools/scripts/tests/lib),
 # 所以往上两级才是 tools/scripts。
 $script:ToolsScriptsDir = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$script:RepoRootPath = (Resolve-Path (Join-Path $script:ToolsScriptsDir "..\..")).Path
 
-. (Join-Path $script:ToolsScriptsDir "lib\release_common.ps1")
+# 仓库根 = tools/scripts 再往上两级。刻意逐级 Split-Path 上溯,而不是拼 "..\..":
+# 反斜杠在 Linux 上是普通字符不是路径分隔符,而 .github/workflows/deploy-config-tests.yml
+# 把本套测试跑在 ubuntu-latest 上(该 workflow 的注释也明确要求"别写反斜杠字面量")。
+$script:RepoRootPath = (Resolve-Path (Split-Path -Parent (Split-Path -Parent $script:ToolsScriptsDir))).Path
+
+. (Join-Path $script:ToolsScriptsDir "lib" "release_common.ps1")
 
 function Get-RepoRoot { return $script:RepoRootPath }
 function Get-ToolsScriptsDir { return $script:ToolsScriptsDir }
 
 <#
 .SYNOPSIS
-    以子进程跑 k8s_deploy.ps1,返回 @{ ExitCode; Output }。
+    以子进程跑一个 pwsh 脚本,合并捕获 stdout+stderr,返回 @{ ExitCode; Output }。
+
+.DESCRIPTION
+    **为什么要在这里管编码**:本套测试的负向用例断的是子进程打出来的**中文错误
+    文本**(见测试头注释:只断退出码等于没测)。而 PowerShell 捕获原生进程输出时,
+    是按 [Console]::OutputEncoding 解码的,子进程也按同一个控制台码页编码 ——
+    Windows 运维机/CI 容器的控制台默认是 ibm437、GBK 这类 OEM 码页,中文在这一
+    编一解里会被整体打成 '?',于是所有断中文的用例集体变红。红的是编码链路,
+    不是被测脚本:同一套断言在 UTF-8 控制台下全绿,在 ibm437 控制台下 6 条红。
+
+    所以这里在捕获期间把控制台编码顶成 UTF-8(子进程继承同一个控制台码页),
+    跑完立刻还原,不污染调用方终端。
 
 .PARAMETER Env
     要在子进程里设置的环境变量(hashtable)。跑完自动还原,避免污染同一轮里的其它用例。
+#>
+function Invoke-CapturedPwsh {
+    param(
+        [Parameter(Mandatory = $true)][string]$ScriptPath,
+        [Parameter(Mandatory = $true)][string[]]$Arguments,
+        [hashtable]$Env = @{}
+    )
+
+    $savedEnv = @{}
+    foreach ($k in $Env.Keys) {
+        $savedEnv[$k] = [System.Environment]::GetEnvironmentVariable($k)
+        [System.Environment]::SetEnvironmentVariable($k, $Env[$k])
+    }
+
+    # 输出被完全重定向、进程没有真实控制台时,读写 [Console]::OutputEncoding 会抛。
+    # 那种场景下保持默认即可(Linux pwsh 本来就是 UTF-8),不能让"拿不到控制台"
+    # 反过来把测试打红。
+    $savedConsoleEncoding = $null
+    try {
+        $savedConsoleEncoding = [Console]::OutputEncoding
+        [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    }
+    catch {
+        $savedConsoleEncoding = $null
+    }
+
+    try {
+        $output = & pwsh -NoProfile -File $ScriptPath @Arguments 2>&1 | Out-String
+        return @{ ExitCode = $LASTEXITCODE; Output = $output }
+    }
+    finally {
+        if ($null -ne $savedConsoleEncoding) {
+            try { [Console]::OutputEncoding = $savedConsoleEncoding } catch { }
+        }
+        foreach ($k in $Env.Keys) {
+            [System.Environment]::SetEnvironmentVariable($k, $savedEnv[$k])
+        }
+    }
+}
+
+<#
+.SYNOPSIS
+    以子进程跑 k8s_deploy.ps1,返回 @{ ExitCode; Output }。
 #>
 function Invoke-DeployDryRun {
     param(
@@ -35,21 +93,7 @@ function Invoke-DeployDryRun {
         [hashtable]$Env = @{}
     )
 
-    $script = Join-Path $script:ToolsScriptsDir "k8s_deploy.ps1"
-    $saved = @{}
-    foreach ($k in $Env.Keys) {
-        $saved[$k] = [System.Environment]::GetEnvironmentVariable($k)
-        [System.Environment]::SetEnvironmentVariable($k, $Env[$k])
-    }
-    try {
-        $output = & pwsh -NoProfile -File $script @Arguments 2>&1 | Out-String
-        return @{ ExitCode = $LASTEXITCODE; Output = $output }
-    }
-    finally {
-        foreach ($k in $Env.Keys) {
-            [System.Environment]::SetEnvironmentVariable($k, $saved[$k])
-        }
-    }
+    return Invoke-CapturedPwsh -ScriptPath (Join-Path $script:ToolsScriptsDir "k8s_deploy.ps1") -Arguments $Arguments -Env $Env
 }
 
 <#
@@ -63,21 +107,7 @@ function Invoke-ToolScript {
         [hashtable]$Env = @{}
     )
 
-    $script = Join-Path $script:ToolsScriptsDir $ScriptName
-    $saved = @{}
-    foreach ($k in $Env.Keys) {
-        $saved[$k] = [System.Environment]::GetEnvironmentVariable($k)
-        [System.Environment]::SetEnvironmentVariable($k, $Env[$k])
-    }
-    try {
-        $output = & pwsh -NoProfile -File $script @Arguments 2>&1 | Out-String
-        return @{ ExitCode = $LASTEXITCODE; Output = $output }
-    }
-    finally {
-        foreach ($k in $Env.Keys) {
-            [System.Environment]::SetEnvironmentVariable($k, $saved[$k])
-        }
-    }
+    return Invoke-CapturedPwsh -ScriptPath (Join-Path $script:ToolsScriptsDir $ScriptName) -Arguments $Arguments -Env $Env
 }
 
 <#
