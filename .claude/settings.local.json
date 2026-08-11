@@ -173,8 +173,6 @@
       "Read(//e/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/**)",
       "Bash(\"e:/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe\" F:/work/mmorpg/cpp/libs/engine/core/core.vcxproj -p:Configuration=Debug -p:Platform=x64 -m -nologo -verbosity:minimal)",
       "Bash(\"e:/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe\" F:/work/mmorpg/cpp/nodes/scene/scene.vcxproj -p:Configuration=Debug -p:Platform=x64 -m -nologo -verbosity:minimal)",
-      "Bash(\"e:/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe\" F:/work/mmorpg/mmorpg.sln -p:Configuration=Debug -p:Platform=x64 -m -nologo -verbosity:minimal)",
-      "Bash(\"e:/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe\" F:/work/mmorpg/mmorpg.sln \"-p:Configuration=Debug\" \"-p:Platform=Any CPU\" -m -nologo -verbosity:minimal)",
       "Bash(\"e:/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe\" F:/work/mmorpg/cpp/tests/cross_zone_test/cross_zone_test.vcxproj -p:Configuration=Debug -p:Platform=x64 -m -nologo -verbosity:minimal)",
       "Bash(\"e:/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe\" F:/work/mmorpg/cpp/tests/currency_test/currency_test.vcxproj -p:Configuration=Debug -p:Platform=x64 -m -nologo -verbosity:minimal)",
       "Bash(\"e:/Program Files/Microsoft Visual Studio/18/Enterprise/MSBuild/Current/Bin/MSBuild.exe\" F:/work/mmorpg/cpp/tests/bag_test/bag_test.vcxproj -p:Configuration=Debug -p:Platform=x64 -m -nologo -verbosity:minimal)",
