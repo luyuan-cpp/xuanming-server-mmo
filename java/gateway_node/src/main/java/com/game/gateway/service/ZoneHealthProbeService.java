@@ -126,13 +126,29 @@ public class ZoneHealthProbeService {
         boolean hasGate = !gates.isEmpty();
         boolean hasScene = !scenes.isEmpty();
 
-        if (hasGate && hasScene) {
-            return AutoZoneStatus.HEALTHY;
-        } else if (hasGate || hasScene) {
-            return AutoZoneStatus.DEGRADED;
-        } else {
+        // 无 gate 必须判 DOWN，不能判 DEGRADED。
+        //
+        // gate 是玩家唯一的对外入口：AssignGate 要从 GateNodeService.rpc/ 里选出一个
+        // gate 才能给客户端 ip/port/token。gates 为空时该区在玩家侧等价于完全不可登录，
+        // 与「scene 挂了但 gate 还在」是两种性质完全不同的残缺态，不能合并成同一个
+        // DEGRADED。
+        //
+        // 合并的后果不是「少报一档」而是彻底反向：ServerListService.resolveDisplayStatus
+        // 只对 DOWN 做降级（→ MAINTENANCE），DEGRADED 没有任何分支、静默落到默认的
+        // OPEN；与此同时 calculateLoadLevel 的分子只统计存活 gate 的 playerCount，
+        // gates 为空 ⇒ totalPlayers=0 ⇒ ratio=0 ⇒ SMOOTH。于是一个 100% 连不上的区服
+        // 对外显示成最诱人的「开放 · 流畅」，玩家点进去必然登录失败并反复重试，
+        // 而运维侧拿不到任何自动降级信号（maintenanceMsg 也不会下发），只能人工去改
+        // zone_config.manual_status。这同时违反「失败路径必须 fail-closed」。
+        //
+        // 现在 DEGRADED 只保留唯一含义：有 gate 但无 scene（能进得来，但进不了场景）。
+        if (!hasGate) {
             return AutoZoneStatus.DOWN;
         }
+        if (!hasScene) {
+            return AutoZoneStatus.DEGRADED;
+        }
+        return AutoZoneStatus.HEALTHY;
     }
 
     private LoadLevel calculateLoadLevel(long totalPlayers, int capacity) {
