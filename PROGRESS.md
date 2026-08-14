@@ -2760,3 +2760,116 @@ gate 一死,它承载的玩家**真的断线了**,不再在线。所以「4 gate
   当前仅有 JDK 21,未宣称测试通过。
 - 部署脚本 AST 解析通过,`k8s_deploy_contract.tests.ps1` 20/20 通过。
 - 根仓库改动按主题提交到 `main`,不推送远端;第三方子模块内部工作区保持原样。
+
+### 2026-08-10(续十):gate 无连接数上限 —— P1,已修(用户指出)
+
+续九里我把「全仓 gate 没有连接数上限概念」当成"所以不能加容量字段"的论据,
+**漏了它本身就是缺陷**:gate 是唯一对公网开放的端口,而 muduo 的 TcpServer 无条件
+accept —— 不需要任何凭证,只要一直建连就能把 fd、SessionMap、每连接读写缓冲吃光,
+直到 accept 撞 EMFILE 或进程 OOM。现有两层防护都拦不住:token 校验发生在建连**之后**,
+IllegalPacketCounter 只按**已建立的会话**计数。用户指出后按标准做法修。
+
+**修法(三处接线,沿用既有通道,不新造机制):**
+- `proto/common/base/config.proto` BaseDeployConfig 加 `gate_max_connections = 15`
+  (0=不限,仅本地调试)。字段号 15 是下一个可用号,未复用。
+- `config.cpp` 按该文件既有的逐字段显式映射风格加 `GateMaxConnections` 读取。
+- `base_deploy_config.yaml` 给保守默认 20000,并注明"真实容量靠压测定,别照抄"。
+- 闸门放在 `HandleConnectionEstablished` **第一句**:在发 session_id、建 SessionInfo
+  之前拒掉,否则限流本身先付出了它要省的内存。判据用 `sessions().size()`
+  (与连接严格 1:1,本函数插入、断开回调删除,不会漂移),不另立计数器。
+  拒绝时直接 forceClose 不回应答 —— 已在容量边界上,再为每条被拒连接序列化一条 tip
+  正是攻击者要的放大。日志按 1024 条汇总一行(同 CheckMessageSize 那条的教训)。
+
+**动手中发现并一并修掉的二级缺陷(比上限本身更险):**
+被拒连接从不 `setContext`,而断开时仍走 `HandleConnectionDisconnection`:
+① `GetSessionId` 对空 context 抛 `bad_any_cast`,那条 catch **每条打一行 ERROR**;
+② **Login 断线通知并没有被 `sessionFound` 守住**(只有 `set_player_id` 被守),
+于是每条被拒连接都会带着 session_id=kInvalidSessionId **向 login 发一次 gRPC** ——
+把连接洪峰原样放大成对 login 的 RPC 洪峰,限流闸门反倒成了新的放大器。
+修:三条 fail-closed 拒连路径(新增的容量超限 + 既有的 node 段未就绪 / prod 空密钥)
+统一 `setContext(kInvalidSessionId)`;`HandleConnectionDisconnection` 顶部对
+`sessionId == kInvalidSessionId` 早退。**既有那两条拒连路径本来就带着这个洞**,
+只因是低频配置错路径而一直没暴露。
+
+**核过的前提(写下来免得下轮重查):**
+- `kInvalidSessionId = UINT32_MAX`;session_id 布局 [node:15][seq:17](kNodeBits=17)。
+  合法号撞上它需要 node_id 恰为 32767(15 位满值,即 3 万多个并发 gate),不可达;
+  且"kInvalidSessionId 即无会话"本就是全仓既有约定(GetSessionId 的 catch、
+  rpc_request_context 的默认值都这么用)。
+- 闸门口径依赖 gate 是**单 IO 线程**:tlsSessionManager 是 thread_local,
+  静态计数器也无同步。全仓无任何 setThreadNum,muduo 默认 0 个 IO 线程,现在成立。
+  已在代码注释里钉死:谁将来开了线程池,SessionMap 本身会先分裂,必须先解决
+  会话表的线程模型。
+
+待 Codex:proto 改了要重生成(`cd go && build.bat` 或等价 C++ proto 生成),
+然后编译 engine config + gate 节点。
+
+### 2026-08-11:Codex 复核、补强与构建验证(gate 连接上限)
+
+先纠正上一段两条错误前提(旧记录按“只追加”规则保留,以本段为准):
+
+- `UINT32_MAX` **不是不可达**。`node_id=32767, seq=131071` 能合法生成该值;
+  gate 现在显式跳过该哨兵,并把所有 node_id 都安全可用的并发 ID 上界定为
+  `131071`。生产配置必须在 `1..131071`;dev/test 配 0 只关闭运维阈值,
+  连接层仍以 131071 作硬上限,不会在 ID 全占满后永久自旋。
+- `cd go && build.bat` 不会重生本字段的 protobuf。正确入口是
+  `tools/scripts/dev_tools.ps1 -Command proto-gen-run`;本轮先把仓库 Debug
+  protobuf 工具目录置于 PATH 首位并断言 `libprotoc 35.1`,再运行生成器。
+  为遵守“不读 client/”,生成期间临时关闭 Unity 产物并在结束后恢复。
+
+对抗复核又补了以下同层收口:
+
+- 生产漏配/配 0 在 gate 启动期 fail-closed;K8s node ConfigMap 显式传播
+  `GateMaxConnections`,契约同时断言与 `bin/etc` 一致且位于 `1..131071`。
+- 只有实际 dispatch 过 `Login.Login` 或已经绑定合法 player 的会话才发 Login
+  断线 RPC;未认证裸连、仅验证 token 后空闲的连接不再放大成跨服务 RPC。
+  已发 Login 但未 Bind 的窗口仍发通知,player_id 保持 0,避免把
+  `kInvalidGuid(UINT64_MAX)` 打到 PlayerLocator。
+- 容量拒绝、新连接、未绑定断开、未认证消息、无效 token、未知 protobuf 与
+  客户端 codec 解析错误均做采样;拒绝后 codec 停止分发同一 read 中的 pipeline
+  帧,错误应答留 100ms flush 窗口后强关,不再依赖只半关闭写端的 `shutdown()`。
+- 配置测试新增仓库默认 `GateMaxConnections=20000` 显式映射断言;若以后漏掉
+  `config.cpp` 字段映射并静默回落 proto3 默认 0,测试会直接失败。部署配置 CI
+  paths 同时补入 `bin/etc/**`,以后只改权威 YAML 也会触发契约测试。
+
+Codex 实际验证(不是 Claude 推测):
+
+- protobuf 生成成功;C++ 生成头为 `Protobuf C++ 7.35.1 / 7035001`,C++/Go/
+  三份服务 proto 镜像均含字段 15。
+- MSBuild Debug/x64 严格串行 `/m:1`: `proto.vcxproj`、`config.vcxproj`、
+  `core.vcxproj`、`gate.vcxproj`、`configuration_table_test.vcxproj` 全部成功;
+  最终产物已复制到 `bin/gate.exe`。
+- `configuration_table_test.exe`:37/37 通过;`go/proto` 的
+  `go test -count=1 ./...` 通过;`k8s_deploy_contract.tests.ps1`:26/26 通过;
+  主题文件 `git diff --check` 通过。
+- MSBuild 前置 `no-raw-pointer-member` 在上述工程均为 **SKIP**(本机既无
+  `no_raw_ptr_check.exe` 也无 `clang-query`),不是 PASS。
+
+本轮没有运行真实 N+1 TCP、Login 指标窗口、Linux/K8s 或容量压测,所以只声明
+“实现、生成、编译、自动契约通过”,不声明运行时/E2E 或 20000 容量已验证。
+
+仍需独立后续处理的风险(不冒充本轮已修):EnterGame 五分钟后台链可在断线后
+继续写回 PlayerLocator ONLINE;Disconnect 仍是 best-effort;session_id 累计
+131072 次会回绕,迟到 Bind 存在同进程 ABA 风险;未认证连接没有握手/空闲超时,
+仍可长期占满全部槽位。proto 生成器本身也仍依赖调用者 PATH,后续应在工具入口
+固定并校验 protoc 版本。
+
+### 2026-08-14:Codex 提交前复核与验证
+
+- 清理协议生成副作用时发现 `scene_node_service.{h,cpp}` 被生成器删掉 Agones
+  `Allocated` 前置门禁 27 行;已恢复原实现,未把该功能回退混入提交。
+- scene 接入 GM HMAC 鉴权后首次真实编译报 `openssl/crypto.h` 找不到;根因是
+  `scene.vcxproj` 只加了仓库中不存在的 `third_party/openssl/include`,而 gate
+  实际使用 `grpc/third_party/boringssl-with-bazel/include`。补齐与 gate 一致的
+  Debug/Release include 后重编通过。
+- Go `shared`、`login`、`db`、`scene_manager` 逐模块执行 `go build ./...` 与
+  `go test -count=1 ./...`,全部通过;`go/proto` 全量测试通过。`snowflakealloc`
+  普通单测通过;带 `-tags=integration` 的 etcd 用例因本机 127.0.0.1:2379
+  未启动而全部明确 SKIP,新增水位集成断言没有真实 etcd 运行证据。
+- 部署脚本与契约测试 AST 解析通过,`k8s_deploy_contract.tests.ps1` 26/26 通过。
+- C++ 完整 `game.sln` 串行构建在工具 10 分钟上限被截断,没有拿到整解方案退出码;
+  随后对受影响目标执行 Debug/x64 `/m:1` 增量验证:`proto`、`config`、`core`、
+  `gate`、`scene`、`configuration_table_test` 均构建通过。配置测试 37/37 通过;
+  `no-raw-pointer-member` 因本机缺少检查器全部明确 SKIP。
+- 本轮没有真实 MySQL dry-run 写入审计、Snowflake etcd 集成、Gate TCP 洪峰、
+  Scene GM RPC、K8s 或玩家 E2E 证据;只声明格式、生成、目标构建及自动测试通过。
