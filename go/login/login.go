@@ -39,6 +39,12 @@ var configFile = flag.String("loginService", "etc/login.yaml", "the config file 
 
 const nodeType = login_proto.ENodeType_LoginNodeService
 
+// playerIDWatermarkLeadMs 是 PlayerId 毫秒水位的**前推量**,必须 > 写入间隔(1s)。
+// 水位契约:任何时刻已持久化的水位 ≥ 本进程可能铸到的最大毫秒时间戳。
+// 写入间隔 1s、前推 2s ⇒ 即使某次写入失败,上一次写的 (now+2000) 仍覆盖着这段时间
+// 内能铸到的毫秒,继任者只需等墙钟越过水位即可,无需再加猜测性余量。
+const playerIDWatermarkLeadMs = 2000
+
 func main() {
 	flag.Parse()
 
@@ -187,13 +193,21 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 
 	ctx.SetNodeId(int64(sfHandle.WorkerID))
 
+	// **同步写一次水位再开始服务**:否则从这里到下面 goroutine 的第一个 tick 之间
+	// (≤1s)已经能铸 PlayerId,而 etcd 里还是前任的旧水位 —— 这段发出的号不被任何
+	// 地板覆盖,崩溃 + 时钟回拨即可被继任者重放。写失败只告警(同下面的循环)。
+	if err := sfHandle.PutMsWatermark(context.Background(),
+		ctx.SnowFlake.NowUnixMs()+playerIDWatermarkLeadMs); err != nil {
+		logx.Errorf("Initial PlayerId ms watermark write failed (the first second of minting is "+
+			"not covered by any floor for the next holder): %v", err)
+	}
+
 	// 水位写入循环:每秒把"发号器时钟 + 前推量"写进 etcd。前推量(2s)>
 	// 写入间隔(1s),保证前任崩溃前可能发出的最大时间戳恒 < 最后一次写入的
 	// 水位值,继任者只需等墙钟越过水位即可,无需再加猜测性余量。
 	// 写失败只告警(与 snowflakealloc.advanceGuard 同理:水位是下一任的地板,
 	// 本进程自己的唯一性不依赖它),连续失败会让地板变陈旧,靠告警可见。
 	safego.Go("login.player_id_watermark", func() {
-		const playerIDWatermarkLeadMs = 2000
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 		for {

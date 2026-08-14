@@ -249,10 +249,24 @@ type Handle struct {
 	WorkerID uint64
 	// GuardEpochSec 是**前任持有者**在这个 worker id 上最后记录的发号秒(自 snowflake.Epoch 起)。
 	// 用 NewNode() 构造发号器时会被当作地板注入;0 表示这个 id 此前没人用过。
+	//
+	// ⚠️ Allocate 之后**只读**。曾经在 advanceGuard 里把它改写成"本进程刚写的水位",
+	// 那既与本注释的语义矛盾(它是继承来的地板,不是自己的水位),又让这个导出字段
+	// 与 keepalive goroutine 的写入发生数据竞争。自己的水位改用 guardWritten 跟踪。
 	GuardEpochSec uint64
 	prefix        string
 	cancel        context.CancelFunc
 	cli           *clientv3.Client
+
+	// guardMu 串行化水位推进,guardWritten 是本进程**已成功落盘**的最大水位。
+	//
+	// 必须串行的原因:advanceGuard 有两个调用方并发 —— NewNode() 的同步首写(调用方
+	// 协程)与 keepalive goroutine 的 tick,而 goroutine 在 NewNode() 之前就已启动。
+	// 不串行会有两个后果:①对 guardWritten 的读改写是数据竞争;②两次 Put 可能乱序
+	// 落盘,把已写的大值覆盖成小值 —— **水位倒退**,地板契约直接破,而这正是整套机制
+	// 要防的东西。锁跨 Put 持有是刻意的:它同时保证了"值的顺序 = 落盘的顺序"。
+	guardMu      sync.Mutex
+	guardWritten uint64
 
 	// node 是经 NewNode() 构造出的发号器(为空 = 调用方还没构造)。
 	// advanceGuard 靠它读真实高水位:发号器借位(step 耗尽 / 时钟停摆)时
@@ -321,10 +335,12 @@ func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, prefix, ho
 		LeaseID:       leaseID,
 		WorkerID:      workerID,
 		GuardEpochSec: guardSec,
-		prefix:        prefix,
-		cancel:        cancel,
-		cli:           cli,
-		lost:          make(chan struct{}),
+		// 起点 = 前任已落盘的水位:低于它的目标值无需重复写(它已经罩住了)。
+		guardWritten: guardSec,
+		prefix:       prefix,
+		cancel:       cancel,
+		cli:          cli,
+		lost:         make(chan struct{}),
 	}
 
 	// 所有权由 **key** 表达,而 KeepAlive 只观测 **lease** —— 两者错配就是静默双发号盲区:
@@ -360,7 +376,12 @@ func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, prefix, ho
 		// 重启时间预算必须闭合)。
 		//
 		// 不会误报:clientv3 的续租间隔是 TTL/3(20s),健康时距上次续租恒 ≤ ~20s < 40s。
-		ticker := time.NewTicker(fenceAfter / 4)
+		//
+		// 节拍取 guardWriteInterval(1s)而不是 fenceAfter/4:持久水位的写入节奏
+		// 由水位契约决定(见 guardLeadSec),比 fencing 判定所需的粒度更密。
+		// 两件事共用这一个 ticker —— fencing 判定只是一次时间比较,提高频率无成本,
+		// 反而让失租感知更快;不为水位另起第二套定时器(§15.2)。
+		ticker := time.NewTicker(guardWriteInterval)
 		defer ticker.Stop()
 		lastRenew := time.Now() // 带单调读数,time.Since 不受墙钟跳变影响
 
@@ -440,6 +461,15 @@ func (h *Handle) NewNode() *snowflake.Node {
 	}
 	// 留一份引用给 advanceGuard 读高水位(见 Handle.node 注释)。
 	h.node.Store(n)
+
+	// **同步写一次水位再把发号器交出去**:否则从这里到 keepalive goroutine 的
+	// 第一个 tick 之间(≤guardWriteInterval),我们已经在发号,而 etcd 里还是
+	// 前任的旧水位 —— 这段发出的号不被任何地板覆盖,崩溃 + 时钟回拨即可被继任者重放。
+	// 写失败只告警不阻断:与 advanceGuard 同理,水位是"下一任的地板",
+	// 本进程自己的唯一性由 SetGuardTime 注入的地板与高水位单调保证。
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	h.advanceGuard(ctx)
+	cancel()
 	return n
 }
 
@@ -475,7 +505,17 @@ func (h *Handle) advanceGuard(ctx context.Context) {
 			target = hw
 		}
 	}
-	if target <= h.GuardEpochSec {
+	// **前推 guardLeadSec**:水位的契约是"不早于本进程可能发到的最大逻辑秒",
+	// 而两次写入之间我们还在继续发号。只写当前值的话,[上次写入, 崩溃时刻] 这段
+	// (最长一个写入间隔)发出的号就超出了已持久化的水位 —— 继任者按该水位当地板
+	// 时罩不住这段,时钟回拨叠加即可重放。前推量 > 写入间隔就把这段覆盖掉了。
+	// 与 login 的毫秒级水位(1s 节拍 / 2s 前推)同一套推导,数值口径也一致。
+	target += guardLeadSec
+
+	// 锁跨 Put 持有:见 guardMu 注释 —— 它同时挡住数据竞争与"乱序落盘导致水位倒退"。
+	h.guardMu.Lock()
+	defer h.guardMu.Unlock()
+	if target <= h.guardWritten {
 		return // 水位没有前进,不重复写
 	}
 	putCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
@@ -486,8 +526,24 @@ func (h *Handle) advanceGuard(ctx context.Context) {
 			h.prefix, h.WorkerID, err)
 		return
 	}
-	h.GuardEpochSec = target
+	h.guardWritten = target
 }
+
+const (
+	// guardWriteInterval 是持久水位的写入节拍(同时也是 fencing 看门狗的 tick)。
+	guardWriteInterval = time.Second
+	// guardLeadSec 是水位的**前推量**(秒),必须 **> 写入间隔**。
+	//
+	// 水位契约:任何时刻,已持久化的水位 ≥ 本进程可能发到的最大逻辑秒。
+	// 写入间隔 1s、前推 2s ⇒ 两次写入之间即使写不出去,上一次写的 (now+2)
+	// 也仍然覆盖着这 1s 内能发到的秒,契约不破。
+	//
+	// 上界同样有约束:继任者拿它当地板,若前推过大(比如 20s),继任者的首个号
+	// 会被顶到墙钟前面很多,撞上 snowflake 的借位预算(maxBorrowAheadSec=10)
+	// 直接 fail-closed 发不出号。2s 既满足下界又远离上界,且正常重启耗时 > 2s,
+	// 继任者拿到手时墙钟通常已越过水位,零等待。
+	guardLeadSec = 2
+)
 
 // guardMsKey 是毫秒级持久水位 key,给 **bwmarrin 布局**的消费方(login PlayerId)用。
 // 与 guardKey 的秒级/snowflake.Epoch 口径完全独立:bwmarrin 是毫秒 epoch,秒级地板
