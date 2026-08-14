@@ -45,7 +45,8 @@ type Options struct {
 	// ExpectedDatabase 是调用方按 ZoneId 推导出的库名,非空时必须与
 	// 服务端 DATABASE() 一致。
 	ExpectedDatabase string
-	// DryRun 只打印不执行(台账也不写)。
+	// DryRun 只打印不执行:不建台账表、不写台账行,对库零持久化写入。
+	// (仅有的写操作是会话级的 SET SESSION 超时与 GET_LOCK,断开即消。)
 	DryRun bool
 	// Logf 输出执行轨迹,为空时丢弃。
 	Logf func(format string, args ...any)
@@ -133,12 +134,35 @@ func (r *Runner) Up(ctx context.Context, src Source) (Report, error) {
 	}
 	defer release()
 
-	if err := r.ensureLedger(ctx, conn, connID); err != nil {
-		return report, err
-	}
-	applied, err := r.loadApplied(ctx, conn)
-	if err != nil {
-		return report, err
+	// plan(DryRun)对库**零持久化写入** —— CLI 的用法说明写的是「预演:打印将要
+	// 执行的语句与人工待办,不动库」,建一张表就已经违约了。
+	//
+	// 台账缺失时不必先建空表再读回空集:台账只由真实 up 在执行前创建,所以
+	// 「查无台账」本身就等价于「一条都没应用过」,直接按空集预演,结果与
+	// 先建表再读完全相同,建表提供不了任何额外信息。Status() 早就是这么做的
+	// (ledgerExists 探 information_schema,缺则返回空)。
+	var applied map[int64]AppliedMigration
+	if r.opts.DryRun {
+		exists, lerr := r.ledgerExists(ctx, conn, database)
+		if lerr != nil {
+			return report, lerr
+		}
+		if exists {
+			applied, err = r.loadApplied(ctx, conn)
+			if err != nil {
+				return report, err
+			}
+		} else {
+			applied = make(map[int64]AppliedMigration)
+		}
+	} else {
+		if err := r.ensureLedger(ctx, conn, connID); err != nil {
+			return report, err
+		}
+		applied, err = r.loadApplied(ctx, conn)
+		if err != nil {
+			return report, err
+		}
 	}
 	for _, a := range applied {
 		if a.Dirty {
@@ -308,8 +332,9 @@ func (r *Runner) ensureLedger(ctx context.Context, conn *sql.Conn, connID uint64
   KEY idx_schema_migrations_checksum (checksum)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='db schema migration ledger'`,
 		quoteIdent(SchemaMigrationsTable))
-	// DryRun 也要建台账:没有台账就读不出「已应用哪些版本」,预演会把所有
-	// 迁移都报成待执行,失去预演的意义。建空表本身无风险。
+	// 只在真实 up 路径被调用:plan(DryRun)改走 ledgerExists + 空集,不建表
+	// (见 Up 里那段注释)。allowInDryRun 仍传 true 只是保持 execDDL 的调用形状,
+	// DryRun 下根本到不了这里。
 	return r.execDDL(ctx, conn, connID, ddl, true)
 }
 
