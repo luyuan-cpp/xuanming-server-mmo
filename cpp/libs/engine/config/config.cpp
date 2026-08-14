@@ -100,6 +100,11 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.set_gate_token_secret(root["GateTokenSecret"].as<std::string>());
 	}
 
+	if (root["GateMaxConnections"])
+	{
+		baseConfig.set_gate_max_connections(root["GateMaxConnections"].as<uint32_t>());
+	}
+
 	// Kafka config
 	if (root["Kafka"])
 	{

@@ -179,8 +179,16 @@ type BaseDeployConfig struct {
 	// Nav bin path = data_root_directory + nav_bin_file from table.
 	// Local dev: "../"   K8s: "/app/"
 	DataRootDirectory string `protobuf:"bytes,14,opt,name=data_root_directory,json=dataRootDirectory,proto3" json:"data_root_directory,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Gate 的并发客户端连接上限。0 = 不限(仅供本地调试用,生产必须配)。
+	//
+	// 为什么必须有:gate 是唯一对公网开放的端口,而 muduo 的 TcpServer 无条件
+	// accept —— 在此之前全仓没有任何连接数上限,任何人都能一直建连把 gate 的
+	// fd、SessionMap 和每连接缓冲吃光,直到 accept 撞 EMFILE 或进程 OOM。
+	// 这条限流不需要任何凭证即可触发,是纯粹的资源耗尽面。
+	// 超过上限的新连接在分配 session 之前就被拒掉(见 HandleConnectionEstablished)。
+	GateMaxConnections uint32 `protobuf:"varint,15,opt,name=gate_max_connections,json=gateMaxConnections,proto3" json:"gate_max_connections,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *BaseDeployConfig) Reset() {
@@ -309,6 +317,13 @@ func (x *BaseDeployConfig) GetDataRootDirectory() string {
 		return x.DataRootDirectory
 	}
 	return ""
+}
+
+func (x *BaseDeployConfig) GetGateMaxConnections() uint32 {
+	if x != nil {
+		return x.GateMaxConnections
+	}
+	return 0
 }
 
 // Game config
@@ -454,7 +469,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x06topics\x18\x02 \x03(\tR\x06topics\x12\x19\n" +
 	"\bgroup_id\x18\x03 \x01(\tR\agroupId\x12,\n" +
 	"\x12enable_auto_commit\x18\x04 \x01(\bR\x10enableAutoCommit\x12*\n" +
-	"\x11auto_offset_reset\x18\x05 \x01(\tR\x0fautoOffsetReset\"\x94\x05\n" +
+	"\x11auto_offset_reset\x18\x05 \x01(\tR\x0fautoOffsetReset\"\xc6\x05\n" +
 	"\x10BaseDeployConfig\x12\x1d\n" +
 	"\n" +
 	"etcd_hosts\x18\x01 \x03(\tR\tetcdHosts\x12\x1b\n" +
@@ -471,7 +486,8 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x11gate_token_secret\x18\v \x01(\tR\x0fgateTokenSecret\x12*\n" +
 	"\x11table_data_format\x18\f \x01(\tR\x0ftableDataFormat\x12;\n" +
 	"\x1anode_removal_grace_seconds\x18\r \x01(\rR\x17nodeRemovalGraceSeconds\x12.\n" +
-	"\x13data_root_directory\x18\x0e \x01(\tR\x11dataRootDirectory\"\xf0\x01\n" +
+	"\x13data_root_directory\x18\x0e \x01(\tR\x11dataRootDirectory\x120\n" +
+	"\x14gate_max_connections\x18\x0f \x01(\rR\x12gateMaxConnections\"\xf0\x01\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +

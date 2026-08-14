@@ -76,3 +76,19 @@ Kafka:
 # 必须与 Go Login 的 GateTokenSecret 保持一致。
 # 空值时 Gate 跳过令牌验证（开发/测试模式）。
 GateTokenSecret: "change-me-in-production-use-a-strong-random-key"
+
+# Gate 并发客户端连接上限。生产必须在 1..131071 内取值;
+# 0 仅允许显式 GATE_RUN_MODE=dev|test 的本地调试,表示关闭运维阈值,
+# 但 session-id 的 131071 硬上限仍然生效;prod 会拒绝启动。
+#
+# gate 是唯一对公网开放的端口,而 muduo 的 TcpServer 无条件 accept ——
+# 没有这条上限时,不需要任何凭证,只要一直建连就能把 gate 的 fd、SessionMap
+# 和每连接读写缓冲吃光(token 校验发生在建连之后,拦不住)。
+# 超限的新连接在分配 session 之前就被拒掉。
+#
+# 取值:按本 gate 期望承载的在线数留出余量(握手中、将断未断的连接都占额度),
+# 并确保不超过进程的 fd 上限(ulimit -n 要大于本值 + 节点间连接 + 日志等)。
+# 20000 是单 gate 的保守默认;真实容量要靠压测定,别照抄。
+# 上界 131071 为所有 node_id 保留 UINT32_MAX 拒连哨兵,也避免 session-id
+# 空间占满后碰撞重试永久自旋。
+GateMaxConnections: 20000

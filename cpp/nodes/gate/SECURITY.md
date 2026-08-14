@@ -106,6 +106,26 @@ echo "reason=${REASON}"
 `secret_not_configured` / `malformed_envelope` / `timestamp_out_of_window` /
 `signature_mismatch` / `replayed_nonce`。
 
+### scene 节点用同一套机制,但 method 名不同
+
+`Scene.GmGracefulShutdown`(`cpp/nodes/scene/handler/rpc/scene_admin_handler.cpp`)
+走的是同一份 `gate_security.h`、同一个 `GATE_GM_ADMIN_SECRET`、同一套信封与时间
+窗。**唯一的差别是 canonical 串第一行的 method 名**:
+
+```
+Scene.GmGracefulShutdown\n<目标 node_id>\n<操作人>\n<unix 秒原文>\n<nonce>\n<reason>
+```
+
+拿 `Gate.GmGracefulShutdown` 签出来的串去调 scene 会得到 `signature_mismatch`
+—— 这是刻意的,method 进 canonical 串就是为了防止两条 GM RPC 的签名互相搬运。
+上面那段 bash 配方把第一行换成 `Scene.GmGracefulShutdown`、`NODE_ID` 换成目标
+scene 的节点号即可。
+
+> 历史:鉴权原语、本文档与单测在做 gate 那一侧时就已经按"两条 RPC 都要签"设计
+> (单测里就有 `Scene.GmGracefulShutdown` 的跨方法重放用例),但 scene 侧的接线
+> 当时漏了 —— 在补上之前,任何能连到 scene RPC 端口的进程都能停掉持有玩家权威
+> 数据的场景节点。
+
 ## 3. 启动版本行
 
 gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogLevel` 影响):
@@ -133,3 +153,23 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 所以能在部署侧一定生效的通道是环境变量(K8s 用镜像 tag / git sha 注入即可);
 编译期宏留作构建流水线以后接入的入口 —— 真要接,得改
 `tools/archived/vcxproj2cmake.py`,不能改生成出来的 `CMakeLists.txt`。
+
+## 4. `GateMaxConnections` —— 客户端连接硬上限
+
+`bin/etc/base_deploy_config.yaml` 的 `GateMaxConnections` 限制单个 gate 同时持有的
+客户端 TCP 会话。闸门在分配 session id / `SessionInfo` 之前执行;超限连接直接关闭,
+不向 Login 发送断线 RPC。容量拒绝日志每 1024 条汇总一次,无会话的断开回调不逐条
+写日志。
+
+公网拒绝路径遵守同一口径:未认证消息、无效 token、未知 protobuf 和 codec 解析错误
+都只做采样日志。handler 一旦拒绝,codec 会停止分发当前 read 中剩余的 pipeline 帧;
+需要回错误应答的 token 路径最多留 100ms flush 窗口,随后强制关闭连接。
+
+生产值必须在 `1..131071` 内。缺键或配置为 0 时 proto3 会得到 0,生产 gate 将
+`LOG_FATAL` 拒绝启动;只有显式 `GATE_RUN_MODE=dev|test` 才允许 0,其含义是关闭运维
+配置阈值,session-id 的 131071 硬上限仍生效。上界为所有 node id 保留
+`UINT32_MAX` 无会话哨兵,并防止 session-id 空间占满后碰撞循环永久自旋。
+
+仓库默认 20000 只是保守占位,必须按单 gate 压测结果、进程 fd 上限和节点间连接余量
+重新定容。该上限只约束资源总量,不替代握手超时、每来源限速或 L4 防护;未认证连接
+仍可长期占满全部槽位。

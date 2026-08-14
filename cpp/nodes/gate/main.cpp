@@ -77,6 +77,54 @@ namespace
         }
     }
 
+    // 启动门禁:生产 gate 不能把连接上限留成 proto3 默认值 0。
+    //
+    // 0 只给显式 dev/test 的本地调试使用。连接层即使遇到 0 也会保留
+    // session-id 空间的硬上限,但若生产配置漏键、ConfigMap 挂载遮蔽或误写成 0
+    // 后仍允许启动,期望的运维容量阈值会静默失效,退化到 131071 的兜底值。
+    void ValidateGateConnectionLimitOrDie()
+    {
+        const auto mode = gate_security::CurrentRunMode();
+        const auto maxConnections =
+            gNodeConfigManager.GetBaseDeployConfig().gate_max_connections();
+        // 为所有 node_id 保留 UINT32_MAX 这个拒连哨兵,所以可并发使用的
+        // session id 至多是低 17 位的非哨兵取值数 kSeqMask(131071)。
+        // 超过后 Generate() 会回绕,而活跃集合已占满时碰撞检查会永久自旋,
+        // 把唯一 EventLoop 线程卡死。
+        constexpr uint32_t kMaxSafeConnections = SessionIdGenerator::kSeqMask;
+
+        if (maxConnections == 0)
+        {
+            if (gate_security::IsNonProdMode(mode))
+            {
+                LOG_WARN << "SECURITY WARNING: gate_max_connections=0 and "
+                         << gate_security::kRunModeEnv << "="
+                         << gate_security::RunModeName(mode)
+                         << " -- the configured operational limit is DISABLED for this"
+                         << " local run; the hard session-id cap " << kMaxSafeConnections
+                         << " remains enforced.";
+                return;
+            }
+
+            LOG_FATAL << "Refusing to start: gate_max_connections is 0 while run_mode=prod."
+                      << " Set GateMaxConnections to a positive value in"
+                      << " etc/base_deploy_config.yaml; unlimited connections are allowed"
+                      << " only with " << gate_security::kRunModeEnv << "=dev|test.";
+            return;
+        }
+
+        if (maxConnections > kMaxSafeConnections)
+        {
+            LOG_FATAL << "Refusing to start: gate_max_connections=" << maxConnections
+                      << " exceeds the safe session-id capacity " << kMaxSafeConnections
+                      << ". Lower GateMaxConnections; otherwise the session-id generator"
+                      << " can wrap while every id is still active and stall the EventLoop.";
+            return;
+        }
+
+        LOG_INFO << "Client connection limit ENFORCED, max_connections=" << maxConnections;
+    }
+
     struct GateRuntimeContext
     {
         ProtobufDispatcher protobufDispatcher;
@@ -88,8 +136,16 @@ namespace
         GateRuntimeContext()
             : protobufDispatcher([](const TcpConnectionPtr &conn, const MessagePtr &msg, Timestamp)
                                  {
-            LOG_ERROR << "Unknown message: " << std::string(msg->GetTypeName());
-            conn->shutdown(); }),
+            // typeName 可由公网客户端控制,不能逐帧 ERROR;拒绝后强关,codec 会
+            // 丢弃同一批 pipeline 的剩余帧。
+            static uint64_t unknownMessageCount = 0;
+            if ((unknownMessageCount++ & 0x3FF) == 0)
+            {
+                LOG_ERROR << "Unknown protobuf messages rejected (sampled), latest_type="
+                          << std::string(msg->GetTypeName())
+                          << " rejected_total=" << unknownMessageCount;
+            }
+            conn->forceClose(); }),
               codec([this](const TcpConnectionPtr &conn, const MessagePtr &msg, Timestamp ts)
                     { protobufDispatcher.onProtobufMessage(conn, msg, ts); }),
               rpcClientHandler(codec, protobufDispatcher)
@@ -137,6 +193,7 @@ int main(int argc, char *argv[])
             // 先过安全门禁,再做任何别的初始化:配置有问题就不该把服务拉起来。
             // 此处 Node 构造已完成,LoadConfigs 读过 etc/base_deploy_config.yaml。
             ValidateGateTokenSecretOrDie();
+            ValidateGateConnectionLimitOrDie();
 
             // Override the default Kafka dispatch with GateCommand-specific routing
             // that handles empty-payload events via fallback field mapping.

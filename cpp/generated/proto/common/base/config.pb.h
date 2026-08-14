@@ -1261,6 +1261,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     kNodeTtlSecondsFieldNumber = 7,
     kHealthCheckIntervalFieldNumber = 8,
     kNodeRemovalGraceSecondsFieldNumber = 13,
+    kGateMaxConnectionsFieldNumber = 15,
   };
   // repeated string etcd_hosts = 1;
   [[nodiscard]] int etcd_hosts_size()
@@ -1478,11 +1479,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
   void _internal_set_node_removal_grace_seconds(::uint32_t value);
 
   public:
+  // uint32 gate_max_connections = 15;
+  void clear_gate_max_connections() ;
+  [[nodiscard]] ::uint32_t gate_max_connections() const;
+  void set_gate_max_connections(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_gate_max_connections() const;
+  void _internal_set_gate_max_connections(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BaseDeployConfig)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
+      ::google::protobuf::internal::TcParseTable<4, 15,
                           2, 162,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1525,6 +1536,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     ::uint32_t node_ttl_seconds_;
     ::uint32_t health_check_interval_;
     ::uint32_t node_removal_grace_seconds_;
+    ::uint32_t gate_max_connections_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2714,6 +2726,30 @@ inline void BaseDeployConfig::set_allocated_data_root_directory(::std::string* P
     _impl_.data_root_directory_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:BaseDeployConfig.data_root_directory)
+}
+
+// uint32 gate_max_connections = 15;
+inline void BaseDeployConfig::clear_gate_max_connections() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gate_max_connections_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t BaseDeployConfig::gate_max_connections() const {
+  // @@protoc_insertion_point(field_get:BaseDeployConfig.gate_max_connections)
+  return _internal_gate_max_connections();
+}
+inline void BaseDeployConfig::set_gate_max_connections(::uint32_t value) {
+  _internal_set_gate_max_connections(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:BaseDeployConfig.gate_max_connections)
+}
+inline ::uint32_t BaseDeployConfig::_internal_gate_max_connections() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gate_max_connections_;
+}
+inline void BaseDeployConfig::_internal_set_gate_max_connections(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gate_max_connections_ = value;
 }
 
 // -------------------------------------------------------------------

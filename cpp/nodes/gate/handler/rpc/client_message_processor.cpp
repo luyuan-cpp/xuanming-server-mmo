@@ -33,6 +33,19 @@
 // 已经提到 gate_security.h —— GM 面鉴权(gate_service_handler.cpp)要复用同一份
 // 实现,两份 HMAC 拼装代码迟早会漂移。
 
+static void LogClientSecurityRejectionSampled(const char *reason, SessionId sessionId)
+{
+	// reason 来自进程内常量,不包含攻击者输入。所有计数都在 gate 单 EventLoop
+	// 线程更新;每 1024 次留一条趋势证据,不能按公网帧量逐条写盘。
+	static uint64_t rejectedCount = 0;
+	if ((rejectedCount++ & 0x3FF) == 0)
+	{
+		LOG_WARN << "Unauthenticated client traffic rejected (sampled), reason=" << reason
+				 << ", latest_session_id=" << sessionId
+				 << ", rejected_total=" << rejectedCount;
+	}
+}
+
 static std::optional<entt::entity> PickRandomNode(uint32_t nodeType)
 {
 	std::vector<entt::entity> candidates;
@@ -291,6 +304,23 @@ bool ParseMessageFromRequestBody(Message &message, const Request &request, const
 void RpcClientSessionHandler::HandleConnectionDisconnection(const muduo::net::TcpConnectionPtr &conn)
 {
 	const auto sessionId = GetSessionId(conn);
+
+	// 从未建立过会话的连接(HandleConnectionEstablished 里三条 fail-closed 拒连:
+	// 容量超限 / node 段未就绪 / prod 空密钥)在这里必须直接返回。
+	//
+	// 它们没有 session、没有 player,下面每一步都是无意义的:
+	//   * sessions.find 必然落空;
+	//   * **而 Login 断线通知并没有被 sessionFound 守住** —— 会带着
+	//     session_id=kInvalidSessionId 向 login 发一次 gRPC。于是"连接洪峰"
+	//     被原样放大成"对 login 的 RPC 洪峰",限流闸门反倒成了新的放大器;
+	//   * 每条还要再打一行 LOG_INFO。
+	// 拒连路径已经 setContext(kInvalidSessionId),所以这里判得到,
+	// 且 GetSessionId 不会再抛 bad_any_cast(那条 catch 每次都要打 ERROR,
+	// 同样是按攻击流量放大的日志写入)。
+	if (sessionId == kInvalidSessionId)
+	{
+		return;
+	}
 	const std::string peer = conn ? conn->peerAddress().toIpPort() : std::string{"<null>"};
 
 	// Retrieve session info before erasing so we can notify both Login and Scene.
@@ -298,6 +328,11 @@ void RpcClientSessionHandler::HandleConnectionDisconnection(const muduo::net::Tc
 	auto sessionIt = sessions.find(sessionId);
 
 	const bool sessionFound = (sessionIt != sessions.end());
+	const bool sessionVerified = sessionFound && sessionIt->second.verified;
+	const bool loginStarted = sessionFound && sessionIt->second.loginStarted;
+	const Guid playerId = sessionFound ? sessionIt->second.playerId : kInvalidGuid;
+	const bool hasBoundPlayer = playerId != 0 && playerId != kInvalidGuid;
+	const bool shouldNotifyLogin = loginStarted || hasBoundPlayer;
 	bool sceneNotified = false;
 	uint32_t sceneNodeId = 0;
 
@@ -328,36 +363,61 @@ void RpcClientSessionHandler::HandleConnectionDisconnection(const muduo::net::Tc
 	// Disconnect notification goes to Login; its session manager owns the disconnect lease.
 	// Login nodes are stateless -- pick any available node, no session affinity needed.
 	//
-	// IMPORTANT: carry SessionInfo.playerId through SessionDetails. Login's
-	// markPlayerSessionDisconnecting() early-returns when playerId == 0,
-	// which meant a TCP close without explicit Logout would leave the
-	// player_locator session in ONLINE forever — later tripping EnterGame
-	// into ReplaceLogin against a dead gate. See
-	// docs/design/stress-test-2026-05-http-login.md §四 #B-1.
-	const auto loginNode = PickRandomNode(eNodeType::LoginNodeService);
-	if (loginNode)
+	// 只有真正向 Login 发起过登录、或已经绑定玩家的会话才需要通知。未认证裸连、
+	// 以及只做完 token verify 的空闲连接若也逐条通知,攻击者只需反复
+	// connect-close(或重放短期 gate token)就能把 TCP 洪峰放大成 Gate->Login RPC
+	// 洪峰;默认的 kInvalidGuid 还会让 Login/PlayerLocator 做无意义查询和重试。
+	//
+	// 已 dispatch Login.Login 但尚未 BindSession 的窗口仍要通知:Login 可能已经按
+	// session_id 写了临时状态。此时 player_id 保持 proto 默认 0,Login 会清 session
+	// 状态后在 markPlayerSessionDisconnecting 的 playerID==0 门禁早退。真正绑定
+	// 玩家后才携带 SessionInfo.playerId,否则 TCP close 会把 player_locator 会话
+	// 永久留在 ONLINE。
+	if (shouldNotifyLogin)
 	{
-		loginpb::LoginNodeDisconnectRequest request;
-		request.set_session_id(sessionId);
-		SessionDetails sessionDetails;
-		sessionDetails.set_session_id(sessionId);
-		sessionDetails.set_gate_node_id(gNode->GetNodeId());
-		sessionDetails.set_gate_instance_id(gNode->GetNodeInfo().node_uuid());
-		if (sessionFound)
+		const auto loginNode = PickRandomNode(eNodeType::LoginNodeService);
+		if (loginNode)
 		{
-			sessionDetails.set_player_id(sessionIt->second.playerId);
+			loginpb::LoginNodeDisconnectRequest request;
+			request.set_session_id(sessionId);
+			SessionDetails sessionDetails;
+			sessionDetails.set_session_id(sessionId);
+			sessionDetails.set_gate_node_id(gNode->GetNodeId());
+			sessionDetails.set_gate_instance_id(gNode->GetNodeInfo().node_uuid());
+			if (hasBoundPlayer)
+			{
+				sessionDetails.set_player_id(playerId);
+			}
+			loginpb::SendClientPlayerLoginDisconnect(tlsNodeContextManager.GetRegistry(eNodeType::LoginNodeService), *loginNode, request, {kSessionBinMetaKey}, SerializeSessionDetails(sessionDetails));
 		}
-		loginpb::SendClientPlayerLoginDisconnect(tlsNodeContextManager.GetRegistry(eNodeType::LoginNodeService), *loginNode, request, {kSessionBinMetaKey}, SerializeSessionDetails(sessionDetails));
 	}
 
 	sessions.erase(sessionId);
 
-	LOG_INFO << "Client disconnected, session_id=" << sessionId
-			 << ", peer=" << peer
-			 << ", session_found=" << sessionFound
-			 << ", scene_node_id=" << sceneNodeId
-			 << ", scene_notified=" << sceneNotified
-			 << ", remaining_sessions=" << sessions.size();
+	if (hasBoundPlayer)
+	{
+		LOG_INFO << "Client disconnected, session_id=" << sessionId
+				 << ", player_id=" << playerId
+				 << ", peer=" << peer
+				 << ", session_found=" << sessionFound
+				 << ", scene_node_id=" << sceneNodeId
+				 << ", scene_notified=" << sceneNotified
+				 << ", remaining_sessions=" << sessions.size();
+	}
+	else
+	{
+		// 未绑定连接的建立/断开次数完全由公网流量决定,不能逐连接写日志。
+		static uint64_t unboundDisconnectCount = 0;
+		if ((unboundDisconnectCount++ & 0x3FF) == 0)
+		{
+			LOG_INFO << "Unbound client disconnects sampled, latest_session_id=" << sessionId
+					 << ", latest_peer=" << peer
+					 << ", latest_verified=" << sessionVerified
+					 << ", latest_login_started=" << loginStarted
+					 << ", disconnect_total=" << unboundDisconnectCount
+					 << ", remaining_sessions=" << sessions.size();
+		}
+	}
 }
 
 // High-water-mark: output buffer exceeded threshold — client not consuming (disconnect/cheat/slow), force close.
@@ -375,6 +435,56 @@ static void OnClientHighWaterMark(const muduo::net::TcpConnectionPtr &conn, size
 
 void RpcClientSessionHandler::HandleConnectionEstablished(const muduo::net::TcpConnectionPtr &conn)
 {
+	// 并发连接上限。必须是第一道闸:在发 session_id、建 SessionInfo 之前拒掉,
+	// 否则限流本身就先付出了它想省下的那份内存。
+	//
+	// gate 是唯一对公网开放的端口,而 muduo 的 TcpServer 无条件 accept:
+	// 在这条闸门之前,全仓没有**任何**连接数上限。不需要任何凭证,只要一直建连
+	// 就能把 gate 的 fd、SessionMap 和每连接读写缓冲吃光,直到 accept 撞 EMFILE
+	// (muduo 此时会用 idleFd 兜底,但连接已经建不上了)或进程 OOM —— 纯资源
+	// 耗尽面,且现有的两层防护都拦不住它:token 校验发生在这之后,
+	// IllegalPacketCounter 只按**已建立的会话**计数。
+	//
+	// 用当前会话数而不是另立计数器:sessions() 与连接是严格一一对应的
+	// (本函数插入、HandleConnectionDisconnection 删除),不会漂移。
+	// 拒绝时直接 forceClose,不回任何应答 —— 已经在容量边界上了,
+	// 再为每条被拒连接序列化一条 tip 正好是攻击者想要的放大。
+	//
+	// ⚠️ 这条闸门的口径依赖 gate 是**单 IO 线程**:tlsSessionManager 是
+	// thread_local,下面的静态计数器也没有同步。全仓没有任何 setThreadNum,
+	// muduo 默认 0 个 IO 线程(全部回调都在主 loop),所以现在成立。
+	// 将来谁给 TcpServer 开了线程池,这个上限会退化成"每线程一份",
+	// 且 SessionMap 本身就会先分裂 —— 那时必须先解决会话表的线程模型。
+	const auto configuredMaxConnections =
+		gNodeConfigManager.GetBaseDeployConfig().gate_max_connections();
+	// dev/test 的 0 只关闭“运维配置阈值”,不能关闭 session-id 空间的硬上限。
+	// 否则 131071 个安全 ID 全占满后,下面的碰撞循环会永远找不到空号。
+	const auto effectiveMaxConnections = configuredMaxConnections > 0
+		? configuredMaxConnections
+		: SessionIdGenerator::kSeqMask;
+	if (tlsSessionManager.sessions().size() >= effectiveMaxConnections)
+	{
+		// 打日志必须限流:被拒的连接量正是攻击流量的量级,每条一行 ERROR
+		// (同步磁盘 I/O)就是把 DoS 从连接层转成日志层,这个坑本轮审计
+		// 在 CheckMessageSize 那里刚踩过。每 1024 条汇总一行。
+		static uint64_t rejectedCount = 0;
+		if ((rejectedCount++ & 0x3FF) == 0)
+		{
+			LOG_ERROR << "Gate at connection capacity, rejecting new connections."
+					  << " configured_limit=" << configuredMaxConnections
+					  << " effective_limit=" << effectiveMaxConnections
+					  << " current=" << tlsSessionManager.sessions().size()
+					  << " rejected_total=" << rejectedCount
+					  << " peer=" << conn->peerAddress().toIpPort();
+		}
+		// 必须显式置成 kInvalidSessionId:否则断开回调里 GetSessionId 会对空
+		// context 抛 bad_any_cast,那条 catch 每次都打一行 ERROR —— 按被拒流量
+		// 放大的同步磁盘写入。见 HandleConnectionDisconnection 顶部的早退。
+		conn->setContext(kInvalidSessionId);
+		conn->forceClose();
+		return;
+	}
+
 	// fail-closed:node 段没种好就绝不发号。带 node 段 0 的 session_id 是"坏号" ——
 	// scene 侧 GetGateNodeId() 得到 0、永远解析不出归属 gate,玩家整局静默不可用,
 	// 且无任何自愈路径。宁可当场拒连让客户端重连,也不要放一个坏号进系统。
@@ -383,6 +493,7 @@ void RpcClientSessionHandler::HandleConnectionEstablished(const muduo::net::TcpC
 	{
 		LOG_ERROR << "Rejecting connection: session id generator has no node id yet, peer="
 				  << conn->peerAddress().toIpPort();
+		conn->setContext(kInvalidSessionId); // 同上:让断开回调走早退,不惊动 login
 		conn->forceClose();
 		return;
 	}
@@ -410,12 +521,18 @@ void RpcClientSessionHandler::HandleConnectionEstablished(const muduo::net::TcpC
 		LOG_ERROR << "Rejecting connection: gate_token_secret is empty while run_mode="
 				  << gate_security::RunModeName(runMode)
 				  << " (fail-closed), peer=" << conn->peerAddress().toIpPort();
+		conn->setContext(kInvalidSessionId); // 同上:让断开回调走早退,不惊动 login
 		conn->forceClose();
 		return;
 	}
 
 	auto sessionId = tlsSessionManager.session_id_gen().Generate();
-	while (tlsSessionManager.sessions().find(sessionId) != tlsSessionManager.sessions().end())
+	// kInvalidSessionId(UINT32_MAX) 是“连接从未建立会话”的保留哨兵。
+	// 复合发号器在 node_id=32767 且 seq=131071 时确实能生成这个值;
+	// 不显式跳过的话,真实会话断开时会命中顶部早退,漏掉 SessionMap、Scene
+	// 与 Login 清理,也会让连接计数永久漂移。
+	while (sessionId == kInvalidSessionId ||
+		   tlsSessionManager.sessions().find(sessionId) != tlsSessionManager.sessions().end())
 	{
 		sessionId = tlsSessionManager.session_id_gen().Generate();
 	}
@@ -447,10 +564,17 @@ void RpcClientSessionHandler::HandleConnectionEstablished(const muduo::net::TcpC
 
 	tlsSessionManager.sessions().emplace(sessionId, std::move(session));
 
-	const std::string peer = conn ? conn->peerAddress().toIpPort() : std::string{"<null>"};
-	LOG_INFO << "Client connected, session_id=" << sessionId
-			 << ", peer=" << peer
-			 << ", total_sessions=" << tlsSessionManager.sessions().size();
+	// 所有新连接此刻都还没绑定玩家,数量完全由公网流量决定;逐连接 INFO 会让
+	// connect-close 攻击在不触碰并发上限的情况下无限放大日志。每 1024 条采样。
+	static uint64_t acceptedConnectionCount = 0;
+	if ((acceptedConnectionCount++ & 0x3FF) == 0)
+	{
+		const std::string peer = conn ? conn->peerAddress().toIpPort() : std::string{"<null>"};
+		LOG_INFO << "Client connections accepted (sampled), latest_session_id=" << sessionId
+				 << ", latest_peer=" << peer
+				 << ", accepted_total=" << acceptedConnectionCount
+				 << ", current_sessions=" << tlsSessionManager.sessions().size();
+	}
 }
 
 // Handle messages related to the game node
@@ -554,6 +678,13 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 			return;
 		}
 
+		// 断开时只有确实走到过 Login.Login 的会话才需要清理 Login 的
+		// session-id 状态。标记必须放在选到节点之后、实际 dispatch 之前。
+		if (request->message_id() == ClientPlayerLoginLoginMessageId)
+		{
+			sessionIt->second.loginStarted = true;
+		}
+
 		rpcHandlerMeta.sender(tlsNodeContextManager.GetRegistry(rpcHandlerMeta.targetNodeType),
 							  *node,
 							  *rpcHandlerMeta.requestProto,
@@ -580,8 +711,8 @@ void RpcClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpConn
 	const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
 	if (sessionIt == tlsSessionManager.sessions().end())
 	{
-		LOG_ERROR << "[Invalid Session] No session found for conn session_id: " << sessionId
-				  << ", message_id: " << request->message_id();
+		LogClientSecurityRejectionSampled("client_request_missing_session", sessionId);
+		conn->forceClose();
 		return;
 	}
 
@@ -593,9 +724,8 @@ void RpcClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpConn
 	// verified 并打一条 SECURITY WARNING。生产模式下空密钥根本连不进来。
 	if (!session.verified)
 	{
-		LOG_WARN << "[Token] Unverified session rejected message_id: " << request->message_id()
-				 << ", session_id: " << sessionId;
-		conn->shutdown();
+		LogClientSecurityRejectionSampled("client_request_before_token_verify", sessionId);
+		conn->forceClose();
 		return;
 	}
 
@@ -644,7 +774,8 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 	const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
 	if (sessionIt == tlsSessionManager.sessions().end())
 	{
-		LOG_ERROR << "[Token] No session found for session_id: " << sessionId;
+		LogClientSecurityRejectionSampled("token_verify_missing_session", sessionId);
+		conn->forceClose();
 		return;
 	}
 
@@ -657,6 +788,15 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 		if (!error.empty())
 			resp.set_error(error);
 		protobufCodec.send(conn, resp);
+	};
+	auto rejectAndClose = [&](const char *reason, const std::string &clientError)
+	{
+		LogClientSecurityRejectionSampled(reason, sessionId);
+		sendReply(false, clientError);
+		// shutdown 立刻把状态切到 kDisconnecting,codec 会停止分发 pipeline;
+		// 短延迟给错误应答一个 flush 窗口,随后强关,不让恶意端长期占槽。
+		conn->shutdown();
+		conn->forceCloseWithDelay(0.1);
 	};
 
 	if (session.verified)
@@ -680,11 +820,7 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 	}
 	if (secretVerdict == gate_security::TokenSecretVerdict::kRefuse)
 	{
-		LOG_ERROR << "[Token] Refusing verification: gate_token_secret is empty while run_mode="
-				  << gate_security::RunModeName(runMode)
-				  << " (fail-closed), session_id: " << sessionId;
-		sendReply(false, "gate token secret not configured");
-		conn->shutdown();
+		rejectAndClose("token_secret_not_configured", "gate token secret not configured");
 		return;
 	}
 
@@ -699,9 +835,7 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 	// 攻击者可用计时差逐字节猜签名。长度不等可以直接拒(长度不是秘密)。
 	if (!gate_security::ConstantTimeEquals(expectedHex, clientSigStr))
 	{
-		LOG_WARN << "[Token] HMAC mismatch for session_id: " << sessionId;
-		sendReply(false, "invalid token signature");
-		conn->shutdown();
+		rejectAndClose("token_hmac_mismatch", "invalid token signature");
 		return;
 	}
 
@@ -709,19 +843,14 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 	GateTokenPayload payload;
 	if (!payload.ParseFromString(payloadBytes))
 	{
-		LOG_WARN << "[Token] Failed to parse token payload for session_id: " << sessionId;
-		sendReply(false, "malformed token payload");
-		conn->shutdown();
+		rejectAndClose("token_payload_parse_failed", "malformed token payload");
 		return;
 	}
 
 	// Check gate_node_id matches this gate
 	if (payload.gate_node_id() != gNode->GetNodeId())
 	{
-		LOG_WARN << "[Token] gate_node_id mismatch: token=" << payload.gate_node_id()
-				 << " self=" << gNode->GetNodeId() << " session_id: " << sessionId;
-		sendReply(false, "token not for this gate");
-		conn->shutdown();
+		rejectAndClose("token_gate_node_mismatch", "token not for this gate");
 		return;
 	}
 
@@ -729,10 +858,7 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 	auto now = static_cast<int64_t>(std::time(nullptr));
 	if (payload.expire_timestamp() <= now)
 	{
-		LOG_WARN << "[Token] Expired token for session_id: " << sessionId
-				 << " expire=" << payload.expire_timestamp() << " now=" << now;
-		sendReply(false, "token expired");
-		conn->shutdown();
+		rejectAndClose("token_expired", "token expired");
 		return;
 	}
 
