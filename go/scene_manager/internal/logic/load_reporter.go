@@ -205,9 +205,10 @@ func readInt64(svcCtx *svc.ServiceContext, key string) int64 {
 //
 // 动作被再入屏障切成两半(docs/design/scene-owner-reentry-barrier.md §3.2):
 //
-//	**立刻做** —— 把节点摘出调度面(负载集、类型镜像、gRPC 连接缓存、指标),
-//	  再记下死亡时刻。这些都不改写任何 scene ownership,也不销毁任何东西,
-//	  只是让新玩家不再被派到它上面,越早越好。
+//	**立刻做** —— 先记下死亡时刻,再把节点摘出调度面(负载集、类型镜像、
+//	  gRPC 连接缓存、指标)。这些都不改写任何 scene ownership,也不销毁任何
+//	  东西,只是让新玩家不再被派到它上面,越早越好。两者的先后**不可交换**,
+//	  理由见函数体内第一段注释。
 //
 //	**推迟做** —— 孤儿实例场景的强制销毁与节点计数清理。C++ 老节点丢租约后
 //	  还有 kDrainBudget(15s)的 emergency relocate,期间仍在 SavePlayerToRedis;
@@ -217,6 +218,22 @@ func readInt64(svcCtx *svc.ServiceContext, key string) int64 {
 // 大世界频道不在这条路径里销毁 —— rebalance 有专门的迁移逻辑(它同样受屏障
 // 约束),在这里销毁会让玩家丢掉世界内上下文。
 func removeNodeFromRedis(svcCtx *svc.ServiceContext, entry nodeEntry) {
+	// 死亡时刻必须**第一个**落地,早于把节点摘出负载集。
+	//
+	// 判死的可观测顺序决定了屏障还有没有用。改派点的判据是两个独立的键:
+	// IsNodeAlive 读的正是下面 Zrem 的那个负载集,CanReclaimDeadNode 读的是
+	// death_at,而后者「键不存在」的语义是**放行**。所以只要 Zrem 先执行,
+	// 在 death_at 写进去之前的那几个 Redis 往返里,并发的 EnterScene 看到的
+	// 组合就是「节点已死(不在负载集)」+「没有 death_at ⇒ 屏障已过」——
+	// 玩家会在老节点 15s emergency drain 还没跑完时就被改派到新节点,
+	// 正是这道屏障要防的双写/回档(docs/design/scene-owner-reentry-barrier.md §2)。
+	// 窗口虽窄,但开服浪涌下 EnterScene 的频率足以撞上,且后果是玩家数据回档。
+	//
+	// 反过来的失败模式是安全的:标记写成功而进程随即崩在 Zrem 之前,节点仍留在
+	// 负载集里 ⇒ IsNodeAlive 为真,本来就不会触发改派;屏障多压一个 TTL 也只是
+	// 少自愈一轮。这正是本文件其余判定一贯的 fail-closed 方向。
+	markNodeDeath(svcCtx, entry.reg.ZoneId, entry.nodeID)
+
 	loadKey := nodeLoadKey(entry.reg.ZoneId)
 	svcCtx.Redis.Zrem(loadKey, entry.nodeID)
 	svcCtx.Redis.Del(nodeSceneNodeTypeKey(entry.reg.ZoneId, entry.nodeID))
@@ -224,9 +241,6 @@ func removeNodeFromRedis(svcCtx *svc.ServiceContext, entry nodeEntry) {
 	metrics.ForgetNode(entry.nodeID, entry.reg.ZoneId, entry.reg.SceneNodeType)
 	logx.Infof("[LoadReporter] removed node %s from Redis load set (zone %d)", entry.nodeID, entry.reg.ZoneId)
 
-	// 死亡时刻必须在入队之前落地:入队后到屏障判定之间没有别的写点,
-	// 而判定读不到标记会被当成「没死过」直接放行。
-	markNodeDeath(svcCtx, entry.reg.ZoneId, entry.nodeID)
 	enqueueDeadNodeReconcile(svcCtx, entry)
 }
 
