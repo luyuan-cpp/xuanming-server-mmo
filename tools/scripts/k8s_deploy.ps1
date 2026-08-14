@@ -237,6 +237,15 @@ function Initialize-InjectedSecrets {
 		-DevFallback "change-me-in-production-use-a-strong-random-key" `
 		-ReleaseProfile $ReleaseProfile -Purpose "Gate 连接令牌 HMAC 共享密钥" -MinLength 32
 
+	# login 的内部调用方验签密钥(Secrets.InternalAuth)。生产模式恒强制验签且
+	# 配置关不掉,缺这一项 login 直接拒绝启动 —— 以前这份 ConfigMap 根本没有它。
+	#
+	# dev 回落值刻意与 GateToken 那把**不同**:secrets.go 里有跨用途复用主密钥的
+	# 检查,填成一样在生产会被判为复用而拒启,本地也会打 WARN。
+	$script:InternalAuthSecret = Resolve-InjectedSecret -EnvName "MMORPG_INTERNAL_AUTH_SECRET" `
+		-DevFallback "change-me-in-production-internal-auth-shared-key" `
+		-ReleaseProfile $ReleaseProfile -Purpose "内部调用方身份声明验签密钥(callerauth)" -MinLength 32
+
 	# db 服务连 MySQL 的凭据。生成器以前写死 root/root,而
 	# deploy/k8s/manifests/infra/mysql.yaml 的 MYSQL_ROOT_PASSWORD 根本不是 root
 	# —— 也就是说这份 ConfigMap 在真集群里连不上库。
@@ -466,12 +475,39 @@ function New-NodeConfigMapYaml {
 		[Parameter(Mandatory = $true)][string]$ConfigName
 	)
 
+	# 这三个值以前要么写死、要么根本没生成,而这份 ConfigMap 是以 readOnly 整目录
+	# 挂到 /app/bin/etc 的(见 New-NodeDeploymentYaml),会**完全遮蔽**镜像里那份
+	# bin/etc/base_deploy_config.yaml。也就是说凡是这里没写的键,cpp 节点就当没配。
+	#
+	# NodeTTLSeconds 走权威取值而不是常数:仓库里那份是 180,注释记着
+	# 2026-05-24 压测的结论 —— 60s 在 45k 开服浪涌下,keepalive 抖一帧就会误判
+	# 租约过期并触发 kLeaseExpiredByEtcd FATAL 自杀(postmortem §A)。生成器写死
+	# 60 等于把那次事故的修复悄悄退回去,而且再入屏障的推导也是按 180 写的
+	# (docs/design/scene-owner-reentry-barrier.md §1)。
+	$nodeTtlSeconds = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Etcd.NodeTTLSeconds'
+	$keepaliveInterval = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Etcd.KeepaliveInterval'
+	# gate 并发连接上限。0 = 不限,字段注释写明「生产必须配」。
+	$gateMaxConnections = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'GateMaxConnections'
+	# gate 客户端令牌 HMAC 密钥。缺这一项时 gate 在 prod 运行模式下会 LOG_FATAL
+	# 拒绝启动(cpp/nodes/gate/main.cpp::ValidateGateTokenSecretOrDie),而部署链
+	# 从不设置 GATE_RUN_MODE,ResolveRunModeOnce 默认就是 prod —— 也就是说这一项
+	# 缺失时 K8s 上的 gate 会直接 CrashLoopBackOff。
+	$gateTokenSecret = $script:GateTokenSecret
+	if ([string]::IsNullOrWhiteSpace($gateTokenSecret)) {
+		# 与 Get-AuthoritativeScalar 同一条纪律:宁可在生成期炸,也不产出一份
+		# 会让 gate 起不来的 ConfigMap。空串在这里是静默故障(要到 Pod
+		# CrashLoopBackOff 才看得见),throw 是当场可读的错误。
+		throw "生成 node ConfigMap 失败:GateTokenSecret 为空。请先调用 Initialize-InjectedSecrets(写操作路径会自动调用),或注入 MMORPG_GATE_TOKEN_SECRET。"
+	}
+
 	$baseDeployConfig = (@"
 Etcd:
   Hosts:
     - "etcd.${InfraNamespace}:2379"
-  KeepaliveInterval: 1
-  NodeTTLSeconds: 60
+  KeepaliveInterval: ${keepaliveInterval}
+  NodeTTLSeconds: ${nodeTtlSeconds}
+GateTokenSecret: "${gateTokenSecret}"
+GateMaxConnections: ${gateMaxConnections}
 TableDataDirectory: "../generated/generated_tables/"
 DataRootDirectory: "/app/"
 LogLevel: 1
@@ -1012,6 +1048,26 @@ function New-GoSvcConfigMapYaml {
 	$mysqlPassword = $script:MysqlPassword
 	$redisPassword = $script:RedisPassword
 	$gateTokenSecret = $script:GateTokenSecret
+	$internalAuthSecret = $script:InternalAuthSecret
+
+	# db 库名白名单。三个来源(DB_ALLOWED_DATABASES 环境变量 / AllowedDatabasesFile /
+	# 本字段)全空时,db 在默认 strict 档下**拒绝启动**
+	# (go/db/internal/config/config.go 的 AllowlistEnforcement)。以前这份 ConfigMap
+	# 里没有 AllowedDatabases,Deployment 也没注入环境变量,所以 db 起不来。
+	#
+	# staging/prod 必须由运维显式注入,**绝不能**让生成器从 $CurrentZoneId 推导:
+	# 这份白名单存在的全部意义,就是用一个与 ZoneId 无关的外部事实去校验
+	# 「ZoneId 拼出来的库名」——ZoneId 填错一位会在生产实例上静默建库并写入玩家
+	# 数据(config.go:44-48)。自己推自己等于零保护,还留下"已经防住了"的错觉。
+	# 只有 dev 档才回落到推导值,为的是本地一键起栈。
+	$dbAllowedDatabases = Resolve-InjectedSecret -EnvName "MMORPG_DB_ALLOWED_DATABASES" `
+		-DevFallback "zone_${CurrentZoneId}_db" -ReleaseProfile $ReleaseProfile `
+		-Purpose "db 库名白名单(逗号分隔,如 zone_1_db,zone_2_db)" -MinLength 3
+	$dbAllowedList = @($dbAllowedDatabases -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+	if ($dbAllowedList.Count -eq 0) {
+		throw "生成 db ConfigMap 失败:库名白名单解析后为空(MMORPG_DB_ALLOWED_DATABASES='$dbAllowedDatabases')。"
+	}
+	$dbAllowedDatabasesYaml = ($dbAllowedList | ForEach-Object { "      - `"$_`"" }) -join "`n"
 
 	$svcConfig = switch ($SvcName) {
 		"db" {
@@ -1040,6 +1096,10 @@ ServerConfig:
     MaxOpenConn: ${dbMaxOpenConn}
     MaxIdleConn: ${dbMaxIdleConn}
     Net: ""
+    # 库名白名单(启动期硬断言)。刻意不写 AllowlistEnforcement:留空即 strict,
+    # 也就是生产语义 —— 白名单一旦解析为空就拒启,不允许静默放行。
+    AllowedDatabases:
+${dbAllowedDatabasesYaml}
   RedisClient:
     Hosts: "redis.${InfraNamespace}:6379"
     DefaultTTLSeconds: 3600
@@ -1138,6 +1198,18 @@ SceneManagerRpc:
   Middlewares:
     Breaker: false
 GateTokenSecret: "${gateTokenSecret}"
+# Secrets.InternalAuth:内部调用方身份声明(x-session-detail-bin)的验签密钥。
+#
+# 生产模式下 EnforceInternalAuth 恒为 true(config/secrets.go,配置关不掉),
+# 于是 ResolveSecrets 里 internal.validate(..., required=true) 会因为"未配置"
+# 直接返回 error,login 拒绝启动。以前这份 ConfigMap 只有上面那个**已废弃**的
+# 顶层 GateTokenSecret,没有 Secrets 段,所以生产 login 起不来。
+#
+# 必须是与 GateToken 不同的一把:secrets.go 里有跨用途复用主密钥的检查,
+# 生产复用会直接拒绝启动(一处泄露不该牵连另一处)。
+Secrets:
+  InternalAuth:
+    Value: "${internalAuthSecret}"
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"

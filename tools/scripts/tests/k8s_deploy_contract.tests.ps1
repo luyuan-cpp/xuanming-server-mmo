@@ -47,6 +47,25 @@ if ($devRun.ExitCode -ne 0) {
 $devOut = $devRun.Output
 
 # ─────────────────────────────────────────────────────────────────
+# 0. 采集链路自检
+# ─────────────────────────────────────────────────────────────────
+
+Test-Case "自检:子进程输出的中文必须无损带回(否则后面断错误文本的用例全是假红)" {
+    # 本套测试的负向用例断的是子进程打出来的中文错误文本。PowerShell 按
+    # [Console]::OutputEncoding 解码原生进程输出,而 Windows 控制台默认码页是
+    # ibm437/GBK 这类 OEM 码页 —— 中文会在编解码往返里被整体打成 '?',于是 6 条
+    # 断中文的用例集体变红,红的却是编码链路而不是被测脚本。这个坑真踩过一次,
+    # 排查成本远高于这条自检本身,所以在这里钉一条。
+    # 兜底逻辑在 tests/lib/deploy_capture.ps1 的 Invoke-CapturedPwsh。
+    #
+    # 判据用"输出里还有没有汉字",不锚定具体措辞:生成器往 ConfigMap 里写的
+    # 中文注释会随代码改,而"一个汉字都不剩"只可能是编码坏了。
+    # 注意本条只能抓住"汉字被打成 '?'"这一类(ibm437 路径);GBK 误解码可能
+    # 仍落在汉字区间,那种情况由下面各条断具体错误文本的用例兜住。
+    Assert-Match -Text $devOut -Pattern '[一-龥]' -Because "捕获回来的子进程输出里一个汉字都没有 = 采集链路的编码坏了,不是被测脚本的问题"
+}
+
+# ─────────────────────────────────────────────────────────────────
 # 1. 生成的 ConfigMap 必须与各服务 etc/*.yaml 跨文件一致
 # ─────────────────────────────────────────────────────────────────
 
@@ -119,6 +138,40 @@ Test-Case "scene-manager ConfigMap 必须带 GateTokenSecret(否则跨 zone 重�
     Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($v)) -Because "gate_redirect.go 在空值时直接返回 'GateTokenSecret not configured'"
 }
 
+Test-Case "node ConfigMap 必须带 GateTokenSecret(否则 gate 在 prod 运行模式下拒绝启动)" {
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "node-config")
+    $v = Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.GateTokenSecret'
+    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($v)) -Because "ValidateGateTokenSecretOrDie 在空密钥 + prod 下 LOG_FATAL,而部署链从不设 GATE_RUN_MODE(默认即 prod)"
+}
+
+Test-Case "node ConfigMap 的 NodeTTLSeconds 必须与 bin/etc 权威值一致" {
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "node-config")
+    $v = Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.Etcd.NodeTTLSeconds'
+    $authoritative = Get-EtcValue -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Etcd.NodeTTLSeconds'
+    Assert-Equal -Expected $authoritative -Actual $v -Because "生成器写死 60 会退回 2026-05-24 压测前的值,45k 浪涌下 keepalive 抖一帧就误判租约过期 FATAL"
+}
+
+Test-Case "node ConfigMap 必须带 GateMaxConnections(缺了等于 gate 无连接数上限)" {
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "node-config")
+    $v = Get-FlatValue -Flat $flat -KeyPath 'data.base_deploy_config.yaml.GateMaxConnections'
+    $authoritative = Get-EtcValue -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'GateMaxConnections'
+    Assert-Equal -Expected $authoritative -Actual $v -Because "0/缺失 = 不限,而 gate 是唯一对公网开放的端口"
+    Assert-True -Condition ([uint64]$v -gt 0) -Because "仓库默认/K8s 部署必须启用连接上限;0 只允许显式 dev/test 本地运行"
+    Assert-True -Condition ([uint64]$v -le 131071) -Because "session id 低 17 位回绕;超过安全容量会让碰撞检查永久自旋"
+}
+
+Test-Case "login ConfigMap 必须带 Secrets.InternalAuth(否则生产 login 拒绝启动)" {
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-login-config")
+    $v = Get-FlatValue -Flat $flat -KeyPath 'data.login.yaml.Secrets.InternalAuth.Value'
+    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($v)) -Because "生产模式 EnforceInternalAuth 恒 true 且关不掉,未配置时 ResolveSecrets 直接返回 error"
+}
+
+Test-Case "db ConfigMap 必须带非空的库名白名单(否则 db 在 strict 档下拒启)" {
+    $flat = ConvertTo-FlatManifest -Block (Select-ManifestByName -Output $devOut -Name "go-svc-db-config")
+    $v = Get-FlatValue -Flat $flat -KeyPath 'data.db.yaml.ServerConfig.Database.AllowedDatabases[0]'
+    Assert-True -Condition (-not [string]::IsNullOrWhiteSpace($v)) -Because "三个来源全空时 AllowlistEnforcement 默认 strict = 拒启"
+}
+
 # ─────────────────────────────────────────────────────────────────
 # 2. 镜像不可变版本戳
 # ─────────────────────────────────────────────────────────────────
@@ -156,6 +209,11 @@ $ProdEnv = @{
     MMORPG_REDIS_PASSWORD     = 'contract-test-redis-pw-01'
     MMORPG_GATEWAY_DB_USER    = 'gateway_app'
     MMORPG_GATEWAY_DB_PASSWORD= 'contract-test-gwdb-pw-01'
+    # login 的 Secrets.InternalAuth:生产模式恒强制验签且关不掉,缺了 login 拒启。
+    # 刻意与 GATE_TOKEN_SECRET 不同 —— secrets.go 会拒绝跨用途复用主密钥。
+    MMORPG_INTERNAL_AUTH_SECRET = 'contract-test-internal-auth-0123456789abcdef'
+    # db 库名白名单:三个来源全空时 db 在默认 strict 档下拒启。
+    MMORPG_DB_ALLOWED_DATABASES = 'zone_1_db,zone_2_db'
 }
 $ProdArgs = $BaseArgs + @(
     "-ReleaseProfile", "prod",

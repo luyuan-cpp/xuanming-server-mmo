@@ -31,6 +31,7 @@ on:
     branches: [main]
     paths:
       - "tools/scripts/**"
+      - "bin/etc/**"
       - "go/*/etc/**"
       - "deploy/k8s/manifests/**"
       - ".github/workflows/deploy-config-tests.yml"
@@ -38,6 +39,8 @@ on:
     branches: [main]
     paths:
       - "tools/scripts/**"
+      # C++ node ConfigMap 的权威输入(GateMaxConnections 等)
+      - "bin/etc/**"
       # 各 go 服务的运行时配置——契约测试的另一半输入
       - "go/*/etc/**"
       # k8s 清单：端口/服务名/镜像 tag 与 etc/*.yaml 对账的对面
