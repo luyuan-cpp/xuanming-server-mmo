@@ -44,7 +44,8 @@
 	ignore = dirty
 [submodule "third_party/boost"]
 	path = third_party/boost
-	url = https://github.com/luyuancpp/boost.git
+	url = https://github.com/boostorg/boost.git
+	branch = master
 	ignore = dirty
 [submodule "third_party/grpc"]
 	path = third_party/grpc
