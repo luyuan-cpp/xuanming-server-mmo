@@ -22,6 +22,11 @@
 .PARAMETER SceneCount
     Number of scene.exe instances to launch (default: 1).
 
+.PARAMETER BattleCount
+    Number of battle.exe instances to launch (default: 1).
+    battle 是全局池(不分 zone),多 zone 压测整个集群起一份即可;
+    dev_tools.ps1 的 dev-start-zones 只在第一个 zone 传非零值。
+
 .PARAMETER NodeIp
     Address these nodes advertise into etcd (NODE_IP). Default 127.0.0.1.
     Pass a LAN address when a client on another device must reach them, or
@@ -55,6 +60,7 @@ param(
 
     [int]$GateCount  = 1,
     [int]$SceneCount = 1,
+    [int]$BattleCount = 1,
 
     # Local multi-zone launch. When > 0:
     #   * Instance keys are prefixed with 'z<Zone>_' so a second zone can
@@ -105,8 +111,9 @@ $LegacyPidFile = Join-Path $RepoRoot "bin\cpp_nodes.pid.json"
 
 # ── Node catalogue ───────────────────────────────────────────────
 $NodeCatalogue = [ordered]@{
-    gate  = @{ Exe = "gate.exe";  Desc = "Gate Node (client TCP bridge + Kafka routing)" }
-    scene = @{ Exe = "scene.exe"; Desc = "Scene Node (gameplay + ECS systems)" }
+    gate   = @{ Exe = "gate.exe";   Desc = "Gate Node (client TCP bridge + Kafka routing)" }
+    scene  = @{ Exe = "scene.exe";  Desc = "Scene Node (gameplay + ECS systems)" }
+    battle = @{ Exe = "battle.exe"; Desc = "Battle Node (回合制战斗房间, gRPC, 全局池)" }
 }
 
 # ── Helpers ──────────────────────────────────────────────────────
@@ -126,9 +133,10 @@ function Resolve-NodeList {
 function Get-InstanceCount {
     param([string]$NodeName)
     switch ($NodeName) {
-        "gate"  { return $GateCount }
-        "scene" { return $SceneCount }
-        default { return 1 }
+        "gate"   { return $GateCount }
+        "scene"  { return $SceneCount }
+        "battle" { return $BattleCount }
+        default  { return 1 }
     }
 }
 
@@ -376,7 +384,7 @@ function Invoke-List {
     foreach ($kv in $NodeCatalogue.GetEnumerator()) {
         Write-Host ("{0,-10} {1,-15} {2}" -f $kv.Key, $kv.Value.Exe, $kv.Value.Desc)
     }
-    Write-Host "`nInstance counts (adjustable): -GateCount $GateCount  -SceneCount $SceneCount" -ForegroundColor DarkGray
+    Write-Host "`nInstance counts (adjustable): -GateCount $GateCount  -SceneCount $SceneCount  -BattleCount $BattleCount" -ForegroundColor DarkGray
     Write-Host ""
 }
 

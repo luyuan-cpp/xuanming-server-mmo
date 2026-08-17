@@ -1,13 +1,13 @@
 module db
 
-go 1.24.5
+go 1.26.5
 
 require (
 	github.com/IBM/sarama v1.43.1
 	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
-	github.com/luyuancpp/proto2mysql v0.0.18
+	github.com/luyuancpp/proto2mysql v0.1.0
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.10.0
@@ -16,11 +16,13 @@ require (
 )
 
 require (
-	github.com/luyuancpp/protooption v0.0.21 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/segmentio/kafka-go v0.4.47 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
+	gorm.io/gorm v1.30.0 // indirect
 )
 
 require (
@@ -71,7 +73,7 @@ require (
 	github.com/openzipkin/zipkin-go v0.4.3 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pierrec/lz4/v4 v4.1.21 // indirect
-	github.com/prometheus/client_golang v1.23.2 // indirect
+	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
@@ -124,3 +126,7 @@ require (
 replace shared => ../shared
 
 replace proto => ../proto
+
+// 本地修复版:键列 string/bytes 映射 VARCHAR(191)/VARBINARY(191)(Error 1170)。
+// 上游打新 tag 后删除本行并升级 require 版本。
+replace github.com/luyuancpp/proto2mysql => ../../../proto2mysql

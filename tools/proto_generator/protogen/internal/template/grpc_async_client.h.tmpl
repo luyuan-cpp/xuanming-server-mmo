@@ -14,7 +14,8 @@ using grpc::ClientContext;
 using grpc::Status;
 using grpc::ClientAsyncResponseReader;
 
-namespace {{.Package}} {
+{{/* 空 package → 全局命名空间(匿名 namespace 进头文件会导致每个包含方各持一份声明,链接必炸) */}}
+{{if .Package}}namespace {{.Package}} {{"{"}}{{end}}
 {{- range $svc := .ServiceInfo }}
 using {{ $svc.Service }}StubPtr = std::unique_ptr<{{ $svc.Service }}::Stub>;
 
@@ -72,4 +73,4 @@ void Init{{$svc.FileBaseNameCamel}}GrpcNode(const std::shared_ptr< ::grpc::Chann
   {{- end }}
 {{- end }}
 
-}// namespace {{.Package}}
+{{if .Package}}{{"}"}}// namespace {{.Package}}{{end}}

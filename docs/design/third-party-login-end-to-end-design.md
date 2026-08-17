@@ -284,3 +284,86 @@ POST /api/bind   { bind_type: "wechat", auth_token: <code> }
 - 代码: `go/login/internal/logic/pkg/auth/providers.go` (WeChatProvider / QQProvider)
 - 代码: `go/login/internal/logic/clientplayerlogin/loginlogic.go` (resolveAccount)
 - 代码: `java/gateway_node/src/main/java/com/game/gateway/controller/` (待加 LoginController)
+
+---
+
+## 七、2026-08-15 落地增量:选服闭环 + login.rpc 多节点发现 + Unity 客户端接通
+
+本节记录已落码的三件事。2026-08-15 已由 Codex 完成
+Java 全量单测和 Unity 程序集编译验证；真实多节点服务联调仍需依赖
+etcd/Redis/MySQL/login/gate/scene 的完整环境。
+
+### 7.1 区服准入闭环(Java Gateway)
+
+此前 `zone_config` 的 MAINTENANCE/CLOSED/PREVIEW 只影响 `/api/server-list`
+展示,直接打 `/api/assign-gate` 仍可进维护区。现在
+`AssignGateService.checkZoneAdmission` 对 `/api/assign-gate` 与
+`/api/queue-status`(排队中运维切维护也要拦)按手工状态 fail-closed:
+
+| 状态 | HTTP code | error tag |
+|---|---|---|
+| zone 不存在 | 404 | `zone_not_found` |
+| MAINTENANCE | 503 | `zone_maintenance` |
+| CLOSED | 503 | `zone_closed` |
+| PREVIEW | 503 | `zone_not_open`(白名单表 account 类型不匹配,暂不消费) |
+| zone_id<=0(自动) | 放行 | 由 login 决定目标 zone |
+
+自动探测态(etcd DOWN)不在网关二次裁决——login 实时选 gate 本身 fail-closed。
+为避免大队列每 2s 轮询把 `zone_config` 放大成玩家数量级 MySQL QPS，
+准入结果按 zone 短缓存 1s；同 zone 并发 miss 单航班合并，仅缓存
+成功查询(含 NOT_FOUND)，DB 异常不缓存并继续 fail-closed。
+单测:`AssignGateServiceZoneAdmissionTest`(10 用例)。
+
+### 7.2 login.rpc 多节点自动发现(Java Gateway)
+
+`login.grpc.endpoints` 的静态 `<zoneId>=host:port` 映射降级为兜底;
+`LoginNodeDiscovery` 每 `login.grpc.discovery-interval-ms`(默认 5s)拉 etcd
+`LoginNodeService.rpc/` 前缀(与 go/login node.go 的注册路径对齐),按 zone
+建动态 channel 池推给 `LoginRpcClient`:
+
+- 同 zone 多 login 实例轮询分摊;重试(UNAVAILABLE/DEADLINE)每次重选实例,
+  天然 failover;
+- 新增 zone / 扩缩容下个周期自动生效,网关不重启;
+- etcd 查询失败保留 last-known-good 路由,不清表;
+- 跨 zone 兜底仍然禁止(压测 3zone §I 事故约束不变);
+- 开关 `login.grpc.discovery-enabled`(默认 true;测试 profile 关闭)。
+
+### 7.3 Unity 客户端全链路(mmorpg-client)
+
+选服 UI(UGUI,`QdaoServerSelectView`)为登录+选服合一屏,数据全动态:
+
+```
+GET /api/server-list ──► 区服卡片(状态灯/负载/推荐/新服/维护文案/分页/搜索/最近登录)
+进入 ──► GameClient.EnterZone:
+  POST /api/login(zone-pinned,排队 code=100 自动重试)
+  POST /api/assign-gate(排队轮询 /api/queue-status,410 重新排队,404/503 拦截文案)
+  TCP 连 gate + ClientTokenVerifyRequest 验签
+  TCP Login(auth_type=access_token,密码不过游戏 TCP;无 token 时回落 password)
+  CreatePlayer(角色为空时)→ EnterGame → 等 NotifyEnterScene 推送才算成功
+RedirectToGateNotify(124) ──► 断旧 gate → 连新 gate → 重验签 → 重绑会话 → EnterGame
+```
+
+关键修复:gate 的 gRPC 回包不回显 `ClientRequest.id`(`main.cpp` SetIfEmptyHandler
+只填 serialized_message+message_id),客户端应答匹配改为「id 精确匹配 → 按
+message_id FIFO 兜底」(与 robot 口径一致),否则 Login/CreatePlayer/EnterGame
+在客户端必超时。建连后所有终态失败统一先断开再回调，
+`NotifyEnterScene` 等待预算与生产 robot 对齐为 60s，避免迟到推送造成
+`InGame` 与 UI 状态分裂。协议、proto、C++、Go 均未改动。
+
+### 7.4 原生 uGUI 资源与运行态验收
+
+`Assets/Resources/UI/Ugui/Native` 已提供原生场景、窗框、搜索框、页签、
+分类、区服卡片、底栏和状态灯 sprite。`QdaoUguiBuilder.BuildAll` 会先校验并
+统一这些纹理的 Sprite importer，再烘焙 `QdaoServerSelect.prefab`；运行时
+`QdaoServerSelectView` 仍会重绑状态灯 sprite，并在陈旧 prefab 上自愈重建。
+
+2026-08-15 使用项目同版本 Unity 6000.5.8f1 完成以下验收:
+
+- Builder:Images=67、Buttons=22、TMP=54、旧全屏参考截图引用数为 0；
+- EditMode 6/6:覆盖全部 Theme 资源、凭据输入限制与 8 个状态灯；
+- PlayMode 1/1:空测试场景经 `AfterSceneLoad` 自动生成 `AppBootstrap`，原生
+  uGUI 初始化成功，未进入 FairyGUI 兼容 Router；
+- 原生 2560x1080 capture 已复核，账号/密码输入保持可见（密码仍只驻内存）。
+
+该验收覆盖资源导入、prefab 和客户端启动生命周期；本地未启动 8081 gateway，
+因此不替代依赖 etcd/Redis/MySQL/login/gate/scene 的真实 HTTP/TCP 联调。

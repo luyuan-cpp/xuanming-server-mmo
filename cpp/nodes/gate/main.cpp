@@ -75,7 +75,12 @@ int main(int argc, char *argv[])
         // listener; their codecs (ProtobufCodec vs RpcCodec) are incompatible
         // and the receiver logs `ProtobufCodec::defaultErrorCallback -
         // InvalidNameLen` on every reconnect (~2 Hz).
-        Node::CanConnectNodeTypeList{SceneNodeService, LoginNodeService, SceneManagerNodeService},
+        //
+        //   * BattleNodeService — 回合制战斗节点(gRPC,全局池,不分 zone):
+        //     gate 按 BindBattleEvent 的会话绑定把客户端战斗消息转发过去。
+        //     必须进白名单,否则 AddServiceNode/ConnectAllNodes 不会为 battle
+        //     建实体和 gRPC stub,绑定解析(FindNodeEntityByNodeId)永远落空。
+        Node::CanConnectNodeTypeList{SceneNodeService, LoginNodeService, SceneManagerNodeService, BattleNodeService},
         [](Node &node, GateRuntimeContext &context)
         {
             // Override the default Kafka dispatch with GateCommand-specific routing

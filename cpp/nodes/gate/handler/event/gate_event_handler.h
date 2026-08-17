@@ -18,4 +18,6 @@ public:
     static void BroadcastToPlayersEventHandler(const contracts::kafka::BroadcastToPlayersEvent& event);
     static void BroadcastToSceneEventHandler(const contracts::kafka::BroadcastToSceneEvent& event);
     static void BroadcastToAllEventHandler(const contracts::kafka::BroadcastToAllEvent& event);
+    static void BindBattleEventHandler(const contracts::kafka::BindBattleEvent& event);
+    static void UnbindBattleEventHandler(const contracts::kafka::UnbindBattleEvent& event);
 };

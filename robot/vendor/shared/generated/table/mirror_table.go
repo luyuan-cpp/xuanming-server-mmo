@@ -6,6 +6,7 @@ import (
     "math/rand/v2"
     "os"
     "path/filepath"
+    "sync/atomic"
 
     "google.golang.org/protobuf/encoding/protojson"
     "google.golang.org/protobuf/proto"
@@ -24,19 +25,24 @@ type mirrorSnapshot struct {
 }
 
 type MirrorTableManager struct {
-    snap *mirrorSnapshot
+    // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
+    // 并发读就是数据竞争(go test -race 会报)。
+    // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
+    // 表缩小时 data[rand.IntN(len(data))] 会越界。
+    snap atomic.Pointer[mirrorSnapshot]
 }
 
 var MirrorTableManagerInstance = NewMirrorTableManager()
 
 func NewMirrorTableManager() *MirrorTableManager {
-    return &MirrorTableManager{
-        snap: &mirrorSnapshot{
-            kvData: make(map[uint32]*pb.MirrorTable),
-            idxSceneId: make(map[uint32][]*pb.MirrorTable),
-            idxMainSceneId: make(map[uint32][]*pb.MirrorTable),
-        },
-    }
+    m := &MirrorTableManager{}
+    m.snap.Store(&mirrorSnapshot{
+        kvData: make(map[uint32]*pb.MirrorTable),
+        idxSceneId: make(map[uint32][]*pb.MirrorTable),
+        idxMainSceneId: make(map[uint32][]*pb.MirrorTable),
+    })
+    return m
 }
 
 func (m *MirrorTableManager) Load(configDir string, useBinary bool) error {
@@ -75,27 +81,31 @@ func (m *MirrorTableManager) Load(configDir string, useBinary bool) error {
     }
 
     snap.data = container.Data
-    m.snap = snap
+    m.snap.Store(snap)
     return nil
 }
 
 func (m *MirrorTableManager) FindAll() []*pb.MirrorTable {
-    return m.snap.data
+    snap := m.snap.Load()
+    return snap.data
 }
 
 func (m *MirrorTableManager) FindById(id uint32) (*pb.MirrorTable, bool) {
-    row, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    row, ok := snap.kvData[id]
     return row, ok
 }
 
 
 func (m *MirrorTableManager) GetBySceneId(key uint32) []*pb.MirrorTable {
-    return m.snap.idxSceneId[key]
+    snap := m.snap.Load()
+    return snap.idxSceneId[key]
 }
 
 
 func (m *MirrorTableManager) GetByMainSceneId(key uint32) []*pb.MirrorTable {
-    return m.snap.idxMainSceneId[key]
+    snap := m.snap.Load()
+    return snap.idxMainSceneId[key]
 }
 
 
@@ -103,7 +113,8 @@ func (m *MirrorTableManager) GetByMainSceneId(key uint32) []*pb.MirrorTable {
 // ---- Exists ----
 
 func (m *MirrorTableManager) Exists(id uint32) bool {
-    _, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    _, ok := snap.kvData[id]
     return ok
 }
 
@@ -112,17 +123,20 @@ func (m *MirrorTableManager) Exists(id uint32) bool {
 // ---- Count ----
 
 func (m *MirrorTableManager) Count() int {
-    return len(m.snap.data)
+    snap := m.snap.Load()
+    return len(snap.data)
 }
 
 
 func (m *MirrorTableManager) CountBySceneIdIndex(key uint32) int {
-    return len(m.snap.idxSceneId[key])
+    snap := m.snap.Load()
+    return len(snap.idxSceneId[key])
 }
 
 
 func (m *MirrorTableManager) CountByMainSceneIdIndex(key uint32) int {
-    return len(m.snap.idxMainSceneId[key])
+    snap := m.snap.Load()
+    return len(snap.idxMainSceneId[key])
 }
 
 
@@ -130,9 +144,10 @@ func (m *MirrorTableManager) CountByMainSceneIdIndex(key uint32) int {
 // ---- FindByIds (IN) ----
 
 func (m *MirrorTableManager) FindByIds(ids []uint32) []*pb.MirrorTable {
+    snap := m.snap.Load()
     result := make([]*pb.MirrorTable, 0, len(ids))
     for _, id := range ids {
-        if row, ok := m.snap.kvData[id]; ok {
+        if row, ok := snap.kvData[id]; ok {
             result = append(result, row)
         }
     }
@@ -142,10 +157,11 @@ func (m *MirrorTableManager) FindByIds(ids []uint32) []*pb.MirrorTable {
 // ---- RandOne ----
 
 func (m *MirrorTableManager) RandOne() (*pb.MirrorTable, bool) {
-    if len(m.snap.data) == 0 {
+    snap := m.snap.Load()
+    if len(snap.data) == 0 {
         return nil, false
     }
-    return m.snap.data[rand.IntN(len(m.snap.data))], true
+    return snap.data[rand.IntN(len(snap.data))], true
 }
 
 
@@ -153,8 +169,9 @@ func (m *MirrorTableManager) RandOne() (*pb.MirrorTable, bool) {
 // ---- Where / First ----
 
 func (m *MirrorTableManager) Where(pred func(*pb.MirrorTable) bool) []*pb.MirrorTable {
+    snap := m.snap.Load()
     var result []*pb.MirrorTable
-    for _, row := range m.snap.data {
+    for _, row := range snap.data {
         if pred(row) {
             result = append(result, row)
         }
@@ -163,7 +180,8 @@ func (m *MirrorTableManager) Where(pred func(*pb.MirrorTable) bool) []*pb.Mirror
 }
 
 func (m *MirrorTableManager) First(pred func(*pb.MirrorTable) bool) (*pb.MirrorTable, bool) {
-    for _, row := range m.snap.data {
+    snap := m.snap.Load()
+    for _, row := range snap.data {
         if pred(row) {
             return row, true
         }

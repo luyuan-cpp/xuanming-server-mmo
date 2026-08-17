@@ -403,6 +403,7 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 - [enter-scene-zone-routing.md](./enter-scene-zone-routing.md)
 
 ### 数据与持久化
+- [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md)
 - [data_service_role_and_scope.md](./data_service_role_and_scope.md)
 - [db_write_behind_dirty_flag_race.md](./db_write_behind_dirty_flag_race.md)
 - [db_zone_isolation.md](./db_zone_isolation.md)
@@ -458,6 +459,7 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 | 18 | **46% 后台 preload_failed 深挖**:发现真凶不在 login 而在 db 端 — `MaxOpenConn=10` 配 partition=10 = MySQL 连接池满载,稳态 200/s 输入下单 partition 排队 ~9k task / 实测 Kafka lag 91k;scene-side `kMaxLoadRetries=6` + 指数退避 `2/4/8/16/32/60s` = 122s 兜底窗口让 robot 看不见失败,但 robot enter_ok 是 RPC 同步成功不等 scene-ready;失败 preload 时锁正常释放、session 保留、Gate/Scene 不知道玩家来过;审了 6 处其它陷阱(lock heartbeat��saveToRedis 失败、同 playerId in-flight、sub_cache 部分命中、TaskResult LPop、batch coalesce)。**下次先动 `MaxOpenConn 10→30`**,加 db_rpc 子阶段打点验证 | **2026-05-28** | [stress-1zone-25k-2026-05-28-deep-dive.md](./stress-1zone-25k-2026-05-28-deep-dive.md) |
 | 19 | **MaxOpenConn 10→30 实测解一半**:`preload{success} avg` 从 5.14s 暴跌到 **34.6ms**(降 99.3%),fail% 从 46% 降到 29%。但 Kafka backlog 仍 80k —— 反转:db worker 串行才是真天花板,**不是 MySQL 连接池**。深挖 §1 诊断对一半:连接池是 latency 瓶颈,但 throughput 瓶颈在 `worker.start` 单 goroutine 处理 batch 的循环里(`partition=10 × 1 worker × 1 MySQL conn = 10 在用,20 个永远闲着`)。下次试 partition 10→20(简单可逆),A 方案是 worker 内 sub-shard 并行(30 行+单测) | **2026-05-28** | [stress-1zone-25k-2026-05-28-maxopenconn.md](./stress-1zone-25k-2026-05-28-maxopenconn.md) |
 | 20 | **Worker sub-shard(方案 A)**:`worker.start` 改造成 router goroutine + `SubShardCount=4` 个并行 `runSubShard` goroutine,按 `hash(task.Key) % N` 路由,保 per-key 顺序。10×4=40 路实际并发。**实测:robot 23 分钟全跑 0 失败 + max_login 209ms(Round 6: 571ms,-64%) + Kafka final lag 4,233(Round 6: 80,055,-95%) + db consumer throughput ~190/s(Round 6: 73/s,+160%) + entergame fail% 17.8%(Round 6: 29%)**。同时把 stress 复盘脚本化:`tools/scripts/stress_summarize.ps1` 直接吃 RunDir + prom snapshots 出 2KB 二维表,以后压测复盘只读它输出 | **2026-05-28** | [stress-1zone-25k-2026-05-28-subshard.md](./stress-1zone-25k-2026-05-28-subshard.md) |
+| 21 | **全区全服数据层 + TiDB**:玩家数据层收敛为单一 TiDB 集群(v8.5 LTS),按 player_id 组织,home_zone 表达逻辑归属;跨区 = 客户端 redirect 重连 + 全局层直读(废弃 player_migrate 的数据搬运职责);合服 = RemapHomeZoneForMerge 零迁移。硬前提:snowflake 主键建表必须 NONCLUSTERED + SHARD_ROW_ID_BITS(写热点)、`txn-entry-size-limit` ≥32MB(16MB 存档默认必炸)、proto2mysql 升新版须逐表锁表名。partition 契约与 L1-L4 验收体系不变 | **2026-08-15** | [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) |
 
 ---
 

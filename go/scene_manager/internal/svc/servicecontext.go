@@ -6,6 +6,7 @@ import (
 	"os"
 	"scene_manager/internal/config"
 	"scene_manager/internal/metrics"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -52,21 +53,30 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// 通过 shared/snowflakealloc 拿一个独立于 NodeInfo.NodeId 的 Snowflake worker id。
 	// 关键点:
-	//   - prefix="/scene_manager" 与历史 key 完全一致(老的 mustAllocNodeID 用的就是这套路径),
-	//     所以同 hostname 重启仍然复用同一个 worker id —— 不破坏现网数据。
+	//   - prefix="/scene_manager" 与历史 key 一致(老的 mustAllocNodeID 用的就是这套路径)。
+	//   - 节点名 = hostname_监听端口,而不是裸 hostname:多副本部署后同一台机器
+	//     (本地 dev 双实例、k8s 同节点多 pod 用 hostNetwork 等)会跑多个实例,
+	//     裸 hostname 会让后启动的实例在 verify ownership 时撞 key 直接 panic。
+	//     端口是实例槽位的稳定标识,同槽位重启仍复用同一个 worker id;
+	//     换 key 的首次启动会分配新 id,snowflakealloc 的前任高水位地板与
+	//     lease 过期回收保证不会撞 ID。
 	//   - 这个 worker id 与 noderegistry 里分配的 NodeInfo.NodeId **解耦**,
 	//     reRegister 切换 NodeInfo.NodeId 不会影响 Snowflake ID 生成。
 	host, err := os.Hostname()
 	if err != nil {
 		panic(fmt.Sprintf("snowflake: failed to get hostname: %v", err))
 	}
+	nodeName := host
+	if i := strings.LastIndex(c.ListenOn, ":"); i >= 0 {
+		nodeName = host + "_" + c.ListenOn[i+1:]
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	hd, err := snowflakealloc.AllocateWithKeepAlive(ctx, etcdCli, "/scene_manager", host, snowflakealloc.Options{LeaseTTL: 60})
+	hd, err := snowflakealloc.AllocateWithKeepAlive(ctx, etcdCli, "/scene_manager", nodeName, snowflakealloc.Options{LeaseTTL: 60})
 	if err != nil {
 		panic(fmt.Sprintf("snowflake worker id alloc failed: %v", err))
 	}
-	logx.Infof("[scene_manager] snowflake worker id = %d (host=%s)", hd.WorkerID, host)
+	logx.Infof("[scene_manager] snowflake worker id = %d (node=%s)", hd.WorkerID, nodeName)
 
 	sc := &ServiceContext{
 		Config: c,

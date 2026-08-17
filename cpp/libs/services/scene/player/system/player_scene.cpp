@@ -22,6 +22,7 @@
 #include <modules/scene/comp/scene_node_comp.h>
 #include <proto/common/component/player_network_comp.pb.h>
 #include "node/system/node/node_util.h"
+#include "battle/system/player_battle.h"
 #include <limits>
 #include <thread_context/ecs_context.h>
 
@@ -123,6 +124,13 @@ void PlayerSceneSystem::OnGetLeaderLocation(entt::entity player, void* replyVoid
 
 	if (leaderSceneId != 0 && leaderSceneId != currentSceneId)
 	{
+		// 回合制战斗冻结拦截:战斗在途不跟随队长切场景(设计文档 §5.3 冻结清单)
+		if (PlayerBattleSystem::IsInBattle(player))
+		{
+			LOG_INFO << "[PlayerBattle] 队伍跟随切场景跳过: 玩家战斗在途, player_id=" << GuidForLog(player);
+			return;
+		}
+
 		const auto* playerSessionPB = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
 		if (!playerSessionPB)
 		{
@@ -257,6 +265,14 @@ bool PlayerSceneSystem::RequestEnterMirrorScene(entt::entity player, uint32_t mi
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
 		LOG_WARN << "RequestEnterMirrorScene: invalid player entity " << entt::to_integral(player);
+		return false;
+	}
+
+	// 回合制战斗冻结拦截:战斗在途拒绝进镜像副本(设计文档 §5.3 冻结清单)
+	if (PlayerBattleSystem::IsInBattle(player))
+	{
+		LOG_WARN << "[PlayerBattle] RequestEnterMirrorScene 被拒: 玩家战斗在途, player_id="
+				 << GuidForLog(player);
 		return false;
 	}
 

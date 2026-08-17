@@ -8,6 +8,7 @@
 #include "node/system/node/node.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_scene.h"
+#include "battle/system/player_battle.h"
 #include "rpc/player_service_interface.h"
 #include "network/rpc_session.h"
 #include "network/network_constants.h"
@@ -766,6 +767,27 @@ void SceneHandler::DestroyScene(::google::protobuf::RpcController* controller, c
 
 	LOG_INFO << "DestroyScene: destroyed scene entity for scene_id=" << sceneId;
 	///<<< END WRITING YOUR CODE}
+}
+
+void SceneHandler::PrepareBattle(::google::protobuf::RpcController* controller, const ::PrepareBattleRequest* request,
+	::PrepareBattleResponse* response,
+	::google::protobuf::Closure* done)
+{
+///<<< BEGIN WRITING YOUR CODE
+	// match -> scene 备战冻结(muduo RPC 入口,已在 loop 线程,直接委托;
+	// match Go 侧实际走 SceneNodeGrpc 的 gRPC 面,本面供 C++ 节点间调用)
+	PlayerBattleSystem::PrepareBattle(*request, *response);
+///<<< END WRITING YOUR CODE}
+}
+
+void SceneHandler::CancelBattlePrepare(::google::protobuf::RpcController* controller, const ::CancelBattlePrepareRequest* request,
+	::Empty* response,
+	::google::protobuf::Closure* done)
+{
+///<<< BEGIN WRITING YOUR CODE
+	// gather 失败补偿解冻,幂等
+	PlayerBattleSystem::CancelBattlePrepare(*request);
+///<<< END WRITING YOUR CODE}
 }
 
 void SceneHandler::NodeHandshake(::google::protobuf::RpcController* controller, const ::NodeHandshakeRequest* request,

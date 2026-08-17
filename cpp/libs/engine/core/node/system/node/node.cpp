@@ -496,7 +496,11 @@ void Node::InitRpcServer()
 	LOG_INFO << "Node endpoint resolved. ip=" << endpointIp;
 	localNodeInfo.set_node_type(GetNodeType());
 	localNodeInfo.set_scene_node_type(tlsNodeConfigManager.GetGameConfig().scene_node_type());
-	localNodeInfo.set_protocol_type(PROTOCOL_TCP);
+	// battle 等纯 gRPC 节点必须以 PROTOCOL_GRPC 注册:发现方(node_connector.cpp)
+	// 按 protocol_type 分派,标成 TCP 会让 gate/match 去拨 muduo TCP 端口而
+	// 永远建不出 gRPC stub。其余 C++ 节点维持 TCP 注册不变。
+	localNodeInfo.set_protocol_type(
+		NodeUtils::IsGrpcOnlyNodeType(GetNodeType()) ? PROTOCOL_GRPC : PROTOCOL_TCP);
 	localNodeInfo.set_launch_time(TimeSystem::NowMicrosecondsUTC());
 	localNodeInfo.set_zone_id(tlsNodeConfigManager.GetGameConfig().zone_id());
 

@@ -54,7 +54,7 @@ echo     MMORPG Dev Server
 echo   ========================================
 echo.
 echo     1.  Start all   (build Go + launch C++ and Go)
-echo     2.  Start C++   (gate + scene only)
+echo     2.  Start C++   (gate + scene + battle only)
 echo     3.  Start Go    (build + launch Go services only)
 echo     4.  Stop all
 echo     5.  Status
@@ -184,8 +184,8 @@ exit /b 0
 
 :: ================================================================
 :start_cpp
-echo Starting C++ nodes (2 gate + 4 scene)...
-%PS% -File tools\scripts\dev_tools.ps1 -Command cpp-node-start -GateCount 2 -SceneCount 4
+echo Starting C++ nodes (2 gate + 4 scene + 1 battle)...
+%PS% -File tools\scripts\dev_tools.ps1 -Command cpp-node-start -GateCount 2 -SceneCount 4 -BattleCount 1
 if errorlevel 1 ( echo Start C++ failed. & pause & exit /b 1 )
 echo C++ nodes started.
 exit /b 0
@@ -581,11 +581,11 @@ echo   Double-click:   Interactive menu
 echo   Command line:   dev ^<command^>
 echo.
 echo   Commands:
-echo     start          Build Go exe + start all (2 gate, 4 scene)
+echo     start          Build Go exe + start all (2 gate, 4 scene, 1 battle)
 echo     start-multi    Build + start with multiple Go instances per service
 echo                    (default: login=2,scene_manager=2,player_locator=2,data_service=2)
 echo                    Override:  dev start-multi "login=3,scene_manager=2"
-echo     start-cpp      Start C++ nodes only (gate + scene)
+echo     start-cpp      Start C++ nodes only (gate + scene + battle)
 echo     start-go       Build + start Go services only
 echo     start-satoken  Start local SA-Token dev app
 echo     stop-satoken   Stop local SA-Token dev app

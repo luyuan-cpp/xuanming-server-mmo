@@ -23,6 +23,10 @@ public:
 
 	void DestroyScene(::google::protobuf::RpcController* controller,  const ::DestroySceneRequest* request, ::Empty* response, ::google::protobuf::Closure* done) override;
 
+	void PrepareBattle(::google::protobuf::RpcController* controller,  const ::PrepareBattleRequest* request, ::PrepareBattleResponse* response, ::google::protobuf::Closure* done) override;
+
+	void CancelBattlePrepare(::google::protobuf::RpcController* controller,  const ::CancelBattlePrepareRequest* request, ::Empty* response, ::google::protobuf::Closure* done) override;
+
 	void NodeHandshake(::google::protobuf::RpcController* controller,  const ::NodeHandshakeRequest* request, ::NodeHandshakeResponse* response, ::google::protobuf::Closure* done) override;
 
 };

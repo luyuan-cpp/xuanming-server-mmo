@@ -142,8 +142,10 @@ func (l *CreateSceneLogic) createMainWorldScene(in *scene_manager.CreateSceneReq
 	}
 
 	// Slow path: no channels exist -- create them now (startup race or missing init).
+	// waitForLock=true:别的实例正在补建时必须等它完成 —— 本 RPC 要在
+	// 返回前看到频道存在,等到锁后重查集合、只补真正缺的。
 	l.Logger.Infof("[MainWorld] No channels for conf %d in zone %d, creating on demand", in.SceneConfId, in.ZoneId)
-	initWorldScenesForZone(l.ctx, l.svcCtx, in.ZoneId, []uint64{in.SceneConfId})
+	initWorldScenesForZone(l.ctx, l.svcCtx, in.ZoneId, []uint64{in.SceneConfId}, true)
 
 	sceneId, nodeId, _ = GetBestWorldChannel(l.ctx, l.svcCtx, in.SceneConfId, in.ZoneId)
 	if sceneId > 0 {

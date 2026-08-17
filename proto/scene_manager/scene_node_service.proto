@@ -17,6 +17,15 @@ service SceneNodeGrpc {
   // change). The old node persists the player to Redis, drops the entity, and
   // frees the session mapping so the new node can load fresh from Redis.
   rpc ReleasePlayer(ReleasePlayerRequest) returns (Empty) {}
+
+  // ---- 回合制战斗 gather 管线(docs/design/turn-based-battle-server.md §3.1/§5.3)----
+  // 消息定义共用 proto/scene/scene.proto 里的那一份(全局包,与 CreateSceneRequest
+  // 同款双服务共享模式):muduo Scene 服务与本 gRPC 控制面同签名,match(Go)走本面。
+  // match 对每个参战者调用:冻结玩家(挂 InBattleComp)+ 返回战斗快照;
+  // error_message.id != 0 即拒绝,且不留任何冻结痕迹。
+  rpc PrepareBattle(PrepareBattleRequest) returns (PrepareBattleResponse) {}
+  // gather 失败的逐人回滚:battle_id 匹配才解冻,迟到/重复取消幂等忽略。
+  rpc CancelBattlePrepare(CancelBattlePrepareRequest) returns (Empty) {}
 }
 
 message ReleasePlayerRequest {

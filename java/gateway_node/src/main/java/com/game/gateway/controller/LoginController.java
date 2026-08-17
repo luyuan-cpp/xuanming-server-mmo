@@ -45,7 +45,9 @@ public class LoginController {
         String ip = extractIp(http);
         String account = effectiveAccount(req);
 
-        RateLimitDecision decision = limiter.check(req.getZoneId(), ip, account);
+        // cooldownScope="login":与 /api/assign-gate 的账号冷却隔离,否则
+        // 「login 成功→立刻 assign-gate」的正常顺序会撞 ACCOUNT_COOLDOWN。
+        RateLimitDecision decision = limiter.check(req.getZoneId(), ip, account, "login");
         if (decision.isQueue()) {
             return LoginResponse.queueing(decision.getRetryAfterMs(), decision.getQueuePosEstimate());
         }

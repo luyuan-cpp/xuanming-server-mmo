@@ -147,6 +147,55 @@ end
 return {nodeId, agonesGs}
 `
 
+// luaAtomicDestroyInstanceForce 是 luaAtomicDestroyInstance 的 force 版:
+// 不做 player_count 守卫,无条件抹掉场景键,并返回抹除前的
+// {nodeId, agonesGs, playerCount}。GET 与 DEL 在同一脚本里原子执行,
+// 并发的多个 force 销毁只有第一个能拿到非空返回 —— 计数减法 / Agones
+// 名额归还 / 镜像级联这些副作用因此恰好执行一次。这是 force 分支在
+// 多副本(空闲清理 vs 死节点 reconcile,或领导者降级窗口里新旧领导者
+// 清理同一批场景)下不双减计数、不双还名额的关键。
+const luaAtomicDestroyInstanceForce = `
+local nodeId = redis.call('GET', KEYS[1])
+local agonesGs = redis.call('GET', KEYS[7])
+local pc = redis.call('GET', KEYS[2])
+redis.call('DEL', KEYS[1], KEYS[2], KEYS[4], KEYS[5], KEYS[6], KEYS[7])
+redis.call('ZREM', KEYS[3], ARGV[1])
+if not nodeId then
+    nodeId = ''
+end
+if not agonesGs then
+    agonesGs = ''
+end
+if not pc then
+    pc = '0'
+end
+return {nodeId, agonesGs, pc}
+`
+
+// AtomicDestroyForce 原子认领并抹掉一个场景的全部 Redis 键(不看人数)。
+// 返回抹除前的 (nodeId, agonesGs, playerCount)。三者全空/零说明别的进程
+// 已抢先抹掉 —— 调用方必须跳过一切副作用(计数、归还、级联、RPC)。
+func AtomicDestroyForce(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64) (string, string, int64, error) {
+	keys := []string{
+		sceneNodeKey(sceneId),
+		fmt.Sprintf(InstancePlayerCountKey, sceneId),
+		activeInstancesKey(zoneId),
+		sceneMirrorFlagKey(sceneId),
+		sceneSourceKey(sceneId),
+		sceneZoneKey(sceneId),
+		sceneAgonesGsKey(sceneId),
+	}
+	raw, err := svcCtx.Redis.Eval(luaAtomicDestroyInstanceForce, keys, fmt.Sprintf("%d", sceneId))
+	if err != nil {
+		return "", "", 0, err
+	}
+	parts := toSlice(raw)
+	if len(parts) < 3 {
+		return "", "", 0, nil
+	}
+	return toString(parts[0]), toString(parts[1]), toInt64(parts[2]), nil
+}
+
 // AtomicIncrPlayerCountIfSceneExists is the race-safe replacement for
 // IncrInstancePlayerCount used inside EnterScene. It guarantees the
 // player_count key is only ever created/incremented when scene:{id}:node

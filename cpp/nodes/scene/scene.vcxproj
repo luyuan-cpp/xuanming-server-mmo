@@ -189,6 +189,7 @@
     <ClCompile Include="handler\event\scene_kafka_command_router.cpp" />
     <ClCompile Include="handler\event\actor_combat_state_event_handler.cpp" />
     <ClCompile Include="handler\event\actor_event_handler.cpp" />
+    <ClCompile Include="handler\event\battle_event_handler.cpp" />
     <ClCompile Include="handler\event\buff_event_handler.cpp" />
     <ClCompile Include="handler\event\combat_event_handler.cpp" />
     <ClCompile Include="handler\event\event_handler.cpp" />
@@ -229,6 +230,7 @@
     <ClInclude Include="handler\event\scene_kafka_command_router.h" />
     <ClInclude Include="handler\event\actor_combat_state_event_handler.h" />
     <ClInclude Include="handler\event\actor_event_handler.h" />
+    <ClInclude Include="handler\event\battle_event_handler.h" />
     <ClInclude Include="handler\event\buff_event_handler.h" />
     <ClInclude Include="handler\event\combat_event_handler.h" />
     <ClInclude Include="handler\event\event_handler.h" />

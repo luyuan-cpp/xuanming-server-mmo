@@ -103,6 +103,7 @@
     <ClCompile Include="player\system\afk.cpp" />
     <ClCompile Include="player\system\player_database_loader.cpp" />
     <ClCompile Include="player\system\player_database_1_loader.cpp" />
+    <ClCompile Include="battle\system\player_battle.cpp" />
     <ClCompile Include="player\system\player_lifecycle.cpp" />
     <ClCompile Include="player\system\player_scene.cpp" />
     <ClCompile Include="player\system\player_skill.cpp" />

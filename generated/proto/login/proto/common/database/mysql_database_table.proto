@@ -81,6 +81,10 @@ message player_centre_database
   option(OptionTableName) = "player_centre_database";
   option(OptionPrimaryKey) = "player_id";
   option(OptionAutoIncrementKey) = "player_id";
+  // 雪花主键 + TiDB 聚簇表 = 写热点,按 §D3 处方打散(global-data-layer-tidb-decision.md)
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
   uint64 player_id = 1;
   PlayerSceneContextComp scene_info = 2;
 }
@@ -93,6 +97,10 @@ message player_database
   option(OptionPrimaryKey) = "player_id";
   option(OptionAutoIncrementKey) = "player_id";
   option (OptionIsPlayerDatabase) = true;
+  // 雪花主键 + TiDB 聚簇表 = 写热点,按 §D3 处方打散(global-data-layer-tidb-decision.md)
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
   uint64 player_id = 1;
   Transform transform = 2;
   PlayerUint64Comp uint64_pb_component = 3;
@@ -118,6 +126,10 @@ message player_database_1
   option(OptionPrimaryKey) = "player_id";
   option(OptionAutoIncrementKey) = "player_id";
   option (OptionIsPlayerDatabase) = true;
+  // 同 player_database:雪花主键防写热点(§D3)
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
   uint64 player_id = 1;
   // Same instrumentation surface as player_database; the data_stress driver
   // and robot data-stress mode write to whichever table the test addresses.
@@ -131,6 +143,10 @@ message player_snapshot
   option(OptionPrimaryKey) = "id";
   option(OptionAutoIncrementKey) = "id";
   option(OptionIndex) = "player_id";
+  // 自增主键同样单调递增,按 §D3 处方 NONCLUSTERED + 打散;自增值非连续可接受(无连续性依赖)
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
 
   uint64 id = 1;             // Auto-increment snapshot ID
   uint64 player_id = 2;      // Player this snapshot belongs to
@@ -148,6 +164,10 @@ message rollback_audit_log
   option(OptionTableName) = "rollback_audit_log";
   option(OptionPrimaryKey) = "id";
   option(OptionAutoIncrementKey) = "id";
+  // 自增主键同样单调递增,按 §D3 处方 NONCLUSTERED + 打散;自增值非连续可接受(无连续性依赖)
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
 
   uint64 id = 1;
   uint64 player_id = 2;          // 0 for zone/server rollback

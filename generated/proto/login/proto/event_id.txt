@@ -40,3 +40,6 @@
 39=ContractsKafkaPushToPlayerEvent
 40=ContractsKafkaBroadcastToSceneEvent
 41=PlayerMigrationAckEvent
+42=BattleSettlementEvent
+43=ContractsKafkaBindBattleEvent
+44=ContractsKafkaUnbindBattleEvent

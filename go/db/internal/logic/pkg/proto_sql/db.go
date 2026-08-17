@@ -9,6 +9,7 @@ import (
 	"log"
 	"os"
 	_ "proto/common/database"
+	"regexp"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
@@ -20,7 +21,7 @@ import (
 )
 
 type GameDB struct {
-	SqlModel *proto2mysql.PbMysqlDB
+	SqlModel *proto2mysql.DB
 	DB       *sql.DB
 }
 
@@ -108,7 +109,7 @@ func openDB() error {
 
 	DB = &GameDB{
 		DB:       databaseHandle,
-		SqlModel: proto2mysql.NewPbMysqlDB(),
+		SqlModel: proto2mysql.NewDB(),
 	}
 
 	DB.DB.SetMaxOpenConns(config.AppConfig.ServerConfig.Database.MaxOpenConn)
@@ -170,6 +171,29 @@ func getTablesFromJSON() ([]proto.Message, error) {
 	return messages, nil
 }
 
+// ddlTableNameRegex 从生成的建表语句里解出表名,用于启动期表名守卫。
+var ddlTableNameRegex = regexp.MustCompile("CREATE TABLE IF NOT EXISTS `([^`]+)`")
+
+// assertTableNameLocked 表名守卫:proto2mysql 新版默认表名 = proto full name(含点号),
+// 一旦 OptionTableName 因任何原因未被读到,schema sync 会静默建出新表,存量数据对业务
+// "消失"。这里强校验每张表生成 DDL 的表名与 proto 里声明的 OptionTableName 完全一致,
+// 不一致直接拒绝启动(全局数据层决策风险 #3)。
+func assertTableNameLocked(table proto.Message) {
+	md := table.ProtoReflect().Descriptor()
+	declared, ok := proto2mysql.TableNameFromDescriptor(md)
+	if !ok || declared == "" {
+		log.Fatalf("表名守卫: 消息 %s 未声明 OptionTableName,拒绝按默认表名建表", md.FullName())
+	}
+	ddl := DB.SqlModel.GetCreateTableSQL(table)
+	m := ddlTableNameRegex.FindStringSubmatch(ddl)
+	if m == nil {
+		log.Fatalf("表名守卫: 无法从 %s 的建表语句中解析表名: %s", md.FullName(), ddl)
+	}
+	if m[1] != declared {
+		log.Fatalf("表名守卫: 消息 %s 生成的表名 %q 与 proto 声明 %q 不一致,拒绝启动", md.FullName(), m[1], declared)
+	}
+}
+
 func CreateOrUpdateTable() {
 	tables, err := getTablesFromJSON()
 	if err != nil {
@@ -179,6 +203,7 @@ func CreateOrUpdateTable() {
 
 	for _, table := range tables {
 		DB.SqlModel.RegisterTable(table)
+		assertTableNameLocked(table)
 		err := DB.SqlModel.CreateOrUpdateTable(table)
 		if err != nil {
 			log.Fatal(err)

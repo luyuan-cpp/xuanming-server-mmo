@@ -24,12 +24,15 @@ namespace NodeUtils
 };
 
 {{ range.ServiceInfo }}
-namespace {{.CppPackage}} {
+{{/* 空 package 时不能包 namespace:`namespace  {}` 是匿名命名空间,跨编译单元不可见,
+     会导致 LNK2019(先例:battle 域 proto 无 package)。空则落全局命名空间,
+     与引用侧生成的 `::SetXxxHandler` 全局限定一致。*/}}
+{{if .CppPackage}}namespace {{.CppPackage}} {{"{"}}{{end}}
     void Set{{.FileBaseNameCamel}}Handler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void Set{{.FileBaseNameCamel}}IfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void Init{{.FileBaseNameCamel}}GrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
     void Handle{{.FileBaseNameCamel}}CompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
-}
+{{if .CppPackage}}{{"}"}}{{end}}
 {{ end }}
 
 void SetIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler){

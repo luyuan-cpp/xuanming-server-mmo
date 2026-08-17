@@ -12,6 +12,8 @@
 #include "core/utils/defer/defer.h"
 #include "core/utils/proto/proto_dirty_compare.h"
 #include "network/node_utils.h"
+#include "battle/system/player_battle.h"
+#include "proto/common/component/battle_comp.pb.h"
 #include "player/comp/last_persisted_snapshot_comp.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/cross_zone_reaper.h"
@@ -418,6 +420,11 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerGa
 			tlsEcs.dispatcher.trigger(loginEvent);
 		}
 	}
+
+	// 6. 回合制战斗登录后置钩子:先应用离线挂起结算(再放开排队),
+	//    RECONNECT 且战斗在途时向 gate 重发 BindBattleEvent 并提示客户端补拉。
+	//    放在场景绑定成功之后:会话快照与 gate 路由此时才可靠。
+	PlayerBattleSystem::OnPlayerEnterScene(player, enterInfo.enter_gs_type());
 }
 
 
@@ -786,6 +793,18 @@ void PlayerLifecycleSystem::HandleCrossZoneTransfer(entt::entity playerEntity)
 
 	if (!changeInfo->is_cross_zone())
 	{
+		return;
+	}
+
+	// 回合制战斗冻结拦截:战斗在途禁止跨 zone 迁移(设计文档 §5.3 冻结清单)。
+	// InBattleComp 摘除前实体必须留在本节点接收结算事件;迁移意图直接作废,
+	// 玩家结算落地(或 reaper 判废)后重新发起即可。
+	if (tlsEcs.actorRegistry.any_of<InBattleComp>(playerEntity))
+	{
+		LOG_WARN << "[PlayerBattle] 跨 zone 迁移被拒: 玩家战斗在途, player_id="
+				 << tlsEcs.actorRegistry.get<Guid>(playerEntity)
+				 << " to_zone=" << changeInfo->to_zone_id();
+		tlsEcs.actorRegistry.remove<ChangeSceneInfoComp>(playerEntity);
 		return;
 	}
 

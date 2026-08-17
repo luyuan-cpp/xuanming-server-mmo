@@ -6,12 +6,14 @@
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
+namespace {
+boost::object_pool<GrpcTag> tagPool;
+}
+
 namespace data_service {
 struct DataServiceCompleteQueue {
     grpc::CompletionQueue cq;
 };
-
-boost::object_pool<GrpcTag> tagPool;
 #pragma region DataServiceLoadPlayerData
 boost::object_pool<AsyncDataServiceLoadPlayerDataGrpcClient> DataServiceLoadPlayerDataPool;
 using AsyncDataServiceLoadPlayerDataHandlerFunctionType =

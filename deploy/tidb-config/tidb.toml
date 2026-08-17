@@ -1,0 +1,7 @@
+# TiDB dev 配置(全区全服数据层 Phase 1)
+# 依据: docs/design/global-data-layer-tidb-decision.md §D4 集群配置硬要求
+
+[performance]
+# 单行 KV 上限。玩家存档是 MEDIUMBLOB(上限 16MB),默认 6MB 写入必炸;
+# 决策要求 ≥32MB,此处取 32MiB。
+txn-entry-size-limit = 33554432

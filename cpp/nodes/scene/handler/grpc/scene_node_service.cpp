@@ -7,6 +7,7 @@
 #include "proto/common/event/scene_event.pb.h"
 #include "thread_context/ecs_context.h"
 #include "muduo/base/Logging.h"
+#include "battle/system/player_battle.h"
 ///<<< END WRITING YOUR CODE
 
 SceneNodeGrpcImpl::SceneNodeGrpcImpl(muduo::net::EventLoop& loop)
@@ -142,6 +143,24 @@ void SceneNodeGrpcImpl::HandleReleasePlayer(const ::scene_node::ReleasePlayerReq
     ///<<< END WRITING YOUR CODE
 }
 
+void SceneNodeGrpcImpl::HandlePrepareBattle(const ::PrepareBattleRequest* request,
+    ::PrepareBattleResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+    // match -> scene 备战冻结(外层已 runInLoop 投递到 loop 线程,可直接同步访问 ECS;
+    // 失败原因经 response.error_message 返回,gRPC status 恒为 OK)
+    PlayerBattleSystem::PrepareBattle(*request, *response);
+///<<< END WRITING YOUR CODE}
+}
+
+void SceneNodeGrpcImpl::HandleCancelBattlePrepare(const ::CancelBattlePrepareRequest* request)
+{
+///<<< BEGIN WRITING YOUR CODE
+    // gather 失败补偿解冻:battle_id 匹配才摘 InBattleComp + DEL battle:lock,幂等
+    PlayerBattleSystem::CancelBattlePrepare(*request);
+///<<< END WRITING YOUR CODE}
+}
+
 grpc::Status SceneNodeGrpcImpl::CreateScene(grpc::ServerContext* /*context*/,
     const ::CreateSceneRequest* request,
     ::CreateSceneResponse* response)
@@ -175,7 +194,6 @@ grpc::Status SceneNodeGrpcImpl::CreateScene(grpc::ServerContext* /*context*/,
         promise.set_value(); });
 
     future.get();
-
     return grpc::Status::OK;
 }
 
@@ -205,6 +223,38 @@ grpc::Status SceneNodeGrpcImpl::ReleasePlayer(grpc::ServerContext* /*context*/,
     loop_.runInLoop([request, &promise]
                     {
         HandleReleasePlayer(request);
+        promise.set_value(); });
+
+    future.get();
+    return grpc::Status::OK;
+}
+
+grpc::Status SceneNodeGrpcImpl::PrepareBattle(grpc::ServerContext* /*context*/,
+    const ::PrepareBattleRequest* request,
+    ::PrepareBattleResponse* response)
+{
+    std::promise<void> promise;
+    auto future = promise.get_future();
+
+    loop_.runInLoop([request, response, &promise]
+                    {
+        HandlePrepareBattle(request, response);
+        promise.set_value(); });
+
+    future.get();
+    return grpc::Status::OK;
+}
+
+grpc::Status SceneNodeGrpcImpl::CancelBattlePrepare(grpc::ServerContext* /*context*/,
+    const ::CancelBattlePrepareRequest* request,
+    ::Empty* response)
+{
+    std::promise<void> promise;
+    auto future = promise.get_future();
+
+    loop_.runInLoop([request, &promise]
+                    {
+        HandleCancelBattlePrepare(request);
         promise.set_value(); });
 
     future.get();

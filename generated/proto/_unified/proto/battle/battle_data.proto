@@ -1,0 +1,145 @@
+syntax = "proto3";
+option go_package = "proto/battle";
+
+import "proto/common/component/actor_comp.proto";
+
+// 回合制战斗共享数据结构(快照/行动/事件/结算)。
+// 设计依据:docs/design/turn-based-battle-server.md §4。
+// 类型纪律:battle_id/player_id/buff_id 为 uint64;table_id/session_id/回合数为 uint32;
+// 时间戳为 uint64 毫秒;属性 uint64(宪法 §4)。
+
+// ---- 路由信息:battle 节点出站消息(Kafka)所需的全部定位数据,快照携带,battle 不查 etcd ----
+message BattleRouting {
+  uint32 session_id = 1;
+  uint32 gate_node_id = 2;
+  string gate_instance_id = 3;   // gate 实例 UUID(GateCommand.target_instance_id 防僵尸)
+  uint32 scene_node_id = 4;
+  string scene_instance_id = 5;  // scene 实例 UUID(SceneCommand.target_instance_id 防僵尸)
+  uint32 zone_id = 6;
+}
+
+// ---- 参战 buff(时间维度已换算为回合,见设计文档 §5.1 换算策略) ----
+message BattleBuffEntry {
+  uint64 buff_id = 1;        // buff 实例 SnowFlake id
+  uint32 buff_table_id = 2;  // BuffTable 表 id
+  uint32 layer = 3;          // 叠层数
+  uint32 remain_rounds = 4;  // 剩余回合(0 = 无限持续)
+  uint64 caster_id = 5;
+}
+
+// ---- 战斗内道具副本 ----
+message BattleItemEntry {
+  uint32 item_table_id = 1;
+  uint64 count = 2;
+}
+
+// ---- 玩家战斗快照:scene 在 PrepareBattle 时构建,是战斗内玩家数据的唯一来源 ----
+message BattlePlayerSnapshot {
+  uint64 player_id = 1;
+  string player_name = 2;
+  uint32 level = 3;
+  BaseAttributesComp base_attributes = 4;  // 含 speed(出手序)
+  uint64 max_health = 5;
+  uint64 max_mana = 6;
+  repeated uint32 skill_table_ids = 7;     // 战斗可用技能(SkillTable id)
+  repeated BattleBuffEntry buffs = 8;      // 参战时携带的持续 buff
+  repeated BattleItemEntry items = 9;      // 战斗可用消耗品数量副本
+  BattleRouting routing = 10;
+  uint32 team_index = 11;                  // 0 = A 方(进攻),1 = B 方
+}
+
+// ---- 战斗单位运行时状态(玩家与怪物统一;引擎状态用 proto 承载,宪法 §3) ----
+enum eBattleActorType {
+  BATTLE_ACTOR_TYPE_NONE = 0;
+  BATTLE_ACTOR_TYPE_PLAYER = 1;
+  BATTLE_ACTOR_TYPE_MONSTER = 2;
+}
+
+message BattleActorState {
+  uint64 actor_id = 1;              // 玩家 = player_id;怪物 = 引擎生成的局内序号 id
+  eBattleActorType actor_type = 2;
+  uint32 team_index = 3;
+  string name = 4;
+  uint32 level = 5;
+  BaseAttributesComp attributes = 6;
+  uint64 max_health = 7;
+  uint64 max_mana = 8;
+  bool is_dead = 9;
+  bool is_defending = 10;           // 本回合防御(受伤减半)
+  bool fled = 11;                   // 已逃离战斗
+  repeated BattleBuffEntry buffs = 12;
+  repeated uint32 skill_table_ids = 13;
+  uint32 monster_table_id = 14;     // 仅怪物有效(MonsterTable id)
+  map<uint32, uint32> skill_cooldown_rounds = 15; // skill_table_id -> 剩余冷却回合
+}
+
+// ---- 玩家行动指令 ----
+enum eBattleActionType {
+  BATTLE_ACTION_NONE = 0;
+  BATTLE_ACTION_ATTACK = 1;  // 普攻
+  BATTLE_ACTION_SKILL = 2;
+  BATTLE_ACTION_DEFEND = 3;  // 防御:本回合受伤减半
+  BATTLE_ACTION_ITEM = 4;    // 使用战斗道具(从快照副本扣,结算回写)
+  BATTLE_ACTION_FLEE = 5;    // 逃跑(PVE 可用;成功率基于速度差)
+}
+
+message BattleAction {
+  eBattleActionType action_type = 1;
+  uint32 skill_table_id = 2;  // SKILL 时有效
+  uint64 target_id = 3;       // ATTACK/SKILL/ITEM 的目标
+  uint32 item_table_id = 4;   // ITEM 时有效
+}
+
+// ---- 回合结算事件(客户端按序播表现;确定性事件流,观战/回放的载体) ----
+enum eBattleEventType {
+  BATTLE_EVENT_NONE = 0;
+  BATTLE_EVENT_ATTACK = 1;       // 普攻出手
+  BATTLE_EVENT_SKILL = 2;        // 技能施放
+  BATTLE_EVENT_DAMAGE = 3;       // 伤害结算
+  BATTLE_EVENT_HEAL = 4;
+  BATTLE_EVENT_BUFF_ADD = 5;
+  BATTLE_EVENT_BUFF_REMOVE = 6;
+  BATTLE_EVENT_BUFF_TICK = 7;    // 周期效果(回合末)
+  BATTLE_EVENT_DEATH = 8;
+  BATTLE_EVENT_DEFEND = 9;
+  BATTLE_EVENT_ITEM = 10;
+  BATTLE_EVENT_FLEE = 11;        // 逃跑尝试(success 标记结果)
+}
+
+message BattleEventItem {
+  eBattleEventType event_type = 1;
+  uint64 source_id = 2;
+  uint64 target_id = 3;
+  uint32 skill_table_id = 4;
+  uint32 buff_table_id = 5;
+  uint64 value = 6;               // 伤害/治疗数值
+  bool is_critical = 7;
+  bool success = 8;               // FLEE 等布尔结果
+  uint64 target_health_after = 9; // 目标结算后 HP(客户端免推算)
+  uint32 item_table_id = 10;
+}
+
+// ---- 胜负 ----
+enum eBattleOutcome {
+  BATTLE_OUTCOME_ONGOING = 0;
+  BATTLE_OUTCOME_SIDE_A_WIN = 1; // team_index 0 胜
+  BATTLE_OUTCOME_SIDE_B_WIN = 2;
+  BATTLE_OUTCOME_DRAW = 3;       // 回合打满等平局情形(PVE 中进攻方判负走 SIDE_B_WIN)
+}
+
+// ---- 单个玩家的结算数据(battle -> scene,scene 是唯一应用者) ----
+message BattleSettlementData {
+  uint64 battle_id = 1;
+  uint64 player_id = 2;
+  eBattleOutcome outcome = 3;
+  uint32 player_team_index = 4;
+  uint64 health = 5;              // 战后终值,由 scene 回写
+  uint64 mana = 6;
+  uint64 exp_gain = 7;
+  uint64 gold_gain = 8;
+  repeated BattleItemEntry items_consumed = 9;  // scene 按实际持有校验扣除(防刷,不足按 0)
+  repeated BattleItemEntry items_gained = 10;   // 掉落
+  bool is_dead = 11;
+  bool fled = 12;
+  uint32 total_rounds = 13;
+}

@@ -25,10 +25,26 @@ public class LoginGrpcProperties {
     /** Optional client-side retry on UNAVAILABLE/DEADLINE_EXCEEDED. 0 disables. */
     private int retry = 1;
 
+    /**
+     * etcd-based login.rpc auto-discovery (multi-node deployments). When on,
+     * the per-zone channel pool follows {@code LoginNodeService.rpc/} etcd
+     * registrations; the static {@link #endpoints} list stays as a bootstrap /
+     * fallback for zones with no live etcd registration. Turning this off
+     * restores the pure static-config behaviour.
+     */
+    private boolean discoveryEnabled = true;
+
+    /** Discovery poll interval (ms). */
+    private long discoveryIntervalMs = 5000;
+
     public String getEndpoints() { return endpoints; }
     public void setEndpoints(String endpoints) { this.endpoints = endpoints; }
     public long getTimeoutMs() { return timeoutMs; }
     public void setTimeoutMs(long timeoutMs) { this.timeoutMs = timeoutMs; }
     public int getRetry() { return retry; }
     public void setRetry(int retry) { this.retry = retry; }
+    public boolean isDiscoveryEnabled() { return discoveryEnabled; }
+    public void setDiscoveryEnabled(boolean discoveryEnabled) { this.discoveryEnabled = discoveryEnabled; }
+    public long getDiscoveryIntervalMs() { return discoveryIntervalMs; }
+    public void setDiscoveryIntervalMs(long discoveryIntervalMs) { this.discoveryIntervalMs = discoveryIntervalMs; }
 }

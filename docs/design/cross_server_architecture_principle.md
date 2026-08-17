@@ -1,5 +1,7 @@
 # MMO Cross-Server Architecture (跨服架构 — 全局设计文档)
 
+> **修订(2026-08-15)**: "每 realm 独立存储、数据永远留在 home realm"的前提被 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) 修订为"TiDB 全局数据层 + home_zone 逻辑归属";**位置透明核心原则本身不变**,且因数据全局化而更容易成立。
+
 ## Game Model
 - MMO (魔兽世界类), ~1000 大区 (realms)
 - Player belongs to one home realm but can freely visit any realm

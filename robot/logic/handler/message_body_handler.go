@@ -29,6 +29,12 @@ func unmarshalAndCall[PT proto.Message](fn func(*gameobject.Player, PT)) handler
 }
 
 var messageHandlers = map[uint32]handlerFunc{
+	game.BattleClientPlayerSubmitBattleActionMessageId: unmarshalAndCall(BattleClientPlayerSubmitBattleActionHandler),
+	game.BattleClientPlayerGetBattleStateMessageId: unmarshalAndCall(BattleClientPlayerGetBattleStateHandler),
+	game.BattleClientPlayerNotifyBattleStartMessageId: unmarshalAndCall(BattleClientPlayerNotifyBattleStartHandler),
+	game.BattleClientPlayerNotifyTurnResultMessageId: unmarshalAndCall(BattleClientPlayerNotifyTurnResultHandler),
+	game.BattleClientPlayerNotifyBattleEndMessageId: unmarshalAndCall(BattleClientPlayerNotifyBattleEndHandler),
+	game.BattleClientPlayerNotifyBattleReconnectMessageId: unmarshalAndCall(BattleClientPlayerNotifyBattleReconnectHandler),
 	game.ClientPlayerChatSendChatMessageId: unmarshalAndCall(ClientPlayerChatSendChatHandler),
 	game.ClientPlayerChatPullChatHistoryMessageId: unmarshalAndCall(ClientPlayerChatPullChatHistoryHandler),
 	game.ClientPlayerLoginLoginMessageId: unmarshalAndCall(ClientPlayerLoginLoginHandler),

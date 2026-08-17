@@ -337,8 +337,15 @@ func writeServiceInfoCppFile(wg *sync.WaitGroup) {
 					"    std::make_unique<%s>(), %d, %s};",
 					handler, GetProtocol(method.Path()), nodeType))
 			} else {
-				declareFunction := "namespace " + method.CppPackage() + "{void Send" +
-					service.Service() + method.Method() + "(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}"
+				// 空 package 时不能包 namespace:"namespace {...}" 是匿名命名空间,
+				// 声明会与其他编译单元中的全局定义失配(LNK2019,先例:battle 域 proto 无 package)。
+				// 空则直接全局声明,引用名退化为 ::SendXxx。
+				sendSignature := "void Send" + service.Service() + method.Method() +
+					"(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );"
+				declareFunction := sendSignature
+				if method.CppPackage() != "" {
+					declareFunction = "namespace " + method.CppPackage() + "{" + sendSignature + "}"
+				}
 				senderFunction = appendUniqueString(senderFunction, senderFunctionSet, declareFunction)
 				sendName := method.CppPackage() + "::" + "Send" + service.Service() + method.Method()
 				initLines = append(initLines, fmt.Sprintf("    std::make_unique<%s>(),", method.CppResponse()))

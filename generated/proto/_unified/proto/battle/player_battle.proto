@@ -1,0 +1,75 @@
+syntax = "proto3";
+option go_package = "proto/battle";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/common/base/empty.proto";
+import "proto/battle/battle_data.proto";
+
+// 注意:不能加 cc_generic_services(与 grpc_cpp_plugin 冲突);客户端协议经 gate 以 gRPC 直达
+// battle 节点,服务端用手写 BattleClientPlayerGrpcImpl 消费 player_battle.grpc.pb.h
+//(必须手写:需读 metadata x-session-detail-bin 取权威 player_id,生成模板会丢弃 ServerContext)。
+option (OptionFileDefaultNode) = NODE_BATTLE;
+
+// 回合制战斗客户端协议。
+// 上行:gate 按本文件路由选项转发到 session 已绑定的 battle 节点(BindBattleEvent 建立绑定)。
+// 下行(Notify*):battle 节点经 Kafka gate-{gate_id} 的 PushToPlayerEvent/BroadcastToPlayersEvent 推送。
+// 设计依据:docs/design/turn-based-battle-server.md §5.2、D6。
+
+// ---- 战斗全量状态(开战下发 / 回合后同步 / 重连补拉,v1 全量同步免客户端预测) ----
+message BattleStateS2C {
+  uint64 battle_id = 1;
+  uint32 round_index = 2;                 // 当前回合序号,从 1 开始
+  repeated BattleActorState actors = 3;
+  uint64 action_deadline_ms = 4;          // 本回合行动提交截止(Unix 毫秒)
+  eBattleOutcome outcome = 5;
+  repeated uint64 pending_actor_ids = 6;  // 尚未提交行动的单位
+}
+
+message BattleStartS2C {
+  uint64 battle_id = 1;
+  BattleStateS2C state = 2;
+}
+
+message TurnResultS2C {
+  uint64 battle_id = 1;
+  uint32 round_index = 2;                 // 本次结算的回合序号
+  repeated BattleEventItem events = 3;    // 按结算顺序播表现
+  BattleStateS2C state = 4;               // 结算后权威状态
+}
+
+message BattleEndS2C {
+  uint64 battle_id = 1;
+  eBattleOutcome outcome = 2;
+  BattleSettlementData settlement = 3;    // 收信玩家本人视角
+}
+
+// 重连提示:scene 在 RECONNECT 链路发现 InBattleComp 时推送,客户端随后 GetBattleState 补拉
+message BattleReconnectS2C {
+  uint64 battle_id = 1;
+}
+
+// ---- 上行 ----
+message SubmitBattleActionRequest {
+  uint64 battle_id = 1;
+  BattleAction action = 2;
+}
+
+message SubmitBattleActionResponse {
+  TipInfoMessage error_message = 1;
+}
+
+message GetBattleStateRequest {
+  uint64 battle_id = 1;
+}
+
+service BattleClientPlayer {
+  option (OptionIsClientProtocolService) = true;
+
+  rpc SubmitBattleAction (SubmitBattleActionRequest) returns (SubmitBattleActionResponse);
+  rpc GetBattleState (GetBattleStateRequest) returns (BattleStateS2C);
+  rpc NotifyBattleStart (BattleStartS2C) returns (Empty);
+  rpc NotifyTurnResult (TurnResultS2C) returns (Empty);
+  rpc NotifyBattleEnd (BattleEndS2C) returns (Empty);
+  rpc NotifyBattleReconnect (BattleReconnectS2C) returns (Empty);
+}

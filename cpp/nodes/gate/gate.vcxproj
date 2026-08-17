@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="handler\event\battle_binding_helper.cpp" />
     <ClCompile Include="handler\event\event_handler.cpp" />
     <ClCompile Include="handler\event\gate_event_handler.cpp" />
     <ClCompile Include="handler\event\gate_kafka_command_router.cpp" />
@@ -36,6 +37,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gate_codec.h" />
+    <ClInclude Include="handler\event\battle_binding_helper.h" />
     <ClInclude Include="handler\event\event_handler.h" />
     <ClInclude Include="handler\event\gate_event_handler.h" />
     <ClInclude Include="handler\event\gate_kafka_command_router.h" />

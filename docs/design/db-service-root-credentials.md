@@ -2,6 +2,8 @@
 
 **Date:** 2026-04-12
 
+> **修订(2026-08-15)**: TiDB 化后本决策需重议(用户/权限模型、自动建库策略、凭证改环境变量注入——login 已有 `DSNEnv` 先例),见 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) §D9。
+
 ## Decision
 The `db` (Go) service connects to MySQL as `root`, not a restricted `appuser`.
 

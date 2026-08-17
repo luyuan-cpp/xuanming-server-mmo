@@ -2,6 +2,7 @@
 
 #include "actor_combat_state_event_handler.h"
 #include "actor_event_handler.h"
+#include "battle_event_handler.h"
 #include "buff_event_handler.h"
 #include "combat_event_handler.h"
 #include "mission_event_handler.h"
@@ -19,6 +20,7 @@ void EventHandler::Register()
 {
 ActorCombatStateEventHandler::Register();
 ActorEventHandler::Register();
+BattleEventHandler::Register();
 BuffEventHandler::Register();
 CombatEventHandler::Register();
 MissionEventHandler::Register();
@@ -36,6 +38,7 @@ void EventHandler::UnRegister()
 {
 ActorCombatStateEventHandler::UnRegister();
 ActorEventHandler::UnRegister();
+BattleEventHandler::UnRegister();
 BuffEventHandler::UnRegister();
 CombatEventHandler::UnRegister();
 MissionEventHandler::UnRegister();

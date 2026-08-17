@@ -11,6 +11,7 @@
 #include "frame/manager/frame_time.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/cross_zone_reaper.h"
+#include "battle/system/player_battle.h"
 #include "kafka/system/kafka.h"
 #include "proto/contracts/kafka/scene_command.pb.h"
 
@@ -88,6 +89,7 @@ int main(int argc, char *argv[])
 			context->dependencyGate.probeTimer.Cancel();
 			context->worldTimer.Cancel();
 			CrossZoneReaper::StopTick();
+			PlayerBattleSystem::StopReaper();
 			tlsRedisSystem.BeginShutdown();
 
             auto view = tlsEcs.actorRegistry.view<Player>();
@@ -274,6 +276,11 @@ int main(int argc, char *argv[])
             //
             // See docs/design/cross-zone-readiness-audit.md §3.2 件 3 + §7.
             CrossZoneReaper::StartTick(n.GetLoop());
+
+            // 回合制战斗冻结 reaper:30s 低频扫描 InBattleComp.deadline_ms,
+            // 过期即作废解冻(battle 节点崩溃 / match 断链的补偿路径,
+            // turn-based-battle-server.md §3.2)。不进 20FPS World::Update。
+            PlayerBattleSystem::StartReaper(n.GetLoop());
 
             context->dependencyGate.WaitAndRun(n, { SceneManagerNodeService },
                 [&context](auto&) {

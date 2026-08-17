@@ -36,7 +36,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
 const char descriptor_table_protodef_proto_2fdb_2fproto_5foption_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\033proto/db/proto_option.proto\032 google/pr"
-    "otobuf/descriptor.proto*\221\004\n\010NodeType\022\024\n\020"
+    "otobuf/descriptor.proto*\242\004\n\010NodeType\022\024\n\020"
     "NODE_UNSPECIFIED\020\000\022\017\n\013NODE_CLIENT\020\001\022\r\n\tN"
     "ODE_GATE\020\002\022\016\n\nNODE_SCENE\020\003\022\017\n\013NODE_CENTR"
     "E\020\004\022\013\n\007NODE_DB\020\005\022\017\n\013NODE_DEPLOY\020\006\022\023\n\017NOD"
@@ -49,64 +49,72 @@ const char descriptor_table_protodef_proto_2fdb_2fproto_5foption_2eproto[] ABSL_
     "_REDIS\020\013\022\r\n\tNODE_ETCD\020\014\022\014\n\010NODE_LOG\020\027\022\020\n"
     "\014NODE_PAYMENT\020\030\022\021\n\rNODE_SECURITY\020\031\022\025\n\021NO"
     "DE_CROSS_SERVER\020\032\022\022\n\016NODE_ANALYTICS\020\033\022\013\n"
-    "\007NODE_GM\020\034\022\027\n\023NODE_PLAYER_LOCATOR\020\035*\317\001\n\014"
-    "OPERATE_TYPE\022\020\n\014OPERATE_NONE\020\000\022\022\n\016OPERAT"
-    "E_INSERT\020\001\022\022\n\016OPERATE_UPDATE\020\002\022\022\n\016OPERAT"
-    "E_DELETE\020\003\022\020\n\014OPERATE_LOAD\020\004\022\030\n\024OPERATE_"
-    "DELETE_CACHE\020\005\022\023\n\017OPERATE_REPLACE\020\006\022\025\n\021O"
-    "PERATE_CALL_PROC\020\007\022\031\n\025OPERATE_DELETE_BAC"
-    "KUP\020\010*Q\n\016BS_RESULT_TYPE\022\022\n\016BS_RESULT_NON"
-    "E\020\000\022\025\n\021BS_RESULT_SUCCESS\020\001\022\024\n\020BS_RESULT_"
-    "FAILED\020\002*N\n\017MessagePriority\022\033\n\027MESSAGE_P"
-    "RIORITY_NORMAL\020\000\022\036\n\032MESSAGE_PRIORITY_IMP"
-    "ORTANT\020\001:H\n\025OptionFileDefaultNode\022\034.goog"
-    "le.protobuf.FileOptions\030\303\232\014 \001(\0162\t.NodeTy"
-    "pe:@\n\025OptionIsPlayerService\022\037.google.pro"
-    "tobuf.ServiceOptions\030\200\265\030 \001(\010:H\n\035OptionIs"
-    "ClientProtocolService\022\037.google.protobuf."
-    "ServiceOptions\030\201\265\030 \001(\010:Q\n\025OptionMessageP"
-    "riority\022\036.google.protobuf.MethodOptions\030"
-    "\220\203\031 \001(\0162\020.MessagePriority:;\n\rOptionTable"
-    "Id\022\037.google.protobuf.MessageOptions\030\240\302\036 "
-    "\001(\r\210\001\001:=\n\017OptionTableName\022\037.google.proto"
-    "buf.MessageOptions\030\241\302\036 \001(\t\210\001\001:>\n\020OptionP"
-    "rimaryKey\022\037.google.protobuf.MessageOptio"
-    "ns\030\242\302\036 \001(\t\210\001\001:>\n\020OptionForeignKey\022\037.goog"
-    "le.protobuf.MessageOptions\030\243\302\036 \001(\t\210\001\001:E\n"
-    "\027OptionForeignReferences\022\037.google.protob"
-    "uf.MessageOptions\030\245\302\036 \001(\t\210\001\001:D\n\026OptionAu"
-    "toIncrementKey\022\037.google.protobuf.Message"
-    "Options\030\246\302\036 \001(\t\210\001\001:C\n\025OptionBackupTableN"
-    "ame\022\037.google.protobuf.MessageOptions\030\247\302\036"
-    " \001(\t\210\001\001:<\n\016OptionLoadOnly\022\037.google.proto"
-    "buf.MessageOptions\030\250\302\036 \001(\010\210\001\001:A\n\023OptionP"
-    "rocedureName\022\037.google.protobuf.MessageOp"
-    "tions\030\251\302\036 \001(\t\210\001\001:C\n\025OptionProcedureResul"
-    "t\022\037.google.protobuf.MessageOptions\030\252\302\036 \001"
-    "(\t\210\001\001:9\n\013OptionIndex\022\037.google.protobuf.M"
-    "essageOptions\030\253\302\036 \001(\t\210\001\001:=\n\017OptionUnique"
-    "Key\022\037.google.protobuf.MessageOptions\030\254\302\036"
-    " \001(\t\210\001\001:D\n\026OptionIsPlayerDatabase\022\037.goog"
-    "le.protobuf.MessageOptions\030\255\302\036 \001(\010\210\001\001:N\n"
-    "\021OptionOperateType\022\037.google.protobuf.Mes"
-    "sageOptions\030\256\302\036 \001(\0162\r.OPERATE_TYPE\210\001\001:=\n"
-    "\021OptionRepeatLimit\022\035.google.protobuf.Fie"
-    "ldOptions\030\300\317$ \001(\r\210\001\001:>\n\022OptionDBFieldExt"
-    "ra\022\035.google.protobuf.FieldOptions\030\301\317$ \001("
-    "\t\210\001\001:<\n\020OptionDBReadOnly\022\035.google.protob"
-    "uf.FieldOptions\030\302\317$ \001(\010\210\001\001:>\n\022OptionDBNa"
-    "mePrefix\022\035.google.protobuf.FieldOptions\030"
-    "\303\317$ \001(\t\210\001\001:;\n\017OptionDBLoadSql\022\035.google.p"
-    "rotobuf.FieldOptions\030\304\317$ \001(\t\210\001\001:>\n\022Optio"
-    "nDBNeedEscape\022\035.google.protobuf.FieldOpt"
-    "ions\030\305\317$ \001(\010\210\001\001:=\n\021OptionDBProcParam\022\035.g"
-    "oogle.protobuf.FieldOptions\030\306\317$ \001(\010\210\001\001:9"
-    "\n\rOptionOldName\022\035.google.protobuf.FieldO"
-    "ptions\030\307\317$ \001(\t\210\001\001:7\n\013OptionTable\022\035.googl"
-    "e.protobuf.FieldOptions\030\310\317$ \001(\t\210\001\001:=\n\021Op"
-    "tionBackUpTabel\022\035.google.protobuf.FieldO"
-    "ptions\030\311\317$ \001(\t\210\001\001B2H\001Z.github.com/luyuan"
-    "cpp/protooption;messageoptionb\006proto3"
+    "\007NODE_GM\020\034\022\027\n\023NODE_PLAYER_LOCATOR\020\035\022\017\n\013N"
+    "ODE_BATTLE\020\036*\317\001\n\014OPERATE_TYPE\022\020\n\014OPERATE"
+    "_NONE\020\000\022\022\n\016OPERATE_INSERT\020\001\022\022\n\016OPERATE_U"
+    "PDATE\020\002\022\022\n\016OPERATE_DELETE\020\003\022\020\n\014OPERATE_L"
+    "OAD\020\004\022\030\n\024OPERATE_DELETE_CACHE\020\005\022\023\n\017OPERA"
+    "TE_REPLACE\020\006\022\025\n\021OPERATE_CALL_PROC\020\007\022\031\n\025O"
+    "PERATE_DELETE_BACKUP\020\010*Q\n\016BS_RESULT_TYPE"
+    "\022\022\n\016BS_RESULT_NONE\020\000\022\025\n\021BS_RESULT_SUCCES"
+    "S\020\001\022\024\n\020BS_RESULT_FAILED\020\002*N\n\017MessagePrio"
+    "rity\022\033\n\027MESSAGE_PRIORITY_NORMAL\020\000\022\036\n\032MES"
+    "SAGE_PRIORITY_IMPORTANT\020\001:H\n\025OptionFileD"
+    "efaultNode\022\034.google.protobuf.FileOptions"
+    "\030\303\232\014 \001(\0162\t.NodeType:@\n\025OptionIsPlayerSer"
+    "vice\022\037.google.protobuf.ServiceOptions\030\200\265"
+    "\030 \001(\010:H\n\035OptionIsClientProtocolService\022\037"
+    ".google.protobuf.ServiceOptions\030\201\265\030 \001(\010:"
+    "Q\n\025OptionMessagePriority\022\036.google.protob"
+    "uf.MethodOptions\030\220\203\031 \001(\0162\020.MessagePriori"
+    "ty:;\n\rOptionTableId\022\037.google.protobuf.Me"
+    "ssageOptions\030\240\302\036 \001(\r\210\001\001:=\n\017OptionTableNa"
+    "me\022\037.google.protobuf.MessageOptions\030\241\302\036 "
+    "\001(\t\210\001\001:>\n\020OptionPrimaryKey\022\037.google.prot"
+    "obuf.MessageOptions\030\242\302\036 \001(\t\210\001\001:>\n\020Option"
+    "ForeignKey\022\037.google.protobuf.MessageOpti"
+    "ons\030\243\302\036 \001(\t\210\001\001:E\n\027OptionForeignReference"
+    "s\022\037.google.protobuf.MessageOptions\030\245\302\036 \001"
+    "(\t\210\001\001:D\n\026OptionAutoIncrementKey\022\037.google"
+    ".protobuf.MessageOptions\030\246\302\036 \001(\t\210\001\001:C\n\025O"
+    "ptionBackupTableName\022\037.google.protobuf.M"
+    "essageOptions\030\247\302\036 \001(\t\210\001\001:<\n\016OptionLoadOn"
+    "ly\022\037.google.protobuf.MessageOptions\030\250\302\036 "
+    "\001(\010\210\001\001:A\n\023OptionProcedureName\022\037.google.p"
+    "rotobuf.MessageOptions\030\251\302\036 \001(\t\210\001\001:C\n\025Opt"
+    "ionProcedureResult\022\037.google.protobuf.Mes"
+    "sageOptions\030\252\302\036 \001(\t\210\001\001:9\n\013OptionIndex\022\037."
+    "google.protobuf.MessageOptions\030\253\302\036 \001(\t\210\001"
+    "\001:=\n\017OptionUniqueKey\022\037.google.protobuf.M"
+    "essageOptions\030\254\302\036 \001(\t\210\001\001:D\n\026OptionIsPlay"
+    "erDatabase\022\037.google.protobuf.MessageOpti"
+    "ons\030\255\302\036 \001(\010\210\001\001:N\n\021OptionOperateType\022\037.go"
+    "ogle.protobuf.MessageOptions\030\256\302\036 \001(\0162\r.O"
+    "PERATE_TYPE\210\001\001:F\n\030OptionTiDBNonclustered"
+    "PK\022\037.google.protobuf.MessageOptions\030\265\302\036 "
+    "\001(\010\210\001\001:F\n\030OptionTiDBShardRowIDBits\022\037.goo"
+    "gle.protobuf.MessageOptions\030\266\302\036 \001(\r\210\001\001:G"
+    "\n\031OptionTiDBPreSplitRegions\022\037.google.pro"
+    "tobuf.MessageOptions\030\267\302\036 \001(\r\210\001\001:F\n\030Optio"
+    "nTiDBAutoIDCacheOne\022\037.google.protobuf.Me"
+    "ssageOptions\030\270\302\036 \001(\010\210\001\001:=\n\021OptionRepeatL"
+    "imit\022\035.google.protobuf.FieldOptions\030\300\317$ "
+    "\001(\r\210\001\001:>\n\022OptionDBFieldExtra\022\035.google.pr"
+    "otobuf.FieldOptions\030\301\317$ \001(\t\210\001\001:<\n\020Option"
+    "DBReadOnly\022\035.google.protobuf.FieldOption"
+    "s\030\302\317$ \001(\010\210\001\001:>\n\022OptionDBNamePrefix\022\035.goo"
+    "gle.protobuf.FieldOptions\030\303\317$ \001(\t\210\001\001:;\n\017"
+    "OptionDBLoadSql\022\035.google.protobuf.FieldO"
+    "ptions\030\304\317$ \001(\t\210\001\001:>\n\022OptionDBNeedEscape\022"
+    "\035.google.protobuf.FieldOptions\030\305\317$ \001(\010\210\001"
+    "\001:=\n\021OptionDBProcParam\022\035.google.protobuf"
+    ".FieldOptions\030\306\317$ \001(\010\210\001\001:9\n\rOptionOldNam"
+    "e\022\035.google.protobuf.FieldOptions\030\307\317$ \001(\t"
+    "\210\001\001:7\n\013OptionTable\022\035.google.protobuf.Fie"
+    "ldOptions\030\310\317$ \001(\t\210\001\001:=\n\021OptionBackUpTabe"
+    "l\022\035.google.protobuf.FieldOptions\030\311\317$ \001(\t"
+    "\210\001\001B2H\001Z.github.com/luyuancpp/protooptio"
+    "n;messageoptionb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fdb_2fproto_5foption_2eproto_deps[1] = {
@@ -116,7 +124,7 @@ static ::absl::once_flag descriptor_table_proto_2fdb_2fproto_5foption_2eproto_on
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdb_2fproto_5foption_2eproto = {
     false,
     false,
-    2877,
+    3183,
     descriptor_table_protodef_proto_2fdb_2fproto_5foption_2eproto,
     "proto/db/proto_option.proto",
     &descriptor_table_proto_2fdb_2fproto_5foption_2eproto_once,
@@ -135,7 +143,7 @@ NodeType_descriptor() {
   return file_level_enum_descriptors_proto_2fdb_2fproto_5foption_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t NodeType_internal_data_[] = {
-    1966080u, 0u, };
+    2031616u, 0u, };
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 OPERATE_TYPE_descriptor() {
   ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2fdb_2fproto_5foption_2eproto);
@@ -239,6 +247,22 @@ PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 ::_pbi::ExtensionIdentifier<
         ::google::protobuf::MessageOptions, ::_pbi::EnumTypeTraits< ::OPERATE_TYPE>, 14, false>
         OptionOperateType(kOptionOperateTypeFieldNumber, static_cast< ::OPERATE_TYPE >(0));
+PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 ::_pbi::ExtensionIdentifier<
+        ::google::protobuf::MessageOptions, ::_pbi::PrimitiveTypeTraits< bool >, 8, false>
+        OptionTiDBNonclusteredPK(kOptionTiDBNonclusteredPKFieldNumber, false);
+PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 ::_pbi::ExtensionIdentifier<
+        ::google::protobuf::MessageOptions, ::_pbi::PrimitiveTypeTraits< ::uint32_t >, 13, false>
+        OptionTiDBShardRowIDBits(kOptionTiDBShardRowIDBitsFieldNumber, 0u);
+PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 ::_pbi::ExtensionIdentifier<
+        ::google::protobuf::MessageOptions, ::_pbi::PrimitiveTypeTraits< ::uint32_t >, 13, false>
+        OptionTiDBPreSplitRegions(kOptionTiDBPreSplitRegionsFieldNumber, 0u);
+PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 ::_pbi::ExtensionIdentifier<
+        ::google::protobuf::MessageOptions, ::_pbi::PrimitiveTypeTraits< bool >, 8, false>
+        OptionTiDBAutoIDCacheOne(kOptionTiDBAutoIDCacheOneFieldNumber, false);
 PROTOBUF_CONSTINIT
     PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 ::_pbi::ExtensionIdentifier<
         ::google::protobuf::FieldOptions, ::_pbi::PrimitiveTypeTraits< ::uint32_t >, 13, false>
@@ -348,6 +372,18 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 static ::std::false_type
         ::_pbi::ExtensionSet::RegisterEnumExtension(
             &::google::protobuf::MessageOptions::default_instance(), 500014, 14,
             false, false, ::OPERATE_TYPE_internal_data_),
+        ::_pbi::ExtensionSet::RegisterExtension(
+            &::google::protobuf::MessageOptions::default_instance(), 500021, 8,
+            false, false, /*is_utf8=*/false),
+        ::_pbi::ExtensionSet::RegisterExtension(
+            &::google::protobuf::MessageOptions::default_instance(), 500022, 13,
+            false, false, /*is_utf8=*/false),
+        ::_pbi::ExtensionSet::RegisterExtension(
+            &::google::protobuf::MessageOptions::default_instance(), 500023, 13,
+            false, false, /*is_utf8=*/false),
+        ::_pbi::ExtensionSet::RegisterExtension(
+            &::google::protobuf::MessageOptions::default_instance(), 500024, 8,
+            false, false, /*is_utf8=*/false),
         ::_pbi::ExtensionSet::RegisterExtension(
             &::google::protobuf::FieldOptions::default_instance(), 600000, 13,
             false, false, /*is_utf8=*/false),

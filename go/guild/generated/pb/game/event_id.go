@@ -42,3 +42,6 @@ const ContractsKafkaBroadcastToPlayersEventEventId = 38
 const ContractsKafkaPushToPlayerEventEventId = 39
 const ContractsKafkaBroadcastToSceneEventEventId = 40
 const PlayerMigrationAckEventEventId = 41
+const BattleSettlementEventEventId = 42
+const ContractsKafkaBindBattleEventEventId = 43
+const ContractsKafkaUnbindBattleEventEventId = 44

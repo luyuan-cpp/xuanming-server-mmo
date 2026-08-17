@@ -21,13 +21,14 @@ metadata:
     app: scene-manager
     tier: go-svc
 spec:
-  replicas: 1
-  # scene-manager 跑着 world_autoscale / agones_reconcile 两个无选主的单写者循环,
-  # 默认 RollingUpdate 在 1 副本上仍会 maxSurge 出第二个 pod,滚动期间两份 autoscaler
-  # 会对同一批 zone 并发做伸缩决策。Recreate 先关旧 pod 再起新 pod,消除重叠窗口。
-  # 正解是把 loginqueue/dispatcher.go 的选主抽到 go/shared/leader 后复用;在那之前用它兜底。
-  strategy:
-    type: Recreate
+  replicas: 2
+  # 多副本安全的前提(2026-08-15 起):world_autoscale / agones_reconcile /
+  # instance_lifecycle / load_reporter 的变更动作已由 shared/leader 的 Redis
+  # 选主锁收敛到单一领导者(scene_manager:leader:lock,TTL 30s,心跳 TTL/3),
+  # 跟随者只跑 RPC 数据面与 etcd watch 内存镜像。滚动更新新旧 pod 并存时也
+  # 只有一个领导者,故不再需要 Recreate;领导者 pod 挂掉后,幸存副本最迟
+  # ~TTL 内接管并用一次 fullSync 补齐缺位窗口内漏掉的变更。
+  # 观测:scene_manager_is_leader gauge,全体副本之和应恒为 1。
   selector:
     matchLabels:
       app: scene-manager
@@ -78,3 +79,18 @@ spec:
         - name: svc-config
           configMap:
             name: go-svc-scene-manager-config
+---
+# PDB 直接放在本文件里:k8s_deploy.ps1 只 apply 各服务目录里的主 manifest,
+# 独立的 *-pdb.yaml(如 login-pdb.yaml)不会被脚本应用 —— 别拆出去。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: scene-manager-pdb
+  labels:
+    app: scene-manager
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: scene-manager

@@ -51,6 +51,15 @@ var (
 		Help:      "Count of live scene nodes per zone and declared role.",
 	}, []string{"zone_id", "role"})
 
+	// isLeaderGauge:1 = 本副本是变更类后台循环的领导者,0 = 跟随者。
+	// 多副本部署时全体副本之和应恒为 1;和为 0 的时间窗超过锁 TTL 说明
+	// 选主卡住(Redis 不可达),需要告警。
+	isLeaderGauge = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "is_leader",
+		Help:      "Whether this replica leads the mutating background loops (1 leader / 0 follower).",
+	})
+
 	rebalanceMigrationsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "rebalance_migrations_total",
@@ -228,6 +237,7 @@ func register() {
 	registerOnce.Do(func() {
 		prometheus.MustRegister(
 			playerCount, sceneCount, loadScore, nodesByRole,
+			isLeaderGauge,
 			rebalanceMigrationsTotal, rebalancePending,
 			mirrorColocateTotal, instanceDestroyedTotal,
 			enterSceneRejectedTotal, sceneOrphansReconciledTotal,
@@ -239,6 +249,27 @@ func register() {
 			kafkaDeliveryTotal,
 		)
 	})
+}
+
+// SetLeader 发布本副本的领导权状态。选主接线见 scene_manager_service.go,
+// 领导权语义见 internal/logic/leader_gate.go。
+func SetLeader(leading bool) {
+	register()
+	if leading {
+		isLeaderGauge.Set(1)
+	} else {
+		isLeaderGauge.Set(0)
+	}
+}
+
+// ResetLeaderGauges 清掉只有领导者才刷新的 gauge 序列。降级后不清的话,
+// 该副本会永远导出最后一次在任时的旧值,sum()/max() 聚合读到脏数据。
+// Reset 直接移除 child 序列(而不是置 0),对聚合最友好。
+// 在失去领导权时调用(scene_manager_service.go 的 OnStateChange)。
+func ResetLeaderGauges() {
+	register()
+	agonesCounterDrift.Reset()
+	rebalancePending.Reset()
 }
 
 // ObserveKafkaDelivery 记录异步 writer 回报的终态；count 是批内消息数，

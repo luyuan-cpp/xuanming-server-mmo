@@ -108,6 +108,7 @@ enum NodeType : int {
   NODE_ANALYTICS = 27,
   NODE_GM = 28,
   NODE_PLAYER_LOCATOR = 29,
+  NODE_BATTLE = 30,
   NodeType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   NodeType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -118,11 +119,11 @@ extern const uint32_t NodeType_internal_data_[];
 inline constexpr NodeType NodeType_MIN =
     static_cast<NodeType>(0);
 inline constexpr NodeType NodeType_MAX =
-    static_cast<NodeType>(29);
+    static_cast<NodeType>(30);
 [[nodiscard]] inline bool NodeType_IsValid(int value) {
-  return 0 <= value && value <= 29;
+  return 0 <= value && value <= 30;
 }
-inline constexpr int NodeType_ARRAYSIZE = 29 + 1;
+inline constexpr int NodeType_ARRAYSIZE = 30 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 NodeType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(NodeType) {
@@ -137,7 +138,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& NodeType_Name(NodeType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<NodeType_descriptor, 0, 29>(
+  return ::google::protobuf::internal::NameOfDenseEnum<NodeType_descriptor, 0, 30>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool NodeType_Parse(
@@ -338,6 +339,18 @@ extern ::google::protobuf::internal::ExtensionIdentifier<
 inline constexpr int kOptionOperateTypeFieldNumber = 500014;
 extern ::google::protobuf::internal::ExtensionIdentifier<
     ::google::protobuf::MessageOptions, ::google::protobuf::internal::EnumTypeTraits< ::OPERATE_TYPE>, 14, false>(OptionOperateType);
+inline constexpr int kOptionTiDBNonclusteredPKFieldNumber = 500021;
+extern ::google::protobuf::internal::ExtensionIdentifier<
+    ::google::protobuf::MessageOptions, ::google::protobuf::internal::PrimitiveTypeTraits< bool >, 8, false>(OptionTiDBNonclusteredPK);
+inline constexpr int kOptionTiDBShardRowIDBitsFieldNumber = 500022;
+extern ::google::protobuf::internal::ExtensionIdentifier<
+    ::google::protobuf::MessageOptions, ::google::protobuf::internal::PrimitiveTypeTraits< ::uint32_t >, 13, false>(OptionTiDBShardRowIDBits);
+inline constexpr int kOptionTiDBPreSplitRegionsFieldNumber = 500023;
+extern ::google::protobuf::internal::ExtensionIdentifier<
+    ::google::protobuf::MessageOptions, ::google::protobuf::internal::PrimitiveTypeTraits< ::uint32_t >, 13, false>(OptionTiDBPreSplitRegions);
+inline constexpr int kOptionTiDBAutoIDCacheOneFieldNumber = 500024;
+extern ::google::protobuf::internal::ExtensionIdentifier<
+    ::google::protobuf::MessageOptions, ::google::protobuf::internal::PrimitiveTypeTraits< bool >, 8, false>(OptionTiDBAutoIDCacheOne);
 inline constexpr int kOptionRepeatLimitFieldNumber = 600000;
 extern ::google::protobuf::internal::ExtensionIdentifier<
     ::google::protobuf::FieldOptions, ::google::protobuf::internal::PrimitiveTypeTraits< ::uint32_t >, 13, false>(OptionRepeatLimit);

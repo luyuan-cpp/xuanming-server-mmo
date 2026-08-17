@@ -64,6 +64,19 @@ public class GateWatcher {
         return fetchNodesByPrefix(NodeType.SCENE_PREFIX);
     }
 
+    /**
+     * Fetches all go-zero login nodes currently registered in etcd. Used by
+     * {@link com.game.gateway.grpc.LoginNodeDiscovery} to keep the per-zone
+     * login.rpc channel pool in sync with the actual deployment instead of a
+     * hand-maintained {@code zoneId=host:port} config list.
+     *
+     * @throws NodeDiscoveryException etcd 查询失败或任一 NodeInfo 记录无法解析；
+     *                                真正的零节点仍返回空列表
+     */
+    public List<NodeInfoRecord> fetchAllLoginNodes() {
+        return fetchNodesByPrefix(NodeType.LOGIN_PREFIX);
+    }
+
     private List<NodeInfoRecord> fetchNodesByPrefix(String prefix) {
         final GetResponse resp;
         try {

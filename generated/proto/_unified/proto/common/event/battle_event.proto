@@ -1,0 +1,15 @@
+syntax = "proto3";
+option go_package = "proto/common/event";
+
+import "proto/battle/battle_data.proto";
+
+// 回合制战斗事件(经 SceneCommand{DispatchEvent} 进 scene 节点进程内分发)。
+// Kafka 投递要求:topic = scene-{node_id},key = player_id(保序),
+// target_instance_id = 快照 BattleRouting.scene_instance_id(防僵尸,宪法 §7 不变量 2)。
+
+// battle -> scene:战斗结算。scene 是唯一应用者:
+// 校验 InBattleComp.battle_id 匹配 -> 应用 -> 摘 InBattleComp + DEL battle:lock;
+// 不匹配丢弃并告警;玩家不在场 -> 写 battle:settlement:pending:{player_id}(TTL 7d)。
+message BattleSettlementEvent {
+  BattleSettlementData settlement = 1;
+}

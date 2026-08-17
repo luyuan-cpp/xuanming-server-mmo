@@ -56,6 +56,17 @@ public class AssignGateRateLimiter {
      * @param account  account identifier or null when not yet known
      */
     public RateLimitDecision check(long zoneId, String clientIp, String account) {
+        return check(zoneId, clientIp, account, "assign");
+    }
+
+    /**
+     * @param cooldownScope account 冷却的命名空间。/api/login 与 /api/assign-gate
+     *                      共用本单例,若共用同一冷却 key,正常的
+     *                      「login 成功 → 紧接着 assign-gate」顺序调用会在第二步
+     *                      必然命中 ACCOUNT_COOLDOWN(默认 5s)被 429。按端点
+     *                      隔离后,各端点保留自己的防重试风暴窗口。
+     */
+    public RateLimitDecision check(long zoneId, String clientIp, String account, String cooldownScope) {
         if (!props.isEnabled() || proxyManager == null) {
             return RateLimitDecision.pass();
         }
@@ -90,14 +101,15 @@ public class AssignGateRateLimiter {
             return RateLimitDecision.pass();
         }
 
-        // 4. account cooldown (best-effort, process-local)
+        // 4. account cooldown (best-effort, process-local, per-endpoint scope)
         if (account != null && !account.isBlank()) {
+            String cooldownKey = cooldownScope + ":" + account;
             long now = System.currentTimeMillis();
-            Long prev = accountCooldown.get(account);
+            Long prev = accountCooldown.get(cooldownKey);
             if (prev != null && now - prev < props.getAccountCooldownMs()) {
                 return RateLimitDecision.deny("ACCOUNT_COOLDOWN");
             }
-            accountCooldown.put(account, now);
+            accountCooldown.put(cooldownKey, now);
             // Opportunistic GC: every ~1k inserts, drop entries older than the cooldown window.
             if ((accountCooldown.size() & 0x3FF) == 0) {
                 long stale = now - props.getAccountCooldownMs();

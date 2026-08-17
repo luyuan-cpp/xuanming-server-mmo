@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"github.com/golang/protobuf/proto"
 	"io"
 	"log"
 	"net"
@@ -11,8 +12,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/golang/protobuf/proto"
 )
 
 type Connection struct {
@@ -56,7 +55,6 @@ func NewConnection(addr string, codec Codec) *Connection {
 func (conn *Connection) connectionManager() {
 	defer conn.wg.Done()
 
-	var failCount int
 	for {
 		if conn.IsClosed() {
 			return
@@ -64,18 +62,10 @@ func (conn *Connection) connectionManager() {
 
 		netConn, err := net.Dial("tcp", conn.addr)
 		if err != nil {
-			failCount++
-			// Throttle the dial-failure log: log only the first failure, then
-			// every 30th retry (~30s with the 1s sleep below). Under 45k-bot
-			// stress this previously emitted ~90k Connect-failed lines/min per
-			// process and drowned every other diagnostic in stderr.
-			if failCount == 1 || failCount%30 == 0 {
-				log.Printf("Connect failed (%s, attempt %d): %v", conn.addr, failCount, err)
-			}
+			log.Println("Connect failed:", err)
 			time.Sleep(time.Second)
 			continue
 		}
-		failCount = 0
 
 		conn.setConn(netConn)
 		log.Println("Connected to", conn.addr)

@@ -87,3 +87,21 @@ message BroadcastToSceneEvent {
 message BroadcastToAllEvent {
   MessageContent message_content = 1;
 }
+
+// 回合制战斗:把 session 的 BattleNodeService 绑定指到指定 battle 节点。
+// 发送方:battle 节点(CreateBattle 成功后)或 scene(RECONNECT 且玩家仍在战斗时重挂)。
+// gate 处理:照 RoutePlayerEvent 模式,SessionInfo 按 nodeType 多绑定,scene 绑定不受影响。
+message BindBattleEvent {
+  uint32 session_id = 1;
+  uint32 battle_node_id = 2;
+  uint64 battle_id = 3;
+  uint64 player_id = 4;
+}
+
+// 回合制战斗:解除 session 的 BattleNodeService 绑定(战斗结束/作废)。
+// battle_id 不匹配当前绑定时忽略(防迟到的解绑清掉新战斗)。
+message UnbindBattleEvent {
+  uint32 session_id = 1;
+  uint64 battle_id = 2;
+  uint64 player_id = 3;
+}

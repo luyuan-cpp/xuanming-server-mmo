@@ -8,12 +8,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
 
 	"shared/generated/table"
 
+	"github.com/google/uuid"
 	"github.com/zeromicro/go-zero/core/logx"
 )
 
@@ -21,7 +23,83 @@ import (
 const (
 	// SET per (zone, confId): holds sceneId strings for each channel.
 	WorldChannelsKeyFmt = "world_channels:zone:%d:%d"
+
+	// worldInitLockKeyFmt: zone 级补建互斥锁。initWorldScenesForZone 的
+	// "数集合缺多少补多少"是无原子性的读改写,而它有两类并发入口:
+	// 领导者的后台循环(fullSync / watch PUT / autoscaler 扩容)与**任意副本**
+	// 上 CreateScene 的 on-demand 兜底(createscenelogic.go)。不加锁时
+	// 两个实例同时看到 existing=0 就会把同一批频道位建两份。
+	worldInitLockKeyFmt = "world_init:lock:zone:%d"
+	// worldInitLockTTLSeconds: 锁 TTL。补建正常几百 ms 内完成,TTL 只是
+	// 持有者进程死亡时的自愈上限。
+	worldInitLockTTLSeconds = 60
+	// worldInitLockWait / worldInitLockPoll: 锁忙时的等待预算与轮询间隔。
+	// 等待预算按调用方拆分(initWorldScenesForZone 的 waitForLock 参数):
+	//   - CreateScene 的 on-demand 兜底(任意副本)必须在返回前看到频道
+	//     存在,用 worldInitLockWait 忙等;
+	//   - 后台路径(fullSync / watch PUT / autoscaler)"锁忙"就意味着别人
+	//     正在做同一件事,直接跳过、靠下一拍收敛 —— 尤其 watch PUT 跑在
+	//     etcd 事件 goroutine 上,忙等 10s 会把 DELETE 事件和定时器全堵住。
+	worldInitLockWait = 10 * time.Second
+	worldInitLockPoll = 200 * time.Millisecond
+
+	// worldInitCreateRPCTimeout: 锁内每个 CreateScene RPC 的时限。后台
+	// 调用方传进来的是 main 的永不取消 ctx,黑洞节点(进程死了、etcd 租约
+	// 还没过期)会让无时限 RPC 挂 ~20s(gRPC minConnectTimeout),几个僵尸
+	// 节点就能把持锁时长顶过 60s TTL,互斥悄悄失效。CreateScene 按
+	// scene_id 幂等,超时安全;DeadlineExceeded 同时会触发 markNodeDead。
+	worldInitCreateRPCTimeout = 5 * time.Second
 )
+
+// luaReleaseWorldInitLock: 属主校验后释放,与仓内其它 Redis 锁的释放脚本一致。
+const luaReleaseWorldInitLock = `
+if redis.call("get", KEYS[1]) == ARGV[1] then
+	return redis.call("del", KEYS[1])
+else
+	return 0
+end
+`
+
+// acquireWorldInitLock 串行化同一 zone 的世界频道补建。返回属主 token。
+// maxWait=0 表示只试一次(后台路径:锁忙即跳过)。ok=false 的各种情况都
+// 选择"跳过本轮补建":Redis 出错时无锁裸跑会复活双建竞态;等待超时说明
+// 持有者异常(正常几百 ms 内放锁),下一拍会收敛。
+func acquireWorldInitLock(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, maxWait time.Duration) (string, bool) {
+	key := fmt.Sprintf(worldInitLockKeyFmt, zoneId)
+	token := uuid.NewString()
+	deadline := time.Now().Add(maxWait)
+	for {
+		ok, err := svcCtx.Redis.SetnxEx(key, token, worldInitLockTTLSeconds)
+		if err != nil {
+			logx.Errorf("[World] Zone %d: acquire init lock failed: %v", zoneId, err)
+			return "", false
+		}
+		if ok {
+			return token, true
+		}
+		if ctx.Err() != nil || time.Now().After(deadline) {
+			return "", false
+		}
+		time.Sleep(worldInitLockPoll)
+	}
+}
+
+func releaseWorldInitLock(svcCtx *svc.ServiceContext, zoneId uint32, token string) {
+	key := fmt.Sprintf(worldInitLockKeyFmt, zoneId)
+	res, err := svcCtx.Redis.Eval(luaReleaseWorldInitLock, []string{key}, token)
+	if err != nil {
+		// 释放失败无碍正确性:锁到 TTL 自然过期,只是这段时间别的补建要等。
+		logx.Errorf("[World] Zone %d: release init lock failed: %v", zoneId, err)
+		return
+	}
+	if toInt64(res) == 0 {
+		// 属主校验没通过 = 本次补建超过了 60s TTL,互斥在中途已经失效。
+		// 这必须可见:说明有节点把 CreateScene 拖得极慢(黑洞节点超时不够
+		// 用?),需要人查,而不是悄悄接受可能的双建。
+		logx.Errorf("[World] Zone %d: init lock expired mid-run (TTL %ds) — mutual exclusion lapsed, investigate slow CreateScene RPCs",
+			zoneId, worldInitLockTTLSeconds)
+	}
+}
 
 type WorldChannelCandidate struct {
 	SceneID uint64
@@ -46,7 +124,23 @@ func worldChannelsKey(zoneID uint32, confId uint64) string {
 // handed a persistent world channel. When StrictNodeTypeSeparation=false and
 // the pool is empty, selection falls back to any available node in the zone
 // (dev / single-process convenience).
-func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, confIds []uint64) {
+// waitForLock:锁忙时是否忙等(预算 worldInitLockWait)。RPC 兜底传 true
+// (必须在返回前看到频道存在),后台路径传 false(跳过,下一拍收敛)。
+func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zoneId uint32, confIds []uint64, waitForLock bool) {
+	// zone 级互斥:见 worldInitLockKeyFmt 的注释。拿不到锁就跳过本轮 ——
+	// 等到锁的一方会重查集合、只补真正缺的;拿不到的调用方靠自身重试
+	// (RPC 兜底会重查 GetBestWorldChannel)或下一拍后台循环收敛。
+	maxWait := time.Duration(0)
+	if waitForLock {
+		maxWait = worldInitLockWait
+	}
+	lockToken, locked := acquireWorldInitLock(ctx, svcCtx, zoneId, maxWait)
+	if !locked {
+		logx.Infof("[World] Zone %d: init lock busy/unavailable, skipping this init round", zoneId)
+		return
+	}
+	defer releaseWorldInitLock(svcCtx, zoneId, lockToken)
+
 	nodes := getNodesForPurpose(svcCtx, zoneId, constants.NodePurposeWorld)
 	if len(nodes) == 0 {
 		logx.Errorf("[World] Zone %d: no world-hosting nodes available (strict=%v), skipping",
@@ -174,10 +268,16 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 				targetNode = newNode
 			}
 
-			if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, targetNode, uint32(confId), sceneId); err != nil {
-				logx.Errorf("[World] Failed to call CreateScene for conf %d scene %d: %v", confId, sceneId, err)
+			// 每个 RPC 限时:本段在 zone 锁内,黑洞节点的无时限 RPC 会把
+			// 持锁时长顶过 TTL(见 worldInitCreateRPCTimeout 注释)。
+			// CreateScene 按 scene_id 幂等,超时安全。
+			rpcCtx, rpcCancel := context.WithTimeout(ctx, worldInitCreateRPCTimeout)
+			_, rpcErr := RequestNodeCreateScene(rpcCtx, svcCtx, zoneId, targetNode, uint32(confId), sceneId)
+			rpcCancel()
+			if rpcErr != nil {
+				logx.Errorf("[World] Failed to call CreateScene for conf %d scene %d: %v", confId, sceneId, rpcErr)
 				// Mark node as dead so we don't keep retrying it for remaining scenes.
-				if isNodeUnreachableError(err) {
+				if isNodeUnreachableError(rpcErr) {
 					markNodeDead(svcCtx, zoneId, targetNode, deadNodes, &liveNodes)
 					// Reassign this scene to a live node and retry once.
 					if len(liveNodes) > 0 {
@@ -186,8 +286,11 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 						reassignSceneNode(svcCtx, zoneId, sceneId, targetNode, newNode)
 						// 同上:重试落到新节点,名额也要跟过去。
 						TransferAgonesRoomForScene(ctx, svcCtx, sceneId, newNode, zoneId)
-						if _, err := RequestNodeCreateScene(ctx, svcCtx, zoneId, newNode, uint32(confId), sceneId); err != nil {
-							logx.Errorf("[World] Retry also failed for conf %d scene %d on node %s: %v", confId, sceneId, newNode, err)
+						retryCtx, retryCancel := context.WithTimeout(ctx, worldInitCreateRPCTimeout)
+						_, retryErr := RequestNodeCreateScene(retryCtx, svcCtx, zoneId, newNode, uint32(confId), sceneId)
+						retryCancel()
+						if retryErr != nil {
+							logx.Errorf("[World] Retry also failed for conf %d scene %d on node %s: %v", confId, sceneId, newNode, retryErr)
 						}
 					}
 				}
@@ -459,7 +562,12 @@ func isNodeUnreachableError(err error) bool {
 	return strings.Contains(s, "Unavailable") ||
 		strings.Contains(s, "connection refused") ||
 		strings.Contains(s, "connectex") ||
-		strings.Contains(s, "not found in etcd")
+		strings.Contains(s, "not found in etcd") ||
+		// 锁内 CreateScene 加了 5s 时限后,黑洞节点(进程死、租约未过期)
+		// 的失败形态从 Unavailable 变成超时 —— 同样按"不可达"处理,
+		// 否则僵尸节点每轮都要白等一次超时。
+		strings.Contains(s, "DeadlineExceeded") ||
+		strings.Contains(s, "context deadline exceeded")
 }
 
 // markNodeDead removes a zombie node from Redis load set and connection cache,

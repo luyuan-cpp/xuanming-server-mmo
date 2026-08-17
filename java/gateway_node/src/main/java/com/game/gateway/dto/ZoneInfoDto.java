@@ -1,6 +1,7 @@
 package com.game.gateway.dto;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class ZoneInfoDto {
@@ -32,6 +33,9 @@ public class ZoneInfoDto {
     public Long getOpenTime() { return openTime; }
     public void setOpenTime(Long openTime) { this.openTime = openTime; }
 
+    // Jackson 会把 boolean getter isNew() 的属性名剥成 "new",SNAKE_CASE 后
+    // 仍是 "new";客户端字段只能叫 is_new(new 是 C# 关键字),必须显式标注。
+    @JsonProperty("is_new")
     public boolean isNew() { return isNew; }
     public void setNew(boolean isNew) { this.isNew = isNew; }
 

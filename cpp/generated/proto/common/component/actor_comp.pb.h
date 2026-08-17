@@ -1614,6 +1614,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseAttributesComp final : public :
     kCritchanceFieldNumber = 5,
     kArmorFieldNumber = 6,
     kResistanceFieldNumber = 7,
+    kSpeedFieldNumber = 8,
   };
   // uint64 strength = 1;
   void clear_strength() ;
@@ -1685,11 +1686,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseAttributesComp final : public :
   void _internal_set_resistance(::uint64_t value);
 
   public:
+  // uint64 speed = 8;
+  void clear_speed() ;
+  [[nodiscard]] ::uint64_t speed() const;
+  void set_speed(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_speed() const;
+  void _internal_set_speed(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BaseAttributesComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
+      ::google::protobuf::internal::TcParseTable<3, 8,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1725,6 +1736,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseAttributesComp final : public :
     ::uint64_t critchance_;
     ::uint64_t armor_;
     ::uint64_t resistance_;
+    ::uint64_t speed_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3338,6 +3350,30 @@ inline ::uint64_t BaseAttributesComp::_internal_resistance() const {
 inline void BaseAttributesComp::_internal_set_resistance(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.resistance_ = value;
+}
+
+// uint64 speed = 8;
+inline void BaseAttributesComp::clear_speed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.speed_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t BaseAttributesComp::speed() const {
+  // @@protoc_insertion_point(field_get:BaseAttributesComp.speed)
+  return _internal_speed();
+}
+inline void BaseAttributesComp::set_speed(::uint64_t value) {
+  _internal_set_speed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:BaseAttributesComp.speed)
+}
+inline ::uint64_t BaseAttributesComp::_internal_speed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.speed_;
+}
+inline void BaseAttributesComp::_internal_set_speed(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.speed_ = value;
 }
 
 // -------------------------------------------------------------------

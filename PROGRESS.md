@@ -2458,3 +2458,413 @@ bag AddItems 非原子(两个批量重载全仓零调用方=死 API,thread_local
 待 Codex:`cd go && go build ./...`;`go test ./login/... ./friend/...`
 (token_test 若断言 SET 语义需改 ZSET;loginqueue TryReserveFastPathSlot 建议补并发占位
 单测:budget=N 时并发 reserve 恰好成功 N 次)。C++ 侧本轮无改动。
+
+---
+
+## 2026-08-15 登录选服闭环:网关准入 + login.rpc etcd 发现 + Unity 客户端接通
+
+设计详见 `docs/design/third-party-login-end-to-end-design.md §7`(本次新增章节)。
+
+### 服务器改动(java/gateway_node,全部未编译,待 Codex 验证)
+
+- `etcd/NodeType.java`:+`LOGIN_NODE_SERVICE=5` / `LOGIN_PREFIX="LoginNodeService.rpc/"`
+- `etcd/GateWatcher.java`:+`fetchAllLoginNodes()`
+- `config/LoginGrpcProperties.java`:+`discoveryEnabled`(默认 true)/`discoveryIntervalMs`(默认 5000)
+- `grpc/LoginRpcClient.java`:动态 per-zone channel 池(etcd 发现,轮询 + 重试换实例),
+  静态 `<zoneId>=host:port` 降级为兜底;`updateDynamicEndpoints()` 整表原子替换 +
+  消失节点 channel 回收;选路逻辑收敛到 `pickChannel()`(每次重试重选)
+- `grpc/LoginNodeDiscovery.java`(新):@Scheduled 拉 etcd → 推 LoginRpcClient;
+  etcd 失败保留 last-known-good;test profile 关闭
+- `service/AssignGateService.java`:`checkZoneAdmission`(assign-gate + queue-status
+  双入口 fail-closed:404 zone_not_found / 503 zone_maintenance|zone_closed|zone_not_open)
+- `dto/AssignGateResponse.java`:+`zoneNotFound()` / `zoneUnavailable(tag)` 工厂
+- `application.yaml` / `application-test.yaml`:发现配置 + 注释
+- 新测试:`service/AssignGateServiceZoneAdmissionTest.java`(7 用例)
+
+### 客户端改动(E:\work\mmorpg-client,UGUI,FairyGUI 未动)
+
+- `Net/GatewayHttpClient.cs`:+`/api/login`、`/api/queue-status`、`/api/refresh-token`;
+  AssignGateResult 补齐 code/queue_token/queue_rank/queue_total/retry_after_ms/token_deadline
+- `Game/GameClient.cs`:应答匹配修复(id 精确 → message_id FIFO 兜底,修 gate gRPC
+  回包 id==0 必超时 bug);`EnterZone` 完整管线(HTTP 登录排队重试 → assign-gate 排队
+  轮询/410 重排 → TCP 验签 → Login(access_token) → CreatePlayer → EnterGame → 等
+  NotifyEnterScene);`RedirectToGateNotify`(124) 跨 gate 重连;TCP RefreshToken
+  回包捕获;断线状态清理
+- `UI/Ugui/QdaoServerSelectView.cs`:登录+选服合一屏,server-list 数据驱动
+  (状态灯/负载/维护文案/分类页签/搜索/分页/最近登录持久化),陈旧 prefab 自愈重建
+- `UI/SessionModel.cs` / `Core/ClientSettings.cs`:配置统一(网关默认端口修正
+  8080→8081)、最近区服持久化、DeviceId、token 仅内存
+- `Net/MessageIds.cs`:重生成(+RedirectToGate=124;tools/gen_messageids.ps1 白名单同步)
+
+### 明确未做 / 环境前置
+
+- proto / C++ gate / Go login 零改动(id 回显问题选择客户端侧修复,与 robot 口径一致)
+- PREVIEW 白名单不消费(zone_whitelist.account_id 是 Long,账号是 string,表结构先修再接)
+- dev 联调前置:login.yaml 开 PasswordAuth 或 DevPasswordAuth(默认 password 认证关闭,
+  客户端登录会得到 401);MySQL gateway 库要有 zone_config 行;k8s 外网形态还差
+  gate 地址翻译(deploy/k8s/README.md:184 已知问题,与本次无关)
+
+### 2026-08-15 补充:多视角审查(12 agent 对抗复核)后的 7 项修复
+
+审查确认 7 实锤(1 编译阻断 + 6 major),全部已修:
+
+1. 客户端 `GameClient.cs` CS0104:`AssignGateRequest` 在 Loginpb 与 MmorpgClient.Net 双命名空间同名 → 使用处全限定
+2. `dto/ZoneInfoDto.java`:Jackson 把 `isNew()` 序列化成 `"new"` 而非客户端期望的 `"is_new"`(C# 关键字不能用 new)→ getter 加 `@JsonProperty("is_new")`(**存量 bug,非本次引入**)
+3. `grpc/LoginRpcClient.java` parseLoginResponse:field 2(players)原来 skipField,/api/login 的 players 恒 [] → 补 wrapper.player.player_id 嵌套解析(**存量 bug**)
+4. `service/AssignGateService.java` checkZoneAdmission:findById 无 try/catch,DB 抖动会穿透成 HTTP 500 whitelabel 打破「恒 200+code」契约 → 捕获后返回 code=500 error=zone_admission_unavailable(fail-closed,维护窗口不放人)
+5. 客户端管线并发互踩:EnterZone 无世代守卫 + 断线回调无条件复位 _busy → GameClient 加 `_pipelineGen` 世代(每个 yield 恢复点校验,EnterZone 开头 Disconnect 清遗留),视图加 `_enterRunId` 作废迟到回调
+6. `GateTcpClient.cs`:Dispose 后 Poll 仍会派发 inbox 残留消息(重定向时旧连接的 KickPlayer/哨兵会打到新状态上)→ `_disposed` 标志,Dispose 首行置位,Poll 双循环检查
+7. `ratelimit/AssignGateRateLimiter.java`:/api/login 与 /api/assign-gate 共用 account 冷却表,开限流后「login→assign-gate」顺序调用必撞 ACCOUNT_COOLDOWN 429 → 冷却 key 加端点 scope("login:"/"assign:"),旧 3 参重载默认 assign 保持测试兼容
+
+审查另驳回 1 项误报(重定向 sentinel 场景,被修复 6 顺带根治)。
+
+## 2026-08-15(续)全区全服数据层 + TiDB 架构决策 + proto2mysql TiDB 方言实现
+
+设计详见 `docs/design/global-data-layer-tidb-decision.md`(本次新增,已进 ARCH.md §10 索引与 §11 决策表第 21 行)。
+
+### 决策要点
+- 目标形态 = 全区全服:物理 zone 只是部署单位,home_zone(逻辑区)表达归属;跨区 = 客户端 redirect 重连(复用 `handleCrossZoneRedirect` 机制),数据不搬家;合服 = `RemapHomeZoneForMerge` 改逻辑归属,零玩家主数据迁移
+- 玩家数据层收敛为单一 TiDB 集群(v8.5 LTS),player_id 主键,分片交给 TiDB region;分阶段:Phase 1 纯搬迁(`zone_{N}_db` 作逻辑库,write-behind 管线/partition 契约/L1-L4 验收全不动),Phase 2 全局表 + home_zone 路由
+- proto2mysql 接 TiDB 判定可行,三个硬前提:snowflake 主键建表 NONCLUSTERED + SHARD_ROW_ID_BITS(默认聚簇表必踩写热点)、集群 `txn-entry-size-limit` ≥32MB(16MB MEDIUMBLOB 存档默认 6MB 上限直接写失败)、升级新版库时逐表锁表名(新版默认表名=proto 全名含点号,不锁会建新表致旧数据"消失")
+
+### 服务器侧文档改动
+- `CLAUDE.md`:§1 基础设施行标注 TiDB 迁移中
+- `docs/design/ARCH.md`:§10 数据与持久化索引 + §11 决策表第 21 行
+- `db_zone_isolation` / `cross_server_architecture_principle` / `mmo_cross_server_architecture` / `server_merge_design` / `zone_data_rollback` / `db-service-root-credentials` 六篇顶部加修订标注指向新决策文档
+
+### proto2mysql 库改动(E:\work\proto2mysql,clone 自 GitHub main,未提交未推送)
+- `proto/proto2mysql_option.proto`:新增 4 个 message option(500021-500024):`tidb_nonclustered_pk` / `tidb_shard_row_id_bits` / `tidb_pre_split_regions` / `tidb_auto_id_cache_one`
+- `proto2mysql.go`:`GetCreateTableSQL` 生成 `/*T!*/` 双方言 DDL(主键 NONCLUSTERED 注释、COMMENT 前的表选项块,顺序对齐 TiDB SHOW CREATE TABLE 规范导出);schema sync 的 ADD PRIMARY KEY 同步带注释;新增 `WithTiDBNonclusteredPK/WithTiDBShardRowIDBits/WithTiDBPreSplitRegions/WithTiDBAutoIDCacheOne`;两条 fail-safe(有主键未声明 NONCLUSTERED 时忽略 shard 并告警、preSplit>shard 收敛)
+- `options.go`:选项读取加 unknown fields 兜底(pbopt 生成代码滞后时扩展落 unknown fields,按 wire 格式解出,不静默丢弃)
+- 测试:`TestTiDBDialectDDL`(DDL 形态/纯 MySQL 不受影响/两条 fail-safe)、`TestTiDBOptionsFromUnknownFields`(兜底回归)、`tools/proto2sql` 端到端 `TestGenerateTiDBDialect` + `testdata/tidb_hotspot.proto`
+- README 新增"TiDB 支持"一节
+- 三个校验 agent 已过:人肉编译检查通过、`/*T!*/` 语法逐条对照 docs.pingcap.com 核实正确、决策文档代码事实全部核实
+
+### 明确未做 / 待验证
+- **全部 Go 代码未编译**(本机无 Go 工具链):待 `go test ./...` + `cd tools/proto2sql && go test ./...`
+- `pbopt/proto2mysql_option.pb.go` 未重新生成(无 protoc;unknown fields 兜底已保证旧 pbopt 下选项不丢,但仍应尽快重生成)
+- proto2mysql 未打新 tag(旧世系 v0.0.18 已断,建议 v0.1.0 起);go/db 升级新版库、TiDB 部署清单、回档 runbook TiDB 版、Phase 2 全部——见决策文档 §6 实施清单
+
+## 2026-08-15(续二)Phase 1 实施:go/db 升级 proto2mysql 新版 + TiDB 方言选项落 proto + dev 集群清单
+
+对应 `docs/design/global-data-layer-tidb-decision.md` §6 实施清单第 3/4 步(第 1 步状态修正:上一条目写"未提交未推送",实际已收尾为 commit `2aca007` 并推送 main,工作树干净;tag 仍未打)。
+
+### go/db(升级 + 表名守卫)
+- `internal/logic/pkg/proto_sql/db.go`:`proto2mysql.PbMysqlDB`/`NewPbMysqlDB()` → `proto2mysql.DB`/`NewDB()`(新版 API;`OpenDB`/`RegisterTable`/`CreateOrUpdateTable`/`Save`/`FindOneByWhereClause`/`ErrNoRowsFound` 等调用面签名兼容,无需其他改动)
+- 同文件新增 `assertTableNameLocked` 启动期表名守卫:逐表校验生成 DDL 的表名与 proto `OptionTableName` 声明完全一致,不一致 `log.Fatalf` 拒绝启动——兜底决策风险 #3(新版默认表名=proto 全名含点号,选项一旦没读到,schema sync 会静默建新表致存量数据"消失")。verifier(cmd/verifier)走同一条 `InitDB` → `CreateOrUpdateTable` 链,自动获得同一守卫
+- `go.mod`:`proto2mysql v0.0.18` → `v0.1.0`(tag 已于 Codex 测试绿后打在 `2aca007` 并推送;`go mod tidy` 仍待执行,见下方清单第 4 步)
+- 表名锁定语义说明:服务器每张表本就显式声明 `OptionTableName`(扩展号 500001),新版库按**字段号**反射读取选项(`options.go` rangeExtensions + unknown fields 兜底),与新版自带 pbopt 同号即被识别——所以不需要在 Go 代码里逐表传 `WithTableName`,守卫负责防回归
+
+### tools/proto_generator/protogen
+- `go.mod` 同步升 `v0.1.0`;`internal/generator/go/db_model.go` `NewPbMysqlDB()` → `NewDB()`(仅用 `RegisterTable`+`GetCreateTableSQL`,余者兼容)。升级后 GenerateMergedTableSQL 产出的合并 SQL 自动携带 `/*T!*/` 方言块
+
+### proto(TiDB 方言选项,重生成前不生效)
+- `proto/db/proto_option.proto`:MessageOptions 新增 4 个 TiDB 选项,**与 proto2mysql 新版 pbopt 刻意同号**(500021-500024):`OptionTiDBNonclusteredPK` / `OptionTiDBShardRowIDBits` / `OptionTiDBPreSplitRegions` / `OptionTiDBAutoIDCacheOne`。同号即可被库按字段号识别,服务器无需 import pbopt(避免同 extendee 同号扩展在 protoregistry 撞注册 panic)
+- `proto/common/database/mysql_database_table.proto`:5 张表加 `NONCLUSTERED + SHARD_ROW_ID_BITS=4 + PRE_SPLIT_REGIONS=4`(§D3 处方):`player_database` / `player_database_1` / `player_centre_database`(雪花主键)+ `player_snapshot` / `rollback_audit_log`(自增主键,§D3 点名)
+
+### go/data_service(裸 DDL 路径,不走 proto2mysql,单独补方言)
+- `internal/store/snapshot_store.go`:`player_snapshot` / `rollback_audit_log` 两张表 DDL 改为显式 `PRIMARY KEY (id) /*T![clustered_index] NONCLUSTERED */` + 表尾 `/*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */`(内联 `AUTO_INCREMENT PRIMARY KEY` 拆为约束式写法,语义不变)
+- `internal/store/transaction_log_store.go`:`transaction_log` 同处理——tx_id 是雪花 ID 且交易日志是全服最高频追加写路径,虽未在 §D3 表清单点名,属其处方射程,已在决策文档 §6 第 3 步标注
+- MySQL 对 `/*T!*/` 按普通注释忽略,存量 MySQL 环境行为不变;`CREATE TABLE IF NOT EXISTS` 对已存在表本就不生效,方言只影响新建环境
+
+### deploy(dev)
+- 新增 `deploy/docker-compose.tidb.yml`:pd/tikv/tidb 单节点 v8.5.2,与 MySQL **并存**(Phase 1 可回退要求,DSN 决定连谁);PD 不发布宿主端口(2379 已被 etcd 容器占用),对外仅 TiDB 4000(SQL)/10080(状态)
+- 新增 `deploy/tidb-config/tidb.toml`(`txn-entry-size-limit = 33554432`,§D4:16MB 存档默认 6MB 必炸)+ `tikv.toml`(`raft-entry-max-size = "32MB"`)
+
+### 明确未做 / 待验证(Codex 执行清单,按顺序)
+
+**Claude 未跑任何编译/测试,以下全部待 Codex 验证后才可声称通过:**
+
+1. **proto2mysql 库测试**(工作目录 `E:\work\proto2mysql`):`go build ./... && go test ./...`;然后 `cd tools/proto2sql && go test ./...`。通过标准:全绿。失败保留完整输出与失败用例名
+2. **打 tag** — **已完成**:`v0.1.0` 已打在 `2aca007` 并推送(推送时远端提示仓库已迁 `luyuan-cpp/proto2mysql`,module 路径仍是旧名 `luyuancpp` 靠重定向工作,风险已记决策文档 §6 第 2 步)
+3. **服务器 proto 重生成**(proto_option / mysql_database_table 变更):`cd E:\work\xuanming-server-mmo\go && build.bat`。产物覆盖 Go/C++/C#/robot vendor 各生成树,不要手改
+4. **go/db**(tag 推送后):`cd E:\work\xuanming-server-mmo\go\db && go mod tidy && go build ./... && go test ./...`。通过标准:编译零错,现有测试全绿;启动冒烟看日志无"表名守卫"Fatal
+5. **protogen**:`cd E:\work\xuanming-server-mmo\tools\proto_generator\protogen && go mod tidy && go build ./...`
+6. **C++ 受影响工程重编**(proto_option.pb.cc 重生成后):MSBuild 串行 `/m:1`,按依赖顺序 scene/gate;并发会报假 C1041/LNK1104
+7. **TiDB dev 冒烟**(可选,建 TiDB 集群后):`docker compose -f deploy/docker-compose.tidb.yml up -d`;`mysql -h 127.0.0.1 -P 4000 -u root` 连通;db 服务 DSN 指向 4000 起服建表后 `SHOW CREATE TABLE zone_1_db.player_database` 应含 `NONCLUSTERED` 与 `SHARD_ROW_ID_BITS=4`;`SHOW CONFIG WHERE name = 'performance.txn-entry-size-limit'` 应为 33554432
+8. **pbopt 重生成**(可选,protoc 可用时,proto2mysql 仓库):按 README 重生成 `pbopt/proto2mysql_option.pb.go`(unknown fields 兜底已保证旧 pbopt 不丢选项,非阻塞)
+
+Phase 1 剩余(见决策文档 §6):k8s prod 清单与权限策略、Dumpling+Lightning 迁移工具、§5 验收全项(L1-L4 + chaos + 压测对比 + SHOW CREATE TABLE diff)、回档 runbook TiDB 版(迁生产前置)。Phase 2 全部未动。
+
+## 2026-08-15(续三)Codex 验证:登录选服闭环
+
+- Java gateway:`java/gateway_node/.\mvnw.cmd -q clean test` 通过，9 suites /
+  56 tests / 0 failure / 0 error / 0 skipped；含准入 10/10、login RPC 重试
+  3/3。本机 JDK 26.0.2(无项目要求的 JDK 23)+Maven Wrapper 3.9.9，
+  测试进程启用 Byte Buddy experimental。
+- 压测风险补修:`AssignGateService` 的 zone 准入查询改为 1s 短缓存，
+  同 zone 并发 miss 单航班合并；DB 异常不缓存、仍返回
+  `500 zone_admission_unavailable`；缓存上限 4096。新增重复轮询、8 并发、
+  TTL 刷新、异常重试四类回归。
+- MessageIds 生成器显式传
+  `-ProtoRoot E:\work\xuanming-server-mmo` 重生 29 项；前后 SHA-256 一致，
+  `RedirectToGate=124` 与两份服务端权威表一致。全仓无
+  `LoginAndEnterGame`、旧 `AssignGate(uint zoneId,...)`、`127.0.0.1:8080` 残留。
+- Unity 6000.5.8f1:同版本 Roslyn 全主程序集与 Tianyong EditMode 测试
+  程序集均 exit 0；已打开的 Editor 也完成 Bee/Tundra 编译、ILPP 和
+  domain reload，无 CS error。batchmode 因同项目已在 Unity 中打开而被锁，
+  未擅自关闭用户实例。仅余 2 条 AppBootstrap Unity 6 obsolete API 警告。
+- 验证中补修客户端实锤:状态灯 sprite 重绑、账号/密码输入上限
+  191/1024、RefreshToken 恒假旧开关、建连后失败统一断线清理、
+  `NotifyEnterScene` 等待 60s、两处 AppBootstrap 注释笔误以及并发 UI 重构的
+  `selected` 局部变量遮蔽。
+- 尚未完成真实 HTTP/TCP 联调:本地 8081 无 gateway 服务；且并发的
+  uGUI 原生素材迁移已把 View 改为 `RequireSprite("UI/Ugui/Native/*")`，
+  但当前 `Assets/Resources/UI/Ugui/Native` 尚未落盘，Play 会回落 FairyGUI 占位路径。
+  这是该并发素材任务的运行阻塞，不影响上述 C# 编译结论，但素材落地前
+  不可声称完成 Play 联调。
+
+## 2026-08-15(续四)Codex 收口:原生 uGUI 素材、prefab 与 PlayMode
+
+- 上一条记录中的素材阻塞已解除:`mmorpg-client/Assets/Resources/UI/Ugui/Native`
+  已落 10 张 PNG + meta，覆盖 Theme 的 11 个用途路径（`list_idle` 复用一次）；
+  GUID、prefab `fileID:21300000` 与 Resources 路径核对一致，旧 ReferenceArtwork
+  截图在运行 prefab 中为 0 引用。
+- 用 Unity 6000.5.8f1 执行 `QdaoUguiBuilder.BuildAll` 成功，重烘焙
+  `QdaoServerSelect.prefab`；生成统计为 Images=67、Buttons=22、TMP=54、
+  FULLSCREEN_REFERENCE_COUNT=0。`BuildAndCapture` 成功生成
+  `E:\work\image\ugui_qdao_headband_native_2560x1080.png`。
+- 截图复核发现账号/密码控件被代码创建后又隐藏，而进入逻辑仍强制读取二者；
+  已移除四个 `SetActive(false)`，保留账号 191 / 密码 1024 的服务端契约限制，
+  并重新烘焙/capture，首次启动现在可实际输入凭据。
+- 新增资源/prefab EditMode 回归，断言 11 个 Theme sprite、无旧参考截图、
+  可见凭据输入和 8 个状态灯；Unity EditMode 6/6 通过。
+- 新增运行态 `AppBootstrap` PlayMode 回归，走真实 `AfterSceneLoad` 自动启动，
+  断言原生 uGUI 已激活且未创建 FairyGUI Router，并复核凭据与状态灯；
+  Unity PlayMode 1/1 通过。测试期间本地 127.0.0.1:8081 未启动，HTTP 连接失败
+  属预期环境缺口；未声称完成真实 gateway/login/gate/scene 联调。
+
+## 2026-08-15(续五)scene_manager 去单点:选主抽到 shared/leader,副本放开为 2
+
+- 背景:全组件单点审计确认 scene_manager 是最重的单点 —— k8s `replicas:1 +
+  Recreate`,根因是 world_autoscale / agones_reconcile / instance_lifecycle /
+  load_reporter 四个"无选主的单写者循环"。RPC 数据面(Redis Lua CAS +
+  无状态 HMAC + etcd CAS 注册)本就多实例安全。
+- 新增 `go/shared/leader`:基于 Redis SetNX 的选主器,从 login
+  `loginqueue/dispatcher.go` 的模式抽取,锁脚本与 `login pkg/locker` 逐字一致;
+  提供 go-zero 与 go-redis 两个适配器(后者留给 login 迁移),自带内存假
+  Store 的单测,零新增外部依赖。
+- scene_manager 接线(`scene_manager_service.go`):启动即竞选,
+  `logic.SetLeaderCheck` 装闸门;变更类动作(补频道 / rebalance / 死节点孤儿
+  清理 / 空闲副本销毁 / 扩缩容 / Agones 对账)只在领导者执行,数据面与 etcd
+  watch 内存镜像每副本照常跑。领导权变化触发 `RequestLoadReporterResync` →
+  fullSync 补齐缺位窗口漏掉的变更;fullSync 的 stale 清理路径补上了
+  `reconcileDeadNodeScenes`(顺带修掉"SM 停机期间节点死亡则孤儿实例不清"
+  的旧缺口)。新配置 `LeaderLockTTLSeconds`(默认 30)/`LeaderLockKey`(可选)。
+- `initWorldScenesForZone` 加 zone 级 Redis 互斥锁(`world_init:lock:zone:{z}`,
+  忙等 10s / TTL 60s):它的"数集合缺多少补多少"读改写有两类并发入口
+  (领导者后台循环、任意副本上 CreateScene 的 on-demand 兜底),原先并发会
+  双建频道 —— 这是审计标记的 world_init.go 竞态,现已关闭。
+- 部署:`scene-manager.yaml` 放开 `replicas: 2`、撤 Recreate(回默认
+  RollingUpdate)、PDB(minAvailable 1)并入同文件 —— 注意 `k8s_deploy.ps1`
+  只 apply 各服务主 manifest,独立 `login-pdb.yaml`/`gateway-pdb.yaml` 其实
+  从未被脚本应用过,属遗留缺口,另行处理。
+- 观测:新增 `scene_manager_is_leader` gauge,全体副本之和应恒为 1;
+  和为 0 超过锁 TTL(30s)应告警。
+- 金丝雀支持:新配置 `LeaderEligible`(默认 true)。金丝雀副本设 false:
+  靠 etcd 发现天然按实例比例分到 RPC 数据面流量,但不参与选主 ——
+  否则金丝雀当选后新版编排逻辑作用于全部 zone,爆炸半径失控。
+- **未编译,待 Codex 验证**:`go/shared` 与 `go/scene_manager` 各跑
+  `go build ./... && go vet ./... && go test ./...`(Windows,工作目录分别为
+  `go/shared`、`go/scene_manager`;shared 无新依赖,理论上无需 tidy)。
+
+## 2026-08-15(续六)scene_manager 去单点:对抗性审查收口(14 findings → 全部处置)
+
+- 24-agent 对抗审查(4 视角 + 逐条验证)确认 14 条,去重后 9 个独立问题,
+  全部修复;另 5 条验证超时的按实核补:
+- **[critical] 选主心跳自我降级**:原实现续期报错只重试,Redis 单边不可达时
+  本副本永远读不到"属主已换",而服务端 key 照常过期被抢 → 双领导。
+  现距上次续期成功 ≥2/3 TTL 即自 fencing 让位(与 snowflakealloc 同模式),
+  保证在 key 服务端过期前 ≥TTL/3 退位;新增单测覆盖。
+- **[major] force 销毁原子认领**:destroyInstanceInternal force 分支原是
+  "快照读 + 七连 DEL",并发双跑会把节点 scene_count 双减、Agones 名额双还。
+  新增 luaAtomicDestroyInstanceForce(读删同脚本,返回抹除前
+  nodeId/agonesGs/playerCount),只有赢家执行副作用。顺带修掉了单实例时代
+  空闲清理 vs 死节点 reconcile 的既有竞态。
+- **[major] fullSync 补扫 Redis 遗留 zone**:stale 清理原来只扫 etcd 快照里的
+  zone,某 zone 最后一个节点死于无领导窗口/停机期间就永远没人清;
+  现 SCAN scene_nodes:zone:*:load 取并集。
+- **[major] 跟随者不再写负载集**:updateNodeLoad 的 Zadd/Set 收归领导者,
+  防止跟随者滞后的 watch 镜像把领导者刚清掉的死节点"复活"回负载集;
+  指标仍每副本发布。
+- **长循环降级即停**:空闲清理 / 死节点 reconcile(不删 setKey,留给继任者
+  重扫)/ stale 清理 / rebalance 迁移,每条目重查 isLeader()。
+- **world_init 锁加固**:锁内 CreateScene RPC 限 5s(黑洞节点原来挂 ~20s,
+  几个僵尸就把持锁顶过 60s TTL);DeadlineExceeded 计入不可达判定;
+  释放脚本返回 0(=TTL 中途失效)记错误日志;等锁预算按调用方拆分 ——
+  watch/fullSync 路径不等锁(避免堵住 etcd 事件 goroutine),RPC 兜底与
+  autoscaler 忙等 10s。
+- **优雅让位**:Elector 新增 Stop(),挂 proc.AddShutdownListener + 失租退出
+  路径 —— go-zero SIGTERM 走 os.Exit 不跑 defer,原来每次滚动更新都多
+  ≤TTL 的无领导窗口。竞选 SetNX 报错补日志(原来静默)。
+- **观测补口**:降级时 ResetLeaderGauges 清掉 agones_counter_drift /
+  rebalance_pending 滞留序列;k8s ConfigMap 补 MetricsListenAddr ":9150"
+  (原来生成的配置根本没开 metrics,清单注释让运维盯的 gauge 不存在)。
+- 单测:新增自 fencing 用例;两处真实时钟脆弱断言改稳(状态回调序列用
+  大 TTL,双领导检查改断言锁存储属主)。
+- **未编译,待 Codex 验证**(命令同续五:shared → scene_manager 依次
+  build/vet/test)。login 的 locker.StartHeartbeat 有同款心跳缺陷,
+  待迁移到 shared/leader 时一并修,另行开任务。
+
+## 2026-08-15(续七)回合制战斗一期:全链路首轮实现(引擎/battle 节点/scene 集成/match 服务/gate 路由/客户端)
+
+设计文档:`docs/design/turn-based-battle-server.md`(架构决策 D1-D6、gather 协议、
+补偿矩阵、模块规格、Codex 总执行清单 §12、守护段施工清单 §13)。核心决策:
+战斗"人不动、数据动"(快照 copy + 结算 event,不做玩家跨节点交接);battle 为
+全局池纯 gRPC 新节点类型(`BattleNodeService=28`);所有开局统一经 match 服务
+编排(队列匹配 + 场景切磋点名两入口汇入同一条 gather 管线);结算串行化
+(InBattleComp 摘除 = 结算已应用,才可开下一场)。
+
+- **proto 契约**:`proto/battle/{battle_data,battle_node,player_battle,battle_event}.proto`
+  (均无 cc_generic_services,纯 gRPC);`match_service.proto` 扩 PVE/切磋模式与
+  Challenge 四 RPC;`scene.proto` 加 PrepareBattle/CancelBattlePrepare(消息全局包,
+  `scene_node_service.proto` 的 SceneNodeGrpc 同签名引用 —— match Go 走 gRPC 面);
+  `gate_event.proto` 加 Bind/UnbindBattleEvent;`battle_comp.proto`(InBattleComp);
+  `BaseAttributesComp` 加 `speed`(uint64,宪法 §4 已同步);`node.proto` 加
+  BattleNodeService=28、`proto_option.proto` 加 NODE_BATTLE=30;生成器
+  `proto_gen.yaml` 补 battle/match 两域(并清掉指向空目录的 turnbased 残留)。
+- **回合引擎**(`cpp/libs/services/battle/`):确定性纯逻辑库(mt19937_64 种子随机、
+  无时钟无网络无 ECS),速度序回合結算、伤害公式照搬实时侧、buff 全语义
+  (叠层/免疫/驱散/sub_buff,时长按 6s/回合换算),BattleDataProvider 薄接口隔离
+  表管理器;17 个 gtest 用例含同种子逐字节回放比对。
+- **battle 节点**(`cpp/nodes/battle/`):BattleRoomManager 房间生命周期
+  (6s 行动窗口 + 整场 deadline 双 timer,超时默认普攻/强制平局),客户端消息走
+  手写 gRPC impl(读 x-session-detail-bin 取权威 player_id),出站全 Kafka
+  (S2C 经 gate PushToPlayer;结算 SceneCommand;绑定 Bind/UnbindBattleEvent),
+  防僵尸 target_instance_id fail-closed。
+- **scene 集成**(`cpp/libs/services/scene/battle/`):PlayerBattleSystem 备战冻结
+  (快照构建含 buff 剩余回合换算、路由信息)/结算应用(battle_id 匹配、
+  离线 pending 7 天、登录先应用再放开)/30s reaper 到点作废/重连重挂 gate 绑定;
+  冻结拦截切场景/镜像/跟随/跨 zone 五个入口。
+- **match 服务**(`go/match/`,go-zero):队列(PVE solo 即配/组队 FIFO/1v1)、
+  切磋(60s 邀约、双锁复查、同目标单邀约)、gather 管线(PrepareBattle 收快照→
+  CreateBattle,任一步失败逐人解冻+回队首)、battle_id 走 shared/snowflake
+  独立 worker 池(不变量:battle_id 只由 match 生产)、metrics :9170、
+  `go_services.ps1` 已入 catalogue(端口 50500)。
+- **gate/框架**:非 zone-scoped 全局池发现、`IsGrpcOnlyNodeType`(battle 注册
+  PROTOCOL_GRPC,node.cpp 原硬编码 TCP)、转发改"绑定优先"(Scene/Battle 无绑定
+  回 kServiceUnavailable,行为向后兼容)、battle_binding_helper 处理绑定/解绑/
+  断线/节点摘除四路清理;dev.bat/cpp_nodes.ps1 支持 -BattleCount。
+- **客户端**(mmorpg-client,UGUI):BattleClient 六相位状态机 + IBattleTransport
+  测试缝(20 EditMode 用例);战斗 UI 全套(排队/挑战弹窗/战斗屏/回合播放/结算屏,
+  纯代码构建,压 FairyGUI 之上),重连自动开屏;gen 脚本白名单 13 条已备。
+- **一致性收口**:PrepareBattle 消息归属(scene.proto 全局包共享,SceneNodeGrpc
+  引用不重复定义)、gather.go 改走 SceneNodeGrpc 客户端、challengelogic.go 的
+  battle_config_id 透传/PVE solo 短路/双人成局逻辑逐项核对。
+- **已知缺口(二期/依赖决策)**:Monster/Dungeon 表缺战斗列(引擎用保守默认值,
+  加列清单见设计文档);经验/背包/道具效果系统不存在(结算仅记日志);观战/
+  ready check/转播/回放为预留接口;k8s battle 全局池部署未落地(Apply-Zone 是
+  每 zone 结构,需加全局 apply 阶段);SessionInfo 未并入 boundBattleId(gate 用
+  side map);客户端技能/道具名接表后替换 ID 占位显示。
+- **未编译,待 Codex 验证**:总执行顺序固化在设计文档 §12(proto 重生成 →
+  守护段施工 §13 + Agones 块恢复 → C++ 串行编译 + 17 单测 → go/match build →
+  客户端两 gen 脚本 + Unity 编译 + 20 EditMode 用例 → 本地冒烟含切磋)。
+
+## 2026-08-16(续八)回合制战斗:本机生成+编译全链验证(Claude 按用户指令代执行,§10.1 例外)
+
+用户明确指令"做到可进 Unity 测试",本轮由 Claude 直接执行生成与编译(宪法 §10.1 的
+Codex 分工以该指令为准,仅此一轮)。
+
+- **工具链从零搭建**(本机原缺):Go 1.26.5 用户级安装 `E:\work\tools\go126`
+  (protogen 的 go.mod 要求 ≥1.26.5;GOPROXY=goproxy.cn+aliyun 链,官方代理超时)、
+  protoc 35.1 用仓库 vendor(install_vs2026/bin)、grpc_cpp_plugin 从既有 VS 构建树
+  手工 cl 补编(CMake 树烘死 D:\ 旧路径,已放 `E:\work\tools\bin`)、gtest/gmock 从
+  grpc 内嵌 googletest 源码补编四库进 `lib/`(仓库原本无处可链,buff_test 同样受益)。
+  环境统一入口 `E:\work\tools\buildenv.ps1`。
+- **生成器修复(重要)**:①空 package proto 的 gRPC client 生成物被包进匿名命名空间,
+  跨编译单元必 LNK2019 —— 修 `grpc_async_client.{cpp,h}.tmpl`、`grpc_init_total.cpp.tmpl`
+  (条件包裹,空 package 落全局;tagPool 单独真匿名防撞名)与
+  `service_register_info.go` 的 Send* 声明;②`protogen/proto-gen.exe` 是**陈旧预编译
+  二进制且 dev_tools 默认优先用它** —— 改生成器源码后必须 `go build -o proto-gen.exe ./cmd`
+  重编,否则改动静默不生效(本轮踩过:改完源码重跑生成仍是旧输出)。
+- **守护段施工**:§13 五处全部填毕;`scene_node_service.cpp` 守护段外的 Agones
+  AcquireCreatePermitBlocking 块在两次重生成后均被吃掉、均已恢复(生成器模板化
+  该块的活先记 TODO);BattleNodeImpl 骨架生成器未配,已手写(镜像 scene 形态)。
+- **工程接线**:proto.vcxproj 收 8+2 个新 pb .cc(match 两个由用户顺手补);scene
+  库/节点 vcxproj 收 player_battle 与 battle_event_handler;game.sln 正式收编
+  battle 库/battle 节点/turn_battle_engine_test 三工程(带依赖序);battle 节点
+  补 `/bigobj`;测试工程补 absl 库路径、hiredisd.lib 命名、gtest 四库。
+- **编译结果(全绿)**:C++ Debug x64 —— proto/grpc_client/rpc 生成库、battle 引擎库、
+  scene.exe、gate.exe、battle.exe(74MB)全部 0 error;`turn_battle_engine_test`
+  **19/19 用例通过**(含同种子逐字节回放、速度序、冷却、buff 全语义、伤害公式精确值、
+  FLEE/DEFEND/ITEM、胜负边界)。Go —— `go/match` `go mod tidy && go build ./...` 零错。
+- **客户端**:`gen_proto.ps1`/`gen_messageids.ps1` 跑通(BattleData/MatchService/
+  PlayerBattle.cs 生成,MessageIds 42 键含 battle/match 全部 13 键);静态核对:
+  生成枚举名 `eBattleOutcome` 小写形态与代码引用一致、S2C 五类齐、Match 枚举成员吻合。
+  Unity 编译待触发:项目正被用户打开的 6000.5.8f1 编辑器锁定(MCP 桥接管道失效,
+  不杀用户进程),聚焦编辑器/Ctrl+R 即自动编译;此前 Console 的 CS0246 全部是
+  proto 类生成之前的陈旧报错(项目 Editor.log 停在 08-15 20:31)。
+- 下步:用户聚焦 Unity 触发编译 → EditMode `MmorpgClient.Tests.EditMode.Battle`
+  20 用例 → 起服冒烟(dev.bat start-cpp 含 battle + go_services 含 match)。
+
+## 2026-08-17 全栈本机构建打通 + 起服冒烟 + TiDB dev 集群验证(Unity 可联调)
+
+用户授权本会话直接执行构建(临时豁免 §10.1 分工)。本机补齐 Go 1.26.6 便携工具链(`E:\work\tools\go`,官方 zip + SHA256 校验)、protoc-gen-go v1.36.10 / protoc-gen-go-grpc v1.6.0(与既有产物同版本)、`grpc_cpp_plugin.exe`(从仓库 grpc v1.83.0 源码树新配置 `.build_cpp_plugin` 编出,复制进 `install_vs2026/bin`——此前该插件从未在本机构建,protogen 的 C++ gRPC 生成一直被静默跳过)。
+
+### 编译/测试结果(全部真实执行)
+- proto2mysql v0.1.0 经 module proxy 正常拉取;protogen 重建(NewDB 迁移生效)+ proto 全量重生成(TiDB 选项进入各语言描述符)
+- go/db:`go mod tidy + build + test` 全绿;全部 Go 服务(db/data_service/player_locator/login/scene_manager/match)编译产出 bin/go_services;match 服务修复缺失的 go.sum(存量问题,`go mod tidy`)
+- C++ `game.sln` Debug|x64 串行构建 **0 error**,gate/scene/battle 三 exe 全新产出
+- robot 冒烟(3 bots,DevPasswordAuth):conn 3/3、login_ok 3/3、enter_ok 3/3,avg_login 58ms——网关→assign-gate→gate TCP(10000)→login→EnterGame→NotifyEnterScene→技能列表 全链路通
+- TiDB v8.5.2 dev 集群(docker-compose.tidb.yml)真集群验证:`txn-entry-size-limit=33554432` 生效;`/*T!*/` 方言 DDL 建表后 `SHOW CREATE TABLE` 原样呈现 `NONCLUSTERED` + `SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4`(§D3 处方落地验证)
+
+### 修复的存量问题(battle/match 半落地导致 C++ 从未编过)
+1. `grpc_client.vcxproj` 缺 battle/match wrapper 成员、`proto.vcxproj` 缺 match_service pb 成员 → 补齐(生成器不维护 vcxproj 成员,新增生成文件须手工挂)
+2. `cpp/nodes/battle/handler/rpc/battle_handler.cpp`:`method->full_name()`(protobuf 35.x 返回 absl::string_view)流入 muduo LogStream 无 operator<< → 显式转 std::string
+3. 无 package proto(battle 域)生成匿名命名空间声明致 LNK2019 → 生成器模板已由并行会话修复(`grpc_init_total.cpp.tmpl`/`grpc_async_client.*.tmpl` 空 package 落全局命名空间),重生成后清零
+4. 并发 msbuild 留下陈旧 rpc.lib(假 LNK2019)→ rpc 工程 `/t:Rebuild` 后串行全量通过——**再次验证宪法"msbuild 必须串行"且同一时间只能有一个构建方**
+5. Docker Desktop 起不来:残留 AF_UNIX socket(`Docker/run/dockerInference`、`docker-secrets-engine/engine.sock`)删除被拒 → 改名父目录后正常;镜像直连 docker.io TLS 超时 → 走 `docker.m.daocloud.io` 镜像源拉取后 retag
+
+### Unity 联调入口(当前本机可用)
+- 服务器列表/登录网关:`http://127.0.0.1:8081`(zone-1 OPEN/SMOOTH/推荐)
+- 认证:DevPasswordAuth 已启用,账号前缀 `dev_` 或 `robot_`,密码 = `LOGIN_DEV_PASSWORD_SHARED_SECRET` 环境变量(本机当前值 `dev-local-secret-2026`,login 进程启动时注入;换密钥需重启 login)
+- gate TCP:10000 起(由 assign-gate 下发,客户端无需手配)
+- 注意:本会话与另一并行会话曾同时操作本仓库/服务(模板修复来自对方,部分服务实例由对方拉起,存在 data_service/player_locator 双实例)。**联调没问题,但下次压测前必须 `dev.bat stop` + 清理后单方重启**,db 是单 Kafka 消费者,双开会破坏有序性
+
+### 待办(不阻塞 Unity 联调)
+- robot 偶发 `enter scene rejected`(切场景动作被拒,error 空)——robot 行为噪音 or 切场景校验问题,未定位,联调中若 Unity 切场景异常优先查这里
+- proto 重生成产物(约 200 文件)+ 本次修复未提交;与并行会话的改动合并后统一提交
+- Phase 1 剩余:Dumpling+Lightning 迁移工具、L1-L4+chaos 在 TiDB 上验收、压测对比基线、回档 runbook TiDB 版(迁生产硬前置)
+
+## 2026-08-17 本地全栈拉起 + scene_manager 双实例实测(至 Unity 可测)
+
+**环境**(本机无 Go 工具链、Docker Desktop 首启即崩,均已解决):
+- 便携 Go 1.24.5 → E:\work\tmp\go-portable(未动系统 PATH);GOPROXY=goproxy.cn。
+- Docker Desktop 后端反复崩:根因是 %LOCALAPPDATA%\Docker\run 下的 unix socket
+  残骸删不掉(Error: volume label syntax incorrect),`rd/del/\?\` 全部无效,
+  最终把整个 run 目录改名隔离(run_stale_*)后正常;顺手关了 EnableDockerAI
+  (Model Runner 即崩溃组件,想用可在设置里打开)。重启系统后可删 stale 目录。
+- bitnami/etcd 已从 Docker Hub 下架 → compose 改用 bitnamilegacy/etcd(官方冻结档)。
+- 国内直连 registry-1.docker.io 拉不动 → 镜像经 docker.m.daocloud.io / docker.1ms.run
+  拉取后重打原 tag(kafka-ui / nacos 未拉,可选组件本轮未启)。
+- Java 侧:gateway jar 用 mvnw 打包;satoken 应用无 mvnw,用 wrapper 下载的
+  maven + 阿里云镜像 settings(scratchpad,未动全局)启动。
+
+**修的拦路问题**:
+1. go/db 起不来:proto2mysql 把参与键的 string 列生成 MEDIUMTEXT(user_oauth
+   主键/唯一键),MySQL Error 1170。修在 E:\work\proto2mysql(isKeyedField →
+   键列 VARCHAR(191)/VARBINARY(191)),其测试全绿;go/db 加 replace 指向本地,
+   上游打新 tag 后删 replace。
+2. scene_manager 同机双实例:snowflakealloc 按裸 hostname 记 worker id key,
+   第二实例 verify ownership 撞 key panic。servicecontext.go 节点名改
+   hostname_端口(k8s 单 pod 语义不变,首次换 key 由前任高水位地板兜底)。
+3. login 启动需 LOGIN_DEV_PASSWORD_SHARED_SECRET(dev 值 123456,与 robot 一致)。
+4. robot battle WIP handler 导入路径笔误 proto/proto/battle → proto/battle(6 文件)
+   + go mod vendor 刷新。
+5. dev 环境切场景全被"拒绝不安全的场景交接"挡住:4 scene 节点 + 频道 hash 散列后
+   跨节点切换成为常态,交接屏障未落地前 fail-closed 全拒。dev etc yaml 开
+   AllowUnsafeCrossNodeHandoff: true(压测/正确性验证时改回 false)。
+
+**冒烟结果**(robot login-test 套件,2 bot):21/23 通过。
+- 通过:登录/建号/进图/重连/顶号/token 续连/并发登录/货币写入跨进出场景(CurrencyCrashWindow)。
+- 剩 2 个失败均为"场景→客户端异步推送未达 robot"(SkillCast 无实体可见、
+  SceneSwitch 无进图通知;服务端日志显示切换已执行、玩家已进新场景)。
+  请求-应答与 gate 自身推送(踢人)均正常。待 Unity 实测判定是 robot WIP
+  回归还是服务端推送缺口。
+- **选主实测**:双实例一主一从(:9150 scene_manager_is_leader=1);领导者
+  进程被顶掉(snowflake 失租自 fencing 退出,走 elector.Stop() 优雅放锁)后,
+  新候选者即刻当选,无 30s 空窗 —— 优雅让位路径真实验证通过。
+
+**当前栈**:etcd/redis/kafka/mysql(容器)+ db/data_service×2/player_locator×2/
+login×2/scene_manager×2/match + gate×2/scene×4 + satoken(18080)/gateway(8081)。
+Unity 客户端默认网关 http://127.0.0.1:8081,零配置可连。

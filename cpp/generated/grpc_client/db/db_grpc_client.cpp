@@ -6,12 +6,13 @@
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
-namespace  {
+namespace {
+boost::object_pool<GrpcTag> tagPool;
+}
+
 struct DbCompleteQueue {
     grpc::CompletionQueue cq;
 };
-
-boost::object_pool<GrpcTag> tagPool;
 #pragma region dbTest
 boost::object_pool<AsyncdbTestGrpcClient> dbTestPool;
 using AsyncdbTestHandlerFunctionType =
@@ -100,5 +101,3 @@ void InitDbGrpcNode(const std::shared_ptr<::grpc::ChannelInterface>& channel, en
     registry.emplace<dbStubPtr>(nodeEntity, db::NewStub(channel));
 
 }
-
-}// namespace 

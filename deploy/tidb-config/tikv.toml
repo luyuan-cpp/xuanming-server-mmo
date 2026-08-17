@@ -1,0 +1,7 @@
+# TiKV dev 配置(全区全服数据层 Phase 1)
+# 依据: docs/design/global-data-layer-tidb-decision.md §D4 集群配置硬要求
+
+[raftstore]
+# 单条 raft entry 上限(默认 8MB)。16MB 存档大行随 txn-entry-size-limit 同步放大,
+# 决策预计 ≥32MB,压测验收时以热点/延迟面板为准。
+raft-entry-max-size = "32MB"

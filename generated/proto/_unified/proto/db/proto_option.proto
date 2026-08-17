@@ -46,6 +46,7 @@ enum NodeType {
 	NODE_ANALYTICS = 27;                       // Analytics service
 	NODE_GM = 28;                              // GM tool service (admin/CS commands)
 	NODE_PLAYER_LOCATOR = 29;                  // Cross-server player locator service
+	NODE_BATTLE = 30;                          // 回合制战斗节点
 }
 
 // ==============================================================================
@@ -87,6 +88,15 @@ extend google.protobuf.MessageOptions {
 	optional string OptionUniqueKey			= 500012	;   // Unique key
 	optional bool OptionIsPlayerDatabase = 500013;  // Whether this is a player database
 	optional OPERATE_TYPE OptionOperateType = 500014;
+
+	// —— TiDB 方言选项(生成 /*T!*/ 扩展注释语法的双方言 DDL,MySQL 视为注释忽略)——
+	// 字段号与 proto2mysql 新版选项(pbopt)刻意同号(500021-500024):库侧按字段号
+	// 反射读取选项,同号即可被识别,无需引入 pbopt 依赖(避免扩展号注册冲突)。
+	// 决策与参数依据见 docs/design/global-data-layer-tidb-decision.md §D3/§D6。
+	optional bool OptionTiDBNonclusteredPK = 500021;    // 主键追加 /*T![clustered_index] NONCLUSTERED */(雪花主键防写热点的前提)
+	optional uint32 OptionTiDBShardRowIDBits = 500022;  // /*T! SHARD_ROW_ID_BITS=N */ 按 _tidb_rowid 打散写入,仅非聚簇表生效
+	optional uint32 OptionTiDBPreSplitRegions = 500023; // /*T! PRE_SPLIT_REGIONS=N */ 建表预切 region,须 ≤ SHARD_ROW_ID_BITS
+	optional bool OptionTiDBAutoIDCacheOne = 500024;    // /*T![auto_id_cache] AUTO_ID_CACHE=1 */ 自增集中分配(近似连续)
 }
 
 // Field-level options (database related)

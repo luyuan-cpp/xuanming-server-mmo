@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="handler">
+      <UniqueIdentifier>{4f2a1c6e-8b93-45d0-9a7f-3e5b8c2d1a64}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="handler\event">
+      <UniqueIdentifier>{9d6e3b82-0c47-4f15-b8a9-72e5d1c4f036}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="handler\grpc">
+      <UniqueIdentifier>{1b8f4d27-6a95-4c30-8e12-f7d3a9b6c580}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="handler\rpc">
+      <UniqueIdentifier>{7c50a9e3-2d18-4b6f-a4c7-90e1f8d5b324}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="handler\rpc\player">
+      <UniqueIdentifier>{e2917f60-5b3a-4d84-bc06-18a4c7e9d5f2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="logic">
+      <UniqueIdentifier>{a6d40b19-7e82-4f5c-93b1-c8f2e6a0d473}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="rpc_replies">
+      <UniqueIdentifier>{5e38c7f4-1a90-4d26-b7e8-d0c95f3a8162}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="rpc_replies\player">
+      <UniqueIdentifier>{c09b5e28-4f61-4a37-90d5-6b1e8f2c7a94}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="handler\event\event_handler.cpp">
+      <Filter>handler\event</Filter>
+    </ClCompile>
+    <ClCompile Include="handler\grpc\battle_client_player_service.cpp">
+      <Filter>handler\grpc</Filter>
+    </ClCompile>
+    <ClCompile Include="handler\grpc\battle_node.cpp">
+      <Filter>handler\grpc</Filter>
+    </ClCompile>
+    <ClCompile Include="handler\rpc\battle_handler.cpp">
+      <Filter>handler\rpc</Filter>
+    </ClCompile>
+    <ClCompile Include="handler\rpc\player\player_service_interface.cpp">
+      <Filter>handler\rpc\player</Filter>
+    </ClCompile>
+    <ClCompile Include="logic\battle_room_manager.cpp">
+      <Filter>logic</Filter>
+    </ClCompile>
+    <ClCompile Include="rpc_replies\player\player_rpc_response_handler.cpp">
+      <Filter>rpc_replies\player</Filter>
+    </ClCompile>
+    <ClCompile Include="rpc_replies\register_handler.cpp">
+      <Filter>rpc_replies</Filter>
+    </ClCompile>
+    <ClCompile Include="rpc_replies\register_response_handler.cpp">
+      <Filter>rpc_replies</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="handler\grpc\battle_client_player_service.h">
+      <Filter>handler\grpc</Filter>
+    </ClInclude>
+    <ClInclude Include="handler\grpc\battle_node.h">
+      <Filter>handler\grpc</Filter>
+    </ClInclude>
+    <ClInclude Include="handler\rpc\battle_handler.h">
+      <Filter>handler\rpc</Filter>
+    </ClInclude>
+    <ClInclude Include="logic\battle_room_manager.h">
+      <Filter>logic</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

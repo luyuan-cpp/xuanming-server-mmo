@@ -1,5 +1,8 @@
 # Base RPC service config
 Name: login.rpc
+# dev:本地联调配置。DevPasswordAuth 的启动门禁要求 Mode=dev/test;
+# 生产部署走 deploy/ 下的受管配置,不复用本文件。
+Mode: dev
 ListenOn: 127.0.0.1:53000
 Timeout: 100000 # Max server-side timeout per request (10s)
 
@@ -168,17 +171,19 @@ PasswordAuth:
   # Waiting for a KDF slot is bounded and context-aware; overload fails closed.
   KDFWaitTimeout: 500ms
 
-# Local robots may use this explicit development-only gate instead:
-# the shared secret must come from an environment variable and only the listed
-# account prefixes are accepted. It is rejected at startup unless go-zero
-# Mode is dev or test; production mode cannot enable it. PasswordAuth and
-# DevPasswordAuth are mutually exclusive.
-# DevPasswordAuth:
-#   Enabled: true
-#   SharedSecretEnv: "LOGIN_DEV_PASSWORD_SHARED_SECRET"
-#   AllowedAccountPrefixes:
-#     - "robot_"
-#     - "dev_"
+# Local robots and the Unity dev client use this explicit development-only
+# gate: the shared secret must come from an environment variable and only the
+# listed account prefixes are accepted. It is rejected at startup unless
+# go-zero Mode is dev or test; production mode cannot enable it. PasswordAuth
+# and DevPasswordAuth are mutually exclusive.
+# 启动 login 前先设(密码=该密钥):
+#   PowerShell: $env:LOGIN_DEV_PASSWORD_SHARED_SECRET='<local-only-secret>'
+DevPasswordAuth:
+  Enabled: true
+  SharedSecretEnv: "LOGIN_DEV_PASSWORD_SHARED_SECRET"
+  AllowedAccountPrefixes:
+    - "robot_"
+    - "dev_"
 
 # Third-party auth provider config (all optional).
 # Password is disabled by default (see PasswordAuth above). Third-party

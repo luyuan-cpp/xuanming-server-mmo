@@ -6,12 +6,14 @@
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
+namespace {
+boost::object_pool<GrpcTag> tagPool;
+}
+
 namespace friendpb {
 struct FriendCompleteQueue {
     grpc::CompletionQueue cq;
 };
-
-boost::object_pool<GrpcTag> tagPool;
 #pragma region FriendServiceAddFriend
 boost::object_pool<AsyncFriendServiceAddFriendGrpcClient> FriendServiceAddFriendPool;
 using AsyncFriendServiceAddFriendHandlerFunctionType =

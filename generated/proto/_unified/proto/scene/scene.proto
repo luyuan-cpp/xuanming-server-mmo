@@ -5,7 +5,9 @@ import "proto/db/proto_option.proto";
 import "proto/common/base/empty.proto";
 import "proto/common/base/common.proto";
 import "proto/common/base/message.proto";
+import "proto/common/base/tip.proto";
 import "proto/scene/scene_info.proto";
+import "proto/battle/battle_data.proto";
 
 option cc_generic_services = true;
 option (OptionFileDefaultNode) = NODE_SCENE;
@@ -66,6 +68,28 @@ message DestroySceneRequest
   uint64 scene_id = 1;
 }
 
+// ---- 回合制战斗备战(match -> scene,gather 协议;设计文档 turn-based-battle-server.md §3.1)----
+
+message PrepareBattleRequest
+{
+  uint64 player_id = 1;
+  uint64 battle_id = 2;
+  uint32 battle_node_id = 3;  // 写进 InBattleComp,重连重挂绑定用
+  uint64 deadline_ms = 4;     // 战斗作废期限(Unix 毫秒),scene reaper 依据
+}
+
+message PrepareBattleResponse
+{
+  TipInfoMessage error_message = 1;   // 玩家不在/已在战斗等拒绝原因
+  BattlePlayerSnapshot snapshot = 2;  // 冻结成功时返回战斗快照
+}
+
+message CancelBattlePrepareRequest
+{
+  uint64 player_id = 1;
+  uint64 battle_id = 2;  // 不匹配 InBattleComp.battle_id 时忽略(防迟到取消)
+}
+
 service Scene {
   rpc PlayerEnterGameNode (PlayerEnterGameNodeRequest) returns (Empty);
   rpc SendMessageToPlayer (NodeRouteMessageRequest) returns (NodeRouteMessageResponse);
@@ -78,5 +102,7 @@ service Scene {
   rpc UpdateSessionDetail (RegisterPlayerSessionRequest) returns (Empty);
   rpc CreateScene (CreateSceneRequest) returns (CreateSceneResponse);
   rpc DestroyScene (DestroySceneRequest) returns (Empty);
+  rpc PrepareBattle (PrepareBattleRequest) returns (PrepareBattleResponse);
+  rpc CancelBattlePrepare (CancelBattlePrepareRequest) returns (Empty);
   rpc NodeHandshake(NodeHandshakeRequest) returns (NodeHandshakeResponse);
 }

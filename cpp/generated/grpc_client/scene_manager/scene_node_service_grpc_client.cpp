@@ -6,12 +6,14 @@
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
+namespace {
+boost::object_pool<GrpcTag> tagPool;
+}
+
 namespace scene_node {
 struct SceneNodeServiceCompleteQueue {
     grpc::CompletionQueue cq;
 };
-
-boost::object_pool<GrpcTag> tagPool;
 #pragma region SceneNodeGrpcCreateScene
 boost::object_pool<AsyncSceneNodeGrpcCreateSceneGrpcClient> SceneNodeGrpcCreateScenePool;
 using AsyncSceneNodeGrpcCreateSceneHandlerFunctionType =
@@ -189,6 +191,124 @@ void SendSceneNodeGrpcReleasePlayer(entt::registry& registry, entt::entity nodeE
     SendSceneNodeGrpcReleasePlayer(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
+#pragma region SceneNodeGrpcPrepareBattle
+boost::object_pool<AsyncSceneNodeGrpcPrepareBattleGrpcClient> SceneNodeGrpcPrepareBattlePool;
+using AsyncSceneNodeGrpcPrepareBattleHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::PrepareBattleResponse&)>;
+AsyncSceneNodeGrpcPrepareBattleHandlerFunctionType AsyncSceneNodeGrpcPrepareBattleHandler;
+
+void AsyncCompleteGrpcSceneNodeGrpcPrepareBattle(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncSceneNodeGrpcPrepareBattleGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncSceneNodeGrpcPrepareBattleHandler) {
+            AsyncSceneNodeGrpcPrepareBattleHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	SceneNodeGrpcPrepareBattlePool.destroy(call);
+}
+
+void SendSceneNodeGrpcPrepareBattle(entt::registry& registry, entt::entity nodeEntity, const ::PrepareBattleRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(SceneNodeGrpcPrepareBattlePool.construct());
+    call->response_reader = registry
+        .get<SceneNodeGrpcStubPtr>(nodeEntity)
+        ->PrepareAsyncPrepareBattle(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcPrepareBattleMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendSceneNodeGrpcPrepareBattle(entt::registry& registry, entt::entity nodeEntity, const ::PrepareBattleRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(SceneNodeGrpcPrepareBattlePool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<SceneNodeGrpcStubPtr>(nodeEntity)
+        ->PrepareAsyncPrepareBattle(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcPrepareBattleMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendSceneNodeGrpcPrepareBattle(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::PrepareBattleRequest& derived = static_cast<const ::PrepareBattleRequest&>(message);
+    SendSceneNodeGrpcPrepareBattle(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region SceneNodeGrpcCancelBattlePrepare
+boost::object_pool<AsyncSceneNodeGrpcCancelBattlePrepareGrpcClient> SceneNodeGrpcCancelBattlePreparePool;
+using AsyncSceneNodeGrpcCancelBattlePrepareHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::Empty&)>;
+AsyncSceneNodeGrpcCancelBattlePrepareHandlerFunctionType AsyncSceneNodeGrpcCancelBattlePrepareHandler;
+
+void AsyncCompleteGrpcSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncSceneNodeGrpcCancelBattlePrepareGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncSceneNodeGrpcCancelBattlePrepareHandler) {
+            AsyncSceneNodeGrpcCancelBattlePrepareHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	SceneNodeGrpcCancelBattlePreparePool.destroy(call);
+}
+
+void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, const ::CancelBattlePrepareRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(SceneNodeGrpcCancelBattlePreparePool.construct());
+    call->response_reader = registry
+        .get<SceneNodeGrpcStubPtr>(nodeEntity)
+        ->PrepareAsyncCancelBattlePrepare(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcCancelBattlePrepareMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, const ::CancelBattlePrepareRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(SceneNodeGrpcCancelBattlePreparePool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<SceneNodeGrpcStubPtr>(nodeEntity)
+        ->PrepareAsyncCancelBattlePrepare(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcCancelBattlePrepareMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::CancelBattlePrepareRequest& derived = static_cast<const ::CancelBattlePrepareRequest&>(message);
+    SendSceneNodeGrpcCancelBattlePrepare(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
 
 void HandleSceneNodeServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag) {
         switch (grpcTag->messageId) {
@@ -204,6 +324,14 @@ void HandleSceneNodeServiceCompletedQueueMessage(entt::registry& registry, entt:
             AsyncCompleteGrpcSceneNodeGrpcReleasePlayer(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
+        case SceneNodeGrpcPrepareBattleMessageId:
+            AsyncCompleteGrpcSceneNodeGrpcPrepareBattle(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case SceneNodeGrpcCancelBattlePrepareMessageId:
+            AsyncCompleteGrpcSceneNodeGrpcCancelBattlePrepare(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
         default:
             break;
         }
@@ -214,6 +342,8 @@ void SetSceneNodeServiceHandler(const std::function<void(const ClientContext&, c
     AsyncSceneNodeGrpcCreateSceneHandler = handler;
     AsyncSceneNodeGrpcDestroySceneHandler = handler;
     AsyncSceneNodeGrpcReleasePlayerHandler = handler;
+    AsyncSceneNodeGrpcPrepareBattleHandler = handler;
+    AsyncSceneNodeGrpcCancelBattlePrepareHandler = handler;
 }
 
 void SetSceneNodeServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler) {
@@ -226,6 +356,12 @@ void SetSceneNodeServiceIfEmptyHandler(const std::function<void(const ClientCont
     }
     if (!AsyncSceneNodeGrpcReleasePlayerHandler) {
         AsyncSceneNodeGrpcReleasePlayerHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcPrepareBattleHandler) {
+        AsyncSceneNodeGrpcPrepareBattleHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcCancelBattlePrepareHandler) {
+        AsyncSceneNodeGrpcCancelBattlePrepareHandler = handler;
     }
 }
 

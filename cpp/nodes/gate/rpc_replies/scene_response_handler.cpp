@@ -33,6 +33,10 @@ void InitSceneReply()
         std::bind(&OnSceneCreateSceneReply, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     gRpcResponseDispatcher.registerMessageCallback<::Empty>(SceneDestroySceneMessageId,
         std::bind(&OnSceneDestroySceneReply, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    gRpcResponseDispatcher.registerMessageCallback<::PrepareBattleResponse>(ScenePrepareBattleMessageId,
+        std::bind(&OnScenePrepareBattleReply, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+    gRpcResponseDispatcher.registerMessageCallback<::Empty>(SceneCancelBattlePrepareMessageId,
+        std::bind(&OnSceneCancelBattlePrepareReply, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
     gRpcResponseDispatcher.registerMessageCallback<::NodeHandshakeResponse>(SceneNodeHandshakeMessageId,
         std::bind(&OnSceneNodeHandshakeReply, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
 }
@@ -107,6 +111,18 @@ void OnSceneCreateSceneReply(const muduo::net::TcpConnectionPtr& conn, const std
 }
 
 void OnSceneDestroySceneReply(const muduo::net::TcpConnectionPtr& conn, const std::shared_ptr<::Empty>& replied, muduo::Timestamp timestamp)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE}
+}
+
+void OnScenePrepareBattleReply(const muduo::net::TcpConnectionPtr& conn, const std::shared_ptr<::PrepareBattleResponse>& replied, muduo::Timestamp timestamp)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE}
+}
+
+void OnSceneCancelBattlePrepareReply(const muduo::net::TcpConnectionPtr& conn, const std::shared_ptr<::Empty>& replied, muduo::Timestamp timestamp)
 {
 ///<<< BEGIN WRITING YOUR CODE
 ///<<< END WRITING YOUR CODE}

@@ -124,6 +124,9 @@ $ServiceCatalogue = [ordered]@{
     player_locator  = @{ Dir = "player_locator";  Entry = "player_locator.go";        Port = 53200; Desc = "Player Locator (Redis cache)";    ConfigFlag = "-f";            ConfigFile = "etc/player_locator.yaml";        AllowMultiInstance = $true;  Tier = 2 }
     login           = @{ Dir = "login";           Entry = "login.go";                 Port = 53000; Desc = "Login (gRPC + etcd)";            ConfigFlag = "-loginService"; ConfigFile = "etc/login.yaml";                 AllowMultiInstance = $true;  Tier = 3 }
     scene_manager   = @{ Dir = "scene_manager";   Entry = "scene_manager_service.go"; Port = 60300; Desc = "Scene Manager (Kafka + Redis)";    ConfigFlag = "-f";            ConfigFile = "etc/scene_manager_service.yaml"; AllowMultiInstance = $true;  Tier = 1 }
+    # 回合制战斗匹配/切磋编排(docs/design/turn-based-battle-server.md §5.4)。
+    # 50500 位于已观测的 Windows 保留区间(50000-50171)与 51573-51872 之间,安全;与 etc yaml ListenOn 保持一致。
+    match           = @{ Dir = "match";           Entry = "match_service.go";         Port = 50500; Desc = "Match (turn-battle matchmaking)";  ConfigFlag = "-f";            ConfigFile = "etc/match_service.yaml";         AllowMultiInstance = $true;  Tier = 3 }
 }
 
 # Derived per-instance config files live here so the source tree stays clean.

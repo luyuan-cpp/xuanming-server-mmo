@@ -15,6 +15,9 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="handler\event\battle_binding_helper.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="handler\event\event_handler.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -59,6 +62,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="handler\event\battle_binding_helper.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
     <ClInclude Include="handler\event\event_handler.h">
       <Filter>Header Files</Filter>
     </ClInclude>

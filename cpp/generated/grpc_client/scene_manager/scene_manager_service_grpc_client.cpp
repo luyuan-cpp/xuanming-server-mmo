@@ -6,12 +6,14 @@
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
+namespace {
+boost::object_pool<GrpcTag> tagPool;
+}
+
 namespace scene_manager {
 struct SceneManagerServiceCompleteQueue {
     grpc::CompletionQueue cq;
 };
-
-boost::object_pool<GrpcTag> tagPool;
 #pragma region SceneManagerCreateScene
 boost::object_pool<AsyncSceneManagerCreateSceneGrpcClient> SceneManagerCreateScenePool;
 using AsyncSceneManagerCreateSceneHandlerFunctionType =

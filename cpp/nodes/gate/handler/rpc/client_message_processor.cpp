@@ -31,6 +31,7 @@
 #include <session/manager/session_manager.h>
 #include <network/node_utils.h>
 #include <node_config_manager.h>
+#include "handler/event/battle_binding_helper.h"
 
 namespace
 {
@@ -382,6 +383,8 @@ void RpcClientSessionHandler::HandleConnectionDisconnection(const muduo::net::Tc
 	}
 
 	sessions.erase(sessionId);
+	// 会话没了,battle_id 绑定记录一并清理(战斗侧照打,重连由 scene 重发 Bind)。
+	gate_battle_binding::ClearBattleRecord(sessionId);
 
 	LOG_INFO << "Client disconnected, session_id=" << sessionId
 			 << ", peer=" << peer
@@ -530,10 +533,18 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 
 	if (rpcHandlerMeta.sender)
 	{
-		// Scene nodes hold player entities in memory -- require session affinity binding.
-		// All Go microservices (login, guild, friend, chat, etc.) are stateless -- pick any available node.
+		// 路由规则(保持向后兼容):
+		//   1. 会话对目标 nodeType 已有绑定(SessionInfo.SetEntityId 过)→ 一律走绑定实体;
+		//   2. 无绑定时,有状态节点(Scene / Battle)不能随机路由 —— Scene 的玩家实体、
+		//      Battle 的战斗房间都只在特定节点上,随机挑一个只会得到"玩家/战斗不存在";
+		//      ResolveSessionTargetNode 对无绑定会话返回 nullopt,统一落到下面的错误应答;
+		//   3. 其余 nodeType(login/guild/friend/chat 等无状态 Go 服务)维持 PickRandomNode 现状。
+		// Battle 的绑定由 BindBattleEvent/UnbindBattleEvent 维护(battle_binding_helper.cpp)。
 		std::optional<entt::entity> node;
-		if (rpcHandlerMeta.targetNodeType == eNodeType::SceneNodeService)
+		const bool requiresSessionBinding =
+			rpcHandlerMeta.targetNodeType == eNodeType::SceneNodeService ||
+			rpcHandlerMeta.targetNodeType == eNodeType::BattleNodeService;
+		if (requiresSessionBinding || sessionIt->second.HasEntityId(rpcHandlerMeta.targetNodeType))
 		{
 			node = ResolveSessionTargetNode(sessionId, rpcHandlerMeta.targetNodeType);
 		}
@@ -749,5 +760,12 @@ void RpcClientSessionHandler::OnNodeRemoveEventHandler(const OnNodeRemoveEvent &
 		if (session.second.GetEntityId(pb.node_type()) != pb.entity())
 			continue;
 		session.second.SetEntityId(pb.node_type(), SessionInfo::kInvalidEntityId);
+		// battle 节点被摘除 = 该节点上的战斗全部作废(节点无持久状态,设计文档 §8),
+		// 同步清掉 battle_id 记录,避免迟到的 UnbindBattleEvent 去匹配一条僵尸记录;
+		// 玩家解冻由 scene reaper 按 InBattleComp.deadline_ms 兜底。
+		if (pb.node_type() == eNodeType::BattleNodeService)
+		{
+			gate_battle_binding::ClearBattleRecord(session.first);
+		}
 	}
 }

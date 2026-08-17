@@ -21,6 +21,7 @@ using common::base::eSceneNodeType_Name;
 using common::base::ActivityNodeService;
 using common::base::AiNodeService;
 using common::base::AnalyticsNodeService;
+using common::base::BattleNodeService;
 using common::base::ChatNodeService;
 using common::base::CrossServerNodeService;
 using common::base::DataServiceNodeService;
@@ -104,4 +105,14 @@ namespace NodeUtils
 	// cross-zone redirect. DataService runs one logical pool for global data
 	// (e.g. account lookup) that every zone shares.
 	bool IsZoneScopedNodeType(uint32_t nodeType);
+
+	// 纯 gRPC 协议的 C++ 节点:不对外提供 muduo TCP RPC 服务,注册进 etcd 的
+	// NodeInfo.protocol_type 必须是 PROTOCOL_GRPC —— 发现方(node_connector)
+	// 按 protocol_type 分派连接方式,标错成 TCP 会让对端反复去拨一个没有
+	// 业务 codec 的端口,而且永远建不出 gRPC stub。
+	// TCP 端口仍会占位分配(gRPC 端口 = TCP + 30000 的派生规则依赖它,见
+	// node_allocator.cpp),只是没有节点会向它发起业务连接。
+	//
+	//   目前:BattleNodeService(回合制战斗,全局池,gRPC only)
+	bool IsGrpcOnlyNodeType(uint32_t nodeType);
 };

@@ -104,6 +104,7 @@ enum eNodeType : int {
   SceneManagerNodeService = 25,
   DataServiceNodeService = 26,
   FriendNodeService = 27,
+  BattleNodeService = 28,
   eNodeType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   eNodeType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -114,11 +115,11 @@ extern const uint32_t eNodeType_internal_data_[];
 inline constexpr eNodeType eNodeType_MIN =
     static_cast<eNodeType>(0);
 inline constexpr eNodeType eNodeType_MAX =
-    static_cast<eNodeType>(27);
+    static_cast<eNodeType>(28);
 [[nodiscard]] inline bool eNodeType_IsValid(int value) {
-  return 0 <= value && value <= 27 && ((268435449u >> value) & 1) != 0;
+  return 0 <= value && value <= 28 && ((536870905u >> value) & 1) != 0;
 }
-inline constexpr int eNodeType_ARRAYSIZE = 27 + 1;
+inline constexpr int eNodeType_ARRAYSIZE = 28 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 eNodeType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(eNodeType) {
@@ -133,7 +134,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& eNodeType_Name(eNodeType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<eNodeType_descriptor, 0, 27>(
+  return ::google::protobuf::internal::NameOfDenseEnum<eNodeType_descriptor, 0, 28>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool eNodeType_Parse(

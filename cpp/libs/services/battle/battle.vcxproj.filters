@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="constants">
+      <UniqueIdentifier>{2f1c1a54-6d94-4a7e-9c1b-0a4a1f4b7301}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="data">
+      <UniqueIdentifier>{2f1c1a54-6d94-4a7e-9c1b-0a4a1f4b7302}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="system">
+      <UniqueIdentifier>{2f1c1a54-6d94-4a7e-9c1b-0a4a1f4b7303}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="constants\turn_battle_constants.h">
+      <Filter>constants</Filter>
+    </ClInclude>
+    <ClInclude Include="data\battle_data_provider.h">
+      <Filter>data</Filter>
+    </ClInclude>
+    <ClInclude Include="data\table_battle_data_provider.h">
+      <Filter>data</Filter>
+    </ClInclude>
+    <ClInclude Include="system\turn_battle_engine.h">
+      <Filter>system</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="data\table_battle_data_provider.cpp">
+      <Filter>data</Filter>
+    </ClCompile>
+    <ClCompile Include="system\turn_battle_engine.cpp">
+      <Filter>system</Filter>
+    </ClCompile>
+  </ItemGroup>
+</Project>

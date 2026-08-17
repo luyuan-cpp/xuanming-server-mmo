@@ -972,11 +972,11 @@ constexpr BaseAttributesComp::ParseTableT_ BaseAttributesComp::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(BaseAttributesComp, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      8,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -986,7 +986,10 @@ constexpr BaseAttributesComp::ParseTableT_ BaseAttributesComp::InternalGenerateP
       ::_pbi::TcParser::GetTable<::BaseAttributesComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 speed = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BaseAttributesComp, _impl_.speed_), 7>(),
+       {64, 7, 0,
+        PROTOBUF_FIELD_OFFSET(BaseAttributesComp, _impl_.speed_)}},
       // uint64 strength = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BaseAttributesComp, _impl_.strength_), 0>(),
        {8, 0, 0,
@@ -1032,6 +1035,8 @@ constexpr BaseAttributesComp::ParseTableT_ BaseAttributesComp::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(BaseAttributesComp, _impl_.armor_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint64 resistance = 7;
       {PROTOBUF_FIELD_OFFSET(BaseAttributesComp, _impl_.resistance_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 speed = 8;
+      {PROTOBUF_FIELD_OFFSET(BaseAttributesComp, _impl_.speed_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -1050,7 +1055,8 @@ inline constexpr BaseAttributesComp::Impl_::Impl_(
         mana_{::uint64_t{0u}},
         critchance_{::uint64_t{0u}},
         armor_{::uint64_t{0u}},
-        resistance_{::uint64_t{0u}} {}
+        resistance_{::uint64_t{0u}},
+        speed_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr BaseAttributesComp::BaseAttributesComp(::_pbi::ConstantInitialized,
@@ -1818,7 +1824,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BaseAttributesComp, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BaseAttributesComp, _impl_.strength_),
         PROTOBUF_FIELD_OFFSET(::BaseAttributesComp, _impl_.stamina_),
         PROTOBUF_FIELD_OFFSET(::BaseAttributesComp, _impl_.health_),
@@ -1826,6 +1832,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BaseAttributesComp, _impl_.critchance_),
         PROTOBUF_FIELD_OFFSET(::BaseAttributesComp, _impl_.armor_),
         PROTOBUF_FIELD_OFFSET(::BaseAttributesComp, _impl_.resistance_),
+        PROTOBUF_FIELD_OFFSET(::BaseAttributesComp, _impl_.speed_),
         0,
         1,
         2,
@@ -1833,6 +1840,7 @@ const ::uint32_t
         4,
         5,
         6,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::LevelComp, _impl_._has_bits_),
         4, // hasbit index offset
@@ -1862,9 +1870,9 @@ static const ::_pbi::MigrationSchema
         {45, sizeof(::Acceleration)},
         {54, sizeof(::ViewRadius)},
         {59, sizeof(::BaseAttributesComp)},
-        {76, sizeof(::LevelComp)},
-        {81, sizeof(::ActorStateComp_StateListEntry_DoNotUse)},
-        {88, sizeof(::ActorStateComp)},
+        {78, sizeof(::LevelComp)},
+        {83, sizeof(::ActorStateComp_StateListEntry_DoNotUse)},
+        {90, sizeof(::ActorStateComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1892,15 +1900,16 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2factor_5fcomp_2
     "ion\022\025\n\005scale\030\003 \001(\0132\006.Scale\"+\n\010Velocity\022\t"
     "\n\001x\030\001 \001(\001\022\t\n\001y\030\002 \001(\001\022\t\n\001z\030\003 \001(\001\"/\n\014Accel"
     "eration\022\t\n\001x\030\001 \001(\001\022\t\n\001y\030\002 \001(\001\022\t\n\001z\030\003 \001(\001"
-    "\"\034\n\nViewRadius\022\016\n\006radius\030\001 \001(\002\"\214\001\n\022BaseA"
+    "\"\034\n\nViewRadius\022\016\n\006radius\030\001 \001(\002\"\233\001\n\022BaseA"
     "ttributesComp\022\020\n\010strength\030\001 \001(\004\022\017\n\007stami"
     "na\030\002 \001(\004\022\016\n\006health\030\003 \001(\004\022\014\n\004mana\030\004 \001(\004\022\022"
     "\n\ncritchance\030\005 \001(\004\022\r\n\005armor\030\006 \001(\004\022\022\n\nres"
-    "istance\030\007 \001(\004\"\032\n\tLevelComp\022\r\n\005level\030\001 \001("
-    "\r\"v\n\016ActorStateComp\0222\n\nstate_list\030\001 \003(\0132"
-    "\036.ActorStateComp.StateListEntry\0320\n\016State"
-    "ListEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\010:\0028"
-    "\001B\022Z\020common/componentb\006proto3"
+    "istance\030\007 \001(\004\022\r\n\005speed\030\010 \001(\004\"\032\n\tLevelCom"
+    "p\022\r\n\005level\030\001 \001(\r\"v\n\016ActorStateComp\0222\n\nst"
+    "ate_list\030\001 \003(\0132\036.ActorStateComp.StateLis"
+    "tEntry\0320\n\016StateListEntry\022\013\n\003key\030\001 \001(\r\022\r\n"
+    "\005value\030\002 \001(\010:\0028\001B\022Z\020common/componentb\006pr"
+    "oto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto_deps[1] = {
@@ -1910,7 +1919,7 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2factor_5fc
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto = {
     false,
     false,
-    749,
+    764,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto,
     "proto/common/component/actor_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2factor_5fcomp_2eproto_once,
@@ -3660,9 +3669,9 @@ inline void BaseAttributesComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, strength_),
            0,
-           offsetof(Impl_, resistance_) -
+           offsetof(Impl_, speed_) -
                offsetof(Impl_, strength_) +
-               sizeof(Impl_::resistance_));
+               sizeof(Impl_::speed_));
 }
 BaseAttributesComp::~BaseAttributesComp() {
   // @@protoc_insertion_point(destructor:BaseAttributesComp)
@@ -3712,10 +3721,10 @@ PROTOBUF_NOINLINE void BaseAttributesComp::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     ::memset(&_impl_.strength_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.resistance_) -
-        reinterpret_cast<char*>(&_impl_.strength_)) + sizeof(_impl_.resistance_));
+        reinterpret_cast<char*>(&_impl_.speed_) -
+        reinterpret_cast<char*>(&_impl_.strength_)) + sizeof(_impl_.speed_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -3803,6 +3812,15 @@ PROTOBUF_NOINLINE void BaseAttributesComp::Clear() {
     }
   }
 
+  // uint64 speed = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_speed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_speed(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -3828,7 +3846,7 @@ PROTOBUF_NOINLINE void BaseAttributesComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // uint64 strength = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_strength() != 0) {
@@ -3878,6 +3896,13 @@ PROTOBUF_NOINLINE void BaseAttributesComp::Clear() {
             this_._internal_resistance());
       }
     }
+    // uint64 speed = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_speed() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_speed());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -3896,7 +3921,7 @@ void BaseAttributesComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_strength() != 0) {
         _this->_impl_.strength_ = from._impl_.strength_;
@@ -3932,6 +3957,11 @@ void BaseAttributesComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.resistance_ = from._impl_.resistance_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_speed() != 0) {
+        _this->_impl_.speed_ = from._impl_.speed_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -3951,8 +3981,8 @@ void BaseAttributesComp::InternalSwap(BaseAttributesComp* PROTOBUF_RESTRICT PROT
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BaseAttributesComp, _impl_.resistance_)
-      + sizeof(BaseAttributesComp::_impl_.resistance_)
+      PROTOBUF_FIELD_OFFSET(BaseAttributesComp, _impl_.speed_)
+      + sizeof(BaseAttributesComp::_impl_.speed_)
       - PROTOBUF_FIELD_OFFSET(BaseAttributesComp, _impl_.strength_)>(
           reinterpret_cast<char*>(&_impl_.strength_),
           reinterpret_cast<char*>(&other->_impl_.strength_));

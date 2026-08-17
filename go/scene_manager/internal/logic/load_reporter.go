@@ -156,16 +156,23 @@ func updateNodeLoad(svcCtx *svc.ServiceContext, entry nodeEntry) {
 	playerCount := readInt64(svcCtx, nodePlayerCountKey(entry.reg.ZoneId, entry.nodeID))
 	score := computeNodeLoadScore(svcCtx, sceneCount, playerCount)
 
-	loadKey := nodeLoadKey(entry.reg.ZoneId)
-	if _, err := svcCtx.Redis.Zadd(loadKey, int64(score), entry.nodeID); err != nil {
-		logx.Errorf("[LoadReporter] failed to update load for node %s (zone %d): %v", entry.nodeID, entry.reg.ZoneId, err)
-	}
+	// Redis 写只归领导者:这不是幂等同值写 —— 跟随者的 watch 镜像可能落后
+	// 于领导者的清理,比如领导者刚把死节点 Zrem 出负载集,跟随者的 5s 刷新
+	// 又把它 Zadd 回去;而 DELETE 事件领导者已经消费过,没有第二次删除,
+	// "复活"的条目会一直留到下一次 fullSync。指标每副本照常发布,
+	// 跟随者的 dashboard 不断流。
+	if isLeader() {
+		loadKey := nodeLoadKey(entry.reg.ZoneId)
+		if _, err := svcCtx.Redis.Zadd(loadKey, int64(score), entry.nodeID); err != nil {
+			logx.Errorf("[LoadReporter] failed to update load for node %s (zone %d): %v", entry.nodeID, entry.reg.ZoneId, err)
+		}
 
-	// Mirror scene_node_type into Redis so getNodesForPurpose can filter
-	// without touching etcd on every CreateScene request.
-	if err := svcCtx.Redis.Set(nodeSceneNodeTypeKey(entry.reg.ZoneId, entry.nodeID),
-		strconv.FormatUint(uint64(entry.reg.SceneNodeType), 10)); err != nil {
-		logx.Errorf("[LoadReporter] failed to mirror scene_node_type for node %s: %v", entry.nodeID, err)
+		// Mirror scene_node_type into Redis so getNodesForPurpose can filter
+		// without touching etcd on every CreateScene request.
+		if err := svcCtx.Redis.Set(nodeSceneNodeTypeKey(entry.reg.ZoneId, entry.nodeID),
+			strconv.FormatUint(uint64(entry.reg.SceneNodeType), 10)); err != nil {
+			logx.Errorf("[LoadReporter] failed to mirror scene_node_type for node %s: %v", entry.nodeID, err)
+		}
 	}
 
 	metrics.ObserveNode(entry.nodeID, entry.reg.ZoneId, entry.reg.SceneNodeType,
@@ -270,6 +277,15 @@ func reconcileDeadNodeScenes(svcCtx *svc.ServiceContext, entry nodeEntry) {
 	destroyed, skippedWorld, stale := 0, 0, 0
 
 	for _, s := range members {
+		// 降级即停,且**不删** setKey:留着集合,新领导者的 fullSync
+		// stale 清理会对同一个死节点重跑本函数,接手剩余成员。
+		// destroyInstanceForce 内部是 Lua 原子认领,即便与新领导者
+		// 短暂并发,每个场景的副作用也只会执行一次。
+		if !isLeader() {
+			logx.Infof("[Reconcile] lost leadership mid-sweep for node %s (zone %d), aborting; successor will re-sweep",
+				entry.nodeID, entry.reg.ZoneId)
+			return
+		}
 		sceneId, err := strconv.ParseUint(s, 10, 64)
 		if err != nil {
 			continue
@@ -460,25 +476,41 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 
 	seenByZone := make(map[uint32]map[string]struct{})
 
-	knownNodesMu.Lock()
-	knownNodes = make(map[string]nodeEntry, len(resp.Kvs))
+	next := make(map[string]nodeEntry, len(resp.Kvs))
 	for _, kv := range resp.Kvs {
 		key := string(kv.Key)
 		entry, ok := parseNodeEntry(kv.Value)
 		if !ok {
 			continue
 		}
-		knownNodes[key] = entry
+		next[key] = entry
 
 		zoneId := entry.reg.ZoneId
 		if seenByZone[zoneId] == nil {
 			seenByZone[zoneId] = make(map[string]struct{})
 		}
 		seenByZone[zoneId][entry.nodeID] = struct{}{}
+	}
 
+	knownNodesMu.Lock()
+	prevKnown := knownNodes
+	knownNodes = next
+	knownNodesMu.Unlock()
+
+	for _, entry := range next {
 		updateNodeLoad(svcCtx, entry)
 	}
-	knownNodesMu.Unlock()
+
+	// 每副本的进程本地清理(不走领导者闸门):watch DELETE 在跟随者上只做
+	// 本地清理,但整段 DELETE 事件也可能被错过(watch 重建窗口)。用新旧
+	// 快照的差集兜底,清掉已消失节点的 gRPC 连接缓存与 Prometheus 序列 ——
+	// 这两样是进程私有的,领导者替代不了。
+	for key, prev := range prevKnown {
+		if _, still := next[key]; !still {
+			RemoveNodeConn(prev.reg.ZoneId, prev.nodeID)
+			metrics.ForgetNode(prev.nodeID, prev.reg.ZoneId, prev.reg.SceneNodeType)
+		}
+	}
 
 	// Update activeZones.
 	zones := make([]uint32, 0, len(seenByZone))
@@ -489,43 +521,88 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 	activeZones = zones
 	activeZonesMu.Unlock()
 
-	// Clean stale Redis entries not in current etcd snapshot.
-	for _, zoneId := range zones {
-		seen := seenByZone[zoneId]
-		loadKey := nodeLoadKey(zoneId)
-		pairs, err := svcCtx.Redis.ZrangeWithScores(loadKey, 0, -1)
-		if err != nil {
-			continue
+	// 以下全部是**变更类**动作,多副本时只有领导者执行(单写者语义);
+	// 跟随者的 fullSync 只负责重建本进程的 etcd 内存镜像与负载分。
+	// 领导者缺位窗口(选举间隙 / 领导者刚挂)里漏掉的动作,由新任领导者
+	// 当选时触发的 RequestLoadReporterResync -> fullSync 一次补齐。
+	if isLeader() {
+		// Clean stale Redis entries not in current etcd snapshot.
+		//
+		// 扫描范围 = 快照里的 zone ∪ Redis 里还留有负载集的 zone。只按快照
+		// 扫有个洞:某 zone 的**最后一个**节点在无领导窗口(或 SM 整体停机)
+		// 里死掉时,快照里根本没有这个 zone,它的负载集条目、计数和孤儿
+		// 实例就永远没人清(runPeriodicRebalance 也只迭代 GetActiveZones)。
+		sweepZones := make(map[uint32]struct{}, len(zones))
+		for _, z := range zones {
+			sweepZones[z] = struct{}{}
 		}
-		for _, p := range pairs {
-			if _, ok := seen[p.Key]; !ok {
-				svcCtx.Redis.Zrem(loadKey, p.Key)
-				svcCtx.Redis.Del(nodeSceneNodeTypeKey(zoneId, p.Key))
-				RemoveNodeConn(zoneId, p.Key)
-				// SceneManager 停机期间死掉的节点走不到 watch DELETE,
-				// 计数残留同样要在这里清(理由见 removeNodeFromRedis)。
-				deleteNodeCounters(svcCtx, zoneId, p.Key)
+		cursor := uint64(0)
+		for {
+			loadKeys, nextCursor, err := svcCtx.Redis.Scan(cursor, "scene_nodes:zone:*:load", 64)
+			if err != nil {
+				logx.Errorf("[LoadReporter] scan zone load keys failed at cursor=%d: %v", cursor, err)
+				break
+			}
+			for _, k := range loadKeys {
+				var z uint32
+				if _, err := fmt.Sscanf(k, NodeLoadKeyFmt, &z); err == nil {
+					sweepZones[z] = struct{}{}
+				}
+			}
+			if nextCursor == 0 {
+				break
+			}
+			cursor = nextCursor
+		}
+
+		for zoneId := range sweepZones {
+			// seen 对快照外的 zone 是 nil map —— 该 zone 所有条目都视为 stale。
+			seen := seenByZone[zoneId]
+			loadKey := nodeLoadKey(zoneId)
+			pairs, err := svcCtx.Redis.ZrangeWithScores(loadKey, 0, -1)
+			if err != nil {
+				continue
+			}
+			for _, p := range pairs {
+				// 长循环里领导权可能中途易主:降级即停,
+				// 新领导者的 resync fullSync 会重扫同一批。
+				if !isLeader() {
+					return resp.Header.Revision, nil
+				}
+				if _, ok := seen[p.Key]; !ok {
+					svcCtx.Redis.Zrem(loadKey, p.Key)
+					svcCtx.Redis.Del(nodeSceneNodeTypeKey(zoneId, p.Key))
+					RemoveNodeConn(zoneId, p.Key)
+					// SceneManager 停机期间(以及领导者缺位窗口内)死掉的
+					// 节点走不到 watch DELETE,它的孤儿实例场景和计数残留
+					// 都要在这里补清 —— 这也是新任领导者补齐跟随期间漏掉
+					// 的 DELETE 事件的唯一路径(理由见 removeNodeFromRedis)。
+					staleEntry := nodeEntry{nodeID: p.Key}
+					staleEntry.reg.ZoneId = zoneId
+					reconcileDeadNodeScenes(svcCtx, staleEntry)
+					deleteNodeCounters(svcCtx, zoneId, p.Key)
+				}
 			}
 		}
-	}
 
-	// Ensure world scenes for all zones (handles SceneManager restart). We
-	// run init followed by a rebalance pass: init handles under-provisioning
-	// (new confIds, fresh zone) while rebalance handles drift that
-	// accumulated while SceneManager was offline (nodes joined/left without
-	// us observing the PUT/DELETE event).
-	if wids := worldConfIds(); len(wids) > 0 {
-		for _, z := range zones {
-			initWorldScenesForZone(ctx, svcCtx, z, wids)
-			RebalanceWorldChannelsForZone(ctx, svcCtx, z, wids)
+		// Ensure world scenes for all zones (handles SceneManager restart). We
+		// run init followed by a rebalance pass: init handles under-provisioning
+		// (new confIds, fresh zone) while rebalance handles drift that
+		// accumulated while SceneManager was offline (nodes joined/left without
+		// us observing the PUT/DELETE event).
+		if wids := worldConfIds(); len(wids) > 0 {
+			for _, z := range zones {
+				initWorldScenesForZone(ctx, svcCtx, z, wids, false)
+				RebalanceWorldChannelsForZone(ctx, svcCtx, z, wids)
+			}
 		}
-	}
 
-	// Opt-out orphan cleanup: drop world_channels:* sets for confIds that
-	// no longer exist in World.json. Runs once per fullSync iteration so a
-	// long-lived SceneManager picks up table edits after a live reload.
-	if svcCtx.Config.CleanupOrphanChannelsOnStartup {
-		CleanupOrphanWorldChannels(ctx, svcCtx)
+		// Opt-out orphan cleanup: drop world_channels:* sets for confIds that
+		// no longer exist in World.json. Runs once per fullSync iteration so a
+		// long-lived SceneManager picks up table edits after a live reload.
+		if svcCtx.Config.CleanupOrphanChannelsOnStartup {
+			CleanupOrphanWorldChannels(ctx, svcCtx)
+		}
 	}
 
 	logx.Infof("[LoadReporter] full sync: %d nodes, %d zones, rev=%d",
@@ -572,6 +649,12 @@ func watchAndRefresh(ctx context.Context, svcCtx *svc.ServiceContext, rev int64)
 			refreshLoadScores(svcCtx)
 		case <-rebalanceTicker:
 			runPeriodicRebalance(ctx, svcCtx)
+		case <-loadReporterResync:
+			// 领导权刚变化:返回让外层循环重跑 fullSync。新任领导者借此
+			// 立即补齐跟随者期间跳过的变更动作(补频道 / rebalance / 清理),
+			// 而不是等下一次 watch 中断。
+			logx.Info("[LoadReporter] resync requested (leadership change)")
+			return
 		}
 	}
 }
@@ -594,6 +677,10 @@ func newRebalanceTicker(svcCtx *svc.ServiceContext) (<-chan time.Time, func()) {
 // zone. This is the fallback path for drift that etcd events don't surface
 // (e.g. a hot channel drained and became opportunistic-migratable).
 func runPeriodicRebalance(ctx context.Context, svcCtx *svc.ServiceContext) {
+	// rebalance 会迁移频道并改写路由,是变更动作 —— 只有领导者做。
+	if !isLeader() {
+		return
+	}
 	wids := worldConfIds()
 	if len(wids) == 0 {
 		return
@@ -647,11 +734,16 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 		updateNodeLoad(svcCtx, entry)
 		rebuildActiveZones()
 
-		if wids := worldConfIds(); len(wids) > 0 {
+		// 补频道 / rebalance 是变更动作,只有领导者做;跟随者只维护上面的
+		// 内存镜像与负载分。跟随者当选时会经 resync -> fullSync 补齐。
+		if wids := worldConfIds(); len(wids) > 0 && isLeader() {
 			if !existed {
 				logx.Infof("[LoadReporter] Zone %d: node %s appeared (watch PUT, role=%d)",
 					entry.reg.ZoneId, entry.nodeID, entry.reg.SceneNodeType)
-				initWorldScenesForZone(ctx, svcCtx, entry.reg.ZoneId, wids)
+				// waitForLock=false:本函数跑在 etcd watch goroutine 上,
+				// 忙等锁会堵住 DELETE 事件与定时器;锁忙说明别人在补建,
+				// 跳过即可。
+				initWorldScenesForZone(ctx, svcCtx, entry.reg.ZoneId, wids, false)
 			}
 			// A world-hosting node joined (or re-registered after a restart /
 			// role flip): the hash ring changed. Try to rebalance empty
@@ -676,6 +768,18 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 		}
 
 		rebuildActiveZones()
+
+		// 进程本地清理每个副本都要做:gRPC 连接缓存与 Prometheus 标签
+		// 是各进程私有的,不清会拿着死节点的 stale endpoint 继续发请求。
+		RemoveNodeConn(entry.reg.ZoneId, entry.nodeID)
+		metrics.ForgetNode(entry.nodeID, entry.reg.ZoneId, entry.reg.SceneNodeType)
+
+		// Redis 侧清理(负载集摘除 / 孤儿实例销毁 / 计数删除)与 rebalance
+		// 是全局变更,只有领导者做。领导者缺位窗口里漏掉的 DELETE,由新任
+		// 领导者当选时的 fullSync 补齐(其 stale 清理路径会跑同一套 reconcile)。
+		if !isLeader() {
+			return
+		}
 		removeNodeFromRedis(svcCtx, entry)
 
 		// A world-hosting node departed: channels mapped to it are now

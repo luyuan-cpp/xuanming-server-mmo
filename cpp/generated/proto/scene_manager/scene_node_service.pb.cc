@@ -230,12 +230,15 @@ const char descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fnode_5fse
     "pty.proto\032\027proto/scene/scene.proto\"Z\n\024Re"
     "leasePlayerRequest\022\021\n\tplayer_id\030\001 \001(\004\022\027\n"
     "\017target_scene_id\030\002 \001(\004\022\026\n\016target_node_id"
-    "\030\003 \001(\t2\270\001\n\rSceneNodeGrpc\022:\n\013CreateScene\022"
+    "\030\003 \001(\t2\270\002\n\rSceneNodeGrpc\022:\n\013CreateScene\022"
     "\023.CreateSceneRequest\032\024.CreateSceneRespon"
     "se\"\000\022.\n\014DestroyScene\022\024.DestroySceneReque"
     "st\032\006.Empty\"\000\022;\n\rReleasePlayer\022 .scene_no"
-    "de.ReleasePlayerRequest\032\006.Empty\"\000B\035Z\033sce"
-    "ne_manager/scene_managerb\006proto3"
+    "de.ReleasePlayerRequest\032\006.Empty\"\000\022@\n\rPre"
+    "pareBattle\022\025.PrepareBattleRequest\032\026.Prep"
+    "areBattleResponse\"\000\022<\n\023CancelBattlePrepa"
+    "re\022\033.CancelBattlePrepareRequest\032\006.Empty\""
+    "\000B\035Z\033scene_manager/scene_managerb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto_deps[2] = {
@@ -246,7 +249,7 @@ static ::absl::once_flag descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto = {
     false,
     false,
-    432,
+    560,
     descriptor_table_protodef_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto,
     "proto/scene_manager/scene_node_service.proto",
     &descriptor_table_proto_2fscene_5fmanager_2fscene_5fnode_5fservice_2eproto_once,

@@ -6,12 +6,14 @@
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
+namespace {
+boost::object_pool<GrpcTag> tagPool;
+}
+
 namespace loginpb {
 struct LoginCompleteQueue {
     grpc::CompletionQueue cq;
 };
-
-boost::object_pool<GrpcTag> tagPool;
 #pragma region ClientPlayerLoginLogin
 boost::object_pool<AsyncClientPlayerLoginLoginGrpcClient> ClientPlayerLoginLoginPool;
 using AsyncClientPlayerLoginLoginHandlerFunctionType =

@@ -22,9 +22,12 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -91,6 +94,19 @@ public class LoginRpcClient {
      */
     private final Map<Integer, ManagedChannel> channelByZone = new LinkedHashMap<>();
     private final AtomicInteger rr = new AtomicInteger();
+
+    // ── etcd 动态发现(多节点部署)────────────────────────────────
+    //
+    // LoginNodeDiscovery 周期性把 etcd 里 LoginNodeService.rpc/ 的注册结果
+    // 通过 updateDynamicEndpoints() 推进来。动态池优先于静态配置:同一 zone
+    // 有多个 login 实例时按轮询分摊;etcd 里没有该 zone 的注册时回落到
+    // 静态 channelByZone(兼容纯静态配置的旧部署)。
+
+    /** endpoint("host:port") -> 动态发现创建的 channel(创建一次,复用)。 */
+    private final ConcurrentHashMap<String, ManagedChannel> dynamicChannels = new ConcurrentHashMap<>();
+
+    /** zone -> 动态 channel 列表。整表原子替换,读方无锁。 */
+    private volatile Map<Integer, List<ManagedChannel>> dynamicByZone = Map.of();
 
     private final MethodDescriptor<LoginRequestProto, LoginResponseProto> loginMethod;
     private final MethodDescriptor<RefreshTokenRequestProto, RefreshTokenResponseProto> refreshTokenMethod;
@@ -179,7 +195,9 @@ public class LoginRpcClient {
 
     @PreDestroy
     void stop() {
-        for (var ch : channels) {
+        var all = new ArrayList<>(channels);
+        all.addAll(dynamicChannels.values());
+        for (var ch : all) {
             ch.shutdown();
             try {
                 ch.awaitTermination(5, TimeUnit.SECONDS);
@@ -187,6 +205,69 @@ public class LoginRpcClient {
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    /**
+     * 用 etcd 发现结果整体替换动态路由表(由 {@link LoginNodeDiscovery}
+     * 周期调用)。endpoint 形如 {@code host:port};已存在的 channel 复用,
+     * 新出现的创建,从 etcd 消失的关停回收。调用方保证 etcd 查询失败时
+     * 不调用本方法(保留 last-known-good 路由)。
+     */
+    public void updateDynamicEndpoints(Map<Integer, List<String>> endpointsByZone) {
+        Map<Integer, List<ManagedChannel>> next = new LinkedHashMap<>();
+        Set<String> live = new HashSet<>();
+        for (var entry : endpointsByZone.entrySet()) {
+            List<ManagedChannel> chs = new ArrayList<>();
+            for (String ep : entry.getValue()) {
+                if (ep == null || ep.isBlank()) continue;
+                live.add(ep);
+                ManagedChannel ch = dynamicChannels.computeIfAbsent(ep, this::buildDynamicChannel);
+                if (ch != null) chs.add(ch);
+            }
+            if (!chs.isEmpty()) next.put(entry.getKey(), chs);
+        }
+        dynamicByZone = next;
+
+        // 回收 etcd 里已消失的节点。grpc shutdown() 是优雅关闭,在途调用
+        // 会完成;新路由表已不含该 channel,不会再被选中。
+        for (var it = dynamicChannels.entrySet().iterator(); it.hasNext(); ) {
+            var entry = it.next();
+            if (!live.contains(entry.getKey())) {
+                it.remove();
+                entry.getValue().shutdown();
+                log.info("login.rpc dynamic channel retired: {}", entry.getKey());
+            }
+        }
+    }
+
+    /** 当前动态路由表快照(仅测试/观测用)。 */
+    public Map<Integer, Integer> dynamicRoutingSnapshot() {
+        Map<Integer, Integer> out = new LinkedHashMap<>();
+        for (var e : dynamicByZone.entrySet()) out.put(e.getKey(), e.getValue().size());
+        return out;
+    }
+
+    private ManagedChannel buildDynamicChannel(String ep) {
+        int colon = ep.lastIndexOf(':');
+        if (colon <= 0 || colon == ep.length() - 1) {
+            log.warn("login.rpc dynamic endpoint malformed, skipped: {}", ep);
+            return null;
+        }
+        final int port;
+        try {
+            port = Integer.parseInt(ep.substring(colon + 1));
+        } catch (NumberFormatException nfe) {
+            log.warn("login.rpc dynamic endpoint port malformed, skipped: {}", ep);
+            return null;
+        }
+        ManagedChannel ch = ManagedChannelBuilder.forAddress(ep.substring(0, colon), port)
+                .usePlaintext()
+                .keepAliveTime(30, TimeUnit.SECONDS)
+                .keepAliveTimeout(10, TimeUnit.SECONDS)
+                .keepAliveWithoutCalls(true)
+                .build();
+        log.info("login.rpc dynamic channel up: {}", ep);
+        return ch;
     }
 
     /**
@@ -236,31 +317,17 @@ public class LoginRpcClient {
             int zoneId,
             boolean zoneRequired,
             boolean retrySafe) {
-        if (channels.isEmpty()) {
-            throw new IllegalStateException("login.rpc no endpoint");
-        }
-
-        ManagedChannel ch;
-        if (zoneRequired) {
-            if (zoneId <= 0) {
-                throw new IllegalArgumentException("login.rpc zone-aware call requires a positive zone id: "
-                        + method.getFullMethodName());
-            }
-            ch = channelByZone.get(zoneId);
-            if (ch == null) {
-                String message = "login.rpc no zone-pinned endpoint for zone=" + zoneId
-                        + " method=" + method.getFullMethodName();
-                log.error("{}; refusing cross-zone round-robin fallback", message);
-                throw new IllegalStateException(message);
-            }
-        } else {
-            // RefreshToken 的 token 当前不携带 zone，才允许在全部 channel 间轮询。
-            ch = channels.get(Math.floorMod(rr.getAndIncrement(), channels.size()));
+        if (zoneRequired && zoneId <= 0) {
+            throw new IllegalArgumentException("login.rpc zone-aware call requires a positive zone id: "
+                    + method.getFullMethodName());
         }
 
         int attempts = retrySafe ? 1 + Math.max(0, props.getRetry()) : 1;
         StatusRuntimeException last = null;
         for (int i = 0; i < attempts; i++) {
+            // 每次尝试重新选 channel:同 zone 多 login 实例时,重试能落到
+            // 另一个实例上(单实例故障的自然 failover)。
+            ManagedChannel ch = pickChannel(method, zoneId, zoneRequired);
             // deadline 必须**每次尝试**单独计算:withDeadlineAfter 产出的是绝对
             // 时间点,若在循环外只算一次,首次 DEADLINE_EXCEEDED 时预算已经
             // 耗尽,后续所有重试都会瞬时再报 DEADLINE_EXCEEDED —— 重试形同虚设,
@@ -279,6 +346,37 @@ public class LoginRpcClient {
             }
         }
         throw last;
+    }
+
+    /**
+     * 选路顺序:zone 动态池(etcd 发现,轮询)→ zone 静态配置 → 报错。
+     * zone 无关调用(RefreshToken)在「动态全体 + 静态全体」里轮询。
+     * 任何情况下都不做跨 zone 兜底(见 channelByZone 注释的压测事故)。
+     */
+    private ManagedChannel pickChannel(MethodDescriptor<?, ?> method, int zoneId, boolean zoneRequired) {
+        if (zoneRequired) {
+            List<ManagedChannel> dyn = dynamicByZone.get(zoneId);
+            if (dyn != null && !dyn.isEmpty()) {
+                return dyn.get(Math.floorMod(rr.getAndIncrement(), dyn.size()));
+            }
+            ManagedChannel ch = channelByZone.get(zoneId);
+            if (ch == null) {
+                String message = "login.rpc no endpoint for zone=" + zoneId
+                        + " (etcd discovery empty, no static zone mapping)"
+                        + " method=" + method.getFullMethodName();
+                log.error("{}; refusing cross-zone round-robin fallback", message);
+                throw new IllegalStateException(message);
+            }
+            return ch;
+        }
+
+        // RefreshToken 的 token 当前不携带 zone，才允许在全部 channel 间轮询。
+        List<ManagedChannel> pool = new ArrayList<>(dynamicChannels.values());
+        pool.addAll(channels);
+        if (pool.isEmpty()) {
+            throw new IllegalStateException("login.rpc no endpoint");
+        }
+        return pool.get(Math.floorMod(rr.getAndIncrement(), pool.size()));
     }
 
     // ──────────────────── Protobuf wire encoding ─────────────────────
@@ -325,7 +423,7 @@ public class LoginRpcClient {
     /**
      * proto/login/login.proto LoginResponse:
      *   TipInfoMessage error_message = 1;                    (group/message — skipped, parsed lazily)
-     *   repeated AccountSimplePlayerWrapper players = 2;     (parsed minimally — we only forward player ids/names if needed later)
+     *   repeated AccountSimplePlayerWrapper players = 2;     (解析 wrapper.player.player_id;proto 目前无 name/level)
      *   string access_token = 3;
      *   string refresh_token = 4;
      *   int64  access_token_expire = 5;
@@ -489,7 +587,39 @@ public class LoginRpcClient {
                     }
                     in.popLimit(oldLimit);
                 }
-                case 2 -> in.skipField(tag);
+                case 2 -> {
+                    // repeated AccountSimplePlayerWrapper players:
+                    //   wrapper.player = 1 (message) -> AccountSimplePlayer.player_id = 1 (varint)
+                    // proto 里 AccountSimplePlayer 目前只有 player_id 一个字段,
+                    // PlayerInfo 的 name/level 等昵称体系落地后再补。
+                    int len = in.readRawVarint32();
+                    int oldLimit = in.pushLimit(len);
+                    long playerId = 0;
+                    while (!in.isAtEnd()) {
+                        int subTag = in.readTag();
+                        int subField = subTag >>> 3;
+                        int wire = subTag & 0x7;
+                        if (subField == 1 && wire == 2) {
+                            int innerLen = in.readRawVarint32();
+                            int innerLimit = in.pushLimit(innerLen);
+                            while (!in.isAtEnd()) {
+                                int pTag = in.readTag();
+                                if ((pTag >>> 3) == 1 && (pTag & 0x7) == 0) {
+                                    playerId = in.readUInt64();
+                                } else {
+                                    in.skipField(pTag);
+                                }
+                            }
+                            in.popLimit(innerLimit);
+                        } else {
+                            in.skipField(subTag);
+                        }
+                    }
+                    in.popLimit(oldLimit);
+                    LoginResponse.PlayerInfo p = new LoginResponse.PlayerInfo();
+                    p.setPlayerId(playerId);
+                    resp.players.add(p);
+                }
                 case 3 -> resp.accessToken = in.readString();
                 case 4 -> resp.refreshToken = in.readString();
                 case 5 -> resp.accessTokenExpire = in.readInt64();

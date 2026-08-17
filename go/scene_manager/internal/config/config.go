@@ -25,6 +25,24 @@ type Config struct {
 	// LeaseTTL: etcd lease TTL in seconds for node registration keepalive.
 	LeaseTTL int64 `json:",default=60"`
 
+	// LeaderLockTTLSeconds:多副本选主锁的 TTL(秒)。变更类后台循环
+	// (补频道 / rebalance / 孤儿与空闲副本清理 / 自动扩缩容 / Agones 对账)
+	// 只在领导者上执行;领导者失联后,其余副本最迟 ~TTL 内接管。
+	// 心跳续期间隔 = TTL/3。见 internal/logic/leader_gate.go。
+	LeaderLockTTLSeconds int64 `json:",default=30"`
+
+	// LeaderLockKey:选主锁的 Redis key,留空用默认 scene_manager:leader:lock。
+	// 服务本身 zone-agnostic,所有副本共用同一把锁。
+	LeaderLockKey string `json:",optional"`
+
+	// LeaderEligible:本副本是否参与选主。金丝雀副本必须设 false ——
+	// 金丝雀靠 etcd 发现天然按实例比例分到 RPC 数据面流量,这正是想灰度的
+	// 部分;但领导者只有一个,金丝雀一旦当选,新版本的**编排**逻辑
+	// (补频道 / rebalance / 伸缩 / 清理)会作用于全部 zone,爆炸半径失控。
+	// 注意:所有副本都设 false 会导致无人编排(scene_manager_is_leader
+	// 全体之和为 0,超过锁 TTL 应告警)。默认 true。
+	LeaderEligible bool `json:",default=true"`
+
 	// TableDir: directory containing exported table data files (JSON or binary pb).
 	// Default assumes the service runs from go/scene_manager/ with repo root two levels up.
 	TableDir string `json:",default=../../generated/tables"`

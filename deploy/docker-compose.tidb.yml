@@ -1,0 +1,70 @@
+# TiDB dev 单节点集群(全区全服数据层 Phase 1)
+# 决策: docs/design/global-data-layer-tidb-decision.md(v8.5 LTS + §D4 配置硬要求)
+#
+# 与 docker-compose.yml 的 MySQL **并存**:Phase 1 要求每步可独立回退,开发期
+# 由各服务 DSN 决定连 MySQL(3306)还是 TiDB(4000),本文件不替换 MySQL。
+#
+# 用法:
+#   docker compose -f docker-compose.tidb.yml up -d
+#   mysql -h 127.0.0.1 -P 4000 -u root        # dev 无密码,root 权限策略上生产前按 §D9 重议
+#
+# 端口说明: PD 集群内部用 2379/2380,与宿主机 etcd 容器同号——因此 PD 不发布
+# 宿主端口,只在 compose 网络内互通;对外只暴露 TiDB 的 4000(SQL)/10080(状态)。
+services:
+  pd:
+    image: pingcap/pd:v8.5.2
+    container_name: tidb-pd
+    command:
+      - --name=pd
+      - --data-dir=/data/pd
+      - --client-urls=http://0.0.0.0:2379
+      - --advertise-client-urls=http://pd:2379
+      - --peer-urls=http://0.0.0.0:2380
+      - --advertise-peer-urls=http://pd:2380
+      - --initial-cluster=pd=http://pd:2380
+    volumes:
+      - tidb-pd-data:/data
+    restart: unless-stopped
+
+  tikv:
+    image: pingcap/tikv:v8.5.2
+    container_name: tidb-tikv
+    command:
+      - --pd-endpoints=pd:2379
+      - --addr=0.0.0.0:20160
+      - --advertise-addr=tikv:20160
+      - --status-addr=0.0.0.0:20180
+      - --data-dir=/data/tikv
+      - --config=/etc/tikv/tikv.toml
+    volumes:
+      - tidb-tikv-data:/data
+      - ./tidb-config/tikv.toml:/etc/tikv/tikv.toml:ro
+    depends_on:
+      - pd
+    restart: unless-stopped
+
+  tidb:
+    image: pingcap/tidb:v8.5.2
+    container_name: tidb
+    ports:
+      - "4000:4000"    # MySQL 协议入口
+      - "10080:10080"  # 状态/指标(压测热点面板从这里拉)
+    command:
+      - --store=tikv
+      - --path=pd:2379
+      - --advertise-address=tidb
+      - --config=/etc/tidb/tidb.toml
+    volumes:
+      - ./tidb-config/tidb.toml:/etc/tidb/tidb.toml:ro
+    depends_on:
+      - tikv
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:10080/status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  tidb-pd-data:
+  tidb-tikv-data:

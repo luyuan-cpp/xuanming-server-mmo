@@ -6,12 +6,14 @@
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
+namespace {
+boost::object_pool<GrpcTag> tagPool;
+}
+
 namespace etcdserverpb {
 struct EtcdCompleteQueue {
     grpc::CompletionQueue cq;
 };
-
-boost::object_pool<GrpcTag> tagPool;
 #pragma region KVRange
 boost::object_pool<AsyncKVRangeGrpcClient> KVRangePool;
 using AsyncKVRangeHandlerFunctionType =

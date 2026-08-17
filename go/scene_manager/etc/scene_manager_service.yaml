@@ -26,7 +26,11 @@ KafkaWriteTimeoutSeconds: 5
 
 # 仅供开发环境临时复现旧交接流程。生产必须保持 false，直到跨 Go/C++/db
 # 的 per-player epoch/落盘屏障落地；否则跨节点进入可能加载到陈旧玩家状态。
-AllowUnsafeCrossNodeHandoff: false
+# 本地 dev 设 true:4 个 scene 节点 + 世界频道按 hash 散列后,切场景大概率
+# 跨节点,持久化交接屏障(cross-server rollback 项目)落地前 fail-closed 会
+# 拒掉一切跨节点切换(robot SceneSwitch/CurrencyCrashWindow 失败根因)。
+# 生产/压测正确性验证时改回 false。
+AllowUnsafeCrossNodeHandoff: true
 
 # Directory containing exported table JSON files (e.g. World.json).
 # World config IDs are loaded from World.json automatically.

@@ -74,11 +74,18 @@ gate:
 # gate registrations in etcd. A round-robin client misroutes 2-in-3
 # AssignGate calls to a wrong-zone instance and gets "no gate available for
 # requested zone" — see docs/design/stress-3zone-2026-05-23-postmortem.md §I.
+# 多节点自动发现(2026-08):discovery-enabled=true 时,网关每
+# discovery-interval-ms 从 etcd 拉 LoginNodeService.rpc/ 的注册,按 zone
+# 建立动态 channel 池(同 zone 多实例轮询,重试自动换实例);上面的静态
+# endpoints 只作为「etcd 里查不到该 zone」时的兜底,新增 zone / login
+# 扩缩容不再需要改这份配置或重启网关。
 login:
   grpc:
     endpoints: "1=127.0.0.1:53000,2=127.0.0.1:54000,3=127.0.0.1:55000"
     timeout-ms: 3000
     retry: 1
+    discovery-enabled: true
+    discovery-interval-ms: 5000
 
 # Zone health probe
 zone-probe:

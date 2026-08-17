@@ -19,9 +19,11 @@ import (
 	"scene_manager/internal/svc"
 	"shared/generated/table"
 	"shared/grpcstats"
+	"shared/leader"
 
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
+	"github.com/zeromicro/go-zero/core/proc"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
@@ -48,6 +50,53 @@ func main() {
 
 	// Start Prometheus metrics endpoint (no-op when MetricsListenAddr is empty).
 	metrics.Start(c.MetricsListenAddr)
+
+	// 选主:变更类后台循环(补频道 / rebalance / 死节点孤儿清理 / 空闲副本
+	// 销毁 / 自动扩缩容 / Agones 对账)全局只允许一个副本执行;RPC 数据面与
+	// etcd watch 内存镜像每个副本照常跑。这是 scene_manager 去单点的关键:
+	// 之前 k8s 只能用 replicas:1 + Recreate 兜"无选主的单写者循环"的口子,
+	// 现在选主抽到了 shared/leader,副本数已放开(见 scene-manager.yaml)。
+	// 必须在所有后台循环启动之前接线,否则首拍可能带着"人人都是领导者"
+	// 的缺省闸门跑变更动作。
+	leaderLockKey := c.LeaderLockKey
+	if leaderLockKey == "" {
+		leaderLockKey = "scene_manager:leader:lock"
+	}
+	leaderLockTTL := time.Duration(c.LeaderLockTTLSeconds) * time.Second
+	if leaderLockTTL <= 0 {
+		leaderLockTTL = 30 * time.Second
+	}
+	electorID, _ := os.Hostname()
+	elector := leader.New(leader.NewGoZeroStore(svcCtx.Redis), leaderLockKey, leader.Options{
+		TTL: leaderLockTTL,
+		ID:  electorID,
+		OnStateChange: func(leading bool) {
+			metrics.SetLeader(leading)
+			if !leading {
+				// 只有领导者刷新的 gauge(Agones 漂移 / rebalance 积压)
+				// 降级后会滞留旧值,直接清掉序列。
+				metrics.ResetLeaderGauges()
+			}
+			// 领导权一变就踢一次 fullSync:新任领导者立即补齐跟随期间
+			// 跳过的变更动作(补频道 / rebalance / 清理),不等 watch 中断。
+			logic.RequestLoadReporterResync()
+		},
+	})
+	logic.SetLeaderCheck(elector.IsLeader)
+	// 先把 gauge 置 0,首轮选举完成前 /metrics 上就能看到本副本
+	// (与 login dispatcherIsLeaderGauge 的处理一致)。
+	metrics.SetLeader(false)
+	if c.LeaderEligible {
+		go elector.Run(ctx, nil)
+		// 优雅让位:go-zero 的 SIGTERM 走 os.Exit,main 的 defer 不执行,
+		// 不主动放锁的话接任者要等满 TTL(30s)—— 每次滚动更新都会多出
+		// 一段无领导窗口。挂 shutdown listener 在退出前用属主校验脚本放锁。
+		proc.AddShutdownListener(elector.Stop)
+	} else {
+		// 金丝雀模式:不竞选,IsLeader 恒 false,只服务 RPC 数据面。
+		// 流量占比 = 本副本数 / 同 zone 实例总数(etcd 发现 + playerId % N)。
+		logx.Info("[scene_manager] LeaderEligible=false: not campaigning for leadership (canary mode, data plane only)")
+	}
 
 	// Agones 容量预占。默认关闭 —— 不配 Agones.Enabled 就是接入之前的行为。
 	//
@@ -143,6 +192,7 @@ func main() {
 		go func() {
 			<-lost
 			svcCtx.SceneIDGen.Fence() // ① 先关闸,后台 ticker 也一并失效
+			elector.Stop()            // ①' 让位(尽力而为):不放锁接任者要等满 TTL
 			logx.Error("[scene_manager] snowflake worker id lease lost; generator fenced, flushing Kafka before exit")
 			svcCtx.Stop() // ② Close/flush Async Kafka pending batches,再释放 worker lease
 			logx.Close()  // ③ 冲掉日志缓冲

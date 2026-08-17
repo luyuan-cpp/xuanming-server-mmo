@@ -1,5 +1,7 @@
 # DB Zone Isolation (2026-04-11)
 
+> **修订(2026-08-15)**: 数据层决策演进为"单一 TiDB 集群上的全区全服数据层",本文"每 zone 独立 MySQL"前提被 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) 修订——Phase 1 中 `zone_{N}_db` 保留为同一 TiDB 集群上的**逻辑库**(库名派生与 `db_task_zone_{N}` topic 契约不变),Phase 2 收敛为全局库。
+
 ## 设计
 
 每个 zone 部署独立的 db 服务实例，Kafka topic 和 MySQL 数据库名均从 `ZoneId` 动态派生：

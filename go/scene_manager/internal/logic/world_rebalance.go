@@ -69,6 +69,13 @@ func RebalanceWorldChannelsForZone(ctx context.Context, svcCtx *svc.ServiceConte
 	migrated, skipped := 0, 0
 	run := func(list []channelMigration) {
 		for _, c := range list {
+			// 降级即停:迁移改写路由且无 CAS 保护,是降级窗口里新旧领导者
+			// 并发时最危险的写路径(双迁同一频道 = 计数双减 + 名额错挂)。
+			// 逐条重查把在途窗口压到单次迁移;剩余的由新领导者重新规划。
+			if !isLeader() {
+				logx.Infof("[Rebalance] zone=%d: lost leadership mid-run, aborting; successor will re-plan", zoneId)
+				return
+			}
 			if migrated >= budget {
 				return
 			}

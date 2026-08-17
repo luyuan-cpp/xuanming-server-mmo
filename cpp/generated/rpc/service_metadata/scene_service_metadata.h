@@ -39,6 +39,14 @@ constexpr uint32_t SceneDestroySceneMessageId = 121;
 constexpr uint32_t SceneDestroySceneIndex = 8;
 #define SceneDestroySceneMethod  ::Scene_Stub::descriptor()->method(8)
 
+constexpr uint32_t ScenePrepareBattleMessageId = 141;
+constexpr uint32_t ScenePrepareBattleIndex = 9;
+#define ScenePrepareBattleMethod  ::Scene_Stub::descriptor()->method(9)
+
+constexpr uint32_t SceneCancelBattlePrepareMessageId = 155;
+constexpr uint32_t SceneCancelBattlePrepareIndex = 10;
+#define SceneCancelBattlePrepareMethod  ::Scene_Stub::descriptor()->method(10)
+
 constexpr uint32_t SceneNodeHandshakeMessageId = 62;
-constexpr uint32_t SceneNodeHandshakeIndex = 9;
-#define SceneNodeHandshakeMethod  ::Scene_Stub::descriptor()->method(9)
+constexpr uint32_t SceneNodeHandshakeIndex = 11;
+#define SceneNodeHandshakeMethod  ::Scene_Stub::descriptor()->method(11)

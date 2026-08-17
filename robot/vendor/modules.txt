@@ -177,9 +177,11 @@ google.golang.org/protobuf/types/known/timestamppb
 gopkg.in/yaml.v3
 # proto v0.0.0 => ../go/proto
 ## explicit; go 1.24.5
+proto/battle
 proto/chat
 proto/common/base
 proto/common/component
+proto/common/options
 proto/common/rollback
 proto/db
 proto/login

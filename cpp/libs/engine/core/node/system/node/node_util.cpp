@@ -13,7 +13,10 @@ const std::unordered_map<eNodeType, std::string> nodeTypeNameMap = {
 	{eNodeType::SceneManagerNodeService, eNodeType_Name(SceneManagerNodeService)},
 	{eNodeType::DataServiceNodeService, eNodeType_Name(DataServiceNodeService)},
 	{eNodeType::FriendNodeService, eNodeType_Name(FriendNodeService)},
-	{eNodeType::GuildNodeService, eNodeType_Name(GuildNodeService)}};
+	{eNodeType::GuildNodeService, eNodeType_Name(GuildNodeService)},
+	// 回合制战斗节点:etcd 前缀 BattleNodeService.rpc;短名/Kafka topic 前缀
+	// (battle-{id})由 NodeTypeToShortName 自动派生,无需另配。
+	{eNodeType::BattleNodeService, eNodeType_Name(BattleNodeService)}};
 
 eNodeType NodeUtils::GetServiceTypeFromPrefix(const std::string &prefix)
 {
@@ -78,6 +81,21 @@ std::optional<entt::entity> NodeUtils::FindNodeEntityByUuid(uint32_t nodeType, c
 	}
 
 	return std::nullopt;
+}
+
+bool NodeUtils::IsGrpcOnlyNodeType(uint32_t nodeType)
+{
+	// 见头文件注释。目前只有回合制战斗节点:纯 gRPC 服务
+	// (turn-based-battle-server.md D2/D6),注册 PROTOCOL_GRPC 后
+	// 发现方(gate 等)会走 ConnectToGrpcNode 建 stub,而不是
+	// 对一个没有业务语义的 muduo TCP 端口拨号。
+	switch (static_cast<eNodeType>(nodeType))
+	{
+	case eNodeType::BattleNodeService:
+		return true;
+	default:
+		return false;
+	}
 }
 
 bool NodeUtils::IsZoneScopedNodeType(uint32_t nodeType)

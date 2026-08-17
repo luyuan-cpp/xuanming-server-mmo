@@ -1252,7 +1252,7 @@ func TestInitWorldScenes_Idempotent_NoDuplicateRedisEntries(t *testing.T) {
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
 
 	// First init: allocates scene IDs in Redis.
-	initWorldScenesForZone(ctx, sc, testZoneId, confIds)
+	initWorldScenesForZone(ctx, sc, testZoneId, confIds, true)
 
 	lines1, _ := GetAllWorldChannels(ctx, sc, 1001, testZoneId)
 	lines2, _ := GetAllWorldChannels(ctx, sc, 1002, testZoneId)
@@ -1261,7 +1261,7 @@ func TestInitWorldScenes_Idempotent_NoDuplicateRedisEntries(t *testing.T) {
 	assert.NotEqual(t, lines1[0], lines2[0], "different configs should get different scene IDs")
 
 	// Second init (simulates node re-appearance): must NOT allocate new IDs.
-	initWorldScenesForZone(ctx, sc, testZoneId, confIds)
+	initWorldScenesForZone(ctx, sc, testZoneId, confIds, true)
 
 	lines1After, _ := GetAllWorldChannels(ctx, sc, 1001, testZoneId)
 	lines2After, _ := GetAllWorldChannels(ctx, sc, 1002, testZoneId)
@@ -1282,7 +1282,7 @@ func TestInitWorldScenes_MultipleChannels(t *testing.T) {
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "20")
 
-	initWorldScenesForZone(ctx, sc, testZoneId, confIds)
+	initWorldScenesForZone(ctx, sc, testZoneId, confIds, true)
 
 	lines, err := GetAllWorldChannels(ctx, sc, 1001, testZoneId)
 	require.NoError(t, err)
@@ -1305,12 +1305,12 @@ func TestInitWorldScenes_MultipleChannels_Idempotent(t *testing.T) {
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
 
 	// First init.
-	initWorldScenesForZone(ctx, sc, testZoneId, confIds)
+	initWorldScenesForZone(ctx, sc, testZoneId, confIds, true)
 	linesBefore, _ := GetAllWorldChannels(ctx, sc, 1001, testZoneId)
 	assert.Len(t, linesBefore, 3)
 
 	// Second init — must not add extra channels.
-	initWorldScenesForZone(ctx, sc, testZoneId, confIds)
+	initWorldScenesForZone(ctx, sc, testZoneId, confIds, true)
 	linesAfter, _ := GetAllWorldChannels(ctx, sc, 1001, testZoneId)
 	assert.Len(t, linesAfter, 3, "re-init must not create extra channels")
 }
@@ -1323,7 +1323,7 @@ func TestGetBestWorldChannel_SelectsLowestPlayerCount(t *testing.T) {
 
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
 
-	initWorldScenesForZone(ctx, sc, testZoneId, confIds)
+	initWorldScenesForZone(ctx, sc, testZoneId, confIds, true)
 
 	lines, _ := GetAllWorldChannels(ctx, sc, 1001, testZoneId)
 	require.Len(t, lines, 3)
@@ -1347,7 +1347,7 @@ func TestGetBestWorldChannel_AllEmpty(t *testing.T) {
 
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
 
-	initWorldScenesForZone(ctx, sc, testZoneId, confIds)
+	initWorldScenesForZone(ctx, sc, testZoneId, confIds, true)
 
 	// All channels have player_count = 0 (initialized by init).
 	bestId, _, err := GetBestWorldChannel(ctx, sc, 1001, testZoneId)
@@ -1819,7 +1819,7 @@ func TestInitWorldScenes_StrictMode_SkipsInstanceOnlyZone(t *testing.T) {
 	// Only instance-type nodes; strict mode must refuse to place world channels.
 	registerTypedNode(mr, testZoneId, "inst1", constants.SceneNodeTypeInstance, 0)
 
-	initWorldScenesForZone(ctx, sc, testZoneId, []uint64{1001})
+	initWorldScenesForZone(ctx, sc, testZoneId, []uint64{1001}, true)
 
 	channels, _ := GetAllWorldChannels(ctx, sc, 1001, testZoneId)
 	assert.Empty(t, channels, "strict mode must not create world channels on instance-only nodes")
@@ -1860,7 +1860,7 @@ func TestInitWorldScenes_PerConfIdOverride(t *testing.T) {
 
 	registerTypedNode(mr, testZoneId, "10", constants.SceneNodeTypeMainWorld, 0)
 
-	initWorldScenesForZone(ctx, sc, testZoneId, []uint64{1001, 1002, 1003})
+	initWorldScenesForZone(ctx, sc, testZoneId, []uint64{1001, 1002, 1003}, true)
 
 	ch1001, _ := GetAllWorldChannels(ctx, sc, 1001, testZoneId)
 	ch1002, _ := GetAllWorldChannels(ctx, sc, 1002, testZoneId)
@@ -2450,7 +2450,7 @@ func TestReconcileDeadNode_PreservesWorldChannels(t *testing.T) {
 	ctx := context.Background()
 	registerTypedNode(mr, testZoneId, "10", constants.SceneNodeTypeMainWorld, 0)
 
-	initWorldScenesForZone(ctx, sc, testZoneId, []uint64{1001})
+	initWorldScenesForZone(ctx, sc, testZoneId, []uint64{1001}, true)
 
 	channels, _ := GetAllWorldChannels(ctx, sc, 1001, testZoneId)
 	require.NotEmpty(t, channels)

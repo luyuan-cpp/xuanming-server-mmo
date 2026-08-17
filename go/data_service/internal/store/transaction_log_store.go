@@ -84,8 +84,11 @@ func NewTransactionLogStore(cfg MySQLConfig) (*TransactionLogStore, error) {
 }
 
 func (s *TransactionLogStore) ensureTable() error {
+	// tx_id 是雪花 ID(时间戳高位、单调递增),TiDB 默认聚簇表下是写热点——
+	// 交易日志是全服最高频的追加写路径之一,按全局数据层决策 §D3 处方
+	// 用 /*T!*/ 双方言注释声明 NONCLUSTERED + 打散;MySQL 忽略注释,行为不变。
 	ddl := `CREATE TABLE IF NOT EXISTS transaction_log (
-		tx_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+		tx_id BIGINT UNSIGNED NOT NULL,
 		timestamp_sec BIGINT UNSIGNED NOT NULL,
 		tx_type INT UNSIGNED NOT NULL DEFAULT 0,
 		from_player BIGINT UNSIGNED NOT NULL DEFAULT 0,
@@ -99,11 +102,12 @@ func (s *TransactionLogStore) ensureTable() error {
 		balance_after BIGINT UNSIGNED NOT NULL DEFAULT 0,
 		correlation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 		extra VARCHAR(1024) NOT NULL DEFAULT '',
+		PRIMARY KEY (tx_id) /*T![clustered_index] NONCLUSTERED */,
 		INDEX idx_player_time (from_player, timestamp_sec),
 		INDEX idx_to_player_time (to_player, timestamp_sec),
 		INDEX idx_item_config (item_config_id, timestamp_sec),
 		INDEX idx_tx_type_time (tx_type, timestamp_sec)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */`
 	_, err := s.db.Exec(ddl)
 	return err
 }

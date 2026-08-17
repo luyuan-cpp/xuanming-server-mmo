@@ -6,12 +6,14 @@
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
+namespace {
+boost::object_pool<GrpcTag> tagPool;
+}
+
 namespace guildpb {
 struct GuildCompleteQueue {
     grpc::CompletionQueue cq;
 };
-
-boost::object_pool<GrpcTag> tagPool;
 #pragma region GuildServiceCreateGuild
 boost::object_pool<AsyncGuildServiceCreateGuildGrpcClient> GuildServiceCreateGuildPool;
 using AsyncGuildServiceCreateGuildHandlerFunctionType =

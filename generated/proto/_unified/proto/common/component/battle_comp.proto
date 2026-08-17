@@ -1,0 +1,21 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+// 回合制战斗:scene 侧玩家实体组件。
+// InBattleComp 存在 = 玩家有一场战斗在途(备战或战斗中):
+//  - 拒绝:再次排队/开战、交易、使用改属性道具、切场景、跨 zone 迁移;
+//  - 摘除条件 = 结算已应用或 reaper 超时作废(结算串行化,设计文档 D4);
+//  - 不落库:玩家下线即弃,离线期间的权威串行化状态由 battle:lock:{player_id}(Redis)承担。
+
+enum eInBattleState {
+  IN_BATTLE_STATE_NONE = 0;
+  IN_BATTLE_STATE_PREPARING = 1;  // PrepareBattle 已冻结,等 CreateBattle 确认
+  IN_BATTLE_STATE_FIGHTING = 2;   // 战斗进行中
+}
+
+message InBattleComp {
+  uint64 battle_id = 1;
+  uint32 battle_node_id = 2;   // 重连时重发 BindBattleEvent 用
+  uint64 deadline_ms = 3;      // 作废期限(Unix 毫秒);reaper 过期即解冻
+  eInBattleState state = 4;
+}

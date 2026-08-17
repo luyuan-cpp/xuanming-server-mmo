@@ -49,11 +49,171 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto, /* tracker*/ nullptr,},
         // ::contracts::kafka::BroadcastToAllEvent
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto, /* tracker*/ nullptr,},
+        // ::contracts::kafka::BindBattleEvent
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto, /* tracker*/ nullptr,},
+        // ::contracts::kafka::UnbindBattleEvent
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
 namespace contracts {
 namespace kafka {
+class UnbindBattleEvent::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<UnbindBattleEvent>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_._has_bits_);
+};
+
+constexpr UnbindBattleEvent::ParseTableT_ UnbindBattleEvent::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::contracts::kafka::UnbindBattleEvent>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 session_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(UnbindBattleEvent, _impl_.session_id_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_.session_id_)}},
+      // uint64 battle_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnbindBattleEvent, _impl_.battle_id_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_.battle_id_)}},
+      // uint64 player_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(UnbindBattleEvent, _impl_.player_id_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_.player_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 session_id = 1;
+      {PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 battle_id = 2;
+      {PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_.battle_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 player_id = 3;
+      {PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr UnbindBattleEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        battle_id_{::uint64_t{0u}},
+        player_id_{::uint64_t{0u}},
+        session_id_{0u} {}
+
+template <typename>
+constexpr UnbindBattleEvent::UnbindBattleEvent(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL UnbindBattleEvent::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) UnbindBattleEvent(arena);
+}
+constexpr auto UnbindBattleEvent::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(UnbindBattleEvent), alignof(UnbindBattleEvent));
+}
+constexpr auto UnbindBattleEvent::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &UnbindBattleEvent::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<UnbindBattleEvent>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &UnbindBattleEvent::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<UnbindBattleEvent>(), &UnbindBattleEvent::ByteSizeLong,
+              &UnbindBattleEvent::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[11],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct UnbindBattleEventGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr UnbindBattleEventGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 UnbindBattleEvent_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(UnbindBattleEvent::InternalGenerateClassData_(
+            _default, &UnbindBattleEvent_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<UnbindBattleEvent>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~UnbindBattleEventGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) UnbindBattleEvent _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<UnbindBattleEvent>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(UnbindBattleEventGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST UnbindBattleEventGlobalsTypeInternal UnbindBattleEvent_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* UnbindBattleEvent_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return UnbindBattleEvent_globals_.GetClassData();
+#else
+  return UnbindBattleEvent_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class RoutePlayerEvent::_Internal {
  public:
   using HasBits = decltype(::std::declval<RoutePlayerEvent>()._impl_._has_bits_);
@@ -1071,6 +1231,168 @@ const ::_pbi::ClassData* BindSessionEvent_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class BindBattleEvent::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<BindBattleEvent>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_._has_bits_);
+};
+
+constexpr BindBattleEvent::ParseTableT_ BindBattleEvent::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_._has_bits_),
+      0, // no _extensions_
+      4, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967280,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      4,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::contracts::kafka::BindBattleEvent>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 player_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BindBattleEvent, _impl_.player_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_.player_id_)}},
+      // uint32 session_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BindBattleEvent, _impl_.session_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_.session_id_)}},
+      // uint32 battle_node_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BindBattleEvent, _impl_.battle_node_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_.battle_node_id_)}},
+      // uint64 battle_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BindBattleEvent, _impl_.battle_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_.battle_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 session_id = 1;
+      {PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_.session_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 battle_node_id = 2;
+      {PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_.battle_node_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 battle_id = 3;
+      {PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_.battle_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 player_id = 4;
+      {PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_.player_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr BindBattleEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        session_id_{0u},
+        battle_node_id_{0u},
+        battle_id_{::uint64_t{0u}},
+        player_id_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr BindBattleEvent::BindBattleEvent(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL BindBattleEvent::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) BindBattleEvent(arena);
+}
+constexpr auto BindBattleEvent::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(BindBattleEvent), alignof(BindBattleEvent));
+}
+constexpr auto BindBattleEvent::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &BindBattleEvent::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<BindBattleEvent>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &BindBattleEvent::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<BindBattleEvent>(), &BindBattleEvent::ByteSizeLong,
+              &BindBattleEvent::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[10],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct BindBattleEventGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr BindBattleEventGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 BindBattleEvent_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(BindBattleEvent::InternalGenerateClassData_(
+            _default, &BindBattleEvent_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<BindBattleEvent>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~BindBattleEventGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) BindBattleEvent _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<BindBattleEvent>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(BindBattleEventGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST BindBattleEventGlobalsTypeInternal BindBattleEvent_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* BindBattleEvent_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return BindBattleEvent_globals_.GetClassData();
+#else
+  return BindBattleEvent_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class PushToPlayerEvent::_Internal {
  public:
   using HasBits = decltype(::std::declval<PushToPlayerEvent>()._impl_._has_bits_);
@@ -1810,6 +2132,26 @@ const ::uint32_t
         4, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::contracts::kafka::BroadcastToAllEvent, _impl_.message_content_),
         0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindBattleEvent, _impl_._has_bits_),
+        7, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindBattleEvent, _impl_.session_id_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindBattleEvent, _impl_.battle_node_id_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindBattleEvent, _impl_.battle_id_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::BindBattleEvent, _impl_.player_id_),
+        0,
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::UnbindBattleEvent, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::UnbindBattleEvent, _impl_.session_id_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::UnbindBattleEvent, _impl_.battle_id_),
+        PROTOBUF_FIELD_OFFSET(::contracts::kafka::UnbindBattleEvent, _impl_.player_id_),
+        2,
+        0,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
@@ -1824,6 +2166,8 @@ static const ::_pbi::MigrationSchema
         {77, sizeof(::contracts::kafka::BroadcastToPlayersEvent)},
         {88, sizeof(::contracts::kafka::BroadcastToSceneEvent)},
         {95, sizeof(::contracts::kafka::BroadcastToAllEvent)},
+        {100, sizeof(::contracts::kafka::BindBattleEvent)},
+        {111, sizeof(::contracts::kafka::UnbindBattleEvent)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1837,6 +2181,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::contracts::kafka::BroadcastToPlayersEvent_globals_,
         &::contracts::kafka::BroadcastToSceneEvent_globals_,
         &::contracts::kafka::BroadcastToAllEvent_globals_,
+        &::contracts::kafka::BindBattleEvent_globals_,
+        &::contracts::kafka::UnbindBattleEvent_globals_,
 };
 const char descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -1869,7 +2215,12 @@ const char descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2e
     "cene_id\030\001 \001(\004\022(\n\017message_content\030\002 \001(\0132\017"
     ".MessageContent\"\?\n\023BroadcastToAllEvent\022("
     "\n\017message_content\030\001 \001(\0132\017.MessageContent"
-    "B\021Z\017contracts/kafkab\006proto3"
+    "\"c\n\017BindBattleEvent\022\022\n\nsession_id\030\001 \001(\r\022"
+    "\026\n\016battle_node_id\030\002 \001(\r\022\021\n\tbattle_id\030\003 \001"
+    "(\004\022\021\n\tplayer_id\030\004 \001(\004\"M\n\021UnbindBattleEve"
+    "nt\022\022\n\nsession_id\030\001 \001(\r\022\021\n\tbattle_id\030\002 \001("
+    "\004\022\021\n\tplayer_id\030\003 \001(\004B\021Z\017contracts/kafkab"
+    "\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_deps[1] = {
@@ -1879,13 +2230,13 @@ static ::absl::once_flag descriptor_table_proto_2fcontracts_2fkafka_2fgate_5feve
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto = {
     false,
     false,
-    1187,
+    1367,
     descriptor_table_protodef_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto,
     "proto/contracts/kafka/gate_event.proto",
     &descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_once,
     descriptor_table_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto_deps,
     1,
-    10,
+    12,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcontracts_2fkafka_2fgate_5fevent_2eproto::offsets,
@@ -4746,6 +5097,525 @@ void BroadcastToAllEvent::InternalSwap(BroadcastToAllEvent* PROTOBUF_RESTRICT PR
 }
 
 ::google::protobuf::Metadata BroadcastToAllEvent::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+BindBattleEvent::BindBattleEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BindBattleEvent_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:contracts.kafka.BindBattleEvent)
+}
+BindBattleEvent::BindBattleEvent(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BindBattleEvent& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, BindBattleEvent_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE BindBattleEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void BindBattleEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, session_id_),
+           0,
+           offsetof(Impl_, player_id_) -
+               offsetof(Impl_, session_id_) +
+               sizeof(Impl_::player_id_));
+}
+BindBattleEvent::~BindBattleEvent() {
+  // @@protoc_insertion_point(destructor:contracts.kafka.BindBattleEvent)
+  SharedDtor(*this);
+}
+inline void BindBattleEvent::SharedDtor(MessageLite& self) {
+  BindBattleEvent& this_ = static_cast<BindBattleEvent&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull BindBattleEvent_class_data_ =
+        BindBattleEvent::InternalGenerateClassData_(BindBattleEvent_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BindBattleEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BindBattleEvent_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(BindBattleEvent_class_data_.tc_table);
+  return BindBattleEvent_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+BindBattleEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&BindBattleEvent_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&BindBattleEvent_globals_));
+  return BindBattleEvent_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const BindBattleEvent::ParseTableT_
+    BindBattleEvent::_table_ =
+        BindBattleEvent::InternalGenerateParseTable_(BindBattleEvent_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void BindBattleEvent::Clear() {
+// @@protoc_insertion_point(message_clear_start:contracts.kafka.BindBattleEvent)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    ::memset(&_impl_.session_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.player_id_) -
+        reinterpret_cast<char*>(&_impl_.session_id_)) + sizeof(_impl_.player_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL BindBattleEvent::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const BindBattleEvent& this_ = static_cast<const BindBattleEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL BindBattleEvent::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const BindBattleEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:contracts.kafka.BindBattleEvent)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 session_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_session_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_session_id(), target);
+    }
+  }
+
+  // uint32 battle_node_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_battle_node_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_battle_node_id(), target);
+    }
+  }
+
+  // uint64 battle_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_battle_id(), target);
+    }
+  }
+
+  // uint64 player_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_player_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:contracts.kafka.BindBattleEvent)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t BindBattleEvent::ByteSizeLong(const MessageLite& base) {
+  const BindBattleEvent& this_ = static_cast<const BindBattleEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t BindBattleEvent::ByteSizeLong() const {
+  const BindBattleEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:contracts.kafka.BindBattleEvent)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    // uint32 session_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_session_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_session_id());
+      }
+    }
+    // uint32 battle_node_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_battle_node_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_battle_node_id());
+      }
+    }
+    // uint64 battle_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_battle_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_id());
+      }
+    }
+    // uint64 player_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void BindBattleEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<BindBattleEvent*>(&to_msg);
+  auto& from = static_cast<const BindBattleEvent&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:contracts.kafka.BindBattleEvent)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_session_id() != 0) {
+        _this->_impl_.session_id_ = from._impl_.session_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_battle_node_id() != 0) {
+        _this->_impl_.battle_node_id_ = from._impl_.battle_node_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_battle_id() != 0) {
+        _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void BindBattleEvent::CopyFrom(const BindBattleEvent& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:contracts.kafka.BindBattleEvent)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void BindBattleEvent::InternalSwap(BindBattleEvent* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_.player_id_)
+      + sizeof(BindBattleEvent::_impl_.player_id_)
+      - PROTOBUF_FIELD_OFFSET(BindBattleEvent, _impl_.session_id_)>(
+          reinterpret_cast<char*>(&_impl_.session_id_),
+          reinterpret_cast<char*>(&other->_impl_.session_id_));
+}
+
+::google::protobuf::Metadata BindBattleEvent::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+UnbindBattleEvent::UnbindBattleEvent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnbindBattleEvent_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:contracts.kafka.UnbindBattleEvent)
+}
+UnbindBattleEvent::UnbindBattleEvent(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UnbindBattleEvent& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, UnbindBattleEvent_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE UnbindBattleEvent::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void UnbindBattleEvent::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, battle_id_),
+           0,
+           offsetof(Impl_, session_id_) -
+               offsetof(Impl_, battle_id_) +
+               sizeof(Impl_::session_id_));
+}
+UnbindBattleEvent::~UnbindBattleEvent() {
+  // @@protoc_insertion_point(destructor:contracts.kafka.UnbindBattleEvent)
+  SharedDtor(*this);
+}
+inline void UnbindBattleEvent::SharedDtor(MessageLite& self) {
+  UnbindBattleEvent& this_ = static_cast<UnbindBattleEvent&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull UnbindBattleEvent_class_data_ =
+        UnbindBattleEvent::InternalGenerateClassData_(UnbindBattleEvent_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnbindBattleEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnbindBattleEvent_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(UnbindBattleEvent_class_data_.tc_table);
+  return UnbindBattleEvent_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+UnbindBattleEvent::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&UnbindBattleEvent_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&UnbindBattleEvent_globals_));
+  return UnbindBattleEvent_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const UnbindBattleEvent::ParseTableT_
+    UnbindBattleEvent::_table_ =
+        UnbindBattleEvent::InternalGenerateParseTable_(UnbindBattleEvent_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void UnbindBattleEvent::Clear() {
+// @@protoc_insertion_point(message_clear_start:contracts.kafka.UnbindBattleEvent)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.session_id_) -
+        reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.session_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL UnbindBattleEvent::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const UnbindBattleEvent& this_ = static_cast<const UnbindBattleEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL UnbindBattleEvent::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const UnbindBattleEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:contracts.kafka.UnbindBattleEvent)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 session_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_session_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_session_id(), target);
+    }
+  }
+
+  // uint64 battle_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_battle_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_battle_id(), target);
+    }
+  }
+
+  // uint64 player_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_player_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:contracts.kafka.UnbindBattleEvent)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t UnbindBattleEvent::ByteSizeLong(const MessageLite& base) {
+  const UnbindBattleEvent& this_ = static_cast<const UnbindBattleEvent&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t UnbindBattleEvent::ByteSizeLong() const {
+  const UnbindBattleEvent& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:contracts.kafka.UnbindBattleEvent)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 battle_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_battle_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_id());
+      }
+    }
+    // uint64 player_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint32 session_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_session_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_session_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void UnbindBattleEvent::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<UnbindBattleEvent*>(&to_msg);
+  auto& from = static_cast<const UnbindBattleEvent&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:contracts.kafka.UnbindBattleEvent)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_battle_id() != 0) {
+        _this->_impl_.battle_id_ = from._impl_.battle_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_session_id() != 0) {
+        _this->_impl_.session_id_ = from._impl_.session_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void UnbindBattleEvent::CopyFrom(const UnbindBattleEvent& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:contracts.kafka.UnbindBattleEvent)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void UnbindBattleEvent::InternalSwap(UnbindBattleEvent* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_.session_id_)
+      + sizeof(UnbindBattleEvent::_impl_.session_id_)
+      - PROTOBUF_FIELD_OFFSET(UnbindBattleEvent, _impl_.battle_id_)>(
+          reinterpret_cast<char*>(&_impl_.battle_id_),
+          reinterpret_cast<char*>(&other->_impl_.battle_id_));
+}
+
+::google::protobuf::Metadata UnbindBattleEvent::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

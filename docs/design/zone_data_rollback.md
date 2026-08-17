@@ -1,5 +1,7 @@
 # Zone 数据回档方案
 
+> **修订(2026-08-15)**: 数据层迁 TiDB 后,灾难恢复级的"MySQL PITR"须改为 TiDB BR/PiTR(runbook 未改写前**不许迁生产**);Phase 2 单一全局库后 zone 粒度回档改由应用级按 home_zone 承担。见 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) §D8。
+
 ## 概述
 
 Zone 数据回档分两个层面：

@@ -75,6 +75,26 @@ public class AssignGateResponse {
         return r;
     }
 
+    /** code=404:请求的 zone 在 zone_config 里不存在(选服目录之外的区)。 */
+    public static AssignGateResponse zoneNotFound() {
+        AssignGateResponse r = new AssignGateResponse();
+        r.code = 404;
+        r.error = "zone_not_found";
+        return r;
+    }
+
+    /**
+     * code=503:zone 存在但当前不可进(维护/关闭/未开放)。error 是机器可读
+     * tag("zone_maintenance"/"zone_closed"/"zone_not_open"),客户端据此
+     * 显示本地化文案;运维公告文本走 /api/server-list 的 maintenance_msg。
+     */
+    public static AssignGateResponse zoneUnavailable(String tag) {
+        AssignGateResponse r = new AssignGateResponse();
+        r.code = 503;
+        r.error = tag;
+        return r;
+    }
+
     public int getCode() { return code; }
     public void setCode(int code) { this.code = code; }
 

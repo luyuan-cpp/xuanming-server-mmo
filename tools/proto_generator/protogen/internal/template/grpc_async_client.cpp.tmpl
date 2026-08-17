@@ -7,12 +7,16 @@
 #include <boost/pool/object_pool.hpp>
 #include "grpc_call_tag.h"
 
-namespace {{.Package}} {
+{{/* 空 package → 全局命名空间(匿名 namespace 会让公开函数跨编译单元不可见,LNK2019);
+     tagPool 无服务前缀,单独放真匿名 namespace 保持内部链接,避免多个无 package 服务撞名 */}}
+namespace {
+boost::object_pool<GrpcTag> tagPool;
+}
+
+{{if .Package}}namespace {{.Package}} {{"{"}}{{end}}
 struct {{.GrpcCompleteQueueName}} {
     grpc::CompletionQueue cq;
 };
-
-boost::object_pool<GrpcTag> tagPool;
 
 {{- range $svc := .ServiceInfo }}
 {{- range $method := $svc.Methods }}
@@ -228,4 +232,4 @@ void Init{{ $m.FileBaseNameCamel }}GrpcNode(const std::shared_ptr<::grpc::Channe
 
 }
 
-}// namespace {{.Package}}
+{{if .Package}}{{"}"}}// namespace {{.Package}}{{end}}

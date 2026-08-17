@@ -1,0 +1,41 @@
+syntax = "proto3";
+option go_package = "db/proto/battle";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/common/base/empty.proto";
+import "proto/battle/battle_data.proto";
+
+// 注意:不能加 cc_generic_services(与 grpc_cpp_plugin 冲突,先例见 proto/scene_manager/scene_node_service.proto);
+// battle 节点是纯 gRPC 服务,C++ 侧消费 battle_node.grpc.pb.h 的 BattleNode::Service。
+option (OptionFileDefaultNode) = NODE_BATTLE;
+
+// battle 节点内部 gRPC 契约(match 服务调用)。
+// battle_id 由 match 服务用 shared/snowflake(17-bit worker 布局)生产,是该 ID 的唯一生产者
+// (SnowFlake 节点隔离不变量,宪法 §7)。
+// 设计依据:docs/design/turn-based-battle-server.md §3.1、§5.4。
+
+message CreateBattleRequest {
+  uint64 battle_id = 1;
+  uint32 battle_config_id = 2;             // DungeonTable id(怪物组/回合上限来源)
+  repeated BattlePlayerSnapshot players = 3;
+  uint64 seed = 4;                         // 确定性 RNG 种子(match 生成)
+  uint32 match_mode = 5;                   // MatchMode 数值(PVE/PVP 区分,决定逃跑等规则)
+  uint64 created_at_ms = 6;                // Unix 毫秒
+  uint64 deadline_ms = 7;                  // 战斗最长期限,超时 battle 强制平局收尾
+}
+
+message CreateBattleResponse {
+  uint64 battle_id = 1;
+  TipInfoMessage error_message = 2;
+}
+
+message DestroyBattleRequest {
+  uint64 battle_id = 1;
+  string reason = 2;   // 补偿路径记录用(gather 回滚 / 管理指令)
+}
+
+service BattleNode {
+  rpc CreateBattle (CreateBattleRequest) returns (CreateBattleResponse);
+  rpc DestroyBattle (DestroyBattleRequest) returns (Empty);
+}

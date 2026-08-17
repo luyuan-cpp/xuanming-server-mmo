@@ -1007,6 +1007,9 @@ Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
 NodeID: "node-1"
+# 选主 gauge(scene_manager_is_leader)与 EnterScene 分阶段指标都从这里出;
+# 不开的话 scene-manager.yaml 注释里让运维盯的告警口径全部落空。
+MetricsListenAddr: ":9150"
 "@
 		}
 		default {

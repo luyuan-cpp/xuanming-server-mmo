@@ -12,7 +12,7 @@
   - **Go 微服务**(`go/login` 等):go-zero,login / db / scene_manager / friend / guild / chat
   - **Java 网关**(`java/gateway_node`):Spring Boot,zone 目录 / gate 分配 / admin API
 - **协议**:gRPC(同步) + Kafka(异步事件)
-- **基础设施**:MySQL + Redis + Kafka + etcd
+- **基础设施**:MySQL(→ 迁移中:TiDB 全区全服数据层,见 `docs/design/global-data-layer-tidb-decision.md`) + Redis + Kafka + etcd
 
 ## 2. 中文回复
 
@@ -33,7 +33,7 @@
 ### proto 字段类型约束(强制)
 
 - **坐标/Transform 用 double**:`Location` / `Rotation` / `Scale` / `Vector3` / `Velocity` / `Acceleration` 的 x/y/z 必须 `double`,匹配 UE 客户端精度
-- **BaseAttributesComp 用 uint64**:`strength` / `stamina` / `health` / `mana` / `critchance` / `armor` / `resistance` 必须 `uint64`,避免战斗公式 cast 时窄化
+- **BaseAttributesComp 用 uint64**:`strength` / `stamina` / `health` / `mana` / `critchance` / `armor` / `resistance` / `speed` 必须 `uint64`,避免战斗公式 cast 时窄化
 - **SnowFlake GUID 用 uint64**:`player_id` / `entity` / `scene_id` / `item_id` / `buff_id` / `skill_id`(运行时实例) / `tx_id` / `snapshot_id` 必须 `uint64`
 - **Unix 时间戳用 uint64/int64**:`created_at` / `expires_at` / `castTime` / `last_time` / `start` 等必须 64-bit
 - **货币用 uint64**:`CurrencyComp.values` / `owed` / `paid` / `balance_before/after`

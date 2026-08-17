@@ -6,6 +6,7 @@ import (
     "math/rand/v2"
     "os"
     "path/filepath"
+    "sync/atomic"
 
     "google.golang.org/protobuf/encoding/protojson"
     "google.golang.org/protobuf/proto"
@@ -25,20 +26,25 @@ type buffSnapshot struct {
 }
 
 type BuffTableManager struct {
-    snap *buffSnapshot
+    // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
+    // 并发读就是数据竞争(go test -race 会报)。
+    // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
+    // 表缩小时 data[rand.IntN(len(data))] 会越界。
+    snap atomic.Pointer[buffSnapshot]
 }
 
 var BuffTableManagerInstance = NewBuffTableManager()
 
 func NewBuffTableManager() *BuffTableManager {
-    return &BuffTableManager{
-        snap: &buffSnapshot{
-            kvData: make(map[uint32]*pb.BuffTable),
-            idxInterval_effect: make(map[float64][]*pb.BuffTable),
-            idxSub_buff: make(map[uint32][]*pb.BuffTable),
-            idxTarget_sub_buff: make(map[uint32][]*pb.BuffTable),
-        },
-    }
+    m := &BuffTableManager{}
+    m.snap.Store(&buffSnapshot{
+        kvData: make(map[uint32]*pb.BuffTable),
+        idxInterval_effect: make(map[float64][]*pb.BuffTable),
+        idxSub_buff: make(map[uint32][]*pb.BuffTable),
+        idxTarget_sub_buff: make(map[uint32][]*pb.BuffTable),
+    })
+    return m
 }
 
 func (m *BuffTableManager) Load(configDir string, useBinary bool) error {
@@ -85,32 +91,37 @@ func (m *BuffTableManager) Load(configDir string, useBinary bool) error {
     }
 
     snap.data = container.Data
-    m.snap = snap
+    m.snap.Store(snap)
     return nil
 }
 
 func (m *BuffTableManager) FindAll() []*pb.BuffTable {
-    return m.snap.data
+    snap := m.snap.Load()
+    return snap.data
 }
 
 func (m *BuffTableManager) FindById(id uint32) (*pb.BuffTable, bool) {
-    row, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    row, ok := snap.kvData[id]
     return row, ok
 }
 
 
 func (m *BuffTableManager) FindByInterval_effectIndex(key float64) []*pb.BuffTable {
-    return m.snap.idxInterval_effect[key]
+    snap := m.snap.Load()
+    return snap.idxInterval_effect[key]
 }
 
 
 func (m *BuffTableManager) FindBySub_buffIndex(key uint32) []*pb.BuffTable {
-    return m.snap.idxSub_buff[key]
+    snap := m.snap.Load()
+    return snap.idxSub_buff[key]
 }
 
 
 func (m *BuffTableManager) FindByTarget_sub_buffIndex(key uint32) []*pb.BuffTable {
-    return m.snap.idxTarget_sub_buff[key]
+    snap := m.snap.Load()
+    return snap.idxTarget_sub_buff[key]
 }
 
 
@@ -118,7 +129,8 @@ func (m *BuffTableManager) FindByTarget_sub_buffIndex(key uint32) []*pb.BuffTabl
 // ---- Exists ----
 
 func (m *BuffTableManager) Exists(id uint32) bool {
-    _, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    _, ok := snap.kvData[id]
     return ok
 }
 
@@ -127,22 +139,26 @@ func (m *BuffTableManager) Exists(id uint32) bool {
 // ---- Count ----
 
 func (m *BuffTableManager) Count() int {
-    return len(m.snap.data)
+    snap := m.snap.Load()
+    return len(snap.data)
 }
 
 
 func (m *BuffTableManager) CountByInterval_effectIndex(key float64) int {
-    return len(m.snap.idxInterval_effect[key])
+    snap := m.snap.Load()
+    return len(snap.idxInterval_effect[key])
 }
 
 
 func (m *BuffTableManager) CountBySub_buffIndex(key uint32) int {
-    return len(m.snap.idxSub_buff[key])
+    snap := m.snap.Load()
+    return len(snap.idxSub_buff[key])
 }
 
 
 func (m *BuffTableManager) CountByTarget_sub_buffIndex(key uint32) int {
-    return len(m.snap.idxTarget_sub_buff[key])
+    snap := m.snap.Load()
+    return len(snap.idxTarget_sub_buff[key])
 }
 
 
@@ -150,9 +166,10 @@ func (m *BuffTableManager) CountByTarget_sub_buffIndex(key uint32) int {
 // ---- FindByIds (IN) ----
 
 func (m *BuffTableManager) FindByIds(ids []uint32) []*pb.BuffTable {
+    snap := m.snap.Load()
     result := make([]*pb.BuffTable, 0, len(ids))
     for _, id := range ids {
-        if row, ok := m.snap.kvData[id]; ok {
+        if row, ok := snap.kvData[id]; ok {
             result = append(result, row)
         }
     }
@@ -162,10 +179,11 @@ func (m *BuffTableManager) FindByIds(ids []uint32) []*pb.BuffTable {
 // ---- RandOne ----
 
 func (m *BuffTableManager) RandOne() (*pb.BuffTable, bool) {
-    if len(m.snap.data) == 0 {
+    snap := m.snap.Load()
+    if len(snap.data) == 0 {
         return nil, false
     }
-    return m.snap.data[rand.IntN(len(m.snap.data))], true
+    return snap.data[rand.IntN(len(snap.data))], true
 }
 
 
@@ -173,8 +191,9 @@ func (m *BuffTableManager) RandOne() (*pb.BuffTable, bool) {
 // ---- Where / First ----
 
 func (m *BuffTableManager) Where(pred func(*pb.BuffTable) bool) []*pb.BuffTable {
+    snap := m.snap.Load()
     var result []*pb.BuffTable
-    for _, row := range m.snap.data {
+    for _, row := range snap.data {
         if pred(row) {
             result = append(result, row)
         }
@@ -183,7 +202,8 @@ func (m *BuffTableManager) Where(pred func(*pb.BuffTable) bool) []*pb.BuffTable 
 }
 
 func (m *BuffTableManager) First(pred func(*pb.BuffTable) bool) (*pb.BuffTable, bool) {
-    for _, row := range m.snap.data {
+    snap := m.snap.Load()
+    for _, row := range snap.data {
         if pred(row) {
             return row, true
         }

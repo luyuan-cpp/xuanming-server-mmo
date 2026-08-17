@@ -141,6 +141,12 @@ func StartWorldAutoscaler(ctx context.Context, svcCtx *svc.ServiceContext) {
 				logx.Info("[WorldAutoscale] stopped")
 				return
 			case <-ticker.C:
+				// 多副本时只有领导者做伸缩决策 —— 两份 autoscaler 并发对同一批
+				// zone 扩缩正是部署清单曾用 replicas:1 + Recreate 兜的口子,
+				// 现在由 shared/leader 选主收敛(接线见 scene_manager_service.go)。
+				if !isLeader() {
+					continue
+				}
 				for _, zoneID := range GetActiveZones() {
 					AutoscaleWorldChannelsForZone(ctx, svcCtx, zoneID)
 				}
@@ -239,7 +245,9 @@ func autoscaleOneWorldMap(ctx context.Context, svcCtx *svc.ServiceContext, zoneI
 
 		setDesiredWorldChannelCount(svcCtx, zoneID, confID, desired+1)
 		// 立刻把新频道建出来,不等下一次 fullSync —— 玩家现在就挤着。
-		initWorldScenesForZone(ctx, svcCtx, zoneID, []uint64{confID})
+		// waitForLock=true:跑在 autoscaler 自己的 goroutine 上,等锁无害,
+		// 而期望频道数已 +1,尽快落地。
+		initWorldScenesForZone(ctx, svcCtx, zoneID, []uint64{confID}, true)
 		markCooldown(svcCtx, zoneID, confID)
 
 		logx.Infof("[WorldAutoscale] zone=%d conf=%d: all %d channel(s) >= %d players, scaled out to %d",

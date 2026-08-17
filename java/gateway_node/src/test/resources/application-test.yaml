@@ -37,6 +37,8 @@ login:
     endpoints: "127.0.0.1:1"
     timeout-ms: 1000
     retry: 0
+    # 测试上下文没有真实 etcd,关掉发现轮询避免后台线程刷警告日志。
+    discovery-enabled: false
 
 zone-probe:
   interval-ms: 60000

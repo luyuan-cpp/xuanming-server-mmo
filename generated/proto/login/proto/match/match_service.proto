@@ -1,15 +1,21 @@
 syntax = "proto3";
 package match;
 
+import "proto/db/proto_option.proto";
 import "proto/common/base/empty.proto";
 import "proto/common/base/tip.proto";
 
 option go_package = "login/proto/match";
+option (OptionFileDefaultNode) = NODE_MATCH;
 
-// MatchService: Server-driven matchmaking for MOBA instances.
-// Players request to join a queue; the server pairs them and creates an instance
-// via SceneManager.CreateScene when enough players are found.
+// MatchService:统一开局入口(回合制战斗一期启用,设计文档 turn-based-battle-server.md D3)。
+// 客户端经 gate 按文件路由选项直达 match 服务(照 login 模式,权威 player_id 取自
+// session metadata,请求内 player_id 仅内部调用使用)。
+// 凑单成功后走 gather 协议:scene.PrepareBattle 收快照 -> battle.CreateBattle,
+// 失败按补偿矩阵回滚(设计文档 §3.2)。
 service MatchService {
+  option (OptionIsClientProtocolService) = true;
+
   // Player requests to join a match queue.
   rpc JoinQueue(JoinQueueRequest) returns (JoinQueueResponse) {}
 
@@ -18,6 +24,12 @@ service MatchService {
 
   // Query current queue status for a player.
   rpc GetQueueStatus(GetQueueStatusRequest) returns (GetQueueStatusResponse) {}
+
+  // ---- 场景发起 PK(切磋):点名成局入口,与队列匹配汇入同一条 gather 开局管线 ----
+  rpc ChallengePlayer(ChallengePlayerRequest) returns (ChallengePlayerResponse) {}
+  rpc RespondChallenge(RespondChallengeRequest) returns (RespondChallengeResponse) {}
+  rpc NotifyChallengeInvite(ChallengeInviteS2C) returns (Empty) {}
+  rpc NotifyChallengeResult(ChallengeResultS2C) returns (Empty) {}
 }
 
 // ----- Match mode config -----
@@ -27,7 +39,10 @@ enum MatchMode {
   MATCH_MODE_UNSPECIFIED = 0;
   MATCH_MODE_5V5         = 1; // 10 players total
   MATCH_MODE_3V3         = 2; // 6 players total
-  MATCH_MODE_1V1         = 3; // 2 players total
+  MATCH_MODE_1V1         = 3; // 2 players total(回合制 PVP,一期启用)
+  MATCH_MODE_PVE_SOLO    = 4; // 回合制 PVE 单人,即时开战(伪匹配)
+  MATCH_MODE_PVE_TEAM    = 5; // 回合制 PVE 组队,FIFO 凑满 DungeonTable.max_team_size
+  MATCH_MODE_PVP_CHALLENGE = 6; // 场景发起 PK(切磋):点名成局,不入队
 }
 
 // ----- Join queue -----
@@ -38,6 +53,7 @@ message JoinQueueRequest {
   uint32 map_config_id = 3;           // Map template config ID (maps to scene_config_id)
   repeated uint64 party_member_ids = 4; // Pre-made party (includes player_id)
   uint32 zone_id = 5;                 // Player's current zone
+  uint32 battle_config_id = 6;        // 回合制战斗配置(DungeonTable id:怪物组/人数/回合上限)
 }
 
 message JoinQueueResponse {
@@ -72,6 +88,48 @@ enum QueueState {
   QUEUE_STATE_READY       = 3;  // Instance created, waiting for player confirm
   QUEUE_STATE_ENTERING    = 4;  // Players entering scene
   QUEUE_STATE_NOT_QUEUED  = 5;  // Player is not in any queue
+}
+
+// ----- 场景发起 PK(切磋) -----
+// challenge_id 由 match 服务 snowflake 生产;挑战记录存 Redis(TTL 60s),超时自动作废。
+// 应战成功后与队列匹配共用 gather 开局管线(PrepareBattle -> CreateBattle),
+// 双方 battle:lock 校验在应战时刻做(发起时只做咨询性检查)。
+
+message ChallengePlayerRequest {
+  uint64 player_id = 1;          // 发起者(权威身份以 session metadata 为准)
+  uint64 target_player_id = 2;   // 被挑战者(客户端从场景 AOI 拿到)
+  uint32 battle_config_id = 3;   // PK 规则/场地配置(0 = 默认切磋规则)
+}
+
+message ChallengePlayerResponse {
+  uint64 challenge_id = 1;
+  TipInfoMessage error_message = 2;  // 对方不在线/在战斗中/自我挑战等拒绝原因
+}
+
+message RespondChallengeRequest {
+  uint64 player_id = 1;          // 应战者(权威身份以 session metadata 为准)
+  uint64 challenge_id = 2;
+  bool accept = 3;
+}
+
+message RespondChallengeResponse {
+  TipInfoMessage error_message = 1;  // 挑战已过期/发起者已进入其它战斗等
+}
+
+// 推给被挑战者的弹窗
+message ChallengeInviteS2C {
+  uint64 challenge_id = 1;
+  uint64 challenger_id = 2;
+  string challenger_name = 3;
+  uint32 battle_config_id = 4;
+  uint64 expires_at_ms = 5;      // Unix 毫秒,过期客户端自动收起弹窗
+}
+
+// 推给发起者(以及拒绝时推给双方)的结果
+message ChallengeResultS2C {
+  uint64 challenge_id = 1;
+  bool accepted = 2;             // false = 拒绝或超时
+  uint64 responder_id = 3;
 }
 
 // ----- Server-internal: match result (used between MatchService and SceneManager) -----

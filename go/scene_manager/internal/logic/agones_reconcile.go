@@ -47,6 +47,11 @@ func StartAgonesReconcile(ctx context.Context, svcCtx *svc.ServiceContext) {
 				logx.Info("[AgonesReconcile] stopped")
 				return
 			case <-ticker.C:
+				// 对账虽然只告警不改写,也收敛到领导者:避免多副本重复拉
+				// Agones API / 重复告警,漂移 gauge 也只由一个实例发布。
+				if !isLeader() {
+					continue
+				}
 				for _, zoneID := range GetActiveZones() {
 					ReconcileAgonesRoomsForZone(ctx, svcCtx, zoneID)
 				}

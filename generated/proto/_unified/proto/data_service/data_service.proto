@@ -245,7 +245,10 @@ message RollbackZoneResponse {
   uint32 players_affected = 2;
   uint32 players_failed = 3;
   repeated uint64 failed_player_ids = 4;
-  repeated uint64 orphan_player_ids = 5; // characters created after target_time, cleaned up
+  // Compatibility name: players currently mapped to the zone but without a
+  // snapshot at or before target_time. Candidates are reported only; no player
+  // data, zone mapping, or account relationship is deleted.
+  repeated uint64 orphan_player_ids = 5;
   uint32 orphans_cleaned = 6;
 }
 

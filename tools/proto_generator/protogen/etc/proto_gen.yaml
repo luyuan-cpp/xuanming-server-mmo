@@ -434,11 +434,33 @@ domain_meta:
         proto: "cpp/generated/slg/proto"
         handler: "cpp/generated/slg/handler"
 
-  turnbased:
-    source: "{{proto_dir}}turnbased/"
+  # 回合制战斗(设计文档 docs/design/turn-based-battle-server.md):
+  # C++ battle 节点为纯 gRPC 服务(battle_node.proto/player_battle.proto 均不带 cc_generic_services);
+  # Go 侧需要 BattleNode 的 grpc client stub(match 服务调 CreateBattle/DestroyBattle)。
+  battle:
+    source: "{{proto_dir}}battle/"
     rpc:
-      type: rpc
+      type: grpc
     outputs:
+      go:
+        proto: "go/generated/battle/proto"
+        grpc: "go/generated/battle/grpc"
       cpp:
-        proto: "cpp/generated/turnbased/proto"
-        handler: "cpp/generated/turnbased/handler"
+        proto: "cpp/generated/battle/proto"
+        handler: "cpp/generated/battle/handler"
+        grpc: "cpp/generated/battle/grpc"
+
+  # 匹配服务(此前 domain_meta 缺失导致 match 只有零散 pb 产物):
+  # Go match 服务实现 MatchService(客户端协议,gate 经 gRPC 直达);cpp 侧供 gate 路由元数据与消息类。
+  match:
+    source: "{{proto_dir}}match/"
+    rpc:
+      type: grpc
+    outputs:
+      go:
+        proto: "go/generated/match/proto"
+        handler: "go/generated/match/handler"
+        grpc: "go/generated/match/grpc"
+      cpp:
+        proto: "cpp/generated/match/proto"
+        grpc: "cpp/generated/match/grpc"

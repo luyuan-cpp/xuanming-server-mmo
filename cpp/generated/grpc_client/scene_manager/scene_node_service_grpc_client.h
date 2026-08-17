@@ -70,6 +70,44 @@ void SendSceneNodeGrpcReleasePlayer(entt::registry& registry, entt::entity nodeE
 void SendSceneNodeGrpcReleasePlayer(entt::registry& registry, entt::entity nodeEntity, const ::scene_node::ReleasePlayerRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 void SendSceneNodeGrpcReleasePlayer(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
+#pragma region SceneNodeGrpcPrepareBattle
+
+struct AsyncSceneNodeGrpcPrepareBattleGrpcClient {
+    uint32_t messageId{ SceneNodeGrpcPrepareBattleMessageId };
+    ClientContext context;
+    Status status;
+    ::PrepareBattleResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::PrepareBattleResponse>> response_reader;
+};
+
+class ::PrepareBattleRequest;
+using AsyncSceneNodeGrpcPrepareBattleHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::PrepareBattleResponse&)>;
+extern AsyncSceneNodeGrpcPrepareBattleHandlerFunctionType AsyncSceneNodeGrpcPrepareBattleHandler;
+
+void SendSceneNodeGrpcPrepareBattle(entt::registry& registry, entt::entity nodeEntity, const ::PrepareBattleRequest& request);
+void SendSceneNodeGrpcPrepareBattle(entt::registry& registry, entt::entity nodeEntity, const ::PrepareBattleRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendSceneNodeGrpcPrepareBattle(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region SceneNodeGrpcCancelBattlePrepare
+
+struct AsyncSceneNodeGrpcCancelBattlePrepareGrpcClient {
+    uint32_t messageId{ SceneNodeGrpcCancelBattlePrepareMessageId };
+    ClientContext context;
+    Status status;
+    ::Empty reply;
+    std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
+};
+
+class ::CancelBattlePrepareRequest;
+using AsyncSceneNodeGrpcCancelBattlePrepareHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::Empty&)>;
+extern AsyncSceneNodeGrpcCancelBattlePrepareHandlerFunctionType AsyncSceneNodeGrpcCancelBattlePrepareHandler;
+
+void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, const ::CancelBattlePrepareRequest& request);
+void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, const ::CancelBattlePrepareRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
 void SetSceneNodeServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void SetSceneNodeServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void HandleSceneNodeServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);

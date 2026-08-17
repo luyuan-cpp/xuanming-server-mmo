@@ -178,7 +178,9 @@ services:
 
   # Etcd service (distributed key-value store)
   etcd:
-    image: bitnami/etcd:latest  # Recommended bitnami image, easy to configure
+    # bitnami/etcd 2025-08 起从 Docker Hub 下架(Bitnami 商业化调整),
+    # bitnamilegacy/ 是官方冻结存档,镜像内容与环境变量语义完全一致。
+    image: bitnamilegacy/etcd:latest
     container_name: etcd
     ports:
       - "2379:2379"  # Client communication port

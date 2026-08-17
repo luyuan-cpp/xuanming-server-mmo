@@ -63,6 +63,7 @@ message BaseAttributesComp {
     uint64 critchance = 5;  // Crit chance
     uint64 armor = 6;       // Armor
     uint64 resistance = 7;  // Resistance
+    uint64 speed = 8;       // 速度:回合制战斗出手序(降序结算),实时战斗暂不消费
 }
 
 // Player level comp, manages level and level-related features

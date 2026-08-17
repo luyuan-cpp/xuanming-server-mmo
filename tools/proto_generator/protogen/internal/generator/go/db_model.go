@@ -130,7 +130,7 @@ func LoadAllDescriptors(wg *sync.WaitGroup) {
 }
 
 func GenerateMergedTableSQL(messageNames []string) error {
-	sqlGenerator := proto2mysql.NewPbMysqlDB()
+	sqlGenerator := proto2mysql.NewDB()
 	var mergedSQL strings.Builder
 
 	for _, msgFullNameStr := range messageNames {

@@ -23,6 +23,16 @@ namespace NodeUtils
 	bool IsNodeConnected(uint32_t nodeType, const NodeInfo& info);
 };
 
+    void SetBattleNodeHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetBattleNodeIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void InitBattleNodeGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
+    void HandleBattleNodeCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
+
+    void SetPlayerBattleHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetPlayerBattleIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void InitPlayerBattleGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
+    void HandlePlayerBattleCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
+
 namespace chatpb {
     void SetChatHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetChatIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
@@ -65,6 +75,13 @@ namespace loginpb {
     void HandleLoginCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
 
+namespace match {
+    void SetMatchServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetMatchServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void InitMatchServiceGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
+    void HandleMatchServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
+}
+
 namespace scene_manager {
     void SetSceneManagerServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetSceneManagerServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
@@ -81,6 +98,10 @@ namespace scene_node {
 
 void SetIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler){
 
+    ::SetBattleNodeIfEmptyHandler(handler);
+
+    ::SetPlayerBattleIfEmptyHandler(handler);
+
     chatpb::SetChatIfEmptyHandler(handler);
 
     data_service::SetDataServiceIfEmptyHandler(handler);
@@ -93,6 +114,8 @@ void SetIfEmptyHandler(const std::function<void(const ClientContext&, const ::go
 
     loginpb::SetLoginIfEmptyHandler(handler);
 
+    match::SetMatchServiceIfEmptyHandler(handler);
+
     scene_manager::SetSceneManagerServiceIfEmptyHandler(handler);
 
     scene_node::SetSceneNodeServiceIfEmptyHandler(handler);
@@ -100,6 +123,10 @@ void SetIfEmptyHandler(const std::function<void(const ClientContext&, const ::go
 }
 
 void SetHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler){
+
+    ::SetBattleNodeHandler(handler);
+
+    ::SetPlayerBattleHandler(handler);
 
     chatpb::SetChatHandler(handler);
 
@@ -112,6 +139,8 @@ void SetHandler(const std::function<void(const ClientContext&, const ::google::p
     guildpb::SetGuildHandler(handler);
 
     loginpb::SetLoginHandler(handler);
+
+    match::SetMatchServiceHandler(handler);
 
     scene_manager::SetSceneManagerServiceHandler(handler);
 
@@ -132,7 +161,13 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 return;
             }
             GrpcTag* grpcTag(reinterpret_cast<GrpcTag*>(got_tag));
-            if (common::base::eNodeType::ChatNodeService == nodeType) {
+            if (common::base::eNodeType::BattleNodeService == nodeType) {
+                ::HandleBattleNodeCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
+            }
+            else if (common::base::eNodeType::BattleNodeService == nodeType) {
+                ::HandlePlayerBattleCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
+            }
+            else if (common::base::eNodeType::ChatNodeService == nodeType) {
                 chatpb::HandleChatCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::DataServiceNodeService == nodeType) {
@@ -150,6 +185,9 @@ void HandleCompletedQueueMessage(entt::registry& registry){
             else if (common::base::eNodeType::LoginNodeService == nodeType) {
                 loginpb::HandleLoginCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
+            else if (common::base::eNodeType::MatchNodeService == nodeType) {
+                match::HandleMatchServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
+            }
             else if (common::base::eNodeType::SceneManagerNodeService == nodeType) {
                 scene_manager::HandleSceneManagerServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
@@ -163,7 +201,13 @@ void HandleCompletedQueueMessage(entt::registry& registry){
 void InitGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity){
     auto nodeType = NodeUtils::GetRegistryType(registry);
     registry.emplace<grpc::CompletionQueue>(nodeEntity);
-    if (common::base::eNodeType::ChatNodeService == nodeType) {
+    if (common::base::eNodeType::BattleNodeService == nodeType) {
+        ::InitBattleNodeGrpcNode(channel, registry, nodeEntity);
+    }
+    else if (common::base::eNodeType::BattleNodeService == nodeType) {
+        ::InitPlayerBattleGrpcNode(channel, registry, nodeEntity);
+    }
+    else if (common::base::eNodeType::ChatNodeService == nodeType) {
         chatpb::InitChatGrpcNode(channel, registry, nodeEntity);
     }
     else if (common::base::eNodeType::DataServiceNodeService == nodeType) {
@@ -180,6 +224,9 @@ void InitGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, ent
     }
     else if (common::base::eNodeType::LoginNodeService == nodeType) {
         loginpb::InitLoginGrpcNode(channel, registry, nodeEntity);
+    }
+    else if (common::base::eNodeType::MatchNodeService == nodeType) {
+        match::InitMatchServiceGrpcNode(channel, registry, nodeEntity);
     }
     else if (common::base::eNodeType::SceneManagerNodeService == nodeType) {
         scene_manager::InitSceneManagerServiceGrpcNode(channel, registry, nodeEntity);

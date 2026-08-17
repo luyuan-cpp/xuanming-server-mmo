@@ -42,6 +42,11 @@ func StartInstanceLifecycleManager(ctx context.Context, svcCtx *svc.ServiceConte
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
+			// 空闲副本销毁是变更动作,多副本时只有领导者执行,
+			// 避免两个实例并发对同一实例走销毁链路(计数双减)。
+			if !isLeader() {
+				continue
+			}
 			cleanupIdleInstances(ctx, svcCtx, instanceTimeout, mirrorTimeout)
 		}
 	}
@@ -88,6 +93,11 @@ func cleanupZoneIdleInstances(ctx context.Context, svcCtx *svc.ServiceContext, z
 	destroyed := 0
 
 	for _, p := range pairs {
+		// 降级即停:isLeader 只在 tick 入口查过一次,长循环里领导权可能
+		// 中途易主;剩余条目由新领导者的下一拍接手,少清一轮无害。
+		if !isLeader() {
+			return
+		}
 		sceneId, err := strconv.ParseUint(p.Key, 10, 64)
 		if err != nil {
 			continue
@@ -227,14 +237,23 @@ func destroyInstanceInternal(ctx context.Context, svcCtx *svc.ServiceContext, zo
 			}
 		}
 	} else {
-		// Force path: wipe unconditionally.
-		svcCtx.Redis.Del(sceneNodeKey)
-		svcCtx.Redis.Del(fmt.Sprintf(InstancePlayerCountKey, sceneId))
-		svcCtx.Redis.Zrem(activeInstancesKey(zoneId), sceneIdStr)
-		svcCtx.Redis.Del(sceneMirrorFlagKey(sceneId))
-		svcCtx.Redis.Del(sceneSourceKey(sceneId))
-		svcCtx.Redis.Del(sceneZoneKey(sceneId))
-		svcCtx.Redis.Del(sceneAgonesGsKey(sceneId))
+		// Force path:原来是"快照读 + 七连 DEL",快照与删除之间没有原子性,
+		// 两个并发的 force 销毁(空闲清理 vs 死节点 reconcile,或领导者降级
+		// 窗口里新旧领导者清理同一死节点)会各自拿到非空快照,把节点
+		// scene_count 双减、Agones 名额双还。改成 Lua 原子认领:读与删同
+		// 脚本,只有赢家拿到非空返回并执行副作用,输家静默退出。
+		atomicNode, atomicGs, atomicResidual, err := AtomicDestroyForce(svcCtx, zoneId, sceneId)
+		if err != nil {
+			logx.Errorf("[InstanceLifecycle] AtomicDestroyForce failed for scene %d: %v", sceneId, err)
+			return
+		}
+		if atomicNode == "" && atomicGs == "" {
+			// 别的进程已抢先抹掉并负责了级联/计数/归还 —— 本次是重复销毁。
+			return
+		}
+		nodeId = atomicNode
+		agonesGs = atomicGs
+		residual = atomicResidual
 	}
 
 	if !destroyed {

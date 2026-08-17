@@ -19,6 +19,16 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="battle\battle_data.pb.cc" />
+    <ClCompile Include="battle\battle_data.grpc.pb.cc" />
+    <ClCompile Include="battle\battle_node.pb.cc" />
+    <ClCompile Include="battle\battle_node.grpc.pb.cc" />
+    <ClCompile Include="battle\player_battle.pb.cc" />
+    <ClCompile Include="battle\player_battle.grpc.pb.cc" />
+    <ClCompile Include="match\match_service.pb.cc" />
+    <ClCompile Include="match\match_service.grpc.pb.cc" />
+    <ClCompile Include="common\component\battle_comp.pb.cc" />
+    <ClCompile Include="common\event\battle_event.pb.cc" />
     <ClCompile Include="chat\chat.pb.cc" />
     <ClCompile Include="chat\chat.grpc.pb.cc" />
     <ClCompile Include="common\base\common.pb.cc" />

@@ -1,5 +1,7 @@
 # MMO Cross-Server Architecture Design (Complete Reference)
 
+> **修订(2026-08-15)**: "each region has an independent Redis/storage"的存储前提被 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) 修订为"TiDB 全局数据层 + home_zone 逻辑归属";跨区改为 redirect 重连 + 全局层直读,不再做跨区数据搬运。
+
 ## 1. Background & Goals
 
 - Game type: MMO (WoW-style), approximately 1000+ zones.

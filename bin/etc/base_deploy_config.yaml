@@ -43,6 +43,7 @@ service_discovery_prefixes:
   - "FriendNodeService.rpc" # 好友服务（Go-Zero gRPC）的Etcd存储前缀
   - "GuildNodeService.rpc" # 公会服务（Go-Zero gRPC）的Etcd存储前缀
   - "SceneManagerNodeService.rpc" # 场景管理服务（Go-Zero gRPC）的Etcd存储前缀
+  - "BattleNodeService.rpc" # 回合制战斗节点（C++ gRPC，全局池不分 zone；gate 据此发现 battle 建 gRPC channel，match 的 Go 侧自行 watch）
 
 # Kafka 配置（分布式消息队列，用于异步通信、日志收集、事件分发等）
 Kafka:

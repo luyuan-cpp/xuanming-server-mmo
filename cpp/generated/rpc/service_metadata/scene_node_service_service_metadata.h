@@ -14,3 +14,11 @@ constexpr uint32_t SceneNodeGrpcDestroySceneIndex = 1;
 constexpr uint32_t SceneNodeGrpcReleasePlayerMessageId = 128;
 constexpr uint32_t SceneNodeGrpcReleasePlayerIndex = 2;
 #define SceneNodeGrpcReleasePlayerMethod  ::SceneNodeGrpc_Stub::descriptor()->method(2)
+
+constexpr uint32_t SceneNodeGrpcPrepareBattleMessageId = 142;
+constexpr uint32_t SceneNodeGrpcPrepareBattleIndex = 3;
+#define SceneNodeGrpcPrepareBattleMethod  ::SceneNodeGrpc_Stub::descriptor()->method(3)
+
+constexpr uint32_t SceneNodeGrpcCancelBattlePrepareMessageId = 145;
+constexpr uint32_t SceneNodeGrpcCancelBattlePrepareIndex = 4;
+#define SceneNodeGrpcCancelBattlePrepareMethod  ::SceneNodeGrpc_Stub::descriptor()->method(4)

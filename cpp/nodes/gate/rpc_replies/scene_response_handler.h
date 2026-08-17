@@ -11,4 +11,6 @@ void OnSceneRoutePlayerStringMsgReply(const muduo::net::TcpConnectionPtr& conn, 
 void OnSceneUpdateSessionDetailReply(const muduo::net::TcpConnectionPtr& conn, const std::shared_ptr<::Empty>& replied, muduo::Timestamp timestamp);
 void OnSceneCreateSceneReply(const muduo::net::TcpConnectionPtr& conn, const std::shared_ptr<::CreateSceneResponse>& replied, muduo::Timestamp timestamp);
 void OnSceneDestroySceneReply(const muduo::net::TcpConnectionPtr& conn, const std::shared_ptr<::Empty>& replied, muduo::Timestamp timestamp);
+void OnScenePrepareBattleReply(const muduo::net::TcpConnectionPtr& conn, const std::shared_ptr<::PrepareBattleResponse>& replied, muduo::Timestamp timestamp);
+void OnSceneCancelBattlePrepareReply(const muduo::net::TcpConnectionPtr& conn, const std::shared_ptr<::Empty>& replied, muduo::Timestamp timestamp);
 void OnSceneNodeHandshakeReply(const muduo::net::TcpConnectionPtr& conn, const std::shared_ptr<::NodeHandshakeResponse>& replied, muduo::Timestamp timestamp);

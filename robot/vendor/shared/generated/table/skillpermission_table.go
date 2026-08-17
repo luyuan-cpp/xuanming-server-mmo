@@ -6,6 +6,7 @@ import (
     "math/rand/v2"
     "os"
     "path/filepath"
+    "sync/atomic"
 
     "google.golang.org/protobuf/encoding/protojson"
     "google.golang.org/protobuf/proto"
@@ -23,18 +24,23 @@ type skillpermissionSnapshot struct {
 }
 
 type SkillPermissionTableManager struct {
-    snap *skillpermissionSnapshot
+    // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
+    // 并发读就是数据竞争(go test -race 会报)。
+    // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
+    // 表缩小时 data[rand.IntN(len(data))] 会越界。
+    snap atomic.Pointer[skillpermissionSnapshot]
 }
 
 var SkillPermissionTableManagerInstance = NewSkillPermissionTableManager()
 
 func NewSkillPermissionTableManager() *SkillPermissionTableManager {
-    return &SkillPermissionTableManager{
-        snap: &skillpermissionSnapshot{
-            kvData: make(map[uint32]*pb.SkillPermissionTable),
-            idxSkill_type: make(map[uint32][]*pb.SkillPermissionTable),
-        },
-    }
+    m := &SkillPermissionTableManager{}
+    m.snap.Store(&skillpermissionSnapshot{
+        kvData: make(map[uint32]*pb.SkillPermissionTable),
+        idxSkill_type: make(map[uint32][]*pb.SkillPermissionTable),
+    })
+    return m
 }
 
 func (m *SkillPermissionTableManager) Load(configDir string, useBinary bool) error {
@@ -73,22 +79,25 @@ func (m *SkillPermissionTableManager) Load(configDir string, useBinary bool) err
     }
 
     snap.data = container.Data
-    m.snap = snap
+    m.snap.Store(snap)
     return nil
 }
 
 func (m *SkillPermissionTableManager) FindAll() []*pb.SkillPermissionTable {
-    return m.snap.data
+    snap := m.snap.Load()
+    return snap.data
 }
 
 func (m *SkillPermissionTableManager) FindById(id uint32) (*pb.SkillPermissionTable, bool) {
-    row, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    row, ok := snap.kvData[id]
     return row, ok
 }
 
 
 func (m *SkillPermissionTableManager) FindBySkill_typeIndex(key uint32) []*pb.SkillPermissionTable {
-    return m.snap.idxSkill_type[key]
+    snap := m.snap.Load()
+    return snap.idxSkill_type[key]
 }
 
 
@@ -96,7 +105,8 @@ func (m *SkillPermissionTableManager) FindBySkill_typeIndex(key uint32) []*pb.Sk
 // ---- Exists ----
 
 func (m *SkillPermissionTableManager) Exists(id uint32) bool {
-    _, ok := m.snap.kvData[id]
+    snap := m.snap.Load()
+    _, ok := snap.kvData[id]
     return ok
 }
 
@@ -105,12 +115,14 @@ func (m *SkillPermissionTableManager) Exists(id uint32) bool {
 // ---- Count ----
 
 func (m *SkillPermissionTableManager) Count() int {
-    return len(m.snap.data)
+    snap := m.snap.Load()
+    return len(snap.data)
 }
 
 
 func (m *SkillPermissionTableManager) CountBySkill_typeIndex(key uint32) int {
-    return len(m.snap.idxSkill_type[key])
+    snap := m.snap.Load()
+    return len(snap.idxSkill_type[key])
 }
 
 
@@ -118,9 +130,10 @@ func (m *SkillPermissionTableManager) CountBySkill_typeIndex(key uint32) int {
 // ---- FindByIds (IN) ----
 
 func (m *SkillPermissionTableManager) FindByIds(ids []uint32) []*pb.SkillPermissionTable {
+    snap := m.snap.Load()
     result := make([]*pb.SkillPermissionTable, 0, len(ids))
     for _, id := range ids {
-        if row, ok := m.snap.kvData[id]; ok {
+        if row, ok := snap.kvData[id]; ok {
             result = append(result, row)
         }
     }
@@ -130,10 +143,11 @@ func (m *SkillPermissionTableManager) FindByIds(ids []uint32) []*pb.SkillPermiss
 // ---- RandOne ----
 
 func (m *SkillPermissionTableManager) RandOne() (*pb.SkillPermissionTable, bool) {
-    if len(m.snap.data) == 0 {
+    snap := m.snap.Load()
+    if len(snap.data) == 0 {
         return nil, false
     }
-    return m.snap.data[rand.IntN(len(m.snap.data))], true
+    return snap.data[rand.IntN(len(snap.data))], true
 }
 
 
@@ -141,8 +155,9 @@ func (m *SkillPermissionTableManager) RandOne() (*pb.SkillPermissionTable, bool)
 // ---- Where / First ----
 
 func (m *SkillPermissionTableManager) Where(pred func(*pb.SkillPermissionTable) bool) []*pb.SkillPermissionTable {
+    snap := m.snap.Load()
     var result []*pb.SkillPermissionTable
-    for _, row := range m.snap.data {
+    for _, row := range snap.data {
         if pred(row) {
             result = append(result, row)
         }
@@ -151,7 +166,8 @@ func (m *SkillPermissionTableManager) Where(pred func(*pb.SkillPermissionTable) 
 }
 
 func (m *SkillPermissionTableManager) First(pred func(*pb.SkillPermissionTable) bool) (*pb.SkillPermissionTable, bool) {
-    for _, row := range m.snap.data {
+    snap := m.snap.Load()
+    for _, row := range snap.data {
         if pred(row) {
             return row, true
         }

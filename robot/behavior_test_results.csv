@@ -1,0 +1,37 @@
+timestamp,account,scenario,action,success,latency_ms,detail,scene_id,concurrent
+2026-08-17T00:03:18.7459408-04:00,robot_0001,NormalLogin,scenario_result,true,263,player_id=274582266645053440,0,0
+2026-08-17T00:03:21.8312645-04:00,robot_0001,LoginLogoutCycle,scenario_result,true,2583,completed 3 login/logout cycles,0,0
+2026-08-17T00:03:22.5444664-04:00,robot_0001,WrongPassword,scenario_result,true,212,server returned error: id:20,0,0
+2026-08-17T00:03:23.3271661-04:00,robot_0001,DuplicateEnterGame,scenario_result,true,281,server returned error for duplicate enter: id:25,0,0
+2026-08-17T00:03:24.0887659-04:00,robot_0001,DuplicateLoginRequest,scenario_result,true,260,got 2 responses to 2 duplicate login requests,0,0
+2026-08-17T00:03:25.3287714-04:00,robot_0001,AccountDisplacement,scenario_result,true,738,A received kick after B logged in with same account,0,0
+2026-08-17T00:03:26.0902912-04:00,robot_0001,ConcurrentSameAccount,scenario_result,true,260,"1/2 succeeded — concurrent results: [login(satoken): server error id:25, <nil>]",0,0
+2026-08-17T00:03:27.222549-04:00,robot_0001,RapidReconnect,scenario_result,true,631,"reconnected OK, player_id=274582266645053440",0,0
+2026-08-17T00:03:28.6901031-04:00,robot_0001,DisconnectDuringLogin,scenario_result,true,966,server recovered after mid-login disconnect,0,0
+2026-08-17T00:03:30.2068888-04:00,robot_0001,DisconnectDuringEnter,scenario_result,true,1015,recovered after disconnect between Login and EnterGame,0,0
+2026-08-17T00:03:34.8711967-04:00,robot_0001,RapidDisconnectReconnect,scenario_result,true,4163,3 rapid disconnect+reconnect cycles completed,0,0
+2026-08-17T00:03:36.3844688-04:00,robot_0001,AccessTokenReconnect,scenario_result,true,1012,"reconnected via access_token (len=43, expire=1786946615), no rotation",0,0
+2026-08-17T00:03:37.7187734-04:00,robot_0001,DifferentAccountSequential,scenario_result,true,832,"both accounts logged in: robot_0001 (pid=274582266645053440), robot_0002 (pid=274582345187590144)",0,0
+2026-08-17T00:03:39.003068-04:00,robot_0001,LeaveAndReEnter,scenario_result,true,782,re-enter error: id:48,0,0
+2026-08-17T00:03:40.6394988-04:00,robot_0001,LeaveAndReLogin,scenario_result,true,1135,"leave+re-login OK, player_id=274582266645053440",0,0
+2026-08-17T00:03:44.4656395-04:00,robot_0001,RapidLoginSpam,scenario_result,true,3324,"survived 10 rapid spam attempts, clean login OK",0,0
+2026-08-17T00:03:45.9299513-04:00,robot_0001,MessageBeforeLogin,scenario_result,true,963,server handled out-of-order message gracefully,0,0
+2026-08-17T00:03:46.6931308-04:00,robot_0001,LoginStuckDetection,scenario_result,true,261,login completed in 261ms (OK),0,0
+2026-08-17T00:03:47.6510788-04:00,robot_0001,BatchConcurrentLogin,scenario_result,true,457,"5/5 succeeded, 0 failed (0 stuck), max_latency=259ms",0,0
+2026-08-17T00:03:52.9704556-04:00,robot_0001,SkillCast,scenario_result,false,4819,no visible/self entity found for skill cast,0,0
+2026-08-17T00:04:00.3379465-04:00,robot_0001,SceneSwitch,scenario_result,false,6866,no enter-scene notification after switch request (scene=57948613585698820 conf=1),0,0
+2026-08-17T00:04:04.2320326-04:00,robot_5000,stress,cast_skill,false,0,no visible target entity,57948613585698820,0
+2026-08-17T00:04:04.8424072-04:00,robot_5002,stress,cast_skill,false,0,no visible target entity,57948613585698825,0
+2026-08-17T00:04:05.0819249-04:00,robot_5001,stress,cast_skill,false,0,no visible target entity,57948613585698824,0
+2026-08-17T00:04:05.2323153-04:00,robot_5000,stress,cast_skill,false,0,no visible target entity,57948613585698820,0
+2026-08-17T00:04:05.8426287-04:00,robot_5002,stress,switch_scene,true,0,scene_conf_id=1,57948613585698825,0
+2026-08-17T00:04:06.0815574-04:00,robot_5001,stress,move,true,0,"pos=(-13.9,-4.4)",57948613585698824,0
+2026-08-17T00:04:06.2320918-04:00,robot_5000,stress,cast_skill,false,0,no visible target entity,57948613585698820,0
+2026-08-17T00:04:06.8425344-04:00,robot_5002,stress,switch_scene,true,0,scene_conf_id=1,57948613585698825,0
+2026-08-17T00:04:07.0819798-04:00,robot_5001,stress,switch_scene,true,0,scene_conf_id=1,57948613585698824,0
+2026-08-17T00:04:07.2320547-04:00,robot_5000,stress,move,true,0,"pos=(-9.6,-1.1)",57948613585698820,0
+2026-08-17T00:04:07.8423684-04:00,robot_5002,stress,cast_skill,false,0,no visible target entity,57948613585698825,0
+2026-08-17T00:04:08.0820998-04:00,robot_5001,stress,move,true,0,"pos=(-16.1,-16.3)",57948613585698824,0
+2026-08-17T00:04:08.2325494-04:00,robot_5000,stress,chat,true,0,follow me,57948613585698820,0
+2026-08-17T00:04:08.7368856-04:00,robot_0001,MultiRobotBehavior,scenario_result,true,7897,"3/3 robots active, behavior_records=13",0,0
+2026-08-17T00:04:11.0797179-04:00,robot_0001,CurrencyCrashWindow,scenario_result,true,1842,pre=0 +10000 -> post=10000,0,0

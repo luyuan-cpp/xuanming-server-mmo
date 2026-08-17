@@ -95,9 +95,12 @@ func NewSnapshotStore(cfg MySQLConfig) (*SnapshotStore, error) {
 }
 
 func (s *SnapshotStore) ensureTables() error {
+	// 单调递增主键(自增)在 TiDB 默认聚簇表下是写热点,按全局数据层决策 §D3 处方
+	// 用 /*T!*/ 双方言注释声明 NONCLUSTERED + SHARD_ROW_ID_BITS 打散;
+	// MySQL 把注释当普通注释忽略,同一份 DDL 两种后端都能跑。
 	ddl := []string{
 		`CREATE TABLE IF NOT EXISTS player_snapshot (
-			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			player_id BIGINT UNSIGNED NOT NULL,
 			zone_id INT UNSIGNED NOT NULL DEFAULT 0,
 			snapshot_type INT UNSIGNED NOT NULL DEFAULT 0,
@@ -105,11 +108,12 @@ func (s *SnapshotStore) ensureTables() error {
 			reason VARCHAR(512) NOT NULL DEFAULT '',
 			operator VARCHAR(128) NOT NULL DEFAULT '',
 			data LONGBLOB,
+			PRIMARY KEY (id) /*T![clustered_index] NONCLUSTERED */,
 			INDEX idx_player_created (player_id, created_at),
 			INDEX idx_zone_created (zone_id, created_at)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */`,
 		`CREATE TABLE IF NOT EXISTS rollback_audit_log (
-			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+			id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
 			player_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
 			zone_id INT UNSIGNED NOT NULL DEFAULT 0,
 			rollback_type INT UNSIGNED NOT NULL DEFAULT 0,
@@ -121,8 +125,9 @@ func (s *SnapshotStore) ensureTables() error {
 			orphans_cleaned INT UNSIGNED NOT NULL DEFAULT 0,
 			reason VARCHAR(512) NOT NULL DEFAULT '',
 			operator VARCHAR(128) NOT NULL DEFAULT '',
-			created_at BIGINT UNSIGNED NOT NULL
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
+			created_at BIGINT UNSIGNED NOT NULL,
+			PRIMARY KEY (id) /*T![clustered_index] NONCLUSTERED */
+		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */`,
 	}
 
 	for _, stmt := range ddl {

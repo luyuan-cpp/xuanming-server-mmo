@@ -11,7 +11,6 @@ using grpc::ClientContext;
 using grpc::Status;
 using grpc::ClientAsyncResponseReader;
 
-namespace  {
 using dbStubPtr = std::unique_ptr<db::Stub>;
 #pragma region dbTest
 
@@ -36,5 +35,3 @@ void SetDbHandler(const std::function<void(const ClientContext&, const ::google:
 void SetDbIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void HandleDbCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 void InitDbGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
-
-}// namespace 

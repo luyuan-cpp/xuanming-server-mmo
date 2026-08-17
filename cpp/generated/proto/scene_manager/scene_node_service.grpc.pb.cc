@@ -26,6 +26,8 @@ static const char* SceneNodeGrpc_method_names[] = {
   "/scene_node.SceneNodeGrpc/CreateScene",
   "/scene_node.SceneNodeGrpc/DestroyScene",
   "/scene_node.SceneNodeGrpc/ReleasePlayer",
+  "/scene_node.SceneNodeGrpc/PrepareBattle",
+  "/scene_node.SceneNodeGrpc/CancelBattlePrepare",
 };
 
 std::unique_ptr< SceneNodeGrpc::Stub> SceneNodeGrpc::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -38,6 +40,8 @@ SceneNodeGrpc::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& chan
   : channel_(channel), rpcmethod_CreateScene_(SceneNodeGrpc_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_DestroyScene_(SceneNodeGrpc_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_ReleasePlayer_(SceneNodeGrpc_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_PrepareBattle_(SceneNodeGrpc_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_CancelBattlePrepare_(SceneNodeGrpc_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status SceneNodeGrpc::Stub::CreateScene(::grpc::ClientContext* context, const ::CreateSceneRequest& request, ::CreateSceneResponse* response) {
@@ -109,6 +113,52 @@ void SceneNodeGrpc::Stub::async::ReleasePlayer(::grpc::ClientContext* context, c
   return result;
 }
 
+::grpc::Status SceneNodeGrpc::Stub::PrepareBattle(::grpc::ClientContext* context, const ::PrepareBattleRequest& request, ::PrepareBattleResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::PrepareBattleRequest, ::PrepareBattleResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_PrepareBattle_, context, request, response);
+}
+
+void SceneNodeGrpc::Stub::async::PrepareBattle(::grpc::ClientContext* context, const ::PrepareBattleRequest* request, ::PrepareBattleResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::PrepareBattleRequest, ::PrepareBattleResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_PrepareBattle_, context, request, response, std::move(f));
+}
+
+void SceneNodeGrpc::Stub::async::PrepareBattle(::grpc::ClientContext* context, const ::PrepareBattleRequest* request, ::PrepareBattleResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_PrepareBattle_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::PrepareBattleResponse>* SceneNodeGrpc::Stub::PrepareAsyncPrepareBattleRaw(::grpc::ClientContext* context, const ::PrepareBattleRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::PrepareBattleResponse, ::PrepareBattleRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_PrepareBattle_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::PrepareBattleResponse>* SceneNodeGrpc::Stub::AsyncPrepareBattleRaw(::grpc::ClientContext* context, const ::PrepareBattleRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncPrepareBattleRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status SceneNodeGrpc::Stub::CancelBattlePrepare(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest& request, ::Empty* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::CancelBattlePrepareRequest, ::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_CancelBattlePrepare_, context, request, response);
+}
+
+void SceneNodeGrpc::Stub::async::CancelBattlePrepare(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest* request, ::Empty* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::CancelBattlePrepareRequest, ::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_CancelBattlePrepare_, context, request, response, std::move(f));
+}
+
+void SceneNodeGrpc::Stub::async::CancelBattlePrepare(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_CancelBattlePrepare_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::Empty>* SceneNodeGrpc::Stub::PrepareAsyncCancelBattlePrepareRaw(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::Empty, ::CancelBattlePrepareRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_CancelBattlePrepare_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::Empty>* SceneNodeGrpc::Stub::AsyncCancelBattlePrepareRaw(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncCancelBattlePrepareRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 SceneNodeGrpc::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       SceneNodeGrpc_method_names[0],
@@ -140,6 +190,26 @@ SceneNodeGrpc::Service::Service() {
              ::Empty* resp) {
                return service->ReleasePlayer(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      SceneNodeGrpc_method_names[3],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< SceneNodeGrpc::Service, ::PrepareBattleRequest, ::PrepareBattleResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](SceneNodeGrpc::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::PrepareBattleRequest* req,
+             ::PrepareBattleResponse* resp) {
+               return service->PrepareBattle(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      SceneNodeGrpc_method_names[4],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< SceneNodeGrpc::Service, ::CancelBattlePrepareRequest, ::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](SceneNodeGrpc::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::CancelBattlePrepareRequest* req,
+             ::Empty* resp) {
+               return service->CancelBattlePrepare(ctx, req, resp);
+             }, this)));
 }
 
 SceneNodeGrpc::Service::~Service() {
@@ -160,6 +230,20 @@ SceneNodeGrpc::Service::~Service() {
 }
 
 ::grpc::Status SceneNodeGrpc::Service::ReleasePlayer(::grpc::ServerContext* context, const ::scene_node::ReleasePlayerRequest* request, ::Empty* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status SceneNodeGrpc::Service::PrepareBattle(::grpc::ServerContext* context, const ::PrepareBattleRequest* request, ::PrepareBattleResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status SceneNodeGrpc::Service::CancelBattlePrepare(::grpc::ServerContext* context, const ::CancelBattlePrepareRequest* request, ::Empty* response) {
   (void) context;
   (void) request;
   (void) response;

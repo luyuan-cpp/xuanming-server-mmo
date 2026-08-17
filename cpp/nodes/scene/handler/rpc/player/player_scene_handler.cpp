@@ -16,6 +16,7 @@
 #include "network/player_message_utils.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "player/system/player_scene.h"
+#include "battle/system/player_battle.h"
 ///<<< END WRITING YOUR CODE
 
 void SceneSceneClientPlayerHandler::EnterScene(entt::entity player,const ::EnterSceneC2SRequest* request,
@@ -32,6 +33,15 @@ void SceneSceneClientPlayerHandler::EnterScene(entt::entity player,const ::Enter
 	{
 		LOG_ERROR << "EnterSceneC2S request rejected due to server type: " << game_node_type;
 		response->mutable_error_message()->set_id(kEnterSceneServerType);
+		return;
+	}
+
+	// 回合制战斗冻结拦截:战斗在途拒绝切场景(含镜像分支;设计文档 §5.3 冻结清单)。
+	// 结算落地摘除 InBattleComp 前,玩家必须留在当前场景节点接收结算事件。
+	if (PlayerBattleSystem::IsInBattle(player))
+	{
+		LOG_WARN << "[PlayerBattle] EnterSceneC2S 被拒: 玩家战斗在途, player_id=" << (g ? *g : 0);
+		response->mutable_error_message()->set_id(kEnterSceneFailed);
 		return;
 	}
 

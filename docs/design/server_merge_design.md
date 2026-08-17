@@ -3,6 +3,7 @@
 > **文档状态**: v1 — 2026-05-15
 > **范围**: 把散落在 `tools/merge_zone/main.go`、`mmo_cross_server_architecture.md §9`、`guild_ranking_architecture.md §合服工具`、`enter-scene-zone-routing.md §50` 的合服知识收口为单一权威来源。
 > **读者**: 运维、客服总监、新接手的 AI / 工程师。
+> **修订(2026-08-15)**: 全区全服数据层落地后(见 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) §D7),合服从"跨库搬数据"收敛为"`RemapHomeZoneForMerge` 改逻辑归属 + 业务数据合并",`tools/merge_zone` 职责相应收缩;Phase 2 之前本文流程仍是权威。
 
 ---
 

@@ -30,6 +30,7 @@ enum eNodeType {
 	SceneManagerNodeService = 25; // Scene manager service (Go-Zero)
 	DataServiceNodeService  = 26; // Cross-server data proxy service (Go-Zero)
 	FriendNodeService       = 27; // Friend system service (Go-Zero)
+	BattleNodeService       = 28; // 回合制战斗节点(gRPC,全局池,不分 zone)
 };
 
 enum eSceneNodeType

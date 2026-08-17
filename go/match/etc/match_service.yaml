@@ -1,0 +1,55 @@
+Name: matchservice.rpc
+ListenOn: 127.0.0.1:50500
+Timeout: 5000
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  Key: matchservice.rpc
+Redis:
+  Host: 127.0.0.1:6379
+  Type: node
+  Key: matchservice
+
+# C++ 约定 etcd 注册用的 zone id(gate 按 MatchNodeService.rpc/zone/{zone} 发现本服务)。
+ZoneId: 1
+
+# etcd 节点注册 keepalive 的租约 TTL(秒)。
+LeaseTTL: 60
+
+Kafka:
+  Brokers:
+    - 127.0.0.1:9092
+
+# 挑战邀请/结果 S2C 走 Kafka gate-{id} 推送时 writer 侧的一次同步 produce 超时(秒)。
+KafkaWriteTimeoutSeconds: 5
+
+# matcher loop 扫队列的间隔(毫秒)。
+MatcherIntervalMs: 500
+
+# 每个 (mode, battle_config_id) 队列凑单临界区的 Redis 锁 TTL(秒)。
+# 多实例部署时拿不到锁的实例跳过本轮,锁只保护弹出成组这一小段。
+MatcherLockTTLSeconds: 10
+
+# 战斗最长时限(秒)。gather 把 now + 该值作为 deadline_ms 下发给
+# scene(InBattleComp 作废期限)与 battle(强制收尾期限)。
+BattleMaxDurationSeconds: 300
+
+# 场景发起 PK(切磋)记录的 TTL(秒),超时未应答自动作废(设计文档 §3.1b)。
+ChallengeTTLSeconds: 60
+
+# 排队 ticket 的兜底 TTL(秒)。正常路径由取消/开战删除,TTL 只挡异常残留。
+TicketTTLSeconds: 21600
+
+# 开局成功后 ticket 停留在 READY 态的 TTL(秒),过期即视为 NOT_QUEUED
+# (战斗内状态由 battle:lock / InBattleComp 权威表达,不再看 ticket)。
+ReadyTicketTTLSeconds: 60
+
+# PVE 组队各 battle_config_id(DungeonTable id)的凑满人数。
+# ⚠ 一期临时配置:人数的权威来源是 DungeonTable.max_team_size,Go 侧尚无表管理器,
+# 待接导表数据后删除本段改为查表(见设计文档 §5.4)。yaml map 键必须是字符串。
+PveTeamSizeByConfigId:
+  "1": 3
+
+# Prometheus /metrics 端口。9101=login / 9150=scene_manager / 9160=db 已占,match 用 9170。
+# 置空可关闭。
+MetricsListenAddr: ":9170"
