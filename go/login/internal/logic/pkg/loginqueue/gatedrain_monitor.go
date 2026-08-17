@@ -7,7 +7,13 @@ import (
 
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
+
+	"shared/safego"
 )
+
+// drainMonitorPoint 是排空判定循环的 safego 点位名。
+// 它会直接变成 Prometheus label,所以必须是常量,不能拼运行期值。
+const drainMonitorPoint = "login.gate_drain_monitor"
 
 // gate 排空的第 2/3 步:等在线掉下去,然后判定"现在缩容是安全的"。
 //
@@ -171,7 +177,9 @@ func StartGateDrainMonitor(
 		return
 	}
 
-	go func() {
+	// safego 而不是裸 go func:排空判定炸一轮不该带走整个 login 进程,
+	// 也不该让循环从此静默停摆(那会让缩容中的 gate 永远不被标记)。
+	safego.Go(drainMonitorPoint, func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		logx.Infof("[GateDrain] monitor started: interval=%s drained_below=%d deadline=%ds",
@@ -183,13 +191,15 @@ func StartGateDrainMonitor(
 				logx.Info("[GateDrain] monitor stopped")
 				return
 			case <-ticker.C:
-				gates, err := snapshot(ctx)
-				if err != nil {
-					logx.Errorf("[GateDrain] gate snapshot failed: %v", err)
-					continue
-				}
-				EvaluateDrainingGates(ctx, rdb, gates, policy, time.Now().Unix())
+				safego.Run(drainMonitorPoint, func() {
+					gates, err := snapshot(ctx)
+					if err != nil {
+						logx.Errorf("[GateDrain] gate snapshot failed: %v", err)
+						return
+					}
+					EvaluateDrainingGates(ctx, rdb, gates, policy, time.Now().Unix())
+				})
 			}
 		}
-	}()
+	})
 }

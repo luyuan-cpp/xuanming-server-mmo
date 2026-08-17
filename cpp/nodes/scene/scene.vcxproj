@@ -68,10 +68,19 @@
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
+  <!--
+    F5 必须从 bin\ 启动,且跑的是 bin\scene.exe 而不是 OutDir 里的产物。
+    配置路径是硬编码的相对路径("etc/base_deploy_config.yaml",见 node.cpp),而
+    YAML::LoadFile 没有 try/catch —— 工作目录不对就抛 YAML::BadFile 穿出 main,
+    std::terminate,**一行日志都不会有**。gate.vcxproj 一直配着这三项,scene 漏了。
+  -->
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <OutDir>../../../build/cpp/nodes/</OutDir>
     <IntDir>../../../build/cpp/intermediate/nodes/$(ProjectName)/</IntDir>
     <GenerateManifest>false</GenerateManifest>
+    <LocalDebuggerCommand>$(ProjectDir)..\..\..\bin\scene.exe</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\..\bin</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <GenerateManifest>false</GenerateManifest>
@@ -81,10 +90,13 @@
     <IntDir>../../../build/cpp/intermediate/nodes/$(ProjectName)/</IntDir>
     <GenerateManifest>false</GenerateManifest>
     <LinkIncremental>false</LinkIncremental>
+    <LocalDebuggerCommand>$(ProjectDir)..\..\..\bin\scene.exe</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\..\bin</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/zlib/;../../../third_party/redis/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;../../../third_party/grpc/include/;../../../third_party/spdlog/include/;../../generated/;../../libs/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../../third_party/xxhash/;../../../third_party/librdkafka/src-cpp/;../../libs/engine/core/;../../libs/engine/;../../libs/engine/infra/;../../libs/engine/modules/;./;../../libs/engine/config/;../../../third_party/ue5navmesh/Public/;../../libs/services/scene/;../../libs/services/player/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/zlib/;../../../third_party/redis/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;../../../third_party/grpc/include/;../../../third_party/spdlog/include/;../../generated/;../../libs/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../../third_party/xxhash/;../../../third_party/librdkafka/src-cpp/;../../libs/engine/core/;../../libs/engine/;../../libs/engine/infra/;../../libs/engine/modules/;./;../../libs/engine/config/;../../../third_party/ue5navmesh/Public/;../../libs/services/scene/;../../libs/services/player/;../../../third_party/grpc/third_party/boringssl-with-bazel/include/;../../../third_party/openssl/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;NOMINMAX;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;YAML_CPP_STATIC_DEFINE</PreprocessorDefinitions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <DisableSpecificWarnings>4200;4819;4146;4244;4267;4018;</DisableSpecificWarnings>
@@ -123,7 +135,7 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
-      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/zlib/;../../../third_party/redis/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;../../../third_party/grpc/include/;../../../third_party/spdlog/include/;../../generated/;../../libs/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../../third_party/xxhash/;../../../third_party/librdkafka/src-cpp/;../../libs/engine/core/;../../libs/engine/;../../libs/engine/infra/;../../libs/engine/modules/;./;../../libs/engine/config/;../../../third_party/ue5navmesh/Public/;../../libs/services/scene/;../../libs/services/player/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/zlib/;../../../third_party/redis/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;../../../third_party/grpc/include/;../../../third_party/spdlog/include/;../../generated/;../../libs/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../../third_party/xxhash/;../../../third_party/librdkafka/src-cpp/;../../libs/engine/core/;../../libs/engine/;../../libs/engine/infra/;../../libs/engine/modules/;./;../../libs/engine/config/;../../../third_party/ue5navmesh/Public/;../../libs/services/scene/;../../libs/services/player/;../../../third_party/grpc/third_party/boringssl-with-bazel/include/;../../../third_party/openssl/include/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;NOMINMAX;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;YAML_CPP_STATIC_DEFINE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
       <DisableSpecificWarnings>4200;4819;4146;4244;4267;4018;</DisableSpecificWarnings>

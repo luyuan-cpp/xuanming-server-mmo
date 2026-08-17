@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
+
+	"shared/safego"
 )
 
 type RedisLocker struct {
@@ -116,7 +118,9 @@ func (l *Lock) StartHeartbeat(interval time.Duration, ttl time.Duration, onLost 
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
 
-	go func() {
+	// safego:心跳 goroutine panic 掉整个进程,会把所有在线玩家一起带走。
+	// `defer close(doneCh)` 在 panic 展开时照样执行,所以 stop() 不会挂住。
+	safego.Go("login.player_lock_heartbeat", func() {
 		defer close(doneCh)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -141,7 +145,7 @@ func (l *Lock) StartHeartbeat(interval time.Duration, ttl time.Duration, onLost 
 				}
 			}
 		}
-	}()
+	})
 
 	return func() {
 		select {

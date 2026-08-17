@@ -66,6 +66,11 @@ class ExporterConfig:
     template_dir: Path = field(default_factory=Path)
     config_root: Path = field(default_factory=Path)
 
+    # 位序状态从空初始化的开关。**只能由命令行 --bitindex-bootstrap 打开**,
+    # 刻意不放进 yaml:配置文件里一旦写上就等于永久关掉了位序状态的 fail-closed 保护
+    # (见 core/generators/bit_index_gen.py 的红线说明)。
+    bit_index_bootstrap: bool = False
+
 
 def _resolve(base: Path, raw: Any) -> Path:
     if raw is None:

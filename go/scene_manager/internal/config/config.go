@@ -161,6 +161,22 @@ type Config struct {
 	// 设计文档:docs/design/world-channel-autoscale.md。
 	WorldAutoscale WorldAutoscaleConfig `json:",optional"`
 
+	// SceneReentryBarrierSeconds: 节点判死之后,SceneManager 允许把它名下的
+	// 场景改派/销毁/清理之前必须等待的秒数。0(默认)= 用
+	// constants.SceneReentryBarrier(= C++ drain 预算 + 时钟余量)。
+	//
+	// 这个值**只能调高不能调低**:它对应的是 C++ 老节点丢租约后仍在
+	// SavePlayerToRedis 的那段 drain,调低等于把双写窗口重新打开。低于安全
+	// 下限的配置会在启动时被钳回下限并打一条 Error 日志。
+	// 只有在 C++ 侧真的把 kDrainBudget 调大之后,才需要在这里跟着调。
+	SceneReentryBarrierSeconds int64 `json:",optional"`
+
+	// KillSwitchPrefix: RPC 级热关停规则在 etcd 里的前缀(shared/killswitch)。
+	// 留空即用 killswitch.DefaultPrefix(/mmorpg/killswitch/)—— 这是安全默认值:
+	// 前缀下没有任何 key 就是全部放行。只有多套环境共用一个 etcd 集群、需要各自
+	// 独立的止血阀时才需要改它。
+	KillSwitchPrefix string `json:",optional"`
+
 	// CleanupOrphanChannelsOnStartup: when true (default), SceneManager
 	// scans Redis on fullSync for world_channels:* sets whose confId is
 	// not in World.json and deletes them. This removes drift left by

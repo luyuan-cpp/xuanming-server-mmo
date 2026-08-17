@@ -9,6 +9,7 @@ require (
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.10.0
+	go.etcd.io/etcd/client/v3 v3.5.15
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
 	proto v0.0.0-00010101000000-000000000000
@@ -59,7 +60,6 @@ require (
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.15 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.15 // indirect
-	go.etcd.io/etcd/client/v3 v3.5.15 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/otel v1.39.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0 // indirect

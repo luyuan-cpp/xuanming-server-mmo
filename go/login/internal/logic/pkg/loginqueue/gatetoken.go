@@ -196,7 +196,25 @@ func signQueueToken(secret []byte, queueID string, zoneID uint32, expireTS int64
 // slower than the TTL". Note we record under zone=unknown when we can't
 // parse the body (signature mismatch before unmarshalling); for TTL
 // rejection we have the real zoneID.
+//
+// 单密钥版本,保留给测试与不涉及轮换的调用方;生产路径请用
+// ParseAndVerifyQueueTokenMulti,它在密钥轮换期能同时认新旧 token。
 func ParseAndVerifyQueueToken(secret []byte, token string) (queueID string, zoneID uint32, err error) {
+	return ParseAndVerifyQueueTokenMulti([][]byte{secret}, token)
+}
+
+// ParseAndVerifyQueueTokenMulti 依次用给定的候选密钥校验排队 token。
+//
+// 候选顺序是「主密钥在前,只验不签的旧密钥在后」。三段式不停服轮换靠的就是
+// 这个列表:新密钥先进候选(所有实例都能验旧 token),再提升为主密钥开始签,
+// 最后把旧密钥从候选里摘掉。任意一步都能单独滚动发布。
+//
+// 候选为空 = 密钥没配好,一律拒绝(fail-closed),绝不当成「无需校验」。
+func ParseAndVerifyQueueTokenMulti(secrets [][]byte, token string) (queueID string, zoneID uint32, err error) {
+	if len(secrets) == 0 {
+		recordExpired(0, ExpireReasonBadSignature)
+		return "", 0, fmt.Errorf("queue token secret not configured")
+	}
 	raw, err := base64.RawURLEncoding.DecodeString(token)
 	if err != nil {
 		recordExpired(0, ExpireReasonBadSignature)
@@ -215,8 +233,17 @@ func ParseAndVerifyQueueToken(secret []byte, token string) (queueID string, zone
 	}
 	bodyBytes := raw[:dot]
 	sig := raw[dot+1:]
-	expected := hmacHex(secret, bodyBytes)
-	if !hmac.Equal(sig, expected) {
+	// 不短路:命中后继续把剩下的密钥算完,免得从耗时差反推出命中的是哪一把。
+	matched := false
+	for _, secret := range secrets {
+		if len(secret) == 0 {
+			continue
+		}
+		if hmac.Equal(sig, hmacHex(secret, bodyBytes)) {
+			matched = true
+		}
+	}
+	if !matched {
 		recordExpired(0, ExpireReasonBadSignature)
 		return "", 0, fmt.Errorf("queue token signature mismatch")
 	}

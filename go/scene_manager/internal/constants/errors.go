@@ -35,4 +35,10 @@ const (
 	// ErrEnterSceneIdempotencyConflict: 同一玩家复用了 request_id，但请求内容
 	// 与首个请求不同。不得重放旧路由/redirect，也不得覆盖正在执行的 owner。
 	ErrEnterSceneIdempotencyConflict uint32 = 16
+	// ErrSceneReentryBarrier: 场景当前映射的节点刚被判死,但再入屏障(见
+	// reentry_barrier.go)还没走完 —— 老节点可能仍在 emergency relocate drain
+	// 里 SavePlayerToRedis。此刻改派会造成同一玩家双写/回档,所以本次请求
+	// **一个字节都不改**地拒绝,由上游带着同样的 scene_conf_id 退避重试。
+	// 这是可重试的瞬时拒绝,不是故障。
+	ErrSceneReentryBarrier uint32 = 17
 )

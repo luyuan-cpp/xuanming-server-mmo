@@ -72,7 +72,16 @@ run/*
 bin/*.txt
 
 # Legacy sa_token log (held open by Java; new writes go to run/logs/sa_token.log)
-bin/logs/
+# 用 bin/logs/* 而不是 bin/logs/:被排除的是**目录**时,git 不允许再用 ! 放行
+# 里面的文件,下面那条 .gitkeep 会失效。
+bin/logs/*
+# 但 cpp_nodes 这个目录本身必须存在:muduo 的 AsyncLogging 用 fopen("a"),不会
+# 创建中间目录,缺了就在 FileUtil::AppendFile 的 assert(fp_) 直接 abort ——
+# 而且是一行日志都没有的那种崩。cpp_nodes.ps1 启动前会预建,但从 Visual Studio
+# 按 F5、或者手工 cd bin 跑 exe 时没人替你建。所以把空目录留在版本库里。
+!bin/logs/cpp_nodes/
+bin/logs/cpp_nodes/*
+!bin/logs/cpp_nodes/.gitkeep
 
 # Python
 *.pyc

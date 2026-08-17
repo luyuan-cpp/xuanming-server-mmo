@@ -24,6 +24,8 @@ import (
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
+
+	"shared/snowflake"
 )
 
 const testEtcdEndpoint = "127.0.0.1:2379"
@@ -383,5 +385,141 @@ func TestOwnershipLostWhenAnotherHostTakesOver(t *testing.T) {
 	}
 	if ttlResp.TTL <= 0 {
 		t.Logf("注意:受害者 lease 已过期(TTL=%d),本次未能覆盖'lease 仍活着'那一支", ttlResp.TTL)
+	}
+}
+
+// TestGuardWatermarkCoversMintingFromTheFirstID:持久水位的契约是
+// "**任何时刻**已持久化的水位 ≥ 本进程可能发到的最大逻辑秒"。
+//
+// 破坏它的两种写法(本用例都要挡住):
+//
+//	① 只在 ticker 上写、启动时不写 → 从 NewNode() 到第一个 tick 之间已在发号,
+//	   etcd 里却还是前任的旧水位,这段号没有任何地板覆盖;
+//	② 写"当前值"而不前推 → 两次写入之间发出的号超过已持久化水位,同样没覆盖。
+//
+// 一旦此刻崩溃且继任者时钟回拨到该区间,就会重放这些号。
+func TestGuardWatermarkCoversMintingFromTheFirstID(t *testing.T) {
+	cli := newTestClient(t)
+	defer cli.Close()
+	prefix := uniquePrefix(t)
+	defer cleanupPrefix(t, cli, prefix)
+
+	hd, err := AllocateWithKeepAlive(context.Background(), cli, prefix, "host-A", Options{LeaseTTL: 30})
+	if err != nil {
+		t.Fatalf("alloc: %v", err)
+	}
+	defer hd.Close()
+
+	// 交出发号器的那一刻,水位就必须已经落盘(NewNode 内同步写)。
+	node := hd.NewNode()
+	persisted, err := readGuard(context.Background(), cli, prefix, hd.WorkerID)
+	if err != nil {
+		t.Fatalf("read guard right after NewNode: %v", err)
+	}
+	if persisted == 0 {
+		t.Fatal("NewNode 返回时水位仍为 0:启动到首个 tick 之间发出的号没有任何地板覆盖")
+	}
+
+	// 立刻发一批号(模拟"刚启动就来请求"),每一个的逻辑秒都必须 ≤ 已落盘的水位。
+	for i := 0; i < 200; i++ {
+		id, gerr := node.Generate()
+		if gerr != nil {
+			t.Fatalf("generate: %v", gerr)
+		}
+		if sec := id >> (snowflake.NodeBits + snowflake.StepBits); sec > persisted {
+			t.Fatalf("第 %d 个号的逻辑秒 %d 超出已持久化水位 %d:继任者的地板罩不住它", i, sec, persisted)
+		}
+	}
+
+	// 前推量必须 > 写入间隔,否则两次写入之间的号会越过水位。
+	if time.Duration(guardLeadSec)*time.Second <= guardWriteInterval {
+		t.Fatalf("guardLeadSec=%ds 必须大于写入间隔 %v", guardLeadSec, guardWriteInterval)
+	}
+}
+
+// TestGuardWatermarkNeverGoesBackwardUnderConcurrency:水位**只能单调前进**。
+//
+// advanceGuard 有两个并发调用方:NewNode() 的同步首写(调用方协程)与 keepalive
+// goroutine 的 tick,而 goroutine 在 NewNode() 之前就已启动。若不串行:
+//
+//	① 对已写水位的读改写是数据竞争;
+//	② 更致命的是两次 Put 可能**乱序落盘** —— 先算出小值的那个协程若在 Put 上被
+//	   调度延迟,会把后写的大值覆盖回小值。水位一旦倒退,继任者的地板就罩不住
+//	   前任已发出的号,整套机制归零。
+//
+// 本用例并发轰 advanceGuard 并持续回读,断言持久值从不减小。
+func TestGuardWatermarkNeverGoesBackwardUnderConcurrency(t *testing.T) {
+	cli := newTestClient(t)
+	defer cli.Close()
+	prefix := uniquePrefix(t)
+	defer cleanupPrefix(t, cli, prefix)
+
+	hd, err := AllocateWithKeepAlive(context.Background(), cli, prefix, "host-A", Options{LeaseTTL: 30})
+	if err != nil {
+		t.Fatalf("alloc: %v", err)
+	}
+	defer hd.Close()
+	hd.NewNode()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+
+	// 写者:多协程并发推进水位(叠加 keepalive goroutine 自己的 tick)。
+	for i := 0; i < 8; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+				hd.advanceGuard(ctx)
+			}
+		}()
+	}
+
+	// 读者:持续回读持久值,一旦发现减小立即判失败。
+	var readErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var prev uint64
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			got, rerr := readGuard(context.Background(), cli, prefix, hd.WorkerID)
+			if rerr != nil {
+				continue // etcd 抖动不算失败,本用例只盯单调性
+			}
+			if got < prev {
+				readErr = fmt.Errorf("水位倒退:%d → %d(并发 Put 乱序落盘,继任者地板将罩不住前任的号)", prev, got)
+				return
+			}
+			prev = got
+		}
+	}()
+
+	time.Sleep(2 * time.Second)
+	cancel()
+	wg.Wait()
+
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	// 收尾:内存里记的"已落盘水位"必须与 etcd 实际值一致。
+	final, err := readGuard(context.Background(), cli, prefix, hd.WorkerID)
+	if err != nil {
+		t.Fatalf("final read: %v", err)
+	}
+	hd.guardMu.Lock()
+	written := hd.guardWritten
+	hd.guardMu.Unlock()
+	if final != written {
+		t.Fatalf("持久值 %d 与内存记录 %d 不一致", final, written)
 	}
 }

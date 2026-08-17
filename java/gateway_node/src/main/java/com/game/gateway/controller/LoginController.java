@@ -3,6 +3,7 @@ package com.game.gateway.controller;
 import com.game.gateway.dto.LoginRequest;
 import com.game.gateway.dto.LoginResponse;
 import com.game.gateway.ratelimit.AssignGateRateLimiter;
+import com.game.gateway.ratelimit.ClientIpResolver;
 import com.game.gateway.ratelimit.RateLimitDecision;
 import com.game.gateway.service.LoginService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -34,15 +35,18 @@ public class LoginController {
 
     private final LoginService loginService;
     private final AssignGateRateLimiter limiter;
+    private final ClientIpResolver ipResolver;
 
-    public LoginController(LoginService loginService, AssignGateRateLimiter limiter) {
+    public LoginController(LoginService loginService, AssignGateRateLimiter limiter,
+                           ClientIpResolver ipResolver) {
         this.loginService = loginService;
         this.limiter = limiter;
+        this.ipResolver = ipResolver;
     }
 
     @PostMapping("/login")
     public LoginResponse login(@RequestBody LoginRequest req, HttpServletRequest http) {
-        String ip = extractIp(http);
+        String ip = ipResolver.resolve(http);
         String account = effectiveAccount(req);
 
         // cooldownScope="login":与 /api/assign-gate 的账号冷却隔离,否则
@@ -56,21 +60,6 @@ public class LoginController {
         }
 
         return loginService.login(req);
-    }
-
-    /**
-     * Best-effort client-IP extraction. Order matters: we honor X-Forwarded-For
-     * only when the gateway is behind a trusted ingress (set via
-     * {@code server.forward-headers-strategy=native}). Without that, fall back
-     * to the socket peer.
-     */
-    static String extractIp(HttpServletRequest http) {
-        String xff = http.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) {
-            int comma = xff.indexOf(',');
-            return (comma > 0 ? xff.substring(0, comma) : xff).trim();
-        }
-        return http.getRemoteAddr();
     }
 
     /** For third-party auth the proto's {@code account} field is empty; use auth_token as the cooldown key. */

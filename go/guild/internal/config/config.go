@@ -8,14 +8,20 @@ import (
 
 type Config struct {
 	zrpc.RpcServerConf
-	RedisClient       RedisConf    `json:"RedisClient"`
-	PlayerLocatorRedis RedisConf   `json:"PlayerLocatorRedis"`
-	MySQL             MySQLConf    `json:"MySQL"`
-	Node              NodeConf     `json:"Node"`
-	Registry          RegistryConf `json:"Registry"`
-	Cache             CacheConf    `json:"Cache"`
-	Kafka             KafkaConf    `json:"Kafka"`
-	TableDir          string       `json:",default=../../generated/tables"`
+	RedisClient        RedisConf    `json:"RedisClient"`
+	PlayerLocatorRedis RedisConf    `json:"PlayerLocatorRedis"`
+	MySQL              MySQLConf    `json:"MySQL"`
+	Node               NodeConf     `json:"Node"`
+	Registry           RegistryConf `json:"Registry"`
+	Cache              CacheConf    `json:"Cache"`
+	Kafka              KafkaConf    `json:"Kafka"`
+	TableDir           string       `json:",default=../../generated/tables"`
+
+	// KillSwitchPrefix 是 RPC 级热关停规则在 etcd 里的前缀(shared/killswitch)。
+	// 留空即用 killswitch.DefaultPrefix(/mmorpg/killswitch/)—— 这是安全默认值:
+	// 前缀下没有任何 key 就是全部放行。只有多套环境共用一个 etcd 集群、需要各自
+	// 独立的止血阀时才需要改它。
+	KillSwitchPrefix string `json:"KillSwitchPrefix,optional"`
 }
 
 type RedisConf struct {

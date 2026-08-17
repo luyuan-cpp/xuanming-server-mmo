@@ -15,6 +15,12 @@ type Config struct {
 	Lease           LeaseConf          `json:"Lease"`
 	TableDir        string             `json:",default=../../generated/tables"`
 	SceneManagerRpc zrpc.RpcClientConf `json:"SceneManagerRpc"` // SceneManager gRPC client (via etcd)
+
+	// KillSwitchPrefix 是 RPC 级热关停规则在 etcd 里的前缀(shared/killswitch)。
+	// 留空即用 killswitch.DefaultPrefix(/mmorpg/killswitch/)—— 这是安全默认值:
+	// 前缀下没有任何 key 就是全部放行。只有多套环境共用一个 etcd 集群、需要各自
+	// 独立的止血阀时才需要改它。
+	KillSwitchPrefix string `json:"KillSwitchPrefix,optional"`
 }
 
 type RedisConf struct {

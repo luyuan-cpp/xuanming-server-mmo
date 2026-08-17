@@ -129,6 +129,15 @@ RebalanceCheckIntervalSeconds: 300
 # only if you share a Redis cluster across incompatible World.json versions.
 CleanupOrphanChannelsOnStartup: true
 
+# RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
+# 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。
+# 关停某个方法:etcdctl put /mmorpg/killswitch/scene_manager.SceneManager/EnterScene '{"deny":true,"reason":"..."}'
+# 关停整个服务:etcdctl put /mmorpg/killswitch/scene_manager.SceneManager/'*' true
+# 恢复:etcdctl del 对应的 key。
+# ⚠️ 它只挡 gRPC 入口:load_reporter / world_autoscale 的后台 ticker 也会建场景,
+# 关掉 CreateScene 不等于"没有场景再被创建"。
+KillSwitchPrefix: ""
+
 # --- Observability ------------------------------------------------------------
 #
 # Prometheus /metrics endpoint. Leave empty to disable (dev default). In

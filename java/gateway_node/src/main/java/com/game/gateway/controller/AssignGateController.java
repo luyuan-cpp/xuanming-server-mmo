@@ -3,6 +3,7 @@ package com.game.gateway.controller;
 import com.game.gateway.dto.AssignGateRequest;
 import com.game.gateway.dto.AssignGateResponse;
 import com.game.gateway.ratelimit.AssignGateRateLimiter;
+import com.game.gateway.ratelimit.ClientIpResolver;
 import com.game.gateway.ratelimit.RateLimitDecision;
 import com.game.gateway.service.AssignGateService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -35,15 +36,18 @@ public class AssignGateController {
 
     private final AssignGateService assignGateService;
     private final AssignGateRateLimiter limiter;
+    private final ClientIpResolver ipResolver;
 
-    public AssignGateController(AssignGateService assignGateService, AssignGateRateLimiter limiter) {
+    public AssignGateController(AssignGateService assignGateService, AssignGateRateLimiter limiter,
+                                ClientIpResolver ipResolver) {
         this.assignGateService = assignGateService;
         this.limiter = limiter;
+        this.ipResolver = ipResolver;
     }
 
     @PostMapping("/assign-gate")
     public AssignGateResponse assignGate(@RequestBody AssignGateRequest req, HttpServletRequest http) {
-        String ip = LoginController.extractIp(http);
+        String ip = ipResolver.resolve(http);
         // Re-entry path (queue_token present) skips the limiter — the caller
         // is already in the queue and is just polling. Throttling them would
         // surface as a UX bug ("rank stops decreasing"). The queue itself

@@ -2403,6 +2403,16 @@ func TestDestroyScene_CascadesToMirrors(t *testing.T) {
 // Node-death reconciliation
 // ---------------------------------------------------------------------------
 
+// reconcileDeadNodeScenesForTest 复刻生产路径的两步:先抄一次
+// node:zone:{z}:{n}:scenes 快照(生产里由 enqueueDeadNodeReconcile 在判死那一刻
+// 抄),再在屏障过后做收尾。测试用它可以跳过屏障等待,只验证收尾逻辑本身。
+func reconcileDeadNodeScenesForTest(t *testing.T, sc *svc.ServiceContext, entry nodeEntry) {
+	t.Helper()
+	members, err := sc.Redis.Smembers(nodeScenesKey(entry.reg.ZoneId, entry.nodeID))
+	require.NoError(t, err)
+	reconcileDeadNodeScenes(context.Background(), sc, entry, members)
+}
+
 // TestReconcileDeadNode_DestroysOrphanInstances verifies the sweep run
 // from removeNodeFromRedis walks node:zone:{zoneId}:{nodeId}:scenes and force-destroys
 // instance scenes whose mapping still points at the dead node.
@@ -2428,7 +2438,7 @@ func TestReconcileDeadNode_DestroysOrphanInstances(t *testing.T) {
 	entry.reg.ZoneId = testZoneId
 	entry.reg.SceneNodeType = constants.SceneNodeTypeInstance
 	mr.ZRem(nodeLoadKey(testZoneId), "10")
-	reconcileDeadNodeScenes(sc, entry)
+	reconcileDeadNodeScenesForTest(t, sc, entry)
 
 	// All orphan instances must be wiped.
 	for _, sid := range sceneIds {
@@ -2459,7 +2469,7 @@ func TestReconcileDeadNode_PreservesWorldChannels(t *testing.T) {
 	entry.reg.ZoneId = testZoneId
 	entry.reg.SceneNodeType = constants.SceneNodeTypeMainWorld
 	mr.ZRem(nodeLoadKey(testZoneId), "10")
-	reconcileDeadNodeScenes(sc, entry)
+	reconcileDeadNodeScenesForTest(t, sc, entry)
 
 	// World channels' scene:{id}:node mapping must still be there — the
 	// rebalance loop reassigns them; we do NOT destroy.
@@ -2483,7 +2493,7 @@ func TestReconcileDeadNode_SkipsReassignedScenes(t *testing.T) {
 
 	entry := nodeEntry{nodeID: "10"}
 	entry.reg.ZoneId = testZoneId
-	reconcileDeadNodeScenes(sc, entry)
+	reconcileDeadNodeScenesForTest(t, sc, entry)
 
 	nid, _ := sc.Redis.Get(fmt.Sprintf(SceneNodeKeyFmt, uint64(77)))
 	assert.Equal(t, "20", nid, "reassigned scene must survive the reconciliation sweep")
@@ -2798,7 +2808,7 @@ func TestReconcileDeadNode_DestroysCoLocatedMirrors(t *testing.T) {
 	entry.reg.ZoneId = testZoneId
 	entry.reg.SceneNodeType = constants.SceneNodeTypeInstance
 	mr.ZRem(nodeLoadKey(testZoneId), "10")
-	reconcileDeadNodeScenes(sc, entry)
+	reconcileDeadNodeScenesForTest(t, sc, entry)
 
 	for _, sid := range append([]uint64{parent.SceneId}, mirrorIds...) {
 		nid, _ := sc.Redis.Get(fmt.Sprintf(SceneNodeKeyFmt, sid))

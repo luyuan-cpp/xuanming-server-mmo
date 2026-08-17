@@ -56,6 +56,10 @@ struct SessionInfo
 	uint32_t pendingEnterGsType{0}; // Pending login type to forward to Scene once scene node is assigned
 	uint64_t sceneId{0};            // Scene instance GUID from SceneManager (RoutePlayerEvent)
 	bool verified{false};			// True after client passes Gate connection token verification
+	// True once Gate actually dispatches ClientPlayerLogin.Login to Login.
+	// Disconnect uses this to clean Login's session-id state without turning
+	// every verified-but-idle TCP close into a cross-service RPC.
+	bool loginStarted{false};
 
 	// Illegal-packet counter (todo.md #236). Increment whenever a packet is
 	// rejected by the gate's incoming validation chain (rate-limit exceeded,

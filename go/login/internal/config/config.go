@@ -20,9 +20,20 @@ type Config struct {
 	Kafka              KafkaConfig        `json:"Kafka"`
 	PlayerLocatorRpc   zrpc.RpcClientConf `json:"PlayerLocatorRpc"` // player_locator gRPC client
 	SceneManagerRpc    zrpc.RpcClientConf `json:"SceneManagerRpc"`  // scene_manager gRPC client
-	GateTokenSecret    string             `json:"GateTokenSecret"`  // HMAC secret for gate connection tokens
-	TableDir           string             `json:",default=../../generated/tables"`
-	AuthProviders      AuthConfig         `json:"AuthProviders,optional"` // Third-party auth provider config
+	// GateTokenSecret 已废弃:单个 string 无法不停服轮换,而且 gate token 与
+	// 排队 token 共用同一把密钥,信任域没拆。保留字段只为让 deploy/*.yaml 与
+	// tools/scripts/k8s_deploy.ps1 这些**仓外**部署产物在过渡期仍能起服
+	// (ResolveSecrets 会按兼容路径读它并打 WARN)。新配置请写 Secrets 块。
+	GateTokenSecret string `json:"GateTokenSecret,optional"`
+	// Secrets 是按用途隔离的 HMAC 密钥集合,支持三段式不停服轮换。
+	// 详见 secrets.go 的包注释。
+	Secrets SecretsConf `json:"Secrets,optional"`
+	// InternalAuth 是内部调用方身份声明(x-session-detail-bin)的验签策略。
+	InternalAuth InternalAuthConf `json:"InternalAuth,optional"`
+	// KillSwitch 是 RPC 级热关停闸门(shared/killswitch)的配置。
+	KillSwitch    KillSwitchConf `json:"KillSwitch,optional"`
+	TableDir      string         `json:",default=../../generated/tables"`
+	AuthProviders AuthConfig     `json:"AuthProviders,optional"` // Third-party auth provider config
 	// DevSkipAuth 是已废弃的不安全开关。保留字段只为让旧配置在启动时
 	// 明确失败,不能因为结构体删字段而静默忽略、让开发者误以为仍生效。
 	DevSkipAuth     bool                `json:"DevSkipAuth,optional"`
@@ -88,6 +99,66 @@ type QueueConf struct {
 	// without trusting gate-side soft caps. Key is zone_id (string for YAML),
 	// value is the absolute number of concurrent online players permitted.
 	ZoneCapacityOverride map[string]uint32 `json:"ZoneCapacityOverride,optional"`
+}
+
+// InternalAuthConf 控制内部调用方身份声明的验签闸门(见
+// internal/logic/pkg/callerauth)。
+//
+// **生产模式恒强制验签,这里没有任何开关能关掉它** —— 唯一能放宽的是
+// go-zero Mode=dev/test,而那是编排层的决定,不是业务配置。
+type InternalAuthConf struct {
+	// ForceEnforce 让 dev/test 也走强制档。上游(cpp gate / Java gateway)
+	// 接完签名后,先在本地把它打开做联调,再上生产。
+	ForceEnforce bool `json:"ForceEnforce,default=false"`
+
+	// MaxClockSkew 是允许的时间戳偏移窗口(双向)。签名里带毫秒时间戳,
+	// 超出这个窗口一律拒绝 —— 这是防重放的第一道闸,nonce 是第二道。
+	//
+	// 30s 的取法:内网 NTP 偏差通常在毫秒级,30s 已经给足容错;
+	// 再放大只会线性放大重放窗口和 nonce 表的内存占用。
+	MaxClockSkew time.Duration `json:"MaxClockSkew,default=30s"`
+
+	// MaxNonceEntries 是 nonce 表的硬上限。超出后强制翻代(丢掉最旧的一代),
+	// 重放窗口会临时缩短但**绝不会**放行验签失败的请求。
+	// 默认 500000 ≈ 4000 QPS × 2×MaxClockSkew 的用量。
+	MaxNonceEntries int `json:"MaxNonceEntries,default=500000"`
+
+	// AllowedCallers 是调用方标识白名单(如 ["gate","gateway"])。
+	// 留空表示不限制调用方名字,但签名仍然必须验过。
+	AllowedCallers []string `json:"AllowedCallers,optional"`
+}
+
+// KillSwitchConf 配置 RPC 级热关停闸门(见 shared/killswitch 包注释)。
+//
+// **整块字段的零值就是期望行为**,这不是偷懒而是刻意的:go-zero 的
+// conf.MustLoad 走的是 mapping.UnmarshalJsonMap(没开 WithDefault),
+// 一个标了 optional 的结构体字段整块缺失时**不会**递归填内层 default
+// (见 core/mapping/unmarshaler.go:processNamedFieldWithoutValue)。
+// 于是任何一份没写 KillSwitch 块的 yaml —— 包括仓外的 deploy/*.yaml ——
+// 都会拿到零值。所以这里绝不能用 `Enabled bool default=true`:那种写法
+// 会让老配置静默地把止血阀关掉,而且要等到线上出事才发现。
+//
+// 零值 = 开着 watch + 库默认前缀/时限。这不会拒绝任何请求:killswitch
+// 铁律 fail-open,etcd 连不上、前缀下没 key、值写坏了一律放行,只有运维
+// 显式往 etcd 写 deny 才会关停。反过来默认不开才是危险的 —— 真出事时
+// 没有止血阀可用。
+type KillSwitchConf struct {
+	// Disabled 完全不起 etcd watch,也不把拦截器挂进链(全部放行)。
+	// 刻意用反向命名,理由见上:缺配置必须等于"开着"。
+	// 只有在热关停机制自身出问题时才需要打开这个逃生阀。
+	Disabled bool `json:"Disabled,default=false"`
+
+	// Prefix 是规则在 etcd 里的前缀,留空用 killswitch.DefaultPrefix
+	// ("/mmorpg/killswitch/")。改它等于换一套规则命名空间,必须与运维
+	// 下发规则的路径一致,否则规则永远命不中(而且是静默命不中)。
+	Prefix string `json:"Prefix,optional"`
+
+	// StaleAfter 与 etcd 失联多久后主动作废本地规则快照、退回全放行。
+	// 0 = 用库默认(1 分钟);负数 = 永不作废。
+	StaleAfter time.Duration `json:"StaleAfter,optional"`
+
+	// ResyncBackoff 全量同步失败后的重试间隔,<=0 用库默认(3s)。
+	ResyncBackoff time.Duration `json:"ResyncBackoff,optional"`
 }
 
 // PreloadPoolConf controls the bounded goroutine pool used to fan out

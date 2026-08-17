@@ -28,9 +28,10 @@
     dev_tools.ps1 的 dev-start-zones 只在第一个 zone 传非零值。
 
 .PARAMETER NodeIp
-    Address these nodes advertise into etcd (NODE_IP). Default 127.0.0.1.
-    Pass a LAN address when a client on another device must reach them, or
-    'auto' to let the engine probe for one. See the parameter block below.
+    Address these nodes advertise into etcd (NODE_IP). Defaults to this
+    machine's detected physical-NIC IPv4, so no configuration is needed for
+    either same-box or off-box clients. Accepts an explicit address, or
+    'loopback' / 'engine' to opt out of detection. See the parameter block.
 
 .EXAMPLE
     # Start all nodes with default counts
@@ -42,8 +43,11 @@
     # Start only scene nodes
     pwsh -File tools/scripts/cpp_nodes.ps1 -Command start -Nodes scene
 
-    # Let a client on another device connect to this machine's gate
+    # Pin the advertised address instead of detecting it
     pwsh -File tools/scripts/cpp_nodes.ps1 -Command start -NodeIp 192.168.2.28
+
+    # Strictly single-box stack; never goes stale when the network changes
+    pwsh -File tools/scripts/cpp_nodes.ps1 -Command start -NodeIp loopback
 
     # Check what's running
     pwsh -File tools/scripts/cpp_nodes.ps1 -Command status
@@ -80,18 +84,22 @@ param(
     # that is local-but-wrong is the classic failure mode here — every process
     # reports healthy and nothing can connect.
     #
-    #   <ip>   advertise exactly this address
-    #   auto   leave NODE_IP unset and let the engine pick one by probing the
-    #          routing table (libs/engine/core/network/process_info.cpp localip())
+    #   (empty)    default — detect this machine's physical-NIC IPv4, falling
+    #              back to 127.0.0.1. Requires no configuration from anyone and
+    #              works whether the client runs on this box or another device.
+    #   auto       same detection, but ignore any inherited NODE_IP
+    #   <ip>       advertise exactly this address
+    #   loopback   force 127.0.0.1 — most robust for a strictly single-box stack,
+    #              since it never goes stale when the network changes
+    #   engine     leave NODE_IP unset and let the C++ side pick
+    #              (libs/engine/core/network/process_info.cpp localip())
     #
-    # 127.0.0.1 is the right default for the usual single-box dev stack — gate,
-    # scene, the Go services, robot and the Java gateway all run on this machine
-    # — and unlike a detected address it survives switching WiFi, bringing a VPN
-    # up or down, and DHCP lease renewals. Deliberately not a hard-coded LAN
-    # address: that would be wrong on every other machine.
-    #
-    # Pass -NodeIp <lan-ip> when a client on another device has to reach these
-    # nodes. An already-exported NODE_IP beats the default but loses to -NodeIp.
+    # Detection asks Windows for physical adapters instead of matching names, so
+    # Hyper-V / WSL / Docker 'vEthernet' switches, VMware, VirtualBox and VPN
+    # tunnels are all excluded — see Find-PhysicalNicIPv4 for why that matters.
+    # Deliberately not a hard-coded LAN address: that would be wrong on every
+    # other machine. An already-exported NODE_IP beats detection but loses to an
+    # explicit -NodeIp.
     [string]$NodeIp = ""
 )
 
@@ -140,12 +148,88 @@ function Get-InstanceCount {
     }
 }
 
+function Find-PhysicalNicIPv4 {
+    # Pick this machine's real LAN IPv4 by asking Windows which adapters are
+    # physical, rather than by pattern-matching adapter names.
+    #
+    # Get-NetAdapter -Physical is what makes this reliable: it excludes Hyper-V /
+    # WSL / Docker Desktop 'vEthernet' switches, VMware and VirtualBox adapters,
+    # VPN tunnels, and loopback in one shot. Those are exactly the addresses that
+    # make naive detection pick a wrong-but-local IP -- gethostbyname(hostname)
+    # returns them in an order set by interface metric, and probing the routing
+    # table follows the default route straight into an active VPN tunnel.
+    #
+    # Remaining filters: link-local (169.254.x, adapter up but unconfigured) and
+    # PrefixOrigin WellKnown are not usable addresses. When a box has several
+    # physical NICs up (laptop docked over Ethernet with WiFi still on), the
+    # lowest InterfaceMetric is the one Windows itself prefers.
+    #
+    # Returns $null when nothing qualifies or the cmdlets are unavailable (non-
+    # Windows pwsh); the caller falls back to loopback.
+    try {
+        $physicalIndexes = @(
+            Get-NetAdapter -Physical -ErrorAction Stop |
+                Where-Object { $_.Status -eq 'Up' } |
+                Select-Object -ExpandProperty InterfaceIndex
+        )
+        if ($physicalIndexes.Count -eq 0) { return $null }
+
+        $candidates = @(
+            Get-NetIPAddress -AddressFamily IPv4 -ErrorAction Stop |
+                Where-Object {
+                    $_.InterfaceIndex -in $physicalIndexes -and
+                    $_.PrefixOrigin -in 'Dhcp', 'Manual' -and
+                    $_.IPAddress -ne '127.0.0.1' -and
+                    $_.IPAddress -notlike '169.254.*' -and
+                    -not $_.SkipAsSource
+                }
+        )
+        if ($candidates.Count -eq 0) { return $null }
+
+        $best = $candidates |
+            Sort-Object { (Get-NetIPInterface -InterfaceIndex $_.InterfaceIndex -AddressFamily IPv4 -ErrorAction SilentlyContinue).InterfaceMetric } |
+            Select-Object -First 1
+
+        if ($candidates.Count -gt 1) {
+            $others = ($candidates | Where-Object { $_.IPAddress -ne $best.IPAddress } | ForEach-Object { "$($_.IPAddress) ($($_.InterfaceAlias))" }) -join ', '
+            Write-Host "[addr]  multiple physical NICs up; chose lowest-metric one, ignoring: $others" -ForegroundColor DarkGray
+        }
+        return $best
+    } catch {
+        return $null
+    }
+}
+
 function Resolve-AdvertiseIp {
-    # Precedence: explicit -NodeIp > already-exported NODE_IP > safe default.
-    # Returns $null to mean "leave NODE_IP unset and let the engine detect".
-    if ($NodeIp -eq "auto") { return $null }
-    if (-not [string]::IsNullOrWhiteSpace($NodeIp)) { return $NodeIp.Trim() }
-    if (-not [string]::IsNullOrWhiteSpace($env:NODE_IP)) { return $env:NODE_IP.Trim() }
+    # Precedence: explicit -NodeIp > already-exported NODE_IP > detected LAN IP
+    # > loopback. Returns $null only for 'engine', meaning "leave NODE_IP unset
+    # and let the C++ side decide".
+    #
+    # Detecting a LAN address rather than defaulting to loopback is what keeps
+    # this zero-configuration for the off-box case too: a client running on a
+    # phone or a second PC can reach the gate without anyone passing a flag.
+    # It is safe to guess here because nodes bind 0.0.0.0 -- if detection picks
+    # some other local address, same-box traffic still connects; only an off-box
+    # client would notice, and that is the case where you would pass -NodeIp
+    # explicitly anyway.
+    switch ($NodeIp) {
+        "engine"   { return $null }
+        "loopback" { return "127.0.0.1" }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($NodeIp) -and $NodeIp -ne "auto") {
+        return $NodeIp.Trim()
+    }
+    if ($NodeIp -ne "auto" -and -not [string]::IsNullOrWhiteSpace($env:NODE_IP)) {
+        return $env:NODE_IP.Trim()
+    }
+
+    $detected = Find-PhysicalNicIPv4
+    if ($null -ne $detected) {
+        Write-Host "[addr]  detected LAN address on '$($detected.InterfaceAlias)'" -ForegroundColor DarkGray
+        return $detected.IPAddress
+    }
+
+    Write-Host "[addr]  no usable physical NIC found; falling back to loopback (off-box clients will not connect)" -ForegroundColor Yellow
     return "127.0.0.1"
 }
 

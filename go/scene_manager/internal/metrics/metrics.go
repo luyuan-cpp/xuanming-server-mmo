@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"scene_manager/internal/constants"
+	"shared/safego"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -25,6 +26,10 @@ import (
 )
 
 const subsystem = "scene_manager"
+
+// safePointMetricsHTTP 是 /metrics + /debug HTTP 服务的 safego 点位名。
+// 它会变成 safego_panic_total{point="..."} 的 label,必须是常量。
+const safePointMetricsHTTP = "scene_manager.metrics_http"
 
 var (
 	playerCount = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -217,6 +222,27 @@ var (
 		Help:      "Terminal async Kafka message delivery outcomes (acked|failed).",
 	}, []string{"outcome"})
 
+	// reentryBarrierBlockedTotal 统计因「老属主节点刚判死、再入屏障未到」而被
+	// 拒绝的改派/销毁/清理次数。site 是**代码里写死的常量点位名**
+	// (resolve_scene|rebalance|reassign|world_channel_lazy|orphan_cleanup),
+	// 绝不能拼进 scene_id / node_id 之类运行期值。
+	//
+	// 稳态应该恒 0;非 0 只在节点刚死后的一个屏障窗口内出现,持续非 0 说明
+	// 有节点在反复丢租约,或者 death_at 标记被写坏了。
+	reentryBarrierBlockedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "reentry_barrier_blocked_total",
+		Help:      "Ownership changes refused because the dead node's re-entry barrier had not elapsed, by site.",
+	}, []string{"zone_id", "site"})
+
+	// deadNodeReconcilePending 是「已判死、但收尾动作还被屏障压着」的节点数。
+	// 它应该在一个屏障时长内回到 0;长期不为 0 = 收尾链路卡住了。
+	deadNodeReconcilePending = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "dead_node_reconcile_pending",
+		Help:      "Dead scene nodes whose orphan-scene reconciliation is deferred by the re-entry barrier.",
+	}, []string{"zone_id"})
+
 	registerOnce sync.Once
 )
 
@@ -247,6 +273,7 @@ func register() {
 			agonesCounterRollbackTotal, agonesMappingFailureTotal,
 			agonesCounterDrift, worldAutoscaleTotal,
 			kafkaDeliveryTotal,
+			reentryBarrierBlockedTotal, deadNodeReconcilePending,
 		)
 	})
 }
@@ -270,6 +297,21 @@ func ResetLeaderGauges() {
 	register()
 	agonesCounterDrift.Reset()
 	rebalancePending.Reset()
+}
+
+// ObserveReentryBarrierBlocked 记一次被再入屏障挡下的所有权变更尝试。
+// site 必须取常量点位名,见 reentryBarrierBlockedTotal 的注释。
+func ObserveReentryBarrierBlocked(zoneID uint32, site string) {
+	register()
+	reentryBarrierBlockedTotal.WithLabelValues(
+		strconv.FormatUint(uint64(zoneID), 10), site).Inc()
+}
+
+// SetDeadNodeReconcilePending 发布某 zone 里被屏障推迟的死节点收尾任务数。
+func SetDeadNodeReconcilePending(zoneID uint32, count int) {
+	register()
+	deadNodeReconcilePending.WithLabelValues(
+		strconv.FormatUint(uint64(zoneID), 10)).Set(float64(count))
 }
 
 // ObserveKafkaDelivery 记录异步 writer 回报的终态；count 是批内消息数，
@@ -538,10 +580,13 @@ func Start(addr string) {
 		Handler:           mux,
 		ReadHeaderTimeout: 5 * time.Second,
 	}
-	go func() {
+	// safego.Go:观测端口炸掉不能连累业务进程。裸 go func 里一次 panic
+	// (比如 debug handler 里的空指针)会直接打死 SceneManager —— 用观测代码
+	// 换掉整个服务是最不划算的交易。
+	safego.Go(safePointMetricsHTTP, func() {
 		logx.Infof("[metrics] Prometheus /metrics listening on %s", addr)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			logx.Errorf("[metrics] HTTP server exited: %v", err)
 		}
-	}()
+	})
 }

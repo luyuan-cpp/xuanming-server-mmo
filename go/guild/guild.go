@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/reflection"
 
 	"guild/internal/config"
+	"guild/internal/constants"
 	"guild/internal/data"
 	"guild/internal/logic"
 	"guild/internal/node"
@@ -26,6 +27,9 @@ import (
 	base "proto/common/base"
 	pb "proto/guild"
 	"shared/grpcstats"
+	"shared/killswitch"
+	"shared/safego"
+	"shared/serverbase"
 	"shared/snowflakealloc"
 )
 
@@ -91,6 +95,19 @@ func main() {
 	defer sfHandle.Close()
 	logx.Infof("Guild snowflake worker id = %d (host=%s)", sfHandle.WorkerID, host_name)
 
+	// RPC 级热关停(shared/killswitch):线上某个方法把 DB 打爆时,往 etcd 写一个
+	// key 就能秒级把它短路掉,不必走一遍构建-发布-滚动更新。
+	//
+	// 复用上面这个 etcdCli(snowflake worker id 分配用的那条连接),不另开第三条 ——
+	// 连的是同一个集群。Start 非阻塞:客户端为 nil、etcd 连不上、前缀下没有 key,
+	// 一律放行(fail-open),因此这里既不需要判错也不需要 logx.Must。
+	ksCtx, ksCancel := context.WithCancel(context.Background())
+	// ⚠️ 这个 defer 必须写在 `defer etcdCli.Close()` 之后:defer 是后进先出,
+	// 先取消 watch 循环,再关 etcd 客户端,否则 watch 会撞上一个已经 Close 的 client。
+	defer ksCancel()
+	ks := killswitch.New(killswitch.Config{Prefix: config.AppConfig.KillSwitchPrefix})
+	ks.Start(ksCtx, etcdCli)
+
 	// 用 Handle.NewNode 而不是裸 snowflake.NewNode:它会把**前任在这个 worker id 上的
 	// 高水位**当地板注入(etcd 里的持久水位),顶住跨机时钟偏斜接管、本机时钟回拨、
 	// 前任借过逻辑秒这三类"启动 guard 挡不住"的重号。
@@ -118,7 +135,7 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
-	s.AddUnaryInterceptors(grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor())
+	s.AddUnaryInterceptors(buildUnaryInterceptors(ks)...)
 	defer s.Stop()
 
 	// Snowflake worker id 的 etcd 租约丢了 = 本进程不再是这个 worker id 的合法持有者,
@@ -136,17 +153,57 @@ func main() {
 	// 靠它"停服"等于什么都没做,进程会带着已失效的 worker id 一直服务下去。
 	// 所以正确性由 Fence() 保证(之后 Generate 一律 ErrFenced,建帮整体失败),
 	// 可用性由进程退出 + 编排重拉保证。
-	go func() {
+	//
+	// 用 safego.Go 而不是裸 `go func`:这条看门狗一旦 panic(比如 Lost() 通道被
+	// 重复关闭),裸 goroutine 会把整个进程当场打死,日志里只剩一段 runtime 栈;
+	// safego 兜住后会打稳定事件名 + 计 safego_panic_total{point="guild.snowflake_fence_watch"},
+	// 看门狗失效这件事变成可告警的,而不是伪装成一次"正常"的进程退出。
+	safego.Go("guild.snowflake_fence_watch", func() {
 		<-sfHandle.Lost()
 		sf.Fence() // ① 先关闸:此后一个号都发不出去,撞号从机制上不可能
 		logx.Error("Guild snowflake worker id lease lost; generator fenced, exiting to let the orchestrator restart " +
 			"(zrpc Stop() only closes the logger and cannot stop serving)")
 		logx.Close() // ② 冲掉日志缓冲,别把上面这条 ERROR 丢了
 		os.Exit(1)   // ③ 退出;重启后拿新租约,并被 snowflake 的启动 guard 兜住
-	}()
+	})
 
 	logx.Infof("Starting Guild RPC server at %s...", config.AppConfig.ListenOn)
 	s.Start()
+}
+
+// buildUnaryInterceptors 组装本服务的一元拦截器链。
+//
+// 返回的切片顺序**就是执行顺序**:go-zero 把它们原样交给
+// grpc.ChainUnaryInterceptor,第一个是最外层。
+//
+// 抽成函数而不是直接在 main 里连着调 AddUnaryInterceptors,是为了让链本身可测 ——
+// main() 没法在单测里跑起来,而"哪次重构顺手把 killswitch 那行删了"是最容易发生、
+// 又最难被发现的回归:开关删掉之后一切照常工作,只有真出事那天才发现止血阀是假的。
+// 见 guild_test.go。
+func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor {
+	return []grpc.UnaryServerInterceptor{
+		// ① 流量统计放最外层:被热关停短路掉的请求也必须被统计到。
+		//    否则"关停生效后这个方法的 QPS 归零"会被误读成客户端不再调用了。
+		grpcstats.New(grpcstats.Options{}).UnaryServerInterceptor(),
+
+		// ② 热关停紧跟其后,尽早短路:命中之后 in-band 定性、handler、
+		//    以及 handler 里的 Redis / MySQL / 发号器访问统统不做 —— 止血阀的全部意义
+		//    就是"别为一个已经关停的方法做任何无谓的工作"。
+		//    它放在 serverbase 之前也意味着被关停的调用不进 rpc_duration_seconds:
+		//    那条指标衡量的是业务链路,而关停请求根本没走业务链路,
+		//    它们的账记在 killswitch_blocked_total{method} 上。
+		ks.UnaryServerInterceptor(),
+
+		// ③ in-band 故障拦截器:本服务的 handler 一律 `return resp, nil`,把失败塞进
+		//    响应体的 TipInfoMessage —— gRPC status 恒 OK,go-zero 自带的指标拦截器会把
+		//    每一次「发号器被 fence」都记成一次成功请求。这层把响应体里的码读出来定性,
+		//    故障打日志 + 计数,业务拒绝只计数。它不改响应内容、不吞错,对客户端无感。
+		//    TipClassifier 必须传:公会码在 200-219 私有段,serverbase 的全局判定
+		//    (只认已生成的 0-129 数轴)会把它们全判成 unknown_code。
+		serverbase.UnaryInterceptor(serverbase.Options{
+			TipClassifier: constants.TipClassifier(),
+		}),
+	}
 }
 
 func splitHostPort(address string) (string, uint32, error) {

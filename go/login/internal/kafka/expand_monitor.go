@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"shared/kafkautil"
+	"shared/safego"
 
 	"github.com/IBM/sarama"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -63,7 +64,11 @@ func (m *ExpandMonitor) Start() {
 	logx.Infof("expand monitor started: topic=%s, checkInterval=%v, initialPartitionCount=%d",
 		m.topic, m.checkInterval, m.oldPartitionCount)
 
-	go func() {
+	// 裸 go func 换成 safego:panic 不再打死整个 login 进程,而且能从
+	// safego_panic_total{point="login.kafka_expand_monitor"} 直接看到是哪条
+	// 后台链路炸的。内层 Run 把 recover 收窄到"一轮":某次分区探测炸掉
+	// 不影响下一次节拍。
+	safego.Go("login.kafka_expand_monitor", func() {
 		ticker := time.NewTicker(m.checkInterval)
 		defer ticker.Stop()
 
@@ -73,10 +78,10 @@ func (m *ExpandMonitor) Start() {
 				logx.Infof("expand monitor stopped: topic=%s", m.topic)
 				return
 			case <-ticker.C:
-				m.checkAndHandleExpand()
+				safego.Run("login.kafka_expand_monitor", m.checkAndHandleExpand)
 			}
 		}
-	}()
+	})
 }
 
 // checkAndHandleExpand checks for partition changes and handles expansion.

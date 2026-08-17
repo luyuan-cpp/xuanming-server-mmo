@@ -149,7 +149,7 @@ func (l *AssignGateLogic) AssignGate(in *loginpb.AssignGateRequest) (*loginpb.As
 // verification map to EXPIRED so the client falls back to a fresh
 // /assign-gate call.
 func (l *AssignGateLogic) handleReentry(token string) (*loginpb.AssignGateResponse, error) {
-	if _, _, err := loginqueue.ParseAndVerifyQueueToken(l.svcCtx.QueueHmacSecret(), token); err != nil {
+	if _, _, err := loginqueue.ParseAndVerifyQueueTokenMulti(l.svcCtx.QueueTokenVerifySecrets(), token); err != nil {
 		logx.Infof("[loginqueue] reentry token rejected: %v", err)
 		return &loginpb.AssignGateResponse{Status: uint32(loginqueue.StatusExpired), Error: err.Error()}, nil
 	}
@@ -162,7 +162,7 @@ func (l *AssignGateLogic) handleReentry(token string) (*loginpb.AssignGateRespon
 			IP:     slot.IP,
 			Port:   slot.Port,
 			ZoneID: slot.ZoneID,
-		}, l.svcCtx.QueueHmacSecret(), gateTokenTTL)
+		}, l.svcCtx.GateTokenSigningSecret(), gateTokenTTL)
 	}
 	state, err := l.svcCtx.LoginQueue.Lookup(l.ctx, token, signFn)
 	if err != nil {
@@ -204,7 +204,7 @@ func (l *AssignGateLogic) signFastPath(zoneID uint32) (*loginpb.AssignGateRespon
 			Error:  "no gate available for requested zone",
 		}, nil
 	}
-	admit, err := loginqueue.PickAndSignGateToken(candidates, l.svcCtx.QueueHmacSecret(), gateTokenTTL)
+	admit, err := loginqueue.PickAndSignGateToken(candidates, l.svcCtx.GateTokenSigningSecret(), gateTokenTTL)
 	if err != nil {
 		logx.Errorf("[loginqueue] fast-path sign zone=%d err=%v", zoneID, err)
 		return &loginpb.AssignGateResponse{Status: uint32(loginqueue.StatusError), Error: "sign failed"}, nil

@@ -34,7 +34,7 @@ spec:
       containers:
         - name: gateway
           image: PLACEHOLDER_IMAGE
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
           ports:
             - containerPort: 8081
               name: http

@@ -299,6 +299,22 @@ func (n *Node) reRegister(ctx context.Context) {
 	}
 }
 
+// EtcdClient 暴露本节点注册用的 etcd 客户端,供同进程内其他需要 etcd 的组件
+// 复用(目前是 shared/killswitch 的规则 watch)。
+//
+// 刻意只读不转移所有权:客户端的生命周期仍由 Node 管,Close() 时一并关闭。
+// 复用而不是另开一条连接,是因为再建一个 clientv3 就多一份 TCP 连接、一份
+// keep-alive 心跳和一份要独立收尾的资源,而它们连的是同一个集群。
+//
+// 调用方必须能接受返回 nil(Node 未初始化 / 已关闭)—— killswitch 对 nil
+// 客户端的语义就是"全部放行",这正是 fail-open 想要的。
+func (n *Node) EtcdClient() *clientv3.Client {
+	if n == nil {
+		return nil
+	}
+	return n.client
+}
+
 func (n *Node) Close() error {
 	if n.cancelFunc != nil {
 		n.cancelFunc()

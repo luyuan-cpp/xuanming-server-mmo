@@ -7,6 +7,7 @@ import (
 
 	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
+	"shared/safego"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -36,28 +37,21 @@ func StartAgonesReconcile(ctx context.Context, svcCtx *svc.ServiceContext) {
 		return
 	}
 
-	go func() {
-		ticker := time.NewTicker(time.Duration(interval) * time.Second)
-		defer ticker.Stop()
-		logx.Infof("[AgonesReconcile] started, interval=%ds", interval)
+	logx.Infof("[AgonesReconcile] started, interval=%ds", interval)
 
-		for {
-			select {
-			case <-ctx.Done():
-				logx.Info("[AgonesReconcile] stopped")
+	// safego.Loop:单轮 panic 只丢那一轮(比对逻辑要读 K8s API,反序列化出意外
+	// 结构是现实风险),循环继续;点位名进 safego_panic_total。
+	safego.Loop(ctx, SafePointAgonesReconcile, time.Duration(interval)*time.Second,
+		func(ctx context.Context) {
+			// 对账虽然只告警不改写,也收敛到领导者:避免多副本重复拉
+			// Agones API / 重复告警,漂移 gauge 也只由一个实例发布。
+			if !isLeader() {
 				return
-			case <-ticker.C:
-				// 对账虽然只告警不改写,也收敛到领导者:避免多副本重复拉
-				// Agones API / 重复告警,漂移 gauge 也只由一个实例发布。
-				if !isLeader() {
-					continue
-				}
-				for _, zoneID := range GetActiveZones() {
-					ReconcileAgonesRoomsForZone(ctx, svcCtx, zoneID)
-				}
 			}
-		}
-	}()
+			for _, zoneID := range GetActiveZones() {
+				ReconcileAgonesRoomsForZone(ctx, svcCtx, zoneID)
+			}
+		})
 }
 
 // ReconcileAgonesRoomsForZone 跑一轮比对并写 scene_manager_agones_counter_drift。

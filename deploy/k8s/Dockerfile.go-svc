@@ -18,6 +18,13 @@ ARG SERVICE
 ARG ENTRY
 ARG GOPROXY=https://proxy.golang.org,direct
 
+# 版本戳。由 tools/scripts/go_svc_image.ps1 从 git 注入,默认 unknown。
+# 既写进二进制的 ldflags,也落一份 /app/BUILD_INFO —— 后者是
+# `kubectl exec … cat /app/BUILD_INFO` 能直接看到的判据,不依赖服务自己打印。
+ARG BUILD_VERSION=unknown
+ARG BUILD_COMMIT=unknown
+ARG BUILD_TIME=unknown
+
 RUN apk add --no-cache git
 
 WORKDIR /src
@@ -31,9 +38,17 @@ COPY ${SERVICE}/ /src/${SERVICE}/
 
 WORKDIR /src/${SERVICE}
 
+# -X main.<var> 只有当目标 package main 里真的声明了同名字符串变量时才生效;
+# 变量还没加时链接器静默忽略,不会让构建失败。Go 侧补上
+#   var buildVersion, buildCommit, buildTime string
+# 并在启动首行打印之后,这里不用再改。
 RUN GOPROXY=${GOPROXY} go mod download \
     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-s -w" -o /app/service ${ENTRY}
+    go build -ldflags="-s -w \
+        -X main.buildVersion=${BUILD_VERSION} \
+        -X main.buildCommit=${BUILD_COMMIT} \
+        -X main.buildTime=${BUILD_TIME}" \
+    -o /app/service ${ENTRY}
 
 # ── Runtime stage ────────────────────────────────────────────────
 FROM alpine:3.20
@@ -41,6 +56,20 @@ FROM alpine:3.20
 RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
+
+ARG BUILD_VERSION=unknown
+ARG BUILD_COMMIT=unknown
+ARG BUILD_TIME=unknown
+
+# OCI 标准标签,`docker inspect` / registry UI 直接可读
+LABEL org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIME}"
+
+# 运行期判据:出事时 `kubectl exec <pod> -- cat /app/BUILD_INFO`
+# 就能确认这个 Pod 到底跑的是哪个 commit,不用去猜 tag 有没有被覆盖。
+RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
+      "${BUILD_VERSION}" "${BUILD_COMMIT}" "${BUILD_TIME}" > /app/BUILD_INFO
 
 COPY --from=builder /app/service /app/service
 

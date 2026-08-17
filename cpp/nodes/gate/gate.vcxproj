@@ -37,6 +37,8 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gate_codec.h" />
+    <ClInclude Include="gate_security.h" />
+    <ClInclude Include="gate_version.h" />
     <ClInclude Include="handler\event\battle_binding_helper.h" />
     <ClInclude Include="handler\event\event_handler.h" />
     <ClInclude Include="handler\event\gate_event_handler.h" />
@@ -117,6 +119,10 @@
     <OutDir>../../../build/cpp/nodes/</OutDir>
     <IntDir>../../../build/cpp/intermediate/nodes/$(ProjectName)/</IntDir>
     <GenerateManifest>false</GenerateManifest>
+    <!-- 与 Debug|x64 同,理由见 scene.vcxproj 里的说明:cwd 不是 bin\ 就无日志崩溃。 -->
+    <LocalDebuggerCommand>$(ProjectDir)..\..\..\bin\gate.exe</LocalDebuggerCommand>
+    <LocalDebuggerWorkingDirectory>$(ProjectDir)..\..\..\bin</LocalDebuggerWorkingDirectory>
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>

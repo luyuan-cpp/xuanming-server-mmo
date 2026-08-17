@@ -5,6 +5,7 @@
 #include "muduo/base/Logging.h"
 
 #include "gate_codec.h"
+#include "gate_security.h"
 #include "node/system/node/node.h"
 #include "network/rpc_client.h"
 #include "thread_context/node_context_manager.h"
@@ -14,6 +15,9 @@
 
 #include "proto/common/component/player_network_comp.pb.h"
 #include <session/manager/session_manager.h>
+
+#include <algorithm>
+#include <string>
 
 ///<<< END WRITING YOUR CODE
 
@@ -290,7 +294,46 @@ void GateHandler::GmGracefulShutdown(::google::protobuf::RpcController* controll
 {
 ///<<< BEGIN WRITING YOUR CODE
 
-	LOG_INFO << "GM graceful shutdown requested by operator=" << request->operator_()
+	// GM 面必须鉴权,这条 RPC 尤其如此:它会把本 gate 上**所有**在线会话
+	// forceClose 再排队停机。旧实现收到请求就干活,唯一的"身份"是请求体里
+	// 自报的 operator 明文字符串 —— 任何能连到本节点 RPC 端口的进程发一条
+	// GmGracefulShutdown 就能停服,无凭据、无审计、不可否认性为零。
+	//
+	// 为什么签名寄生在 operator 字段而不是新增 proto 字段:
+	// GmGracefulShutdownRequest 只有 operator / reason 两个字段
+	// (proto/common/base/gm_admin.proto),而这条 RPC 走的是 muduo GameChannel
+	// 通道 —— CallMethod 的 controller 与 done 都恒为 nullptr
+	// (game_channel.cpp:451),**没有任何 metadata 边信道**可用;改 proto 则要
+	// 连带重生成 C++/Go/Java 三侧产物,不在本次可验证范围内。信封格式与
+	// canonical 串的完整定义见 gate_security.h。
+	//
+	// 密钥只从环境变量 GATE_GM_ADMIN_SECRET 读,未配置时一律拒绝(fail-closed),
+	// 不设"开发模式免签"的口子:开发环境要停 gate,Ctrl+C / SIGTERM 就够了。
+	//
+	// 签名绑本节点 node_id:nonce 去重表是进程内的,不绑就意味着抓到一条合法
+	// 停机请求后可以在时间窗内挨个重放给全区每一个 gate —— 一次抓包换全服掉线。
+	const std::string selfNodeId = std::to_string(gNode->GetNodeId());
+	const auto gmAuth = gate_security::VerifyGmRequestFromEnv(
+		"Gate.GmGracefulShutdown", selfNodeId, request->operator_(), request->reason());
+	if (gmAuth.result != gate_security::GmAuthResult::kOk)
+	{
+		// 拒绝也要留痕:这是入侵检测的唯一信号源。原始 operator / reason 都是
+		// 攻击者可控的输入(不含任何秘密),照原样打有助于事后比对来源 ——
+		// 但必须截断:不截断的话对方发一条几 MB 的 operator 就能把 gate 的日志
+		// 盘和 IO 线程当放大器用,而这条路径连鉴权都还没过。
+		constexpr size_t kMaxLoggedFieldLength = 128;
+		const std::string loggedOperator = request->operator_().substr(
+			0, std::min<size_t>(request->operator_().size(), kMaxLoggedFieldLength));
+		const std::string loggedReason = request->reason().substr(
+			0, std::min<size_t>(request->reason().size(), kMaxLoggedFieldLength));
+		LOG_ERROR << "GM graceful shutdown REJECTED, reason="
+				  << gate_security::GmAuthResultName(gmAuth.result)
+				  << " raw_operator=" << loggedOperator
+				  << " request_reason=" << loggedReason;
+		return;
+	}
+
+	LOG_INFO << "GM graceful shutdown requested by operator=" << gmAuth.operatorName
 			 << " reason=" << request->reason();
 
 	auto& sessions = tlsSessionManager.sessions();

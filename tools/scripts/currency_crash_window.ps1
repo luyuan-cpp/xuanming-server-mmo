@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Currency-crash-window verification driver. Runs the 4 cases (A/B/C/D)
     described in docs/notes/currency-crash-window-verification.md and writes

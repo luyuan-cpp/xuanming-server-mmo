@@ -54,7 +54,7 @@ func (l *QueryQueueStatusLogic) QueryQueueStatus(in *loginpb.QueryQueueStatusReq
 		}, nil
 	}
 
-	if _, _, err := loginqueue.ParseAndVerifyQueueToken(l.svcCtx.QueueHmacSecret(), in.QueueToken); err != nil {
+	if _, _, err := loginqueue.ParseAndVerifyQueueTokenMulti(l.svcCtx.QueueTokenVerifySecrets(), in.QueueToken); err != nil {
 		return &loginpb.QueryQueueStatusResponse{
 			Status: uint32(loginqueue.StatusExpired),
 			Error:  err.Error(),
@@ -70,7 +70,7 @@ func (l *QueryQueueStatusLogic) QueryQueueStatus(in *loginpb.QueryQueueStatusReq
 			IP:     slot.IP,
 			Port:   slot.Port,
 			ZoneID: slot.ZoneID,
-		}, l.svcCtx.QueueHmacSecret(), gateTokenTTL)
+		}, l.svcCtx.GateTokenSigningSecret(), gateTokenTTL)
 	})
 	if err != nil {
 		// Redis flap or similar — log so on-call can correlate with Redis

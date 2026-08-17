@@ -26,6 +26,7 @@ import (
 	plpb "proto/player_locator"
 	smpb "proto/scene_manager"
 	"shared/generated/table"
+	"shared/safego"
 	"time"
 )
 
@@ -180,13 +181,42 @@ func NewServiceContext() *ServiceContext {
 	return sc
 }
 
-// QueueHmacSecret returns the secret used to sign opaque queue tokens.
-// We deliberately reuse GateTokenSecret: the queue token has a different
-// wire shape (base64(JSON|.|hmac)) than the gate token (proto-marshalled
-// GateTokenPayload), so cross-format confusion attacks aren't possible,
-// and rotating one secret rotates both — simpler operational model.
-func (s *ServiceContext) QueueHmacSecret() []byte {
-	return []byte(config.AppConfig.GateTokenSecret)
+// GateTokenSigningSecret 返回签发 gate 连接票据用的主密钥。
+//
+// 票据由 cpp gate 校验,login 只签不验,所以这里只需要主密钥;
+// 轮换时 gate 侧要先认新旧两把,再由这边切主密钥。
+func (s *ServiceContext) GateTokenSigningSecret() []byte {
+	return activeSecrets().GateToken.Primary()
+}
+
+// QueueTokenSigningSecret 返回签发排队 token 的主密钥。
+//
+// **不再与 gate token 共用一把**:原来两者复用 GateTokenSecret
+// (理由记在 docs/design/login-queue-2026-05.md:194),信任域没拆,
+// 任一侧泄露另一侧同时失守。现在是独立的 Secrets.QueueToken。
+func (s *ServiceContext) QueueTokenSigningSecret() []byte {
+	return activeSecrets().QueueToken.Primary()
+}
+
+// QueueTokenVerifySecrets 返回校验排队 token 时要依次尝试的全部密钥:
+// 主密钥在前,只验不签的旧密钥在后。轮换期新旧 token 都验得过靠的就是它。
+func (s *ServiceContext) QueueTokenVerifySecrets() [][]byte {
+	return activeSecrets().QueueToken.Candidates()
+}
+
+// activeSecrets 兜住「config.ActiveSecrets 还没被 main 赋值」的情况。
+// 正常启动路径一定先 ResolveSecrets 再建 ServiceContext;这里返回空集合
+// 而不是 panic,是为了让只构造 ServiceContext 的单测不被迫去搭密钥配置
+// —— 空密钥集合下 Sign 返回 nil、Verify 恒 false,方向仍是 fail-closed。
+func activeSecrets() *config.ResolvedSecrets {
+	if config.ActiveSecrets != nil {
+		return config.ActiveSecrets
+	}
+	return &config.ResolvedSecrets{
+		GateToken:    &config.SecretSet{},
+		QueueToken:   &config.SecretSet{},
+		InternalAuth: &config.SecretSet{},
+	}
 }
 
 // QueueCapacityProvider returns the CapacityProvider the AssignGate handler
@@ -270,7 +300,7 @@ func (s *ServiceContext) initLoginQueue() {
 		s.RedisClient,
 		cfg.QueueEntryTTL,
 		cfg.AdmitTTL,
-		s.QueueHmacSecret(),
+		s.QueueTokenSigningSecret(),
 	)
 
 	// activeZonesProvider: union of (zones we have gates for) ∪ (zones with
@@ -296,7 +326,9 @@ func (s *ServiceContext) initLoginQueue() {
 		s.LoginQueue,
 		s.queueCapProvider,
 		s.RedisClient,
-		s.QueueHmacSecret(),
+		// dispatcher 这条参数是给 gate token 签名用的(它只挑 gate、
+		// 真正签名在 consume 时由 handler 做),所以传 gate 密钥不是队列密钥。
+		s.GateTokenSigningSecret(),
 		10*time.Minute, // gateTokenTTL — must match assigngatelogic.gateTokenTTL (Round 19, R17 R2 收尾)
 		cfg.DispatchInterval,
 		cfg.SoftCapMultiplier,
@@ -444,7 +476,7 @@ func (s *ServiceContext) startPreloadStatsLogger() {
 	}
 	s.preloadStatsStop = make(chan struct{})
 	stop := s.preloadStatsStop
-	go func() {
+	safego.Go("login.preload_stats_logger", func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		var lastSubmitted, lastDropped uint64
@@ -463,5 +495,5 @@ func (s *ServiceContext) startPreloadStatsLogger() {
 					submitted, dropped, dSubmitted, dDropped)
 			}
 		}
-	}()
+	})
 }

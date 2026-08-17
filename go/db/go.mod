@@ -81,7 +81,7 @@ require (
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.15 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.15 // indirect
-	go.etcd.io/etcd/client/v3 v3.5.15 // indirect
+	go.etcd.io/etcd/client/v3 v3.5.15
 	go.opentelemetry.io/otel v1.39.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.24.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.24.0 // indirect

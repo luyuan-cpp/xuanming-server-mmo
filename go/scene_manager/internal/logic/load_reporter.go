@@ -210,12 +210,37 @@ func readInt64(svcCtx *svc.ServiceContext, key string) int64 {
 // removeNodeFromRedis cleans up a node's load-set entry, cached connection,
 // and mirrored scene_node_type.
 //
-// It also kicks off orphan scene reconciliation — instance scenes that
-// were hosted on this dead node are force-destroyed, since the C++
-// process holding their ECS entities is gone and they'd otherwise linger
-// in Redis forever. World channels are left alone; the rebalance system
-// migrates them in a separate path.
+// 动作被再入屏障切成两半(docs/design/scene-owner-reentry-barrier.md §3.2):
+//
+//	**立刻做** —— 先记下死亡时刻,再把节点摘出调度面(负载集、类型镜像、
+//	  gRPC 连接缓存、指标)。这些都不改写任何 scene ownership,也不销毁任何
+//	  东西,只是让新玩家不再被派到它上面,越早越好。两者的先后**不可交换**,
+//	  理由见函数体内第一段注释。
+//
+//	**推迟做** —— 孤儿实例场景的强制销毁与节点计数清理。C++ 老节点丢租约后
+//	  还有 kDrainBudget(15s)的 emergency relocate,期间仍在 SavePlayerToRedis;
+//	  此刻销毁它名下的场景映射,等于在老节点停笔前就把归属改了。任务入队,
+//	  由 drainPendingDeadNodeReconciles 在屏障走完后执行。
+//
+// 大世界频道不在这条路径里销毁 —— rebalance 有专门的迁移逻辑(它同样受屏障
+// 约束),在这里销毁会让玩家丢掉世界内上下文。
 func removeNodeFromRedis(svcCtx *svc.ServiceContext, entry nodeEntry) {
+	// 死亡时刻必须**第一个**落地,早于把节点摘出负载集。
+	//
+	// 判死的可观测顺序决定了屏障还有没有用。改派点的判据是两个独立的键:
+	// IsNodeAlive 读的正是下面 Zrem 的那个负载集,CanReclaimDeadNode 读的是
+	// death_at,而后者「键不存在」的语义是**放行**。所以只要 Zrem 先执行,
+	// 在 death_at 写进去之前的那几个 Redis 往返里,并发的 EnterScene 看到的
+	// 组合就是「节点已死(不在负载集)」+「没有 death_at ⇒ 屏障已过」——
+	// 玩家会在老节点 15s emergency drain 还没跑完时就被改派到新节点,
+	// 正是这道屏障要防的双写/回档(docs/design/scene-owner-reentry-barrier.md §2)。
+	// 窗口虽窄,但开服浪涌下 EnterScene 的频率足以撞上,且后果是玩家数据回档。
+	//
+	// 反过来的失败模式是安全的:标记写成功而进程随即崩在 Zrem 之前,节点仍留在
+	// 负载集里 ⇒ IsNodeAlive 为真,本来就不会触发改派;屏障多压一个 TTL 也只是
+	// 少自愈一轮。这正是本文件其余判定一贯的 fail-closed 方向。
+	markNodeDeath(svcCtx, entry.reg.ZoneId, entry.nodeID)
+
 	loadKey := nodeLoadKey(entry.reg.ZoneId)
 	svcCtx.Redis.Zrem(loadKey, entry.nodeID)
 	svcCtx.Redis.Del(nodeSceneNodeTypeKey(entry.reg.ZoneId, entry.nodeID))
@@ -223,21 +248,20 @@ func removeNodeFromRedis(svcCtx *svc.ServiceContext, entry nodeEntry) {
 	metrics.ForgetNode(entry.nodeID, entry.reg.ZoneId, entry.reg.SceneNodeType)
 	logx.Infof("[LoadReporter] removed node %s from Redis load set (zone %d)", entry.nodeID, entry.reg.ZoneId)
 
-	reconcileDeadNodeScenes(svcCtx, entry)
-
-	// scene_count / player_count 必须在 reconcile **之后**清掉。
-	// 这两个键全仓只有 Incr/Decr,没有任何"节点重新上线时归零"的路径 ——
-	// 旧注释声称"下一个复用 id 的节点会覆盖它们"是不成立的:死节点残留的
-	// 正计数会被复用同 id 的新节点原样继承,负载分永久虚高,调度一直躲着它。
-	// 顺序放在 reconcile 之后,是因为 reconcile 里的 destroyInstanceForce
-	// 自己还会对这两个键做减法;先删会被它们重新建出来。删完之后若还有
-	// 极晚到的在途 destroy 把键重建成小负数,player_count 有 <0 归零钳制,
-	// scene_count 的 -1 会被新节点的第一次 Incr 冲平 —— 都是有界的,
-	// 与无界的正残留不同。
-	deleteNodeCounters(svcCtx, entry.reg.ZoneId, entry.nodeID)
+	enqueueDeadNodeReconcile(svcCtx, entry)
 }
 
 // deleteNodeCounters 清掉一个已判死节点的负载计数键。
+//
+// 这两个键全仓只有 Incr/Decr,没有任何"节点重新上线时归零"的路径 ——
+// 旧注释声称"下一个复用 id 的节点会覆盖它们"是不成立的:死节点残留的正计数
+// 会被复用同 id 的新节点原样继承,负载分永久虚高,调度一直躲着它。
+//
+// ⚠️ 调用顺序:必须在 reconcileDeadNodeScenes **之后**。reconcile 里的
+// destroyInstanceForce 自己还会对这两个键做减法,先删会被它们重新建出来。
+// 删完之后若还有极晚到的在途 destroy 把键重建成小负数,player_count 有 <0
+// 归零钳制,scene_count 的 -1 会被新节点的第一次 Incr 冲平 —— 都是有界的,
+// 与无界的正残留不同。
 func deleteNodeCounters(svcCtx *svc.ServiceContext, zoneID uint32, nodeID string) {
 	if _, err := svcCtx.Redis.Del(nodeSceneCountKey(zoneID, nodeID)); err != nil {
 		logx.Errorf("[LoadReporter] failed to delete scene_count for dead node %s (zone %d): %v", nodeID, zoneID, err)
@@ -247,11 +271,16 @@ func deleteNodeCounters(svcCtx *svc.ServiceContext, zoneID uint32, nodeID string
 	}
 }
 
-// reconcileDeadNodeScenes is invoked when a node disappears from etcd.
-// Walks node:zone:{zoneId}:{nodeId}:scenes and force-destroys orphaned instance scenes
-// whose scene:{id}:node mapping still points at this dead node. Main
-// world channels are left for the rebalance path; stale set entries for
-// scenes that already got moved elsewhere are quietly dropped.
+// reconcileDeadNodeScenes force-destroys the orphaned instance scenes of a node
+// that disappeared from etcd, once its re-entry barrier has elapsed.
+//
+// members 是**判死那一刻**抄下的 node:zone:{zoneId}:{nodeId}:scenes 快照,由
+// enqueueDeadNodeReconcile 传进来 —— 不在这里现读。屏障窗口(默认 20s)里完全
+// 可能有新场景被建到同一个 node_id 上(进程换代但 id 被复用),现读会把这些
+// 新场景一起强制销毁。快照把收尾范围钉死在「它死时确实属于它的那些场景」。
+//
+// 只销毁实例场景:scene:{id}:node 仍指向本节点、且在 active instances 集合里的
+// 那些。大世界频道留给 rebalance 路径;已经被改派走的陈旧条目静默丢弃。
 //
 // Why not destroy world channels here:
 //
@@ -260,15 +289,11 @@ func deleteNodeCounters(svcCtx *svc.ServiceContext, zoneID uint32, nodeID string
 //	here would force players to re-enter a different scene and lose
 //	their in-world context. Instances are per-run disposable, so
 //	destroying an orphan is the right default.
-func reconcileDeadNodeScenes(svcCtx *svc.ServiceContext, entry nodeEntry) {
+func reconcileDeadNodeScenes(ctx context.Context, svcCtx *svc.ServiceContext, entry nodeEntry, members []string) {
 	setKey := nodeScenesKey(entry.reg.ZoneId, entry.nodeID)
-	members, err := svcCtx.Redis.Smembers(setKey)
-	if err != nil {
-		logx.Errorf("[Reconcile] Smembers %s failed: %v", setKey, err)
-		return
-	}
 	if len(members) == 0 {
-		svcCtx.Redis.Del(setKey)
+		// 快照为空:它死时名下没有场景。此刻集合里若有内容,那是屏障窗口里
+		// 新建到同一 node_id 上的,不属于本次收尾范围,绝不能 Del 掉。
 		return
 	}
 
@@ -309,11 +334,22 @@ func reconcileDeadNodeScenes(svcCtx *svc.ServiceContext, entry nodeEntry) {
 
 		logx.Infof("[Reconcile] Force-destroying orphan instance %d (was on dead node %s, zone %d)",
 			sceneId, entry.nodeID, zoneId)
-		destroyInstanceForce(context.Background(), svcCtx, zoneId, sceneId, "node_death")
+		destroyInstanceForce(ctx, svcCtx, zoneId, sceneId, "node_death")
 		destroyed++
 	}
 
-	svcCtx.Redis.Del(setKey)
+	// 只摘掉快照里的成员,不 Del 整个集合:屏障窗口里可能有新场景被建到同一个
+	// node_id 上并加进了这个集合,Del 会把它们的反向索引一起抹掉,以后再没有
+	// 任何路径能发现它们。集合被摘空后 Redis 会自动回收键。
+	if len(members) > 0 {
+		values := make([]any, 0, len(members))
+		for _, m := range members {
+			values = append(values, m)
+		}
+		if _, err := svcCtx.Redis.Srem(setKey, values...); err != nil {
+			logx.Errorf("[Reconcile] Srem %s failed: %v", setKey, err)
+		}
+	}
 
 	metrics.ObserveSceneOrphansReconciled(zoneId, destroyed)
 
@@ -573,17 +609,27 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 					svcCtx.Redis.Zrem(loadKey, p.Key)
 					svcCtx.Redis.Del(nodeSceneNodeTypeKey(zoneId, p.Key))
 					RemoveNodeConn(zoneId, p.Key)
-					// SceneManager 停机期间(以及领导者缺位窗口内)死掉的
-					// 节点走不到 watch DELETE,它的孤儿实例场景和计数残留
-					// 都要在这里补清 —— 这也是新任领导者补齐跟随期间漏掉
-					// 的 DELETE 事件的唯一路径(理由见 removeNodeFromRedis)。
+					// SceneManager 停机 / 领导者缺位窗口期间死掉的节点走不到
+					// watch DELETE,这里是唯一能观察到它们消失的地方。死亡时刻
+					// 必须补记:不记的话 CanReclaimDeadNode 读不到标记,会把它们
+					// 当成「没死过」直接放行改派,而它们很可能是几秒前刚断的、
+					// C++ 侧还在 drain。我们不知道真实死亡时刻,只能用「首次
+					// 观察到」这个偏晚的时刻 —— 方向是安全的(屏障结束点跟着偏晚)。
+					markNodeDeath(svcCtx, zoneId, p.Key)
+					// 孤儿实例场景与计数残留也只有这条路径能补收(这也是新任
+					// 领导者补齐跟随期间漏掉的 DELETE 事件的唯一路径)。与 watch
+					// DELETE 同构:入队等再入屏障走完,由 drainPendingDeadNodeReconciles
+					// 收尾;计数由它在 reconcile **之后**清(顺序理由见 deleteNodeCounters)。
 					staleEntry := nodeEntry{nodeID: p.Key}
 					staleEntry.reg.ZoneId = zoneId
-					reconcileDeadNodeScenes(svcCtx, staleEntry)
-					deleteNodeCounters(svcCtx, zoneId, p.Key)
+					enqueueDeadNodeReconcile(svcCtx, staleEntry)
 				}
 			}
 		}
+
+		// watch 中断期间入队的死节点收尾在这里也推一把:屏障已过的立刻做掉,
+		// 没过的原样留在队列里等下一拍。
+		drainPendingDeadNodeReconciles(ctx, svcCtx)
 
 		// Ensure world scenes for all zones (handles SceneManager restart). We
 		// run init followed by a rebalance pass: init handles under-provisioning
@@ -647,6 +693,9 @@ func watchAndRefresh(ctx context.Context, svcCtx *svc.ServiceContext, rev int64)
 			}
 		case <-loadTicker.C:
 			refreshLoadScores(svcCtx)
+			// 被再入屏障压着的死节点收尾:屏障(默认 20s)远大于一拍(5s),
+			// 所以「等屏障」就是「多等几拍」,不需要每个死节点起一条 goroutine。
+			drainPendingDeadNodeReconciles(ctx, svcCtx)
 		case <-rebalanceTicker:
 			runPeriodicRebalance(ctx, svcCtx)
 		case <-loadReporterResync:
@@ -722,6 +771,10 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 					entry.nodeID, prev.reg.ZoneId, entry.reg.ZoneId, key)
 			}
 		}
+
+		// 节点(重新)注册 = 它此刻是活的,上一次的死亡标记必须抹掉,否则
+		// IsNodeAlive 说活、再入屏障却还压着它名下的场景,两个判定自相矛盾。
+		clearNodeDeath(svcCtx, entry.reg.ZoneId, entry.nodeID)
 
 		// Clear stale gRPC connection: endpoint may have changed after restart.
 		RemoveNodeConn(entry.reg.ZoneId, entry.nodeID)

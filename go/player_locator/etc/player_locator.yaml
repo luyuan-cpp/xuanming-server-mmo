@@ -40,3 +40,28 @@ SceneManagerRpc:
       - 127.0.0.1:2379
     Key: scenemanagerservice.rpc
   Timeout: 3000
+
+# RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
+# 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。
+# 关停某个方法:etcdctl put /mmorpg/killswitch/playerlocator.PlayerLocator/GetLocation '{"deny":true,"reason":"..."}'
+# 关停整个服务:etcdctl put /mmorpg/killswitch/playerlocator.PlayerLocator/'*' true
+# 恢复:etcdctl del 对应的 key。
+# ⚠️ SetSession / SetDisconnecting 是会话租约链的写入点,关掉会留下永久 ONLINE 的
+# 会话(只能靠会话对账扫描事后补),止血请优先关只读方法。
+KillSwitchPrefix: ""
+
+# Prometheus 抓取端点,由 go-zero core/service 自带的 agent 暴露(不要另起 promhttp)。
+# 端口分工:login 9101 / scene_manager 9150 / db 9160 / guild 9170 / friend 9180 /
+# player_locator 9190。dev 下绑 127.0.0.1,避免指标泄到本机以外;
+# staging/prod 改绑 0.0.0.0 让 Prometheus / Grafana 抓得到。
+# 留空 Host 即彻底关闭 /metrics(go-zero 的 StartAgent 直接 return)。
+#
+# 本服务没有 in-band 业务码(PlayerLocator 的响应要么是 Empty,要么用
+# ReconnectResponse.success + 自由文本 error_message),失败一律走 gRPC status。
+# 所以 shared/serverbase 在这里主要提供统一的 rpc_duration_seconds{method,status},
+# 其中 status=transport_error 就是真实失败率。另外还有:
+#   safego_panic_total{point}  - 后台循环(租约监视 / 会话对账)被兜住的 panic,应恒 0
+Prometheus:
+  Host: 127.0.0.1
+  Port: 9190
+  Path: /metrics

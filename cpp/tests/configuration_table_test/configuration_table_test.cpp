@@ -37,6 +37,22 @@ namespace
 } // namespace
 
 // ---------------------------------------------------------------------------
+// BaseDeployConfig YAML -> proto 显式映射
+// ---------------------------------------------------------------------------
+
+TEST(BaseDeployConfigTest, GateMaxConnectionsUsesShippedSafeDefault)
+{
+	const auto maxConnections =
+		tlsNodeConfigManager.GetBaseDeployConfig().gate_max_connections();
+
+	// 漏掉 config.cpp 的显式字段映射时,proto3 会静默回落到 0(不限)。
+	// 这里既钉住仓库默认值,也钉住安全的 session-id 空间上界。
+	EXPECT_EQ(maxConnections, 20000u);
+	EXPECT_GT(maxConnections, 0u);
+	EXPECT_LE(maxConnections, 131071u);
+}
+
+// ---------------------------------------------------------------------------
 // 验证各配置表能正常加载并遍历
 // ---------------------------------------------------------------------------
 

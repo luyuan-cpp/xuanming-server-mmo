@@ -37,6 +37,34 @@ ServerConfig:
     Hosts: "127.0.0.1:3306"
     User: "root"
     Passwd: "Mmorpg#2026db"
+    # ── 库名白名单(启动期硬断言)────────────────────────────────────
+    # DBName 由 ZoneId 现拼(zone_{ZoneId}_db),而 ZoneId 是最容易填错的字段:
+    # 填错一位就会在生产实例上静默建出新库、建全套表、把玩家数据写进去且无人
+    # 看到报错。所以启动时会 SELECT DATABASE() 并要求它落在这份**与 ZoneId
+    # 无关的外部清单**里,不在就拒启。
+    # 解析优先级:环境变量 DB_ALLOWED_DATABASES > AllowedDatabasesFile > 本字段。
+    # 生产部署请在 Deployment 上注入 DB_ALLOWED_DATABASES,不要依赖本文件。
+    AllowedDatabases: []
+    # AllowlistEnforcement=warn 表示「三个来源全空时打 WARN 放行」。
+    # ⚠️ 本文件是**本地/dev 配置**(127.0.0.1 + MetricsListenAddr 都是 dev 默认),
+    # 本地 go_services.ps1 会按 -Zone 改写 ZoneId,写死清单反而挡住多 zone 调试。
+    # 生产配置一律不要带这一行(缺省即 strict = 拒启)。
+    AllowlistEnforcement: warn
+    # ── 启动期 DDL 开关(默认全关)──────────────────────────────────
+    # 历史行为等价于两个都 true:InitDB() 会逐张跑 CreateOrUpdateTable。
+    # 多 zone × 多副本同时启动会对同一张大表并发 ALTER,MDL 阻塞会让整个 zone
+    # 的 db_task 消费停摆;proto2mysql 还会在类型不匹配时自动 MODIFY COLUMN,
+    # 无版本记录、无 lock 超时。生产改为部署阶段跑:
+    #     go run ./cmd/migrate -f etc/db.yaml -command up
+    # 本地为了「起了就能用」保持 true;要临时回退线上行为可用环境变量
+    # DB_AUTO_CREATE_DATABASE=1 / DB_AUTO_MIGRATE_SCHEMA=1 覆盖(见 README)。
+    AutoCreateDatabase: true
+    AutoMigrateSchema: true
+    Migration:
+      LockWaitSeconds: 5           # MDL 等待上限:撞上长事务时秒级失败,别堵死整表
+      InnodbLockWaitSeconds: 5     # 行锁等待上限
+      StatementTimeoutSeconds: 300 # 单条 DDL 硬超时,超时后旁路 KILL QUERY
+      AdvisoryLockSeconds: 60      # GET_LOCK 等待:多副本同时部署时后到的排队
     MaxOpenConn: 60 # 2026-05-28 deep-dive §1: 10 was the real bottleneck.
                     # partition=10 + MaxOpenConn=10 meant every worker
                     # competed for exactly one MySQL connection; under
@@ -59,6 +87,23 @@ ServerConfig:
     DefaultTTLSeconds: 3600
     Password: ""
     DB: 0
+  # ── 大字段三档闸(db_task 落库路径)──────────────────────────────
+  # 上限按**设计期望**定,不是按 MEDIUMBLOB 的 16MB 定 —— 按 16MB 设等于没设,
+  # 等它触发时单次存盘早就把 MySQL 往返 + Redis 写回一起拖垮了。
+  # 玩家单个组件 blob 的设计量级是个位数 KB,256KiB 已留一到两个数量级余量。
+  # 量的是**入库字节**:proto2mysql 把子消息 base64 后再入库,≈ 序列化字节 ×4/3。
+  # 观测:db_blob_bytes{table,column} / db_blob_row_bytes{table} 两个 histogram
+  #      (看 p99,不是 max)+ db_blob_guard_total{table,column,level} 计数。
+  BlobGuard:
+    MaxColumnBytes: 262144   # 256 KiB / 列
+    MaxRowBytes: 1048576     # 1 MiB / 行(所有 blob 列之和)
+    WarnRatio: 0.8           # 到 80% 打 WARN + counter,仍放行
+    ReportOnly: false        # 超限拒写。灰度期可临时设 true 先只观测
+    PerTable:
+      # 快照天然就大,单独放宽;它不走 db_task 路径,这里只是把口径写明白。
+      player_snapshot:
+        MaxColumnBytes: 8388608
+        MaxRowBytes: 8388608
 
 # Prometheus /metrics endpoint. Dev default; disable for prod by setting
 # empty string. Exposes:

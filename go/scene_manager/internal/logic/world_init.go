@@ -259,7 +259,13 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 				}
 				newNode := assignNodeByHash(confId*1000+uint64(ensured), liveNodes)
 				logx.Infof("[World] Reassigning scene %d from dead node %s to live node %s", sceneId, targetNode, newNode)
-				reassignSceneNode(svcCtx, zoneId, sceneId, targetNode, newNode)
+				// 再入屏障未到时 reassignSceneNode 什么都不改,此时既不能转移
+				// Agones 名额,也不能把 CreateScene 发到新节点上 —— 归属还在
+				// 老节点手里,建出来的实体是没有归属的孤儿。跳过本轮,下一次
+				// initWorldScenesForZone / rebalance 会重来。
+				if !reassignSceneNode(svcCtx, zoneId, sceneId, targetNode, newNode) {
+					continue
+				}
 				// 频道换了节点,Agones 名额必须跟着走。旧节点已死,它的 GameServer
 				// 迟早被 Agones 回收、计数随对象一起消失,所以释放是尽力而为;
 				// 但**在新节点上占一份**不能省 —— 不占的话这个频道在新进程上
@@ -283,14 +289,19 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 					if len(liveNodes) > 0 {
 						newNode := assignNodeByHash(confId*1000+uint64(ensured), liveNodes)
 						logx.Infof("[World] Retrying scene %d on live node %s after dead node %s", sceneId, newNode, targetNode)
-						reassignSceneNode(svcCtx, zoneId, sceneId, targetNode, newNode)
-						// 同上:重试落到新节点,名额也要跟过去。
-						TransferAgonesRoomForScene(ctx, svcCtx, sceneId, newNode, zoneId)
-						retryCtx, retryCancel := context.WithTimeout(ctx, worldInitCreateRPCTimeout)
-						_, retryErr := RequestNodeCreateScene(retryCtx, svcCtx, zoneId, newNode, uint32(confId), sceneId)
-						retryCancel()
-						if retryErr != nil {
-							logx.Errorf("[World] Retry also failed for conf %d scene %d on node %s: %v", confId, sceneId, newNode, retryErr)
+						// 屏障未到就连重试都不做:归属没改,发 CreateScene 只会
+						// 在新节点上造一个没有归属的实体。
+						if reassignSceneNode(svcCtx, zoneId, sceneId, targetNode, newNode) {
+							// 同上:重试落到新节点,名额也要跟过去。
+							TransferAgonesRoomForScene(ctx, svcCtx, sceneId, newNode, zoneId)
+							// 锁内 RPC 必须限时,黑洞节点会把持锁顶过 TTL
+							//(见 worldInitCreateRPCTimeout 注释)。
+							retryCtx, retryCancel := context.WithTimeout(ctx, worldInitCreateRPCTimeout)
+							_, retryErr := RequestNodeCreateScene(retryCtx, svcCtx, zoneId, newNode, uint32(confId), sceneId)
+							retryCancel()
+							if retryErr != nil {
+								logx.Errorf("[World] Retry also failed for conf %d scene %d on node %s: %v", confId, sceneId, newNode, retryErr)
+							}
 						}
 					}
 				}
@@ -374,6 +385,11 @@ func GetBestWorldChannel(ctx context.Context, svcCtx *svc.ServiceContext, confId
 		targetNode := assignNodeByHash(confId*1000+uint64(i), liveNodes)
 		nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
 		oldNode, _ := svcCtx.Redis.Get(nodeKey)
+		// 再入屏障:老属主刚判死时仍可能在 SavePlayerToRedis,懒改派同样不能抢。
+		// 换下一个陈旧频道试,全都被挡住就返回"没有可用频道",上游退避重试。
+		if oldNode != "" && reentryBarrierBlocks(svcCtx, zoneId, oldNode, barrierSiteWorldChannelLazy) {
+			continue
+		}
 		if err := svcCtx.Redis.Set(nodeKey, targetNode); err != nil {
 			logx.Errorf("[World] Lazy-reassign: failed to update scene %d -> node %s: %v", sceneId, targetNode, err)
 			continue
@@ -445,6 +461,10 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 			targetNode := assignNodeByHash(confId*1000+uint64(i), liveNodes)
 			nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
 			oldNode, _ := svcCtx.Redis.Get(nodeKey)
+			// 同 GetBestWorldChannel:老属主刚判死时不抢归属,换下一个陈旧频道。
+			if oldNode != "" && reentryBarrierBlocks(svcCtx, zoneId, oldNode, barrierSiteWorldChannelLazy) {
+				continue
+			}
 			if err := svcCtx.Redis.Set(nodeKey, targetNode); err != nil {
 				logx.Errorf("[World] Reserve lazy-reassign: failed to update scene %d -> node %s: %v", sceneId, targetNode, err)
 				continue
@@ -474,17 +494,29 @@ func ReserveBestWorldChannelForEnter(ctx context.Context, svcCtx *svc.ServiceCon
 // node:zone:{zoneId}:{nodeId}:scenes membership on both sides. Errors are logged and
 // swallowed — the reverse index is best-effort and the node-death
 // reconciliation loop double-checks scene:{id}:node before destroying.
-func reassignSceneNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, oldNode, newNode string) {
+//
+// 这是**所有权改写的收口点**:全模块改写 scene:{id}:node 的路径都应经过它
+// (resolveScene 因为要在同一分支里发 CreateScene 而单独判定,判定同源)。
+// 所以再入屏障在这里再判一次 —— 调用方在计划阶段判过的那次可能已经隔了几个
+// RPC,期间老节点的死亡时刻才刚写进 Redis。
+//
+// 返回 false 表示**什么都没改**:屏障未到,或者 Set 失败。调用方必须据此
+// 跳过后续的 Agones 名额转移 / CreateScene,否则会在没有归属的节点上建实体。
+func reassignSceneNode(svcCtx *svc.ServiceContext, zoneId uint32, sceneId uint64, oldNode, newNode string) bool {
+	if oldNode != "" && reentryBarrierBlocks(svcCtx, zoneId, oldNode, barrierSiteReassign) {
+		return false
+	}
 	nodeKey := fmt.Sprintf("scene:%d:node", sceneId)
 	if err := svcCtx.Redis.Set(nodeKey, newNode); err != nil {
 		logx.Errorf("[reassign] Failed to update scene %d -> node %s: %v", sceneId, newNode, err)
-		return
+		return false
 	}
 	sceneStr := fmt.Sprintf("%d", sceneId)
 	if oldNode != "" && oldNode != newNode {
 		svcCtx.Redis.Srem(nodeScenesKey(zoneId, oldNode), sceneStr)
 	}
 	svcCtx.Redis.Sadd(nodeScenesKey(zoneId, newNode), sceneStr)
+	return true
 }
 
 // GetAllWorldChannels returns all channel sceneIds for a confId in a zone.

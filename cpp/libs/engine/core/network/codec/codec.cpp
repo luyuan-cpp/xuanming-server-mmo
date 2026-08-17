@@ -9,6 +9,7 @@
 #include "network/codec/codec.h"
 
 #include <cassert>
+#include <cstdint>
 #include "muduo/base/Logging.h"
 #include "muduo/net/Endian.h"
 #include "muduo/net/protorpc/google-inl.h"
@@ -119,10 +120,25 @@ void ProtobufCodec::defaultErrorCallback(const muduo::net::TcpConnectionPtr& con
                                          muduo::Timestamp,
                                          ErrorCode errorCode)
 {
-  LOG_ERROR << "ProtobufCodec::defaultErrorCallback - " << errorCodeToString(errorCode);
-  if (conn && conn->connected())
+  // 客户端可完全控制解析错误频率;逐帧 ERROR 会把公网坏包放大成同步日志 I/O。
+  // 本 codec 只用于 gate 的单 EventLoop 客户端监听,每 1024 次汇总一行即可。
+  static uint64_t errorCount = 0;
+  if ((errorCount++ & 0x3FF) == 0)
   {
-    conn->shutdown();
+    LOG_ERROR << "Protobuf client frames rejected (sampled), reason="
+              << errorCodeToString(errorCode)
+              << " rejected_total=" << errorCount
+              << " peer=" << (conn ? conn->peerAddress().toIpPort() : "N/A");
+  }
+
+  if (buf)
+  {
+    // 丢掉同一批已 pipeline 的帧,拒绝后不能继续分发。
+    buf->retrieveAll();
+  }
+  if (conn)
+  {
+    conn->forceClose();
   }
 }
 
@@ -137,14 +153,19 @@ void ProtobufCodec::onMessage(const TcpConnectionPtr& conn,
                               Buffer* buf,
                               Timestamp receiveTime)
 {
+  // shutdown()/forceClose() 会先把状态改成 kDisconnecting,实际 close 可能排队。
+  // 这段窗口里继续解析会让攻击者在一次 pipeline 中触发多次处理/日志/RPC。
+  if (!conn || !conn->connected())
+  {
+    buf->retrieveAll();
+    return;
+  }
+
   while (buf->readableBytes() >= kMinMessageLen + kHeaderLen)
   {
     const int32_t len = buf->peekInt32();
     if (len > maxMessageLen_ || len < kMinMessageLen)
     {
-      LOG_ERROR << "ProtobufCodec::onMessage InvalidLength len=" << len
-                << " (min=" << kMinMessageLen << " max=" << maxMessageLen_ << ")"
-                << " peer=" << (conn ? conn->peerAddress().toIpPort() : "N/A");
       errorCallback_(conn, buf, receiveTime, kInvalidLength);
       break;
     }
@@ -156,6 +177,12 @@ void ProtobufCodec::onMessage(const TcpConnectionPtr& conn,
       {
         messageCallback_(conn, message, receiveTime);
         buf->retrieve(kHeaderLen+len);
+        if (!conn->connected())
+        {
+          // handler 已拒绝连接;同一 read 中剩余的 pipeline 帧全部作废。
+          buf->retrieveAll();
+          break;
+        }
       }
       else
       {

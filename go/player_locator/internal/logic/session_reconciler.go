@@ -14,6 +14,7 @@ import (
 	"player_locator/internal/svc"
 	base "proto/common/base"
 	pb "proto/player_locator"
+	"shared/safego"
 )
 
 // 会话对账扫描:兜住「gate 整机崩溃 → TCP 断开回调不执行 → SetDisconnecting
@@ -93,7 +94,12 @@ func StartSessionReconciler(
 			logx.Info("SessionReconciler stopped")
 			return
 		case <-ticker.C:
-			reconcileOnce(ctx, svcCtx, etcdCli, suspects)
+			// 与 LeaseMonitor 同理:recover 收到"一轮"。对账扫描本身就是兜底链路,
+			// 它自己因为一条畸形会话 panic 而永久停摆的话,gate 崩溃留下的永久
+			// ONLINE 会话就再也没有自动清理路径(只剩人工 SCAN)。
+			safego.Run("player_locator.session_reconciler.round", func() {
+				reconcileOnce(ctx, svcCtx, etcdCli, suspects)
+			})
 		}
 	}
 }

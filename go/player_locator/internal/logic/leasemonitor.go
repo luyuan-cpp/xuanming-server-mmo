@@ -16,6 +16,7 @@ import (
 	kafkapb "proto/contracts/kafka"
 	pb "proto/player_locator"
 	smpb "proto/scene_manager"
+	"shared/safego"
 )
 
 const (
@@ -43,7 +44,13 @@ func StartLeaseMonitor(ctx context.Context, svcCtx *svc.ServiceContext, pollInte
 			logx.Info("LeaseMonitor stopped")
 			return
 		case <-ticker.C:
-			processExpiredLeases(ctx, svcCtx, batchSize)
+			// recover 的作用域精确到"一轮":某一轮 panic(例如某条 claim 的载荷
+			// 触发了下游的空指针)只丢掉这一轮,下一个 tick 照常继续。
+			// 不包的话,整条 LeaseMonitor 会永久停摆 —— 进程还活着、日志不再有新行,
+			// 所有断线玩家的会话从此没人清理,是最难被发现的一类故障。
+			safego.Run("player_locator.lease_monitor.round", func() {
+				processExpiredLeases(ctx, svcCtx, batchSize)
+			})
 		}
 	}
 }
@@ -81,7 +88,13 @@ func startLeaseClaimHeartbeat(
 
 	heartbeatCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
-	go func() {
+	// 用 safego.Go 而不是裸 `go func`:这条续期循环一旦 panic,裸写法会把整个
+	// player_locator 进程打死 —— 而它跑在"已经领了 claim、副作用做到一半"的窗口里,
+	// 正是最不该整进程消失的时刻。外层兜住 panic 保住进程,内层 safego.Run 把
+	// recover 的作用域收到**一轮**:某一次续期炸掉只丢这一轮,循环继续按节拍跑,
+	// 否则 claim 会在无人续期的情况下静默过期、被别的 worker 重复领走。
+	// defer close(done) 在 panic 展开时照样执行,所以下面返回的 stop 函数不会挂死。
+	safego.Go("player_locator.lease_claim_heartbeat", func() {
 		defer close(done)
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
@@ -90,12 +103,14 @@ func startLeaseClaimHeartbeat(
 			case <-heartbeatCtx.Done():
 				return
 			case now := <-ticker.C:
-				if _, err := renewLeaseClaims(heartbeatCtx, svcCtx, claims, now.Add(claimTTL)); err != nil && heartbeatCtx.Err() == nil {
-					logx.Errorf("LeaseMonitor: renew processing claims failed: %v", err)
-				}
+				safego.Run("player_locator.lease_claim_heartbeat.round", func() {
+					if _, err := renewLeaseClaims(heartbeatCtx, svcCtx, claims, now.Add(claimTTL)); err != nil && heartbeatCtx.Err() == nil {
+						logx.Errorf("LeaseMonitor: renew processing claims failed: %v", err)
+					}
+				})
 			}
 		}
-	}()
+	})
 
 	return func() {
 		cancel()
