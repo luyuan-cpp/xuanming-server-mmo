@@ -1,0 +1,44 @@
+# 离线导航网格烘焙工具(见 navmesh_baker.cpp 文件头说明)。
+#
+# 必须与运行时同一套 ue5navmesh 源码/布局编译(dtReal=double、
+# WITH_NAVMESH_* 全部不定义),否则产出的 bin 与 scene 节点的
+# LoadNavMesh 二进制不兼容。
+#
+# 构建(Windows,由 Codex 执行):
+#   cmake -S tools/navmesh_baker -B tools/navmesh_baker/build
+#   cmake --build tools/navmesh_baker/build --config Release
+# Linux:
+#   cmake -S tools/navmesh_baker -B tools/navmesh_baker/build && cmake --build tools/navmesh_baker/build
+
+cmake_minimum_required(VERSION 3.22)
+project(navmesh_baker CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(UE5NAVMESH_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../third_party/ue5navmesh)
+
+file(GLOB RECAST_SOURCES ${UE5NAVMESH_DIR}/Private/Recast/*.cpp)
+set(DETOUR_SOURCES
+    ${UE5NAVMESH_DIR}/Private/Detour/DetourAlloc.cpp
+    ${UE5NAVMESH_DIR}/Private/Detour/DetourCommon.cpp
+    ${UE5NAVMESH_DIR}/Private/Detour/DetourNavMesh.cpp
+    ${UE5NAVMESH_DIR}/Private/Detour/DetourNavMeshBuilder.cpp
+    ${UE5NAVMESH_DIR}/Private/Detour/DetourNavMeshQuery.cpp
+    ${UE5NAVMESH_DIR}/Private/Detour/DetourNode.cpp
+)
+
+add_executable(navmesh_baker
+    navmesh_baker.cpp
+    ${RECAST_SOURCES}
+    ${DETOUR_SOURCES}
+)
+
+target_include_directories(navmesh_baker PRIVATE ${UE5NAVMESH_DIR}/Public)
+
+if(WIN32)
+    # WIN32 宏对齐 third_party.vcxproj 的 ue5navmesh 编译配置
+    # (CoreMinimal.h 用它决定 TEXT/Windows.h 分支)。
+    target_compile_definitions(navmesh_baker PRIVATE
+        WIN32 NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+endif()

@@ -76,7 +76,8 @@ Kafka:
 # Gate 连接令牌 HMAC 共享密钥（Login 签发，Gate 验证）
 # 必须与 Go Login 的 GateTokenSecret 保持一致。
 # 空值时 Gate 跳过令牌验证（开发/测试模式）。
-GateTokenSecret: "change-me-in-production-use-a-strong-random-key"
+# 2026-08-18 与 go/login/etc/login.yaml Secrets.GateToken 同步(login 侧已切新密钥)
+GateTokenSecret: "local-dev-gate-token-secret-0123456789abcdef"
 
 # Gate 并发客户端连接上限。生产必须在 1..131071 内取值;
 # 0 仅允许显式 GATE_RUN_MODE=dev|test 的本地调试,表示关闭运维阈值,

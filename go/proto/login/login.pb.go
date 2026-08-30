@@ -373,6 +373,8 @@ func (x *TestResponse) GetTestint() []int32 {
 
 type CreatePlayerRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
+	ClassId       uint32                 `protobuf:"varint,1,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"` // 职业(Class 配表 id);0 = 兼容旧客户端,取配表第一个职业
+	Gender        uint32                 `protobuf:"varint,2,opt,name=gender,proto3" json:"gender,omitempty"`                  // 1=男 2=女;0 = 兼容旧客户端,默认 1
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -405,6 +407,20 @@ func (x *CreatePlayerRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use CreatePlayerRequest.ProtoReflect.Descriptor instead.
 func (*CreatePlayerRequest) Descriptor() ([]byte, []int) {
 	return file_proto_login_login_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *CreatePlayerRequest) GetClassId() uint32 {
+	if x != nil {
+		return x.ClassId
+	}
+	return 0
+}
+
+func (x *CreatePlayerRequest) GetGender() uint32 {
+	if x != nil {
+		return x.Gender
+	}
+	return 0
 }
 
 type CreatePlayerResponse struct {
@@ -1351,8 +1367,10 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\n" +
 	"teststring\x18\x03 \x03(\tR\n" +
 	"teststring\x12\x18\n" +
-	"\atestint\x18\x04 \x03(\x05R\atestint\"\x15\n" +
-	"\x13CreatePlayerRequest\"\x8b\x01\n" +
+	"\atestint\x18\x04 \x03(\x05R\atestint\"H\n" +
+	"\x13CreatePlayerRequest\x12\x19\n" +
+	"\bclass_id\x18\x01 \x01(\rR\aclassId\x12\x16\n" +
+	"\x06gender\x18\x02 \x01(\rR\x06gender\"\x8b\x01\n" +
 	"\x14CreatePlayerResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12=\n" +
 	"\aplayers\x18\x02 \x03(\v2#.loginpb.AccountSimplePlayerWrapperR\aplayers\"N\n" +
@@ -1438,7 +1456,7 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\x10QueryQueueStatus\x12 .loginpb.QueryQueueStatusRequest\x1a!.loginpb.QueryQueueStatusResponse2\x80\x01\n" +
 	"\n" +
 	"LoginAdmin\x12r\n" +
-	"\x19RemovePlayersFromAccounts\x12).loginpb.RemovePlayersFromAccountsRequest\x1a*.loginpb.RemovePlayersFromAccountsResponseB\rZ\vproto/loginb\x06proto3"
+	"\x19RemovePlayersFromAccounts\x12).loginpb.RemovePlayersFromAccountsRequest\x1a*.loginpb.RemovePlayersFromAccountsResponseB\x13Z\x11login/proto/loginb\x06proto3"
 
 var (
 	file_proto_login_login_proto_rawDescOnce sync.Once

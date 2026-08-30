@@ -12,6 +12,7 @@ import (
 	login_proto_common "proto/common/base"
 	login_data_base "proto/common/database"
 	login_proto "proto/login"
+	gametable "shared/generated/table"
 	"shared/generated/pb/table"
 	"time"
 
@@ -102,6 +103,27 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		logx.Infof("Account player limit reached: %s", account)
 		return resp, nil
 	}
+
+	// 6a. 职业/性别参数(class_id=0 / gender=0 兼容旧客户端与 robot:取配表第一个职业、默认男)
+	classId := in.ClassId
+	if classId == 0 {
+		if rows := gametable.ClassTableManagerInstance.FindAll(); len(rows) > 0 {
+			classId = rows[0].Id
+		}
+	} else if !gametable.ClassTableManagerInstance.Exists(classId) {
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginUnknownError)}
+		logx.Errorf("CreatePlayer rejected: class_id=%d not in Class table (account=%s)", classId, account)
+		return resp, nil
+	}
+	gender := in.Gender
+	if gender == 0 {
+		gender = 1
+	}
+	if gender > 2 {
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginUnknownError)}
+		logx.Errorf("CreatePlayer rejected: gender=%d invalid (account=%s)", in.Gender, account)
+		return resp, nil
+	}
 	// 失去 worker id 所有权后发号器被 fence,建角整体失败。
 	// 绝不能吞掉错误再用 0 或自造 id —— 那会与接管了同一 worker id 的进程
 	// 发出逐位相同的 PlayerId,而 player_database 上并没有唯一索引兜底。
@@ -112,7 +134,12 @@ func (l *CreatePlayerLogic) CreatePlayer(in *login_proto.CreatePlayerRequest) (*
 		return resp, nil
 	}
 	newPlayerId := uint64(generatedID)
-	newPlayer := &login_proto_common.AccountSimplePlayer{PlayerId: newPlayerId}
+	newPlayer := &login_proto_common.AccountSimplePlayer{
+		PlayerId: newPlayerId,
+		ClassId:  classId,
+		Gender:   gender,
+		ZoneId:   config.AppConfig.Node.ZoneId,
+	}
 	userAccount.SimplePlayers.Players = append(userAccount.SimplePlayers.Players, newPlayer)
 
 	// 7. Write back to Redis

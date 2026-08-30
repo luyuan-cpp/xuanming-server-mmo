@@ -1,6 +1,6 @@
 # player_locator service config
 Name: playerlocator.rpc
-ListenOn: 127.0.0.1:51200
+ListenOn: 127.0.0.1:53200
 Timeout: 10000
 
 Etcd:

@@ -73,6 +73,7 @@
     <ClInclude Include="spatial\system\interest.h" />
     <ClInclude Include="spatial\system\movement.h" />
     <ClInclude Include="spatial\system\movement_acceleration.h" />
+    <ClInclude Include="spatial\system\nav_query.h" />
     <ClInclude Include="spatial\system\navigation.h" />
     <ClInclude Include="spatial\system\recast.h" />
     <ClInclude Include="spatial\system\scene_crowd.h" />
@@ -116,6 +117,7 @@
     <ClCompile Include="spatial\system\interest.cpp" />
     <ClCompile Include="spatial\system\movement.cpp" />
     <ClCompile Include="spatial\system\movement_acceleration.cpp" />
+    <ClCompile Include="spatial\system\nav_query.cpp" />
     <ClCompile Include="spatial\system\navigation.cpp" />
     <ClCompile Include="spatial\system\recast.cpp" />
     <ClCompile Include="spatial\system\scene_crowd.cpp" />

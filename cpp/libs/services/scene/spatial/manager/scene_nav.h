@@ -26,5 +26,14 @@ public:
 
     bool Contains(uint32_t id) { return sceneNav.contains(id); }
 
+    // 场景配置 id → 导航;未烘焙/未注册返回 nullptr(LoadNavBins fail-closed,
+    // 加载失败的场景不会出现在表里)。指针生命周期 = 本线程整个进程期,
+    // NavComp 不可搬家(见 nav_comp.h),裸指针可以安全短持。
+    NavComp* Get(uint32_t id)
+    {
+        const auto it = sceneNav.find(id);
+        return it == sceneNav.end() ? nullptr : it->second.get();
+    }
+
 	SceneNavMapComp sceneNav;
 };

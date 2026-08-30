@@ -3283,3 +3283,60 @@ Codex 分工以该指令为准,仅此一轮)。
 **当前栈**:etcd/redis/kafka/mysql(容器)+ db/data_service×2/player_locator×2/
 login×2/scene_manager×2/match + gate×2/scene×4 + satoken(18080)/gateway(8081)。
 Unity 客户端默认网关 http://127.0.0.1:8081,零配置可连。
+
+## 2026-08-18 登录选角/建角闭环(选区 → 无角色建角(职业/性别)→ 有角色选角 → 进入场景)
+
+需求:用户选区点击进入后,该区无角色则先创建角色(选职业+性别),有角色则选择角色进入游戏。
+
+### 契约(proto,开发期字段号)
+- `proto/common/base/user_accounts.proto`:`AccountSimplePlayer` 加 `class_id(2)/gender(3)/zone_id(4)`(建角时盖归属区;0=存量旧数据)
+- `proto/login/login.proto`:`CreatePlayerRequest` 加 `class_id(1)/gender(2)`(0=兼容旧客户端/robot,服务端取默认:配表第一个职业、男)
+- **只重生成了 Go(protoc + M 映射,与原产物 import 布局一致)与客户端 C#**;C++/robot vendor 生成树未动 —— protobuf 未知字段透传,旧 gate/scene 二进制兼容,下次全量 proto-gen 时自然收敛
+
+### go/login
+- `createplayerlogic.go`:接收 class_id/gender;class 按 `gametable.ClassTableManagerInstance.Exists` 校验(非法回 kLoginUnknownError),gender 限 1/2;新角色盖 `ZoneId = config.AppConfig.Node.ZoneId`
+- login.exe 已重编并重启(本会话早些时候顺带修了 8/17 合并的 Secrets 配置块 vs 旧 exe 不兼容问题)
+- loginlogic 应答透传 AccountSimplePlayer 对象,新字段自动带给客户端;Java gateway 手写解码器**未**补新字段(HTTP /api/login 的 players 仍只有 player_id,选角走 TCP LoginResponse,不阻塞)
+
+### mmorpg-client(Unity)
+- `Game/GameClient.cs`:管线拆开 —— 新增 `PlayerChooser` 钩子(zoneId+区内角色列表 → PlayerChoice{选角/建角(class,gender)/取消});`ConnectAndEnter` 带 zoneId 按区过滤(zone_id==0 存量角色任何区可见);重定向沿用 `_redirectPlayerId`(修掉旧"重定向后回 Players[0]"的隐患);无钩子(测试/robot 口径)保持旧行为:区内无角色默认建号、有则第一个。`CreatePlayerCo` 从全量列表 diff 新角色 id
+- 新增 `UI/Ugui/Role/RoleFlowUi.cs`:纯代码 Canvas(sortingOrder 150),选角屏(行点击即进入,标注[上次])+ 建角屏(4 职业:剑修1/法修2/丹修3/体修4 + 性别男1/女2);AppBootstrap uGUI 分支挂接
+- `Core/ClientSettings.cs`:`mmorpg.lastplayer.{zone}` 记每区最近角色
+- C# proto 已重生成(gen_proto.ps1,protoc 用 third_party/grpc/install_vs2026 vendor);无新 RPC,MessageIds 不变
+
+### 已知缺口(后续)
+- `PlayerUint32Comp.class` 仍无人消费:scene 侧 `player_skill.cpp:51` 还是全职业技能并集,且 class/gender 未落 player_database(账号档有、玩家存档无)。要玩法生效需:EnterGame 链路把 class 带到 scene 首登初始化 + `FindClassTableById` 按职业发技能 + 初始属性表
+- Class 配表 id 2-9 技能全是占位 `[1,1,1]`;客户端只放前 4 个职业
+- 全区全服口径下"角色列表全服共享/存档分区"的既有错配未在本轮处理(见 2026-08-15 TiDB 决策文档)
+
+## 2026-08-20 主城可见角色:补发 self ActorCreate + 客户端 2.5D 画布地面重构
+
+### 根因
+- 单人在线时客户端收不到任何 ActorCreate:AOI 可见性遍历刻意跳过 observer 自己(`aoi.cpp HandleEntityVisibility` 的 `otherEntity == entity` 分支),且全服务端没有其他路径下发"自己的 actor"。客户端 `SpawnActorView` 依赖 `guid == player_id` 绑定本地角色 → 本地角色/相机跟随/移动控制器全部无法建立。此前被主城全屏背景图遮蔽,一直未暴露。
+
+### scene(C++)
+- `player_scene.cpp HandleEnterScene` 第 4.5 步:进场景通知后用 `ViewSystem::FillActorCreateMessageInfo(player, player, ...)` 补发 `SceneSceneClientPlayerNotifyActorCreate` 给本人。**未编译,待 Codex 验证**(仅改 scene 共享逻辑,重编 scene 节点即可)。
+
+### mmorpg-client(Unity)
+- 玩家 8 方向行走序列帧(qdao_headband_boy,8 帧×8 向,256px 条带图)入库 `Resources/World/Characters/QdaoHeadbandBoy/`;新增 `World/QdaoBoySpriteAnimator.cs`(公告板精灵,按 transform yaw 相对相机选向,10fps 走帧/停帧,ActorWorld.SpawnActor 对 Player 挂载并隐藏占位 Cube,仅 Play 模式生效,EditMode 测试不受影响)
+- 主城视觉重构:删除 ScreenSpaceOverlay 全屏背景 `TianyongSceneBackdrop`(盖住整个世界含角色),新增 `TianyongPaintedCity`——城景图铺为世界空间不透明地面(cover 裁切保纵横比),City 主题下隐藏程序化 3D 城渲染器、碰撞与导航网格保留,角色/NPC/名字标签靠深度缓冲天然渲染在画面之上
+- `TianyongMapConfig` 新增 paintedCityGround 开关 + 相机缩放三参数(10/55/18,旧资产缺字段有兜底);`TianyongCameraController` 缩放范围配置化;测试迁移为 `TianyongPaintedCityTests`(6 例)
+- 客户端两程序集已 Roslyn 离线编译通过;EditMode 测试需编辑器内跑
+
+## 2026-08-26 Recast 导航网格烘焙管线 + 服务器寻路阻挡点校验
+
+### 决策文档
+- `docs/design/scene-navmesh-pipeline.md`(管线全貌、坐标契约、Codex 执行清单)
+
+### tools(新增)
+- `tools/navmesh_baker/`:离线烘焙器(C++,与运行时同一套 ue5navmesh 源码编译,dtReal=double 布局)。输入二选一:`--painted-city` 直接解析客户端 `TianyongPaintedCity.cs` 内嵌 WalkMaskBase64(150×150 可走位图,已手工验证:2813 字节、出生点可走、5892/22500 格可走);`--obj` 通用三角网。输出 'MSET' v1 bin,与 `recast.cpp` 加载器逐字节兼容
+
+### scene(C++)
+- 新增 `spatial/system/nav_query.{h,cpp}`:NavQuerySystem——SnapToMesh / ValidateMove(撞墙返回**阻挡点**)/ FindPath(拉直路径);对外服务器坐标(Z-up),内部按 WorldCoordinateConverter 契约换轴(nav=(sy,sz,sx))
+- `player_movement_handler.cpp`:MoveStart/MoveSync/MoveStop 从空桩落地——位置裁决(阻挡截断/引导落位/双端非法拒绝)、速度信任上限截断(10m/s)、水平差 >0.25m 回 MoveAckS2C 纠偏;TeleportRequest 仍空桩
+- `movement.cpp`:每 tick 积分后导航夹持(撞墙停阻挡点并清 Velocity),补上 Transform/Velocity 的 ActorBaseAttributesS2C 脏位(此前注释里欠的)
+- `scene_nav.h` 补 Get();`constants/nav.h` 补速度上限/纠偏阈值;CMake/vcxproj/filters 已注册新文件
+- **全部未编译,待 Codex 验证**;旧三份占位 bin 待烘焙产物覆盖(执行清单见决策文档 §6)
+
+### 已知缺口(后续)
+- 首进场 (0,0,0) spawn 契约未修(handler 有引导落位兜底);客户端无预测回滚;FindPath 尚无调用方;dtCrowd 未接;SceneNavManager thread_local 加载线程问题维持现状

@@ -23,6 +23,7 @@
 #include <proto/common/component/player_network_comp.pb.h>
 #include "node/system/node/node_util.h"
 #include "battle/system/player_battle.h"
+#include "spatial/system/view.h"
 #include <limits>
 #include <thread_context/ecs_context.h>
 
@@ -232,6 +233,15 @@ void PlayerSceneSystem::HandleEnterScene(entt::entity player, entt::entity scene
 	EnterSceneS2C message;
 	message.mutable_scene_info()->CopyFrom(*sceneInfo);
 	SendMessageToClientViaGate(SceneSceneClientPlayerNotifyEnterSceneMessageId, message, player);
+
+	// 4.5 补发"自己"的 ActorCreate:AOI 可见性遍历刻意跳过 observer 本身
+	// (aoi.cpp HandleEntityVisibility 的 otherEntity == entity 分支),因此
+	// 除这里之外没有任何路径把玩家自己的 actor 下发给客户端——单人在线时
+	// 客户端将收不到任何 ActorCreate,本地角色/相机绑定/移动控制器全部
+	// 无法建立。客户端靠 guid == player_id 识别并绑定本地角色。
+	ActorCreateS2C selfCreate;
+	ViewSystem::FillActorCreateMessageInfo(player, player, selfCreate);
+	SendMessageToClientViaGate(SceneSceneClientPlayerNotifyActorCreateMessageId, selfCreate, player);
 
 	LOG_INFO << "HandleEnterScene: player " << GuidForLog(player)
 			 << " entered scene_id=" << sceneInfo->scene_id();

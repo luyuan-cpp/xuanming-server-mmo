@@ -68,6 +68,10 @@ vsout/
 run/*
 !run/README.md
 
+# Robot 行为/压测明细是每次运行重新生成的本地产物，可能超过 GitHub 单文件 100 MiB 限制。
+robot/behavior_test_results.csv
+robot/behavior_test_results.jsonl
+
 # Binary output logs (transient, legacy location)
 bin/*.txt
 

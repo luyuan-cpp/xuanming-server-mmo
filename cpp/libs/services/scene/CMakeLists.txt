@@ -100,6 +100,7 @@ set(SOURCE_FILES
     spatial/system/interest.cpp
     spatial/system/movement.cpp
     spatial/system/movement_acceleration.cpp
+    spatial/system/nav_query.cpp
     spatial/system/navigation.cpp
     spatial/system/recast.cpp
     spatial/system/scene_crowd.cpp

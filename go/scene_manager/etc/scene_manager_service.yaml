@@ -69,7 +69,7 @@ InstanceCheckIntervalSeconds: 30
 
 # HMAC-SHA256 secret for signing gate connection tokens during cross-zone redirect.
 # Must match the secret configured in Login service and Gate nodes.
-GateTokenSecret: "change-me-in-production-use-a-strong-random-key"
+GateTokenSecret: "local-dev-gate-token-secret-0123456789abcdef"
 
 # --- World channels -----------------------------------------------------------
 #
