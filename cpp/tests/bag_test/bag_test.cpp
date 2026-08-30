@@ -4,8 +4,10 @@
 #include "engine/thread_context/snow_flake_manager.h"
 
 #include "table/code/item_table.h"
+#include "table/code/equipslot_table.h"
 #include "modules/bag/bag_system.h"
 #include "modules/bag/bag_service.h"
+#include "modules/bag/comp/player_bags_comp.h"
 #include "modules/gain_block/gain_block_service.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/bag_error_tip.pb.h"
@@ -1057,6 +1059,792 @@ TEST(GainBlockServiceTest, GlobalAndPerPlayerBlockCombo)
     GainBlockService::ClearAllGlobalBlocks();
 }
 
+// ---------------------------------------------------------------------------
+// 实例层 / 布局层拆分回归
+//
+// 下面两组用例钉住的是**那条缝本身**,不是某个玩法:
+//   * GridLayoutTest    —— 直接构造一个 GridLayout。目前没有任何背包用它,
+//     测试就是它的使用者;它证明"加一种布局策略,ItemStore 与 Bag 一行都不用改"。
+//   * BagLayoutSwapTest —— 给一个空 Bag 换上格子布局,证明 Bag 这座桥真的只
+//     隔着 IContainerLayout 接口跟布局层说话,没有偷偷依赖扁平语义。
+//
+// 详见 docs/design/bag-instance-layout-split.md。
+// ---------------------------------------------------------------------------
+
+TEST(GridLayoutTest, PlacementCoversEveryCellNotJustTheAnchor)
+{
+    GridLayout grid(4, 3); // 4 列 x 3 行 = 12 格
+    EXPECT_EQ(12u, grid.Capacity());
+    EXPECT_EQ(12u, grid.FreeCells());
+
+    // 一件 2x2 的东西 first-fit 落在左上角,锚点 = 0。
+    const SlotId anchor = grid.Place(1001, Footprint{2, 2});
+    EXPECT_EQ(0u, anchor);
+    EXPECT_EQ(8u, grid.FreeCells()); // 12 - 4
+    EXPECT_EQ(1u, grid.OccupiedSlotCount());
+
+    // 它盖住的每一格都能反查到它,不只是锚点 —— 点在一件 2x2 装备的任意一角
+    // 都该拿到同一件东西。扁平布局根本没有"一件东西盖住多格"这个概念。
+    for (SlotId slot : {0u, 1u, 4u, 5u})
+    {
+        EXPECT_EQ(1001u, grid.At(slot)) << "slot " << slot;
+    }
+    EXPECT_EQ(kInvalidGuid, grid.At(2));
+    EXPECT_EQ(0u, grid.SlotOf(1001));
+}
+
+TEST(GridLayoutTest, FreeCellCountIsNotAnAnswerToCanFit)
+{
+    // 这一条正是"扁平那句 `空格数 >= count` 在格子下必然失效"的判据 ——
+    // 也是 IContainerLayout 必须把 CanFit 做成虚函数、而不是让桥层自己拿
+    // FreeCells() 做减法的原因。
+    GridLayout grid(3, 3); // 9 格
+
+    // 沿对角线摆 3 个 1x1(锚点 0 / 4 / 8),剩 6 个空格,但没有任何一块连续的 2x2。
+    EXPECT_TRUE(grid.PlaceAt(2001, 0, kSingleCell));
+    EXPECT_TRUE(grid.PlaceAt(2002, 4, kSingleCell));
+    EXPECT_TRUE(grid.PlaceAt(2003, 8, kSingleCell));
+    EXPECT_EQ(6u, grid.FreeCells());
+
+    EXPECT_FALSE(grid.CanFit(1, Footprint{2, 2})); // 空格够,却摆不进去
+    EXPECT_TRUE(grid.CanFit(6, kSingleCell));      // 换成 1x1 就放得下
+    EXPECT_FALSE(grid.CanFit(7, kSingleCell));
+}
+
+TEST(GridLayoutTest, RemoveFreesEveryCoveredCell)
+{
+    GridLayout grid(4, 2); // 8 格
+    ASSERT_EQ(0u, grid.Place(3001, Footprint{2, 2}));
+    EXPECT_EQ(4u, grid.FreeCells());
+
+    grid.Remove(3001);
+    EXPECT_EQ(8u, grid.FreeCells());
+    EXPECT_EQ(0u, grid.OccupiedSlotCount());
+    EXPECT_EQ(kInvalidSlot, grid.SlotOf(3001));
+    EXPECT_EQ(kInvalidGuid, grid.At(0));
+}
+
+TEST(GridLayoutTest, PlaceAtRejectsOverlapAndOutOfBounds)
+{
+    GridLayout grid(4, 4);
+    EXPECT_TRUE(grid.PlaceAt(4001, 5, Footprint{2, 2})); // (1,1) 起的 2x2 -> 槽位 5/6/9/10
+    EXPECT_EQ(5u, grid.SlotOf(4001));
+
+    EXPECT_FALSE(grid.PlaceAt(4002, 0, Footprint{2, 2})); // (0,0) 起的 2x2 与上面在槽位 5 重叠
+    EXPECT_EQ(kInvalidSlot, grid.SlotOf(4002));
+
+    EXPECT_FALSE(grid.PlaceAt(4003, 3, Footprint{2, 1})); // x=3 再往右放 2 宽 -> 越右边界
+    EXPECT_FALSE(grid.PlaceAt(4004, 999, kSingleCell));   // 槽位号本身越界
+}
+
+TEST(GridLayoutTest, ResizeGrowsByRowsAndRefusesToEvict)
+{
+    GridLayout grid(4, 2); // 8 格
+    ASSERT_TRUE(grid.PlaceAt(5001, 4, kSingleCell)); // 第 2 行第 1 格
+    EXPECT_EQ(8u, grid.Capacity());
+
+    grid.Resize(12); // 长到 3 行
+    EXPECT_EQ(12u, grid.Capacity());
+    EXPECT_EQ(3u, grid.Height());
+    EXPECT_EQ(5001u, grid.At(4)); // 原有物品原地不动
+
+    grid.Resize(4); // 想砍回 1 行 —— 第 2 行还有东西,布局层无权挤掉它,必须拒绝
+    EXPECT_EQ(12u, grid.Capacity());
+    EXPECT_EQ(5001u, grid.At(4));
+
+    grid.Remove(5001);
+    grid.Resize(4); // 空了就允许
+    EXPECT_EQ(4u, grid.Capacity());
+}
+
+TEST(BagLayoutSwapTest, SetLayoutRefusedWhileBagHoldsItems)
+{
+    Bag bag;
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10)));
+    const std::size_t capacityBefore = bag.Capacity();
+
+    bag.SetLayout(std::make_unique<GridLayout>(4, 4));
+
+    // 拒绝:槽位号在两种策略下含义不同(扁平是下标、格子是 y*width+x),
+    // 带着物品换布局等于让所有已持久化的 pos 突然改变意义。
+    EXPECT_EQ(capacityBefore, bag.Capacity());
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+}
+
+TEST(BagLayoutSwapTest, GridBackedBagStillMergesPartialStacks)
+{
+    // 换布局不影响实例层:堆叠合并照常工作。
+    Bag bag;
+    bag.SetLayout(std::make_unique<GridLayout>(4, 4));
+    ASSERT_EQ(16u, bag.Capacity());
+
+    const auto maxStack = MaxStack(kStack10);
+    ASSERT_GE(maxStack, 2u);
+
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, maxStack * 2)));
+    EXPECT_EQ(2u, bag.OccupiedGridCount());
+    FillAndReduceToOne(bag, kStack10, 0, 2); // 削成一高一低两个未满堆
+
+    EXPECT_TRUE(bag.MergeAndCompact());
+
+    EXPECT_EQ(1u, bag.OccupiedGridCount()); // 两个零散堆并成一个
+    EXPECT_EQ(1u, bag.GridSlotCount());
+    EXPECT_EQ(2u, bag.GetTotalItemCount(kStack10));
+}
+
+TEST(BagLayoutSwapTest, GridBackedBagDoesNotReorderOnMergeAndCompact)
+{
+    // 换布局改变的是布局行为:格子背包 SupportsCompaction()==false,
+    // 整理只合并堆叠、绝不挪位置 —— 玩家手摆的格子布局就是布局本身。
+    Bag bag;
+    bag.SetLayout(std::make_unique<GridLayout>(4, 4));
+
+    // 按 config 降序铺:11 在锚点 0,10 在锚点 1。同样的排布在扁平布局下
+    // 一定会被重排成升序(见 MergeAndCompactGroupsAndSortsByConfigAscending)。
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack11)));
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10)));
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(1));
+    ASSERT_EQ(kStack11, bag.GetItemCompByPos(0)->config_id());
+    ASSERT_EQ(kStack10, bag.GetItemCompByPos(1)->config_id());
+
+    // 没有可合并的零散堆 + 布局不支持重排 -> 早退,整理是无操作。
+    EXPECT_FALSE(bag.MergeAndCompact());
+
+    EXPECT_EQ(kStack11, bag.GetItemCompByPos(0)->config_id());
+    EXPECT_EQ(kStack10, bag.GetItemCompByPos(1)->config_id());
+}
+
+// ---------------------------------------------------------------------------
+// 遗留缺陷修复的回归用例
+//
+// 下面每一条都钉住一个**拆分前就存在、拆分时刻意没动、现在修掉**的缺陷。
+// 对照 docs/design/bag-instance-layout-split.md §11。
+// ---------------------------------------------------------------------------
+
+// §11(a):快照里的 pos 不可用时,拆分前是一句无校验的 posToGuid[pos] = guid,
+// 越界的会落进一个永远扫不到的幽灵槽位。现在布局层 fail-closed,桥层退化为自动选位。
+TEST(BagRestoreTest, OutOfRangeSnapshotPosIsRelocatedNotLost)
+{
+    Bag bag;
+    bag.SetCapacityForRestore(5);
+    bag.InsertItemForRestore(/*guid=*/9001, /*configId=*/kStack10, /*stackSize=*/3, /*pos=*/99);
+
+    // 物品还在,而且**两层对得上**——拆分前它会既查不到又删不掉。
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+    EXPECT_EQ(1u, bag.GridSlotCount());
+
+    const uint32_t slot = bag.GetItemPosByGuid(9001);
+    ASSERT_NE(kInvalidU32Id, slot);
+    EXPECT_LT(slot, 5u) << "重新安置后必须落在合法容量范围内";
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(slot));
+    EXPECT_EQ(3u, bag.GetItemCompByPos(slot)->size());
+}
+
+// §11(a) 的另一半:两条快照记录撞同一个 pos。拆分前后写者直接覆盖,
+// 先到的那件被顶成"在 items 里但没有槽位"的孤儿。
+TEST(BagRestoreTest, CollidingSnapshotPosDoesNotOrphanTheFirstItem)
+{
+    Bag bag;
+    bag.SetCapacityForRestore(5);
+    bag.InsertItemForRestore(9101, kStack10, 1, 2);
+    bag.InsertItemForRestore(9102, kStack10, 1, 2); // 撞位
+
+    EXPECT_EQ(2u, bag.OccupiedGridCount());
+    EXPECT_EQ(2u, bag.GridSlotCount());
+
+    EXPECT_EQ(2u, bag.GetItemPosByGuid(9101)) << "先到的守住原位";
+    const uint32_t second = bag.GetItemPosByGuid(9102);
+    ASSERT_NE(kInvalidU32Id, second) << "后到的必须也有位置,不能变成孤儿";
+    EXPECT_NE(2u, second);
+}
+
+// §11(a) 的边界:快照里的物品比容量还多。位置可以变,但实在放不下时宁可丢掉
+// 并报错,也不能留下没有槽位的实例——那会让实例数与槽位数永久对不上。
+TEST(BagRestoreTest, OverCapacitySnapshotDropsRatherThanBreakTheInvariant)
+{
+    Bag bag;
+    bag.SetCapacityForRestore(2);
+    bag.InsertItemForRestore(9201, kStack10, 1, 0);
+    bag.InsertItemForRestore(9202, kStack10, 1, 1);
+    bag.InsertItemForRestore(9203, kStack10, 1, 2); // 放不下
+
+    EXPECT_EQ(2u, bag.OccupiedGridCount());
+    EXPECT_EQ(2u, bag.GridSlotCount());
+    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(9203));
+}
+
+// §11(a) 在布局层这一侧的判据:PlaceAt 必须诚实拒绝,不能静默顶替。
+TEST(FlatLayoutTest, PlaceAtRejectsOutOfRangeAndOccupiedSlots)
+{
+    FlatLayout flat(4); // 合法槽位 0..3
+
+    EXPECT_TRUE(flat.PlaceAt(11, 3, kSingleCell));
+
+    EXPECT_FALSE(flat.PlaceAt(12, 4, kSingleCell)) << "越界必须拒绝";
+    EXPECT_EQ(kInvalidSlot, flat.SlotOf(12));
+
+    EXPECT_FALSE(flat.PlaceAt(13, 3, kSingleCell)) << "已被别人占的槽位必须拒绝";
+    EXPECT_EQ(kInvalidSlot, flat.SlotOf(13));
+
+    EXPECT_EQ(11u, flat.At(3)) << "原主不能被顶掉";
+    EXPECT_EQ(1u, flat.OccupiedSlotCount());
+}
+
+// §11(i):不可叠加物品被 RemoveItemByPos 扣到 0 之后,MergePartialStacks 永远
+// 碰不到它(那里跳过 max_stack_size() <= 1),于是它永久占着一个格子。
+TEST(BagTest, MergeAndCompactReclaimsDrainedNonStackableSlot)
+{
+    ASSERT_EQ(1u, MaxStack(kNonStack1)) << "用例前提:该 config 不可叠加";
+
+    Bag bag;
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+
+    auto dp = MakeRemoveParam(bag, 0, kNonStack1, 1);
+    EXPECT_EQ(kSuccess, bag.RemoveItemByPos(dp));
+
+    // 扣光后实例与槽位都还在——这是 RemoveItemByPos 的既有语义,没有改。
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    EXPECT_EQ(0u, bag.GetItemCompByPos(0)->size());
+
+    std::vector<DestroyedInstance> destroyed;
+    EXPECT_TRUE(bag.MergeAndCompact(&destroyed));
+
+    EXPECT_EQ(0u, bag.OccupiedGridCount()) << "整理必须回收 size==0 的僵尸";
+    EXPECT_EQ(0u, bag.GridSlotCount());
+    ASSERT_EQ(1u, destroyed.size());
+    EXPECT_EQ(kNonStack1, destroyed.front().configId);
+    EXPECT_EQ(0u, destroyed.front().size);
+}
+
+// §11(g):整理会退役一批 item_uuid,而那是 transaction_log 做外挂回收关联的键。
+// Bag 是纯容器不写流水,但必须**报告**退役了哪些,否则追溯链在整理这一步无声断掉。
+TEST(BagTest, MergeAndCompactReportsRetiredInstances)
+{
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+    const auto maxStack = MaxStack(kStack10);
+    ASSERT_GE(maxStack, 2u);
+
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, maxStack * 2)));
+    FillAndReduceToOne(bag, kStack10, 0, 2); // [1,1] 两个未满堆
+
+    std::vector<DestroyedInstance> destroyed;
+    EXPECT_TRUE(bag.MergeAndCompact(&destroyed));
+
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+    EXPECT_EQ(2u, bag.GetTotalItemCount(kStack10)) << "数量守恒,只是实例少了一个";
+    ASSERT_EQ(1u, destroyed.size());
+    EXPECT_EQ(kStack10, destroyed.front().configId);
+    EXPECT_NE(kInvalidGuid, destroyed.front().guid);
+}
+
+// 回执参数是可选的:老调用方(以及本文件里原有的十个 MergeAndCompact 用例)
+// 不传也必须照常工作。
+TEST(BagTest, MergeAndCompactWithoutReceiptStillWorks)
+{
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, MaxStack(kStack10) * 2)));
+    FillAndReduceToOne(bag, kStack10, 0, 2);
+    EXPECT_TRUE(bag.MergeAndCompact());
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+}
+
+// §11(b):playerGuid 此前全仓没有写入点,所有 player= 日志打的都是哨兵。
+TEST(BagTest, PlayerGuidIsSettableForLogging)
+{
+    Bag bag;
+    EXPECT_EQ(kInvalidGuid, bag.PlayerGuid()) << "默认仍是哨兵";
+    bag.SetPlayerGuid(123456789ULL);
+    EXPECT_EQ(123456789ULL, bag.PlayerGuid());
+}
+
+// ---------------------------------------------------------------------------
+// §11.2 两条"需要产品决策"的收口
+//
+// (d) 装备栏改用具名槽布局:不再被"整理"重排。槽位分类(哪件装备进哪个槽)
+//     仍然等策划,但**危害本身**已经消掉了。
+// (h) 自动整理 vs 还原位置:变成调用点必须表态的 CompactPolicy。
+// ---------------------------------------------------------------------------
+
+// §11.2(d):四个背包各自的布局与起始容量。拆分前这张表只是注释,
+// 代码里四个包清一色 kDefaultCapacity(10 格)且全是扁平布局。
+TEST(PlayerBagsCompTest, EachBagTypeGetsItsDocumentedLayoutAndCapacity)
+{
+    PlayerBagsComp comp;
+
+    EXPECT_EQ(kBagMaxCapacity, comp.bags[kInventory].Capacity());
+    EXPECT_EQ(kWarehouseMaxCapacity, comp.bags[kWarehouse].Capacity());
+    EXPECT_EQ(kEquipmentCapacity, comp.bags[kEquipment].Capacity());
+    EXPECT_EQ(kTempBagMaxCapacity, comp.bags[kTemporary].Capacity());
+
+    // 只有装备栏不参与自动重排。
+    EXPECT_TRUE(comp.bags[kInventory].Layout().SupportsCompaction());
+    EXPECT_TRUE(comp.bags[kWarehouse].Layout().SupportsCompaction());
+    EXPECT_FALSE(comp.bags[kEquipment].Layout().SupportsCompaction());
+    EXPECT_TRUE(comp.bags[kTemporary].Layout().SupportsCompaction());
+}
+
+// §11.2(d):**部位与槽位口径全在配置数据里,代码零硬编。**
+//
+//   CfgItem.equip_kind   这件东西属于哪个部位(0 = 不是装备)
+//   CfgEquipSlot         每个槽位接受哪个部位
+//
+// 下面用例里的示例数据(data/Item.xlsx 与 data/EquipSlot.xlsx):
+//   item 1 / item 2 -> 部位 1
+//   槽位 0 -> 部位 1、槽位 1 -> 部位 1、槽位 2 -> 部位 2
+// **部位 1 有两个槽** —— 这就是"能带两只手镯"的形状。
+
+// 头号用例:同一部位的两件装备可以同时穿戴,第三件才被拒。
+// 上一版模型(equip_slot = 只能进第 N 号槽)根本表达不了这件事:
+// 两件同部位的东西会抢同一个槽号,第二件必然被拒。
+TEST(FixedSlotLayoutTest, TwoItemsOfTheSameKindOccupyTwoSlots)
+{
+    Bag bag;
+    bag.SetLayout(std::make_unique<FixedSlotLayout>(kEquipmentCapacity));
+
+    // 两件**同一部位**的装备(想象成两只手镯)。
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+    EXPECT_EQ(2u, bag.OccupiedGridCount()) << "同部位有两个槽,两件都该穿得上";
+
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(1));
+    EXPECT_EQ(kNonStack1, bag.GetItemCompByPos(0)->config_id());
+    EXPECT_EQ(kNonStack1, bag.GetItemCompByPos(1)->config_id());
+
+    // 第三件同部位的就没位置了 —— 槽位数由表决定,不是代码。
+    EXPECT_NE(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+    EXPECT_EQ(2u, bag.OccupiedGridCount());
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// 不同 config、同一部位,一样各占一个槽。
+TEST(FixedSlotLayoutTest, DifferentConfigsSharingAKindShareItsSlots)
+{
+    Bag bag;
+    bag.SetLayout(std::make_unique<FixedSlotLayout>(kEquipmentCapacity));
+
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack2)));
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(1));
+    EXPECT_EQ(kNonStack2, bag.GetItemCompByPos(0)->config_id());
+    EXPECT_EQ(kNonStack1, bag.GetItemCompByPos(1)->config_id());
+    EXPECT_EQ(nullptr, bag.GetItemCompByPos(2)) << "部位 2 的槽没人穿,就该空着";
+}
+
+// 没在表里声明部位的东西(equip_kind = 0)压根不该进装备栏。
+TEST(FixedSlotLayoutTest, RejectsItemsThatDeclareNoKind)
+{
+    Bag bag;
+    bag.SetLayout(std::make_unique<FixedSlotLayout>(kEquipmentCapacity));
+
+    EXPECT_NE(kSuccess, bag.AddItem(MakeItem(kStack10, 1))); // 普通物品,equip_kind = 0
+    EXPECT_EQ(0u, bag.OccupiedGridCount()) << "拒绝要干净,不能留下半个实例";
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// 同一件装备躺在**人物背包**(扁平布局)里时不受部位约束 —— 背包的下标
+// 不表达任何语义,它就该 first-fit 落到 0 号位。
+TEST(FixedSlotLayoutTest, FlatBagIgnoresEquipKind)
+{
+    Bag bag; // 默认 FlatLayout
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack2)));
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    EXPECT_EQ(kNonStack2, bag.GetItemCompByPos(0)->config_id())
+        << "背包里的装备仍是 first-fit,不该被塞进装备槽";
+}
+
+// §11.2(d) 的实际危害:装备栏被"整理"重排。
+TEST(FixedSlotLayoutTest, NeverReordersWornGear)
+{
+    Bag bag;
+    bag.SetLayout(std::make_unique<FixedSlotLayout>(kEquipmentCapacity));
+
+    // config 降序穿:kNonStack2 先占 0 号槽,kNonStack1 占 1 号槽。
+    // 同样的排布在扁平布局下一定会被整理成 config 升序。
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack2)));
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+
+    EXPECT_FALSE(bag.MergeAndCompact()) << "没得合并 + 不许重排 -> 早退";
+
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(1));
+    EXPECT_EQ(kNonStack2, bag.GetItemCompByPos(0)->config_id())
+        << "具名槽是契约:整理绝不能把头盔挪到鞋子的位置";
+    EXPECT_EQ(kNonStack1, bag.GetItemCompByPos(1)->config_id());
+}
+
+// 具名槽**刻意没有**把槽位数写死:一份 capacities[kEquipment]=20 的存量快照
+// 撞上写死的 10,还原时会静默丢装备。这条用例拦住那个"优化"。
+TEST(FixedSlotLayoutTest, CapacityStaysRestorableSoSnapshotsDoNotLoseGear)
+{
+    Bag bag;
+    bag.SetLayout(std::make_unique<FixedSlotLayout>(kEquipmentCapacity));
+    ASSERT_EQ(kEquipmentCapacity, bag.Capacity());
+
+    bag.SetCapacityForRestore(20);
+    EXPECT_EQ(20u, bag.Capacity()) << "槽位数必须能被快照还原,不能被代码写死";
+    bag.SetCapacityForRestore(4);
+    EXPECT_EQ(4u, bag.Capacity());
+}
+
+// 还原到装备栏时以**配置**为准,快照里的 pos 只是历史记录 ——
+// 策划把某个部位的槽位改了之后,老存档还原就该落到新槽位。
+TEST(FixedSlotLayoutTest, RestoreFollowsConfigNotTheSnapshotPos)
+{
+    Bag bag;
+    bag.SetLayout(std::make_unique<FixedSlotLayout>(kEquipmentCapacity));
+
+    // 快照说它在 7 号槽,但 kNonStack1 是部位 1,该部位的第一个空槽是 0。
+    bag.InsertItemForRestore(/*guid=*/7101, /*configId=*/kNonStack1, /*stackSize=*/1, /*pos=*/7);
+
+    EXPECT_EQ(0u, bag.GetItemPosByGuid(7101)) << "以配置为准,不是以快照为准";
+    EXPECT_EQ(nullptr, bag.GetItemCompByPos(7));
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// 还原路径与入包路径的**严格程度刻意不同**。
+//
+// 入包严格:往装备栏塞没声明部位的东西,拒。
+// 还原宽容:配置里查不到部位 —— 表被裁过、这件是新版本装备、或者干脆是脏数据
+// —— 把玩家的装备丢掉,远比"放错格子"更坏。原则仍是 §11(a):
+// **位置可以变,物品不能丢**。这条 bug 是 cross_zone_test 抓到的。
+TEST(FixedSlotLayoutTest, RestoreKeepsGearWhoseConfigDeclaresNoKind)
+{
+    Bag bag;
+    bag.SetLayout(std::make_unique<FixedSlotLayout>(kEquipmentCapacity));
+
+    constexpr uint32_t kUnknownConfig = 987654; // 表里根本没有这个 config
+    bag.InsertItemForRestore(/*guid=*/7201, kUnknownConfig, /*stackSize=*/1, /*pos=*/5);
+
+    EXPECT_EQ(1u, bag.OccupiedGridCount()) << "查不到配置也绝不能丢玩家的东西";
+    EXPECT_EQ(5u, bag.GetItemPosByGuid(7201)) << "退回快照里的位置";
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+TEST(CompactPolicyTest, MergeOnlyMergesWithoutTouchingPositions)
+{
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+    const auto max10 = MaxStack(kStack10);
+    ASSERT_GE(max10, 2u);
+
+    // config 降序摆放:11 占 pos0,10 占 pos1/pos2;再把 10 削成两个未满堆。
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack11)));
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, max10 * 2)));
+    FillAndReduceToOne(bag, kStack10, 1, 2);
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    const Guid guidAtZero = bag.GetItemCompByPos(0)->item_id();
+
+    std::vector<DestroyedInstance> destroyed;
+    EXPECT_TRUE(bag.MergeAndCompact(&destroyed, CompactPolicy::kMergeOnly));
+
+    // 合并确实发生了:两个零头并成一个,退役掉一个实例。
+    ASSERT_EQ(1u, destroyed.size());
+    EXPECT_EQ(2u, bag.GetTotalItemCount(kStack10));
+
+    // 但 pos0 上那件东西一动没动 —— 位置不是整理的副作用。
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    EXPECT_EQ(guidAtZero, bag.GetItemCompByPos(0)->item_id());
+    EXPECT_EQ(kStack11, bag.GetItemCompByPos(0)->config_id());
+}
+
+// §11.2(h):kMergeAndReorder —— 玩家显式点"整理"才重排。
+TEST(CompactPolicyTest, MergeAndReorderSortsByConfigAscending)
+{
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack11)));
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10)));
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    ASSERT_EQ(kStack11, bag.GetItemCompByPos(0)->config_id());
+
+    EXPECT_TRUE(bag.MergeAndCompact(nullptr, CompactPolicy::kMergeAndReorder));
+
+    EXPECT_EQ(kStack10, bag.GetItemCompByPos(0)->config_id()) << "显式整理才重排";
+    EXPECT_EQ(kStack11, bag.GetItemCompByPos(1)->config_id());
+}
+
+// 同一份布局,两种 policy 给出两种结果 —— 这就是"取舍变成参数"的意思。
+TEST(CompactPolicyTest, SameBagTwoPoliciesTwoOutcomes)
+{
+    const auto build = [](Bag &bag) {
+        bag.ExpandCapacity(kDefaultCapacity);
+        EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack11)));
+        EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10)));
+    };
+
+    Bag kept;
+    build(kept);
+    EXPECT_FALSE(kept.MergeAndCompact(nullptr, CompactPolicy::kMergeOnly))
+        << "没得合并也没得回收 -> 早退,布局原封不动";
+    EXPECT_EQ(kStack11, kept.GetItemCompByPos(0)->config_id());
+
+    Bag sorted;
+    build(sorted);
+    EXPECT_TRUE(sorted.MergeAndCompact(nullptr, CompactPolicy::kMergeAndReorder));
+    EXPECT_EQ(kStack10, sorted.GetItemCompByPos(0)->config_id());
+}
+
+// ---------------------------------------------------------------------------
+// 补上变异分析暴露出的两条"没有用例保护"的修复
+//
+// 做完 §11 的修复之后,我把每条修复逐个 revert 回去看对应用例会不会变红。
+// 结果发现 (e) 和 (f) **revert 掉之后所有用例仍然全绿** —— 它们是防御性路径,
+// 在正常调用序列下不可达,于是没有任何用例能证明它们有效。
+// 下面两组就是补这个洞的。
+// ---------------------------------------------------------------------------
+
+// §11(e) 的可测性:一个"说谎"的布局 —— CanFit 恒说放得下,Place 恒失败。
+//
+// 生产里不存在这种布局。它存在的意义是把那条防御路径变成**可触发**的,
+// 而这恰恰是把布局抽成接口才换来的能力:拆分前那段逻辑焊死在 Bag 内部,
+// 除非改产品代码,否则从外部根本没办法制造"容量判定说行、放置却失败"的局面。
+class LyingLayout final : public FlatLayout
+{
+public:
+    explicit LyingLayout(std::size_t capacity) : FlatLayout(capacity) {}
+
+    bool CanFit(std::size_t, Footprint) const override { return true; }
+    SlotId Place(Guid, Footprint) override { return kInvalidSlot; }
+};
+
+// §11(e):放置失败必须回滚实例,绝不能留下"进了仓库却没有槽位"的孤儿。
+TEST(BagPlacementFailureTest, NonStackableRollsBackWhenLayoutRefuses)
+{
+    Bag bag;
+    bag.SetLayout(std::make_unique<LyingLayout>(kDefaultCapacity));
+
+    EXPECT_EQ(kBagAddItemBagFull, bag.AddItem(MakeItem(kNonStack1)));
+
+    EXPECT_EQ(0u, bag.OccupiedGridCount()) << "失败的这一件必须被回滚掉";
+    EXPECT_EQ(0u, bag.GridSlotCount());
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+TEST(BagPlacementFailureTest, StackableSpillRollsBackWhenLayoutRefuses)
+{
+    Bag bag;
+    bag.SetLayout(std::make_unique<LyingLayout>(kDefaultCapacity));
+
+    EXPECT_EQ(kBagAddItemBagFull, bag.AddItem(MakeItem(kStack10, 1)));
+
+    EXPECT_EQ(0u, bag.OccupiedGridCount());
+    EXPECT_EQ(0u, bag.GridSlotCount());
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// §11(f):跨层不变量。断言在 Release 下会被编译掉,所以谓词要能被用例直接验。
+// 这条用例串起**每一个公开写入方法**,每步之后都验一次。
+TEST(BagTest, LayerConsistencyHoldsAcrossEveryMutator)
+{
+    Bag bag;
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "空背包";
+
+    bag.ExpandCapacity(kDefaultCapacity);
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "ExpandCapacity";
+
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, MaxStack(kStack10) * 2)));
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "AddItem(可叠加,溢出到新实例)";
+
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "AddItem(不可叠加)";
+
+    ItemCountMap toAdd{{kStack11, MaxStack(kStack11)}};
+    EXPECT_EQ(kSuccess, bag.AddItems(toAdd));
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "AddItems(ItemCountMap)";
+
+    ItemCountMap toRemove{{kStack10, 1}};
+    EXPECT_EQ(kSuccess, bag.RemoveItems(toRemove));
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "RemoveItems";
+
+    auto dp = MakeRemoveParam(bag, 0, kStack10, 1);
+    EXPECT_EQ(kSuccess, bag.RemoveItemByPos(dp));
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "RemoveItemByPos";
+
+    const Guid someGuid = bag.GetItemCompByPos(0)->item_id();
+    EXPECT_EQ(kSuccess, bag.RemoveItem(someGuid));
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "RemoveItem";
+
+    bag.MergeAndCompact();
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "MergeAndCompact";
+
+    bag.ResetFromSnapshot();
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "ResetFromSnapshot";
+
+    bag.SetCapacityForRestore(4);
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "SetCapacityForRestore";
+
+    bag.InsertItemForRestore(8001, kStack10, 2, 99); // 越界 -> 重新安置
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "InsertItemForRestore(越界 pos)";
+
+    bag.InsertItemForRestore(8002, kStack10, 2, 0);
+    bag.InsertItemForRestore(8003, kStack10, 2, 0); // 撞位 -> 重新安置
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "InsertItemForRestore(撞位)";
+
+    bag.InsertItemForRestore(8004, kStack10, 2, 1);
+    bag.InsertItemForRestore(8005, kStack10, 2, 2); // 第 5 件,容量只有 4 -> 丢弃
+    EXPECT_TRUE(bag.IsLayerConsistent()) << "InsertItemForRestore(超容量丢弃)";
+    EXPECT_EQ(4u, bag.OccupiedGridCount());
+}
+
+// §11(f) 的**负向**用例。
+//
+// 变异测试抓到的洞:原来只有 `EXPECT_TRUE(bag.IsLayerConsistent())` 这种正向断言,
+// 把谓词改成 `return true;` 之后全套用例照样绿 —— 那是同义反复,只能证明"没报错",
+// 证明不了"报得出错"。必须有一条用例让它返回 false。
+//
+// SetCapacityForRestore 是唯一不做容量校验、也不带 AssertLayerConsistency 的入口
+// (marshal 在 ResetFromSnapshot 之后、插入物品之前调它,那一刻背包本来就是空的),
+// 所以它是从外部制造"容量 < 已占槽位"的唯一途径。
+TEST(BagTest, LayerConsistencyPredicateActuallyDetectsBreakage)
+{
+    Bag bag;
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+    ASSERT_TRUE(bag.IsLayerConsistent());
+    ASSERT_EQ(1u, bag.GridSlotCount());
+
+    bag.SetCapacityForRestore(0); // 容量 0,却还占着 1 个槽位
+
+    EXPECT_FALSE(bag.IsLayerConsistent())
+        << "谓词必须真的发现得了不一致,否则 AssertLayerConsistency 只是个摆设";
+}
+
+// 产品决策钉桩:新建角色的人物背包 = 100 格(2026-08-27 用户拍板)。
+//
+// 上面那条用例断言的是 `kBagMaxCapacity` 这个**常量**,它只能证明"构造函数用了
+// 那个常量",证明不了"那个常量还是当初拍板的数"。有人把 kBagMaxCapacity 从 100
+// 改成别的,上面那条照样绿。所以这里单独钉死字面量。
+//
+// 拆分前这个数其实是 10 —— player_bags_comp.h 里那张 100/200/10/200 的容量表
+// 一直只是注释,没有任何代码兑现它,四个包清一色 kDefaultCapacity。
+// 详见 docs/design/bag-instance-layout-split.md §11.2(d)。
+//
+// 要改这个数,是一次 gameplay 变更:改常量 + 改这条用例 + 知会策划。
+TEST(PlayerBagsCompTest, NewCharacterInventoryIsOneHundredSlots)
+{
+    EXPECT_EQ(100u, kBagMaxCapacity) << "新角色人物背包格数是拍过板的,不是随手可调的常量";
+
+    PlayerBagsComp comp;
+    EXPECT_EQ(100u, comp.bags[kInventory].Capacity());
+}
+
+// ---------------------------------------------------------------------------
+// §13:批量入包的事务性(此前是"注释比代码强",现在把话兑现)
+//
+// 拆分前 AddItems 只有 CheckSpaceFor 一道预检 —— 它挡容量和配置表,挡不住
+// 发号器被 fence、也挡不住预设 guid 撞车。于是"第一件纯并堆成功、第二件要
+// 铸号却失败"就留下半批。邮件附件是这条路径的主要用户,半批发放会让调用方
+// 以为整批失败而重发,变成复制道具。
+// ---------------------------------------------------------------------------
+
+// 预设 guid 撞背包里已有的 -> 整批拒绝,一件都不许写进去。
+TEST(BagBatchAtomicityTest, PreassignedGuidCollidingWithExistingItemRejectsWholeBatch)
+{
+    Bag bag;
+    bag.ExpandCapacity(kBagMaxCapacity);
+
+    std::vector<Guid> written;
+    ASSERT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1), &written));
+    ASSERT_EQ(1u, written.size());
+    const Guid existing = written.front();
+    ASSERT_EQ(1u, bag.OccupiedGridCount());
+
+    // 第一件全新、第二件的 guid 撞已有的那件。
+    InitItemParam fresh = MakeItem(kNonStack2, 1);
+    fresh.itemPBComp.set_item_id(778899);
+    InitItemParam clash = MakeItem(kNonStack1, 1);
+    clash.itemPBComp.set_item_id(existing);
+
+    EXPECT_NE(kSuccess, bag.AddItems(std::vector<InitItemParam>{fresh, clash}));
+
+    // 关键:第一件也不能进去。
+    EXPECT_EQ(1u, bag.OccupiedGridCount()) << "撞车必须整批拒绝,不能留下半批";
+    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(778899));
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// 同一批里两件用了同一个预设 guid -> 整批拒绝。
+TEST(BagBatchAtomicityTest, DuplicateGuidWithinTheBatchRejectsWholeBatch)
+{
+    Bag bag;
+    bag.ExpandCapacity(kBagMaxCapacity);
+
+    InitItemParam a = MakeItem(kNonStack1, 1);
+    a.itemPBComp.set_item_id(556677);
+    InitItemParam b = MakeItem(kNonStack2, 1);
+    b.itemPBComp.set_item_id(556677); // 同一个 guid
+
+    EXPECT_NE(kSuccess, bag.AddItems(std::vector<InitItemParam>{a, b}));
+    EXPECT_EQ(0u, bag.OccupiedGridCount());
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// 全部携带各自合法的预设 guid(邮件附件的典型形状)-> 不需要铸号,正常放行。
+// 这条用例同时钉住"别把铸号预检写成无条件拒绝"——那样会误伤这个场景。
+TEST(BagBatchAtomicityTest, AllPreassignedGuidsNeedNoMintingAndSucceed)
+{
+    Bag bag;
+    bag.ExpandCapacity(kBagMaxCapacity);
+
+    InitItemParam a = MakeItem(kNonStack1, 1);
+    a.itemPBComp.set_item_id(331);
+    InitItemParam b = MakeItem(kNonStack2, 1);
+    b.itemPBComp.set_item_id(332);
+
+    EXPECT_EQ(kSuccess, bag.AddItems(std::vector<InitItemParam>{a, b}));
+    EXPECT_EQ(2u, bag.OccupiedGridCount());
+    ASSERT_NE(nullptr, bag.GetItemCompByGuid(331));
+    ASSERT_NE(nullptr, bag.GetItemCompByGuid(332));
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// §11.2(h) 的落点:玩家点击"整理"是唯一会重排位置的入口(2026-08-27 拍板)。
+TEST(BagServiceSortTest, SortByPlayerRequestReorders)
+{
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+
+    // config 降序摆放,扁平布局下"整理"应当把它排成升序。
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack11)));
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10)));
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    ASSERT_EQ(kStack11, bag.GetItemCompByPos(0)->config_id());
+
+    bool changed = false;
+    EXPECT_EQ(kSuccess, BagService::SortByPlayerRequest(entt::null, bag, &changed));
+    EXPECT_TRUE(changed);
+
+    EXPECT_EQ(kStack10, bag.GetItemCompByPos(0)->config_id());
+    EXPECT_EQ(kStack11, bag.GetItemCompByPos(1)->config_id());
+}
+
+// 与之对照:自动触发的档位只合并、不挪位置。两条并排放,是为了让"点击才重排"
+// 这个决定在用例层面一眼可见。
+TEST(BagServiceSortTest, AutoTidyPathDoesNotReorder)
+{
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack11)));
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10)));
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+    ASSERT_EQ(kStack11, bag.GetItemCompByPos(0)->config_id());
+
+    EXPECT_EQ(kSuccess,
+              BagService::MergeAndCompact(entt::null, bag, CompactPolicy::kMergeOnly));
+
+    EXPECT_EQ(kStack11, bag.GetItemCompByPos(0)->config_id())
+        << "自动路径不许挪位置:跨服回来东西得还在原地";
+    EXPECT_EQ(kStack10, bag.GetItemCompByPos(1)->config_id());
+}
+
 // ⚠️ 本套件必须保持在**文件最后**:Fence() 是单向的,tlsSnowflakeManager 是进程级 tls 单例,
 // fence 之后本线程再也铸不出合法 guid —— 在它后面声明的任何铸号型用例都会被连坐挂掉。
 // (gtest 默认按声明序执行;请勿对本文件开 --gtest_shuffle。)
@@ -1096,6 +1884,67 @@ TEST(BagFencedGeneratorTest, MintingPathsFailClosedWhileMergeStillWorks)
     EXPECT_EQ(1, bag.OccupiedGridCount());
 }
 
+// 必须排在上面那条之后:Fence() 是单向的,本组用例依赖它已经被拉下。
+//
+// 钉住的契约:发号器不可用时,**批量入包整批拒绝**,一件都不许落地。
+// 关键在于批次里混了"不铸号就能完成"的项和"必须铸号"的项 —— 逐件把关时,
+// 前者会先成功写进去,等轮到后者才失败,于是留下半批。邮件附件是这条路径的
+// 主要用户,半批发放会让调用方以为整批失败而重发,变成复制道具。
+//
+// 铺底用 InsertItemForRestore:它用调用方给的 guid,不铸号,所以 fence 之后
+// 仍然可用 —— 否则 fence 之后根本没法把背包摆成需要的初始状态。
+TEST(BagFencedGeneratorTest, VectorBatchRejectsWholeBatchWhenAnyPieceNeedsMinting)
+{
+    ASSERT_TRUE(tlsSnowflakeManager.IsFenced()) << "本用例依赖前一条用例已经 Fence()";
+
+    const uint32_t maxStack10 = MaxStack(kStack10);
+    ASSERT_GE(maxStack10, 4u) << "用例前提:该物品堆叠上限至少 4";
+
+    Bag bag;
+    bag.SetCapacityForRestore(kBagMaxCapacity);
+    bag.InsertItemForRestore(910001, kStack10, maxStack10 - 2, 0);
+    ASSERT_EQ(1u, bag.OccupiedGridCount());
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+
+    // vector 重载按下标顺序处理,所以这里的"第一件能并堆、第二件要铸号"是
+    // 确定性的:没有预检的话,第一件一定会先被写进旧堆。
+    std::vector<InitItemParam> batch{MakeItem(kStack10, 2), MakeItem(kStack11, 1)};
+    EXPECT_NE(kSuccess, bag.AddItems(batch));
+
+    EXPECT_EQ(maxStack10 - 2, bag.GetItemCompByPos(0)->size())
+        << "第一件不能被灌进旧堆 —— 整批拒绝意味着一件都没写";
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+    EXPECT_EQ(0u, bag.GetTotalItemCount(kStack11));
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// ItemCountMap 重载的同一条契约。
+//
+// 注意它与上面那条的区别:ItemCountMap 是 unordered_map,**遍历顺序不确定**,
+// 所以"没有预检时会不会留下半批"取决于哈希序 —— 那正是必须有整批预检的理由:
+// 否则同一份数据在不同构建下表现不一样,是个 heisenbug。有了预检,下面的断言
+// 才是确定成立的。
+TEST(BagFencedGeneratorTest, CountMapBatchRejectsWholeBatchWhenMintingUnavailable)
+{
+    ASSERT_TRUE(tlsSnowflakeManager.IsFenced());
+
+    const uint32_t maxStack10 = MaxStack(kStack10);
+    ASSERT_GE(maxStack10, 4u);
+
+    Bag bag;
+    bag.SetCapacityForRestore(kBagMaxCapacity);
+    bag.InsertItemForRestore(920001, kStack10, maxStack10 - 2, 0);
+    ASSERT_NE(nullptr, bag.GetItemCompByPos(0));
+
+    ItemCountMap batch{{kStack10, 2}, {kStack11, 1}};
+    EXPECT_NE(kSuccess, bag.AddItems(batch));
+
+    EXPECT_EQ(maxStack10 - 2, bag.GetItemCompByPos(0)->size());
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+    EXPECT_EQ(0u, bag.GetTotalItemCount(kStack11));
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
 int main(int argc, char **argv)
 {
     if (!test_config::FindAndLoadTestConfig(argc, argv))
@@ -1104,6 +1953,10 @@ int main(int argc, char **argv)
     // 必须显式给当前测试线程一个非零节点号，不能依赖未初始化时的保留 node_id=0。
     tlsSnowflakeManager.OnNodeStart(1);
     ItemTableManager::Instance().Load();
+    // 装备栏的槽位口径在这张表里(哪个槽接受哪个部位)。生产侧由 all_table.cpp
+    // 自动注册加载;单测没有那条启动链,必须自己加载,否则 FindAll() 为空、
+    // 任何装备都放不进具名槽。
+    EquipSlotTableManager::Instance().Load();
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

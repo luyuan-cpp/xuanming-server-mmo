@@ -21,6 +21,10 @@ type ItemMax_stack_sizeComp struct {
     Value uint32
 }
 
+type ItemEquip_kindComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -32,5 +36,9 @@ func MakeItemIdComp(row *pb.ItemTable) ItemIdComp {
 
 func MakeItemMax_stack_sizeComp(row *pb.ItemTable) ItemMax_stack_sizeComp {
     return ItemMax_stack_sizeComp{Value: row.MaxStackSize}
+}
+
+func MakeItemEquip_kindComp(row *pb.ItemTable) ItemEquip_kindComp {
+    return ItemEquip_kindComp{Value: row.EquipKind}
 }
 

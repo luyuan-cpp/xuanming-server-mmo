@@ -33,6 +33,8 @@ public class AllTable {
 
         DungeonTableManager.getInstance().load(configDir, useBinary);
 
+        EquipSlotTableManager.getInstance().load(configDir, useBinary);
+
         GlobalVariableTableManager.getInstance().load(configDir, useBinary);
 
         ItemTableManager.getInstance().load(configDir, useBinary);
@@ -72,7 +74,7 @@ public class AllTable {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(20);
+        CountDownLatch latch = new CountDownLatch(21);
 
         new Thread(() -> {
             try {
@@ -149,6 +151,16 @@ public class AllTable {
                 DungeonTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Dungeon table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                EquipSlotTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load EquipSlot table", e);
             } finally {
                 latch.countDown();
             }
@@ -309,6 +321,8 @@ public class AllTable {
         CooldownTableManager.getInstance().load(configDir, useBinary);
 
         DungeonTableManager.getInstance().load(configDir, useBinary);
+
+        EquipSlotTableManager.getInstance().load(configDir, useBinary);
 
         GlobalVariableTableManager.getInstance().load(configDir, useBinary);
 

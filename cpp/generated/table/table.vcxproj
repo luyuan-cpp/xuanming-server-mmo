@@ -44,7 +44,9 @@
     <ClInclude Include="code\dungeon_table_comp.h" />
     <ClInclude Include="code\globalvariable_table.h" />
     <ClInclude Include="code\globalvariable_table_comp.h" />
+    <ClInclude Include="code\equipslot_table.h" />
     <ClInclude Include="code\item_table.h" />
+    <ClInclude Include="code\equipslot_table_comp.h" />
     <ClInclude Include="code\item_table_comp.h" />
     <ClInclude Include="code\messagelimiter_table.h" />
     <ClInclude Include="code\messagelimiter_table_comp.h" />
@@ -82,6 +84,7 @@
     <ClInclude Include="proto\cooldown_table.pb.h" />
     <ClInclude Include="proto\dungeon_table.pb.h" />
     <ClInclude Include="proto\globalvariable_table.pb.h" />
+    <ClInclude Include="proto\equipslot_table.pb.h" />
     <ClInclude Include="proto\item_table.pb.h" />
     <ClInclude Include="proto\messagelimiter_table.pb.h" />
     <ClInclude Include="proto\mirror_table.pb.h" />
@@ -121,6 +124,7 @@
     <ClCompile Include="code\cooldown_table.cpp" />
     <ClCompile Include="code\dungeon_table.cpp" />
     <ClCompile Include="code\globalvariable_table.cpp" />
+    <ClCompile Include="code\equipslot_table.cpp" />
     <ClCompile Include="code\item_table.cpp" />
     <ClCompile Include="code\messagelimiter_table.cpp" />
     <ClCompile Include="code\mirror_table.cpp" />
@@ -141,6 +145,7 @@
     <ClCompile Include="proto\cooldown_table.pb.cc" />
     <ClCompile Include="proto\dungeon_table.pb.cc" />
     <ClCompile Include="proto\globalvariable_table.pb.cc" />
+    <ClCompile Include="proto\equipslot_table.pb.cc" />
     <ClCompile Include="proto\item_table.pb.cc" />
     <ClCompile Include="proto\messagelimiter_table.pb.cc" />
     <ClCompile Include="proto\mirror_table.pb.cc" />

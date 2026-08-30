@@ -12,6 +12,7 @@
 #include "condition_table.h"
 #include "cooldown_table.h"
 #include "dungeon_table.h"
+#include "equipslot_table.h"
 #include "globalvariable_table.h"
 #include "item_table.h"
 #include "messagelimiter_table.h"
@@ -45,6 +46,8 @@ void LoadTables() {
     CooldownTableManager::Instance().Load();
 
     DungeonTableManager::Instance().Load();
+
+    EquipSlotTableManager::Instance().Load();
 
     GlobalVariableTableManager::Instance().Load();
 
@@ -88,6 +91,8 @@ void LoadTables() {
 
     DungeonTableManager::Instance().LoadSuccess();
 
+    EquipSlotTableManager::Instance().LoadSuccess();
+
     GlobalVariableTableManager::Instance().LoadSuccess();
 
     ItemTableManager::Instance().LoadSuccess();
@@ -119,7 +124,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(20);
+    static muduo::CountDownLatch latch(21);
 
     std::thread ActorActionCombatStateLoadThread([]() {
         void InitThreadLocalConfig();
@@ -184,6 +189,14 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     DungeonLoadThread.detach();
+
+    std::thread EquipSlotLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        EquipSlotTableManager::Instance().Load();
+        latch.countDown();
+    });
+    EquipSlotLoadThread.detach();
 
     std::thread GlobalVariableLoadThread([]() {
         void InitThreadLocalConfig();
@@ -299,6 +312,8 @@ void LoadTablesAsync() {
     CooldownTableManager::Instance().LoadSuccess();
 
     DungeonTableManager::Instance().LoadSuccess();
+
+    EquipSlotTableManager::Instance().LoadSuccess();
 
     GlobalVariableTableManager::Instance().LoadSuccess();
 

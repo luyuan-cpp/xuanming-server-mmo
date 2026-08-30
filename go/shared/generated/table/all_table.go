@@ -36,6 +36,9 @@ func LoadTables(configDir string, useBinary bool) {
     if err := DungeonTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load Dungeon table: %v", err)
     }
+    if err := EquipSlotTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load EquipSlot table: %v", err)
+    }
     if err := GlobalVariableTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load GlobalVariable table: %v", err)
     }
@@ -82,7 +85,7 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(20)
+    wg.Add(21)
     go func() {
         defer wg.Done()
         if err := ActorActionCombatStateTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -129,6 +132,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
         defer wg.Done()
         if err := DungeonTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load Dungeon table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := EquipSlotTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load EquipSlot table: %v", err)
         }
     }()
     go func() {
@@ -251,6 +260,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newDungeon.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload Dungeon failed: %w", err)
     }
+    newEquipSlot := NewEquipSlotTableManager()
+    if err := newEquipSlot.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload EquipSlot failed: %w", err)
+    }
     newGlobalVariable := NewGlobalVariableTableManager()
     if err := newGlobalVariable.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload GlobalVariable failed: %w", err)
@@ -309,6 +322,7 @@ func ReloadTables(configDir string, useBinary bool) error {
     ConditionTableManagerInstance = newCondition
     CooldownTableManagerInstance = newCooldown
     DungeonTableManagerInstance = newDungeon
+    EquipSlotTableManagerInstance = newEquipSlot
     GlobalVariableTableManagerInstance = newGlobalVariable
     ItemTableManagerInstance = newItem
     MessageLimiterTableManagerInstance = newMessageLimiter

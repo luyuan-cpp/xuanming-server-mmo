@@ -230,6 +230,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTable final : public ::google::
   enum : int {
     kIdFieldNumber = 1,
     kMaxStackSizeFieldNumber = 2,
+    kEquipKindFieldNumber = 3,
   };
   // uint32 id = 1;
   void clear_id() ;
@@ -251,11 +252,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTable final : public ::google::
   void _internal_set_max_stack_size(::uint32_t value);
 
   public:
+  // uint32 equip_kind = 3;
+  void clear_equip_kind() ;
+  [[nodiscard]] ::uint32_t equip_kind() const;
+  void set_equip_kind(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_equip_kind() const;
+  void _internal_set_equip_kind(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ItemTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -286,6 +297,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTable final : public ::google::
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t id_;
     ::uint32_t max_stack_size_;
+    ::uint32_t equip_kind_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -566,6 +578,30 @@ inline ::uint32_t ItemTable::_internal_max_stack_size() const {
 inline void ItemTable::_internal_set_max_stack_size(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_stack_size_ = value;
+}
+
+// uint32 equip_kind = 3;
+inline void ItemTable::clear_equip_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_kind_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t ItemTable::equip_kind() const {
+  // @@protoc_insertion_point(field_get:ItemTable.equip_kind)
+  return _internal_equip_kind();
+}
+inline void ItemTable::set_equip_kind(::uint32_t value) {
+  _internal_set_equip_kind(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ItemTable.equip_kind)
+}
+inline ::uint32_t ItemTable::_internal_equip_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.equip_kind_;
+}
+inline void ItemTable::_internal_set_equip_kind(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.equip_kind_ = value;
 }
 
 // -------------------------------------------------------------------

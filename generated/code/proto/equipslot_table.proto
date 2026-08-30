@@ -1,0 +1,18 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "EquipSlotTableOuterClass";
+option java_multiple_files = true;
+
+
+message EquipSlotTable {
+	uint32 id = 1;
+	uint32 equip_kind = 2;
+}
+
+message EquipSlotTableData {
+	repeated EquipSlotTable data = 1;
+}

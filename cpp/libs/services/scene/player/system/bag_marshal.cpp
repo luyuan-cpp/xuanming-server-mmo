@@ -92,6 +92,13 @@ void Unmarshal(entt::entity player, const BagAllData& in)
 {
     auto& bags = tlsEcs.actorRegistry.get_or_emplace<PlayerBagsComp>(player);
 
+    // 把玩家 guid 记进每个 Bag —— **只用于日志**,不参与任何判定。
+    // Bag::playerGuid 此前全仓没有任何写入点,于是每一条带 player= 的错误日志
+    // 打的都是 kInvalidGuid 哨兵,排障时等于没有。这里取的是挂在实体上的 Guid
+    // 组件,与 TransactionLogSystem::ResolvePlayerId 同源。
+    const auto* ownerGuid = tlsEcs.actorRegistry.try_get<Guid>(player);
+    const Guid owner = (ownerGuid != nullptr) ? *ownerGuid : kInvalidGuid;
+
     // Capacity replay first — InsertItemForRestore validates against
     // capacity_ via the bag's own bookkeeping, so getting capacities
     // straight before items go in matters.
@@ -103,6 +110,7 @@ void Unmarshal(entt::entity player, const BagAllData& in)
     const int caps = in.capacities_size();
     for (uint32_t bagType = 0; bagType < static_cast<uint32_t>(kBagTypeCount); ++bagType)
     {
+        bags.bags[bagType].SetPlayerGuid(owner);
         bags.bags[bagType].ResetFromSnapshot();
         if (static_cast<int>(bagType) < caps)
         {
@@ -141,6 +149,7 @@ void Unmarshal(entt::entity player, const BagAllData& in)
     for (const auto& dyn : in.dynamic_bags())
     {
         Bag& bag = bags.dynamicBags_[dyn.bag_id()];
+        bag.SetPlayerGuid(owner);
         bag.ResetFromSnapshot();
         bag.SetCapacityForRestore(static_cast<std::size_t>(dyn.capacity()));
         for (const auto& entry : dyn.items())

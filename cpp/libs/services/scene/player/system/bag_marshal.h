@@ -3,24 +3,28 @@
 // BagMarshal — bridge between BagAllData proto (cross-zone payload /
 // persistence blob) and the player's runtime bag state.
 //
-// Status (2026-05-16):
-//   The Bag class in cpp/libs/modules/bag/bag_system.h is NOT currently
-//   attached to player entities in production code — `grep -rn
-//   "emplace<Bag>"` returns zero hits outside cpp/tests/. So the
-//   Marshal/Unmarshal functions below are stubs that handle the proto
-//   side correctly but have nothing on the ECS side to read/write.
+// Status (2026-08-27):
+//   FULLY IMPLEMENTED. Both directions walk PlayerBagsComp's four fixed
+//   bags plus dynamicBags_ and map them to/from BagAllData — see the
+//   comment block at the top of bag_marshal.cpp for the exact shape.
 //
-//   The proto wire path is plumbed (PlayerAllData carries BagAllData in
-//   field 4), so cross-zone migration can ship without bag data drop —
-//   it just won't carry items until bag-to-entity attach lands.
+//   (This block used to read "CURRENT BEHAVIOR (2026-05-16): no-op",
+//   which stopped being true when the real implementation landed on
+//   2026-05-17. It stayed stale for three months and is exactly the kind
+//   of comment that sends someone down the wrong path during an incident,
+//   so: if you change these functions, change this paragraph too.)
 //
-//   When bag attaches to player entity (track via task #21 and the bag
-//   integration design discussion that hasn't started yet), update both
-//   functions to walk the bag's items_ map and emit ItemEntry per
-//   {bag_type=0..3, pos, item_uuid, config_id, stack_size}. The proto
-//   schema (BagAllData) and ItemEntry layout already accommodate this —
-//   see proto/common/database/bag_quest_mail_data.proto for game-design
-//   field TODOs at known field numbers.
+//   Schema is still the conservative 5-field subset (item_uuid /
+//   config_id / stack_size / pos / bag_type). Game-design extensions
+//   (enchant level, affixes, gem inlay, bound state) are documented as
+//   TODO at known field numbers in
+//   proto/common/database/bag_quest_mail_data.proto and will land here as
+//   the schema grows; proto field numbers are reserved so the migration
+//   path stays forward-compatible.
+//
+//   ItemEntry.pos is a Bag SlotId. Its meaning is layout-strategy
+//   dependent (flat = index, grid = y*width+x) but its wire type never
+//   changes — see docs/design/bag-instance-layout-split.md §7.
 
 #include "entt/src/entt/entity/registry.hpp"
 #include "proto/common/database/bag_quest_mail_data.pb.h"
@@ -32,9 +36,9 @@ namespace bag_marshal
     // produces equivalent BagAllData (modulo serialization order, which
     // proto3 doesn't guarantee anyway).
     //
-    // CURRENT BEHAVIOR (2026-05-16): no-op. Bag isn't attached to player
-    // entity in production code. The function exists so PlayerAllData
-    // marshalling has a stable ABI for the next iteration.
+    // A player entity with no PlayerBagsComp yields an empty BagAllData
+    // (that is the correct payload for an entity that hasn't been through
+    // the lifecycle yet), not an error.
     void Marshal(entt::entity player, BagAllData& out);
 
     // Reverse direction: rebuild bag/warehouse/equipment/temp ECS state
@@ -42,6 +46,11 @@ namespace bag_marshal
     // when receiving a migrating player, on player login when loading
     // from Redis, and on rollback when restoring a snapshot.
     //
-    // CURRENT BEHAVIOR (2026-05-16): no-op for the same reason as Marshal.
+    // get_or_emplace's the component, so it works on a fresh entity.
+    // Entries whose bag_type is out of range are dropped with a WARN.
+    // An entry whose recorded pos is unusable (out of range, or already
+    // taken by another restored item) is relocated to a free slot rather
+    // than dropped — position can change, the item must not vanish.
+    // See Bag::InsertItemForRestore.
     void Unmarshal(entt::entity player, const BagAllData& in);
 }

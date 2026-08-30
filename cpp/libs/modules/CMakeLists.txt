@@ -60,6 +60,8 @@ include_directories(
 set(SOURCE_FILES
     bag/bag_system.cpp
     bag/bag_service.cpp
+    bag/container_layout.cpp
+    bag/item_store.cpp
     condition/condition_util.cpp
     currency/system/currency_system.cpp
     gain_block/gain_block_service.cpp

@@ -21,6 +21,8 @@
   <ItemGroup>
     <ClCompile Include="bag\bag_system.cpp" />
     <ClCompile Include="bag\bag_service.cpp" />
+    <ClCompile Include="bag\container_layout.cpp" />
+    <ClCompile Include="bag\item_store.cpp" />
     <ClCompile Include="condition\condition_util.cpp" />
     <ClCompile Include="currency\system\currency_system.cpp" />
     <ClCompile Include="gain_block\gain_block_service.cpp" />
@@ -34,6 +36,9 @@
     <ClInclude Include="bag\bag_system.h" />
     <ClInclude Include="bag\bag_service.h" />
     <ClInclude Include="bag\item_system.h" />
+    <ClInclude Include="bag\container_layout.h" />
+    <ClInclude Include="bag\item_store.h" />
+    <ClInclude Include="bag\comp\player_bags_comp.h" />
     <ClInclude Include="condition\condition_util.h" />
     <ClInclude Include="currency\comp\player_currency_comp.h" />
     <ClInclude Include="currency\constants\currency.h" />

@@ -22,6 +22,10 @@ struct ItemMax_stack_sizeComp {
     uint32_t value;
 };
 
+struct ItemEquip_kindComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -32,4 +36,7 @@ inline ItemIdComp MakeItemIdComp(const ItemTable& row) {
 }
 inline ItemMax_stack_sizeComp MakeItemMax_stack_sizeComp(const ItemTable& row) {
     return { row.max_stack_size() };
+}
+inline ItemEquip_kindComp MakeItemEquip_kindComp(const ItemTable& row) {
+    return { row.equip_kind() };
 }

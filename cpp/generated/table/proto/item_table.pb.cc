@@ -48,11 +48,11 @@ constexpr ItemTable::ParseTableT_ ItemTable::InternalGenerateParseTable_(const :
     {
       PROTOBUF_FIELD_OFFSET(ItemTable, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -62,14 +62,19 @@ constexpr ItemTable::ParseTableT_ ItemTable::InternalGenerateParseTable_(const :
       ::_pbi::TcParser::GetTable<::ItemTable>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 max_stack_size = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemTable, _impl_.max_stack_size_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.max_stack_size_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemTable, _impl_.id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.id_)}},
+      // uint32 max_stack_size = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemTable, _impl_.max_stack_size_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.max_stack_size_)}},
+      // uint32 equip_kind = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemTable, _impl_.equip_kind_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.equip_kind_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -77,6 +82,8 @@ constexpr ItemTable::ParseTableT_ ItemTable::InternalGenerateParseTable_(const :
       {PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 max_stack_size = 2;
       {PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.max_stack_size_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 equip_kind = 3;
+      {PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.equip_kind_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -90,7 +97,8 @@ inline constexpr ItemTable::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         id_{0u},
-        max_stack_size_{0u} {}
+        max_stack_size_{0u},
+        equip_kind_{0u} {}
 
 template <typename>
 constexpr ItemTable::ItemTable(::_pbi::ConstantInitialized,
@@ -344,11 +352,13 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_.max_stack_size_),
+        PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_.equip_kind_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ItemTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -359,7 +369,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ItemTable)},
-        {7, sizeof(::ItemTableData)},
+        {9, sizeof(::ItemTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -368,17 +378,17 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_item_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\020item_table.proto\"/\n\tItemTable\022\n\n\002id\030\001 "
-    "\001(\r\022\026\n\016max_stack_size\030\002 \001(\r\")\n\rItemTable"
-    "Data\022\030\n\004data\030\001 \003(\0132\n.ItemTableB;\n\016com.ga"
-    "me.tableB\023ItemTableOuterClassP\001Z\022generat"
-    "ed/pb/tableb\006proto3"
+    "\n\020item_table.proto\"C\n\tItemTable\022\n\n\002id\030\001 "
+    "\001(\r\022\026\n\016max_stack_size\030\002 \001(\r\022\022\n\nequip_kin"
+    "d\030\003 \001(\r\")\n\rItemTableData\022\030\n\004data\030\001 \003(\0132\n"
+    ".ItemTableB;\n\016com.game.tableB\023ItemTableO"
+    "uterClassP\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_item_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_item_5ftable_2eproto = {
     false,
     false,
-    179,
+    199,
     descriptor_table_protodef_item_5ftable_2eproto,
     "item_table.proto",
     &descriptor_table_item_5ftable_2eproto_once,
@@ -423,9 +433,9 @@ inline void ItemTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, max_stack_size_) -
+           offsetof(Impl_, equip_kind_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::max_stack_size_));
+               sizeof(Impl_::equip_kind_));
 }
 ItemTable::~ItemTable() {
   // @@protoc_insertion_point(destructor:ItemTable)
@@ -475,10 +485,10 @@ PROTOBUF_NOINLINE void ItemTable::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.max_stack_size_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.max_stack_size_));
+        reinterpret_cast<char*>(&_impl_.equip_kind_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.equip_kind_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -521,6 +531,15 @@ PROTOBUF_NOINLINE void ItemTable::Clear() {
     }
   }
 
+  // uint32 equip_kind = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_equip_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_equip_kind(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -546,7 +565,7 @@ PROTOBUF_NOINLINE void ItemTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // uint32 id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_id() != 0) {
@@ -559,6 +578,13 @@ PROTOBUF_NOINLINE void ItemTable::Clear() {
       if (this_._internal_max_stack_size() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_stack_size());
+      }
+    }
+    // uint32 equip_kind = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_equip_kind() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_equip_kind());
       }
     }
   }
@@ -579,7 +605,7 @@ void ItemTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
@@ -588,6 +614,11 @@ void ItemTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_max_stack_size() != 0) {
         _this->_impl_.max_stack_size_ = from._impl_.max_stack_size_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_equip_kind() != 0) {
+        _this->_impl_.equip_kind_ = from._impl_.equip_kind_;
       }
     }
   }
@@ -609,8 +640,8 @@ void ItemTable::InternalSwap(ItemTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL other
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.max_stack_size_)
-      + sizeof(ItemTable::_impl_.max_stack_size_)
+      PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.equip_kind_)
+      + sizeof(ItemTable::_impl_.equip_kind_)
       - PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

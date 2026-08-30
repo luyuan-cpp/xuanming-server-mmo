@@ -278,3 +278,58 @@ uint32_t BagService::RemoveItem(
 
 	return result;
 }
+
+uint32_t BagService::MergeAndCompact(
+	entt::entity playerEntity,
+	Bag &bag,
+	CompactPolicy policy,
+	bool *changedOut)
+{
+	if (changedOut != nullptr)
+	{
+		*changedOut = false;
+	}
+
+	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
+	// 整理会销毁实例、重排槽位,两样都是会被 marshal 带走的状态。传输在途时动它
+	// 等于在源端造出一份与已发出快照不一致的布局,ACK 后 DestroyPlayer 一到,
+	// 这次整理就白做了(更糟的是流水已经写了)。理由同 AddItem。
+	// See docs/design/cross-zone-readiness-audit.md §11.1.
+	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	{
+		LOG_WARN << "BagService::MergeAndCompact rejected: player frozen for cross-zone migration. "
+				 << "player=" << bag.PlayerGuid();
+		return PrintStackAndReturnError(kInvalidParameter);
+	}
+
+	// ── Delegate to pure container ───────────────────────────────────────
+	std::vector<DestroyedInstance> destroyed;
+	const bool changed = bag.MergeAndCompact(&destroyed, policy);
+	if (changedOut != nullptr)
+	{
+		*changedOut = changed;
+	}
+
+	// ── Post: transaction log for every retired instance ─────────────────
+	// 数量没有凭空消失(它们被并进了别的实例),但 item_uuid 本身退役了,而那
+	// 正是外挂回收做关联的键。不写这一笔,追溯链就在"整理"这一步无声断掉 ——
+	// 拆分前 MergeAndCompact 根本没有编排层,这些 guid 是悄悄消失的。
+	for (const auto &item : destroyed)
+	{
+		TransactionLogSystem::LogItemDestroy(
+			playerEntity, item.guid, item.configId, item.size);
+	}
+
+	return kSuccess;
+}
+
+uint32_t BagService::SortByPlayerRequest(
+	entt::entity playerEntity,
+	Bag &bag,
+	bool *changedOut)
+{
+	// 玩家点了"整理"按钮 —— 这是唯一被授权重排位置的路径。
+	// 编排(冻结检查 + 退役实例写流水)全在 MergeAndCompact 里,这里只负责
+	// 把"这是玩家的显式意图"这件事翻译成 policy,不重复任何逻辑。
+	return MergeAndCompact(playerEntity, bag, CompactPolicy::kMergeAndReorder, changedOut);
+}

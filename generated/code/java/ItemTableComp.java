@@ -29,4 +29,10 @@ public final class ItemTableComp {
         }
     }
 
+    public record Equip_kind(int value) {
+        public static Equip_kind from(ItemTable row) {
+            return new Equip_kind(row.getEquipKind());
+        }
+    }
+
 }
