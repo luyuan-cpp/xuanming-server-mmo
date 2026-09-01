@@ -605,6 +605,7 @@ build/cpp/tests/bag_test.exe
 
 ## 关联
 
+- [bag-rule-policy-layering.md](bag-rule-policy-layering.md) —— 下一刀(规则):准入 / 淘汰 / 流出 等正交策略,含本文档 §11 遗留项的延续与一条 `CanFit` 现存缺陷
 - [bag-service-srp-refactor.md](bag-service-srp-refactor.md) —— 上一刀(纵切):`Bag` → `BagService`
 - [cross-zone-readiness-audit.md](cross-zone-readiness-audit.md) §3.2 件 1 / §11.1 —— 背包跨服迁移与单写者冻结
 - [bag-rollback-feasibility-analysis.md](bag-rollback-feasibility-analysis.md) —— 回档对实例身份的要求

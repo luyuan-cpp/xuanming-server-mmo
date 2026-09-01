@@ -3340,3 +3340,25 @@ Unity 客户端默认网关 http://127.0.0.1:8081,零配置可连。
 
 ### 已知缺口(后续)
 - 首进场 (0,0,0) spawn 契约未修(handler 有引导落位兜底);客户端无预测回滚;FindPath 尚无调用方;dtCrowd 未接;SceneNavManager thread_local 加载线程问题维持现状
+
+## 2026-09-01 背包玩法规则的策略化分层(只出设计,未落码)
+
+### 决策文档
+- `docs/design/bag-rule-policy-layering.md`(结论、正交轴清单、红线、七步执行清单)
+
+### 结论
+- 问题:装备栏两格只放手镯 / 临时包 FIFO / 节日包只收节日道具 —— 数据结构相同、规则不同,该不该抽层。
+- 答案:抽的**不是一层**,是**六个各自只回答一个问题的正交策略**(准入 / 摆放 / 淘汰 / 整理 / 流出 / 过期)。做法是「一个参数化容器 + 一组 Strategy,按背包类型装配成 `BagProfile`」,**不是**继承出 `EquipmentBag / TempBag / FestivalBag`(四条理由见文档 §2,其中 `std::array<Bag, kBagTypeCount>` 的值语义会 object slicing 是硬约束)。
+- 模式:Strategy(摆放 / 淘汰)+ Specification/Composite(准入)+ Abstract Factory(装配)+ 规则数据化。明确排除 Policy-based design(编译期绑定,规则要按活动在运行期换)、责任链、Template Method。
+- 「显示规则」不进服务器容器:服务器只负责 `pos` / `bag_type` 稳定。
+- 三个需求的现状:装备槽机制**已完成**(`FixedSlotLayout` + `CfgItem.equip_kind` + `CfgEquipSlot`,别重做);FIFO 与节日包都还没有,且各自缺一块**数据**而不是代码。
+
+### 顺带挖出的现存缺陷(未修)
+- **`CanFit()` 对具名槽说谎**:`FixedSlotLayout` 继承 `FlatLayout` 且未覆盖 `CanFit`,于是 `reserve` 阶段只数空格、不问部位。装备栏 10 格 / 2 个手镯位,一次放 3 只手镯 → 预检通过 → 放进 2 只后第 3 只失败 → **函数返回失败但前两只留在包里**,违反 `AddItems` 注释里"绝不部分添加"的事务承诺。`AddItems(ItemCountMap)` 同样漏。
+- 修法只能提到桥层做(布局层不许认识 `config_id`),这正是"缺准入轴"的直接证据。
+- **静态阅读所得,未跑用例,可达性未查证**(是否真有生产路径往装备栏批量塞同部位装备)。实施第一步就是补一个失败用例确认。
+
+### 后续要动的数据 / 协议(都未动)
+- `CfgItem` 缺分类列(今天只有 `id` / `max_stack_size` / `equip_kind`),节日包准入无从表达;需新增 `CfgBagProfile` 表。
+- FIFO 序不能靠 snowflake guid 近似(跨服迁移 + 邮件附件预设 guid 两条路径会打乱),需给 `ItemEntry` 加显式字段(6/7/8 已被 TODO 预定,用 **9**),`ItemComp` 也要加。
+- `BagAllData.DynamicBagData` 只带 `bag_id + capacity + items`,**没有 profile id** —— 规则一旦挂到包上,节日包跨服回来会静默退化成普通自由包。
