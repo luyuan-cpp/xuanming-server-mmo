@@ -1,0 +1,26 @@
+# battle-smoke 配置:双机器人"回合制战斗 + 观战"端到端冒烟
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/battle_smoke.yaml
+# 退出码 0 = 全部断言通过(日志有 BATTLE_SMOKE_OK 一行);
+# 退出码 1 = 任一步失败(日志有 BATTLE_SMOKE_FAIL step=… reason=…)。
+#
+# 场景固定使用 robot_9001(参战 A)/ robot_9002(观战 B)两个账号,
+# 不走 account_fmt 展开;账号前缀必须是 robot_ 才会命中 login 侧的
+# DevPasswordAuth(开发用密码认证),改名会直接登录失败。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 目标 zone(0 = 从 /api/server-list 自动选推荐 zone);也用作 JoinQueueRequest.zone_id
+robot_count: 2 # 语义占位:本模式固定 A/B 两个机器人,不按此展开
+account_fmt: "robot_%04d" # 保留骨架字段;battle-smoke 用固定账号 robot_9001/9002(前缀必须 robot_,见上)
+password: "123456"
+skill_ids: [] # 战斗走服务端回合引擎 + 自动战斗,无需配置技能
+table_dir: "../generated/tables" # generated/tables 目录(相对工作目录或绝对路径)
+action_interval: 3 # 本模式不跑场景 AI 循环,保留默认
+report_interval: 5
+
+# 双机器人回合制战斗 + 观战冒烟(见 battle_smoke_scenario.go)
+mode: "battle-smoke"
+
+# 认证:password 模式(robot_ 前缀账号走 DevPasswordAuth)
+auth_type: "password"
