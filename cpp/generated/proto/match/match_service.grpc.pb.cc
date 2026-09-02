@@ -30,6 +30,8 @@ static const char* MatchService_method_names[] = {
   "/match.MatchService/RespondChallenge",
   "/match.MatchService/NotifyChallengeInvite",
   "/match.MatchService/NotifyChallengeResult",
+  "/match.MatchService/WatchBattle",
+  "/match.MatchService/ListWatchableBattles",
 };
 
 std::unique_ptr< MatchService::Stub> MatchService::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -46,6 +48,8 @@ MatchService::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& chann
   , rpcmethod_RespondChallenge_(MatchService_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_NotifyChallengeInvite_(MatchService_method_names[5], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_NotifyChallengeResult_(MatchService_method_names[6], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_WatchBattle_(MatchService_method_names[7], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_ListWatchableBattles_(MatchService_method_names[8], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status MatchService::Stub::JoinQueue(::grpc::ClientContext* context, const ::match::JoinQueueRequest& request, ::match::JoinQueueResponse* response) {
@@ -209,6 +213,52 @@ void MatchService::Stub::async::NotifyChallengeResult(::grpc::ClientContext* con
   return result;
 }
 
+::grpc::Status MatchService::Stub::WatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::match::WatchBattleResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::match::WatchBattleRequest, ::match::WatchBattleResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_WatchBattle_, context, request, response);
+}
+
+void MatchService::Stub::async::WatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest* request, ::match::WatchBattleResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::match::WatchBattleRequest, ::match::WatchBattleResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_WatchBattle_, context, request, response, std::move(f));
+}
+
+void MatchService::Stub::async::WatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest* request, ::match::WatchBattleResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_WatchBattle_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::match::WatchBattleResponse>* MatchService::Stub::PrepareAsyncWatchBattleRaw(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::match::WatchBattleResponse, ::match::WatchBattleRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_WatchBattle_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::match::WatchBattleResponse>* MatchService::Stub::AsyncWatchBattleRaw(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncWatchBattleRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status MatchService::Stub::ListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::match::ListWatchableBattlesResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::match::ListWatchableBattlesRequest, ::match::ListWatchableBattlesResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_ListWatchableBattles_, context, request, response);
+}
+
+void MatchService::Stub::async::ListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest* request, ::match::ListWatchableBattlesResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::match::ListWatchableBattlesRequest, ::match::ListWatchableBattlesResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ListWatchableBattles_, context, request, response, std::move(f));
+}
+
+void MatchService::Stub::async::ListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest* request, ::match::ListWatchableBattlesResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ListWatchableBattles_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::match::ListWatchableBattlesResponse>* MatchService::Stub::PrepareAsyncListWatchableBattlesRaw(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::match::ListWatchableBattlesResponse, ::match::ListWatchableBattlesRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_ListWatchableBattles_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::match::ListWatchableBattlesResponse>* MatchService::Stub::AsyncListWatchableBattlesRaw(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncListWatchableBattlesRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 MatchService::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       MatchService_method_names[0],
@@ -280,6 +330,26 @@ MatchService::Service::Service() {
              ::Empty* resp) {
                return service->NotifyChallengeResult(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      MatchService_method_names[7],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< MatchService::Service, ::match::WatchBattleRequest, ::match::WatchBattleResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](MatchService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::match::WatchBattleRequest* req,
+             ::match::WatchBattleResponse* resp) {
+               return service->WatchBattle(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      MatchService_method_names[8],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< MatchService::Service, ::match::ListWatchableBattlesRequest, ::match::ListWatchableBattlesResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](MatchService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::match::ListWatchableBattlesRequest* req,
+             ::match::ListWatchableBattlesResponse* resp) {
+               return service->ListWatchableBattles(ctx, req, resp);
+             }, this)));
 }
 
 MatchService::Service::~Service() {
@@ -328,6 +398,20 @@ MatchService::Service::~Service() {
 }
 
 ::grpc::Status MatchService::Service::NotifyChallengeResult(::grpc::ServerContext* context, const ::match::ChallengeResultS2C* request, ::Empty* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status MatchService::Service::WatchBattle(::grpc::ServerContext* context, const ::match::WatchBattleRequest* request, ::match::WatchBattleResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status MatchService::Service::ListWatchableBattles(::grpc::ServerContext* context, const ::match::ListWatchableBattlesRequest* request, ::match::ListWatchableBattlesResponse* response) {
   (void) context;
   (void) request;
   (void) response;

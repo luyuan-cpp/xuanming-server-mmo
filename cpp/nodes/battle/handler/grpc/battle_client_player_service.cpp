@@ -103,3 +103,51 @@ grpc::Status BattleClientPlayerGrpcImpl::GetBattleState(grpc::ServerContext *con
     future.get();
     return grpc::Status::OK;
 }
+
+grpc::Status BattleClientPlayerGrpcImpl::StopWatchBattle(grpc::ServerContext *context,
+    const ::StopWatchBattleRequest *request,
+    ::StopWatchBattleResponse *response)
+{
+    ::SessionDetails sessionDetails;
+    std::string rawMeta;
+    if (!ReadSessionDetails(*context, sessionDetails, rawMeta))
+    {
+        return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "missing x-session-detail-bin");
+    }
+    context->AddInitialMetadata(kSessionBinMetaKey, rawMeta);
+
+    std::promise<void> promise;
+    auto future = promise.get_future();
+
+    loop_.runInLoop([request, response, &sessionDetails, &promise]
+                    {
+        BattleRoomManager::Instance().HandleStopWatchBattle(sessionDetails, *request, *response);
+        promise.set_value(); });
+
+    future.get();
+    return grpc::Status::OK;
+}
+
+grpc::Status BattleClientPlayerGrpcImpl::SetAutoBattle(grpc::ServerContext *context,
+    const ::SetAutoBattleRequest *request,
+    ::SetAutoBattleResponse *response)
+{
+    ::SessionDetails sessionDetails;
+    std::string rawMeta;
+    if (!ReadSessionDetails(*context, sessionDetails, rawMeta))
+    {
+        return grpc::Status(grpc::StatusCode::UNAUTHENTICATED, "missing x-session-detail-bin");
+    }
+    context->AddInitialMetadata(kSessionBinMetaKey, rawMeta);
+
+    std::promise<void> promise;
+    auto future = promise.get_future();
+
+    loop_.runInLoop([request, response, &sessionDetails, &promise]
+                    {
+        BattleRoomManager::Instance().HandleSetAutoBattle(sessionDetails, *request, *response);
+        promise.set_value(); });
+
+    future.get();
+    return grpc::Status::OK;
+}

@@ -294,6 +294,13 @@ void SendMessageToPlayerOnGrpcNode(uint32_t messageId, const google::protobuf::M
 		return;
 	}
 
+	if (messageId >= gRpcMethodRegistry.size())
+	{
+		LOG_WARN << "Message dropped, messageId out of range: " << messageId
+				 << " (max: " << gRpcMethodRegistry.size() << ")";
+		return;
+	}
+
 	auto &rpcHandlerMeta = gRpcMethodRegistry[messageId];
 
 	const auto *playerSessionSnapshotPB = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(playerEntity);

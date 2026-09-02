@@ -30,3 +30,11 @@ constexpr uint32_t MatchServiceNotifyChallengeInviteIndex = 5;
 constexpr uint32_t MatchServiceNotifyChallengeResultMessageId = 154;
 constexpr uint32_t MatchServiceNotifyChallengeResultIndex = 6;
 #define MatchServiceNotifyChallengeResultMethod  ::MatchService_Stub::descriptor()->method(6)
+
+constexpr uint32_t MatchServiceWatchBattleMessageId = 163;
+constexpr uint32_t MatchServiceWatchBattleIndex = 7;
+#define MatchServiceWatchBattleMethod  ::MatchService_Stub::descriptor()->method(7)
+
+constexpr uint32_t MatchServiceListWatchableBattlesMessageId = 164;
+constexpr uint32_t MatchServiceListWatchableBattlesIndex = 8;
+#define MatchServiceListWatchableBattlesMethod  ::MatchService_Stub::descriptor()->method(8)

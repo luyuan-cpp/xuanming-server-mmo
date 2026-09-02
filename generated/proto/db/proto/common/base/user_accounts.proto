@@ -6,6 +6,9 @@ option go_package = "db/proto/common/base";
 message AccountSimplePlayer
 {
   uint64 player_id = 1;
+  uint32 class_id = 2;   // 职业(Class 配表 id);0 = 旧数据未设置
+  uint32 gender = 3;     // 1=男 2=女;0 = 旧数据未设置
+  uint32 zone_id = 4;    // 建角归属区(建角时的 Node.ZoneId);0 = 旧数据未设置
 }
 
 message AccountSimplePlayerList

@@ -427,6 +427,124 @@ void SendMatchServiceNotifyChallengeResult(entt::registry& registry, entt::entit
     SendMatchServiceNotifyChallengeResult(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
+#pragma region MatchServiceWatchBattle
+boost::object_pool<AsyncMatchServiceWatchBattleGrpcClient> MatchServiceWatchBattlePool;
+using AsyncMatchServiceWatchBattleHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::match::WatchBattleResponse&)>;
+AsyncMatchServiceWatchBattleHandlerFunctionType AsyncMatchServiceWatchBattleHandler;
+
+void AsyncCompleteGrpcMatchServiceWatchBattle(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncMatchServiceWatchBattleGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncMatchServiceWatchBattleHandler) {
+            AsyncMatchServiceWatchBattleHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	MatchServiceWatchBattlePool.destroy(call);
+}
+
+void SendMatchServiceWatchBattle(entt::registry& registry, entt::entity nodeEntity, const ::match::WatchBattleRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(MatchServiceWatchBattlePool.construct());
+    call->response_reader = registry
+        .get<MatchServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncWatchBattle(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(MatchServiceWatchBattleMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendMatchServiceWatchBattle(entt::registry& registry, entt::entity nodeEntity, const ::match::WatchBattleRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(MatchServiceWatchBattlePool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<MatchServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncWatchBattle(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(MatchServiceWatchBattleMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendMatchServiceWatchBattle(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::match::WatchBattleRequest& derived = static_cast<const ::match::WatchBattleRequest&>(message);
+    SendMatchServiceWatchBattle(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region MatchServiceListWatchableBattles
+boost::object_pool<AsyncMatchServiceListWatchableBattlesGrpcClient> MatchServiceListWatchableBattlesPool;
+using AsyncMatchServiceListWatchableBattlesHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::match::ListWatchableBattlesResponse&)>;
+AsyncMatchServiceListWatchableBattlesHandlerFunctionType AsyncMatchServiceListWatchableBattlesHandler;
+
+void AsyncCompleteGrpcMatchServiceListWatchableBattles(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncMatchServiceListWatchableBattlesGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncMatchServiceListWatchableBattlesHandler) {
+            AsyncMatchServiceListWatchableBattlesHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	MatchServiceListWatchableBattlesPool.destroy(call);
+}
+
+void SendMatchServiceListWatchableBattles(entt::registry& registry, entt::entity nodeEntity, const ::match::ListWatchableBattlesRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(MatchServiceListWatchableBattlesPool.construct());
+    call->response_reader = registry
+        .get<MatchServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncListWatchableBattles(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(MatchServiceListWatchableBattlesMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendMatchServiceListWatchableBattles(entt::registry& registry, entt::entity nodeEntity, const ::match::ListWatchableBattlesRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(MatchServiceListWatchableBattlesPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<MatchServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncListWatchableBattles(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(MatchServiceListWatchableBattlesMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendMatchServiceListWatchableBattles(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::match::ListWatchableBattlesRequest& derived = static_cast<const ::match::ListWatchableBattlesRequest&>(message);
+    SendMatchServiceListWatchableBattles(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
 
 void HandleMatchServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag) {
         switch (grpcTag->messageId) {
@@ -458,6 +576,14 @@ void HandleMatchServiceCompletedQueueMessage(entt::registry& registry, entt::ent
             AsyncCompleteGrpcMatchServiceNotifyChallengeResult(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
+        case MatchServiceWatchBattleMessageId:
+            AsyncCompleteGrpcMatchServiceWatchBattle(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case MatchServiceListWatchableBattlesMessageId:
+            AsyncCompleteGrpcMatchServiceListWatchableBattles(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
         default:
             break;
         }
@@ -472,6 +598,8 @@ void SetMatchServiceHandler(const std::function<void(const ClientContext&, const
     AsyncMatchServiceRespondChallengeHandler = handler;
     AsyncMatchServiceNotifyChallengeInviteHandler = handler;
     AsyncMatchServiceNotifyChallengeResultHandler = handler;
+    AsyncMatchServiceWatchBattleHandler = handler;
+    AsyncMatchServiceListWatchableBattlesHandler = handler;
 }
 
 void SetMatchServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler) {
@@ -496,6 +624,12 @@ void SetMatchServiceIfEmptyHandler(const std::function<void(const ClientContext&
     }
     if (!AsyncMatchServiceNotifyChallengeResultHandler) {
         AsyncMatchServiceNotifyChallengeResultHandler = handler;
+    }
+    if (!AsyncMatchServiceWatchBattleHandler) {
+        AsyncMatchServiceWatchBattleHandler = handler;
+    }
+    if (!AsyncMatchServiceListWatchableBattlesHandler) {
+        AsyncMatchServiceListWatchableBattlesHandler = handler;
     }
 }
 

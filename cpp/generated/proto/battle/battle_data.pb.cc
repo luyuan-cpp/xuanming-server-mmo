@@ -1575,11 +1575,11 @@ constexpr BattleActorState::ParseTableT_ BattleActorState::InternalGenerateParse
     {
       PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_._has_bits_),
       0, // no _extensions_
-      15, 120,  // max_field_number, fast_idx_mask
+      16, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294934528,  // skipmap
+      4294901760,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      15,  // num_field_entries
+      16,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1589,7 +1589,10 @@ constexpr BattleActorState::ParseTableT_ BattleActorState::InternalGenerateParse
       ::_pbi::TcParser::GetTable<::BattleActorState>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // bool is_auto = 16;
+      {::_pbi::TcParser::FastV8S2,
+       {384, 13, 0,
+        PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.is_auto_)}},
       // uint64 actor_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BattleActorState, _impl_.actor_id_), 4>(),
        {8, 4, 0,
@@ -1643,8 +1646,8 @@ constexpr BattleActorState::ParseTableT_ BattleActorState::InternalGenerateParse
        {106, 1, 0,
         PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.skill_table_ids_)}},
       // uint32 monster_table_id = 14;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorState, _impl_.monster_table_id_), 13>(),
-       {112, 13, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BattleActorState, _impl_.monster_table_id_), 14>(),
+       {112, 14, 0,
         PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.monster_table_id_)}},
       {::_pbi::TcParser::MiniParse, {}},
     }}, {{
@@ -1677,9 +1680,11 @@ constexpr BattleActorState::ParseTableT_ BattleActorState::InternalGenerateParse
       // repeated uint32 skill_table_ids = 13;
       {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.skill_table_ids_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
       // uint32 monster_table_id = 14;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.monster_table_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.monster_table_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // map<uint32, uint32> skill_cooldown_rounds = 15;
-      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.skill_cooldown_rounds_), _Internal::kHasBitsOffset + 14, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.skill_cooldown_rounds_), _Internal::kHasBitsOffset + 15, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      // bool is_auto = 16;
+      {PROTOBUF_FIELD_OFFSET(BattleActorState, _impl_.is_auto_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1696,7 +1701,7 @@ constexpr BattleActorState::ParseTableT_ BattleActorState::InternalGenerateParse
             0, 0, 13, 13, 0)},
     }},
     {{
-      "\20\0\0\0\4\0\0\0\0\0\0\0\0\0\0\0"
+      "\20\0\0\0\4\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "BattleActorState"
       "name"
     }},
@@ -1732,6 +1737,7 @@ inline constexpr BattleActorState::Impl_::Impl_(
         is_dead_{false},
         is_defending_{false},
         fled_{false},
+        is_auto_{false},
         monster_table_id_{0u},
         skill_cooldown_rounds_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::BattleActorState,
@@ -1907,7 +1913,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_._has_bits_),
-        18, // hasbit index offset
+        19, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.actor_id_),
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.actor_type_),
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.team_index_),
@@ -1923,6 +1929,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.skill_table_ids_),
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.monster_table_id_),
         PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.skill_cooldown_rounds_),
+        PROTOBUF_FIELD_OFFSET(::BattleActorState, _impl_.is_auto_),
         4,
         5,
         6,
@@ -1936,8 +1943,9 @@ const ::uint32_t
         12,
         0,
         1,
-        13,
         14,
+        15,
+        13,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleAction, _impl_._has_bits_),
         7, // hasbit index offset
@@ -2011,9 +2019,9 @@ static const ::_pbi::MigrationSchema
         {35, sizeof(::BattlePlayerSnapshot)},
         {60, sizeof(::BattleActorState_SkillCooldownRoundsEntry_DoNotUse)},
         {67, sizeof(::BattleActorState)},
-        {100, sizeof(::BattleAction)},
-        {111, sizeof(::BattleEventItem)},
-        {134, sizeof(::BattleSettlementData)},
+        {102, sizeof(::BattleAction)},
+        {113, sizeof(::BattleEventItem)},
+        {136, sizeof(::BattleSettlementData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2046,7 +2054,7 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "\001(\004\022\027\n\017skill_table_ids\030\007 \003(\r\022\037\n\005buffs\030\010 "
     "\003(\0132\020.BattleBuffEntry\022\037\n\005items\030\t \003(\0132\020.B"
     "attleItemEntry\022\037\n\007routing\030\n \001(\0132\016.Battle"
-    "Routing\022\022\n\nteam_index\030\013 \001(\r\"\333\003\n\020BattleAc"
+    "Routing\022\022\n\nteam_index\030\013 \001(\r\"\354\003\n\020BattleAc"
     "torState\022\020\n\010actor_id\030\001 \001(\004\022%\n\nactor_type"
     "\030\002 \001(\0162\021.eBattleActorType\022\022\n\nteam_index\030"
     "\003 \001(\r\022\014\n\004name\030\004 \001(\t\022\r\n\005level\030\005 \001(\r\022\'\n\nat"
@@ -2057,44 +2065,45 @@ const char descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto[] AB
     "\027\n\017skill_table_ids\030\r \003(\r\022\030\n\020monster_tabl"
     "e_id\030\016 \001(\r\022I\n\025skill_cooldown_rounds\030\017 \003("
     "\0132*.BattleActorState.SkillCooldownRounds"
-    "Entry\032:\n\030SkillCooldownRoundsEntry\022\013\n\003key"
-    "\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\"y\n\014BattleActio"
-    "n\022\'\n\013action_type\030\001 \001(\0162\022.eBattleActionTy"
-    "pe\022\026\n\016skill_table_id\030\002 \001(\r\022\021\n\ttarget_id\030"
-    "\003 \001(\004\022\025\n\ritem_table_id\030\004 \001(\r\"\366\001\n\017BattleE"
-    "ventItem\022%\n\nevent_type\030\001 \001(\0162\021.eBattleEv"
-    "entType\022\021\n\tsource_id\030\002 \001(\004\022\021\n\ttarget_id\030"
-    "\003 \001(\004\022\026\n\016skill_table_id\030\004 \001(\r\022\025\n\rbuff_ta"
-    "ble_id\030\005 \001(\r\022\r\n\005value\030\006 \001(\004\022\023\n\013is_critic"
-    "al\030\007 \001(\010\022\017\n\007success\030\010 \001(\010\022\033\n\023target_heal"
-    "th_after\030\t \001(\004\022\025\n\ritem_table_id\030\n \001(\r\"\303\002"
-    "\n\024BattleSettlementData\022\021\n\tbattle_id\030\001 \001("
-    "\004\022\021\n\tplayer_id\030\002 \001(\004\022 \n\007outcome\030\003 \001(\0162\017."
-    "eBattleOutcome\022\031\n\021player_team_index\030\004 \001("
-    "\r\022\016\n\006health\030\005 \001(\004\022\014\n\004mana\030\006 \001(\004\022\020\n\010exp_g"
-    "ain\030\007 \001(\004\022\021\n\tgold_gain\030\010 \001(\004\022(\n\016items_co"
-    "nsumed\030\t \003(\0132\020.BattleItemEntry\022&\n\014items_"
-    "gained\030\n \003(\0132\020.BattleItemEntry\022\017\n\007is_dea"
-    "d\030\013 \001(\010\022\014\n\004fled\030\014 \001(\010\022\024\n\014total_rounds\030\r "
-    "\001(\r*k\n\020eBattleActorType\022\032\n\026BATTLE_ACTOR_"
-    "TYPE_NONE\020\000\022\034\n\030BATTLE_ACTOR_TYPE_PLAYER\020"
-    "\001\022\035\n\031BATTLE_ACTOR_TYPE_MONSTER\020\002*\250\001\n\021eBa"
-    "ttleActionType\022\026\n\022BATTLE_ACTION_NONE\020\000\022\030"
-    "\n\024BATTLE_ACTION_ATTACK\020\001\022\027\n\023BATTLE_ACTIO"
-    "N_SKILL\020\002\022\030\n\024BATTLE_ACTION_DEFEND\020\003\022\026\n\022B"
-    "ATTLE_ACTION_ITEM\020\004\022\026\n\022BATTLE_ACTION_FLE"
-    "E\020\005*\276\002\n\020eBattleEventType\022\025\n\021BATTLE_EVENT"
-    "_NONE\020\000\022\027\n\023BATTLE_EVENT_ATTACK\020\001\022\026\n\022BATT"
-    "LE_EVENT_SKILL\020\002\022\027\n\023BATTLE_EVENT_DAMAGE\020"
-    "\003\022\025\n\021BATTLE_EVENT_HEAL\020\004\022\031\n\025BATTLE_EVENT"
-    "_BUFF_ADD\020\005\022\034\n\030BATTLE_EVENT_BUFF_REMOVE\020"
-    "\006\022\032\n\026BATTLE_EVENT_BUFF_TICK\020\007\022\026\n\022BATTLE_"
-    "EVENT_DEATH\020\010\022\027\n\023BATTLE_EVENT_DEFEND\020\t\022\025"
-    "\n\021BATTLE_EVENT_ITEM\020\n\022\025\n\021BATTLE_EVENT_FL"
-    "EE\020\013*\203\001\n\016eBattleOutcome\022\032\n\026BATTLE_OUTCOM"
-    "E_ONGOING\020\000\022\035\n\031BATTLE_OUTCOME_SIDE_A_WIN"
-    "\020\001\022\035\n\031BATTLE_OUTCOME_SIDE_B_WIN\020\002\022\027\n\023BAT"
-    "TLE_OUTCOME_DRAW\020\003B\010Z\006battleb\006proto3"
+    "Entry\022\017\n\007is_auto\030\020 \001(\010\032:\n\030SkillCooldownR"
+    "oundsEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\002"
+    "8\001\"y\n\014BattleAction\022\'\n\013action_type\030\001 \001(\0162"
+    "\022.eBattleActionType\022\026\n\016skill_table_id\030\002 "
+    "\001(\r\022\021\n\ttarget_id\030\003 \001(\004\022\025\n\ritem_table_id\030"
+    "\004 \001(\r\"\366\001\n\017BattleEventItem\022%\n\nevent_type\030"
+    "\001 \001(\0162\021.eBattleEventType\022\021\n\tsource_id\030\002 "
+    "\001(\004\022\021\n\ttarget_id\030\003 \001(\004\022\026\n\016skill_table_id"
+    "\030\004 \001(\r\022\025\n\rbuff_table_id\030\005 \001(\r\022\r\n\005value\030\006"
+    " \001(\004\022\023\n\013is_critical\030\007 \001(\010\022\017\n\007success\030\010 \001"
+    "(\010\022\033\n\023target_health_after\030\t \001(\004\022\025\n\ritem_"
+    "table_id\030\n \001(\r\"\303\002\n\024BattleSettlementData\022"
+    "\021\n\tbattle_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022 \n"
+    "\007outcome\030\003 \001(\0162\017.eBattleOutcome\022\031\n\021playe"
+    "r_team_index\030\004 \001(\r\022\016\n\006health\030\005 \001(\004\022\014\n\004ma"
+    "na\030\006 \001(\004\022\020\n\010exp_gain\030\007 \001(\004\022\021\n\tgold_gain\030"
+    "\010 \001(\004\022(\n\016items_consumed\030\t \003(\0132\020.BattleIt"
+    "emEntry\022&\n\014items_gained\030\n \003(\0132\020.BattleIt"
+    "emEntry\022\017\n\007is_dead\030\013 \001(\010\022\014\n\004fled\030\014 \001(\010\022\024"
+    "\n\014total_rounds\030\r \001(\r*k\n\020eBattleActorType"
+    "\022\032\n\026BATTLE_ACTOR_TYPE_NONE\020\000\022\034\n\030BATTLE_A"
+    "CTOR_TYPE_PLAYER\020\001\022\035\n\031BATTLE_ACTOR_TYPE_"
+    "MONSTER\020\002*\250\001\n\021eBattleActionType\022\026\n\022BATTL"
+    "E_ACTION_NONE\020\000\022\030\n\024BATTLE_ACTION_ATTACK\020"
+    "\001\022\027\n\023BATTLE_ACTION_SKILL\020\002\022\030\n\024BATTLE_ACT"
+    "ION_DEFEND\020\003\022\026\n\022BATTLE_ACTION_ITEM\020\004\022\026\n\022"
+    "BATTLE_ACTION_FLEE\020\005*\276\002\n\020eBattleEventTyp"
+    "e\022\025\n\021BATTLE_EVENT_NONE\020\000\022\027\n\023BATTLE_EVENT"
+    "_ATTACK\020\001\022\026\n\022BATTLE_EVENT_SKILL\020\002\022\027\n\023BAT"
+    "TLE_EVENT_DAMAGE\020\003\022\025\n\021BATTLE_EVENT_HEAL\020"
+    "\004\022\031\n\025BATTLE_EVENT_BUFF_ADD\020\005\022\034\n\030BATTLE_E"
+    "VENT_BUFF_REMOVE\020\006\022\032\n\026BATTLE_EVENT_BUFF_"
+    "TICK\020\007\022\026\n\022BATTLE_EVENT_DEATH\020\010\022\027\n\023BATTLE"
+    "_EVENT_DEFEND\020\t\022\025\n\021BATTLE_EVENT_ITEM\020\n\022\025"
+    "\n\021BATTLE_EVENT_FLEE\020\013*\203\001\n\016eBattleOutcome"
+    "\022\032\n\026BATTLE_OUTCOME_ONGOING\020\000\022\035\n\031BATTLE_O"
+    "UTCOME_SIDE_A_WIN\020\001\022\035\n\031BATTLE_OUTCOME_SI"
+    "DE_B_WIN\020\002\022\027\n\023BATTLE_OUTCOME_DRAW\020\003B\010Z\006b"
+    "attleb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_deps[1] = {
@@ -2104,7 +2113,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto = {
     false,
     false,
-    2636,
+    2653,
     descriptor_table_protodef_proto_2fbattle_2fbattle_5fdata_2eproto,
     "proto/battle/battle_data.proto",
     &descriptor_table_proto_2fbattle_2fbattle_5fdata_2eproto_once,
@@ -3778,11 +3787,11 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
         reinterpret_cast<char*>(&_impl_.max_health_) -
         reinterpret_cast<char*>(&_impl_.actor_id_)) + sizeof(_impl_.max_health_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     ::memset(&_impl_.max_mana_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.monster_table_id_) -
         reinterpret_cast<char*>(&_impl_.max_mana_)) + sizeof(_impl_.monster_table_id_));
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       _impl_.skill_cooldown_rounds_.Clear();
     }
   }
@@ -3932,7 +3941,7 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
   }
 
   // uint32 monster_table_id = 14;
-  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
     if (this_._internal_monster_table_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3941,7 +3950,7 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
   }
 
   // map<uint32, uint32> skill_cooldown_rounds = 15;
-  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
     if (!this_._internal_skill_cooldown_rounds().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -3960,6 +3969,15 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
               15, entry.first, entry.second, target, stream);
         }
       }
+    }
+  }
+
+  // bool is_auto = 16;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_is_auto() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          16, this_._internal_is_auto(), target);
     }
   }
 
@@ -4044,7 +4062,7 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     // uint64 max_mana = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_max_mana() != 0) {
@@ -4077,15 +4095,21 @@ PROTOBUF_NOINLINE void BattleActorState::Clear() {
         total_size += 2;
       }
     }
-    // uint32 monster_table_id = 14;
+    // bool is_auto = 16;
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_is_auto() != 0) {
+        total_size += 3;
+      }
+    }
+    // uint32 monster_table_id = 14;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (this_._internal_monster_table_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_monster_table_id());
       }
     }
     // map<uint32, uint32> skill_cooldown_rounds = 15;
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_skill_cooldown_rounds_size());
       for (const auto& entry : this_._internal_skill_cooldown_rounds()) {
@@ -4160,7 +4184,7 @@ void BattleActorState::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_max_mana() != 0) {
         _this->_impl_.max_mana_ = from._impl_.max_mana_;
@@ -4187,11 +4211,16 @@ void BattleActorState::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_is_auto() != 0) {
+        _this->_impl_.is_auto_ = from._impl_.is_auto_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
       if (from._internal_monster_table_id() != 0) {
         _this->_impl_.monster_table_id_ = from._impl_.monster_table_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
       _this->_impl_.skill_cooldown_rounds_.MergeFrom(from._impl_.skill_cooldown_rounds_);
     }
   }

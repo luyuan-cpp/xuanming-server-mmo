@@ -13,7 +13,8 @@
 //
 // 表管理器依赖用 MemoryBattleDataProvider 注入隔离,不依赖 Excel 数据与配置加载;
 // 覆盖:确定性事件流 / 速度序 / 超时默认行动 / 冷却回合 / buff 到期·叠层·周期·驱散·免疫 /
-// 沉默许可 / 胜负边界(全灭·打满·平局)/ 结算数值 / FLEE·DEFEND·ITEM 路径。
+// 沉默许可 / 胜负边界(全灭·打满·平局)/ 结算数值 / FLEE·DEFEND·ITEM 路径 /
+// 二期:自动战斗(SetActorAuto·就绪·快照排除·确定性回归)/ 队伍人数上限(设计文档 §11)。
 
 namespace {
 
@@ -21,6 +22,7 @@ using turnbattle::TurnBattleEngine;
 
 constexpr uint64_t kPlayerA = 5001;
 constexpr uint64_t kPlayerB = 5002;
+constexpr uint64_t kPlayerC = 5003;
 const uint64_t kMonsterId = turnbattle::kMonsterActorIdBase;
 
 // 常用表 id
@@ -660,6 +662,178 @@ TEST(TurnBattleEngineTest, StateSnapshotTracksPendingActorsAndRoundIndex) {
     state = engine.BuildStateSnapshot();
     EXPECT_EQ(state.round_index(), 2u);
     ASSERT_EQ(state.pending_actor_ids_size(), 1);  // 新回合重新待行动
+}
+
+// ---------------------------------------------------------------------------
+// 二期:自动战斗(设计文档 §11 D12)
+// ---------------------------------------------------------------------------
+
+TEST(TurnBattleEngineTest, AutoActorCountsAsReadyAndActsWithDefaultAttack) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9020, turnbattle::kMatchModePveSolo, 1);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 0, 10);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 未提交且未挂机:不就绪;开挂机后无需提交即就绪(提前结算的判据)
+    EXPECT_FALSE(engine.AllPlayersReady());
+    ASSERT_EQ(engine.SetActorAuto(kPlayerA, true), 0u);
+    EXPECT_TRUE(engine.AllPlayersReady());
+
+    // 结算走默认普攻代打:玩家速度 10 > 怪物默认 5,首事件是玩家对怪的普攻
+    const auto result = engine.ResolveCurrentRound();
+    ASSERT_GE(result.events_size(), 1);
+    EXPECT_EQ(result.events(0).event_type(), BATTLE_EVENT_ATTACK);
+    EXPECT_EQ(result.events(0).source_id(), kPlayerA);
+    EXPECT_EQ(result.events(0).target_id(), kMonsterId);
+
+    // 关闭挂机:回到待提交状态
+    ASSERT_EQ(engine.SetActorAuto(kPlayerA, false), 0u);
+    EXPECT_FALSE(engine.AllPlayersReady());
+}
+
+TEST(TurnBattleEngineTest, SetActorAutoRejectsMonsterDeadAndFledActors) {
+    // 怪物 / 不存在的单位:参数错误
+    {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9021, turnbattle::kMatchModePveSolo, 1);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 10);
+        ASSERT_TRUE(engine.Initialize(request));
+        EXPECT_EQ(engine.SetActorAuto(kMonsterId, true), static_cast<uint32_t>(kInvalidParameter));
+        EXPECT_EQ(engine.SetActorAuto(999999u, true), static_cast<uint32_t>(kInvalidParameter));
+    }
+
+    // 死亡玩家:1v2 秒掉 B 后战斗仍进行中,B 被拒,存活的 C 可开
+    {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9022, 3 /* PVP */, 1);
+        AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 10);
+        AddPlayer(request, kPlayerB, 1, 500, 500, 0, 0, 0, 5);  // 无甲,一击可杀
+        AddPlayer(request, kPlayerC, 1, 500, 500, 0, 100, 0, 5);
+        ASSERT_TRUE(engine.Initialize(request));
+
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillNuke));
+        engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_DEFEND));
+        engine.SubmitAction(kPlayerC, MakeAction(BATTLE_ACTION_DEFEND));
+        engine.ResolveCurrentRound();
+
+        ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_ONGOING);
+        EXPECT_EQ(engine.SetActorAuto(kPlayerB, true),
+                  static_cast<uint32_t>(kThisEntityIsInvalid));
+        EXPECT_EQ(engine.SetActorAuto(kPlayerC, true), 0u);
+    }
+
+    // 已逃玩家:逃跑成功率随种子,扫种子找一局"A 首回合逃跑成功、B 仍在场"
+    // (成功率封顶 0.95,32 枚种子内必现;Rand01 跨平台同种子同序列,结果确定可复现)
+    {
+        bool verified = false;
+        for (uint64_t seed = 1; seed <= 32 && !verified; ++seed) {
+            TurnBattleEngine engine(MakeProvider());
+            auto request = MakeRequest(9023, turnbattle::kMatchModePveTeam, seed);
+            AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 50);  // 高速,逃跑成功率高
+            AddPlayer(request, kPlayerB, 0, 1000, 1000, 0, 100, 0, 10);
+            ASSERT_TRUE(engine.Initialize(request));
+
+            engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_FLEE));
+            engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_DEFEND));
+            const auto result = engine.ResolveCurrentRound();
+            const auto* fleeEvent = FindFirstEvent(result, BATTLE_EVENT_FLEE);
+            ASSERT_NE(fleeEvent, nullptr);
+            if (!fleeEvent->success()) {
+                continue;
+            }
+
+            ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_ONGOING);  // B 还在,战斗未结束
+            EXPECT_EQ(engine.SetActorAuto(kPlayerA, true),
+                      static_cast<uint32_t>(kThisEntityIsInvalid));
+            verified = true;
+        }
+        EXPECT_TRUE(verified);
+    }
+}
+
+TEST(TurnBattleEngineTest, AutoModeMatchesManualDefaultAttackEventStream) {
+    // 确定性回归:开 auto(引擎代打默认普攻)与手动提交等价指令
+    // (ATTACK + target 0,即默认行动本体)必须产出逐字节相同的事件流与结算
+    const auto runBattle = [](uint64_t seed, bool useAuto) {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9024, turnbattle::kMatchModePveSolo, seed);
+        // 高暴击逼引擎大量消耗 RNG,任何随机路径分叉都会导致字节流不一致
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 50, 10);
+        EXPECT_TRUE(engine.Initialize(request));
+        if (useAuto) {
+            EXPECT_EQ(engine.SetActorAuto(kPlayerA, true), 0u);
+        }
+
+        std::string stream;
+        for (int round = 0; round < 10 && engine.Outcome() == BATTLE_OUTCOME_ONGOING; ++round) {
+            if (!useAuto) {
+                engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, 0));
+            }
+            const auto result = engine.ResolveCurrentRound();
+            for (const auto& event : result.events()) {
+                stream += event.SerializeAsString();
+                stream += '|';
+            }
+        }
+        stream += engine.BuildSettlement(kPlayerA).SerializeAsString();
+        return stream;
+    };
+
+    EXPECT_EQ(runBattle(42, true), runBattle(42, false));
+    EXPECT_EQ(runBattle(20260831, true), runBattle(20260831, false));
+}
+
+TEST(TurnBattleEngineTest, SnapshotMarksAutoActorAndExcludesFromPending) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9025, 3 /* PVP */, 1);
+    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 10);
+    AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 5);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    ASSERT_EQ(engine.BuildStateSnapshot().pending_actor_ids_size(), 2);
+
+    // A 开挂机:快照携带 is_auto,待行动名单只剩手动的 B
+    ASSERT_EQ(engine.SetActorAuto(kPlayerA, true), 0u);
+    auto state = engine.BuildStateSnapshot();
+    const auto* autoActor = FindStateActor(state, kPlayerA);
+    ASSERT_NE(autoActor, nullptr);
+    EXPECT_TRUE(autoActor->is_auto());
+    const auto* manualActor = FindStateActor(state, kPlayerB);
+    ASSERT_NE(manualActor, nullptr);
+    EXPECT_FALSE(manualActor->is_auto());
+    ASSERT_EQ(state.pending_actor_ids_size(), 1);
+    EXPECT_EQ(state.pending_actor_ids(0), kPlayerB);
+
+    // 关闭挂机:重回待行动名单
+    ASSERT_EQ(engine.SetActorAuto(kPlayerA, false), 0u);
+    state = engine.BuildStateSnapshot();
+    EXPECT_EQ(state.pending_actor_ids_size(), 2);
+}
+
+// ---------------------------------------------------------------------------
+// 二期:队伍人数上限(设计文档 §11 D14)
+// ---------------------------------------------------------------------------
+
+TEST(TurnBattleEngineTest, InitializeEnforcesTeamSizeLimit) {
+    // 单队 6 人:超上限拒绝建房
+    {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9026, turnbattle::kMatchModePveTeam, 1);
+        for (uint64_t offset = 0; offset < turnbattle::kMaxBattleTeamSize + 1; ++offset) {
+            AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 0, 100, 0, 10);
+        }
+        EXPECT_FALSE(engine.Initialize(request));
+    }
+
+    // 单队 5 人:恰在上限,放行
+    {
+        TurnBattleEngine engine(MakeProvider());
+        auto request = MakeRequest(9027, turnbattle::kMatchModePveTeam, 1);
+        for (uint64_t offset = 0; offset < turnbattle::kMaxBattleTeamSize; ++offset) {
+            AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 0, 100, 0, 10);
+        }
+        EXPECT_TRUE(engine.Initialize(request));
+    }
 }
 
 int main(int argc, char** argv) {

@@ -94,6 +94,23 @@ class MatchService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> PrepareAsyncNotifyChallengeResult(::grpc::ClientContext* context, const ::match::ChallengeResultS2C& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(PrepareAsyncNotifyChallengeResultRaw(context, request, cq));
     }
+    // ---- 二期:观战匹配(设计文档 §10) ----
+    // battle_id=0 表示随机观战(从活跃战斗索引里随机挑一场);成功后由 battle 节点
+    // 经 Kafka 推 NotifySpectateState 首帧,客户端收到首帧才算进入观战。
+    virtual ::grpc::Status WatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::match::WatchBattleResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::match::WatchBattleResponse>> AsyncWatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::match::WatchBattleResponse>>(AsyncWatchBattleRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::match::WatchBattleResponse>> PrepareAsyncWatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::match::WatchBattleResponse>>(PrepareAsyncWatchBattleRaw(context, request, cq));
+    }
+    virtual ::grpc::Status ListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::match::ListWatchableBattlesResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::match::ListWatchableBattlesResponse>> AsyncListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::match::ListWatchableBattlesResponse>>(AsyncListWatchableBattlesRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::match::ListWatchableBattlesResponse>> PrepareAsyncListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::match::ListWatchableBattlesResponse>>(PrepareAsyncListWatchableBattlesRaw(context, request, cq));
+    }
     class async_interface {
      public:
       virtual ~async_interface() {}
@@ -115,6 +132,13 @@ class MatchService final {
       virtual void NotifyChallengeInvite(::grpc::ClientContext* context, const ::match::ChallengeInviteS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void NotifyChallengeResult(::grpc::ClientContext* context, const ::match::ChallengeResultS2C* request, ::Empty* response, std::function<void(::grpc::Status)>) = 0;
       virtual void NotifyChallengeResult(::grpc::ClientContext* context, const ::match::ChallengeResultS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // ---- 二期:观战匹配(设计文档 §10) ----
+      // battle_id=0 表示随机观战(从活跃战斗索引里随机挑一场);成功后由 battle 节点
+      // 经 Kafka 推 NotifySpectateState 首帧,客户端收到首帧才算进入观战。
+      virtual void WatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest* request, ::match::WatchBattleResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void WatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest* request, ::match::WatchBattleResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void ListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest* request, ::match::ListWatchableBattlesResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void ListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest* request, ::match::ListWatchableBattlesResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -134,6 +158,10 @@ class MatchService final {
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* PrepareAsyncNotifyChallengeInviteRaw(::grpc::ClientContext* context, const ::match::ChallengeInviteS2C& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* AsyncNotifyChallengeResultRaw(::grpc::ClientContext* context, const ::match::ChallengeResultS2C& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* PrepareAsyncNotifyChallengeResultRaw(::grpc::ClientContext* context, const ::match::ChallengeResultS2C& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::match::WatchBattleResponse>* AsyncWatchBattleRaw(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::match::WatchBattleResponse>* PrepareAsyncWatchBattleRaw(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::match::ListWatchableBattlesResponse>* AsyncListWatchableBattlesRaw(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::match::ListWatchableBattlesResponse>* PrepareAsyncListWatchableBattlesRaw(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -187,6 +215,20 @@ class MatchService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> PrepareAsyncNotifyChallengeResult(::grpc::ClientContext* context, const ::match::ChallengeResultS2C& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(PrepareAsyncNotifyChallengeResultRaw(context, request, cq));
     }
+    ::grpc::Status WatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::match::WatchBattleResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::match::WatchBattleResponse>> AsyncWatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::match::WatchBattleResponse>>(AsyncWatchBattleRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::match::WatchBattleResponse>> PrepareAsyncWatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::match::WatchBattleResponse>>(PrepareAsyncWatchBattleRaw(context, request, cq));
+    }
+    ::grpc::Status ListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::match::ListWatchableBattlesResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::match::ListWatchableBattlesResponse>> AsyncListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::match::ListWatchableBattlesResponse>>(AsyncListWatchableBattlesRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::match::ListWatchableBattlesResponse>> PrepareAsyncListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::match::ListWatchableBattlesResponse>>(PrepareAsyncListWatchableBattlesRaw(context, request, cq));
+    }
     class async final :
       public StubInterface::async_interface {
      public:
@@ -204,6 +246,10 @@ class MatchService final {
       void NotifyChallengeInvite(::grpc::ClientContext* context, const ::match::ChallengeInviteS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
       void NotifyChallengeResult(::grpc::ClientContext* context, const ::match::ChallengeResultS2C* request, ::Empty* response, std::function<void(::grpc::Status)>) override;
       void NotifyChallengeResult(::grpc::ClientContext* context, const ::match::ChallengeResultS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void WatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest* request, ::match::WatchBattleResponse* response, std::function<void(::grpc::Status)>) override;
+      void WatchBattle(::grpc::ClientContext* context, const ::match::WatchBattleRequest* request, ::match::WatchBattleResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void ListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest* request, ::match::ListWatchableBattlesResponse* response, std::function<void(::grpc::Status)>) override;
+      void ListWatchableBattles(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest* request, ::match::ListWatchableBattlesResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -229,6 +275,10 @@ class MatchService final {
     ::grpc::ClientAsyncResponseReader< ::Empty>* PrepareAsyncNotifyChallengeInviteRaw(::grpc::ClientContext* context, const ::match::ChallengeInviteS2C& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::Empty>* AsyncNotifyChallengeResultRaw(::grpc::ClientContext* context, const ::match::ChallengeResultS2C& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::Empty>* PrepareAsyncNotifyChallengeResultRaw(::grpc::ClientContext* context, const ::match::ChallengeResultS2C& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::match::WatchBattleResponse>* AsyncWatchBattleRaw(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::match::WatchBattleResponse>* PrepareAsyncWatchBattleRaw(::grpc::ClientContext* context, const ::match::WatchBattleRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::match::ListWatchableBattlesResponse>* AsyncListWatchableBattlesRaw(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::match::ListWatchableBattlesResponse>* PrepareAsyncListWatchableBattlesRaw(::grpc::ClientContext* context, const ::match::ListWatchableBattlesRequest& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_JoinQueue_;
     const ::grpc::internal::RpcMethod rpcmethod_CancelQueue_;
     const ::grpc::internal::RpcMethod rpcmethod_GetQueueStatus_;
@@ -236,6 +286,8 @@ class MatchService final {
     const ::grpc::internal::RpcMethod rpcmethod_RespondChallenge_;
     const ::grpc::internal::RpcMethod rpcmethod_NotifyChallengeInvite_;
     const ::grpc::internal::RpcMethod rpcmethod_NotifyChallengeResult_;
+    const ::grpc::internal::RpcMethod rpcmethod_WatchBattle_;
+    const ::grpc::internal::RpcMethod rpcmethod_ListWatchableBattles_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -254,6 +306,11 @@ class MatchService final {
     virtual ::grpc::Status RespondChallenge(::grpc::ServerContext* context, const ::match::RespondChallengeRequest* request, ::match::RespondChallengeResponse* response);
     virtual ::grpc::Status NotifyChallengeInvite(::grpc::ServerContext* context, const ::match::ChallengeInviteS2C* request, ::Empty* response);
     virtual ::grpc::Status NotifyChallengeResult(::grpc::ServerContext* context, const ::match::ChallengeResultS2C* request, ::Empty* response);
+    // ---- 二期:观战匹配(设计文档 §10) ----
+    // battle_id=0 表示随机观战(从活跃战斗索引里随机挑一场);成功后由 battle 节点
+    // 经 Kafka 推 NotifySpectateState 首帧,客户端收到首帧才算进入观战。
+    virtual ::grpc::Status WatchBattle(::grpc::ServerContext* context, const ::match::WatchBattleRequest* request, ::match::WatchBattleResponse* response);
+    virtual ::grpc::Status ListWatchableBattles(::grpc::ServerContext* context, const ::match::ListWatchableBattlesRequest* request, ::match::ListWatchableBattlesResponse* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_JoinQueue : public BaseClass {
@@ -395,7 +452,47 @@ class MatchService final {
       ::grpc::Service::RequestAsyncUnary(6, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_JoinQueue<WithAsyncMethod_CancelQueue<WithAsyncMethod_GetQueueStatus<WithAsyncMethod_ChallengePlayer<WithAsyncMethod_RespondChallenge<WithAsyncMethod_NotifyChallengeInvite<WithAsyncMethod_NotifyChallengeResult<Service > > > > > > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_WatchBattle : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_WatchBattle() {
+      ::grpc::Service::MarkMethodAsync(7);
+    }
+    ~WithAsyncMethod_WatchBattle() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status WatchBattle(::grpc::ServerContext* /*context*/, const ::match::WatchBattleRequest* /*request*/, ::match::WatchBattleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestWatchBattle(::grpc::ServerContext* context, ::match::WatchBattleRequest* request, ::grpc::ServerAsyncResponseWriter< ::match::WatchBattleResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_ListWatchableBattles : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_ListWatchableBattles() {
+      ::grpc::Service::MarkMethodAsync(8);
+    }
+    ~WithAsyncMethod_ListWatchableBattles() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListWatchableBattles(::grpc::ServerContext* /*context*/, const ::match::ListWatchableBattlesRequest* /*request*/, ::match::ListWatchableBattlesResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestListWatchableBattles(::grpc::ServerContext* context, ::match::ListWatchableBattlesRequest* request, ::grpc::ServerAsyncResponseWriter< ::match::ListWatchableBattlesResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(8, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_JoinQueue<WithAsyncMethod_CancelQueue<WithAsyncMethod_GetQueueStatus<WithAsyncMethod_ChallengePlayer<WithAsyncMethod_RespondChallenge<WithAsyncMethod_NotifyChallengeInvite<WithAsyncMethod_NotifyChallengeResult<WithAsyncMethod_WatchBattle<WithAsyncMethod_ListWatchableBattles<Service > > > > > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_JoinQueue : public BaseClass {
    private:
@@ -585,7 +682,61 @@ class MatchService final {
     virtual ::grpc::ServerUnaryReactor* NotifyChallengeResult(
       ::grpc::CallbackServerContext* /*context*/, const ::match::ChallengeResultS2C* /*request*/, ::Empty* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_JoinQueue<WithCallbackMethod_CancelQueue<WithCallbackMethod_GetQueueStatus<WithCallbackMethod_ChallengePlayer<WithCallbackMethod_RespondChallenge<WithCallbackMethod_NotifyChallengeInvite<WithCallbackMethod_NotifyChallengeResult<Service > > > > > > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_WatchBattle : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_WatchBattle() {
+      ::grpc::Service::MarkMethodCallback(7,
+          new ::grpc::internal::CallbackUnaryHandler< ::match::WatchBattleRequest, ::match::WatchBattleResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::match::WatchBattleRequest* request, ::match::WatchBattleResponse* response) { return this->WatchBattle(context, request, response); }));}
+    void SetMessageAllocatorFor_WatchBattle(
+        ::grpc::MessageAllocator< ::match::WatchBattleRequest, ::match::WatchBattleResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(7);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::match::WatchBattleRequest, ::match::WatchBattleResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_WatchBattle() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status WatchBattle(::grpc::ServerContext* /*context*/, const ::match::WatchBattleRequest* /*request*/, ::match::WatchBattleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* WatchBattle(
+      ::grpc::CallbackServerContext* /*context*/, const ::match::WatchBattleRequest* /*request*/, ::match::WatchBattleResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_ListWatchableBattles : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_ListWatchableBattles() {
+      ::grpc::Service::MarkMethodCallback(8,
+          new ::grpc::internal::CallbackUnaryHandler< ::match::ListWatchableBattlesRequest, ::match::ListWatchableBattlesResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::match::ListWatchableBattlesRequest* request, ::match::ListWatchableBattlesResponse* response) { return this->ListWatchableBattles(context, request, response); }));}
+    void SetMessageAllocatorFor_ListWatchableBattles(
+        ::grpc::MessageAllocator< ::match::ListWatchableBattlesRequest, ::match::ListWatchableBattlesResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(8);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::match::ListWatchableBattlesRequest, ::match::ListWatchableBattlesResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_ListWatchableBattles() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListWatchableBattles(::grpc::ServerContext* /*context*/, const ::match::ListWatchableBattlesRequest* /*request*/, ::match::ListWatchableBattlesResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ListWatchableBattles(
+      ::grpc::CallbackServerContext* /*context*/, const ::match::ListWatchableBattlesRequest* /*request*/, ::match::ListWatchableBattlesResponse* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_JoinQueue<WithCallbackMethod_CancelQueue<WithCallbackMethod_GetQueueStatus<WithCallbackMethod_ChallengePlayer<WithCallbackMethod_RespondChallenge<WithCallbackMethod_NotifyChallengeInvite<WithCallbackMethod_NotifyChallengeResult<WithCallbackMethod_WatchBattle<WithCallbackMethod_ListWatchableBattles<Service > > > > > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_JoinQueue : public BaseClass {
@@ -702,6 +853,40 @@ class MatchService final {
     }
     // disable synchronous version of this method
     ::grpc::Status NotifyChallengeResult(::grpc::ServerContext* /*context*/, const ::match::ChallengeResultS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_WatchBattle : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_WatchBattle() {
+      ::grpc::Service::MarkMethodGeneric(7);
+    }
+    ~WithGenericMethod_WatchBattle() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status WatchBattle(::grpc::ServerContext* /*context*/, const ::match::WatchBattleRequest* /*request*/, ::match::WatchBattleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_ListWatchableBattles : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_ListWatchableBattles() {
+      ::grpc::Service::MarkMethodGeneric(8);
+    }
+    ~WithGenericMethod_ListWatchableBattles() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListWatchableBattles(::grpc::ServerContext* /*context*/, const ::match::ListWatchableBattlesRequest* /*request*/, ::match::ListWatchableBattlesResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -844,6 +1029,46 @@ class MatchService final {
     }
     void RequestNotifyChallengeResult(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(6, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_WatchBattle : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_WatchBattle() {
+      ::grpc::Service::MarkMethodRaw(7);
+    }
+    ~WithRawMethod_WatchBattle() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status WatchBattle(::grpc::ServerContext* /*context*/, const ::match::WatchBattleRequest* /*request*/, ::match::WatchBattleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestWatchBattle(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_ListWatchableBattles : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_ListWatchableBattles() {
+      ::grpc::Service::MarkMethodRaw(8);
+    }
+    ~WithRawMethod_ListWatchableBattles() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListWatchableBattles(::grpc::ServerContext* /*context*/, const ::match::ListWatchableBattlesRequest* /*request*/, ::match::ListWatchableBattlesResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestListWatchableBattles(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(8, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -998,6 +1223,50 @@ class MatchService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* NotifyChallengeResult(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_WatchBattle : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_WatchBattle() {
+      ::grpc::Service::MarkMethodRawCallback(7,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->WatchBattle(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_WatchBattle() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status WatchBattle(::grpc::ServerContext* /*context*/, const ::match::WatchBattleRequest* /*request*/, ::match::WatchBattleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* WatchBattle(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_ListWatchableBattles : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_ListWatchableBattles() {
+      ::grpc::Service::MarkMethodRawCallback(8,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->ListWatchableBattles(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_ListWatchableBattles() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListWatchableBattles(::grpc::ServerContext* /*context*/, const ::match::ListWatchableBattlesRequest* /*request*/, ::match::ListWatchableBattlesResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ListWatchableBattles(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -1189,9 +1458,63 @@ class MatchService final {
     // replace default version of method with streamed unary
     virtual ::grpc::Status StreamedNotifyChallengeResult(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::match::ChallengeResultS2C,::Empty>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_JoinQueue<WithStreamedUnaryMethod_CancelQueue<WithStreamedUnaryMethod_GetQueueStatus<WithStreamedUnaryMethod_ChallengePlayer<WithStreamedUnaryMethod_RespondChallenge<WithStreamedUnaryMethod_NotifyChallengeInvite<WithStreamedUnaryMethod_NotifyChallengeResult<Service > > > > > > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_WatchBattle : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_WatchBattle() {
+      ::grpc::Service::MarkMethodStreamed(7,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::match::WatchBattleRequest, ::match::WatchBattleResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::match::WatchBattleRequest, ::match::WatchBattleResponse>* streamer) {
+                       return this->StreamedWatchBattle(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_WatchBattle() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status WatchBattle(::grpc::ServerContext* /*context*/, const ::match::WatchBattleRequest* /*request*/, ::match::WatchBattleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedWatchBattle(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::match::WatchBattleRequest,::match::WatchBattleResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_ListWatchableBattles : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_ListWatchableBattles() {
+      ::grpc::Service::MarkMethodStreamed(8,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::match::ListWatchableBattlesRequest, ::match::ListWatchableBattlesResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::match::ListWatchableBattlesRequest, ::match::ListWatchableBattlesResponse>* streamer) {
+                       return this->StreamedListWatchableBattles(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_ListWatchableBattles() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status ListWatchableBattles(::grpc::ServerContext* /*context*/, const ::match::ListWatchableBattlesRequest* /*request*/, ::match::ListWatchableBattlesResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedListWatchableBattles(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::match::ListWatchableBattlesRequest,::match::ListWatchableBattlesResponse>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_JoinQueue<WithStreamedUnaryMethod_CancelQueue<WithStreamedUnaryMethod_GetQueueStatus<WithStreamedUnaryMethod_ChallengePlayer<WithStreamedUnaryMethod_RespondChallenge<WithStreamedUnaryMethod_NotifyChallengeInvite<WithStreamedUnaryMethod_NotifyChallengeResult<WithStreamedUnaryMethod_WatchBattle<WithStreamedUnaryMethod_ListWatchableBattles<Service > > > > > > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_JoinQueue<WithStreamedUnaryMethod_CancelQueue<WithStreamedUnaryMethod_GetQueueStatus<WithStreamedUnaryMethod_ChallengePlayer<WithStreamedUnaryMethod_RespondChallenge<WithStreamedUnaryMethod_NotifyChallengeInvite<WithStreamedUnaryMethod_NotifyChallengeResult<Service > > > > > > > StreamedService;
+  typedef WithStreamedUnaryMethod_JoinQueue<WithStreamedUnaryMethod_CancelQueue<WithStreamedUnaryMethod_GetQueueStatus<WithStreamedUnaryMethod_ChallengePlayer<WithStreamedUnaryMethod_RespondChallenge<WithStreamedUnaryMethod_NotifyChallengeInvite<WithStreamedUnaryMethod_NotifyChallengeResult<WithStreamedUnaryMethod_WatchBattle<WithStreamedUnaryMethod_ListWatchableBattles<Service > > > > > > > > > StreamedService;
 };
 
 }  // namespace match

@@ -3362,3 +3362,47 @@ Unity 客户端默认网关 http://127.0.0.1:8081,零配置可连。
 - `CfgItem` 缺分类列(今天只有 `id` / `max_stack_size` / `equip_kind`),节日包准入无从表达;需新增 `CfgBagProfile` 表。
 - FIFO 序不能靠 snowflake guid 近似(跨服迁移 + 邮件附件预设 guid 两条路径会打乱),需给 `ItemEntry` 加显式字段(6/7/8 已被 TODO 预定,用 **9**),`ItemComp` 也要加。
 - `BagAllData.DynamicBagData` 只带 `bag_id + capacity + items`,**没有 profile id** —— 规则一旦挂到包上,节日包跨服回来会静默退化成普通自由包。
+
+## 2026-09-02 回合制战斗二期:观战 + 观战匹配 + 自动战斗 + 5v5 + 队伍上限 5
+
+### 决策文档
+- `docs/design/turn-based-battle-server.md` 扩写:§10(观战 D8-D11)、§11(自动战斗/5v5/队伍上限 D12-D16)、§7 新增不变量 6-9、§14 二期 Codex 清单
+
+### proto 契约(已重生成)
+- `battle/battle_data.proto`:`BattleActorState.is_auto`(自动战斗状态,进快照/重连/观战免费可见)
+- `battle/player_battle.proto`:`SpectateStateS2C`/`SpectateEndS2C`/`eSpectateEndReason`、`StopWatchBattle*`/`SetAutoBattle*`;service 加 5 个 rpc(StopWatchBattle/SetAutoBattle/NotifySpectate{State,TurnResult,End}),消息号 158/161-166
+- `battle/battle_node.proto`:`AddObserver`/`RemoveObserver`(match→battle 内部 gRPC)
+- `match/match_service.proto`:`WatchBattle`/`ListWatchableBattles` + `BattleWatchSummary`/`SpectateBattleRecord`;`MATCH_MODE_5V5` 启用
+
+### 引擎(cpp/libs/services/battle)
+- `SetActorAuto`(仅存活未逃玩家,零随机零时钟,契约:0=成功/非 0=tip);`AllPlayersReady` 跳过 auto 单位;`BuildStateSnapshot.pending_actor_ids` 排除 auto;`Initialize` 每队玩家 ≤5 校验;常量 `kMaxBattleTeamSize=5`/`kAutoRoundIntervalMs=2000`;引擎单测 24 例全绿(新增 5)
+
+### battle 节点(cpp/nodes/battle)
+- `BattleRoom` 加 `routingByObserver`(观众路由,scene 字段恒 0 = 不变量 6:观众永不收结算);`HandleAddObserver`/`HandleRemoveObserver`(match gRPC)、`HandleStopWatchBattle`/`HandleSetAutoBattle`(gate gRPC);观众推送复用既有 Kafka 出站(BindBattle+NotifySpectateState 首帧、逐回合 NotifySpectateTurnResult、结束 NotifySpectateEnd+Unbind);`ArmRoundTimer` 全自动房用 2s 节奏(D13);四条收尾路径(FinishBattle/OnBattleDeadline/HandleDestroyBattle/AbortAllRooms)统一清观众;`kMaxObserversPerRoom=20`
+- **修复(集成)**:`HandleSetAutoBattle` 引擎返回值契约对齐(引擎 0=成功,节点原误判 kSuccess=1);置位翻转检测(`wasAllReady`)防以包速率重发击穿 D13 固定节奏
+
+### match(go/match)
+- 5v5=10 人 FIFO;PVE_TEAM 人数 `min(cfg,5)` 收口(D14);`teamIndexFor` 按 `memberIndex<required/2` 分队;`stopWatchingIfAny` 在 gather 前清退观战(D11 互斥);新 `spectate.go`(观战索引 3 key + 懒剔除 + 随机挑场)、`watchbattlelogic.go`(SETNX 原子抢占 + ticket/lock/watching 三查 + double-check TOCTOU 自清退)、`listwatchablebattleslogic.go`;错误码 40-45;metric `watch_battle_total`
+
+### gate(cpp/nodes/gate)+ 引擎
+- **修复(冒烟)**:`base_deploy_config.yaml` 加 `MatchNodeService.rpc` 服务发现前缀;gate 出站白名单加 `MatchNodeService`(main.cpp);`node_util.cpp` 前缀→类型映射加 MatchNodeService——三者缺一则 gate 报 "Node not found/Unknown service ... message id: 157/163"
+- **修复(编译)**:`movement.cpp`/`player_movement_handler.cpp` Transform.location(Vector3) 与导航/协议 Location 的 proto 类型换壳(ToLocation/WriteLocation),补 8-30 navmesh 改动遗留的 C2440
+
+### mmorpg-client(Unity,UGUI)
+- NET 层:`SpectateClient.cs`(观战只读状态机,4 相位,复用 IBattleTransport);`BattleClient` 加 SetAutoBattle/AutoBattleLatched(跨场挂机记忆)/ContinuousBattle;修复 Requesting 相位 StopWatch 的 battle_id=0 竞态(待补退出屏障)、SetAutoBattle 失败回滚 latch;7 条消息号白名单
+- UI 层:`SpectatePanel.cs`(随机观战 + 战斗列表);`BattleScreen` spectate 只读模式 + 「自动」开关;`BattleQueuePanel` 加 PVE 组队/5v5/连续战斗入口
+- gen_proto/gen_messageids 重生成;EditMode 战斗测试 84/84 全绿(新增观战状态机 + 自动战斗回滚用例)
+- 4 个新文件补 .meta
+
+### robot(压测端)
+- 新 `battle-smoke` 模式(battle_smoke_scenario.go + battle_smoke.yaml):两机器人端到端"回合制战斗+观战"冒烟,兑现设计文档 §9 预留的 robot battle 动作;填充 6 个 battle/spectate handler + match 应答 handler
+
+### 编译与验证(本机实测,非"待验证")
+- proto 重生成 → game.sln Debug/x64 串行 `/m:1` 零错误 → 引擎单测 24/24 → go/match build+vet 零错误 → 客户端 gen + EditMode 84/84
+- **端到端冒烟通过**:全栈起齐(6 go + java 网关 + scene/gate/battle),robot battle-smoke `BATTLE_SMOKE_OK`——A 排 PVE→开战→自动战斗→结算,B 随机观战匹配→收首帧(observer_count=1)→逐回合 NotifySpectateTurnResult(与参战者同回合同事件)→NotifySpectateEnd(SPECTATE_END_BATTLE_FINISHED)
+- 观战匹配对 PVE-solo 秒杀战斗(玩家 auto + 怪物无属性一回合 ~100ms 结束)存在时序竞态:B 观战匹配一圈慢于战斗生命周期时扑空(battle 房间已销毁,回 tip_id=5)。冒烟脚本用"A 等 B 观战首帧到位再开 auto"的屏障规避(真实 PVP/多回合无此问题);产品侧待办见下
+
+### 已知缺口(后续)
+- 怪物属性表:MonsterTable 只有 id 列,PVE 战斗怪物走保守默认值(一回合被秒),需补属性/技能列重导才有像样的多回合 PVE;结算的经验/道具 delta 也依赖 Dungeon/Monster 表补列
+- 观战事件流延迟推送(反小号偷看,§10.6)、ready check、5v5 预组队入队仍预留
+- 本机全栈启动脚本 go_services 分层就绪等待在单实例场景不可靠;节点用显式端口预设(RPC_PORT/NODE_PORT)+ 逐个 etcd 注册确认更稳(见 scratchpad start_rest.ps1 模式)

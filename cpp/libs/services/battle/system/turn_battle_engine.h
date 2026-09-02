@@ -41,6 +41,17 @@ public:
     // 由回合超时的默认普攻兜底(设计文档 §5.1 超时/掉线默认行动)
     bool SubmitAction(uint64_t actorId, const BattleAction& action);
 
+    // 自动战斗开关(设计文档 §11 D12):仅存活未逃的玩家单位可设,
+    // 写 BattleActorState.is_auto。返回 0 成功,非 0 为 tip 错误码
+    // (与节点 error_message.id 同域,节点侧直接透传)。
+    // 零随机/零时钟:auto 单位出手复用默认行动路径(FillDefaultActions),
+    // 确定性不受影响
+    uint32_t SetActorAuto(uint64_t actorId, bool enabled);
+
+    // 全体存活玩家是否已就绪(挂机单位视为已就绪,D12)。
+    // 公开给 battle 节点:SetAutoBattle 后立即结算、全自动房间快节奏 timer(D13)都要查
+    bool AllPlayersReady() const;
+
     // 未提交者填默认行动并结算本回合
     TurnResultS2C ResolveCurrentRound();
 
@@ -119,7 +130,6 @@ private:
     bool ActorHasBuffOfType(const BattleActorState& actor, uint32_t buffType) const;
     uint64_t MaxAliveEnemySpeed(const BattleActorState& actor) const;
     std::vector<uint64_t> CollectAliveEnemyIds(const BattleActorState& actor) const;
-    bool AllPlayersReady() const;
     bool SideWiped(uint32_t teamIndex) const;
     uint32_t CompletedRounds() const;
     BattleEventItem* AppendEvent(TurnResultS2C& result, eBattleEventType eventType,

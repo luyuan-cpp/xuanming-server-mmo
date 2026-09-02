@@ -30,8 +30,8 @@ func NewGetQueueStatusLogic(ctx context.Context, svcCtx *svc.ServiceContext) *Ge
 //	state=queued             -> QUEUE_STATE_QUEUED
 //	state=matched            -> QUEUE_STATE_MATCHED(gather 管线执行中)
 //	state=ready              -> QUEUE_STATE_READY(战斗已建,等 BattleStartS2C)
-//	QUEUE_STATE_ENTERING     -> 场景匹配(5v5/3v3)的进场态,回合制无进场步骤,
-//	                            一期不产生;保留枚举以兼容二期场景匹配。
+//	QUEUE_STATE_ENTERING     -> 场景类匹配预留的进场态,回合制(含二期 5v5)
+//	                            无进场步骤,不产生;保留枚举以兼容场景匹配。
 func (l *GetQueueStatusLogic) GetQueueStatus(in *matchpb.GetQueueStatusRequest) (*matchpb.GetQueueStatusResponse, error) {
 	playerId := authoritativePlayerID(l.ctx, in.PlayerId)
 	if playerId == 0 {

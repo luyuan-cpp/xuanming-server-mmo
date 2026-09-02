@@ -8,7 +8,8 @@
 // 既有 gRPC 域的生成规律推断),定义 BattleClientPlayer::Service。
 #include "proto/battle/player_battle.grpc.pb.h"
 
-// gate → battle 的客户端消息 gRPC 服务(SubmitBattleAction / GetBattleState)。
+// gate → battle 的客户端消息 gRPC 服务
+// (SubmitBattleAction / GetBattleState / StopWatchBattle / SetAutoBattle)。
 //
 // 手写而非生成骨架,原因:生成的 grpc handler 骨架(见 grpc_handler_gen.go 模板)
 // 会丢弃 ServerContext,而本服务必须:
@@ -35,6 +36,16 @@ public:
     grpc::Status GetBattleState(grpc::ServerContext *context,
         const ::GetBattleStateRequest *request,
         ::BattleStateS2C *response) override;
+
+    // ---- 二期:观战退出 + 自动战斗(设计文档 §10/§11) ----
+
+    grpc::Status StopWatchBattle(grpc::ServerContext *context,
+        const ::StopWatchBattleRequest *request,
+        ::StopWatchBattleResponse *response) override;
+
+    grpc::Status SetAutoBattle(grpc::ServerContext *context,
+        const ::SetAutoBattleRequest *request,
+        ::SetAutoBattleResponse *response) override;
 
 private:
     muduo::net::EventLoop &loop_;

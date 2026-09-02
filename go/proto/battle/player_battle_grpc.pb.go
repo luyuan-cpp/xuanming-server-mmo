@@ -20,12 +20,17 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BattleClientPlayer_SubmitBattleAction_FullMethodName    = "/BattleClientPlayer/SubmitBattleAction"
-	BattleClientPlayer_GetBattleState_FullMethodName        = "/BattleClientPlayer/GetBattleState"
-	BattleClientPlayer_NotifyBattleStart_FullMethodName     = "/BattleClientPlayer/NotifyBattleStart"
-	BattleClientPlayer_NotifyTurnResult_FullMethodName      = "/BattleClientPlayer/NotifyTurnResult"
-	BattleClientPlayer_NotifyBattleEnd_FullMethodName       = "/BattleClientPlayer/NotifyBattleEnd"
-	BattleClientPlayer_NotifyBattleReconnect_FullMethodName = "/BattleClientPlayer/NotifyBattleReconnect"
+	BattleClientPlayer_SubmitBattleAction_FullMethodName       = "/BattleClientPlayer/SubmitBattleAction"
+	BattleClientPlayer_GetBattleState_FullMethodName           = "/BattleClientPlayer/GetBattleState"
+	BattleClientPlayer_NotifyBattleStart_FullMethodName        = "/BattleClientPlayer/NotifyBattleStart"
+	BattleClientPlayer_NotifyTurnResult_FullMethodName         = "/BattleClientPlayer/NotifyTurnResult"
+	BattleClientPlayer_NotifyBattleEnd_FullMethodName          = "/BattleClientPlayer/NotifyBattleEnd"
+	BattleClientPlayer_NotifyBattleReconnect_FullMethodName    = "/BattleClientPlayer/NotifyBattleReconnect"
+	BattleClientPlayer_StopWatchBattle_FullMethodName          = "/BattleClientPlayer/StopWatchBattle"
+	BattleClientPlayer_SetAutoBattle_FullMethodName            = "/BattleClientPlayer/SetAutoBattle"
+	BattleClientPlayer_NotifySpectateState_FullMethodName      = "/BattleClientPlayer/NotifySpectateState"
+	BattleClientPlayer_NotifySpectateTurnResult_FullMethodName = "/BattleClientPlayer/NotifySpectateTurnResult"
+	BattleClientPlayer_NotifySpectateEnd_FullMethodName        = "/BattleClientPlayer/NotifySpectateEnd"
 )
 
 // BattleClientPlayerClient is the client API for BattleClientPlayer service.
@@ -38,6 +43,12 @@ type BattleClientPlayerClient interface {
 	NotifyTurnResult(ctx context.Context, in *TurnResultS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifyBattleEnd(ctx context.Context, in *BattleEndS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifyBattleReconnect(ctx context.Context, in *BattleReconnectS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	// ---- 二期:观战 + 自动战斗(设计文档 §10/§11) ----
+	StopWatchBattle(ctx context.Context, in *StopWatchBattleRequest, opts ...grpc.CallOption) (*StopWatchBattleResponse, error)
+	SetAutoBattle(ctx context.Context, in *SetAutoBattleRequest, opts ...grpc.CallOption) (*SetAutoBattleResponse, error)
+	NotifySpectateState(ctx context.Context, in *SpectateStateS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	NotifySpectateTurnResult(ctx context.Context, in *TurnResultS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	NotifySpectateEnd(ctx context.Context, in *SpectateEndS2C, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
 type battleClientPlayerClient struct {
@@ -108,6 +119,56 @@ func (c *battleClientPlayerClient) NotifyBattleReconnect(ctx context.Context, in
 	return out, nil
 }
 
+func (c *battleClientPlayerClient) StopWatchBattle(ctx context.Context, in *StopWatchBattleRequest, opts ...grpc.CallOption) (*StopWatchBattleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(StopWatchBattleResponse)
+	err := c.cc.Invoke(ctx, BattleClientPlayer_StopWatchBattle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *battleClientPlayerClient) SetAutoBattle(ctx context.Context, in *SetAutoBattleRequest, opts ...grpc.CallOption) (*SetAutoBattleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetAutoBattleResponse)
+	err := c.cc.Invoke(ctx, BattleClientPlayer_SetAutoBattle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *battleClientPlayerClient) NotifySpectateState(ctx context.Context, in *SpectateStateS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, BattleClientPlayer_NotifySpectateState_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *battleClientPlayerClient) NotifySpectateTurnResult(ctx context.Context, in *TurnResultS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, BattleClientPlayer_NotifySpectateTurnResult_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *battleClientPlayerClient) NotifySpectateEnd(ctx context.Context, in *SpectateEndS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, BattleClientPlayer_NotifySpectateEnd_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BattleClientPlayerServer is the server API for BattleClientPlayer service.
 // All implementations must embed UnimplementedBattleClientPlayerServer
 // for forward compatibility.
@@ -118,6 +179,12 @@ type BattleClientPlayerServer interface {
 	NotifyTurnResult(context.Context, *TurnResultS2C) (*base.Empty, error)
 	NotifyBattleEnd(context.Context, *BattleEndS2C) (*base.Empty, error)
 	NotifyBattleReconnect(context.Context, *BattleReconnectS2C) (*base.Empty, error)
+	// ---- 二期:观战 + 自动战斗(设计文档 §10/§11) ----
+	StopWatchBattle(context.Context, *StopWatchBattleRequest) (*StopWatchBattleResponse, error)
+	SetAutoBattle(context.Context, *SetAutoBattleRequest) (*SetAutoBattleResponse, error)
+	NotifySpectateState(context.Context, *SpectateStateS2C) (*base.Empty, error)
+	NotifySpectateTurnResult(context.Context, *TurnResultS2C) (*base.Empty, error)
+	NotifySpectateEnd(context.Context, *SpectateEndS2C) (*base.Empty, error)
 	mustEmbedUnimplementedBattleClientPlayerServer()
 }
 
@@ -145,6 +212,21 @@ func (UnimplementedBattleClientPlayerServer) NotifyBattleEnd(context.Context, *B
 }
 func (UnimplementedBattleClientPlayerServer) NotifyBattleReconnect(context.Context, *BattleReconnectS2C) (*base.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method NotifyBattleReconnect not implemented")
+}
+func (UnimplementedBattleClientPlayerServer) StopWatchBattle(context.Context, *StopWatchBattleRequest) (*StopWatchBattleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopWatchBattle not implemented")
+}
+func (UnimplementedBattleClientPlayerServer) SetAutoBattle(context.Context, *SetAutoBattleRequest) (*SetAutoBattleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SetAutoBattle not implemented")
+}
+func (UnimplementedBattleClientPlayerServer) NotifySpectateState(context.Context, *SpectateStateS2C) (*base.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method NotifySpectateState not implemented")
+}
+func (UnimplementedBattleClientPlayerServer) NotifySpectateTurnResult(context.Context, *TurnResultS2C) (*base.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method NotifySpectateTurnResult not implemented")
+}
+func (UnimplementedBattleClientPlayerServer) NotifySpectateEnd(context.Context, *SpectateEndS2C) (*base.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method NotifySpectateEnd not implemented")
 }
 func (UnimplementedBattleClientPlayerServer) mustEmbedUnimplementedBattleClientPlayerServer() {}
 func (UnimplementedBattleClientPlayerServer) testEmbeddedByValue()                            {}
@@ -275,6 +357,96 @@ func _BattleClientPlayer_NotifyBattleReconnect_Handler(srv interface{}, ctx cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BattleClientPlayer_StopWatchBattle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopWatchBattleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleClientPlayerServer).StopWatchBattle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleClientPlayer_StopWatchBattle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleClientPlayerServer).StopWatchBattle(ctx, req.(*StopWatchBattleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BattleClientPlayer_SetAutoBattle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetAutoBattleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleClientPlayerServer).SetAutoBattle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleClientPlayer_SetAutoBattle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleClientPlayerServer).SetAutoBattle(ctx, req.(*SetAutoBattleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BattleClientPlayer_NotifySpectateState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SpectateStateS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleClientPlayerServer).NotifySpectateState(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleClientPlayer_NotifySpectateState_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleClientPlayerServer).NotifySpectateState(ctx, req.(*SpectateStateS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BattleClientPlayer_NotifySpectateTurnResult_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(TurnResultS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleClientPlayerServer).NotifySpectateTurnResult(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleClientPlayer_NotifySpectateTurnResult_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleClientPlayerServer).NotifySpectateTurnResult(ctx, req.(*TurnResultS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BattleClientPlayer_NotifySpectateEnd_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SpectateEndS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleClientPlayerServer).NotifySpectateEnd(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleClientPlayer_NotifySpectateEnd_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleClientPlayerServer).NotifySpectateEnd(ctx, req.(*SpectateEndS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BattleClientPlayer_ServiceDesc is the grpc.ServiceDesc for BattleClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -305,6 +477,26 @@ var BattleClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifyBattleReconnect",
 			Handler:    _BattleClientPlayer_NotifyBattleReconnect_Handler,
+		},
+		{
+			MethodName: "StopWatchBattle",
+			Handler:    _BattleClientPlayer_StopWatchBattle_Handler,
+		},
+		{
+			MethodName: "SetAutoBattle",
+			Handler:    _BattleClientPlayer_SetAutoBattle_Handler,
+		},
+		{
+			MethodName: "NotifySpectateState",
+			Handler:    _BattleClientPlayer_NotifySpectateState_Handler,
+		},
+		{
+			MethodName: "NotifySpectateTurnResult",
+			Handler:    _BattleClientPlayer_NotifySpectateTurnResult_Handler,
+		},
+		{
+			MethodName: "NotifySpectateEnd",
+			Handler:    _BattleClientPlayer_NotifySpectateEnd_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

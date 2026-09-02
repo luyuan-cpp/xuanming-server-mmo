@@ -229,6 +229,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AccountSimplePlayer final : public 
   // accessors -------------------------------------------------------
   enum : int {
     kPlayerIdFieldNumber = 1,
+    kClassIdFieldNumber = 2,
+    kGenderFieldNumber = 3,
+    kZoneIdFieldNumber = 4,
   };
   // uint64 player_id = 1;
   void clear_player_id() ;
@@ -240,11 +243,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AccountSimplePlayer final : public 
   void _internal_set_player_id(::uint64_t value);
 
   public:
+  // uint32 class_id = 2;
+  void clear_class_id() ;
+  [[nodiscard]] ::uint32_t class_id() const;
+  void set_class_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_class_id() const;
+  void _internal_set_class_id(::uint32_t value);
+
+  public:
+  // uint32 gender = 3;
+  void clear_gender() ;
+  [[nodiscard]] ::uint32_t gender() const;
+  void set_gender(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_gender() const;
+  void _internal_set_gender(::uint32_t value);
+
+  public:
+  // uint32 zone_id = 4;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:AccountSimplePlayer)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -274,6 +307,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AccountSimplePlayer final : public 
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t player_id_;
+    ::uint32_t class_id_;
+    ::uint32_t gender_;
+    ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -530,6 +566,78 @@ inline ::uint64_t AccountSimplePlayer::_internal_player_id() const {
 inline void AccountSimplePlayer::_internal_set_player_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = value;
+}
+
+// uint32 class_id = 2;
+inline void AccountSimplePlayer::clear_class_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.class_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t AccountSimplePlayer::class_id() const {
+  // @@protoc_insertion_point(field_get:AccountSimplePlayer.class_id)
+  return _internal_class_id();
+}
+inline void AccountSimplePlayer::set_class_id(::uint32_t value) {
+  _internal_set_class_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:AccountSimplePlayer.class_id)
+}
+inline ::uint32_t AccountSimplePlayer::_internal_class_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.class_id_;
+}
+inline void AccountSimplePlayer::_internal_set_class_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.class_id_ = value;
+}
+
+// uint32 gender = 3;
+inline void AccountSimplePlayer::clear_gender() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gender_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t AccountSimplePlayer::gender() const {
+  // @@protoc_insertion_point(field_get:AccountSimplePlayer.gender)
+  return _internal_gender();
+}
+inline void AccountSimplePlayer::set_gender(::uint32_t value) {
+  _internal_set_gender(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:AccountSimplePlayer.gender)
+}
+inline ::uint32_t AccountSimplePlayer::_internal_gender() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.gender_;
+}
+inline void AccountSimplePlayer::_internal_set_gender(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.gender_ = value;
+}
+
+// uint32 zone_id = 4;
+inline void AccountSimplePlayer::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t AccountSimplePlayer::zone_id() const {
+  // @@protoc_insertion_point(field_get:AccountSimplePlayer.zone_id)
+  return _internal_zone_id();
+}
+inline void AccountSimplePlayer::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:AccountSimplePlayer.zone_id)
+}
+inline ::uint32_t AccountSimplePlayer::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void AccountSimplePlayer::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -146,6 +146,44 @@ void SendMatchServiceNotifyChallengeResult(entt::registry& registry, entt::entit
 void SendMatchServiceNotifyChallengeResult(entt::registry& registry, entt::entity nodeEntity, const ::match::ChallengeResultS2C& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 void SendMatchServiceNotifyChallengeResult(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
+#pragma region MatchServiceWatchBattle
+
+struct AsyncMatchServiceWatchBattleGrpcClient {
+    uint32_t messageId{ MatchServiceWatchBattleMessageId };
+    ClientContext context;
+    Status status;
+    ::match::WatchBattleResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::match::WatchBattleResponse>> response_reader;
+};
+
+class ::match::WatchBattleRequest;
+using AsyncMatchServiceWatchBattleHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::match::WatchBattleResponse&)>;
+extern AsyncMatchServiceWatchBattleHandlerFunctionType AsyncMatchServiceWatchBattleHandler;
+
+void SendMatchServiceWatchBattle(entt::registry& registry, entt::entity nodeEntity, const ::match::WatchBattleRequest& request);
+void SendMatchServiceWatchBattle(entt::registry& registry, entt::entity nodeEntity, const ::match::WatchBattleRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendMatchServiceWatchBattle(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region MatchServiceListWatchableBattles
+
+struct AsyncMatchServiceListWatchableBattlesGrpcClient {
+    uint32_t messageId{ MatchServiceListWatchableBattlesMessageId };
+    ClientContext context;
+    Status status;
+    ::match::ListWatchableBattlesResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::match::ListWatchableBattlesResponse>> response_reader;
+};
+
+class ::match::ListWatchableBattlesRequest;
+using AsyncMatchServiceListWatchableBattlesHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::match::ListWatchableBattlesResponse&)>;
+extern AsyncMatchServiceListWatchableBattlesHandlerFunctionType AsyncMatchServiceListWatchableBattlesHandler;
+
+void SendMatchServiceListWatchableBattles(entt::registry& registry, entt::entity nodeEntity, const ::match::ListWatchableBattlesRequest& request);
+void SendMatchServiceListWatchableBattles(entt::registry& registry, entt::entity nodeEntity, const ::match::ListWatchableBattlesRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendMatchServiceListWatchableBattles(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
 void SetMatchServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void SetMatchServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void HandleMatchServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);

@@ -1,8 +1,9 @@
 # 回合制战斗服设计(turn-based battle server)
 
-> 状态:一期实现中(2026-08-15 起)。本文是回合制战斗(问道/梦幻式)的架构决策与模块规格,
-> 是 battle 节点、battle 引擎、scene 集成、match 服务四个模块的实现依据。
-> 未编译声明:本轮所有代码均为"待 Codex 生成+编译验证"状态,见 §12。
+> 状态:一期已落地(2026-08-15 起实现,2026-08-17 全栈冒烟通);二期实现中(2026-08-31 起,
+> 见 §10 观战、§11 自动战斗/5v5/队伍上限)。本文是回合制战斗(问道/梦幻式)的架构决策与
+> 模块规格,是 battle 节点、battle 引擎、scene 集成、match 服务四个模块的实现依据。
+> 未编译声明:二期代码为"待 Codex 生成+编译验证"状态,见 §14。
 
 ## 1. 背景与一期范围
 
@@ -241,17 +242,128 @@ go-zero,结构照抄 `go/scene_manager`(config/etc yaml/internal/{logic,svc,serv
 4. 战斗服对玩家权威数据零写权:结算只能以事件形式交由 scene 应用,禁止 battle 直写 DB/Redis 玩家数据;
 5. 引擎内所有随机只走种子 RNG(确定性,观战/回放依赖)。
 
+二期新增(2026-08-31):
+
+6. 观众对战斗状态零影响:AddObserver/RemoveObserver/StopWatch 不触碰引擎;观众不能是本场参战者;
+   观众永远收不到结算事件(BattleRouting 的 scene 字段留 0 即是这条不变量的实现);
+7. `spectate:*` Redis key 只有 match 读写(battle 节点保持零持久化);
+8. 观战与排队/战斗互斥:进 gather 前 match 必须清退该玩家的观战绑定(D11);
+9. 移动链路与战斗触发零耦合:任何"遇怪"入口只能经 match(D16,禁止随机遇怪)。
+
 ## 8. 部署形态
 
 battle 为独立进程池(全局,不分 zone),K8s 单独 Deployment(照 scene-world/scene-instance
 第三池模式);战斗房间为纯内存对象,节点无持久状态,崩溃即战斗作废(§3.2 补偿);
 水平扩容 = 加实例,match 按发现列表分配。Agones/rooms Counter 一期不接。
 
-## 9. 二期清单(预留接口)
+## 9. 二期清单
 
-观战(BattleRoom.observers + WatchBattle RPC + 事件流延迟推送)、ready check、转播 relay、
-回放持久化(事件流落盘)、宠物参战(快照加 pet 段)、robot battle 动作、匹配负载均衡、
-Excel 回合列(替代 kRoundDurationMs 换算)。
+**本轮实现(2026-08-31)**:观战 + 观战匹配(§10)、自动战斗 + 5v5 + 队伍上限 5(§11)。
+**仍预留**:ready check、转播 relay、回放持久化(事件流落盘)、宠物参战(快照加 pet 段)、
+robot battle 动作、匹配负载均衡、Excel 回合列(替代 kRoundDurationMs 换算)、
+观战事件流延迟推送(反侦察,见 §10.6)、预组队入队(party_member_ids)。
+
+## 10. 观战系统(二期,2026-08-31)
+
+### 10.1 决策
+
+| # | 决策 | 理由 |
+|---|------|------|
+| D8 | **观战 = 转发确定性事件流**(D7 的直接兑现):观众首帧收 `BuildStateSnapshot()` 全量状态,之后逐回合收与参战者相同的 `TurnResultS2C`(不同消息号) | 引擎零改动;观众对战斗状态零影响(零写权,同宪法不变量 4 的精神) |
+| D9 | **观战匹配由 match 编排**(D3 的延伸):match 在 gather 开局成功后把战斗登记进 Redis 活跃索引;`WatchBattle(battle_id=0)` 随机挑一场,`ListWatchableBattles` 出列表。battle 节点不碰 Redis,索引清理靠 TTL + 懒剔除 | 只有 match 知道"哪些战斗存在、在哪个 battle 节点";battle 节点保持纯内存、零持久化(§8) |
+| D10 | **观众复用参战者的会话绑定机制**:AddObserver 成功后 battle 节点发既有 `BindBattleEvent` 把观众 session 绑到本节点,退出观战的上行(`StopWatchBattle`)按绑定路由 | 不新增 gate 机制;Kafka 同 key(player_id)保证 gate 先处理绑定再下发首帧 |
+| D11 | **观战与排队/战斗互斥**:`WatchBattle` 拒绝持有 match ticket 或 `battle:lock` 的玩家;已在观战的玩家由 `WatchBattle` 先清退旧场(RemoveObserver+DEL 标记)再接入新场;任何玩家进入 gather(排队凑单/切磋成局)时 match 先把他从观战中清退(RemoveObserver,尽力而为) | 观众绑定和参战绑定共用 SessionInfo 的 BattleNodeService 槽位,互斥杜绝绑定被覆盖的竞态 |
+
+### 10.2 数据流
+
+```
+客户端 WatchBattle(battle_id|0) ──gate(gRPC,无状态路由)──► match
+  match: 互斥检查(ticket / battle:lock;重复 WatchBattle 不拒绝,懒清退旧场后放行,战斗已收尾则仅删标记)
+       → battle_id=0 时从 spectate:battles:active 随机挑一场
+       → 读 spectate:battle:{id} 得 SpectateBattleRecord(含 battle_node_id)
+       → 读 player:session:{player_id} 组观众 BattleRouting(session/gate/zone,scene 字段留 0)
+       → SETNX+EX spectate:watching:{player_id} = battle_id(TTL 同索引;并发 WatchBattle 抢占失败即拒绝)
+       → gRPC battle.AddObserver(battle_id, observer, routing)
+  battle: 房间校验(存在/观众未满 kMaxObserversPerRoom/非参战者)→ 加入 room.observers
+       → Kafka gate-{gid}: BindBattleEvent(观众 session → 本节点)
+       → Kafka gate-{gid}: PushToPlayerEvent(NotifySpectateState 首帧,含 observer_count)
+  回合循环:每次 ResolveRound 广播 TurnResultS2C 给参战者(NotifyTurnResult)
+       同时广播给观众(NotifySpectateTurnResult,同 payload 不同消息号)
+  战斗结束/作废:观众收 NotifySpectateEnd(outcome + reason)→ UnbindBattleEvent
+  观众主动退出:StopWatchBattle ──gate(按绑定)──► battle:移出 observers + Unbind
+  AddObserver 报房间不存在:match 懒剔除索引(DEL 记录 + ZREM)后对随机模式换一场重试一次
+```
+
+### 10.3 proto 契约(已落盘)
+
+- `proto/battle/player_battle.proto`:`SpectateStateS2C` / `SpectateEndS2C`(含 `eSpectateEndReason`)、
+  `StopWatchBattle(Request/Response)`;service 新增 `StopWatchBattle` /
+  `NotifySpectateState` / `NotifySpectateTurnResult` / `NotifySpectateEnd`;
+- `proto/battle/battle_node.proto`:`AddObserver` / `RemoveObserver`(match→battle 内部 gRPC);
+- `proto/match/match_service.proto`:`WatchBattle` / `ListWatchableBattles` +
+  `BattleWatchSummary`(客户端摘要)+ `SpectateBattleRecord`(Redis 内部记录,含 battle_node_id)。
+
+### 10.4 Redis key 契约(新增,全部 match 读写)
+
+| key | 类型 | 语义 |
+|-----|------|------|
+| `spectate:battle:{battle_id}` | string = SpectateBattleRecord pb,TTL = BattleMaxDurationSeconds + 60s | 活跃战斗登记(gather 成功后写) |
+| `spectate:battles:active` | ZSET member=battle_id score=created_at_ms | 随机/列表索引;懒剔除 + 定期按 score 清过期 |
+| `spectate:watching:{player_id}` | string = battle_id,TTL 同上 | 观战互斥标记(gather 清退时反查用);重复 WatchBattle 懒清退旧场(战斗已收尾则仅删标记) |
+
+### 10.5 房间侧规格(battle 节点)
+
+- `BattleRoom` 加 `std::map<uint64_t, ::BattleRouting> routingByObserver`(有序,遍历稳定)
+  + 常量 `kMaxObserversPerRoom = 20`;
+- 观众推送与参战者共用既有 Kafka 出站助手(key=player_id,target_instance_id 防僵尸不变量照守);
+- `HandleGetBattleState` 放行观众(参战者或观众都可补拉,重进观战画面用);
+- `AbortAllRooms` / deadline 强制收尾 / `FinishBattle` 都要给观众发 `SpectateEndS2C` + 解绑;
+- `HandleDestroyBattle`(match 回滚路径)同样清观众;
+- 观众数上限满 / 观众是参战者 / 房间不存在 → AddObserver 回对应 tip 错误。
+
+### 10.6 一期观战明确不做
+
+事件流延迟推送(防"开小号观战偷看对手指令"):v1 观众与参战者同步收流。回合制信息量
+有限且当前无排位利益,延迟缓冲(N 回合环形缓冲 + 首帧快照回退 N 回合)留到有竞技需求时做。
+
+## 11. 自动战斗 / 5v5 / 队伍上限(二期,2026-08-31)
+
+### 11.1 决策
+
+| # | 决策 | 理由 |
+|---|------|------|
+| D12 | **自动战斗是服务端状态**:`SetAutoBattle` 落在引擎 `BattleActorState.is_auto`;auto 单位在 `AllPlayersReady()` 中视为已就绪,`ResolveCurrentRound()` 的默认行动路径(普攻随机存活敌人)替他出手 | 挂机玩家掉线/切后台照打;引擎确定性不受影响(默认行动本来就走引擎 RNG);状态进快照,重连/观战免费可见 |
+| D13 | **全自动房间按固定节奏推进**:装填回合时若 `AllPlayersReady()` 立即为真(全员挂机),回合 timer 改用 `kAutoRoundIntervalMs = 2000` 而非整个行动窗口 | 既不空转刷回合(观众/客户端跟得上),也不傻等 30s 行动窗口 |
+| D14 | **队伍上限 5 双侧强制**:引擎 `Initialize` 校验每队玩家 ≤ `kMaxBattleTeamSize = 5`(超限拒绝建房);match 侧 PVE_TEAM 凑满人数按 `min(配置值, 5)` 收口 | 产品口径"队伍上限五个人";Dungeon 表存在 max_team_size=10 的历史行,代码收口比改表重导安全 |
+| D15 | **5v5 PVP 启用既有枚举**:`MATCH_MODE_5V5` 走 FIFO 凑 10 人,弹出序前 5 人 team 0、后 5 人 team 1 | 复用 matcher/gather 全部管线,只改 requiredPlayers/teamIndexFor 两个开关点 |
+| D16 | **跑图不遇怪是既定架构,明文化**:场景内没有怪物实体、没有任何移动/碰撞触发战斗的逻辑;PVE 进战斗只有两条路——JoinQueue 匹配(solo 即配/组队凑单)与场景点名切磋。移动链路(MoveStart/MoveSync/导航裁决)与战斗系统零耦合,今后加"场景可见怪物"也必须走"点击怪物 → match 入口",禁止随机遇怪 | 用户产品决策(2026-08-31):跑路不遇怪 |
+
+### 11.2 自动战斗数据流
+
+```
+客户端「自动」开关 → SetAutoBattle{battle_id, enabled} ──gate(按绑定)──► battle
+  battle: 校验参战者/未死/未逃 → engine.SetActorAuto(player_id, enabled)
+        → enabled 且 AllPlayersReady() → 立即 ResolveRound(同 SubmitAction 就绪路径)
+  引擎: is_auto 单位不进 pending_actor_ids;ResolveCurrentRound 对未提交者
+        (含 auto)FillDefaultActions 普攻
+  客户端: BattleStateS2C.actors[].is_auto 渲染开关状态;本地记忆开关,
+        下一场 BattleStart 后自动重发 SetAutoBattle(连续挂机体验)
+「连续战斗」为纯客户端开关:BattleEnd 结算面板收起后自动按上一次的
+  mode/battle_config_id 重新 JoinQueue。
+```
+
+### 11.3 触点清单
+
+- 引擎:`SetActorAuto` / `AllPlayersReady` 跳过 auto / `BuildStateSnapshot.pending_actor_ids`
+  排除 auto / `Initialize` 队伍人数校验;常量 `kMaxBattleTeamSize=5`、`kAutoRoundIntervalMs=2000`
+  进 `constants/turn_battle_constants.h`;
+- battle 节点:`HandleSetAutoBattle`(手写 BattleClientPlayerGrpcImpl 新方法)+
+  `ArmRoundTimer` 全自动检测(D13);
+- match:`requiredPlayers`/`JoinQueue` 开放 5v5(=10 人)、PVE_TEAM 人数 `min(cfg,5)`、
+  `teamIndexFor` 按 `memberIndex < required/2` 分队(1v1/切磋语义不变);
+- 客户端:战斗屏「自动」按钮、排队面板「连续战斗」开关、5v5 与 PVE 组队入口。
+
+
 
 ## 12. Codex 验证清单(总执行顺序,2026-08-15 首轮实现后固化)
 
@@ -313,3 +425,36 @@ etcdctl 验 `BattleNodeService.rpc` 记录 `protocolType=PROTOCOL_GRPC` → 登�
 `#include "battle_binding_helper.h"`,重生成保留):
 - `BindBattleEventHandler` 守护段:`gate_battle_binding::HandleBindBattle(event);`
 - `UnbindBattleEventHandler` 守护段:`gate_battle_binding::HandleUnbindBattle(event);`
+
+## 14. 二期 Codex 验证清单(观战 + 自动战斗 + 5v5,2026-08-31)
+
+> 总顺序与 §12 相同:proto 重生成 → C++ 串行编译 → go/match → 客户端 → 冒烟。
+> C++ MSBuild 一律 `/m:1`。
+
+**阶段 0:proto 重生成** — `cd go && build.bat`(必要时 `dev_tools.ps1 -Command proto-gen-run`)。验收:
+- `battle_data.pb.h`:`BattleActorState` 含 `is_auto`;
+- `player_battle.pb.h`:`SpectateStateS2C`/`SpectateEndS2C`/`eSpectateEndReason`/
+  `StopWatchBattle*`/`SetAutoBattle*`;`player_battle_service_metadata.h` 新增 5 个
+  `BattleClientPlayer*MessageId`(StopWatchBattle/SetAutoBattle/NotifySpectateState/
+  NotifySpectateTurnResult/NotifySpectateEnd);
+- `battle_node.pb.h` + `battle_node.grpc.pb.h`:`AddObserver`/`RemoveObserver`;
+- `match_service.pb.go` 等 Go 产物:`WatchBattle`/`ListWatchableBattles`/
+  `BattleWatchSummary`/`SpectateBattleRecord`;`message_id.txt` 新增
+  `MatchServiceWatchBattle`/`MatchServiceListWatchableBattles` 与 5 个 BattleClientPlayer 键;
+- ⚠️ 老陷阱:`scene_node_service.cpp` 守护段外的 Agones 块重生成必丢,git diff 恢复。
+- 任何常量名与代码引用不符 → 只改引用侧(battle_room_manager.cpp / spectate.go /
+  客户端 BattleClient.cs、SpectateClient.cs),不改生成器。
+
+**阶段 1:C++(串行)**:proto.vcxproj(新 .cc)→ `cpp/libs/services/battle`(引擎)→
+`cpp/nodes/battle` → `turn_battle_engine_test.exe`(新增 auto/人数上限用例全绿,含既有 17 例)。
+scene/gate 无代码改动,受 proto 重生成影响需重编。
+
+**阶段 2:Go**:`cd go/match && go mod tidy && go build ./... && go vet ./...`。
+
+**阶段 3:客户端**(E:/work/mmorpg-client):`gen_proto.ps1 -ProtoRoot E:/work/xuanming-server-mmo`
+→ `gen_messageids.ps1`(白名单新增 7 键无 missing 警告)→ 编译零 CS 错 →
+EditMode Battle 测试全绿(含新增 SpectateClient / 自动战斗用例)。
+
+**阶段 4:冒烟**:两客户端(dev_demo + 第二个 dev 账号):A 排 PVE solo 开战 →
+B 主界面「观战」→ 随机观战 → 收到首帧与逐回合事件 → A 开「自动」挂机到结算 →
+B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpectateEnd reason=REMOVED)。

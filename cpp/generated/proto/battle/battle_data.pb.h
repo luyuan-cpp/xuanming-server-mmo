@@ -2568,6 +2568,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     kIsDeadFieldNumber = 9,
     kIsDefendingFieldNumber = 10,
     kFledFieldNumber = 11,
+    kIsAutoFieldNumber = 16,
     kMonsterTableIdFieldNumber = 14,
     kSkillCooldownRoundsFieldNumber = 15,
   };
@@ -2733,6 +2734,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
   void _internal_set_fled(bool value);
 
   public:
+  // bool is_auto = 16;
+  void clear_is_auto() ;
+  [[nodiscard]] bool is_auto() const;
+  void set_is_auto(bool value);
+
+  private:
+  bool _internal_is_auto() const;
+  void _internal_set_is_auto(bool value);
+
+  public:
   // uint32 monster_table_id = 14;
   void clear_monster_table_id() ;
   [[nodiscard]] ::uint32_t monster_table_id() const;
@@ -2763,8 +2774,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 15,
-                          3, 37,
+      ::google::protobuf::internal::TcParseTable<4, 16,
+                          3, 45,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2806,6 +2817,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleActorState final : public ::g
     bool is_dead_;
     bool is_defending_;
     bool fled_;
+    bool is_auto_;
     ::uint32_t monster_table_id_;
     ::google::protobuf::internal::MapField<BattleActorState_SkillCooldownRoundsEntry_DoNotUse, ::uint32_t, ::uint32_t> skill_cooldown_rounds_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -4259,7 +4271,7 @@ BattleActorState::_internal_mutable_skill_table_ids() {
 inline void BattleActorState::clear_monster_table_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.monster_table_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t BattleActorState::monster_table_id() const {
   // @@protoc_insertion_point(field_get:BattleActorState.monster_table_id)
@@ -4267,7 +4279,7 @@ inline ::uint32_t BattleActorState::monster_table_id() const {
 }
 inline void BattleActorState::set_monster_table_id(::uint32_t value) {
   _internal_set_monster_table_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:BattleActorState.monster_table_id)
 }
 inline ::uint32_t BattleActorState::_internal_monster_table_id() const {
@@ -4289,7 +4301,7 @@ inline int BattleActorState::skill_cooldown_rounds_size() const {
 inline void BattleActorState::clear_skill_cooldown_rounds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.skill_cooldown_rounds_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& BattleActorState::_internal_skill_cooldown_rounds() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -4305,9 +4317,33 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleA
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL BattleActorState::mutable_skill_cooldown_rounds()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_mutable_map:BattleActorState.skill_cooldown_rounds)
   return _internal_mutable_skill_cooldown_rounds();
+}
+
+// bool is_auto = 16;
+inline void BattleActorState::clear_is_auto() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_auto_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+}
+inline bool BattleActorState::is_auto() const {
+  // @@protoc_insertion_point(field_get:BattleActorState.is_auto)
+  return _internal_is_auto();
+}
+inline void BattleActorState::set_is_auto(bool value) {
+  _internal_set_is_auto(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  // @@protoc_insertion_point(field_set:BattleActorState.is_auto)
+}
+inline bool BattleActorState::_internal_is_auto() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.is_auto_;
+}
+inline void BattleActorState::_internal_set_is_auto(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.is_auto_ = value;
 }
 
 // -------------------------------------------------------------------

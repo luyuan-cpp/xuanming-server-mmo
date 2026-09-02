@@ -39,6 +39,27 @@ type Player struct {
 	currencyListReadyOne sync.Once
 	currencyAddReady     chan struct{} // closed on first GmAddCurrencyResponse
 	currencyAddReadyOne  sync.Once
+
+	// ---- 战斗冒烟(battle-smoke)状态:参战侧 ----
+	// battleId 由 NotifyBattleStart 写入;battleStart/battleEnd 是一次性广播
+	// 通道(close 即广播),照 sceneReady 的惯例做懒初始化 + sync.Once 保护。
+	battleId        uint64        // 当前对局 id(NotifyBattleStart 记录)
+	battleOutcome   int32         // 战斗结果(EBattleOutcome,NotifyBattleEnd 记录)
+	turnCount       int           // 收到的 NotifyTurnResult 条数(参战视角回合数)
+	battleStart     chan struct{} // NotifyBattleStart 到达时 close
+	battleStartOnce sync.Once
+	battleEnd       chan struct{} // NotifyBattleEnd 到达时 close
+	battleEndOnce   sync.Once
+
+	// ---- 战斗冒烟(battle-smoke)状态:观战侧 ----
+	spectateBattleId  uint64        // 正在观战的对局 id(NotifySpectateState 记录)
+	spectateObservers uint32        // 观战人数(NotifySpectateState 记录)
+	spectateTurnCount int           // 收到的 NotifySpectateTurnResult 条数(观战视角回合数)
+	spectateEndReason int32         // 观战结束原因(ESpectateEndReason,NotifySpectateEnd 记录)
+	spectateState     chan struct{} // 首个 NotifySpectateState 到达时 close
+	spectateStateOnce sync.Once
+	spectateEnd       chan struct{} // NotifySpectateEnd 到达时 close
+	spectateEndOnce   sync.Once
 }
 
 // NewPlayer creates a Player with an initialized scene-ready channel.
@@ -337,6 +358,193 @@ func (p *Player) WaitCurrencyAddReady(ctx context.Context) error {
 		return nil
 	case <-ctx.Done():
 		return ctx.Err()
+	}
+}
+
+// ---------------------------------------------------------------------------
+// 战斗冒烟(battle-smoke)信号:参战侧
+// 通道全部懒初始化(ensureXxxChannel),Signal/Wait 双侧都先 ensure,
+// 保证任意调用顺序下都不会对 nil channel 做 select/close。
+// ---------------------------------------------------------------------------
+
+func (p *Player) ensureBattleStartChannel() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.battleStart == nil {
+		p.battleStart = make(chan struct{})
+	}
+}
+
+func (p *Player) ensureBattleEndChannel() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.battleEnd == nil {
+		p.battleEnd = make(chan struct{})
+	}
+}
+
+// SignalBattleStart 记录对局 id 并广播"战斗已开始"。由 NotifyBattleStart
+// handler 调用;重复到达只生效一次(sync.Once)。
+func (p *Player) SignalBattleStart(battleId uint64) {
+	p.ensureBattleStartChannel()
+	p.mu.Lock()
+	p.battleId = battleId
+	p.mu.Unlock()
+	p.battleStartOnce.Do(func() { close(p.battleStart) })
+}
+
+// WaitBattleStart 阻塞等待 NotifyBattleStart,返回对局 id。
+func (p *Player) WaitBattleStart(ctx context.Context) (uint64, error) {
+	p.ensureBattleStartChannel()
+	p.mu.RLock()
+	ch := p.battleStart
+	p.mu.RUnlock()
+	select {
+	case <-ch:
+		return p.GetBattleId(), nil
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+}
+
+// GetBattleId 返回 NotifyBattleStart 记录的对局 id(0 = 尚未开战)。
+func (p *Player) GetBattleId() uint64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.battleId
+}
+
+// SignalBattleEnd 记录战斗结果并广播"战斗已结束"。由 NotifyBattleEnd
+// handler 调用;outcome 为 EBattleOutcome 的数值。
+func (p *Player) SignalBattleEnd(outcome int32) {
+	p.ensureBattleEndChannel()
+	p.mu.Lock()
+	p.battleOutcome = outcome
+	p.mu.Unlock()
+	p.battleEndOnce.Do(func() { close(p.battleEnd) })
+}
+
+// WaitBattleEnd 阻塞等待 NotifyBattleEnd,返回战斗结果(EBattleOutcome 数值)。
+func (p *Player) WaitBattleEnd(ctx context.Context) (int32, error) {
+	p.ensureBattleEndChannel()
+	p.mu.RLock()
+	ch := p.battleEnd
+	p.mu.RUnlock()
+	select {
+	case <-ch:
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+		return p.battleOutcome, nil
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+}
+
+// AddTurnResult 参战视角回合计数 +1(每收到一条 NotifyTurnResult 调一次)。
+func (p *Player) AddTurnResult() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.turnCount++
+}
+
+// GetTurnCount 返回参战视角收到的回合结算条数。
+func (p *Player) GetTurnCount() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.turnCount
+}
+
+// ---------------------------------------------------------------------------
+// 战斗冒烟(battle-smoke)信号:观战侧
+// ---------------------------------------------------------------------------
+
+func (p *Player) ensureSpectateStateChannel() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.spectateState == nil {
+		p.spectateState = make(chan struct{})
+	}
+}
+
+func (p *Player) ensureSpectateEndChannel() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.spectateEnd == nil {
+		p.spectateEnd = make(chan struct{})
+	}
+}
+
+// SignalSpectateState 记录观战对局 id / 观战人数并广播"观战快照已到"。
+// 由 NotifySpectateState handler 调用;后续快照仍会刷新数据,但只广播一次。
+func (p *Player) SignalSpectateState(battleId uint64, observerCount uint32) {
+	p.ensureSpectateStateChannel()
+	p.mu.Lock()
+	p.spectateBattleId = battleId
+	p.spectateObservers = observerCount
+	p.mu.Unlock()
+	p.spectateStateOnce.Do(func() { close(p.spectateState) })
+}
+
+// WaitSpectateState 阻塞等待首个 NotifySpectateState,返回观战对局 id。
+func (p *Player) WaitSpectateState(ctx context.Context) (uint64, error) {
+	p.ensureSpectateStateChannel()
+	p.mu.RLock()
+	ch := p.spectateState
+	p.mu.RUnlock()
+	select {
+	case <-ch:
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+		return p.spectateBattleId, nil
+	case <-ctx.Done():
+		return 0, ctx.Err()
+	}
+}
+
+// GetSpectateObserverCount 返回最近一次 NotifySpectateState 里的观战人数。
+func (p *Player) GetSpectateObserverCount() uint32 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.spectateObservers
+}
+
+// AddSpectateTurnResult 观战视角回合计数 +1(每收到一条 NotifySpectateTurnResult 调一次)。
+func (p *Player) AddSpectateTurnResult() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.spectateTurnCount++
+}
+
+// GetSpectateTurnCount 返回观战视角收到的回合结算条数。
+func (p *Player) GetSpectateTurnCount() int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.spectateTurnCount
+}
+
+// SignalSpectateEnd 记录观战结束原因并广播"观战已结束"。
+// 由 NotifySpectateEnd handler 调用;reason 为 ESpectateEndReason 的数值。
+func (p *Player) SignalSpectateEnd(reason int32) {
+	p.ensureSpectateEndChannel()
+	p.mu.Lock()
+	p.spectateEndReason = reason
+	p.mu.Unlock()
+	p.spectateEndOnce.Do(func() { close(p.spectateEnd) })
+}
+
+// WaitSpectateEnd 阻塞等待 NotifySpectateEnd,返回观战结束原因。
+func (p *Player) WaitSpectateEnd(ctx context.Context) (int32, error) {
+	p.ensureSpectateEndChannel()
+	p.mu.RLock()
+	ch := p.spectateEnd
+	p.mu.RUnlock()
+	select {
+	case <-ch:
+		p.mu.RLock()
+		defer p.mu.RUnlock()
+		return p.spectateEndReason, nil
+	case <-ctx.Done():
+		return 0, ctx.Err()
 	}
 }
 

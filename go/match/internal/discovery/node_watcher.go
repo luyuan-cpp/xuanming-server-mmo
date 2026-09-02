@@ -250,6 +250,33 @@ func (w *NodeWatcher) EndpointOf(zoneId uint32, nodeId string) (string, error) {
 	return endpoint, nil
 }
 
+// EndpointOfNode 按 node_id 找节点 gRPC 地址(battle 节点是全局池不分 zone,
+// 观战路径按 SpectateBattleRecord.battle_node_id 定位对端时用;歧义拒绝语义
+// 与 EndpointOf 一致:同一 node_id 出现多条注册说明租约/部署链分叉,拒选)。
+func (w *NodeWatcher) EndpointOfNode(nodeId uint32) (string, error) {
+	w.mu.RLock()
+	defer w.mu.RUnlock()
+	var endpoint string
+	matches := 0
+	for _, entry := range w.nodes {
+		if entry.NodeId != nodeId {
+			continue
+		}
+		matches++
+		if endpoint != "" && endpoint != entry.Endpoint {
+			return "", fmt.Errorf("节点身份歧义 node=%d: 多个 endpoint 注册", nodeId)
+		}
+		endpoint = entry.Endpoint
+	}
+	if matches > 1 {
+		return "", fmt.Errorf("节点身份歧义 node=%d: %d 条注册", nodeId, matches)
+	}
+	if matches == 0 {
+		return "", fmt.Errorf("节点未注册 node=%d", nodeId)
+	}
+	return endpoint, nil
+}
+
 // PickRandom 随机取一个节点(battle 节点 v1 选法:随机,负载上报二期)。
 func (w *NodeWatcher) PickRandom() (NodeEntry, bool) {
 	w.mu.RLock()

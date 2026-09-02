@@ -59,6 +59,12 @@ var (
 		Name:      "kafka_push_total",
 		Help:      "Challenge S2C pushes via gate Kafka by outcome (ok|error).",
 	}, []string{"outcome"})
+
+	watchBattleTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "watch_battle_total",
+		Help:      "WatchBattle requests by outcome (ok|queued|in_battle|already_watching|offline|no_battle|not_found|rejected|internal).",
+	}, []string{"outcome"})
 )
 
 var registerOnce sync.Once
@@ -73,6 +79,7 @@ func register() {
 			queueDepth,
 			discoveredNodes,
 			kafkaPushTotal,
+			watchBattleTotal,
 		)
 	})
 }
@@ -106,6 +113,11 @@ func SetDiscoveredNodes(kind string, count int) {
 // ObserveKafkaPush 记录一次 gate Kafka 推送结果。
 func ObserveKafkaPush(outcome string) {
 	kafkaPushTotal.WithLabelValues(outcome).Inc()
+}
+
+// ObserveWatchBattle 记录一次 WatchBattle 请求结果。
+func ObserveWatchBattle(outcome string) {
+	watchBattleTotal.WithLabelValues(outcome).Inc()
 }
 
 // Start 启动 Prometheus /metrics 端点;addr 为空则关闭(与 scene_manager 同模式)。

@@ -119,7 +119,7 @@ void ServiceDiscoveryManager::AddServiceNode(const std::string &nodeJson, uint32
 	}
 
 	const auto &whitelist = gNode->GetTargetNodeTypeWhitelist();
-	if (!whitelist.empty() && !whitelist.contains(nodeType))
+	if (!whitelist.contains(nodeType))
 		return;
 	if (NodeUtils::IsNodeConnected(nodeType, discoveredNode))
 	{

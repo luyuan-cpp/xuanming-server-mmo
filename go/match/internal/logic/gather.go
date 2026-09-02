@@ -27,6 +27,16 @@ const (
 	rollbackTimeout      = 3 * time.Second
 )
 
+// kMaxBattleTeamSize 队伍上限 5(设计决策 D14,双侧强制):引擎 Initialize
+// 同步校验每队 ≤ 5;match 侧 PVE_TEAM 凑满人数按 min(配置值, 5) 收口 ——
+// DungeonTable 存在 max_team_size=10 的历史行,代码收口比改表重导安全。
+// 与引擎 constants/turn_battle_constants.h 的同名常量保持一致。
+const kMaxBattleTeamSize = 5
+
+// required5v5Players 5v5 凑满人数(设计决策 D15:FIFO 凑 10 人,
+// 弹出序前 5 人 team 0、后 5 人 team 1)。
+const required5v5Players = kMaxBattleTeamSize * 2
+
 // preparedMember 记录一个已冻结(PrepareBattle 成功)的参与者,补偿时逐个解冻。
 type preparedMember struct {
 	playerId      uint64
@@ -108,6 +118,13 @@ func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigI
 
 	deadlineMs := nowMs() + uint64(svcCtx.Config.BattleMaxDurationSeconds)*1000
 
+	// 2.5 观战互斥清退(设计决策 D11 / 不变量 8):进 gather 的玩家必须先从
+	//     观战中摘除,杜绝观众绑定与随后的参战 BindBattleEvent 抢占 SessionInfo
+	//     槽位的竞态;尽力而为,失败只记日志不阻断开局。
+	for _, playerId := range members {
+		stopWatchingIfAny(svcCtx, playerId, "enter_gather")
+	}
+
 	// 3. 逐参与者冻结收快照。
 	var prepared []preparedMember
 	for i, playerId := range members {
@@ -121,7 +138,7 @@ func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigI
 			}
 			return fail(outcome, playerId, prepared, battleId)
 		}
-		snapshot.TeamIndex = teamIndexFor(mode, i)
+		snapshot.TeamIndex = teamIndexFor(mode, i, len(members))
 		prepared = append(prepared, preparedMember{
 			playerId:      playerId,
 			sceneEndpoint: endpoint,
@@ -139,13 +156,14 @@ func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigI
 	for _, p := range prepared {
 		snapshots = append(snapshots, p.snapshot)
 	}
+	createdAtMs := nowMs()
 	if err := createBattle(battleNode, &battlepb.CreateBattleRequest{
 		BattleId:       battleId,
 		BattleConfigId: battleConfigId,
 		Players:        snapshots,
 		Seed:           seed,
 		MatchMode:      uint32(mode),
-		CreatedAtMs:    nowMs(),
+		CreatedAtMs:    createdAtMs,
 		DeadlineMs:     deadlineMs,
 	}); err != nil {
 		logx.Errorf("[gather] CreateBattle 失败 battle=%d node=%d(%s): %v",
@@ -162,6 +180,14 @@ func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigI
 			markTicketReady(svcCtx, pid, battleId)
 		}
 	}
+
+	// 登记观战索引(设计决策 D9:只有 match 知道战斗在哪个 battle 节点;
+	// score/created_at 与 CreateBattleRequest 同一时刻取值,过期判定对齐 deadline)。
+	playerNames := make([]string, 0, len(prepared))
+	for _, p := range prepared {
+		playerNames = append(playerNames, p.snapshot.GetPlayerName())
+	}
+	registerSpectateBattle(svcCtx, battleId, battleNode.NodeId, mode, battleConfigId, playerNames, createdAtMs)
 	logx.Infof("[gather] 开局成功 battle=%d mode=%s config=%d node=%d members=%v 耗时=%s",
 		battleId, modeName, battleConfigId, battleNode.NodeId, members, time.Since(start))
 	metrics.ObserveGather(modeName, "success", time.Since(start))
@@ -281,12 +307,19 @@ func destroyBattle(node discovery.NodeEntry, battleId uint64, reason string) {
 	}
 }
 
-// teamIndexFor 决定参与者的队伍编号:PVP(1v1/切磋)前后两人各一队,
-// PVE 全员 0 队(怪物侧由 battle 节点按 DungeonTable 生成,恒为 1 队对手)。
-func teamIndexFor(mode matchpb.MatchMode, memberIndex int) uint32 {
+// teamIndexFor 决定参与者的队伍编号:1v1/切磋语义不变(memberIndex 即队号,
+// 前后两人各一队);5v5 按弹出序前半 team 0、后半 team 1(设计决策 D15,
+// required 传成组人数);PVE 全员 0 队(怪物侧由 battle 节点按 DungeonTable
+// 生成,恒为 1 队对手)。
+func teamIndexFor(mode matchpb.MatchMode, memberIndex int, required int) uint32 {
 	switch mode {
 	case matchpb.MatchMode_MATCH_MODE_1V1, matchpb.MatchMode_MATCH_MODE_PVP_CHALLENGE:
 		return uint32(memberIndex)
+	case matchpb.MatchMode_MATCH_MODE_5V5:
+		if required > 0 && memberIndex >= required/2 {
+			return 1
+		}
+		return 0
 	default:
 		return 0
 	}

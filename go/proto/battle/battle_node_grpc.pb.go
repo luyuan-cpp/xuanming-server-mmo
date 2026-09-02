@@ -20,8 +20,10 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	BattleNode_CreateBattle_FullMethodName  = "/BattleNode/CreateBattle"
-	BattleNode_DestroyBattle_FullMethodName = "/BattleNode/DestroyBattle"
+	BattleNode_CreateBattle_FullMethodName   = "/BattleNode/CreateBattle"
+	BattleNode_DestroyBattle_FullMethodName  = "/BattleNode/DestroyBattle"
+	BattleNode_AddObserver_FullMethodName    = "/BattleNode/AddObserver"
+	BattleNode_RemoveObserver_FullMethodName = "/BattleNode/RemoveObserver"
 )
 
 // BattleNodeClient is the client API for BattleNode service.
@@ -30,6 +32,8 @@ const (
 type BattleNodeClient interface {
 	CreateBattle(ctx context.Context, in *CreateBattleRequest, opts ...grpc.CallOption) (*CreateBattleResponse, error)
 	DestroyBattle(ctx context.Context, in *DestroyBattleRequest, opts ...grpc.CallOption) (*base.Empty, error)
+	AddObserver(ctx context.Context, in *AddObserverRequest, opts ...grpc.CallOption) (*AddObserverResponse, error)
+	RemoveObserver(ctx context.Context, in *RemoveObserverRequest, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
 type battleNodeClient struct {
@@ -60,12 +64,34 @@ func (c *battleNodeClient) DestroyBattle(ctx context.Context, in *DestroyBattleR
 	return out, nil
 }
 
+func (c *battleNodeClient) AddObserver(ctx context.Context, in *AddObserverRequest, opts ...grpc.CallOption) (*AddObserverResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AddObserverResponse)
+	err := c.cc.Invoke(ctx, BattleNode_AddObserver_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *battleNodeClient) RemoveObserver(ctx context.Context, in *RemoveObserverRequest, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, BattleNode_RemoveObserver_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BattleNodeServer is the server API for BattleNode service.
 // All implementations must embed UnimplementedBattleNodeServer
 // for forward compatibility.
 type BattleNodeServer interface {
 	CreateBattle(context.Context, *CreateBattleRequest) (*CreateBattleResponse, error)
 	DestroyBattle(context.Context, *DestroyBattleRequest) (*base.Empty, error)
+	AddObserver(context.Context, *AddObserverRequest) (*AddObserverResponse, error)
+	RemoveObserver(context.Context, *RemoveObserverRequest) (*base.Empty, error)
 	mustEmbedUnimplementedBattleNodeServer()
 }
 
@@ -81,6 +107,12 @@ func (UnimplementedBattleNodeServer) CreateBattle(context.Context, *CreateBattle
 }
 func (UnimplementedBattleNodeServer) DestroyBattle(context.Context, *DestroyBattleRequest) (*base.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DestroyBattle not implemented")
+}
+func (UnimplementedBattleNodeServer) AddObserver(context.Context, *AddObserverRequest) (*AddObserverResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AddObserver not implemented")
+}
+func (UnimplementedBattleNodeServer) RemoveObserver(context.Context, *RemoveObserverRequest) (*base.Empty, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveObserver not implemented")
 }
 func (UnimplementedBattleNodeServer) mustEmbedUnimplementedBattleNodeServer() {}
 func (UnimplementedBattleNodeServer) testEmbeddedByValue()                    {}
@@ -139,6 +171,42 @@ func _BattleNode_DestroyBattle_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BattleNode_AddObserver_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AddObserverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleNodeServer).AddObserver(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleNode_AddObserver_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleNodeServer).AddObserver(ctx, req.(*AddObserverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _BattleNode_RemoveObserver_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveObserverRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleNodeServer).RemoveObserver(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleNode_RemoveObserver_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleNodeServer).RemoveObserver(ctx, req.(*RemoveObserverRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BattleNode_ServiceDesc is the grpc.ServiceDesc for BattleNode service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -153,6 +221,14 @@ var BattleNode_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DestroyBattle",
 			Handler:    _BattleNode_DestroyBattle_Handler,
+		},
+		{
+			MethodName: "AddObserver",
+			Handler:    _BattleNode_AddObserver_Handler,
+		},
+		{
+			MethodName: "RemoveObserver",
+			Handler:    _BattleNode_RemoveObserver_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

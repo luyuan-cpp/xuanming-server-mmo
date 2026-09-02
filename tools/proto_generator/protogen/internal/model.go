@@ -266,14 +266,27 @@ func (info *MethodInfo) GoResponse() string {
 	return fileDir + typeName
 }
 
+// goProtoImportDir 把 descriptor 路径转成 proto 模块内的包目录。
+// ParentFile().Path() 取决于 protoc 的 -I 根:以仓库根加载时带 "proto/"
+// 前缀,以 proto 根加载时不带。消费模板统一硬拼 "proto/<dir>",这里必须
+// 剥掉可能存在的前缀,否则产出 "proto/proto/battle" 双前缀 import
+// (2026-09-01 五个 robot 观战 stub 因此编译失败,且 stub 存在即跳过、
+// 重跑生成器也不会自愈)。
+func goProtoImportDir(filePath string) string {
+	dir := filepath.ToSlash(filepath.Dir(filePath))
+	if dir == "proto" {
+		return ""
+	}
+	return strings.TrimPrefix(dir, "proto/")
+}
+
 // GoResponseImportDir returns the proto file's relative directory path for the
 // response type (e.g. "chat", "common/base", "scene"). Used to construct the
 // correct Go import path: "robot/proto/" + GoResponseImportDir().
 func (info *MethodInfo) GoResponseImportDir() string {
 	fullType := strings.TrimPrefix(info.MethodDescriptorProto.GetOutputType(), ".")
 	if activeMsgDesc, ok := ActiveMsgDescCache[protoreflect.FullName(fullType)]; ok {
-		filePath := activeMsgDesc.ParentFile().Path()
-		return filepath.ToSlash(filepath.Dir(filePath))
+		return goProtoImportDir(activeMsgDesc.ParentFile().Path())
 	}
 	return ""
 }
@@ -283,8 +296,7 @@ func (info *MethodInfo) GoResponseImportDir() string {
 func (info *MethodInfo) GoRequestImportDir() string {
 	fullType := strings.TrimPrefix(info.MethodDescriptorProto.GetInputType(), ".")
 	if activeMsgDesc, ok := ActiveMsgDescCache[protoreflect.FullName(fullType)]; ok {
-		filePath := activeMsgDesc.ParentFile().Path()
-		return filepath.ToSlash(filepath.Dir(filePath))
+		return goProtoImportDir(activeMsgDesc.ParentFile().Path())
 	}
 	return ""
 }

@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "data/table_battle_data_provider.h"
+#include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/skill_error_tip.pb.h"
 
@@ -14,7 +15,8 @@
 //   1. 一切时间维度换算为回合(RoundsFrom*,kRoundDurationMs=6000),无任何 timer;
 //   2. 去掉 casting/recovery/channel 相位与对应校验(CheckCasting/CheckRecovery/CheckChannel);
 //   3. 所有随机只走成员 RNG(mt19937_64(seed)),禁 tlsRandom/rand();
-//   4. 引擎内不打日志(纯逻辑库,校验失败以错误码/静默降级表达,由 battle 节点记日志)。
+//   4. 引擎内不打日志(纯逻辑库,校验失败以错误码/静默降级表达,由 battle 节点记日志);
+//      唯一例外:Initialize 建房参数违规打 ERROR(编排层错误须运维可见,设计文档 §11 D14)。
 
 namespace turnbattle {
 
@@ -43,6 +45,24 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
     }
     if (request.battle_id() == 0 || request.players_size() == 0) {
         return false;
+    }
+
+    // 每队玩家数上限双侧强制(D14):match 收口 + 引擎兜底,超编直接拒绝建房;
+    // team_index 越界交给 InitPlayers 统一兜住,这里只数合法队伍
+    uint32_t teamPlayerCounts[2] = {0, 0};
+    for (const auto& snapshot : request.players()) {
+        if (snapshot.team_index() <= 1) {
+            ++teamPlayerCounts[snapshot.team_index()];
+        }
+    }
+    for (uint32_t teamIndex = 0; teamIndex < 2; ++teamIndex) {
+        if (teamPlayerCounts[teamIndex] > kMaxBattleTeamSize) {
+            LOG_ERROR << "CreateBattle 队伍人数超限: battle_id=" << request.battle_id()
+                      << " team_index=" << teamIndex
+                      << " players=" << teamPlayerCounts[teamIndex]
+                      << " limit=" << kMaxBattleTeamSize;
+            return false;
+        }
     }
 
     createRequest = request;
@@ -185,9 +205,31 @@ bool TurnBattleEngine::SubmitAction(uint64_t actorId, const BattleAction& action
     return AllPlayersReady();
 }
 
+uint32_t TurnBattleEngine::SetActorAuto(uint64_t actorId, bool enabled) {
+    // 只翻转状态位,不消耗 RNG、不触发结算:确定性由默认行动路径保证,
+    // "开 auto 后立即结算"由节点在查 AllPlayersReady 后自行调 ResolveCurrentRound
+    if (!initialized || outcome != BATTLE_OUTCOME_ONGOING) {
+        return kInvalidParameter;
+    }
+    auto* actor = FindActor(actorId);
+    if (actor == nullptr || actor->actor_type() != BATTLE_ACTOR_TYPE_PLAYER) {
+        return kInvalidParameter;
+    }
+    // 与 CheckState 同口径:死亡/已逃单位无行动权,自然也无挂机语义
+    if (actor->is_dead() || actor->fled()) {
+        return kThisEntityIsInvalid;
+    }
+    actor->set_is_auto(enabled);
+    return 0;
+}
+
 bool TurnBattleEngine::AllPlayersReady() const {
     for (const auto& actor : actors) {
         if (actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER || !IsActorActive(actor)) {
+            continue;
+        }
+        // 挂机单位由默认行动路径代打,视为已就绪(D12)
+        if (actor.is_auto()) {
             continue;
         }
         if (pendingActions.find(actor.actor_id()) == pendingActions.end()) {
@@ -1089,6 +1131,10 @@ BattleStateS2C TurnBattleEngine::BuildStateSnapshot() const {
     if (outcome == BATTLE_OUTCOME_ONGOING) {
         for (const auto& actor : actors) {
             if (actor.actor_type() != BATTLE_ACTOR_TYPE_PLAYER || !IsActorActive(actor)) {
+                continue;
+            }
+            // 挂机单位不待行动(与 AllPlayersReady 的就绪语义对齐,D12)
+            if (actor.is_auto()) {
                 continue;
             }
             if (pendingActions.find(actor.actor_id()) == pendingActions.end()) {

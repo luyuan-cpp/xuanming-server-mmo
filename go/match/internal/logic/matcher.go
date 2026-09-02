@@ -43,6 +43,10 @@ func StartMatcherLoop(ctx context.Context, svcCtx *svc.ServiceContext) {
 // runMatcherRound 扫描所有存在的队列 key 并逐个尝试凑单。
 // 队列 key 由 JoinQueue 按需创建,SCAN 发现即可,无需预注册清单。
 func runMatcherRound(ctx context.Context, svcCtx *svc.ServiceContext) {
+	// 顺手清观战索引的过期残留(ZSET 成员无 TTL,懒剔除之外的定期兜底;
+	// 多实例重复执行幂等,不值得为它单独抢锁/起 goroutine)。
+	cleanupExpiredSpectateIndex(svcCtx)
+
 	cursor := uint64(0)
 	for {
 		keys, next, err := svcCtx.Redis.Scan(cursor, "match:queue:*", 64)
@@ -131,14 +135,22 @@ func matchQueueOnce(svcCtx *svc.ServiceContext, queueKey string) {
 }
 
 // requiredPlayers 返回该队列凑满所需人数;未知模式/未配置返回 0。
+// 必须与 JoinQueue 的 required 口径一致,否则队列永远凑不满或多弹人。
 func requiredPlayers(svcCtx *svc.ServiceContext, mode int32, config uint32) uint32 {
 	switch matchpb.MatchMode(mode) {
 	case matchpb.MatchMode_MATCH_MODE_1V1:
 		return 2
+	case matchpb.MatchMode_MATCH_MODE_5V5:
+		return required5v5Players
 	case matchpb.MatchMode_MATCH_MODE_PVE_TEAM:
-		return svcCtx.Config.PveTeamSizeFor(config)
+		required := svcCtx.Config.PveTeamSizeFor(config)
+		// 队伍上限 5 收口(D14),与 JoinQueue 同口径。
+		if required > kMaxBattleTeamSize {
+			required = kMaxBattleTeamSize
+		}
+		return required
 	default:
-		// PVE_SOLO 不入队;5v5/3v3/切磋没有队列。
+		// PVE_SOLO 不入队;3v3/切磋没有队列。
 		return 0
 	}
 }

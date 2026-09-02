@@ -28,6 +28,25 @@ double HorizontalDistance(const Location& a, const Location& b)
 	return std::sqrt(dx * dx + dy * dy);
 }
 
+// Transform.location 的 proto 类型是 Vector3,移动协议字段与导航接口用的是
+// 结构等价的 Location(proto 消息间无隐式转换),在 Transform 边界显式换壳
+// (与 movement.cpp 同一对助手,两个编译单元各自持有)。
+Location ToLocation(const Vector3& v)
+{
+	Location out;
+	out.set_x(v.x());
+	out.set_y(v.y());
+	out.set_z(v.z());
+	return out;
+}
+
+void WriteLocation(Vector3& dst, const Location& src)
+{
+	dst.set_x(src.x());
+	dst.set_y(src.y());
+	dst.set_z(src.z());
+}
+
 // 客户端上报速度按信任上限截断后写入 Velocity 组件(供 MovementSystem
 // 每 tick 积分),并置脏位走 ActorBaseAttributesS2C 通道下发。
 // 注意只缩放矢量、不改方向 —— 见 movement.cpp 关于标量/矢量语义的注释。
@@ -65,18 +84,19 @@ void ApplyReportedLocation(const entt::entity player, const Location& reported,
 		return;
 	}
 
+	const Location current = ToLocation(transform->location());
 	Location accepted = reported;
 	if (auto* nav = NavQuerySystem::GetNavForPlayer(player))
 	{
 		Location clamped;
-		if (NavQuerySystem::ValidateMove(*nav, transform->location(), reported, clamped))
+		if (NavQuerySystem::ValidateMove(*nav, current, reported, clamped))
 		{
 			accepted = clamped;
 		}
 		else
 		{
 			Location snappedCurrent;
-			if (NavQuerySystem::SnapToMesh(*nav, transform->location(), snappedCurrent))
+			if (NavQuerySystem::SnapToMesh(*nav, current, snappedCurrent))
 			{
 				// 起点合法、途中撞墙:clamped 即阻挡点。
 				accepted = clamped;
@@ -92,13 +112,13 @@ void ApplyReportedLocation(const entt::entity player, const Location& reported,
 				}
 				else
 				{
-					accepted = transform->location();
+					accepted = current;
 				}
 			}
 		}
 	}
 
-	*transform->mutable_location() = accepted;
+	WriteLocation(*transform->mutable_location(), accepted);
 	*transform->mutable_rotation() = rotation;
 	SetActorBaseAttributesS2CAttrDirtyBit(player, ActorBaseAttributesS2C::kTransformFieldNumber);
 

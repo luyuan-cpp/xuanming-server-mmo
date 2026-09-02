@@ -64,3 +64,15 @@ func (s *MatchServiceServer) NotifyChallengeResult(ctx context.Context, in *matc
 	l := logic.NewChallengeLogic(ctx, s.svcCtx)
 	return l.NotifyChallengeResult(in)
 }
+
+// WatchBattle 观战接入(二期,设计文档 §10;battle_id=0 随机观战)。
+func (s *MatchServiceServer) WatchBattle(ctx context.Context, in *matchpb.WatchBattleRequest) (*matchpb.WatchBattleResponse, error) {
+	l := logic.NewWatchBattleLogic(ctx, s.svcCtx)
+	return l.WatchBattle(in)
+}
+
+// ListWatchableBattles 可观战列表(二期,设计文档 §10)。
+func (s *MatchServiceServer) ListWatchableBattles(ctx context.Context, in *matchpb.ListWatchableBattlesRequest) (*matchpb.ListWatchableBattlesResponse, error) {
+	l := logic.NewListWatchableBattlesLogic(ctx, s.svcCtx)
+	return l.ListWatchableBattles(in)
+}

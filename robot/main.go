@@ -110,6 +110,15 @@ func main() {
 		return
 	}
 
+	// Battle-smoke 模式:两个机器人做"回合制战斗 + 观战"端到端冒烟
+	// (A 排队 PVE_SOLO 自动战斗,B 观战匹配跟看),断言全过退出码 0,
+	// 任一步失败退出码 1。见 battle_smoke_scenario.go 与
+	// docs/design/turn-based-battle-server.md §9 的 robot battle 动作预留。
+	if cfg.Mode == "battle-smoke" {
+		RunBattleSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {
@@ -781,6 +790,7 @@ func sendAndRecvLocal(gc *pkg.GameClient, stats *metrics.Stats, msgID uint32, re
 				ch <- recvResult{msg: raw}
 				return
 			}
+			gc.DeferMessage(raw)
 		}
 	}()
 

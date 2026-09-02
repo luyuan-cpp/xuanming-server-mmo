@@ -192,7 +192,10 @@ int main(int argc, char *argv[])
         //     gate 按 BindBattleEvent 的会话绑定把客户端战斗消息转发过去。
         //     必须进白名单,否则 AddServiceNode/ConnectAllNodes 不会为 battle
         //     建实体和 gRPC stub,绑定解析(FindNodeEntityByNodeId)永远落空。
-        Node::CanConnectNodeTypeList{SceneNodeService, LoginNodeService, SceneManagerNodeService, BattleNodeService},
+        //   * MatchNodeService — 匹配服务(Go gRPC,无状态随机路由):客户端
+        //     JoinQueue/ChallengePlayer/WatchBattle 等按 NODE_MATCH 路由,缺席则
+        //     全部报 "Node not found ... message id: 157"(2026-09-01 冒烟补)。
+        Node::CanConnectNodeTypeList{SceneNodeService, LoginNodeService, SceneManagerNodeService, BattleNodeService, MatchNodeService},
         [](Node &node, GateRuntimeContext &context)
         {
             // 先过安全门禁,再做任何别的初始化:配置有问题就不该把服务拉起来。

@@ -27,6 +27,8 @@ const (
 	MatchService_RespondChallenge_FullMethodName      = "/match.MatchService/RespondChallenge"
 	MatchService_NotifyChallengeInvite_FullMethodName = "/match.MatchService/NotifyChallengeInvite"
 	MatchService_NotifyChallengeResult_FullMethodName = "/match.MatchService/NotifyChallengeResult"
+	MatchService_WatchBattle_FullMethodName           = "/match.MatchService/WatchBattle"
+	MatchService_ListWatchableBattles_FullMethodName  = "/match.MatchService/ListWatchableBattles"
 )
 
 // MatchServiceClient is the client API for MatchService service.
@@ -50,6 +52,11 @@ type MatchServiceClient interface {
 	RespondChallenge(ctx context.Context, in *RespondChallengeRequest, opts ...grpc.CallOption) (*RespondChallengeResponse, error)
 	NotifyChallengeInvite(ctx context.Context, in *ChallengeInviteS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifyChallengeResult(ctx context.Context, in *ChallengeResultS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	// ---- 二期:观战匹配(设计文档 §10) ----
+	// battle_id=0 表示随机观战(从活跃战斗索引里随机挑一场);成功后由 battle 节点
+	// 经 Kafka 推 NotifySpectateState 首帧,客户端收到首帧才算进入观战。
+	WatchBattle(ctx context.Context, in *WatchBattleRequest, opts ...grpc.CallOption) (*WatchBattleResponse, error)
+	ListWatchableBattles(ctx context.Context, in *ListWatchableBattlesRequest, opts ...grpc.CallOption) (*ListWatchableBattlesResponse, error)
 }
 
 type matchServiceClient struct {
@@ -130,6 +137,26 @@ func (c *matchServiceClient) NotifyChallengeResult(ctx context.Context, in *Chal
 	return out, nil
 }
 
+func (c *matchServiceClient) WatchBattle(ctx context.Context, in *WatchBattleRequest, opts ...grpc.CallOption) (*WatchBattleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WatchBattleResponse)
+	err := c.cc.Invoke(ctx, MatchService_WatchBattle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *matchServiceClient) ListWatchableBattles(ctx context.Context, in *ListWatchableBattlesRequest, opts ...grpc.CallOption) (*ListWatchableBattlesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListWatchableBattlesResponse)
+	err := c.cc.Invoke(ctx, MatchService_ListWatchableBattles_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // MatchServiceServer is the server API for MatchService service.
 // All implementations must embed UnimplementedMatchServiceServer
 // for forward compatibility.
@@ -151,6 +178,11 @@ type MatchServiceServer interface {
 	RespondChallenge(context.Context, *RespondChallengeRequest) (*RespondChallengeResponse, error)
 	NotifyChallengeInvite(context.Context, *ChallengeInviteS2C) (*base.Empty, error)
 	NotifyChallengeResult(context.Context, *ChallengeResultS2C) (*base.Empty, error)
+	// ---- 二期:观战匹配(设计文档 §10) ----
+	// battle_id=0 表示随机观战(从活跃战斗索引里随机挑一场);成功后由 battle 节点
+	// 经 Kafka 推 NotifySpectateState 首帧,客户端收到首帧才算进入观战。
+	WatchBattle(context.Context, *WatchBattleRequest) (*WatchBattleResponse, error)
+	ListWatchableBattles(context.Context, *ListWatchableBattlesRequest) (*ListWatchableBattlesResponse, error)
 	mustEmbedUnimplementedMatchServiceServer()
 }
 
@@ -181,6 +213,12 @@ func (UnimplementedMatchServiceServer) NotifyChallengeInvite(context.Context, *C
 }
 func (UnimplementedMatchServiceServer) NotifyChallengeResult(context.Context, *ChallengeResultS2C) (*base.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method NotifyChallengeResult not implemented")
+}
+func (UnimplementedMatchServiceServer) WatchBattle(context.Context, *WatchBattleRequest) (*WatchBattleResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WatchBattle not implemented")
+}
+func (UnimplementedMatchServiceServer) ListWatchableBattles(context.Context, *ListWatchableBattlesRequest) (*ListWatchableBattlesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListWatchableBattles not implemented")
 }
 func (UnimplementedMatchServiceServer) mustEmbedUnimplementedMatchServiceServer() {}
 func (UnimplementedMatchServiceServer) testEmbeddedByValue()                      {}
@@ -329,6 +367,42 @@ func _MatchService_NotifyChallengeResult_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_WatchBattle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WatchBattleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).WatchBattle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_WatchBattle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).WatchBattle(ctx, req.(*WatchBattleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _MatchService_ListWatchableBattles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListWatchableBattlesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).ListWatchableBattles(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_ListWatchableBattles_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).ListWatchableBattles(ctx, req.(*ListWatchableBattlesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // MatchService_ServiceDesc is the grpc.ServiceDesc for MatchService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -363,6 +437,14 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifyChallengeResult",
 			Handler:    _MatchService_NotifyChallengeResult_Handler,
+		},
+		{
+			MethodName: "WatchBattle",
+			Handler:    _MatchService_WatchBattle_Handler,
+		},
+		{
+			MethodName: "ListWatchableBattles",
+			Handler:    _MatchService_ListWatchableBattles_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

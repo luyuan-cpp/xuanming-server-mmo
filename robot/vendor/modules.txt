@@ -185,6 +185,7 @@ proto/common/options
 proto/common/rollback
 proto/db
 proto/login
+proto/match
 proto/scene
 # shared v0.0.0 => ../go/shared
 ## explicit; go 1.24.5

@@ -16,7 +16,11 @@ const std::unordered_map<eNodeType, std::string> nodeTypeNameMap = {
 	{eNodeType::GuildNodeService, eNodeType_Name(GuildNodeService)},
 	// 回合制战斗节点:etcd 前缀 BattleNodeService.rpc;短名/Kafka topic 前缀
 	// (battle-{id})由 NodeTypeToShortName 自动派生,无需另配。
-	{eNodeType::BattleNodeService, eNodeType_Name(BattleNodeService)}};
+	{eNodeType::BattleNodeService, eNodeType_Name(BattleNodeService)},
+	// 匹配服务(Go gRPC,无状态):gate 按 NODE_MATCH 路由客户端 JoinQueue/
+	// WatchBattle 等消息,缺席则发现侧报 "Unknown service type for prefix:
+	// MatchNodeService.rpc/..."(2026-09-01 冒烟补)。
+	{eNodeType::MatchNodeService, eNodeType_Name(MatchNodeService)}};
 
 eNodeType NodeUtils::GetServiceTypeFromPrefix(const std::string &prefix)
 {

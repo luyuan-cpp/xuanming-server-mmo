@@ -71,6 +71,7 @@ message BattleActorState {
   repeated uint32 skill_table_ids = 13;
   uint32 monster_table_id = 14;     // 仅怪物有效(MonsterTable id)
   map<uint32, uint32> skill_cooldown_rounds = 15; // skill_table_id -> 剩余冷却回合
+  bool is_auto = 16;                // 自动战斗(挂机):回合内视为已就绪,结算时按默认行动出手
 }
 
 // ---- 玩家行动指令 ----

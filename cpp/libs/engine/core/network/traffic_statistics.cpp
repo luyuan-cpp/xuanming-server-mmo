@@ -43,7 +43,11 @@ void TrafficStatsCollector::RecordSend(uint32_t messageId, uint32_t byteSize)
     if (!enabled_.load(std::memory_order_relaxed))
         return;
     if (messageId >= kMaxRpcMethodCount)
+    {
+        LOG_WARN << "[TrafficStats] Send messageId out of range, skip: " << messageId
+                 << " (max: " << kMaxRpcMethodCount << ")";
         return;
+    }
 
     auto &c = counters_[messageId];
     c.sendCount.fetch_add(1, std::memory_order_relaxed);
@@ -56,7 +60,11 @@ void TrafficStatsCollector::RecordRecv(uint32_t messageId, uint32_t byteSize)
     if (!enabled_.load(std::memory_order_relaxed))
         return;
     if (messageId >= kMaxRpcMethodCount)
+    {
+        LOG_WARN << "[TrafficStats] Recv messageId out of range, skip: " << messageId
+                 << " (max: " << kMaxRpcMethodCount << ")";
         return;
+    }
 
     auto &c = counters_[messageId];
     c.recvCount.fetch_add(1, std::memory_order_relaxed);

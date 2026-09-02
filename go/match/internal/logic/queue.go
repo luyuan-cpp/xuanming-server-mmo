@@ -20,8 +20,8 @@ import (
 //	matched -> 已被 matcher 弹出,gather 管线执行中(QUEUE_STATE_MATCHED)
 //	ready   -> CreateBattle 成功,等 battle 推 BattleStartS2C(QUEUE_STATE_READY,短 TTL 自清)
 //
-// ticket 不存在 = QUEUE_STATE_NOT_QUEUED。ENTERING 是场景匹配(5v5/3v3)的
-// 进场态,回合制战斗没有进场步骤,一期不产生该状态。
+// ticket 不存在 = QUEUE_STATE_NOT_QUEUED。ENTERING 是场景类匹配预留的进场态,
+// 回合制战斗(含二期 5v5)没有进场步骤,不产生该状态。
 const (
 	ticketStateQueued  = "queued"
 	ticketStateMatched = "matched"

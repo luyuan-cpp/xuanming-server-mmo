@@ -191,6 +191,13 @@ void GameChannel::LogMessageStatistics(const GameRpcMessage &message, uint32_t c
         return;
 
     uint32_t messageId = message.message_id();
+    if (messageId >= kMaxRpcMethodCount)
+    {
+        LOG_WARN << "Message statistics skipped, messageId out of range: " << messageId
+                 << " (max: " << kMaxRpcMethodCount << ")";
+        return;
+    }
+
     uint64_t messageSize = cachedSize;
 
     auto now = std::chrono::steady_clock::now();

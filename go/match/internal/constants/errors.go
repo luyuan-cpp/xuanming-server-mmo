@@ -37,4 +37,22 @@ const (
 	ErrChallengeExpired uint32 = 25
 	// ErrChallengeNotTarget:应答者不是该挑战的被挑战者。
 	ErrChallengeNotTarget uint32 = 26
+
+	// ---- 观战(二期,设计文档 §10) ----
+	// 观众绑定与参战绑定共用 SessionInfo 的 BattleNodeService 槽位,
+	// 排队/战斗/观战三态互斥(设计决策 D11)。
+
+	// ErrSpectateWhileQueued:持有 match ticket(排队/开局中)不能观战。
+	ErrSpectateWhileQueued uint32 = 40
+	// ErrSpectateWhileInBattle:battle:lock 存在,战斗中不能观战。
+	ErrSpectateWhileInBattle uint32 = 41
+	// ErrAlreadyWatching:并发 WatchBattle 冲突(观战标记原子抢占失败);
+	// 换场由服务端自动清退旧场,客户端无需先 StopWatchBattle。
+	ErrAlreadyWatching uint32 = 42
+	// ErrNoWatchableBattle:随机观战当前没有可观战的活跃战斗。
+	ErrNoWatchableBattle uint32 = 43
+	// ErrBattleNotWatchable:指定战斗不存在/已结束,或 battle 节点拒绝接入观众。
+	ErrBattleNotWatchable uint32 = 44
+	// ErrSpectateOffline:观战者会话不在线,观战首帧无法路由。
+	ErrSpectateOffline uint32 = 45
 )

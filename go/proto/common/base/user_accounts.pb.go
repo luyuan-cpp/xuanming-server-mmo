@@ -144,7 +144,7 @@ const file_proto_common_base_user_accounts_proto_rawDesc = "" +
 	"\x06gender\x18\x03 \x01(\rR\x06gender\x12\x17\n" +
 	"\azone_id\x18\x04 \x01(\rR\x06zoneId\"I\n" +
 	"\x17AccountSimplePlayerList\x12.\n" +
-	"\aplayers\x18\x01 \x03(\v2\x14.AccountSimplePlayerR\aplayersB\rZ\vcommon/baseb\x06proto3"
+	"\aplayers\x18\x01 \x03(\v2\x14.AccountSimplePlayerR\aplayersB\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_user_accounts_proto_rawDescOnce sync.Once

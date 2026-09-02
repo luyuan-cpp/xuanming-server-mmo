@@ -35,7 +35,29 @@ message DestroyBattleRequest {
   string reason = 2;   // 补偿路径记录用(gather 回滚 / 管理指令)
 }
 
+// ---- 二期:观战(match → battle,设计文档 §10) ----
+// 观众路由只填 session/gate/zone 字段(scene 字段留 0:观众无结算,battle 不会
+// 向观众的 scene 发任何事件);match 从 player:session:{id} 组装。
+message AddObserverRequest {
+  uint64 battle_id = 1;
+  uint64 observer_player_id = 2;
+  BattleRouting routing = 3;
+  string observer_name = 4;   // 日志/后续观众列表展示用
+}
+
+message AddObserverResponse {
+  TipInfoMessage error_message = 1;  // 房间不存在/观众已满/观众是参战者
+}
+
+message RemoveObserverRequest {
+  uint64 battle_id = 1;
+  uint64 observer_player_id = 2;
+  string reason = 3;   // 日志用(玩家去排队被互斥清退等)
+}
+
 service BattleNode {
   rpc CreateBattle (CreateBattleRequest) returns (CreateBattleResponse);
   rpc DestroyBattle (DestroyBattleRequest) returns (Empty);
+  rpc AddObserver (AddObserverRequest) returns (AddObserverResponse);
+  rpc RemoveObserver (RemoveObserverRequest) returns (Empty);
 }

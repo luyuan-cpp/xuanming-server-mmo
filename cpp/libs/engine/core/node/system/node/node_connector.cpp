@@ -153,7 +153,7 @@ void NodeConnector::ConnectAllNodes()
 	const auto &whitelist = gNode->GetTargetNodeTypeWhitelist();
 	for (uint32_t nodeType = 0; nodeType < eNodeType_ARRAYSIZE; ++nodeType)
 	{
-		if (!whitelist.empty() && !whitelist.contains(nodeType))
+		if (!whitelist.contains(nodeType))
 			continue;
 
 		for (const auto &serviceNode : serviceNodesByType[nodeType].node_list())

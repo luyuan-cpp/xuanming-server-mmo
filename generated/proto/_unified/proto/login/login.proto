@@ -51,6 +51,8 @@ message TestResponse
 
 message CreatePlayerRequest
 {
+  uint32 class_id = 1;  // 职业(Class 配表 id);0 = 兼容旧客户端,取配表第一个职业
+  uint32 gender = 2;    // 1=男 2=女;0 = 兼容旧客户端,默认 1
 }
 
 message CreatePlayerResponse

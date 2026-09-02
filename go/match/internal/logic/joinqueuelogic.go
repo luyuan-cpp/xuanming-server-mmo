@@ -35,12 +35,12 @@ func NewJoinQueueLogic(ctx context.Context, svcCtx *svc.ServiceContext) *JoinQue
 	}
 }
 
-// JoinQueue 玩家入队(设计文档 §5.4):
+// JoinQueue 玩家入队(设计文档 §5.4 / §11):
 //   - 咨询性查 battle:lock:{player_id},存在即拒(权威判定仍在 scene 的 InBattleComp);
 //   - MATCH_MODE_PVE_SOLO 即时开战:不入队,直接走 gather 开局管线;
-//   - MATCH_MODE_PVE_TEAM 按 battle_config_id 查凑满人数,FIFO 凑单;
-//   - MATCH_MODE_1V1 两人凑对;
-//   - 5v5/3v3 一期未开放,切磋走 ChallengePlayer,均拒绝直接入队。
+//   - MATCH_MODE_PVE_TEAM 按 battle_config_id 查凑满人数,FIFO 凑单(上限 5 收口,D14);
+//   - MATCH_MODE_1V1 两人凑对;MATCH_MODE_5V5 凑 10 人(二期开放,D15);
+//   - 3v3 未开放,切磋走 ChallengePlayer,均拒绝直接入队。
 func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQueueResponse, error) {
 	playerId := authoritativePlayerID(l.ctx, in.PlayerId)
 	modeName := in.Mode.String()
@@ -72,10 +72,17 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 				ErrorMessage: tipErr(constants.ErrTeamSizeNotConfigured, "该副本未开放组队"),
 			}, nil
 		}
+		// 队伍上限 5 收口(D14):DungeonTable 历史行可能配 10,与引擎
+		// Initialize 校验同口径压到 kMaxBattleTeamSize。
+		if required > kMaxBattleTeamSize {
+			required = kMaxBattleTeamSize
+		}
 	case matchpb.MatchMode_MATCH_MODE_1V1:
 		required = 2
+	case matchpb.MatchMode_MATCH_MODE_5V5:
+		required = required5v5Players
 	default:
-		// 5v5/3v3 一期未开放;切磋(PVP_CHALLENGE)点名成局,不走排队入口。
+		// 3v3 未开放;切磋(PVP_CHALLENGE)点名成局,不走排队入口。
 		metrics.ObserveJoinQueue(modeName, "mode_not_open")
 		return &matchpb.JoinQueueResponse{
 			ErrorCode:    constants.ErrModeNotOpen,

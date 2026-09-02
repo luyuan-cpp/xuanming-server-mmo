@@ -126,6 +126,101 @@ void SendBattleClientPlayerNotifyBattleReconnect(entt::registry& registry, entt:
 void SendBattleClientPlayerNotifyBattleReconnect(entt::registry& registry, entt::entity nodeEntity, const ::BattleReconnectS2C& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 void SendBattleClientPlayerNotifyBattleReconnect(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
+#pragma region BattleClientPlayerStopWatchBattle
+
+struct AsyncBattleClientPlayerStopWatchBattleGrpcClient {
+    uint32_t messageId{ BattleClientPlayerStopWatchBattleMessageId };
+    ClientContext context;
+    Status status;
+    ::StopWatchBattleResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::StopWatchBattleResponse>> response_reader;
+};
+
+class ::StopWatchBattleRequest;
+using AsyncBattleClientPlayerStopWatchBattleHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::StopWatchBattleResponse&)>;
+extern AsyncBattleClientPlayerStopWatchBattleHandlerFunctionType AsyncBattleClientPlayerStopWatchBattleHandler;
+
+void SendBattleClientPlayerStopWatchBattle(entt::registry& registry, entt::entity nodeEntity, const ::StopWatchBattleRequest& request);
+void SendBattleClientPlayerStopWatchBattle(entt::registry& registry, entt::entity nodeEntity, const ::StopWatchBattleRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendBattleClientPlayerStopWatchBattle(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region BattleClientPlayerSetAutoBattle
+
+struct AsyncBattleClientPlayerSetAutoBattleGrpcClient {
+    uint32_t messageId{ BattleClientPlayerSetAutoBattleMessageId };
+    ClientContext context;
+    Status status;
+    ::SetAutoBattleResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::SetAutoBattleResponse>> response_reader;
+};
+
+class ::SetAutoBattleRequest;
+using AsyncBattleClientPlayerSetAutoBattleHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::SetAutoBattleResponse&)>;
+extern AsyncBattleClientPlayerSetAutoBattleHandlerFunctionType AsyncBattleClientPlayerSetAutoBattleHandler;
+
+void SendBattleClientPlayerSetAutoBattle(entt::registry& registry, entt::entity nodeEntity, const ::SetAutoBattleRequest& request);
+void SendBattleClientPlayerSetAutoBattle(entt::registry& registry, entt::entity nodeEntity, const ::SetAutoBattleRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendBattleClientPlayerSetAutoBattle(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region BattleClientPlayerNotifySpectateState
+
+struct AsyncBattleClientPlayerNotifySpectateStateGrpcClient {
+    uint32_t messageId{ BattleClientPlayerNotifySpectateStateMessageId };
+    ClientContext context;
+    Status status;
+    ::Empty reply;
+    std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
+};
+
+class ::SpectateStateS2C;
+using AsyncBattleClientPlayerNotifySpectateStateHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::Empty&)>;
+extern AsyncBattleClientPlayerNotifySpectateStateHandlerFunctionType AsyncBattleClientPlayerNotifySpectateStateHandler;
+
+void SendBattleClientPlayerNotifySpectateState(entt::registry& registry, entt::entity nodeEntity, const ::SpectateStateS2C& request);
+void SendBattleClientPlayerNotifySpectateState(entt::registry& registry, entt::entity nodeEntity, const ::SpectateStateS2C& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendBattleClientPlayerNotifySpectateState(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region BattleClientPlayerNotifySpectateTurnResult
+
+struct AsyncBattleClientPlayerNotifySpectateTurnResultGrpcClient {
+    uint32_t messageId{ BattleClientPlayerNotifySpectateTurnResultMessageId };
+    ClientContext context;
+    Status status;
+    ::Empty reply;
+    std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
+};
+
+class ::TurnResultS2C;
+using AsyncBattleClientPlayerNotifySpectateTurnResultHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::Empty&)>;
+extern AsyncBattleClientPlayerNotifySpectateTurnResultHandlerFunctionType AsyncBattleClientPlayerNotifySpectateTurnResultHandler;
+
+void SendBattleClientPlayerNotifySpectateTurnResult(entt::registry& registry, entt::entity nodeEntity, const ::TurnResultS2C& request);
+void SendBattleClientPlayerNotifySpectateTurnResult(entt::registry& registry, entt::entity nodeEntity, const ::TurnResultS2C& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendBattleClientPlayerNotifySpectateTurnResult(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region BattleClientPlayerNotifySpectateEnd
+
+struct AsyncBattleClientPlayerNotifySpectateEndGrpcClient {
+    uint32_t messageId{ BattleClientPlayerNotifySpectateEndMessageId };
+    ClientContext context;
+    Status status;
+    ::Empty reply;
+    std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
+};
+
+class ::SpectateEndS2C;
+using AsyncBattleClientPlayerNotifySpectateEndHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::Empty&)>;
+extern AsyncBattleClientPlayerNotifySpectateEndHandlerFunctionType AsyncBattleClientPlayerNotifySpectateEndHandler;
+
+void SendBattleClientPlayerNotifySpectateEnd(entt::registry& registry, entt::entity nodeEntity, const ::SpectateEndS2C& request);
+void SendBattleClientPlayerNotifySpectateEnd(entt::registry& registry, entt::entity nodeEntity, const ::SpectateEndS2C& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendBattleClientPlayerNotifySpectateEnd(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
 void SetPlayerBattleHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void SetPlayerBattleIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void HandlePlayerBattleCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);

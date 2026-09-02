@@ -165,26 +165,6 @@ grpc::Status SceneNodeGrpcImpl::CreateScene(grpc::ServerContext* /*context*/,
     const ::CreateSceneRequest* request,
     ::CreateSceneResponse* response)
 {
-    // Agones high-density mode: the process MUST be Allocated before the first
-    // scene is created.
-    //
-    // Deliberately placed BEFORE runInLoop, i.e. on the gRPC thread: POST
-    // /allocate is a network call and would stall the whole logic frame if it
-    // ran inside the event loop. What blocks here is one gRPC pool thread, and
-    // the wait is bounded (LifecycleOptions::allocateWaitTimeout).
-    //
-    // Failure is always fail-closed: create no entity, return a non-OK status
-    // so SceneManager rolls back and retries, instead of leaving behind a room
-    // that Agones does not account for.
-    auto createPermit = agones::SceneLifecycle::Instance().AcquireCreatePermitBlocking();
-    if (!createPermit)
-    {
-        LOG_ERROR << "[gRPC] CreateScene rejected: Agones allocate not confirmed, scene_id="
-                  << request->scene_id() << " state="
-                  << agones::ToString(agones::SceneLifecycle::Instance().State());
-        return grpc::Status(grpc::StatusCode::UNAVAILABLE, "agones allocate not confirmed");
-    }
-
     std::promise<void> promise;
     auto future = promise.get_future();
 

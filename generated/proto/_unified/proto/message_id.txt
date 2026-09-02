@@ -156,3 +156,12 @@
 155=SceneCancelBattlePrepare
 156=MatchServiceNotifyChallengeInvite
 157=MatchServiceJoinQueue
+158=BattleClientPlayerNotifySpectateTurnResult
+159=BattleNodeRemoveObserver
+160=BattleNodeAddObserver
+161=BattleClientPlayerNotifySpectateState
+162=BattleClientPlayerSetAutoBattle
+163=MatchServiceWatchBattle
+164=MatchServiceListWatchableBattles
+165=BattleClientPlayerStopWatchBattle
+166=BattleClientPlayerNotifySpectateEnd

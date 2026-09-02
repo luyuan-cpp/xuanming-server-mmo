@@ -179,13 +179,17 @@ type BaseDeployConfig struct {
 	// Nav bin path = data_root_directory + nav_bin_file from table.
 	// Local dev: "../"   K8s: "/app/"
 	DataRootDirectory string `protobuf:"bytes,14,opt,name=data_root_directory,json=dataRootDirectory,proto3" json:"data_root_directory,omitempty"`
-	// Gate 的并发客户端连接上限。0 = 不限(仅供本地调试用,生产必须配)。
+	// Gate 的并发客户端连接上限。生产取值 1..131071;
+	// 0 = 关闭运维阈值(仅供显式 dev/test 本地调试,prod 会拒绝启动),
+	// 但 session-id 的 131071 硬上限仍然生效。
 	//
 	// 为什么必须有:gate 是唯一对公网开放的端口,而 muduo 的 TcpServer 无条件
 	// accept —— 在此之前全仓没有任何连接数上限,任何人都能一直建连把 gate 的
 	// fd、SessionMap 和每连接缓冲吃光,直到 accept 撞 EMFILE 或进程 OOM。
 	// 这条限流不需要任何凭证即可触发,是纯粹的资源耗尽面。
 	// 超过上限的新连接在分配 session 之前就被拒掉(见 HandleConnectionEstablished)。
+	// 131071 上界为所有 node_id 保留 UINT32_MAX 哨兵,并避免 session-id 空间
+	// 全部占满后碰撞重试永久自旋。
 	GateMaxConnections uint32 `protobuf:"varint,15,opt,name=gate_max_connections,json=gateMaxConnections,proto3" json:"gate_max_connections,omitempty"`
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache

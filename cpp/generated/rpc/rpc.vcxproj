@@ -50,7 +50,6 @@
     <ClInclude Include="service_metadata\scene_service_metadata.h" />
     <ClInclude Include="service_metadata\gate_service_service_metadata.h" />
     <ClInclude Include="service_metadata\login_service_metadata.h" />
-    <ClInclude Include="service_metadata\player_locator_service_metadata.h" />
     <ClInclude Include="service_metadata\player_scene_service_metadata.h" />
     <ClInclude Include="service_metadata\player_skill_service_metadata.h" />
     <ClInclude Include="service_metadata\player_state_attribute_sync_service_metadata.h" />

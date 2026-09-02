@@ -30,6 +30,12 @@ service MatchService {
   rpc RespondChallenge(RespondChallengeRequest) returns (RespondChallengeResponse) {}
   rpc NotifyChallengeInvite(ChallengeInviteS2C) returns (Empty) {}
   rpc NotifyChallengeResult(ChallengeResultS2C) returns (Empty) {}
+
+  // ---- 二期:观战匹配(设计文档 §10) ----
+  // battle_id=0 表示随机观战(从活跃战斗索引里随机挑一场);成功后由 battle 节点
+  // 经 Kafka 推 NotifySpectateState 首帧,客户端收到首帧才算进入观战。
+  rpc WatchBattle(WatchBattleRequest) returns (WatchBattleResponse) {}
+  rpc ListWatchableBattles(ListWatchableBattlesRequest) returns (ListWatchableBattlesResponse) {}
 }
 
 // ----- Match mode config -----
@@ -37,8 +43,8 @@ service MatchService {
 // Match mode determines team size, player count, and map config.
 enum MatchMode {
   MATCH_MODE_UNSPECIFIED = 0;
-  MATCH_MODE_5V5         = 1; // 10 players total
-  MATCH_MODE_3V3         = 2; // 6 players total
+  MATCH_MODE_5V5         = 1; // 回合制 PVP 5v5(二期启用):FIFO 凑 10 人,前 5 后 5 各一队
+  MATCH_MODE_3V3         = 2; // 6 players total(未开放)
   MATCH_MODE_1V1         = 3; // 2 players total(回合制 PVP,一期启用)
   MATCH_MODE_PVE_SOLO    = 4; // 回合制 PVE 单人,即时开战(伪匹配)
   MATCH_MODE_PVE_TEAM    = 5; // 回合制 PVE 组队,FIFO 凑满 DungeonTable.max_team_size
@@ -130,6 +136,45 @@ message ChallengeResultS2C {
   uint64 challenge_id = 1;
   bool accepted = 2;             // false = 拒绝或超时
   uint64 responder_id = 3;
+}
+
+// ----- 二期:观战匹配(设计文档 §10) -----
+// 活跃战斗索引由 match 维护:gather 开局成功后写 spectate:battle:{battle_id}
+// (SpectateBattleRecord pb,TTL = 战斗最长期限 + 余量)+ ZADD spectate:battles:active;
+// 清理靠 TTL + 观战失败(battle 节点报房间不存在)时懒剔除,battle 节点不碰 Redis。
+
+message WatchBattleRequest {
+  uint64 player_id = 1;      // 权威身份以 session metadata 为准
+  uint64 battle_id = 2;      // 0 = 随机观战
+}
+
+message WatchBattleResponse {
+  uint64 battle_id = 1;      // 实际观战的战斗(随机模式回填)
+  TipInfoMessage error_message = 2;  // 无可观战战斗/本人在战斗或队列中/战斗已结束
+}
+
+message ListWatchableBattlesRequest {
+  uint64 player_id = 1;
+  uint32 limit = 2;          // 0 = 服务端默认条数
+}
+
+message ListWatchableBattlesResponse {
+  repeated BattleWatchSummary battles = 1;
+}
+
+// 客户端观战列表条目(摘要在开局时刻生成,不含实时回合数)
+message BattleWatchSummary {
+  uint64 battle_id = 1;
+  MatchMode mode = 2;
+  uint32 battle_config_id = 3;
+  repeated string player_names = 4;
+  uint64 created_at_ms = 5;
+}
+
+// 内部登记记录(Redis value,含路由所需的 battle 节点 id,不下发客户端)
+message SpectateBattleRecord {
+  BattleWatchSummary summary = 1;
+  uint32 battle_node_id = 2;
 }
 
 // ----- Server-internal: match result (used between MatchService and SceneManager) -----

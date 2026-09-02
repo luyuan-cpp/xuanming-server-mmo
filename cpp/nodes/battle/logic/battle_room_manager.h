@@ -46,6 +46,14 @@ public:
     // 幂等:房间不存在视为已销毁。销毁只解绑,不发结算(补偿/回滚路径)。
     void HandleDestroyBattle(const ::DestroyBattleRequest &request);
 
+    // 观战接入(设计文档 §10.5)。错误 tip 约定:房间不存在=kEntityIsNull
+    // (match 据此懒剔除 Redis 索引并换场重试)、观众满=kRateLimitExceeded、
+    // 观众是参战者=kInvalidParameter。幂等:同 observer 重复 Add 只重推首帧。
+    void HandleAddObserver(const ::AddObserverRequest &request, ::AddObserverResponse &response);
+
+    // 幂等移除(match 互斥清退路径):向该观众推 SpectateEnd(REMOVED)+ 解绑。
+    void HandleRemoveObserver(const ::RemoveObserverRequest &request);
+
     // ---- gate → battle 客户端消息(权威身份来自会话 metadata,不信请求体) ----
 
     void HandleSubmitBattleAction(const ::SessionDetails &sessionDetails,
@@ -55,6 +63,18 @@ public:
     void HandleGetBattleState(const ::SessionDetails &sessionDetails,
                               const ::GetBattleStateRequest &request,
                               ::BattleStateS2C &response);
+
+    // 观众主动退出:只解绑不推 SpectateEnd(是客户端自己发起的,再推是回声);
+    // 观众不存在也回成功(幂等,重复点退出/晚到的退出包都无害)。
+    void HandleStopWatchBattle(const ::SessionDetails &sessionDetails,
+                               const ::StopWatchBattleRequest &request,
+                               ::StopWatchBattleResponse &response);
+
+    // 自动战斗开关(设计文档 §11.2):落引擎 is_auto;开启后若全员就绪,
+    // 走与 SubmitBattleAction 相同的提前结算路径。
+    void HandleSetAutoBattle(const ::SessionDetails &sessionDetails,
+                             const ::SetAutoBattleRequest &request,
+                             ::SetAutoBattleResponse &response);
 
     // 停机收尾:全部房间作废(仅向 gate 发解绑,不结算),供 SetBeforeShutdown 调用。
     void AbortAllRooms(const std::string &reason);
@@ -69,6 +89,11 @@ private:
         // player_id → 路由信息副本(快照携带,battle 不查 etcd 定位对端)。
         // 有序容器:广播与结算的遍历顺序稳定,日志/回放可复现。
         std::map<uint64_t, ::BattleRouting> routingByPlayer;
+        // 观众路由(设计文档 §10.5)。routing 的 scene 字段恒为 0:观众零写权、
+        // 无结算,绝不向观众的 scene 发任何事件(不变量 6),出站只走 gate。
+        std::map<uint64_t, ::BattleRouting> routingByObserver;
+        // 观众名字(AddObserverRequest.observer_name,仅日志/后续观众列表用)
+        std::map<uint64_t, std::string> observerNames;
         TimerTaskComp roundTimer;      // 回合 action_deadline
         TimerTaskComp battleTimer;     // 整场 deadline_ms(强制收尾,防房间泄漏)
         uint64_t actionDeadlineMs = 0; // 当前回合行动截止(Unix 毫秒,GetBattleState 回填)
@@ -86,11 +111,22 @@ private:
     // 整场 deadline 到期:引擎仍未分出胜负按平局强制收尾(battle_node.proto 契约)。
     void OnBattleDeadline(uint64_t battleId);
 
-    // 战斗收尾:每参与者 BattleEndS2C → BattleSettlementEvent → UnbindBattleEvent。
+    // 战斗收尾:每参与者 BattleEndS2C → BattleSettlementEvent → UnbindBattleEvent;
+    // 观众按 spectateReason 推 SpectateEndS2C + 解绑(§10.5)。
     // 只组装与发送,不动 rooms_(房间由调用方随后移除)。
-    void FinishBattle(BattleRoom &room, ::eBattleOutcome outcome);
+    void FinishBattle(BattleRoom &room, ::eBattleOutcome outcome,
+                      ::eSpectateEndReason spectateReason);
 
     void BroadcastTurnResult(const BattleRoom &room, const ::TurnResultS2C &result);
+
+    // 观战首帧:全量快照 + 房间 timer 回填的行动截止 + 当前观众数。
+    void PushSpectateState(const BattleRoom &room, uint64_t observerId,
+                           const ::BattleRouting &routing) const;
+
+    // 收尾/作废统一出口:向全部观众推 SpectateEndS2C + UnbindBattleEvent,
+    // 然后清空观众表(此后任何广播都不会再打到观众)。
+    void NotifySpectateEndAndUnbind(BattleRoom &room, ::eSpectateEndReason reason,
+                                    ::eBattleOutcome outcome);
 
     std::unordered_map<uint64_t, std::unique_ptr<BattleRoom>> rooms_;
 };

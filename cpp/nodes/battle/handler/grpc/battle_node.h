@@ -24,10 +24,22 @@ public:
         const ::DestroyBattleRequest* request,
         ::Empty* response) override;
 
+    // ---- 二期:观战接入(match → battle,设计文档 §10) ----
+
+    grpc::Status AddObserver(grpc::ServerContext* context,
+        const ::AddObserverRequest* request,
+        ::AddObserverResponse* response) override;
+
+    grpc::Status RemoveObserver(grpc::ServerContext* context,
+        const ::RemoveObserverRequest* request,
+        ::Empty* response) override;
+
 private:
     // loop 线程执行;必须快速完成(gRPC 线程经 promise/future 等待)。
     static void HandleCreateBattle(const ::CreateBattleRequest* request, ::CreateBattleResponse* response);
     static void HandleDestroyBattle(const ::DestroyBattleRequest* request);
+    static void HandleAddObserver(const ::AddObserverRequest* request, ::AddObserverResponse* response);
+    static void HandleRemoveObserver(const ::RemoveObserverRequest* request);
 
     muduo::net::EventLoop& loop_;
 };

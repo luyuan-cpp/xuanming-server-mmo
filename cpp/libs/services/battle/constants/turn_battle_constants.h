@@ -22,6 +22,18 @@ inline constexpr uint32_t kDefaultMaxRounds = 30;
 inline constexpr uint32_t kMatchModePveSolo = 4;
 inline constexpr uint32_t kMatchModePveTeam = 5;
 
+// ---- 二期:自动战斗 / 5v5 / 队伍上限(设计文档 §11,D13/D14) ----
+
+// 每队玩家数上限(产品口径:队伍上限五个人)。引擎 Initialize 按此拒绝超编建房,
+// match 侧凑单人数同步收口 min(配置值, 5),双侧强制;Dungeon 表存在 max_team_size=10
+// 的历史行,以本常量为准,不改表重导
+inline constexpr uint32_t kMaxBattleTeamSize = 5;
+
+// 全自动房间(全体存活玩家均挂机)的回合推进间隔:装填回合时 AllPlayersReady()
+// 立即为真的房间,节点回合 timer 用此值替代整个行动窗口——既不空转刷回合
+// (观众/客户端跟得上),也不傻等行动窗口(D13)
+inline constexpr uint64_t kAutoRoundIntervalMs = 2000;
+
 // ---- 技能类型位号(镜像 cpp/libs/services/scene/combat/skill/constants/skill.h 的 eSkillType) ----
 // SkillTable.skill_type 存的是位号(0..5),SkillPermission.skill_type 列按位号平铺
 

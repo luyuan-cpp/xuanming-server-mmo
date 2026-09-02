@@ -1456,7 +1456,7 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\x10QueryQueueStatus\x12 .loginpb.QueryQueueStatusRequest\x1a!.loginpb.QueryQueueStatusResponse2\x80\x01\n" +
 	"\n" +
 	"LoginAdmin\x12r\n" +
-	"\x19RemovePlayersFromAccounts\x12).loginpb.RemovePlayersFromAccountsRequest\x1a*.loginpb.RemovePlayersFromAccountsResponseB\x13Z\x11login/proto/loginb\x06proto3"
+	"\x19RemovePlayersFromAccounts\x12).loginpb.RemovePlayersFromAccountsRequest\x1a*.loginpb.RemovePlayersFromAccountsResponseB\rZ\vproto/loginb\x06proto3"
 
 var (
 	file_proto_login_login_proto_rawDescOnce sync.Once

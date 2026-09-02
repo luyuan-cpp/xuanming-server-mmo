@@ -97,12 +97,19 @@ class SceneSceneImpl final : public SceneScene {};
 
 void SendBattleNodeCreateBattle(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
 void SendBattleNodeDestroyBattle(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
+void SendBattleNodeAddObserver(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
+void SendBattleNodeRemoveObserver(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
 void SendBattleClientPlayerSubmitBattleAction(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
 void SendBattleClientPlayerGetBattleState(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
 void SendBattleClientPlayerNotifyBattleStart(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
 void SendBattleClientPlayerNotifyTurnResult(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
 void SendBattleClientPlayerNotifyBattleEnd(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
 void SendBattleClientPlayerNotifyBattleReconnect(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
+void SendBattleClientPlayerStopWatchBattle(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
+void SendBattleClientPlayerSetAutoBattle(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
+void SendBattleClientPlayerNotifySpectateState(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
+void SendBattleClientPlayerNotifySpectateTurnResult(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
+void SendBattleClientPlayerNotifySpectateEnd(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );
 namespace chatpb{void SendClientPlayerChatSendChat(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace chatpb{void SendClientPlayerChatPullChatHistory(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace data_service{void SendDataServiceLoadPlayerData(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
@@ -168,6 +175,8 @@ namespace match{void SendMatchServiceChallengePlayer(entt::registry& , entt::ent
 namespace match{void SendMatchServiceRespondChallenge(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace match{void SendMatchServiceNotifyChallengeInvite(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace match{void SendMatchServiceNotifyChallengeResult(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace match{void SendMatchServiceWatchBattle(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace match{void SendMatchServiceListWatchableBattles(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace scene_manager{void SendSceneManagerCreateScene(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace scene_manager{void SendSceneManagerDestroyScene(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace scene_manager{void SendSceneManagerEnterScene(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
@@ -178,7 +187,12 @@ namespace scene_node{void SendSceneNodeGrpcReleasePlayer(entt::registry& , entt:
 namespace scene_node{void SendSceneNodeGrpcPrepareBattle(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace scene_node{void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 
-std::array<RpcMethodMeta, 158> gRpcMethodRegistry;
+// 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
+// "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
+// InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
+static_assert(kMaxRpcMethodCount == 167,
+    "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
+std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
 void InitMessageInfo()
 {
@@ -193,6 +207,16 @@ void InitMessageInfo()
         std::make_unique<::DestroyBattleRequest>(),
         std::make_unique<::Empty>(),
         nullptr, 1, common::base::eNodeType::BattleNodeService, ::SendBattleNodeDestroyBattle};
+    gRpcMethodRegistry[BattleNodeAddObserverMessageId] = RpcMethodMeta{
+        "BattleNode", "AddObserver",
+        std::make_unique<::AddObserverRequest>(),
+        std::make_unique<::AddObserverResponse>(),
+        nullptr, 1, common::base::eNodeType::BattleNodeService, ::SendBattleNodeAddObserver};
+    gRpcMethodRegistry[BattleNodeRemoveObserverMessageId] = RpcMethodMeta{
+        "BattleNode", "RemoveObserver",
+        std::make_unique<::RemoveObserverRequest>(),
+        std::make_unique<::Empty>(),
+        nullptr, 1, common::base::eNodeType::BattleNodeService, ::SendBattleNodeRemoveObserver};
 
     // --- BattleClientPlayer ---
     gRpcMethodRegistry[BattleClientPlayerSubmitBattleActionMessageId] = RpcMethodMeta{
@@ -225,6 +249,31 @@ void InitMessageInfo()
         std::make_unique<::BattleReconnectS2C>(),
         std::make_unique<::Empty>(),
         nullptr, 1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerNotifyBattleReconnect};
+    gRpcMethodRegistry[BattleClientPlayerStopWatchBattleMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "StopWatchBattle",
+        std::make_unique<::StopWatchBattleRequest>(),
+        std::make_unique<::StopWatchBattleResponse>(),
+        nullptr, 1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerStopWatchBattle};
+    gRpcMethodRegistry[BattleClientPlayerSetAutoBattleMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "SetAutoBattle",
+        std::make_unique<::SetAutoBattleRequest>(),
+        std::make_unique<::SetAutoBattleResponse>(),
+        nullptr, 1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerSetAutoBattle};
+    gRpcMethodRegistry[BattleClientPlayerNotifySpectateStateMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "NotifySpectateState",
+        std::make_unique<::SpectateStateS2C>(),
+        std::make_unique<::Empty>(),
+        nullptr, 1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerNotifySpectateState};
+    gRpcMethodRegistry[BattleClientPlayerNotifySpectateTurnResultMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "NotifySpectateTurnResult",
+        std::make_unique<::TurnResultS2C>(),
+        std::make_unique<::Empty>(),
+        nullptr, 1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerNotifySpectateTurnResult};
+    gRpcMethodRegistry[BattleClientPlayerNotifySpectateEndMessageId] = RpcMethodMeta{
+        "BattleClientPlayer", "NotifySpectateEnd",
+        std::make_unique<::SpectateEndS2C>(),
+        std::make_unique<::Empty>(),
+        nullptr, 1, common::base::eNodeType::BattleNodeService, ::SendBattleClientPlayerNotifySpectateEnd};
 
     // --- ClientPlayerChat ---
     gRpcMethodRegistry[ClientPlayerChatSendChatMessageId] = RpcMethodMeta{
@@ -624,6 +673,16 @@ void InitMessageInfo()
         std::make_unique<::match::ChallengeResultS2C>(),
         std::make_unique<::Empty>(),
         nullptr, 1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceNotifyChallengeResult};
+    gRpcMethodRegistry[MatchServiceWatchBattleMessageId] = RpcMethodMeta{
+        "MatchService", "WatchBattle",
+        std::make_unique<::match::WatchBattleRequest>(),
+        std::make_unique<::match::WatchBattleResponse>(),
+        nullptr, 1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceWatchBattle};
+    gRpcMethodRegistry[MatchServiceListWatchableBattlesMessageId] = RpcMethodMeta{
+        "MatchService", "ListWatchableBattles",
+        std::make_unique<::match::ListWatchableBattlesRequest>(),
+        std::make_unique<::match::ListWatchableBattlesResponse>(),
+        nullptr, 1, common::base::eNodeType::MatchNodeService, match::SendMatchServiceListWatchableBattles};
 
     // --- SceneClientPlayerCommon ---
     gRpcMethodRegistry[SceneClientPlayerCommonSendTipToClientMessageId] = RpcMethodMeta{
@@ -1031,6 +1090,11 @@ bool IsClientMessageId(uint32_t messageId)
 	case BattleClientPlayerNotifyTurnResultMessageId:
 	case BattleClientPlayerNotifyBattleEndMessageId:
 	case BattleClientPlayerNotifyBattleReconnectMessageId:
+	case BattleClientPlayerStopWatchBattleMessageId:
+	case BattleClientPlayerSetAutoBattleMessageId:
+	case BattleClientPlayerNotifySpectateStateMessageId:
+	case BattleClientPlayerNotifySpectateTurnResultMessageId:
+	case BattleClientPlayerNotifySpectateEndMessageId:
 	case ClientPlayerChatSendChatMessageId:
 	case ClientPlayerChatPullChatHistoryMessageId:
 	case ClientPlayerLoginLoginMessageId:
@@ -1046,6 +1110,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case MatchServiceRespondChallengeMessageId:
 	case MatchServiceNotifyChallengeInviteMessageId:
 	case MatchServiceNotifyChallengeResultMessageId:
+	case MatchServiceWatchBattleMessageId:
+	case MatchServiceListWatchableBattlesMessageId:
 	case SceneClientPlayerCommonSendTipToClientMessageId:
 	case SceneClientPlayerCommonKickPlayerMessageId:
 	case SceneClientPlayerCommonRedirectToGateMessageId:

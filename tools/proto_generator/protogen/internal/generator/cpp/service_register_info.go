@@ -197,11 +197,9 @@ func InitMessageId() {
 			if len(unUseMessageId) > 0 && mv.Id == math.MaxUint64 {
 				for uk := range unUseMessageId {
 					mv.Id = uk
-					internal.RpcIdMethodMap[mv.Id] = mv
 					delete(unUseMessageId, uk)
 					break
 				}
-				continue
 			}
 			if mv.Id == math.MaxUint64 {
 				internal.MessageIdFileMaxId++
@@ -399,8 +397,7 @@ func writeServiceInfoCppFile(wg *sync.WaitGroup) {
 }
 
 // writeServiceInfoHeadFile writes service information to a header file.
-func writeServiceInfoHeadFile(wg *sync.WaitGroup) {
-	defer wg.Done()
+func writeServiceInfoHeadFile() {
 	type HeaderTemplateData struct {
 		MaxMessageLen uint64
 		MaxEventLen   uint64
@@ -538,10 +535,12 @@ func writePlayerServiceInstanceFiles(wg *sync.WaitGroup, serviceType string, isP
 
 func WriteServiceRegisterInfoFile(wg *sync.WaitGroup) {
 	writeEventIdHeaderFiles()
+	// 头文件(kMaxRpcMethodCount)必须先于 .cpp 同步落盘:若生成中途 Fatal 退出,
+	// 只允许出现"头已扩容而 .cpp 未更新"的安全方向(数组偏大无害);反向会让
+	// InitMessageInfo 越界写 std::array,节点启动即断言(2026-09-01 事故)。
+	writeServiceInfoHeadFile()
 	wg.Add(1)
 	go writeServiceInfoCppFile(wg)
-	wg.Add(1)
-	go writeServiceInfoHeadFile(wg)
 	wg.Add(1)
 	go writePlayerServiceInstanceFiles(wg, "instance", IsSceneNodeHostedPlayerProtocolHandler, _config.Global.PathLists.MethodHandlerDirectories.SceneNodePlayer, _config.Global.Naming.PlayerService)
 	wg.Add(1)

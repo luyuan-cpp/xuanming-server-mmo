@@ -161,37 +161,49 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 return;
             }
             GrpcTag* grpcTag(reinterpret_cast<GrpcTag*>(got_tag));
-            if (common::base::eNodeType::BattleNodeService == nodeType) {
+            const auto messageId = grpcTag->messageId;
+            if (common::base::eNodeType::BattleNodeService == nodeType &&
+                (messageId == 146u || messageId == 147u || messageId == 159u || messageId == 160u)) {
                 ::HandleBattleNodeCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
-            else if (common::base::eNodeType::BattleNodeService == nodeType) {
+            else if (common::base::eNodeType::BattleNodeService == nodeType &&
+                (messageId == 139u || messageId == 140u || messageId == 143u || messageId == 144u || messageId == 149u || messageId == 150u || messageId == 158u || messageId == 161u || messageId == 162u || messageId == 165u || messageId == 166u)) {
                 ::HandlePlayerBattleCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
-            else if (common::base::eNodeType::ChatNodeService == nodeType) {
+            else if (common::base::eNodeType::ChatNodeService == nodeType &&
+                (messageId == 28u || messageId == 61u)) {
                 chatpb::HandleChatCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
-            else if (common::base::eNodeType::DataServiceNodeService == nodeType) {
+            else if (common::base::eNodeType::DataServiceNodeService == nodeType &&
+                (messageId == 86u || messageId == 87u || messageId == 88u || messageId == 89u || messageId == 90u || messageId == 91u || messageId == 92u || messageId == 93u || messageId == 96u || messageId == 97u || messageId == 98u || messageId == 99u || messageId == 100u || messageId == 101u || messageId == 105u || messageId == 108u || messageId == 114u || messageId == 129u)) {
                 data_service::HandleDataServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
-            else if (common::base::eNodeType::EtcdNodeService == nodeType) {
+            else if (common::base::eNodeType::EtcdNodeService == nodeType &&
+                (messageId == 0u || messageId == 4u || messageId == 5u || messageId == 6u || messageId == 13u || messageId == 20u || messageId == 22u || messageId == 25u || messageId == 59u || messageId == 73u || messageId == 80u)) {
                 etcdserverpb::HandleEtcdCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
-            else if (common::base::eNodeType::FriendNodeService == nodeType) {
+            else if (common::base::eNodeType::FriendNodeService == nodeType &&
+                (messageId == 2u || messageId == 7u || messageId == 11u || messageId == 12u || messageId == 53u || messageId == 76u || messageId == 119u || messageId == 120u)) {
                 friendpb::HandleFriendCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
-            else if (common::base::eNodeType::GuildNodeService == nodeType) {
+            else if (common::base::eNodeType::GuildNodeService == nodeType &&
+                (messageId == 8u || messageId == 15u || messageId == 19u || messageId == 27u || messageId == 29u || messageId == 35u || messageId == 38u || messageId == 39u || messageId == 52u || messageId == 60u)) {
                 guildpb::HandleGuildCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
-            else if (common::base::eNodeType::LoginNodeService == nodeType) {
+            else if (common::base::eNodeType::LoginNodeService == nodeType &&
+                (messageId == 14u || messageId == 17u || messageId == 26u || messageId == 48u || messageId == 58u || messageId == 111u || messageId == 118u || messageId == 127u || messageId == 138u)) {
                 loginpb::HandleLoginCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
-            else if (common::base::eNodeType::MatchNodeService == nodeType) {
+            else if (common::base::eNodeType::MatchNodeService == nodeType &&
+                (messageId == 148u || messageId == 151u || messageId == 152u || messageId == 153u || messageId == 154u || messageId == 156u || messageId == 157u || messageId == 163u || messageId == 164u)) {
                 match::HandleMatchServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
-            else if (common::base::eNodeType::SceneManagerNodeService == nodeType) {
+            else if (common::base::eNodeType::SceneManagerNodeService == nodeType &&
+                (messageId == 16u || messageId == 44u || messageId == 46u || messageId == 85u)) {
                 scene_manager::HandleSceneManagerServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
-            else if (common::base::eNodeType::SceneManagerNodeService == nodeType) {
+            else if (common::base::eNodeType::SceneManagerNodeService == nodeType &&
+                (messageId == 122u || messageId == 123u || messageId == 128u || messageId == 142u || messageId == 145u)) {
                 scene_node::HandleSceneNodeServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
         }
@@ -204,34 +216,34 @@ void InitGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, ent
     if (common::base::eNodeType::BattleNodeService == nodeType) {
         ::InitBattleNodeGrpcNode(channel, registry, nodeEntity);
     }
-    else if (common::base::eNodeType::BattleNodeService == nodeType) {
+    if (common::base::eNodeType::BattleNodeService == nodeType) {
         ::InitPlayerBattleGrpcNode(channel, registry, nodeEntity);
     }
-    else if (common::base::eNodeType::ChatNodeService == nodeType) {
+    if (common::base::eNodeType::ChatNodeService == nodeType) {
         chatpb::InitChatGrpcNode(channel, registry, nodeEntity);
     }
-    else if (common::base::eNodeType::DataServiceNodeService == nodeType) {
+    if (common::base::eNodeType::DataServiceNodeService == nodeType) {
         data_service::InitDataServiceGrpcNode(channel, registry, nodeEntity);
     }
-    else if (common::base::eNodeType::EtcdNodeService == nodeType) {
+    if (common::base::eNodeType::EtcdNodeService == nodeType) {
         etcdserverpb::InitEtcdGrpcNode(channel, registry, nodeEntity);
     }
-    else if (common::base::eNodeType::FriendNodeService == nodeType) {
+    if (common::base::eNodeType::FriendNodeService == nodeType) {
         friendpb::InitFriendGrpcNode(channel, registry, nodeEntity);
     }
-    else if (common::base::eNodeType::GuildNodeService == nodeType) {
+    if (common::base::eNodeType::GuildNodeService == nodeType) {
         guildpb::InitGuildGrpcNode(channel, registry, nodeEntity);
     }
-    else if (common::base::eNodeType::LoginNodeService == nodeType) {
+    if (common::base::eNodeType::LoginNodeService == nodeType) {
         loginpb::InitLoginGrpcNode(channel, registry, nodeEntity);
     }
-    else if (common::base::eNodeType::MatchNodeService == nodeType) {
+    if (common::base::eNodeType::MatchNodeService == nodeType) {
         match::InitMatchServiceGrpcNode(channel, registry, nodeEntity);
     }
-    else if (common::base::eNodeType::SceneManagerNodeService == nodeType) {
+    if (common::base::eNodeType::SceneManagerNodeService == nodeType) {
         scene_manager::InitSceneManagerServiceGrpcNode(channel, registry, nodeEntity);
     }
-    else if (common::base::eNodeType::SceneManagerNodeService == nodeType) {
+    if (common::base::eNodeType::SceneManagerNodeService == nodeType) {
         scene_node::InitSceneNodeServiceGrpcNode(channel, registry, nodeEntity);
     }
 }

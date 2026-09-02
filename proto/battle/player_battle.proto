@@ -49,6 +49,28 @@ message BattleReconnectS2C {
   uint64 battle_id = 1;
 }
 
+// ---- 观战 S2C(二期,设计文档 §10) ----
+// 观众入场首帧:全量状态复用 BattleStateS2C(BuildStateSnapshot 同源,action_deadline_ms
+// 由 battle 节点按房间 timer 回填)。观众与参战者用不同的消息号,客户端两套状态机互不干扰。
+message SpectateStateS2C {
+  BattleStateS2C state = 1;
+  uint32 observer_count = 2;       // 当前观众数(含收信者)
+}
+
+// 观战结束原因(枚举首值必须 0,宪法 §4)
+enum eSpectateEndReason {
+  SPECTATE_END_NONE = 0;
+  SPECTATE_END_BATTLE_FINISHED = 1;  // 战斗正常分出胜负
+  SPECTATE_END_BATTLE_ABORTED = 2;   // 战斗作废(节点停机/deadline 强制收尾)
+  SPECTATE_END_REMOVED = 3;          // 观众被移除(自己去排队/开战导致互斥清退)
+}
+
+message SpectateEndS2C {
+  uint64 battle_id = 1;
+  eBattleOutcome outcome = 2;        // 结束时胜负(作废时为 ONGOING)
+  eSpectateEndReason reason = 3;
+}
+
 // ---- 上行 ----
 message SubmitBattleActionRequest {
   uint64 battle_id = 1;
@@ -63,6 +85,25 @@ message GetBattleStateRequest {
   uint64 battle_id = 1;
 }
 
+// 退出观战(观众主动;经 gate 按 BindBattleEvent 建立的绑定路由到 battle 节点)
+message StopWatchBattleRequest {
+  uint64 battle_id = 1;
+}
+
+message StopWatchBattleResponse {
+  TipInfoMessage error_message = 1;
+}
+
+// 自动战斗开关(参战者;开启后本人回合视为已就绪,由引擎按默认行动出手)
+message SetAutoBattleRequest {
+  uint64 battle_id = 1;
+  bool enabled = 2;
+}
+
+message SetAutoBattleResponse {
+  TipInfoMessage error_message = 1;
+}
+
 service BattleClientPlayer {
   option (OptionIsClientProtocolService) = true;
 
@@ -72,4 +113,11 @@ service BattleClientPlayer {
   rpc NotifyTurnResult (TurnResultS2C) returns (Empty);
   rpc NotifyBattleEnd (BattleEndS2C) returns (Empty);
   rpc NotifyBattleReconnect (BattleReconnectS2C) returns (Empty);
+
+  // ---- 二期:观战 + 自动战斗(设计文档 §10/§11) ----
+  rpc StopWatchBattle (StopWatchBattleRequest) returns (StopWatchBattleResponse);
+  rpc SetAutoBattle (SetAutoBattleRequest) returns (SetAutoBattleResponse);
+  rpc NotifySpectateState (SpectateStateS2C) returns (Empty);
+  rpc NotifySpectateTurnResult (TurnResultS2C) returns (Empty);
+  rpc NotifySpectateEnd (SpectateEndS2C) returns (Empty);
 }

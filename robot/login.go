@@ -127,7 +127,11 @@ func sendAndRecvTimeout(gc *pkg.GameClient, stats *metrics.Stats, msgId uint32, 
 				ch <- recvResult{msg: raw}
 				return
 			}
-			zap.L().Debug("skipping msg during login",
+			// SceneManager 路由与 EnterGameResponse 是并发链路，Scene 的
+			// NotifyEnterScene 可能先到。暂存非目标消息，待 Player 注册并
+			// 启动 RecvLoop 后补投递，不能在这里静默吞掉。
+			gc.DeferMessage(raw)
+			zap.L().Debug("deferring msg during login",
 				zap.Uint32("got", raw.MessageId),
 				zap.Uint32("want", msgId),
 			)

@@ -48,9 +48,6 @@
     <ClInclude Include="service_metadata\login_service_metadata.h">
       <Filter>头文件</Filter>
     </ClInclude>
-    <ClInclude Include="service_metadata\player_locator_service_metadata.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="service_metadata\player_scene_service_metadata.h">
       <Filter>头文件</Filter>
     </ClInclude>

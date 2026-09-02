@@ -24,6 +24,12 @@ type GameClient struct {
 	PlayerId uint64
 	Account  string
 
+	// 登录阶段使用同步的 SendRequest + RecvOne 等待指定响应。Scene 的
+	// NotifyEnterScene 可能先于 EnterGameResponse 到达，不能在等待循环里
+	// 丢弃；先暂存，等 Player 注册并切换到 RecvLoop 后按到达顺序补投递。
+	deferredMu       sync.Mutex
+	deferredMessages []*base.MessageContent
+
 	tokenMu            sync.RWMutex
 	AccessToken        string
 	RefreshToken       string
@@ -97,6 +103,39 @@ func (gc *GameClient) RecvOne() (*base.MessageContent, error) {
 	}
 }
 
+// DeferMessage 暂存同步登录阶段提前到达的服务器推送。RecvLoop 启动时会先
+// 按 FIFO 顺序补投递，避免 NotifyEnterScene 被等待其他响应的循环吞掉。
+func (gc *GameClient) DeferMessage(msg *base.MessageContent) {
+	if msg == nil {
+		return
+	}
+	gc.deferredMu.Lock()
+	gc.deferredMessages = append(gc.deferredMessages, msg)
+	gc.deferredMu.Unlock()
+}
+
+func (gc *GameClient) popDeferredMessage() *base.MessageContent {
+	gc.deferredMu.Lock()
+	defer gc.deferredMu.Unlock()
+	if len(gc.deferredMessages) == 0 {
+		return nil
+	}
+	msg := gc.deferredMessages[0]
+	gc.deferredMessages[0] = nil
+	gc.deferredMessages = gc.deferredMessages[1:]
+	return msg
+}
+
+func (gc *GameClient) replayDeferredMessages(onMessage func(*GameClient, *base.MessageContent)) {
+	for {
+		msg := gc.popDeferredMessage()
+		if msg == nil {
+			return
+		}
+		onMessage(gc, msg)
+	}
+}
+
 // VerifyGateToken sends a ClientTokenVerifyRequest as the first message and
 // waits for a ClientTokenVerifyResponse from Gate.
 func (gc *GameClient) VerifyGateToken(payload, signature []byte) error {
@@ -124,6 +163,7 @@ func (gc *GameClient) VerifyGateToken(payload, signature []byte) error {
 
 // RecvLoop reads messages from the gate and dispatches them via onMessage.
 func (gc *GameClient) RecvLoop(onMessage func(*GameClient, *base.MessageContent)) {
+	gc.replayDeferredMessages(onMessage)
 	for {
 		msg, err := gc.client.Recv()
 		if err != nil {

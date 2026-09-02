@@ -48,6 +48,20 @@ class BattleNode final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> PrepareAsyncDestroyBattle(::grpc::ClientContext* context, const ::DestroyBattleRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(PrepareAsyncDestroyBattleRaw(context, request, cq));
     }
+    virtual ::grpc::Status AddObserver(::grpc::ClientContext* context, const ::AddObserverRequest& request, ::AddObserverResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AddObserverResponse>> AsyncAddObserver(::grpc::ClientContext* context, const ::AddObserverRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AddObserverResponse>>(AsyncAddObserverRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AddObserverResponse>> PrepareAsyncAddObserver(::grpc::ClientContext* context, const ::AddObserverRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AddObserverResponse>>(PrepareAsyncAddObserverRaw(context, request, cq));
+    }
+    virtual ::grpc::Status RemoveObserver(::grpc::ClientContext* context, const ::RemoveObserverRequest& request, ::Empty* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> AsyncRemoveObserver(::grpc::ClientContext* context, const ::RemoveObserverRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(AsyncRemoveObserverRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> PrepareAsyncRemoveObserver(::grpc::ClientContext* context, const ::RemoveObserverRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(PrepareAsyncRemoveObserverRaw(context, request, cq));
+    }
     class async_interface {
      public:
       virtual ~async_interface() {}
@@ -55,6 +69,10 @@ class BattleNode final {
       virtual void CreateBattle(::grpc::ClientContext* context, const ::CreateBattleRequest* request, ::CreateBattleResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void DestroyBattle(::grpc::ClientContext* context, const ::DestroyBattleRequest* request, ::Empty* response, std::function<void(::grpc::Status)>) = 0;
       virtual void DestroyBattle(::grpc::ClientContext* context, const ::DestroyBattleRequest* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void AddObserver(::grpc::ClientContext* context, const ::AddObserverRequest* request, ::AddObserverResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void AddObserver(::grpc::ClientContext* context, const ::AddObserverRequest* request, ::AddObserverResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void RemoveObserver(::grpc::ClientContext* context, const ::RemoveObserverRequest* request, ::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void RemoveObserver(::grpc::ClientContext* context, const ::RemoveObserverRequest* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -64,6 +82,10 @@ class BattleNode final {
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::CreateBattleResponse>* PrepareAsyncCreateBattleRaw(::grpc::ClientContext* context, const ::CreateBattleRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* AsyncDestroyBattleRaw(::grpc::ClientContext* context, const ::DestroyBattleRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* PrepareAsyncDestroyBattleRaw(::grpc::ClientContext* context, const ::DestroyBattleRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::AddObserverResponse>* AsyncAddObserverRaw(::grpc::ClientContext* context, const ::AddObserverRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::AddObserverResponse>* PrepareAsyncAddObserverRaw(::grpc::ClientContext* context, const ::AddObserverRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* AsyncRemoveObserverRaw(::grpc::ClientContext* context, const ::RemoveObserverRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* PrepareAsyncRemoveObserverRaw(::grpc::ClientContext* context, const ::RemoveObserverRequest& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -82,6 +104,20 @@ class BattleNode final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> PrepareAsyncDestroyBattle(::grpc::ClientContext* context, const ::DestroyBattleRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(PrepareAsyncDestroyBattleRaw(context, request, cq));
     }
+    ::grpc::Status AddObserver(::grpc::ClientContext* context, const ::AddObserverRequest& request, ::AddObserverResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AddObserverResponse>> AsyncAddObserver(::grpc::ClientContext* context, const ::AddObserverRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AddObserverResponse>>(AsyncAddObserverRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AddObserverResponse>> PrepareAsyncAddObserver(::grpc::ClientContext* context, const ::AddObserverRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AddObserverResponse>>(PrepareAsyncAddObserverRaw(context, request, cq));
+    }
+    ::grpc::Status RemoveObserver(::grpc::ClientContext* context, const ::RemoveObserverRequest& request, ::Empty* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> AsyncRemoveObserver(::grpc::ClientContext* context, const ::RemoveObserverRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(AsyncRemoveObserverRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> PrepareAsyncRemoveObserver(::grpc::ClientContext* context, const ::RemoveObserverRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(PrepareAsyncRemoveObserverRaw(context, request, cq));
+    }
     class async final :
       public StubInterface::async_interface {
      public:
@@ -89,6 +125,10 @@ class BattleNode final {
       void CreateBattle(::grpc::ClientContext* context, const ::CreateBattleRequest* request, ::CreateBattleResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void DestroyBattle(::grpc::ClientContext* context, const ::DestroyBattleRequest* request, ::Empty* response, std::function<void(::grpc::Status)>) override;
       void DestroyBattle(::grpc::ClientContext* context, const ::DestroyBattleRequest* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void AddObserver(::grpc::ClientContext* context, const ::AddObserverRequest* request, ::AddObserverResponse* response, std::function<void(::grpc::Status)>) override;
+      void AddObserver(::grpc::ClientContext* context, const ::AddObserverRequest* request, ::AddObserverResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void RemoveObserver(::grpc::ClientContext* context, const ::RemoveObserverRequest* request, ::Empty* response, std::function<void(::grpc::Status)>) override;
+      void RemoveObserver(::grpc::ClientContext* context, const ::RemoveObserverRequest* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -104,8 +144,14 @@ class BattleNode final {
     ::grpc::ClientAsyncResponseReader< ::CreateBattleResponse>* PrepareAsyncCreateBattleRaw(::grpc::ClientContext* context, const ::CreateBattleRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::Empty>* AsyncDestroyBattleRaw(::grpc::ClientContext* context, const ::DestroyBattleRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::Empty>* PrepareAsyncDestroyBattleRaw(::grpc::ClientContext* context, const ::DestroyBattleRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::AddObserverResponse>* AsyncAddObserverRaw(::grpc::ClientContext* context, const ::AddObserverRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::AddObserverResponse>* PrepareAsyncAddObserverRaw(::grpc::ClientContext* context, const ::AddObserverRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::Empty>* AsyncRemoveObserverRaw(::grpc::ClientContext* context, const ::RemoveObserverRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::Empty>* PrepareAsyncRemoveObserverRaw(::grpc::ClientContext* context, const ::RemoveObserverRequest& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_CreateBattle_;
     const ::grpc::internal::RpcMethod rpcmethod_DestroyBattle_;
+    const ::grpc::internal::RpcMethod rpcmethod_AddObserver_;
+    const ::grpc::internal::RpcMethod rpcmethod_RemoveObserver_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -115,6 +161,8 @@ class BattleNode final {
     virtual ~Service();
     virtual ::grpc::Status CreateBattle(::grpc::ServerContext* context, const ::CreateBattleRequest* request, ::CreateBattleResponse* response);
     virtual ::grpc::Status DestroyBattle(::grpc::ServerContext* context, const ::DestroyBattleRequest* request, ::Empty* response);
+    virtual ::grpc::Status AddObserver(::grpc::ServerContext* context, const ::AddObserverRequest* request, ::AddObserverResponse* response);
+    virtual ::grpc::Status RemoveObserver(::grpc::ServerContext* context, const ::RemoveObserverRequest* request, ::Empty* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_CreateBattle : public BaseClass {
@@ -156,7 +204,47 @@ class BattleNode final {
       ::grpc::Service::RequestAsyncUnary(1, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_CreateBattle<WithAsyncMethod_DestroyBattle<Service > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_AddObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_AddObserver() {
+      ::grpc::Service::MarkMethodAsync(2);
+    }
+    ~WithAsyncMethod_AddObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AddObserver(::grpc::ServerContext* /*context*/, const ::AddObserverRequest* /*request*/, ::AddObserverResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestAddObserver(::grpc::ServerContext* context, ::AddObserverRequest* request, ::grpc::ServerAsyncResponseWriter< ::AddObserverResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_RemoveObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RemoveObserver() {
+      ::grpc::Service::MarkMethodAsync(3);
+    }
+    ~WithAsyncMethod_RemoveObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RemoveObserver(::grpc::ServerContext* /*context*/, const ::RemoveObserverRequest* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRemoveObserver(::grpc::ServerContext* context, ::RemoveObserverRequest* request, ::grpc::ServerAsyncResponseWriter< ::Empty>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_CreateBattle<WithAsyncMethod_DestroyBattle<WithAsyncMethod_AddObserver<WithAsyncMethod_RemoveObserver<Service > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_CreateBattle : public BaseClass {
    private:
@@ -211,7 +299,61 @@ class BattleNode final {
     virtual ::grpc::ServerUnaryReactor* DestroyBattle(
       ::grpc::CallbackServerContext* /*context*/, const ::DestroyBattleRequest* /*request*/, ::Empty* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_CreateBattle<WithCallbackMethod_DestroyBattle<Service > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_AddObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_AddObserver() {
+      ::grpc::Service::MarkMethodCallback(2,
+          new ::grpc::internal::CallbackUnaryHandler< ::AddObserverRequest, ::AddObserverResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::AddObserverRequest* request, ::AddObserverResponse* response) { return this->AddObserver(context, request, response); }));}
+    void SetMessageAllocatorFor_AddObserver(
+        ::grpc::MessageAllocator< ::AddObserverRequest, ::AddObserverResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(2);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::AddObserverRequest, ::AddObserverResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_AddObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AddObserver(::grpc::ServerContext* /*context*/, const ::AddObserverRequest* /*request*/, ::AddObserverResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* AddObserver(
+      ::grpc::CallbackServerContext* /*context*/, const ::AddObserverRequest* /*request*/, ::AddObserverResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_RemoveObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RemoveObserver() {
+      ::grpc::Service::MarkMethodCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::RemoveObserverRequest, ::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::RemoveObserverRequest* request, ::Empty* response) { return this->RemoveObserver(context, request, response); }));}
+    void SetMessageAllocatorFor_RemoveObserver(
+        ::grpc::MessageAllocator< ::RemoveObserverRequest, ::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(3);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::RemoveObserverRequest, ::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_RemoveObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RemoveObserver(::grpc::ServerContext* /*context*/, const ::RemoveObserverRequest* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RemoveObserver(
+      ::grpc::CallbackServerContext* /*context*/, const ::RemoveObserverRequest* /*request*/, ::Empty* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_CreateBattle<WithCallbackMethod_DestroyBattle<WithCallbackMethod_AddObserver<WithCallbackMethod_RemoveObserver<Service > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_CreateBattle : public BaseClass {
@@ -243,6 +385,40 @@ class BattleNode final {
     }
     // disable synchronous version of this method
     ::grpc::Status DestroyBattle(::grpc::ServerContext* /*context*/, const ::DestroyBattleRequest* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_AddObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_AddObserver() {
+      ::grpc::Service::MarkMethodGeneric(2);
+    }
+    ~WithGenericMethod_AddObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AddObserver(::grpc::ServerContext* /*context*/, const ::AddObserverRequest* /*request*/, ::AddObserverResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RemoveObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RemoveObserver() {
+      ::grpc::Service::MarkMethodGeneric(3);
+    }
+    ~WithGenericMethod_RemoveObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RemoveObserver(::grpc::ServerContext* /*context*/, const ::RemoveObserverRequest* /*request*/, ::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -288,6 +464,46 @@ class BattleNode final {
     }
   };
   template <class BaseClass>
+  class WithRawMethod_AddObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_AddObserver() {
+      ::grpc::Service::MarkMethodRaw(2);
+    }
+    ~WithRawMethod_AddObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AddObserver(::grpc::ServerContext* /*context*/, const ::AddObserverRequest* /*request*/, ::AddObserverResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestAddObserver(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(2, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RemoveObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RemoveObserver() {
+      ::grpc::Service::MarkMethodRaw(3);
+    }
+    ~WithRawMethod_RemoveObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RemoveObserver(::grpc::ServerContext* /*context*/, const ::RemoveObserverRequest* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRemoveObserver(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
   class WithRawCallbackMethod_CreateBattle : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
@@ -329,6 +545,50 @@ class BattleNode final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* DestroyBattle(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_AddObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_AddObserver() {
+      ::grpc::Service::MarkMethodRawCallback(2,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->AddObserver(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_AddObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AddObserver(::grpc::ServerContext* /*context*/, const ::AddObserverRequest* /*request*/, ::AddObserverResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* AddObserver(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RemoveObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RemoveObserver() {
+      ::grpc::Service::MarkMethodRawCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->RemoveObserver(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_RemoveObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RemoveObserver(::grpc::ServerContext* /*context*/, const ::RemoveObserverRequest* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RemoveObserver(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -385,9 +645,63 @@ class BattleNode final {
     // replace default version of method with streamed unary
     virtual ::grpc::Status StreamedDestroyBattle(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::DestroyBattleRequest,::Empty>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_CreateBattle<WithStreamedUnaryMethod_DestroyBattle<Service > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_AddObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_AddObserver() {
+      ::grpc::Service::MarkMethodStreamed(2,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::AddObserverRequest, ::AddObserverResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::AddObserverRequest, ::AddObserverResponse>* streamer) {
+                       return this->StreamedAddObserver(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_AddObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status AddObserver(::grpc::ServerContext* /*context*/, const ::AddObserverRequest* /*request*/, ::AddObserverResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedAddObserver(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::AddObserverRequest,::AddObserverResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_RemoveObserver : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_RemoveObserver() {
+      ::grpc::Service::MarkMethodStreamed(3,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::RemoveObserverRequest, ::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::RemoveObserverRequest, ::Empty>* streamer) {
+                       return this->StreamedRemoveObserver(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_RemoveObserver() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RemoveObserver(::grpc::ServerContext* /*context*/, const ::RemoveObserverRequest* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedRemoveObserver(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::RemoveObserverRequest,::Empty>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_CreateBattle<WithStreamedUnaryMethod_DestroyBattle<WithStreamedUnaryMethod_AddObserver<WithStreamedUnaryMethod_RemoveObserver<Service > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_CreateBattle<WithStreamedUnaryMethod_DestroyBattle<Service > > StreamedService;
+  typedef WithStreamedUnaryMethod_CreateBattle<WithStreamedUnaryMethod_DestroyBattle<WithStreamedUnaryMethod_AddObserver<WithStreamedUnaryMethod_RemoveObserver<Service > > > > StreamedService;
 };
 
 

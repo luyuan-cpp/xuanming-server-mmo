@@ -23,7 +23,7 @@ namespace NodeUtils
 	bool IsNodeConnected(uint32_t nodeType, const {{.NodeInfoCppType}}& info);
 };
 
-{{ range.ServiceInfo }}
+{{ range .GrpcFiles }}
 {{/* 空 package 时不能包 namespace:`namespace  {}` 是匿名命名空间,跨编译单元不可见,
      会导致 LNK2019(先例:battle 域 proto 无 package)。空则落全局命名空间,
      与引用侧生成的 `::SetXxxHandler` 全局限定一致。*/}}
@@ -36,13 +36,13 @@ namespace NodeUtils
 {{ end }}
 
 void SetIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler){
-{{ range.ServiceInfo }}
+{{ range .GrpcFiles }}
     {{.CppPackage}}::Set{{.FileBaseNameCamel}}IfEmptyHandler(handler);
 {{ end }}
 }
 
 void SetHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler){
-{{ range.ServiceInfo }}
+{{ range .GrpcFiles }}
     {{.CppPackage}}::Set{{.FileBaseNameCamel}}Handler(handler);
 {{ end }}
 }
@@ -60,15 +60,18 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 return;
             }
             GrpcTag* grpcTag(reinterpret_cast<GrpcTag*>(got_tag));
+            const auto messageId = grpcTag->messageId;
 
-{{- range $index, $m := .ServiceInfo }}
+{{- range $index, $file := .GrpcFiles }}
     {{- if eq $index 0 }}
-            if ({{$.NodeEnumCppType}}::{{$m.NodeServiceForCpp}}NodeService == nodeType) {
-                {{$m.CppPackage}}::Handle{{$m.FileBaseNameCamel}}CompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
+            if ({{$.NodeEnumCppType}}::{{$file.NodeServiceForCpp}}NodeService == nodeType &&
+                ({{range $methodIndex, $method := $file.Methods}}{{if ne $methodIndex 0}} || {{end}}messageId == {{$method.Id}}u{{else}}false{{end}})) {
+                {{$file.CppPackage}}::Handle{{$file.FileBaseNameCamel}}CompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
     {{- else }}
-            else if ({{$.NodeEnumCppType}}::{{$m.NodeServiceForCpp}}NodeService == nodeType) {
-                {{$m.CppPackage}}::Handle{{$m.FileBaseNameCamel}}CompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
+            else if ({{$.NodeEnumCppType}}::{{$file.NodeServiceForCpp}}NodeService == nodeType &&
+                ({{range $methodIndex, $method := $file.Methods}}{{if ne $methodIndex 0}} || {{end}}messageId == {{$method.Id}}u{{else}}false{{end}})) {
+                {{$file.CppPackage}}::Handle{{$file.FileBaseNameCamel}}CompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
     {{- end }}
 {{- end }}
@@ -80,15 +83,9 @@ void HandleCompletedQueueMessage(entt::registry& registry){
 void InitGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity){
     auto nodeType = NodeUtils::GetRegistryType(registry);
     registry.emplace<grpc::CompletionQueue>(nodeEntity);
-{{- range $index, $m := .ServiceInfo }}
-    {{- if eq $index 0 }}
-    if ({{$.NodeEnumCppType}}::{{$m.NodeServiceForCpp}}NodeService == nodeType) {
-        {{$m.CppPackage}}::Init{{$m.FileBaseNameCamel}}GrpcNode(channel, registry, nodeEntity);
+{{- range $file := .GrpcFiles }}
+    if ({{$.NodeEnumCppType}}::{{$file.NodeServiceForCpp}}NodeService == nodeType) {
+        {{$file.CppPackage}}::Init{{$file.FileBaseNameCamel}}GrpcNode(channel, registry, nodeEntity);
     }
-    {{- else }}
-    else if ({{$.NodeEnumCppType}}::{{$m.NodeServiceForCpp}}NodeService == nodeType) {
-        {{$m.CppPackage}}::Init{{$m.FileBaseNameCamel}}GrpcNode(channel, registry, nodeEntity);
-    }
-    {{- end }}
 {{- end }}
 }

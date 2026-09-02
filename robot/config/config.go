@@ -26,7 +26,9 @@ type Config struct {
 	// Mode: "stress" (default) — mass concurrent bots; "login-test" — scenario
 	// suite with login/skill/scene tests; "data-stress" — repeated
 	// login → play → logout cycles with Redis-published expectations for the
-	// db-side verifier (see DataStress block).
+	// db-side verifier (see DataStress block); "currency-crash-snapshot" —
+	// 单次登录快照(见 CurrencyCrash 块); "battle-smoke" — 双机器人
+	// 回合制战斗 + 观战端到端冒烟(见 battle_smoke_scenario.go)。
 	Mode string `yaml:"mode"`
 
 	// DataStress configures the data-consistency stress mode.
@@ -163,10 +165,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot":
+	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, or currency-crash-snapshot)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, or battle-smoke)", c.Mode)
 	}
 	if c.AuthType == "satoken" && c.SaTokenAddr == "" {
 		return fmt.Errorf("satoken_addr must be set when auth_type is satoken")

@@ -10,6 +10,7 @@ import "fmt"
 //	battle:lock:{player_id}                锁    scene 写,match 只做咨询性读(权威在 InBattleComp)
 //	challenge:{id}                         hash  切磋记录(TTL 60s)
 //	challenge:target:{player_id}           锁    同一目标同时只挂一个待应答挑战
+//	spectate:*                             观战索引与互斥标记(§10.4),key 组装见 spectate.go
 
 func matchQueueKey(mode int32, battleConfigId uint32) string {
 	return fmt.Sprintf("match:queue:%d:%d", mode, battleConfigId)

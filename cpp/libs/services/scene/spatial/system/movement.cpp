@@ -9,6 +9,28 @@
 #include "spatial/system/nav_query.h"
 #include "thread_context/ecs_context.h"
 
+namespace
+{
+	// Transform.location 的 proto 类型是 Vector3,导航接口(NavQuerySystem)与移动
+	// 协议字段用的是结构等价的 Location(同为 double x/y/z 的独立消息,proto 间无
+	// 隐式转换)。在 Transform 边界显式换壳,两侧契约都不动。
+	Location ToLocation(const Vector3& v)
+	{
+		Location out;
+		out.set_x(v.x());
+		out.set_y(v.y());
+		out.set_z(v.z());
+		return out;
+	}
+
+	void WriteLocation(Vector3& dst, const Location& src)
+	{
+		dst.set_x(src.x());
+		dst.set_y(src.y());
+		dst.set_z(src.z());
+	}
+}
+
 void MovementSystem::Update(const double delta)
 {
 	// Velocity 是**运动学矢量**(方向 × 速率),只能由真实的移动来源写入
@@ -32,7 +54,8 @@ void MovementSystem::Update(const double delta)
 			continue;
 		}
 
-		Location target = transform.location();
+		const Location current = ToLocation(transform.location());
+		Location target = current;
 		target.set_x(target.x() + velocity.x() * delta);
 		target.set_y(target.y() + velocity.y() * delta);
 		target.set_z(target.z() + velocity.z() * delta);
@@ -43,8 +66,8 @@ void MovementSystem::Update(const double delta)
 		{
 			// 预置为当前位置:ValidateMove 在"起点不在网格上"时不写 clamped,
 			// 此时原地冻结而不是跳到默认 (0,0,0)。
-			Location clamped = transform.location();
-			if (!NavQuerySystem::ValidateMove(*nav, transform.location(), target, clamped))
+			Location clamped = current;
+			if (!NavQuerySystem::ValidateMove(*nav, current, target, clamped))
 			{
 				velocity.set_x(0.0);
 				velocity.set_y(0.0);
@@ -55,7 +78,7 @@ void MovementSystem::Update(const double delta)
 			target = clamped;
 		}
 
-		*transform.mutable_location() = target;
+		WriteLocation(*transform.mutable_location(), target);
 		SetActorBaseAttributesS2CAttrDirtyBit(
 			entity, ActorBaseAttributesS2C::kTransformFieldNumber);
 	}

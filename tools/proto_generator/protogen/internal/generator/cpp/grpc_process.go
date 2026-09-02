@@ -26,6 +26,66 @@ type GrpcServiceTemplateData struct {
 	FileBaseNameCamel     string
 }
 
+// grpcInitFileInfo represents one generated async gRPC client translation unit.
+// A proto file can contain multiple services, so Methods contains the union of
+// all RPCs whose completion tags are consumed by that generated client.
+type grpcInitFileInfo struct {
+	*internal.RPCServiceInfo
+	Methods internal.RPCMethods
+}
+
+type grpcInitTemplateData struct {
+	GrpcFiles       []*grpcInitFileInfo
+	NodeEnumCppType string
+	NodeInfoCppType string
+}
+
+func buildGrpcInitFileInfo(services []*internal.RPCServiceInfo) []*grpcInitFileInfo {
+	filesByProtoPath := make(map[string]*grpcInitFileInfo)
+	files := make([]*grpcInitFileInfo, 0)
+
+	for _, service := range services {
+		if service.CcGenericServices() {
+			continue
+		}
+
+		if internal.IsFileBelongToNode(service.Fd, messageoption.NodeType_NODE_DB) {
+			continue
+		}
+
+		protoPath := service.FileName()
+		file, ok := filesByProtoPath[protoPath]
+		if !ok {
+			file = &grpcInitFileInfo{RPCServiceInfo: service}
+			filesByProtoPath[protoPath] = file
+			files = append(files, file)
+		}
+		file.Methods = append(file.Methods, service.Methods...)
+	}
+
+	// Stabilize namespace/branch emission order in grpc_init_total templates.
+	sort.Slice(files, func(i, j int) bool {
+		left := files[i].RPCServiceInfo
+		right := files[j].RPCServiceInfo
+
+		if left.BasePathForCpp() != right.BasePathForCpp() {
+			return left.BasePathForCpp() < right.BasePathForCpp()
+		}
+		if left.Package() != right.Package() {
+			return left.Package() < right.Package()
+		}
+		return left.FileName() < right.FileName()
+	})
+
+	for _, file := range files {
+		sort.Slice(file.Methods, func(i, j int) bool {
+			return file.Methods[i].Id < file.Methods[j].Id
+		})
+	}
+
+	return files
+}
+
 // generateGrpcFile generates a gRPC file from a template file and avoids duplicate writes.
 func generateGrpcFile(fileName string, grpcServices []*internal.RPCServiceInfo, tmplPath string) error {
 	if len(grpcServices) == 0 {
@@ -122,37 +182,7 @@ func CppGrpcCallClient(wg *sync.WaitGroup) {
 
 		go func() {
 			defer wg.Done()
-			m := map[string]*internal.RPCServiceInfo{}
-			serviceInfoList := make([]*internal.RPCServiceInfo, 0)
-			for _, service := range internal.GlobalRPCServiceList {
-				if service.CcGenericServices() {
-					continue
-				}
-
-				if internal.IsFileBelongToNode(service.Fd, messageoption.NodeType_NODE_DB) {
-					continue
-				}
-
-				if _, ok := m[service.FileBaseNameCamel()]; ok {
-					continue
-				}
-				m[service.FileBaseNameCamel()] = service
-				serviceInfoList = append(serviceInfoList, service)
-			}
-
-			// Stabilize namespace/branch emission order in grpc_init_total templates.
-			sort.Slice(serviceInfoList, func(i, j int) bool {
-				left := serviceInfoList[i]
-				right := serviceInfoList[j]
-
-				if left.BasePathForCpp() != right.BasePathForCpp() {
-					return left.BasePathForCpp() < right.BasePathForCpp()
-				}
-				if left.Package() != right.Package() {
-					return left.Package() < right.Package()
-				}
-				return left.FileBaseNameCamel() < right.FileBaseNameCamel()
-			})
+			grpcFiles := buildGrpcInitFileInfo(internal.GlobalRPCServiceList)
 
 			err := os.MkdirAll(path.Dir(_config.Global.Paths.GrpcInitCppFile), os.FileMode(0777))
 			if err != nil {
@@ -166,12 +196,8 @@ func CppGrpcCallClient(wg *sync.WaitGroup) {
 			// NodeInfo is defined in common.proto (no package), so it stays in the global namespace.
 			nodeInfoCppType := "NodeInfo"
 
-			cppData := struct {
-				ServiceInfo     []*internal.RPCServiceInfo
-				NodeEnumCppType string
-				NodeInfoCppType string
-			}{
-				ServiceInfo:     serviceInfoList,
+			cppData := grpcInitTemplateData{
+				GrpcFiles:       grpcFiles,
 				NodeEnumCppType: internal.NodeEnumCppQualifiedType,
 				NodeInfoCppType: nodeInfoCppType,
 			}
