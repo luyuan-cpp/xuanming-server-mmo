@@ -44,6 +44,26 @@ static Guid PrimaryWrittenGuid(const std::vector<Guid> &writtenGuids)
 	return writtenGuids.empty() ? kInvalidGuid : writtenGuids.front();
 }
 
+// 为腾位而被挤掉的实例:逐条落 LogItemDestroy。
+//
+// 与 MergeAndCompact 那条路径同一个理由 —— `item_uuid` 是 transaction_log 做外挂
+// 回收关联的键,被挤掉的实例不留痕,追溯链就在"临时格溢出"这一步无声断掉。
+//
+// 一个关键区别:整理退役的实例 `size` 恒为 0(数量并进了别的堆,没有消失),
+// 而这里被销毁的实例**数量是真的没了**,所以 quantity 是它当时的真实 size。
+//
+// **无论本次入包最终成功与否都要落。** 淘汰是一次已经提交完成的销毁,
+// 它跟后面那件东西放没放进去无关;只在成功分支里记,就会漏掉"腾了位但入包
+// 仍然失败"那条路径上被销毁的实例 —— 那正是最需要能查的情形。
+static void LogEvictedInstances(entt::entity playerEntity,
+								const std::vector<DestroyedInstance> &evicted)
+{
+	for (const auto &item : evicted)
+	{
+		TransactionLogSystem::LogItemDestroy(playerEntity, item.guid, item.configId, item.size);
+	}
+}
+
 uint32_t BagService::AddItem(
 	entt::entity playerEntity,
 	Bag &bag,
@@ -87,7 +107,13 @@ uint32_t BagService::AddItem(
 	// 不能再回读发号器的"上一个号"—— 同一个发号器还在铸 tx_id / snapshot_id,
 	// 而且并堆 / 沿用预设 guid 的路径根本不铸号,残值属于上一件物品。
 	std::vector<Guid> writtenGuids;
-	auto result = bag.AddItem(param, &writtenGuids);
+	// evicted:临时格满了时被先进先出挤掉的实例(其余包恒为空)。
+	std::vector<DestroyedInstance> evicted;
+	auto result = bag.AddItem(param, &writtenGuids, &evicted);
+
+	// 先落淘汰流水,再落本次获得的流水 —— 顺序与实际发生顺序一致(腾位在写入
+	// 之前),而且它不看 result:销毁已经提交完成了。
+	LogEvictedInstances(playerEntity, evicted);
 
 	// ── Post-success: transaction log + anomaly detection ────────────────
 	if (result == kSuccess)
@@ -141,7 +167,13 @@ uint32_t BagService::AddItems(
 	}
 
 	// ── All-or-nothing space check before any mutation ───────────────────
-	RETURN_ON_ERROR(bag.CheckSpaceFor(itemsToAdd));
+	// 用 ReserveForBatchAdd 而不是 CheckSpaceFor:后者是纯预测,会抢在淘汰之前
+	// 把整批拒掉,临时格的先进先出在批量路径上就永远不生效了。
+	std::vector<DestroyedInstance> evicted;
+	const uint32_t reserved = bag.ReserveForBatchAdd(itemsToAdd, &evicted);
+	// 腾位可能已经发生(哪怕后面整批失败),销毁必须留痕。
+	LogEvictedInstances(playerEntity, evicted);
+	RETURN_ON_ERROR(reserved);
 
 	// ── Apply per config: Bag::AddItem → transaction log + anomaly ───────
 	for (const auto &[configId, count] : itemsToAdd)
@@ -151,7 +183,10 @@ uint32_t BagService::AddItems(
 		param.itemPBComp.set_size(count);
 
 		std::vector<Guid> writtenGuids;
-		auto result = bag.AddItem(param, &writtenGuids);
+		// 位已经腾够,这里正常不会再淘汰;真淘汰了也要留痕(说明上面的规划漏了什么)。
+		std::vector<DestroyedInstance> lateEvicted;
+		auto result = bag.AddItem(param, &writtenGuids, &lateEvicted);
+		LogEvictedInstances(playerEntity, lateEvicted);
 		if (result != kSuccess)
 		{
 			return result;
@@ -203,14 +238,13 @@ uint32_t BagService::AddItems(
 	}
 
 	// ── All-or-nothing space pre-check before any mutation ───────────────
-	// Aggregate config -> total size; CheckSpaceFor handles equipment
-	// (maxStack==1, one grid per unit) and stackables uniformly.
-	ItemCountMap requiredSpace;
-	for (const auto &param : itemsToAdd)
-	{
-		requiredSpace[param.itemPBComp.config_id()] += param.itemPBComp.size();
-	}
-	RETURN_ON_ERROR(bag.CheckSpaceFor(requiredSpace));
+	// 走 **vector 重载**,不要自己汇总成 ItemCountMap 再调 —— 那样会丢掉"预设 guid
+	// 撞车"这道预检(它需要看到每一件的 guid),邮件附件重放时临时格会先挤掉旧物、
+	// 再在写到一半时撞 guid 失败。全部纯预检都在这个入口里、在腾位之前。
+	std::vector<DestroyedInstance> evicted;
+	const uint32_t reserved = bag.ReserveForBatchAdd(itemsToAdd, &evicted);
+	LogEvictedInstances(playerEntity, evicted);
+	RETURN_ON_ERROR(reserved);
 
 	// ── Apply per piece, interleaving the transaction log ────────────────
 	// 逐件添加,每件拿自己的写入回执,于是一条流水对应一件物品。
@@ -219,7 +253,9 @@ uint32_t BagService::AddItems(
 	for (const auto &param : itemsToAdd)
 	{
 		std::vector<Guid> writtenGuids;
-		auto result = bag.AddItem(param, &writtenGuids);
+		std::vector<DestroyedInstance> lateEvicted;
+		auto result = bag.AddItem(param, &writtenGuids, &lateEvicted);
+		LogEvictedInstances(playerEntity, lateEvicted);
 		if (result != kSuccess)
 		{
 			return result;

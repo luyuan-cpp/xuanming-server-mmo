@@ -111,12 +111,18 @@ bool ItemStore::HasAll(const ItemCountMap &required) const
 
 // ── 堆叠语义 ─────────────────────────────────────────────────────────────
 
-ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted) const
+ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted,
+                                                 const std::unordered_set<Guid> *exclude) const
 {
     ItemCountMap freeRoomByConfig;
     for (const auto &[entity, item] : registry_.view<ItemComp>().each())
     {
         if (!wanted.contains(item.config_id()))
+        {
+            continue;
+        }
+        // 被排除的实例视同不存在 —— 它的空余不能算给这一批。
+        if (exclude != nullptr && exclude->contains(static_cast<Guid>(item.item_id())))
         {
             continue;
         }
@@ -132,7 +138,8 @@ ItemCountMap ItemStore::MeasureFreeRoomPerConfig(const ItemCountMap &wanted) con
 }
 
 uint32_t ItemStore::PlanStackIntoExistingStacks(const ItemComp &proto, uint32_t maxStackSize,
-                                                std::vector<StackFill> &outFillPlan) const
+                                                std::vector<StackFill> &outFillPlan,
+                                                const std::unordered_set<Guid> *exclude) const
 {
     uint32_t remaining = proto.size();
     for (auto &&[entity, item] : registry_.view<ItemComp>().each())
@@ -144,6 +151,10 @@ uint32_t ItemStore::PlanStackIntoExistingStacks(const ItemComp &proto, uint32_t 
         if (!CanStack(item, proto))
         {
             continue;
+        }
+        if (exclude != nullptr && exclude->contains(static_cast<Guid>(item.item_id())))
+        {
+            continue; // 视同不存在,见头文件
         }
         if (item.size() > maxStackSize)
         {
@@ -169,6 +180,17 @@ void ItemStore::ApplyStackFill(const std::vector<StackFill> &fillPlan,
 {
     for (const auto &plan : fillPlan)
     {
+        // 防御:计划里的实体在 plan 与 apply 之间被销毁(唯一的销毁点是淘汰腾位,
+        // 桥层腾位后必定重新规划,所以正常到不了这里)。到了就是编程错误 ——
+        // 但 entt 对失效实体 get 在 Release 下是 UB,宁可丢这一份数量并吼,
+        // 也不能拿悬空实体去解引用。
+        if (!registry_.valid(plan.entity))
+        {
+            LOG_ERROR << "ItemStore::ApplyStackFill: fill plan references a destroyed entity; "
+                      << plan.amount << " unit(s) NOT applied. The plan must be recomputed after "
+                      << "any eviction — this is a bridge-layer ordering bug.";
+            continue;
+        }
         auto &item = registry_.get<ItemComp>(plan.entity);
         item.set_size(item.size() + plan.amount);
 

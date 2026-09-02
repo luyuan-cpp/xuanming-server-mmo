@@ -3406,3 +3406,99 @@ Unity 客户端默认网关 http://127.0.0.1:8081,零配置可连。
 - 怪物属性表:MonsterTable 只有 id 列,PVE 战斗怪物走保守默认值(一回合被秒),需补属性/技能列重导才有像样的多回合 PVE;结算的经验/道具 delta 也依赖 Dungeon/Monster 表补列
 - 观战事件流延迟推送(反小号偷看,§10.6)、ready check、5v5 预组队入队仍预留
 - 本机全栈启动脚本 go_services 分层就绪等待在单实例场景不可靠;节点用显式端口预设(RPC_PORT/NODE_PORT)+ 逐个 etcd 注册确认更稳(见 scratchpad start_rest.ps1 模式)
+
+## 2026-09-01(2)背包规则分层:第 1~3 步落码(具名槽 reserve 缺陷修复 + 准入轴)
+
+### 决策文档
+- `docs/design/bag-rule-policy-layering.md`(已更新:§5.1 记录一处被推翻的接口设计,§6.1 记录实际修法,§8.1 落码清单 / §8.2 Codex 编译指令)
+
+### 修的 bug:`CanFit()` 对具名槽说谎
+- `FixedSlotLayout` 继承 `FlatLayout::CanFit`(`FreeCells() >= count`)却没覆盖它,而 commit 侧的 `PlaceInstance` 是按 `HasSlotSemantics()` 分叉去查槽位表的。**两侧分叉条件不一致** => 装备栏 10 格但部位 1 只有 2 个槽时,第 3 只手镯通过预检、写到一半失败,留下「前两只已入包却返回失败」的半批 —— 正是 `AddItems` 注释里发誓不会发生的事。三条入口全中:`AddNonStackableItem` / `AddStackableItem` / `CheckSpaceFor`。
+- 修法:新增 `Bag::CanReserve(instancesByConfig, totalInstances)` 取代三处裸 `CanFit`/`IsSpaceInsufficient`。它①先问格子数②`if (!HasSlotSemantics()) return true;`(与 `PlaceInstance` 逐字相同的分叉)③具名槽按**部位**汇总需求再逐部位比空槽数(不能按 config 问 —— 两件不同手镯共用同一对槽位)。
+- 抽出文件级静态 `IsFreeSlotForEquipKind()`,让 `FindFreeSlotForKind`(commit)与新增 `CountFreeSlotsForKind`(reserve)共用同一条「可用空槽」判据;顺带补上原先漏的 `slot < Capacity()` 过滤。
+- **错误码刻意不变**(`kBagAddItemBagFull` / `kBagItemNotStacked`),只是失败时机从 commit 中途提前到写入之前。要区分「不收」与「满了」得给 `bag_error_tip.proto` 加新码,需重生成,留后续。
+
+### 加的层:准入轴(第 3 步)
+- 新增 `cpp/libs/modules/bag/admission_policy.h`(**纯头文件,无 .cpp**):`IAdmissionPolicy` + `AcceptAll`。已注册进 `modules.vcxproj` 的 ClInclude;`CMakeLists.txt` 只列 .cpp,无需改。
+- `BagProfile`(定义在 `bag_system.h`)= `{layout, admission}` 两个 unique_ptr + `Flat(capacity)` / `Equipment(slotCount)` 工厂;`Bag::SetProfile/SetAdmission/Admission()`;`PlayerBagsComp` 四个包改走 `SetProfile`。加淘汰/过期轴时这四行不用改。
+- `SetAdmission` 刻意**不**要求背包为空(准入是纯谓词,不重新解释已存 pos),与 `SetLayout` 的空包守卫不对称,是有意的。
+
+### 设计上被推翻的一处(重要)
+- 原设计文档 §5 画的 `IAdmissionPolicy::AcceptsBatch(items, layout)` 和 `AcceptEquippable` **不做了**。理由:具名槽的批量判定必须与 `PlaceInstance` 在同一个 `if` 上分叉,做成可插拔策略等于让「两侧必须一致」重新变成靠人记住的事 —— 那正是这个 bug 的成因。所以它留在桥层,准入层只保留与占用无关的纯 config 判定。用例 `BagProfileTest.FixedBagsCarryNoAdmissionRuleYet` 钉住这个取舍。
+
+### 测试
+- 新增 `EquipmentReserveTest` × 8(核心判据 `ThreeOfOneKindLeaveNothingBehindWhenRefused`:修复前会红)、`BagProfileTest` × 3。
+- **全部未编译,待 Codex 验证**:先 `modules` 后 `bag_test`,MSBuild 串行 `/m:1`;回归重点 `FixedSlotLayoutTest.*` / `BagBatchAtomicityTest.*` / `PlayerBagsCompTest.*` 行为不应变,另跑 `cross_zone_test`(它往装备栏还原表里不存在的 config,验证「入包严格、还原宽容」没被破坏)。
+
+### 未开工(第 4~7 步)
+- 第 4 步加 `CfgItem.tag` + `CfgBagProfile` 两张表、第 5 步节日包(含 `DynamicBagData.profile_id`)、第 6 步 FIFO 淘汰(含 `ItemEntry`/`ItemComp` 序号字段)—— 都要改配置表或 proto,需先跑导表工具 / `cd go && build.bat`,不是接着写代码就能推进的。第 7 步等真实使用者。
+
+### 2026-09-01 补:两条查证结果(未编译前)
+
+- **背包域生产侧零调用点**:`BagService` 全仓非测试位置只剩注释;`Bag::AddItem/AddItems` 在 `cpp/libs/services` 与 `cpp/nodes` 零命中;`PlayerBagsComp` 只被 `bag_marshal` 用。=> 背包今天只被"存"和"还原",没有玩法入口。所以本轮修的具名槽 reserve 缺陷是**定时炸弹不是正在流血**;更要紧的是:在推进节日包 / FIFO 之前,应先把至少一条真实入包链路(掉落拾取或邮件领取)接到 `BagService::AddItem`,否则是在没有调用者的容器上叠规则。判据与 grep 命令记在 `docs/design/bag-rule-policy-layering.md` §6.1。
+- **导表工具产物大面积重生成(非本次改动)—— 已定性:良性,可以照常提交。** 工作区里 `generated/code/proto/**`、`go/shared/generated/pb/table/**`、`java/config_node/**`、`generated/tables/{buff,test,testmultikey}.pb`、`tools/data_table_exporter/state/**` 全被改写,并新增未跟踪的 `generated/tables/manifest.json`。逐项查证结果:
+  - `tools/data_table_exporter/state/{operator/id_pool,mapping/tip_enum_ids/tip_enum_ids}.json`:`git diff --stat` **零内容差异**,只是 CRLF→LF 行尾归一化。**id 没有重排**。
+  - tip / operator 的**枚举值零变化**(`git diff generated/code/proto/cpp/tip/ | grep '= N'` 空)。
+  - proto 的 `source:` 名去掉 `tip/` 前缀 —— 这是**收敛不是分裂**:C++ 实际编译用的那份 `cpp/generated/table/proto/**` 在 HEAD 里**早就是**新写法,本次只是 `generated/code/proto/**` 镜像追上。`git status cpp/generated/` 里连一个 proto 文件都没有。**没有描述符池文件名分裂风险。**
+  - `bit_index/*.h`:**只加了文件末尾换行**(`\ No newline at end of file` 消失),零语义变化。
+  - 三个 `.pb` 表二进制:字节数与 HEAD **完全相同**。
+  - 新增 `generated/tables/manifest.json`:导表工具新增的**产物清单**(schema_version/content_digest/`source_rev` pin 到 commit d5fe6223 且 `data_dirty:false`/21 张表逐表 sha256)。
+  - 已确认 `Item.json` / `EquipSlot.json` / `item_table.proto` / `equipslot_table.proto` **未变**,背包改动与其用例不受影响。
+  - **更正**:本条早先写的"有 File already exists in database 风险""id 分配漂移""不该跟背包改动一起提交",三条均已证伪,以本段为准。实质是导表工具升级一版(新增 manifest + 统一 proto 源名 + 规整行尾)后跑的一次全量重生成。
+
+## 2026-09-01(3)背包淘汰轴落码:临时格先进先出(第 6 步)
+
+### 落码
+- 新增 `cpp/libs/modules/bag/eviction_policy.{h,cpp}`:`IEvictionPolicy` + `RejectWhenFull`(三个包,= 拆分前"满了就拒"的行为,以前没有名字)+ `EvictOldestFirst`(临时格)。已注册进 `modules.vcxproj` **和** `CMakeLists.txt`(这次有 .cpp,两处都要改)。
+- `BagProfile` 加第三根轴 `eviction` + `Temporary()` 工厂;`PlayerBagsComp` 的 `kTemporary` 改用它。
+- `Bag`:`SetEviction`/`Eviction()`;私有 `ReserveOrEvict`(唯一会在 reserve 段改状态的地方)、`PlanInstances`、`ReserveBatch`;公开 `ReserveForBatchAdd`;`AddItem`/`AddItems` 加**可选** `evictedOut` 回执(公开 API 只增不改)。
+- `BagService`:`LogEvictedInstances` 逐条落 `LogItemDestroy`,**无论本次入包成败都落**(腾位是已经提交完成的销毁);两处批量闸从 `CheckSpaceFor` 换成 `ReserveForBatchAdd`。
+- 新增用例 `EvictionPolicyTest` × 8;`BagProfileTest` 增 1 条。
+
+### 三个容易写错、已用例钉住的点
+- **具名槽一律不淘汰**:装备栏配 `RejectWhenFull` + 桥层第二道锁(`ReserveOrEvict` 见到 `HasSlotSemantics()` 直接拒),两道一起才挡得住"有人手工把 EvictOldestFirst 配到装备栏"。
+- **淘汰后必须重新规划**:被挤掉的可能正是本次要并进去的未满堆(临时格里同 config 的旧堆恰恰最早进包),不重算会拿悬空 entity 去 `ApplyStackFill`。`AddStackableItem` 与 `ReserveBatch` 各一次重规划,两遍是确定上界不是循环。
+- **`CheckSpaceFor` 保持纯预测**:按"不破坏现状"回答,于是对会淘汰的包偏保守;真入包改走 `ReserveForBatchAdd`,否则先进先出在批量路径上永远不生效。
+- 另:**先算清楚腾了够不够,够了才真销毁**;腾不够一件都不动(销毁一半仍放不下=白丢玩家东西)。
+
+### 唯一一条 gameplay 语义变更
+`kTemporary` 满了会挤掉最早进包的实例,而不是拒绝入包 —— 这正是"临时背包先进先出"这个需求本身。其余三个包行为不变。被挤掉的实例逐条落 `LogItemDestroy`。
+
+### 仍是近似的一处
+FIFO 排序依据是 **guid(snowflake 高位是时间)**,不是真正的获得序号。两条路径会打乱:跨服迁移带回的 guid 是源服 node 铸的;邮件附件沿用调用方预设 guid。正解是给 `ItemEntry`/`ItemComp` 加序号字段(`ItemEntry` 用字段号 9,6/7/8 已被 TODO 预定),要改 proto。近似已收在 `EvictOldestFirst::AcquisitionOrderOf()` **一个函数**里,那天只改这一行。
+
+### 状态
+未编译(用户明确表示本轮不管编译)。第 4、5 步(`CfgItem.tag` + `CfgBagProfile` + 节日包)仍卡在导表工具;第 7 步按判据等使用者。
+
+### 2026-09-01(4)自查发现并修复:淘汰把预检顺序踩坏了
+
+加淘汰轴当天,在同一份代码里造出一个**与具名槽那个 bug 同族**的问题:**一个会失败的判断站错了位置**。
+
+- `ReserveOrEvict` 会为了腾位**真销毁实例**,而它被放在了 `CanMintGuid` 这类零副作用预检的**前面**。后果:发号器被 fence(跨服失租等)时,临时格已经挤掉最早那件,然后整批拒绝 —— 玩家资产白丢,而且这次连"放不下"都不是,是根本不该开始。
+- 四处同病,已全部改为「纯预检 → reserve/腾位 → commit」:`AddNonStackableItem`(reserve→铸号预检 改为 铸号预检→reserve)、`AddStackableItem`(plan→reserve→铸号预检 改为 plan→铸号预检→reserve)、`AddItems(ItemCountMap)` 与 `AddItems(vector)`(都改为先 `PlanInstances` + 全部预检,最后才 `ReserveBatch`)。
+- `AddStackableItem` 的铸号预检因此**略保守**(腾位后若重新规划发现不用铸号也已拒),刻意取舍:宁可少收一次,不可错杀一件。
+- 升级成红线(文档 §7 第 7 条)+ 判据 §6.3 + 用例 `BagFencedGeneratorTest.EvictionNeverHappensBeforeAPureCheckCanRefuse`(放在 fenced 套件末尾,依赖前序用例已 Fence;铺底走 `InsertItemForRestore` 因为它不铸号)。
+
+**教训(值得记住的部分):引入第一根有副作用的轴,会把整个模块里所有判断的先后顺序从风格问题变成正确性问题。** 三段式此前好写,是因为 plan/reserve 两段都是纯的;淘汰打破了这个前提,于是每一处 reserve 都要重新审"我前面还有没有会失败的判断"。
+
+## 2026-09-02 背包第二轮审计:8 视角独立审查 + 对抗证伪,18 条全部成立并修复
+
+### 方法
+同一个人复审同一份代码盲区不变(§6.3 那次自查抓到"预检站错位置",却漏掉十行外的"缺口按淘汰前算")。改用 8 个互不知情的审查视角各自读代码 → 36 条原始去重成 18 条 → 每条 2 个证伪者对着真实代码反驳。证伪阶段撞会话限额(29 个证伪者未返回),未被证伪的 13 条人工逐条复核。**空结果≠干净,先看 failures** —— 这次 failures 列表就是证据。
+
+### P0 三族(全是淘汰轴引入的),已修
+- **A. 缺口按淘汰前的规划算**:被挤掉的正是本批要并入的同 config 未满堆 → 腾位后需求变大 → 已销毁却整批失败(临时格拾取同种材料的日常路径;第一版注释"不是数据能触发"是错的)。修法:`ReserveOrEvict` **先算到不动点再销毁** —— 把牺牲者当作已不存在重新规划(`PlanInstances` / `ItemStore::MeasureFreeRoomPerConfig` / `PlanStackIntoExistingStacks` 新增 `exclude` 集),需求变大就多选,稳定了才 `DestroyItem`;入参改为单位数,自己反复规划。
+- **B. `BagService::AddItems` 自带批量循环不经过 `Bag::AddItems`**,§6.3 挪到前面的预检在编排层根本没跑。修法:全部纯预检并进 `ReserveForBatchAdd`(两个重载,vector 重载含预设 guid 撞车),`Bag::AddItems` 与 `BagService::AddItems` 都只调它;fence 下**连腾位也不做**。
+- **C. 单件沿用预设 guid 的 `Contains` 预检排在腾位之后**。修法:提前。
+
+### P1/P2(8 条),已修
+零数量条目在逐件才拒(哈希序决定半批)→ reserve 入口最前面拒;槽位表重复 id 行 reserve 多数 → 按物理槽 id 去重;`SetProfile` 非原子 → 要求空包且三轴齐全否则整套不换;`evictedOut==nullptr` 仍销毁 → **没有回执就不淘汰**(注释变闸);`SetCapacityForRestore` 可压到 < 占用 → 拒;`ApplyStackFill` 悬空 entity 零防御 → `valid()` + LOG_ERROR;格子布局碎片被当编程错误吼 → 按 RejectWhenFull 静默;`bag_service.h` "all-or-nothing" 注释陈旧 → 更正。
+
+### 覆盖缺口(3 条),已补
+fence 顺序用例补可叠加溢出 + vector 三形状;准入轴补负向用例 `RejectAllAdmission`;新增 P0 回归 `EvictingTheMergeTargetStillLandsEverything`(修复前必红)等 8 条。
+
+### 编译清单更正(§8.2)
+**scene 工程不能漏**:`Bag` 多了两个 `unique_ptr`,`sizeof(Bag)` / `PlayerBagsComp` 步长变了;`cross_zone_test` 链接 `modules.lib + scene.lib`,`bag_marshal.obj` 里 `entt::basic_storage<PlayerBagsComp>` 实例化带旧步长 —— 只重编 modules 会复现 split 文档 §9.1 的 `is_power_of_two` 断言。顺序:modules → scene → bag_test → cross_zone_test。
+
+### 教训
+引入第一根有副作用的轴之后,"不是数据能触发的情形"每写一次都要给出触发不了的证明 —— 第一版写了两处,两处都错。两套批量循环 = 两份预检 = 必然漂移,修法是并进唯一 reserve 入口。全部**仍未编译**。

@@ -27,6 +27,13 @@ private:
 //   - Transaction logging                     (TransactionLogSystem)
 //   - Anomaly detection                       (AnomalyDetector)
 //
+// 2026-09-01 起还多一件:**为腾位而被挤掉的实例要落 LogItemDestroy**。
+// 临时格(kTemporary)配的是先进先出淘汰策略,满了会销毁最早进包的实例;
+// `item_uuid` 是外挂回收的关联键,不留痕追溯链就在这一步断掉。Bag 是纯容器
+// 不写流水,所以它把退役清单**回执**上来,由这里落 —— 形状与 MergeAndCompact
+// 那条路完全一致。批量入包因此必须走 `Bag::ReserveForBatchAdd` 而不是纯预测的
+// `CheckSpaceFor`,否则淘汰在批量路径上永远不会发生。
+//
 // Bag itself is a pure container (grid / slot / stack management only).
 class BagService
 {
@@ -40,9 +47,14 @@ public:
 		const InitItemParam &param);
 
 	// Orchestrated batch AddItems (config_id → count):
-	//   transactional — all-or-nothing space check, then per-config
-	//   block check → Bag::AddItem → transaction log → anomaly detection.
-	//   Symmetric with Bag::RemoveItems.
+	//   per-config block check → Bag::ReserveForBatchAdd(全部纯预检 + 腾位)
+	//   → per-config Bag::AddItem → transaction log → anomaly detection.
+	//
+	//   原子性口径(2026-09-01 更正):所有**会拒绝**的判断都在 ReserveForBatchAdd
+	//   之前或之内完成;它返回成功之后,逐项写入不会再失败(失败即编程错误)。
+	//   但注意:临时格(kTemporary)上 reserve 本身可能**已经销毁**了最早的物品来
+	//   腾位 —— 那些实例已落 LogItemDestroy,且即使后续失败也不会复活。调用方不能
+	//   把"返回失败"理解为"包与调用前完全一致"。
 	static uint32_t AddItems(
 		entt::entity playerEntity,
 		Bag &bag,
@@ -51,9 +63,10 @@ public:
 
 	// Orchestrated batch AddItems carrying full ItemComp per piece
 	//   (mail attachments mixing equipment + stackable items): preserves
-	//   each piece's preassigned guid / attributes. Transactional —
-	//   all-or-nothing space check, then per-piece
-	//   block check → Bag::AddItem → transaction log → anomaly detection.
+	//   each piece's preassigned guid / attributes.
+	//   per-piece block check → Bag::ReserveForBatchAdd(vector 重载:含预设 guid
+	//   撞车预检)→ per-piece Bag::AddItem → transaction log → anomaly detection.
+	//   原子性口径同上。
 	static uint32_t AddItems(
 		entt::entity playerEntity,
 		Bag &bag,

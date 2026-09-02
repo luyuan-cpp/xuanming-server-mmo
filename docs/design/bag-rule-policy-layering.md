@@ -1,9 +1,24 @@
 # 背包:玩法规则的策略化分层 (2026-09-01)
 
-> **状态:只有设计,未落码。** 本文档记录"背包规则该怎么分层"的结论、判据与执行清单,
-> 供后续实施。**2026-09-01 当天没有改任何代码、配置表或 proto。**
-> 唯一的例外是文档里记下了一条**现存缺陷**(§6.1),它是本次分析顺带挖出来的,
-> 同样没有修。
+> **状态(2026-09-01):§8 的第 1、2、3、6 步已落码,未编译。**
+>
+> 落码的是:①具名槽 reserve 缺陷的回归用例;②`Bag::CanReserve()` 修复;
+> ③`IAdmissionPolicy` + `BagProfile` 装配器;⑥`IEvictionPolicy` +
+> `RejectWhenFull` / `EvictOldestFirst`(临时格先进先出)+ 退役实例落流水。
+>
+> 第 4、5 步未开工 —— 它们要加配置表列,得跑导表工具。第 7 步按判据等使用者。
+> 第 6 步的 **FIFO 排序依据仍是 guid 近似**(真正的获得序号字段要改 proto),
+> 近似收在 `EvictOldestFirst::AcquisitionOrderOf()` 一个函数里,见 §6.2。
+>
+> 落码过程中推翻了本文档 §5 原先画的一处接口(`AcceptsBatch`),理由记在 §5.1。
+> **没有动**任何配置表、proto、线上协议或错误码。
+>
+> **2026-09-02 第二轮审计(§6.5)**:8 视角独立审查 + 对抗证伪,18 条全部成立
+> (3 族 P0 全在淘汰轴),已全部修复并补 11 条用例。仍未编译。
+> **编译清单已改:scene 工程不能漏**(§8.2)。
+>
+> ⚠ 另见 §6.1 的查证:**整个背包域在生产侧零调用点**,这套规则今天还没有任何
+> 真实使用者。第 4 步之前应先接一条真实入包链路。
 
 ## 概述
 
@@ -81,14 +96,18 @@
 按**问题**拆接口,不按**背包**拆。每个接口只回答一件事(ISP)——
 **不要**做一个大 `IBagRule`。
 
-| 轴 | 只回答一个问题 | 有副作用? | 现状 |
+| 轴 | 只回答一个问题 | 有副作用? | 现状(2026-09-01) |
 |---|---|---|---|
-| **摆放** `IContainerLayout` | 放哪一格 | 有(写槽位) | ✅ 已有,做得对 |
-| **准入** `IAdmissionPolicy` | 这件东西能不能进来 | **无**(纯谓词) | ❌ 缺 → 节日包 |
-| **淘汰** `IEvictionPolicy` | 满了挤掉谁 | **有**(唯一一个) | ❌ 缺 → 临时包 FIFO |
+| **摆放** `IContainerLayout` | 放哪一格 | 有(写槽位) | ✅ 已有 |
+| **准入** `IAdmissionPolicy` | 这个包收不收这种东西 | **无**(纯谓词) | ✅ 接口 + `AcceptAll` 已落码;`AcceptByTag`(节日包)待第 5 步 |
+| **淘汰** `IEvictionPolicy` | 满了挤掉谁 | **有**(唯一一个) | ✅ 已落码:`RejectWhenFull`(三个包)+ `EvictOldestFirst`(临时格);FIFO 序仍是 guid 近似,见 §6.2 |
 | **排序 / 整理** | 能不能重排、按什么排 | 有 | ✅ `SupportsCompaction()` + `CompactPolicy` |
-| **流出** `IWithdrawPolicy` | 能不能拿出去 / 移到别的包 | 无 | ❌ 缺 → 绑定 / 任务道具 / 活动期结束 |
+| **流出** `IWithdrawPolicy` | 能不能拿出去 / 移到别的包 | 无 | ❌ 缺 → 绑定 / 任务道具 / 活动期结束(第 7 步,等使用者) |
 | **过期** | 整包什么时候清 | 有 | ❌ 缺 |
+
+> **注意"摆放"这一轴有个例外**:具名槽下"这批摆不摆得下"**不是**布局层能独自
+> 回答的(要按部位分桶,而部位在配置表里)。那一问落在桥层的 `Bag::CanReserve()`,
+> 见 §5.1 与 §6.1。这不是轴划错了,而是这一轴的答案天然需要两层的信息。
 
 ### 3.1 「有无副作用」那一列是纪律,不是描述
 
@@ -104,8 +123,8 @@
 与 `ItemStore::MergePartialStacks` 同一条纪律:**销毁必须两层成对进行,那是桥层的活**。
 淘汰策略只负责**选出**该退役哪些 guid,由 `Bag` 执行销毁、由 `BagService` 落流水。
 
-`cpp/libs/modules/bag/bag_system.cpp:340` 那句 `// TODO: overflow to temp bag or mail`
-就是这一轴的占位符 —— 它今天的实现是隐式的 `RejectWhenFull`。
+`Bag::AddNonStackableItem` 里那句 `// TODO: overflow to temp bag or mail` 就是这一轴的
+占位符 —— 它今天的实现是隐式的 `RejectWhenFull`。
 
 ---
 
@@ -144,20 +163,42 @@ class IAdmissionPolicy
 public:
     virtual ~IAdmissionPolicy() = default;
 
-    // 单件:这件东西能不能进这个容器。
+    // 这个容器收不收这种东西。**只看 config,不看当前占用**。
     [[nodiscard]] virtual bool Accepts(uint32_t configId) const = 0;
-
-    // 整批:这一批能不能一次性容纳(reserve 阶段用)。
-    // 为什么必须有这一条而不是循环调 Accepts —— 见 §6.1。
-    [[nodiscard]] virtual bool AcceptsBatch(const ItemCountMap &items,
-                                            const IContainerLayout &layout) const = 0;
 };
 
-class AcceptAll        final : public IAdmissionPolicy {};  // 人物背包 / 仓库 / 临时格
-class AcceptByTag      final : public IAdmissionPolicy {};  // 节日包
-class AcceptEquippable final : public IAdmissionPolicy {};  // 装备栏(含按部位的槽位可用性)
-class AllOf            final : public IAdmissionPolicy {};  // Composite
+class AcceptAll   final : public IAdmissionPolicy {};  // 已落码:四个固定包 + 全部动态包
+class AcceptByTag final : public IAdmissionPolicy {};  // 待做(第 5 步):节日包
+class AllOf       final : public IAdmissionPolicy {};  // 待做:Composite,规则可组合时再加
 ```
+
+### 5.1 落码时推翻的一处:`AcceptsBatch` 不属于这一层
+
+本节原先还画了一个 `AcceptsBatch(items, layout)`,用来回答"装备栏的两个手镯位
+装不装得下这一批",并把 `AcceptEquippable` 列为装备栏的准入策略。**实现时发现这
+是错的**,已改。
+
+理由有两条,第二条是硬的:
+
+1. "这批摆不摆得下"要同时读**布局的当前占用**和**配置表**,那是桥层的活,不是
+   一个只认识 config 的谓词能回答的。
+2. 更关键:它**必须与 `Bag::PlaceInstance` 在同一个条件上分叉**
+   (`layout_->HasSlotSemantics()`)。§6.1 那个 bug 的根就是两侧分叉条件不一致 ——
+   commit 侧按具名槽去查槽位表,reserve 侧却一律拿 `FreeCells()` 作答。
+   **把它做成可插拔策略,等于让"两侧必须一致"重新变成一件靠人记住的事** ——
+   下一次有人给装备栏配了 `AcceptAll`,这个 bug 就原样复活,而且更难看出来。
+
+所以具名槽的批量判定落在桥层的 `Bag::CanReserve()`,它与 `PlaceInstance` 逐字
+共用那个 `if`;`IAdmissionPolicy` 只保留与占用无关的纯 config 判定(节日包收不收
+这种道具)。`AcceptEquippable` 因此不存在。
+
+代价是装备栏的 profile 里写的是 `AcceptAll` —— 读起来像"装备栏没有准入规则",
+容易误解。用例 `BagProfileTest.FixedBagsCarryNoAdmissionRuleYet` 把这个取舍钉住了:
+谁想把"只收装备"挪进准入策略,会先撞到它。
+
+**推论(给第 5 步):** `AcceptByTag` 是安全的,因为"是不是节日道具"跟占用无关。
+但凡将来出现"这个包最多收 3 件任务道具"这种**跟占用有关**的规则,它同样不该
+进准入层,而要走 `CanReserve` 那条路。
 
 ```cpp
 // eviction_policy.h —— 唯一有副作用的轴,所以必须回执
@@ -178,23 +219,41 @@ class RejectWhenFull   final : public IEvictionPolicy {};  // 返回空 = 拒绝
 class EvictOldestFirst final : public IEvictionPolicy {};  // 临时包 FIFO
 ```
 
-### 5.1 装配点已经存在
+### 5.2 装配点(已落码)
 
-`comp/player_bags_comp.h` 的构造函数**已经是雏形的 Abstract Factory**,
-只是今天只装配了布局一维:
+`comp/player_bags_comp.h` 的构造函数原本就是雏形的 Abstract Factory,只是当时
+只装配了布局一维。现在它装配整个 profile:
 
 ```cpp
-// 今天:
-bags[kEquipment].SetLayout(std::make_unique<FixedSlotLayout>(kEquipmentCapacity));
+// 落码后(bag_system.h 定义 BagProfile,player_bags_comp.h 装配)
+bags[kInventory].SetProfile(BagProfile::Flat(kBagMaxCapacity));
+bags[kWarehouse].SetProfile(BagProfile::Flat(kWarehouseMaxCapacity));
+bags[kEquipment].SetProfile(BagProfile::Equipment(kEquipmentCapacity));
+bags[kTemporary].SetProfile(BagProfile::Temporary(kTempBagMaxCapacity)); // 先进先出
 
-// 推广后:一次装配一整套 profile
-bags[kEquipment].SetProfile(BagProfile::Equipment());
-bags[kTemporary].SetProfile(BagProfile::Temporary());          // Flat + AcceptAll + EvictOldestFirst
-dynamicBags_[eventId].SetProfile(BagProfile::FromTable(profileId));  // 节日包,查表
+// 待做(第 5 步):节日包按表装配
+dynamicBags_[eventId].SetProfile(BagProfile::FromTable(profileId));
 ```
 
-`BagProfile` 就是 `{layout, admission, eviction, ordering}` 四个 `unique_ptr` 的一个包。
-**它是装配器,不是新的一层** —— `Bag` 的公开 API 一行不变,这与上一刀的验收判据同源。
+`BagProfile` 今天是 `{layout, admission, eviction}` 三个 `unique_ptr`;`expiry` 是
+后面的字段 —— **加字段时上面四行一个字都不用改**,这正是做成 struct 而不是三个
+setter 的理由。加淘汰轴时兑现了这句话:只多了一个字段、一个 `Temporary()` 工厂,
+装配点只有 `kTemporary` 那一行从 `Flat` 换成了 `Temporary`。
+
+`Flat()` 收一个容量参数(三个自由格包只差这个数字),`Equipment()` 收槽位数。
+容量刻意**不写死在 profile 里**:它是 profile 给的**起点**,随后会被
+`ExpandCapacity`(玩法解锁)或 `SetCapacityForRestore`(快照还原)覆盖 ——
+它是状态,不是规则。
+
+**它是装配器,不是新的一层** —— `Bag` 的公开 API 只增不改
+(`SetProfile` / `SetAdmission` / `Admission()` 是新增的,老方法一个没动),
+这与上一刀的验收判据同源。
+
+一个刻意的不对称:`SetLayout` 要求背包**必须是空的**(槽位号在不同布局下含义
+不同,带着物品换布局等于让所有已持久化的 `pos` 突然改变意义),而
+`SetAdmission` **不要求** —— 准入是纯谓词,换掉它不重新解释任何已存状态。
+换成更严的策略后包里可能留着新策略不接受的存量物品,那是刻意的:
+**不能因为规则变了就丢玩家的东西**(同 §7 红线 7)。
 
 ---
 
@@ -207,10 +266,11 @@ dynamicBags_[eventId].SetProfile(BagProfile::FromTable(profileId));  // 节日�
 手镯位)+ `Bag::FindFreeSlotForKind()`(找"第一个空的接受槽")。整条链完整,
 见 split 文档 §11.2(d)。
 
-#### 现存缺陷:`CanFit()` 对具名槽说谎
+#### 缺陷:`CanFit()` 对具名槽说谎 —— 已落码,未编译
 
-> **未修。** 2026-09-01 由静态阅读发现,**没有跑过用例验证**,实施前请先写一个
-> 失败用例确认。
+> **2026-09-01 已修,但尚未编译、尚未跑过用例**(按 `CLAUDE.md` §10.1,构建由
+> Codex 执行)。下面的推演仍是**静态阅读**的产物;回归用例已一并写好
+> (`EquipmentReserveTest` 套件),跑通之前不要当作"已验证"。
 
 `FixedSlotLayout` 继承 `FlatLayout` 且**没有覆盖 `CanFit()`**,于是:
 
@@ -244,13 +304,66 @@ dynamicBags_[eventId].SetProfile(BagProfile::FromTable(profileId));  // 节日�
 | 修法 | 评价 |
 |---|---|
 | `FixedSlotLayout` 覆盖 `CanFit` | 做不到 —— 它认不得 `config_id`,而"这批里几只是手镯"必须查表。硬做就是让布局层认识 config,§5 那条判据当场破 |
-| 把判定提到桥层的准入策略 | **正解**。与 `EquipKindFor` / `FindFreeSlotForKind` 同层同源 |
+| 把判定提到桥层 | **正解,已采用**。与 `EquipKindFor` / `FindFreeSlotForKind` 同层同源 |
 
-> **可达性存疑,实施前先确认。** 今天是否真有生产路径往 `kEquipment` 批量塞同部位
-> 装备(邮件附件发两只手镯?),没有查证。即使今天不可达,它也是一颗定时炸弹 ——
-> 穿戴流程一落地就踩上。
+#### 实际修法
 
-### 6.2 临时背包 FIFO —— 淘汰必须有回执,且缺"入包顺序"这个状态
+新增 `Bag::CanReserve(instancesByConfig, totalInstances)`,取代三处 reserve 里的
+裸 `CanFit` / `IsSpaceInsufficient`(`CheckSpaceFor`、`AddNonStackableItem`、
+`AddStackableItem`)。它做三件事:
+
+1. 先问格子数(`layout_->CanFit`)—— 任何布局都要过;
+2. `if (!layout_->HasSlotSemantics()) return true;` —— **这一行是整个修复的要点**,
+   它与 `PlaceInstance` 的分叉条件逐字相同;
+3. 具名槽:把需求按**部位**汇总(不是按 config —— 两件不同的手镯共用同一对槽位),
+   再逐部位比对空槽数。
+
+配套:抽出文件级静态函数 `IsFreeSlotForEquipKind()`,让
+`FindFreeSlotForKind`(commit 侧)与新增的 `CountFreeSlotsForKind`(reserve 侧)
+**共用同一条"可用空槽"判据** —— 两侧各写各的,正是这个 bug 的成因,不能再犯第二次。
+它顺带补上了原先漏掉的 `slot < Capacity()` 过滤(容量可被快照还原改小)。
+
+`IsSpaceInsufficient()` 保留为公开 API(对自由格布局仍然正确),但注释里标明了
+它对具名槽不完整;`IContainerLayout::CanFit` 与 `FixedSlotLayout` 的注释也各加了
+一段,说明"这里为什么不能覆盖 CanFit"。
+
+**错误码刻意没变**:准入/槽位不足仍返回今天那两个码
+(`kBagAddItemBagFull` / `kBagItemNotStacked`),只是**失败时机**从 commit 中途
+提前到写入之前。想把"这个包不收"与"满了"分开,需要给 `bag_error_tip.proto` 加
+新码 —— 那要重生成,留到后续。
+
+#### 可达性:已查证 —— **今天不可达,因为整个背包域在生产侧零调用点**
+
+2026-09-01 查证结果(`grep` 判据附后):
+
+| 问题 | 答案 |
+|---|---|
+| 生产代码里谁调用 `Bag::AddItem` / `AddItems`? | **没有人。** `cpp/libs/services` 与 `cpp/nodes` 零命中 |
+| 谁调用 `BagService::*`? | **没有人。** 全仓提到 `BagService` 的非测试位置全是注释 |
+| 谁用 `PlayerBagsComp`? | 只有 `bag_marshal.{h,cpp}`(序列化 / 跨服还原) |
+
+```bash
+grep -rn "BagService" --include=*.cpp --include=*.h cpp/ | grep -v modules/bag/bag_service | grep -v ^cpp/tests
+grep -rn "\.AddItem\|AddItems" --include=*.cpp cpp/libs/services cpp/nodes
+```
+
+所以**背包今天只被"存"和"还原",没有任何玩法入口**——加物品、扣物品、整理这些
+公开 API 的唯一使用者是 `bag_test`。这与 `player_bags_comp.h` 里记的那段历史
+(2026-05-17 之前"production code had ZERO instantiations")是同一件事的延续:
+组件建起来了,玩法链路仍然没接。
+
+**推论一(给这个 bug):** 它是**定时炸弹,不是正在流血**。穿戴 / 邮件附件 /
+掉落任一条链路接上来的当天就会踩上,但今天线上不会因为它掉装备。修得早是对的,
+优先级不必按"线上事故"排。
+
+**推论二(给第 4~6 步,更重要):** 节日包、FIFO 临时包都是**玩法规则**,而玩法
+入口不存在。在一个没有调用者的容器上继续叠规则,等于在空中盖楼 —— 规则写完了
+也没有任何路径会去执行它,连"跑一遍看看对不对"都做不到,只能靠单测自证。
+建议在推进第 4 步之前,先把**至少一条真实入包链路**接到 `BagService::AddItem`
+(掉落拾取或邮件领取都行),让这套规则有第一个真实使用者。这与第 7 步的判据
+是同一条:**没有使用者的东西不要提前造。**
+
+### 6.2 临时背包 FIFO —— 已落码(排序依据仍是近似)
 
 #### (1) 挤掉的东西是玩家资产,不能无声消失
 
@@ -276,12 +389,72 @@ dynamicBags_[eventId].SetProfile(BagProfile::FromTable(profileId));  // 节日�
 **字段号 6/7/8 已被 TODO 预定**(enchant / affixes / gem,见
 `proto/common/database/bag_quest_mail_data.proto`),**用 9**。
 
+> **落码现状:先用 guid 近似,但把近似关进了一个函数。**
+> `EvictOldestFirst::AcquisitionOrderOf(guid, item)` 是排序依据的**唯一**来源,
+> 今天 `return guid`。等序号字段落地,**整个淘汰轴只改这一个函数**,策略与桥层
+> 都不用动。这么做而不是等 proto,是因为除了排序依据之外的每一块
+> (回执、落流水、腾位纪律、具名槽禁淘汰)都跟字段无关,先做掉是净收益。
+
+#### (3) 落码后的实际形状
+
+| 环节 | 落在哪 |
+|---|---|
+| 选谁退役(零副作用) | `EvictOldestFirst::SelectVictims` —— 腾不够就返回**空**,绝不"能腾多少算多少" |
+| 真销毁(两层成对) | `Bag::ReserveOrEvict` —— 且**先算清楚腾了够不够,够了才销毁** |
+| 回执 | `AddItem` / `AddItems` 新增的 `evictedOut`(可选参数,老调用方不受影响) |
+| 落流水 | `BagService::LogEvictedInstances` → `LogItemDestroy`,**无论本次入包成败都落** |
+
+三条容易写错、已经用例钉住的地方:
+
+1. **具名槽一律不淘汰。** 装备栏配的是 `RejectWhenFull`,桥层还有第二道锁
+   (`ReserveOrEvict` 见到 `HasSlotSemantics()` 直接拒)—— 两道一起,才挡得住
+   "有人手工把 `EvictOldestFirst` 配到装备栏上"。
+   用例 `EvictionPolicyTest.NamedSlotsNeverEvictEvenWithAnEvictingPolicy`。
+2. **淘汰之后必须重新规划。** 被挤掉的可能正是本次打算并进去的未满堆(临时格里
+   同 config 的旧堆恰恰最早进包),不重算就会拿着悬空的 entity 去 `ApplyStackFill`。
+   `AddStackableItem` 与 `ReserveBatch` 各有一次重规划,两遍是确定上界不是循环。
+3. **`CheckSpaceFor` 保持纯预测。** 它按"不破坏现状"回答,于是对会淘汰的包偏
+   保守。真入包路径改走 `ReserveForBatchAdd` —— 否则纯预测会抢在淘汰之前把整批
+   拒掉,先进先出在批量路径上永远不生效。这一条正是 `BagService` 那两处批量闸
+   必须一起改的原因。用例 `CheckSpaceForStaysPureAndNeverEvicts`。
+
 > 注意 `ItemComp`(`proto/common/component/item_base_comp.proto`)今天只有
 > `item_id` / `config_id` / `size` **三个字段** —— split 文档里"proto 里已按已知
 > 字段号预留了强化等级 / 词条 / 镶嵌"指的是 `ItemEntry`(持久化),不是 `ItemComp`
 > (运行时)。FIFO 序要在运行时可读,**两边都得加**。
 
-### 6.3 节日背包 —— 缺的是表列,不是 C++
+### 6.3 落码时自己踩出来的一个同族缺陷(已修)
+
+加淘汰轴的当天,在同一份代码里又造出了一个**和 §6.1 同一家族**的问题:
+**一个会失败的判断站错了位置。**
+
+`ReserveOrEvict` 会为了腾位真的销毁实例,而它被放在了 `CanMintGuid` 这类
+**零副作用预检的前面**。后果:发号器被 fence(跨服失租等)时,临时格已经挤掉
+最早那件东西,然后整批拒绝 —— **玩家的资产白丢,而且这次连"放不下"都不是,
+是根本不该开始**。
+
+四处同病,全部已改为「纯预检 → reserve/腾位 → commit」:
+
+| 位置 | 原来的顺序 | 改后 |
+|---|---|---|
+| `AddNonStackableItem` | reserve → 铸号预检 | 铸号预检 → reserve |
+| `AddStackableItem` | plan → reserve → 铸号预检 | plan → 铸号预检 → reserve |
+| `AddItems(ItemCountMap)` | reserve → 铸号预检 | `PlanInstances` → 铸号预检 → reserve |
+| `AddItems(vector)` | reserve → guid 撞车预检 → 铸号预检 | `PlanInstances` → 两道预检 → reserve |
+
+`AddStackableItem` 那处的铸号预检因此变得**略保守**(万一腾位后重新规划发现
+全并得进去、根本不用铸号,也已经拒了)。这是刻意的取舍:**宁可少收一次,
+不可错杀一件。**
+
+判据升级成一条红线(§7 第 7 条),用例
+`BagFencedGeneratorTest.EvictionNeverHappensBeforeAPureCheckCanRefuse`。
+
+> 这条值得记住的原因不是"改了个 bug",而是:**引入第一根有副作用的轴,会把
+> 整个模块里所有判断的先后顺序从风格问题变成正确性问题。** 三段式
+> (`plan -> reserve -> commit`)此前之所以好写,是因为前两段都是纯的;淘汰打破
+> 了这个前提,于是每一处 reserve 都要重新审一遍"我前面还有没有会失败的判断"。
+
+### 6.4 节日背包 —— 缺的是表列,不是 C++
 
 `generated/code/proto/item_table.proto` 今天只有三列:
 
@@ -316,6 +489,60 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 
 ---
 
+### 6.5 第二轮审计(2026-09-02):8 视角独立审查 + 对抗证伪
+
+当天代码零编译、零运行,又刚被同一个人复审过一遍 —— 盲区不变。于是换成
+**8 个互不知情的审查视角**(三段纪律 / 淘汰 / 层不变量 / 编译级 / 测试有效性 /
+编排与流水 / 还原路径 / 生命周期)各自读代码,36 条原始发现去重成 18 条,再对每条
+派 2 个证伪者对着真实代码反驳。证伪阶段撞了会话限额(29 个证伪者未返回),
+未被证伪的 13 条由人工逐条复核。**结果:18 条全部成立**(其中 1 条降为"存疑,
+加防御")。
+
+#### 6.5.1 P0(3 族 5 条)—— 全部是淘汰轴引入的,全部已修
+
+| 族 | 缺陷 | 根因 | 修法 |
+|---|---|---|---|
+| **A** | 淘汰掉的正是本批要并入的同 config 未满堆 → 腾位后需求变大 → 已销毁却整批失败 | 缺口按**淘汰前**的规划算;`EvictOldestFirst` 不排除并入目标;第一版注释"不是数据能触发"是错的 —— 临时格拾取同种材料就是日常路径 | `ReserveOrEvict` 改为**先算到不动点再销毁**:把牺牲者当作已不存在重新规划(`PlanInstances` / `ItemStore` 两个规划函数新增 `exclude` 集),需求变大就多选牺牲者,稳定了才真 `DestroyItem`。收敛上界 `store_.Size()` 轮 |
+| **B** | `BagService::AddItems` 自带一套批量循环,不经过 `Bag::AddItems`,于是 §6.3 挪到前面的预检在编排层根本没跑 —— fence / guid 撞车时先挤掉旧物再失败 | 预检写在 `Bag::AddItems` 里而不是 reserve 入口里,两套循环漂移 | 全部纯预检并进 `ReserveForBatchAdd`(两个重载),`Bag::AddItems` 与 `BagService::AddItems` 都只调它;vector 重载额外带预设 guid 撞车预检;fence 下**连腾位也不做**(腾位后重规划可能把纯并堆变成要铸号的溢出) |
+| **C** | 单件沿用预设 guid 时,`store_.Contains` 这道零成本预检排在腾位之后 | 与 vector 批量入口不对称 | `AddNonStackableItem` 在 `ReserveOrEvict` 之前加 `Contains` 预检 |
+
+#### 6.5.2 P1 / P2(8 条)—— 已修
+
+| # | 缺陷 | 修法 |
+|---|---|---|
+| P1 | `count==0` 条目过了预检、逐件 `AddItem` 才拒,半批且取决于哈希序 | `ReserveForBatchAdd` 两个重载在最前面拒零数量(`CheckSpaceFor` 保持宽容,既有口径) |
+| P2 | 槽位表出现重复 id 行时 `CountFreeSlotsForKind` 多数空槽,reserve 又比 commit 乐观 | 按物理槽位 id 去重 |
+| P2 | `SetProfile` 非原子:非空包上 `SetLayout` 被拒、另外两根照换,得到"旧布局 + 新淘汰策略" | `SetProfile` 要求空包且三根轴齐全,否则整套不换 |
+| P2 | `evictedOut == nullptr` 时照样销毁,回执无声丢弃 | **没有回执就不淘汰**(按 `RejectWhenFull` 处理)—— 从注释变成闸 |
+| P2 | `SetCapacityForRestore` 可把容量压到已占槽位之下,Debug 断言 / Release 永远满 | 拒绝缩到 `OccupiedSlotCount()` 之下 |
+| P2 | `ApplyStackFill` 对悬空 entity 零防御(entt Release 下 UB) | `registry_.valid()` 防御 + `LOG_ERROR`;真正的保证仍是"淘汰后必重规划" |
+| P2 | 格子布局碎片时 `ReserveOrEvict` 把"空格够却摆不进"当编程错误吼 | 识别为"容量不是标量",按 `RejectWhenFull` 静默处理 |
+| 文档 | `bag_service.h` 仍写"transactional / all-or-nothing space check" | 更正为实际口径:reserve 之后逐项不再失败,但临时格上 reserve 本身可能已销毁旧物 |
+
+#### 6.5.3 覆盖缺口(3 条)—— 已补用例
+
+- fence 顺序用例只走了不可叠加 + ItemCountMap → 补 `StackableSpillNeverEvictsWhenGeneratorIsFenced`、`VectorBatchNeverEvictsWhenGeneratorIsFenced`
+- 准入轴全是 `AcceptAll` 走 true 分支,删掉两处 `Accepts` 判断也全绿 → 补 `RejectingAdmissionRefusesBeforeAnyWrite`(`RejectAllAdmission`)
+- "被挤掉的实例必须落 `LogItemDestroy`"零用例 → 见 §6.5.4
+
+新增回归:`EvictingTheMergeTargetStillLandsEverything`(族 A 核心,修复前必红)、
+`EvictingTheMergeTargetInABatchStillLandsEverything`、`MergeTargetThatIsNotOldestSurvivesAndAbsorbs`
+(对照:不能退化成一律按最坏情况多挤)、`PreassignedGuidCollisionRefusesBeforeEvicting`、
+`ZeroCountEntryRefusesWholeBatchBeforeAnyWrite`、`NoReceiptSinkMeansNoEviction`、
+`SetProfileOnANonEmptyBagChangesNothing`、`CapacityNeverShrinksBelowOccupiedSlots`。
+
+#### 6.5.4 教训
+
+1. **同一个人复审同一份代码,盲区不变。** §6.3 那次自查抓到了"预检站错位置",
+   却没抓到"缺口按淘汰前算"—— 两者相隔十行。8 个视角里有 6 个各自独立报了后者。
+2. **"不是数据能触发的情形"这句话每写一次都要给出触发不了的证明。** 第一版
+   写了两处,两处都错。
+3. **两套批量循环 = 两份预检 = 必然漂移。** 修法不是"记得两边同改",是把预检
+   并进唯一的 reserve 入口,让漂移在结构上不可能。
+4. **`sizeof(Bag)` 变了,scene 工程必须重编**(split 文档 §9.1 踩过同一个坑):
+   `cross_zone_test` 链接 `modules.lib` + `scene.lib`,`bag_marshal.obj` 里
+   `entt::basic_storage<PlayerBagsComp>` 的实例化步长是旧的。§8.2 已改。
+
 ## 7. 红线(别把已经挖开的缝焊回去)
 
 1. **布局层永远不许认识 `config_id`。** split 文档 §2.2 的唯一判据。准入规则要查表
@@ -326,7 +553,13 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 5. **不要把策略对象序列化进快照。** 快照存 `profile_id`,还原时**重新装配**。
    策略是代码 + 配置,不是玩家数据。
 6. **`BagType` 枚举不为活动增殖**,动态包走 `dynamicBags_`。
-7. **入包严格、还原宽容。** split 文档 §11.2(d) 那条区别对准入规则同样适用:
+7. **所有零副作用的预检,必须排在唯一那步会改状态的操作之前。**
+   淘汰进来之后,reserve 段不再是纯的了(`ReserveOrEvict` 会真销毁实例)。于是
+   "判断的先后顺序"从风格问题变成了正确性问题:任何一个会失败的纯预检站在
+   `ReserveOrEvict` 后面,都会造成**已经挤掉了玩家的东西、然后整批拒绝**。
+   落码时在四处都踩了这一脚(见 §6.3),已全部修正并由用例
+   `BagFencedGeneratorTest.EvictionNeverHappensBeforeAPureCheckCanRefuse` 钉住。
+8. **入包严格、还原宽容。** split 文档 §11.2(d) 那条区别对准入规则同样适用:
    往节日包里塞非节日道具要拒;**但快照还原时不许因为规则不匹配就丢玩家东西**
    (表被裁过 / 活动已下线 / 脏数据都可能触发)。*位置可以变,物品不能丢。*
 
@@ -334,28 +567,88 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 
 ## 8. 执行清单(建议顺序)
 
-> 全部未开工。每一步都应当能独立编译、独立跑 `bag_test`,不要合并成一个大改动。
-
-| 步 | 做什么 | 为什么排这里 | 涉及 |
+| 步 | 做什么 | 状态 | 涉及 |
 |---|---|---|---|
-| 1 | 为 §6.1 的 `CanFit` 洞写一个**失败用例**,确认可达性 | 先证明缺陷存在,再动结构 | `cpp/tests/bag_test/` |
-| 2 | 修 §6.1:把具名槽的批量准入判定提到桥层 | 是现存 bug,且能顺手验证"准入必须批量可判定" | `bag_system.{h,cpp}` |
-| 3 | 抽 `IAdmissionPolicy` + `BagProfile` 装配器,四个固定包全部走 `AcceptAll` | 纯重构,行为逐字不变,可用现有 `bag_test` 当验收 | 新增 `admission_policy.{h,cpp}`、`player_bags_comp.h` |
-| 4 | 加 `CfgItem.tag` + `CfgBagProfile` 两张表 | 规则数据化的前提 | `data/*.xlsx` + 导表 |
-| 5 | 节日包:`AcceptByTag` + `DynamicBagData.profile_id` + 还原路径 | 第一个真实使用者,证明这条缝是真的 | proto + `bag_marshal.cpp` |
-| 6 | `IEvictionPolicy` + `EvictOldestFirst` + `ItemEntry`/`ItemComp` 序号字段 + 流水回执 | 唯一有副作用的轴,单独一批做,风险最高 | proto + `bag_system` + `bag_service` |
-| 7 | `IWithdrawPolicy`(绑定 / 任务道具 / 活动结束) | **等有真实使用者再做** | —— |
+| 1 | 为 §6.1 的 `CanFit` 洞写回归用例 | ✅ 已落码,未编译 | `bag_test.cpp` 新增 `EquipmentReserveTest`(8 例)+ `BagProfileTest`(3 例) |
+| 2 | 修 §6.1:把具名槽的批量 reserve 提到桥层 | ✅ 已落码,未编译 | `Bag::CanReserve` / `CountFreeSlotsForKind` / `IsFreeSlotForEquipKind` |
+| 3 | 抽 `IAdmissionPolicy` + `BagProfile` 装配器 | ✅ 已落码,未编译 | 新增 `admission_policy.h`(仅头文件);`bag_system.{h,cpp}`、`player_bags_comp.h`、`modules.vcxproj` |
+| 4 | 加 `CfgItem.tag` + `CfgBagProfile` 两张表 | ⬜ 未开工 | `data/*.xlsx` + 导表(需人跑导表工具) |
+| 5 | 节日包:`AcceptByTag` + `DynamicBagData.profile_id` + 还原路径 | ⬜ 未开工,**卡在第 4 步** | proto + `bag_marshal.cpp` |
+| 6 | `IEvictionPolicy` + `EvictOldestFirst` + 流水回执 | ✅ 已落码,未编译(**序号字段除外**) | 新增 `eviction_policy.{h,cpp}`;`bag_system.{h,cpp}`、`bag_service.{h,cpp}`、`player_bags_comp.h` |
+| 6b | `ItemEntry`/`ItemComp` 加获得序号字段(字段号 9),`AcquisitionOrderOf` 改读它 | ⬜ 未开工 | proto,只需改一个函数 |
+| 7 | `IWithdrawPolicy`(绑定 / 任务道具 / 活动结束) | ⬜ **等有真实使用者再做** | —— |
+
+第 4~6 步都要改配置表或 proto,得跑导表工具 / `cd go && build.bat` 重生成,
+所以它们不是"接着写代码"就能推进的,需要先安排那两条链路。
 
 第 7 步的判据来自 `GridLayout` 自己的注释:
 
 > 等真要做格子背包时再加,现在加就是没有使用者的臆测。
 
 同样适用于规则轴 —— **没有使用者的策略接口不要提前造。**
+(§5.1 里被推翻的 `AcceptsBatch` 就是这条判据的一次现场应用。)
 
-### 8.1 编译
+### 8.1 第 1~3 步实际落码清单(2026-09-01)
 
-按 `CLAUDE.md` §10.1:Claude 不执行编译。任一步落码后交 Codex 编译
-`modules` + `bag_test`(C++ MSBuild 串行 `/m:1`),未拿到结果前不得声称"测试绿"。
+| 文件 | 改动 |
+|---|---|
+| `cpp/libs/modules/bag/admission_policy.h` | **新增**(仅头文件,无 .cpp):`IAdmissionPolicy` + `AcceptAll` |
+| `cpp/libs/modules/bag/bag_system.h` | `BagProfile` 结构 + `Flat()`/`Equipment()` 工厂;`SetAdmission`/`Admission()`/`SetProfile`;私有 `CountFreeSlotsForKind`/`CanReserve`;成员 `admission_`;顶部三层说明;更正 `EquipKindFor` 的陈旧注释(`equip_slot` -> `equip_kind`) |
+| `cpp/libs/modules/bag/bag_system.cpp` | `SetAdmission`/`SetProfile` 实现;三处 reserve 改走 `CanReserve`;`AddItem`/`CheckSpaceFor` 加 `Accepts` 门;抽 `IsFreeSlotForEquipKind`;新增 `CountFreeSlotsForKind`/`CanReserve` |
+| `cpp/libs/modules/bag/container_layout.h` | `CanFit` 与 `FixedSlotLayout` 各加一段"为什么这里答不完整、正确答案在桥层" |
+| `cpp/libs/modules/bag/comp/player_bags_comp.h` | 四个包改走 `SetProfile`;更正"槽位口径还不在配置里"的陈旧注释 |
+| `cpp/libs/modules/modules.vcxproj` | 注册 `bag\admission_policy.h`(`CMakeLists.txt` 只列 .cpp,无需改) |
+| `cpp/tests/bag_test/bag_test.cpp` | 新增 `EquipmentReserveTest` × 8、`BagProfileTest` × 4 |
+
+### 8.1b 第 6 步落码清单(2026-09-01,同日)
+
+| 文件 | 改动 |
+|---|---|
+| `cpp/libs/modules/bag/eviction_policy.{h,cpp}` | **新增**:`IEvictionPolicy` + `RejectWhenFull`(inline)+ `EvictOldestFirst`;排序依据收在 `AcquisitionOrderOf()` |
+| `cpp/libs/modules/bag/bag_system.h` | `BagProfile` 加 `eviction` 字段 + `Temporary()` 工厂;`SetEviction`/`Eviction()`;`ReserveForBatchAdd`(公开);私有 `PlanInstances`/`ReserveBatch`/`ReserveOrEvict`;`AddItem`/`AddItems` 加可选 `evictedOut` |
+| `cpp/libs/modules/bag/bag_system.cpp` | `CheckSpaceFor` 拆成 `PlanInstances` + `CanReserve`(保持纯);三条入包路径改走 `ReserveOrEvict`/`ReserveBatch`;淘汰后重规划 |
+| `cpp/libs/modules/bag/bag_service.{h,cpp}` | `LogEvictedInstances`;三处 `AddItem` 收回执并落流水;两处批量闸从 `CheckSpaceFor` 换成 `ReserveForBatchAdd` |
+| `cpp/libs/modules/bag/comp/player_bags_comp.h` | `kTemporary` 改用 `BagProfile::Temporary` |
+| `modules.vcxproj` / `CMakeLists.txt` | 注册 `eviction_policy.{h,cpp}`(这次有 .cpp,两个文件都要改) |
+| `cpp/tests/bag_test/bag_test.cpp` | 新增 `EvictionPolicyTest` × 8 |
+
+### 8.1c 行为变化(两条)
+
+1. **具名槽布局下,放不下的批次现在在写入之前就被拒**(此前会写进去一部分再
+   返回失败)。自由格布局逐字不变。
+2. **临时格(`kTemporary`)满了会挤掉最早进包的实例**,而不是拒绝入包。这是
+   本次唯一一条 gameplay 语义变更 —— 它正是"临时背包先进先出"这个需求本身。
+   被挤掉的实例逐条落 `LogItemDestroy`,不会无声消失。
+   其余三个包(人物背包 / 仓库 / 装备栏)行为不变:满了就拒。
+
+错误码不变,线上协议与持久化格式不变,公开 API **只增不改**
+(新增的都是带默认值的可选参数与新方法)。
+
+### 8.2 编译(交 Codex)
+
+按 `CLAUDE.md` §10.1:Claude 不执行编译。第 1~3 步已落码,**未编译**。
+
+- **目标工程(顺序不能乱)**:`cpp/libs/modules`(modules)→
+  **`cpp/libs/services/scene`(scene)** → `cpp/tests/bag_test` → `cpp/tests/cross_zone_test`。
+  C++ MSBuild **必须串行** `/m:1`(并发会报假的 C1041/LNK1104)。
+  **scene 不能漏**:`Bag` 新增了 `admission_` / `eviction_` 两个 `unique_ptr`,
+  `sizeof(Bag)` 与 `PlayerBagsComp` 步长都变了;`cross_zone_test` 链接
+  `modules.lib` + `scene.lib`,而 `bag_marshal.obj` 里 `entt::basic_storage<PlayerBagsComp>`
+  的模板实例化带着旧步长 —— 只重编 modules 会复现 split 文档 §9.1 记录的
+  `is_power_of_two` 断言 / `emplace` 读 `0xFFFF…` 访问违例。
+- **新文件**:`cpp/libs/modules/bag/admission_policy.h` 已注册进 `modules.vcxproj`
+  的 `ClInclude`。它是**纯头文件,没有 .cpp**,所以 `CMakeLists.txt` 的
+  `SOURCE_FILES`(只列 .cpp)无需改动 —— 若 Linux 侧报"找不到符号",先确认这一点。
+- **通过标准**:两个工程编译零错误;`bag_test` 全绿。新增用例
+  `EquipmentReserveTest.*`(8 例)与 `BagProfileTest.*`(3 例)必须全过 ——
+  其中 `ThreeOfOneKindLeaveNothingBehindWhenRefused` 是这次修复的核心判据
+  (修复前它会红:返回失败但 `OccupiedGridCount()` 是 2 而不是 0)。
+- **回归重点**:`FixedSlotLayoutTest.*`、`BagBatchAtomicityTest.*`、
+  `PlayerBagsCompTest.*` 三套原有用例的行为**不应改变**。
+  另外 `cpp/tests/cross_zone_test` 也要跑一遍:它往装备栏还原的是物品表里
+  **不存在**的 config(3001/3002),走的是还原路径(不经 `CanReserve`),
+  正好验证"入包严格、还原宽容"没有被这次改动破坏。
+- **失败时保留**:完整编译错误输出;`bag_test` 失败用例的 gtest 输出全文。
 
 ---
 
@@ -366,7 +659,7 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 - [bag-service-srp-refactor.md](bag-service-srp-refactor.md) —— 更早一刀(纵切):
   `Bag` -> `BagService`
 - [cross-zone-readiness-audit.md](cross-zone-readiness-audit.md) §3.2 件 1 ——
-  背包跨服迁移;§6.3 的 profile 持久化缺口挂在这里
+  背包跨服迁移;§6.4 的 profile 持久化缺口挂在这里
 - `proto/common/database/bag_quest_mail_data.proto` —— `ItemEntry` / `BagAllData` /
   `DynamicBagData` 线上格式
 - `generated/code/proto/item_table.proto` / `equipslot_table.proto` —— 现有表列

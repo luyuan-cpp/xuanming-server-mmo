@@ -70,6 +70,12 @@ public:
 
     // 还能不能再放下 count 个 footprint 形状的实例(整批判定,不改任何状态)。
     // 扁平布局等价于"空格数 >= count";格子布局必须真去试摆。
+    //
+    // ⚠ **这个答案对具名槽是不完整的,而且没法在这一层补完。** 装备栏的容量是
+    // 按部位分桶的("还有 8 格"不代表"还能再穿一只手镯"),而要按部位回答就得
+    // 认识 config —— 那是这一层的红线。所以入包路径不能只信 CanFit:
+    // 桥层的 `Bag::CanReserve()` 会在 CanFit 之上再按部位问一遍。
+    // 详见 docs/design/bag-rule-policy-layering.md §6.1。
     [[nodiscard]] virtual bool CanFit(std::size_t count, Footprint footprint) const = 0;
 
     // ── 放置 / 取出 ───────────────────────────────────────────────────
@@ -196,6 +202,14 @@ class FixedSlotLayout final : public FlatLayout
 {
 public:
     explicit FixedSlotLayout(std::size_t slotCount) : FlatLayout(slotCount) {}
+
+    // ⚠ **刻意不覆盖 `CanFit()`。** 看起来这里最该覆盖它 —— 继承来的
+    // `FlatLayout::CanFit`(`FreeCells() >= count`)对具名槽是偏乐观的,
+    // 装备栏"还有 8 个空格"并不代表"还能再穿一只手镯"。但按部位回答就必须
+    // 认识 `config_id`,那是本文件顶部那条红线;这里覆盖不了,只能骗得更少。
+    // 正确答案在桥层:`Bag::CanReserve()` 在 CanFit 之上按部位再问一遍。
+    // (2026-08-27 拆分时漏了这一问,后果见
+    //  docs/design/bag-rule-policy-layering.md §6.1;2026-09-01 补上。)
 
     // 具名槽绝不参与自动重排。桥层看到 false 就只合并堆叠、回收空实例,
     // 位置一格不动。

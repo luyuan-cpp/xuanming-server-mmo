@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "entt/src/entt/entity/registry.hpp"
@@ -85,12 +86,19 @@ public:
 
     // 对 wanted 里的每个 config,汇总既有堆叠还空着多少(config_id -> 空余单位)。
     // 不在 wanted 里的、以及不可叠加(满于 1)的 config 一律贡献 0。
-    [[nodiscard]] ItemCountMap MeasureFreeRoomPerConfig(const ItemCountMap &wanted) const;
+    //
+    // exclude(可为 nullptr):把这些 guid 的实例当作**已经不存在**来算。
+    // 淘汰腾位前用它回答"如果这几件被挤掉了,这批还要新建几个实例" —— 被挤掉的
+    // 可能正是本批打算并进去的未满堆,不排除就会把需求算小,于是"腾完仍放不下"。
+    [[nodiscard]] ItemCountMap MeasureFreeRoomPerConfig(
+        const ItemCountMap &wanted, const std::unordered_set<Guid> *exclude = nullptr) const;
 
     // 规划(不改任何状态)进来的数量如何填进同 config 的既有堆叠。
     // 填充计划写进 outFillPlan,返回还需要**新建实例**才装得下的剩余量。
+    // exclude 语义同 MeasureFreeRoomPerConfig。
     uint32_t PlanStackIntoExistingStacks(const ItemComp &proto, uint32_t maxStackSize,
-                                         std::vector<StackFill> &outFillPlan) const;
+                                         std::vector<StackFill> &outFillPlan,
+                                         const std::unordered_set<Guid> *exclude = nullptr) const;
 
     // 执行 PlanStackIntoExistingStacks 的计划(真正改 size)。
     // writtenGuidsOut(可为 nullptr)按写入顺序收集被灌入的既有堆 guid ——
