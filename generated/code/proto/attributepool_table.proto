@@ -1,0 +1,25 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "AttributePoolTableOuterClass";
+option java_multiple_files = true;
+
+
+message AttributePoolTable {
+	uint32 id = 1;
+	string name = 2;
+	uint32 unlock_level = 3;
+	uint32 points_per_level = 4;
+	uint32 base_points = 5;
+	uint32 dimension_cap = 6;
+	uint64 reset_cost_gold = 7;
+	uint32 reset_free_below_level = 8;
+	string desc = 9;
+}
+
+message AttributePoolTableData {
+	repeated AttributePoolTable data = 1;
+}

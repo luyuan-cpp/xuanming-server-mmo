@@ -1749,11 +1749,11 @@ constexpr TurnResultS2C::ParseTableT_ TurnResultS2C::InternalGenerateParseTable_
     {
       PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       2,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -1763,33 +1763,42 @@ constexpr TurnResultS2C::ParseTableT_ TurnResultS2C::InternalGenerateParseTable_
       ::_pbi::TcParser::GetTable<::TurnResultS2C>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .BattleStateS2C state = 4;
-      {::_pbi::TcParser::FastMtS1,
-       {34, 1, 1,
-        PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.state_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 battle_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TurnResultS2C, _impl_.battle_id_), 2>(),
-       {8, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TurnResultS2C, _impl_.battle_id_), 3>(),
+       {8, 3, 0,
         PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.battle_id_)}},
       // uint32 round_index = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TurnResultS2C, _impl_.round_index_), 3>(),
-       {16, 3, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TurnResultS2C, _impl_.round_index_), 4>(),
+       {16, 4, 0,
         PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.round_index_)}},
       // repeated .BattleEventItem events = 3;
       {::_pbi::TcParser::FastMtR1,
        {26, 0, 0,
         PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.events_)}},
+      // .BattleStateS2C state = 4;
+      {::_pbi::TcParser::FastMtS1,
+       {34, 2, 1,
+        PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.state_)}},
+      // repeated uint64 action_order = 5;
+      {::_pbi::TcParser::FastV64P1,
+       {42, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.action_order_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 battle_id = 1;
-      {PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.battle_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.battle_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 round_index = 2;
-      {PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.round_index_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.round_index_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // repeated .BattleEventItem events = 3;
       {PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.events_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // .BattleStateS2C state = 4;
-      {PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.state_), _Internal::kHasBitsOffset + 1, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      {PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.state_), _Internal::kHasBitsOffset + 2, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // repeated uint64 action_order = 5;
+      {PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.action_order_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -1818,6 +1827,12 @@ inline constexpr TurnResultS2C::Impl_::Impl_(
             PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.events_)>()
          }
         ,
+        action_order_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::TurnResultS2C,
+            PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.action_order_)>()
+         }
+        ,
+        _action_order_cached_byte_size_{0},
         state_{nullptr},
         battle_id_{::uint64_t{0u}},
         round_index_{0u} {}
@@ -2253,14 +2268,16 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.battle_id_),
         PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.round_index_),
         PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.events_),
         PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.state_),
-        2,
+        PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.action_order_),
         3,
+        4,
         0,
+        2,
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BattleEndS2C, _impl_._has_bits_),
@@ -2338,17 +2355,17 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::BattleStateS2C)},
         {15, sizeof(::BattleStartS2C)},
         {22, sizeof(::TurnResultS2C)},
-        {33, sizeof(::BattleEndS2C)},
-        {42, sizeof(::BattleReconnectS2C)},
-        {47, sizeof(::SpectateStateS2C)},
-        {54, sizeof(::SpectateEndS2C)},
-        {63, sizeof(::SubmitBattleActionRequest)},
-        {70, sizeof(::SubmitBattleActionResponse)},
-        {75, sizeof(::GetBattleStateRequest)},
-        {80, sizeof(::StopWatchBattleRequest)},
-        {85, sizeof(::StopWatchBattleResponse)},
-        {90, sizeof(::SetAutoBattleRequest)},
-        {97, sizeof(::SetAutoBattleResponse)},
+        {35, sizeof(::BattleEndS2C)},
+        {44, sizeof(::BattleReconnectS2C)},
+        {49, sizeof(::SpectateStateS2C)},
+        {56, sizeof(::SpectateEndS2C)},
+        {65, sizeof(::SubmitBattleActionRequest)},
+        {72, sizeof(::SubmitBattleActionResponse)},
+        {77, sizeof(::GetBattleStateRequest)},
+        {82, sizeof(::StopWatchBattleRequest)},
+        {87, sizeof(::StopWatchBattleResponse)},
+        {92, sizeof(::SetAutoBattleRequest)},
+        {99, sizeof(::SetAutoBattleResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -2379,49 +2396,49 @@ const char descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto[] 
     "\007outcome\030\005 \001(\0162\017.eBattleOutcome\022\031\n\021pendi"
     "ng_actor_ids\030\006 \003(\004\"C\n\016BattleStartS2C\022\021\n\t"
     "battle_id\030\001 \001(\004\022\036\n\005state\030\002 \001(\0132\017.BattleS"
-    "tateS2C\"y\n\rTurnResultS2C\022\021\n\tbattle_id\030\001 "
-    "\001(\004\022\023\n\013round_index\030\002 \001(\r\022 \n\006events\030\003 \003(\013"
-    "2\020.BattleEventItem\022\036\n\005state\030\004 \001(\0132\017.Batt"
-    "leStateS2C\"n\n\014BattleEndS2C\022\021\n\tbattle_id\030"
-    "\001 \001(\004\022 \n\007outcome\030\002 \001(\0162\017.eBattleOutcome\022"
-    ")\n\nsettlement\030\003 \001(\0132\025.BattleSettlementDa"
-    "ta\"\'\n\022BattleReconnectS2C\022\021\n\tbattle_id\030\001 "
-    "\001(\004\"J\n\020SpectateStateS2C\022\036\n\005state\030\001 \001(\0132\017"
-    ".BattleStateS2C\022\026\n\016observer_count\030\002 \001(\r\""
-    "j\n\016SpectateEndS2C\022\021\n\tbattle_id\030\001 \001(\004\022 \n\007"
-    "outcome\030\002 \001(\0162\017.eBattleOutcome\022#\n\006reason"
-    "\030\003 \001(\0162\023.eSpectateEndReason\"M\n\031SubmitBat"
-    "tleActionRequest\022\021\n\tbattle_id\030\001 \001(\004\022\035\n\006a"
-    "ction\030\002 \001(\0132\r.BattleAction\"D\n\032SubmitBatt"
-    "leActionResponse\022&\n\rerror_message\030\001 \001(\0132"
-    "\017.TipInfoMessage\"*\n\025GetBattleStateReques"
-    "t\022\021\n\tbattle_id\030\001 \001(\004\"+\n\026StopWatchBattleR"
-    "equest\022\021\n\tbattle_id\030\001 \001(\004\"A\n\027StopWatchBa"
-    "ttleResponse\022&\n\rerror_message\030\001 \001(\0132\017.Ti"
-    "pInfoMessage\":\n\024SetAutoBattleRequest\022\021\n\t"
-    "battle_id\030\001 \001(\004\022\017\n\007enabled\030\002 \001(\010\"\?\n\025SetA"
-    "utoBattleResponse\022&\n\rerror_message\030\001 \001(\013"
-    "2\017.TipInfoMessage*\210\001\n\022eSpectateEndReason"
-    "\022\025\n\021SPECTATE_END_NONE\020\000\022 \n\034SPECTATE_END_"
-    "BATTLE_FINISHED\020\001\022\037\n\033SPECTATE_END_BATTLE"
-    "_ABORTED\020\002\022\030\n\024SPECTATE_END_REMOVED\020\0032\371\004\n"
-    "\022BattleClientPlayer\022M\n\022SubmitBattleActio"
-    "n\022\032.SubmitBattleActionRequest\032\033.SubmitBa"
-    "ttleActionResponse\0229\n\016GetBattleState\022\026.G"
-    "etBattleStateRequest\032\017.BattleStateS2C\022,\n"
-    "\021NotifyBattleStart\022\017.BattleStartS2C\032\006.Em"
-    "pty\022*\n\020NotifyTurnResult\022\016.TurnResultS2C\032"
-    "\006.Empty\022(\n\017NotifyBattleEnd\022\r.BattleEndS2"
-    "C\032\006.Empty\0224\n\025NotifyBattleReconnect\022\023.Bat"
-    "tleReconnectS2C\032\006.Empty\022D\n\017StopWatchBatt"
-    "le\022\027.StopWatchBattleRequest\032\030.StopWatchB"
-    "attleResponse\022>\n\rSetAutoBattle\022\025.SetAuto"
-    "BattleRequest\032\026.SetAutoBattleResponse\0220\n"
-    "\023NotifySpectateState\022\021.SpectateStateS2C\032"
-    "\006.Empty\0222\n\030NotifySpectateTurnResult\022\016.Tu"
-    "rnResultS2C\032\006.Empty\022,\n\021NotifySpectateEnd"
-    "\022\017.SpectateEndS2C\032\006.Empty\032\005\210\250\303\001\001B\014Z\006batt"
-    "le\230\324a\036b\006proto3"
+    "tateS2C\"\217\001\n\rTurnResultS2C\022\021\n\tbattle_id\030\001"
+    " \001(\004\022\023\n\013round_index\030\002 \001(\r\022 \n\006events\030\003 \003("
+    "\0132\020.BattleEventItem\022\036\n\005state\030\004 \001(\0132\017.Bat"
+    "tleStateS2C\022\024\n\014action_order\030\005 \003(\004\"n\n\014Bat"
+    "tleEndS2C\022\021\n\tbattle_id\030\001 \001(\004\022 \n\007outcome\030"
+    "\002 \001(\0162\017.eBattleOutcome\022)\n\nsettlement\030\003 \001"
+    "(\0132\025.BattleSettlementData\"\'\n\022BattleRecon"
+    "nectS2C\022\021\n\tbattle_id\030\001 \001(\004\"J\n\020SpectateSt"
+    "ateS2C\022\036\n\005state\030\001 \001(\0132\017.BattleStateS2C\022\026"
+    "\n\016observer_count\030\002 \001(\r\"j\n\016SpectateEndS2C"
+    "\022\021\n\tbattle_id\030\001 \001(\004\022 \n\007outcome\030\002 \001(\0162\017.e"
+    "BattleOutcome\022#\n\006reason\030\003 \001(\0162\023.eSpectat"
+    "eEndReason\"M\n\031SubmitBattleActionRequest\022"
+    "\021\n\tbattle_id\030\001 \001(\004\022\035\n\006action\030\002 \001(\0132\r.Bat"
+    "tleAction\"D\n\032SubmitBattleActionResponse\022"
+    "&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage\""
+    "*\n\025GetBattleStateRequest\022\021\n\tbattle_id\030\001 "
+    "\001(\004\"+\n\026StopWatchBattleRequest\022\021\n\tbattle_"
+    "id\030\001 \001(\004\"A\n\027StopWatchBattleResponse\022&\n\re"
+    "rror_message\030\001 \001(\0132\017.TipInfoMessage\":\n\024S"
+    "etAutoBattleRequest\022\021\n\tbattle_id\030\001 \001(\004\022\017"
+    "\n\007enabled\030\002 \001(\010\"\?\n\025SetAutoBattleResponse"
+    "\022&\n\rerror_message\030\001 \001(\0132\017.TipInfoMessage"
+    "*\210\001\n\022eSpectateEndReason\022\025\n\021SPECTATE_END_"
+    "NONE\020\000\022 \n\034SPECTATE_END_BATTLE_FINISHED\020\001"
+    "\022\037\n\033SPECTATE_END_BATTLE_ABORTED\020\002\022\030\n\024SPE"
+    "CTATE_END_REMOVED\020\0032\371\004\n\022BattleClientPlay"
+    "er\022M\n\022SubmitBattleAction\022\032.SubmitBattleA"
+    "ctionRequest\032\033.SubmitBattleActionRespons"
+    "e\0229\n\016GetBattleState\022\026.GetBattleStateRequ"
+    "est\032\017.BattleStateS2C\022,\n\021NotifyBattleStar"
+    "t\022\017.BattleStartS2C\032\006.Empty\022*\n\020NotifyTurn"
+    "Result\022\016.TurnResultS2C\032\006.Empty\022(\n\017Notify"
+    "BattleEnd\022\r.BattleEndS2C\032\006.Empty\0224\n\025Noti"
+    "fyBattleReconnect\022\023.BattleReconnectS2C\032\006"
+    ".Empty\022D\n\017StopWatchBattle\022\027.StopWatchBat"
+    "tleRequest\032\030.StopWatchBattleResponse\022>\n\r"
+    "SetAutoBattle\022\025.SetAutoBattleRequest\032\026.S"
+    "etAutoBattleResponse\0220\n\023NotifySpectateSt"
+    "ate\022\021.SpectateStateS2C\032\006.Empty\0222\n\030Notify"
+    "SpectateTurnResult\022\016.TurnResultS2C\032\006.Emp"
+    "ty\022,\n\021NotifySpectateEnd\022\017.SpectateEndS2C"
+    "\032\006.Empty\032\005\210\250\303\001\001B\014Z\006battle\230\324a\036b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto_deps[4] = {
@@ -2434,7 +2451,7 @@ static ::absl::once_flag descriptor_table_proto_2fbattle_2fplayer_5fbattle_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto = {
     false,
     false,
-    2094,
+    2117,
     descriptor_table_protodef_proto_2fbattle_2fplayer_5fbattle_2eproto,
     "proto/battle/player_battle.proto",
     &descriptor_table_proto_2fbattle_2fplayer_5fbattle_2eproto_once,
@@ -3107,7 +3124,15 @@ PROTOBUF_NDEBUG_INLINE TurnResultS2C::Impl_::Impl_(
               PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.events_)>()
           , from.events_
         }
-     {}
+        ,
+        action_order_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::TurnResultS2C,
+              PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.action_order_)>()
+          , from.action_order_
+        }
+        ,
+        _action_order_cached_byte_size_{0} {}
 
 TurnResultS2C::TurnResultS2C(
     ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
@@ -3124,7 +3149,7 @@ TurnResultS2C::TurnResultS2C(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
   ::uint32_t cached_has_bits = _impl_._has_bits_[0];
-  _impl_.state_ = (CheckHasBit(cached_has_bits, 0x00000002U))
+  _impl_.state_ = (CheckHasBit(cached_has_bits, 0x00000004U))
                 ? ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_)
                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
@@ -3145,7 +3170,13 @@ PROTOBUF_NDEBUG_INLINE TurnResultS2C::Impl_::Impl_(
             ::TurnResultS2C,
             PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.events_)>()
          }
-     {}
+        ,
+        action_order_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::TurnResultS2C,
+            PROTOBUF_FIELD_OFFSET(::TurnResultS2C, _impl_.action_order_)>()
+         }
+        ,
+        _action_order_cached_byte_size_{0} {}
 
 inline void TurnResultS2C::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -3205,16 +3236,19 @@ PROTOBUF_NOINLINE void TurnResultS2C::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _impl_.events_.Clear();
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _impl_.action_order_.Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(_impl_.state_ != nullptr);
       _impl_.state_->Clear();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000cU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000018U)) {
     ::memset(&_impl_.battle_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.round_index_) -
         reinterpret_cast<char*>(&_impl_.battle_id_)) + sizeof(_impl_.round_index_));
@@ -3243,7 +3277,7 @@ PROTOBUF_NOINLINE void TurnResultS2C::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 battle_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_battle_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -3252,7 +3286,7 @@ PROTOBUF_NOINLINE void TurnResultS2C::Clear() {
   }
 
   // uint32 round_index = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_round_index() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -3274,10 +3308,21 @@ PROTOBUF_NOINLINE void TurnResultS2C::Clear() {
   }
 
   // .BattleStateS2C state = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         4, *this_._impl_.state_, this_._impl_.state_->GetCachedSize(), target,
         stream);
+  }
+
+  // repeated uint64 action_order = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    {
+      int byte_size = this_._impl_._action_order_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt64Packed(
+            5, this_._internal_action_order(), byte_size, target);
+      }
+    }
   }
 
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
@@ -3305,7 +3350,7 @@ PROTOBUF_NOINLINE void TurnResultS2C::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // repeated .BattleEventItem events = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_events_size();
@@ -3313,20 +3358,27 @@ PROTOBUF_NOINLINE void TurnResultS2C::Clear() {
         total_size += ::google::protobuf::internal::WireFormatLite::MessageSize(msg);
       }
     }
-    // .BattleStateS2C state = 4;
+    // repeated uint64 action_order = 5;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(
+              this_._internal_action_order(), 1,
+              this_._impl_._action_order_cached_byte_size_);
+    }
+    // .BattleStateS2C state = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.state_);
     }
     // uint64 battle_id = 1;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_battle_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_battle_id());
       }
     }
     // uint32 round_index = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_round_index() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_round_index());
@@ -3351,13 +3403,16 @@ void TurnResultS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_events()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
           from._internal_events());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      _this->_internal_mutable_action_order()->MergeFrom(from._internal_action_order());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       ABSL_DCHECK(from._impl_.state_ != nullptr);
       if (_this->_impl_.state_ == nullptr) {
         _this->_impl_.state_ = ::google::protobuf::Message::CopyConstruct(arena, *from._impl_.state_);
@@ -3365,12 +3420,12 @@ void TurnResultS2C::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.state_->MergeFrom(*from._impl_.state_);
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_battle_id() != 0) {
         _this->_impl_.battle_id_ = from._impl_.battle_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_round_index() != 0) {
         _this->_impl_.round_index_ = from._impl_.round_index_;
       }
@@ -3394,6 +3449,7 @@ void TurnResultS2C::InternalSwap(TurnResultS2C* PROTOBUF_RESTRICT PROTOBUF_NONNU
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.events_.InternalSwap(&other->_impl_.events_);
+  _impl_.action_order_.InternalSwap(&other->_impl_.action_order_);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(TurnResultS2C, _impl_.round_index_)
       + sizeof(TurnResultS2C::_impl_.round_index_)

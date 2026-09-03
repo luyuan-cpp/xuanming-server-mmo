@@ -87,7 +87,26 @@ inline constexpr uint64_t kDefaultItemHealHp = 100;
 // 子 buff 递归深度上限(防表配环)
 inline constexpr uint32_t kMaxSubBuffDepth = 8;
 
-// ---- 怪物侧保守默认值(MonsterTable 目前只有 id 列,缺属性列,见 open_issues) ----
+// ---- 表现规格(docs/design/turn-battle-presentation.md §2 D1-D5)相关常量 ----
+
+// 命中判定基础命中率(百分比)。一期 Skill/Monster 表均无命中率/闪避列,
+// 引擎按本常量走判定骨架:命中率 >= 100 时不消耗随机数、永不产出 MISS,
+// 既有同种子回放基线不受影响;二期接表(SkillTable 命中列 / MonsterTable 闪避列)后
+// 由 RollHit 在此基础上减闪避,届时新增的随机数消费位于伤害暴击掷骰之前,
+// 需同步刷新回放基线(见 turn_battle_engine_test.cpp 的说明)
+inline constexpr uint32_t kBaseHitRate = 100;
+
+// SkillTable.cost_resource[].cost_resource_id 中表示"法力"的资源 id
+// (Skill.xlsx 第 1 行示例为 {id=1,cost=10},id=2 语义未定,引擎只消费 id=1;
+// 其余资源 id 一期忽略,见任务 open_issues)
+inline constexpr uint32_t kSkillCostResourceMana = 1;
+
+// 阵位:每队 0..4 为前排(左→右),5..9 为后排(D4)。队伍上限 5 人时玩家只占前排;
+// 怪物按副本怪物组顺序落位,组内超过 5 只落后排
+inline constexpr uint32_t kFormationFrontRowSize = 5;
+
+// ---- 怪物侧保守默认值(仅在 MonsterTable 查不到行/属性缺失时回退,2026-09-02 起
+//      正常从 MonsterTable 读属性;兜底怪 monster_table_id=0 走这些常量) ----
 
 inline constexpr uint64_t kMonsterActorIdBase = 1000000;  // 怪物局内 actor_id 起始值
 inline constexpr uint64_t kMonsterDefaultHealth = 300;

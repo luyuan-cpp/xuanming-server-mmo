@@ -23,6 +23,7 @@ message CreateBattleRequest {
   uint32 match_mode = 5;                   // MatchMode 数值(PVE/PVP 区分,决定逃跑等规则)
   uint64 created_at_ms = 6;                // Unix 毫秒
   uint64 deadline_ms = 7;                  // 战斗最长期限,超时 battle 强制平局收尾
+  string table_fingerprint = 8;            // match 确认的全员一致指纹;battle 与自身指纹不一致按配置拒开局/告警
 }
 
 message CreateBattleResponse {

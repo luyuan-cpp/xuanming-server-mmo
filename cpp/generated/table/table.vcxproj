@@ -56,6 +56,16 @@
     <ClInclude Include="code\mission_table_comp.h" />
     <ClInclude Include="code\monster_table.h" />
     <ClInclude Include="code\monster_table_comp.h" />
+    <ClInclude Include="code\attributeautoplan_table.h" />
+    <ClInclude Include="code\attributeautoplan_table_comp.h" />
+    <ClInclude Include="code\attributeautoplan_table_fk.h" />
+    <ClInclude Include="code\attributedimension_table.h" />
+    <ClInclude Include="code\attributedimension_table_comp.h" />
+    <ClInclude Include="code\attributedimension_table_fk.h" />
+    <ClInclude Include="code\attributepool_table.h" />
+    <ClInclude Include="code\attributepool_table_comp.h" />
+    <ClInclude Include="code\attributerule_table.h" />
+    <ClInclude Include="code\attributerule_table_comp.h" />
     <ClInclude Include="code\reward_table.h" />
     <ClInclude Include="code\reward_table_comp.h" />
     <ClInclude Include="code\skillpermission_table.h" />
@@ -90,6 +100,10 @@
     <ClInclude Include="proto\mirror_table.pb.h" />
     <ClInclude Include="proto\mission_table.pb.h" />
     <ClInclude Include="proto\monster_table.pb.h" />
+    <ClInclude Include="proto\attributeautoplan_table.pb.h" />
+    <ClInclude Include="proto\attributedimension_table.pb.h" />
+    <ClInclude Include="proto\attributepool_table.pb.h" />
+    <ClInclude Include="proto\attributerule_table.pb.h" />
     <ClInclude Include="proto\operator\ability_operator.pb.h" />
     <ClInclude Include="proto\operator\bag_operator.pb.h" />
     <ClInclude Include="proto\operator\scene_operator.pb.h" />
@@ -101,6 +115,7 @@
     <ClInclude Include="proto\tip\actor_action_error_tip.pb.h" />
     <ClInclude Include="proto\tip\bag_error_tip.pb.h" />
     <ClInclude Include="proto\tip\buff_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\attribute_error_tip.pb.h" />
     <ClInclude Include="proto\tip\common_error_tip.pb.h" />
     <ClInclude Include="proto\tip\cross_server_error_tip.pb.h" />
     <ClInclude Include="proto\tip\entity_error_tip.pb.h" />
@@ -130,6 +145,10 @@
     <ClCompile Include="code\mirror_table.cpp" />
     <ClCompile Include="code\mission_table.cpp" />
     <ClCompile Include="code\monster_table.cpp" />
+    <ClCompile Include="code\attributeautoplan_table.cpp" />
+    <ClCompile Include="code\attributedimension_table.cpp" />
+    <ClCompile Include="code\attributepool_table.cpp" />
+    <ClCompile Include="code\attributerule_table.cpp" />
     <ClCompile Include="code\reward_table.cpp" />
     <ClCompile Include="code\skillpermission_table.cpp" />
     <ClCompile Include="code\skill_table.cpp" />
@@ -151,6 +170,10 @@
     <ClCompile Include="proto\mirror_table.pb.cc" />
     <ClCompile Include="proto\mission_table.pb.cc" />
     <ClCompile Include="proto\monster_table.pb.cc" />
+    <ClCompile Include="proto\attributeautoplan_table.pb.cc" />
+    <ClCompile Include="proto\attributedimension_table.pb.cc" />
+    <ClCompile Include="proto\attributepool_table.pb.cc" />
+    <ClCompile Include="proto\attributerule_table.pb.cc" />
     <ClCompile Include="proto\operator\ability_operator.pb.cc" />
     <ClCompile Include="proto\operator\bag_operator.pb.cc" />
     <ClCompile Include="proto\operator\scene_operator.pb.cc" />
@@ -162,6 +185,7 @@
     <ClCompile Include="proto\tip\actor_action_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\bag_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\buff_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\attribute_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\common_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\cross_server_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\entity_error_tip.pb.cc" />

@@ -4,6 +4,8 @@ import (
 	"context"
 	"math/rand"
 	"sync"
+
+	"go.uber.org/zap"
 )
 
 // Player represents a robot's in-game player state.
@@ -416,9 +418,22 @@ func (p *Player) GetBattleId() uint64 {
 
 // SignalBattleEnd 记录战斗结果并广播"战斗已结束"。由 NotifyBattleEnd
 // handler 调用;outcome 为 EBattleOutcome 的数值。
-func (p *Player) SignalBattleEnd(outcome int32) {
+//
+// 按 battle_id 过滤:玩家登录时 scene 会把离线期间结束的**上一局**结算以
+// BattleEndS2C 补推给客户端(离线挂起结算),它先于本进程的 NotifyBattleStart 到达。
+// 不过滤的话这条陈旧结束会提前关掉 battleEnd 通道,WaitBattleEnd 在新局刚开始时就
+// 返回"0 回合结束"(2026-09-02 跨 zone 冒烟复跑实测)。只接受与当前对局一致的结束;
+// 尚未开战(battleId==0)时收到的结束一律视为陈旧,只记录不广播。
+func (p *Player) SignalBattleEnd(battleId uint64, outcome int32) {
 	p.ensureBattleEndChannel()
 	p.mu.Lock()
+	current := p.battleId
+	if battleId != 0 && current != battleId {
+		p.mu.Unlock()
+		zap.L().Info("[robot] ignore stale BattleEnd",
+			zap.Uint64("end_battle_id", battleId), zap.Uint64("current_battle_id", current))
+		return
+	}
 	p.battleOutcome = outcome
 	p.mu.Unlock()
 	p.battleEndOnce.Do(func() { close(p.battleEnd) })

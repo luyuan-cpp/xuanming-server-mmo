@@ -18,6 +18,38 @@ struct MonsterIdComp {
     uint32_t value;
 };
 
+struct MonsterHealthComp {
+    uint64_t value;
+};
+
+struct MonsterStrengthComp {
+    uint64_t value;
+};
+
+struct MonsterArmorComp {
+    uint64_t value;
+};
+
+struct MonsterResistanceComp {
+    uint64_t value;
+};
+
+struct MonsterCritchanceComp {
+    uint64_t value;
+};
+
+struct MonsterSpeedComp {
+    uint64_t value;
+};
+
+struct MonsterExp_rewardComp {
+    uint64_t value;
+};
+
+struct MonsterGold_rewardComp {
+    uint64_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -25,4 +57,28 @@ struct MonsterIdComp {
 
 inline MonsterIdComp MakeMonsterIdComp(const MonsterTable& row) {
     return { row.id() };
+}
+inline MonsterHealthComp MakeMonsterHealthComp(const MonsterTable& row) {
+    return { row.health() };
+}
+inline MonsterStrengthComp MakeMonsterStrengthComp(const MonsterTable& row) {
+    return { row.strength() };
+}
+inline MonsterArmorComp MakeMonsterArmorComp(const MonsterTable& row) {
+    return { row.armor() };
+}
+inline MonsterResistanceComp MakeMonsterResistanceComp(const MonsterTable& row) {
+    return { row.resistance() };
+}
+inline MonsterCritchanceComp MakeMonsterCritchanceComp(const MonsterTable& row) {
+    return { row.critchance() };
+}
+inline MonsterSpeedComp MakeMonsterSpeedComp(const MonsterTable& row) {
+    return { row.speed() };
+}
+inline MonsterExp_rewardComp MakeMonsterExp_rewardComp(const MonsterTable& row) {
+    return { row.exp_reward() };
+}
+inline MonsterGold_rewardComp MakeMonsterGold_rewardComp(const MonsterTable& row) {
+    return { row.gold_reward() };
 }

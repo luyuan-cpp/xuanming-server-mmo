@@ -17,6 +17,7 @@ proto_generator/protogen/*.exe
 proto_generator/protogen/*.dll
 proto/protogen/*.exe
 proto/protogen/*.dll
+battle_art_gen/battle_art_gen.exe
 
 # Downloaded / extracted tool caches
 cache/

@@ -18,6 +18,34 @@ struct ClassIdComp {
     uint32_t value;
 };
 
+struct ClassInit_healthComp {
+    uint64_t value;
+};
+
+struct ClassInit_manaComp {
+    uint64_t value;
+};
+
+struct ClassInit_strengthComp {
+    uint64_t value;
+};
+
+struct ClassInit_armorComp {
+    uint64_t value;
+};
+
+struct ClassInit_resistanceComp {
+    uint64_t value;
+};
+
+struct ClassInit_critchanceComp {
+    uint64_t value;
+};
+
+struct ClassInit_speedComp {
+    uint64_t value;
+};
+
 struct ClassSkillComp {
     std::span<const uint32_t> values;
 };
@@ -29,6 +57,27 @@ struct ClassSkillComp {
 
 inline ClassIdComp MakeClassIdComp(const ClassTable& row) {
     return { row.id() };
+}
+inline ClassInit_healthComp MakeClassInit_healthComp(const ClassTable& row) {
+    return { row.init_health() };
+}
+inline ClassInit_manaComp MakeClassInit_manaComp(const ClassTable& row) {
+    return { row.init_mana() };
+}
+inline ClassInit_strengthComp MakeClassInit_strengthComp(const ClassTable& row) {
+    return { row.init_strength() };
+}
+inline ClassInit_armorComp MakeClassInit_armorComp(const ClassTable& row) {
+    return { row.init_armor() };
+}
+inline ClassInit_resistanceComp MakeClassInit_resistanceComp(const ClassTable& row) {
+    return { row.init_resistance() };
+}
+inline ClassInit_critchanceComp MakeClassInit_critchanceComp(const ClassTable& row) {
+    return { row.init_critchance() };
+}
+inline ClassInit_speedComp MakeClassInit_speedComp(const ClassTable& row) {
+    return { row.init_speed() };
 }
 inline ClassSkillComp MakeClassSkillComp(const ClassTable& row) {
     const auto& rf = row.skill();

@@ -1,0 +1,39 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+enum attribute_error {
+  kAttribute_errorOK = 0;
+
+  kAttributePoolNotFound = 130;
+
+  kAttributePoolLocked = 131;
+
+  kAttributeDimensionNotFound = 132;
+
+  kAttributePointsNotEnough = 133;
+
+  kAttributePointsCannotDecrease = 134;
+
+  kAttributeDimensionCapExceeded = 135;
+
+  kAttributeSchemeNotFound = 136;
+
+  kAttributeSchemeLimitReached = 137;
+
+  kAttributeSchemeSwitchCooldown = 138;
+
+  kAttributeSchemeNameInvalid = 139;
+
+  kAttributeSchemeAlreadyActive = 140;
+
+  kAttributeInBattle = 141;
+
+  kAttributeGoldNotEnough = 142;
+
+  kAttributeNoAutoPlan = 143;
+
+  kAttributeNothingToChange = 144;
+
+};

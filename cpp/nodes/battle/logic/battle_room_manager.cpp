@@ -1,7 +1,11 @@
 #include "battle_room_manager.h"
 
+#include <cstdlib>
+#include <map>
 #include <string>
 #include <vector>
+
+#include <yaml-cpp/yaml.h>
 
 #include "muduo/base/Logging.h"
 
@@ -10,11 +14,13 @@
 #include "time/system/time.h"
 
 #include "constants/turn_battle_constants.h"
+#include "data/battle_table_fingerprint.h"
 
 #include "proto/common/base/message.pb.h"
 #include "proto/common/event/battle_event.pb.h"
 #include "proto/contracts/kafka/gate_command.pb.h"
 #include "proto/contracts/kafka/gate_event.pb.h"
+#include "proto/contracts/kafka/match_event.pb.h"
 #include "proto/contracts/kafka/scene_command.pb.h"
 
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -109,38 +115,230 @@ namespace
                         event.SerializeAsString());
     }
 
-    // 结算:每玩家一条 SceneCommand{DispatchEvent, BattleSettlementEvent}。
-    // scene 是结算的唯一应用者(宪法 §7 新增不变量 4)。
-    void SendSettlementEvent(const ::BattleRouting &routing, const uint64_t playerId,
-                             const ::BattleSettlementData &settlement)
+    // 发一条进程内事件到玩家所在 scene:SceneCommand{DispatchEvent, eventId, message}。
+    // topic=scene-{scene_node_id},key=player_id(同一玩家的确认/结算保序,不变量 3),
+    // target_instance_id=BattleRouting.scene_instance_id(不变量 2 fail-closed)。
+    // 结算事件与确认事件共用;eventId 用生成的 *EventEventId 常量。
+    void SendSceneEvent(const ::BattleRouting &routing, const uint64_t playerId,
+                        const uint32_t eventId, const google::protobuf::Message &message,
+                        const uint64_t battleIdForLog)
     {
         if (routing.scene_instance_id().empty())
         {
-            LOG_ERROR << "battle 结算事件被拒: scene_instance_id 为空, player_id=" << playerId
-                      << " battle_id=" << settlement.battle_id();
+            LOG_ERROR << "battle 出站 scene 事件被拒: scene_instance_id 为空, player_id=" << playerId
+                      << " battle_id=" << battleIdForLog << " event_id=" << eventId;
             return;
         }
-
-        ::BattleSettlementEvent event;
-        *event.mutable_settlement() = settlement;
 
         contracts::kafka::SceneCommand command;
         command.set_command_type(contracts::kafka::SceneCommand::DispatchEvent);
         command.set_player_id(playerId);
         command.set_target_scene_id(routing.scene_node_id());
-        command.set_payload(event.SerializeAsString());
+        command.set_payload(message.SerializeAsString());
         command.set_target_instance_id(routing.scene_instance_id());
-        command.set_event_id(BattleSettlementEventEventId);
+        command.set_event_id(eventId);
 
         const std::string topic = "scene-" + std::to_string(routing.scene_node_id());
         const auto err = KafkaProducer::Instance().send(topic, command.SerializeAsString(),
                                                         std::to_string(playerId));
         if (err != RdKafka::ERR_NO_ERROR)
         {
-            LOG_ERROR << "battle 结算事件发送失败: topic=" << topic
-                      << " player_id=" << playerId << " battle_id=" << settlement.battle_id()
-                      << " err=" << err;
+            LOG_ERROR << "battle 出站 scene 事件发送失败: topic=" << topic
+                      << " player_id=" << playerId << " battle_id=" << battleIdForLog
+                      << " event_id=" << eventId << " err=" << err;
         }
+    }
+
+    // 结算:每玩家一条 BattleSettlementEvent。scene 是结算的唯一应用者(宪法 §7 新增不变量 4)。
+    void SendSettlementEvent(const ::BattleRouting &routing, const uint64_t playerId,
+                             const ::BattleSettlementData &settlement)
+    {
+        ::BattleSettlementEvent event;
+        *event.mutable_settlement() = settlement;
+        SendSceneEvent(routing, playerId, BattleSettlementEventEventId, event, settlement.battle_id());
+    }
+
+    // 确认事件补发策略(与 scene 侧 player_battle.h 的锁保留期对齐):
+    //   scene 备战期锁 EX = prepare_deadline(2 人 30s / 5 人 48s / 10 人 78s)+ 60s 余量,
+    //   备战到期只摘组件不删锁,锁在期间迟到的确认仍可重建冻结。补发窗口取 150s ≥ 78+60,
+    //   窗口内每 10s 一次(scene 已 FIGHTING 时幂等忽略,开销是每玩家一条小消息)。
+    constexpr uint64_t kConfirmResendWindowMs = 150 * 1000;
+    constexpr double kConfirmResendIntervalSec = 10.0;
+
+    // 确认:CreateBattle 成功后每玩家一条 BattleConfirmedEvent,scene 据此 PREPARING→FIGHTING
+    // 并把作废期限从 prepare_deadline_ms 切到正式 deadline_ms(cross-zone-matchmaking.md §10)。
+    // 首发 + 开局后窗口内周期补发(ResendBattleConfirmed);produce 失败只记日志,由下一次补发覆盖。
+    void SendBattleConfirmedEvent(const ::BattleRouting &routing, const uint64_t playerId,
+                                  const uint64_t battleId, const uint64_t deadlineMs)
+    {
+        ::BattleConfirmedEvent event;
+        event.set_battle_id(battleId);
+        event.set_player_id(playerId);
+        event.set_deadline_ms(deadlineMs);
+        SendSceneEvent(routing, playerId, BattleConfirmedEventEventId, event, battleId);
+    }
+
+    // 对局结果回流 match(评分,二期 MMR):topic=match-results(全局,不带 zone 段),
+    // key=battle_id(同局保序即可)。payload 直接是 BattleResultEvent,不套 *Command 信封:
+    // 该 topic 无目标实例语义(任一 match 实例消费即可),不适用不变量 2 的 target_instance_id。
+    constexpr char kMatchResultsTopic[] = "match-results";
+
+    void SendBattleResultEvent(const contracts::kafka::BattleResultEvent &event)
+    {
+        const auto err = KafkaProducer::Instance().send(kMatchResultsTopic, event.SerializeAsString(),
+                                                        std::to_string(event.battle_id()));
+        if (err != RdKafka::ERR_NO_ERROR)
+        {
+            LOG_ERROR << "battle 对局结果发送失败: topic=" << kMatchResultsTopic
+                      << " battle_id=" << event.battle_id() << " err=" << err;
+        }
+    }
+
+    // ---- 配表指纹校验开关(cross-zone-matchmaking.md §10) ----
+
+    enum class FingerprintMode
+    {
+        Off,     // 不校验
+        Warn,    // 不一致只记 metric=battle_table_fingerprint_mismatch,照常开局(默认)
+        Enforce, // 不一致拒绝 CreateBattle,metric=battle_table_fingerprint_reject
+    };
+
+    const char *FingerprintModeName(const FingerprintMode mode)
+    {
+        switch (mode)
+        {
+        case FingerprintMode::Off:
+            return "off";
+        case FingerprintMode::Enforce:
+            return "enforce";
+        case FingerprintMode::Warn:
+        default:
+            return "warn";
+        }
+    }
+
+    bool ParseFingerprintMode(const std::string &text, FingerprintMode &out)
+    {
+        if (text == "off")
+        {
+            out = FingerprintMode::Off;
+            return true;
+        }
+        if (text == "warn")
+        {
+            out = FingerprintMode::Warn;
+            return true;
+        }
+        if (text == "enforce")
+        {
+            out = FingerprintMode::Enforce;
+            return true;
+        }
+        return false;
+    }
+
+    // 配置载体:GameConfig proto 只承载 scene_node_type/zone_id/zone_redis 且 proto 已冻结
+    // (本轮不改 proto),故这里直接用 yaml-cpp 读同一份 etc/game_config.yaml 的
+    // `battle_table_fingerprint_mode` 键(与 Node::LoadConfigs 同路径规则:GAME_CONFIG_PATH
+    // 环境变量优先),再允许 BATTLE_TABLE_FINGERPRINT_MODE 环境变量覆盖(K8s 灰度用)。
+    // 进程内只读一次;缺键/读失败一律回默认 warn(灰度期宁可多告警不误拒开局)。
+    FingerprintMode LoadFingerprintModeOnce()
+    {
+        FingerprintMode mode = FingerprintMode::Warn;
+
+        std::string configPath = "etc/game_config.yaml";
+        if (const char *envPath = std::getenv("GAME_CONFIG_PATH"); envPath != nullptr && envPath[0] != '\0')
+        {
+            configPath = envPath;
+        }
+        try
+        {
+            const YAML::Node root = YAML::LoadFile(configPath);
+            if (root["battle_table_fingerprint_mode"])
+            {
+                const auto text = root["battle_table_fingerprint_mode"].as<std::string>();
+                if (!ParseFingerprintMode(text, mode))
+                {
+                    LOG_WARN << "battle_table_fingerprint_mode 取值非法,回默认 warn: value=" << text
+                             << " path=" << configPath;
+                }
+            }
+        }
+        catch (const std::exception &ex)
+        {
+            LOG_WARN << "读取 battle_table_fingerprint_mode 失败,回默认 warn: path=" << configPath
+                     << " err=" << ex.what();
+        }
+
+        if (const char *envMode = std::getenv("BATTLE_TABLE_FINGERPRINT_MODE");
+            envMode != nullptr && envMode[0] != '\0')
+        {
+            if (ParseFingerprintMode(envMode, mode))
+            {
+                LOG_INFO << "BATTLE_TABLE_FINGERPRINT_MODE env override applied: " << envMode;
+            }
+            else
+            {
+                LOG_WARN << "BATTLE_TABLE_FINGERPRINT_MODE 取值非法,忽略: value=" << envMode;
+            }
+        }
+
+        LOG_INFO << "battle 配表指纹校验模式: mode=" << FingerprintModeName(mode);
+        return mode;
+    }
+
+    FingerprintMode CurrentFingerprintMode()
+    {
+        // 单 loop 线程访问;首次 CreateBattle 时读一次配置并缓存
+        static const FingerprintMode mode = LoadFingerprintModeOnce();
+        return mode;
+    }
+
+    // 校验 CreateBattleRequest 携带的指纹(request.table_fingerprint + 每个快照的
+    // table_fingerprint,非空才比)与本节点指纹一致。返回 false = 按 enforce 拒绝开局。
+    bool CheckTableFingerprint(const ::CreateBattleRequest &request)
+    {
+        const auto mode = CurrentFingerprintMode();
+        if (mode == FingerprintMode::Off)
+        {
+            return true;
+        }
+        const auto &self = turnbattle::BattleTableFingerprint::Current();
+
+        // 收集所有不一致来源(request 本身 + 各玩家快照),一次日志说清楚
+        std::string mismatches;
+        if (!request.table_fingerprint().empty() && request.table_fingerprint() != self)
+        {
+            mismatches += " request=" + request.table_fingerprint();
+        }
+        for (const auto &snapshot : request.players())
+        {
+            if (!snapshot.table_fingerprint().empty() && snapshot.table_fingerprint() != self)
+            {
+                mismatches += " player_" + std::to_string(snapshot.player_id()) + "=" +
+                              snapshot.table_fingerprint();
+            }
+        }
+        if (mismatches.empty())
+        {
+            return true;
+        }
+
+        // 结构化 metric 日志(battle 进程无 Prometheus 端点,与 scene reaper 同款口径,
+        // 由日志侧提取计数);不含 player_id 标签之外的高基数字段
+        if (mode == FingerprintMode::Enforce)
+        {
+            LOG_ERROR << "metric=battle_table_fingerprint_reject battle_id=" << request.battle_id()
+                      << " match_mode=" << request.match_mode()
+                      << " self=" << self << " mismatch:" << mismatches
+                      << ",配表指纹不一致,拒绝开局(mode=enforce)";
+            return false;
+        }
+        LOG_WARN << "metric=battle_table_fingerprint_mismatch battle_id=" << request.battle_id()
+                 << " match_mode=" << request.match_mode()
+                 << " self=" << self << " mismatch:" << mismatches
+                 << ",配表指纹不一致,照常开局(mode=warn)";
+        return true;
     }
 
     // 本节点 node_id(BindBattleEvent 需要;gNode 在 Node 构造时已就绪)。
@@ -201,8 +399,23 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         }
     }
 
+    // 配表指纹:出快照的 scene / 编排的 match 与本节点读的不是同一份战斗表时,
+    // 确定性引擎的结果对各方不再可复现;按配置 warn/enforce(cross-zone-matchmaking.md §10)
+    if (!CheckTableFingerprint(request))
+    {
+        // TipInfoMessage 只有 id + parameters:说明文本放 parameters[0],match 日志可直接打出来
+        response.mutable_error_message()->set_id(kFeatureUnavailable);
+        response.mutable_error_message()->add_parameters(
+            "battle table fingerprint mismatch: node=" +
+            turnbattle::BattleTableFingerprint::Current() +
+            " request=" + request.table_fingerprint());
+        return;
+    }
+
     auto room = std::make_unique<BattleRoom>();
     room->battleId = battleId;
+    room->matchMode = request.match_mode();
+    room->battleConfigId = request.battle_config_id();
     if (!room->engine.Initialize(request))
     {
         LOG_ERROR << "CreateBattle 引擎初始化失败(快照/表数据非法): battle_id=" << battleId
@@ -250,7 +463,17 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     {
         SendBindBattle(routing, playerId, battleId, nodeId);
         PushMessageToPlayer(routing, playerId, BattleClientPlayerNotifyBattleStartMessageId, start);
+        // 向玩家所在 scene 确认开局:PREPARING→FIGHTING,作废期限切到本房间的正式 deadline
+        // (与 battleTimer 同一个值,scene reaper 与房间强制收尾的时限口径一致)
+        SendBattleConfirmedEvent(routing, playerId, battleId, deadlineMs);
     }
+
+    // 确认事件有界周期补发:单次投递丢失/迟到时 scene 仍能在锁保留期内把冻结升级/重建
+    roomPtr->deadlineMs = deadlineMs;
+    roomPtr->confirmResendUntilMs = nowMs + kConfirmResendWindowMs;
+    roomPtr->confirmResendTimer.RunEvery(kConfirmResendIntervalSec,
+                                         [this, battleId]
+                                         { ResendBattleConfirmed(battleId); });
 
     LOG_INFO << "CreateBattle 成功: battle_id=" << battleId
              << " players=" << request.players_size()
@@ -272,9 +495,12 @@ void BattleRoomManager::HandleDestroyBattle(const ::DestroyBattleRequest &reques
     }
 
     // 补偿/回滚路径:只解绑,不发结算(冻结解除由 match 调 scene CancelBattlePrepare
-    // 或 scene reaper 按 deadline 兜底,设计文档 §3.2)
+    // 或 scene reaper 按 deadline 兜底,设计文档 §3.2)。
+    // 注意:scene 收到过本房间的确认事件后会拒绝 CancelBattlePrepare(已 FIGHTING 视为过期回滚),
+    // 此时玩家冻结要等 reaper 按 deadline_ms 解除 —— 房间已销毁无法再发结算,属已知取舍。
     room->roundTimer.Cancel();
     room->battleTimer.Cancel();
+    room->confirmResendTimer.Cancel();
     for (const auto &[playerId, routing] : room->routingByPlayer)
     {
         SendUnbindBattle(routing, playerId, battleId);
@@ -606,6 +832,13 @@ void BattleRoomManager::ResolveRound(const uint64_t battleId)
     }
     result.set_battle_id(battleId);
     result.mutable_state()->set_battle_id(battleId);
+    // 出手序透传(表现规格 D3):引擎按速度排定的 actor_id 序,含本回合被跳过者,
+    // 客户端据此播"行动预告条";参战者与观众收同一份 payload
+    result.clear_action_order();
+    for (const auto actorId : room->engine.LastActionOrder())
+    {
+        result.add_action_order(actorId);
+    }
 
     BroadcastTurnResult(*room, result);
 
@@ -641,11 +874,39 @@ void BattleRoomManager::OnBattleDeadline(const uint64_t battleId)
     rooms_.erase(battleId);
 }
 
+void BattleRoomManager::ResendBattleConfirmed(const uint64_t battleId)
+{
+    auto *room = FindRoom(battleId);
+    if (room == nullptr)
+    {
+        return;
+    }
+    const auto nowMs = TimeSystem::NowMillisecondsUTC();
+    if (nowMs >= room->confirmResendUntilMs)
+    {
+        // 窗口已过:scene 侧锁也已过期,再补发无意义,停表
+        room->confirmResendTimer.Cancel();
+        return;
+    }
+    for (const auto &[playerId, routing] : room->routingByPlayer)
+    {
+        SendBattleConfirmedEvent(routing, playerId, battleId, room->deadlineMs);
+    }
+    LOG_INFO << "BattleConfirmedEvent 周期补发: battle_id=" << battleId
+             << " players=" << room->routingByPlayer.size()
+             << " remain_ms=" << (room->confirmResendUntilMs - nowMs);
+}
+
 void BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome outcome,
                                      const ::eSpectateEndReason spectateReason)
 {
     room.roundTimer.Cancel();
     room.battleTimer.Cancel();
+    room.confirmResendTimer.Cancel();
+
+    // 对局结果回流 match:按 team_index 归组玩家(routingByPlayer 只有玩家,天然不含怪物)
+    std::map<uint32_t, std::vector<uint64_t>> playersByTeam;
+    uint32_t totalRounds = 0;
 
     for (const auto &[playerId, routing] : room.routingByPlayer)
     {
@@ -653,6 +914,9 @@ void BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
         // 强制平局路径引擎结算里还是 ONGOING,以节点判定为准统一盖章
         settlement.set_outcome(outcome);
         settlement.set_battle_id(room.battleId);
+
+        playersByTeam[settlement.player_team_index()].push_back(playerId);
+        totalRounds = settlement.total_rounds();
 
         // 顺序即协议:客户端先收终局包,scene 再应用结算,最后 gate 解绑(§3.1)
         ::BattleEndS2C end;
@@ -667,9 +931,32 @@ void BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
 
     NotifySpectateEndAndUnbind(room, spectateReason, outcome);
 
+    // BattleResultEvent(只在真实打完的局发;DestroyBattle/AbortAllRooms 作废路径不进这里)。
+    // winner_team_index:SIDE_A_WIN=0 / SIDE_B_WIN=1,平局时 match 忽略该字段。
+    contracts::kafka::BattleResultEvent result;
+    result.set_battle_id(room.battleId);
+    result.set_match_mode(room.matchMode);
+    result.set_battle_config_id(room.battleConfigId);
+    result.set_outcome(outcome);
+    result.set_winner_team_index(outcome == ::BATTLE_OUTCOME_SIDE_B_WIN ? 1u : 0u);
+    for (const auto &[teamIndex, playerIds] : playersByTeam)
+    {
+        auto *team = result.add_teams();
+        team->set_team_index(teamIndex);
+        for (const auto playerId : playerIds)
+        {
+            team->add_player_ids(playerId);
+        }
+    }
+    result.set_total_rounds(totalRounds);
+    result.set_finished_at_ms(TimeSystem::NowMillisecondsUTC());
+    SendBattleResultEvent(result);
+
     LOG_INFO << "战斗结束: battle_id=" << room.battleId
              << " outcome=" << ::eBattleOutcome_Name(outcome)
-             << " players=" << room.routingByPlayer.size();
+             << " players=" << room.routingByPlayer.size()
+             << " teams=" << playersByTeam.size()
+             << " total_rounds=" << totalRounds;
 }
 
 void BattleRoomManager::BroadcastTurnResult(const BattleRoom &room, const ::TurnResultS2C &result)
@@ -743,6 +1030,7 @@ void BattleRoomManager::AbortAllRooms(const std::string &reason)
     {
         room->roundTimer.Cancel();
         room->battleTimer.Cancel();
+        room->confirmResendTimer.Cancel();
         // 只解绑不结算:战斗作废,scene reaper 按 InBattleComp.deadline_ms 解冻(§3.2)
         for (const auto &[playerId, routing] : room->routingByPlayer)
         {

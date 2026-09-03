@@ -22,5 +22,15 @@ report_interval: 5
 # 双机器人回合制战斗 + 观战冒烟(见 battle_smoke_scenario.go)
 mode: "battle-smoke"
 
+# 跨 zone 匹配子模式默认关闭(走上面的 PVE + 观战流程)。
+# 要跑"A 登 zone_a、B 登 zone_b 双双 JoinQueue(1V1) 匹配进同一局"的冒烟,
+# 用 etc/battle_smoke_cross_zone.yaml(battle_smoke.cross_zone: true),
+# 见 docs/design/cross-zone-matchmaking.md §8。
+# battle_smoke:
+#   cross_zone: false
+#   zone_a: 1
+#   zone_b: 2
+#   mode: "1v1"
+
 # 认证:password 模式(robot_ 前缀账号走 DevPasswordAuth)
 auth_type: "password"

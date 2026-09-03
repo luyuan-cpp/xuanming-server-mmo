@@ -14,7 +14,8 @@ func BattleClientPlayerNotifyBattleEndHandler(player *gameobject.Player, respons
 		zap.L().Warn("nil BattleEndS2C", zap.Uint64("player", player.ID))
 		return
 	}
-	player.SignalBattleEnd(int32(response.GetOutcome()))
+	// 带 battle_id:登录时补推的上一局(离线挂起结算)BattleEnd 必须被过滤掉,见 Player.SignalBattleEnd。
+	player.SignalBattleEnd(response.GetBattleId(), int32(response.GetOutcome()))
 	zap.L().Info("notify battle end",
 		zap.Uint64("player", player.ID),
 		zap.Uint64("battle_id", response.GetBattleId()),

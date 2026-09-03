@@ -119,6 +119,12 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
         *actor.mutable_attributes() = snapshot.base_attributes();
         actor.set_max_health(FallbackMax(snapshot.max_health(), snapshot.base_attributes().health()));
         actor.set_max_mana(FallbackMax(snapshot.max_mana(), snapshot.base_attributes().mana()));
+        // 二级属性(属性加点系统):怪物不带 = 0,公式退化为老口径
+        actor.set_physical_attack(snapshot.physical_attack());
+        actor.set_magic_attack(snapshot.magic_attack());
+        actor.set_defense(snapshot.defense());
+        // 阵位(表现规格 D4):按快照顺序在本队内 0.. 递增,前 5 个前排、之后后排
+        actor.set_formation_slot(NextFormationSlot(snapshot.team_index()));
         // 参战 buff 副本:remain_rounds 已是回合口径(快照契约,scene 侧负责换算)
         for (const auto& buff : snapshot.buffs()) {
             *actor.add_buffs() = buff;
@@ -162,7 +168,6 @@ bool TurnBattleEngine::InitMonsters(const CreateBattleRequest& request) {
 
 void TurnBattleEngine::AppendMonsterActor(uint32_t monsterTableId, uint32_t monsterIndex,
                                           uint32_t referenceLevel) {
-    // MonsterTable 目前只有 id 列,属性全部走保守默认值(见 constants 与 open_issues)
     BattleActorState actor;
     actor.set_actor_id(kMonsterActorIdBase + monsterIndex);  // 局内序号 id,确定性
     actor.set_actor_type(BATTLE_ACTOR_TYPE_MONSTER);
@@ -170,17 +175,45 @@ void TurnBattleEngine::AppendMonsterActor(uint32_t monsterTableId, uint32_t mons
     actor.set_name("野怪");
     actor.set_level(referenceLevel);
     actor.set_monster_table_id(monsterTableId);
+    // 阵位(D4):按副本怪物组顺序在 B 方内 0.. 递增(PVE 的 B 方只有怪物,
+    // 故等于 monsterIndex;若 B 方已有玩家则接在其后,保证队内唯一)
+    actor.set_formation_slot(NextFormationSlot(1));
 
+    // 优先读 MonsterTable 属性;行缺失(如 monster_table_id=0 的兜底怪)才回退
+    // kMonsterDefault* 常量,保证任何配置下 PVE 都有能打的对手。
+    const MonsterTable* row = dataProvider->FindMonster(monsterTableId);
     auto* attributes = actor.mutable_attributes();
-    attributes->set_health(kMonsterDefaultHealth);
-    attributes->set_strength(kMonsterDefaultStrength);
-    attributes->set_armor(kMonsterDefaultArmor);
-    attributes->set_resistance(kMonsterDefaultResistance);
-    attributes->set_critchance(kMonsterDefaultCritChance);
-    attributes->set_speed(kMonsterDefaultSpeed);
-    actor.set_max_health(kMonsterDefaultHealth);
+    if (row != nullptr && row->health() > 0) {
+        attributes->set_health(row->health());
+        attributes->set_strength(row->strength());
+        attributes->set_armor(row->armor());
+        attributes->set_resistance(row->resistance());
+        attributes->set_critchance(row->critchance());
+        attributes->set_speed(row->speed() > 0 ? row->speed() : kMonsterDefaultSpeed);
+        actor.set_max_health(row->health());
+    } else {
+        attributes->set_health(kMonsterDefaultHealth);
+        attributes->set_strength(kMonsterDefaultStrength);
+        attributes->set_armor(kMonsterDefaultArmor);
+        attributes->set_resistance(kMonsterDefaultResistance);
+        attributes->set_critchance(kMonsterDefaultCritChance);
+        attributes->set_speed(kMonsterDefaultSpeed);
+        actor.set_max_health(kMonsterDefaultHealth);
+    }
 
     actors.emplace_back(std::move(actor));
+}
+
+uint32_t TurnBattleEngine::NextFormationSlot(uint32_t teamIndex) const {
+    // 阵位 = 该队已有单位数:插入序即阵位序,天然队内唯一;
+    // 0..kFormationFrontRowSize-1 前排,其后后排(表现规格 D4,不参与任何判定)
+    uint32_t count = 0;
+    for (const auto& actor : actors) {
+        if (actor.team_index() == teamIndex) {
+            ++count;
+        }
+    }
+    return count;
 }
 
 // ---------------------------------------------------------------------------
@@ -298,11 +331,24 @@ uint32_t TurnBattleEngine::CheckActionPrerequisites(const BattleActorState& acto
         if (const auto result = CheckBuff(actor, *skillRow); result != kSuccess) {
             return result;
         }
+        if (const auto result = CheckSkillCost(actor, *skillRow); result != kSuccess) {
+            return result;
+        }
         return kSuccess;
     }
     default:
         return kInvalidParameter;
     }
+}
+
+uint32_t TurnBattleEngine::CheckSkillCost(const BattleActorState& actor,
+                                          const SkillTable& skillRow) const {
+    // 耗蓝不足:提交期不落账(回合超时默认普攻兜底),出手期降级为普攻(ExecuteSkill)。
+    // tip 表暂无"法力不足"专用码,借用"当前状态不可施放"(见任务 open_issues)
+    if (SkillManaCost(skillRow) > actor.attributes().mana()) {
+        return kSkillCannotBeCastInCurrentState;
+    }
+    return kSuccess;
 }
 
 uint32_t TurnBattleEngine::ValidateSkillTarget(const BattleActorState& actor,
@@ -418,8 +464,14 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
     // 1. 未提交者(含掉线/超时玩家与全部怪物)填默认普攻
     FillDefaultActions();
 
+    // 事件组编号每回合从 1 起(表现规格 D2);出手序在回合开始时一次排定并保留下来
+    // (表现规格 D3:含回合中途死亡/逃离而被跳过者,节点透传到 TurnResultS2C.action_order)
+    currentGroupId = 0;
+    currentHitIndex = 0;
+    lastActionOrder = BuildTurnOrder();
+
     // 2. 速度降序、同速按 actor_id 稳定序,逐个执行;死亡/已逃单位跳过
-    for (const auto actorId : BuildTurnOrder()) {
+    for (const auto actorId : lastActionOrder) {
         auto* actor = FindActor(actorId);
         if (actor == nullptr || !IsActorActive(*actor)) {
             continue;
@@ -428,6 +480,8 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
         if (actionIt == pendingActions.end()) {
             continue;
         }
+        // 每个行动一组:该行动产生的全部事件(含降级普攻/死亡/buff)共用 group_id
+        BeginEventGroup();
         ExecuteAction(*actor, actionIt->second, result);
     }
 
@@ -540,15 +594,26 @@ void TurnBattleEngine::ExecuteAttack(BattleActorState& actor, uint64_t targetId,
 
     AppendEvent(result, BATTLE_EVENT_ATTACK, actor.actor_id(), targetId);
 
+    // 命中判定(D1):未命中只出 MISS,不出 DAMAGE(一期命中率 100%,永不进入此分支)
+    if (!RollHit(actor, *target)) {
+        auto* missEvent = AppendEvent(result, BATTLE_EVENT_MISS, actor.actor_id(), targetId);
+        missEvent->set_value(0);
+        missEvent->set_target_health_after(target->attributes().health());
+        missEvent->set_target_mana_after(target->attributes().mana());
+        return;
+    }
+
     bool isCritical = false;
-    const double finalDamage =
-        CalculateFinalDamage(actor, *target, kBasicAttackBaseDamage, isCritical);
+    // 普攻吃"物伤"(属性加点二级属性),技能吃"法伤"(见 ExecuteSkill)
+    const double finalDamage = CalculateFinalDamage(actor, *target, kBasicAttackBaseDamage,
+                                                    actor.physical_attack(), isCritical);
     const uint64_t dealt = ApplyDamage(*target, finalDamage);
 
     auto* damageEvent = AppendEvent(result, BATTLE_EVENT_DAMAGE, actor.actor_id(), targetId);
     damageEvent->set_value(dealt);
     damageEvent->set_is_critical(isCritical);
     damageEvent->set_target_health_after(target->attributes().health());
+    damageEvent->set_target_mana_after(target->attributes().mana());
 
     if (target->attributes().health() == 0) {
         HandleDeath(*target, result);
@@ -570,20 +635,31 @@ void TurnBattleEngine::ExecuteSkill(BattleActorState& actor, const BattleAction&
         return;
     }
 
-    // 目标失效 → 随机存活敌方(与普攻同口径)
-    uint64_t targetId = action.target_id();
-    auto* target = FindActor(targetId);
-    if (target == nullptr || !IsActorActive(*target)) {
-        const auto enemyIds = CollectAliveEnemyIds(actor);
-        if (enemyIds.empty()) {
+    // 目标集:AOE 技能(targeting_mode 含 AOE 位)对全部存活敌方生效,按 actors 插入序,
+    // 不消耗随机数;单体技能沿用"目标失效 → 随机存活敌方"(与普攻同口径,随机数消费不变)
+    std::vector<uint64_t> targetIds;
+    if (IsAreaSkill(*skillRow)) {
+        targetIds = CollectAliveEnemyIds(actor);
+        if (targetIds.empty()) {
             return;
         }
-        targetId = enemyIds[static_cast<size_t>(RandIndex(enemyIds.size()))];
-        target = FindActor(targetId);
-        if (target == nullptr) {
-            return;
+    } else {
+        uint64_t targetId = action.target_id();
+        const auto* target = FindActor(targetId);
+        if (target == nullptr || !IsActorActive(*target)) {
+            const auto enemyIds = CollectAliveEnemyIds(actor);
+            if (enemyIds.empty()) {
+                return;
+            }
+            targetId = enemyIds[static_cast<size_t>(RandIndex(enemyIds.size()))];
+            if (FindActor(targetId) == nullptr) {
+                return;
+            }
         }
+        targetIds.push_back(targetId);
     }
+    // SKILL 事件的 target 取首目标(单体即唯一目标;AOE 为敌方首位,演出以 DAMAGE 逐目标为准)
+    const uint64_t primaryTargetId = targetIds.front();
 
     // 出手即挂冷却(镜像 SkillSystem::StartCooldown),时长换算为回合;
     // 状态 map 键为 skill_table_id(proto 契约),分组共享语义见 CheckCooldown
@@ -593,36 +669,110 @@ void TurnBattleEngine::ExecuteSkill(BattleActorState& actor, const BattleAction&
             RoundsFromMilliseconds(cooldownMs);
     }
 
-    auto* skillEvent = AppendEvent(result, BATTLE_EVENT_SKILL, actor.actor_id(), targetId);
+    auto* skillEvent = AppendEvent(result, BATTLE_EVENT_SKILL, actor.actor_id(), primaryTargetId);
     skillEvent->set_skill_table_id(action.skill_table_id());
 
+    // 耗蓝(D5):SKILL 事件之后、伤害之前产出 MANA 事件(校验链已保证蓝够)
+    ConsumeSkillMana(actor, *skillRow, action.skill_table_id(), result);
+
     // 伤害:damage 表达式两步调用(SetDamageParam({casterLevel}) + GetDamage),
-    // 之后镜像 CalculateFinalDamage 公式;表达式为空/求值为 0 视为纯 buff 技能
+    // 之后镜像 CalculateFinalDamage 公式;表达式为空/求值为 0 视为纯 buff 技能。
+    // 表达式只求值一次,多目标共用同一 base
     const double baseDamage =
         dataProvider->GetSkillDamage(action.skill_table_id(), static_cast<double>(actor.level()));
+
+    // 逐目标落地,hit_index = 目标序(D2:群攻多目标同一 group_id、hit_index 0..n-1)
+    for (size_t hitIndex = 0; hitIndex < targetIds.size(); ++hitIndex) {
+        auto* target = FindActor(targetIds[hitIndex]);
+        if (target == nullptr) {
+            continue;
+        }
+        currentHitIndex = static_cast<uint32_t>(hitIndex);
+        ApplySkillToTarget(actor, action, *skillRow, baseDamage, *target, result);
+    }
+    currentHitIndex = 0;
+}
+
+void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleAction& action,
+                                          const SkillTable& skillRow, double baseDamage,
+                                          BattleActorState& target, TurnResultS2C& result) {
+    // 命中判定(D1):未命中只出 MISS,伤害与 effect[] buff 都不落地
+    // (一期命中率 100%,永不进入此分支)
+    if (!RollHit(actor, target)) {
+        auto* missEvent =
+            AppendEvent(result, BATTLE_EVENT_MISS, actor.actor_id(), target.actor_id());
+        missEvent->set_skill_table_id(action.skill_table_id());
+        missEvent->set_value(0);
+        missEvent->set_target_health_after(target.attributes().health());
+        missEvent->set_target_mana_after(target.attributes().mana());
+        return;
+    }
+
     if (baseDamage > 0) {
         bool isCritical = false;
-        const double finalDamage = CalculateFinalDamage(actor, *target, baseDamage, isCritical);
-        const uint64_t dealt = ApplyDamage(*target, finalDamage);
+        const double finalDamage =
+            CalculateFinalDamage(actor, target, baseDamage, actor.magic_attack(), isCritical);
+        const uint64_t dealt = ApplyDamage(target, finalDamage);
 
-        auto* damageEvent = AppendEvent(result, BATTLE_EVENT_DAMAGE, actor.actor_id(), targetId);
+        auto* damageEvent =
+            AppendEvent(result, BATTLE_EVENT_DAMAGE, actor.actor_id(), target.actor_id());
         damageEvent->set_skill_table_id(action.skill_table_id());
         damageEvent->set_value(dealt);
         damageEvent->set_is_critical(isCritical);
-        damageEvent->set_target_health_after(target->attributes().health());
+        damageEvent->set_target_health_after(target.attributes().health());
+        damageEvent->set_target_mana_after(target.attributes().mana());
 
-        if (target->attributes().health() == 0) {
-            HandleDeath(*target, result);
+        if (target.attributes().health() == 0) {
+            HandleDeath(target, result);
         }
     }
 
     // effect[] → buff(镜像 SkillSystem::TriggerSkillEffect,打在技能目标上);
     // 目标已死则不再挂 buff
-    if (!target->is_dead()) {
-        for (const auto effectBuffId : skillRow->effect()) {
-            AddBuffToActor(*target, effectBuffId, actor.actor_id(), 0, result);
+    if (!target.is_dead()) {
+        for (const auto effectBuffId : skillRow.effect()) {
+            AddBuffToActor(target, effectBuffId, actor.actor_id(), 0, result);
         }
     }
+}
+
+bool TurnBattleEngine::IsAreaSkill(const SkillTable& skillRow) const {
+    // targeting_mode 存位号(与 ValidateSkillTarget 同口径)
+    for (const auto modeBit : skillRow.targeting_mode()) {
+        if ((1u << modeBit) == kTargetingAreaOfEffect) {
+            return true;
+        }
+    }
+    return false;
+}
+
+uint64_t TurnBattleEngine::SkillManaCost(const SkillTable& skillRow) const {
+    // cost_resource[] 平铺多列,Excel 空格补 {0,0};只认法力资源 id
+    uint64_t cost = 0;
+    for (const auto& entry : skillRow.cost_resource()) {
+        if (entry.cost_resource_id() == kSkillCostResourceMana) {
+            cost += entry.cost_resource_cost();
+        }
+    }
+    return cost;
+}
+
+void TurnBattleEngine::ConsumeSkillMana(BattleActorState& actor, const SkillTable& skillRow,
+                                        uint32_t skillTableId, TurnResultS2C& result) {
+    const uint64_t manaCost = SkillManaCost(skillRow);
+    if (manaCost == 0) {
+        return;  // 无耗蓝技能不产出 MANA 事件
+    }
+    // 校验链已保证蓝够,这里仍饱和到 0 兜底(纯逻辑库不 assert)
+    const uint64_t manaBefore = actor.attributes().mana();
+    const uint64_t manaAfter = manaBefore > manaCost ? manaBefore - manaCost : 0;
+    actor.mutable_attributes()->set_mana(manaAfter);
+
+    auto* manaEvent = AppendEvent(result, BATTLE_EVENT_MANA, actor.actor_id(), actor.actor_id());
+    manaEvent->set_skill_table_id(skillTableId);
+    manaEvent->set_value(manaBefore - manaAfter);  // 实际消耗量(客户端按 MANA 语义显示为负)
+    manaEvent->set_target_health_after(actor.attributes().health());
+    manaEvent->set_target_mana_after(manaAfter);
 }
 
 void TurnBattleEngine::ExecuteDefend(BattleActorState& actor, TurnResultS2C& result) {
@@ -674,6 +824,7 @@ void TurnBattleEngine::ExecuteItem(BattleActorState& actor, const BattleAction& 
     itemEvent->set_item_table_id(action.item_table_id());
     itemEvent->set_value(healed);
     itemEvent->set_target_health_after(actor.attributes().health());
+    itemEvent->set_target_mana_after(actor.attributes().mana());
 }
 
 void TurnBattleEngine::ExecuteFlee(BattleActorState& actor, TurnResultS2C& result) {
@@ -720,6 +871,12 @@ void TurnBattleEngine::TickActorBuffs(BattleActorState& actor, TurnResultS2C& re
     for (const auto& buff : actor.buffs()) {
         buffIds.push_back(buff.buff_id());
     }
+    if (buffIds.empty()) {
+        return;
+    }
+    // 回合末结算:每个单位的 buff tick(周期效果/到期移除/致死)独立成组,
+    // 与任何行动的 group_id 都不同(表现规格 D2)
+    BeginEventGroup();
 
     for (const auto buffId : buffIds) {
         int index = FindBuffIndex(actor, buffId);
@@ -795,6 +952,7 @@ void TurnBattleEngine::ApplyBuffIntervalEffect(BattleActorState& actor,
             tickEvent->set_buff_table_id(buffRow.id());
             tickEvent->set_value(healed);
             tickEvent->set_target_health_after(actor.attributes().health());
+            tickEvent->set_target_mana_after(actor.attributes().mana());
         }
         break;
     }
@@ -814,6 +972,7 @@ void TurnBattleEngine::ApplyBuffIntervalEffect(BattleActorState& actor,
             tickEvent->set_buff_table_id(buffRow.id());
             tickEvent->set_value(dealt);
             tickEvent->set_target_health_after(actor.attributes().health());
+            tickEvent->set_target_mana_after(actor.attributes().mana());
         }
         if (actor.attributes().health() == 0) {
             HandleDeath(actor, result);
@@ -859,7 +1018,7 @@ void TurnBattleEngine::UpdateOutcome() {
 
 double TurnBattleEngine::CalculateFinalDamage(const BattleActorState& caster,
                                               const BattleActorState& target, double baseDamage,
-                                              bool& isCritical) {
+                                              uint64_t attackBonus, bool& isCritical) {
     isCritical = false;
 
     // critchance 为整数百分比口径,换算后夹到 [0,1](镜像实时 CalculateFinalDamage)
@@ -868,9 +1027,12 @@ double TurnBattleEngine::CalculateFinalDamage(const BattleActorState& caster,
     const double strength = static_cast<double>(caster.attributes().strength());
     const double armor = static_cast<double>(target.attributes().armor());
     const double resistance = static_cast<double>(target.attributes().resistance());
+    // 属性加点二级属性:攻方物伤/法伤加法进 base,守方防御加法进减伤
+    // (怪物/老存档两项皆 0,公式与实时 CalculateFinalDamage 老口径逐字节一致)
+    const double defense = static_cast<double>(target.defense());
 
-    double finalDamage = baseDamage * (1 + strength * 0.1);
-    finalDamage = finalDamage - armor;
+    double finalDamage = baseDamage * (1 + strength * 0.1) + static_cast<double>(attackBonus);
+    finalDamage = finalDamage - armor - defense;
     finalDamage *= (1 - resistance * 0.01);
 
     // 暴击只走引擎 RNG;critChance 为 0 时不消耗随机数(与实时短路口径一致)
@@ -1111,8 +1273,28 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
     settlement.set_mana(actor->attributes().mana());
     settlement.set_is_dead(actor->is_dead());
     settlement.set_fled(actor->fled());
-    // exp_gain/gold_gain/items_gained:DungeonTable/MonsterTable 缺奖励列,
-    // 一期固定为 0/空,加列后在此接入(见 open_issues)
+
+    // 奖励:仅在玩家侧(A 方=team 0)获胜时结算,给未逃跑的存活参战者。
+    // 经验/金币 = 本场被击杀怪物 MonsterTable.exp_reward/gold_reward 之和;
+    // 队伍 PVE 每个达成条件的成员各得全额(经典 MMO 组队口径)。
+    // 逃跑或阵亡的玩家不发奖。掉落 items_gained 依赖掉落表,留待后续接入。
+    if (outcome == BATTLE_OUTCOME_SIDE_A_WIN && actor->team_index() == 0 &&
+        !actor->fled() && !actor->is_dead()) {
+        uint64_t expSum = 0;
+        uint64_t goldSum = 0;
+        for (const auto& other : actors) {
+            if (other.actor_type() != BATTLE_ACTOR_TYPE_MONSTER || !other.is_dead()) {
+                continue;
+            }
+            const MonsterTable* row = dataProvider->FindMonster(other.monster_table_id());
+            if (row != nullptr) {
+                expSum += row->exp_reward();
+                goldSum += row->gold_reward();
+            }
+        }
+        settlement.set_exp_gain(expSum);
+        settlement.set_gold_gain(goldSum);
+    }
     return settlement;
 }
 
@@ -1232,7 +1414,30 @@ BattleEventItem* TurnBattleEngine::AppendEvent(TurnResultS2C& result, eBattleEve
     event->set_event_type(eventType);
     event->set_source_id(sourceId);
     event->set_target_id(targetId);
+    // 表现层分组(D2):同一行动/同一单位的回合末 tick 共用 group_id;
+    // hit_index 由 ExecuteSkill 逐目标递增,其余场景为 0
+    event->set_group_id(currentGroupId);
+    event->set_hit_index(currentHitIndex);
     return event;
+}
+
+void TurnBattleEngine::BeginEventGroup() {
+    ++currentGroupId;
+    currentHitIndex = 0;
+}
+
+bool TurnBattleEngine::RollHit(const BattleActorState& caster, const BattleActorState& target) {
+    (void)caster;
+    (void)target;
+    // 一期:Skill/Monster 表均无命中率/闪避列,命中率固定 kBaseHitRate=100,
+    // 短路返回、不消耗随机数(与暴击 critChance=0 时的短路口径一致),既有回放基线不变。
+    // 二期接表:hitRate = kBaseHitRate + 攻方命中列 - 守方闪避列,
+    // 再 `Rand01() * 100.0 < hitRate` 掷骰——该随机数消费位于暴击掷骰之前,
+    // 接入时须同步刷新单测回放基线(见 turn_battle_engine_test.cpp 说明)
+    if (kBaseHitRate >= 100) {
+        return true;
+    }
+    return Rand01() * 100.0 < static_cast<double>(kBaseHitRate);
 }
 
 // ---------------------------------------------------------------------------

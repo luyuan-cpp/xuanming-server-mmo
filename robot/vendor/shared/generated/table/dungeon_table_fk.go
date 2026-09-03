@@ -22,6 +22,26 @@ func GetDungeonSceneIdRowById(tableId uint32) (*pb.BaseSceneTable, bool) {
     return GetDungeonSceneIdRow(row)
 }
 
+// GetDungeonMonsterRows resolves Dungeon.monster[] -> Monster rows.
+func GetDungeonMonsterRows(row *pb.DungeonTable) []*pb.MonsterTable {
+    var result []*pb.MonsterTable
+    for _, id := range row.Monster {
+        if r, ok := MonsterTableManagerInstance.FindById(id); ok {
+            result = append(result, r)
+        }
+    }
+    return result
+}
+
+// GetDungeonMonsterRowsById resolves Dungeon.monster[] -> Monster rows (by Dungeon id).
+func GetDungeonMonsterRowsById(tableId uint32) []*pb.MonsterTable {
+    row, ok := DungeonTableManagerInstance.FindById(tableId)
+    if !ok {
+        return nil
+    }
+    return GetDungeonMonsterRows(row)
+}
+
 // ---------------------------------------------------------------------------
 // Reverse FK (HasMany): find source rows by FK column value
 // ---------------------------------------------------------------------------

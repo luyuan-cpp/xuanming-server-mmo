@@ -124,6 +124,157 @@ services:
       - redis-data:/data
     restart: unless-stopped
 
+  # ── Redis Cluster(profile: redis-cluster,默认不起)────────────────────
+  # match 服务的私有存储(docs/design/cross-zone-matchmaking.md §2 D2 / §7):
+  # 3 主 3 从,宿主机 Go 进程直连。默认 `docker compose up` 不会拉起,需要
+  #   docker compose -f deploy/docker-compose.yml --profile redis-cluster up -d
+  # 并把 go/match/etc/match_service.yaml 的 MatchRedis 指到 127.0.0.1:7000,Type: cluster。
+  #
+  # 为什么六个节点共用 redis-cluster-0 的网络命名空间(network_mode: service:…):
+  #   集群客户端会跟随 MOVED 跳到节点 announce 的地址,所以节点必须 announce
+  #   宿主机可达的 127.0.0.1:700N;但 announce 地址同时也是节点之间 gossip 用的
+  #   地址,六个容器各自独立网络时 127.0.0.1 指向自己,建群握手必然失败。
+  #   Docker Desktop for Windows 又不支持 network_mode: host。共享一个网络命名
+  #   空间后,容器内 127.0.0.1:700N 互通、宿主机 127.0.0.1:700N 经端口映射到达
+  #   同一个命名空间 —— 两边看到的地址完全一致,MOVED 才能跟得上。
+  #   代价是所有端口映射只能写在命名空间的持有者 redis-cluster-0 上。
+  redis-cluster-0:
+    image: redis:7.2
+    container_name: redis-cluster-0
+    profiles: ["redis-cluster"]
+    ports:
+      - "7000:7000"
+      - "7001:7001"
+      - "7002:7002"
+      - "7003:7003"
+      - "7004:7004"
+      - "7005:7005"
+      - "17000:17000"
+      - "17001:17001"
+      - "17002:17002"
+      - "17003:17003"
+      - "17004:17004"
+      - "17005:17005"
+    command: >
+      redis-server --port 7000 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes
+      --cluster-announce-ip 127.0.0.1 --cluster-announce-port 7000 --cluster-announce-bus-port 17000
+    volumes:
+      - redis-cluster-0-data:/data
+    restart: unless-stopped
+
+  redis-cluster-1:
+    image: redis:7.2
+    container_name: redis-cluster-1
+    profiles: ["redis-cluster"]
+    network_mode: "service:redis-cluster-0"
+    depends_on: [redis-cluster-0]
+    command: >
+      redis-server --port 7001 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes
+      --cluster-announce-ip 127.0.0.1 --cluster-announce-port 7001 --cluster-announce-bus-port 17001
+    volumes:
+      - redis-cluster-1-data:/data
+    restart: unless-stopped
+
+  redis-cluster-2:
+    image: redis:7.2
+    container_name: redis-cluster-2
+    profiles: ["redis-cluster"]
+    network_mode: "service:redis-cluster-0"
+    depends_on: [redis-cluster-0]
+    command: >
+      redis-server --port 7002 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes
+      --cluster-announce-ip 127.0.0.1 --cluster-announce-port 7002 --cluster-announce-bus-port 17002
+    volumes:
+      - redis-cluster-2-data:/data
+    restart: unless-stopped
+
+  redis-cluster-3:
+    image: redis:7.2
+    container_name: redis-cluster-3
+    profiles: ["redis-cluster"]
+    network_mode: "service:redis-cluster-0"
+    depends_on: [redis-cluster-0]
+    command: >
+      redis-server --port 7003 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes
+      --cluster-announce-ip 127.0.0.1 --cluster-announce-port 7003 --cluster-announce-bus-port 17003
+    volumes:
+      - redis-cluster-3-data:/data
+    restart: unless-stopped
+
+  redis-cluster-4:
+    image: redis:7.2
+    container_name: redis-cluster-4
+    profiles: ["redis-cluster"]
+    network_mode: "service:redis-cluster-0"
+    depends_on: [redis-cluster-0]
+    command: >
+      redis-server --port 7004 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes
+      --cluster-announce-ip 127.0.0.1 --cluster-announce-port 7004 --cluster-announce-bus-port 17004
+    volumes:
+      - redis-cluster-4-data:/data
+    restart: unless-stopped
+
+  redis-cluster-5:
+    image: redis:7.2
+    container_name: redis-cluster-5
+    profiles: ["redis-cluster"]
+    network_mode: "service:redis-cluster-0"
+    depends_on: [redis-cluster-0]
+    command: >
+      redis-server --port 7005 --cluster-enabled yes --cluster-config-file nodes.conf
+      --cluster-node-timeout 5000 --appendonly yes
+      --cluster-announce-ip 127.0.0.1 --cluster-announce-port 7005 --cluster-announce-bus-port 17005
+    volumes:
+      - redis-cluster-5-data:/data
+    restart: unless-stopped
+
+  # 建群一次性任务。幂等:已经 cluster_state:ok 就跳过,重复 up 不会重建。
+  # 同样共享 redis-cluster-0 的网络命名空间,所以能直接用节点 announce 的
+  # 127.0.0.1:700N 建群(redis-cli 建群时会按 announce 地址握手)。
+  redis-cluster-init:
+    image: redis:7.2
+    container_name: redis-cluster-init
+    profiles: ["redis-cluster"]
+    network_mode: "service:redis-cluster-0"
+    depends_on:
+      - redis-cluster-0
+      - redis-cluster-1
+      - redis-cluster-2
+      - redis-cluster-3
+      - redis-cluster-4
+      - redis-cluster-5
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -e
+        nodes=""
+        for p in 7000 7001 7002 7003 7004 7005; do
+          for i in $$(seq 1 30); do
+            if redis-cli -p $$p ping 2>/dev/null | grep -q PONG; then break; fi
+            echo "waiting for redis 127.0.0.1:$$p ($$i/30)..."
+            sleep 1
+          done
+          nodes="$$nodes 127.0.0.1:$$p"
+        done
+        if redis-cli -p 7000 cluster info 2>/dev/null | grep -q '^cluster_state:ok'; then
+          echo "redis cluster already formed, skip create"
+        else
+          redis-cli --cluster create $$nodes --cluster-replicas 1 --cluster-yes
+        fi
+        # create 返回时 slot 表还在 gossip 传播,立刻查会短暂看到 cluster_state:fail;等到 ok 再报
+        for i in $$(seq 1 30); do
+          if redis-cli -p 7000 cluster info 2>/dev/null | grep -q '^cluster_state:ok'; then break; fi
+          sleep 1
+        done
+        redis-cli -p 7000 cluster info | grep -E '^cluster_(state|known_nodes|size)'
+    restart: "no"
+
   # MySQL service
   mysql:
     image: mysql:latest
@@ -211,6 +362,13 @@ services:
 volumes:
   kafka-data:
   redis-data:
+  # Redis Cluster(profile redis-cluster)每节点独立的 nodes.conf + AOF
+  redis-cluster-0-data:
+  redis-cluster-1-data:
+  redis-cluster-2-data:
+  redis-cluster-3-data:
+  redis-cluster-4-data:
+  redis-cluster-5-data:
   mysql-data:
   nacos-data:  # Nacos data persistence
   nacos-log:   # Nacos logs

@@ -3,6 +3,7 @@
 
 ///<<< BEGIN WRITING YOUR CODE
 #include "player/system/player_skill.h"
+#include "player/system/player_attribute.h"
 #include <muduo/base/Logging.h>
 #include "proto/common/component/player_login_comp.pb.h"
 ///<<< END WRITING YOUR CODE
@@ -38,6 +39,15 @@ void PlayerEventHandler::RegisterPlayerEventHandler(const RegisterPlayerEvent& e
 void PlayerEventHandler::PlayerUpgradeEventHandler(const PlayerUpgradeEvent& event)
 {
 ///<<< BEGIN WRITING YOUR CODE
+	auto player = entt::to_entity(event.actor_entity());
+	if (!tlsEcs.actorRegistry.valid(player))
+	{
+		LOG_ERROR << "Player Not Found :" << event.actor_entity();
+		return;
+	}
+	// 升级发点:总点数按等级换算,不存量;重算二级属性并推面板(客户端整体覆盖)
+	PlayerAttributeSystem::Recalculate(player);
+	PlayerAttributeSystem::PushPanel(player);
 ///<<< END WRITING YOUR CODE
 }
 void PlayerEventHandler::InitializePlayerCompsEventHandler(const InitializePlayerCompsEvent& event)

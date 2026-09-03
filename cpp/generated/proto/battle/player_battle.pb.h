@@ -2774,6 +2774,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TurnResultS2C final : public ::goog
   // accessors -------------------------------------------------------
   enum : int {
     kEventsFieldNumber = 3,
+    kActionOrderFieldNumber = 5,
     kStateFieldNumber = 4,
     kBattleIdFieldNumber = 1,
     kRoundIndexFieldNumber = 2,
@@ -2797,6 +2798,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TurnResultS2C final : public ::goog
   private:
   const ::google::protobuf::RepeatedPtrField<::BattleEventItem>& _internal_events() const;
   ::google::protobuf::RepeatedPtrField<::BattleEventItem>* PROTOBUF_NONNULL _internal_mutable_events();
+
+  public:
+  // repeated uint64 action_order = 5;
+  [[nodiscard]] int action_order_size()
+      const;
+  private:
+  int _internal_action_order_size() const;
+
+  public:
+  void clear_action_order() ;
+  [[nodiscard]] ::uint64_t action_order(int index) const;
+  void set_action_order(int index, ::uint64_t value);
+  void add_action_order(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& action_order()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_action_order();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_action_order() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_action_order();
 
   public:
   // .BattleStateS2C state = 4;
@@ -2839,7 +2860,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TurnResultS2C final : public ::goog
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2869,6 +2890,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TurnResultS2C final : public ::goog
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedPtrField< ::BattleEventItem > events_;
+    ::google::protobuf::RepeatedField<::uint64_t> action_order_;
+    ::google::protobuf::internal::CachedSize _action_order_cached_byte_size_;
     ::BattleStateS2C* PROTOBUF_NULLABLE state_;
     ::uint64_t battle_id_;
     ::uint32_t round_index_;
@@ -3663,7 +3686,7 @@ inline void BattleStartS2C::set_allocated_state(::BattleStateS2C* PROTOBUF_NULLA
 inline void TurnResultS2C::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t TurnResultS2C::battle_id() const {
   // @@protoc_insertion_point(field_get:TurnResultS2C.battle_id)
@@ -3671,7 +3694,7 @@ inline ::uint64_t TurnResultS2C::battle_id() const {
 }
 inline void TurnResultS2C::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:TurnResultS2C.battle_id)
 }
 inline ::uint64_t TurnResultS2C::_internal_battle_id() const {
@@ -3687,7 +3710,7 @@ inline void TurnResultS2C::_internal_set_battle_id(::uint64_t value) {
 inline void TurnResultS2C::clear_round_index() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.round_index_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t TurnResultS2C::round_index() const {
   // @@protoc_insertion_point(field_get:TurnResultS2C.round_index)
@@ -3695,7 +3718,7 @@ inline ::uint32_t TurnResultS2C::round_index() const {
 }
 inline void TurnResultS2C::set_round_index(::uint32_t value) {
   _internal_set_round_index(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:TurnResultS2C.round_index)
 }
 inline ::uint32_t TurnResultS2C::_internal_round_index() const {
@@ -3759,14 +3782,14 @@ TurnResultS2C::_internal_mutable_events() {
 
 // .BattleStateS2C state = 4;
 inline bool TurnResultS2C::has_state() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   PROTOBUF_ASSUME(!value || _impl_.state_ != nullptr);
   return value;
 }
 inline void TurnResultS2C::clear_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.state_ != nullptr) _impl_.state_->Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::BattleStateS2C& TurnResultS2C::_internal_state() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -3785,16 +3808,16 @@ inline void TurnResultS2C::unsafe_arena_set_allocated_state(
   }
   _impl_.state_ = reinterpret_cast<::BattleStateS2C*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:TurnResultS2C.state)
 }
 inline ::BattleStateS2C* PROTOBUF_NULLABLE TurnResultS2C::release_state() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::BattleStateS2C* released = _impl_.state_;
   _impl_.state_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -3814,7 +3837,7 @@ inline ::BattleStateS2C* PROTOBUF_NULLABLE TurnResultS2C::unsafe_arena_release_s
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:TurnResultS2C.state)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::BattleStateS2C* temp = _impl_.state_;
   _impl_.state_ = nullptr;
   return temp;
@@ -3829,7 +3852,7 @@ inline ::BattleStateS2C* PROTOBUF_NONNULL TurnResultS2C::_internal_mutable_state
 }
 inline ::BattleStateS2C* PROTOBUF_NONNULL TurnResultS2C::mutable_state()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::BattleStateS2C* _msg = _internal_mutable_state();
   // @@protoc_insertion_point(field_mutable:TurnResultS2C.state)
   return _msg;
@@ -3846,13 +3869,64 @@ inline void TurnResultS2C::set_allocated_state(::BattleStateS2C* PROTOBUF_NULLAB
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
   _impl_.state_ = reinterpret_cast<::BattleStateS2C*>(value);
   // @@protoc_insertion_point(field_set_allocated:TurnResultS2C.state)
+}
+
+// repeated uint64 action_order = 5;
+inline int TurnResultS2C::_internal_action_order_size() const {
+  return _internal_action_order().size();
+}
+inline int TurnResultS2C::action_order_size() const {
+  return _internal_action_order_size();
+}
+inline void TurnResultS2C::clear_action_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.action_order_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t TurnResultS2C::action_order(int index) const {
+  // @@protoc_insertion_point(field_get:TurnResultS2C.action_order)
+  return _internal_action_order().Get(index);
+}
+inline void TurnResultS2C::set_action_order(int index, ::uint64_t value) {
+  _internal_mutable_action_order()->Set(index, value);
+  // @@protoc_insertion_point(field_set:TurnResultS2C.action_order)
+}
+inline void TurnResultS2C::add_action_order(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_action_order()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:TurnResultS2C.action_order)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& TurnResultS2C::action_order() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:TurnResultS2C.action_order)
+  return _internal_action_order();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL TurnResultS2C::mutable_action_order()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:TurnResultS2C.action_order)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_action_order();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+TurnResultS2C::_internal_action_order() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.action_order_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+TurnResultS2C::_internal_mutable_action_order() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.action_order_;
 }
 
 // -------------------------------------------------------------------

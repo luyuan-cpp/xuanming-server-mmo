@@ -22,6 +22,7 @@
     <ClCompile Include="handler\event\battle_binding_helper.cpp" />
     <ClCompile Include="handler\event\event_handler.cpp" />
     <ClCompile Include="handler\event\gate_event_handler.cpp" />
+    <ClCompile Include="handler\event\match_event_handler.cpp" />
     <ClCompile Include="handler\event\gate_kafka_command_router.cpp" />
     <ClCompile Include="handler\event\player_event_handler.cpp" />
     <ClCompile Include="handler\rpc\client_message_processor.cpp" />
@@ -40,6 +41,7 @@
     <ClInclude Include="gate_security.h" />
     <ClInclude Include="gate_version.h" />
     <ClInclude Include="handler\event\battle_binding_helper.h" />
+    <ClInclude Include="handler\event\match_event_handler.h" />
     <ClInclude Include="handler\event\event_handler.h" />
     <ClInclude Include="handler\event\gate_event_handler.h" />
     <ClInclude Include="handler\event\gate_kafka_command_router.h" />

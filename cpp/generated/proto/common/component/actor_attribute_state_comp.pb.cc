@@ -52,11 +52,11 @@ constexpr DerivedAttributesComp::ParseTableT_ DerivedAttributesComp::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
+      6,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -66,15 +66,47 @@ constexpr DerivedAttributesComp::ParseTableT_ DerivedAttributesComp::InternalGen
       ::_pbi::TcParser::GetTable<::DerivedAttributesComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 max_health = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DerivedAttributesComp, _impl_.max_health_), 0>(),
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 max_health = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DerivedAttributesComp, _impl_.max_health_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.max_health_)}},
+      // uint64 max_mana = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DerivedAttributesComp, _impl_.max_mana_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.max_mana_)}},
+      // uint64 physical_attack = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DerivedAttributesComp, _impl_.physical_attack_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.physical_attack_)}},
+      // uint64 magic_attack = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DerivedAttributesComp, _impl_.magic_attack_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.magic_attack_)}},
+      // uint64 defense = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DerivedAttributesComp, _impl_.defense_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.defense_)}},
+      // uint64 speed = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DerivedAttributesComp, _impl_.speed_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.speed_)}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
-      // uint32 max_health = 1;
-      {PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.max_health_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 max_health = 1;
+      {PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.max_health_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 max_mana = 2;
+      {PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.max_mana_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 physical_attack = 3;
+      {PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.physical_attack_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 magic_attack = 4;
+      {PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.magic_attack_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 defense = 5;
+      {PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.defense_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 speed = 6;
+      {PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.speed_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -87,7 +119,12 @@ inline constexpr DerivedAttributesComp::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
-        max_health_{0u} {}
+        max_health_{::uint64_t{0u}},
+        max_mana_{::uint64_t{0u}},
+        physical_attack_{::uint64_t{0u}},
+        magic_attack_{::uint64_t{0u}},
+        defense_{::uint64_t{0u}},
+        speed_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr DerivedAttributesComp::DerivedAttributesComp(::_pbi::ConstantInitialized,
@@ -645,9 +682,19 @@ const ::uint32_t
         2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::DerivedAttributesComp, _impl_._has_bits_),
-        4, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::DerivedAttributesComp, _impl_.max_health_),
+        PROTOBUF_FIELD_OFFSET(::DerivedAttributesComp, _impl_.max_mana_),
+        PROTOBUF_FIELD_OFFSET(::DerivedAttributesComp, _impl_.physical_attack_),
+        PROTOBUF_FIELD_OFFSET(::DerivedAttributesComp, _impl_.magic_attack_),
+        PROTOBUF_FIELD_OFFSET(::DerivedAttributesComp, _impl_.defense_),
+        PROTOBUF_FIELD_OFFSET(::DerivedAttributesComp, _impl_.speed_),
         0,
+        1,
+        2,
+        3,
+        4,
+        5,
 };
 
 static const ::_pbi::MigrationSchema
@@ -673,14 +720,17 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2factor_5fattrib
     "y\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\010:\0028\001\"W\n\030Cal"
     "culatedAttributesComp\022\024\n\014attack_power\030\001 "
     "\001(\r\022\025\n\rdefense_power\030\002 \001(\r\022\016\n\006isDead\030\003 \001"
-    "(\010\"+\n\025DerivedAttributesComp\022\022\n\nmax_healt"
-    "h\030\001 \001(\rB\022Z\020common/componentb\006proto3"
+    "(\010\"\214\001\n\025DerivedAttributesComp\022\022\n\nmax_heal"
+    "th\030\001 \001(\004\022\020\n\010max_mana\030\002 \001(\004\022\027\n\017physical_a"
+    "ttack\030\003 \001(\004\022\024\n\014magic_attack\030\004 \001(\004\022\017\n\007def"
+    "ense\030\005 \001(\004\022\r\n\005speed\030\006 \001(\004B\022Z\020common/comp"
+    "onentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2factor_5fattribute_5fstate_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2factor_5fattribute_5fstate_5fcomp_2eproto = {
     false,
     false,
-    355,
+    453,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2factor_5fattribute_5fstate_5fcomp_2eproto,
     "proto/common/component/actor_attribute_state_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2factor_5fattribute_5fstate_5fcomp_2eproto_once,
@@ -1240,7 +1290,12 @@ PROTOBUF_NDEBUG_INLINE DerivedAttributesComp::Impl_::Impl_(
 
 inline void DerivedAttributesComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.max_health_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, max_health_),
+           0,
+           offsetof(Impl_, speed_) -
+               offsetof(Impl_, max_health_) +
+               sizeof(Impl_::speed_));
 }
 DerivedAttributesComp::~DerivedAttributesComp() {
   // @@protoc_insertion_point(destructor:DerivedAttributesComp)
@@ -1289,7 +1344,12 @@ PROTOBUF_NOINLINE void DerivedAttributesComp::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  _impl_.max_health_ = 0u;
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    ::memset(&_impl_.max_health_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.speed_) -
+        reinterpret_cast<char*>(&_impl_.max_health_)) + sizeof(_impl_.speed_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1313,12 +1373,57 @@ PROTOBUF_NOINLINE void DerivedAttributesComp::Clear() {
   (void)cached_has_bits;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  // uint32 max_health = 1;
+  // uint64 max_health = 1;
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     if (this_._internal_max_health() != 0) {
       target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           1, this_._internal_max_health(), target);
+    }
+  }
+
+  // uint64 max_mana = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_max_mana() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_max_mana(), target);
+    }
+  }
+
+  // uint64 physical_attack = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_physical_attack() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_physical_attack(), target);
+    }
+  }
+
+  // uint64 magic_attack = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_magic_attack() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_magic_attack(), target);
+    }
+  }
+
+  // uint64 defense = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_defense() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_defense(), target);
+    }
+  }
+
+  // uint64 speed = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_speed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_speed(), target);
     }
   }
 
@@ -1345,13 +1450,49 @@ PROTOBUF_NOINLINE void DerivedAttributesComp::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
-   {
-    // uint32 max_health = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    // uint64 max_health = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_max_health() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_max_health());
+      }
+    }
+    // uint64 max_mana = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_max_mana() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_max_mana());
+      }
+    }
+    // uint64 physical_attack = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_physical_attack() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_physical_attack());
+      }
+    }
+    // uint64 magic_attack = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_magic_attack() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_magic_attack());
+      }
+    }
+    // uint64 defense = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_defense() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_defense());
+      }
+    }
+    // uint64 speed = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_speed() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_speed());
       }
     }
   }
@@ -1372,9 +1513,36 @@ void DerivedAttributesComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
-    if (from._internal_max_health() != 0) {
-      _this->_impl_.max_health_ = from._impl_.max_health_;
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_max_health() != 0) {
+        _this->_impl_.max_health_ = from._impl_.max_health_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_max_mana() != 0) {
+        _this->_impl_.max_mana_ = from._impl_.max_mana_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_physical_attack() != 0) {
+        _this->_impl_.physical_attack_ = from._impl_.physical_attack_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_magic_attack() != 0) {
+        _this->_impl_.magic_attack_ = from._impl_.magic_attack_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_defense() != 0) {
+        _this->_impl_.defense_ = from._impl_.defense_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_speed() != 0) {
+        _this->_impl_.speed_ = from._impl_.speed_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1394,7 +1562,12 @@ void DerivedAttributesComp::InternalSwap(DerivedAttributesComp* PROTOBUF_RESTRIC
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.max_health_, other->_impl_.max_health_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.speed_)
+      + sizeof(DerivedAttributesComp::_impl_.speed_)
+      - PROTOBUF_FIELD_OFFSET(DerivedAttributesComp, _impl_.max_health_)>(
+          reinterpret_cast<char*>(&_impl_.max_health_),
+          reinterpret_cast<char*>(&other->_impl_.max_health_));
 }
 
 ::google::protobuf::Metadata DerivedAttributesComp::GetMetadata() const {

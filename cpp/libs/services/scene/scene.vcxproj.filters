@@ -39,6 +39,8 @@
     <ClInclude Include="player\system\player_lifecycle.h" />
     <ClInclude Include="player\system\player_scene.h" />
     <ClInclude Include="player\system\player_skill.h" />
+    <ClInclude Include="player\system\player_attribute.h" />
+    <ClInclude Include="player\system\attribute_allocation_rules.h" />
     <ClInclude Include="player\system\player_tip.h" />
     <ClInclude Include="player\system\stress_test_probe.h" />
     <ClInclude Include="spatial\comp\dt_crowd_comp.h" />
@@ -87,6 +89,7 @@
     <ClCompile Include="kafka\system\kafka.cpp" />
     <ClCompile Include="player\system\player_scene.cpp" />
     <ClCompile Include="player\system\player_skill.cpp" />
+    <ClCompile Include="player\system\player_attribute.cpp" />
     <ClCompile Include="player\system\player_tip.cpp" />
     <ClCompile Include="spatial\system\aoi.cpp" />
     <ClCompile Include="spatial\system\grid.cpp" />

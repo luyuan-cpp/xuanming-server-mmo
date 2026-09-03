@@ -36,6 +36,7 @@ message TurnResultS2C {
   uint32 round_index = 2;                 // 本次结算的回合序号
   repeated BattleEventItem events = 3;    // 按结算顺序播表现
   BattleStateS2C state = 4;               // 结算后权威状态
+  repeated uint64 action_order = 5;  // 本回合按速度排定的出手序(actor_id;含被跳过者),演出"行动预告条"用
 }
 
 message BattleEndS2C {

@@ -249,22 +249,77 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DerivedAttributesComp final : publi
   // accessors -------------------------------------------------------
   enum : int {
     kMaxHealthFieldNumber = 1,
+    kMaxManaFieldNumber = 2,
+    kPhysicalAttackFieldNumber = 3,
+    kMagicAttackFieldNumber = 4,
+    kDefenseFieldNumber = 5,
+    kSpeedFieldNumber = 6,
   };
-  // uint32 max_health = 1;
+  // uint64 max_health = 1;
   void clear_max_health() ;
-  [[nodiscard]] ::uint32_t max_health() const;
-  void set_max_health(::uint32_t value);
+  [[nodiscard]] ::uint64_t max_health() const;
+  void set_max_health(::uint64_t value);
 
   private:
-  ::uint32_t _internal_max_health() const;
-  void _internal_set_max_health(::uint32_t value);
+  ::uint64_t _internal_max_health() const;
+  void _internal_set_max_health(::uint64_t value);
+
+  public:
+  // uint64 max_mana = 2;
+  void clear_max_mana() ;
+  [[nodiscard]] ::uint64_t max_mana() const;
+  void set_max_mana(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_max_mana() const;
+  void _internal_set_max_mana(::uint64_t value);
+
+  public:
+  // uint64 physical_attack = 3;
+  void clear_physical_attack() ;
+  [[nodiscard]] ::uint64_t physical_attack() const;
+  void set_physical_attack(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_physical_attack() const;
+  void _internal_set_physical_attack(::uint64_t value);
+
+  public:
+  // uint64 magic_attack = 4;
+  void clear_magic_attack() ;
+  [[nodiscard]] ::uint64_t magic_attack() const;
+  void set_magic_attack(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_magic_attack() const;
+  void _internal_set_magic_attack(::uint64_t value);
+
+  public:
+  // uint64 defense = 5;
+  void clear_defense() ;
+  [[nodiscard]] ::uint64_t defense() const;
+  void set_defense(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_defense() const;
+  void _internal_set_defense(::uint64_t value);
+
+  public:
+  // uint64 speed = 6;
+  void clear_speed() ;
+  [[nodiscard]] ::uint64_t speed() const;
+  void set_speed(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_speed() const;
+  void _internal_set_speed(::uint64_t value);
 
   public:
   // @@protoc_insertion_point(class_scope:DerivedAttributesComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -293,7 +348,12 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DerivedAttributesComp final : publi
         const DerivedAttributesComp& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
-    ::uint32_t max_health_;
+    ::uint64_t max_health_;
+    ::uint64_t max_mana_;
+    ::uint64_t physical_attack_;
+    ::uint64_t magic_attack_;
+    ::uint64_t defense_;
+    ::uint64_t speed_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -910,28 +970,148 @@ inline void CalculatedAttributesComp::_internal_set_isdead(bool value) {
 
 // DerivedAttributesComp
 
-// uint32 max_health = 1;
+// uint64 max_health = 1;
 inline void DerivedAttributesComp::clear_max_health() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.max_health_ = 0u;
+  _impl_.max_health_ = ::uint64_t{0u};
   ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
 }
-inline ::uint32_t DerivedAttributesComp::max_health() const {
+inline ::uint64_t DerivedAttributesComp::max_health() const {
   // @@protoc_insertion_point(field_get:DerivedAttributesComp.max_health)
   return _internal_max_health();
 }
-inline void DerivedAttributesComp::set_max_health(::uint32_t value) {
+inline void DerivedAttributesComp::set_max_health(::uint64_t value) {
   _internal_set_max_health(value);
   SetHasBit(_impl_._has_bits_[0], 0x00000001U);
   // @@protoc_insertion_point(field_set:DerivedAttributesComp.max_health)
 }
-inline ::uint32_t DerivedAttributesComp::_internal_max_health() const {
+inline ::uint64_t DerivedAttributesComp::_internal_max_health() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return _impl_.max_health_;
 }
-inline void DerivedAttributesComp::_internal_set_max_health(::uint32_t value) {
+inline void DerivedAttributesComp::_internal_set_max_health(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_health_ = value;
+}
+
+// uint64 max_mana = 2;
+inline void DerivedAttributesComp::clear_max_mana() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_mana_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t DerivedAttributesComp::max_mana() const {
+  // @@protoc_insertion_point(field_get:DerivedAttributesComp.max_mana)
+  return _internal_max_mana();
+}
+inline void DerivedAttributesComp::set_max_mana(::uint64_t value) {
+  _internal_set_max_mana(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:DerivedAttributesComp.max_mana)
+}
+inline ::uint64_t DerivedAttributesComp::_internal_max_mana() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_mana_;
+}
+inline void DerivedAttributesComp::_internal_set_max_mana(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_mana_ = value;
+}
+
+// uint64 physical_attack = 3;
+inline void DerivedAttributesComp::clear_physical_attack() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.physical_attack_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t DerivedAttributesComp::physical_attack() const {
+  // @@protoc_insertion_point(field_get:DerivedAttributesComp.physical_attack)
+  return _internal_physical_attack();
+}
+inline void DerivedAttributesComp::set_physical_attack(::uint64_t value) {
+  _internal_set_physical_attack(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:DerivedAttributesComp.physical_attack)
+}
+inline ::uint64_t DerivedAttributesComp::_internal_physical_attack() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.physical_attack_;
+}
+inline void DerivedAttributesComp::_internal_set_physical_attack(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.physical_attack_ = value;
+}
+
+// uint64 magic_attack = 4;
+inline void DerivedAttributesComp::clear_magic_attack() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.magic_attack_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t DerivedAttributesComp::magic_attack() const {
+  // @@protoc_insertion_point(field_get:DerivedAttributesComp.magic_attack)
+  return _internal_magic_attack();
+}
+inline void DerivedAttributesComp::set_magic_attack(::uint64_t value) {
+  _internal_set_magic_attack(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:DerivedAttributesComp.magic_attack)
+}
+inline ::uint64_t DerivedAttributesComp::_internal_magic_attack() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.magic_attack_;
+}
+inline void DerivedAttributesComp::_internal_set_magic_attack(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.magic_attack_ = value;
+}
+
+// uint64 defense = 5;
+inline void DerivedAttributesComp::clear_defense() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.defense_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t DerivedAttributesComp::defense() const {
+  // @@protoc_insertion_point(field_get:DerivedAttributesComp.defense)
+  return _internal_defense();
+}
+inline void DerivedAttributesComp::set_defense(::uint64_t value) {
+  _internal_set_defense(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:DerivedAttributesComp.defense)
+}
+inline ::uint64_t DerivedAttributesComp::_internal_defense() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.defense_;
+}
+inline void DerivedAttributesComp::_internal_set_defense(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.defense_ = value;
+}
+
+// uint64 speed = 6;
+inline void DerivedAttributesComp::clear_speed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.speed_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t DerivedAttributesComp::speed() const {
+  // @@protoc_insertion_point(field_get:DerivedAttributesComp.speed)
+  return _internal_speed();
+}
+inline void DerivedAttributesComp::set_speed(::uint64_t value) {
+  _internal_set_speed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:DerivedAttributesComp.speed)
+}
+inline ::uint64_t DerivedAttributesComp::_internal_speed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.speed_;
+}
+inline void DerivedAttributesComp::_internal_set_speed(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.speed_ = value;
 }
 
 #ifdef __GNUC__

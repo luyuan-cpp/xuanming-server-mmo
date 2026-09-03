@@ -55,6 +55,7 @@
     <ClCompile Include="common\component\mission_comp.pb.cc" />
     <ClCompile Include="common\component\npc_comp.pb.cc" />
     <ClCompile Include="common\component\player_async_comp.pb.cc" />
+    <ClCompile Include="common\component\player_attribute_comp.pb.cc" />
     <ClCompile Include="common\component\player_comp.pb.cc" />
     <ClCompile Include="common\component\player_login_comp.pb.cc" />
     <ClCompile Include="common\component\player_network_comp.pb.cc" />
@@ -88,6 +89,7 @@
     <ClCompile Include="common\rollback\player_snapshot.pb.cc" />
     <ClCompile Include="common\rollback\transaction_log.pb.cc" />
     <ClCompile Include="contracts\kafka\gate_command.pb.cc" />
+    <ClCompile Include="contracts\kafka\match_event.pb.cc" />
     <ClCompile Include="contracts\kafka\gate_event.pb.cc" />
     <ClCompile Include="contracts\kafka\player_event.pb.cc" />
     <ClCompile Include="contracts\kafka\scene_command.pb.cc" />
@@ -117,6 +119,7 @@
     <ClCompile Include="scene\player_movement.pb.cc" />
     <ClCompile Include="scene\s2s_player_scene.pb.cc" />
     <ClCompile Include="scene\scene_admin.pb.cc" />
+    <ClCompile Include="scene\player_attribute.pb.cc" />
     <ClCompile Include="scene\player_currency.pb.cc" />
     <ClCompile Include="scene\player_rollback.pb.cc" />
     <ClCompile Include="scene\player_scene.pb.cc" />
@@ -158,6 +161,7 @@
     <ClInclude Include="common\component\mission_comp.pb.h" />
     <ClInclude Include="common\component\npc_comp.pb.h" />
     <ClInclude Include="common\component\player_async_comp.pb.h" />
+    <ClInclude Include="common\component\player_attribute_comp.pb.h" />
     <ClInclude Include="common\component\player_comp.pb.h" />
     <ClInclude Include="common\component\player_login_comp.pb.h" />
     <ClInclude Include="common\component\player_network_comp.pb.h" />
@@ -219,6 +223,7 @@
     <ClInclude Include="scene\player_movement.pb.h" />
     <ClInclude Include="scene\s2s_player_scene.pb.h" />
     <ClInclude Include="scene\scene_admin.pb.h" />
+    <ClInclude Include="scene\player_attribute.pb.h" />
     <ClInclude Include="scene\player_currency.pb.h" />
     <ClInclude Include="scene\player_rollback.pb.h" />
     <ClInclude Include="scene\player_scene.pb.h" />

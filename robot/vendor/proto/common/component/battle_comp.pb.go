@@ -71,13 +71,14 @@ func (EInBattleState) EnumDescriptor() ([]byte, []int) {
 }
 
 type InBattleComp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	BattleNodeId  uint32                 `protobuf:"varint,2,opt,name=battle_node_id,json=battleNodeId,proto3" json:"battle_node_id,omitempty"` // 重连时重发 BindBattleEvent 用
-	DeadlineMs    uint64                 `protobuf:"varint,3,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`         // 作废期限(Unix 毫秒);reaper 过期即解冻
-	State         EInBattleState         `protobuf:"varint,4,opt,name=state,proto3,enum=EInBattleState" json:"state,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	BattleId          uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	BattleNodeId      uint32                 `protobuf:"varint,2,opt,name=battle_node_id,json=battleNodeId,proto3" json:"battle_node_id,omitempty"` // 重连时重发 BindBattleEvent 用
+	DeadlineMs        uint64                 `protobuf:"varint,3,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`         // 作废期限(Unix 毫秒);reaper 过期即解冻
+	State             EInBattleState         `protobuf:"varint,4,opt,name=state,proto3,enum=EInBattleState" json:"state,omitempty"`
+	PrepareDeadlineMs uint64                 `protobuf:"varint,5,opt,name=prepare_deadline_ms,json=prepareDeadlineMs,proto3" json:"prepare_deadline_ms,omitempty"` // PREPARING 态的作废期限;收到 BattleConfirmedEvent 后升级为 FIGHTING 并以 deadline_ms 为准
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *InBattleComp) Reset() {
@@ -138,17 +139,25 @@ func (x *InBattleComp) GetState() EInBattleState {
 	return EInBattleState_IN_BATTLE_STATE_NONE
 }
 
+func (x *InBattleComp) GetPrepareDeadlineMs() uint64 {
+	if x != nil {
+		return x.PrepareDeadlineMs
+	}
+	return 0
+}
+
 var File_proto_common_component_battle_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_battle_comp_proto_rawDesc = "" +
 	"\n" +
-	"(proto/common/component/battle_comp.proto\"\x99\x01\n" +
+	"(proto/common/component/battle_comp.proto\"\xc9\x01\n" +
 	"\fInBattleComp\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12$\n" +
 	"\x0ebattle_node_id\x18\x02 \x01(\rR\fbattleNodeId\x12\x1f\n" +
 	"\vdeadline_ms\x18\x03 \x01(\x04R\n" +
 	"deadlineMs\x12%\n" +
-	"\x05state\x18\x04 \x01(\x0e2\x0f.eInBattleStateR\x05state*g\n" +
+	"\x05state\x18\x04 \x01(\x0e2\x0f.eInBattleStateR\x05state\x12.\n" +
+	"\x13prepare_deadline_ms\x18\x05 \x01(\x04R\x11prepareDeadlineMs*g\n" +
 	"\x0eeInBattleState\x12\x18\n" +
 	"\x14IN_BATTLE_STATE_NONE\x10\x00\x12\x1d\n" +
 	"\x19IN_BATTLE_STATE_PREPARING\x10\x01\x12\x1c\n" +

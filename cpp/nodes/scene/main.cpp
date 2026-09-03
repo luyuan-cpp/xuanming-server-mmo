@@ -12,6 +12,7 @@
 #include "player/system/player_lifecycle.h"
 #include "player/system/cross_zone_reaper.h"
 #include "battle/system/player_battle.h"
+#include "services/battle/data/battle_table_fingerprint.h"
 #include "kafka/system/kafka.h"
 #include "proto/contracts/kafka/scene_command.pb.h"
 
@@ -44,7 +45,14 @@ namespace
     {
         struct TableLoadHandler
         {
-            static void OnLoaded() { ConfigSystem::OnConfigLoadSuccessful(); }
+            static void OnLoaded()
+            {
+                ConfigSystem::OnConfigLoadSuccessful();
+                // 战斗配表指纹:表加载完成后算一次并缓存(PrepareBattle 每次备战直接读缓存),
+                // 也让指纹出现在启动日志里便于跨 zone 比对排障
+                LOG_INFO << "scene 战斗配表指纹: table_fingerprint="
+                         << turnbattle::BattleTableFingerprint::Refresh();
+            }
         };
         using KafkaCommandType = contracts::kafka::SceneCommand;
     };

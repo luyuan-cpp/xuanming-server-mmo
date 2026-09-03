@@ -1,0 +1,28 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "AttributeDimensionTableOuterClass";
+option java_multiple_files = true;
+
+
+message AttributeDimensionTable {
+	uint32 id = 1;
+	uint32 pool_id = 2;
+	string name = 3;
+	string desc = 4;
+	uint32 sort = 5;
+	uint32 base_per_level = 6;
+	double max_health = 7;
+	double max_mana = 8;
+	double physical_attack = 9;
+	double magic_attack = 10;
+	double speed = 11;
+	double defense = 12;
+}
+
+message AttributeDimensionTableData {
+	repeated AttributeDimensionTable data = 1;
+}

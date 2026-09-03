@@ -275,3 +275,33 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - The script assumes Linux containers and `/app/bin` runtime layout.
 - Deleting a zone currently deletes the entire namespace (`k8s-zone-down`).
 - Do not use `LoadBalancer` in production unless the cluster provides a real, mature LB implementation. Otherwise use `NodePort` plus an external L4 balancer.
+
+## Local Trial on kind (2026-09-03 实跑记录)
+
+`infra-up` 在本机 kind(v0.33.0 / node v1.37.0,Docker Desktop 29 引擎)上跑通 A 档
+(etcd / redis / redis-match-cluster / kafka / mysql + 全局 match)时踩到的坑,都是
+kind 本地环境特有,不影响真集群:
+
+```powershell
+. E:\work\tools\buildenv.ps1                       # GOPROXY / go 工具链
+go install sigs.k8s.io/kind@latest                 # 装到 $(go env GOPATH)\bin
+kind create cluster --name mmorpg                  # kubectl context 自动切到 kind-mmorpg
+pwsh -File tools/scripts/go_svc_image.ps1 -Command build-all -Registry local -Services match
+kind load docker-image local/mmorpg-match:<tag> --name mmorpg
+pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -GoSvcRegistry local -ZoneId 101
+```
+
+- **kind 节点不共享宿主 Docker 的镜像缓存/镜像源**,直接从 Docker Hub 拉基础镜像
+  (redis / kafka / mysql)极慢,而 kubelet 默认串行拉镜像,一个卡住的拉取会把
+  所有 Pod 钉在 `ContainerCreating`。把宿主已有镜像 `kind load` 进去即可解开。
+- **Docker 29 的 containerd 镜像存储下 `kind load docker-image` 对 Hub 拉下来的多平台
+  镜像会失败**(`ctr: content digest sha256:...: not found`,因为 `docker save` 输出
+  的 index 引用了本地没有的其他平台清单)。改用
+  `docker save --platform linux/amd64 -o x.tar <image>` + `kind load image-archive x.tar`。
+  本地 `docker build` 出来的单平台镜像(Go 服务)不受影响。
+- `kind load` 之后老 Pod 仍卡在原来的拉取请求上时,直接 `kubectl delete pod`
+  让控制器重建,新 Pod 走 `IfNotPresent` 立刻起来。
+- `mysql-backup-pvc` 是 ReadWriteMany,kind 自带的 local-path 不支持,会一直 Pending;
+  只有备份 CronJob 用它,mysql 本体不受影响。
+- go/db 的镜像在任何环境都构建不了:`go/db/go.mod` 把 proto2mysql replace 到仓库外
+  (`../../../proto2mysql`),以 `go/` 为 build context 带不进去。B 档要部署 db 得先解决这一条。

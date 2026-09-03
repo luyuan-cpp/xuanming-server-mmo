@@ -21,10 +21,10 @@ import (
 const pushTimeout = 5 * time.Second
 
 // loadPlayerSession 读 player_locator 维护的 player:session:{id}
-// (照 guild online_status_resolver 的读法,只是这里走 go-zero redis)。
-// 返回 (nil, nil) 表示键不存在。
+// (照 guild online_status_resolver 的读法,只是这里走 go-zero redis;
+// 契约 key,只经 SharedRedis 读)。返回 (nil, nil) 表示键不存在。
 func loadPlayerSession(svcCtx *svc.ServiceContext, playerId uint64) (*plpb.PlayerSession, error) {
-	raw, err := svcCtx.Redis.Get(playerSessionKey(playerId))
+	raw, err := svcCtx.SharedRedis.Get(playerSessionKey(playerId))
 	if err != nil {
 		return nil, err
 	}

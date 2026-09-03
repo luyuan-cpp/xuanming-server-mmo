@@ -44,7 +44,7 @@ service_discovery_prefixes:
   - "GuildNodeService.rpc" # 公会服务（Go-Zero gRPC）的Etcd存储前缀
   - "SceneManagerNodeService.rpc" # 场景管理服务（Go-Zero gRPC）的Etcd存储前缀
   - "BattleNodeService.rpc" # 回合制战斗节点（C++ gRPC，全局池不分 zone；gate 据此发现 battle 建 gRPC channel，match 的 Go 侧自行 watch）
-  - "MatchNodeService.rpc" # 匹配服务（Go-Zero gRPC）：gate 按 NODE_MATCH 路由 JoinQueue/WatchBattle 等客户端消息，缺此前缀会报 "Node not found ... message id: 157"（2026-09-01 冒烟补）
+  - "MatchNodeService.rpc" # 匹配服务（Go-Zero gRPC，全局池不分 zone：不在 IsZoneScopedNodeType，gate 连全 zone 的 match 实例随机路由；排队池全服共享，见 docs/design/cross-zone-matchmaking.md）：gate 按 NODE_MATCH 路由 JoinQueue/WatchBattle 等客户端消息，缺此前缀会报 "Node not found ... message id: 157"（2026-09-01 冒烟补）
 
 # Kafka 配置（分布式消息队列，用于异步通信、日志收集、事件分发等）
 Kafka:

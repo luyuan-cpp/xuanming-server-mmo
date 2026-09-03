@@ -5,12 +5,27 @@ Etcd:
   Hosts:
     - 127.0.0.1:2379
   Key: matchservice.rpc
+
+# ---- 双存储(设计文档 cross-zone-matchmaking.md D2)----
+# Redis:既有共享库。跨运行时契约 key(player:{id}:location / player:session:{id} /
+#   battle:lock:{id})只在这里,写者是 scene_manager / player_locator / C++ scene,
+#   match 只读。C++ 侧 hiredis 无集群客户端,这一库不能集群化。
+# MatchRedis:match 私有 key(match:* / challenge:* / spectate:*)的存储,可指向
+#   Redis Cluster。不配即回落到 Redis(两类 key 同一实例,本地单库形态,行为与
+#   改前一致)。队列相关 key 共用 {mq} hash tag 落同一 slot,入队/剔除都是单 slot Lua。
 Redis:
   Host: 127.0.0.1:6379
   Type: node
   Key: matchservice
 
-# C++ 约定 etcd 注册用的 zone id(gate 按 MatchNodeService.rpc/zone/{zone} 发现本服务)。
+# 本地集群样例(docker compose --profile redis-cluster,6 节点 3 主 3 从):
+# Host 逗号分隔多个种子地址,Type 必须是 cluster。
+MatchRedis:
+  Host: 127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005
+  Type: cluster
+# C++ 约定 etcd 注册路径用的 zone id。MatchNodeService 不是 zone-scoped 节点类型,
+# gate 连的是全 zone 的 match 实例(随机路由);zone 只影响 etcd 注册路径,
+# 匹配池全局不分 zone。本地 dev-start-zones 每 zone 起一份 = 多实例。
 ZoneId: 1
 
 # etcd 节点注册 keepalive 的租约 TTL(秒)。
@@ -40,9 +55,22 @@ ChallengeTTLSeconds: 60
 # 排队 ticket 的兜底 TTL(秒)。正常路径由取消/开战删除,TTL 只挡异常残留。
 TicketTTLSeconds: 21600
 
+# ticket 被 matcher 弹出进入 MATCHED 态后的 TTL(秒)。弹组实例在 gather 中崩溃
+# 时票据在该窗口后自灭,玩家可重排(容错不降级,决策 D5);失败回队首恢复
+# TicketTTLSeconds,成功走 ReadyTicketTTLSeconds。
+MatchedTicketTTLSeconds: 30
+
 # 开局成功后 ticket 停留在 READY 态的 TTL(秒),过期即视为 NOT_QUEUED
 # (战斗内状态由 battle:lock / InBattleComp 权威表达,不再看 ticket)。
 ReadyTicketTTLSeconds: 60
+
+# 战斗配表指纹比对策略(设计决策 D14):scene 在 PrepareBattle 响应里回报本节点六张
+# 战斗表的内容指纹,gather 收齐后比对全员一致才透传给 battle。
+#   off     不比对、不透传;
+#   warn    不一致 / 部分为空只记 Error 日志 + match_table_fingerprint_mismatch_total,照常开局;
+#   enforce 不一致视为 prepare 失败:与多数派不一致者出局删票,幸存者回队首,已冻结者解冻。
+# 灰度期用 warn 观察指标,各 zone 表版本对齐后再切 enforce。
+TableFingerprintMode: warn
 
 # PVE 组队各 battle_config_id(DungeonTable id)的凑满人数。
 # ⚠ 一期临时配置:人数的权威来源是 DungeonTable.max_team_size,Go 侧尚无表管理器,
@@ -51,5 +79,33 @@ PveTeamSizeByConfigId:
   "1": 3
 
 # Prometheus /metrics 端口。9101=login / 9150=scene_manager / 9160=db 已占,match 用 9170。
-# 置空可关闭。
+# 置空可关闭。本机多实例时由 go_services.ps1 按实例派生不同端口。
 MetricsListenAddr: ":9170"
+
+# ---- 评分匹配(设计文档 cross-zone-matchmaking.md §11)----
+# 评分存 MatchRedis 的 match:rating:{player_id}(无 TTL,默认 1500)。⚠ MatchRedis 缺省
+# 回落共享库时,共享库若配了 allkeys-lfu 之类的淘汰策略,评分可能被淘汰回落 1500;
+# 生产必须配独立 MatchRedis。
+# RatingEnabled:消费 Kafka 对局结果更新 Elo;关闭后评分停在 1500,匹配退化为纯等待序。
+RatingEnabled: true
+# battle 节点发 BattleResultEvent 的 topic(全局无 zone 段,key=battle_id),与 C++
+# battle_room_manager.cpp 的 kMatchResultsTopic 一致;启动时确保存在。分区数是不可变契约。
+ResultTopic: match-results
+ResultTopicPartitions: 3
+# 消费组:多实例同组分摊分区,每条结果只被一个实例消费。
+ResultConsumerGroup: match-rating
+# 容差曲线 tol = min(Max, Base + floor(等待秒 / StepSeconds) × StepDelta):
+# 100 起、每 5s 放宽 100、上限 1000。PVE 组队不看评分(容差 ∞,纯等待序)。
+RatingToleranceBase: 100
+RatingToleranceStepSeconds: 5
+RatingToleranceStepDelta: 100
+RatingToleranceMax: 1000
+# 终态兜底:锚点已等 ≥ 该秒数时容差 = ∞(纯等待序),分差再大也必配;分差超过
+# RatingToleranceMax 的两人不会永久饥饿。0 / 漏配按默认 90。
+RatingToleranceMaxWaitSeconds: 90
+# 回合打满按平局:C++ 引擎回合打满一律判 SIDE_B_WIN(PVE 规则),PVP 照胜负结算会让
+# 锚点 / 高分方系统性扣分;total_rounds ≥ 该值的胜负结果按 0.5 结算。默认 30 =
+# C++ kDefaultMaxRounds;0 关闭。配了 DungeonTable.time_limit 的配置按下面的 map 覆盖。
+RatingDrawRoundCap: 30
+# RatingDrawRoundCapByConfigId:
+#   "1": 300

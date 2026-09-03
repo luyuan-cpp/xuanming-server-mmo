@@ -29,6 +29,16 @@ param(
     # 留空 = git 短 sha(脏树带 -dirty)。不再默认 latest:
     # 可变 tag 会让 `kubectl rollout undo` 退回同一个 digest。
     [string]$Tag = "",
+    # 只处理目录里的这几个服务(逗号分隔,如 match,login)。留空 = 全部。
+    # 目录是顺序遍历、一个失败就 throw,以前想单独构建 match 也得先等 db 过——
+    # 而 go/db/go.mod 把 proto2mysql replace 到仓库外(../../../proto2mysql),
+    # 以 go/ 为 build context 根本带不进镜像,db 一挂后面全都不构建。
+    #
+    # 类型是 [string[]] 而不是 [string]:从 PowerShell 里 `& go_svc_image.ps1 -Services a,b`
+    # 调用时,逗号表达式先被解析成数组,[string] 参数会直接报
+    # "Cannot convert value to type System.String" 而不是进到下面的 split;
+    # `pwsh -File ... -Services "a,b"` 传的是单个字符串,两种形态这里都接。
+    [string[]]$Services = @(),
     [switch]$DryRun
 )
 
@@ -60,6 +70,22 @@ $Catalogue = [ordered]@{
     login           = @{ Dir = "login";           Entry = "login.go";               ImageName = "mmorpg-login" }
     "player-locator"= @{ Dir = "player_locator";  Entry = "player_locator.go";      ImageName = "mmorpg-player-locator" }
     "scene-manager" = @{ Dir = "scene_manager";   Entry = "scene_manager_service.go"; ImageName = "mmorpg-scene-manager" }
+    # 与 k8s_deploy.ps1 $GoSvcCatalogue 的 match 条目配对(ImageName 必须一致,否则 infra-up 拉不到镜像)
+    match           = @{ Dir = "match";           Entry = "match_service.go";       ImageName = "mmorpg-match" }
+}
+
+# 先把每个元素再按逗号拆一次,兼容 "a,b"(单字符串)和 a,b(数组)两种传法。
+$wanted = @($Services | ForEach-Object { $_ -split ',' } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+if ($wanted.Count -gt 0) {
+    $unknown = @($wanted | Where-Object { -not $Catalogue.Contains($_) })
+    if ($unknown.Count -gt 0) {
+        throw "未知的 Go 服务:$($unknown -join ', ')。可选:$($Catalogue.Keys -join ', ')"
+    }
+    $filtered = [ordered]@{}
+    foreach ($name in $Catalogue.Keys) {
+        if ($wanted -contains $name) { $filtered[$name] = $Catalogue[$name] }
+    }
+    $Catalogue = $filtered
 }
 
 function Get-ImageFullName {
@@ -86,10 +112,14 @@ function Invoke-BuildAll {
             "--build-arg", "ENTRY=$($info.Entry)",
             "--build-arg", "BUILD_VERSION=$Tag",
             "--build-arg", "BUILD_COMMIT=$BuildCommit",
-            "--build-arg", "BUILD_TIME=$BuildTime",
-            "-t", $fullImage,
-            $GoRoot
+            "--build-arg", "BUILD_TIME=$BuildTime"
         )
+        # 宿主设置了 GOPROXY(buildenv.ps1 → goproxy.cn)就透传给 Dockerfile 的 ARG GOPROXY,
+        # 否则 builder 阶段走 proxy.golang.org,国内网络下 `go mod download` 会超时。
+        if (-not [string]::IsNullOrWhiteSpace($env:GOPROXY)) {
+            $buildArgs += @("--build-arg", "GOPROXY=$($env:GOPROXY)")
+        }
+        $buildArgs += @("-t", $fullImage, $GoRoot)
 
         if ($DryRun) {
             Write-Host "  [dry-run] docker $($buildArgs -join ' ')" -ForegroundColor DarkGray

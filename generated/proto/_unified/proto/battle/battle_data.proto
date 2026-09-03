@@ -46,6 +46,10 @@ message BattlePlayerSnapshot {
   repeated BattleItemEntry items = 9;      // 战斗可用消耗品数量副本
   BattleRouting routing = 10;
   uint32 team_index = 11;                  // 0 = A 方(进攻),1 = B 方
+  string table_fingerprint = 12;           // 出快照的 scene 节点的战斗配表指纹(与 PrepareBattleResponse.table_fingerprint 同值)
+  uint64 physical_attack = 13;             // 二级属性(属性加点系统):物伤,scene 侧由 DerivedAttributes 填;引擎 InitPlayers 直接透传给 BattleActorState
+  uint64 magic_attack = 14;                // 法伤
+  uint64 defense = 15;                     // 防御
 }
 
 // ---- 战斗单位运行时状态(玩家与怪物统一;引擎状态用 proto 承载,宪法 §3) ----
@@ -72,6 +76,10 @@ message BattleActorState {
   uint32 monster_table_id = 14;     // 仅怪物有效(MonsterTable id)
   map<uint32, uint32> skill_cooldown_rounds = 15; // skill_table_id -> 剩余冷却回合
   bool is_auto = 16;                // 自动战斗(挂机):回合内视为已就绪,结算时按默认行动出手
+  uint32 formation_slot = 17;       // 阵位 0-9:0-4 前排(左→右),5-9 后排;演出站位用,不参与判定
+  uint64 physical_attack = 18;      // 物伤(来自快照;怪物 0)
+  uint64 magic_attack = 19;         // 法伤(来自快照;怪物 0)
+  uint64 defense = 20;              // 防御(来自快照;怪物 0)
 }
 
 // ---- 玩家行动指令 ----
@@ -105,6 +113,9 @@ enum eBattleEventType {
   BATTLE_EVENT_DEFEND = 9;
   BATTLE_EVENT_ITEM = 10;
   BATTLE_EVENT_FLEE = 11;        // 逃跑尝试(success 标记结果)
+  BATTLE_EVENT_MISS = 12;      // 未命中/闪避(演出:目标头顶"闪");value=0
+  BATTLE_EVENT_BLOCK = 13;     // 格挡(预留,一期不产出)
+  BATTLE_EVENT_MANA = 14;      // 法力变化:value=变化绝对值,is_negative 由 target_health_after 之外的 mana_after 表达
 }
 
 message BattleEventItem {
@@ -118,6 +129,9 @@ message BattleEventItem {
   bool success = 8;               // FLEE 等布尔结果
   uint64 target_health_after = 9; // 目标结算后 HP(客户端免推算)
   uint32 item_table_id = 10;
+  uint32 group_id = 11;             // 同一次行动/施法内的事件共用(演出:群攻多目标同一拍);每次行动递增
+  uint32 hit_index = 12;            // 多段攻击的段序(0 起)
+  uint64 target_mana_after = 13;    // 目标结算后法力(BATTLE_EVENT_MANA 与技能耗蓝演出用)
 }
 
 // ---- 胜负 ----

@@ -21,10 +21,12 @@
   <ItemGroup>
     <ClInclude Include="constants\turn_battle_constants.h" />
     <ClInclude Include="data\battle_data_provider.h" />
+    <ClInclude Include="data\battle_table_fingerprint.h" />
     <ClInclude Include="data\table_battle_data_provider.h" />
     <ClInclude Include="system\turn_battle_engine.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="data\battle_table_fingerprint.cpp" />
     <ClCompile Include="data\table_battle_data_provider.cpp" />
     <ClCompile Include="system\turn_battle_engine.cpp" />
   </ItemGroup>

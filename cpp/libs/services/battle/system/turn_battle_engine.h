@@ -55,6 +55,11 @@ public:
     // 未提交者填默认行动并结算本回合
     TurnResultS2C ResolveCurrentRound();
 
+    // 最近一次 ResolveCurrentRound 的出手序(actor_id,速度降序、同速 actor_id 升序),
+    // 按回合开始时的存活未逃单位排定,回合中途死亡/逃离而被跳过者也在列
+    // (表现规格 D3:battle 节点组 TurnResultS2C.action_order 时透传)
+    const std::vector<uint64_t>& LastActionOrder() const { return lastActionOrder; }
+
     // ONGOING / SIDE_A_WIN / SIDE_B_WIN / DRAW
     eBattleOutcome Outcome() const { return outcome; }
 
@@ -71,6 +76,8 @@ private:
     bool InitPlayers(const CreateBattleRequest& request);
     bool InitMonsters(const CreateBattleRequest& request);
     void AppendMonsterActor(uint32_t monsterTableId, uint32_t monsterIndex, uint32_t referenceLevel);
+    // 阵位分配(表现规格 D4):该队下一个空位 = 该队已有单位数(插入序即阵位序)
+    uint32_t NextFormationSlot(uint32_t teamIndex) const;
 
     // ---- 行动校验链(镜像 SkillSystem::CheckSkillPrerequisites,去掉相位校验) ----
 
@@ -80,6 +87,8 @@ private:
     uint32_t CheckPlayerLevel(const BattleActorState& actor, const SkillTable& skillRow) const;
     uint32_t CheckBuff(const BattleActorState& actor, const SkillTable& skillRow) const;
     uint32_t CheckState(const BattleActorState& actor) const;
+    // 耗蓝校验:SkillTable.cost_resource 中 kSkillCostResourceMana 项之和须 <= 当前法力
+    uint32_t CheckSkillCost(const BattleActorState& actor, const SkillTable& skillRow) const;
 
     // ---- 回合结算 ----
 
@@ -88,6 +97,11 @@ private:
     void ExecuteAction(BattleActorState& actor, const BattleAction& action, TurnResultS2C& result);
     void ExecuteAttack(BattleActorState& actor, uint64_t targetId, TurnResultS2C& result);
     void ExecuteSkill(BattleActorState& actor, const BattleAction& action, TurnResultS2C& result);
+    // 技能对单个目标落地:命中判定 → 伤害 → 死亡 → effect[] buff;
+    // 多目标(AOE)技能对每个目标依次调用,hit_index 由调用方递增
+    void ApplySkillToTarget(BattleActorState& actor, const BattleAction& action,
+                            const SkillTable& skillRow, double baseDamage,
+                            BattleActorState& target, TurnResultS2C& result);
     void ExecuteDefend(BattleActorState& actor, TurnResultS2C& result);
     void ExecuteItem(BattleActorState& actor, const BattleAction& action, TurnResultS2C& result);
     void ExecuteFlee(BattleActorState& actor, TurnResultS2C& result);
@@ -101,10 +115,23 @@ private:
     // ---- 伤害/治疗/buff ----
 
     // 伤害公式镜像实时战斗 CalculateFinalDamage:
-    // base*(1+strength*0.1) - armor,再 *(1-resistance*0.01),
-    // critchance/100 概率 ×2,饱和到 0。isCritical 回传是否暴击(事件流展示用)
+    // base*(1+strength*0.1) + attackBonus - armor - defense,再 *(1-resistance*0.01),
+    // critchance/100 概率 ×2,饱和到 0。attackBonus = 攻方物伤(普攻)或法伤(技能),
+    // defense = 守方防御(属性加点二级属性,怪物为 0)。isCritical 回传是否暴击
     double CalculateFinalDamage(const BattleActorState& caster, const BattleActorState& target,
-                                double baseDamage, bool& isCritical);
+                                double baseDamage, uint64_t attackBonus, bool& isCritical);
+    // 命中判定骨架(表现规格 D1):命中率 = kBaseHitRate(一期表无命中/闪避列)。
+    // 命中率 >= 100 直接返回 true 且不消耗随机数,保证既有回放基线不变;
+    // 二期接表后在此处减去目标闪避并用 Rand01 掷骰
+    bool RollHit(const BattleActorState& caster, const BattleActorState& target);
+    // 技能耗蓝量:cost_resource[] 中 cost_resource_id == kSkillCostResourceMana 的 cost 之和
+    uint64_t SkillManaCost(const SkillTable& skillRow) const;
+    // 扣蓝并产出 BATTLE_EVENT_MANA(source=target=施法者,value=实际消耗,target_mana_after=扣后法力);
+    // 耗蓝为 0 不产出事件
+    void ConsumeSkillMana(BattleActorState& actor, const SkillTable& skillRow, uint32_t skillTableId,
+                          TurnResultS2C& result);
+    // targeting_mode 含 AOE 位:对全部存活敌方生效
+    bool IsAreaSkill(const SkillTable& skillRow) const;
     // 落伤害:DEFEND 减半,ceil 取整,饱和到 0 HP;返回实际扣血
     uint64_t ApplyDamage(BattleActorState& target, double rawDamage);
     uint64_t ApplyHeal(BattleActorState& target, double rawHeal);
@@ -132,8 +159,12 @@ private:
     std::vector<uint64_t> CollectAliveEnemyIds(const BattleActorState& actor) const;
     bool SideWiped(uint32_t teamIndex) const;
     uint32_t CompletedRounds() const;
+    // 追加事件并盖上当前事件组 group_id / hit_index(表现规格 D2)
     BattleEventItem* AppendEvent(TurnResultS2C& result, eBattleEventType eventType,
                                  uint64_t sourceId, uint64_t targetId);
+    // 开启新事件组:group_id 每回合从 1 起递增,hit_index 归 0。
+    // 每个行动(普攻/技能/道具/防御/逃跑)一组;回合末每个单位的 buff tick 各一组
+    void BeginEventGroup();
 
     // ---- 确定性随机(禁 tlsRandom / rand(),宪法 §7 新增不变量 5) ----
 
@@ -158,6 +189,11 @@ private:
     eBattleOutcome outcome = BATTLE_OUTCOME_ONGOING;
     uint64_t nextBuffInstanceId = 1;  // 局内 buff 实例 id,确定性自增(不用全局 id 生成器)
     bool initialized = false;
+
+    // ---- 表现层附加数据(不参与判定) ----
+    std::vector<uint64_t> lastActionOrder;  // 最近一回合出手序(D3)
+    uint32_t currentGroupId = 0;            // 当前事件组 id,每回合结算开始归 0(D2)
+    uint32_t currentHitIndex = 0;           // 当前事件组内的段序/目标序(D2)
 };
 
 }  // namespace turnbattle

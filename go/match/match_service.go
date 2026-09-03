@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"match/internal/config"
 	"match/internal/metrics"
@@ -15,9 +16,11 @@ import (
 	"match/internal/server"
 	"match/internal/svc"
 
+	matchkafka "match/internal/kafka"
 	matchlogic "match/internal/logic"
 
 	base "proto/common/base"
+	kafkapb "proto/contracts/kafka"
 	matchpb "proto/match"
 
 	"shared/grpcstats"
@@ -57,6 +60,44 @@ func main() {
 	// matcher loop:定时扫队列凑单。多实例安全由每个 (mode, config) 队列的
 	// Redis SETNX 锁保证,match 服务本身无状态、可水平扩(设计文档 §5.4)。
 	matchlogic.StartMatcherLoop(ctx, svcCtx)
+
+	// 对局结果回流(cross-zone-matchmaking.md §11):消费 battle 发的
+	// BattleResultEvent 更新 Elo。消费者不 import logic(会成环),入账逻辑
+	// 以回调注入;RatingEnabled=false 时不消费,评分停在默认 1500。
+	if c.RatingEnabled {
+		startResults := func() error {
+			return matchkafka.StartResultConsumer(ctx, matchkafka.ResultConsumerConfig{
+				Brokers:    c.Kafka.Brokers,
+				Topic:      c.ResultTopic,
+				GroupID:    c.ResultConsumerGroup,
+				Partitions: c.ResultTopicPartitions,
+			}, func(_ context.Context, event *kafkapb.BattleResultEvent) error {
+				_, err := matchlogic.ApplyBattleResult(svcCtx, event)
+				return err
+			})
+		}
+		// 评分是软数据:Kafka 暂不可达(EnsureTopics / 建 reader 失败)不能拖死匹配本身
+		// (复审:RatingEnabled=true 让 match 启动硬依赖 Kafka)。降级为告警 + 30s 后台重试,
+		// 期间排队/凑单照常、评分停在当前值;重试成功后从最早 offset 补消费,不丢结果。
+		if err := startResults(); err != nil {
+			logx.Errorf("[rating] 对局结果消费者启动失败,评分暂停更新、30s 后后台重试: %v", err)
+			safego.Go("match.kafka.results.retry", func() {
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					case <-time.After(30 * time.Second):
+					}
+					if err := startResults(); err != nil {
+						logx.Errorf("[rating] 对局结果消费者重试启动失败,30s 后再试: %v", err)
+						continue
+					}
+					logx.Info("[rating] 对局结果消费者重试启动成功")
+					return
+				}
+			})
+		}
+	}
 
 	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		matchpb.RegisterMatchServiceServer(grpcServer, server.NewMatchServiceServer(svcCtx))

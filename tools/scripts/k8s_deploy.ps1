@@ -255,10 +255,14 @@ function Initialize-InjectedSecrets {
 		-DevFallback "Mmorpg#2026db" -ReleaseProfile $ReleaseProfile -Purpose "MySQL 密码" -MinLength 12
 	$script:RedisPassword = Resolve-InjectedSecret -EnvName "MMORPG_REDIS_PASSWORD" `
 		-DevFallback "" -ReleaseProfile $ReleaseProfile -Purpose "Redis 密码" -MinLength 12
+	# Java 网关数据源。dev 回落值以 deploy/docker-compose.yml + gateway_node
+	# application.yaml 的口径为准(appuser/apppass123):mysql.yaml 用 MYSQL_USER 建的
+	# 就是这个账号,且 MYSQL_DATABASE=mmorpg 会自动授权给它。以前回落 root/123456,
+	# 而集群 root 密码是 Mmorpg#2026db —— dev 档的网关在 K8s 上连库必然失败。
 	$script:GatewayDbUser = Resolve-InjectedSecret -EnvName "MMORPG_GATEWAY_DB_USER" `
-		-DevFallback "root" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 数据源用户名" -MinLength 1
+		-DevFallback "appuser" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 数据源用户名" -MinLength 1
 	$script:GatewayDbPassword = Resolve-InjectedSecret -EnvName "MMORPG_GATEWAY_DB_PASSWORD" `
-		-DevFallback "123456" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 数据源密码" -MinLength 12
+		-DevFallback "apppass123" -ReleaseProfile $ReleaseProfile -Purpose "Java Gateway 数据源密码" -MinLength 12
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -290,12 +294,25 @@ function Get-AuthoritativeScalar {
 }
 
 # Go micro-service catalogue: name → { configMapName, manifestFile, port, configFlag, configFileName }
+#   Global = $true 的条目是**全局池**服务:只在 infra-up / all-up 的基础设施阶段部署到
+#   $InfraNamespace 一次,zone-up 跳过(见 Apply-GlobalGoSvcManifests)。
 $GoSvcCatalogue = @{
 	db              = @{ ConfigMap = "go-svc-db-config";              Manifest = "db.yaml";              Port = 6000;  ConfigFlag = "-f";              ConfigFile = "db.yaml";                    ImageName = "mmorpg-db" }
 	"data-service"  = @{ ConfigMap = "go-svc-data-service-config";    Manifest = "data-service.yaml";    Port = 9000;  ConfigFlag = "-f";              ConfigFile = "data_service.yaml";             ImageName = "mmorpg-data-service" }
 	login           = @{ ConfigMap = "go-svc-login-config";           Manifest = "login.yaml";           Port = 50000; ConfigFlag = "-loginService";   ConfigFile = "login.yaml";                  ImageName = "mmorpg-login" }
 	"player-locator"= @{ ConfigMap = "go-svc-player-locator-config";  Manifest = "player-locator.yaml";  Port = 50100; ConfigFlag = "-f";              ConfigFile = "player_locator.yaml";           ImageName = "mmorpg-player-locator" }
 	"scene-manager" = @{ ConfigMap = "go-svc-scene-manager-config";   Manifest = "scene-manager.yaml";   Port = 60000; ConfigFlag = "-f";              ConfigFile = "scene_manager_service.yaml";    ImageName = "mmorpg-scene-manager" }
+	# 回合制战斗匹配:全局池、不分 zone(docs/design/cross-zone-matchmaking.md D1/D10),
+	# 与 battle 池同形态。gate 发现它走非 zone-scoped 前缀,所以放 infra namespace 一份即可。
+	match           = @{ ConfigMap = "go-svc-match-config";           Manifest = "match.yaml";           Port = 50500; ConfigFlag = "-f";              ConfigFile = "match_service.yaml";            ImageName = "mmorpg-match"; Global = $true }
+}
+
+# 目录里非全局(= 随 zone 部署)的服务名。两处 zone 循环共用,避免各写一遍过滤条件。
+function Get-ZoneScopedGoSvcNames {
+	return @($GoSvcCatalogue.Keys | Where-Object { -not $GoSvcCatalogue[$_].Global })
+}
+function Get-GlobalGoSvcNames {
+	return @($GoSvcCatalogue.Keys | Where-Object { $GoSvcCatalogue[$_].Global })
 }
 
 # Java service catalogue
@@ -516,6 +533,12 @@ service_discovery_prefixes:
   - "SceneNodeService.rpc"
   - "GateNodeService.rpc"
   - "LoginNodeService.rpc"
+  # 与 bin/etc/base_deploy_config.yaml 对齐(2026-09-02 跨 zone 匹配审计发现此处只有三条):
+  # 缺 BattleNodeService/MatchNodeService 时 gate 发现不到 battle/match,BindBattle 不落地、
+  # JoinQueue 报 "Node not found ... message id: 157";这份 ConfigMap 以只读整目录挂载覆盖镜像里的 bin/etc。
+  - "SceneManagerNodeService.rpc"
+  - "BattleNodeService.rpc"
+  - "MatchNodeService.rpc"
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
@@ -1001,7 +1024,8 @@ function Wait-ForZoneReady {
 	}
 
 	if (-not $SkipGoSvc -and -not [string]::IsNullOrWhiteSpace($GoSvcRegistry)) {
-		foreach ($svcName in $GoSvcCatalogue.Keys) {
+		# 全局服务(match)不在 zone namespace 里,等它会直接超时
+		foreach ($svcName in (Get-ZoneScopedGoSvcNames)) {
 			Wait-ForDeploymentReady -Namespace $Namespace -DeploymentName $svcName
 		}
 	}
@@ -1044,6 +1068,31 @@ function New-GoSvcConfigMapYaml {
 	$locatorNodeLeaseTTL    = Get-AuthoritativeScalar -RelativePath 'go/player_locator/etc/player_locator.yaml' -KeyPath 'Node.LeaseTTL'
 	$locatorLeaseTTLSeconds = Get-AuthoritativeScalar -RelativePath 'go/player_locator/etc/player_locator.yaml' -KeyPath 'Lease.DefaultTTLSeconds'
 
+	# match 的时间窗口全是"多实例 / 崩溃自愈"语义(锁 TTL、票据 TTL、战斗时限),
+	# 生成器里另抄一份就是又一处会漂移的常数,一律从服务自己的 yaml 取。
+	$matchYaml                  = 'go/match/etc/match_service.yaml'
+	$matchTimeout               = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'Timeout'
+	$matchLeaseTTL              = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'LeaseTTL'
+	$matchKafkaWriteTimeout     = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'KafkaWriteTimeoutSeconds'
+	$matchMatcherIntervalMs     = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'MatcherIntervalMs'
+	$matchMatcherLockTTL        = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'MatcherLockTTLSeconds'
+	$matchBattleMaxDuration     = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'BattleMaxDurationSeconds'
+	$matchChallengeTTL          = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'ChallengeTTLSeconds'
+	$matchTicketTTL             = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'TicketTTLSeconds'
+	$matchReadyTicketTTL        = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'ReadyTicketTTLSeconds'
+	$matchPveTeamSizeConfig1    = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'PveTeamSizeByConfigId.1'
+	# MatchedTicketTTLSeconds 是本轮新增项(cross-zone-matchmaking.md D5,Go 侧缺省 30)。
+	# 和上面不同,它允许缺席:yaml 里没有就整行不写,交给 Go 的 default 标签,
+	# 这样 go/match 与部署脚本可以分开落地,不会让 infra-up 卡在别人的提交上。
+	$matchMatchedTicketTTLLine  = ''
+	$matchMatchedTicketTTL = Get-YamlScalar -Path (Join-Path $RepoRoot ($matchYaml -replace '/', [System.IO.Path]::DirectorySeparatorChar)) -KeyPath 'MatchedTicketTTLSeconds'
+	if ($matchMatchedTicketTTL.Found) {
+		$matchMatchedTicketTTLLine = "MatchedTicketTTLSeconds: $($matchMatchedTicketTTL.Value)"
+	}
+	# MatchRedis:六个 StatefulSet pod 的 headless DNS 逗号串,go-zero 的 cluster 客户端按逗号拆
+	# (core/stores/redis/redisclustermanager.go splitClusterAddrs)。
+	$matchRedisClusterHosts = @(0..5 | ForEach-Object { "redis-match-cluster-$_.redis-match-cluster.${InfraNamespace}.svc.cluster.local:6379" }) -join ','
+
 	$mysqlUser = $script:MysqlUser
 	$mysqlPassword = $script:MysqlPassword
 	$redisPassword = $script:RedisPassword
@@ -1060,14 +1109,34 @@ function New-GoSvcConfigMapYaml {
 	# 「ZoneId 拼出来的库名」——ZoneId 填错一位会在生产实例上静默建库并写入玩家
 	# 数据(config.go:44-48)。自己推自己等于零保护,还留下"已经防住了"的错觉。
 	# 只有 dev 档才回落到推导值,为的是本地一键起栈。
-	$dbAllowedDatabases = Resolve-InjectedSecret -EnvName "MMORPG_DB_ALLOWED_DATABASES" `
-		-DevFallback "zone_${CurrentZoneId}_db" -ReleaseProfile $ReleaseProfile `
-		-Purpose "db 库名白名单(逗号分隔,如 zone_1_db,zone_2_db)" -MinLength 3
-	$dbAllowedList = @($dbAllowedDatabases -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
-	if ($dbAllowedList.Count -eq 0) {
-		throw "生成 db ConfigMap 失败:库名白名单解析后为空(MMORPG_DB_ALLOWED_DATABASES='$dbAllowedDatabases')。"
+	#
+	# 只在生成 db 自己的 ConfigMap 时解析:这是 db 独有的注入项,以前无条件求值只是
+	# 顺手;现在全局服务(match)会在 infra-up 阶段也走这个函数,staging/prod 的
+	# infra-up 不该因为一个 db 才用的密钥缺席而失败。
+	$dbAllowedDatabasesYaml = ''
+	if ($SvcName -eq 'db') {
+		$dbAllowedDatabases = Resolve-InjectedSecret -EnvName "MMORPG_DB_ALLOWED_DATABASES" `
+			-DevFallback "zone_${CurrentZoneId}_db" -ReleaseProfile $ReleaseProfile `
+			-Purpose "db 库名白名单(逗号分隔,如 zone_1_db,zone_2_db)" -MinLength 3
+		$dbAllowedList = @($dbAllowedDatabases -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+		if ($dbAllowedList.Count -eq 0) {
+			throw "生成 db ConfigMap 失败:库名白名单解析后为空(MMORPG_DB_ALLOWED_DATABASES='$dbAllowedDatabases')。"
+		}
+		$dbAllowedDatabasesYaml = ($dbAllowedList | ForEach-Object { "      - `"$_`"" }) -join "`n"
 	}
-	$dbAllowedDatabasesYaml = ($dbAllowedList | ForEach-Object { "      - `"$_`"" }) -join "`n"
+
+	# 启动期 DDL 开关。go/db 默认全 false 且库不存在时 fail-closed
+	# (proto_sql/db.go openDB:"database does not exist and startup-path DDL is disabled"),
+	# 以前这份 ConfigMap 两个开关都没写,K8s 上的 db 只要 zone_<id>_db 没预建就拒启。
+	# dev 档镜像 go/db/etc/db.yaml 的值(本地"起了就能用"语义,建库仍受上面的白名单约束);
+	# staging/prod 固定 false:库由 infra-up 的 mysql-init-sql ConfigMap 预建、
+	# 表由部署阶段的 `go run ./cmd/migrate -command up` 迁移负责(go/db/README.md)。
+	$dbAutoCreateDatabase = 'false'
+	$dbAutoMigrateSchema = 'false'
+	if ($SvcName -eq 'db' -and $ReleaseProfile -eq 'dev') {
+		$dbAutoCreateDatabase = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Database.AutoCreateDatabase'
+		$dbAutoMigrateSchema = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Database.AutoMigrateSchema'
+	}
 
 	$svcConfig = switch ($SvcName) {
 		"db" {
@@ -1096,6 +1165,9 @@ ServerConfig:
     MaxOpenConn: ${dbMaxOpenConn}
     MaxIdleConn: ${dbMaxIdleConn}
     Net: ""
+    # 启动期 DDL(见生成器注释):dev = go/db/etc/db.yaml 的值;staging/prod = false。
+    AutoCreateDatabase: ${dbAutoCreateDatabase}
+    AutoMigrateSchema: ${dbAutoMigrateSchema}
     # 库名白名单(启动期硬断言)。刻意不写 AllowlistEnforcement:留空即 strict,
     # 也就是生产语义 —— 白名单一旦解析为空就拒启,不允许静默放行。
     AllowedDatabases:
@@ -1285,6 +1357,47 @@ MetricsListenAddr: ":9150"
 GateTokenSecret: "${gateTokenSecret}"
 "@
 		}
+		"match" {
+@"
+Name: matchservice.rpc
+ListenOn: 0.0.0.0:50500
+Timeout: ${matchTimeout}
+Etcd:
+  Hosts:
+    - "etcd.${InfraNamespace}:2379"
+  Key: matchservice.rpc
+# 双存储(cross-zone-matchmaking.md D2):
+#   Redis      = SharedRedis,既有共享单库,只读跨运行时契约 key
+#                (player:*:location / player:session:* / battle:lock:*,写者含 C++ scene)
+#   MatchRedis = match 独占的 Redis Cluster,放 match:* / challenge:* / spectate:*
+Redis:
+  Host: redis.${InfraNamespace}:6379
+  Type: node
+  Key: matchservice
+MatchRedis:
+  Host: ${matchRedisClusterHosts}
+  Type: cluster
+  Key: matchservice
+# 全局池:ZoneId 只影响 etcd 注册路径,gate 按非 zone-scoped 前缀发现,任何 zone 的 gate 都能连到。
+ZoneId: ${CurrentZoneId}
+LeaseTTL: ${matchLeaseTTL}
+Kafka:
+  Brokers:
+    - "kafka.${InfraNamespace}:9092"
+KafkaWriteTimeoutSeconds: ${matchKafkaWriteTimeout}
+MatcherIntervalMs: ${matchMatcherIntervalMs}
+MatcherLockTTLSeconds: ${matchMatcherLockTTL}
+BattleMaxDurationSeconds: ${matchBattleMaxDuration}
+ChallengeTTLSeconds: ${matchChallengeTTL}
+TicketTTLSeconds: ${matchTicketTTL}
+ReadyTicketTTLSeconds: ${matchReadyTicketTTL}
+${matchMatchedTicketTTLLine}
+PveTeamSizeByConfigId:
+  "1": ${matchPveTeamSizeConfig1}
+# 与 match.yaml 里的 metrics 容器端口一致
+MetricsListenAddr: ":9170"
+"@
+		}
 		default {
 			throw "Unknown Go service: $SvcName"
 		}
@@ -1315,26 +1428,64 @@ function Apply-GoSvcManifests {
 
 	Write-Host "Applying Go micro-service manifests to namespace $Namespace (registry=$GoSvcRegistry tag=$GoSvcTag)"
 
-	foreach ($svcName in $GoSvcCatalogue.Keys) {
-		$info = $GoSvcCatalogue[$svcName]
-		$svcImage = "$GoSvcRegistry/$($info.ImageName):$GoSvcTag"
+	# 全局服务(match)由 Apply-GlobalGoSvcManifests 在 infra 阶段部署,这里只放随 zone 走的
+	foreach ($svcName in (Get-ZoneScopedGoSvcNames)) {
+		Apply-OneGoSvc -SvcName $svcName -Namespace $Namespace -CurrentZoneId $CurrentZoneId
+	}
+}
 
-		# Apply ConfigMap
-		$cmYaml = New-GoSvcConfigMapYaml -SvcName $svcName -CurrentZoneId $CurrentZoneId
-		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $cmYaml
+# 单个 Go 服务的 ConfigMap + 主 manifest apply。zone 循环与全局循环共用同一段逻辑。
+function Apply-OneGoSvc {
+	param(
+		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][int]$CurrentZoneId
+	)
 
-		# Apply manifest with image placeholder replaced
-		$manifestPath = Join-Path $GoSvcManifestsDir $info.Manifest
-		if (-not (Test-Path $manifestPath)) {
-			Write-Warning "Go service manifest not found: $manifestPath – skipping $svcName"
-			continue
+	$info = $GoSvcCatalogue[$SvcName]
+	$svcImage = "$GoSvcRegistry/$($info.ImageName):$GoSvcTag"
+
+	# Apply ConfigMap
+	$cmYaml = New-GoSvcConfigMapYaml -SvcName $SvcName -CurrentZoneId $CurrentZoneId
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $cmYaml
+
+	# Apply manifest with image placeholder replaced
+	$manifestPath = Join-Path $GoSvcManifestsDir $info.Manifest
+	if (-not (Test-Path $manifestPath)) {
+		Write-Warning "Go service manifest not found: $manifestPath – skipping $SvcName"
+		return
+	}
+	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
+	$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
+	$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
+
+	Write-Host "  [applied] $SvcName -> $svcImage (port $($info.Port) pullPolicy=$svcPullPolicy)"
+}
+
+# 全局池 Go 服务(目录里 Global = $true,目前只有 match):部署到 $InfraNamespace 一次。
+# 由 Apply-Infra 调用,所以 infra-up / all-up 都会带上;zone-up 不碰它。
+function Apply-GlobalGoSvcManifests {
+	if ($SkipGoSvc) { return }
+	if ([string]::IsNullOrWhiteSpace($GoSvcRegistry)) {
+		Write-Host "[skip] Global Go services: -GoSvcRegistry not set, skipping."
+		return
+	}
+
+	$globalNames = Get-GlobalGoSvcNames
+	if ($globalNames.Count -eq 0) { return }
+
+	Write-Host "Applying global Go micro-service manifests to namespace $InfraNamespace (registry=$GoSvcRegistry tag=$GoSvcTag)"
+	foreach ($svcName in $globalNames) {
+		# 全局服务没有"自己的 zone"。ZoneId 只决定 etcd 注册路径,gate 按非 zone-scoped
+		# 前缀发现 match(cpp node_util.cpp IsZoneScopedNodeType 不含它),所以填哪个 zone
+		# 都不影响路由;沿用命令行 -ZoneId 让 infra-up 与 zone-up 的取值口径一致。
+		Apply-OneGoSvc -SvcName $svcName -Namespace $InfraNamespace -CurrentZoneId $ZoneId
+	}
+	if ($WaitReady) {
+		foreach ($svcName in $globalNames) {
+			Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName $svcName
 		}
-		$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
-		$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
-		$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
-		Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
-
-		Write-Host "  [applied] $svcName -> $svcImage (port $($info.Port) pullPolicy=$svcPullPolicy)"
 	}
 }
 
@@ -1794,32 +1945,150 @@ function Show-ZoneStatus {
 	Invoke-Kubectl -Args @("get", "deploy,po,svc,cm", "-n", $namespace) -AllowFailure
 }
 
+<#
+.SYNOPSIS
+	infra-up 要预建 zone_<id>_db 的 zone 列表:zones 配置里的全部 zone ∪ 本次 -ZoneId。
+
+.DESCRIPTION
+	zones 配置走 Resolve-ZonesConfigPath(-ZonesConfigPath / deploy/k8s/zones.json)。
+	文件不存在时**只警告不阻断**:infra-up 本来就不依赖 zones.json(zone-up 才要),
+	此时至少还有 -ZoneId 这一个库,不能让"没有 zones.json"把整个 infra-up 拦下。
+#>
+function Get-InfraZoneIds {
+	$ids = [System.Collections.Generic.List[int]]::new()
+	$ids.Add([int]$ZoneId)
+
+	$zonesPath = Resolve-ZonesConfigPath
+	if (Test-Path $zonesPath) {
+		foreach ($zone in (Get-ZonesFromJson -Path $zonesPath)) {
+			$zid = [int]$zone.zoneId
+			if (-not $ids.Contains($zid)) { $ids.Add($zid) }
+		}
+	}
+	else {
+		Write-Warning "zones 配置不存在($zonesPath),mysql-init-sql 只预建 -ZoneId=$ZoneId 的 zone_${ZoneId}_db。其余 zone 的库要么补进 zones 配置后重建 mysql PVC,要么由 db 服务在 dev 档自建。"
+	}
+
+	return @($ids | Sort-Object)
+}
+
+<#
+.SYNOPSIS
+	把 deploy/mysql-init/*.sql 打成 ConfigMap mysql-init-sql,供 mysql.yaml 挂到
+	/docker-entrypoint-initdb.d —— 与 compose 的 ./mysql-init 卷同一份源。
+
+.DESCRIPTION
+	以前 K8s 侧的 mysql.yaml 只有 my.cnf 一个 ConfigMap,mysql-init 里的
+	zone_config / guild / friend 建表与 zone_N_db 预建全都只在 compose 生效:
+	K8s 上 Java 网关查 zone_config 报表不存在,db 服务因 zone_<id>_db 不存在拒启。
+
+	除仓库里的 sql 原样带入(CRLF 统一成 LF)外,再按 zones 配置与本次 -ZoneId
+	生成 01_k8s_zone_dbs.sql 预建每个 zone 的库并授权给 appuser。文件名以 01_
+	开头保证排在 00_init_zone_dbs.sql 之后、gateway_tables.sql 之前(initdb 按
+	文件名顺序执行);CREATE DATABASE IF NOT EXISTS 与 00_ 里的 zone_1/2 重叠无害。
+
+	注意 initdb 只在数据目录为空的首次启动执行,PVC 已有数据时改 sql 不会重跑
+	(见 mysql.yaml 里 mysql-init 卷的注释)。
+#>
+function New-MysqlInitConfigMapYaml {
+	$initDir = Join-Path $RepoRoot "deploy\mysql-init"
+	if (-not (Test-Path $initDir)) {
+		throw "生成 mysql-init-sql ConfigMap 失败:找不到 $initDir(fail-closed:没有 initdb 脚本的 MySQL 等于没有 zone_config / zone_<id>_db)"
+	}
+
+	$entries = [ordered]@{}
+	foreach ($file in (Get-ChildItem -Path $initDir -Filter "*.sql" -File | Sort-Object Name)) {
+		# CRLF → LF:\r 会原样落进容器,mysql 客户端把 "utf8mb4;\r" 当成语句的一部分报语法错。
+		$entries[$file.Name] = ((Get-Content -Path $file.FullName -Raw) -replace "`r`n", "`n")
+	}
+	if ($entries.Count -eq 0) {
+		throw "生成 mysql-init-sql ConfigMap 失败:$initDir 下没有任何 *.sql"
+	}
+
+	$zoneIds = Get-InfraZoneIds
+	$zoneSql = @(
+		"-- 由 k8s_deploy.ps1 Apply-Infra 生成,不要手改:按 zones 配置 + -ZoneId 预建每个 zone 的库。",
+		"-- zones = $($zoneIds -join ',')",
+		""
+	)
+	foreach ($id in $zoneIds) {
+		$zoneSql += ('CREATE DATABASE IF NOT EXISTS `zone_{0}_db`;' -f $id)
+		# 单引号字符串:双引号里的反引号会被 PowerShell 当转义符吃掉,SQL 里的库名引号就没了。
+		$zoneSql += ('GRANT ALL PRIVILEGES ON `zone_{0}_db`.* TO ''appuser''@''%'';' -f $id)
+	}
+	$zoneSql += "FLUSH PRIVILEGES;"
+	$entries["01_k8s_zone_dbs.sql"] = (($zoneSql -join "`n") + "`n")
+
+	# 每个文件一个 data 键,内容用 YAML 字面块(|)带入:sql 里的反引号 / 引号 / 冒号
+	# 在字面块里都是纯文本,不需要转义;空行保留(YAML 允许字面块内空行)。
+	$dataBlock = foreach ($kv in $entries.GetEnumerator()) {
+		$body = @($kv.Value.TrimEnd("`n") -split "`n" | ForEach-Object {
+			if ($_.Length -gt 0) { "    $_" } else { "" }
+		}) -join "`n"
+		"  $($kv.Key): |`n$body"
+	}
+
+	return @"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init-sql
+data:
+$($dataBlock -join "`n")
+"@
+}
+
 function Apply-Infra {
 	Write-Host "Deploying shared infrastructure to namespace $InfraNamespace"
 	Write-Host "Kafka profile: $KafkaProfile (broker_retention_ms=$KafkaBrokerRetentionMs db_task_retention_ms=$KafkaDbTaskRetentionMs)"
 	Ensure-Namespace -Namespace $InfraNamespace
 
-	foreach ($manifest in @("etcd.yaml", "redis.yaml", "kafka.yaml", "mysql.yaml")) {
+	# redis-match-cluster.yaml:match 私有的 Redis Cluster(StatefulSet + 建群 Job)。
+	# 里面的 Job 幂等(已建群就跳过);但 Job 的 template 一旦落地就不可变,改了
+	# 建群脚本要先 `kubectl -n <infra> delete job redis-match-cluster-init` 再 apply。
+	foreach ($manifest in @("etcd.yaml", "redis.yaml", "redis-match-cluster.yaml", "kafka.yaml", "mysql.yaml")) {
 		$path = Join-Path $InfraManifestsDir $manifest
 		if (-not (Test-Path $path)) {
 			Write-Warning "Infra manifest not found: $path — skipping"
 			continue
 		}
+
+		if ($manifest -eq "mysql.yaml") {
+			# initdb 脚本的 ConfigMap 必须先于 mysql Deployment 落地,否则 Pod 因
+			# volume 引用的 ConfigMap 不存在卡在 ContainerCreating。
+			Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent (New-MysqlInitConfigMapYaml)
+		}
+
+		$manifestContent = Get-Content -Path $path -Raw
+
+		# 所有 infra manifest 共用的占位:__INFRA_NAMESPACE__ → -InfraNamespace。
+		# etcd / kafka 的广播地址必须是跨 namespace 可解析的 FQDN(zone namespace 里的
+		# 客户端 bootstrap 后拿到的是 broker 广播的地址再去连),而 FQDN 里带 namespace,
+		# 写死在 manifest 里换 namespace 部署就会广播一个不存在的地址。
+		$manifestContent = $manifestContent.Replace("__INFRA_NAMESPACE__", $InfraNamespace)
+
 		if ($manifest -eq "kafka.yaml") {
-			$manifestContent = Get-Content -Path $path -Raw
 			$manifestContent = $manifestContent.Replace("__KAFKA_LOG_RETENTION_MS__", [string]$KafkaBrokerRetentionMs)
 			$manifestContent = $manifestContent.Replace("__KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS__", [string]$KafkaRetentionCheckIntervalMs)
 			$manifestContent = $manifestContent.Replace("__KAFKA_LOG_RETENTION_BYTES__", [string]$KafkaRetentionBytes)
 			$manifestContent = $manifestContent.Replace("__KAFKA_LOG_SEGMENT_BYTES__", [string]$KafkaSegmentBytes)
 			$manifestContent = $manifestContent.Replace("__KAFKA_HEAP_OPTS__", [string]$KafkaHeapOpts)
-			Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $manifestContent
 		}
-		else {
-			Invoke-Kubectl -Args @("apply", "-n", $InfraNamespace, "-f", $path)
+
+		# fail-closed:任何 __XXX__ 形态的占位没被替换就拒绝 apply。以前只有 kafka.yaml
+		# 走替换,别的 manifest 里新加占位会原样送进集群,要到 Pod 起不来才发现。
+		$leftover = [regex]::Matches($manifestContent, '__[A-Z][A-Z0-9_]*__') | ForEach-Object { $_.Value } | Sort-Object -Unique
+		if ($leftover.Count -gt 0) {
+			throw "infra manifest $manifest 里有未替换的占位:$($leftover -join ', ')。请在 Apply-Infra 里补对应的 Replace。"
 		}
+
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $manifestContent
 	}
 
 	Write-Host "Shared infrastructure deployed: namespace=$InfraNamespace"
+
+	# 全局池服务(match)与基础设施同命运:一份、放 infra namespace、所有 zone 共用
+	Apply-GlobalGoSvcManifests
 }
 
 function Remove-Infra {

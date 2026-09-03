@@ -32,8 +32,22 @@ const (
 
 type ServiceContext struct {
 	Config config.Config
-	Redis  *redis.Redis
-	Etcd   *clientv3.Client
+
+	// 双存储(设计文档 cross-zone-matchmaking.md D2):
+	//   - MatchRedis:match 私有 key(match:* / challenge:* / spectate:*),
+	//     可指向 Redis Cluster;队列三类 key 共用 {mq} hash tag 同 slot。
+	//   - SharedRedis:跨运行时契约 key(player:{id}:location /
+	//     player:session:{id} / battle:lock:{id}),写者是 scene_manager /
+	//     player_locator / C++ scene,match 只读。C++ 无集群客户端,所以
+	//     这条永远是既有共享库。
+	// MatchRedis 未配置时两者是同一句柄(本地单库形态,行为与改前一致)。
+	MatchRedis  *redis.Redis
+	SharedRedis *redis.Redis
+	// Redis 是 SharedRedis 的过渡别名:保留一版避免外部引用断裂,
+	// 新代码一律按 key 归属显式选 MatchRedis / SharedRedis,不要再用它。
+	Redis *redis.Redis
+
+	Etcd *clientv3.Client
 	// Kafka 只用于挑战(切磋)S2C 经 gate-{id} 的推送,同步 RequireOne
 	// (与 friend/guild 的 servicecontext 同口径)。
 	Kafka              *kafka.Writer
@@ -71,22 +85,32 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	// 通过 shared/snowflakealloc 拿独立的 Snowflake worker id(照 scene_manager):
 	// prefix="/match" 与 NodeInfo.NodeId 解耦,reRegister 换业务 node_id 不影响发号;
-	// 同 hostname 重启复用同一 worker id,Handle.NewNode 注入前任高水位地板。
+	// 同亲和键重启复用同一 worker id,Handle.NewNode 注入前任高水位地板。
+	//
+	// 亲和键 = hostname#ListenOn 而非裸 hostname(设计决策 D5b):snowflakealloc
+	// 按亲和键复用 worker id 且不校验旧持有者是否存活(allocator.go 的 CAS 只比
+	// nodeKey 的 value),同一主机上两个 match 进程(本地双 zone / -Counts match=2)
+	// 用裸 hostname 会拿到同一 worker id → battle_id / challenge_id 撞号。加上监听
+	// 地址后同机多进程各自一把键;同一进程重启仍复用原 id。
 	host, err := os.Hostname()
 	if err != nil {
 		panic(fmt.Sprintf("snowflake: failed to get hostname: %v", err))
 	}
+	affinityKey := fmt.Sprintf("%s#%s", host, c.ListenOn)
 	allocCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	hd, err := snowflakealloc.AllocateWithKeepAlive(allocCtx, etcdCli, "/match", host, snowflakealloc.Options{LeaseTTL: 60})
+	hd, err := snowflakealloc.AllocateWithKeepAlive(allocCtx, etcdCli, "/match", affinityKey, snowflakealloc.Options{LeaseTTL: 60})
 	if err != nil {
 		panic(fmt.Sprintf("snowflake worker id alloc failed: %v", err))
 	}
-	logx.Infof("[match] snowflake worker id = %d (host=%s)", hd.WorkerID, host)
+	logx.Infof("[match] snowflake worker id = %d (affinity=%s)", hd.WorkerID, affinityKey)
 
+	matchRds, sharedRds := NewRedisHandles(c)
 	sc := &ServiceContext{
 		Config:             c,
-		Redis:              redis.MustNewRedis(c.Redis.RedisConf),
+		MatchRedis:         matchRds,
+		SharedRedis:        sharedRds,
+		Redis:              sharedRds,
 		Etcd:               etcdCli,
 		GateCommandBuilder: matchkafka.NewGateCommandBuilder(),
 		BattleIDGen:        hd.NewNode(),
@@ -121,6 +145,21 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
 
 	return sc
+}
+
+// NewRedisHandles 按配置建立 (MatchRedis, SharedRedis) 两个句柄。
+// MatchRedis.Host 为空即未配置,私有 key 回落到共享库,两者返回同一句柄
+// (向后兼容:本地/既有部署不改 yaml 照跑)。拆成独立函数是为了不依赖
+// etcd 就能测试回落逻辑。
+func NewRedisHandles(c config.Config) (matchRds, sharedRds *redis.Redis) {
+	sharedRds = redis.MustNewRedis(c.Redis.RedisConf)
+	if c.MatchRedis.Host == "" {
+		return sharedRds, sharedRds
+	}
+	matchRds = redis.MustNewRedis(c.MatchRedis)
+	logx.Infof("[match] MatchRedis 独立配置生效 host=%s type=%s(契约 key 仍走 Redis host=%s)",
+		c.MatchRedis.Host, c.MatchRedis.Type, c.Redis.Host)
+	return matchRds, sharedRds
 }
 
 // SnowflakeLost 在本进程失去 Snowflake worker id 的 etcd 租约时关闭。

@@ -91,6 +91,7 @@ set(SOURCE_FILES
     player/system/player_lifecycle.cpp
     player/system/player_scene.cpp
     player/system/player_skill.cpp
+    player/system/player_attribute.cpp
     player/system/player_tip.cpp
     player/system/stress_test_probe.cpp
     player/system/bag_marshal.cpp

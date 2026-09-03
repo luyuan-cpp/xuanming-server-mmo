@@ -30,6 +30,10 @@ struct DungeonTime_limitComp {
     uint32_t value;
 };
 
+struct DungeonMonsterComp {
+    std::span<const uint32_t> values;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -46,4 +50,8 @@ inline DungeonMax_team_sizeComp MakeDungeonMax_team_sizeComp(const DungeonTable&
 }
 inline DungeonTime_limitComp MakeDungeonTime_limitComp(const DungeonTable& row) {
     return { row.time_limit() };
+}
+inline DungeonMonsterComp MakeDungeonMonsterComp(const DungeonTable& row) {
+    const auto& rf = row.monster();
+    return { std::span<const uint32_t>(rf.data(), rf.size()) };
 }

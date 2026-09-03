@@ -5,6 +5,24 @@
    "max_requests": 10,
    "time_window": 1,
    "tip_message": 1
+  },
+  {
+   "id": 131,
+   "max_requests": 15,
+   "time_window": 1,
+   "tip_message": 1
+  },
+  {
+   "id": 132,
+   "max_requests": 20,
+   "time_window": 1,
+   "tip_message": 1
+  },
+  {
+   "id": 134,
+   "max_requests": 15,
+   "time_window": 1,
+   "tip_message": 1
   }
  ]
 }

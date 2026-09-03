@@ -48,11 +48,11 @@ constexpr MonsterTable::ParseTableT_ MonsterTable::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_._has_bits_),
       0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -62,15 +62,70 @@ constexpr MonsterTable::ParseTableT_ MonsterTable::InternalGenerateParseTable_(c
       ::_pbi::TcParser::GetTable<::MonsterTable>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MonsterTable, _impl_.id_), 0>(),
-       {8, 0, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MonsterTable, _impl_.id_), 8>(),
+       {8, 8, 0,
         PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.id_)}},
+      // uint64 health = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MonsterTable, _impl_.health_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.health_)}},
+      // uint64 strength = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MonsterTable, _impl_.strength_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.strength_)}},
+      // uint64 armor = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MonsterTable, _impl_.armor_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.armor_)}},
+      // uint64 resistance = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MonsterTable, _impl_.resistance_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.resistance_)}},
+      // uint64 critchance = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MonsterTable, _impl_.critchance_), 4>(),
+       {48, 4, 0,
+        PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.critchance_)}},
+      // uint64 speed = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MonsterTable, _impl_.speed_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.speed_)}},
+      // uint64 exp_reward = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MonsterTable, _impl_.exp_reward_), 6>(),
+       {64, 6, 0,
+        PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.exp_reward_)}},
+      // uint64 gold_reward = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(MonsterTable, _impl_.gold_reward_), 7>(),
+       {72, 7, 0,
+        PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.gold_reward_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 health = 2;
+      {PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.health_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 strength = 3;
+      {PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.strength_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 armor = 4;
+      {PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.armor_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 resistance = 5;
+      {PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.resistance_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 critchance = 6;
+      {PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.critchance_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 speed = 7;
+      {PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.speed_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 exp_reward = 8;
+      {PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.exp_reward_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 gold_reward = 9;
+      {PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.gold_reward_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -83,6 +138,14 @@ inline constexpr MonsterTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        health_{::uint64_t{0u}},
+        strength_{::uint64_t{0u}},
+        armor_{::uint64_t{0u}},
+        resistance_{::uint64_t{0u}},
+        critchance_{::uint64_t{0u}},
+        speed_{::uint64_t{0u}},
+        exp_reward_{::uint64_t{0u}},
+        gold_reward_{::uint64_t{0u}},
         id_{0u} {}
 
 template <typename>
@@ -337,9 +400,25 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::MonsterTable, _impl_._has_bits_),
-        4, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::MonsterTable, _impl_.id_),
+        PROTOBUF_FIELD_OFFSET(::MonsterTable, _impl_.health_),
+        PROTOBUF_FIELD_OFFSET(::MonsterTable, _impl_.strength_),
+        PROTOBUF_FIELD_OFFSET(::MonsterTable, _impl_.armor_),
+        PROTOBUF_FIELD_OFFSET(::MonsterTable, _impl_.resistance_),
+        PROTOBUF_FIELD_OFFSET(::MonsterTable, _impl_.critchance_),
+        PROTOBUF_FIELD_OFFSET(::MonsterTable, _impl_.speed_),
+        PROTOBUF_FIELD_OFFSET(::MonsterTable, _impl_.exp_reward_),
+        PROTOBUF_FIELD_OFFSET(::MonsterTable, _impl_.gold_reward_),
+        8,
         0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::MonsterTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -350,7 +429,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::MonsterTable)},
-        {5, sizeof(::MonsterTableData)},
+        {21, sizeof(::MonsterTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -359,17 +438,20 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_monster_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\023monster_table.proto\"\032\n\014MonsterTable\022\n\n"
-    "\002id\030\001 \001(\r\"/\n\020MonsterTableData\022\033\n\004data\030\001 "
-    "\003(\0132\r.MonsterTableB>\n\016com.game.tableB\026Mo"
-    "nsterTableOuterClassP\001Z\022generated/pb/tab"
-    "leb\006proto3"
+    "\n\023monster_table.proto\"\253\001\n\014MonsterTable\022\n"
+    "\n\002id\030\001 \001(\r\022\016\n\006health\030\002 \001(\004\022\020\n\010strength\030\003"
+    " \001(\004\022\r\n\005armor\030\004 \001(\004\022\022\n\nresistance\030\005 \001(\004\022"
+    "\022\n\ncritchance\030\006 \001(\004\022\r\n\005speed\030\007 \001(\004\022\022\n\nex"
+    "p_reward\030\010 \001(\004\022\023\n\013gold_reward\030\t \001(\004\"/\n\020M"
+    "onsterTableData\022\033\n\004data\030\001 \003(\0132\r.MonsterT"
+    "ableB>\n\016com.game.tableB\026MonsterTableOute"
+    "rClassP\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_monster_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_monster_5ftable_2eproto = {
     false,
     false,
-    170,
+    316,
     descriptor_table_protodef_monster_5ftable_2eproto,
     "monster_table.proto",
     &descriptor_table_monster_5ftable_2eproto_once,
@@ -411,7 +493,12 @@ PROTOBUF_NDEBUG_INLINE MonsterTable::Impl_::Impl_(
 
 inline void MonsterTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, health_),
+           0,
+           offsetof(Impl_, id_) -
+               offsetof(Impl_, health_) +
+               sizeof(Impl_::id_));
 }
 MonsterTable::~MonsterTable() {
   // @@protoc_insertion_point(destructor:MonsterTable)
@@ -460,6 +547,12 @@ PROTOBUF_NOINLINE void MonsterTable::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    ::memset(&_impl_.health_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.gold_reward_) -
+        reinterpret_cast<char*>(&_impl_.health_)) + sizeof(_impl_.gold_reward_));
+  }
   _impl_.id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -485,11 +578,83 @@ PROTOBUF_NOINLINE void MonsterTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           1, this_._internal_id(), target);
+    }
+  }
+
+  // uint64 health = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_health() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_health(), target);
+    }
+  }
+
+  // uint64 strength = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_strength() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_strength(), target);
+    }
+  }
+
+  // uint64 armor = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_armor() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_armor(), target);
+    }
+  }
+
+  // uint64 resistance = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_resistance() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_resistance(), target);
+    }
+  }
+
+  // uint64 critchance = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_critchance() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_critchance(), target);
+    }
+  }
+
+  // uint64 speed = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_speed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_speed(), target);
+    }
+  }
+
+  // uint64 exp_reward = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_exp_reward() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_exp_reward(), target);
+    }
+  }
+
+  // uint64 gold_reward = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_gold_reward() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_gold_reward(), target);
     }
   }
 
@@ -516,10 +681,69 @@ PROTOBUF_NOINLINE void MonsterTable::Clear() {
   // Prevent compiler warnings about cached_has_bits being unused
   (void)cached_has_bits;
 
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // uint64 health = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_health() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_health());
+      }
+    }
+    // uint64 strength = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_strength() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_strength());
+      }
+    }
+    // uint64 armor = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_armor() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_armor());
+      }
+    }
+    // uint64 resistance = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_resistance() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_resistance());
+      }
+    }
+    // uint64 critchance = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_critchance() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_critchance());
+      }
+    }
+    // uint64 speed = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_speed() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_speed());
+      }
+    }
+    // uint64 exp_reward = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_exp_reward() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_exp_reward());
+      }
+    }
+    // uint64 gold_reward = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_gold_reward() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_gold_reward());
+      }
+    }
+  }
    {
     // uint32 id = 1;
-    cached_has_bits = this_._impl_._has_bits_[0];
-    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
@@ -543,7 +767,49 @@ void MonsterTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_health() != 0) {
+        _this->_impl_.health_ = from._impl_.health_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_strength() != 0) {
+        _this->_impl_.strength_ = from._impl_.strength_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_armor() != 0) {
+        _this->_impl_.armor_ = from._impl_.armor_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_resistance() != 0) {
+        _this->_impl_.resistance_ = from._impl_.resistance_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_critchance() != 0) {
+        _this->_impl_.critchance_ = from._impl_.critchance_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_speed() != 0) {
+        _this->_impl_.speed_ = from._impl_.speed_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_exp_reward() != 0) {
+        _this->_impl_.exp_reward_ = from._impl_.exp_reward_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_gold_reward() != 0) {
+        _this->_impl_.gold_reward_ = from._impl_.gold_reward_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (from._internal_id() != 0) {
       _this->_impl_.id_ = from._impl_.id_;
     }
@@ -565,7 +831,12 @@ void MonsterTable::InternalSwap(MonsterTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
-  swap(_impl_.id_, other->_impl_.id_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.id_)
+      + sizeof(MonsterTable::_impl_.id_)
+      - PROTOBUF_FIELD_OFFSET(MonsterTable, _impl_.health_)>(
+          reinterpret_cast<char*>(&_impl_.health_),
+          reinterpret_cast<char*>(&other->_impl_.health_));
 }
 
 ::google::protobuf::Metadata MonsterTable::GetMetadata() const {

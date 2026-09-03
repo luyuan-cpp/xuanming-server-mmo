@@ -509,13 +509,14 @@ func (x *DestroySceneRequest) GetSceneId() uint64 {
 }
 
 type PrepareBattleRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	BattleId      uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	BattleNodeId  uint32                 `protobuf:"varint,3,opt,name=battle_node_id,json=battleNodeId,proto3" json:"battle_node_id,omitempty"` // 写进 InBattleComp,重连重挂绑定用
-	DeadlineMs    uint64                 `protobuf:"varint,4,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`         // 战斗作废期限(Unix 毫秒),scene reaper 依据
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId          uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	BattleId          uint64                 `protobuf:"varint,2,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	BattleNodeId      uint32                 `protobuf:"varint,3,opt,name=battle_node_id,json=battleNodeId,proto3" json:"battle_node_id,omitempty"`                // 写进 InBattleComp,重连重挂绑定用
+	DeadlineMs        uint64                 `protobuf:"varint,4,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                        // 战斗作废期限(Unix 毫秒),scene reaper 依据
+	PrepareDeadlineMs uint64                 `protobuf:"varint,5,opt,name=prepare_deadline_ms,json=prepareDeadlineMs,proto3" json:"prepare_deadline_ms,omitempty"` // 备战作废期限(Unix 毫秒):CreateBattle 确认前 reaper 按它解冻(二期,设计 cross-zone-matchmaking.md §10);0 = 沿用 deadline_ms
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *PrepareBattleRequest) Reset() {
@@ -576,12 +577,20 @@ func (x *PrepareBattleRequest) GetDeadlineMs() uint64 {
 	return 0
 }
 
+func (x *PrepareBattleRequest) GetPrepareDeadlineMs() uint64 {
+	if x != nil {
+		return x.PrepareDeadlineMs
+	}
+	return 0
+}
+
 type PrepareBattleResponse struct {
-	state         protoimpl.MessageState       `protogen:"open.v1"`
-	ErrorMessage  *base.TipInfoMessage         `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // 玩家不在/已在战斗等拒绝原因
-	Snapshot      *battle.BattlePlayerSnapshot `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`                             // 冻结成功时返回战斗快照
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState       `protogen:"open.v1"`
+	ErrorMessage     *base.TipInfoMessage         `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`             // 玩家不在/已在战斗等拒绝原因
+	Snapshot         *battle.BattlePlayerSnapshot `protobuf:"bytes,2,opt,name=snapshot,proto3" json:"snapshot,omitempty"`                                         // 冻结成功时返回战斗快照
+	TableFingerprint string                       `protobuf:"bytes,3,opt,name=table_fingerprint,json=tableFingerprint,proto3" json:"table_fingerprint,omitempty"` // scene 侧战斗配表指纹(六张战斗表解析后确定性序列化的 sha256 前 16 字节 hex);match 比对全员一致
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *PrepareBattleResponse) Reset() {
@@ -626,6 +635,13 @@ func (x *PrepareBattleResponse) GetSnapshot() *battle.BattlePlayerSnapshot {
 		return x.Snapshot
 	}
 	return nil
+}
+
+func (x *PrepareBattleResponse) GetTableFingerprint() string {
+	if x != nil {
+		return x.TableFingerprint
+	}
+	return ""
 }
 
 type CancelBattlePrepareRequest struct {
@@ -721,16 +737,18 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\n" +
 	"scene_info\x18\x01 \x01(\v2\x0e.SceneInfoCompR\tsceneInfo\"0\n" +
 	"\x13DestroySceneRequest\x12\x19\n" +
-	"\bscene_id\x18\x01 \x01(\x04R\asceneId\"\x97\x01\n" +
+	"\bscene_id\x18\x01 \x01(\x04R\asceneId\"\xc7\x01\n" +
 	"\x14PrepareBattleRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId\x12$\n" +
 	"\x0ebattle_node_id\x18\x03 \x01(\rR\fbattleNodeId\x12\x1f\n" +
 	"\vdeadline_ms\x18\x04 \x01(\x04R\n" +
-	"deadlineMs\"\x80\x01\n" +
+	"deadlineMs\x12.\n" +
+	"\x13prepare_deadline_ms\x18\x05 \x01(\x04R\x11prepareDeadlineMs\"\xad\x01\n" +
 	"\x15PrepareBattleResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x121\n" +
-	"\bsnapshot\x18\x02 \x01(\v2\x15.BattlePlayerSnapshotR\bsnapshot\"V\n" +
+	"\bsnapshot\x18\x02 \x01(\v2\x15.BattlePlayerSnapshotR\bsnapshot\x12+\n" +
+	"\x11table_fingerprint\x18\x03 \x01(\tR\x10tableFingerprint\"V\n" +
 	"\x1aCancelBattlePrepareRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1b\n" +
 	"\tbattle_id\x18\x02 \x01(\x04R\bbattleId2\xbf\x06\n" +

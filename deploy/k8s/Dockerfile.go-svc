@@ -12,10 +12,15 @@
 # ────────────────────────────────────────────────────────────────
 
 # ── Build stage ──────────────────────────────────────────────────
-FROM golang:1.24-alpine AS builder
+# go/db/go.mod 已声明 go 1.26.5,golang:1.24 基础镜像会在 `go mod download` 时按
+# GOTOOLCHAIN=auto 再去下载一个 1.26 工具链(国内网络下经常超时),干脆直接用 1.26。
+# 其余服务(go 1.24.5)向后兼容。
+FROM golang:1.26-alpine AS builder
 
 ARG SERVICE
 ARG ENTRY
+# 默认官方代理;国内构建由 tools/scripts/go_svc_image.ps1 把宿主的 $env:GOPROXY
+# (buildenv.ps1 设为 goproxy.cn)透传进来,否则模块下载会卡死。
 ARG GOPROXY=https://proxy.golang.org,direct
 
 # 版本戳。由 tools/scripts/go_svc_image.ps1 从 git 注入,默认 unknown。

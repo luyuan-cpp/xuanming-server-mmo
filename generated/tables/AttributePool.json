@@ -1,0 +1,37 @@
+{
+ "data": [
+  {
+   "base_points": 0,
+   "desc": "每升一级获得 5 点,分配到体质/灵力/力量/敏捷",
+   "dimension_cap": 0,
+   "id": 1,
+   "name": "属性点",
+   "points_per_level": 5,
+   "reset_cost_gold": 500,
+   "reset_free_below_level": 30,
+   "unlock_level": 1
+  },
+  {
+   "base_points": 0,
+   "desc": "每升一级获得 1 点,五行相性单项上限 50",
+   "dimension_cap": 50,
+   "id": 2,
+   "name": "相性点",
+   "points_per_level": 1,
+   "reset_cost_gold": 800,
+   "reset_free_below_level": 30,
+   "unlock_level": 1
+  },
+  {
+   "base_points": 0,
+   "desc": "60 级解锁,每级 1 点,仙/魔两路强化",
+   "dimension_cap": 0,
+   "id": 3,
+   "name": "仙魔点",
+   "points_per_level": 1,
+   "reset_cost_gold": 1500,
+   "reset_free_below_level": 0,
+   "unlock_level": 60
+  }
+ ]
+}

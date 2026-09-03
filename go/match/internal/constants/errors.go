@@ -20,6 +20,9 @@ const (
 	ErrTicketMismatch uint32 = 6
 	// ErrCancelTooLate:ticket 已进入 MATCHED 及之后状态,取消太迟。
 	ErrCancelTooLate uint32 = 7
+	// ErrNotInScene:player:{id}:location 缺失,玩家不在任何场景。没有位置的
+	// 玩家 gather 必败(no_location),入队前提前拒绝(设计决策 D6)。
+	ErrNotInScene uint32 = 8
 
 	// ---- 场景发起 PK(切磋) ----
 

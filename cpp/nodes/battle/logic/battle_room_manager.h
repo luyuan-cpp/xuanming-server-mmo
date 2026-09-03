@@ -32,7 +32,15 @@
 //   绑定     → BindBattleEvent / UnbindBattleEvent(同上走 GateCommand 信封);
 //   结算     → SceneCommand{DispatchEvent, BattleSettlementEvent},
 //             topic=scene-{scene_node_id},key=player_id,
-//             target_instance_id=BattleRouting.scene_instance_id。
+//             target_instance_id=BattleRouting.scene_instance_id;
+//   确认     → SceneCommand{DispatchEvent, BattleConfirmedEvent}(CreateBattle 成功后每玩家一条,
+//             scene 据此 PREPARING→FIGHTING 并把作废期限切到正式 deadline,同上信封);
+//   对局结果 → contracts.kafka.BattleResultEvent,topic=match-results(全局无 zone 段),
+//             key=battle_id;只在真实打完(FinishBattle)时发,Destroy/Abort 作废不发。
+//
+// 配表指纹(cross-zone-matchmaking.md §10):CreateBattle 时把 request/players[i] 携带的
+// 指纹与本节点六张战斗表指纹比对,不一致按 game_config.yaml battle_table_fingerprint_mode
+// (warn|enforce|off,默认 warn)处理。
 class BattleRoomManager
 {
 public:
@@ -85,6 +93,9 @@ private:
     struct BattleRoom
     {
         uint64_t battleId = 0;
+        // 开局参数副本(BattleResultEvent 回流给 match 用;引擎内的请求副本是私有的)
+        uint32_t matchMode = 0;
+        uint32_t battleConfigId = 0;
         turnbattle::TurnBattleEngine engine;
         // player_id → 路由信息副本(快照携带,battle 不查 etcd 定位对端)。
         // 有序容器:广播与结算的遍历顺序稳定,日志/回放可复现。
@@ -97,9 +108,19 @@ private:
         TimerTaskComp roundTimer;      // 回合 action_deadline
         TimerTaskComp battleTimer;     // 整场 deadline_ms(强制收尾,防房间泄漏)
         uint64_t actionDeadlineMs = 0; // 当前回合行动截止(Unix 毫秒,GetBattleState 回填)
+        uint64_t deadlineMs = 0;       // 整场作废期限(与 battleTimer 同值;补发确认事件时带给 scene)
+        // BattleConfirmedEvent 补发:开局后 kConfirmResendWindowMs 内每 kConfirmResendIntervalSec
+        // 向全部参战玩家重发一次(scene 幂等)。没有 scene→battle 的确认回执通道(proto 已定),
+        // 用有界周期补发覆盖"首发 produce 失败 / Kafka 积压 / scene 消费者 rebalance"这类
+        // 单次投递丢失或迟到;窗口按 scene 侧锁保留期(prepare TTL 最长 78s + 60s 余量)取整。
+        TimerTaskComp confirmResendTimer;
+        uint64_t confirmResendUntilMs = 0;
     };
 
     BattleRoom *FindRoom(uint64_t battleId);
+
+    // 确认事件周期补发(confirmResendTimer 回调):窗口已过则停表,否则对全员重发。
+    void ResendBattleConfirmed(uint64_t battleId);
 
     // 装填下一回合行动收集窗口并记录截止时间。
     void ArmRoundTimer(BattleRoom &room);
@@ -112,7 +133,8 @@ private:
     void OnBattleDeadline(uint64_t battleId);
 
     // 战斗收尾:每参与者 BattleEndS2C → BattleSettlementEvent → UnbindBattleEvent;
-    // 观众按 spectateReason 推 SpectateEndS2C + 解绑(§10.5)。
+    // 观众按 spectateReason 推 SpectateEndS2C + 解绑(§10.5);
+    // 最后向 match-results 发一条 BattleResultEvent(评分回流)。
     // 只组装与发送,不动 rooms_(房间由调用方随后移除)。
     void FinishBattle(BattleRoom &room, ::eBattleOutcome outcome,
                       ::eSpectateEndReason spectateReason);

@@ -18,6 +18,9 @@
     <ClInclude Include="data\battle_data_provider.h">
       <Filter>data</Filter>
     </ClInclude>
+    <ClInclude Include="data\battle_table_fingerprint.h">
+      <Filter>data</Filter>
+    </ClInclude>
     <ClInclude Include="data\table_battle_data_provider.h">
       <Filter>data</Filter>
     </ClInclude>
@@ -26,6 +29,9 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="data\battle_table_fingerprint.cpp">
+      <Filter>data</Filter>
+    </ClCompile>
     <ClCompile Include="data\table_battle_data_provider.cpp">
       <Filter>data</Filter>
     </ClCompile>

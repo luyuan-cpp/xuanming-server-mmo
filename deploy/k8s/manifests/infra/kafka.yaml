@@ -41,10 +41,18 @@ spec:
               value: "CONTROLLER"
             - name: KAFKA_LISTENERS
               value: "PLAINTEXT://:9092,CONTROLLER://:9093"
+            # 广播地址必须是**跨 namespace 可解析**的 FQDN。
+            # zone namespace 里的 login/db/gate 用 kafka.<infra ns>:9092 做 bootstrap
+            # 没问题,但 bootstrap 之后客户端拿到的是 broker 广播的地址再去连;以前
+            # 这里广播短名 "kafka",在 mmorpg-zone-* namespace 里解析不到,表现为
+            # metadata 拉到了却 "dial tcp: lookup kafka: no such host"。
+            # __INFRA_NAMESPACE__ 由 k8s_deploy.ps1 Apply-Infra 替换(与 etcd.yaml 同一占位)。
             - name: KAFKA_ADVERTISED_LISTENERS
-              value: "PLAINTEXT://kafka:9092"
+              value: "PLAINTEXT://kafka.__INFRA_NAMESPACE__.svc.cluster.local:9092"
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+            # controller quorum 只在 infra namespace 内部通信,短名足够;也不要写
+            # FQDN,KRaft 单节点启动早于 DNS 就绪时 FQDN 解析失败会让 controller 起不来。
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
               value: "1@kafka:9093"
             - name: KAFKA_INTER_BROKER_LISTENER_NAME

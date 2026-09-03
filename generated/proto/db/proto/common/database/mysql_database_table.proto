@@ -3,6 +3,7 @@ option go_package = "db/proto/common/database";
 
 import "proto/db/proto_option.proto";
 import "proto/common/base/user_accounts.proto";
+import "proto/common/component/player_attribute_comp.proto";
 import "proto/common/component/player_scene_comp.proto";
 import "proto/common/component/actor_comp.proto";
 import "proto/common/component/player_comp.proto";
@@ -118,6 +119,8 @@ message player_database
   // on the first qualifying post-merge action. See player_comp.proto's
   // PlayerMergeStateComp comment for the full contract.
   PlayerMergeStateComp merge_state = 10;
+  // 属性加点(方案/已分配点/额外点/外部加成),设计文档 player-attribute-allocation.md
+  PlayerAttributeComp attribute_component = 11;
 }
 
 message player_database_1

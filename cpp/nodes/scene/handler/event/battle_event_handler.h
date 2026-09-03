@@ -9,4 +9,5 @@ public:
 
     static void UnRegister();
     static void BattleSettlementEventHandler(const BattleSettlementEvent& event);
+    static void BattleConfirmedEventHandler(const BattleConfirmedEvent& event);
 };

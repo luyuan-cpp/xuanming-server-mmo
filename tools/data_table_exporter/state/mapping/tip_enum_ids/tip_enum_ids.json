@@ -153,5 +153,22 @@
   },
   "cross_server_error": {
     "SceneTransferInProgress": 129
+  },
+  "attribute_error": {
+    "AttributePoolNotFound": 130,
+    "AttributePoolLocked": 131,
+    "AttributeDimensionNotFound": 132,
+    "AttributePointsNotEnough": 133,
+    "AttributePointsCannotDecrease": 134,
+    "AttributeDimensionCapExceeded": 135,
+    "AttributeSchemeNotFound": 136,
+    "AttributeSchemeLimitReached": 137,
+    "AttributeSchemeSwitchCooldown": 138,
+    "AttributeSchemeNameInvalid": 139,
+    "AttributeSchemeAlreadyActive": 140,
+    "AttributeInBattle": 141,
+    "AttributeGoldNotEnough": 142,
+    "AttributeNoAutoPlan": 143,
+    "AttributeNothingToChange": 144
   }
 }

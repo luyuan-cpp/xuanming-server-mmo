@@ -1,0 +1,22 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "AttributeAutoPlanTableOuterClass";
+option java_multiple_files = true;
+
+
+message AttributeAutoPlanTable {
+	uint32 id = 1;
+	uint32 class_id = 2;
+	uint32 pool_id = 3;
+	repeated uint32 dimension = 4;
+	repeated uint32 weight = 5;
+	string desc = 6;
+}
+
+message AttributeAutoPlanTableData {
+	repeated AttributeAutoPlanTable data = 1;
+}

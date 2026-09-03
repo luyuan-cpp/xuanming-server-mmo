@@ -13,6 +13,7 @@ message DungeonTable {
 	uint32 scene_id = 2;
 	uint32 max_team_size = 3;
 	uint32 time_limit = 4;
+	repeated uint32 monster = 5;
 }
 
 message DungeonTableData {

@@ -24,16 +24,17 @@ const (
 )
 
 type CreateBattleRequest struct {
-	state          protoimpl.MessageState  `protogen:"open.v1"`
-	BattleId       uint64                  `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	BattleConfigId uint32                  `protobuf:"varint,2,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // DungeonTable id(怪物组/回合上限来源)
-	Players        []*BattlePlayerSnapshot `protobuf:"bytes,3,rep,name=players,proto3" json:"players,omitempty"`
-	Seed           uint64                  `protobuf:"varint,4,opt,name=seed,proto3" json:"seed,omitempty"`                                    // 确定性 RNG 种子(match 生成)
-	MatchMode      uint32                  `protobuf:"varint,5,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`         // MatchMode 数值(PVE/PVP 区分,决定逃跑等规则)
-	CreatedAtMs    uint64                  `protobuf:"varint,6,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"` // Unix 毫秒
-	DeadlineMs     uint64                  `protobuf:"varint,7,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`      // 战斗最长期限,超时 battle 强制平局收尾
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state            protoimpl.MessageState  `protogen:"open.v1"`
+	BattleId         uint64                  `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	BattleConfigId   uint32                  `protobuf:"varint,2,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // DungeonTable id(怪物组/回合上限来源)
+	Players          []*BattlePlayerSnapshot `protobuf:"bytes,3,rep,name=players,proto3" json:"players,omitempty"`
+	Seed             uint64                  `protobuf:"varint,4,opt,name=seed,proto3" json:"seed,omitempty"`                                                // 确定性 RNG 种子(match 生成)
+	MatchMode        uint32                  `protobuf:"varint,5,opt,name=match_mode,json=matchMode,proto3" json:"match_mode,omitempty"`                     // MatchMode 数值(PVE/PVP 区分,决定逃跑等规则)
+	CreatedAtMs      uint64                  `protobuf:"varint,6,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`             // Unix 毫秒
+	DeadlineMs       uint64                  `protobuf:"varint,7,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                  // 战斗最长期限,超时 battle 强制平局收尾
+	TableFingerprint string                  `protobuf:"bytes,8,opt,name=table_fingerprint,json=tableFingerprint,proto3" json:"table_fingerprint,omitempty"` // match 确认的全员一致指纹;battle 与自身指纹不一致按配置拒开局/告警
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *CreateBattleRequest) Reset() {
@@ -113,6 +114,13 @@ func (x *CreateBattleRequest) GetDeadlineMs() uint64 {
 		return x.DeadlineMs
 	}
 	return 0
+}
+
+func (x *CreateBattleRequest) GetTableFingerprint() string {
+	if x != nil {
+		return x.TableFingerprint
+	}
+	return ""
 }
 
 type CreateBattleResponse struct {
@@ -398,7 +406,7 @@ var File_proto_battle_battle_node_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\n" +
-	"\x1eproto/battle/battle_node.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1eproto/battle/battle_data.proto\"\x85\x02\n" +
+	"\x1eproto/battle/battle_node.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1eproto/battle/battle_data.proto\"\xb2\x02\n" +
 	"\x13CreateBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12(\n" +
 	"\x10battle_config_id\x18\x02 \x01(\rR\x0ebattleConfigId\x12/\n" +
@@ -408,7 +416,8 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"match_mode\x18\x05 \x01(\rR\tmatchMode\x12\"\n" +
 	"\rcreated_at_ms\x18\x06 \x01(\x04R\vcreatedAtMs\x12\x1f\n" +
 	"\vdeadline_ms\x18\a \x01(\x04R\n" +
-	"deadlineMs\"i\n" +
+	"deadlineMs\x12+\n" +
+	"\x11table_fingerprint\x18\b \x01(\tR\x10tableFingerprint\"i\n" +
 	"\x14CreateBattleResponse\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x124\n" +
 	"\rerror_message\x18\x02 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"K\n" +

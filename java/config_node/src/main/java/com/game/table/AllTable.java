@@ -21,6 +21,14 @@ public class AllTable {
 
         ActorActionStateTableManager.getInstance().load(configDir, useBinary);
 
+        AttributeAutoPlanTableManager.getInstance().load(configDir, useBinary);
+
+        AttributeDimensionTableManager.getInstance().load(configDir, useBinary);
+
+        AttributePoolTableManager.getInstance().load(configDir, useBinary);
+
+        AttributeRuleTableManager.getInstance().load(configDir, useBinary);
+
         BaseSceneTableManager.getInstance().load(configDir, useBinary);
 
         BuffTableManager.getInstance().load(configDir, useBinary);
@@ -74,7 +82,7 @@ public class AllTable {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(21);
+        CountDownLatch latch = new CountDownLatch(25);
 
         new Thread(() -> {
             try {
@@ -91,6 +99,46 @@ public class AllTable {
                 ActorActionStateTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load ActorActionState table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                AttributeAutoPlanTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load AttributeAutoPlan table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                AttributeDimensionTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load AttributeDimension table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                AttributePoolTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load AttributePool table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                AttributeRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load AttributeRule table", e);
             } finally {
                 latch.countDown();
             }
@@ -309,6 +357,14 @@ public class AllTable {
         ActorActionCombatStateTableManager.getInstance().load(configDir, useBinary);
 
         ActorActionStateTableManager.getInstance().load(configDir, useBinary);
+
+        AttributeAutoPlanTableManager.getInstance().load(configDir, useBinary);
+
+        AttributeDimensionTableManager.getInstance().load(configDir, useBinary);
+
+        AttributePoolTableManager.getInstance().load(configDir, useBinary);
+
+        AttributeRuleTableManager.getInstance().load(configDir, useBinary);
 
         BaseSceneTableManager.getInstance().load(configDir, useBinary);
 

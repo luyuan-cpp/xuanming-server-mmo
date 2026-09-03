@@ -116,7 +116,7 @@ func (l *ChallengeLogic) ChallengePlayer(in *matchpb.ChallengePlayerRequest) (*m
 	expiresAtMs := nowMs() + uint64(ttl)*1000
 
 	// 同一目标同时只挂一个待应答挑战:SETNX 占坑,后来者拒绝。
-	acquired, err := l.svcCtx.Redis.SetnxEx(challengeTargetKey(in.TargetPlayerId),
+	acquired, err := l.svcCtx.MatchRedis.SetnxEx(challengeTargetKey(in.TargetPlayerId),
 		strconv.FormatUint(challengeId, 10), ttl)
 	if err != nil {
 		l.Errorf("[challenge] 目标占坑失败 target=%d: %v", in.TargetPlayerId, err)
@@ -133,13 +133,11 @@ func (l *ChallengeLogic) ChallengePlayer(in *matchpb.ChallengePlayerRequest) (*m
 	}
 
 	cleanup := func() {
-		if _, err := l.svcCtx.Redis.Del(challengeKey(challengeId), challengeTargetKey(in.TargetPlayerId)); err != nil {
-			l.Errorf("[challenge] 清理挑战记录失败 challenge=%d: %v", challengeId, err)
-		}
+		deleteChallengeRecord(l.svcCtx, challengeId, in.TargetPlayerId)
 	}
 
 	recordKey := challengeKey(challengeId)
-	if err := l.svcCtx.Redis.Hmset(recordKey, map[string]string{
+	if err := l.svcCtx.MatchRedis.Hmset(recordKey, map[string]string{
 		challengeFieldChallenger: strconv.FormatUint(challengerId, 10),
 		challengeFieldTarget:     strconv.FormatUint(in.TargetPlayerId, 10),
 		challengeFieldConfig:     strconv.FormatUint(uint64(in.BattleConfigId), 10),
@@ -152,7 +150,7 @@ func (l *ChallengeLogic) ChallengePlayer(in *matchpb.ChallengePlayerRequest) (*m
 			ErrorMessage: tipErr(constants.ErrInternal, "服务器繁忙,请稍后再试"),
 		}, nil
 	}
-	if err := l.svcCtx.Redis.Expire(recordKey, ttl); err != nil {
+	if err := l.svcCtx.MatchRedis.Expire(recordKey, ttl); err != nil {
 		l.Errorf("[challenge] 挑战记录挂 TTL 失败 challenge=%d: %v", challengeId, err)
 	}
 
@@ -198,7 +196,7 @@ func (l *ChallengeLogic) RespondChallenge(in *matchpb.RespondChallengeRequest) (
 		}, nil
 	}
 
-	fields, err := l.svcCtx.Redis.Hgetall(challengeKey(in.ChallengeId))
+	fields, err := l.svcCtx.MatchRedis.Hgetall(challengeKey(in.ChallengeId))
 	if err != nil {
 		l.Errorf("[challenge] 读挑战记录失败 challenge=%d: %v", in.ChallengeId, err)
 		metrics.ObserveChallenge("respond", "internal")
@@ -226,9 +224,7 @@ func (l *ChallengeLogic) RespondChallenge(in *matchpb.RespondChallengeRequest) (
 	}
 
 	// 挑战记录一次性消费:应战/拒战/过期都作废(TTL 是兜底,这里显式删)。
-	if _, err := l.svcCtx.Redis.Del(challengeKey(in.ChallengeId), challengeTargetKey(targetId)); err != nil {
-		l.Errorf("[challenge] 删除挑战记录失败 challenge=%d: %v", in.ChallengeId, err)
-	}
+	deleteChallengeRecord(l.svcCtx, in.ChallengeId, targetId)
 
 	if expiresAtMs > 0 && nowMs() >= expiresAtMs {
 		metrics.ObserveChallenge("respond", "expired")
@@ -290,6 +286,19 @@ func (l *ChallengeLogic) RespondChallenge(in *matchpb.RespondChallengeRequest) (
 		in.ChallengeId, challengerId, responderId, configId)
 	metrics.ObserveChallenge("respond", "accepted")
 	return &matchpb.RespondChallengeResponse{}, nil
+}
+
+// deleteChallengeRecord 删挑战记录与目标占坑。两条单 key DEL 而不是一条双 key
+// DEL:challenge:{id} 与 challenge:target:{pid} 身份不同不能共 hash tag,集群下
+// 双 key DEL 会 CROSSSLOT(设计决策 D7)。非原子可接受 —— 目标占坑有 TTL,
+// 残留只影响 60s 内对同一目标重复发起。
+func deleteChallengeRecord(svcCtx *svc.ServiceContext, challengeId uint64, targetPlayerId uint64) {
+	if _, err := svcCtx.MatchRedis.Del(challengeKey(challengeId)); err != nil {
+		logx.Errorf("[challenge] 删除挑战记录失败 challenge=%d: %v", challengeId, err)
+	}
+	if _, err := svcCtx.MatchRedis.Del(challengeTargetKey(targetPlayerId)); err != nil {
+		logx.Errorf("[challenge] 删除目标占坑失败 challenge=%d target=%d: %v", challengeId, targetPlayerId, err)
+	}
 }
 
 // pushResult 推挑战结果(尽力而为:推送失败不回滚业务状态,只记日志)。

@@ -267,6 +267,24 @@ function Resolve-InstanceConfig {
         1
     )
 
+    # Rewrite top-level MetricsListenAddr (e.g. `MetricsListenAddr: ":9170"`) with the
+    # SAME offset rule as ListenOn: base + (Zone-1)*ZonePortShift + (Index-1)*PortStride.
+    # Without this every instance of scene_manager / db / match binds the same fixed
+    # Prometheus port and the second instance (or second zone) dies on bind. Keeping
+    # the rule identical to ListenOn means one mental model: zone 2 match #1 listens
+    # on 51500 and exposes metrics on 10170. Services without the key are untouched.
+    $metricsRegex = [regex]::new('(?m)^(?<lead>MetricsListenAddr:\s*"?)(?<host>[^:"\s]*):(?<port>\d+)(?<tail>"?\s*(#.*)?)$')
+    if ($metricsRegex.IsMatch($content)) {
+        $content = $metricsRegex.Replace(
+            $content,
+            { param($m)
+                $metricsPort = [int]$m.Groups['port'].Value + $zoneShift + ($Index - 1) * $PortStride
+                "$($m.Groups['lead'].Value)$($m.Groups['host'].Value):$metricsPort$($m.Groups['tail'].Value)"
+            },
+            1
+        )
+    }
+
     # Rewrite first ZoneId entry (handles both top-level 'ZoneId: N' and the
     # nested 'Node:\n  ZoneId: N' shape used by login/guild/friend/player_locator).
     if ($Zone -gt 0) {

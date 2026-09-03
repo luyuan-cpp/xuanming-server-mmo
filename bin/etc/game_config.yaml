@@ -9,6 +9,15 @@
 SceneNodeType: 0
 ZoneId: 1
 
+# 战斗配表指纹校验模式(仅 battle 节点读取;scene/gate 忽略此键)。
+# CreateBattleRequest.table_fingerprint / players[i].table_fingerprint 非空时与 battle 自身
+# 六张战斗表指纹比对(设计 docs/design/cross-zone-matchmaking.md §10):
+#   warn    = 不一致只记结构化日志 metric=battle_table_fingerprint_mismatch,照常开局(默认)
+#   enforce = 不一致拒绝 CreateBattle(kFeatureUnavailable),metric=battle_table_fingerprint_reject
+#   off     = 不校验
+# 环境变量 BATTLE_TABLE_FINGERPRINT_MODE 可覆盖(K8s 灰度用)。
+battle_table_fingerprint_mode: warn
+
 # Zone redis 配置
 zoneredis:
   host: "127.0.0.1"        # Redis 服务器地址

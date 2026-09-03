@@ -121,6 +121,11 @@ CreateBattleRequest MakeRequest(uint64_t battleId, uint32_t matchMode, uint64_t 
     return request;
 }
 
+// 兼容属性加点线的用例:省略 battle_id 的两参重载(固定 9900)
+CreateBattleRequest MakeRequest(uint32_t matchMode, uint64_t seed) {
+    return MakeRequest(9900, matchMode, seed);
+}
+
 BattlePlayerSnapshot* AddPlayer(CreateBattleRequest& request, uint64_t playerId, uint32_t teamIndex,
                                 uint64_t health, uint64_t maxHealth, uint64_t strength,
                                 uint64_t armor, uint64_t critChance, uint64_t speed) {
@@ -836,7 +841,443 @@ TEST(TurnBattleEngineTest, InitializeEnforcesTeamSizeLimit) {
     }
 }
 
+// 2026-09-02:怪物属性从 MonsterTable 读入(不再写死 300 常量)→ PVE 多回合;
+// 玩家击杀怪物后结算累加 MonsterTable.exp_reward/gold_reward。
+TEST(TurnBattleEngineTest, MonsterAttributesFromTableEnableMultiRoundAndRewards) {
+    auto provider = MakeProvider();
+    // 表配怪物:200 HP、护甲 5、速度 8(慢于玩家),奖励经验 50 金币 25。
+    constexpr uint32_t kMonsterTableId = 7000;
+    auto& monster = provider->AddMonster(kMonsterTableId);
+    monster.set_health(200);
+    monster.set_strength(10);
+    monster.set_armor(5);
+    monster.set_speed(8);
+    monster.set_exp_reward(50);
+    monster.set_gold_reward(25);
+    provider->SetDungeonMonsters(kDungeonConfig, {kMonsterTableId});
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9030, turnbattle::kMatchModePveSolo, 7);
+    // 玩家:1000 HP、力量 20(普攻 10*(1+2.0)-5=25)、速度 20(先手)。
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/20);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 怪物从表读到 200 HP(不是常量 300),证明读表生效
+    const auto initState = engine.BuildStateSnapshot();
+    const auto* monsterActor = FindStateActor(initState, kMonsterId);
+    ASSERT_NE(monsterActor, nullptr);
+    EXPECT_EQ(monsterActor->attributes().health(), 200u);
+    EXPECT_EQ(monsterActor->max_health(), 200u);
+
+    // 玩家逐回合普攻,战斗应持续多回合(200/25≈8 回合),不再一击秒杀
+    int rounds = 0;
+    while (engine.Outcome() == BATTLE_OUTCOME_ONGOING && rounds < 30) {
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+        engine.ResolveCurrentRound();
+        ++rounds;
+    }
+    EXPECT_GE(rounds, 3);  // 多回合(不是 1 回合秒杀)
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);  // 玩家胜
+
+    // 结算:击杀怪物累加经验/金币
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    EXPECT_EQ(settlement.exp_gain(), 50u);
+    EXPECT_EQ(settlement.gold_gain(), 25u);
+
+    // 败方(此局无败玩家)/逃跑玩家不发奖的语义:阵亡玩家 exp_gain 应为 0
+    // (此处玩家胜,单独验证"未击杀/失败不发奖"由 outcome 分支保证,不再造局)
+}
+
+// 玩家阵亡(怪物过强)时不发奖励:outcome != SIDE_A_WIN 分支
+TEST(TurnBattleEngineTest, PlayerDefeatYieldsNoReward) {
+    auto provider = MakeProvider();
+    constexpr uint32_t kBossTableId = 7001;
+    auto& boss = provider->AddMonster(kBossTableId);
+    boss.set_health(100000);     // 打不死
+    boss.set_strength(1000);     // 秒玩家
+    boss.set_speed(100);         // 先手
+    boss.set_exp_reward(9999);
+    boss.set_gold_reward(9999);
+    provider->SetDungeonMonsters(kDungeonConfig, {kBossTableId});
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9031, turnbattle::kMatchModePveSolo, 7);
+    AddPlayer(request, kPlayerA, 0, 50, 50, 5, 0, 0, 1);  // 脆弱、后手
+    ASSERT_TRUE(engine.Initialize(request));
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+    engine.ResolveCurrentRound();
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_B_WIN);  // 玩家败
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    EXPECT_EQ(settlement.exp_gain(), 0u);   // 败方无奖励
+    EXPECT_EQ(settlement.gold_gain(), 0u);
+}
+
+// ---------------------------------------------------------------------------
+// 属性加点二级属性:物伤/法伤/防御加法接入伤害公式(怪物/老存档为 0 时与老公式逐字节一致)
+// ---------------------------------------------------------------------------
+
+TEST(TurnBattleEngineTest, DerivedPhysicalAttackAndDefenseAreAdditive) {
+    auto request = MakeRequest(turnbattle::kMatchModePveSolo, 7);
+    // strength=4 / armor / crit=0 与 DamageFormulaMatchesRealtimeSemantics 同基线,
+    // 再叠 physical_attack=50:普攻 = (10*(1+0.4) + 50) - 2 = 62
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/0, /*crit*/0, /*speed*/50);
+    snapshot->set_physical_attack(50);
+    snapshot->set_magic_attack(999);  // 普攻不吃法伤
+    snapshot->set_defense(0);
+
+    TurnBattleEngine engine(MakeProvider());
+    ASSERT_TRUE(engine.Initialize(request));
+    ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, turnbattle::kMonsterActorIdBase)));
+    const auto result = engine.ResolveCurrentRound();
+
+    const auto* damageEvent = FindFirstEvent(result, BATTLE_EVENT_DAMAGE);
+    ASSERT_NE(damageEvent, nullptr);
+    EXPECT_EQ(damageEvent->source_id(), kPlayerA);
+    EXPECT_EQ(damageEvent->value(), 62u);
+}
+
+TEST(TurnBattleEngineTest, DerivedDefenseReducesIncomingDamageAdditively) {
+    auto request = MakeRequest(turnbattle::kMatchModePveSolo, 7);
+    // 玩家 speed=1 让怪物先手;怪物默认 strength/armor 常量,玩家 defense=30 直接从伤害里减
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/0, /*crit*/0, /*speed*/1);
+    snapshot->set_defense(30);
+
+    auto requestNoDefense = MakeRequest(turnbattle::kMatchModePveSolo, 7);
+    AddPlayer(requestNoDefense, kPlayerA, 0, 1000, 1000, 4, 0, 0, 1);
+
+    TurnBattleEngine withDefense(MakeProvider());
+    TurnBattleEngine withoutDefense(MakeProvider());
+    ASSERT_TRUE(withDefense.Initialize(request));
+    ASSERT_TRUE(withoutDefense.Initialize(requestNoDefense));
+    ASSERT_TRUE(withDefense.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_DEFEND)));
+    ASSERT_TRUE(withoutDefense.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_DEFEND)));
+    const auto a = withDefense.ResolveCurrentRound();
+    const auto b = withoutDefense.ResolveCurrentRound();
+
+    const auto* stateA = FindStateActor(a.state(), kPlayerA);
+    const auto* stateB = FindStateActor(b.state(), kPlayerA);
+    ASSERT_NE(stateA, nullptr);
+    ASSERT_NE(stateB, nullptr);
+    // 同种子同指令,唯一差异是 defense=30:受伤更少(DEFEND 减半后差值为 15)
+    EXPECT_GT(stateA->attributes().health(), stateB->attributes().health());
+    EXPECT_EQ(stateA->attributes().health() - stateB->attributes().health(), 15u);
+    EXPECT_EQ(stateA->defense(), 30u);
+}
+
+// 表里有怪物行但没配战斗属性(health=0,即 2026-09-02 事故前的表形态)→ 回退常量,
+// 不会出 0 血怪、也不会开局即判负
+TEST(TurnBattleEngineTest, MonsterRowWithoutStatsFallsBackToDefaults) {
+    auto provider = MakeProvider();
+    constexpr uint32_t kBareMonster = 7002;
+    provider->AddMonster(kBareMonster);  // 只有 id,其余字段全 0
+    provider->SetDungeonMonsters(kDungeonConfig, {kBareMonster});
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9040, turnbattle::kMatchModePveSolo, 11);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/20);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto state = engine.BuildStateSnapshot();  // 快照要先落地:指向临时对象的指针在整句结束后悬空
+    const auto* monster = FindStateActor(state, kMonsterId);
+    ASSERT_NE(monster, nullptr);
+    EXPECT_EQ(monster->attributes().health(), turnbattle::kMonsterDefaultHealth);
+    EXPECT_EQ(monster->max_health(), turnbattle::kMonsterDefaultHealth);
+    EXPECT_EQ(monster->attributes().strength(), turnbattle::kMonsterDefaultStrength);
+    EXPECT_EQ(monster->attributes().armor(), turnbattle::kMonsterDefaultArmor);
+    EXPECT_EQ(monster->attributes().speed(), turnbattle::kMonsterDefaultSpeed);
+    EXPECT_EQ(monster->monster_table_id(), kBareMonster);
+
+    // 回退常量必须给出一个「真能打」的对手:玩家普攻 10*(1+2.0)-2=28,300 血要 11 刀。
+    // 只断言 Outcome==ONGOING 是恒真的(刚 Initialize 完必然如此),抓不到任何回归。
+    int rounds = 0;
+    while (engine.Outcome() == BATTLE_OUTCOME_ONGOING && rounds < 30) {
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+        engine.ResolveCurrentRound();
+        ++rounds;
+    }
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    EXPECT_EQ(rounds, 11) << "回退怪物 300 血/护甲 2,应打满 11 回合而不是开局即结束";
+}
+
+// 表配了血量但速度为 0 → 只有速度回退常量(0 速会破坏出手序),其余一律按表
+TEST(TurnBattleEngineTest, MonsterZeroSpeedInTableFallsBackToDefaultSpeed) {
+    auto provider = MakeProvider();
+    constexpr uint32_t kSlowMonster = 7003;
+    auto& row = provider->AddMonster(kSlowMonster);
+    row.set_health(150);
+    row.set_strength(8);
+    row.set_armor(1);
+    provider->SetDungeonMonsters(kDungeonConfig, {kSlowMonster});
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9041, turnbattle::kMatchModePveSolo, 12);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 20);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto state = engine.BuildStateSnapshot();  // 快照要先落地:指向临时对象的指针在整句结束后悬空
+    const auto* monster = FindStateActor(state, kMonsterId);
+    ASSERT_NE(monster, nullptr);
+    EXPECT_EQ(monster->attributes().health(), 150u);
+    EXPECT_EQ(monster->attributes().strength(), 8u);
+    EXPECT_EQ(monster->attributes().armor(), 1u);
+    EXPECT_EQ(monster->attributes().speed(), turnbattle::kMonsterDefaultSpeed);
+}
+
+// 多怪副本:奖励按击杀的每只怪逐个累加,一只不多一只不少
+TEST(TurnBattleEngineTest, RewardsAccumulateAcrossAllMonstersInGroup) {
+    auto provider = MakeProvider();
+    constexpr uint32_t kMonsterX = 7004;
+    constexpr uint32_t kMonsterY = 7005;
+    auto& x = provider->AddMonster(kMonsterX);
+    x.set_health(60);
+    x.set_strength(1);
+    x.set_speed(3);
+    x.set_exp_reward(10);
+    x.set_gold_reward(5);
+    auto& y = provider->AddMonster(kMonsterY);
+    y.set_health(60);
+    y.set_strength(1);
+    y.set_speed(2);
+    y.set_exp_reward(15);
+    y.set_gold_reward(7);
+    provider->SetDungeonMonsters(kDungeonConfig, {kMonsterX, kMonsterY});
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9042, turnbattle::kMatchModePveSolo, 13);
+    // 玩家力量 20 → 普攻 10*(1+2.0)=30(怪物护甲 0),每只 2 刀;怪物力量 1 打不穿护甲 10
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 20);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    int rounds = 0;
+    while (engine.Outcome() == BATTLE_OUTCOME_ONGOING && rounds < 30) {
+        const auto state = engine.BuildStateSnapshot();
+        uint64_t target = 0;
+        for (const auto& actor : state.actors()) {
+            if (actor.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && !actor.is_dead()) {
+                target = actor.actor_id();
+                break;
+            }
+        }
+        ASSERT_NE(target, 0u);
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, target));
+        engine.ResolveCurrentRound();
+        ++rounds;
+    }
+    EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    EXPECT_EQ(rounds, 4);  // 2 只 x 2 刀,确定性
+
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    EXPECT_EQ(settlement.exp_gain(), 25u);
+    EXPECT_EQ(settlement.gold_gain(), 12u);
+}
+
+// 胜方里逃跑的玩家不发奖:结算条件是 SIDE_A_WIN && team_index==0 && !fled && !is_dead。
+// 只测 outcome 分支不够 —— 队伍打赢但自己中途跑了,照发奖就是刷奖漏洞。
+TEST(TurnBattleEngineTest, FledPlayerOnWinningTeamGetsNoReward) {
+    auto provider = MakeProvider();
+    constexpr uint32_t kRewardMonster = 7006;
+    auto& monster = provider->AddMonster(kRewardMonster);
+    monster.set_health(150);
+    monster.set_strength(1);   // 打不穿玩家护甲,不会误杀
+    monster.set_speed(1);      // 最慢:B 的逃跑成功率被夹到上限 0.95
+    monster.set_exp_reward(40);
+    monster.set_gold_reward(20);
+    provider->SetDungeonMonsters(kDungeonConfig, {kRewardMonster});
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9043, turnbattle::kMatchModePveTeam, 21);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/30);
+    AddPlayer(request, kPlayerB, 0, 1000, 1000, /*strength*/0, /*armor*/10, /*crit*/0, /*speed*/120);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 第一阶段:A 防御拖时间,B 反复逃跑直到成功(0.95/次,种子固定 → 确定性)
+    bool fled = false;
+    for (int round = 0; round < 5 && !fled; ++round) {
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_DEFEND));
+        engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_FLEE));
+        engine.ResolveCurrentRound();
+        const auto* actorB = FindStateActor(engine.BuildStateSnapshot(), kPlayerB);
+        ASSERT_NE(actorB, nullptr);
+        fled = actorB->fled();
+    }
+    ASSERT_TRUE(fled) << "B 应已逃离战斗";
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_ONGOING) << "A 还在,战斗不该结束";
+
+    // 第二阶段:A 独自打死怪物
+    for (int round = 0; round < 20 && engine.Outcome() == BATTLE_OUTCOME_ONGOING; ++round) {
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+        engine.ResolveCurrentRound();
+    }
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+
+    const auto settlementA = engine.BuildSettlement(kPlayerA);
+    EXPECT_FALSE(settlementA.fled());
+    EXPECT_EQ(settlementA.exp_gain(), 40u);
+    EXPECT_EQ(settlementA.gold_gain(), 20u);
+
+    const auto settlementB = engine.BuildSettlement(kPlayerB);
+    EXPECT_TRUE(settlementB.fled());
+    EXPECT_EQ(settlementB.exp_gain(), 0u) << "逃跑玩家不能吃队伍的胜利奖励";
+    EXPECT_EQ(settlementB.gold_gain(), 0u);
+}
+
+// 胜方里阵亡的玩家同样不发奖(结算条件的 !is_dead 那一半)。
+// 与 FledPlayerOnWinningTeamGetsNoReward 成对:一个覆盖 fled,一个覆盖 is_dead。
+TEST(TurnBattleEngineTest, DeadPlayerOnWinningTeamGetsNoReward) {
+    auto provider = MakeProvider();
+    constexpr uint32_t kBruiserMonster = 7007;
+    auto& monster = provider->AddMonster(kBruiserMonster);
+    monster.set_health(400);   // 够 A 慢慢磨,给怪物足够回合打到 B
+    monster.set_strength(20);  // 普攻 10*(1+2.0)=30,足以一击带走 1 血的 B
+    monster.set_speed(1);
+    monster.set_exp_reward(60);
+    monster.set_gold_reward(30);
+    provider->SetDungeonMonsters(kDungeonConfig, {kBruiserMonster});
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9044, turnbattle::kMatchModePveTeam, 33);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/30);
+    AddPlayer(request, kPlayerB, 0, 1, 1, /*strength*/0, /*armor*/0, /*crit*/0, /*speed*/2);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 第一阶段:A 防御拖回合,等怪物随机选到 B 把他打死(种子固定 → 确定性)
+    bool dead = false;
+    for (int round = 0; round < 15 && !dead && engine.Outcome() == BATTLE_OUTCOME_ONGOING; ++round) {
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_DEFEND));
+        engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_DEFEND));
+        engine.ResolveCurrentRound();
+        const auto* actorB = FindStateActor(engine.BuildStateSnapshot(), kPlayerB);
+        ASSERT_NE(actorB, nullptr);
+        dead = actorB->is_dead();
+    }
+    ASSERT_TRUE(dead) << "B 应已阵亡";
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_ONGOING) << "A 还活着,战斗不该结束";
+
+    // 第二阶段:A 独自打死怪物
+    for (int round = 0; round < 30 && engine.Outcome() == BATTLE_OUTCOME_ONGOING; ++round) {
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
+        engine.ResolveCurrentRound();
+    }
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+
+    const auto settlementA = engine.BuildSettlement(kPlayerA);
+    EXPECT_FALSE(settlementA.is_dead());
+    EXPECT_EQ(settlementA.exp_gain(), 60u);
+    EXPECT_EQ(settlementA.gold_gain(), 30u);
+
+    const auto settlementB = engine.BuildSettlement(kPlayerB);
+    EXPECT_TRUE(settlementB.is_dead());
+    EXPECT_EQ(settlementB.exp_gain(), 0u) << "阵亡玩家不吃队伍的胜利奖励";
+    EXPECT_EQ(settlementB.gold_gain(), 0u);
+}
+
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
+}
+
+// ---------------------------------------------------------------------------
+// 表现层数据(turn-battle-presentation.md D1-D5):同一次行动内事件共用 group_id、
+// 行动序 LastActionOrder、阵位 formation_slot、技能耗蓝 MANA 事件
+// ---------------------------------------------------------------------------
+
+// 一次行动 = ATTACK + 其伤害事件,共用一个非 0 group_id;不同行动 group_id 不同;
+// 单目标 hit_index 恒为 0;基础命中率 100 下普攻不产出 MISS;行动序与事件流一致
+TEST(TurnBattleEngineTest, PresentationGroupIdSharedWithinActionDistinctAcrossActions) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9101, 3 /* PVP 1v1 */, 1);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, 0, /*speed*/10);
+    AddPlayer(request, kPlayerB, 1, 1000, 1000, /*strength*/20, /*armor*/10, 0, /*speed*/20);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
+    ASSERT_TRUE(engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_ATTACK, kPlayerA)));
+    const auto result = engine.ResolveCurrentRound();
+
+    // 行动序:B(速度 20)先手,A 后手;battle 节点把它填进 TurnResultS2C.action_order
+    ASSERT_EQ(engine.LastActionOrder().size(), 2u);
+    EXPECT_EQ(engine.LastActionOrder()[0], kPlayerB);
+    EXPECT_EQ(engine.LastActionOrder()[1], kPlayerA);
+
+    // 事件流:ATTACK(B→A) DAMAGE(B→A) ATTACK(A→B) DAMAGE(A→B)
+    ASSERT_GE(result.events_size(), 4);
+    EXPECT_EQ(result.events(0).event_type(), BATTLE_EVENT_ATTACK);
+    EXPECT_EQ(result.events(1).event_type(), BATTLE_EVENT_DAMAGE);
+    EXPECT_EQ(result.events(2).event_type(), BATTLE_EVENT_ATTACK);
+    EXPECT_EQ(result.events(3).event_type(), BATTLE_EVENT_DAMAGE);
+    EXPECT_EQ(result.events(0).source_id(), kPlayerB);
+    EXPECT_EQ(result.events(2).source_id(), kPlayerA);
+
+    EXPECT_NE(result.events(0).group_id(), 0u);
+    EXPECT_EQ(result.events(0).group_id(), result.events(1).group_id());
+    EXPECT_EQ(result.events(2).group_id(), result.events(3).group_id());
+    EXPECT_NE(result.events(0).group_id(), result.events(2).group_id());
+    for (const auto& event : result.events()) {
+        EXPECT_EQ(event.hit_index(), 0u);
+    }
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_MISS), 0);
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_DAMAGE), 2);
+}
+
+// 阵位:同队按快照顺序 0.. 递增,怪物方独立计数
+TEST(TurnBattleEngineTest, PresentationFormationSlotIncrementsPerTeamInSnapshotOrder) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9102, turnbattle::kMatchModePveTeam, 1);
+    AddPlayer(request, kPlayerA, 0, 500, 500, 20, 10, 0, 10);
+    AddPlayer(request, kPlayerB, 0, 500, 500, 20, 10, 0, 9);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto state = engine.BuildStateSnapshot();
+    const auto* actorA = FindStateActor(state, kPlayerA);
+    const auto* actorB = FindStateActor(state, kPlayerB);
+    const auto* monster = FindStateActor(state, kMonsterId);
+    ASSERT_NE(actorA, nullptr);
+    ASSERT_NE(actorB, nullptr);
+    ASSERT_NE(monster, nullptr);
+    EXPECT_EQ(actorA->formation_slot(), 0u);
+    EXPECT_EQ(actorB->formation_slot(), 1u);
+    EXPECT_EQ(monster->formation_slot(), 0u);  // 怪物队从 0 起
+}
+
+// 耗蓝技能:施放后产出 MANA 事件(value=消耗量,target_mana_after=剩余),与 SKILL 同 group;
+// 状态快照里的法力同步扣减;无耗蓝技能不产出 MANA
+TEST(TurnBattleEngineTest, PresentationSkillManaCostEmitsManaEventInSkillGroup) {
+    auto provider = MakeProvider();
+    auto* cost = provider->AddSkill(kSkillDamage).add_cost_resource();
+    cost->set_cost_resource_id(turnbattle::kSkillCostResourceMana);
+    cost->set_cost_resource_cost(30);
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9103, turnbattle::kMatchModePveSolo, 1);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 20);
+    snapshot->set_max_mana(100);
+    snapshot->mutable_base_attributes()->set_mana(100);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillDamage)));
+    const auto result = engine.ResolveCurrentRound();
+
+    const auto* skillEvent = FindFirstEvent(result, BATTLE_EVENT_SKILL);
+    const auto* manaEvent = FindFirstEvent(result, BATTLE_EVENT_MANA);
+    ASSERT_NE(skillEvent, nullptr);
+    ASSERT_NE(manaEvent, nullptr);
+    EXPECT_EQ(manaEvent->source_id(), kPlayerA);
+    EXPECT_EQ(manaEvent->target_id(), kPlayerA);
+    EXPECT_EQ(manaEvent->skill_table_id(), kSkillDamage);
+    EXPECT_EQ(manaEvent->value(), 30u);
+    EXPECT_EQ(manaEvent->target_mana_after(), 70u);
+    EXPECT_EQ(manaEvent->group_id(), skillEvent->group_id());
+    EXPECT_EQ(CountEvents(result, BATTLE_EVENT_MANA), 1);
+
+    const auto state = engine.BuildStateSnapshot();
+    const auto* actorA = FindStateActor(state, kPlayerA);
+    ASSERT_NE(actorA, nullptr);
+    EXPECT_EQ(actorA->attributes().mana(), 70u);
+
+    // 第二回合改用无耗蓝的挂毒技能:不再产出 MANA
+    if (engine.Outcome() == BATTLE_OUTCOME_ONGOING) {
+        ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillPoison)));
+        const auto second = engine.ResolveCurrentRound();
+        EXPECT_EQ(CountEvents(second, BATTLE_EVENT_MANA), 0);
+    }
 }

@@ -8,7 +8,8 @@
 # What it does (every day at 03:17 UTC):
 #   1. mysqldump --all-databases --single-transaction --master-data=2
 #      → /backup/dump/dump-YYYYMMDD-HHMM.sql.gz
-#   2. Copy /var/lib/mysql/binlog/mysql-bin.* into /backup/binlog/
+#   2. Copy the server's binlog files (PVC binlog/, mounted in the server as
+#      /var/lib/mysql-binlog, here as /mysql-data/binlog) into /backup/binlog/
 #   3. Prune dumps older than 30 days, binlogs older than 14 days
 #
 # What it does NOT do:
