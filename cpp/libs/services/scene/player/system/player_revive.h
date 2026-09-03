@@ -56,6 +56,8 @@ inline PlayerReviveOutcome ApplyClassInitialAttributesOrRevive(
 }
 
 // 阵亡基础复活(ECS 侧入口,定义在 player_database_loader.cpp:取 ClassTable 行后套用上面的规则)。
+// 注:同名的 player_data_loader.h 才是生成器产物;loader 的 .cpp 生成器只写到 tools/generated/temp/,
+// 源码树里那份 player_database_loader.cpp 是手写文件,regen 不会覆盖它。
 // health==0 时回满 HP/MP,否则不动;maxHealth/maxMana 由调用方从 DerivedAttributesComp 取,
 // 取不到传 0 退回职业初值。回合制战斗结算把玩家打到 0 血后调用,否则 0 血玩家可以再次排队、
 // 被快照进新局、引擎开局即判负(2026-09-02 跨 zone 冒烟实测)。

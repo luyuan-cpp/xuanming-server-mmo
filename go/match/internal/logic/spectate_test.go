@@ -816,3 +816,74 @@ func TestSpectateTTLFollowsConfigAndFallsBack(t *testing.T) {
 	svcCtx.Config.BattleMaxDurationSeconds = 0
 	require.Equal(t, 300+60, spectateTTLSeconds(svcCtx), "配置缺省时退回 300s 基线")
 }
+
+// ---- 剩余缺口:清退的错误分支 / 选场放弃 / Redis 故障 / gather 回滚 ----
+
+// 记录读坏(pb 损坏)时的清退:不能拿脏数据去摘观众,但标记必须清掉 ——
+// 不清就把玩家卡满整个 TTL 窗口(既不能观战也不能被 gather 正确清退),这是 D11 互斥最弱的一环。
+func TestStopWatchingIfAnyWithCorruptRecordStillClearsMark(t *testing.T) {
+	svcCtx, mr := newGatherSvcCtx(t)
+	fake := stubObserverRPCs(t)
+	const watcher = uint64(7310)
+	require.NoError(t, mr.Set(spectateWatchingKey(watcher), "880300"))
+	require.NoError(t, mr.Set(spectateBattleKey(880300), "\x08")) // 截断的 varint,必定反序列化失败
+
+	stopWatchingIfAny(svcCtx, watcher, "unit")
+
+	require.Empty(t, fake.removes, "记录读不出来就不该拿脏数据去 battle 摘观众")
+	require.Empty(t, watchingMark(t, mr, watcher), "标记必须清掉,否则玩家被卡满 TTL 窗口")
+}
+
+// 随机选场最多尝试 3 次:全是过期成员时放弃并返回 0(不是死循环、也不是一次性清空整个索引)。
+// 5 个过期成员 → 剔掉 3 个后放弃,剩 2 个由 matcher 每轮的 cleanupExpiredSpectateIndex 兜底。
+func TestPickRandomBattleGivesUpAfterThreeAttempts(t *testing.T) {
+	svcCtx, _ := newTestSvcCtx(t)
+	stale := staleCreatedAtMs(svcCtx)
+	for i := 0; i < 5; i++ {
+		registerBattle(t, svcCtx, uint64(880310+i), stale)
+	}
+
+	picked, err := pickRandomBattle(svcCtx)
+	require.NoError(t, err)
+	require.Zero(t, picked)
+	require.Equal(t, 2, activeIndexSize(t, svcCtx), "每次尝试剔一个,尝试 3 次剔 3 个")
+}
+
+// Redis 掉线时列表必须回错误,不能吞成空列表 —— 空列表在客户端等同于「当前没有可观战的战斗」,
+// 把基础设施故障伪装成正常业务结果。
+func TestListWatchableBattlesPropagatesRedisError(t *testing.T) {
+	svcCtx, mr := newTestSvcCtx(t)
+	registerBattle(t, svcCtx, 880320, nowMs())
+	mr.Close()
+
+	_, err := NewListWatchableBattlesLogic(context.Background(), svcCtx).
+		ListWatchableBattles(&matchpb.ListWatchableBattlesRequest{})
+	require.Error(t, err, "读索引失败必须回错误,不能返回空列表冒充『没有可观战的战斗』")
+}
+
+// gather 开局失败并回滚:① 不得登记新的可观战战斗;② 入口已清退的观众不因回滚而恢复
+// (观众绑定早被参战绑定覆盖过,恢复只会推给一个已经不存在的战斗)。
+func TestGatherFailureLeavesNoSpectateIndexAndKeepsObserverEvicted(t *testing.T) {
+	svcCtx, mr := newGatherSvcCtx(t)
+	rpcs := stubGatherRPCs(t, map[uint64]string{7210: "fp", 7211: "fp"})
+	observers := stubObserverRPCs(t)
+	registerBattle(t, svcCtx, 880330, nowMs(), "旧甲", "旧乙")
+	require.NoError(t, mr.Set(spectateWatchingKey(7210), "880330"))
+
+	prevCreate := createBattleFn
+	createBattleFn = func(string, *battlepb.CreateBattleRequest) (*battlepb.CreateBattleResponse, error) {
+		return nil, errors.New("battle 节点开局失败")
+	}
+	t.Cleanup(func() { createBattleFn = prevCreate })
+
+	members, tickets, _ := popMatchedPair(t, svcCtx, mr, 7210, 7211)
+	RunGather(svcCtx, matchpb.MatchMode_MATCH_MODE_1V1, 0, members, true, tickets)
+
+	require.Empty(t, rpcs.created, "CreateBattle 被顶替,不应有成功记录")
+	require.Len(t, rpcs.cancelled, 2, "回滚必须解冻两名参与者")
+	require.Equal(t, 1, activeIndexSize(t, svcCtx), "开局失败不得新登记可观战战斗(索引里只剩旧场)")
+	require.False(t, mr.Exists(spectateBattleKey(members[0])))
+	require.Empty(t, watchingMark(t, mr, 7210), "已清退的观众不因回滚而恢复")
+	require.Len(t, observers.removes, 1)
+	require.Equal(t, "enter_gather", observers.removes[0].GetReason())
+}
