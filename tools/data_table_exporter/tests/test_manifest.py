@@ -126,3 +126,23 @@ def test_corrupt_previous_manifest_does_not_abort(cfg):
     generate_manifest(cfg, tables)
 
     assert _read_manifest(cfg)["version"] == 1
+
+
+def test_json_overwrites_stale_rows_when_table_becomes_empty(cfg):
+    """合法空表必须产出空数组，不能静默沿用上一批非空 JSON。"""
+    tables = build_tables(cfg, [TableSpec(
+        name="Permission",
+        fields=[Field(name="id"), Field(name="result", options="tip_ref")],
+        rows=[[1, 1000]],
+    )])
+    generate_json(cfg, tables)
+
+    empty_tables = build_tables(cfg, [TableSpec(
+        name="Permission",
+        fields=[Field(name="id"), Field(name="result", options="tip_ref")],
+        rows=[],
+    )])
+    generate_json(cfg, empty_tables)
+
+    payload = json.loads((cfg.json_dir / "Permission.json").read_text(encoding="utf-8"))
+    assert payload == {"data": []}

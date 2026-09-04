@@ -3,55 +3,58 @@ syntax = "proto3";
 
 option go_package = "generated/pb/table";
 
+option java_package = "com.game.table";
+
+
 enum scene_error {
   kScene_errorOK = 0;
 
-  kEnterSceneNotFound = 52;
+  kEnterSceneNotFound = 3000;
 
-  kEnterSceneNotFull = 53;
+  kEnterSceneNotFull = 3001;
 
-  kEnterSceneMainFull = 54;
+  kEnterSceneMainFull = 3002;
 
-  kEnterNodeUnavailable = 55;
+  kEnterNodeUnavailable = 3003;
 
-  kEnterSceneServerType = 56;
+  kEnterSceneServerType = 3004;
 
-  kEnterSceneParamError = 57;
+  kEnterSceneParamError = 3005;
 
-  kEnterSceneSceneFull = 58;
+  kEnterSceneSceneFull = 3006;
 
-  kEnterSceneSceneNotFound = 59;
+  kEnterSceneSceneNotFound = 3007;
 
-  kEnterSceneYouInCurrentScene = 60;
+  kEnterSceneYouInCurrentScene = 3008;
 
-  kEnterSceneEnterCrossRoomScene = 61;
+  kEnterSceneEnterCrossRoomScene = 3009;
 
-  kEnterSceneGsInfoNull = 62;
+  kEnterSceneGsInfoNull = 3010;
 
-  kEnterSceneGsFull = 63;
+  kEnterSceneGsFull = 3011;
 
-  kEnterSceneYourSceneIsNull = 64;
+  kEnterSceneYourSceneIsNull = 3012;
 
-  kEnterSceneChangeSceneOffLine = 65;
+  kEnterSceneChangeSceneOffLine = 3013;
 
-  kEnterSceneChangingScene = 66;
+  kEnterSceneChangingScene = 3014;
 
-  kEnterSceneChangingGs = 67;
+  kEnterSceneChangingGs = 3015;
 
-  kChangeScenePlayerQueueNotFound = 68;
+  kChangeScenePlayerQueueNotFound = 3016;
 
-  kChangeScenePlayerQueueFull = 69;
+  kChangeScenePlayerQueueFull = 3017;
 
-  kChangeScenePlayerQueueComponentGsNull = 70;
+  kChangeScenePlayerQueueComponentGsNull = 3018;
 
-  kChangeScenePlayerQueueComponentEmpty = 71;
+  kChangeScenePlayerQueueComponentEmpty = 3019;
 
-  kChangeSceneEnQueueNotSameGs = 72;
+  kChangeSceneEnQueueNotSameGs = 3020;
 
-  kInvalidEnterSceneParameters = 73;
+  kInvalidEnterSceneParameters = 3021;
 
-  kCheckEnterSceneCreator = 74;
+  kCheckEnterSceneCreator = 3022;
 
-  kEnterSceneFailed = 75;
+  kEnterSceneFailed = 3023;
 
 };

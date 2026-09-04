@@ -15,13 +15,6 @@ public final class TestMultiKeyTableForeignKeys {
         return TestTableManager.getInstance().findById(row.getTestRef());
     }
 
-    /** Resolve TestMultiKey.test_ref -> Test row (by TestMultiKey id). */
-    public static TestTable getTestRefRow(int tableId) {
-        TestMultiKeyTable row = TestMultiKeyTableManager.getInstance().findById(tableId);
-        if (row == null) { return null; }
-        return getTestRefRow(row);
-    }
-
     /** Resolve TestMultiKey.test_refs[] -> Test rows. */
     public static List<TestTable> getTestRefsRows(TestMultiKeyTable row) {
         List<TestTable> result = new ArrayList<>();
@@ -30,13 +23,6 @@ public final class TestMultiKeyTableForeignKeys {
             if (r != null) { result.add(r); }
         }
         return result;
-    }
-
-    /** Resolve TestMultiKey.test_refs[] -> Test rows (by TestMultiKey id). */
-    public static List<TestTable> getTestRefsRows(int tableId) {
-        TestMultiKeyTable row = TestMultiKeyTableManager.getInstance().findById(tableId);
-        if (row == null) { return List.of(); }
-        return getTestRefsRows(row);
     }
 
     // ---- Reverse FK (HasMany): find source rows by FK column value ----

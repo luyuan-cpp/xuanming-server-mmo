@@ -22,12 +22,15 @@ inline std::vector<const {{ col.foreign_key.target_table }}Table*> Get{{ sheetna
     return result;
 }
 
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *ById 便利函数;调用方先自己 FindAllById 再逐行调上面那个版本。 #}
+{% if not table.multi_primary_key %}
 /// Resolve {{ sheetname }}.{{ col.name }}[] -> {{ col.foreign_key.target_table }} rows (by {{ sheetname }} id).
 inline std::vector<const {{ col.foreign_key.target_table }}Table*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(uint32_t tableId) {
     auto [row, _] = {{ sheetname }}TableManager::Instance().FindByIdSilent(tableId);
     if (!row) return {};
     return Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(*row);
 }
+{% endif %}
 {% else %}
 
 /// Resolve {{ sheetname }}.{{ col.name }} -> {{ col.foreign_key.target_table }} row.
@@ -36,12 +39,15 @@ inline const {{ col.foreign_key.target_table }}Table* Get{{ sheetname }}{{ to_pa
     return ptr;
 }
 
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *ById 便利函数;调用方先自己 FindAllById 再逐行调上面那个版本。 #}
+{% if not table.multi_primary_key %}
 /// Resolve {{ sheetname }}.{{ col.name }} -> {{ col.foreign_key.target_table }} row (by {{ sheetname }} id).
 inline const {{ col.foreign_key.target_table }}Table* Get{{ sheetname }}{{ to_pascal_case(col.name) }}Row(uint32_t tableId) {
     auto [row, _] = {{ sheetname }}TableManager::Instance().FindByIdSilent(tableId);
     if (!row) return nullptr;
     return Get{{ sheetname }}{{ to_pascal_case(col.name) }}Row(*row);
 }
+{% endif %}
 {% endif %}
 {% endfor %}
 {% for col in table.group_foreign_key_columns %}
@@ -56,12 +62,15 @@ inline std::vector<const {{ col.group_foreign_key.target_table }}Table*> Get{{ s
     return result;
 }
 
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *ById 便利函数;调用方先自己 FindAllById 再逐行调上面那个版本。 #}
+{% if not table.multi_primary_key %}
 /// Resolve {{ sheetname }}.{{ col.name }}[] -> {{ col.group_foreign_key.target_table }} rows (by {{ sheetname }} id).
 inline std::vector<const {{ col.group_foreign_key.target_table }}Table*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(uint32_t tableId) {
     auto [row, _] = {{ sheetname }}TableManager::Instance().FindByIdSilent(tableId);
     if (!row) return {};
     return Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(*row);
 }
+{% endif %}
 {% endfor %}
 
 // ---------------------------------------------------------------------------

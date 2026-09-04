@@ -35,25 +35,25 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_bag_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\023bag_error_tip.proto*\261\003\n\tbag_error\022\020\n\014k"
-    "Bag_errorOK\020\000\022\032\n\026kBagDeleteItemFindGuid\020"
-    "e\022 \n\034kBagDeleteItemAlreadyHasGuid\020f\022\"\n\036k"
-    "BagAddItemHasNotBaseComponent\020g\022\032\n\026kBagA"
-    "ddItemInvalidGuid\020h\022\033\n\027kBagAddItemInvali"
-    "dParam\020i\022\026\n\022kBagAddItemBagFull\020j\022\026\n\022kBag"
-    "ItemNotStacked\020k\022\031\n\025kBagInsufficientItem"
-    "s\020l\022\022\n\016kBagDelItemPos\020m\022\025\n\021kBagDelItemCo"
-    "nfig\020n\022\023\n\017kBagDelItemGuid\020o\022\027\n\023kBagDelIt"
-    "emFindItem\020p\022\023\n\017kBagDelItemSize\020q\022 \n\034kBa"
-    "gItemDeletionSizeMismatch\020r\022\034\n\030kBagInsuf"
-    "ficientBagSpace\020sB\024Z\022generated/pb/tableb"
-    "\006proto3"
+    "\n\023bag_error_tip.proto*\300\003\n\tbag_error\022\020\n\014k"
+    "Bag_errorOK\020\000\022\033\n\026kBagDeleteItemFindGuid\020"
+    "\360.\022!\n\034kBagDeleteItemAlreadyHasGuid\020\361.\022#\n"
+    "\036kBagAddItemHasNotBaseComponent\020\362.\022\033\n\026kB"
+    "agAddItemInvalidGuid\020\363.\022\034\n\027kBagAddItemIn"
+    "validParam\020\364.\022\027\n\022kBagAddItemBagFull\020\365.\022\027"
+    "\n\022kBagItemNotStacked\020\366.\022\032\n\025kBagInsuffici"
+    "entItems\020\367.\022\023\n\016kBagDelItemPos\020\370.\022\026\n\021kBag"
+    "DelItemConfig\020\371.\022\024\n\017kBagDelItemGuid\020\372.\022\030"
+    "\n\023kBagDelItemFindItem\020\373.\022\024\n\017kBagDelItemS"
+    "ize\020\374.\022!\n\034kBagItemDeletionSizeMismatch\020\375"
+    ".\022\035\n\030kBagInsufficientBagSpace\020\376.B$\n\016com."
+    "game.tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_bag_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_bag_5ferror_5ftip_2eproto = {
     false,
     false,
-    487,
+    518,
     descriptor_table_protodef_bag_5ferror_5ftip_2eproto,
     "bag_error_tip.proto",
     &descriptor_table_bag_5ferror_5ftip_2eproto_once,
@@ -72,7 +72,7 @@ bag_error_descriptor() {
   return file_level_enum_descriptors_bag_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t bag_error_internal_data_[] = {
-    65536u, 128u, 0u, 0u, 0u, 524272u, };
+    65536u, 983040u, 6007u, 6003u, 6011u, 6001u, 6005u, 6009u, 6013u, 6000u, 6002u, 6004u, 6006u, 6008u, 6010u, 6012u, 6014u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

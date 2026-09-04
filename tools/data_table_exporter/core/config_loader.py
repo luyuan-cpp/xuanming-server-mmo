@@ -43,6 +43,9 @@ class ExporterConfig:
     data_begin_row: int = 7
     metadata_rows: dict[str, int] = field(default_factory=dict)
     server_owner_types: list[str] = field(default_factory=lambda: ["server", "common"])
+    # 权威 schema 目录。某张表在这里有 <sheet>_table.proto 就走 schema-first,
+    # 没有就退回读 xlsx 第 2~5 行的旧路。缺省 <data_dir>/schema。
+    schema_dir: Path = field(default_factory=Path)
 
     # Output
     generated_dir: Path = field(default_factory=Path)
@@ -60,6 +63,13 @@ class ExporterConfig:
     cpp: LangConfig = field(default_factory=LangConfig)
     go: LangConfig = field(default_factory=LangConfig)
     java: LangConfig = field(default_factory=LangConfig)
+    # 客户端与脚本侧。加一门语言只要:这里加一个字段 + yaml 加一节 +
+    # type_mapping 加映射 + templates 加模板 + config_gen 加一个 _gen_all_<lang>。
+    csharp: LangConfig = field(default_factory=LangConfig)
+    python: LangConfig = field(default_factory=LangConfig)
+    # UE(Unreal):USTRUCT + 自建 Snapshot 管理器 + FJsonObjectConverter 读 JSON,
+    # 不引 protobuf、不依赖编辑器。见 templates/ue_*.j2 的说明。
+    ue: LangConfig = field(default_factory=LangConfig)
 
     # Misc
     constant_tables: list[str] = field(default_factory=list)
@@ -70,6 +80,10 @@ class ExporterConfig:
     # 刻意不放进 yaml:配置文件里一旦写上就等于永久关掉了位序状态的 fail-closed 保护
     # (见 core/generators/bit_index_gen.py 的红线说明)。
     bit_index_bootstrap: bool = False
+
+    # tip 码轴状态从空初始化的开关。和位序状态一样，只允许命令行显式打开；
+    # state 是客户端可见 ID 的连续性契约，文件漏检出时不能静默重新发号。
+    tip_axis_bootstrap: bool = False
 
 
 def _resolve(base: Path, raw: Any) -> Path:
@@ -122,6 +136,9 @@ def load_config(config_path: str | Path | None = None) -> ExporterConfig:
         data_begin_row=excel.get("data_begin_row", 7),
         metadata_rows=excel.get("metadata_rows", {}),
         server_owner_types=excel.get("server_owner_types", ["server", "common"]),
+        schema_dir=_resolve(base, excel.get("schema_dir"))
+        if excel.get("schema_dir")
+        else _resolve(base, excel.get("data_dir")) / "schema",
 
         generated_dir=_resolve(base, output.get("generated_dir")),
         json_dir=_resolve(base, output.get("json_dir")),
@@ -136,6 +153,9 @@ def load_config(config_path: str | Path | None = None) -> ExporterConfig:
         cpp=_build_lang(base, langs.get("cpp", {})),
         go=_build_lang(base, langs.get("go", {})),
         java=_build_lang(base, langs.get("java", {})),
+        csharp=_build_lang(base, langs.get("csharp", {})),
+        python=_build_lang(base, langs.get("python", {})),
+        ue=_build_lang(base, langs.get("ue", {})),
 
         constant_tables=raw.get("constant_tables", []),
         template_dir=(base / "templates").resolve(),

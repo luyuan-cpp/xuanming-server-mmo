@@ -23,12 +23,15 @@ public final class {{ sheetname }}TableForeignKeys {
         return result;
     }
 
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *(int tableId) 重载;调用方先 findAllById 再逐行调另一个重载。 #}
+{% if not table.multi_primary_key %}
     /** Resolve {{ sheetname }}.{{ col.name }}[] -> {{ col.foreign_key.target_table }} rows (by {{ sheetname }} id). */
     public static List<{{ col.foreign_key.target_table }}Table> get{{ to_pascal_case(col.name) }}Rows(int tableId) {
         {{ sheetname }}Table row = {{ sheetname }}TableManager.getInstance().findById(tableId);
         if (row == null) { return List.of(); }
         return get{{ to_pascal_case(col.name) }}Rows(row);
     }
+{% endif %}
 {% else %}
 
     /** Resolve {{ sheetname }}.{{ col.name }} -> {{ col.foreign_key.target_table }} row. */
@@ -36,12 +39,15 @@ public final class {{ sheetname }}TableForeignKeys {
         return {{ col.foreign_key.target_table }}TableManager.getInstance().findById(row.{{ to_java_proto_getter(col.name) }}());
     }
 
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *(int tableId) 重载;调用方先 findAllById 再逐行调另一个重载。 #}
+{% if not table.multi_primary_key %}
     /** Resolve {{ sheetname }}.{{ col.name }} -> {{ col.foreign_key.target_table }} row (by {{ sheetname }} id). */
     public static {{ col.foreign_key.target_table }}Table get{{ to_pascal_case(col.name) }}Row(int tableId) {
         {{ sheetname }}Table row = {{ sheetname }}TableManager.getInstance().findById(tableId);
         if (row == null) { return null; }
         return get{{ to_pascal_case(col.name) }}Row(row);
     }
+{% endif %}
 {% endif %}
 {% endfor %}
 {% for col in table.group_foreign_key_columns %}
@@ -56,12 +62,15 @@ public final class {{ sheetname }}TableForeignKeys {
         return result;
     }
 
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *(int tableId) 重载;调用方先 findAllById 再逐行调另一个重载。 #}
+{% if not table.multi_primary_key %}
     /** Resolve {{ sheetname }}.{{ col.name }}[] -> {{ col.group_foreign_key.target_table }} rows (by {{ sheetname }} id). */
     public static List<{{ col.group_foreign_key.target_table }}Table> get{{ to_pascal_case(col.name) }}Rows(int tableId) {
         {{ sheetname }}Table row = {{ sheetname }}TableManager.getInstance().findById(tableId);
         if (row == null) { return List.of(); }
         return get{{ to_pascal_case(col.name) }}Rows(row);
     }
+{% endif %}
 {% endfor %}
 
     // ---- Reverse FK (HasMany): find source rows by FK column value ----

@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1atip/common_error_tip.proto*\x82\x04\n\x0c\x63ommon_error\x12\x13\n\x0fkCommon_errorOK\x10\x00\x12\x0c\n\x08kSuccess\x10\x01\x12\x13\n\x0fkInvalidTableId\x10\x02\x12\x15\n\x11kInvalidTableData\x10\x03\x12\x17\n\x13kServiceUnavailable\x10\x04\x12\x11\n\rkEntityIsNull\x10\x05\x12\x15\n\x11kInvalidParameter\x10\x06\x12\x17\n\x13kFeatureUnavailable\x10\x07\x12\x14\n\x10kIndexOutOfRange\x10\x08\x12\x16\n\x12kRateLimitExceeded\x10\t\x12\x18\n\x14kThisEntityIsInvalid\x10\n\x12\x18\n\x14kMessageSizeExceeded\x10\x0b\x12\x14\n\x10kSessionNotFound\x10\x0c\x12\x1c\n\x18kPlayerNotFoundInSession\x10\r\x12\x16\n\x12kMessageIdNotFound\x10\x0e\x12\x1d\n\x19kRequestMessageParseError\x10\x0f\x12\x1f\n\x1bkArraySizeTooLargeInMessage\x10\x10\x12\x1e\n\x1akResponseMessageParseError\x10\x11\x12\x1b\n\x17kNegativeValueInMessage\x10\x12\x12\x1c\n\x18kFailedToRegisterTheNode\x10\x13\x42\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1atip/common_error_tip.proto*\x95\x04\n\x0c\x63ommon_error\x12\x13\n\x0fkCommon_errorOK\x10\x00\x12\r\n\x08kSuccess\x10\xe8\x07\x12\x14\n\x0fkInvalidTableId\x10\xe9\x07\x12\x16\n\x11kInvalidTableData\x10\xea\x07\x12\x18\n\x13kServiceUnavailable\x10\xeb\x07\x12\x12\n\rkEntityIsNull\x10\xec\x07\x12\x16\n\x11kInvalidParameter\x10\xed\x07\x12\x18\n\x13kFeatureUnavailable\x10\xee\x07\x12\x15\n\x10kIndexOutOfRange\x10\xef\x07\x12\x17\n\x12kRateLimitExceeded\x10\xf0\x07\x12\x19\n\x14kThisEntityIsInvalid\x10\xf1\x07\x12\x19\n\x14kMessageSizeExceeded\x10\xf2\x07\x12\x15\n\x10kSessionNotFound\x10\xf3\x07\x12\x1d\n\x18kPlayerNotFoundInSession\x10\xf4\x07\x12\x17\n\x12kMessageIdNotFound\x10\xf5\x07\x12\x1e\n\x19kRequestMessageParseError\x10\xf6\x07\x12 \n\x1bkArraySizeTooLargeInMessage\x10\xf7\x07\x12\x1f\n\x1akResponseMessageParseError\x10\xf8\x07\x12\x1c\n\x17kNegativeValueInMessage\x10\xf9\x07\x12\x1d\n\x18kFailedToRegisterTheNode\x10\xfa\x07\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tip.common_error_tip_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_COMMON_ERROR']._serialized_start=31
-  _globals['_COMMON_ERROR']._serialized_end=545
+  _globals['_COMMON_ERROR']._serialized_end=564
 # @@protoc_insertion_point(module_scope)

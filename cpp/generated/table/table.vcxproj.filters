@@ -15,24 +15,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="cpp_table_id_bit_index\mission_table_id_bit_index.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="cpp_table_id_bit_index\reward_table_id_bit_index.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="cpp_table_id_constants_name\actoractioncombatstate_table_id_constants.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="cpp_table_id_constants_name\actoractionstate_table_id_constants.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="cpp_table_id_constants_name\globalvariable_table_id_constants.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="cpp_table_id_constants_name\global_abnormal_logout_table_id_constants.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
     <ClInclude Include="code\actoractioncombatstate_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -111,7 +93,16 @@
     <ClInclude Include="proto\tip\entity_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\tip\friend_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\tip\guild_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\tip\login_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\tip\match_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\tip\mission_error_tip.pb.h">
@@ -190,9 +181,6 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\constants\actoractionstate_table_id_constants.h">
-      <Filter>头文件</Filter>
-    </ClInclude>
-    <ClInclude Include="code\constants\globalvariable_table_id_constants.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\constants\global_abnormal_logout_table_id_constants.h">
@@ -365,7 +353,16 @@
     <ClCompile Include="proto\tip\entity_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="proto\tip\friend_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\tip\guild_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="proto\tip\login_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\tip\match_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\tip\mission_error_tip.pb.cc">

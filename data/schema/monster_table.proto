@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+// Monster 表的权威 schema。源表 data/Monster.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号是从 generated/code/proto/monster_table.proto 抄来的现状值,**只增不改、删字段用 reserved**。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message MonsterTable {
+  option (cfg_sheet)       = "Monster";
+  option (cfg_source_file) = "Monster.xlsx";
+  option (cfg_primary_key) = "id";
+
+  uint32 id = 1;
+  int32 designer = 9001 [(cfg_owner) = "designer"];
+}

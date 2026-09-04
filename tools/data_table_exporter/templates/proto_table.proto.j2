@@ -17,31 +17,25 @@ message {{ table.name }}{{ group.name }} {
 
 {% endfor -%}
 message {{ table.name }}Table {
-{%- set ns = namespace(idx=1) -%}
 {%- set seen = {} -%}
 {%- for col in table.server_columns -%}
 {%- if col.name not in seen -%}
 {%- if col.map_role == "set" %}
-	map <{{ col.data_type }}, bool> {{ col.name }} = {{ ns.idx }};
-{%- set ns.idx = ns.idx + 1 -%}
+	map <{{ col.data_type }}, bool> {{ col.name }} = {{ table.field_numbers[col.name] }};
 {%- elif col.map_role in ("map_key", "map_value") -%}
 {%- elif col.name in table.arrays %}
-	repeated {{ col.data_type }} {{ col.name }} = {{ ns.idx }};
-{%- set ns.idx = ns.idx + 1 -%}
+	repeated {{ col.data_type }} {{ col.name }} = {{ table.field_numbers[col.name] }};
 {%- elif col.excel_index not in table.col_to_group %}
-	{{ col.data_type }} {{ col.name }} = {{ ns.idx }};
-{%- set ns.idx = ns.idx + 1 -%}
+	{{ col.data_type }} {{ col.name }} = {{ table.field_numbers[col.name] }};
 {%- endif -%}
 {%- if seen.update({col.name: true}) %}{% endif -%}
 {%- endif -%}
 {%- endfor -%}
 {%- for m in table.maps.values() %}
-	map <{{ m.key_type }}, {{ m.value_type }}> {{ m.name }} = {{ ns.idx }};
-{%- set ns.idx = ns.idx + 1 -%}
+	map <{{ m.key_type }}, {{ m.value_type }}> {{ m.name }} = {{ table.field_numbers[m.name] }};
 {%- endfor -%}
 {%- for g in table.groups.values() %}
-	repeated {{ table.name }}{{ g.name }} {{ g.name }} = {{ ns.idx }};
-{%- set ns.idx = ns.idx + 1 -%}
+	repeated {{ table.name }}{{ g.name }} {{ g.name }} = {{ table.field_numbers[g.name] }};
 {%- endfor %}
 }
 

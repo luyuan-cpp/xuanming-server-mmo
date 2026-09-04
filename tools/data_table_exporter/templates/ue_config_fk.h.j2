@@ -1,0 +1,154 @@
+{# ue_config_fk.h.j2 -- 外键跨表查询助手 #}
+// ---------------------------------------------------------------------------
+//  由 Data Table Exporter 从 {{ sheetname }}.xlsx 生成。**不要手改**。
+//  重新生成:tools/data_table_exporter/run.py
+// ---------------------------------------------------------------------------
+//
+//  与 C++ 那门的差别只有一个:C++ 侧每张表是进程级单例(XxxTableManager::Instance()),
+//  UE 侧表挂在 UConfigSubsystem(每个 GameInstance 一份)上,所以每个助手的第一个
+//  参数是那个 subsystem。传 nullptr 一律返回空结果,不崩。
+//
+//  返回的 const {{ row_struct }}* / const FCfg*Row* 属于**目标表当前快照**,
+//  只在目标表下一次 Load 之前有效。调用方只存 id。
+//
+//  模块依赖(Build.cs)见 ConfigSubsystem.h 顶部:
+//  PublicDependencyModuleNames 要有 Core / CoreUObject / Engine / Json / JsonUtilities。
+// ---------------------------------------------------------------------------
+#pragma once
+
+#include "CoreMinimal.h"
+
+#include "ConfigSubsystem.h"
+#include "{{ mgr_header }}.h"
+{%- for target in fk_targets %}
+#include "{{ target }}Table.h"
+{%- endfor %}
+
+{% for col in table.foreign_key_columns %}
+{%- set target = col.foreign_key.target_table %}
+{%- set target_row = 'FCfg' ~ target ~ 'Row' %}
+{%- set target_mgr = 'U' ~ target ~ 'Table' %}
+{%- set target_multi = target in multi_pk_tables %}
+{%- if col.is_repeated %}
+/// 解析 {{ sheetname }}.{{ col.name }}[] -> {{ target }} 行。
+{%- if target_multi %}
+/// {{ target }} 的主键可重复,一个 id 可能命中多行,这里全部展开。
+{%- endif %}
+inline TArray<const {{ target_row }}*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(const UConfigSubsystem* Config, const {{ row_struct }}& Row)
+{
+	TArray<const {{ target_row }}*> Result;
+	const {{ target_mgr }}* Target = Config != nullptr ? Config->Get{{ target }}Table() : nullptr;
+	if (Target == nullptr)
+	{
+		return Result;
+	}
+	for (const {{ to_ue_type(col.data_type) }}& RefId : Row.{{ col.name }})
+	{
+{%- if target_multi %}
+		Result.Append(Target->FindAllById(RefId));
+{%- else %}
+		if (const {{ target_row }}* Found = Target->FindByIdSilent(RefId))
+		{
+			Result.Add(Found);
+		}
+{%- endif %}
+	}
+	return Result;
+}
+{%- if not table.multi_primary_key %}
+
+/// 同上,按 {{ sheetname }} 的 id 取行再解析。
+inline TArray<const {{ target_row }}*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(const UConfigSubsystem* Config, {{ to_ue_param_type(table.id_column.data_type) }} TableId)
+{
+	const {{ mgr_class }}* Source = Config != nullptr ? Config->Get{{ sheetname }}Table() : nullptr;
+	const {{ row_struct }}* Row = Source != nullptr ? Source->FindByIdSilent(TableId) : nullptr;
+	return Row != nullptr ? Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(Config, *Row) : TArray<const {{ target_row }}*>();
+}
+{%- endif %}
+{%- elif target_multi %}
+/// 解析 {{ sheetname }}.{{ col.name }} -> {{ target }} 行。
+/// {{ target }} 的主键可重复,所以返回的是集合而不是单行。
+inline TArray<const {{ target_row }}*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(const UConfigSubsystem* Config, const {{ row_struct }}& Row)
+{
+	const {{ target_mgr }}* Target = Config != nullptr ? Config->Get{{ target }}Table() : nullptr;
+	return Target != nullptr ? Target->FindAllById(Row.{{ col.name }}) : TArray<const {{ target_row }}*>();
+}
+{%- if not table.multi_primary_key %}
+
+/// 同上,按 {{ sheetname }} 的 id 取行再解析。
+inline TArray<const {{ target_row }}*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(const UConfigSubsystem* Config, {{ to_ue_param_type(table.id_column.data_type) }} TableId)
+{
+	const {{ mgr_class }}* Source = Config != nullptr ? Config->Get{{ sheetname }}Table() : nullptr;
+	const {{ row_struct }}* Row = Source != nullptr ? Source->FindByIdSilent(TableId) : nullptr;
+	return Row != nullptr ? Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(Config, *Row) : TArray<const {{ target_row }}*>();
+}
+{%- endif %}
+{%- else %}
+/// 解析 {{ sheetname }}.{{ col.name }} -> {{ target }} 行。
+inline const {{ target_row }}* Get{{ sheetname }}{{ to_pascal_case(col.name) }}Row(const UConfigSubsystem* Config, const {{ row_struct }}& Row)
+{
+	const {{ target_mgr }}* Target = Config != nullptr ? Config->Get{{ target }}Table() : nullptr;
+	return Target != nullptr ? Target->FindByIdSilent(Row.{{ col.name }}) : nullptr;
+}
+{%- if not table.multi_primary_key %}
+
+/// 同上,按 {{ sheetname }} 的 id 取行再解析。
+inline const {{ target_row }}* Get{{ sheetname }}{{ to_pascal_case(col.name) }}Row(const UConfigSubsystem* Config, {{ to_ue_param_type(table.id_column.data_type) }} TableId)
+{
+	const {{ mgr_class }}* Source = Config != nullptr ? Config->Get{{ sheetname }}Table() : nullptr;
+	const {{ row_struct }}* Row = Source != nullptr ? Source->FindByIdSilent(TableId) : nullptr;
+	return Row != nullptr ? Get{{ sheetname }}{{ to_pascal_case(col.name) }}Row(Config, *Row) : nullptr;
+}
+{%- endif %}
+{%- endif %}
+{% endfor %}
+{%- for col in table.group_foreign_key_columns %}
+{%- set target = col.group_foreign_key.target_table %}
+{%- set target_row = 'FCfg' ~ target ~ 'Row' %}
+{%- set target_mgr = 'U' ~ target ~ 'Table' %}
+{%- set target_multi = target in multi_pk_tables %}
+/// 解析 {{ sheetname }}.{{ col.name }}[] -> {{ target }} 行(组外键 gfk)。
+inline TArray<const {{ target_row }}*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(const UConfigSubsystem* Config, const {{ row_struct }}& Row)
+{
+	TArray<const {{ target_row }}*> Result;
+	const {{ target_mgr }}* Target = Config != nullptr ? Config->Get{{ target }}Table() : nullptr;
+	if (Target == nullptr)
+	{
+		return Result;
+	}
+	for (const {{ to_ue_type(col.data_type) }}& RefId : Row.{{ col.name }})
+	{
+{%- if target_multi %}
+		Result.Append(Target->FindAllById(RefId));
+{%- else %}
+		if (const {{ target_row }}* Found = Target->FindByIdSilent(RefId))
+		{
+			Result.Add(Found);
+		}
+{%- endif %}
+	}
+	return Result;
+}
+{%- if not table.multi_primary_key %}
+
+/// 同上,按 {{ sheetname }} 的 id 取行再解析。
+inline TArray<const {{ target_row }}*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(const UConfigSubsystem* Config, {{ to_ue_param_type(table.id_column.data_type) }} TableId)
+{
+	const {{ mgr_class }}* Source = Config != nullptr ? Config->Get{{ sheetname }}Table() : nullptr;
+	const {{ row_struct }}* Row = Source != nullptr ? Source->FindByIdSilent(TableId) : nullptr;
+	return Row != nullptr ? Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(Config, *Row) : TArray<const {{ target_row }}*>();
+}
+{%- endif %}
+{% endfor %}
+
+// ---------------------------------------------------------------------------
+// 反向外键(HasMany):按外键列的值找源表的行
+// ---------------------------------------------------------------------------
+{% for col in table.foreign_key_columns if not col.is_repeated %}
+/// 反查:{{ col.name }} == Key 的全部 {{ sheetname }} 行。
+inline TArray<const {{ row_struct }}*> Find{{ sheetname }}RowsBy{{ to_pascal_case(col.name) }}(const UConfigSubsystem* Config, {{ to_ue_param_type(col.data_type) }} Key)
+{
+	const {{ mgr_class }}* Source = Config != nullptr ? Config->Get{{ sheetname }}Table() : nullptr;
+	return Source != nullptr ? Source->GetBy{{ to_pascal_case(col.name) }}(Key) : TArray<const {{ row_struct }}*>();
+}
+{% endfor %}

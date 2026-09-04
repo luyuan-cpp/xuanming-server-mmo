@@ -3,9 +3,12 @@ syntax = "proto3";
 
 option go_package = "generated/pb/table";
 
+option java_package = "com.game.table";
+
+
 enum actor_action_error {
   kActor_action_errorOK = 0;
 
-  kActorActionStateActionCannotBePerformedWhileInTeamFollowMode = 126;
+  kActorActionStateActionCannotBePerformedWhileInTeamFollowMode = 10000;
 
 };

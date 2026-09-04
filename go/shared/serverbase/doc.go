@@ -17,13 +17,13 @@
 //
 // 全仓的 in-band 码**不是一套**,至少三套,数值区间还高度重叠:
 //
-//  1. tip 码表(0..129,扁平单命名空间,按域切段):
+//  1. tip 码表(1000 起,单命名空间,每域 1000 槽的分段轴):
 //     由 `TipInfoMessage error_message` 字段承载,见
 //     generated/code/proto/tip/*.proto、Go 常量在 shared/generated/pb/table。
 //     login / friend / guild / chat / instance / match 走这套。
 //  2. data_service 私有码表(0..17):`uint32 error_code`,
 //     见 go/data_service/internal/constants/error_codes.go。
-//     其 1 = Redis 失败,而 tip 的 1 = kSuccess。
+//     其低位值与 tip 轴没有任何对应关系。
 //  3. scene_manager 私有码表(0..16):`uint32 error_code`,
 //     见 go/scene_manager/internal/constants/errors.go。
 //

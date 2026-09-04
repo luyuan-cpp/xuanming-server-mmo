@@ -3,9 +3,12 @@ syntax = "proto3";
 
 option go_package = "generated/pb/table";
 
+option java_package = "com.game.table";
+
+
 enum mount_error {
   kMount_errorOK = 0;
 
-  kMountNotMounted = 127;
+  kMountNotMounted = 11000;
 
 };

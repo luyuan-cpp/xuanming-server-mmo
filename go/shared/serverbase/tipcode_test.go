@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"shared/generated/pb/table"
+	"shared/generated/tip"
 )
 
 func TestTipVerdict(t *testing.T) {
@@ -13,7 +14,7 @@ func TestTipVerdict(t *testing.T) {
 		want Verdict
 	}{
 		{"码 0 是成功", 0, VerdictOK},
-		{"kSuccess=1 也是成功", uint32(table.CommonError_kSuccess), VerdictOK},
+		{"kSuccess 也是成功", uint32(table.CommonError_kSuccess), VerdictOK},
 
 		// —— 服务端内部故障 ——
 		{"依赖不可用", uint32(table.CommonError_kServiceUnavailable), VerdictFault},
@@ -43,8 +44,9 @@ func TestTipVerdict(t *testing.T) {
 		{"换场进行中不是故障", uint32(table.CrossServerError_kSceneTransferInProgress), VerdictBizReject},
 
 		// —— 码表漂移 ——
-		{"超出已知码表上界", TipMaxKnownCode + 1, VerdictUnknown},
-		{"远超上界", 100000, VerdictUnknown},
+		{"高于本段已分配上界(对端码表更新)", uint32(table.CrossServerError_kSceneTransferInProgress) + 1, VerdictUnknown},
+		{"落在所有段之外", 100000, VerdictUnknown},
+		{"段与段之间的空隙", 999, VerdictUnknown},
 	}
 
 	for _, tt := range tests {
@@ -61,12 +63,12 @@ func TestTipVerdict(t *testing.T) {
 // VerdictUnknown,永远走不到故障分支 —— 这个测试让那种失配立刻暴露。
 func TestTipFaultCodesAllInKnownRange(t *testing.T) {
 	for code := range tipFaultCodes {
-		if code == 0 || code > TipMaxKnownCode {
-			t.Errorf("故障码 %d 超出已知码表范围 (1..%d)", code, TipMaxKnownCode)
+		if code == 0 || !tip.InAllocatedRange(code) {
+			t.Errorf("故障码 %d 不在任何段的已分配区间内", code)
 			continue
 		}
 		if TipDomain(code) == "unknown" {
-			t.Errorf("故障码 %d 落在 tipDomains 的任何分段之外", code)
+			t.Errorf("故障码 %d 落在所有已声明分段之外", code)
 		}
 		if got := TipVerdict(code); got != VerdictFault {
 			t.Errorf("故障码 %d 的 TipVerdict = %v, 期望 VerdictFault", code, got)
@@ -74,27 +76,39 @@ func TestTipFaultCodesAllInKnownRange(t *testing.T) {
 	}
 }
 
-// TestTipDomainsContiguous 守住分段表本身:必须按序、无空洞、无重叠,
-// 且恰好覆盖 1..TipMaxKnownCode。tip 码表是扁平单命名空间,一旦分段
-// 出现空洞,落在洞里的真实码会被 TipDomain 报成 unknown。
-func TestTipDomainsContiguous(t *testing.T) {
-	if len(tipDomains) == 0 {
-		t.Fatal("tipDomains 为空")
+// TestTipSegmentsDisjointAndSorted 守住段表本身。
+//
+// 注意与改造前的差别:段**不再要求连续**。改造前 13 个段紧挨着排满 1..129、
+// 零余量,于是往任何一组加码都只能拿全局队尾的号、落在自己段外。
+// 现在每段各留余量(默认 1000 号),段之间有空隙是正常的、也是刻意的;
+// 要守的只有「不重叠、按序、已用区间不越段」。
+//
+// 段表是生成产物(shared/generated/tip),源头是 data/tip/Tip.xlsx 的组头行;
+// 导表器在生成期已经自检过一遍,这里是编译进二进制之后的第二道网。
+func TestTipSegmentsDisjointAndSorted(t *testing.T) {
+	if len(tip.Segments) == 0 {
+		t.Fatal("tip.Segments 为空:导表器没跑过,或段表没被生成出来")
 	}
-	if tipDomains[0].Lo != 1 {
-		t.Fatalf("tipDomains 起点 = %d, 期望 1", tipDomains[0].Lo)
-	}
-	for i, r := range tipDomains {
-		if r.Lo > r.Hi {
-			t.Fatalf("分段 %q 区间倒置: [%d,%d]", r.Domain, r.Lo, r.Hi)
+	for i, s := range tip.Segments {
+		if s.Width == 0 {
+			t.Fatalf("段 %q 的 Width 为 0", s.Domain)
 		}
-		if i > 0 && r.Lo != tipDomains[i-1].Hi+1 {
-			t.Fatalf("分段 %q 与上一段不连续: 上段止于 %d, 本段起于 %d",
-				r.Domain, tipDomains[i-1].Hi, r.Lo)
+		if s.Count > 0 && (s.Lo < s.Base || s.Hi >= s.Base+s.Width) {
+			t.Fatalf("段 %q 的已用区间 [%d,%d] 越出段 [%d,%d)",
+				s.Domain, s.Lo, s.Hi, s.Base, s.Base+s.Width)
 		}
-	}
-	if last := tipDomains[len(tipDomains)-1].Hi; last != TipMaxKnownCode {
-		t.Fatalf("tipDomains 终点 = %d, 期望 TipMaxKnownCode=%d", last, TipMaxKnownCode)
+		if i > 0 {
+			prev := tip.Segments[i-1]
+			if s.Base < prev.Base {
+				t.Fatalf("段表未按 Base 升序: %q(%d) 排在 %q(%d) 之后",
+					s.Domain, s.Base, prev.Domain, prev.Base)
+			}
+			if s.Base < prev.Base+prev.Width {
+				t.Fatalf("段重叠: %q [%d,%d) 与 %q [%d,%d)",
+					prev.Domain, prev.Base, prev.Base+prev.Width,
+					s.Domain, s.Base, s.Base+s.Width)
+			}
+		}
 	}
 }
 
@@ -116,7 +130,8 @@ func TestTipDomain(t *testing.T) {
 		{uint32(table.MountError_kMountNotMounted), "mount"},
 		{uint32(table.RewardError_kRewardAlreadyClaimed), "reward"},
 		{uint32(table.CrossServerError_kSceneTransferInProgress), "cross_server"},
-		{TipMaxKnownCode + 1, "unknown"},
+		{100000, "unknown"},
+		{999, "unknown"},
 	}
 	for _, tt := range tests {
 		if got := TipDomain(tt.code); got != tt.want {

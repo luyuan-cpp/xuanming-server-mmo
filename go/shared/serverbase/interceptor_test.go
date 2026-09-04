@@ -69,7 +69,7 @@ func TestOptionsClassify(t *testing.T) {
 		},
 		{
 			name: "tip 码超界记成码表漂移",
-			bc:   BizCode{Code: TipMaxKnownCode + 1, Source: SourceTipInfo},
+			bc:   BizCode{Code: uint32(100000), Source: SourceTipInfo},
 			want: VerdictUnknown,
 		},
 	}
@@ -167,7 +167,7 @@ func TestUnaryInterceptorMetricsAndLog(t *testing.T) {
 		{
 			name:       "码表漂移:进 unknown counter 并打漂移事件",
 			fullMethod: "/login.LoginService/Case6",
-			resp:       &respTip{tip: &fakeTip{id: TipMaxKnownCode + 1}},
+			resp:       &respTip{tip: &fakeTip{id: uint32(100000)}},
 
 			wantUnknown:    true,
 			wantUnknownSrc: "tip_info",

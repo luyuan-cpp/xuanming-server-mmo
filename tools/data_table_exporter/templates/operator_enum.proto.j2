@@ -2,6 +2,9 @@
 syntax = "proto3";
 
 option go_package = "generated/pb/table";
+{% if java_package %}
+option java_package = "{{ java_package }}";
+{% endif %}
 
 enum {{ group_name }} {
   k{{ group_name | capitalize }}OK = 0;

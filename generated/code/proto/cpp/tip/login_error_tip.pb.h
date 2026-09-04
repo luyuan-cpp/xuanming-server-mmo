@@ -63,38 +63,38 @@ internal::EnumTraitsT<::login_error_internal_data_>
 
 enum login_error : int {
   kLogin_errorOK = 0,
-  kLoginAccountNotFound = 20,
-  kLoginAccountPlayerFull = 21,
-  kLoginCreatePlayerUnLoadAccount = 22,
-  kLoginCreatePlayerConnectionHasNotAccount = 23,
-  kLoginUnLogin = 24,
-  kLoginInProgress = 25,
-  kLoginPlayerGuidError = 26,
-  kLoginEnteringGame = 27,
-  kLoginPlaying = 28,
-  kLoginCreatingPlayer = 29,
-  kLoginWaitingEnterGame = 30,
-  kLoginEnterGameGuid = 31,
-  kLoginAccountNameEmpty = 32,
-  kLoginCreateConnectionAccountEmpty = 33,
-  kLoginEnterGameConnectionAccountEmpty = 34,
-  kLoginUnknownError = 35,
-  kLoginSessionDisconnect = 36,
-  kLoginBeKickByAnOtherAccount = 37,
-  kLoginSessionIdNotFound = 38,
-  kLoginFsmFailed = 39,
-  kLoginDataSerializeFailed = 40,
-  kLoginRedisError = 41,
-  kLoginDataParseFailed = 42,
-  kLoginRedisSetFailed = 43,
-  kTooManyDevices = 44,
-  kLoginFSMLoadFailed = 45,
-  kLoginFSMEventFailed = 46,
-  kLoginAccountDataLoadFaile = 47,
-  kLoginSessionNotFound = 48,
-  kLoginAccountDataLoadFailed = 49,
-  kLoginFsmInvalidEvent = 50,
-  kLoginTimeout = 51,
+  kLoginAccountNotFound = 2000,
+  kLoginAccountPlayerFull = 2001,
+  kLoginCreatePlayerUnLoadAccount = 2002,
+  kLoginCreatePlayerConnectionHasNotAccount = 2003,
+  kLoginUnLogin = 2004,
+  kLoginInProgress = 2005,
+  kLoginPlayerGuidError = 2006,
+  kLoginEnteringGame = 2007,
+  kLoginPlaying = 2008,
+  kLoginCreatingPlayer = 2009,
+  kLoginWaitingEnterGame = 2010,
+  kLoginEnterGameGuid = 2011,
+  kLoginAccountNameEmpty = 2012,
+  kLoginCreateConnectionAccountEmpty = 2013,
+  kLoginEnterGameConnectionAccountEmpty = 2014,
+  kLoginUnknownError = 2015,
+  kLoginSessionDisconnect = 2016,
+  kLoginBeKickByAnOtherAccount = 2017,
+  kLoginSessionIdNotFound = 2018,
+  kLoginFsmFailed = 2019,
+  kLoginDataSerializeFailed = 2020,
+  kLoginRedisError = 2021,
+  kLoginDataParseFailed = 2022,
+  kLoginRedisSetFailed = 2023,
+  kTooManyDevices = 2024,
+  kLoginFSMLoadFailed = 2025,
+  kLoginFSMEventFailed = 2026,
+  kLoginAccountDataLoadFaile = 2027,
+  kLoginSessionNotFound = 2028,
+  kLoginAccountDataLoadFailed = 2029,
+  kLoginFsmInvalidEvent = 2030,
+  kLoginTimeout = 2031,
   login_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   login_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -105,11 +105,11 @@ extern const uint32_t login_error_internal_data_[];
 inline constexpr login_error login_error_MIN =
     static_cast<login_error>(0);
 inline constexpr login_error login_error_MAX =
-    static_cast<login_error>(51);
+    static_cast<login_error>(2031);
 [[nodiscard]] inline bool login_error_IsValid(int value) {
-  return 0 <= value && value <= 51 && ((4503599626321921u >> value) & 1) != 0;
+  return ::google::protobuf::internal::ValidateEnum(value, login_error_internal_data_);
 }
-inline constexpr int login_error_ARRAYSIZE = 51 + 1;
+inline constexpr int login_error_ARRAYSIZE = 2031 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 login_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(login_error) {
@@ -120,12 +120,7 @@ template <typename T>
   static_assert(::std::is_same<T, login_error>::value ||
                     ::std::is_integral<T>::value,
                 "Incorrect type passed to login_error_Name().");
-  return login_error_Name(static_cast<login_error>(value));
-}
-template <>
-[[nodiscard]] inline const ::std::string& login_error_Name(login_error value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<login_error_descriptor, 0, 51>(
-      static_cast<int>(value));
+  return ::google::protobuf::internal::NameOfEnum(login_error_descriptor(), value);
 }
 [[nodiscard]] inline bool login_error_Parse(
     ::absl::string_view name, login_error* PROTOBUF_NONNULL value) {

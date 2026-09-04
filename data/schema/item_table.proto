@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+// Item 表的权威 schema。源表 data/Item.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号是从 generated/code/proto/item_table.proto 抄来的现状值,**只增不改、删字段用 reserved**。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message ItemTable {
+  option (cfg_sheet)       = "Item";
+  option (cfg_source_file) = "Item.xlsx";
+  option (cfg_primary_key) = "id";
+
+  uint32 id = 1;
+  // 最大堆叠数量
+  uint32 max_stack_size = 2;
+  // 装备部位:0=不是装备。>0=该部位编号。部位的含义(手镯/头/胸…)以及每个部位有几个槽,全部由数据定义 —— 槽位表 EquipSlot 决定哪个槽接受哪个部位,代码里不写死
+  uint32 equip_kind = 3;
+}

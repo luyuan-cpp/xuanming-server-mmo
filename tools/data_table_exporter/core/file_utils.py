@@ -60,8 +60,15 @@ def sha256_hash(file_path: Path | str, block_size: int = 2 ** 20) -> str | None:
 def md5_copy_file(src: Path, dst: Path) -> None:
     """Copy *src* → *dst* only when content differs (by MD5)."""
     dst.parent.mkdir(parents=True, exist_ok=True)
-    if dst.exists() and md5_hash(src) == md5_hash(dst):
-        return
+    src_digest = md5_hash(src)
+    if src_digest is None:
+        raise OSError(f"无法读取部署源文件: {src}")
+    if dst.exists():
+        dst_digest = md5_hash(dst)
+        if dst_digest is None:
+            raise OSError(f"无法读取部署目标文件: {dst}")
+        if src_digest == dst_digest:
+            return
     shutil.copyfile(str(src), str(dst))
     logger.debug("Copied %s → %s", src, dst)
 
@@ -71,7 +78,7 @@ def md5_copy_dir(src_dir: Path, dst_dir: Path) -> None:
     src_dir = Path(src_dir)
     dst_dir = Path(dst_dir)
     if not src_dir.exists():
-        return
+        raise FileNotFoundError(f"部署源目录不存在: {src_dir}")
     dst_dir.mkdir(parents=True, exist_ok=True)
     for item in src_dir.iterdir():
         dst_item = dst_dir / item.name
@@ -89,7 +96,7 @@ def md5_copy(src: str | Path, dst: str | Path) -> None:
     elif src.is_dir():
         md5_copy_dir(src, dst)
     else:
-        logger.warning("md5_copy: source does not exist: %s", src)
+        raise FileNotFoundError(f"部署源不存在: {src}")
 
 
 # 手写文件白名单:这些文件本就该只存在于部署目标树、源树里没有,不算陈旧产物。
@@ -99,7 +106,8 @@ _DEPLOY_KEEP: frozenset[str] = frozenset({
 })
 
 # 只对这些后缀查陈旧产物(编译单元;.json/.pb 等数据产物由 manifest 与业务自行管理)。
-_ORPHAN_SUFFIXES: frozenset[str] = frozenset({".go", ".h", ".hpp", ".cpp", ".java"})
+_ORPHAN_SUFFIXES: frozenset[str] = frozenset(
+    {".go", ".h", ".hpp", ".cpp", ".java", ".cs", ".py"})
 
 
 def report_orphans(src_dirs: list[Path] | tuple[Path, ...], dst_dir: Path | str) -> list[Path]:
@@ -146,4 +154,7 @@ def list_xlsx(directory: Path) -> list[Path]:
     """Return all *.xlsx* files directly under *directory*."""
     if not directory.exists():
         return []
-    return sorted(f for f in directory.iterdir() if f.is_file() and f.suffix == ".xlsx")
+    return sorted(
+        f for f in directory.iterdir()
+        if f.is_file() and f.suffix == ".xlsx" and not f.name.startswith("~$")
+    )

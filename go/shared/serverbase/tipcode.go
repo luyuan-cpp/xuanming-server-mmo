@@ -2,13 +2,14 @@ package serverbase
 
 import (
 	"shared/generated/pb/table"
+	"shared/generated/tip"
 )
 
 // Verdict 是对一个业务错误码的定性。
 type Verdict uint8
 
 const (
-	// VerdictOK 成功(码 0,或 tip 码表里的 kSuccess=1)。
+	// VerdictOK 成功(码 0,或 tip 码表里的 kSuccess=1000)。
 	VerdictOK Verdict = iota
 	// VerdictBizReject 正常业务拒绝:背包满、队伍满、冷却未到、参数非法……
 	// 这类不是故障,只计数,不打 Error 日志、不该配告警。
@@ -42,47 +43,26 @@ type Classifier func(code uint32) Verdict
 // tip 码表
 // ---------------------------------------------------------------------------
 
-// tipCodeRange 是 tip 码表的一个域段。
+// tip 码轴的段表已改为**生成产物**:shared/generated/tip。
 //
-// tip 码表是**单一扁平命名空间**:所有 *_error_tip.proto 里的枚举共用
-// 0..129 这一条数轴,每个 proto 占一段连续区间,互不重叠
-// (0 是各枚举各自的 OK 值,不属于任何段)。
-type tipCodeRange struct {
-	Domain string
-	Lo, Hi uint32
-}
+// 这里以前是一张手抄的 tipDomains,而发号在 tools/data_table_exporter 里 ——
+// 两边互不知道对方存在,于是往任何一组加码都会拿到全局队尾的号、落在自己段外,
+// 且全程零报错(往 common 加第 20 个码,它拿到的是 130 而不是 20)。
+//
+// 现在段由 data/tip/Tip.xlsx 的组头行声明、由发号器按段分配、
+// 并生成到 shared/generated/tip。本文件只消费,不再维护副本。
+//
+// 段之间**不再连续**:每组各占 1000 号(common 1000、login 2000 ……),
+// 留出扩容余量。因此判定一个码在不在轴上要用 tip.InKnownSegment,
+// 不能再用「小于某个最大值」——段之间的空洞不属于任何域。
 
-// tipDomains 与 generated/code/proto/tip/*.proto 的实际取值一一对应。
-// 新增 tip proto / 扩段时必须同步这里,否则新码会落进 VerdictUnknown。
-var tipDomains = []tipCodeRange{
-	{"common", 1, 19},
-	{"login", 20, 51},
-	{"scene", 52, 75},
-	{"team", 76, 93},
-	{"mission", 94, 100},
-	{"bag", 101, 115},
-	{"skill", 116, 122},
-	{"buff", 123, 124},
-	{"entity", 125, 125},
-	{"actor_action", 126, 126},
-	{"mount", 127, 127},
-	{"reward", 128, 128},
-	{"cross_server", 129, 129},
-}
-
-// TipMaxKnownCode 是 tip 码表当前的最大已知码。超过它一律 VerdictUnknown。
-const TipMaxKnownCode uint32 = uint32(table.CrossServerError_kSceneTransferInProgress)
-
-// TipDomain 返回 tip 码所属的域名(用作日志字段;不当 Prometheus label 也行,
-// 但它是低基数的,想当 label 也安全)。
+// TipDomain 返回 tip 码所属的域名(用作日志字段;低基数,想当 Prometheus label 也安全)。
 func TipDomain(code uint32) string {
 	if code == 0 {
 		return "ok"
 	}
-	for _, r := range tipDomains {
-		if code >= r.Lo && code <= r.Hi {
-			return r.Domain
-		}
+	if d := tip.DomainOf(code); d != "" {
+		return d
 	}
 	return "unknown"
 }
@@ -120,13 +100,12 @@ var tipFaultCodes = map[uint32]struct{}{
 	uint32(table.CommonError_kFailedToRegisterTheNode): {},
 	//
 	// 刻意**不算**故障的 common 码,记在这里免得下个人反复纠结:
-	//   kInvalidTableId(2)      查表 id 非法,多半是请求带进来的
-	//   kInvalidParameter(6)    客户端参数
-	//   kFeatureUnavailable(7)  功能未开放,产品行为
-	//   kRateLimitExceeded(9)   限流,是保护生效不是故障
-	//   kMessageSizeExceeded(11) / kMessageIdNotFound(14) /
-	//   kRequestMessageParseError(15) / kArraySizeTooLargeInMessage(16) /
-	//   kNegativeValueInMessage(18)  全是客户端上行侧的问题
+	//   kInvalidTableId / kInvalidParameter      请求参数不合法
+	//   kFeatureUnavailable                     功能未开放,产品行为
+	//   kRateLimitExceeded                      限流,是保护生效不是故障
+	//   kMessageSizeExceeded / kMessageIdNotFound /
+	//   kRequestMessageParseError / kArraySizeTooLargeInMessage /
+	//   kNegativeValueInMessage                 全是客户端上行侧的问题
 
 	// ---- login 段 ----
 	uint32(table.LoginError_kLoginUnknownError):          {}, // 兜底未知错误
@@ -144,10 +123,10 @@ var tipFaultCodes = map[uint32]struct{}{
 	uint32(table.LoginError_kLoginAccountDataLoadFailed): {},
 	uint32(table.LoginError_kLoginTimeout):               {}, // 超时
 	//
-	// 不算故障:kLoginAccountNotFound(20) / kLoginAccountPlayerFull(21) /
-	// kLoginInProgress(25) / kLoginEnteringGame(27) / kLoginPlaying(28) /
-	// kTooManyDevices(44) / kLoginBeKickByAnOtherAccount(37) /
-	// kLoginSessionDisconnect(36) —— 都是正常的登录态与业务规则。
+	// 不算故障:kLoginAccountNotFound / kLoginAccountPlayerFull /
+	// kLoginInProgress / kLoginEnteringGame / kLoginPlaying /
+	// kTooManyDevices / kLoginBeKickByAnOtherAccount /
+	// kLoginSessionDisconnect —— 都是正常的登录态与业务规则。
 
 	// ---- scene 段 ----
 	uint32(table.SceneError_kEnterNodeUnavailable):                  {}, // 没有可用场景节点
@@ -158,10 +137,10 @@ var tipFaultCodes = map[uint32]struct{}{
 	uint32(table.SceneError_kChangeScenePlayerQueueComponentEmpty):  {},
 	uint32(table.SceneError_kEnterSceneFailed):                      {}, // 泛化的进场失败
 	//
-	// 不算故障:kEnterSceneSceneFull(58) / kEnterSceneMainFull(54) /
-	// kEnterSceneGsFull(63) / kChangeScenePlayerQueueFull(69) 都是容量拒绝;
-	// kEnterSceneYouInCurrentScene(60) / kEnterSceneChangingScene(66) 是状态拒绝;
-	// kInvalidEnterSceneParameters(73) / kEnterSceneParamError(57) 是参数问题。
+	// 不算故障:kEnterSceneSceneFull / kEnterSceneMainFull /
+	// kEnterSceneGsFull / kChangeScenePlayerQueueFull 都是容量拒绝;
+	// kEnterSceneYouInCurrentScene / kEnterSceneChangingScene 是状态拒绝;
+	// kInvalidEnterSceneParameters / kEnterSceneParamError 是参数问题。
 
 	// ---- 其余域:几乎全是游戏规则拒绝,只挑出"服务端组件缺失"这一类 ----
 	uint32(table.MissionError_kPlayerMissionComponentNotFound): {},
@@ -172,14 +151,17 @@ var tipFaultCodes = map[uint32]struct{}{
 // TipVerdict 按 tip 码表给一个码定性。
 //
 // 注意:只能用于确实来自 tip 码表的码(即 SourceTipInfo)。
-// 拿它去判 data_service / scene_manager 的 error_code 会得到垃圾
-// —— 那两套码表里的 1、4、8 与 tip 的 1、4、8 完全不是一回事。
+// 拿它去判 data_service / scene_manager 的 error_code 会得到垃圾：
+// 那两套轴仍从低位独立发号，而 tip 已迁到 1000 起的分段轴，语义并不相通。
 func TipVerdict(code uint32) Verdict {
 	switch {
 	case code == uint32(table.CommonError_kCommon_errorOK),
 		code == uint32(table.CommonError_kSuccess):
 		return VerdictOK
-	case code > TipMaxKnownCode:
+	case !tip.InAllocatedRange(code):
+		// 「码表漂移」:码落在所有段之外,或者高于本二进制编译时该段的已分配上界
+		// —— 后者说明对端跑的是更新的码表而本进程没跟上。两种都单独计数,
+		// 免得新码被默默归进「业务拒绝」从此隐身。
 		return VerdictUnknown
 	}
 	if _, ok := tipFaultCodes[code]; ok {

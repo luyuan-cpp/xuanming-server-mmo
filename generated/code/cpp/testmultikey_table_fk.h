@@ -14,13 +14,6 @@ inline const TestTable* GetTestMultiKeyTestRefRow(const TestMultiKeyTable& row) 
     return ptr;
 }
 
-/// Resolve TestMultiKey.test_ref -> Test row (by TestMultiKey id).
-inline const TestTable* GetTestMultiKeyTestRefRow(uint32_t tableId) {
-    auto [row, _] = TestMultiKeyTableManager::Instance().FindByIdSilent(tableId);
-    if (!row) return nullptr;
-    return GetTestMultiKeyTestRefRow(*row);
-}
-
 /// Resolve TestMultiKey.test_refs[] -> Test rows.
 inline std::vector<const TestTable*> GetTestMultiKeyTestRefsRows(const TestMultiKeyTable& row) {
     std::vector<const TestTable*> result;
@@ -29,13 +22,6 @@ inline std::vector<const TestTable*> GetTestMultiKeyTestRefsRows(const TestMulti
         if (ptr) result.push_back(ptr);
     }
     return result;
-}
-
-/// Resolve TestMultiKey.test_refs[] -> Test rows (by TestMultiKey id).
-inline std::vector<const TestTable*> GetTestMultiKeyTestRefsRows(uint32_t tableId) {
-    auto [row, _] = TestMultiKeyTableManager::Instance().FindByIdSilent(tableId);
-    if (!row) return {};
-    return GetTestMultiKeyTestRefsRows(*row);
 }
 
 // ---------------------------------------------------------------------------

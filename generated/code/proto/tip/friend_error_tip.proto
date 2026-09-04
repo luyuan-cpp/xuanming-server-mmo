@@ -1,0 +1,26 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum friend_error {
+  kFriend_errorOK = 0;
+
+  kFriendCannotAddSelf = 15000;
+
+  kFriendAlreadyFriends = 15001;
+
+  kFriendListFull = 15002;
+
+  kFriendRequestAlreadySent = 15003;
+
+  kFriendTargetListFull = 15004;
+
+  kFriendNoPendingRequest = 15005;
+
+  kFriendTooManyPending = 15006;
+
+};

@@ -26,30 +26,30 @@ public class {{ sheetname }}TableManager {
      */
     private static class Snapshot {
         final {{ sheetname }}TableData data;
-        final Map<Integer, {{ sheetname }}Table> kvData;
+        final {% if table.multi_primary_key %}Map<Integer, List<{{ sheetname }}Table>>{% else %}Map<Integer, {{ sheetname }}Table>{% endif %} kvData;
 {% for col in table.table_keys if not col.is_multi_key %}
-        final Map<{{ to_java_boxed(col.data_type) }}, {{ sheetname }}Table> kv{{ col.name | title }}Data;
+        final Map<{{ to_java_boxed(col.data_type) }}, {{ sheetname }}Table> kv{{ to_pascal_case(col.name) }}Data;
 {% endfor %}
 {% for col in table.table_keys if col.is_multi_key %}
-        final Map<{{ to_java_boxed(col.data_type) }}, List<{{ sheetname }}Table>> kv{{ col.name | title }}Data;
+        final Map<{{ to_java_boxed(col.data_type) }}, List<{{ sheetname }}Table>> kv{{ to_pascal_case(col.name) }}Data;
 {% endfor %}
 {% for arr in table.repeated_comp_arrays %}
-        final Map<{{ to_java_repeated_elem_type(arr.data_type) }}, List<{{ sheetname }}Table>> idx{{ arr.name | title }};
+        final Map<{{ to_java_repeated_elem_type(arr.data_type) }}, List<{{ sheetname }}Table>> idx{{ to_pascal_case(arr.name) }};
 {% endfor %}
 {% for col in table.index_columns %}
         final Map<{{ to_java_boxed(col.data_type) }}, List<{{ sheetname }}Table>> idx{{ to_pascal_case(col.name) }};
 {% endfor %}
 
         Snapshot({{ sheetname }}TableData data,
-                 Map<Integer, {{ sheetname }}Table> kvData
+                 {% if table.multi_primary_key %}Map<Integer, List<{{ sheetname }}Table>>{% else %}Map<Integer, {{ sheetname }}Table>{% endif %} kvData
 {%- for col in table.table_keys if not col.is_multi_key %},
-                 Map<{{ to_java_boxed(col.data_type) }}, {{ sheetname }}Table> kv{{ col.name | title }}Data
+                 Map<{{ to_java_boxed(col.data_type) }}, {{ sheetname }}Table> kv{{ to_pascal_case(col.name) }}Data
 {%- endfor %}
 {%- for col in table.table_keys if col.is_multi_key %},
-                 Map<{{ to_java_boxed(col.data_type) }}, List<{{ sheetname }}Table>> kv{{ col.name | title }}Data
+                 Map<{{ to_java_boxed(col.data_type) }}, List<{{ sheetname }}Table>> kv{{ to_pascal_case(col.name) }}Data
 {%- endfor %}
 {%- for arr in table.repeated_comp_arrays %},
-                 Map<{{ to_java_repeated_elem_type(arr.data_type) }}, List<{{ sheetname }}Table>> idx{{ arr.name | title }}
+                 Map<{{ to_java_repeated_elem_type(arr.data_type) }}, List<{{ sheetname }}Table>> idx{{ to_pascal_case(arr.name) }}
 {%- endfor %}
 {%- for col in table.index_columns %},
                  Map<{{ to_java_boxed(col.data_type) }}, List<{{ sheetname }}Table>> idx{{ to_pascal_case(col.name) }}
@@ -57,10 +57,10 @@ public class {{ sheetname }}TableManager {
             this.data = data;
             this.kvData = kvData;
 {%- for col in table.table_keys %}
-            this.kv{{ col.name | title }}Data = kv{{ col.name | title }}Data;
+            this.kv{{ to_pascal_case(col.name) }}Data = kv{{ to_pascal_case(col.name) }}Data;
 {%- endfor %}
 {%- for arr in table.repeated_comp_arrays %}
-            this.idx{{ arr.name | title }} = idx{{ arr.name | title }};
+            this.idx{{ to_pascal_case(arr.name) }} = idx{{ to_pascal_case(arr.name) }};
 {%- endfor %}
 {%- for col in table.index_columns %}
             this.idx{{ to_pascal_case(col.name) }} = idx{{ to_pascal_case(col.name) }};
@@ -97,31 +97,35 @@ public class {{ sheetname }}TableManager {
         }
         {{ sheetname }}TableData data = builder.build();
 
-        Map<Integer, {{ sheetname }}Table> kvData = new HashMap<>(data.getDataCount());
+        {% if table.multi_primary_key %}Map<Integer, List<{{ sheetname }}Table>>{% else %}Map<Integer, {{ sheetname }}Table>{% endif %} kvData = new HashMap<>(data.getDataCount());
 {%- for col in table.table_keys if not col.is_multi_key %}
-        Map<{{ to_java_boxed(col.data_type) }}, {{ sheetname }}Table> kv{{ col.name | title }}Data = new HashMap<>(data.getDataCount());
+        Map<{{ to_java_boxed(col.data_type) }}, {{ sheetname }}Table> kv{{ to_pascal_case(col.name) }}Data = new HashMap<>(data.getDataCount());
 {%- endfor %}
 {%- for col in table.table_keys if col.is_multi_key %}
-        Map<{{ to_java_boxed(col.data_type) }}, List<{{ sheetname }}Table>> kv{{ col.name | title }}Data = new HashMap<>();
+        Map<{{ to_java_boxed(col.data_type) }}, List<{{ sheetname }}Table>> kv{{ to_pascal_case(col.name) }}Data = new HashMap<>();
 {%- endfor %}
 {%- for arr in table.repeated_comp_arrays %}
-        Map<{{ to_java_repeated_elem_type(arr.data_type) }}, List<{{ sheetname }}Table>> idx{{ arr.name | title }} = new HashMap<>();
+        Map<{{ to_java_repeated_elem_type(arr.data_type) }}, List<{{ sheetname }}Table>> idx{{ to_pascal_case(arr.name) }} = new HashMap<>();
 {%- endfor %}
 {%- for col in table.index_columns %}
         Map<{{ to_java_boxed(col.data_type) }}, List<{{ sheetname }}Table>> idx{{ to_pascal_case(col.name) }} = new HashMap<>();
 {%- endfor %}
 
         for ({{ sheetname }}Table row : data.getDataList()) {
+{%- if table.multi_primary_key %}
+            kvData.computeIfAbsent(row.getId(), k -> new ArrayList<>()).add(row);
+{%- else %}
             kvData.put(row.getId(), row);
+{%- endif %}
 {%- for col in table.table_keys if not col.is_multi_key %}
-            kv{{ col.name | title }}Data.put(row.{{ to_java_proto_getter(col.name) }}(), row);
+            kv{{ to_pascal_case(col.name) }}Data.put(row.{{ to_java_proto_getter(col.name) }}(), row);
 {%- endfor %}
 {%- for col in table.table_keys if col.is_multi_key %}
-            kv{{ col.name | title }}Data.computeIfAbsent(row.{{ to_java_proto_getter(col.name) }}(), k -> new ArrayList<>()).add(row);
+            kv{{ to_pascal_case(col.name) }}Data.computeIfAbsent(row.{{ to_java_proto_getter(col.name) }}(), k -> new ArrayList<>()).add(row);
 {%- endfor %}
 {%- for arr in table.repeated_comp_arrays %}
             for ({{ to_java_repeated_elem_type(arr.data_type) }} elem : row.{{ to_java_proto_getter(arr.name) }}List()) {
-                idx{{ arr.name | title }}.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idx{{ to_pascal_case(arr.name) }}.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
 {%- endfor %}
 {%- for col in table.index_columns %}
@@ -130,8 +134,8 @@ public class {{ sheetname }}TableManager {
         }
 
         this.snapshot = new Snapshot(data, kvData
-{%- for col in table.table_keys %}, kv{{ col.name | title }}Data{% endfor %}
-{%- for arr in table.repeated_comp_arrays %}, idx{{ arr.name | title }}{% endfor %}
+{%- for col in table.table_keys %}, kv{{ to_pascal_case(col.name) }}Data{% endfor %}
+{%- for arr in table.repeated_comp_arrays %}, idx{{ to_pascal_case(arr.name) }}{% endfor %}
 {%- for col in table.index_columns %}, idx{{ to_pascal_case(col.name) }}{% endfor %});
     }
 
@@ -139,28 +143,43 @@ public class {{ sheetname }}TableManager {
         return snapshot.data;
     }
 
+{%- if table.multi_primary_key %}
+
+    /**
+     * 返回该 id 命中的全部行。这张表的主键声明了 (cfg_multi)，单值语义不成立，
+     * 因此不提供 findById —— 把可重复主键当单值用会在编译期断，而不是悄悄只看第一行。
+     *
+     * <p>热更契约：返回的对象属于当前快照，只许当场用，调用方**只存 id**。
+     */
+    public List<{{ sheetname }}Table> findAllById(int id) {
+        return snapshot.kvData.getOrDefault(id, Collections.emptyList());
+    }
+{%- else %}
+
+    /** 热更契约：返回的对象属于当前快照，调用方**只存 id**，不要长期持有引用。 */
     public {{ sheetname }}Table findById(int id) {
         return snapshot.kvData.get(id);
     }
+{%- endif %}
 
-    public Map<Integer, {{ sheetname }}Table> getKvData() {
+    public {% if table.multi_primary_key %}Map<Integer, List<{{ sheetname }}Table>>{% else %}Map<Integer, {{ sheetname }}Table>{% endif %} getKvData() {
         return Collections.unmodifiableMap(snapshot.kvData);
     }
 
 {% for col in table.table_keys if not col.is_multi_key %}
-    public {{ sheetname }}Table findBy{{ col.name | title }}({{ to_java_type(col.data_type) }} key) {
-        return snapshot.kv{{ col.name | title }}Data.get(key);
+    public {{ sheetname }}Table findBy{{ to_pascal_case(col.name) }}({{ to_java_type(col.data_type) }} key) {
+        return snapshot.kv{{ to_pascal_case(col.name) }}Data.get(key);
     }
 {% endfor %}
 {% for col in table.table_keys if col.is_multi_key %}
-    public List<{{ sheetname }}Table> findBy{{ col.name | title }}({{ to_java_type(col.data_type) }} key) {
-        return snapshot.kv{{ col.name | title }}Data.getOrDefault(key, Collections.emptyList());
+    public List<{{ sheetname }}Table> findBy{{ to_pascal_case(col.name) }}({{ to_java_type(col.data_type) }} key) {
+        return snapshot.kv{{ to_pascal_case(col.name) }}Data.getOrDefault(key, Collections.emptyList());
     }
 {% endfor %}
 
 {% for arr in table.repeated_comp_arrays %}
-    public List<{{ sheetname }}Table> findBy{{ arr.name | title }}Index({{ to_java_type(arr.data_type) }} key) {
-        return snapshot.idx{{ arr.name | title }}.getOrDefault(key, Collections.emptyList());
+    public List<{{ sheetname }}Table> findBy{{ to_pascal_case(arr.name) }}Index({{ to_java_type(arr.data_type) }} key) {
+        return snapshot.idx{{ to_pascal_case(arr.name) }}.getOrDefault(key, Collections.emptyList());
     }
 {% endfor %}
 
@@ -181,25 +200,29 @@ public class {{ sheetname }}TableManager {
     }
 
 {% for col in table.table_keys if not col.is_multi_key %}
-    public boolean existsBy{{ col.name | title }}({{ to_java_type(col.data_type) }} key) {
-        return snapshot.kv{{ col.name | title }}Data.containsKey(key);
+    public boolean existsBy{{ to_pascal_case(col.name) }}({{ to_java_type(col.data_type) }} key) {
+        return snapshot.kv{{ to_pascal_case(col.name) }}Data.containsKey(key);
     }
 {% endfor %}
 
     // ---- Count ----
 
     public int count() {
+{%- if table.multi_primary_key %}
+        return snapshot.data.getDataCount();
+{%- else %}
         return snapshot.kvData.size();
+{%- endif %}
     }
 
 {% for col in table.table_keys if col.is_multi_key %}
-    public int countBy{{ col.name | title }}({{ to_java_type(col.data_type) }} key) {
-        return snapshot.kv{{ col.name | title }}Data.getOrDefault(key, Collections.emptyList()).size();
+    public int countBy{{ to_pascal_case(col.name) }}({{ to_java_type(col.data_type) }} key) {
+        return snapshot.kv{{ to_pascal_case(col.name) }}Data.getOrDefault(key, Collections.emptyList()).size();
     }
 {% endfor %}
 {% for arr in table.repeated_comp_arrays %}
-    public int countBy{{ arr.name | title }}Index({{ to_java_type(arr.data_type) }} key) {
-        return snapshot.idx{{ arr.name | title }}.getOrDefault(key, Collections.emptyList()).size();
+    public int countBy{{ to_pascal_case(arr.name) }}Index({{ to_java_type(arr.data_type) }} key) {
+        return snapshot.idx{{ to_pascal_case(arr.name) }}.getOrDefault(key, Collections.emptyList()).size();
     }
 {% endfor %}
 {% for col in table.index_columns %}
@@ -214,8 +237,12 @@ public class {{ sheetname }}TableManager {
         Snapshot snap = this.snapshot;
         List<{{ sheetname }}Table> result = new ArrayList<>(ids.size());
         for (int id : ids) {
+{%- if table.multi_primary_key %}
+            result.addAll(snap.kvData.getOrDefault(id, Collections.emptyList()));
+{%- else %}
             {{ sheetname }}Table row = snap.kvData.get(id);
             if (row != null) { result.add(row); }
+{%- endif %}
         }
         return result;
     }

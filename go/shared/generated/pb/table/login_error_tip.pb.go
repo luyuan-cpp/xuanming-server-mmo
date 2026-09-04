@@ -25,111 +25,111 @@ type LoginError int32
 
 const (
 	LoginError_kLogin_errorOK                            LoginError = 0
-	LoginError_kLoginAccountNotFound                     LoginError = 20
-	LoginError_kLoginAccountPlayerFull                   LoginError = 21
-	LoginError_kLoginCreatePlayerUnLoadAccount           LoginError = 22
-	LoginError_kLoginCreatePlayerConnectionHasNotAccount LoginError = 23
-	LoginError_kLoginUnLogin                             LoginError = 24
-	LoginError_kLoginInProgress                          LoginError = 25
-	LoginError_kLoginPlayerGuidError                     LoginError = 26
-	LoginError_kLoginEnteringGame                        LoginError = 27
-	LoginError_kLoginPlaying                             LoginError = 28
-	LoginError_kLoginCreatingPlayer                      LoginError = 29
-	LoginError_kLoginWaitingEnterGame                    LoginError = 30
-	LoginError_kLoginEnterGameGuid                       LoginError = 31
-	LoginError_kLoginAccountNameEmpty                    LoginError = 32
-	LoginError_kLoginCreateConnectionAccountEmpty        LoginError = 33
-	LoginError_kLoginEnterGameConnectionAccountEmpty     LoginError = 34
-	LoginError_kLoginUnknownError                        LoginError = 35
-	LoginError_kLoginSessionDisconnect                   LoginError = 36
-	LoginError_kLoginBeKickByAnOtherAccount              LoginError = 37
-	LoginError_kLoginSessionIdNotFound                   LoginError = 38
-	LoginError_kLoginFsmFailed                           LoginError = 39
-	LoginError_kLoginDataSerializeFailed                 LoginError = 40
-	LoginError_kLoginRedisError                          LoginError = 41
-	LoginError_kLoginDataParseFailed                     LoginError = 42
-	LoginError_kLoginRedisSetFailed                      LoginError = 43
-	LoginError_kTooManyDevices                           LoginError = 44
-	LoginError_kLoginFSMLoadFailed                       LoginError = 45
-	LoginError_kLoginFSMEventFailed                      LoginError = 46
-	LoginError_kLoginAccountDataLoadFaile                LoginError = 47
-	LoginError_kLoginSessionNotFound                     LoginError = 48
-	LoginError_kLoginAccountDataLoadFailed               LoginError = 49
-	LoginError_kLoginFsmInvalidEvent                     LoginError = 50
-	LoginError_kLoginTimeout                             LoginError = 51
+	LoginError_kLoginAccountNotFound                     LoginError = 2000
+	LoginError_kLoginAccountPlayerFull                   LoginError = 2001
+	LoginError_kLoginCreatePlayerUnLoadAccount           LoginError = 2002
+	LoginError_kLoginCreatePlayerConnectionHasNotAccount LoginError = 2003
+	LoginError_kLoginUnLogin                             LoginError = 2004
+	LoginError_kLoginInProgress                          LoginError = 2005
+	LoginError_kLoginPlayerGuidError                     LoginError = 2006
+	LoginError_kLoginEnteringGame                        LoginError = 2007
+	LoginError_kLoginPlaying                             LoginError = 2008
+	LoginError_kLoginCreatingPlayer                      LoginError = 2009
+	LoginError_kLoginWaitingEnterGame                    LoginError = 2010
+	LoginError_kLoginEnterGameGuid                       LoginError = 2011
+	LoginError_kLoginAccountNameEmpty                    LoginError = 2012
+	LoginError_kLoginCreateConnectionAccountEmpty        LoginError = 2013
+	LoginError_kLoginEnterGameConnectionAccountEmpty     LoginError = 2014
+	LoginError_kLoginUnknownError                        LoginError = 2015
+	LoginError_kLoginSessionDisconnect                   LoginError = 2016
+	LoginError_kLoginBeKickByAnOtherAccount              LoginError = 2017
+	LoginError_kLoginSessionIdNotFound                   LoginError = 2018
+	LoginError_kLoginFsmFailed                           LoginError = 2019
+	LoginError_kLoginDataSerializeFailed                 LoginError = 2020
+	LoginError_kLoginRedisError                          LoginError = 2021
+	LoginError_kLoginDataParseFailed                     LoginError = 2022
+	LoginError_kLoginRedisSetFailed                      LoginError = 2023
+	LoginError_kTooManyDevices                           LoginError = 2024
+	LoginError_kLoginFSMLoadFailed                       LoginError = 2025
+	LoginError_kLoginFSMEventFailed                      LoginError = 2026
+	LoginError_kLoginAccountDataLoadFaile                LoginError = 2027
+	LoginError_kLoginSessionNotFound                     LoginError = 2028
+	LoginError_kLoginAccountDataLoadFailed               LoginError = 2029
+	LoginError_kLoginFsmInvalidEvent                     LoginError = 2030
+	LoginError_kLoginTimeout                             LoginError = 2031
 )
 
 // Enum value maps for LoginError.
 var (
 	LoginError_name = map[int32]string{
-		0:  "kLogin_errorOK",
-		20: "kLoginAccountNotFound",
-		21: "kLoginAccountPlayerFull",
-		22: "kLoginCreatePlayerUnLoadAccount",
-		23: "kLoginCreatePlayerConnectionHasNotAccount",
-		24: "kLoginUnLogin",
-		25: "kLoginInProgress",
-		26: "kLoginPlayerGuidError",
-		27: "kLoginEnteringGame",
-		28: "kLoginPlaying",
-		29: "kLoginCreatingPlayer",
-		30: "kLoginWaitingEnterGame",
-		31: "kLoginEnterGameGuid",
-		32: "kLoginAccountNameEmpty",
-		33: "kLoginCreateConnectionAccountEmpty",
-		34: "kLoginEnterGameConnectionAccountEmpty",
-		35: "kLoginUnknownError",
-		36: "kLoginSessionDisconnect",
-		37: "kLoginBeKickByAnOtherAccount",
-		38: "kLoginSessionIdNotFound",
-		39: "kLoginFsmFailed",
-		40: "kLoginDataSerializeFailed",
-		41: "kLoginRedisError",
-		42: "kLoginDataParseFailed",
-		43: "kLoginRedisSetFailed",
-		44: "kTooManyDevices",
-		45: "kLoginFSMLoadFailed",
-		46: "kLoginFSMEventFailed",
-		47: "kLoginAccountDataLoadFaile",
-		48: "kLoginSessionNotFound",
-		49: "kLoginAccountDataLoadFailed",
-		50: "kLoginFsmInvalidEvent",
-		51: "kLoginTimeout",
+		0:    "kLogin_errorOK",
+		2000: "kLoginAccountNotFound",
+		2001: "kLoginAccountPlayerFull",
+		2002: "kLoginCreatePlayerUnLoadAccount",
+		2003: "kLoginCreatePlayerConnectionHasNotAccount",
+		2004: "kLoginUnLogin",
+		2005: "kLoginInProgress",
+		2006: "kLoginPlayerGuidError",
+		2007: "kLoginEnteringGame",
+		2008: "kLoginPlaying",
+		2009: "kLoginCreatingPlayer",
+		2010: "kLoginWaitingEnterGame",
+		2011: "kLoginEnterGameGuid",
+		2012: "kLoginAccountNameEmpty",
+		2013: "kLoginCreateConnectionAccountEmpty",
+		2014: "kLoginEnterGameConnectionAccountEmpty",
+		2015: "kLoginUnknownError",
+		2016: "kLoginSessionDisconnect",
+		2017: "kLoginBeKickByAnOtherAccount",
+		2018: "kLoginSessionIdNotFound",
+		2019: "kLoginFsmFailed",
+		2020: "kLoginDataSerializeFailed",
+		2021: "kLoginRedisError",
+		2022: "kLoginDataParseFailed",
+		2023: "kLoginRedisSetFailed",
+		2024: "kTooManyDevices",
+		2025: "kLoginFSMLoadFailed",
+		2026: "kLoginFSMEventFailed",
+		2027: "kLoginAccountDataLoadFaile",
+		2028: "kLoginSessionNotFound",
+		2029: "kLoginAccountDataLoadFailed",
+		2030: "kLoginFsmInvalidEvent",
+		2031: "kLoginTimeout",
 	}
 	LoginError_value = map[string]int32{
 		"kLogin_errorOK":                            0,
-		"kLoginAccountNotFound":                     20,
-		"kLoginAccountPlayerFull":                   21,
-		"kLoginCreatePlayerUnLoadAccount":           22,
-		"kLoginCreatePlayerConnectionHasNotAccount": 23,
-		"kLoginUnLogin":                             24,
-		"kLoginInProgress":                          25,
-		"kLoginPlayerGuidError":                     26,
-		"kLoginEnteringGame":                        27,
-		"kLoginPlaying":                             28,
-		"kLoginCreatingPlayer":                      29,
-		"kLoginWaitingEnterGame":                    30,
-		"kLoginEnterGameGuid":                       31,
-		"kLoginAccountNameEmpty":                    32,
-		"kLoginCreateConnectionAccountEmpty":        33,
-		"kLoginEnterGameConnectionAccountEmpty":     34,
-		"kLoginUnknownError":                        35,
-		"kLoginSessionDisconnect":                   36,
-		"kLoginBeKickByAnOtherAccount":              37,
-		"kLoginSessionIdNotFound":                   38,
-		"kLoginFsmFailed":                           39,
-		"kLoginDataSerializeFailed":                 40,
-		"kLoginRedisError":                          41,
-		"kLoginDataParseFailed":                     42,
-		"kLoginRedisSetFailed":                      43,
-		"kTooManyDevices":                           44,
-		"kLoginFSMLoadFailed":                       45,
-		"kLoginFSMEventFailed":                      46,
-		"kLoginAccountDataLoadFaile":                47,
-		"kLoginSessionNotFound":                     48,
-		"kLoginAccountDataLoadFailed":               49,
-		"kLoginFsmInvalidEvent":                     50,
-		"kLoginTimeout":                             51,
+		"kLoginAccountNotFound":                     2000,
+		"kLoginAccountPlayerFull":                   2001,
+		"kLoginCreatePlayerUnLoadAccount":           2002,
+		"kLoginCreatePlayerConnectionHasNotAccount": 2003,
+		"kLoginUnLogin":                             2004,
+		"kLoginInProgress":                          2005,
+		"kLoginPlayerGuidError":                     2006,
+		"kLoginEnteringGame":                        2007,
+		"kLoginPlaying":                             2008,
+		"kLoginCreatingPlayer":                      2009,
+		"kLoginWaitingEnterGame":                    2010,
+		"kLoginEnterGameGuid":                       2011,
+		"kLoginAccountNameEmpty":                    2012,
+		"kLoginCreateConnectionAccountEmpty":        2013,
+		"kLoginEnterGameConnectionAccountEmpty":     2014,
+		"kLoginUnknownError":                        2015,
+		"kLoginSessionDisconnect":                   2016,
+		"kLoginBeKickByAnOtherAccount":              2017,
+		"kLoginSessionIdNotFound":                   2018,
+		"kLoginFsmFailed":                           2019,
+		"kLoginDataSerializeFailed":                 2020,
+		"kLoginRedisError":                          2021,
+		"kLoginDataParseFailed":                     2022,
+		"kLoginRedisSetFailed":                      2023,
+		"kTooManyDevices":                           2024,
+		"kLoginFSMLoadFailed":                       2025,
+		"kLoginFSMEventFailed":                      2026,
+		"kLoginAccountDataLoadFaile":                2027,
+		"kLoginSessionNotFound":                     2028,
+		"kLoginAccountDataLoadFailed":               2029,
+		"kLoginFsmInvalidEvent":                     2030,
+		"kLoginTimeout":                             2031,
 	}
 )
 
@@ -164,41 +164,42 @@ var File_login_error_tip_proto protoreflect.FileDescriptor
 
 const file_login_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15login_error_tip.proto*\x9f\a\n" +
+	"\x15login_error_tip.proto*\xbf\a\n" +
 	"\vlogin_error\x12\x12\n" +
-	"\x0ekLogin_errorOK\x10\x00\x12\x19\n" +
-	"\x15kLoginAccountNotFound\x10\x14\x12\x1b\n" +
-	"\x17kLoginAccountPlayerFull\x10\x15\x12#\n" +
-	"\x1fkLoginCreatePlayerUnLoadAccount\x10\x16\x12-\n" +
-	")kLoginCreatePlayerConnectionHasNotAccount\x10\x17\x12\x11\n" +
-	"\rkLoginUnLogin\x10\x18\x12\x14\n" +
-	"\x10kLoginInProgress\x10\x19\x12\x19\n" +
-	"\x15kLoginPlayerGuidError\x10\x1a\x12\x16\n" +
-	"\x12kLoginEnteringGame\x10\x1b\x12\x11\n" +
-	"\rkLoginPlaying\x10\x1c\x12\x18\n" +
-	"\x14kLoginCreatingPlayer\x10\x1d\x12\x1a\n" +
-	"\x16kLoginWaitingEnterGame\x10\x1e\x12\x17\n" +
-	"\x13kLoginEnterGameGuid\x10\x1f\x12\x1a\n" +
-	"\x16kLoginAccountNameEmpty\x10 \x12&\n" +
-	"\"kLoginCreateConnectionAccountEmpty\x10!\x12)\n" +
-	"%kLoginEnterGameConnectionAccountEmpty\x10\"\x12\x16\n" +
-	"\x12kLoginUnknownError\x10#\x12\x1b\n" +
-	"\x17kLoginSessionDisconnect\x10$\x12 \n" +
-	"\x1ckLoginBeKickByAnOtherAccount\x10%\x12\x1b\n" +
-	"\x17kLoginSessionIdNotFound\x10&\x12\x13\n" +
-	"\x0fkLoginFsmFailed\x10'\x12\x1d\n" +
-	"\x19kLoginDataSerializeFailed\x10(\x12\x14\n" +
-	"\x10kLoginRedisError\x10)\x12\x19\n" +
-	"\x15kLoginDataParseFailed\x10*\x12\x18\n" +
-	"\x14kLoginRedisSetFailed\x10+\x12\x13\n" +
-	"\x0fkTooManyDevices\x10,\x12\x17\n" +
-	"\x13kLoginFSMLoadFailed\x10-\x12\x18\n" +
-	"\x14kLoginFSMEventFailed\x10.\x12\x1e\n" +
-	"\x1akLoginAccountDataLoadFaile\x10/\x12\x19\n" +
-	"\x15kLoginSessionNotFound\x100\x12\x1f\n" +
-	"\x1bkLoginAccountDataLoadFailed\x101\x12\x19\n" +
-	"\x15kLoginFsmInvalidEvent\x102\x12\x11\n" +
-	"\rkLoginTimeout\x103B\x14Z\x12generated/pb/tableb\x06proto3"
+	"\x0ekLogin_errorOK\x10\x00\x12\x1a\n" +
+	"\x15kLoginAccountNotFound\x10\xd0\x0f\x12\x1c\n" +
+	"\x17kLoginAccountPlayerFull\x10\xd1\x0f\x12$\n" +
+	"\x1fkLoginCreatePlayerUnLoadAccount\x10\xd2\x0f\x12.\n" +
+	")kLoginCreatePlayerConnectionHasNotAccount\x10\xd3\x0f\x12\x12\n" +
+	"\rkLoginUnLogin\x10\xd4\x0f\x12\x15\n" +
+	"\x10kLoginInProgress\x10\xd5\x0f\x12\x1a\n" +
+	"\x15kLoginPlayerGuidError\x10\xd6\x0f\x12\x17\n" +
+	"\x12kLoginEnteringGame\x10\xd7\x0f\x12\x12\n" +
+	"\rkLoginPlaying\x10\xd8\x0f\x12\x19\n" +
+	"\x14kLoginCreatingPlayer\x10\xd9\x0f\x12\x1b\n" +
+	"\x16kLoginWaitingEnterGame\x10\xda\x0f\x12\x18\n" +
+	"\x13kLoginEnterGameGuid\x10\xdb\x0f\x12\x1b\n" +
+	"\x16kLoginAccountNameEmpty\x10\xdc\x0f\x12'\n" +
+	"\"kLoginCreateConnectionAccountEmpty\x10\xdd\x0f\x12*\n" +
+	"%kLoginEnterGameConnectionAccountEmpty\x10\xde\x0f\x12\x17\n" +
+	"\x12kLoginUnknownError\x10\xdf\x0f\x12\x1c\n" +
+	"\x17kLoginSessionDisconnect\x10\xe0\x0f\x12!\n" +
+	"\x1ckLoginBeKickByAnOtherAccount\x10\xe1\x0f\x12\x1c\n" +
+	"\x17kLoginSessionIdNotFound\x10\xe2\x0f\x12\x14\n" +
+	"\x0fkLoginFsmFailed\x10\xe3\x0f\x12\x1e\n" +
+	"\x19kLoginDataSerializeFailed\x10\xe4\x0f\x12\x15\n" +
+	"\x10kLoginRedisError\x10\xe5\x0f\x12\x1a\n" +
+	"\x15kLoginDataParseFailed\x10\xe6\x0f\x12\x19\n" +
+	"\x14kLoginRedisSetFailed\x10\xe7\x0f\x12\x14\n" +
+	"\x0fkTooManyDevices\x10\xe8\x0f\x12\x18\n" +
+	"\x13kLoginFSMLoadFailed\x10\xe9\x0f\x12\x19\n" +
+	"\x14kLoginFSMEventFailed\x10\xea\x0f\x12\x1f\n" +
+	"\x1akLoginAccountDataLoadFaile\x10\xeb\x0f\x12\x1a\n" +
+	"\x15kLoginSessionNotFound\x10\xec\x0f\x12 \n" +
+	"\x1bkLoginAccountDataLoadFailed\x10\xed\x0f\x12\x1a\n" +
+	"\x15kLoginFsmInvalidEvent\x10\xee\x0f\x12\x12\n" +
+	"\rkLoginTimeout\x10\xef\x0fB$\n" +
+	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (
 	file_login_error_tip_proto_rawDescOnce sync.Once

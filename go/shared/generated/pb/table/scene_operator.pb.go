@@ -74,7 +74,8 @@ const file_scene_operator_proto_rawDesc = "" +
 	"\x14scene_operator.proto*)\n" +
 	"\x05scene\x12\f\n" +
 	"\bkSceneOK\x10\x00\x12\x12\n" +
-	"\x0ekEnterSceneC2S\x10\x01B\x14Z\x12generated/pb/tableb\x06proto3"
+	"\x0ekEnterSceneC2S\x10\x01B$\n" +
+	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (
 	file_scene_operator_proto_rawDescOnce sync.Once

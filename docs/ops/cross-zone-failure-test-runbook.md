@@ -104,7 +104,7 @@ kubectl scale deploy/scene -n mmorpg-zone-z2 --replicas=0
 #      Unfreezing, sending tip, keeping player on source zone.
 
 # 4. 验证客户端:
-#    应该收到 kSceneTransferFailed (130) tip
+#    应该收到 kEnterSceneFailed (3023) tip
 #    UI 应该 dismiss 跨服 loading 蒙版,玩家能在 z1 继续移动
 
 # 5. 恢复 z2(为了下个测试):
@@ -115,14 +115,14 @@ kubectl scale deploy/scene -n mmorpg-zone-z2 --replicas=1
 - ✅ 玩家**留在 z1**,可以继续移动 / 战斗 / 消费货币
 - ✅ z1 的 `PlayerFrozenComp` 被清除(grep `metric=reaper_failed`)
 - ✅ z1 玩家实体**还活着**(NOT DestroyPlayer'd)
-- ✅ 客户端收到 `kSceneTransferFailed = 130` tip
+- ✅ 客户端收到 `kEnterSceneFailed = 3023` tip
 - ✅ Redis `player_migration:{P}` 被 DEL
 - ✅ z1 玩家货币 / bag 数据**完整无丢失**(Frozen 期间业务系统正确 reject 了写入,数据没飘)
 - ❌ 玩家**不能**在 z2 上线(z2 都没起来,这是反向验证)
 
 **失败的诊断**:
 - 如果玩家在 z1 也消失了,说明 Frozen + reaper unfreeze 路径有 bug
-- 如果客户端收到 `kSceneTransferInProgress`(129)而不是 130,reaper 用错 tip code
+- 如果客户端收到 `kSceneTransferInProgress`(13000)而不是 `kEnterSceneFailed`(3023),reaper 用错 tip code
 
 ---
 
@@ -216,7 +216,7 @@ Build: <commit-sha>
 | Scenario | Result | Notes |
 |---|---|---|
 | A (Kafka transient) | PASS / FAIL | attempt=2/3 succeeded at <time> |
-| B (dest persistent down) | PASS / FAIL | reaper_failed at <time>, client got tip 130 |
+| B (dest persistent down) | PASS / FAIL | reaper_failed at <time>, client got kEnterSceneFailed(3023) |
 | C (source restart) | PASS / FAIL | ScanAndRecover cleaned Redis at <time> |
 | D (Kafka duplicate) | PASS / FAIL / SKIP-pending-#32 | |
 ```

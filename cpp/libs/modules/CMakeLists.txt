@@ -60,6 +60,7 @@ include_directories(
 set(SOURCE_FILES
     bag/bag_system.cpp
     bag/bag_service.cpp
+    bag/bag_profile_registry.cpp
     bag/container_layout.cpp
     bag/eviction_policy.cpp
     bag/item_store.cpp

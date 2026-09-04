@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+// Class 表的权威 schema。源表 data/Class.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号是从 generated/code/proto/class_table.proto 抄来的现状值,**只增不改、删字段用 reserved**。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message ClassTable {
+  option (cfg_sheet)       = "Class";
+  option (cfg_source_file) = "Class.xlsx";
+  option (cfg_primary_key) = "id";
+
+  uint32 id = 1;
+  repeated uint32 skill = 2 [(cfg_slots) = 3];
+}

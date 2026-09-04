@@ -75,7 +75,8 @@ const file_ability_operator_proto_rawDesc = "" +
 	"\aability\x12\x0e\n" +
 	"\n" +
 	"kAbilityOK\x10\x00\x12\x0f\n" +
-	"\vkUseAbility\x10\x05B\x14Z\x12generated/pb/tableb\x06proto3"
+	"\vkUseAbility\x10\x05B$\n" +
+	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (
 	file_ability_operator_proto_rawDescOnce sync.Once

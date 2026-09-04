@@ -8,4 +8,17 @@ message ItemComp
 	uint64 item_id = 1;
 	uint32 config_id = 2;
 	uint32 size = 3;
+
+	// 入包序号:同一个背包内单调递增,越小越早进包。
+	//
+	// 淘汰策略(临时格先进先出)按它排序。**不能用 item_id 代替** ——
+	// item_id 是 snowflake,看似时间有序,但两条路径会打乱它:
+	//   ① 跨服迁移带回来的实例,号是**源服 node** 铸的;
+	//   ② 邮件附件沿用调用方**预设的 guid**,可能比包里已有的都小。
+	// 两种情况下"先进先出"都会挤错人 —— 挤掉刚拿到的、留下最早的。
+	//
+	// 由 ItemStore 在实例入库时统一盖(见 item_store.h 的 nextAcquireSeq_),
+	// 跨服 / 快照随 ItemEntry.acquire_seq 原样带走,还原时恢复水位。
+	// 0 = 未盖章(旧存档),此时退回按 item_id 排序,与本字段落地前的行为一致。
+	uint64 acquire_seq = 4;
 }

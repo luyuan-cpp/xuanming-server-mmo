@@ -511,6 +511,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemEntry final : public ::google::
     kStackSizeFieldNumber = 3,
     kPosFieldNumber = 4,
     kBagTypeFieldNumber = 5,
+    kAcquireSeqFieldNumber = 13,
   };
   // uint64 item_uuid = 1;
   void clear_item_uuid() ;
@@ -562,11 +563,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemEntry final : public ::google::
   void _internal_set_bag_type(::uint32_t value);
 
   public:
+  // uint64 acquire_seq = 13;
+  void clear_acquire_seq() ;
+  [[nodiscard]] ::uint64_t acquire_seq() const;
+  void set_acquire_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_acquire_seq() const;
+  void _internal_set_acquire_seq(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ItemEntry)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -600,6 +611,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemEntry final : public ::google::
     ::uint32_t stack_size_;
     ::uint32_t pos_;
     ::uint32_t bag_type_;
+    ::uint64_t acquire_seq_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1333,6 +1345,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagAllData_DynamicBagData final : p
     kItemsFieldNumber = 3,
     kBagIdFieldNumber = 1,
     kCapacityFieldNumber = 2,
+    kProfileIdFieldNumber = 4,
   };
   // repeated .ItemEntry items = 3;
   [[nodiscard]] int items_size()
@@ -1375,11 +1388,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagAllData_DynamicBagData final : p
   void _internal_set_capacity(::uint32_t value);
 
   public:
+  // uint32 profile_id = 4;
+  void clear_profile_id() ;
+  [[nodiscard]] ::uint32_t profile_id() const;
+  void set_profile_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_profile_id() const;
+  void _internal_set_profile_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BagAllData.DynamicBagData)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1411,6 +1434,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BagAllData_DynamicBagData final : p
     ::google::protobuf::RepeatedPtrField< ::ItemEntry > items_;
     ::uint64_t bag_id_;
     ::uint32_t capacity_;
+    ::uint32_t profile_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2024,6 +2048,30 @@ inline void ItemEntry::_internal_set_bag_type(::uint32_t value) {
   _impl_.bag_type_ = value;
 }
 
+// uint64 acquire_seq = 13;
+inline void ItemEntry::clear_acquire_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.acquire_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t ItemEntry::acquire_seq() const {
+  // @@protoc_insertion_point(field_get:ItemEntry.acquire_seq)
+  return _internal_acquire_seq();
+}
+inline void ItemEntry::set_acquire_seq(::uint64_t value) {
+  _internal_set_acquire_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:ItemEntry.acquire_seq)
+}
+inline ::uint64_t ItemEntry::_internal_acquire_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.acquire_seq_;
+}
+inline void ItemEntry::_internal_set_acquire_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.acquire_seq_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // BagAllData_DynamicBagData
@@ -2129,6 +2177,30 @@ inline ::google::protobuf::RepeatedPtrField<::ItemEntry>* PROTOBUF_NONNULL
 BagAllData_DynamicBagData::_internal_mutable_items() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.items_;
+}
+
+// uint32 profile_id = 4;
+inline void BagAllData_DynamicBagData::clear_profile_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.profile_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t BagAllData_DynamicBagData::profile_id() const {
+  // @@protoc_insertion_point(field_get:BagAllData.DynamicBagData.profile_id)
+  return _internal_profile_id();
+}
+inline void BagAllData_DynamicBagData::set_profile_id(::uint32_t value) {
+  _internal_set_profile_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BagAllData.DynamicBagData.profile_id)
+}
+inline ::uint32_t BagAllData_DynamicBagData::_internal_profile_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.profile_id_;
+}
+inline void BagAllData_DynamicBagData::_internal_set_profile_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.profile_id_ = value;
 }
 
 // -------------------------------------------------------------------

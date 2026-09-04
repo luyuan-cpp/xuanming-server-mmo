@@ -3,9 +3,12 @@ syntax = "proto3";
 
 option go_package = "generated/pb/table";
 
+option java_package = "com.game.table";
+
+
 enum reward_error {
   kReward_errorOK = 0;
 
-  kRewardAlreadyClaimed = 128;
+  kRewardAlreadyClaimed = 12000;
 
 };

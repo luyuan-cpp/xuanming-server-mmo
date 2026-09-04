@@ -26,25 +26,25 @@ public class TestMultiKeyTableManager {
      */
     private static class Snapshot {
         final TestMultiKeyTableData data;
-        final Map<Integer, TestMultiKeyTable> kvData;
+        final Map<Integer, List<TestMultiKeyTable>> kvData;
 
-        final Map<String, TestMultiKeyTable> kvString_keyData;
+        final Map<String, TestMultiKeyTable> kvStringKeyData;
 
-        final Map<Integer, TestMultiKeyTable> kvUint32_keyData;
+        final Map<Integer, TestMultiKeyTable> kvUint32KeyData;
 
-        final Map<Integer, TestMultiKeyTable> kvInt32_keyData;
+        final Map<Integer, TestMultiKeyTable> kvInt32KeyData;
 
 
-        final Map<String, List<TestMultiKeyTable>> kvM_string_keyData;
+        final Map<String, List<TestMultiKeyTable>> kvMStringKeyData;
 
-        final Map<Integer, List<TestMultiKeyTable>> kvM_uint32_keyData;
+        final Map<Integer, List<TestMultiKeyTable>> kvMUint32KeyData;
 
-        final Map<Integer, List<TestMultiKeyTable>> kvM_int32_keyData;
+        final Map<Integer, List<TestMultiKeyTable>> kvMInt32KeyData;
 
 
         final Map<Integer, List<TestMultiKeyTable>> idxEffect;
 
-        final Map<Integer, List<TestMultiKeyTable>> idxTest_refs;
+        final Map<Integer, List<TestMultiKeyTable>> idxTestRefs;
 
 
         final Map<Integer, List<TestMultiKeyTable>> idxLevel;
@@ -53,27 +53,27 @@ public class TestMultiKeyTableManager {
 
 
         Snapshot(TestMultiKeyTableData data,
-                 Map<Integer, TestMultiKeyTable> kvData,
-                 Map<String, TestMultiKeyTable> kvString_keyData,
-                 Map<Integer, TestMultiKeyTable> kvUint32_keyData,
-                 Map<Integer, TestMultiKeyTable> kvInt32_keyData,
-                 Map<String, List<TestMultiKeyTable>> kvM_string_keyData,
-                 Map<Integer, List<TestMultiKeyTable>> kvM_uint32_keyData,
-                 Map<Integer, List<TestMultiKeyTable>> kvM_int32_keyData,
+                 Map<Integer, List<TestMultiKeyTable>> kvData,
+                 Map<String, TestMultiKeyTable> kvStringKeyData,
+                 Map<Integer, TestMultiKeyTable> kvUint32KeyData,
+                 Map<Integer, TestMultiKeyTable> kvInt32KeyData,
+                 Map<String, List<TestMultiKeyTable>> kvMStringKeyData,
+                 Map<Integer, List<TestMultiKeyTable>> kvMUint32KeyData,
+                 Map<Integer, List<TestMultiKeyTable>> kvMInt32KeyData,
                  Map<Integer, List<TestMultiKeyTable>> idxEffect,
-                 Map<Integer, List<TestMultiKeyTable>> idxTest_refs,
+                 Map<Integer, List<TestMultiKeyTable>> idxTestRefs,
                  Map<Integer, List<TestMultiKeyTable>> idxLevel,
                  Map<Integer, List<TestMultiKeyTable>> idxTestRef) {
             this.data = data;
             this.kvData = kvData;
-            this.kvString_keyData = kvString_keyData;
-            this.kvUint32_keyData = kvUint32_keyData;
-            this.kvInt32_keyData = kvInt32_keyData;
-            this.kvM_string_keyData = kvM_string_keyData;
-            this.kvM_uint32_keyData = kvM_uint32_keyData;
-            this.kvM_int32_keyData = kvM_int32_keyData;
+            this.kvStringKeyData = kvStringKeyData;
+            this.kvUint32KeyData = kvUint32KeyData;
+            this.kvInt32KeyData = kvInt32KeyData;
+            this.kvMStringKeyData = kvMStringKeyData;
+            this.kvMUint32KeyData = kvMUint32KeyData;
+            this.kvMInt32KeyData = kvMInt32KeyData;
             this.idxEffect = idxEffect;
-            this.idxTest_refs = idxTest_refs;
+            this.idxTestRefs = idxTestRefs;
             this.idxLevel = idxLevel;
             this.idxTestRef = idxTestRef;
         }
@@ -109,75 +109,81 @@ public class TestMultiKeyTableManager {
         }
         TestMultiKeyTableData data = builder.build();
 
-        Map<Integer, TestMultiKeyTable> kvData = new HashMap<>(data.getDataCount());
-        Map<String, TestMultiKeyTable> kvString_keyData = new HashMap<>(data.getDataCount());
-        Map<Integer, TestMultiKeyTable> kvUint32_keyData = new HashMap<>(data.getDataCount());
-        Map<Integer, TestMultiKeyTable> kvInt32_keyData = new HashMap<>(data.getDataCount());
-        Map<String, List<TestMultiKeyTable>> kvM_string_keyData = new HashMap<>();
-        Map<Integer, List<TestMultiKeyTable>> kvM_uint32_keyData = new HashMap<>();
-        Map<Integer, List<TestMultiKeyTable>> kvM_int32_keyData = new HashMap<>();
+        Map<Integer, List<TestMultiKeyTable>> kvData = new HashMap<>(data.getDataCount());
+        Map<String, TestMultiKeyTable> kvStringKeyData = new HashMap<>(data.getDataCount());
+        Map<Integer, TestMultiKeyTable> kvUint32KeyData = new HashMap<>(data.getDataCount());
+        Map<Integer, TestMultiKeyTable> kvInt32KeyData = new HashMap<>(data.getDataCount());
+        Map<String, List<TestMultiKeyTable>> kvMStringKeyData = new HashMap<>();
+        Map<Integer, List<TestMultiKeyTable>> kvMUint32KeyData = new HashMap<>();
+        Map<Integer, List<TestMultiKeyTable>> kvMInt32KeyData = new HashMap<>();
         Map<Integer, List<TestMultiKeyTable>> idxEffect = new HashMap<>();
-        Map<Integer, List<TestMultiKeyTable>> idxTest_refs = new HashMap<>();
+        Map<Integer, List<TestMultiKeyTable>> idxTestRefs = new HashMap<>();
         Map<Integer, List<TestMultiKeyTable>> idxLevel = new HashMap<>();
         Map<Integer, List<TestMultiKeyTable>> idxTestRef = new HashMap<>();
 
         for (TestMultiKeyTable row : data.getDataList()) {
-            kvData.put(row.getId(), row);
-            kvString_keyData.put(row.getStringKey(), row);
-            kvUint32_keyData.put(row.getUint32Key(), row);
-            kvInt32_keyData.put(row.getInt32Key(), row);
-            kvM_string_keyData.computeIfAbsent(row.getMStringKey(), k -> new ArrayList<>()).add(row);
-            kvM_uint32_keyData.computeIfAbsent(row.getMUint32Key(), k -> new ArrayList<>()).add(row);
-            kvM_int32_keyData.computeIfAbsent(row.getMInt32Key(), k -> new ArrayList<>()).add(row);
+            kvData.computeIfAbsent(row.getId(), k -> new ArrayList<>()).add(row);
+            kvStringKeyData.put(row.getStringKey(), row);
+            kvUint32KeyData.put(row.getUint32Key(), row);
+            kvInt32KeyData.put(row.getInt32Key(), row);
+            kvMStringKeyData.computeIfAbsent(row.getMStringKey(), k -> new ArrayList<>()).add(row);
+            kvMUint32KeyData.computeIfAbsent(row.getMUint32Key(), k -> new ArrayList<>()).add(row);
+            kvMInt32KeyData.computeIfAbsent(row.getMInt32Key(), k -> new ArrayList<>()).add(row);
             for (Integer elem : row.getEffectList()) {
                 idxEffect.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
             for (Integer elem : row.getTestRefsList()) {
-                idxTest_refs.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idxTestRefs.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
             idxLevel.computeIfAbsent(row.getLevel(), k -> new ArrayList<>()).add(row);
             idxTestRef.computeIfAbsent(row.getTestRef(), k -> new ArrayList<>()).add(row);
         }
 
-        this.snapshot = new Snapshot(data, kvData, kvString_keyData, kvUint32_keyData, kvInt32_keyData, kvM_string_keyData, kvM_uint32_keyData, kvM_int32_keyData, idxEffect, idxTest_refs, idxLevel, idxTestRef);
+        this.snapshot = new Snapshot(data, kvData, kvStringKeyData, kvUint32KeyData, kvInt32KeyData, kvMStringKeyData, kvMUint32KeyData, kvMInt32KeyData, idxEffect, idxTestRefs, idxLevel, idxTestRef);
     }
 
     public TestMultiKeyTableData findAll() {
         return snapshot.data;
     }
 
-    public TestMultiKeyTable findById(int id) {
-        return snapshot.kvData.get(id);
+    /**
+     * 返回该 id 命中的全部行。这张表的主键声明了 (cfg_multi)，单值语义不成立，
+     * 因此不提供 findById —— 把可重复主键当单值用会在编译期断，而不是悄悄只看第一行。
+     *
+     * <p>热更契约：返回的对象属于当前快照，只许当场用，调用方**只存 id**。
+     */
+    public List<TestMultiKeyTable> findAllById(int id) {
+        return snapshot.kvData.getOrDefault(id, Collections.emptyList());
     }
 
-    public Map<Integer, TestMultiKeyTable> getKvData() {
+    public Map<Integer, List<TestMultiKeyTable>> getKvData() {
         return Collections.unmodifiableMap(snapshot.kvData);
     }
 
 
-    public TestMultiKeyTable findByString_key(String key) {
-        return snapshot.kvString_keyData.get(key);
+    public TestMultiKeyTable findByStringKey(String key) {
+        return snapshot.kvStringKeyData.get(key);
     }
 
-    public TestMultiKeyTable findByUint32_key(int key) {
-        return snapshot.kvUint32_keyData.get(key);
+    public TestMultiKeyTable findByUint32Key(int key) {
+        return snapshot.kvUint32KeyData.get(key);
     }
 
-    public TestMultiKeyTable findByInt32_key(int key) {
-        return snapshot.kvInt32_keyData.get(key);
+    public TestMultiKeyTable findByInt32Key(int key) {
+        return snapshot.kvInt32KeyData.get(key);
     }
 
 
-    public List<TestMultiKeyTable> findByM_string_key(String key) {
-        return snapshot.kvM_string_keyData.getOrDefault(key, Collections.emptyList());
+    public List<TestMultiKeyTable> findByMStringKey(String key) {
+        return snapshot.kvMStringKeyData.getOrDefault(key, Collections.emptyList());
     }
 
-    public List<TestMultiKeyTable> findByM_uint32_key(int key) {
-        return snapshot.kvM_uint32_keyData.getOrDefault(key, Collections.emptyList());
+    public List<TestMultiKeyTable> findByMUint32Key(int key) {
+        return snapshot.kvMUint32KeyData.getOrDefault(key, Collections.emptyList());
     }
 
-    public List<TestMultiKeyTable> findByM_int32_key(int key) {
-        return snapshot.kvM_int32_keyData.getOrDefault(key, Collections.emptyList());
+    public List<TestMultiKeyTable> findByMInt32Key(int key) {
+        return snapshot.kvMInt32KeyData.getOrDefault(key, Collections.emptyList());
     }
 
 
@@ -186,8 +192,8 @@ public class TestMultiKeyTableManager {
         return snapshot.idxEffect.getOrDefault(key, Collections.emptyList());
     }
 
-    public List<TestMultiKeyTable> findByTest_refsIndex(int key) {
-        return snapshot.idxTest_refs.getOrDefault(key, Collections.emptyList());
+    public List<TestMultiKeyTable> findByTestRefsIndex(int key) {
+        return snapshot.idxTestRefs.getOrDefault(key, Collections.emptyList());
     }
 
 
@@ -212,36 +218,36 @@ public class TestMultiKeyTableManager {
     }
 
 
-    public boolean existsByString_key(String key) {
-        return snapshot.kvString_keyData.containsKey(key);
+    public boolean existsByStringKey(String key) {
+        return snapshot.kvStringKeyData.containsKey(key);
     }
 
-    public boolean existsByUint32_key(int key) {
-        return snapshot.kvUint32_keyData.containsKey(key);
+    public boolean existsByUint32Key(int key) {
+        return snapshot.kvUint32KeyData.containsKey(key);
     }
 
-    public boolean existsByInt32_key(int key) {
-        return snapshot.kvInt32_keyData.containsKey(key);
+    public boolean existsByInt32Key(int key) {
+        return snapshot.kvInt32KeyData.containsKey(key);
     }
 
 
     // ---- Count ----
 
     public int count() {
-        return snapshot.kvData.size();
+        return snapshot.data.getDataCount();
     }
 
 
-    public int countByM_string_key(String key) {
-        return snapshot.kvM_string_keyData.getOrDefault(key, Collections.emptyList()).size();
+    public int countByMStringKey(String key) {
+        return snapshot.kvMStringKeyData.getOrDefault(key, Collections.emptyList()).size();
     }
 
-    public int countByM_uint32_key(int key) {
-        return snapshot.kvM_uint32_keyData.getOrDefault(key, Collections.emptyList()).size();
+    public int countByMUint32Key(int key) {
+        return snapshot.kvMUint32KeyData.getOrDefault(key, Collections.emptyList()).size();
     }
 
-    public int countByM_int32_key(int key) {
-        return snapshot.kvM_int32_keyData.getOrDefault(key, Collections.emptyList()).size();
+    public int countByMInt32Key(int key) {
+        return snapshot.kvMInt32KeyData.getOrDefault(key, Collections.emptyList()).size();
     }
 
 
@@ -249,8 +255,8 @@ public class TestMultiKeyTableManager {
         return snapshot.idxEffect.getOrDefault(key, Collections.emptyList()).size();
     }
 
-    public int countByTest_refsIndex(int key) {
-        return snapshot.idxTest_refs.getOrDefault(key, Collections.emptyList()).size();
+    public int countByTestRefsIndex(int key) {
+        return snapshot.idxTestRefs.getOrDefault(key, Collections.emptyList()).size();
     }
 
 
@@ -269,8 +275,7 @@ public class TestMultiKeyTableManager {
         Snapshot snap = this.snapshot;
         List<TestMultiKeyTable> result = new ArrayList<>(ids.size());
         for (int id : ids) {
-            TestMultiKeyTable row = snap.kvData.get(id);
-            if (row != null) { result.add(row); }
+            result.addAll(snap.kvData.getOrDefault(id, Collections.emptyList()));
         }
         return result;
     }

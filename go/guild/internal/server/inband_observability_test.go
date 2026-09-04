@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -54,8 +55,8 @@ func counterValue(t *testing.T, name string, labels map[string]string) float64 {
 // 业务拒绝,都会被打成 rpc_inband_fault_total 并刷一条 Error 日志。
 // 那正是撞车的实际代价:监控与告警读到的语义是错的。
 //
-// 修复后 ErrGuildFull 落在 200-219 私有段,由 constants.TipClassifier() 判成
-// biz_reject:fault 计数不动,reject 计数 +1。
+// 修复后 ErrGuildFull 由 Tip.xlsx 发到 guild 段,全局段表认领其域；
+// constants.TipClassifier() 只补充公会域的故障属性。
 func TestInbandInterceptorClassifiesGuildRejection(t *testing.T) {
 	const method = "GuildService/JoinGuild"
 	faultLabels := map[string]string{"method": method, "source": "tip_info"}
@@ -107,7 +108,7 @@ func TestInbandInterceptorClassifiesGuildFault(t *testing.T) {
 	faultLabels := map[string]string{
 		"method": method,
 		"source": "tip_info",
-		"code":   "208", // constants.ErrIDGenUnavailable
+		"code":   strconv.FormatUint(uint64(constants.ErrIDGenUnavailable), 10),
 	}
 	beforeFault := counterValue(t, "rpc_inband_fault_total", faultLabels)
 
@@ -128,6 +129,7 @@ func TestInbandInterceptorClassifiesGuildFault(t *testing.T) {
 	}
 
 	if got := counterValue(t, "rpc_inband_fault_total", faultLabels); got != beforeFault+1 {
-		t.Errorf("ErrIDGenUnavailable 应计入 rpc_inband_fault_total{code=208}:%v -> %v", beforeFault, got)
+		t.Errorf("ErrIDGenUnavailable 应计入 rpc_inband_fault_total{code=%s}:%v -> %v",
+			faultLabels["code"], beforeFault, got)
 	}
 }

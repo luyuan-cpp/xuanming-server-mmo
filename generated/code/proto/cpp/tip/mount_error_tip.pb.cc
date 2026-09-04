@@ -35,15 +35,16 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_mount_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025mount_error_tip.proto*7\n\013mount_error\022\022"
-    "\n\016kMount_errorOK\020\000\022\024\n\020kMountNotMounted\020\177"
-    "B\024Z\022generated/pb/tableb\006proto3"
+    "\n\025mount_error_tip.proto*8\n\013mount_error\022\022"
+    "\n\016kMount_errorOK\020\000\022\025\n\020kMountNotMounted\020\370"
+    "UB$\n\016com.game.tableZ\022generated/pb/tableb"
+    "\006proto3"
 };
 static ::absl::once_flag descriptor_table_mount_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_mount_5ferror_5ftip_2eproto = {
     false,
     false,
-    110,
+    127,
     descriptor_table_protodef_mount_5ferror_5ftip_2eproto,
     "mount_error_tip.proto",
     &descriptor_table_mount_5ferror_5ftip_2eproto_once,
@@ -62,7 +63,7 @@ mount_error_descriptor() {
   return file_level_enum_descriptors_mount_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t mount_error_internal_data_[] = {
-    65536u, 65536u, 127u, };
+    65536u, 65536u, 11000u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

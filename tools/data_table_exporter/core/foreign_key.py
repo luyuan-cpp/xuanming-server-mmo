@@ -78,6 +78,28 @@ def validate_foreign_keys(tables: list[TableSchema], cfg: ExporterConfig) -> For
                 report.errors.append(f"{label}:目标列 '{target_column}' 不存在")
                 continue
 
+            # 外键必须解析到**唯一一行**。目标表主键可重复时,「XX.id = 5」指的是哪一行
+            # 没有答案 —— 生成的 FK 助手也拿不到 FindById(那种表不生成它)。
+            # 外键列的类型必须与目标键列一致。C++/Go/Java 里 int32 与 uint32 映射到同一个
+            # 整型所以静默放行,而 C# 跟着 protoc 走(int vs uint),类型不一致会直接编译不过。
+            # 这本来就是策划填错类型,不该由某一门语言去替大家发现。
+            tgt_cols = {c.name: c for c in table_map[target_table].columns}
+            src_col = next((c for c in table.columns if c.name == col_name), None)
+            tgt_col = tgt_cols.get(target_column)
+            if src_col is not None and tgt_col is not None and src_col.data_type != tgt_col.data_type:
+                report.errors.append(
+                    f"{label}:类型不一致 —— 本列是 {src_col.data_type},"
+                    f"{target_table}.{target_column} 是 {tgt_col.data_type}。"
+                    f"外键两端类型必须相同(C# 会因此编译不过,其余语言只是静默通过)。")
+                continue
+
+            if target_column == "id" and table_map[target_table].multi_primary_key:
+                report.errors.append(
+                    f"{label}:目标表 {target_table} 的主键声明了 (cfg_multi)(id 可重复),"
+                    f"不能被外键引用 —— 外键要求唯一解析。"
+                    f"要么去掉那边的 (cfg_multi),要么把这个引用指向该表的某个唯一键列。")
+                continue
+
             keys = _target_keys(table_map[target_table], target_column, cfg, rows_cache, key_cache)
             if not keys:
                 report.warnings.append(f"{label}:目标表没有可校验的取值(空表?),跳过数据层校验")

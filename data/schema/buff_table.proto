@@ -1,0 +1,100 @@
+syntax = "proto3";
+
+// Buff 表的权威 schema。源表 data/Buff.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号是从 generated/code/proto/buff_table.proto 抄来的现状值,**只增不改、删字段用 reserved**。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message BuffTable {
+  option (cfg_sheet)       = "Buff";
+  option (cfg_source_file) = "Buff.xlsx";
+  option (cfg_primary_key) = "id";
+
+  uint32 id = 1;
+  int32 designer = 9001 [(cfg_owner) = "designer"];
+  // 强制没有施法者
+  uint32 no_caster = 2;
+  // #pragma once
+  //
+  // enum eBuffType {
+  //     // 控制类 Buff
+  //     kBuffTypeMovementSpeedReduction = 0,           // 移动速度减速
+  //     kBuffTypeAttackSpeedSlow = 1,                  // 攻击速度减速
+  //     kBuffTypeCastSpeedSlow = 2,                    // 技能施放速度减速
+  //     kBuffTypeGlobalSlow = 3,                       // 全局减速（移动、攻击、施法等都减速）
+  //
+  //     // 属性增强类 Buff
+  //     kBuffTypeIncreaseAttack = 10,                  // 增加攻击力
+  //     kBuffTypeIncreaseDefense = 11,                 // 增加防御力
+  //     kBuffTypeIncreaseHealth = 12,                  // 增加最大生命值
+  //     kBuffTypeMovementSpeedBoost = 13,              // 提高移动速度
+  //     kBuffTypeIncreaseCriticalChance = 14,          // 提高暴击率
+  //
+  //     // 防御类 Buff
+  //     kBuffTypeDamageReduction = 20,                 // 减少受到的伤害
+  //     kBuffTypeShield = 21,                          // 获得护盾（吸收伤害）
+  //
+  //     // 特殊类 Buff
+  //     kBuffTypeStun = 30,                            // 晕眩，无法行动
+  //     kBuffTypeSilence = 31,                         // 沉默，无法施放技能
+  //     kBuffTypeInvincibility = 32,                   // 无敌，免疫所有伤害
+  //     kBuffTypeStealth = 33,                         // 隐身，无法被敌人发现
+  //     kBuffTypeImmunity = 34,                        // 免疫buff
+  //     kBuffTypeDispel = 35,                          // 驱散，移除buff或debuff
+  //     kBuffTypeNextBasicAttack = 36,                 // 下一次普攻，造成额外效果
+  //
+  //     // 持续恢复类 Buff
+  //     kBuffTypeHealthRegeneration = 40,              // 持续恢复生命值
+  //     kBuffTypeManaRegeneration = 41,                // 持续恢复法力值
+  //     kBuffTypeHealthRegenerationBasedOnLostHealth = 42, // 根据已损失生命值的每秒回复
+  //     kBuffTypeNoDamageOrSkillHitInLastSeconds = 43, // 若在过去s秒内，没有受到伤害或被技能命中
+  //
+  //     // Debuff 类
+  //     kBuffTypePoison = 50,                          // 中毒，持续扣除生命值
+  //     kBuffTypeBurn = 51,                            // 燃烧，持续受到火焰伤害
+  //     kBuffTypeFreeze = 52,                          // 冰冻，无法行动
+  // };
+  uint32 buff_type = 3 [(cfg_multi) = true];
+  // Slow:减速
+  map<string, bool> tag = 4 [(cfg_slots) = 3, (cfg_shape) = CFG_SHAPE_SET];
+  // 免疫tag
+  map<string, bool> immune_tag = 5 [(cfg_slots) = 3, (cfg_shape) = CFG_SHAPE_SET];
+  // 驱散tag
+  map<string, bool> dispel_tag = 6 [(cfg_slots) = 3, (cfg_shape) = CFG_SHAPE_SET];
+  // 等级
+  uint32 level = 7;
+  // 最大层数
+  uint32 max_layer = 8;
+  // 无限时长
+  uint32 infinite_duration = 9;
+  // 持续时间
+  double duration = 10;
+  // 强制打断
+  uint32 force_interrupt = 11;
+  // 间隔时间
+  double interval = 12;
+  // 间隔时间
+  uint32 interval_count = 13;
+  // 间隔时间
+  repeated double interval_effect = 14 [(cfg_slots) = 2];
+  // 移动速度加成
+  double movement_speed_boost = 15;
+  // 移速降低
+  double movement_speed_reduction = 16;
+  // 持续恢复公式
+  string health_regeneration = 17 [(cfg_expr_type) = "double", (cfg_expr_param) = "level", (cfg_expr_param) = "health"];
+  // 子buff
+  repeated uint32 sub_buff = 18 [(cfg_slots) = 2];
+  // 子buff
+  repeated uint32 target_sub_buff = 19 [(cfg_slots) = 2];
+  // 若在过去s能命中
+  double combat_idle_seconds = 20;
+  // 生效次数
+  uint32 time = 21;
+  // 额外物理伤害
+  string bonus_damage = 22 [(cfg_expr_type) = "double"];
+}

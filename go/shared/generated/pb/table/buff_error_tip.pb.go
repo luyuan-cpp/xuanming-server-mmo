@@ -25,21 +25,21 @@ type BuffError int32
 
 const (
 	BuffError_kBuff_errorOK           BuffError = 0
-	BuffError_kBuffMaxBuffStack       BuffError = 123
-	BuffError_kBuffTargetImmuneToBuff BuffError = 124
+	BuffError_kBuffMaxBuffStack       BuffError = 8000
+	BuffError_kBuffTargetImmuneToBuff BuffError = 8001
 )
 
 // Enum value maps for BuffError.
 var (
 	BuffError_name = map[int32]string{
-		0:   "kBuff_errorOK",
-		123: "kBuffMaxBuffStack",
-		124: "kBuffTargetImmuneToBuff",
+		0:    "kBuff_errorOK",
+		8000: "kBuffMaxBuffStack",
+		8001: "kBuffTargetImmuneToBuff",
 	}
 	BuffError_value = map[string]int32{
 		"kBuff_errorOK":           0,
-		"kBuffMaxBuffStack":       123,
-		"kBuffTargetImmuneToBuff": 124,
+		"kBuffMaxBuffStack":       8000,
+		"kBuffTargetImmuneToBuff": 8001,
 	}
 )
 
@@ -74,12 +74,13 @@ var File_buff_error_tip_proto protoreflect.FileDescriptor
 
 const file_buff_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x14buff_error_tip.proto*S\n" +
+	"\x14buff_error_tip.proto*U\n" +
 	"\n" +
 	"buff_error\x12\x11\n" +
-	"\rkBuff_errorOK\x10\x00\x12\x15\n" +
-	"\x11kBuffMaxBuffStack\x10{\x12\x1b\n" +
-	"\x17kBuffTargetImmuneToBuff\x10|B\x14Z\x12generated/pb/tableb\x06proto3"
+	"\rkBuff_errorOK\x10\x00\x12\x16\n" +
+	"\x11kBuffMaxBuffStack\x10\xc0>\x12\x1c\n" +
+	"\x17kBuffTargetImmuneToBuff\x10\xc1>B$\n" +
+	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (
 	file_buff_error_tip_proto_rawDescOnce sync.Once

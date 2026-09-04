@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19tip/skill_error_tip.proto*\x83\x02\n\x0bskill_error\x12\x12\n\x0ekSkill_errorOK\x10\x00\x12\x19\n\x15kSkillUnInterruptible\x10t\x12\x19\n\x15kSkillInvalidTargetId\x10u\x12\x17\n\x13kSkillInvalidTarget\x10v\x12\x1a\n\x16kSkillCooldownNotReady\x10w\x12$\n kSkillCannotBeCastInCurrentState\x10x\x12(\n$kSkillCannotBeCastSilenceRestriction\x10y\x12%\n!kSkillCannotBeCastStunRestriction\x10zB\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19tip/skill_error_tip.proto*\x8a\x02\n\x0bskill_error\x12\x12\n\x0ekSkill_errorOK\x10\x00\x12\x1a\n\x15kSkillUnInterruptible\x10\xd8\x36\x12\x1a\n\x15kSkillInvalidTargetId\x10\xd9\x36\x12\x18\n\x13kSkillInvalidTarget\x10\xda\x36\x12\x1b\n\x16kSkillCooldownNotReady\x10\xdb\x36\x12%\n kSkillCannotBeCastInCurrentState\x10\xdc\x36\x12)\n$kSkillCannotBeCastSilenceRestriction\x10\xdd\x36\x12&\n!kSkillCannotBeCastStunRestriction\x10\xde\x36\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tip.skill_error_tip_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_SKILL_ERROR']._serialized_start=30
-  _globals['_SKILL_ERROR']._serialized_end=289
+  _globals['_SKILL_ERROR']._serialized_end=296
 # @@protoc_insertion_point(module_scope)

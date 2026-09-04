@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19tip/scene_error_tip.proto*\xfd\x05\n\x0bscene_error\x12\x12\n\x0ekScene_errorOK\x10\x00\x12\x17\n\x13kEnterSceneNotFound\x10\x34\x12\x16\n\x12kEnterSceneNotFull\x10\x35\x12\x17\n\x13kEnterSceneMainFull\x10\x36\x12\x19\n\x15kEnterNodeUnavailable\x10\x37\x12\x19\n\x15kEnterSceneServerType\x10\x38\x12\x19\n\x15kEnterSceneParamError\x10\x39\x12\x18\n\x14kEnterSceneSceneFull\x10:\x12\x1c\n\x18kEnterSceneSceneNotFound\x10;\x12 \n\x1ckEnterSceneYouInCurrentScene\x10<\x12\"\n\x1ekEnterSceneEnterCrossRoomScene\x10=\x12\x19\n\x15kEnterSceneGsInfoNull\x10>\x12\x15\n\x11kEnterSceneGsFull\x10?\x12\x1e\n\x1akEnterSceneYourSceneIsNull\x10@\x12!\n\x1dkEnterSceneChangeSceneOffLine\x10\x41\x12\x1c\n\x18kEnterSceneChangingScene\x10\x42\x12\x19\n\x15kEnterSceneChangingGs\x10\x43\x12#\n\x1fkChangeScenePlayerQueueNotFound\x10\x44\x12\x1f\n\x1bkChangeScenePlayerQueueFull\x10\x45\x12*\n&kChangeScenePlayerQueueComponentGsNull\x10\x46\x12)\n%kChangeScenePlayerQueueComponentEmpty\x10G\x12 \n\x1ckChangeSceneEnQueueNotSameGs\x10H\x12 \n\x1ckInvalidEnterSceneParameters\x10I\x12\x1b\n\x17kCheckEnterSceneCreator\x10J\x12\x15\n\x11kEnterSceneFailed\x10KB\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19tip/scene_error_tip.proto*\x95\x06\n\x0bscene_error\x12\x12\n\x0ekScene_errorOK\x10\x00\x12\x18\n\x13kEnterSceneNotFound\x10\xb8\x17\x12\x17\n\x12kEnterSceneNotFull\x10\xb9\x17\x12\x18\n\x13kEnterSceneMainFull\x10\xba\x17\x12\x1a\n\x15kEnterNodeUnavailable\x10\xbb\x17\x12\x1a\n\x15kEnterSceneServerType\x10\xbc\x17\x12\x1a\n\x15kEnterSceneParamError\x10\xbd\x17\x12\x19\n\x14kEnterSceneSceneFull\x10\xbe\x17\x12\x1d\n\x18kEnterSceneSceneNotFound\x10\xbf\x17\x12!\n\x1ckEnterSceneYouInCurrentScene\x10\xc0\x17\x12#\n\x1ekEnterSceneEnterCrossRoomScene\x10\xc1\x17\x12\x1a\n\x15kEnterSceneGsInfoNull\x10\xc2\x17\x12\x16\n\x11kEnterSceneGsFull\x10\xc3\x17\x12\x1f\n\x1akEnterSceneYourSceneIsNull\x10\xc4\x17\x12\"\n\x1dkEnterSceneChangeSceneOffLine\x10\xc5\x17\x12\x1d\n\x18kEnterSceneChangingScene\x10\xc6\x17\x12\x1a\n\x15kEnterSceneChangingGs\x10\xc7\x17\x12$\n\x1fkChangeScenePlayerQueueNotFound\x10\xc8\x17\x12 \n\x1bkChangeScenePlayerQueueFull\x10\xc9\x17\x12+\n&kChangeScenePlayerQueueComponentGsNull\x10\xca\x17\x12*\n%kChangeScenePlayerQueueComponentEmpty\x10\xcb\x17\x12!\n\x1ckChangeSceneEnQueueNotSameGs\x10\xcc\x17\x12!\n\x1ckInvalidEnterSceneParameters\x10\xcd\x17\x12\x1c\n\x17kCheckEnterSceneCreator\x10\xce\x17\x12\x16\n\x11kEnterSceneFailed\x10\xcf\x17\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tip.scene_error_tip_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_SCENE_ERROR']._serialized_start=30
-  _globals['_SCENE_ERROR']._serialized_end=795
+  _globals['_SCENE_ERROR']._serialized_end=819
 # @@protoc_insertion_point(module_scope)

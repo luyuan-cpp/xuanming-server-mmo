@@ -7,6 +7,7 @@
 #include "table/code/equipslot_table.h"
 #include "modules/bag/bag_system.h"
 #include "modules/bag/bag_service.h"
+#include "modules/bag/bag_profile_registry.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/gain_block/gain_block_service.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -2137,6 +2138,234 @@ TEST(BagRestoreTest, CapacityNeverShrinksBelowOccupiedSlots)
     EXPECT_EQ(3u, bag.Capacity());
     bag.SetCapacityForRestore(5);
     EXPECT_EQ(5u, bag.Capacity());
+}
+
+// ---------------------------------------------------------------------------
+// 入包序号(ItemComp.acquire_seq)—— 淘汰排序的真实依据
+//
+// 2026-09-01 首版按 guid 排序,当天就记为"已知近似";2026-09-02 补上真序号。
+// 见 docs/design/bag-rule-policy-layering.md §6.2。
+// ---------------------------------------------------------------------------
+
+// 入库口统一盖章:序号非零、同包内单调。
+TEST(AcquireSeqTest, InsertStampsMonotonicSequence)
+{
+    Bag bag;
+    const Guid a = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
+    const Guid b = AddItemAndGetLastWritten(bag, MakeItem(kNonStack2));
+
+    ASSERT_NE(nullptr, bag.GetItemCompByGuid(a));
+    ASSERT_NE(nullptr, bag.GetItemCompByGuid(b));
+    EXPECT_NE(0u, bag.GetItemCompByGuid(a)->acquire_seq()) << "0 是「没盖章」的哨兵";
+    EXPECT_LT(bag.GetItemCompByGuid(a)->acquire_seq(), bag.GetItemCompByGuid(b)->acquire_seq())
+        << "后进包的序号必须更大";
+}
+
+// **本轮的核心回归:先进先出必须看序号,不能看 guid。**
+//
+// 构造的正是生产里真实存在的两条打乱路径:跨服迁移带回来的实例(号是源服 node
+// 铸的)、邮件附件沿用调用方预设的 guid。这里让**更早进包的那件拿到更大的 guid**——
+// 按 guid 排会挤错人:留下最早的、挤掉刚拿到的。
+TEST(AcquireSeqTest, FifoFollowsSequenceNotGuid)
+{
+    Bag bag;
+    bag.SetProfile(BagProfile::Temporary(2));
+
+    // guid 大 / 序号小 = 最早进包(跨服带回来的那件)
+    bag.InsertItemForRestore(/*guid=*/900002, kNonStack1, 1, 0, /*acquireSeq=*/1);
+    // guid 小 / 序号大 = 后进包(本服邮件附件预设的号)
+    bag.InsertItemForRestore(/*guid=*/900001, kNonStack2, 1, 1, /*acquireSeq=*/2);
+    ASSERT_TRUE(bag.IsFull());
+
+    std::vector<DestroyedInstance> evicted;
+    ASSERT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1), nullptr, &evicted));
+
+    ASSERT_EQ(1u, evicted.size());
+    EXPECT_EQ(900002u, evicted.front().guid)
+        << "该挤掉序号最小的那件;挤掉 900001 说明还在按 guid 排";
+    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(900002));
+    EXPECT_NE(nullptr, bag.GetItemCompByGuid(900001));
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// 还原保留快照里的序号,并把水位抬到它之上 —— 否则还原后新进的物品会拿到
+// 与存量重复的序号,先进先出就退化成随机。
+TEST(AcquireSeqTest, RestorePreservesSeqAndRaisesWatermark)
+{
+    Bag bag;
+    bag.SetCapacityForRestore(4);
+    bag.InsertItemForRestore(910001, kNonStack1, 1, 0, /*acquireSeq=*/70);
+    bag.InsertItemForRestore(910002, kNonStack2, 1, 1, /*acquireSeq=*/50);
+
+    ASSERT_NE(nullptr, bag.GetItemCompByGuid(910001));
+    EXPECT_EQ(70u, bag.GetItemCompByGuid(910001)->acquire_seq()) << "快照里的章原样保留";
+    EXPECT_EQ(50u, bag.GetItemCompByGuid(910002)->acquire_seq());
+
+    const Guid fresh = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
+    EXPECT_GT(bag.GetItemCompByGuid(fresh)->acquire_seq(), 70u)
+        << "水位必须抬到存量之上,新物品不能与存量撞号";
+}
+
+// 旧存档(没有 acquire_seq 字段,全是 0)按重放顺序补盖 —— 至少还原出一个
+// 自洽的先后,好过拿 guid 猜。
+TEST(AcquireSeqTest, LegacySnapshotWithoutSeqGetsStampedInReplayOrder)
+{
+    Bag bag;
+    bag.SetCapacityForRestore(3);
+    bag.InsertItemForRestore(920002, kNonStack1, 1, 0); // 不传 seq = 旧存档
+    bag.InsertItemForRestore(920001, kNonStack2, 1, 1);
+
+    const auto *first = bag.GetItemCompByGuid(920002);
+    const auto *second = bag.GetItemCompByGuid(920001);
+    ASSERT_NE(nullptr, first);
+    ASSERT_NE(nullptr, second);
+    EXPECT_NE(0u, first->acquire_seq()) << "补盖之后不能还留着 0";
+    EXPECT_LT(first->acquire_seq(), second->acquire_seq()) << "按重放顺序,与 guid 无关";
+}
+
+// ---------------------------------------------------------------------------
+// 节日 / 活动包:只收名单上的道具 + profile 注册与持久化
+// ---------------------------------------------------------------------------
+
+constexpr uint32_t kFestivalProfileId = 8801;
+
+TEST(FestivalBagTest, OnlyAcceptsListedConfigs)
+{
+    Bag bag;
+    bag.SetProfile(BagProfile::Festival(10, {kNonStack1, kStack10}));
+
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, 1)));
+    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kNonStack2)))
+        << "不在名单上的道具不该进节日包";
+    EXPECT_EQ(2u, bag.OccupiedGridCount());
+
+    // 预检与批量路径同样要拒。
+    ItemCountMap batch;
+    batch[kNonStack2] = 1;
+    EXPECT_EQ(kBagAddItemInvalidParam, bag.CheckSpaceFor(batch));
+    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItems(batch));
+    EXPECT_EQ(2u, bag.OccupiedGridCount());
+}
+
+// 节日包满了**拒绝**而不是挤掉旧的:活动道具通常是限量凭证,先进先出在这里
+// 是丢失不是缓冲。
+TEST(FestivalBagTest, FullFestivalBagRefusesInsteadOfEvicting)
+{
+    Bag bag;
+    bag.SetProfile(BagProfile::Festival(1, {kNonStack1}));
+    const Guid kept = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
+
+    std::vector<DestroyedInstance> evicted;
+    EXPECT_NE(kSuccess, bag.AddItem(MakeItem(kNonStack1), nullptr, &evicted));
+    EXPECT_TRUE(evicted.empty());
+    EXPECT_NE(nullptr, bag.GetItemCompByGuid(kept));
+}
+
+TEST(BagProfileRegistryTest, RegisteredProfileIsRebuiltById)
+{
+    auto &reg = BagProfileRegistry::Instance();
+    reg.ClearForTest();
+    reg.Register(kFestivalProfileId, [](std::size_t capacity) {
+        return BagProfile::Festival(capacity, {kNonStack1});
+    });
+    ASSERT_TRUE(reg.Contains(kFestivalProfileId));
+
+    Bag bag;
+    bag.SetProfile(reg.Make(kFestivalProfileId, 5));
+
+    EXPECT_EQ(kFestivalProfileId, bag.ProfileId()) << "id 要跟着包走,存盘靠它";
+    EXPECT_EQ(5u, bag.Capacity());
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
+    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kNonStack2)));
+    reg.ClearForTest();
+}
+
+// 注册表查不到时 **fail-open**:退化成自由格,但保留 id ——
+// 活动下线 / profile 还没注册 / 脏数据,都不能因此让玩家的东西没地方放。
+// 保留 id 才能让活动重新上线后这个包自己变回去。
+TEST(BagProfileRegistryTest, UnknownProfileFallsBackButKeepsTheId)
+{
+    auto &reg = BagProfileRegistry::Instance();
+    reg.ClearForTest();
+
+    Bag bag;
+    bag.SetProfile(reg.Make(kFestivalProfileId, 4));
+
+    EXPECT_EQ(kFestivalProfileId, bag.ProfileId()) << "id 不能被抹掉,否则活动回来也变不回去";
+    EXPECT_EQ(4u, bag.Capacity());
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack2))) << "退化成什么都收,绝不丢东西";
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+TEST(BagProfileRegistryTest, ProfileIdZeroIsTheUnspecifiedSentinel)
+{
+    auto &reg = BagProfileRegistry::Instance();
+    reg.ClearForTest();
+    reg.Register(kBagProfileUnspecified, [](std::size_t c) { return BagProfile::Flat(c); });
+    EXPECT_FALSE(reg.Contains(kBagProfileUnspecified)) << "0 是哨兵,不许注册";
+
+    Bag bag;
+    bag.SetProfile(reg.Make(kBagProfileUnspecified, 3));
+    EXPECT_EQ(kBagProfileUnspecified, bag.ProfileId());
+    EXPECT_EQ(3u, bag.Capacity());
+}
+
+// 四个固定包不经注册表 —— BagType 就是它们的身份。
+TEST(BagProfileRegistryTest, FixedBagsCarryNoProfileId)
+{
+    PlayerBagsComp comp;
+    for (uint32_t bagType = 0; bagType < static_cast<uint32_t>(kBagTypeCount); ++bagType)
+    {
+        EXPECT_EQ(kBagProfileUnspecified, comp.bags[bagType].ProfileId()) << "bag_type=" << bagType;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 编排层:被挤掉的实例必须经 BagService 落 LogItemDestroy
+//
+// 此前这条改动零用例守着 —— 把 LogEvictedInstances 的调用全删掉,bag_test 仍全绿。
+// ---------------------------------------------------------------------------
+
+// 判据:**满了的临时格经 BagService 仍能入包**。
+// 这一条能区分编排层走的是 ReserveForBatchAdd(会腾位)还是纯预测的 CheckSpaceFor
+// —— 后者会抢在淘汰之前把整批拒掉,先进先出在编排层就永远不生效。
+TEST(BagServiceEvictionTest, ServiceLevelAddEvictsOnAFullTemporaryBag)
+{
+    PlayerItemBlockList blockList;
+    Bag bag;
+    bag.SetProfile(BagProfile::Temporary(2));
+    const Guid oldest = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
+    const Guid newer = AddItemAndGetLastWritten(bag, MakeItem(kNonStack2));
+    ASSERT_TRUE(bag.IsFull());
+
+    // 单件路径。
+    EXPECT_EQ(kSuccess, BagService::AddItem(entt::null, bag, blockList, MakeItem(kNonStack1)));
+    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(oldest)) << "最早那件被挤掉";
+    EXPECT_NE(nullptr, bag.GetItemCompByGuid(newer));
+    EXPECT_EQ(2u, bag.OccupiedGridCount());
+
+    // 批量路径(ItemCountMap):这条最能说明问题 —— 走 CheckSpaceFor 的话必然失败。
+    ItemCountMap batch;
+    batch[kNonStack2] = 1;
+    EXPECT_EQ(kSuccess, BagService::AddItems(entt::null, bag, blockList, batch))
+        << "编排层必须走 ReserveForBatchAdd,否则临时格的先进先出在批量路径上失效";
+    EXPECT_EQ(nullptr, bag.GetItemCompByGuid(newer)) << "轮到它了";
+    EXPECT_EQ(2u, bag.OccupiedGridCount());
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+// 其余三个包在编排层同样不淘汰 —— 满了就拒。
+TEST(BagServiceEvictionTest, ServiceLevelAddNeverEvictsOnNonEvictingBags)
+{
+    PlayerItemBlockList blockList;
+    Bag bag; // 默认 Flat + RejectWhenFull
+    bag.SetProfile(BagProfile::Flat(1));
+    const Guid kept = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1));
+
+    EXPECT_NE(kSuccess, BagService::AddItem(entt::null, bag, blockList, MakeItem(kNonStack2)));
+    EXPECT_NE(nullptr, bag.GetItemCompByGuid(kept));
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
 }
 
 TEST(CompactPolicyTest, MergeOnlyMergesWithoutTouchingPositions)

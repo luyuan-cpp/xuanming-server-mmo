@@ -544,7 +544,7 @@ void BattleRoomManager::HandleSetAutoBattle(const ::SessionDetails &sessionDetai
     const bool wasAllReady = room->engine.AllPlayersReady();
 
     // 未死/未逃等状态校验在引擎内。注意引擎契约是"0 = 成功、非 0 = tip 错误码"
-    // (turn_battle_engine.h SetActorAuto 注释),与 tip 枚举的 kSuccess=1 不是一回事,
+    // (turn_battle_engine.h SetActorAuto 注释),与 tip 枚举的 kSuccess 不是一回事,
     // 不能拿 kSuccess 比较。
     const uint32_t result = room->engine.SetActorAuto(playerId, request.enabled());
     if (result != 0)

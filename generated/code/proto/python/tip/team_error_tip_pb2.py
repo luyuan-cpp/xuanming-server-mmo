@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18tip/team_error_tip.proto*\xd7\x03\n\nteam_error\x12\x11\n\rkTeam_errorOK\x10\x00\x12\x18\n\x14kTeamNotInApplicants\x10L\x12\x11\n\rkTeamPlayerId\x10M\x12\x14\n\x10kTeamMembersFull\x10N\x12\x15\n\x11kTeamMemberInTeam\x10O\x12\x18\n\x14kTeamMemberNotInTeam\x10P\x12\x11\n\rkTeamKickSelf\x10Q\x12\x16\n\x12kTeamKickNotLeader\x10R\x12\x14\n\x10kTeamAppointSelf\x10S\x12\x1f\n\x1bkTeamAppointLeaderNotLeader\x10T\x12\r\n\tkTeamFull\x10U\x12\x18\n\x14kTeamInApplicantList\x10V\x12\x1b\n\x17kTeamNotInApplicantList\x10W\x12\x14\n\x10kTeamListMaxSize\x10X\x12\x15\n\x11kTeamHasNotTeamId\x10Y\x12\x19\n\x15kTeamDismissNotLeader\x10Z\x12\x17\n\x13kTeamMemberListFull\x10[\x12 \n\x1ckTeamCreateTeamMaxMemberSize\x10\\\x12\x17\n\x13kTeamPlayerNotFound\x10]B\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18tip/team_error_tip.proto*\xe9\x03\n\nteam_error\x12\x11\n\rkTeam_errorOK\x10\x00\x12\x19\n\x14kTeamNotInApplicants\x10\xa0\x1f\x12\x12\n\rkTeamPlayerId\x10\xa1\x1f\x12\x15\n\x10kTeamMembersFull\x10\xa2\x1f\x12\x16\n\x11kTeamMemberInTeam\x10\xa3\x1f\x12\x19\n\x14kTeamMemberNotInTeam\x10\xa4\x1f\x12\x12\n\rkTeamKickSelf\x10\xa5\x1f\x12\x17\n\x12kTeamKickNotLeader\x10\xa6\x1f\x12\x15\n\x10kTeamAppointSelf\x10\xa7\x1f\x12 \n\x1bkTeamAppointLeaderNotLeader\x10\xa8\x1f\x12\x0e\n\tkTeamFull\x10\xa9\x1f\x12\x19\n\x14kTeamInApplicantList\x10\xaa\x1f\x12\x1c\n\x17kTeamNotInApplicantList\x10\xab\x1f\x12\x15\n\x10kTeamListMaxSize\x10\xac\x1f\x12\x16\n\x11kTeamHasNotTeamId\x10\xad\x1f\x12\x1a\n\x15kTeamDismissNotLeader\x10\xae\x1f\x12\x18\n\x13kTeamMemberListFull\x10\xaf\x1f\x12!\n\x1ckTeamCreateTeamMaxMemberSize\x10\xb0\x1f\x12\x18\n\x13kTeamPlayerNotFound\x10\xb1\x1f\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tip.team_error_tip_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_TEAM_ERROR']._serialized_start=29
-  _globals['_TEAM_ERROR']._serialized_end=500
+  _globals['_TEAM_ERROR']._serialized_end=518
 # @@protoc_insertion_point(module_scope)

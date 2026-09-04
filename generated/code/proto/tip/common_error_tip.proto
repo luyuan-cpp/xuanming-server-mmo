@@ -3,45 +3,48 @@ syntax = "proto3";
 
 option go_package = "generated/pb/table";
 
+option java_package = "com.game.table";
+
+
 enum common_error {
   kCommon_errorOK = 0;
 
-  kSuccess = 1;
+  kSuccess = 1000;
 
-  kInvalidTableId = 2;
+  kInvalidTableId = 1001;
 
-  kInvalidTableData = 3;
+  kInvalidTableData = 1002;
 
-  kServiceUnavailable = 4;
+  kServiceUnavailable = 1003;
 
-  kEntityIsNull = 5;
+  kEntityIsNull = 1004;
 
-  kInvalidParameter = 6;
+  kInvalidParameter = 1005;
 
-  kFeatureUnavailable = 7;
+  kFeatureUnavailable = 1006;
 
-  kIndexOutOfRange = 8;
+  kIndexOutOfRange = 1007;
 
-  kRateLimitExceeded = 9;
+  kRateLimitExceeded = 1008;
 
-  kThisEntityIsInvalid = 10;
+  kThisEntityIsInvalid = 1009;
 
-  kMessageSizeExceeded = 11;
+  kMessageSizeExceeded = 1010;
 
-  kSessionNotFound = 12;
+  kSessionNotFound = 1011;
 
-  kPlayerNotFoundInSession = 13;
+  kPlayerNotFoundInSession = 1012;
 
-  kMessageIdNotFound = 14;
+  kMessageIdNotFound = 1013;
 
-  kRequestMessageParseError = 15;
+  kRequestMessageParseError = 1014;
 
-  kArraySizeTooLargeInMessage = 16;
+  kArraySizeTooLargeInMessage = 1015;
 
-  kResponseMessageParseError = 17;
+  kResponseMessageParseError = 1016;
 
-  kNegativeValueInMessage = 18;
+  kNegativeValueInMessage = 1017;
 
-  kFailedToRegisterTheNode = 19;
+  kFailedToRegisterTheNode = 1018;
 
 };

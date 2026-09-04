@@ -220,11 +220,11 @@ constexpr ItemEntry::ParseTableT_ ItemEntry::InternalGenerateParseTable_(const :
     {
       PROTOBUF_FIELD_OFFSET(ItemEntry, _impl_._has_bits_),
       0, // no _extensions_
-      5, 56,  // max_field_number, fast_idx_mask
+      13, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967264,  // skipmap
+      4294963168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      5,  // num_field_entries
+      6,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -270,6 +270,8 @@ constexpr ItemEntry::ParseTableT_ ItemEntry::InternalGenerateParseTable_(const :
       {PROTOBUF_FIELD_OFFSET(ItemEntry, _impl_.pos_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 bag_type = 5;
       {PROTOBUF_FIELD_OFFSET(ItemEntry, _impl_.bag_type_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 acquire_seq = 13;
+      {PROTOBUF_FIELD_OFFSET(ItemEntry, _impl_.acquire_seq_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -286,7 +288,8 @@ inline constexpr ItemEntry::Impl_::Impl_(
         config_id_{0u},
         stack_size_{0u},
         pos_{0u},
-        bag_type_{0u} {}
+        bag_type_{0u},
+        acquire_seq_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr ItemEntry::ItemEntry(::_pbi::ConstantInitialized,
@@ -787,11 +790,11 @@ constexpr BagAllData_DynamicBagData::ParseTableT_ BagAllData_DynamicBagData::Int
     {
       PROTOBUF_FIELD_OFFSET(BagAllData_DynamicBagData, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      4, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967280,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      4,  // num_field_entries
       1,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -801,7 +804,10 @@ constexpr BagAllData_DynamicBagData::ParseTableT_ BagAllData_DynamicBagData::Int
       ::_pbi::TcParser::GetTable<::BagAllData_DynamicBagData>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 profile_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BagAllData_DynamicBagData, _impl_.profile_id_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BagAllData_DynamicBagData, _impl_.profile_id_)}},
       // uint64 bag_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(BagAllData_DynamicBagData, _impl_.bag_id_), 1>(),
        {8, 1, 0,
@@ -823,6 +829,8 @@ constexpr BagAllData_DynamicBagData::ParseTableT_ BagAllData_DynamicBagData::Int
       {PROTOBUF_FIELD_OFFSET(BagAllData_DynamicBagData, _impl_.capacity_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // repeated .ItemEntry items = 3;
       {PROTOBUF_FIELD_OFFSET(BagAllData_DynamicBagData, _impl_.items_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 profile_id = 4;
+      {PROTOBUF_FIELD_OFFSET(BagAllData_DynamicBagData, _impl_.profile_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -847,7 +855,8 @@ inline constexpr BagAllData_DynamicBagData::Impl_::Impl_(
          }
         ,
         bag_id_{::uint64_t{0u}},
-        capacity_{0u} {}
+        capacity_{0u},
+        profile_id_{0u} {}
 
 template <typename>
 constexpr BagAllData_DynamicBagData::BagAllData_DynamicBagData(::_pbi::ConstantInitialized,
@@ -1281,26 +1290,30 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ItemEntry, _impl_._has_bits_),
-        8, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ItemEntry, _impl_.item_uuid_),
         PROTOBUF_FIELD_OFFSET(::ItemEntry, _impl_.config_id_),
         PROTOBUF_FIELD_OFFSET(::ItemEntry, _impl_.stack_size_),
         PROTOBUF_FIELD_OFFSET(::ItemEntry, _impl_.pos_),
         PROTOBUF_FIELD_OFFSET(::ItemEntry, _impl_.bag_type_),
+        PROTOBUF_FIELD_OFFSET(::ItemEntry, _impl_.acquire_seq_),
         0,
         1,
         2,
         3,
         4,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BagAllData_DynamicBagData, _impl_._has_bits_),
-        6, // hasbit index offset
+        7, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BagAllData_DynamicBagData, _impl_.bag_id_),
         PROTOBUF_FIELD_OFFSET(::BagAllData_DynamicBagData, _impl_.capacity_),
         PROTOBUF_FIELD_OFFSET(::BagAllData_DynamicBagData, _impl_.items_),
+        PROTOBUF_FIELD_OFFSET(::BagAllData_DynamicBagData, _impl_.profile_id_),
         1,
         2,
         0,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BagAllData, _impl_._has_bits_),
         6, // hasbit index offset
@@ -1359,12 +1372,12 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ItemEntry)},
-        {13, sizeof(::BagAllData_DynamicBagData)},
-        {22, sizeof(::BagAllData)},
-        {31, sizeof(::QuestEntry)},
-        {42, sizeof(::QuestAllData)},
-        {49, sizeof(::MailEntry)},
-        {70, sizeof(::MailAllData)},
+        {15, sizeof(::BagAllData_DynamicBagData)},
+        {26, sizeof(::BagAllData)},
+        {35, sizeof(::QuestEntry)},
+        {46, sizeof(::QuestAllData)},
+        {53, sizeof(::MailEntry)},
+        {74, sizeof(::MailAllData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1380,25 +1393,26 @@ const char descriptor_table_protodef_proto_2fcommon_2fdatabase_2fbag_5fquest_5fm
     protodesc_cold) = {
     "\n/proto/common/database/bag_quest_mail_d"
     "ata.proto\032+proto/common/component/item_b"
-    "ase_comp.proto\"d\n\tItemEntry\022\021\n\titem_uuid"
+    "ase_comp.proto\"y\n\tItemEntry\022\021\n\titem_uuid"
     "\030\001 \001(\004\022\021\n\tconfig_id\030\002 \001(\r\022\022\n\nstack_size\030"
-    "\003 \001(\r\022\013\n\003pos\030\004 \001(\r\022\020\n\010bag_type\030\005 \001(\r\"\274\001\n"
-    "\nBagAllData\022\031\n\005items\030\001 \003(\0132\n.ItemEntry\022\022"
-    "\n\ncapacities\030\002 \003(\r\0220\n\014dynamic_bags\030\003 \003(\013"
-    "2\032.BagAllData.DynamicBagData\032M\n\016DynamicB"
-    "agData\022\016\n\006bag_id\030\001 \001(\004\022\020\n\010capacity\030\002 \001(\r"
-    "\022\031\n\005items\030\003 \003(\0132\n.ItemEntry\"X\n\nQuestEntr"
-    "y\022\021\n\tconfig_id\030\001 \001(\r\022\020\n\010progress\030\002 \001(\r\022\r"
-    "\n\005state\030\003 \001(\r\022\026\n\016accepted_at_ms\030\004 \001(\004\">\n"
-    "\014QuestAllData\022\033\n\006active\030\001 \003(\0132\013.QuestEnt"
-    "ry\022\021\n\tcompleted\030\002 \003(\r\"\336\001\n\tMailEntry\022\017\n\007m"
-    "ail_id\030\001 \001(\004\022\021\n\tsender_id\030\002 \001(\004\022\017\n\007subje"
-    "ct\030\003 \001(\t\022\014\n\004body\030\004 \001(\t\022\022\n\nsent_at_ms\030\005 \001"
-    "(\004\022\"\n\016attached_items\030\006 \003(\0132\n.ItemEntry\022\037"
-    "\n\027attached_currency_types\030\007 \003(\r\022!\n\031attac"
-    "hed_currency_amounts\030\010 \003(\004\022\022\n\nread_state"
-    "\030\t \001(\r\"(\n\013MailAllData\022\031\n\005mails\030\001 \003(\0132\n.M"
-    "ailEntryB\021Z\017common/databaseb\006proto3"
+    "\003 \001(\r\022\013\n\003pos\030\004 \001(\r\022\020\n\010bag_type\030\005 \001(\r\022\023\n\013"
+    "acquire_seq\030\r \001(\004\"\320\001\n\nBagAllData\022\031\n\005item"
+    "s\030\001 \003(\0132\n.ItemEntry\022\022\n\ncapacities\030\002 \003(\r\022"
+    "0\n\014dynamic_bags\030\003 \003(\0132\032.BagAllData.Dynam"
+    "icBagData\032a\n\016DynamicBagData\022\016\n\006bag_id\030\001 "
+    "\001(\004\022\020\n\010capacity\030\002 \001(\r\022\031\n\005items\030\003 \003(\0132\n.I"
+    "temEntry\022\022\n\nprofile_id\030\004 \001(\r\"X\n\nQuestEnt"
+    "ry\022\021\n\tconfig_id\030\001 \001(\r\022\020\n\010progress\030\002 \001(\r\022"
+    "\r\n\005state\030\003 \001(\r\022\026\n\016accepted_at_ms\030\004 \001(\004\">"
+    "\n\014QuestAllData\022\033\n\006active\030\001 \003(\0132\013.QuestEn"
+    "try\022\021\n\tcompleted\030\002 \003(\r\"\336\001\n\tMailEntry\022\017\n\007"
+    "mail_id\030\001 \001(\004\022\021\n\tsender_id\030\002 \001(\004\022\017\n\007subj"
+    "ect\030\003 \001(\t\022\014\n\004body\030\004 \001(\t\022\022\n\nsent_at_ms\030\005 "
+    "\001(\004\022\"\n\016attached_items\030\006 \003(\0132\n.ItemEntry\022"
+    "\037\n\027attached_currency_types\030\007 \003(\r\022!\n\031atta"
+    "ched_currency_amounts\030\010 \003(\004\022\022\n\nread_stat"
+    "e\030\t \001(\r\"(\n\013MailAllData\022\031\n\005mails\030\001 \003(\0132\n."
+    "MailEntryB\021Z\017common/databaseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fdatabase_2fbag_5fquest_5fmail_5fdata_2eproto_deps[1] = {
@@ -1408,7 +1422,7 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fdatabase_2fbag_5fques
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fdatabase_2fbag_5fquest_5fmail_5fdata_2eproto = {
     false,
     false,
-    835,
+    876,
     descriptor_table_protodef_proto_2fcommon_2fdatabase_2fbag_5fquest_5fmail_5fdata_2eproto,
     "proto/common/database/bag_quest_mail_data.proto",
     &descriptor_table_proto_2fcommon_2fdatabase_2fbag_5fquest_5fmail_5fdata_2eproto_once,
@@ -1453,9 +1467,9 @@ inline void ItemEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, item_uuid_),
            0,
-           offsetof(Impl_, bag_type_) -
+           offsetof(Impl_, acquire_seq_) -
                offsetof(Impl_, item_uuid_) +
-               sizeof(Impl_::bag_type_));
+               sizeof(Impl_::acquire_seq_));
 }
 ItemEntry::~ItemEntry() {
   // @@protoc_insertion_point(destructor:ItemEntry)
@@ -1505,10 +1519,10 @@ PROTOBUF_NOINLINE void ItemEntry::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     ::memset(&_impl_.item_uuid_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.bag_type_) -
-        reinterpret_cast<char*>(&_impl_.item_uuid_)) + sizeof(_impl_.bag_type_));
+        reinterpret_cast<char*>(&_impl_.acquire_seq_) -
+        reinterpret_cast<char*>(&_impl_.item_uuid_)) + sizeof(_impl_.acquire_seq_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1578,6 +1592,15 @@ PROTOBUF_NOINLINE void ItemEntry::Clear() {
     }
   }
 
+  // uint64 acquire_seq = 13;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_acquire_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          13, this_._internal_acquire_seq(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1603,7 +1626,7 @@ PROTOBUF_NOINLINE void ItemEntry::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // uint64 item_uuid = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_item_uuid() != 0) {
@@ -1639,6 +1662,13 @@ PROTOBUF_NOINLINE void ItemEntry::Clear() {
             this_._internal_bag_type());
       }
     }
+    // uint64 acquire_seq = 13;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_acquire_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_acquire_seq());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -1657,7 +1687,7 @@ void ItemEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_item_uuid() != 0) {
         _this->_impl_.item_uuid_ = from._impl_.item_uuid_;
@@ -1683,6 +1713,11 @@ void ItemEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.bag_type_ = from._impl_.bag_type_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_acquire_seq() != 0) {
+        _this->_impl_.acquire_seq_ = from._impl_.acquire_seq_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1702,8 +1737,8 @@ void ItemEntry::InternalSwap(ItemEntry* PROTOBUF_RESTRICT PROTOBUF_NONNULL other
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ItemEntry, _impl_.bag_type_)
-      + sizeof(ItemEntry::_impl_.bag_type_)
+      PROTOBUF_FIELD_OFFSET(ItemEntry, _impl_.acquire_seq_)
+      + sizeof(ItemEntry::_impl_.acquire_seq_)
       - PROTOBUF_FIELD_OFFSET(ItemEntry, _impl_.item_uuid_)>(
           reinterpret_cast<char*>(&_impl_.item_uuid_),
           reinterpret_cast<char*>(&other->_impl_.item_uuid_));
@@ -1755,9 +1790,9 @@ BagAllData_DynamicBagData::BagAllData_DynamicBagData(
                offsetof(Impl_, bag_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, bag_id_),
-           offsetof(Impl_, capacity_) -
+           offsetof(Impl_, profile_id_) -
                offsetof(Impl_, bag_id_) +
-               sizeof(Impl_::capacity_));
+               sizeof(Impl_::profile_id_));
 
   // @@protoc_insertion_point(copy_constructor:BagAllData.DynamicBagData)
 }
@@ -1776,9 +1811,9 @@ inline void BagAllData_DynamicBagData::SharedCtor(::_pb::Arena* PROTOBUF_NULLABL
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, bag_id_),
            0,
-           offsetof(Impl_, capacity_) -
+           offsetof(Impl_, profile_id_) -
                offsetof(Impl_, bag_id_) +
-               sizeof(Impl_::capacity_));
+               sizeof(Impl_::profile_id_));
 }
 BagAllData_DynamicBagData::~BagAllData_DynamicBagData() {
   // @@protoc_insertion_point(destructor:BagAllData.DynamicBagData)
@@ -1831,10 +1866,10 @@ PROTOBUF_NOINLINE void BagAllData_DynamicBagData::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.items_.Clear();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000006U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000eU)) {
     ::memset(&_impl_.bag_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.capacity_) -
-        reinterpret_cast<char*>(&_impl_.bag_id_)) + sizeof(_impl_.capacity_));
+        reinterpret_cast<char*>(&_impl_.profile_id_) -
+        reinterpret_cast<char*>(&_impl_.bag_id_)) + sizeof(_impl_.profile_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -1890,6 +1925,15 @@ PROTOBUF_NOINLINE void BagAllData_DynamicBagData::Clear() {
     }
   }
 
+  // uint32 profile_id = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_profile_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_profile_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -1915,7 +1959,7 @@ PROTOBUF_NOINLINE void BagAllData_DynamicBagData::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     // repeated .ItemEntry items = 3;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_items_size();
@@ -1937,6 +1981,13 @@ PROTOBUF_NOINLINE void BagAllData_DynamicBagData::Clear() {
             this_._internal_capacity());
       }
     }
+    // uint32 profile_id = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_profile_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_profile_id());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -1956,7 +2007,7 @@ void BagAllData_DynamicBagData::MergeImpl(::google::protobuf::MessageLite& to_ms
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_items()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -1970,6 +2021,11 @@ void BagAllData_DynamicBagData::MergeImpl(::google::protobuf::MessageLite& to_ms
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_capacity() != 0) {
         _this->_impl_.capacity_ = from._impl_.capacity_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_profile_id() != 0) {
+        _this->_impl_.profile_id_ = from._impl_.profile_id_;
       }
     }
   }
@@ -1992,8 +2048,8 @@ void BagAllData_DynamicBagData::InternalSwap(BagAllData_DynamicBagData* PROTOBUF
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.items_.InternalSwap(&other->_impl_.items_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(BagAllData_DynamicBagData, _impl_.capacity_)
-      + sizeof(BagAllData_DynamicBagData::_impl_.capacity_)
+      PROTOBUF_FIELD_OFFSET(BagAllData_DynamicBagData, _impl_.profile_id_)
+      + sizeof(BagAllData_DynamicBagData::_impl_.profile_id_)
       - PROTOBUF_FIELD_OFFSET(BagAllData_DynamicBagData, _impl_.bag_id_)>(
           reinterpret_cast<char*>(&_impl_.bag_id_),
           reinterpret_cast<char*>(&other->_impl_.bag_id_));

@@ -1,0 +1,72 @@
+{
+ "data": [
+  {
+   "id": 0,
+   "state": [
+    {
+     "state_mode": 1,
+     "state_tip": 1000
+    },
+    {
+     "state_mode": 1,
+     "state_tip": 1000
+    },
+    {
+     "state_mode": 1,
+     "state_tip": 1000
+    }
+   ]
+  },
+  {
+   "id": 1,
+   "state": [
+    {
+     "state_mode": 1,
+     "state_tip": 0
+    },
+    {
+     "state_mode": 0,
+     "state_tip": 0
+    },
+    {
+     "state_mode": 0,
+     "state_tip": 1000
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "state": [
+    {
+     "state_mode": 0,
+     "state_tip": 0
+    },
+    {
+     "state_mode": 0,
+     "state_tip": 0
+    },
+    {
+     "state_mode": 0,
+     "state_tip": 0
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "state": [
+    {
+     "state_mode": 0,
+     "state_tip": 0
+    },
+    {
+     "state_mode": 0,
+     "state_tip": 0
+    },
+    {
+     "state_mode": 0,
+     "state_tip": 0
+    }
+   ]
+  }
+ ]
+}

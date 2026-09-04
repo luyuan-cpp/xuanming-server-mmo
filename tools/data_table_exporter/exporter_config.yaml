@@ -83,5 +83,62 @@ languages:
       - src: ../../generated/code/proto/java/com/game/table
         dst: ../../java/config_node/src/main/java/com/game/table
 
+  # --- C#（Unity 客户端）---
+  # 刻意不配 constants_dir / table_id_dir / bit_index_dir：这三样目前没有 C# 模板，
+  # constants_gen / table_id_gen / bit_index_gen 也只 gate 在 cpp/go/java 上。
+  # 将来补了模板再加，别现在先把路径写上让人以为已经生成了。
+  csharp:
+    enabled: true
+    code_dir: ../../generated/code/csharp
+    proto_output_dir: ../../generated/code/proto/csharp
+    # C# 侧 proto 消息类所在的 namespace。generated/code/proto/*.proto 既没有
+    # package 也没有 option csharp_namespace，protoc 会把消息类放进**全局 namespace**，
+    # 与 client/unity/Assets/Scripts/Net/Generated 的现有网络协议产物口径一致，
+    # 所以这里留空，模板就不写 using。将来若给 proto_table.proto.j2 加上
+    # option csharp_namespace，把那个 namespace 原样填进来即可，模板会自动 using。
+    proto_import_path: ""
+    package: "MmorpgClient.Table"
+    deploy:
+      - src: ../../generated/code/csharp
+        dst: ../../client/unity/Assets/Scripts/Table/Generated
+      - src: ../../generated/code/proto/csharp
+        dst: ../../client/unity/Assets/Scripts/Table/Generated
+
+  python:
+    enabled: true
+    code_dir: ../../generated/code/python/table
+    proto_output_dir: ../../generated/code/proto/python
+    # 留空 -> 产物按顶层模块名 `import xxx_table_pb2`，消费方要把
+    # generated/code/proto/python 放进 sys.path（core/generators/binary_gen.py
+    # 自己就是这么干的）。真起 Python 服务、把 pb2 装成一个包之后，这里填包名，
+    # 产物会自动改成 `from <包名> import xxx_table_pb2 as _pb`。
+    proto_import_path: ""
+    # 仓里还没有 Python 服务，暂不部署，产物只落在 generated/code/python/table。
+    # 将来要部署，除了这里加 deploy，还得在 core/orchestrator.py 的 _deploy()
+    # 里加 cfg.python 分支 —— 那个函数目前只认 cpp/go/java 三家。
+    deploy: []
+
+  # --- UE（Unreal Engine 客户端 / DS）---
+  # 刻意**不引 protobuf**：产物用 FJsonObjectConverter 直接读
+  # generated/tables/<表名小写>.json，所以这里没有 proto_output_dir。
+  # 消费方模块的 Build.cs 需要：Core, CoreUObject, Engine, Json, JsonUtilities。
+  #   （Engine 是因为 FTableRowBase 在 Engine/DataTable.h、UGameInstanceSubsystem 在 Engine 模块；
+  #     Json 出 FJsonObject/FJsonSerializer，JsonUtilities 出 FJsonObjectConverter。）
+  # 同样刻意不配 constants_dir / table_id_dir / bit_index_dir：那三样没有 UE 模板，
+  # constants_gen / table_id_gen / bit_index_gen 也只 gate 在 cpp/go/java 上。
+  ue:
+    enabled: true
+    code_dir: ../../generated/code/ue
+    # package 在 UE 这门被当作**模块导出宏**用（UCLASS 前的 XXX_API），
+    # 不是 namespace —— UE 产物不放 namespace（UHT 不支持带 namespace 的 UCLASS）。
+    # 单模块工程可以留空，模板就不写这个宏；跨模块引用这些类就必须填。
+    package: "MMORPGCONFIG_API"
+    # 暂不部署：UE 工程路径未定。将来要部署，除了这里加 deploy，
+    # 还得在 core/orchestrator.py 的 _deploy() 里加 cfg.ue 分支
+    # —— 那个函数目前只认 cpp/go/java/csharp/python。
+    # 另外部署时建议拆两个 dst：*.h 进模块 Public/，*.cpp 进 Private/
+    # （放同一个目录也能编，只是不符合 UE 的模块惯例）。
+    deploy: []
+
 # --- Tables with named ID constants ---
 constant_tables: [GlobalVariable]

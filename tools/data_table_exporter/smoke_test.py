@@ -20,7 +20,8 @@ if str(_HERE) not in sys.path:
     sys.path.insert(0, str(_HERE))
 
 from core.config_loader import ExporterConfig, load_config  # noqa: E402
-from core.excel_reader import read_all_tables, read_data_rows, read_table  # noqa: E402
+from core.excel_reader import read_data_rows  # noqa: E402
+from core.table_source import read_all_tables, read_one_table  # noqa: E402
 from core.foreign_key import validate_foreign_keys  # noqa: E402
 from core.schema import TableSchema  # noqa: E402
 
@@ -47,7 +48,7 @@ def test_sample_table_parses(cfg: ExporterConfig, filename: str):
     if not path.exists():
         pytest.skip(f"{filename} 不存在")
 
-    schema = read_table(path, cfg)
+    schema = read_one_table(path, cfg)
 
     assert schema is not None, f"{filename} 解析失败"
     assert schema.columns, f"{filename} 没解析出任何列"
@@ -61,7 +62,7 @@ def test_sample_table_has_data_rows(cfg: ExporterConfig, filename: str):
     if not path.exists():
         pytest.skip(f"{filename} 不存在")
 
-    schema = read_table(path, cfg)
+    schema = read_one_table(path, cfg)
     rows = read_data_rows(schema, cfg)
 
     assert rows, f"{filename} 读不出任何数据行"

@@ -1,0 +1,513 @@
+{# ue_config.cpp.j2 -- 每张表一个 U<Table>Table 管理器(实现) #}
+{#- ---------------------------------------------------------------------- #}
+{#- 「由无符号收窄而来」的列清单。走法必须与 _ue_row_fields 一致:            #}
+{#- 按列序走 server_columns(按名去重)取非分组标量,再取 repeated 数组,     #}
+{#- 最后取子消息成员。set/map 不进清单:它们的键在 JSON 里是**字符串**,     #}
+{#- 收窄发生在 LexFromString 里,不是本函数管得住的面。                      #}
+{#- ---------------------------------------------------------------------- #}
+{%- set narrowed = [] %}
+{%- set narrowed_seen = [] %}
+{%- for col in table.server_columns %}
+{%- if col.name not in narrowed_seen %}
+{%- set _ = narrowed_seen.append(col.name) %}
+{%- if col.map_role == '' and col.name not in table.arrays and col.excel_index not in table.col_to_group and col.data_type in ('uint32', 'uint64') %}
+{%- set _ = narrowed.append({'key': col.name, 'display': col.name, 'type': col.data_type}) %}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- for arr in table.repeated_comp_arrays %}
+{%- if arr.data_type in ('uint32', 'uint64') %}
+{%- set _ = narrowed.append({'key': arr.name, 'display': arr.name ~ '[]', 'type': arr.data_type}) %}
+{%- endif %}
+{%- endfor %}
+{%- set narrowed_groups = [] %}
+{%- for g in table.groups.values() %}
+{%- set narrowed_members = [] %}
+{%- for c in g.columns %}
+{%- if c.data_type in ('uint32', 'uint64') %}
+{%- set _ = narrowed_members.append({'key': c.name, 'display': g.name ~ '[].' ~ c.name, 'type': c.data_type}) %}
+{%- endif %}
+{%- endfor %}
+{%- if narrowed_members %}
+{%- set _ = narrowed_groups.append({'name': g.name, 'members': narrowed_members}) %}
+{%- endif %}
+{%- endfor %}
+// ---------------------------------------------------------------------------
+//  由 Data Table Exporter 从 {{ sheetname }}.xlsx 生成。**不要手改**。
+//  重新生成:tools/data_table_exporter/run.py
+//
+//  模块依赖:Core、CoreUObject、Engine、Json、JsonUtilities。
+//  可直接抄的一行见 ConfigSubsystem.h 顶部的「Build.cs」一节。
+// ---------------------------------------------------------------------------
+#include "{{ mgr_header }}.h"
+
+#include "ConfigSubsystem.h"
+
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
+#include "JsonObjectConverter.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
+
+// 文件内的静态量一律带表名前缀:UBT 的 unity build 会把多个 .cpp 拼进同一个翻译单元,
+// 两张表里同名的文件级 static 会当场重定义。
+static const TArray<int32> G{{ sheetname }}EmptyIndices;
+
+/// 把 JSON 里出现过、但 {{ row_struct }} 里没有对应 UPROPERTY 的键报出来。
+///
+/// 这是本门语言唯一的**静默失效**面:FJsonObjectConverter 找不到同名属性时不报错、
+/// 不返回 false,只是跳过 —— 表面上装载成功,那一列全是默认值。改列名 / 改大小写风格
+/// 都会踩到。这个审计让它在日志里现形,而不是在玩法里现形。
+///
+/// 它只查「键有没有对应 UPROPERTY」,**不查值域** —— 值域是下面
+/// {{ sheetname }}TableCheckNarrowedRow 的事。
+static void {{ sheetname }}TableAuditJsonKeys(const TSharedPtr<FJsonObject>& RowObject, TSet<FString>& CheckedKeys)
+{
+	const UScriptStruct* RowStruct = {{ row_struct }}::StaticStruct();
+	// 用 const auto&:FJsonObject::Values 的**键类型跨 UE 版本变过**(FString -> FSharedString),
+	// 写死 TPair<FString, ...> 在新引擎上编不过。键取 *Pair.Key 拿 const TCHAR*。
+	for (const auto& Pair : RowObject->Values)
+	{
+		bool bAlready = false;
+		CheckedKeys.Add(Pair.Key, &bAlready);
+		if (bAlready)
+		{
+			continue;
+		}
+		if (RowStruct->FindPropertyByName(FName(*Pair.Key)) == nullptr)
+		{
+			UE_LOG(LogConfigTable, Warning,
+				TEXT("[{{ sheetname }}] {{ json_file }} 里的键 '%s' 在 {{ row_struct }} 中没有对应 UPROPERTY,这一列被静默丢弃。导表器与 UE 产物不同代?"),
+				*Pair.Key);
+		}
+	}
+}
+{% if narrowed or narrowed_groups %}
+/// 一个「由无符号收窄而来」的值的值域检查。
+///
+/// proto 的 uint32/uint64 在 UE 这门是 int32/int64(UHT 不让无符号整数带 Blueprint
+/// 说明符,见 {{ row_header }}.h)。收窄本身是刻意的,**但从前是完全静默的**:
+/// JSON 里一个 3000000000 会变成 -1294967296,FJsonObjectConverter 一声不吭。
+/// 这里在装载路径上把越界值点名报出来。
+///
+/// 只对**由无符号收窄而来**的列调用 —— 本来就是 int32/int64 的列不查,
+/// 负数对它们是合法值,查了就是误报。
+///
+/// 精度说明:JSON 数字在 FJsonValue 里是 double,超过 2^53 的整数在**解析那一步**
+/// 就已经不精确了。所以 uint64 列的边界判定是近似的:它抓得住量级错误(> 2^63),
+/// 抓不住 2^53 附近的最后几位 —— 那是 JSON 数字类型本身的下限,不是这个函数的。
+static void {{ sheetname }}TableCheckNarrowedValue(const TSharedPtr<FJsonValue>& Value, const TCHAR* ColumnName,
+	int32 RowIndex, double MaxValue, const TCHAR* SourceType)
+{
+	if (!Value.IsValid() || Value->Type != EJson::Number)
+	{
+		// 缺席(空单元格)/ 非数字:不归这个函数管,键的审计在 AuditJsonKeys。
+		return;
+	}
+	const double Number = Value->AsNumber();
+	if (Number < 0.0 || Number > MaxValue)
+	{
+		UE_LOG(LogConfigTable, Error,
+			TEXT("[{{ sheetname }}] {{ json_file }} data[%d] 的列 '%s'(proto %s)值 %.0f 超出 UE 侧承接类型的范围 [0, %.0f];")
+			TEXT("UE 这门把无符号整数收窄成有符号(见 {{ row_header }}.h),这个值会读成负数或被截断。改用 int64 列或把值调小。"),
+			RowIndex, ColumnName, SourceType, Number, MaxValue);
+	}
+}
+
+/// 取一个键的值做检查;键是数组时逐个元素查。
+static void {{ sheetname }}TableCheckNarrowedField(const TSharedPtr<FJsonObject>& Object, const TCHAR* Key,
+	const TCHAR* ColumnName, int32 RowIndex, double MaxValue, const TCHAR* SourceType)
+{
+	// 与本文件其它地方一致,用 Values.Find 而不是 TryGetField:
+	// FJsonObject 的取值 API 跨 UE 版本改过签名,Values 这条路最稳。
+	const TSharedPtr<FJsonValue>* Field = Object->Values.Find(Key);
+	if (Field == nullptr || !Field->IsValid())
+	{
+		return;
+	}
+	if ((*Field)->Type == EJson::Array)
+	{
+		for (const TSharedPtr<FJsonValue>& Element : (*Field)->AsArray())
+		{
+			{{ sheetname }}TableCheckNarrowedValue(Element, ColumnName, RowIndex, MaxValue, SourceType);
+		}
+		return;
+	}
+	{{ sheetname }}TableCheckNarrowedValue(*Field, ColumnName, RowIndex, MaxValue, SourceType);
+}
+
+/// 一行里全部「由无符号收窄而来」的列的值域检查。
+static void {{ sheetname }}TableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject, int32 RowIndex)
+{
+{%- for f in narrowed %}
+	{{ sheetname }}TableCheckNarrowedField(RowObject, TEXT("{{ f.key }}"), TEXT("{{ f.display }}"), RowIndex, {% if f.type == 'uint32' %}2147483647.0{% else %}9223372036854775807.0{% endif %}, TEXT("{{ f.type }}"));
+{%- endfor %}
+{%- for g in narrowed_groups %}
+	// 子消息 {{ g.name }}[]:每个元素是一个对象,逐个元素查它的收窄列。
+	if (const TSharedPtr<FJsonValue>* {{ to_pascal_case(g.name) }}Field = RowObject->Values.Find(TEXT("{{ g.name }}")))
+	{
+		if ({{ to_pascal_case(g.name) }}Field->IsValid() && (*{{ to_pascal_case(g.name) }}Field)->Type == EJson::Array)
+		{
+			for (const TSharedPtr<FJsonValue>& Element : (*{{ to_pascal_case(g.name) }}Field)->AsArray())
+			{
+				if (!Element.IsValid() || Element->Type != EJson::Object)
+				{
+					continue;
+				}
+				const TSharedPtr<FJsonObject>& ElementObject = Element->AsObject();
+{%- for f in g.members %}
+				{{ sheetname }}TableCheckNarrowedField(ElementObject, TEXT("{{ f.key }}"), TEXT("{{ f.display }}"), RowIndex, {% if f.type == 'uint32' %}2147483647.0{% else %}9223372036854775807.0{% endif %}, TEXT("{{ f.type }}"));
+{%- endfor %}
+			}
+		}
+	}
+{%- endfor %}
+}
+{% endif %}
+bool {{ mgr_class }}::LoadFromJson(const FString& JsonText, FString& OutError)
+{
+	TSharedPtr<FJsonObject> Root;
+	const TSharedRef<TJsonReader<TCHAR>> Reader = TJsonReaderFactory<TCHAR>::Create(JsonText);
+	if (!FJsonSerializer::Deserialize(Reader, Root) || !Root.IsValid())
+	{
+		OutError = FString::Printf(TEXT("[{{ sheetname }}] %s 不是合法 JSON: %s"), TEXT("{{ json_file }}"), *Reader->GetErrorMessage());
+		return false;
+	}
+
+	// 顶层形状是 {"data": [ {...}, ... ]}(见 core/generators/json_gen.py)。
+	const TSharedPtr<FJsonValue>* DataField = Root->Values.Find(TEXT("data"));
+	if (DataField == nullptr || !DataField->IsValid() || (*DataField)->Type != EJson::Array)
+	{
+		OutError = TEXT("[{{ sheetname }}] {{ json_file }} 顶层缺少数组字段 \"data\"");
+		return false;
+	}
+	const TArray<TSharedPtr<FJsonValue>>& DataArray = (*DataField)->AsArray();
+
+	// 整批建新快照;中途任何一行失败都直接返回,**现有快照原封不动**。
+	TSharedRef<FSnapshot> NewSnapshot = MakeShared<FSnapshot>();
+	NewSnapshot->Rows.Reserve(DataArray.Num());
+
+	TSet<FString> CheckedKeys;
+	for (int32 RowIndex = 0; RowIndex < DataArray.Num(); ++RowIndex)
+	{
+		const TSharedPtr<FJsonValue>& Element = DataArray[RowIndex];
+		if (!Element.IsValid() || Element->Type != EJson::Object)
+		{
+			OutError = FString::Printf(TEXT("[{{ sheetname }}] data[%d] 不是对象"), RowIndex);
+			return false;
+		}
+		const TSharedPtr<FJsonObject>& RowObject = Element->AsObject();
+		{{ sheetname }}TableAuditJsonKeys(RowObject, CheckedKeys);
+{%- if narrowed or narrowed_groups %}
+		// 值域检查只打日志、不中断装载:一个越界的格子不该让整张表停在旧一代,
+		// 但它必须在日志里有名有姓。
+		{{ sheetname }}TableCheckNarrowedRow(RowObject, RowIndex);
+{%- endif %}
+
+		// 必须 value-init:导表器的 JSON **按行省略空单元格**,而 FJsonObjectConverter
+		// 对缺席的键是静默跳过、不写。写成 `Row;` 那些列就是未初始化内存 ——
+		// 不是 0,不报错,shipping 里一样。
+		{{ row_struct }} Row{};
+		// CheckFlags/SkipFlags 都传 0:全部 UPROPERTY 都参与匹配。
+		// 匹配靠「属性名 == JSON 键」(TMap<FString> 查找,忽略大小写),所以
+		// {{ row_struct }} 的字段名是 snake_case —— 见 {{ row_header }}.h 的文件头。
+		if (!FJsonObjectConverter::JsonObjectToUStruct<{{ row_struct }}>(RowObject.ToSharedRef(), &Row, 0, 0))
+		{
+			OutError = FString::Printf(TEXT("[{{ sheetname }}] data[%d] 转 {{ row_struct }} 失败"), RowIndex);
+			return false;
+		}
+		NewSnapshot->Rows.Add(MoveTemp(Row));
+	}
+
+	BuildIndices(NewSnapshot.Get());
+
+	// 原子换代:旧快照在最后一个 PinSnapshot() 持有者放手时析构。
+	Snapshot = NewSnapshot;
+	UE_LOG(LogConfigTable, Log, TEXT("[{{ sheetname }}] 装载 %d 行"), NewSnapshot->Rows.Num());
+	return true;
+}
+
+bool {{ mgr_class }}::LoadFromDir(const FString& ConfigDir, FString& OutError)
+{
+	const FString Path = FPaths::Combine(ConfigDir, FileName());
+	FString JsonText;
+	if (!FFileHelper::LoadFileToString(JsonText, *Path))
+	{
+		OutError = FString::Printf(TEXT("[{{ sheetname }}] 读不到配置文件: %s"), *Path);
+		return false;
+	}
+	return LoadFromJson(JsonText, OutError);
+}
+
+void {{ mgr_class }}::BuildIndices(FSnapshot& Snap)
+{
+	const int32 RowCount = Snap.Rows.Num();
+{%- if not table.multi_primary_key %}
+	Snap.IdIndex.Reserve(RowCount);
+{%- endif %}
+	for (int32 RowIndex = 0; RowIndex < RowCount; ++RowIndex)
+	{
+		const {{ row_struct }}& Row = Snap.Rows[RowIndex];
+{%- if table.multi_primary_key %}
+		Snap.IdIndex.FindOrAdd(Row.{{ table.id_column.name }}).Add(RowIndex);
+{%- else %}
+		// 重复 id 会覆盖前一行。这张表的主键**不是** (cfg_multi),重复即配置错误。
+		if (int32* Existing = Snap.IdIndex.Find(Row.{{ table.id_column.name }}))
+		{
+			UE_LOG(LogConfigTable, Error,
+				TEXT("[{{ sheetname }}] id=%s 重复(行 %d 与行 %d);这张表没有标 (cfg_multi),后一行会覆盖前一行"),
+				*LexToString(Row.{{ table.id_column.name }}), *Existing, RowIndex);
+		}
+		Snap.IdIndex.Add(Row.{{ table.id_column.name }}, RowIndex);
+{%- endif %}
+{%- for col in table.table_keys %}
+{%- if col.is_multi_key %}
+		Snap.{{ to_pascal_case(col.name) }}Map.FindOrAdd(Row.{{ col.name }}).Add(RowIndex);
+{%- else %}
+		// 唯一键重复也是配置错误,与 id 同一口径:不打日志就只剩「查出来的行不是我填的那行」。
+		if (int32* Existing{{ to_pascal_case(col.name) }} = Snap.{{ to_pascal_case(col.name) }}Map.Find(Row.{{ col.name }}))
+		{
+			UE_LOG(LogConfigTable, Error,
+				TEXT("[{{ sheetname }}] 唯一键 {{ col.name }}=%s 重复(行 %d 与行 %d);这一列标的是 (cfg_key) 而不是 (cfg_key multi),后一行会覆盖前一行"),
+				*LexToString(Row.{{ col.name }}), *Existing{{ to_pascal_case(col.name) }}, RowIndex);
+		}
+		Snap.{{ to_pascal_case(col.name) }}Map.Add(Row.{{ col.name }}, RowIndex);
+{%- endif %}
+{%- endfor %}
+{%- for arr in table.repeated_comp_arrays %}
+		for (const {{ to_ue_type(arr.data_type) }}& Element : Row.{{ arr.name }})
+		{
+			// 同一行同一个值只塞一次。定长数组补位、重复填同一个 id 在配置表里很常见,
+			// 不去重的话 GetRowsBy{{ to_pascal_case(arr.name) }}() 会把这一行返回 N 遍、
+			// CountBy{{ to_pascal_case(arr.name) }}Index() 会数成 N 而不是 1。
+			// 行是按 RowIndex 递增处理的,所以本行的下标只可能在桶尾。
+			TArray<int32>& Bucket = Snap.{{ to_pascal_case(arr.name) }}ValueIndex.FindOrAdd(Element);
+			if (Bucket.Num() == 0 || Bucket.Last() != RowIndex)
+			{
+				Bucket.Add(RowIndex);
+			}
+		}
+{%- endfor %}
+{%- for col in table.index_columns %}
+		Snap.{{ to_pascal_case(col.name) }}Index.FindOrAdd(Row.{{ col.name }}).Add(RowIndex);
+{%- endfor %}
+{%- for ck in table.composite_keys %}
+		{
+			{{ ue_composite_struct_name(sheetname, ck.group) }} CompositeKey;
+{%- for col in ck.columns %}
+			CompositeKey.{{ col.name }} = Row.{{ col.name }};
+{%- endfor %}
+			Snap.{{ to_pascal_case(ck.group) }}Composite.Add(CompositeKey, RowIndex);
+		}
+{%- endfor %}
+	}
+}
+
+{% if table.multi_primary_key %}
+TArray<const {{ row_struct }}*> {{ mgr_class }}::FindAllById({{ to_ue_param_type(table.id_column.data_type) }} Id) const
+{
+	TArray<const {{ row_struct }}*> Result;
+	const TArray<int32>& Indices = FindAllIdIndices(Id);
+	Result.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
+	{
+		Result.Add(&Snapshot->Rows[RowIndex]);
+	}
+	return Result;
+}
+
+const TArray<int32>& {{ mgr_class }}::FindAllIdIndices({{ to_ue_param_type(table.id_column.data_type) }} Id) const
+{
+	const TArray<int32>* Found = Snapshot->IdIndex.Find(Id);
+	return Found != nullptr ? *Found : G{{ sheetname }}EmptyIndices;
+}
+
+void {{ mgr_class }}::K2_FindAllById({{ id_type }} Id, TArray<{{ row_struct }}>& OutRows) const
+{
+	OutRows.Reset();
+	const TArray<int32>& Indices = FindAllIdIndices(Id);
+	OutRows.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
+	{
+		OutRows.Add(Snapshot->Rows[RowIndex]);
+	}
+}
+
+int32 {{ mgr_class }}::CountById({{ to_ue_param_type(table.id_column.data_type) }} Id) const
+{
+	return FindAllIdIndices(Id).Num();
+}
+{% else %}
+const {{ row_struct }}* {{ mgr_class }}::FindById({{ to_ue_param_type(table.id_column.data_type) }} Id) const
+{
+	const {{ row_struct }}* Row = FindByIdSilent(Id);
+	if (Row == nullptr)
+	{
+		UE_LOG(LogConfigTable, Warning, TEXT("[{{ sheetname }}] 查不到 id=%s"), *LexToString(Id));
+	}
+	return Row;
+}
+
+const {{ row_struct }}* {{ mgr_class }}::FindByIdSilent({{ to_ue_param_type(table.id_column.data_type) }} Id) const
+{
+	const int32* RowIndex = Snapshot->IdIndex.Find(Id);
+	return RowIndex != nullptr ? &Snapshot->Rows[*RowIndex] : nullptr;
+}
+
+bool {{ mgr_class }}::K2_FindById({{ id_type }} Id, {{ row_struct }}& OutRow) const
+{
+	if (const {{ row_struct }}* Row = FindByIdSilent(Id))
+	{
+		OutRow = *Row;
+		return true;
+	}
+	OutRow = {{ row_struct }}();
+	return false;
+}
+{% endif %}
+
+TArray<const {{ row_struct }}*> {{ mgr_class }}::FindByIds(const TArray<{{ id_type }}>& Ids) const
+{
+	TArray<const {{ row_struct }}*> Result;
+	Result.Reserve(Ids.Num());
+	for (const {{ id_type }} Id : Ids)
+	{
+{%- if table.multi_primary_key %}
+		for (const int32 RowIndex : FindAllIdIndices(Id))
+		{
+			Result.Add(&Snapshot->Rows[RowIndex]);
+		}
+{%- else %}
+		if (const {{ row_struct }}* Row = FindByIdSilent(Id))
+		{
+			Result.Add(Row);
+		}
+{%- endif %}
+	}
+	return Result;
+}
+
+const {{ row_struct }}* {{ mgr_class }}::RandOne() const
+{
+	// 返回的指针属于当前快照,只在下一次 Load() 之前有效 —— 调用方只存 id。
+	if (Snapshot->Rows.Num() == 0)
+	{
+		return nullptr;
+	}
+	return &Snapshot->Rows[FMath::RandRange(0, Snapshot->Rows.Num() - 1)];
+}
+{% for col in table.table_keys %}
+{% if col.is_multi_key %}
+TArray<const {{ row_struct }}*> {{ mgr_class }}::FindBy{{ to_pascal_case(col.name) }}({{ to_ue_param_type(col.data_type) }} Key) const
+{
+	TArray<const {{ row_struct }}*> Result;
+	const TArray<int32>& Indices = FindBy{{ to_pascal_case(col.name) }}Indices(Key);
+	Result.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
+	{
+		Result.Add(&Snapshot->Rows[RowIndex]);
+	}
+	return Result;
+}
+
+const TArray<int32>& {{ mgr_class }}::FindBy{{ to_pascal_case(col.name) }}Indices({{ to_ue_param_type(col.data_type) }} Key) const
+{
+	const TArray<int32>* Found = Snapshot->{{ to_pascal_case(col.name) }}Map.Find(Key);
+	return Found != nullptr ? *Found : G{{ sheetname }}EmptyIndices;
+}
+
+int32 {{ mgr_class }}::CountBy{{ to_pascal_case(col.name) }}({{ to_ue_param_type(col.data_type) }} Key) const
+{
+	return FindBy{{ to_pascal_case(col.name) }}Indices(Key).Num();
+}
+{% else %}
+const {{ row_struct }}* {{ mgr_class }}::FindBy{{ to_pascal_case(col.name) }}({{ to_ue_param_type(col.data_type) }} Key) const
+{
+	const int32* RowIndex = Snapshot->{{ to_pascal_case(col.name) }}Map.Find(Key);
+	return RowIndex != nullptr ? &Snapshot->Rows[*RowIndex] : nullptr;
+}
+{% endif %}
+{% endfor %}
+{% for col in table.index_columns %}
+TArray<const {{ row_struct }}*> {{ mgr_class }}::GetBy{{ to_pascal_case(col.name) }}({{ to_ue_param_type(col.data_type) }} Key) const
+{
+	TArray<const {{ row_struct }}*> Result;
+	const TArray<int32>& Indices = Get{{ to_pascal_case(col.name) }}Indices(Key);
+	Result.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
+	{
+		Result.Add(&Snapshot->Rows[RowIndex]);
+	}
+	return Result;
+}
+
+const TArray<int32>& {{ mgr_class }}::Get{{ to_pascal_case(col.name) }}Indices({{ to_ue_param_type(col.data_type) }} Key) const
+{
+	const TArray<int32>* Found = Snapshot->{{ to_pascal_case(col.name) }}Index.Find(Key);
+	return Found != nullptr ? *Found : G{{ sheetname }}EmptyIndices;
+}
+
+int32 {{ mgr_class }}::CountBy{{ to_pascal_case(col.name) }}Index({{ to_ue_param_type(col.data_type) }} Key) const
+{
+	return Get{{ to_pascal_case(col.name) }}Indices(Key).Num();
+}
+{% endfor %}
+{% for arr in table.repeated_comp_arrays %}
+TArray<const {{ row_struct }}*> {{ mgr_class }}::GetRowsBy{{ to_pascal_case(arr.name) }}({{ to_ue_param_type(arr.data_type) }} Value) const
+{
+	TArray<const {{ row_struct }}*> Result;
+	if (const TArray<int32>* Indices = Snapshot->{{ to_pascal_case(arr.name) }}ValueIndex.Find(Value))
+	{
+		Result.Reserve(Indices->Num());
+		for (const int32 RowIndex : *Indices)
+		{
+			Result.Add(&Snapshot->Rows[RowIndex]);
+		}
+	}
+	return Result;
+}
+
+int32 {{ mgr_class }}::CountBy{{ to_pascal_case(arr.name) }}Index({{ to_ue_param_type(arr.data_type) }} Value) const
+{
+	// 桶里同一行只有一个下标(见 BuildIndices),所以这是**行数**。
+	const TArray<int32>* Indices = Snapshot->{{ to_pascal_case(arr.name) }}ValueIndex.Find(Value);
+	return Indices != nullptr ? Indices->Num() : 0;
+}
+{% endfor %}
+{% for ck in table.composite_keys %}
+const {{ row_struct }}* {{ mgr_class }}::FindBy{{ to_pascal_case(ck.group) }}({% for col in ck.columns %}{{ to_ue_param_type(col.data_type) }} In{{ to_pascal_case(col.name) }}{% if not loop.last %}, {% endif %}{% endfor %}) const
+{
+	{{ ue_composite_struct_name(sheetname, ck.group) }} CompositeKey;
+{%- for col in ck.columns %}
+	CompositeKey.{{ col.name }} = In{{ to_pascal_case(col.name) }};
+{%- endfor %}
+	const int32* RowIndex = Snapshot->{{ to_pascal_case(ck.group) }}Composite.Find(CompositeKey);
+	return RowIndex != nullptr ? &Snapshot->Rows[*RowIndex] : nullptr;
+}
+{% endfor %}
+TArray<const {{ row_struct }}*> {{ mgr_class }}::Where(TFunctionRef<bool(const {{ row_struct }}&)> Pred) const
+{
+	TArray<const {{ row_struct }}*> Result;
+	for (const {{ row_struct }}& Row : Snapshot->Rows)
+	{
+		if (Pred(Row))
+		{
+			Result.Add(&Row);
+		}
+	}
+	return Result;
+}
+
+const {{ row_struct }}* {{ mgr_class }}::First(TFunctionRef<bool(const {{ row_struct }}&)> Pred) const
+{
+	for (const {{ row_struct }}& Row : Snapshot->Rows)
+	{
+		if (Pred(Row))
+		{
+			return &Row;
+		}
+	}
+	return nullptr;
+}

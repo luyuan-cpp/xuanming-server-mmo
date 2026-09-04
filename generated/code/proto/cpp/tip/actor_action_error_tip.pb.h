@@ -63,7 +63,7 @@ internal::EnumTraitsT<::actor_action_error_internal_data_>
 
 enum actor_action_error : int {
   kActor_action_errorOK = 0,
-  kActorActionStateActionCannotBePerformedWhileInTeamFollowMode = 126,
+  kActorActionStateActionCannotBePerformedWhileInTeamFollowMode = 10000,
   actor_action_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   actor_action_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -74,11 +74,11 @@ extern const uint32_t actor_action_error_internal_data_[];
 inline constexpr actor_action_error actor_action_error_MIN =
     static_cast<actor_action_error>(0);
 inline constexpr actor_action_error actor_action_error_MAX =
-    static_cast<actor_action_error>(126);
+    static_cast<actor_action_error>(10000);
 [[nodiscard]] inline bool actor_action_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, actor_action_error_internal_data_);
 }
-inline constexpr int actor_action_error_ARRAYSIZE = 126 + 1;
+inline constexpr int actor_action_error_ARRAYSIZE = 10000 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 actor_action_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(actor_action_error) {

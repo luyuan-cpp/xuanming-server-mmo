@@ -25,87 +25,87 @@ type SceneError int32
 
 const (
 	SceneError_kScene_errorOK                         SceneError = 0
-	SceneError_kEnterSceneNotFound                    SceneError = 52
-	SceneError_kEnterSceneNotFull                     SceneError = 53
-	SceneError_kEnterSceneMainFull                    SceneError = 54
-	SceneError_kEnterNodeUnavailable                  SceneError = 55
-	SceneError_kEnterSceneServerType                  SceneError = 56
-	SceneError_kEnterSceneParamError                  SceneError = 57
-	SceneError_kEnterSceneSceneFull                   SceneError = 58
-	SceneError_kEnterSceneSceneNotFound               SceneError = 59
-	SceneError_kEnterSceneYouInCurrentScene           SceneError = 60
-	SceneError_kEnterSceneEnterCrossRoomScene         SceneError = 61
-	SceneError_kEnterSceneGsInfoNull                  SceneError = 62
-	SceneError_kEnterSceneGsFull                      SceneError = 63
-	SceneError_kEnterSceneYourSceneIsNull             SceneError = 64
-	SceneError_kEnterSceneChangeSceneOffLine          SceneError = 65
-	SceneError_kEnterSceneChangingScene               SceneError = 66
-	SceneError_kEnterSceneChangingGs                  SceneError = 67
-	SceneError_kChangeScenePlayerQueueNotFound        SceneError = 68
-	SceneError_kChangeScenePlayerQueueFull            SceneError = 69
-	SceneError_kChangeScenePlayerQueueComponentGsNull SceneError = 70
-	SceneError_kChangeScenePlayerQueueComponentEmpty  SceneError = 71
-	SceneError_kChangeSceneEnQueueNotSameGs           SceneError = 72
-	SceneError_kInvalidEnterSceneParameters           SceneError = 73
-	SceneError_kCheckEnterSceneCreator                SceneError = 74
-	SceneError_kEnterSceneFailed                      SceneError = 75
+	SceneError_kEnterSceneNotFound                    SceneError = 3000
+	SceneError_kEnterSceneNotFull                     SceneError = 3001
+	SceneError_kEnterSceneMainFull                    SceneError = 3002
+	SceneError_kEnterNodeUnavailable                  SceneError = 3003
+	SceneError_kEnterSceneServerType                  SceneError = 3004
+	SceneError_kEnterSceneParamError                  SceneError = 3005
+	SceneError_kEnterSceneSceneFull                   SceneError = 3006
+	SceneError_kEnterSceneSceneNotFound               SceneError = 3007
+	SceneError_kEnterSceneYouInCurrentScene           SceneError = 3008
+	SceneError_kEnterSceneEnterCrossRoomScene         SceneError = 3009
+	SceneError_kEnterSceneGsInfoNull                  SceneError = 3010
+	SceneError_kEnterSceneGsFull                      SceneError = 3011
+	SceneError_kEnterSceneYourSceneIsNull             SceneError = 3012
+	SceneError_kEnterSceneChangeSceneOffLine          SceneError = 3013
+	SceneError_kEnterSceneChangingScene               SceneError = 3014
+	SceneError_kEnterSceneChangingGs                  SceneError = 3015
+	SceneError_kChangeScenePlayerQueueNotFound        SceneError = 3016
+	SceneError_kChangeScenePlayerQueueFull            SceneError = 3017
+	SceneError_kChangeScenePlayerQueueComponentGsNull SceneError = 3018
+	SceneError_kChangeScenePlayerQueueComponentEmpty  SceneError = 3019
+	SceneError_kChangeSceneEnQueueNotSameGs           SceneError = 3020
+	SceneError_kInvalidEnterSceneParameters           SceneError = 3021
+	SceneError_kCheckEnterSceneCreator                SceneError = 3022
+	SceneError_kEnterSceneFailed                      SceneError = 3023
 )
 
 // Enum value maps for SceneError.
 var (
 	SceneError_name = map[int32]string{
-		0:  "kScene_errorOK",
-		52: "kEnterSceneNotFound",
-		53: "kEnterSceneNotFull",
-		54: "kEnterSceneMainFull",
-		55: "kEnterNodeUnavailable",
-		56: "kEnterSceneServerType",
-		57: "kEnterSceneParamError",
-		58: "kEnterSceneSceneFull",
-		59: "kEnterSceneSceneNotFound",
-		60: "kEnterSceneYouInCurrentScene",
-		61: "kEnterSceneEnterCrossRoomScene",
-		62: "kEnterSceneGsInfoNull",
-		63: "kEnterSceneGsFull",
-		64: "kEnterSceneYourSceneIsNull",
-		65: "kEnterSceneChangeSceneOffLine",
-		66: "kEnterSceneChangingScene",
-		67: "kEnterSceneChangingGs",
-		68: "kChangeScenePlayerQueueNotFound",
-		69: "kChangeScenePlayerQueueFull",
-		70: "kChangeScenePlayerQueueComponentGsNull",
-		71: "kChangeScenePlayerQueueComponentEmpty",
-		72: "kChangeSceneEnQueueNotSameGs",
-		73: "kInvalidEnterSceneParameters",
-		74: "kCheckEnterSceneCreator",
-		75: "kEnterSceneFailed",
+		0:    "kScene_errorOK",
+		3000: "kEnterSceneNotFound",
+		3001: "kEnterSceneNotFull",
+		3002: "kEnterSceneMainFull",
+		3003: "kEnterNodeUnavailable",
+		3004: "kEnterSceneServerType",
+		3005: "kEnterSceneParamError",
+		3006: "kEnterSceneSceneFull",
+		3007: "kEnterSceneSceneNotFound",
+		3008: "kEnterSceneYouInCurrentScene",
+		3009: "kEnterSceneEnterCrossRoomScene",
+		3010: "kEnterSceneGsInfoNull",
+		3011: "kEnterSceneGsFull",
+		3012: "kEnterSceneYourSceneIsNull",
+		3013: "kEnterSceneChangeSceneOffLine",
+		3014: "kEnterSceneChangingScene",
+		3015: "kEnterSceneChangingGs",
+		3016: "kChangeScenePlayerQueueNotFound",
+		3017: "kChangeScenePlayerQueueFull",
+		3018: "kChangeScenePlayerQueueComponentGsNull",
+		3019: "kChangeScenePlayerQueueComponentEmpty",
+		3020: "kChangeSceneEnQueueNotSameGs",
+		3021: "kInvalidEnterSceneParameters",
+		3022: "kCheckEnterSceneCreator",
+		3023: "kEnterSceneFailed",
 	}
 	SceneError_value = map[string]int32{
 		"kScene_errorOK":                         0,
-		"kEnterSceneNotFound":                    52,
-		"kEnterSceneNotFull":                     53,
-		"kEnterSceneMainFull":                    54,
-		"kEnterNodeUnavailable":                  55,
-		"kEnterSceneServerType":                  56,
-		"kEnterSceneParamError":                  57,
-		"kEnterSceneSceneFull":                   58,
-		"kEnterSceneSceneNotFound":               59,
-		"kEnterSceneYouInCurrentScene":           60,
-		"kEnterSceneEnterCrossRoomScene":         61,
-		"kEnterSceneGsInfoNull":                  62,
-		"kEnterSceneGsFull":                      63,
-		"kEnterSceneYourSceneIsNull":             64,
-		"kEnterSceneChangeSceneOffLine":          65,
-		"kEnterSceneChangingScene":               66,
-		"kEnterSceneChangingGs":                  67,
-		"kChangeScenePlayerQueueNotFound":        68,
-		"kChangeScenePlayerQueueFull":            69,
-		"kChangeScenePlayerQueueComponentGsNull": 70,
-		"kChangeScenePlayerQueueComponentEmpty":  71,
-		"kChangeSceneEnQueueNotSameGs":           72,
-		"kInvalidEnterSceneParameters":           73,
-		"kCheckEnterSceneCreator":                74,
-		"kEnterSceneFailed":                      75,
+		"kEnterSceneNotFound":                    3000,
+		"kEnterSceneNotFull":                     3001,
+		"kEnterSceneMainFull":                    3002,
+		"kEnterNodeUnavailable":                  3003,
+		"kEnterSceneServerType":                  3004,
+		"kEnterSceneParamError":                  3005,
+		"kEnterSceneSceneFull":                   3006,
+		"kEnterSceneSceneNotFound":               3007,
+		"kEnterSceneYouInCurrentScene":           3008,
+		"kEnterSceneEnterCrossRoomScene":         3009,
+		"kEnterSceneGsInfoNull":                  3010,
+		"kEnterSceneGsFull":                      3011,
+		"kEnterSceneYourSceneIsNull":             3012,
+		"kEnterSceneChangeSceneOffLine":          3013,
+		"kEnterSceneChangingScene":               3014,
+		"kEnterSceneChangingGs":                  3015,
+		"kChangeScenePlayerQueueNotFound":        3016,
+		"kChangeScenePlayerQueueFull":            3017,
+		"kChangeScenePlayerQueueComponentGsNull": 3018,
+		"kChangeScenePlayerQueueComponentEmpty":  3019,
+		"kChangeSceneEnQueueNotSameGs":           3020,
+		"kInvalidEnterSceneParameters":           3021,
+		"kCheckEnterSceneCreator":                3022,
+		"kEnterSceneFailed":                      3023,
 	}
 )
 
@@ -140,33 +140,34 @@ var File_scene_error_tip_proto protoreflect.FileDescriptor
 
 const file_scene_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15scene_error_tip.proto*\xfd\x05\n" +
+	"\x15scene_error_tip.proto*\x95\x06\n" +
 	"\vscene_error\x12\x12\n" +
-	"\x0ekScene_errorOK\x10\x00\x12\x17\n" +
-	"\x13kEnterSceneNotFound\x104\x12\x16\n" +
-	"\x12kEnterSceneNotFull\x105\x12\x17\n" +
-	"\x13kEnterSceneMainFull\x106\x12\x19\n" +
-	"\x15kEnterNodeUnavailable\x107\x12\x19\n" +
-	"\x15kEnterSceneServerType\x108\x12\x19\n" +
-	"\x15kEnterSceneParamError\x109\x12\x18\n" +
-	"\x14kEnterSceneSceneFull\x10:\x12\x1c\n" +
-	"\x18kEnterSceneSceneNotFound\x10;\x12 \n" +
-	"\x1ckEnterSceneYouInCurrentScene\x10<\x12\"\n" +
-	"\x1ekEnterSceneEnterCrossRoomScene\x10=\x12\x19\n" +
-	"\x15kEnterSceneGsInfoNull\x10>\x12\x15\n" +
-	"\x11kEnterSceneGsFull\x10?\x12\x1e\n" +
-	"\x1akEnterSceneYourSceneIsNull\x10@\x12!\n" +
-	"\x1dkEnterSceneChangeSceneOffLine\x10A\x12\x1c\n" +
-	"\x18kEnterSceneChangingScene\x10B\x12\x19\n" +
-	"\x15kEnterSceneChangingGs\x10C\x12#\n" +
-	"\x1fkChangeScenePlayerQueueNotFound\x10D\x12\x1f\n" +
-	"\x1bkChangeScenePlayerQueueFull\x10E\x12*\n" +
-	"&kChangeScenePlayerQueueComponentGsNull\x10F\x12)\n" +
-	"%kChangeScenePlayerQueueComponentEmpty\x10G\x12 \n" +
-	"\x1ckChangeSceneEnQueueNotSameGs\x10H\x12 \n" +
-	"\x1ckInvalidEnterSceneParameters\x10I\x12\x1b\n" +
-	"\x17kCheckEnterSceneCreator\x10J\x12\x15\n" +
-	"\x11kEnterSceneFailed\x10KB\x14Z\x12generated/pb/tableb\x06proto3"
+	"\x0ekScene_errorOK\x10\x00\x12\x18\n" +
+	"\x13kEnterSceneNotFound\x10\xb8\x17\x12\x17\n" +
+	"\x12kEnterSceneNotFull\x10\xb9\x17\x12\x18\n" +
+	"\x13kEnterSceneMainFull\x10\xba\x17\x12\x1a\n" +
+	"\x15kEnterNodeUnavailable\x10\xbb\x17\x12\x1a\n" +
+	"\x15kEnterSceneServerType\x10\xbc\x17\x12\x1a\n" +
+	"\x15kEnterSceneParamError\x10\xbd\x17\x12\x19\n" +
+	"\x14kEnterSceneSceneFull\x10\xbe\x17\x12\x1d\n" +
+	"\x18kEnterSceneSceneNotFound\x10\xbf\x17\x12!\n" +
+	"\x1ckEnterSceneYouInCurrentScene\x10\xc0\x17\x12#\n" +
+	"\x1ekEnterSceneEnterCrossRoomScene\x10\xc1\x17\x12\x1a\n" +
+	"\x15kEnterSceneGsInfoNull\x10\xc2\x17\x12\x16\n" +
+	"\x11kEnterSceneGsFull\x10\xc3\x17\x12\x1f\n" +
+	"\x1akEnterSceneYourSceneIsNull\x10\xc4\x17\x12\"\n" +
+	"\x1dkEnterSceneChangeSceneOffLine\x10\xc5\x17\x12\x1d\n" +
+	"\x18kEnterSceneChangingScene\x10\xc6\x17\x12\x1a\n" +
+	"\x15kEnterSceneChangingGs\x10\xc7\x17\x12$\n" +
+	"\x1fkChangeScenePlayerQueueNotFound\x10\xc8\x17\x12 \n" +
+	"\x1bkChangeScenePlayerQueueFull\x10\xc9\x17\x12+\n" +
+	"&kChangeScenePlayerQueueComponentGsNull\x10\xca\x17\x12*\n" +
+	"%kChangeScenePlayerQueueComponentEmpty\x10\xcb\x17\x12!\n" +
+	"\x1ckChangeSceneEnQueueNotSameGs\x10\xcc\x17\x12!\n" +
+	"\x1ckInvalidEnterSceneParameters\x10\xcd\x17\x12\x1c\n" +
+	"\x17kCheckEnterSceneCreator\x10\xce\x17\x12\x16\n" +
+	"\x11kEnterSceneFailed\x10\xcf\x17B$\n" +
+	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (
 	file_scene_error_tip_proto_rawDescOnce sync.Once

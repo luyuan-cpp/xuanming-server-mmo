@@ -63,8 +63,8 @@ internal::EnumTraitsT<::buff_error_internal_data_>
 
 enum buff_error : int {
   kBuff_errorOK = 0,
-  kBuffMaxBuffStack = 123,
-  kBuffTargetImmuneToBuff = 124,
+  kBuffMaxBuffStack = 8000,
+  kBuffTargetImmuneToBuff = 8001,
   buff_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   buff_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -75,11 +75,11 @@ extern const uint32_t buff_error_internal_data_[];
 inline constexpr buff_error buff_error_MIN =
     static_cast<buff_error>(0);
 inline constexpr buff_error buff_error_MAX =
-    static_cast<buff_error>(124);
+    static_cast<buff_error>(8001);
 [[nodiscard]] inline bool buff_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, buff_error_internal_data_);
 }
-inline constexpr int buff_error_ARRAYSIZE = 124 + 1;
+inline constexpr int buff_error_ARRAYSIZE = 8001 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 buff_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(buff_error) {

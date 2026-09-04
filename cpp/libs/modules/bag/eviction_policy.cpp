@@ -4,12 +4,14 @@
 #include <utility>
 #include <vector>
 
-uint64_t EvictOldestFirst::AcquisitionOrderOf(Guid guid, const ItemComp & /*item*/)
+uint64_t EvictOldestFirst::AcquisitionOrderOf(Guid /*guid*/, const ItemComp &item)
 {
-	// 今天:snowflake guid 升序 ≈ 入包先后(高位是时间)。已知近似,两条例外
-	// 路径写在头文件里。等 ItemComp 有了显式的获得序号字段,这里改成读它 ——
-	// **整个淘汰轴只有这一个函数需要改**。
-	return static_cast<uint64_t>(guid);
+	// `ItemStore::Insert` 保证店里每个实例的 acquire_seq 都非零、且同包内单调
+	// (新实例盖当前水位,快照带回来的章原样保留并抬高水位)。所以这里直接比它。
+	//
+	// 恒为 0 是构造上不可达的;真出现了就排最前(当作最早),即"优先被挤掉" ——
+	// 一个没有身份的实例先走,比让它永远赖着不走安全。
+	return item.acquire_seq();
 }
 
 GuidVector EvictOldestFirst::SelectVictims(std::size_t needed, const ItemStore &store,

@@ -223,6 +223,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
     kItemIdFieldNumber = 1,
     kConfigIdFieldNumber = 2,
     kSizeFieldNumber = 3,
+    kAcquireSeqFieldNumber = 4,
   };
   // uint64 item_id = 1;
   void clear_item_id() ;
@@ -254,11 +255,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
   void _internal_set_size(::uint32_t value);
 
   public:
+  // uint64 acquire_seq = 4;
+  void clear_acquire_seq() ;
+  [[nodiscard]] ::uint64_t acquire_seq() const;
+  void set_acquire_seq(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_acquire_seq() const;
+  void _internal_set_acquire_seq(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ItemComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -290,6 +301,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemComp final : public ::google::p
     ::uint64_t item_id_;
     ::uint32_t config_id_;
     ::uint32_t size_;
+    ::uint64_t acquire_seq_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -382,6 +394,30 @@ inline ::uint32_t ItemComp::_internal_size() const {
 inline void ItemComp::_internal_set_size(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.size_ = value;
+}
+
+// uint64 acquire_seq = 4;
+inline void ItemComp::clear_acquire_seq() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.acquire_seq_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t ItemComp::acquire_seq() const {
+  // @@protoc_insertion_point(field_get:ItemComp.acquire_seq)
+  return _internal_acquire_seq();
+}
+inline void ItemComp::set_acquire_seq(::uint64_t value) {
+  _internal_set_acquire_seq(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ItemComp.acquire_seq)
+}
+inline ::uint64_t ItemComp::_internal_acquire_seq() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.acquire_seq_;
+}
+inline void ItemComp::_internal_set_acquire_seq(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.acquire_seq_ = value;
 }
 
 #ifdef __GNUC__

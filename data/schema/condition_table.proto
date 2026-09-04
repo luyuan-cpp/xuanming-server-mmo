@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+// Condition 表的权威 schema。源表 data/Condition.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号是从 generated/code/proto/condition_table.proto 抄来的现状值,**只增不改、删字段用 reserved**。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message ConditionTable {
+  option (cfg_sheet)       = "Condition";
+  option (cfg_source_file) = "Condition.xlsx";
+  option (cfg_primary_key) = "id";
+
+  uint32 id = 1;
+  // 1杀怪2对话npc3完成相应条件4使用类型物品5交互6升级7不是表里的条件8完成相应任务
+  uint32 condition_category = 2;
+  repeated uint32 condition1 = 3 [(cfg_slots) = 5];
+  repeated uint32 condition2 = 4 [(cfg_slots) = 4];
+  repeated uint32 condition3 = 5 [(cfg_slots) = 2];
+  repeated uint32 condition4 = 6 [(cfg_slots) = 2];
+  // 时间约束（如 1 小时内完成）
+  uint64 valid_duration = 7;
+  // 0:累计 (如累计充值人民币1万元) 1:拥有 (如拥有一万砖石)并用枚举描述 0 = cumulative, 1 = owned
+  uint32 quantity_type = 8;
+  // 数量
+  uint32 target_count = 9;
+  // 0: >= 1:> 2: <= 3: < 4:==
+  uint32 comparison_op = 10;
+  int32 design_note = 9001 [(cfg_owner) = "designer"];
+}

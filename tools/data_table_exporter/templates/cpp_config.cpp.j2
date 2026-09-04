@@ -54,6 +54,8 @@ void {{ sheetname }}TableManager::Load() {
     snapshot = std::move(snap);
 }
 
+{%- if not table.multi_primary_key %}
+
 std::pair<const {{ sheetname }}Table*, uint32_t> {{ sheetname }}TableManager::FindById(const uint32_t tableId) {
     const auto& snap = GetSnapshot();
     const auto it = snap.idMap.find(tableId);
@@ -72,6 +74,7 @@ std::pair<const {{ sheetname }}Table*, uint32_t> {{ sheetname }}TableManager::Fi
     }
     return {it->second, kSuccess};
 }
+{%- endif %}
 
 {% for col in table.table_keys -%}
 std::pair<const {{ sheetname }}Table*, uint32_t> {{ sheetname }}TableManager::FindBy{{ to_pascal_case(col.name) }}({{ to_cpp_param_type(col.data_type) }} key) const {

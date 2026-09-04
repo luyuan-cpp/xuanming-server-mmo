@@ -30,24 +30,24 @@ public class BuffTableManager {
 
 
 
-        final Map<Double, List<BuffTable>> idxInterval_effect;
+        final Map<Double, List<BuffTable>> idxIntervalEffect;
 
-        final Map<Integer, List<BuffTable>> idxSub_buff;
+        final Map<Integer, List<BuffTable>> idxSubBuff;
 
-        final Map<Integer, List<BuffTable>> idxTarget_sub_buff;
+        final Map<Integer, List<BuffTable>> idxTargetSubBuff;
 
 
 
         Snapshot(BuffTableData data,
                  Map<Integer, BuffTable> kvData,
-                 Map<Double, List<BuffTable>> idxInterval_effect,
-                 Map<Integer, List<BuffTable>> idxSub_buff,
-                 Map<Integer, List<BuffTable>> idxTarget_sub_buff) {
+                 Map<Double, List<BuffTable>> idxIntervalEffect,
+                 Map<Integer, List<BuffTable>> idxSubBuff,
+                 Map<Integer, List<BuffTable>> idxTargetSubBuff) {
             this.data = data;
             this.kvData = kvData;
-            this.idxInterval_effect = idxInterval_effect;
-            this.idxSub_buff = idxSub_buff;
-            this.idxTarget_sub_buff = idxTarget_sub_buff;
+            this.idxIntervalEffect = idxIntervalEffect;
+            this.idxSubBuff = idxSubBuff;
+            this.idxTargetSubBuff = idxTargetSubBuff;
         }
     }
 
@@ -75,30 +75,31 @@ public class BuffTableManager {
         BuffTableData data = builder.build();
 
         Map<Integer, BuffTable> kvData = new HashMap<>(data.getDataCount());
-        Map<Double, List<BuffTable>> idxInterval_effect = new HashMap<>();
-        Map<Integer, List<BuffTable>> idxSub_buff = new HashMap<>();
-        Map<Integer, List<BuffTable>> idxTarget_sub_buff = new HashMap<>();
+        Map<Double, List<BuffTable>> idxIntervalEffect = new HashMap<>();
+        Map<Integer, List<BuffTable>> idxSubBuff = new HashMap<>();
+        Map<Integer, List<BuffTable>> idxTargetSubBuff = new HashMap<>();
 
         for (BuffTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
             for (Double elem : row.getIntervalEffectList()) {
-                idxInterval_effect.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idxIntervalEffect.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
             for (Integer elem : row.getSubBuffList()) {
-                idxSub_buff.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idxSubBuff.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
             for (Integer elem : row.getTargetSubBuffList()) {
-                idxTarget_sub_buff.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idxTargetSubBuff.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
         }
 
-        this.snapshot = new Snapshot(data, kvData, idxInterval_effect, idxSub_buff, idxTarget_sub_buff);
+        this.snapshot = new Snapshot(data, kvData, idxIntervalEffect, idxSubBuff, idxTargetSubBuff);
     }
 
     public BuffTableData findAll() {
         return snapshot.data;
     }
 
+    /** 热更契约：返回的对象属于当前快照，调用方**只存 id**，不要长期持有引用。 */
     public BuffTable findById(int id) {
         return snapshot.kvData.get(id);
     }
@@ -111,16 +112,16 @@ public class BuffTableManager {
 
 
 
-    public List<BuffTable> findByInterval_effectIndex(double key) {
-        return snapshot.idxInterval_effect.getOrDefault(key, Collections.emptyList());
+    public List<BuffTable> findByIntervalEffectIndex(double key) {
+        return snapshot.idxIntervalEffect.getOrDefault(key, Collections.emptyList());
     }
 
-    public List<BuffTable> findBySub_buffIndex(int key) {
-        return snapshot.idxSub_buff.getOrDefault(key, Collections.emptyList());
+    public List<BuffTable> findBySubBuffIndex(int key) {
+        return snapshot.idxSubBuff.getOrDefault(key, Collections.emptyList());
     }
 
-    public List<BuffTable> findByTarget_sub_buffIndex(int key) {
-        return snapshot.idxTarget_sub_buff.getOrDefault(key, Collections.emptyList());
+    public List<BuffTable> findByTargetSubBuffIndex(int key) {
+        return snapshot.idxTargetSubBuff.getOrDefault(key, Collections.emptyList());
     }
 
 
@@ -144,16 +145,16 @@ public class BuffTableManager {
 
 
 
-    public int countByInterval_effectIndex(double key) {
-        return snapshot.idxInterval_effect.getOrDefault(key, Collections.emptyList()).size();
+    public int countByIntervalEffectIndex(double key) {
+        return snapshot.idxIntervalEffect.getOrDefault(key, Collections.emptyList()).size();
     }
 
-    public int countBySub_buffIndex(int key) {
-        return snapshot.idxSub_buff.getOrDefault(key, Collections.emptyList()).size();
+    public int countBySubBuffIndex(int key) {
+        return snapshot.idxSubBuff.getOrDefault(key, Collections.emptyList()).size();
     }
 
-    public int countByTarget_sub_buffIndex(int key) {
-        return snapshot.idxTarget_sub_buff.getOrDefault(key, Collections.emptyList()).size();
+    public int countByTargetSubBuffIndex(int key) {
+        return snapshot.idxTargetSubBuff.getOrDefault(key, Collections.emptyList()).size();
     }
 
 

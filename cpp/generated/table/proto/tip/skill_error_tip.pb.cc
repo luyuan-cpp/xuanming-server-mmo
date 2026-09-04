@@ -35,20 +35,21 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_skill_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025skill_error_tip.proto*\203\002\n\013skill_error\022"
-    "\022\n\016kSkill_errorOK\020\000\022\031\n\025kSkillUnInterrupt"
-    "ible\020t\022\031\n\025kSkillInvalidTargetId\020u\022\027\n\023kSk"
-    "illInvalidTarget\020v\022\032\n\026kSkillCooldownNotR"
-    "eady\020w\022$\n kSkillCannotBeCastInCurrentSta"
-    "te\020x\022(\n$kSkillCannotBeCastSilenceRestric"
-    "tion\020y\022%\n!kSkillCannotBeCastStunRestrict"
-    "ion\020zB\024Z\022generated/pb/tableb\006proto3"
+    "\n\025skill_error_tip.proto*\212\002\n\013skill_error\022"
+    "\022\n\016kSkill_errorOK\020\000\022\032\n\025kSkillUnInterrupt"
+    "ible\020\3306\022\032\n\025kSkillInvalidTargetId\020\3316\022\030\n\023k"
+    "SkillInvalidTarget\020\3326\022\033\n\026kSkillCooldownN"
+    "otReady\020\3336\022%\n kSkillCannotBeCastInCurren"
+    "tState\020\3346\022)\n$kSkillCannotBeCastSilenceRe"
+    "striction\020\3356\022&\n!kSkillCannotBeCastStunRe"
+    "striction\020\3366B$\n\016com.game.tableZ\022generate"
+    "d/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_skill_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_skill_5ferror_5ftip_2eproto = {
     false,
     false,
-    315,
+    338,
     descriptor_table_protodef_skill_5ferror_5ftip_2eproto,
     "skill_error_tip.proto",
     &descriptor_table_skill_5ferror_5ftip_2eproto_once,
@@ -67,7 +68,7 @@ skill_error_descriptor() {
   return file_level_enum_descriptors_skill_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t skill_error_internal_data_[] = {
-    65536u, 128u, 0u, 0u, 0u, 66584576u, };
+    65536u, 458752u, 7003u, 7001u, 7005u, 7000u, 7002u, 7004u, 7006u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

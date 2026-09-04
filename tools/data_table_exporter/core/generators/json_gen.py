@@ -26,15 +26,19 @@ def generate_json(cfg: ExporterConfig, tables: list[TableSchema]) -> None:
         return
 
     with ThreadPoolExecutor() as pool:
-        pool.map(lambda t: _export_one(t, cfg), tables)
+        # Executor.map 是惰性的；不消费结果就会吞掉工作线程异常，随后拿旧产物
+        # 继续编译/部署。逐项迭代才能把任一表的失败传播给 orchestrator。
+        for _ in pool.map(lambda t: _export_one(t, cfg), tables):
+            pass
 
 
 def _export_one(table: TableSchema, cfg: ExporterConfig) -> None:
     try:
         rows = read_data_rows(table, cfg)
-        if not rows:
-            return
-        out = cfg.json_dir / f"{table.name}.json"
+        # 小写与 binary_gen 的 f"{table.name.lower()}.pb" 以及 cpp/go/java 三端模板里的
+        # "{{ sheetname | lower }}.json" 对齐。从前这里是 PascalCase:Windows 大小写不敏感
+        # 所以一直没炸,**Linux 上 JSON 模式必然读不到文件**(线上跑 binary 才没暴露)。
+        out = cfg.json_dir / f"{table.name.lower()}.json"
         content = json.dumps(
             {"data": rows},
             sort_keys=True,
@@ -45,4 +49,6 @@ def _export_one(table: TableSchema, cfg: ExporterConfig) -> None:
         write_file(out, content)
         logger.info("Generated %s", out.name)
     except Exception as exc:
-        logger.error("JSON generation failed for %s: %s", table.name, exc)
+        raise RuntimeError(
+            f"JSON generation failed for {table.name}: {exc}"
+        ) from exc

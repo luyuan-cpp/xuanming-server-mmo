@@ -25,72 +25,72 @@ type CommonError int32
 
 const (
 	CommonError_kCommon_errorOK             CommonError = 0
-	CommonError_kSuccess                    CommonError = 1
-	CommonError_kInvalidTableId             CommonError = 2
-	CommonError_kInvalidTableData           CommonError = 3
-	CommonError_kServiceUnavailable         CommonError = 4
-	CommonError_kEntityIsNull               CommonError = 5
-	CommonError_kInvalidParameter           CommonError = 6
-	CommonError_kFeatureUnavailable         CommonError = 7
-	CommonError_kIndexOutOfRange            CommonError = 8
-	CommonError_kRateLimitExceeded          CommonError = 9
-	CommonError_kThisEntityIsInvalid        CommonError = 10
-	CommonError_kMessageSizeExceeded        CommonError = 11
-	CommonError_kSessionNotFound            CommonError = 12
-	CommonError_kPlayerNotFoundInSession    CommonError = 13
-	CommonError_kMessageIdNotFound          CommonError = 14
-	CommonError_kRequestMessageParseError   CommonError = 15
-	CommonError_kArraySizeTooLargeInMessage CommonError = 16
-	CommonError_kResponseMessageParseError  CommonError = 17
-	CommonError_kNegativeValueInMessage     CommonError = 18
-	CommonError_kFailedToRegisterTheNode    CommonError = 19
+	CommonError_kSuccess                    CommonError = 1000
+	CommonError_kInvalidTableId             CommonError = 1001
+	CommonError_kInvalidTableData           CommonError = 1002
+	CommonError_kServiceUnavailable         CommonError = 1003
+	CommonError_kEntityIsNull               CommonError = 1004
+	CommonError_kInvalidParameter           CommonError = 1005
+	CommonError_kFeatureUnavailable         CommonError = 1006
+	CommonError_kIndexOutOfRange            CommonError = 1007
+	CommonError_kRateLimitExceeded          CommonError = 1008
+	CommonError_kThisEntityIsInvalid        CommonError = 1009
+	CommonError_kMessageSizeExceeded        CommonError = 1010
+	CommonError_kSessionNotFound            CommonError = 1011
+	CommonError_kPlayerNotFoundInSession    CommonError = 1012
+	CommonError_kMessageIdNotFound          CommonError = 1013
+	CommonError_kRequestMessageParseError   CommonError = 1014
+	CommonError_kArraySizeTooLargeInMessage CommonError = 1015
+	CommonError_kResponseMessageParseError  CommonError = 1016
+	CommonError_kNegativeValueInMessage     CommonError = 1017
+	CommonError_kFailedToRegisterTheNode    CommonError = 1018
 )
 
 // Enum value maps for CommonError.
 var (
 	CommonError_name = map[int32]string{
-		0:  "kCommon_errorOK",
-		1:  "kSuccess",
-		2:  "kInvalidTableId",
-		3:  "kInvalidTableData",
-		4:  "kServiceUnavailable",
-		5:  "kEntityIsNull",
-		6:  "kInvalidParameter",
-		7:  "kFeatureUnavailable",
-		8:  "kIndexOutOfRange",
-		9:  "kRateLimitExceeded",
-		10: "kThisEntityIsInvalid",
-		11: "kMessageSizeExceeded",
-		12: "kSessionNotFound",
-		13: "kPlayerNotFoundInSession",
-		14: "kMessageIdNotFound",
-		15: "kRequestMessageParseError",
-		16: "kArraySizeTooLargeInMessage",
-		17: "kResponseMessageParseError",
-		18: "kNegativeValueInMessage",
-		19: "kFailedToRegisterTheNode",
+		0:    "kCommon_errorOK",
+		1000: "kSuccess",
+		1001: "kInvalidTableId",
+		1002: "kInvalidTableData",
+		1003: "kServiceUnavailable",
+		1004: "kEntityIsNull",
+		1005: "kInvalidParameter",
+		1006: "kFeatureUnavailable",
+		1007: "kIndexOutOfRange",
+		1008: "kRateLimitExceeded",
+		1009: "kThisEntityIsInvalid",
+		1010: "kMessageSizeExceeded",
+		1011: "kSessionNotFound",
+		1012: "kPlayerNotFoundInSession",
+		1013: "kMessageIdNotFound",
+		1014: "kRequestMessageParseError",
+		1015: "kArraySizeTooLargeInMessage",
+		1016: "kResponseMessageParseError",
+		1017: "kNegativeValueInMessage",
+		1018: "kFailedToRegisterTheNode",
 	}
 	CommonError_value = map[string]int32{
 		"kCommon_errorOK":             0,
-		"kSuccess":                    1,
-		"kInvalidTableId":             2,
-		"kInvalidTableData":           3,
-		"kServiceUnavailable":         4,
-		"kEntityIsNull":               5,
-		"kInvalidParameter":           6,
-		"kFeatureUnavailable":         7,
-		"kIndexOutOfRange":            8,
-		"kRateLimitExceeded":          9,
-		"kThisEntityIsInvalid":        10,
-		"kMessageSizeExceeded":        11,
-		"kSessionNotFound":            12,
-		"kPlayerNotFoundInSession":    13,
-		"kMessageIdNotFound":          14,
-		"kRequestMessageParseError":   15,
-		"kArraySizeTooLargeInMessage": 16,
-		"kResponseMessageParseError":  17,
-		"kNegativeValueInMessage":     18,
-		"kFailedToRegisterTheNode":    19,
+		"kSuccess":                    1000,
+		"kInvalidTableId":             1001,
+		"kInvalidTableData":           1002,
+		"kServiceUnavailable":         1003,
+		"kEntityIsNull":               1004,
+		"kInvalidParameter":           1005,
+		"kFeatureUnavailable":         1006,
+		"kIndexOutOfRange":            1007,
+		"kRateLimitExceeded":          1008,
+		"kThisEntityIsInvalid":        1009,
+		"kMessageSizeExceeded":        1010,
+		"kSessionNotFound":            1011,
+		"kPlayerNotFoundInSession":    1012,
+		"kMessageIdNotFound":          1013,
+		"kRequestMessageParseError":   1014,
+		"kArraySizeTooLargeInMessage": 1015,
+		"kResponseMessageParseError":  1016,
+		"kNegativeValueInMessage":     1017,
+		"kFailedToRegisterTheNode":    1018,
 	}
 )
 
@@ -125,29 +125,29 @@ var File_common_error_tip_proto protoreflect.FileDescriptor
 
 const file_common_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x16common_error_tip.proto*\x82\x04\n" +
+	"\x16common_error_tip.proto*\x95\x04\n" +
 	"\fcommon_error\x12\x13\n" +
-	"\x0fkCommon_errorOK\x10\x00\x12\f\n" +
-	"\bkSuccess\x10\x01\x12\x13\n" +
-	"\x0fkInvalidTableId\x10\x02\x12\x15\n" +
-	"\x11kInvalidTableData\x10\x03\x12\x17\n" +
-	"\x13kServiceUnavailable\x10\x04\x12\x11\n" +
-	"\rkEntityIsNull\x10\x05\x12\x15\n" +
-	"\x11kInvalidParameter\x10\x06\x12\x17\n" +
-	"\x13kFeatureUnavailable\x10\a\x12\x14\n" +
-	"\x10kIndexOutOfRange\x10\b\x12\x16\n" +
-	"\x12kRateLimitExceeded\x10\t\x12\x18\n" +
-	"\x14kThisEntityIsInvalid\x10\n" +
-	"\x12\x18\n" +
-	"\x14kMessageSizeExceeded\x10\v\x12\x14\n" +
-	"\x10kSessionNotFound\x10\f\x12\x1c\n" +
-	"\x18kPlayerNotFoundInSession\x10\r\x12\x16\n" +
-	"\x12kMessageIdNotFound\x10\x0e\x12\x1d\n" +
-	"\x19kRequestMessageParseError\x10\x0f\x12\x1f\n" +
-	"\x1bkArraySizeTooLargeInMessage\x10\x10\x12\x1e\n" +
-	"\x1akResponseMessageParseError\x10\x11\x12\x1b\n" +
-	"\x17kNegativeValueInMessage\x10\x12\x12\x1c\n" +
-	"\x18kFailedToRegisterTheNode\x10\x13B\x14Z\x12generated/pb/tableb\x06proto3"
+	"\x0fkCommon_errorOK\x10\x00\x12\r\n" +
+	"\bkSuccess\x10\xe8\a\x12\x14\n" +
+	"\x0fkInvalidTableId\x10\xe9\a\x12\x16\n" +
+	"\x11kInvalidTableData\x10\xea\a\x12\x18\n" +
+	"\x13kServiceUnavailable\x10\xeb\a\x12\x12\n" +
+	"\rkEntityIsNull\x10\xec\a\x12\x16\n" +
+	"\x11kInvalidParameter\x10\xed\a\x12\x18\n" +
+	"\x13kFeatureUnavailable\x10\xee\a\x12\x15\n" +
+	"\x10kIndexOutOfRange\x10\xef\a\x12\x17\n" +
+	"\x12kRateLimitExceeded\x10\xf0\a\x12\x19\n" +
+	"\x14kThisEntityIsInvalid\x10\xf1\a\x12\x19\n" +
+	"\x14kMessageSizeExceeded\x10\xf2\a\x12\x15\n" +
+	"\x10kSessionNotFound\x10\xf3\a\x12\x1d\n" +
+	"\x18kPlayerNotFoundInSession\x10\xf4\a\x12\x17\n" +
+	"\x12kMessageIdNotFound\x10\xf5\a\x12\x1e\n" +
+	"\x19kRequestMessageParseError\x10\xf6\a\x12 \n" +
+	"\x1bkArraySizeTooLargeInMessage\x10\xf7\a\x12\x1f\n" +
+	"\x1akResponseMessageParseError\x10\xf8\a\x12\x1c\n" +
+	"\x17kNegativeValueInMessage\x10\xf9\a\x12\x1d\n" +
+	"\x18kFailedToRegisterTheNode\x10\xfa\aB$\n" +
+	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (
 	file_common_error_tip_proto_rawDescOnce sync.Once

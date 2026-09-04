@@ -1,6 +1,9 @@
 package constants
 
-import "shared/serverbase"
+import (
+	"shared/generated/pb/table"
+	"shared/serverbase"
+)
 
 // Guild member roles.
 const (
@@ -9,48 +12,33 @@ const (
 	RoleLeader  uint32 = 3
 )
 
-// 公会服务独占的 tip 码段 [200, 219]。
+// 公会的 tip 码现在由配表统一发号,不再手写。
 //
-// # 为什么必须开号段
+// # 这里为什么变了
 //
-// 下面的 Err* 常量最终写进 TipInfoMessage.id,而 TipInfoMessage 承载的是**全仓
-// 唯一一条扁平数轴**:generated/code/proto/tip/*.proto 里所有枚举共用它,
-// common 占 1-19、login 20-51、scene 52-75、team 76-93 …… 一直到 cross_server 129。
-// 历史实现绕开这条数轴、从 1 开始手写自己的常量,于是
-// ErrGuildNotFound=2 与 common 段的 kInvalidTableId=2 完全撞号 —— 客户端按 id
-// 查提示表,拿到的是「无效表 ID」而不是「公会不存在」。
+// 这些常量最终写进 TipInfoMessage.id,而 TipInfoMessage 承载的是**全仓唯一一条
+// 数轴**,客户端拿 id 去查文案。历史上这一段是手写的 [200,219] 私有段 ——
+// 一个「约定」:它防不住别人(go/match 就从 1 开始重新数了一遍,ErrInBattle=1
+// 直接压在 common 段上),也拿不到中文文案(Tip.xlsx 的文案列当时根本没有出口)。
 //
-// 号段划分:130-199 留给未来新增的 *_error_tip.proto(即配表生成链自己的扩展空间),
-// 200 起给各 Go 服务的私有段 —— guild 200-219 / friend 220-239 /
-// player_locator 240-259(后者当前无 tip 码,只做预留)。
-// 「本文件里每个 Err* uint32 常量都落在本段内且互不相同」由 constants_test.go 强制,
-// 该测试同时扫描它们与 common 段(以及整条已生成的 tip 数轴)是否重叠。
+// 2026-09-02 起改成:段由 data/tip/Tip.xlsx 的组头行声明,发号器按段分配,
+// 段表与文案表都是生成产物。公会段是 guild_error base=14000。
+// 于是「防重叠」从人的自觉变成发号器的机械保证,文案也随表一起发。
 //
-// # 上线影响(必须知情)
-//
-// 新 id 目前**不在 data/tip/Tip.xlsx 里**,客户端查不到对应文案。
-// tipErr() 仍会把英文短语放进 Parameters[0],不至于变成完全空白的错误;
-// 真正的中文文案需要后续把 200-219 补进配表并重新生成 tip proto。
-// 在补齐之前,这些 id 至少不再冒充 common 段的其它含义。
+// 加一个新码 = 往 Tip.xlsx 的 //guild_error 组里加一行(名字 + 中文),
+// 重跑导表器,然后在下面加一行引用。不要再手写数字。
 const (
-	GuildTipCodeLo uint32 = 200
-	GuildTipCodeHi uint32 = 219
-)
-
-// Business error IDs returned in TipInfoMessage.Id.
-// 本组常量全部是 tip 码,取值必须落在 [GuildTipCodeLo, GuildTipCodeHi] 内。
-const (
-	ErrAlreadyInGuild  uint32 = 200
-	ErrGuildNotFound   uint32 = 201
-	ErrNotInGuild      uint32 = 202
-	ErrGuildFull       uint32 = 203
-	ErrLeaderCantLeave uint32 = 204
-	ErrNotLeader       uint32 = 205
-	ErrNoPermission    uint32 = 206
-	ErrNotRanked       uint32 = 207
+	ErrAlreadyInGuild  = uint32(table.GuildError_kGuildAlreadyInGuild)
+	ErrGuildNotFound   = uint32(table.GuildError_kGuildNotFound)
+	ErrNotInGuild      = uint32(table.GuildError_kGuildNotInGuild)
+	ErrGuildFull       = uint32(table.GuildError_kGuildFull)
+	ErrLeaderCantLeave = uint32(table.GuildError_kGuildLeaderCantLeave)
+	ErrNotLeader       = uint32(table.GuildError_kGuildNotLeader)
+	ErrNoPermission    = uint32(table.GuildError_kGuildNoPermission)
+	ErrNotRanked       = uint32(table.GuildError_kGuildNotRanked)
 	// ErrIDGenUnavailable:发号器已被 fence(worker id 的 etcd 租约丢了),
 	// 本次建帮整体失败。客户端重试即可 —— 进程会退出并由编排重拉、重新拿号。
-	ErrIDGenUnavailable uint32 = 208
+	ErrIDGenUnavailable = uint32(table.GuildError_kGuildIdGenUnavailable)
 )
 
 // Default limits.
@@ -72,18 +60,16 @@ var faultCodes = map[uint32]struct{}{
 
 // TipClassifier 返回本服务的 in-band 业务码定性函数,供 serverbase.UnaryInterceptor 使用。
 //
-// 为什么不能直接用 serverbase.TipVerdict:它只认已生成的 tip 数轴(上限 129),
-// 200-219 会被判成 VerdictUnknown 并刷 rpc_inband_unknown_code 日志。
-// 本函数只接管公会自己的号段,段外的码(例如上游透传的 common 段)仍交回全局判定,
-// 这样 serverbase 的「码表漂移」告警语义不受影响。
+// 公会段进配表之后,serverbase.TipVerdict 已经认得这些码(不再判 VerdictUnknown),
+// 所以这里只剩一件事:声明本域里哪些码算「服务端故障」。
+// 这是**码的属性**,理应和码定义在一起(Tip.xlsx 加一列 fault 就能收口),
+// 目前仍散在各服务 —— 与刚修掉的「段和发号分家」是同一类病,见
+// docs/design/tip-code-axis.md 的「已知残留」。
 func TipClassifier() serverbase.Classifier {
 	return func(code uint32) serverbase.Verdict {
-		if code < GuildTipCodeLo || code > GuildTipCodeHi {
-			return serverbase.TipVerdict(code)
-		}
 		if _, ok := faultCodes[code]; ok {
 			return serverbase.VerdictFault
 		}
-		return serverbase.VerdictBizReject
+		return serverbase.TipVerdict(code)
 	}
 }

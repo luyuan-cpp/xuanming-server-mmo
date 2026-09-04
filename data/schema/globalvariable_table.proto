@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+// GlobalVariable 表的权威 schema。源表 data/GlobalVariable.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号是从 generated/code/proto/globalvariable_table.proto 抄来的现状值,**只增不改、删字段用 reserved**。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message GlobalVariableTable {
+  option (cfg_sheet)       = "GlobalVariable";
+  option (cfg_source_file) = "GlobalVariable.xlsx";
+  option (cfg_primary_key) = "id";
+
+  uint32 id = 1;
+  int32 designer = 9001 [(cfg_owner) = "designer"];
+  int32 constants_name = 9002 [(cfg_owner) = "constants_name"];
+  uint32 to_uint32 = 9003 [(cfg_owner) = ""];
+  int32 to_int32 = 9004 [(cfg_owner) = ""];
+  string to_string = 9005 [(cfg_owner) = ""];
+  float to_float = 9006 [(cfg_owner) = ""];
+  double to_double = 9007 [(cfg_owner) = ""];
+}

@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18tip/buff_error_tip.proto*S\n\nbuff_error\x12\x11\n\rkBuff_errorOK\x10\x00\x12\x15\n\x11kBuffMaxBuffStack\x10{\x12\x1b\n\x17kBuffTargetImmuneToBuff\x10|B\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x18tip/buff_error_tip.proto*U\n\nbuff_error\x12\x11\n\rkBuff_errorOK\x10\x00\x12\x16\n\x11kBuffMaxBuffStack\x10\xc0>\x12\x1c\n\x17kBuffTargetImmuneToBuff\x10\xc1>B$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tip.buff_error_tip_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_BUFF_ERROR']._serialized_start=28
-  _globals['_BUFF_ERROR']._serialized_end=111
+  _globals['_BUFF_ERROR']._serialized_end=113
 # @@protoc_insertion_point(module_scope)

@@ -30,9 +30,9 @@ public class SkillTableManager {
 
 
 
-        final Map<Integer, List<SkillTable>> idxSkill_type;
+        final Map<Integer, List<SkillTable>> idxSkillType;
 
-        final Map<Integer, List<SkillTable>> idxTargeting_mode;
+        final Map<Integer, List<SkillTable>> idxTargetingMode;
 
         final Map<Integer, List<SkillTable>> idxEffect;
 
@@ -40,13 +40,13 @@ public class SkillTableManager {
 
         Snapshot(SkillTableData data,
                  Map<Integer, SkillTable> kvData,
-                 Map<Integer, List<SkillTable>> idxSkill_type,
-                 Map<Integer, List<SkillTable>> idxTargeting_mode,
+                 Map<Integer, List<SkillTable>> idxSkillType,
+                 Map<Integer, List<SkillTable>> idxTargetingMode,
                  Map<Integer, List<SkillTable>> idxEffect) {
             this.data = data;
             this.kvData = kvData;
-            this.idxSkill_type = idxSkill_type;
-            this.idxTargeting_mode = idxTargeting_mode;
+            this.idxSkillType = idxSkillType;
+            this.idxTargetingMode = idxTargetingMode;
             this.idxEffect = idxEffect;
         }
     }
@@ -75,30 +75,31 @@ public class SkillTableManager {
         SkillTableData data = builder.build();
 
         Map<Integer, SkillTable> kvData = new HashMap<>(data.getDataCount());
-        Map<Integer, List<SkillTable>> idxSkill_type = new HashMap<>();
-        Map<Integer, List<SkillTable>> idxTargeting_mode = new HashMap<>();
+        Map<Integer, List<SkillTable>> idxSkillType = new HashMap<>();
+        Map<Integer, List<SkillTable>> idxTargetingMode = new HashMap<>();
         Map<Integer, List<SkillTable>> idxEffect = new HashMap<>();
 
         for (SkillTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
             for (Integer elem : row.getSkillTypeList()) {
-                idxSkill_type.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idxSkillType.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
             for (Integer elem : row.getTargetingModeList()) {
-                idxTargeting_mode.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idxTargetingMode.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
             for (Integer elem : row.getEffectList()) {
                 idxEffect.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
         }
 
-        this.snapshot = new Snapshot(data, kvData, idxSkill_type, idxTargeting_mode, idxEffect);
+        this.snapshot = new Snapshot(data, kvData, idxSkillType, idxTargetingMode, idxEffect);
     }
 
     public SkillTableData findAll() {
         return snapshot.data;
     }
 
+    /** 热更契约：返回的对象属于当前快照，调用方**只存 id**，不要长期持有引用。 */
     public SkillTable findById(int id) {
         return snapshot.kvData.get(id);
     }
@@ -111,12 +112,12 @@ public class SkillTableManager {
 
 
 
-    public List<SkillTable> findBySkill_typeIndex(int key) {
-        return snapshot.idxSkill_type.getOrDefault(key, Collections.emptyList());
+    public List<SkillTable> findBySkillTypeIndex(int key) {
+        return snapshot.idxSkillType.getOrDefault(key, Collections.emptyList());
     }
 
-    public List<SkillTable> findByTargeting_modeIndex(int key) {
-        return snapshot.idxTargeting_mode.getOrDefault(key, Collections.emptyList());
+    public List<SkillTable> findByTargetingModeIndex(int key) {
+        return snapshot.idxTargetingMode.getOrDefault(key, Collections.emptyList());
     }
 
     public List<SkillTable> findByEffectIndex(int key) {
@@ -144,12 +145,12 @@ public class SkillTableManager {
 
 
 
-    public int countBySkill_typeIndex(int key) {
-        return snapshot.idxSkill_type.getOrDefault(key, Collections.emptyList()).size();
+    public int countBySkillTypeIndex(int key) {
+        return snapshot.idxSkillType.getOrDefault(key, Collections.emptyList()).size();
     }
 
-    public int countByTargeting_modeIndex(int key) {
-        return snapshot.idxTargeting_mode.getOrDefault(key, Collections.emptyList()).size();
+    public int countByTargetingModeIndex(int key) {
+        return snapshot.idxTargetingMode.getOrDefault(key, Collections.emptyList()).size();
     }
 
     public int countByEffectIndex(int key) {

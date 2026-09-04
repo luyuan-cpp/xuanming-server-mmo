@@ -63,13 +63,13 @@ internal::EnumTraitsT<::mission_error_internal_data_>
 
 enum mission_error : int {
   kMission_errorOK = 0,
-  kMissionTypeAlreadyExists = 94,
-  kMissionAlreadyCompleted = 95,
-  kMissionIdNotInRewardList = 96,
-  kPlayerMissionComponentNotFound = 97,
-  kMissionIdRepeated = 98,
-  kConditionIdOutOfRange = 99,
-  kMissionNotInProgress = 100,
+  kMissionTypeAlreadyExists = 5000,
+  kMissionAlreadyCompleted = 5001,
+  kMissionIdNotInRewardList = 5002,
+  kPlayerMissionComponentNotFound = 5003,
+  kMissionIdRepeated = 5004,
+  kConditionIdOutOfRange = 5005,
+  kMissionNotInProgress = 5006,
   mission_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   mission_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -80,11 +80,11 @@ extern const uint32_t mission_error_internal_data_[];
 inline constexpr mission_error mission_error_MIN =
     static_cast<mission_error>(0);
 inline constexpr mission_error mission_error_MAX =
-    static_cast<mission_error>(100);
+    static_cast<mission_error>(5006);
 [[nodiscard]] inline bool mission_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, mission_error_internal_data_);
 }
-inline constexpr int mission_error_ARRAYSIZE = 100 + 1;
+inline constexpr int mission_error_ARRAYSIZE = 5006 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 mission_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(mission_error) {

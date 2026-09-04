@@ -20,13 +20,16 @@ import (
 type buffSnapshot struct {
     data   []*pb.BuffTable
     kvData map[uint32]*pb.BuffTable
-    idxInterval_effect map[float64][]*pb.BuffTable
-    idxSub_buff map[uint32][]*pb.BuffTable
-    idxTarget_sub_buff map[uint32][]*pb.BuffTable
+    idxIntervalEffect map[float64][]*pb.BuffTable
+    idxSubBuff map[uint32][]*pb.BuffTable
+    idxTargetSubBuff map[uint32][]*pb.BuffTable
 }
 
 type BuffTableManager struct {
     // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    //
+    // 热更契约:返回出去的 *pb 行属于**当时**那个快照。Go 有 GC,存着不会崩,
+    // 但会永远拿到热更前的旧值。调用方**只存 id**,用的时候现查。
     // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
     // 并发读就是数据竞争(go test -race 会报)。
     // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
@@ -40,9 +43,9 @@ func NewBuffTableManager() *BuffTableManager {
     m := &BuffTableManager{}
     m.snap.Store(&buffSnapshot{
         kvData: make(map[uint32]*pb.BuffTable),
-        idxInterval_effect: make(map[float64][]*pb.BuffTable),
-        idxSub_buff: make(map[uint32][]*pb.BuffTable),
-        idxTarget_sub_buff: make(map[uint32][]*pb.BuffTable),
+        idxIntervalEffect: make(map[float64][]*pb.BuffTable),
+        idxSubBuff: make(map[uint32][]*pb.BuffTable),
+        idxTargetSubBuff: make(map[uint32][]*pb.BuffTable),
     })
     return m
 }
@@ -72,21 +75,21 @@ func (m *BuffTableManager) Load(configDir string, useBinary bool) error {
 
     snap := &buffSnapshot{
         kvData: make(map[uint32]*pb.BuffTable, len(container.Data)),
-        idxInterval_effect: make(map[float64][]*pb.BuffTable),
-        idxSub_buff: make(map[uint32][]*pb.BuffTable),
-        idxTarget_sub_buff: make(map[uint32][]*pb.BuffTable),
+        idxIntervalEffect: make(map[float64][]*pb.BuffTable),
+        idxSubBuff: make(map[uint32][]*pb.BuffTable),
+        idxTargetSubBuff: make(map[uint32][]*pb.BuffTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
         for _, elem := range row.IntervalEffect {
-            snap.idxInterval_effect[elem] = append(snap.idxInterval_effect[elem], row)
+            snap.idxIntervalEffect[elem] = append(snap.idxIntervalEffect[elem], row)
         }
         for _, elem := range row.SubBuff {
-            snap.idxSub_buff[elem] = append(snap.idxSub_buff[elem], row)
+            snap.idxSubBuff[elem] = append(snap.idxSubBuff[elem], row)
         }
         for _, elem := range row.TargetSubBuff {
-            snap.idxTarget_sub_buff[elem] = append(snap.idxTarget_sub_buff[elem], row)
+            snap.idxTargetSubBuff[elem] = append(snap.idxTargetSubBuff[elem], row)
         }
     }
 
@@ -107,21 +110,21 @@ func (m *BuffTableManager) FindById(id uint32) (*pb.BuffTable, bool) {
 }
 
 
-func (m *BuffTableManager) FindByInterval_effectIndex(key float64) []*pb.BuffTable {
+func (m *BuffTableManager) FindByIntervalEffectIndex(key float64) []*pb.BuffTable {
     snap := m.snap.Load()
-    return snap.idxInterval_effect[key]
+    return snap.idxIntervalEffect[key]
 }
 
 
-func (m *BuffTableManager) FindBySub_buffIndex(key uint32) []*pb.BuffTable {
+func (m *BuffTableManager) FindBySubBuffIndex(key uint32) []*pb.BuffTable {
     snap := m.snap.Load()
-    return snap.idxSub_buff[key]
+    return snap.idxSubBuff[key]
 }
 
 
-func (m *BuffTableManager) FindByTarget_sub_buffIndex(key uint32) []*pb.BuffTable {
+func (m *BuffTableManager) FindByTargetSubBuffIndex(key uint32) []*pb.BuffTable {
     snap := m.snap.Load()
-    return snap.idxTarget_sub_buff[key]
+    return snap.idxTargetSubBuff[key]
 }
 
 
@@ -144,21 +147,21 @@ func (m *BuffTableManager) Count() int {
 }
 
 
-func (m *BuffTableManager) CountByInterval_effectIndex(key float64) int {
+func (m *BuffTableManager) CountByIntervalEffectIndex(key float64) int {
     snap := m.snap.Load()
-    return len(snap.idxInterval_effect[key])
+    return len(snap.idxIntervalEffect[key])
 }
 
 
-func (m *BuffTableManager) CountBySub_buffIndex(key uint32) int {
+func (m *BuffTableManager) CountBySubBuffIndex(key uint32) int {
     snap := m.snap.Load()
-    return len(snap.idxSub_buff[key])
+    return len(snap.idxSubBuff[key])
 }
 
 
-func (m *BuffTableManager) CountByTarget_sub_buffIndex(key uint32) int {
+func (m *BuffTableManager) CountByTargetSubBuffIndex(key uint32) int {
     snap := m.snap.Load()
-    return len(snap.idxTarget_sub_buff[key])
+    return len(snap.idxTargetSubBuff[key])
 }
 
 

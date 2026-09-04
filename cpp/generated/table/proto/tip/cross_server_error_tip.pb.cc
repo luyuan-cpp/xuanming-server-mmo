@@ -37,14 +37,14 @@ const char descriptor_table_protodef_cross_5fserver_5ferror_5ftip_2eproto[] ABSL
     protodesc_cold) = {
     "\n\034cross_server_error_tip.proto*N\n\022cross_"
     "server_error\022\031\n\025kCross_server_errorOK\020\000\022"
-    "\035\n\030kSceneTransferInProgress\020\201\001B\024Z\022genera"
-    "ted/pb/tableb\006proto3"
+    "\035\n\030kSceneTransferInProgress\020\310eB$\n\016com.ga"
+    "me.tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_cross_5fserver_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_cross_5fserver_5ferror_5ftip_2eproto = {
     false,
     false,
-    140,
+    156,
     descriptor_table_protodef_cross_5fserver_5ferror_5ftip_2eproto,
     "cross_server_error_tip.proto",
     &descriptor_table_cross_5fserver_5ferror_5ftip_2eproto_once,
@@ -63,7 +63,7 @@ cross_server_error_descriptor() {
   return file_level_enum_descriptors_cross_5fserver_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t cross_server_error_internal_data_[] = {
-    65536u, 65536u, 129u, };
+    65536u, 65536u, 13000u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

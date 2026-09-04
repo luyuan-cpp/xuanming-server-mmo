@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1doperator/scene_operator.proto*)\n\x05scene\x12\x0c\n\x08kSceneOK\x10\x00\x12\x12\n\x0ekEnterSceneC2S\x10\x01\x42\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1doperator/scene_operator.proto*)\n\x05scene\x12\x0c\n\x08kSceneOK\x10\x00\x12\x12\n\x0ekEnterSceneC2S\x10\x01\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'operator.scene_operator_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_SCENE']._serialized_start=33
   _globals['_SCENE']._serialized_end=74
 # @@protoc_insertion_point(module_scope)

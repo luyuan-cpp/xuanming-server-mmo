@@ -25,36 +25,36 @@ type SkillError int32
 
 const (
 	SkillError_kSkill_errorOK                       SkillError = 0
-	SkillError_kSkillUnInterruptible                SkillError = 116
-	SkillError_kSkillInvalidTargetId                SkillError = 117
-	SkillError_kSkillInvalidTarget                  SkillError = 118
-	SkillError_kSkillCooldownNotReady               SkillError = 119
-	SkillError_kSkillCannotBeCastInCurrentState     SkillError = 120
-	SkillError_kSkillCannotBeCastSilenceRestriction SkillError = 121
-	SkillError_kSkillCannotBeCastStunRestriction    SkillError = 122
+	SkillError_kSkillUnInterruptible                SkillError = 7000
+	SkillError_kSkillInvalidTargetId                SkillError = 7001
+	SkillError_kSkillInvalidTarget                  SkillError = 7002
+	SkillError_kSkillCooldownNotReady               SkillError = 7003
+	SkillError_kSkillCannotBeCastInCurrentState     SkillError = 7004
+	SkillError_kSkillCannotBeCastSilenceRestriction SkillError = 7005
+	SkillError_kSkillCannotBeCastStunRestriction    SkillError = 7006
 )
 
 // Enum value maps for SkillError.
 var (
 	SkillError_name = map[int32]string{
-		0:   "kSkill_errorOK",
-		116: "kSkillUnInterruptible",
-		117: "kSkillInvalidTargetId",
-		118: "kSkillInvalidTarget",
-		119: "kSkillCooldownNotReady",
-		120: "kSkillCannotBeCastInCurrentState",
-		121: "kSkillCannotBeCastSilenceRestriction",
-		122: "kSkillCannotBeCastStunRestriction",
+		0:    "kSkill_errorOK",
+		7000: "kSkillUnInterruptible",
+		7001: "kSkillInvalidTargetId",
+		7002: "kSkillInvalidTarget",
+		7003: "kSkillCooldownNotReady",
+		7004: "kSkillCannotBeCastInCurrentState",
+		7005: "kSkillCannotBeCastSilenceRestriction",
+		7006: "kSkillCannotBeCastStunRestriction",
 	}
 	SkillError_value = map[string]int32{
 		"kSkill_errorOK":                       0,
-		"kSkillUnInterruptible":                116,
-		"kSkillInvalidTargetId":                117,
-		"kSkillInvalidTarget":                  118,
-		"kSkillCooldownNotReady":               119,
-		"kSkillCannotBeCastInCurrentState":     120,
-		"kSkillCannotBeCastSilenceRestriction": 121,
-		"kSkillCannotBeCastStunRestriction":    122,
+		"kSkillUnInterruptible":                7000,
+		"kSkillInvalidTargetId":                7001,
+		"kSkillInvalidTarget":                  7002,
+		"kSkillCooldownNotReady":               7003,
+		"kSkillCannotBeCastInCurrentState":     7004,
+		"kSkillCannotBeCastSilenceRestriction": 7005,
+		"kSkillCannotBeCastStunRestriction":    7006,
 	}
 )
 
@@ -89,16 +89,17 @@ var File_skill_error_tip_proto protoreflect.FileDescriptor
 
 const file_skill_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15skill_error_tip.proto*\x83\x02\n" +
+	"\x15skill_error_tip.proto*\x8a\x02\n" +
 	"\vskill_error\x12\x12\n" +
-	"\x0ekSkill_errorOK\x10\x00\x12\x19\n" +
-	"\x15kSkillUnInterruptible\x10t\x12\x19\n" +
-	"\x15kSkillInvalidTargetId\x10u\x12\x17\n" +
-	"\x13kSkillInvalidTarget\x10v\x12\x1a\n" +
-	"\x16kSkillCooldownNotReady\x10w\x12$\n" +
-	" kSkillCannotBeCastInCurrentState\x10x\x12(\n" +
-	"$kSkillCannotBeCastSilenceRestriction\x10y\x12%\n" +
-	"!kSkillCannotBeCastStunRestriction\x10zB\x14Z\x12generated/pb/tableb\x06proto3"
+	"\x0ekSkill_errorOK\x10\x00\x12\x1a\n" +
+	"\x15kSkillUnInterruptible\x10\xd86\x12\x1a\n" +
+	"\x15kSkillInvalidTargetId\x10\xd96\x12\x18\n" +
+	"\x13kSkillInvalidTarget\x10\xda6\x12\x1b\n" +
+	"\x16kSkillCooldownNotReady\x10\xdb6\x12%\n" +
+	" kSkillCannotBeCastInCurrentState\x10\xdc6\x12)\n" +
+	"$kSkillCannotBeCastSilenceRestriction\x10\xdd6\x12&\n" +
+	"!kSkillCannotBeCastStunRestriction\x10\xde6B$\n" +
+	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (
 	file_skill_error_tip_proto_rawDescOnce sync.Once

@@ -3,11 +3,14 @@ syntax = "proto3";
 
 option go_package = "generated/pb/table";
 
+option java_package = "com.game.table";
+
+
 enum buff_error {
   kBuff_errorOK = 0;
 
-  kBuffMaxBuffStack = 123;
+  kBuffMaxBuffStack = 8000;
 
-  kBuffTargetImmuneToBuff = 124;
+  kBuffTargetImmuneToBuff = 8001;
 
 };

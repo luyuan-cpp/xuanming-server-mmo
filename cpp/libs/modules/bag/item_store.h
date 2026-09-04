@@ -40,7 +40,11 @@ public:
     ItemComp *Find(Guid guid);
     [[nodiscard]] const ItemComp *Find(Guid guid) const;
 
+    // 当前水位(下一个会盖出的序号)。只读,给用例断言用。
+    [[nodiscard]] uint64_t NextAcquireSeq() const { return nextAcquireSeq_; }
+
     // 建实体、存组件、登记索引 —— 三件事一次做完。
+    // 顺带给 acquire_seq 盖章(0 则盖当前水位;非 0 则保留并抬高水位)。
     // guid 撞车时回滚半建好的实体并返回 nullptr(绝不留下孤儿实体)。
     // proto 必须已经填好 item_id / config_id / size。
     //
@@ -155,4 +159,8 @@ public:
 private:
     ItemsMap guidToEntity_{};
     entt::registry registry_{};
+
+    // 下一个要盖的入包序号。1 起步,0 是"没盖章"的哨兵。
+    // 只由 Insert 推进、只由 Clear 复位 —— 见 Insert 里的注释。
+    uint64_t nextAcquireSeq_{1};
 };

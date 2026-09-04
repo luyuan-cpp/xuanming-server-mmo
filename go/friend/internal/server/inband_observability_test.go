@@ -54,8 +54,8 @@ func counterValue(t *testing.T, name string, labels map[string]string) float64 {
 // 业务拒绝,都会被打成 rpc_inband_fault_total 并刷一条 Error 日志;
 // 客户端那边同样按 id 查提示表,显示的是「无效表数据」。
 //
-// 修复后 ErrFriendListFull 落在 220-239 私有段,由 constants.TipClassifier()
-// 判成 biz_reject:fault 计数不动,reject 计数 +1。
+// 修复后 ErrFriendListFull 由 Tip.xlsx 发到 friend 段,全局段表判成
+// biz_reject:fault 计数不动,reject 计数 +1。
 func TestInbandInterceptorClassifiesFriendRejection(t *testing.T) {
 	const method = "FriendService/AddFriend"
 	labels := map[string]string{"method": method, "source": "tip_info"}

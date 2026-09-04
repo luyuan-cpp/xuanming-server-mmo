@@ -36,14 +36,14 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
 const char descriptor_table_protodef_ability_5foperator_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\026ability_operator.proto**\n\007ability\022\016\n\nk"
-    "AbilityOK\020\000\022\017\n\013kUseAbility\020\005B\024Z\022generate"
-    "d/pb/tableb\006proto3"
+    "AbilityOK\020\000\022\017\n\013kUseAbility\020\005B$\n\016com.game"
+    ".tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_ability_5foperator_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_ability_5foperator_2eproto = {
     false,
     false,
-    98,
+    114,
     descriptor_table_protodef_ability_5foperator_2eproto,
     "ability_operator.proto",
     &descriptor_table_ability_5foperator_2eproto_once,

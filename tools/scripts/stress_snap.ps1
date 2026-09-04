@@ -1,6 +1,6 @@
 # stress_snap.ps1 — periodic multi-endpoint Prometheus snapshot for stress runs.
 #
-# Per AGENTS.md §8/§9, every stress round must capture prom snapshots at
+# Per AGENTS.md §6.2, every stress round must capture prom snapshots at
 # ramp-end / steady-mid / steady-end and store them under the run dir's
 # prom-snapshots/ folder for stress_summarize.ps1 to consume.
 #

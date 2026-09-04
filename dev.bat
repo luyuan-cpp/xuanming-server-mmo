@@ -494,16 +494,49 @@ echo All builds succeeded.
 exit /b 0
 
 :: ================================================================
+:prepare_protoc
+set "REPO_PROTOC_DIR=%~dp0third_party\grpc\install_vs2026_dbg\bin"
+set "REPO_PROTOC=%REPO_PROTOC_DIR%\protoc.exe"
+if not exist "%REPO_PROTOC%" (
+    echo Required protoc was not found: "%REPO_PROTOC%"
+    exit /b 1
+)
+"%REPO_PROTOC%" --version 2>nul | findstr /x /c:"libprotoc 35.1" >nul
+if errorlevel 1 (
+    echo Repository generation requires libprotoc 35.1. Found:
+    "%REPO_PROTOC%" --version
+    exit /b 1
+)
+set "PATH=%REPO_PROTOC_DIR%;%PATH%"
+exit /b 0
+
+:: ================================================================
 :proto
+setlocal DisableDelayedExpansion
+call :prepare_protoc
+if errorlevel 1 (
+    pause
+    endlocal & exit /b 1
+)
+echo Using protoc: "%REPO_PROTOC%"
+"%REPO_PROTOC%" --version
 echo [1/2] Building proto generator...
 %PS% -File tools\scripts\dev_tools.ps1 -Command proto-gen-build
-if errorlevel 1 ( echo Proto generator build failed. & pause & exit /b 1 )
+if errorlevel 1 (
+    echo Proto generator build failed.
+    pause
+    endlocal & exit /b 1
+)
 echo.
 echo [2/2] Regenerating proto code...
 %PS% -File tools\scripts\dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath tools\proto_generator\protogen\etc\proto_gen.yaml
-if errorlevel 1 ( echo Proto generation failed. & pause & exit /b 1 )
+if errorlevel 1 (
+    echo Proto generation failed.
+    pause
+    endlocal & exit /b 1
+)
 echo Proto generation complete.
-exit /b 0
+endlocal & exit /b 0
 
 :: ================================================================
 :gen
@@ -520,16 +553,61 @@ exit /b 0
 
 :: ================================================================
 :export
+setlocal DisableDelayedExpansion
 set "EXPORT_CFG=%~2"
-if "%EXPORT_CFG%"=="" set "EXPORT_CFG=tools\data_table_exporter\exporter_config.yaml"
+if not defined EXPORT_CFG set "EXPORT_CFG=tools\data_table_exporter\exporter_config.yaml"
+
+set "EXPORT_PYTHON="
+if defined PYTHON_EXE set "EXPORT_PYTHON=%PYTHON_EXE:"=%"
+if not defined EXPORT_PYTHON (
+    py -3 -c "import sys" >nul 2>&1
+    if not errorlevel 1 (
+        for /f "delims=" %%I in ('py -3 -c "import sys; print(sys.executable)" 2^>nul') do set "EXPORT_PYTHON=%%I"
+    )
+)
+if not defined EXPORT_PYTHON (
+    python -c "import sys" >nul 2>&1
+    if not errorlevel 1 (
+        for /f "delims=" %%I in ('python -c "import sys; print(sys.executable)" 2^>nul') do set "EXPORT_PYTHON=%%I"
+    )
+)
+if not defined EXPORT_PYTHON (
+    echo Python 3 was not found. Install Python 3 or make the py launcher available.
+    pause
+    endlocal & exit /b 1
+)
+"%EXPORT_PYTHON%" -c "import sys; raise SystemExit(0 if sys.version_info.major == 3 else 1)" >nul 2>&1
+if errorlevel 1 (
+    echo Python 3 is not usable: "%EXPORT_PYTHON%"
+    pause
+    endlocal & exit /b 1
+)
+call :prepare_protoc
+if errorlevel 1 (
+    pause
+    endlocal & exit /b 1
+)
+
+echo Using Python: "%EXPORT_PYTHON%"
+"%EXPORT_PYTHON%" --version
+echo Using protoc: "%REPO_PROTOC%"
+"%REPO_PROTOC%" --version
 echo Installing Python dependencies...
-pip install -q -r tools\data_table_exporter\requirements.txt
-if errorlevel 1 ( echo pip install failed. & pause & exit /b 1 )
-echo Running data table exporter  [config: %EXPORT_CFG%]
-python tools\data_table_exporter\run.py "%EXPORT_CFG%"
-if errorlevel 1 ( echo Export failed. & pause & exit /b 1 )
+"%EXPORT_PYTHON%" -m pip install -q -r tools\data_table_exporter\requirements.txt
+if errorlevel 1 (
+    echo Python dependency installation failed.
+    pause
+    endlocal & exit /b 1
+)
+echo Running data table exporter  [config: "%EXPORT_CFG%"]
+"%EXPORT_PYTHON%" tools\data_table_exporter\run.py "%EXPORT_CFG%"
+if errorlevel 1 (
+    echo Export failed.
+    pause
+    endlocal & exit /b 1
+)
 echo Data table export complete.
-exit /b 0
+endlocal & exit /b 0
 
 :: ================================================================
 :clean_logs
@@ -603,6 +681,7 @@ echo     build          Compile C++ + Go (no launch)
 echo     proto          Regenerate proto code
 echo     export         Run Excel data table exporter (Python)
 echo     export ^<cfg^>   Use custom config (default: exporter_config.yaml)
+echo                    Optional Python override: set PYTHON_EXE=C:\path\to\python.exe
 echo     gen            Export tables + regenerate proto (both)
 echo     clean-logs     Delete all log files under run\logs
 echo     ui             mprocs TUI dashboard (all processes)

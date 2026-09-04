@@ -1,21 +1,27 @@
 # 背包:玩法规则的策略化分层 (2026-09-01)
 
-> **状态(2026-09-01):§8 的第 1、2、3、6 步已落码,未编译。**
+> **状态(2026-09-02):三个原始需求全部落码,P0/P1/P2 清零,未编译。**
 >
-> 落码的是:①具名槽 reserve 缺陷的回归用例;②`Bag::CanReserve()` 修复;
-> ③`IAdmissionPolicy` + `BagProfile` 装配器;⑥`IEvictionPolicy` +
-> `RejectWhenFull` / `EvictOldestFirst`(临时格先进先出)+ 退役实例落流水。
+> 用户最初问的三件事,现在都有完整实现与回归用例:
+> ①**装备栏两个手镯位**(具名槽 + 按部位 reserve,§6.1);
+> ②**临时包先进先出**(淘汰轴 + **真入包序号**,不再是 guid 近似,§6.2);
+> ③**节日包只收节日道具**(`AcceptByConfigSet` + profile 注册表 + `profile_id`
+> 持久化,§6.4)。
 >
-> 第 4、5 步未开工 —— 它们要加配置表列,得跑导表工具。第 7 步按判据等使用者。
-> 第 6 步的 **FIFO 排序依据仍是 guid 近似**(真正的获得序号字段要改 proto),
-> 近似收在 `EvictOldestFirst::AcquisitionOrderOf()` 一个函数里,见 §6.2。
+> 落码顺序:9-01 落 §8 第 1/2/3/6 步 → 9-01 自查修一处顺序缺陷(§6.3)→
+> 9-02 第二轮 8 视角审计 + 对抗证伪,18 条全部成立并修完(§6.5)→
+> 9-02 补完真序号与节日包。落码过程中推翻了 §5 原先画的 `AcceptsBatch`(§5.1)。
 >
-> 落码过程中推翻了本文档 §5 原先画的一处接口(`AcceptsBatch`),理由记在 §5.1。
-> **没有动**任何配置表、proto、线上协议或错误码。
+> **改了三个源 proto**:`ItemComp.acquire_seq`(字段 4)、`ItemEntry.acquire_seq`
+> (字段 **13** —— 6~12 被 TODO 表预定,早先说"用 9"是错的)、
+> `DynamicBagData.profile_id`(字段 4)。需按 `CLAUDE.md` §4 重生成。
+> **配置表(xlsx)一个字没动。**
 >
-> **2026-09-02 第二轮审计(§6.5)**:8 视角独立审查 + 对抗证伪,18 条全部成立
-> (3 族 P0 全在淘汰轴),已全部修复并补 11 条用例。仍未编译。
-> **编译清单已改:scene 工程不能漏**(§8.2)。
+> **编译清单见 §8.2:scene 工程不能漏**(`sizeof(Bag)` 变了)。
+>
+> 未做且是刻意的:`AcceptByTag`(等 `CfgItem` 加 tag 列;没有列它会什么都不收,
+> 比没有更糟 —— 见 §6.4)、`CfgBagProfile` 表化(注册表是可用替代)、
+> 第 7 步 `IWithdrawPolicy`(按判据等使用者)。
 >
 > ⚠ 另见 §6.1 的查证:**整个背包域在生产侧零调用点**,这套规则今天还没有任何
 > 真实使用者。第 4 步之前应先接一条真实入包链路。
@@ -389,11 +395,23 @@ grep -rn "\.AddItem\|AddItems" --include=*.cpp cpp/libs/services cpp/nodes
 **字段号 6/7/8 已被 TODO 预定**(enchant / affixes / gem,见
 `proto/common/database/bag_quest_mail_data.proto`),**用 9**。
 
-> **落码现状:先用 guid 近似,但把近似关进了一个函数。**
-> `EvictOldestFirst::AcquisitionOrderOf(guid, item)` 是排序依据的**唯一**来源,
-> 今天 `return guid`。等序号字段落地,**整个淘汰轴只改这一个函数**,策略与桥层
-> 都不用动。这么做而不是等 proto,是因为除了排序依据之外的每一块
-> (回执、落流水、腾位纪律、具名槽禁淘汰)都跟字段无关,先做掉是净收益。
+> **2026-09-02 已落地,不再是近似。** 新增 `ItemComp.acquire_seq`(字段 4)与
+> `ItemEntry.acquire_seq`(**字段 13** —— 6~12 被上面那张 TODO 表预定了,早先
+> 说"用 9"是错的)。
+>
+> 盖章点是 `ItemStore::Insert` —— 本仓库唯一的实例创建口径:
+>   * `acquire_seq == 0` → 盖当前水位(新实例 / 旧存档没盖过章);
+>   * `acquire_seq > 0` → 原样保留,并把水位抬到它之上(快照带回来的章)。
+>
+> 于是"店里每个实例都有非零、同包内单调的序号"是**结构保证**,淘汰策略可以直接
+> 比大小。`Clear()` 复位水位,免得反复还原的实体涨到没有意义的大数。
+>
+> 刻意**不做** `seq==0 时回退 guid` 的混排:两个数域混排会让旧存档的物品永远
+> 排在最后,先进先出照样挤错人。补盖比回退干净。
+>
+> 回归用例 `AcquireSeqTest.FifoFollowsSequenceNotGuid` 把这件事钉死:它让
+> **更早进包的那件拿到更大的 guid**(跨服 / 邮件附件的真实形状),按 guid 排就会
+> 挤错人。
 
 #### (3) 落码后的实际形状
 
@@ -454,7 +472,7 @@ grep -rn "\.AddItem\|AddItems" --include=*.cpp cpp/libs/services cpp/nodes
 > (`plan -> reserve -> commit`)此前之所以好写,是因为前两段都是纯的;淘汰打破
 > 了这个前提,于是每一处 reserve 都要重新审一遍"我前面还有没有会失败的判断"。
 
-### 6.4 节日背包 —— 缺的是表列,不是 C++
+### 6.4 节日背包 —— 已落码(用名单式准入,不等 tag 列)
 
 `generated/code/proto/item_table.proto` 今天只有三列:
 
@@ -466,8 +484,38 @@ message ItemTable {
 }
 ```
 
-**没有任何分类 / 标签列**,所以"只能放节日道具"这句话在数据里根本表达不出来。
-**先加列,再写代码:**
+**没有任何分类 / 标签列。** 加列要改二进制 xlsx 源表 + 跑导表工具 —— 不是代码能
+落地的事,而且据 `configtable-unversioned-source-xlsx` 那条记录,这些源表连 SVN
+都没进,手改风险很高。
+
+#### 落码采用的方案:名单式准入(`AcceptByConfigSet`)
+
+**不等表列,今天就完整可用。** 名单由创建这个包的玩法(活动系统)在注册 profile
+时给出 —— 那边本来就知道自己发哪些道具。
+
+为什么不先把 `AcceptByTag` 写好占位:**没有 tag 列,它对所有东西都会读到
+`tag == 0` → 什么都不收**,节日包直接变成黑洞,比没有更糟。等 tag 列真的落地,
+再加一个约二十行的 `AcceptByTag` 与它并列即可 —— `IAdmissionPolicy` 一个字都不用
+改,这正是把准入做成策略的意义。
+
+#### profile 注册表:规则不进快照,进快照的只有一个 id
+
+`BagProfileRegistry`(`bag_profile_registry.{h,cpp}`)把两件事分开:
+
+| | 归属 | 去向 |
+|---|---|---|
+| "这个包是哪套规则" | **玩家数据** | `DynamicBagData.profile_id`,**必须持久化** |
+| "那套规则具体是什么" | 代码 + 配置 | 注册表里的工厂,**绝不进快照**(§7 红线 5) |
+
+`Make(profileId, capacity)` 查不到时 **fail-open**:退化成自由格 + 什么都收,
+打 ERROR,但**保留 id** —— 活动下线 / profile 未注册 / 脏数据,都不能因此让玩家
+的东西没地方放;保留 id 才能让活动重新上线后这个包自己变回去。口径与
+`InsertItemForRestore` 一致:**位置可以变,规则可以退化,物品不能丢**。
+
+`CfgBagProfile` 表仍是终局,但那时的改动**只在注册表内部**(`Make()` 改成先查表、
+查不到再回退到已注册工厂),调用方一行都不用动。
+
+#### 原设计里"先加列"的那段(保留作对照)
 
 | 表 | 新增列 | 含义 |
 |---|---|---|
@@ -482,10 +530,11 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 `comp/player_bags_comp.h` 的注释已经明确:节日包属于运行时 / 临时背包这一档,
 **不要加进 `BagType` 枚举**(那是持久化契约,不能为活动增殖)。
 
-**缺口:** `BagAllData.DynamicBagData` 今天只带 `bag_id + capacity + items`,
-**没有 profile id**(见 `bag_marshal.cpp:74` 的 Marshal 与 `:149` 的 Unmarshal)。
-一旦规则挂到包上,跨服回来节日包会退化成默认 `FlatLayout(kDefaultCapacity)` 的
-自由包 —— **规则静默消失**。加 proto 字段和 `SetProfile` 还原路径必须一起做。
+**缺口(2026-09-02 已补)**:`BagAllData.DynamicBagData` 原先只带
+`bag_id + capacity + items`,**没有 profile id** —— 规则一挂到包上,跨服回来就会
+退化成默认自由包,规则静默消失。现已加 `profile_id = 4`,并在 `bag_marshal` 两侧
+接好:Marshal 写 `bag.ProfileId()`;Unmarshal **先 `SetProfile(registry.Make(...))`
+再放物品**(`SetProfile` 只接受空包,顺序反了规则装不上)。
 
 ---
 
@@ -572,10 +621,10 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 | 1 | 为 §6.1 的 `CanFit` 洞写回归用例 | ✅ 已落码,未编译 | `bag_test.cpp` 新增 `EquipmentReserveTest`(8 例)+ `BagProfileTest`(3 例) |
 | 2 | 修 §6.1:把具名槽的批量 reserve 提到桥层 | ✅ 已落码,未编译 | `Bag::CanReserve` / `CountFreeSlotsForKind` / `IsFreeSlotForEquipKind` |
 | 3 | 抽 `IAdmissionPolicy` + `BagProfile` 装配器 | ✅ 已落码,未编译 | 新增 `admission_policy.h`(仅头文件);`bag_system.{h,cpp}`、`player_bags_comp.h`、`modules.vcxproj` |
-| 4 | 加 `CfgItem.tag` + `CfgBagProfile` 两张表 | ⬜ 未开工 | `data/*.xlsx` + 导表(需人跑导表工具) |
-| 5 | 节日包:`AcceptByTag` + `DynamicBagData.profile_id` + 还原路径 | ⬜ 未开工,**卡在第 4 步** | proto + `bag_marshal.cpp` |
-| 6 | `IEvictionPolicy` + `EvictOldestFirst` + 流水回执 | ✅ 已落码,未编译(**序号字段除外**) | 新增 `eviction_policy.{h,cpp}`;`bag_system.{h,cpp}`、`bag_service.{h,cpp}`、`player_bags_comp.h` |
-| 6b | `ItemEntry`/`ItemComp` 加获得序号字段(字段号 9),`AcquisitionOrderOf` 改读它 | ⬜ 未开工 | proto,只需改一个函数 |
+| 4 | ~~加 `CfgItem.tag` + `CfgBagProfile` 两张表~~ → **改用注册表 + 名单式准入** | ✅ 已落码(等价替代,§6.4);tag 列仍待日后 | 新增 `bag_profile_registry.{h,cpp}`、`AcceptByConfigSet` |
+| 5 | 节日包:准入 + `DynamicBagData.profile_id` + 还原路径 | ✅ 已落码,未编译 | proto + `bag_marshal.cpp` + `BagProfile::Festival` |
+| 6 | `IEvictionPolicy` + `EvictOldestFirst` + 流水回执 | ✅ 已落码,未编译 | 新增 `eviction_policy.{h,cpp}`;`bag_system.{h,cpp}`、`bag_service.{h,cpp}`、`player_bags_comp.h` |
+| 6b | `ItemEntry`/`ItemComp` 加入包序号(**字段 13 / 4**),`AcquisitionOrderOf` 改读它 | ✅ 已落码,未编译 | 两个源 proto + `ItemStore::Insert` 盖章 + `bag_marshal` |
 | 7 | `IWithdrawPolicy`(绑定 / 任务道具 / 活动结束) | ⬜ **等有真实使用者再做** | —— |
 
 第 4~6 步都要改配置表或 proto,得跑导表工具 / `cd go && build.bat` 重生成,
@@ -628,6 +677,10 @@ C++ 里不写死任何一个 tag 值。** 这条在装备槽上已经做对了�
 
 按 `CLAUDE.md` §10.1:Claude 不执行编译。第 1~3 步已落码,**未编译**。
 
+- **先重生成 proto**(本轮改了三个源 proto):按 `CLAUDE.md` §4,`cd go && build.bat`,
+  再重编受影响的 C++ / Go / Java。新增字段:`ItemComp.acquire_seq=4`、
+  `ItemEntry.acquire_seq=13`、`BagAllData.DynamicBagData.profile_id=4`。
+  **都是新增、不复用任何已用字段号**,线上兼容(旧存档读到 0,行为与落地前一致)。
 - **目标工程(顺序不能乱)**:`cpp/libs/modules`(modules)→
   **`cpp/libs/services/scene`(scene)** → `cpp/tests/bag_test` → `cpp/tests/cross_zone_test`。
   C++ MSBuild **必须串行** `/m:1`(并发会报假的 C1041/LNK1104)。

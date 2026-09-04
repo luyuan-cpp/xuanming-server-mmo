@@ -1,0 +1,172 @@
+{# ue_all_table.cpp.j2 -- UConfigSubsystem 实现 #}
+// ---------------------------------------------------------------------------
+//  由 Data Table Exporter 生成。**不要手改**。
+//  重新生成:tools/data_table_exporter/run.py
+//
+//  模块依赖(Build.cs)见 ConfigSubsystem.h 顶部。
+// ---------------------------------------------------------------------------
+#include "ConfigSubsystem.h"
+
+#include "Engine/GameInstance.h"
+#include "Engine/World.h"
+#include "Misc/Paths.h"
+
+DEFINE_LOG_CATEGORY(LogConfigTable);
+
+UConfigSubsystem* UConfigSubsystem::Get(const UObject* WorldContextObject)
+{
+	if (WorldContextObject == nullptr)
+	{
+		return nullptr;
+	}
+	const UWorld* World = WorldContextObject->GetWorld();
+	if (World == nullptr)
+	{
+		return nullptr;
+	}
+	UGameInstance* GameInstance = World->GetGameInstance();
+	return GameInstance != nullptr ? GameInstance->GetSubsystem<UConfigSubsystem>() : nullptr;
+}
+
+void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+
+	// 只建管理器,**不装载**:配置文件从哪来是工程决策(Content 目录 / pak /
+	// 下载目录),生成器不替工程猜。装载由调用方显式调 LoadAll。
+{%- for item in sheetnames %}
+	{{ item }}Table = NewObject<U{{ item }}Table>(this);
+{%- endfor %}
+}
+
+void UConfigSubsystem::Deinitialize()
+{
+{%- for item in sheetnames %}
+	{{ item }}Table = nullptr;
+{%- endfor %}
+	ConfigDir.Reset();
+	LoadVersion = 0;
+	bAllTablesCoherent = false;
+	Super::Deinitialize();
+}
+
+TArray<FString> UConfigSubsystem::TableFileNames()
+{
+	return TArray<FString>{
+{%- for item in sheetnames %}
+		U{{ item }}Table::FileName(){% if not loop.last %},{% endif %}
+{%- endfor %}
+	};
+}
+
+bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
+{
+	bool bAllOk = true;
+	// 单张表的 Load 成功 == 那张表换了代(失败时它原封不动留在旧一代)。
+	// LoadVersion 是失效通知,所以只要**有一张**换了代就得 +1 —— 见 ConfigSubsystem.h。
+	bool bAnySwapped = false;
+	FString Error;
+{% for item in sheetnames %}
+	if ({{ item }}Table == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[{{ item }}] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!{{ item }}Table->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+{%- endfor %}
+
+	ConfigDir = InConfigDir;
+	bAllTablesCoherent = bAllOk;
+	if (bAnySwapped)
+	{
+		++LoadVersion;
+	}
+	if (bAllOk)
+	{
+		UE_LOG(LogConfigTable, Log, TEXT("全部 %d 张配置表装载完成(第 %d 代): %s"), TableCount, LoadVersion, *InConfigDir);
+	}
+	else if (bAnySwapped)
+	{
+		// 失败的表留在旧一代 —— 这里是「部分新、部分旧」,不是一个一致的截面。
+		// LoadVersion 照样 +1:混代恰恰是缓存最需要被通知的情形。
+		UE_LOG(LogConfigTable, Error,
+			TEXT("配置表装载有失败项,表集合处于混代状态(失效版本号已 +1 到 %d): %s"), LoadVersion, *InConfigDir);
+	}
+	else
+	{
+		// 一张都没换代:没有任何东西过期,版本号不动。
+		UE_LOG(LogConfigTable, Error, TEXT("配置表全部装载失败,表集合原封不动(仍为第 %d 代): %s"), LoadVersion, *InConfigDir);
+	}
+	return bAllOk;
+}
+
+bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FString&)> TextProvider)
+{
+	bool bAllOk = true;
+	bool bAnySwapped = false;
+	FString Error;
+	FString JsonText;
+{% for item in sheetnames %}
+	JsonText.Reset();
+	if ({{ item }}Table == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[{{ item }}] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(U{{ item }}Table::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[{{ item }}] 取不到 %s"), U{{ item }}Table::FileName());
+		bAllOk = false;
+	}
+	else if (!{{ item }}Table->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+{%- endfor %}
+
+	ConfigDir.Reset();
+	bAllTablesCoherent = bAllOk;
+	if (bAnySwapped)
+	{
+		++LoadVersion;
+	}
+	if (bAllOk)
+	{
+		UE_LOG(LogConfigTable, Log, TEXT("全部 %d 张配置表装载完成(第 %d 代,provider)"), TableCount, LoadVersion);
+	}
+	else if (bAnySwapped)
+	{
+		UE_LOG(LogConfigTable, Error,
+			TEXT("配置表装载有失败项,表集合处于混代状态(失效版本号已 +1 到 %d,provider)"), LoadVersion);
+	}
+	else
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("配置表全部装载失败,表集合原封不动(仍为第 %d 代,provider)"), LoadVersion);
+	}
+	return bAllOk;
+}
+
+bool UConfigSubsystem::ReloadAll()
+{
+	if (ConfigDir.IsEmpty())
+	{
+		UE_LOG(LogConfigTable, Warning, TEXT("ReloadAll 前没有成功的 LoadAll(ConfigDir),无处可重装"));
+		return false;
+	}
+	// 拷一份再传:LoadAll 会写回 ConfigDir,直接把成员按 const& 传进去是自赋值。
+	const FString Dir = ConfigDir;
+	return LoadAll(Dir);
+}

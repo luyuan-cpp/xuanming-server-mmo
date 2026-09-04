@@ -35,16 +35,16 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_buff_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\024buff_error_tip.proto*S\n\nbuff_error\022\021\n\r"
-    "kBuff_errorOK\020\000\022\025\n\021kBuffMaxBuffStack\020{\022\033"
-    "\n\027kBuffTargetImmuneToBuff\020|B\024Z\022generated"
-    "/pb/tableb\006proto3"
+    "\n\024buff_error_tip.proto*U\n\nbuff_error\022\021\n\r"
+    "kBuff_errorOK\020\000\022\026\n\021kBuffMaxBuffStack\020\300>\022"
+    "\034\n\027kBuffTargetImmuneToBuff\020\301>B$\n\016com.gam"
+    "e.tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_buff_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_buff_5ferror_5ftip_2eproto = {
     false,
     false,
-    137,
+    155,
     descriptor_table_protodef_buff_5ferror_5ftip_2eproto,
     "buff_error_tip.proto",
     &descriptor_table_buff_5ferror_5ftip_2eproto_once,
@@ -63,7 +63,7 @@ buff_error_descriptor() {
   return file_level_enum_descriptors_buff_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t buff_error_internal_data_[] = {
-    65536u, 131072u, 124u, 123u, };
+    65536u, 131072u, 8001u, 8000u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

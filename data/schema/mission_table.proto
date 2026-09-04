@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+// Mission 表的权威 schema。源表 data/Mission.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号是从 generated/code/proto/mission_table.proto 抄来的现状值,**只增不改、删字段用 reserved**。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message MissionTable {
+  option (cfg_sheet)       = "Mission";
+  option (cfg_source_file) = "Mission.xlsx";
+  option (cfg_primary_key) = "id";
+
+  uint32 id = 1 [(cfg_bit_index) = true];
+  // condition表的id
+  repeated uint32 condition_id = 2 [(cfg_slots) = 6, (cfg_gfk) = "Condition"];
+  // 1：主线，2：活动
+  uint32 mission_type = 3;
+  // 自定义：非特殊情况1
+  uint32 mission_sub_type = 4;
+  // 0并行1顺序
+  uint32 condition_order = 5;
+  // 是否自动奖励
+  uint32 auto_reward = 6;
+  uint32 reward_id = 7 [(cfg_fk) = "Reward"];
+  repeated uint32 next_mission_id = 8 [(cfg_slots) = 1];
+  // 每个condition对应的目标数量(覆盖condition表默认值)
+  repeated uint32 target_count = 9 [(cfg_slots) = 2];
+}

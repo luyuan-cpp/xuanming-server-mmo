@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n tip/actor_action_error_tip.proto*r\n\x12\x61\x63tor_action_error\x12\x19\n\x15kActor_action_errorOK\x10\x00\x12\x41\n=kActorActionStateActionCannotBePerformedWhileInTeamFollowMode\x10~B\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n tip/actor_action_error_tip.proto*s\n\x12\x61\x63tor_action_error\x12\x19\n\x15kActor_action_errorOK\x10\x00\x12\x42\n=kActorActionStateActionCannotBePerformedWhileInTeamFollowMode\x10\x90NB$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tip.actor_action_error_tip_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_ACTOR_ACTION_ERROR']._serialized_start=36
-  _globals['_ACTOR_ACTION_ERROR']._serialized_end=150
+  _globals['_ACTOR_ACTION_ERROR']._serialized_end=151
 # @@protoc_insertion_point(module_scope)

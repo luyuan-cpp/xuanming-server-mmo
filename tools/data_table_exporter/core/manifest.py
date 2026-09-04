@@ -79,7 +79,7 @@ def _table_entry(cfg: ExporterConfig, table: TableSchema, manifest_dir: Path) ->
     """一张表在清单里的条目:源表指纹 + 行数 + 全部产物指纹。"""
     artifacts: list[dict[str, Any]] = []
 
-    json_path = cfg.json_dir / f"{table.name}.json"
+    json_path = cfg.json_dir / f"{table.name.lower()}.json"   # 与 json_gen / .pb / 三端模板同口径
     binary_path = cfg.binary_dir / f"{table.name.lower()}.pb"
     for path, kind in ((json_path, "json"), (binary_path, "binary")):
         info = _artifact_info(path, kind, manifest_dir)

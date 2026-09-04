@@ -35,27 +35,28 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_common_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\026common_error_tip.proto*\202\004\n\014common_erro"
-    "r\022\023\n\017kCommon_errorOK\020\000\022\014\n\010kSuccess\020\001\022\023\n\017"
-    "kInvalidTableId\020\002\022\025\n\021kInvalidTableData\020\003"
-    "\022\027\n\023kServiceUnavailable\020\004\022\021\n\rkEntityIsNu"
-    "ll\020\005\022\025\n\021kInvalidParameter\020\006\022\027\n\023kFeatureU"
-    "navailable\020\007\022\024\n\020kIndexOutOfRange\020\010\022\026\n\022kR"
-    "ateLimitExceeded\020\t\022\030\n\024kThisEntityIsInval"
-    "id\020\n\022\030\n\024kMessageSizeExceeded\020\013\022\024\n\020kSessi"
-    "onNotFound\020\014\022\034\n\030kPlayerNotFoundInSession"
-    "\020\r\022\026\n\022kMessageIdNotFound\020\016\022\035\n\031kRequestMe"
-    "ssageParseError\020\017\022\037\n\033kArraySizeTooLargeI"
-    "nMessage\020\020\022\036\n\032kResponseMessageParseError"
-    "\020\021\022\033\n\027kNegativeValueInMessage\020\022\022\034\n\030kFail"
-    "edToRegisterTheNode\020\023B\024Z\022generated/pb/ta"
-    "bleb\006proto3"
+    "\n\026common_error_tip.proto*\225\004\n\014common_erro"
+    "r\022\023\n\017kCommon_errorOK\020\000\022\r\n\010kSuccess\020\350\007\022\024\n"
+    "\017kInvalidTableId\020\351\007\022\026\n\021kInvalidTableData"
+    "\020\352\007\022\030\n\023kServiceUnavailable\020\353\007\022\022\n\rkEntity"
+    "IsNull\020\354\007\022\026\n\021kInvalidParameter\020\355\007\022\030\n\023kFe"
+    "atureUnavailable\020\356\007\022\025\n\020kIndexOutOfRange\020"
+    "\357\007\022\027\n\022kRateLimitExceeded\020\360\007\022\031\n\024kThisEnti"
+    "tyIsInvalid\020\361\007\022\031\n\024kMessageSizeExceeded\020\362"
+    "\007\022\025\n\020kSessionNotFound\020\363\007\022\035\n\030kPlayerNotFo"
+    "undInSession\020\364\007\022\027\n\022kMessageIdNotFound\020\365\007"
+    "\022\036\n\031kRequestMessageParseError\020\366\007\022 \n\033kArr"
+    "aySizeTooLargeInMessage\020\367\007\022\037\n\032kResponseM"
+    "essageParseError\020\370\007\022\034\n\027kNegativeValueInM"
+    "essage\020\371\007\022\035\n\030kFailedToRegisterTheNode\020\372\007"
+    "B$\n\016com.game.tableZ\022generated/pb/tableb\006"
+    "proto3"
 };
 static ::absl::once_flag descriptor_table_common_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_common_5ferror_5ftip_2eproto = {
     false,
     false,
-    571,
+    606,
     descriptor_table_protodef_common_5ferror_5ftip_2eproto,
     "common_error_tip.proto",
     &descriptor_table_common_5ferror_5ftip_2eproto_once,
@@ -74,7 +75,7 @@ common_error_descriptor() {
   return file_level_enum_descriptors_common_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t common_error_internal_data_[] = {
-    1310720u, 0u, };
+    65536u, 1245184u, 1011u, 1007u, 1015u, 1003u, 1009u, 1013u, 1017u, 1001u, 1005u, 1008u, 1010u, 1012u, 1014u, 1016u, 1018u, 1000u, 1002u, 1004u, 1006u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

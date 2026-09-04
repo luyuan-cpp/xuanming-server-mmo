@@ -31,9 +31,14 @@ from core.schema import (
     GroupField,
     MapField,
     TableSchema,
+    positional_field_numbers,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class TableReadError(RuntimeError):
+    """至少一张输入表无法解析；继续生成会把旧产物伪装成最新结果。"""
 
 
 # ---------------------------------------------------------------------------
@@ -47,49 +52,69 @@ def read_table(file_path: Path, cfg: ExporterConfig) -> Optional[TableSchema]:
     except Exception as exc:
         logger.error("Cannot open %s: %s", file_path, exc)
         return None
+    try:
+        if not wb.sheetnames:
+            logger.error("No sheets in %s", file_path)
+            return None
 
-    if not wb.sheetnames:
-        logger.error("No sheets in %s", file_path)
+        sheet_name = wb.sheetnames[0]
+        ws = wb[sheet_name]
+
+        first_cell = str(ws.cell(row=1, column=1).value or "").strip()
+        if first_cell != "id":
+            logger.error("First column name must be 'id' (%s)", file_path)
+            return None
+
+        columns = _parse_columns(ws, cfg)
+        arrays, groups, maps = _detect_layout(columns)
+
+        first_col = columns[0] if columns else None
+        multi_primary_key = first_col is not None and first_col.is_multi_key
+
+        constants_idx = next(
+            (c.excel_index for c in columns if c.name == "constants_name"), None
+        )
+
+        schema = TableSchema(
+            name=sheet_name,
+            source_path=file_path,
+            columns=columns,
+            arrays=arrays,
+            groups=groups,
+            maps=maps,
+            multi_primary_key=multi_primary_key,
+            has_constants_name=constants_idx is not None,
+            constants_name_index=constants_idx,
+        )
+        # 这条路径没有显式字段号,按历史规则复算 —— 与从前模板内自增发号的结果逐位相同。
+        schema.field_numbers = positional_field_numbers(schema)
+        return schema
+    except Exception as exc:
+        logger.error("Cannot parse %s: %s", file_path, exc)
         return None
-
-    sheet_name = wb.sheetnames[0]
-    ws = wb[sheet_name]
-
-    first_cell = str(ws.cell(row=1, column=1).value or "").strip()
-    if first_cell != "id":
-        logger.error("First column name must be 'id' (%s)", file_path)
-        return None
-
-    columns = _parse_columns(ws, cfg)
-    arrays, groups, maps = _detect_layout(columns)
-
-    first_col = columns[0] if columns else None
-    use_flat_multimap = first_col is not None and first_col.is_multi_key
-
-    constants_idx = next(
-        (c.excel_index for c in columns if c.name == "constants_name"), None
-    )
-
-    return TableSchema(
-        name=sheet_name,
-        source_path=file_path,
-        columns=columns,
-        arrays=arrays,
-        groups=groups,
-        maps=maps,
-        use_flat_multimap=use_flat_multimap,
-        has_constants_name=constants_idx is not None,
-        constants_name_index=constants_idx,
-    )
+    finally:
+        wb.close()
 
 
 def read_all_tables(cfg: ExporterConfig) -> list[TableSchema]:
-    """Read every ``.xlsx`` in *cfg.data_dir* and return a list of schemas."""
+    """Read every input workbook, failing closed if any table is omitted."""
+    files = list_xlsx(cfg.data_dir)
+    if not files:
+        raise TableReadError(f"数据目录没有可导出的 xlsx: {cfg.data_dir}")
+
     tables: list[TableSchema] = []
-    for xlsx in list_xlsx(cfg.data_dir):
+    failed: list[Path] = []
+    for xlsx in files:
         schema = read_table(xlsx, cfg)
-        if schema is not None:
-            tables.append(schema)
+        if schema is None:
+            failed.append(xlsx)
+            continue
+        tables.append(schema)
+    if failed:
+        names = ", ".join(path.name for path in failed)
+        raise TableReadError(
+            f"{len(failed)} 张输入表无法解析，拒绝继续沿用旧产物: {names}"
+        )
     return tables
 
 

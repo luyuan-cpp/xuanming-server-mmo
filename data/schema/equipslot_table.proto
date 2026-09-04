@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+// EquipSlot 表的权威 schema。源表 data/EquipSlot.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号是从 generated/code/proto/equipslot_table.proto 抄来的现状值,**只增不改、删字段用 reserved**。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message EquipSlotTable {
+  option (cfg_sheet)       = "EquipSlot";
+  option (cfg_source_file) = "EquipSlot.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 装备栏槽位号(对应 BagAllData.ItemEntry.pos)
+  uint32 id = 1;
+  // 该槽位接受的装备部位;没在本表里出现的槽位不接受任何东西
+  uint32 equip_kind = 2;
+}

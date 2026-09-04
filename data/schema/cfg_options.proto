@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+// 配置表 schema 的自定义 option 词表。
+//
+// 这个文件是「权威 schema」这条路的词汇表：data/schema/<Sheet>_table.proto 用这里的
+// option 把过去写在 xlsx 表头第 2~5 行的信息（类型 / owner / options / 注释）显式写出来。
+//
+// 三点约定：
+//   1. 本文件与 data/schema/*.proto **不参与 protoc 编译**，不进任何语言的构建。
+//      导表器用 core/schema_proto.py 直接文本解析它们；protoc 只在 CI 里当语法 lint。
+//   2. 生成物 generated/code/proto/<sheet>_table.proto 仍由导表器产出、仍然不带任何
+//      option —— 三语言构建看到的东西一个字节都没变。
+//   3. 扩展号占用 60001-60199。改动前先确认没有别的 extend 用了同一段。
+
+package mmorpg.cfgtable.v1;
+
+import "google/protobuf/descriptor.proto";
+
+// 一个字段在 Excel 里的物理形态。决定它占几列、怎么展开。
+enum CfgShape {
+  CFG_SHAPE_UNSPECIFIED = 0;
+  CFG_SHAPE_SCALAR      = 1;  // 单列标量。       旧写法 row2 = "uint32"
+  CFG_SHAPE_LIST        = 2;  // 定长数组。       旧写法 row2 = "repeated uint32"，或标量占多列被静默升格
+  CFG_SHAPE_SET         = 3;  // 集合 -> map<T,bool>。旧写法 row2 = "set<string>"
+  CFG_SHAPE_MAP         = 4;  // 映射，每条目占 2 列。旧写法 row2 = "map<string,string>"
+  CFG_SHAPE_STRUCT_LIST = 5;  // 子消息数组，每条占 N 列。旧写法 row2 = "repeated { uint32 a; uint32 b }"
+}
+
+extend google.protobuf.MessageOptions {
+  // 源工作簿的 sheet 名。同时也是表名（TableSchema.name）。
+  string cfg_sheet = 60001;
+
+  // 源文件名，相对 data/。仅作人读，导表器按 sheet 名寻表。
+  string cfg_source_file = 60002;
+
+  // 主键列名。今天恒为 "id"，写出来是为了让它不再是硬编码的隐式约定。
+  string cfg_primary_key = 60003;
+
+  // 60004 曾是 cfg_flat_multimap（表级「主键可重复」开关），已废弃：
+  // 这件事只由主键列上的 (cfg_multi) 决定，不设第二个说法。
+  // extend 块里不能写 reserved（protoc 会报 "Expected field name"），
+  // 所以退休的扩展号只能靠这条注释登记：**60004 不要复用**。
+}
+
+extend google.protobuf.FieldOptions {
+  // Excel 第 1 行的表头名。缺省 = proto 字段名。
+  // 绑定按**列名**做，不按声明序 —— 策划在任何位置插列/删列/重排都不影响其它字段。
+  string cfg_col = 60101;
+
+  // server | common | client | design | designer | constants_name。缺省 common。
+  // 只有 server/common 会进产物；其余取值的列仍占物理列位，但整列被丢弃。
+  string cfg_owner = 60102;
+
+  // 容量：LIST/SET = 槽位数；MAP = 键值对数；STRUCT_LIST = 记录条数；SCALAR = 1。
+  // 这一条过去只存在于「右边留了几个空格子」里，是本次改造最主要的收益。
+  uint32 cfg_slots = 60103;
+
+  // 物理形态。缺省按 proto 类型推断：map<K,V> -> MAP，repeated <消息> -> STRUCT_LIST，
+  // repeated <标量> -> LIST，其余 SCALAR。SET 必须显式写，因为它和 MAP 的 proto 类型都是 map。
+  CfgShape cfg_shape = 60104;
+
+  bool cfg_key       = 60105;  // 旧 options token: key
+  // 旧 options token: multi。
+  //   写在**主键列**上 = 这张表的 id 允许重复;
+  //   写在其它 key 列上 = 该二级键是多值键。
+  // 主键可重复的表**不生成 FindById，只生成 FindAllById**（把可重复主键当单值用
+  // 会在编译期断，而不是悄悄只看第一行），并且不允许再有 (cfg_bit_index)。
+  bool cfg_multi     = 60106;
+  bool cfg_index     = 60107;  // 旧 options token: idx
+  bool cfg_bit_index = 60108;  // 旧 options token: bit_index —— 存档位图下标，改动即错位
+  bool cfg_tip_ref   = 60109;  // 旧 options token: tip_ref
+
+  // 旧 options token: fk:<值> / gfk:<值>。原样保存冒号后面的部分（"Test" 或 "Test.column"）。
+  string cfg_fk  = 60110;
+  string cfg_gfk = 60111;
+
+  // 旧 options token: expr:<类型> / expr_params:<a,b>
+  string cfg_expr_type           = 60112;
+  repeated string cfg_expr_param = 60113;
+
+  // 旧 options token: composite:<组名>
+  string cfg_composite = 60114;
+}

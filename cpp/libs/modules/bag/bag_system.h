@@ -7,6 +7,7 @@
 #include <unordered_set>
 #include <utility>
 #include <vector>
+#include <vector>
 
 #include "engine/core/type_define/type_define.h"
 
@@ -126,11 +127,20 @@ enum class CompactPolicy : uint8_t
 // 刻意**不带容量**:容量是 profile 给的**起点**,随后会被玩法解锁
 // (ExpandCapacity)或快照还原(SetCapacityForRestore)覆盖,它是状态不是规则。
 // 起点写在下面各个工厂里。
+// 动态包(节日 / 活动 / 宠物包)的 profile id。0 = 未指定,按默认自由格装配。
+// 固定包不用它 —— 它们由 BagType 指认,构造函数直接装。
+// id 与工厂的对应关系在 bag_profile_registry.h,**必须持久化**(见那里的说明)。
+inline constexpr uint32_t kBagProfileUnspecified{0};
+
 struct BagProfile
 {
     std::unique_ptr<IContainerLayout> layout;
     std::unique_ptr<IAdmissionPolicy> admission;
     std::unique_ptr<IEvictionPolicy> eviction;
+
+    // 这套规则的注册 id。跟着包走进快照,还原时据此重新装配。
+    // 固定包留 0:它们不经注册表,BagType 就是身份。
+    uint32_t id{kBagProfileUnspecified};
 
     // 人物背包 / 仓库:自由格 + 什么都收 + 满了就拒。
     // 两者只有容量不同,所以共用一个工厂 —— 免得多一个只差一个数字的函数。
@@ -169,6 +179,21 @@ struct BagProfile
                           std::make_unique<AcceptAll>(),
                           std::make_unique<EvictOldestFirst>()};
     }
+
+    // 节日 / 活动包:自由格 + **只收名单上的道具** + 满了就拒。
+    //
+    // 满了拒而不是先进先出,是刻意的:活动道具通常是限量发放的凭证 / 材料,
+    // "为了塞新的而挤掉旧的"在这里是丢失而不是缓冲。要 FIFO 的活动自己注册
+    // 一个换掉 eviction 的 profile 即可 —— 这正是三根轴正交的好处。
+    //
+    // 名单由创建这个包的玩法给出(活动系统本来就知道自己发哪些道具),
+    // 不需要在物品表上加 tag 列。见 admission_policy.h 里 AcceptByConfigSet 的说明。
+    static BagProfile Festival(std::size_t capacity, std::unordered_set<uint32_t> allowedConfigs)
+    {
+        return BagProfile{std::make_unique<FlatLayout>(capacity),
+                          std::make_unique<AcceptByConfigSet>(std::move(allowedConfigs)),
+                          std::make_unique<RejectWhenFull>()};
+    }
 };
 
 class Bag
@@ -202,6 +227,11 @@ public:
     // 一次装配一整套规则。生产代码请走这个,不要逐轴 Set —— 每加一根轴,
     // 逐轴调用的地方都得记得同改一遍,而 Profile 只改一处。
     void SetProfile(BagProfile profile);
+
+    // 这个包按哪套注册规则装配的。0 = 没经过注册表(四个固定包、以及默认构造的
+    // 动态包)。bag_marshal 持久化它,还原时据此重新装配 —— **规则本身不进快照,
+    // 进快照的只是"这个包是哪套规则"这一个 id**。
+    [[nodiscard]] uint32_t ProfileId() const { return profileId_; }
 
     // Capacity = how many grid slots this bag has unlocked. NOT the number
     // of items currently held (that's OccupiedGridCount()).
@@ -365,7 +395,10 @@ public:
     // Insert one item entry at a known position with a known guid.
     // Companion to ResetFromSnapshot. Used by bag_marshal::Unmarshal
     // to replay items one by one without re-running stack/anomaly logic.
-    void InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize, uint32_t pos);
+    // acquireSeq:快照里的入包序号。0 = 旧存档没盖过章,由 ItemStore 按重放顺序
+    // 重新盖 —— 那至少还原出一个自洽的先后,好过拿 guid 猜。
+    void InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize, uint32_t pos,
+                              uint64_t acquireSeq = 0);
 
     // Set capacity (replays Bag::ExpandCapacity's effect without the audit log).
     // Used by Unmarshal to restore gameplay-unlocked slots.
@@ -526,5 +559,6 @@ private:
     // 默认满了就拒 —— 同上,默认值必须等于拆分前的行为。一个默认构造出来的包
     // 绝不能自作主张挤掉玩家的东西。
     std::unique_ptr<IEvictionPolicy> eviction_{std::make_unique<RejectWhenFull>()};
+    uint32_t profileId_{kBagProfileUnspecified};
     Guid playerGuid{kInvalidGuid};
 };

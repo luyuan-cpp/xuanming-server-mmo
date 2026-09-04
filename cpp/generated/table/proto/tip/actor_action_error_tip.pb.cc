@@ -35,17 +35,17 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_actor_5faction_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\034actor_action_error_tip.proto*r\n\022actor_"
+    "\n\034actor_action_error_tip.proto*s\n\022actor_"
     "action_error\022\031\n\025kActor_action_errorOK\020\000\022"
-    "A\n=kActorActionStateActionCannotBePerfor"
-    "medWhileInTeamFollowMode\020~B\024Z\022generated/"
-    "pb/tableb\006proto3"
+    "B\n=kActorActionStateActionCannotBePerfor"
+    "medWhileInTeamFollowMode\020\220NB$\n\016com.game."
+    "tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_actor_5faction_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_actor_5faction_5ferror_5ftip_2eproto = {
     false,
     false,
-    176,
+    193,
     descriptor_table_protodef_actor_5faction_5ferror_5ftip_2eproto,
     "actor_action_error_tip.proto",
     &descriptor_table_actor_5faction_5ferror_5ftip_2eproto_once,
@@ -64,7 +64,7 @@ actor_action_error_descriptor() {
   return file_level_enum_descriptors_actor_5faction_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t actor_action_error_internal_data_[] = {
-    65536u, 65536u, 126u, };
+    65536u, 65536u, 10000u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

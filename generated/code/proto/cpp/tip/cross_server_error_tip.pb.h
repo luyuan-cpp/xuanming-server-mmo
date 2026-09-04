@@ -63,7 +63,7 @@ internal::EnumTraitsT<::cross_server_error_internal_data_>
 
 enum cross_server_error : int {
   kCross_server_errorOK = 0,
-  kSceneTransferInProgress = 129,
+  kSceneTransferInProgress = 13000,
   cross_server_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   cross_server_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -74,11 +74,11 @@ extern const uint32_t cross_server_error_internal_data_[];
 inline constexpr cross_server_error cross_server_error_MIN =
     static_cast<cross_server_error>(0);
 inline constexpr cross_server_error cross_server_error_MAX =
-    static_cast<cross_server_error>(129);
+    static_cast<cross_server_error>(13000);
 [[nodiscard]] inline bool cross_server_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, cross_server_error_internal_data_);
 }
-inline constexpr int cross_server_error_ARRAYSIZE = 129 + 1;
+inline constexpr int cross_server_error_ARRAYSIZE = 13000 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 cross_server_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(cross_server_error) {

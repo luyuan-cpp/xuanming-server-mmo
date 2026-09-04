@@ -45,25 +45,6 @@ void TestMultiKeyTableManager::Load() {
     snapshot = std::move(snap);
 }
 
-std::pair<const TestMultiKeyTable*, uint32_t> TestMultiKeyTableManager::FindById(const uint32_t tableId) {
-    const auto& snap = GetSnapshot();
-    const auto it = snap.idMap.find(tableId);
-    if (it == snap.idMap.end()) {
-        LOG_ERROR << "TestMultiKey table not found for ID: " << tableId;
-        return {nullptr, kInvalidTableId};
-    }
-    return {it->second, kSuccess};
-}
-
-std::pair<const TestMultiKeyTable*, uint32_t> TestMultiKeyTableManager::FindByIdSilent(const uint32_t tableId) {
-    const auto& snap = GetSnapshot();
-    const auto it = snap.idMap.find(tableId);
-    if (it == snap.idMap.end()) {
-        return {nullptr, kInvalidTableId};
-    }
-    return {it->second, kSuccess};
-}
-
 std::pair<const TestMultiKeyTable*, uint32_t> TestMultiKeyTableManager::FindByStringKey(const std::string& key) const {
     const auto& snap = GetSnapshot();
     const auto it = snap.stringKeyMap.find(key);

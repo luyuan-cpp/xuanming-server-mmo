@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+// Cooldown 表的权威 schema。源表 data/Cooldown.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号是从 generated/code/proto/cooldown_table.proto 抄来的现状值,**只增不改、删字段用 reserved**。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message CooldownTable {
+  option (cfg_sheet)       = "Cooldown";
+  option (cfg_source_file) = "Cooldown.xlsx";
+  option (cfg_primary_key) = "id";
+
+  uint32 id = 1;
+  uint32 duration = 2;
+}

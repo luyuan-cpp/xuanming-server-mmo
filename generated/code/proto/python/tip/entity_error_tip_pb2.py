@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1atip/entity_error_tip.proto*A\n\x0c\x65ntity_error\x12\x13\n\x0fkEntity_errorOK\x10\x00\x12\x1c\n\x18kEntityTransformNotFound\x10}B\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1atip/entity_error_tip.proto*B\n\x0c\x65ntity_error\x12\x13\n\x0fkEntity_errorOK\x10\x00\x12\x1d\n\x18kEntityTransformNotFound\x10\xa8\x46\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tip.entity_error_tip_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_ENTITY_ERROR']._serialized_start=30
-  _globals['_ENTITY_ERROR']._serialized_end=95
+  _globals['_ENTITY_ERROR']._serialized_end=96
 # @@protoc_insertion_point(module_scope)

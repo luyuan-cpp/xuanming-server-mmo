@@ -173,3 +173,15 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 仓库默认 20000 只是保守占位,必须按单 gate 压测结果、进程 fd 上限和节点间连接余量
 重新定容。该上限只约束资源总量,不替代握手超时、每来源限速或 L4 防护;未认证连接
 仍可长期占满全部槽位。
+
+> **这最后一句是一个已知的、成建制的缺口，不是措辞上的保留。** 它的完整分析、业界对照
+> （nginx / HAProxy / Envoy / sshd / Redis / PostgreSQL 的对应机制）、两条拒绝路线的取舍，
+> 以及按 P0/P1/P2 排序的落地清单，见
+> [`docs/design/gate-connection-admission-control.md`](../../../docs/design/gate-connection-admission-control.md)。
+>
+> 其中三条与本文档直接相关、且**会让本节描述的闸门失效**的结论：
+> ① 进程从不 `setrlimit`、k8s 也没有对应字段，真正先生效的上限很可能是 `RLIMIT_NOFILE` soft=1024，
+> 那样 `GateMaxConnections` 这条分支永远执行不到；
+> ② `LogLevel: 2` 在 muduo 枚举里是 **INFO 而非注释所写的 WARN**，而 `TcpServer` 对每条连接的
+> 建立与移除各有一行无条件 `LOG_INFO`——本节称道的采样纪律被上游抵消；
+> ③ 补上「未认证连接独立预算 + 死线」约 20 行、不需要改 muduo，是投入产出比最高的一条。

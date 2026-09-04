@@ -3,6 +3,7 @@
 #include <muduo/base/Logging.h>
 
 #include "modules/bag/comp/player_bags_comp.h"
+#include "modules/bag/bag_profile_registry.h"
 #include "modules/bag/bag_system.h"
 #include "thread_context/ecs_context.h"
 
@@ -65,6 +66,9 @@ void Marshal(entt::entity player, BagAllData& out)
             entry->set_stack_size(item.size());
             entry->set_pos(bag.GetItemPosByGuid(guid));
             entry->set_bag_type(bagType);
+            // 入包序号:淘汰策略按它排先后。不带走的话跨服一跳顺序就丢了,
+            // 而 item_uuid 顶替不了它(跨服的号是源服铸的)。
+            entry->set_acquire_seq(item.acquire_seq());
         });
     }
 
@@ -76,12 +80,16 @@ void Marshal(entt::entity player, BagAllData& out)
         BagAllData::DynamicBagData* dyn = out.add_dynamic_bags();
         dyn->set_bag_id(bagId);
         dyn->set_capacity(static_cast<uint32_t>(bag.Capacity()));
+        // **规则本身不进快照,进快照的只是"这个包是哪套规则"这一个 id。**
+        // 不带它,节日包跨服回来会退化成默认的自由格 + 什么都收 —— 规则静默消失。
+        dyn->set_profile_id(bag.ProfileId());
         bag.ForEachItem([dyn, &bag](Guid guid, const ItemComp& item) {
             ItemEntry* entry = dyn->add_items();
             entry->set_item_uuid(static_cast<uint64_t>(guid));
             entry->set_config_id(item.config_id());
             entry->set_stack_size(item.size());
             entry->set_pos(bag.GetItemPosByGuid(guid));
+            entry->set_acquire_seq(item.acquire_seq());
             // bag_type is meaningless for dynamic bags (identified by
             // bag_id); leave it at the proto default 0.
         });
@@ -139,7 +147,8 @@ void Unmarshal(entt::entity player, const BagAllData& in)
             static_cast<Guid>(entry.item_uuid()),
             entry.config_id(),
             entry.stack_size(),
-            entry.pos());
+            entry.pos(),
+            entry.acquire_seq());
     }
 
     // Transient runtime bags. Rebuild dynamicBags_ from scratch so a
@@ -151,6 +160,12 @@ void Unmarshal(entt::entity player, const BagAllData& in)
         Bag& bag = bags.dynamicBags_[dyn.bag_id()];
         bag.SetPlayerGuid(owner);
         bag.ResetFromSnapshot();
+        // 先按 profile_id 装回规则,**再**放物品 —— SetProfile 只接受空包
+        // (槽位号在不同布局下含义不同),顺序反了规则就装不上。
+        // 注册表查不到时 fail-open 成自由格但保留 id:活动下线也绝不丢东西,
+        // 活动重新上线后这个包会自己变回去。见 bag_profile_registry.h。
+        bag.SetProfile(BagProfileRegistry::Instance().Make(
+            dyn.profile_id(), static_cast<std::size_t>(dyn.capacity())));
         bag.SetCapacityForRestore(static_cast<std::size_t>(dyn.capacity()));
         for (const auto& entry : dyn.items())
         {
@@ -158,7 +173,8 @@ void Unmarshal(entt::entity player, const BagAllData& in)
                 static_cast<Guid>(entry.item_uuid()),
                 entry.config_id(),
                 entry.stack_size(),
-                entry.pos());
+                entry.pos(),
+                entry.acquire_seq());
         }
     }
 }

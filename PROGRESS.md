@@ -3502,3 +3502,89 @@ fence 顺序用例补可叠加溢出 + vector 三形状;准入轴补负向用例
 
 ### 教训
 引入第一根有副作用的轴之后,"不是数据能触发的情形"每写一次都要给出触发不了的证明 —— 第一版写了两处,两处都错。两套批量循环 = 两份预检 = 必然漂移,修法是并进唯一 reserve 入口。全部**仍未编译**。
+
+## 2026-09-02 背包第二轮审计:8 视角独立审查 + 对抗证伪,18 条全部落码
+
+### 为什么再审一轮
+9-01 那批改动零编译零运行,且只被我自己复审过 —— 同一个人复审同一份代码盲区不变(9-01 自查抓到"预检站错位置",却漏了相隔十行的"缺口按淘汰前算")。改用 8 个互不知情的审查视角并行读代码,再对每条发现派 2 个证伪者反驳。
+
+### 结果
+36 条原始 → 去重 18 条 → **18 条全部成立**(1 条降为"存疑,加防御")。证伪阶段撞会话限额(29/36 证伪者未返回、完整性批评者未跑),未被机器证伪的 13 条由人工逐条复核。
+
+### P0(3 族)全部是淘汰轴引入的
+- **族 A(最严重)**:淘汰掉的正是本批要并入的同 config 未满堆 → 腾位后需求变大 → **已销毁却整批失败**,玩家净损失。临时格拾取同种材料就是日常路径,而第一版注释写着"不是数据能触发的情形"。修法:`ReserveOrEvict` 改为**先算到不动点再销毁** —— 把牺牲者当作已不存在反复规划(`PlanInstances` 与 `ItemStore` 两个规划函数新增 `exclude` 集),需求变大就多选,稳定了才真 `DestroyItem`。收敛上界 `store_.Size()` 轮。
+- **族 B**:`BagService::AddItems` 自带批量循环、不经过 `Bag::AddItems`,于是 9-01 挪到前面的预检在编排层根本没跑。修法:全部纯预检并进 `ReserveForBatchAdd`(新增 vector 重载,含预设 guid 撞车),两处调用点都只调它 —— 让"两份预检漂移"在结构上不可能。fence 下连腾位也不做。
+- **族 C**:单件沿用预设 guid 时 `store_.Contains` 排在腾位之后。已提前。
+
+### P1/P2 八条
+`count==0` 半批(且取决于哈希序)/ 槽位表重复 id 让 reserve 偏乐观 / `SetProfile` 非原子(半套 profile)/ `evictedOut==nullptr` 仍销毁(改成**没有回执就不淘汰**,从注释变成闸)/ `SetCapacityForRestore` 可压破不变量 / `ApplyStackFill` 悬空 entity 零防御 / 格子碎片被误判成编程错误刷日志 / `bag_service.h` 的 all-or-nothing 描述与实现不符。
+
+### 覆盖缺口三条已补
+fence 顺序用例只覆盖了不可叠加+ItemCountMap;准入轴全是 `AcceptAll` 走 true 分支(删掉判断也全绿);"被挤掉必须落 LogItemDestroy"零用例。新增 13 条回归,核心是 `EvictingTheMergeTargetStillLandsEverything`(族 A,修复前必红)与对照用例 `MergeTargetThatIsNotOldestSurvivesAndAbsorbs`(防止退化成"一律按最坏情况多挤")。
+
+### 编译清单更正(重要)
+`sizeof(Bag)` 因两个新 unique_ptr 变了,`PlayerBagsComp` 步长跟着变。§8.2 原来只写 modules+bag_test,**漏了 scene** —— `cross_zone_test` 链接 `modules.lib`+`scene.lib`,`bag_marshal.obj` 里 `entt::basic_storage<PlayerBagsComp>` 带旧步长,会复现 split 文档 §9.1 的断言/访问违例。正确顺序:modules → **scene** → bag_test → cross_zone_test,串行 `/m:1`。
+
+### 状态
+**仍然零编译零运行。** 两轮改动累计触及 7 个文件 + 3 个新文件,一行都没跑过。
+
+## 2026-09-02(2)背包三个原始需求全部落码:真入包序号 + 节日包
+
+### 第 6b 步:FIFO 不再是 guid 近似
+- 源 proto 新增 `ItemComp.acquire_seq = 4`、`ItemEntry.acquire_seq = 13`。**字段号更正**:早先说"用 9"是错的,`ItemEntry` 的 6~12 全被 TODO 表预定(enchant/affixes/gem/bound/trade/expire/blob),下一个空位是 13。
+- 盖章点在 `ItemStore::Insert`(唯一的实例创建口径):`seq==0` 盖当前水位;`seq>0` 原样保留并抬高水位。于是"店里每个实例都有非零、同包内单调的序号"是结构保证。`Clear()` 复位水位。
+- `AcquisitionOrderOf` 改读 `acquire_seq`。**刻意不做 0 回退 guid 的混排** —— 两个数域混排会让旧存档物品永远排最后,先进先出照样挤错人;补盖比回退干净。
+- `bag_marshal` 两侧带走/还原;`InsertItemForRestore` 加 `acquireSeq` 默认参(旧调用点不受影响)。
+- 核心回归 `AcquireSeqTest.FifoFollowsSequenceNotGuid`:让**更早进包的那件拿到更大的 guid**(跨服/邮件附件的真实形状),按 guid 排就会挤错人。
+
+### 第 4/5 步:节日包 —— 用名单式准入替代 tag 列
+- **不加 xlsx 表列**(二进制源表,据记录连 SVN 都没进,手改风险高)。改用 `AcceptByConfigSet`:名单由创建包的玩法给出,活动系统本来就知道自己发哪些道具。
+- **为什么不先写 AcceptByTag 占位**:没有 tag 列它会对所有东西读到 `tag==0` → 什么都不收,节日包变黑洞,比没有更糟。等列落地再加约 20 行,`IAdmissionPolicy` 不用改。
+- 新增 `BagProfileRegistry`(`bag_profile_registry.{h,cpp}`):把"这个包是哪套规则"(uint32,**玩家数据,必须持久化**)与"那套规则是什么"(三个策略对象,**绝不进快照**)分开。`Make()` 查不到时 **fail-open** 退化成自由格但**保留 id** —— 活动下线不丢东西,活动回来包自己变回去。
+- `DynamicBagData.profile_id = 4` + `bag_marshal` 接好。**Unmarshal 必须先 SetProfile 再放物品**(SetProfile 只接受空包)。
+- `BagProfile::Festival(capacity, allowedConfigs)`:自由格 + 名单准入 + **满了拒**(活动道具是限量凭证,FIFO 在这里是丢失不是缓冲)。
+
+### 补上第二轮审计唯一遗留的 P2
+`BagServiceEvictionTest` 两条:判据是"**满了的临时格经 BagService 仍能入包**" —— 这一条能区分编排层走的是 `ReserveForBatchAdd`(会腾位)还是纯预测的 `CheckSpaceFor`(会抢先拒掉整批)。此前 `LogEvictedInstances` 三处调用全删掉 bag_test 也全绿。
+
+### 用例总数
+本轮新增 `AcquireSeqTest`×4、`FestivalBagTest`×2、`BagProfileRegistryTest`×4、`BagServiceEvictionTest`×2 = 12 条;累计新增约 46 条。
+
+### 状态
+**仍然零编译零运行。** 编译前须先 `cd go && build.bat` 重生成 proto;工程顺序 modules → **scene** → bag_test → cross_zone_test,串行 `/m:1`。
+
+## 2026-09-03 tip 错误码轴:从「扁平队尾发号」改成「段是发号器的输入」
+
+### 问题不是没分段,是分段和发号是两拨人
+`TipInfoMessage.id` 是客户端可见契约(按 id 查文案),全仓一条数轴。改造前这条轴上有**三拨人各自发号**:
+
+- **发号的** `tools/data_table_exporter/core/generators/enum_gen.py`:规则是 `global_id = 所有组最大号 + 1`,一个**跨组的全局队尾计数器**;全文 grep `range|segment|base|domain|lo|hi|overlap` 只命中两处 Python 内置的 `range()` —— 它没有「段」的概念。
+- **分段的** `go/shared/serverbase/tipcode.go` 的 `tipDomains`:一张**人手抄**的镜像表,grep `enum_gen|tip_enum_ids|xlsx` 零命中 —— 它不知道号是谁发的。
+- **各自发号的** 6 个服务的 `constants.go`:guild/friend 知道有这条轴(专门写 `TipClassifier` 绕开它),**`go/match` 零引用**,从 1 开始重数,20 个码全撞(1-7 压 common、20-26/40-45 压 login)。
+
+后果:13 个组紧挨着排满 `1..129` **零余量**,往 common 加第 20 个码拿到的号是 **130** —— 落在自己段外,`TipVerdict` 判 Unknown,**全程零报错**。段只是「事后描述」,不是分配规则。
+
+另外查出:**`Tip.xlsx` 的 B 列(中文文案)从来没有出口** —— `enum_gen` 只读 A 列,`generated/tables/` 下无任何 tip 产物。「客户端按 id 查文案」这条链本来就是断的,129 个码里只有 50 个填了文案。
+
+### 改成什么
+- **段声明进 `Tip.xlsx` 组头行**:`//common_error base=1000 width=1000`。组头 vs 注释靠「`//` 后有无空格」区分(不能用「有无 `base=`」:那样旧格式组头会被静默当注释,它下面的码全部落进上一组 —— 恰好是要消灭的那类静默错误)。
+- **发号按段**:新码取本组段内最小空位;段满 `SystemExit` 并点名组与码。
+- **state 升 v2 且只增不减**:删掉 xlsx 一行不回收号(留墓碑)。旧实现用当前表内容整体重写 state,删一行号就没了 —— `kSceneTransferFailed=130` 当年就是这么消失的。v1 格式一律拒绝。
+- **生成期自检**:段不重叠 / 码不越段 / **枚举名全局唯一**(tip proto 无 package 声明,枚举值同一命名空间,重名会在 protoc 炸) / 码值唯一。
+- **镜像改成生成产物**:删 `tipDomains` 与 `TipMaxKnownCode`,改消费 `shared/generated/tip`。「未知码」判据改为 `InAllocatedRange`(段外,或高于本二进制编译时该段已分配上界=对端码表更新)。
+- **文案有出口**:新增 `generated/tables/tip_text.json`;缺文案的码导表时告警列出(当前 79 个)。
+- **「Go 私有段」概念删除**:guild 9 / friend 7 / match 20 共 36 个手写码进表,拿到中文文案与机械保护。
+
+### 一次性重排
+13 组零余量,不重排等于老组永远加不了码。存量 129 个码重排到 1000/2000/…/13000,guild 14000 / friend 15000 / match 16000,每组宽 1000(余量约 980),`17000+` 给移植域预留。**符号安全**:调用点引用的是符号不是字面量,79 处一处未动;旧→新 129 条映射记在 state 的 `legacy_ids`。
+
+### 改动集(15 个文件)
+`data/tip/Tip.xlsx`、`enum_gen.py`、`tip_enum_ids.json`、新模板 `tip_segments.go.j2`、新测试 `tests/test_tip_axis.py`(10 条闸门)、`tipcode.go` + `tipcode_test.go` + `interceptor_test.go`、guild/friend/match 的 `constants.go` 与两个 `constants_test.go`、新文档 `docs/design/tip-code-axis.md`、新 workflow `.github/workflows/exporter-tests.yml`、`cpp/generated/table/{CMakeLists.txt,table.vcxproj}`(三个新 tip proto 入构建清单)、`AGENTS.md` §4/§7 登记规则。
+
+顺带修真 bug:`load_workbook(read_only=True)` 不 `close` 会在 Windows 锁住源表(tip 与 operator 两处)。
+
+导表器的 `tests/` 此前**从没被任何 workflow 调用过**,本次接进 CI。
+
+### 状态
+**未编译、未跑导表器。** 10 条闸门用临时 runner 在本机跑通(py -3 里没装 pytest);真 `Tip.xlsx` 的解析+分配+自检跑通;段表模板渲染后经 `gofmt -e` 语法合法。
+验证顺序见 `docs/design/tip-code-axis.md` §6 —— **第 2 步(跑导表器)之前 Go 编译不过是预期的**,`shared/generated/tip` 是导表器产物。

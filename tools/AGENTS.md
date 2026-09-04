@@ -31,6 +31,10 @@ tools/
 | Robot proto/handlers | `robot/` | Proto defs + message handlers for load testing |
 | Robot data-stress mode | see `robot/data_stress.go` | L3 e2e: login→enter→play→logout cycles, publishes expected seq to Redis for verifier |
 | Archived generator logs | `docs/protogen/` | Historical runs only |
+| **配置表 schema（事实源）** | `data/schema/*.proto` | 类型/owner/键/索引/外键/位序/注释;词表在 `cfg_options.proto` |
+| **配置表全表索引** | `data/AGENTS.md` | 哪张表有主键/索引/外键/位序,由 `gen_schema_index.py` 生成 |
+| 表怎么被读进来 | `data_table_exporter/core/table_source.py` | 按 sheet 名派发:有权威 schema 走 schema-first |
+| 改导表器后的验收 | `data_table_exporter/tools/sandbox_export.py` | 沙盒导一次 + 与仓内产物逐字节比对,对仓库只读 |
 
 ## CONVENTIONS
 - Keep runnable source projects in dedicated subdirectories; do not scatter standalone scripts across `tools/` root.
@@ -38,6 +42,8 @@ tools/
 - Keep temp generation output under ignored paths like `generated/` and local binaries.
 - `tools/scripts/dev_tools.ps1` is the preferred shell entrypoint for routine commands.
 - `tools/proto_generator/protogen` is the canonical proto-gen project; `tools/proto/protogen` exists for compatibility.
+- 配置表的 schema 事实源是 `data/schema/*.proto`,**不是 xlsx 表头**(5 行表头格式 2026-09-03 退休)。
+  改表流程与禁忌见 `data/AGENTS.md`;导表器自身的说明见 `data_table_exporter/readme.md`。
 - Robot client logic assumes one client binds to exactly one goroutine.
 
 ## ANTI-PATTERNS

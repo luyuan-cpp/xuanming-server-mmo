@@ -3,43 +3,46 @@ syntax = "proto3";
 
 option go_package = "generated/pb/table";
 
+option java_package = "com.game.table";
+
+
 enum team_error {
   kTeam_errorOK = 0;
 
-  kTeamNotInApplicants = 76;
+  kTeamNotInApplicants = 4000;
 
-  kTeamPlayerId = 77;
+  kTeamPlayerId = 4001;
 
-  kTeamMembersFull = 78;
+  kTeamMembersFull = 4002;
 
-  kTeamMemberInTeam = 79;
+  kTeamMemberInTeam = 4003;
 
-  kTeamMemberNotInTeam = 80;
+  kTeamMemberNotInTeam = 4004;
 
-  kTeamKickSelf = 81;
+  kTeamKickSelf = 4005;
 
-  kTeamKickNotLeader = 82;
+  kTeamKickNotLeader = 4006;
 
-  kTeamAppointSelf = 83;
+  kTeamAppointSelf = 4007;
 
-  kTeamAppointLeaderNotLeader = 84;
+  kTeamAppointLeaderNotLeader = 4008;
 
-  kTeamFull = 85;
+  kTeamFull = 4009;
 
-  kTeamInApplicantList = 86;
+  kTeamInApplicantList = 4010;
 
-  kTeamNotInApplicantList = 87;
+  kTeamNotInApplicantList = 4011;
 
-  kTeamListMaxSize = 88;
+  kTeamListMaxSize = 4012;
 
-  kTeamHasNotTeamId = 89;
+  kTeamHasNotTeamId = 4013;
 
-  kTeamDismissNotLeader = 90;
+  kTeamDismissNotLeader = 4014;
 
-  kTeamMemberListFull = 91;
+  kTeamMemberListFull = 4015;
 
-  kTeamCreateTeamMaxMemberSize = 92;
+  kTeamCreateTeamMaxMemberSize = 4016;
 
-  kTeamPlayerNotFound = 93;
+  kTeamPlayerNotFound = 4017;
 
 };

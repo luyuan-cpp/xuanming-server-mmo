@@ -4,7 +4,7 @@
   R2 gate-token-expiry fixes (gateTokenTTL 5min->10min + robot retry accounting).
 
 .DESCRIPTION
-  Drives the full CLAUDE.md §6.2 / AGENTS.md §7 clean-stress protocol in phases:
+  Drives the full AGENTS.md §6.2 clean-stress protocol in phases:
 
     plan       (default) print exactly what each phase WILL do, touch nothing.
     baseline   verify prev-summary.txt (R18) exists as the comparison baseline.

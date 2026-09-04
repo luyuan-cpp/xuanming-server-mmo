@@ -35,20 +35,21 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_mission_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\027mission_error_tip.proto*\365\001\n\rmission_er"
-    "ror\022\024\n\020kMission_errorOK\020\000\022\035\n\031kMissionTyp"
-    "eAlreadyExists\020^\022\034\n\030kMissionAlreadyCompl"
-    "eted\020_\022\035\n\031kMissionIdNotInRewardList\020`\022#\n"
-    "\037kPlayerMissionComponentNotFound\020a\022\026\n\022kM"
-    "issionIdRepeated\020b\022\032\n\026kConditionIdOutOfR"
-    "ange\020c\022\031\n\025kMissionNotInProgress\020dB\024Z\022gen"
-    "erated/pb/tableb\006proto3"
+    "\n\027mission_error_tip.proto*\374\001\n\rmission_er"
+    "ror\022\024\n\020kMission_errorOK\020\000\022\036\n\031kMissionTyp"
+    "eAlreadyExists\020\210\'\022\035\n\030kMissionAlreadyComp"
+    "leted\020\211\'\022\036\n\031kMissionIdNotInRewardList\020\212\'"
+    "\022$\n\037kPlayerMissionComponentNotFound\020\213\'\022\027"
+    "\n\022kMissionIdRepeated\020\214\'\022\033\n\026kConditionIdO"
+    "utOfRange\020\215\'\022\032\n\025kMissionNotInProgress\020\216\'"
+    "B$\n\016com.game.tableZ\022generated/pb/tableb\006"
+    "proto3"
 };
 static ::absl::once_flag descriptor_table_mission_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_mission_5ferror_5ftip_2eproto = {
     false,
     false,
-    303,
+    326,
     descriptor_table_protodef_mission_5ferror_5ftip_2eproto,
     "mission_error_tip.proto",
     &descriptor_table_mission_5ferror_5ftip_2eproto_once,
@@ -67,7 +68,7 @@ mission_error_descriptor() {
   return file_level_enum_descriptors_mission_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t mission_error_internal_data_[] = {
-    65536u, 128u, 0u, 0u, 3758096384u, 15u, };
+    65536u, 458752u, 5003u, 5001u, 5005u, 5000u, 5002u, 5004u, 5006u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

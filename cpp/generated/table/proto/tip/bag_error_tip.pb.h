@@ -63,21 +63,21 @@ internal::EnumTraitsT<::bag_error_internal_data_>
 
 enum bag_error : int {
   kBag_errorOK = 0,
-  kBagDeleteItemFindGuid = 101,
-  kBagDeleteItemAlreadyHasGuid = 102,
-  kBagAddItemHasNotBaseComponent = 103,
-  kBagAddItemInvalidGuid = 104,
-  kBagAddItemInvalidParam = 105,
-  kBagAddItemBagFull = 106,
-  kBagItemNotStacked = 107,
-  kBagInsufficientItems = 108,
-  kBagDelItemPos = 109,
-  kBagDelItemConfig = 110,
-  kBagDelItemGuid = 111,
-  kBagDelItemFindItem = 112,
-  kBagDelItemSize = 113,
-  kBagItemDeletionSizeMismatch = 114,
-  kBagInsufficientBagSpace = 115,
+  kBagDeleteItemFindGuid = 6000,
+  kBagDeleteItemAlreadyHasGuid = 6001,
+  kBagAddItemHasNotBaseComponent = 6002,
+  kBagAddItemInvalidGuid = 6003,
+  kBagAddItemInvalidParam = 6004,
+  kBagAddItemBagFull = 6005,
+  kBagItemNotStacked = 6006,
+  kBagInsufficientItems = 6007,
+  kBagDelItemPos = 6008,
+  kBagDelItemConfig = 6009,
+  kBagDelItemGuid = 6010,
+  kBagDelItemFindItem = 6011,
+  kBagDelItemSize = 6012,
+  kBagItemDeletionSizeMismatch = 6013,
+  kBagInsufficientBagSpace = 6014,
   bag_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   bag_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -88,11 +88,11 @@ extern const uint32_t bag_error_internal_data_[];
 inline constexpr bag_error bag_error_MIN =
     static_cast<bag_error>(0);
 inline constexpr bag_error bag_error_MAX =
-    static_cast<bag_error>(115);
+    static_cast<bag_error>(6014);
 [[nodiscard]] inline bool bag_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, bag_error_internal_data_);
 }
-inline constexpr int bag_error_ARRAYSIZE = 115 + 1;
+inline constexpr int bag_error_ARRAYSIZE = 6014 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 bag_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(bag_error) {

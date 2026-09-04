@@ -25,26 +25,34 @@ type {{ sheetname }}{{ composite_go_struct_name(ck.group) }} struct {
 // Load() builds a new snapshot and swaps it in, replacing the old one.
 type {{ sheetname | lower }}Snapshot struct {
     data   []*pb.{{ sheetname }}Table
+{%- if table.multi_primary_key %}
+    // 主键可重复:一个 id 对应多行
+    kvData map[{{ to_go_type(table.id_column.data_type) }}][]*pb.{{ sheetname }}Table
+{%- else %}
     kvData map[{{ to_go_type(table.id_column.data_type) }}]*pb.{{ sheetname }}Table
+{%- endif %}
 {%- for col in table.table_keys if not col.is_multi_key %}
-    kv{{ col.name | title }}Data map[{{ to_go_type(col.data_type) }}]*pb.{{ sheetname }}Table
+    kv{{ to_go_proto_field(col.name) }}Data map[{{ to_go_type(col.data_type) }}]*pb.{{ sheetname }}Table
 {%- endfor %}
 {%- for col in table.table_keys if col.is_multi_key %}
-    kv{{ col.name | title }}Data map[{{ to_go_type(col.data_type) }}][]*pb.{{ sheetname }}Table
+    kv{{ to_go_proto_field(col.name) }}Data map[{{ to_go_type(col.data_type) }}][]*pb.{{ sheetname }}Table
 {%- endfor %}
 {%- for arr in table.repeated_comp_arrays %}
-    idx{{ arr.name | title }} map[{{ to_go_type(arr.data_type) }}][]*pb.{{ sheetname }}Table
+    idx{{ to_go_proto_field(arr.name) }} map[{{ to_go_type(arr.data_type) }}][]*pb.{{ sheetname }}Table
 {%- endfor %}
 {%- for col in table.index_columns %}
     idx{{ to_go_proto_field(col.name) }} map[{{ to_go_type(col.data_type) }}][]*pb.{{ sheetname }}Table
 {%- endfor %}
 {%- for ck in table.composite_keys %}
-    compositeKv{{ ck.group | title }} map[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}]*pb.{{ sheetname }}Table
+    compositeKv{{ to_go_proto_field(ck.group) }} map[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}]*pb.{{ sheetname }}Table
 {%- endfor %}
 }
 
 type {{ sheetname }}TableManager struct {
     // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    //
+    // 热更契约:返回出去的 *pb 行属于**当时**那个快照。Go 有 GC,存着不会崩,
+    // 但会永远拿到热更前的旧值。调用方**只存 id**,用的时候现查。
     // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
     // 并发读就是数据竞争(go test -race 会报)。
     // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
@@ -57,19 +65,23 @@ var {{ sheetname }}TableManagerInstance = New{{ sheetname }}TableManager()
 func New{{ sheetname }}TableManager() *{{ sheetname }}TableManager {
     m := &{{ sheetname }}TableManager{}
     m.snap.Store(&{{ sheetname | lower }}Snapshot{
+{%- if table.multi_primary_key %}
+        kvData: make(map[{{ to_go_type(table.id_column.data_type) }}][]*pb.{{ sheetname }}Table),
+{%- else %}
         kvData: make(map[{{ to_go_type(table.id_column.data_type) }}]*pb.{{ sheetname }}Table),
+{%- endif %}
 {%- for col in table.table_keys if not col.is_multi_key %}
-        kv{{ col.name | title }}Data: make(map[{{ to_go_type(col.data_type) }}]*pb.{{ sheetname }}Table),
+        kv{{ to_go_proto_field(col.name) }}Data: make(map[{{ to_go_type(col.data_type) }}]*pb.{{ sheetname }}Table),
 {%- endfor %}
 {%- for col in table.table_keys if col.is_multi_key %}
-        kv{{ col.name | title }}Data: make(map[{{ to_go_type(col.data_type) }}][]*pb.{{ sheetname }}Table),
+        kv{{ to_go_proto_field(col.name) }}Data: make(map[{{ to_go_type(col.data_type) }}][]*pb.{{ sheetname }}Table),
 {%- endfor %}
 {%- for arr in table.repeated_comp_arrays %}
-        idx{{ arr.name | title }}: make(map[{{ to_go_type(arr.data_type) }}][]*pb.{{ sheetname }}Table),
+        idx{{ to_go_proto_field(arr.name) }}: make(map[{{ to_go_type(arr.data_type) }}][]*pb.{{ sheetname }}Table),
 {%- endfor %}{%- for col in table.index_columns %}
         idx{{ to_go_proto_field(col.name) }}: make(map[{{ to_go_type(col.data_type) }}][]*pb.{{ sheetname }}Table),
 {%- endfor %}{%- for ck in table.composite_keys %}
-        compositeKv{{ ck.group | title }}: make(map[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}]*pb.{{ sheetname }}Table),
+        compositeKv{{ to_go_proto_field(ck.group) }}: make(map[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}]*pb.{{ sheetname }}Table),
 {%- endfor %}
     })
     return m
@@ -99,42 +111,50 @@ func (m *{{ sheetname }}TableManager) Load(configDir string, useBinary bool) err
     }
 
     snap := &{{ sheetname | lower }}Snapshot{
+{%- if table.multi_primary_key %}
+        kvData: make(map[{{ to_go_type(table.id_column.data_type) }}][]*pb.{{ sheetname }}Table, len(container.Data)),
+{%- else %}
         kvData: make(map[{{ to_go_type(table.id_column.data_type) }}]*pb.{{ sheetname }}Table, len(container.Data)),
+{%- endif %}
 {%- for col in table.table_keys if not col.is_multi_key %}
-        kv{{ col.name | title }}Data: make(map[{{ to_go_type(col.data_type) }}]*pb.{{ sheetname }}Table, len(container.Data)),
+        kv{{ to_go_proto_field(col.name) }}Data: make(map[{{ to_go_type(col.data_type) }}]*pb.{{ sheetname }}Table, len(container.Data)),
 {%- endfor %}
 {%- for col in table.table_keys if col.is_multi_key %}
-        kv{{ col.name | title }}Data: make(map[{{ to_go_type(col.data_type) }}][]*pb.{{ sheetname }}Table),
+        kv{{ to_go_proto_field(col.name) }}Data: make(map[{{ to_go_type(col.data_type) }}][]*pb.{{ sheetname }}Table),
 {%- endfor %}
 {%- for arr in table.repeated_comp_arrays %}
-        idx{{ arr.name | title }}: make(map[{{ to_go_type(arr.data_type) }}][]*pb.{{ sheetname }}Table),
+        idx{{ to_go_proto_field(arr.name) }}: make(map[{{ to_go_type(arr.data_type) }}][]*pb.{{ sheetname }}Table),
 {%- endfor %}
 {%- for col in table.index_columns %}
         idx{{ to_go_proto_field(col.name) }}: make(map[{{ to_go_type(col.data_type) }}][]*pb.{{ sheetname }}Table),
 {%- endfor %}
 {%- for ck in table.composite_keys %}
-        compositeKv{{ ck.group | title }}: make(map[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}]*pb.{{ sheetname }}Table, len(container.Data)),
+        compositeKv{{ to_go_proto_field(ck.group) }}: make(map[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}]*pb.{{ sheetname }}Table, len(container.Data)),
 {%- endfor %}
     }
 
     for _, row := range container.Data {
+{%- if table.multi_primary_key %}
+        snap.kvData[row.Id] = append(snap.kvData[row.Id], row)
+{%- else %}
         snap.kvData[row.Id] = row
+{%- endif %}
 {%- for col in table.table_keys if not col.is_multi_key %}
-        snap.kv{{ col.name | title }}Data[row.{{ to_go_proto_field(col.name) }}] = row
+        snap.kv{{ to_go_proto_field(col.name) }}Data[row.{{ to_go_proto_field(col.name) }}] = row
 {%- endfor %}
 {%- for col in table.table_keys if col.is_multi_key %}
-        snap.kv{{ col.name | title }}Data[row.{{ to_go_proto_field(col.name) }}] = append(snap.kv{{ col.name | title }}Data[row.{{ to_go_proto_field(col.name) }}], row)
+        snap.kv{{ to_go_proto_field(col.name) }}Data[row.{{ to_go_proto_field(col.name) }}] = append(snap.kv{{ to_go_proto_field(col.name) }}Data[row.{{ to_go_proto_field(col.name) }}], row)
 {%- endfor %}
 {%- for arr in table.repeated_comp_arrays %}
         for _, elem := range row.{{ to_go_proto_field(arr.name) }} {
-            snap.idx{{ arr.name | title }}[elem] = append(snap.idx{{ arr.name | title }}[elem], row)
+            snap.idx{{ to_go_proto_field(arr.name) }}[elem] = append(snap.idx{{ to_go_proto_field(arr.name) }}[elem], row)
         }
 {%- endfor %}
 {%- for col in table.index_columns %}
         snap.idx{{ to_go_proto_field(col.name) }}[row.{{ to_go_proto_field(col.name) }}] = append(snap.idx{{ to_go_proto_field(col.name) }}[row.{{ to_go_proto_field(col.name) }}], row)
 {%- endfor %}
 {%- for ck in table.composite_keys %}
-        snap.compositeKv{{ ck.group | title }}[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}{ {%- for col in ck.columns %}{{ to_go_proto_field(col.name) }}: row.{{ to_go_proto_field(col.name) }}, {% endfor -%} }] = row
+        snap.compositeKv{{ to_go_proto_field(ck.group) }}[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}{ {%- for col in ck.columns %}{{ to_go_proto_field(col.name) }}: row.{{ to_go_proto_field(col.name) }}, {% endfor -%} }] = row
 {%- endfor %}
     }
 
@@ -148,31 +168,43 @@ func (m *{{ sheetname }}TableManager) FindAll() []*pb.{{ sheetname }}Table {
     return snap.data
 }
 
+{%- if table.multi_primary_key %}
+
+// FindAllById 返回该 id 命中的**全部**行(表内顺序)。
+// 这张表的主键声明了 (cfg_multi),所以不生成 FindById —— 把可重复主键当单值用
+// 会在编译期断，而不是悄悄只看第一行。
+func (m *{{ sheetname }}TableManager) FindAllById(id {{ to_go_type(table.id_column.data_type) }}) []*pb.{{ sheetname }}Table {
+    snap := m.snap.Load()
+    return snap.kvData[id]
+}
+{%- else %}
+
 func (m *{{ sheetname }}TableManager) FindById(id {{ to_go_type(table.id_column.data_type) }}) (*pb.{{ sheetname }}Table, bool) {
     snap := m.snap.Load()
     row, ok := snap.kvData[id]
     return row, ok
 }
+{%- endif %}
 
 {% for col in table.table_keys if not col.is_multi_key -%}
-func (m *{{ sheetname }}TableManager) FindBy{{ col.name | title }}(key {{ to_go_type(col.data_type) }}) (*pb.{{ sheetname }}Table, bool) {
+func (m *{{ sheetname }}TableManager) FindBy{{ to_go_proto_field(col.name) }}(key {{ to_go_type(col.data_type) }}) (*pb.{{ sheetname }}Table, bool) {
     snap := m.snap.Load()
-    row, ok := snap.kv{{ col.name | title }}Data[key]
+    row, ok := snap.kv{{ to_go_proto_field(col.name) }}Data[key]
     return row, ok
 }
 
 {% endfor %}
 {%- for col in table.table_keys if col.is_multi_key %}
-func (m *{{ sheetname }}TableManager) FindBy{{ col.name | title }}(key {{ to_go_type(col.data_type) }}) []*pb.{{ sheetname }}Table {
+func (m *{{ sheetname }}TableManager) FindBy{{ to_go_proto_field(col.name) }}(key {{ to_go_type(col.data_type) }}) []*pb.{{ sheetname }}Table {
     snap := m.snap.Load()
-    return snap.kv{{ col.name | title }}Data[key]
+    return snap.kv{{ to_go_proto_field(col.name) }}Data[key]
 }
 
 {% endfor %}
 {%- for arr in table.repeated_comp_arrays %}
-func (m *{{ sheetname }}TableManager) FindBy{{ arr.name | title }}Index(key {{ to_go_type(arr.data_type) }}) []*pb.{{ sheetname }}Table {
+func (m *{{ sheetname }}TableManager) FindBy{{ to_go_proto_field(arr.name) }}Index(key {{ to_go_type(arr.data_type) }}) []*pb.{{ sheetname }}Table {
     snap := m.snap.Load()
-    return snap.idx{{ arr.name | title }}[key]
+    return snap.idx{{ to_go_proto_field(arr.name) }}[key]
 }
 
 {% endfor %}
@@ -188,14 +220,18 @@ func (m *{{ sheetname }}TableManager) GetBy{{ to_go_proto_field(col.name) }}(key
 
 func (m *{{ sheetname }}TableManager) Exists(id {{ to_go_type(table.id_column.data_type) }}) bool {
     snap := m.snap.Load()
+{%- if table.multi_primary_key %}
+    return len(snap.kvData[id]) > 0
+{%- else %}
     _, ok := snap.kvData[id]
     return ok
+{%- endif %}
 }
 
 {% for col in table.table_keys if not col.is_multi_key -%}
-func (m *{{ sheetname }}TableManager) ExistsBy{{ col.name | title }}(key {{ to_go_type(col.data_type) }}) bool {
+func (m *{{ sheetname }}TableManager) ExistsBy{{ to_go_proto_field(col.name) }}(key {{ to_go_type(col.data_type) }}) bool {
     snap := m.snap.Load()
-    _, ok := snap.kv{{ col.name | title }}Data[key]
+    _, ok := snap.kv{{ to_go_proto_field(col.name) }}Data[key]
     return ok
 }
 
@@ -209,16 +245,16 @@ func (m *{{ sheetname }}TableManager) Count() int {
 }
 
 {% for col in table.table_keys if col.is_multi_key -%}
-func (m *{{ sheetname }}TableManager) CountBy{{ col.name | title }}(key {{ to_go_type(col.data_type) }}) int {
+func (m *{{ sheetname }}TableManager) CountBy{{ to_go_proto_field(col.name) }}(key {{ to_go_type(col.data_type) }}) int {
     snap := m.snap.Load()
-    return len(snap.kv{{ col.name | title }}Data[key])
+    return len(snap.kv{{ to_go_proto_field(col.name) }}Data[key])
 }
 
 {% endfor %}
 {%- for arr in table.repeated_comp_arrays %}
-func (m *{{ sheetname }}TableManager) CountBy{{ arr.name | title }}Index(key {{ to_go_type(arr.data_type) }}) int {
+func (m *{{ sheetname }}TableManager) CountBy{{ to_go_proto_field(arr.name) }}Index(key {{ to_go_type(arr.data_type) }}) int {
     snap := m.snap.Load()
-    return len(snap.idx{{ arr.name | title }}[key])
+    return len(snap.idx{{ to_go_proto_field(arr.name) }}[key])
 }
 
 {% endfor %}
@@ -236,9 +272,13 @@ func (m *{{ sheetname }}TableManager) FindByIds(ids []{{ to_go_type(table.id_col
     snap := m.snap.Load()
     result := make([]*pb.{{ sheetname }}Table, 0, len(ids))
     for _, id := range ids {
+{%- if table.multi_primary_key %}
+        result = append(result, snap.kvData[id]...)
+{%- else %}
         if row, ok := snap.kvData[id]; ok {
             result = append(result, row)
         }
+{%- endif %}
     }
     return result
 }
@@ -254,9 +294,9 @@ func (m *{{ sheetname }}TableManager) RandOne() (*pb.{{ sheetname }}Table, bool)
 }
 
 {% for col in table.table_keys if col.is_multi_key -%}
-func (m *{{ sheetname }}TableManager) RandOneBy{{ col.name | title }}(key {{ to_go_type(col.data_type) }}) (*pb.{{ sheetname }}Table, bool) {
+func (m *{{ sheetname }}TableManager) RandOneBy{{ to_go_proto_field(col.name) }}(key {{ to_go_type(col.data_type) }}) (*pb.{{ sheetname }}Table, bool) {
     snap := m.snap.Load()
-    rows := snap.kv{{ col.name | title }}Data[key]
+    rows := snap.kv{{ to_go_proto_field(col.name) }}Data[key]
     if len(rows) == 0 {
         return nil, false
     }
@@ -295,15 +335,15 @@ func (m *{{ sheetname }}TableManager) First(pred func(*pb.{{ sheetname }}Table) 
 // ---- Composite Key ----
 
 {% for ck in table.composite_keys -%}
-func (m *{{ sheetname }}TableManager) FindBy{{ ck.group | title }}({% for col in ck.columns %}{{ col.name }} {{ to_go_type(col.data_type) }}{% if not loop.last %}, {% endif %}{% endfor %}) (*pb.{{ sheetname }}Table, bool) {
+func (m *{{ sheetname }}TableManager) FindBy{{ to_go_proto_field(ck.group) }}({% for col in ck.columns %}{{ col.name }} {{ to_go_type(col.data_type) }}{% if not loop.last %}, {% endif %}{% endfor %}) (*pb.{{ sheetname }}Table, bool) {
     snap := m.snap.Load()
-    row, ok := snap.compositeKv{{ ck.group | title }}[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}{ {%- for col in ck.columns %}{{ to_go_proto_field(col.name) }}: {{ col.name }}, {% endfor -%} }]
+    row, ok := snap.compositeKv{{ to_go_proto_field(ck.group) }}[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}{ {%- for col in ck.columns %}{{ to_go_proto_field(col.name) }}: {{ col.name }}, {% endfor -%} }]
     return row, ok
 }
 
-func (m *{{ sheetname }}TableManager) ExistsBy{{ ck.group | title }}({% for col in ck.columns %}{{ col.name }} {{ to_go_type(col.data_type) }}{% if not loop.last %}, {% endif %}{% endfor %}) bool {
+func (m *{{ sheetname }}TableManager) ExistsBy{{ to_go_proto_field(ck.group) }}({% for col in ck.columns %}{{ col.name }} {{ to_go_type(col.data_type) }}{% if not loop.last %}, {% endif %}{% endfor %}) bool {
     snap := m.snap.Load()
-    _, ok := snap.compositeKv{{ ck.group | title }}[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}{ {%- for col in ck.columns %}{{ to_go_proto_field(col.name) }}: {{ col.name }}, {% endfor -%} }]
+    _, ok := snap.compositeKv{{ to_go_proto_field(ck.group) }}[{{ sheetname }}{{ composite_go_struct_name(ck.group) }}{ {%- for col in ck.columns %}{{ to_go_proto_field(col.name) }}: {{ col.name }}, {% endfor -%} }]
     return ok
 }
 

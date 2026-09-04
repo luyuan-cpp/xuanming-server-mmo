@@ -28,6 +28,23 @@ const ItemComp *ItemStore::Find(Guid guid) const
 
 ItemComp *ItemStore::Insert(ItemComp proto)
 {
+    // 入包序号在这里、也只在这里盖章 —— Insert 是本仓库唯一的创建口径。
+    //
+    //   acquire_seq == 0  新实例 / 旧存档没盖过章 -> 盖当前水位;
+    //   acquire_seq  > 0  快照带回来的章 -> 原样保留,并把水位抬到它之上。
+    //
+    // 于是"店里的每个实例都有非零、且同包内单调"这条不变量由结构保证:
+    // 淘汰策略可以直接比大小,不必再考虑 0 与 guid 混排(两个数域混排会让
+    // 旧存档的物品永远排在最后,先进先出就挤错人)。
+    if (proto.acquire_seq() == 0)
+    {
+        proto.set_acquire_seq(nextAcquireSeq_++);
+    }
+    else if (proto.acquire_seq() >= nextAcquireSeq_)
+    {
+        nextAcquireSeq_ = proto.acquire_seq() + 1;
+    }
+
     auto entity = registry_.create();
     auto &stored = registry_.emplace<ItemComp>(entity, std::move(proto));
 
@@ -70,6 +87,10 @@ void ItemStore::Clear()
         }
     }
     guidToEntity_.clear();
+    // 水位跟着清空一起复位:ResetFromSnapshot 之后紧跟着的就是按快照顺序重放,
+    // 那批实例会带着自己的章回来(或没章、由这里重新按顺序盖)。不复位的话,
+    // 一个反复还原的实体水位会单调涨到没有意义的大数。
+    nextAcquireSeq_ = 1;
 }
 
 std::size_t ItemStore::TotalCountOf(uint32_t configId) const

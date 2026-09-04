@@ -3,21 +3,24 @@ syntax = "proto3";
 
 option go_package = "generated/pb/table";
 
+option java_package = "com.game.table";
+
+
 enum skill_error {
   kSkill_errorOK = 0;
 
-  kSkillUnInterruptible = 116;
+  kSkillUnInterruptible = 7000;
 
-  kSkillInvalidTargetId = 117;
+  kSkillInvalidTargetId = 7001;
 
-  kSkillInvalidTarget = 118;
+  kSkillInvalidTarget = 7002;
 
-  kSkillCooldownNotReady = 119;
+  kSkillCooldownNotReady = 7003;
 
-  kSkillCannotBeCastInCurrentState = 120;
+  kSkillCannotBeCastInCurrentState = 7004;
 
-  kSkillCannotBeCastSilenceRestriction = 121;
+  kSkillCannotBeCastSilenceRestriction = 7005;
 
-  kSkillCannotBeCastStunRestriction = 122;
+  kSkillCannotBeCastStunRestriction = 7006;
 
 };

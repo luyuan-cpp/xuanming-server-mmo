@@ -5,6 +5,9 @@
 #include <functional>
 #include <memory>
 #include <random>
+{%- if table.multi_primary_key %}
+#include <ranges>
+{%- endif %}
 #include <unordered_map>
 #include <vector>
 #include "table_expression.h"
@@ -34,7 +37,7 @@ struct {{ sheetname }}{{ composite_cpp_struct_name(ck.group) }}Hash {
 
 class {{ sheetname }}TableManager {
 public:
-    using IdMapType = std::unordered_map<uint32_t, const {{ sheetname }}Table*>;
+    using IdMapType = std::{{ cpp_map_type(table.multi_primary_key) }}<uint32_t, const {{ sheetname }}Table*>;
     using LoadSuccessCallback = std::function<void()>;
 
     // Internal snapshot holding all parsed data and indices.
@@ -68,8 +71,33 @@ public:
 
     const {{ sheetname }}TableData& FindAll() const { return snapshot->data; }
 
+    // ---- 生命周期契约(热更) ----
+    //
+    // Load() 会整批建好新 Snapshot 再换掉旧的,**旧 Snapshot 当场析构**。
+    // 所以下面所有返回指针 / 引用 / 迭代器的接口,返回值只在**下一次 Load() 之前**有效。
+    //
+    //   ✅ 存 id,用的时候现查
+    //   ❌ 把 const {{ sheetname }}Table* 存进成员、容器、闭包、协程帧
+    //
+    // 存指针在热更那一刻就是野指针,而且不会有任何报错。
+{%- if table.multi_primary_key %}
+    // 这张表的主键可重复((cfg_multi)),因此**不提供 FindById** —— 单值语义不成立。
+    //
+    // 返回的是 multimap 的 equal_range 视图,**不拷贝、不分配**:
+    //
+    //     for (const auto* row : Mgr::Instance().FindAllById(id)) { ... }
+    //
+    // 视图与它产出的指针一样,只在下一次 Load() 之前有效。
+    auto FindAllById(uint32_t tableId) const {
+        auto [first, last] = snapshot->idMap.equal_range(tableId);
+        return std::ranges::subrange(first, last) | std::views::values;
+    }
+
+    std::size_t CountById(uint32_t tableId) const { return snapshot->idMap.count(tableId); }
+{%- else %}
     std::pair<const {{ sheetname }}Table*, uint32_t> FindById(uint32_t tableId);
     std::pair<const {{ sheetname }}Table*, uint32_t> FindByIdSilent(uint32_t tableId);
+{%- endif %}
     const IdMapType& GetIdMap() const { return snapshot->idMap; }
 
     void Load();
@@ -87,7 +115,12 @@ public:
 
 {% for col in table.expression_columns %}
     {{ col.expression_type }} Get{{ to_pascal_case(col.name) }}(uint32_t tableId) {
+{%- if table.multi_primary_key %}
+        auto rows = FindAllById(tableId);
+        const auto* table = std::ranges::empty(rows) ? nullptr : *std::ranges::begin(rows);
+{%- else %}
         auto [table, fetchResult] = FindById(tableId);
+{%- endif %}
         if (table == nullptr) {
             return {{ col.expression_type }}();
         }
@@ -144,9 +177,16 @@ public:
         std::vector<const {{ sheetname }}Table*> result;
         result.reserve(ids.size());
         for (auto id : ids) {
+{%- if table.multi_primary_key %}
+            auto [first, last] = snapshot->idMap.equal_range(id);
+            for (auto it = first; it != last; ++it) {
+                result.push_back(it->second);
+            }
+{%- else %}
             if (auto it = snapshot->idMap.find(id); it != snapshot->idMap.end()) {
                 result.push_back(it->second);
             }
+{%- endif %}
         }
         return result;
     }

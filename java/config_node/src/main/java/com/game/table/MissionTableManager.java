@@ -30,11 +30,11 @@ public class MissionTableManager {
 
 
 
-        final Map<Integer, List<MissionTable>> idxCondition_id;
+        final Map<Integer, List<MissionTable>> idxConditionId;
 
-        final Map<Integer, List<MissionTable>> idxNext_mission_id;
+        final Map<Integer, List<MissionTable>> idxNextMissionId;
 
-        final Map<Integer, List<MissionTable>> idxTarget_count;
+        final Map<Integer, List<MissionTable>> idxTargetCount;
 
 
         final Map<Integer, List<MissionTable>> idxRewardId;
@@ -42,15 +42,15 @@ public class MissionTableManager {
 
         Snapshot(MissionTableData data,
                  Map<Integer, MissionTable> kvData,
-                 Map<Integer, List<MissionTable>> idxCondition_id,
-                 Map<Integer, List<MissionTable>> idxNext_mission_id,
-                 Map<Integer, List<MissionTable>> idxTarget_count,
+                 Map<Integer, List<MissionTable>> idxConditionId,
+                 Map<Integer, List<MissionTable>> idxNextMissionId,
+                 Map<Integer, List<MissionTable>> idxTargetCount,
                  Map<Integer, List<MissionTable>> idxRewardId) {
             this.data = data;
             this.kvData = kvData;
-            this.idxCondition_id = idxCondition_id;
-            this.idxNext_mission_id = idxNext_mission_id;
-            this.idxTarget_count = idxTarget_count;
+            this.idxConditionId = idxConditionId;
+            this.idxNextMissionId = idxNextMissionId;
+            this.idxTargetCount = idxTargetCount;
             this.idxRewardId = idxRewardId;
         }
     }
@@ -80,32 +80,33 @@ public class MissionTableManager {
         MissionTableData data = builder.build();
 
         Map<Integer, MissionTable> kvData = new HashMap<>(data.getDataCount());
-        Map<Integer, List<MissionTable>> idxCondition_id = new HashMap<>();
-        Map<Integer, List<MissionTable>> idxNext_mission_id = new HashMap<>();
-        Map<Integer, List<MissionTable>> idxTarget_count = new HashMap<>();
+        Map<Integer, List<MissionTable>> idxConditionId = new HashMap<>();
+        Map<Integer, List<MissionTable>> idxNextMissionId = new HashMap<>();
+        Map<Integer, List<MissionTable>> idxTargetCount = new HashMap<>();
         Map<Integer, List<MissionTable>> idxRewardId = new HashMap<>();
 
         for (MissionTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
             for (Integer elem : row.getConditionIdList()) {
-                idxCondition_id.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idxConditionId.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
             for (Integer elem : row.getNextMissionIdList()) {
-                idxNext_mission_id.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idxNextMissionId.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
             for (Integer elem : row.getTargetCountList()) {
-                idxTarget_count.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idxTargetCount.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
             idxRewardId.computeIfAbsent(row.getRewardId(), k -> new ArrayList<>()).add(row);
         }
 
-        this.snapshot = new Snapshot(data, kvData, idxCondition_id, idxNext_mission_id, idxTarget_count, idxRewardId);
+        this.snapshot = new Snapshot(data, kvData, idxConditionId, idxNextMissionId, idxTargetCount, idxRewardId);
     }
 
     public MissionTableData findAll() {
         return snapshot.data;
     }
 
+    /** 热更契约：返回的对象属于当前快照，调用方**只存 id**，不要长期持有引用。 */
     public MissionTable findById(int id) {
         return snapshot.kvData.get(id);
     }
@@ -118,16 +119,16 @@ public class MissionTableManager {
 
 
 
-    public List<MissionTable> findByCondition_idIndex(int key) {
-        return snapshot.idxCondition_id.getOrDefault(key, Collections.emptyList());
+    public List<MissionTable> findByConditionIdIndex(int key) {
+        return snapshot.idxConditionId.getOrDefault(key, Collections.emptyList());
     }
 
-    public List<MissionTable> findByNext_mission_idIndex(int key) {
-        return snapshot.idxNext_mission_id.getOrDefault(key, Collections.emptyList());
+    public List<MissionTable> findByNextMissionIdIndex(int key) {
+        return snapshot.idxNextMissionId.getOrDefault(key, Collections.emptyList());
     }
 
-    public List<MissionTable> findByTarget_countIndex(int key) {
-        return snapshot.idxTarget_count.getOrDefault(key, Collections.emptyList());
+    public List<MissionTable> findByTargetCountIndex(int key) {
+        return snapshot.idxTargetCount.getOrDefault(key, Collections.emptyList());
     }
 
 
@@ -157,16 +158,16 @@ public class MissionTableManager {
 
 
 
-    public int countByCondition_idIndex(int key) {
-        return snapshot.idxCondition_id.getOrDefault(key, Collections.emptyList()).size();
+    public int countByConditionIdIndex(int key) {
+        return snapshot.idxConditionId.getOrDefault(key, Collections.emptyList()).size();
     }
 
-    public int countByNext_mission_idIndex(int key) {
-        return snapshot.idxNext_mission_id.getOrDefault(key, Collections.emptyList()).size();
+    public int countByNextMissionIdIndex(int key) {
+        return snapshot.idxNextMissionId.getOrDefault(key, Collections.emptyList()).size();
     }
 
-    public int countByTarget_countIndex(int key) {
-        return snapshot.idxTarget_count.getOrDefault(key, Collections.emptyList()).size();
+    public int countByTargetCountIndex(int key) {
+        return snapshot.idxTargetCount.getOrDefault(key, Collections.emptyList()).size();
     }
 
 

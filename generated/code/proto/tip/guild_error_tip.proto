@@ -1,0 +1,30 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum guild_error {
+  kGuild_errorOK = 0;
+
+  kGuildAlreadyInGuild = 14000;
+
+  kGuildNotFound = 14001;
+
+  kGuildNotInGuild = 14002;
+
+  kGuildFull = 14003;
+
+  kGuildLeaderCantLeave = 14004;
+
+  kGuildNotLeader = 14005;
+
+  kGuildNoPermission = 14006;
+
+  kGuildNotRanked = 14007;
+
+  kGuildIdGenUnavailable = 14008;
+
+};

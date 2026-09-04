@@ -82,6 +82,7 @@ void Bag::SetProfile(BagProfile profile)
 	SetLayout(std::move(profile.layout));
 	SetAdmission(std::move(profile.admission));
 	SetEviction(std::move(profile.eviction));
+	profileId_ = profile.id;
 }
 
 void Bag::SetCapacityForRestore(std::size_t newCapacity)
@@ -1251,7 +1252,8 @@ void Bag::ResetFromSnapshot()
 	AssertLayerConsistency();
 }
 
-void Bag::InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize, uint32_t pos)
+void Bag::InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize, uint32_t pos,
+							   uint64_t acquireSeq)
 {
 	if (guid == kInvalidGuid)
 	{
@@ -1273,6 +1275,8 @@ void Bag::InsertItemForRestore(Guid guid, uint32_t configId, uint32_t stackSize,
 	proto.set_item_id(guid);
 	proto.set_config_id(configId);
 	proto.set_size(stackSize);
+	// 0 交给 ItemStore::Insert 按重放顺序补盖(旧存档);非 0 原样保留并抬高水位。
+	proto.set_acquire_seq(acquireSeq);
 
 	if (store_.Insert(std::move(proto)) == nullptr)
 	{

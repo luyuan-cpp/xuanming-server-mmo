@@ -1,4 +1,5 @@
 openpyxl>=3.1.0
 Jinja2>=3.1.0
 PyYAML>=6.0
-protobuf>=4.21.0
+# checked-in protoc 35.1 emits Python gencode 7.35.1；跨 major runtime 会拒绝加载。
+protobuf>=7.35.1,<8

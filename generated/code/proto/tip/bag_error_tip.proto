@@ -3,37 +3,40 @@ syntax = "proto3";
 
 option go_package = "generated/pb/table";
 
+option java_package = "com.game.table";
+
+
 enum bag_error {
   kBag_errorOK = 0;
 
-  kBagDeleteItemFindGuid = 101;
+  kBagDeleteItemFindGuid = 6000;
 
-  kBagDeleteItemAlreadyHasGuid = 102;
+  kBagDeleteItemAlreadyHasGuid = 6001;
 
-  kBagAddItemHasNotBaseComponent = 103;
+  kBagAddItemHasNotBaseComponent = 6002;
 
-  kBagAddItemInvalidGuid = 104;
+  kBagAddItemInvalidGuid = 6003;
 
-  kBagAddItemInvalidParam = 105;
+  kBagAddItemInvalidParam = 6004;
 
-  kBagAddItemBagFull = 106;
+  kBagAddItemBagFull = 6005;
 
-  kBagItemNotStacked = 107;
+  kBagItemNotStacked = 6006;
 
-  kBagInsufficientItems = 108;
+  kBagInsufficientItems = 6007;
 
-  kBagDelItemPos = 109;
+  kBagDelItemPos = 6008;
 
-  kBagDelItemConfig = 110;
+  kBagDelItemConfig = 6009;
 
-  kBagDelItemGuid = 111;
+  kBagDelItemGuid = 6010;
 
-  kBagDelItemFindItem = 112;
+  kBagDelItemFindItem = 6011;
 
-  kBagDelItemSize = 113;
+  kBagDelItemSize = 6012;
 
-  kBagItemDeletionSizeMismatch = 114;
+  kBagItemDeletionSizeMismatch = 6013;
 
-  kBagInsufficientBagSpace = 115;
+  kBagInsufficientBagSpace = 6014;
 
 };

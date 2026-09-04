@@ -42,20 +42,69 @@ All settings live in `exporter_config.yaml`:
 - **languages**: per-language enable flags, output directories, deploy targets
 - **constant_tables**: which tables generate table-ID enums
 
-## Excel Format
+## Schema 与源表
 
-表头 5 行,数据从第 6 行开始(行号由 `exporter_config.yaml` 的 `excel.metadata_rows`
-与 `excel.data_begin_row` 决定)。每个逻辑字段只在**span 的第一列**写元数据,
-后续列留空表示"属于同一个字段"(repeated / map / 子消息就是靠这个展开的)。
+**schema 的事实源是 `data/schema/<Sheet>_table.proto`,不是 xlsx 表头。**
+2026-09-03 迁移完成:类型 / owner / 选项 / 注释全部从 Excel 的第 2~5 行搬进了权威 schema,
+xlsx 只留列名与数据。
 
-| Row | Purpose        | Example                                                     |
-|-----|----------------|-------------------------------------------------------------|
-| 1   | 字段名(第一列必须是 `id`) | `id`、`reward_id`                                 |
-| 2   | 类型声明       | `uint32`、`string`、`repeated uint32`、`map<uint32,uint32>`、`set<uint32>`、`repeated { uint32 a; uint32 b }` |
-| 3   | owner          | `server` / `client` / `common` / `design`                    |
-| 4   | options(空格分隔) | `key`、`multi`、`idx`、`bit_index`、`composite:g`、`fk:T`、`gfk:T`、`expr:type`、`expr_params:a,b` |
-| 5   | 注释           | 任意文本                                                     |
-| 6+  | **数据行**     |                                                              |
+```proto
+// data/schema/mission_table.proto
+message MissionTable {
+  option (cfg_sheet)       = "Mission";
+  option (cfg_primary_key) = "id";
+
+  uint32 id = 1 [(cfg_bit_index) = true];
+  // condition表的id
+  repeated uint32 condition_id = 2 [(cfg_slots) = 6, (cfg_gfk) = "Condition"];
+  uint32 reward_id = 7 [(cfg_fk) = "Reward"];
+}
+```
+
+对应的 xlsx:
+
+| 行 | 内容 |
+|-----|------|
+| 1 | 字段名。**机器按这一行的名字绑列**,冻结,改名等于改绑定 |
+| 2-4 | 空 |
+| 5 | 中文说明。由 `strip_header_rows.py --decorate` 从 schema 的 `//` 注释**投影**而来,不是事实源;在表里改它不生效 |
+| 6+ | 数据 |
+
+三条设计要点:
+
+- **按列名绑定,不按列位。** 策划在任意位置插列/删列/重排,其它字段不受影响,字段号一个不动。
+- **容量显式。** `(cfg_slots)` 说明一个数组/映射/子消息列表占几个槽;从前这条信息只存在于
+  「右边留了几个空格子」里。
+- **字段号由人写死。** 产物模板只查 `TableSchema.field_numbers`,不再自己发号;
+  从前它按列序自增,于是「在中间插一列」会让后面所有字段的号整体 +1,而 `.pb` 是入库的二进制。
+  删字段用 `reserved`,复用退休号会被拒。
+
+option 词表在 `data/schema/cfg_options.proto`,**导表器运行时解析它**得到合法 option 名与取值 ——
+词表与解析器不存在漏同步。
+
+### 主键可重复 / 热更契约
+
+主键列写 `(cfg_multi)` = 这张表的 `id` 允许重复：生成 `FindAllById`、不生成 `FindById`、
+不允许 `(cfg_bit_index)`。没声明却出现重复 `id` 一律导表失败
+（`core/primary_key.py`，与外键校验同一位置 fail-closed）。
+
+生成的管理器返回的行**属于当前快照**：C++ 的旧快照在 `Load()` 时当场析构，
+存指针即野指针；Go/Java 不崩但会永远陈旧。契约是**只存 id**，生成代码里写着同一句话。
+
+### 尚未迁移的表怎么办
+
+`core/table_source.py` 按 sheet 名派发:有权威 schema 走 schema-first,没有就退回读
+xlsx 第 2~5 行的旧格式(`core/excel_reader.py`,格式见该文件 docstring)。
+两条路产出同一个 `TableSchema`,所以生成器与模板不受影响。
+
+### 相关工具
+
+| 命令 | 用途 |
+|------|------|
+| `tools/bootstrap_schema.py` | 从现有 xlsx + 现有产物播种权威 schema(字段号只抄不算,写盘前 round-trip 自检) |
+| `tools/verify_schema_parity.py` | 迁移期闸门:新旧两路 TableSchema 等价 + protoc 语法 lint |
+| `tools/strip_header_rows.py` | 迁移最后一步:清掉已搬走的表头行,把中文说明投影回第 5 行 |
+| `tools/sandbox_export.py` | **长期验收判据**:在沙盒里完整导一次表,与仓内产物逐字节比对(对仓库只读) |
 
 ### Foreign Key Syntax
 

@@ -81,6 +81,7 @@ public class TestTableManager {
         return snapshot.data;
     }
 
+    /** 热更契约：返回的对象属于当前快照，调用方**只存 id**，不要长期持有引用。 */
     public TestTable findById(int id) {
         return snapshot.kvData.get(id);
     }

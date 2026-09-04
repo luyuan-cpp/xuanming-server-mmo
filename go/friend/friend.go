@@ -121,8 +121,8 @@ func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor
 		//    业务拒绝都记成一次成功请求,监控上看不出任何比例变化。这层把响应体里的码读出来
 		//    定性后单独计数;真正的依赖故障(Redis / MySQL)在 friend_logic 里是
 		//    `return nil, err`,由同一个拦截器记成 transport_error。
-		//    TipClassifier 必须传:好友码在 220-239 私有段,serverbase 的全局判定
-		//    (只认已生成的 0-129 数轴)会把它们全判成 unknown_code。
+		//    好友域没有 in-band 故障码,TipClassifier 直接复用由 Tip.xlsx 生成的
+		//    全局段表判定；保留显式注入以固定本服务的定性接缝。
 		serverbase.UnaryInterceptor(serverbase.Options{
 			TipClassifier: constants.TipClassifier(),
 		}),

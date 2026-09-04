@@ -63,25 +63,25 @@ internal::EnumTraitsT<::common_error_internal_data_>
 
 enum common_error : int {
   kCommon_errorOK = 0,
-  kSuccess = 1,
-  kInvalidTableId = 2,
-  kInvalidTableData = 3,
-  kServiceUnavailable = 4,
-  kEntityIsNull = 5,
-  kInvalidParameter = 6,
-  kFeatureUnavailable = 7,
-  kIndexOutOfRange = 8,
-  kRateLimitExceeded = 9,
-  kThisEntityIsInvalid = 10,
-  kMessageSizeExceeded = 11,
-  kSessionNotFound = 12,
-  kPlayerNotFoundInSession = 13,
-  kMessageIdNotFound = 14,
-  kRequestMessageParseError = 15,
-  kArraySizeTooLargeInMessage = 16,
-  kResponseMessageParseError = 17,
-  kNegativeValueInMessage = 18,
-  kFailedToRegisterTheNode = 19,
+  kSuccess = 1000,
+  kInvalidTableId = 1001,
+  kInvalidTableData = 1002,
+  kServiceUnavailable = 1003,
+  kEntityIsNull = 1004,
+  kInvalidParameter = 1005,
+  kFeatureUnavailable = 1006,
+  kIndexOutOfRange = 1007,
+  kRateLimitExceeded = 1008,
+  kThisEntityIsInvalid = 1009,
+  kMessageSizeExceeded = 1010,
+  kSessionNotFound = 1011,
+  kPlayerNotFoundInSession = 1012,
+  kMessageIdNotFound = 1013,
+  kRequestMessageParseError = 1014,
+  kArraySizeTooLargeInMessage = 1015,
+  kResponseMessageParseError = 1016,
+  kNegativeValueInMessage = 1017,
+  kFailedToRegisterTheNode = 1018,
   common_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   common_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -92,11 +92,11 @@ extern const uint32_t common_error_internal_data_[];
 inline constexpr common_error common_error_MIN =
     static_cast<common_error>(0);
 inline constexpr common_error common_error_MAX =
-    static_cast<common_error>(19);
+    static_cast<common_error>(1018);
 [[nodiscard]] inline bool common_error_IsValid(int value) {
-  return 0 <= value && value <= 19;
+  return ::google::protobuf::internal::ValidateEnum(value, common_error_internal_data_);
 }
-inline constexpr int common_error_ARRAYSIZE = 19 + 1;
+inline constexpr int common_error_ARRAYSIZE = 1018 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 common_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(common_error) {
@@ -107,12 +107,7 @@ template <typename T>
   static_assert(::std::is_same<T, common_error>::value ||
                     ::std::is_integral<T>::value,
                 "Incorrect type passed to common_error_Name().");
-  return common_error_Name(static_cast<common_error>(value));
-}
-template <>
-[[nodiscard]] inline const ::std::string& common_error_Name(common_error value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<common_error_descriptor, 0, 19>(
-      static_cast<int>(value));
+  return ::google::protobuf::internal::NameOfEnum(common_error_descriptor(), value);
 }
 [[nodiscard]] inline bool common_error_Parse(
     ::absl::string_view name, common_error* PROTOBUF_NONNULL value) {

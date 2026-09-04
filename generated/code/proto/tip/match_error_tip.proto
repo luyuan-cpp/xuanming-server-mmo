@@ -1,0 +1,52 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum match_error {
+  kMatch_errorOK = 0;
+
+  kMatchInBattle = 16000;
+
+  kMatchAlreadyQueued = 16001;
+
+  kMatchModeNotOpen = 16002;
+
+  kMatchTeamSizeNotConfigured = 16003;
+
+  kMatchInternal = 16004;
+
+  kMatchTicketMismatch = 16005;
+
+  kMatchCancelTooLate = 16006;
+
+  kMatchChallengeSelf = 16007;
+
+  kMatchChallengeTargetOffline = 16008;
+
+  kMatchChallengeTargetBusy = 16009;
+
+  kMatchChallengeSelfBusy = 16010;
+
+  kMatchChallengePending = 16011;
+
+  kMatchChallengeExpired = 16012;
+
+  kMatchChallengeNotTarget = 16013;
+
+  kMatchSpectateWhileQueued = 16014;
+
+  kMatchSpectateWhileInBattle = 16015;
+
+  kMatchAlreadyWatching = 16016;
+
+  kMatchNoWatchableBattle = 16017;
+
+  kMatchBattleNotWatchable = 16018;
+
+  kMatchSpectateOffline = 16019;
+
+};

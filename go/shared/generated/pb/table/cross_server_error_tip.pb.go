@@ -25,18 +25,18 @@ type CrossServerError int32
 
 const (
 	CrossServerError_kCross_server_errorOK    CrossServerError = 0
-	CrossServerError_kSceneTransferInProgress CrossServerError = 129
+	CrossServerError_kSceneTransferInProgress CrossServerError = 13000
 )
 
 // Enum value maps for CrossServerError.
 var (
 	CrossServerError_name = map[int32]string{
-		0:   "kCross_server_errorOK",
-		129: "kSceneTransferInProgress",
+		0:     "kCross_server_errorOK",
+		13000: "kSceneTransferInProgress",
 	}
 	CrossServerError_value = map[string]int32{
 		"kCross_server_errorOK":    0,
-		"kSceneTransferInProgress": 129,
+		"kSceneTransferInProgress": 13000,
 	}
 )
 
@@ -74,7 +74,8 @@ const file_cross_server_error_tip_proto_rawDesc = "" +
 	"\x1ccross_server_error_tip.proto*N\n" +
 	"\x12cross_server_error\x12\x19\n" +
 	"\x15kCross_server_errorOK\x10\x00\x12\x1d\n" +
-	"\x18kSceneTransferInProgress\x10\x81\x01B\x14Z\x12generated/pb/tableb\x06proto3"
+	"\x18kSceneTransferInProgress\x10\xc8eB$\n" +
+	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (
 	file_cross_server_error_tip_proto_rawDescOnce sync.Once

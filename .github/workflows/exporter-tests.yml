@@ -1,0 +1,355 @@
+name: 导表器单元测试
+
+# 这个 workflow 存在的理由：
+#   tools/data_table_exporter/tests/ 下已经有一批回归测试（位序不复用、
+#   外键 fail-closed、清单 sha256、编排门禁、tip 码轴分段），但在此之前
+#   **没有任何 workflow 调用过它们** —— 和 deploy-config-tests.yml 头部
+#   记的是同一个空洞："写了测试但没 wire 进 CI"。
+#
+#   导表器的产物是全仓三语言的配置表与错误码枚举，它出错的形态是"静默产出
+#   坏数据"而不是"报错"，正是最需要机械护栏的一类工具。tip 码轴那组用例
+#   尤其如此：段与发号一旦脱节，症状是几个月后客户端弹错文案，不是编译失败。
+#
+# ── 写测试的人请遵守 ──────────────────────────────────────────────
+#   * 测试放 tools/data_table_exporter/tests/，pytest 风格，用 conftest.py
+#     里的夹具在 tmp_path 里现造 xlsx —— 不许依赖仓库里的真实 data/*.xlsx，
+#     那样测试会随策划改表而红。
+#   * 不需要 protoc：本 job 只装 requirements-dev.txt，跑的是纯 Python 的
+#     解析/分配/校验逻辑。凡是要 protoc 的（proto 编译、三语言产物）属于
+#     导表全流程，不在本 job 范围。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "tools/data_table_exporter/**"
+      # 段声明写在 Tip.xlsx 的组头行里，push 与 PR 必须使用同一触发面
+      - "data/tip/**"
+      # 任意表都可能通过 *_tip 列或 tip_ref option 消费提示码
+      - "data/**/*.xlsx"
+      - "generated/code/proto/tip/**"
+      - "generated/code/go/generated/tip/**"
+      - "generated/code/java/**"
+      - "generated/code/proto/java/**"
+      - "generated/tables/**"
+      - "go/shared/generated/tip/**"
+      - "go/shared/generated/pb/table/*_tip.pb.go"
+      - "java/config_node/src/main/java/com/game/table/**"
+      - "java/config_node/pom.xml"
+      - "cpp/generated/table/proto/tip/**"
+      - "cpp/generated/table/CMakeLists.txt"
+      - "cpp/generated/table/table.vcxproj"
+      - ".github/workflows/exporter-tests.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "tools/data_table_exporter/**"
+      # 段声明写在 Tip.xlsx 的组头行里，改表可能违反段纪律
+      - "data/tip/**"
+      # 任意表都可能通过 *_tip 列或 tip_ref option 消费提示码
+      - "data/**/*.xlsx"
+      - "generated/code/proto/tip/**"
+      - "generated/code/go/generated/tip/**"
+      - "generated/code/java/**"
+      - "generated/code/proto/java/**"
+      - "generated/tables/**"
+      - "go/shared/generated/tip/**"
+      - "go/shared/generated/pb/table/*_tip.pb.go"
+      - "java/config_node/src/main/java/com/game/table/**"
+      - "java/config_node/pom.xml"
+      - "cpp/generated/table/proto/tip/**"
+      - "cpp/generated/table/CMakeLists.txt"
+      - "cpp/generated/table/table.vcxproj"
+      - ".github/workflows/exporter-tests.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: exporter-tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: tools/data_table_exporter/tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: tools/data_table_exporter
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # “state 只增不减”必须和上一个提交比较，单个快照看不出墓碑被删过。
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: |
+            tools/data_table_exporter/requirements.txt
+            tools/data_table_exporter/requirements-dev.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: java/config_node/pom.xml
+
+      - name: 安装依赖
+        run: python -m pip install --upgrade pip && pip install -r requirements-dev.txt
+
+      - name: 执行单元测试
+        run: python -m pytest tests/ -q
+
+      # 真实表纪律：上一步用的是 tmp_path 里现造的表，这一步拿仓库里的
+      # Tip.xlsx 与全部业务表再过一遍自检。除段纪律外，也保证 *_tip/tip_ref
+      # 单元格只能引用 0 或 state 中仍受保护的已分配码。
+      - name: 校验真实 Tip 码轴与业务表引用
+        run: |
+          python - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0, ".")
+          from core.config_loader import load_config
+          from core.excel_reader import read_all_tables
+          from core.generators.enum_gen import (
+              _assign_tip_ids, _check_tip_axis, _load_tip_state, _read_tip_groups,
+              validate_tip_references,
+          )
+          from core.orchestrator import _validate_java_code_outputs
+
+          cfg = load_config()
+          groups = _read_tip_groups(Path("../../data/tip/Tip.xlsx"))
+          state = _load_tip_state(Path("state/mapping/tip_enum_ids/tip_enum_ids.json"))
+          _assign_tip_ids(groups, state)
+          _check_tip_axis(groups)
+          tables = read_all_tables(cfg)
+          validate_tip_references(tables, cfg)
+          _validate_java_code_outputs(cfg, tables)
+
+          print(f"tip 码轴自检通过：{len(groups)} 组")
+          for name, g in sorted(groups.items(), key=lambda kv: kv[1]["base"]):
+              used = len(g["ids"])
+              print(f"  {name:24} base={g['base']:<6} 已用 {used:<4} 余量 {g['width'] - used}")
+          PY
+
+      - name: 校验 tip state 只增不减
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          from core.generators.enum_gen import _check_tip_state_evolution
+
+          base = os.environ.get("BASE_SHA", "")
+          if not base or set(base) == {"0"}:
+              print("workflow_dispatch/初始 push 无可比较基线，跳过历史演进检查")
+              raise SystemExit(0)
+
+          repo_path = "tools/data_table_exporter/state/mapping/tip_enum_ids/tip_enum_ids.json"
+          previous = json.loads(subprocess.check_output(
+              ["git", "show", f"{base}:{repo_path}"], text=True, encoding="utf-8"
+          ))
+          current = json.loads(Path("state/mapping/tip_enum_ids/tip_enum_ids.json").read_text(
+              encoding="utf-8"
+          ))
+          _check_tip_state_evolution(previous, current)
+          print(f"tip state 相对 {base[:12]} 保持只增不减")
+          PY
+
+      - name: 校验 Tip 受控产物无漂移
+        run: |
+          python - <<'PY'
+          from core.config_loader import load_config
+          from core.generators.enum_gen import generate_tip_enums
+
+          generate_tip_enums(load_config())
+          PY
+
+          dirty="$(git status --porcelain --untracked-files=all -- \
+            state/mapping/tip_enum_ids/tip_enum_ids.json \
+            ../../generated/code/proto/tip \
+            ../../generated/code/go/generated/tip/segments.go \
+            ../../generated/tables/tip_text.json)"
+          if [ -n "$dirty" ]; then
+            echo "Tip.xlsx/state 与提交的受控产物不一致："
+            echo "$dirty"
+            exit 1
+          fi
+
+          cmp ../../generated/code/go/generated/tip/segments.go \
+            ../../go/shared/generated/tip/segments.go
+
+      # 这里不需要 protoc：提交的 *_table_pb2.py 足以从真实 xlsx 重建 JSON/PB。
+      # 只校验 manifest 自己的 hash 不够，因为“源表和旧产物一起自洽”仍可能
+      # 对不上；必须真正重建一次，才能拦住有效 tip 码 A→B 后漏提交数据产物。
+      - name: 校验业务表 JSON、PB 与 manifest 无漂移
+        run: |
+          python - <<'PY'
+          from core.config_loader import load_config
+          from core.excel_reader import read_all_tables
+          from core.generators.binary_gen import generate_binary
+          from core.generators.json_gen import generate_json
+          from core.manifest import generate_manifest
+
+          cfg = load_config()
+          tables = read_all_tables(cfg)
+          generate_json(cfg, tables)
+          generate_binary(cfg, tables)
+          generate_manifest(cfg, tables)
+          PY
+
+          dirty="$(git status --porcelain --untracked-files=all -- \
+            ../../generated/tables)"
+          if [ -n "$dirty" ]; then
+            echo "业务表 xlsx 与提交的 JSON/PB/manifest 不一致："
+            echo "$dirty"
+            exit 1
+          fi
+
+      - name: 校验 Tip 三语言 protobuf 绑定与 C++ 工程 wiring
+        run: |
+          python - <<'PY'
+          import re
+          from pathlib import Path
+
+          from core.config_loader import load_config
+          from core.file_utils import report_orphans
+
+          repo = Path("../..").resolve()
+          proto_dir = repo / "generated/code/proto/tip"
+          go_dir = repo / "go/shared/generated/pb/table"
+          cpp_dir = repo / "cpp/generated/table/proto/tip"
+          java_generated_dir = repo / "generated/code/proto/java/com/game/table"
+          java_deployed_dir = repo / "java/config_node/src/main/java/com/game/table"
+          java_pom = (repo / "java/config_node/pom.xml").read_text(encoding="utf-8")
+
+          proto_re = re.compile(r"^\s*(k[A-Za-z0-9_]+)\s*=\s*(-?\d+)\s*;", re.MULTILINE)
+          go_re = re.compile(
+              r"^\s*[A-Za-z0-9_]+_(k[A-Za-z0-9_]+)\s+[A-Za-z0-9_]+\s*=\s*(-?\d+)\s*$",
+              re.MULTILINE,
+          )
+          cpp_re = re.compile(r"^\s*(k[A-Za-z0-9_]+)\s*=\s*(-?\d+)\s*,", re.MULTILINE)
+          java_re = re.compile(
+              r"^\s*public static final int (k[A-Za-z0-9_]+)_VALUE = (-?\d+);",
+              re.MULTILINE,
+          )
+
+          def values(path, pattern):
+              if not path.is_file():
+                  raise SystemExit(f"缺少 Tip 生成产物: {path}")
+              return {name: int(value) for name, value in pattern.findall(
+                  path.read_text(encoding="utf-8")
+              )}
+
+          sources = sorted(proto_dir.glob("*_tip.proto"))
+          if not sources:
+              raise SystemExit("没有找到 Tip proto 源产物")
+
+          cmake = (repo / "cpp/generated/table/CMakeLists.txt").read_text(encoding="utf-8")
+          vcxproj = (repo / "cpp/generated/table/table.vcxproj").read_text(encoding="utf-8")
+          errors = []
+          legacy_java = [
+              *sorted((repo / "generated/code/proto/java").glob("*.java")),
+              *sorted((repo / "generated/code/proto/java/tip").glob("*.java")),
+              *sorted((repo / "generated/code/proto/java/operator").glob("*.java")),
+          ]
+          errors.extend(f"Java protobuf 仍有旧布局产物 {path}" for path in legacy_java)
+          for source in sources:
+              stem = source.stem
+              expected = values(source, proto_re)
+              got_go = values(go_dir / f"{stem}.pb.go", go_re)
+              got_cpp = values(cpp_dir / f"{stem}.pb.h", cpp_re)
+              java_name = "".join(part.capitalize() for part in stem.split("_")) + ".java"
+              java_generated = java_generated_dir / java_name
+              java_deployed = java_deployed_dir / java_name
+              got_java_generated = values(java_generated, java_re)
+              got_java_deployed = values(java_deployed, java_re)
+              if got_go != expected:
+                  errors.append(f"{stem}: Go pb 枚举与 proto 源不一致")
+              if got_cpp != expected:
+                  errors.append(f"{stem}: C++ pb 枚举与 proto 源不一致")
+              if got_java_generated != expected:
+                  errors.append(f"{stem}: Java pb 枚举与 proto 源不一致")
+              if got_java_deployed != expected:
+                  errors.append(f"{stem}: Java 部署副本与 proto 源不一致")
+              if "package com.game.table;" not in java_generated.read_text(encoding="utf-8"):
+                  errors.append(f"{stem}: Java pb 没有进入 com.game.table 包")
+              java_source = java_generated.read_text(encoding="utf-8")
+              gencode_version = re.search(r"Protobuf Java Version: ([0-9.]+)", java_source)
+              runtime_version = re.search(
+                  r"<protobuf\.version>([0-9.]+)</protobuf\.version>", java_pom
+              )
+              if not gencode_version or not runtime_version:
+                  errors.append(f"{stem}: 无法核对 Java gencode/runtime 版本")
+              elif gencode_version.group(1) != runtime_version.group(1):
+                  errors.append(
+                      f"{stem}: Java gencode {gencode_version.group(1)} 与 "
+                      f"runtime {runtime_version.group(1)} 不一致"
+                  )
+              for legacy in (
+                  repo / "generated/code/proto/java" / java_name,
+                  repo / "generated/code/proto/java/tip" / java_name,
+              ):
+                  if legacy.exists():
+                      errors.append(f"{stem}: 仍有未部署的 Java 重复产物 {legacy}")
+              if f"proto/tip/{stem}.pb.cc" not in cmake:
+                  errors.append(f"{stem}: CMakeLists.txt 未纳入 .pb.cc")
+              h_item = f'proto\\tip\\{stem}.pb.h'
+              cc_item = f'proto\\tip\\{stem}.pb.cc'
+              if h_item not in vcxproj or cc_item not in vcxproj:
+                  errors.append(f"{stem}: table.vcxproj 未同时纳入 .pb.h/.pb.cc")
+
+          cfg = load_config()
+          java_sources = [item["src"] for item in cfg.java.deploy]
+          java_target = cfg.java.deploy[0]["dst"]
+          errors.extend(
+              f"Java 部署目标存在陈旧产物 {path}"
+              for path in report_orphans(java_sources, java_target)
+          )
+
+          if errors:
+              raise SystemExit("Tip 绑定闭环校验失败:\n  " + "\n  ".join(errors))
+          print(f"Tip 三语言 protobuf/C++ wiring 自检通过: {len(sources)} 组")
+          PY
+
+      # data/AGENTS.md 里的配置表索引是给人和 agent 检索用的。腐坏的索引比没有索引更坏
+      # ——它会让人按一张过期的表去找列/外键/位序。这一步只做纯文本比对，不需要 protoc。
+      - name: 校验配置表索引未腐坏
+        run: python tools/gen_schema_index.py --check
+        working-directory: tools/data_table_exporter
+
+      # 六门语言的表管理器全部由 TableSchema 渲染，不需要 protoc 就能重建。
+      # 上面那步只重建了 JSON/PB/manifest，拦不住「改了模板但没重生代码」。
+      - name: 校验六门语言的表管理器产物无漂移
+        run: |
+          python - <<'PY'
+          from core.config_loader import load_config
+          from core.generators.config_gen import generate_config_classes
+          from core.table_source import read_all_tables
+
+          cfg = load_config()
+          generate_config_classes(cfg, read_all_tables(cfg))
+          PY
+
+          dirty="$(git status --porcelain --untracked-files=all --             ../../generated/code/cpp ../../generated/code/go             ../../generated/code/java ../../generated/code/csharp             ../../generated/code/python ../../generated/code/ue)"
+          if [ -n "$dirty" ]; then
+            echo "模板/schema 与提交的语言产物不一致（改了模板忘记重生？）："
+            echo "$dirty"
+            exit 1
+          fi
+
+      # 静态枚举对比拦不住 Java 消息已删除、旧单文件类仍残留的情况。
+      # 真实消费工程编译是这条链的最后一道闸门。
+      - name: 编译 Java config_node 消费端
+        working-directory: java/config_node
+        # 仓库里 mvnw 历史上是 0644，显式交给 bash，不依赖 executable bit。
+        run: bash ./mvnw -B --no-transfer-progress test

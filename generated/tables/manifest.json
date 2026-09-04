@@ -1,11 +1,11 @@
 {
   "schema_version": 1,
-  "version": 1,
-  "content_digest": "7e166e37814e21f2aa5215f146873c8be41486f27536e69aeff0839c5b19f149",
-  "generated_at": "2026-09-02T02:35:19Z",
+  "version": 5,
+  "content_digest": "95c54c145462f3e90ce5f044a0531f4af11b4a1eb97930c9b54257bbad104ce1",
+  "generated_at": "2026-09-03T10:29:30Z",
   "source_rev": {
-    "commit": "d5fe62232e9cfddab6f18d84ccab5f67024772b0",
-    "data_dirty": false
+    "commit": "5ef65b3f86e461467146c2790a3d8aefd5e4e065",
+    "data_dirty": true
   },
   "table_count": 21,
   "tables": [
@@ -14,21 +14,21 @@
       "rows": 4,
       "source": {
         "file": "ActorActionCombatState.xlsx",
-        "size": 5108,
-        "sha256": "741b457b551d07f7791b6fcb39d8dcc536d99d1b50254626c34f343275c25eff"
+        "size": 4128,
+        "sha256": "dcd08d69048ac51c300e5ff6808dfbfa2c580a1a5e4e29798ddf806de3423659"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "ActorActionCombatState.json",
-          "size": 832,
-          "sha256": "3e4f2284316d9e9a21a4d4c6812e88e189a21738fee2f05d4689e0f44e318c9b"
+          "file": "actoractioncombatstate.json",
+          "size": 844,
+          "sha256": "6cb16b9316beabace8eb45a7cb07f19a5495370cb541ab1fc6527efcaa3b234d"
         },
         {
           "kind": "binary",
           "file": "actoractioncombatstate.pb",
-          "size": 54,
-          "sha256": "0d21fb70eab99786cfc7c8184d7aec22429b68871d06e45c2a2b37dba0263969"
+          "size": 58,
+          "sha256": "d585219ab1a168f089b170680c53fee1662a69dfb774d5cd8a2b9bc3926c346c"
         }
       ]
     },
@@ -37,21 +37,21 @@
       "rows": 4,
       "source": {
         "file": "ActorActionState.xlsx",
-        "size": 5104,
-        "sha256": "f088ca913c5ddccec7e804144134ee4188a5232fe6c52c5320ef4d95a154cd11"
+        "size": 4124,
+        "sha256": "06eb45c8a0902e33cefbe2846ed28120fa051c28156a5c6b99424b7c885d5dc9"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "ActorActionState.json",
-          "size": 832,
-          "sha256": "3e4f2284316d9e9a21a4d4c6812e88e189a21738fee2f05d4689e0f44e318c9b"
+          "file": "actoractionstate.json",
+          "size": 844,
+          "sha256": "6cb16b9316beabace8eb45a7cb07f19a5495370cb541ab1fc6527efcaa3b234d"
         },
         {
           "kind": "binary",
           "file": "actoractionstate.pb",
-          "size": 54,
-          "sha256": "0d21fb70eab99786cfc7c8184d7aec22429b68871d06e45c2a2b37dba0263969"
+          "size": 58,
+          "sha256": "d585219ab1a168f089b170680c53fee1662a69dfb774d5cd8a2b9bc3926c346c"
         }
       ]
     },
@@ -60,13 +60,13 @@
       "rows": 21,
       "source": {
         "file": "BaseScene.xlsx",
-        "size": 5198,
-        "sha256": "68d3ca2900028c110d2ef4eddbe0ad6d35cfb0629237b2b4f209dae91fbfb0c5"
+        "size": 5174,
+        "sha256": "fd0701aade0eb5b7bc0c179230886b4c7b6a4afdc0cd150e43a1de6b40e8eda8"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "BaseScene.json",
+          "file": "basescene.json",
           "size": 1637,
           "sha256": "632da7874567a243b0789cf64c930d1445b1fe701cc665d9f5da081e7da12aee"
         },
@@ -83,13 +83,13 @@
       "rows": 20,
       "source": {
         "file": "Buff.xlsx",
-        "size": 8523,
-        "sha256": "1acb780aa470a758b2b2952a5b0f6726153ca885eb4c7a7ca0d720a422e96406"
+        "size": 7640,
+        "sha256": "2c9dcd18c12a7631a689c85aec6cf701ee40b8f5f330752ed980350f553bb14b"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Buff.json",
+          "file": "buff.json",
           "size": 10548,
           "sha256": "2a89b5fb6532ca31323e58d96d99b4f3254786f944444eed6ba215f19064c35c"
         },
@@ -106,13 +106,13 @@
       "rows": 9,
       "source": {
         "file": "Class.xlsx",
-        "size": 5062,
-        "sha256": "94e05d95d7e38cec20fdbf6ae132c531a0a5f1a7aad52a731676e92755797137"
+        "size": 5051,
+        "sha256": "86993088cdbc831bd41690e58d7daa725d67fbe97f2f4c1def480912c0ee4e92"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Class.json",
+          "file": "class.json",
           "size": 557,
           "sha256": "7bcdfd928f9f6a18e8ca3fe18505240fc4388e6e7e19e013ec16c6cff1169ceb"
         },
@@ -129,13 +129,13 @@
       "rows": 29,
       "source": {
         "file": "Condition.xlsx",
-        "size": 6217,
-        "sha256": "877f9f04b812ee65068653b58ef204e5954ae55a67a3a59fc1ba94aacd5d998c"
+        "size": 6145,
+        "sha256": "8f8205556138384f4fe0d16c962bc32460d49cecd395e8a2d1a9f780987ce64f"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Condition.json",
+          "file": "condition.json",
           "size": 4362,
           "sha256": "21f9c3ce67062f7ba683b350bd5876213c4eab2a53745bbf57b01f51236343ae"
         },
@@ -152,13 +152,13 @@
       "rows": 9,
       "source": {
         "file": "Cooldown.xlsx",
-        "size": 5012,
-        "sha256": "35fafb4f4cbbf0018e1ecf515bdc02e34583c0d176cab3821cb5ff25a45909ce"
+        "size": 5006,
+        "sha256": "e3391fe9bf9223c6c3bbf8a06f65e5d8bb343b3c496303db1f008f01c9d2bce5"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Cooldown.json",
+          "file": "cooldown.json",
           "size": 386,
           "sha256": "24f5516717ec14542a40e6ff0fb821496b70074e80748a38ac9f0bb5599a9bdd"
         },
@@ -175,13 +175,13 @@
       "rows": 3,
       "source": {
         "file": "Dungeon.xlsx",
-        "size": 5068,
-        "sha256": "08f2ef1a17703afce15f1987e3188d463e791824d9fa7d930303fd1b997a19cd"
+        "size": 5008,
+        "sha256": "ac6e6a0de7a19695f9c2704b1afd33e939fd629d7c99a8e7b8f2ca1b8b9431f0"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Dungeon.json",
+          "file": "dungeon.json",
           "size": 272,
           "sha256": "7a689647d887a25614e842347882d8247400c13208554bd18054af67ca3cbd72"
         },
@@ -198,13 +198,13 @@
       "rows": 3,
       "source": {
         "file": "EquipSlot.xlsx",
-        "size": 5097,
-        "sha256": "199c7dce7bde21904ccfafe0fcc5cea339ff8f13b74964e998ce49c4dc1b24dc"
+        "size": 5078,
+        "sha256": "a16c5c9b1d75d754980e5c49c0c4c0dc3d98c685fdb7afbc36ed310e095c1e2e"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "EquipSlot.json",
+          "file": "equipslot.json",
           "size": 136,
           "sha256": "a6eac451eaf12c30880f3e71ee2619c82b4250f950e853badec086824e3f3400"
         },
@@ -221,13 +221,13 @@
       "rows": 16,
       "source": {
         "file": "GlobalVariable.xlsx",
-        "size": 5188,
-        "sha256": "23b89b096f99d7b89dfebb29af886f51d73c074fc56ccea3373d1bc079fa1d1a"
+        "size": 5151,
+        "sha256": "d8782db2bc7d0b3881b8bcedc8968186b702ec3316e6b3b41d4dce19617cb737"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "GlobalVariable.json",
+          "file": "globalvariable.json",
           "size": 343,
           "sha256": "40896e822b41bf113491984fb00424503eaeeeffbd76b3610be1f7985560f38e"
         },
@@ -244,13 +244,13 @@
       "rows": 28,
       "source": {
         "file": "Item.xlsx",
-        "size": 5626,
-        "sha256": "c873c3a081812a215b6b6fc08a1e8f45dfbf6a61d0b35ad08b0f8ff80304b0d2"
+        "size": 5586,
+        "sha256": "7bf40c4294e0ba51a5e800133d6e132766b8d5b81b84bed8d1a2da9d9919ce73"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Item.json",
+          "file": "item.json",
           "size": 1859,
           "sha256": "fda14e237189a7ce5b84c220e7eb81cb44e38b25213831f0c729ab621d91c44a"
         },
@@ -264,24 +264,24 @@
     },
     {
       "name": "MessageLimiter",
-      "rows": 1,
+      "rows": 4,
       "source": {
         "file": "MessageLimiter.xlsx",
-        "size": 4959,
-        "sha256": "f28319a50dc94252db8ca7973a66292064dae0ed6cae3255ba801ec2c5dc8730"
+        "size": 4059,
+        "sha256": "de53d7597b96b04e1cab5c50b605fb61d74e606c5fb0f79286fcb8ceef0d90dd"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "MessageLimiter.json",
-          "size": 102,
-          "sha256": "ad88424a8aa7965996c4c611ad3a3e922cc17ee412fc0ab734118e38daefc5cc"
+          "file": "messagelimiter.json",
+          "size": 375,
+          "sha256": "e9fee1a906f6123e3acf3353b26a7c8e8ac8c6df92dcd8954637e69b7d7db082"
         },
         {
           "kind": "binary",
           "file": "messagelimiter.pb",
-          "size": 10,
-          "sha256": "8ea3f5fa51b2080eff4ed21934261018e0a23819ab9232664e2bf343a5d6e48a"
+          "size": 47,
+          "sha256": "9d69f4c004dc34412e434c611d28a5e54a1575ba492f072bce05a86bc7cce54f"
         }
       ]
     },
@@ -290,13 +290,13 @@
       "rows": 2,
       "source": {
         "file": "Mirror.xlsx",
-        "size": 5005,
-        "sha256": "a44dd0fa548d5bbf30ede74fad10d18c69927d58c70ad47a3031fb3bae507554"
+        "size": 4960,
+        "sha256": "e1449def0ebccf640967a9633b8a8dff559c143368d1676db67f841603ab0b27"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Mirror.json",
+          "file": "mirror.json",
           "size": 140,
           "sha256": "9d36ba159b61d3c5426d3e6b2959cfcfd34b9cbf17a6d21055d7297653840b8b"
         },
@@ -313,13 +313,13 @@
       "rows": 17,
       "source": {
         "file": "Mission.xlsx",
-        "size": 5880,
-        "sha256": "0e12f365a7d1682398c954bec0830057824642e10be233bdabc215b7bb6db6a5"
+        "size": 5759,
+        "sha256": "68ae8916048442e8205f7311fed0a74b5bd44d9a18d1f2e773a80c8759223733"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Mission.json",
+          "file": "mission.json",
           "size": 3289,
           "sha256": "e6ed7780e53dfea6e40c165a81c797ffa6838953bf2dfe482aa6e37e56d826ee"
         },
@@ -336,13 +336,13 @@
       "rows": 16,
       "source": {
         "file": "Monster.xlsx",
-        "size": 5026,
-        "sha256": "6c9b34ed55fb8ea20f9cb1b67e65927065f7f88e889722e7ffdc3bbb7cd2498a"
+        "size": 5013,
+        "sha256": "cda699f34b62a096e4890b368d82cff05b406d3371cca612ca152d6869c0ca0b"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Monster.json",
+          "file": "monster.json",
           "size": 343,
           "sha256": "40896e822b41bf113491984fb00424503eaeeeffbd76b3610be1f7985560f38e"
         },
@@ -359,13 +359,13 @@
       "rows": 7,
       "source": {
         "file": "Reward.xlsx",
-        "size": 5074,
-        "sha256": "ca0ecd18f4efaf954ab50d95da2b5be14da18e99685e4c48d6e6dc859d8c3fee"
+        "size": 5034,
+        "sha256": "155199c48c3b413fbf01a5316ec4f71381ec57b67419a81cea7bc77f1253e4bc"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Reward.json",
+          "file": "reward.json",
           "size": 1122,
           "sha256": "58aceb61038bdb56d78c23bf0d98c52696040d2936a9fb993f43bd4fd2a2b7ca"
         },
@@ -382,13 +382,13 @@
       "rows": 13,
       "source": {
         "file": "Skill.xlsx",
-        "size": 7839,
-        "sha256": "2fc08c908591c8a152246e7310f24f583ef82a1c159ff63dceef5177281f7ba6"
+        "size": 7406,
+        "sha256": "e9931bfacc2688901ef3aee306c7e8a0e5a13266eca19ac044b000b612e3ac1e"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Skill.json",
+          "file": "skill.json",
           "size": 15559,
           "sha256": "0ece314e106a1cfde24bf6a10b7bd1c5c747f24605f7c050683df7d343137d33"
         },
@@ -405,21 +405,21 @@
       "rows": 3,
       "source": {
         "file": "SkillPermission.xlsx",
-        "size": 4990,
-        "sha256": "b3dd653f7bb3c109828e61ac353cced9e65ddba9d59bc6b8013256d7de6c6ab5"
+        "size": 4032,
+        "sha256": "d1060b9faa7de7944a6493faff53b3a2d001dbe51c9af60435ece26332b1b5eb"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "SkillPermission.json",
-          "size": 180,
-          "sha256": "eaa26919fe249a42f63f2b5cca1cf6e476c8d684eb64a9fb81ed5b4655f5a875"
+          "file": "skillpermission.json",
+          "size": 204,
+          "sha256": "fad1d43fd908cff71adc13c54a7bc0a8e8944ff1eaab9c2f83181a3651c0cbbb"
         },
         {
           "kind": "binary",
           "file": "skillpermission.pb",
-          "size": 24,
-          "sha256": "3fc030f77d2c8d8a5e972ab84a28debecb6538e7b95b799006719c7d847cfd6f"
+          "size": 32,
+          "sha256": "4b598209d9948db06351613b9fd12bffc0e60823bee131cc824f7894b2f78b8f"
         }
       ]
     },
@@ -428,13 +428,13 @@
       "rows": 6,
       "source": {
         "file": "Test.xlsx",
-        "size": 5556,
-        "sha256": "deee875686682c6372c232bfcd73dff8f7333e8670182150bec630b64fac15b7"
+        "size": 5467,
+        "sha256": "65b871586bb1fbadc53e3e76fac6f8ba1029fb36f95d984fcf354796a33aa656"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "Test.json",
+          "file": "test.json",
           "size": 2687,
           "sha256": "558a8f6083bcd08acde2c7fa9f8af6018f2d2a927f838b4287dfd5afdb65cfb0"
         },
@@ -451,13 +451,13 @@
       "rows": 6,
       "source": {
         "file": "TestMultiKey.xlsx",
-        "size": 5983,
-        "sha256": "56187d8575c2246ac7956594ebc5340bddf5ba3a1221f20013dcbfb8c97ab077"
+        "size": 5767,
+        "sha256": "a14e550507854c014db96e52ff2f5341dab290103068e4449069f0b59fbc6c3c"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "TestMultiKey.json",
+          "file": "testmultikey.json",
           "size": 3716,
           "sha256": "5426b3b92efeba917a8945f93517385ab6d1ab6bbc475eceb580d2d7b626f123"
         },
@@ -474,13 +474,13 @@
       "rows": 16,
       "source": {
         "file": "World.xlsx",
-        "size": 5135,
-        "sha256": "b21a680f486e46380dd90e8a5ff040415fc9183b1bb557584c8665fc6cb6bc1a"
+        "size": 5100,
+        "sha256": "3a40c7f27a1cffb26d1e243e21ebc8abd584a424bfd642bd6159027a73a039cc"
       },
       "artifacts": [
         {
           "kind": "json",
-          "file": "World.json",
+          "file": "world.json",
           "size": 638,
           "sha256": "6fa232e2cf85588ef813c29c947e494e3a59a092da2cf4757fd48b2a3f61b74b"
         },

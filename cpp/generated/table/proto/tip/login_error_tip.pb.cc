@@ -35,37 +35,38 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_login_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025login_error_tip.proto*\237\007\n\013login_error\022"
-    "\022\n\016kLogin_errorOK\020\000\022\031\n\025kLoginAccountNotF"
-    "ound\020\024\022\033\n\027kLoginAccountPlayerFull\020\025\022#\n\037k"
-    "LoginCreatePlayerUnLoadAccount\020\026\022-\n)kLog"
-    "inCreatePlayerConnectionHasNotAccount\020\027\022"
-    "\021\n\rkLoginUnLogin\020\030\022\024\n\020kLoginInProgress\020\031"
-    "\022\031\n\025kLoginPlayerGuidError\020\032\022\026\n\022kLoginEnt"
-    "eringGame\020\033\022\021\n\rkLoginPlaying\020\034\022\030\n\024kLogin"
-    "CreatingPlayer\020\035\022\032\n\026kLoginWaitingEnterGa"
-    "me\020\036\022\027\n\023kLoginEnterGameGuid\020\037\022\032\n\026kLoginA"
-    "ccountNameEmpty\020 \022&\n\"kLoginCreateConnect"
-    "ionAccountEmpty\020!\022)\n%kLoginEnterGameConn"
-    "ectionAccountEmpty\020\"\022\026\n\022kLoginUnknownErr"
-    "or\020#\022\033\n\027kLoginSessionDisconnect\020$\022 \n\034kLo"
-    "ginBeKickByAnOtherAccount\020%\022\033\n\027kLoginSes"
-    "sionIdNotFound\020&\022\023\n\017kLoginFsmFailed\020\'\022\035\n"
-    "\031kLoginDataSerializeFailed\020(\022\024\n\020kLoginRe"
-    "disError\020)\022\031\n\025kLoginDataParseFailed\020*\022\030\n"
-    "\024kLoginRedisSetFailed\020+\022\023\n\017kTooManyDevic"
-    "es\020,\022\027\n\023kLoginFSMLoadFailed\020-\022\030\n\024kLoginF"
-    "SMEventFailed\020.\022\036\n\032kLoginAccountDataLoad"
-    "Faile\020/\022\031\n\025kLoginSessionNotFound\0200\022\037\n\033kL"
-    "oginAccountDataLoadFailed\0201\022\031\n\025kLoginFsm"
-    "InvalidEvent\0202\022\021\n\rkLoginTimeout\0203B\024Z\022gen"
-    "erated/pb/tableb\006proto3"
+    "\n\025login_error_tip.proto*\277\007\n\013login_error\022"
+    "\022\n\016kLogin_errorOK\020\000\022\032\n\025kLoginAccountNotF"
+    "ound\020\320\017\022\034\n\027kLoginAccountPlayerFull\020\321\017\022$\n"
+    "\037kLoginCreatePlayerUnLoadAccount\020\322\017\022.\n)k"
+    "LoginCreatePlayerConnectionHasNotAccount"
+    "\020\323\017\022\022\n\rkLoginUnLogin\020\324\017\022\025\n\020kLoginInProgr"
+    "ess\020\325\017\022\032\n\025kLoginPlayerGuidError\020\326\017\022\027\n\022kL"
+    "oginEnteringGame\020\327\017\022\022\n\rkLoginPlaying\020\330\017\022"
+    "\031\n\024kLoginCreatingPlayer\020\331\017\022\033\n\026kLoginWait"
+    "ingEnterGame\020\332\017\022\030\n\023kLoginEnterGameGuid\020\333"
+    "\017\022\033\n\026kLoginAccountNameEmpty\020\334\017\022\'\n\"kLogin"
+    "CreateConnectionAccountEmpty\020\335\017\022*\n%kLogi"
+    "nEnterGameConnectionAccountEmpty\020\336\017\022\027\n\022k"
+    "LoginUnknownError\020\337\017\022\034\n\027kLoginSessionDis"
+    "connect\020\340\017\022!\n\034kLoginBeKickByAnOtherAccou"
+    "nt\020\341\017\022\034\n\027kLoginSessionIdNotFound\020\342\017\022\024\n\017k"
+    "LoginFsmFailed\020\343\017\022\036\n\031kLoginDataSerialize"
+    "Failed\020\344\017\022\025\n\020kLoginRedisError\020\345\017\022\032\n\025kLog"
+    "inDataParseFailed\020\346\017\022\031\n\024kLoginRedisSetFa"
+    "iled\020\347\017\022\024\n\017kTooManyDevices\020\350\017\022\030\n\023kLoginF"
+    "SMLoadFailed\020\351\017\022\031\n\024kLoginFSMEventFailed\020"
+    "\352\017\022\037\n\032kLoginAccountDataLoadFaile\020\353\017\022\032\n\025k"
+    "LoginSessionNotFound\020\354\017\022 \n\033kLoginAccount"
+    "DataLoadFailed\020\355\017\022\032\n\025kLoginFsmInvalidEve"
+    "nt\020\356\017\022\022\n\rkLoginTimeout\020\357\017B$\n\016com.game.ta"
+    "bleZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_login_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_login_5ferror_5ftip_2eproto = {
     false,
     false,
-    983,
+    1031,
     descriptor_table_protodef_login_5ferror_5ftip_2eproto,
     "login_error_tip.proto",
     &descriptor_table_login_5ferror_5ftip_2eproto_once,
@@ -84,7 +85,7 @@ login_error_descriptor() {
   return file_level_enum_descriptors_login_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t login_error_internal_data_[] = {
-    65536u, 64u, 4294443008u, 524287u, };
+    65536u, 2097152u, 2016u, 2008u, 2024u, 2004u, 2012u, 2020u, 2028u, 2002u, 2006u, 2010u, 2014u, 2018u, 2022u, 2026u, 2030u, 2001u, 2003u, 2005u, 2007u, 2009u, 2011u, 2013u, 2015u, 2017u, 2019u, 2021u, 2023u, 2025u, 2027u, 2029u, 2031u, 2000u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

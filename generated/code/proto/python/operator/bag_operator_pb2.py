@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1boperator/bag_operator.proto*P\n\x03\x62\x61g\x12\n\n\x06kBagOK\x10\x00\x12\x0c\n\x08kUseItem\x10\x02\x12\x17\n\x13kActivityRewardItem\x10\x03\x12\x16\n\x12kMissionRewardItem\x10\x04\x42\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1boperator/bag_operator.proto*P\n\x03\x62\x61g\x12\n\n\x06kBagOK\x10\x00\x12\x0c\n\x08kUseItem\x10\x02\x12\x17\n\x13kActivityRewardItem\x10\x03\x12\x16\n\x12kMissionRewardItem\x10\x04\x42$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'operator.bag_operator_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_BAG']._serialized_start=31
   _globals['_BAG']._serialized_end=111
 # @@protoc_insertion_point(module_scope)

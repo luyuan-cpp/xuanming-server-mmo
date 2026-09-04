@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1btip/mission_error_tip.proto*\xf5\x01\n\rmission_error\x12\x14\n\x10kMission_errorOK\x10\x00\x12\x1d\n\x19kMissionTypeAlreadyExists\x10^\x12\x1c\n\x18kMissionAlreadyCompleted\x10_\x12\x1d\n\x19kMissionIdNotInRewardList\x10`\x12#\n\x1fkPlayerMissionComponentNotFound\x10\x61\x12\x16\n\x12kMissionIdRepeated\x10\x62\x12\x1a\n\x16kConditionIdOutOfRange\x10\x63\x12\x19\n\x15kMissionNotInProgress\x10\x64\x42\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x1btip/mission_error_tip.proto*\xfc\x01\n\rmission_error\x12\x14\n\x10kMission_errorOK\x10\x00\x12\x1e\n\x19kMissionTypeAlreadyExists\x10\x88\'\x12\x1d\n\x18kMissionAlreadyCompleted\x10\x89\'\x12\x1e\n\x19kMissionIdNotInRewardList\x10\x8a\'\x12$\n\x1fkPlayerMissionComponentNotFound\x10\x8b\'\x12\x17\n\x12kMissionIdRepeated\x10\x8c\'\x12\x1b\n\x16kConditionIdOutOfRange\x10\x8d\'\x12\x1a\n\x15kMissionNotInProgress\x10\x8e\'B$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tip.mission_error_tip_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_MISSION_ERROR']._serialized_start=32
-  _globals['_MISSION_ERROR']._serialized_end=277
+  _globals['_MISSION_ERROR']._serialized_end=284
 # @@protoc_insertion_point(module_scope)

@@ -25,60 +25,60 @@ type BagError int32
 
 const (
 	BagError_kBag_errorOK                   BagError = 0
-	BagError_kBagDeleteItemFindGuid         BagError = 101
-	BagError_kBagDeleteItemAlreadyHasGuid   BagError = 102
-	BagError_kBagAddItemHasNotBaseComponent BagError = 103
-	BagError_kBagAddItemInvalidGuid         BagError = 104
-	BagError_kBagAddItemInvalidParam        BagError = 105
-	BagError_kBagAddItemBagFull             BagError = 106
-	BagError_kBagItemNotStacked             BagError = 107
-	BagError_kBagInsufficientItems          BagError = 108
-	BagError_kBagDelItemPos                 BagError = 109
-	BagError_kBagDelItemConfig              BagError = 110
-	BagError_kBagDelItemGuid                BagError = 111
-	BagError_kBagDelItemFindItem            BagError = 112
-	BagError_kBagDelItemSize                BagError = 113
-	BagError_kBagItemDeletionSizeMismatch   BagError = 114
-	BagError_kBagInsufficientBagSpace       BagError = 115
+	BagError_kBagDeleteItemFindGuid         BagError = 6000
+	BagError_kBagDeleteItemAlreadyHasGuid   BagError = 6001
+	BagError_kBagAddItemHasNotBaseComponent BagError = 6002
+	BagError_kBagAddItemInvalidGuid         BagError = 6003
+	BagError_kBagAddItemInvalidParam        BagError = 6004
+	BagError_kBagAddItemBagFull             BagError = 6005
+	BagError_kBagItemNotStacked             BagError = 6006
+	BagError_kBagInsufficientItems          BagError = 6007
+	BagError_kBagDelItemPos                 BagError = 6008
+	BagError_kBagDelItemConfig              BagError = 6009
+	BagError_kBagDelItemGuid                BagError = 6010
+	BagError_kBagDelItemFindItem            BagError = 6011
+	BagError_kBagDelItemSize                BagError = 6012
+	BagError_kBagItemDeletionSizeMismatch   BagError = 6013
+	BagError_kBagInsufficientBagSpace       BagError = 6014
 )
 
 // Enum value maps for BagError.
 var (
 	BagError_name = map[int32]string{
-		0:   "kBag_errorOK",
-		101: "kBagDeleteItemFindGuid",
-		102: "kBagDeleteItemAlreadyHasGuid",
-		103: "kBagAddItemHasNotBaseComponent",
-		104: "kBagAddItemInvalidGuid",
-		105: "kBagAddItemInvalidParam",
-		106: "kBagAddItemBagFull",
-		107: "kBagItemNotStacked",
-		108: "kBagInsufficientItems",
-		109: "kBagDelItemPos",
-		110: "kBagDelItemConfig",
-		111: "kBagDelItemGuid",
-		112: "kBagDelItemFindItem",
-		113: "kBagDelItemSize",
-		114: "kBagItemDeletionSizeMismatch",
-		115: "kBagInsufficientBagSpace",
+		0:    "kBag_errorOK",
+		6000: "kBagDeleteItemFindGuid",
+		6001: "kBagDeleteItemAlreadyHasGuid",
+		6002: "kBagAddItemHasNotBaseComponent",
+		6003: "kBagAddItemInvalidGuid",
+		6004: "kBagAddItemInvalidParam",
+		6005: "kBagAddItemBagFull",
+		6006: "kBagItemNotStacked",
+		6007: "kBagInsufficientItems",
+		6008: "kBagDelItemPos",
+		6009: "kBagDelItemConfig",
+		6010: "kBagDelItemGuid",
+		6011: "kBagDelItemFindItem",
+		6012: "kBagDelItemSize",
+		6013: "kBagItemDeletionSizeMismatch",
+		6014: "kBagInsufficientBagSpace",
 	}
 	BagError_value = map[string]int32{
 		"kBag_errorOK":                   0,
-		"kBagDeleteItemFindGuid":         101,
-		"kBagDeleteItemAlreadyHasGuid":   102,
-		"kBagAddItemHasNotBaseComponent": 103,
-		"kBagAddItemInvalidGuid":         104,
-		"kBagAddItemInvalidParam":        105,
-		"kBagAddItemBagFull":             106,
-		"kBagItemNotStacked":             107,
-		"kBagInsufficientItems":          108,
-		"kBagDelItemPos":                 109,
-		"kBagDelItemConfig":              110,
-		"kBagDelItemGuid":                111,
-		"kBagDelItemFindItem":            112,
-		"kBagDelItemSize":                113,
-		"kBagItemDeletionSizeMismatch":   114,
-		"kBagInsufficientBagSpace":       115,
+		"kBagDeleteItemFindGuid":         6000,
+		"kBagDeleteItemAlreadyHasGuid":   6001,
+		"kBagAddItemHasNotBaseComponent": 6002,
+		"kBagAddItemInvalidGuid":         6003,
+		"kBagAddItemInvalidParam":        6004,
+		"kBagAddItemBagFull":             6005,
+		"kBagItemNotStacked":             6006,
+		"kBagInsufficientItems":          6007,
+		"kBagDelItemPos":                 6008,
+		"kBagDelItemConfig":              6009,
+		"kBagDelItemGuid":                6010,
+		"kBagDelItemFindItem":            6011,
+		"kBagDelItemSize":                6012,
+		"kBagItemDeletionSizeMismatch":   6013,
+		"kBagInsufficientBagSpace":       6014,
 	}
 )
 
@@ -113,24 +113,25 @@ var File_bag_error_tip_proto protoreflect.FileDescriptor
 
 const file_bag_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x13bag_error_tip.proto*\xb1\x03\n" +
+	"\x13bag_error_tip.proto*\xc0\x03\n" +
 	"\tbag_error\x12\x10\n" +
-	"\fkBag_errorOK\x10\x00\x12\x1a\n" +
-	"\x16kBagDeleteItemFindGuid\x10e\x12 \n" +
-	"\x1ckBagDeleteItemAlreadyHasGuid\x10f\x12\"\n" +
-	"\x1ekBagAddItemHasNotBaseComponent\x10g\x12\x1a\n" +
-	"\x16kBagAddItemInvalidGuid\x10h\x12\x1b\n" +
-	"\x17kBagAddItemInvalidParam\x10i\x12\x16\n" +
-	"\x12kBagAddItemBagFull\x10j\x12\x16\n" +
-	"\x12kBagItemNotStacked\x10k\x12\x19\n" +
-	"\x15kBagInsufficientItems\x10l\x12\x12\n" +
-	"\x0ekBagDelItemPos\x10m\x12\x15\n" +
-	"\x11kBagDelItemConfig\x10n\x12\x13\n" +
-	"\x0fkBagDelItemGuid\x10o\x12\x17\n" +
-	"\x13kBagDelItemFindItem\x10p\x12\x13\n" +
-	"\x0fkBagDelItemSize\x10q\x12 \n" +
-	"\x1ckBagItemDeletionSizeMismatch\x10r\x12\x1c\n" +
-	"\x18kBagInsufficientBagSpace\x10sB\x14Z\x12generated/pb/tableb\x06proto3"
+	"\fkBag_errorOK\x10\x00\x12\x1b\n" +
+	"\x16kBagDeleteItemFindGuid\x10\xf0.\x12!\n" +
+	"\x1ckBagDeleteItemAlreadyHasGuid\x10\xf1.\x12#\n" +
+	"\x1ekBagAddItemHasNotBaseComponent\x10\xf2.\x12\x1b\n" +
+	"\x16kBagAddItemInvalidGuid\x10\xf3.\x12\x1c\n" +
+	"\x17kBagAddItemInvalidParam\x10\xf4.\x12\x17\n" +
+	"\x12kBagAddItemBagFull\x10\xf5.\x12\x17\n" +
+	"\x12kBagItemNotStacked\x10\xf6.\x12\x1a\n" +
+	"\x15kBagInsufficientItems\x10\xf7.\x12\x13\n" +
+	"\x0ekBagDelItemPos\x10\xf8.\x12\x16\n" +
+	"\x11kBagDelItemConfig\x10\xf9.\x12\x14\n" +
+	"\x0fkBagDelItemGuid\x10\xfa.\x12\x18\n" +
+	"\x13kBagDelItemFindItem\x10\xfb.\x12\x14\n" +
+	"\x0fkBagDelItemSize\x10\xfc.\x12!\n" +
+	"\x1ckBagItemDeletionSizeMismatch\x10\xfd.\x12\x1d\n" +
+	"\x18kBagInsufficientBagSpace\x10\xfe.B$\n" +
+	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (
 	file_bag_error_tip_proto_rawDescOnce sync.Once

@@ -35,26 +35,26 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_team_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\024team_error_tip.proto*\327\003\n\nteam_error\022\021\n"
-    "\rkTeam_errorOK\020\000\022\030\n\024kTeamNotInApplicants"
-    "\020L\022\021\n\rkTeamPlayerId\020M\022\024\n\020kTeamMembersFul"
-    "l\020N\022\025\n\021kTeamMemberInTeam\020O\022\030\n\024kTeamMembe"
-    "rNotInTeam\020P\022\021\n\rkTeamKickSelf\020Q\022\026\n\022kTeam"
-    "KickNotLeader\020R\022\024\n\020kTeamAppointSelf\020S\022\037\n"
-    "\033kTeamAppointLeaderNotLeader\020T\022\r\n\tkTeamF"
-    "ull\020U\022\030\n\024kTeamInApplicantList\020V\022\033\n\027kTeam"
-    "NotInApplicantList\020W\022\024\n\020kTeamListMaxSize"
-    "\020X\022\025\n\021kTeamHasNotTeamId\020Y\022\031\n\025kTeamDismis"
-    "sNotLeader\020Z\022\027\n\023kTeamMemberListFull\020[\022 \n"
-    "\034kTeamCreateTeamMaxMemberSize\020\\\022\027\n\023kTeam"
-    "PlayerNotFound\020]B\024Z\022generated/pb/tableb\006"
-    "proto3"
+    "\n\024team_error_tip.proto*\351\003\n\nteam_error\022\021\n"
+    "\rkTeam_errorOK\020\000\022\031\n\024kTeamNotInApplicants"
+    "\020\240\037\022\022\n\rkTeamPlayerId\020\241\037\022\025\n\020kTeamMembersF"
+    "ull\020\242\037\022\026\n\021kTeamMemberInTeam\020\243\037\022\031\n\024kTeamM"
+    "emberNotInTeam\020\244\037\022\022\n\rkTeamKickSelf\020\245\037\022\027\n"
+    "\022kTeamKickNotLeader\020\246\037\022\025\n\020kTeamAppointSe"
+    "lf\020\247\037\022 \n\033kTeamAppointLeaderNotLeader\020\250\037\022"
+    "\016\n\tkTeamFull\020\251\037\022\031\n\024kTeamInApplicantList\020"
+    "\252\037\022\034\n\027kTeamNotInApplicantList\020\253\037\022\025\n\020kTea"
+    "mListMaxSize\020\254\037\022\026\n\021kTeamHasNotTeamId\020\255\037\022"
+    "\032\n\025kTeamDismissNotLeader\020\256\037\022\030\n\023kTeamMemb"
+    "erListFull\020\257\037\022!\n\034kTeamCreateTeamMaxMembe"
+    "rSize\020\260\037\022\030\n\023kTeamPlayerNotFound\020\261\037B$\n\016co"
+    "m.game.tableZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_team_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_team_5ferror_5ftip_2eproto = {
     false,
     false,
-    526,
+    560,
     descriptor_table_protodef_team_5ferror_5ftip_2eproto,
     "team_error_tip.proto",
     &descriptor_table_team_5ferror_5ftip_2eproto_once,
@@ -73,7 +73,7 @@ team_error_descriptor() {
   return file_level_enum_descriptors_team_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t team_error_internal_data_[] = {
-    65536u, 96u, 0u, 0u, 536868864u, };
+    65536u, 1179648u, 4010u, 4006u, 4014u, 4003u, 4008u, 4012u, 4016u, 4001u, 4005u, 4007u, 4009u, 4011u, 4013u, 4015u, 4017u, 4000u, 4002u, 4004u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

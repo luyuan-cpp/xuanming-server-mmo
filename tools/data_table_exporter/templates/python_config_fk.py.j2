@@ -1,0 +1,131 @@
+{# python_config_fk.py.j2 — 外键跨表查询助手 #}
+"""{{ sheetname }} 的外键跨表查询助手（自动生成，请勿手改）。
+
+DO NOT EDIT — regenerate from Excel via Data Table Exporter.
+
+这里只做一件事：把 {{ sheetname }} 行里存的**目标表 id** 解析成目标表的行。
+解析结果和源行一样属于「当前快照」，同样的热更契约：**只存 id，不存行**。
+
+放在独立模块而不是塞进 {{ sheetname | lower }}_table.py，是因为它要 import 目标表的
+管理器；写在一起时两张互相引用的表就会在 import 期成环。
+"""
+
+from __future__ import annotations
+
+{% if proto_import_path %}from {{ proto_import_path }} import {{ pb_module }} as _pb
+{%- for t in fk_targets %}
+from {{ proto_import_path }} import {{ t | lower }}_table_pb2 as _pb_{{ t | lower }}
+{%- endfor %}
+{% else %}import {{ pb_module }} as _pb
+{%- for t in fk_targets %}
+import {{ t | lower }}_table_pb2 as _pb_{{ t | lower }}
+{%- endfor %}
+{% endif %}
+from .{{ sheetname | lower }}_table import {{ sheetname }}TableManager
+{%- for t in fk_targets %}
+from .{{ t | lower }}_table import {{ t }}TableManager
+{%- endfor %}
+
+Row = _pb.{{ sheetname }}Table
+{% for col in table.foreign_key_columns %}
+{%- set target = col.foreign_key.target_table %}
+{%- set target_pb = "_pb_" ~ target | lower %}
+{%- if col.is_repeated %}
+
+def get_{{ col.name }}_rows(row: Row) -> tuple[{{ target_pb }}.{{ target }}Table, ...]:
+    """解析 {{ sheetname }}.{{ col.name }}[] -> {{ target }} 行。解析不到的 id 直接跳过。"""
+    manager = {{ target }}TableManager.instance()
+    result: list[{{ target_pb }}.{{ target }}Table] = []
+    for fk_id in row.{{ to_python_field(col.name) }}:
+{%- if target in multi_pk_targets %}
+        # {{ target }} 主键可重复：一个 id 命中多行，全都收进来。
+        result.extend(manager.find_all_by_id(fk_id))
+{%- else %}
+        target_row = manager.find_by_id(fk_id)
+        if target_row is not None:
+            result.append(target_row)
+{%- endif %}
+    return tuple(result)
+{%- if not table.multi_primary_key %}
+
+
+def get_{{ col.name }}_rows_by_id(table_id: {{ to_python_type(table.id_column.data_type) }}) -> tuple[{{ target_pb }}.{{ target }}Table, ...]:
+    """同上，入参换成 {{ sheetname }} 自己的 id。源行不存在时返回空元组。"""
+    row = {{ sheetname }}TableManager.instance().find_by_id(table_id)
+    if row is None:
+        return ()
+    return get_{{ col.name }}_rows(row)
+{%- endif %}
+{%- elif target in multi_pk_targets %}
+
+def get_{{ col.name }}_rows(row: Row) -> tuple[{{ target_pb }}.{{ target }}Table, ...]:
+    """解析 {{ sheetname }}.{{ col.name }} -> {{ target }} 行。
+
+    {{ target }} 的主键声明了 (cfg_multi)，一个 id 对应多行，所以这里返回的是
+    **元组**而不是单行 —— 目标表没有「按 id 拿一行」的语义。
+    """
+    return {{ target }}TableManager.instance().find_all_by_id(row.{{ to_python_field(col.name) }})
+{%- if not table.multi_primary_key %}
+
+
+def get_{{ col.name }}_rows_by_id(table_id: {{ to_python_type(table.id_column.data_type) }}) -> tuple[{{ target_pb }}.{{ target }}Table, ...]:
+    """同上，入参换成 {{ sheetname }} 自己的 id。源行不存在时返回空元组。"""
+    row = {{ sheetname }}TableManager.instance().find_by_id(table_id)
+    if row is None:
+        return ()
+    return get_{{ col.name }}_rows(row)
+{%- endif %}
+{%- else %}
+
+def get_{{ col.name }}_row(row: Row) -> {{ target_pb }}.{{ target }}Table | None:
+    """解析 {{ sheetname }}.{{ col.name }} -> {{ target }} 行；解析不到返回 ``None``。"""
+    return {{ target }}TableManager.instance().find_by_id(row.{{ to_python_field(col.name) }})
+{%- if not table.multi_primary_key %}
+
+
+def get_{{ col.name }}_row_by_id(table_id: {{ to_python_type(table.id_column.data_type) }}) -> {{ target_pb }}.{{ target }}Table | None:
+    """同上，入参换成 {{ sheetname }} 自己的 id。"""
+    row = {{ sheetname }}TableManager.instance().find_by_id(table_id)
+    if row is None:
+        return None
+    return get_{{ col.name }}_row(row)
+{%- endif %}
+{%- endif %}
+{% endfor %}
+{%- for col in table.group_foreign_key_columns %}
+{%- set target = col.group_foreign_key.target_table %}
+{%- set target_pb = "_pb_" ~ target | lower %}
+
+def get_{{ col.name }}_rows(row: Row) -> tuple[{{ target_pb }}.{{ target }}Table, ...]:
+    """解析组外键 {{ sheetname }}.{{ col.name }}[] -> {{ target }} 行。"""
+    manager = {{ target }}TableManager.instance()
+    result: list[{{ target_pb }}.{{ target }}Table] = []
+    for fk_id in row.{{ to_python_field(col.name) }}:
+{%- if target in multi_pk_targets %}
+        # {{ target }} 主键可重复：一个 id 命中多行，全都收进来。
+        result.extend(manager.find_all_by_id(fk_id))
+{%- else %}
+        target_row = manager.find_by_id(fk_id)
+        if target_row is not None:
+            result.append(target_row)
+{%- endif %}
+    return tuple(result)
+{%- if not table.multi_primary_key %}
+
+
+def get_{{ col.name }}_rows_by_id(table_id: {{ to_python_type(table.id_column.data_type) }}) -> tuple[{{ target_pb }}.{{ target }}Table, ...]:
+    """同上，入参换成 {{ sheetname }} 自己的 id。源行不存在时返回空元组。"""
+    row = {{ sheetname }}TableManager.instance().find_by_id(table_id)
+    if row is None:
+        return ()
+    return get_{{ col.name }}_rows(row)
+{%- endif %}
+{% endfor %}
+
+# ---- 反向外键（HasMany）：按外键列的值反查源表的行 ----
+{% for col in table.foreign_key_columns if not col.is_repeated %}
+
+def find_rows_by_{{ col.name }}(key: {{ to_python_type(col.data_type) }}) -> tuple[Row, ...]:
+    """反查：全部 {{ col.name }} == key 的 {{ sheetname }} 行。走的是已建好的二级索引。"""
+    return {{ sheetname }}TableManager.instance().get_by_{{ col.name }}(key)
+{% endfor %}

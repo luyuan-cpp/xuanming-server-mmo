@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <unordered_set>
+#include <utility>
 
 // ─────────────────────────────────────────────────────────────────────────
 // 准入层(admission policy)
@@ -60,4 +62,37 @@ class AcceptAll final : public IAdmissionPolicy
 {
 public:
     [[nodiscard]] bool Accepts(uint32_t /*configId*/) const override { return true; }
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// AcceptByConfigSet —— 只收名单上的 config。
+//
+// **节日包 / 活动包用它。** 名单由创建这个包的玩法(活动系统)在注册 profile 时
+// 给出 —— 那边本来就知道自己发哪些道具,不需要再去物品表上加一列。
+//
+// 为什么不是 `AcceptByTag`(在 CfgItem 上加一列 tag、按 tag 收):
+// 那当然更像"数据驱动",但今天 `CfgItem` 只有 id / max_stack_size / equip_kind
+// 三列,加列要改二进制 xlsx 源表 + 跑导表工具,不是代码能落地的事。而
+// **没有那一列,AcceptByTag 会对所有东西返回 tag==0 → 什么都不收**,比没有更糟。
+// 名单式准入今天就是完整可用的;等 tag 列真的落地,再加一个
+// `class AcceptByTag final : public IAdmissionPolicy`(约二十行)与它并列即可,
+// 这一层的接口一个字都不用改 —— 这正是把准入做成策略的意义。
+// ─────────────────────────────────────────────────────────────────────────
+class AcceptByConfigSet final : public IAdmissionPolicy
+{
+public:
+    explicit AcceptByConfigSet(std::unordered_set<uint32_t> allowed)
+        : allowed_(std::move(allowed))
+    {
+    }
+
+    [[nodiscard]] bool Accepts(uint32_t configId) const override
+    {
+        return allowed_.contains(configId);
+    }
+
+    [[nodiscard]] const std::unordered_set<uint32_t> &Allowed() const { return allowed_; }
+
+private:
+    std::unordered_set<uint32_t> allowed_;
 };

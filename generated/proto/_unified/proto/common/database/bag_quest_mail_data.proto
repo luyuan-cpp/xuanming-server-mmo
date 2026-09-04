@@ -83,6 +83,17 @@ message ItemEntry {
   // 11: uint64 expire_at_ms     — for time-limited items
   // 12: bytes  custom_blob      — escape hatch for system-specific state
   //                                (recipe progress, summon stats, etc.)
+
+  // 入包序号(同一背包内单调递增,越小越早进包)。镜像 ItemComp.acquire_seq。
+  //
+  // 淘汰策略(临时格先进先出)按它排序;不持久化的话,跨服一跳顺序就丢了,
+  // 而 item_uuid 顶替不了它 —— 跨服迁移的号是源服 node 铸的、邮件附件的号是
+  // 调用方预设的,两者都不反映本包内的先后。
+  //
+  // 字段号从 13 起:6–12 已被上面那张 TODO 表预定,占用它们会让日后加那些
+  // 字段时撞号。0 = 旧存档没盖过章,还原后按 item_uuid 排序(与本字段落地前
+  // 的行为一致),并由 ItemStore 从现有实例重建水位。
+  uint64 acquire_seq = 13;
   //
   // When adding any of the above:
   //   1. uncomment the field with the exact number listed
@@ -114,6 +125,15 @@ message BagAllData {
     // Items in this bag. ItemEntry.bag_type is IGNORED here (the bag is
     // identified by bag_id, not BagType) and should be left 0.
     repeated ItemEntry items = 3;
+
+    // 这个动态包按哪套规则装配(布局 / 准入 / 淘汰),见
+    // cpp/libs/modules/bag/bag_profile_registry.h。
+    //
+    // **必须持久化。** 规则本身是代码 + 配置,不进快照;但"这个包是哪套规则"
+    // 是玩家数据。不带它,跨服回来节日包会退化成默认的自由格 + 什么都收 ——
+    // 规则静默消失,节日包变成普通包。
+    // 0 = 未指定,按默认 profile 还原(与本字段落地前的行为一致)。
+    uint32 profile_id = 4;
   }
 
   // All item entries across all bag_type buckets. Marshaller groups

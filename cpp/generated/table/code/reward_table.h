@@ -31,6 +31,15 @@ public:
 
     const RewardTableData& FindAll() const { return snapshot->data; }
 
+    // ---- 生命周期契约(热更) ----
+    //
+    // Load() 会整批建好新 Snapshot 再换掉旧的,**旧 Snapshot 当场析构**。
+    // 所以下面所有返回指针 / 引用 / 迭代器的接口,返回值只在**下一次 Load() 之前**有效。
+    //
+    //   ✅ 存 id,用的时候现查
+    //   ❌ 把 const RewardTable* 存进成员、容器、闭包、协程帧
+    //
+    // 存指针在热更那一刻就是野指针,而且不会有任何报错。
     std::pair<const RewardTable*, uint32_t> FindById(uint32_t tableId);
     std::pair<const RewardTable*, uint32_t> FindByIdSilent(uint32_t tableId);
     const IdMapType& GetIdMap() const { return snapshot->idMap; }

@@ -36,7 +36,6 @@
     <ClInclude Include="code\condition_table_comp.h" />
     <ClInclude Include="code\constants\actoractioncombatstate_table_id_constants.h" />
     <ClInclude Include="code\constants\actoractionstate_table_id_constants.h" />
-    <ClInclude Include="code\constants\globalvariable_table_id_constants.h" />
     <ClInclude Include="code\constants\global_abnormal_logout_table_id_constants.h" />
     <ClInclude Include="code\cooldown_table.h" />
     <ClInclude Include="code\cooldown_table_comp.h" />
@@ -69,12 +68,6 @@
     <ClInclude Include="code\test_table_comp.h" />
     <ClInclude Include="code\world_table.h" />
     <ClInclude Include="code\world_table_comp.h" />
-    <ClInclude Include="cpp_table_id_bit_index\mission_table_id_bit_index.h" />
-    <ClInclude Include="cpp_table_id_bit_index\reward_table_id_bit_index.h" />
-    <ClInclude Include="cpp_table_id_constants_name\actoractioncombatstate_table_id_constants.h" />
-    <ClInclude Include="cpp_table_id_constants_name\actoractionstate_table_id_constants.h" />
-    <ClInclude Include="cpp_table_id_constants_name\globalvariable_table_id_constants.h" />
-    <ClInclude Include="cpp_table_id_constants_name\global_abnormal_logout_table_id_constants.h" />
     <ClInclude Include="proto\actoractioncombatstate_table.pb.h" />
     <ClInclude Include="proto\actoractionstate_table.pb.h" />
     <ClInclude Include="proto\basescene_table.pb.h" />
@@ -104,7 +97,10 @@
     <ClInclude Include="proto\tip\common_error_tip.pb.h" />
     <ClInclude Include="proto\tip\cross_server_error_tip.pb.h" />
     <ClInclude Include="proto\tip\entity_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\friend_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\guild_error_tip.pb.h" />
     <ClInclude Include="proto\tip\login_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\match_error_tip.pb.h" />
     <ClInclude Include="proto\tip\mission_error_tip.pb.h" />
     <ClInclude Include="proto\tip\mount_error_tip.pb.h" />
     <ClInclude Include="proto\tip\reward_error_tip.pb.h" />
@@ -165,7 +161,10 @@
     <ClCompile Include="proto\tip\common_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\cross_server_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\entity_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\friend_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\guild_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\login_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\match_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\mission_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\mount_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\reward_error_tip.pb.cc" />

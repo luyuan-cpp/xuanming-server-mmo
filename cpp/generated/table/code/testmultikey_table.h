@@ -4,6 +4,7 @@
 #include <functional>
 #include <memory>
 #include <random>
+#include <ranges>
 #include <unordered_map>
 #include <vector>
 #include "table_expression.h"
@@ -12,7 +13,7 @@
 
 class TestMultiKeyTableManager {
 public:
-    using IdMapType = std::unordered_map<uint32_t, const TestMultiKeyTable*>;
+    using IdMapType = std::unordered_multimap<uint32_t, const TestMultiKeyTable*>;
     using LoadSuccessCallback = std::function<void()>;
 
     // Internal snapshot holding all parsed data and indices.
@@ -41,8 +42,28 @@ public:
 
     const TestMultiKeyTableData& FindAll() const { return snapshot->data; }
 
-    std::pair<const TestMultiKeyTable*, uint32_t> FindById(uint32_t tableId);
-    std::pair<const TestMultiKeyTable*, uint32_t> FindByIdSilent(uint32_t tableId);
+    // ---- 生命周期契约(热更) ----
+    //
+    // Load() 会整批建好新 Snapshot 再换掉旧的,**旧 Snapshot 当场析构**。
+    // 所以下面所有返回指针 / 引用 / 迭代器的接口,返回值只在**下一次 Load() 之前**有效。
+    //
+    //   ✅ 存 id,用的时候现查
+    //   ❌ 把 const TestMultiKeyTable* 存进成员、容器、闭包、协程帧
+    //
+    // 存指针在热更那一刻就是野指针,而且不会有任何报错。
+    // 这张表的主键可重复((cfg_multi)),因此**不提供 FindById** —— 单值语义不成立。
+    //
+    // 返回的是 multimap 的 equal_range 视图,**不拷贝、不分配**:
+    //
+    //     for (const auto* row : Mgr::Instance().FindAllById(id)) { ... }
+    //
+    // 视图与它产出的指针一样,只在下一次 Load() 之前有效。
+    auto FindAllById(uint32_t tableId) const {
+        auto [first, last] = snapshot->idMap.equal_range(tableId);
+        return std::ranges::subrange(first, last) | std::views::values;
+    }
+
+    std::size_t CountById(uint32_t tableId) const { return snapshot->idMap.count(tableId); }
     const IdMapType& GetIdMap() const { return snapshot->idMap; }
 
     void Load();
@@ -117,7 +138,8 @@ public:
         std::vector<const TestMultiKeyTable*> result;
         result.reserve(ids.size());
         for (auto id : ids) {
-            if (auto it = snapshot->idMap.find(id); it != snapshot->idMap.end()) {
+            auto [first, last] = snapshot->idMap.equal_range(id);
+            for (auto it = first; it != last; ++it) {
                 result.push_back(it->second);
             }
         }

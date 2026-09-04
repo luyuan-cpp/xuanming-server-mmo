@@ -40,28 +40,34 @@ def generate_binary(cfg: ExporterConfig, tables: list[TableSchema]) -> None:
         sys.path.insert(0, pb2_dir)
 
     with ThreadPoolExecutor() as pool:
-        pool.map(lambda t: _export_one(t, cfg), tables)
+        for _ in pool.map(lambda t: _export_one(t, cfg), tables):
+            pass
 
 
 def _export_one(table: TableSchema, cfg: ExporterConfig) -> None:
     json_path = cfg.json_dir / f"{table.name}.json"
     if not json_path.exists():
-        logger.warning("JSON not found for %s, skipping binary", table.name)
-        return
+        raise RuntimeError(
+            f"Binary generation failed for {table.name}: JSON not found: {json_path}"
+        )
 
     module_name = f"{table.name.lower()}_table_pb2"
     try:
         mod = importlib.import_module(module_name)
-    except ModuleNotFoundError:
-        logger.error("Proto module %s not found – run compile_proto first", module_name)
-        return
+    except ModuleNotFoundError as exc:
+        raise RuntimeError(
+            f"Binary generation failed for {table.name}: proto module "
+            f"{module_name} not found; run compile_proto first"
+        ) from exc
 
     # The wrapper message is always ``{SheetName}TableData``
     msg_cls_name = f"{table.name}TableData"
     msg_cls = getattr(mod, msg_cls_name, None)
     if msg_cls is None:
-        logger.error("Message class %s not found in %s", msg_cls_name, module_name)
-        return
+        raise RuntimeError(
+            f"Binary generation failed for {table.name}: message class "
+            f"{msg_cls_name} not found in {module_name}"
+        )
 
     try:
         with open(json_path, "r", encoding="utf-8") as f:
@@ -71,7 +77,11 @@ def _export_one(table: TableSchema, cfg: ExporterConfig) -> None:
         json_format.Parse(json_text, msg)
 
         out = cfg.binary_dir / f"{table.name.lower()}.pb"
-        write_file_bytes(out, msg.SerializeToString())
+        # 产物会在 CI 中逐字节做漂移检查；protobuf map 的默认序列化顺序没有
+        # 契约保证，必须显式 deterministic 才能跨 Windows/Linux 可复现。
+        write_file_bytes(out, msg.SerializeToString(deterministic=True))
         logger.info("Generated %s (%d bytes)", out.name, out.stat().st_size)
     except Exception as exc:
-        logger.error("Binary generation failed for %s: %s", table.name, exc)
+        raise RuntimeError(
+            f"Binary generation failed for {table.name}: {exc}"
+        ) from exc

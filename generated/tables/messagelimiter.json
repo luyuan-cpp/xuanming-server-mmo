@@ -1,0 +1,28 @@
+{
+ "data": [
+  {
+   "id": 68,
+   "max_requests": 10,
+   "time_window": 1,
+   "tip_message": 1000
+  },
+  {
+   "id": 131,
+   "max_requests": 15,
+   "time_window": 1,
+   "tip_message": 1000
+  },
+  {
+   "id": 132,
+   "max_requests": 20,
+   "time_window": 1,
+   "tip_message": 1000
+  },
+  {
+   "id": 134,
+   "max_requests": 15,
+   "time_window": 1,
+   "tip_message": 1000
+  }
+ ]
+}

@@ -22,6 +22,8 @@ func Get{{ sheetname }}{{ to_go_proto_field(col.name) }}Rows(row *pb.{{ sheetnam
     return result
 }
 
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *ById 便利函数;调用方先自己 FindAllById 再逐行调上面那个版本。 #}
+{% if not table.multi_primary_key %}
 // Get{{ sheetname }}{{ to_go_proto_field(col.name) }}RowsById resolves {{ sheetname }}.{{ col.name }}[] -> {{ col.foreign_key.target_table }} rows (by {{ sheetname }} id).
 func Get{{ sheetname }}{{ to_go_proto_field(col.name) }}RowsById(tableId uint32) []*pb.{{ col.foreign_key.target_table }}Table {
     row, ok := {{ sheetname }}TableManagerInstance.FindById(tableId)
@@ -30,6 +32,7 @@ func Get{{ sheetname }}{{ to_go_proto_field(col.name) }}RowsById(tableId uint32)
     }
     return Get{{ sheetname }}{{ to_go_proto_field(col.name) }}Rows(row)
 }
+{% endif %}
 {% else %}
 
 // Get{{ sheetname }}{{ to_go_proto_field(col.name) }}Row resolves {{ sheetname }}.{{ col.name }} -> {{ col.foreign_key.target_table }} row.
@@ -37,6 +40,8 @@ func Get{{ sheetname }}{{ to_go_proto_field(col.name) }}Row(row *pb.{{ sheetname
     return {{ col.foreign_key.target_table }}TableManagerInstance.FindById(row.{{ to_go_proto_field(col.name) }})
 }
 
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *ById 便利函数;调用方先自己 FindAllById 再逐行调上面那个版本。 #}
+{% if not table.multi_primary_key %}
 // Get{{ sheetname }}{{ to_go_proto_field(col.name) }}RowById resolves {{ sheetname }}.{{ col.name }} -> {{ col.foreign_key.target_table }} row (by {{ sheetname }} id).
 func Get{{ sheetname }}{{ to_go_proto_field(col.name) }}RowById(tableId uint32) (*pb.{{ col.foreign_key.target_table }}Table, bool) {
     row, ok := {{ sheetname }}TableManagerInstance.FindById(tableId)
@@ -45,6 +50,7 @@ func Get{{ sheetname }}{{ to_go_proto_field(col.name) }}RowById(tableId uint32) 
     }
     return Get{{ sheetname }}{{ to_go_proto_field(col.name) }}Row(row)
 }
+{% endif %}
 {% endif %}
 {% endfor %}
 {% for col in table.group_foreign_key_columns %}
@@ -60,6 +66,8 @@ func Get{{ sheetname }}{{ to_go_proto_field(col.name) }}Rows(row *pb.{{ sheetnam
     return result
 }
 
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *ById 便利函数;调用方先自己 FindAllById 再逐行调上面那个版本。 #}
+{% if not table.multi_primary_key %}
 // Get{{ sheetname }}{{ to_go_proto_field(col.name) }}RowsById resolves {{ sheetname }}.{{ col.name }}[] -> {{ col.group_foreign_key.target_table }} rows (by {{ sheetname }} id).
 func Get{{ sheetname }}{{ to_go_proto_field(col.name) }}RowsById(tableId uint32) []*pb.{{ col.group_foreign_key.target_table }}Table {
     row, ok := {{ sheetname }}TableManagerInstance.FindById(tableId)
@@ -68,6 +76,7 @@ func Get{{ sheetname }}{{ to_go_proto_field(col.name) }}RowsById(tableId uint32)
     }
     return Get{{ sheetname }}{{ to_go_proto_field(col.name) }}Rows(row)
 }
+{% endif %}
 {% endfor %}
 
 // ---------------------------------------------------------------------------

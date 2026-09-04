@@ -71,18 +71,16 @@ public:
 // 临时格(`kTemporary`)用它:那个包是掉落溢出的缓冲,语义本来就是"新的进来、
 // 旧的顶出去",而不是"满了就捡不起来"。
 //
-// ⚠ **排序依据目前是 guid,这是一个已知的近似。**
+// 排序依据是 `ItemComp.acquire_seq` —— 由 `ItemStore::Insert` 在唯一的入库口盖章、
+// 同包内单调、随快照原样带走并在还原时恢复水位。
 //
-// item guid 是 snowflake,高位是时间,所以升序**约等于**入包先后。两条路径会
-// 打乱它:
+// **刻意不用 guid。** item guid 是 snowflake,高位是时间,升序看似等于入包先后,
+// 但两条路径会打乱它,而且都是生产路径:
 //   ① 跨服迁移带回来的实例,guid 是**源服 node** 铸的;
 //   ② `AddItems(std::vector<InitItemParam>)`(邮件附件)**沿用调用方预设的
 //      guid**,那个号可能比包里已有的都小。
-//
-// 正解是给 `ItemEntry` / `ItemComp` 加一个显式的获得序号字段(`ItemEntry` 的
-// 字段号 6/7/8 已被 TODO 预定,用 9),那要改 proto 并重生成,不在本批范围内。
-// 届时**只需要改 AcquisitionOrderOf() 这一个函数**,策略与桥层都不用动 ——
-// 把近似收在一个有名字的函数里,就是为了让那天的改动只有一行。
+// 两种情况下先进先出都会挤错人 —— 挤掉刚拿到的、留下最早的。
+// (2026-09-01 首版就是按 guid 排的,当天记为已知近似;2026-09-02 补上真序号。)
 // ─────────────────────────────────────────────────────────────────────────
 class EvictOldestFirst final : public IEvictionPolicy
 {
@@ -90,7 +88,6 @@ public:
     [[nodiscard]] GuidVector SelectVictims(std::size_t needed, const ItemStore &store,
                                            const IContainerLayout &layout) const override;
 
-    // 一个实例的"入包早晚"。越小越早。见上面那段关于近似的说明 ——
-    // 换成真正的获得序号时,这里是唯一的改动点。
+    // 一个实例的"入包早晚"。越小越早。排序依据的**唯一**来源。
     [[nodiscard]] static uint64_t AcquisitionOrderOf(Guid guid, const ItemComp &item);
 };

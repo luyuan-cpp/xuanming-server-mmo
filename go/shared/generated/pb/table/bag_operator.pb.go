@@ -83,7 +83,8 @@ const file_bag_operator_proto_rawDesc = "" +
 	"\x06kBagOK\x10\x00\x12\f\n" +
 	"\bkUseItem\x10\x02\x12\x17\n" +
 	"\x13kActivityRewardItem\x10\x03\x12\x16\n" +
-	"\x12kMissionRewardItem\x10\x04B\x14Z\x12generated/pb/tableb\x06proto3"
+	"\x12kMissionRewardItem\x10\x04B$\n" +
+	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (
 	file_bag_operator_proto_rawDescOnce sync.Once

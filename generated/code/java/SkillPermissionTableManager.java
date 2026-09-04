@@ -30,16 +30,16 @@ public class SkillPermissionTableManager {
 
 
 
-        final Map<Integer, List<SkillPermissionTable>> idxSkill_type;
+        final Map<Integer, List<SkillPermissionTable>> idxSkillType;
 
 
 
         Snapshot(SkillPermissionTableData data,
                  Map<Integer, SkillPermissionTable> kvData,
-                 Map<Integer, List<SkillPermissionTable>> idxSkill_type) {
+                 Map<Integer, List<SkillPermissionTable>> idxSkillType) {
             this.data = data;
             this.kvData = kvData;
-            this.idxSkill_type = idxSkill_type;
+            this.idxSkillType = idxSkillType;
         }
     }
 
@@ -65,22 +65,23 @@ public class SkillPermissionTableManager {
         SkillPermissionTableData data = builder.build();
 
         Map<Integer, SkillPermissionTable> kvData = new HashMap<>(data.getDataCount());
-        Map<Integer, List<SkillPermissionTable>> idxSkill_type = new HashMap<>();
+        Map<Integer, List<SkillPermissionTable>> idxSkillType = new HashMap<>();
 
         for (SkillPermissionTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
             for (Integer elem : row.getSkillTypeList()) {
-                idxSkill_type.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+                idxSkillType.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
             }
         }
 
-        this.snapshot = new Snapshot(data, kvData, idxSkill_type);
+        this.snapshot = new Snapshot(data, kvData, idxSkillType);
     }
 
     public SkillPermissionTableData findAll() {
         return snapshot.data;
     }
 
+    /** 热更契约：返回的对象属于当前快照，调用方**只存 id**，不要长期持有引用。 */
     public SkillPermissionTable findById(int id) {
         return snapshot.kvData.get(id);
     }
@@ -93,8 +94,8 @@ public class SkillPermissionTableManager {
 
 
 
-    public List<SkillPermissionTable> findBySkill_typeIndex(int key) {
-        return snapshot.idxSkill_type.getOrDefault(key, Collections.emptyList());
+    public List<SkillPermissionTable> findBySkillTypeIndex(int key) {
+        return snapshot.idxSkillType.getOrDefault(key, Collections.emptyList());
     }
 
 
@@ -118,8 +119,8 @@ public class SkillPermissionTableManager {
 
 
 
-    public int countBySkill_typeIndex(int key) {
-        return snapshot.idxSkill_type.getOrDefault(key, Collections.emptyList()).size();
+    public int countBySkillTypeIndex(int key) {
+        return snapshot.idxSkillType.getOrDefault(key, Collections.emptyList()).size();
     }
 
 

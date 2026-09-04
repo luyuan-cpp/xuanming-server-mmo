@@ -63,30 +63,30 @@ internal::EnumTraitsT<::scene_error_internal_data_>
 
 enum scene_error : int {
   kScene_errorOK = 0,
-  kEnterSceneNotFound = 52,
-  kEnterSceneNotFull = 53,
-  kEnterSceneMainFull = 54,
-  kEnterNodeUnavailable = 55,
-  kEnterSceneServerType = 56,
-  kEnterSceneParamError = 57,
-  kEnterSceneSceneFull = 58,
-  kEnterSceneSceneNotFound = 59,
-  kEnterSceneYouInCurrentScene = 60,
-  kEnterSceneEnterCrossRoomScene = 61,
-  kEnterSceneGsInfoNull = 62,
-  kEnterSceneGsFull = 63,
-  kEnterSceneYourSceneIsNull = 64,
-  kEnterSceneChangeSceneOffLine = 65,
-  kEnterSceneChangingScene = 66,
-  kEnterSceneChangingGs = 67,
-  kChangeScenePlayerQueueNotFound = 68,
-  kChangeScenePlayerQueueFull = 69,
-  kChangeScenePlayerQueueComponentGsNull = 70,
-  kChangeScenePlayerQueueComponentEmpty = 71,
-  kChangeSceneEnQueueNotSameGs = 72,
-  kInvalidEnterSceneParameters = 73,
-  kCheckEnterSceneCreator = 74,
-  kEnterSceneFailed = 75,
+  kEnterSceneNotFound = 3000,
+  kEnterSceneNotFull = 3001,
+  kEnterSceneMainFull = 3002,
+  kEnterNodeUnavailable = 3003,
+  kEnterSceneServerType = 3004,
+  kEnterSceneParamError = 3005,
+  kEnterSceneSceneFull = 3006,
+  kEnterSceneSceneNotFound = 3007,
+  kEnterSceneYouInCurrentScene = 3008,
+  kEnterSceneEnterCrossRoomScene = 3009,
+  kEnterSceneGsInfoNull = 3010,
+  kEnterSceneGsFull = 3011,
+  kEnterSceneYourSceneIsNull = 3012,
+  kEnterSceneChangeSceneOffLine = 3013,
+  kEnterSceneChangingScene = 3014,
+  kEnterSceneChangingGs = 3015,
+  kChangeScenePlayerQueueNotFound = 3016,
+  kChangeScenePlayerQueueFull = 3017,
+  kChangeScenePlayerQueueComponentGsNull = 3018,
+  kChangeScenePlayerQueueComponentEmpty = 3019,
+  kChangeSceneEnQueueNotSameGs = 3020,
+  kInvalidEnterSceneParameters = 3021,
+  kCheckEnterSceneCreator = 3022,
+  kEnterSceneFailed = 3023,
   scene_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   scene_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -97,11 +97,11 @@ extern const uint32_t scene_error_internal_data_[];
 inline constexpr scene_error scene_error_MIN =
     static_cast<scene_error>(0);
 inline constexpr scene_error scene_error_MAX =
-    static_cast<scene_error>(75);
+    static_cast<scene_error>(3023);
 [[nodiscard]] inline bool scene_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, scene_error_internal_data_);
 }
-inline constexpr int scene_error_ARRAYSIZE = 75 + 1;
+inline constexpr int scene_error_ARRAYSIZE = 3023 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 scene_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(scene_error) {

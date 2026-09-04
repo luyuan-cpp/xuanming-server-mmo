@@ -3,71 +3,74 @@ syntax = "proto3";
 
 option go_package = "generated/pb/table";
 
+option java_package = "com.game.table";
+
+
 enum login_error {
   kLogin_errorOK = 0;
 
-  kLoginAccountNotFound = 20;
+  kLoginAccountNotFound = 2000;
 
-  kLoginAccountPlayerFull = 21;
+  kLoginAccountPlayerFull = 2001;
 
-  kLoginCreatePlayerUnLoadAccount = 22;
+  kLoginCreatePlayerUnLoadAccount = 2002;
 
-  kLoginCreatePlayerConnectionHasNotAccount = 23;
+  kLoginCreatePlayerConnectionHasNotAccount = 2003;
 
-  kLoginUnLogin = 24;
+  kLoginUnLogin = 2004;
 
-  kLoginInProgress = 25;
+  kLoginInProgress = 2005;
 
-  kLoginPlayerGuidError = 26;
+  kLoginPlayerGuidError = 2006;
 
-  kLoginEnteringGame = 27;
+  kLoginEnteringGame = 2007;
 
-  kLoginPlaying = 28;
+  kLoginPlaying = 2008;
 
-  kLoginCreatingPlayer = 29;
+  kLoginCreatingPlayer = 2009;
 
-  kLoginWaitingEnterGame = 30;
+  kLoginWaitingEnterGame = 2010;
 
-  kLoginEnterGameGuid = 31;
+  kLoginEnterGameGuid = 2011;
 
-  kLoginAccountNameEmpty = 32;
+  kLoginAccountNameEmpty = 2012;
 
-  kLoginCreateConnectionAccountEmpty = 33;
+  kLoginCreateConnectionAccountEmpty = 2013;
 
-  kLoginEnterGameConnectionAccountEmpty = 34;
+  kLoginEnterGameConnectionAccountEmpty = 2014;
 
-  kLoginUnknownError = 35;
+  kLoginUnknownError = 2015;
 
-  kLoginSessionDisconnect = 36;
+  kLoginSessionDisconnect = 2016;
 
-  kLoginBeKickByAnOtherAccount = 37;
+  kLoginBeKickByAnOtherAccount = 2017;
 
-  kLoginSessionIdNotFound = 38;
+  kLoginSessionIdNotFound = 2018;
 
-  kLoginFsmFailed = 39;
+  kLoginFsmFailed = 2019;
 
-  kLoginDataSerializeFailed = 40;
+  kLoginDataSerializeFailed = 2020;
 
-  kLoginRedisError = 41;
+  kLoginRedisError = 2021;
 
-  kLoginDataParseFailed = 42;
+  kLoginDataParseFailed = 2022;
 
-  kLoginRedisSetFailed = 43;
+  kLoginRedisSetFailed = 2023;
 
-  kTooManyDevices = 44;
+  kTooManyDevices = 2024;
 
-  kLoginFSMLoadFailed = 45;
+  kLoginFSMLoadFailed = 2025;
 
-  kLoginFSMEventFailed = 46;
+  kLoginFSMEventFailed = 2026;
 
-  kLoginAccountDataLoadFaile = 47;
+  kLoginAccountDataLoadFaile = 2027;
 
-  kLoginSessionNotFound = 48;
+  kLoginSessionNotFound = 2028;
 
-  kLoginAccountDataLoadFailed = 49;
+  kLoginAccountDataLoadFailed = 2029;
 
-  kLoginFsmInvalidEvent = 50;
+  kLoginFsmInvalidEvent = 2030;
 
-  kLoginTimeout = 51;
+  kLoginTimeout = 2031;
 
 };

@@ -86,6 +86,12 @@ def make_config(tmp_path: Path) -> ExporterConfig:
     out = tmp_path / "out"
     return ExporterConfig(
         data_dir=tmp_path / "data",
+        # 与 load_config 里「未显式配置时取 data_dir/schema」的推导保持一致。
+        # 不设的话会拿到 dataclass 默认值 Path() == '.'(= 跑 pytest 时的 CWD),
+        # 而 index_schema_protos 对「目录存在但没有 cfg_options.proto」是
+        # fail-closed 的 —— 那是生产侧要的行为(schema_dir 配错要立刻炸),
+        # 但在测试里会让每个走 read_all_tables 的用例都误报。
+        schema_dir=tmp_path / "data" / "schema",
         data_begin_row=_DATA_BEGIN_ROW,
         metadata_rows=dict(_METADATA_ROWS),
         generated_dir=out,

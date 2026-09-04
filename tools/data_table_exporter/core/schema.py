@@ -8,7 +8,8 @@ Excel header format (5 rows):
     Row 2: type declaration — ``uint32``, ``map<K,V>``, ``set<T>``,
            ``repeated uint32``, ``repeated { uint32 f1; uint32 f2 }``
     Row 3: owner — "server", "client", "common", "design", or "constants_name"
-    Row 4: options — space-separated tokens: bit_index, key, multi, fk:T, gfk:T, expr:type, expr_params:a,b
+    Row 4: options — space-separated tokens: bit_index, key, multi, tip_ref,
+           fk:T, gfk:T, expr:type, expr_params:a,b
     Row 5: comment
     Row 6+: data
 """
@@ -201,9 +202,24 @@ class TableSchema:
     arrays: dict[str, ArrayField] = field(default_factory=dict)
     groups: dict[str, GroupField] = field(default_factory=dict)
     maps: dict[str, MapField] = field(default_factory=dict)
-    use_flat_multimap: bool = False
+    # 主键可重复:同一个 id 允许出现在多行。由主键列上的 (cfg_multi) 决定。
+    #
+    # 这不是新概念 —— 旧生成器读 A5=='multi' 时就有,重写导表器时模板没接上,
+    # 于是这个字段变成了零消费者的悬空标记(`_old/gen_xls_to_language_config_file.py:57`)。
+    # 现在它真的会改变产物:主键索引变多值,并且**不生成 FindById,只生成 FindAllById**,
+    # 让「把可重复主键当单值用」在编译期就断,而不是悄悄只看第一行。
+    multi_primary_key: bool = False
     has_constants_name: bool = False
     constants_name_index: Optional[int] = None
+
+    # proto 字段号台账 {字段名: 号}。**产物模板只认这一份**,不再自己发号。
+    #
+    # 从前 proto_table.proto.j2 用一个自增计数器按列序发号,于是「在表中间插一列」
+    # 会把它后面所有字段的号整体 +1,而 .pb 是 git-tracked 的二进制:旧数据被
+    # ParseFromString 无异常地整体错读。现在号由来源层显式给出:
+    #   - 权威 schema 路径:直接取 .proto 里人写的 `= N`
+    #   - 旧表头路径:用 positional_field_numbers() 复算出与历史完全一致的号
+    field_numbers: dict[str, int] = field(default_factory=dict)
 
     # ----- convenience properties -----
 
@@ -352,3 +368,42 @@ class TableSchema:
         Returns ArrayField objects (not grouped sub-messages).
         """
         return [a for a in self.arrays.values()]
+
+
+def positional_field_numbers(schema: TableSchema) -> dict[str, int]:
+    """按历史规则(列序)复算 proto 字段号。
+
+    这是 ``templates/proto_table.proto.j2`` 从前那个自增发号器的等价实现:
+    先按列序走 ``server_columns``(按名去重)发给 set / 数组 / 非分组标量,
+    再发给全部 map,最后发给全部子消息。**不是声明序。**
+
+    只有两个用途:(1) 尚未迁移到权威 schema 的表在导表时取号;
+    (2) 播种权威 schema 时核对人写的号是否等于历史号。
+    新表不该依赖它 —— 号应当写在 ``data/schema/<Sheet>_table.proto`` 里。
+    """
+    out: dict[str, int] = {}
+    seen: set[str] = set()
+    col_to_group = schema.col_to_group
+    idx = 1
+    for col in schema.server_columns:
+        if col.name in seen:
+            continue
+        seen.add(col.name)
+        if col.map_role == "set":
+            out[col.name] = idx
+            idx += 1
+        elif col.map_role in ("map_key", "map_value"):
+            continue
+        elif col.name in schema.arrays:
+            out[col.name] = idx
+            idx += 1
+        elif col.excel_index not in col_to_group:
+            out[col.name] = idx
+            idx += 1
+    for name in schema.maps:
+        out[name] = idx
+        idx += 1
+    for name in schema.groups:
+        out[name] = idx
+        idx += 1
+    return out

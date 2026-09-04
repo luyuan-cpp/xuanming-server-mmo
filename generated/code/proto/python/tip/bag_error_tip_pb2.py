@@ -24,14 +24,14 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x17tip/bag_error_tip.proto*\xb1\x03\n\tbag_error\x12\x10\n\x0ckBag_errorOK\x10\x00\x12\x1a\n\x16kBagDeleteItemFindGuid\x10\x65\x12 \n\x1ckBagDeleteItemAlreadyHasGuid\x10\x66\x12\"\n\x1ekBagAddItemHasNotBaseComponent\x10g\x12\x1a\n\x16kBagAddItemInvalidGuid\x10h\x12\x1b\n\x17kBagAddItemInvalidParam\x10i\x12\x16\n\x12kBagAddItemBagFull\x10j\x12\x16\n\x12kBagItemNotStacked\x10k\x12\x19\n\x15kBagInsufficientItems\x10l\x12\x12\n\x0ekBagDelItemPos\x10m\x12\x15\n\x11kBagDelItemConfig\x10n\x12\x13\n\x0fkBagDelItemGuid\x10o\x12\x17\n\x13kBagDelItemFindItem\x10p\x12\x13\n\x0fkBagDelItemSize\x10q\x12 \n\x1ckBagItemDeletionSizeMismatch\x10r\x12\x1c\n\x18kBagInsufficientBagSpace\x10sB\x14Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x17tip/bag_error_tip.proto*\xc0\x03\n\tbag_error\x12\x10\n\x0ckBag_errorOK\x10\x00\x12\x1b\n\x16kBagDeleteItemFindGuid\x10\xf0.\x12!\n\x1ckBagDeleteItemAlreadyHasGuid\x10\xf1.\x12#\n\x1ekBagAddItemHasNotBaseComponent\x10\xf2.\x12\x1b\n\x16kBagAddItemInvalidGuid\x10\xf3.\x12\x1c\n\x17kBagAddItemInvalidParam\x10\xf4.\x12\x17\n\x12kBagAddItemBagFull\x10\xf5.\x12\x17\n\x12kBagItemNotStacked\x10\xf6.\x12\x1a\n\x15kBagInsufficientItems\x10\xf7.\x12\x13\n\x0ekBagDelItemPos\x10\xf8.\x12\x16\n\x11kBagDelItemConfig\x10\xf9.\x12\x14\n\x0fkBagDelItemGuid\x10\xfa.\x12\x18\n\x13kBagDelItemFindItem\x10\xfb.\x12\x14\n\x0fkBagDelItemSize\x10\xfc.\x12!\n\x1ckBagItemDeletionSizeMismatch\x10\xfd.\x12\x1d\n\x18kBagInsufficientBagSpace\x10\xfe.B$\n\x0e\x63om.game.tableZ\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'tip.bag_error_tip_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
-  _globals['DESCRIPTOR']._serialized_options = b'Z\022generated/pb/table'
+  _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableZ\022generated/pb/table'
   _globals['_BAG_ERROR']._serialized_start=28
-  _globals['_BAG_ERROR']._serialized_end=461
+  _globals['_BAG_ERROR']._serialized_end=476
 # @@protoc_insertion_point(module_scope)

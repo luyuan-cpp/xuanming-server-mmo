@@ -36,14 +36,14 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
 const char descriptor_table_protodef_scene_5foperator_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n\024scene_operator.proto*)\n\005scene\022\014\n\010kScen"
-    "eOK\020\000\022\022\n\016kEnterSceneC2S\020\001B\024Z\022generated/p"
-    "b/tableb\006proto3"
+    "eOK\020\000\022\022\n\016kEnterSceneC2S\020\001B$\n\016com.game.ta"
+    "bleZ\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_scene_5foperator_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_scene_5foperator_2eproto = {
     false,
     false,
-    95,
+    111,
     descriptor_table_protodef_scene_5foperator_2eproto,
     "scene_operator.proto",
     &descriptor_table_scene_5foperator_2eproto_once,
