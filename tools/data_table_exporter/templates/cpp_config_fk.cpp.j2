@@ -1,0 +1,14 @@
+{# cpp_config_fk.cpp.j2 -- foreign key cross-table lookup helpers (definitions) #}
+{%- import "_cpp_fk_helpers.j2" as fk with context -%}
+{#- 裸引号 include:与同一对的 .h 以及 cpp_all_table.cpp.j2 一致,
+    按 includer 相对查找,不依赖 ../../generated/ 在 -I 上。 -#}
+#include "{{ sheetname | lower }}_table_fk.h"
+#include "{{ sheetname | lower }}_table.h"
+{%- for target in fk_targets %}
+#include "{{ target | lower }}_table.h"
+{%- endfor %}
+
+// ---------------------------------------------------------------------------
+// Foreign key helpers for {{ sheetname }}Table
+// ---------------------------------------------------------------------------
+{{ fk.emit('def') }}

@@ -48,18 +48,24 @@ set(SOURCE_FILES
     code/condition_table.cpp
     code/cooldown_table.cpp
     code/dungeon_table.cpp
+    code/equipslot_table.cpp
+    code/dungeon_table_fk.cpp
     code/globalvariable_table.cpp
     code/item_table.cpp
     code/messagelimiter_table.cpp
     code/mirror_table.cpp
+    code/mirror_table_fk.cpp
     code/mission_table.cpp
+    code/mission_table_fk.cpp
     code/monster_table.cpp
     code/reward_table.cpp
     code/skillpermission_table.cpp
     code/skill_table.cpp
     code/testmultikey_table.cpp
+    code/testmultikey_table_fk.cpp
     code/test_table.cpp
     code/world_table.cpp
+    code/world_table_fk.cpp
     proto/actoractioncombatstate_table.pb.cc
     proto/actoractionstate_table.pb.cc
     proto/basescene_table.pb.cc
@@ -68,6 +74,7 @@ set(SOURCE_FILES
     proto/condition_table.pb.cc
     proto/cooldown_table.pb.cc
     proto/dungeon_table.pb.cc
+    proto/equipslot_table.pb.cc
     proto/globalvariable_table.pb.cc
     proto/item_table.pb.cc
     proto/messagelimiter_table.pb.cc

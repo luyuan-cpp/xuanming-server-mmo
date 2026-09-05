@@ -1,0 +1,94 @@
+{# _cpp_fk_helpers.j2 -- 外键助手的**唯一**发射点。
+
+   cpp_config_fk.h.j2 用 mode='decl' 发声明,cpp_config_fk.cpp.j2 用 mode='def' 发定义。
+   两边共用同一个 macro,所以签名和 {% raw %}{% if not table.multi_primary_key %}{% endraw %} 闸门
+   构造上不可能分叉 —— 分叉会产生「有声明无定义」,而那种缺陷编译干净、链接干净
+   (因为全仓几乎没人引用这些函数),没有任何闸门能发现它。
+
+   两个模式都**不发 inline**:定义现在是外联的,放在 <表名>_table_fk.cpp 里。
+#}
+{%- macro emit(mode) -%}
+{%- set d = (mode == 'def') -%}
+{% for col in table.foreign_key_columns %}
+{% if col.is_repeated %}
+
+/// Resolve {{ sheetname }}.{{ col.name }}[] -> {{ col.foreign_key.target_table }} rows.
+std::vector<const {{ col.foreign_key.target_table }}Table*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(const {{ sheetname }}Table& row){% if not d %};{% else %} {
+    std::vector<const {{ col.foreign_key.target_table }}Table*> result;
+    for (auto id : row.{{ col.name }}()) {
+        auto [ptr, _] = {{ col.foreign_key.target_table }}TableManager::Instance().FindByIdSilent(id);
+        if (ptr) result.push_back(ptr);
+    }
+    return result;
+}
+{% endif %}
+
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *ById 便利函数;调用方先自己 FindAllById 再逐行调上面那个版本。 #}
+{% if not table.multi_primary_key %}
+/// Resolve {{ sheetname }}.{{ col.name }}[] -> {{ col.foreign_key.target_table }} rows (by {{ sheetname }} id).
+std::vector<const {{ col.foreign_key.target_table }}Table*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(uint32_t tableId){% if not d %};{% else %} {
+    auto [row, _] = {{ sheetname }}TableManager::Instance().FindByIdSilent(tableId);
+    if (!row) return {};
+    return Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(*row);
+}
+{% endif %}
+{% endif %}
+{% else %}
+
+/// Resolve {{ sheetname }}.{{ col.name }} -> {{ col.foreign_key.target_table }} row.
+const {{ col.foreign_key.target_table }}Table* Get{{ sheetname }}{{ to_pascal_case(col.name) }}Row(const {{ sheetname }}Table& row){% if not d %};{% else %} {
+    auto [ptr, _] = {{ col.foreign_key.target_table }}TableManager::Instance().FindByIdSilent(row.{{ col.name }}());
+    return ptr;
+}
+{% endif %}
+
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *ById 便利函数;调用方先自己 FindAllById 再逐行调上面那个版本。 #}
+{% if not table.multi_primary_key %}
+/// Resolve {{ sheetname }}.{{ col.name }} -> {{ col.foreign_key.target_table }} row (by {{ sheetname }} id).
+const {{ col.foreign_key.target_table }}Table* Get{{ sheetname }}{{ to_pascal_case(col.name) }}Row(uint32_t tableId){% if not d %};{% else %} {
+    auto [row, _] = {{ sheetname }}TableManager::Instance().FindByIdSilent(tableId);
+    if (!row) return nullptr;
+    return Get{{ sheetname }}{{ to_pascal_case(col.name) }}Row(*row);
+}
+{% endif %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% for col in table.group_foreign_key_columns %}
+
+/// Resolve {{ sheetname }}.{{ col.name }}[] -> {{ col.group_foreign_key.target_table }} rows.
+std::vector<const {{ col.group_foreign_key.target_table }}Table*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(const {{ sheetname }}Table& row){% if not d %};{% else %} {
+    std::vector<const {{ col.group_foreign_key.target_table }}Table*> result;
+    for (auto id : row.{{ col.name }}()) {
+        auto [ptr, _] = {{ col.group_foreign_key.target_table }}TableManager::Instance().FindByIdSilent(id);
+        if (ptr) result.push_back(ptr);
+    }
+    return result;
+}
+{% endif %}
+
+{# 主键可重复的表没有「按 id 拿一行」的语义,不生成 *ById 便利函数;调用方先自己 FindAllById 再逐行调上面那个版本。 #}
+{% if not table.multi_primary_key %}
+/// Resolve {{ sheetname }}.{{ col.name }}[] -> {{ col.group_foreign_key.target_table }} rows (by {{ sheetname }} id).
+std::vector<const {{ col.group_foreign_key.target_table }}Table*> Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(uint32_t tableId){% if not d %};{% else %} {
+    auto [row, _] = {{ sheetname }}TableManager::Instance().FindByIdSilent(tableId);
+    if (!row) return {};
+    return Get{{ sheetname }}{{ to_pascal_case(col.name) }}Rows(*row);
+}
+{% endif %}
+{% endif %}
+{% endfor %}
+
+// ---------------------------------------------------------------------------
+// Reverse FK (HasMany): find source rows by FK column value
+// 只碰本表的 manager,不需要任何目标表的类型。
+// ---------------------------------------------------------------------------
+{% for col in table.foreign_key_columns if not col.is_repeated %}
+
+/// Reverse FK: find all {{ sheetname }} rows whose {{ col.name }} == key.
+const std::vector<const {{ sheetname }}Table*>& Find{{ sheetname }}RowsBy{{ to_pascal_case(col.name) }}({{ to_cpp_param_type(col.data_type) }} key){% if not d %};{% else %} {
+    return {{ sheetname }}TableManager::Instance().GetBy{{ to_pascal_case(col.name) }}(key);
+}
+{% endif %}
+{% endfor %}
+{%- endmacro -%}

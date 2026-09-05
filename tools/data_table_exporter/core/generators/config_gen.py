@@ -70,6 +70,7 @@ def _gen_all_cpp(tables: list[TableSchema], env: Environment, cfg: ExporterConfi
     h_tpl: Template = env.get_template("cpp_config.h.j2")
     cpp_tpl: Template = env.get_template("cpp_config.cpp.j2")
     fk_tpl: Template = env.get_template("cpp_config_fk.h.j2")
+    fk_cpp_tpl: Template = env.get_template("cpp_config_fk.cpp.j2")
 
     for t in tables:
         ctx = _cpp_ctx(t)
@@ -78,6 +79,7 @@ def _gen_all_cpp(tables: list[TableSchema], env: Environment, cfg: ExporterConfi
         if t.has_foreign_keys:
             fk_ctx = _cpp_fk_ctx(t)
             write_file(cfg.cpp.code_dir / f"{t.name.lower()}_table_fk.h", _clean_output(fk_tpl.render(**fk_ctx)))
+            write_file(cfg.cpp.code_dir / f"{t.name.lower()}_table_fk.cpp", _clean_output(fk_cpp_tpl.render(**fk_ctx)))
             logger.info("Generated C++ FK: %s", t.name)
         logger.info("Generated C++ config: %s", t.name)
 

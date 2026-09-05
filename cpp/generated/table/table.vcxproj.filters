@@ -332,6 +332,9 @@
     <ClCompile Include="code\mission_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="code\mission_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="code\monster_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -348,6 +351,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\testmultikey_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\testmultikey_table_fk.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\operator\ability_operator.pb.cc">
@@ -458,10 +464,19 @@
     <ClCompile Include="code\world_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="code\world_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="code\mirror_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="code\mirror_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="code\dungeon_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\dungeon_table_fk.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\basescene_table.cpp">
