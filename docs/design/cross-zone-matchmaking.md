@@ -180,6 +180,7 @@ MULTI、MGET(§10.0)。所以 SharedRedis **必须保持单实例(或主从哨�
 | etcd 失租(snowflake) | 既有:fence 发号器 → flush → 退出重启 | 不撞 id |
 | 某 zone 的 scene 全挂 | 该 zone 玩家 gather `prepare_failed` → 肇事者出局删票、幸存者回队首(既有补偿矩阵) | 其他 zone 玩家继续匹配 |
 | battle 池空 | `no_battle_node` → 补偿;告警指标 | 排队不丢 |
+| 节点 gRPC 端口被占(如杀 battle 后立刻重拉,旧进程 50100 未释放) | **2026-09-04 前 fail-open**:带空 `grpc_endpoint` 注册,gate 循环 `grpc_endpoint is empty`、match 报 battle 池空、JoinQueue 超时;**现 fail-closed**(`node_allocator.cpp`):gRPC 端口不可用不发布、退回 TCP 端口、`AcquirePortWithRetry` 退避重试(预设端口等释放,扫描路径换下一对) | 不产生"活着但连不上"的节点;重拉前给旧进程 ≥5s 释放端口 |
 
 ---
 
@@ -265,6 +266,7 @@ MULTI、MGET(§10.0)。所以 SharedRedis **必须保持单实例(或主从哨�
 | 连续复跑 ×2(修后) | ✅ 12:17 两次 `CROSS_ZONE_MATCH_OK`(18 / 8 回合,间隔 30s),双 match 实例(zone1 node 3 / zone2 node 4)均在线 |
 | K8s 契约测试 | 26/26(`service_discovery_prefixes` 补齐后) |
 | 二期(D13/D14/§11)运行时复验(2026-09-03 11:27,新版 scene/battle/gate + 双 match) | ✅ `CROSS_ZONE_MATCH_OK battle_id=64436612657872896 zone_a=1 zone_b=2` 21 回合(49s)。scene 两侧"备战冻结完成(deadline_ms/prepare_deadline_ms)"→ 开局 <1s "战斗确认 PREPARING->FIGHTING",battle 每 10s `BattleConfirmedEvent 周期补发` 被 scene 幂等忽略;z1/z2 四 scene + battle 指纹同为 `1fd045595a6c22488723ad7bea957a3c`,battle `mode=warn`;match 建 `match-results`(3 分区/7d)并消费,终局 `评分更新 1500→1484/1516`、`对局入账 rounds=21`,集群键 `match:rating:{pid}`(hash:rating/updated_at_ms/recent_battles/games)+ `match:rating:applied:{battle}` 幂等标记落在 MatchRedis(7000-7005),共享库零 match 键;败方结算复活满血。引擎单测 50/50(含演出数据 3 个) |
+| K8s kind A 档实跑(2026-09-04) | ✅ kind mmorpg 上 infra-up 全 Ready:etcd/kafka/mysql/redis + redis-match-cluster 0..5(cluster create OK)+ match ×2(MatchRedis 集群 + 契约 key 单机 Redis 双存储配置生效、snowflake worker 0/1、自建 match-results、etcd 注册 zone/101);修 mysql.yaml binlog 目录进 datadir 的初始化拒启。B 档阻塞:go/db 的仓库外 replace(proto2mysql)进不了 build context;C++ 节点无 Linux 镜像(C 档) |
 
 ## 10. 非目标 / 后续
 
