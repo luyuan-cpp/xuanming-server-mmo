@@ -128,7 +128,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../pkg/common/src/;../../third_party/protobuf/src/;../../third_party/muduo/;../../third_party/boost/;../../third_party/googletest/googletest/include/;../../third_party/redis/;../../third_party/;../../;../../pkg/pbc/;../../third_party/protobuf/third_party/abseil-cpp/;../../pkg/logic/src/;../../pkg/pbc/src/;../../node/centre/src/;../../pkg/config/src/;../../pkg/config/src/pbc/;../../pkg/pbc/src/proto/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../pkg/common/src/;../../third_party/protobuf/src/;../../third_party/muduo/;../../third_party/boost/;../../../third_party/grpc/third_party/googletest/googletest/include/;../../third_party/redis/;../../third_party/;../../;../../pkg/pbc/;../../third_party/protobuf/third_party/abseil-cpp/;../../pkg/logic/src/;../../pkg/pbc/src/;../../node/centre/src/;../../pkg/config/src/;../../pkg/config/src/pbc/;../../pkg/pbc/src/proto/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4819;%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>

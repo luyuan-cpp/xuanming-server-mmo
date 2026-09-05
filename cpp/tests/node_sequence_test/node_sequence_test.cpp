@@ -15,7 +15,13 @@ using TransientNode32BitCompositeIdGenerator = TransientNodeCompositeIdGenerator
 
 TransientNode32BitCompositeIdGenerator idGenAtomic;
 
-static const std::size_t kTotalIds = 0xffffff;
+// 原值 0xffffff(1677 万)× 10 轮:Debug 下 unordered_set 要跑几分钟、吃 1GB 以上内存,
+// 统一测试入口(tools/scripts/run_cpp_tests.ps1)按超时判死;而 32 位序列号要 42 亿次才回绕,
+// 1677 万同样碰不到回绕,这个规模只有成本没有覆盖。压到 20 万 × 3 轮:唯一性与跨轮连续性
+// 照样验,单次 <1s。真要验回绕请单独写针对 TransientNodeCompositeIdGenerator<uint64_t, N>
+// 小位宽实例的用例,而不是硬跑。
+static const std::size_t kTotalIds = 200000;
+static const int32_t kRounds = 3;
 
 void GenerateIdsIntoVector(GuidVector& out)
 {
@@ -39,7 +45,7 @@ TEST(NodeCompositeIdTest, SingleGeneration)
 
 TEST(NodeCompositeIdTest, AllGeneratedIdsAreUnique)
 {
-	for (int32_t round = 0; round < 10; ++round)
+	for (int32_t round = 0; round < kRounds; ++round)
 	{
 		GuidVector ids;
 		GenerateIdsIntoVector(ids);

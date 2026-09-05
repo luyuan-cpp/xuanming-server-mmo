@@ -3606,3 +3606,174 @@ Unity 客户端默认网关 http://127.0.0.1:8081,零配置可连。
   `go/match` 全量测试绿(`go vet`/`gofmt` 干净);scene/battle 库与 scene/battle/gate 三个节点
   编译链接全部通过(post-build 拷 `bin/*.exe` 因另一会话的进程占用而失败,非代码问题)。
   已知先前存在、与本次无关:`go/db` 因本地 `proto2mysql` 缺 `PbMysqlDB` 编不过(世系断裂,见 TiDB 迁移决策文档)。
+
+## 2026-09-03(续二)问道式战斗表现层落地 + 视觉验收工具链
+
+- **客户端表现层(工作流 3 阶段:地基 → 演出/HUD → 两视角对抗复审 + 修复)**
+  - 地基:`Game/Battle/Presentation/{TurnPlan,BattleSequencer,BattleTempo,PlaybackBudget}.cs`(TurnPlan 把 events[] 按 group_id 编成拍,
+    多目标并入同拍;无 group_id 回退到"紧随其后的 DAMAGE 归入前一 ATTACK/SKILL");`UI/Ugui/Battle/{BattleStage,BattleUnitView,BattleArtCatalog}.cs`
+    (10 槽位对角斜带 + 近大远小 + formation_slot 尊重/冲突回退;图片单位 + 脚底阴影 + 头顶红蓝条 + 脚下名字 + buff 行)。
+    删掉了反射兼容层 BattleProtoCompat.cs —— proto 增量字段已生成,直读真字段。
+  - 演出/HUD:`BattlePresenter`(拍 → 冲锋/命中/群攻同拍飙血/暴击顿帧+震屏/死亡渐隐/开场云层与出生光环)、`BattleFx`(序列帧对象池)、
+    `DamageNumber`(字集数字 + 弹出上飘 + 多目标避让)、`BattleHud`(回合数翻牌/战斗记录/行动预告条/角色卡)、`BattleCommandRing`(问道式命令环,
+    PVP 逃跑置灰、自动战斗三键)、`BattleResultPanel`(大字弹入 + 奖励逐条飞入)。
+  - 复审修复(blocker/major):演出时长 vs 服务端行动窗口 → 新增 `PlaybackBudget`(按 ActionDeadlineMs 算 speed,塞不下就 Skip);
+    群攻首目标死亡不再拆拍(Death 延后成拍);BUFF_TICK 回血不再当伤害演出;战斗画布改 ScreenMatchMode.Expand 修 1920×1080 右侧 HUD 出屏;
+    舞台下移让出顶部预告条;SpeedScale 传导到单位动作/特效;嵌套子画布减少全画布重建。
+  - EditMode:133 例 132 过(唯一失败是既有 walk_N 资产用例,与本线无关);离线 Roslyn 编译三程序集全绿。
+- **视觉验收工具链(新增)**:`DevAutoPilot` 加 `-shotDir/-shotInterval/-shotSuperSize/-shotMax/-shotAll`,按"开局/每回合/终局 + 定时"截帧,
+  终局后多截 6 帧结算再退出;`tools/run_crosszone_pair.ps1` 加 `-ShotDir/-ShotInterval`,双实例各自截到 `<ShotDir>/{A,B}`。
+  用途:真机跑一局跨区 1v1,产出帧序列与问道录像逐项比对(阵型/数字/特效/命令环)。
+- **协作提示**:本机同时有另一会话在改同一份客户端(属性面板 AttributePanel/AttributeUiRoot)与服务端 bin,期间出现过
+  C++ 节点被停、客户端一度不可编译(其 AttributeUiRoot 还引用了 BattleUiRoot.IsBattleLayerVisible —— 我们这边从未有过该成员,需其自行补)。
+  本会话的做法:节点用 `relaunch_cpp_nodes.ps1` 显式端口重拉;出包前先跑离线 Roslyn 编译轮询确认绿灯。
+
+## 2026-09-04 二期收口(续):K8s A 档实跑通过 / 战斗单位美术落盘 / 重启后一键整栈
+
+- **K8s kind 实跑 A 档 ✅(工作流 k8s-kind-realrun,第 2 次续跑)**:`kind` 集群 `mmorpg`(v1.37.0)上 `infra-up` 全部 Ready —— etcd、kafka、mysql、redis、
+  redis-match-cluster 0..5(`--cluster create` 16384 slots covered,cluster_state ok)、match ×2(snowflakealloc worker 0/1、MatchRedis 集群配置生效、
+  自建 `match-results` 3 分区、etcd 注册 `MatchNodeService.rpc/zone/101/...`)。修了两处真 bug:`mysql.yaml` initContainer 把 binlog 目录建在 datadir 里
+  导致 `mysqld --initialize` 拒启(改 PVC 下 data/ + binlog/ 两个 subPath);`go_svc_image.ps1 -Services` 从 PowerShell 内以数组形态调用时类型转换失败。
+  契约测试 26/26。B 档(zone-up Go+Java)首次续跑因 API 断连失败,已再续。已知阻塞:`go/db` 的 `replace ../../../proto2mysql` 指向仓库外,
+  Dockerfile.go-svc 的 build context 带不进去,B 档部署 db 前要先决定 vendor/改 replace;`mysql-backup-pvc` 要 RWX 在 kind 上永远 Pending;
+  C++ 节点(gate/scene/battle)无 Linux 镜像(C 档,不在本轮)。
+- **战斗单位美术(工作流 battle-art-units)**:`tools/battle_art_gen -mode characters/monsters` 从 22 张 qdao_v3 立绘产出
+  `Assets/Resources/Battle/Characters/<id>/{idle,attack,cast,hit}_{E,W}_strip.png`(176 张,2048×256,脚底对齐)+ 6 只程序化怪物
+  `Battle/Monsters/<id>/{idle,attack,hit}_{E,W}_strip.png`(36 张)+ 两条地台光带;`BattleArtCatalog.CharacterIdFor` 已接线:按 actor_id 与头像同一
+  哈希稳定挑一套(同一人立绘头像与场上身形一致),缺图仍回退跑步条首帧。
+- **实机截图验收(第一轮,新美术接线前)**:`shots_live2` 143 帧/侧(1v1,17 回合)。已对照录像确认可用项:太极台背景、左上回合数 + 战斗记录、
+  右上角色卡 + 计时环、右下问道式命令环(攻击/法术/防御/道具/召唤/逃跑/自动)与自动战斗三键、头顶红蓝条 + 脚下名字、伤害数字。
+  **差距**:1v1 两单位都落在最左列且只差一个身位(两条对角斜带不成立)、单位偏小、场上人物仍是同一个跑步条小人(此项已由上面的接线解决,待第二轮截图)。
+  阵型改法(队伍横向分离 + 人数不足时排内居中)交给演出验收台工作流按帧证据修(我手改 `BattleStage.TeamSideShiftX` 时用户中止,已回退,尊重该决定)。
+- **环境**:机器夜间重启;`full_restart.ps1` 一键链(Docker Desktop WMI 起 → 起 Exited 容器 → 等 Kafka → recover_stack → db/login 补拉 →
+  双 match + 网关 → cpp 显式端口)约 5 分钟把两个 zone 拉回 OPEN,顺序记入记忆 runbook 第 17 条。
+
+## 2026-09-04 角色属性加点系统(问道式三池)收口:设计文档 / 客户端 / 限流档位 / 端到端冒烟
+
+> 服务端主体(proto / 表 / PlayerAttributeSystem / handler / 引擎加法公式 / 单测)已随 `143ecca96` 提交;
+> 本条目补的是当时缺的四块:**设计文档**(代码里到处引用但文件不存在)、**Unity 客户端**、**新协议的限流档位**、
+> **可重复运行的端到端冒烟**。§10.1 例外沿用(用户要求直接落地并验证)。
+
+### 设计文档
+- 新建 `docs/design/player-attribute-allocation.md`:数据三层(总量不落库按等级换算 / 已分配落库 / 二级属性重算)、
+  表结构与系数矩阵、一级→二级公式、二级属性进战斗的六条通道与统一伤害公式、协议三条纪律(全量下发 / 写回全量 / 目标值幂等)、
+  五条校验不变量、客户端交互约束、验证与已知缺口。
+
+### 客户端(mmorpg-client,UGUI)
+- NET 层 `Assets/Scripts/Game/Attribute/AttributeClient.cs`:复用 `IBattleTransport` 测试缝;`Busy` 单飞写请求;
+  面板只由服务器给(写成功回全量整体覆盖,失败保留旧面板不清空);自动加点只回建议不占 Busy;断线清面板。
+  `GameClient.Attributes` 与 Battle/Spectate 平行挂接(无定时器,不进 Tick)。
+- UI 层 `Assets/Scripts/UI/Ugui/Attribute/`:`AttributeUiRoot`(自有 Canvas,sortingOrder 160,HUD「角色」入口在战斗入口之下,
+  战斗/观战屏亮着时隐藏入口并收起面板;`BattleUiRoot.IsBattleLayerVisible` 新增)、`AttributePanel`(两栏窗:方案下拉 + 六项二级属性 +
+  开启新方案 | 三池页签 + 剩余点 + 自动加点 + 加点行 + 重置/确认;维度名/说明 tooltip/上限全部来自面板,零本地配表)、
+  `AttributeUiWidgets`(仓库第一个交互 `Slider`,手工装配 fill/handle;`UiPointRow` 的 pending/committed 模型:滑条下界 =
+  服务器已确认值,上界 = 已确认 + 剩余点再夹 cap,与服务端"只增不减"对齐)、`AttributeUiStyle`。
+  「重置」两段语义:先撤本地未提交增量(免费),无增量才发洗点(扣金币);有未提交增量时切页签/切方案被拦。
+- gen 脚本:`gen_proto.ps1` 加 3 个 proto,`gen_messageids.ps1` 白名单加 9 条(167-175)。
+- 验证:Roslyn 离线编译(主程序集 + EditMode.Battle 测试程序集)0 错;robocopy 副本工程 Unity batchmode EditMode
+  **162 例 161 通过**,唯一失败是既有美术帧断言 `QdaoRunAssetTests.DirectionalRunStrips_*`(与本功能无关,上一轮已记录);
+  新增 `AttributeClientTests` 9 条全绿(面板覆盖 / 目标值语义 / 单飞 / 失败清 Busy / 空请求本地拒 / 自动加点不动面板 / 推送覆盖 / 断线作废 / 未就绪拒发)。
+  坑:`-runTests` 不能与 `-quit` 同用(会在跑测前退出、无结果 XML)。
+
+### 新协议限流档位(真缺口)
+- 端到端冒烟第 8 步"超相性上限"没等到 tip:gate 日志 `kRateLimitExceeded(9) messageId=168` —— **`MessageLimiter` 默认档是 3 次/窗口**,
+  新客户端 RPC 不在 `data/MessageLimiter.xlsx` 里就吃默认档,UI 连点 +/− 再确认或冒烟连发第 4 个包就被静默丢弃(现象是无响应,不是错误 tip)。
+- `MessageLimiter.xlsx` 加 8 行:167/168/173 = 10 次/秒(面板读、确认加点、自动加点),169/171/172/174/175 = 5 次/秒(方案改名/切换/洗点/开方案/GM 设级);
+  170 是 S2C 推送不配。重导表后重启 gate 生效(`scratchpad/relaunch_gate.ps1`:显式 ZONE_ID/RPC_PORT/NODE_IP,经 WMI 逃逸启动)。
+
+### robot 端到端冒烟(`robot/attribute_smoke_scenario.go` + `etc/attribute_smoke.yaml`,mode `attribute-smoke`)
+- 9 个生成 handler stub 填实(响应带全量面板 → `Player.SetAttributePanel`,自动加点 → `SetAttributeSuggestion`,推送同路);
+  `gameobject.Player` 加面板序号游标(`WaitAttributePanelAfter`,区分"这次请求的新面板"与上次残留)。
+- 11 步断言逐条对应设计文档契约:预备(等级归 1、两池洗点、切回首方案、GM 发币,**同账号可反复跑**)→ 面板形状 → 1→30 级属性点恰好 +145 →
+  自动加点只算不落且增量 = 剩余点 → 确认后剩余归零、二级属性变大(气血 530→2150、物伤 525、法伤 165、防御 110、速度 185)→
+  幂等(tip 144)→ 只增不减(134)→ 相性超上限(135)→ 未解锁池(131)→ 开新方案精确扣 `create_scheme_cost_gold`、新方案干净、
+  等 60s 切换冷却后切回原方案加点原样(方案不串档)→ 30 级洗点精确扣 `reset_cost_gold`、分配清零、全额返还。
+- **实测 `ATTRIBUTE_SMOKE_OK player_id=281253138764136448 level=30 pools=3 dimensions=13 schemes=2 max_health=1400 gold=98500`**
+  (100000 − 开方案 1000 − 洗点 500),整跑 ~62s(含冷却等待),退出码 0。
+- 复跑三次(含"方案已满→复用既有方案"分支)全部 `ATTRIBUTE_SMOKE_OK`;第二/三次开局读到上一轮的方案数与金币,即 `attribute_component` 经 DB 落库/加载往返正确。
+
+### 对抗式评审(Workflow:7 维度查找 → 去重 → 每条 3 视角复核 ≥2 票留 → 完整性批评者;62 代理)与修复
+- 原始 19 条 → 确认 17 + 批评者补 2;驳回 1(handler 对空 allocated 回 kInvalidParameter 与规则层 144 不一致 —— 保留,空请求本就不该到规则层)。
+- **major(已修)**:
+  - **"上限抬高补当前值、降低只夹"组合成免费无限回血**(残血 → 洗点/切空方案把上限压低只夹 → 加回/切回按增量补,每往返净赚两上限之差,30 级以下洗点还免费;直接绕过 D4 残血带出战斗)。
+    修法:`PlayerAttributeSystem::Recalculate(player, RecalcReason)` —— 只有 `kLevelChanged`(升级事件)补绝对增量,加载/加点/切方案/洗点按比例保持 `hp×newMax/oldMax`(活着至少留 1),往返零净得失。
+  - **降级后已分配不收敛**(GM 先升 200 级分满再设回 1 级,面板与快照仍是 200 级口径):`kLoad`/`kLevelChanged` 前置 `ConvergeOverAllocation`,已分配 > 总量的池整池清零返还并 WARN。
+  - **客户端把响应体 tip 当成功**:scene 的拒绝码在 `resp.error_message`,`GameClient.Call` 只折算信封,所有拒绝都变成"服务器未返回属性面板"。`AttributeClient` 每个回包先 `HasTip`,`DescribeTip` 镜像 Tip.xlsx attribute_error 130-144 中文;EditMode 新增 2 条(响应体拒绝保留旧面板 / 自动加点被拒不出建议),`AttributeClientTests` 11/11。
+  - **属性层 Canvas 用 MatchWidthOrHeight 0.5**,贴右缘的「角色」入口在 16:9 被裁出屏 → 改 `Expand`(与 BattleUiRoot/QdaoUguiRuntime 一致)。
+  - **手工装 Slider 的 fill/handle 保留了左上 pivot + 满尺寸 sizeDelta**(Slider 只驱动 anchors)→ 填充铺满并溢出一条轨道、滑块高一倍 → pivot 居中、sizeDelta 归零/固定方块、滑动区两端让半个滑块。
+  - **方案下拉被六项属性底板盖住**(兄弟序更早)→ 展开时 `SetAsLastSibling`。
+  - **DB 新列无迁移项**:`player_database.attribute_component` 在 `AutoMigrateSchema=false` 的环境会让整行读写报 Unknown column → 设计文档 §2.1 写明 `go run ./cmd/migrate -command up` 为上线前置;`go/db`、`go/login`、`go/player_locator` 三份 `mysql_database_table.sql` 同步加列。
+- **minor(已修)**:方案名全空格/零宽字符(按码点判至少一个可见字符);`RenameScheme` 与其它写操作同走 `CheckWritable`(战斗在途拒);自动加点建议被旧滑条上界截断(先 `RebuildRows` 再写入);`ApplyBusy` 不锁/解锁加点行;行悬停说明触发不到(整行近透明射线目标 + 只带 Enter/Exit 的 `UiPointerHoverRelay`,弃用会吞子按钮点击的 `EventTrigger`);robot 面板按来源消息号认领(GmSetLevel 先推 170 再回 175 会错位)、`send()` 同步游标、信封错误(限流)落成 tip + Error 日志、`MessageLimiter.xlsx` 补 54(GetCurrencyList);冒烟新增第 12 步下线重登持久化断言。
+- **记入缺口不擅改表(策划平衡项)**:速度量级(1 级 23 已高于全部怪物 8~20,怪物永远后手、逃跑 95% 饱和)、防御加法减伤让 1 级投 5 点体质即让 1 号怪普攻归零(整场 0 伤害事件流);tip 文案全仓统一下发机制仍缺。
+- **修后验证(本机实测)**:C++ 18 工程串行 `/m:1` 0 错(scene 库 + 三节点重编、全量重拉);Roslyn 主程序集 + 测试程序集 0 错;副本工程 EditMode **168 例 167 通过**(唯一失败仍是既有美术帧断言);
+  `robot -c etc/attribute_smoke.yaml` **12 步 `ATTRIBUTE_SMOKE_OK`**(含重登后 allocated=25 / max_health=2150 / 方案 3 个原样恢复;方案已满分支);`robot -c etc/battle_smoke.yaml` **`BATTLE_SMOKE_OK` 14 回合**(HP 按比例改动未影响战斗流)。
+- **环境坑**:10:47 另一并行会话与我同时重拉 C++ 节点,etcd 旧租约未过期 → "Preset RPC port already registered"/"Node ID hijack" 新进程自杀、登录会话被顶掉(一次冒烟误报 login 超时);已记入记忆。
+
+### 已知缺口(与设计文档 §8 一致)
+- 经验系统未接(等级只能 `GmSetPlayerLevel`);`class_id` 未下发 scene(职业取首行 / 自动加点用 class_id=0 兜底行);
+  `bonus_values`/`bonus_points` 无写入方;相性不参与元素克制;`GmSetPlayerLevel` 与 `GmAddCurrency` 同口径开发期直连,上线前并入 gate GM 鉴权白名单。
+- 客户端收到的 tip 仍是 `server tip=N` 裸编号,无文案映射(全仓既有现状,不止本功能)。
+
+## 2026-09-04 K8s kind 实跑 B 档 ✅:zone-up(Go 五服务 + Java 网关)在 A 档 infra 之上全部 Ready
+
+> 工作流 k8s-kind-realrun 第 2 次续跑接续:首跑已把镜像/清单/脚本改到位并部署,本次复核结果、补契约测试与文档。
+> 契约测试属工作流强制项(PowerShell 生成器测试,非 go build/mvn),§10.1 例外沿用。
+
+- **结果**:`mmorpg-zone-yesterday`(zone_id=1)里 db / data-service / login ×2 / player-locator / scene-manager ×2 / gateway ×2 全部 1/1 Ready;
+  gate / scene 用 alpine 占位镜像 CrashLoop(exit 127)属预期,C++ Linux 镜像归 C 档。
+  etcd:`LoginNodeService.rpc/zone/1/node_type/5/node_id/{2,3}`、`PlayerLocatorNodeService.rpc/zone/1/...`、`SceneManagerNodeService.rpc/zone/1/...`
+  与 go-zero 发现键 `db.rpc/ login.rpc/ playerlocator.rpc/ dataservice.rpc/ scenemanagerservice.rpc/` 齐全。
+  MySQL:`mmorpg.zone_config` 存在且有 zone 1 行,`zone_1_db / zone_2_db / zone_101_db / zone_102_db` 已建(mysql-init 的 SQL 在 K8s 也生效)。
+  网关 port-forward `GET /api/server-list` → `{"zones":[{"zone_id":1,"name":"zone-1","status":"MAINTENANCE",...}]}`(无 gate 注册所以是 MAINTENANCE,非 bug)。
+- **首跑修掉的 4 个真 bug(都不是 kind 特有,详见 deploy/k8s/README.md "B 档")**:Go 镜像没打包策划表 → login/player-locator/scene-manager `LoadTables` Fatal
+  (Dockerfile.go-svc 以 `--build-context tables=` 带入 `/generated/tables` 并把文件名转小写,Linux 区分大小写);`go/db/db.go` 自 fc9377336 起没 `s.Start()`,
+  进程假活、6000 不监听、etcd 无 `db.rpc`(K8s 探针把它揪出来了,compose 一直没暴露);dev 档 login ConfigMap 缺 `Mode: dev` → 密钥门禁 panic;
+  `-WaitReady` 等不存在 manifest 的 auth 必超时。另:`go/db` 的仓库外 `replace ../../../proto2mysql` 用 BuildKit 命名上下文覆盖占位 stage 带入,go.mod 不改。
+- **本次新增**:契约测试第 27 条 "login 的 go-zero Mode:dev 档必须写且 == go/login/etc/login.yaml,prod 档必须不写",27/27 通过;
+  README 补 B 档验收清单与三条现象说明(login 早于 player-locator 起会 fatal 重启几次自愈;宿主重启后老 Pod 卡 ErrImagePull 用 delete pod 重建;
+  网关 `127.0.0.1:53000` 静态兜底行可忽略)。
+- **C 档待办**:gate/scene/battle 三个 C++ 节点没有 Linux 构建产物,`deploy/k8s/Dockerfile.cpp` 走 `tools/scripts/build_linux.sh`;`k8s_deploy.ps1` 只有 gate/scene 清单,
+  **battle 节点无 manifest**(需要照 scene.yaml 加 battle Deployment + node-config 段 + 端口/etcd 注册),跨 zone 匹配链路在 K8s 上才能闭环。- **真 bug:节点 gRPC 端口拿不到时 fail-open(2026-09-04 实机抓帧暴露)**:`node_allocator.cpp` 对预设 TCP 端口已是 fail-closed,但 gRPC 端口
+  (= TCP + 30000)拿不到只打一条 ERROR 就带着空 `grpc_endpoint` 发布到 etcd。杀掉 battle 后立刻重拉,旧进程的 50100 尚未释放 → 新 battle
+  banner 显示 `gRPC: (disabled)`、etcd 注册无 grpc_endpoint;两个 gate 循环报 `Cannot connect to GRPC node: grpc_endpoint is empty (NodeType 28)`,
+  match 报 `battle 池为空,暂停凑单`,客户端 JoinQueue 超时。修:gRPC 端口不可用 → 不发布、把 TCP 端口退回本轮之前的值、返回 false 让
+  `AcquirePortWithRetry` 退避重试(预设端口等释放;扫描路径游标已推进换下一对端口)。core.vcxproj 已编译通过,待抓帧结束后串行重编三节点并
+  用"杀 battle → 立刻重拉"复现验证。运维口径:重拉节点前给旧进程 ≥5s 释放端口(relaunch 脚本已是 kill → sleep → start)。
+- **战斗单位美术工作流收口(battle-art-units,含两视角对抗复审 + 修复)**:复审 major 三条已修 —— ① W 向帧条与 E 向逐格镜像完全冗余
+  (客户端 `LoadDirectionalStrip` 缺 W 即取 E 并置 Mirrored),删掉 88+18 张 W 帧条,Resources 省 ~40MB、进包省 ~212MiB 未压缩纹理;
+  ② 22 角色"统一长边"≠"统一身高"(170~189px 抵消近大远小),改按身高归一;③ 怪物剪影同模板换色(野狼/狐妖 IoU 0.80),重做 6 只形态模板。
+  最终产物:Characters 22 × 4 动作 E 向 88 张 + meta/manifest;Monsters 6 × 3 动作 E 向 18 张;`UI/ground_band_{far,near}.png` 地台光带。
+  留档 minor:cast 脚底光晕贴到 256 画布底边被硬切、源立绘本身裁在 850 框内、怪物清单命中帧 index 4 vs 客户端默认 HitFrame=3(受击早一帧)、
+  导入设置依赖未提交的 Editor 脚本(新克隆会按 Unity 默认压缩+mipmap)。
+
+## 2026-09-04 C++ 测试工程整体救活 + 统一入口
+
+> 起因:改了 scene.lib 与三张配表后想跑同类测试做回归,发现除 turn_battle_engine_test /
+> agones_lifecycle_test 外,其余 27 个 gtest 工程要么编不过、要么根本没人跑过。
+
+- **根因**:game.sln 里这些工程只有 `ActiveCfg` 没有 `Build.0`,整解决方案编译从不碰它们;
+  又没有统一运行入口,于是逐个腐坏:库名停在 release 变体(`hiredis.lib`)、缺 absl 库目录、
+  `third_party` 相对路径少一级、gtest 指向不存在的 `third_party/googletest`、被测类改名(`TimeUtil`→`TimeSystem`)。
+- **新增统一入口** `tools/scripts/run_cpp_tests.ps1`(`-Build` 串行编译、`-Filter`、超时判死、退出码):
+  21 个工程一张表。两处坑已内置:① 部分 exe 运行期要 `zlibd.dll`/`rdkafka*.dll`,只在 `bin/` 有,
+  缺了以 0xC0000135 静默退出、连 gtest 头都不打;② **退出码非 0 但没有 `[FAILED]` 行 = 用例中途
+  LOG_FATAL/崩溃**,必须判红 —— `readfile2string_test` 就是这样假绿了很久(它只有一行
+  `File2String("test.txt")`,文件不存在直接 FATAL)。
+- **救活 19 个 + 修 4 处真问题**:
+  - `scene.lib` 现在硬依赖 `battle.lib`(`PlayerBattleSystem::PrepareBattle` 调 `BattleTableFingerprint::Current`),
+    bag/cross_zone/currency 三个只链 scene.lib 的工程 LNK2019,补 battle.lib。
+  - `aoi_test.ServerPressureReducesCapacity`:`GetEffectiveCapacity` 取 min(客户端上限, 服务器上限),
+    没挂 `AoiClientCapacityComp` 时客户端上限是默认 100,服务器压力算出的 110 根本轮不到;用例名与内容不符,
+    改成先把客户端上限抬到 max,再单独钉住"默认值更紧时取默认值"。
+  - `timer_queue_unit_test.ComponentStaysSmall`:`TimerTaskComp` 24→40 字节是 `aliveToken`(shared_ptr)
+    为修同批到期定时器 use-after-free 加的,组件注释原话 "correctness over 16 bytes",测试上界没跟着改;
+    上界改为 TimerId + 8 + shared_ptr,再长仍红。
+  - `node_sequence_test`:1677 万 ID × 10 轮塞 unordered_set,Debug 下几分钟、1GB 内存,且远够不到 32 位序列回绕;
+    压到 20 万 × 3 轮,秒级。
+  - `readfile2string_test` 重写为自带临时文件夹具的 4 个真断言(整文件/空文件/内嵌 \0 与高位字节/CRLF 不转换)。
+- **game.sln**:21 个能编能跑的工程全部补 `Debug|x64.Build.0`;`cross_zone_test`/`time_util_test` 此前根本没登记,
+  补 Project 块 + 配置 + 嵌套到 tests 文件夹。msbuild `ValidateSolutionConfiguration` 通过。
+- **确认死透、未启用的 5 个**(被测代码整个被删,不是配置问题):scene_test(SceneSystem/SceneNodeStateSystem/
+  SceneNodeSelectorSystem 全没了)、team_test(team_system.h)、consistent_hash_node_test(ConsistentHashNode)、
+  redis_test / mrediscli_test(引用已删的 `common/src/pb/pbc` proto 树)。要么连源码一起重写要么删,列在脚本注释里。
+- **结果**:`run_cpp_tests.ps1` 21/21 全绿(合计 391 个用例)。
