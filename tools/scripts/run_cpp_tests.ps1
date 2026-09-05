@@ -49,12 +49,12 @@ $projects = [ordered]@{
     'cool_down_time_test'      = 'cpp\tests\cool_down_time_test\cool_down_time_test.vcxproj'
     'cross_zone_test'          = 'cpp\tests\cross_zone_test\cross_zone_test.vcxproj'
     'currency_test'            = 'cpp\tests\currency_test\currency_test.vcxproj'
-    'message_limiter_test'     = 'cpp\tests\message_limiter_test\message_limiter_test.vcxproj'
+    'message_limiter_test'     = 'cpp\tests\message_limiter_test\message_limiter.vcxproj'
     'missions_test'            = 'cpp\tests\missions_test\missions.vcxproj'
     'node_sequence_test'       = 'cpp\tests\node_sequence_test\server_sequence.vcxproj'
     'proto_field_checker_test' = 'cpp\tests\proto_field_checker_test\proto_field_checker_test.vcxproj'
     'readfile2string_test'     = 'cpp\tests\readfile2string_test\readfile2string.vcxproj'
-    'reward_test'              = 'cpp\tests\reward_test\reward_test.vcxproj'
+    'reward_test'              = 'cpp\tests\reward_test\reward.vcxproj'
     'skill_test'               = 'cpp\tests\skill_test\skill_test.vcxproj'
     'snow_flake_test'          = 'cpp\tests\snow_flake_test\snow_flake.vcxproj'
     'time_meter_test'          = 'cpp\tests\time_meter_test\time_meter_test.vcxproj'
@@ -96,7 +96,7 @@ if ($Build) {
     foreach ($name in $projects.Keys) {
         $proj = Join-Path $repoRoot $projects[$name]
         if (-not (Test-Path $proj)) {
-            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = '缺工程文件'; 结果 = '-' })
+            $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'FAIL'; 结果 = "缺工程文件 $($projects[$name])" })
             continue
         }
         # 串行 /m:1:并发会报假的 C1041/LNK1104
