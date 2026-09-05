@@ -2,7 +2,9 @@ package main
 
 // battle_art_gen —— 程序化生成回合制战斗表现所需的 PNG 美术。
 //
-//	go run . -out E:/work/mmorpg-client/Assets/Resources/Battle
+//	go run . -out E:/work/mmorpg-client/Assets/Resources/Battle   # -mode battle:Fx / UI / 数字 / buff
+//	go run . -mode characters                                      # 22 张立绘 → 角色帧条(默认只出 E 向,统一身高)
+//	go run . -mode monsters                                        # 程序化怪物帧条 + 地台(默认只出 E 向)
 //
 // 规格见 docs/design/battle-art-prompts.md §3/§4 与 turn-battle-presentation.md §5。
 // 只写 .png / .json,不生成 .meta(Unity 导入时自动生成)。
@@ -16,6 +18,7 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -71,17 +74,82 @@ type Manifest struct {
 }
 
 func main() {
+	mode := flag.String("mode", "battle",
+		"battle = 生成 Fx/UI/数字字集/buff 图标;characters = 22 张 qdao_v3 立绘 → 战斗精灵动作帧条;"+
+			"monsters = 纯程序化怪物帧条 + 战斗地台")
 	out := flag.String("out", `E:/work/mmorpg-client/Assets/Resources/Battle`, "输出根目录(客户端 Resources/Battle)")
 	buffTable := flag.String("buff-table", `../../generated/tables/Buff.json`, "Buff 导表 json 路径")
 	fontPath := flag.String("font", "", "字体路径;留空自动探测 simhei.ttf / msyhbd.ttc")
 	seed := flag.Uint64("seed", 20260903, "随机种子(同一 seed 产出完全一致)")
 	buffCount := flag.Int("buff-count", 24, "生成的 buff 图标个数")
+
+	// ── -mode characters 专用参数(全部写进 CHARACTER_MANIFEST.json 的 params,便于复现)──
+	charSrc := flag.String("char-src", `E:/work/mmorpg-client/Assets/Resources/UI/qdao_v3/characters`,
+		"立绘源目录(*.png)")
+	charOut := flag.String("char-out", "", "角色帧条输出目录;留空 = <out>/Characters")
+	charActions := flag.String("char-actions", "idle,attack,cast,hit",
+		"生成的动作,逗号分隔;可选 idle,attack,cast,hit,die,win")
+	charMaxHeight := flag.Int("char-max-height", 232, "角色**身高**上限像素(等比缩放,不拉伸;≤ 256-20 的可用高度)。"+
+		"实际统一身高由工具求解(全体取同一个值),见 CHARACTER_MANIFEST.json params.fitted_height")
+	charDirs := flag.String("char-dirs", "E",
+		"输出朝向,逗号分隔;默认只出 E,W 由客户端 BattleArtCatalog.LoadDirectionalStrip 运行时镜像。"+
+			"W 只是 E 的逐格镜像副本(体积翻倍、画面零差异),只在需要非对称专有 W 向素材时才显式加上 W")
+	charAlpha := flag.Int("char-alpha", 16, "包围盒判定的 alpha 阈值(0..255)")
+	charChroma := flag.Float64("char-chroma", 0.18, "无 alpha 立绘的 chroma 抠图容差(RGB 欧氏距离,0..1.73)")
+	charMinComp := flag.Float64("char-min-comp", 0.01, "连通域保留下限(相对最大域面积的比例,小于此值当噪点丢弃)")
+	charSS := flag.Int("char-ss", 2, "每轴超采样数(2 = 4×,变换后边缘更干净)")
+
+	// ── -mode monsters 专用参数 ──
+	monCount := flag.Int("monster-count", 6,
+		"生成花名册前 N 只怪(默认 6 = battle-art-prompts.md §2.2 首批;最多 16)")
+	monDirs := flag.String("monster-dirs", "E",
+		"怪物帧条输出朝向,逗号分隔;默认只出 E(W 由客户端运行时镜像,同 -char-dirs)")
 	flag.Parse()
 
-	if err := run(*out, *buffTable, *fontPath, *seed, *buffCount); err != nil {
+	var err error
+	switch *mode {
+	case "battle":
+		err = run(*out, *buffTable, *fontPath, *seed, *buffCount)
+	case "characters":
+		dst := *charOut
+		if dst == "" {
+			dst = filepath.Join(*out, "Characters")
+		}
+		err = runCharacters(charOptions{
+			SrcDir:      filepath.ToSlash(*charSrc),
+			OutDir:      filepath.ToSlash(dst),
+			Actions:     splitCSV(*charActions),
+			Dirs:        splitCSV(*charDirs),
+			MaxHeight:   *charMaxHeight,
+			AlphaThres:  *charAlpha,
+			ChromaTol:   *charChroma,
+			MinCompPct:  *charMinComp,
+			Supersample: *charSS,
+		})
+	case "monsters":
+		// 纯程序化怪物帧条 + 战斗地台;不读任何外部素材,只写 Battle/Monsters 与 Battle/UI/ground_band_*。
+		genMode = "monsters"
+		monsterCount = *monCount
+		monsterDirs = splitCSV(*monDirs)
+		_, err = runMonsterStage(*out)
+	default:
+		err = fmt.Errorf("未知 -mode %q(可选 battle / characters / monsters)", *mode)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "错误:", err)
 		os.Exit(1)
 	}
+}
+
+// splitCSV 拆逗号分隔列表并去空白/空项。
+func splitCSV(s string) []string {
+	var out []string
+	for _, p := range strings.Split(s, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func run(outRoot, buffTablePath, fontPath string, seed uint64, buffCount int) error {
