@@ -123,7 +123,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../common/;../../common/src/pb/pbc/;../../third_party/protobuf/src/;../../third_party/muduo/;../../third_party/boost/;../../third_party/googletest/googletest/include/;../../third_party/redis/;../../third_party/;../../third_party/muduo/contrib/windows/include/;../../third_party/redis/deps/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../common/;../../common/src/pb/pbc/;../../../third_party/protobuf/src/;../../../third_party/muduo/;../../../third_party/boost/;../../../third_party/grpc/third_party/googletest/googletest/include/;../../../third_party/redis/;../../../third_party/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4200;4819</DisableSpecificWarnings>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
@@ -131,7 +131,7 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>third_party.lib;common.lib;libprotobufd.lib;zlib.lib;gtestd.lib;hiredis.lib</AdditionalDependencies>
+      <AdditionalDependencies>third_party.lib;common.lib;libprotobufd.lib;zlib.lib;gtestd.lib;hiredisd.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>../../bin/</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>

@@ -32,6 +32,32 @@ namespace MmorpgClient.Table
             return GetSceneIdRow(DungeonTableManager.Instance.FindById(tableId));
         }
 
+        /// <summary>Resolve Dungeon.monster[] → Monster rows.</summary>
+        public static List<MonsterTable> GetMonsterRows(DungeonTable row)
+        {
+            List<MonsterTable> result = new List<MonsterTable>();
+            if (row == null)
+            {
+                return result;
+            }
+            RepeatedField<uint> ids = row.Monster;
+            for (int i = 0; i < ids.Count; i++)
+            {
+                MonsterTable r = MonsterTableManager.Instance.FindById(ids[i]);
+                if (r != null)
+                {
+                    result.Add(r);
+                }
+            }
+            return result;
+        }
+
+        /// <summary>Resolve Dungeon.monster[] → Monster rows, by Dungeon id.</summary>
+        public static List<MonsterTable> GetMonsterRows(uint tableId)
+        {
+            return GetMonsterRows(DungeonTableManager.Instance.FindById(tableId));
+        }
+
         // ---- Reverse FK (HasMany): find source rows by FK column value ----
 
         /// <summary>Reverse FK: all Dungeon rows whose scene_id == key.</summary>

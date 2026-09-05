@@ -15,4 +15,52 @@ public interface MonsterTableOrBuilder extends
    * @return The id.
    */
   int getId();
+
+  /**
+   * <code>uint64 health = 2;</code>
+   * @return The health.
+   */
+  long getHealth();
+
+  /**
+   * <code>uint64 strength = 3;</code>
+   * @return The strength.
+   */
+  long getStrength();
+
+  /**
+   * <code>uint64 armor = 4;</code>
+   * @return The armor.
+   */
+  long getArmor();
+
+  /**
+   * <code>uint64 resistance = 5;</code>
+   * @return The resistance.
+   */
+  long getResistance();
+
+  /**
+   * <code>uint64 critchance = 6;</code>
+   * @return The critchance.
+   */
+  long getCritchance();
+
+  /**
+   * <code>uint64 speed = 7;</code>
+   * @return The speed.
+   */
+  long getSpeed();
+
+  /**
+   * <code>uint64 exp_reward = 8;</code>
+   * @return The expReward.
+   */
+  long getExpReward();
+
+  /**
+   * <code>uint64 gold_reward = 9;</code>
+   * @return The goldReward.
+   */
+  long getGoldReward();
 }

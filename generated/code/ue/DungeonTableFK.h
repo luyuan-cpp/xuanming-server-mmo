@@ -20,6 +20,7 @@
 #include "ConfigSubsystem.h"
 #include "DungeonTable.h"
 #include "BaseSceneTable.h"
+#include "MonsterTable.h"
 
 /// 解析 Dungeon.scene_id -> BaseScene 行。
 inline const FCfgBaseSceneRow* GetDungeonSceneIdRow(const UConfigSubsystem* Config, const FCfgDungeonRow& Row)
@@ -34,6 +35,33 @@ inline const FCfgBaseSceneRow* GetDungeonSceneIdRow(const UConfigSubsystem* Conf
 	const UDungeonTable* Source = Config != nullptr ? Config->GetDungeonTable() : nullptr;
 	const FCfgDungeonRow* Row = Source != nullptr ? Source->FindByIdSilent(TableId) : nullptr;
 	return Row != nullptr ? GetDungeonSceneIdRow(Config, *Row) : nullptr;
+}
+
+/// 解析 Dungeon.monster[] -> Monster 行。
+inline TArray<const FCfgMonsterRow*> GetDungeonMonsterRows(const UConfigSubsystem* Config, const FCfgDungeonRow& Row)
+{
+	TArray<const FCfgMonsterRow*> Result;
+	const UMonsterTable* Target = Config != nullptr ? Config->GetMonsterTable() : nullptr;
+	if (Target == nullptr)
+	{
+		return Result;
+	}
+	for (const int32& RefId : Row.monster)
+	{
+		if (const FCfgMonsterRow* Found = Target->FindByIdSilent(RefId))
+		{
+			Result.Add(Found);
+		}
+	}
+	return Result;
+}
+
+/// 同上,按 Dungeon 的 id 取行再解析。
+inline TArray<const FCfgMonsterRow*> GetDungeonMonsterRows(const UConfigSubsystem* Config, int32 TableId)
+{
+	const UDungeonTable* Source = Config != nullptr ? Config->GetDungeonTable() : nullptr;
+	const FCfgDungeonRow* Row = Source != nullptr ? Source->FindByIdSilent(TableId) : nullptr;
+	return Row != nullptr ? GetDungeonMonsterRows(Config, *Row) : TArray<const FCfgMonsterRow*>();
 }
 
 // ---------------------------------------------------------------------------

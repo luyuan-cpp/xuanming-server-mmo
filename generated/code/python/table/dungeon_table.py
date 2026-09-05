@@ -51,6 +51,7 @@ class Snapshot:
     rows: tuple[Row, ...]
     #: 主键唯一：一个 id 一行。
     by_id: dict[int, Row]
+    arr_monster: dict[int, tuple[Row, ...]]
     idx_scene_id: dict[int, tuple[Row, ...]]
 
 
@@ -60,6 +61,7 @@ _EMPTY_SNAPSHOT: Snapshot = Snapshot(
     container=_pb.DungeonTableData(),
     rows=(),
     by_id={},
+    arr_monster={},
     idx_scene_id={},
 )
 
@@ -103,10 +105,13 @@ class DungeonTableManager:
 
         rows: tuple[Row, ...] = tuple(container.data)
         by_id: dict[int, Row] = {}
+        arr_monster: dict[int, list[Row]] = {}
         idx_scene_id: dict[int, list[Row]] = {}
 
         for row in rows:
             by_id[row.id] = row
+            for elem in row.monster:
+                arr_monster.setdefault(elem, []).append(row)
             idx_scene_id.setdefault(row.scene_id, []).append(row)
 
         # 多值索引建的时候用 list（要 append），落进快照前一律冻成 tuple：查询返回的
@@ -116,6 +121,7 @@ class DungeonTableManager:
             container=container,
             rows=rows,
             by_id=by_id,
+            arr_monster={k: tuple(v) for k, v in arr_monster.items()},
             idx_scene_id={k: tuple(v) for k, v in idx_scene_id.items()},
         )
 
@@ -163,6 +169,10 @@ class DungeonTableManager:
                 result.append(row)
         return tuple(result)
 
+    def find_by_monster_index(self, key: int) -> tuple[Row, ...]:
+        """反查：repeated 列 ``monster`` 里含有 key 的全部行。"""
+        return self._snap.arr_monster.get(key, _NO_ROWS)
+
     def get_by_scene_id(self, key: int) -> tuple[Row, ...]:
         """二级索引：``scene_id`` == key 的全部行。"""
         return self._snap.idx_scene_id.get(key, _NO_ROWS)
@@ -176,6 +186,9 @@ class DungeonTableManager:
 
     def count(self) -> int:
         return len(self._snap.rows)
+
+    def count_by_monster_index(self, key: int) -> int:
+        return len(self._snap.arr_monster.get(key, _NO_ROWS))
 
     def count_by_scene_id_index(self, key: int) -> int:
         return len(self._snap.idx_scene_id.get(key, _NO_ROWS))
@@ -206,6 +219,7 @@ class DungeonTableManager:
 
     # 外键登记（解析函数在 dungeon_table_fk.py，不在这里）：
     # FK: scene_id -> BaseScene.id
+    # FK: monster -> Monster.id
 
 
 #: 模块级单例。别再 ``DungeonTableManager()`` 自己新建一个 —— 那个实例是空的，

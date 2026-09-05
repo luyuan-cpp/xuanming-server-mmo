@@ -1,0 +1,208 @@
+# match 服务私有的 Redis Cluster(3 主 3 从),部署到 mmorpg-infra namespace。
+# 设计:docs/design/cross-zone-matchmaking.md §2 D2(双存储)/ §7(部署形态)。
+#
+# 与 redis.yaml(单副本共享库)并存:共享库继续承载 player:location /
+# player:session / battle:lock 这类跨运行时契约 key(C++ hiredis 不支持集群),
+# 本集群只放 match:* / challenge:* / spectate:* 这类 match 独占的 key。
+#
+# 节点 announce 的是 pod 的 headless DNS 而不是 pod IP(cluster-announce-hostname +
+# cluster-preferred-endpoint-type hostname):StatefulSet pod 重启后 IP 会变而
+# DNS 不变,集群拓扑 / 客户端 MOVED 目标都不会指向一个已经消失的 IP。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-match-cluster-config
+  labels:
+    app: redis-match-cluster
+data:
+  redis.conf: |
+    port 6379
+    cluster-enabled yes
+    cluster-config-file nodes.conf
+    cluster-node-timeout 5000
+    cluster-preferred-endpoint-type hostname
+    appendonly yes
+    # 与 redis.yaml 同款 OOM 防御思路,但 match 的 key 都是短 TTL 的排队/票据,
+    # 量级远小于玩家缓存,给小上限即可;淘汰策略用 volatile-lru 只淘汰带 TTL 的。
+    maxmemory 512mb
+    maxmemory-policy volatile-lru
+---
+# headless Service:给每个 pod 一个稳定 DNS
+# redis-match-cluster-{0..5}.redis-match-cluster.<ns>.svc.cluster.local
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-match-cluster
+  labels:
+    app: redis-match-cluster
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: redis-match-cluster
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+    - name: cluster-bus
+      port: 16379
+      targetPort: 16379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-match-cluster
+  labels:
+    app: redis-match-cluster
+spec:
+  serviceName: redis-match-cluster
+  replicas: 6
+  # 六个 pod 并行拉起,建群 Job 只关心"六个都 ready",不需要顺序启动
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: redis-match-cluster
+  template:
+    metadata:
+      labels:
+        app: redis-match-cluster
+    spec:
+      terminationGracePeriodSeconds: 30
+      affinity:
+        podAntiAffinity:
+          # 尽量分散到不同节点:同一物理节点挂掉不应同时带走一对主从
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: redis-match-cluster
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: redis
+          image: redis:7.2
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          command:
+            - sh
+            - -c
+            - >
+              exec redis-server /etc/redis/redis.conf
+              --cluster-announce-hostname "${POD_NAME}.redis-match-cluster.${POD_NAMESPACE}.svc.cluster.local"
+          ports:
+            - containerPort: 6379
+              name: redis
+            - containerPort: 16379
+              name: cluster-bus
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "-p", "6379", "ping"]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "-p", "6379", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 640Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/redis
+              readOnly: true
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: config
+          configMap:
+            name: redis-match-cluster-config
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi
+---
+# 建群 Job:六个 pod 都 ready 后用 pod DNS 跑一次 `redis-cli --cluster create`。
+# 幂等:已经 cluster_state:ok 就跳过,重复 apply(kubectl apply 对已完成 Job
+# 是 no-op)或手动删掉 Job 重跑都不会破坏既有集群。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: redis-match-cluster-init
+  labels:
+    app: redis-match-cluster
+spec:
+  backoffLimit: 6
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app: redis-match-cluster-init
+    spec:
+      restartPolicy: OnFailure
+      initContainers:
+        # 等六个 pod 的 redis 都应答 PING,再交给主容器建群
+        - name: wait-nodes
+          image: redis:7.2
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              for i in 0 1 2 3 4 5; do
+                h="redis-match-cluster-$i.redis-match-cluster.${POD_NAMESPACE}.svc.cluster.local"
+                until redis-cli -h "$h" -p 6379 ping 2>/dev/null | grep -q PONG; do
+                  echo "waiting for $h ..."
+                  sleep 2
+                done
+                echo "$h is up"
+              done
+      containers:
+        - name: cluster-create
+          image: redis:7.2
+          env:
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              suffix="redis-match-cluster.${POD_NAMESPACE}.svc.cluster.local"
+              first="redis-match-cluster-0.$suffix"
+              if redis-cli -h "$first" -p 6379 cluster info 2>/dev/null | grep -q '^cluster_state:ok'; then
+                echo "redis match cluster already formed, skip create"
+              else
+                nodes=""
+                for i in 0 1 2 3 4 5; do nodes="$nodes redis-match-cluster-$i.$suffix:6379"; done
+                redis-cli --cluster create $nodes --cluster-replicas 1 --cluster-yes
+              fi
+              # create 返回时 slot 表还在 gossip 传播,等到 ok 再退出,否则 Job 成功 != 集群可用
+              for i in $(seq 1 60); do
+                if redis-cli -h "$first" -p 6379 cluster info 2>/dev/null | grep -q '^cluster_state:ok'; then break; fi
+                sleep 1
+              done
+              redis-cli -h "$first" -p 6379 cluster info | grep -E '^cluster_(state|known_nodes|size)'
+              redis-cli -h "$first" -p 6379 cluster info | grep -q '^cluster_state:ok'

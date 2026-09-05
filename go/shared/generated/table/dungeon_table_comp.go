@@ -29,6 +29,10 @@ type DungeonTime_limitComp struct {
     Value uint32
 }
 
+type DungeonMonsterComp struct {
+    Values []uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -48,5 +52,9 @@ func MakeDungeonMax_team_sizeComp(row *pb.DungeonTable) DungeonMax_team_sizeComp
 
 func MakeDungeonTime_limitComp(row *pb.DungeonTable) DungeonTime_limitComp {
     return DungeonTime_limitComp{Value: row.TimeLimit}
+}
+
+func MakeDungeonMonsterComp(row *pb.DungeonTable) DungeonMonsterComp {
+    return DungeonMonsterComp{Values: row.Monster}
 }
 

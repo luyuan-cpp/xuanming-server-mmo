@@ -57,4 +57,29 @@ struct FCfgMonsterRow : public FTableRowBase
 
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
 	int32 id = 0;
+
+	/** 战斗属性与掉落。字段号抄自 generated/code/proto/monster_table.proto,纯追加,1 号未动。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int64 health = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int64 strength = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int64 armor = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int64 resistance = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int64 critchance = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int64 speed = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int64 exp_reward = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int64 gold_reward = 0;
 };

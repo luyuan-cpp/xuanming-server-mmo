@@ -45,6 +45,7 @@ const (
 	MatchError_kMatchNoWatchableBattle      MatchError = 16017
 	MatchError_kMatchBattleNotWatchable     MatchError = 16018
 	MatchError_kMatchSpectateOffline        MatchError = 16019
+	MatchError_kMatchNotInScene             MatchError = 16020
 )
 
 // Enum value maps for MatchError.
@@ -71,6 +72,7 @@ var (
 		16017: "kMatchNoWatchableBattle",
 		16018: "kMatchBattleNotWatchable",
 		16019: "kMatchSpectateOffline",
+		16020: "kMatchNotInScene",
 	}
 	MatchError_value = map[string]int32{
 		"kMatch_errorOK":               0,
@@ -94,6 +96,7 @@ var (
 		"kMatchNoWatchableBattle":      16017,
 		"kMatchBattleNotWatchable":     16018,
 		"kMatchSpectateOffline":        16019,
+		"kMatchNotInScene":             16020,
 	}
 )
 
@@ -128,7 +131,7 @@ var File_match_error_tip_proto protoreflect.FileDescriptor
 
 const file_match_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15match_error_tip.proto*\xdf\x04\n" +
+	"\x15match_error_tip.proto*\xf6\x04\n" +
 	"\vmatch_error\x12\x12\n" +
 	"\x0ekMatch_errorOK\x10\x00\x12\x13\n" +
 	"\x0ekMatchInBattle\x10\x80}\x12\x18\n" +
@@ -150,7 +153,8 @@ const file_match_error_tip_proto_rawDesc = "" +
 	"\x15kMatchAlreadyWatching\x10\x90}\x12\x1c\n" +
 	"\x17kMatchNoWatchableBattle\x10\x91}\x12\x1d\n" +
 	"\x18kMatchBattleNotWatchable\x10\x92}\x12\x1a\n" +
-	"\x15kMatchSpectateOffline\x10\x93}B$\n" +
+	"\x15kMatchSpectateOffline\x10\x93}\x12\x15\n" +
+	"\x10kMatchNotInScene\x10\x94}B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

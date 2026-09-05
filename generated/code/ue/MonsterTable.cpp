@@ -108,6 +108,14 @@ static void MonsterTableCheckNarrowedField(const TSharedPtr<FJsonObject>& Object
 static void MonsterTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject, int32 RowIndex)
 {
 	MonsterTableCheckNarrowedField(RowObject, TEXT("id"), TEXT("id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("health"), TEXT("health"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("strength"), TEXT("strength"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("armor"), TEXT("armor"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("resistance"), TEXT("resistance"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("critchance"), TEXT("critchance"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("speed"), TEXT("speed"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("exp_reward"), TEXT("exp_reward"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	MonsterTableCheckNarrowedField(RowObject, TEXT("gold_reward"), TEXT("gold_reward"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 }
 
 bool UMonsterTable::LoadFromJson(const FString& JsonText, FString& OutError)

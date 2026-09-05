@@ -37,10 +37,20 @@ uint64_t TableBattleDataProvider::GetCooldownDurationMs(uint32_t cooldownTableId
 }
 
 std::vector<uint32_t> TableBattleDataProvider::GetDungeonMonsterIds(uint32_t dungeonTableId) const {
-    // DungeonTable 目前没有怪物组列(仅 id/scene_id/max_team_size/time_limit),
-    // 返回空表 → 引擎按保守默认值生成怪物侧;等 Excel 加列后在此接入
-    (void)dungeonTableId;
-    return {};
+    // 读 DungeonTable.monster 怪物组列(2026-09-02 加列);缺行/空组时返回空表,
+    // 引擎按玩家人数生成兜底怪(InitMonsters),保证 PVE 一定有对手。
+    const auto* row = DungeonTableManager::Instance().FindByIdSilent(dungeonTableId).first;
+    if (row == nullptr) {
+        return {};
+    }
+    std::vector<uint32_t> ids;
+    ids.reserve(static_cast<size_t>(row->monster_size()));
+    for (int i = 0; i < row->monster_size(); ++i) {
+        if (row->monster(i) != 0) {  // 表内跨列留空处会补 0,跳过
+            ids.push_back(row->monster(i));
+        }
+    }
+    return ids;
 }
 
 double TableBattleDataProvider::GetSkillDamage(uint32_t skillTableId, double casterLevel) {

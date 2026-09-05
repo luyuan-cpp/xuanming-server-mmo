@@ -1,6 +1,7 @@
 #include "dungeon_table_fk.h"
 #include "dungeon_table.h"
 #include "basescene_table.h"
+#include "monster_table.h"
 
 // ---------------------------------------------------------------------------
 // Foreign key helpers for DungeonTable
@@ -17,6 +18,23 @@ const BaseSceneTable* GetDungeonSceneIdRow(uint32_t tableId) {
     auto [row, _] = DungeonTableManager::Instance().FindByIdSilent(tableId);
     if (!row) return nullptr;
     return GetDungeonSceneIdRow(*row);
+}
+
+/// Resolve Dungeon.monster[] -> Monster rows.
+std::vector<const MonsterTable*> GetDungeonMonsterRows(const DungeonTable& row) {
+    std::vector<const MonsterTable*> result;
+    for (auto id : row.monster()) {
+        auto [ptr, _] = MonsterTableManager::Instance().FindByIdSilent(id);
+        if (ptr) result.push_back(ptr);
+    }
+    return result;
+}
+
+/// Resolve Dungeon.monster[] -> Monster rows (by Dungeon id).
+std::vector<const MonsterTable*> GetDungeonMonsterRows(uint32_t tableId) {
+    auto [row, _] = DungeonTableManager::Instance().FindByIdSilent(tableId);
+    if (!row) return {};
+    return GetDungeonMonsterRows(*row);
 }
 
 // ---------------------------------------------------------------------------

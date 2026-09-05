@@ -20,6 +20,7 @@ import (
 type dungeonSnapshot struct {
     data   []*pb.DungeonTable
     kvData map[uint32]*pb.DungeonTable
+    idxMonster map[uint32][]*pb.DungeonTable
     idxSceneId map[uint32][]*pb.DungeonTable
 }
 
@@ -41,6 +42,7 @@ func NewDungeonTableManager() *DungeonTableManager {
     m := &DungeonTableManager{}
     m.snap.Store(&dungeonSnapshot{
         kvData: make(map[uint32]*pb.DungeonTable),
+        idxMonster: make(map[uint32][]*pb.DungeonTable),
         idxSceneId: make(map[uint32][]*pb.DungeonTable),
     })
     return m
@@ -71,11 +73,15 @@ func (m *DungeonTableManager) Load(configDir string, useBinary bool) error {
 
     snap := &dungeonSnapshot{
         kvData: make(map[uint32]*pb.DungeonTable, len(container.Data)),
+        idxMonster: make(map[uint32][]*pb.DungeonTable),
         idxSceneId: make(map[uint32][]*pb.DungeonTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
+        for _, elem := range row.Monster {
+            snap.idxMonster[elem] = append(snap.idxMonster[elem], row)
+        }
         snap.idxSceneId[row.SceneId] = append(snap.idxSceneId[row.SceneId], row)
     }
 
@@ -93,6 +99,12 @@ func (m *DungeonTableManager) FindById(id uint32) (*pb.DungeonTable, bool) {
     snap := m.snap.Load()
     row, ok := snap.kvData[id]
     return row, ok
+}
+
+
+func (m *DungeonTableManager) FindByMonsterIndex(key uint32) []*pb.DungeonTable {
+    snap := m.snap.Load()
+    return snap.idxMonster[key]
 }
 
 
@@ -118,6 +130,12 @@ func (m *DungeonTableManager) Exists(id uint32) bool {
 func (m *DungeonTableManager) Count() int {
     snap := m.snap.Load()
     return len(snap.data)
+}
+
+
+func (m *DungeonTableManager) CountByMonsterIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxMonster[key])
 }
 
 
@@ -176,6 +194,8 @@ func (m *DungeonTableManager) First(pred func(*pb.DungeonTable) bool) (*pb.Dunge
     return nil, false
 }
 // FK: scene_id → BaseScene.id
+
+// FK: monster → Monster.id
 
 
 // ---- Composite Key ----

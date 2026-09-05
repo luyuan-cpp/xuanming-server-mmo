@@ -44,7 +44,7 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 		limit = maxWatchableListLimit
 	}
 
-	pairs, err := l.svcCtx.Redis.ZrevrangeWithScores(spectateBattlesActiveKey, 0, int64(limit)-1)
+	pairs, err := l.svcCtx.MatchRedis.ZrevrangeWithScores(spectateBattlesActiveKey, 0, int64(limit)-1)
 	if err != nil {
 		l.Errorf("[spectate] 读观战索引失败: %v", err)
 		return nil, err
@@ -56,7 +56,7 @@ func (l *ListWatchableBattlesLogic) ListWatchableBattles(in *matchpb.ListWatchab
 		battleId, err := strconv.ParseUint(pair.Key, 10, 64)
 		if err != nil {
 			l.Errorf("[spectate] 观战索引出现非法成员 %q,剔除", pair.Key)
-			if _, err := l.svcCtx.Redis.Zrem(spectateBattlesActiveKey, pair.Key); err != nil {
+			if _, err := l.svcCtx.MatchRedis.Zrem(spectateBattlesActiveKey, pair.Key); err != nil {
 				l.Errorf("[spectate] 剔除非法成员失败: %v", err)
 			}
 			continue

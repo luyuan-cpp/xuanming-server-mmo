@@ -228,11 +228,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DungeonTable final : public ::googl
 
   // accessors -------------------------------------------------------
   enum : int {
+    kMonsterFieldNumber = 5,
     kIdFieldNumber = 1,
     kSceneIdFieldNumber = 2,
     kMaxTeamSizeFieldNumber = 3,
     kTimeLimitFieldNumber = 4,
   };
+  // repeated uint32 monster = 5;
+  [[nodiscard]] int monster_size()
+      const;
+  private:
+  int _internal_monster_size() const;
+
+  public:
+  void clear_monster() ;
+  [[nodiscard]] ::uint32_t monster(int index) const;
+  void set_monster(int index, ::uint32_t value);
+  void add_monster(::uint32_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint32_t>& monster()
+      const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL mutable_monster();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint32_t>& _internal_monster() const;
+  ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_monster();
+
+  public:
   // uint32 id = 1;
   void clear_id() ;
   [[nodiscard]] ::uint32_t id() const;
@@ -277,7 +298,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DungeonTable final : public ::googl
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -306,6 +327,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DungeonTable final : public ::googl
         const DungeonTable& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedField<::uint32_t> monster_;
+    ::google::protobuf::internal::CachedSize _monster_cached_byte_size_;
     ::uint32_t id_;
     ::uint32_t scene_id_;
     ::uint32_t max_team_size_;
@@ -548,7 +571,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DungeonTableData final : public ::g
 inline void DungeonTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint32_t DungeonTable::id() const {
   // @@protoc_insertion_point(field_get:DungeonTable.id)
@@ -556,7 +579,7 @@ inline ::uint32_t DungeonTable::id() const {
 }
 inline void DungeonTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:DungeonTable.id)
 }
 inline ::uint32_t DungeonTable::_internal_id() const {
@@ -572,7 +595,7 @@ inline void DungeonTable::_internal_set_id(::uint32_t value) {
 inline void DungeonTable::clear_scene_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scene_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t DungeonTable::scene_id() const {
   // @@protoc_insertion_point(field_get:DungeonTable.scene_id)
@@ -580,7 +603,7 @@ inline ::uint32_t DungeonTable::scene_id() const {
 }
 inline void DungeonTable::set_scene_id(::uint32_t value) {
   _internal_set_scene_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:DungeonTable.scene_id)
 }
 inline ::uint32_t DungeonTable::_internal_scene_id() const {
@@ -596,7 +619,7 @@ inline void DungeonTable::_internal_set_scene_id(::uint32_t value) {
 inline void DungeonTable::clear_max_team_size() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_team_size_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t DungeonTable::max_team_size() const {
   // @@protoc_insertion_point(field_get:DungeonTable.max_team_size)
@@ -604,7 +627,7 @@ inline ::uint32_t DungeonTable::max_team_size() const {
 }
 inline void DungeonTable::set_max_team_size(::uint32_t value) {
   _internal_set_max_team_size(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:DungeonTable.max_team_size)
 }
 inline ::uint32_t DungeonTable::_internal_max_team_size() const {
@@ -620,7 +643,7 @@ inline void DungeonTable::_internal_set_max_team_size(::uint32_t value) {
 inline void DungeonTable::clear_time_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.time_limit_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t DungeonTable::time_limit() const {
   // @@protoc_insertion_point(field_get:DungeonTable.time_limit)
@@ -628,7 +651,7 @@ inline ::uint32_t DungeonTable::time_limit() const {
 }
 inline void DungeonTable::set_time_limit(::uint32_t value) {
   _internal_set_time_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:DungeonTable.time_limit)
 }
 inline ::uint32_t DungeonTable::_internal_time_limit() const {
@@ -638,6 +661,57 @@ inline ::uint32_t DungeonTable::_internal_time_limit() const {
 inline void DungeonTable::_internal_set_time_limit(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.time_limit_ = value;
+}
+
+// repeated uint32 monster = 5;
+inline int DungeonTable::_internal_monster_size() const {
+  return _internal_monster().size();
+}
+inline int DungeonTable::monster_size() const {
+  return _internal_monster_size();
+}
+inline void DungeonTable::clear_monster() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.monster_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t DungeonTable::monster(int index) const {
+  // @@protoc_insertion_point(field_get:DungeonTable.monster)
+  return _internal_monster().Get(index);
+}
+inline void DungeonTable::set_monster(int index, ::uint32_t value) {
+  _internal_mutable_monster()->Set(index, value);
+  // @@protoc_insertion_point(field_set:DungeonTable.monster)
+}
+inline void DungeonTable::add_monster(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_monster()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:DungeonTable.monster)
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>& DungeonTable::monster() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:DungeonTable.monster)
+  return _internal_monster();
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL DungeonTable::mutable_monster()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:DungeonTable.monster)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_monster();
+}
+inline const ::google::protobuf::RepeatedField<::uint32_t>&
+DungeonTable::_internal_monster() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.monster_;
+}
+inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
+DungeonTable::_internal_mutable_monster() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.monster_;
 }
 
 // -------------------------------------------------------------------

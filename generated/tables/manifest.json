@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "version": 5,
-  "content_digest": "95c54c145462f3e90ce5f044a0531f4af11b4a1eb97930c9b54257bbad104ce1",
-  "generated_at": "2026-09-03T10:29:30Z",
+  "version": 6,
+  "content_digest": "1476a9f9f0dbdd44c4e7ba8161bb8757e620949ba89215764e4f7214c4007008",
+  "generated_at": "2026-09-05T08:31:18Z",
   "source_rev": {
-    "commit": "5ef65b3f86e461467146c2790a3d8aefd5e4e065",
+    "commit": "e4364063863ad5294da8a5165475cea5461b49bd",
     "data_dirty": true
   },
-  "table_count": 21,
+  "table_count": 25,
   "tables": [
     {
       "name": "ActorActionCombatState",
@@ -52,6 +52,98 @@
           "file": "actoractionstate.pb",
           "size": 58,
           "sha256": "d585219ab1a168f089b170680c53fee1662a69dfb774d5cd8a2b9bc3926c346c"
+        }
+      ]
+    },
+    {
+      "name": "AttributeAutoPlan",
+      "rows": 9,
+      "source": {
+        "file": "AttributeAutoPlan.xlsx",
+        "size": 5628,
+        "sha256": "fea2cfc3ae408086ebd3855fdda6e0e44702de426c18b23f047d35178da2afa4"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "attributeautoplan.json",
+          "size": 1711,
+          "sha256": "740f2b465b07aa43a8000422f955f70f89c9c33df5560382a76ff7b9e7699f9c"
+        },
+        {
+          "kind": "binary",
+          "file": "attributeautoplan.pb",
+          "size": 463,
+          "sha256": "3f0c81aecf263cb0dd330f5f2053110fceb78ce383c54a815a8fdc3b8dea1a74"
+        }
+      ]
+    },
+    {
+      "name": "AttributeDimension",
+      "rows": 13,
+      "source": {
+        "file": "AttributeDimension.xlsx",
+        "size": 6039,
+        "sha256": "a2ad0f8d82bf75d244e5a9bdf8025926365ba95ed14b8f7a1aadc1bbdd2c4cf4"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "attributedimension.json",
+          "size": 3630,
+          "sha256": "7fcc34f1f20a53c9f5e2d28f787a909988be4f12087759eae7b6d8d028b2f71e"
+        },
+        {
+          "kind": "binary",
+          "file": "attributedimension.pb",
+          "size": 855,
+          "sha256": "27eadf253dabb11744016f291365679a2fb526e65f30d9c25d495d9d3a03ceea"
+        }
+      ]
+    },
+    {
+      "name": "AttributePool",
+      "rows": 3,
+      "source": {
+        "file": "AttributePool.xlsx",
+        "size": 5449,
+        "sha256": "bdbb30e5fbfd4787a124158b7aa7b8a5f4b1ae384b31f14b2fc80876d225394e"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "attributepool.json",
+          "size": 809,
+          "sha256": "09905fa686e0f0ae1587d38c3bba6ab619f5e6e8ea4faa8257682b99c94a0e7d"
+        },
+        {
+          "kind": "binary",
+          "file": "attributepool.pb",
+          "size": 236,
+          "sha256": "c994481344b66b626673fdb24cc908ab95d41bf3314b788dfec0d0368f1e8e36"
+        }
+      ]
+    },
+    {
+      "name": "AttributeRule",
+      "rows": 1,
+      "source": {
+        "file": "AttributeRule.xlsx",
+        "size": 5163,
+        "sha256": "a91bd3a6515434d5634428a59ee0df9d9ce906e8301fd46dd02c3f1fd496e836"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "attributerule.json",
+          "size": 184,
+          "sha256": "45c7b8f8901881a1c5da62a8b30767367446ee0e32232681c317ce317840aba8"
+        },
+        {
+          "kind": "binary",
+          "file": "attributerule.pb",
+          "size": 15,
+          "sha256": "44bce0102b6e5ed0551507d649f04788a47f084c62d8b279c2f7f8bf9139212c"
         }
       ]
     },
@@ -106,21 +198,21 @@
       "rows": 9,
       "source": {
         "file": "Class.xlsx",
-        "size": 5051,
-        "sha256": "86993088cdbc831bd41690e58d7daa725d67fbe97f2f4c1def480912c0ee4e92"
+        "size": 5437,
+        "sha256": "8558401d97244bfa234f32d555494f6c1478be36655ed0dba484657cf5106b01"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "class.json",
-          "size": 557,
-          "sha256": "7bcdfd928f9f6a18e8ca3fe18505240fc4388e6e7e19e013ec16c6cff1169ceb"
+          "size": 2006,
+          "sha256": "2a15ec3baea88fcad60abbcca050c381cfcc87f316040c5ca85c9dc0f963bf1e"
         },
         {
           "kind": "binary",
           "file": "class.pb",
-          "size": 81,
-          "sha256": "dd6dff05f68bef982085db1fd6ff808f4be72a172ed06be294c32efe46ea9648"
+          "size": 225,
+          "sha256": "0c1b29535b528003f3bf384c2a498de1e2741dea32c8421ed16550956210b5d0"
         }
       ]
     },
@@ -175,21 +267,21 @@
       "rows": 3,
       "source": {
         "file": "Dungeon.xlsx",
-        "size": 5008,
-        "sha256": "ac6e6a0de7a19695f9c2704b1afd33e939fd629d7c99a8e7b8f2ca1b8b9431f0"
+        "size": 5143,
+        "sha256": "a6b0435885848b4b615ff4c6679bec5c877741cd5b7c518cbdc7f28f54e67634"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "dungeon.json",
-          "size": 272,
-          "sha256": "7a689647d887a25614e842347882d8247400c13208554bd18054af67ca3cbd72"
+          "size": 387,
+          "sha256": "a4740be2c5c30be3e2c9089a07e0940db7a5a5ee9aad6868a13831a138509b7c"
         },
         {
           "kind": "binary",
           "file": "dungeon.pb",
-          "size": 33,
-          "sha256": "b8405177c066a132a1dde2e2d520ee8a7fe388f89513a070be43dbd53b6367df"
+          "size": 46,
+          "sha256": "6ccf6b110d4fa81e8b05b039cab4695dac1c917a3d38e01f752f23dc2f694d71"
         }
       ]
     },
@@ -264,24 +356,24 @@
     },
     {
       "name": "MessageLimiter",
-      "rows": 4,
+      "rows": 13,
       "source": {
         "file": "MessageLimiter.xlsx",
-        "size": 4059,
-        "sha256": "de53d7597b96b04e1cab5c50b605fb61d74e606c5fb0f79286fcb8ceef0d90dd"
+        "size": 5164,
+        "sha256": "684d118f4e56492ec40ac367bace3e7165588d9846cfb714749c275aeb51e61f"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "messagelimiter.json",
-          "size": 375,
-          "sha256": "e9fee1a906f6123e3acf3353b26a7c8e8ac8c6df92dcd8954637e69b7d7db082"
+          "size": 1179,
+          "sha256": "3a09a417eb9d85880a7c0ea51a6960fac7a782d0c5c995dadb0e516a09caeb10"
         },
         {
           "kind": "binary",
           "file": "messagelimiter.pb",
-          "size": 47,
-          "sha256": "9d69f4c004dc34412e434c611d28a5e54a1575ba492f072bce05a86bc7cce54f"
+          "size": 154,
+          "sha256": "199a534cc5df9ad88700d8d19ccde1e6d8b2335a0a2705bb20fa8d3f8aaf5688"
         }
       ]
     },
@@ -336,21 +428,21 @@
       "rows": 16,
       "source": {
         "file": "Monster.xlsx",
-        "size": 5013,
-        "sha256": "cda699f34b62a096e4890b368d82cff05b406d3371cca612ca152d6869c0ca0b"
+        "size": 5774,
+        "sha256": "e576a72bb41895f44ffb3f82b74a7b835b1418c6308bfcba945035559070017f"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "monster.json",
-          "size": 343,
-          "sha256": "40896e822b41bf113491984fb00424503eaeeeffbd76b3610be1f7985560f38e"
+          "size": 2813,
+          "sha256": "138662b64c73f77d1eeb67a63ddc263176f67abd19ce6f99e4f5c9efab5bb587"
         },
         {
           "kind": "binary",
           "file": "monster.pb",
-          "size": 64,
-          "sha256": "0fd0146b30b8dc7719d3925b2edb3cecde46741d5381bb5a88629aca535fc45f"
+          "size": 337,
+          "sha256": "b28c3f558e2d57ceb3673de79fb3e8c3c31f30e324f54c2e3c4ff48ffa61bac4"
         }
       ]
     },

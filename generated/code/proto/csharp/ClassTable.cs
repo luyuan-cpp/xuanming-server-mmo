@@ -22,14 +22,18 @@ public static partial class ClassTableReflection {
   static ClassTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChFjbGFzc190YWJsZS5wcm90byInCgpDbGFzc1RhYmxlEgoKAmlkGAEgASgN",
-          "Eg0KBXNraWxsGAIgAygNIisKDkNsYXNzVGFibGVEYXRhEhkKBGRhdGEYASAD",
-          "KAsyCy5DbGFzc1RhYmxlQjwKDmNvbS5nYW1lLnRhYmxlQhRDbGFzc1RhYmxl",
-          "T3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3RvMw=="));
+          "ChFjbGFzc190YWJsZS5wcm90byLAAQoKQ2xhc3NUYWJsZRIKCgJpZBgBIAEo",
+          "DRINCgVza2lsbBgCIAMoDRITCgtpbml0X2hlYWx0aBgDIAEoBBIRCglpbml0",
+          "X21hbmEYBCABKAQSFQoNaW5pdF9zdHJlbmd0aBgFIAEoBBISCgppbml0X2Fy",
+          "bW9yGAYgASgEEhcKD2luaXRfcmVzaXN0YW5jZRgHIAEoBBIXCg9pbml0X2Ny",
+          "aXRjaGFuY2UYCCABKAQSEgoKaW5pdF9zcGVlZBgJIAEoBCIrCg5DbGFzc1Rh",
+          "YmxlRGF0YRIZCgRkYXRhGAEgAygLMgsuQ2xhc3NUYWJsZUI8Cg5jb20uZ2Ft",
+          "ZS50YWJsZUIUQ2xhc3NUYWJsZU91dGVyQ2xhc3NQAVoSZ2VuZXJhdGVkL3Bi",
+          "L3RhYmxlYgZwcm90bzM="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::ClassTable), global::ClassTable.Parser, new[]{ "Id", "Skill" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::ClassTable), global::ClassTable.Parser, new[]{ "Id", "Skill", "InitHealth", "InitMana", "InitStrength", "InitArmor", "InitResistance", "InitCritchance", "InitSpeed" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::ClassTableData), global::ClassTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -74,6 +78,13 @@ public sealed partial class ClassTable : pb::IMessage<ClassTable>
   public ClassTable(ClassTable other) : this() {
     id_ = other.id_;
     skill_ = other.skill_.Clone();
+    initHealth_ = other.initHealth_;
+    initMana_ = other.initMana_;
+    initStrength_ = other.initStrength_;
+    initArmor_ = other.initArmor_;
+    initResistance_ = other.initResistance_;
+    initCritchance_ = other.initCritchance_;
+    initSpeed_ = other.initSpeed_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -106,6 +117,90 @@ public sealed partial class ClassTable : pb::IMessage<ClassTable>
     get { return skill_; }
   }
 
+  /// <summary>Field number for the "init_health" field.</summary>
+  public const int InitHealthFieldNumber = 3;
+  private ulong initHealth_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong InitHealth {
+    get { return initHealth_; }
+    set {
+      initHealth_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "init_mana" field.</summary>
+  public const int InitManaFieldNumber = 4;
+  private ulong initMana_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong InitMana {
+    get { return initMana_; }
+    set {
+      initMana_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "init_strength" field.</summary>
+  public const int InitStrengthFieldNumber = 5;
+  private ulong initStrength_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong InitStrength {
+    get { return initStrength_; }
+    set {
+      initStrength_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "init_armor" field.</summary>
+  public const int InitArmorFieldNumber = 6;
+  private ulong initArmor_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong InitArmor {
+    get { return initArmor_; }
+    set {
+      initArmor_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "init_resistance" field.</summary>
+  public const int InitResistanceFieldNumber = 7;
+  private ulong initResistance_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong InitResistance {
+    get { return initResistance_; }
+    set {
+      initResistance_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "init_critchance" field.</summary>
+  public const int InitCritchanceFieldNumber = 8;
+  private ulong initCritchance_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong InitCritchance {
+    get { return initCritchance_; }
+    set {
+      initCritchance_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "init_speed" field.</summary>
+  public const int InitSpeedFieldNumber = 9;
+  private ulong initSpeed_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong InitSpeed {
+    get { return initSpeed_; }
+    set {
+      initSpeed_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -123,6 +218,13 @@ public sealed partial class ClassTable : pb::IMessage<ClassTable>
     }
     if (Id != other.Id) return false;
     if(!skill_.Equals(other.skill_)) return false;
+    if (InitHealth != other.InitHealth) return false;
+    if (InitMana != other.InitMana) return false;
+    if (InitStrength != other.InitStrength) return false;
+    if (InitArmor != other.InitArmor) return false;
+    if (InitResistance != other.InitResistance) return false;
+    if (InitCritchance != other.InitCritchance) return false;
+    if (InitSpeed != other.InitSpeed) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -132,6 +234,13 @@ public sealed partial class ClassTable : pb::IMessage<ClassTable>
     int hash = 1;
     if (Id != 0) hash ^= Id.GetHashCode();
     hash ^= skill_.GetHashCode();
+    if (InitHealth != 0UL) hash ^= InitHealth.GetHashCode();
+    if (InitMana != 0UL) hash ^= InitMana.GetHashCode();
+    if (InitStrength != 0UL) hash ^= InitStrength.GetHashCode();
+    if (InitArmor != 0UL) hash ^= InitArmor.GetHashCode();
+    if (InitResistance != 0UL) hash ^= InitResistance.GetHashCode();
+    if (InitCritchance != 0UL) hash ^= InitCritchance.GetHashCode();
+    if (InitSpeed != 0UL) hash ^= InitSpeed.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -155,6 +264,34 @@ public sealed partial class ClassTable : pb::IMessage<ClassTable>
       output.WriteUInt32(Id);
     }
     skill_.WriteTo(output, _repeated_skill_codec);
+    if (InitHealth != 0UL) {
+      output.WriteRawTag(24);
+      output.WriteUInt64(InitHealth);
+    }
+    if (InitMana != 0UL) {
+      output.WriteRawTag(32);
+      output.WriteUInt64(InitMana);
+    }
+    if (InitStrength != 0UL) {
+      output.WriteRawTag(40);
+      output.WriteUInt64(InitStrength);
+    }
+    if (InitArmor != 0UL) {
+      output.WriteRawTag(48);
+      output.WriteUInt64(InitArmor);
+    }
+    if (InitResistance != 0UL) {
+      output.WriteRawTag(56);
+      output.WriteUInt64(InitResistance);
+    }
+    if (InitCritchance != 0UL) {
+      output.WriteRawTag(64);
+      output.WriteUInt64(InitCritchance);
+    }
+    if (InitSpeed != 0UL) {
+      output.WriteRawTag(72);
+      output.WriteUInt64(InitSpeed);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -170,6 +307,34 @@ public sealed partial class ClassTable : pb::IMessage<ClassTable>
       output.WriteUInt32(Id);
     }
     skill_.WriteTo(ref output, _repeated_skill_codec);
+    if (InitHealth != 0UL) {
+      output.WriteRawTag(24);
+      output.WriteUInt64(InitHealth);
+    }
+    if (InitMana != 0UL) {
+      output.WriteRawTag(32);
+      output.WriteUInt64(InitMana);
+    }
+    if (InitStrength != 0UL) {
+      output.WriteRawTag(40);
+      output.WriteUInt64(InitStrength);
+    }
+    if (InitArmor != 0UL) {
+      output.WriteRawTag(48);
+      output.WriteUInt64(InitArmor);
+    }
+    if (InitResistance != 0UL) {
+      output.WriteRawTag(56);
+      output.WriteUInt64(InitResistance);
+    }
+    if (InitCritchance != 0UL) {
+      output.WriteRawTag(64);
+      output.WriteUInt64(InitCritchance);
+    }
+    if (InitSpeed != 0UL) {
+      output.WriteRawTag(72);
+      output.WriteUInt64(InitSpeed);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -184,6 +349,27 @@ public sealed partial class ClassTable : pb::IMessage<ClassTable>
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Id);
     }
     size += skill_.CalculateSize(_repeated_skill_codec);
+    if (InitHealth != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(InitHealth);
+    }
+    if (InitMana != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(InitMana);
+    }
+    if (InitStrength != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(InitStrength);
+    }
+    if (InitArmor != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(InitArmor);
+    }
+    if (InitResistance != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(InitResistance);
+    }
+    if (InitCritchance != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(InitCritchance);
+    }
+    if (InitSpeed != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(InitSpeed);
+    }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
     }
@@ -200,6 +386,27 @@ public sealed partial class ClassTable : pb::IMessage<ClassTable>
       Id = other.Id;
     }
     skill_.Add(other.skill_);
+    if (other.InitHealth != 0UL) {
+      InitHealth = other.InitHealth;
+    }
+    if (other.InitMana != 0UL) {
+      InitMana = other.InitMana;
+    }
+    if (other.InitStrength != 0UL) {
+      InitStrength = other.InitStrength;
+    }
+    if (other.InitArmor != 0UL) {
+      InitArmor = other.InitArmor;
+    }
+    if (other.InitResistance != 0UL) {
+      InitResistance = other.InitResistance;
+    }
+    if (other.InitCritchance != 0UL) {
+      InitCritchance = other.InitCritchance;
+    }
+    if (other.InitSpeed != 0UL) {
+      InitSpeed = other.InitSpeed;
+    }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
 
@@ -228,6 +435,34 @@ public sealed partial class ClassTable : pb::IMessage<ClassTable>
           skill_.AddEntriesFrom(input, _repeated_skill_codec);
           break;
         }
+        case 24: {
+          InitHealth = input.ReadUInt64();
+          break;
+        }
+        case 32: {
+          InitMana = input.ReadUInt64();
+          break;
+        }
+        case 40: {
+          InitStrength = input.ReadUInt64();
+          break;
+        }
+        case 48: {
+          InitArmor = input.ReadUInt64();
+          break;
+        }
+        case 56: {
+          InitResistance = input.ReadUInt64();
+          break;
+        }
+        case 64: {
+          InitCritchance = input.ReadUInt64();
+          break;
+        }
+        case 72: {
+          InitSpeed = input.ReadUInt64();
+          break;
+        }
       }
     }
   #endif
@@ -254,6 +489,34 @@ public sealed partial class ClassTable : pb::IMessage<ClassTable>
         case 18:
         case 16: {
           skill_.AddEntriesFrom(ref input, _repeated_skill_codec);
+          break;
+        }
+        case 24: {
+          InitHealth = input.ReadUInt64();
+          break;
+        }
+        case 32: {
+          InitMana = input.ReadUInt64();
+          break;
+        }
+        case 40: {
+          InitStrength = input.ReadUInt64();
+          break;
+        }
+        case 48: {
+          InitArmor = input.ReadUInt64();
+          break;
+        }
+        case 56: {
+          InitResistance = input.ReadUInt64();
+          break;
+        }
+        case 64: {
+          InitCritchance = input.ReadUInt64();
+          break;
+        }
+        case 72: {
+          InitSpeed = input.ReadUInt64();
           break;
         }
       }

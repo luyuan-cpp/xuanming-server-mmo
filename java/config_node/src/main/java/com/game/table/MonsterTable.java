@@ -59,6 +59,94 @@ private static final long serialVersionUID = 0L;
     return id_;
   }
 
+  public static final int HEALTH_FIELD_NUMBER = 2;
+  private long health_ = 0L;
+  /**
+   * <code>uint64 health = 2;</code>
+   * @return The health.
+   */
+  @java.lang.Override
+  public long getHealth() {
+    return health_;
+  }
+
+  public static final int STRENGTH_FIELD_NUMBER = 3;
+  private long strength_ = 0L;
+  /**
+   * <code>uint64 strength = 3;</code>
+   * @return The strength.
+   */
+  @java.lang.Override
+  public long getStrength() {
+    return strength_;
+  }
+
+  public static final int ARMOR_FIELD_NUMBER = 4;
+  private long armor_ = 0L;
+  /**
+   * <code>uint64 armor = 4;</code>
+   * @return The armor.
+   */
+  @java.lang.Override
+  public long getArmor() {
+    return armor_;
+  }
+
+  public static final int RESISTANCE_FIELD_NUMBER = 5;
+  private long resistance_ = 0L;
+  /**
+   * <code>uint64 resistance = 5;</code>
+   * @return The resistance.
+   */
+  @java.lang.Override
+  public long getResistance() {
+    return resistance_;
+  }
+
+  public static final int CRITCHANCE_FIELD_NUMBER = 6;
+  private long critchance_ = 0L;
+  /**
+   * <code>uint64 critchance = 6;</code>
+   * @return The critchance.
+   */
+  @java.lang.Override
+  public long getCritchance() {
+    return critchance_;
+  }
+
+  public static final int SPEED_FIELD_NUMBER = 7;
+  private long speed_ = 0L;
+  /**
+   * <code>uint64 speed = 7;</code>
+   * @return The speed.
+   */
+  @java.lang.Override
+  public long getSpeed() {
+    return speed_;
+  }
+
+  public static final int EXP_REWARD_FIELD_NUMBER = 8;
+  private long expReward_ = 0L;
+  /**
+   * <code>uint64 exp_reward = 8;</code>
+   * @return The expReward.
+   */
+  @java.lang.Override
+  public long getExpReward() {
+    return expReward_;
+  }
+
+  public static final int GOLD_REWARD_FIELD_NUMBER = 9;
+  private long goldReward_ = 0L;
+  /**
+   * <code>uint64 gold_reward = 9;</code>
+   * @return The goldReward.
+   */
+  @java.lang.Override
+  public long getGoldReward() {
+    return goldReward_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -76,6 +164,30 @@ private static final long serialVersionUID = 0L;
     if (id_ != 0) {
       output.writeUInt32(1, id_);
     }
+    if (health_ != 0L) {
+      output.writeUInt64(2, health_);
+    }
+    if (strength_ != 0L) {
+      output.writeUInt64(3, strength_);
+    }
+    if (armor_ != 0L) {
+      output.writeUInt64(4, armor_);
+    }
+    if (resistance_ != 0L) {
+      output.writeUInt64(5, resistance_);
+    }
+    if (critchance_ != 0L) {
+      output.writeUInt64(6, critchance_);
+    }
+    if (speed_ != 0L) {
+      output.writeUInt64(7, speed_);
+    }
+    if (expReward_ != 0L) {
+      output.writeUInt64(8, expReward_);
+    }
+    if (goldReward_ != 0L) {
+      output.writeUInt64(9, goldReward_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -83,6 +195,38 @@ private static final long serialVersionUID = 0L;
     if (id_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(1, id_);
+    }
+    if (health_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(2, health_);
+    }
+    if (strength_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(3, strength_);
+    }
+    if (armor_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(4, armor_);
+    }
+    if (resistance_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(5, resistance_);
+    }
+    if (critchance_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(6, critchance_);
+    }
+    if (speed_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(7, speed_);
+    }
+    if (expReward_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(8, expReward_);
+    }
+    if (goldReward_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(9, goldReward_);
     }
     return size;
   }
@@ -110,6 +254,22 @@ private static final long serialVersionUID = 0L;
 
     if (getId()
         != other.getId()) return false;
+    if (getHealth()
+        != other.getHealth()) return false;
+    if (getStrength()
+        != other.getStrength()) return false;
+    if (getArmor()
+        != other.getArmor()) return false;
+    if (getResistance()
+        != other.getResistance()) return false;
+    if (getCritchance()
+        != other.getCritchance()) return false;
+    if (getSpeed()
+        != other.getSpeed()) return false;
+    if (getExpReward()
+        != other.getExpReward()) return false;
+    if (getGoldReward()
+        != other.getGoldReward()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -123,6 +283,30 @@ private static final long serialVersionUID = 0L;
     hash = (19 * hash) + getDescriptor().hashCode();
     hash = (37 * hash) + ID_FIELD_NUMBER;
     hash = (53 * hash) + getId();
+    hash = (37 * hash) + HEALTH_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getHealth());
+    hash = (37 * hash) + STRENGTH_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getStrength());
+    hash = (37 * hash) + ARMOR_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getArmor());
+    hash = (37 * hash) + RESISTANCE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getResistance());
+    hash = (37 * hash) + CRITCHANCE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getCritchance());
+    hash = (37 * hash) + SPEED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getSpeed());
+    hash = (37 * hash) + EXP_REWARD_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getExpReward());
+    hash = (37 * hash) + GOLD_REWARD_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getGoldReward());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -255,6 +439,14 @@ private static final long serialVersionUID = 0L;
       super.clear();
       bitField0_ = 0;
       id_ = 0;
+      health_ = 0L;
+      strength_ = 0L;
+      armor_ = 0L;
+      resistance_ = 0L;
+      critchance_ = 0L;
+      speed_ = 0L;
+      expReward_ = 0L;
+      goldReward_ = 0L;
       return this;
     }
 
@@ -291,6 +483,30 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000001) != 0)) {
         result.id_ = id_;
       }
+      if (((from_bitField0_ & 0x00000002) != 0)) {
+        result.health_ = health_;
+      }
+      if (((from_bitField0_ & 0x00000004) != 0)) {
+        result.strength_ = strength_;
+      }
+      if (((from_bitField0_ & 0x00000008) != 0)) {
+        result.armor_ = armor_;
+      }
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        result.resistance_ = resistance_;
+      }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.critchance_ = critchance_;
+      }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.speed_ = speed_;
+      }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.expReward_ = expReward_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.goldReward_ = goldReward_;
+      }
     }
 
     @java.lang.Override
@@ -307,6 +523,30 @@ private static final long serialVersionUID = 0L;
       if (other == com.game.table.MonsterTable.getDefaultInstance()) return this;
       if (other.getId() != 0) {
         setId(other.getId());
+      }
+      if (other.getHealth() != 0L) {
+        setHealth(other.getHealth());
+      }
+      if (other.getStrength() != 0L) {
+        setStrength(other.getStrength());
+      }
+      if (other.getArmor() != 0L) {
+        setArmor(other.getArmor());
+      }
+      if (other.getResistance() != 0L) {
+        setResistance(other.getResistance());
+      }
+      if (other.getCritchance() != 0L) {
+        setCritchance(other.getCritchance());
+      }
+      if (other.getSpeed() != 0L) {
+        setSpeed(other.getSpeed());
+      }
+      if (other.getExpReward() != 0L) {
+        setExpReward(other.getExpReward());
+      }
+      if (other.getGoldReward() != 0L) {
+        setGoldReward(other.getGoldReward());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -339,6 +579,46 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000001;
               break;
             } // case 8
+            case 16: {
+              health_ = input.readUInt64();
+              bitField0_ |= 0x00000002;
+              break;
+            } // case 16
+            case 24: {
+              strength_ = input.readUInt64();
+              bitField0_ |= 0x00000004;
+              break;
+            } // case 24
+            case 32: {
+              armor_ = input.readUInt64();
+              bitField0_ |= 0x00000008;
+              break;
+            } // case 32
+            case 40: {
+              resistance_ = input.readUInt64();
+              bitField0_ |= 0x00000010;
+              break;
+            } // case 40
+            case 48: {
+              critchance_ = input.readUInt64();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 48
+            case 56: {
+              speed_ = input.readUInt64();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 56
+            case 64: {
+              expReward_ = input.readUInt64();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
+            case 72: {
+              goldReward_ = input.readUInt64();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -384,6 +664,262 @@ private static final long serialVersionUID = 0L;
     public Builder clearId() {
       bitField0_ = (bitField0_ & ~0x00000001);
       id_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private long health_ ;
+    /**
+     * <code>uint64 health = 2;</code>
+     * @return The health.
+     */
+    @java.lang.Override
+    public long getHealth() {
+      return health_;
+    }
+    /**
+     * <code>uint64 health = 2;</code>
+     * @param value The health to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHealth(long value) {
+
+      health_ = value;
+      bitField0_ |= 0x00000002;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 health = 2;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHealth() {
+      bitField0_ = (bitField0_ & ~0x00000002);
+      health_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long strength_ ;
+    /**
+     * <code>uint64 strength = 3;</code>
+     * @return The strength.
+     */
+    @java.lang.Override
+    public long getStrength() {
+      return strength_;
+    }
+    /**
+     * <code>uint64 strength = 3;</code>
+     * @param value The strength to set.
+     * @return This builder for chaining.
+     */
+    public Builder setStrength(long value) {
+
+      strength_ = value;
+      bitField0_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 strength = 3;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearStrength() {
+      bitField0_ = (bitField0_ & ~0x00000004);
+      strength_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long armor_ ;
+    /**
+     * <code>uint64 armor = 4;</code>
+     * @return The armor.
+     */
+    @java.lang.Override
+    public long getArmor() {
+      return armor_;
+    }
+    /**
+     * <code>uint64 armor = 4;</code>
+     * @param value The armor to set.
+     * @return This builder for chaining.
+     */
+    public Builder setArmor(long value) {
+
+      armor_ = value;
+      bitField0_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 armor = 4;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearArmor() {
+      bitField0_ = (bitField0_ & ~0x00000008);
+      armor_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long resistance_ ;
+    /**
+     * <code>uint64 resistance = 5;</code>
+     * @return The resistance.
+     */
+    @java.lang.Override
+    public long getResistance() {
+      return resistance_;
+    }
+    /**
+     * <code>uint64 resistance = 5;</code>
+     * @param value The resistance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setResistance(long value) {
+
+      resistance_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 resistance = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearResistance() {
+      bitField0_ = (bitField0_ & ~0x00000010);
+      resistance_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long critchance_ ;
+    /**
+     * <code>uint64 critchance = 6;</code>
+     * @return The critchance.
+     */
+    @java.lang.Override
+    public long getCritchance() {
+      return critchance_;
+    }
+    /**
+     * <code>uint64 critchance = 6;</code>
+     * @param value The critchance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCritchance(long value) {
+
+      critchance_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 critchance = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCritchance() {
+      bitField0_ = (bitField0_ & ~0x00000020);
+      critchance_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long speed_ ;
+    /**
+     * <code>uint64 speed = 7;</code>
+     * @return The speed.
+     */
+    @java.lang.Override
+    public long getSpeed() {
+      return speed_;
+    }
+    /**
+     * <code>uint64 speed = 7;</code>
+     * @param value The speed to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSpeed(long value) {
+
+      speed_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 speed = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSpeed() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      speed_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long expReward_ ;
+    /**
+     * <code>uint64 exp_reward = 8;</code>
+     * @return The expReward.
+     */
+    @java.lang.Override
+    public long getExpReward() {
+      return expReward_;
+    }
+    /**
+     * <code>uint64 exp_reward = 8;</code>
+     * @param value The expReward to set.
+     * @return This builder for chaining.
+     */
+    public Builder setExpReward(long value) {
+
+      expReward_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 exp_reward = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearExpReward() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      expReward_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long goldReward_ ;
+    /**
+     * <code>uint64 gold_reward = 9;</code>
+     * @return The goldReward.
+     */
+    @java.lang.Override
+    public long getGoldReward() {
+      return goldReward_;
+    }
+    /**
+     * <code>uint64 gold_reward = 9;</code>
+     * @param value The goldReward to set.
+     * @return This builder for chaining.
+     */
+    public Builder setGoldReward(long value) {
+
+      goldReward_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 gold_reward = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearGoldReward() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      goldReward_ = 0L;
       onChanged();
       return this;
     }

@@ -50,7 +50,13 @@ data:
   my.cnf: |
     [mysqld]
     # ── Binary logging (required for PITR) ───────────────────────────
-    log-bin = /var/lib/mysql/binlog/mysql-bin
+    # binlog 目录必须在 datadir(/var/lib/mysql)**之外**:首次启动 mysqld --initialize
+    # 要求 datadir 为空,以前 initContainer 先 mkdir /var/lib/mysql/binlog,initialize
+    # 直接报 "data directory has files in it. Aborting" 进 CrashLoopBackOff,
+    # initdb 脚本(zone_config / zone_<id>_db)一条都跑不到。2026-09-03 kind 实跑发现。
+    # /var/lib/mysql-binlog 是 mysql-data-pvc 的 binlog/ 子目录(见 Deployment 的
+    # subPath 挂载),备份 CronJob 仍从 PVC 根的 binlog/ 读,路径不变。
+    log-bin = /var/lib/mysql-binlog/mysql-bin
     binlog_format = ROW
     binlog_row_image = FULL
     server-id = 1
@@ -86,17 +92,18 @@ spec:
         app: mysql
     spec:
       initContainers:
-        # Ensure the binlog directory exists before mysqld starts.
-        # First-boot mysqld writes binlog under /var/lib/mysql/binlog/.
+        # 在 PVC 根下预建 data/(datadir)与 binlog/ 两个子目录并交给 mysql 用户(uid 999)。
+        # 两者由下面的 subPath 分别挂到 /var/lib/mysql 与 /var/lib/mysql-binlog:
+        # datadir 首次启动时必须为空,所以 binlog 不能再放在 datadir 里面。
         - name: init-binlog-dir
           image: busybox:1.36
           command:
             - sh
             - -c
-            - "mkdir -p /var/lib/mysql/binlog && chown -R 999:999 /var/lib/mysql"
+            - "mkdir -p /pvc/data /pvc/binlog && chown -R 999:999 /pvc/data /pvc/binlog"
           volumeMounts:
             - name: mysql-data
-              mountPath: /var/lib/mysql
+              mountPath: /pvc
       containers:
         - name: mysql
           image: mysql:8.0
@@ -105,16 +112,44 @@ spec:
           env:
             - name: MYSQL_ROOT_PASSWORD
               value: "Mmorpg#2026db"
+            # 库名口径以 deploy/docker-compose.yml 为准:MYSQL_DATABASE=mmorpg。
+            # 以前这里写 game,而 mysql-init/gateway_tables.sql 是 `USE mmorpg;`、
+            # Java 网关 jdbc 也连 /mmorpg —— 在 K8s 上 zone_config 表根本不在网关看的库里。
+            # mysql 镜像的 entrypoint 跑 initdb 脚本时会带 --database=$MYSQL_DATABASE,
+            # 所以没写 USE 的 guild_friend_tables.sql 也落在 mmorpg。
             - name: MYSQL_DATABASE
-              value: "game"
+              value: "mmorpg"
+            # 与 compose 同一套业务账号。00_init_zone_dbs.sql 会 GRANT 给 'appuser'@'%',
+            # MySQL 8 对不存在的用户执行 GRANT 直接报 ERROR 1410 并中止整个 initdb,
+            # 所以 appuser 必须由 MYSQL_USER 先建出来。
+            - name: MYSQL_USER
+              value: "appuser"
+            - name: MYSQL_PASSWORD
+              value: "apppass123"
           ports:
             - containerPort: 3306
               name: mysql
           volumeMounts:
+            # PVC 根不直接挂到 datadir:PVC 根里还有 binlog/,会让 --initialize 判定
+            # datadir 非空。datadir = PVC/data,binlog = PVC/binlog(与 my.cnf 的 log-bin 对应)。
             - name: mysql-data
               mountPath: /var/lib/mysql
+              subPath: data
+            - name: mysql-data
+              mountPath: /var/lib/mysql-binlog
+              subPath: binlog
             - name: mysql-config
               mountPath: /etc/mysql/conf.d
+              readOnly: true
+            # deploy/mysql-init/*.sql(+ k8s_deploy.ps1 按 zones 配置生成的
+            # 01_k8s_zone_dbs.sql)以 ConfigMap mysql-init-sql 挂到 initdb 目录,
+            # 与 compose 的 ./mysql-init 卷等价。ConfigMap 由 k8s_deploy.ps1
+            # Apply-Infra 在 apply 本文件之前生成(New-MysqlInitConfigMapYaml)。
+            # 注意:initdb 只在数据目录为空的**首次**启动执行;PVC 已有数据时不会
+            # 重跑,改了 sql 要么 `kubectl -n <infra> delete pvc mysql-data-pvc` 重建,
+            # 要么手动 `kubectl exec ... mysql < xxx.sql`。
+            - name: mysql-init
+              mountPath: /docker-entrypoint-initdb.d
               readOnly: true
           resources:
             requests:
@@ -142,3 +177,6 @@ spec:
         - name: mysql-config
           configMap:
             name: mysql-config
+        - name: mysql-init
+          configMap:
+            name: mysql-init-sql

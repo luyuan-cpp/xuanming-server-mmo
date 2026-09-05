@@ -65,6 +65,32 @@ func (o Options) maxWorkerID() uint64 {
 // nodeKey 是 hostname → workerID 映射,用来支持 "同 hostname 重启复用同 id"。
 //
 //	<prefix>/snowflake_nodes/<hostname> = <id>
+// leaseAlive 判断 nodeKey 当前挂着的 lease 是否仍存活(TTL > 0)。
+// lease==0(key 无 lease)或 TimeToLive 返回 TTL<=0(已过期 / 已 revoke)视为已死;
+// 查询出错时按"存活"处理 —— fail-closed:宁可多分配一个新 id,也不能抢活着的 id
+// (抢到手的代价是原持有者 keepalive 检测到 ownership lost 后 fence + 退出)。
+func leaseAlive(ctx context.Context, cli *clientv3.Client, lease int64) bool {
+	if lease == 0 {
+		return false
+	}
+	resp, err := cli.TimeToLive(ctx, clientv3.LeaseID(lease))
+	if err != nil {
+		logx.Errorf("[snowflakealloc] TimeToLive(lease=%d) failed, treating holder as alive: %v", lease, err)
+		return true
+	}
+	return resp.TTL > 0
+}
+
+// releasedKey 是 Close() 留下的"已优雅释放"标记(挂在同一 lease 上,随 lease 一起消失)。
+// value 固定为非数字的 "released":scanUsedWorkerIDs 按 nodeKey 前缀扫时会尝试把 value
+// 解析成 id,非数字直接忽略,不会把它误算成占用。
+// 语义:同 hostname 的后继进程只有在(lease 已死)或(有此标记 = 前任已优雅退出)时
+// 才允许接管原 worker id;lease 活着且无标记 = 前任仍在运行(或刚崩溃、lease 未到期),
+// 一律不抢,改派生键分配新 id。
+func releasedKey(prefix, hostname string) string {
+	return nodeKey(prefix, hostname) + "/released"
+}
+
 func nodeKey(prefix, hostname string) string {
 	return fmt.Sprintf("%s/snowflake_nodes/%s", prefix, hostname)
 }
@@ -146,6 +172,27 @@ func Allocate(ctx context.Context, cli *clientv3.Client, prefix, hostname string
 			return 0, 0, fmt.Errorf("snowflakealloc: get nodeKey: %w", err)
 		}
 		if len(resp.Kvs) > 0 {
+			released := false
+			if relResp, rerr := cli.Get(ctx, releasedKey(prefix, hostname)); rerr == nil && len(relResp.Kvs) > 0 {
+				released = true
+			}
+			if !released && leaseAlive(ctx, cli, resp.Kvs[0].Lease) {
+				// 亲和键上的持有者还活着(lease 未过期)且没有优雅释放标记:**不抢**。
+				// 2026-09-02 事故:同一主机上按 -Zone 起第二个 login,它按 hostname 亲和
+				// "复用"了 worker 0,把 nodeKey 挂到自己的新 lease 上,活着的 zone1 login
+				// 在 keepalive 里检测到 ownership lost 后 fence + 退出,整条登录链路 UNAVAILABLE。
+				// 亲和复用的本意是"进程重启、老 lease 尚未过期时拿回原 id",不是让同主机的
+				// 第二个进程抢活着的 id。但又不能停在原键上走新 id 分配 —— 下面的双 key CAS
+				// 要求 nodeKey 不存在,会永远失败直到 ctx 超时(kill 后 60s 内重启也会撞上:
+				// 进程已死、lease 尚在)。所以派生一个本进程独有的亲和键继续分配;旧 id 等旧
+				// lease 自然过期后释放。
+				derived := fmt.Sprintf("%s#%x", hostname, uint64(leaseID))
+				logx.Errorf("[snowflakealloc] affinity key busy with a live lease (prefix=%s, host=%s, lease=%d); "+
+					"allocating under derived key %q instead of stealing", prefix, hostname, resp.Kvs[0].Lease, derived)
+				hostname = derived
+				nKey = nodeKey(prefix, hostname)
+				continue
+			}
 			oldIDStr := string(resp.Kvs[0].Value)
 			if oldID, perr := strconv.ParseUint(oldIDStr, 10, 64); perr == nil && oldID <= maxID {
 				iKey := idKey(prefix, oldID)
@@ -257,6 +304,9 @@ type Handle struct {
 	prefix        string
 	cancel        context.CancelFunc
 	cli           *clientv3.Client
+	// host 是分配时实际写入 idKey 的亲和键(可能是派生键 hostname#lease),
+	// Close() 用它定位 releasedKey。
+	host string
 
 	// guardMu 串行化水位推进,guardWritten 是本进程**已成功落盘**的最大水位。
 	//
@@ -352,7 +402,18 @@ func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, prefix, ho
 	// 所以必须补一条按 key 归属判定的通道:watch nodeKey,发现它改挂到别的 lease 或被删,
 	// 立刻 markLost。起点 revision 取自下面这次 Get,并在同一次 Get 里先校验一遍当前归属,
 	// 堵住"抢占发生在 Allocate 与 watch 之间"的窗口。
-	nKey := nodeKey(prefix, hostname)
+	// Allocate 在亲和键被活持有者占用时会改用派生键(hostname#lease)分配,所以
+	// 这里不能用调用方传入的 hostname 反推 nodeKey,而要以 idKey 的 value(分配时
+	// 写入的实际亲和键)为准;读不到时退回传入的 hostname。
+	effectiveHost := hostname
+	if idResp, gerr := cli.Get(ctx, idKey(prefix, workerID)); gerr == nil && len(idResp.Kvs) > 0 && len(idResp.Kvs[0].Value) > 0 {
+		effectiveHost = string(idResp.Kvs[0].Value)
+	} else if gerr != nil {
+		logx.Errorf("[snowflakealloc] read idKey for effective affinity failed (prefix=%s, worker_id=%d): %v; watching %q",
+			prefix, workerID, gerr, hostname)
+	}
+	h.host = effectiveHost
+	nKey := nodeKey(prefix, effectiveHost)
 	ownershipRev, err := verifyKeyOwnership(ctx, cli, nKey, leaseID)
 	if err != nil {
 		cancel()
@@ -664,6 +725,17 @@ func (h *Handle) Close() {
 	if h.cancel != nil {
 		h.cancel()
 		h.cancel = nil
+	}
+	// 优雅释放标记:挂在仍存活的 lease 上,随它一起过期。同 hostname 的后继进程
+	// 据此判定"前任已退出,可以在 TTL 内接管原 worker id";没有标记(崩溃 / 仍在运行)
+	// 则后继进程走派生键拿新 id,不会抢活着的持有者(见 Allocate 复用分支)。
+	// 尽力而为:写失败只损失"重启复用同 id"这一优化,不影响正确性。
+	if h.cli != nil && h.LeaseID != 0 && h.host != "" {
+		putCtx, putCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		if _, err := h.cli.Put(putCtx, releasedKey(h.prefix, h.host), "released", clientv3.WithLease(h.LeaseID)); err != nil {
+			logx.Errorf("[snowflakealloc] write released marker failed (prefix=%s, host=%s): %v", h.prefix, h.host, err)
+		}
+		putCancel()
 	}
 	h.LeaseID = 0
 }

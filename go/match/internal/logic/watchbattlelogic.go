@@ -10,10 +10,8 @@ import (
 
 	battlepb "proto/battle"
 	matchpb "proto/match"
-	smpb "proto/scene_manager"
 
 	"github.com/zeromicro/go-zero/core/logx"
-	"google.golang.org/protobuf/proto"
 )
 
 type WatchBattleLogic struct {
@@ -77,7 +75,7 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 			ErrorMessage: tipErr(constants.ErrSpectateWhileInBattle, "战斗尚未结束,无法观战"),
 		}, nil
 	}
-	watchingRaw, err := l.svcCtx.Redis.Get(spectateWatchingKey(playerId))
+	watchingRaw, err := l.svcCtx.MatchRedis.Get(spectateWatchingKey(playerId))
 	if err != nil {
 		return internalErr("读观战标记", err)
 	}
@@ -165,7 +163,10 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 		// 先原子抢占互斥标记(SETNX+EX)再 AddObserver:标记必须先于绑定生效,
 		// 否则并发的 JoinQueue 会漏掉清退;入口已清掉本玩家旧标记,抢占失败只可能
 		// 是并发 WatchBattle,由 SetnxEx 一锤定音拒绝。AddObserver 失败回滚 DEL。
-		acquired, err := l.svcCtx.Redis.SetnxEx(spectateWatchingKey(playerId),
+		if beforeAcquireWatchingHook != nil {
+			beforeAcquireWatchingHook(playerId)
+		}
+		acquired, err := l.svcCtx.MatchRedis.SetnxEx(spectateWatchingKey(playerId),
 			strconv.FormatUint(battleId, 10), spectateTTLSeconds(l.svcCtx))
 		if err != nil {
 			return internalErr("写观战标记", err)
@@ -237,17 +238,12 @@ func (l *WatchBattleLogic) WatchBattle(in *matchpb.WatchBattleRequest) (*matchpb
 // observerZoneId 从 player:{id}:location 取观众 zone(BattleRouting 的携带字段;
 // 当前 battle 出站 topic 只用 gate_node_id,zone 缺失不致命,读不到按 0 记日志)。
 func (l *WatchBattleLogic) observerZoneId(playerId uint64) uint32 {
-	raw, err := l.svcCtx.Redis.Get(getPlayerLocationKey(playerId))
+	loc, err := loadPlayerLocation(l.svcCtx, playerId)
 	if err != nil {
 		l.Errorf("[spectate] 读观众位置失败 player=%d: %v", playerId, err)
 		return 0
 	}
-	if raw == "" {
-		return 0
-	}
-	loc := &smpb.PlayerLocation{}
-	if err := proto.Unmarshal([]byte(raw), loc); err != nil {
-		l.Errorf("[spectate] 观众位置反序列化失败 player=%d: %v", playerId, err)
+	if loc == nil {
 		return 0
 	}
 	return loc.ZoneId

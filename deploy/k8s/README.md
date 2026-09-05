@@ -275,3 +275,108 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - The script assumes Linux containers and `/app/bin` runtime layout.
 - Deleting a zone currently deletes the entire namespace (`k8s-zone-down`).
 - Do not use `LoadBalancer` in production unless the cluster provides a real, mature LB implementation. Otherwise use `NodePort` plus an external L4 balancer.
+
+## Local Trial on kind (2026-09-03 实跑记录)
+
+`infra-up` 在本机 kind(v0.33.0 / node v1.37.0,Docker Desktop 29 引擎)上跑通 A 档
+(etcd / redis / redis-match-cluster / kafka / mysql + 全局 match)时踩到的坑,都是
+kind 本地环境特有,不影响真集群:
+
+```powershell
+. E:\work\tools\buildenv.ps1                       # GOPROXY / go 工具链
+go install sigs.k8s.io/kind@latest                 # 装到 $(go env GOPATH)\bin
+kind create cluster --name mmorpg                  # kubectl context 自动切到 kind-mmorpg
+pwsh -File tools/scripts/go_svc_image.ps1 -Command build-all -Registry local -Services match
+kind load docker-image local/mmorpg-match:<tag> --name mmorpg
+pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -GoSvcRegistry local -ZoneId 101
+```
+
+- **kind 节点不共享宿主 Docker 的镜像缓存/镜像源**,直接从 Docker Hub 拉基础镜像
+  (redis / kafka / mysql)极慢,而 kubelet 默认串行拉镜像,一个卡住的拉取会把
+  所有 Pod 钉在 `ContainerCreating`。把宿主已有镜像 `kind load` 进去即可解开。
+- **Docker 29 的 containerd 镜像存储下 `kind load docker-image` 对 Hub 拉下来的多平台
+  镜像会失败**(`ctr: content digest sha256:...: not found`,因为 `docker save` 输出
+  的 index 引用了本地没有的其他平台清单)。改用
+  `docker save --platform linux/amd64 -o x.tar <image>` + `kind load image-archive x.tar`。
+  本地 `docker build` 出来的单平台镜像(Go 服务)不受影响。
+- `kind load` 之后老 Pod 仍卡在原来的拉取请求上时,直接 `kubectl delete pod`
+  让控制器重建,新 Pod 走 `IfNotPresent` 立刻起来。
+- `mysql-backup-pvc` 是 ReadWriteMany,kind 自带的 local-path 不支持,会一直 Pending;
+  只有备份 CronJob 用它,mysql 本体不受影响。
+- go/db 的镜像以前在任何环境都构建不了:`go/db/go.mod` 把 proto2mysql replace 到仓库外
+  (`../../../proto2mysql`),以 `go/` 为 build context 带不进去。B 档已修:见下一节。
+
+### B 档:zone-up(2026-09-03 实跑记录)
+
+在 A 档 infra 之上把 `yesterday`(zone_id=1)拉起来:Go 五服务 + Java 网关,C++ 节点用占位镜像。
+
+```powershell
+. E:\work	oolsuildenv.ps1
+# Go 服务镜像(db 需要宿主上检出 E:\work\proto2mysql;所有服务都会打包 generated/tables)
+pwsh -File tools/scripts/go_svc_image.ps1 -Command build-all -Registry local -Tag <tag>
+# Java 网关镜像(Dockerfile.java-svc 的 build context 是 java/gateway_node)
+pwsh -File tools/scripts/java_svc_image.ps1 -Command build -Registry local -Tag <tag>
+# C++ 节点本档不构建:用任意小镜像占位,gate/scene Pod 会 CrashLoop/RunContainerError,属预期
+docker tag busybox:1.36 local/mmorpg-node:<tag>
+# 逐个 docker save --platform linux/amd64 + kind load image-archive(见上节)
+pwsh -File tools/scripts/k8s_deploy.ps1 -Command zone-up -ZoneName yesterday -ZoneId 1 `
+    -GoSvcRegistry local -JavaSvcRegistry local -NodeImage local/mmorpg-node:<tag> `
+    -GateReplicas 1 -SceneReplicas 1
+```
+
+- `-NodeImage` 显式给出时 go/java tag **跟随它的 tag**,所以占位镜像的 tag 必须与
+  Go/Java 镜像一致(或显式传 `-GoSvcTag/-JavaSvcTag`)。
+- 不要带 `-WaitReady`:它先等 gate,占位镜像的 gate 永远不 Ready 会直接超时。
+- 实跑修掉的四个真 bug(都不是 kind 特有):
+  1. **Go 镜像里没有策划表**:login / player-locator / scene-manager 启动 `LoadTables`
+     (TableDir 默认 `../../generated/tables`)直接 `log.Fatalf` CrashLoop。
+     `Dockerfile.go-svc` 现在以 `--build-context tables=<仓库>/generated/tables` 带入
+     并落到 `/generated/tables`(WORKDIR /app 向上归一化正好命中默认值);同时**文件名转小写**
+     —— 生成的 loader 读 `actoractioncombatstate.json`,导表产物却是 `ActorActionCombatState.json`,
+     Windows 不分大小写所以本地从没暴露,Linux 一定读不到。根因在导表/生成器命名不一致,镜像里只是兜底。
+  2. **db 的 gRPC 服务从未 Start**:`go/db/db.go` 自 fc9377336 起只 `MustNewServer` 没 `Start()`,
+     进程打印 STARTED 却不监听 6000、不注册 etcd `db.rpc`;compose 没探针一直没暴露,K8s 的
+     grpc readiness/liveness 永远超时 → 0/1 + 反复重启。已补 `go s.Start()`。
+  3. **dev 档 login 拒启**:生成器 dev 档回落占位密钥,而 login 的 secrets 门禁只在 go-zero
+     `Mode=dev/test` 才降级为 WARN,ConfigMap 里没写 Mode(默认 pro)→ panic
+     "HMAC 密钥配置不合格"。现在 dev 档 login ConfigMap 写 `Mode: dev`(与 go/login/etc/login.yaml 一致),
+     staging/prod 不写,门禁不变。
+  4. **`-WaitReady` 会等根本没部署的 auth**:`$JavaSvcCatalogue` 有 auth 条目但
+     `manifests/java-svc/auth.yaml` 不存在,Apply 只告警跳过,Wait 却照等 → 必超时。已改为 manifest 不存在则跳过。
+- **占位镜像别用节点上 kubelet 已经拉过的镜像 ID 重打 tag**:一开始 `docker tag busybox:1.36 local/mmorpg-node:<tag>`
+  再 `kind load`,gate/scene 一直 `ErrImagePull`(kubelet 明明配了 IfNotPresent 还去 Docker Hub 拉
+  `docker.io/local/mmorpg-node`)。原因是 k8s 1.33+ 的 `KubeletEnsureSecretPulledImages`:
+  `/var/lib/kubelet/image_manager/pulled/` 里有 busybox 那个镜像 ID 的 `ImagePulledRecord`
+  (credentialMapping 只有 `busybox`),同一个镜像 ID 换个仓库名引用就必须重新验证拉取权限。
+  换一个节点上从未被 kubelet 拉过的镜像(alpine:3.20)做占位就正常了;`crictl inspecti` 能查到不等于 kubelet 会用。
+- 镜像构建慢的两个来源:`go mod download` 每个服务重下一遍(Dockerfile 无 cache mount);
+  temurin 基础镜像从 Docker Hub 直拉约 100KB/s,`docker.m.daocloud.io` 当日返回 unavailable,
+  `docker.1ms.run/library/eclipse-temurin:23-jdk` 可用,拉完 `docker tag` 成官方名即可命中本地缓存。
+
+#### B 档验收清单(2026-09-04 复核通过)
+
+```powershell
+# 1. Go 五服务 + Java 网关 Ready;gate/scene(占位镜像)CrashLoop 属预期
+kubectl get pods -n mmorpg-zone-yesterday
+# 2. login / player-locator / scene-manager 已注册进 etcd(zone/1 前缀)
+kubectl exec -n mmorpg-infra deploy/etcd -- etcdctl get --prefix --keys-only LoginNodeService.rpc/zone/1
+#    → LoginNodeService.rpc/zone/1/node_type/5/node_id/{2,3};另有 db.rpc/ login.rpc/ playerlocator.rpc/
+#      dataservice.rpc/ scenemanagerservice.rpc/ 的 go-zero 发现键
+# 3. MySQL 初始化 SQL 生效:zone_config 在 mmorpg 库,zone_1_db / zone_2_db / zone_101_db / zone_102_db 已建
+kubectl exec -n mmorpg-infra deploy/mysql -- sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SELECT * FROM mmorpg.zone_config"'
+# 4. Java 网关 zone 目录
+kubectl port-forward -n mmorpg-zone-yesterday svc/gateway 18081:8081
+curl http://127.0.0.1:18081/api/server-list
+#    → {"zones":[{"zone_id":1,"name":"zone-1","status":"MAINTENANCE",...}]}
+#      status 是 MAINTENANCE 而不是 OPEN:zone_config.manual_status=0 且没有任何 gate 注册
+#      (本档 gate 是占位镜像),C 档 C++ 镜像上来后才会变 OPEN,不是网关的 bug。
+```
+
+- **login 起得比 player-locator 早会 fatal 重启几次**:`NewServiceContext` 用 `zrpc.MustNewClient` 同步拨
+  `playerlocator.rpc`,etcd 里还没有就 `logx.Must` 直接退出。两副本各重启 3~13 次后随 player-locator Ready
+  自愈,不是 bug;要消除只能把客户端改成 lazy dial 或给 login 加 initContainer 等依赖。
+- **宿主重启后老 Pod 可能卡 `ErrImagePull`**:kind 节点重启时 kubelet 对已 `kind load` 的镜像仍会去 Docker Hub
+  校验(`lookup registry-1.docker.io ... server misbehaving` / `EOF`),gateway 两副本卡了 40 分钟;
+  `kubectl delete pod -l app=gateway` 让控制器重建就走 IfNotPresent 立刻起来(与 A 档一节同一个坑)。
+- 网关日志里 `login.rpc channel up (zone=1): 127.0.0.1:53000` 三行是 `application.yaml` 里给本地 compose 的静态兜底,
+  K8s 上真正生效的是随后 `login.rpc discovery routing changed: {1=2}` 那条 etcd 动态发现,可以忽略。

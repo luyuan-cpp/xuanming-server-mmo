@@ -19,4 +19,6 @@ message DungeonTable {
   uint32 scene_id = 2 [(cfg_fk) = "BaseScene"];
   uint32 max_team_size = 3;
   uint32 time_limit = 4;
+  // FK -> Monster.id(重复列,占 3 格)。源表 opts 写的是 fk:Monster。
+  repeated uint32 monster = 5 [(cfg_slots) = 3, (cfg_fk) = "Monster"];
 }

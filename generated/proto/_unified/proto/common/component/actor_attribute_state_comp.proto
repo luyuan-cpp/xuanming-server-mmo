@@ -14,9 +14,16 @@ message CalculatedAttributesComp {
 	bool isDead = 3; // Dead/alive state
 }
 
-// Derived attributes, computed server-side
+// 二级属性(服务器按 AttributeDimension 表系数重算,不落库;设计文档
+// docs/design/player-attribute-allocation.md §3)。
+// 全部 uint64:与 BaseAttributesComp / BattlePlayerSnapshot 同口径,战斗公式不窄化。
 message DerivedAttributesComp {
-    uint32 max_health = 1;     // Max HP
+    uint64 max_health = 1;      // 气血上限
+    uint64 max_mana = 2;        // 法力上限
+    uint64 physical_attack = 3; // 物伤(普攻加成,加法接入引擎公式)
+    uint64 magic_attack = 4;    // 法伤(技能加成)
+    uint64 defense = 5;         // 防御(加法减伤)
+    uint64 speed = 6;           // 速度(同步写入 BaseAttributesComp.speed 供出手序)
 }
 
 

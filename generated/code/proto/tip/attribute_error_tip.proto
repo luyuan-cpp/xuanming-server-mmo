@@ -1,0 +1,42 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum attribute_error {
+  kAttribute_errorOK = 0;
+
+  kAttributePoolNotFound = 25000;
+
+  kAttributePoolLocked = 25001;
+
+  kAttributeDimensionNotFound = 25002;
+
+  kAttributePointsNotEnough = 25003;
+
+  kAttributePointsCannotDecrease = 25004;
+
+  kAttributeDimensionCapExceeded = 25005;
+
+  kAttributeSchemeNotFound = 25006;
+
+  kAttributeSchemeLimitReached = 25007;
+
+  kAttributeSchemeSwitchCooldown = 25008;
+
+  kAttributeSchemeNameInvalid = 25009;
+
+  kAttributeSchemeAlreadyActive = 25010;
+
+  kAttributeInBattle = 25011;
+
+  kAttributeGoldNotEnough = 25012;
+
+  kAttributeNoAutoPlan = 25013;
+
+  kAttributeNothingToChange = 25014;
+
+};

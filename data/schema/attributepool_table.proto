@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+// AttributePool 表的权威 schema。源表 data/AttributePool.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号抄自 generated/code/proto/attributepool_table.proto,**只增不改、删字段用 reserved**;
+// 导表时会按产物发号规则复算并逐条核对,对不上直接中止。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message AttributePoolTable {
+  option (cfg_sheet)       = "AttributePool";
+  option (cfg_source_file) = "AttributePool.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 池 id
+  uint32 id = 1;
+  // 池名(下发客户端)
+  string name = 2;
+  // 解锁等级
+  uint32 unlock_level = 3;
+  // 每级获得点数
+  uint32 points_per_level = 4;
+  // 解锁时一次性给点
+  uint32 base_points = 5;
+  // 单维度可分配上限(0=不限)
+  uint32 dimension_cap = 6;
+  // 重置(洗点)金币
+  uint64 reset_cost_gold = 7;
+  // 低于此等级重置免费(0=不免费)
+  uint32 reset_free_below_level = 8;
+  // 说明
+  string desc = 9;
+}

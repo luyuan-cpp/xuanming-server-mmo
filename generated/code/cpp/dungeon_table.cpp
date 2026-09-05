@@ -27,6 +27,9 @@ void DungeonTableManager::Load() {
     for (int32_t i = 0; i < snap->data.data_size(); ++i) {
         const auto& row_data = snap->data.data(i);
         snap->idMap.emplace(row_data.id(), &row_data);
+        for (const auto& elem : row_data.monster()) {
+            snap->monsterIndex.emplace(elem, &row_data);
+        }
         snap->sceneIdIndex[row_data.scene_id()].push_back(&row_data);
     }
 

@@ -1086,6 +1086,20 @@ func prepareBehaviorClient(host string, port int, account, password string, stat
 
 	go gc.RecvLoop(func(client *pkg.GameClient, msg *base.MessageContent) {
 		stats.MsgRecv()
+		// gate 级拒绝(限流 / 超长包等)写在信封 MessageContent.error_message,body 为空。
+		// 属性冒烟的等待方靠"响应体 tip"或"新面板"推进,信封错误若只是被静默分发成一条全零响应,
+		// 现象就是 10s 超时而看不到真实原因;这里先把它落成 tip + Error 日志再决定是否分发。
+		if msg.ErrorMessage != nil && msg.ErrorMessage.Id != 0 {
+			zap.L().Error("gate envelope error", zap.Uint32("message_id", msg.MessageId),
+				zap.Uint32("tip", msg.ErrorMessage.Id))
+			if isAttributeMessage(msg.MessageId) {
+				if p, ok := gameobject.PlayerList.Get(client.PlayerId); ok {
+					p.SetAttributePanel(nil, msg.ErrorMessage.Id, msg.MessageId)
+					p.SetAttributeSuggestion(0, nil, msg.ErrorMessage.Id)
+				}
+				return // 不再分发空 body(否则 handler 会用全零响应把刚记下的 tip 冲掉)
+			}
+		}
 		handler.MessageBodyHandler(client, msg)
 	})
 
@@ -1350,4 +1364,10 @@ func testAccessTokenReconnect(host string, port int, account, password string, s
 	return testResult{Passed: true, Elapsed: time.Since(start),
 		Detail: fmt.Sprintf("reconnected via access_token (len=%d, expire=%d), no rotation",
 			len(firstToken), firstExpire)}
+}
+
+// isAttributeMessage:角色属性加点协议的消息号区间(proto/scene/player_attribute.proto,167-175)。
+func isAttributeMessage(messageId uint32) bool {
+	return messageId >= game.SceneAttributeClientPlayerGetAttributePanelMessageId &&
+		messageId <= game.SceneAttributeClientPlayerGmSetPlayerLevelMessageId
 }

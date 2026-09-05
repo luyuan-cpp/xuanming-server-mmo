@@ -49,4 +49,6 @@ enum match_error {
 
   kMatchSpectateOffline = 16019;
 
+  kMatchNotInScene = 16020;
+
 };

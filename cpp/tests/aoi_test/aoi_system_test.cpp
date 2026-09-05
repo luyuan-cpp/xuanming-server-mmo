@@ -513,16 +513,31 @@ TEST_F(AoiDynamicCapacityTest, ClientCapacityClampedToMax)
 }
 
 // Server pressure reduces the effective capacity.
+// GetEffectiveCapacity() 取 min(客户端上限, 服务器上限);没挂 AoiClientCapacityComp 时
+// 客户端上限是 kAoiListCapacityDefault(100),会先于服务器压力成为约束项。
+// 所以要验"服务器压力起作用",必须把客户端上限抬到 max,否则测的其实是那个默认值。
 TEST_F(AoiDynamicCapacityTest, ServerPressureReducesCapacity)
 {
     auto watcher = SpawnAt(0, 0);
+    auto& clientCap = tlsEcs.actorRegistry.emplace<AoiClientCapacityComp>(watcher);
+    clientCap.clientDesiredCount = kAoiListCapacityMax;
 
     auto& pressure = tlsEcs.sceneRegistry.emplace<ScenePressureComp>(sceneEntity);
     pressure.pressureFactor = 0.5; // half pressure → midpoint between max and min
 
-    const auto cap = InterestSystem::GetEffectiveCapacity(watcher);
     // Expected: max - 0.5 * (max - min) = 200 - 0.5 * 180 = 110
-    EXPECT_EQ(cap, 110u);
+    EXPECT_EQ(InterestSystem::GetEffectiveCapacity(watcher), 110u);
+}
+
+// 没有 AoiClientCapacityComp 时,默认客户端上限(100)比压力算出的服务器上限(110)更紧,
+// 结果取默认值 —— 这条把上面那个用例踩过的坑单独钉住。
+TEST_F(AoiDynamicCapacityTest, DefaultClientCapacityWinsWhenTighterThanServerCap)
+{
+    auto watcher = SpawnAt(0, 0);
+    auto& pressure = tlsEcs.sceneRegistry.emplace<ScenePressureComp>(sceneEntity);
+    pressure.pressureFactor = 0.5;
+
+    EXPECT_EQ(InterestSystem::GetEffectiveCapacity(watcher), kAoiListCapacityDefault);
 }
 
 // Full pressure yields minimum capacity.

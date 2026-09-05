@@ -31,6 +31,10 @@
 
 #include "ActorActionCombatStateTable.h"
 #include "ActorActionStateTable.h"
+#include "AttributeAutoPlanTable.h"
+#include "AttributeDimensionTable.h"
+#include "AttributePoolTable.h"
+#include "AttributeRuleTable.h"
 #include "BaseSceneTable.h"
 #include "BuffTable.h"
 #include "ClassTable.h"
@@ -88,7 +92,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 21;
+	static constexpr int32 TableCount = 25;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -144,6 +148,18 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UActorActionStateTable* GetActorActionStateTable() const { return ActorActionStateTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UAttributeAutoPlanTable* GetAttributeAutoPlanTable() const { return AttributeAutoPlanTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UAttributeDimensionTable* GetAttributeDimensionTable() const { return AttributeDimensionTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UAttributePoolTable* GetAttributePoolTable() const { return AttributePoolTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UAttributeRuleTable* GetAttributeRuleTable() const { return AttributeRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UBaseSceneTable* GetBaseSceneTable() const { return BaseSceneTable; }
@@ -207,6 +223,14 @@ private:
 	TObjectPtr<UActorActionCombatStateTable> ActorActionCombatStateTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UActorActionStateTable> ActorActionStateTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UAttributeAutoPlanTable> AttributeAutoPlanTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UAttributeDimensionTable> AttributeDimensionTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UAttributePoolTable> AttributePoolTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UAttributeRuleTable> AttributeRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UBaseSceneTable> BaseSceneTable;
 	UPROPERTY(Transient)

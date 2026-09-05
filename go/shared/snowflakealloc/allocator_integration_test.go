@@ -18,6 +18,7 @@ package snowflakealloc
 
 import (
 	"context"
+	"strconv"
 	"fmt"
 	"sync"
 	"testing"
@@ -359,16 +360,25 @@ func TestOwnershipLostWhenAnotherHostTakesOver(t *testing.T) {
 	default:
 	}
 
-	// 同 hostname 的第二个进程走复用分支,把两个 key 抢到自己的 lease 上。
-	// 受害者的 lease 依旧存活、KeepAlive 依旧成功。
-	taker, err := AllocateWithKeepAlive(context.Background(), cli, prefix, host, Options{LeaseTTL: 30})
+	// 2026-09-02 起分配器不再允许同 hostname 的活进程抢占(leaseAlive 判定),
+	// 所以这里改用"外部行为者"直接把两个 key 改挂到另一个 lease 上模拟接管
+	// (运维误操作 / 旧版本二进制 / 任何绕过分配器的写入)。
+	// 受害者的 lease 依旧存活、KeepAlive 依旧成功 —— 只监 lease 是盲区。
+	intruderLease, err := cli.Grant(context.Background(), 30)
 	if err != nil {
-		t.Fatalf("alloc taker: %v", err)
+		t.Fatalf("grant intruder lease: %v", err)
 	}
-	defer taker.Close()
-	if taker.WorkerID != victim.WorkerID {
-		t.Fatalf("前提不成立:接管者应复用同一个 worker id, victim=%d taker=%d",
-			victim.WorkerID, taker.WorkerID)
+	defer cli.Revoke(context.Background(), intruderLease.ID)
+	idStr := strconv.FormatUint(victim.WorkerID, 10)
+	txn, err := cli.Txn(context.Background()).
+		If(clientv3.Compare(clientv3.Value(nodeKey(prefix, host)), "=", idStr)).
+		Then(
+			clientv3.OpPut(nodeKey(prefix, host), idStr, clientv3.WithLease(intruderLease.ID)),
+			clientv3.OpPut(idKey(prefix, victim.WorkerID), "intruder", clientv3.WithLease(intruderLease.ID)),
+		).
+		Commit()
+	if err != nil || !txn.Succeeded {
+		t.Fatalf("前提不成立:外部接管写入失败 err=%v succeeded=%v", err, txn != nil && txn.Succeeded)
 	}
 
 	// 受害者必须察觉。修复前这里会超时 —— lease 还活着,没有任何通道会通知它。
@@ -521,5 +531,37 @@ func TestGuardWatermarkNeverGoesBackwardUnderConcurrency(t *testing.T) {
 	hd.guardMu.Unlock()
 	if final != written {
 		t.Fatalf("持久值 %d 与内存记录 %d 不一致", final, written)
+	}
+}
+
+// TestAllocateSameHostnameDoesNotStealLiveLease: 同 hostname 的第二个进程在第一个
+// 进程仍存活(lease 未过期)时**不得**接管其 worker id(2026-09-02 事故:本地按
+// -Zone 起第二个 login 抢走 worker 0,zone1 login 检测到 ownership lost 自杀)。
+// 期望:第二次分配拿到不同的 id,且第一个 Handle 的 Lost() 在观察窗口内保持未关闭。
+func TestAllocateSameHostnameDoesNotStealLiveLease(t *testing.T) {
+	cli := newTestClient(t)
+	defer cli.Close()
+	prefix := uniquePrefix(t)
+	defer cleanupPrefix(t, cli, prefix)
+
+	hd1, err := AllocateWithKeepAlive(context.Background(), cli, prefix, "host-live", Options{LeaseTTL: 30})
+	if err != nil {
+		t.Fatalf("allocate 1: %v", err)
+	}
+	defer hd1.Close()
+
+	hd2, err := AllocateWithKeepAlive(context.Background(), cli, prefix, "host-live", Options{LeaseTTL: 30})
+	if err != nil {
+		t.Fatalf("allocate 2: %v", err)
+	}
+	defer hd2.Close()
+
+	if hd2.WorkerID == hd1.WorkerID {
+		t.Fatalf("second live process on the same hostname stole worker_id=%d", hd1.WorkerID)
+	}
+	select {
+	case <-hd1.Lost():
+		t.Fatalf("first holder lost ownership although its lease was alive")
+	case <-time.After(1500 * time.Millisecond):
 	}
 }

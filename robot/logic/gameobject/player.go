@@ -4,6 +4,11 @@ import (
 	"context"
 	"math/rand"
 	"sync"
+	"time"
+
+	"go.uber.org/zap"
+
+	"proto/scene"
 )
 
 // Player represents a robot's in-game player state.
@@ -60,6 +65,20 @@ type Player struct {
 	spectateStateOnce sync.Once
 	spectateEnd       chan struct{} // NotifySpectateEnd 到达时 close
 	spectateEndOnce   sync.Once
+
+	// ---- 属性加点冒烟(attribute-smoke)状态 ----
+	// 面板是服务器唯一真相:每个写操作的响应都带全量面板,这里只存最近一份。
+	// attrPanel 用 chan 广播"面板已到",照 sceneReady 的懒初始化 + sync.Once 惯例;
+	// 但与战斗不同,属性面板会反复刷新,所以额外用 attrPanelSeq 让等待方能区分
+	// "拿到的是这次请求的新面板"还是"上一次留下的旧面板"。
+	attrPanel       *scene.AttributePanelInfo
+	attrPanelSeq    uint64
+	attrPanelMsg    uint32            // 最近一份面板的来源消息号(响应 = 请求号;主动推送 = 170)
+	attrLastTip     uint32            // 最近一次属性 RPC 的 error_message.id(0 = 成功)
+	attrSuggested   map[uint32]uint32 // 最近一次自动加点建议(dimension_id → 目标已分配)
+	attrSuggestPool uint32
+	attrReady       chan struct{} // 首份面板到达时 close
+	attrReadyOnce   sync.Once
 }
 
 // NewPlayer creates a Player with an initialized scene-ready channel.
@@ -416,9 +435,22 @@ func (p *Player) GetBattleId() uint64 {
 
 // SignalBattleEnd 记录战斗结果并广播"战斗已结束"。由 NotifyBattleEnd
 // handler 调用;outcome 为 EBattleOutcome 的数值。
-func (p *Player) SignalBattleEnd(outcome int32) {
+//
+// 按 battle_id 过滤:玩家登录时 scene 会把离线期间结束的**上一局**结算以
+// BattleEndS2C 补推给客户端(离线挂起结算),它先于本进程的 NotifyBattleStart 到达。
+// 不过滤的话这条陈旧结束会提前关掉 battleEnd 通道,WaitBattleEnd 在新局刚开始时就
+// 返回"0 回合结束"(2026-09-02 跨 zone 冒烟复跑实测)。只接受与当前对局一致的结束;
+// 尚未开战(battleId==0)时收到的结束一律视为陈旧,只记录不广播。
+func (p *Player) SignalBattleEnd(battleId uint64, outcome int32) {
 	p.ensureBattleEndChannel()
 	p.mu.Lock()
+	current := p.battleId
+	if battleId != 0 && current != battleId {
+		p.mu.Unlock()
+		zap.L().Info("[robot] ignore stale BattleEnd",
+			zap.Uint64("end_battle_id", battleId), zap.Uint64("current_battle_id", current))
+		return
+	}
 	p.battleOutcome = outcome
 	p.mu.Unlock()
 	p.battleEndOnce.Do(func() { close(p.battleEnd) })
@@ -574,4 +606,90 @@ func (pm *playerMap) Delete(id uint64) {
 	pm.mu.Lock()
 	defer pm.mu.Unlock()
 	delete(pm.m, id)
+}
+
+// ---------------------------------------------------------------------------
+// 属性加点冒烟(attribute-smoke)信号
+// ---------------------------------------------------------------------------
+
+func (p *Player) ensureAttrChannel() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.attrReady == nil {
+		p.attrReady = make(chan struct{})
+	}
+}
+
+// SetAttributePanel 记录服务器下发的全量面板(每个属性 RPC 的响应与主动推送都会调)。
+// seq 自增,让等待方能等到"比某个时刻更新"的那一份;messageId 记来源,让等待方只认
+// "本次请求的响应"——GmSetPlayerLevel 会先推一份(170)再回响应(175),不带来源就会错位消费。
+func (p *Player) SetAttributePanel(panel *scene.AttributePanelInfo, tipId uint32, messageId uint32) {
+	p.ensureAttrChannel()
+	p.mu.Lock()
+	p.attrLastTip = tipId
+	if panel != nil {
+		p.attrPanel = panel
+		p.attrPanelSeq++
+		p.attrPanelMsg = messageId
+	}
+	p.mu.Unlock()
+	if panel != nil {
+		p.attrReadyOnce.Do(func() { close(p.attrReady) })
+	}
+}
+
+// SetAttributeSuggestion 记录自动加点建议(只算不落,不动面板)。
+func (p *Player) SetAttributeSuggestion(poolId uint32, suggested map[uint32]uint32, tipId uint32) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.attrSuggestPool = poolId
+	p.attrSuggested = suggested
+	p.attrLastTip = tipId
+}
+
+// GetAttributeSuggestion 返回最近一次自动加点建议。
+func (p *Player) GetAttributeSuggestion() (uint32, map[uint32]uint32) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.attrSuggestPool, p.attrSuggested
+}
+
+// GetAttributePanel 返回最近一份面板与它的序号(序号用于等待"更新的一份")。
+func (p *Player) GetAttributePanel() (*scene.AttributePanelInfo, uint64) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.attrPanel, p.attrPanelSeq
+}
+
+// GetAttributePanelSource 返回最近一份面板的来源消息号(响应 = 请求号;推送 = 170)。
+func (p *Player) GetAttributePanelSource() uint32 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.attrPanelMsg
+}
+
+// GetAttributeLastTip 返回最近一次属性 RPC 的 tip id(0 = 成功)。
+func (p *Player) GetAttributeLastTip() uint32 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.attrLastTip
+}
+
+// WaitAttributePanelAfter 等到面板序号超过 sinceSeq 的那一份(传 0 即"等第一份")。
+// 轮询而非条件变量:冒烟脚本用,50ms 粒度足够,省一套 sync.Cond 状态。
+func (p *Player) WaitAttributePanelAfter(ctx context.Context, sinceSeq uint64) (*scene.AttributePanelInfo, uint64, error) {
+	p.ensureAttrChannel()
+	for {
+		p.mu.RLock()
+		panel, seq := p.attrPanel, p.attrPanelSeq
+		p.mu.RUnlock()
+		if panel != nil && seq > sinceSeq {
+			return panel, seq, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, seq, ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
 }

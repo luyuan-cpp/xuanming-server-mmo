@@ -3,18 +3,31 @@
   {
    "id": 1,
    "max_team_size": 5,
+   "monster": [
+    1,
+    2
+   ],
    "scene_id": 17,
    "time_limit": 1800
   },
   {
    "id": 2,
    "max_team_size": 5,
+   "monster": [
+    6,
+    7
+   ],
    "scene_id": 18,
    "time_limit": 3600
   },
   {
    "id": 3,
    "max_team_size": 10,
+   "monster": [
+    11,
+    12,
+    16
+   ],
    "scene_id": 19,
    "time_limit": 1800
   }

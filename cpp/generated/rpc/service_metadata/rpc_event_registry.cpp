@@ -14,6 +14,7 @@
 #include "proto/login/login.pb.h"
 #include "proto/match/match_service.pb.h"
 #include "proto/scene/client_player_common.pb.h"
+#include "proto/scene/player_attribute.pb.h"
 #include "proto/scene/player_currency.pb.h"
 #include "proto/scene/player_lifecycle.pb.h"
 #include "proto/scene/player_movement.pb.h"
@@ -38,6 +39,7 @@
 #include "rpc/service_metadata/login_service_metadata.h"
 #include "rpc/service_metadata/match_service_service_metadata.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
+#include "rpc/service_metadata/player_attribute_service_metadata.h"
 #include "rpc/service_metadata/player_currency_service_metadata.h"
 #include "rpc/service_metadata/player_lifecycle_service_metadata.h"
 #include "rpc/service_metadata/player_movement_service_metadata.h"
@@ -58,6 +60,7 @@
 #include "proto/common/event/buff_event.pb.h"
 #include "proto/common/event/actor_combat_state_event.pb.h"
 #include "proto/common/event/node_event.pb.h"
+#include "proto/contracts/kafka/match_event.pb.h"
 #include "proto/contracts/kafka/gate_event.pb.h"
 #include "proto/contracts/kafka/player_event.pb.h"
 #include "proto/common/event/actor_event.pb.h"
@@ -73,6 +76,7 @@
 #include "common_event_buff_event_event_id.h"
 #include "common_event_actor_combat_state_event_event_id.h"
 #include "common_event_node_event_event_id.h"
+#include "contracts_kafka_match_event_event_id.h"
 #include "contracts_kafka_gate_event_event_id.h"
 #include "contracts_kafka_player_event_event_id.h"
 #include "common_event_actor_event_event_id.h"
@@ -84,6 +88,7 @@
 
 class GateImpl final : public Gate {};
 class SceneClientPlayerCommonImpl final : public SceneClientPlayerCommon {};
+class SceneAttributeClientPlayerImpl final : public SceneAttributeClientPlayer {};
 class SceneCurrencyClientPlayerImpl final : public SceneCurrencyClientPlayer {};
 class ScenePlayerImpl final : public ScenePlayer {};
 class SceneMovementClientPlayerImpl final : public SceneMovementClientPlayer {};
@@ -190,7 +195,7 @@ namespace scene_node{void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 167,
+static_assert(kMaxRpcMethodCount == 176,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -701,6 +706,53 @@ void InitMessageInfo()
         std::make_unique<::Empty>(),
         std::make_unique<SceneClientPlayerCommonImpl>(), 0, common::base::eNodeType::SceneNodeService};
 
+    // --- SceneAttributeClientPlayer ---
+    gRpcMethodRegistry[SceneAttributeClientPlayerGetAttributePanelMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "GetAttributePanel",
+        std::make_unique<::GetAttributePanelRequest>(),
+        std::make_unique<::GetAttributePanelResponse>(),
+        std::make_unique<SceneAttributeClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerAllocateAttributePointsMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "AllocateAttributePoints",
+        std::make_unique<::AllocateAttributePointsRequest>(),
+        std::make_unique<::AllocateAttributePointsResponse>(),
+        std::make_unique<SceneAttributeClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerResetAttributePointsMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "ResetAttributePoints",
+        std::make_unique<::ResetAttributePointsRequest>(),
+        std::make_unique<::ResetAttributePointsResponse>(),
+        std::make_unique<SceneAttributeClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerAutoAllocateAttributePointsMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "AutoAllocateAttributePoints",
+        std::make_unique<::AutoAllocateAttributePointsRequest>(),
+        std::make_unique<::AutoAllocateAttributePointsResponse>(),
+        std::make_unique<SceneAttributeClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerCreateAttributeSchemeMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "CreateAttributeScheme",
+        std::make_unique<::CreateAttributeSchemeRequest>(),
+        std::make_unique<::CreateAttributeSchemeResponse>(),
+        std::make_unique<SceneAttributeClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerSwitchAttributeSchemeMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "SwitchAttributeScheme",
+        std::make_unique<::SwitchAttributeSchemeRequest>(),
+        std::make_unique<::SwitchAttributeSchemeResponse>(),
+        std::make_unique<SceneAttributeClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerRenameAttributeSchemeMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "RenameAttributeScheme",
+        std::make_unique<::RenameAttributeSchemeRequest>(),
+        std::make_unique<::RenameAttributeSchemeResponse>(),
+        std::make_unique<SceneAttributeClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerNotifyAttributePanelChangedMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "NotifyAttributePanelChanged",
+        std::make_unique<::AttributePanelChangedS2C>(),
+        std::make_unique<::Empty>(),
+        std::make_unique<SceneAttributeClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneAttributeClientPlayerGmSetPlayerLevelMessageId] = RpcMethodMeta{
+        "SceneAttributeClientPlayer", "GmSetPlayerLevel",
+        std::make_unique<::GmSetPlayerLevelRequest>(),
+        std::make_unique<::GmSetPlayerLevelResponse>(),
+        std::make_unique<SceneAttributeClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+
     // --- SceneCurrencyClientPlayer ---
     gRpcMethodRegistry[SceneCurrencyClientPlayerGmAddCurrencyMessageId] = RpcMethodMeta{
         "SceneCurrencyClientPlayer", "GmAddCurrency",
@@ -1115,6 +1167,15 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneClientPlayerCommonSendTipToClientMessageId:
 	case SceneClientPlayerCommonKickPlayerMessageId:
 	case SceneClientPlayerCommonRedirectToGateMessageId:
+	case SceneAttributeClientPlayerGetAttributePanelMessageId:
+	case SceneAttributeClientPlayerAllocateAttributePointsMessageId:
+	case SceneAttributeClientPlayerResetAttributePointsMessageId:
+	case SceneAttributeClientPlayerAutoAllocateAttributePointsMessageId:
+	case SceneAttributeClientPlayerCreateAttributeSchemeMessageId:
+	case SceneAttributeClientPlayerSwitchAttributeSchemeMessageId:
+	case SceneAttributeClientPlayerRenameAttributeSchemeMessageId:
+	case SceneAttributeClientPlayerNotifyAttributePanelChangedMessageId:
+	case SceneAttributeClientPlayerGmSetPlayerLevelMessageId:
 	case SceneCurrencyClientPlayerGmAddCurrencyMessageId:
 	case SceneCurrencyClientPlayerGmDeductCurrencyMessageId:
 	case SceneCurrencyClientPlayerGetCurrencyListMessageId:
@@ -1172,6 +1233,14 @@ bool DispatchProtoEvent(uint32_t eventId, const std::string& payload)
 	}
 	case AfterLeaveSceneEventId: {
 		AfterLeaveScene event;
+		if (!event.ParseFromString(payload)) {
+			return false;
+		}
+		tlsEcs.dispatcher.trigger(event);
+		return true;
+	}
+	case BattleConfirmedEventEventId: {
+		BattleConfirmedEvent event;
 		if (!event.ParseFromString(payload)) {
 			return false;
 		}
@@ -1244,6 +1313,22 @@ bool DispatchProtoEvent(uint32_t eventId, const std::string& payload)
 	}
 	case ConnectToNodeEventEventId: {
 		ConnectToNodeEvent event;
+		if (!event.ParseFromString(payload)) {
+			return false;
+		}
+		tlsEcs.dispatcher.trigger(event);
+		return true;
+	}
+	case ContractsKafkaBattleResultEventEventId: {
+		contracts::kafka::BattleResultEvent event;
+		if (!event.ParseFromString(payload)) {
+			return false;
+		}
+		tlsEcs.dispatcher.trigger(event);
+		return true;
+	}
+	case ContractsKafkaBattleResultTeamEventId: {
+		contracts::kafka::BattleResultTeam event;
 		if (!event.ParseFromString(payload)) {
 			return false;
 		}

@@ -52,10 +52,14 @@ static std::optional<entt::entity> PickRandomNode(uint32_t nodeType)
 	std::vector<entt::entity> candidates;
 	auto &registry = tlsNodeContextManager.GetRegistry(nodeType);
 	auto view = registry.view<NodeInfo>();
+	// 全局池类型(match / battle)不比对 zone:任一 zone 的实例都能服务本 zone 玩家,
+	// 某 zone 的实例全挂时自动落到其他 zone(设计文档 cross-zone-matchmaking.md D11)。
+	const bool globalPool = NodeUtils::IsGlobalPoolNodeType(nodeType);
+	const auto selfZoneId = GetNodeInfo().zone_id();
 	for (auto entity : view)
 	{
 		const auto &node = view.get<NodeInfo>(entity);
-		if (node.zone_id() == GetNodeInfo().zone_id())
+		if (globalPool || node.zone_id() == selfZoneId)
 		{
 			candidates.push_back(entity);
 		}

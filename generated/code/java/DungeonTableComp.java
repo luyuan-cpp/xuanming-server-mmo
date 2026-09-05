@@ -41,4 +41,10 @@ public final class DungeonTableComp {
         }
     }
 
+    public record Monster(List<Integer> values) {
+        public static Monster from(DungeonTable row) {
+            return new Monster(row.getMonsterList());
+        }
+    }
+
 }

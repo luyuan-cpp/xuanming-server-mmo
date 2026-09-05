@@ -1,0 +1,25 @@
+syntax = "proto3";
+package contracts.kafka;
+option go_package = "login/proto/contracts/kafka";
+
+import "proto/battle/battle_data.proto";
+
+// battle -> match:对局结果(评分回流,二期 MMR)。
+// Kafka 投递:topic = match-results(全局,无 zone 段),key = battle_id(同局保序即可);
+// 无目标实例语义(任一 match 实例消费即可,消费组 match-rating)。
+// battle 作废(DestroyBattle / AbortAllRooms)不发本事件:评分只按真实打完的局更新。
+message BattleResultTeam {
+  uint32 team_index = 1;
+  repeated uint64 player_ids = 2;
+}
+
+message BattleResultEvent {
+  uint64 battle_id = 1;
+  uint32 match_mode = 2;                 // MatchMode 数值(PVE 模式 match 侧忽略评分)
+  uint32 battle_config_id = 3;
+  eBattleOutcome outcome = 4;            // A 胜 / B 胜 / 平局 / 逃跑等
+  uint32 winner_team_index = 5;          // outcome 为胜负时有效;平局时忽略
+  repeated BattleResultTeam teams = 6;
+  uint32 total_rounds = 7;
+  uint64 finished_at_ms = 8;
+}

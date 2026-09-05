@@ -162,7 +162,10 @@
     <ClInclude Include="memory_battle_data_provider.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="battle_table_fingerprint_test.cpp" />
     <ClCompile Include="turn_battle_engine_test.cpp" />
+    <ClCompile Include="player_revive_rule_test.cpp" />
+    <ClCompile Include="table_battle_data_provider_test.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>

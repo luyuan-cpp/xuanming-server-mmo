@@ -30,21 +30,26 @@ public class DungeonTableManager {
 
 
 
+        final Map<Integer, List<DungeonTable>> idxMonster;
+
 
         final Map<Integer, List<DungeonTable>> idxSceneId;
 
 
         Snapshot(DungeonTableData data,
                  Map<Integer, DungeonTable> kvData,
+                 Map<Integer, List<DungeonTable>> idxMonster,
                  Map<Integer, List<DungeonTable>> idxSceneId) {
             this.data = data;
             this.kvData = kvData;
+            this.idxMonster = idxMonster;
             this.idxSceneId = idxSceneId;
         }
     }
 
     private Snapshot snapshot = new Snapshot(
             DungeonTableData.getDefaultInstance(),
+            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap()
     );
@@ -65,14 +70,18 @@ public class DungeonTableManager {
         DungeonTableData data = builder.build();
 
         Map<Integer, DungeonTable> kvData = new HashMap<>(data.getDataCount());
+        Map<Integer, List<DungeonTable>> idxMonster = new HashMap<>();
         Map<Integer, List<DungeonTable>> idxSceneId = new HashMap<>();
 
         for (DungeonTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
+            for (Integer elem : row.getMonsterList()) {
+                idxMonster.computeIfAbsent(elem, k -> new ArrayList<>()).add(row);
+            }
             idxSceneId.computeIfAbsent(row.getSceneId(), k -> new ArrayList<>()).add(row);
         }
 
-        this.snapshot = new Snapshot(data, kvData, idxSceneId);
+        this.snapshot = new Snapshot(data, kvData, idxMonster, idxSceneId);
     }
 
     public DungeonTableData findAll() {
@@ -92,6 +101,10 @@ public class DungeonTableManager {
 
 
 
+    public List<DungeonTable> findByMonsterIndex(int key) {
+        return snapshot.idxMonster.getOrDefault(key, Collections.emptyList());
+    }
+
 
 
     public List<DungeonTable> getBySceneId(int key) {
@@ -101,6 +114,8 @@ public class DungeonTableManager {
 
 
     // FK: scene_id → BaseScene.id
+
+    // FK: monster → Monster.id
 
 
     // ---- Exists ----
@@ -118,6 +133,10 @@ public class DungeonTableManager {
     }
 
 
+
+    public int countByMonsterIndex(int key) {
+        return snapshot.idxMonster.getOrDefault(key, Collections.emptyList()).size();
+    }
 
 
     public int countBySceneIdIndex(int key) {

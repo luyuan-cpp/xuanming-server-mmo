@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_match_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025match_error_tip.proto*\337\004\n\013match_error\022"
+    "\n\025match_error_tip.proto*\366\004\n\013match_error\022"
     "\022\n\016kMatch_errorOK\020\000\022\023\n\016kMatchInBattle\020\200}"
     "\022\030\n\023kMatchAlreadyQueued\020\201}\022\026\n\021kMatchMode"
     "NotOpen\020\202}\022 \n\033kMatchTeamSizeNotConfigure"
@@ -50,14 +50,15 @@ const char descriptor_table_protodef_match_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "\216}\022 \n\033kMatchSpectateWhileInBattle\020\217}\022\032\n\025"
     "kMatchAlreadyWatching\020\220}\022\034\n\027kMatchNoWatc"
     "hableBattle\020\221}\022\035\n\030kMatchBattleNotWatchab"
-    "le\020\222}\022\032\n\025kMatchSpectateOffline\020\223}B$\n\016com"
-    ".game.tableZ\022generated/pb/tableb\006proto3"
+    "le\020\222}\022\032\n\025kMatchSpectateOffline\020\223}\022\025\n\020kMa"
+    "tchNotInScene\020\224}B$\n\016com.game.tableZ\022gene"
+    "rated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_match_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_match_5ferror_5ftip_2eproto = {
     false,
     false,
-    679,
+    702,
     descriptor_table_protodef_match_5ferror_5ftip_2eproto,
     "match_error_tip.proto",
     &descriptor_table_match_5ferror_5ftip_2eproto_once,
@@ -76,7 +77,7 @@ match_error_descriptor() {
   return file_level_enum_descriptors_match_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t match_error_internal_data_[] = {
-    65536u, 1310720u, 16012u, 16007u, 16016u, 16003u, 16010u, 16014u, 16018u, 16001u, 16005u, 16009u, 16011u, 16013u, 16015u, 16017u, 16019u, 16000u, 16002u, 16004u, 16006u, 16008u, };
+    65536u, 1376256u, 16013u, 16007u, 16017u, 16003u, 16011u, 16015u, 16019u, 16001u, 16005u, 16009u, 16012u, 16014u, 16016u, 16018u, 16020u, 16000u, 16002u, 16004u, 16006u, 16008u, 16010u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

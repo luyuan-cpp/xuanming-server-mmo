@@ -1,0 +1,116 @@
+# match:回合制战斗匹配 / 切磋 / 观战编排(docs/design/cross-zone-matchmaking.md)。
+#
+# **全局池,只部署到 mmorpg-infra namespace 一次,不进任何 zone namespace。**
+# 匹配队列本就不分 zone(match:{mq}:queue 全局 list),gate 发现 match 走的是
+# 非 zone-scoped 的 MatchNodeService 前缀(cpp node_util.cpp IsZoneScopedNodeType
+# 不含它),所以全 zone 的 gate 都会连到这里的实例并随机路由。
+# k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,
+# infra-up / all-up 在基础设施阶段部署。ConfigMap go-svc-match-config 由脚本生成。
+apiVersion: v1
+kind: Service
+metadata:
+  name: match
+  labels:
+    app: match
+    tier: go-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: match
+  ports:
+    - name: grpc
+      port: 50500
+      targetPort: 50500
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: match
+  labels:
+    app: match
+    tier: go-svc
+spec:
+  # 多实例安全:每个 (mode,config) 队列一把 Redis SETNX 锁 + Lua 按持有者释放,
+  # snowflake worker id 由 etcd 分配;实例无状态,gate 随机路由。replicas>=2 是
+  # "容错不降级"的最低冗余(设计 §5:一个实例挂掉,锁 TTL 10s 到期后其余实例接管)。
+  replicas: 2
+  selector:
+    matchLabels:
+      app: match
+  template:
+    metadata:
+      labels:
+        app: match
+        tier: go-svc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9170"
+        prometheus.io/path: "/metrics"
+    spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点,否则单节点故障等于全池不可用
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: match
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: match
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
+              value: warn
+          args: ["-f", "/app/etc/match_service.yaml"]
+          ports:
+            - containerPort: 50500
+              name: grpc
+            - containerPort: 9170
+              name: metrics
+          readinessProbe:
+            grpc:
+              port: 50500
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 50500
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/etc
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: svc-config
+          configMap:
+            name: go-svc-match-config
+---
+# PDB 与主 manifest 同文件:k8s_deploy.ps1 只 apply 目录条目里的主 manifest。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: match-pdb
+  labels:
+    app: match
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: match

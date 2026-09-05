@@ -208,7 +208,9 @@ go-zero,结构照抄 `go/scene_manager`(config/etc yaml/internal/{logic,svc,serv
   本文档即该 key 的共享契约记录);
 - battle 节点发现:etcd list-watch `BattleNodeService.rpc/` 前缀(照 LoadReporter 模式),
   v1 随机选,负载上报二期;
-- 无状态、可水平扩,多实例用 Redis 锁保护 matcher loop(或 v1 单实例部署 + 文档标注);
+- 无状态、可水平扩,多实例用 Redis 锁保护 matcher loop;**全服跨 zone 匹配与 Redis Cluster
+  形态见 §16 / `cross-zone-matchmaking.md`**(2026-09-02:队列 key 改为 `{mq}` hash tag 同 slot +
+  注册集取代 SCAN,match 私有 key 与跨运行时契约 key 分成 MatchRedis / SharedRedis 双存储);
 - **挑战模块(场景发起 PK)**:ChallengePlayer/RespondChallenge(§3.1b),challenge 记录
   `challenge:{id}` Redis TTL 60s + `challenge:target:{player_id}` 反查(同一目标同时只挂一个
   待应答挑战,后来者拒绝);S2C 弹窗/结果经 Kafka gate PushToPlayerEvent 推送(目标玩家的
@@ -232,7 +234,12 @@ go-zero,结构照抄 `go/scene_manager`(config/etc yaml/internal/{logic,svc,serv
 |-----|------|------|------|
 | `battle:lock:{player_id}` = battle_id | scene(Prepare 时 SET EX / 结算与作废时 DEL) | match(JoinQueue 咨询性检查) | 战斗串行化锁,权威判定仍在 scene 的 InBattleComp |
 | `battle:settlement:pending:{player_id}` = 序列化 BattleSettlementEvent,TTL 7d | scene(玩家离线时) | scene(登录加载后) | 离线结算暂存 |
-| `match:queue:*` / `match:ticket:{player_id}` | match | match | 队列状态,重启可续 |
+| `match:{mq}:index` / `match:{mq}:queue:*` / `match:{mq}:lock:*` | match | match | 队列注册集 / 队列 / 凑单锁,hash tag `{mq}` 同 slot(Lua 原子入队;§16)|
+| `match:ticket:{player_id}` | match | match | 排队票据(含 zone_id / queue_key;matched 态短 TTL 自愈,§16)|
+
+**存储归属(2026-09-02,§16)**:上表 `battle:*` 与 `player:*` 是跨运行时契约 key,留在共享 Redis
+(SharedRedis,match 只读);`match:*` / `challenge:*` / `spectate:*` 是 match 私有 key,走 MatchRedis
+(可配 Redis Cluster)。`MatchRedis` 未配置时两者为同一实例。
 
 ## 7. 新增不变量(并入宪法 §7 语义)
 
@@ -255,6 +262,9 @@ go-zero,结构照抄 `go/scene_manager`(config/etc yaml/internal/{logic,svc,serv
 battle 为独立进程池(全局,不分 zone),K8s 单独 Deployment(照 scene-world/scene-instance
 第三池模式);战斗房间为纯内存对象,节点无持久状态,崩溃即战斗作废(§3.2 补偿);
 水平扩容 = 加实例,match 按发现列表分配。Agones/rooms Counter 一期不接。
+
+match 同为**全局池**(MatchNodeService 不在 `IsZoneScopedNodeType`,gate 连全 zone 的 match 实例随机路由):
+K8s 部署到 infra namespace 一次、replicas ≥ 2;排队/票据/挑战/观战索引放 Redis Cluster(§16)。
 
 ## 9. 二期清单
 
@@ -458,3 +468,60 @@ EditMode Battle 测试全绿(含新增 SpectateClient / 自动战斗用例)。
 **阶段 4:冒烟**:两客户端(dev_demo + 第二个 dev 账号):A 排 PVE solo 开战 →
 B 主界面「观战」→ 随机观战 → 收到首帧与逐回合事件 → A 开「自动」挂机到结算 →
 B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpectateEnd reason=REMOVED)。
+
+## 15. PVE 数据化(2026-09-02):怪物属性 / 副本怪物组 / 奖励 / 玩家初始属性
+
+引擎早已支持带属性怪物/多怪/多回合(单测反证),此前 PVE"一回合秒杀"纯因**表空**
+(MonsterTable 只有 id 列)+ **玩家新号 0 属性**(建角只写账号级 class_id,不建属性数据)。
+本轮补数据 + 三处接线,PVE 变为大厂标准多回合对战。
+
+### 15.1 策划表加列(走 tools/data_table_exporter 重导)
+- `Monster.xlsx`:health/strength/armor/resistance/critchance/speed(uint64)+ exp_reward/gold_reward;16 只怪分级。
+- `Dungeon.xlsx`:`monster`(repeated fk:Monster)怪物组;副本1=[1,2]/副本2=[6,7]/副本3=[11,12,16]。
+- `Class.xlsx`:init_health/mana/strength/armor/resistance/critchance/speed(职业初始属性)。
+- **导表 PATH 必须同时含 protoc 与 protoc-gen-go/grpc**,否则 Go 侧 proto 静默不重生成。
+
+### 15.2 引擎接线(cpp/libs/services/battle)
+- `AppendMonsterActor` 优先读 `FindMonster(id)` 表属性,缺行(兜底怪 id=0)回退常量。
+- `TableBattleDataProvider::GetDungeonMonsterIds` 读 `DungeonTable.monster`。
+- `BuildSettlement` 玩家侧(team0)胜时累加击杀怪物 exp_reward/gold_reward → exp_gain/gold_gain;败/逃/亡不发奖。
+
+### 15.3 玩家初始属性 + 复活(cpp/libs/services/scene/player/player_database_loader.cpp)
+- `ApplyClassInitialAttributesOrRevive`:加载时 BaseAttributesComp 全 0(新号)→ 按 ClassTable 首行 init_* 赋全属性;
+  已初始化但 health=0(阵亡)→ 恢复满血满蓝(基础复活,防永久卡死)。残血带出战斗(D4)在同会话 battle→battle 保持,不受影响(此函数只在 DB 加载/登录跑)。
+
+### 15.4 已知缺口
+- 经验/道具落地:引擎已产出 exp_gain/items_gained,scene 侧金币真入账,经验/掉落需先建经验/等级/背包系统。
+- 怪物 AI 用技能未做(只普攻);技能 damage 表达式对低级 PVE 偏大,配怪技能前要重平衡。
+- class_id 未随 PlayerAllData 下发 scene,玩家初始属性/技能暂全职业统一(取 Class 首行)。
+- 完整死亡/复活流程(复活点/惩罚/道具)待产品细化。**基线(2026-09-02)**:战斗结算把玩家打到 0 血
+  (含离线挂起结算登录后补应用)即按 ClassTable 首行满血满蓝复活(`ReviveBaseAttributesIfDead`,与登录
+  加载复活同一规则);`PrepareBattle` 拒绝 0 血玩家。否则阵亡玩家可再次排队、被快照进新局、引擎开局即判负
+  (跨 zone 冒烟复跑时实测)。产品定稿死亡流程时替换此基线。
+
+## 16. 全服跨 zone 匹配 + 水平扩展 + Redis Cluster(2026-09-02)
+
+完整设计见 `docs/design/cross-zone-matchmaking.md`。要点:
+
+- **链路本来就通**:快照模型玩家不搬家(绕开 `cross-zone-readiness-audit.md` 的实体迁移致命项);
+  `(node_type, node_id)` 由 etcd CAS **全局**分配(Go `noderegistry` allocationKey 不带 zone、C++
+  `etcd_service.cpp` "lost the race globally"),`gate-{id}` / `scene-{id}` topic 跨 zone 不撞;
+  `player:{id}:location` 带 zone_id,match watcher 覆盖全 zone 的 scene 前缀;battle / match 都是全局池。
+- **真正补的洞**:①Redis Cluster 就绪 —— `SCAN match:queue:*` 在集群只扫一个分片、挑战记录双 key
+  `DEL` 跨 slot、C++ hiredis 无集群;②实例崩溃后 `matched` 票据 6h 不能重排;③多实例 metrics 端口撞。
+- **决策**:全局池不分 zone、无优先级、无降级开关;MatchRedis(私有 key,可集群)/ SharedRedis(契约 key,
+  只读)双存储;队列三类 key 同 `{mq}` slot + Lua 原子入队 + 注册集;`matched` 短 TTL(默认 30s);
+  票据记 zone_id / queue_key;`gather_zone_mix_total{mode,mix}` 指标;客户端零改动。
+- **补充(实施中发现)**:gate 两处随机路由硬过滤同 zone → `NodeUtils::IsGlobalPoolNodeType` 豁免
+  Match/Battle(D11);`shared/snowflakealloc` 同主机亲和复用会抢活进程的 worker id(本地起第二个 login
+  时 zone1 login 自杀)→ 只在 lease 已死或有 `released` 标记时接管,否则派生键分配(D5b)。
+- **验证**:go/match 单测(miniredis);本地 `redis-cluster` compose profile + `dev-start-zones 1,2` +
+  robot `battle-smoke` `cross_zone: true` 输出 `CROSS_ZONE_MATCH_OK`。
+
+## 17. 战斗表现(问道式演出)与二期扩展索引(2026-09-03)
+
+- 表现规格与美术契约:`turn-battle-presentation.md`(录像观察、协议增量 D1-D5、客户端表现层架构、验证)、
+  `battle-art-prompts.md`(生图提示词包、资源路径契约、程序化生成清单)。
+- 二期服务端:prepare deadline + `BattleConfirmedEvent`、配表指纹(`BattlePlayerSnapshot.table_fingerprint` /
+  `CreateBattleRequest.table_fingerprint`)、`contracts.kafka.BattleResultEvent`(battle → match,评分回流)—— 见
+  `cross-zone-matchmaking.md` §10/§11。

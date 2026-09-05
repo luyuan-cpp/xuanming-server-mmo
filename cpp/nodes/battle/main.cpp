@@ -11,6 +11,8 @@
 #include "handler/grpc/battle_client_player_service.h"
 #include "logic/battle_room_manager.h"
 
+#include "data/battle_table_fingerprint.h"
+
 #include "proto/common/base/node.pb.h"
 
 #include "table/code/skill_table.h"
@@ -66,6 +68,11 @@ namespace
                 {
                     LOG_ERROR << "battle 关键战斗表为空,回合引擎将无法开局,请检查表数据目录";
                 }
+
+                // 战斗配表指纹:表加载完成后算一次并缓存,CreateBattle 与 match/scene 带来的
+                // 指纹比对(设计文档 cross-zone-matchmaking.md §10);启动日志里打出来便于跨节点排障
+                LOG_INFO << "battle 战斗配表指纹: table_fingerprint="
+                         << turnbattle::BattleTableFingerprint::Refresh();
             }
         };
 

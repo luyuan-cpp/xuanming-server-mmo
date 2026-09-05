@@ -80,11 +80,11 @@ func registerSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64, battleN
 	}
 	// 先写记录再入 ZSET:列表/随机挑中的成员保证记录可读(反序不变量,
 	// 与 JoinQueue 先写 ticket 再入队同理)。
-	if err := svcCtx.Redis.Setex(spectateBattleKey(battleId), string(raw), spectateTTLSeconds(svcCtx)); err != nil {
+	if err := svcCtx.MatchRedis.Setex(spectateBattleKey(battleId), string(raw), spectateTTLSeconds(svcCtx)); err != nil {
 		logx.Errorf("[spectate] 写观战记录失败 battle=%d: %v", battleId, err)
 		return
 	}
-	if _, err := svcCtx.Redis.Zadd(spectateBattlesActiveKey, int64(createdAtMs),
+	if _, err := svcCtx.MatchRedis.Zadd(spectateBattlesActiveKey, int64(createdAtMs),
 		strconv.FormatUint(battleId, 10)); err != nil {
 		logx.Errorf("[spectate] 观战索引 ZADD 失败 battle=%d: %v", battleId, err)
 		return
@@ -95,7 +95,7 @@ func registerSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64, battleN
 
 // loadSpectateBattle 读活跃战斗记录;不存在(TTL 已清/从未登记)返回 (nil, nil)。
 func loadSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64) (*matchpb.SpectateBattleRecord, error) {
-	raw, err := svcCtx.Redis.Get(spectateBattleKey(battleId))
+	raw, err := svcCtx.MatchRedis.Get(spectateBattleKey(battleId))
 	if err != nil {
 		return nil, err
 	}
@@ -111,10 +111,10 @@ func loadSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64) (*matchpb.S
 
 // removeSpectateBattle 懒剔除:battle 报房间不存在 / 记录缺失或损坏时清索引。
 func removeSpectateBattle(svcCtx *svc.ServiceContext, battleId uint64) {
-	if _, err := svcCtx.Redis.Del(spectateBattleKey(battleId)); err != nil {
+	if _, err := svcCtx.MatchRedis.Del(spectateBattleKey(battleId)); err != nil {
 		logx.Errorf("[spectate] 删观战记录失败 battle=%d: %v", battleId, err)
 	}
-	if _, err := svcCtx.Redis.Zrem(spectateBattlesActiveKey, strconv.FormatUint(battleId, 10)); err != nil {
+	if _, err := svcCtx.MatchRedis.Zrem(spectateBattlesActiveKey, strconv.FormatUint(battleId, 10)); err != nil {
 		logx.Errorf("[spectate] 观战索引 ZREM 失败 battle=%d: %v", battleId, err)
 	}
 }
@@ -132,7 +132,7 @@ func spectateStaleBeforeMs(svcCtx *svc.ServiceContext) uint64 {
 func pickRandomBattle(svcCtx *svc.ServiceContext) (uint64, error) {
 	staleBefore := spectateStaleBeforeMs(svcCtx)
 	for attempt := 0; attempt < 3; attempt++ {
-		count, err := svcCtx.Redis.Zcard(spectateBattlesActiveKey)
+		count, err := svcCtx.MatchRedis.Zcard(spectateBattlesActiveKey)
 		if err != nil {
 			return 0, fmt.Errorf("观战索引 ZCARD 失败: %w", err)
 		}
@@ -140,7 +140,7 @@ func pickRandomBattle(svcCtx *svc.ServiceContext) (uint64, error) {
 			return 0, nil
 		}
 		idx := int64(rand.Intn(count))
-		pairs, err := svcCtx.Redis.ZrangeWithScores(spectateBattlesActiveKey, idx, idx)
+		pairs, err := svcCtx.MatchRedis.ZrangeWithScores(spectateBattlesActiveKey, idx, idx)
 		if err != nil {
 			return 0, fmt.Errorf("观战索引 ZRANGE 失败: %w", err)
 		}
@@ -151,7 +151,7 @@ func pickRandomBattle(svcCtx *svc.ServiceContext) (uint64, error) {
 		battleId, err := strconv.ParseUint(pairs[0].Key, 10, 64)
 		if err != nil {
 			logx.Errorf("[spectate] 观战索引出现非法成员 %q,剔除", pairs[0].Key)
-			if _, err := svcCtx.Redis.Zrem(spectateBattlesActiveKey, pairs[0].Key); err != nil {
+			if _, err := svcCtx.MatchRedis.Zrem(spectateBattlesActiveKey, pairs[0].Key); err != nil {
 				logx.Errorf("[spectate] 剔除非法成员失败: %v", err)
 			}
 			continue
@@ -170,7 +170,7 @@ func pickRandomBattle(svcCtx *svc.ServiceContext) (uint64, error) {
 // 槽位的竞态。整条路径尽力而为:任何失败只记日志不阻断开局 —— RemoveObserver
 // 丢了,观众绑定也会被参战绑定覆盖,battle 侧观众推送则因防僵尸校验自然失效。
 func stopWatchingIfAny(svcCtx *svc.ServiceContext, playerId uint64, reason string) {
-	raw, err := svcCtx.Redis.Get(spectateWatchingKey(playerId))
+	raw, err := svcCtx.MatchRedis.Get(spectateWatchingKey(playerId))
 	if err != nil {
 		logx.Errorf("[spectate] 读观战标记失败 player=%d: %v", playerId, err)
 		return
@@ -199,9 +199,41 @@ func stopWatchingIfAny(svcCtx *svc.ServiceContext, playerId uint64, reason strin
 
 // deleteSpectateWatching 删观战互斥标记(WatchBattle 失败回滚 / 清退共用)。
 func deleteSpectateWatching(svcCtx *svc.ServiceContext, playerId uint64) {
-	if _, err := svcCtx.Redis.Del(spectateWatchingKey(playerId)); err != nil {
+	if _, err := svcCtx.MatchRedis.Del(spectateWatchingKey(playerId)); err != nil {
 		logx.Errorf("[spectate] 删观战标记失败 player=%d: %v", playerId, err)
 	}
+}
+
+// battle 节点观战 RPC 的可替换缝(单测用记录器顶替真 gRPC;与 gather.go 的
+// prepareBattleFn / createBattleFn 等四个缝同一模式)。生产实现只做"建连 + 发一次
+// 请求",节点定位与索引懒剔除判定留在 addObserver / removeObserver 里,
+// 这样单测能覆盖到判定逻辑而不需要起 battle 节点。
+var (
+	addObserverFn    = addObserverRPC
+	removeObserverFn = removeObserverRPC
+)
+
+// addObserverRPC 是 addObserverFn 的生产实现。
+func addObserverRPC(endpoint string, req *battlepb.AddObserverRequest) (*battlepb.AddObserverResponse, error) {
+	conn, err := discovery.DialEndpoint(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("连接 battle 节点失败: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), addObserverTimeout)
+	defer cancel()
+	return battlepb.NewBattleNodeClient(conn).AddObserver(ctx, req)
+}
+
+// removeObserverRPC 是 removeObserverFn 的生产实现。
+func removeObserverRPC(endpoint string, req *battlepb.RemoveObserverRequest) error {
+	conn, err := discovery.DialEndpoint(endpoint)
+	if err != nil {
+		return fmt.Errorf("连接 battle 节点失败: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), removeObserverTimeout)
+	defer cancel()
+	_, err = battlepb.NewBattleNodeClient(conn).RemoveObserver(ctx, req)
+	return err
 }
 
 // addObserver 调 battle 节点挂观众。返回 roomMissing=true 表示 battle 回
@@ -214,13 +246,7 @@ func addObserver(svcCtx *svc.ServiceContext, battleNodeId uint32, battleId, obse
 	if err != nil {
 		return false, fmt.Errorf("定位 battle 节点失败(node=%d): %w", battleNodeId, err)
 	}
-	conn, err := discovery.DialEndpoint(endpoint)
-	if err != nil {
-		return false, fmt.Errorf("连接 battle 节点失败: %w", err)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), addObserverTimeout)
-	defer cancel()
-	resp, err := battlepb.NewBattleNodeClient(conn).AddObserver(ctx, &battlepb.AddObserverRequest{
+	resp, err := addObserverFn(endpoint, &battlepb.AddObserverRequest{
 		BattleId:         battleId,
 		ObserverPlayerId: observerId,
 		Routing:          routing,
@@ -243,14 +269,7 @@ func removeObserver(svcCtx *svc.ServiceContext, battleNodeId uint32, battleId, o
 			battleId, battleNodeId, observerId, err)
 		return
 	}
-	conn, err := discovery.DialEndpoint(endpoint)
-	if err != nil {
-		logx.Errorf("[spectate] 清退时连接 battle 节点失败 battle=%d player=%d: %v", battleId, observerId, err)
-		return
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), removeObserverTimeout)
-	defer cancel()
-	if _, err := battlepb.NewBattleNodeClient(conn).RemoveObserver(ctx, &battlepb.RemoveObserverRequest{
+	if err := removeObserverFn(endpoint, &battlepb.RemoveObserverRequest{
 		BattleId:         battleId,
 		ObserverPlayerId: observerId,
 		Reason:           reason,
@@ -268,7 +287,7 @@ func cleanupExpiredSpectateIndex(svcCtx *svc.ServiceContext) {
 	if staleBefore <= 0 {
 		return
 	}
-	removed, err := svcCtx.Redis.Zremrangebyscore(spectateBattlesActiveKey, 0, staleBefore)
+	removed, err := svcCtx.MatchRedis.Zremrangebyscore(spectateBattlesActiveKey, 0, staleBefore)
 	if err != nil {
 		logx.Errorf("[matcher] 清理过期观战索引失败: %v", err)
 		return

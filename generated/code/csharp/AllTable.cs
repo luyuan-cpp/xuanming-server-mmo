@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class AllTable
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 21;
+        public const int TableCount = 25;
 
         private static Action s_loadSuccessCallback;
 
@@ -40,6 +40,10 @@ namespace MmorpgClient.Table
             {
                 ActorActionCombatStateTableManager.FileName(useBinary),
                 ActorActionStateTableManager.FileName(useBinary),
+                AttributeAutoPlanTableManager.FileName(useBinary),
+                AttributeDimensionTableManager.FileName(useBinary),
+                AttributePoolTableManager.FileName(useBinary),
+                AttributeRuleTableManager.FileName(useBinary),
                 BaseSceneTableManager.FileName(useBinary),
                 BuffTableManager.FileName(useBinary),
                 ClassTableManager.FileName(useBinary),
@@ -68,6 +72,10 @@ namespace MmorpgClient.Table
         {
             ActorActionCombatStateTableManager.Instance.Load(configDir, useBinary);
             ActorActionStateTableManager.Instance.Load(configDir, useBinary);
+            AttributeAutoPlanTableManager.Instance.Load(configDir, useBinary);
+            AttributeDimensionTableManager.Instance.Load(configDir, useBinary);
+            AttributePoolTableManager.Instance.Load(configDir, useBinary);
+            AttributeRuleTableManager.Instance.Load(configDir, useBinary);
             BaseSceneTableManager.Instance.Load(configDir, useBinary);
             BuffTableManager.Instance.Load(configDir, useBinary);
             ClassTableManager.Instance.Load(configDir, useBinary);
@@ -115,6 +123,14 @@ namespace MmorpgClient.Table
                 ActorActionCombatStateTableManager.Instance.LoadFromBytes, ActorActionCombatStateTableManager.Instance.LoadFromJson);
             LoadOne(ActorActionStateTableManager.FileName(useBinary), byteProvider, useBinary,
                 ActorActionStateTableManager.Instance.LoadFromBytes, ActorActionStateTableManager.Instance.LoadFromJson);
+            LoadOne(AttributeAutoPlanTableManager.FileName(useBinary), byteProvider, useBinary,
+                AttributeAutoPlanTableManager.Instance.LoadFromBytes, AttributeAutoPlanTableManager.Instance.LoadFromJson);
+            LoadOne(AttributeDimensionTableManager.FileName(useBinary), byteProvider, useBinary,
+                AttributeDimensionTableManager.Instance.LoadFromBytes, AttributeDimensionTableManager.Instance.LoadFromJson);
+            LoadOne(AttributePoolTableManager.FileName(useBinary), byteProvider, useBinary,
+                AttributePoolTableManager.Instance.LoadFromBytes, AttributePoolTableManager.Instance.LoadFromJson);
+            LoadOne(AttributeRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                AttributeRuleTableManager.Instance.LoadFromBytes, AttributeRuleTableManager.Instance.LoadFromJson);
             LoadOne(BaseSceneTableManager.FileName(useBinary), byteProvider, useBinary,
                 BaseSceneTableManager.Instance.LoadFromBytes, BaseSceneTableManager.Instance.LoadFromJson);
             LoadOne(BuffTableManager.FileName(useBinary), byteProvider, useBinary,

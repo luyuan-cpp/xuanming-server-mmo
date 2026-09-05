@@ -8,6 +8,7 @@
 #include "network/rpc_session.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "network/node_utils.h"
+#include "node/system/node/node_util.h"
 #include <rpc/service_metadata/scene_service_metadata.h>
 #include "thread_context/node_context_manager.h"
 #include "utils/random/random.h"
@@ -270,10 +271,12 @@ inline entt::entity PickRandomNodeEntity(uint32_t nodeType)
 	auto view = registry.view<NodeInfo>();
 	std::vector<entt::entity> candidates;
 	const auto zoneId = GetNodeInfo().zone_id();
+	// 全局池类型(match / battle)不比对 zone(设计文档 cross-zone-matchmaking.md D11)。
+	const bool globalPool = NodeUtils::IsGlobalPoolNodeType(nodeType);
 	for (auto entity : view)
 	{
 		const auto &node = view.get<NodeInfo>(entity);
-		if (node.zone_id() == zoneId)
+		if (globalPool || node.zone_id() == zoneId)
 		{
 			candidates.push_back(entity);
 		}

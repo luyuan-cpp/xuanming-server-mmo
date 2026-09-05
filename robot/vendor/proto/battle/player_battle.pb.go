@@ -216,9 +216,10 @@ func (x *BattleStartS2C) GetState() *BattleStateS2C {
 type TurnResultS2C struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	RoundIndex    uint32                 `protobuf:"varint,2,opt,name=round_index,json=roundIndex,proto3" json:"round_index,omitempty"` // 本次结算的回合序号
-	Events        []*BattleEventItem     `protobuf:"bytes,3,rep,name=events,proto3" json:"events,omitempty"`                            // 按结算顺序播表现
-	State         *BattleStateS2C        `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`                              // 结算后权威状态
+	RoundIndex    uint32                 `protobuf:"varint,2,opt,name=round_index,json=roundIndex,proto3" json:"round_index,omitempty"`           // 本次结算的回合序号
+	Events        []*BattleEventItem     `protobuf:"bytes,3,rep,name=events,proto3" json:"events,omitempty"`                                      // 按结算顺序播表现
+	State         *BattleStateS2C        `protobuf:"bytes,4,opt,name=state,proto3" json:"state,omitempty"`                                        // 结算后权威状态
+	ActionOrder   []uint64               `protobuf:"varint,5,rep,packed,name=action_order,json=actionOrder,proto3" json:"action_order,omitempty"` // 本回合按速度排定的出手序(actor_id;含被跳过者),演出"行动预告条"用
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -277,6 +278,13 @@ func (x *TurnResultS2C) GetEvents() []*BattleEventItem {
 func (x *TurnResultS2C) GetState() *BattleStateS2C {
 	if x != nil {
 		return x.State
+	}
+	return nil
+}
+
+func (x *TurnResultS2C) GetActionOrder() []uint64 {
+	if x != nil {
+		return x.ActionOrder
 	}
 	return nil
 }
@@ -843,13 +851,14 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x11pending_actor_ids\x18\x06 \x03(\x04R\x0fpendingActorIds\"T\n" +
 	"\x0eBattleStartS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12%\n" +
-	"\x05state\x18\x02 \x01(\v2\x0f.BattleStateS2CR\x05state\"\x9e\x01\n" +
+	"\x05state\x18\x02 \x01(\v2\x0f.BattleStateS2CR\x05state\"\xc1\x01\n" +
 	"\rTurnResultS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1f\n" +
 	"\vround_index\x18\x02 \x01(\rR\n" +
 	"roundIndex\x12(\n" +
 	"\x06events\x18\x03 \x03(\v2\x10.BattleEventItemR\x06events\x12%\n" +
-	"\x05state\x18\x04 \x01(\v2\x0f.BattleStateS2CR\x05state\"\x8d\x01\n" +
+	"\x05state\x18\x04 \x01(\v2\x0f.BattleStateS2CR\x05state\x12!\n" +
+	"\faction_order\x18\x05 \x03(\x04R\vactionOrder\"\x8d\x01\n" +
 	"\fBattleEndS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12)\n" +
 	"\aoutcome\x18\x02 \x01(\x0e2\x0f.eBattleOutcomeR\aoutcome\x125\n" +

@@ -16,4 +16,12 @@ message ClassTable {
 
   uint32 id = 1;
   repeated uint32 skill = 2 [(cfg_slots) = 3];
+  // 初始属性。字段号抄自 generated/code/proto/class_table.proto,纯追加,1/2 号未动。
+  uint64 init_health = 3;
+  uint64 init_mana = 4;
+  uint64 init_strength = 5;
+  uint64 init_armor = 6;
+  uint64 init_resistance = 7;
+  uint64 init_critchance = 8;
+  uint64 init_speed = 9;
 }

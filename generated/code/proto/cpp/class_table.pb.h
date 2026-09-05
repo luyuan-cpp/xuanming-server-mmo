@@ -229,6 +229,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClassTable final : public ::google:
   // accessors -------------------------------------------------------
   enum : int {
     kSkillFieldNumber = 2,
+    kInitHealthFieldNumber = 3,
+    kInitManaFieldNumber = 4,
+    kInitStrengthFieldNumber = 5,
+    kInitArmorFieldNumber = 6,
+    kInitResistanceFieldNumber = 7,
+    kInitCritchanceFieldNumber = 8,
+    kInitSpeedFieldNumber = 9,
     kIdFieldNumber = 1,
   };
   // repeated uint32 skill = 2;
@@ -251,6 +258,76 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClassTable final : public ::google:
   ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_skill();
 
   public:
+  // uint64 init_health = 3;
+  void clear_init_health() ;
+  [[nodiscard]] ::uint64_t init_health() const;
+  void set_init_health(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_init_health() const;
+  void _internal_set_init_health(::uint64_t value);
+
+  public:
+  // uint64 init_mana = 4;
+  void clear_init_mana() ;
+  [[nodiscard]] ::uint64_t init_mana() const;
+  void set_init_mana(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_init_mana() const;
+  void _internal_set_init_mana(::uint64_t value);
+
+  public:
+  // uint64 init_strength = 5;
+  void clear_init_strength() ;
+  [[nodiscard]] ::uint64_t init_strength() const;
+  void set_init_strength(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_init_strength() const;
+  void _internal_set_init_strength(::uint64_t value);
+
+  public:
+  // uint64 init_armor = 6;
+  void clear_init_armor() ;
+  [[nodiscard]] ::uint64_t init_armor() const;
+  void set_init_armor(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_init_armor() const;
+  void _internal_set_init_armor(::uint64_t value);
+
+  public:
+  // uint64 init_resistance = 7;
+  void clear_init_resistance() ;
+  [[nodiscard]] ::uint64_t init_resistance() const;
+  void set_init_resistance(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_init_resistance() const;
+  void _internal_set_init_resistance(::uint64_t value);
+
+  public:
+  // uint64 init_critchance = 8;
+  void clear_init_critchance() ;
+  [[nodiscard]] ::uint64_t init_critchance() const;
+  void set_init_critchance(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_init_critchance() const;
+  void _internal_set_init_critchance(::uint64_t value);
+
+  public:
+  // uint64 init_speed = 9;
+  void clear_init_speed() ;
+  [[nodiscard]] ::uint64_t init_speed() const;
+  void set_init_speed(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_init_speed() const;
+  void _internal_set_init_speed(::uint64_t value);
+
+  public:
   // uint32 id = 1;
   void clear_id() ;
   [[nodiscard]] ::uint32_t id() const;
@@ -265,7 +342,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClassTable final : public ::google:
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<4, 9,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -296,6 +373,13 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClassTable final : public ::google:
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedField<::uint32_t> skill_;
     ::google::protobuf::internal::CachedSize _skill_cached_byte_size_;
+    ::uint64_t init_health_;
+    ::uint64_t init_mana_;
+    ::uint64_t init_strength_;
+    ::uint64_t init_armor_;
+    ::uint64_t init_resistance_;
+    ::uint64_t init_critchance_;
+    ::uint64_t init_speed_;
     ::uint32_t id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -535,7 +619,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ClassTableData final : public ::goo
 inline void ClassTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t ClassTable::id() const {
   // @@protoc_insertion_point(field_get:ClassTable.id)
@@ -543,7 +627,7 @@ inline ::uint32_t ClassTable::id() const {
 }
 inline void ClassTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:ClassTable.id)
 }
 inline ::uint32_t ClassTable::_internal_id() const {
@@ -604,6 +688,174 @@ inline ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL
 ClassTable::_internal_mutable_skill() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.skill_;
+}
+
+// uint64 init_health = 3;
+inline void ClassTable::clear_init_health() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_health_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t ClassTable::init_health() const {
+  // @@protoc_insertion_point(field_get:ClassTable.init_health)
+  return _internal_init_health();
+}
+inline void ClassTable::set_init_health(::uint64_t value) {
+  _internal_set_init_health(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:ClassTable.init_health)
+}
+inline ::uint64_t ClassTable::_internal_init_health() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.init_health_;
+}
+inline void ClassTable::_internal_set_init_health(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_health_ = value;
+}
+
+// uint64 init_mana = 4;
+inline void ClassTable::clear_init_mana() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_mana_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t ClassTable::init_mana() const {
+  // @@protoc_insertion_point(field_get:ClassTable.init_mana)
+  return _internal_init_mana();
+}
+inline void ClassTable::set_init_mana(::uint64_t value) {
+  _internal_set_init_mana(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:ClassTable.init_mana)
+}
+inline ::uint64_t ClassTable::_internal_init_mana() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.init_mana_;
+}
+inline void ClassTable::_internal_set_init_mana(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_mana_ = value;
+}
+
+// uint64 init_strength = 5;
+inline void ClassTable::clear_init_strength() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_strength_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t ClassTable::init_strength() const {
+  // @@protoc_insertion_point(field_get:ClassTable.init_strength)
+  return _internal_init_strength();
+}
+inline void ClassTable::set_init_strength(::uint64_t value) {
+  _internal_set_init_strength(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ClassTable.init_strength)
+}
+inline ::uint64_t ClassTable::_internal_init_strength() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.init_strength_;
+}
+inline void ClassTable::_internal_set_init_strength(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_strength_ = value;
+}
+
+// uint64 init_armor = 6;
+inline void ClassTable::clear_init_armor() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_armor_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t ClassTable::init_armor() const {
+  // @@protoc_insertion_point(field_get:ClassTable.init_armor)
+  return _internal_init_armor();
+}
+inline void ClassTable::set_init_armor(::uint64_t value) {
+  _internal_set_init_armor(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:ClassTable.init_armor)
+}
+inline ::uint64_t ClassTable::_internal_init_armor() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.init_armor_;
+}
+inline void ClassTable::_internal_set_init_armor(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_armor_ = value;
+}
+
+// uint64 init_resistance = 7;
+inline void ClassTable::clear_init_resistance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_resistance_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t ClassTable::init_resistance() const {
+  // @@protoc_insertion_point(field_get:ClassTable.init_resistance)
+  return _internal_init_resistance();
+}
+inline void ClassTable::set_init_resistance(::uint64_t value) {
+  _internal_set_init_resistance(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:ClassTable.init_resistance)
+}
+inline ::uint64_t ClassTable::_internal_init_resistance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.init_resistance_;
+}
+inline void ClassTable::_internal_set_init_resistance(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_resistance_ = value;
+}
+
+// uint64 init_critchance = 8;
+inline void ClassTable::clear_init_critchance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_critchance_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t ClassTable::init_critchance() const {
+  // @@protoc_insertion_point(field_get:ClassTable.init_critchance)
+  return _internal_init_critchance();
+}
+inline void ClassTable::set_init_critchance(::uint64_t value) {
+  _internal_set_init_critchance(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:ClassTable.init_critchance)
+}
+inline ::uint64_t ClassTable::_internal_init_critchance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.init_critchance_;
+}
+inline void ClassTable::_internal_set_init_critchance(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_critchance_ = value;
+}
+
+// uint64 init_speed = 9;
+inline void ClassTable::clear_init_speed() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_speed_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t ClassTable::init_speed() const {
+  // @@protoc_insertion_point(field_get:ClassTable.init_speed)
+  return _internal_init_speed();
+}
+inline void ClassTable::set_init_speed(::uint64_t value) {
+  _internal_set_init_speed(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:ClassTable.init_speed)
+}
+inline ::uint64_t ClassTable::_internal_init_speed() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.init_speed_;
+}
+inline void ClassTable::_internal_set_init_speed(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.init_speed_ = value;
 }
 
 // -------------------------------------------------------------------

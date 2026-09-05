@@ -43,3 +43,6 @@
 42=BattleSettlementEvent
 43=ContractsKafkaBindBattleEvent
 44=ContractsKafkaUnbindBattleEvent
+45=BattleConfirmedEvent
+46=ContractsKafkaBattleResultEvent
+47=ContractsKafkaBattleResultTeam

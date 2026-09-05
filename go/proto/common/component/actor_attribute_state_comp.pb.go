@@ -126,12 +126,19 @@ func (x *CalculatedAttributesComp) GetIsDead() bool {
 	return false
 }
 
-// Derived attributes, computed server-side
+// 二级属性(服务器按 AttributeDimension 表系数重算,不落库;设计文档
+// docs/design/player-attribute-allocation.md §3)。
+// 全部 uint64:与 BaseAttributesComp / BattlePlayerSnapshot 同口径,战斗公式不窄化。
 type DerivedAttributesComp struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	MaxHealth     uint32                 `protobuf:"varint,1,opt,name=max_health,json=maxHealth,proto3" json:"max_health,omitempty"` // Max HP
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	MaxHealth      uint64                 `protobuf:"varint,1,opt,name=max_health,json=maxHealth,proto3" json:"max_health,omitempty"`                // 气血上限
+	MaxMana        uint64                 `protobuf:"varint,2,opt,name=max_mana,json=maxMana,proto3" json:"max_mana,omitempty"`                      // 法力上限
+	PhysicalAttack uint64                 `protobuf:"varint,3,opt,name=physical_attack,json=physicalAttack,proto3" json:"physical_attack,omitempty"` // 物伤(普攻加成,加法接入引擎公式)
+	MagicAttack    uint64                 `protobuf:"varint,4,opt,name=magic_attack,json=magicAttack,proto3" json:"magic_attack,omitempty"`          // 法伤(技能加成)
+	Defense        uint64                 `protobuf:"varint,5,opt,name=defense,proto3" json:"defense,omitempty"`                                     // 防御(加法减伤)
+	Speed          uint64                 `protobuf:"varint,6,opt,name=speed,proto3" json:"speed,omitempty"`                                         // 速度(同步写入 BaseAttributesComp.speed 供出手序)
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *DerivedAttributesComp) Reset() {
@@ -164,9 +171,44 @@ func (*DerivedAttributesComp) Descriptor() ([]byte, []int) {
 	return file_proto_common_component_actor_attribute_state_comp_proto_rawDescGZIP(), []int{2}
 }
 
-func (x *DerivedAttributesComp) GetMaxHealth() uint32 {
+func (x *DerivedAttributesComp) GetMaxHealth() uint64 {
 	if x != nil {
 		return x.MaxHealth
+	}
+	return 0
+}
+
+func (x *DerivedAttributesComp) GetMaxMana() uint64 {
+	if x != nil {
+		return x.MaxMana
+	}
+	return 0
+}
+
+func (x *DerivedAttributesComp) GetPhysicalAttack() uint64 {
+	if x != nil {
+		return x.PhysicalAttack
+	}
+	return 0
+}
+
+func (x *DerivedAttributesComp) GetMagicAttack() uint64 {
+	if x != nil {
+		return x.MagicAttack
+	}
+	return 0
+}
+
+func (x *DerivedAttributesComp) GetDefense() uint64 {
+	if x != nil {
+		return x.Defense
+	}
+	return 0
+}
+
+func (x *DerivedAttributesComp) GetSpeed() uint64 {
+	if x != nil {
+		return x.Speed
 	}
 	return 0
 }
@@ -185,10 +227,15 @@ const file_proto_common_component_actor_attribute_state_comp_proto_rawDesc = "" 
 	"\x18CalculatedAttributesComp\x12!\n" +
 	"\fattack_power\x18\x01 \x01(\rR\vattackPower\x12#\n" +
 	"\rdefense_power\x18\x02 \x01(\rR\fdefensePower\x12\x16\n" +
-	"\x06isDead\x18\x03 \x01(\bR\x06isDead\"6\n" +
+	"\x06isDead\x18\x03 \x01(\bR\x06isDead\"\xcd\x01\n" +
 	"\x15DerivedAttributesComp\x12\x1d\n" +
 	"\n" +
-	"max_health\x18\x01 \x01(\rR\tmaxHealthB\x18Z\x16proto/common/componentb\x06proto3"
+	"max_health\x18\x01 \x01(\x04R\tmaxHealth\x12\x19\n" +
+	"\bmax_mana\x18\x02 \x01(\x04R\amaxMana\x12'\n" +
+	"\x0fphysical_attack\x18\x03 \x01(\x04R\x0ephysicalAttack\x12!\n" +
+	"\fmagic_attack\x18\x04 \x01(\x04R\vmagicAttack\x12\x18\n" +
+	"\adefense\x18\x05 \x01(\x04R\adefense\x12\x14\n" +
+	"\x05speed\x18\x06 \x01(\x04R\x05speedB\x18Z\x16proto/common/componentb\x06proto3"
 
 var (
 	file_proto_common_component_actor_attribute_state_comp_proto_rawDescOnce sync.Once

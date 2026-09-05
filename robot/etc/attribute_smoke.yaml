@@ -1,0 +1,23 @@
+# attribute-smoke 配置:单机器人「角色属性加点」端到端冒烟
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/attribute_smoke.yaml
+# 退出码 0 = 全部断言通过(日志有 ATTRIBUTE_SMOKE_OK 一行);
+# 退出码 1 = 任一步失败(日志有 ATTRIBUTE_SMOKE_FAIL step=… reason=…)。
+#
+# 固定账号 robot_9101(前缀必须 robot_ 才走 login 侧 DevPasswordAuth,改名会直接登录失败)。
+# 断言逐条对应 docs/design/player-attribute-allocation.md 的服务端契约。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 目标 zone(0 = 从 /api/server-list 自动选推荐 zone)
+robot_count: 1 # 语义占位:本模式固定单机器人
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号 robot_9101
+password: "123456"
+skill_ids: []
+table_dir: "../generated/tables"
+action_interval: 3 # 本模式不跑场景 AI 循环
+report_interval: 5
+
+mode: "attribute-smoke"
+
+auth_type: "password"

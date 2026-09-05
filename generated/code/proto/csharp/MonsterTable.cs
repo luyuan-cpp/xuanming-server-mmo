@@ -22,14 +22,18 @@ public static partial class MonsterTableReflection {
   static MonsterTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChNtb25zdGVyX3RhYmxlLnByb3RvIhoKDE1vbnN0ZXJUYWJsZRIKCgJpZBgB",
-          "IAEoDSIvChBNb25zdGVyVGFibGVEYXRhEhsKBGRhdGEYASADKAsyDS5Nb25z",
-          "dGVyVGFibGVCPgoOY29tLmdhbWUudGFibGVCFk1vbnN0ZXJUYWJsZU91dGVy",
-          "Q2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "ChNtb25zdGVyX3RhYmxlLnByb3RvIqsBCgxNb25zdGVyVGFibGUSCgoCaWQY",
+          "ASABKA0SDgoGaGVhbHRoGAIgASgEEhAKCHN0cmVuZ3RoGAMgASgEEg0KBWFy",
+          "bW9yGAQgASgEEhIKCnJlc2lzdGFuY2UYBSABKAQSEgoKY3JpdGNoYW5jZRgG",
+          "IAEoBBINCgVzcGVlZBgHIAEoBBISCgpleHBfcmV3YXJkGAggASgEEhMKC2dv",
+          "bGRfcmV3YXJkGAkgASgEIi8KEE1vbnN0ZXJUYWJsZURhdGESGwoEZGF0YRgB",
+          "IAMoCzINLk1vbnN0ZXJUYWJsZUI+Cg5jb20uZ2FtZS50YWJsZUIWTW9uc3Rl",
+          "clRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3Rv",
+          "Mw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTable), global::MonsterTable.Parser, new[]{ "Id" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTable), global::MonsterTable.Parser, new[]{ "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTableData), global::MonsterTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -73,6 +77,14 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public MonsterTable(MonsterTable other) : this() {
     id_ = other.id_;
+    health_ = other.health_;
+    strength_ = other.strength_;
+    armor_ = other.armor_;
+    resistance_ = other.resistance_;
+    critchance_ = other.critchance_;
+    speed_ = other.speed_;
+    expReward_ = other.expReward_;
+    goldReward_ = other.goldReward_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -94,6 +106,102 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     }
   }
 
+  /// <summary>Field number for the "health" field.</summary>
+  public const int HealthFieldNumber = 2;
+  private ulong health_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong Health {
+    get { return health_; }
+    set {
+      health_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "strength" field.</summary>
+  public const int StrengthFieldNumber = 3;
+  private ulong strength_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong Strength {
+    get { return strength_; }
+    set {
+      strength_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "armor" field.</summary>
+  public const int ArmorFieldNumber = 4;
+  private ulong armor_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong Armor {
+    get { return armor_; }
+    set {
+      armor_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "resistance" field.</summary>
+  public const int ResistanceFieldNumber = 5;
+  private ulong resistance_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong Resistance {
+    get { return resistance_; }
+    set {
+      resistance_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "critchance" field.</summary>
+  public const int CritchanceFieldNumber = 6;
+  private ulong critchance_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong Critchance {
+    get { return critchance_; }
+    set {
+      critchance_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "speed" field.</summary>
+  public const int SpeedFieldNumber = 7;
+  private ulong speed_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong Speed {
+    get { return speed_; }
+    set {
+      speed_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "exp_reward" field.</summary>
+  public const int ExpRewardFieldNumber = 8;
+  private ulong expReward_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong ExpReward {
+    get { return expReward_; }
+    set {
+      expReward_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "gold_reward" field.</summary>
+  public const int GoldRewardFieldNumber = 9;
+  private ulong goldReward_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong GoldReward {
+    get { return goldReward_; }
+    set {
+      goldReward_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -110,6 +218,14 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
       return true;
     }
     if (Id != other.Id) return false;
+    if (Health != other.Health) return false;
+    if (Strength != other.Strength) return false;
+    if (Armor != other.Armor) return false;
+    if (Resistance != other.Resistance) return false;
+    if (Critchance != other.Critchance) return false;
+    if (Speed != other.Speed) return false;
+    if (ExpReward != other.ExpReward) return false;
+    if (GoldReward != other.GoldReward) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -118,6 +234,14 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
   public override int GetHashCode() {
     int hash = 1;
     if (Id != 0) hash ^= Id.GetHashCode();
+    if (Health != 0UL) hash ^= Health.GetHashCode();
+    if (Strength != 0UL) hash ^= Strength.GetHashCode();
+    if (Armor != 0UL) hash ^= Armor.GetHashCode();
+    if (Resistance != 0UL) hash ^= Resistance.GetHashCode();
+    if (Critchance != 0UL) hash ^= Critchance.GetHashCode();
+    if (Speed != 0UL) hash ^= Speed.GetHashCode();
+    if (ExpReward != 0UL) hash ^= ExpReward.GetHashCode();
+    if (GoldReward != 0UL) hash ^= GoldReward.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -140,6 +264,38 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
       output.WriteRawTag(8);
       output.WriteUInt32(Id);
     }
+    if (Health != 0UL) {
+      output.WriteRawTag(16);
+      output.WriteUInt64(Health);
+    }
+    if (Strength != 0UL) {
+      output.WriteRawTag(24);
+      output.WriteUInt64(Strength);
+    }
+    if (Armor != 0UL) {
+      output.WriteRawTag(32);
+      output.WriteUInt64(Armor);
+    }
+    if (Resistance != 0UL) {
+      output.WriteRawTag(40);
+      output.WriteUInt64(Resistance);
+    }
+    if (Critchance != 0UL) {
+      output.WriteRawTag(48);
+      output.WriteUInt64(Critchance);
+    }
+    if (Speed != 0UL) {
+      output.WriteRawTag(56);
+      output.WriteUInt64(Speed);
+    }
+    if (ExpReward != 0UL) {
+      output.WriteRawTag(64);
+      output.WriteUInt64(ExpReward);
+    }
+    if (GoldReward != 0UL) {
+      output.WriteRawTag(72);
+      output.WriteUInt64(GoldReward);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -154,6 +310,38 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
       output.WriteRawTag(8);
       output.WriteUInt32(Id);
     }
+    if (Health != 0UL) {
+      output.WriteRawTag(16);
+      output.WriteUInt64(Health);
+    }
+    if (Strength != 0UL) {
+      output.WriteRawTag(24);
+      output.WriteUInt64(Strength);
+    }
+    if (Armor != 0UL) {
+      output.WriteRawTag(32);
+      output.WriteUInt64(Armor);
+    }
+    if (Resistance != 0UL) {
+      output.WriteRawTag(40);
+      output.WriteUInt64(Resistance);
+    }
+    if (Critchance != 0UL) {
+      output.WriteRawTag(48);
+      output.WriteUInt64(Critchance);
+    }
+    if (Speed != 0UL) {
+      output.WriteRawTag(56);
+      output.WriteUInt64(Speed);
+    }
+    if (ExpReward != 0UL) {
+      output.WriteRawTag(64);
+      output.WriteUInt64(ExpReward);
+    }
+    if (GoldReward != 0UL) {
+      output.WriteRawTag(72);
+      output.WriteUInt64(GoldReward);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -166,6 +354,30 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     int size = 0;
     if (Id != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Id);
+    }
+    if (Health != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Health);
+    }
+    if (Strength != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Strength);
+    }
+    if (Armor != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Armor);
+    }
+    if (Resistance != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Resistance);
+    }
+    if (Critchance != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Critchance);
+    }
+    if (Speed != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(Speed);
+    }
+    if (ExpReward != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(ExpReward);
+    }
+    if (GoldReward != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GoldReward);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -181,6 +393,30 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     }
     if (other.Id != 0) {
       Id = other.Id;
+    }
+    if (other.Health != 0UL) {
+      Health = other.Health;
+    }
+    if (other.Strength != 0UL) {
+      Strength = other.Strength;
+    }
+    if (other.Armor != 0UL) {
+      Armor = other.Armor;
+    }
+    if (other.Resistance != 0UL) {
+      Resistance = other.Resistance;
+    }
+    if (other.Critchance != 0UL) {
+      Critchance = other.Critchance;
+    }
+    if (other.Speed != 0UL) {
+      Speed = other.Speed;
+    }
+    if (other.ExpReward != 0UL) {
+      ExpReward = other.ExpReward;
+    }
+    if (other.GoldReward != 0UL) {
+      GoldReward = other.GoldReward;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -205,6 +441,38 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
           Id = input.ReadUInt32();
           break;
         }
+        case 16: {
+          Health = input.ReadUInt64();
+          break;
+        }
+        case 24: {
+          Strength = input.ReadUInt64();
+          break;
+        }
+        case 32: {
+          Armor = input.ReadUInt64();
+          break;
+        }
+        case 40: {
+          Resistance = input.ReadUInt64();
+          break;
+        }
+        case 48: {
+          Critchance = input.ReadUInt64();
+          break;
+        }
+        case 56: {
+          Speed = input.ReadUInt64();
+          break;
+        }
+        case 64: {
+          ExpReward = input.ReadUInt64();
+          break;
+        }
+        case 72: {
+          GoldReward = input.ReadUInt64();
+          break;
+        }
       }
     }
   #endif
@@ -226,6 +494,38 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
           break;
         case 8: {
           Id = input.ReadUInt32();
+          break;
+        }
+        case 16: {
+          Health = input.ReadUInt64();
+          break;
+        }
+        case 24: {
+          Strength = input.ReadUInt64();
+          break;
+        }
+        case 32: {
+          Armor = input.ReadUInt64();
+          break;
+        }
+        case 40: {
+          Resistance = input.ReadUInt64();
+          break;
+        }
+        case 48: {
+          Critchance = input.ReadUInt64();
+          break;
+        }
+        case 56: {
+          Speed = input.ReadUInt64();
+          break;
+        }
+        case 64: {
+          ExpReward = input.ReadUInt64();
+          break;
+        }
+        case 72: {
+          GoldReward = input.ReadUInt64();
           break;
         }
       }

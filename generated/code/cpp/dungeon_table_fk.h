@@ -11,6 +11,7 @@
 // (全局作用域、无 package、无 dllexport_decl),所以这行是合法的重复声明。
 class DungeonTable;
 class BaseSceneTable;
+class MonsterTable;
 
 // ---------------------------------------------------------------------------
 // Foreign key helpers for DungeonTable
@@ -21,6 +22,12 @@ const BaseSceneTable* GetDungeonSceneIdRow(const DungeonTable& row);
 
 /// Resolve Dungeon.scene_id -> BaseScene row (by Dungeon id).
 const BaseSceneTable* GetDungeonSceneIdRow(uint32_t tableId);
+
+/// Resolve Dungeon.monster[] -> Monster rows.
+std::vector<const MonsterTable*> GetDungeonMonsterRows(const DungeonTable& row);
+
+/// Resolve Dungeon.monster[] -> Monster rows (by Dungeon id).
+std::vector<const MonsterTable*> GetDungeonMonsterRows(uint32_t tableId);
 
 // ---------------------------------------------------------------------------
 // Reverse FK (HasMany): find source rows by FK column value

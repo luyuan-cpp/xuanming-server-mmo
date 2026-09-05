@@ -121,6 +121,19 @@ bool NodeUtils::IsZoneScopedNodeType(uint32_t nodeType)
 	}
 }
 
+bool NodeUtils::IsGlobalPoolNodeType(uint32_t nodeType)
+{
+	// 见头文件注释(设计文档 cross-zone-matchmaking.md D11)。
+	switch (static_cast<eNodeType>(nodeType))
+	{
+	case eNodeType::MatchNodeService:
+	case eNodeType::BattleNodeService:
+		return true;
+	default:
+		return false;
+	}
+}
+
 std::string NodeUtils::GetRegistryName(const entt::registry &registry)
 {
 	const auto type = GetRegistryType(registry);

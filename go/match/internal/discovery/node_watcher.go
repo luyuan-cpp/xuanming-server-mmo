@@ -159,20 +159,7 @@ func (w *NodeWatcher) handleEvent(ev *clientv3.Event) {
 		if !ok {
 			return
 		}
-		w.mu.Lock()
-		prev, existed := w.nodes[key]
-		w.nodes[key] = entry
-		count := len(w.nodes)
-		w.mu.Unlock()
-		// 重启后 endpoint 可能变了,旧连接必须废弃。
-		if existed && w.onRemove != nil && prev.Endpoint != entry.Endpoint {
-			w.onRemove(prev)
-		}
-		if !existed {
-			logx.Infof("[NodeWatcher:%s] 节点上线: zone=%d node=%d endpoint=%s",
-				w.name, entry.ZoneId, entry.NodeId, entry.Endpoint)
-		}
-		w.reportCount(count)
+		w.Upsert(key, entry)
 	case clientv3.EventTypeDelete:
 		w.mu.Lock()
 		entry, existed := w.nodes[key]
@@ -191,6 +178,26 @@ func (w *NodeWatcher) handleEvent(ev *clientv3.Event) {
 			w.name, entry.ZoneId, entry.NodeId, entry.Endpoint)
 		w.reportCount(count)
 	}
+}
+
+// Upsert 把一条节点登记写进镜像(etcd PUT 事件的落库路径;测试也用它直接
+// 灌节点,不必起 etcd)。同 key 重复登记且 endpoint 变了(重启换端口)会先
+// 通过 onRemove 废弃旧连接。
+func (w *NodeWatcher) Upsert(key string, entry NodeEntry) {
+	w.mu.Lock()
+	prev, existed := w.nodes[key]
+	w.nodes[key] = entry
+	count := len(w.nodes)
+	w.mu.Unlock()
+	// 重启后 endpoint 可能变了,旧连接必须废弃。
+	if existed && w.onRemove != nil && prev.Endpoint != entry.Endpoint {
+		w.onRemove(prev)
+	}
+	if !existed {
+		logx.Infof("[NodeWatcher:%s] 节点上线: zone=%d node=%d endpoint=%s",
+			w.name, entry.ZoneId, entry.NodeId, entry.Endpoint)
+	}
+	w.reportCount(count)
 }
 
 func (w *NodeWatcher) parse(key string, value []byte) (NodeEntry, bool) {

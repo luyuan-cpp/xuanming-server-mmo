@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS player_database (
   level_component MEDIUMBLOB,
   currency MEDIUMBLOB,
   stress_test_probe MEDIUMBLOB,
-  merge_state MEDIUMBLOB
+  merge_state MEDIUMBLOB,
+  attribute_component MEDIUMBLOB
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='player_database';
 
 CREATE TABLE IF NOT EXISTS player_database_1 (

@@ -56,6 +56,7 @@ const (
 // battleSmokeBot 是一个已登录进场的机器人会话。
 type battleSmokeBot struct {
 	account string
+	gate    string // assign-gate 分配到的 gate 地址(host:port);跨 zone 冒烟用它证明两人落在不同 zone
 	gc      *pkg.GameClient
 	player  *gameobject.Player
 }
@@ -82,6 +83,13 @@ func RunBattleSmoke(cfg *config.Config) {
 	// prepareBehaviorClient 经 loginAndEnterScenario 读 loginTestCfg 决定认证方式
 	// (password / satoken),这里先挂上配置。
 	loginTestCfg = cfg
+
+	// 子模式分流:cross_zone=true 走跨 zone 匹配冒烟(battle_smoke_cross_zone_scenario.go),
+	// 否则下面的 PVE + 观战流程保持原样。
+	if cfg.BattleSmoke.CrossZone {
+		runCrossZoneMatchSmoke(cfg)
+		return
+	}
 
 	stats := robotStatsRef
 	if stats == nil {
@@ -244,7 +252,7 @@ func battleSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) 
 	if err != nil {
 		return nil, fmt.Errorf("prepare client: %w", err)
 	}
-	return &battleSmokeBot{account: account, gc: gc, player: player}, nil
+	return &battleSmokeBot{account: account, gate: host + ":" + portStr, gc: gc, player: player}, nil
 }
 
 // runBattleSmokeFighter 是参战方(A)的完整流程:

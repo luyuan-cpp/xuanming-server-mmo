@@ -147,6 +147,9 @@ const (
 	EBattleEventType_BATTLE_EVENT_DEFEND      EBattleEventType = 9
 	EBattleEventType_BATTLE_EVENT_ITEM        EBattleEventType = 10
 	EBattleEventType_BATTLE_EVENT_FLEE        EBattleEventType = 11 // 逃跑尝试(success 标记结果)
+	EBattleEventType_BATTLE_EVENT_MISS        EBattleEventType = 12 // 未命中/闪避(演出:目标头顶"闪");value=0
+	EBattleEventType_BATTLE_EVENT_BLOCK       EBattleEventType = 13 // 格挡(预留,一期不产出)
+	EBattleEventType_BATTLE_EVENT_MANA        EBattleEventType = 14 // 法力变化:value=变化绝对值,is_negative 由 target_health_after 之外的 mana_after 表达
 )
 
 // Enum value maps for EBattleEventType.
@@ -164,6 +167,9 @@ var (
 		9:  "BATTLE_EVENT_DEFEND",
 		10: "BATTLE_EVENT_ITEM",
 		11: "BATTLE_EVENT_FLEE",
+		12: "BATTLE_EVENT_MISS",
+		13: "BATTLE_EVENT_BLOCK",
+		14: "BATTLE_EVENT_MANA",
 	}
 	EBattleEventType_value = map[string]int32{
 		"BATTLE_EVENT_NONE":        0,
@@ -178,6 +184,9 @@ var (
 		"BATTLE_EVENT_DEFEND":      9,
 		"BATTLE_EVENT_ITEM":        10,
 		"BATTLE_EVENT_FLEE":        11,
+		"BATTLE_EVENT_MISS":        12,
+		"BATTLE_EVENT_BLOCK":       13,
+		"BATTLE_EVENT_MANA":        14,
 	}
 )
 
@@ -478,20 +487,24 @@ func (x *BattleItemEntry) GetCount() uint64 {
 
 // ---- 玩家战斗快照:scene 在 PrepareBattle 时构建,是战斗内玩家数据的唯一来源 ----
 type BattlePlayerSnapshot struct {
-	state          protoimpl.MessageState        `protogen:"open.v1"`
-	PlayerId       uint64                        `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	PlayerName     string                        `protobuf:"bytes,2,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
-	Level          uint32                        `protobuf:"varint,3,opt,name=level,proto3" json:"level,omitempty"`
-	BaseAttributes *component.BaseAttributesComp `protobuf:"bytes,4,opt,name=base_attributes,json=baseAttributes,proto3" json:"base_attributes,omitempty"` // 含 speed(出手序)
-	MaxHealth      uint64                        `protobuf:"varint,5,opt,name=max_health,json=maxHealth,proto3" json:"max_health,omitempty"`
-	MaxMana        uint64                        `protobuf:"varint,6,opt,name=max_mana,json=maxMana,proto3" json:"max_mana,omitempty"`
-	SkillTableIds  []uint32                      `protobuf:"varint,7,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"` // 战斗可用技能(SkillTable id)
-	Buffs          []*BattleBuffEntry            `protobuf:"bytes,8,rep,name=buffs,proto3" json:"buffs,omitempty"`                                                // 参战时携带的持续 buff
-	Items          []*BattleItemEntry            `protobuf:"bytes,9,rep,name=items,proto3" json:"items,omitempty"`                                                // 战斗可用消耗品数量副本
-	Routing        *BattleRouting                `protobuf:"bytes,10,opt,name=routing,proto3" json:"routing,omitempty"`
-	TeamIndex      uint32                        `protobuf:"varint,11,opt,name=team_index,json=teamIndex,proto3" json:"team_index,omitempty"` // 0 = A 方(进攻),1 = B 方
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state            protoimpl.MessageState        `protogen:"open.v1"`
+	PlayerId         uint64                        `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	PlayerName       string                        `protobuf:"bytes,2,opt,name=player_name,json=playerName,proto3" json:"player_name,omitempty"`
+	Level            uint32                        `protobuf:"varint,3,opt,name=level,proto3" json:"level,omitempty"`
+	BaseAttributes   *component.BaseAttributesComp `protobuf:"bytes,4,opt,name=base_attributes,json=baseAttributes,proto3" json:"base_attributes,omitempty"` // 含 speed(出手序)
+	MaxHealth        uint64                        `protobuf:"varint,5,opt,name=max_health,json=maxHealth,proto3" json:"max_health,omitempty"`
+	MaxMana          uint64                        `protobuf:"varint,6,opt,name=max_mana,json=maxMana,proto3" json:"max_mana,omitempty"`
+	SkillTableIds    []uint32                      `protobuf:"varint,7,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"` // 战斗可用技能(SkillTable id)
+	Buffs            []*BattleBuffEntry            `protobuf:"bytes,8,rep,name=buffs,proto3" json:"buffs,omitempty"`                                                // 参战时携带的持续 buff
+	Items            []*BattleItemEntry            `protobuf:"bytes,9,rep,name=items,proto3" json:"items,omitempty"`                                                // 战斗可用消耗品数量副本
+	Routing          *BattleRouting                `protobuf:"bytes,10,opt,name=routing,proto3" json:"routing,omitempty"`
+	TeamIndex        uint32                        `protobuf:"varint,11,opt,name=team_index,json=teamIndex,proto3" json:"team_index,omitempty"`                     // 0 = A 方(进攻),1 = B 方
+	TableFingerprint string                        `protobuf:"bytes,12,opt,name=table_fingerprint,json=tableFingerprint,proto3" json:"table_fingerprint,omitempty"` // 出快照的 scene 节点的战斗配表指纹(与 PrepareBattleResponse.table_fingerprint 同值)
+	PhysicalAttack   uint64                        `protobuf:"varint,13,opt,name=physical_attack,json=physicalAttack,proto3" json:"physical_attack,omitempty"`      // 二级属性(属性加点系统):物伤,scene 侧由 DerivedAttributes 填;引擎 InitPlayers 直接透传给 BattleActorState
+	MagicAttack      uint64                        `protobuf:"varint,14,opt,name=magic_attack,json=magicAttack,proto3" json:"magic_attack,omitempty"`               // 法伤
+	Defense          uint64                        `protobuf:"varint,15,opt,name=defense,proto3" json:"defense,omitempty"`                                          // 防御
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *BattlePlayerSnapshot) Reset() {
@@ -601,6 +614,34 @@ func (x *BattlePlayerSnapshot) GetTeamIndex() uint32 {
 	return 0
 }
 
+func (x *BattlePlayerSnapshot) GetTableFingerprint() string {
+	if x != nil {
+		return x.TableFingerprint
+	}
+	return ""
+}
+
+func (x *BattlePlayerSnapshot) GetPhysicalAttack() uint64 {
+	if x != nil {
+		return x.PhysicalAttack
+	}
+	return 0
+}
+
+func (x *BattlePlayerSnapshot) GetMagicAttack() uint64 {
+	if x != nil {
+		return x.MagicAttack
+	}
+	return 0
+}
+
+func (x *BattlePlayerSnapshot) GetDefense() uint64 {
+	if x != nil {
+		return x.Defense
+	}
+	return 0
+}
+
 type BattleActorState struct {
 	state               protoimpl.MessageState        `protogen:"open.v1"`
 	ActorId             uint64                        `protobuf:"varint,1,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"` // 玩家 = player_id;怪物 = 引擎生成的局内序号 id
@@ -619,6 +660,10 @@ type BattleActorState struct {
 	MonsterTableId      uint32                        `protobuf:"varint,14,opt,name=monster_table_id,json=monsterTableId,proto3" json:"monster_table_id,omitempty"`                                                                                           // 仅怪物有效(MonsterTable id)
 	SkillCooldownRounds map[uint32]uint32             `protobuf:"bytes,15,rep,name=skill_cooldown_rounds,json=skillCooldownRounds,proto3" json:"skill_cooldown_rounds,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // skill_table_id -> 剩余冷却回合
 	IsAuto              bool                          `protobuf:"varint,16,opt,name=is_auto,json=isAuto,proto3" json:"is_auto,omitempty"`                                                                                                                     // 自动战斗(挂机):回合内视为已就绪,结算时按默认行动出手
+	FormationSlot       uint32                        `protobuf:"varint,17,opt,name=formation_slot,json=formationSlot,proto3" json:"formation_slot,omitempty"`                                                                                                // 阵位 0-9:0-4 前排(左→右),5-9 后排;演出站位用,不参与判定
+	PhysicalAttack      uint64                        `protobuf:"varint,18,opt,name=physical_attack,json=physicalAttack,proto3" json:"physical_attack,omitempty"`                                                                                             // 物伤(来自快照;怪物 0)
+	MagicAttack         uint64                        `protobuf:"varint,19,opt,name=magic_attack,json=magicAttack,proto3" json:"magic_attack,omitempty"`                                                                                                      // 法伤(来自快照;怪物 0)
+	Defense             uint64                        `protobuf:"varint,20,opt,name=defense,proto3" json:"defense,omitempty"`                                                                                                                                 // 防御(来自快照;怪物 0)
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -765,6 +810,34 @@ func (x *BattleActorState) GetIsAuto() bool {
 	return false
 }
 
+func (x *BattleActorState) GetFormationSlot() uint32 {
+	if x != nil {
+		return x.FormationSlot
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetPhysicalAttack() uint64 {
+	if x != nil {
+		return x.PhysicalAttack
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetMagicAttack() uint64 {
+	if x != nil {
+		return x.MagicAttack
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetDefense() uint64 {
+	if x != nil {
+		return x.Defense
+	}
+	return 0
+}
+
 type BattleAction struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ActionType    EBattleActionType      `protobuf:"varint,1,opt,name=action_type,json=actionType,proto3,enum=EBattleActionType" json:"action_type,omitempty"`
@@ -845,6 +918,9 @@ type BattleEventItem struct {
 	Success           bool                   `protobuf:"varint,8,opt,name=success,proto3" json:"success,omitempty"`                                                // FLEE 等布尔结果
 	TargetHealthAfter uint64                 `protobuf:"varint,9,opt,name=target_health_after,json=targetHealthAfter,proto3" json:"target_health_after,omitempty"` // 目标结算后 HP(客户端免推算)
 	ItemTableId       uint32                 `protobuf:"varint,10,opt,name=item_table_id,json=itemTableId,proto3" json:"item_table_id,omitempty"`
+	GroupId           uint32                 `protobuf:"varint,11,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`                           // 同一次行动/施法内的事件共用(演出:群攻多目标同一拍);每次行动递增
+	HitIndex          uint32                 `protobuf:"varint,12,opt,name=hit_index,json=hitIndex,proto3" json:"hit_index,omitempty"`                        // 多段攻击的段序(0 起)
+	TargetManaAfter   uint64                 `protobuf:"varint,13,opt,name=target_mana_after,json=targetManaAfter,proto3" json:"target_mana_after,omitempty"` // 目标结算后法力(BATTLE_EVENT_MANA 与技能耗蓝演出用)
 	unknownFields     protoimpl.UnknownFields
 	sizeCache         protoimpl.SizeCache
 }
@@ -945,6 +1021,27 @@ func (x *BattleEventItem) GetTargetHealthAfter() uint64 {
 func (x *BattleEventItem) GetItemTableId() uint32 {
 	if x != nil {
 		return x.ItemTableId
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetGroupId() uint32 {
+	if x != nil {
+		return x.GroupId
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetHitIndex() uint32 {
+	if x != nil {
+		return x.HitIndex
+	}
+	return 0
+}
+
+func (x *BattleEventItem) GetTargetManaAfter() uint64 {
+	if x != nil {
+		return x.TargetManaAfter
 	}
 	return 0
 }
@@ -1112,7 +1209,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\tcaster_id\x18\x05 \x01(\x04R\bcasterId\"K\n" +
 	"\x0fBattleItemEntry\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xa3\x03\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xb6\x04\n" +
 	"\x14BattlePlayerSnapshot\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -1128,7 +1225,11 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\arouting\x18\n" +
 	" \x01(\v2\x0e.BattleRoutingR\arouting\x12\x1d\n" +
 	"\n" +
-	"team_index\x18\v \x01(\rR\tteamIndex\"\xa2\x05\n" +
+	"team_index\x18\v \x01(\rR\tteamIndex\x12+\n" +
+	"\x11table_fingerprint\x18\f \x01(\tR\x10tableFingerprint\x12'\n" +
+	"\x0fphysical_attack\x18\r \x01(\x04R\x0ephysicalAttack\x12!\n" +
+	"\fmagic_attack\x18\x0e \x01(\x04R\vmagicAttack\x12\x18\n" +
+	"\adefense\x18\x0f \x01(\x04R\adefense\"\xaf\x06\n" +
 	"\x10BattleActorState\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x120\n" +
 	"\n" +
@@ -1151,7 +1252,11 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x0fskill_table_ids\x18\r \x03(\rR\rskillTableIds\x12(\n" +
 	"\x10monster_table_id\x18\x0e \x01(\rR\x0emonsterTableId\x12^\n" +
 	"\x15skill_cooldown_rounds\x18\x0f \x03(\v2*.BattleActorState.SkillCooldownRoundsEntryR\x13skillCooldownRounds\x12\x17\n" +
-	"\ais_auto\x18\x10 \x01(\bR\x06isAuto\x1aF\n" +
+	"\ais_auto\x18\x10 \x01(\bR\x06isAuto\x12%\n" +
+	"\x0eformation_slot\x18\x11 \x01(\rR\rformationSlot\x12'\n" +
+	"\x0fphysical_attack\x18\x12 \x01(\x04R\x0ephysicalAttack\x12!\n" +
+	"\fmagic_attack\x18\x13 \x01(\x04R\vmagicAttack\x12\x18\n" +
+	"\adefense\x18\x14 \x01(\x04R\adefense\x1aF\n" +
 	"\x18SkillCooldownRoundsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xaa\x01\n" +
@@ -1160,7 +1265,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"actionType\x12$\n" +
 	"\x0eskill_table_id\x18\x02 \x01(\rR\fskillTableId\x12\x1b\n" +
 	"\ttarget_id\x18\x03 \x01(\x04R\btargetId\x12\"\n" +
-	"\ritem_table_id\x18\x04 \x01(\rR\vitemTableId\"\xec\x02\n" +
+	"\ritem_table_id\x18\x04 \x01(\rR\vitemTableId\"\xd0\x03\n" +
 	"\x0fBattleEventItem\x120\n" +
 	"\n" +
 	"event_type\x18\x01 \x01(\x0e2\x11.eBattleEventTypeR\teventType\x12\x1b\n" +
@@ -1174,7 +1279,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\asuccess\x18\b \x01(\bR\asuccess\x12.\n" +
 	"\x13target_health_after\x18\t \x01(\x04R\x11targetHealthAfter\x12\"\n" +
 	"\ritem_table_id\x18\n" +
-	" \x01(\rR\vitemTableId\"\xc9\x03\n" +
+	" \x01(\rR\vitemTableId\x12\x19\n" +
+	"\bgroup_id\x18\v \x01(\rR\agroupId\x12\x1b\n" +
+	"\thit_index\x18\f \x01(\rR\bhitIndex\x12*\n" +
+	"\x11target_mana_after\x18\r \x01(\x04R\x0ftargetManaAfter\"\xc9\x03\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -1200,7 +1308,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x13BATTLE_ACTION_SKILL\x10\x02\x12\x18\n" +
 	"\x14BATTLE_ACTION_DEFEND\x10\x03\x12\x16\n" +
 	"\x12BATTLE_ACTION_ITEM\x10\x04\x12\x16\n" +
-	"\x12BATTLE_ACTION_FLEE\x10\x05*\xbe\x02\n" +
+	"\x12BATTLE_ACTION_FLEE\x10\x05*\x84\x03\n" +
 	"\x10eBattleEventType\x12\x15\n" +
 	"\x11BATTLE_EVENT_NONE\x10\x00\x12\x17\n" +
 	"\x13BATTLE_EVENT_ATTACK\x10\x01\x12\x16\n" +
@@ -1214,7 +1322,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x13BATTLE_EVENT_DEFEND\x10\t\x12\x15\n" +
 	"\x11BATTLE_EVENT_ITEM\x10\n" +
 	"\x12\x15\n" +
-	"\x11BATTLE_EVENT_FLEE\x10\v*\x83\x01\n" +
+	"\x11BATTLE_EVENT_FLEE\x10\v\x12\x15\n" +
+	"\x11BATTLE_EVENT_MISS\x10\f\x12\x16\n" +
+	"\x12BATTLE_EVENT_BLOCK\x10\r\x12\x15\n" +
+	"\x11BATTLE_EVENT_MANA\x10\x0e*\x83\x01\n" +
 	"\x0eeBattleOutcome\x12\x1a\n" +
 	"\x16BATTLE_OUTCOME_ONGOING\x10\x00\x12\x1d\n" +
 	"\x19BATTLE_OUTCOME_SIDE_A_WIN\x10\x01\x12\x1d\n" +

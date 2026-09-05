@@ -1,0 +1,30 @@
+syntax = "proto3";
+option go_package = "login/proto/common/component";
+
+// 角色属性加点(问道式三池:属性点 / 相性点 / 仙魔点),设计文档
+// docs/design/player-attribute-allocation.md。
+//
+// 数据分层:
+//   一级属性 = 表 AttributeDimension 的维度(体质/灵力/力量/敏捷、金木水火土、仙攻/仙护/魔攻/魔体),
+//              维度值 = 每级自然成长 × 等级 + 已分配点 + 外部加成(bonus_values);
+//   二级属性 = DerivedAttributesComp(气血/法力上限、物伤、法伤、速度、防御),
+//              由 PlayerAttributeSystem::Recalculate 按表系数重算,不落库。
+//   点数总量按 LevelComp.level 与 AttributePool 表换算,不落库;只落"已分配"。
+
+// 一套加点方案:每个维度的已分配点。dimension_id 全局唯一(表 AttributeDimension.id),
+// 所属池由表决定,方案里不再冗余存池。
+message AttributeScheme {
+  uint32 scheme_id = 1;
+  string name = 2;
+  map<uint32, uint32> allocated = 3;  // dimension_id -> 已分配点(只增不减;洗点走整池重置)
+}
+
+// 玩家加点数据(持久化到 player_database.attribute_component)
+message PlayerAttributeComp {
+  repeated AttributeScheme schemes = 1;
+  uint32 active_scheme_id = 2;         // 当前生效方案;0 = 尚未初始化(登录时补默认方案)
+  uint32 next_scheme_id = 3;           // 方案 id 自增游标(方案删除后 id 不复用)
+  uint64 last_switch_time = 4;         // 上次切换方案的 Unix 秒(切换冷却)
+  map<uint32, uint32> bonus_points = 5;  // pool_id -> 等级之外获得的额外点(道具/任务奖励)
+  map<uint32, uint32> bonus_values = 6;  // dimension_id -> 外部加成(装备/丹药),不占点、随方案不变
+}

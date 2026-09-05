@@ -26,6 +26,10 @@ struct FCfgDungeonSnapshot
 	TArray<FCfgDungeonRow> Rows;
 	/// id -> 行下标。
 	TMap<int32, int32> IdIndex;
+	/// monster[] 的元素值 -> 含有该值的全部行下标。
+	/// 每行在同一个值下**最多出现一次**:数组里重复填同一个值(配置表里很常见,
+	/// 定长数组补位就会)不该让这一行在结果里重复 N 遍。
+	TMap<int32, TArray<int32>> MonsterValueIndex;
 	/// scene_id -> 全部命中行的下标(二级索引)。
 	TMap<int32, TArray<int32>> SceneIdIndex;
 };
@@ -139,6 +143,16 @@ public:
 	}
 
 	// ---- repeated 标量的值索引 ----
+
+	/// monster[] 里含有 Value 的全部行。同一行只出现一次,
+	/// 哪怕它的 monster[] 里填了好几个同样的值。
+	TArray<const FCfgDungeonRow*> GetRowsByMonster(int32 Value) const;
+	/// 含有 Value 的**行数**(不是值出现的次数)。
+	int32 CountByMonsterIndex(int32 Value) const;
+	const TMap<int32, TArray<int32>>& GetMonsterIndex() const
+	{
+		return Snapshot->MonsterValueIndex;
+	}
 
 	// ---- 复合键 ----
 

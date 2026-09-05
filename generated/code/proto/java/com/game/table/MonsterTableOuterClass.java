@@ -45,11 +45,14 @@ public final class MonsterTableOuterClass extends com.google.protobuf.GeneratedF
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023monster_table.proto\"\032\n\014MonsterTable\022\n\n" +
-      "\002id\030\001 \001(\r\"/\n\020MonsterTableData\022\033\n\004data\030\001 " +
-      "\003(\0132\r.MonsterTableB>\n\016com.game.tableB\026Mo" +
-      "nsterTableOuterClassP\001Z\022generated/pb/tab" +
-      "leb\006proto3"
+      "\n\023monster_table.proto\"\253\001\n\014MonsterTable\022\n" +
+      "\n\002id\030\001 \001(\r\022\016\n\006health\030\002 \001(\004\022\020\n\010strength\030\003" +
+      " \001(\004\022\r\n\005armor\030\004 \001(\004\022\022\n\nresistance\030\005 \001(\004\022" +
+      "\022\n\ncritchance\030\006 \001(\004\022\r\n\005speed\030\007 \001(\004\022\022\n\nex" +
+      "p_reward\030\010 \001(\004\022\023\n\013gold_reward\030\t \001(\004\"/\n\020M" +
+      "onsterTableData\022\033\n\004data\030\001 \003(\0132\r.MonsterT" +
+      "ableB>\n\016com.game.tableB\026MonsterTableOute" +
+      "rClassP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -60,7 +63,7 @@ public final class MonsterTableOuterClass extends com.google.protobuf.GeneratedF
     internal_static_MonsterTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_MonsterTable_descriptor,
-        new java.lang.String[] { "Id", });
+        new java.lang.String[] { "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward", });
     internal_static_MonsterTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_MonsterTableData_fieldAccessorTable = new

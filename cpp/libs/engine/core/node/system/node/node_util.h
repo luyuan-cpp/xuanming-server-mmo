@@ -106,6 +106,19 @@ namespace NodeUtils
 	// (e.g. account lookup) that every zone shares.
 	bool IsZoneScopedNodeType(uint32_t nodeType);
 
+	// 全局池节点类型:实例不分 zone,任一 zone 的调用方都可以路由过去。
+	// PickRandomNode / PickRandomNodeEntity 对这两类**不比对 zone**(设计文档
+	// cross-zone-matchmaking.md D11):match 是无状态编排者、battle 是纯内存房间,
+	// 排队池 / 房间池全服共享。只列明确的全局池类型,不扩大到其他非 zone-scoped
+	// 服务(friend/guild/chat 的路由语义保持原样)。
+	//
+	// 注意:(node_type, node_id) 由 etcd allocation key **全局** CAS 分配
+	// (Go noderegistry / C++ etcd_service 的 allocated/ 路径都不带 zone),所以
+	// 跨 zone 路由后 gate-{id} / scene-{id} 这类 Kafka topic 不会撞名;
+	// 上面 IsZoneScopedNodeType 注释里"node_id 只在 zone 内唯一"是历史防御性
+	// 措辞,分配器的实际行为是全局唯一。
+	bool IsGlobalPoolNodeType(uint32_t nodeType);
+
 	// 纯 gRPC 协议的 C++ 节点:不对外提供 muduo TCP RPC 服务,注册进 etcd 的
 	// NodeInfo.protocol_type 必须是 PROTOCOL_GRPC —— 发现方(node_connector)
 	// 按 protocol_type 分派连接方式,标错成 TCP 会让对端反复去拨一个没有

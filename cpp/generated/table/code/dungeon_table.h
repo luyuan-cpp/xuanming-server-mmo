@@ -19,6 +19,7 @@ public:
     struct Snapshot {
         DungeonTableData data;
         IdMapType idMap;
+        std::unordered_multimap<uint32_t, const DungeonTable*> monsterIndex;
         std::unordered_map<uint32_t, std::vector<const DungeonTable*>> sceneIdIndex;
     };
 
@@ -53,6 +54,8 @@ public:
     void LoadSuccess() { if (loadSuccessCallback) { loadSuccessCallback(); } }
 
     // FK: scene_id -> BaseScene.id
+    // FK: monster -> Monster.id
+    const std::unordered_multimap<uint32_t, const DungeonTable*>& GetMonsterIndex() const { return snapshot->monsterIndex; }
     const std::unordered_map<uint32_t, std::vector<const DungeonTable*>>& GetSceneIdIndex() const { return snapshot->sceneIdIndex; }
     const std::vector<const DungeonTable*>& GetBySceneId(uint32_t key) const {
         static const std::vector<const DungeonTable*> kEmpty;
@@ -67,6 +70,7 @@ public:
     // ---- Count ----
 
     std::size_t Count() const { return snapshot->idMap.size(); }
+    std::size_t CountByMonsterIndex(uint32_t key) const { return snapshot->monsterIndex.count(key); }
     std::size_t CountBySceneIdIndex(uint32_t key) const {
         auto it = snapshot->sceneIdIndex.find(key);
         return it != snapshot->sceneIdIndex.end() ? it->second.size() : 0;

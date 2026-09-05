@@ -48,11 +48,11 @@ constexpr ClassTable::ParseTableT_ ClassTable::InternalGenerateParseTable_(const
     {
       PROTOBUF_FIELD_OFFSET(ClassTable, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -62,21 +62,70 @@ constexpr ClassTable::ParseTableT_ ClassTable::InternalGenerateParseTable_(const
       ::_pbi::TcParser::GetTable<::ClassTable>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClassTable, _impl_.id_), 8>(),
+       {8, 8, 0,
+        PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.id_)}},
       // repeated uint32 skill = 2;
       {::_pbi::TcParser::FastV32P1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.skill_)}},
-      // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ClassTable, _impl_.id_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.id_)}},
+      // uint64 init_health = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClassTable, _impl_.init_health_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_health_)}},
+      // uint64 init_mana = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClassTable, _impl_.init_mana_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_mana_)}},
+      // uint64 init_strength = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClassTable, _impl_.init_strength_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_strength_)}},
+      // uint64 init_armor = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClassTable, _impl_.init_armor_), 4>(),
+       {48, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_armor_)}},
+      // uint64 init_resistance = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClassTable, _impl_.init_resistance_), 5>(),
+       {56, 5, 0,
+        PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_resistance_)}},
+      // uint64 init_critchance = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClassTable, _impl_.init_critchance_), 6>(),
+       {64, 6, 0,
+        PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_critchance_)}},
+      // uint64 init_speed = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ClassTable, _impl_.init_speed_), 7>(),
+       {72, 7, 0,
+        PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_speed_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.id_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // repeated uint32 skill = 2;
       {PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.skill_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
+      // uint64 init_health = 3;
+      {PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_health_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 init_mana = 4;
+      {PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_mana_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 init_strength = 5;
+      {PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_strength_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 init_armor = 6;
+      {PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_armor_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 init_resistance = 7;
+      {PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_resistance_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 init_critchance = 8;
+      {PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_critchance_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 init_speed = 9;
+      {PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_speed_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -95,6 +144,13 @@ inline constexpr ClassTable::Impl_::Impl_(
          }
         ,
         _skill_cached_byte_size_{0},
+        init_health_{::uint64_t{0u}},
+        init_mana_{::uint64_t{0u}},
+        init_strength_{::uint64_t{0u}},
+        init_armor_{::uint64_t{0u}},
+        init_resistance_{::uint64_t{0u}},
+        init_critchance_{::uint64_t{0u}},
+        init_speed_{::uint64_t{0u}},
         id_{0u} {}
 
 template <typename>
@@ -349,11 +405,25 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClassTable, _impl_._has_bits_),
-        5, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ClassTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::ClassTable, _impl_.skill_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::ClassTable, _impl_.init_health_),
+        PROTOBUF_FIELD_OFFSET(::ClassTable, _impl_.init_mana_),
+        PROTOBUF_FIELD_OFFSET(::ClassTable, _impl_.init_strength_),
+        PROTOBUF_FIELD_OFFSET(::ClassTable, _impl_.init_armor_),
+        PROTOBUF_FIELD_OFFSET(::ClassTable, _impl_.init_resistance_),
+        PROTOBUF_FIELD_OFFSET(::ClassTable, _impl_.init_critchance_),
+        PROTOBUF_FIELD_OFFSET(::ClassTable, _impl_.init_speed_),
+        8,
         0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ClassTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -364,7 +434,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ClassTable)},
-        {7, sizeof(::ClassTableData)},
+        {21, sizeof(::ClassTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -373,17 +443,21 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_class_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\021class_table.proto\"\'\n\nClassTable\022\n\n\002id\030"
-    "\001 \001(\r\022\r\n\005skill\030\002 \003(\r\"+\n\016ClassTableData\022\031"
-    "\n\004data\030\001 \003(\0132\013.ClassTableB<\n\016com.game.ta"
-    "bleB\024ClassTableOuterClassP\001Z\022generated/p"
-    "b/tableb\006proto3"
+    "\n\021class_table.proto\"\300\001\n\nClassTable\022\n\n\002id"
+    "\030\001 \001(\r\022\r\n\005skill\030\002 \003(\r\022\023\n\013init_health\030\003 \001"
+    "(\004\022\021\n\tinit_mana\030\004 \001(\004\022\025\n\rinit_strength\030\005"
+    " \001(\004\022\022\n\ninit_armor\030\006 \001(\004\022\027\n\017init_resista"
+    "nce\030\007 \001(\004\022\027\n\017init_critchance\030\010 \001(\004\022\022\n\nin"
+    "it_speed\030\t \001(\004\"+\n\016ClassTableData\022\031\n\004data"
+    "\030\001 \003(\0132\013.ClassTableB<\n\016com.game.tableB\024C"
+    "lassTableOuterClassP\001Z\022generated/pb/tabl"
+    "eb\006proto3"
 };
 static ::absl::once_flag descriptor_table_class_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_class_5ftable_2eproto = {
     false,
     false,
-    175,
+    329,
     descriptor_table_protodef_class_5ftable_2eproto,
     "class_table.proto",
     &descriptor_table_class_5ftable_2eproto_once,
@@ -436,7 +510,13 @@ ClassTable::ClassTable(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.id_ = from._impl_.id_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, init_health_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, init_health_),
+           offsetof(Impl_, id_) -
+               offsetof(Impl_, init_health_) +
+               sizeof(Impl_::id_));
 
   // @@protoc_insertion_point(copy_constructor:ClassTable)
 }
@@ -453,7 +533,12 @@ PROTOBUF_NDEBUG_INLINE ClassTable::Impl_::Impl_(
 
 inline void ClassTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, init_health_),
+           0,
+           offsetof(Impl_, id_) -
+               offsetof(Impl_, init_health_) +
+               sizeof(Impl_::id_));
 }
 ClassTable::~ClassTable() {
   // @@protoc_insertion_point(destructor:ClassTable)
@@ -506,6 +591,11 @@ PROTOBUF_NOINLINE void ClassTable::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.skill_.Clear();
   }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.init_health_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.init_speed_) -
+        reinterpret_cast<char*>(&_impl_.init_health_)) + sizeof(_impl_.init_speed_));
+  }
   _impl_.id_ = 0u;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -531,7 +621,7 @@ PROTOBUF_NOINLINE void ClassTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -547,6 +637,69 @@ PROTOBUF_NOINLINE void ClassTable::Clear() {
         target = stream->WriteUInt32Packed(
             2, this_._internal_skill(), byte_size, target);
       }
+    }
+  }
+
+  // uint64 init_health = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_init_health() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_init_health(), target);
+    }
+  }
+
+  // uint64 init_mana = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_init_mana() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_init_mana(), target);
+    }
+  }
+
+  // uint64 init_strength = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_init_strength() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_init_strength(), target);
+    }
+  }
+
+  // uint64 init_armor = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_init_armor() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_init_armor(), target);
+    }
+  }
+
+  // uint64 init_resistance = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_init_resistance() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          7, this_._internal_init_resistance(), target);
+    }
+  }
+
+  // uint64 init_critchance = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_init_critchance() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_init_critchance(), target);
+    }
+  }
+
+  // uint64 init_speed = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_init_speed() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          9, this_._internal_init_speed(), target);
     }
   }
 
@@ -575,7 +728,7 @@ PROTOBUF_NOINLINE void ClassTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // repeated uint32 skill = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
@@ -583,8 +736,59 @@ PROTOBUF_NOINLINE void ClassTable::Clear() {
               this_._internal_skill(), 1,
               this_._impl_._skill_cached_byte_size_);
     }
-    // uint32 id = 1;
+    // uint64 init_health = 3;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_init_health() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_init_health());
+      }
+    }
+    // uint64 init_mana = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_init_mana() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_init_mana());
+      }
+    }
+    // uint64 init_strength = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_init_strength() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_init_strength());
+      }
+    }
+    // uint64 init_armor = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_init_armor() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_init_armor());
+      }
+    }
+    // uint64 init_resistance = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_init_resistance() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_init_resistance());
+      }
+    }
+    // uint64 init_critchance = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_init_critchance() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_init_critchance());
+      }
+    }
+    // uint64 init_speed = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_init_speed() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_init_speed());
+      }
+    }
+  }
+   {
+    // uint32 id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
@@ -608,14 +812,49 @@ void ClassTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_skill()->MergeFrom(from._internal_skill());
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
-      if (from._internal_id() != 0) {
-        _this->_impl_.id_ = from._impl_.id_;
+      if (from._internal_init_health() != 0) {
+        _this->_impl_.init_health_ = from._impl_.init_health_;
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_init_mana() != 0) {
+        _this->_impl_.init_mana_ = from._impl_.init_mana_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_init_strength() != 0) {
+        _this->_impl_.init_strength_ = from._impl_.init_strength_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_init_armor() != 0) {
+        _this->_impl_.init_armor_ = from._impl_.init_armor_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_init_resistance() != 0) {
+        _this->_impl_.init_resistance_ = from._impl_.init_resistance_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_init_critchance() != 0) {
+        _this->_impl_.init_critchance_ = from._impl_.init_critchance_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_init_speed() != 0) {
+        _this->_impl_.init_speed_ = from._impl_.init_speed_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_id() != 0) {
+      _this->_impl_.id_ = from._impl_.id_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -636,7 +875,12 @@ void ClassTable::InternalSwap(ClassTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL oth
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.skill_.InternalSwap(&other->_impl_.skill_);
-  swap(_impl_.id_, other->_impl_.id_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.id_)
+      + sizeof(ClassTable::_impl_.id_)
+      - PROTOBUF_FIELD_OFFSET(ClassTable, _impl_.init_health_)>(
+          reinterpret_cast<char*>(&_impl_.init_health_),
+          reinterpret_cast<char*>(&other->_impl_.init_health_));
 }
 
 ::google::protobuf::Metadata ClassTable::GetMetadata() const {

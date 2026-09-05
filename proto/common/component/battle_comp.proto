@@ -18,4 +18,5 @@ message InBattleComp {
   uint32 battle_node_id = 2;   // 重连时重发 BindBattleEvent 用
   uint64 deadline_ms = 3;      // 作废期限(Unix 毫秒);reaper 过期即解冻
   eInBattleState state = 4;
+  uint64 prepare_deadline_ms = 5;  // PREPARING 态的作废期限;收到 BattleConfirmedEvent 后升级为 FIGHTING 并以 deadline_ms 为准
 }

@@ -67,6 +67,7 @@ namespace MmorpgClient.Table
             public readonly DungeonTableData Container;
             public readonly RepeatedField<DungeonTable> Rows;
             public readonly Dictionary<uint, DungeonTable> KvData;
+            public readonly Dictionary<uint, IReadOnlyList<DungeonTable>> IdxMonster;
             public readonly Dictionary<uint, IReadOnlyList<DungeonTable>> IdxSceneId;
 
             public Snapshot(DungeonTableData container, int capacity)
@@ -74,6 +75,7 @@ namespace MmorpgClient.Table
                 Container = container;
                 Rows = container.Data;
                 KvData = new Dictionary<uint, DungeonTable>(capacity);
+                IdxMonster = new Dictionary<uint, IReadOnlyList<DungeonTable>>();
                 IdxSceneId = new Dictionary<uint, IReadOnlyList<DungeonTable>>();
             }
         }
@@ -121,10 +123,16 @@ namespace MmorpgClient.Table
             {
                 DungeonTable row = rows[i];
                 snap.KvData[row.Id] = row;
+                RepeatedField<uint> monsterElems = row.Monster;
+                for (int j = 0; j < monsterElems.Count; j++)
+                {
+                    Index(snap.IdxMonster, monsterElems[j], row);
+                }
                 Index(snap.IdxSceneId, row.SceneId, row);
             }
 
             // 索引建完了,把所有桶从可变 List 冻成数组 —— 冻之前它们是可以被强转回 List 改掉的。
+            Freeze(snap.IdxMonster);
             Freeze(snap.IdxSceneId);
 
             // 原子换快照：到这一行为止读线程看到的都是上一代，之后看到的都是完整的新一代。
@@ -168,6 +176,13 @@ namespace MmorpgClient.Table
             get { return _snapshot.KvData; }
         }
 
+        /// <summary>Rows whose repeated field monster contains <paramref name="key"/>.</summary>
+        public IReadOnlyList<DungeonTable> FindByMonsterIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxMonster, key);
+        }
+
         /// <summary>Secondary index lookup on scene_id; 未命中返回空集合。</summary>
         public IReadOnlyList<DungeonTable> GetBySceneId(uint key)
         {
@@ -175,6 +190,7 @@ namespace MmorpgClient.Table
             return Bucket(snap.IdxSceneId, key);
         }
         // FK: scene_id → BaseScene.id
+        // FK: monster → Monster.id
 
         // ---- Exists ----
 
@@ -191,6 +207,12 @@ namespace MmorpgClient.Table
         {
             Snapshot snap = _snapshot;
             return snap.Rows.Count;
+        }
+
+        public int CountByMonsterIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxMonster, key).Count;
         }
 
         public int CountBySceneIdIndex(uint key)

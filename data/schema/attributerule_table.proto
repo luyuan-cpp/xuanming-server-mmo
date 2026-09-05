@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+// AttributeRule 表的权威 schema。源表 data/AttributeRule.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号抄自 generated/code/proto/attributerule_table.proto,**只增不改、删字段用 reserved**;
+// 导表时会按产物发号规则复算并逐条核对,对不上直接中止。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message AttributeRuleTable {
+  option (cfg_sheet)       = "AttributeRule";
+  option (cfg_source_file) = "AttributeRule.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 固定 1
+  uint32 id = 1;
+  // 方案数量上限
+  uint32 max_schemes = 2;
+  // 免费方案数(含默认方案)
+  uint32 free_scheme_count = 3;
+  // 开启新方案金币(超出免费数后)
+  uint64 create_scheme_cost_gold = 4;
+  // 切换方案冷却(秒)
+  uint32 switch_cooldown_seconds = 5;
+  // 方案名最大字符数
+  uint32 scheme_name_max_len = 6;
+}

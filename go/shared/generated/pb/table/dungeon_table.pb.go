@@ -27,6 +27,7 @@ type DungeonTable struct {
 	SceneId       uint32                 `protobuf:"varint,2,opt,name=scene_id,json=sceneId,proto3" json:"scene_id,omitempty"`
 	MaxTeamSize   uint32                 `protobuf:"varint,3,opt,name=max_team_size,json=maxTeamSize,proto3" json:"max_team_size,omitempty"`
 	TimeLimit     uint32                 `protobuf:"varint,4,opt,name=time_limit,json=timeLimit,proto3" json:"time_limit,omitempty"`
+	Monster       []uint32               `protobuf:"varint,5,rep,packed,name=monster,proto3" json:"monster,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,6 +90,13 @@ func (x *DungeonTable) GetTimeLimit() uint32 {
 	return 0
 }
 
+func (x *DungeonTable) GetMonster() []uint32 {
+	if x != nil {
+		return x.Monster
+	}
+	return nil
+}
+
 type DungeonTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*DungeonTable        `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -137,13 +145,14 @@ var File_dungeon_table_proto protoreflect.FileDescriptor
 
 const file_dungeon_table_proto_rawDesc = "" +
 	"\n" +
-	"\x13dungeon_table.proto\"|\n" +
+	"\x13dungeon_table.proto\"\x96\x01\n" +
 	"\fDungeonTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x19\n" +
 	"\bscene_id\x18\x02 \x01(\rR\asceneId\x12\"\n" +
 	"\rmax_team_size\x18\x03 \x01(\rR\vmaxTeamSize\x12\x1d\n" +
 	"\n" +
-	"time_limit\x18\x04 \x01(\rR\ttimeLimit\"5\n" +
+	"time_limit\x18\x04 \x01(\rR\ttimeLimit\x12\x18\n" +
+	"\amonster\x18\x05 \x03(\rR\amonster\"5\n" +
 	"\x10DungeonTableData\x12!\n" +
 	"\x04data\x18\x01 \x03(\v2\r.DungeonTableR\x04dataB>\n" +
 	"\x0ecom.game.tableB\x16DungeonTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

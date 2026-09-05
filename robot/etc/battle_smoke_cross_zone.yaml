@@ -1,0 +1,36 @@
+# battle-smoke 跨 zone 匹配子模式:A 登 zone 1、B 登 zone 2,双双 JoinQueue(1V1),
+# 断言匹配进同一场对局并自动战斗到终局(docs/design/cross-zone-matchmaking.md §8/§9)。
+#
+# 前置:两 zone 都在跑(dev-start-zones -Zones 1,2,match 每 zone 一份 = 双实例),
+#       且共用同一套 Redis(排队池全局不分 zone)。
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/battle_smoke_cross_zone.yaml
+# 退出码 0 = 全部断言通过(日志有 CROSS_ZONE_MATCH_OK battle_id=… zone_a=… zone_b=… 一行);
+# 退出码 1 = 任一步失败(日志有 CROSS_ZONE_MATCH_FAIL step=… reason=…)。
+#
+# 场景固定使用 robot_9003(A)/ robot_9004(B)两个账号,与原 PVE+观战冒烟
+# (robot_9001/9002)错开,避免两种冒烟互相顶号;前缀必须是 robot_
+# 才会命中 login 侧的 DevPasswordAuth。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 本子模式不用此字段选区(A/B 各按 battle_smoke.zone_a/zone_b 登录),保留骨架
+robot_count: 2 # 语义占位:本模式固定 A/B 两个机器人,不按此展开
+account_fmt: "robot_%04d" # 保留骨架字段;本子模式用固定账号 robot_9003/9004(见上)
+password: "123456"
+skill_ids: [] # 战斗走服务端回合引擎 + 自动战斗,无需配置技能
+table_dir: "../generated/tables"
+action_interval: 3 # 本模式不跑场景 AI 循环,保留默认
+report_interval: 5
+
+mode: "battle-smoke"
+
+# 跨 zone 子开关(见 config.BattleSmokeConfig / battle_smoke_cross_zone_scenario.go)
+battle_smoke:
+  cross_zone: true
+  zone_a: 1 # 机器人 A 登录的 zone
+  zone_b: 2 # 机器人 B 登录的 zone(必须与 zone_a 不同)
+  mode: "1v1" # 排队模式,当前只支持 1v1
+
+# 认证:password 模式(robot_ 前缀账号走 DevPasswordAuth)
+auth_type: "password"

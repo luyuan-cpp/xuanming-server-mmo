@@ -90,6 +90,83 @@ private static final long serialVersionUID = 0L;
   }
   private int skillMemoizedSerializedSize = -1;
 
+  public static final int INIT_HEALTH_FIELD_NUMBER = 3;
+  private long initHealth_ = 0L;
+  /**
+   * <code>uint64 init_health = 3;</code>
+   * @return The initHealth.
+   */
+  @java.lang.Override
+  public long getInitHealth() {
+    return initHealth_;
+  }
+
+  public static final int INIT_MANA_FIELD_NUMBER = 4;
+  private long initMana_ = 0L;
+  /**
+   * <code>uint64 init_mana = 4;</code>
+   * @return The initMana.
+   */
+  @java.lang.Override
+  public long getInitMana() {
+    return initMana_;
+  }
+
+  public static final int INIT_STRENGTH_FIELD_NUMBER = 5;
+  private long initStrength_ = 0L;
+  /**
+   * <code>uint64 init_strength = 5;</code>
+   * @return The initStrength.
+   */
+  @java.lang.Override
+  public long getInitStrength() {
+    return initStrength_;
+  }
+
+  public static final int INIT_ARMOR_FIELD_NUMBER = 6;
+  private long initArmor_ = 0L;
+  /**
+   * <code>uint64 init_armor = 6;</code>
+   * @return The initArmor.
+   */
+  @java.lang.Override
+  public long getInitArmor() {
+    return initArmor_;
+  }
+
+  public static final int INIT_RESISTANCE_FIELD_NUMBER = 7;
+  private long initResistance_ = 0L;
+  /**
+   * <code>uint64 init_resistance = 7;</code>
+   * @return The initResistance.
+   */
+  @java.lang.Override
+  public long getInitResistance() {
+    return initResistance_;
+  }
+
+  public static final int INIT_CRITCHANCE_FIELD_NUMBER = 8;
+  private long initCritchance_ = 0L;
+  /**
+   * <code>uint64 init_critchance = 8;</code>
+   * @return The initCritchance.
+   */
+  @java.lang.Override
+  public long getInitCritchance() {
+    return initCritchance_;
+  }
+
+  public static final int INIT_SPEED_FIELD_NUMBER = 9;
+  private long initSpeed_ = 0L;
+  /**
+   * <code>uint64 init_speed = 9;</code>
+   * @return The initSpeed.
+   */
+  @java.lang.Override
+  public long getInitSpeed() {
+    return initSpeed_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -115,6 +192,27 @@ private static final long serialVersionUID = 0L;
     for (int i = 0; i < skill_.size(); i++) {
       output.writeUInt32NoTag(skill_.getInt(i));
     }
+    if (initHealth_ != 0L) {
+      output.writeUInt64(3, initHealth_);
+    }
+    if (initMana_ != 0L) {
+      output.writeUInt64(4, initMana_);
+    }
+    if (initStrength_ != 0L) {
+      output.writeUInt64(5, initStrength_);
+    }
+    if (initArmor_ != 0L) {
+      output.writeUInt64(6, initArmor_);
+    }
+    if (initResistance_ != 0L) {
+      output.writeUInt64(7, initResistance_);
+    }
+    if (initCritchance_ != 0L) {
+      output.writeUInt64(8, initCritchance_);
+    }
+    if (initSpeed_ != 0L) {
+      output.writeUInt64(9, initSpeed_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -136,6 +234,34 @@ private static final long serialVersionUID = 0L;
             .computeInt32SizeNoTag(dataSize);
       }
       skillMemoizedSerializedSize = dataSize;
+    }
+    if (initHealth_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(3, initHealth_);
+    }
+    if (initMana_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(4, initMana_);
+    }
+    if (initStrength_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(5, initStrength_);
+    }
+    if (initArmor_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(6, initArmor_);
+    }
+    if (initResistance_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(7, initResistance_);
+    }
+    if (initCritchance_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(8, initCritchance_);
+    }
+    if (initSpeed_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(9, initSpeed_);
     }
     return size;
   }
@@ -165,6 +291,20 @@ private static final long serialVersionUID = 0L;
         != other.getId()) return false;
     if (!getSkillList()
         .equals(other.getSkillList())) return false;
+    if (getInitHealth()
+        != other.getInitHealth()) return false;
+    if (getInitMana()
+        != other.getInitMana()) return false;
+    if (getInitStrength()
+        != other.getInitStrength()) return false;
+    if (getInitArmor()
+        != other.getInitArmor()) return false;
+    if (getInitResistance()
+        != other.getInitResistance()) return false;
+    if (getInitCritchance()
+        != other.getInitCritchance()) return false;
+    if (getInitSpeed()
+        != other.getInitSpeed()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -182,6 +322,27 @@ private static final long serialVersionUID = 0L;
       hash = (37 * hash) + SKILL_FIELD_NUMBER;
       hash = (53 * hash) + getSkillList().hashCode();
     }
+    hash = (37 * hash) + INIT_HEALTH_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getInitHealth());
+    hash = (37 * hash) + INIT_MANA_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getInitMana());
+    hash = (37 * hash) + INIT_STRENGTH_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getInitStrength());
+    hash = (37 * hash) + INIT_ARMOR_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getInitArmor());
+    hash = (37 * hash) + INIT_RESISTANCE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getInitResistance());
+    hash = (37 * hash) + INIT_CRITCHANCE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getInitCritchance());
+    hash = (37 * hash) + INIT_SPEED_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getInitSpeed());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -315,6 +476,13 @@ private static final long serialVersionUID = 0L;
       bitField0_ = 0;
       id_ = 0;
       skill_ = emptyIntList();
+      initHealth_ = 0L;
+      initMana_ = 0L;
+      initStrength_ = 0L;
+      initArmor_ = 0L;
+      initResistance_ = 0L;
+      initCritchance_ = 0L;
+      initSpeed_ = 0L;
       return this;
     }
 
@@ -355,6 +523,27 @@ private static final long serialVersionUID = 0L;
         skill_.makeImmutable();
         result.skill_ = skill_;
       }
+      if (((from_bitField0_ & 0x00000004) != 0)) {
+        result.initHealth_ = initHealth_;
+      }
+      if (((from_bitField0_ & 0x00000008) != 0)) {
+        result.initMana_ = initMana_;
+      }
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        result.initStrength_ = initStrength_;
+      }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.initArmor_ = initArmor_;
+      }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.initResistance_ = initResistance_;
+      }
+      if (((from_bitField0_ & 0x00000080) != 0)) {
+        result.initCritchance_ = initCritchance_;
+      }
+      if (((from_bitField0_ & 0x00000100) != 0)) {
+        result.initSpeed_ = initSpeed_;
+      }
     }
 
     @java.lang.Override
@@ -382,6 +571,27 @@ private static final long serialVersionUID = 0L;
           skill_.addAll(other.skill_);
         }
         onChanged();
+      }
+      if (other.getInitHealth() != 0L) {
+        setInitHealth(other.getInitHealth());
+      }
+      if (other.getInitMana() != 0L) {
+        setInitMana(other.getInitMana());
+      }
+      if (other.getInitStrength() != 0L) {
+        setInitStrength(other.getInitStrength());
+      }
+      if (other.getInitArmor() != 0L) {
+        setInitArmor(other.getInitArmor());
+      }
+      if (other.getInitResistance() != 0L) {
+        setInitResistance(other.getInitResistance());
+      }
+      if (other.getInitCritchance() != 0L) {
+        setInitCritchance(other.getInitCritchance());
+      }
+      if (other.getInitSpeed() != 0L) {
+        setInitSpeed(other.getInitSpeed());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -430,6 +640,41 @@ private static final long serialVersionUID = 0L;
               input.popLimit(limit);
               break;
             } // case 18
+            case 24: {
+              initHealth_ = input.readUInt64();
+              bitField0_ |= 0x00000004;
+              break;
+            } // case 24
+            case 32: {
+              initMana_ = input.readUInt64();
+              bitField0_ |= 0x00000008;
+              break;
+            } // case 32
+            case 40: {
+              initStrength_ = input.readUInt64();
+              bitField0_ |= 0x00000010;
+              break;
+            } // case 40
+            case 48: {
+              initArmor_ = input.readUInt64();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 48
+            case 56: {
+              initResistance_ = input.readUInt64();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 56
+            case 64: {
+              initCritchance_ = input.readUInt64();
+              bitField0_ |= 0x00000080;
+              break;
+            } // case 64
+            case 72: {
+              initSpeed_ = input.readUInt64();
+              bitField0_ |= 0x00000100;
+              break;
+            } // case 72
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -559,6 +804,230 @@ private static final long serialVersionUID = 0L;
     public Builder clearSkill() {
       skill_ = emptyIntList();
       bitField0_ = (bitField0_ & ~0x00000002);
+      onChanged();
+      return this;
+    }
+
+    private long initHealth_ ;
+    /**
+     * <code>uint64 init_health = 3;</code>
+     * @return The initHealth.
+     */
+    @java.lang.Override
+    public long getInitHealth() {
+      return initHealth_;
+    }
+    /**
+     * <code>uint64 init_health = 3;</code>
+     * @param value The initHealth to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInitHealth(long value) {
+
+      initHealth_ = value;
+      bitField0_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 init_health = 3;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInitHealth() {
+      bitField0_ = (bitField0_ & ~0x00000004);
+      initHealth_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long initMana_ ;
+    /**
+     * <code>uint64 init_mana = 4;</code>
+     * @return The initMana.
+     */
+    @java.lang.Override
+    public long getInitMana() {
+      return initMana_;
+    }
+    /**
+     * <code>uint64 init_mana = 4;</code>
+     * @param value The initMana to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInitMana(long value) {
+
+      initMana_ = value;
+      bitField0_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 init_mana = 4;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInitMana() {
+      bitField0_ = (bitField0_ & ~0x00000008);
+      initMana_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long initStrength_ ;
+    /**
+     * <code>uint64 init_strength = 5;</code>
+     * @return The initStrength.
+     */
+    @java.lang.Override
+    public long getInitStrength() {
+      return initStrength_;
+    }
+    /**
+     * <code>uint64 init_strength = 5;</code>
+     * @param value The initStrength to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInitStrength(long value) {
+
+      initStrength_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 init_strength = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInitStrength() {
+      bitField0_ = (bitField0_ & ~0x00000010);
+      initStrength_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long initArmor_ ;
+    /**
+     * <code>uint64 init_armor = 6;</code>
+     * @return The initArmor.
+     */
+    @java.lang.Override
+    public long getInitArmor() {
+      return initArmor_;
+    }
+    /**
+     * <code>uint64 init_armor = 6;</code>
+     * @param value The initArmor to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInitArmor(long value) {
+
+      initArmor_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 init_armor = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInitArmor() {
+      bitField0_ = (bitField0_ & ~0x00000020);
+      initArmor_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long initResistance_ ;
+    /**
+     * <code>uint64 init_resistance = 7;</code>
+     * @return The initResistance.
+     */
+    @java.lang.Override
+    public long getInitResistance() {
+      return initResistance_;
+    }
+    /**
+     * <code>uint64 init_resistance = 7;</code>
+     * @param value The initResistance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInitResistance(long value) {
+
+      initResistance_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 init_resistance = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInitResistance() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      initResistance_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long initCritchance_ ;
+    /**
+     * <code>uint64 init_critchance = 8;</code>
+     * @return The initCritchance.
+     */
+    @java.lang.Override
+    public long getInitCritchance() {
+      return initCritchance_;
+    }
+    /**
+     * <code>uint64 init_critchance = 8;</code>
+     * @param value The initCritchance to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInitCritchance(long value) {
+
+      initCritchance_ = value;
+      bitField0_ |= 0x00000080;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 init_critchance = 8;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInitCritchance() {
+      bitField0_ = (bitField0_ & ~0x00000080);
+      initCritchance_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long initSpeed_ ;
+    /**
+     * <code>uint64 init_speed = 9;</code>
+     * @return The initSpeed.
+     */
+    @java.lang.Override
+    public long getInitSpeed() {
+      return initSpeed_;
+    }
+    /**
+     * <code>uint64 init_speed = 9;</code>
+     * @param value The initSpeed to set.
+     * @return This builder for chaining.
+     */
+    public Builder setInitSpeed(long value) {
+
+      initSpeed_ = value;
+      bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 init_speed = 9;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearInitSpeed() {
+      bitField0_ = (bitField0_ & ~0x00000100);
+      initSpeed_ = 0L;
       onChanged();
       return this;
     }

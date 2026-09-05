@@ -1,0 +1,104 @@
+package handler
+
+import (
+	"reflect"
+
+	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
+	"robot/generated/pb/game"
+	"robot/logic/gameobject"
+	"robot/pkg"
+	base "proto/common/base"
+)
+
+type handlerFunc func(*gameobject.Player, []byte)
+
+// unmarshalAndCall creates a handlerFunc that unmarshals body into a new
+// message of type PT and forwards it to the typed handler function.
+func unmarshalAndCall[PT proto.Message](fn func(*gameobject.Player, PT)) handlerFunc {
+	var zero PT
+	msgType := reflect.TypeOf(zero).Elem()
+	return func(player *gameobject.Player, body []byte) {
+		msg := reflect.New(msgType).Interface().(PT)
+		if err := proto.Unmarshal(body, msg); err != nil {
+			zap.L().Error("unmarshal failed", zap.Error(err))
+			return
+		}
+		fn(player, msg)
+	}
+}
+
+var messageHandlers = map[uint32]handlerFunc{
+	game.BattleClientPlayerSubmitBattleActionMessageId: unmarshalAndCall(BattleClientPlayerSubmitBattleActionHandler),
+	game.BattleClientPlayerGetBattleStateMessageId: unmarshalAndCall(BattleClientPlayerGetBattleStateHandler),
+	game.BattleClientPlayerNotifyBattleStartMessageId: unmarshalAndCall(BattleClientPlayerNotifyBattleStartHandler),
+	game.BattleClientPlayerNotifyTurnResultMessageId: unmarshalAndCall(BattleClientPlayerNotifyTurnResultHandler),
+	game.BattleClientPlayerNotifyBattleEndMessageId: unmarshalAndCall(BattleClientPlayerNotifyBattleEndHandler),
+	game.BattleClientPlayerNotifyBattleReconnectMessageId: unmarshalAndCall(BattleClientPlayerNotifyBattleReconnectHandler),
+	game.BattleClientPlayerStopWatchBattleMessageId: unmarshalAndCall(BattleClientPlayerStopWatchBattleHandler),
+	game.BattleClientPlayerSetAutoBattleMessageId: unmarshalAndCall(BattleClientPlayerSetAutoBattleHandler),
+	game.BattleClientPlayerNotifySpectateStateMessageId: unmarshalAndCall(BattleClientPlayerNotifySpectateStateHandler),
+	game.BattleClientPlayerNotifySpectateTurnResultMessageId: unmarshalAndCall(BattleClientPlayerNotifySpectateTurnResultHandler),
+	game.BattleClientPlayerNotifySpectateEndMessageId: unmarshalAndCall(BattleClientPlayerNotifySpectateEndHandler),
+	game.ClientPlayerChatSendChatMessageId: unmarshalAndCall(ClientPlayerChatSendChatHandler),
+	game.ClientPlayerChatPullChatHistoryMessageId: unmarshalAndCall(ClientPlayerChatPullChatHistoryHandler),
+	game.ClientPlayerLoginLoginMessageId: unmarshalAndCall(ClientPlayerLoginLoginHandler),
+	game.ClientPlayerLoginCreatePlayerMessageId: unmarshalAndCall(ClientPlayerLoginCreatePlayerHandler),
+	game.ClientPlayerLoginEnterGameMessageId: unmarshalAndCall(ClientPlayerLoginEnterGameHandler),
+	game.ClientPlayerLoginLeaveGameMessageId: unmarshalAndCall(ClientPlayerLoginLeaveGameHandler),
+	game.ClientPlayerLoginDisconnectMessageId: unmarshalAndCall(ClientPlayerLoginDisconnectHandler),
+	game.ClientPlayerLoginRefreshTokenMessageId: unmarshalAndCall(ClientPlayerLoginRefreshTokenHandler),
+	game.SceneClientPlayerCommonSendTipToClientMessageId: unmarshalAndCall(SceneClientPlayerCommonSendTipToClientHandler),
+	game.SceneClientPlayerCommonKickPlayerMessageId: unmarshalAndCall(SceneClientPlayerCommonKickPlayerHandler),
+	game.SceneClientPlayerCommonRedirectToGateMessageId: unmarshalAndCall(SceneClientPlayerCommonRedirectToGateHandler),
+	game.SceneAttributeClientPlayerGetAttributePanelMessageId: unmarshalAndCall(SceneAttributeClientPlayerGetAttributePanelHandler),
+	game.SceneAttributeClientPlayerAllocateAttributePointsMessageId: unmarshalAndCall(SceneAttributeClientPlayerAllocateAttributePointsHandler),
+	game.SceneAttributeClientPlayerResetAttributePointsMessageId: unmarshalAndCall(SceneAttributeClientPlayerResetAttributePointsHandler),
+	game.SceneAttributeClientPlayerAutoAllocateAttributePointsMessageId: unmarshalAndCall(SceneAttributeClientPlayerAutoAllocateAttributePointsHandler),
+	game.SceneAttributeClientPlayerCreateAttributeSchemeMessageId: unmarshalAndCall(SceneAttributeClientPlayerCreateAttributeSchemeHandler),
+	game.SceneAttributeClientPlayerSwitchAttributeSchemeMessageId: unmarshalAndCall(SceneAttributeClientPlayerSwitchAttributeSchemeHandler),
+	game.SceneAttributeClientPlayerRenameAttributeSchemeMessageId: unmarshalAndCall(SceneAttributeClientPlayerRenameAttributeSchemeHandler),
+	game.SceneAttributeClientPlayerNotifyAttributePanelChangedMessageId: unmarshalAndCall(SceneAttributeClientPlayerNotifyAttributePanelChangedHandler),
+	game.SceneAttributeClientPlayerGmSetPlayerLevelMessageId: unmarshalAndCall(SceneAttributeClientPlayerGmSetPlayerLevelHandler),
+	game.SceneCurrencyClientPlayerGmAddCurrencyMessageId: unmarshalAndCall(SceneCurrencyClientPlayerGmAddCurrencyHandler),
+	game.SceneCurrencyClientPlayerGmDeductCurrencyMessageId: unmarshalAndCall(SceneCurrencyClientPlayerGmDeductCurrencyHandler),
+	game.SceneCurrencyClientPlayerGetCurrencyListMessageId: unmarshalAndCall(SceneCurrencyClientPlayerGetCurrencyListHandler),
+	game.SceneCurrencyClientPlayerGmBlockCurrencyMessageId: unmarshalAndCall(SceneCurrencyClientPlayerGmBlockCurrencyHandler),
+	game.SceneCurrencyClientPlayerGmUnblockCurrencyMessageId: unmarshalAndCall(SceneCurrencyClientPlayerGmUnblockCurrencyHandler),
+	game.SceneMovementClientPlayerMoveStartMessageId: unmarshalAndCall(SceneMovementClientPlayerMoveStartHandler),
+	game.SceneMovementClientPlayerMoveStopMessageId: unmarshalAndCall(SceneMovementClientPlayerMoveStopHandler),
+	game.SceneMovementClientPlayerMoveSyncMessageId: unmarshalAndCall(SceneMovementClientPlayerMoveSyncHandler),
+	game.SceneMovementClientPlayerTeleportRequestMessageId: unmarshalAndCall(SceneMovementClientPlayerTeleportRequestHandler),
+	game.SceneMovementClientPlayerNotifyMoveAckMessageId: unmarshalAndCall(SceneMovementClientPlayerNotifyMoveAckHandler),
+	game.SceneMovementClientPlayerNotifyActorMoveMessageId: unmarshalAndCall(SceneMovementClientPlayerNotifyActorMoveHandler),
+	game.SceneMovementClientPlayerNotifyActorMoveListMessageId: unmarshalAndCall(SceneMovementClientPlayerNotifyActorMoveListHandler),
+	game.SceneMovementClientPlayerNotifyTeleportMessageId: unmarshalAndCall(SceneMovementClientPlayerNotifyTeleportHandler),
+	game.SceneSceneClientPlayerEnterSceneMessageId: unmarshalAndCall(SceneSceneClientPlayerEnterSceneHandler),
+	game.SceneSceneClientPlayerNotifyEnterSceneMessageId: unmarshalAndCall(SceneSceneClientPlayerNotifyEnterSceneHandler),
+	game.SceneSceneClientPlayerSceneInfoC2SMessageId: unmarshalAndCall(SceneSceneClientPlayerSceneInfoC2SHandler),
+	game.SceneSceneClientPlayerNotifySceneInfoMessageId: unmarshalAndCall(SceneSceneClientPlayerNotifySceneInfoHandler),
+	game.SceneSceneClientPlayerNotifyActorCreateMessageId: unmarshalAndCall(SceneSceneClientPlayerNotifyActorCreateHandler),
+	game.SceneSceneClientPlayerNotifyActorDestroyMessageId: unmarshalAndCall(SceneSceneClientPlayerNotifyActorDestroyHandler),
+	game.SceneSceneClientPlayerNotifyActorListCreateMessageId: unmarshalAndCall(SceneSceneClientPlayerNotifyActorListCreateHandler),
+	game.SceneSceneClientPlayerNotifyActorListDestroyMessageId: unmarshalAndCall(SceneSceneClientPlayerNotifyActorListDestroyHandler),
+	game.SceneSkillClientPlayerReleaseSkillMessageId: unmarshalAndCall(SceneSkillClientPlayerReleaseSkillHandler),
+	game.SceneSkillClientPlayerNotifySkillUsedMessageId: unmarshalAndCall(SceneSkillClientPlayerNotifySkillUsedHandler),
+	game.SceneSkillClientPlayerNotifySkillInterruptedMessageId: unmarshalAndCall(SceneSkillClientPlayerNotifySkillInterruptedHandler),
+	game.SceneSkillClientPlayerListSkillsMessageId: unmarshalAndCall(SceneSkillClientPlayerListSkillsHandler),
+}
+
+func MessageBodyHandler(client *pkg.GameClient, response *base.MessageContent) {
+	zap.L().Debug("Received message body", zap.String("response", response.String()))
+
+	player, ok := gameobject.PlayerList.Get(client.PlayerId)
+	if !ok {
+		zap.L().Error("Player not found", zap.Uint64("player_id", client.PlayerId))
+		return
+	}
+
+	if h, ok := messageHandlers[response.MessageId]; ok {
+		h(player, response.SerializedMessage)
+	} else {
+		zap.L().Info("Unhandled message", zap.Uint32("message_id", response.MessageId))
+	}
+}

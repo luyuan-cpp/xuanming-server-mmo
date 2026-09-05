@@ -260,7 +260,29 @@
         "MatchAlreadyWatching": 16016,
         "MatchNoWatchableBattle": 16017,
         "MatchBattleNotWatchable": 16018,
-        "MatchSpectateOffline": 16019
+        "MatchSpectateOffline": 16019,
+        "MatchNotInScene": 16020
+      }
+    },
+    "attribute_error": {
+      "base": 25000,
+      "width": 1000,
+      "ids": {
+        "AttributePoolNotFound": 25000,
+        "AttributePoolLocked": 25001,
+        "AttributeDimensionNotFound": 25002,
+        "AttributePointsNotEnough": 25003,
+        "AttributePointsCannotDecrease": 25004,
+        "AttributeDimensionCapExceeded": 25005,
+        "AttributeSchemeNotFound": 25006,
+        "AttributeSchemeLimitReached": 25007,
+        "AttributeSchemeSwitchCooldown": 25008,
+        "AttributeSchemeNameInvalid": 25009,
+        "AttributeSchemeAlreadyActive": 25010,
+        "AttributeInBattle": 25011,
+        "AttributeGoldNotEnough": 25012,
+        "AttributeNoAutoPlan": 25013,
+        "AttributeNothingToChange": 25014
       }
     }
   },

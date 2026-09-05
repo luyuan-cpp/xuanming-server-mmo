@@ -60,4 +60,26 @@ struct FCfgClassRow : public FTableRowBase
 
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Class")
 	TArray<int32> skill;
+
+	/** 初始属性。字段号抄自 generated/code/proto/class_table.proto,纯追加,1/2 号未动。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Class")
+	int64 init_health = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Class")
+	int64 init_mana = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Class")
+	int64 init_strength = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Class")
+	int64 init_armor = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Class")
+	int64 init_resistance = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Class")
+	int64 init_critchance = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Class")
+	int64 init_speed = 0;
 };

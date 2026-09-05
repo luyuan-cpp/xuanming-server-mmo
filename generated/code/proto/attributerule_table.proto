@@ -1,0 +1,22 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "AttributeRuleTableOuterClass";
+option java_multiple_files = true;
+
+
+message AttributeRuleTable {
+	uint32 id = 1;
+	uint32 max_schemes = 2;
+	uint32 free_scheme_count = 3;
+	uint64 create_scheme_cost_gold = 4;
+	uint32 switch_cooldown_seconds = 5;
+	uint32 scheme_name_max_len = 6;
+}
+
+message AttributeRuleTableData {
+	repeated AttributeRuleTable data = 1;
+}

@@ -273,6 +273,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InBattleComp final : public ::googl
     kDeadlineMsFieldNumber = 3,
     kBattleNodeIdFieldNumber = 2,
     kStateFieldNumber = 4,
+    kPrepareDeadlineMsFieldNumber = 5,
   };
   // uint64 battle_id = 1;
   void clear_battle_id() ;
@@ -314,11 +315,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InBattleComp final : public ::googl
   void _internal_set_state(::eInBattleState value);
 
   public:
+  // uint64 prepare_deadline_ms = 5;
+  void clear_prepare_deadline_ms() ;
+  [[nodiscard]] ::uint64_t prepare_deadline_ms() const;
+  void set_prepare_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_prepare_deadline_ms() const;
+  void _internal_set_prepare_deadline_ms(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:InBattleComp)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -351,6 +362,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED InBattleComp final : public ::googl
     ::uint64_t deadline_ms_;
     ::uint32_t battle_node_id_;
     int state_;
+    ::uint64_t prepare_deadline_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -467,6 +479,30 @@ inline ::eInBattleState InBattleComp::_internal_state() const {
 inline void InBattleComp::_internal_set_state(::eInBattleState value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.state_ = value;
+}
+
+// uint64 prepare_deadline_ms = 5;
+inline void InBattleComp::clear_prepare_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.prepare_deadline_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t InBattleComp::prepare_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:InBattleComp.prepare_deadline_ms)
+  return _internal_prepare_deadline_ms();
+}
+inline void InBattleComp::set_prepare_deadline_ms(::uint64_t value) {
+  _internal_set_prepare_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:InBattleComp.prepare_deadline_ms)
+}
+inline ::uint64_t InBattleComp::_internal_prepare_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.prepare_deadline_ms_;
+}
+inline void InBattleComp::_internal_set_prepare_deadline_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.prepare_deadline_ms_ = value;
 }
 
 #ifdef __GNUC__

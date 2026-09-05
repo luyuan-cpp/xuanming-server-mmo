@@ -108,6 +108,13 @@ static void ClassTableCheckNarrowedField(const TSharedPtr<FJsonObject>& Object, 
 static void ClassTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject, int32 RowIndex)
 {
 	ClassTableCheckNarrowedField(RowObject, TEXT("id"), TEXT("id"), RowIndex, 2147483647.0, TEXT("uint32"));
+	ClassTableCheckNarrowedField(RowObject, TEXT("init_health"), TEXT("init_health"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	ClassTableCheckNarrowedField(RowObject, TEXT("init_mana"), TEXT("init_mana"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	ClassTableCheckNarrowedField(RowObject, TEXT("init_strength"), TEXT("init_strength"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	ClassTableCheckNarrowedField(RowObject, TEXT("init_armor"), TEXT("init_armor"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	ClassTableCheckNarrowedField(RowObject, TEXT("init_resistance"), TEXT("init_resistance"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	ClassTableCheckNarrowedField(RowObject, TEXT("init_critchance"), TEXT("init_critchance"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	ClassTableCheckNarrowedField(RowObject, TEXT("init_speed"), TEXT("init_speed"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	ClassTableCheckNarrowedField(RowObject, TEXT("skill"), TEXT("skill[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 

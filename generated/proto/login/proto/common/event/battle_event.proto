@@ -13,3 +13,13 @@ import "proto/battle/battle_data.proto";
 message BattleSettlementEvent {
   BattleSettlementData settlement = 1;
 }
+
+// battle -> scene:CreateBattle 成功后每个参战玩家一条。scene 校验 InBattleComp.battle_id 匹配且
+// state==PREPARING -> state=FIGHTING、deadline_ms=event.deadline_ms、battle:lock 按正式期限续期;
+// 不匹配 / 已 FIGHTING / 玩家不在线(锁值匹配则只续期)一律幂等处理。
+// 目的:备战期用短 prepare_deadline_ms 解冻,match 在 gather 中崩溃时已冻结成员不再等整场战斗时限。
+message BattleConfirmedEvent {
+  uint64 battle_id = 1;
+  uint64 player_id = 2;
+  uint64 deadline_ms = 3;  // 正式战斗作废期限(= CreateBattleRequest.deadline_ms)
+}

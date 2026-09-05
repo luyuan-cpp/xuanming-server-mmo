@@ -1,0 +1,30 @@
+syntax = "proto3";
+
+// AttributeAutoPlan 表的权威 schema。源表 data/AttributeAutoPlan.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号抄自 generated/code/proto/attributeautoplan_table.proto,**只增不改、删字段用 reserved**;
+// 导表时会按产物发号规则复算并逐条核对,对不上直接中止。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message AttributeAutoPlanTable {
+  option (cfg_sheet)       = "AttributeAutoPlan";
+  option (cfg_source_file) = "AttributeAutoPlan.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 方案 id
+  uint32 id = 1;
+  // 职业 id(0=通用兜底)
+  uint32 class_id = 2 [(cfg_index) = true];
+  // 池
+  uint32 pool_id = 3 [(cfg_fk) = "AttributePool"];
+  // 维度优先序(有上限池按序灌满;无上限池按 weight 比例分配)
+  repeated uint32 dimension = 4 [(cfg_slots) = 5, (cfg_fk) = "AttributeDimension"];
+  // 各维度权重(与 dimension 一一对应)
+  repeated uint32 weight = 5 [(cfg_slots) = 5];
+  // 说明
+  string desc = 6;
+}

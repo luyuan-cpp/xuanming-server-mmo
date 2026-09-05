@@ -67,4 +67,8 @@ struct FCfgDungeonRow : public FTableRowBase
 
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Dungeon")
 	int32 time_limit = 0;
+
+	/** FK -> Monster.id(重复列,占 3 格)。源表 opts 写的是 fk:Monster。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Dungeon")
+	TArray<int32> monster;
 };

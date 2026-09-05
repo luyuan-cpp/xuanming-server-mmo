@@ -45,11 +45,15 @@ public final class ClassTableOuterClass extends com.google.protobuf.GeneratedFil
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\021class_table.proto\"\'\n\nClassTable\022\n\n\002id\030" +
-      "\001 \001(\r\022\r\n\005skill\030\002 \003(\r\"+\n\016ClassTableData\022\031" +
-      "\n\004data\030\001 \003(\0132\013.ClassTableB<\n\016com.game.ta" +
-      "bleB\024ClassTableOuterClassP\001Z\022generated/p" +
-      "b/tableb\006proto3"
+      "\n\021class_table.proto\"\300\001\n\nClassTable\022\n\n\002id" +
+      "\030\001 \001(\r\022\r\n\005skill\030\002 \003(\r\022\023\n\013init_health\030\003 \001" +
+      "(\004\022\021\n\tinit_mana\030\004 \001(\004\022\025\n\rinit_strength\030\005" +
+      " \001(\004\022\022\n\ninit_armor\030\006 \001(\004\022\027\n\017init_resista" +
+      "nce\030\007 \001(\004\022\027\n\017init_critchance\030\010 \001(\004\022\022\n\nin" +
+      "it_speed\030\t \001(\004\"+\n\016ClassTableData\022\031\n\004data" +
+      "\030\001 \003(\0132\013.ClassTableB<\n\016com.game.tableB\024C" +
+      "lassTableOuterClassP\001Z\022generated/pb/tabl" +
+      "eb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -60,7 +64,7 @@ public final class ClassTableOuterClass extends com.google.protobuf.GeneratedFil
     internal_static_ClassTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ClassTable_descriptor,
-        new java.lang.String[] { "Id", "Skill", });
+        new java.lang.String[] { "Id", "Skill", "InitHealth", "InitMana", "InitStrength", "InitArmor", "InitResistance", "InitCritchance", "InitSpeed", });
     internal_static_ClassTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_ClassTableData_fieldAccessorTable = new

@@ -48,11 +48,11 @@ constexpr DungeonTable::ParseTableT_ DungeonTable::InternalGenerateParseTable_(c
     {
       PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -62,33 +62,42 @@ constexpr DungeonTable::ParseTableT_ DungeonTable::InternalGenerateParseTable_(c
       ::_pbi::TcParser::GetTable<::DungeonTable>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 time_limit = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DungeonTable, _impl_.time_limit_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.time_limit_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DungeonTable, _impl_.id_), 0>(),
-       {8, 0, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DungeonTable, _impl_.id_), 1>(),
+       {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.id_)}},
       // uint32 scene_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DungeonTable, _impl_.scene_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DungeonTable, _impl_.scene_id_), 2>(),
+       {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.scene_id_)}},
       // uint32 max_team_size = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DungeonTable, _impl_.max_team_size_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DungeonTable, _impl_.max_team_size_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.max_team_size_)}},
+      // uint32 time_limit = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DungeonTable, _impl_.time_limit_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.time_limit_)}},
+      // repeated uint32 monster = 5;
+      {::_pbi::TcParser::FastV32P1,
+       {42, 0, 0,
+        PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.monster_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 scene_id = 2;
-      {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.scene_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.scene_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 max_team_size = 3;
-      {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.max_team_size_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.max_team_size_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 time_limit = 4;
-      {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.time_limit_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.time_limit_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // repeated uint32 monster = 5;
+      {PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.monster_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt32)},
     }},
     // no aux_entries
     {{
@@ -101,6 +110,12 @@ inline constexpr DungeonTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        monster_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::DungeonTable,
+            PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.monster_)>()
+         }
+        ,
+        _monster_cached_byte_size_{0},
         id_{0u},
         scene_id_{0u},
         max_team_size_{0u},
@@ -122,7 +137,7 @@ inline void* PROTOBUF_NONNULL DungeonTable::PlacementNew_(
   return ::new (mem) DungeonTable(arena);
 }
 constexpr auto DungeonTable::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(DungeonTable), alignof(DungeonTable));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(DungeonTable), alignof(DungeonTable));
 }
 constexpr auto DungeonTable::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -358,15 +373,17 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.scene_id_),
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.max_team_size_),
         PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.time_limit_),
-        0,
+        PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.monster_),
         1,
         2,
         3,
+        4,
+        0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::DungeonTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -377,7 +394,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::DungeonTable)},
-        {11, sizeof(::DungeonTableData)},
+        {13, sizeof(::DungeonTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -386,18 +403,19 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_dungeon_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\023dungeon_table.proto\"W\n\014DungeonTable\022\n\n"
+    "\n\023dungeon_table.proto\"h\n\014DungeonTable\022\n\n"
     "\002id\030\001 \001(\r\022\020\n\010scene_id\030\002 \001(\r\022\025\n\rmax_team_"
-    "size\030\003 \001(\r\022\022\n\ntime_limit\030\004 \001(\r\"/\n\020Dungeo"
-    "nTableData\022\033\n\004data\030\001 \003(\0132\r.DungeonTableB"
-    ">\n\016com.game.tableB\026DungeonTableOuterClas"
-    "sP\001Z\022generated/pb/tableb\006proto3"
+    "size\030\003 \001(\r\022\022\n\ntime_limit\030\004 \001(\r\022\017\n\007monste"
+    "r\030\005 \003(\r\"/\n\020DungeonTableData\022\033\n\004data\030\001 \003("
+    "\0132\r.DungeonTableB>\n\016com.game.tableB\026Dung"
+    "eonTableOuterClassP\001Z\022generated/pb/table"
+    "b\006proto3"
 };
 static ::absl::once_flag descriptor_table_dungeon_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_dungeon_5ftable_2eproto = {
     false,
     false,
-    231,
+    248,
     descriptor_table_protodef_dungeon_5ftable_2eproto,
     "dungeon_table.proto",
     &descriptor_table_dungeon_5ftable_2eproto_once,
@@ -421,21 +439,55 @@ DungeonTable::DungeonTable(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:DungeonTable)
 }
+PROTOBUF_NDEBUG_INLINE DungeonTable::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::DungeonTable& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        monster_ {
+          visibility, ::_pbi::InternalMetadataOffset::Build<
+              ::DungeonTable,
+              PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.monster_)>()
+          , from.monster_
+        }
+        ,
+        _monster_cached_byte_size_{0} {}
+
 DungeonTable::DungeonTable(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DungeonTable& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const DungeonTable& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, DungeonTable_get_class_data()),
+    : ::google::protobuf::Message(arena, DungeonTable_get_class_data()) {
+
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  DungeonTable* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, id_),
+           offsetof(Impl_, time_limit_) -
+               offsetof(Impl_, id_) +
+               sizeof(Impl_::time_limit_));
+
+  // @@protoc_insertion_point(copy_constructor:DungeonTable)
 }
 PROTOBUF_NDEBUG_INLINE DungeonTable::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        monster_ { visibility, ::_pbi::InternalMetadataOffset::Build<
+            ::DungeonTable,
+            PROTOBUF_FIELD_OFFSET(::DungeonTable, _impl_.monster_)>()
+         }
+        ,
+        _monster_cached_byte_size_{0} {}
 
 inline void DungeonTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -494,7 +546,10 @@ PROTOBUF_NOINLINE void DungeonTable::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.monster_.Clear();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.time_limit_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.time_limit_));
@@ -523,7 +578,7 @@ PROTOBUF_NOINLINE void DungeonTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -532,7 +587,7 @@ PROTOBUF_NOINLINE void DungeonTable::Clear() {
   }
 
   // uint32 scene_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_scene_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -541,7 +596,7 @@ PROTOBUF_NOINLINE void DungeonTable::Clear() {
   }
 
   // uint32 max_team_size = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_max_team_size() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -550,11 +605,22 @@ PROTOBUF_NOINLINE void DungeonTable::Clear() {
   }
 
   // uint32 time_limit = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_time_limit() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           4, this_._internal_time_limit(), target);
+    }
+  }
+
+  // repeated uint32 monster = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    {
+      int byte_size = this_._impl_._monster_cached_byte_size_.Get();
+      if (byte_size > 0) {
+        target = stream->WriteUInt32Packed(
+            5, this_._internal_monster(), byte_size, target);
+      }
     }
   }
 
@@ -583,30 +649,37 @@ PROTOBUF_NOINLINE void DungeonTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // uint32 id = 1;
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // repeated uint32 monster = 5;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      total_size +=
+          ::_pbi::WireFormatLite::UInt32SizeWithPackedTagSize(
+              this_._internal_monster(), 1,
+              this_._impl_._monster_cached_byte_size_);
+    }
+    // uint32 id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
       }
     }
     // uint32 scene_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_scene_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_scene_id());
       }
     }
     // uint32 max_team_size = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_max_team_size() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_max_team_size());
       }
     }
     // uint32 time_limit = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_time_limit() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_time_limit());
@@ -630,23 +703,26 @@ void DungeonTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      _this->_internal_mutable_monster()->MergeFrom(from._internal_monster());
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_scene_id() != 0) {
         _this->_impl_.scene_id_ = from._impl_.scene_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_max_team_size() != 0) {
         _this->_impl_.max_team_size_ = from._impl_.max_team_size_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_time_limit() != 0) {
         _this->_impl_.time_limit_ = from._impl_.time_limit_;
       }
@@ -669,6 +745,7 @@ void DungeonTable::InternalSwap(DungeonTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL
   using ::std::swap;
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  _impl_.monster_.InternalSwap(&other->_impl_.monster_);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(DungeonTable, _impl_.time_limit_)
       + sizeof(DungeonTable::_impl_.time_limit_)

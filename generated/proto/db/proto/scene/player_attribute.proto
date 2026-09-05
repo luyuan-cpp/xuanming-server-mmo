@@ -1,0 +1,169 @@
+syntax = "proto3";
+option go_package = "db/proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/common/base/empty.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 角色属性加点客户端协议(设计文档 docs/design/player-attribute-allocation.md §4)。
+//
+// 面板全量下发(AttributePanelInfo):客户端零配表,维度名/说明/上限/剩余点全部来自服务器;
+// 每个写操作成功后都回全量面板,客户端直接覆盖本地状态,不做增量合并。
+
+// 维度(体质/灵力/... 金木水火土 ... 仙攻/仙护/魔攻/魔体)
+message AttributeDimensionInfo {
+  uint32 dimension_id = 1;
+  uint32 pool_id = 2;
+  string name = 3;
+  string desc = 4;         // 悬浮说明,如"体质:提高气血上限和防御。"
+  uint32 allocated = 5;    // 当前方案已分配点
+  uint64 value = 6;        // 面板显示值 = 自然成长 + 已分配 + 外部加成
+  uint32 cap = 7;          // 可分配上限(0 = 不限;相性 = 50)
+  uint32 sort = 8;
+}
+
+// 点数池(属性点 / 相性点 / 仙魔点)
+message AttributePoolInfo {
+  uint32 pool_id = 1;
+  string name = 2;
+  uint32 total = 3;        // 总点数(等级换算 + 额外点)
+  uint32 remaining = 4;    // 剩余可分配
+  uint32 dimension_cap = 5;
+  bool unlocked = 6;
+  uint32 unlock_level = 7;
+  uint64 reset_cost_gold = 8;  // 当前等级下重置本池的金币(0 = 免费)
+}
+
+message AttributeSchemeInfo {
+  uint32 scheme_id = 1;
+  string name = 2;
+}
+
+// 二级属性(面板左栏六项 + 当前气血/法力)
+message DerivedAttributeInfo {
+  uint64 max_health = 1;
+  uint64 max_mana = 2;
+  uint64 physical_attack = 3;
+  uint64 magic_attack = 4;
+  uint64 speed = 5;
+  uint64 defense = 6;
+  uint64 health = 7;
+  uint64 mana = 8;
+}
+
+message AttributePanelInfo {
+  repeated AttributePoolInfo pools = 1;
+  repeated AttributeDimensionInfo dimensions = 2;
+  repeated AttributeSchemeInfo schemes = 3;
+  uint32 active_scheme_id = 4;
+  uint32 max_schemes = 5;
+  DerivedAttributeInfo derived = 6;
+  uint32 level = 7;
+  uint64 switch_cooldown_until = 8;     // Unix 秒;<= now 表示可切换
+  uint64 create_scheme_cost_gold = 9;   // 再开一个方案要花的金币(0 = 免费)
+}
+
+message GetAttributePanelRequest {
+}
+
+message GetAttributePanelResponse {
+  TipInfoMessage error_message = 1;
+  AttributePanelInfo panel = 2;
+}
+
+// 确认加点:提交某池"全部维度的目标已分配值"(全量、幂等)。
+// 校验:池已解锁、维度属于该池、每维度只增不减、单维度不超上限、增量总和 <= 剩余点。
+message AllocateAttributePointsRequest {
+  uint32 pool_id = 1;
+  map<uint32, uint32> allocated = 2;  // dimension_id -> 目标已分配点(缺省维度视为不变)
+}
+
+message AllocateAttributePointsResponse {
+  TipInfoMessage error_message = 1;
+  AttributePanelInfo panel = 2;
+}
+
+// 重置(洗点):清空当前方案里该池的全部分配,点数返还;按 AttributePool 表扣金币
+message ResetAttributePointsRequest {
+  uint32 pool_id = 1;
+}
+
+message ResetAttributePointsResponse {
+  TipInfoMessage error_message = 1;
+  AttributePanelInfo panel = 2;
+}
+
+// 自动加点:服务器按职业方案(AttributeAutoPlan)把该池剩余点算成建议分配,
+// 只算不落;客户端填进面板预览,玩家点"确认"再走 AllocateAttributePoints
+message AutoAllocateAttributePointsRequest {
+  uint32 pool_id = 1;
+}
+
+message AutoAllocateAttributePointsResponse {
+  TipInfoMessage error_message = 1;
+  uint32 pool_id = 2;
+  map<uint32, uint32> suggested = 3;  // dimension_id -> 建议的目标已分配点(含已分配部分)
+}
+
+message CreateAttributeSchemeRequest {
+  string name = 1;   // 空 = 服务器按"方案N"命名
+}
+
+message CreateAttributeSchemeResponse {
+  TipInfoMessage error_message = 1;
+  AttributePanelInfo panel = 2;
+  uint32 scheme_id = 3;
+}
+
+// 切换方案:立即按目标方案重算二级属性(战斗中/冷却中拒绝)
+message SwitchAttributeSchemeRequest {
+  uint32 scheme_id = 1;
+}
+
+message SwitchAttributeSchemeResponse {
+  TipInfoMessage error_message = 1;
+  AttributePanelInfo panel = 2;
+}
+
+message RenameAttributeSchemeRequest {
+  uint32 scheme_id = 1;
+  string name = 2;
+}
+
+message RenameAttributeSchemeResponse {
+  TipInfoMessage error_message = 1;
+  AttributePanelInfo panel = 2;
+}
+
+// 服务器主动推送(升级发点、GM 改等级、外部加成变化):客户端整体覆盖
+message AttributePanelChangedS2C {
+  AttributePanelInfo panel = 1;
+}
+
+// GM:直接设等级(开发/测试用;上线走 GM 鉴权白名单)。等级变化会重算点数与二级属性
+message GmSetPlayerLevelRequest {
+  uint32 level = 1;
+}
+
+message GmSetPlayerLevelResponse {
+  TipInfoMessage error_message = 1;
+  AttributePanelInfo panel = 2;
+}
+
+service SceneAttributeClientPlayer {
+  option (OptionIsPlayerService) = true;
+  option (OptionIsClientProtocolService) = true;
+
+  rpc GetAttributePanel (GetAttributePanelRequest) returns (GetAttributePanelResponse);
+  rpc AllocateAttributePoints (AllocateAttributePointsRequest) returns (AllocateAttributePointsResponse);
+  rpc ResetAttributePoints (ResetAttributePointsRequest) returns (ResetAttributePointsResponse);
+  rpc AutoAllocateAttributePoints (AutoAllocateAttributePointsRequest) returns (AutoAllocateAttributePointsResponse);
+  rpc CreateAttributeScheme (CreateAttributeSchemeRequest) returns (CreateAttributeSchemeResponse);
+  rpc SwitchAttributeScheme (SwitchAttributeSchemeRequest) returns (SwitchAttributeSchemeResponse);
+  rpc RenameAttributeScheme (RenameAttributeSchemeRequest) returns (RenameAttributeSchemeResponse);
+  rpc NotifyAttributePanelChanged (AttributePanelChangedS2C) returns (Empty);
+  rpc GmSetPlayerLevel (GmSetPlayerLevelRequest) returns (GmSetPlayerLevelResponse);
+}

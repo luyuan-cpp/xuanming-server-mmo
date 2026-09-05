@@ -28,6 +28,7 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private DungeonTable() {
+    monster_ = emptyIntList();
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -92,6 +93,36 @@ private static final long serialVersionUID = 0L;
     return timeLimit_;
   }
 
+  public static final int MONSTER_FIELD_NUMBER = 5;
+  @SuppressWarnings("serial")
+  private com.google.protobuf.Internal.IntList monster_ =
+      emptyIntList();
+  /**
+   * <code>repeated uint32 monster = 5;</code>
+   * @return A list containing the monster.
+   */
+  @java.lang.Override
+  public java.util.List<java.lang.Integer>
+      getMonsterList() {
+    return monster_;
+  }
+  /**
+   * <code>repeated uint32 monster = 5;</code>
+   * @return The count of monster.
+   */
+  public int getMonsterCount() {
+    return monster_.size();
+  }
+  /**
+   * <code>repeated uint32 monster = 5;</code>
+   * @param index The index of the element to return.
+   * @return The monster at the given index.
+   */
+  public int getMonster(int index) {
+    return monster_.getInt(index);
+  }
+  private int monsterMemoizedSerializedSize = -1;
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -106,6 +137,7 @@ private static final long serialVersionUID = 0L;
   @java.lang.Override
   public void writeTo(com.google.protobuf.CodedOutputStream output)
                       throws java.io.IOException {
+    getSerializedSize();
     if (id_ != 0) {
       output.writeUInt32(1, id_);
     }
@@ -117,6 +149,13 @@ private static final long serialVersionUID = 0L;
     }
     if (timeLimit_ != 0) {
       output.writeUInt32(4, timeLimit_);
+    }
+    if (getMonsterList().size() > 0) {
+      output.writeUInt32NoTag(42);
+      output.writeUInt32NoTag(monsterMemoizedSerializedSize);
+    }
+    for (int i = 0; i < monster_.size(); i++) {
+      output.writeUInt32NoTag(monster_.getInt(i));
     }
     getUnknownFields().writeTo(output);
   }
@@ -137,6 +176,20 @@ private static final long serialVersionUID = 0L;
     if (timeLimit_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(4, timeLimit_);
+    }
+    {
+      int dataSize = 0;
+      for (int i = 0; i < monster_.size(); i++) {
+        dataSize += com.google.protobuf.CodedOutputStream
+          .computeUInt32SizeNoTag(monster_.getInt(i));
+      }
+      size += dataSize;
+      if (!getMonsterList().isEmpty()) {
+        size += 1;
+        size += com.google.protobuf.CodedOutputStream
+            .computeInt32SizeNoTag(dataSize);
+      }
+      monsterMemoizedSerializedSize = dataSize;
     }
     return size;
   }
@@ -170,6 +223,8 @@ private static final long serialVersionUID = 0L;
         != other.getMaxTeamSize()) return false;
     if (getTimeLimit()
         != other.getTimeLimit()) return false;
+    if (!getMonsterList()
+        .equals(other.getMonsterList())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -189,6 +244,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getMaxTeamSize();
     hash = (37 * hash) + TIME_LIMIT_FIELD_NUMBER;
     hash = (53 * hash) + getTimeLimit();
+    if (getMonsterCount() > 0) {
+      hash = (37 * hash) + MONSTER_FIELD_NUMBER;
+      hash = (53 * hash) + getMonsterList().hashCode();
+    }
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -324,6 +383,7 @@ private static final long serialVersionUID = 0L;
       sceneId_ = 0;
       maxTeamSize_ = 0;
       timeLimit_ = 0;
+      monster_ = emptyIntList();
       return this;
     }
 
@@ -369,6 +429,10 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000008) != 0)) {
         result.timeLimit_ = timeLimit_;
       }
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        monster_.makeImmutable();
+        result.monster_ = monster_;
+      }
     }
 
     @java.lang.Override
@@ -394,6 +458,17 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getTimeLimit() != 0) {
         setTimeLimit(other.getTimeLimit());
+      }
+      if (!other.monster_.isEmpty()) {
+        if (monster_.isEmpty()) {
+          monster_ = other.monster_;
+          monster_.makeImmutable();
+          bitField0_ |= 0x00000010;
+        } else {
+          ensureMonsterIsMutable();
+          monster_.addAll(other.monster_);
+        }
+        onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -441,6 +516,22 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000008;
               break;
             } // case 32
+            case 40: {
+              int v = input.readUInt32();
+              ensureMonsterIsMutable();
+              monster_.addInt(v);
+              break;
+            } // case 40
+            case 42: {
+              int length = input.readRawVarint32();
+              int limit = input.pushLimit(length);
+              ensureMonsterIsMutable();
+              while (input.getBytesUntilLimit() > 0) {
+                monster_.addInt(input.readUInt32());
+              }
+              input.popLimit(limit);
+              break;
+            } // case 42
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -582,6 +673,90 @@ private static final long serialVersionUID = 0L;
     public Builder clearTimeLimit() {
       bitField0_ = (bitField0_ & ~0x00000008);
       timeLimit_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private com.google.protobuf.Internal.IntList monster_ = emptyIntList();
+    private void ensureMonsterIsMutable() {
+      if (!monster_.isModifiable()) {
+        monster_ = makeMutableCopy(monster_);
+      }
+      bitField0_ |= 0x00000010;
+    }
+    /**
+     * <code>repeated uint32 monster = 5;</code>
+     * @return A list containing the monster.
+     */
+    public java.util.List<java.lang.Integer>
+        getMonsterList() {
+      monster_.makeImmutable();
+      return monster_;
+    }
+    /**
+     * <code>repeated uint32 monster = 5;</code>
+     * @return The count of monster.
+     */
+    public int getMonsterCount() {
+      return monster_.size();
+    }
+    /**
+     * <code>repeated uint32 monster = 5;</code>
+     * @param index The index of the element to return.
+     * @return The monster at the given index.
+     */
+    public int getMonster(int index) {
+      return monster_.getInt(index);
+    }
+    /**
+     * <code>repeated uint32 monster = 5;</code>
+     * @param index The index to set the value at.
+     * @param value The monster to set.
+     * @return This builder for chaining.
+     */
+    public Builder setMonster(
+        int index, int value) {
+
+      ensureMonsterIsMutable();
+      monster_.setInt(index, value);
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>repeated uint32 monster = 5;</code>
+     * @param value The monster to add.
+     * @return This builder for chaining.
+     */
+    public Builder addMonster(int value) {
+
+      ensureMonsterIsMutable();
+      monster_.addInt(value);
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>repeated uint32 monster = 5;</code>
+     * @param values The monster to add.
+     * @return This builder for chaining.
+     */
+    public Builder addAllMonster(
+        java.lang.Iterable<? extends java.lang.Integer> values) {
+      ensureMonsterIsMutable();
+      com.google.protobuf.AbstractMessageLite.Builder.addAll(
+          values, monster_);
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>repeated uint32 monster = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearMonster() {
+      monster_ = emptyIntList();
+      bitField0_ = (bitField0_ & ~0x00000010);
       onChanged();
       return this;
     }

@@ -33,4 +33,21 @@ public interface DungeonTableOrBuilder extends
    * @return The timeLimit.
    */
   int getTimeLimit();
+
+  /**
+   * <code>repeated uint32 monster = 5;</code>
+   * @return A list containing the monster.
+   */
+  java.util.List<java.lang.Integer> getMonsterList();
+  /**
+   * <code>repeated uint32 monster = 5;</code>
+   * @return The count of monster.
+   */
+  int getMonsterCount();
+  /**
+   * <code>repeated uint32 monster = 5;</code>
+   * @param index The index of the element to return.
+   * @return The monster at the given index.
+   */
+  int getMonster(int index);
 }

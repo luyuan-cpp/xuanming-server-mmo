@@ -6,6 +6,10 @@
 
 #include "actoractioncombatstate_table.h"
 #include "actoractionstate_table.h"
+#include "attributeautoplan_table.h"
+#include "attributedimension_table.h"
+#include "attributepool_table.h"
+#include "attributerule_table.h"
 #include "basescene_table.h"
 #include "buff_table.h"
 #include "class_table.h"
@@ -34,6 +38,14 @@ void LoadTables() {
     ActorActionCombatStateTableManager::Instance().Load();
 
     ActorActionStateTableManager::Instance().Load();
+
+    AttributeAutoPlanTableManager::Instance().Load();
+
+    AttributeDimensionTableManager::Instance().Load();
+
+    AttributePoolTableManager::Instance().Load();
+
+    AttributeRuleTableManager::Instance().Load();
 
     BaseSceneTableManager::Instance().Load();
 
@@ -78,6 +90,14 @@ void LoadTables() {
     ActorActionCombatStateTableManager::Instance().LoadSuccess();
 
     ActorActionStateTableManager::Instance().LoadSuccess();
+
+    AttributeAutoPlanTableManager::Instance().LoadSuccess();
+
+    AttributeDimensionTableManager::Instance().LoadSuccess();
+
+    AttributePoolTableManager::Instance().LoadSuccess();
+
+    AttributeRuleTableManager::Instance().LoadSuccess();
 
     BaseSceneTableManager::Instance().LoadSuccess();
 
@@ -124,7 +144,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(21);
+    static muduo::CountDownLatch latch(25);
 
     std::thread ActorActionCombatStateLoadThread([]() {
         void InitThreadLocalConfig();
@@ -141,6 +161,38 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     ActorActionStateLoadThread.detach();
+
+    std::thread AttributeAutoPlanLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        AttributeAutoPlanTableManager::Instance().Load();
+        latch.countDown();
+    });
+    AttributeAutoPlanLoadThread.detach();
+
+    std::thread AttributeDimensionLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        AttributeDimensionTableManager::Instance().Load();
+        latch.countDown();
+    });
+    AttributeDimensionLoadThread.detach();
+
+    std::thread AttributePoolLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        AttributePoolTableManager::Instance().Load();
+        latch.countDown();
+    });
+    AttributePoolLoadThread.detach();
+
+    std::thread AttributeRuleLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        AttributeRuleTableManager::Instance().Load();
+        latch.countDown();
+    });
+    AttributeRuleLoadThread.detach();
 
     std::thread BaseSceneLoadThread([]() {
         void InitThreadLocalConfig();
@@ -300,6 +352,14 @@ void LoadTablesAsync() {
     ActorActionCombatStateTableManager::Instance().LoadSuccess();
 
     ActorActionStateTableManager::Instance().LoadSuccess();
+
+    AttributeAutoPlanTableManager::Instance().LoadSuccess();
+
+    AttributeDimensionTableManager::Instance().LoadSuccess();
+
+    AttributePoolTableManager::Instance().LoadSuccess();
+
+    AttributeRuleTableManager::Instance().LoadSuccess();
 
     BaseSceneTableManager::Instance().LoadSuccess();
 

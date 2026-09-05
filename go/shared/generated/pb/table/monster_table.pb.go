@@ -24,6 +24,14 @@ const (
 type MonsterTable struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Health        uint64                 `protobuf:"varint,2,opt,name=health,proto3" json:"health,omitempty"`
+	Strength      uint64                 `protobuf:"varint,3,opt,name=strength,proto3" json:"strength,omitempty"`
+	Armor         uint64                 `protobuf:"varint,4,opt,name=armor,proto3" json:"armor,omitempty"`
+	Resistance    uint64                 `protobuf:"varint,5,opt,name=resistance,proto3" json:"resistance,omitempty"`
+	Critchance    uint64                 `protobuf:"varint,6,opt,name=critchance,proto3" json:"critchance,omitempty"`
+	Speed         uint64                 `protobuf:"varint,7,opt,name=speed,proto3" json:"speed,omitempty"`
+	ExpReward     uint64                 `protobuf:"varint,8,opt,name=exp_reward,json=expReward,proto3" json:"exp_reward,omitempty"`
+	GoldReward    uint64                 `protobuf:"varint,9,opt,name=gold_reward,json=goldReward,proto3" json:"gold_reward,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -61,6 +69,62 @@ func (*MonsterTable) Descriptor() ([]byte, []int) {
 func (x *MonsterTable) GetId() uint32 {
 	if x != nil {
 		return x.Id
+	}
+	return 0
+}
+
+func (x *MonsterTable) GetHealth() uint64 {
+	if x != nil {
+		return x.Health
+	}
+	return 0
+}
+
+func (x *MonsterTable) GetStrength() uint64 {
+	if x != nil {
+		return x.Strength
+	}
+	return 0
+}
+
+func (x *MonsterTable) GetArmor() uint64 {
+	if x != nil {
+		return x.Armor
+	}
+	return 0
+}
+
+func (x *MonsterTable) GetResistance() uint64 {
+	if x != nil {
+		return x.Resistance
+	}
+	return 0
+}
+
+func (x *MonsterTable) GetCritchance() uint64 {
+	if x != nil {
+		return x.Critchance
+	}
+	return 0
+}
+
+func (x *MonsterTable) GetSpeed() uint64 {
+	if x != nil {
+		return x.Speed
+	}
+	return 0
+}
+
+func (x *MonsterTable) GetExpReward() uint64 {
+	if x != nil {
+		return x.ExpReward
+	}
+	return 0
+}
+
+func (x *MonsterTable) GetGoldReward() uint64 {
+	if x != nil {
+		return x.GoldReward
 	}
 	return 0
 }
@@ -113,9 +177,23 @@ var File_monster_table_proto protoreflect.FileDescriptor
 
 const file_monster_table_proto_rawDesc = "" +
 	"\n" +
-	"\x13monster_table.proto\"\x1e\n" +
+	"\x13monster_table.proto\"\xfe\x01\n" +
 	"\fMonsterTable\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\rR\x02id\"5\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\x16\n" +
+	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x1a\n" +
+	"\bstrength\x18\x03 \x01(\x04R\bstrength\x12\x14\n" +
+	"\x05armor\x18\x04 \x01(\x04R\x05armor\x12\x1e\n" +
+	"\n" +
+	"resistance\x18\x05 \x01(\x04R\n" +
+	"resistance\x12\x1e\n" +
+	"\n" +
+	"critchance\x18\x06 \x01(\x04R\n" +
+	"critchance\x12\x14\n" +
+	"\x05speed\x18\a \x01(\x04R\x05speed\x12\x1d\n" +
+	"\n" +
+	"exp_reward\x18\b \x01(\x04R\texpReward\x12\x1f\n" +
+	"\vgold_reward\x18\t \x01(\x04R\n" +
+	"goldReward\"5\n" +
 	"\x10MonsterTableData\x12!\n" +
 	"\x04data\x18\x01 \x03(\v2\r.MonsterTableR\x04dataB>\n" +
 	"\x0ecom.game.tableB\x16MonsterTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

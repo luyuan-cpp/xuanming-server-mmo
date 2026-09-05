@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11\x63lass_table.proto\"\'\n\nClassTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\r\n\x05skill\x18\x02 \x03(\r\"+\n\x0e\x43lassTableData\x12\x19\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x0b.ClassTableB<\n\x0e\x63om.game.tableB\x14\x43lassTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x11\x63lass_table.proto\"\xc0\x01\n\nClassTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\r\n\x05skill\x18\x02 \x03(\r\x12\x13\n\x0binit_health\x18\x03 \x01(\x04\x12\x11\n\tinit_mana\x18\x04 \x01(\x04\x12\x15\n\rinit_strength\x18\x05 \x01(\x04\x12\x12\n\ninit_armor\x18\x06 \x01(\x04\x12\x17\n\x0finit_resistance\x18\x07 \x01(\x04\x12\x17\n\x0finit_critchance\x18\x08 \x01(\x04\x12\x12\n\ninit_speed\x18\t \x01(\x04\"+\n\x0e\x43lassTableData\x12\x19\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x0b.ClassTableB<\n\x0e\x63om.game.tableB\x14\x43lassTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,8 +32,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'class_table_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\024ClassTableOuterClassP\001Z\022generated/pb/table'
-  _globals['_CLASSTABLE']._serialized_start=21
-  _globals['_CLASSTABLE']._serialized_end=60
-  _globals['_CLASSTABLEDATA']._serialized_start=62
-  _globals['_CLASSTABLEDATA']._serialized_end=105
+  _globals['_CLASSTABLE']._serialized_start=22
+  _globals['_CLASSTABLE']._serialized_end=214
+  _globals['_CLASSTABLEDATA']._serialized_start=216
+  _globals['_CLASSTABLEDATA']._serialized_end=259
 # @@protoc_insertion_point(module_scope)

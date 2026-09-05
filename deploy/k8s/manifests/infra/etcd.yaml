@@ -29,15 +29,22 @@ spec:
     spec:
       containers:
         - name: etcd
-          image: bitnami/etcd:latest
+          # bitnami/etcd 的 tag 已全部下架(Docker Hub 拉取 404,2025-09 Bitnami 收编
+          # 到 bitnamilegacy 只读仓库)。bitnamilegacy/etcd 是同一套镜像的归档,
+          # ALLOW_NONE_AUTHENTICATION / ETCD_* 环境变量语义与数据目录 /bitnami/etcd/data
+          # 完全兼容;deploy/docker-compose.yml 已改同一镜像,这里保持口径一致。
+          image: bitnamilegacy/etcd:latest
           imagePullPolicy: IfNotPresent
           env:
             - name: ALLOW_NONE_AUTHENTICATION
               value: "yes"
             - name: ETCD_LISTEN_CLIENT_URLS
               value: "http://0.0.0.0:2379"
+            # __INFRA_NAMESPACE__ 由 k8s_deploy.ps1 Apply-Infra 在 apply 前替换成
+            # -InfraNamespace 的值(所有 infra manifest 共用同一占位),以前这里写死
+            # mmorpg-infra,换 namespace 部署时 etcd 会广播一个不存在的地址。
             - name: ETCD_ADVERTISE_CLIENT_URLS
-              value: "http://etcd.mmorpg-infra.svc.cluster.local:2379"
+              value: "http://etcd.__INFRA_NAMESPACE__.svc.cluster.local:2379"
             - name: ETCD_LISTEN_PEER_URLS
               value: "http://0.0.0.0:2380"
             - name: ETCD_INITIAL_ADVERTISE_PEER_URLS

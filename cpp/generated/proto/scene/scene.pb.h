@@ -733,6 +733,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
     kPlayerIdFieldNumber = 1,
     kBattleIdFieldNumber = 2,
     kDeadlineMsFieldNumber = 4,
+    kPrepareDeadlineMsFieldNumber = 5,
     kBattleNodeIdFieldNumber = 3,
   };
   // uint64 player_id = 1;
@@ -765,6 +766,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
   void _internal_set_deadline_ms(::uint64_t value);
 
   public:
+  // uint64 prepare_deadline_ms = 5;
+  void clear_prepare_deadline_ms() ;
+  [[nodiscard]] ::uint64_t prepare_deadline_ms() const;
+  void set_prepare_deadline_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_prepare_deadline_ms() const;
+  void _internal_set_prepare_deadline_ms(::uint64_t value);
+
+  public:
   // uint32 battle_node_id = 3;
   void clear_battle_node_id() ;
   [[nodiscard]] ::uint32_t battle_node_id() const;
@@ -779,7 +790,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -811,6 +822,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleRequest final : public
     ::uint64_t player_id_;
     ::uint64_t battle_id_;
     ::uint64_t deadline_ms_;
+    ::uint64_t prepare_deadline_ms_;
     ::uint32_t battle_node_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2535,9 +2547,25 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleResponse final : publi
 
   // accessors -------------------------------------------------------
   enum : int {
+    kTableFingerprintFieldNumber = 3,
     kErrorMessageFieldNumber = 1,
     kSnapshotFieldNumber = 2,
   };
+  // string table_fingerprint = 3;
+  void clear_table_fingerprint() ;
+  [[nodiscard]] const ::std::string& table_fingerprint() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_table_fingerprint(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_table_fingerprint();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_table_fingerprint();
+  void set_allocated_table_fingerprint(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_table_fingerprint() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_table_fingerprint(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_table_fingerprint();
+
+  public:
   // .TipInfoMessage error_message = 1;
   [[nodiscard]] bool has_error_message()
       const;
@@ -2574,8 +2602,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleResponse final : publi
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          2, 0,
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 47,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2603,6 +2631,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PrepareBattleResponse final : publi
         const PrepareBattleResponse& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr table_fingerprint_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::BattlePlayerSnapshot* PROTOBUF_NULLABLE snapshot_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -3856,7 +3885,7 @@ inline void PrepareBattleRequest::_internal_set_battle_id(::uint64_t value) {
 inline void PrepareBattleRequest::clear_battle_node_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_node_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t PrepareBattleRequest::battle_node_id() const {
   // @@protoc_insertion_point(field_get:PrepareBattleRequest.battle_node_id)
@@ -3864,7 +3893,7 @@ inline ::uint32_t PrepareBattleRequest::battle_node_id() const {
 }
 inline void PrepareBattleRequest::set_battle_node_id(::uint32_t value) {
   _internal_set_battle_node_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:PrepareBattleRequest.battle_node_id)
 }
 inline ::uint32_t PrepareBattleRequest::_internal_battle_node_id() const {
@@ -3900,13 +3929,37 @@ inline void PrepareBattleRequest::_internal_set_deadline_ms(::uint64_t value) {
   _impl_.deadline_ms_ = value;
 }
 
+// uint64 prepare_deadline_ms = 5;
+inline void PrepareBattleRequest::clear_prepare_deadline_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.prepare_deadline_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t PrepareBattleRequest::prepare_deadline_ms() const {
+  // @@protoc_insertion_point(field_get:PrepareBattleRequest.prepare_deadline_ms)
+  return _internal_prepare_deadline_ms();
+}
+inline void PrepareBattleRequest::set_prepare_deadline_ms(::uint64_t value) {
+  _internal_set_prepare_deadline_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:PrepareBattleRequest.prepare_deadline_ms)
+}
+inline ::uint64_t PrepareBattleRequest::_internal_prepare_deadline_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.prepare_deadline_ms_;
+}
+inline void PrepareBattleRequest::_internal_set_prepare_deadline_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.prepare_deadline_ms_ = value;
+}
+
 // -------------------------------------------------------------------
 
 // PrepareBattleResponse
 
 // .TipInfoMessage error_message = 1;
 inline bool PrepareBattleResponse::has_error_message() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
   PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
   return value;
 }
@@ -3927,16 +3980,16 @@ inline void PrepareBattleResponse::unsafe_arena_set_allocated_error_message(
   }
   _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PrepareBattleResponse.error_message)
 }
 inline ::TipInfoMessage* PROTOBUF_NULLABLE PrepareBattleResponse::release_error_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::TipInfoMessage* released = _impl_.error_message_;
   _impl_.error_message_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -3956,7 +4009,7 @@ inline ::TipInfoMessage* PROTOBUF_NULLABLE PrepareBattleResponse::unsafe_arena_r
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PrepareBattleResponse.error_message)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::TipInfoMessage* temp = _impl_.error_message_;
   _impl_.error_message_ = nullptr;
   return temp;
@@ -3971,7 +4024,7 @@ inline ::TipInfoMessage* PROTOBUF_NONNULL PrepareBattleResponse::_internal_mutab
 }
 inline ::TipInfoMessage* PROTOBUF_NONNULL PrepareBattleResponse::mutable_error_message()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   ::TipInfoMessage* _msg = _internal_mutable_error_message();
   // @@protoc_insertion_point(field_mutable:PrepareBattleResponse.error_message)
   return _msg;
@@ -3988,9 +4041,9 @@ inline void PrepareBattleResponse::set_allocated_error_message(::TipInfoMessage*
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
   }
 
   _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
@@ -3999,7 +4052,7 @@ inline void PrepareBattleResponse::set_allocated_error_message(::TipInfoMessage*
 
 // .BattlePlayerSnapshot snapshot = 2;
 inline bool PrepareBattleResponse::has_snapshot() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
   PROTOBUF_ASSUME(!value || _impl_.snapshot_ != nullptr);
   return value;
 }
@@ -4020,16 +4073,16 @@ inline void PrepareBattleResponse::unsafe_arena_set_allocated_snapshot(
   }
   _impl_.snapshot_ = reinterpret_cast<::BattlePlayerSnapshot*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:PrepareBattleResponse.snapshot)
 }
 inline ::BattlePlayerSnapshot* PROTOBUF_NULLABLE PrepareBattleResponse::release_snapshot() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::BattlePlayerSnapshot* released = _impl_.snapshot_;
   _impl_.snapshot_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -4049,7 +4102,7 @@ inline ::BattlePlayerSnapshot* PROTOBUF_NULLABLE PrepareBattleResponse::unsafe_a
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:PrepareBattleResponse.snapshot)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::BattlePlayerSnapshot* temp = _impl_.snapshot_;
   _impl_.snapshot_ = nullptr;
   return temp;
@@ -4064,7 +4117,7 @@ inline ::BattlePlayerSnapshot* PROTOBUF_NONNULL PrepareBattleResponse::_internal
 }
 inline ::BattlePlayerSnapshot* PROTOBUF_NONNULL PrepareBattleResponse::mutable_snapshot()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::BattlePlayerSnapshot* _msg = _internal_mutable_snapshot();
   // @@protoc_insertion_point(field_mutable:PrepareBattleResponse.snapshot)
   return _msg;
@@ -4081,13 +4134,77 @@ inline void PrepareBattleResponse::set_allocated_snapshot(::BattlePlayerSnapshot
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
 
   _impl_.snapshot_ = reinterpret_cast<::BattlePlayerSnapshot*>(value);
   // @@protoc_insertion_point(field_set_allocated:PrepareBattleResponse.snapshot)
+}
+
+// string table_fingerprint = 3;
+inline void PrepareBattleResponse::clear_table_fingerprint() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.table_fingerprint_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& PrepareBattleResponse::table_fingerprint() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:PrepareBattleResponse.table_fingerprint)
+  return _internal_table_fingerprint();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void PrepareBattleResponse::set_table_fingerprint(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.table_fingerprint_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:PrepareBattleResponse.table_fingerprint)
+}
+inline ::std::string* PROTOBUF_NONNULL PrepareBattleResponse::mutable_table_fingerprint()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_table_fingerprint();
+  // @@protoc_insertion_point(field_mutable:PrepareBattleResponse.table_fingerprint)
+  return _s;
+}
+inline const ::std::string& PrepareBattleResponse::_internal_table_fingerprint() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.table_fingerprint_.Get();
+}
+inline void PrepareBattleResponse::_internal_set_table_fingerprint(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.table_fingerprint_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL PrepareBattleResponse::_internal_mutable_table_fingerprint() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.table_fingerprint_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE PrepareBattleResponse::release_table_fingerprint() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:PrepareBattleResponse.table_fingerprint)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.table_fingerprint_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.table_fingerprint_.Set("", GetArena());
+  }
+  return released;
+}
+inline void PrepareBattleResponse::set_allocated_table_fingerprint(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.table_fingerprint_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.table_fingerprint_.IsDefault()) {
+    _impl_.table_fingerprint_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:PrepareBattleResponse.table_fingerprint)
 }
 
 // -------------------------------------------------------------------

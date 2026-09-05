@@ -25,6 +25,7 @@
 #include "proto/common/component/player_comp.pb.h"
 #include "rpc/service_metadata/player_skill_service_metadata.h"
 #include "proto/common/component/actor_combat_state_comp.pb.h"
+#include "proto/common/component/actor_attribute_state_comp.pb.h"  // DerivedAttributesComp(属性加点二级属性)
 
 #include "time/comp/timer_task_comp.h"
 #include "time/system/time_cooldown.h"
@@ -531,10 +532,21 @@ double CalculateFinalDamage(const entt::entity casterEntity, const entt::entity 
 	double strength = casterAttributes->strength();
 	double armor = targetAttributes->armor();
 	double resistance = targetAttributes->resistance();
+	// 属性加点二级属性(与回合引擎 CalculateFinalDamage 同口径):实时技能吃法伤,守方防御加法减伤
+	double attackBonus = 0.0;
+	double defense = 0.0;
+	if (const auto* casterDerived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(casterEntity))
+	{
+		attackBonus = static_cast<double>(casterDerived->magic_attack());
+	}
+	if (const auto* targetDerived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(target))
+	{
+		defense = static_cast<double>(targetDerived->defense());
+	}
 
 	// Apply crit and penetration modifiers
-    double finalDamage = baseDamage * (1 + strength * 0.1);
-    finalDamage = finalDamage - armor;
+    double finalDamage = baseDamage * (1 + strength * 0.1) + attackBonus;
+    finalDamage = finalDamage - armor - defense;
     finalDamage *= (1 - resistance * 0.01);
 
     // rand() 是全局非线程安全且未播种的 C 运行时状态,战斗判定统一走 tlsRandom。

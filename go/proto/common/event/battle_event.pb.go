@@ -69,6 +69,70 @@ func (x *BattleSettlementEvent) GetSettlement() *battle.BattleSettlementData {
 	return nil
 }
 
+// battle -> scene:CreateBattle 成功后每个参战玩家一条。scene 校验 InBattleComp.battle_id 匹配且
+// state==PREPARING -> state=FIGHTING、deadline_ms=event.deadline_ms、battle:lock 按正式期限续期;
+// 不匹配 / 已 FIGHTING / 玩家不在线(锁值匹配则只续期)一律幂等处理。
+// 目的:备战期用短 prepare_deadline_ms 解冻,match 在 gather 中崩溃时已冻结成员不再等整场战斗时限。
+type BattleConfirmedEvent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	DeadlineMs    uint64                 `protobuf:"varint,3,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"` // 正式战斗作废期限(= CreateBattleRequest.deadline_ms)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BattleConfirmedEvent) Reset() {
+	*x = BattleConfirmedEvent{}
+	mi := &file_proto_common_event_battle_event_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleConfirmedEvent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleConfirmedEvent) ProtoMessage() {}
+
+func (x *BattleConfirmedEvent) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_event_battle_event_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleConfirmedEvent.ProtoReflect.Descriptor instead.
+func (*BattleConfirmedEvent) Descriptor() ([]byte, []int) {
+	return file_proto_common_event_battle_event_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *BattleConfirmedEvent) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *BattleConfirmedEvent) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *BattleConfirmedEvent) GetDeadlineMs() uint64 {
+	if x != nil {
+		return x.DeadlineMs
+	}
+	return 0
+}
+
 var File_proto_common_event_battle_event_proto protoreflect.FileDescriptor
 
 const file_proto_common_event_battle_event_proto_rawDesc = "" +
@@ -77,7 +141,12 @@ const file_proto_common_event_battle_event_proto_rawDesc = "" +
 	"\x15BattleSettlementEvent\x125\n" +
 	"\n" +
 	"settlement\x18\x01 \x01(\v2\x15.BattleSettlementDataR\n" +
-	"settlementB\x14Z\x12proto/common/eventb\x06proto3"
+	"settlement\"q\n" +
+	"\x14BattleConfirmedEvent\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x1f\n" +
+	"\vdeadline_ms\x18\x03 \x01(\x04R\n" +
+	"deadlineMsB\x14Z\x12proto/common/eventb\x06proto3"
 
 var (
 	file_proto_common_event_battle_event_proto_rawDescOnce sync.Once
@@ -91,13 +160,14 @@ func file_proto_common_event_battle_event_proto_rawDescGZIP() []byte {
 	return file_proto_common_event_battle_event_proto_rawDescData
 }
 
-var file_proto_common_event_battle_event_proto_msgTypes = make([]protoimpl.MessageInfo, 1)
+var file_proto_common_event_battle_event_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
 var file_proto_common_event_battle_event_proto_goTypes = []any{
 	(*BattleSettlementEvent)(nil),       // 0: BattleSettlementEvent
-	(*battle.BattleSettlementData)(nil), // 1: BattleSettlementData
+	(*BattleConfirmedEvent)(nil),        // 1: BattleConfirmedEvent
+	(*battle.BattleSettlementData)(nil), // 2: BattleSettlementData
 }
 var file_proto_common_event_battle_event_proto_depIdxs = []int32{
-	1, // 0: BattleSettlementEvent.settlement:type_name -> BattleSettlementData
+	2, // 0: BattleSettlementEvent.settlement:type_name -> BattleSettlementData
 	1, // [1:1] is the sub-list for method output_type
 	1, // [1:1] is the sub-list for method input_type
 	1, // [1:1] is the sub-list for extension type_name
@@ -116,7 +186,7 @@ func file_proto_common_event_battle_event_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_event_battle_event_proto_rawDesc), len(file_proto_common_event_battle_event_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   1,
+			NumMessages:   2,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

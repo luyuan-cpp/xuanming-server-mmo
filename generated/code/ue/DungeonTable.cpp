@@ -111,6 +111,7 @@ static void DungeonTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObjec
 	DungeonTableCheckNarrowedField(RowObject, TEXT("scene_id"), TEXT("scene_id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	DungeonTableCheckNarrowedField(RowObject, TEXT("max_team_size"), TEXT("max_team_size"), RowIndex, 2147483647.0, TEXT("uint32"));
 	DungeonTableCheckNarrowedField(RowObject, TEXT("time_limit"), TEXT("time_limit"), RowIndex, 2147483647.0, TEXT("uint32"));
+	DungeonTableCheckNarrowedField(RowObject, TEXT("monster"), TEXT("monster[]"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UDungeonTable::LoadFromJson(const FString& JsonText, FString& OutError)
@@ -201,6 +202,18 @@ void UDungeonTable::BuildIndices(FSnapshot& Snap)
 				*LexToString(Row.id), *Existing, RowIndex);
 		}
 		Snap.IdIndex.Add(Row.id, RowIndex);
+		for (const int32& Element : Row.monster)
+		{
+			// 同一行同一个值只塞一次。定长数组补位、重复填同一个 id 在配置表里很常见,
+			// 不去重的话 GetRowsByMonster() 会把这一行返回 N 遍、
+			// CountByMonsterIndex() 会数成 N 而不是 1。
+			// 行是按 RowIndex 递增处理的,所以本行的下标只可能在桶尾。
+			TArray<int32>& Bucket = Snap.MonsterValueIndex.FindOrAdd(Element);
+			if (Bucket.Num() == 0 || Bucket.Last() != RowIndex)
+			{
+				Bucket.Add(RowIndex);
+			}
+		}
 		Snap.SceneIdIndex.FindOrAdd(Row.scene_id).Add(RowIndex);
 	}
 }
@@ -277,6 +290,27 @@ const TArray<int32>& UDungeonTable::GetSceneIdIndices(int32 Key) const
 int32 UDungeonTable::CountBySceneIdIndex(int32 Key) const
 {
 	return GetSceneIdIndices(Key).Num();
+}
+
+TArray<const FCfgDungeonRow*> UDungeonTable::GetRowsByMonster(int32 Value) const
+{
+	TArray<const FCfgDungeonRow*> Result;
+	if (const TArray<int32>* Indices = Snapshot->MonsterValueIndex.Find(Value))
+	{
+		Result.Reserve(Indices->Num());
+		for (const int32 RowIndex : *Indices)
+		{
+			Result.Add(&Snapshot->Rows[RowIndex]);
+		}
+	}
+	return Result;
+}
+
+int32 UDungeonTable::CountByMonsterIndex(int32 Value) const
+{
+	// 桶里同一行只有一个下标(见 BuildIndices),所以这是**行数**。
+	const TArray<int32>* Indices = Snapshot->MonsterValueIndex.Find(Value);
+	return Indices != nullptr ? Indices->Num() : 0;
 }
 
 TArray<const FCfgDungeonRow*> UDungeonTable::Where(TFunctionRef<bool(const FCfgDungeonRow&)> Pred) const

@@ -15,5 +15,14 @@ message MonsterTable {
   option (cfg_primary_key) = "id";
 
   uint32 id = 1;
+  // 战斗属性与掉落。字段号抄自 generated/code/proto/monster_table.proto,纯追加,1 号未动。
+  uint64 health = 2;
+  uint64 strength = 3;
+  uint64 armor = 4;
+  uint64 resistance = 5;
+  uint64 critchance = 6;
+  uint64 speed = 7;
+  uint64 exp_reward = 8;
+  uint64 gold_reward = 9;
   int32 designer = 9001 [(cfg_owner) = "designer"];
 }

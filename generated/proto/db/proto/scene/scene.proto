@@ -76,12 +76,14 @@ message PrepareBattleRequest
   uint64 battle_id = 2;
   uint32 battle_node_id = 3;  // 写进 InBattleComp,重连重挂绑定用
   uint64 deadline_ms = 4;     // 战斗作废期限(Unix 毫秒),scene reaper 依据
+  uint64 prepare_deadline_ms = 5; // 备战作废期限(Unix 毫秒):CreateBattle 确认前 reaper 按它解冻(二期,设计 cross-zone-matchmaking.md §10);0 = 沿用 deadline_ms
 }
 
 message PrepareBattleResponse
 {
   TipInfoMessage error_message = 1;   // 玩家不在/已在战斗等拒绝原因
   BattlePlayerSnapshot snapshot = 2;  // 冻结成功时返回战斗快照
+  string table_fingerprint = 3;      // scene 侧战斗配表指纹(六张战斗表解析后确定性序列化的 sha256 前 16 字节 hex);match 比对全员一致
 }
 
 message CancelBattlePrepareRequest

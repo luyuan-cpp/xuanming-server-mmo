@@ -18,6 +18,18 @@ func LoadTables(configDir string, useBinary bool) {
     if err := ActorActionStateTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load ActorActionState table: %v", err)
     }
+    if err := AttributeAutoPlanTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load AttributeAutoPlan table: %v", err)
+    }
+    if err := AttributeDimensionTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load AttributeDimension table: %v", err)
+    }
+    if err := AttributePoolTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load AttributePool table: %v", err)
+    }
+    if err := AttributeRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load AttributeRule table: %v", err)
+    }
     if err := BaseSceneTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load BaseScene table: %v", err)
     }
@@ -85,7 +97,7 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(21)
+    wg.Add(25)
     go func() {
         defer wg.Done()
         if err := ActorActionCombatStateTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -96,6 +108,30 @@ func LoadTablesAsync(configDir string, useBinary bool) {
         defer wg.Done()
         if err := ActorActionStateTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load ActorActionState table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := AttributeAutoPlanTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load AttributeAutoPlan table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := AttributeDimensionTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load AttributeDimension table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := AttributePoolTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load AttributePool table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := AttributeRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load AttributeRule table: %v", err)
         }
     }()
     go func() {
@@ -236,6 +272,22 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newActorActionState.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload ActorActionState failed: %w", err)
     }
+    newAttributeAutoPlan := NewAttributeAutoPlanTableManager()
+    if err := newAttributeAutoPlan.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload AttributeAutoPlan failed: %w", err)
+    }
+    newAttributeDimension := NewAttributeDimensionTableManager()
+    if err := newAttributeDimension.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload AttributeDimension failed: %w", err)
+    }
+    newAttributePool := NewAttributePoolTableManager()
+    if err := newAttributePool.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload AttributePool failed: %w", err)
+    }
+    newAttributeRule := NewAttributeRuleTableManager()
+    if err := newAttributeRule.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload AttributeRule failed: %w", err)
+    }
     newBaseScene := NewBaseSceneTableManager()
     if err := newBaseScene.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload BaseScene failed: %w", err)
@@ -316,6 +368,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     // Swap all instances at once after all loads succeed.
     ActorActionCombatStateTableManagerInstance = newActorActionCombatState
     ActorActionStateTableManagerInstance = newActorActionState
+    AttributeAutoPlanTableManagerInstance = newAttributeAutoPlan
+    AttributeDimensionTableManagerInstance = newAttributeDimension
+    AttributePoolTableManagerInstance = newAttributePool
+    AttributeRuleTableManagerInstance = newAttributeRule
     BaseSceneTableManagerInstance = newBaseScene
     BuffTableManagerInstance = newBuff
     ClassTableManagerInstance = newClass

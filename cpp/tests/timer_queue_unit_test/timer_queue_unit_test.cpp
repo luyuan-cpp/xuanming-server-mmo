@@ -97,7 +97,14 @@ TEST(TimerQueueTest, ComponentStaysSmall)
 	// entities carry several of them (casting / recovery / channel / buff).
 	// Shrinking `generation` would not help -- alignment forces the tail to 8
 	// bytes whether it holds a uint64 or a uint32 plus a bool.
-	EXPECT_LE(sizeof(TimerTaskComp), sizeof(TimerId) + sizeof(std::uint64_t));
+	//
+	// 2026-08 起多了 `aliveToken`(std::shared_ptr,一对指针 = 16 字节):同批到期的
+	// 定时器里,前一个回调销毁了后一个的宿主后,后者的闭包仍会带着已释放的 this 进
+	// OnTimer —— generation 住在那块内存里,读它就已经是 use-after-free;闭包只持
+	// weak_ptr、开火先 lock() 才能挡住。组件注释原话:correctness over 16 bytes。
+	// 所以上界 = TimerId + 8 字节尾 + 一个 shared_ptr;再长仍然红。
+	EXPECT_LE(sizeof(TimerTaskComp),
+	          sizeof(TimerId) + sizeof(std::uint64_t) + sizeof(std::shared_ptr<void>));
 }
 
 TEST(TimerQueueTest, BasicTimerOperations)

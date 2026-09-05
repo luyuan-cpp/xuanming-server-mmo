@@ -16,6 +16,16 @@
 
 void LoadTables();
 
+// TestMultiKey 的主键可重复((cfg_multi)),生成器刻意不提供 FindById —— 「按 id 拿一行」
+// 的单值语义不成立。下面这些用例只关心 id=1 的第一行,用 FindAllById 取首个。
+static const TestMultiKeyTable *FirstTestMultiKeyRowById(const TestMultiKeyTableManager &mgr,
+                                                         uint32_t tableId)
+{
+    for (const auto *row : mgr.FindAllById(tableId))
+        return row;
+    return nullptr;
+}
+
 // ---------------------------------------------------------------------------
 // Portable env helpers for the GameConfigEnvOverride tests below.
 // ---------------------------------------------------------------------------
@@ -150,7 +160,7 @@ TEST(ConfigTableTest, FindByStringKey)
 
 TEST(ConfigTableTest, ScalarCompFromRow)
 {
-	auto [row, ok] = TestMultiKeyTableManager::Instance().FindById(1);
+	const auto *row = FirstTestMultiKeyRowById(TestMultiKeyTableManager::Instance(), 1);
 	ASSERT_NE(row, nullptr);
 
 	auto idComp = MakeTestMultiKeyIdComp(*row);
@@ -168,7 +178,7 @@ TEST(ConfigTableTest, ScalarCompFromRow)
 
 TEST(ConfigTableTest, RepeatedCompSpan)
 {
-	auto [row, ok] = TestMultiKeyTableManager::Instance().FindById(1);
+	const auto *row = FirstTestMultiKeyRowById(TestMultiKeyTableManager::Instance(), 1);
 	ASSERT_NE(row, nullptr);
 
 	auto effectComp = MakeTestMultiKeyEffectComp(*row);
@@ -260,7 +270,7 @@ TEST(ConfigTableTest, ReloadDoesNotAccumulateData)
 	EXPECT_EQ(mgr.Count(), countBefore);
 
 	// Data should still be accessible.
-	auto [row, ok] = mgr.FindById(1);
+	const auto *row = FirstTestMultiKeyRowById(mgr, 1);
 	ASSERT_NE(row, nullptr);
 	EXPECT_EQ(row->id(), 1u);
 }
@@ -270,7 +280,7 @@ TEST(ConfigTableTest, ReloadReplacesOldPointers)
 	auto &mgr = TestMultiKeyTableManager::Instance();
 
 	// Get a pointer before reload.
-	auto [rowBefore, ok1] = mgr.FindById(1);
+	const auto *rowBefore = FirstTestMultiKeyRowById(mgr, 1);
 	ASSERT_NE(rowBefore, nullptr);
 	EXPECT_EQ(rowBefore->id(), 1u);
 
@@ -279,7 +289,7 @@ TEST(ConfigTableTest, ReloadReplacesOldPointers)
 
 	// New pointer should be valid and contain correct data,
 	// but will point to a different Snapshot's protobuf storage.
-	auto [rowAfter, ok2] = mgr.FindById(1);
+	const auto *rowAfter = FirstTestMultiKeyRowById(mgr, 1);
 	ASSERT_NE(rowAfter, nullptr);
 	EXPECT_EQ(rowAfter->id(), 1u);
 	EXPECT_NE(rowBefore, rowAfter) << "reload should produce a new Snapshot";
@@ -313,7 +323,7 @@ TEST(ConfigTableTest, ReloadMultiKeyIndicesConsistent)
 
 TEST(ConfigTableTest, ScalarForeignKeyLookup)
 {
-	auto [row, ok] = TestMultiKeyTableManager::Instance().FindById(1);
+	const auto *row = FirstTestMultiKeyRowById(TestMultiKeyTableManager::Instance(), 1);
 	ASSERT_NE(row, nullptr);
 
 	const auto *testRow = GetTestMultiKeyTestRefRow(*row);
@@ -323,7 +333,7 @@ TEST(ConfigTableTest, ScalarForeignKeyLookup)
 
 TEST(ConfigTableTest, GroupForeignKeyLookup)
 {
-	auto [row, ok] = TestMultiKeyTableManager::Instance().FindById(1);
+	const auto *row = FirstTestMultiKeyRowById(TestMultiKeyTableManager::Instance(), 1);
 	ASSERT_NE(row, nullptr);
 
 	auto testRows = GetTestMultiKeyTestRefsRows(*row);
@@ -338,7 +348,7 @@ TEST(ConfigTableTest, ForeignKeyAfterReload)
 {
 	auto &mgr = TestMultiKeyTableManager::Instance();
 
-	auto [rowBefore, ok1] = mgr.FindById(1);
+	const auto *rowBefore = FirstTestMultiKeyRowById(mgr, 1);
 	ASSERT_NE(rowBefore, nullptr);
 	const auto *fkBefore = GetTestMultiKeyTestRefRow(*rowBefore);
 	ASSERT_NE(fkBefore, nullptr);
@@ -347,7 +357,7 @@ TEST(ConfigTableTest, ForeignKeyAfterReload)
 	mgr.Load();
 	TestTableManager::Instance().Load();
 
-	auto [rowAfter, ok2] = mgr.FindById(1);
+	const auto *rowAfter = FirstTestMultiKeyRowById(mgr, 1);
 	ASSERT_NE(rowAfter, nullptr);
 	const auto *fkAfter = GetTestMultiKeyTestRefRow(*rowAfter);
 	ASSERT_NE(fkAfter, nullptr);

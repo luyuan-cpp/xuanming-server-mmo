@@ -300,21 +300,30 @@ bool NodeAllocator::AcquireNodePort()
 	GetNodeInfo().mutable_endpoint()->set_port(assignedPort);
 
 	// gRPC port = TCP port + 30000 (deterministic, separate range).
+	//
+	// 注册了 gRPC 服务的节点(battle / match 这类只靠 gRPC 被调用的节点),gRPC 端口拿不到
+	// 必须与预设 TCP 端口同样 fail-closed:以前这里只打一条 ERROR 就带着空 grpc_endpoint
+	// 发布到 etcd,节点"活着"却没人连得上 —— gate 循环报 "grpc_endpoint is empty",
+	// match 因 battle 池为空永远不凑单(2026-09-04 实测:杀掉 battle 后立刻重拉,旧进程的
+	// 50100 还没释放,新进程就这样带病注册了)。改为不发布、让调用方退避重试:预设端口
+	// 会等到端口释放,扫描路径则因游标已推进而换下一个 TCP/gRPC 端口对。
 	if (!gNode->GetGrpcServices().empty())
 	{
 		const uint32_t grpcPort = assignedPort + kGrpcPortOffset;
 		if (!IsLocalPortAvailable(static_cast<uint16_t>(grpcPort)))
 		{
 			LOG_ERROR << "gRPC port " << grpcPort << " (TCP " << assignedPort
-					  << " + " << kGrpcPortOffset << ") not available.";
+					  << " + " << kGrpcPortOffset << ") not available"
+					  << "; nothing published to etcd, caller must retry";
+			// 把 TCP 端口退回本轮之前的值:扫描路径要保持 0(下轮继续扫),
+			// 否则重试时会把刚挑到的端口误当成"预设端口"死等。
+			GetNodeInfo().mutable_endpoint()->set_port(presetPort);
+			return false;
 		}
-		else
-		{
-			GetNodeInfo().mutable_grpc_endpoint()->set_ip(GetNodeInfo().endpoint().ip());
-			GetNodeInfo().mutable_grpc_endpoint()->set_port(grpcPort);
-			LOG_INFO << "Assigned gRPC port: " << grpcPort
-					 << " (TCP " << assignedPort << " + " << kGrpcPortOffset << ")";
-		}
+		GetNodeInfo().mutable_grpc_endpoint()->set_ip(GetNodeInfo().endpoint().ip());
+		GetNodeInfo().mutable_grpc_endpoint()->set_port(grpcPort);
+		LOG_INFO << "Assigned gRPC port: " << grpcPort
+				 << " (TCP " << assignedPort << " + " << kGrpcPortOffset << ")";
 	}
 
 	LOG_INFO << "NodeType: " << gNode->GetNodeType()

@@ -66,6 +66,12 @@ set(SOURCE_FILES
     code/test_table.cpp
     code/world_table.cpp
     code/world_table_fk.cpp
+    code/attributeautoplan_table.cpp
+    code/attributeautoplan_table_fk.cpp
+    code/attributedimension_table.cpp
+    code/attributedimension_table_fk.cpp
+    code/attributepool_table.cpp
+    code/attributerule_table.cpp
     proto/actoractioncombatstate_table.pb.cc
     proto/actoractionstate_table.pb.cc
     proto/basescene_table.pb.cc
@@ -106,6 +112,11 @@ set(SOURCE_FILES
     proto/tip/skill_error_tip.pb.cc
     proto/tip/team_error_tip.pb.cc
     proto/world_table.pb.cc
+    proto/attributeautoplan_table.pb.cc
+    proto/attributedimension_table.pb.cc
+    proto/attributepool_table.pb.cc
+    proto/attributerule_table.pb.cc
+    proto/tip/attribute_error_tip.pb.cc
 )
 
 add_library(table STATIC ${SOURCE_FILES})

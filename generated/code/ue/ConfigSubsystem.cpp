@@ -35,6 +35,10 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	// 下载目录),生成器不替工程猜。装载由调用方显式调 LoadAll。
 	ActorActionCombatStateTable = NewObject<UActorActionCombatStateTable>(this);
 	ActorActionStateTable = NewObject<UActorActionStateTable>(this);
+	AttributeAutoPlanTable = NewObject<UAttributeAutoPlanTable>(this);
+	AttributeDimensionTable = NewObject<UAttributeDimensionTable>(this);
+	AttributePoolTable = NewObject<UAttributePoolTable>(this);
+	AttributeRuleTable = NewObject<UAttributeRuleTable>(this);
 	BaseSceneTable = NewObject<UBaseSceneTable>(this);
 	BuffTable = NewObject<UBuffTable>(this);
 	ClassTable = NewObject<UClassTable>(this);
@@ -60,6 +64,10 @@ void UConfigSubsystem::Deinitialize()
 {
 	ActorActionCombatStateTable = nullptr;
 	ActorActionStateTable = nullptr;
+	AttributeAutoPlanTable = nullptr;
+	AttributeDimensionTable = nullptr;
+	AttributePoolTable = nullptr;
+	AttributeRuleTable = nullptr;
 	BaseSceneTable = nullptr;
 	BuffTable = nullptr;
 	ClassTable = nullptr;
@@ -90,6 +98,10 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 	return TArray<FString>{
 		UActorActionCombatStateTable::FileName(),
 		UActorActionStateTable::FileName(),
+		UAttributeAutoPlanTable::FileName(),
+		UAttributeDimensionTable::FileName(),
+		UAttributePoolTable::FileName(),
+		UAttributeRuleTable::FileName(),
 		UBaseSceneTable::FileName(),
 		UBuffTable::FileName(),
 		UClassTable::FileName(),
@@ -140,6 +152,62 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!ActorActionStateTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (AttributeAutoPlanTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeAutoPlan] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!AttributeAutoPlanTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (AttributeDimensionTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeDimension] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!AttributeDimensionTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (AttributePoolTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributePool] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!AttributePoolTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (AttributeRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!AttributeRuleTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -479,6 +547,86 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!ActorActionStateTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (AttributeAutoPlanTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeAutoPlan] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UAttributeAutoPlanTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeAutoPlan] 取不到 %s"), UAttributeAutoPlanTable::FileName());
+		bAllOk = false;
+	}
+	else if (!AttributeAutoPlanTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (AttributeDimensionTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeDimension] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UAttributeDimensionTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeDimension] 取不到 %s"), UAttributeDimensionTable::FileName());
+		bAllOk = false;
+	}
+	else if (!AttributeDimensionTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (AttributePoolTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributePool] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UAttributePoolTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributePool] 取不到 %s"), UAttributePoolTable::FileName());
+		bAllOk = false;
+	}
+	else if (!AttributePoolTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (AttributeRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UAttributeRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeRule] 取不到 %s"), UAttributeRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!AttributeRuleTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

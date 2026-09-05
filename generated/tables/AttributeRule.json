@@ -1,0 +1,12 @@
+{
+ "data": [
+  {
+   "create_scheme_cost_gold": 1000,
+   "free_scheme_count": 1,
+   "id": 1,
+   "max_schemes": 3,
+   "scheme_name_max_len": 12,
+   "switch_cooldown_seconds": 60
+  }
+ ]
+}

@@ -1,0 +1,42 @@
+syntax = "proto3";
+
+// AttributeDimension 表的权威 schema。源表 data/AttributeDimension.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号抄自 generated/code/proto/attributedimension_table.proto,**只增不改、删字段用 reserved**;
+// 导表时会按产物发号规则复算并逐条核对,对不上直接中止。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message AttributeDimensionTable {
+  option (cfg_sheet)       = "AttributeDimension";
+  option (cfg_source_file) = "AttributeDimension.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 维度 id
+  uint32 id = 1;
+  // 所属池
+  uint32 pool_id = 2 [(cfg_fk) = "AttributePool", (cfg_index) = true];
+  // 维度名(下发客户端)
+  string name = 3;
+  // 说明(下发客户端 tooltip)
+  string desc = 4;
+  // 面板排序
+  uint32 sort = 5;
+  // 每级自然成长(不占点)
+  uint32 base_per_level = 6;
+  // 每点→气血上限
+  double max_health = 7;
+  // 每点→法力上限
+  double max_mana = 8;
+  // 每点→物伤
+  double physical_attack = 9;
+  // 每点→法伤
+  double magic_attack = 10;
+  // 每点→速度
+  double speed = 11;
+  // 每点→防御
+  double defense = 12;
+}

@@ -51,6 +51,18 @@
     <ClInclude Include="code\monster_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\attributerule_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\attributepool_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\attributedimension_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\attributeautoplan_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\reward_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -156,6 +168,18 @@
     <ClInclude Include="proto\monster_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\attributerule_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\attributepool_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\attributedimension_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\attributeautoplan_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\reward_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -220,6 +244,24 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\monster_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\attributerule_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\attributepool_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\attributedimension_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\attributedimension_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\attributeautoplan_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\attributeautoplan_table_comp.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\reward_table_comp.h">
@@ -338,6 +380,18 @@
     <ClCompile Include="code\monster_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="code\attributerule_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\attributepool_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\attributedimension_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\attributeautoplan_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="code\reward_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -446,6 +500,18 @@
     <ClCompile Include="proto\monster_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="proto\attributerule_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\attributepool_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\attributedimension_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\attributeautoplan_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="proto\reward_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -498,6 +564,15 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\equipslot_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\attributeautoplan_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\attributedimension_table_fk.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\tip\attribute_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

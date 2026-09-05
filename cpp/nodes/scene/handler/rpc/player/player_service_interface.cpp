@@ -3,6 +3,7 @@
 #include <unordered_map>
 #include "rpc/player_service_interface.h"
 #include "client_player_common_handler.h"
+#include "player_attribute_handler.h"
 #include "player_currency_handler.h"
 #include "player_lifecycle_handler.h"
 #include "player_movement_handler.h"
@@ -12,6 +13,7 @@
 #include "player_state_attribute_sync_handler.h"
 #include "s2s_player_scene_handler.h"
 class SceneClientPlayerCommonImpl : public SceneClientPlayerCommon {};
+class SceneAttributeClientPlayerImpl : public SceneAttributeClientPlayer {};
 class SceneCurrencyClientPlayerImpl : public SceneCurrencyClientPlayer {};
 class ScenePlayerImpl : public ScenePlayer {};
 class SceneMovementClientPlayerImpl : public SceneMovementClientPlayer {};
@@ -26,6 +28,7 @@ std::unordered_map<std::string, std::unique_ptr<PlayerService>> gPlayerService;
 void InitPlayerService()
 {
     gPlayerService.emplace("SceneClientPlayerCommon", std::make_unique<SceneClientPlayerCommonHandler>(std::make_unique<SceneClientPlayerCommonImpl>()));
+    gPlayerService.emplace("SceneAttributeClientPlayer", std::make_unique<SceneAttributeClientPlayerHandler>(std::make_unique<SceneAttributeClientPlayerImpl>()));
     gPlayerService.emplace("SceneCurrencyClientPlayer", std::make_unique<SceneCurrencyClientPlayerHandler>(std::make_unique<SceneCurrencyClientPlayerImpl>()));
     gPlayerService.emplace("ScenePlayer", std::make_unique<ScenePlayerHandler>(std::make_unique<ScenePlayerImpl>()));
     gPlayerService.emplace("SceneMovementClientPlayer", std::make_unique<SceneMovementClientPlayerHandler>(std::make_unique<SceneMovementClientPlayerImpl>()));

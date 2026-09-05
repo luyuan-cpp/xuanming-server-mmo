@@ -13,9 +13,11 @@ from __future__ import annotations
 
 import dungeon_table_pb2 as _pb
 import basescene_table_pb2 as _pb_basescene
+import monster_table_pb2 as _pb_monster
 
 from .dungeon_table import DungeonTableManager
 from .basescene_table import BaseSceneTableManager
+from .monster_table import MonsterTableManager
 
 Row = _pb.DungeonTable
 
@@ -31,6 +33,25 @@ def get_scene_id_row_by_id(table_id: int) -> _pb_basescene.BaseSceneTable | None
     if row is None:
         return None
     return get_scene_id_row(row)
+
+
+def get_monster_rows(row: Row) -> tuple[_pb_monster.MonsterTable, ...]:
+    """解析 Dungeon.monster[] -> Monster 行。解析不到的 id 直接跳过。"""
+    manager = MonsterTableManager.instance()
+    result: list[_pb_monster.MonsterTable] = []
+    for fk_id in row.monster:
+        target_row = manager.find_by_id(fk_id)
+        if target_row is not None:
+            result.append(target_row)
+    return tuple(result)
+
+
+def get_monster_rows_by_id(table_id: int) -> tuple[_pb_monster.MonsterTable, ...]:
+    """同上，入参换成 Dungeon 自己的 id。源行不存在时返回空元组。"""
+    row = DungeonTableManager.instance().find_by_id(table_id)
+    if row is None:
+        return ()
+    return get_monster_rows(row)
 
 
 # ---- 反向外键（HasMany）：按外键列的值反查源表的行 ----
