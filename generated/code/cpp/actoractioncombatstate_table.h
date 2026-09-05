@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/actoractioncombatstate_table.pb.h"
 
 class ActorActionCombatStateTableManager {
@@ -119,7 +118,9 @@ inline const ActorActionCombatStateTableData& FindAllActorActionCombatStateTable
 // the current scope:
 //   actorActionCombatStateRow    -> const ActorActionCombatStateTable* (the matched row)
 //   actorActionCombatStateResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -128,24 +129,24 @@ inline const ActorActionCombatStateTableData& FindAllActorActionCombatStateTable
 
 #define LookupActorActionCombatStateOrReturnError(tableId) \
     const auto [actorActionCombatStateRow, actorActionCombatStateResult] = ActorActionCombatStateTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(actorActionCombatStateRow)) { LOG_ERROR << "ActorActionCombatState row not found for ID: " << tableId; return actorActionCombatStateResult; } } while(0)
+    do { if (!(actorActionCombatStateRow)) { TableLookupLogMissing("ActorActionCombatState", tableId, __FILE__, __LINE__); return actorActionCombatStateResult; } } while(0)
 
 #define LookupActorActionCombatStateAsOrReturnError(prefix, tableId) \
     const auto [prefix##ActorActionCombatStateRow, prefix##ActorActionCombatStateResult] = ActorActionCombatStateTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##ActorActionCombatStateRow)) { LOG_ERROR << "ActorActionCombatState row not found for ID: " << tableId; return prefix##ActorActionCombatStateResult; } } while(0)
+    do { if (!(prefix##ActorActionCombatStateRow)) { TableLookupLogMissing("ActorActionCombatState", tableId, __FILE__, __LINE__); return prefix##ActorActionCombatStateResult; } } while(0)
 
 #define LookupActorActionCombatStateOrReturn(tableId, customReturnValue) \
     const auto [actorActionCombatStateRow, actorActionCombatStateResult] = ActorActionCombatStateTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(actorActionCombatStateRow)) { LOG_ERROR << "ActorActionCombatState row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(actorActionCombatStateRow)) { TableLookupLogMissing("ActorActionCombatState", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupActorActionCombatStateOrReturnVoid(tableId) \
     const auto [actorActionCombatStateRow, actorActionCombatStateResult] = ActorActionCombatStateTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(actorActionCombatStateRow)) { LOG_ERROR << "ActorActionCombatState row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(actorActionCombatStateRow)) { TableLookupLogMissing("ActorActionCombatState", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupActorActionCombatStateOrContinue(tableId) \
     const auto [actorActionCombatStateRow, actorActionCombatStateResult] = ActorActionCombatStateTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(actorActionCombatStateRow)) { LOG_ERROR << "ActorActionCombatState row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(actorActionCombatStateRow)) { TableLookupLogMissing("ActorActionCombatState", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupActorActionCombatStateOrReturnFalse(tableId) \
     const auto [actorActionCombatStateRow, actorActionCombatStateResult] = ActorActionCombatStateTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(actorActionCombatStateRow)) { LOG_ERROR << "ActorActionCombatState row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(actorActionCombatStateRow)) { TableLookupLogMissing("ActorActionCombatState", tableId, __FILE__, __LINE__); return false; } } while(0)

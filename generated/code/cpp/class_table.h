@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/class_table.pb.h"
 
 class ClassTableManager {
@@ -123,7 +122,9 @@ inline const ClassTableData& FindAllClassTable() {
 // the current scope:
 //   classRow    -> const ClassTable* (the matched row)
 //   classResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -132,24 +133,24 @@ inline const ClassTableData& FindAllClassTable() {
 
 #define LookupClassOrReturnError(tableId) \
     const auto [classRow, classResult] = ClassTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(classRow)) { LOG_ERROR << "Class row not found for ID: " << tableId; return classResult; } } while(0)
+    do { if (!(classRow)) { TableLookupLogMissing("Class", tableId, __FILE__, __LINE__); return classResult; } } while(0)
 
 #define LookupClassAsOrReturnError(prefix, tableId) \
     const auto [prefix##ClassRow, prefix##ClassResult] = ClassTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##ClassRow)) { LOG_ERROR << "Class row not found for ID: " << tableId; return prefix##ClassResult; } } while(0)
+    do { if (!(prefix##ClassRow)) { TableLookupLogMissing("Class", tableId, __FILE__, __LINE__); return prefix##ClassResult; } } while(0)
 
 #define LookupClassOrReturn(tableId, customReturnValue) \
     const auto [classRow, classResult] = ClassTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(classRow)) { LOG_ERROR << "Class row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(classRow)) { TableLookupLogMissing("Class", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupClassOrReturnVoid(tableId) \
     const auto [classRow, classResult] = ClassTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(classRow)) { LOG_ERROR << "Class row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(classRow)) { TableLookupLogMissing("Class", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupClassOrContinue(tableId) \
     const auto [classRow, classResult] = ClassTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(classRow)) { LOG_ERROR << "Class row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(classRow)) { TableLookupLogMissing("Class", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupClassOrReturnFalse(tableId) \
     const auto [classRow, classResult] = ClassTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(classRow)) { LOG_ERROR << "Class row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(classRow)) { TableLookupLogMissing("Class", tableId, __FILE__, __LINE__); return false; } } while(0)

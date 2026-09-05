@@ -58,6 +58,7 @@ include_directories(
 set(SOURCE_FILES
     config.cpp
     node_config_manager.cpp
+    table_log.cpp
 )
 
 add_library(config STATIC ${SOURCE_FILES})

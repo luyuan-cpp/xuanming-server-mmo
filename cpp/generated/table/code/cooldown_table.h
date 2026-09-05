@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/cooldown_table.pb.h"
 
 class CooldownTableManager {
@@ -119,7 +118,9 @@ inline const CooldownTableData& FindAllCooldownTable() {
 // the current scope:
 //   cooldownRow    -> const CooldownTable* (the matched row)
 //   cooldownResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -128,24 +129,24 @@ inline const CooldownTableData& FindAllCooldownTable() {
 
 #define LookupCooldownOrReturnError(tableId) \
     const auto [cooldownRow, cooldownResult] = CooldownTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(cooldownRow)) { LOG_ERROR << "Cooldown row not found for ID: " << tableId; return cooldownResult; } } while(0)
+    do { if (!(cooldownRow)) { TableLookupLogMissing("Cooldown", tableId, __FILE__, __LINE__); return cooldownResult; } } while(0)
 
 #define LookupCooldownAsOrReturnError(prefix, tableId) \
     const auto [prefix##CooldownRow, prefix##CooldownResult] = CooldownTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##CooldownRow)) { LOG_ERROR << "Cooldown row not found for ID: " << tableId; return prefix##CooldownResult; } } while(0)
+    do { if (!(prefix##CooldownRow)) { TableLookupLogMissing("Cooldown", tableId, __FILE__, __LINE__); return prefix##CooldownResult; } } while(0)
 
 #define LookupCooldownOrReturn(tableId, customReturnValue) \
     const auto [cooldownRow, cooldownResult] = CooldownTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(cooldownRow)) { LOG_ERROR << "Cooldown row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(cooldownRow)) { TableLookupLogMissing("Cooldown", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupCooldownOrReturnVoid(tableId) \
     const auto [cooldownRow, cooldownResult] = CooldownTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(cooldownRow)) { LOG_ERROR << "Cooldown row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(cooldownRow)) { TableLookupLogMissing("Cooldown", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupCooldownOrContinue(tableId) \
     const auto [cooldownRow, cooldownResult] = CooldownTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(cooldownRow)) { LOG_ERROR << "Cooldown row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(cooldownRow)) { TableLookupLogMissing("Cooldown", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupCooldownOrReturnFalse(tableId) \
     const auto [cooldownRow, cooldownResult] = CooldownTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(cooldownRow)) { LOG_ERROR << "Cooldown row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(cooldownRow)) { TableLookupLogMissing("Cooldown", tableId, __FILE__, __LINE__); return false; } } while(0)

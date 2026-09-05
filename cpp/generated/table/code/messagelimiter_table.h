@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/messagelimiter_table.pb.h"
 
 class MessageLimiterTableManager {
@@ -119,7 +118,9 @@ inline const MessageLimiterTableData& FindAllMessageLimiterTable() {
 // the current scope:
 //   messageLimiterRow    -> const MessageLimiterTable* (the matched row)
 //   messageLimiterResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -128,24 +129,24 @@ inline const MessageLimiterTableData& FindAllMessageLimiterTable() {
 
 #define LookupMessageLimiterOrReturnError(tableId) \
     const auto [messageLimiterRow, messageLimiterResult] = MessageLimiterTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(messageLimiterRow)) { LOG_ERROR << "MessageLimiter row not found for ID: " << tableId; return messageLimiterResult; } } while(0)
+    do { if (!(messageLimiterRow)) { TableLookupLogMissing("MessageLimiter", tableId, __FILE__, __LINE__); return messageLimiterResult; } } while(0)
 
 #define LookupMessageLimiterAsOrReturnError(prefix, tableId) \
     const auto [prefix##MessageLimiterRow, prefix##MessageLimiterResult] = MessageLimiterTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##MessageLimiterRow)) { LOG_ERROR << "MessageLimiter row not found for ID: " << tableId; return prefix##MessageLimiterResult; } } while(0)
+    do { if (!(prefix##MessageLimiterRow)) { TableLookupLogMissing("MessageLimiter", tableId, __FILE__, __LINE__); return prefix##MessageLimiterResult; } } while(0)
 
 #define LookupMessageLimiterOrReturn(tableId, customReturnValue) \
     const auto [messageLimiterRow, messageLimiterResult] = MessageLimiterTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(messageLimiterRow)) { LOG_ERROR << "MessageLimiter row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(messageLimiterRow)) { TableLookupLogMissing("MessageLimiter", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupMessageLimiterOrReturnVoid(tableId) \
     const auto [messageLimiterRow, messageLimiterResult] = MessageLimiterTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(messageLimiterRow)) { LOG_ERROR << "MessageLimiter row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(messageLimiterRow)) { TableLookupLogMissing("MessageLimiter", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupMessageLimiterOrContinue(tableId) \
     const auto [messageLimiterRow, messageLimiterResult] = MessageLimiterTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(messageLimiterRow)) { LOG_ERROR << "MessageLimiter row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(messageLimiterRow)) { TableLookupLogMissing("MessageLimiter", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupMessageLimiterOrReturnFalse(tableId) \
     const auto [messageLimiterRow, messageLimiterResult] = MessageLimiterTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(messageLimiterRow)) { LOG_ERROR << "MessageLimiter row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(messageLimiterRow)) { TableLookupLogMissing("MessageLimiter", tableId, __FILE__, __LINE__); return false; } } while(0)

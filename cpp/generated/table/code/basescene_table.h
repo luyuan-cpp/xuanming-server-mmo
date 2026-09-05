@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/basescene_table.pb.h"
 
 class BaseSceneTableManager {
@@ -119,7 +118,9 @@ inline const BaseSceneTableData& FindAllBaseSceneTable() {
 // the current scope:
 //   baseSceneRow    -> const BaseSceneTable* (the matched row)
 //   baseSceneResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -128,24 +129,24 @@ inline const BaseSceneTableData& FindAllBaseSceneTable() {
 
 #define LookupBaseSceneOrReturnError(tableId) \
     const auto [baseSceneRow, baseSceneResult] = BaseSceneTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(baseSceneRow)) { LOG_ERROR << "BaseScene row not found for ID: " << tableId; return baseSceneResult; } } while(0)
+    do { if (!(baseSceneRow)) { TableLookupLogMissing("BaseScene", tableId, __FILE__, __LINE__); return baseSceneResult; } } while(0)
 
 #define LookupBaseSceneAsOrReturnError(prefix, tableId) \
     const auto [prefix##BaseSceneRow, prefix##BaseSceneResult] = BaseSceneTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##BaseSceneRow)) { LOG_ERROR << "BaseScene row not found for ID: " << tableId; return prefix##BaseSceneResult; } } while(0)
+    do { if (!(prefix##BaseSceneRow)) { TableLookupLogMissing("BaseScene", tableId, __FILE__, __LINE__); return prefix##BaseSceneResult; } } while(0)
 
 #define LookupBaseSceneOrReturn(tableId, customReturnValue) \
     const auto [baseSceneRow, baseSceneResult] = BaseSceneTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(baseSceneRow)) { LOG_ERROR << "BaseScene row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(baseSceneRow)) { TableLookupLogMissing("BaseScene", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupBaseSceneOrReturnVoid(tableId) \
     const auto [baseSceneRow, baseSceneResult] = BaseSceneTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(baseSceneRow)) { LOG_ERROR << "BaseScene row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(baseSceneRow)) { TableLookupLogMissing("BaseScene", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupBaseSceneOrContinue(tableId) \
     const auto [baseSceneRow, baseSceneResult] = BaseSceneTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(baseSceneRow)) { LOG_ERROR << "BaseScene row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(baseSceneRow)) { TableLookupLogMissing("BaseScene", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupBaseSceneOrReturnFalse(tableId) \
     const auto [baseSceneRow, baseSceneResult] = BaseSceneTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(baseSceneRow)) { LOG_ERROR << "BaseScene row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(baseSceneRow)) { TableLookupLogMissing("BaseScene", tableId, __FILE__, __LINE__); return false; } } while(0)

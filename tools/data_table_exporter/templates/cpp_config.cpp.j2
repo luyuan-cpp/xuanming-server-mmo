@@ -1,6 +1,7 @@
 {# cpp_config.cpp.j2 — per-table config manager implementation #}
 #include "google/protobuf/util/json_util.h"
 #include "core/utils/file/file2string.h"
+#include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/code/{{ sheetname | lower }}_table.h"
 

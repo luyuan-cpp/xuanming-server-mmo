@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/dungeon_table.pb.h"
 
 class DungeonTableManager {
@@ -132,7 +131,9 @@ inline const DungeonTableData& FindAllDungeonTable() {
 // the current scope:
 //   dungeonRow    -> const DungeonTable* (the matched row)
 //   dungeonResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -141,24 +142,24 @@ inline const DungeonTableData& FindAllDungeonTable() {
 
 #define LookupDungeonOrReturnError(tableId) \
     const auto [dungeonRow, dungeonResult] = DungeonTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(dungeonRow)) { LOG_ERROR << "Dungeon row not found for ID: " << tableId; return dungeonResult; } } while(0)
+    do { if (!(dungeonRow)) { TableLookupLogMissing("Dungeon", tableId, __FILE__, __LINE__); return dungeonResult; } } while(0)
 
 #define LookupDungeonAsOrReturnError(prefix, tableId) \
     const auto [prefix##DungeonRow, prefix##DungeonResult] = DungeonTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##DungeonRow)) { LOG_ERROR << "Dungeon row not found for ID: " << tableId; return prefix##DungeonResult; } } while(0)
+    do { if (!(prefix##DungeonRow)) { TableLookupLogMissing("Dungeon", tableId, __FILE__, __LINE__); return prefix##DungeonResult; } } while(0)
 
 #define LookupDungeonOrReturn(tableId, customReturnValue) \
     const auto [dungeonRow, dungeonResult] = DungeonTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(dungeonRow)) { LOG_ERROR << "Dungeon row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(dungeonRow)) { TableLookupLogMissing("Dungeon", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupDungeonOrReturnVoid(tableId) \
     const auto [dungeonRow, dungeonResult] = DungeonTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(dungeonRow)) { LOG_ERROR << "Dungeon row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(dungeonRow)) { TableLookupLogMissing("Dungeon", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupDungeonOrContinue(tableId) \
     const auto [dungeonRow, dungeonResult] = DungeonTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(dungeonRow)) { LOG_ERROR << "Dungeon row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(dungeonRow)) { TableLookupLogMissing("Dungeon", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupDungeonOrReturnFalse(tableId) \
     const auto [dungeonRow, dungeonResult] = DungeonTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(dungeonRow)) { LOG_ERROR << "Dungeon row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(dungeonRow)) { TableLookupLogMissing("Dungeon", tableId, __FILE__, __LINE__); return false; } } while(0)

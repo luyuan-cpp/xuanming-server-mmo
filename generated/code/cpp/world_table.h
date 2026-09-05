@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/world_table.pb.h"
 
 class WorldTableManager {
@@ -132,7 +131,9 @@ inline const WorldTableData& FindAllWorldTable() {
 // the current scope:
 //   worldRow    -> const WorldTable* (the matched row)
 //   worldResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -141,24 +142,24 @@ inline const WorldTableData& FindAllWorldTable() {
 
 #define LookupWorldOrReturnError(tableId) \
     const auto [worldRow, worldResult] = WorldTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(worldRow)) { LOG_ERROR << "World row not found for ID: " << tableId; return worldResult; } } while(0)
+    do { if (!(worldRow)) { TableLookupLogMissing("World", tableId, __FILE__, __LINE__); return worldResult; } } while(0)
 
 #define LookupWorldAsOrReturnError(prefix, tableId) \
     const auto [prefix##WorldRow, prefix##WorldResult] = WorldTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##WorldRow)) { LOG_ERROR << "World row not found for ID: " << tableId; return prefix##WorldResult; } } while(0)
+    do { if (!(prefix##WorldRow)) { TableLookupLogMissing("World", tableId, __FILE__, __LINE__); return prefix##WorldResult; } } while(0)
 
 #define LookupWorldOrReturn(tableId, customReturnValue) \
     const auto [worldRow, worldResult] = WorldTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(worldRow)) { LOG_ERROR << "World row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(worldRow)) { TableLookupLogMissing("World", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupWorldOrReturnVoid(tableId) \
     const auto [worldRow, worldResult] = WorldTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(worldRow)) { LOG_ERROR << "World row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(worldRow)) { TableLookupLogMissing("World", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupWorldOrContinue(tableId) \
     const auto [worldRow, worldResult] = WorldTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(worldRow)) { LOG_ERROR << "World row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(worldRow)) { TableLookupLogMissing("World", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupWorldOrReturnFalse(tableId) \
     const auto [worldRow, worldResult] = WorldTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(worldRow)) { LOG_ERROR << "World row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(worldRow)) { TableLookupLogMissing("World", tableId, __FILE__, __LINE__); return false; } } while(0)

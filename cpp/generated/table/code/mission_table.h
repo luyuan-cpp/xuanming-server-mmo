@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/mission_table.pb.h"
 
 class MissionTableManager {
@@ -141,7 +140,9 @@ inline const MissionTableData& FindAllMissionTable() {
 // the current scope:
 //   missionRow    -> const MissionTable* (the matched row)
 //   missionResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -150,24 +151,24 @@ inline const MissionTableData& FindAllMissionTable() {
 
 #define LookupMissionOrReturnError(tableId) \
     const auto [missionRow, missionResult] = MissionTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(missionRow)) { LOG_ERROR << "Mission row not found for ID: " << tableId; return missionResult; } } while(0)
+    do { if (!(missionRow)) { TableLookupLogMissing("Mission", tableId, __FILE__, __LINE__); return missionResult; } } while(0)
 
 #define LookupMissionAsOrReturnError(prefix, tableId) \
     const auto [prefix##MissionRow, prefix##MissionResult] = MissionTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##MissionRow)) { LOG_ERROR << "Mission row not found for ID: " << tableId; return prefix##MissionResult; } } while(0)
+    do { if (!(prefix##MissionRow)) { TableLookupLogMissing("Mission", tableId, __FILE__, __LINE__); return prefix##MissionResult; } } while(0)
 
 #define LookupMissionOrReturn(tableId, customReturnValue) \
     const auto [missionRow, missionResult] = MissionTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(missionRow)) { LOG_ERROR << "Mission row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(missionRow)) { TableLookupLogMissing("Mission", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupMissionOrReturnVoid(tableId) \
     const auto [missionRow, missionResult] = MissionTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(missionRow)) { LOG_ERROR << "Mission row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(missionRow)) { TableLookupLogMissing("Mission", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupMissionOrContinue(tableId) \
     const auto [missionRow, missionResult] = MissionTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(missionRow)) { LOG_ERROR << "Mission row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(missionRow)) { TableLookupLogMissing("Mission", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupMissionOrReturnFalse(tableId) \
     const auto [missionRow, missionResult] = MissionTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(missionRow)) { LOG_ERROR << "Mission row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(missionRow)) { TableLookupLogMissing("Mission", tableId, __FILE__, __LINE__); return false; } } while(0)

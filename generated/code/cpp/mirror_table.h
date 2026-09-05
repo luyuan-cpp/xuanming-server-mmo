@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/mirror_table.pb.h"
 
 class MirrorTableManager {
@@ -144,7 +143,9 @@ inline const MirrorTableData& FindAllMirrorTable() {
 // the current scope:
 //   mirrorRow    -> const MirrorTable* (the matched row)
 //   mirrorResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -153,24 +154,24 @@ inline const MirrorTableData& FindAllMirrorTable() {
 
 #define LookupMirrorOrReturnError(tableId) \
     const auto [mirrorRow, mirrorResult] = MirrorTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(mirrorRow)) { LOG_ERROR << "Mirror row not found for ID: " << tableId; return mirrorResult; } } while(0)
+    do { if (!(mirrorRow)) { TableLookupLogMissing("Mirror", tableId, __FILE__, __LINE__); return mirrorResult; } } while(0)
 
 #define LookupMirrorAsOrReturnError(prefix, tableId) \
     const auto [prefix##MirrorRow, prefix##MirrorResult] = MirrorTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##MirrorRow)) { LOG_ERROR << "Mirror row not found for ID: " << tableId; return prefix##MirrorResult; } } while(0)
+    do { if (!(prefix##MirrorRow)) { TableLookupLogMissing("Mirror", tableId, __FILE__, __LINE__); return prefix##MirrorResult; } } while(0)
 
 #define LookupMirrorOrReturn(tableId, customReturnValue) \
     const auto [mirrorRow, mirrorResult] = MirrorTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(mirrorRow)) { LOG_ERROR << "Mirror row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(mirrorRow)) { TableLookupLogMissing("Mirror", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupMirrorOrReturnVoid(tableId) \
     const auto [mirrorRow, mirrorResult] = MirrorTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(mirrorRow)) { LOG_ERROR << "Mirror row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(mirrorRow)) { TableLookupLogMissing("Mirror", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupMirrorOrContinue(tableId) \
     const auto [mirrorRow, mirrorResult] = MirrorTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(mirrorRow)) { LOG_ERROR << "Mirror row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(mirrorRow)) { TableLookupLogMissing("Mirror", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupMirrorOrReturnFalse(tableId) \
     const auto [mirrorRow, mirrorResult] = MirrorTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(mirrorRow)) { LOG_ERROR << "Mirror row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(mirrorRow)) { TableLookupLogMissing("Mirror", tableId, __FILE__, __LINE__); return false; } } while(0)

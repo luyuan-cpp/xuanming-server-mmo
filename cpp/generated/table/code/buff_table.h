@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 #include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/buff_table.pb.h"
 
 class BuffTableManager {
@@ -153,7 +153,9 @@ inline const BuffTableData& FindAllBuffTable() {
 // the current scope:
 //   buffRow    -> const BuffTable* (the matched row)
 //   buffResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -162,24 +164,24 @@ inline const BuffTableData& FindAllBuffTable() {
 
 #define LookupBuffOrReturnError(tableId) \
     const auto [buffRow, buffResult] = BuffTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(buffRow)) { LOG_ERROR << "Buff row not found for ID: " << tableId; return buffResult; } } while(0)
+    do { if (!(buffRow)) { TableLookupLogMissing("Buff", tableId, __FILE__, __LINE__); return buffResult; } } while(0)
 
 #define LookupBuffAsOrReturnError(prefix, tableId) \
     const auto [prefix##BuffRow, prefix##BuffResult] = BuffTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##BuffRow)) { LOG_ERROR << "Buff row not found for ID: " << tableId; return prefix##BuffResult; } } while(0)
+    do { if (!(prefix##BuffRow)) { TableLookupLogMissing("Buff", tableId, __FILE__, __LINE__); return prefix##BuffResult; } } while(0)
 
 #define LookupBuffOrReturn(tableId, customReturnValue) \
     const auto [buffRow, buffResult] = BuffTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(buffRow)) { LOG_ERROR << "Buff row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(buffRow)) { TableLookupLogMissing("Buff", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupBuffOrReturnVoid(tableId) \
     const auto [buffRow, buffResult] = BuffTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(buffRow)) { LOG_ERROR << "Buff row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(buffRow)) { TableLookupLogMissing("Buff", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupBuffOrContinue(tableId) \
     const auto [buffRow, buffResult] = BuffTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(buffRow)) { LOG_ERROR << "Buff row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(buffRow)) { TableLookupLogMissing("Buff", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupBuffOrReturnFalse(tableId) \
     const auto [buffRow, buffResult] = BuffTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(buffRow)) { LOG_ERROR << "Buff row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(buffRow)) { TableLookupLogMissing("Buff", tableId, __FILE__, __LINE__); return false; } } while(0)

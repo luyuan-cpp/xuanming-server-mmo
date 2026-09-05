@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/test_table.pb.h"
 
 class TestTableManager {
@@ -123,7 +122,9 @@ inline const TestTableData& FindAllTestTable() {
 // the current scope:
 //   testRow    -> const TestTable* (the matched row)
 //   testResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -132,24 +133,24 @@ inline const TestTableData& FindAllTestTable() {
 
 #define LookupTestOrReturnError(tableId) \
     const auto [testRow, testResult] = TestTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(testRow)) { LOG_ERROR << "Test row not found for ID: " << tableId; return testResult; } } while(0)
+    do { if (!(testRow)) { TableLookupLogMissing("Test", tableId, __FILE__, __LINE__); return testResult; } } while(0)
 
 #define LookupTestAsOrReturnError(prefix, tableId) \
     const auto [prefix##TestRow, prefix##TestResult] = TestTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##TestRow)) { LOG_ERROR << "Test row not found for ID: " << tableId; return prefix##TestResult; } } while(0)
+    do { if (!(prefix##TestRow)) { TableLookupLogMissing("Test", tableId, __FILE__, __LINE__); return prefix##TestResult; } } while(0)
 
 #define LookupTestOrReturn(tableId, customReturnValue) \
     const auto [testRow, testResult] = TestTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(testRow)) { LOG_ERROR << "Test row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(testRow)) { TableLookupLogMissing("Test", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupTestOrReturnVoid(tableId) \
     const auto [testRow, testResult] = TestTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(testRow)) { LOG_ERROR << "Test row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(testRow)) { TableLookupLogMissing("Test", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupTestOrContinue(tableId) \
     const auto [testRow, testResult] = TestTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(testRow)) { LOG_ERROR << "Test row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(testRow)) { TableLookupLogMissing("Test", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupTestOrReturnFalse(tableId) \
     const auto [testRow, testResult] = TestTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(testRow)) { LOG_ERROR << "Test row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(testRow)) { TableLookupLogMissing("Test", tableId, __FILE__, __LINE__); return false; } } while(0)

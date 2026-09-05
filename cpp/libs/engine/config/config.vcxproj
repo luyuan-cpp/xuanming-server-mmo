@@ -20,12 +20,14 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="table_expression.h" />
+    <ClInclude Include="table_log.h" />
     <ClInclude Include="config.h" />
     <ClInclude Include="node_config_manager.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="config.cpp" />
     <ClCompile Include="node_config_manager.cpp" />
+    <ClCompile Include="table_log.cpp" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/reward_table.pb.h"
 
 class RewardTableManager {
@@ -119,7 +118,9 @@ inline const RewardTableData& FindAllRewardTable() {
 // the current scope:
 //   rewardRow    -> const RewardTable* (the matched row)
 //   rewardResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -128,24 +129,24 @@ inline const RewardTableData& FindAllRewardTable() {
 
 #define LookupRewardOrReturnError(tableId) \
     const auto [rewardRow, rewardResult] = RewardTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(rewardRow)) { LOG_ERROR << "Reward row not found for ID: " << tableId; return rewardResult; } } while(0)
+    do { if (!(rewardRow)) { TableLookupLogMissing("Reward", tableId, __FILE__, __LINE__); return rewardResult; } } while(0)
 
 #define LookupRewardAsOrReturnError(prefix, tableId) \
     const auto [prefix##RewardRow, prefix##RewardResult] = RewardTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##RewardRow)) { LOG_ERROR << "Reward row not found for ID: " << tableId; return prefix##RewardResult; } } while(0)
+    do { if (!(prefix##RewardRow)) { TableLookupLogMissing("Reward", tableId, __FILE__, __LINE__); return prefix##RewardResult; } } while(0)
 
 #define LookupRewardOrReturn(tableId, customReturnValue) \
     const auto [rewardRow, rewardResult] = RewardTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(rewardRow)) { LOG_ERROR << "Reward row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(rewardRow)) { TableLookupLogMissing("Reward", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupRewardOrReturnVoid(tableId) \
     const auto [rewardRow, rewardResult] = RewardTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(rewardRow)) { LOG_ERROR << "Reward row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(rewardRow)) { TableLookupLogMissing("Reward", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupRewardOrContinue(tableId) \
     const auto [rewardRow, rewardResult] = RewardTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(rewardRow)) { LOG_ERROR << "Reward row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(rewardRow)) { TableLookupLogMissing("Reward", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupRewardOrReturnFalse(tableId) \
     const auto [rewardRow, rewardResult] = RewardTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(rewardRow)) { LOG_ERROR << "Reward row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(rewardRow)) { TableLookupLogMissing("Reward", tableId, __FILE__, __LINE__); return false; } } while(0)

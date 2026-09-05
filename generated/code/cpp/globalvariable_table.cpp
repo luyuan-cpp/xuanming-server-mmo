@@ -1,5 +1,6 @@
 #include "google/protobuf/util/json_util.h"
 #include "core/utils/file/file2string.h"
+#include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/code/globalvariable_table.h"
 

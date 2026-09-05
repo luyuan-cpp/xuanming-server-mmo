@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/equipslot_table.pb.h"
 
 class EquipSlotTableManager {
@@ -119,7 +118,9 @@ inline const EquipSlotTableData& FindAllEquipSlotTable() {
 // the current scope:
 //   equipSlotRow    -> const EquipSlotTable* (the matched row)
 //   equipSlotResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -128,24 +129,24 @@ inline const EquipSlotTableData& FindAllEquipSlotTable() {
 
 #define LookupEquipSlotOrReturnError(tableId) \
     const auto [equipSlotRow, equipSlotResult] = EquipSlotTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(equipSlotRow)) { LOG_ERROR << "EquipSlot row not found for ID: " << tableId; return equipSlotResult; } } while(0)
+    do { if (!(equipSlotRow)) { TableLookupLogMissing("EquipSlot", tableId, __FILE__, __LINE__); return equipSlotResult; } } while(0)
 
 #define LookupEquipSlotAsOrReturnError(prefix, tableId) \
     const auto [prefix##EquipSlotRow, prefix##EquipSlotResult] = EquipSlotTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##EquipSlotRow)) { LOG_ERROR << "EquipSlot row not found for ID: " << tableId; return prefix##EquipSlotResult; } } while(0)
+    do { if (!(prefix##EquipSlotRow)) { TableLookupLogMissing("EquipSlot", tableId, __FILE__, __LINE__); return prefix##EquipSlotResult; } } while(0)
 
 #define LookupEquipSlotOrReturn(tableId, customReturnValue) \
     const auto [equipSlotRow, equipSlotResult] = EquipSlotTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(equipSlotRow)) { LOG_ERROR << "EquipSlot row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(equipSlotRow)) { TableLookupLogMissing("EquipSlot", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupEquipSlotOrReturnVoid(tableId) \
     const auto [equipSlotRow, equipSlotResult] = EquipSlotTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(equipSlotRow)) { LOG_ERROR << "EquipSlot row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(equipSlotRow)) { TableLookupLogMissing("EquipSlot", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupEquipSlotOrContinue(tableId) \
     const auto [equipSlotRow, equipSlotResult] = EquipSlotTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(equipSlotRow)) { LOG_ERROR << "EquipSlot row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(equipSlotRow)) { TableLookupLogMissing("EquipSlot", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupEquipSlotOrReturnFalse(tableId) \
     const auto [equipSlotRow, equipSlotResult] = EquipSlotTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(equipSlotRow)) { LOG_ERROR << "EquipSlot row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(equipSlotRow)) { TableLookupLogMissing("EquipSlot", tableId, __FILE__, __LINE__); return false; } } while(0)

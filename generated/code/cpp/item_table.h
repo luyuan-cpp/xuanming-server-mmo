@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/item_table.pb.h"
 
 class ItemTableManager {
@@ -119,7 +118,9 @@ inline const ItemTableData& FindAllItemTable() {
 // the current scope:
 //   itemRow    -> const ItemTable* (the matched row)
 //   itemResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -128,24 +129,24 @@ inline const ItemTableData& FindAllItemTable() {
 
 #define LookupItemOrReturnError(tableId) \
     const auto [itemRow, itemResult] = ItemTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(itemRow)) { LOG_ERROR << "Item row not found for ID: " << tableId; return itemResult; } } while(0)
+    do { if (!(itemRow)) { TableLookupLogMissing("Item", tableId, __FILE__, __LINE__); return itemResult; } } while(0)
 
 #define LookupItemAsOrReturnError(prefix, tableId) \
     const auto [prefix##ItemRow, prefix##ItemResult] = ItemTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##ItemRow)) { LOG_ERROR << "Item row not found for ID: " << tableId; return prefix##ItemResult; } } while(0)
+    do { if (!(prefix##ItemRow)) { TableLookupLogMissing("Item", tableId, __FILE__, __LINE__); return prefix##ItemResult; } } while(0)
 
 #define LookupItemOrReturn(tableId, customReturnValue) \
     const auto [itemRow, itemResult] = ItemTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(itemRow)) { LOG_ERROR << "Item row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(itemRow)) { TableLookupLogMissing("Item", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupItemOrReturnVoid(tableId) \
     const auto [itemRow, itemResult] = ItemTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(itemRow)) { LOG_ERROR << "Item row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(itemRow)) { TableLookupLogMissing("Item", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupItemOrContinue(tableId) \
     const auto [itemRow, itemResult] = ItemTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(itemRow)) { LOG_ERROR << "Item row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(itemRow)) { TableLookupLogMissing("Item", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupItemOrReturnFalse(tableId) \
     const auto [itemRow, itemResult] = ItemTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(itemRow)) { LOG_ERROR << "Item row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(itemRow)) { TableLookupLogMissing("Item", tableId, __FILE__, __LINE__); return false; } } while(0)

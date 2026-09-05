@@ -1,5 +1,6 @@
 #include "modifier_buff_impl.h"
 
+#include "muduo/base/Logging.h"
 #include "table/code/buff_table.h"
 #include "table/proto/buff_table.pb.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"

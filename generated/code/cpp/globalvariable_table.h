@@ -6,8 +6,7 @@
 #include <random>
 #include <unordered_map>
 #include <vector>
-#include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/globalvariable_table.pb.h"
 
 class GlobalVariableTableManager {
@@ -119,7 +118,9 @@ inline const GlobalVariableTableData& FindAllGlobalVariableTable() {
 // the current scope:
 //   globalVariableRow    -> const GlobalVariableTable* (the matched row)
 //   globalVariableResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -128,24 +129,24 @@ inline const GlobalVariableTableData& FindAllGlobalVariableTable() {
 
 #define LookupGlobalVariableOrReturnError(tableId) \
     const auto [globalVariableRow, globalVariableResult] = GlobalVariableTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(globalVariableRow)) { LOG_ERROR << "GlobalVariable row not found for ID: " << tableId; return globalVariableResult; } } while(0)
+    do { if (!(globalVariableRow)) { TableLookupLogMissing("GlobalVariable", tableId, __FILE__, __LINE__); return globalVariableResult; } } while(0)
 
 #define LookupGlobalVariableAsOrReturnError(prefix, tableId) \
     const auto [prefix##GlobalVariableRow, prefix##GlobalVariableResult] = GlobalVariableTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##GlobalVariableRow)) { LOG_ERROR << "GlobalVariable row not found for ID: " << tableId; return prefix##GlobalVariableResult; } } while(0)
+    do { if (!(prefix##GlobalVariableRow)) { TableLookupLogMissing("GlobalVariable", tableId, __FILE__, __LINE__); return prefix##GlobalVariableResult; } } while(0)
 
 #define LookupGlobalVariableOrReturn(tableId, customReturnValue) \
     const auto [globalVariableRow, globalVariableResult] = GlobalVariableTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(globalVariableRow)) { LOG_ERROR << "GlobalVariable row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(globalVariableRow)) { TableLookupLogMissing("GlobalVariable", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupGlobalVariableOrReturnVoid(tableId) \
     const auto [globalVariableRow, globalVariableResult] = GlobalVariableTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(globalVariableRow)) { LOG_ERROR << "GlobalVariable row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(globalVariableRow)) { TableLookupLogMissing("GlobalVariable", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupGlobalVariableOrContinue(tableId) \
     const auto [globalVariableRow, globalVariableResult] = GlobalVariableTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(globalVariableRow)) { LOG_ERROR << "GlobalVariable row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(globalVariableRow)) { TableLookupLogMissing("GlobalVariable", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupGlobalVariableOrReturnFalse(tableId) \
     const auto [globalVariableRow, globalVariableResult] = GlobalVariableTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(globalVariableRow)) { LOG_ERROR << "GlobalVariable row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(globalVariableRow)) { TableLookupLogMissing("GlobalVariable", tableId, __FILE__, __LINE__); return false; } } while(0)

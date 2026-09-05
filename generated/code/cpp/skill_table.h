@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 #include "table_expression.h"
-#include "muduo/base/Logging.h"
+#include "table_log.h"
 #include "table/proto/skill_table.pb.h"
 
 class SkillTableManager {
@@ -141,7 +141,9 @@ inline const SkillTableData& FindAllSkillTable() {
 // the current scope:
 //   skillRow    -> const SkillTable* (the matched row)
 //   skillResult -> uint32_t status (kInvalidTableId on miss)
-// On a miss they log an error and bail out; the suffix spells out HOW they bail:
+// On a miss they log an error (via TableLookupLogMissing in table_log.h — the macros
+// deliberately do NOT stream through muduo, so this header owes muduo nothing) and
+// bail out; the suffix spells out HOW they bail:
 //   OrReturnError -> return the kInvalidTableId status code
 //   OrReturn      -> return a caller-supplied value
 //   OrReturnVoid  -> return; (for void functions)
@@ -150,24 +152,24 @@ inline const SkillTableData& FindAllSkillTable() {
 
 #define LookupSkillOrReturnError(tableId) \
     const auto [skillRow, skillResult] = SkillTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(skillRow)) { LOG_ERROR << "Skill row not found for ID: " << tableId; return skillResult; } } while(0)
+    do { if (!(skillRow)) { TableLookupLogMissing("Skill", tableId, __FILE__, __LINE__); return skillResult; } } while(0)
 
 #define LookupSkillAsOrReturnError(prefix, tableId) \
     const auto [prefix##SkillRow, prefix##SkillResult] = SkillTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(prefix##SkillRow)) { LOG_ERROR << "Skill row not found for ID: " << tableId; return prefix##SkillResult; } } while(0)
+    do { if (!(prefix##SkillRow)) { TableLookupLogMissing("Skill", tableId, __FILE__, __LINE__); return prefix##SkillResult; } } while(0)
 
 #define LookupSkillOrReturn(tableId, customReturnValue) \
     const auto [skillRow, skillResult] = SkillTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(skillRow)) { LOG_ERROR << "Skill row not found for ID: " << tableId; return customReturnValue; } } while(0)
+    do { if (!(skillRow)) { TableLookupLogMissing("Skill", tableId, __FILE__, __LINE__); return customReturnValue; } } while(0)
 
 #define LookupSkillOrReturnVoid(tableId) \
     const auto [skillRow, skillResult] = SkillTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(skillRow)) { LOG_ERROR << "Skill row not found for ID: " << tableId; return; } } while(0)
+    do { if (!(skillRow)) { TableLookupLogMissing("Skill", tableId, __FILE__, __LINE__); return; } } while(0)
 
 #define LookupSkillOrContinue(tableId) \
     const auto [skillRow, skillResult] = SkillTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(skillRow)) { LOG_ERROR << "Skill row not found for ID: " << tableId; continue; } } while(0)
+    do { if (!(skillRow)) { TableLookupLogMissing("Skill", tableId, __FILE__, __LINE__); continue; } } while(0)
 
 #define LookupSkillOrReturnFalse(tableId) \
     const auto [skillRow, skillResult] = SkillTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(skillRow)) { LOG_ERROR << "Skill row not found for ID: " << tableId; return false; } } while(0)
+    do { if (!(skillRow)) { TableLookupLogMissing("Skill", tableId, __FILE__, __LINE__); return false; } } while(0)
