@@ -156,6 +156,14 @@ func main() {
 	s.AddUnaryInterceptors(serverbase.UnaryInterceptor(serverbase.Options{}))
 	defer s.Stop()
 
+	// 真正把 gRPC 服务跑起来。fc9377336(asynq→kafka)之后这里只剩 MustNewServer
+	// 没有 Start:进程打印 "STARTED SUCCESSFULLY" 却什么端口都不监听,也不向 etcd
+	// 注册 db.rpc。本地 compose 没探针所以一直没暴露;K8s(deploy/k8s/manifests/go-svc/db.yaml)
+	// 的 grpc readiness/liveness 探 6000 端口永远超时,db Pod 永远 0/1 并被反复重启
+	// (2026-09-03 kind 实跑)。go-zero 的 Start() 是阻塞的(内部先注册 etcd 再 Serve,
+	// 出错走 logx.Must 直接退出),放到 goroutine 里,主 goroutine 仍按下面的信号退出。
+	go s.Start()
+
 	// Wait for shutdown signal
 	fmt.Println("\n=============================================================")
 	fmt.Println("  DB SERVICE STARTED SUCCESSFULLY")

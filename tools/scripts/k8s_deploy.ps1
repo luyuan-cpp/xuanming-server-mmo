@@ -1031,6 +1031,13 @@ function Wait-ForZoneReady {
 	}
 	if (-not $SkipJavaSvc -and -not [string]::IsNullOrWhiteSpace($JavaSvcRegistry)) {
 		foreach ($svcName in $JavaSvcCatalogue.Keys) {
+			# 目录里有条目但没有 manifest 的服务(auth:仓库里没有可打包的工程,
+			# manifests/java-svc/auth.yaml 也不存在)在 Apply-JavaSvcManifests 里只告警不 apply,
+			# 这里若照等就会在 `rollout status deploy/auth` 上白白超时,拖垮整条 -WaitReady。
+			if (-not (Test-Path (Join-Path $JavaSvcManifestsDir $JavaSvcCatalogue[$svcName].Manifest))) {
+				Write-Host "  [skip-wait] ${svcName}: manifest 不存在,未部署,不等待"
+				continue
+			}
 			Wait-ForDeploymentReady -Namespace $Namespace -DeploymentName $svcName
 		}
 	}
@@ -1138,6 +1145,13 @@ function New-GoSvcConfigMapYaml {
 		$dbAutoMigrateSchema = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Database.AutoMigrateSchema'
 	}
 
+	# login 的 go-zero Mode。secrets.go 只在 Mode=dev/test 时把密钥校验降级为 WARN,
+	# 其余(含不写,默认 pro)一律 fail-closed。dev 档位的密钥本来就是占位回落
+	# (Initialize-InjectedSecrets),不写 Mode 的话 login 起来就 panic
+	# "HMAC 密钥配置不合格,拒绝启动"(2026-09-03 kind 实跑);与 go/login/etc/login.yaml
+	# 的 `Mode: dev` 口径一致。staging/prod 不写,保持 pro 的严格门禁。
+	$loginModeLine = if ($ReleaseProfile -eq 'dev') { 'Mode: dev' } else { '' }
+
 	$svcConfig = switch ($SvcName) {
 		"db" {
 @"
@@ -1209,6 +1223,7 @@ PlayerLockTTLSec: 3
 Name: login.rpc
 ListenOn: 0.0.0.0:50000
 Timeout: 100000
+${loginModeLine}
 Etcd:
   Hosts:
     - "etcd.${InfraNamespace}:2379"

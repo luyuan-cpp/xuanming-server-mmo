@@ -9,7 +9,35 @@
 #     --build-arg SERVICE=login \
 #     --build-arg ENTRY=login.go \
 #     -t mmorpg-login:latest  go/
+#
+#   db 额外需要仓库外的 proto2mysql(见下方 proto2mysql stage 说明):
+#   docker build -f deploy/k8s/Dockerfile.go-svc \
+#     --build-arg SERVICE=db --build-arg ENTRY=db.go \
+#     --build-context proto2mysql=../proto2mysql \
+#     -t mmorpg-db:<tag>  go/
+#   平时走 tools/scripts/go_svc_image.ps1,它会自动解析 go.mod 的 replace 并追加该参数。
 # ────────────────────────────────────────────────────────────────
+
+# ── 仓库外 replace 模块(可选)──────────────────────────────────────
+# go/db/go.mod 把 proto2mysql replace 到仓库外(`../../../proto2mysql`),以 go/
+# 为 build context 带不进镜像,db 镜像在任何环境都构建不了(2026-09-03 kind 实跑)。
+#
+# 解法:BuildKit 的命名上下文可以**按名字覆盖同名 stage**。这里先声明一个空的
+# scratch stage 占位;tools/scripts/go_svc_image.ps1 在宿主上解析到该 replace
+# 目录存在时,传 `--build-context proto2mysql=<宿主目录>` 把它整个替换成那个目录。
+#   - 传了:下面 COPY 得到完整源码,go build 按 replace 相对路径找到它;
+#   - 没传(其他服务 / 目录不存在):COPY 一个空 scratch 只会生成空目录,无副作用。
+# 不改 go.mod、不 vendor,本地开发与镜像构建用同一份 replace。
+FROM scratch AS proto2mysql
+
+# ── 策划表(generated/tables)────────────────────────────────────────
+# login / player_locator / scene_manager / friend / guild 启动时都会
+# LoadTables(TableDir 默认 ../../generated/tables),表在仓库根 generated/tables/,
+# 同样不在 go/ 这个 build context 里。以前镜像里根本没有表,这几个服务在 K8s 上
+# 一起来就 log.Fatalf("failed to load ActorActionCombatState table")
+# CrashLoop(2026-09-03 kind 实跑)。同样用可覆盖的命名上下文带入,
+# go_svc_image.ps1 固定传 --build-context tables=<仓库>/generated/tables。
+FROM scratch AS tables
 
 # ── Build stage ──────────────────────────────────────────────────
 # go/db/go.mod 已声明 go 1.26.5,golang:1.24 基础镜像会在 `go mod download` 时按
@@ -40,6 +68,11 @@ COPY shared/ /src/shared/
 
 # Copy the target service
 COPY ${SERVICE}/ /src/${SERVICE}/
+
+# 仓库外 replace 模块落到 /proto2mysql:go.mod 里的相对路径 `../../../proto2mysql`
+# 从 /src/<service>/ 出发向上越过根目录后仍归一化为 /proto2mysql,与宿主上
+# go/<service>/../../../proto2mysql 的相对深度一致,所以 replace 行不用改。
+COPY --from=proto2mysql / /proto2mysql/
 
 WORKDIR /src/${SERVICE}
 
@@ -86,6 +119,21 @@ COPY ${SERVICE}/etc/ /app/etc/
 # Optional data directory (e.g., db/data/ with table JSON definitions)
 # The wildcard pattern avoids build failure if the dir doesn't exist.
 COPY ${SERVICE}/data*/ /app/data/
+
+# 策划表落到 /generated/tables:WORKDIR 是 /app,TableDir 默认值 ../../generated/tables
+# 从 /app 向上归一化后正是 /generated/tables,所以各服务 etc/*.yaml 与 K8s ConfigMap
+# 都不用改 TableDir。
+#
+# 文件名统一转小写:go/shared/generated/table/*_table.go 里是按小写文件名读的
+# (如 actoractioncombatstate.json),而 generated/tables/ 导出的是大驼峰
+# (ActorActionCombatState.json)。Windows 文件系统不分大小写所以本地从没暴露,
+# Linux 容器里一定读不到。这里是部署侧兜底,根因在导表/生成器命名不一致。
+COPY --from=tables / /generated/tables/
+RUN set -e; cd /generated/tables; for f in *.json; do \
+      [ -e "$f" ] || continue; \
+      lower="$(printf '%s' "$f" | tr 'A-Z' 'a-z')"; \
+      [ "$f" = "$lower" ] || mv "$f" "$lower"; \
+    done
 
 EXPOSE 8080
 
