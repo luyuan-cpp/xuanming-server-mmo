@@ -70,10 +70,15 @@ playerHeight/playerStepOffset)。速度信任上限 `kMaxTrustedClientSpeed=10`
 
 ## 5. 已知边界(不在本轮)
 
-- 首进场 spawn 契约仍是 (0,0,0)(TianyongMap.md 记录的缺口)。handler 对
-  "服务器当前位置不在网格上"做了引导落位兜底(吸附客户端上报点),但正解
-  是进场时按场景表出生点落位。
-- 客户端未做预测回滚,MoveAck 纠偏 >1.5m 硬 snap(GameClient.cs 现状)。
+- ~~首进场 spawn 契约仍是 (0,0,0)~~ **2026-09-05 已修**(见
+  `nav-spawn-fix-2026-09-05.md`):`SceneSpawnSystem::EnsureValidEnterLocation`
+  在 `HandleEnterScene` 里按导航校验进场位置,不合法落到出生点
+  `kTianyongSpawn* = (180,200,0)`(== Unity (200,0,180));`LoadNavBins` 注册前
+  探针出生点,旧占位 bin 会被拒绝注册;烘焙器 `--probe` 出包前同样探针。
+  出生点仍是常量而非 BaseScene 表列(所有场景共用一张图)。
+- 客户端未做预测回滚,MoveAck 纠偏 >1.5m 硬 snap(GameClient.cs 现状);
+  snap 落点不在 mask 上时客户端会恢复到最近可走格并回报 MoveStop(兜底,
+  正常数据下不触发)。
 - AI 寻路(`FindPath`)已有 API,尚无调用方;dtCrowd 仍未接。
 - 反作弊只有速度截断 + 阻挡夹持,无 client_time 单调性/违规计数。
 - `SceneNavManager` 是 thread_local,`LoadNavBins` 只在启动线程跑过——多场景

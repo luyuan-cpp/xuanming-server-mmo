@@ -105,6 +105,7 @@ set(SOURCE_FILES
     spatial/system/navigation.cpp
     spatial/system/recast.cpp
     spatial/system/scene_crowd.cpp
+    spatial/system/scene_spawn.cpp
     spatial/system/view.cpp
     world/world.cpp
 )

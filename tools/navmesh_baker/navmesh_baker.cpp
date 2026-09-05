@@ -25,6 +25,15 @@
 //   不做半径收缩;服务器校验同一个点,所以烘焙也不收缩,保证两端边界一致。
 //   cs=0.25 且 mask 格 2m 为其整数倍,烘出来的导航边界与 mask 格线精确重合。
 //
+// 出生点探针(数据契约自检):
+//   --probe x,y,z   Unity 坐标(米,Y-up),可重复。烘焙完成后对最终网格做
+//       findNearestPoly,任一探针不在网格上则**不写文件**并以非零退出 ——
+//       防止把和出生点契约不符的网格交给 scene 节点(scene 侧
+//       NavigationSystem::LoadNavBins 也会用同一契约再探针一次)。
+//   --painted-city 模式默认自带天墉城出生点探针 (200,0,180)
+//       (客户端 TianyongMapDefinition.DefaultSpawn,服务器 (180,200,0)),
+//       用 --no-default-probe 关闭。
+//
 // 构建/运行(由 Codex 执行,Windows MSVC):
 //   cmake -S tools/navmesh_baker -B tools/navmesh_baker/build
 //   cmake --build tools/navmesh_baker/build --config Release
@@ -45,6 +54,7 @@
 #include "Recast/Recast.h"
 #include "Detour/DetourNavMesh.h"
 #include "Detour/DetourNavMeshBuilder.h"
+#include "Detour/DetourNavMeshQuery.h"
 
 namespace
 {
@@ -556,6 +566,63 @@ int NextPow2(int v)
 	return p;
 }
 
+struct ProbePoint
+{
+	double v[3];  // Unity 坐标 (x, y, z)
+	std::string label;
+};
+
+// "x,y,z" → ProbePoint。
+bool ParseProbe(const std::string& text, ProbePoint& out)
+{
+	double x = 0, y = 0, z = 0;
+	if (std::sscanf(text.c_str(), "%lf,%lf,%lf", &x, &y, &z) != 3)
+	{
+		return false;
+	}
+	out.v[0] = x;
+	out.v[1] = y;
+	out.v[2] = z;
+	out.label = text;
+	return true;
+}
+
+// 对最终网格做探针:每个点 findNearestPoly,搜索范围与 scene 侧
+// nav_query.cpp 的 kSnapExtents 完全一致(水平 ±2m、垂直 ±4m),
+// 保证"烘焙器说在网格上" ⇔ "scene 节点说在网格上"。
+bool ProbeNavMesh(const dtNavMesh& navMesh, const std::vector<ProbePoint>& probes)
+{
+	if (probes.empty()) return true;
+
+	dtNavMeshQuery query;
+	if (dtStatusFailed(query.init(&navMesh, 2048)))
+	{
+		std::fprintf(stderr, "error: dtNavMeshQuery::init failed for probing\n");
+		return false;
+	}
+	const dtReal extents[3] = {2.0, 4.0, 2.0};
+	const dtQueryFilter filter;
+	bool allOk = true;
+	for (const ProbePoint& p : probes)
+	{
+		const dtReal center[3] = {p.v[0], p.v[1], p.v[2]};
+		dtPolyRef ref = 0;
+		dtReal nearest[3] = {0, 0, 0};
+		const dtStatus status = query.findNearestPoly(center, extents, &filter, &ref, nearest);
+		const bool ok = dtStatusSucceed(status) && ref != 0;
+		std::printf("probe unity=(%.2f,%.2f,%.2f) server=(%.2f,%.2f,%.2f): %s",
+			p.v[0], p.v[1], p.v[2], p.v[2], p.v[0], p.v[1], ok ? "ON MESH" : "OFF MESH");
+		if (ok)
+		{
+			std::printf(" nearest=(%.2f,%.2f,%.2f) poly=%llu", nearest[0], nearest[1], nearest[2],
+				static_cast<unsigned long long>(ref));
+		}
+		std::printf("\n");
+		allOk = allOk && ok;
+	}
+	return allOk;
+}
+
 }  // namespace
 
 int main(int argc, char** argv)
@@ -564,6 +631,8 @@ int main(int argc, char** argv)
 	std::string objPath;
 	std::string outPath;
 	BakeConfig bake;
+	std::vector<ProbePoint> probes;
+	bool defaultProbe = true;
 
 	for (int i = 1; i < argc; ++i)
 	{
@@ -578,6 +647,18 @@ int main(int argc, char** argv)
 		else if (arg == "--agent-height") bake.agentHeight = std::atof(next());
 		else if (arg == "--agent-climb") bake.agentMaxClimb = std::atof(next());
 		else if (arg == "--tile-size") bake.tileSizeVx = std::atoi(next());
+		else if (arg == "--probe")
+		{
+			ProbePoint p;
+			const std::string text = next();
+			if (!ParseProbe(text, p))
+			{
+				std::fprintf(stderr, "bad --probe value (want x,y,z): %s\n", text.c_str());
+				return 1;
+			}
+			probes.push_back(p);
+		}
+		else if (arg == "--no-default-probe") defaultProbe = false;
 		else
 		{
 			std::fprintf(stderr, "unknown arg: %s\n", arg.c_str());
@@ -590,8 +671,18 @@ int main(int argc, char** argv)
 			"usage: navmesh_baker (--painted-city <TianyongPaintedCity.cs> | --obj <mesh.obj>)"
 			" --out <scene.bin>\n"
 			"       [--cs 0.25] [--ch 0.2] [--agent-radius 0] [--agent-height 1.8]"
-			" [--agent-climb 0.35] [--tile-size 128]\n");
+			" [--agent-climb 0.35] [--tile-size 128]\n"
+			"       [--probe x,y,z ...] [--no-default-probe]\n");
 		return 1;
+	}
+	if (!paintedCityPath.empty() && defaultProbe)
+	{
+		// 天墉城出生点契约:客户端 TianyongMapDefinition.DefaultSpawn (200,0,180),
+		// 服务器 spatial/constants/nav.h kTianyongSpawn* = (180,200,0)。
+		ProbePoint spawn;
+		ParseProbe("200,0,180", spawn);
+		spawn.label = "tianyong-default-spawn";
+		probes.push_back(spawn);
 	}
 
 	TriMesh mesh;
@@ -676,6 +767,14 @@ int main(int argc, char** argv)
 		return 1;
 	}
 	std::printf("built %d tiles\n", builtTiles);
+
+	if (!ProbeNavMesh(navMesh, probes))
+	{
+		std::fprintf(stderr,
+			"error: probe point(s) off the navmesh, refusing to write %s"
+			" (spawn contract broken — check mask/coordinate mapping)\n", outPath.c_str());
+		return 1;
+	}
 
 	return SaveNavMesh(outPath, navMesh) ? 0 : 1;
 }

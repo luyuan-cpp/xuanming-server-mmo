@@ -3998,3 +3998,26 @@ fence 顺序用例只覆盖了不可叠加+ItemCountMap;准入轴全是 `AcceptA
   要测拉取后行为需停栈后重拷重启)。
 
 - **交接清单**:三天工作的全部留档待办经代码逐条核实后汇编为 `docs/design/handoff-backlog-2026-09-05.md`(77 条:P1 17 / P2 35 / P3 25,其中 21 条需先拍板;附录 A 列出已被做掉、勿重做的 5 项;附录 B 是脚本与产物索引)。
+
+## 2026-09-05 客户端/服务端导航数据、出生点与位置纠正契约统一
+
+> 现象:进场后首次移动即被 MoveAck 拉回原点附近、钳到 Unity (2,0,2),此后 WASD/寻路全被客户端 mask 挡住。
+> 根因是三处各说各话:服务端 `data/scene_nav_bin/*.bin` 仍是 20648 字节的 UE 占位导航;玩家 Transform 从 DB 反序列化
+> 后零校验(新号 (0,0,0));客户端发现出生点不可走**本地**挪到 (200,0,180) 却不告诉服务器。详见
+> `docs/design/nav-spawn-fix-2026-09-05.md`(含 Codex 执行清单与验收判据)。
+
+- **服务端**:新增 `spatial/system/scene_spawn.{h,cpp}`(`SceneSpawnSystem`:出生点常量 `nav.h kTianyongSpawn* = (180,200,0)`
+  == Unity (200,0,180);`EnsureValidEnterLocation` 在 `HandleEnterScene` 第 3.5 步按导航校验进场位置,非法/全零落到出生点;
+  `FallbackLocationForPlayer` 给移动裁决兜底)。`ApplyReportedLocation` 的"两头都不在网格"分支不再把非法原位回给客户端,
+  改落出生点,并对每次 MoveAck 打 `move corrected` INFO(带 current/reported/accepted 坐标)。`LoadNavBins` 注册前探针出生点,
+  旧占位 bin 拒绝注册(fail-open)并 ERROR,注册成功打 tile 数与 params。烘焙器 `navmesh_baker` 新增 `--probe`,
+  `--painted-city` 默认探针 (200,0,180),探针失败不落盘。
+- **客户端**:`TianyongPlayerController.WarpFromServer`(snap 落点不在 mask 上 → 最近可走格 + MoveStop 回报)、
+  `ReportPositionToServer`、`SetDebugDirection/SetDebugIgnoreMask`(验收驱动);`ActorWorld.Teleport` 走它;
+  `TianyongMapRuntime` 本地兜底落位后回报服务器;`GameClient` 的 MoveAck/自身 ActorCreate 日志带坐标 + 计数器;
+  `DevAutoPilot -moveTest`(出生点 → 四向 WASD → 客户端撞墙 → 绕 mask 冲墙要求服务器回 ack → 点击寻路)与
+  `tools/run_move_test.ps1`(同账号两轮 + 新账号,断言重登落位与默认出生点)。
+- **状态**:客户端离线 Roslyn 编译 0 错误;服务端 C++ / 烘焙器**未编译**,导航**未重烘**,验收未跑 —— 归 Codex
+  (文档 §5)。烘焙器此前从未编过,§6 列出已按 ue5navmesh 头文件核对的 API 面。
+- **边界**:出生点仍是常量(所有场景共用天墉城一张图),分场景时迁 BaseScene 表列;`SceneNavManager` thread_local 边界不变;
+  客户端无预测回滚。
