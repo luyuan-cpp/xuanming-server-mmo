@@ -3777,3 +3777,20 @@ Unity 客户端默认网关 http://127.0.0.1:8081,零配置可连。
   SceneNodeSelectorSystem 全没了)、team_test(team_system.h)、consistent_hash_node_test(ConsistentHashNode)、
   redis_test / mrediscli_test(引用已删的 `common/src/pb/pbc` proto 树)。要么连源码一起重写要么删,列在脚本注释里。
 - **结果**:`run_cpp_tests.ps1` 21/21 全绿(合计 391 个用例)。
+- **演出验收台工作流(battle-presentation-visual-verify)结果**:合成 5v5 战斗驱动 `Assets/Scripts/App/PresentationShowcase.cs`(-showcase -shotDir,
+  覆盖单体/暴击/群攻 5 目标/MISS/HEAL/BUFF 三态/MANA/群攻中死亡/防御道具/5 回合与 action_order)+ `Assets/Editor/ShowcaseBuild.cs` +
+  scratchpad `run_showcase.ps1`(副本工程出包 → 跑 → 72 帧到 `E:/work/tmp/showcase_shots`)。逐帧验收判 blocker 两条 —— 阵型是中央菱形团块、
+  血蓝条脱离单位 —— 修复已落地:`BattleStage` 改为两条 17° 对角斜带(`RowStep(170,-52)` / `TeamRowShift 260` / 敌方远端 ×0.95 / 后排 0.85),
+  新增 `BattlePlateFollower`(名牌按立绘实际顶点跟随),伤害数字换字集(红色厚描边、暴击黄字、群攻同拍按目标错位),名字加描边、死亡回收名牌。
+  EditMode 166 例 165 过(唯一失败仍是既有 walk_N 资产用例)。09-05 02:07 用最终代码重跑演出台 72 帧:两阵对角分离、22 套角色、群攻五串数字同拍可见,
+  与录像 f_003/f_008 结构一致。工作流报告本身因 API 断连(ECONNRESET/403)未回传,以磁盘产物 + 帧为准。
+- **重启后端口被 Windows 动态保留区间吃掉(2026-09-05,第二次撞上)**:本次 `netsh int ipv4 show excludedportrange` 的 60279-60378 覆盖了 zone1
+  scene_manager 的 60300 → bind "access permissions" panic → player_locator 拨 scenemanagerservice.rpc 超时 panic → login 拨 playerlocator.rpc 超时 panic,
+  三个服务连锁死而 `/api/server-list` 仍双 OPEN(那只证明 gate 在)。修:`tools/scripts/go_services.ps1` 新增 `Resolve-BindablePort`
+  (解析保留区间,落进去就上移到第一个区间外端口,并强制写派生 yaml 让 ListenOn/PID 文件/LISTEN 探测都用实际端口;只规避保留区间,不规避占用),
+  实测 60300 → 60479 后三服务顺序起齐(依赖链 scene_manager → player_locator → login,必须逐个等端口)。不改系统 dynamicport 设置。
+- **最终实机验收(2026-09-05 02:56)**:最终客户端代码出包(`E:/work/tmp/livecap_player`,含 BattleStage 对角斜带 / BattlePlateFollower / 字集数字 / 22 套角色精灵)
+  跑真实跨区 1v1:`CROSS_ZONE_PAIR_PASS battle_id=65047318352658432 zone_a=1 zone_b=2 turns=23`,两侧各 163 帧(`E:/work/tmp/shots_live5`)。帧核对:敌方左上 / 我方右下
+  对角站位、两名角色为不同精灵、血蓝条贴头、名字描边、红色厚描边伤害数字上飘、自动战斗三键 —— 与问道录像结构一致。至此本轮全部目标闭环:
+  ① 全服跨 zone 匹配(robot / Redis Cluster / 故障切换 / 真实 Unity 双端);② 二期 prepare deadline + 配表指纹 + MMR 运行时证据;③ K8s kind A/B 档;
+  ④ 问道式战斗表现(服务端演出数据 + 客户端表现层 + 美术 + 确定性验收台 + 实机截图链)。剩余为已登记的 minor 余项与 C 档(C++ Linux 镜像)。

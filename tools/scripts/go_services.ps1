@@ -221,6 +221,37 @@ function Get-InstanceKey {
 # For instance #1 of a single-instance launch with Zone=0, return the original
 # etc path so behavior is unchanged. Otherwise materialize a derived yaml in
 # run/etc/go_services with ListenOn (and ZoneId, when -Zone is set) rewritten.
+# Windows(Hyper-V / WinNAT)每次开机会随机保留若干 TCP 端口区间(`netsh int ipv4 show excludedportrange protocol=tcp`),
+# 固定端口落进去时 bind 报 "An attempt was made to access a socket in a way forbidden by its access permissions",
+# go-zero 服务直接 panic(2026-08-22 player_locator 51200、2026-09-05 scene_manager 60300 都是这个坑)。
+# 起服务前探一次:落在保留区间就往上挪到第一个不在任何区间里的端口,并强制走派生 yaml 写入;
+# 对等方经 etcd 发现实际端口,不受影响。只规避保留区间,不规避"已被占用"(占用要么是陈旧实例要么是配置撞车,应当报错而不是悄悄换)。
+$script:ExcludedPortRanges = $null
+function Get-ExcludedPortRanges {
+    if ($null -ne $script:ExcludedPortRanges) { return $script:ExcludedPortRanges }
+    $ranges = @()
+    try {
+        $out = netsh interface ipv4 show excludedportrange protocol=tcp 2>$null
+        foreach ($line in $out) {
+            if ($line -match '^\s*(\d+)\s+(\d+)\s*\*?\s*$') { $ranges += ,@([int]$Matches[1], [int]$Matches[2]) }
+        }
+    } catch { }
+    $script:ExcludedPortRanges = $ranges
+    return $ranges
+}
+function Test-PortExcluded([int]$Port) {
+    foreach ($r in (Get-ExcludedPortRanges)) { if ($Port -ge $r[0] -and $Port -le $r[1]) { return $true } }
+    return $false
+}
+function Resolve-BindablePort([int]$Port, [string]$Label) {
+    $p = $Port
+    for ($i = 0; $i -lt 2000 -and (Test-PortExcluded $p); $i++) { $p++ }
+    if ($p -ne $Port) {
+        Write-Warning "[port] $Label : $Port 落在 Windows 保留端口区间,改用 $p(派生 yaml;对等方经 etcd 发现,不受影响)"
+    }
+    return $p
+}
+
 function Resolve-InstanceConfig {
     param(
         [string]$Name,
@@ -232,9 +263,10 @@ function Resolve-InstanceConfig {
     $baseYaml  = Join-Path $svcDir $Info.ConfigFile
     $zoneShift = if ($Zone -gt 0) { ($Zone - 1) * $ZonePortShift } else { 0 }
     $port      = [int]$Info.Port + $zoneShift + ($Index - 1) * $PortStride
+    $port      = Resolve-BindablePort $port "$Name #$Index"   # 保留区间规避,见上
 
     # Legacy fast path: single-zone, single-instance -> original yaml as-is.
-    if ($Total -le 1 -and $Zone -le 0) {
+    if ($Total -le 1 -and $Zone -le 0 -and $port -eq [int]$Info.Port) {
         return [pscustomobject]@{
             Path     = $Info.ConfigFile  # relative path; resolved by working dir
             FullPath = $baseYaml

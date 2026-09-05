@@ -106,6 +106,25 @@ BattleScreen(已有):改为只负责命令环/回合计时/目标选择;单位�
   - `PresentationFormationSlotIncrementsPerTeamInSnapshotOrder`:同队 `formation_slot` 按快照顺序 0.. 递增,怪物队独立从 0 起。
   - `PresentationSkillManaCostEmitsManaEventInSkillGroup`:耗蓝技能产出 MANA 事件(value=消耗、`target_mana_after`=剩余、与 SKILL 同 group),状态快照法力同步扣减,无耗蓝技能不产出。
   - 引擎测试合计 50/50 全绿;客户端侧 `TurnPlan` 直接消费上述字段,旧服务端(无 group_id)按"紧随其后的 DAMAGE 归入前一个 ATTACK/SKILL"回退。
+- 视觉验收(2026-09-04/05):
+  - 确定性演出台 `PresentationShowcase`(命令行 `-showcase -shotDir <dir>`,`Assets/Editor/ShowcaseBuild.cs` 出包,scratchpad `run_showcase.ps1` 一键)
+    合成 5v5 覆盖 a-j 全部事件类型,72 帧;对照录像 f_003/f_008 逐帧核对后修掉两条 blocker(阵型中央团块 → 两条 17° 对角斜带 + 队伍沿排方向反向平移;
+    血蓝条脱离单位 → `BattlePlateFollower` 按立绘实际顶点跟随)。终帧:敌阵左上 / 我方右下、后排 0.85 + 敌方 0.95 近大远小、群攻五串红色厚描边数字同拍、暴击黄字、名字描边。
+  - 实机:`DevAutoPilot -shotDir`(开局/每回合/终局 + 0.3s 定时)+ `tools/run_crosszone_pair.ps1 -ShotDir`,真实跨区 1v1 对局 163 帧/侧,
+    22 套角色精灵按 actor_id 稳定选图生效(与右上头像同哈希)。
+  - 已知余项(minor):cast 脚底光晕贴画布底边被硬切;源立绘裁在 850 框内;怪物命中帧 index 4 vs 客户端默认 HitFrame 3;命令环右下安全边距;角色卡等级文字被裁。
+## 6.1 行动窗口 vs 演出时长(跨端契约,2026-09-03 定)
+
+服务端 `BattleRoomManager::ArmRoundTimer` 的行动收集窗口 = `kRoundDurationMs`(手动局)或 `kAutoRoundIntervalMs = 2000ms`(全员自动,D13),
+`action_deadline_ms` 随 `BattleStartS2C` / `TurnResultS2C` 下发。**这个窗口不含客户端演出时长** —— 一回合多目标群攻的演出可能 4~6s,
+远超自动局 2s 的节奏。
+
+**契约(客户端负责压缩,服务端不改)**:
+- 客户端按 `PlaybackBudget` 计算预算 `budget = action_deadline_ms − now − 输入余量`(手动 2.5s / 自动·观战 0.3s),
+  取 `speed = clamp(plan.TotalSeconds / budget, 基础倍率(自动 1.5), 6x)`;`budget < 0.6s` 或 6x 仍塞不下 → 直接 `Skip()` 跳到终态。
+- `action_deadline_ms == 0`(无窗口)或 `State.Outcome` 已终局时,完整播放不压缩(末回合与结算要看清)。
+- 因此**服务端可以放心按固定窗口推进**,客户端永远不会因为演出没播完而错过提交;代价是高倍率下动作观感被压缩。
+- 若将来要让演出"播得完整",服务端可考虑 `windowMs += f(events.size())`,属产品节奏决策,不在本轮范围。
 ## 7. 与二期并行线的关系
 
 - 服务端 §2 的 proto 增量在 `phase2-cpp-scene-battle` 线完成后再改(避免与其同时改 battle 引擎/regen)。
