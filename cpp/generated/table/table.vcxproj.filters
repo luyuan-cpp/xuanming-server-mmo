@@ -273,6 +273,30 @@
     <ClInclude Include="proto\world_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\equipslot_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\equipslot_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\equipslot_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\mirror_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\mission_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\testmultikey_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\world_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\dungeon_table_fk.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="code\actoractioncombatstate_table.cpp">
@@ -453,6 +477,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\world_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\equipslot_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\equipslot_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

@@ -41,6 +41,7 @@
     <ClInclude Include="code\cooldown_table_comp.h" />
     <ClInclude Include="code\dungeon_table.h" />
     <ClInclude Include="code\dungeon_table_comp.h" />
+    <ClInclude Include="code\dungeon_table_fk.h" />
     <ClInclude Include="code\globalvariable_table.h" />
     <ClInclude Include="code\globalvariable_table_comp.h" />
     <ClInclude Include="code\equipslot_table.h" />
@@ -51,8 +52,10 @@
     <ClInclude Include="code\messagelimiter_table_comp.h" />
     <ClInclude Include="code\mirror_table.h" />
     <ClInclude Include="code\mirror_table_comp.h" />
+    <ClInclude Include="code\mirror_table_fk.h" />
     <ClInclude Include="code\mission_table.h" />
     <ClInclude Include="code\mission_table_comp.h" />
+    <ClInclude Include="code\mission_table_fk.h" />
     <ClInclude Include="code\monster_table.h" />
     <ClInclude Include="code\monster_table_comp.h" />
     <ClInclude Include="code\reward_table.h" />
@@ -64,10 +67,12 @@
     <ClInclude Include="code\table_id\globalvariable_table_id.h" />
     <ClInclude Include="code\testmultikey_table.h" />
     <ClInclude Include="code\testmultikey_table_comp.h" />
+    <ClInclude Include="code\testmultikey_table_fk.h" />
     <ClInclude Include="code\test_table.h" />
     <ClInclude Include="code\test_table_comp.h" />
     <ClInclude Include="code\world_table.h" />
     <ClInclude Include="code\world_table_comp.h" />
+    <ClInclude Include="code\world_table_fk.h" />
     <ClInclude Include="proto\actoractioncombatstate_table.pb.h" />
     <ClInclude Include="proto\actoractionstate_table.pb.h" />
     <ClInclude Include="proto\basescene_table.pb.h" />
@@ -210,8 +215,10 @@
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
-  <ImportGroup Label="ExtensionSettings"></ImportGroup>
-  <ImportGroup Label="Shared"></ImportGroup>
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
   <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
   </ImportGroup>
@@ -237,13 +244,15 @@
       <PreprocessorDefinitions>WIN32;_DEBUG;_LIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <PrecompiledHeaderFile></PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
       <AdditionalIncludeDirectories>./src/;../third_party/protobuf/src/;../third_party/protobuf/third_party/abseil-cpp/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <SubSystem></SubSystem>
+      <SubSystem>
+      </SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
@@ -260,7 +269,8 @@
       <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
-      <SubSystem></SubSystem>
+      <SubSystem>
+      </SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
@@ -273,7 +283,8 @@
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;NOMINMAX;GOOGLE_CHECK_EQ=ABSL_CHECK_EQ;GOOGLE_LOG=ABSL_LOG;GOOGLE_DCHECK=ABSL_DCHECK;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <PrecompiledHeader>NotUsing</PrecompiledHeader>
-      <PrecompiledHeaderFile></PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>
+      </PrecompiledHeaderFile>
       <AdditionalIncludeDirectories>../../libs/base/common/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/muduo;../../../third_party/boost/;../../../third_party/exprtk/;../../../third_party/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../generated/;../../libs/engine/config/;../../libs/;../../libs/engine/;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <DisableSpecificWarnings>4018;4244;4082;4267;4819;</DisableSpecificWarnings>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -287,7 +298,8 @@
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
     </ClCompile>
     <Link>
-      <SubSystem></SubSystem>
+      <SubSystem>
+      </SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
@@ -306,12 +318,14 @@
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
-      <SubSystem></SubSystem>
+      <SubSystem>
+      </SubSystem>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <ImportGroup Label="ExtensionTargets"></ImportGroup>
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
 </Project>
