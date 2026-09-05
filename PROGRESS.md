@@ -3975,3 +3975,24 @@ fence 顺序用例只覆盖了不可叠加+ItemCountMap;准入轴全是 `AcceptA
 ### 状态
 **未编译、未跑导表器。** 10 条闸门用临时 runner 在本机跑通(py -3 里没装 pytest);真 `Tip.xlsx` 的解析+分配+自检跑通;段表模板渲染后经 `gofmt -e` 语法合法。
 验证顺序见 `docs/design/tip-code-axis.md` §6 —— **第 2 步(跑导表器)之前 Go 编译不过是预期的**,`shared/generated/tip` 是导表器产物。
+
+## 2026-09-05 拉取上游 12 提交后的核对:我方改动未被覆盖,修 3 处合并缝
+
+> 上游 `d007e448e` 把配置表 schema 迁到权威 proto、`5ef65b3f8` 背包准入/淘汰策略、导表器表头解耦,
+> 直接动了战斗/观战/测试基建依赖的生成表头与错误码。逐项 sentinel 核对 + 库链串行重编 + 全量测试后的结论。
+
+- **未被覆盖**:观战测试缝(`addObserverFn`/`removeObserverFn`/`beforeAcquireWatchingHook`)与 36 个用例、
+  复活回满上限修复(`player_revive.h` / loader `TopUpToDerivedMax` / 结算传 Derived 上限)、引擎 PVE 三处、
+  C++ 新增测试与登记、`game.sln` 21 工程、`run_cpp_tests.ps1`、四处测试修复、配表列、robot `battle-smoke`、客户端观战代码——全在。
+  六个观战错误码被上游**正确迁移**为 `uint32(table.MatchError_kMatchSpectate*)`,tip 文本 16014–16019 在。
+- **合并缝 1(Go)**:上游新护栏 `TestNoHandWrittenTipCodes` 要求 errors.go 每个 Err 常量都在 `tipCodes()`;
+  跨 zone 那条 `ErrNotInScene` 随 143ecca96 进的,护栏没看见它 → 补一行(6557eb94a)。
+  以后给 match 加错误码:Tip.xlsx 加行 → 导表出枚举 → errors.go 写枚举引用 → 常量名补进 `tipCodes()`。
+- **合并缝 2(测试基建)**:`run_cpp_tests.ps1` 里 message_limiter/reward 两个 vcxproj 文件名写错,`-Build` 找不到工程
+  就拿拉取前的旧 exe 跑出"全过"。路径改正,"缺工程文件"改判 FAIL(e6ba62cc7)。
+- **合并缝 3(背包)**:`LayerConsistencyPredicateActuallyDetectsBreakage` 靠 `SetCapacityForRestore(0)` 造不一致,
+  该入口后来被加固成拒绝缩容,公开 API 造不出不一致、用例红,而加固本身无用例。不改生产代码:空包时注入自留裸指针的
+  `FlatLayout`,放入物品后在布局层 `Resize(0)`,一条用例同时钉住"缩容被拒"与"谓词报得出"(818af4417)。
+- **验证**:16 个库按依赖顺序串行重编 OK;`run_cpp_tests.ps1` **21/21 全绿(437 用例)**;`go/match` 全量绿;
+  scene/battle/gate 三个节点对新生成头链接成功(拷 `bin/` 因进程占用跳过——**`bin/` 里在跑的仍是 09-04 拉取前的版本**,
+  要测拉取后行为需停栈后重拷重启)。
