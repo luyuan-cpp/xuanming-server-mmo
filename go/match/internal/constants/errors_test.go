@@ -20,6 +20,7 @@ func tipCodes() map[string]uint32 {
 		"ErrInternal":               ErrInternal,
 		"ErrTicketMismatch":         ErrTicketMismatch,
 		"ErrCancelTooLate":          ErrCancelTooLate,
+		"ErrNotInScene":             ErrNotInScene,
 		"ErrChallengeSelf":          ErrChallengeSelf,
 		"ErrChallengeTargetOffline": ErrChallengeTargetOffline,
 		"ErrChallengeTargetBusy":    ErrChallengeTargetBusy,
