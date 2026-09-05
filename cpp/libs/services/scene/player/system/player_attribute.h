@@ -23,9 +23,15 @@ public:
 	// 从 DB 加载 / 首登后调用:补默认方案、清理不存在的维度、重算二级属性。
 	static void InitializeOnLoad(entt::entity player);
 
-	// 重算二级属性(DerivedAttributesComp + BaseAttributesComp.speed),夹当前 HP/MP。
-	// 上限提升时当前 HP/MP 同步加同样的增量(升级手感);不落库。
-	static void Recalculate(entt::entity player);
+	// 重算的触发原因:决定当前 HP/MP 怎么跟随上限变化(评审 2026-09-04 堵住"降后再升"白嫖回血):
+	//   kLevelChanged  升级:上限抬高按绝对增量补当前值(升级手感);降级只夹。
+	//   其它(加载/加点/切方案/洗点):按比例保持 hp = hp × newMax / oldMax,一升一降往返零净得失,
+	//                 切方案 / 洗点 / 重新加点都不能成为回血手段(turn-based-battle-server.md D4 残血带出战斗)。
+	enum class RecalcReason : uint8_t { kLoad, kLevelChanged, kAllocate, kSchemeSwitch, kReset };
+
+	// 重算二级属性(DerivedAttributesComp + BaseAttributesComp.speed),按 reason 处理当前 HP/MP;不落库。
+	// kLoad / kLevelChanged 还会先做"已分配 > 总量"的收敛(降级 / 改表后整池清零返还),防止低等级号带着高等级面板。
+	static void Recalculate(entt::entity player, RecalcReason reason = RecalcReason::kLoad);
 
 	// 面板全量(客户端零配表,维度名/说明/上限/剩余点都在这里)
 	static void BuildPanel(entt::entity player, AttributePanelInfo& panel);

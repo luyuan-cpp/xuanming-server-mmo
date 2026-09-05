@@ -119,6 +119,14 @@ func main() {
 		return
 	}
 
+	// Attribute-smoke 模式:单机器人做「角色属性加点」端到端冒烟
+	// (拉面板 → 提级发点 → 自动加点预览 → 确认 → 各类拒绝守卫 → 方案隔离 → 洗点返还)。
+	// 见 attribute_smoke_scenario.go 与 docs/design/player-attribute-allocation.md。
+	if cfg.Mode == "attribute-smoke" {
+		RunAttributeSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {
@@ -709,11 +717,11 @@ func loginAndEnterWithAuth(gc *pkg.GameClient, cfg *config.Config, stats *metric
 //
 // Why the gate TCP still runs ClientPlayerLogin.Login afterwards:
 //
-//   The gate-side Login RPC's job is twofold — it (a) verifies credentials
-//   and (b) binds the {session_id, account} pair via loginsession.Save +
-//   the device-set so that EnterGame can find the account. (a) was already
-//   done over HTTP, so we use auth_type="access_token" here to skip the
-//   provider round-trip; (b) still has to happen on the actual TCP socket.
+//	The gate-side Login RPC's job is twofold — it (a) verifies credentials
+//	and (b) binds the {session_id, account} pair via loginsession.Save +
+//	the device-set so that EnterGame can find the account. (a) was already
+//	done over HTTP, so we use auth_type="access_token" here to skip the
+//	provider round-trip; (b) still has to happen on the actual TCP socket.
 //
 // This is exactly the static-shape we want for production clients: one
 // HTTP round trip moves the OAuth/3rd-party heavy lifting off the gate, and

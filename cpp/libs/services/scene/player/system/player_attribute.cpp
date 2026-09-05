@@ -206,7 +206,14 @@ uint64_t CreateSchemeCostFor(const PlayerAttributeComp& comp) {
 	return static_cast<uint32_t>(comp.schemes_size()) < freeCount ? 0 : rule->create_scheme_cost_gold();
 }
 
-// 方案名校验:非空、不超表定字符数(按 UTF-8 码点数)、不含控制字符
+// 方案名校验:非空、不超表定字符数(按 UTF-8 码点数)、不含控制字符、至少一个可见码点
+// (全空格 / U+200B 零宽空格 / U+FEFF 之类在列表里是一片空白,玩家自己都分不清;与客户端
+// IsNullOrWhiteSpace 校验对齐,评审 2026-09-04)。
+bool IsInvisibleCodePoint(uint32_t cp) {
+	return cp == 0x20 || cp == 0xA0 || (cp >= 0x2000 && cp <= 0x200F) || cp == 0x2028 || cp == 0x2029 ||
+		   cp == 0x202F || cp == 0x205F || cp == 0x2060 || cp == 0x3000 || cp == 0xFEFF;
+}
+
 bool IsSchemeNameValid(const std::string& name) {
 	if (name.empty()) {
 		return false;
@@ -214,15 +221,34 @@ bool IsSchemeNameValid(const std::string& name) {
 	const auto* rule = RuleRow();
 	const uint32_t maxLen = (rule != nullptr && rule->scheme_name_max_len() > 0) ? rule->scheme_name_max_len() : 12;
 	uint32_t codePoints = 0;
-	for (const unsigned char c : name) {
+	bool hasVisible = false;
+	for (size_t i = 0; i < name.size();) {
+		const auto c = static_cast<unsigned char>(name[i]);
 		if (c < 0x20 || c == 0x7f) {
 			return false;
 		}
-		if ((c & 0xC0) != 0x80) {
-			++codePoints;
+		uint32_t cp = c;
+		size_t len = 1;
+		if (c >= 0xF0) { cp = c & 0x07; len = 4; }
+		else if (c >= 0xE0) { cp = c & 0x0F; len = 3; }
+		else if (c >= 0xC0) { cp = c & 0x1F; len = 2; }
+		if (i + len > name.size()) {
+			return false;  // 截断的 UTF-8 序列
+		}
+		for (size_t k = 1; k < len; ++k) {
+			const auto cc = static_cast<unsigned char>(name[i + k]);
+			if ((cc & 0xC0) != 0x80) {
+				return false;
+			}
+			cp = (cp << 6) | (cc & 0x3F);
+		}
+		i += len;
+		++codePoints;
+		if (!IsInvisibleCodePoint(cp)) {
+			hasVisible = true;
 		}
 	}
-	return codePoints <= maxLen;
+	return hasVisible && codePoints <= maxLen;
 }
 
 PlayerAttributeComp& EnsureComp(entt::entity player) {
@@ -272,7 +298,44 @@ void PlayerAttributeSystem::InitializeOnLoad(entt::entity player) {
 	Recalculate(player);
 }
 
-void PlayerAttributeSystem::Recalculate(entt::entity player) {
+namespace {
+
+// 已分配 > 总量的收敛:等级下降(GM / 回档)或改表缩点后,某方案某池的已分配可能超过该池总量。
+// 不收敛的话低等级号会一直带着高等级面板进战斗快照。整池清零返还(不做按比例裁剪:裁剪结果不可预期,
+// 玩家更容易理解"点数退回来了")。
+void ConvergeOverAllocation(entt::entity player, PlayerAttributeComp& comp) {
+	const auto& pools = AttributePoolTableManager::Instance().FindAll().data();
+	for (const auto& pool : pools) {
+		const auto total = TotalPoints(player, comp, pool);
+		for (auto& scheme : *comp.mutable_schemes()) {
+			if (UsedPoints(scheme, pool.id()) <= total) {
+				continue;
+			}
+			for (const auto* dim : AttributeDimensionTableManager::Instance().GetByPoolId(pool.id())) {
+				scheme.mutable_allocated()->erase(dim->id());
+			}
+			LOG_WARN << "[PlayerAttribute] 已分配超总量,整池清零返还: player_id=" << GuidForLog(player)
+					 << " pool=" << pool.id() << " scheme=" << scheme.scheme_id() << " total=" << total;
+		}
+	}
+}
+
+// 当前值随上限变化:按比例保持,活着的至少留 1(往返切方案不能把人切死)
+uint64_t RescaleCurrent(uint64_t current, uint64_t oldMax, uint64_t newMax) {
+	if (current == 0 || newMax == 0) {
+		return 0;
+	}
+	if (oldMax == 0 || oldMax == newMax) {
+		return std::min(current, newMax);
+	}
+	const auto scaled = static_cast<uint64_t>(static_cast<double>(current) * static_cast<double>(newMax) /
+											   static_cast<double>(oldMax));
+	return std::clamp<uint64_t>(scaled, 1, newMax);
+}
+
+}  // namespace
+
+void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason) {
 	if (!tlsEcs.actorRegistry.valid(player)) {
 		return;
 	}
@@ -280,7 +343,10 @@ void PlayerAttributeSystem::Recalculate(entt::entity player) {
 	if (baseAttrs == nullptr) {
 		return;
 	}
-	const auto& comp = EnsureComp(player);
+	auto& comp = EnsureComp(player);
+	if (reason == RecalcReason::kLoad || reason == RecalcReason::kLevelChanged) {
+		ConvergeOverAllocation(player, comp);
+	}
 	const auto* scheme = ActiveScheme(comp);
 	const auto* classRow = ResolveClassRow(player);
 
@@ -323,16 +389,23 @@ void PlayerAttributeSystem::Recalculate(entt::entity player) {
 	// 速度直写基础属性:回合引擎出手序 / 逃跑判定只读 BaseAttributesComp.speed
 	baseAttrs->set_speed(derived.speed());
 
-	// 当前 HP/MP:上限抬高时同步加增量(升级/加点手感);上限降低(切方案/洗点)只夹不补
-	if (baseAttrs->health() > 0 && derived.max_health() > oldMaxHealth && oldMaxHealth > 0) {
-		baseAttrs->set_health(baseAttrs->health() + (derived.max_health() - oldMaxHealth));
-	}
-	if (derived.max_mana() > oldMaxMana && oldMaxMana > 0) {
-		baseAttrs->set_mana(baseAttrs->mana() + (derived.max_mana() - oldMaxMana));
-	}
-	baseAttrs->set_health(std::min(baseAttrs->health(), derived.max_health()));
-	if (derived.max_mana() > 0) {
-		baseAttrs->set_mana(std::min(baseAttrs->mana(), derived.max_mana()));
+	// 当前 HP/MP 跟随上限(见 RecalcReason 注释):
+	//   升级:抬高按绝对增量补(降级只夹);
+	//   加载/加点/切方案/洗点:按比例保持 —— 降后再升往返零净得失,堵住"切方案/洗点当治疗"。
+	if (reason == RecalcReason::kLevelChanged) {
+		if (baseAttrs->health() > 0 && derived.max_health() > oldMaxHealth && oldMaxHealth > 0) {
+			baseAttrs->set_health(baseAttrs->health() + (derived.max_health() - oldMaxHealth));
+		}
+		if (derived.max_mana() > oldMaxMana && oldMaxMana > 0) {
+			baseAttrs->set_mana(baseAttrs->mana() + (derived.max_mana() - oldMaxMana));
+		}
+		baseAttrs->set_health(std::min(baseAttrs->health(), derived.max_health()));
+		if (derived.max_mana() > 0) {
+			baseAttrs->set_mana(std::min(baseAttrs->mana(), derived.max_mana()));
+		}
+	} else {
+		baseAttrs->set_health(RescaleCurrent(baseAttrs->health(), oldMaxHealth, derived.max_health()));
+		baseAttrs->set_mana(RescaleCurrent(baseAttrs->mana(), oldMaxMana, derived.max_mana()));
 	}
 
 	ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kHealth);
@@ -438,7 +511,7 @@ uint32_t PlayerAttributeSystem::Allocate(entt::entity player, uint32_t poolId,
 	for (const auto& [dimensionId, want] : target) {
 		(*scheme->mutable_allocated())[dimensionId] = want;
 	}
-	Recalculate(player);
+	Recalculate(player, RecalcReason::kAllocate);
 	LOG_INFO << "[PlayerAttribute] 加点: player_id=" << GuidForLog(player) << " pool=" << poolId
 			 << " scheme=" << scheme->scheme_id() << " delta=" << delta
 			 << " remaining=" << (remaining - delta);
@@ -475,7 +548,7 @@ uint32_t PlayerAttributeSystem::Reset(entt::entity player, uint32_t poolId) {
 	for (const auto* dim : AttributeDimensionTableManager::Instance().GetByPoolId(poolId)) {
 		scheme->mutable_allocated()->erase(dim->id());
 	}
-	Recalculate(player);
+	Recalculate(player, RecalcReason::kReset);
 	LOG_INFO << "[PlayerAttribute] 洗点: player_id=" << GuidForLog(player) << " pool=" << poolId
 			 << " scheme=" << scheme->scheme_id() << " cost_gold=" << cost;
 	return kSuccess;
@@ -592,17 +665,16 @@ uint32_t PlayerAttributeSystem::SwitchScheme(entt::entity player, uint32_t schem
 	}
 	comp.set_active_scheme_id(schemeId);
 	comp.set_last_switch_time(now);
-	Recalculate(player);
+	Recalculate(player, RecalcReason::kSchemeSwitch);
 	LOG_INFO << "[PlayerAttribute] 切换方案: player_id=" << GuidForLog(player) << " scheme=" << schemeId;
 	return kSuccess;
 }
 
 uint32_t PlayerAttributeSystem::RenameScheme(entt::entity player, uint32_t schemeId, const std::string& name) {
-	if (!tlsEcs.actorRegistry.valid(player)) {
-		return kEntityIsNull;
-	}
-	if (tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player)) {
-		return kInvalidParameter;
+	// 与其它写操作同一道门(跨 zone 冻结 / 战斗在途拒绝):改名虽不影响数值,
+	// 但设计文档 §5 承诺"战斗在途拒绝一切写",不给协议层留特例
+	if (const auto err = CheckWritable(player); err != kSuccess) {
+		return err;
 	}
 	if (!IsSchemeNameValid(name)) {
 		return kAttributeSchemeNameInvalid;

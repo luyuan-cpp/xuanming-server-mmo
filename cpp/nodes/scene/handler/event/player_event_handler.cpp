@@ -46,7 +46,7 @@ void PlayerEventHandler::PlayerUpgradeEventHandler(const PlayerUpgradeEvent& eve
 		return;
 	}
 	// 升级发点:总点数按等级换算,不存量;重算二级属性并推面板(客户端整体覆盖)
-	PlayerAttributeSystem::Recalculate(player);
+	PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kLevelChanged);
 	PlayerAttributeSystem::PushPanel(player);
 ///<<< END WRITING YOUR CODE
 }
