@@ -2540,20 +2540,38 @@ TEST(BagTest, LayerConsistencyHoldsAcrossEveryMutator)
 // 把谓词改成 `return true;` 之后全套用例照样绿 —— 那是同义反复,只能证明"没报错",
 // 证明不了"报得出错"。必须有一条用例让它返回 false。
 //
-// SetCapacityForRestore 是唯一不做容量校验、也不带 AssertLayerConsistency 的入口
-// (marshal 在 ResetFromSnapshot 之后、插入物品之前调它,那一刻背包本来就是空的),
-// 所以它是从外部制造"容量 < 已占槽位"的唯一途径。
+// SetCapacityForRestore 曾是唯一不做容量校验的入口,这条用例原本靠它制造"容量 < 已占槽位"。
+// 后来它被加固成拒绝缩到占用以下(LOG_ERROR 后保持原容量),Bag 的公开 API 再也造不出不一致
+// —— 用例随之红了,而加固本身没有任何用例钉住。现在两件事一起钉:
+//   ① 加固:缩容被拒绝,容量不变、仍一致;
+//   ② 谓词:绕过 Bag、直接在自己注入的布局上缩容(FlatLayout::Resize 不设防),必须报得出来。
+// 布局要在空包时注入(SetLayout 对非空包会拒绝,见 SetLayoutRefusedWhileBagHoldsItems),
+// 注入前留住裸指针,Bag 只是接管所有权、对象仍是同一个。
 TEST(BagTest, LayerConsistencyPredicateActuallyDetectsBreakage)
 {
     Bag bag;
+    auto injected = std::make_unique<FlatLayout>(kDefaultCapacity);
+    FlatLayout* layout = injected.get();
+    bag.SetLayout(std::move(injected));
+
     EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1)));
     ASSERT_TRUE(bag.IsLayerConsistent());
     ASSERT_EQ(1u, bag.GridSlotCount());
 
-    bag.SetCapacityForRestore(0); // 容量 0,却还占着 1 个槽位
+    // ① 从公开 API 缩到占用以下:必须被拒绝,什么都不变
+    bag.SetCapacityForRestore(0);
+    EXPECT_EQ(kDefaultCapacity, bag.Capacity()) << "缩到占用以下必须被拒绝,容量保持原值";
+    EXPECT_EQ(1u, bag.GridSlotCount());
+    EXPECT_TRUE(bag.IsLayerConsistent());
 
+    // ② 在布局层硬造"容量 0,却还占着 1 个槽位":谓词必须真的发现得了
+    layout->Resize(0);
     EXPECT_FALSE(bag.IsLayerConsistent())
         << "谓词必须真的发现得了不一致,否则 AssertLayerConsistency 只是个摆设";
+
+    // 复原,别让一个故意弄坏的对象带着不一致走完析构
+    layout->Resize(kDefaultCapacity);
+    EXPECT_TRUE(bag.IsLayerConsistent());
 }
 
 // 产品决策钉桩:新建角色的人物背包 = 100 格(2026-08-27 用户拍板)。
