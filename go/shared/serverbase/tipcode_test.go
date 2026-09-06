@@ -27,6 +27,13 @@ func TestTipVerdict(t *testing.T) {
 		{"服务端场景状态缺失", uint32(table.SceneError_kEnterSceneYourSceneIsNull), VerdictFault},
 		{"任务组件缺失", uint32(table.MissionError_kPlayerMissionComponentNotFound), VerdictFault},
 		{"背包基础组件缺失", uint32(table.BagError_kBagAddItemHasNotBaseComponent), VerdictFault},
+		// 这条以前不在 serverbase 的手写表里,靠 guild 的本地 map 补。
+		// 分类进 Tip.xlsx 的 fault 列之后,全局判定就能直接认出它。
+		{"公会发号器被 fence", uint32(table.GuildError_kGuildIdGenUnavailable), VerdictFault},
+		// kMatchInternal 刻意**不标**:match 把它同时用作「缺少玩家身份」的参数出口
+		// (一码两用),标了会把参数拒绝刷成故障告警。拆码之前维持业务拒绝,
+		// 见 docs/design/tip-code-axis.md「故障分类」一节。
+		{"匹配内部错误一码两用,拿不准不标", uint32(table.MatchError_kMatchInternal), VerdictBizReject},
 
 		// —— 正常业务拒绝:这些绝不能被判成故障 ——
 		{"背包满不是故障", uint32(table.BagError_kBagAddItemBagFull), VerdictBizReject},
@@ -42,6 +49,8 @@ func TestTipVerdict(t *testing.T) {
 		{"被顶号不是故障", uint32(table.LoginError_kLoginBeKickByAnOtherAccount), VerdictBizReject},
 		{"奖励已领取不是故障", uint32(table.RewardError_kRewardAlreadyClaimed), VerdictBizReject},
 		{"换场进行中不是故障", uint32(table.CrossServerError_kSceneTransferInProgress), VerdictBizReject},
+		{"公会已满不是故障", uint32(table.GuildError_kGuildFull), VerdictBizReject},
+		{"匹配中已在队列不是故障", uint32(table.MatchError_kMatchAlreadyQueued), VerdictBizReject},
 
 		// —— 码表漂移 ——
 		{"高于本段已分配上界(对端码表更新)", uint32(table.CrossServerError_kSceneTransferInProgress) + 1, VerdictUnknown},
@@ -59,19 +68,40 @@ func TestTipVerdict(t *testing.T) {
 }
 
 // TestTipFaultCodesAllInKnownRange 守住"故障码集合"与码表分段的一致性:
-// 如果有人往集合里塞了一个越界的码,它在 TipVerdict 里会先被判成
+// 如果故障表里有一个越界的码,它在 TipVerdict 里会先被判成
 // VerdictUnknown,永远走不到故障分支 —— 这个测试让那种失配立刻暴露。
+//
+// 故障表与段表都是导表器从同一份 Tip.xlsx 生成的,理论上不可能失配;
+// 这里是编译进二进制之后的第二道网(比如有人手改了其中一个产物)。
 func TestTipFaultCodesAllInKnownRange(t *testing.T) {
-	for code := range tipFaultCodes {
+	if len(tip.Faults) == 0 {
+		t.Fatal("tip.Faults 为空:导表器没跑过,或 Tip.xlsx 的 fault 列被清空了")
+	}
+	for _, f := range tip.Faults {
+		code := f.Code
 		if code == 0 || !tip.InAllocatedRange(code) {
-			t.Errorf("故障码 %d 不在任何段的已分配区间内", code)
+			t.Errorf("故障码 %d(%s.%s) 不在任何段的已分配区间内", code, f.Group, f.Name)
 			continue
 		}
 		if TipDomain(code) == "unknown" {
-			t.Errorf("故障码 %d 落在所有已声明分段之外", code)
+			t.Errorf("故障码 %d(%s.%s) 落在所有已声明分段之外", code, f.Group, f.Name)
+		}
+		if !tip.IsFault(code) {
+			t.Errorf("故障码 %d(%s.%s) 在 Faults 里却 IsFault=false:产物自相矛盾", code, f.Group, f.Name)
 		}
 		if got := TipVerdict(code); got != VerdictFault {
-			t.Errorf("故障码 %d 的 TipVerdict = %v, 期望 VerdictFault", code, got)
+			t.Errorf("故障码 %d(%s.%s) 的 TipVerdict = %v, 期望 VerdictFault", code, f.Group, f.Name, got)
+		}
+	}
+}
+
+// TestTipFaultTableIsSorted 守住产物形状:Faults 按码升序且不重复,
+// 这样人读产物、diff 产物时才有稳定顺序。
+func TestTipFaultTableIsSorted(t *testing.T) {
+	for i := 1; i < len(tip.Faults); i++ {
+		if tip.Faults[i].Code <= tip.Faults[i-1].Code {
+			t.Errorf("tip.Faults 未按码严格升序: [%d]=%d 排在 [%d]=%d 之后",
+				i, tip.Faults[i].Code, i-1, tip.Faults[i-1].Code)
 		}
 	}
 }

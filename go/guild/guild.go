@@ -198,8 +198,8 @@ func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor
 		//    响应体的 TipInfoMessage —— gRPC status 恒 OK,go-zero 自带的指标拦截器会把
 		//    每一次「发号器被 fence」都记成一次成功请求。这层把响应体里的码读出来定性,
 		//    故障打日志 + 计数,业务拒绝只计数。它不改响应内容、不吞错,对客户端无感。
-		//    TipClassifier 只补充本域故障属性(发号器被 fence);段归属与已分配范围
-		//    已由 Tip.xlsx 生成的全局段表统一判定。
+		//    段归属、已分配范围、哪个码算故障(发号器被 fence)全部由 Tip.xlsx 生成的
+		//    全局段表 + 故障表统一判定;TipClassifier 只是本服务固定下来的定性接缝。
 		serverbase.UnaryInterceptor(serverbase.Options{
 			TipClassifier: constants.TipClassifier(),
 		}),

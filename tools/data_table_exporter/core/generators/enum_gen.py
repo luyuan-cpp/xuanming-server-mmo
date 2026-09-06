@@ -28,6 +28,23 @@ tip 码是**客户端可见的契约**：客户端拿 ``TipInfoMessage.id`` 去�
 枚举名为什么必须全局唯一:生成的 tip proto **没有 package 声明**，
 protobuf 的 enum 值是 enum 的兄弟而不是子成员，于是所有 tip proto 的
 枚举值处在同一个命名空间里。重名会在 protoc 阶段炸，这里提前拦。
+
+故障分类也在表里（2026-09-05 起）
+----------------------------------
+「这个码算不算服务端内部故障」是码的属性，以前散在
+``go/shared/serverbase/tipcode.go`` 的一张手写 map 和各服务的本地 map 里
+—— 与「段和发号分家」是同一类病：加码的人不知道要去另一个文件登记。
+
+现在 ``Tip.xlsx`` 有一列 ``fault``（按第 1 行表头名定位，不按列位）：
+标 ``1`` 的码是故障，空的不是。产物是 Go 侧的 ``faults.go``（``tip.IsFault``），
+``serverbase.TipVerdict`` 只消费它。
+
+* 表头 ``fault`` **必须存在**：列被删/改名不能静默变成「全部不是故障」，
+  那会让所有 in-band 故障告警一起消失且零报错；
+* 取值是闭集（见 ``_FAULT_TRUE`` / ``_FAULT_FALSE``），其他任何值都中止。
+  误报比漏报更糟——把「背包满」刷成 Error 告警比看不见更坏，所以不猜；
+* fault 不进 state：它不影响发号，翻转一个码的分类不需要任何迁移；
+* 墓碑（xlsx 已删、state 仍留号的名字）不进故障表：它已没有定义。
 """
 
 from __future__ import annotations
@@ -158,6 +175,7 @@ def generate_tip_enums(cfg: ExporterConfig) -> None:
 
     _write_tip_state(id_file, groups, state)
     _generate_tip_segments(cfg, env, groups)
+    _generate_tip_faults(cfg, env, groups)
     _generate_tip_text(cfg, groups)
 
 
@@ -272,7 +290,7 @@ def _parse_group_header(raw: str) -> tuple[str, int, int]:
 
 
 def _read_tip_groups(file_path: Path) -> dict[str, dict]:
-    """读 Tip.xlsx。A 列码名(组头以 // 开头)，B 列中文文案。"""
+    """读 Tip.xlsx。A 列码名(组头以 // 开头)，B 列中文文案，``fault`` 列按表头名定位。"""
     # read_only 的 workbook 在 Windows 上会一直占着文件句柄,不 close 就锁住
     # Tip.xlsx(策划下一步想打开都打不开)。原实现漏了这一步。
     wb = load_workbook(file_path, read_only=True)
@@ -282,19 +300,86 @@ def _read_tip_groups(file_path: Path) -> dict[str, dict]:
         wb.close()
 
 
+# Tip.xlsx 的第 1 行是表头行(name / commen / fault)。
+_TIP_HEADER_ROW = 1
+# 码定义从第 18 行开始;第 2~17 行是类型/owner 等元数据与留白。
+_TIP_DATA_BEGIN_ROW = 18
+
+# fault 列的取值闭集。故意不接受自由文本:一个写着「否」「不算」「TODO」的单元格
+# 若被当成 truthy,就会把一个普通业务拒绝刷成 Error 告警 —— 那比漏报更糟。
+_FAULT_TRUE = frozenset({"1", "true", "yes", "是"})
+_FAULT_FALSE = frozenset({"", "0", "false", "no", "否"})
+
+
+def _locate_fault_column(ws) -> int:
+    """按第 1 行表头名找 ``fault`` 列，返回 0-based 列下标。
+
+    按名不按位:策划在中间插一列不该悄悄改变 fault 列的含义。
+    找不到即中止 —— 列被删掉/改名不能静默退化成「没有任何码是故障」。
+    """
+    header = ws[_TIP_HEADER_ROW]
+    hits = [
+        idx for idx, cell in enumerate(header)
+        if cell.value is not None and str(cell.value).strip().lower() == "fault"
+    ]
+    if len(hits) > 1:
+        cols = ", ".join(get_column_letter(i + 1) for i in hits)
+        raise TipAxisError(f"Tip.xlsx 第 {_TIP_HEADER_ROW} 行有多个 fault 表头: {cols}")
+    if not hits:
+        raise TipAxisError(
+            "Tip.xlsx 缺少 fault 列(第 1 行没有名为 fault 的表头)。\n"
+            "  fault 列声明「这个码算不算服务端内部故障」,是 serverbase.TipVerdict 的唯一依据;\n"
+            "  列缺失会让所有 in-band 故障告警一起消失,所以这里中止而不是当成全不是故障。\n"
+            "  修法:在第 1 行加一个表头 fault(第 2 行类型 bool、第 4 行 owner server),\n"
+            "  故障码那一行填 1,其余留空。判定原则见 docs/design/tip-code-axis.md。"
+        )
+    return hits[0]
+
+
+def _parse_fault_cell(value, cell_ref: str) -> bool:
+    """把 fault 单元格解析成布尔。openpyxl 会按单元格格式给 bool / int / float / str。"""
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, float) and value.is_integer():
+        value = int(value)
+    s = str(value).strip().lower()
+    if s in _FAULT_TRUE:
+        return True
+    if s in _FAULT_FALSE:
+        return False
+    raise TipAxisError(
+        f"Tip.xlsx!{cell_ref} 的 fault 取值 {value!r} 不可识别。\n"
+        f"  只接受 {sorted(_FAULT_TRUE)} 表示故障、{sorted(v for v in _FAULT_FALSE if v)} 或留空表示不是。\n"
+        f"  不猜测含义:误把业务拒绝判成故障会刷出满屏假告警。"
+    )
+
+
 def _parse_tip_sheet(ws) -> dict[str, dict]:
     groups: dict[str, dict] = {}
     current = None
+    fault_col = _locate_fault_column(ws)
+    fault_letter = get_column_letter(fault_col + 1)
 
-    for row_idx in range(18, (ws.max_row or 18) + 1):
+    for row_idx in range(_TIP_DATA_BEGIN_ROW, (ws.max_row or _TIP_DATA_BEGIN_ROW) + 1):
         cells = ws[row_idx]
         val = cells[0].value
-        if val is None:
+        fault_raw = cells[fault_col].value if fault_col < len(cells) else None
+        if val is None or not str(val).strip():
+            if fault_raw is not None and str(fault_raw).strip():
+                raise TipAxisError(
+                    f"Tip.xlsx!{fault_letter}{row_idx} 标了 fault,但这一行没有码名。"
+                )
             continue
         s = str(val).strip()
-        if not s:
-            continue
         if s.startswith("//"):
+            # 组头 / 注释行都不是码,fault 单元格必须为空 —— 否则多半是行错位,
+            # 标记本想落在相邻的某个码上。不猜,直接报。
+            if fault_raw is not None and str(fault_raw).strip():
+                raise TipAxisError(
+                    f"Tip.xlsx!{fault_letter}{row_idx} 标了 fault,但这一行是组头/注释,不是码。"
+                )
             # 组头 vs 注释靠「// 后面有没有空格」区分:
             #   //common_error base=1000 width=1000   ← 组头(紧贴)
             #   // 这是一句说明                        ← 注释(有空格)
@@ -307,11 +392,17 @@ def _parse_tip_sheet(ws) -> dict[str, dict]:
             name, base, width = _parse_group_header(s)
             if name in groups:
                 raise TipAxisError(f"tip 组 '{name}' 在 Tip.xlsx 里出现了两次")
-            groups[name] = {"base": base, "width": width, "entries": [], "ids": {}}
+            groups[name] = {"base": base, "width": width, "entries": [], "ids": {}, "faults": set()}
             current = name
         elif current:
             text = cells[1].value if len(cells) > 1 else None
             groups[current]["entries"].append((s, "" if text is None else str(text).strip()))
+            if _parse_fault_cell(fault_raw, f"{fault_letter}{row_idx}"):
+                groups[current]["faults"].add(s)
+        else:
+            raise TipAxisError(
+                f"Tip.xlsx!A{row_idx} 的码 '{s}' 出现在第一个组头之前,不属于任何组。"
+            )
 
     if not groups:
         raise TipAxisError("Tip.xlsx 里没有解析到任何组")
@@ -559,6 +650,39 @@ def _generate_tip_segments(cfg: ExporterConfig, env: Environment, groups: dict[s
     tpl = env.get_template("tip_segments.go.j2")
     write_file(out_dir / "segments.go", tpl.render(rows=rows))
     logger.info("Generated tip segment table: %d segments", len(rows))
+
+
+def _generate_tip_faults(cfg: ExporterConfig, env: Environment, groups: dict[str, dict]) -> None:
+    """生成 Go 侧故障码表(``tip.Faults`` / ``tip.IsFault``)。
+
+    取代 go/shared/serverbase/tipcode.go 里那张手写的 tipFaultCodes 与
+    guild 的本地 faultCodes —— 「码算不算故障」是码的属性,和码定义放在一起
+    (Tip.xlsx 的 fault 列),这里只是同一份事实的生成产物。
+
+    只收当前活动的 entry:墓碑虽然占着号,但已经没有定义,也就没有分类。
+    """
+    if not cfg.go.enabled:
+        return
+    rows = []
+    for name, g in groups.items():
+        for enum_name, _text in g["entries"]:
+            if enum_name in g["faults"]:
+                rows.append({"code": g["ids"][enum_name], "group": name, "name": enum_name})
+    rows.sort(key=lambda r: r["code"])
+    out_dir = Path(cfg.go.code_dir).parent / "tip"
+    ensure_dirs(out_dir)
+    tpl = env.get_template("tip_faults.go.j2")
+    content = tpl.render(rows=rows)
+    # Jinja 默认吃掉模板末尾那一个换行,而 gofmt 要求文件以换行结尾;
+    # 补回去,让产物可以直接过 gofmt -l。
+    if not content.endswith("\n"):
+        content += "\n"
+    write_file(out_dir / "faults.go", content)
+    logger.info("Generated tip fault table: %d fault code(s)", len(rows))
+    if not rows:
+        # 合法但极可疑:一整张码表里没有一个服务端故障,多半是列被清空了。
+        # 表头还在所以不中止,但要让跑导表的人看见。
+        logger.warning("Tip.xlsx 的 fault 列没有标出任何故障码,serverbase 将不会判出任何 in-band 故障")
 
 
 def _generate_tip_text(cfg: ExporterConfig, groups: dict[str, dict]) -> None:

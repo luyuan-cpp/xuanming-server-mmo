@@ -56,7 +56,8 @@ func counterValue(t *testing.T, name string, labels map[string]string) float64 {
 // 那正是撞车的实际代价:监控与告警读到的语义是错的。
 //
 // 修复后 ErrGuildFull 由 Tip.xlsx 发到 guild 段,全局段表认领其域；
-// constants.TipClassifier() 只补充公会域的故障属性。
+// 哪个码算故障同样来自 Tip.xlsx 的 fault 列(生成到 tip.Faults),
+// constants.TipClassifier() 不再附加任何本地判定。
 func TestInbandInterceptorClassifiesGuildRejection(t *testing.T) {
 	const method = "GuildService/JoinGuild"
 	faultLabels := map[string]string{"method": method, "source": "tip_info"}

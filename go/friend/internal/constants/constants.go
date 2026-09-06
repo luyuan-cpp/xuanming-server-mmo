@@ -39,7 +39,8 @@ const (
 //
 // 好友段进配表之后,serverbase.TipVerdict 已经认得这些码(不再判 VerdictUnknown),
 // 且本域没有故障码,所以这里直接交回全局判定。将来若真加了故障码,
-// 照 guild 的形状加一个 faultCodes map 并在此先查一次即可。
+// 在 Tip.xlsx 那一行的 fault 列标 1 即可(生成到 tip.Faults,全局判定直接认得),
+// **不要**在这里包一层本地 map —— 那就是把「码的属性和码定义分家」重新制造出来。
 func TipClassifier() serverbase.Classifier {
 	return serverbase.TipVerdict
 }

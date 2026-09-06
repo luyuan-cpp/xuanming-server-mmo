@@ -67,86 +67,26 @@ func TipDomain(code uint32) string {
 	return "unknown"
 }
 
-// tipFaultCodes 是 tip 码表里判定为"服务端内部故障"的码。
+// 「哪些 tip 码算服务端内部故障」也已改为**生成产物**:shared/generated/tip 的
+// Faults / IsFault,源头是 data/tip/Tip.xlsx 的 fault 列(标 1 的码是故障)。
 //
-// 判定原则(照着这条线加码,别凭感觉):
+// 这里以前是一张手写的 tipFaultCodes(33 条),guild 还另有一张本地 faultCodes ——
+// 「码算不算故障」是码的属性,却和码定义分家,加码的人不知道要去另一个文件登记,
+// 与「段和发号分家」是同一类病。
+// 现在分类和定义在 Tip.xlsx 同一行上,本文件只消费,不再维护副本。
+//
+// 判定原则(改 fault 列时照着这条线,别凭感觉;完整清单与「刻意不算故障」的
+// 码见 docs/design/tip-code-axis.md「故障分类」一节):
 //
 //	是故障 —— 码明确指向服务端自身或其依赖出错:存储/序列化失败、
 //	          状态机走死、超时、服务端会话/组件/场景状态缺失、无可用节点。
 //	不是故障 —— 客户端传错参数、协议层拒绝、以及一切游戏规则拒绝
 //	          (满、重复、冷却、权限、已领取)。容量满属于规则拒绝,不是故障。
 //
-// 拿不准的一律**不放进来**:漏报只是维持现状(本来就看不见),
+// 拿不准的一律**不标**:漏报只是维持现状(本来就看不见),
 // 误报会把"背包满"刷成 Error 告警,那比没有更糟。
-// 各服务如需微调,自己包一层 Classifier 即可,不必改本表。
-var tipFaultCodes = map[uint32]struct{}{
-	// ---- common 段 ----
-	// 配置表数据本身坏了 —— 服务端加载/生成侧的问题。
-	uint32(table.CommonError_kInvalidTableData): {},
-	// 依赖服务不可用。
-	uint32(table.CommonError_kServiceUnavailable): {},
-	// 服务端手上的实体是空的 —— 状态缺失。
-	uint32(table.CommonError_kEntityIsNull): {},
-	// 服务端自己越界。
-	uint32(table.CommonError_kIndexOutOfRange): {},
-	// 实体存在但无效 —— 同样是服务端状态问题。
-	uint32(table.CommonError_kThisEntityIsInvalid): {},
-	// 会话不在了:玩家还在发请求,服务端却查不到会话。
-	uint32(table.CommonError_kSessionNotFound):         {},
-	uint32(table.CommonError_kPlayerNotFoundInSession): {},
-	// 服务端产出的响应连自己都解不开。
-	uint32(table.CommonError_kResponseMessageParseError): {},
-	// 节点注册失败 —— 直接影响服务发现。
-	uint32(table.CommonError_kFailedToRegisterTheNode): {},
-	//
-	// 刻意**不算**故障的 common 码,记在这里免得下个人反复纠结:
-	//   kInvalidTableId / kInvalidParameter      请求参数不合法
-	//   kFeatureUnavailable                     功能未开放,产品行为
-	//   kRateLimitExceeded                      限流,是保护生效不是故障
-	//   kMessageSizeExceeded / kMessageIdNotFound /
-	//   kRequestMessageParseError / kArraySizeTooLargeInMessage /
-	//   kNegativeValueInMessage                 全是客户端上行侧的问题
-
-	// ---- login 段 ----
-	uint32(table.LoginError_kLoginUnknownError):          {}, // 兜底未知错误
-	uint32(table.LoginError_kLoginSessionIdNotFound):     {}, // 会话状态缺失
-	uint32(table.LoginError_kLoginSessionNotFound):       {},
-	uint32(table.LoginError_kLoginFsmFailed):             {}, // 登录状态机走死
-	uint32(table.LoginError_kLoginFSMLoadFailed):         {},
-	uint32(table.LoginError_kLoginFSMEventFailed):        {},
-	uint32(table.LoginError_kLoginFsmInvalidEvent):       {},
-	uint32(table.LoginError_kLoginDataSerializeFailed):   {}, // 序列化/反序列化
-	uint32(table.LoginError_kLoginDataParseFailed):       {},
-	uint32(table.LoginError_kLoginRedisError):            {}, // 存储依赖
-	uint32(table.LoginError_kLoginRedisSetFailed):        {},
-	uint32(table.LoginError_kLoginAccountDataLoadFaile):  {}, // 拼写错的历史码,数值真实存在
-	uint32(table.LoginError_kLoginAccountDataLoadFailed): {},
-	uint32(table.LoginError_kLoginTimeout):               {}, // 超时
-	//
-	// 不算故障:kLoginAccountNotFound / kLoginAccountPlayerFull /
-	// kLoginInProgress / kLoginEnteringGame / kLoginPlaying /
-	// kTooManyDevices / kLoginBeKickByAnOtherAccount /
-	// kLoginSessionDisconnect —— 都是正常的登录态与业务规则。
-
-	// ---- scene 段 ----
-	uint32(table.SceneError_kEnterNodeUnavailable):                  {}, // 没有可用场景节点
-	uint32(table.SceneError_kEnterSceneGsInfoNull):                  {}, // 服务端 GS 信息缺失
-	uint32(table.SceneError_kEnterSceneYourSceneIsNull):             {}, // 服务端场景状态缺失
-	uint32(table.SceneError_kChangeScenePlayerQueueNotFound):        {}, // 换场队列状态缺失
-	uint32(table.SceneError_kChangeScenePlayerQueueComponentGsNull): {},
-	uint32(table.SceneError_kChangeScenePlayerQueueComponentEmpty):  {},
-	uint32(table.SceneError_kEnterSceneFailed):                      {}, // 泛化的进场失败
-	//
-	// 不算故障:kEnterSceneSceneFull / kEnterSceneMainFull /
-	// kEnterSceneGsFull / kChangeScenePlayerQueueFull 都是容量拒绝;
-	// kEnterSceneYouInCurrentScene / kEnterSceneChangingScene 是状态拒绝;
-	// kInvalidEnterSceneParameters / kEnterSceneParamError 是参数问题。
-
-	// ---- 其余域:几乎全是游戏规则拒绝,只挑出"服务端组件缺失"这一类 ----
-	uint32(table.MissionError_kPlayerMissionComponentNotFound): {},
-	uint32(table.BagError_kBagAddItemHasNotBaseComponent):      {},
-	uint32(table.EntityError_kEntityTransformNotFound):         {},
-}
+// 不要再在服务里包一层本地 map 去"微调"——那就是把分家重新制造出来;
+// 要改分类,改表。
 
 // TipVerdict 按 tip 码表给一个码定性。
 //
@@ -163,8 +103,7 @@ func TipVerdict(code uint32) Verdict {
 		// —— 后者说明对端跑的是更新的码表而本进程没跟上。两种都单独计数,
 		// 免得新码被默默归进「业务拒绝」从此隐身。
 		return VerdictUnknown
-	}
-	if _, ok := tipFaultCodes[code]; ok {
+	case tip.IsFault(code):
 		return VerdictFault
 	}
 	return VerdictBizReject

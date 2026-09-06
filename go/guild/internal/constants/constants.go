@@ -47,29 +47,15 @@ const (
 	DefaultInitLevel  uint32 = 1
 )
 
-// faultCodes 是本段里判定为「服务端内部故障」的码 —— 需要打 Error 日志 + 配告警。
-//
-// 判定原则照抄 shared/serverbase 的那条线:码明确指向服务端自身或其依赖出错的才算
-// 故障;一切游戏规则拒绝(已在公会、公会满、不是会长、没权限、未上榜)都不算。
-// 拿不准的一律不放进来 —— 漏报只是维持现状,误报会把「公会满」刷成告警。
-var faultCodes = map[uint32]struct{}{
-	// 发号器被 fence:本进程已不是该 worker id 的合法持有者,建帮整体失败。
-	// 这是服务端自身状态问题,且随后进程会主动退出,必须能被看见。
-	ErrIDGenUnavailable: {},
-}
-
 // TipClassifier 返回本服务的 in-band 业务码定性函数,供 serverbase.UnaryInterceptor 使用。
 //
-// 公会段进配表之后,serverbase.TipVerdict 已经认得这些码(不再判 VerdictUnknown),
-// 所以这里只剩一件事:声明本域里哪些码算「服务端故障」。
-// 这是**码的属性**,理应和码定义在一起(Tip.xlsx 加一列 fault 就能收口),
-// 目前仍散在各服务 —— 与刚修掉的「段和发号分家」是同一类病,见
-// docs/design/tip-code-axis.md 的「已知残留」。
+// 公会段进配表之后,serverbase.TipVerdict 已经认得这些码(不再判 VerdictUnknown);
+// 「哪个码算服务端故障」也进了表 —— Tip.xlsx 的 fault 列,ErrIDGenUnavailable
+// (发号器被 fence:本进程已不是该 worker id 的合法持有者,随后会主动退出,必须能被看见)
+// 就是在那里标的 1。以前这里有一张本地 faultCodes map 专门补这一条,
+// 那正是「码的属性和码定义分家」的病灶,2026-09-05 随 fault 列一起删掉了。
+//
+// 所以这里直接交回全局判定。**不要再往这里加本地 map** —— 要改某个码的分类,改表。
 func TipClassifier() serverbase.Classifier {
-	return func(code uint32) serverbase.Verdict {
-		if _, ok := faultCodes[code]; ok {
-			return serverbase.VerdictFault
-		}
-		return serverbase.TipVerdict(code)
-	}
+	return serverbase.TipVerdict
 }

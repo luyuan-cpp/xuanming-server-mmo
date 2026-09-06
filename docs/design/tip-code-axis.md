@@ -1,7 +1,8 @@
 # tip 码轴：段是发号器的输入
 
-**状态**：已完成。Codex 完成 35.1 全量导表 + 三语言编译；本机完成二次复核并修掉 4 项遗留，导表器 73 passed、Go 全绿。证据见 §6 与 §6.2
-**日期**：2026-09-03
+**状态**：已完成。Codex 完成 35.1 全量导表 + 三语言编译；本机完成二次复核并修掉 4 项遗留，导表器 73 passed、Go 全绿。证据见 §6 与 §6.2。
+2026-09-05 追加：故障分类收口到 `Tip.xlsx` 的 `fault` 列（§2.9），导表器 129 passed、Go 全绿，证据见 §6.3
+**日期**：2026-09-03（§2.9 / §6.3 为 2026-09-05）
 **影响面**：`data/tip/Tip.xlsx`、4 张内嵌 tip ID 的业务表、导表器、三语言生成产物、`go/shared/serverbase`、guild / friend / match 的错误码常量
 
 ---
@@ -139,6 +140,55 @@ ErrAlreadyInGuild = uint32(table.GuildError_kGuildAlreadyInGuild)
 引用。CI 还会重建并比较全部表的 JSON、PB 与 manifest，防止只改 xlsx 却漏交
 运行时数据产物，或者从一个合法码改到另一个合法码后仍部署旧 PB。
 
+### 2.9 故障分类也在表里（2026-09-05）
+
+「这个码算不算服务端内部故障」是码的属性。它决定 `serverbase.UnaryInterceptor` 对一个 in-band 失败是**打 Error 日志 + 计数 + 告警**（故障），还是**只计数**（业务拒绝）。此前它散在两处手写：`serverbase/tipcode.go` 的 `tipFaultCodes`（33 条）与 guild 的本地 `faultCodes`（1 条）——加码的人不知道要去另一个文件登记，与 §1 的「段和发号分家」是同一类病。（match 的 `kMatchInternal` 两张表都没登记；本次复核后**刻意仍不标**，原因见下面的清单。）
+
+现在 `Tip.xlsx` 多一列 **`fault`**：
+
+```
+name                      commen          fault
+//common_error base=1000 width=1000
+Success                   成功
+ServiceUnavailable        服务不可用      1
+```
+
+- **按第 1 行表头名定位，不按列位**。策划在中间插列不会改变它的含义。
+- **表头必须存在**。列被删/改名时导表器中止，而不是静默变成「没有任何码是故障」——那会让所有 in-band 故障告警一起消失且零报错。
+- **取值是闭集**：`1 / true / yes / 是` 为故障，空 / `0 / false / no / 否` 为不是，其他任何值（`TODO`、`故障`、`2`）都点名单元格中止。不猜：把一个业务拒绝误判成故障会刷出满屏假告警，比漏报更糟。
+- 组头行 / 注释行 / 没有码名的行标了 fault 也中止——多半是行错位。
+- **不进 state**：fault 是分类不是号，翻转一个码的分类不需要任何迁移。
+- **墓碑不进故障表**：已删行只占号，没有定义也就没有分类。
+
+产物是 Go 侧的 `shared/generated/tip/faults.go`（`tip.Faults` 切片 + `tip.IsFault`），与段表同一目录同一部署链。`serverbase.TipVerdict` 的顺序是：`0/kSuccess` → OK；`!InAllocatedRange` → Unknown；`IsFault` → Fault；否则 BizReject。手写的 `tipFaultCodes` 与 guild 的 `faultCodes` 已删除；guild / friend 的 `TipClassifier()` 都直接返回 `serverbase.TipVerdict`，只是本服务固定下来的注入接缝，**不要再在服务里包一层本地 map**——那就是把分家重新制造出来。要改分类，改表。
+
+只生成 Go 产物：只有 Go 的 `serverbase` 按故障 / 拒绝定性；C++ 的 `PlayerTipSystem` 只把 tipId 发给客户端，`tip_text.json` 是客户端契约，都不需要这个属性。所以本次**没有**动三语言 proto 产物。
+
+**判定原则**（改 `fault` 列时照着这条线，别凭感觉）：
+
+| | 例 |
+|---|---|
+| **是故障**：码明确指向服务端自身或其依赖出错 | 存储 / 序列化失败、状态机走死、超时、服务端会话 / 组件 / 场景状态缺失、无可用节点、发号器被 fence |
+| **不是故障**：客户端传错参数、协议层拒绝、一切游戏规则拒绝 | 满、重复、冷却、权限、已领取、限流、功能未开放。**容量满是规则拒绝** |
+
+拿不准的一律**不标**。当前 34 个故障码（= 原 `tipFaultCodes` 33 + guild 本地 map 1，逐符号对照过，无漏迁无误标），按组：
+
+| 组 | 故障码 |
+|---|---|
+| common（9） | InvalidTableData, ServiceUnavailable, EntityIsNull, IndexOutOfRange, ThisEntityIsInvalid, SessionNotFound, PlayerNotFoundInSession, ResponseMessageParseError, FailedToRegisterTheNode |
+| login（14） | LoginUnknownError, LoginSessionIdNotFound, LoginSessionNotFound, LoginFsmFailed, LoginFSMLoadFailed, LoginFSMEventFailed, LoginFsmInvalidEvent, LoginDataSerializeFailed, LoginDataParseFailed, LoginRedisError, LoginRedisSetFailed, LoginAccountDataLoadFaile（拼写错的历史码，数值真实存在）, LoginAccountDataLoadFailed, LoginTimeout |
+| scene（7） | EnterNodeUnavailable, EnterSceneGsInfoNull, EnterSceneYourSceneIsNull, ChangeScenePlayerQueueNotFound, ChangeScenePlayerQueueComponentGsNull, ChangeScenePlayerQueueComponentEmpty, EnterSceneFailed |
+| mission / bag / entity（各 1） | PlayerMissionComponentNotFound, BagAddItemHasNotBaseComponent, EntityTransformNotFound |
+| guild（1） | GuildIdGenUnavailable（原 guild 本地 map 迁入） |
+
+**刻意不算故障**的，记在这里免得下个人反复纠结：
+
+- common：`InvalidTableId / InvalidParameter`（请求参数不合法）、`FeatureUnavailable`（功能未开放，产品行为）、`RateLimitExceeded`（限流是保护生效）、`MessageSizeExceeded / MessageIdNotFound / RequestMessageParseError / ArraySizeTooLargeInMessage / NegativeValueInMessage`（全是客户端上行侧的问题）
+- login：`LoginAccountNotFound / LoginAccountPlayerFull / LoginInProgress / LoginEnteringGame / LoginPlaying / TooManyDevices / LoginBeKickByAnOtherAccount / LoginSessionDisconnect`（正常的登录态与业务规则）
+- scene：`EnterSceneSceneFull / EnterSceneMainFull / EnterSceneGsFull / ChangeScenePlayerQueueFull`（容量拒绝）、`EnterSceneYouInCurrentScene / EnterSceneChangingScene`（状态拒绝）、`InvalidEnterSceneParameters / EnterSceneParamError`（参数问题）
+- attribute（25000 段，2026-09-05 由他人新增的 15 个码）：全部按名字是规则拒绝（池未解锁、点数不足、冷却、金币不足……）；`AttributePoolNotFound / DimensionNotFound / SchemeNotFound` 既可能是配置缺失也可能是客户端传错 id，拿不准，不标
+- match：`MatchInternal` **拿不准，不标**。它的注释说是 Redis / snowflake 内部错误，但 match 同时把它当「缺少玩家身份」的参数校验出口（`joinqueuelogic.go` 的 `playerId == 0` 分支，`challengelogic.go` / `watchbattlelogic.go` 同形），一码两用；标了会把参数拒绝刷成故障告警。要标，先拆成两个码。另外两件事接手人必须知道：**match 至今没挂 `serverbase.UnaryInterceptor`**（`match_service.go` 只挂了 session 与 grpcstats 两层），所以 match 的任何 tip 码目前都没有运行时的故障定性消费者，标不标都不会产生一条 `rpc_inband_fault`；而且 `JoinQueueResponse` 同时带 `error_code` 与 `TipInfoMessage`，拦截器对非 0 `error_code` 走 `ErrorCodeClassifier`（见 `bizcode.go`），接拦截器时要把 `ErrorCodeClassifier` 也指到 tip 轴上，否则 fault 列对 JoinQueue 仍不生效
+
 ---
 
 ## 3. 一次性重排
@@ -174,9 +224,9 @@ ErrAlreadyInGuild = uint32(table.GuildError_kGuildAlreadyInGuild)
 
 ## 4. 怎么加一个新码
 
-1. 在 `data/tip/Tip.xlsx` 的对应 `//xxx_error` 组下加一行：A 列码名（**全局唯一**，建议带域前缀）、B 列中文文案
+1. 在 `data/tip/Tip.xlsx` 的对应 `//xxx_error` 组下加一行：A 列码名（**全局唯一**，建议带域前缀）、B 列中文文案；若它是**服务端内部故障**（依赖挂了 / 状态缺失 / 序列化 / 超时，见 §2.9 的判定原则），`fault` 列填 `1`，否则留空
 2. 跑导表器
-3. 在服务的 `constants.go` 里加一行 `ErrX = uint32(table.XxxError_kXxxX)`
+3. 在服务的 `constants.go` 里加一行 `ErrX = uint32(table.XxxError_kXxxX)`。**不要**在服务里再写 fault map——分类由 `fault` 列生成到 `tip.Faults`，`serverbase.TipVerdict` 直接认得
 
 **不要手写数字。** 三个服务的常量测试会逐个检查 `Err*` 右值，只接受
 `uint32(table.<本域>Error_k...)`，并要求扫描到的常量集合与测试清单完全一致；
@@ -190,7 +240,7 @@ ErrAlreadyInGuild = uint32(table.GuildError_kGuildAlreadyInGuild)
 
 按「不假装做完」的口径列出来：
 
-1. **故障分类还是散的。**「这个码算不算服务端故障」是码的属性，现在分散在 `serverbase.tipFaultCodes`（30+ 条手写）与各服务的本地 map 里——与刚修掉的「段和发号分家」是**同一类病**。标准解法是 Tip.xlsx 加一列 `fault`，让它和码定义在一起。本次没做，因为它不属于「防重叠」这个题目，且会再动一次三语言产物。
+1. ~~**故障分类还是散的。**~~ **已收口（2026-09-05，见 §2.9）**：`Tip.xlsx` 加了 `fault` 列，`serverbase.tipFaultCodes`（33 条手写）与 guild 本地 map 删除，改消费生成产物 `tip.Faults`（34 条 = 33 + 1，迁移保真）。`kMatchInternal` 一码两用，刻意不标（§2.9）。只动了 Go 产物，没动三语言 proto。**仍散着的是消费侧**：match 没挂 in-band 拦截器，它的码没有运行时定性消费者（§2.9 末条）。
 2. **79 个码没有中文文案**（165 个里有 86 个有）。导表时会告警列出。这是策划的活——直接打开 `Tip.xlsx` 填 B 列的空格即可，代码侧通道已经通了。按组分布：
 
    | 组 | 缺 / 共 | 例 |
@@ -315,3 +365,21 @@ to_float/to_double` 五列 owner 为空，导表器会警告「整列丢弃」�
 关于「工作区不干净（484 项）」：其中绝大多数是**并发编辑者**的改动（`go/proto/**` 等在本次工作开始前 14 小时就已存在）。
 本次改造开工前逐目录确认过要动的路径是干净的。「新增产物与 workflow 未跟踪」是预期状态——
 按仓库规则 `git add` / `git commit` 须由人明确发话。
+
+### 6.3 故障分类收口（本机，2026-09-05）
+
+工具链：隔离 venv（pytest / openpyxl / jinja2 / PyYAML / protobuf 7.36）、go1.26.5；**本机仍无 protoc 35.1**。
+
+**通过项**
+
+- 导表器：`pytest tests/ -q` → **129 passed**（含本轮新增的「红线 7：故障分类在表里」用例：表头按名定位、表头缺失中止、闭集取值、非法值点名单元格、组头/注释行标 fault 中止、墓碑不进表、fault 不进 state、空故障表仍是合法 Go、产物末尾有换行）。
+- 四视角独立评审（导表器 / Go / CI 与文档 / 分类数据保真，每条发现 2 个反驳者复核，20 个 agent）：分类数据逐符号对照**无漏迁无误标**；确认 4 条 P2 全是文案与交接一致性（match 没挂拦截器却把 `MatchInternal` 写成「已收口」、`Options.TipClassifier` 注释仍邀请按服务微调、handoff 并发编辑者清单不全、handoff 仍写 73 passed），已全部修掉；驳回 4 条（非码行填 `0` 也中止是 fail-closed 而非缺陷；空故障表的 `[]Fault{\n}` 形状顺手改成 `[]Fault{}`；CI 对 `generated/code/go` 的 `git status` 因 `.gitignore` 永远安静、闸门是 `cmp`，已把死条目删掉并注明）。评审后把 `MatchInternal` 的标记撤回（一码两用）。
+- 生成：用纯 Python 路径跑 `generate_tip_enums(load_config())`（不需要 protoc）：17 段、**34 个故障码**；`state` / 17 份 tip proto / `tip_text.json` / `segments.go` **零变化**；`faults.go` 生成后手动部署到 `go/shared/generated/tip/`，与 `generated/code/go/generated/tip/` 两份 `cmp` 一致；`gofmt -l` 干净（`faultSet` 改为从 `Faults` 派生，是因为 4 位码与 5 位码混排时 gofmt 会重排 map 字面量对齐；Jinja 吃掉的末尾换行由生成器补回）。
+- Go：`go/shared` build + vet + `serverbase` 测试；`guild` build + constants + server（in-band 观测）测试；`friend` build + constants + server 测试；`match` build + constants 测试，全部通过（`-count=1` 复跑一次）。
+
+**顺带修的既有红**：`go/match/internal/constants/errors_test.go` 的 `tipCodes` 清单缺 `ErrNotInScene`（`71edf77f7` 合并上游时 `errors.go` 加了码但清单没跟上），HEAD 上 `TestNoHandWrittenTipCodes` 就红。补了一行。
+
+**仍未覆盖**
+
+- 没跑全量导表（同 §6.2 的原因）。本改动对全量导表的影响只有 `_generate_tip_faults` 多写一个 Go 文件；`_deploy` 会把 `generated/code/go/generated` 整目录同步到 `go/shared/generated`，`faults.go` 会自然到位。
+- 没跑 C++ / Java 构建：本改动没碰它们的任何输入（proto 产物零变化）。
