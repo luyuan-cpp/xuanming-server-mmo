@@ -4021,6 +4021,13 @@ fence 顺序用例只覆盖了不可叠加+ItemCountMap;准入轴全是 `AcceptA
   (文档 §5)。烘焙器此前从未编过,§6 列出已按 ue5navmesh 头文件核对的 API 面。
 - **边界**:出生点仍是常量(所有场景共用天墉城一张图),分场景时迁 BaseScene 表列;`SceneNavManager` thread_local 边界不变;
   客户端无预测回滚。
+- **审查(5 视角 × 3 反驳者的多智能体对抗审查)确认并修掉的**:烘焙器 `ExtractWalkMask` 锚在第一次出现的 `WalkMaskBase64`
+  (是 LoadMask 里的用法,不是常量)→ base64 永远为空(blocker);CMake 缺 `UNICODE/_TCHAR_DEFINED` → `CoreMinimal.h` 的
+  `using TCHAR = wchar_t` 与 winnt.h 冲突 C2371(blocker);静止时 <1.5m 的 ack 客户端不应用,冲墙验收会误判(major,改为
+  静止时应用任何 ack = `reconcile settle`)。另处理:`rcFilterLedgeSpans` 使网格边界内缩 0.25m → `kMoveCorrectionEpsilon` 0.25→0.5;
+  地面几何下移到 `kGroundY=-0.2`(可走面回到 y≈0,探针 nearest 可核对);bin 头填充清零;空几何守卫;21 行按路径去重加载
+  (`SceneNavMapComp` 改 shared_ptr);`WarpFromServer` 回报熔断;`-moveTest` 协程的销毁检查与驱动标志清理;日志坐标 InvariantCulture。
+  全文见 nav-spawn-fix 文档 §8。
 
 ## 2026-09-06 — 服务端移除旧客户端目录
 
@@ -4028,3 +4035,16 @@ fence 顺序用例只覆盖了不可叠加+ItemCountMap;准入轴全是 `AcceptA
 - 协议生成器和配表 C# 部署路径切换至独立客户端，仓库说明同步更新。
 - 旧 client 与子模块 Git 元数据完整保存在 E:/work/xuanming-client-backup-20260906；27 条未提交状态核验一致，独立客户端工作区状态未改变。
 - 验证：配表配置真实加载、协议路径展开、旧目录与索引移除检查通过；未运行全量生成或服务端构建。环境无 gh，未查询远端 PR/Issue。
+
+## 2026-09-06 战斗站位按用户录像精确对齐(人物 + 宝宝)
+
+用户要求"人物和宝宝的位置要和我所录制的视频上一样对齐",给了新录像 a58f3434….mp4(1280×592,36s)。工作流:三份独立帧量测(f_003~005 / f_015~017 / f_027~029)
+→ 逐单位取中位数合并(位置分歧 ≤13px)→ `BattleStage` 从参数化几何改为**逐槽位数据表**(视频像素按高度等比换算到 2560×1080:s=1.8243,dx=(vx−640)s+1280)→ 演出台出帧逐点比对。
+- **量测结论**:排方向角 32.2°(旧参数 17°)、槽间距 159px、排间垂直距离 敌 146 / 我 173、前后排为"同列近乎垂直平移 + 沿排错 0.22~0.25 槽"(不是半格交错);
+  视频几乎无近大远小(≤6%),改为极弱深度模型 1/10000 每像素,取消后排/敌队整排缩放;我方玩家排是后排(屏幕更下方)、宝宝排是前排;
+  宝宝固定在主人左上方,偏移 (−145,−113) 设计像素。敌方视频只有 9 只怪,前排第 5 槽按步长外推。
+- **代码**:`BattleStage.cs`(20 条实测槽位 + 每槽宝宝位;新增 `PetSlotPosition/PetSlotScale/PetOwnerResolver`,默认恒 0 现网不变)、`BattleScreen.cs`(宝宝按主人宝宝位摆放、
+  HudBottomBand 900→992 与底部条位移让位)、`PresentationShowcase.cs`(合成 5 宝宝,用 Monsters 帧条临时形象)、`BattleStageTests.cs`(20 例,含"与量测表逐值相等"真源断言)。
+- **验证**:EditMode Battle 137/137(全量 173 只剩既有 walk_N 资产失败);演出台出帧 73 张;逐点比对 15 个单位与量测表**最大偏差 19px ≤ 24px 阈值,PASS**。
+- **留档**:服务端宠物尚无实体 —— 建议 `BattleActorState.owner_actor_id` + `BATTLE_ACTOR_TYPE_PET`,客户端接入只需 `BattleStage.PetOwnerResolver = a => a.OwnerActorId`;
+  正式宠物形象/黄名/第三条待资源;`BattleUnitView.PlayerHeight` 230 未随表降到 200(避开另一会话正在迁 tween 的文件);敌方后排最高点挂满 buff 可能压顶部预告条。
