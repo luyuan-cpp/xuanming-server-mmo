@@ -3976,6 +3976,79 @@ fence 顺序用例只覆盖了不可叠加+ItemCountMap;准入轴全是 `AcceptA
 **未编译、未跑导表器。** 10 条闸门用临时 runner 在本机跑通(py -3 里没装 pytest);真 `Tip.xlsx` 的解析+分配+自检跑通;段表模板渲染后经 `gofmt -e` 语法合法。
 验证顺序见 `docs/design/tip-code-axis.md` §6 —— **第 2 步(跑导表器)之前 Go 编译不过是预期的**,`shared/generated/tip` 是导表器产物。
 
+## 2026-09-05 拉取上游 12 提交后的核对:我方改动未被覆盖,修 3 处合并缝
+
+> 上游 `d007e448e` 把配置表 schema 迁到权威 proto、`5ef65b3f8` 背包准入/淘汰策略、导表器表头解耦,
+> 直接动了战斗/观战/测试基建依赖的生成表头与错误码。逐项 sentinel 核对 + 库链串行重编 + 全量测试后的结论。
+
+- **未被覆盖**:观战测试缝(`addObserverFn`/`removeObserverFn`/`beforeAcquireWatchingHook`)与 36 个用例、
+  复活回满上限修复(`player_revive.h` / loader `TopUpToDerivedMax` / 结算传 Derived 上限)、引擎 PVE 三处、
+  C++ 新增测试与登记、`game.sln` 21 工程、`run_cpp_tests.ps1`、四处测试修复、配表列、robot `battle-smoke`、客户端观战代码——全在。
+  六个观战错误码被上游**正确迁移**为 `uint32(table.MatchError_kMatchSpectate*)`,tip 文本 16014–16019 在。
+- **合并缝 1(Go)**:上游新护栏 `TestNoHandWrittenTipCodes` 要求 errors.go 每个 Err 常量都在 `tipCodes()`;
+  跨 zone 那条 `ErrNotInScene` 随 143ecca96 进的,护栏没看见它 → 补一行(6557eb94a)。
+  以后给 match 加错误码:Tip.xlsx 加行 → 导表出枚举 → errors.go 写枚举引用 → 常量名补进 `tipCodes()`。
+- **合并缝 2(测试基建)**:`run_cpp_tests.ps1` 里 message_limiter/reward 两个 vcxproj 文件名写错,`-Build` 找不到工程
+  就拿拉取前的旧 exe 跑出"全过"。路径改正,"缺工程文件"改判 FAIL(e6ba62cc7)。
+- **合并缝 3(背包)**:`LayerConsistencyPredicateActuallyDetectsBreakage` 靠 `SetCapacityForRestore(0)` 造不一致,
+  该入口后来被加固成拒绝缩容,公开 API 造不出不一致、用例红,而加固本身无用例。不改生产代码:空包时注入自留裸指针的
+  `FlatLayout`,放入物品后在布局层 `Resize(0)`,一条用例同时钉住"缩容被拒"与"谓词报得出"(818af4417)。
+- **验证**:16 个库按依赖顺序串行重编 OK;`run_cpp_tests.ps1` **21/21 全绿(437 用例)**;`go/match` 全量绿;
+  scene/battle/gate 三个节点对新生成头链接成功(拷 `bin/` 因进程占用跳过——**`bin/` 里在跑的仍是 09-04 拉取前的版本**,
+  要测拉取后行为需停栈后重拷重启)。
+
+- **交接清单**:三天工作的全部留档待办经代码逐条核实后汇编为 `docs/design/handoff-backlog-2026-09-05.md`(77 条:P1 17 / P2 35 / P3 25,其中 21 条需先拍板;附录 A 列出已被做掉、勿重做的 5 项;附录 B 是脚本与产物索引)。
+
+## 2026-09-05 客户端/服务端导航数据、出生点与位置纠正契约统一
+
+> 现象:进场后首次移动即被 MoveAck 拉回原点附近、钳到 Unity (2,0,2),此后 WASD/寻路全被客户端 mask 挡住。
+> 根因是三处各说各话:服务端 `data/scene_nav_bin/*.bin` 仍是 20648 字节的 UE 占位导航;玩家 Transform 从 DB 反序列化
+> 后零校验(新号 (0,0,0));客户端发现出生点不可走**本地**挪到 (200,0,180) 却不告诉服务器。详见
+> `docs/design/nav-spawn-fix-2026-09-05.md`(含 Codex 执行清单与验收判据)。
+
+- **服务端**:新增 `spatial/system/scene_spawn.{h,cpp}`(`SceneSpawnSystem`:出生点常量 `nav.h kTianyongSpawn* = (180,200,0)`
+  == Unity (200,0,180);`EnsureValidEnterLocation` 在 `HandleEnterScene` 第 3.5 步按导航校验进场位置,非法/全零落到出生点;
+  `FallbackLocationForPlayer` 给移动裁决兜底)。`ApplyReportedLocation` 的"两头都不在网格"分支不再把非法原位回给客户端,
+  改落出生点,并对每次 MoveAck 打 `move corrected` INFO(带 current/reported/accepted 坐标)。`LoadNavBins` 注册前探针出生点,
+  旧占位 bin 拒绝注册(fail-open)并 ERROR,注册成功打 tile 数与 params。烘焙器 `navmesh_baker` 新增 `--probe`,
+  `--painted-city` 默认探针 (200,0,180),探针失败不落盘。
+- **客户端**:`TianyongPlayerController.WarpFromServer`(snap 落点不在 mask 上 → 最近可走格 + MoveStop 回报)、
+  `ReportPositionToServer`、`SetDebugDirection/SetDebugIgnoreMask`(验收驱动);`ActorWorld.Teleport` 走它;
+  `TianyongMapRuntime` 本地兜底落位后回报服务器;`GameClient` 的 MoveAck/自身 ActorCreate 日志带坐标 + 计数器;
+  `DevAutoPilot -moveTest`(出生点 → 四向 WASD → 客户端撞墙 → 绕 mask 冲墙要求服务器回 ack → 点击寻路)与
+  `tools/run_move_test.ps1`(同账号两轮 + 新账号,断言重登落位与默认出生点)。
+- **状态**:客户端离线 Roslyn 编译 0 错误;服务端 C++ / 烘焙器**未编译**,导航**未重烘**,验收未跑 —— 归 Codex
+  (文档 §5)。烘焙器此前从未编过,§6 列出已按 ue5navmesh 头文件核对的 API 面。
+- **边界**:出生点仍是常量(所有场景共用天墉城一张图),分场景时迁 BaseScene 表列;`SceneNavManager` thread_local 边界不变;
+  客户端无预测回滚。
+- **审查(5 视角 × 3 反驳者的多智能体对抗审查)确认并修掉的**:烘焙器 `ExtractWalkMask` 锚在第一次出现的 `WalkMaskBase64`
+  (是 LoadMask 里的用法,不是常量)→ base64 永远为空(blocker);CMake 缺 `UNICODE/_TCHAR_DEFINED` → `CoreMinimal.h` 的
+  `using TCHAR = wchar_t` 与 winnt.h 冲突 C2371(blocker);静止时 <1.5m 的 ack 客户端不应用,冲墙验收会误判(major,改为
+  静止时应用任何 ack = `reconcile settle`)。另处理:`rcFilterLedgeSpans` 使网格边界内缩 0.25m → `kMoveCorrectionEpsilon` 0.25→0.5;
+  地面几何下移到 `kGroundY=-0.2`(可走面回到 y≈0,探针 nearest 可核对);bin 头填充清零;空几何守卫;21 行按路径去重加载
+  (`SceneNavMapComp` 改 shared_ptr);`WarpFromServer` 回报熔断;`-moveTest` 协程的销毁检查与驱动标志清理;日志坐标 InvariantCulture。
+  全文见 nav-spawn-fix 文档 §8。
+
+## 2026-09-06 — 服务端移除旧客户端目录
+
+- 按用户确认移除整个 client、Unity 子模块配置及旧 FairyGUI 构建脚本，客户端统一使用同级 ../mmorpg-client 仓库。
+- 协议生成器和配表 C# 部署路径切换至独立客户端，仓库说明同步更新。
+- 旧 client 与子模块 Git 元数据完整保存在 E:/work/xuanming-client-backup-20260906；27 条未提交状态核验一致，独立客户端工作区状态未改变。
+- 验证：配表配置真实加载、协议路径展开、旧目录与索引移除检查通过；未运行全量生成或服务端构建。环境无 gh，未查询远端 PR/Issue。
+
+## 2026-09-06 战斗站位按用户录像精确对齐(人物 + 宝宝)
+
+用户要求"人物和宝宝的位置要和我所录制的视频上一样对齐",给了新录像 a58f3434….mp4(1280×592,36s)。工作流:三份独立帧量测(f_003~005 / f_015~017 / f_027~029)
+→ 逐单位取中位数合并(位置分歧 ≤13px)→ `BattleStage` 从参数化几何改为**逐槽位数据表**(视频像素按高度等比换算到 2560×1080:s=1.8243,dx=(vx−640)s+1280)→ 演出台出帧逐点比对。
+- **量测结论**:排方向角 32.2°(旧参数 17°)、槽间距 159px、排间垂直距离 敌 146 / 我 173、前后排为"同列近乎垂直平移 + 沿排错 0.22~0.25 槽"(不是半格交错);
+  视频几乎无近大远小(≤6%),改为极弱深度模型 1/10000 每像素,取消后排/敌队整排缩放;我方玩家排是后排(屏幕更下方)、宝宝排是前排;
+  宝宝固定在主人左上方,偏移 (−145,−113) 设计像素。敌方视频只有 9 只怪,前排第 5 槽按步长外推。
+- **代码**:`BattleStage.cs`(20 条实测槽位 + 每槽宝宝位;新增 `PetSlotPosition/PetSlotScale/PetOwnerResolver`,默认恒 0 现网不变)、`BattleScreen.cs`(宝宝按主人宝宝位摆放、
+  HudBottomBand 900→992 与底部条位移让位)、`PresentationShowcase.cs`(合成 5 宝宝,用 Monsters 帧条临时形象)、`BattleStageTests.cs`(20 例,含"与量测表逐值相等"真源断言)。
+- **验证**:EditMode Battle 137/137(全量 173 只剩既有 walk_N 资产失败);演出台出帧 73 张;逐点比对 15 个单位与量测表**最大偏差 19px ≤ 24px 阈值,PASS**。
+- **留档**:服务端宠物尚无实体 —— 建议 `BattleActorState.owner_actor_id` + `BATTLE_ACTOR_TYPE_PET`,客户端接入只需 `BattleStage.PetOwnerResolver = a => a.OwnerActorId`;
+  正式宠物形象/黄名/第三条待资源;`BattleUnitView.PlayerHeight` 230 未随表降到 200(避开另一会话正在迁 tween 的文件);敌方后排最高点挂满 buff 可能压顶部预告条。
+
 ### 收尾复核(本机,Codex 额度耗尽后接手)
 产物对拍与工程 wiring 复核报了 4 项,实际处理 6 项(2 项是 Codex 未报的):
 - **本次漏项**:`table.vcxproj.filters` 漏 friend/guild/match 六项(只改了 `.vcxproj` 忘了配套的分组视图文件)。已补,并做三方对拍:CMakeLists 16 / vcxproj 16+16 / filters 16+16,集合一致、文件都存在、XML 良构。
@@ -4082,7 +4155,7 @@ Unity 客户端在独立仓库,接入契约写在 §18.2。
 - **proto-gen**:重建生成器后重生成;消息号 176=ClientRpcRouterForward / 177=NotifyBattleAssigned / 178=IssueBattleTicket / 179=MatchServiceRequestBattleTicket。
 
 ### 冒烟:被 C++ 节点注册卡住(**与本次改动无关**,证据在下)
-本机已按用户授权补齐环境:compose 起 etcd/redis/redis-cluster×6/kafka/mysql;`mvnw` 打出网关 jar(需 `-Djava.version=21`,本机 JDK 21 而 pom 写 23);网关起服要 `-Djdk.net.unixdomain.tmpdir=D:	mp\jsock`(本机 AF_UNIX 默认目录被拦,netty 开不出 selector);login 需 `LOGIN_DEV_PASSWORD_SHARED_SECRET`。Go 五服务 + 网关(:8081)全部就绪。
+本机已按用户授权补齐环境:compose 起 etcd/redis/redis-cluster×6/kafka/mysql;`mvnw` 打出网关 jar(需 `-Djava.version=21`,本机 JDK 21 而 pom 写 23);网关起服要 `-Djdk.net.unixdomain.tmpdir=D:\tmp\jsock`(本机 AF_UNIX 默认目录被拦,netty 开不出 selector);login 需 `LOGIN_DEV_PASSWORD_SHARED_SECRET`。Go 五服务 + 网关(:8081)全部就绪。
 
 **卡点**:gate 与 scene 启动后停在 `Claiming global node-id allocation` —— etcd 里 alloc key 已写成功、gate 的 TCP 10000 已 LISTEN,但 `OnTxnSucceeded` 后的第二阶段(发布 per-zone NodeInfo)从未发生,`GateNodeService.rpc/zone/...` 始终不存在,于是 login 的 AssignGate 一直回 `no gate available for requested zone`,robot 冒烟在第一步登录就失败。
 **证据表明与本次改动无关**:①`cpp/nodes/scene` 本次一行未改,症状与 gate 完全一致;②唯一成功注册的是 **battle** —— 它是三者中唯一不消费 Kafka、且 `CanConnectNodeTypeList{}` 为空的节点;③停掉全部 Go 服务、单起 gate(无任何对端可连)复现同样的卡点,排除了 `ConnectAllNodes`;④gate 进程有到 etcd/redis 的连接,**没有**到 Kafka 9092 的连接。
@@ -4128,7 +4201,7 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 3. **scene 与 battle 共用同一端口基址 20000**:端口扫描只看同类型节点,跨类型靠 `/service/<ip>/port/<n>` 的 CAS 兜底;而 `NodeAllocator::AcquireNode` 的重试路径把**自动分配**的端口当成**显式预设**(`presetPort = GetNodeInfo().endpoint().port()`),于是 fail-closed 死循环、永不换端口。本地用 `RPC_PORT=20010` 给 battle 指定端口绕过。
 
 ### 本地跑起来需要的四个环境事实(都不是仓库改动)
-- Java 网关:`mvnw.cmd -DskipTests -Djava.version=21 package`(pom 要 23,本机 JDK 21);起服加 `-Djdk.net.unixdomain.tmpdir=D:	mp\jsock`,否则 netty 开 selector 时 AF_UNIX 环回被拦。
+- Java 网关:`mvnw.cmd -DskipTests -Djava.version=21 package`(pom 要 23,本机 JDK 21);起服加 `-Djdk.net.unixdomain.tmpdir=D:\tmp\jsock`,否则 netty 开 selector 时 AF_UNIX 环回被拦。
 - login 需要 `LOGIN_DEV_PASSWORD_SHARED_SECRET=123456` —— 开发密码档是**常量时间比较密码与该密钥**,值必须等于 robot 配置里的 `password`。
 - C++ Debug 产物运行要 `third_party/grpc/install_vs2026_dbg/bin` 在 PATH(缺 `zlibd.dll`)。
-- MSBuild 在 `E:\Program Files\Microsoft Visual Studio8\Enterprise`(vswhere 可查)。
+- MSBuild 在 `E:\Program Files\Microsoft Visual Studio\18\Enterprise`(vswhere 可查)。

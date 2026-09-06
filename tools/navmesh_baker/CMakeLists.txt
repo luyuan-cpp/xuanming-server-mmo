@@ -37,8 +37,18 @@ add_executable(navmesh_baker
 target_include_directories(navmesh_baker PRIVATE ${UE5NAVMESH_DIR}/Public)
 
 if(WIN32)
-    # WIN32 宏对齐 third_party.vcxproj 的 ue5navmesh 编译配置
-    # (CoreMinimal.h 用它决定 TEXT/Windows.h 分支)。
+    # 宏对齐 scene.vcxproj / third_party.vcxproj 里 ue5navmesh 的编译配置:
+    #   WIN32            CoreMinimal.h 用它决定 TEXT/Windows.h 分支;
+    #   UNICODE/_UNICODE + _TCHAR_DEFINED
+    #                    CoreMinimal.h 先 #include <Windows.h> 再 `using TCHAR = wchar_t;`,
+    #                    没有 UNICODE 时 winnt.h 会先 typedef char TCHAR,与之冲突(C2371);
+    #                    vcxproj 那边靠 CharacterSet=Unicode + 显式 _TCHAR_DEFINED 躲过,这里照抄。
     target_compile_definitions(navmesh_baker PRIVATE
-        WIN32 NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+        WIN32 UNICODE _UNICODE _TCHAR_DEFINED NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
+endif()
+
+if(MSVC)
+    # 源码是无 BOM 的 UTF-8(含中文注释与字符串):不加 /utf-8 在 CP936 机器上会按 GBK
+    # 读,C4819 满屏、字符串里的多字节字符被改写。scene.vcxproj 同样带 /utf-8。
+    target_compile_options(navmesh_baker PRIVATE /utf-8 /bigobj)
 endif()

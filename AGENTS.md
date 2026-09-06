@@ -144,7 +144,7 @@
 
 ## 9. 禁止事项与权限边界
 
-- ❌ 不要读 `client/` 目录
+- ❌ 客户端统一使用同级独立仓库 `../mmorpg-client/`；服务端不再维护 `client/` 目录，未获客户端任务授权时不要读取或修改独立客户端
 - ❌ 不要手改生成产物（见 §3）
 - ❌ 不要在 `docs/design/` 之外随便建 README，不要为记录改动新建 markdown（除非用户要求）
 - ❌ 不要把 `player_id` 当 Prometheus label（高基数会爆）

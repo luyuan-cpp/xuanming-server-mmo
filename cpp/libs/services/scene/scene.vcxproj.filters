@@ -60,6 +60,7 @@
     <ClInclude Include="spatial\system\navigation.h" />
     <ClInclude Include="spatial\system\recast.h" />
     <ClInclude Include="spatial\system\scene_crowd.h" />
+    <ClInclude Include="spatial\system\scene_spawn.h" />
     <ClInclude Include="spatial\system\view.h" />
     <ClInclude Include="world\world.h" />
     <ClInclude Include="player\comp\afk_comp.h" />
@@ -100,6 +101,7 @@
     <ClCompile Include="spatial\system\navigation.cpp" />
     <ClCompile Include="spatial\system\recast.cpp" />
     <ClCompile Include="spatial\system\scene_crowd.cpp" />
+    <ClCompile Include="spatial\system\scene_spawn.cpp" />
     <ClCompile Include="spatial\system\view.cpp" />
     <ClCompile Include="world\world.cpp" />
     <ClCompile Include="player\system\player_lifecycle.cpp" />

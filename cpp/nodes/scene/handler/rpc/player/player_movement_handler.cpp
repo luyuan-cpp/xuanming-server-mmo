@@ -14,6 +14,7 @@
 #include "spatial/comp/nav_comp.h"
 #include "spatial/constants/nav.h"
 #include "spatial/system/nav_query.h"
+#include "spatial/system/scene_spawn.h"
 #include "thread_context/ecs_context.h"
 #include "time/system/time.h"
 
@@ -68,11 +69,14 @@ void ApplyReportedVelocity(const entt::entity player, const Velocity& reported)
 
 // 用场景导航网格裁决一次客户端上报位置(寻路阻挡点校验的核心):
 //   1. 服务器当前位置 → 上报位置做 raycast,撞墙则截断在阻挡点;
-//   2. 服务器当前位置不在网格上(首进场 (0,0,0) 契约缺口,见
-//      TianyongMap.md §spawn)时,退化为直接吸附上报点引导落位;
+//   2. 服务器当前位置不在网格上(进场落位已由 SceneSpawnSystem 保证,这里
+//      只剩极端情况:导航热更/位置被别的系统改坏)时,退化为直接吸附上报点
+//      引导落位;两头都不在网格上则落到场景出生点 —— 绝不能把一个本身就
+//      非法的"原位"回给客户端,那会把人拉进墙里卡死;
 //   3. 场景没有导航数据时 fail-open,原样接受(与旧行为一致,不卡人)。
 // 落地 Transform + 置脏位;裁决位置与上报位置水平差超阈值时回发 MoveAck
-// 让客户端纠偏。
+// 让客户端纠偏。MoveAck.server_location 因此恒为网格上的合法点(或 fail-open
+// 下的上报点本身),客户端 WarpTo 之后不会停在不可走区域。
 void ApplyReportedLocation(const entt::entity player, const Location& reported,
 	const Rotation& rotation, const uint32_t inputSeq)
 {
@@ -86,6 +90,7 @@ void ApplyReportedLocation(const entt::entity player, const Location& reported,
 
 	const Location current = ToLocation(transform->location());
 	Location accepted = reported;
+	const char* verdict = "accepted";
 	if (auto* nav = NavQuerySystem::GetNavForPlayer(player))
 	{
 		Location clamped;
@@ -100,19 +105,22 @@ void ApplyReportedLocation(const entt::entity player, const Location& reported,
 			{
 				// 起点合法、途中撞墙:clamped 即阻挡点。
 				accepted = clamped;
+				verdict = "blocked";
 			}
 			else
 			{
 				// 起点不在网格上:引导落位到上报点的吸附结果;
-				// 两头都不在网格 → 拒绝本次移动,保持原位。
+				// 两头都不在网格 → 落到场景出生点(原位是非法点,不能回给客户端)。
 				Location snappedReported;
 				if (NavQuerySystem::SnapToMesh(*nav, reported, snappedReported))
 				{
 					accepted = snappedReported;
+					verdict = "guided";
 				}
 				else
 				{
-					accepted = current;
+					accepted = SceneSpawnSystem::FallbackLocationForPlayer(player, nav);
+					verdict = "respawned";
 				}
 			}
 		}
@@ -133,6 +141,13 @@ void ApplyReportedLocation(const entt::entity player, const Location& reported,
 		}
 		ack.set_server_time_ms(TimeSystem::NowMilliseconds());
 		SendMessageToClientViaGate(SceneMovementClientPlayerNotifyMoveAckMessageId, ack, player);
+		// 纠偏是低频事件(合法道路上不会触发),INFO 级留证据:验收时看
+		// "合法道路不回拉 / 撞墙有回拉"就靠这一行。
+		LOG_INFO << "move corrected: entity=" << static_cast<uint64_t>(entt::to_integral(player))
+			<< " seq=" << inputSeq << " verdict=" << verdict
+			<< " current=(" << current.x() << "," << current.y() << "," << current.z() << ")"
+			<< " reported=(" << reported.x() << "," << reported.y() << "," << reported.z() << ")"
+			<< " accepted=(" << accepted.x() << "," << accepted.y() << "," << accepted.z() << ")";
 	}
 }
 

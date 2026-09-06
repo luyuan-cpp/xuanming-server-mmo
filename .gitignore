@@ -208,9 +208,6 @@ debug-symbols-out/
 .no_raw_ptr_check_ok
 cpp/plugin/build/
 
-# FairyGUI atlas/asset rework backups (kept locally as safety net,
-# never committed). Restoring is just a file copy from these dirs.
-client/fairygui/qdao/assets/_backup_*/
 
 # Scratch screenshots / debug captures under image/.
 # The "effect" art (q_daoist_*.png design plates, ui_controls_v2/, the
@@ -259,7 +256,6 @@ tools/proto/protogen/
 # - cpp/libs/base/, cpp/libs/services/slg/, cpp/nodes/slg_map/ :
 #                                          WIP / submodule-like checkouts
 # - cpp/libs/engine/muduo_windows/src/boost-download/ : boost fetch cache
-# - client/fairygui/qdao/.objs/          : FairyGUI build artefacts
 # - lib/pkgconfig/                       : pkg-config output from build
 # - generated/code/java/bit_index/, generated/robot/proto/go-zero/,
 #   java/config_node/src/main/java/com/game/table/bit_index/ :
@@ -275,7 +271,6 @@ cpp/libs/base/
 cpp/libs/services/slg/
 cpp/nodes/slg_map/
 cpp/libs/engine/muduo_windows/src/boost-download/
-client/fairygui/qdao/.objs/
 lib/pkgconfig/
 generated/code/java/bit_index/
 generated/robot/proto/go-zero/

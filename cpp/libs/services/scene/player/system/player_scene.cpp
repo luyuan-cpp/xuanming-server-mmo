@@ -23,6 +23,7 @@
 #include <proto/common/component/player_network_comp.pb.h>
 #include "node/system/node/node_util.h"
 #include "battle/system/player_battle.h"
+#include "spatial/system/scene_spawn.h"
 #include "spatial/system/view.h"
 #include <limits>
 #include <thread_context/ecs_context.h>
@@ -228,6 +229,13 @@ void PlayerSceneSystem::HandleEnterScene(entt::entity player, entt::entity scene
 	{
 		scenePlayers->emplace(player);
 	}
+
+	// 3.5 服务器权威落位:Transform 来自 DB(新号是 proto 默认 (0,0,0),旧号可能
+	// 存着旧地图/别的场景的坐标),必须在自身 ActorCreate(4.5)与 AOI 广播之前
+	// 校验它在目标场景导航网格上,不在就落到场景出生点。否则客户端会本地把
+	// 人挪到城内、服务器仍在 (0,0,0),首次移动的 MoveAck 把客户端拉回原点卡死
+	// (2026-09-05 移动诊断)。跨场景切换/跨 zone 迁移的合法坐标原样保留。
+	SceneSpawnSystem::EnsureValidEnterLocation(player, scene);
 
 	// 4. Notify client of scene entry.
 	EnterSceneS2C message;

@@ -1,6 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<component size="1280,100" opaque="false">
-  <displayList>
-    <image id="n0" name="bg" src="00010008" fileName="bar.png" xy="0,0" size="1280,100"/>
-  </displayList>
-</component>

@@ -265,7 +265,7 @@ def _csharp_ctx(table: TableSchema, cfg: ExporterConfig) -> dict:
         package=cfg.csharp.package,
         # protoc 把消息类放进哪个 namespace。生成的 .proto 既没有 package 也没有
         # option csharp_namespace -> 全局 namespace -> 这里留空，模板就不写 using。
-        # 与 client/unity/Assets/Scripts/Net/Generated 现有网络协议产物口径一致。
+        # 与独立客户端 mmorpg-client/Assets/Scripts/Net/Generated 现有网络协议产物口径一致。
         proto_namespace=cfg.csharp.proto_import_path,
     )
 

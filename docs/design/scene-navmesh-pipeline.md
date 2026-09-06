@@ -42,7 +42,7 @@ scene 节点 LoadNavBins → SceneNavManager → NavQuerySystem(吸附/阻挡射
 | 烘焙输入 | 直接解析客户端 C# 源里的 WalkMaskBase64,不开 Unity | 地图是运行时程序化生成,编辑期场景无几何;mask 就是客户端判定真相,解析它 = 两端语义一比一,且无 Unity/Python 依赖 |
 | agent radius | 0(不收缩) | 客户端 `TianyongPlayerController` 只拿脚底点查 mask,无半径概念;服务器校验同一个点。收缩会造成"服务器说撞墙、客户端看还有缝" |
 | 单位/坐标 | 米,Unity 坐标系(Y-up)烘焙;查询侧换轴 | 换轴契约与客户端 `WorldCoordinateConverter` 一致:nav=(sy,sz,sx),server=(nav.z,nav.x,nav.y)。服务器是 Z-up |
-| cs | 0.25m | mask 格 2m 的整数分之一,导航边界与 mask 格线精确重合 |
+| cs | 0.25m | mask 格 2m 的整数分之一,导航边界与 mask 格线对齐;**注意** `rcFilterLedgeSpans` 会把紧邻洞的一圈体素当悬崖剔掉,实际边界向内缩 1 个体素(0.25m),`kMoveCorrectionEpsilon` 取 0.5m 吞掉这个差值(2026-09-05 审查确认,见 nav-spawn-fix 文档 §8) |
 | 校验失败策略 | fail-open(场景无导航→放行)+ 阻挡点截断 + MoveAck 纠偏 | 不能因缺数据卡死玩家;撞墙时服务器权威位置停在阻挡点,水平差 >0.25m 回 MoveAck 让客户端拉回 |
 
 Agent 参数:height 1.8 / climb 0.35(对齐客户端 `TianyongMapConfig`
@@ -70,10 +70,15 @@ playerHeight/playerStepOffset)。速度信任上限 `kMaxTrustedClientSpeed=10`
 
 ## 5. 已知边界(不在本轮)
 
-- 首进场 spawn 契约仍是 (0,0,0)(TianyongMap.md 记录的缺口)。handler 对
-  "服务器当前位置不在网格上"做了引导落位兜底(吸附客户端上报点),但正解
-  是进场时按场景表出生点落位。
-- 客户端未做预测回滚,MoveAck 纠偏 >1.5m 硬 snap(GameClient.cs 现状)。
+- ~~首进场 spawn 契约仍是 (0,0,0)~~ **2026-09-05 已修**(见
+  `nav-spawn-fix-2026-09-05.md`):`SceneSpawnSystem::EnsureValidEnterLocation`
+  在 `HandleEnterScene` 里按导航校验进场位置,不合法落到出生点
+  `kTianyongSpawn* = (180,200,0)`(== Unity (200,0,180));`LoadNavBins` 注册前
+  探针出生点,旧占位 bin 会被拒绝注册;烘焙器 `--probe` 出包前同样探针。
+  出生点仍是常量而非 BaseScene 表列(所有场景共用一张图)。
+- 客户端未做预测回滚,MoveAck 纠偏 >1.5m 硬 snap(GameClient.cs 现状);
+  snap 落点不在 mask 上时客户端会恢复到最近可走格并回报 MoveStop(兜底,
+  正常数据下不触发)。
 - AI 寻路(`FindPath`)已有 API,尚无调用方;dtCrowd 仍未接。
 - 反作弊只有速度截断 + 阻挡夹持,无 client_time 单调性/违规计数。
 - `SceneNavManager` 是 thread_local,`LoadNavBins` 只在启动线程跑过——多场景
