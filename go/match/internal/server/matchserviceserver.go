@@ -6,6 +6,7 @@ import (
 	"match/internal/logic"
 	"match/internal/svc"
 
+	battlepb "proto/battle"
 	base "proto/common/base"
 	matchpb "proto/match"
 )
@@ -75,4 +76,11 @@ func (s *MatchServiceServer) WatchBattle(ctx context.Context, in *matchpb.WatchB
 func (s *MatchServiceServer) ListWatchableBattles(ctx context.Context, in *matchpb.ListWatchableBattlesRequest) (*matchpb.ListWatchableBattlesResponse, error) {
 	l := logic.NewListWatchableBattlesLogic(ctx, s.svcCtx)
 	return l.ListWatchableBattles(in)
+}
+
+// RequestBattleTicket 客户端丢票补签(客户端协议;turn-based §18 D25、client-rpc-router.md D33):
+// match 按观战索引定位房间所在 battle 节点,再调 BattleNode.IssueBattleTicket 由 battle 核对名单自签。
+func (s *MatchServiceServer) RequestBattleTicket(ctx context.Context, in *battlepb.RequestBattleTicketRequest) (*battlepb.RequestBattleTicketResponse, error) {
+	l := logic.NewRequestBattleTicketLogic(ctx, s.svcCtx)
+	return l.RequestBattleTicket(in)
 }

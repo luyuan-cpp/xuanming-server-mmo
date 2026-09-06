@@ -191,8 +191,16 @@ type BaseDeployConfig struct {
 	// 131071 上界为所有 node_id 保留 UINT32_MAX 哨兵,并避免 session-id 空间
 	// 全部占满后碰撞重试永久自旋。
 	GateMaxConnections uint32 `protobuf:"varint,15,opt,name=gate_max_connections,json=gateMaxConnections,proto3" json:"gate_max_connections,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// battle 节点客户端直连票据的 HMAC 共享密钥(battle 节点签发并校验;全部 battle 实例
+	// 必须一致;与 gate_token_secret 分域,任一泄露不影响另一侧)。
+	// 空值处置由 BATTLE_RUN_MODE 决定:dev/test 放行并 WARN,prod 拒绝启动
+	// (设计文档 turn-based-battle-server.md §18 D24/D27)。
+	BattleTokenSecret string `protobuf:"bytes,16,opt,name=battle_token_secret,json=battleTokenSecret,proto3" json:"battle_token_secret,omitempty"`
+	// battle 节点客户端面并发直连上限。0 = 关闭运维阈值(仅 dev/test);
+	// 语义与 gate_max_connections 相同:超限连接在握手前即被拒。
+	BattleMaxConnections uint32 `protobuf:"varint,17,opt,name=battle_max_connections,json=battleMaxConnections,proto3" json:"battle_max_connections,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BaseDeployConfig) Reset() {
@@ -326,6 +334,20 @@ func (x *BaseDeployConfig) GetDataRootDirectory() string {
 func (x *BaseDeployConfig) GetGateMaxConnections() uint32 {
 	if x != nil {
 		return x.GateMaxConnections
+	}
+	return 0
+}
+
+func (x *BaseDeployConfig) GetBattleTokenSecret() string {
+	if x != nil {
+		return x.BattleTokenSecret
+	}
+	return ""
+}
+
+func (x *BaseDeployConfig) GetBattleMaxConnections() uint32 {
+	if x != nil {
+		return x.BattleMaxConnections
 	}
 	return 0
 }
@@ -473,7 +495,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x06topics\x18\x02 \x03(\tR\x06topics\x12\x19\n" +
 	"\bgroup_id\x18\x03 \x01(\tR\agroupId\x12,\n" +
 	"\x12enable_auto_commit\x18\x04 \x01(\bR\x10enableAutoCommit\x12*\n" +
-	"\x11auto_offset_reset\x18\x05 \x01(\tR\x0fautoOffsetReset\"\xc6\x05\n" +
+	"\x11auto_offset_reset\x18\x05 \x01(\tR\x0fautoOffsetReset\"\xac\x06\n" +
 	"\x10BaseDeployConfig\x12\x1d\n" +
 	"\n" +
 	"etcd_hosts\x18\x01 \x03(\tR\tetcdHosts\x12\x1b\n" +
@@ -491,7 +513,9 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x11table_data_format\x18\f \x01(\tR\x0ftableDataFormat\x12;\n" +
 	"\x1anode_removal_grace_seconds\x18\r \x01(\rR\x17nodeRemovalGraceSeconds\x12.\n" +
 	"\x13data_root_directory\x18\x0e \x01(\tR\x11dataRootDirectory\x120\n" +
-	"\x14gate_max_connections\x18\x0f \x01(\rR\x12gateMaxConnections\"\xf0\x01\n" +
+	"\x14gate_max_connections\x18\x0f \x01(\rR\x12gateMaxConnections\x12.\n" +
+	"\x13battle_token_secret\x18\x10 \x01(\tR\x11battleTokenSecret\x124\n" +
+	"\x16battle_max_connections\x18\x11 \x01(\rR\x14battleMaxConnections\"\xf0\x01\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +

@@ -3,6 +3,7 @@
 #include <unordered_map>
 
 #include <session/manager/session_manager.h>
+#include "gate_router_mode.h"
 #include "muduo/base/Logging.h"
 #include "node/system/node/node_util.h"
 #include "proto/common/base/node.pb.h"
@@ -13,10 +14,38 @@ namespace
 	// gate 单 loop 线程访问,无并发问题;条目在解绑、会话断开、battle 节点
 	// 被摘除三条路径上清理(后两条见 client_message_processor.cpp)。
 	std::unordered_map<SessionId, uint64_t> boundBattleIdBySession;
+
+	// 路由模式(GATE_CLIENT_RPC_ROUTER=1,client-rpc-router.md D33/D34):战斗流量走
+	// 客户端直连,gate 不再持 battle stub、不进 battle 白名单、不维护 battle 绑定 ——
+	// Bind/Unbind 事件到达即忽略。若不忽略,HandleBindBattle 会在路由模式下对每一场
+	// 开战都因 FindNodeEntityByNodeId 落空刷一条 ERROR(battle 根本不在本地注册表里)。
+	// 返回 true = 调用方直接 return。只在第一次到达时留一条 DEBUG 说明,不逐事件刷
+	// (事件频率 = 全服开战/结束频率)。
+	bool IgnoredInRouterMode(const char *eventName, const SessionId sessionId, const uint64_t battleId)
+	{
+		if (!gate_router_mode::IsRouterModeEnabled())
+		{
+			return false;
+		}
+		static bool explained = false;
+		if (!explained)
+		{
+			explained = true;
+			LOG_DEBUG << eventName << ": 路由模式下忽略战斗绑定事件 —— 战斗流量走客户端直连,"
+					  << "gate 不再持 battle 绑定;此后同类事件不再记录. first_session_id=" << sessionId
+					  << " first_battle_id=" << battleId;
+		}
+		return true;
+	}
 }
 
 void gate_battle_binding::HandleBindBattle(const contracts::kafka::BindBattleEvent &event)
 {
+	if (IgnoredInRouterMode("BindBattle", event.session_id(), event.battle_id()))
+	{
+		return;
+	}
+
 	const auto sessionId = event.session_id();
 	auto &sessions = tlsSessionManager.sessions();
 	const auto it = sessions.find(sessionId);
@@ -65,6 +94,11 @@ void gate_battle_binding::HandleBindBattle(const contracts::kafka::BindBattleEve
 
 void gate_battle_binding::HandleUnbindBattle(const contracts::kafka::UnbindBattleEvent &event)
 {
+	if (IgnoredInRouterMode("UnbindBattle", event.session_id(), event.battle_id()))
+	{
+		return;
+	}
+
 	const auto sessionId = event.session_id();
 	const auto recordIt = boundBattleIdBySession.find(sessionId);
 	if (recordIt == boundBattleIdBySession.end())

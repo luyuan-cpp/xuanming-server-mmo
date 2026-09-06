@@ -1,7 +1,9 @@
 # 会话制对局(MOBA 形态)目标架构基准
 
-**Created:** 2026-08-31
-**状态:** 讨论定稿(目标形态基准 + 本仓现状映射;未开工)
+**Created:** 2026-08-31 · **Updated:** 2026-09-05
+**状态:** 目标形态基准 + 本仓现状映射。**2026-09-05:第 7 步「客户端直连 + 票据入场」已落码、已过静态评审与编译/单测(C++ Debug 0 error、gtest 18+22 全绿、Go/robot 全绿),整栈冒烟待本机基础设施**
+(见 [turn-based-battle-server.md §18](./turn-based-battle-server.md#18-客户端直连-battle-节点票据入场战斗流量零字节经-gate2026-09-05已落码待验证));
+写本文时 battle 节点尚不存在,现状映射一节按 2026-09-05 的仓库状态重写。
 **来源:** 架构讨论。通用骨架部分为业界标准形态(LoL / Dota2 / 王者 / 绝地求生这类"会话制对局"的通用做法),现状映射部分已逐项对照本仓代码核实。
 **关联:** [moba-ds-server-interview-qa.md](./moba-ds-server-interview-qa.md)(DS 内部设计细则)、[moba-non-ds-server-interview-qa.md](./moba-non-ds-server-interview-qa.md)(外围系统)、[ARCH.md](./ARCH.md)(现有 MMO 拓扑)、[player_login_flow.md](./player_login_flow.md)(票据入场的现有实现)
 
@@ -54,6 +56,14 @@ Allocator 签发一次性 token:`{match_id, user_id, server_id, exp, sig}`。
 TCP 直连 gate,gate 侧 `ClientTokenVerifyRequest` 本地验签
 (见 ARCH.md §3.1 八步、gate `main.cpp` 的 `ValidateGateTokenSecretOrDie` 启动门禁)。
 战斗票据 = 同一模式换 payload,不是新发明。
+
+**本仓的落地变体(2026-09-05,与上面"标准形态"两处有意偏离,理由见 turn-based-battle-server.md §18 D24/D25):**
+- 签发者是 **battle 节点自己**而不是 Allocator(match):battle 是唯一知道房间名单的一方,少一处持密者;
+  且 match 与 battle 各自 Kafka 生产者,由 match 签票会让"分配包"与"开战包"跨生产者无序,battle 自签
+  能在同 key 上保证先分配再开战。"本地验签、不回问大厅"仍成立。
+- 票据**不是一次性短 exp**,而是寿命 = 房间作废期限、可重复用于重连,不做 jti:房间销毁即全部票据失效,
+  一次性表没有增益;票据绑定 `(battle_id, player_id, node_id, 实例 UUID, role)`,节点重启后 node_id 复用
+  也不会让旧票复活;客户端丢票经大厅会话 `RequestBattleTicket` 补签。
 
 ### ② 战斗服吃快照、吐结果,中间不碰库
 
@@ -146,7 +156,27 @@ Battle ──result──▶ 结算服
 
 ## 六、本仓现状映射:已有 / 缺口
 
-### 已有(核实过,别重复建设)
+### 已有(2026-09-05 核实;8 月 31 日写本文时 battle / match 尚不存在,一周内由回合制战斗一、二期补齐)
+
+| 资产 | 位置/证据 | 对应标准角色 |
+|---|---|---|
+| Battle 节点(纯内存房间、不连玩家库、崩溃即作废) | `cpp/nodes/battle`,设计 `turn-based-battle-server.md` D1/D2/§8;不变量"battle 对玩家权威数据零写权" | Battle Server ✅ |
+| Matchmaker + Allocator(凑单 → 选 battle 节点 → gather) | `go/match`(队列 / 挑战 / 观战匹配 / 评分),gather 管线 §3.1,补偿矩阵 §3.2 | Matchmaker ✅ / Allocator ✅(合一) |
+| 入场快照 / 出场结果 DTO | `BattlePlayerSnapshot`(scene PrepareBattle 出)/ `BattleSettlementData` + `BattleSettlementEvent`(Kafka 回 scene)+ `BattleResultEvent`(回 match 评分) | 契约② ✅ |
+| 幂等结算 | scene 按 `InBattleComp.battle_id` 匹配才应用,重复投递丢弃;离线 pending 7 天 | 契约③ ✅(result 落地 = Kafka at-least-once + scene 幂等) |
+| 局中闸 | `InBattleComp` 冻结清单(排队 / 交易 / 改属性道具 / 切场景) | 存储红线 2 ✅ |
+| 路由表 | match 侧 `spectate:*` / 票据;battle 落点由 gather 决定并写进快照路由 | 存储红线 3 ✅(Redis) |
+| **客户端直连 + 票据入场** | `turn-based-battle-server.md` §18(2026-09-05 落码):battle 自签 HMAC 票据、自身 TCP 端口开客户端面、S2C 直连优先 Kafka 回落 | 契约① / 第五节直连 ✅(待编译 + 冒烟) |
+| 跨 zone 匹配 + 水平扩展 | `cross-zone-matchmaking.md`;battle / match 全局池 | — |
+
+### 仍是缺口
+
+1. **收缩阶段**:gate 仍中继战斗消息(回落路径),Unity 客户端尚未接直连(客户端仓独立);等直连失败率数据后删 gate 中继;
+2. **部署形态**:battle 无 K8s manifest,直连需要 hostPort / NodePort 暴露(C 档待办);
+3. 落点粒度已由事实拍板为 **一进程 N 房**(单 battle 进程多房间,§8),隔离(单房异常不掀翻进程)只有 timer 回调按 battle_id 重查这一层,无 try/catch 熔断 —— 待补;
+4. 票据吊销 / 每消息 HMAC / 观众连接上限单独配置(§18.7)。
+
+### 已有(2026-08-31 原文,保留作历史对照)
 
 | 资产 | 位置/证据 | 对局子系统里的用途 |
 |---|---|---|

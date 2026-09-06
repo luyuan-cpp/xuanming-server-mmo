@@ -92,5 +92,8 @@
     <ClInclude Include="gate_codec.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="gate_router_mode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>

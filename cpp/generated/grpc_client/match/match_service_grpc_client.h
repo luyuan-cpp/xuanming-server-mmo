@@ -165,6 +165,25 @@ void SendMatchServiceWatchBattle(entt::registry& registry, entt::entity nodeEnti
 void SendMatchServiceWatchBattle(entt::registry& registry, entt::entity nodeEntity, const ::match::WatchBattleRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 void SendMatchServiceWatchBattle(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
+#pragma region MatchServiceRequestBattleTicket
+
+struct AsyncMatchServiceRequestBattleTicketGrpcClient {
+    uint32_t messageId{ MatchServiceRequestBattleTicketMessageId };
+    ClientContext context;
+    Status status;
+    ::RequestBattleTicketResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::RequestBattleTicketResponse>> response_reader;
+};
+
+class ::RequestBattleTicketRequest;
+using AsyncMatchServiceRequestBattleTicketHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::RequestBattleTicketResponse&)>;
+extern AsyncMatchServiceRequestBattleTicketHandlerFunctionType AsyncMatchServiceRequestBattleTicketHandler;
+
+void SendMatchServiceRequestBattleTicket(entt::registry& registry, entt::entity nodeEntity, const ::RequestBattleTicketRequest& request);
+void SendMatchServiceRequestBattleTicket(entt::registry& registry, entt::entity nodeEntity, const ::RequestBattleTicketRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendMatchServiceRequestBattleTicket(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
 #pragma region MatchServiceListWatchableBattles
 
 struct AsyncMatchServiceListWatchableBattlesGrpcClient {

@@ -33,6 +33,7 @@ func tipCodes() map[string]uint32 {
 		"ErrNoWatchableBattle":      ErrNoWatchableBattle,
 		"ErrBattleNotWatchable":     ErrBattleNotWatchable,
 		"ErrSpectateOffline":        ErrSpectateOffline,
+		"ErrNotInScene":             ErrNotInScene,
 	}
 }
 

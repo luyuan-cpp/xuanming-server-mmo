@@ -47,6 +47,9 @@ public:
         const ::SetAutoBattleRequest *request,
         ::SetAutoBattleResponse *response) override;
 
+    // 丢票补签不在本服务下:gate 收成只连路由服后不再直连 battle(client-rpc-router.md D33),
+    // 客户端走 MatchService.RequestBattleTicket → BattleNode.IssueBattleTicket(见 battle_node.h)。
+
 private:
     muduo::net::EventLoop &loop_;
 };

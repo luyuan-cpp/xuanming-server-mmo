@@ -9,7 +9,7 @@
 // 跑法(仓库根目录,Linux 或带 g++ 的容器;gtest 用仓库里已经 vendored 的那份):
 //
 //   GT=third_party/grpc/third_party/googletest/googletest
-//   g++ -std=c++23 -I cpp/nodes/gate -I "$GT/include" -I "$GT"
+//   g++ -std=c++23 -I cpp/nodes/gate -I cpp/libs/engine/core -I "$GT/include" -I "$GT"
 //       cpp/nodes/gate/tests/gate_security_test.cpp
 //       "$GT/src/gtest-all.cc" "$GT/src/gtest_main.cc"
 //       -lssl -lcrypto -lpthread -o /tmp/gate_security_test
@@ -22,11 +22,29 @@
 #include <cstdlib>
 #include <string>
 
+#include "gate_router_mode.h"
 #include "gate_security.h"
 #include "gate_version.h"
 
 namespace
 {
+
+// 跨平台设/删环境变量。Windows 上 _putenv_s(name, "") 等价于删除(getenv 得 nullptr)。
+void SetEnvForTest(const char *name, const char *value)
+{
+#ifdef _WIN32
+	_putenv_s(name, value);
+#else
+	if (value[0] == '\0')
+	{
+		unsetenv(name);
+	}
+	else
+	{
+		setenv(name, value, 1);
+	}
+#endif
+}
 
 // 测试里统一用这把密钥,和签名辅助函数保持一致。
 constexpr char kSecret[] = "unit-test-gm-secret";
@@ -79,6 +97,79 @@ TEST(GateRunMode, DevAndTestAreRecognizedCaseInsensitivelyAndTrimmed)
 	EXPECT_EQ(gate_security::RunMode::kDev, gate_security::ParseRunMode("DEVELOPMENT", nullptr));
 	EXPECT_EQ(gate_security::RunMode::kTest, gate_security::ParseRunMode("Test", nullptr));
 	EXPECT_EQ(gate_security::RunMode::kProd, gate_security::ParseRunMode("PRODUCTION", nullptr));
+}
+
+// ── 路由模式开关(GATE_CLIENT_RPC_ROUTER):默认必须落在旧模式 ─────────────
+//
+// client-rpc-router.md D34:未设 / 非 1|true|on 时 gate 行为与改前完全一致。
+// 这是灰度开关,拼错宁可留在直连,绝不能悄悄切到路由服。
+
+TEST(GateRouterMode, ExplicitOnValuesEnable)
+{
+	EXPECT_TRUE(gate_router_mode::ParseRouterModeFlag("1"));
+	EXPECT_TRUE(gate_router_mode::ParseRouterModeFlag("true"));
+	EXPECT_TRUE(gate_router_mode::ParseRouterModeFlag("on"));
+}
+
+TEST(GateRouterMode, OnValuesAreCaseInsensitiveAndTrimmed)
+{
+	EXPECT_TRUE(gate_router_mode::ParseRouterModeFlag("TRUE"));
+	EXPECT_TRUE(gate_router_mode::ParseRouterModeFlag("True"));
+	EXPECT_TRUE(gate_router_mode::ParseRouterModeFlag("ON"));
+	EXPECT_TRUE(gate_router_mode::ParseRouterModeFlag("On"));
+	EXPECT_TRUE(gate_router_mode::ParseRouterModeFlag("  1  "));
+	EXPECT_TRUE(gate_router_mode::ParseRouterModeFlag("\ttrue\n"));
+	EXPECT_TRUE(gate_router_mode::ParseRouterModeFlag(" on\r\n"));
+}
+
+TEST(GateRouterMode, EmptyAndUnsetDefaultToDirectMode)
+{
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag(""));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("   \t "));
+	// 变量名为空指针 / 变量未设置:都视为关。
+	EXPECT_FALSE(gate_router_mode::ResolveRouterModeFromEnv(nullptr));
+	SetEnvForTest("GATE_ROUTER_MODE_UNIT_TEST_UNSET", "");
+	EXPECT_FALSE(gate_router_mode::ResolveRouterModeFromEnv("GATE_ROUTER_MODE_UNIT_TEST_UNSET"));
+}
+
+TEST(GateRouterMode, ExplicitOffAndUnknownValuesStayDirect)
+{
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("0"));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("false"));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("off"));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("FALSE"));
+	// 没进白名单的肯定词也是关:开关只认三个显式值,不猜意图。
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("yes"));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("enable"));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("enabled"));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("router"));
+	// 形似但不等于:不能靠前缀匹配。
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("2"));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("10"));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("true1"));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("on-"));
+	EXPECT_FALSE(gate_router_mode::ParseRouterModeFlag("1 1"));
+}
+
+TEST(GateRouterMode, EnvValueIsReadAndParsed)
+{
+	// 用测试专属变量名,不与 IsRouterModeEnabled() 的进程级缓存耦合。
+	constexpr char kEnv[] = "GATE_ROUTER_MODE_UNIT_TEST";
+	SetEnvForTest(kEnv, "1");
+	EXPECT_TRUE(gate_router_mode::ResolveRouterModeFromEnv(kEnv));
+	SetEnvForTest(kEnv, " On ");
+	EXPECT_TRUE(gate_router_mode::ResolveRouterModeFromEnv(kEnv));
+	SetEnvForTest(kEnv, "off");
+	EXPECT_FALSE(gate_router_mode::ResolveRouterModeFromEnv(kEnv));
+	SetEnvForTest(kEnv, "");
+	EXPECT_FALSE(gate_router_mode::ResolveRouterModeFromEnv(kEnv));
+}
+
+TEST(GateRouterMode, ModeNameIsStableForLogs)
+{
+	// 启动日志与运维手册都按这两个词查:不能改。
+	EXPECT_STREQ("router", gate_router_mode::RouterModeName(true));
+	EXPECT_STREQ("direct", gate_router_mode::RouterModeName(false));
 }
 
 // ── 空 gate_token_secret:这是工作包 a 的核心回归 ───────────────────────────

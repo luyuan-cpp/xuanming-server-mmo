@@ -4,6 +4,7 @@ package match;
 import "proto/db/proto_option.proto";
 import "proto/common/base/empty.proto";
 import "proto/common/base/tip.proto";
+import "proto/battle/player_battle.proto";
 
 option go_package = "match/match";
 option (OptionFileDefaultNode) = NODE_MATCH;
@@ -35,6 +36,13 @@ service MatchService {
   // battle_id=0 表示随机观战(从活跃战斗索引里随机挑一场);成功后由 battle 节点
   // 经 Kafka 推 NotifySpectateState 首帧,客户端收到首帧才算进入观战。
   rpc WatchBattle(WatchBattleRequest) returns (WatchBattleResponse) {}
+
+  // ---- 战斗票据补签(客户端丢票 / 冷启动;turn-based-battle-server.md §18 D25) ----
+  // 大厅会话唯一的补签入口:match 按 spectate:battle:{battle_id} 索引定位房间所在 battle 节点,
+  // 调 BattleNode.IssueBattleTicket 由 battle 本地核对名单并自签;仅参战者 / 观众可得票。
+  // 曾是 BattleClientPlayer.RequestBattleTicket(gate→battle gRPC);gate 收成只连路由服后 gate 不再
+  // 认识 battle 节点,补签改由 match 转,请求 / 响应消息复用 player_battle.proto 里的定义。
+  rpc RequestBattleTicket(RequestBattleTicketRequest) returns (RequestBattleTicketResponse) {}
   rpc ListWatchableBattles(ListWatchableBattlesRequest) returns (ListWatchableBattlesResponse) {}
 }
 

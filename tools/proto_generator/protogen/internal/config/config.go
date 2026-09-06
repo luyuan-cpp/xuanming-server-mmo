@@ -95,6 +95,7 @@ type Paths struct {
 	MessageIdFile           string `yaml:"message_id_file"`
 	EventIdFile             string `yaml:"event_id_file"`
 	RobotMessageIdFile      string `yaml:"robot_message_id_file"`
+	ClientRpcRouterRouteTableFile string `yaml:"client_rpc_router_route_table_file"`
 	RobotProtoImportPath    string `yaml:"robot_proto_import_path"`
 	ServiceCppFile          string `yaml:"service_cpp_file"`
 	ServiceHeaderFile       string `yaml:"service_header_file"`

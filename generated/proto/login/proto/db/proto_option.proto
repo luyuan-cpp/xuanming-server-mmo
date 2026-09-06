@@ -47,6 +47,7 @@ enum NodeType {
 	NODE_GM = 28;                              // GM tool service (admin/CS commands)
 	NODE_PLAYER_LOCATOR = 29;                  // Cross-server player locator service
 	NODE_BATTLE = 30;                          // 回合制战斗节点
+	NODE_CLIENT_RPC_ROUTER = 31;               // 客户端 RPC 路由服(gate → 业务 Go 服务的唯一 gRPC 目标)
 }
 
 // ==============================================================================

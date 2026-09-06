@@ -33,6 +33,7 @@ static const char* BattleClientPlayer_method_names[] = {
   "/BattleClientPlayer/NotifySpectateState",
   "/BattleClientPlayer/NotifySpectateTurnResult",
   "/BattleClientPlayer/NotifySpectateEnd",
+  "/BattleClientPlayer/NotifyBattleAssigned",
 };
 
 std::unique_ptr< BattleClientPlayer::Stub> BattleClientPlayer::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -53,6 +54,7 @@ BattleClientPlayer::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>&
   , rpcmethod_NotifySpectateState_(BattleClientPlayer_method_names[8], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_NotifySpectateTurnResult_(BattleClientPlayer_method_names[9], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_NotifySpectateEnd_(BattleClientPlayer_method_names[10], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_NotifyBattleAssigned_(BattleClientPlayer_method_names[11], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status BattleClientPlayer::Stub::SubmitBattleAction(::grpc::ClientContext* context, const ::SubmitBattleActionRequest& request, ::SubmitBattleActionResponse* response) {
@@ -308,6 +310,29 @@ void BattleClientPlayer::Stub::async::NotifySpectateEnd(::grpc::ClientContext* c
   return result;
 }
 
+::grpc::Status BattleClientPlayer::Stub::NotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::Empty* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::BattleAssignedS2C, ::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_NotifyBattleAssigned_, context, request, response);
+}
+
+void BattleClientPlayer::Stub::async::NotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C* request, ::Empty* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::BattleAssignedS2C, ::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyBattleAssigned_, context, request, response, std::move(f));
+}
+
+void BattleClientPlayer::Stub::async::NotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyBattleAssigned_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::Empty>* BattleClientPlayer::Stub::PrepareAsyncNotifyBattleAssignedRaw(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::Empty, ::BattleAssignedS2C, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_NotifyBattleAssigned_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::Empty>* BattleClientPlayer::Stub::AsyncNotifyBattleAssignedRaw(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncNotifyBattleAssignedRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 BattleClientPlayer::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       BattleClientPlayer_method_names[0],
@@ -419,6 +444,16 @@ BattleClientPlayer::Service::Service() {
              ::Empty* resp) {
                return service->NotifySpectateEnd(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      BattleClientPlayer_method_names[11],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< BattleClientPlayer::Service, ::BattleAssignedS2C, ::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](BattleClientPlayer::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::BattleAssignedS2C* req,
+             ::Empty* resp) {
+               return service->NotifyBattleAssigned(ctx, req, resp);
+             }, this)));
 }
 
 BattleClientPlayer::Service::~Service() {
@@ -495,6 +530,13 @@ BattleClientPlayer::Service::~Service() {
 }
 
 ::grpc::Status BattleClientPlayer::Service::NotifySpectateEnd(::grpc::ServerContext* context, const ::SpectateEndS2C* request, ::Empty* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status BattleClientPlayer::Service::NotifyBattleAssigned(::grpc::ServerContext* context, const ::BattleAssignedS2C* request, ::Empty* response) {
   (void) context;
   (void) request;
   (void) response;

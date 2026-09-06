@@ -26,6 +26,7 @@ static const char* BattleNode_method_names[] = {
   "/BattleNode/DestroyBattle",
   "/BattleNode/AddObserver",
   "/BattleNode/RemoveObserver",
+  "/BattleNode/IssueBattleTicket",
 };
 
 std::unique_ptr< BattleNode::Stub> BattleNode::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -39,6 +40,7 @@ BattleNode::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel
   , rpcmethod_DestroyBattle_(BattleNode_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_AddObserver_(BattleNode_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_RemoveObserver_(BattleNode_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_IssueBattleTicket_(BattleNode_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status BattleNode::Stub::CreateBattle(::grpc::ClientContext* context, const ::CreateBattleRequest& request, ::CreateBattleResponse* response) {
@@ -133,6 +135,29 @@ void BattleNode::Stub::async::RemoveObserver(::grpc::ClientContext* context, con
   return result;
 }
 
+::grpc::Status BattleNode::Stub::IssueBattleTicket(::grpc::ClientContext* context, const ::IssueBattleTicketRequest& request, ::IssueBattleTicketResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::IssueBattleTicketRequest, ::IssueBattleTicketResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_IssueBattleTicket_, context, request, response);
+}
+
+void BattleNode::Stub::async::IssueBattleTicket(::grpc::ClientContext* context, const ::IssueBattleTicketRequest* request, ::IssueBattleTicketResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::IssueBattleTicketRequest, ::IssueBattleTicketResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_IssueBattleTicket_, context, request, response, std::move(f));
+}
+
+void BattleNode::Stub::async::IssueBattleTicket(::grpc::ClientContext* context, const ::IssueBattleTicketRequest* request, ::IssueBattleTicketResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_IssueBattleTicket_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::IssueBattleTicketResponse>* BattleNode::Stub::PrepareAsyncIssueBattleTicketRaw(::grpc::ClientContext* context, const ::IssueBattleTicketRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::IssueBattleTicketResponse, ::IssueBattleTicketRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_IssueBattleTicket_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::IssueBattleTicketResponse>* BattleNode::Stub::AsyncIssueBattleTicketRaw(::grpc::ClientContext* context, const ::IssueBattleTicketRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncIssueBattleTicketRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 BattleNode::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       BattleNode_method_names[0],
@@ -174,6 +199,16 @@ BattleNode::Service::Service() {
              ::Empty* resp) {
                return service->RemoveObserver(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      BattleNode_method_names[4],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< BattleNode::Service, ::IssueBattleTicketRequest, ::IssueBattleTicketResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](BattleNode::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::IssueBattleTicketRequest* req,
+             ::IssueBattleTicketResponse* resp) {
+               return service->IssueBattleTicket(ctx, req, resp);
+             }, this)));
 }
 
 BattleNode::Service::~Service() {
@@ -201,6 +236,13 @@ BattleNode::Service::~Service() {
 }
 
 ::grpc::Status BattleNode::Service::RemoveObserver(::grpc::ServerContext* context, const ::RemoveObserverRequest* request, ::Empty* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status BattleNode::Service::IssueBattleTicket(::grpc::ServerContext* context, const ::IssueBattleTicketRequest* request, ::IssueBattleTicketResponse* response) {
   (void) context;
   (void) request;
   (void) response;

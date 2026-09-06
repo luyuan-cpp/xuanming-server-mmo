@@ -10,11 +10,14 @@
 //   3) HMAC 工具原来藏在 client_message_processor.cpp 的匿名 namespace 里,
 //      GM 鉴权要复用它 —— 提到这里避免第二份实现。
 //
-// 依赖:标准库 + OpenSSL(gate 已经链了 ssl/crypto,不引入新依赖)。
+// 依赖:标准库 + OpenSSL(gate 已经链了 ssl/crypto,不引入新依赖)+
+//      引擎层 core/security/token_security.h(同样只依赖标准库 + OpenSSL)。
 
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+
+#include "security/token_security.h"
 
 #include <cctype>
 #include <cerrno>
@@ -32,208 +35,40 @@
 namespace gate_security
 {
 
-// ── HMAC / 定长比较 ─────────────────────────────────────────────────────────
-
-inline std::string BytesToHex(const unsigned char *data, unsigned int size)
-{
-	std::ostringstream stream;
-	stream << std::hex << std::setfill('0');
-	for (unsigned int index = 0; index < size; ++index)
-	{
-		stream << std::setw(2) << static_cast<unsigned int>(data[index]);
-	}
-	return stream.str();
-}
-
-inline std::string HmacSha256Hex(std::string_view secret, std::string_view payload)
-{
-	unsigned char digest[EVP_MAX_MD_SIZE];
-	unsigned int digestLength = 0;
-	const auto *result = HMAC(EVP_sha256(),
-							  secret.data(),
-							  static_cast<int>(secret.size()),
-							  reinterpret_cast<const unsigned char *>(payload.data()),
-							  payload.size(),
-							  digest,
-							  &digestLength);
-	if (result == nullptr)
-	{
-		return {};
-	}
-	return BytesToHex(digest, digestLength);
-}
-
-// 常数时间比较。std::string 的 == 在首个不匹配字节处提前返回,攻击者可用
-// 计时差逐字节猜签名。长度不等可以直接拒(长度不是秘密)。
-inline bool ConstantTimeEquals(std::string_view lhs, std::string_view rhs)
-{
-	if (lhs.size() != rhs.size() || lhs.empty())
-	{
-		return false;
-	}
-	return CRYPTO_memcmp(lhs.data(), rhs.data(), lhs.size()) == 0;
-}
-
-// ── 运行模式 ────────────────────────────────────────────────────────────────
+// ── HMAC / 运行模式 / 空密钥处置:唯一实现在引擎层 ─────────────────────────
 //
-// gate 原来**没有任何** dev/prod 判别:空 gate_token_secret 就等于"开发模式,
-// 全放行"。这里补上唯一的显式判据 —— 环境变量 GATE_RUN_MODE。
-// 默认值必须是安全的那一侧:未设置 / 设了不认识的值,一律按 prod 处理。
+// 原来定义在这里的 HmacSha256Hex / ConstantTimeEquals / RunMode / ParseRunMode /
+// TokenSecretVerdict / ClassifyTokenSecret 已提到 core/security/token_security.h
+// (battle 节点客户端直连票据要用同一套,见 turn-based-battle-server.md §18)。
+// 这里只留 using 别名,gate 全部调用点与 tests/gate_security_test.cpp 的 API 不变。
 
-enum class RunMode
-{
-	kProd,
-	kDev,
-	kTest,
-};
-
-inline const char *RunModeName(RunMode mode)
-{
-	switch (mode)
-	{
-	case RunMode::kDev:
-		return "dev";
-	case RunMode::kTest:
-		return "test";
-	case RunMode::kProd:
-	default:
-		return "prod";
-	}
-}
-
-// 非生产 = 允许出现降级路径(空密钥放行)的环境。
-inline bool IsNonProdMode(RunMode mode)
-{
-	return mode == RunMode::kDev || mode == RunMode::kTest;
-}
-
-inline std::string ToLowerAscii(std::string_view text)
-{
-	std::string lowered;
-	lowered.reserve(text.size());
-	for (const char ch : text)
-	{
-		lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(ch))));
-	}
-	return lowered;
-}
-
-inline std::string TrimAscii(std::string_view text)
-{
-	size_t begin = 0;
-	size_t end = text.size();
-	while (begin < end && std::isspace(static_cast<unsigned char>(text[begin])) != 0)
-	{
-		++begin;
-	}
-	while (end > begin && std::isspace(static_cast<unsigned char>(text[end - 1])) != 0)
-	{
-		--end;
-	}
-	return std::string(text.substr(begin, end - begin));
-}
-
-// recognized 输出"这个字符串是不是我们认识的模式名"。不认识时 mode 仍然是
-// kProd(安全侧),但调用点应当就此打一条 WARN —— 把 GATE_RUN_MODE 拼错成
-// "Dev "、"develop" 之类而静默按生产跑,是运维最容易踩的坑。
-inline RunMode ParseRunMode(std::string_view raw, bool *recognized)
-{
-	const std::string value = ToLowerAscii(TrimAscii(raw));
-	const auto mark = [recognized](bool ok)
-	{
-		if (recognized != nullptr)
-		{
-			*recognized = ok;
-		}
-	};
-
-	if (value.empty())
-	{
-		// 未配置不算"拼错",只是走默认(生产)。
-		mark(true);
-		return RunMode::kProd;
-	}
-	if (value == "prod" || value == "production" || value == "release" || value == "live")
-	{
-		mark(true);
-		return RunMode::kProd;
-	}
-	if (value == "dev" || value == "development" || value == "local")
-	{
-		mark(true);
-		return RunMode::kDev;
-	}
-	if (value == "test" || value == "testing")
-	{
-		mark(true);
-		return RunMode::kTest;
-	}
-
-	mark(false);
-	return RunMode::kProd;
-}
-
-struct RunModeResolution
-{
-	RunMode mode = RunMode::kProd;
-	bool recognized = true;
-	std::string raw;
-};
+using token_security::BytesToHex;
+using token_security::ClassifyTokenSecret;
+using token_security::ConstantTimeEquals;
+using token_security::HmacSha256Hex;
+using token_security::IsNonProdMode;
+using token_security::ParseRunMode;
+using token_security::RunMode;
+using token_security::RunModeName;
+using token_security::RunModeResolution;
+using token_security::ToLowerAscii;
+using token_security::TokenSecretVerdict;
+using token_security::TokenSecretVerdictName;
+using token_security::TrimAscii;
 
 inline constexpr char kRunModeEnv[] = "GATE_RUN_MODE";
 
 // 进程内解析一次并缓存:运行模式在进程生命周期内不会变,而且这个值会被
-// 每条新连接读到,不能每次都去 getenv。
+// 每条新连接读到,不能每次都 getenv。
 inline const RunModeResolution &ResolveRunModeOnce()
 {
-	static const RunModeResolution resolution = []
-	{
-		RunModeResolution result;
-		const char *raw = std::getenv(kRunModeEnv);
-		result.raw = raw != nullptr ? raw : "";
-		result.mode = ParseRunMode(result.raw, &result.recognized);
-		return result;
-	}();
+	static const RunModeResolution resolution = token_security::ResolveRunModeFromEnv(kRunModeEnv);
 	return resolution;
 }
 
 inline RunMode CurrentRunMode()
 {
 	return ResolveRunModeOnce().mode;
-}
-
-// ── 空 gate_token_secret 的处置 ─────────────────────────────────────────────
-
-enum class TokenSecretVerdict
-{
-	kEnforce,   // 配了密钥:正常做 HMAC 令牌校验
-	kDevBypass, // 没配密钥 + 非生产:放行,调用点必须打醒目 WARN
-	kRefuse,    // 没配密钥 + 生产:fail-closed(拒绝启动 / 拒绝连接)
-};
-
-inline const char *TokenSecretVerdictName(TokenSecretVerdict verdict)
-{
-	switch (verdict)
-	{
-	case TokenSecretVerdict::kEnforce:
-		return "enforce";
-	case TokenSecretVerdict::kDevBypass:
-		return "dev_bypass";
-	case TokenSecretVerdict::kRefuse:
-	default:
-		return "refuse";
-	}
-}
-
-// 纯空白的密钥等同于没配 —— YAML 里写成 `GateTokenSecret: " "` 不该被当成
-// 配好了。
-inline TokenSecretVerdict ClassifyTokenSecret(std::string_view secret, RunMode mode)
-{
-	if (!TrimAscii(secret).empty())
-	{
-		return TokenSecretVerdict::kEnforce;
-	}
-	return IsNonProdMode(mode) ? TokenSecretVerdict::kDevBypass : TokenSecretVerdict::kRefuse;
 }
 
 // ── GM 面鉴权 ───────────────────────────────────────────────────────────────

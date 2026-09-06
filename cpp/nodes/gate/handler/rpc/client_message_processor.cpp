@@ -10,11 +10,14 @@
 #include <string_view>
 
 #include "gate_codec.h"
+#include "gate_router_mode.h"
 #include "gate_security.h"
 #include "message_limiter/illegal_packet_counter.h"
 #include "error_reporter/error_reporter.h"
 #include "node/system/node/node.h"
 #include "grpc_client/login/login_grpc_client.h"
+#include "grpc_client/client_rpc_router/client_rpc_router_grpc_client.h"
+#include "proto/client_rpc_router/client_rpc_router.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "rpc/service_metadata/scene_service_metadata.h"
@@ -103,6 +106,57 @@ static inline uint64_t GetEffectiveNodeId(
 	// the session binding via entity integers. Returning kInvalidEntityId lets
 	// the caller short-circuit rather than forward to a phantom node.
 	return SessionInfo::kInvalidEntityId;
+}
+
+// SessionDetails 是 gate 递给 Go 服务的会话身份(gRPC metadata x-session-detail-bin,
+// Go 侧 SessionInterceptor 据此识别玩家,并在响应头回写供 gate 找回会话)。
+// 路由模式的请求转发与断线通知都用这一份;playerId 传 0 表示"尚未绑定玩家"
+// (proto3 隐式存在:0 与不设置在线上是同一形状)。
+static SessionDetails BuildSessionDetails(const SessionId sessionId, const Guid playerId)
+{
+	SessionDetails sessionDetails;
+	sessionDetails.set_session_id(sessionId);
+	sessionDetails.set_player_id(playerId);
+	sessionDetails.set_gate_node_id(gNode->GetNodeId());
+	sessionDetails.set_gate_instance_id(gNode->GetNodeInfo().node_uuid());
+	return sessionDetails;
+}
+
+// 路由模式专用:把一条 ClientRequest **原包**交给路由服(client-rpc-router.md D30
+// 不透明转发)。不解析 body、不挑业务实例 —— 目标由路由服按生成的路由表和
+// zone_id 选;会话身份仍走同一段 metadata,Go 侧拦截器看到的与 gate 直连时完全相同。
+//
+// 返回 false = 本地尚未发现任何路由服实例(启动窗口 / 路由服全部下线)。调用方
+// 决定后果:请求路径回客户端 kServiceUnavailable;断线通知没有客户端可回,只留痕。
+static bool SendViaRouter(const ClientRequest &request, const SessionDetails &sessionDetails)
+{
+	const auto routerNode = PickRandomNode(eNodeType::ClientRpcRouterNodeService);
+	if (!routerNode)
+	{
+		// 路由服全部下线时这里的频率 = 全部在线玩家的 gRPC 类消息频率,必须采样;
+		// 每 1024 条留一行趋势证据,配合客户端收到的 kServiceUnavailable 定性。
+		static uint64_t unavailableCount = 0;
+		if ((unavailableCount++ & 0x3FF) == 0)
+		{
+			LOG_WARN << "路由服无可用实例,消息未转发(采样), latest_message_id=" << request.message_id()
+					 << ", latest_session_id=" << sessionDetails.session_id()
+					 << ", unavailable_total=" << unavailableCount;
+		}
+		return false;
+	}
+
+	client_rpc_router::ForwardRequest forwardRequest;
+	forwardRequest.mutable_request()->CopyFrom(request);
+	// zone-scoped 目标(login)由路由服按这个 zone 挑同 zone 实例,与直连模式下
+	// PickRandomNode 的 zone 过滤语义一致(D33)。
+	forwardRequest.set_zone_id(gNode->GetNodeInfo().zone_id());
+	client_rpc_router::SendClientRpcRouterForward(
+		tlsNodeContextManager.GetRegistry(eNodeType::ClientRpcRouterNodeService),
+		*routerNode,
+		forwardRequest,
+		{kSessionBinMetaKey},
+		SerializeSessionDetails(sessionDetails));
+	return true;
 }
 
 RpcClientSessionHandler::RpcClientSessionHandler(ProtobufCodec &codec,
@@ -380,20 +434,33 @@ void RpcClientSessionHandler::HandleConnectionDisconnection(const muduo::net::Tc
 	// 永久留在 ONLINE。
 	if (shouldNotifyLogin)
 	{
-		const auto loginNode = PickRandomNode(eNodeType::LoginNodeService);
-		if (loginNode)
+		loginpb::LoginNodeDisconnectRequest request;
+		request.set_session_id(sessionId);
+		// 未绑定玩家时 player_id 保持 0(见上面的注释:Login 会在 playerID==0 门禁早退)。
+		const SessionDetails sessionDetails = BuildSessionDetails(sessionId, hasBoundPlayer ? playerId : 0);
+
+		if (gate_router_mode::IsRouterModeEnabled())
 		{
-			loginpb::LoginNodeDisconnectRequest request;
-			request.set_session_id(sessionId);
-			SessionDetails sessionDetails;
-			sessionDetails.set_session_id(sessionId);
-			sessionDetails.set_gate_node_id(gNode->GetNodeId());
-			sessionDetails.set_gate_instance_id(gNode->GetNodeInfo().node_uuid());
-			if (hasBoundPlayer)
+			// 路由模式(client-rpc-router.md D34):gate 对 login 零 stub,断线通知合成一条
+			// ClientRequest 走与客户端请求同一条 Forward 路径,路由服按 message_id 转给
+			// 同 zone 的 login,Login 侧看到的请求体与 metadata 与直连时完全相同。
+			// id=0:这是单向通知;回包 MessageContent 到达时会话已 erase,桥接找不到会话
+			// 直接丢弃 —— 与直连模式下 LoginNodeDisconnectResponse 的处置一致。
+			// 无路由服时 SendViaRouter 已采样 WARN 留痕;这里没有客户端可回 tip,Login 侧
+			// 的会话状态由其自身租约超时兜底(与直连模式下 login 全下线时的行为一致)。
+			ClientRequest disconnectRequest;
+			disconnectRequest.set_id(0);
+			disconnectRequest.set_message_id(ClientPlayerLoginDisconnectMessageId);
+			disconnectRequest.set_body(request.SerializeAsString());
+			SendViaRouter(disconnectRequest, sessionDetails);
+		}
+		else
+		{
+			const auto loginNode = PickRandomNode(eNodeType::LoginNodeService);
+			if (loginNode)
 			{
-				sessionDetails.set_player_id(playerId);
+				loginpb::SendClientPlayerLoginDisconnect(tlsNodeContextManager.GetRegistry(eNodeType::LoginNodeService), *loginNode, request, {kSessionBinMetaKey}, SerializeSessionDetails(sessionDetails));
 			}
-			loginpb::SendClientPlayerLoginDisconnect(tlsNodeContextManager.GetRegistry(eNodeType::LoginNodeService), *loginNode, request, {kSessionBinMetaKey}, SerializeSessionDetails(sessionDetails));
 		}
 	}
 
@@ -708,6 +775,51 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 	}
 }
 
+// 路由模式下 PROTOCOL_GRPC 消息的唯一出口(HandleGrpcNodeMessage 的替身,
+// client-rpc-router.md §3)。与直连路径的差别只有两处:
+//   * 不解析 body —— gRpcMethodRegistry 里的共享原型 requestProto 完全不被触碰,
+//     原包字节交给路由服,由目标 Go 服务自己解;
+//   * 不挑业务实例 —— 只挑路由服实例。
+// 三道闸(IsClientMessageId / 体积 / 限速)仍在调用方 DispatchClientRpcMessage 里,
+// 顺序与直连模式完全相同;本函数只在闸门全部通过后被调用。
+static void HandleRouterForward(SessionId sessionId, const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn)
+{
+	assert(request->message_id() < gRpcMethodRegistry.size());
+	const auto &rpcHandlerMeta = gRpcMethodRegistry[request->message_id()];
+
+	// D33:战斗只走客户端直连(turn-based-battle-server.md §18),不经路由服。
+	// battle 的会话绑定只有 gate 知道,路由服不该复制这份状态;而路由模式下 gate
+	// 又不再持 battle stub —— 所以在这里就拒,不劳路由服再拒一次。
+	// skip_direct_connect 的回落路径在路由模式下预期失败,是设计而非缺陷(设计文档 §7.5)。
+	if (rpcHandlerMeta.targetNodeType == eNodeType::BattleNodeService)
+	{
+		LOG_DEBUG << "路由模式拒绝经 gate 的战斗消息(战斗只走直连), session_id=" << sessionId
+				  << ", message_id=" << request->message_id();
+		RpcClientSessionHandler::SendTipToClient(conn, kServiceUnavailable);
+		return;
+	}
+
+	const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
+	if (sessionIt == tlsSessionManager.sessions().end())
+	{
+		LOG_ERROR << "Session not found for session id: " << sessionId;
+		return;
+	}
+
+	if (!SendViaRouter(*request, BuildSessionDetails(sessionId, sessionIt->second.playerId)))
+	{
+		RpcClientSessionHandler::SendTipToClient(conn, kServiceUnavailable);
+		return;
+	}
+
+	// 与直连路径同一条规则:确实发出过 Login.Login 的会话,断开时才需要通知 Login 清
+	// session-id 状态。放在发出之后 —— 没选到路由服、根本没发出去的请求不算"发起过登录"。
+	if (request->message_id() == ClientPlayerLoginLoginMessageId)
+	{
+		sessionIt->second.loginStarted = true;
+	}
+}
+
 bool RpcClientSessionHandler::ValidateClientMessage(SessionInfo &session, const RpcClientMessagePtr &request, const muduo::net::TcpConnectionPtr &conn) const
 {
 	if (!CheckMessageSize(session, request, conn))
@@ -777,7 +889,16 @@ void RpcClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpConn
 	}
 	else if (messageInfo.protocol == PROTOCOL_GRPC)
 	{
-		HandleGrpcNodeMessage(sessionId, request, conn);
+		// 路由模式(GATE_CLIENT_RPC_ROUTER=1):原包交给路由服,不解析、不挑业务实例;
+		// 直连模式:typed sender 直发业务服务,与引入路由服之前完全一致(D34)。
+		if (gate_router_mode::IsRouterModeEnabled())
+		{
+			HandleRouterForward(sessionId, request, conn);
+		}
+		else
+		{
+			HandleGrpcNodeMessage(sessionId, request, conn);
+		}
 	}
 }
 

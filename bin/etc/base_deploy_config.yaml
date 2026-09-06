@@ -44,6 +44,7 @@ service_discovery_prefixes:
   - "GuildNodeService.rpc" # 公会服务（Go-Zero gRPC）的Etcd存储前缀
   - "SceneManagerNodeService.rpc" # 场景管理服务（Go-Zero gRPC）的Etcd存储前缀
   - "BattleNodeService.rpc" # 回合制战斗节点（C++ gRPC，全局池不分 zone；gate 据此发现 battle 建 gRPC channel，match 的 Go 侧自行 watch）
+  - "ClientRpcRouterNodeService.rpc" # 客户端 RPC 路由服(Go-Zero,全局池):GATE_CLIENT_RPC_ROUTER=1 时 gate 唯一的 gRPC 目标,客户端消息按 message_id 经它不透明转发到 login/match/… (docs/design/client-rpc-router.md)
   - "MatchNodeService.rpc" # 匹配服务（Go-Zero gRPC，全局池不分 zone：不在 IsZoneScopedNodeType，gate 连全 zone 的 match 实例随机路由；排队池全服共享，见 docs/design/cross-zone-matchmaking.md）：gate 按 NODE_MATCH 路由 JoinQueue/WatchBattle 等客户端消息，缺此前缀会报 "Node not found ... message id: 157"（2026-09-01 冒烟补）
 
 # Kafka 配置（分布式消息队列，用于异步通信、日志收集、事件分发等）
@@ -95,3 +96,13 @@ GateTokenSecret: "local-dev-gate-token-secret-0123456789abcdef"
 # 上界 131071 为所有 node_id 保留 UINT32_MAX 拒连哨兵,也避免 session-id
 # 空间占满后碰撞重试永久自旋。
 GateMaxConnections: 20000
+
+# battle 节点客户端直连票据 HMAC 共享密钥(battle 节点签发并校验,见
+# docs/design/turn-based-battle-server.md §18 D24)。全部 battle 实例必须一致;
+# 刻意与 GateTokenSecret 不同(分域:任一泄露不影响另一侧)。
+# 空值处置看 BATTLE_RUN_MODE:dev/test 放行并打 SECURITY WARNING,prod 拒绝启动。
+BattleTokenSecret: "local-dev-battle-token-secret-fedcba9876543210"
+
+# battle 节点客户端面并发直连上限(语义同 GateMaxConnections;0 仅 dev/test 允许)。
+# 回合制房间人数有界:参战 ≤10 + 观众 ≤20 每房,按单节点期望房间数留余量。
+BattleMaxConnections: 4096

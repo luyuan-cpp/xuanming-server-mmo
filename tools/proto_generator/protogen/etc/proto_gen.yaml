@@ -63,6 +63,8 @@ paths:
   message_id_file: "{{proto_dir}}message_id.txt"
   event_id_file: "{{proto_dir}}event_id.txt"
   robot_message_id_file: "{{robot_go_game_pb_dir}}/message_id.go"
+  # 客户端 RPC 路由服的生成路由表(message_id → gRPC 全限定方法 / 目标节点类型),与该服务的 message_id.go 同包
+  client_rpc_router_route_table_file: "{{node_go_dir}}client_rpc_router/generated/pb/game/route_table.go"
   robot_proto_import_path: "{{output_root}}{{robot_proto}}" # Robot proto import path
   service_cpp_file: "{{service_info_dir}}rpc_event_registry.cpp"
   service_header_file: "{{service_info_dir}}rpc_event_registry.h"
@@ -452,6 +454,20 @@ domain_meta:
 
   # 匹配服务(此前 domain_meta 缺失导致 match 只有零散 pb 产物):
   # Go match 服务实现 MatchService(客户端协议,gate 经 gRPC 直达);cpp 侧供 gate 路由元数据与消息类。
+  # 客户端 RPC 路由服(docs/design/client-rpc-router.md):gate 唯一的 gRPC 目标;Go 实现 ClientRpcRouter,
+  # cpp 侧供 gate 生成 sender / 完成队列分派。
+  client_rpc_router:
+    source: "{{proto_dir}}client_rpc_router/"
+    rpc:
+      type: grpc
+    outputs:
+      go:
+        proto: "go/generated/client_rpc_router/proto"
+        grpc: "go/generated/client_rpc_router/grpc"
+      cpp:
+        proto: "cpp/generated/client_rpc_router/proto"
+        grpc: "cpp/generated/client_rpc_router/grpc"
+
   match:
     source: "{{proto_dir}}match/"
     rpc:

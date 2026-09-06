@@ -10,7 +10,8 @@ package main
 //           双方回合数 ≥ 1。
 //
 // 结果约定(供外层脚本消费):
-//   全部通过 → 日志一行 `CROSS_ZONE_MATCH_OK battle_id=… zone_a=… zone_b=… a_turns=… b_turns=…`,
+//   全部通过 → 日志一行 `CROSS_ZONE_MATCH_OK battle_id=… zone_a=… zone_b=… a_turns=… b_turns=…
+//                a_direct_turns=… b_direct_turns=…`(跳过直连时后两项为 -1),
 //              退出码 0;
 //   任一步失败 → 日志一行 `CROSS_ZONE_MATCH_FAIL step=… reason=…`,退出码 1。
 //
@@ -73,6 +74,8 @@ type crossZoneFighterResult struct {
 	battleId uint64
 	outcome  int32
 	turns    int
+	// directTurns 是从战斗直连收到的 NotifyTurnResult 条数;-1 = 本次跳过直连
+	directTurns int
 }
 
 // runCrossZoneMatchSmoke 是 cross_zone=true 时 RunBattleSmoke 的实际流程。
@@ -212,8 +215,8 @@ func runCrossZoneMatchSmoke(cfg *config.Config) {
 	bRes := collect("b", bDone)
 
 	// ---- 全部断言通过 ----
-	zap.L().Info(fmt.Sprintf("CROSS_ZONE_MATCH_OK battle_id=%d zone_a=%d zone_b=%d a_turns=%d b_turns=%d",
-		aRes.battleId, zoneA, zoneB, aRes.turns, bRes.turns),
+	zap.L().Info(fmt.Sprintf("CROSS_ZONE_MATCH_OK battle_id=%d zone_a=%d zone_b=%d a_turns=%d b_turns=%d a_direct_turns=%d b_direct_turns=%d",
+		aRes.battleId, zoneA, zoneB, aRes.turns, bRes.turns, aRes.directTurns, bRes.directTurns),
 		zap.String("a_gate", botA.gate), zap.String("b_gate", botB.gate),
 		zap.String("a_outcome", battle.EBattleOutcome(aRes.outcome).String()),
 		zap.String("b_outcome", battle.EBattleOutcome(bRes.outcome).String()))
@@ -254,8 +257,26 @@ func runCrossZoneFighter(side string, bot *battleSmokeBot, zone uint32, mode mat
 	zap.L().Info("[cross-zone] battle started, enabling auto battle",
 		zap.String("side", side), zap.Uint64("battle_id", battleId))
 
+	// 战斗直连(§18):两侧各凭自己的票据直连同一个 battle 节点(battle 是全局池,
+	// 跨 zone 对局两人连的是同一进程)。跳过时退回 gate 中继(D23 回落路径)。
+	var direct *battleDirectConn
+	sendBattle := bot.gc.SendRequest
+	if loginTestCfg == nil || !loginTestCfg.BattleSmoke.SkipDirectConnect {
+		direct, err = openBattleDirectConn(bot, stats)
+		if err != nil {
+			return crossZoneFighterResult{step: stepPrefix + "-direct-connect", err: err, battleId: battleId}
+		}
+		defer direct.Close()
+		if direct.battleId != battleId {
+			return crossZoneFighterResult{step: stepPrefix + "-direct-battle-id",
+				err:      fmt.Errorf("direct handshake battle_id=%d != started battle_id=%d", direct.battleId, battleId),
+				battleId: battleId}
+		}
+		sendBattle = direct.Send
+	}
+
 	// 双方都开自动战斗,battle 节点每回合替双方出招,冒烟无需手工提交动作。
-	if err := bot.gc.SendRequest(game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{
+	if err := sendBattle(game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{
 		BattleId: battleId,
 		Enabled:  true,
 	}); err != nil {
@@ -273,9 +294,20 @@ func runCrossZoneFighter(side string, bot *battleSmokeBot, zone uint32, mode mat
 	}
 
 	turns := bot.player.GetTurnCount()
+	directTurns := -1
+	if direct != nil {
+		directTurns = int(direct.turnResults.Load())
+		zap.L().Info("[cross-zone] direct-connect delivery",
+			zap.String("side", side), zap.String("counts", direct.summary()))
+		if directTurns < 1 || direct.battleEnds.Load() < 1 {
+			return crossZoneFighterResult{step: stepPrefix + "-direct-delivery",
+				err:      fmt.Errorf("direct connection saw %s, expected turn_results>=1 and battle_ends>=1", direct.summary()),
+				battleId: battleId, outcome: outcome, turns: turns}
+		}
+	}
 	zap.L().Info("[cross-zone] battle finished",
 		zap.String("side", side), zap.Uint64("battle_id", battleId),
 		zap.String("outcome", battle.EBattleOutcome(outcome).String()),
-		zap.Int("turns", turns))
-	return crossZoneFighterResult{battleId: battleId, outcome: outcome, turns: turns}
+		zap.Int("turns", turns), zap.Int("direct_turns", directTurns))
+	return crossZoneFighterResult{battleId: battleId, outcome: outcome, turns: turns, directTurns: directTurns}
 }

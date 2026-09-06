@@ -1,0 +1,44 @@
+Name: client_rpc_router.rpc
+ListenOn: 127.0.0.1:50600
+# zrpc 服务端整体超时(毫秒)。必须为 0(不限)或大于 ForwardTimeoutMs:
+# 转发链上游先于目标超时会把目标的正常慢响应误判成故障。
+Timeout: 6000
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  Key: client_rpc_router.rpc
+
+# ⚠ 必配,且由 config.Validate 强制:go-zero 的 Stat 拦截器默认开启,会对每个
+# 非慢调用 json.Marshal(req) 后按 INFO 打整包 —— ForwardRequest 里带的是客户端
+# 原包 body([]byte 被 JSON 编成 base64),一次解码就是目标请求的 protobuf。
+# 对 ClientPlayerLogin/Login 那就是**明文账号密码落日志**(AGENTS.md §7 红线),
+# 而且路由服汇聚全部 gate 的全部 gRPC 类客户端消息,逐请求 INFO 等于把全网
+# 消息速率放大成日志速率。这里只屏蔽内容,不关 Stat —— 慢调用告警仍然保留。
+Middlewares:
+  StatConf:
+    IgnoreContentMethods:
+      - /client_rpc_router.ClientRpcRouter/Forward
+
+# C++ 约定 etcd 注册路径用的 zone id。ClientRpcRouterNodeService 是全局池节点类型
+# (node_util.cpp IsGlobalPoolNodeType),gate 连的是全 zone 的路由服实例;
+# zone 只影响本服务自己的注册路径,不影响转发时对目标实例的 zone 过滤
+# (那个用的是 ForwardRequest.zone_id,即发起 gate 所在 zone)。
+ZoneId: 1
+
+# etcd 节点注册 keepalive 的租约 TTL(秒)。
+LeaseTTL: 60
+
+# 单次向目标业务服务 Invoke 的超时(毫秒)。超时按 kServiceUnavailable 回给客户端。
+ForwardTimeoutMs: 5000
+
+# 只挑与 ForwardRequest.zone_id 同 zone 实例的目标节点类型(设计决策 D33),
+# 取值是 proto/common/base/node.proto 的 ENodeType 枚举名;其余类型全局随机。
+# 与 gate 的 IsZoneScopedNodeType 语义一致:login 按 zone 注册、只服务本 zone。
+ZoneScopedNodeTypes:
+  - LoginNodeService
+
+# Prometheus /metrics 监听地址,留空关闭(dev 默认关)。
+# 端口分工:9101=login / 9150=scene_manager / 9160=db / 9170=guild(match 也写了 9170)/
+# 9180=friend / 9190=player_locator。设计文档 §6 写「续 9180」,但 9180 已被 friend 占用,
+# 开启时请填下一个空位 ":9200",并同步修正设计文档。
+MetricsListenAddr: ""

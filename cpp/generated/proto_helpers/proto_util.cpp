@@ -31,6 +31,7 @@ bool IsTcpNodeType(uint32_t nodeType) {
 		common::base::eNodeType::DataServiceNodeService,
 		common::base::eNodeType::FriendNodeService,
 		common::base::eNodeType::BattleNodeService,
+		common::base::eNodeType::ClientRpcRouterNodeService,
 	};
 
 	return validTypes.contains(nodeType);

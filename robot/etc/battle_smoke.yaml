@@ -31,6 +31,10 @@ mode: "battle-smoke"
 #   zone_a: 1
 #   zone_b: 2
 #   mode: "1v1"
+#   # 战斗直连(docs/design/turn-based-battle-server.md §18):缺省 false = 收到
+#   # NotifyBattleAssigned 后凭票据直连 battle 节点客户端面,并断言回合结果 / 终局包
+#   # 从直连到达;true = 跳过直连,战斗消息全程经 gate 中继(验证 D23 回落路径仍完整)。
+#   skip_direct_connect: false
 
 # 认证:password 模式(robot_ 前缀账号走 DevPasswordAuth)
 auth_type: "password"

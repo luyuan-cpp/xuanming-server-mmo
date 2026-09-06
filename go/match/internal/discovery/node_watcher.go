@@ -114,9 +114,12 @@ func (w *NodeWatcher) fullSync(ctx context.Context, etcd *clientv3.Client) (int6
 	w.mu.Unlock()
 
 	// 差集兜底:watch 重建窗口里错过的 DELETE,靠新旧快照比对清连接缓存。
+	// 同一个 key 换了 endpoint(节点重启换端口)同样要清:旧 endpoint 的连接
+	// 不再有任何持有者,不清就永久滞留在连接缓存里,后续拨到它必失败。
 	if w.onRemove != nil {
 		for key, entry := range prev {
-			if _, still := next[key]; !still {
+			nextEntry, still := next[key]
+			if !still || nextEntry.Endpoint != entry.Endpoint {
 				w.onRemove(entry)
 			}
 		}

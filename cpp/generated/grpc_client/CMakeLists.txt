@@ -37,6 +37,7 @@ include_directories(
 
 set(SOURCE_FILES
     chat/chat_grpc_client.cpp
+    client_rpc_router/client_rpc_router_grpc_client.cpp
     data_service/data_service_grpc_client.cpp
     db/db_grpc_client.cpp
     etcd/etcd_grpc_client.cpp

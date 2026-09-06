@@ -1,0 +1,29 @@
+syntax = "proto3";
+package client_rpc_router;
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/message.proto";
+
+option go_package = "login/proto/client_rpc_router";
+option (OptionFileDefaultNode) = NODE_CLIENT_RPC_ROUTER;
+
+// ClientRpcRouter:gate 与业务 Go 服务之间唯一的 gRPC 目标(设计文档 docs/design/client-rpc-router.md)。
+//
+// 不是客户端协议(刻意不挂 OptionIsClientProtocolService):只有 gate 调用。
+// gate 收到客户端 ClientRequest 后不解析 body、不挑业务实例,原样放进 ForwardRequest 发来;
+// 会话身份照旧走 gRPC metadata `x-session-detail-bin`(base64 SessionDetails),
+// 路由服原样透传给目标服务,并在响应头回写同一段 metadata 供 gate 找回客户端会话。
+// 路由服按生成的路由表(message_id → 目标 gRPC 方法 / 节点类型)以原始字节转发,
+// 把目标服务的响应包成 MessageContent{id, message_id, serialized_message} 返回;
+// 目标不可达 / 未知消息号 / 非客户端协议 → MessageContent.error_message 填 tip 码,body 为空。
+//
+// 响应直接用 MessageContent:gate 的回包桥接对 MessageContent 类型原样下发,
+// 不需要为路由服再加任何 gate 侧代码。
+service ClientRpcRouter {
+  rpc Forward (ForwardRequest) returns (MessageContent);
+}
+
+message ForwardRequest {
+  ClientRequest request = 1;   // 客户端原包(id / message_id / body),路由服不解析 body
+  uint32 zone_id = 2;          // 发起 gate 所在 zone:zone-scoped 目标(login)只挑同 zone 实例
+}

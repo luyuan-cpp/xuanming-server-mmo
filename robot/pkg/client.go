@@ -9,6 +9,7 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/protobuf/proto"
 
+	"proto/battle"
 	"proto/common/base"
 )
 
@@ -158,6 +159,35 @@ func (gc *GameClient) VerifyGateToken(payload, signature []byte) error {
 		return nil
 	default:
 		return fmt.Errorf("unexpected response type for token verify: %T", msg)
+	}
+}
+
+// VerifyBattleToken 是战斗直连(battle 节点客户端面)的握手:连上 BattleAssignedS2C
+// 给的 host:port 后,首包必须是 BattleTokenVerifyRequest,payload / signature 原样
+// 来自 BattleAssignedS2C.token_payload / token_signature。成功返回服务端回填的 battle_id。
+// 线协议与 gate 完全一致(同一个 muduo codec),所以 GameClient 直接复用:握手之后
+// SendRequest / RecvLoop 照常工作,只是消息号只允许 BattleClientPlayer 的四条客户端 RPC。
+// 见 docs/design/turn-based-battle-server.md §18。
+func (gc *GameClient) VerifyBattleToken(payload, signature []byte) (uint64, error) {
+	req := &battle.BattleTokenVerifyRequest{
+		Payload:   payload,
+		Signature: signature,
+	}
+	gc.client.Send(req)
+
+	msg, err := gc.client.Recv()
+	if err != nil {
+		return 0, fmt.Errorf("recv battle token verify response: %w", err)
+	}
+
+	switch m := msg.(type) {
+	case *battle.BattleTokenVerifyResponse:
+		if !m.Success {
+			return 0, fmt.Errorf("battle ticket rejected: %s", m.Error)
+		}
+		return m.BattleId, nil
+	default:
+		return 0, fmt.Errorf("unexpected response type for battle token verify: %T", msg)
 	}
 }
 

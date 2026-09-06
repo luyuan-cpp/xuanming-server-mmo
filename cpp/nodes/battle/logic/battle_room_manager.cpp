@@ -11,7 +11,11 @@
 
 #include "engine/infra/messaging/kafka/kafka_producer.h"
 #include "node/system/node/node.h"
+#include "node_config_manager.h"
 #include "time/system/time.h"
+
+#include "battle_security.h"
+#include "client/battle_client_edge.h"
 
 #include "constants/turn_battle_constants.h"
 #include "data/battle_table_fingerprint.h"
@@ -74,9 +78,10 @@ namespace
         }
     }
 
-    // S2C 推送:MessageContent 包客户端协议消息,经 PushToPlayerEvent 送到玩家 TCP 连接。
-    void PushMessageToPlayer(const ::BattleRouting &routing, const uint64_t playerId,
-                             const uint32_t messageId, const google::protobuf::Message &message)
+    // S2C 推送(Kafka→gate 回落路径):MessageContent 包客户端协议消息,经 PushToPlayerEvent
+    // 送到玩家的大厅 TCP 连接。有直连时不走这里 —— 统一出口是 BattleRoomManager::PushToPlayer。
+    void PushMessageViaGate(const ::BattleRouting &routing, const uint64_t playerId,
+                            const uint32_t messageId, const google::protobuf::Message &message)
     {
         contracts::kafka::PushToPlayerEvent event;
         event.set_session_id(routing.session_id());
@@ -459,17 +464,22 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
     // 引擎无时钟,行动截止由节点按房间 timer 回填
     start.mutable_state()->set_action_deadline_ms(roomPtr->actionDeadlineMs);
 
+    // 票据 expire_at_ms 取房间作废期限,必须在签票之前落到房间上
+    roomPtr->deadlineMs = deadlineMs;
+
     for (const auto &[playerId, routing] : roomPtr->routingByPlayer)
     {
         SendBindBattle(routing, playerId, battleId, nodeId);
-        PushMessageToPlayer(routing, playerId, BattleClientPlayerNotifyBattleStartMessageId, start);
+        // 直连落点分配先于开战包(同 key 保序,D26):客户端拿到票据后建第二条连接,
+        // 此刻还没有直连,两条都经 Kafka→gate 回落下发
+        PushAssignment(*roomPtr, playerId, routing, ::BATTLE_TICKET_ROLE_PARTICIPANT);
+        PushToPlayer(*roomPtr, playerId, routing, BattleClientPlayerNotifyBattleStartMessageId, start);
         // 向玩家所在 scene 确认开局:PREPARING→FIGHTING,作废期限切到本房间的正式 deadline
         // (与 battleTimer 同一个值,scene reaper 与房间强制收尾的时限口径一致)
         SendBattleConfirmedEvent(routing, playerId, battleId, deadlineMs);
     }
 
     // 确认事件有界周期补发:单次投递丢失/迟到时 scene 仍能在锁保留期内把冻结升级/重建
-    roomPtr->deadlineMs = deadlineMs;
     roomPtr->confirmResendUntilMs = nowMs + kConfirmResendWindowMs;
     roomPtr->confirmResendTimer.RunEvery(kConfirmResendIntervalSec,
                                          [this, battleId]
@@ -507,6 +517,8 @@ void BattleRoomManager::HandleDestroyBattle(const ::DestroyBattleRequest &reques
     }
     // 观众同步清退:作废路径无胜负,outcome 留 ONGOING(player_battle.proto 契约)
     NotifySpectateEndAndUnbind(*room, ::SPECTATE_END_BATTLE_ABORTED, ::BATTLE_OUTCOME_ONGOING);
+    // 作废路径没有终局包可等,直接关直连;客户端凭 GetBattleState 空响应 / 断连收 UI
+    CloseDirectConnections(*room, "destroyed");
     rooms_.erase(battleId);
 
     LOG_INFO << "DestroyBattle 完成: battle_id=" << battleId << " reason=" << request.reason();
@@ -633,6 +645,7 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
             // 同会话重试:绑定仍有效,只重推首帧即可
             LOG_INFO << "AddObserver 幂等命中,重推首帧: battle_id=" << battleId
                      << " observer=" << observerId;
+            PushAssignment(*room, observerId, it->second, ::BATTLE_TICKET_ROLE_OBSERVER);
             PushSpectateState(*room, observerId, it->second);
             return;
         }
@@ -642,8 +655,13 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
                  << " new_session_id=" << request.routing().session_id();
         it->second = request.routing();
         room->observerNames[observerId] = request.observer_name();
+        // 会话变了 = 旧客户端实例已不在(崩溃 / 换网):它留下的直连很可能半开,内核尚未
+        // 感知、connected() 仍为 true,分配包和首帧会被写进死 socket 而不是回落到新会话。
+        // 先关旧直连,让下面两条推送走 Kafka→gate 到新会话;新客户端凭新票重新挂接。
+        CloseDirectConnectionOf(*room, observerId, "observer_session_changed");
         // 先绑定后首帧:同 topic 同 key(player_id),gate 必先建绑定再下发首帧(D10)
         SendBindBattle(request.routing(), observerId, battleId, SelfNodeId());
+        PushAssignment(*room, observerId, it->second, ::BATTLE_TICKET_ROLE_OBSERVER);
         PushSpectateState(*room, observerId, it->second);
         return;
     }
@@ -661,6 +679,8 @@ void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
 
     // 先绑定后首帧:同 topic 同 key(player_id),gate 必先建绑定再下发首帧(D10)
     SendBindBattle(request.routing(), observerId, battleId, SelfNodeId());
+    // 观众同样先收落点分配再收首帧(D26)
+    PushAssignment(*room, observerId, request.routing(), ::BATTLE_TICKET_ROLE_OBSERVER);
     PushSpectateState(*room, observerId, request.routing());
 
     LOG_INFO << "AddObserver 成功: battle_id=" << battleId
@@ -690,11 +710,13 @@ void BattleRoomManager::HandleRemoveObserver(const ::RemoveObserverRequest &requ
     end.set_battle_id(battleId);
     end.set_outcome(::BATTLE_OUTCOME_ONGOING);
     end.set_reason(::SPECTATE_END_REMOVED);
-    PushMessageToPlayer(it->second, observerId, BattleClientPlayerNotifySpectateEndMessageId, end);
+    PushToPlayer(*room, observerId, it->second, BattleClientPlayerNotifySpectateEndMessageId, end);
     SendUnbindBattle(it->second, observerId, battleId);
 
     room->routingByObserver.erase(it);
     room->observerNames.erase(observerId);
+    // 观众已不在名单,直连没有存在意义;SpectateEnd 已排队,shutdown 让它先 flush
+    CloseDirectConnectionOf(*room, observerId, "observer_removed");
 
     LOG_INFO << "RemoveObserver 完成: battle_id=" << battleId
              << " observer=" << observerId << " reason=" << request.reason();
@@ -731,6 +753,9 @@ void BattleRoomManager::HandleStopWatchBattle(const ::SessionDetails &sessionDet
     SendUnbindBattle(it->second, playerId, room->battleId);
     room->routingByObserver.erase(it);
     room->observerNames.erase(playerId);
+    // 退出请求可能就是从这条直连来的,应答由直连面在本函数返回后写出;关闭已推迟到本轮
+    // loop 之后(CloseDirectConnectionOf 内部 queueInLoop),应答不会被丢
+    CloseDirectConnectionOf(*room, playerId, "stop_watch");
 
     LOG_INFO << "StopWatchBattle 完成: battle_id=" << room->battleId
              << " observer=" << playerId;
@@ -923,13 +948,15 @@ void BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
         end.set_battle_id(room.battleId);
         end.set_outcome(outcome);
         *end.mutable_settlement() = settlement;
-        PushMessageToPlayer(routing, playerId, BattleClientPlayerNotifyBattleEndMessageId, end);
+        PushToPlayer(room, playerId, routing, BattleClientPlayerNotifyBattleEndMessageId, end);
 
         SendSettlementEvent(routing, playerId, settlement);
         SendUnbindBattle(routing, playerId, room.battleId);
     }
 
     NotifySpectateEndAndUnbind(room, spectateReason, outcome);
+    // 终局包已全部排队,直连从此没有存在意义:shutdown 让它们先 flush 再 FIN(D23)
+    CloseDirectConnections(room, "battle_finished");
 
     // BattleResultEvent(只在真实打完的局发;DestroyBattle/AbortAllRooms 作废路径不进这里)。
     // winner_team_index:SIDE_A_WIN=0 / SIDE_B_WIN=1,平局时 match 忽略该字段。
@@ -965,13 +992,13 @@ void BattleRoomManager::BroadcastTurnResult(const BattleRoom &room, const ::Turn
     // TurnResult 与随后的 BattleEnd 在 gate 侧有序(宪法 §7 不变量 3)。
     for (const auto &[playerId, routing] : room.routingByPlayer)
     {
-        PushMessageToPlayer(routing, playerId, BattleClientPlayerNotifyTurnResultMessageId, result);
+        PushToPlayer(room, playerId, routing, BattleClientPlayerNotifyTurnResultMessageId, result);
     }
     // 观众收同一份 payload,消息号不同(D8:客户端观战/参战两套状态机互不干扰)
     for (const auto &[observerId, routing] : room.routingByObserver)
     {
-        PushMessageToPlayer(routing, observerId,
-                            BattleClientPlayerNotifySpectateTurnResultMessageId, result);
+        PushToPlayer(room, observerId, routing,
+                     BattleClientPlayerNotifySpectateTurnResultMessageId, result);
     }
 }
 
@@ -985,7 +1012,7 @@ void BattleRoomManager::PushSpectateState(const BattleRoom &room, const uint64_t
     state.mutable_state()->set_action_deadline_ms(room.actionDeadlineMs);
     state.set_observer_count(static_cast<uint32_t>(room.routingByObserver.size()));
 
-    PushMessageToPlayer(routing, observerId, BattleClientPlayerNotifySpectateStateMessageId, state);
+    PushToPlayer(room, observerId, routing, BattleClientPlayerNotifySpectateStateMessageId, state);
 }
 
 void BattleRoomManager::NotifySpectateEndAndUnbind(BattleRoom &room,
@@ -1005,9 +1032,10 @@ void BattleRoomManager::NotifySpectateEndAndUnbind(BattleRoom &room,
     // 同 key(player_id)先推终局包再解绑:gate 侧保证观众先看到结束原因
     for (const auto &[observerId, routing] : room.routingByObserver)
     {
-        PushMessageToPlayer(routing, observerId,
-                            BattleClientPlayerNotifySpectateEndMessageId, end);
+        PushToPlayer(room, observerId, routing,
+                     BattleClientPlayerNotifySpectateEndMessageId, end);
         SendUnbindBattle(routing, observerId, room.battleId);
+        CloseDirectConnectionOf(room, observerId, "spectate_end");
     }
 
     LOG_INFO << "观战清退: battle_id=" << room.battleId
@@ -1039,6 +1067,275 @@ void BattleRoomManager::AbortAllRooms(const std::string &reason)
         // 停机作废无胜负:观众收 ABORTED + ONGOING
         NotifySpectateEndAndUnbind(*room, ::SPECTATE_END_BATTLE_ABORTED,
                                    ::BATTLE_OUTCOME_ONGOING);
+        CloseDirectConnections(*room, reason.c_str());
     }
     rooms_.clear();
+}
+
+// ---- 客户端直连(设计文档 §18,D23-D28) ----
+
+void BattleRoomManager::PushToPlayer(const BattleRoom &room, const uint64_t playerId,
+                                     const ::BattleRouting &routing, const uint32_t messageId,
+                                     const ::google::protobuf::Message &message) const
+{
+    if (edge_ != nullptr)
+    {
+        const auto it = room.directConnByPlayer.find(playerId);
+        if (it != room.directConnByPlayer.end() && it->second && it->second->connected())
+        {
+            ::MessageContent content;
+            content.set_message_id(messageId);
+            content.set_serialized_message(message.SerializeAsString());
+            edge_->Send(it->second, content);
+            return;
+        }
+    }
+    PushMessageViaGate(routing, playerId, messageId, message);
+}
+
+bool BattleRoomManager::BuildAssignment(const BattleRoom &room, const uint64_t playerId,
+                                        const ::eBattleTicketRole role, ::BattleAssignedS2C &out) const
+{
+    const auto &deploy = gNodeConfigManager.GetBaseDeployConfig();
+    const auto &secret = deploy.battle_token_secret();
+    const auto verdict = battle_security::ClassifyTokenSecret(secret, battle_security::CurrentRunMode());
+    if (verdict == battle_security::TokenSecretVerdict::kRefuse)
+    {
+        // 启动门禁已拒过一次;这里是纵深防御,不签空签名的票
+        LOG_ERROR << "battle 票据签发被拒: battle_token_secret 为空且 run_mode=prod, battle_id="
+                  << room.battleId << " player_id=" << playerId;
+        return false;
+    }
+    if (gNode == nullptr)
+    {
+        return false;
+    }
+    const auto &self = gNode->GetNodeInfo();
+    if (self.endpoint().ip().empty() || self.endpoint().port() == 0)
+    {
+        LOG_ERROR << "battle 票据签发被拒: 本节点客户端面 endpoint 未就绪, battle_id=" << room.battleId;
+        return false;
+    }
+
+    ::BattleTicketPayload payload;
+    payload.set_battle_id(room.battleId);
+    payload.set_player_id(playerId);
+    payload.set_battle_node_id(self.node_id());
+    payload.set_battle_instance_id(self.node_uuid());
+    payload.set_expire_at_ms(room.deadlineMs);
+    payload.set_role(role);
+    const std::string payloadBytes = payload.SerializeAsString();
+
+    std::string signature;
+    if (verdict == battle_security::TokenSecretVerdict::kEnforce)
+    {
+        signature = battle_security::SignTicket(secret, payloadBytes);
+        if (signature.empty())
+        {
+            LOG_ERROR << "battle 票据签名失败(OpenSSL), battle_id=" << room.battleId
+                      << " player_id=" << playerId;
+            return false;
+        }
+    }
+    // dev/test 空密钥:签名留空,直连面按同一判据跳过比对(battle_client_edge.cpp)
+
+    out.Clear();
+    out.set_battle_id(room.battleId);
+    out.set_host(self.endpoint().ip());
+    out.set_port(self.endpoint().port());
+    out.set_token_payload(payloadBytes);
+    out.set_token_signature(signature);
+    out.set_expire_at_ms(room.deadlineMs);
+    out.set_role(role);
+    return true;
+}
+
+void BattleRoomManager::PushAssignment(const BattleRoom &room, const uint64_t playerId,
+                                       const ::BattleRouting &routing, const ::eBattleTicketRole role) const
+{
+    ::BattleAssignedS2C assigned;
+    if (!BuildAssignment(room, playerId, role, assigned))
+    {
+        // 签不出票不阻断开局:该玩家仍能经 gate 中继打完这一局(D23 回落路径)
+        LOG_WARN << "battle 落点分配包未下发,玩家将全程走 gate 中继: battle_id=" << room.battleId
+                 << " player_id=" << playerId << " role=" << ::eBattleTicketRole_Name(role);
+        return;
+    }
+    PushToPlayer(room, playerId, routing, BattleClientPlayerNotifyBattleAssignedMessageId, assigned);
+}
+
+bool BattleRoomManager::AttachDirectConnection(const uint64_t battleId, const uint64_t playerId,
+                                               const ::eBattleTicketRole role,
+                                               const muduo::net::TcpConnectionPtr &conn,
+                                               uint32_t *gateSessionId)
+{
+    auto *room = FindRoom(battleId);
+    if (room == nullptr || !conn)
+    {
+        return false;
+    }
+
+    // 按票据角色核对名单:参战票只认参战名单,观众票只认观众名单(票不能换角色用)
+    const ::BattleRouting *routing = nullptr;
+    if (role == ::BATTLE_TICKET_ROLE_PARTICIPANT)
+    {
+        if (const auto it = room->routingByPlayer.find(playerId); it != room->routingByPlayer.end())
+        {
+            routing = &it->second;
+        }
+    }
+    else if (role == ::BATTLE_TICKET_ROLE_OBSERVER)
+    {
+        if (const auto it = room->routingByObserver.find(playerId); it != room->routingByObserver.end())
+        {
+            routing = &it->second;
+        }
+    }
+    if (routing == nullptr)
+    {
+        LOG_WARN << "battle 直连挂接被拒: 玩家不在名单, battle_id=" << battleId
+                 << " player_id=" << playerId << " role=" << ::eBattleTicketRole_Name(role);
+        return false;
+    }
+
+    auto &slot = room->directConnByPlayer[playerId];
+    if (slot && slot != conn)
+    {
+        // 重连:先关旧的。forceClose 是 queueInLoop 异步的,旧连接的断开回调在本函数
+        // 返回后才跑,那时 slot 已指向新连接,DetachDirectConnection 按身份比对不会误摘。
+        LOG_INFO << "battle 直连重连,替换旧连接: battle_id=" << battleId << " player_id=" << playerId
+                 << " old_peer=" << slot->peerAddress().toIpPort()
+                 << " new_peer=" << conn->peerAddress().toIpPort();
+        slot->forceClose();
+    }
+    slot = conn;
+    if (gateSessionId != nullptr)
+    {
+        *gateSessionId = routing->session_id();
+    }
+    return true;
+}
+
+void BattleRoomManager::DetachDirectConnection(const uint64_t battleId, const uint64_t playerId,
+                                               const muduo::net::TcpConnectionPtr &conn)
+{
+    auto *room = FindRoom(battleId);
+    if (room == nullptr)
+    {
+        return;
+    }
+    const auto it = room->directConnByPlayer.find(playerId);
+    if (it != room->directConnByPlayer.end() && it->second == conn)
+    {
+        room->directConnByPlayer.erase(it);
+    }
+}
+
+namespace
+{
+    // 推迟到本轮 loop 之后再关:shutdown() 与 forceCloseWithDelay() 都会**同步**把连接切到
+    // kDisconnecting(muduo TcpConnection.cc),之后 connected()==false、send 一律丢弃。而
+    // 调用本函数的 Handle*(StopWatchBattle / 打出最后一击的 SubmitBattleAction / SetAutoBattle)
+    // 的应答要等 Handle* 返回后由直连面写出。queueInLoop 保证:应答先入输出缓冲 → shutdown
+    // 等排空再 FIN → 1s 后强关兜底不配合的对端。终局包(PushToPlayer)早已在缓冲里,顺序不变。
+    void ShutdownDirectConnAfterThisLoop(const muduo::net::TcpConnectionPtr &conn)
+    {
+        if (!conn)
+        {
+            return;
+        }
+        std::weak_ptr<muduo::net::TcpConnection> weak = conn;
+        conn->getLoop()->queueInLoop([weak]
+                                     {
+            if (const auto c = weak.lock(); c && c->connected())
+            {
+                c->shutdown();
+                c->forceCloseWithDelay(1.0);
+            } });
+    }
+} // namespace
+
+void BattleRoomManager::CloseDirectConnectionOf(BattleRoom &room, const uint64_t playerId, const char *reason)
+{
+    const auto it = room.directConnByPlayer.find(playerId);
+    if (it == room.directConnByPlayer.end())
+    {
+        return;
+    }
+    if (it->second && it->second->connected())
+    {
+        LOG_INFO << "battle 关闭玩家直连: battle_id=" << room.battleId << " player_id=" << playerId
+                 << " reason=" << reason;
+        ShutdownDirectConnAfterThisLoop(it->second);
+    }
+    // 表里立刻摘除:从此对该玩家的 S2C 回落 Kafka→gate,不再往一条正在关闭的连接上写
+    room.directConnByPlayer.erase(it);
+}
+
+void BattleRoomManager::CloseDirectConnections(BattleRoom &room, const char *reason)
+{
+    if (room.directConnByPlayer.empty())
+    {
+        return;
+    }
+    LOG_INFO << "battle 关闭房间全部直连: battle_id=" << room.battleId
+             << " count=" << room.directConnByPlayer.size() << " reason=" << reason;
+    for (auto &[playerId, conn] : room.directConnByPlayer)
+    {
+        if (conn && conn->connected())
+        {
+            ShutdownDirectConnAfterThisLoop(conn);
+        }
+    }
+    room.directConnByPlayer.clear();
+}
+
+void BattleRoomManager::HandleIssueBattleTicket(const ::IssueBattleTicketRequest &request,
+                                                ::IssueBattleTicketResponse &response)
+{
+    // match 已从大厅会话 metadata 取得权威 player_id(客户端请求体里没有 player_id),
+    // battle 只核对名单;这里的 0 只可能是 match 侧漏填,按参数错误拒绝而非 kPlayerNotFoundInSession
+    const auto playerId = request.player_id();
+    if (playerId == 0)
+    {
+        LOG_WARN << "IssueBattleTicket 请求缺少 player_id: battle_id=" << request.battle_id();
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
+    auto *room = FindRoom(request.battle_id());
+    if (room == nullptr)
+    {
+        // 房间已结束/作废:match 原样透传,客户端据此丢弃本地战斗 UI(与 GetBattleState 空响应同语义)
+        LOG_DEBUG << "IssueBattleTicket 房间不存在: battle_id=" << request.battle_id()
+                  << " player_id=" << playerId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
+    ::eBattleTicketRole role = ::BATTLE_TICKET_ROLE_NONE;
+    if (room->routingByPlayer.find(playerId) != room->routingByPlayer.end())
+    {
+        role = ::BATTLE_TICKET_ROLE_PARTICIPANT;
+    }
+    else if (room->routingByObserver.find(playerId) != room->routingByObserver.end())
+    {
+        role = ::BATTLE_TICKET_ROLE_OBSERVER;
+    }
+    else
+    {
+        LOG_WARN << "IssueBattleTicket 玩家不在此战斗: battle_id=" << request.battle_id()
+                 << " player_id=" << playerId;
+        response.mutable_error_message()->set_id(kInvalidParameter);
+        return;
+    }
+
+    if (!BuildAssignment(*room, playerId, role, *response.mutable_assignment()))
+    {
+        response.clear_assignment();
+        response.mutable_error_message()->set_id(kServiceUnavailable);
+        return;
+    }
+    LOG_INFO << "IssueBattleTicket 补签成功: battle_id=" << request.battle_id()
+             << " player_id=" << playerId << " role=" << ::eBattleTicketRole_Name(role);
 }

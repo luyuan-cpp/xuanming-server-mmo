@@ -23,6 +23,7 @@ using common::base::AiNodeService;
 using common::base::AnalyticsNodeService;
 using common::base::BattleNodeService;
 using common::base::ChatNodeService;
+using common::base::ClientRpcRouterNodeService;
 using common::base::CrossServerNodeService;
 using common::base::DataServiceNodeService;
 using common::base::EtcdNodeService;

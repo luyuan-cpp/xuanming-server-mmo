@@ -98,3 +98,26 @@ grpc::Status BattleNodeImpl::RemoveObserver(grpc::ServerContext* /*context*/,
     future.get();
     return grpc::Status::OK;
 }
+
+void BattleNodeImpl::HandleIssueBattleTicket(const ::IssueBattleTicketRequest* request,
+    ::IssueBattleTicketResponse* response)
+{
+    // 丢票补签(设计文档 §18 D25):名单核对 + 自签在手写房间管理器,错误经 response tip 返回,status 恒 OK
+    BattleRoomManager::Instance().HandleIssueBattleTicket(*request, *response);
+}
+
+grpc::Status BattleNodeImpl::IssueBattleTicket(grpc::ServerContext* /*context*/,
+    const ::IssueBattleTicketRequest* request,
+    ::IssueBattleTicketResponse* response)
+{
+    std::promise<void> promise;
+    auto future = promise.get_future();
+
+    loop_.runInLoop([request, response, &promise]
+                    {
+        HandleIssueBattleTicket(request, response);
+        promise.set_value(); });
+
+    future.get();
+    return grpc::Status::OK;
+}

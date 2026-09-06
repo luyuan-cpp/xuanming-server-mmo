@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	battle "proto/battle"
 	base "proto/common/base"
 )
 
@@ -28,6 +29,7 @@ const (
 	MatchService_NotifyChallengeInvite_FullMethodName = "/match.MatchService/NotifyChallengeInvite"
 	MatchService_NotifyChallengeResult_FullMethodName = "/match.MatchService/NotifyChallengeResult"
 	MatchService_WatchBattle_FullMethodName           = "/match.MatchService/WatchBattle"
+	MatchService_RequestBattleTicket_FullMethodName   = "/match.MatchService/RequestBattleTicket"
 	MatchService_ListWatchableBattles_FullMethodName  = "/match.MatchService/ListWatchableBattles"
 )
 
@@ -56,6 +58,12 @@ type MatchServiceClient interface {
 	// battle_id=0 表示随机观战(从活跃战斗索引里随机挑一场);成功后由 battle 节点
 	// 经 Kafka 推 NotifySpectateState 首帧,客户端收到首帧才算进入观战。
 	WatchBattle(ctx context.Context, in *WatchBattleRequest, opts ...grpc.CallOption) (*WatchBattleResponse, error)
+	// ---- 战斗票据补签(客户端丢票 / 冷启动;turn-based-battle-server.md §18 D25) ----
+	// 大厅会话唯一的补签入口:match 按 spectate:battle:{battle_id} 索引定位房间所在 battle 节点,
+	// 调 BattleNode.IssueBattleTicket 由 battle 本地核对名单并自签;仅参战者 / 观众可得票。
+	// 曾是 BattleClientPlayer.RequestBattleTicket(gate→battle gRPC);gate 收成只连路由服后 gate 不再
+	// 认识 battle 节点,补签改由 match 转,请求 / 响应消息复用 player_battle.proto 里的定义。
+	RequestBattleTicket(ctx context.Context, in *battle.RequestBattleTicketRequest, opts ...grpc.CallOption) (*battle.RequestBattleTicketResponse, error)
 	ListWatchableBattles(ctx context.Context, in *ListWatchableBattlesRequest, opts ...grpc.CallOption) (*ListWatchableBattlesResponse, error)
 }
 
@@ -147,6 +155,16 @@ func (c *matchServiceClient) WatchBattle(ctx context.Context, in *WatchBattleReq
 	return out, nil
 }
 
+func (c *matchServiceClient) RequestBattleTicket(ctx context.Context, in *battle.RequestBattleTicketRequest, opts ...grpc.CallOption) (*battle.RequestBattleTicketResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(battle.RequestBattleTicketResponse)
+	err := c.cc.Invoke(ctx, MatchService_RequestBattleTicket_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *matchServiceClient) ListWatchableBattles(ctx context.Context, in *ListWatchableBattlesRequest, opts ...grpc.CallOption) (*ListWatchableBattlesResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(ListWatchableBattlesResponse)
@@ -182,6 +200,12 @@ type MatchServiceServer interface {
 	// battle_id=0 表示随机观战(从活跃战斗索引里随机挑一场);成功后由 battle 节点
 	// 经 Kafka 推 NotifySpectateState 首帧,客户端收到首帧才算进入观战。
 	WatchBattle(context.Context, *WatchBattleRequest) (*WatchBattleResponse, error)
+	// ---- 战斗票据补签(客户端丢票 / 冷启动;turn-based-battle-server.md §18 D25) ----
+	// 大厅会话唯一的补签入口:match 按 spectate:battle:{battle_id} 索引定位房间所在 battle 节点,
+	// 调 BattleNode.IssueBattleTicket 由 battle 本地核对名单并自签;仅参战者 / 观众可得票。
+	// 曾是 BattleClientPlayer.RequestBattleTicket(gate→battle gRPC);gate 收成只连路由服后 gate 不再
+	// 认识 battle 节点,补签改由 match 转,请求 / 响应消息复用 player_battle.proto 里的定义。
+	RequestBattleTicket(context.Context, *battle.RequestBattleTicketRequest) (*battle.RequestBattleTicketResponse, error)
 	ListWatchableBattles(context.Context, *ListWatchableBattlesRequest) (*ListWatchableBattlesResponse, error)
 	mustEmbedUnimplementedMatchServiceServer()
 }
@@ -216,6 +240,9 @@ func (UnimplementedMatchServiceServer) NotifyChallengeResult(context.Context, *C
 }
 func (UnimplementedMatchServiceServer) WatchBattle(context.Context, *WatchBattleRequest) (*WatchBattleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method WatchBattle not implemented")
+}
+func (UnimplementedMatchServiceServer) RequestBattleTicket(context.Context, *battle.RequestBattleTicketRequest) (*battle.RequestBattleTicketResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RequestBattleTicket not implemented")
 }
 func (UnimplementedMatchServiceServer) ListWatchableBattles(context.Context, *ListWatchableBattlesRequest) (*ListWatchableBattlesResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListWatchableBattles not implemented")
@@ -385,6 +412,24 @@ func _MatchService_WatchBattle_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _MatchService_RequestBattleTicket_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(battle.RequestBattleTicketRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(MatchServiceServer).RequestBattleTicket(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: MatchService_RequestBattleTicket_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(MatchServiceServer).RequestBattleTicket(ctx, req.(*battle.RequestBattleTicketRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _MatchService_ListWatchableBattles_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ListWatchableBattlesRequest)
 	if err := dec(in); err != nil {
@@ -441,6 +486,10 @@ var MatchService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "WatchBattle",
 			Handler:    _MatchService_WatchBattle_Handler,
+		},
+		{
+			MethodName: "RequestBattleTicket",
+			Handler:    _MatchService_RequestBattleTicket_Handler,
 		},
 		{
 			MethodName: "ListWatchableBattles",

@@ -13,6 +13,7 @@
 #include "handler/rpc/gate_service_handler.h"
 #include "handler/rpc/client_message_processor.h"
 #include "gate_codec.h"
+#include "gate_router_mode.h"
 #include "gate_security.h"
 #include "gate_version.h"
 #include "node_config_manager.h"
@@ -28,6 +29,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 namespace
 {
@@ -169,39 +171,64 @@ int main(int argc, char *argv[])
     // 再补一条同前缀的完整六元组行。
     gate_version::PrintStartupLine("GATE", nullptr, nullptr);
 
+    // Gate's outbound connections, by transport:
+    //   * SceneNodeService — muduo TCP RPC (in-zone Gate↔Scene messaging).
+    //   * LoginNodeService / SceneManagerNodeService — gRPC, dispatched via
+    //     PickRandomNode in client_message_processor (msg_id=48 login,
+    //     scene-manager redirects, etc.). They MUST appear in the whitelist
+    //     so ConnectAllNodes / AddServiceNode wire them into the local
+    //     entt::registry; otherwise PickRandomNode finds an empty registry
+    //     and rejects every request with "Node not found, message id: 48".
+    // Cross-zone is handled by ServiceDiscoveryManager's zone filter
+    // (see NodeUtils::IsZoneScopedNodeType): only same-zone Login/Scene
+    // are inserted, while SceneManager (cross-zone by design) is global.
+    // Other gates are reached via Kafka (`gate-{id}` topic). An empty
+    // whitelist would make Gate-1 connect to Gate-2's client-facing TCP
+    // listener; their codecs (ProtobufCodec vs RpcCodec) are incompatible
+    // and the receiver logs `ProtobufCodec::defaultErrorCallback -
+    // InvalidNameLen` on every reconnect (~2 Hz).
+    //
+    //   * BattleNodeService — 回合制战斗节点(gRPC,全局池,不分 zone):
+    //     gate 按 BindBattleEvent 的会话绑定把客户端战斗消息转发过去。
+    //     必须进白名单,否则 AddServiceNode/ConnectAllNodes 不会为 battle
+    //     建实体和 gRPC stub,绑定解析(FindNodeEntityByNodeId)永远落空。
+    //   * MatchNodeService — 匹配服务(Go gRPC,无状态随机路由):客户端
+    //     JoinQueue/ChallengePlayer/WatchBattle 等按 NODE_MATCH 路由,缺席则
+    //     全部报 "Node not found ... message id: 157"(2026-09-01 冒烟补)。
+    //
+    //   * ClientRpcRouterNodeService — 客户端 RPC 路由服(Go gRPC,全局池,不分 zone;
+    //     docs/design/client-rpc-router.md D29–D34)。GATE_CLIENT_RPC_ROUTER=1 时它是
+    //     gate **唯一**的 gRPC 目标:白名单收成 {Scene(TCP), ClientRpcRouter},gate 对
+    //     login / scene_manager / battle / match **零 stub、零 channel**,gRPC 连接数 =
+    //     路由服副本数,与业务服务数量无关 —— 以后加 chat / friend / guild 不再碰 gate。
+    //     旧模式(默认,未设或非 1/true/on)完全不连路由服,行为与改前一致;所以路由服
+    //     可以先于 gate 切换单独上线,回退 = 去掉环境变量再滚动(设计文档 §6 灰度)。
+    const bool routerMode = gate_router_mode::IsRouterModeEnabled();
+    const Node::CanConnectNodeTypeList connectTo = routerMode
+        ? Node::CanConnectNodeTypeList{SceneNodeService, eNodeType::ClientRpcRouterNodeService}
+        : Node::CanConnectNodeTypeList{SceneNodeService, LoginNodeService, SceneManagerNodeService, BattleNodeService, MatchNodeService};
+
     return node::entry::RunSimpleNodeMainWithOwnedContext<GateHandler, GateRuntimeContext, GateNodeHooks>(
         GateNodeService,
-        // Gate's outbound connections, by transport:
-        //   * SceneNodeService — muduo TCP RPC (in-zone Gate↔Scene messaging).
-        //   * LoginNodeService / SceneManagerNodeService — gRPC, dispatched via
-        //     PickRandomNode in client_message_processor (msg_id=48 login,
-        //     scene-manager redirects, etc.). They MUST appear in the whitelist
-        //     so ConnectAllNodes / AddServiceNode wire them into the local
-        //     entt::registry; otherwise PickRandomNode finds an empty registry
-        //     and rejects every request with "Node not found, message id: 48".
-        // Cross-zone is handled by ServiceDiscoveryManager's zone filter
-        // (see NodeUtils::IsZoneScopedNodeType): only same-zone Login/Scene
-        // are inserted, while SceneManager (cross-zone by design) is global.
-        // Other gates are reached via Kafka (`gate-{id}` topic). An empty
-        // whitelist would make Gate-1 connect to Gate-2's client-facing TCP
-        // listener; their codecs (ProtobufCodec vs RpcCodec) are incompatible
-        // and the receiver logs `ProtobufCodec::defaultErrorCallback -
-        // InvalidNameLen` on every reconnect (~2 Hz).
-        //
-        //   * BattleNodeService — 回合制战斗节点(gRPC,全局池,不分 zone):
-        //     gate 按 BindBattleEvent 的会话绑定把客户端战斗消息转发过去。
-        //     必须进白名单,否则 AddServiceNode/ConnectAllNodes 不会为 battle
-        //     建实体和 gRPC stub,绑定解析(FindNodeEntityByNodeId)永远落空。
-        //   * MatchNodeService — 匹配服务(Go gRPC,无状态随机路由):客户端
-        //     JoinQueue/ChallengePlayer/WatchBattle 等按 NODE_MATCH 路由,缺席则
-        //     全部报 "Node not found ... message id: 157"(2026-09-01 冒烟补)。
-        Node::CanConnectNodeTypeList{SceneNodeService, LoginNodeService, SceneManagerNodeService, BattleNodeService, MatchNodeService},
-        [](Node &node, GateRuntimeContext &context)
+        connectTo,
+        [connectTo, routerMode](Node &node, GateRuntimeContext &context)
         {
             // 先过安全门禁,再做任何别的初始化:配置有问题就不该把服务拉起来。
             // 此处 Node 构造已完成,LoadConfigs 读过 etc/base_deploy_config.yaml。
             ValidateGateTokenSecretOrDie();
             ValidateGateConnectionLimitOrDie();
+
+            // 启动日志:出口模式与出站白名单一起打。事故复盘要能一眼看出"这台 gate
+            // 连的是路由服还是业务服务",不能靠翻容器的环境变量。
+            {
+                const std::vector<uint32_t> whitelistForLog(connectTo.begin(), connectTo.end());
+                LOG_INFO << "gate 客户端消息出口模式=" << gate_router_mode::RouterModeName(routerMode)
+                         << "(" << gate_router_mode::kRouterModeEnv << "=1|true|on 为 router,其它为 direct)"
+                         << ", 出站白名单=" << Node::FormatNodeTypeNames(whitelistForLog)
+                         << (routerMode
+                                 ? ", 路由模式:gate 对 Go 业务服务零 stub,gRPC 连接数=路由服副本数,战斗消息一律拒绝(只走直连)"
+                                 : ", 直连模式:行为与引入路由服之前一致");
+            }
 
             // Override the default Kafka dispatch with GateCommand-specific routing
             // that handles empty-payload events via fallback field mapping.
@@ -243,6 +270,13 @@ int main(int argc, char *argv[])
             }
 
             // gRPC response -> client TCP bridge (wrap in MessageContent)
+            //
+            // 路由服 ClientRpcRouter.Forward 的响应类型就是 MessageContent
+            // (client-rpc-router.md D30):走下面第一个分支原样下发,路由模式不需要
+            // 在这里加任何代码。上面的反查表因此会多一条
+            // "MessageContent -> ClientRpcRouterForwardMessageId(176)",但那张表只在
+            // reply **不是** MessageContent 时才查,这一条永远不会被命中;全表也只有
+            // Forward 一条以 MessageContent 应答,不会挤掉别的回包类型的映射。
             SetIfEmptyHandler([&context](const ClientContext &ctx, const ::google::protobuf::Message &reply)
                               {
                 auto sd = GetSessionDetailsByClientContext(ctx);
@@ -309,7 +343,12 @@ int main(int argc, char *argv[])
                                 context.codec.onMessage(conn, buf, ts);
                             });
 
-                        context.dependencyGate.WaitAndRun(n, {LoginNodeService, SceneNodeService}, [&context](Node &n)
+                        // 依赖门:路由模式下等的是路由服而不是 login —— gate 这时根本不连
+                        // login,等它永远等不到;Scene(TCP 中继)两种模式都要等。
+                        const std::vector<uint32_t> requiredDependencies = gate_router_mode::IsRouterModeEnabled()
+                            ? std::vector<uint32_t>{eNodeType::ClientRpcRouterNodeService, SceneNodeService}
+                            : std::vector<uint32_t>{LoginNodeService, SceneNodeService};
+                        context.dependencyGate.WaitAndRun(n, requiredDependencies, [&context](Node &n)
                                                                    {
                         // Report player_count to etcd every 10 seconds for load balancing
                         context.playerCountReportTimer.RunEvery(10.0, [&n] {

@@ -93,6 +93,7 @@
 2. **会话权威源:`Login + player_locator`** — Centre 节点已删除([player_login_flow.md](./player_login_flow.md))
 3. **Gate 是纯转发层** — `BindSession` 绑定会话,`RoutePlayer` 绑定场景,`ForwardLoginToScene` 通知 scene
 4. **Kafka 解耦** — Gate / Login / SceneManager / player_locator 全部通过 Kafka 异步通信,无 full-mesh gRPC 流
+5. **gate 只连一类 gRPC 目标**(2026-09-05,[client-rpc-router.md](./client-rpc-router.md))— 客户端可见的 gRPC 类消息由 gate **原样**转给无状态 Go 路由服 `client_rpc_router`,路由服按生成的路由表以原始字节转发到 login / match / chat / …;gate 的 gRPC 连接数 = 路由服副本数,与业务服务数量无关,加业务服务不再改 gate、不重编、不重启。`GATE_CLIENT_RPC_ROUTER=1` 开启,默认仍是旧的逐服务直连(expand→migrate→contract)。战斗流量不经 gate、不经路由服:客户端凭票据直连 battle 节点([turn-based-battle-server.md §18](./turn-based-battle-server.md))
 5. **失败语义统一** — 所有锁走 `RedisLocker`(UUID + Lua CAS,见 [login-simplification-2026-04.md](./login-simplification-2026-04.md))
 
 ---
@@ -224,6 +225,8 @@ Bound        15470→  2704    (5.7x 缓解)
 | **游戏热路径**(客户端包 ↔ scene) | C++ Gate ↔ C++ Scene | **直连 gRPC**(lazy 建连 + channel pool + 同区) | 延迟敏感,要常驻有状态低延迟通道 |
 | **控制面**(RoutePlayer / Kick / Bind / LeaseExpired / Redirect) | Go 服务 → `gate-{gateId}` topic → Gate | **Kafka** | 低频、fire-and-forget,要解耦防连接爆炸 |
 | **业务反向推送**(好友/公会 server→client) | Go 服务 → Kafka → Gate → client TCP | **Kafka** | 异步通知,非实时 |
+| **客户端业务请求**(login / match / chat / friend / guild …) | client TCP → Gate → `client_rpc_router` → 目标 Go 服务 | **gRPC unary,原始字节透传**(gate 只连路由服一类;`GATE_CLIENT_RPC_ROUTER=1`,见 [client-rpc-router.md](./client-rpc-router.md)) | 请求/应答语义,一跳亚毫秒;gate 不持任何业务 stub,加服务不碰 gate |
+| **对局战斗**(回合制 battle) | client TCP **直连** battle 节点(票据入场) | **TCP,零字节经 gate**([turn-based-battle-server.md §18](./turn-based-battle-server.md)) | 战斗服可随时 kill;gate 与 battle 之间无连接 |
 
 ### 6.2 Kafka topic 路由(控制面)
 
@@ -392,6 +395,7 @@ net.ipv4.tcp_max_syn_backlog     = 65535
 - [gate-entity-id-truncation-fix.md](./gate-entity-id-truncation-fix.md) — entity id 截断修复
 - [k8s_gate_exposure_guidance.md](./k8s_gate_exposure_guidance.md) — K8s 暴露
 - [java-gateway-portal-decision.md](./java-gateway-portal-decision.md) — Java Gateway 选型决策
+- [client-rpc-router.md](./client-rpc-router.md) — 客户端 RPC 路由服:gate 唯一的 gRPC 目标(2026-09-05)
 
 ### 跨服与场景
 - [cross_server_architecture_principle.md](./cross_server_architecture_principle.md)

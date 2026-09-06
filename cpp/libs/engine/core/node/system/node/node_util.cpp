@@ -20,7 +20,10 @@ const std::unordered_map<eNodeType, std::string> nodeTypeNameMap = {
 	// 匹配服务(Go gRPC,无状态):gate 按 NODE_MATCH 路由客户端 JoinQueue/
 	// WatchBattle 等消息,缺席则发现侧报 "Unknown service type for prefix:
 	// MatchNodeService.rpc/..."(2026-09-01 冒烟补)。
-	{eNodeType::MatchNodeService, eNodeType_Name(MatchNodeService)}};
+	{eNodeType::MatchNodeService, eNodeType_Name(MatchNodeService)},
+	// 客户端 RPC 路由服:etcd 前缀 ClientRpcRouterNodeService.rpc;gate 唯一的 gRPC 目标
+	// (docs/design/client-rpc-router.md),Go-Zero 实现,全局池。
+	{eNodeType::ClientRpcRouterNodeService, eNodeType_Name(ClientRpcRouterNodeService)}};
 
 eNodeType NodeUtils::GetServiceTypeFromPrefix(const std::string &prefix)
 {
@@ -128,6 +131,7 @@ bool NodeUtils::IsGlobalPoolNodeType(uint32_t nodeType)
 	{
 	case eNodeType::MatchNodeService:
 	case eNodeType::BattleNodeService:
+	case eNodeType::ClientRpcRouterNodeService:
 		return true;
 	default:
 		return false;

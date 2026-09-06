@@ -25,6 +25,47 @@
     <ClInclude Include="storage\redis_client\redis_client.h" />
   </ItemGroup>
   <ItemGroup>
+    <!-- librdkafka 的 C++ 包装层随本工程从源码编译,不链接预编译的 rdkafka++.dll。
+         那份 DLL 是 /MT(静态 CRT)Release 构建,std::string 布局与本地 Debug(IDL=2)不同,
+         跨边界传 std::string 会读到乱码参数、并让库把错误串写进本进程析构的字符串里,
+         造成堆损坏(表现为 gate/scene 启动静默卡死)。详见 kafka_consumer.h 顶部注释。
+         这些 TU 需要 LIBRDKAFKA_STATICLIB,否则 RD_EXPORT 会展开成 dllimport。 -->
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/ConfImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/ConsumerImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/HandleImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/HeadersImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/KafkaConsumerImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/MessageImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/MetadataImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/ProducerImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/QueueImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/RdKafka.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/TopicImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <ClCompile Include="../../../../third_party/librdkafka/src-cpp/TopicPartitionImpl.cpp">
+      <PreprocessorDefinitions>LIBRDKAFKA_STATICLIB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
     <ClCompile Include="messaging\kafka\kafka_consumer.cpp" />
     <ClCompile Include="messaging\kafka\kafka_manager.cpp" />
     <ClCompile Include="messaging\kafka\kafka_producer.cpp" />

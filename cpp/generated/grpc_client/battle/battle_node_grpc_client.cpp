@@ -249,6 +249,65 @@ void SendBattleNodeRemoveObserver(entt::registry& registry, entt::entity nodeEnt
     SendBattleNodeRemoveObserver(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
+#pragma region BattleNodeIssueBattleTicket
+boost::object_pool<AsyncBattleNodeIssueBattleTicketGrpcClient> BattleNodeIssueBattleTicketPool;
+using AsyncBattleNodeIssueBattleTicketHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::IssueBattleTicketResponse&)>;
+AsyncBattleNodeIssueBattleTicketHandlerFunctionType AsyncBattleNodeIssueBattleTicketHandler;
+
+void AsyncCompleteGrpcBattleNodeIssueBattleTicket(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncBattleNodeIssueBattleTicketGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncBattleNodeIssueBattleTicketHandler) {
+            AsyncBattleNodeIssueBattleTicketHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	BattleNodeIssueBattleTicketPool.destroy(call);
+}
+
+void SendBattleNodeIssueBattleTicket(entt::registry& registry, entt::entity nodeEntity, const ::IssueBattleTicketRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(BattleNodeIssueBattleTicketPool.construct());
+    call->response_reader = registry
+        .get<BattleNodeStubPtr>(nodeEntity)
+        ->PrepareAsyncIssueBattleTicket(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(BattleNodeIssueBattleTicketMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendBattleNodeIssueBattleTicket(entt::registry& registry, entt::entity nodeEntity, const ::IssueBattleTicketRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(BattleNodeIssueBattleTicketPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<BattleNodeStubPtr>(nodeEntity)
+        ->PrepareAsyncIssueBattleTicket(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(BattleNodeIssueBattleTicketMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendBattleNodeIssueBattleTicket(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::IssueBattleTicketRequest& derived = static_cast<const ::IssueBattleTicketRequest&>(message);
+    SendBattleNodeIssueBattleTicket(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
 
 void HandleBattleNodeCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag) {
         switch (grpcTag->messageId) {
@@ -268,6 +327,10 @@ void HandleBattleNodeCompletedQueueMessage(entt::registry& registry, entt::entit
             AsyncCompleteGrpcBattleNodeRemoveObserver(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
+        case BattleNodeIssueBattleTicketMessageId:
+            AsyncCompleteGrpcBattleNodeIssueBattleTicket(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
         default:
             break;
         }
@@ -279,6 +342,7 @@ void SetBattleNodeHandler(const std::function<void(const ClientContext&, const :
     AsyncBattleNodeDestroyBattleHandler = handler;
     AsyncBattleNodeAddObserverHandler = handler;
     AsyncBattleNodeRemoveObserverHandler = handler;
+    AsyncBattleNodeIssueBattleTicketHandler = handler;
 }
 
 void SetBattleNodeIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler) {
@@ -294,6 +358,9 @@ void SetBattleNodeIfEmptyHandler(const std::function<void(const ClientContext&, 
     }
     if (!AsyncBattleNodeRemoveObserverHandler) {
         AsyncBattleNodeRemoveObserverHandler = handler;
+    }
+    if (!AsyncBattleNodeIssueBattleTicketHandler) {
+        AsyncBattleNodeIssueBattleTicketHandler = handler;
     }
 }
 

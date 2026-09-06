@@ -662,6 +662,65 @@ void SendBattleClientPlayerNotifySpectateEnd(entt::registry& registry, entt::ent
     SendBattleClientPlayerNotifySpectateEnd(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
+#pragma region BattleClientPlayerNotifyBattleAssigned
+boost::object_pool<AsyncBattleClientPlayerNotifyBattleAssignedGrpcClient> BattleClientPlayerNotifyBattleAssignedPool;
+using AsyncBattleClientPlayerNotifyBattleAssignedHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::Empty&)>;
+AsyncBattleClientPlayerNotifyBattleAssignedHandlerFunctionType AsyncBattleClientPlayerNotifyBattleAssignedHandler;
+
+void AsyncCompleteGrpcBattleClientPlayerNotifyBattleAssigned(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncBattleClientPlayerNotifyBattleAssignedGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncBattleClientPlayerNotifyBattleAssignedHandler) {
+            AsyncBattleClientPlayerNotifyBattleAssignedHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	BattleClientPlayerNotifyBattleAssignedPool.destroy(call);
+}
+
+void SendBattleClientPlayerNotifyBattleAssigned(entt::registry& registry, entt::entity nodeEntity, const ::BattleAssignedS2C& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(BattleClientPlayerNotifyBattleAssignedPool.construct());
+    call->response_reader = registry
+        .get<BattleClientPlayerStubPtr>(nodeEntity)
+        ->PrepareAsyncNotifyBattleAssigned(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(BattleClientPlayerNotifyBattleAssignedMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendBattleClientPlayerNotifyBattleAssigned(entt::registry& registry, entt::entity nodeEntity, const ::BattleAssignedS2C& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(BattleClientPlayerNotifyBattleAssignedPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<BattleClientPlayerStubPtr>(nodeEntity)
+        ->PrepareAsyncNotifyBattleAssigned(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(BattleClientPlayerNotifyBattleAssignedMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendBattleClientPlayerNotifyBattleAssigned(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::BattleAssignedS2C& derived = static_cast<const ::BattleAssignedS2C&>(message);
+    SendBattleClientPlayerNotifyBattleAssigned(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
 
 void HandlePlayerBattleCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag) {
         switch (grpcTag->messageId) {
@@ -709,6 +768,10 @@ void HandlePlayerBattleCompletedQueueMessage(entt::registry& registry, entt::ent
             AsyncCompleteGrpcBattleClientPlayerNotifySpectateEnd(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
+        case BattleClientPlayerNotifyBattleAssignedMessageId:
+            AsyncCompleteGrpcBattleClientPlayerNotifyBattleAssigned(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
         default:
             break;
         }
@@ -727,6 +790,7 @@ void SetPlayerBattleHandler(const std::function<void(const ClientContext&, const
     AsyncBattleClientPlayerNotifySpectateStateHandler = handler;
     AsyncBattleClientPlayerNotifySpectateTurnResultHandler = handler;
     AsyncBattleClientPlayerNotifySpectateEndHandler = handler;
+    AsyncBattleClientPlayerNotifyBattleAssignedHandler = handler;
 }
 
 void SetPlayerBattleIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler) {
@@ -763,6 +827,9 @@ void SetPlayerBattleIfEmptyHandler(const std::function<void(const ClientContext&
     }
     if (!AsyncBattleClientPlayerNotifySpectateEndHandler) {
         AsyncBattleClientPlayerNotifySpectateEndHandler = handler;
+    }
+    if (!AsyncBattleClientPlayerNotifyBattleAssignedHandler) {
+        AsyncBattleClientPlayerNotifyBattleAssignedHandler = handler;
     }
 }
 

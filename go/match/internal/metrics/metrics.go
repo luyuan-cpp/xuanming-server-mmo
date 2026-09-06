@@ -84,6 +84,14 @@ var (
 		Help:      "WatchBattle requests by outcome (ok|queued|in_battle|already_watching|offline|no_battle|not_found|rejected|internal).",
 	}, []string{"outcome"})
 
+	// requestBattleTicketTotal 丢票补签(MatchService.RequestBattleTicket → BattleNode.IssueBattleTicket)
+	// 的出口分布:rejected = battle 核对名单后拒签,no_node = 观战索引指向的 battle 节点未发现。
+	requestBattleTicketTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "request_battle_ticket_total",
+		Help:      "RequestBattleTicket requests by outcome (ok|no_session|not_found|no_node|rpc_error|rejected|internal).",
+	}, []string{"outcome"})
+
 	// ---- 评分匹配(设计文档 §11)----
 
 	// ratingUpdateTotal 对局结果回流(Kafka match-results)的入账结果:
@@ -146,6 +154,7 @@ func register() {
 			discoveredNodes,
 			kafkaPushTotal,
 			watchBattleTotal,
+			requestBattleTicketTotal,
 			ratingUpdateTotal,
 			groupRatingSpread,
 			waitSeconds,
@@ -252,6 +261,11 @@ func ObserveKafkaPush(outcome string) {
 // ObserveWatchBattle 记录一次 WatchBattle 请求结果。
 func ObserveWatchBattle(outcome string) {
 	watchBattleTotal.WithLabelValues(outcome).Inc()
+}
+
+// ObserveRequestBattleTicket 记录一次 RequestBattleTicket(丢票补签)请求结果。
+func ObserveRequestBattleTicket(outcome string) {
+	requestBattleTicketTotal.WithLabelValues(outcome).Inc()
 }
 
 // Start 启动 Prometheus /metrics 端点;addr 为空则关闭(与 scene_manager 同模式)。

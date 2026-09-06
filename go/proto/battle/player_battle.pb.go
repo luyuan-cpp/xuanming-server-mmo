@@ -76,6 +76,56 @@ func (ESpectateEndReason) EnumDescriptor() ([]byte, []int) {
 	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{0}
 }
 
+// 票据角色(枚举首值必须 0,宪法 §4)
+type EBattleTicketRole int32
+
+const (
+	EBattleTicketRole_BATTLE_TICKET_ROLE_NONE        EBattleTicketRole = 0
+	EBattleTicketRole_BATTLE_TICKET_ROLE_PARTICIPANT EBattleTicketRole = 1 // 参战者
+	EBattleTicketRole_BATTLE_TICKET_ROLE_OBSERVER    EBattleTicketRole = 2 // 观众
+)
+
+// Enum value maps for EBattleTicketRole.
+var (
+	EBattleTicketRole_name = map[int32]string{
+		0: "BATTLE_TICKET_ROLE_NONE",
+		1: "BATTLE_TICKET_ROLE_PARTICIPANT",
+		2: "BATTLE_TICKET_ROLE_OBSERVER",
+	}
+	EBattleTicketRole_value = map[string]int32{
+		"BATTLE_TICKET_ROLE_NONE":        0,
+		"BATTLE_TICKET_ROLE_PARTICIPANT": 1,
+		"BATTLE_TICKET_ROLE_OBSERVER":    2,
+	}
+)
+
+func (x EBattleTicketRole) Enum() *EBattleTicketRole {
+	p := new(EBattleTicketRole)
+	*p = x
+	return p
+}
+
+func (x EBattleTicketRole) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (EBattleTicketRole) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_battle_player_battle_proto_enumTypes[1].Descriptor()
+}
+
+func (EBattleTicketRole) Type() protoreflect.EnumType {
+	return &file_proto_battle_player_battle_proto_enumTypes[1]
+}
+
+func (x EBattleTicketRole) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use EBattleTicketRole.Descriptor instead.
+func (EBattleTicketRole) EnumDescriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{1}
+}
+
 // ---- 战斗全量状态(开战下发 / 回合后同步 / 重连补拉,v1 全量同步免客户端预测) ----
 type BattleStateS2C struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
@@ -836,6 +886,403 @@ func (x *SetAutoBattleResponse) GetErrorMessage() *base.TipInfoMessage {
 	return nil
 }
 
+// 票据载荷:battle 节点在 CreateBattle / AddObserver 成功后签发(HMAC-SHA256,
+// 密钥 BaseDeployConfig.battle_token_secret,全部 battle 实例共享,与 gate 令牌密钥分域)。
+// 签名 = hex(HMAC-SHA256(secret, 序列化后的本消息字节)),形态与 GateTokenPayload 一致。
+// 寿命 = 房间作废期限(D25):同一票可重复用于战斗中重连;房间销毁即失效。
+type BattleTicketPayload struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	BattleId         uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	PlayerId         uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	BattleNodeId     uint32                 `protobuf:"varint,3,opt,name=battle_node_id,json=battleNodeId,proto3" json:"battle_node_id,omitempty"`            // 签发节点 node_id,验签侧必须等于自身
+	BattleInstanceId string                 `protobuf:"bytes,4,opt,name=battle_instance_id,json=battleInstanceId,proto3" json:"battle_instance_id,omitempty"` // 签发节点实例 UUID(node_uuid),防节点重启后 node_id 复用
+	ExpireAtMs       uint64                 `protobuf:"varint,5,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"`                  // Unix 毫秒;与房间 deadline_ms 同值
+	Role             EBattleTicketRole      `protobuf:"varint,6,opt,name=role,proto3,enum=EBattleTicketRole" json:"role,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *BattleTicketPayload) Reset() {
+	*x = BattleTicketPayload{}
+	mi := &file_proto_battle_player_battle_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleTicketPayload) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleTicketPayload) ProtoMessage() {}
+
+func (x *BattleTicketPayload) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_player_battle_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleTicketPayload.ProtoReflect.Descriptor instead.
+func (*BattleTicketPayload) Descriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *BattleTicketPayload) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *BattleTicketPayload) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *BattleTicketPayload) GetBattleNodeId() uint32 {
+	if x != nil {
+		return x.BattleNodeId
+	}
+	return 0
+}
+
+func (x *BattleTicketPayload) GetBattleInstanceId() string {
+	if x != nil {
+		return x.BattleInstanceId
+	}
+	return ""
+}
+
+func (x *BattleTicketPayload) GetExpireAtMs() uint64 {
+	if x != nil {
+		return x.ExpireAtMs
+	}
+	return 0
+}
+
+func (x *BattleTicketPayload) GetRole() EBattleTicketRole {
+	if x != nil {
+		return x.Role
+	}
+	return EBattleTicketRole_BATTLE_TICKET_ROLE_NONE
+}
+
+// 直连握手首包(客户端 → battle 节点)。
+type BattleTokenVerifyRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Payload       []byte                 `protobuf:"bytes,1,opt,name=payload,proto3" json:"payload,omitempty"`     // 序列化的 BattleTicketPayload
+	Signature     []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"` // hex 文本形式的 HMAC-SHA256(与 ClientTokenVerifyRequest 同口径)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BattleTokenVerifyRequest) Reset() {
+	*x = BattleTokenVerifyRequest{}
+	mi := &file_proto_battle_player_battle_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleTokenVerifyRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleTokenVerifyRequest) ProtoMessage() {}
+
+func (x *BattleTokenVerifyRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_player_battle_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleTokenVerifyRequest.ProtoReflect.Descriptor instead.
+func (*BattleTokenVerifyRequest) Descriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *BattleTokenVerifyRequest) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *BattleTokenVerifyRequest) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+// 握手应答(battle 节点 → 客户端)。失败时 battle 节点随后主动断开。
+type BattleTokenVerifyResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Error         string                 `protobuf:"bytes,2,opt,name=error,proto3" json:"error,omitempty"`                        // 失败原因(非敏感,可直接展示 / 记日志)
+	BattleId      uint64                 `protobuf:"varint,3,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"` // 成功时回填,客户端据此把连接与本地战斗状态机对上
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BattleTokenVerifyResponse) Reset() {
+	*x = BattleTokenVerifyResponse{}
+	mi := &file_proto_battle_player_battle_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleTokenVerifyResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleTokenVerifyResponse) ProtoMessage() {}
+
+func (x *BattleTokenVerifyResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_player_battle_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleTokenVerifyResponse.ProtoReflect.Descriptor instead.
+func (*BattleTokenVerifyResponse) Descriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *BattleTokenVerifyResponse) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *BattleTokenVerifyResponse) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+func (x *BattleTokenVerifyResponse) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+// 落点分配(battle 节点 → 客户端,经大厅通道 Kafka gate-{id} 推送;D26):
+// 收到后客户端向 host:port 建第二条 TCP 连接并以票据握手。
+// CreateBattle 成功后每参战者先收本消息再收 BattleStartS2C(同 key 保序);
+// 观众 AddObserver 成功后先收本消息再收 SpectateStateS2C。
+type BattleAssignedS2C struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	BattleId       uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	Host           string                 `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"` // battle 节点客户端面地址(NodeInfo.endpoint)
+	Port           uint32                 `protobuf:"varint,3,opt,name=port,proto3" json:"port,omitempty"`
+	TokenPayload   []byte                 `protobuf:"bytes,4,opt,name=token_payload,json=tokenPayload,proto3" json:"token_payload,omitempty"`       // 序列化的 BattleTicketPayload,原样放进 BattleTokenVerifyRequest.payload
+	TokenSignature []byte                 `protobuf:"bytes,5,opt,name=token_signature,json=tokenSignature,proto3" json:"token_signature,omitempty"` // 原样放进 BattleTokenVerifyRequest.signature
+	ExpireAtMs     uint64                 `protobuf:"varint,6,opt,name=expire_at_ms,json=expireAtMs,proto3" json:"expire_at_ms,omitempty"`          // 票据 / 房间作废期限(Unix 毫秒)
+	Role           EBattleTicketRole      `protobuf:"varint,7,opt,name=role,proto3,enum=EBattleTicketRole" json:"role,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *BattleAssignedS2C) Reset() {
+	*x = BattleAssignedS2C{}
+	mi := &file_proto_battle_player_battle_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattleAssignedS2C) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattleAssignedS2C) ProtoMessage() {}
+
+func (x *BattleAssignedS2C) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_player_battle_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattleAssignedS2C.ProtoReflect.Descriptor instead.
+func (*BattleAssignedS2C) Descriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *BattleAssignedS2C) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *BattleAssignedS2C) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *BattleAssignedS2C) GetPort() uint32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *BattleAssignedS2C) GetTokenPayload() []byte {
+	if x != nil {
+		return x.TokenPayload
+	}
+	return nil
+}
+
+func (x *BattleAssignedS2C) GetTokenSignature() []byte {
+	if x != nil {
+		return x.TokenSignature
+	}
+	return nil
+}
+
+func (x *BattleAssignedS2C) GetExpireAtMs() uint64 {
+	if x != nil {
+		return x.ExpireAtMs
+	}
+	return 0
+}
+
+func (x *BattleAssignedS2C) GetRole() EBattleTicketRole {
+	if x != nil {
+		return x.Role
+	}
+	return EBattleTicketRole_BATTLE_TICKET_ROLE_NONE
+}
+
+// 客户端丢票(冷启动 / 换设备)时经大厅通道补签(D25)。请求 / 响应由 MatchService.RequestBattleTicket
+// 使用(match → BattleNode.IssueBattleTicket);gate 收成只连路由服后不再直连 battle,补签不再挂在本服务下。
+// 仅当该玩家仍是 battle_id 房间的参战者或观众时才签;否则 error_message 非零且 assignment 为空。
+type RequestBattleTicketRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestBattleTicketRequest) Reset() {
+	*x = RequestBattleTicketRequest{}
+	mi := &file_proto_battle_player_battle_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestBattleTicketRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestBattleTicketRequest) ProtoMessage() {}
+
+func (x *RequestBattleTicketRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_player_battle_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestBattleTicketRequest.ProtoReflect.Descriptor instead.
+func (*RequestBattleTicketRequest) Descriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *RequestBattleTicketRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+type RequestBattleTicketResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Assignment    *BattleAssignedS2C     `protobuf:"bytes,2,opt,name=assignment,proto3" json:"assignment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *RequestBattleTicketResponse) Reset() {
+	*x = RequestBattleTicketResponse{}
+	mi := &file_proto_battle_player_battle_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RequestBattleTicketResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RequestBattleTicketResponse) ProtoMessage() {}
+
+func (x *RequestBattleTicketResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_player_battle_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RequestBattleTicketResponse.ProtoReflect.Descriptor instead.
+func (*RequestBattleTicketResponse) Descriptor() ([]byte, []int) {
+	return file_proto_battle_player_battle_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *RequestBattleTicketResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *RequestBattleTicketResponse) GetAssignment() *BattleAssignedS2C {
+	if x != nil {
+		return x.Assignment
+	}
+	return nil
+}
+
 var File_proto_battle_player_battle_proto protoreflect.FileDescriptor
 
 const file_proto_battle_player_battle_proto_rawDesc = "" +
@@ -889,12 +1336,47 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x18\n" +
 	"\aenabled\x18\x02 \x01(\bR\aenabled\"M\n" +
 	"\x15SetAutoBattleResponse\x124\n" +
-	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage*\x88\x01\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"\xed\x01\n" +
+	"\x13BattleTicketPayload\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12$\n" +
+	"\x0ebattle_node_id\x18\x03 \x01(\rR\fbattleNodeId\x12,\n" +
+	"\x12battle_instance_id\x18\x04 \x01(\tR\x10battleInstanceId\x12 \n" +
+	"\fexpire_at_ms\x18\x05 \x01(\x04R\n" +
+	"expireAtMs\x12&\n" +
+	"\x04role\x18\x06 \x01(\x0e2\x12.eBattleTicketRoleR\x04role\"R\n" +
+	"\x18BattleTokenVerifyRequest\x12\x18\n" +
+	"\apayload\x18\x01 \x01(\fR\apayload\x12\x1c\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\"h\n" +
+	"\x19BattleTokenVerifyResponse\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x14\n" +
+	"\x05error\x18\x02 \x01(\tR\x05error\x12\x1b\n" +
+	"\tbattle_id\x18\x03 \x01(\x04R\bbattleId\"\xf0\x01\n" +
+	"\x11BattleAssignedS2C\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x12\n" +
+	"\x04host\x18\x02 \x01(\tR\x04host\x12\x12\n" +
+	"\x04port\x18\x03 \x01(\rR\x04port\x12#\n" +
+	"\rtoken_payload\x18\x04 \x01(\fR\ftokenPayload\x12'\n" +
+	"\x0ftoken_signature\x18\x05 \x01(\fR\x0etokenSignature\x12 \n" +
+	"\fexpire_at_ms\x18\x06 \x01(\x04R\n" +
+	"expireAtMs\x12&\n" +
+	"\x04role\x18\a \x01(\x0e2\x12.eBattleTicketRoleR\x04role\"9\n" +
+	"\x1aRequestBattleTicketRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\"\x87\x01\n" +
+	"\x1bRequestBattleTicketResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x122\n" +
+	"\n" +
+	"assignment\x18\x02 \x01(\v2\x12.BattleAssignedS2CR\n" +
+	"assignment*\x88\x01\n" +
 	"\x12eSpectateEndReason\x12\x15\n" +
 	"\x11SPECTATE_END_NONE\x10\x00\x12 \n" +
 	"\x1cSPECTATE_END_BATTLE_FINISHED\x10\x01\x12\x1f\n" +
 	"\x1bSPECTATE_END_BATTLE_ABORTED\x10\x02\x12\x18\n" +
-	"\x14SPECTATE_END_REMOVED\x10\x032\xf9\x04\n" +
+	"\x14SPECTATE_END_REMOVED\x10\x03*u\n" +
+	"\x11eBattleTicketRole\x12\x1b\n" +
+	"\x17BATTLE_TICKET_ROLE_NONE\x10\x00\x12\"\n" +
+	"\x1eBATTLE_TICKET_ROLE_PARTICIPANT\x10\x01\x12\x1f\n" +
+	"\x1bBATTLE_TICKET_ROLE_OBSERVER\x10\x022\xad\x05\n" +
 	"\x12BattleClientPlayer\x12M\n" +
 	"\x12SubmitBattleAction\x12\x1a.SubmitBattleActionRequest\x1a\x1b.SubmitBattleActionResponse\x129\n" +
 	"\x0eGetBattleState\x12\x16.GetBattleStateRequest\x1a\x0f.BattleStateS2C\x12,\n" +
@@ -906,7 +1388,8 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\rSetAutoBattle\x12\x15.SetAutoBattleRequest\x1a\x16.SetAutoBattleResponse\x120\n" +
 	"\x13NotifySpectateState\x12\x11.SpectateStateS2C\x1a\x06.Empty\x122\n" +
 	"\x18NotifySpectateTurnResult\x12\x0e.TurnResultS2C\x1a\x06.Empty\x12,\n" +
-	"\x11NotifySpectateEnd\x12\x0f.SpectateEndS2C\x1a\x06.Empty\x1a\x05\x88\xa8\xc3\x01\x01B\x12\x98\xd4a\x1eZ\fproto/battleb\x06proto3"
+	"\x11NotifySpectateEnd\x12\x0f.SpectateEndS2C\x1a\x06.Empty\x122\n" +
+	"\x14NotifyBattleAssigned\x12\x12.BattleAssignedS2C\x1a\x06.Empty\x1a\x05\x88\xa8\xc3\x01\x01B\x12\x98\xd4a\x1eZ\fproto/battleb\x06proto3"
 
 var (
 	file_proto_battle_player_battle_proto_rawDescOnce sync.Once
@@ -920,74 +1403,87 @@ func file_proto_battle_player_battle_proto_rawDescGZIP() []byte {
 	return file_proto_battle_player_battle_proto_rawDescData
 }
 
-var file_proto_battle_player_battle_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_battle_player_battle_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_proto_battle_player_battle_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
+var file_proto_battle_player_battle_proto_msgTypes = make([]protoimpl.MessageInfo, 20)
 var file_proto_battle_player_battle_proto_goTypes = []any{
-	(ESpectateEndReason)(0),            // 0: eSpectateEndReason
-	(*BattleStateS2C)(nil),             // 1: BattleStateS2C
-	(*BattleStartS2C)(nil),             // 2: BattleStartS2C
-	(*TurnResultS2C)(nil),              // 3: TurnResultS2C
-	(*BattleEndS2C)(nil),               // 4: BattleEndS2C
-	(*BattleReconnectS2C)(nil),         // 5: BattleReconnectS2C
-	(*SpectateStateS2C)(nil),           // 6: SpectateStateS2C
-	(*SpectateEndS2C)(nil),             // 7: SpectateEndS2C
-	(*SubmitBattleActionRequest)(nil),  // 8: SubmitBattleActionRequest
-	(*SubmitBattleActionResponse)(nil), // 9: SubmitBattleActionResponse
-	(*GetBattleStateRequest)(nil),      // 10: GetBattleStateRequest
-	(*StopWatchBattleRequest)(nil),     // 11: StopWatchBattleRequest
-	(*StopWatchBattleResponse)(nil),    // 12: StopWatchBattleResponse
-	(*SetAutoBattleRequest)(nil),       // 13: SetAutoBattleRequest
-	(*SetAutoBattleResponse)(nil),      // 14: SetAutoBattleResponse
-	(*BattleActorState)(nil),           // 15: BattleActorState
-	(EBattleOutcome)(0),                // 16: eBattleOutcome
-	(*BattleEventItem)(nil),            // 17: BattleEventItem
-	(*BattleSettlementData)(nil),       // 18: BattleSettlementData
-	(*BattleAction)(nil),               // 19: BattleAction
-	(*base.TipInfoMessage)(nil),        // 20: TipInfoMessage
-	(*base.Empty)(nil),                 // 21: Empty
+	(ESpectateEndReason)(0),             // 0: eSpectateEndReason
+	(EBattleTicketRole)(0),              // 1: eBattleTicketRole
+	(*BattleStateS2C)(nil),              // 2: BattleStateS2C
+	(*BattleStartS2C)(nil),              // 3: BattleStartS2C
+	(*TurnResultS2C)(nil),               // 4: TurnResultS2C
+	(*BattleEndS2C)(nil),                // 5: BattleEndS2C
+	(*BattleReconnectS2C)(nil),          // 6: BattleReconnectS2C
+	(*SpectateStateS2C)(nil),            // 7: SpectateStateS2C
+	(*SpectateEndS2C)(nil),              // 8: SpectateEndS2C
+	(*SubmitBattleActionRequest)(nil),   // 9: SubmitBattleActionRequest
+	(*SubmitBattleActionResponse)(nil),  // 10: SubmitBattleActionResponse
+	(*GetBattleStateRequest)(nil),       // 11: GetBattleStateRequest
+	(*StopWatchBattleRequest)(nil),      // 12: StopWatchBattleRequest
+	(*StopWatchBattleResponse)(nil),     // 13: StopWatchBattleResponse
+	(*SetAutoBattleRequest)(nil),        // 14: SetAutoBattleRequest
+	(*SetAutoBattleResponse)(nil),       // 15: SetAutoBattleResponse
+	(*BattleTicketPayload)(nil),         // 16: BattleTicketPayload
+	(*BattleTokenVerifyRequest)(nil),    // 17: BattleTokenVerifyRequest
+	(*BattleTokenVerifyResponse)(nil),   // 18: BattleTokenVerifyResponse
+	(*BattleAssignedS2C)(nil),           // 19: BattleAssignedS2C
+	(*RequestBattleTicketRequest)(nil),  // 20: RequestBattleTicketRequest
+	(*RequestBattleTicketResponse)(nil), // 21: RequestBattleTicketResponse
+	(*BattleActorState)(nil),            // 22: BattleActorState
+	(EBattleOutcome)(0),                 // 23: eBattleOutcome
+	(*BattleEventItem)(nil),             // 24: BattleEventItem
+	(*BattleSettlementData)(nil),        // 25: BattleSettlementData
+	(*BattleAction)(nil),                // 26: BattleAction
+	(*base.TipInfoMessage)(nil),         // 27: TipInfoMessage
+	(*base.Empty)(nil),                  // 28: Empty
 }
 var file_proto_battle_player_battle_proto_depIdxs = []int32{
-	15, // 0: BattleStateS2C.actors:type_name -> BattleActorState
-	16, // 1: BattleStateS2C.outcome:type_name -> eBattleOutcome
-	1,  // 2: BattleStartS2C.state:type_name -> BattleStateS2C
-	17, // 3: TurnResultS2C.events:type_name -> BattleEventItem
-	1,  // 4: TurnResultS2C.state:type_name -> BattleStateS2C
-	16, // 5: BattleEndS2C.outcome:type_name -> eBattleOutcome
-	18, // 6: BattleEndS2C.settlement:type_name -> BattleSettlementData
-	1,  // 7: SpectateStateS2C.state:type_name -> BattleStateS2C
-	16, // 8: SpectateEndS2C.outcome:type_name -> eBattleOutcome
+	22, // 0: BattleStateS2C.actors:type_name -> BattleActorState
+	23, // 1: BattleStateS2C.outcome:type_name -> eBattleOutcome
+	2,  // 2: BattleStartS2C.state:type_name -> BattleStateS2C
+	24, // 3: TurnResultS2C.events:type_name -> BattleEventItem
+	2,  // 4: TurnResultS2C.state:type_name -> BattleStateS2C
+	23, // 5: BattleEndS2C.outcome:type_name -> eBattleOutcome
+	25, // 6: BattleEndS2C.settlement:type_name -> BattleSettlementData
+	2,  // 7: SpectateStateS2C.state:type_name -> BattleStateS2C
+	23, // 8: SpectateEndS2C.outcome:type_name -> eBattleOutcome
 	0,  // 9: SpectateEndS2C.reason:type_name -> eSpectateEndReason
-	19, // 10: SubmitBattleActionRequest.action:type_name -> BattleAction
-	20, // 11: SubmitBattleActionResponse.error_message:type_name -> TipInfoMessage
-	20, // 12: StopWatchBattleResponse.error_message:type_name -> TipInfoMessage
-	20, // 13: SetAutoBattleResponse.error_message:type_name -> TipInfoMessage
-	8,  // 14: BattleClientPlayer.SubmitBattleAction:input_type -> SubmitBattleActionRequest
-	10, // 15: BattleClientPlayer.GetBattleState:input_type -> GetBattleStateRequest
-	2,  // 16: BattleClientPlayer.NotifyBattleStart:input_type -> BattleStartS2C
-	3,  // 17: BattleClientPlayer.NotifyTurnResult:input_type -> TurnResultS2C
-	4,  // 18: BattleClientPlayer.NotifyBattleEnd:input_type -> BattleEndS2C
-	5,  // 19: BattleClientPlayer.NotifyBattleReconnect:input_type -> BattleReconnectS2C
-	11, // 20: BattleClientPlayer.StopWatchBattle:input_type -> StopWatchBattleRequest
-	13, // 21: BattleClientPlayer.SetAutoBattle:input_type -> SetAutoBattleRequest
-	6,  // 22: BattleClientPlayer.NotifySpectateState:input_type -> SpectateStateS2C
-	3,  // 23: BattleClientPlayer.NotifySpectateTurnResult:input_type -> TurnResultS2C
-	7,  // 24: BattleClientPlayer.NotifySpectateEnd:input_type -> SpectateEndS2C
-	9,  // 25: BattleClientPlayer.SubmitBattleAction:output_type -> SubmitBattleActionResponse
-	1,  // 26: BattleClientPlayer.GetBattleState:output_type -> BattleStateS2C
-	21, // 27: BattleClientPlayer.NotifyBattleStart:output_type -> Empty
-	21, // 28: BattleClientPlayer.NotifyTurnResult:output_type -> Empty
-	21, // 29: BattleClientPlayer.NotifyBattleEnd:output_type -> Empty
-	21, // 30: BattleClientPlayer.NotifyBattleReconnect:output_type -> Empty
-	12, // 31: BattleClientPlayer.StopWatchBattle:output_type -> StopWatchBattleResponse
-	14, // 32: BattleClientPlayer.SetAutoBattle:output_type -> SetAutoBattleResponse
-	21, // 33: BattleClientPlayer.NotifySpectateState:output_type -> Empty
-	21, // 34: BattleClientPlayer.NotifySpectateTurnResult:output_type -> Empty
-	21, // 35: BattleClientPlayer.NotifySpectateEnd:output_type -> Empty
-	25, // [25:36] is the sub-list for method output_type
-	14, // [14:25] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	26, // 10: SubmitBattleActionRequest.action:type_name -> BattleAction
+	27, // 11: SubmitBattleActionResponse.error_message:type_name -> TipInfoMessage
+	27, // 12: StopWatchBattleResponse.error_message:type_name -> TipInfoMessage
+	27, // 13: SetAutoBattleResponse.error_message:type_name -> TipInfoMessage
+	1,  // 14: BattleTicketPayload.role:type_name -> eBattleTicketRole
+	1,  // 15: BattleAssignedS2C.role:type_name -> eBattleTicketRole
+	27, // 16: RequestBattleTicketResponse.error_message:type_name -> TipInfoMessage
+	19, // 17: RequestBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
+	9,  // 18: BattleClientPlayer.SubmitBattleAction:input_type -> SubmitBattleActionRequest
+	11, // 19: BattleClientPlayer.GetBattleState:input_type -> GetBattleStateRequest
+	3,  // 20: BattleClientPlayer.NotifyBattleStart:input_type -> BattleStartS2C
+	4,  // 21: BattleClientPlayer.NotifyTurnResult:input_type -> TurnResultS2C
+	5,  // 22: BattleClientPlayer.NotifyBattleEnd:input_type -> BattleEndS2C
+	6,  // 23: BattleClientPlayer.NotifyBattleReconnect:input_type -> BattleReconnectS2C
+	12, // 24: BattleClientPlayer.StopWatchBattle:input_type -> StopWatchBattleRequest
+	14, // 25: BattleClientPlayer.SetAutoBattle:input_type -> SetAutoBattleRequest
+	7,  // 26: BattleClientPlayer.NotifySpectateState:input_type -> SpectateStateS2C
+	4,  // 27: BattleClientPlayer.NotifySpectateTurnResult:input_type -> TurnResultS2C
+	8,  // 28: BattleClientPlayer.NotifySpectateEnd:input_type -> SpectateEndS2C
+	19, // 29: BattleClientPlayer.NotifyBattleAssigned:input_type -> BattleAssignedS2C
+	10, // 30: BattleClientPlayer.SubmitBattleAction:output_type -> SubmitBattleActionResponse
+	2,  // 31: BattleClientPlayer.GetBattleState:output_type -> BattleStateS2C
+	28, // 32: BattleClientPlayer.NotifyBattleStart:output_type -> Empty
+	28, // 33: BattleClientPlayer.NotifyTurnResult:output_type -> Empty
+	28, // 34: BattleClientPlayer.NotifyBattleEnd:output_type -> Empty
+	28, // 35: BattleClientPlayer.NotifyBattleReconnect:output_type -> Empty
+	13, // 36: BattleClientPlayer.StopWatchBattle:output_type -> StopWatchBattleResponse
+	15, // 37: BattleClientPlayer.SetAutoBattle:output_type -> SetAutoBattleResponse
+	28, // 38: BattleClientPlayer.NotifySpectateState:output_type -> Empty
+	28, // 39: BattleClientPlayer.NotifySpectateTurnResult:output_type -> Empty
+	28, // 40: BattleClientPlayer.NotifySpectateEnd:output_type -> Empty
+	28, // 41: BattleClientPlayer.NotifyBattleAssigned:output_type -> Empty
+	30, // [30:42] is the sub-list for method output_type
+	18, // [18:30] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_player_battle_proto_init() }
@@ -1001,8 +1497,8 @@ func file_proto_battle_player_battle_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_player_battle_proto_rawDesc), len(file_proto_battle_player_battle_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   14,
+			NumEnums:      2,
+			NumMessages:   20,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

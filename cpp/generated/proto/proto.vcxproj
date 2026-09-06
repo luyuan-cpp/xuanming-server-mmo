@@ -27,6 +27,8 @@
     <ClCompile Include="battle\player_battle.grpc.pb.cc" />
     <ClCompile Include="match\match_service.pb.cc" />
     <ClCompile Include="match\match_service.grpc.pb.cc" />
+    <ClCompile Include="client_rpc_router\client_rpc_router.pb.cc" />
+    <ClCompile Include="client_rpc_router\client_rpc_router.grpc.pb.cc" />
     <ClCompile Include="common\component\battle_comp.pb.cc" />
     <ClCompile Include="common\event\battle_event.pb.cc" />
     <ClCompile Include="chat\chat.pb.cc" />

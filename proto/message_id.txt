@@ -174,3 +174,7 @@
 173=SceneAttributeClientPlayerAutoAllocateAttributePoints
 174=SceneAttributeClientPlayerCreateAttributeScheme
 175=SceneAttributeClientPlayerGmSetPlayerLevel
+176=ClientRpcRouterForward
+177=BattleClientPlayerNotifyBattleAssigned
+178=BattleNodeIssueBattleTicket
+179=MatchServiceRequestBattleTicket

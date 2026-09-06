@@ -3,14 +3,19 @@ package main
 // battle-smoke 场景:两个机器人对本地服务端做"回合制战斗 + 观战"端到端冒烟。
 //
 // 兑现 docs/design/turn-based-battle-server.md §9 预留的 "robot battle 动作":
-//   机器人 A(参战):JoinQueue(PVE_SOLO) → NotifyBattleStart → SetAutoBattle
-//                   → 等 NotifyBattleEnd;
+//   机器人 A(参战):JoinQueue(PVE_SOLO) → NotifyBattleStart → [直连 battle 节点]
+//                   → SetAutoBattle → 等 NotifyBattleEnd;
 //   机器人 B(观战):等 A 开战 → WatchBattle(battle_id=0,观战匹配随机对局)
-//                   → NotifySpectateState → 断言观战对局 == A 的对局
+//                   → NotifySpectateState → 断言观战对局 == A 的对局 → [直连 battle 节点]
 //                   → 等 NotifySpectateEnd → 断言观战回合数 ≥ 1。
 //
+// 方括号是战斗直连(docs/design/turn-based-battle-server.md §18):凭 NotifyBattleAssigned
+// 的票据连 battle 节点客户端面,并断言回合结果 / 终局包从直连到达;
+// battle_smoke.skip_direct_connect=true 时跳过,全程经 gate 中继(验证 D23 回落路径)。
+//
 // 结果约定(供外层脚本消费):
-//   全部断言通过 → 日志一行 `BATTLE_SMOKE_OK battle_id=… a_turns=… b_spectate_turns=…`,
+//   全部断言通过 → 日志一行 `BATTLE_SMOKE_OK battle_id=… a_turns=… b_spectate_turns=…
+//                  a_direct_turns=… b_direct_spectate_turns=…`(跳过直连时后两项为 -1),
 //                  进程退出码 0;
 //   任一步失败   → 日志一行 `BATTLE_SMOKE_FAIL step=… reason=…`,进程退出码 1。
 //
@@ -75,6 +80,8 @@ type battleSmokeFighterResult struct {
 	battleId uint64
 	outcome  int32
 	turns    int
+	// directTurns 是从战斗直连收到的 NotifyTurnResult 条数;-1 = 本次跳过直连
+	directTurns int
 }
 
 // RunBattleSmoke 是 main.go `mode: battle-smoke` 的入口。
@@ -190,6 +197,17 @@ func RunBattleSmoke(cfg *config.Config) {
 		zap.Uint64("battle_id", specBattleId),
 		zap.Uint32("observer_count", botB.player.GetSpectateObserverCount()))
 
+	// B 也走战斗直连(观众票据,role=OBSERVER):首帧之前落点分配已到(D26),
+	// 这里连上去,后续 SpectateTurnResult / SpectateEnd 应从直连到达。
+	var bDirect *battleDirectConn
+	if !cfg.BattleSmoke.SkipDirectConnect {
+		bDirect, err = openBattleDirectConn(botB, stats)
+		if err != nil {
+			fail("b-direct-connect", "%v", err)
+		}
+		defer bDirect.Close()
+	}
+
 	// B 观战首帧已到位,放行 A 开自动战斗推进对局(见 spectateReady 注释)。
 	close(spectateReady)
 
@@ -212,6 +230,16 @@ func RunBattleSmoke(cfg *config.Config) {
 	if bSpectateTurns < 1 {
 		fail("b-spectate-turn-count", "spectator saw %d turn results, expected >= 1", bSpectateTurns)
 	}
+	bDirectSpectateTurns := -1
+	if bDirect != nil {
+		// 直连建立之后,观众的回合结果与观战结束必须从直连到达(不再经 gate 回落)
+		bDirectSpectateTurns = int(bDirect.spectateTurns.Load())
+		zap.L().Info("[battle-smoke] B direct-connect delivery", zap.String("counts", bDirect.summary()))
+		if bDirectSpectateTurns < 1 || bDirect.spectateEnds.Load() < 1 {
+			fail("b-direct-delivery", "observer direct connection saw %s, expected spectate_turns>=1 and spectate_ends>=1",
+				bDirect.summary())
+		}
+	}
 
 	// ---- 步骤 5:收 A 的参战结果 ----
 	var aRes battleSmokeFighterResult
@@ -228,8 +256,8 @@ func RunBattleSmoke(cfg *config.Config) {
 	}
 
 	// ---- 全部断言通过 ----
-	zap.L().Info(fmt.Sprintf("BATTLE_SMOKE_OK battle_id=%d a_turns=%d b_spectate_turns=%d",
-		aRes.battleId, aRes.turns, bSpectateTurns),
+	zap.L().Info(fmt.Sprintf("BATTLE_SMOKE_OK battle_id=%d a_turns=%d b_spectate_turns=%d a_direct_turns=%d b_direct_spectate_turns=%d",
+		aRes.battleId, aRes.turns, bSpectateTurns, aRes.directTurns, bDirectSpectateTurns),
 		zap.String("a_outcome", battle.EBattleOutcome(aRes.outcome).String()),
 		zap.String("b_end_reason", battle.ESpectateEndReason(specEndReason).String()))
 	cleanup()
@@ -291,8 +319,26 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 	zap.L().Info("[battle-smoke] A battle started, enabling auto battle",
 		zap.Uint64("battle_id", battleId))
 
+	// 战斗直连(§18):凭 NotifyBattleAssigned 的票据连 battle 节点;之后战斗消息走直连,
+	// 大厅那条连接不再承载任何战斗流量。跳过时退回 gate 中继(D23 回落路径)。
+	var direct *battleDirectConn
+	sendBattle := bot.gc.SendRequest
+	if !cfg.BattleSmoke.SkipDirectConnect {
+		direct, err = openBattleDirectConn(bot, stats)
+		if err != nil {
+			return battleSmokeFighterResult{step: "a-direct-connect", err: err, battleId: battleId}
+		}
+		defer direct.Close()
+		if direct.battleId != battleId {
+			return battleSmokeFighterResult{step: "a-direct-battle-id",
+				err:      fmt.Errorf("direct handshake battle_id=%d != started battle_id=%d", direct.battleId, battleId),
+				battleId: battleId}
+		}
+		sendBattle = direct.Send
+	}
+
 	// 开自动战斗,battle 节点每回合替 A 出招,冒烟无需手工提交动作。
-	if err := bot.gc.SendRequest(game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{
+	if err := sendBattle(game.BattleClientPlayerSetAutoBattleMessageId, &battle.SetAutoBattleRequest{
 		BattleId: battleId,
 		Enabled:  true,
 	}); err != nil {
@@ -310,9 +356,20 @@ func runBattleSmokeFighter(cfg *config.Config, bot *battleSmokeBot, stats *metri
 	}
 
 	turns := bot.player.GetTurnCount()
+	directTurns := -1
+	if direct != nil {
+		// 直连建立之后,回合结果与终局包必须从直连到达(零字节经 gate,§18 验收判据)
+		directTurns = int(direct.turnResults.Load())
+		zap.L().Info("[battle-smoke] A direct-connect delivery", zap.String("counts", direct.summary()))
+		if directTurns < 1 || direct.battleEnds.Load() < 1 {
+			return battleSmokeFighterResult{step: "a-direct-delivery",
+				err:      fmt.Errorf("fighter direct connection saw %s, expected turn_results>=1 and battle_ends>=1", direct.summary()),
+				battleId: battleId, outcome: outcome, turns: turns}
+		}
+	}
 	zap.L().Info("[battle-smoke] A battle finished",
 		zap.Uint64("battle_id", battleId),
 		zap.String("outcome", battle.EBattleOutcome(outcome).String()),
-		zap.Int("a_turns", turns))
-	return battleSmokeFighterResult{battleId: battleId, outcome: outcome, turns: turns}
+		zap.Int("a_turns", turns), zap.Int("a_direct_turns", directTurns))
+	return battleSmokeFighterResult{battleId: battleId, outcome: outcome, turns: turns, directTurns: directTurns}
 }

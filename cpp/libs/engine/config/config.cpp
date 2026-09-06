@@ -105,6 +105,16 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.set_gate_max_connections(root["GateMaxConnections"].as<uint32_t>());
 	}
 
+	if (root["BattleTokenSecret"])
+	{
+		baseConfig.set_battle_token_secret(root["BattleTokenSecret"].as<std::string>());
+	}
+
+	if (root["BattleMaxConnections"])
+	{
+		baseConfig.set_battle_max_connections(root["BattleMaxConnections"].as<uint32_t>());
+	}
+
 	// Kafka config
 	if (root["Kafka"])
 	{
