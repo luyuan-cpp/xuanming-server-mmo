@@ -41,8 +41,8 @@ uint64_t GuidForLog(const entt::entity player)
 
 Location SceneSpawnSystem::DefaultSpawnFor(const uint32_t /*sceneConfigId*/)
 {
-	// 所有场景当前共用天墉城一张图(BaseScene.nav_bin_file 全部 main_scene.bin),
-	// 出生点只有一份;分场景后此处改查 BaseScene 表。
+	// 所有场景当前共用天墉城一张图(main/dungeon/mirror 三个 bin 是同一次烘焙的
+	// 拷贝),出生点只有一份;分场景后此处改查 BaseScene 表(见 nav.h 注释)。
 	Location spawn;
 	spawn.set_x(kTianyongSpawnX);
 	spawn.set_y(kTianyongSpawnY);

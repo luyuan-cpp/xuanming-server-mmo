@@ -22,8 +22,19 @@
 //
 // 默认参数对齐客户端判定语义:
 //   agent radius = 0 —— 客户端 TianyongPlayerController 只用脚底点查 mask,
-//   不做半径收缩;服务器校验同一个点,所以烘焙也不收缩,保证两端边界一致。
-//   cs=0.25 且 mask 格 2m 为其整数倍,烘出来的导航边界与 mask 格线精确重合。
+//   不做半径收缩;服务器校验同一个点。
+//   cs=0.25 且 mask 格 2m 为其整数倍,导航边界与 mask 格线对齐 —— 但注意
+//   rcFilterLedgeSpans 会把紧邻"洞"(不可走格/画面边缘)的那一圈体素判成
+//   悬崖(邻格没有 span → 视为无限下落)并剔除,所以**网格边界比 mask 格线
+//   向内缩 1 个体素(0.25m)**。这一圈内缩是有意保留的:它保证服务器吸附出的
+//   边界点永远落在客户端 mask 的可走格内(不会正好压在格线上被 floor 判到
+//   墙那一侧),代价是服务器裁决的贴墙位置比客户端最多差 ~0.3m ——
+//   scene 侧 kMoveCorrectionEpsilon(spatial/constants/nav.h)取 0.5m 就是
+//   为了吞掉这个差值,改 cs 时要一起改。
+//   地面几何放在 y = -ch:Recast 光栅化把恰好压在体素边界上的平面向上取整
+//   一个体素,几何放在 y=0 时可走面会落在 +ch(0.2m);下移一个体素后可走面
+//   回到 y≈0(探针输出 nearest 的 y 可以直接核对,偏 ±0.2 说明取整模型
+//   和这里的假设不一致,改 kGroundY 即可,不影响水平语义)。
 //
 // 出生点探针(数据契约自检):
 //   --probe x,y,z   Unity 坐标(米,Y-up),可重复。烘焙完成后对最终网格做
@@ -45,6 +56,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <fstream>
 #include <sstream>
@@ -91,6 +103,9 @@ constexpr int kMaskResolution = 150;
 constexpr double kMaskCellSize = 2.0;
 constexpr double kPaintingMinX = 50.0;
 constexpr double kPaintingMaxZ = 300.0;
+
+// 地面几何的 y(见文件头"地面几何放在 y = -ch"):必须等于 -BakeConfig::cellHeight。
+constexpr double kGroundY = -0.2;
 
 struct TriMesh
 {
@@ -140,10 +155,17 @@ bool ExtractWalkMask(const std::string& csPath, std::vector<uint8_t>& mask)
 	ss << file.rdbuf();
 	const std::string text = ss.str();
 
-	const size_t anchor = text.find("WalkMaskBase64");
+	// 必须锚在常量**定义**上:文件里第一次出现的 "WalkMaskBase64" 是 LoadMask()
+	// 里的用法 `Convert.FromBase64String(WalkMaskBase64);`,从那里往后扫到分号
+	// 一个字符串字面量都没有,base64 为空(2026-09-05 审查发现)。
+	size_t anchor = text.find("const string WalkMaskBase64");
 	if (anchor == std::string::npos)
 	{
-		std::fprintf(stderr, "error: WalkMaskBase64 not found in %s\n", csPath.c_str());
+		anchor = text.find("WalkMaskBase64 =");
+	}
+	if (anchor == std::string::npos)
+	{
+		std::fprintf(stderr, "error: WalkMaskBase64 definition not found in %s\n", csPath.c_str());
 		return false;
 	}
 
@@ -165,6 +187,13 @@ bool ExtractWalkMask(const std::string& csPath, std::vector<uint8_t>& mask)
 		{
 			break;
 		}
+	}
+	if (base64.empty())
+	{
+		std::fprintf(stderr,
+			"error: WalkMaskBase64 definition found but no string literal follows it in %s\n",
+			csPath.c_str());
+		return false;
 	}
 
 	if (!DecodeBase64(base64, mask))
@@ -197,7 +226,7 @@ TriMesh BuildMaskGeometry(const std::vector<uint8_t>& mask)
 	auto addQuad = [&mesh](double x0, double x1, double z0, double z1) {
 		const int base = static_cast<int>(mesh.verts.size() / 3);
 		const double quad[4][3] = {
-			{x0, 0.0, z0}, {x0, 0.0, z1}, {x1, 0.0, z1}, {x1, 0.0, z0}};
+			{x0, kGroundY, z0}, {x0, kGroundY, z1}, {x1, kGroundY, z1}, {x1, kGroundY, z0}};
 		for (auto& v : quad)
 		{
 			mesh.verts.push_back(v[0]);
@@ -233,8 +262,8 @@ TriMesh BuildMaskGeometry(const std::vector<uint8_t>& mask)
 			}
 		}
 	}
-	std::printf("mask geometry: %d quads, %zu verts, %zu tris\n",
-		quadCount, mesh.verts.size() / 3, mesh.tris.size() / 3);
+	std::printf("mask geometry: %d quads, %zu verts, %zu tris (ground y=%.2f)\n",
+		quadCount, mesh.verts.size() / 3, mesh.tris.size() / 3, kGroundY);
 	return mesh;
 }
 
@@ -528,7 +557,10 @@ bool SaveNavMesh(const std::string& path, const dtNavMesh& navMesh)
 		return false;
 	}
 
+	// 整个结构体 fwrite:先清零,让对齐填充字节确定,同一输入产出逐字节相同的
+	// bin(否则 git 里每次重烘都是"变了"的二进制)。
 	NavMeshSetHeader header;
+	std::memset(&header, 0, sizeof(header));
 	header.magic = kNavMeshSetMagic;
 	header.version = kNavMeshSetVersion;
 	header.numTiles = 0;
@@ -549,6 +581,7 @@ bool SaveNavMesh(const std::string& path, const dtNavMesh& navMesh)
 		if (!tile || !tile->header || tile->dataSize <= 0) continue;
 
 		NavMeshTileHeader tileHeader;
+		std::memset(&tileHeader, 0, sizeof(tileHeader));
 		tileHeader.tileRef = navMesh.getTileRef(tile);
 		tileHeader.dataSize = tile->dataSize;
 		std::fwrite(&tileHeader, sizeof(tileHeader), 1, fp);
@@ -694,6 +727,12 @@ int main(int argc, char** argv)
 	}
 	else if (!LoadObj(objPath, mesh))
 	{
+		return 1;
+	}
+	if (mesh.tris.empty())
+	{
+		// 全零 mask / 错误文件:不能让 bounds 停在 ±1e300 把 tile 数算成负数。
+		std::fprintf(stderr, "error: input has no walkable geometry, nothing to bake\n");
 		return 1;
 	}
 
