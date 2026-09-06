@@ -172,7 +172,7 @@ jobs:
           #     排除（gRPC 由 Dockerfile 内部按固定 revision 自己 clone），
           #     递归拉下来是几 GB 的纯浪费；
           #   * cpp/libs/engine/muduo_windows/src/... 是 Windows 专用；
-          #   * client/unity 是客户端仓库，与本次编译无关。
+          #   * 客户端在同级独立仓库 mmorpg-client 中，与本次编译无关。
           submodules: false
 
       - name: 初始化编译所需子模块

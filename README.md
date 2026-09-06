@@ -190,3 +190,7 @@ For detailed design docs, see [docs/](docs/).
 ## License
 
 This project is licensed under the **MIT License** — see [LICENSE](./LICENSE) for details.
+
+## 客户端仓库
+
+客户端统一使用服务端同级的独立仓库 `../mmorpg-client/`（本机为 `E:/work/mmorpg-client`）。服务端不再包含 `client/` 子模块、旧 UI 素材及 FairyGUI 构建脚本。协议生成器和配表导出器的客户端输出均指向该独立仓库；运行生成前应先准备好客户端工作区。目录布局不同时，分别调整 `tools/proto_generator/protogen/etc/proto_gen.yaml` 的 `paths.unity_client_dir` 和 `tools/data_table_exporter/exporter_config.yaml` 的 C# `deploy` 目标。

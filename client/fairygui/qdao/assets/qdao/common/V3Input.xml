@@ -1,7 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<component size="420,84" opaque="true">
-  <displayList>
-    <image id="n0" name="bg" src="00010009" fileName="input.png" xy="0,0" size="420,84"/>
-    <text id="n1" name="edit" xy="86,22" size="312,40" fontSize="26" color="#3d2914" autoSize="none" singleLine="true" input="true" prompt="" text=""/>
-  </displayList>
-</component>

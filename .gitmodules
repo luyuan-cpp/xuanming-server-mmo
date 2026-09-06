@@ -74,6 +74,3 @@
 	path = third_party/openssl
 	url = https://github.com/openssl/openssl.git
 	branch = openssl-3.6
-[submodule "client/unity"]
-	path = client/unity
-	url = https://github.com/luyuancpp/mmorpg-client.git
