@@ -40,6 +40,13 @@ namespace chatpb {
     void HandleChatCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
 
+namespace client_rpc_router {
+    void SetClientRpcRouterHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetClientRpcRouterIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void InitClientRpcRouterGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
+    void HandleClientRpcRouterCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
+}
+
 namespace data_service {
     void SetDataServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetDataServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
@@ -104,6 +111,8 @@ void SetIfEmptyHandler(const std::function<void(const ClientContext&, const ::go
 
     chatpb::SetChatIfEmptyHandler(handler);
 
+    client_rpc_router::SetClientRpcRouterIfEmptyHandler(handler);
+
     data_service::SetDataServiceIfEmptyHandler(handler);
 
     etcdserverpb::SetEtcdIfEmptyHandler(handler);
@@ -129,6 +138,8 @@ void SetHandler(const std::function<void(const ClientContext&, const ::google::p
     ::SetPlayerBattleHandler(handler);
 
     chatpb::SetChatHandler(handler);
+
+    client_rpc_router::SetClientRpcRouterHandler(handler);
 
     data_service::SetDataServiceHandler(handler);
 
@@ -163,16 +174,20 @@ void HandleCompletedQueueMessage(entt::registry& registry){
             GrpcTag* grpcTag(reinterpret_cast<GrpcTag*>(got_tag));
             const auto messageId = grpcTag->messageId;
             if (common::base::eNodeType::BattleNodeService == nodeType &&
-                (messageId == 146u || messageId == 147u || messageId == 159u || messageId == 160u)) {
+                (messageId == 146u || messageId == 147u || messageId == 159u || messageId == 160u || messageId == 178u)) {
                 ::HandleBattleNodeCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::BattleNodeService == nodeType &&
-                (messageId == 139u || messageId == 140u || messageId == 143u || messageId == 144u || messageId == 149u || messageId == 150u || messageId == 158u || messageId == 161u || messageId == 162u || messageId == 165u || messageId == 166u)) {
+                (messageId == 139u || messageId == 140u || messageId == 143u || messageId == 144u || messageId == 149u || messageId == 150u || messageId == 158u || messageId == 161u || messageId == 162u || messageId == 165u || messageId == 166u || messageId == 177u)) {
                 ::HandlePlayerBattleCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::ChatNodeService == nodeType &&
                 (messageId == 28u || messageId == 61u)) {
                 chatpb::HandleChatCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
+            }
+            else if (common::base::eNodeType::ClientRpcRouterNodeService == nodeType &&
+                (messageId == 176u)) {
+                client_rpc_router::HandleClientRpcRouterCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::DataServiceNodeService == nodeType &&
                 (messageId == 86u || messageId == 87u || messageId == 88u || messageId == 89u || messageId == 90u || messageId == 91u || messageId == 92u || messageId == 93u || messageId == 96u || messageId == 97u || messageId == 98u || messageId == 99u || messageId == 100u || messageId == 101u || messageId == 105u || messageId == 108u || messageId == 114u || messageId == 129u)) {
@@ -195,7 +210,7 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 loginpb::HandleLoginCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::MatchNodeService == nodeType &&
-                (messageId == 148u || messageId == 151u || messageId == 152u || messageId == 153u || messageId == 154u || messageId == 156u || messageId == 157u || messageId == 163u || messageId == 164u)) {
+                (messageId == 148u || messageId == 151u || messageId == 152u || messageId == 153u || messageId == 154u || messageId == 156u || messageId == 157u || messageId == 163u || messageId == 164u || messageId == 179u)) {
                 match::HandleMatchServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::SceneManagerNodeService == nodeType &&
@@ -221,6 +236,9 @@ void InitGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, ent
     }
     if (common::base::eNodeType::ChatNodeService == nodeType) {
         chatpb::InitChatGrpcNode(channel, registry, nodeEntity);
+    }
+    if (common::base::eNodeType::ClientRpcRouterNodeService == nodeType) {
+        client_rpc_router::InitClientRpcRouterGrpcNode(channel, registry, nodeEntity);
     }
     if (common::base::eNodeType::DataServiceNodeService == nodeType) {
         data_service::InitDataServiceGrpcNode(channel, registry, nodeEntity);

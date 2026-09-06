@@ -18,3 +18,7 @@ constexpr uint32_t BattleNodeAddObserverIndex = 2;
 constexpr uint32_t BattleNodeRemoveObserverMessageId = 159;
 constexpr uint32_t BattleNodeRemoveObserverIndex = 3;
 #define BattleNodeRemoveObserverMethod  ::BattleNode_Stub::descriptor()->method(3)
+
+constexpr uint32_t BattleNodeIssueBattleTicketMessageId = 178;
+constexpr uint32_t BattleNodeIssueBattleTicketIndex = 4;
+#define BattleNodeIssueBattleTicketMethod  ::BattleNode_Stub::descriptor()->method(4)

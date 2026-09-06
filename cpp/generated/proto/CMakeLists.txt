@@ -34,6 +34,8 @@ include_directories(
 set(SOURCE_FILES
     chat/chat.pb.cc
     chat/chat.grpc.pb.cc
+    client_rpc_router/client_rpc_router.pb.cc
+    client_rpc_router/client_rpc_router.grpc.pb.cc
     common/base/common.pb.cc
     common/base/config.pb.cc
     common/base/empty.pb.cc

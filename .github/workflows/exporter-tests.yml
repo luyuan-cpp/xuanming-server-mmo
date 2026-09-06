@@ -131,10 +131,12 @@ jobs:
           validate_tip_references(tables, cfg)
           _validate_java_code_outputs(cfg, tables)
 
-          print(f"tip 码轴自检通过：{len(groups)} 组")
+          faults = sum(len(g["faults"]) for g in groups.values())
+          print(f"tip 码轴自检通过：{len(groups)} 组，{faults} 个码标为服务端故障")
           for name, g in sorted(groups.items(), key=lambda kv: kv[1]["base"]):
               used = len(g["ids"])
-              print(f"  {name:24} base={g['base']:<6} 已用 {used:<4} 余量 {g['width'] - used}")
+              print(f"  {name:24} base={g['base']:<6} 已用 {used:<4} 余量 {g['width'] - used}"
+                    f"  故障 {len(g['faults'])}")
           PY
 
       - name: 校验 tip state 只增不减
@@ -174,10 +176,12 @@ jobs:
           generate_tip_enums(load_config())
           PY
 
+          # generated/code/go/ 在 .gitignore 里,对它 git status 永远安静 —— 别把它列在这里
+          # 假装有覆盖。Go 侧两份产物(段表/故障表)的闸门是下面的 cmp:与提交在
+          # go/shared/generated/tip 的部署副本逐字节比。
           dirty="$(git status --porcelain --untracked-files=all -- \
             state/mapping/tip_enum_ids/tip_enum_ids.json \
             ../../generated/code/proto/tip \
-            ../../generated/code/go/generated/tip/segments.go \
             ../../generated/tables/tip_text.json)"
           if [ -n "$dirty" ]; then
             echo "Tip.xlsx/state 与提交的受控产物不一致："
@@ -185,8 +189,12 @@ jobs:
             exit 1
           fi
 
+          # 段表与故障表都部署到 go/shared/generated/tip；两边必须逐字节一致，
+          # 否则 serverbase 编译进去的是旧分类而 Tip.xlsx 已经改了。
           cmp ../../generated/code/go/generated/tip/segments.go \
             ../../go/shared/generated/tip/segments.go
+          cmp ../../generated/code/go/generated/tip/faults.go \
+            ../../go/shared/generated/tip/faults.go
 
       # 这里不需要 protoc：提交的 *_table_pb2.py 足以从真实 xlsx 重建 JSON/PB。
       # 只校验 manifest 自己的 hash 不够，因为“源表和旧产物一起自洽”仍可能

@@ -29,7 +29,11 @@ type Options struct {
 	ErrorCodeClassifier Classifier
 
 	// TipClassifier 定性 TipInfoMessage.id。留 nil 用 TipVerdict。
-	// 一般不需要覆盖;个别服务想微调某个码的定性时才传。
+	//
+	// 「哪个码算故障」来自 data/tip/Tip.xlsx 的 fault 列(生成到 shared/generated/tip),
+	// **不要**为了给某个码换定性而在服务里包一层本地 map 传进来 —— 那是把
+	// 「分类与码定义分家」重新制造出来;要改分类,改表。这个接缝只留给测试注入,
+	// 以及 TipInfoMessage.id 根本不在 tip 码轴上的服务(目前没有)。
 	TipClassifier Classifier
 
 	// SuppressFaultLog 为 true 时只记指标不打日志。

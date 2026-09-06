@@ -107,7 +107,7 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 #               not see this; they still discover endpoints via etcd (so rolling
 #               upgrades / hot updates / canary releases are unaffected).
 #               Tier 0 = infra-adjacent (db, data_service)
-#               Tier 1 = scene_manager (depended by player_locator)
+#               Tier 1 = scene_manager (depended by player_locator), client_rpc_router (gate 的唯一 gRPC 目标)
 #               Tier 2 = player_locator (depended by login)
 #               Tier 3 = login (top of the dial chain)
 $ServiceCatalogue = [ordered]@{
@@ -127,6 +127,12 @@ $ServiceCatalogue = [ordered]@{
     # 回合制战斗匹配/切磋编排(docs/design/turn-based-battle-server.md §5.4)。
     # 50500 位于已观测的 Windows 保留区间(50000-50171)与 51573-51872 之间,安全;与 etc yaml ListenOn 保持一致。
     match           = @{ Dir = "match";           Entry = "match_service.go";         Port = 50500; Desc = "Match (turn-battle matchmaking)";  ConfigFlag = "-f";            ConfigFile = "etc/match_service.yaml";         AllowMultiInstance = $true;  Tier = 3 }
+    # 客户端 RPC 路由服(docs/design/client-rpc-router.md D29-D34):gate 在 GATE_CLIENT_RPC_ROUTER=1 模式下
+    # 唯一的 gRPC 目标,无状态、全局池不分 zone、可多开。Tier 1:gate 一起来就要连到它,与 scene_manager
+    # 同批先起;它自身不依赖别的 Go 服务(只按 etcd 发现转发)。
+    # 端口 50600 与 match 的 50500 同一安全区间(已观测的 Windows 保留区 50000-50171 与 51573-51872 之间),
+    # 与 go/client_rpc_router/etc/client_rpc_router.yaml 的 ListenOn 保持一致。
+    client_rpc_router = @{ Dir = "client_rpc_router"; Entry = "client_rpc_router_service.go"; Port = 50600; Desc = "Client RPC Router (gate 唯一 gRPC 目标)"; ConfigFlag = "-f"; ConfigFile = "etc/client_rpc_router.yaml"; AllowMultiInstance = $true; Tier = 1 }
 }
 
 # Derived per-instance config files live here so the source tree stays clean.

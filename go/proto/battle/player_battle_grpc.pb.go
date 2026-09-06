@@ -31,6 +31,7 @@ const (
 	BattleClientPlayer_NotifySpectateState_FullMethodName      = "/BattleClientPlayer/NotifySpectateState"
 	BattleClientPlayer_NotifySpectateTurnResult_FullMethodName = "/BattleClientPlayer/NotifySpectateTurnResult"
 	BattleClientPlayer_NotifySpectateEnd_FullMethodName        = "/BattleClientPlayer/NotifySpectateEnd"
+	BattleClientPlayer_NotifyBattleAssigned_FullMethodName     = "/BattleClientPlayer/NotifyBattleAssigned"
 )
 
 // BattleClientPlayerClient is the client API for BattleClientPlayer service.
@@ -49,6 +50,8 @@ type BattleClientPlayerClient interface {
 	NotifySpectateState(ctx context.Context, in *SpectateStateS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifySpectateTurnResult(ctx context.Context, in *TurnResultS2C, opts ...grpc.CallOption) (*base.Empty, error)
 	NotifySpectateEnd(ctx context.Context, in *SpectateEndS2C, opts ...grpc.CallOption) (*base.Empty, error)
+	// ---- 客户端直连(设计文档 §18):落点分配推送;丢票补签见 MatchService.RequestBattleTicket ----
+	NotifyBattleAssigned(ctx context.Context, in *BattleAssignedS2C, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
 type battleClientPlayerClient struct {
@@ -169,6 +172,16 @@ func (c *battleClientPlayerClient) NotifySpectateEnd(ctx context.Context, in *Sp
 	return out, nil
 }
 
+func (c *battleClientPlayerClient) NotifyBattleAssigned(ctx context.Context, in *BattleAssignedS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, BattleClientPlayer_NotifyBattleAssigned_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // BattleClientPlayerServer is the server API for BattleClientPlayer service.
 // All implementations must embed UnimplementedBattleClientPlayerServer
 // for forward compatibility.
@@ -185,6 +198,8 @@ type BattleClientPlayerServer interface {
 	NotifySpectateState(context.Context, *SpectateStateS2C) (*base.Empty, error)
 	NotifySpectateTurnResult(context.Context, *TurnResultS2C) (*base.Empty, error)
 	NotifySpectateEnd(context.Context, *SpectateEndS2C) (*base.Empty, error)
+	// ---- 客户端直连(设计文档 §18):落点分配推送;丢票补签见 MatchService.RequestBattleTicket ----
+	NotifyBattleAssigned(context.Context, *BattleAssignedS2C) (*base.Empty, error)
 	mustEmbedUnimplementedBattleClientPlayerServer()
 }
 
@@ -227,6 +242,9 @@ func (UnimplementedBattleClientPlayerServer) NotifySpectateTurnResult(context.Co
 }
 func (UnimplementedBattleClientPlayerServer) NotifySpectateEnd(context.Context, *SpectateEndS2C) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method NotifySpectateEnd not implemented")
+}
+func (UnimplementedBattleClientPlayerServer) NotifyBattleAssigned(context.Context, *BattleAssignedS2C) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyBattleAssigned not implemented")
 }
 func (UnimplementedBattleClientPlayerServer) mustEmbedUnimplementedBattleClientPlayerServer() {}
 func (UnimplementedBattleClientPlayerServer) testEmbeddedByValue()                            {}
@@ -447,6 +465,24 @@ func _BattleClientPlayer_NotifySpectateEnd_Handler(srv interface{}, ctx context.
 	return interceptor(ctx, in, info, handler)
 }
 
+func _BattleClientPlayer_NotifyBattleAssigned_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BattleAssignedS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(BattleClientPlayerServer).NotifyBattleAssigned(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: BattleClientPlayer_NotifyBattleAssigned_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(BattleClientPlayerServer).NotifyBattleAssigned(ctx, req.(*BattleAssignedS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // BattleClientPlayer_ServiceDesc is the grpc.ServiceDesc for BattleClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -497,6 +533,10 @@ var BattleClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "NotifySpectateEnd",
 			Handler:    _BattleClientPlayer_NotifySpectateEnd_Handler,
+		},
+		{
+			MethodName: "NotifyBattleAssigned",
+			Handler:    _BattleClientPlayer_NotifyBattleAssigned_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

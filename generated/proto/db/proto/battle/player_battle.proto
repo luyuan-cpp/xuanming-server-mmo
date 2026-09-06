@@ -105,6 +105,71 @@ message SetAutoBattleResponse {
   TipInfoMessage error_message = 1;
 }
 
+// ==== 客户端直连 battle 节点(设计文档 turn-based-battle-server.md §18,D23-D28)====
+//
+// 大厅一条连接(gate),战斗另一条连接(直连 battle 节点 TCP 端口,票据入场)。
+// 线协议与 gate 客户端面完全一致:ProtobufCodec 帧,上行 ClientRequest,下行 MessageContent。
+// 握手首包必须是 BattleTokenVerifyRequest,验签通过前 battle 节点丢弃并断开一切其它消息。
+
+// 票据角色(枚举首值必须 0,宪法 §4)
+enum eBattleTicketRole {
+  BATTLE_TICKET_ROLE_NONE = 0;
+  BATTLE_TICKET_ROLE_PARTICIPANT = 1;  // 参战者
+  BATTLE_TICKET_ROLE_OBSERVER = 2;     // 观众
+}
+
+// 票据载荷:battle 节点在 CreateBattle / AddObserver 成功后签发(HMAC-SHA256,
+// 密钥 BaseDeployConfig.battle_token_secret,全部 battle 实例共享,与 gate 令牌密钥分域)。
+// 签名 = hex(HMAC-SHA256(secret, 序列化后的本消息字节)),形态与 GateTokenPayload 一致。
+// 寿命 = 房间作废期限(D25):同一票可重复用于战斗中重连;房间销毁即失效。
+message BattleTicketPayload {
+  uint64 battle_id = 1;
+  uint64 player_id = 2;
+  uint32 battle_node_id = 3;        // 签发节点 node_id,验签侧必须等于自身
+  string battle_instance_id = 4;    // 签发节点实例 UUID(node_uuid),防节点重启后 node_id 复用
+  uint64 expire_at_ms = 5;          // Unix 毫秒;与房间 deadline_ms 同值
+  eBattleTicketRole role = 6;
+}
+
+// 直连握手首包(客户端 → battle 节点)。
+message BattleTokenVerifyRequest {
+  bytes payload = 1;     // 序列化的 BattleTicketPayload
+  bytes signature = 2;   // hex 文本形式的 HMAC-SHA256(与 ClientTokenVerifyRequest 同口径)
+}
+
+// 握手应答(battle 节点 → 客户端)。失败时 battle 节点随后主动断开。
+message BattleTokenVerifyResponse {
+  bool success = 1;
+  string error = 2;       // 失败原因(非敏感,可直接展示 / 记日志)
+  uint64 battle_id = 3;   // 成功时回填,客户端据此把连接与本地战斗状态机对上
+}
+
+// 落点分配(battle 节点 → 客户端,经大厅通道 Kafka gate-{id} 推送;D26):
+// 收到后客户端向 host:port 建第二条 TCP 连接并以票据握手。
+// CreateBattle 成功后每参战者先收本消息再收 BattleStartS2C(同 key 保序);
+// 观众 AddObserver 成功后先收本消息再收 SpectateStateS2C。
+message BattleAssignedS2C {
+  uint64 battle_id = 1;
+  string host = 2;             // battle 节点客户端面地址(NodeInfo.endpoint)
+  uint32 port = 3;
+  bytes token_payload = 4;     // 序列化的 BattleTicketPayload,原样放进 BattleTokenVerifyRequest.payload
+  bytes token_signature = 5;   // 原样放进 BattleTokenVerifyRequest.signature
+  uint64 expire_at_ms = 6;     // 票据 / 房间作废期限(Unix 毫秒)
+  eBattleTicketRole role = 7;
+}
+
+// 客户端丢票(冷启动 / 换设备)时经大厅通道补签(D25)。请求 / 响应由 MatchService.RequestBattleTicket
+// 使用(match → BattleNode.IssueBattleTicket);gate 收成只连路由服后不再直连 battle,补签不再挂在本服务下。
+// 仅当该玩家仍是 battle_id 房间的参战者或观众时才签;否则 error_message 非零且 assignment 为空。
+message RequestBattleTicketRequest {
+  uint64 battle_id = 1;
+}
+
+message RequestBattleTicketResponse {
+  TipInfoMessage error_message = 1;
+  BattleAssignedS2C assignment = 2;
+}
+
 service BattleClientPlayer {
   option (OptionIsClientProtocolService) = true;
 
@@ -121,4 +186,7 @@ service BattleClientPlayer {
   rpc NotifySpectateState (SpectateStateS2C) returns (Empty);
   rpc NotifySpectateTurnResult (TurnResultS2C) returns (Empty);
   rpc NotifySpectateEnd (SpectateEndS2C) returns (Empty);
+
+  // ---- 客户端直连(设计文档 §18):落点分配推送;丢票补签见 MatchService.RequestBattleTicket ----
+  rpc NotifyBattleAssigned (BattleAssignedS2C) returns (Empty);
 }

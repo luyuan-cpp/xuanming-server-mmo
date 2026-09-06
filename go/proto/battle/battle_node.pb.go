@@ -402,11 +402,119 @@ func (x *RemoveObserverRequest) GetReason() string {
 	return ""
 }
 
+// ---- 票据补签(match → battle;client-rpc-router.md / turn-based-battle-server.md §18 D25) ----
+// 客户端丢票经大厅会话调 MatchService.RequestBattleTicket,match 定位房间所在 battle 节点后调本 RPC。
+// 仅当 player_id 仍是该房间的参战者或观众时才签;否则 error_message 非零且 assignment 为空。
+// 内部 RPC:player_id 由 match 从会话 metadata 取得后填入,battle 只核对名单不再鉴权。
+type IssueBattleTicketRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BattleId      uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IssueBattleTicketRequest) Reset() {
+	*x = IssueBattleTicketRequest{}
+	mi := &file_proto_battle_battle_node_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueBattleTicketRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueBattleTicketRequest) ProtoMessage() {}
+
+func (x *IssueBattleTicketRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_node_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueBattleTicketRequest.ProtoReflect.Descriptor instead.
+func (*IssueBattleTicketRequest) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_node_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *IssueBattleTicketRequest) GetBattleId() uint64 {
+	if x != nil {
+		return x.BattleId
+	}
+	return 0
+}
+
+func (x *IssueBattleTicketRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+type IssueBattleTicketResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorMessage  *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
+	Assignment    *BattleAssignedS2C     `protobuf:"bytes,2,opt,name=assignment,proto3" json:"assignment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IssueBattleTicketResponse) Reset() {
+	*x = IssueBattleTicketResponse{}
+	mi := &file_proto_battle_battle_node_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueBattleTicketResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueBattleTicketResponse) ProtoMessage() {}
+
+func (x *IssueBattleTicketResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_node_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueBattleTicketResponse.ProtoReflect.Descriptor instead.
+func (*IssueBattleTicketResponse) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_node_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *IssueBattleTicketResponse) GetErrorMessage() *base.TipInfoMessage {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return nil
+}
+
+func (x *IssueBattleTicketResponse) GetAssignment() *BattleAssignedS2C {
+	if x != nil {
+		return x.Assignment
+	}
+	return nil
+}
+
 var File_proto_battle_battle_node_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\n" +
-	"\x1eproto/battle/battle_node.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1eproto/battle/battle_data.proto\"\xb2\x02\n" +
+	"\x1eproto/battle/battle_node.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1eproto/battle/battle_data.proto\x1a proto/battle/player_battle.proto\"\xb2\x02\n" +
 	"\x13CreateBattleRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12(\n" +
 	"\x10battle_config_id\x18\x02 \x01(\rR\x0ebattleConfigId\x12/\n" +
@@ -434,13 +542,22 @@ const file_proto_battle_battle_node_proto_rawDesc = "" +
 	"\x15RemoveObserverRequest\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12,\n" +
 	"\x12observer_player_id\x18\x02 \x01(\x04R\x10observerPlayerId\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason2\xe5\x01\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"T\n" +
+	"\x18IssueBattleTicketRequest\x12\x1b\n" +
+	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\"\x85\x01\n" +
+	"\x19IssueBattleTicketResponse\x124\n" +
+	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x122\n" +
+	"\n" +
+	"assignment\x18\x02 \x01(\v2\x12.BattleAssignedS2CR\n" +
+	"assignment2\xb1\x02\n" +
 	"\n" +
 	"BattleNode\x12;\n" +
 	"\fCreateBattle\x12\x14.CreateBattleRequest\x1a\x15.CreateBattleResponse\x12.\n" +
 	"\rDestroyBattle\x12\x15.DestroyBattleRequest\x1a\x06.Empty\x128\n" +
 	"\vAddObserver\x12\x13.AddObserverRequest\x1a\x14.AddObserverResponse\x120\n" +
-	"\x0eRemoveObserver\x12\x16.RemoveObserverRequest\x1a\x06.EmptyB\x12\x98\xd4a\x1eZ\fproto/battleb\x06proto3"
+	"\x0eRemoveObserver\x12\x16.RemoveObserverRequest\x1a\x06.Empty\x12J\n" +
+	"\x11IssueBattleTicket\x12\x19.IssueBattleTicketRequest\x1a\x1a.IssueBattleTicketResponseB\x12\x98\xd4a\x1eZ\fproto/battleb\x06proto3"
 
 var (
 	file_proto_battle_battle_node_proto_rawDescOnce sync.Once
@@ -454,37 +571,44 @@ func file_proto_battle_battle_node_proto_rawDescGZIP() []byte {
 	return file_proto_battle_battle_node_proto_rawDescData
 }
 
-var file_proto_battle_battle_node_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_proto_battle_battle_node_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_battle_battle_node_proto_goTypes = []any{
-	(*CreateBattleRequest)(nil),   // 0: CreateBattleRequest
-	(*CreateBattleResponse)(nil),  // 1: CreateBattleResponse
-	(*DestroyBattleRequest)(nil),  // 2: DestroyBattleRequest
-	(*AddObserverRequest)(nil),    // 3: AddObserverRequest
-	(*AddObserverResponse)(nil),   // 4: AddObserverResponse
-	(*RemoveObserverRequest)(nil), // 5: RemoveObserverRequest
-	(*BattlePlayerSnapshot)(nil),  // 6: BattlePlayerSnapshot
-	(*base.TipInfoMessage)(nil),   // 7: TipInfoMessage
-	(*BattleRouting)(nil),         // 8: BattleRouting
-	(*base.Empty)(nil),            // 9: Empty
+	(*CreateBattleRequest)(nil),       // 0: CreateBattleRequest
+	(*CreateBattleResponse)(nil),      // 1: CreateBattleResponse
+	(*DestroyBattleRequest)(nil),      // 2: DestroyBattleRequest
+	(*AddObserverRequest)(nil),        // 3: AddObserverRequest
+	(*AddObserverResponse)(nil),       // 4: AddObserverResponse
+	(*RemoveObserverRequest)(nil),     // 5: RemoveObserverRequest
+	(*IssueBattleTicketRequest)(nil),  // 6: IssueBattleTicketRequest
+	(*IssueBattleTicketResponse)(nil), // 7: IssueBattleTicketResponse
+	(*BattlePlayerSnapshot)(nil),      // 8: BattlePlayerSnapshot
+	(*base.TipInfoMessage)(nil),       // 9: TipInfoMessage
+	(*BattleRouting)(nil),             // 10: BattleRouting
+	(*BattleAssignedS2C)(nil),         // 11: BattleAssignedS2C
+	(*base.Empty)(nil),                // 12: Empty
 }
 var file_proto_battle_battle_node_proto_depIdxs = []int32{
-	6, // 0: CreateBattleRequest.players:type_name -> BattlePlayerSnapshot
-	7, // 1: CreateBattleResponse.error_message:type_name -> TipInfoMessage
-	8, // 2: AddObserverRequest.routing:type_name -> BattleRouting
-	7, // 3: AddObserverResponse.error_message:type_name -> TipInfoMessage
-	0, // 4: BattleNode.CreateBattle:input_type -> CreateBattleRequest
-	2, // 5: BattleNode.DestroyBattle:input_type -> DestroyBattleRequest
-	3, // 6: BattleNode.AddObserver:input_type -> AddObserverRequest
-	5, // 7: BattleNode.RemoveObserver:input_type -> RemoveObserverRequest
-	1, // 8: BattleNode.CreateBattle:output_type -> CreateBattleResponse
-	9, // 9: BattleNode.DestroyBattle:output_type -> Empty
-	4, // 10: BattleNode.AddObserver:output_type -> AddObserverResponse
-	9, // 11: BattleNode.RemoveObserver:output_type -> Empty
-	8, // [8:12] is the sub-list for method output_type
-	4, // [4:8] is the sub-list for method input_type
-	4, // [4:4] is the sub-list for extension type_name
-	4, // [4:4] is the sub-list for extension extendee
-	0, // [0:4] is the sub-list for field type_name
+	8,  // 0: CreateBattleRequest.players:type_name -> BattlePlayerSnapshot
+	9,  // 1: CreateBattleResponse.error_message:type_name -> TipInfoMessage
+	10, // 2: AddObserverRequest.routing:type_name -> BattleRouting
+	9,  // 3: AddObserverResponse.error_message:type_name -> TipInfoMessage
+	9,  // 4: IssueBattleTicketResponse.error_message:type_name -> TipInfoMessage
+	11, // 5: IssueBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
+	0,  // 6: BattleNode.CreateBattle:input_type -> CreateBattleRequest
+	2,  // 7: BattleNode.DestroyBattle:input_type -> DestroyBattleRequest
+	3,  // 8: BattleNode.AddObserver:input_type -> AddObserverRequest
+	5,  // 9: BattleNode.RemoveObserver:input_type -> RemoveObserverRequest
+	6,  // 10: BattleNode.IssueBattleTicket:input_type -> IssueBattleTicketRequest
+	1,  // 11: BattleNode.CreateBattle:output_type -> CreateBattleResponse
+	12, // 12: BattleNode.DestroyBattle:output_type -> Empty
+	4,  // 13: BattleNode.AddObserver:output_type -> AddObserverResponse
+	12, // 14: BattleNode.RemoveObserver:output_type -> Empty
+	7,  // 15: BattleNode.IssueBattleTicket:output_type -> IssueBattleTicketResponse
+	11, // [11:16] is the sub-list for method output_type
+	6,  // [6:11] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_node_proto_init() }
@@ -493,13 +617,14 @@ func file_proto_battle_battle_node_proto_init() {
 		return
 	}
 	file_proto_battle_battle_data_proto_init()
+	file_proto_battle_player_battle_proto_init()
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_battle_node_proto_rawDesc), len(file_proto_battle_battle_node_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

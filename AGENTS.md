@@ -43,8 +43,9 @@
 2. 重新编译受影响的 C++ / Go / Java 服务
 3. 字段编号上线后**不复用**，只能 deprecate（`reserved N;` + 注释原因）；开发期已删字段可复用，但须重生并完整编译所有启用 module
 4. **tip 错误码不在 proto 里手写**：`generated/code/proto/tip/*.proto` 全部由导表器从 `data/tip/Tip.xlsx` 生成。
-   加一个码 = 表里加一行（A 列码名，**全局唯一**，建议带域前缀；B 列中文文案）→ 跑导表器 →
-   在服务的 `constants.go` 里写 `ErrX = uint32(table.XxxError_kXxxX)`。
+   加一个码 = 表里加一行（A 列码名，**全局唯一**，建议带域前缀；B 列中文文案；服务端内部故障在
+   `fault` 列填 `1`，业务拒绝留空）→ 跑导表器 → 在服务的 `constants.go` 里写 `ErrX = uint32(table.XxxError_kXxxX)`。
+   「哪个码算故障」也由表生成（`go/shared/generated/tip/faults.go`），**不要在服务里再包一层 fault map**。
    新开一个域 = 表里加一行组头 `//xxx_error base=<起始号> width=1000`，并把新生成的
    `.pb.cc/.pb.h` 加进 `cpp/generated/table/CMakeLists.txt` 与 `table.vcxproj`。
    详见 [docs/design/tip-code-axis.md](docs/design/tip-code-axis.md)。
@@ -128,6 +129,8 @@
    历史教训：手写「私有段」只是**约定**，拦不住不知情的新服务 —— `go/match` 曾从 1 开始重数，
    20 个码全部压在 common / login 段上，客户端弹出的是完全无关的文案，且全程零报错。
    guild / friend / match 的 `constants_test.go` 里有 `TestNoHandWrittenTipCodes` 机械守住这条。
+   「这个码算不算服务端故障」同样是表的一列（`fault`），生成到 `tip.Faults` 供 `serverbase.TipVerdict` 消费；
+   服务里不许再手写故障码集合——那会把「段和发号分家」的病在分类上重新制造一遍。
    详见 [docs/design/tip-code-axis.md](docs/design/tip-code-axis.md)。
 5. **ECS 组件访问**：per-tick 路径禁用 `get_or_emplace`；跨实体查询用 `try_get`，不用 `get`（见 copilot-instructions）
 6. **保证修改代码的正确性、数据一致性**

@@ -53,16 +53,17 @@ const (
 	NodeType_NODE_MATCH         NodeType = 21 // Match service (e.g. dungeon, PVP)
 	NodeType_NODE_AI            NodeType = 22 // AI/NPC control service
 	// Infrastructure nodes
-	NodeType_NODE_REDIS          NodeType = 11 // Redis service node
-	NodeType_NODE_ETCD           NodeType = 12 // etcd node
-	NodeType_NODE_LOG            NodeType = 23 // Log collection service
-	NodeType_NODE_PAYMENT        NodeType = 24 // Payment/recharge service
-	NodeType_NODE_SECURITY       NodeType = 25 // Anti-cheat/security service
-	NodeType_NODE_CROSS_SERVER   NodeType = 26 // Cross-server service (e.g. cross-server battleground)
-	NodeType_NODE_ANALYTICS      NodeType = 27 // Analytics service
-	NodeType_NODE_GM             NodeType = 28 // GM tool service (admin/CS commands)
-	NodeType_NODE_PLAYER_LOCATOR NodeType = 29 // Cross-server player locator service
-	NodeType_NODE_BATTLE         NodeType = 30 // 回合制战斗节点
+	NodeType_NODE_REDIS             NodeType = 11 // Redis service node
+	NodeType_NODE_ETCD              NodeType = 12 // etcd node
+	NodeType_NODE_LOG               NodeType = 23 // Log collection service
+	NodeType_NODE_PAYMENT           NodeType = 24 // Payment/recharge service
+	NodeType_NODE_SECURITY          NodeType = 25 // Anti-cheat/security service
+	NodeType_NODE_CROSS_SERVER      NodeType = 26 // Cross-server service (e.g. cross-server battleground)
+	NodeType_NODE_ANALYTICS         NodeType = 27 // Analytics service
+	NodeType_NODE_GM                NodeType = 28 // GM tool service (admin/CS commands)
+	NodeType_NODE_PLAYER_LOCATOR    NodeType = 29 // Cross-server player locator service
+	NodeType_NODE_BATTLE            NodeType = 30 // 回合制战斗节点
+	NodeType_NODE_CLIENT_RPC_ROUTER NodeType = 31 // 客户端 RPC 路由服(gate → 业务 Go 服务的唯一 gRPC 目标)
 )
 
 // Enum value maps for NodeType.
@@ -99,39 +100,41 @@ var (
 		28: "NODE_GM",
 		29: "NODE_PLAYER_LOCATOR",
 		30: "NODE_BATTLE",
+		31: "NODE_CLIENT_RPC_ROUTER",
 	}
 	NodeType_value = map[string]int32{
-		"NODE_UNSPECIFIED":    0,
-		"NODE_CLIENT":         1,
-		"NODE_GATE":           2,
-		"NODE_SCENE":          3,
-		"NODE_CENTRE":         4,
-		"NODE_DB":             5,
-		"NODE_DEPLOY":         6,
-		"NODE_DB_SERVICE":     7,
-		"NODE_CENTRE_SCENE":   8,
-		"NODE_SCENE_MANAGER":  9,
-		"NODE_LOGIN":          10,
-		"NODE_MAIL":           13,
-		"NODE_CHAT":           14,
-		"NODE_TEAM":           15,
-		"NODE_ACTIVITY":       16,
-		"NODE_TRADE":          17,
-		"NODE_RANK":           18,
-		"NODE_TASK":           19,
-		"NODE_GUILD":          20,
-		"NODE_MATCH":          21,
-		"NODE_AI":             22,
-		"NODE_REDIS":          11,
-		"NODE_ETCD":           12,
-		"NODE_LOG":            23,
-		"NODE_PAYMENT":        24,
-		"NODE_SECURITY":       25,
-		"NODE_CROSS_SERVER":   26,
-		"NODE_ANALYTICS":      27,
-		"NODE_GM":             28,
-		"NODE_PLAYER_LOCATOR": 29,
-		"NODE_BATTLE":         30,
+		"NODE_UNSPECIFIED":       0,
+		"NODE_CLIENT":            1,
+		"NODE_GATE":              2,
+		"NODE_SCENE":             3,
+		"NODE_CENTRE":            4,
+		"NODE_DB":                5,
+		"NODE_DEPLOY":            6,
+		"NODE_DB_SERVICE":        7,
+		"NODE_CENTRE_SCENE":      8,
+		"NODE_SCENE_MANAGER":     9,
+		"NODE_LOGIN":             10,
+		"NODE_MAIL":              13,
+		"NODE_CHAT":              14,
+		"NODE_TEAM":              15,
+		"NODE_ACTIVITY":          16,
+		"NODE_TRADE":             17,
+		"NODE_RANK":              18,
+		"NODE_TASK":              19,
+		"NODE_GUILD":             20,
+		"NODE_MATCH":             21,
+		"NODE_AI":                22,
+		"NODE_REDIS":             11,
+		"NODE_ETCD":              12,
+		"NODE_LOG":               23,
+		"NODE_PAYMENT":           24,
+		"NODE_SECURITY":          25,
+		"NODE_CROSS_SERVER":      26,
+		"NODE_ANALYTICS":         27,
+		"NODE_GM":                28,
+		"NODE_PLAYER_LOCATOR":    29,
+		"NODE_BATTLE":            30,
+		"NODE_CLIENT_RPC_ROUTER": 31,
 	}
 )
 
@@ -685,7 +688,7 @@ var File_proto_db_proto_option_proto protoreflect.FileDescriptor
 
 const file_proto_db_proto_option_proto_rawDesc = "" +
 	"\n" +
-	"\x1bproto/db/proto_option.proto\x1a google/protobuf/descriptor.proto*\xa2\x04\n" +
+	"\x1bproto/db/proto_option.proto\x1a google/protobuf/descriptor.proto*\xbe\x04\n" +
 	"\bNodeType\x12\x14\n" +
 	"\x10NODE_UNSPECIFIED\x10\x00\x12\x0f\n" +
 	"\vNODE_CLIENT\x10\x01\x12\r\n" +
@@ -724,7 +727,8 @@ const file_proto_db_proto_option_proto_rawDesc = "" +
 	"\x0eNODE_ANALYTICS\x10\x1b\x12\v\n" +
 	"\aNODE_GM\x10\x1c\x12\x17\n" +
 	"\x13NODE_PLAYER_LOCATOR\x10\x1d\x12\x0f\n" +
-	"\vNODE_BATTLE\x10\x1e*\xcf\x01\n" +
+	"\vNODE_BATTLE\x10\x1e\x12\x1a\n" +
+	"\x16NODE_CLIENT_RPC_ROUTER\x10\x1f*\xcf\x01\n" +
 	"\fOPERATE_TYPE\x12\x10\n" +
 	"\fOPERATE_NONE\x10\x00\x12\x12\n" +
 	"\x0eOPERATE_INSERT\x10\x01\x12\x12\n" +

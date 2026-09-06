@@ -3975,3 +3975,160 @@ fence 顺序用例只覆盖了不可叠加+ItemCountMap;准入轴全是 `AcceptA
 ### 状态
 **未编译、未跑导表器。** 10 条闸门用临时 runner 在本机跑通(py -3 里没装 pytest);真 `Tip.xlsx` 的解析+分配+自检跑通;段表模板渲染后经 `gofmt -e` 语法合法。
 验证顺序见 `docs/design/tip-code-axis.md` §6 —— **第 2 步(跑导表器)之前 Go 编译不过是预期的**,`shared/generated/tip` 是导表器产物。
+
+### 收尾复核(本机,Codex 额度耗尽后接手)
+产物对拍与工程 wiring 复核报了 4 项,实际处理 6 项(2 项是 Codex 未报的):
+- **本次漏项**:`table.vcxproj.filters` 漏 friend/guild/match 六项(只改了 `.vcxproj` 忘了配套的分组视图文件)。已补,并做三方对拍:CMakeLists 16 / vcxproj 16+16 / filters 16+16,集合一致、文件都存在、XML 良构。
+- **本次漏项**:文档只登记 1 份旧 v1 state,实际 3 份(`mapping/`、`core/mapping/`、`core/state/mapping/`),已改成完整表格。
+- **非本次回归**:删掉陈旧产物 `globalvariable_table_id_constants.h`(源树+部署树各一份)。证明:单独跑 `generate_constants`(纯 Python 不需 protoc)到临时目录,当前生成器对 C++/Go **各产出 3 个文件**均不含它;两语言文件数从此一致 —— 此前 C++ 4 / Go 3 的不对称差的正好是这个孤儿。它定义 `kGlobalVariable_2..16`(旧生成器给无名行按 id 兜底),现在只生成 `kGlobalVariable_Abnormal_logout`,符号不重叠,非重定义冲突。
+- **Codex 未报**:清掉 10 条悬空工程引用 —— `cpp_table_id_constants_name\`(该目录在部署树里根本不存在)4 条 + `cpp_table_id_bit_index\` 2 条及 filters 对应块。正确的 `code\constants\` 与 `code\bit_index\` 条目一直都在,这些是更早一代生成器留下的重复。现在 vcxproj/filters 里**所有 ClInclude/ClCompile 指向的文件均存在(悬空 0 条)**。
+- **Codex 未报**:`tests/conftest.py` 的 `make_config` 漏设 `schema_dir`,直接构造 `ExporterConfig` 绕过 `load_config` 拿到默认值 `Path()=='.'`,触发 `index_schema_protos` 的 fail-closed,导致两条编排门禁用例误报(Codex 报 73 passed,本机实测 71 passed / 2 failed)。按 `load_config` 的推导补成 `data_dir/schema`。**生产不受影响**(实测解析到 `data/schema`,22 个 proto 齐全),那条 fail-closed 保留 —— schema_dir 配错必须立刻炸。
+
+**本机验证**:导表器 `pytest tests/ -q` **73 passed**(修 conftest 前 71/2);`go/shared` build+vet+serverbase 测试通过;`guild`/`friend`/`match` 各自 build + constants 测试通过。
+**未覆盖**:没跑全量导表(仓库自带 protoc 是 **31.1**,本管线要求恰 **35.1**,跨版本会产生大量无关 diff);没跑 C++/Java 构建(本轮只增删工程文件条目,未碰 `.h/.cc`,用 XML 解析 + 悬空引用归零替代);`no-raw-pointer-member` 仍 SKIP。
+**顺带发现未处理**:`GlobalVariable.xlsx` 五列 owner 为空,其中 `to_double` 确有 1 个数据单元格正被静默丢弃(策划表问题)。
+
+交接清单见 `docs/design/handoff-tip-axis-and-port-20260903.md`。
+
+## 2026-09-05 tip 故障分类收口:「这个码算不算服务端故障」进 Tip.xlsx 的 fault 列
+
+### 病是同一个
+「码算不算故障」决定 `serverbase.UnaryInterceptor` 对一次 in-band 失败是打 Error + 计数 + 告警,还是只计数。它此前散在两处手写:`serverbase/tipcode.go` 的 `tipFaultCodes`(33 条)和 guild 的本地 `faultCodes`(1 条)。match 的 `kMatchInternal`(注释明写 Redis / snowflake 内部错误)**两张表都没登记** —— 加码的人不知道要去另一个文件登记,与 09-03 修掉的「段和发号分家」是同一类病。
+
+### 改成什么
+- `Tip.xlsx` 加第 3 列 `fault`(行 1 表头 `fault` / 行 2 `bool` / 行 4 owner `server`)。导表器**按表头名定位**不按列位;**表头必须存在**,缺了中止而不是静默变成「没有任何故障码」(那会让所有 in-band 故障告警一起消失且零报错);取值闭集 `1/true/yes/是` 与 `空/0/false/no/否`,其他值点名单元格中止;组头/注释行标了 fault 中止;墓碑不进表;fault 不进 state。
+- 新产物 `go/shared/generated/tip/faults.go`(`tip.Faults` + `tip.IsFault`),模板 `tip_faults.go.j2`,与段表同目录同部署链。**只生成 Go**:只有 serverbase 按故障定性,C++ 的 PlayerTipSystem 与 `tip_text.json` 都用不上,所以三语言 proto 产物一个字节没动。
+- `serverbase.TipVerdict`:OK → `!InAllocatedRange`=Unknown → `IsFault`=Fault → BizReject。`tipFaultCodes` 删除;guild 的 `faultCodes` 删除,guild / friend 的 `TipClassifier()` 都直接返回 `serverbase.TipVerdict`。
+- 34 个故障码 = 原 33 + guild 的 `GuildIdGenUnavailable`,逐符号对照过,无漏迁无误标。`MatchInternal` 两张表都没登记过,本想顺手标上,复核发现 match 把它同时当「缺少玩家身份」的参数出口(一码两用),标了会出假告警 —— **刻意不标**;并记下 **match 至今没挂 `serverbase.UnaryInterceptor`**,它的 tip 码没有运行时定性消费者,且 `JoinQueueResponse` 同时带 `error_code`,接拦截器时 `ErrorCodeClassifier` 得一并指到 tip 轴。attribute 段 15 个码按名字全是规则拒绝,未标。判定原则与「刻意不算故障」清单从 Go 注释搬进 `tip-code-axis.md` §2.9。
+- CI `exporter-tests.yml` 的漂移检查 / `cmp` 列表加 `faults.go`。
+
+### 改动集
+`data/tip/Tip.xlsx`、`enum_gen.py`、新模板 `tip_faults.go.j2`、`tests/test_tip_axis.py`(红线 7 用例)、新产物 `go/shared/generated/tip/faults.go`、`tipcode.go` + `tipcode_test.go`、guild 的 `constants.go` / `guild.go` / `inband_observability_test.go`、friend 的 `constants.go`、`exporter-tests.yml`、`tip-code-axis.md`(§2.9 / §4 / §5 / §6.3)、`AGENTS.md` §4.4 / §7.5、handoff 文档。
+顺带修既有红:`go/match/internal/constants/errors_test.go` 的 `tipCodes` 清单缺 `ErrNotInScene`(`71edf77f7` 合并上游时加的码,清单没跟上,HEAD 上就红)。
+
+### 状态
+导表器 **129 passed**;纯 Python 路径重生 tip 产物,state / proto / tip_text.json / segments.go 零变化,`faults.go` 与部署副本 `cmp` 一致、`gofmt` 干净;`shared` / `guild` / `friend` / `match` build + vet + 测试全绿。
+四视角独立评审(20 agent,每条发现 2 个反驳者):分类数据逐符号对照无漏迁无误标;确认 4 条 P2 全是文案/交接一致性,已修;驳回 4 条。
+**未跑**全量导表(仍缺 protoc 35.1)与 C++ / Java 构建(本改动没碰其输入)。**未提交**;注意本文件是混写文件(09-03 收尾复核段落 + 本段 + 并发编辑者的「回合制战斗:客户端直连 battle 节点」段落都在同一份未提交 diff 里),提交时按 hunk 挑。
+
+## 2026-09-05 回合制战斗:客户端直连 battle 节点(票据入场)落码 —— 未编译,待 Codex 验证
+
+### 背景
+用户拍板把 mmorpg 做成"会话制对局标准形态"(`docs/design/moba-battle-target-architecture.md`):大厅一条连接走 gate,
+战斗另一条连接直连 battle、票据入场。回合制战斗一、二期已在(9 月 5 日实机跨区 1v1 通过),差的正是"战斗流量不过 gate"
+这一步;本轮只做直连 + 票据,gate / scene / match 零改动(expand 阶段,gate 中继降级为回落路径)。
+
+### 决策(写进 `turn-based-battle-server.md` §18,D23-D28)
+- 双通道并存直连优先;battle 节点自签自验 HMAC 票据(独立密钥 `BattleTokenSecret`,与 gate 分域);
+- 票据寿命 = 房间 deadline、可重用于重连、绑 node_id + 实例 UUID;丢票走大厅通道 `RequestBattleTicket` 补签;
+- 先推 `BattleAssignedS2C` 再推开战 / 观战首帧(同 key 保序);
+- 直连面五道闸逐条镜像 gate(连接上限 / 空密钥按 `BATTLE_RUN_MODE` / 10s 握手期限 / 验证前拒一切 / 1KB + 消息号白名单);
+- 直连身份合成 `SessionDetails`,四个 Handle* 零改动。
+
+### 改动集(19 个文件,清单与逐文件说明见 §18.3)
+proto 2 + yaml/config 2 + 引擎共享安全头 1(gate_security.h 改 using 别名,API 不变)+ battle 节点 8(新 `client/battle_client_edge.{h,cpp}`、
+`battle_security.h`、`tests/battle_ticket_test.cpp`;room manager / grpc / main / 三份构建清单)+ robot 8 + 文档 3。
+
+### 状态
+**未编译、未跑导表 / proto-gen、未冒烟。** 编译前必须先 `proto-gen-run`(新增两个 RPC 的消息号是生成产物,C++ / robot 都引用生成常量);
+验证顺序与期望产物见 `turn-based-battle-server.md` §18.8(7 步:proto-gen → Go → C++ 串行 `/m:1` → 两份独立 gtest → 整栈冒烟含直连断言与回落断言 → 负向三条)。
+Unity 客户端在独立仓库,接入契约写在 §18.2。
+
+## 2026-09-05 回合制战斗直连:静态评审 22 条全部修复,proto-gen / C++ Debug / Go / robot / 两份 gtest 全绿;整栈冒烟待本机基础设施
+
+### 评审与修复(5 维 53 个子代理,30 条候选 → 复核 24 → 确认 22 / 证伪 2;6 条未复核的已按维度全部人工过一遍)
+- **编不过(P0/P1 ×3 同源)**:`BattleClientEdge::Send` 是 const 却调非 const 的 `ProtobufCodec::send`(gate 能过是因为它持的是引用成员)→ 改为静态 `ProtobufCodec::fillEmptyBuffer` + `conn->send`,分帧不变。
+- **应答被吞(P1 ×2)**:`CloseDirectConnectionOf(waitForReply=true)` 走 `forceCloseWithDelay` 仍会同步切 `kDisconnecting`,StopWatch 的回包被丢;终局那一手 `SubmitBattleAction/SetAutoBattle` 同理(`FinishBattle` 先 shutdown 了请求所在的连接)→ 统一改成 `queueInLoop` 到本轮回环末尾再 `shutdown + forceCloseWithDelay(1s)`,表里立刻摘除;删掉 `waitForReply` 参数。顺序从此固定:应答 / 终局包 → FIN。
+- **半开连接(P2)**:AddObserver 会话已变分支保留旧直连 → 先 `CloseDirectConnectionOf(observer_session_changed)` 再重绑,首帧回落新会话。
+- **停机断连(P2)**:`DisconnectAll` 只对 `connected()` 的连接 `forceClose`,已 shutdown 的让它排空。
+- **安全闸补齐(P1 ×1 + P2 ×3)**:直连面补 `MessageLimiter` 每消息号限速(与 gate 同一张表);非法包阈值改用共享 `IllegalPacketCounter`(默认 50、`GATE_ILLEGAL_PACKET_THRESHOLD` 可调),删掉自写的硬编码 8;拒绝日志按 reason 分别计数(伪造签名不再被超时噪音淹没);`OnUnknownMessage` 去掉不采样的 WARN;启动门禁加「密钥 ≥32 字节且 ≠ GateTokenSecret」(prod 拒启 / dev-test WARN,`battle_security::ClassifySecretStrength` + 2 条单测)。
+- **robot(P1 ×2)**:直连建连 + 握手放进 goroutine 用同一 ctx 兜 10s(muduo 客户端拨不通会无限重拨、Recv 永不返回,之前会挂死不出退出码);§18.8 补 `go mod vendor`(robot 走 vendor 构建,重生成后不刷新照样 undefined)。
+- **文档一致性(P2 ×5)**:main.cpp 注释改引 `IsGrpcOnlyNodeType/PROTOCOL_GRPC`(battle 其实在 `IsTcpNodeType` 里);D27 改按实际阈值来源写;`battle_max_connections` 无代码默认值(缺键 prod 拒启)按实际写;单测计数 18;moba 目标文档补「本仓落地变体」(battle 自签 / 票据寿命 = 房间期限)与标准形态的两处有意偏离及理由;§18.6 登记部署链四处待补(`k8s_deploy.ps1` 注入 / ConfigMap 模板 / preflight / 契约测试),与 battle manifest 同批。
+
+### 验证链(§18.8 第 1-4 步,2026-09-05 本机)
+1. **proto-gen**:先重建二进制再重生成 —— 旧 `proto-gen.exe`(08-11)对无 `package` 的 battle proto 把 sender 声明写进匿名命名空间,gate/scene/battle 链接 17 个 LNK2019;`protoc` 须在 PATH(`third_party/grpc/install_vs2026_dbg/bin`);`protogen/go.sum` 的 `proto2mysql@v0.1.0` 校验和已更正(否则 `proto-gen-build` 拒建)。重生成还顺带把 `grpc_init_client.cpp` 的 PlayerBattle 完成队列分派加上 176/177(必需)。4 个无关 go pb 的 protoc-gen-go 版本噪音已还原。
+2. **Go**:`go/proto` / `go/match`(build + test 全过)/ `robot`(vendor 与 `go/proto/battle` 逐字节一致,build + vet 过)。
+3. **C++**:`msbuild game.sln -m:1 Debug x64` **0 error**(1142 既有 warning,7 分钟),gate / scene / battle 三个 exe 重新链接并复制到 `bin/`。Release 配置不可用(third_party 全是 Debug/MDd 库,成片 LNK2038,与本改动无关)。
+4. **gtest(MSVC)**:`battle_ticket_test` 18/18、`gate_security_test` 22/22(回归:gate_security.h 改 using 别名后 API 不变)。
+
+### 未验证(第 5-6 步:整栈冒烟 + 负向)
+本机缺两样,都要联网下载:compose 用的 `apache/kafka` / `redis:latest,7.2` / `mysql:latest` / `bitnamilegacy/etcd` 镜像一个都没缓存;Java 网关(robot 的 `/api/assign-gate` 唯一入口)没有 Maven、没有现成 jar,`mvnw` 需下载发行版。装好后按 §18.8 第 5-6 步跑:`BATTLE_SMOKE_OK … a_direct_turns>=1 b_direct_spectate_turns>=1`、`skip_direct_connect: true` 回落路径、跨 zone、三条负向。
+
+## 2026-09-05(2)gate 只连一类 gRPC 目标:客户端 RPC 路由服落码 + 五维评审修完;冒烟被 C++ 节点注册卡住
+
+### 为什么做
+用户的诉求不是"socket 太多",是**每加一个客户端可见的 Go 服务都要改 gate**:白名单加一类、编进该服务的 typed stub 与回包反查表、`service_discovery_prefixes` 加一行,然后**重编 7 分钟 + 滚动重启踢在线玩家**。gate 是 C++、有状态、对公网的唯一入口,这类改动的代价不该由它承担。
+
+### 做了什么(决策与规格:`docs/design/client-rpc-router.md` D29–D34)
+- **新增无状态 Go 服务 `go/client_rpc_router`**(节点类型 `ClientRpcRouterNodeService=29` / `NODE_CLIENT_RPC_ROUTER=31`,全局池)。gate 的 gRPC 白名单在路由模式下收成 `{Scene(TCP), ClientRpcRouter}` —— **连接数 = 路由服副本数,与业务服务数量无关**,以后加 chat/friend/guild/team 不再碰 gate。
+- **不透明转发**:`ClientRpcRouter.Forward(ForwardRequest{ClientRequest 原包, zone_id}) → MessageContent`。gate 不解析 body、不挑业务实例、不持业务 stub;响应类型直接是 `MessageContent`,gate 现有回包桥接零改动。会话身份仍走 `x-session-detail-bin`,路由服按 `x-` 前缀整体透传并回写响应头,目标 Go 服务的 `SessionInterceptor` 一行不改。
+- **路由表是生成物**:`tools/proto_generator/protogen/internal/route_table.go` 新增发射器,输出 `go/client_rpc_router/generated/pb/game/route_table.go`(95 条,`message_id → {FullMethod, NodeType, ClientProtocol}`,键用生成常量、输出过 `go/format`)。加业务服务 = 改 proto + 重生成 + 重部署路由服。
+- **原始字节转发**:自定义 `encoding.Codec`(`Name()="proto"`,Marshal 透传 []byte),`conn.Invoke(FullMethod, body, &respBytes, ForceCodec)`,路由服对业务协议零依赖。
+- **zone 过滤**:`ZoneScopedNodeTypes`(默认 `[LoginNodeService]`)按 `ForwardRequest.zone_id` 挑同 zone 实例,其余全局随机;`BattleNodeService` 一律拒转(D33:战斗只走直连)。
+- **双模式默认旧模式**:`GATE_CLIENT_RPC_ROUTER=1` 才切;未设时行为与改前完全一致(expand→migrate→contract)。
+- **票据补签改道**:`BattleClientPlayer.RequestBattleTicket` 删除 → `MatchService.RequestBattleTicket`(客户端协议)→ `BattleNode.IssueBattleTicket`(内部)。gate 从此与 battle **零连接**。
+
+### 五维静态评审 + 两票对抗证伪(41 个子代理;18 条候选 → 确认 5 / 证伪 13)
+全部 5 条已修并带回归测试:
+1. **[P1] go-zero Stat 拦截器把整包请求打进 INFO**:`ForwardRequest.body` base64 一解就是目标请求原文,登录消息即**明文密码**(AGENTS §7 红线),且逐请求 INFO 把全网消息速率放大成日志速率。修:yaml 加 `Middlewares.StatConf.IgnoreContentMethods`,并在 `config.Validate()` fail-fast(Stat 开着又没屏蔽就拒启),`config_test` 加 4 条断言。
+2. **[P2] 失败分支逐请求 Errorf**:改成按 outcome 分别采样(每 1024 条一行,与 gate 同口径),精确计数交给指标。
+3. **[P2] `fullSync` 差集只处理消失的 key**:同 key 换 endpoint 不触发 `onRemove`,旧连接永久滞留。修:抽出纯函数 `diffRemoved` 并覆盖 endpoint 变更,补单测;**同款修法同步到 `go/match/internal/discovery`**。
+4. **[P2] 生成的 gate 侧 gRPC 失败回调只打日志不回包**:路由服"已发现但连接不可用"的窗口内请求无回执 —— 改模板影响所有服务,记入设计文档 §7 已知缺口,单独排期。
+5. **[question] `x-caller-*` 注释与事实不符**:C++ gate 目前并不签 callerauth 头(既有缺口,dev 宽松档遮住)。修:注释改成条件式,并在 §7 加一条"路由模式冒烟须在 login `Mode=pro` 下再跑一次"。
+
+### 验证
+- **C++**:`msbuild game.sln -m:1 Debug x64` **0 error**(修了一处真编译错:`node_util.h` 漏了 `ClientRpcRouterNodeService` 的枚举再导出);gate 侧新增 `GateRouterMode` 6 条单测,`gate_security_test` 28/28 全绿。
+- **Go**:`go/proto`、`go/client_rpc_router`(build+vet+test,含 bufconn 端到端:body 原样到达、响应原样返回、`x-` 键透传与响应头回写)、`go/match`(含 6 条补签单测)、`robot`(vendor 手工同步后 build+vet)全绿。
+- **proto-gen**:重建生成器后重生成;消息号 176=ClientRpcRouterForward / 177=NotifyBattleAssigned / 178=IssueBattleTicket / 179=MatchServiceRequestBattleTicket。
+
+### 冒烟:被 C++ 节点注册卡住(**与本次改动无关**,证据在下)
+本机已按用户授权补齐环境:compose 起 etcd/redis/redis-cluster×6/kafka/mysql;`mvnw` 打出网关 jar(需 `-Djava.version=21`,本机 JDK 21 而 pom 写 23);网关起服要 `-Djdk.net.unixdomain.tmpdir=D:	mp\jsock`(本机 AF_UNIX 默认目录被拦,netty 开不出 selector);login 需 `LOGIN_DEV_PASSWORD_SHARED_SECRET`。Go 五服务 + 网关(:8081)全部就绪。
+
+**卡点**:gate 与 scene 启动后停在 `Claiming global node-id allocation` —— etcd 里 alloc key 已写成功、gate 的 TCP 10000 已 LISTEN,但 `OnTxnSucceeded` 后的第二阶段(发布 per-zone NodeInfo)从未发生,`GateNodeService.rpc/zone/...` 始终不存在,于是 login 的 AssignGate 一直回 `no gate available for requested zone`,robot 冒烟在第一步登录就失败。
+**证据表明与本次改动无关**:①`cpp/nodes/scene` 本次一行未改,症状与 gate 完全一致;②唯一成功注册的是 **battle** —— 它是三者中唯一不消费 Kafka、且 `CanConnectNodeTypeList{}` 为空的节点;③停掉全部 Go 服务、单起 gate(无任何对端可连)复现同样的卡点,排除了 `ConnectAllNodes`;④gate 进程有到 etcd/redis 的连接,**没有**到 Kafka 9092 的连接。
+**下一步**(建议单独排期):在 `Node::StartRpcServer` 的 `RegisterKafkaHandlers()` 前后加时序日志、或对 gate 进程发 SIGBREAK 取栈(节点已装 stack-dump handler),确认是卡在 Kafka 消费者创建还是 etcd 第二阶段 txn。
+
+### 状态
+代码与文档已完成;C++ / Go / 单测全绿;**整栈冒烟(§7.4/§7.5 与 turn-based §18.8 第 5-6 步)仍未通过**,阻塞在上述 C++ 节点注册问题。
+
+## 2026-09-05(3)冒烟打通:两轮 BATTLE_SMOKE_OK(旧模式 + 路由模式),真因是 librdkafka C++ 包装层的 CRT 边界
+
+上一节记的「gate/scene 卡在 node-id 注册、与本次改动无关」结论**方向对但定位错了**。用 cdb 附加取原生栈拿到了真相,现已修复,整栈冒烟两轮全绿。
+
+### 真因(cdb 栈,不是推断)
+gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers` → `KafkaManager::Subscribe` → `KafkaConsumer::init` → `std::string` 析构 → `_Orphan_all_unlocked_v3` → **访问违例** → 进程的未处理异常过滤器 → `HandleFatalSignal` → `boost::stacktrace::to_string` → `dbgeng!OneTimeInitialization` → **`SleepEx` 永久阻塞**。
+
+也就是说 gate **崩了**,但崩溃处理器在初始化 dbgeng 时卡死,进程既不退出也不落日志 —— 于是外部表现成「静默挂起」,`bin/logs/cpp_nodes/gate.*.log` 恒为 0 字节。scene 症状相同;battle 是三者中唯一不消费 Kafka 的,所以唯独它能起来。
+
+崩溃机理:`bin/rdkafka++.dll` 的依赖只有 `rdkafka.dll` + `KERNEL32.dll`(dumpbin 证实),说明它是 **/MT 静态 CRT** 构建 —— 自带一套 CRT 与堆,`std::string` 按 `_ITERATOR_DEBUG_LEVEL=0` 排布(32 字节);本工程本地只能出 Debug(IDL=2,多一个 `_Myproxy` 指针,40 字节)。于是 `Conf::set(const std::string&, const std::string&, std::string&)` 一跨边界:入参按错位读成乱码 → 每个配置项都设置失败 → 库把错误串写进 `errstr`(在 DLL 的堆上分配)→ 本进程析构时按自己的堆释放 → 堆损坏。
+
+### 修法(已落码)
+把 librdkafka 的 **C++ 包装层随工程从源码编译**,不再链接预编译的 `rdkafka++.dll`;跨边界的只剩 `rdkafka.dll` 的 C 接口(不透明句柄 + `const char*`),与 CRT 无关。
+- `cpp/libs/engine/infra/infra.vcxproj`:加入 `third_party/librdkafka/src-cpp/*.cpp`(12 个),每个带 `LIBRDKAFKA_STATICLIB`(否则 `RD_EXPORT` 展开成 `dllimport`,自己定义自己导入)。
+- `kafka_consumer.h` / `kafka_producer.h`:包含 `rdkafkacpp.h` **之前**定义 `LIBRDKAFKA_STATICLIB`,并 `#pragma comment(lib, "rdkafka.lib")`。
+- gate / scene / battle 与 bag_test / cross_zone_test / currency_test:Debug 依赖去掉 `rdkafka++.lib`、补上 `rdkafka.lib`(Release 本来就有)。
+全量 Debug 构建 **0 error**。
+
+### 顺带纠正一条错误结论
+上一节说「Release 才是可用配置」是**错的**,已实测推翻:`third_party/grpc/install_vs2026`(Release)里的 protobuf 停在 2026-06-29,而 gRPC 1.83 / Protobuf 35.1 的升级只装了 `install_vs2026_dbg`(2026-07-31)。Release 链接必然缺 `Empty_globals_` / `FileOptions_globals_` 这类 35.1 符号。**本地只能编 Debug**,这条结论不变,变的是原因。
+
+### 冒烟结果
+| 轮次 | 结果 |
+|---|---|
+| 旧模式(默认,未设 GATE_CLIENT_RPC_ROUTER) | `BATTLE_SMOKE_OK battle_id=65299462997671936 a_turns=14 b_spectate_turns=14 a_direct_turns=14 b_direct_spectate_turns=14`,退出码 0 |
+| 路由模式(`GATE_CLIENT_RPC_ROUTER=1`) | `BATTLE_SMOKE_OK battle_id=65300493789822976 a_turns=13 b_spectate_turns=13 a_direct_turns=13 b_direct_spectate_turns=13`,退出码 0 |
+
+两轮的 `a_direct_turns` / `b_direct_spectate_turns` 都等于总回合数 —— **战斗帧全程走客户端直连战斗服**,没有一帧回落 gate 中继。
+
+路由模式下 gate 的出站连接实测(netstat 按 PID):`scene:20000`(muduo TCP)、`etcd:2379`、`redis:6379`、`kafka:9092`、**`client_rpc_router:50600`**。对 login(53000)/ match(50500)/ scene_manager(60300)/ battle **零 gRPC 连接** —— D29–D34 的目标达成:gate 的 gRPC 目标收成一类,连接数 = 路由服副本数。
+
+### 途中定位到的三个既有缺陷(与本次改动无关,未修)
+1. **三张表用 string 做主键,MySQL 建不出来**:`user_oauth.provider`(联合主键分量)、`user_accounts.account`、`account_share_database.account`、以及 `user_phone.phone`(唯一键)。string 映射成 MEDIUMTEXT,`Error 1170: BLOB/TEXT column used in key specification without a key length`。本地已按等价定义手工建表(键加 `(191)` 前缀)绕过,`CREATE TABLE IF NOT EXISTS` 因此变成 no-op;**正解是表结构决策**(改整数代理主键,或库侧支持 VARCHAR 映射),留给你定。
+2. **`go/db` 的 replace 指向 `D:/luyuan/proto2mysql` 工作副本**,那份未发布代码新增了「主键不得为 MEDIUMTEXT」的校验,直接让 db 拒启;而且 `go/db/internal/logic/pkg/proto_sql/db.go` 的表名守卫用 `GetCreateTableSQL` 返回空串来判断,把「DDL 生成被拒」误报成「无法解析表名」,**真因被掩盖**。建议守卫改用 `proto2mysql.ValidateTableMessage` 拿真实错误。本地是用已发布的 v0.1.0 单独编了一个 db.exe 绕过(仓库 go.mod/go.sum 未改动)。
+3. **scene 与 battle 共用同一端口基址 20000**:端口扫描只看同类型节点,跨类型靠 `/service/<ip>/port/<n>` 的 CAS 兜底;而 `NodeAllocator::AcquireNode` 的重试路径把**自动分配**的端口当成**显式预设**(`presetPort = GetNodeInfo().endpoint().port()`),于是 fail-closed 死循环、永不换端口。本地用 `RPC_PORT=20010` 给 battle 指定端口绕过。
+
+### 本地跑起来需要的四个环境事实(都不是仓库改动)
+- Java 网关:`mvnw.cmd -DskipTests -Djava.version=21 package`(pom 要 23,本机 JDK 21);起服加 `-Djdk.net.unixdomain.tmpdir=D:	mp\jsock`,否则 netty 开 selector 时 AF_UNIX 环回被拦。
+- login 需要 `LOGIN_DEV_PASSWORD_SHARED_SECRET=123456` —— 开发密码档是**常量时间比较密码与该密钥**,值必须等于 robot 配置里的 `password`。
+- C++ Debug 产物运行要 `third_party/grpc/install_vs2026_dbg/bin` 在 PATH(缺 `zlibd.dll`)。
+- MSBuild 在 `E:\Program Files\Microsoft Visual Studio8\Enterprise`(vswhere 可查)。

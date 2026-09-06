@@ -176,3 +176,7 @@ const SceneAttributeClientPlayerResetAttributePointsMessageId = 172
 const SceneAttributeClientPlayerAutoAllocateAttributePointsMessageId = 173
 const SceneAttributeClientPlayerCreateAttributeSchemeMessageId = 174
 const SceneAttributeClientPlayerGmSetPlayerLevelMessageId = 175
+const ClientRpcRouterForwardMessageId = 176
+const BattleClientPlayerNotifyBattleAssignedMessageId = 177
+const BattleNodeIssueBattleTicketMessageId = 178
+const MatchServiceRequestBattleTicketMessageId = 179

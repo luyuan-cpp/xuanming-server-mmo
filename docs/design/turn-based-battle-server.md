@@ -24,8 +24,9 @@
 | D3 | **所有战斗统一由 match 服务编排开局**,两个入口:①队列匹配(系统凑单);②场景发起 PK(点名成局,challenge 应战后成局)。两入口汇入同一条 gather 管线;`battle_id`/`challenge_id` 由 match 服务用 shared/snowflake(17-bit worker 布局)生产 | 用户产品决策:匹配遇怪 + 场景可点名切磋;单一编排者让 gather/补偿逻辑只存在一份;SnowFlake 节点隔离不变量:battle_id 只能由 match 节点生产 |
 | D4 | **结算串行化**:`InBattleComp` 摘除条件 = 场景服已应用结算;摘除前不得再排队/开战 | 残血带出战斗要求下一场快照必须反映上一场结果;每玩家最多一单在途,幂等去重退化为"每人记最近一个 battle_id" |
 | D5 | **技能/buff 沿用现有表与管线,时间换算成回合**:复用 `SkillTable`/`BuffTable`/`CooldownTable`/`SkillPermission` 及 damage/bonus_damage 表达式、effect[]→buff 语义,把挂钟 timer 全部替换为回合计数;回合制战斗代码是**全新独立模块**,不改实时战斗代码 | 用户指示:技能参照原来那套、把 timer 弄掉弄成回合;新开回合制战斗模块 |
-| D6 | **上行走 gate→gRPC,下行走 Kafka**:客户端战斗消息经 gate 按 `OptionFileDefaultNode=NODE_BATTLE` 路由(gRPC + `x-session-detail-bin` metadata);battle 推 S2C 走 Kafka `gate-{gate_id}` 的 `PushToPlayerEvent`/`BroadcastToPlayersEvent`(既有已实现路径) | battle 不需要 muduo TCP server 全套;回合制每回合一条消息,Kafka 延迟完全可接受;不用管 battle↔gate 连接拓扑(全局池连全服 gate 的问题消失) |
+| D6 | **上行走 gate→gRPC,下行走 Kafka**:客户端战斗消息经 gate 按 `OptionFileDefaultNode=NODE_BATTLE` 路由(gRPC + `x-session-detail-bin` metadata);battle 推 S2C 走 Kafka `gate-{gate_id}` 的 `PushToPlayerEvent`/`BroadcastToPlayersEvent`(既有已实现路径)。**2026-09-05 起降级为回落路径**:客户端凭票据直连 battle 节点,有直连即直发,见 §18 D23 | battle 不需要 muduo TCP server 全套;回合制每回合一条消息,Kafka 延迟完全可接受;不用管 battle↔gate 连接拓扑(全局池连全服 gate 的问题消失)。§18 之后:gate 中继只在直连未建立 / 断开时兜底 |
 | D7 | **确定性引擎**:引擎输入 = 快照 + 指令流 + 随机种子,输出纯函数;战斗事件流(每回合一条 `TurnResult`)是一等公民 | 观战 = 转发事件流;断线重连 = 补发状态快照;回放 = 免费;单测可穷打 |
+| D35 | **传输选型定谳(2026-09-05):按平面拆传输,不按节点选传输。** 客户端 ↔ battle = **muduo TCP 直连**(照搬 gate 客户端面,票据入场,§18);match(Go)→ battle 的控制面(CreateBattle / DestroyBattle / AddObserver / RemoveObserver / IssueBattleTicket)= **gRPC unary**;battle → 结算 = Kafka 幂等;battle → gate **不再有这条边**。三方案排序:①客户端面 muduo + 控制面 gRPC(本决策)> ②全 muduo(前提:`GameRpcMessage` 加 request_id + 生产级 Go RPC0 客户端)> ③全 gRPC(D6 原形态)。**battle 保持 C++**,gRPC ≠ Go。D6 的 gate 中继与 Kafka 回落定为过渡路径,收缩条件见 §18.7。完整论证、gRPC 在本仓的实测成本、RPC0 缺口清单见 [battle-transport-decision.md](./battle-transport-decision.md) | 战斗流量九成五在客户端边,muduo 单线程零拷贝完胜;gRPC 在本仓每节点起手 17 线程、≤8 poller 各阻塞在 promise/future、应答等 5ms CQ 轮询,不该进热路径。控制面每局一两次调用,gRPC 成本可忽略,而 RPC0 无请求关联 id、无 deadline、无 Go 客户端,补齐等于重写三成 gRPC。D6 原论据「不用管 battle↔gate 拓扑」不成立:gate 白名单已含 Battle,每 gate 对每 battle 建 channel + CQ |
 
 ## 3. 生命周期与数据流
 
@@ -525,3 +526,105 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
 - 二期服务端:prepare deadline + `BattleConfirmedEvent`、配表指纹(`BattlePlayerSnapshot.table_fingerprint` /
   `CreateBattleRequest.table_fingerprint`)、`contracts.kafka.BattleResultEvent`(battle → match,评分回流)—— 见
   `cross-zone-matchmaking.md` §10/§11。
+
+## 18. 客户端直连 battle 节点:票据入场,战斗流量零字节经 gate(2026-09-05,已落码待验证)
+
+> 状态:**已落码;2026-09-05 静态评审 22 条已修;proto-gen / C++ Debug 全量 0 error / Go / robot / 两份 gtest 全绿;整栈冒烟(§18.8 第 5-6 步)待本机基础设施(镜像与 Maven 需下载)**。目标形态与判据见
+> [moba-battle-target-architecture.md](./moba-battle-target-architecture.md)(会话制对局标准形态:
+> 大厅一条连接走 gate,战斗另一条连接直连 battle,票据入场,battle 可随时 kill)。
+> 本节只写"改了什么、契约是什么、怎么验",不重复目标文档的论证。
+
+### 18.1 决策
+
+| # | 决策 | 理由 |
+|---|------|------|
+| D23 | **双通道并存、直连优先(expand 阶段)**:battle 节点在自身 TCP 端口(`NodeInfo.endpoint`,框架已分配并发布到 etcd)开客户端监听;出站 S2C 有已验证直连即直发,否则回落既有 Kafka→gate 路径;上行经 gate gRPC 的路径保留。gate / scene / match **零改动** | 旧客户端零改动行为不变(AGENTS.md §11.3 向后兼容:expand→migrate→contract);战斗流量不再挤 gate 这条共享通道;收缩阶段(删 gate 中继)另起决策,须先确认全部客户端已切直连 |
+| D24 | **票据由 battle 节点自己签发并校验**:HMAC-SHA256,独立密钥 `BaseDeployConfig.battle_token_secret`(全部 battle 实例共享,与 `gate_token_secret` 分域);签名 = hex(HMAC(secret, `BattleTicketPayload` 序列化字节)),与 gate 令牌完全同口径 | battle 是唯一知道房间名单的一方;不给 match 发密钥(少一处持密者);"本地验签、不回问大厅"仍成立;客户端 / robot 两条连接复用同一套握手代码。备选"match 签发"被否:match 与 battle 各自 Kafka 生产者,分配包与开战包跨生产者无序,而 battle 自签能在同 key 上保证"先分配再开战" |
+| D25 | **票据寿命 = 房间作废期限 `deadline_ms`,可重复用于重连,不做 jti 一次性**。验签之后仍须:签给本节点(`battle_node_id` + 实例 UUID `battle_instance_id`)、未过期、角色合法、房间仍存在且该玩家按角色确在名单。客户端丢票(冷启动)经大厅通道 `MatchService.RequestBattleTicket` 补签:match 从会话 metadata 取权威 player_id、按观战索引 `spectate:battle:{battle_id}` 定位房间所在 battle 节点,再调内部 `BattleNode.IssueBattleTicket{battle_id, player_id}` 由 battle 核对名单自签,裁决原样透传(原 gate→battle 的 `BattleClientPlayer.RequestBattleTicket` 已删,改道理由见 [client-rpc-router.md](./client-rpc-router.md) D33:路由服不转发 battle 消息) | 房间销毁即全部票据失效,一次性 jti 表没有增益;实例 UUID 防节点重启后 node_id 复用让旧票复活;补签走已鉴权的大厅会话,票据发放只有两条通道(开局推送 / 会话补签),都由会话身份背书;match 不持票据密钥、不复制名单 |
+| D26 | **投递顺序**:CreateBattle 成功后每参战者先推 `BattleAssignedS2C{battle_id, host, port, token_payload, token_signature, expire_at_ms, role}` 再推 `BattleStartS2C`(同 Kafka key=player_id 保序);观众 AddObserver 成功后先推 Assigned(role=OBSERVER)再推 `SpectateStateS2C`。签不出票(见 D27 空密钥 / endpoint 未就绪)只记 WARN 不阻断开局,该玩家全程走 gate 中继 | 客户端拿到票据就能建连,开战包此刻还没直连、照旧经 gate;两条路径都合法,客户端对战斗消息来自哪条连接不敏感 |
+| D27 | **直连安全闸(逐条镜像 gate)**:并发上限 `battle_max_connections`(0 仅 dev/test);空密钥处置由 `BATTLE_RUN_MODE` 决定(dev/test 跳过签名比对但载荷 / 节点 / 期限 / 名单照常校验,prod 拒绝启动 + 拒连);未验证连接 10s 握手期限;验证前一切非握手消息即关;`ClientRequest` 体 ≤1KB;每消息号限速(`MessageLimiter`,与 gate 同一张表);消息号白名单 = `BattleClientPlayer` 的四条客户端 RPC;非法包累计达阈值即关(阈值与 gate 同源:`IllegalPacketCounter`,默认 50,`GATE_ILLEGAL_PACKET_THRESHOLD` 可调、0 = 只计数不踢);输出缓冲 2MB 高水位断连;启动门禁除非空外还查密钥 ≥32 字节且 ≠ `GateTokenSecret`(prod 拒启,dev/test WARN) | 直连面是第二个对公网开放的端口,必须与 gate 同等设防;运行模式变量与 gate 分开(`BATTLE_RUN_MODE`):同机 gate=dev 不能顺带放行 battle |
+| D28 | **会话身份合成**:直连消息进 `BattleRoomManager` 时合成 `SessionDetails{player_id, session_id=路由快照里的 gate 会话号}`,四个 Handle* **零改动**(复用既有防串房 / 防观众冒充校验) | 权威身份来自已验证票据而非请求体,与 gate 注入 metadata 的形态一致;`session_id` 只用于日志对齐 |
+
+### 18.2 线协议与握手(客户端接入契约;Unity 客户端在独立仓库,按此实现)
+
+- **帧格式与 gate 完全一致**:ProtobufCodec(`len | nameLen | typeName | protobuf | adler32`);上行 `ClientRequest{id, message_id, body}`,下行 `MessageContent{message_id, serialized_message, id, error_message}`。客户端复用大厅连接的编解码与按 `message_id` 分发的 handler 表,**不需要第二套协议栈**。
+- **握手**:TCP 连上 `BattleAssignedS2C.host:port` 后,**首包必须**是 `BattleTokenVerifyRequest{payload=token_payload, signature=token_signature}`(两字段原样透传,客户端不解析 payload);服务端回 `BattleTokenVerifyResponse{success, error, battle_id}`。失败后服务端主动断开;客户端不得重试同一张票超过 1 次,应回大厅通道 `MatchService.RequestBattleTicket` 补签。
+- **握手之后**:只允许 `SubmitBattleAction / GetBattleState / StopWatchBattle / SetAutoBattle` 四个消息号;应答 `MessageContent.message_id` = 请求消息号、`id` = 请求 id。别的消息号回信封错误 `kInvalidParameter` 并计非法包。
+- **S2C**:握手成功后本玩家的 `NotifyTurnResult / NotifyBattleEnd / NotifySpectateState / NotifySpectateTurnResult / NotifySpectateEnd` 全部改从直连到达;`NotifyBattleStart`、`NotifyBattleAssigned`、`NotifyBattleReconnect` 仍从大厅连接到达(它们发生在直连建立之前)。客户端两条连接的 S2C 走同一个 handler 表即可。
+- **生命周期**:战斗结束 / 作废 / 观众被清退时服务端先推终局包再 `shutdown`(FIN 在输出缓冲排空之后),客户端收到 FIN 即视为本局直连结束,不重连;战斗中直连意外断开 → 若手里的票据未过期直接重连握手(同票可重用,D25),否则大厅通道 `MatchService.RequestBattleTicket(battle_id)` 取新票再连。`NotifyBattleReconnect`(scene 在 RECONNECT 链路推)到达时按同样流程建直连。
+- **回落**:直连建不起来(网络策略 / 端口不可达)时客户端可以继续经大厅连接收发战斗消息 —— 服务端两条路径都在(D23)。客户端应打点上报"直连失败率",这是收缩阶段(删 gate 中继)的前置数据。
+- **消息号**:`BattleClientPlayerNotifyBattleAssignedMessageId` / `MatchServiceRequestBattleTicketMessageId` 由 proto-gen 分配(`proto/message_id.txt`;补签消息号挂在 MatchService 下,`BattleClientPlayerRequestBattleTicket` 已删),客户端 / robot 用生成常量,不写数字。
+
+### 18.3 服务端改动集
+
+| 文件 | 改动 |
+|---|---|
+| `proto/battle/player_battle.proto` / `proto/match/match_service.proto` / `proto/battle/battle_node.proto` | `player_battle.proto` 新增 `eBattleTicketRole` / `BattleTicketPayload` / `BattleTokenVerifyRequest` / `BattleTokenVerifyResponse` / `BattleAssignedS2C` / `RequestBattleTicketRequest` / `RequestBattleTicketResponse`,service 加 `NotifyBattleAssigned`(`RequestBattleTicket` 已从本服务删除);补签入口挂在 `MatchService.RequestBattleTicket`(客户端协议,复用上述请求 / 响应消息);`battle_node.proto` 加内部 `BattleNode.IssueBattleTicket(IssueBattleTicketRequest{battle_id, player_id}) returns (IssueBattleTicketResponse{error_message, assignment})` |
+| `go/match`:`internal/server/matchserviceserver.go`、`internal/logic/requestbattleticketlogic.go`(+ `requestbattleticket_test.go`)、`internal/metrics` | `MatchService.RequestBattleTicket`:player_id 只取会话 metadata → `spectate:battle:{battle_id}` 取 `battle_node_id`(不存在 = 房间已结束,kInvalidParameter)→ `BattleNodes.EndpointOfNode`(未发现 = kServiceUnavailable)→ `BattleNode.IssueBattleTicket`(3s 超时,RPC 缝 `issueBattleTicketFn` 可替换)→ battle 裁决原样透传;计数 `match_request_battle_ticket_total{outcome}` |
+| `proto/common/base/config.proto` + `cpp/libs/engine/config/config.cpp` + `bin/etc/base_deploy_config.yaml` | `battle_token_secret = 16`(yaml `BattleTokenSecret`)、`battle_max_connections = 17`(yaml `BattleMaxConnections`;**代码无默认值**:缺键即 proto3 零值 0,prod 拒绝启动、dev/test 按硬上限 65535 放行 —— 本地 yaml 显式配 4096,部署 ConfigMap 必须显式带这一项,与 `GateMaxConnections` 同纪律) |
+| `cpp/libs/engine/core/security/token_security.h`(新) | HMAC / 常数时间比较 / RunMode / ClassifyTokenSecret 的唯一实现;`cpp/nodes/gate/gate_security.h` 改为 using 别名(API 不变,GM 鉴权部分原地不动;`gate/tests/gate_security_test.cpp` 编译命令多一个 `-I cpp/libs/engine/core`) |
+| `cpp/nodes/battle/battle_security.h`(新) | `BATTLE_RUN_MODE`、`SignTicket` / `VerifyTicketSignature`(字节级)、`ClassifyTicketFields`(与 proto 解耦的字段判定) |
+| `cpp/nodes/battle/client/battle_client_edge.{h,cpp}`(新) | 客户端直连面:装到 `Node::GetTcpServer()`(与 gate 同时机 `SetAfterStart`),握手 / 派发 / 下行 / D27 五道闸 |
+| `cpp/nodes/battle/logic/battle_room_manager.{h,cpp}` | `directConnByPlayer`;`PushToPlayer`(直连优先、Kafka 回落)替换全部 `PushMessageToPlayer`(改名 `PushMessageViaGate`);`BuildAssignment` / `PushAssignment` / `AttachDirectConnection` / `DetachDirectConnection` / `CloseDirectConnection(s)` / `HandleIssueBattleTicket`(player_id 来自 match 请求,battle 只核对名单;原 `HandleRequestBattleTicket` 去掉会话入参);开局 / 观战接入先推分配包;结束 / 作废 / 销毁 / 观众清退关直连 |
+| `cpp/nodes/battle/handler/grpc/battle_node.{h,cpp}` | `IssueBattleTicket`(match → battle 内部 gRPC,runInLoop + promise 委托 `HandleIssueBattleTicket`,status 恒 OK、错误经 tip);`battle_client_player_service.{h,cpp}` 不再覆写补签(生成基类已无该方法) |
+| `cpp/nodes/battle/main.cpp` | `ValidateBattleClientEdgeConfigOrDie` 启动门禁;装配 edge;停机断开全部直连 |
+| `cpp/nodes/battle/{battle.vcxproj,battle.vcxproj.filters,CMakeLists.txt}` | 新源文件入构建 |
+| `cpp/nodes/battle/tests/battle_ticket_test.cpp`(新) | 独立 gtest(18 条):签名往返 / 篡改 / 分域 / 字段判定顺序 / 期限闭区间 / 空密钥处置 / 密钥强度(≥32 字节、≠ gate) |
+| `tools/proto_generator/protogen/go.sum` | `luyuancpp/proto2mysql@v0.1.0` 校验和更正为上游实际值(否则 `proto-gen-build` 拒建,见 §18.8 第 1 步) |
+| `robot/`:`pkg/client.go`(`VerifyBattleToken`)、`battle_direct_conn.go`(新)、`logic/gameobject/player.go`、`logic/handler/battle_client_player_notify_battle_assigned.go`(新)、`logic/handler/match_service_responses.go`(`MatchServiceRequestBattleTicketHandler` + `init()` 登记:生成的分发表只收 `ClientPlayer` / `GamePlayer` 命名的服务)、`battle_smoke_scenario.go`、`battle_smoke_cross_zone_scenario.go`、`config/config.go`、`etc/battle_smoke.yaml` | 机器人凭票据直连并断言回合结果 / 终局包从直连到达;`battle_smoke.skip_direct_connect=true` 走回落路径 |
+
+**没改的**:gate 旧模式(继续中继 + Bind/Unbind;路由模式见 §18.7)、scene(RECONNECT 仍重发 BindBattleEvent + BattleReconnectS2C)、match 的 gather(只新增 `RequestBattleTicket` 补签入口)、Kafka 契约、结算 / 确认 / 结果回流链路。
+
+### 18.4 Redis / Kafka 契约变化
+
+无。票据不落 Redis(D25:房间存在 + 名单即权威);直连面不产生任何 Kafka 消息。
+
+### 18.5 新增不变量(并入 §7 语义)
+
+10. 直连面放行的唯一凭据是本节点签发的票据;票据只经两条已鉴权通道发放(开局 / 观战接入的 `NotifyBattleAssigned` 推送,大厅会话经 `MatchService.RequestBattleTicket → BattleNode.IssueBattleTicket` 的补签 —— player_id 由 match 从会话取,battle 只核对名单),battle 不提供任何不验票的客户端入口,也不提供任何绕过 match 的补签入口;
+11. 直连消息的玩家身份只来自票据(`SessionDetails.player_id`),请求体里的 `battle_id` 只用于查房,不用于身份;既有 Handle* 的名单校验对直连同样生效;
+12. 同一玩家同一房间最多一条有效直连;重连即替换,旧连接的迟到 FIN 不得摘掉新连接(按连接身份比对);
+13. 房间结束 / 作废 / 销毁必须关闭其全部直连;不允许存在"房间已不存在、直连仍挂着"的状态。
+
+### 18.6 部署与运维
+
+- 配置:`BattleTokenSecret`(生产必须与 `GateTokenSecret` 不同且 ≥32 字节 —— 两条都由 battle 启动门禁强制,prod 违反即 LOG_FATAL;进 Secret 不进 git,本地 `base_deploy_config.yaml` 里的 `local-dev-` 值只用于开发)、`BattleMaxConnections`(无代码默认值,必须显式配);环境变量 `BATTLE_RUN_MODE=dev|test|prod`(默认 prod)。
+- **部署链尚未接入这两个键(与 battle manifest 同批补,缺一项 battle Pod 就 CrashLoopBackOff)**:`tools/scripts/k8s_deploy.ps1` 的 `Initialize-InjectedSecrets` 加 `MMORPG_BATTLE_TOKEN_SECRET`(`-MinLength 32`,并断言 ≠ `MMORPG_GATE_TOKEN_SECRET`)、node ConfigMap 模板追加 `BattleTokenSecret` / `BattleMaxConnections`(后者 `Get-AuthoritativeScalar` 取自 `base_deploy_config.yaml`)、`release_preflight.ps1` 加 battle 目标、`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 镜像 GateTokenSecret 那条非空断言。现在不改:battle 没有 manifest,而 `Initialize-InjectedSecrets` 在 prod 档位缺环境变量会 throw,提前加会把现有 gate/scene 发布一起打死。
+- 寻址:客户端连的是 `NodeInfo.endpoint`(`NODE_IP` 解析出的注册地址 + 框架分配的 TCP 端口)。本地 `dev_tools.ps1 -NodeIp <LAN ip>` 已能让局域网客户端连到;**K8s 上 battle Pod 需要客户端可达的入口(hostPort / NodePort,同 gate 的做法)—— C 档待办,battle 目前连 manifest 都没有(PROGRESS 2026-09-04)**。
+- 观测:`battle 客户端直连面已就绪` / `battle 直连握手成功` / `battle 直连拒绝(采样) reason=…` / `battle 关闭房间全部直连` 四类日志;拒绝原因枚举:`at_capacity / token_secret_not_configured / handshake_timeout / ticket_hmac_mismatch / ticket_payload_parse_failed / empty_identity / node_mismatch / instance_mismatch / expired / role_invalid / ticket_not_in_roster / request_before_verify / unknown_message_type`。
+
+### 18.7 明确不做 / 后续
+
+- **收缩阶段 = `GATE_CLIENT_RPC_ROUTER` 路由模式**(见 [client-rpc-router.md](./client-rpc-router.md) D33 / D34):gate 设该环境变量后白名单只剩 `{Scene(TCP), ClientRpcRouter}`,不再中继任何 battle 消息、忽略 Bind/Unbind 事件,直连成为唯一战斗通路;票据补签因此改道 `MatchService.RequestBattleTicket → BattleNode.IssueBattleTicket`(D25 已按此口径更新),`skip_direct_connect: true` 的回落路径在路由模式下预期失败。默认仍是旧模式(D34),翻转前提不变:客户端直连失败率数据 + scene 的 RECONNECT 链路换成推 `BattleAssignedS2C`;
+- **收缩(contract)**:默认翻转到路由模式后再删 gate 的 battle 中继代码(四类白名单、Bind/Unbind 事件、`SetIfEmptyHandler` 桥接);
+- **待修(服务端,2026-09-05 客户端接入时发现)**:`RedirectToGate`(跨区 / gate 迁移)后战斗既收不到重绑也收不到重连提示。判据链:`DecideEnterGame` 只在旧会话 `State==StateDisconnecting` 时判 `ShortReconnect`,而 gate 迁移时旧会话通常仍是 `StateOnline` → 判 `ReplaceLogin` → `enter_gs_type=LOGIN_REPLACE`;此时 `player_battle.cpp` 的 `OnPlayerEnterScene` 两步守卫都不触发 —— 第 1 步 `RestoreBattleFreezeOnLogin` 被 `!any_of<InBattleComp>` 挡住(同区迁移实体还在),第 2 步要求 `enterGsType == LOGIN_RECONNECT`。后果:`BindBattleEvent` 不重发 → 新 gate 上没有该会话的 battle 绑定 → **gate 中继路径同样断**(`requiresSessionBinding` 命中 BattleNodeService),`BattleReconnectS2C` 也不推。修法:第 2 步的条件改成「有 `InBattleComp` 且本次是换会话类登录(RECONNECT **或** REPLACE)」,或在 `RestoreBattleFreezeOnLogin` 之外单列一条「会话换了就重绑」的路径。**客户端已先自愈**(`GameClient.RedirectFlow` 在重定向成功后用捕获的 battle_id 主动走 `MatchService.RequestBattleTicket` 补签重建直连,该链路经 match 随机路由、不依赖 gate 绑定),所以路由模式下不受影响;但旧模式下服务端不修就仍是断的;
+- 每消息 HMAC(`hmac-message-signing.md` 的 slice B)—— 直连面与 gate 同样只有 adler32,两处一起做;
+- 票据吊销(踢人 / 封号中途):目前靠房间销毁;需要时加 `RevokeTicket` 走 match→battle gRPC;
+- 观众直连上限单独配置(现在与参战者共享 `battle_max_connections`)。
+
+### 18.8 Codex 验证清单(按序;任一步红即停)
+
+1. **重生成 proto**(仓库根):`pwsh -File tools/scripts/dev_tools.ps1 -Command proto-gen-run`。期望:`proto/message_id.txt` 末尾新增 `BattleClientPlayerNotifyBattleAssigned` / `BattleNodeIssueBattleTicket` / `MatchServiceRequestBattleTicket`(`BattleClientPlayerRequestBattleTicket` 已删,不再出现);`cpp/generated/rpc/service_metadata/{player_battle,battle_node,match_service}_service_metadata.h` 出现同名 `*MessageId` 常量;`robot/generated/pb/game/message_id.go` 同;`robot/logic/handler/message_body_handler.go` 的 map 只多一行 `BattleClientPlayerNotifyBattleAssigned`(生成器 `robot_case.go` 只收服务名含 `ClientPlayer` / `GamePlayer` 的服务,`MatchService*` 应答由 `match_service_responses.go` 的 `init()` 自行登记,handler 函数已手写);`client/unity/Assets/Scripts/Net/Generated/` 多两个 handler 桩(客户端仓的事,不在本仓验)。**第 1 步之前 C++ / robot 编译不过是预期的。**
+   **2026-09-05 实跑踩到的三个坑(照此做,否则第 3 步链接必红):**
+   - **先 `proto-gen-build` 再 `proto-gen-run`**:仓里的 `proto-gen.exe` 是 08-11 的旧二进制(未跟踪),它对**没有 `package` 的 proto**(battle 域全部)把 sender 前置声明写成 `namespace {void SendBattleNode…}`(匿名命名空间),gate / scene / battle 链接时 17 个 `LNK2019`;生成器源码已修(`service_register_info.go` 空 package 走全局声明),只是二进制没重建。
+   - **`protoc` 必须在 PATH**:`proto-gen-run` 的 C++ 序列化步骤直接 exec `protoc`,本机装在 `third_party/grpc/install_vs2026_dbg/bin`(含 `grpc_cpp_plugin.exe`),不在 PATH 时 fatal 于 `rpc_message.proto`、registry 根本走不到。
+   - **`tools/proto_generator/protogen/go.sum` 里 `luyuancpp/proto2mysql@v0.1.0` 的校验和是陈旧的**(代理与 GitHub 直连拿到的都是 `h1:JrtGCOG…`,go.sum 记的是 `h1:da7YQBr…`),`proto-gen-build` 会以 SECURITY ERROR 拒建;本次已把 go.sum 更新为上游实际内容的校验和(API 兼容,构建通过)。
+   - 重生成的副产物里 **`cpp/generated/grpc_client/grpc_init_client.cpp` 多出 `messageId == 176u || 177u`** 是必需的(PlayerBattle 完成队列分派,少了 gate 收不到这两个 RPC 的回包);而本机 `protoc-gen-go v1.36.10` / `protoc-gen-go-grpc v1.6.0` 比生成 HEAD 时用的版本旧,会把 4 个无关 go pb(`player_attribute*` / `match_event`)改成纯版本注释噪音,**已还原,不要把它们带进提交**。
+2. **Go**:`cd go/proto && go build ./...`;`cd go/match && go build ./... && go test ./...`(含 `RequestBattleTicket` 逻辑的 6 条单测:成功透传 / 无会话 / 索引缺失 / 节点未发现 / RPC 出错 / battle 拒签透传);**robot 走 vendor 构建**(`robot/vendor/modules.txt` 存在,`go build` 默认 `-mod=vendor`,读的是 `robot/vendor/proto/battle/*.pb.go` 而不是 `go/proto/`):先 `cd robot && go mod vendor` 刷新(需要能拉私有模块 `github.com/luyuancpp/muduoclient`;拉不到时退而求其次:把 `go/proto/battle/*.pb.go` 原样复制到 `robot/vendor/proto/battle/`,`shared` 未改不用动),再 `go build ./... && go vet ./...`;刷新后的 `robot/vendor/proto/**` 随本次提交。上次 robot 侧改 proto 就漏过这一步(PROGRESS 2026-09-03「go mod vendor 刷新」)。
+3. **C++ 全解决方案串行编译**:`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64`(仓库根;`/m:1` 必须,并发会报假 C1041 / LNK1104)。受影响工程:`proto` / `rpc` / `grpc_client`(重生成)、`config`(config.cpp)、`gate`(gate_security.h 改 include)、`battle`(全部新文件)。期望 0 error。 **2026-09-05 实测:重建 proto-gen 并重生成后,gate / scene / battle 三个 exe 均链接成功并复制到 `bin/`;不要用 Release 配置(third_party 全部是 Debug/MDd 静态库,Release 会报成片 `LNK2038` 运行库不匹配,与本改动无关)。**
+4. **独立单测**(Linux 或带 g++ 的容器,仓库根,`GT=third_party/grpc/third_party/googletest/googletest`;**Windows 无 g++ 时用 MSVC**:`vcvars64` 后 `cl /std:c++latest /EHsc /MDd /utf-8 /I cpp
+odesattle /I cpp\libs\engine\core /I third_party\grpc\install_vs2026_dbg\include /I %GT%\include <test.cpp> %GT%\src\gtest_main.cc /link /LIBPATH:lib gtest.lib crypto.lib ssl.lib ws2_32.lib advapi32.lib` —— `lib/gtest_main.lib` 链不出 `main`,要直接编 `gtest_main.cc`;2026-09-05 实测 battle 18/18、gate 22/22 全绿):
+   - `g++ -std=c++23 -I cpp/nodes/battle -I cpp/libs/engine/core -I "$GT/include" -I "$GT" cpp/nodes/battle/tests/battle_ticket_test.cpp "$GT/src/gtest-all.cc" "$GT/src/gtest_main.cc" -lssl -lcrypto -lpthread -o /tmp/battle_ticket_test && /tmp/battle_ticket_test` → 18 条全绿;
+   - `g++ -std=c++23 -I cpp/nodes/gate -I cpp/libs/engine/core -I "$GT/include" -I "$GT" cpp/nodes/gate/tests/gate_security_test.cpp "$GT/src/gtest-all.cc" "$GT/src/gtest_main.cc" -lssl -lcrypto -lpthread -o /tmp/gate_security_test && /tmp/gate_security_test` → 原有用例全绿(回归:gate_security.h 改为 using 别名后 API 不变)。
+5. **本地整栈冒烟**(`pwsh -File tools/scripts/dev_tools.ps1 -Command dev-start`,`BATTLE_RUN_MODE` 不设即 prod,`base_deploy_config.yaml` 已配 `BattleTokenSecret`):
+   - battle 日志出现 `battle 客户端直连面已就绪: endpoint=<ip>:<port> max_connections=4096 run_mode=prod` 与 `Battle direct-connect ticket verification ENFORCED`;
+   - `cd robot && .
+obot.exe -c etc/battle_smoke.yaml` → `BATTLE_SMOKE_OK … a_direct_turns>=1 b_direct_spectate_turns>=1`,battle 日志有两条 `battle 直连握手成功 … signature_checked=1`(role 各一)与 `battle 关闭房间全部直连`;
+   - 把 `etc/battle_smoke.yaml` 里 `battle_smoke.skip_direct_connect: true` 打开再跑一次 → `BATTLE_SMOKE_OK … a_direct_turns=-1 b_direct_spectate_turns=-1`(D23 回落路径完整);
+   - `dev-start-zones 1,2` + `.
+obot.exe -c etc/battle_smoke_cross_zone.yaml` → `CROSS_ZONE_MATCH_OK … a_direct_turns>=1 b_direct_turns>=1`(两侧连同一个 battle 进程)。
+6. **负向**:
+   - 临时把 `BattleTokenSecret` 改成另一个值只重启 battle(robot 侧票据由 battle 签、battle 验,改密钥不影响正向;要造 `ticket_hmac_mismatch` 需在 robot 里把 `token_signature` 改一个字节后握手,期望 `BattleTokenVerifyResponse.success=false error="invalid ticket signature"` 且连接被关);
+   - `BattleTokenSecret: ""` + 不设 `BATTLE_RUN_MODE` 启动 battle → 进程 FATAL `Refusing to start: battle_token_secret is empty while run_mode=prod`;加 `BATTLE_RUN_MODE=dev` → 启动成功并打 `SECURITY WARNING`,冒烟仍过(`signature_checked=0`);
+   - 用 `nc`/裸 TCP 连 battle TCP 端口不发任何东西 → 10s 后被关(`handshake_timeout` 采样日志)。
+7. 以上任一步失败:保留 battle 日志(`run/logs/cpp_nodes/battle*`)、robot 日志与失败 step 名,不重试、不改判据。

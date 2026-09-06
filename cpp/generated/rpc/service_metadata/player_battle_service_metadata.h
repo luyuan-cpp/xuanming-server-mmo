@@ -46,3 +46,7 @@ constexpr uint32_t BattleClientPlayerNotifySpectateTurnResultIndex = 9;
 constexpr uint32_t BattleClientPlayerNotifySpectateEndMessageId = 166;
 constexpr uint32_t BattleClientPlayerNotifySpectateEndIndex = 10;
 #define BattleClientPlayerNotifySpectateEndMethod  ::BattleClientPlayer_Stub::descriptor()->method(10)
+
+constexpr uint32_t BattleClientPlayerNotifyBattleAssignedMessageId = 177;
+constexpr uint32_t BattleClientPlayerNotifyBattleAssignedIndex = 11;
+#define BattleClientPlayerNotifyBattleAssignedMethod  ::BattleClientPlayer_Stub::descriptor()->method(11)

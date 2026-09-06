@@ -52,6 +52,7 @@ func runGenerationPipeline(runner *ExecutionRunner) {
 	runner.RunParallelGroup("ConstantsMessageIdsAndOptionBuilding", []NamedTask{
 		{Name: "internal.GenerateServiceConstants", Run: internal.GenerateServiceConstants},
 		{Name: "internal.WriteGoMessageId", Run: internal.WriteGoMessageId},
+		{Name: "internal.WriteGoRouteTable", Run: internal.WriteGoRouteTable},
 		{Name: "internal.WriteGoEventId", Run: internal.WriteGoEventId},
 		{Name: "goGen.LoadAllDescriptors", Run: goGen.LoadAllDescriptors},
 		{Name: "cppGenOption.BuildOption", Run: adaptSimpleTask(cppGenOption.BuildOption)},

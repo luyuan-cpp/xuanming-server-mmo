@@ -5,6 +5,7 @@ import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
 import "proto/common/base/empty.proto";
 import "proto/battle/battle_data.proto";
+import "proto/battle/player_battle.proto";
 
 // 注意:不能加 cc_generic_services(与 grpc_cpp_plugin 冲突,先例见 proto/scene_manager/scene_node_service.proto);
 // battle 节点是纯 gRPC 服务,C++ 侧消费 battle_node.grpc.pb.h 的 BattleNode::Service。
@@ -56,9 +57,24 @@ message RemoveObserverRequest {
   string reason = 3;   // 日志用(玩家去排队被互斥清退等)
 }
 
+// ---- 票据补签(match → battle;client-rpc-router.md / turn-based-battle-server.md §18 D25) ----
+// 客户端丢票经大厅会话调 MatchService.RequestBattleTicket,match 定位房间所在 battle 节点后调本 RPC。
+// 仅当 player_id 仍是该房间的参战者或观众时才签;否则 error_message 非零且 assignment 为空。
+// 内部 RPC:player_id 由 match 从会话 metadata 取得后填入,battle 只核对名单不再鉴权。
+message IssueBattleTicketRequest {
+  uint64 battle_id = 1;
+  uint64 player_id = 2;
+}
+
+message IssueBattleTicketResponse {
+  TipInfoMessage error_message = 1;
+  BattleAssignedS2C assignment = 2;
+}
+
 service BattleNode {
   rpc CreateBattle (CreateBattleRequest) returns (CreateBattleResponse);
   rpc DestroyBattle (DestroyBattleRequest) returns (Empty);
   rpc AddObserver (AddObserverRequest) returns (AddObserverResponse);
   rpc RemoveObserver (RemoveObserverRequest) returns (Empty);
+  rpc IssueBattleTicket (IssueBattleTicketRequest) returns (IssueBattleTicketResponse);
 }

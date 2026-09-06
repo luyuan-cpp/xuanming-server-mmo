@@ -109,6 +109,7 @@ enum NodeType : int {
   NODE_GM = 28,
   NODE_PLAYER_LOCATOR = 29,
   NODE_BATTLE = 30,
+  NODE_CLIENT_RPC_ROUTER = 31,
   NodeType_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   NodeType_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -119,11 +120,11 @@ extern const uint32_t NodeType_internal_data_[];
 inline constexpr NodeType NodeType_MIN =
     static_cast<NodeType>(0);
 inline constexpr NodeType NodeType_MAX =
-    static_cast<NodeType>(30);
+    static_cast<NodeType>(31);
 [[nodiscard]] inline bool NodeType_IsValid(int value) {
-  return 0 <= value && value <= 30;
+  return 0 <= value && value <= 31;
 }
-inline constexpr int NodeType_ARRAYSIZE = 30 + 1;
+inline constexpr int NodeType_ARRAYSIZE = 31 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 NodeType_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(NodeType) {
@@ -138,7 +139,7 @@ template <typename T>
 }
 template <>
 [[nodiscard]] inline const ::std::string& NodeType_Name(NodeType value) {
-  return ::google::protobuf::internal::NameOfDenseEnum<NodeType_descriptor, 0, 30>(
+  return ::google::protobuf::internal::NameOfDenseEnum<NodeType_descriptor, 0, 31>(
       static_cast<int>(value));
 }
 [[nodiscard]] inline bool NodeType_Parse(

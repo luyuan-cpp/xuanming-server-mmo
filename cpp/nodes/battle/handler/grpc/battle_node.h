@@ -34,12 +34,20 @@ public:
         const ::RemoveObserverRequest* request,
         ::Empty* response) override;
 
+    // ---- 客户端直连:丢票补签(match → battle,turn-based §18 D25 / client-rpc-router.md D33) ----
+    // 会话身份由 match 从大厅会话取得并放进 request.player_id,本节点只核对名单并自签。
+
+    grpc::Status IssueBattleTicket(grpc::ServerContext* context,
+        const ::IssueBattleTicketRequest* request,
+        ::IssueBattleTicketResponse* response) override;
+
 private:
     // loop 线程执行;必须快速完成(gRPC 线程经 promise/future 等待)。
     static void HandleCreateBattle(const ::CreateBattleRequest* request, ::CreateBattleResponse* response);
     static void HandleDestroyBattle(const ::DestroyBattleRequest* request);
     static void HandleAddObserver(const ::AddObserverRequest* request, ::AddObserverResponse* response);
     static void HandleRemoveObserver(const ::RemoveObserverRequest* request);
+    static void HandleIssueBattleTicket(const ::IssueBattleTicketRequest* request, ::IssueBattleTicketResponse* response);
 
     muduo::net::EventLoop& loop_;
 };

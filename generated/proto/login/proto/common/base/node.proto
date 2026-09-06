@@ -31,6 +31,7 @@ enum eNodeType {
 	DataServiceNodeService  = 26; // Cross-server data proxy service (Go-Zero)
 	FriendNodeService       = 27; // Friend system service (Go-Zero)
 	BattleNodeService       = 28; // 回合制战斗节点(gRPC,全局池,不分 zone)
+	ClientRpcRouterNodeService = 29; // 客户端 RPC 路由服(Go-Zero,全局池):gate 唯一的 gRPC 目标,按 message_id 不透明转发到各业务 Go 服务(docs/design/client-rpc-router.md)
 };
 
 enum eSceneNodeType

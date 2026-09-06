@@ -62,6 +62,16 @@ message BaseDeployConfig {
     // 131071 上界为所有 node_id 保留 UINT32_MAX 哨兵,并避免 session-id 空间
     // 全部占满后碰撞重试永久自旋。
     uint32 gate_max_connections = 15;
+
+    // battle 节点客户端直连票据的 HMAC 共享密钥(battle 节点签发并校验;全部 battle 实例
+    // 必须一致;与 gate_token_secret 分域,任一泄露不影响另一侧)。
+    // 空值处置由 BATTLE_RUN_MODE 决定:dev/test 放行并 WARN,prod 拒绝启动
+    // (设计文档 turn-based-battle-server.md §18 D24/D27)。
+    string battle_token_secret = 16;
+
+    // battle 节点客户端面并发直连上限。0 = 关闭运维阈值(仅 dev/test);
+    // 语义与 gate_max_connections 相同:超限连接在握手前即被拒。
+    uint32 battle_max_connections = 17;
 }
 
 // Game config

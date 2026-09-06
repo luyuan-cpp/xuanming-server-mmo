@@ -112,6 +112,14 @@ class BattleClientPlayer final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> PrepareAsyncNotifySpectateEnd(::grpc::ClientContext* context, const ::SpectateEndS2C& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(PrepareAsyncNotifySpectateEndRaw(context, request, cq));
     }
+    // ---- 客户端直连(设计文档 §18):落点分配推送;丢票补签见 MatchService.RequestBattleTicket ----
+    virtual ::grpc::Status NotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::Empty* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> AsyncNotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(AsyncNotifyBattleAssignedRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> PrepareAsyncNotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(PrepareAsyncNotifyBattleAssignedRaw(context, request, cq));
+    }
     class async_interface {
      public:
       virtual ~async_interface() {}
@@ -138,6 +146,9 @@ class BattleClientPlayer final {
       virtual void NotifySpectateTurnResult(::grpc::ClientContext* context, const ::TurnResultS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void NotifySpectateEnd(::grpc::ClientContext* context, const ::SpectateEndS2C* request, ::Empty* response, std::function<void(::grpc::Status)>) = 0;
       virtual void NotifySpectateEnd(::grpc::ClientContext* context, const ::SpectateEndS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // ---- 客户端直连(设计文档 §18):落点分配推送;丢票补签见 MatchService.RequestBattleTicket ----
+      virtual void NotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C* request, ::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void NotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -165,6 +176,8 @@ class BattleClientPlayer final {
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* PrepareAsyncNotifySpectateTurnResultRaw(::grpc::ClientContext* context, const ::TurnResultS2C& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* AsyncNotifySpectateEndRaw(::grpc::ClientContext* context, const ::SpectateEndS2C& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* PrepareAsyncNotifySpectateEndRaw(::grpc::ClientContext* context, const ::SpectateEndS2C& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* AsyncNotifyBattleAssignedRaw(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* PrepareAsyncNotifyBattleAssignedRaw(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -246,6 +259,13 @@ class BattleClientPlayer final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> PrepareAsyncNotifySpectateEnd(::grpc::ClientContext* context, const ::SpectateEndS2C& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(PrepareAsyncNotifySpectateEndRaw(context, request, cq));
     }
+    ::grpc::Status NotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::Empty* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> AsyncNotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(AsyncNotifyBattleAssignedRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> PrepareAsyncNotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(PrepareAsyncNotifyBattleAssignedRaw(context, request, cq));
+    }
     class async final :
       public StubInterface::async_interface {
      public:
@@ -271,6 +291,8 @@ class BattleClientPlayer final {
       void NotifySpectateTurnResult(::grpc::ClientContext* context, const ::TurnResultS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
       void NotifySpectateEnd(::grpc::ClientContext* context, const ::SpectateEndS2C* request, ::Empty* response, std::function<void(::grpc::Status)>) override;
       void NotifySpectateEnd(::grpc::ClientContext* context, const ::SpectateEndS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void NotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C* request, ::Empty* response, std::function<void(::grpc::Status)>) override;
+      void NotifyBattleAssigned(::grpc::ClientContext* context, const ::BattleAssignedS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -304,6 +326,8 @@ class BattleClientPlayer final {
     ::grpc::ClientAsyncResponseReader< ::Empty>* PrepareAsyncNotifySpectateTurnResultRaw(::grpc::ClientContext* context, const ::TurnResultS2C& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::Empty>* AsyncNotifySpectateEndRaw(::grpc::ClientContext* context, const ::SpectateEndS2C& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::Empty>* PrepareAsyncNotifySpectateEndRaw(::grpc::ClientContext* context, const ::SpectateEndS2C& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::Empty>* AsyncNotifyBattleAssignedRaw(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::Empty>* PrepareAsyncNotifyBattleAssignedRaw(::grpc::ClientContext* context, const ::BattleAssignedS2C& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_SubmitBattleAction_;
     const ::grpc::internal::RpcMethod rpcmethod_GetBattleState_;
     const ::grpc::internal::RpcMethod rpcmethod_NotifyBattleStart_;
@@ -315,6 +339,7 @@ class BattleClientPlayer final {
     const ::grpc::internal::RpcMethod rpcmethod_NotifySpectateState_;
     const ::grpc::internal::RpcMethod rpcmethod_NotifySpectateTurnResult_;
     const ::grpc::internal::RpcMethod rpcmethod_NotifySpectateEnd_;
+    const ::grpc::internal::RpcMethod rpcmethod_NotifyBattleAssigned_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -334,6 +359,8 @@ class BattleClientPlayer final {
     virtual ::grpc::Status NotifySpectateState(::grpc::ServerContext* context, const ::SpectateStateS2C* request, ::Empty* response);
     virtual ::grpc::Status NotifySpectateTurnResult(::grpc::ServerContext* context, const ::TurnResultS2C* request, ::Empty* response);
     virtual ::grpc::Status NotifySpectateEnd(::grpc::ServerContext* context, const ::SpectateEndS2C* request, ::Empty* response);
+    // ---- 客户端直连(设计文档 §18):落点分配推送;丢票补签见 MatchService.RequestBattleTicket ----
+    virtual ::grpc::Status NotifyBattleAssigned(::grpc::ServerContext* context, const ::BattleAssignedS2C* request, ::Empty* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_SubmitBattleAction : public BaseClass {
@@ -555,7 +582,27 @@ class BattleClientPlayer final {
       ::grpc::Service::RequestAsyncUnary(10, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_SubmitBattleAction<WithAsyncMethod_GetBattleState<WithAsyncMethod_NotifyBattleStart<WithAsyncMethod_NotifyTurnResult<WithAsyncMethod_NotifyBattleEnd<WithAsyncMethod_NotifyBattleReconnect<WithAsyncMethod_StopWatchBattle<WithAsyncMethod_SetAutoBattle<WithAsyncMethod_NotifySpectateState<WithAsyncMethod_NotifySpectateTurnResult<WithAsyncMethod_NotifySpectateEnd<Service > > > > > > > > > > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_NotifyBattleAssigned : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_NotifyBattleAssigned() {
+      ::grpc::Service::MarkMethodAsync(11);
+    }
+    ~WithAsyncMethod_NotifyBattleAssigned() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyBattleAssigned(::grpc::ServerContext* /*context*/, const ::BattleAssignedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestNotifyBattleAssigned(::grpc::ServerContext* context, ::BattleAssignedS2C* request, ::grpc::ServerAsyncResponseWriter< ::Empty>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(11, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_SubmitBattleAction<WithAsyncMethod_GetBattleState<WithAsyncMethod_NotifyBattleStart<WithAsyncMethod_NotifyTurnResult<WithAsyncMethod_NotifyBattleEnd<WithAsyncMethod_NotifyBattleReconnect<WithAsyncMethod_StopWatchBattle<WithAsyncMethod_SetAutoBattle<WithAsyncMethod_NotifySpectateState<WithAsyncMethod_NotifySpectateTurnResult<WithAsyncMethod_NotifySpectateEnd<WithAsyncMethod_NotifyBattleAssigned<Service > > > > > > > > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_SubmitBattleAction : public BaseClass {
    private:
@@ -853,7 +900,34 @@ class BattleClientPlayer final {
     virtual ::grpc::ServerUnaryReactor* NotifySpectateEnd(
       ::grpc::CallbackServerContext* /*context*/, const ::SpectateEndS2C* /*request*/, ::Empty* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_SubmitBattleAction<WithCallbackMethod_GetBattleState<WithCallbackMethod_NotifyBattleStart<WithCallbackMethod_NotifyTurnResult<WithCallbackMethod_NotifyBattleEnd<WithCallbackMethod_NotifyBattleReconnect<WithCallbackMethod_StopWatchBattle<WithCallbackMethod_SetAutoBattle<WithCallbackMethod_NotifySpectateState<WithCallbackMethod_NotifySpectateTurnResult<WithCallbackMethod_NotifySpectateEnd<Service > > > > > > > > > > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_NotifyBattleAssigned : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_NotifyBattleAssigned() {
+      ::grpc::Service::MarkMethodCallback(11,
+          new ::grpc::internal::CallbackUnaryHandler< ::BattleAssignedS2C, ::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::BattleAssignedS2C* request, ::Empty* response) { return this->NotifyBattleAssigned(context, request, response); }));}
+    void SetMessageAllocatorFor_NotifyBattleAssigned(
+        ::grpc::MessageAllocator< ::BattleAssignedS2C, ::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(11);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::BattleAssignedS2C, ::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_NotifyBattleAssigned() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyBattleAssigned(::grpc::ServerContext* /*context*/, const ::BattleAssignedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* NotifyBattleAssigned(
+      ::grpc::CallbackServerContext* /*context*/, const ::BattleAssignedS2C* /*request*/, ::Empty* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_SubmitBattleAction<WithCallbackMethod_GetBattleState<WithCallbackMethod_NotifyBattleStart<WithCallbackMethod_NotifyTurnResult<WithCallbackMethod_NotifyBattleEnd<WithCallbackMethod_NotifyBattleReconnect<WithCallbackMethod_StopWatchBattle<WithCallbackMethod_SetAutoBattle<WithCallbackMethod_NotifySpectateState<WithCallbackMethod_NotifySpectateTurnResult<WithCallbackMethod_NotifySpectateEnd<WithCallbackMethod_NotifyBattleAssigned<Service > > > > > > > > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_SubmitBattleAction : public BaseClass {
@@ -1038,6 +1112,23 @@ class BattleClientPlayer final {
     }
     // disable synchronous version of this method
     ::grpc::Status NotifySpectateEnd(::grpc::ServerContext* /*context*/, const ::SpectateEndS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_NotifyBattleAssigned : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_NotifyBattleAssigned() {
+      ::grpc::Service::MarkMethodGeneric(11);
+    }
+    ~WithGenericMethod_NotifyBattleAssigned() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyBattleAssigned(::grpc::ServerContext* /*context*/, const ::BattleAssignedS2C* /*request*/, ::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -1260,6 +1351,26 @@ class BattleClientPlayer final {
     }
     void RequestNotifySpectateEnd(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(10, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_NotifyBattleAssigned : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_NotifyBattleAssigned() {
+      ::grpc::Service::MarkMethodRaw(11);
+    }
+    ~WithRawMethod_NotifyBattleAssigned() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyBattleAssigned(::grpc::ServerContext* /*context*/, const ::BattleAssignedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestNotifyBattleAssigned(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(11, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -1502,6 +1613,28 @@ class BattleClientPlayer final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* NotifySpectateEnd(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_NotifyBattleAssigned : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_NotifyBattleAssigned() {
+      ::grpc::Service::MarkMethodRawCallback(11,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->NotifyBattleAssigned(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_NotifyBattleAssigned() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyBattleAssigned(::grpc::ServerContext* /*context*/, const ::BattleAssignedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* NotifyBattleAssigned(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -1801,9 +1934,36 @@ class BattleClientPlayer final {
     // replace default version of method with streamed unary
     virtual ::grpc::Status StreamedNotifySpectateEnd(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::SpectateEndS2C,::Empty>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_SubmitBattleAction<WithStreamedUnaryMethod_GetBattleState<WithStreamedUnaryMethod_NotifyBattleStart<WithStreamedUnaryMethod_NotifyTurnResult<WithStreamedUnaryMethod_NotifyBattleEnd<WithStreamedUnaryMethod_NotifyBattleReconnect<WithStreamedUnaryMethod_StopWatchBattle<WithStreamedUnaryMethod_SetAutoBattle<WithStreamedUnaryMethod_NotifySpectateState<WithStreamedUnaryMethod_NotifySpectateTurnResult<WithStreamedUnaryMethod_NotifySpectateEnd<Service > > > > > > > > > > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_NotifyBattleAssigned : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_NotifyBattleAssigned() {
+      ::grpc::Service::MarkMethodStreamed(11,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::BattleAssignedS2C, ::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::BattleAssignedS2C, ::Empty>* streamer) {
+                       return this->StreamedNotifyBattleAssigned(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_NotifyBattleAssigned() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status NotifyBattleAssigned(::grpc::ServerContext* /*context*/, const ::BattleAssignedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedNotifyBattleAssigned(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::BattleAssignedS2C,::Empty>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_SubmitBattleAction<WithStreamedUnaryMethod_GetBattleState<WithStreamedUnaryMethod_NotifyBattleStart<WithStreamedUnaryMethod_NotifyTurnResult<WithStreamedUnaryMethod_NotifyBattleEnd<WithStreamedUnaryMethod_NotifyBattleReconnect<WithStreamedUnaryMethod_StopWatchBattle<WithStreamedUnaryMethod_SetAutoBattle<WithStreamedUnaryMethod_NotifySpectateState<WithStreamedUnaryMethod_NotifySpectateTurnResult<WithStreamedUnaryMethod_NotifySpectateEnd<WithStreamedUnaryMethod_NotifyBattleAssigned<Service > > > > > > > > > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_SubmitBattleAction<WithStreamedUnaryMethod_GetBattleState<WithStreamedUnaryMethod_NotifyBattleStart<WithStreamedUnaryMethod_NotifyTurnResult<WithStreamedUnaryMethod_NotifyBattleEnd<WithStreamedUnaryMethod_NotifyBattleReconnect<WithStreamedUnaryMethod_StopWatchBattle<WithStreamedUnaryMethod_SetAutoBattle<WithStreamedUnaryMethod_NotifySpectateState<WithStreamedUnaryMethod_NotifySpectateTurnResult<WithStreamedUnaryMethod_NotifySpectateEnd<Service > > > > > > > > > > > StreamedService;
+  typedef WithStreamedUnaryMethod_SubmitBattleAction<WithStreamedUnaryMethod_GetBattleState<WithStreamedUnaryMethod_NotifyBattleStart<WithStreamedUnaryMethod_NotifyTurnResult<WithStreamedUnaryMethod_NotifyBattleEnd<WithStreamedUnaryMethod_NotifyBattleReconnect<WithStreamedUnaryMethod_StopWatchBattle<WithStreamedUnaryMethod_SetAutoBattle<WithStreamedUnaryMethod_NotifySpectateState<WithStreamedUnaryMethod_NotifySpectateTurnResult<WithStreamedUnaryMethod_NotifySpectateEnd<WithStreamedUnaryMethod_NotifyBattleAssigned<Service > > > > > > > > > > > > StreamedService;
 };
 
 

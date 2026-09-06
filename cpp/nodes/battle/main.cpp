@@ -10,6 +10,9 @@
 #include "handler/grpc/battle_node.h"
 #include "handler/grpc/battle_client_player_service.h"
 #include "logic/battle_room_manager.h"
+#include "client/battle_client_edge.h"
+#include "battle_security.h"
+#include "node_config_manager.h"
 
 #include "data/battle_table_fingerprint.h"
 
@@ -39,7 +42,86 @@ namespace
         // gate → battle 客户端消息(SubmitBattleAction / GetBattleState,
         // 会话权威身份从 x-session-detail-bin metadata 解出)
         std::unique_ptr<BattleClientPlayerGrpcImpl> clientPlayerService;
+        // 客户端直连面(设计文档 §18):装在节点自身 TCP 端口上,票据握手 + 战斗消息就地派发
+        std::unique_ptr<BattleClientEdge> clientEdge;
     };
+
+    // 启动门禁:空 battle_token_secret 在生产模式下**拒绝启动**(照 gate 的
+    // ValidateGateTokenSecretOrDie:弱入口必须由显式运行模式 BATTLE_RUN_MODE 授权,
+    // 配置里恰好少了一项不算授权)。同时校验 battle_max_connections=0 只在 dev/test 合法。
+    // 调用时机必须晚于 Node 构造(LoadConfigs 之后),所以放在 configure 回调第一句。
+    void ValidateBattleClientEdgeConfigOrDie()
+    {
+        const auto &resolution = battle_security::ResolveRunModeOnce();
+        if (!resolution.recognized)
+        {
+            LOG_WARN << "Unrecognized " << battle_security::kRunModeEnv << "='" << resolution.raw
+                     << "', falling back to run_mode=prod. Valid values: prod|dev|test.";
+        }
+        const auto mode = resolution.mode;
+        const auto &deploy = gNodeConfigManager.GetBaseDeployConfig();
+
+        switch (battle_security::ClassifyTokenSecret(deploy.battle_token_secret(), mode))
+        {
+        case battle_security::TokenSecretVerdict::kEnforce:
+            LOG_INFO << "Battle direct-connect ticket verification ENFORCED, run_mode="
+                     << battle_security::RunModeName(mode);
+            // 非空只是最低门槛。§18.6 的两条硬要求也在这里守:≥32 字节(HMAC-SHA256 输出
+            // 32 字节,更短的密钥把暴力搜索空间塌到密钥长度上,票据可伪造为任意玩家),
+            // 且 ≠ GateTokenSecret(分域:任一泄露不影响另一侧,D24)。prod 拒启,dev/test 只 WARN。
+            switch (battle_security::ClassifySecretStrength(deploy.battle_token_secret(),
+                                                            deploy.gate_token_secret()))
+            {
+            case battle_security::SecretStrengthVerdict::kOk:
+                break;
+            case battle_security::SecretStrengthVerdict::kTooShort:
+                if (battle_security::IsNonProdMode(mode))
+                {
+                    LOG_WARN << "battle_token_secret is shorter than "
+                             << battle_security::kMinTokenSecretBytes
+                             << " bytes; tolerated only because run_mode=" << battle_security::RunModeName(mode);
+                }
+                else
+                {
+                    LOG_FATAL << "Refusing to start: battle_token_secret must be at least "
+                              << battle_security::kMinTokenSecretBytes << " bytes while run_mode=prod.";
+                }
+                break;
+            case battle_security::SecretStrengthVerdict::kSameAsGate:
+                if (battle_security::IsNonProdMode(mode))
+                {
+                    LOG_WARN << "battle_token_secret equals gate_token_secret; tolerated only because run_mode="
+                             << battle_security::RunModeName(mode)
+                             << ". Production must use a distinct secret (trust-domain separation).";
+                }
+                else
+                {
+                    LOG_FATAL << "Refusing to start: battle_token_secret equals gate_token_secret while run_mode=prod"
+                              << " (trust domains must be separate, design D24).";
+                }
+                break;
+            }
+            break;
+        case battle_security::TokenSecretVerdict::kDevBypass:
+            LOG_WARN << "SECURITY WARNING: battle_token_secret is EMPTY and "
+                     << battle_security::kRunModeEnv << "=" << battle_security::RunModeName(mode)
+                     << " -- direct-connect ticket signatures will NOT be verified."
+                     << " NEVER run this configuration in production.";
+            break;
+        case battle_security::TokenSecretVerdict::kRefuse:
+            // LOG_FATAL 会 abort:带着空密钥的 battle 直连面等于谁拿到 battle_id 都能进房
+            LOG_FATAL << "Refusing to start: battle_token_secret is empty while run_mode=prod."
+                      << " Set BattleTokenSecret in etc/base_deploy_config.yaml, or set "
+                      << battle_security::kRunModeEnv << "=dev|test for a local run.";
+            break;
+        }
+
+        if (deploy.battle_max_connections() == 0 && !battle_security::IsNonProdMode(mode))
+        {
+            LOG_FATAL << "Refusing to start: battle_max_connections=0 while run_mode=prod."
+                      << " Set BattleMaxConnections in etc/base_deploy_config.yaml (1..65535).";
+        }
+    }
 
     struct BattleNodeHooks
     {
@@ -76,8 +158,18 @@ namespace
             }
         };
 
-        // 刻意不声明 KafkaCommandType:battle 一期不消费 battle-{id} topic,
-        // 上行全走 gRPC(gate/match),出站全走 Kafka producer(设计文档 D6)。
+        // 刻意不声明 KafkaCommandType:battle 不消费 battle-{id} topic。
+        //
+        // 上下行的当前口径(§18 直连落地后,D6 已降级为回落路径):
+        //   * 客户端上行:优先走本节点 TCP 端口上的直连面(BattleClientEdge);
+        //     没有直连的玩家才经 gate→BattleClientPlayer gRPC 中继进来。
+        //   * 客户端下行:BattleRoomManager::PushToPlayer 有直连即直发,否则回落
+        //     Kafka gate-{id} 的 PushToPlayerEvent。
+        //   * 控制面(match→battle 的 CreateBattle/DestroyBattle/AddObserver/
+        //     RemoveObserver/IssueBattleTicket):恒走 gRPC,不受直连影响 —— 调用方是
+        //     Go 服务,而自家 RPC0 信封没有请求关联 id,配不出应答
+        //     (选型定谳见 docs/design/battle-transport-decision.md)。
+        //   * 结算 / 绑定事件:仍恒走 Kafka producer。
     };
 
 } // namespace
@@ -99,10 +191,33 @@ int main(int argc, char *argv[])
             node.RegisterGrpcService(context.battleNodeService.get());
             node.RegisterGrpcService(context.clientPlayerService.get());
 
+            // 客户端直连面(设计文档 §18):先过安全门禁,再装配。
+            ValidateBattleClientEdgeConfigOrDie();
+            context.clientEdge = std::make_unique<BattleClientEdge>();
+            BattleRoomManager::Instance().SetClientEdge(context.clientEdge.get());
+
+            // 节点自身的 TCP 端口(NodeInfo.endpoint,框架分配并发布到 etcd)原本挂的是节点间
+            // RpcCodec。battle 以 PROTOCOL_GRPC 注册(node.cpp 按 IsGrpcOnlyNodeType 设
+            // protocol_type),发现方 node_connector 按 protocol_type 分派,只会拨它的 gRPC 端口、
+            // 不会经这个 TCP 端口握手 —— 所以可以把它整个让给客户端直连
+            //(与 gate main.cpp 覆写 GetTcpServer 回调同一时机:StartRpcServer 之后)。
+            node.SetAfterStart([&context](Node &n)
+                               {
+                context.clientEdge->Install(n.GetTcpServer());
+                const auto &ep = n.GetNodeInfo().endpoint();
+                LOG_INFO << "battle 客户端直连面已就绪: endpoint=" << ep.ip() << ":" << ep.port()
+                         << " max_connections=" << gNodeConfigManager.GetBaseDeployConfig().battle_max_connections()
+                         << " run_mode=" << battle_security::RunModeName(battle_security::CurrentRunMode()); });
+
             // 停机收尾:所有在打战斗作废(只解绑 gate 会话,不发结算;
-            // scene 侧 reaper 按 InBattleComp.deadline_ms 解冻,设计文档 §3.2)。
-            // 框架随后 flush Kafka producer,解绑事件不会丢在队列里。
-            node.SetBeforeShutdown([](Node &)
-                                   { BattleRoomManager::Instance().AbortAllRooms("node_shutdown"); });
+            // scene 侧 reaper 按 InBattleComp.deadline_ms 解冻,设计文档 §3.2),
+            // 随后断开全部客户端直连。框架随后 flush Kafka producer,解绑事件不会丢在队列里。
+            node.SetBeforeShutdown([&context](Node &)
+                                   {
+                BattleRoomManager::Instance().AbortAllRooms("node_shutdown");
+                if (context.clientEdge)
+                {
+                    context.clientEdge->DisconnectAll("node_shutdown");
+                } });
         });
 }

@@ -24,33 +24,34 @@ const (
 type ENodeType int32
 
 const (
-	ENodeType_UnknownNodeService       ENodeType = 0  // Unknown node service
-	ENodeType_SceneNodeService         ENodeType = 3  // Scene node service
-	ENodeType_GateNodeService          ENodeType = 4  // Gate node service
-	ENodeType_LoginNodeService         ENodeType = 5  // Login node service
-	ENodeType_RedisNodeService         ENodeType = 6  // Redis node service
-	ENodeType_EtcdNodeService          ENodeType = 7  // etcd node
-	ENodeType_MailNodeService          ENodeType = 8  // Mail node service
-	ENodeType_ChatNodeService          ENodeType = 9  // Chat node service
-	ENodeType_TeamNodeService          ENodeType = 10 // Team node service
-	ENodeType_ActivityNodeService      ENodeType = 11 // Activity node service
-	ENodeType_TradeNodeService         ENodeType = 12 // Trade/auction service
-	ENodeType_RankNodeService          ENodeType = 13 // Ranking service
-	ENodeType_TaskNodeService          ENodeType = 14 // Task/quest service
-	ENodeType_GuildNodeService         ENodeType = 15 // Guild service
-	ENodeType_MatchNodeService         ENodeType = 16 // Match service (e.g. dungeon, PVP)
-	ENodeType_AiNodeService            ENodeType = 17 // AI/NPC control service
-	ENodeType_LogNodeService           ENodeType = 18 // Log collection service
-	ENodeType_PaymentNodeService       ENodeType = 19 // Payment/recharge service
-	ENodeType_SecurityNodeService      ENodeType = 20 // Anti-cheat/security service
-	ENodeType_CrossServerNodeService   ENodeType = 21 // Cross-server service (e.g. cross-server battleground)
-	ENodeType_AnalyticsNodeService     ENodeType = 22 // Analytics service
-	ENodeType_GmNodeService            ENodeType = 23 // GM tool service (admin/CS commands)
-	ENodeType_PlayerLocatorNodeService ENodeType = 24 // Cross-server player locator service
-	ENodeType_SceneManagerNodeService  ENodeType = 25 // Scene manager service (Go-Zero)
-	ENodeType_DataServiceNodeService   ENodeType = 26 // Cross-server data proxy service (Go-Zero)
-	ENodeType_FriendNodeService        ENodeType = 27 // Friend system service (Go-Zero)
-	ENodeType_BattleNodeService        ENodeType = 28 // 回合制战斗节点(gRPC,全局池,不分 zone)
+	ENodeType_UnknownNodeService         ENodeType = 0  // Unknown node service
+	ENodeType_SceneNodeService           ENodeType = 3  // Scene node service
+	ENodeType_GateNodeService            ENodeType = 4  // Gate node service
+	ENodeType_LoginNodeService           ENodeType = 5  // Login node service
+	ENodeType_RedisNodeService           ENodeType = 6  // Redis node service
+	ENodeType_EtcdNodeService            ENodeType = 7  // etcd node
+	ENodeType_MailNodeService            ENodeType = 8  // Mail node service
+	ENodeType_ChatNodeService            ENodeType = 9  // Chat node service
+	ENodeType_TeamNodeService            ENodeType = 10 // Team node service
+	ENodeType_ActivityNodeService        ENodeType = 11 // Activity node service
+	ENodeType_TradeNodeService           ENodeType = 12 // Trade/auction service
+	ENodeType_RankNodeService            ENodeType = 13 // Ranking service
+	ENodeType_TaskNodeService            ENodeType = 14 // Task/quest service
+	ENodeType_GuildNodeService           ENodeType = 15 // Guild service
+	ENodeType_MatchNodeService           ENodeType = 16 // Match service (e.g. dungeon, PVP)
+	ENodeType_AiNodeService              ENodeType = 17 // AI/NPC control service
+	ENodeType_LogNodeService             ENodeType = 18 // Log collection service
+	ENodeType_PaymentNodeService         ENodeType = 19 // Payment/recharge service
+	ENodeType_SecurityNodeService        ENodeType = 20 // Anti-cheat/security service
+	ENodeType_CrossServerNodeService     ENodeType = 21 // Cross-server service (e.g. cross-server battleground)
+	ENodeType_AnalyticsNodeService       ENodeType = 22 // Analytics service
+	ENodeType_GmNodeService              ENodeType = 23 // GM tool service (admin/CS commands)
+	ENodeType_PlayerLocatorNodeService   ENodeType = 24 // Cross-server player locator service
+	ENodeType_SceneManagerNodeService    ENodeType = 25 // Scene manager service (Go-Zero)
+	ENodeType_DataServiceNodeService     ENodeType = 26 // Cross-server data proxy service (Go-Zero)
+	ENodeType_FriendNodeService          ENodeType = 27 // Friend system service (Go-Zero)
+	ENodeType_BattleNodeService          ENodeType = 28 // 回合制战斗节点(gRPC,全局池,不分 zone)
+	ENodeType_ClientRpcRouterNodeService ENodeType = 29 // 客户端 RPC 路由服(Go-Zero,全局池):gate 唯一的 gRPC 目标,按 message_id 不透明转发到各业务 Go 服务(docs/design/client-rpc-router.md)
 )
 
 // Enum value maps for ENodeType.
@@ -83,35 +84,37 @@ var (
 		26: "DataServiceNodeService",
 		27: "FriendNodeService",
 		28: "BattleNodeService",
+		29: "ClientRpcRouterNodeService",
 	}
 	ENodeType_value = map[string]int32{
-		"UnknownNodeService":       0,
-		"SceneNodeService":         3,
-		"GateNodeService":          4,
-		"LoginNodeService":         5,
-		"RedisNodeService":         6,
-		"EtcdNodeService":          7,
-		"MailNodeService":          8,
-		"ChatNodeService":          9,
-		"TeamNodeService":          10,
-		"ActivityNodeService":      11,
-		"TradeNodeService":         12,
-		"RankNodeService":          13,
-		"TaskNodeService":          14,
-		"GuildNodeService":         15,
-		"MatchNodeService":         16,
-		"AiNodeService":            17,
-		"LogNodeService":           18,
-		"PaymentNodeService":       19,
-		"SecurityNodeService":      20,
-		"CrossServerNodeService":   21,
-		"AnalyticsNodeService":     22,
-		"GmNodeService":            23,
-		"PlayerLocatorNodeService": 24,
-		"SceneManagerNodeService":  25,
-		"DataServiceNodeService":   26,
-		"FriendNodeService":        27,
-		"BattleNodeService":        28,
+		"UnknownNodeService":         0,
+		"SceneNodeService":           3,
+		"GateNodeService":            4,
+		"LoginNodeService":           5,
+		"RedisNodeService":           6,
+		"EtcdNodeService":            7,
+		"MailNodeService":            8,
+		"ChatNodeService":            9,
+		"TeamNodeService":            10,
+		"ActivityNodeService":        11,
+		"TradeNodeService":           12,
+		"RankNodeService":            13,
+		"TaskNodeService":            14,
+		"GuildNodeService":           15,
+		"MatchNodeService":           16,
+		"AiNodeService":              17,
+		"LogNodeService":             18,
+		"PaymentNodeService":         19,
+		"SecurityNodeService":        20,
+		"CrossServerNodeService":     21,
+		"AnalyticsNodeService":       22,
+		"GmNodeService":              23,
+		"PlayerLocatorNodeService":   24,
+		"SceneManagerNodeService":    25,
+		"DataServiceNodeService":     26,
+		"FriendNodeService":          27,
+		"BattleNodeService":          28,
+		"ClientRpcRouterNodeService": 29,
 	}
 )
 
@@ -248,7 +251,7 @@ var File_proto_common_base_node_proto protoreflect.FileDescriptor
 
 const file_proto_common_base_node_proto_rawDesc = "" +
 	"\n" +
-	"\x1cproto/common/base/node.proto\x12\vcommon.base*\xf9\x04\n" +
+	"\x1cproto/common/base/node.proto\x12\vcommon.base*\x99\x05\n" +
 	"\teNodeType\x12\x16\n" +
 	"\x12UnknownNodeService\x10\x00\x12\x14\n" +
 	"\x10SceneNodeService\x10\x03\x12\x13\n" +
@@ -277,7 +280,8 @@ const file_proto_common_base_node_proto_rawDesc = "" +
 	"\x17SceneManagerNodeService\x10\x19\x12\x1a\n" +
 	"\x16DataServiceNodeService\x10\x1a\x12\x15\n" +
 	"\x11FriendNodeService\x10\x1b\x12\x15\n" +
-	"\x11BattleNodeService\x10\x1c*g\n" +
+	"\x11BattleNodeService\x10\x1c\x12\x1e\n" +
+	"\x1aClientRpcRouterNodeService\x10\x1d*g\n" +
 	"\x0eeSceneNodeType\x12\x12\n" +
 	"\x0ekMainSceneNode\x10\x00\x12\x0e\n" +
 	"\n" +

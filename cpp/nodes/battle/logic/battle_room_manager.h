@@ -6,6 +6,7 @@
 #include <string>
 #include <unordered_map>
 
+#include "muduo/net/TcpConnection.h"
 #include "time/comp/timer_task_comp.h"
 
 // 回合引擎(cpp/libs/services/battle,纯逻辑库,API 见设计文档 §5.1)
@@ -38,15 +39,44 @@
 //   对局结果 → contracts.kafka.BattleResultEvent,topic=match-results(全局无 zone 段),
 //             key=battle_id;只在真实打完(FinishBattle)时发,Destroy/Abort 作废不发。
 //
+// 客户端直连(设计文档 §18,D23-D28):房间为每个参战者 / 观众最多保留一条已验证的
+// 直连(directConnByPlayer)。S2C 有直连即直发(PushToPlayer),否则回落上面的
+// Kafka→gate 路径;绑定 / 解绑 / 结算 / 确认事件仍全走 Kafka。票据由本节点签发
+// (BuildAssignment),开局 / 观战接入时先推 BattleAssignedS2C 再推首帧。
+//
 // 配表指纹(cross-zone-matchmaking.md §10):CreateBattle 时把 request/players[i] 携带的
 // 指纹与本节点六张战斗表指纹比对,不一致按 game_config.yaml battle_table_fingerprint_mode
 // (warn|enforce|off,默认 warn)处理。
+class BattleClientEdge;
+
 class BattleRoomManager
 {
 public:
     static BattleRoomManager &Instance();
 
+    // ---- 客户端直连面(main.cpp 装配;BattleClientEdge 生命周期由 main 的运行时上下文持有) ----
+
+    void SetClientEdge(BattleClientEdge *edge) { edge_ = edge; }
+
+    // 票据握手通过后把直连挂到房间上。校验"房间仍存在 + 该玩家按 role 确在名单上";
+    // 同一玩家已有直连(重连)则关闭旧连接、换成新的。成功时回填该玩家的 gate 会话号
+    // (合成 SessionDetails 用),返回 false = 拒绝握手。
+    bool AttachDirectConnection(uint64_t battleId, uint64_t playerId, ::eBattleTicketRole role,
+                                const muduo::net::TcpConnectionPtr &conn, uint32_t *gateSessionId);
+
+    // 直连断开:只摘"仍指向本连接"的记录(晚到的旧连接 FIN 不能摘掉重连后的新连接);
+    // 房间已不存在时 no-op。
+    void DetachDirectConnection(uint64_t battleId, uint64_t playerId,
+                                const muduo::net::TcpConnectionPtr &conn);
+
     // ---- match → battle 内部 gRPC(生成骨架守护段一行委托到这里) ----
+
+    // 丢票补签(D25;改道见 client-rpc-router.md D33):match 已从大厅会话取得权威 player_id,
+    // battle 只核对名单 —— 仅当该玩家仍是房间的参战者 / 观众时才签,否则 error_message 非零
+    // (player_id 缺失 / 房间不存在 / 不在名单 = kInvalidParameter,签不出票 = kServiceUnavailable)。
+    // 消息类型来自 proto/battle/battle_node.pb.h。
+    void HandleIssueBattleTicket(const ::IssueBattleTicketRequest &request,
+                                 ::IssueBattleTicketResponse &response);
 
     // 幂等:同 battle_id 重复创建直接回 OK(match 补偿路径可能重试)。
     void HandleCreateBattle(const ::CreateBattleRequest &request, ::CreateBattleResponse &response);
@@ -115,6 +145,9 @@ private:
         // 单次投递丢失或迟到;窗口按 scene 侧锁保留期(prepare TTL 最长 78s + 60s 余量)取整。
         TimerTaskComp confirmResendTimer;
         uint64_t confirmResendUntilMs = 0;
+        // player_id(参战者或观众)→ 已验证的客户端直连;缺项 = 该玩家走 Kafka→gate 回落。
+        // 有序容器:与 routingByPlayer 同口径,收尾遍历顺序稳定。
+        std::map<uint64_t, muduo::net::TcpConnectionPtr> directConnByPlayer;
     };
 
     BattleRoom *FindRoom(uint64_t battleId);
@@ -149,6 +182,36 @@ private:
     // 然后清空观众表(此后任何广播都不会再打到观众)。
     void NotifySpectateEndAndUnbind(BattleRoom &room, ::eSpectateEndReason reason,
                                     ::eBattleOutcome outcome);
+
+    // ---- 客户端直连(设计文档 §18) ----
+
+    // S2C 统一出口:该玩家有活着的直连就直发 MessageContent,否则回落 Kafka→gate
+    //(routing 只在回落时用)。const:PushSpectateState 是 const 方法。
+    void PushToPlayer(const BattleRoom &room, uint64_t playerId, const ::BattleRouting &routing,
+                      uint32_t messageId, const ::google::protobuf::Message &message) const;
+
+    // 签票据并组装落点分配包。false = 签不出(空密钥 + prod / OpenSSL 失败 / 本节点
+    // endpoint 未就绪),调用方不下发。expire_at_ms = room.deadlineMs。
+    bool BuildAssignment(const BattleRoom &room, uint64_t playerId, ::eBattleTicketRole role,
+                         ::BattleAssignedS2C &out) const;
+
+    // BuildAssignment + 经 PushToPlayer 下发 NotifyBattleAssigned(开局 / 观战接入首帧之前)。
+    void PushAssignment(const BattleRoom &room, uint64_t playerId, const ::BattleRouting &routing,
+                        ::eBattleTicketRole role) const;
+
+    // 关闭并摘除一个玩家的直连(观众退出 / 被清退)。立刻从表里摘除,但 shutdown() +
+    // 延迟强关**推迟到本轮 loop 之后**(queueInLoop):Handle* 可能就是从这条直连进来的,
+    // 直连面要在 Handle* 返回后才写应答;shutdown / forceCloseWithDelay 都会同步把连接切到
+    // kDisconnecting,那时再写就被丢。推迟一轮后,应答已在输出缓冲里,shutdown 仍等排空再 FIN,
+    // 顺序仍是:终局包 → 应答 → FIN。
+    void CloseDirectConnectionOf(BattleRoom &room, uint64_t playerId, const char *reason);
+
+    // 关闭并清空房间全部直连(结束 / 作废 / 销毁;必须在终局包推完之后调用)。
+    // 同样推迟到本轮 loop 之后:打完最后一击的 SubmitBattleAction / SetAutoBattle 会同步走到
+    // FinishBattle,它的应答此刻还没写。
+    void CloseDirectConnections(BattleRoom &room, const char *reason);
+
+    BattleClientEdge *edge_ = nullptr;
 
     std::unordered_map<uint64_t, std::unique_ptr<BattleRoom>> rooms_;
 };

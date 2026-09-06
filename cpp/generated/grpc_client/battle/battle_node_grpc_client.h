@@ -88,6 +88,25 @@ void SendBattleNodeRemoveObserver(entt::registry& registry, entt::entity nodeEnt
 void SendBattleNodeRemoveObserver(entt::registry& registry, entt::entity nodeEntity, const ::RemoveObserverRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 void SendBattleNodeRemoveObserver(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
+#pragma region BattleNodeIssueBattleTicket
+
+struct AsyncBattleNodeIssueBattleTicketGrpcClient {
+    uint32_t messageId{ BattleNodeIssueBattleTicketMessageId };
+    ClientContext context;
+    Status status;
+    ::IssueBattleTicketResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::IssueBattleTicketResponse>> response_reader;
+};
+
+class ::IssueBattleTicketRequest;
+using AsyncBattleNodeIssueBattleTicketHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::IssueBattleTicketResponse&)>;
+extern AsyncBattleNodeIssueBattleTicketHandlerFunctionType AsyncBattleNodeIssueBattleTicketHandler;
+
+void SendBattleNodeIssueBattleTicket(entt::registry& registry, entt::entity nodeEntity, const ::IssueBattleTicketRequest& request);
+void SendBattleNodeIssueBattleTicket(entt::registry& registry, entt::entity nodeEntity, const ::IssueBattleTicketRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendBattleNodeIssueBattleTicket(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
 void SetBattleNodeHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void SetBattleNodeIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void HandleBattleNodeCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);

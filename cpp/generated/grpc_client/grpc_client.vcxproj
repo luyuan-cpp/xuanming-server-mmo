@@ -22,6 +22,7 @@
     <ClCompile Include="battle\battle_node_grpc_client.cpp" />
     <ClCompile Include="battle\player_battle_grpc_client.cpp" />
     <ClCompile Include="chat\chat_grpc_client.cpp" />
+    <ClCompile Include="client_rpc_router\client_rpc_router_grpc_client.cpp" />
     <ClCompile Include="data_service\data_service_grpc_client.cpp" />
     <ClCompile Include="db\db_grpc_client.cpp" />
     <ClCompile Include="etcd\etcd_grpc_client.cpp" />
@@ -37,6 +38,7 @@
     <ClInclude Include="battle\battle_node_grpc_client.h" />
     <ClInclude Include="battle\player_battle_grpc_client.h" />
     <ClInclude Include="chat\chat_grpc_client.h" />
+    <ClInclude Include="client_rpc_router\client_rpc_router_grpc_client.h" />
     <ClInclude Include="data_service\data_service_grpc_client.h" />
     <ClInclude Include="db\db_grpc_client.h" />
     <ClInclude Include="etcd\etcd_grpc_client.h" />
