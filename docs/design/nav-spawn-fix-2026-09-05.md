@@ -174,7 +174,9 @@ $msb = "D:\Program Files\Microsoft Visual Studio\18\Enterprise\MSBuild\Current\B
 robocopy E:\work\mmorpg-client\Assets          E:\work\tmp\shotverify_project\Assets          /MIR /NFL /NDL /NJH /NJS
 robocopy E:\work\mmorpg-client\ProjectSettings E:\work\tmp\shotverify_project\ProjectSettings /MIR /NFL /NDL /NJH /NJS
 robocopy E:\work\mmorpg-client\Packages        E:\work\tmp\shotverify_project\Packages        /MIR /NFL /NDL /NJH /NJS
-& "C:\Program Files\Unity\Hub\Editor\6000.5.8f1\Editor\Unity.exe" -batchmode -nographics -quit -projectPath E:/work/tmp/shotverify_project -executeMethod MmorpgClient.Editor.ShowcaseBuild.Build -showcaseOut E:/work/tmp/showcase_player -logFile E:/work/tmp/showcase_build.log
+# 本机 Unity 已升到 6000.6.0f1(2026-09-08,6000.5.8f1 已卸载),路径按已安装版本探测,别写死
+$unity = (Get-ChildItem "C:\Program Files\Unity\Hub\Editor" -Directory | Sort-Object Name -Descending | Select-Object -First 1).FullName + "\Editor\Unity.exe"
+& $unity -batchmode -nographics -quit -projectPath E:/work/tmp/shotverify_project -executeMethod MmorpgClient.Editor.ShowcaseBuild.Build -showcaseOut E:/work/tmp/showcase_player -logFile E:/work/tmp/showcase_build.log
 Select-String -Path E:\work\tmp\showcase_build.log -Pattern "\[ShowcaseBuild\] result=|error CS" | Select-Object -Last 5
 ```
 
