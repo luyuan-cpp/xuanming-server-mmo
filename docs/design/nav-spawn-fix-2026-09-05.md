@@ -197,6 +197,10 @@ pwsh -File E:\work\mmorpg-client\tools\run_move_test.ps1 -Account robot_move_sel
 
 ## 6. 静态核对过的 API 面(供编译报错时定位)
 
+2026-09-08 实际首次编译烘焙器又抓到一条静态审查漏掉的:`third_party/ue5navmesh/Private/Detour/DetourNavMeshBuilder.cpp:536`
+裸用 `assert(false)`,而 `DetourAssert.h` 只在 Debug 下 `#include <assert.h>`;scene 是 Debug 构建碰不到,烘焙器 Release 构建
+报 C3861。CMake 已加 `/FIcassert`(GCC/Clang `-include cassert`)强制包含,`NDEBUG` 下 `assert` 展开为空,不改变行为。
+
 烘焙器与 scene 侧改动只用到 ue5navmesh 这些符号,均已按 `third_party/ue5navmesh/Public` 头文件核对签名:
 `rcCreateHeightfield / rcMarkWalkableTriangles / rcRasterizeTriangles / rcFilterLowHangingWalkableObstacles /
 rcFilterLedgeSpans / rcFilterWalkableLowHeightSpans / rcBuildCompactHeightfield / rcErodeWalkableArea /
@@ -241,6 +245,40 @@ rcBuildDistanceField / rcBuildRegions / rcBuildContours / rcBuildPolyMesh / rcBu
 
 未处理(不影响本次验收):`kMoveCorrectionEpsilon`(0.5)与客户端 1.5m 死区之间的移动中纠偏只记日志不应用(设计如此);
 `FindPath` 无调用方;dtCrowd 未接。
+
+## 9. 2026-09-08 实际执行记录(用户授权由本会话执行 §5 清单)
+
+按顺序做完:烘焙器 cmake 构建 → 重烘 → 库链重编(proto/proto_helpers/grpc_client/rpc/config/core/infra/modules 8 个 9-05 之后
+有源码变动的库 + scene 库)→ 三个节点重链 → 整栈拉起 → 播放器出包(Unity 6000.6.0f1)→ `run_move_test.ps1` 五轮迭代。
+每一轮验收都暴露一个真问题,全部已修:
+
+| 轮次 | 现象 | 根因 | 修法 |
+|---|---|---|---|
+| 烘焙器首编 | `DetourNavMeshBuilder.cpp:536` C3861 `assert` | 裸 `assert(false)`,`DetourAssert.h` 只在 Debug 含 `<assert.h>` | CMake `/FIcassert`(§6) |
+| 节点首链 | `gRpcMethodRegistry<…,180>` + `RdKafka::*` `__imp_` 未解析 | `rpc.lib`(9-03)/`infra.lib`(9-01)早于 9-06 的 RPC 数与 kafka 静态封装改动 | 按依赖顺序重编有变动的库再链节点 |
+| 验收 1 | 旧账号"控制器 15s 未就绪";自身 ActorCreate `entity=0` | scene 进程重启后第一个实体 entt id 就是 0,客户端把 0 当"无本地角色"哨兵 | `ActorWorld.HasLocalPlayer` 显式标志,所有 `== 0` 判断改掉 |
+| 验收 2 | 寻路段每秒 4 次回拉循环 | 悬崖过滤让网格比 mask 内缩 0.25m,客户端沿墙走在 mask 可走/网格不可走的带子里 | painted-city 模式跳过 `rcFilterLedgeSpans`;客户端纠偏重规划加熔断 |
+| 验收 3 | 寻路在 (212,148) 单格柱子旁卡死 | 平滑直线擦柱子边,CC 侧滑几厘米踩进柱子格,跟随器只会 StopMoving | LOS 平滑带 0.35m 横向余量;被挡时从当前位置重规划(≤3 次);CC 移动后落到 mask 外就退回 |
+| 验收 4 | (190–192,144–146) 不可走格里服务器截在 145.82 | 关掉悬崖过滤后网格反而**外扩**一个体素:quad 边压在体素边界,退化裁剪被当作覆盖 | 每个 quad 内缩 `kQuadInset=1cm`;探针实测边界 146.01/192.01,与格线重合 |
+| 验收 4/5 | 旧账号 scene 重拉后 60s 内进不了场 | scene_manager 把玩家分到重新注册的 node 3,gate 到它的 RPC 客户端仍是旧连接("Client is not connected") | **既有基础设施问题,不在本次范围**;绕过:gate/scene/battle 一起重拉并等 etcd 端口租约释放 |
+
+**最终通过的证据(2026-09-08 06:50 轮,`run_move_test.ps1` 末行 `[move] PASS`)**:
+- 旧账号 R1:`RESULT=PASS stage=move_test spawn=(189.72,0,149.73) final=(188.34,0.01,116.25) acks=6 snaps=6`(6 次全在 server_wall 段);
+- 旧账号 R2(重登):`spawn=(188.34,0,116.25)` == R1.final,`distXZ=0.00m`;`final=(188.19,0.01,86.29)` PASS;
+- 新账号:`spawn=(200,0,180)` 距默认出生点 0.00m,PASS;
+- scene 日志:首登 `EnterScene spawn: player … (0,0,0) unset (0,0,0) -> spawn (180,200,0)`;`nav loaded … tiles=74 … snapped=(180,200,0)`;
+  `move corrected` 只出现在 server_wall 段(verdict=blocked)。
+- 日志:`E:\work\tmp\move_test\move_{R1,R2,NEW}.log`。
+
+顺带发现、**未处理**的环境/基础设施问题(交给对应负责人):
+- `tools/scripts/start_game.ps1`(一键启动)起 gate 时把 `third_party/grpc/install_vs2026_dbg/bin` 插到 PATH 最前,gate 连上
+  Redis 后立刻死于 entt 断言 `is_power_of_two(mod)`(`run/logs/cpp_nodes/z1_gate.stderr.log`);同一个 gate.exe 用默认 PATH、
+  显式 ZONE_ID/RPC_PORT/NODE_IP 启动完全正常。怀疑是那条 PATH 让它加载了另一套 DLL。
+- `E:\work\tools\`(go126、buildenv.ps1、ffmpeg、gtest_build、grpc_cpp_plugin)09-07 11:16 被清空,只剩 `figma-context-mcp`;
+  Go 服务现在只能跑 `bin/go_services/*.exe` 预编译产物。
+- Unity 已升 6000.6.0f1,csproj 的 HintPath 仍指 6000.5.8f1(编辑器重生成工程文件前);`client_compile_check.ps1` 已能自动映射。
+- Docker Desktop 再次因 `%LOCALAPPDATA%\Docker\run\dockerInference` 残留 socket 启动即退,按 runbook 改名两目录后正常。
+- 并行的 Codex 会话在同一时段反复运行 `start_game.ps1`;本会话的节点重拉与它互相踩过一次。
 
 ## 7. 边界与后续
 

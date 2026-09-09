@@ -4205,3 +4205,17 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - login 需要 `LOGIN_DEV_PASSWORD_SHARED_SECRET=123456` —— 开发密码档是**常量时间比较密码与该密钥**,值必须等于 robot 配置里的 `password`。
 - C++ Debug 产物运行要 `third_party/grpc/install_vs2026_dbg/bin` 在 PATH(缺 `zlibd.dll`)。
 - MSBuild 在 `E:\Program Files\Microsoft Visual Studio\18\Enterprise`(vswhere 可查)。
+
+## 2026-09-08 本机游戏一键启动入口
+
+- 新增根目录 `启动服务器.cmd` / `启动服务器并打开游戏.cmd`，逻辑在 `tools/scripts/start_game.ps1`；工作目录 E:/work 另有两个便捷入口。
+- 复用 dev_tools.ps1 启动六个 Go 服务、Java 网关、一区 gate/scene/battle；自动等待 Docker 与数据库依赖，保留所有数据。运行日志在 run/logs/game-launcher。
+- 处理旧 PID 被其他程序复用、并发双击、中文/空格路径、原生命令超时、Docker 已知残留通信文件；不持久化或回显开发登录密码。
+- 验证：PowerShell 语法、两层中文 CMD 入口、不同工作目录、中文/引号/反斜杠参数、PID 复用与备份、超时、缺失客户端退出码、并发互斥通过。重复执行未多开已有六个 Go 服务和 Java 网关。
+- 实际整栈：Docker/MySQL/etcd/Redis/Redis Cluster/Kafka、六个 Go 服务与 Java health=UP 通过。当前 bin/gate.exe（2026-09-08 05:33 构建）启动发生 `Assertion failed: is_power_of_two(mod)`，third_party/entt/src/entt/core/memory.hpp:48，完整游戏启动未通过。启动器已正确报告此错误，未打开未就绪的客户端；本次验证产生的崩溃 gate 进程已关闭。该服务程序问题未在本任务修改。
+- **2026-09-08 执行(用户授权本会话跑 Codex 清单)**:烘焙器首编抓到 `assert` 缺头(`/FIcassert`);节点链接抓到 `rpc.lib`/`infra.lib` 陈旧
+  (按依赖重编 8 个库);五轮 `run_move_test.ps1` 各暴露一个真问题并修掉:客户端把 entt entity 0 当"无本地角色"哨兵(改 `HasLocalPlayer`);
+  悬崖过滤让网格内缩 0.25m 造成沿墙回拉循环(painted-city 跳过 `rcFilterLedgeSpans`);quad 边压体素边界让网格外扩一个体素
+  (`kQuadInset=1cm`,探针实测边界与格线重合);寻路平滑擦柱子边卡死(LOS 0.35m 余量 + 被挡重规划)。旧账号/新账号/重登三项 PASS
+  (`RESULT=PASS … snaps` 全在 server_wall 段,重登落位 0.00m)。未处理:gate 在 `start_game.ps1` 的 PATH 下 entt 断言崩溃、
+  scene 重拉后 gate 对重注册节点的 RPC 客户端陈旧、`E:\work\tools` 被清空、Unity 升到 6000.6.0f1。详见 nav-spawn-fix 文档 §9。

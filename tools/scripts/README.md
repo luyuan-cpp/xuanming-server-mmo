@@ -12,6 +12,19 @@ PowerShell and shell scripts for common development tasks.
 
 ## Available Scripts
 
+### start_game.ps1（本机游戏一键启动）
+
+电脑重启后双击仓库根目录 `启动服务器.cmd`；双击 `启动服务器并打开游戏.cmd` 可同时打开客户端。
+脚本复用现有 `dev_tools.ps1` 和编译产物，依次启动本机 Docker、数据库依赖、六个 Go 服务、Java 网关、一区 gate / scene / battle，并等待就绪。关闭启动窗口后服务继续运行；再次双击会复用已有实例。
+
+- 网关：`http://127.0.0.1:8081`，一区；默认客户端：同级工作目录 `tmp/showcase_player/mmorpg.exe`。
+- 指定客户端：`pwsh -File tools/scripts/start_game.ps1 -OpenClient -ClientPath "E:/其他目录/mmorpg.exe"`。
+- 只检查运行文件：`pwsh -File tools/scripts/start_game.ps1 -CheckOnly`。
+- 前置：PowerShell 7、Java 21+、本机 Docker Desktop、已缓存镜像与游戏编译产物；日常启动不执行构建或镜像下载。
+- 日志：`run/logs/game-launcher/<时间>/`；服务日志仍位于 `run/logs/go_services` 和 `run/logs/cpp_nodes`。
+- 旧 PID 会核对程序完整路径，失效记录先备份。Docker 停止时，已知遗留通信目录与独立 socket 会重命名备份；不删除数据卷、账号或角色。
+- 失败时显示原因与日志位置；已经启动的服务保留，解决原因后可重新双击。
+
 ### dev_tools.ps1
 
 Main entry point for tool commands on Windows.

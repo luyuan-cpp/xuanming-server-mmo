@@ -50,5 +50,11 @@ endif()
 if(MSVC)
     # 源码是无 BOM 的 UTF-8(含中文注释与字符串):不加 /utf-8 在 CP936 机器上会按 GBK
     # 读,C4819 满屏、字符串里的多字节字符被改写。scene.vcxproj 同样带 /utf-8。
-    target_compile_options(navmesh_baker PRIVATE /utf-8 /bigobj)
+    # /FIcassert:ue5navmesh 的 DetourNavMeshBuilder.cpp 裸用 assert(false),而
+    # DetourAssert.h 只在 Debug 才 #include <assert.h>;scene 是 Debug 构建碰不到,
+    # 烘焙器 Release 构建会 C3861 "assert 找不到标识符",强制包含一次即可
+    # (NDEBUG 下 assert 展开为空,不改变行为)。
+    target_compile_options(navmesh_baker PRIVATE /utf-8 /bigobj /FIcassert)
+else()
+    target_compile_options(navmesh_baker PRIVATE -include cassert)
 endif()
