@@ -80,6 +80,18 @@ const ClassTable* ResolveClassRow(entt::entity player) {
 	return rows.size() > 0 ? &rows.Get(0) : nullptr;
 }
 
+// 角色池 / 宝宝池分流:AttributePool.owner_type(0=角色,1=宝宝)。
+// 两边共用同一套表与纯规则,但**面板与写入口互不可见** —— 角色面板不出宝宝池,
+// 角色的 Allocate/Reset/AutoAllocate 拿到宝宝池一律按"池不存在"拒绝(宝宝走 PetSystem)。
+constexpr uint32_t kPoolOwnerPlayer = 0;
+
+bool IsPlayerPool(const AttributePoolTable& pool) { return pool.owner_type() == kPoolOwnerPlayer; }
+
+bool IsPlayerDimension(const AttributeDimensionTable& dim) {
+	const auto [pool, err] = AttributePoolTableManager::Instance().FindByIdSilent(dim.pool_id());
+	return pool != nullptr && IsPlayerPool(*pool);
+}
+
 PoolRule ToRule(const AttributePoolTable& row) {
 	PoolRule rule;
 	rule.poolId = row.id();
@@ -306,6 +318,9 @@ namespace {
 void ConvergeOverAllocation(entt::entity player, PlayerAttributeComp& comp) {
 	const auto& pools = AttributePoolTableManager::Instance().FindAll().data();
 	for (const auto& pool : pools) {
+		if (!IsPlayerPool(pool)) {
+			continue;  // 宝宝池的收敛由 PetSystem 按宝宝等级做
+		}
 		const auto total = TotalPoints(player, comp, pool);
 		for (auto& scheme : *comp.mutable_schemes()) {
 			if (UsedPoints(scheme, pool.id()) <= total) {
@@ -318,19 +333,6 @@ void ConvergeOverAllocation(entt::entity player, PlayerAttributeComp& comp) {
 					 << " pool=" << pool.id() << " scheme=" << scheme.scheme_id() << " total=" << total;
 		}
 	}
-}
-
-// 当前值随上限变化:按比例保持,活着的至少留 1(往返切方案不能把人切死)
-uint64_t RescaleCurrent(uint64_t current, uint64_t oldMax, uint64_t newMax) {
-	if (current == 0 || newMax == 0) {
-		return 0;
-	}
-	if (oldMax == 0 || oldMax == newMax) {
-		return std::min(current, newMax);
-	}
-	const auto scaled = static_cast<uint64_t>(static_cast<double>(current) * static_cast<double>(newMax) /
-											   static_cast<double>(oldMax));
-	return std::clamp<uint64_t>(scaled, 1, newMax);
 }
 
 }  // namespace
@@ -359,6 +361,9 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 
 	const auto& dims = AttributeDimensionTableManager::Instance().FindAll().data();
 	for (const auto& dim : dims) {
+		if (!IsPlayerDimension(dim)) {
+			continue;  // 宝宝维度不进角色二级属性
+		}
 		const auto value = static_cast<double>(DimensionValue(player, comp, scheme, dim));
 		if (value == 0.0) {
 			continue;
@@ -404,8 +409,11 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 			baseAttrs->set_mana(std::min(baseAttrs->mana(), derived.max_mana()));
 		}
 	} else {
-		baseAttrs->set_health(RescaleCurrent(baseAttrs->health(), oldMaxHealth, derived.max_health()));
-		baseAttrs->set_mana(RescaleCurrent(baseAttrs->mana(), oldMaxMana, derived.max_mana()));
+		// 按比例保持:与宝宝共用 attributerules::RescaleCurrent,两边口径不会分叉
+		baseAttrs->set_health(
+			attributerules::RescaleCurrent(baseAttrs->health(), oldMaxHealth, derived.max_health()));
+		baseAttrs->set_mana(
+			attributerules::RescaleCurrent(baseAttrs->mana(), oldMaxMana, derived.max_mana()));
 	}
 
 	ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kHealth);
@@ -430,6 +438,9 @@ void PlayerAttributeSystem::BuildPanel(entt::entity player, AttributePanelInfo& 
 
 	const auto& pools = AttributePoolTableManager::Instance().FindAll().data();
 	for (const auto& pool : pools) {
+		if (!IsPlayerPool(pool)) {
+			continue;
+		}
 		auto* info = panel.add_pools();
 		info->set_pool_id(pool.id());
 		info->set_name(pool.name());
@@ -445,6 +456,9 @@ void PlayerAttributeSystem::BuildPanel(entt::entity player, AttributePanelInfo& 
 
 	const auto& dims = AttributeDimensionTableManager::Instance().FindAll().data();
 	for (const auto& dim : dims) {
+		if (!IsPlayerDimension(dim)) {
+			continue;
+		}
 		auto* info = panel.add_dimensions();
 		info->set_dimension_id(dim.id());
 		info->set_pool_id(dim.pool_id());
@@ -485,8 +499,8 @@ uint32_t PlayerAttributeSystem::Allocate(entt::entity player, uint32_t poolId,
 		return err;
 	}
 	const auto [pool, poolErr] = AttributePoolTableManager::Instance().FindByIdSilent(poolId);
-	if (pool == nullptr) {
-		return kAttributePoolNotFound;
+	if (pool == nullptr || !IsPlayerPool(*pool)) {
+		return kAttributePoolNotFound;  // 宝宝池走 PetSystem,角色接口按不存在处理
 	}
 	auto& comp = EnsureComp(player);
 	auto* scheme = ActiveSchemeMutable(comp);
@@ -523,8 +537,8 @@ uint32_t PlayerAttributeSystem::Reset(entt::entity player, uint32_t poolId) {
 		return err;
 	}
 	const auto [pool, poolErr] = AttributePoolTableManager::Instance().FindByIdSilent(poolId);
-	if (pool == nullptr) {
-		return kAttributePoolNotFound;
+	if (pool == nullptr || !IsPlayerPool(*pool)) {
+		return kAttributePoolNotFound;  // 宝宝池走 PetSystem,角色接口按不存在处理
 	}
 	auto& comp = EnsureComp(player);
 	auto* scheme = ActiveSchemeMutable(comp);
@@ -561,8 +575,8 @@ uint32_t PlayerAttributeSystem::AutoAllocate(entt::entity player, uint32_t poolI
 		return kEntityIsNull;
 	}
 	const auto [pool, poolErr] = AttributePoolTableManager::Instance().FindByIdSilent(poolId);
-	if (pool == nullptr) {
-		return kAttributePoolNotFound;
+	if (pool == nullptr || !IsPlayerPool(*pool)) {
+		return kAttributePoolNotFound;  // 宝宝池走 PetSystem,角色接口按不存在处理
 	}
 	const auto level = PlayerLevel(player);
 	if (!attributerules::IsUnlocked(ToRule(*pool), level)) {

@@ -33,4 +33,7 @@ message AttributePoolTable {
   uint32 reset_free_below_level = 8;
   // 说明
   string desc = 9;
+  // 归属(0=角色,1=宝宝)。角色面板只出 owner_type=0 的池与其维度,
+  // 宝宝面板只出 owner_type=1 的;两边共用同一套加点纯规则(player-pet.md §3)
+  uint32 owner_type = 10 [(cfg_index) = true];
 }

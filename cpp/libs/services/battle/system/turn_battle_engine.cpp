@@ -81,6 +81,11 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
         return false;
     }
 
+    // 宝宝必须在玩家之后追加:阵位按插入序排,主人先站前排
+    if (!InitPets(request)) {
+        return false;
+    }
+
     const bool isPve =
         request.match_mode() == kMatchModePveSolo || request.match_mode() == kMatchModePveTeam;
     if (isPve && !InitMonsters(request)) {
@@ -141,6 +146,60 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
         auto& settlement = settlements[snapshot.player_id()];
         settlement.set_battle_id(request.battle_id());
         settlement.set_player_id(snapshot.player_id());
+    }
+    return true;
+}
+
+bool TurnBattleEngine::InitPets(const CreateBattleRequest& request) {
+    for (const auto& snapshot : request.players()) {
+        for (const auto& pet : snapshot.pets()) {
+            if (pet.pet_id() == 0) {
+                return false;  // 快照非法:scene 不应产出无 id 的宝宝
+            }
+            // pet_id 与 player_id 是**两套互不兼容的 SnowFlake 布局**(pet_id 走 scene 的
+            // item guid 发号器:17-bit worker / 秒级 epoch;player_id 走 login 的
+            // bwmarrin 布局:13-bit node / 毫秒 epoch,见 AGENTS §7 不变量 1)。
+            // 两个数值域理论上可以相交,所以这里不是"断言不会撞",而是**查重后 fail-closed**:
+            // 撞了就拒绝开局,绝不让一只宝宝顶替掉某个玩家的 actor。
+            if (FindActor(pet.pet_id()) != nullptr) {
+                LOG_ERROR << "CreateBattle 宝宝 actor_id 与既有单位相撞: battle_id="
+                          << request.battle_id() << " pet_id=" << pet.pet_id();
+                return false;
+            }
+
+            BattleActorState actor;
+            actor.set_actor_id(pet.pet_id());
+            actor.set_actor_type(BATTLE_ACTOR_TYPE_PET);
+            // 与主人同队:快照的 team_index 由 match 改写,宝宝只跟随,不自带阵营
+            actor.set_team_index(snapshot.team_index());
+            // 归属**只认快照的主人**:宝宝挂在谁的快照里就是谁的。快照自带的 owner_player_id
+            // 只用来对账,不当权威 —— 让它改写归属的话,一份被改过的快照就能把宝宝的战后结算
+            // 记到别人名下。对不上直接拒绝开局。
+            if (pet.owner_player_id() != 0 && pet.owner_player_id() != snapshot.player_id()) {
+                LOG_ERROR << "CreateBattle 宝宝归属与所在快照不一致: battle_id=" << request.battle_id()
+                          << " pet_id=" << pet.pet_id() << " owner=" << pet.owner_player_id()
+                          << " snapshot_player=" << snapshot.player_id();
+                return false;
+            }
+            actor.set_owner_player_id(snapshot.player_id());
+            actor.set_pet_table_id(pet.pet_table_id());
+            actor.set_name(pet.pet_name());
+            actor.set_level(pet.level());
+            *actor.mutable_attributes() = pet.base_attributes();
+            actor.set_max_health(FallbackMax(pet.max_health(), pet.base_attributes().health()));
+            actor.set_max_mana(FallbackMax(pet.max_mana(), pet.base_attributes().mana()));
+            actor.set_physical_attack(pet.physical_attack());
+            actor.set_magic_attack(pet.magic_attack());
+            actor.set_defense(pet.defense());
+            actor.set_formation_slot(NextFormationSlot(snapshot.team_index()));
+            // 宝宝没有客户端行动权:标 auto,让默认行动路径(零随机分支之外的普攻)代打。
+            // 这同时保证 AllPlayersReady 不会因为宝宝没提交行动而卡住整个回合。
+            actor.set_is_auto(true);
+            for (const auto skillTableId : pet.skill_table_ids()) {
+                actor.add_skill_table_ids(skillTableId);
+            }
+            actors.emplace_back(std::move(actor));
+        }
     }
     return true;
 }
@@ -1273,6 +1332,18 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
     settlement.set_mana(actor->attributes().mana());
     settlement.set_is_dead(actor->is_dead());
     settlement.set_fled(actor->fled());
+
+    // 出战宝宝的战后终值:随主人的结算一起回 scene(scene 是唯一应用者)
+    for (const auto& other : actors) {
+        if (other.actor_type() != BATTLE_ACTOR_TYPE_PET || other.owner_player_id() != playerId) {
+            continue;
+        }
+        auto* petSettlement = settlement.add_pets();
+        petSettlement->set_pet_id(other.actor_id());
+        petSettlement->set_health(other.attributes().health());
+        petSettlement->set_mana(other.attributes().mana());
+        petSettlement->set_is_dead(other.is_dead());
+    }
 
     // 奖励:仅在玩家侧(A 方=team 0)获胜时结算,给未逃跑的存活参战者。
     // 经验/金币 = 本场被击杀怪物 MonsterTable.exp_reward/gold_reward 之和;

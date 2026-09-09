@@ -48,6 +48,25 @@ inline uint32_t TotalPoints(const PoolRule& rule, uint32_t level, uint32_t bonus
     return total > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(total);
 }
 
+// 当前值(HP/MP)随上限变化时按比例保持:活着的至少留 1,一升一降往返零净得失。
+// 角色(切方案/洗点/加点)与宝宝(加点/洗点/升级)共用,避免"改属性当治疗"的白嫖路径
+// (评审 2026-09-04,player-attribute-allocation.md §3.1)。
+inline uint64_t RescaleCurrent(uint64_t current, uint64_t oldMax, uint64_t newMax) {
+    if (current == 0 || newMax == 0) {
+        return 0;
+    }
+    if (oldMax == 0 || oldMax == newMax) {
+        return current < newMax ? current : newMax;
+    }
+    const auto scaled = static_cast<uint64_t>(static_cast<double>(current) *
+                                              static_cast<double>(newMax) /
+                                              static_cast<double>(oldMax));
+    if (scaled < 1) {
+        return 1;
+    }
+    return scaled < newMax ? scaled : newMax;
+}
+
 inline uint32_t SumPoints(const std::map<uint32_t, uint32_t>& allocated) {
     uint64_t sum = 0;
     for (const auto& [_, v] : allocated) {

@@ -29,6 +29,7 @@
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
+#include "player/system/player_pet.h"
 #include "player/system/player_revive.h"
 
 // 时间->回合换算与回合常量的权威定义在回合引擎库(scene 可以依赖 battle 常量,反向禁止)。
@@ -461,6 +462,12 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 		snapshot.set_physical_attack(derived->physical_attack());
 		snapshot.set_magic_attack(derived->magic_attack());
 		snapshot.set_defense(derived->defense());
+	}
+
+	// —— 出战宝宝(player-pet.md §5):没带宝宝时不填,引擎侧自然没有这个单位 ——
+	if (::BattlePetSnapshot petSnapshot; PetSystem::BuildBattleSnapshot(player, petSnapshot))
+	{
+		*snapshot.add_pets() = petSnapshot;
 	}
 
 	// —— 技能列表 ——
@@ -1039,6 +1046,18 @@ void PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 	}
 	ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kHealth);
 	ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kEnergy);
+
+	// 出战宝宝的终值回写(阵亡宝宝在 PetSystem 内回满,理由见那里的注释)。
+	// 回写完必须推一次列表:玩家战后打开宝宝面板看到的应该是战后血量,
+	// 不推的话面板会一直停在战前那份(设计文档 player-pet.md §4 承诺的推送时机)。
+	if (settlement.pets_size() > 0)
+	{
+		for (const auto& petSettlement : settlement.pets())
+		{
+			PetSystem::ApplyBattleSettlement(player, petSettlement);
+		}
+		PetSystem::PushList(player);
+	}
 
 	// 金钱:走统一入账入口(补缴/封禁钩子都在里面,禁止直写 CurrencyComp)
 	if (settlement.gold_gain() > 0)

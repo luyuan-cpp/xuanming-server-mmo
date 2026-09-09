@@ -138,6 +138,14 @@ func main() {
 		return
 	}
 
+	// Pet-smoke 模式:单机器人做「宝宝(宠物)系统」端到端冒烟
+	// (发宝宝 → 池隔离 → 等级跟随主人 → 自动加点预览 → 确认 → 各类拒绝守卫 → 出战 → 重登往返 → 收回)。
+	// 见 pet_smoke_scenario.go 与 docs/design/player-pet.md。
+	if cfg.Mode == "pet-smoke" {
+		RunPetSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {

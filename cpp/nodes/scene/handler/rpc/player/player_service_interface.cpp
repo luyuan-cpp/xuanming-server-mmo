@@ -7,6 +7,7 @@
 #include "player_currency_handler.h"
 #include "player_lifecycle_handler.h"
 #include "player_movement_handler.h"
+#include "player_pet_handler.h"
 #include "player_rollback_handler.h"
 #include "player_scene_handler.h"
 #include "player_skill_handler.h"
@@ -14,6 +15,7 @@
 #include "s2s_player_scene_handler.h"
 class SceneClientPlayerCommonImpl : public SceneClientPlayerCommon {};
 class SceneAttributeClientPlayerImpl : public SceneAttributeClientPlayer {};
+class ScenePetClientPlayerImpl : public ScenePetClientPlayer {};
 class SceneCurrencyClientPlayerImpl : public SceneCurrencyClientPlayer {};
 class ScenePlayerImpl : public ScenePlayer {};
 class SceneMovementClientPlayerImpl : public SceneMovementClientPlayer {};
@@ -29,6 +31,7 @@ void InitPlayerService()
 {
     gPlayerService.emplace("SceneClientPlayerCommon", std::make_unique<SceneClientPlayerCommonHandler>(std::make_unique<SceneClientPlayerCommonImpl>()));
     gPlayerService.emplace("SceneAttributeClientPlayer", std::make_unique<SceneAttributeClientPlayerHandler>(std::make_unique<SceneAttributeClientPlayerImpl>()));
+    gPlayerService.emplace("ScenePetClientPlayer", std::make_unique<ScenePetClientPlayerHandler>(std::make_unique<ScenePetClientPlayerImpl>()));
     gPlayerService.emplace("SceneCurrencyClientPlayer", std::make_unique<SceneCurrencyClientPlayerHandler>(std::make_unique<SceneCurrencyClientPlayerImpl>()));
     gPlayerService.emplace("ScenePlayer", std::make_unique<ScenePlayerHandler>(std::make_unique<ScenePlayerImpl>()));
     gPlayerService.emplace("SceneMovementClientPlayer", std::make_unique<SceneMovementClientPlayerHandler>(std::make_unique<SceneMovementClientPlayerImpl>()));

@@ -1,0 +1,47 @@
+syntax = "proto3";
+
+// Pet 表的权威 schema。源表 data/Pet.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 宝宝"种类"表:决定初值、资质区间、可携带等级与自带技能。
+// 一只宝宝的一级/二级属性算法见 docs/design/player-pet.md §3,
+// 加点维度与点数池复用 AttributeDimension / AttributePool 中 owner_type=1 的行。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message PetTable {
+  option (cfg_sheet)       = "Pet";
+  option (cfg_source_file) = "Pet.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 宝宝种类 id
+  uint32 id = 1;
+  // 种类名(玩家未改名时的展示名)
+  string name = 2;
+  // 说明(下发客户端 tooltip)
+  string desc = 3;
+  // 客户端模型 id
+  uint32 model_id = 4;
+  // 品质(1 普通 2 精良 3 稀有 4 传说),纯展示与筛选
+  uint32 quality = 5;
+  // 可携带的最低主人等级
+  uint32 unlock_level = 6;
+  // 宝宝等级上限:实际等级 = min(主人等级, 本值)
+  uint32 level_cap = 7;
+  // 气血上限初值(不随等级,等价角色的 ClassTable.init_health)
+  uint64 init_health = 8;
+  // 法力上限初值
+  uint64 init_mana = 9;
+  // 出手速度初值
+  uint64 init_speed = 10;
+  // 资质下限(万分比,10000=100%),按维度 401 体质 / 402 灵力 / 403 力量 / 404 敏捷 顺序
+  repeated uint32 aptitude_min = 11 [(cfg_slots) = 4];
+  // 资质上限(万分比),与 aptitude_min 一一对应;出生时在 [min,max] 闭区间随机
+  repeated uint32 aptitude_max = 12 [(cfg_slots) = 4];
+  // 自带技能(SkillTable id)
+  repeated uint32 skill = 13 [(cfg_slots) = 4];
+}

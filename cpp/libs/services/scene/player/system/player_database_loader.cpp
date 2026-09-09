@@ -4,6 +4,7 @@
 #include "modules/currency/comp/player_currency_comp.h"
 #include "player_skill.h"
 #include "player_attribute.h"
+#include "player_pet.h"
 #include "player_revive.h"
 #include "table/code/class_table.h"
 #include "muduo/base/Logging.h"
@@ -81,6 +82,7 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	const auto reviveOutcome = ApplyClassInitialAttributesOrReviveFromTable(baseAttrs);
 	tlsEcs.actorRegistry.emplace<LevelComp>(player, message.level_component());
 	tlsEcs.actorRegistry.emplace<PlayerAttributeComp>(player, message.attribute_component());
+	tlsEcs.actorRegistry.emplace<PlayerPetComp>(player, message.pet_component());
 	tlsEcs.actorRegistry.emplace<CurrencyComp>(player, message.currency());
 	// 补缴欠款(debts)是 PlayerCurrencyComp 的运行时结构,持久化载体是
 	// CurrencyComp.debts。这一对 LoadFromProto/SaveToProto 之前从未被调用过 ——
@@ -89,6 +91,8 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	tlsEcs.actorRegistry.get_or_emplace<PlayerCurrencyComp>(player).LoadFromProto(message.currency());
 	// 属性加点:补默认方案 + 按等级/方案重算二级属性(max_health 等此前无写者,战斗快照靠它)
 	PlayerAttributeSystem::InitializeOnLoad(player);
+	// 宝宝:同步等级(跟随主人)+ 按上限夹当前 HP/MP;必须在主人等级已 emplace 之后
+	PetSystem::InitializeOnLoad(player);
 	// 新号/复活的玩家在这里才拿得到真实上限,顶满(活着的玩家不碰,保住残血语义)
 	if (reviveOutcome != PlayerReviveOutcome::kUntouched) {
 		TopUpToDerivedMax(player, baseAttrs);
@@ -103,6 +107,7 @@ void PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_derived_attributes_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<BaseAttributesComp>(player));
 	message.mutable_level_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<LevelComp>(player));
 	message.mutable_attribute_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<PlayerAttributeComp>(player));
+	message.mutable_pet_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<PlayerPetComp>(player));
 	message.mutable_currency()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<CurrencyComp>(player));
 	// 必须在 CopyFrom 之后:CopyFrom 会覆盖整个 currency 子消息(含 debts),
 	// 反序会把刚写进去的欠款抹掉。

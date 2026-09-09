@@ -197,10 +197,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke":
+	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, or attribute-smoke)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, or pet-smoke)", c.Mode)
 	}
 	if c.AuthType == "satoken" && c.SaTokenAddr == "" {
 		return fmt.Errorf("satoken_addr must be set when auth_type is satoken")

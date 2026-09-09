@@ -4219,3 +4219,27 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   (`kQuadInset=1cm`,探针实测边界与格线重合);寻路平滑擦柱子边卡死(LOS 0.35m 余量 + 被挡重规划)。旧账号/新账号/重登三项 PASS
   (`RESULT=PASS … snaps` 全在 server_wall 段,重登落位 0.00m)。未处理:gate 在 `start_game.ps1` 的 PATH 下 entt 断言崩溃、
   scene 重拉后 gate 对重注册节点的 RPC 客户端陈旧、`E:\work\tools` 被清空、Unity 升到 6000.6.0f1。详见 nav-spawn-fix 文档 §9。
+
+## 2026-09-09 宝宝(宠物)系统核心线
+
+- 范围按用户当日选定:核心线(数据/四属性+资质/加点/召唤/参战),属性口径复用角色那套,宝宝作为独立参战单位。捕捉、合宠、洗资质、放生、技能书是二期。
+- **角色属性加点不重做**:`data/AttributeDimension.xlsx` 的 pool 1 已经就是体质(血+防)/灵力(法力+法伤)/力量(物伤)/敏捷(速度),与用户给的截图口径一致。
+- 复用方式:`AttributePool` 加一列 `owner_type`(0 角色 / 1 宝宝);两边共用 `attributerules` 的总量换算、分配校验、自动分配与 `RescaleCurrent`(本次把角色侧的私有副本提到共享头)。角色面板与三个写入口现在过 `IsPlayerPool()`,拿到宝宝池按"池不存在"拒绝。
+- 新增:`PlayerPetComp`(落库 `player_database.pet_component` 字段 12,**上线前必须跑 db 迁移**)、`ScenePetClientPlayer` 九个 RPC、`PetSystem`、`petrules` 纯规则、`Pet`/`PetRule` 两张表、`//pet_error base=26000` 17 个码。
+- 战斗:`BattlePlayerSnapshot.pets` + `BATTLE_ACTOR_TYPE_PET` + 引擎 `InitPets` + `BattleSettlementData.pets`。宝宝 `is_auto=true`、无客户端行动权、不进 `AllPlayersReady`,所以带宝宝不拖慢回合。
+- 设计文档:`docs/design/player-pet.md`(§9 是给 Codex 的验证清单)。
+- robot 冒烟:`robot/etc/pet_smoke.yaml` + `pet_smoke_scenario.go`(账号 robot_9102,12 步,过打 `PET_SMOKE_OK`),含"角色面板不得出现宝宝池"的池隔离断言;满槽时自动复用既有宝宝,保证同账号可重复。
+- 客户端(用户当日授权改 `../mmorpg-client/`):`Game/Pet/PetClient.cs` + `UI/Ugui/Pet/{PetUiRoot,PetPanel,PetUiStyle}.cs`(三栏窗:宝宝列表 / 二级属性+资质成长率 / 四行加点),控件与配色复用属性窗的 `AttributeUiWidgets`/`AttributeUiStyle`;EditMode 用例 `PetClientTests.cs` 11 条;`tools/gen_proto.ps1` 已加两个 pet proto。
+- **顺带修掉一个既有缺陷**:`95b5641d0` 把 tip 码轴改成按段发号(attribute_error → 25000 段)后,robot 的 `attribute_smoke_scenario.go`、客户端 `AttributeClient.DescribeTip` 与 `AttributeClientTests` 仍写着旧的 130-144。后果是属性冒烟的负向断言永远对不上、客户端把所有属性拒绝显示成裸 `tip=25004`。三处已同步到 25000 段。
+- **未编译、未跑任何测试**(AGENTS §10.1)。自动化证据是新写的三条引擎单测 + 11 条客户端 EditMode 用例 + 一条 robot 冒烟,均待 Codex 执行。剩余依赖生成的一步:`MessageLimiter.xlsx` 加行(要等 `message_id.txt` 发号)。
+
+- **2026-09-09 多智能体评审后的返工(9 维度 × 3 怀疑者)**:评审本身两轮被网络打断(9 个代理全 ECONNRESET),第三轮拿到 42 条去重发现,逐条核实后全部处理。真问题清单(同类功能下次直接避开):
+  1. **宝宝二级属性是现算的,加点/洗点必须在改 allocated 之前取旧上限** —— 改完再算"旧上限"就等于新上限,按比例保持退化成恒等式,洗点再加回来会白掉一截血。角色侧没这个坑是因为它有 `DerivedAttributesComp` 存着上一份。
+  2. `Pet.xlsx` 的 `skill` 是 4 槽 LIST 又排在最后一列,四格全空时 xlsx 物理上只有 1 列,导表器按列名+槽位绑定会当场报错(用 0 占满四格)。
+  3. **引擎返回的 `TurnResultS2C.action_order` 恒为空**,它是 battle 节点从 `engine.LastActionOrder()` 透传的 —— 新写的用例断言它必红。
+  4. 客户端 `MessageIds.cs` 是**白名单驱动**的(`tools/gen_messageids.ps1`),不加白名单跑完生成器也没有宝宝常量,`PetClient.cs` 直接编译不过。
+  5. **事实源是 `.vcxproj`,不是 Linux 的 `CMakeLists.txt`** —— 后者由 `tools/archived/vcxproj2cmake.py` 在 `build_linux.sh` 第 [2] 步从前者重生成。新 proto 的 `.pb.cc` 必须进 `cpp/generated/proto/proto.vcxproj`(这条是真缺口,已补);仓内那几份 CMakeLists 我一并同步了,但那只是让已入库的生成产物不落后,不是缺陷修复 —— 评审里"Linux CMakeLists 漏登记"的几条据此判为误报,我此前"属性 handler 在 Linux 上没编进去"的说法也是错的。
+  6. **`pet_id` 与 `player_id` 不是同一套 SnowFlake 布局**(AGENTS §7 不变量 1),数值域理论上可相交:`InitPets` 改成查重后 fail-closed,归属只认所在快照的 `player_id`,不让快照自带字段改写。
+  7. 宝宝降级原本走按比例缩放,与文档和角色侧的"降级只夹"分叉;结算回写后没推列表;名字校验放行非法 UTF-8;资质单边缺配会掷出接近 0;改名同名重复扣费;缺角色 `SanitizeSchemes` 的对等物;技能有实例/表两份真相;资质槽位按表行序绑定(改成按 dimension_id 升序,插行不再整体错位)。
+  8. 客户端:`BattleStage.PetOwnerResolver` 默认实现改为直接读 `owner_player_id`(正式战斗路径此前从未接上);`PartyCardOrder` 把宝宝当队友挤掉人类队友;满槽时列表末项被「出战」按钮压住;属性窗与宝宝窗互不关闭。
+  9. 顺带修掉的既有缺陷:tip 码轴改段后,robot 的 attribute-smoke、客户端 `AttributeClient.DescribeTip`、`AttributeClientTests` 与属性设计文档仍写着旧的 130-144。两个 robot 冒烟的 tip 常量改成引用 `shared/generated/pb/table` 的生成枚举,再改号会在编译期断而不是静默失效。
