@@ -79,6 +79,18 @@ type Player struct {
 	attrSuggestPool uint32
 	attrReady       chan struct{} // 首份面板到达时 close
 	attrReadyOnce   sync.Once
+
+	// ---- 宝宝冒烟(pet-smoke)状态 ----
+	// 与属性面板同一套路:列表是服务器唯一真相,写操作的响应都带全量列表;
+	// petListSeq 让等待方区分"这次请求的新列表"与"上次留下的旧列表",
+	// petListMsg 记来源消息号,避免主动推送(NotifyPetListChanged)被当成响应消费。
+	petList        *scene.PetListInfo
+	petListSeq     uint64
+	petListMsg     uint32
+	petLastTip     uint32            // 最近一次宝宝 RPC 的 error_message.id(0 = 成功)
+	petSuggested   map[uint32]uint32 // 最近一次自动加点建议(dimension_id → 目标已分配)
+	petSuggestPet  uint64
+	petLastGranted uint64            // 最近一次 GmGrantPet 返回的 pet_id
 }
 
 // NewPlayer creates a Player with an initialized scene-ready channel.
@@ -692,4 +704,83 @@ func (p *Player) WaitAttributePanelAfter(ctx context.Context, sinceSeq uint64) (
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
+}
+
+// ---------------------------------------------------------------------------
+// 宝宝(pet-smoke)
+// ---------------------------------------------------------------------------
+
+// SetPetList 记录服务器下发的全量宝宝列表(每个宝宝 RPC 的响应与主动推送都会调)。
+// tipId != 0 时服务器不填 pets,这里只记 tip,列表保持上一份不动 —— 与属性面板同口径。
+func (p *Player) SetPetList(list *scene.PetListInfo, tipId uint32, messageId uint32) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.petLastTip = tipId
+	if list != nil {
+		p.petList = list
+		p.petListSeq++
+		p.petListMsg = messageId
+	}
+}
+
+// SetPetSuggestion 记录自动加点建议(只算不落,不动列表)。
+func (p *Player) SetPetSuggestion(petId uint64, suggested map[uint32]uint32, tipId uint32) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.petSuggestPet = petId
+	p.petSuggested = suggested
+	p.petLastTip = tipId
+}
+
+// SetPetGranted 记录 GmGrantPet 新发宝宝的 pet_id(0 = 本次没发出来)。
+func (p *Player) SetPetGranted(petId uint64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.petLastGranted = petId
+}
+
+// GetPetList 返回最近一份宝宝列表与它的序号。
+func (p *Player) GetPetList() (*scene.PetListInfo, uint64) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.petList, p.petListSeq
+}
+
+// GetPetListSource 返回最近一份列表的来源消息号(响应 = 请求号;推送 = NotifyPetListChanged)。
+func (p *Player) GetPetListSource() uint32 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.petListMsg
+}
+
+// GetPetLastTip 返回最近一次宝宝 RPC 的 tip id(0 = 成功)。
+func (p *Player) GetPetLastTip() uint32 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.petLastTip
+}
+
+// GetPetSuggestion 返回最近一次自动加点建议。
+func (p *Player) GetPetSuggestion() (uint64, map[uint32]uint32) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.petSuggestPet, p.petSuggested
+}
+
+// GetPetGranted 返回最近一次 GmGrantPet 的 pet_id。
+func (p *Player) GetPetGranted() uint64 {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.petLastGranted
+}
+
+// ResetPetWaiters 清掉上一步残留的列表/建议/tip,让下一次等待只认新到的那一份。
+func (p *Player) ResetPetWaiters() uint64 {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.petLastTip = 0
+	p.petSuggested = nil
+	p.petSuggestPet = 0
+	p.petLastGranted = 0
+	return p.petListSeq
 }

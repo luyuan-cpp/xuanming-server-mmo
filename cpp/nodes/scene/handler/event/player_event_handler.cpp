@@ -4,6 +4,7 @@
 ///<<< BEGIN WRITING YOUR CODE
 #include "player/system/player_skill.h"
 #include "player/system/player_attribute.h"
+#include "player/system/player_pet.h"
 #include <muduo/base/Logging.h>
 #include "proto/common/component/player_login_comp.pb.h"
 ///<<< END WRITING YOUR CODE
@@ -48,6 +49,9 @@ void PlayerEventHandler::PlayerUpgradeEventHandler(const PlayerUpgradeEvent& eve
 	// 升级发点:总点数按等级换算,不存量;重算二级属性并推面板(客户端整体覆盖)
 	PlayerAttributeSystem::Recalculate(player, PlayerAttributeSystem::RecalcReason::kLevelChanged);
 	PlayerAttributeSystem::PushPanel(player);
+	// 宝宝等级跟随主人(经验系统未接前这是宝宝唯一的成长通道),重算后推列表
+	PetSystem::RecalculateAll(player, PetSystem::RecalcReason::kLevelChanged);
+	PetSystem::PushList(player);
 ///<<< END WRITING YOUR CODE
 }
 void PlayerEventHandler::InitializePlayerCompsEventHandler(const InitializePlayerCompsEvent& event)

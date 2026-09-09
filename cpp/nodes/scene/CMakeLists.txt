@@ -66,6 +66,8 @@ set(SOURCE_FILES
     handler/event/skill_event_handler.cpp
     handler/rpc/scene_admin_handler.cpp
     handler/rpc/player/player_currency_handler.cpp
+    handler/rpc/player/player_attribute_handler.cpp
+    handler/rpc/player/player_pet_handler.cpp
     handler/rpc/player/player_rollback_handler.cpp
     handler/rpc/scene_handler.cpp
     handler/rpc/player/client_player_common_handler.cpp

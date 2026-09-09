@@ -72,6 +72,8 @@ set(SOURCE_FILES
     code/attributedimension_table_fk.cpp
     code/attributepool_table.cpp
     code/attributerule_table.cpp
+    code/pet_table.cpp
+    code/petrule_table.cpp
     proto/actoractioncombatstate_table.pb.cc
     proto/actoractionstate_table.pb.cc
     proto/basescene_table.pb.cc
@@ -105,6 +107,7 @@ set(SOURCE_FILES
     proto/tip/guild_error_tip.pb.cc
     proto/tip/login_error_tip.pb.cc
     proto/tip/match_error_tip.pb.cc
+    proto/tip/pet_error_tip.pb.cc
     proto/tip/mission_error_tip.pb.cc
     proto/tip/mount_error_tip.pb.cc
     proto/tip/reward_error_tip.pb.cc
@@ -116,6 +119,8 @@ set(SOURCE_FILES
     proto/attributedimension_table.pb.cc
     proto/attributepool_table.pb.cc
     proto/attributerule_table.pb.cc
+    proto/pet_table.pb.cc
+    proto/petrule_table.pb.cc
     proto/tip/attribute_error_tip.pb.cc
 )
 

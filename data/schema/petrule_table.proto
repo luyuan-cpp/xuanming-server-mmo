@@ -1,0 +1,31 @@
+syntax = "proto3";
+
+// PetRule 表的权威 schema。源表 data/PetRule.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 宝宝系统的单行全局规则(与 AttributeRule 同套路:只取第一行)。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message PetRuleTable {
+  option (cfg_sheet)       = "PetRule";
+  option (cfg_source_file) = "PetRule.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 规则行 id(固定 1)
+  uint32 id = 1;
+  // 可携带宝宝数量上限
+  uint32 max_pets = 2;
+  // 宝宝名最大长度(UTF-8 码点数)
+  uint32 name_max_len = 3;
+  // 改名金币(0 = 免费)
+  uint64 rename_cost_gold = 4;
+  // 召唤/收回冷却秒(0 = 无冷却)
+  uint32 summon_cooldown_seconds = 5;
+  // 说明
+  string desc = 6;
+}

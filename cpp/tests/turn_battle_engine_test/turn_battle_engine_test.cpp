@@ -1382,3 +1382,101 @@ TEST(TurnBattleEngineTest, PresentationSkillManaCostEmitsManaEventInSkillGroup) 
         EXPECT_EQ(CountEvents(second, BATTLE_EVENT_MANA), 0);
     }
 }
+
+// ---------------------------------------------------------------------------
+// 宝宝(宠物)作为独立参战单位(player-pet.md §5)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// 给某个玩家快照挂一只出战宝宝
+BattlePetSnapshot* AddPet(BattlePlayerSnapshot* owner, uint64_t petId, uint64_t health,
+                          uint64_t maxHealth, uint64_t strength, uint64_t speed,
+                          uint64_t physicalAttack = 0) {
+    auto* pet = owner->add_pets();
+    pet->set_pet_id(petId);
+    pet->set_owner_player_id(owner->player_id());
+    pet->set_pet_name("小灵狐");
+    pet->set_pet_table_id(1);
+    pet->set_level(owner->level());
+    pet->set_max_health(maxHealth);
+    pet->set_physical_attack(physicalAttack);
+    auto* attributes = pet->mutable_base_attributes();
+    attributes->set_health(health);
+    attributes->set_strength(strength);
+    attributes->set_speed(speed);
+    return pet;
+}
+
+constexpr uint64_t kPetA = 700001;
+
+}  // namespace
+
+TEST(TurnBattleEngineTest, PetJoinsOwnerTeamAndActsWithoutClientAction) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9401, turnbattle::kMatchModePveSolo, 31337);
+    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 10);
+    // 宝宝比主人快:出手序里应排在主人之前
+    AddPet(owner, kPetA, 400, 400, 4, 30);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto state = engine.BuildStateSnapshot();
+    const auto* petActor = FindStateActor(state, kPetA);
+    ASSERT_NE(petActor, nullptr);
+    EXPECT_EQ(petActor->actor_type(), BATTLE_ACTOR_TYPE_PET);
+    EXPECT_EQ(petActor->team_index(), 0u);
+    EXPECT_EQ(petActor->owner_player_id(), kPlayerA);
+    // 宝宝无客户端行动权:标 auto,不进就绪判定 —— 主人一提交行动就能结算
+    EXPECT_TRUE(petActor->is_auto());
+
+    ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId)));
+    const auto result = engine.ResolveCurrentRound();
+    // 出手序看 engine.LastActionOrder():TurnResultS2C.action_order 是 battle **节点**
+    // 从这里透传上去的(battle_room_manager.cpp),引擎自己返回的那份里恒为空
+    const auto& order = engine.LastActionOrder();
+    ASSERT_GE(order.size(), 2u);
+    EXPECT_EQ(order[0], kPetA);  // 速度 30 > 10
+
+    // 宝宝这一回合确实出了手(普攻由默认行动路径代打)
+    bool petAttacked = false;
+    for (const auto& event : result.events()) {
+        if (event.event_type() == BATTLE_EVENT_ATTACK && event.source_id() == kPetA) {
+            petAttacked = true;
+        }
+    }
+    EXPECT_TRUE(petAttacked);
+}
+
+TEST(TurnBattleEngineTest, PetIsNotControllableByClient) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9402, turnbattle::kMatchModePveSolo, 4242);
+    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 10);
+    AddPet(owner, kPetA, 400, 400, 4, 30);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 对宝宝提交行动不落账(SubmitAction 只收 PLAYER),也不能给它开关自动战斗
+    EXPECT_FALSE(engine.SubmitAction(kPetA, MakeAction(BATTLE_ACTION_DEFEND)));
+    EXPECT_NE(engine.SetActorAuto(kPetA, false), 0u);
+
+    const auto state = engine.BuildStateSnapshot();
+    const auto* petActor = FindStateActor(state, kPetA);
+    ASSERT_NE(petActor, nullptr);
+    EXPECT_TRUE(petActor->is_auto());
+}
+
+TEST(TurnBattleEngineTest, PetFinalStateGoesIntoOwnerSettlement) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9403, turnbattle::kMatchModePveSolo, 55);
+    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 10);
+    AddPet(owner, kPetA, 400, 400, 4, 30);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId)));
+    engine.ResolveCurrentRound();
+
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    ASSERT_EQ(settlement.pets_size(), 1);
+    EXPECT_EQ(settlement.pets(0).pet_id(), kPetA);
+    EXPECT_LE(settlement.pets(0).health(), 400u);
+    EXPECT_FALSE(settlement.pets(0).is_dead());
+}

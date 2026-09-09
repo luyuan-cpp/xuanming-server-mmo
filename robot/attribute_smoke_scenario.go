@@ -38,6 +38,8 @@ import (
 	"robot/logic/gameobject"
 	"robot/metrics"
 	"robot/pkg"
+
+	tiptable "shared/generated/pb/table"
 )
 
 // 账号前缀必须是 robot_ 才会命中 login 侧的 DevPasswordAuth(开发用密码认证)。
@@ -61,14 +63,17 @@ const (
 // AttributePool 行 1 的 points_per_level(表值;冒烟用它算 1→30 级应得的精确点数)。
 const attrPrimaryPointsPerLevel uint32 = 5
 
-// tip id 与 data/tip/Tip.xlsx 的 //attribute_error 组对齐(130 起)。
-const (
-	tipAttributePoolLocked           uint32 = 131
-	tipAttributePointsCannotDecrease uint32 = 134
-	tipAttributeDimensionCapExceeded uint32 = 135
-	tipAttributeSchemeLimitReached   uint32 = 137
-	tipAttributeSchemeSwitchCooldown uint32 = 138
-	tipAttributeNothingToChange      uint32 = 144
+// tip id 一律读导表器生成的枚举,**不写字面量**(AGENTS.md §7 不变量 5)。
+// 2026-09-09 修正:这组常量原本手抄的是 131/134/... 那套旧号,tip 码轴改成按段发号
+// (commit 95b5641d0)之后就全部作废了,负向断言(期待被拒的那几步)因此永远对不上且零报错。
+// 改成引用枚举后,再发生一次同类改号会在编译期断,而不是在冒烟里静默变绿/变红。
+var (
+	tipAttributePoolLocked           = uint32(tiptable.AttributeError_kAttributePoolLocked)
+	tipAttributePointsCannotDecrease = uint32(tiptable.AttributeError_kAttributePointsCannotDecrease)
+	tipAttributeDimensionCapExceeded = uint32(tiptable.AttributeError_kAttributeDimensionCapExceeded)
+	tipAttributeSchemeLimitReached   = uint32(tiptable.AttributeError_kAttributeSchemeLimitReached)
+	tipAttributeSchemeSwitchCooldown = uint32(tiptable.AttributeError_kAttributeSchemeSwitchCooldown)
+	tipAttributeNothingToChange      = uint32(tiptable.AttributeError_kAttributeNothingToChange)
 )
 
 // attributeSmokeSession 是一个已登录进场的机器人会话 + 面板序号游标。

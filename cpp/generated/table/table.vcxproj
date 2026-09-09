@@ -65,6 +65,10 @@
     <ClInclude Include="code\attributedimension_table_comp.h" />
     <ClInclude Include="code\attributedimension_table_fk.h" />
     <ClInclude Include="code\attributepool_table.h" />
+    <ClInclude Include="code\pet_table.h" />
+    <ClInclude Include="code\pet_table_comp.h" />
+    <ClInclude Include="code\petrule_table.h" />
+    <ClInclude Include="code\petrule_table_comp.h" />
     <ClInclude Include="code\attributepool_table_comp.h" />
     <ClInclude Include="code\attributerule_table.h" />
     <ClInclude Include="code\attributerule_table_comp.h" />
@@ -101,6 +105,8 @@
     <ClInclude Include="proto\attributeautoplan_table.pb.h" />
     <ClInclude Include="proto\attributedimension_table.pb.h" />
     <ClInclude Include="proto\attributepool_table.pb.h" />
+    <ClInclude Include="proto\pet_table.pb.h" />
+    <ClInclude Include="proto\petrule_table.pb.h" />
     <ClInclude Include="proto\attributerule_table.pb.h" />
     <ClInclude Include="proto\operator\ability_operator.pb.h" />
     <ClInclude Include="proto\operator\bag_operator.pb.h" />
@@ -114,6 +120,7 @@
     <ClInclude Include="proto\tip\bag_error_tip.pb.h" />
     <ClInclude Include="proto\tip\buff_error_tip.pb.h" />
     <ClInclude Include="proto\tip\attribute_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\pet_error_tip.pb.h" />
     <ClInclude Include="proto\tip\common_error_tip.pb.h" />
     <ClInclude Include="proto\tip\cross_server_error_tip.pb.h" />
     <ClInclude Include="proto\tip\entity_error_tip.pb.h" />
@@ -152,6 +159,8 @@
     <ClCompile Include="code\attributeautoplan_table.cpp" />
     <ClCompile Include="code\attributedimension_table.cpp" />
     <ClCompile Include="code\attributepool_table.cpp" />
+    <ClCompile Include="code\pet_table.cpp" />
+    <ClCompile Include="code\petrule_table.cpp" />
     <ClCompile Include="code\attributerule_table.cpp" />
     <ClCompile Include="code\reward_table.cpp" />
     <ClCompile Include="code\skillpermission_table.cpp" />
@@ -181,6 +190,8 @@
     <ClCompile Include="proto\attributeautoplan_table.pb.cc" />
     <ClCompile Include="proto\attributedimension_table.pb.cc" />
     <ClCompile Include="proto\attributepool_table.pb.cc" />
+    <ClCompile Include="proto\pet_table.pb.cc" />
+    <ClCompile Include="proto\petrule_table.pb.cc" />
     <ClCompile Include="proto\attributerule_table.pb.cc" />
     <ClCompile Include="proto\operator\ability_operator.pb.cc" />
     <ClCompile Include="proto\operator\bag_operator.pb.cc" />
@@ -194,6 +205,7 @@
     <ClCompile Include="proto\tip\bag_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\buff_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\attribute_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\pet_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\common_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\cross_server_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\entity_error_tip.pb.cc" />

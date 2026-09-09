@@ -147,7 +147,7 @@ crit(critchance/100) → ×2,饱和到 0
 - 洗点 / 开新方案的金币**必须走 `CurrencySystem`**(补缴与封禁钩子都在里面),禁止直写 `CurrencyComp`;
   先扣费成功再改数据,扣费失败什么都不动。
 
-错误码:`data/tip/Tip.xlsx` 的 `//attribute_error` 组(130-144),生成到
+错误码:`data/tip/Tip.xlsx` 的 `//attribute_error` 组(25000-25014,base=25000),生成到
 `table/proto/tip/attribute_error_tip.pb.h`。
 
 ## 6. 客户端(Unity uGUI)
@@ -187,4 +187,4 @@ crit(critchance/100) → ×2,饱和到 0
   两者都是 `AttributeDimension` 系数与 `Monster` 强度量级失配,需要策划按同级怪物重定系数,或给怪物基伤按等级成长
   / 给引擎加最低伤害比例下限。
 - **tip 文案**:服务端只下发裸编号;客户端 `AttributeClient.DescribeTip` 镜像了 `Tip.xlsx` 的 attribute_error 组
-  (130-144)做中文映射,改表要同步。全仓统一的 tip 文案下发机制仍是缺口。
+  (25000-25014,base=25000)做中文映射,改表要同步。全仓统一的 tip 文案下发机制仍是缺口。

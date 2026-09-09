@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS player_database (
   stress_test_probe MEDIUMBLOB,
   merge_state MEDIUMBLOB,
   attribute_component MEDIUMBLOB,
+  pet_component MEDIUMBLOB,
   PRIMARY KEY (player_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='player_database';
 
