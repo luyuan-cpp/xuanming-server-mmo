@@ -28,6 +28,8 @@
     <ClCompile Include="condition\condition_util.cpp" />
     <ClCompile Include="currency\system\currency_system.cpp" />
     <ClCompile Include="gain_block\gain_block_service.cpp" />
+    <ClCompile Include="id_segment\guid_segment_client.cpp" />
+    <ClCompile Include="id_segment\guid_segment_registry.cpp" />
     <ClCompile Include="mission\comp\mission_comp.cpp" />
     <ClCompile Include="mission\system\mission.cpp" />
     <ClCompile Include="snapshot\snapshot_system.cpp" />
@@ -45,6 +47,8 @@
     <ClInclude Include="bag\item_store.h" />
     <ClInclude Include="bag\comp\player_bags_comp.h" />
     <ClInclude Include="condition\condition_util.h" />
+    <ClInclude Include="id_segment\guid_segment_client.h" />
+    <ClInclude Include="id_segment\guid_segment_registry.h" />
     <ClInclude Include="currency\comp\player_currency_comp.h" />
     <ClInclude Include="currency\constants\currency.h" />
     <ClInclude Include="currency\system\currency_system.h" />

@@ -15,10 +15,13 @@ import (
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	gproto "google.golang.org/protobuf/proto"
 
+	kafkacontracts "proto/contracts/kafka"
 	"proto/scene_manager"
+	game "scene_manager/generated/pb/game"
 	"scene_manager/internal/config"
 	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
+	"shared/kafkacmd"
 	"shared/snowflake"
 )
 
@@ -648,11 +651,12 @@ func TestEnterScene_CrossNodeRejectedWithoutSideEffectsAndRetryStaysRejected(t *
 	}
 }
 
-func TestEnterScene_ExistingLocationCrossZoneRejectedAndReservationRolledBack(t *testing.T) {
+func TestEnterScene_ExistingLocationCrossZoneRejectedWhileOldNodeAliveThenRedirectsOnceZoneDead(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	ctx := context.Background()
 	writer := &countingKafkaWriter{}
 	sc.Kafka = writer
+	sc.Config.KafkaWriteTimeoutSeconds = 1
 
 	const (
 		playerID = uint64(5102)
@@ -667,19 +671,30 @@ func TestEnterScene_ExistingLocationCrossZoneRejectedAndReservationRolledBack(t 
 	mr.ZAdd(nodeLoadKey(2), 0, "10")
 	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, oldScene), "10")
 	mr.Set(fmt.Sprintf(InstancePlayerCountKey, oldScene), "5")
+	// 旧 zone 的属主节点仍在负载集里 = 它可能还在写这名玩家 → 必须拒绝。
+	mr.ZAdd(nodeLoadKey(1), 0, "10")
 	require.NoError(t, UpdatePlayerLocation(ctx, sc, playerID, oldScene, "10", 1))
 
-	resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
+	logic := NewEnterSceneLogic(ctx, sc)
+	assignCalls := 0
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32) (*scene_manager.RedirectToGateInfo, error) {
+		assignCalls++
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	request := &scene_manager.EnterSceneRequest{
 		PlayerId: playerID, SceneConfId: confID, ZoneId: 2,
 		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
-	})
+	}
+
+	resp, err := logic.EnterScene(request)
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode)
+	assert.Equal(t, 0, assignCalls, "拒绝时不得分配目标区 Gate")
 
 	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
 	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(2, "10"))
 	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
-	assert.Equal(t, "3", targetCount)
+	assert.Equal(t, "3", targetCount, "重定向分支在解析之前,不得留下目标场景预占")
 	assert.Equal(t, "8", nodeCount)
 	assert.Equal(t, "5", oldCount)
 	assert.Equal(t, 0, writer.count())
@@ -687,9 +702,26 @@ func TestEnterScene_ExistingLocationCrossZoneRejectedAndReservationRolledBack(t 
 	require.NoError(t, locErr)
 	assert.Equal(t, oldScene, loc.SceneId)
 	assert.Equal(t, uint32(1), loc.ZoneId)
+
+	// 旧 zone 整体下线(负载集空、节点不在集内、无 death_at 屏障):陈旧位置
+	// 不再能证明有人在写,第一条腿必须放行到重定向。
+	mr.ZRem(nodeLoadKey(1), "10")
+	resp, err = logic.EnterScene(request)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode, "旧 zone 已死时陈旧位置不得再挡住重定向")
+	require.NotNil(t, resp.Redirect)
+	assert.Equal(t, "10.2.0.8", resp.Redirect.TargetGateIp)
+	assert.Equal(t, 1, assignCalls)
+	assert.Equal(t, 1, writer.count(), "重定向必须推送 RedirectToGateEvent 给当前 Gate")
+	targetCount, _ = sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	assert.Equal(t, "3", targetCount, "重定向不预占目标场景人数")
+	loc, locErr = GetPlayerLocation(ctx, sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc, "重定向不提交新位置;陈旧位置留给第二条腿覆盖")
+	assert.Equal(t, oldScene, loc.SceneId)
 }
 
-func TestEnterScene_ZoneScopedNodeIDCollisionStillRejected(t *testing.T) {
+func TestEnterScene_ZoneScopedNodeIDCollisionStillRejectedWhileOldNodeAlive(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	ctx := context.Background()
 	writer := &countingKafkaWriter{}
@@ -702,11 +734,12 @@ func TestEnterScene_ZoneScopedNodeIDCollisionStillRejected(t *testing.T) {
 	)
 	// node_id=10 在两个 zone 各自合法存在；只比 node 字符串会把它们误判成
 	// 同一物理节点。玩家已经连到目标区 Gate，因此 crossZoneRedirect=false，
-	// 这正是旧门禁会漏掉的路径。
+	// 这正是旧门禁会漏掉的路径。旧 zone 的 node 10 仍活着,必须拒绝。
 	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, targetID), "10")
 	mr.Set(fmt.Sprintf(InstancePlayerCountKey, targetID), "3")
 	mr.Set(nodePlayerCountKey(2, "10"), "8")
 	mr.ZAdd(nodeLoadKey(2), 0, "10")
+	mr.ZAdd(nodeLoadKey(1), 0, "10")
 	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, oldScene), "10")
 	mr.Set(fmt.Sprintf(InstancePlayerCountKey, oldScene), "5")
 	require.NoError(t, UpdatePlayerLocation(ctx, sc, playerID, oldScene, "10", 1))
@@ -727,6 +760,185 @@ func TestEnterScene_ZoneScopedNodeIDCollisionStillRejected(t *testing.T) {
 	require.NotNil(t, loc)
 	assert.Equal(t, oldScene, loc.SceneId)
 	assert.Equal(t, uint32(1), loc.ZoneId)
+}
+
+// seedStaleLocationFromZone1 摆出「玩家位置指向 zone 1 的 node 10 / oldScene,
+// 目标是 zone 2 的 targetID(node 10)」这组共用夹具;zone 1 的负载集由各用例
+// 自己决定是活着、空着还是坏掉。
+func seedStaleLocationFromZone1(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Miniredis, playerID, oldScene, targetID uint64) {
+	t.Helper()
+	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, targetID), "10")
+	mr.Set(fmt.Sprintf(SceneZoneKeyFmt, targetID), "2")
+	mr.Set(fmt.Sprintf(InstancePlayerCountKey, targetID), "3")
+	mr.Set(nodePlayerCountKey(2, "10"), "8")
+	mr.ZAdd(nodeLoadKey(2), 0, "10")
+	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, oldScene), "10")
+	mr.Set(fmt.Sprintf(SceneZoneKeyFmt, oldScene), "1")
+	mr.Set(fmt.Sprintf(InstancePlayerCountKey, oldScene), "5")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+}
+
+func TestEnterScene_StaleLocationFromDeadZoneAllowsPlacementViaTargetGate(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	ctx := context.Background()
+	writer := &countingKafkaWriter{}
+	sc.Kafka = writer
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+
+	const (
+		playerID = uint64(5120)
+		oldScene = uint64(1120)
+		targetID = uint64(2220)
+	)
+	seedStaleLocationFromZone1(t, sc, mr, playerID, oldScene, targetID)
+	// zone 1 的负载集不存在:源区已永久下线(合服第二条腿:玩家已连到目标区 Gate)。
+
+	fake := withReachableSceneNode(t, sc, "10")
+	releasesBefore := fake.releaseCalls.Load()
+	resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: 2,
+		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode, "旧 zone 已死时陈旧位置不得触发跨节点交接拒绝")
+
+	loc, locErr := GetPlayerLocation(ctx, sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, targetID, loc.SceneId, "成功落点必须覆盖陈旧位置")
+	assert.Equal(t, uint32(2), loc.ZoneId)
+	assert.Equal(t, "10", loc.NodeId)
+
+	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(2, "10"))
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	assert.Equal(t, "4", targetCount)
+	assert.Equal(t, "9", nodeCount)
+	assert.Equal(t, "5", oldCount, "死 zone 的旧场景计数是垃圾,不去扣它(由合服工具整体清理)")
+	assert.Equal(t, 1, writer.count(), "正常落点必须给 Gate 发路由")
+	assert.Equal(t, releasesBefore, fake.releaseCalls.Load(), "不得向已消失的旧节点发 ReleasePlayer")
+}
+
+func TestEnterScene_StaleLocationCheckFailsClosedOnRedisError(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	ctx := context.Background()
+	writer := &countingKafkaWriter{}
+	sc.Kafka = writer
+
+	const (
+		playerID = uint64(5121)
+		oldScene = uint64(1121)
+		targetID = uint64(2221)
+	)
+	seedStaleLocationFromZone1(t, sc, mr, playerID, oldScene, targetID)
+	// zone 1 的负载集键被写成 string:ZCARD/ZSCORE 都会得到 WRONGTYPE —— 这是
+	// 「Redis 出错、状态未知」的真实形态。拿不到证据就不能把位置当不存在。
+	mr.Set(nodeLoadKey(1), "corrupt")
+
+	resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: 2,
+		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode, "Redis 错误时必须 fail-closed 沿用拒绝")
+
+	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(2, "10"))
+	assert.Equal(t, "3", targetCount)
+	assert.Equal(t, "8", nodeCount)
+	assert.Equal(t, 0, writer.count())
+	loc, locErr := GetPlayerLocation(ctx, sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, oldScene, loc.SceneId)
+	assert.Equal(t, uint32(1), loc.ZoneId)
+}
+
+func TestEnterScene_StaleLocationCheckWaitsForReentryBarrier(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	ctx := context.Background()
+	writer := &countingKafkaWriter{}
+	sc.Kafka = writer
+
+	const (
+		playerID = uint64(5122)
+		oldScene = uint64(1122)
+		targetID = uint64(2222)
+	)
+	seedStaleLocationFromZone1(t, sc, mr, playerID, oldScene, targetID)
+	// zone 1 负载集空,但 node 10 是**刚**判死的:C++ 老进程还在 drain 里存盘。
+	// 屏障没走完之前,位置记录仍然代表一个可能在写的属主。
+	markNodeDeath(sc, 1, "10")
+
+	resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: 2,
+		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode, "再入屏障未到时不得把陈旧位置当不存在")
+	assert.Equal(t, 0, writer.count())
+
+	// 屏障过后(死亡标记消失)同一请求放行。
+	mr.Del(nodeDeathAtKey(1, "10"))
+	resp, err = NewEnterSceneLogic(ctx, sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: 2,
+		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+}
+
+func TestEnterScene_RedirectWithoutTargetWorldChannelStillEmitsRedirectEvent(t *testing.T) {
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	ctx := context.Background()
+	var captured []kafka.Message
+	writer := &countingKafkaWriter{onWrite: func(msgs []kafka.Message) { captured = append(captured, msgs...) }}
+	sc.Kafka = writer
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+
+	const (
+		playerID = uint64(5123)
+		confID   = uint64(3323)
+	)
+	// 目标 zone 2 没有任何频道 / 节点:合服后目标区仍在过渡窗口。修复前这里
+	// 会先解析场景失败返回 ErrNoAvailableNode,重定向永远到不了。
+	logic := NewEnterSceneLogic(ctx, sc)
+	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, zone uint32) (*scene_manager.RedirectToGateInfo, error) {
+		assert.Equal(t, uint32(2), zone)
+		return &scene_manager.RedirectToGateInfo{
+			TargetGateIp: "10.2.0.9", TargetGatePort: 7002,
+			TokenPayload: []byte{9, 9}, TokenSignature: []byte("sig"), TokenDeadline: 42,
+		}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneConfId: confID, ZoneId: 2, GateZoneId: 1,
+		GateId: "7", GateInstanceId: "gate-uuid-test", SessionId: 77, RequestId: "redirect-no-channel",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	require.NotNil(t, resp.Redirect)
+	assert.Equal(t, "10.2.0.9", resp.Redirect.TargetGateIp)
+
+	require.Len(t, captured, 1)
+	assert.Equal(t, GateTopicName("7"), captured[0].Topic)
+	// 控制面命令的落点是 node_id % P,不是 key 哈希:分区错了目标 gate 就永远
+	// 收不到,而 Kafka 一个错都不报(docs/design/control-plane-topic-partitioning-20260908.md)。
+	assert.Equal(t, kafkacmd.GateCommandPartition(7), captured[0].Partition)
+	cmd := &kafkacontracts.GateCommand{}
+	require.NoError(t, gproto.Unmarshal(captured[0].Value, cmd))
+	assert.Equal(t, uint32(game.ContractsKafkaRedirectToGateEventEventId), cmd.EventId)
+	assert.Equal(t, uint32(7), cmd.TargetGateId)
+	assert.Equal(t, "gate-uuid-test", cmd.TargetInstanceId)
+	event := &kafkacontracts.RedirectToGateEvent{}
+	require.NoError(t, gproto.Unmarshal(cmd.Payload, event))
+	assert.Equal(t, playerID, event.PlayerId)
+	assert.Equal(t, uint32(77), event.SessionId)
+	assert.Equal(t, "10.2.0.9", event.TargetGateIp)
+	assert.Equal(t, []byte("sig"), event.TokenSignature)
+
+	loc, locErr := GetPlayerLocation(ctx, sc, playerID)
+	require.NoError(t, locErr)
+	assert.Nil(t, loc, "重定向不提交位置")
 }
 
 func TestEnterScene_SameNodeSwitchStillSucceeds(t *testing.T) {

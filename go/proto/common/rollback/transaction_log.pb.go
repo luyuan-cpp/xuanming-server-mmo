@@ -173,7 +173,12 @@ type TransactionLogEntry struct {
 	// Correlation: links related operations (e.g. both sides of a trade)
 	CorrelationId uint64 `protobuf:"varint,13,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"` // Shared SnowFlake ID across paired entries
 	// Free-form metadata (JSON)
-	Extra         string `protobuf:"bytes,14,opt,name=extra,proto3" json:"extra,omitempty"`
+	Extra string `protobuf:"bytes,14,opt,name=extra,proto3" json:"extra,omitempty"`
+	// 捕获时刻所在的 zone(生产者填 GetZoneId())。
+	// 消费者(data_service 的 Kafka 落库)必须直接用这个值,不许回查 Router:
+	// 玩家的 home_zone 之后可能因合服而改变,回滚审计要的是"事发时在哪个 zone"。
+	// 见 docs/design/node-id-overhaul-plan-20260908.md §2.0c 第 1 步。
+	ZoneId        uint32 `protobuf:"varint,15,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -306,6 +311,13 @@ func (x *TransactionLogEntry) GetExtra() string {
 	return ""
 }
 
+func (x *TransactionLogEntry) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
 // Batch wrapper for Kafka transport.
 type TransactionLogBatch struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -355,7 +367,7 @@ var File_proto_common_rollback_transaction_log_proto protoreflect.FileDescriptor
 
 const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\n" +
-	"+proto/common/rollback/transaction_log.proto\"\xee\x03\n" +
+	"+proto/common/rollback/transaction_log.proto\"\x87\x04\n" +
 	"\x13TransactionLogEntry\x12\x13\n" +
 	"\x05tx_id\x18\x01 \x01(\x04R\x04txId\x12\x1c\n" +
 	"\ttimestamp\x18\x02 \x01(\x04R\ttimestamp\x12)\n" +
@@ -372,7 +384,8 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x0ebalance_before\x18\v \x01(\x04R\rbalanceBefore\x12#\n" +
 	"\rbalance_after\x18\f \x01(\x04R\fbalanceAfter\x12%\n" +
 	"\x0ecorrelation_id\x18\r \x01(\x04R\rcorrelationId\x12\x14\n" +
-	"\x05extra\x18\x0e \x01(\tR\x05extra\"E\n" +
+	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
+	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
 	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xff\x03\n" +
 	"\x0fTransactionType\x12\x0e\n" +

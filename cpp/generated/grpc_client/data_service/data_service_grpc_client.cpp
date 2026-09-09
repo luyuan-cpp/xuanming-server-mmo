@@ -1076,6 +1076,65 @@ void SendDataServiceCreateEventSnapshot(entt::registry& registry, entt::entity n
     SendDataServiceCreateEventSnapshot(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
+#pragma region DataServiceAllocateIdSegment
+boost::object_pool<AsyncDataServiceAllocateIdSegmentGrpcClient> DataServiceAllocateIdSegmentPool;
+using AsyncDataServiceAllocateIdSegmentHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::data_service::AllocateIdSegmentResponse&)>;
+AsyncDataServiceAllocateIdSegmentHandlerFunctionType AsyncDataServiceAllocateIdSegmentHandler;
+
+void AsyncCompleteGrpcDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncDataServiceAllocateIdSegmentGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncDataServiceAllocateIdSegmentHandler) {
+            AsyncDataServiceAllocateIdSegmentHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	DataServiceAllocateIdSegmentPool.destroy(call);
+}
+
+void SendDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nodeEntity, const ::data_service::AllocateIdSegmentRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(DataServiceAllocateIdSegmentPool.construct());
+    call->response_reader = registry
+        .get<DataServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncAllocateIdSegment(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(DataServiceAllocateIdSegmentMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nodeEntity, const ::data_service::AllocateIdSegmentRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(DataServiceAllocateIdSegmentPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<DataServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncAllocateIdSegment(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(DataServiceAllocateIdSegmentMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::data_service::AllocateIdSegmentRequest& derived = static_cast<const ::data_service::AllocateIdSegmentRequest&>(message);
+    SendDataServiceAllocateIdSegment(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
 
 void HandleDataServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag) {
         switch (grpcTag->messageId) {
@@ -1151,6 +1210,10 @@ void HandleDataServiceCompletedQueueMessage(entt::registry& registry, entt::enti
             AsyncCompleteGrpcDataServiceCreateEventSnapshot(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
+        case DataServiceAllocateIdSegmentMessageId:
+            AsyncCompleteGrpcDataServiceAllocateIdSegment(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
         default:
             break;
         }
@@ -1176,6 +1239,7 @@ void SetDataServiceHandler(const std::function<void(const ClientContext&, const 
     AsyncDataServiceBatchRecallItemsHandler = handler;
     AsyncDataServiceQueryTransactionLogHandler = handler;
     AsyncDataServiceCreateEventSnapshotHandler = handler;
+    AsyncDataServiceAllocateIdSegmentHandler = handler;
 }
 
 void SetDataServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler) {
@@ -1233,6 +1297,9 @@ void SetDataServiceIfEmptyHandler(const std::function<void(const ClientContext&,
     }
     if (!AsyncDataServiceCreateEventSnapshotHandler) {
         AsyncDataServiceCreateEventSnapshotHandler = handler;
+    }
+    if (!AsyncDataServiceAllocateIdSegmentHandler) {
+        AsyncDataServiceAllocateIdSegmentHandler = handler;
     }
 }
 

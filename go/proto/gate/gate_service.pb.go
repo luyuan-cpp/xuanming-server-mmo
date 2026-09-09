@@ -151,8 +151,21 @@ type BroadcastToPlayersRequest struct {
 	// bit N set in session_bitmap means session (session_bitmap_base + N) is included.
 	SessionBitmapBase uint32 `protobuf:"varint,3,opt,name=session_bitmap_base,json=sessionBitmapBase,proto3" json:"session_bitmap_base,omitempty"`
 	SessionBitmap     []byte `protobuf:"bytes,4,opt,name=session_bitmap,json=sessionBitmap,proto3" json:"session_bitmap,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// 目标玩家身份栅栏(routing-identity-audit-20260908.md R13),与 NodeMessageHeader
+	// .target_player_id 同一理由:session_id 的高位是**立刻复用**的 gate node_id,
+	// 低 17 位序号在单个 gate 实例内也会回绕,单靠 session_id 会把 A 的广播写进
+	// 另一个玩家的 socket。
+	//
+	// **顺序即契约**:player_list[i] 对应"按 session_id 升序"的第 i 个目标。
+	//   - session_list 形态:发送方按升序填 session_list,两个列表逐项对应;
+	//   - bitmap 形态:gate 按 bit 序(= session_id 升序)遍历,第 i 个置位的
+	//     session 对应 player_list[i]。
+	//
+	// 两种形态都归结为同一条规则,不存在第二种解释。
+	// 留空 = 老发送方(灰度窗口),gate 放行不校验。
+	PlayerList    []uint64 `protobuf:"varint,5,rep,packed,name=player_list,json=playerList,proto3" json:"player_list,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BroadcastToPlayersRequest) Reset() {
@@ -209,6 +222,13 @@ func (x *BroadcastToPlayersRequest) GetSessionBitmapBase() uint32 {
 func (x *BroadcastToPlayersRequest) GetSessionBitmap() []byte {
 	if x != nil {
 		return x.SessionBitmap
+	}
+	return nil
+}
+
+func (x *BroadcastToPlayersRequest) GetPlayerList() []uint64 {
+	if x != nil {
+		return x.PlayerList
 	}
 	return nil
 }
@@ -323,12 +343,14 @@ const file_proto_gate_gate_service_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12'\n" +
-	"\x0fsession_version\x18\x03 \x01(\rR\x0esessionVersion\"\xcf\x01\n" +
+	"\x0fsession_version\x18\x03 \x01(\rR\x0esessionVersion\"\xf0\x01\n" +
 	"\x19BroadcastToPlayersRequest\x12!\n" +
 	"\fsession_list\x18\x01 \x03(\rR\vsessionList\x128\n" +
 	"\x0fmessage_content\x18\x02 \x01(\v2\x0f.MessageContentR\x0emessageContent\x12.\n" +
 	"\x13session_bitmap_base\x18\x03 \x01(\rR\x11sessionBitmapBase\x12%\n" +
-	"\x0esession_bitmap\x18\x04 \x01(\fR\rsessionBitmap\"n\n" +
+	"\x0esession_bitmap\x18\x04 \x01(\fR\rsessionBitmap\x12\x1f\n" +
+	"\vplayer_list\x18\x05 \x03(\x04R\n" +
+	"playerList\"n\n" +
 	"\x17BroadcastToSceneRequest\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x128\n" +
 	"\x0fmessage_content\x18\x02 \x01(\v2\x0f.MessageContentR\x0emessageContent\"Q\n" +

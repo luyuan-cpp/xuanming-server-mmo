@@ -5,6 +5,8 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "muduo/net/TcpConnection.h"
 #include "time/comp/timer_task_comp.h"
@@ -27,13 +29,15 @@
 // 补偿全部由 scene 侧 reaper 按 InBattleComp.deadline_ms 兜底(§3.2),
 // 本类不做任何持久化,对玩家权威数据零写权(宪法 §7 新增不变量 4)。
 //
-// 出站(全走 Kafka producer,设计文档 D6):
-//   S2C     → GateCommand{PushToPlayerEvent},topic=gate-{gate_node_id},
-//             key=player_id,target_instance_id=BattleRouting.gate_instance_id;
+// 出站(全走 Kafka producer,设计文档 D6;寻址方式见
+// docs/design/control-plane-topic-partitioning-20260908.md,由 ResolveCommandRoute 统一给出):
+//   S2C     → GateCommand{PushToPlayerEvent},topic=gate-cmd_g<N> 的
+//             gate_node_id % P 号分区,key=player_id,
+//             target_gate_id=gate_node_id + target_instance_id=BattleRouting.gate_instance_id;
 //   绑定     → BindBattleEvent / UnbindBattleEvent(同上走 GateCommand 信封);
 //   结算     → SceneCommand{DispatchEvent, BattleSettlementEvent},
-//             topic=scene-{scene_node_id},key=player_id,
-//             target_instance_id=BattleRouting.scene_instance_id;
+//             topic=scene-cmd_g<N> 的 scene_node_id % P 号分区,key=player_id,
+//             target_scene_id=scene_node_id + target_instance_id=BattleRouting.scene_instance_id;
 //   确认     → SceneCommand{DispatchEvent, BattleConfirmedEvent}(CreateBattle 成功后每玩家一条,
 //             scene 据此 PREPARING→FIGHTING 并把作废期限切到正式 deadline,同上信封);
 //   对局结果 → contracts.kafka.BattleResultEvent,topic=match-results(全局无 zone 段),
@@ -94,6 +98,21 @@ public:
 
     // ---- gate → battle 客户端消息(权威身份来自会话 metadata,不信请求体) ----
 
+    // 参战/观战路由的**自愈**(routing-identity-audit-20260908.md R10)。
+    //
+    // BattleRouting 在 CreateBattle 时抓一次就再不刷新,战中换 gate / 换会话之后
+    // Kafka→gate 的回落推送就投到旧 gate 的旧 session 上,静默失效。
+    // 修法是"用已经在线上的数据自愈":gate 在每一条经它转发的客户端 RPC 上都会把
+    // 自己的 session_id / node_id / 实例 uuid 盖进 SessionDetails
+    // (client_message_processor.cpp BuildSessionDetails),这就是当前真值。
+    // 每个 Handle* 入口顺手比一次、不同就更新,重连后客户端的第一条包(重连流程里
+    // 必发的 GetBattleState)就把路由修好了。
+    //
+    // 只在 gate_instance_id 非空时才采信:客户端**直连面**合成的 SessionDetails
+    // (battle_client_edge.cpp)只有 player_id + 从房间里取回的旧 session_id,
+    // gate 身份两项为空 —— 拿它去"刷新"等于把旧值再写一遍,更糟的是会掩盖真实变更。
+    void RefreshRoutingFromSession(const ::SessionDetails &sessionDetails);
+
     void HandleSubmitBattleAction(const ::SessionDetails &sessionDetails,
                                   const ::SubmitBattleActionRequest &request,
                                   ::SubmitBattleActionResponse &response);
@@ -116,6 +135,17 @@ public:
 
     // 停机收尾:全部房间作废(仅向 gate 发解绑,不结算),供 SetBeforeShutdown 调用。
     void AbortAllRooms(const std::string &reason);
+
+    // ---- 结算重投的调参(测试与运维需要看得见,故放公开区)----
+    //
+    // 重投窗口 = kSettlementRetryIntervalSec × kSettlementRetryMaxAttempts = 120s。
+    // 上界取自"要覆盖一次 scene 进程重启 + 服务发现补齐"的时间尺度;再长没有意义:
+    // 持久记录仍在(TTL 7 天),玩家下次进场景会由登录钩子补应用。
+    static constexpr double kSettlementRetryIntervalSec = 10.0;
+    static constexpr uint32_t kSettlementRetryMaxAttempts = 12;
+    // 与 scene 侧 PlayerBattleSystem::kPendingSettlementTtlSec 同值(设计文档 §6)。
+    // 两处必须一致:battle 写、scene 读与销账,TTL 分叉就是"记录先于消费者过期"。
+    static constexpr uint32_t kPendingSettlementTtlSec = 7 * 24 * 3600;
 
 private:
     BattleRoomManager() = default;
@@ -211,7 +241,46 @@ private:
     // FinishBattle,它的应答此刻还没写。
     void CloseDirectConnections(BattleRoom &room, const char *reason);
 
+    // ---- 结算发件箱(R07:结算必须可重投,且重投要重新解析目标)----
+    //
+    // 判定逻辑在 services/battle/settlement/settlement_outbox.h(纯函数,单测直接盯)。
+    // 这里只放"条目 + 一个节点级定时器",房间在 FinishBattle 之后就被销毁了,
+    // 定时器不能挂在房间上。
+    struct PendingSettlement
+    {
+        uint64_t battleId = 0;
+        uint64_t playerId = 0;
+        // 序列化好的 BattleSettlementEvent(重投时原样再发,不重算 —— 结算必须幂等且一致)。
+        std::string payload;
+        // 开局时抓到的 scene 落点,只用于日志对照:重投**一律**用重新解析出来的 node_id。
+        uint32_t originalSceneNodeId = 0;
+        uint32_t attempts = 0;
+    };
+
+    // 结算的**唯一**出口(R07)。顺序是硬要求:
+    //   Redis 落库 → (落库回调里)投 SceneCommand → 登记进 outbox 等销账。
+    // 不能反过来先投再落库:投递可能比 Redis 的 SET 先到,scene 应用结算后销账
+    // (此刻记录还不存在,销账是空操作),随后迟到的 SET 落地就留下一条孤儿记录,
+    // 玩家下次登录会被**重复发一次奖励**。
+    // Redis 不可用时降级为"直接投递"并报 ERROR —— 那是既有行为,不是本次引入的退化。
+    void DispatchSettlementDurably(const ::BattleRouting &routing, uint64_t playerId,
+                                   const ::BattleSettlementData &settlement);
+
+    // 落库成功后登记一条待销账记录并保证重投定时器已装填。
+    void EnqueuePendingSettlement(uint64_t battleId, uint64_t playerId, std::string payload,
+                                  uint32_t originalSceneNodeId);
+    // 定时器回调:对每条未销账的记录探测 ACK、重新解析目标、按判定重投或收尾。
+    void RetryPendingSettlements();
+    // 单条记录的一轮处理(Redis 回调链的入口)。
+    void ProbeAndRetryOne(uint64_t battleId, uint64_t playerId);
+    // outbox 空了就停表:battle 常态下没有未销账记录,不该留一个每 10s 空转的定时器。
+    void StopSettlementRetryTimerIfIdle();
+
     BattleClientEdge *edge_ = nullptr;
 
     std::unordered_map<uint64_t, std::unique_ptr<BattleRoom>> rooms_;
+
+    // key = (battle_id, player_id);量级 = 未销账的结算条数,常态为 0。
+    std::map<std::pair<uint64_t, uint64_t>, PendingSettlement> settlementOutbox_;
+    TimerTaskComp settlementRetryTimer_;
 };

@@ -139,50 +139,9 @@ message player_database_1
   PlayerStressTestProbe stress_test_probe = 2;
 }
 
-// ─── Player snapshot table (for rollback) ────────────────────
-message player_snapshot
-{
-  option(OptionTableName) = "player_snapshot";
-  option(OptionPrimaryKey) = "id";
-  option(OptionAutoIncrementKey) = "id";
-  option(OptionIndex) = "player_id";
-  // 自增主键同样单调递增,按 §D3 处方 NONCLUSTERED + 打散;自增值非连续可接受(无连续性依赖)
-  option(OptionTiDBNonclusteredPK) = true;
-  option(OptionTiDBShardRowIDBits) = 4;
-  option(OptionTiDBPreSplitRegions) = 4;
+// player_snapshot / rollback_audit_log 已移到 rollback_database_table.proto:导表器按本文件的 message 成员生成 zone 库建表清单(generated/data/mysql_database_table_list.json),而这两张表只该存在于全局库(data_service)一处。
 
-  uint64 id = 1;             // Auto-increment snapshot ID
-  uint64 player_id = 2;      // Player this snapshot belongs to
-  uint32 zone_id = 3;        // Player's home zone at snapshot time
-  uint32 snapshot_type = 4;  // SnapshotType enum value
-  uint64 created_at = 5;     // Unix timestamp of snapshot creation
-  string reason = 6;         // Reason / description
-  string operator = 7;       // GM operator who created it
-  bytes  data = 8;           // Serialized snapshot data (proto SnapshotData)
-}
-
-// ─── Rollback audit log ──────────────────────────────────────
-message rollback_audit_log
-{
-  option(OptionTableName) = "rollback_audit_log";
-  option(OptionPrimaryKey) = "id";
-  option(OptionAutoIncrementKey) = "id";
-  // 自增主键同样单调递增,按 §D3 处方 NONCLUSTERED + 打散;自增值非连续可接受(无连续性依赖)
-  option(OptionTiDBNonclusteredPK) = true;
-  option(OptionTiDBShardRowIDBits) = 4;
-  option(OptionTiDBPreSplitRegions) = 4;
-
-  uint64 id = 1;
-  uint64 player_id = 2;          // 0 for zone/server rollback
-  uint32 zone_id = 3;            // 0 for server-wide rollback
-  uint32 rollback_type = 4;      // 1=player, 2=zone, 3=server
-  uint64 snapshot_id_used = 5;   // Which snapshot was restored (single-player only)
-  uint64 pre_rollback_snapshot_id = 6;  // Safety snapshot before rollback
-  uint64 target_time = 7;        // Target rollback timestamp
-  uint32 players_affected = 8;
-  uint32 players_failed = 9;
-  string reason = 10;
-  string operator = 11;          // GM operator
-  uint64 created_at = 12;        // When the rollback was executed
-}
+// id_segment(号段表)同样刻意不放本文件:导表器按本文件的 message 成员生成
+// generated/data/mysql_database_table_list.json,go/db 据此在每个 zone 库建表;
+// 号段表只该存在于全局库一处,所以定义在 rollback_database_table.proto(与 transaction_log 同处)。
 

@@ -534,11 +534,11 @@ constexpr NodeMessageHeader::ParseTableT_ NodeMessageHeader::InternalGeneratePar
     {
       PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      3, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967288,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      3,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -548,14 +548,19 @@ constexpr NodeMessageHeader::ParseTableT_ NodeMessageHeader::InternalGeneratePar
       ::_pbi::TcParser::GetTable<::NodeMessageHeader>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 session_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeMessageHeader, _impl_.session_id_), 1>(),
-       {16, 1, 0,
-        PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_.session_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint32 node_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeMessageHeader, _impl_.node_id_), 0>(),
        {8, 0, 0,
         PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_.node_id_)}},
+      // uint32 session_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(NodeMessageHeader, _impl_.session_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_.session_id_)}},
+      // uint64 target_player_id = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(NodeMessageHeader, _impl_.target_player_id_), 2>(),
+       {24, 2, 0,
+        PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_.target_player_id_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -563,6 +568,8 @@ constexpr NodeMessageHeader::ParseTableT_ NodeMessageHeader::InternalGeneratePar
       {PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_.node_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 session_id = 2;
       {PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_.session_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 target_player_id = 3;
+      {PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_.target_player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -576,7 +583,8 @@ inline constexpr NodeMessageHeader::Impl_::Impl_(
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
         node_id_{0u},
-        session_id_{0u} {}
+        session_id_{0u},
+        target_player_id_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr NodeMessageHeader::NodeMessageHeader(::_pbi::ConstantInitialized,
@@ -4913,11 +4921,13 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::NodeMessageHeader, _impl_._has_bits_),
-        5, // hasbit index offset
+        6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::NodeMessageHeader, _impl_.node_id_),
         PROTOBUF_FIELD_OFFSET(::NodeMessageHeader, _impl_.session_id_),
+        PROTOBUF_FIELD_OFFSET(::NodeMessageHeader, _impl_.target_player_id_),
         0,
         1,
+        2,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::NodeRouteMessageRequest, _impl_._has_bits_),
         5, // hasbit index offset
@@ -5138,33 +5148,33 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::RoutingNodeInfo)},
         {7, sizeof(::MessageContent)},
         {18, sizeof(::NodeMessageHeader)},
-        {25, sizeof(::NodeRouteMessageRequest)},
-        {32, sizeof(::NodeRouteMessageResponse)},
-        {39, sizeof(::PlayerInfoExternal)},
-        {44, sizeof(::PlayerNodeServiceRequest)},
-        {51, sizeof(::PlayerMessageResponse)},
-        {58, sizeof(::NodeRoutingMessageBody)},
-        {63, sizeof(::RegisterGameNodeSessionRequest)},
-        {70, sizeof(::RegisterGameNodeSessionResponse)},
-        {75, sizeof(::RegisterGateNodeSessionResponse)},
-        {80, sizeof(::GateSessionDisconnectRequest)},
-        {85, sizeof(::RouteMessageRequest)},
-        {98, sizeof(::RouteMessageResponse)},
-        {111, sizeof(::RoutePlayerMessageRequest)},
-        {120, sizeof(::RoutePlayerMessageResponse)},
-        {129, sizeof(::RegisterGameNodeRequest)},
-        {142, sizeof(::RegisterGateNodeRequest)},
-        {149, sizeof(::UnregisterGameNodeRequest)},
-        {154, sizeof(::ProtoFieldCheckerTestSubPB)},
-        {159, sizeof(::ProtoFieldCheckerTestPB)},
-        {164, sizeof(::MyProtoMessage)},
-        {177, sizeof(::MyNestedMessage)},
-        {184, sizeof(::ClientRequest)},
-        {197, sizeof(::NodeHandshakeRequest)},
-        {206, sizeof(::NodeHandshakeResponse)},
-        {213, sizeof(::GateTokenPayload)},
-        {224, sizeof(::ClientTokenVerifyRequest)},
-        {231, sizeof(::ClientTokenVerifyResponse)},
+        {27, sizeof(::NodeRouteMessageRequest)},
+        {34, sizeof(::NodeRouteMessageResponse)},
+        {41, sizeof(::PlayerInfoExternal)},
+        {46, sizeof(::PlayerNodeServiceRequest)},
+        {53, sizeof(::PlayerMessageResponse)},
+        {60, sizeof(::NodeRoutingMessageBody)},
+        {65, sizeof(::RegisterGameNodeSessionRequest)},
+        {72, sizeof(::RegisterGameNodeSessionResponse)},
+        {77, sizeof(::RegisterGateNodeSessionResponse)},
+        {82, sizeof(::GateSessionDisconnectRequest)},
+        {87, sizeof(::RouteMessageRequest)},
+        {100, sizeof(::RouteMessageResponse)},
+        {113, sizeof(::RoutePlayerMessageRequest)},
+        {122, sizeof(::RoutePlayerMessageResponse)},
+        {131, sizeof(::RegisterGameNodeRequest)},
+        {144, sizeof(::RegisterGateNodeRequest)},
+        {151, sizeof(::UnregisterGameNodeRequest)},
+        {156, sizeof(::ProtoFieldCheckerTestSubPB)},
+        {161, sizeof(::ProtoFieldCheckerTestPB)},
+        {166, sizeof(::MyProtoMessage)},
+        {179, sizeof(::MyNestedMessage)},
+        {186, sizeof(::ClientRequest)},
+        {199, sizeof(::NodeHandshakeRequest)},
+        {208, sizeof(::NodeHandshakeResponse)},
+        {215, sizeof(::GateTokenPayload)},
+        {226, sizeof(::ClientTokenVerifyRequest)},
+        {233, sizeof(::ClientTokenVerifyResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -5208,72 +5218,73 @@ const char descriptor_table_protodef_proto_2fcommon_2fbase_2fmessage_2eproto[] A
     "\001 \001(\0132\t.NodeInfo\022\022\n\nmessage_id\030\002 \001(\r\"t\n\016"
     "MessageContent\022\032\n\022serialized_message\030\001 \001"
     "(\014\022\022\n\nmessage_id\030\002 \001(\r\022\n\n\002id\030\003 \001(\004\022&\n\rer"
-    "ror_message\030\004 \001(\0132\017.TipInfoMessage\"8\n\021No"
+    "ror_message\030\004 \001(\0132\017.TipInfoMessage\"R\n\021No"
     "deMessageHeader\022\017\n\007node_id\030\001 \001(\r\022\022\n\nsess"
-    "ion_id\030\002 \001(\r\"g\n\027NodeRouteMessageRequest\022"
-    "(\n\017message_content\030\001 \001(\0132\017.MessageConten"
-    "t\022\"\n\006header\030\002 \001(\0132\022.NodeMessageHeader\"h\n"
-    "\030NodeRouteMessageResponse\022(\n\017message_con"
+    "ion_id\030\002 \001(\r\022\030\n\020target_player_id\030\003 \001(\004\"g"
+    "\n\027NodeRouteMessageRequest\022(\n\017message_con"
     "tent\030\001 \001(\0132\017.MessageContent\022\"\n\006header\030\002 "
-    "\001(\0132\022.NodeMessageHeader\"\'\n\022PlayerInfoExt"
-    "ernal\022\021\n\tplayer_id\030\001 \001(\004\"i\n\030PlayerNodeSe"
-    "rviceRequest\022(\n\017message_content\030\001 \001(\0132\017."
-    "MessageContent\022#\n\006header\030\002 \001(\0132\023.PlayerI"
-    "nfoExternal\"f\n\025PlayerMessageResponse\022(\n\017"
-    "message_content\030\001 \001(\0132\017.MessageContent\022#"
-    "\n\006header\030\002 \001(\0132\023.PlayerInfoExternal\"6\n\026N"
-    "odeRoutingMessageBody\022\034\n\tnode_info\030\002 \001(\013"
-    "2\t.NodeInfo\"^\n\036RegisterGameNodeSessionRe"
-    "quest\022%\n\014session_info\030\001 \001(\0132\017.SessionDet"
-    "ails\022\025\n\rscene_node_id\030\002 \001(\r\"H\n\037RegisterG"
-    "ameNodeSessionResponse\022%\n\014session_info\030\001"
-    " \001(\0132\017.SessionDetails\"H\n\037RegisterGateNod"
-    "eSessionResponse\022%\n\014session_info\030\001 \001(\0132\017"
-    ".SessionDetails\"E\n\034GateSessionDisconnect"
-    "Request\022%\n\014session_info\030\001 \001(\0132\017.SessionD"
-    "etails\"}\n\023RouteMessageRequest\022\014\n\004body\030\001 "
-    "\001(\014\022%\n\013route_nodes\030\002 \003(\0132\020.RoutingNodeIn"
-    "fo\022\022\n\nsession_id\030\003 \001(\r\022\n\n\002id\030\004 \001(\004\022\021\n\tis"
-    "_client\030\005 \001(\010\"~\n\024RouteMessageResponse\022\014\n"
-    "\004body\030\001 \001(\014\022%\n\013route_nodes\030\002 \003(\0132\020.Routi"
-    "ngNodeInfo\022\022\n\nsession_id\030\003 \001(\r\022\n\n\002id\030\004 \001"
-    "(\004\022\021\n\tis_client\030\005 \001(\010\"q\n\031RoutePlayerMess"
-    "ageRequest\022\014\n\004body\030\001 \001(\014\022\034\n\tnode_list\030\002 "
-    "\003(\0132\t.NodeInfo\022(\n\013player_info\030\003 \001(\0132\023.Pl"
-    "ayerInfoExternal\"r\n\032RoutePlayerMessageRe"
-    "sponse\022\014\n\004body\030\001 \001(\014\022\034\n\tnode_list\030\002 \003(\0132"
-    "\t.NodeInfo\022(\n\013player_info\030\003 \001(\0132\023.Player"
-    "InfoExternal\"\250\001\n\027RegisterGameNodeRequest"
-    "\022#\n\nrpc_client\030\001 \001(\0132\017.NetworkAddress\022#\n"
-    "\nrpc_server\030\002 \001(\0132\017.NetworkAddress\022\025\n\rsc"
-    "ene_node_id\030\003 \001(\r\022\023\n\013server_type\030\004 \001(\r\022\027"
-    "\n\017scene_node_type\030\005 \001(\r\"T\n\027RegisterGateN"
-    "odeRequest\022#\n\nrpc_client\030\001 \001(\0132\017.Network"
-    "Address\022\024\n\014gate_node_id\030\002 \001(\r\"2\n\031Unregis"
-    "terGameNodeRequest\022\025\n\rscene_node_id\030\001 \001("
-    "\r\"+\n\032ProtoFieldCheckerTestSubPB\022\r\n\005items"
-    "\030\001 \003(\t\"K\n\027ProtoFieldCheckerTestPB\0220\n\013sub"
-    "_message\030\001 \001(\0132\033.ProtoFieldCheckerTestSu"
-    "bPB\"\256\001\n\016MyProtoMessage\022\032\n\022single_int32_f"
-    "ield\030\001 \001(\005\022\032\n\022single_int64_field\030\002 \001(\003\022\034"
-    "\n\024repeated_int32_field\030\003 \003(\005\022\034\n\024repeated"
-    "_int64_field\030\004 \003(\003\022(\n\016nested_message\030\005 \001"
-    "(\0132\020.MyNestedMessage\"I\n\017MyNestedMessage\022"
-    "\032\n\022nested_int32_field\030\001 \001(\005\022\032\n\022nested_in"
-    "t64_field\030\002 \001(\003\"^\n\rClientRequest\022\n\n\002id\030\001"
-    " \001(\004\022\017\n\007service\030\002 \001(\t\022\016\n\006method\030\003 \001(\t\022\014\n"
-    "\004body\030\004 \001(\014\022\022\n\nmessage_id\030\005 \001(\r\"T\n\024NodeH"
-    "andshakeRequest\022\017\n\007version\030\001 \001(\t\022\r\n\005toke"
-    "n\030\002 \001(\t\022\034\n\tself_node\030\003 \001(\0132\t.NodeInfo\"]\n"
-    "\025NodeHandshakeResponse\022&\n\rerror_message\030"
-    "\001 \001(\0132\017.TipInfoMessage\022\034\n\tpeer_node\030\002 \001("
-    "\0132\t.NodeInfo\"m\n\020GateTokenPayload\022\024\n\014gate"
-    "_node_id\030\001 \001(\r\022\017\n\007zone_id\030\002 \001(\r\022\030\n\020expir"
-    "e_timestamp\030\003 \001(\003\022\030\n\020hmac_session_key\030\004 "
-    "\001(\014\">\n\030ClientTokenVerifyRequest\022\017\n\007paylo"
-    "ad\030\001 \001(\014\022\021\n\tsignature\030\002 \001(\014\";\n\031ClientTok"
-    "enVerifyResponse\022\017\n\007success\030\001 \001(\010\022\r\n\005err"
-    "or\030\002 \001(\tB\rZ\013common/baseb\006proto3"
+    "\001(\0132\022.NodeMessageHeader\"h\n\030NodeRouteMess"
+    "ageResponse\022(\n\017message_content\030\001 \001(\0132\017.M"
+    "essageContent\022\"\n\006header\030\002 \001(\0132\022.NodeMess"
+    "ageHeader\"\'\n\022PlayerInfoExternal\022\021\n\tplaye"
+    "r_id\030\001 \001(\004\"i\n\030PlayerNodeServiceRequest\022("
+    "\n\017message_content\030\001 \001(\0132\017.MessageContent"
+    "\022#\n\006header\030\002 \001(\0132\023.PlayerInfoExternal\"f\n"
+    "\025PlayerMessageResponse\022(\n\017message_conten"
+    "t\030\001 \001(\0132\017.MessageContent\022#\n\006header\030\002 \001(\013"
+    "2\023.PlayerInfoExternal\"6\n\026NodeRoutingMess"
+    "ageBody\022\034\n\tnode_info\030\002 \001(\0132\t.NodeInfo\"^\n"
+    "\036RegisterGameNodeSessionRequest\022%\n\014sessi"
+    "on_info\030\001 \001(\0132\017.SessionDetails\022\025\n\rscene_"
+    "node_id\030\002 \001(\r\"H\n\037RegisterGameNodeSession"
+    "Response\022%\n\014session_info\030\001 \001(\0132\017.Session"
+    "Details\"H\n\037RegisterGateNodeSessionRespon"
+    "se\022%\n\014session_info\030\001 \001(\0132\017.SessionDetail"
+    "s\"E\n\034GateSessionDisconnectRequest\022%\n\014ses"
+    "sion_info\030\001 \001(\0132\017.SessionDetails\"}\n\023Rout"
+    "eMessageRequest\022\014\n\004body\030\001 \001(\014\022%\n\013route_n"
+    "odes\030\002 \003(\0132\020.RoutingNodeInfo\022\022\n\nsession_"
+    "id\030\003 \001(\r\022\n\n\002id\030\004 \001(\004\022\021\n\tis_client\030\005 \001(\010\""
+    "~\n\024RouteMessageResponse\022\014\n\004body\030\001 \001(\014\022%\n"
+    "\013route_nodes\030\002 \003(\0132\020.RoutingNodeInfo\022\022\n\n"
+    "session_id\030\003 \001(\r\022\n\n\002id\030\004 \001(\004\022\021\n\tis_clien"
+    "t\030\005 \001(\010\"q\n\031RoutePlayerMessageRequest\022\014\n\004"
+    "body\030\001 \001(\014\022\034\n\tnode_list\030\002 \003(\0132\t.NodeInfo"
+    "\022(\n\013player_info\030\003 \001(\0132\023.PlayerInfoExtern"
+    "al\"r\n\032RoutePlayerMessageResponse\022\014\n\004body"
+    "\030\001 \001(\014\022\034\n\tnode_list\030\002 \003(\0132\t.NodeInfo\022(\n\013"
+    "player_info\030\003 \001(\0132\023.PlayerInfoExternal\"\250"
+    "\001\n\027RegisterGameNodeRequest\022#\n\nrpc_client"
+    "\030\001 \001(\0132\017.NetworkAddress\022#\n\nrpc_server\030\002 "
+    "\001(\0132\017.NetworkAddress\022\025\n\rscene_node_id\030\003 "
+    "\001(\r\022\023\n\013server_type\030\004 \001(\r\022\027\n\017scene_node_t"
+    "ype\030\005 \001(\r\"T\n\027RegisterGateNodeRequest\022#\n\n"
+    "rpc_client\030\001 \001(\0132\017.NetworkAddress\022\024\n\014gat"
+    "e_node_id\030\002 \001(\r\"2\n\031UnregisterGameNodeReq"
+    "uest\022\025\n\rscene_node_id\030\001 \001(\r\"+\n\032ProtoFiel"
+    "dCheckerTestSubPB\022\r\n\005items\030\001 \003(\t\"K\n\027Prot"
+    "oFieldCheckerTestPB\0220\n\013sub_message\030\001 \001(\013"
+    "2\033.ProtoFieldCheckerTestSubPB\"\256\001\n\016MyProt"
+    "oMessage\022\032\n\022single_int32_field\030\001 \001(\005\022\032\n\022"
+    "single_int64_field\030\002 \001(\003\022\034\n\024repeated_int"
+    "32_field\030\003 \003(\005\022\034\n\024repeated_int64_field\030\004"
+    " \003(\003\022(\n\016nested_message\030\005 \001(\0132\020.MyNestedM"
+    "essage\"I\n\017MyNestedMessage\022\032\n\022nested_int3"
+    "2_field\030\001 \001(\005\022\032\n\022nested_int64_field\030\002 \001("
+    "\003\"^\n\rClientRequest\022\n\n\002id\030\001 \001(\004\022\017\n\007servic"
+    "e\030\002 \001(\t\022\016\n\006method\030\003 \001(\t\022\014\n\004body\030\004 \001(\014\022\022\n"
+    "\nmessage_id\030\005 \001(\r\"T\n\024NodeHandshakeReques"
+    "t\022\017\n\007version\030\001 \001(\t\022\r\n\005token\030\002 \001(\t\022\034\n\tsel"
+    "f_node\030\003 \001(\0132\t.NodeInfo\"]\n\025NodeHandshake"
+    "Response\022&\n\rerror_message\030\001 \001(\0132\017.TipInf"
+    "oMessage\022\034\n\tpeer_node\030\002 \001(\0132\t.NodeInfo\"m"
+    "\n\020GateTokenPayload\022\024\n\014gate_node_id\030\001 \001(\r"
+    "\022\017\n\007zone_id\030\002 \001(\r\022\030\n\020expire_timestamp\030\003 "
+    "\001(\003\022\030\n\020hmac_session_key\030\004 \001(\014\">\n\030ClientT"
+    "okenVerifyRequest\022\017\n\007payload\030\001 \001(\014\022\021\n\tsi"
+    "gnature\030\002 \001(\014\";\n\031ClientTokenVerifyRespon"
+    "se\022\017\n\007success\030\001 \001(\010\022\r\n\005error\030\002 \001(\tB\rZ\013co"
+    "mmon/baseb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fcommon_2fbase_2fmessage_2eproto_deps[3] = {
@@ -5285,7 +5296,7 @@ static ::absl::once_flag descriptor_table_proto_2fcommon_2fbase_2fmessage_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fmessage_2eproto = {
     false,
     false,
-    2911,
+    2937,
     descriptor_table_protodef_proto_2fcommon_2fbase_2fmessage_2eproto,
     "proto/common/base/message.proto",
     &descriptor_table_proto_2fcommon_2fbase_2fmessage_2eproto_once,
@@ -5900,9 +5911,9 @@ inline void NodeMessageHeader::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena)
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, node_id_),
            0,
-           offsetof(Impl_, session_id_) -
+           offsetof(Impl_, target_player_id_) -
                offsetof(Impl_, node_id_) +
-               sizeof(Impl_::session_id_));
+               sizeof(Impl_::target_player_id_));
 }
 NodeMessageHeader::~NodeMessageHeader() {
   // @@protoc_insertion_point(destructor:NodeMessageHeader)
@@ -5952,10 +5963,10 @@ PROTOBUF_NOINLINE void NodeMessageHeader::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     ::memset(&_impl_.node_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.session_id_) -
-        reinterpret_cast<char*>(&_impl_.node_id_)) + sizeof(_impl_.session_id_));
+        reinterpret_cast<char*>(&_impl_.target_player_id_) -
+        reinterpret_cast<char*>(&_impl_.node_id_)) + sizeof(_impl_.target_player_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -5998,6 +6009,15 @@ PROTOBUF_NOINLINE void NodeMessageHeader::Clear() {
     }
   }
 
+  // uint64 target_player_id = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_target_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_target_player_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -6023,7 +6043,7 @@ PROTOBUF_NOINLINE void NodeMessageHeader::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     // uint32 node_id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_node_id() != 0) {
@@ -6036,6 +6056,13 @@ PROTOBUF_NOINLINE void NodeMessageHeader::Clear() {
       if (this_._internal_session_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_session_id());
+      }
+    }
+    // uint64 target_player_id = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_target_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_target_player_id());
       }
     }
   }
@@ -6056,7 +6083,7 @@ void NodeMessageHeader::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_node_id() != 0) {
         _this->_impl_.node_id_ = from._impl_.node_id_;
@@ -6065,6 +6092,11 @@ void NodeMessageHeader::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_session_id() != 0) {
         _this->_impl_.session_id_ = from._impl_.session_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_target_player_id() != 0) {
+        _this->_impl_.target_player_id_ = from._impl_.target_player_id_;
       }
     }
   }
@@ -6086,8 +6118,8 @@ void NodeMessageHeader::InternalSwap(NodeMessageHeader* PROTOBUF_RESTRICT PROTOB
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_.session_id_)
-      + sizeof(NodeMessageHeader::_impl_.session_id_)
+      PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_.target_player_id_)
+      + sizeof(NodeMessageHeader::_impl_.target_player_id_)
       - PROTOBUF_FIELD_OFFSET(NodeMessageHeader, _impl_.node_id_)>(
           reinterpret_cast<char*>(&_impl_.node_id_),
           reinterpret_cast<char*>(&other->_impl_.node_id_));

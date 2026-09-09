@@ -5,7 +5,8 @@ import (
 	"database/sql"
 	"fmt"
 	"strings"
-	"time"
+
+	dbpb "proto/common/database"
 
 	"github.com/zeromicro/go-zero/core/logx"
 )
@@ -13,7 +14,7 @@ import (
 // TransactionLogRow matches the schema consumed from Kafka and persisted in MySQL.
 type TransactionLogRow struct {
 	TxID          uint64
-	Timestamp     uint64
+	Timestamp     uint64 // column timestamp_sec (Unix seconds)
 	TxType        uint32
 	FromPlayer    uint64
 	ToPlayer      uint64
@@ -26,6 +27,9 @@ type TransactionLogRow struct {
 	BalanceAfter  uint64
 	CorrelationID uint64
 	Extra         string
+	// ZoneID 是捕获时刻所在 zone(TransactionLogEntry.zone_id)。只在表 proto 声明了
+	// zone_id 列时写入,见 txLogHasZoneColumn。
+	ZoneID uint32
 }
 
 // TransactionLogQuery holds filter criteria for QueryTransactionLog.
@@ -40,81 +44,90 @@ type TransactionLogQuery struct {
 	Offset       uint64
 }
 
+// txLogHasZoneColumn:表结构真源是 proto(rollback_database_table.proto 的 transaction_log),
+// 而 Kafka 载荷 TransactionLogEntry 已经带 zone_id。表消息一旦补上 zone_id 字段,
+// INSERT 自动多写这一列;还没补上时只能丢掉(启动时打一条 Error 提醒),不能靠手写 DDL
+// 加列 —— 那正是本次收口要消灭的漂移源。
+var txLogHasZoneColumn = (&dbpb.TransactionLog{}).ProtoReflect().Descriptor().Fields().ByName("zone_id") != nil
+
+// txLogInsertColumns 是 InsertBatchIgnore 的列序;与 rowValues 一一对应。
+var txLogInsertColumns = func() []string {
+	cols := []string{
+		"tx_id", "timestamp_sec", "tx_type", "from_player", "to_player",
+		"item_uuid", "item_config_id", "item_quantity",
+		"currency_type", "currency_delta", "balance_before", "balance_after",
+		"correlation_id", "extra",
+	}
+	if txLogHasZoneColumn {
+		cols = append(cols, "zone_id")
+	}
+	return cols
+}()
+
 // TransactionLogStore provides query access to the transaction_log table.
 type TransactionLogStore struct {
 	db *sql.DB
 }
 
-// NewTransactionLogStore creates a store sharing the same MySQL database.
+// NewTransactionLogStore opens the pool. It does NOT create tables — see schema.go.
 func NewTransactionLogStore(cfg MySQLConfig) (*TransactionLogStore, error) {
-	dsn := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&charset=utf8mb4",
-		cfg.User, cfg.Password, cfg.Host, cfg.DBName)
-
-	db, err := sql.Open("mysql", dsn)
+	db, err := openMySQL(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("open mysql: %w", err)
+		return nil, err
 	}
-
-	if cfg.MaxOpenConn > 0 {
-		db.SetMaxOpenConns(cfg.MaxOpenConn)
-	} else {
-		db.SetMaxOpenConns(5)
+	if !txLogHasZoneColumn {
+		logx.Errorf("[TransactionLogStore] table proto transaction_log has no zone_id column; " +
+			"TransactionLogEntry.zone_id from Kafka will be dropped until the table proto gains the field")
 	}
-	if cfg.MaxIdleConn > 0 {
-		db.SetMaxIdleConns(cfg.MaxIdleConn)
-	} else {
-		db.SetMaxIdleConns(2)
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("ping mysql: %w", err)
-	}
-
-	s := &TransactionLogStore{db: db}
-	if err := s.ensureTable(); err != nil {
-		db.Close()
-		return nil, fmt.Errorf("ensure transaction_log table: %w", err)
-	}
-
 	logx.Infof("[TransactionLogStore] connected to %s/%s", cfg.Host, cfg.DBName)
-	return s, nil
-}
-
-func (s *TransactionLogStore) ensureTable() error {
-	// tx_id 是雪花 ID(时间戳高位、单调递增),TiDB 默认聚簇表下是写热点——
-	// 交易日志是全服最高频的追加写路径之一,按全局数据层决策 §D3 处方
-	// 用 /*T!*/ 双方言注释声明 NONCLUSTERED + 打散;MySQL 忽略注释,行为不变。
-	ddl := `CREATE TABLE IF NOT EXISTS transaction_log (
-		tx_id BIGINT UNSIGNED NOT NULL,
-		timestamp_sec BIGINT UNSIGNED NOT NULL,
-		tx_type INT UNSIGNED NOT NULL DEFAULT 0,
-		from_player BIGINT UNSIGNED NOT NULL DEFAULT 0,
-		to_player BIGINT UNSIGNED NOT NULL DEFAULT 0,
-		item_uuid BIGINT UNSIGNED NOT NULL DEFAULT 0,
-		item_config_id INT UNSIGNED NOT NULL DEFAULT 0,
-		item_quantity INT UNSIGNED NOT NULL DEFAULT 0,
-		currency_type INT UNSIGNED NOT NULL DEFAULT 0,
-		currency_delta BIGINT NOT NULL DEFAULT 0,
-		balance_before BIGINT UNSIGNED NOT NULL DEFAULT 0,
-		balance_after BIGINT UNSIGNED NOT NULL DEFAULT 0,
-		correlation_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
-		extra VARCHAR(1024) NOT NULL DEFAULT '',
-		PRIMARY KEY (tx_id) /*T![clustered_index] NONCLUSTERED */,
-		INDEX idx_player_time (from_player, timestamp_sec),
-		INDEX idx_to_player_time (to_player, timestamp_sec),
-		INDEX idx_item_config (item_config_id, timestamp_sec),
-		INDEX idx_tx_type_time (tx_type, timestamp_sec)
-	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */`
-	_, err := s.db.Exec(ddl)
-	return err
+	return &TransactionLogStore{db: db}, nil
 }
 
 // Close releases the database connection.
 func (s *TransactionLogStore) Close() error {
 	return s.db.Close()
+}
+
+// InsertBatchIgnore 一条多行 `INSERT IGNORE` 落一批流水,返回真正插入的行数。
+// tx_id 是主键,重放同一批(消费者提交 offset 前崩溃)只会被 IGNORE,天然幂等。
+// 200 行 × 15 列 = 3000 个占位符,远低于 MySQL 65535 的上限,不分块。
+func (s *TransactionLogStore) InsertBatchIgnore(ctx context.Context, rows []*TransactionLogRow) (int64, error) {
+	if len(rows) == 0 {
+		return 0, nil
+	}
+	colCount := len(txLogInsertColumns)
+	placeholder := "(" + strings.TrimSuffix(strings.Repeat("?,", colCount), ",") + ")"
+
+	var sb strings.Builder
+	sb.WriteString("INSERT IGNORE INTO transaction_log (")
+	sb.WriteString(strings.Join(txLogInsertColumns, ", "))
+	sb.WriteString(") VALUES ")
+	args := make([]interface{}, 0, len(rows)*colCount)
+	for i, r := range rows {
+		if i > 0 {
+			sb.WriteString(",")
+		}
+		sb.WriteString(placeholder)
+		args = append(args,
+			r.TxID, r.Timestamp, r.TxType, r.FromPlayer, r.ToPlayer,
+			r.ItemUUID, r.ItemConfigID, r.ItemQuantity,
+			r.CurrencyType, r.CurrencyDelta, r.BalanceBefore, r.BalanceAfter,
+			r.CorrelationID, r.Extra,
+		)
+		if txLogHasZoneColumn {
+			args = append(args, r.ZoneID)
+		}
+	}
+
+	res, err := s.db.ExecContext(ctx, sb.String(), args...)
+	if err != nil {
+		return 0, fmt.Errorf("insert ignore transaction_log (%d rows): %w", len(rows), err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("insert ignore transaction_log rows affected: %w", err)
+	}
+	return n, nil
 }
 
 // QueryLog retrieves transaction log entries matching the filter criteria.

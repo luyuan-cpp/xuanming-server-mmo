@@ -27,21 +27,28 @@ const (
 // Transaction Log — append-only audit trail for all bidirectional operations.
 // ============================================================================
 type TransactionLog struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TxId          uint64                 `protobuf:"varint,1,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"`
-	Timestamp     uint64                 `protobuf:"varint,2,opt,name=timestamp,proto3" json:"timestamp,omitempty"`
-	TxType        uint32                 `protobuf:"varint,3,opt,name=tx_type,json=txType,proto3" json:"tx_type,omitempty"` // TransactionType enum
-	FromPlayer    uint64                 `protobuf:"varint,4,opt,name=from_player,json=fromPlayer,proto3" json:"from_player,omitempty"`
-	ToPlayer      uint64                 `protobuf:"varint,5,opt,name=to_player,json=toPlayer,proto3" json:"to_player,omitempty"`
-	ItemUuid      uint64                 `protobuf:"varint,6,opt,name=item_uuid,json=itemUuid,proto3" json:"item_uuid,omitempty"`
-	ItemConfigId  uint32                 `protobuf:"varint,7,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
-	ItemQuantity  uint32                 `protobuf:"varint,8,opt,name=item_quantity,json=itemQuantity,proto3" json:"item_quantity,omitempty"`
-	CurrencyType  uint32                 `protobuf:"varint,9,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
-	CurrencyDelta int64                  `protobuf:"varint,10,opt,name=currency_delta,json=currencyDelta,proto3" json:"currency_delta,omitempty"`
-	BalanceBefore uint64                 `protobuf:"varint,11,opt,name=balance_before,json=balanceBefore,proto3" json:"balance_before,omitempty"`
-	BalanceAfter  uint64                 `protobuf:"varint,12,opt,name=balance_after,json=balanceAfter,proto3" json:"balance_after,omitempty"`
-	CorrelationId uint64                 `protobuf:"varint,13,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
-	Extra         string                 `protobuf:"bytes,14,opt,name=extra,proto3" json:"extra,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	TxId  uint64                 `protobuf:"varint,1,opt,name=tx_id,json=txId,proto3" json:"tx_id,omitempty"`
+	// 列名与手写 DDL 统一为 timestamp_sec(Unix 秒)。proto2mysql 按 pb:N 字段号识别列,
+	// 改名不需要 OptionOldName;且改名时全仓尚无一行数据。
+	TimestampSec  uint64 `protobuf:"varint,2,opt,name=timestamp_sec,json=timestampSec,proto3" json:"timestamp_sec,omitempty"`
+	TxType        uint32 `protobuf:"varint,3,opt,name=tx_type,json=txType,proto3" json:"tx_type,omitempty"` // TransactionType enum
+	FromPlayer    uint64 `protobuf:"varint,4,opt,name=from_player,json=fromPlayer,proto3" json:"from_player,omitempty"`
+	ToPlayer      uint64 `protobuf:"varint,5,opt,name=to_player,json=toPlayer,proto3" json:"to_player,omitempty"`
+	ItemUuid      uint64 `protobuf:"varint,6,opt,name=item_uuid,json=itemUuid,proto3" json:"item_uuid,omitempty"`
+	ItemConfigId  uint32 `protobuf:"varint,7,opt,name=item_config_id,json=itemConfigId,proto3" json:"item_config_id,omitempty"`
+	ItemQuantity  uint32 `protobuf:"varint,8,opt,name=item_quantity,json=itemQuantity,proto3" json:"item_quantity,omitempty"`
+	CurrencyType  uint32 `protobuf:"varint,9,opt,name=currency_type,json=currencyType,proto3" json:"currency_type,omitempty"`
+	CurrencyDelta int64  `protobuf:"varint,10,opt,name=currency_delta,json=currencyDelta,proto3" json:"currency_delta,omitempty"`
+	BalanceBefore uint64 `protobuf:"varint,11,opt,name=balance_before,json=balanceBefore,proto3" json:"balance_before,omitempty"`
+	BalanceAfter  uint64 `protobuf:"varint,12,opt,name=balance_after,json=balanceAfter,proto3" json:"balance_after,omitempty"`
+	CorrelationId uint64 `protobuf:"varint,13,opt,name=correlation_id,json=correlationId,proto3" json:"correlation_id,omitempty"`
+	// proto2mysql 把 string 映射成 MEDIUMTEXT,已比手写 DDL 的 VARCHAR(1024) 宽,无需额外选项。
+	Extra string `protobuf:"bytes,14,opt,name=extra,proto3" json:"extra,omitempty"`
+	// 记录时所在的 zone,镜像 TransactionLogEntry.zone_id(transaction_log.proto 字段 15)。
+	// 表已定在全局库一处,没有这一列就分不清同一 tx 来自哪个 zone;
+	// data_service 的 Kafka 消费者按列名自动探测,老表缺列时按 0 写入,不需要迁移开关。
+	ZoneId        uint32 `protobuf:"varint,15,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -83,9 +90,9 @@ func (x *TransactionLog) GetTxId() uint64 {
 	return 0
 }
 
-func (x *TransactionLog) GetTimestamp() uint64 {
+func (x *TransactionLog) GetTimestampSec() uint64 {
 	if x != nil {
-		return x.Timestamp
+		return x.TimestampSec
 	}
 	return 0
 }
@@ -174,6 +181,286 @@ func (x *TransactionLog) GetExtra() string {
 	return ""
 }
 
+func (x *TransactionLog) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
+// ============================================================================
+// Player snapshot table (for rollback) — 从 mysql_database_table.proto 移入:
+// 导表器按那个文件的 message 成员生成 zone 库建表清单
+// (generated/data/mysql_database_table_list.json),而本表只该存在于全局库
+// (data_service)一处。决策见 docs/design/node-id-overhaul-plan-20260908.md。
+// ============================================================================
+type PlayerSnapshot struct {
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Id           uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`                                         // Auto-increment snapshot ID
+	PlayerId     uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`             // Player this snapshot belongs to
+	ZoneId       uint32                 `protobuf:"varint,3,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                   // Player's home zone at snapshot time
+	SnapshotType uint32                 `protobuf:"varint,4,opt,name=snapshot_type,json=snapshotType,proto3" json:"snapshot_type,omitempty"` // SnapshotType enum value
+	CreatedAt    uint64                 `protobuf:"varint,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`          // Unix timestamp of snapshot creation
+	Reason       string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`                                  // Reason / description
+	Operator     string                 `protobuf:"bytes,7,opt,name=operator,proto3" json:"operator,omitempty"`                              // GM operator who created it
+	Data         []byte                 `protobuf:"bytes,8,opt,name=data,proto3" json:"data,omitempty"`                                      // Serialized snapshot data (proto SnapshotData)
+	// C++ scene 经 Kafka 送来的 PlayerSnapshotEntry.snapshot_id(SnowFlake)。GM 行为 0。
+	// 不改主键:rollback_audit_log.snapshot_id_used 引用的是自增 id,换主键等于篡改历史审计。
+	SnapshotGuid uint64 `protobuf:"varint,9,opt,name=snapshot_guid,json=snapshotGuid,proto3" json:"snapshot_guid,omitempty"`
+	// 来源:0 = GM/data_service 直接写入(data 列是 Redis 字段图 JSON),
+	//
+	//	1 = C++ scene Kafka 落库(data 列是 PlayerSnapshotEntry 的两个 proto blob)。
+	//
+	// 两种格式不兼容,回滚读路径在学会解 proto blob 之前必须先过滤 source=0。
+	Source        uint32 `protobuf:"varint,10,opt,name=source,proto3" json:"source,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerSnapshot) Reset() {
+	*x = PlayerSnapshot{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerSnapshot) ProtoMessage() {}
+
+func (x *PlayerSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerSnapshot.ProtoReflect.Descriptor instead.
+func (*PlayerSnapshot) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *PlayerSnapshot) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *PlayerSnapshot) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *PlayerSnapshot) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
+func (x *PlayerSnapshot) GetSnapshotType() uint32 {
+	if x != nil {
+		return x.SnapshotType
+	}
+	return 0
+}
+
+func (x *PlayerSnapshot) GetCreatedAt() uint64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *PlayerSnapshot) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *PlayerSnapshot) GetOperator() string {
+	if x != nil {
+		return x.Operator
+	}
+	return ""
+}
+
+func (x *PlayerSnapshot) GetData() []byte {
+	if x != nil {
+		return x.Data
+	}
+	return nil
+}
+
+func (x *PlayerSnapshot) GetSnapshotGuid() uint64 {
+	if x != nil {
+		return x.SnapshotGuid
+	}
+	return 0
+}
+
+func (x *PlayerSnapshot) GetSource() uint32 {
+	if x != nil {
+		return x.Source
+	}
+	return 0
+}
+
+// ============================================================================
+// Rollback audit log — 同 player_snapshot,只在全局库(data_service)一处。
+// ============================================================================
+type RollbackAuditLog struct {
+	state                 protoimpl.MessageState `protogen:"open.v1"`
+	Id                    uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	PlayerId              uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`                                            // 0 for zone/server rollback
+	ZoneId                uint32                 `protobuf:"varint,3,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                                                  // 0 for server-wide rollback
+	RollbackType          uint32                 `protobuf:"varint,4,opt,name=rollback_type,json=rollbackType,proto3" json:"rollback_type,omitempty"`                                // 1=player, 2=zone, 3=server
+	SnapshotIdUsed        uint64                 `protobuf:"varint,5,opt,name=snapshot_id_used,json=snapshotIdUsed,proto3" json:"snapshot_id_used,omitempty"`                        // Which snapshot was restored (single-player only)
+	PreRollbackSnapshotId uint64                 `protobuf:"varint,6,opt,name=pre_rollback_snapshot_id,json=preRollbackSnapshotId,proto3" json:"pre_rollback_snapshot_id,omitempty"` // Safety snapshot before rollback
+	TargetTime            uint64                 `protobuf:"varint,7,opt,name=target_time,json=targetTime,proto3" json:"target_time,omitempty"`                                      // Target rollback timestamp
+	PlayersAffected       uint32                 `protobuf:"varint,8,opt,name=players_affected,json=playersAffected,proto3" json:"players_affected,omitempty"`
+	PlayersFailed         uint32                 `protobuf:"varint,9,opt,name=players_failed,json=playersFailed,proto3" json:"players_failed,omitempty"`
+	Reason                string                 `protobuf:"bytes,10,opt,name=reason,proto3" json:"reason,omitempty"`
+	Operator              string                 `protobuf:"bytes,11,opt,name=operator,proto3" json:"operator,omitempty"`                     // GM operator
+	CreatedAt             uint64                 `protobuf:"varint,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // When the rollback was executed
+	// 收口 DDL/proto 漂移:data_service 手写 DDL(snapshot_store.go)早已有此列,proto 一直缺。
+	OrphansCleaned uint32 `protobuf:"varint,13,opt,name=orphans_cleaned,json=orphansCleaned,proto3" json:"orphans_cleaned,omitempty"` // RollbackZone 清理掉的孤儿玩家数
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *RollbackAuditLog) Reset() {
+	*x = RollbackAuditLog{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *RollbackAuditLog) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*RollbackAuditLog) ProtoMessage() {}
+
+func (x *RollbackAuditLog) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use RollbackAuditLog.ProtoReflect.Descriptor instead.
+func (*RollbackAuditLog) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *RollbackAuditLog) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *RollbackAuditLog) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *RollbackAuditLog) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
+	}
+	return 0
+}
+
+func (x *RollbackAuditLog) GetRollbackType() uint32 {
+	if x != nil {
+		return x.RollbackType
+	}
+	return 0
+}
+
+func (x *RollbackAuditLog) GetSnapshotIdUsed() uint64 {
+	if x != nil {
+		return x.SnapshotIdUsed
+	}
+	return 0
+}
+
+func (x *RollbackAuditLog) GetPreRollbackSnapshotId() uint64 {
+	if x != nil {
+		return x.PreRollbackSnapshotId
+	}
+	return 0
+}
+
+func (x *RollbackAuditLog) GetTargetTime() uint64 {
+	if x != nil {
+		return x.TargetTime
+	}
+	return 0
+}
+
+func (x *RollbackAuditLog) GetPlayersAffected() uint32 {
+	if x != nil {
+		return x.PlayersAffected
+	}
+	return 0
+}
+
+func (x *RollbackAuditLog) GetPlayersFailed() uint32 {
+	if x != nil {
+		return x.PlayersFailed
+	}
+	return 0
+}
+
+func (x *RollbackAuditLog) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
+func (x *RollbackAuditLog) GetOperator() string {
+	if x != nil {
+		return x.Operator
+	}
+	return ""
+}
+
+func (x *RollbackAuditLog) GetCreatedAt() uint64 {
+	if x != nil {
+		return x.CreatedAt
+	}
+	return 0
+}
+
+func (x *RollbackAuditLog) GetOrphansCleaned() uint32 {
+	if x != nil {
+		return x.OrphansCleaned
+	}
+	return 0
+}
+
 // ============================================================================
 // Player Debt — deferred-clawback (补缴) records; separate from CurrencyComp
 // so GM tool can query/manage offline.
@@ -196,7 +483,7 @@ type PlayerDebt struct {
 
 func (x *PlayerDebt) Reset() {
 	*x = PlayerDebt{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[1]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -208,7 +495,7 @@ func (x *PlayerDebt) String() string {
 func (*PlayerDebt) ProtoMessage() {}
 
 func (x *PlayerDebt) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[1]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -221,7 +508,7 @@ func (x *PlayerDebt) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerDebt.ProtoReflect.Descriptor instead.
 func (*PlayerDebt) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{1}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *PlayerDebt) GetPlayerId() uint64 {
@@ -318,7 +605,7 @@ type RollbackAudit struct {
 
 func (x *RollbackAudit) Reset() {
 	*x = RollbackAudit{}
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[2]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -330,7 +617,7 @@ func (x *RollbackAudit) String() string {
 func (*RollbackAudit) ProtoMessage() {}
 
 func (x *RollbackAudit) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[2]
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -343,7 +630,7 @@ func (x *RollbackAudit) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackAudit.ProtoReflect.Descriptor instead.
 func (*RollbackAudit) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{2}
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *RollbackAudit) GetAuditId() uint64 {
@@ -437,14 +724,92 @@ func (x *RollbackAudit) GetDiffJson() string {
 	return ""
 }
 
+// ============================================================================
+// ID Segment — Leaf-segment 号段表(永久身份 player_id / guild_id / item guid 的发号源)。
+// 一个持有者用一次 CAS(WHERE biz_tag=? AND version=?)领走 [max_id, max_id+step),
+// 不依赖 lease / 时钟 / worker id。
+// 放在本文件而不是 mysql_database_table.proto:导表器按那个文件的 message 成员生成
+// go/db 的 zone 库建表清单(generated/data/mysql_database_table_list.json),而号段表
+// 只该存在于全局库(data_service)一处。
+// 值域上限 2^55,与存量 snowflake 号(≥ 6.7e16)永不相交,新旧号可共存。
+// 见 docs/design/node-id-overhaul-plan-20260908.md §6。
+// ============================================================================
+type IdSegment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BizTag        string                 `protobuf:"bytes,1,opt,name=biz_tag,json=bizTag,proto3" json:"biz_tag,omitempty"` // "player" / "guild" / "item"
+	MaxId         uint64                 `protobuf:"varint,2,opt,name=max_id,json=maxId,proto3" json:"max_id,omitempty"`   // 已分配到(不含);下一段从这里开始
+	Step          uint32                 `protobuf:"varint,3,opt,name=step,proto3" json:"step,omitempty"`                  // 每次领段的长度,按"10 分钟峰值发号量"配
+	Version       uint64                 `protobuf:"varint,4,opt,name=version,proto3" json:"version,omitempty"`            // CAS 版本号,每次领段 +1
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdSegment) Reset() {
+	*x = IdSegment{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdSegment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdSegment) ProtoMessage() {}
+
+func (x *IdSegment) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdSegment.ProtoReflect.Descriptor instead.
+func (*IdSegment) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *IdSegment) GetBizTag() string {
+	if x != nil {
+		return x.BizTag
+	}
+	return ""
+}
+
+func (x *IdSegment) GetMaxId() uint64 {
+	if x != nil {
+		return x.MaxId
+	}
+	return 0
+}
+
+func (x *IdSegment) GetStep() uint32 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+func (x *IdSegment) GetVersion() uint64 {
+	if x != nil {
+		return x.Version
+	}
+	return 0
+}
+
 var File_proto_common_database_rollback_database_table_proto protoreflect.FileDescriptor
 
 const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\n" +
-	"3proto/common/database/rollback_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a+proto/common/rollback/transaction_log.proto\x1a+proto/common/rollback/player_snapshot.proto\"\xa6\x04\n" +
+	"3proto/common/database/rollback_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a+proto/common/rollback/transaction_log.proto\x1a+proto/common/rollback/player_snapshot.proto\"\x91\x05\n" +
 	"\x0ftransaction_log\x12\x13\n" +
-	"\x05tx_id\x18\x01 \x01(\x04R\x04txId\x12\x1c\n" +
-	"\ttimestamp\x18\x02 \x01(\x04R\ttimestamp\x12\x17\n" +
+	"\x05tx_id\x18\x01 \x01(\x04R\x04txId\x12#\n" +
+	"\rtimestamp_sec\x18\x02 \x01(\x04R\ftimestampSec\x12\x17\n" +
 	"\atx_type\x18\x03 \x01(\rR\x06txType\x12\x1f\n" +
 	"\vfrom_player\x18\x04 \x01(\x04R\n" +
 	"fromPlayer\x12\x1b\n" +
@@ -458,7 +823,38 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\x0ebalance_before\x18\v \x01(\x04R\rbalanceBefore\x12#\n" +
 	"\rbalance_after\x18\f \x01(\x04R\fbalanceAfter\x12%\n" +
 	"\x0ecorrelation_id\x18\r \x01(\x04R\rcorrelationId\x12\x14\n" +
-	"\x05extra\x18\x0e \x01(\tR\x05extra:L\x8a\x92\xf4\x01\x0ftransaction_log\x92\x92\xf4\x01\x05tx_idڒ\xf4\x01)from_player,to_player,item_uuid,timestamp\"\xff\x02\n" +
+	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
+	"\azone_id\x18\x0f \x01(\rR\x06zoneId:\x96\x01\x8a\x92\xf4\x01\x0ftransaction_log\x92\x92\xf4\x01\x05tx_idڒ\xf4\x01dfrom_player,timestamp_sec;to_player,timestamp_sec;item_config_id,timestamp_sec;tx_type,timestamp_sec\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xef\x02\n" +
+	"\x0fplayer_snapshot\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x17\n" +
+	"\azone_id\x18\x03 \x01(\rR\x06zoneId\x12#\n" +
+	"\rsnapshot_type\x18\x04 \x01(\rR\fsnapshotType\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\x05 \x01(\x04R\tcreatedAt\x12\x16\n" +
+	"\x06reason\x18\x06 \x01(\tR\x06reason\x12\x1a\n" +
+	"\boperator\x18\a \x01(\tR\boperator\x12\x12\n" +
+	"\x04data\x18\b \x01(\fR\x04data\x12#\n" +
+	"\rsnapshot_guid\x18\t \x01(\x04R\fsnapshotGuid\x12\x16\n" +
+	"\x06source\x18\n" +
+	" \x01(\rR\x06source:M\x8a\x92\xf4\x01\x0fplayer_snapshot\x92\x92\xf4\x01\x02id\xb2\x92\xf4\x01\x02idڒ\xf4\x01\x17player_id;snapshot_guid\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x87\x04\n" +
+	"\x12rollback_audit_log\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x17\n" +
+	"\azone_id\x18\x03 \x01(\rR\x06zoneId\x12#\n" +
+	"\rrollback_type\x18\x04 \x01(\rR\frollbackType\x12(\n" +
+	"\x10snapshot_id_used\x18\x05 \x01(\x04R\x0esnapshotIdUsed\x127\n" +
+	"\x18pre_rollback_snapshot_id\x18\x06 \x01(\x04R\x15preRollbackSnapshotId\x12\x1f\n" +
+	"\vtarget_time\x18\a \x01(\x04R\n" +
+	"targetTime\x12)\n" +
+	"\x10players_affected\x18\b \x01(\rR\x0fplayersAffected\x12%\n" +
+	"\x0eplayers_failed\x18\t \x01(\rR\rplayersFailed\x12\x16\n" +
+	"\x06reason\x18\n" +
+	" \x01(\tR\x06reason\x12\x1a\n" +
+	"\boperator\x18\v \x01(\tR\boperator\x12\x1d\n" +
+	"\n" +
+	"created_at\x18\f \x01(\x04R\tcreatedAt\x12'\n" +
+	"\x0forphans_cleaned\x18\r \x01(\rR\x0eorphansCleaned:4\x8a\x92\xf4\x01\x12rollback_audit_log\x92\x92\xf4\x01\x02id\xb2\x92\xf4\x01\x02id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xff\x02\n" +
 	"\vplayer_debt\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12#\n" +
 	"\rcurrency_type\x18\x02 \x01(\rR\fcurrencyType\x12\x1f\n" +
@@ -494,7 +890,14 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	" \x01(\rR\fitemsSkipped\x12/\n" +
 	"\x13currencies_restored\x18\v \x01(\rR\x12currenciesRestored\x12-\n" +
 	"\x12currencies_skipped\x18\f \x01(\rR\x11currenciesSkipped\x12\x1b\n" +
-	"\tdiff_json\x18\r \x01(\tR\bdiffJson:.\x8a\x92\xf4\x01\x0erollback_audit\x92\x92\xf4\x01\baudit_idڒ\xf4\x01\tplayer_idB\x17Z\x15proto/common/databaseb\x06proto3"
+	"\tdiff_json\x18\r \x01(\tR\bdiffJson:.\x8a\x92\xf4\x01\x0erollback_audit\x92\x92\xf4\x01\baudit_idڒ\xf4\x01\tplayer_id\"\x96\x01\n" +
+	"\n" +
+	"id_segment\x12\x17\n" +
+	"\abiz_tag\x18\x01 \x01(\tR\x06bizTag\x12\x15\n" +
+	"\x06max_id\x18\x02 \x01(\x04R\x05maxId\x12\x12\n" +
+	"\x04step\x18\x03 \x01(\rR\x04step\x12\x18\n" +
+	"\aversion\x18\x04 \x01(\x04R\aversion:*\x8a\x92\xf4\x01\n" +
+	"id_segment\x92\x92\xf4\x01\abiz_tag\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04B\x17Z\x15proto/common/databaseb\x06proto3"
 
 var (
 	file_proto_common_database_rollback_database_table_proto_rawDescOnce sync.Once
@@ -508,11 +911,14 @@ func file_proto_common_database_rollback_database_table_proto_rawDescGZIP() []by
 	return file_proto_common_database_rollback_database_table_proto_rawDescData
 }
 
-var file_proto_common_database_rollback_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_proto_common_database_rollback_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
 var file_proto_common_database_rollback_database_table_proto_goTypes = []any{
-	(*TransactionLog)(nil), // 0: transaction_log
-	(*PlayerDebt)(nil),     // 1: player_debt
-	(*RollbackAudit)(nil),  // 2: rollback_audit
+	(*TransactionLog)(nil),   // 0: transaction_log
+	(*PlayerSnapshot)(nil),   // 1: player_snapshot
+	(*RollbackAuditLog)(nil), // 2: rollback_audit_log
+	(*PlayerDebt)(nil),       // 3: player_debt
+	(*RollbackAudit)(nil),    // 4: rollback_audit
+	(*IdSegment)(nil),        // 5: id_segment
 }
 var file_proto_common_database_rollback_database_table_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -533,7 +939,7 @@ func file_proto_common_database_rollback_database_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_database_rollback_database_table_proto_rawDesc), len(file_proto_common_database_rollback_database_table_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   3,
+			NumMessages:   6,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

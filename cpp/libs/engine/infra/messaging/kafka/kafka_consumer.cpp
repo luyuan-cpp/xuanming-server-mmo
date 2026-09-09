@@ -17,12 +17,66 @@ namespace
 	// idle traffic doesn't spin the CPU, small enough that stop() returns
 	// promptly when the consumer is being shut down.
 	constexpr int kBackgroundConsumeTimeoutMs = 200;
+
+	// 分区契约核对的重试参数。刚起的 broker 在选 controller 期间会先返回
+	// "topic 存在但 0 分区" 或直接查不到,重试几次再判失败,别把正常的
+	// 冷启动竞态当成契约违反。
+	constexpr int kPartitionContractQueryAttempts = 5;
+	constexpr int kPartitionContractQueryTimeoutMs = 5000;
+	constexpr int kPartitionContractRetryDelayMs = 1000;
+}
+
+int32_t KafkaConsumer::queryTopicPartitionCount(const std::string &topic)
+{
+	if (!consumer_)
+	{
+		return -1;
+	}
+
+	std::string errstr;
+	std::unique_ptr<RdKafka::Topic> topicHandle{
+		RdKafka::Topic::create(consumer_.get(), topic, nullptr, errstr)};
+	if (!topicHandle)
+	{
+		LOG_WARN << "KafkaConsumer: cannot create topic handle for metadata query. topic="
+				 << topic << ", err=" << errstr;
+		return -1;
+	}
+
+	RdKafka::Metadata *rawMetadata = nullptr;
+	const auto err = consumer_->metadata(/*all_topics=*/false, topicHandle.get(),
+										 &rawMetadata, kPartitionContractQueryTimeoutMs);
+	std::unique_ptr<RdKafka::Metadata> metadata{rawMetadata};
+	if (err != RdKafka::ERR_NO_ERROR || !metadata)
+	{
+		LOG_WARN << "KafkaConsumer: metadata query failed. topic=" << topic
+				 << ", err=" << RdKafka::err2str(err);
+		return -1;
+	}
+
+	for (auto it = metadata->topics()->begin(); it != metadata->topics()->end(); ++it)
+	{
+		if ((*it)->topic() != topic)
+		{
+			continue;
+		}
+		if ((*it)->err() != RdKafka::ERR_NO_ERROR)
+		{
+			LOG_WARN << "KafkaConsumer: metadata reports topic error. topic=" << topic
+					 << ", err=" << RdKafka::err2str((*it)->err());
+			return -1;
+		}
+		return static_cast<int32_t>((*it)->partitions()->size());
+	}
+
+	return -1;
 }
 
 bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 						 const std::vector<std::string> &topics,
 						 const std::vector<int32_t> &partitions,
-						 const MessageCallback &callback)
+						 const MessageCallback &callback,
+						 const KafkaPartitionAssignPolicy &assignPolicy)
 {
 	msgCallback_ = callback;
 
@@ -53,11 +107,15 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 		LOG_ERROR << "KafkaConsumer: failed to set group.id: " << errstr;
 		return false;
 	}
-	if (conf_->set("enable.auto.commit", "true", errstr) != RdKafka::Conf::CONF_OK)
+	// ownOffsets 的理由见 kafka_consumer.h::KafkaPartitionAssignPolicy:
+	// 共享分区时 offset 是没有主人的,提交只会互相覆盖。
+	const char *const autoCommit = assignPolicy.ownOffsets ? "false" : "true";
+	const char *const offsetReset = assignPolicy.ownOffsets ? "latest" : "earliest";
+	if (conf_->set("enable.auto.commit", autoCommit, errstr) != RdKafka::Conf::CONF_OK)
 	{
 		LOG_ERROR << "KafkaConsumer: failed to set enable.auto.commit: " << errstr;
 	}
-	if (conf_->set("auto.offset.reset", "earliest", errstr) != RdKafka::Conf::CONF_OK)
+	if (conf_->set("auto.offset.reset", offsetReset, errstr) != RdKafka::Conf::CONF_OK)
 	{
 		LOG_ERROR << "KafkaConsumer: failed to set auto.offset.reset: " << errstr;
 	}
@@ -127,17 +185,76 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 	// Use assign() for specific partitions
 	if (!partitions.empty())
 	{
-		std::vector<RdKafka::TopicPartition *> assignedPartitions;
-		for (int32_t partition : partitions)
+		if (topics.empty())
 		{
-			if (topics.empty())
+			LOG_ERROR << "KafkaConsumer: topics is empty, cannot assign partitions";
+			consumer_->close();
+			consumer_.reset();
+			return false;
+		}
+
+		// 分区契约门禁。放在 assign 之前:assign 一个不存在的分区不会报错,
+		// 只会安静地永远收不到消息。
+		if (assignPolicy.expectedTopicPartitions > 0)
+		{
+			int32_t actual = -1;
+			for (int attempt = 1; attempt <= kPartitionContractQueryAttempts; ++attempt)
 			{
-				LOG_ERROR << "KafkaConsumer: topics is empty, cannot assign partitions";
+				actual = queryTopicPartitionCount(topics[0]);
+				if (actual > 0)
+				{
+					break;
+				}
+				LOG_WARN << "KafkaConsumer: partition contract query not settled yet. topic="
+						 << topics[0] << ", attempt=" << attempt << "/"
+						 << kPartitionContractQueryAttempts;
+				std::this_thread::sleep_for(std::chrono::milliseconds(kPartitionContractRetryDelayMs));
+			}
+
+			if (actual > 0 && actual != assignPolicy.expectedTopicPartitions)
+			{
+				// broker 明确答了一个不同的数字 —— 这是真正的契约违反,fail-closed。
+				// 最常见的成因:topic 被生产者抢在预建之前 auto-create 成 1 分区。
+				LOG_ERROR << "KafkaConsumer: Kafka partition contract mismatch. topic=" << topics[0]
+						  << ", broker=" << actual
+						  << ", contract=" << assignPolicy.expectedTopicPartitions
+						  << ". 分区数是寻址协议的一部分(partition = node_id % P),不可原地扩缩:"
+						  << "如果 topic 是被生产者 auto-create 成 1 分区的,删掉它再跑 topic 预建"
+						  << "(deploy/docker-compose.yml kafka-topic-init / k8s_deploy.ps1 "
+						  << "-Command infra-kafka-topics);如果是有意改分区数,"
+						  << "请 +1 Kafka.CommandTopicGeneration 换一批新 topic。";
 				consumer_->close();
 				consumer_.reset();
 				return false;
 			}
-			assignedPartitions.push_back(RdKafka::TopicPartition::create(topics[0], partition));
+
+			if (actual <= 0)
+			{
+				// 压根查不到(broker 不可达 / 元数据还没广播开)。这里**不**拒绝启动:
+				// 改造之前 subscribe() 在 broker 不可达时也照样成功、由后台重连兜底,
+				// 把它变成启动致命会让"Kafka 晚起一会儿"直接打死 gate/scene。
+				// 真正危险的那一种(broker 答了 1 分区)已经在上面挡掉了。
+				LOG_ERROR << "KafkaConsumer: cannot verify partition contract, broker metadata unavailable. topic="
+						  << topics[0] << ", contract=" << assignPolicy.expectedTopicPartitions
+						  << "。继续按契约 assign;若 broker 起来后该 topic 实际不是这个分区数,"
+						  << "本进程会收不到任何命令 —— 请先确认 topic 预建已跑过。";
+			}
+			else
+			{
+				LOG_INFO << "KafkaConsumer: partition contract verified. topic=" << topics[0]
+						 << ", partitions=" << actual;
+			}
+		}
+
+		std::vector<RdKafka::TopicPartition *> assignedPartitions;
+		for (int32_t partition : partitions)
+		{
+			// startAtEnd:每次进程启动都从分区末尾开始,不重放别人的历史。
+			// 理由见 kafka_consumer.h::KafkaPartitionAssignPolicy。
+			assignedPartitions.push_back(assignPolicy.startAtEnd
+											 ? RdKafka::TopicPartition::create(topics[0], partition,
+																			   RdKafka::Topic::OFFSET_END)
+											 : RdKafka::TopicPartition::create(topics[0], partition));
 		}
 		const auto err = consumer_->assign(assignedPartitions);
 		for (auto *assignedPartition : assignedPartitions)
@@ -151,7 +268,10 @@ bool KafkaConsumer::init(const std::string &brokers, const std::string &groupId,
 			consumer_.reset();
 			return false;
 		}
-		LOG_INFO << "Assigned to specific partitions.";
+		LOG_INFO << "Assigned to specific partitions. topic=" << topics[0]
+				 << ", partition_count=" << partitions.size()
+				 << ", start_at_end=" << assignPolicy.startAtEnd
+				 << ", own_offsets=" << assignPolicy.ownOffsets;
 	}
 	else
 	{

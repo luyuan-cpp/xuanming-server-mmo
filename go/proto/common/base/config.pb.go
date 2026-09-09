@@ -81,8 +81,22 @@ type KafkaConfig struct {
 	GroupId          string                 `protobuf:"bytes,3,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`                               // Consumer group ID
 	EnableAutoCommit bool                   `protobuf:"varint,4,opt,name=enable_auto_commit,json=enableAutoCommit,proto3" json:"enable_auto_commit,omitempty"` // Enable auto-commit
 	AutoOffsetReset  string                 `protobuf:"bytes,5,opt,name=auto_offset_reset,json=autoOffsetReset,proto3" json:"auto_offset_reset,omitempty"`     // earliest / latest
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// P:分区数。**不可变契约**,与 db_task / 审计 topic 同一套纪律
+	// (docs/design/db-task-kafka-partition-contract.md):要改就 +1 代号换一批
+	// 新 topic,绝不原地扩分区 —— 扩分区会把 node_id % P 重映射,
+	// 命令就发到没人 assign 的分区上,静默全丢。0 = 256。
+	CommandTopicPartitions uint32 `protobuf:"varint,6,opt,name=command_topic_partitions,json=commandTopicPartitions,proto3" json:"command_topic_partitions,omitempty"`
+	// 代号,进 topic 名:`<类型>-cmd_g<N>`(与 data_service 的
+	// transaction_log_topic_g1 同形)。0 = 1。
+	CommandTopicGeneration uint32 `protobuf:"varint,7,opt,name=command_topic_generation,json=commandTopicGeneration,proto3" json:"command_topic_generation,omitempty"`
+	// 迁移窗口开关:true = **不再**消费旧的 `<类型>-<node_id>` per-node topic。
+	// 默认 false(仍消费),因为生产者是分批切的(Go login 由另一路发布切换),
+	// producer 还在写老 topic 时把消费端关掉 = 命令全丢。
+	// 全部生产者切完后置 true,P1(僵尸进程与继任者共用 consumer group、
+	// 分区被判给僵尸导致继任者饿死)才算彻底关闭 —— 老路径仍是 group 订阅。
+	DisableLegacyPerNodeTopic bool `protobuf:"varint,8,opt,name=disable_legacy_per_node_topic,json=disableLegacyPerNodeTopic,proto3" json:"disable_legacy_per_node_topic,omitempty"`
+	unknownFields             protoimpl.UnknownFields
+	sizeCache                 protoimpl.SizeCache
 }
 
 func (x *KafkaConfig) Reset() {
@@ -150,6 +164,158 @@ func (x *KafkaConfig) GetAutoOffsetReset() string {
 	return ""
 }
 
+func (x *KafkaConfig) GetCommandTopicPartitions() uint32 {
+	if x != nil {
+		return x.CommandTopicPartitions
+	}
+	return 0
+}
+
+func (x *KafkaConfig) GetCommandTopicGeneration() uint32 {
+	if x != nil {
+		return x.CommandTopicGeneration
+	}
+	return 0
+}
+
+func (x *KafkaConfig) GetDisableLegacyPerNodeTopic() bool {
+	if x != nil {
+		return x.DisableLegacyPerNodeTopic
+	}
+	return false
+}
+
+// 一种永久 guid 的号段配置(docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5)。
+// 号段 = scene 经 DataService.AllocateIdSegment 从全局库 id_segment 表领 [lo, hi),
+// 值域 [1, 2^55) 与存量 snowflake 号(≥ 6.7e16)不相交,新旧号在同一张表 / 玩家 blob 里共存、不迁数据。
+// 一种 GUID 一个客户端实例(C++ GuidSegmentRegistry),kind 名 = 注册表种类名 = id_segment.biz_tag。
+type IdSegmentKindConfig struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 种类名:item / txlog / snapshot(以后 pet / guild …)。不认识的名字被忽略并记 ERROR。
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	// 关闭 = 这种 guid 在本节点**没有发号源**:没有 snowflake 回退(scene 已退出槽位协议),
+	// 每次铸号都 fail-closed。只用于故意停掉某种 guid 的场景,不是回滚开关。
+	Enabled bool `protobuf:"varint,2,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// 动态 step(Leaf 口径):首次领段长度,以及上下限。一段不到 15 分钟用完 → 下次 ×2(≤ max_step),
+	// 超过 30 分钟才用完 → 下次 ÷2(≥ min_step)。0 = 钉在 initial_step 上(不扩 / 不缩)。
+	InitialStep   uint32 `protobuf:"varint,3,opt,name=initial_step,json=initialStep,proto3" json:"initial_step,omitempty"`
+	MinStep       uint32 `protobuf:"varint,4,opt,name=min_step,json=minStep,proto3" json:"min_step,omitempty"`
+	MaxStep       uint32 `protobuf:"varint,5,opt,name=max_step,json=maxStep,proto3" json:"max_step,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdSegmentKindConfig) Reset() {
+	*x = IdSegmentKindConfig{}
+	mi := &file_proto_common_base_config_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdSegmentKindConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdSegmentKindConfig) ProtoMessage() {}
+
+func (x *IdSegmentKindConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_base_config_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdSegmentKindConfig.ProtoReflect.Descriptor instead.
+func (*IdSegmentKindConfig) Descriptor() ([]byte, []int) {
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *IdSegmentKindConfig) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *IdSegmentKindConfig) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *IdSegmentKindConfig) GetInitialStep() uint32 {
+	if x != nil {
+		return x.InitialStep
+	}
+	return 0
+}
+
+func (x *IdSegmentKindConfig) GetMinStep() uint32 {
+	if x != nil {
+		return x.MinStep
+	}
+	return 0
+}
+
+func (x *IdSegmentKindConfig) GetMaxStep() uint32 {
+	if x != nil {
+		return x.MaxStep
+	}
+	return 0
+}
+
+// 永久 guid 号段总配置:每种 guid 一块。只有 scene 读;放在部署配置而不是 GameConfig,
+// 因为它是发号基础设施参数,不是玩法参数,而且只有这一份 yaml 不用改两处。
+type IdSegmentConfig struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Kinds         []*IdSegmentKindConfig `protobuf:"bytes,1,rep,name=kinds,proto3" json:"kinds,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IdSegmentConfig) Reset() {
+	*x = IdSegmentConfig{}
+	mi := &file_proto_common_base_config_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IdSegmentConfig) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IdSegmentConfig) ProtoMessage() {}
+
+func (x *IdSegmentConfig) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_base_config_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IdSegmentConfig.ProtoReflect.Descriptor instead.
+func (*IdSegmentConfig) Descriptor() ([]byte, []int) {
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *IdSegmentConfig) GetKinds() []*IdSegmentKindConfig {
+	if x != nil {
+		return x.Kinds
+	}
+	return nil
+}
+
 // Base deploy config
 type BaseDeployConfig struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
@@ -199,13 +365,21 @@ type BaseDeployConfig struct {
 	// battle 节点客户端面并发直连上限。0 = 关闭运维阈值(仅 dev/test);
 	// 语义与 gate_max_connections 相同:超限连接在握手前即被拒。
 	BattleMaxConnections uint32 `protobuf:"varint,17,opt,name=battle_max_connections,json=battleMaxConnections,proto3" json:"battle_max_connections,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	// 集群号:部署级常量,由运维一次性设定(ConfigMap / yaml),策划不碰,默认 0。
+	// 只有 Go 的 snowflake 槽位协议(login-player / guild / scene-manager / match)消费它,
+	// 作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者
+	// (scene 的永久 guid 走号段,不编码集群),这里只是同一份 yaml 口径的原样读入。
+	// 取值 0..31。见 docs/design/node-id-overhaul-plan-20260908.md §5 / §7.5。
+	ClusterId uint32 `protobuf:"varint,18,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
+	// 永久 guid 号段(item / txlog / snapshot 各一块,见 IdSegmentConfig)。
+	IdSegment     *IdSegmentConfig `protobuf:"bytes,19,opt,name=id_segment,json=idSegment,proto3" json:"id_segment,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BaseDeployConfig) Reset() {
 	*x = BaseDeployConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[2]
+	mi := &file_proto_common_base_config_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -217,7 +391,7 @@ func (x *BaseDeployConfig) String() string {
 func (*BaseDeployConfig) ProtoMessage() {}
 
 func (x *BaseDeployConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[2]
+	mi := &file_proto_common_base_config_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -230,7 +404,7 @@ func (x *BaseDeployConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BaseDeployConfig.ProtoReflect.Descriptor instead.
 func (*BaseDeployConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{2}
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *BaseDeployConfig) GetEtcdHosts() []string {
@@ -352,6 +526,20 @@ func (x *BaseDeployConfig) GetBattleMaxConnections() uint32 {
 	return 0
 }
 
+func (x *BaseDeployConfig) GetClusterId() uint32 {
+	if x != nil {
+		return x.ClusterId
+	}
+	return 0
+}
+
+func (x *BaseDeployConfig) GetIdSegment() *IdSegmentConfig {
+	if x != nil {
+		return x.IdSegment
+	}
+	return nil
+}
+
 // Game config
 type GameConfig struct {
 	state         protoimpl.MessageState      `protogen:"open.v1"`
@@ -364,7 +552,7 @@ type GameConfig struct {
 
 func (x *GameConfig) Reset() {
 	*x = GameConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[3]
+	mi := &file_proto_common_base_config_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -376,7 +564,7 @@ func (x *GameConfig) String() string {
 func (*GameConfig) ProtoMessage() {}
 
 func (x *GameConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[3]
+	mi := &file_proto_common_base_config_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -389,7 +577,7 @@ func (x *GameConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameConfig.ProtoReflect.Descriptor instead.
 func (*GameConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{3}
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *GameConfig) GetSceneNodeType() uint32 {
@@ -426,7 +614,7 @@ type GameConfig_ZoneRedisConfig struct {
 
 func (x *GameConfig_ZoneRedisConfig) Reset() {
 	*x = GameConfig_ZoneRedisConfig{}
-	mi := &file_proto_common_base_config_proto_msgTypes[4]
+	mi := &file_proto_common_base_config_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -438,7 +626,7 @@ func (x *GameConfig_ZoneRedisConfig) String() string {
 func (*GameConfig_ZoneRedisConfig) ProtoMessage() {}
 
 func (x *GameConfig_ZoneRedisConfig) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_base_config_proto_msgTypes[4]
+	mi := &file_proto_common_base_config_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -451,7 +639,7 @@ func (x *GameConfig_ZoneRedisConfig) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GameConfig_ZoneRedisConfig.ProtoReflect.Descriptor instead.
 func (*GameConfig_ZoneRedisConfig) Descriptor() ([]byte, []int) {
-	return file_proto_common_base_config_proto_rawDescGZIP(), []int{3, 0}
+	return file_proto_common_base_config_proto_rawDescGZIP(), []int{5, 0}
 }
 
 func (x *GameConfig_ZoneRedisConfig) GetHost() string {
@@ -489,13 +677,24 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x1eproto/common/base/config.proto\"5\n" +
 	"\rServiceConfig\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x10\n" +
-	"\x03url\x18\x02 \x01(\tR\x03url\"\xb4\x01\n" +
+	"\x03url\x18\x02 \x01(\tR\x03url\"\xea\x02\n" +
 	"\vKafkaConfig\x12\x18\n" +
 	"\abrokers\x18\x01 \x03(\tR\abrokers\x12\x16\n" +
 	"\x06topics\x18\x02 \x03(\tR\x06topics\x12\x19\n" +
 	"\bgroup_id\x18\x03 \x01(\tR\agroupId\x12,\n" +
 	"\x12enable_auto_commit\x18\x04 \x01(\bR\x10enableAutoCommit\x12*\n" +
-	"\x11auto_offset_reset\x18\x05 \x01(\tR\x0fautoOffsetReset\"\xac\x06\n" +
+	"\x11auto_offset_reset\x18\x05 \x01(\tR\x0fautoOffsetReset\x128\n" +
+	"\x18command_topic_partitions\x18\x06 \x01(\rR\x16commandTopicPartitions\x128\n" +
+	"\x18command_topic_generation\x18\a \x01(\rR\x16commandTopicGeneration\x12@\n" +
+	"\x1ddisable_legacy_per_node_topic\x18\b \x01(\bR\x19disableLegacyPerNodeTopic\"\x9c\x01\n" +
+	"\x13IdSegmentKindConfig\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12\x18\n" +
+	"\aenabled\x18\x02 \x01(\bR\aenabled\x12!\n" +
+	"\finitial_step\x18\x03 \x01(\rR\vinitialStep\x12\x19\n" +
+	"\bmin_step\x18\x04 \x01(\rR\aminStep\x12\x19\n" +
+	"\bmax_step\x18\x05 \x01(\rR\amaxStep\"=\n" +
+	"\x0fIdSegmentConfig\x12*\n" +
+	"\x05kinds\x18\x01 \x03(\v2\x14.IdSegmentKindConfigR\x05kinds\"\xfc\x06\n" +
 	"\x10BaseDeployConfig\x12\x1d\n" +
 	"\n" +
 	"etcd_hosts\x18\x01 \x03(\tR\tetcdHosts\x12\x1b\n" +
@@ -515,7 +714,11 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\x13data_root_directory\x18\x0e \x01(\tR\x11dataRootDirectory\x120\n" +
 	"\x14gate_max_connections\x18\x0f \x01(\rR\x12gateMaxConnections\x12.\n" +
 	"\x13battle_token_secret\x18\x10 \x01(\tR\x11battleTokenSecret\x124\n" +
-	"\x16battle_max_connections\x18\x11 \x01(\rR\x14battleMaxConnections\"\xf0\x01\n" +
+	"\x16battle_max_connections\x18\x11 \x01(\rR\x14battleMaxConnections\x12\x1d\n" +
+	"\n" +
+	"cluster_id\x18\x12 \x01(\rR\tclusterId\x12/\n" +
+	"\n" +
+	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\"\xf0\x01\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +
@@ -540,23 +743,27 @@ func file_proto_common_base_config_proto_rawDescGZIP() []byte {
 	return file_proto_common_base_config_proto_rawDescData
 }
 
-var file_proto_common_base_config_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
+var file_proto_common_base_config_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_common_base_config_proto_goTypes = []any{
 	(*ServiceConfig)(nil),              // 0: ServiceConfig
 	(*KafkaConfig)(nil),                // 1: KafkaConfig
-	(*BaseDeployConfig)(nil),           // 2: BaseDeployConfig
-	(*GameConfig)(nil),                 // 3: GameConfig
-	(*GameConfig_ZoneRedisConfig)(nil), // 4: GameConfig.ZoneRedisConfig
+	(*IdSegmentKindConfig)(nil),        // 2: IdSegmentKindConfig
+	(*IdSegmentConfig)(nil),            // 3: IdSegmentConfig
+	(*BaseDeployConfig)(nil),           // 4: BaseDeployConfig
+	(*GameConfig)(nil),                 // 5: GameConfig
+	(*GameConfig_ZoneRedisConfig)(nil), // 6: GameConfig.ZoneRedisConfig
 }
 var file_proto_common_base_config_proto_depIdxs = []int32{
-	0, // 0: BaseDeployConfig.services:type_name -> ServiceConfig
-	1, // 1: BaseDeployConfig.kafka:type_name -> KafkaConfig
-	4, // 2: GameConfig.zone_redis:type_name -> GameConfig.ZoneRedisConfig
-	3, // [3:3] is the sub-list for method output_type
-	3, // [3:3] is the sub-list for method input_type
-	3, // [3:3] is the sub-list for extension type_name
-	3, // [3:3] is the sub-list for extension extendee
-	0, // [0:3] is the sub-list for field type_name
+	2, // 0: IdSegmentConfig.kinds:type_name -> IdSegmentKindConfig
+	0, // 1: BaseDeployConfig.services:type_name -> ServiceConfig
+	1, // 2: BaseDeployConfig.kafka:type_name -> KafkaConfig
+	3, // 3: BaseDeployConfig.id_segment:type_name -> IdSegmentConfig
+	6, // 4: GameConfig.zone_redis:type_name -> GameConfig.ZoneRedisConfig
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_base_config_proto_init() }
@@ -570,7 +777,7 @@ func file_proto_common_base_config_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_base_config_proto_rawDesc), len(file_proto_common_base_config_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   5,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

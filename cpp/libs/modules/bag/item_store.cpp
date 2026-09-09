@@ -4,7 +4,10 @@
 
 #include "engine/core/error_handling/error_handling.h"
 #include "table/code/item_table.h"
-#include <thread_context/snow_flake_manager.h>
+
+#include <chrono>
+
+#include "modules/id_segment/guid_segment_registry.h"
 
 // ── 身份与生命期 ─────────────────────────────────────────────────────────
 
@@ -360,21 +363,70 @@ std::size_t ItemStore::StacksNeededFor(std::size_t totalSize, std::size_t maxSta
 }
 
 // ── guid 发号(实例身份)───────────────────────────────────────────────
+//
+// 唯一的发号源是 item 种类的号段客户端(docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5):
+// scene 经 DataService.AllocateIdSegment 从全局库 id_segment 表领 [lo, hi),这里只从手里的段发号。
+// **没有回退**(§7.5 第 1 条:scene 已退出 snowflake 槽位协议,没有槽就没有可回退的发号器):
+// 两段都空且续段未到 → kInvalidGuid,调用方 fail-closed(背包整批拒绝、零写入)。
+// tx_id / snapshot_id 各自有自己的实例(GuidKind::kTxLog / kSnapshot),互不影响。
+
+namespace
+{
+    GuidSegmentClient &ItemSegment()
+    {
+        return tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+    }
+
+    // 发号源掉线时 MintGuid / CanMintGuid 会被批量入包连续调用,ERROR 按 1/s 节流,
+    // 否则一次 400 件的发放就是 400 行同样的日志。tls 单线程,不需要原子量。
+    bool ShouldLogMintFailure()
+    {
+        using Clock = std::chrono::steady_clock;
+        thread_local Clock::time_point lastLogged{};
+        const auto now = Clock::now();
+        if (lastLogged != Clock::time_point{} && now - lastLogged < std::chrono::seconds(1))
+        {
+            return false;
+        }
+        lastLogged = now;
+        return true;
+    }
+} // namespace
 
 Guid ItemStore::MintGuid()
 {
-    return tlsSnowflakeManager.GenerateItemGuid();
+    Guid guid = kInvalidGuid;
+    if (ItemSegment().TryNext(guid))
+    {
+        return guid;
+    }
+    if (ShouldLogMintFailure())
+    {
+        LOG_ERROR << "[idsegment] no id source for item guid: segment not enabled, exhausted or first range not "
+                  << "fetched yet, refill not ready; returning kInvalidGuid (fail-closed, no fallback by design) "
+                  << ItemSegment().Describe();
+    }
+    return kInvalidGuid;
 }
 
-bool ItemStore::CanMintGuid()
+bool ItemStore::CanMintGuids(std::size_t count)
 {
-    // 发号器被 fence(失去 node_id 所有权)或本线程从未 OnNodeStart 时,
-    // GenerateItemGuid() 只会返回 kInvalidGuid。铸号型写入必须在**改动任何状态
-    // 之前**用它把整个操作拒掉:哨兵值一旦被 set 进 item_id 并 Insert,就是一件
-    // guid 为哨兵的物品被持久化进玩家 blob(数据完整性破坏),且第二件同样的
-    // 插入会撞 DuplicateGuid,报错方向完全误导排障。
+    // 铸号型写入必须在**改动任何状态之前**用它把整个操作拒掉:哨兵值一旦被 set 进
+    // item_id 并 Insert,就是一件 guid 为哨兵的物品被持久化进玩家 blob(数据完整性破坏),
+    // 且第二件同样的插入会撞 DuplicateGuid,报错方向完全误导排障。
     // tls 单线程,本调用与后续铸号之间状态不会被并发翻转,先查后铸没有 TOCTOU。
-    return tlsSnowflakeManager.IsInitialized() && !tlsSnowflakeManager.IsFenced();
+    if (ItemSegment().Available() >= count)
+    {
+        return true;
+    }
+    // 库存不够 —— "没有发号源"。启动期 DependencyGate 挡着玩家进不来,运行期走到这里说明
+    // 手里两段都已耗尽而 data_service 仍没恢复(或 item 种类根本没在配置里启用)。
+    if (ShouldLogMintFailure())
+    {
+        LOG_ERROR << "[idsegment] no id source for " << count << " item guid(s): available="
+                  << ItemSegment().Available() << ", no fallback by design " << ItemSegment().Describe();
+    }
+    return false;
 }
 
 bool ItemStore::IsInvalidGuid(const ItemComp &item)

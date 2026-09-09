@@ -12,10 +12,20 @@ message transaction_log
 {
   option(OptionTableName) = "transaction_log";
   option(OptionPrimaryKey) = "tx_id";
-  option(OptionIndex) = "from_player,to_player,item_uuid,timestamp";
+  // 与 data_service 手写 DDL(transaction_log_store.go)逐条对齐的四条联合索引。
+  // proto2mysql 语义:分号分隔多索引、逗号 = 联合索引;原来的单串
+  // "from_player,to_player,item_uuid,timestamp" 会被解释成一条 4 列联合索引,
+  // 对按 to_player / tx_type 单独过滤的查询没用。
+  option(OptionIndex) = "from_player,timestamp_sec;to_player,timestamp_sec;item_config_id,timestamp_sec;tx_type,timestamp_sec";
+  // 雪花主键 + 全服最高频追加写,按 §D3 处方 NONCLUSTERED + 打散(global-data-layer-tidb-decision.md)
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
 
   uint64 tx_id = 1;
-  uint64 timestamp = 2;
+  // 列名与手写 DDL 统一为 timestamp_sec(Unix 秒)。proto2mysql 按 pb:N 字段号识别列,
+  // 改名不需要 OptionOldName;且改名时全仓尚无一行数据。
+  uint64 timestamp_sec = 2;
   uint32 tx_type = 3;           // TransactionType enum
   uint64 from_player = 4;
   uint64 to_player = 5;
@@ -27,13 +37,81 @@ message transaction_log
   uint64 balance_before = 11;
   uint64 balance_after = 12;
   uint64 correlation_id = 13;
+  // proto2mysql 把 string 映射成 MEDIUMTEXT,已比手写 DDL 的 VARCHAR(1024) 宽,无需额外选项。
   string extra = 14;
+  // 记录时所在的 zone,镜像 TransactionLogEntry.zone_id(transaction_log.proto 字段 15)。
+  // 表已定在全局库一处,没有这一列就分不清同一 tx 来自哪个 zone;
+  // data_service 的 Kafka 消费者按列名自动探测,老表缺列时按 0 写入,不需要迁移开关。
+  uint32 zone_id = 15;
 }
 
 // ============================================================================
-// Player Snapshot — defined in mysql_database_table.proto (player_snapshot).
-// Do NOT duplicate here; C++ protoc compiles both files together.
+// Player snapshot table (for rollback) — 从 mysql_database_table.proto 移入:
+// 导表器按那个文件的 message 成员生成 zone 库建表清单
+// (generated/data/mysql_database_table_list.json),而本表只该存在于全局库
+// (data_service)一处。决策见 docs/design/node-id-overhaul-plan-20260908.md。
 // ============================================================================
+message player_snapshot
+{
+  option(OptionTableName) = "player_snapshot";
+  option(OptionPrimaryKey) = "id";
+  option(OptionAutoIncrementKey) = "id";
+  // 分号 = 两条独立索引(proto2mysql 语义:分号分隔多索引,逗号 = 联合索引)。
+  // snapshot_guid 刻意用普通 INDEX 而不是 UNIQUE:GM/data_service 产生的行没有 guid,
+  // proto2mysql 的 nullable 选项只去掉 NOT NULL、仍保留 DEFAULT 0,且写入路径对未设置的
+  // 标量一律绑 0 —— UNIQUE 会让第二条 GM 行就撞键。去重责任在消费者:落库前按
+  // snapshot_guid 先查后插(check-then-insert),见 docs/design/node-id-overhaul-plan-20260908.md §2.0c。
+  option(OptionIndex) = "player_id;snapshot_guid";
+  // 自增主键同样单调递增,按 §D3 处方 NONCLUSTERED + 打散;自增值非连续可接受(无连续性依赖)
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 id = 1;             // Auto-increment snapshot ID
+  uint64 player_id = 2;      // Player this snapshot belongs to
+  uint32 zone_id = 3;        // Player's home zone at snapshot time
+  uint32 snapshot_type = 4;  // SnapshotType enum value
+  uint64 created_at = 5;     // Unix timestamp of snapshot creation
+  string reason = 6;         // Reason / description
+  string operator = 7;       // GM operator who created it
+  bytes  data = 8;           // Serialized snapshot data (proto SnapshotData)
+  // C++ scene 经 Kafka 送来的 PlayerSnapshotEntry.snapshot_id(SnowFlake)。GM 行为 0。
+  // 不改主键:rollback_audit_log.snapshot_id_used 引用的是自增 id,换主键等于篡改历史审计。
+  uint64 snapshot_guid = 9;
+  // 来源:0 = GM/data_service 直接写入(data 列是 Redis 字段图 JSON),
+  //       1 = C++ scene Kafka 落库(data 列是 PlayerSnapshotEntry 的两个 proto blob)。
+  // 两种格式不兼容,回滚读路径在学会解 proto blob 之前必须先过滤 source=0。
+  uint32 source = 10;
+}
+
+// ============================================================================
+// Rollback audit log — 同 player_snapshot,只在全局库(data_service)一处。
+// ============================================================================
+message rollback_audit_log
+{
+  option(OptionTableName) = "rollback_audit_log";
+  option(OptionPrimaryKey) = "id";
+  option(OptionAutoIncrementKey) = "id";
+  // 自增主键同样单调递增,按 §D3 处方 NONCLUSTERED + 打散;自增值非连续可接受(无连续性依赖)
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 id = 1;
+  uint64 player_id = 2;          // 0 for zone/server rollback
+  uint32 zone_id = 3;            // 0 for server-wide rollback
+  uint32 rollback_type = 4;      // 1=player, 2=zone, 3=server
+  uint64 snapshot_id_used = 5;   // Which snapshot was restored (single-player only)
+  uint64 pre_rollback_snapshot_id = 6;  // Safety snapshot before rollback
+  uint64 target_time = 7;        // Target rollback timestamp
+  uint32 players_affected = 8;
+  uint32 players_failed = 9;
+  string reason = 10;
+  string operator = 11;          // GM operator
+  uint64 created_at = 12;        // When the rollback was executed
+  // 收口 DDL/proto 漂移:data_service 手写 DDL(snapshot_store.go)早已有此列,proto 一直缺。
+  uint32 orphans_cleaned = 13;   // RollbackZone 清理掉的孤儿玩家数
+}
 
 // ============================================================================
 // Player Debt — deferred-clawback (补缴) records; separate from CurrencyComp
@@ -79,4 +157,30 @@ message rollback_audit
   uint32 currencies_restored = 11;
   uint32 currencies_skipped = 12;
   string diff_json = 13;        // Serialized SnapshotDiff for human review
+}
+
+// ============================================================================
+// ID Segment — Leaf-segment 号段表(永久身份 player_id / guild_id / item guid 的发号源)。
+// 一个持有者用一次 CAS(WHERE biz_tag=? AND version=?)领走 [max_id, max_id+step),
+// 不依赖 lease / 时钟 / worker id。
+// 放在本文件而不是 mysql_database_table.proto:导表器按那个文件的 message 成员生成
+// go/db 的 zone 库建表清单(generated/data/mysql_database_table_list.json),而号段表
+// 只该存在于全局库(data_service)一处。
+// 值域上限 2^55,与存量 snowflake 号(≥ 6.7e16)永不相交,新旧号可共存。
+// 见 docs/design/node-id-overhaul-plan-20260908.md §6。
+// ============================================================================
+message id_segment
+{
+  option(OptionTableName) = "id_segment";
+  option(OptionPrimaryKey) = "biz_tag";
+  // 主键是短字符串、行数只有几条(player / guild / item),没有写热点;
+  // 仍按 §D3 声明 NONCLUSTERED + 打散,与全局库其余表口径一致,免得日后加 biz_tag 时再迁。
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  string biz_tag = 1;   // "player" / "guild" / "item"
+  uint64 max_id = 2;    // 已分配到(不含);下一段从这里开始
+  uint32 step = 3;      // 每次领段的长度,按"10 分钟峰值发号量"配
+  uint64 version = 4;   // CAS 版本号,每次领段 +1
 }

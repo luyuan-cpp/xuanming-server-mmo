@@ -16,6 +16,10 @@
 #     sandbox-mock container so the OAuth chain runs offline.
 #   - Prometheus block enabled on 0.0.0.0:9101 (container-internal)
 #     so the host-published :9101 scrape works.
+#   - SnowflakeCacheDir pinned to /tmp/snowflake (image WORKDIR is /app,
+#     so the Go default ../../run/snowflake would land on /run/snowflake).
+#   - DataServiceRpc discovers data_service through the host etcd; this
+#     compose has no data_service container, see the block below.
 #
 # To switch from sandbox-mock to real WeChat/QQ:
 #   - delete AuthProviders.WeChat.Endpoint
@@ -56,6 +60,16 @@ Snowflake:
   NodeBits: 13
   StepBits: 9
 
+# 部署级集群号(PlayerId 13 位 node 段的 cluster 位)。单机 compose 栈保持 0,
+# 与 go/login/etc/login.yaml 一致;两个集群共用一个 etcd 也不撞号。
+ClusterId: 0
+
+# PlayerId 槽位本地缓存目录(docs/design/node-id-overhaul-plan-20260908.md §3.5):
+# etcd 启动时不可达、缓存在 2h 内则用缓存的槽起服。镜像 WORKDIR 是 /app,Go 默认的
+# ../../run/snowflake 会落到 /run/snowflake;与 K8s ConfigMap 一样显式指到 /tmp/snowflake
+# (容器内可写,不挂卷:缓存是本容器自己的启动期草稿,重建容器就重新申领)。留空关闭。
+SnowflakeCacheDir: /tmp/snowflake
+
 Locker:
   AccountLockTTL: 30
   PlayerLockTTL: 30
@@ -90,6 +104,33 @@ SceneManagerRpc:
     Hosts:
       - host.docker.internal:2379
     Key: scenemanagerservice.rpc
+
+# DataService gRPC client (discovered via etcd)。login 只用它领 PlayerId 号段
+# (DataService.AllocateIdSegment);IdSegment.Enabled=false 时不拨号。
+# NonBlock: true —— 号段是弱依赖(设计稿 §6.5):data_service 没起时 login 照常起服,
+# 领段失败按 IdSegment.FallbackToSnowflake 决定回退还是拒绝建角。
+# ⚠️ 本 compose 栈没有 data_service 容器:要走建角,得在宿主上起 go/data_service
+# (它注册到同一个 host.docker.internal:2379 的 etcd,这里就能发现它),
+# 且宿主 MySQL 里要有它的库(deploy/mysql-init/00_init_zone_dbs.sql 建的 testdb)。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - host.docker.internal:2379
+    Key: dataservice.rpc
+  Timeout: 3000
+  NonBlock: true
+  Middlewares:
+    Breaker: false
+
+# PlayerId 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6),与 go/login/etc/login.yaml 同值。
+# Enabled:**只有显式写 true 才开**;整块不写 = 关 = 纯 snowflake 老路径(回滚开关)。
+# Step:每次领段长度,按「10 分钟峰值建角量」配;双 buffer 意味着库倒下后还能发完两段。
+# FallbackToSnowflake:固定 false(§6.4 的决定):号段失败即建角失败(tip kLoginDataSerializeFailed),
+#   靠 data_service 的可用性兜底,不靠回退 —— 回退虽安全但会让 snowflake 机器永远留着。
+IdSegment:
+  Enabled: true
+  Step: 100
+  FallbackToSnowflake: false
 
 GateTokenSecret: "change-me-in-production-use-a-strong-random-key"
 TableDir: "/app/data"

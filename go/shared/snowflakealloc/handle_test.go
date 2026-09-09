@@ -1,12 +1,24 @@
 package snowflakealloc
 
 import (
+	"errors"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"shared/snowflake"
 )
 
-func newTestHandle(workerID uint64) *Handle {
-	return &Handle{WorkerID: workerID, lost: make(chan struct{})}
+func newTestHandle(slot uint64) *Handle {
+	return &Handle{
+		Kind:     "unit",
+		Slot:     slot,
+		WorkerID: slot,
+		UUID:     "uuid-unit",
+		lost:     make(chan struct{}),
+		fence:    snowflake.NewFenceClock(time.Minute),
+	}
 }
 
 func isClosed(ch <-chan struct{}) bool {
@@ -18,28 +30,37 @@ func isClosed(ch <-chan struct{}) bool {
 	}
 }
 
-// 租约真的没了(KeepAlive 流在没有 Close 的情况下结束)必须通知调用方:
-// 此刻 etcd 已经可以把同一个 worker id 分给别的进程,继续发号就是确定性撞号。
-func TestHandle_LeaseLossSignalsLost(t *testing.T) {
-	h := newTestHandle(7)
+type fakeFencer struct{ fenced bool }
 
-	h.onKeepAliveEnded("/test", "host-a")
+func (f *fakeFencer) Fence() { f.fenced = true }
+
+// 槽被别的 uuid 接管 = 真的失去所有权,必须关闭 Lost(),并先把登记的发号器全部 fence
+// (防御纵深:不等消费方的 <-Lost() 协程被调度)。
+func TestHandle_OwnershipLostSignalsLostAndFences(t *testing.T) {
+	h := newTestHandle(7)
+	f := &fakeFencer{}
+	h.AttachFencer(f)
+
+	h.onOwnershipLost("slot key now holds uuid other")
 
 	if !isClosed(h.Lost()) {
-		t.Fatal("lease loss must close Lost()")
+		t.Fatal("ownership loss must close Lost()")
+	}
+	if !f.fenced {
+		t.Fatal("attached generators must be fenced before Lost() closes")
 	}
 }
 
-// 正常 Close() 引起的 KeepAlive 结束不是身份丢失,不能误报 ——
-// 否则每次优雅停机都会触发调用方的"停服"分支。
+// 正常 Close() 期间的归属判定不是身份丢失,不能误报 ——
+// 否则每次优雅停机都会触发调用方的"停服 + os.Exit(1)"分支。
 func TestHandle_CloseIsNotReportedAsLost(t *testing.T) {
 	h := newTestHandle(7)
 	h.closing.Store(true) // Close() 做的第一件事
 
-	h.onKeepAliveEnded("/test", "host-a")
+	h.onOwnershipLost("watch event during shutdown")
 
 	if isClosed(h.Lost()) {
-		t.Fatal("graceful Close() must not be reported as a lost lease")
+		t.Fatal("graceful Close() must not be reported as lost ownership")
 	}
 }
 
@@ -47,8 +68,8 @@ func TestHandle_CloseIsNotReportedAsLost(t *testing.T) {
 func TestHandle_LostIsIdempotent(t *testing.T) {
 	h := newTestHandle(7)
 
-	h.onKeepAliveEnded("/test", "host-a")
-	h.onKeepAliveEnded("/test", "host-a")
+	h.onOwnershipLost("first")
+	h.onOwnershipLost("second")
 
 	if !isClosed(h.Lost()) {
 		t.Fatal("Lost() should stay closed")
@@ -61,57 +82,76 @@ func TestHandle_NilLostIsSafe(t *testing.T) {
 	if h.Lost() != nil {
 		t.Fatal("nil handle should report a nil channel")
 	}
+	h.Close() // 也不应崩
 }
 
-// 只靠"KeepAlive channel 关闭"感知失租**恒晚于服务端过期点**:clientv3 把 ka.deadline
-// 设成"收到响应的时刻 + TTL",而服务端过期点是"它处理续租的时刻 + TTL",前者恒晚一个 RTT,
-// 再叠加 deadlineLoop 每 1s 才扫一轮。等 channel 关闭时,worker id 可能已被分给别的进程。
-// 而本包的消费方收到 Lost() 后是**优雅停**,排空期间仍在发号 —— 所以必须在服务端过期点
-// **之前**主动 fence,把剩余租约留给排空。
-func TestHandle_SelfFencesBeforeChannelCloses(t *testing.T) {
-	h := newTestHandle(11)
-
-	// 距上次成功续租已超预算 ⇒ 无法再证明自己持有 worker id,必须立刻报信,
-	// 不等 etcd 把 channel 关掉。
-	h.onSelfFenced("/test", "host-a", 41*time.Second, 40*time.Second)
-
-	if !isClosed(h.Lost()) {
-		t.Fatal("超过自 fencing 预算必须关闭 Lost(),不能干等 channel 关闭")
+// 日志三字段是排障契约:kind / worker=c<cluster>:<slot> / inc=<revision>。
+func TestHandle_LogFields(t *testing.T) {
+	h := newTestHandle(5)
+	h.Cluster = 3
+	h.incarnation.Store(1234)
+	h.registered.Store(true)
+	if got := h.LogFields(); got != "kind=unit worker=c3:5 inc=1234" {
+		t.Fatalf("LogFields=%q", got)
+	}
+	h.registered.Store(false)
+	if got := h.LogFields(); !strings.Contains(got, "unregistered") {
+		t.Fatalf("未注册状态必须在日志里可见: %q", got)
 	}
 }
 
-// 正常 Close() 期间不得被自 fencing 误报成失租,否则每次优雅停机都会触发调用方的停服分支。
-func TestHandle_SelfFenceSuppressedWhileClosing(t *testing.T) {
-	h := newTestHandle(11)
-	h.closing.Store(true)
+// Options 默认值与校验:Q=4h、F=2h、F 必须 < Q、cluster 不得越过位宽、MaxSlot 不得越过 SlotBits。
+func TestOptions_ResolveDefaultsAndValidation(t *testing.T) {
+	r, err := Options{}.resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r.ttl != 60 || r.quarantine != 4*time.Hour || r.fenceAfter != 2*time.Hour {
+		t.Fatalf("defaults: ttl=%d Q=%v F=%v", r.ttl, r.quarantine, r.fenceAfter)
+	}
+	if r.clusterBits != 5 || r.slotBits != 12 || r.maxSlot != 4095 {
+		t.Fatalf("defaults: cluster%d slot%d max=%d", r.clusterBits, r.slotBits, r.maxSlot)
+	}
 
-	h.onSelfFenced("/test", "host-a", 41*time.Second, 40*time.Second)
+	if _, err := (Options{Quarantine: time.Hour, FenceAfter: time.Hour}).resolve(); !errors.Is(err, ErrInvalidOptions) {
+		t.Fatalf("F >= Q 必须拒绝, got %v", err)
+	}
+	// F 必须 ≤ Q/2,不是"只要 F < Q"。Q − F 是吃时钟偏差 / 排空 / 冻结感知延迟的余量,
+	// F=0.6Q 在数学上仍满足 F<Q 却几乎没有余量(设计稿 §1.2 直接定 F = Q/2)。
+	if _, err := (Options{Quarantine: time.Hour, FenceAfter: 36 * time.Minute}).resolve(); !errors.Is(err, ErrInvalidOptions) {
+		t.Fatalf("F > Q/2 必须拒绝, got %v", err)
+	}
+	if r, err := (Options{Quarantine: time.Hour, FenceAfter: 30 * time.Minute}).resolve(); err != nil || r.fenceAfter != 30*time.Minute {
+		t.Fatalf("F == Q/2 必须接受, got F=%v err=%v", r.fenceAfter, err)
+	}
+	if _, err := (Options{ClusterID: 32}).resolve(); !errors.Is(err, ErrInvalidOptions) {
+		t.Fatalf("cluster 32 越过 5 位必须拒绝, got %v", err)
+	}
+	if _, err := (Options{MaxSlot: 4096}).resolve(); !errors.Is(err, ErrInvalidOptions) {
+		t.Fatalf("MaxSlot 4096 越过 12 位必须拒绝, got %v", err)
+	}
 
-	if isClosed(h.Lost()) {
-		t.Fatal("Close() 期间的自 fencing 检查不得报成失租")
+	// login 的 13 位布局 [cluster3][slot10]
+	lr, err := (Options{ClusterBits: 3, SlotBits: 10, ClusterID: 7}).resolve()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if lr.maxSlot != 1023 {
+		t.Fatalf("login MaxSlot=%d, 期望 1023", lr.maxSlot)
+	}
+	if _, err := (Options{ClusterBits: 3, SlotBits: 10, ClusterID: 8}).resolve(); !errors.Is(err, ErrInvalidOptions) {
+		t.Fatalf("login cluster 8 越过 3 位必须拒绝, got %v", err)
 	}
 }
 
-// 自 fencing 预算必须显著早于服务端过期点(留出排空余量),又显著晚于 clientv3 的
-// 续租间隔 TTL/3(否则健康时也会误报)。这两条边界一起把取值钉死在 TTL 的 2/3。
-func TestSelfFenceAfter_SitsBetweenRenewIntervalAndExpiry(t *testing.T) {
-	for _, ttlSec := range []int64{15, 30, 60, 120} {
-		ttl := time.Duration(ttlSec) * time.Second
-		renewInterval := ttl / 3 // clientv3 的续租节奏
-		got := selfFenceAfter(ttlSec)
-
-		if got <= renewInterval {
-			t.Fatalf("ttl=%ds: fenceAfter=%v <= 续租间隔 %v,健康时会误报", ttlSec, got, renewInterval)
-		}
-		if got >= ttl {
-			t.Fatalf("ttl=%ds: fenceAfter=%v >= TTL %v,晚于服务端过期点就失去意义", ttlSec, got, ttl)
-		}
+// 缓存路径带 kind 与亲和键,同主机多实例(host#port / host_port)各自一份;非法字符替换。
+func TestDefaultCachePath(t *testing.T) {
+	if DefaultCachePath("", "guild", "h") != "" {
+		t.Fatal("dir 为空必须关闭缓存")
 	}
-}
-
-// TTL 极小时 fenceAfter 不能退化到与续租间隔同量级(会误报),必须被下界钳住。
-func TestSelfFenceAfter_ClampsTinyTTL(t *testing.T) {
-	if got := selfFenceAfter(1); got < 2*time.Second {
-		t.Fatalf("ttl=1s 时 fenceAfter=%v 未被下界钳住", got)
+	got := DefaultCachePath("d", "login-player", "host#127.0.0.1:50500")
+	want := filepath.Join("d", "snowflake-login-player-host_127.0.0.1_50500.json")
+	if got != want {
+		t.Fatalf("got %q want %q", got, want)
 	}
 }

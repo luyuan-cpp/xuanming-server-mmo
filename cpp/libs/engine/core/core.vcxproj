@@ -367,6 +367,7 @@
     <ClInclude Include="log\system\console_log.h" />
     <ClInclude Include="message_limiter\message_limiter.h" />
     <ClInclude Include="macros\return_define.h" />
+    <ClInclude Include="network\broadcast_target_codec.h" />
     <ClInclude Include="network\codec\codec.h" />
     <ClInclude Include="network\codec\dispatcher.h" />
     <ClInclude Include="network\codec\dispatcher_lite.h" />
@@ -394,6 +395,9 @@
     <ClInclude Include="node\system\node\node_allocator.h" />
     <ClInclude Include="node\system\node\node_connector.h" />
     <ClInclude Include="node\system\node\node_entry.h" />
+    <ClInclude Include="node\system\node\node_command_route.h" />
+    <ClInclude Include="node\system\node\node_command_topic.h" />
+    <ClInclude Include="node\system\node\node_kafka_command_filter.h" />
     <ClInclude Include="node\system\node\node_kafka_command_handler.h" />
     <ClInclude Include="node\system\node\node_util.h" />
     <ClInclude Include="node\system\node\thread_observability.h" />

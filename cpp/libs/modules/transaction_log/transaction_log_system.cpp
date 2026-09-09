@@ -6,7 +6,8 @@
 #include "ecs_context.h"
 #include "engine/core/type_define/type_define.h"
 #include "engine/infra/messaging/kafka/kafka_producer.h"
-#include "thread_context/snow_flake_manager.h"
+#include "modules/id_segment/guid_segment_registry.h"
+#include "node_config_manager.h"
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -18,9 +19,17 @@ uint64_t TransactionLogSystem::ResolvePlayerId(entt::entity player)
     return (guid != nullptr && *guid != kInvalidGuid) ? *guid : 0;
 }
 
+// tx_id 走 txlog 种类的号段(docs/design/node-id-overhaul-plan-20260908.md §7.5 第 1 条):它只是
+// Kafka / transaction_log 表的去重键与主键,不需要时间序 —— 时间在 timestamp 列里。
+// 拿不到号(种类未启用 / 两段耗尽且续段未到)返回 kInvalidGuid,SendEntry 据此 fail-closed。
 uint64_t TransactionLogSystem::GenerateTxId()
 {
-    return tlsSnowflakeManager.GenerateItemGuid();
+    Guid txId = kInvalidGuid;
+    if (tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).TryNext(txId))
+    {
+        return txId;
+    }
+    return kInvalidGuid;
 }
 
 static uint64_t NowUnixSeconds()
@@ -39,17 +48,26 @@ void TransactionLogSystem::SendEntry(const TransactionLogEntry &entry)
 {
     if (entry.tx_id() == kInvalidGuid || entry.tx_id() == 0)
     {
-        // GenerateTxId 返回 kInvalidGuid 说明发号器被 fence(节点失去 node_id 身份)
-        // 或该线程未初始化。流水的价值全在 tx_id 唯一,写一条 0 号流水会与其它
-        // 0 号流水混在一起,比不写更糟。fail-closed。
-        LOG_ERROR << "TransactionLogSystem: refusing to emit entry with invalid tx_id"
+        // GenerateTxId 返回 kInvalidGuid 说明 txlog 号段没号(种类未启用、两段耗尽且
+        // data_service 还没把续段送回来)。流水的价值全在 tx_id 唯一,写一条 0 号流水会与其它
+        // 0 号流水混在一起,比不写更糟。fail-closed:这条不发、记日志;没有 snowflake 回退。
+        LOG_ERROR << "TransactionLogSystem: refusing to emit entry with invalid tx_id (txlog id segment not ready)"
                   << " from_player=" << entry.from_player()
-                  << " to_player=" << entry.to_player();
+                  << " to_player=" << entry.to_player()
+                  << " " << tlsGuidSegmentRegistry.Get(GuidKind::kTxLog).Describe();
         return;
     }
 
+    // 捕获时刻的 zone 由生产者统一在这里盖章(不散到六个 Log* 里各写一遍),
+    // 消费者不许回查 Router(合服后 home_zone 会变)。入参是 const 引用,盖章落在
+    // 一份本地副本上;流水消息很小,复制成本远低于后面的 Kafka 发送。
+    // 取 GameConfig.zone_id 而非 GetZoneId():两者同源(node.cpp 用它填 NodeInfo.zone_id),
+    // 但 modules 工程的包含路径里没有 engine/core,引不到 network/node_utils.h。
+    TransactionLogEntry stamped = entry;
+    stamped.set_zone_id(tlsNodeConfigManager.GetGameConfig().zone_id());
+
     std::string bytes;
-    if (!entry.SerializeToString(&bytes))
+    if (!stamped.SerializeToString(&bytes))
     {
         LOG_ERROR << "TransactionLogSystem: failed to serialize entry tx_id=" << entry.tx_id();
         return;

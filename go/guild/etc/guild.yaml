@@ -20,6 +20,21 @@ PlayerLocatorRedis:
   Password: ""
   DB: 0
 
+# 合服闸门(可选):指向 data_service 的 **mapping Redis**,guild 只读一把键
+# merge:in_progress:{zone}。键存在 = 该 zone 正在合服 → CreateGuild 拒绝
+# (见 internal/logic/merge_fence.go 顶部的完整契约)。
+#
+# DB 必须与 data_service 实际使用的一致 = **0**。注意 data_service 的
+# etc/data_service.yaml 里 MappingRedis 段**没有 DB 键**且不能加:go-zero 的
+# redis.RedisConf 根本没有 DB 字段,写了会被静默忽略(那份 yaml 里有详细说明)。
+# 填错库 = 闸门永远看不到标记 = 合服窗口内照样能在源 zone 建帮。
+#
+# 整段删掉 = 闸门不生效,启动时会打一条 "MergeMarkerRedis 未配置" 的 Info。
+MergeMarkerRedis:
+  Host: 127.0.0.1:6379
+  Pass: ""
+  DB: 0
+
 MySQL:
   DataSource: "root:Mmorpg#2026db@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local"
 
@@ -41,12 +56,48 @@ Kafka:
   Brokers:
     - "localhost:9092"
 
+# DataService gRPC client (discovered via etcd,与 login 的 PlayerLocatorRpc 同一写法)。
+# guild 只用它领 guild_id 号段(DataService.AllocateIdSegment);IdSegment.Enabled=false 时不拨号。
+# NonBlock: true —— 号段是弱依赖(设计稿 §6.5):data_service 没起时 guild 照常起服,
+# 领段失败按 IdSegment.FallbackToSnowflake 决定回退还是拒绝建帮。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: dataservice.rpc
+  Timeout: 3000
+  NonBlock: true
+  Middlewares:
+    Breaker: false
+
+# guild_id 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
+# Enabled:**只有显式写 true 才开**;整块不写 = 关 = 纯 snowflake 老路径(回滚开关)。
+# Step:**初始**领段长度;之后按 Leaf 口径动态调整 —— 一段不到 15 分钟用完则下次翻倍,
+#   超过 30 分钟则减半,夹在 [MinStep, MaxStep] 内(缺省 [10, 1000])。每天重启一次时浪费
+#   最多两段(当前段 + 预取段),动态 step 把它压到最小;双 buffer 意味着库倒下后还能发完两段。
+# FallbackToSnowflake:号段失败时回退 snowflake。回退是安全的(号段 [1, 2^55) 与存量
+#   snowflake guild_id ≈6.7e16 起的值域不相交),但会让 snowflake 机器永远留着 ——
+#   默认 false:号段失败即建帮失败(tip kGuildIdGenUnavailable),§6.4 的决定。
+IdSegment:
+  Enabled: true
+  Step: 100
+  MinStep: 10
+  MaxStep: 1000
+  FallbackToSnowflake: false
+
 # RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
 # 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。
 # 关停某个方法:etcdctl put /mmorpg/killswitch/guildpb.GuildService/CreateGuild '{"deny":true,"reason":"..."}'
 # 关停整个服务:etcdctl put /mmorpg/killswitch/guildpb.GuildService/'*' true
 # 恢复:etcdctl del 对应的 key。
 KillSwitchPrefix: ""
+
+# 部署级集群号(snowflake worker 段的 cluster 位,0..31)。运维按集群一次性设定,策划不碰;
+# 单集群 / 存量布局保持 0。两个集群共用一个 etcd 也不撞号。
+ClusterId: 0
+
+# snowflake 槽位本地缓存目录:etcd 启动时不可达、缓存在 2h 内则用缓存的槽起服。留空关闭。
+SnowflakeCacheDir: ../../run/snowflake
 
 # Prometheus 抓取端点,由 go-zero core/service 自带的 agent 暴露(不要另起 promhttp)。
 # 端口分工:login 9101 / scene_manager 9150 / db 9160 / guild 9170 / friend 9180 /

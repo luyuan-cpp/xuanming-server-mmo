@@ -32,6 +32,12 @@ message PlayerSnapshotEntry
 
   // Snapshot size in bytes (for monitoring / retention policies).
   uint64 total_bytes = 8;
+
+  // 捕获时刻所在的 zone(生产者填 GetZoneId())。
+  // 消费者必须直接用这个值,不许回查 Router:RollbackZone 要的是"快照时玩家在哪个 zone",
+  // 而不是消费当时的 home_zone(合服后两者会不同)。
+  // 见 docs/design/node-id-overhaul-plan-20260908.md §2.0c 第 1 步。
+  uint32 zone_id = 9;
 }
 
 // Query helpers ---------------------------------------------------------------

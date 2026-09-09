@@ -6,7 +6,8 @@
 #include "engine/core/type_define/type_define.h"
 #include "engine/core/time/system/time.h"
 #include "engine/infra/messaging/kafka/kafka_producer.h"
-#include "thread_context/snow_flake_manager.h"
+#include "modules/id_segment/guid_segment_registry.h"
+#include "node_config_manager.h"
 #include "services/scene/player/system/player_data_loader.h"
 #include "proto/common/database/mysql_database_table.pb.h"
 #include "proto/common/database/player_cache.pb.h"
@@ -48,16 +49,19 @@ uint64_t SnapshotSystem::CaptureAndSend(entt::entity player, SnapshotTrigger tri
     }
 
     // ── Build snapshot entry ─────────────────────────────────────────────
-    const uint64_t snapshotId = tlsSnowflakeManager.GenerateItemGuid();
-    if (snapshotId == kInvalidGuid)
+    // snapshot_id 走 snapshot 种类的号段(docs/design/node-id-overhaul-plan-20260908.md §7.5 第 1 条):
+    // 它只是 player_snapshot 表的主键 / 去重键,不需要时间序 —— 时间在 snapshot_time 列里。
+    Guid snapshotId = kInvalidGuid;
+    if (!tlsGuidSegmentRegistry.Get(GuidKind::kSnapshot).TryNext(snapshotId))
     {
-        // 发号器已被 fence(本节点丢了 node_id 身份)或该线程从未 OnNodeStart。
+        // snapshot 号段没号(种类未启用、两段耗尽且 data_service 还没把续段送回来)。
         // 快照只是回滚兜底,宁可少一条也不能写 snapshot_id=0 —— 那会和别的节点、
         // 别的时刻的 0 号快照互相覆盖,反而毁掉回滚链路。真正的存盘走
-        // SavePlayerToRedis,不受影响。
-        LOG_ERROR << "[SnapshotSystem] snowflake unavailable (fenced or uninitialized); "
+        // SavePlayerToRedis,不受影响。没有 snowflake 回退,fail-closed。
+        LOG_ERROR << "[SnapshotSystem] snapshot id segment not ready; "
                   << "skipping snapshot for player " << playerId
-                  << " trigger=" << static_cast<int>(trigger);
+                  << " trigger=" << static_cast<int>(trigger) << " "
+                  << tlsGuidSegmentRegistry.Get(GuidKind::kSnapshot).Describe();
         return 0;
     }
     const uint64_t nowSec = TimeSystem::NowSecondsUTC();
@@ -70,6 +74,10 @@ uint64_t SnapshotSystem::CaptureAndSend(entt::entity player, SnapshotTrigger tri
     entry.set_player_database_blob(std::move(dbBlob));
     entry.set_player_database_1_blob(std::move(db1Blob));
     entry.set_schema_version(kSnapshotSchemaVersion);
+    // 捕获时刻的 zone 由生产者盖章,消费者不许回查 Router(合服后 home_zone 会变)。
+    // 取 GameConfig.zone_id 而非 GetZoneId():两者同源(node.cpp 用它填 NodeInfo.zone_id),
+    // 但 modules 工程的包含路径里没有 engine/core,引不到 network/node_utils.h。
+    entry.set_zone_id(tlsNodeConfigManager.GetGameConfig().zone_id());
 
     // ── Serialize and send to Kafka ──────────────────────────────────────
     // Serialize once to get the actual size, set total_bytes, then re-serialize

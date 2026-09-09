@@ -65,30 +65,84 @@ type ResourceAudit struct {
 // We pass this around instead of a global so the auditor can be unit-tested
 // with mocked DB / Redis. Keep this struct small — anything zone-wide goes
 // into a closure if needed.
+// Redis DB 分布(实地核对 2026-09-08,来源见每行括注)。审计跨了四个 DB,
+// 把它们混成一个句柄正是旧 auditOnlineKeys 恒不告警的根因,所以这里一人一格。
+//
+//	mapping  DB 0   player:zone:{id} / lock:player:{id} / merge:in_progress:{zone}
+//	                (go/data_service/etc/data_service.yaml MappingRedis)
+//	guild    DB 2   guild_rank:zone:{z} / guild:v2:{id} / guild_rank:maintenance_lock
+//	                (go/guild/etc/guild.yaml RedisClient)
+//	friend   DB 3   friend:online:{pid}
+//	                (go/friend/etc/friend.yaml RedisClient)
+//	shared   DB 0   player:session:{pid} / kafka:{retry,dead}:queue:* /
+//	                PlayerAllData:{pid} / {MsgType}:{pid} / player_merge_notice:{pid}
+//	                (go/login, go/db, go/player_locator, scene_manager 都是 DB 0)
 type auditConfig struct {
-	db        *sql.DB        // game MySQL — guild / mail / auction / etc.
-	mappingDB *redis.Client  // mapping redis — player:zone:{id} → home_zone
-	rankRDB   *redis.Client  // rank redis — guild_rank:zone:{id} ZSETs
-	src       uint32         // source zone (merging FROM)
-	dst       uint32         // target zone (merging INTO)
-	verify    bool           // post-merge verification mode (see -VerifyMerged in runbook)
-	timeout   time.Duration  // per-query timeout — keep short, audit must be fast
+	db        *sql.DB       // game MySQL — guild / friend / zone_{N}_db
+	mappingDB *redis.Client // DB 0(go-zero RedisConf 无 DB 字段)
+	rankRDB   *redis.Client // DB 2
+	friendRDB *redis.Client // DB 3
+	sharedRDB *redis.Client // DB 0
+	sceneRDB  *redis.Client // scene_manager Redis (DB 0 by default)
+	// dataRDB: per-zone player data Redis(standalone 或 cluster)。可选:
+	// 只有配了 -source-data-redis 才有,用来查 player:{id}:__lock。
+	dataRDB redis.UniversalClient
+
+	// 下面两个只用于把 DB 号打进 Notes —— 审计输出必须自己说清「我查的是哪个库」,
+	// 否则「0 在线」这种结论没法复核。
+	friendDBIndex int
+	sharedDBIndex int
+
+	src     uint32        // source zone (merging FROM)
+	dst     uint32        // target zone (merging INTO)
+	verify  bool          // post-merge verification mode (-verify-merged)
+	timeout time.Duration // per-query timeout — keep short, audit must be fast
+
+	// expectedSrcPlayers: T-1 彩排记下来的源区玩家数,-1 = 未提供。
+	// -verify-merged 用它把「行数够不够」从软提示变成硬断言。
+	expectedSrcPlayers int64
+	// tableCandidates: go/db 建表清单里的表名全集,用于发现玩家表。
+	tableCandidates []string
+	// topicGeneration: db_task topic 的代号(go/db/etc/db.yaml Kafka.TopicGeneration)。
+	topicGeneration uint32
 }
 
 // auditEntryParams is the pure-data input for runAuditEntry. main.go owns
 // flag parsing; audit_resources.go owns the audit semantics. This struct
 // is the seam between them.
 type auditEntryParams struct {
-	src          uint32
-	dst          uint32
-	mysqlDSN     string
-	mappingAddr  string
-	mappingPwd   string
-	mappingDB    int
-	rankAddr     string
-	rankPwd      string
-	rankDB       int
-	verifyMerged bool
+	src      uint32
+	dst      uint32
+	mysqlDSN string
+
+	mappingAddr string
+	mappingPwd  string
+	mappingDB   int
+
+	rankAddr string
+	rankPwd  string
+	rankDB   int
+
+	friendAddr string
+	friendPwd  string
+	friendDB   int
+
+	sharedAddr string
+	sharedPwd  string
+	sharedDB   int
+
+	sceneAddr string
+	scenePwd  string
+	sceneDB   int
+
+	dataAddrs []string
+	dataPwd   string
+	dataDB    int
+
+	verifyMerged       bool
+	expectedSrcPlayers int64
+	tableCandidates    []string
+	topicGeneration    uint32
 }
 
 // firstNonEmpty returns a if non-empty, else b. Avoids a one-line helper
@@ -105,55 +159,78 @@ func firstNonEmpty(a, b string) string {
 // if any auditor returned Severity="block".
 //
 // Exit code policy:
-//   0 — clean, no blockers
-//   1 — at least one block-severity finding (do NOT proceed with merge)
-//   2 — infrastructure error (couldn't even connect to MySQL/Redis)
+//
+//	0 — clean, no blockers
+//	1 — at least one block-severity finding (do NOT proceed with merge)
+//	2 — infrastructure error (couldn't even connect to MySQL/Redis)
 //
 // Ops scripts can branch on exit code without parsing stdout.
 func runAuditEntry(p auditEntryParams) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 
 	db, err := sql.Open("mysql", p.mysqlDSN)
 	if err != nil {
-		log.Printf("ERROR: mysql open: %v — audit will skip MySQL-backed checks", err)
-		// Don't fatal — Redis-backed audits (online_keys) still useful.
+		log.Printf("ERROR: mysql open: %v — MySQL-backed checks will report INFRA", err)
+		db = nil
 	} else {
 		defer db.Close()
 		if err := db.PingContext(ctx); err != nil {
-			log.Printf("WARN: mysql ping: %v — audit will skip MySQL-backed checks", err)
+			log.Printf("ERROR: mysql ping: %v — MySQL-backed checks will report INFRA", err)
 			db = nil
 		}
 	}
 
-	mapRdb := redis.NewClient(&redis.Options{
-		Addr:     p.mappingAddr,
-		Password: p.mappingPwd,
-		DB:       p.mappingDB,
-	})
-	defer mapRdb.Close()
-	if err := mapRdb.Ping(ctx).Err(); err != nil {
-		log.Printf("WARN: mapping redis ping: %v — audit will skip mapping-backed checks", err)
-		mapRdb = nil
+	// 每个 DB 一个句柄。ping 失败**不再**降级成静默跳过:句柄留 nil,对应
+	// auditor 会返回 INFRA 级 block,整个审计以 exit 2 结束。
+	dial := func(label, addr, pwd string, dbIndex int) *redis.Client {
+		c := redis.NewClient(&redis.Options{Addr: addr, Password: pwd, DB: dbIndex})
+		if err := c.Ping(ctx).Err(); err != nil {
+			log.Printf("ERROR: %s redis ping (%s db=%d): %v", label, addr, dbIndex, err)
+			_ = c.Close()
+			return nil
+		}
+		return c
+	}
+	mapRdb := dial("mapping", p.mappingAddr, p.mappingPwd, p.mappingDB)
+	rankRdb := dial("guild", p.rankAddr, p.rankPwd, p.rankDB)
+	friendRdb := dial("friend", p.friendAddr, p.friendPwd, p.friendDB)
+	sharedRdb := dial("shared(DB0)", p.sharedAddr, p.sharedPwd, p.sharedDB)
+	sceneRdb := dial("scene_manager", p.sceneAddr, p.scenePwd, p.sceneDB)
+	for _, c := range []*redis.Client{mapRdb, rankRdb, friendRdb, sharedRdb, sceneRdb} {
+		if c != nil {
+			defer c.Close()
+		}
+	}
+	var dataRdb redis.UniversalClient
+	if len(p.dataAddrs) > 0 {
+		dataRdb = newDataRedisClient(p.dataAddrs, p.dataPwd, p.dataDB)
+		if dataRdb != nil {
+			defer dataRdb.Close()
+			if err := dataRdb.Ping(ctx).Err(); err != nil {
+				log.Printf("ERROR: data redis ping (%v): %v", p.dataAddrs, err)
+				dataRdb = nil
+			}
+		}
 	}
 
-	rankRdb := redis.NewClient(&redis.Options{
-		Addr:     p.rankAddr,
-		Password: p.rankPwd,
-		DB:       p.rankDB,
-	})
-	defer rankRdb.Close()
-	// Rank ping isn't fatal; if it fails the rank-side audits just degrade.
-	_ = rankRdb.Ping(ctx).Err()
-
 	cfg := auditConfig{
-		db:        db,
-		mappingDB: mapRdb,
-		rankRDB:   rankRdb,
-		src:       p.src,
-		dst:       p.dst,
-		verify:    p.verifyMerged,
-		timeout:   30 * time.Second,
+		db:                 db,
+		mappingDB:          mapRdb,
+		rankRDB:            rankRdb,
+		friendRDB:          friendRdb,
+		sharedRDB:          sharedRdb,
+		sceneRDB:           sceneRdb,
+		dataRDB:            dataRdb,
+		friendDBIndex:      p.friendDB,
+		sharedDBIndex:      p.sharedDB,
+		src:                p.src,
+		dst:                p.dst,
+		verify:             p.verifyMerged,
+		timeout:            30 * time.Second,
+		expectedSrcPlayers: p.expectedSrcPlayers,
+		tableCandidates:    p.tableCandidates,
+		topicGeneration:    p.topicGeneration,
 	}
 
 	mode := "pre-merge"
@@ -165,6 +242,19 @@ func runAuditEntry(p auditEntryParams) {
 	results := runAuditMode(ctx, cfg)
 	blockCount, _ := printAuditReport(results)
 
+	// exit 2 优先于 exit 1:「审计本身没跑成」和「审计跑成了并发现问题」
+	// 对 ops 脚本是两件事。文档一直这么写,以前从没真的返回过。
+	infra := 0
+	for _, r := range results {
+		if isInfraAudit(r) {
+			infra++
+		}
+	}
+	if infra > 0 {
+		log.Printf("Audit could not complete: %d check(s) failed for infrastructure reasons. "+
+			"The result is NOT a clean bill of health.", infra)
+		os.Exit(2)
+	}
 	if blockCount > 0 {
 		os.Exit(1)
 	}
@@ -180,34 +270,53 @@ func runAuditEntry(p auditEntryParams) {
 //     audit silently skipped.
 //
 // 2026-05-23 schema-reality reconciliation:
-//   The earlier shape of this file ran ten auditors covering
-//   player.name / mail / mail_attachment / auction / chat_history /
-//   guild_application — all assuming standalone MySQL tables that
-//   *do not actually exist in this codebase*. The real schema lives
-//   in deploy/mysql-init/ and go/db/model/mysql_database_table.sql:
-//   only `guild`, `guild_member`, `friend`, `friend_request`, and the
-//   blob-form `player_database` exist. Player nicknames are inside
-//   `player_database`'s MEDIUMBLOB, not a column.
 //
-//   Running auditors against tables that don't exist returns the
-//   "table not present — nothing to audit" placeholder I built as a
-//   "graceful degradation" path. In practice that placeholder *misleads*
-//   ops into thinking the audit ran cleanly. Removed those auditors;
-//   only checks that exercise schema we *actually have* survived.
+//	The earlier shape of this file ran ten auditors covering
+//	player.name / mail / mail_attachment / auction / chat_history /
+//	guild_application — all assuming standalone MySQL tables that
+//	*do not actually exist in this codebase*. The real schema lives
+//	in deploy/mysql-init/ and go/db/model/mysql_database_table.sql:
+//	only `guild`, `guild_member`, `friend`, `friend_request`, and the
+//	blob-form `player_database` exist. Player nicknames are inside
+//	`player_database`'s MEDIUMBLOB, not a column.
 //
-//   The Player-name conflict check survives in a different shape: it
-//   prints an explicit "not implemented" line so the operator knows
-//   to fall back to the manual procedure in
-//   docs/ops/merge-zone-runbook.md §4.4. The block-vs-info severity
-//   makes this visible at the bottom of every audit run rather than
-//   hiding under "info: schema doesn't expose zone_id".
+//	Running auditors against tables that don't exist returns the
+//	"table not present — nothing to audit" placeholder I built as a
+//	"graceful degradation" path. In practice that placeholder *misleads*
+//	ops into thinking the audit ran cleanly. Removed those auditors;
+//	only checks that exercise schema we *actually have* survived.
+//
+//	The Player-name conflict check survives in a different shape: it
+//	prints an explicit "not implemented" line so the operator knows
+//	to fall back to the manual procedure in
+//	docs/ops/merge-zone-runbook.md §4.4. The block-vs-info severity
+//	makes this visible at the bottom of every audit run rather than
+//	hiding under "info: schema doesn't expose zone_id".
 func runAuditMode(ctx context.Context, cfg auditConfig) []ResourceAudit {
 	auditors := []func(context.Context, auditConfig) ResourceAudit{
-		auditPlayerNameConflicts, // explicit "not implemented" notice — see below
+		auditPlayerNameConflicts, // explicit "not applicable" notice — see below
 		auditFriend,              // global table keyed by player_id; survives merge automatically
 		auditFriendRequest,       // same
 		auditGuildMembers,        // global guild_member table; surfaces volume + zone-cross hints
-		auditOnlineKeys,          // Redis online TTL keys leftover after zone-down
+	}
+	if cfg.verify {
+		// 合服后验证:runbook §5 Step 5 的那张表,逐条 block 级断言。
+		auditors = append(auditors,
+			verifyMappingDrained,
+			verifyGuildZoneDrained,
+			verifyGuildRankZSets,
+			verifyTargetZoneRows,
+			verifySourceHotStateGone,
+			verifyFenceReleased,
+		)
+	} else {
+		// 合服前门禁:每一条都能真的拦住 -apply。
+		auditors = append(auditors,
+			auditSourceZoneNodes, // scene_nodes:zone:{src}:load 必须空
+			auditOnlinePresence,  // friend:online(DB 3) + player:session(DB 0)
+			auditPlayerLocks,     // lock:player:*(mapping DB) + player:{id}:__lock(data)
+			auditKafkaQueues,     // kafka:retry/processing/dead(DB 0)
+		)
 	}
 
 	results := make([]ResourceAudit, 0, len(auditors))
@@ -272,44 +381,46 @@ func printAuditReport(results []ResourceAudit) (blockCount, warnCount int) {
 // notice. The 2026-05-23-pm reality check went one layer deeper).
 //
 // History (kept as a cautionary comment for future engineers):
-//   The earliest shape ran SQL against `player.name` / `player.zone_id`.
-//   Both columns are entirely fictional in this codebase — the real
-//   `player_database` schema has only `player_id BIGINT` plus seven
-//   MEDIUMBLOB component columns. Discovering that triggered v1.1 of
-//   this audit, which turned the row into a block-severity "not
-//   implemented; see merge-zone-runbook.md §4.4" hint pointing at a
-//   manual rename procedure.
 //
-//   Then I went looking for *which* protobuf field actually holds the
-//   nickname so a future protobuf-decoding implementation knew where
-//   to look. Result:
-//     - CreatePlayerRequest is an empty message — no nickname on creation
-//     - AccountSimplePlayer carries only player_id
-//     - PlayerUint32Comp / PlayerUint64Comp carry class /
-//       registration_timestamp respectively, no name field
-//     - user.display_name column exists in the SQL schema but
-//       grep across go/ + cpp/ shows zero readers and zero writers;
-//       it's a placeholder column on a placeholder table
+//	The earliest shape ran SQL against `player.name` / `player.zone_id`.
+//	Both columns are entirely fictional in this codebase — the real
+//	`player_database` schema has only `player_id BIGINT` plus seven
+//	MEDIUMBLOB component columns. Discovering that triggered v1.1 of
+//	this audit, which turned the row into a block-severity "not
+//	implemented; see merge-zone-runbook.md §4.4" hint pointing at a
+//	manual rename procedure.
 //
-//   So the project today has NO PLAYER NICKNAME at all. Players are
-//   identified to other players by player_id (uint64). The "two
-//   players named 剑圣 in different zones merge" scenario described
-//   in server-merge-gap-fixes.md §1 cannot happen because nobody has
-//   a name to clash on.
+//	Then I went looking for *which* protobuf field actually holds the
+//	nickname so a future protobuf-decoding implementation knew where
+//	to look. Result:
+//	  - CreatePlayerRequest is an empty message — no nickname on creation
+//	  - AccountSimplePlayer carries only player_id
+//	  - PlayerUint32Comp / PlayerUint64Comp carry class /
+//	    registration_timestamp respectively, no name field
+//	  - user.display_name column exists in the SQL schema but
+//	    grep across go/ + cpp/ shows zero readers and zero writers;
+//	    it's a placeholder column on a placeholder table
 //
-//   The force_rename plumbing (PlayerMergeStateComp + Redis flag +
-//   EnterGameResponse field + post_merge_stamp.go's parameter seam)
-//   is NOT dead code — it's pre-wired for the day someone enables a
-//   nickname surface. Until then this auditor reports the situation
-//   so operators don't blindly follow a manual procedure for a
-//   problem they don't have.
+//	So the project today has NO PLAYER NICKNAME at all. Players are
+//	identified to other players by player_id (uint64). The "two
+//	players named 剑圣 in different zones merge" scenario described
+//	in server-merge-gap-fixes.md §1 cannot happen because nobody has
+//	a name to clash on.
+//
+//	The force_rename plumbing (PlayerMergeStateComp + Redis flag +
+//	EnterGameResponse field + post_merge_stamp.go's parameter seam)
+//	is NOT dead code — it's pre-wired for the day someone enables a
+//	nickname surface. Until then this auditor reports the situation
+//	so operators don't blindly follow a manual procedure for a
+//	problem they don't have.
 //
 // What this auditor does today:
-//   Returns an info-severity row that says "not applicable — no
-//   nickname surface in this codebase". Severity is intentionally
-//   info, not block: blocking would force ops to skip a real audit
-//   gate to merge, which is counterproductive when the gate guards
-//   nothing.
+//
+//	Returns an info-severity row that says "not applicable — no
+//	nickname surface in this codebase". Severity is intentionally
+//	info, not block: blocking would force ops to skip a real audit
+//	gate to merge, which is counterproductive when the gate guards
+//	nothing.
 func auditPlayerNameConflicts(ctx context.Context, cfg auditConfig) ResourceAudit {
 	return ResourceAudit{
 		Name:        "player.name (n/a)",
@@ -337,14 +448,10 @@ func auditPlayerNameConflicts(ctx context.Context, cfg auditConfig) ResourceAudi
 func auditFriend(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r := ResourceAudit{Name: "friend", UniqueScope: "global"}
 	if cfg.db == nil {
-		r.Severity = "warn"
-		r.Notes = "no MySQL handle"
-		return r
+		return infraAudit(r.Name, "no MySQL handle")
 	}
 	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM friend").Scan(&r.SourceCount); err != nil {
-		r.Severity = "warn"
-		r.Notes = fmt.Sprintf("count failed: %v", err)
-		return r
+		return infraAudit(r.Name, "count failed: %v", err)
 	}
 	r.TargetCount = r.SourceCount // same global table; we don't subdivide
 	r.Severity = "info"
@@ -362,15 +469,11 @@ func auditFriend(ctx context.Context, cfg auditConfig) ResourceAudit {
 func auditFriendRequest(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r := ResourceAudit{Name: "friend_request", UniqueScope: "global"}
 	if cfg.db == nil {
-		r.Severity = "warn"
-		r.Notes = "no MySQL handle"
-		return r
+		return infraAudit(r.Name, "no MySQL handle")
 	}
 	if err := cfg.db.QueryRowContext(ctx,
 		"SELECT COUNT(*) FROM friend_request WHERE status = 1").Scan(&r.SourceCount); err != nil {
-		r.Severity = "warn"
-		r.Notes = fmt.Sprintf("count failed: %v", err)
-		return r
+		return infraAudit(r.Name, "count failed: %v", err)
 	}
 	r.TargetCount = r.SourceCount
 	r.Severity = "info"
@@ -389,9 +492,7 @@ func auditFriendRequest(ctx context.Context, cfg auditConfig) ResourceAudit {
 func auditGuildMembers(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r := ResourceAudit{Name: "guild_member", UniqueScope: "global"}
 	if cfg.db == nil {
-		r.Severity = "warn"
-		r.Notes = "no MySQL handle"
-		return r
+		return infraAudit(r.Name, "no MySQL handle")
 	}
 	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_member").Scan(&r.SourceCount); err != nil {
 		r.Severity = "info"
@@ -416,50 +517,9 @@ func auditGuildMembers(ctx context.Context, cfg auditConfig) ResourceAudit {
 	return r
 }
 
-// auditOnlineKeys — Redis online TTL keys leftover after zone-down.
+// (auditOnlineKeys 已删除,由 audit_checks.go 的 auditOnlinePresence 取代。
 //
-// `friend:online:{playerId}` is a Redis key with 60s TTL written by
-// FriendRepo.SetPlayerOnline. After zone-down, no one writes it; after
-// 60s, all entries naturally expire. If the auditor finds source-zone
-// players still flagged online, it means zone-down didn't propagate or
-// there's a rogue process still ACK'ing — BLOCK the merge until clean.
-func auditOnlineKeys(ctx context.Context, cfg auditConfig) ResourceAudit {
-	r := ResourceAudit{Name: "online_keys", UniqueScope: "per_zone"}
-	if cfg.mappingDB == nil {
-		r.Severity = "warn"
-		r.Notes = "no mapping Redis handle"
-		return r
-	}
-	// Count source-zone players still showing as online.
-	pids, err := collectPlayerIDsWithHomeZone(ctx, cfg.mappingDB, cfg.src)
-	if err != nil {
-		r.Severity = "warn"
-		r.Notes = fmt.Sprintf("mapping scan failed: %v", err)
-		return r
-	}
-	r.SourceCount = int64(len(pids))
-
-	online := int64(0)
-	pipe := cfg.mappingDB.Pipeline()
-	checks := make([]*redis.IntCmd, 0, len(pids))
-	for _, pid := range pids {
-		checks = append(checks, pipe.Exists(ctx, fmt.Sprintf("friend:online:%d", pid)))
-	}
-	// Best-effort: pipeline errors don't block the audit.
-	_, _ = pipe.Exec(ctx)
-	for _, c := range checks {
-		if c.Val() > 0 {
-			online++
-		}
-	}
-	r.TargetCount = online
-
-	if online > 0 {
-		r.Severity = "block"
-		r.Notes = fmt.Sprintf("%d source-zone players still flagged online. Wait 60s for TTL or investigate — zone-down may be incomplete.", online)
-	} else {
-		r.Severity = "info"
-		r.Notes = "all source-zone players offline ✅"
-	}
-	return r
-}
+//	它查错了 Redis DB:friend:online:{pid} 由 go/friend 写在 **DB 3**,而旧实现
+//	在 mapping Redis(DB 0)上查,恒查不到 ⇒ 恒 "all source-zone players offline ✅"。
+//	pipeline 错误还被 `_, _ = pipe.Exec(ctx)` 吞掉,超时同样落到「0 在线」。
+//	一个从设计上就不可能返回 block 的 block 级门禁,比没有门禁更危险。)

@@ -1,7 +1,6 @@
 ﻿#include <gtest/gtest.h>
 
 #include "engine/core/type_define/type_define.h"
-#include "engine/thread_context/snow_flake_manager.h"
 
 #include "table/code/item_table.h"
 #include "table/code/equipslot_table.h"
@@ -9,7 +8,17 @@
 #include "modules/bag/bag_service.h"
 #include "modules/bag/bag_profile_registry.h"
 #include "modules/bag/comp/player_bags_comp.h"
+#include "modules/id_segment/guid_segment_registry.h"
+#include "modules/snapshot/snapshot_system.h"
+#include "modules/transaction_log/transaction_log_system.h"
 #include "modules/gain_block/gain_block_service.h"
+#include <thread_context/ecs_context.h>
+
+#include <functional>
+#include <iostream>
+#include <set>
+#include <string>
+#include <vector>
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/bag_error_tip.pb.h"
 #include "../test_config_helper.h"
@@ -2702,14 +2711,849 @@ TEST(BagServiceSortTest, AutoTidyPathDoesNotReorder)
     EXPECT_EQ(kStack10, bag.GetItemCompByPos(1)->config_id());
 }
 
-// ⚠️ 本套件必须保持在**文件最后**:Fence() 是单向的,tlsSnowflakeManager 是进程级 tls 单例,
-// fence 之后本线程再也铸不出合法 guid —— 在它后面声明的任何铸号型用例都会被连坐挂掉。
-// (gtest 默认按声明序执行;请勿对本文件开 --gtest_shuffle。)
+// ---------------------------------------------------------------------------
+// 永久 guid 号段(GuidSegmentClient / GuidSegmentRegistry)与 MintGuid 发号源策略
 //
-// 钉住的契约:发号器被 fence(失去 node_id 所有权)后,铸号型入包必须在**改动任何背包状态
-// 之前**整体拒绝 —— 绝不能把 kInvalidGuid 哨兵当 item_id 写进背包持久化;
-// 而不需要铸号的路径(纯并堆)不受影响。修复前:AddItem 会静默插入一件 guid=0 的物品。
-TEST(BagFencedGeneratorTest, MintingPathsFailClosedWhileMergeStillWorks)
+// 客户端本体不认识 gRPC / 事件循环:传输、定时器、时钟都是注入的。这里用假传输记录请求、
+// 手动投递响应与触发定时器、手动拨时钟,把双 buffer / 单飞预取 / 范围校验 / 退避 / 动态 step /
+// 按种类隔离逐条钉死。
+//
+// 本文件所有铸号型用例都经 ItemStore::MintGuid → tlsGuidSegmentRegistry.Get(kItem) 取号,
+// 所以 main() 先给 item 种类装一个进程级假传输并投一段大范围(ArmBaselineItemSegment);
+// 下面动 item 实例的用例都用 ScopedItemSegmentOverride,退出时恢复基线。
+// 唯一例外是文件最后的 BagSegmentNotReadyTest:它把 item 实例置为"永远领不到段"且不恢复。
+// ---------------------------------------------------------------------------
+namespace
+{
+    using SegClient = GuidSegmentClient;
+    using SegKind = GuidSegmentClient::TimerKind;
+
+    // 号段上界 2^55 = snowflake 值域下界以下(存量 item guid ≥ 6.7e16):
+    // 用它断言"这个号是号段发的"—— 现在没有回退,任何合法号都必须落在它之下。
+    constexpr uint64_t kSnowflakeDomainFloor = uint64_t{1} << 55;
+
+    struct FakeSegmentTransport
+    {
+        struct Request
+        {
+            std::string bizTag;
+            uint32_t step;
+        };
+        struct Timer
+        {
+            SegKind kind;
+            double delaySec;
+            std::function<void()> fn;
+        };
+
+        std::vector<Request> requests;
+        std::vector<Timer> timers;
+        bool available{true}; // false = 模拟"没有已连接的 DataService 节点 / 共享通道忙"
+        double nowSec{0.0};   // 注入时钟:动态 step 用例手动拨
+
+        SegClient::SendFn Send()
+        {
+            return [this](const std::string &bizTag, uint32_t step)
+            {
+                if (!available)
+                    return false;
+                requests.push_back({bizTag, step});
+                return true;
+            };
+        }
+
+        SegClient::ScheduleFn Schedule()
+        {
+            return [this](SegKind kind, double delaySec, std::function<void()> fn)
+            { timers.push_back({kind, delaySec, std::move(fn)}); };
+        }
+
+        SegClient::ClockFn Clock()
+        {
+            return [this] { return nowSec; };
+        }
+
+        std::size_t Pending(SegKind kind) const
+        {
+            std::size_t n = 0;
+            for (const auto &t : timers)
+                n += (t.kind == kind) ? 1 : 0;
+            return n;
+        }
+
+        // 触发**最新**一枚指定类型的定时器并清掉该类型的全部登记(与 TimerTaskComp
+        // "重新武装即取消上一枚"同一语义),返回其延迟;没有则返回 -1 且什么都不做。
+        double Fire(SegKind kind)
+        {
+            Timer latest{};
+            bool found = false;
+            for (auto it = timers.begin(); it != timers.end();)
+            {
+                if (it->kind == kind)
+                {
+                    latest = std::move(*it);
+                    found = true;
+                    it = timers.erase(it);
+                }
+                else
+                {
+                    ++it;
+                }
+            }
+            if (!found)
+                return -1.0;
+            latest.fn();
+            return latest.delaySec;
+        }
+
+        void EnableOn(SegClient &client, uint32_t step, double prefetchAt = 0.1, const char *kind = "item",
+                      uint32_t minStep = 0, uint32_t maxStep = 0)
+        {
+            SegClient::Options o;
+            o.kindName = kind;
+            o.bizTag = kind;
+            o.initialStep = step;
+            o.minStep = minStep;
+            o.maxStep = maxStep;
+            o.prefetchAt = prefetchAt;
+            ASSERT_TRUE(client.Enable(o, Send(), Schedule(), Clock()));
+        }
+    };
+
+    // 整个测试进程的基线:item 种类由一个进程级假传输供号,首段是 [1, 2^54)。
+    // 生产里这一步由 scene 的 ConfigureGuidSegmentClients + DataService 首段 + DependencyGate 完成。
+    FakeSegmentTransport &BaselineTransport()
+    {
+        static FakeSegmentTransport transport;
+        return transport;
+    }
+    constexpr uint64_t kBaselineLo = 1;
+    constexpr uint64_t kBaselineHi = uint64_t{1} << 54;
+
+    bool ArmBaselineItemSegment()
+    {
+        auto &transport = BaselineTransport();
+        transport.requests.clear();
+        transport.timers.clear();
+        transport.available = true;
+        auto &item = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+        item.Reset();
+        SegClient::Options o;
+        o.kindName = "item";
+        o.initialStep = 1000000;
+        if (!item.Enable(o, transport.Send(), transport.Schedule(), transport.Clock()))
+            return false;
+        item.Warm();
+        item.OnResponse(0, kBaselineLo, kBaselineHi);
+        return item.IsReady();
+    }
+
+    // 作用域守卫:进入时把 item 实例交给用例自己的假传输(Reset 后**未领段**),
+    // 退出时恢复进程基线,后面的用例回到"号管够"的状态。
+    struct ScopedItemSegmentOverride
+    {
+        FakeSegmentTransport transport;
+
+        explicit ScopedItemSegmentOverride(uint32_t step = 10, double prefetchAt = 0.1)
+        {
+            auto &item = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+            item.Reset();
+            transport.EnableOn(item, step, prefetchAt, "item");
+        }
+        ~ScopedItemSegmentOverride()
+        {
+            EXPECT_TRUE(ArmBaselineItemSegment()) << "恢复基线失败,后面的铸号型用例会连坐";
+        }
+        GuidSegmentClient &item() { return tlsGuidSegmentRegistry.Get(GuidKind::kItem); }
+    };
+
+    // 同形:txlog / snapshot 基线里本来就没启用,用完 Reset 回"未启用"即可。
+    struct ScopedKindOverride
+    {
+        GuidKind kind;
+        FakeSegmentTransport transport;
+
+        explicit ScopedKindOverride(GuidKind k, uint32_t step = 10) : kind(k)
+        {
+            auto &client = tlsGuidSegmentRegistry.Get(kind);
+            client.Reset();
+            transport.EnableOn(client, step, 0.1, GuidKindName(kind));
+        }
+        ~ScopedKindOverride() { tlsGuidSegmentRegistry.Get(kind).Reset(); }
+        GuidSegmentClient &client() { return tlsGuidSegmentRegistry.Get(kind); }
+    };
+
+    std::vector<Guid> Drain(SegClient &client, std::size_t count)
+    {
+        std::vector<Guid> ids;
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            Guid g = kInvalidGuid;
+            if (!client.TryNext(g))
+                break;
+            ids.push_back(g);
+        }
+        return ids;
+    }
+} // namespace
+
+// ── 通用客户端:双 buffer / 单飞 / 校验 / 退避 ─────────────────────────────
+
+TEST(GuidSegmentClientTest, EnableRejectsContradictoryOptions)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    SegClient::Options o;
+    o.kindName = "item";
+    o.initialStep = 0;
+    EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule())) << "step=0 没法算预取阈值";
+    o.initialStep = 10;
+    o.prefetchAt = 0.0;
+    EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule()));
+    o.prefetchAt = 0.1;
+    o.maxIdExclusive = (uint64_t{1} << 55) + 1;
+    EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule())) << "上界只能调小:调大就与 snowflake 值域相交";
+    o.maxIdExclusive = uint64_t{1} << 55;
+    EXPECT_FALSE(client.Enable(o, nullptr, t.Schedule()));
+    o.minStep = 20;
+    EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule())) << "下限高于初值";
+    o.minStep = 0;
+    o.maxStep = 5;
+    EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule())) << "上限低于初值";
+    o.maxStep = 0;
+    o.stepGrowBelowSec = 100;
+    o.stepShrinkAboveSec = 50;
+    EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule())) << "翻倍 / 减半阈值倒挂";
+    o.stepGrowBelowSec = 15 * 60;
+    o.stepShrinkAboveSec = 30 * 60;
+    o.kindName = "";
+    EXPECT_FALSE(client.Enable(o, t.Send(), t.Schedule())) << "种类名是日志 / 指标标签,必填";
+    o.kindName = "item";
+    EXPECT_FALSE(client.IsEnabled());
+
+    EXPECT_TRUE(client.Enable(o, t.Send(), t.Schedule()));
+    EXPECT_TRUE(client.IsEnabled());
+    EXPECT_FALSE(client.IsReady());
+    EXPECT_EQ(0u, client.Available());
+    EXPECT_EQ("item", client.options().bizTag) << "biz_tag 缺省 = 种类名";
+    EXPECT_EQ(10u, client.options().minStep) << "0 = 钉在初值上";
+    EXPECT_EQ(10u, client.options().maxStep);
+    EXPECT_EQ(10u, client.GetStats().currentStep);
+}
+
+TEST(GuidSegmentClientTest, SequentialUniquenessAcrossRanges)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 10);
+
+    client.Warm();
+    ASSERT_EQ(1u, t.requests.size());
+    EXPECT_EQ("item", t.requests[0].bizTag);
+    EXPECT_EQ(10u, t.requests[0].step);
+    EXPECT_FALSE(client.IsReady());
+
+    client.OnResponse(0, 1, 11);
+    EXPECT_TRUE(client.IsReady());
+    EXPECT_EQ(10u, client.Available());
+
+    const auto first = Drain(client, 10);
+    ASSERT_EQ(10u, first.size());
+    // threshold = ceil(0.1 * 10) = 1:发到只剩 1 个时预取一次,发到 0 不重复
+    EXPECT_EQ(2u, t.requests.size());
+
+    client.OnResponse(0, 11, 21);
+    const auto second = Drain(client, 10);
+    ASSERT_EQ(10u, second.size());
+    EXPECT_EQ(3u, t.requests.size());
+
+    std::vector<Guid> all = first;
+    all.insert(all.end(), second.begin(), second.end());
+    for (std::size_t i = 0; i < all.size(); ++i)
+    {
+        EXPECT_EQ(static_cast<Guid>(i + 1), all[i]) << "跨段必须严格递增、无空洞";
+    }
+    const std::set<Guid> unique(all.begin(), all.end());
+    EXPECT_EQ(all.size(), unique.size());
+    EXPECT_LT(all.back(), kSnowflakeDomainFloor);
+
+    Guid g = kInvalidGuid;
+    EXPECT_FALSE(client.TryNext(g)) << "两段都空:不阻塞,立刻 false";
+    const auto s = client.GetStats();
+    EXPECT_EQ(20u, s.issued);
+    EXPECT_EQ(2u, s.fetches);
+    EXPECT_EQ(1u, s.unavailable);
+    EXPECT_EQ(21u, s.highWater);
+    EXPECT_TRUE(s.inflight);
+    EXPECT_EQ(2u, s.rangesConsumed);
+}
+
+TEST(GuidSegmentClientTest, PrefetchFiresAtThresholdExactlyOnce)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 100); // threshold = 10
+
+    client.Warm();
+    client.OnResponse(0, 1, 101);
+    ASSERT_EQ(1u, t.requests.size());
+
+    ASSERT_EQ(89u, Drain(client, 89).size()); // 剩 11:还没到阈值
+    EXPECT_EQ(1u, t.requests.size());
+    ASSERT_EQ(1u, Drain(client, 1).size()); // 剩 10:恰好触发
+    EXPECT_EQ(2u, t.requests.size());
+    ASSERT_EQ(5u, Drain(client, 5).size()); // 继续发不会再发第二个请求(单飞)
+    EXPECT_EQ(2u, t.requests.size());
+
+    client.OnResponse(0, 101, 201);
+    EXPECT_TRUE(client.GetStats().nextReady);
+    ASSERT_EQ(5u, Drain(client, 5).size()); // 当前段用光
+    EXPECT_EQ(2u, t.requests.size());
+
+    const auto switched = Drain(client, 1);
+    ASSERT_EQ(1u, switched.size());
+    EXPECT_EQ(101u, switched[0]) << "切到预取段";
+    EXPECT_EQ(2u, t.requests.size()) << "新段剩 99 > 阈值,不预取";
+    EXPECT_EQ(2u, client.GetStats().fetches);
+}
+
+TEST(GuidSegmentClientTest, PrefetchThresholdFollowsTheRangeLengthNotTheConfiguredStep)
+{
+    // 动态 step 下相邻两段长度可能差一倍;服务端也可能钳制 step。阈值按**这一段**的长度算。
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 100); // 配置 step 100,但服务端只给了 20 个
+    client.Warm();
+    client.OnResponse(0, 1, 21); // threshold = ceil(0.1 * 20) = 2
+    ASSERT_EQ(17u, Drain(client, 17).size()); // 剩 3:未触发
+    EXPECT_EQ(1u, t.requests.size());
+    ASSERT_EQ(1u, Drain(client, 1).size()); // 剩 2:触发
+    EXPECT_EQ(2u, t.requests.size());
+}
+
+TEST(GuidSegmentClientTest, ExhaustedWithoutNextReturnsFalseAndRecoversAfterRetry)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 2); // threshold = 1
+
+    client.Warm();
+    client.OnResponse(0, 1, 3);
+    ASSERT_EQ(2u, Drain(client, 2).size());
+    EXPECT_EQ(2u, t.requests.size()) << "发到剩 1 个时已预取";
+
+    Guid g = kInvalidGuid;
+    EXPECT_FALSE(client.TryNext(g));
+    EXPECT_FALSE(client.IsReady());
+    EXPECT_EQ(1u, client.GetStats().unavailable);
+    EXPECT_EQ(2u, t.requests.size()) << "在途时不重复发";
+
+    // 传输失败:生成的 gRPC 客户端不回调 handler,只能靠超时兜底
+    EXPECT_GT(t.Fire(SegKind::kFetchTimeout), 0.0);
+    auto s = client.GetStats();
+    EXPECT_EQ(1u, s.timeouts);
+    EXPECT_EQ(1u, s.fetchErrors);
+    EXPECT_TRUE(s.retryPending);
+    EXPECT_FALSE(s.inflight);
+
+    EXPECT_FALSE(client.TryNext(g));
+    EXPECT_EQ(2u, t.requests.size()) << "退避期间不发";
+
+    EXPECT_DOUBLE_EQ(0.5, t.Fire(SegKind::kRetry));
+    EXPECT_EQ(3u, t.requests.size());
+    client.OnResponse(0, 3, 5);
+    ASSERT_TRUE(client.TryNext(g));
+    EXPECT_EQ(3u, g);
+}
+
+TEST(GuidSegmentClientTest, RangeValidationRejectsOverlapRegressionOverCapAndZero)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 10);
+    client.Warm();
+
+    // lo=0:哪怕是首段、没有 highWater 也拒
+    client.OnResponse(0, 0, 10);
+    EXPECT_FALSE(client.IsReady());
+    EXPECT_EQ(1u, client.GetStats().rangeViolations);
+    EXPECT_DOUBLE_EQ(0.5, t.Fire(SegKind::kRetry));
+    EXPECT_EQ(2u, t.requests.size());
+
+    client.OnResponse(0, 1, 11);
+    ASSERT_EQ(10u, Drain(client, 10).size());
+    EXPECT_EQ(3u, t.requests.size());
+    EXPECT_EQ(11u, client.GetStats().highWater);
+
+    // 重叠:lo < 上一段 hi
+    client.OnResponse(0, 5, 15);
+    EXPECT_FALSE(client.IsReady());
+    EXPECT_EQ(2u, client.GetStats().rangeViolations);
+    EXPECT_DOUBLE_EQ(0.5, t.Fire(SegKind::kRetry)) << "上次成功后退避已复位";
+    EXPECT_EQ(4u, t.requests.size());
+
+    // 回退:整段都在已发出的水位之下
+    client.OnResponse(0, 1, 11);
+    EXPECT_EQ(3u, client.GetStats().rangeViolations);
+    EXPECT_DOUBLE_EQ(1.0, t.Fire(SegKind::kRetry));
+    EXPECT_EQ(5u, t.requests.size());
+
+    // 空区间 hi <= lo
+    client.OnResponse(0, 20, 20);
+    EXPECT_EQ(4u, client.GetStats().rangeViolations);
+    EXPECT_DOUBLE_EQ(2.0, t.Fire(SegKind::kRetry));
+    EXPECT_EQ(6u, t.requests.size());
+
+    // 超上界:会与 snowflake 值域相交
+    client.OnResponse(0, (uint64_t{1} << 55) - 5, (uint64_t{1} << 55) + 5);
+    EXPECT_EQ(5u, client.GetStats().rangeViolations);
+    EXPECT_FALSE(client.IsReady());
+    EXPECT_DOUBLE_EQ(4.0, t.Fire(SegKind::kRetry));
+    EXPECT_EQ(7u, t.requests.size());
+
+    // 合法范围照常收下;被拒的段一个号都没发出去
+    client.OnResponse(0, 11, 21);
+    Guid g = kInvalidGuid;
+    ASSERT_TRUE(client.TryNext(g));
+    EXPECT_EQ(11u, g);
+    const auto s = client.GetStats();
+    EXPECT_EQ(5u, s.fetchErrors);
+    EXPECT_EQ(2u, s.fetches);
+    EXPECT_EQ(21u, s.highWater);
+}
+
+TEST(GuidSegmentClientTest, ServerErrorRetriesWithExponentialBackoffCappedAt5s)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 10);
+    client.Warm();
+    ASSERT_EQ(1u, t.requests.size());
+
+    const double expected[] = {0.5, 1.0, 2.0, 4.0, 5.0, 5.0};
+    for (std::size_t i = 0; i < std::size(expected); ++i)
+    {
+        client.OnResponse(7, 0, 0);
+        EXPECT_FALSE(client.IsReady());
+        Guid g = kInvalidGuid;
+        EXPECT_FALSE(client.TryNext(g));
+        EXPECT_EQ(i + 1, t.requests.size()) << "退避期间 TryNext 不会另发请求";
+        EXPECT_DOUBLE_EQ(expected[i], t.Fire(SegKind::kRetry)) << "第 " << i << " 次退避";
+        EXPECT_EQ(i + 2, t.requests.size());
+    }
+    EXPECT_EQ(std::size(expected), client.GetStats().fetchErrors);
+
+    // 成功后退避复位:下一次失败又从 500ms 起
+    client.OnResponse(0, 1, 11);
+    ASSERT_EQ(10u, Drain(client, 10).size());
+    client.OnResponse(7, 0, 0);
+    EXPECT_DOUBLE_EQ(0.5, t.Fire(SegKind::kRetry));
+}
+
+TEST(GuidSegmentClientTest, SendUnavailableBacksOffAndWarmIsIdempotent)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 10);
+    t.available = false; // DataService 还没连上 / 共享通道忙
+
+    client.Warm();
+    EXPECT_TRUE(t.requests.empty());
+    EXPECT_EQ(1u, client.GetStats().sendUnavailable);
+    EXPECT_EQ(1u, t.Pending(SegKind::kRetry));
+
+    client.Warm(); // 退避中再 Warm 是空操作
+    Guid g = kInvalidGuid;
+    EXPECT_FALSE(client.TryNext(g));
+    EXPECT_EQ(1u, t.Pending(SegKind::kRetry));
+    EXPECT_EQ(1u, client.GetStats().sendUnavailable);
+
+    t.available = true;
+    EXPECT_DOUBLE_EQ(0.5, t.Fire(SegKind::kRetry));
+    ASSERT_EQ(1u, t.requests.size());
+    client.OnResponse(0, 1, 11);
+    EXPECT_TRUE(client.IsReady());
+}
+
+TEST(GuidSegmentClientTest, LateResponseAfterTimeoutIsUsedAndSurplusIsDropped)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 10);
+    client.Warm();
+    ASSERT_EQ(1u, t.requests.size());
+
+    EXPECT_GT(t.Fire(SegKind::kFetchTimeout), 0.0);
+    EXPECT_TRUE(client.GetStats().retryPending);
+
+    // 晚到的响应照样能用(校验通过就是合法的段)
+    client.OnResponse(0, 1, 11);
+    EXPECT_TRUE(client.IsReady());
+    EXPECT_DOUBLE_EQ(0.5, t.Fire(SegKind::kRetry));
+    EXPECT_EQ(1u, t.requests.size()) << "段已补上、剩余高于阈值:重试回调不再发";
+
+    ASSERT_EQ(9u, Drain(client, 9).size()); // 剩 1 → 预取
+    EXPECT_EQ(2u, t.requests.size());
+    EXPECT_GT(t.Fire(SegKind::kFetchTimeout), 0.0);
+    EXPECT_DOUBLE_EQ(0.5, t.Fire(SegKind::kRetry));
+    EXPECT_EQ(3u, t.requests.size());
+
+    client.OnResponse(0, 11, 21); // 两次发送的响应都到了
+    client.OnResponse(0, 21, 31); // 两个 buffer 都满:多出来的作废,但水位照抬
+    auto s = client.GetStats();
+    EXPECT_EQ(1u, s.droppedRanges);
+    EXPECT_EQ(31u, s.highWater);
+    client.OnResponse(0, 25, 35); // 作废段之下的范围仍然是重叠,必须拒
+    EXPECT_EQ(1u, client.GetStats().rangeViolations);
+
+    const auto rest = Drain(client, 11);
+    ASSERT_EQ(11u, rest.size());
+    EXPECT_EQ(10u, rest.front());
+    EXPECT_EQ(20u, rest.back());
+}
+
+TEST(GuidSegmentClientTest, ShutdownStopsFetchingButKeepsIssuingWhatIsInHand)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 10);
+    client.Warm();
+    client.OnResponse(0, 1, 11);
+    ASSERT_EQ(5u, Drain(client, 5).size());
+
+    client.Shutdown();
+    const auto rest = Drain(client, 5);
+    ASSERT_EQ(5u, rest.size());
+    EXPECT_EQ(6u, rest.front());
+    EXPECT_EQ(10u, rest.back());
+    EXPECT_EQ(1u, t.requests.size()) << "停机后不再预取";
+    Guid g = kInvalidGuid;
+    EXPECT_FALSE(client.TryNext(g));
+    EXPECT_EQ(1u, t.requests.size());
+    EXPECT_EQ(0u, t.Pending(SegKind::kRetry));
+}
+
+// ── 动态 step(Leaf 口径,§7.5 第 4 条)────────────────────────────────────
+
+TEST(GuidSegmentClientTest, DynamicStepDoublesUnder15MinHalvesOver30MinWithinBounds)
+{
+    SegClient client;
+    FakeSegmentTransport t;
+    t.EnableOn(client, 10, 0.1, "item", /*minStep=*/5, /*maxStep=*/40);
+    EXPECT_EQ(10u, client.GetStats().currentStep);
+
+    // 段 A:@0s 领到 10 个
+    t.nowSec = 0;
+    client.Warm();
+    ASSERT_EQ(1u, t.requests.size());
+    EXPECT_EQ(10u, t.requests[0].step);
+    client.OnResponse(0, 1, 11);
+    ASSERT_EQ(9u, Drain(client, 9).size()); // 剩 1 → 预取;段 A 还没发完,这次仍按 10 请求
+    ASSERT_EQ(2u, t.requests.size());
+    EXPECT_EQ(10u, t.requests[1].step);
+    t.nowSec = 60; // 段 A 1 分钟用完:< 15 分钟 → 翻倍
+    ASSERT_EQ(1u, Drain(client, 1).size());
+    auto s = client.GetStats();
+    EXPECT_EQ(20u, s.currentStep);
+    EXPECT_DOUBLE_EQ(60.0, s.lastRangeLastedSec);
+    EXPECT_EQ(1u, s.rangesConsumed);
+    EXPECT_EQ(1u, s.stepChanges);
+
+    // 段 B(req#2 的响应,10 个):当前段已空,直接成为当前段 @60s
+    client.OnResponse(0, 11, 21);
+    ASSERT_EQ(9u, Drain(client, 9).size()); // 剩 1 → 预取 req#3,这次按翻倍后的 20
+    ASSERT_EQ(3u, t.requests.size());
+    EXPECT_EQ(20u, t.requests[2].step);
+    t.nowSec = 60 + 1000; // 段 B 撑了 1000s:15~30 分钟之间 → 不变
+    ASSERT_EQ(1u, Drain(client, 1).size());
+    EXPECT_EQ(20u, client.GetStats().currentStep);
+    EXPECT_EQ(1u, client.GetStats().stepChanges);
+
+    // 段 C(20 个)@1060s:阈值 = ceil(0.1×20) = 2
+    client.OnResponse(0, 21, 41);
+    ASSERT_EQ(18u, Drain(client, 18).size()); // 剩 2 → 预取 req#4 按 20
+    ASSERT_EQ(4u, t.requests.size());
+    EXPECT_EQ(20u, t.requests[3].step);
+    t.nowSec = 1060 + 3600; // 段 C 撑了 1 小时:> 30 分钟 → 减半
+    ASSERT_EQ(2u, Drain(client, 2).size());
+    EXPECT_EQ(10u, client.GetStats().currentStep);
+    EXPECT_EQ(2u, client.GetStats().stepChanges);
+
+    // 段 D(req#4 给 20 个)@4660s 再撑 1 小时 → 5;段 E(req#5 给 10 个)再撑 1 小时 → 钉在下限 5
+    client.OnResponse(0, 41, 61);
+    ASSERT_EQ(18u, Drain(client, 18).size()); // req#5 按 10
+    ASSERT_EQ(5u, t.requests.size());
+    EXPECT_EQ(10u, t.requests[4].step);
+    t.nowSec = 4660 + 3600;
+    ASSERT_EQ(2u, Drain(client, 2).size());
+    EXPECT_EQ(5u, client.GetStats().currentStep);
+    client.OnResponse(0, 61, 71); // @8260s
+    ASSERT_EQ(9u, Drain(client, 9).size()); // req#6 按 5
+    ASSERT_EQ(6u, t.requests.size());
+    EXPECT_EQ(5u, t.requests[5].step);
+    t.nowSec = 8260 + 3600;
+    ASSERT_EQ(1u, Drain(client, 1).size());
+    EXPECT_EQ(5u, client.GetStats().currentStep) << "不低于下限";
+    EXPECT_EQ(3u, client.GetStats().stepChanges) << "钉在下限不算改变";
+
+    // 往上:时钟不动 = 每段都被秒杀,5 → 10 → 20 → 40 → 40(上限)。
+    // 服务端按请求的 step 给;每段的预取请求带的是调整**前**的 step(在途请求不受影响)。
+    uint64_t lo = 71;
+    uint32_t given = t.requests.back().step;
+    const uint32_t expectedSteps[] = {10, 20, 40, 40};
+    for (const uint32_t expected : expectedSteps)
+    {
+        client.OnResponse(0, lo, lo + given);
+        ASSERT_EQ(static_cast<std::size_t>(given), Drain(client, given).size());
+        EXPECT_EQ(expected, client.GetStats().currentStep);
+        lo += given;
+        given = t.requests.back().step;
+    }
+    EXPECT_EQ(40u, given) << "最后一次预取按上限请求";
+    EXPECT_EQ(6u, client.GetStats().stepChanges);
+}
+
+// ── 注册表:一种 GUID 一个实例(§7.5 第 3 条)────────────────────────────────
+
+TEST(GuidSegmentRegistryTest, LookupByKindAndNameAndReadiness)
+{
+    GuidKind kind{};
+    EXPECT_TRUE(ParseGuidKind("item", kind));
+    EXPECT_EQ(GuidKind::kItem, kind);
+    EXPECT_TRUE(ParseGuidKind("txlog", kind));
+    EXPECT_EQ(GuidKind::kTxLog, kind);
+    EXPECT_TRUE(ParseGuidKind("snapshot", kind));
+    EXPECT_EQ(GuidKind::kSnapshot, kind);
+    EXPECT_FALSE(ParseGuidKind("pet", kind)) << "还没注册的种类";
+    EXPECT_FALSE(ParseGuidKind("", kind));
+    EXPECT_STREQ("item", GuidKindName(GuidKind::kItem));
+    EXPECT_STREQ("txlog", GuidKindName(GuidKind::kTxLog));
+    EXPECT_STREQ("snapshot", GuidKindName(GuidKind::kSnapshot));
+    EXPECT_EQ(3u, kGuidKindCount);
+
+    // 同一种类拿到的是同一个实例;不同种类是不同实例
+    EXPECT_EQ(&tlsGuidSegmentRegistry.Get(GuidKind::kItem), &tlsGuidSegmentRegistry.Get(GuidKind::kItem));
+    EXPECT_NE(&tlsGuidSegmentRegistry.Get(GuidKind::kItem), &tlsGuidSegmentRegistry.Get(GuidKind::kTxLog));
+    EXPECT_NE(&tlsGuidSegmentRegistry.Get(GuidKind::kTxLog), &tlsGuidSegmentRegistry.Get(GuidKind::kSnapshot));
+
+    // 基线:只有 item 启用且就绪
+    EXPECT_EQ(1u, tlsGuidSegmentRegistry.EnabledCount());
+    EXPECT_TRUE(tlsGuidSegmentRegistry.AllEnabledReady());
+    EXPECT_TRUE(tlsGuidSegmentRegistry.DescribeNotReady().empty());
+    EXPECT_EQ("item", tlsGuidSegmentRegistry.Get(GuidKind::kItem).KindName());
+    {
+        ScopedKindOverride snap(GuidKind::kSnapshot, 10); // 启用但未领段
+        EXPECT_EQ(2u, tlsGuidSegmentRegistry.EnabledCount());
+        EXPECT_FALSE(tlsGuidSegmentRegistry.AllEnabledReady()) << "启用而未领到首段的种类挡住就绪";
+        EXPECT_EQ("snapshot", tlsGuidSegmentRegistry.DescribeNotReady());
+        const auto baselineRequests = BaselineTransport().requests.size();
+        tlsGuidSegmentRegistry.WarmAll();
+        EXPECT_EQ(1u, snap.transport.requests.size());
+        EXPECT_EQ("snapshot", snap.transport.requests[0].bizTag);
+        EXPECT_EQ(baselineRequests, BaselineTransport().requests.size()) << "已就绪的 item 不会被 WarmAll 再催";
+        snap.client().OnResponse(0, 1, 11);
+        EXPECT_TRUE(tlsGuidSegmentRegistry.AllEnabledReady());
+    }
+    EXPECT_EQ(1u, tlsGuidSegmentRegistry.EnabledCount());
+    EXPECT_TRUE(tlsGuidSegmentRegistry.AllEnabledReady());
+}
+
+TEST(GuidSegmentRegistryTest, KindsAreIsolatedItemExhaustionDoesNotTouchTxLog)
+{
+    ScopedItemSegmentOverride item(3);
+    ScopedKindOverride tx(GuidKind::kTxLog, 10);
+    item.item().Warm();
+    item.item().OnResponse(0, 1, 4);
+    tx.client().Warm();
+    tx.client().OnResponse(0, 1, 11); // 两种各自独立的计数器:同样从 1 起,互不相干
+
+    ASSERT_EQ(3u, Drain(item.item(), 3).size());
+    Guid g = kInvalidGuid;
+    EXPECT_FALSE(item.item().TryNext(g)) << "item 两段都空";
+    EXPECT_FALSE(ItemStore::CanMintGuid());
+    EXPECT_FALSE(tlsGuidSegmentRegistry.AllEnabledReady());
+    EXPECT_EQ("item", tlsGuidSegmentRegistry.DescribeNotReady());
+
+    EXPECT_TRUE(tx.client().IsReady()) << "txlog 不受 item 耗尽影响";
+    ASSERT_TRUE(tx.client().TryNext(g));
+    EXPECT_EQ(1u, g);
+
+    // 各自的传输、各自的统计
+    EXPECT_EQ(1u, item.item().GetStats().unavailable);
+    EXPECT_EQ(0u, tx.client().GetStats().unavailable);
+    EXPECT_EQ(3u, item.item().GetStats().issued);
+    EXPECT_EQ(1u, tx.client().GetStats().issued);
+    ASSERT_EQ(2u, item.transport.requests.size()) << "Warm + 剩 1 时的预取";
+    for (const auto &request : item.transport.requests)
+        EXPECT_EQ("item", request.bizTag);
+    ASSERT_EQ(1u, tx.transport.requests.size());
+    EXPECT_EQ("txlog", tx.transport.requests[0].bizTag);
+
+    // item 续上段之后两边都就绪;txlog 的水位没被 item 的范围碰过
+    item.item().OnResponse(0, 4, 7);
+    EXPECT_TRUE(tlsGuidSegmentRegistry.AllEnabledReady());
+    EXPECT_EQ(7u, item.item().GetStats().highWater);
+    EXPECT_EQ(11u, tx.client().GetStats().highWater);
+}
+
+// ── MintGuid / tx_id / snapshot_id 发号源策略:只有号段,没段就 fail-closed ──────
+
+TEST(GuidSourcePolicyTest, ItemSegmentReadyMintsFromRangeThroughTheBag)
+{
+    ScopedItemSegmentOverride item(10);
+    item.item().Warm();
+    item.item().OnResponse(0, 1000, 1010);
+
+    EXPECT_TRUE(ItemStore::CanMintGuid());
+    EXPECT_TRUE(ItemStore::CanMintGuids(10));
+    EXPECT_FALSE(ItemStore::CanMintGuids(11)) << "库存只有 10 个";
+    EXPECT_EQ(1000u, ItemStore::MintGuid());
+
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+    const Guid written = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1, 1));
+    EXPECT_EQ(1001u, written) << "背包入包铸的号来自号段";
+    EXPECT_NE(nullptr, bag.GetItemCompByGuid(1001));
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+TEST(GuidSourcePolicyTest, ItemSegmentNotReadyFailsClosedWithNoFallback)
+{
+    ScopedItemSegmentOverride item(10);
+    // 未领到首段(生产里启动期由 DependencyGate 挡玩家;运行期 = 两段耗尽且续段失败)
+
+    EXPECT_FALSE(ItemStore::CanMintGuid()) << "没有发号源";
+    EXPECT_EQ(kInvalidGuid, ItemStore::MintGuid()) << "没有 snowflake 回退:只能是哨兵";
+    EXPECT_GE(item.item().GetStats().unavailable, 1u) << "确实问过 item 号段并被拒";
+
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kNonStack1, 1)));
+    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kStack10, 1))) << "可叠加溢出到新实例也要铸号";
+    EXPECT_EQ(0u, bag.OccupiedGridCount()) << "整体拒绝,零写入";
+    EXPECT_TRUE(bag.IsLayerConsistent());
+
+    // 段到了就恢复,而且号一定在号段值域里 —— 没有任何路径能铸出 snowflake 域的号
+    item.item().OnResponse(0, 5000, 5010);
+    const Guid segmentGuid = AddItemAndGetLastWritten(bag, MakeItem(kNonStack1, 1));
+    EXPECT_EQ(5000u, segmentGuid);
+    EXPECT_LT(segmentGuid, kSnowflakeDomainFloor);
+    EXPECT_EQ(1u, bag.OccupiedGridCount());
+}
+
+TEST(GuidSourcePolicyTest, ItemKindDisabledFailsClosedToo)
+{
+    // 配置里 Enabled=false 的形态:实例根本没启用。同样没有回退。
+    auto &item = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+    item.Reset();
+    EXPECT_FALSE(item.IsEnabled());
+    EXPECT_FALSE(ItemStore::CanMintGuid());
+    EXPECT_EQ(kInvalidGuid, ItemStore::MintGuid());
+
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kNonStack1, 1)));
+    EXPECT_EQ(0u, bag.OccupiedGridCount());
+
+    ASSERT_TRUE(ArmBaselineItemSegment());
+    EXPECT_TRUE(ItemStore::CanMintGuid());
+}
+
+TEST(GuidSourcePolicyTest, BatchLargerThanRemainingSegmentIsRefusedBeforeAnyWrite)
+{
+    ScopedItemSegmentOverride item(10);
+    item.item().Warm();
+    item.item().OnResponse(0, 1, 4); // 服务端只给了 3 个号
+
+    Bag bag;
+    bag.ExpandCapacity(kDefaultCapacity);
+    // 5 件不可叠加要 5 个号:库存 3 个,必须在写第一件之前整体拒绝,不能写 3 件后中途铸出哨兵
+    EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kNonStack1, 5)));
+    EXPECT_EQ(0u, bag.OccupiedGridCount());
+
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kNonStack1, 3)));
+    EXPECT_EQ(3u, bag.OccupiedGridCount());
+    EXPECT_NE(nullptr, bag.GetItemCompByGuid(1));
+    EXPECT_NE(nullptr, bag.GetItemCompByGuid(2));
+    EXPECT_NE(nullptr, bag.GetItemCompByGuid(3));
+    EXPECT_TRUE(bag.IsLayerConsistent());
+    EXPECT_FALSE(ItemStore::CanMintGuid()) << "库存用光、下一段没到";
+}
+
+TEST(GuidSourcePolicyTest, TxLogFailsClosedUntilItsOwnKindHasARange)
+{
+    ScopedKindOverride tx(GuidKind::kTxLog, 10); // 启用、未领段
+    const auto player = tlsEcs.actorRegistry.create();
+    tlsEcs.actorRegistry.emplace<Guid>(player, Guid{4242});
+
+    const auto baselineRequests = BaselineTransport().requests.size();
+    TransactionLogSystem::LogItemDestroy(player, 77, kNonStack1, 1);
+    auto s = tx.client().GetStats();
+    EXPECT_EQ(1u, s.unavailable) << "走到了 txlog 号段、被拒发:没有 tx_id 的流水不发(fail-closed)";
+    EXPECT_EQ(0u, s.issued);
+    EXPECT_EQ(1u, tx.transport.requests.size()) << "拒发的同时催起续段";
+    EXPECT_EQ("txlog", tx.transport.requests[0].bizTag);
+    // item 种类不受影响(各自的实例),也没人拿 item 的号去当 tx_id
+    EXPECT_TRUE(ItemStore::CanMintGuid());
+    EXPECT_EQ(baselineRequests, BaselineTransport().requests.size()) << "没人拿 item 的号去当 tx_id";
+
+    tx.client().OnResponse(0, 1, 11);
+    TransactionLogSystem::LogItemDestroy(player, 77, kNonStack1, 1);
+    s = tx.client().GetStats();
+    EXPECT_EQ(1u, s.issued) << "有段就铸 tx_id 并进入发送路径(单测没有 Kafka,producer 报 ERR__STATE,不影响本断言)";
+    EXPECT_EQ(1u, s.unavailable);
+
+    tlsEcs.actorRegistry.destroy(player);
+}
+
+TEST(GuidSourcePolicyTest, SnapshotIsSkippedUntilItsOwnKindHasARange)
+{
+    ScopedKindOverride snap(GuidKind::kSnapshot, 10); // 启用、未领段
+    const auto player = tlsEcs.actorRegistry.create();
+    tlsEcs.actorRegistry.emplace<Guid>(player, Guid{4243});
+
+    EXPECT_EQ(0u, SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGIN)) << "没 snapshot_id 就跳过这条快照";
+    auto s = snap.client().GetStats();
+    EXPECT_EQ(1u, s.unavailable);
+    EXPECT_EQ(0u, s.issued);
+    EXPECT_EQ(1u, snap.transport.requests.size());
+    EXPECT_EQ("snapshot", snap.transport.requests[0].bizTag);
+
+    snap.client().OnResponse(0, 1, 11);
+    // 有段:snapshot_id 铸出来了。单测没有 Kafka,发送失败返回 0,所以判据看号段统计而不是返回值。
+    (void)SnapshotSystem::CaptureAndSend(player, SNAPSHOT_LOGIN);
+    s = snap.client().GetStats();
+    EXPECT_EQ(1u, s.issued);
+    EXPECT_EQ(1u, s.unavailable);
+
+    tlsEcs.actorRegistry.destroy(player);
+}
+
+// ⚠️ 本套件必须保持在**文件最后**:它把 item 号段实例置为"启用但永远领不到段"并**不再恢复**
+// (对应生产里"两段耗尽而 data_service 一直没回来";没有 snowflake 回退可走),在它后面
+// 声明的任何铸号型用例都会被连坐挂掉。(gtest 默认按声明序执行;请勿对本文件开 --gtest_shuffle。)
+//
+// 钉住的契约:发号源不可用时,铸号型入包必须在**改动任何背包状态之前**整体拒绝 ——
+// 绝不能把 kInvalidGuid 哨兵当 item_id 写进背包持久化;而不需要铸号的路径(纯并堆)不受影响。
+// 修复前:AddItem 会静默插入一件 guid=0 的物品。
+namespace
+{
+    void MakeItemSegmentUnavailableForRestOfProcess()
+    {
+        static FakeSegmentTransport starved; // 请求都"发出去了",但永远没有响应
+        auto &item = tlsGuidSegmentRegistry.Get(GuidKind::kItem);
+        item.Reset();
+        SegClient::Options o;
+        o.kindName = "item";
+        o.initialStep = 10;
+        EXPECT_TRUE(item.Enable(o, starved.Send(), starved.Schedule(), starved.Clock()));
+        item.Warm();
+        EXPECT_FALSE(item.IsReady());
+    }
+} // namespace
+
+TEST(BagSegmentNotReadyTest, MintingPathsFailClosedWhileMergeStillWorks)
 {
     // 堆叠上限从表读(kStack10 的 10 是 config_id,不是上限),所有数量按它推导,不硬编码。
     const uint32_t maxStack = MaxStack(kStack10);
@@ -2722,9 +3566,10 @@ TEST(BagFencedGeneratorTest, MintingPathsFailClosedWhileMergeStillWorks)
     EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, maxStack - 3)));
     EXPECT_EQ(1, bag.OccupiedGridCount());
 
-    tlsSnowflakeManager.Fence();
+    MakeItemSegmentUnavailableForRestOfProcess();
+    ASSERT_FALSE(ItemStore::CanMintGuid());
 
-    // ① 纯并堆不铸号:fence 后必须照常成功(门的作用域只限"会铸号"的路径)。并 2,还剩 1 空位。
+    // ① 纯并堆不铸号:发号源没了也必须照常成功(门的作用域只限"会铸号"的路径)。并 2,还剩 1 空位。
     EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, 2)));
     EXPECT_EQ(1, bag.OccupiedGridCount());
 
@@ -2741,18 +3586,18 @@ TEST(BagFencedGeneratorTest, MintingPathsFailClosedWhileMergeStillWorks)
     EXPECT_EQ(1, bag.OccupiedGridCount());
 }
 
-// 必须排在上面那条之后:Fence() 是单向的,本组用例依赖它已经被拉下。
+// 必须排在上面那条之后:本组用例依赖 item 号段已经被置为不可用。
 //
-// 钉住的契约:发号器不可用时,**批量入包整批拒绝**,一件都不许落地。
+// 钉住的契约:发号源不可用时,**批量入包整批拒绝**,一件都不许落地。
 // 关键在于批次里混了"不铸号就能完成"的项和"必须铸号"的项 —— 逐件把关时,
 // 前者会先成功写进去,等轮到后者才失败,于是留下半批。邮件附件是这条路径的
 // 主要用户,半批发放会让调用方以为整批失败而重发,变成复制道具。
 //
-// 铺底用 InsertItemForRestore:它用调用方给的 guid,不铸号,所以 fence 之后
-// 仍然可用 —— 否则 fence 之后根本没法把背包摆成需要的初始状态。
-TEST(BagFencedGeneratorTest, VectorBatchRejectsWholeBatchWhenAnyPieceNeedsMinting)
+// 铺底用 InsertItemForRestore:它用调用方给的 guid,不铸号,所以发号源没了之后
+// 仍然可用 —— 否则根本没法把背包摆成需要的初始状态。
+TEST(BagSegmentNotReadyTest, VectorBatchRejectsWholeBatchWhenAnyPieceNeedsMinting)
 {
-    ASSERT_TRUE(tlsSnowflakeManager.IsFenced()) << "本用例依赖前一条用例已经 Fence()";
+    ASSERT_FALSE(ItemStore::CanMintGuid()) << "本用例依赖前一条用例已把 item 号段置为不可用";
 
     const uint32_t maxStack10 = MaxStack(kStack10);
     ASSERT_GE(maxStack10, 4u) << "用例前提:该物品堆叠上限至少 4";
@@ -2781,9 +3626,9 @@ TEST(BagFencedGeneratorTest, VectorBatchRejectsWholeBatchWhenAnyPieceNeedsMintin
 // 所以"没有预检时会不会留下半批"取决于哈希序 —— 那正是必须有整批预检的理由:
 // 否则同一份数据在不同构建下表现不一样,是个 heisenbug。有了预检,下面的断言
 // 才是确定成立的。
-TEST(BagFencedGeneratorTest, CountMapBatchRejectsWholeBatchWhenMintingUnavailable)
+TEST(BagSegmentNotReadyTest, CountMapBatchRejectsWholeBatchWhenMintingUnavailable)
 {
-    ASSERT_TRUE(tlsSnowflakeManager.IsFenced());
+    ASSERT_FALSE(ItemStore::CanMintGuid());
 
     const uint32_t maxStack10 = MaxStack(kStack10);
     ASSERT_GE(maxStack10, 4u);
@@ -2805,26 +3650,26 @@ TEST(BagFencedGeneratorTest, CountMapBatchRejectsWholeBatchWhenMintingUnavailabl
 // 顺序纪律:**所有零副作用的预检,必须跑在唯一那步会改状态的操作之前。**
 //
 // 加淘汰轴时这里踩过一次:ReserveOrEvict(会为了腾位真销毁实例)排在
-// CanMintGuid 预检**之前**,于是发号器被 fence 时,临时格已经挤掉了最早那件、
+// CanMintGuid 预检**之前**,于是发号源不可用时,临时格已经挤掉了最早那件、
 // 然后整批拒绝 —— 玩家的东西白丢了。这跟 §6.1 那个 bug 是同一个家族:
 // 一个会失败的判断站错了位置。
 //
 // 三处同病(AddNonStackableItem / AddStackableItem / 两个 AddItems),已全部
 // 把预检提到 reserve 之前。这条用例钉住结果:**被预检拒绝的批次,不该付出
 // 任何代价。**
-TEST(BagFencedGeneratorTest, EvictionNeverHappensBeforeAPureCheckCanRefuse)
+TEST(BagSegmentNotReadyTest, EvictionNeverHappensBeforeAPureCheckCanRefuse)
 {
-    ASSERT_TRUE(tlsSnowflakeManager.IsFenced()) << "本用例依赖前面的用例已经 Fence()";
+    ASSERT_FALSE(ItemStore::CanMintGuid()) << "本用例依赖前面的用例已把 item 号段置为不可用";
 
     Bag bag;
     bag.SetProfile(BagProfile::Temporary(2)); // 会淘汰的包
-    // 用还原路径铺底:它不铸号,fence 之后仍然可用。
+    // 用还原路径铺底:它不铸号,发号源没了之后仍然可用。
     bag.InsertItemForRestore(920001, kNonStack1, 1, 0);
     bag.InsertItemForRestore(920002, kNonStack2, 1, 1);
     ASSERT_EQ(2u, bag.OccupiedGridCount());
     ASSERT_TRUE(bag.IsFull()) << "满了 —— 再进一件就会触发淘汰";
 
-    // 单件路径:要铸号而发号器被 fence,必须在腾位之前就拒。
+    // 单件路径:要铸号而发号源不可用,必须在腾位之前就拒。
     std::vector<DestroyedInstance> evicted;
     EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kNonStack1), nullptr, &evicted));
     EXPECT_TRUE(evicted.empty()) << "预检拒绝的批次不该挤掉任何东西";
@@ -2845,9 +3690,9 @@ TEST(BagFencedGeneratorTest, EvictionNeverHappensBeforeAPureCheckCanRefuse)
 
 // 第二轮审计补的覆盖:上一条只走了 AddNonStackableItem 与 ItemCountMap 重载。
 // 可叠加溢出路径的铸号预检也必须在腾位之前。
-TEST(BagFencedGeneratorTest, StackableSpillNeverEvictsWhenGeneratorIsFenced)
+TEST(BagSegmentNotReadyTest, StackableSpillNeverEvictsWhenSegmentIsUnavailable)
 {
-    ASSERT_TRUE(tlsSnowflakeManager.IsFenced()) << "本用例依赖前面的用例已经 Fence()";
+    ASSERT_FALSE(ItemStore::CanMintGuid()) << "本用例依赖前面的用例已把 item 号段置为不可用";
     const uint32_t maxStack10 = MaxStack(kStack10);
 
     Bag bag;
@@ -2857,15 +3702,15 @@ TEST(BagFencedGeneratorTest, StackableSpillNeverEvictsWhenGeneratorIsFenced)
 
     std::vector<DestroyedInstance> evicted;
     EXPECT_EQ(kBagAddItemInvalidParam, bag.AddItem(MakeItem(kStack10, 1), nullptr, &evicted));
-    EXPECT_TRUE(evicted.empty()) << "要溢出到新实例就要铸号;fence 了必须在腾位之前拒";
+    EXPECT_TRUE(evicted.empty()) << "要溢出到新实例就要铸号;没号必须在腾位之前拒";
     ASSERT_NE(nullptr, bag.GetItemCompByGuid(930001));
     EXPECT_EQ(maxStack10, bag.GetItemCompByGuid(930001)->size());
 }
 
 // vector 重载的三种形状:需铸号 / 全预设但放不下 / 全预设且放得下。
-TEST(BagFencedGeneratorTest, VectorBatchNeverEvictsWhenGeneratorIsFenced)
+TEST(BagSegmentNotReadyTest, VectorBatchNeverEvictsWhenSegmentIsUnavailable)
 {
-    ASSERT_TRUE(tlsSnowflakeManager.IsFenced()) << "本用例依赖前面的用例已经 Fence()";
+    ASSERT_FALSE(ItemStore::CanMintGuid()) << "本用例依赖前面的用例已把 item 号段置为不可用";
 
     Bag bag;
     bag.SetProfile(BagProfile::Temporary(2));
@@ -2880,7 +3725,7 @@ TEST(BagFencedGeneratorTest, VectorBatchNeverEvictsWhenGeneratorIsFenced)
               bag.AddItems(std::vector<InitItemParam>{MakeItem(kNonStack1, 1)}, &evicted));
     EXPECT_TRUE(evicted.empty());
 
-    // ② 全部沿用预设 guid、但现状放不下:fence 下**不许靠腾位解决** ——
+    // ② 全部沿用预设 guid、但现状放不下:发号源不可用时**不许靠腾位解决** ——
     //    腾位后重规划可能把纯并堆变成要铸号的溢出,那就成了"先销毁、再铸不了号"。
     InitItemParam preassigned = MakeItem(kNonStack1, 1);
     preassigned.itemPBComp.set_item_id(940003);
@@ -2903,9 +3748,15 @@ int main(int argc, char **argv)
 {
     if (!test_config::FindAndLoadTestConfig(argc, argv))
         return 1;
-    // 生产线程由 EtcdService 在节点身份分配成功后初始化发号器；单测没有该启动链，
-    // 必须显式给当前测试线程一个非零节点号，不能依赖未初始化时的保留 node_id=0。
-    tlsSnowflakeManager.OnNodeStart(1);
+    // 生产线程由 scene 的 ConfigureGuidSegmentClients 按配置启用号段并经 DataService 领首段;
+    // 单测没有那条启动链,必须给 item 种类装一个进程级假传输并直接投一段大范围,
+    // 否则所有铸号型入包都会 fail-closed。txlog / snapshot 基线**不**启用:背包用例里的
+    // 流水按设计被静默丢弃(fail-closed),专门的用例自己启用它们。
+    if (!ArmBaselineItemSegment())
+    {
+        std::cerr << "failed to arm the baseline item id segment\n";
+        return 1;
+    }
     ItemTableManager::Instance().Load();
     // 装备栏的槽位口径在这张表里(哪个槽接受哪个部位)。生产侧由 all_table.cpp
     // 自动注册加载;单测没有那条启动链,必须自己加载,否则 FindAll() 为空、

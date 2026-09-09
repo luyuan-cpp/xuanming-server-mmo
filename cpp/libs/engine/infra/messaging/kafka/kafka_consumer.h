@@ -39,6 +39,8 @@
 
 namespace muduo { namespace net { class EventLoop; } }
 
+#include "messaging/kafka/kafka_partition_assign_policy.h"
+
 class KafkaConsumer {
 public:
 	using MessageCallback = std::function<void(const std::string&, const std::string&)>;
@@ -47,7 +49,8 @@ public:
 		const std::string& groupId,
 		const std::vector<std::string>& topics,
 		const std::vector<int32_t>& partitions,  // Partitions to consume
-		const MessageCallback& callback);
+		const MessageCallback& callback,
+		const KafkaPartitionAssignPolicy& assignPolicy = {});
 
 	static KafkaConsumer& Instance() {
 		thread_local KafkaConsumer instance;
@@ -77,6 +80,8 @@ private:
 	void backgroundPollLoop();
 	void dispatch(const std::string& topic, std::string payload);
 	void consumeOnce(bool blocking);
+	// 向 broker 查 topic 的分区数。查不到返回 -1(区别于"查到 0")。
+	int32_t queryTopicPartitionCount(const std::string& topic);
 
 	std::unique_ptr<RdKafka::KafkaConsumer> consumer_;
 	std::unique_ptr<RdKafka::Conf> conf_;

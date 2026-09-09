@@ -5,7 +5,12 @@
 #include "proto/common/rollback/transaction_log.pb.h"
 
 // Kafka topic for transaction log entries.
-constexpr char kTransactionLogTopic[] = "transaction_log_topic";
+//
+// 带 topic 世代后缀 `_g<N>`:分区数是 topic 的不可变契约(分区键 = player_id 的按玩家有序
+// 全靠它),改分区数不许原地改,只能换一代 —— 新名字、新分区数、消费者(go/data_service)
+// 同步切到同一代。世代号与 go/data_service/etc/data_service.yaml 的 Kafka.TopicGeneration 对齐;
+// 两边不一致就是生产者写进没人消费的 topic,流水静默丢失。
+constexpr char kTransactionLogTopic[] = "transaction_log_topic_g1";
 
 // Stateless utility that builds TransactionLogEntry messages and sends them
 // to Kafka for persistence by the Go DB service.
@@ -79,6 +84,7 @@ private:
     // Get the player_id from an entity. Returns 0 if not resolvable.
     static uint64_t ResolvePlayerId(entt::entity player);
 
-    // Generate a unique tx_id via SnowFlake.
+    // Generate a unique tx_id from the txlog id segment; kInvalidGuid when the segment
+    // has no id in hand (SendEntry then drops the entry, fail-closed).
     static uint64_t GenerateTxId();
 };

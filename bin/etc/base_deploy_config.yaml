@@ -46,6 +46,7 @@ service_discovery_prefixes:
   - "BattleNodeService.rpc" # 回合制战斗节点（C++ gRPC，全局池不分 zone；gate 据此发现 battle 建 gRPC channel，match 的 Go 侧自行 watch）
   - "ClientRpcRouterNodeService.rpc" # 客户端 RPC 路由服(Go-Zero,全局池):GATE_CLIENT_RPC_ROUTER=1 时 gate 唯一的 gRPC 目标,客户端消息按 message_id 经它不透明转发到 login/match/… (docs/design/client-rpc-router.md)
   - "MatchNodeService.rpc" # 匹配服务（Go-Zero gRPC，全局池不分 zone：不在 IsZoneScopedNodeType，gate 连全 zone 的 match 实例随机路由；排队池全服共享，见 docs/design/cross-zone-matchmaking.md）：gate 按 NODE_MATCH 路由 JoinQueue/WatchBattle 等客户端消息，缺此前缀会报 "Node not found ... message id: 157"（2026-09-01 冒烟补）
+  - "DataServiceNodeService.rpc" # 全局数据服务（Go-Zero gRPC，全局池不分 zone）：scene 经它的 AllocateIdSegment 领 item / txlog / snapshot 三种永久 guid 的号段（IdSegments 里启用的种类领到首段是启动硬依赖）。前提：data_service 须按 C++ 约定把 NodeInfo 注册到本前缀下（同 scene_manager 的 noderegistry），只注册 go-zero 的 dataservice.rpc 是发现不到的
 
 # Kafka 配置（分布式消息队列，用于异步通信、日志收集、事件分发等）
 Kafka:
@@ -74,6 +75,33 @@ Kafka:
   GroupID: ""
   EnableAutoCommit: true
   AutoOffsetReset: "earliest"
+
+  # ---- 控制面命令 topic 的分区契约 ----
+  # docs/design/control-plane-topic-partitioning-20260908.md
+  #
+  # 上面那段关于 per-instance groupId 的说明只对**旧的**一节点一 topic 路径成立,
+  # 而且它只解决了"跨 zone 错路由",没有解决同一个 node_id 被回收后
+  # 前任僵尸与继任者共用 `gate-group-5` 的分区争夺(P1)。新路径不再进 group:
+  # 命令走 `gate-cmd_g1` / `scene-cmd_g1`,partition = node_id % CommandTopicPartitions,
+  # 每个进程 assign 自己那一个分区。
+  #
+  # 三个数是**部署级常量**,必须与下列各处同时改(改分区数一律走换代号,绝不原地扩):
+  #   go/shared/kafkautil/command_topic.go 的默认值 / 环境变量
+  #   deploy/docker-compose.yml 的 kafka-topic-init
+  #   deploy/k8s/manifests/infra/kafka-topic-init.yaml(值由 k8s_deploy.ps1 从本文件读)
+  CommandTopicPartitions: 256
+  CommandTopicGeneration: 1
+  # 迁移窗口开关。true = 不再消费旧的 `gate-<node_id>` / `scene-<node_id>`。
+  # 生产者(含 Go login)全部切到新 topic 之前必须保持 false,否则命令全丢。
+  #
+  # 2026-09-08:**生产者侧前置条件已全部满足** —— 全仓已无旧主题的生产者
+  # (C++ 四处走 ResolveCommandRoute;Go 的 friend/guild/match/scene_manager/
+  # player_locator/login 全部切完;唯一残留的 LegacyPerNodeTopic() 只被消费端引用)。
+  # 但**仍保持 false**:翻这个开关只关掉旧的消费路径,必须等新版本 gate/scene
+  # 滚更全部完成、且旧 topic 的写入速率与积压都读到 0 之后,由运维显式翻。
+  # 滚更窗口里提前翻 = 老版本生产者发出的命令没人消费。
+  # 顺序见 docs/design/control-plane-topic-partitioning-20260908.md §迁移顺序 第 4 步。
+  DisableLegacyPerNodeTopic: false
 
 # Gate 连接令牌 HMAC 共享密钥（Login 签发，Gate 验证）
 # 必须与 Go Login 的 GateTokenSecret 保持一致。
@@ -106,3 +134,49 @@ BattleTokenSecret: "local-dev-battle-token-secret-fedcba9876543210"
 # battle 节点客户端面并发直连上限(语义同 GateMaxConnections;0 仅 dev/test 允许)。
 # 回合制房间人数有界:参战 ≤10 + 观众 ≤20 每房,按单节点期望房间数留余量。
 BattleMaxConnections: 4096
+
+# 集群号(0..31):部署级常量,运维一次性设定,策划不碰。只有 Go 的 snowflake 槽位协议
+# (login-player / guild / scene-manager / match)消费它,作为 17 位 worker 字段的高 5 位;
+# C++ 侧 2026-09-08 起没有消费者(scene 的永久 guid 走号段,不编码集群),这里只是同一份口径。
+# 本地/单集群保持 0;第二套集群才需要改。见 docs/design/node-id-overhaul-plan-20260908.md §5 / §7.5。
+ClusterId: 0
+
+# 永久 guid 号段(Leaf-segment,docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5)。
+# item guid / tx_id / snapshot_id 三种**全部**走号段:scene 经 DataService.AllocateIdSegment 从全局库
+# id_segment 表领 [lo, hi) 双 buffer 发号,值域 [1, 2^55) 与存量 snowflake 号(≥ 6.7e16)不相交,
+# 新旧号在同一张表 / 玩家 blob 里共存、不迁数据。scene 不再参与任何 snowflake 槽位协议。
+# 一种 GUID 一个客户端实例(各自的段 / 预取 / 退避 / 指标),共用一条到 data_service 的 gRPC 路径。
+# 只有 scene 读;gate / battle 不铸永久 guid。
+#
+# 启动:每个启用的种类领到首段是硬依赖(DependencyGate "id segments ready":没领到不放玩家进来);
+# 运行期是弱依赖(手里两段能顶 data_service 不可用一段时间)。没有 snowflake 回退:没段就 fail-closed
+# (背包整批拒绝、零写入;流水不发;快照跳过),都记 ERROR。
+# 前提:service_discovery_prefixes 里有 DataServiceNodeService.rpc,且 data_service 按 C++ 约定注册 NodeInfo;
+# id_segment 表里每个 Kind 有一行(迁移显式创建,生产不自动补种)。
+#
+# 动态 step(Leaf 口径):一段不到 15 分钟用完 → 下次 step ×2(≤ MaxStep);超过 30 分钟才用完 → ÷2(≥ MinStep)。
+# 每天重启一次浪费 ≤ 2×step;2^55 个号在 10 万台每天重启下仍可撑两万年以上,这里只为把浪费压到最小。
+# 加一种 guid(pet / guild …)= C++ GUID_SEGMENT_KIND_LIST 加一行 + 这里加一块 + id_segment 表加一行种子。
+IdSegments:
+  # item guid:拾取 / 发放 / 邮件附件每新建一个物品实例铸一个号。用户拍板的默认值:初值 20,000,区间 [1,000, 1,000,000]。
+  - Kind: item
+    Enabled: true
+    InitialStep: 20000
+    MinStep: 1000
+    MaxStep: 1000000
+  # tx_id:交易流水,每条一个号。调用点 9 处 —— 每新建 / 销毁 / 转移一个物品实例各一条(bag_service),
+  # 每次货币增减 / 延迟追缴各一条(currency_system);货币操作比物品铸号更频繁,估算 tx 峰值 ≈ 2~3 倍 item 铸号率,
+  # 所以初值与上限都取 item 的 2~2.5 倍:初值 50,000,区间 [2,000, 2,000,000]。
+  - Kind: txlog
+    Enabled: true
+    InitialStep: 50000
+    MinStep: 2000
+    MaxStep: 2000000
+  # snapshot_id:玩家快照,调用点 2 处(SNAPSHOT_LOGIN / SNAPSHOT_LOGOUT)≈ 每个会话 2 个号。
+  # 峰值在开服 / 维护后回流的登录洪峰:按单节点几千玩家在几分钟内进来、10 分钟峰值 ≈ 1 万估,
+  # 初值 2,000(浪费 ≤ 4,000/次重启,可忽略),区间 [200, 100,000];空闲节点一段撑过 30 分钟会自动缩到 200。
+  - Kind: snapshot
+    Enabled: true
+    InitialStep: 2000
+    MinStep: 200
+    MaxStep: 100000

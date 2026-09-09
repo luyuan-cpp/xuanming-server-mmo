@@ -88,6 +88,12 @@ spec:
             - name: svc-config
               mountPath: /app/etc
               readOnly: true
+            # snowflake 槽位本地缓存(docs/design/node-id-overhaul-plan-20260908.md §3.5):
+            # 每个 Pod 自己的启动期草稿,etcd 不可达时凭它续用上次的槽位(2h 内),
+            # 不跨 Pod 共享、不需要持久卷,Pod 重建就重新申领。路径必须与 ConfigMap 里的
+            # SnowflakeCacheDir 一致(k8s_deploy.ps1 顶部 $SnowflakeCacheDir = /tmp/snowflake)。
+            - name: snowflake-cache
+              mountPath: /tmp/snowflake
           resources:
             requests:
               cpu: 100m
@@ -100,6 +106,9 @@ spec:
         - name: svc-config
           configMap:
             name: go-svc-match-config
+        # 见上面 volumeMounts 的注释:每 Pod 一份 emptyDir,随 Pod 生灭。
+        - name: snowflake-cache
+          emptyDir: {}
 ---
 # PDB 与主 manifest 同文件:k8s_deploy.ps1 只 apply 目录条目里的主 manifest。
 apiVersion: policy/v1

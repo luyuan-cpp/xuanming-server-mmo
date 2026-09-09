@@ -1,0 +1,115 @@
+{
+  "schema": "Control-plane command topic addressing vectors, shared by the Go implementation (go/shared/kafkautil/command_topic.go) and the C++ one (cpp/libs/engine/core/node/system/node/node_command_topic.h). Design doc: docs/design/control-plane-topic-partitioning-20260908.md. Rules under test: (1) partitions == 0 means 'not configured' and falls back to default_partitions; (2) generation == 0 means 'not configured' and falls back to default_generation; (3) partition = node_id % effective_partitions; (4) effective topic name = base + '_g' + effective_generation. Both sides must produce expect_partition and expect_topic byte-for-byte. Bumping default_partitions here without bumping the generation is a contract violation: see the doc's 'partition-count contract' section.",
+  "default_partitions": 256,
+  "default_generation": 1,
+  "cases": [
+    {
+      "name": "gate_node_1_default_contract",
+      "base": "gate-cmd",
+      "node_id": 1,
+      "partitions": 256,
+      "generation": 1,
+      "expect_partition": 1,
+      "expect_topic": "gate-cmd_g1"
+    },
+    {
+      "name": "scene_node_1_default_contract",
+      "base": "scene-cmd",
+      "node_id": 1,
+      "partitions": 256,
+      "generation": 1,
+      "expect_partition": 1,
+      "expect_topic": "scene-cmd_g1"
+    },
+    {
+      "name": "zero_partitions_means_unconfigured",
+      "base": "gate-cmd",
+      "node_id": 300,
+      "partitions": 0,
+      "generation": 0,
+      "expect_partition": 44,
+      "expect_topic": "gate-cmd_g1"
+    },
+    {
+      "name": "exact_multiple_wraps_to_zero",
+      "base": "gate-cmd",
+      "node_id": 256,
+      "partitions": 256,
+      "generation": 1,
+      "expect_partition": 0,
+      "expect_topic": "gate-cmd_g1"
+    },
+    {
+      "name": "last_partition_of_first_lap",
+      "base": "gate-cmd",
+      "node_id": 255,
+      "partitions": 256,
+      "generation": 1,
+      "expect_partition": 255,
+      "expect_topic": "gate-cmd_g1"
+    },
+    {
+      "name": "second_lap_collides_with_first",
+      "base": "scene-cmd",
+      "node_id": 512,
+      "partitions": 256,
+      "generation": 1,
+      "expect_partition": 0,
+      "expect_topic": "scene-cmd_g1"
+    },
+    {
+      "name": "max_routing_node_id_17_bits",
+      "base": "scene-cmd",
+      "node_id": 131071,
+      "partitions": 256,
+      "generation": 1,
+      "expect_partition": 255,
+      "expect_topic": "scene-cmd_g1"
+    },
+    {
+      "name": "hundred_thousand_scene_nodes",
+      "base": "scene-cmd",
+      "node_id": 100000,
+      "partitions": 256,
+      "generation": 1,
+      "expect_partition": 160,
+      "expect_topic": "scene-cmd_g1"
+    },
+    {
+      "name": "generation_two_changes_topic_not_partition",
+      "base": "gate-cmd",
+      "node_id": 100000,
+      "partitions": 256,
+      "generation": 2,
+      "expect_partition": 160,
+      "expect_topic": "gate-cmd_g2"
+    },
+    {
+      "name": "non_default_partition_count_1024",
+      "base": "scene-cmd",
+      "node_id": 100000,
+      "partitions": 1024,
+      "generation": 3,
+      "expect_partition": 672,
+      "expect_topic": "scene-cmd_g3"
+    },
+    {
+      "name": "single_partition_degenerate_contract",
+      "base": "gate-cmd",
+      "node_id": 99991,
+      "partitions": 1,
+      "generation": 1,
+      "expect_partition": 0,
+      "expect_topic": "gate-cmd_g1"
+    },
+    {
+      "name": "node_id_zero_is_never_allocated_but_must_not_crash",
+      "base": "gate-cmd",
+      "node_id": 0,
+      "partitions": 256,
+      "generation": 1,
+      "expect_partition": 0,
+      "expect_topic": "gate-cmd_g1"
+    }
+  ]
+}

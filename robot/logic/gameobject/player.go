@@ -8,6 +8,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"proto/battle"
 	"proto/scene"
 )
 
@@ -55,6 +56,14 @@ type Player struct {
 	battleStartOnce sync.Once
 	battleEnd       chan struct{} // NotifyBattleEnd 到达时 close
 	battleEndOnce   sync.Once
+
+	// battleAssigned 是战斗直连的落点分配(NotifyBattleAssigned / 补签应答记录),
+	// openBattleDirectConn 等它拿 host:port + 票据。与 battleStart 同一套惯例:
+	// 懒初始化通道 + sync.Once 广播。补签(RequestBattleTicket)会再次 Signal,
+	// 那时通道已关,只更新快照——等待方本来就只关心"最新一份分配"。
+	battleAssignedInfo *battle.BattleAssignedS2C
+	battleAssigned     chan struct{}
+	battleAssignedOnce sync.Once
 
 	// ---- 战斗冒烟(battle-smoke)状态:观战侧 ----
 	spectateBattleId  uint64        // 正在观战的对局 id(NotifySpectateState 记录)
@@ -424,6 +433,49 @@ func (p *Player) WaitBattleStart(ctx context.Context) (uint64, error) {
 	case <-ctx.Done():
 		return 0, ctx.Err()
 	}
+}
+
+func (p *Player) ensureBattleAssignedChannel() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.battleAssigned == nil {
+		p.battleAssigned = make(chan struct{})
+	}
+}
+
+// SignalBattleAssigned 记录战斗直连的落点分配并广播。由 NotifyBattleAssigned
+// (battle 主动推)和 RequestBattleTicket 的补签应答共同调用;nil 分配忽略,
+// 免得等待方拿到一份空落点还以为拿到了票据。
+func (p *Player) SignalBattleAssigned(assigned *battle.BattleAssignedS2C) {
+	if assigned == nil {
+		return
+	}
+	p.ensureBattleAssignedChannel()
+	p.mu.Lock()
+	p.battleAssignedInfo = assigned
+	p.mu.Unlock()
+	p.battleAssignedOnce.Do(func() { close(p.battleAssigned) })
+}
+
+// WaitBattleAssigned 阻塞等待落点分配,返回最近一份(补签会覆盖)。
+func (p *Player) WaitBattleAssigned(ctx context.Context) (*battle.BattleAssignedS2C, error) {
+	p.ensureBattleAssignedChannel()
+	p.mu.RLock()
+	ch := p.battleAssigned
+	p.mu.RUnlock()
+	select {
+	case <-ch:
+		return p.GetBattleAssigned(), nil
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+}
+
+// GetBattleAssigned 返回最近一份落点分配(nil = 还没收到)。
+func (p *Player) GetBattleAssigned() *battle.BattleAssignedS2C {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.battleAssignedInfo
 }
 
 // GetBattleId 返回 NotifyBattleStart 记录的对局 id(0 = 尚未开战)。

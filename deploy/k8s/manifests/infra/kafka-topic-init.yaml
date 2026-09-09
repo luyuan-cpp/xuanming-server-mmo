@@ -1,0 +1,165 @@
+# Kafka topic 预建 Job(一次性、幂等;2026-09-08,node-id-overhaul-plan §2.0c)。
+# 建两类按分区契约寻址的 topic:
+#   1) data_service 的两个审计 topic(见下);
+#   2) 控制面命令 topic gate-cmd_g<N> / scene-cmd_g<N>
+#      (docs/design/control-plane-topic-partitioning-20260908.md)。gate/scene 不再一个
+#      节点一个 topic —— 那套写法在 10 万 scene 进程下压垮 controller 元数据,而且
+#      topic 名与 consumer group 名里都带被回收复用的 node_id,冻结的前任会把继任者的
+#      命令消费掉再丢弃。现在按 partition = node_id % P 寻址、消费端 assign 不进 group,
+#      所以分区数必须在任何节点起来之前按契约建好:少一个分区就有一批 node_id 永远收不到命令。
+#      旧的 per-node topic 不再预建,生产者切完后按 retention 自然过期。
+#
+# 为什么要由部署侧建:kafka.yaml 的 broker 开着 auto.create.topics.enable 且 num.partitions=1,
+# C++ scene 一发消息就会把 topic 自动建成 1 分区;而 data_service 的 kafkautil.EnsureTopics
+# 拿契约(transaction_log 6 / snapshot 3)去比只会永远报 "partition contract mismatch",
+# 两条落库消费者一条都起不来,唯一症状是每 30s 一条 Error 日志。所以 topic 必须在
+# 任何 scene 起来之前按契约建好:k8s_deploy.ps1 Apply-Infra 在五个 infra manifest 之后、
+# 任何 zone 之前 apply 本 Job(Apply-KafkaTopicInitJob),-WaitReady 会等它 Complete。
+#
+# 本文件里所有双下划线包裹的大写占位(env 里那六个)由 Apply-KafkaTopicInitJob 在 apply 前替换,
+# 值全部来自 go/data_service/etc/data_service.yaml(与 data-service ConfigMap 同源),这里不写任何数字
+# (占位名不在注释里重复:脚本是全文替换,写在注释里会被一起替换成值):
+#   INFRA_NAMESPACE           -InfraNamespace(broker 广播的就是这个 FQDN)
+#   KAFKA_AUDIT_TX_TOPIC      <Kafka.TransactionLogTopic>_g<Kafka.TopicGeneration>
+#   KAFKA_AUDIT_TX_PARTITIONS Kafka.TransactionLogPartitions
+#   KAFKA_AUDIT_SNAPSHOT_*    同上,取 Kafka.SnapshotTopic / Kafka.SnapshotPartitions
+#   KAFKA_AUDIT_RETENTION_MS  Kafka.RetentionMs
+# 改分区数 = Kafka.TopicGeneration +1(换一批新 topic,老的排空后删),绝不原地扩分区:
+# 扩分区会重映射 key=player_id 的哈希,同一玩家的流水顺序就断了。
+#
+# 保留期的规则(routing-identity-audit-20260908.md R11):**任何消费者可能落后的 topic,
+# 保留期必须 > 消费者可能落后的最长时间,并留足余量,而且必须显式声明、不许继承 broker 默认值。**
+# C++ 的 gate / scene 消费者把 max.poll.interval.ms 钉在 900000(15 分钟),所以命令 topic
+# 取 1 小时(4×)。本 Job 不只在建 topic 时带 --config,建完还会用 kafka-configs.sh --alter
+# 重新声明并读回核对 —— 否则一个被 auto-create 抢先建出来的 topic 会静默吃 broker 默认保留期。
+#
+# 幂等:--if-not-exists 建 topic,再 --describe 核对 PartitionCount,不符即失败(不假装成功);
+# retention.ms 每次都重新声明 + 回读核对。脚本每次都先 delete 再 apply 本 Job:template 不可变,
+# 而且必须能重跑 —— Kafka 换成 StatefulSet+PVC 之后(R06)普通重启不再丢 topic,但第一次
+# 从旧 emptyDir Deployment 切过来、`infra-down` 删过 namespace(PVC 一起没)、或有人手工删过
+# topic 之后,topic 都是空的(命令 infra-kafka-topics)。细节见 deploy/k8s/README.md
+# 「Kafka:StatefulSet + PVC」与「Kafka 审计 topic 预建」。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topic-init
+  labels:
+    app: kafka-topic-init
+spec:
+  backoffLimit: 6
+  # 不设 ttlSecondsAfterFinished:完成记录留着,infra-status / `kubectl get job` 能看到
+  # 上一次预建是否成功;重跑由脚本 delete 再 apply。
+  template:
+    metadata:
+      labels:
+        app: kafka-topic-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: topic-init
+          # 与 kafka.yaml 同一个镜像,自带 kafka-topics.sh / kafka-broker-api-versions.sh。
+          image: apache/kafka:latest
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: BOOTSTRAP
+              value: "kafka.__INFRA_NAMESPACE__.svc.cluster.local:9092"
+            - name: TX_TOPIC
+              value: "__KAFKA_AUDIT_TX_TOPIC__"
+            - name: TX_PARTITIONS
+              value: "__KAFKA_AUDIT_TX_PARTITIONS__"
+            - name: SNAPSHOT_TOPIC
+              value: "__KAFKA_AUDIT_SNAPSHOT_TOPIC__"
+            - name: SNAPSHOT_PARTITIONS
+              value: "__KAFKA_AUDIT_SNAPSHOT_PARTITIONS__"
+            - name: RETENTION_MS
+              value: "__KAFKA_AUDIT_RETENTION_MS__"
+            # 控制面命令 topic(docs/design/control-plane-topic-partitioning-20260908.md)。
+            # gate/scene 按 partition = node_id % COMMAND_PARTITIONS 各 assign 一个分区,
+            # 分区数少一个就有一批 node_id 永远收不到命令,而且 Kafka 不报错。
+            # 值由 Apply-KafkaTopicInitJob 从 bin/etc/base_deploy_config.yaml 的
+            # Kafka.CommandTopicPartitions / CommandTopicGeneration 注入。
+            - name: GATE_COMMAND_TOPIC
+              value: "__KAFKA_GATE_COMMAND_TOPIC__"
+            - name: SCENE_COMMAND_TOPIC
+              value: "__KAFKA_SCENE_COMMAND_TOPIC__"
+            - name: COMMAND_PARTITIONS
+              value: "__KAFKA_COMMAND_PARTITIONS__"
+          command:
+            - sh
+            - -c
+            - |
+              set -e
+              KT=/opt/kafka/bin/kafka-topics.sh
+              KC=/opt/kafka/bin/kafka-configs.sh
+              # broker 可能还在拉镜像 / 选举 controller:最多等 5 分钟,等不到就失败让 backoffLimit 重试。
+              ready=0
+              for i in $(seq 1 60); do
+                if /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server "$BOOTSTRAP" >/dev/null 2>&1; then
+                  ready=1; break
+                fi
+                echo "waiting for kafka broker $BOOTSTRAP ($i/60)..."
+                sleep 5
+              done
+              if [ "$ready" != 1 ]; then
+                echo "ERROR: kafka broker $BOOTSTRAP not reachable after 5 minutes" >&2
+                exit 1
+              fi
+              # ensure_topic <name> <partitions> [retention_ms]
+              # --if-not-exists 会原样保留已存在的 topic(包括被生产者抢先自动建成 1 分区的),
+              # 所以建完必须 --describe 核对 PartitionCount。
+              #
+              # retention.ms 分两步,因为 --config 只在**新建那一刻**生效:
+              # 一个已经存在的 topic(被 auto-create 抢先建出来的、或上一代 Job 用别的值建的)
+              # 会静默继承 broker 默认保留期。broker 默认值在 kafka.yaml 里是给
+              # "没有自己契约的 topic" 用的短保留期,套到命令 topic 上就是
+              # routing-identity-audit-20260908.md R11:一个短暂落后的 gate 丢的是
+              # BindSession / RoutePlayer,不是"追上来"。
+              # 所以建完再用 kafka-configs.sh --alter 显式声明一次(幂等、可重跑),
+              # 再 --describe 读回来核对 —— 保留期是**声明**出来的,不是继承来的。
+              # (与分区数不同,retention.ms 是可变配置,重设它没有任何寻址风险。)
+              ensure_topic() {
+                _ret="${3:-$RETENTION_MS}"
+                $KT --bootstrap-server "$BOOTSTRAP" --create --if-not-exists --topic "$1" \
+                  --partitions "$2" --replication-factor 1 --config "retention.ms=$_ret"
+                got=$($KT --bootstrap-server "$BOOTSTRAP" --describe --topic "$1" \
+                  | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -n 1)
+                if [ "$got" != "$2" ]; then
+                  echo "ERROR: topic $1 has PartitionCount=${got:-?} but the contract is $2." >&2
+                  echo "       审计 topic 的契约在 go/data_service/etc/data_service.yaml;" >&2
+                  echo "       命令 topic 的契约在 bin/etc/base_deploy_config.yaml Kafka.CommandTopicPartitions。" >&2
+                  echo "       Partition counts are immutable: bump the topic generation (new *_gN topic); never expand in place." >&2
+                  echo "       If a producer auto-created this topic before this Job ran, delete the topic and re-run: k8s_deploy.ps1 -Command infra-kafka-topics" >&2
+                  exit 1
+                fi
+                $KC --bootstrap-server "$BOOTSTRAP" --entity-type topics --entity-name "$1" \
+                  --alter --add-config "retention.ms=$_ret" >/dev/null
+                # 必须锚在行首:--describe 那行长这样
+                #   "  retention.ms=3600000 sensitive=false synonyms={DYNAMIC_TOPIC_CONFIG:retention.ms=3600000, DEFAULT_CONFIG:log.retention.ms=...}"
+                # 贪婪的 .*retention\.ms= 会一路吃到 synonyms 里的 **log.**retention.ms,
+                # 读回来的是 broker 默认值,于是这条校验反过来把正确的配置判成失败。
+                gotret=$($KC --bootstrap-server "$BOOTSTRAP" --entity-type topics --entity-name "$1" \
+                  --describe | sed -n 's/^[[:space:]]*retention\.ms=\([0-9][0-9]*\).*/\1/p' | head -n 1)
+                if [ "$gotret" != "$_ret" ]; then
+                  echo "ERROR: topic $1 retention.ms=${gotret:-<inherited>} but it must be explicitly $_ret." >&2
+                  echo "       保留期必须 > 消费者可能落后的最长时间(C++ 消费者 max.poll.interval.ms=900000)。" >&2
+                  echo "       Retention must be declared per topic, never inherited from the broker default." >&2
+                  exit 1
+                fi
+                echo "ok: $1 partitions=$2 retention.ms=$_ret"
+              }
+              ensure_topic "$TX_TOPIC" "$TX_PARTITIONS"
+              ensure_topic "$SNAPSHOT_TOPIC" "$SNAPSHOT_PARTITIONS"
+              # 控制面命令 topic 保留 1 小时就够:消费者每次启动都 assign 到分区末尾
+              # (KafkaPartitionAssignPolicy::startAtEnd),没有任何人会回放历史 ——
+              # 发给某个进程的命令不可能早于这个进程的启动时刻(target_instance_id 是
+              # 启动时新生成的 uuid)。保留期长只是白占磁盘。
+              ensure_topic "$GATE_COMMAND_TOPIC" "$COMMAND_PARTITIONS" 3600000
+              ensure_topic "$SCENE_COMMAND_TOPIC" "$COMMAND_PARTITIONS" 3600000
+              echo "kafka topic bootstrap done (audit + control-plane commands)"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

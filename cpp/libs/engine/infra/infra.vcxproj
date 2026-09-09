@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="messaging\kafka\kafka_consumer.h" />
+    <ClInclude Include="messaging\kafka\kafka_partition_assign_policy.h" />
     <ClInclude Include="messaging\kafka\kafka_manager.h" />
     <ClInclude Include="messaging\kafka\kafka_producer.h" />
     <ClInclude Include="storage\redis_client\redis_client.h" />

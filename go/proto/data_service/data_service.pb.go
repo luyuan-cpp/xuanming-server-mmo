@@ -2777,6 +2777,122 @@ func (x *CreateEventSnapshotResponse) GetCreatedAt() uint64 {
 	return 0
 }
 
+type AllocateIdSegmentRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BizTag        string                 `protobuf:"bytes,1,opt,name=biz_tag,json=bizTag,proto3" json:"biz_tag,omitempty"` // id_segment.biz_tag:"player" / "guild" / "item"
+	Step          uint32                 `protobuf:"varint,2,opt,name=step,proto3" json:"step,omitempty"`                  // 0 = 用表里配置的 step;>0 = 本次希望领取的段长(服务端可钳制)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AllocateIdSegmentRequest) Reset() {
+	*x = AllocateIdSegmentRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[39]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AllocateIdSegmentRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AllocateIdSegmentRequest) ProtoMessage() {}
+
+func (x *AllocateIdSegmentRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[39]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AllocateIdSegmentRequest.ProtoReflect.Descriptor instead.
+func (*AllocateIdSegmentRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{39}
+}
+
+func (x *AllocateIdSegmentRequest) GetBizTag() string {
+	if x != nil {
+		return x.BizTag
+	}
+	return ""
+}
+
+func (x *AllocateIdSegmentRequest) GetStep() uint32 {
+	if x != nil {
+		return x.Step
+	}
+	return 0
+}
+
+// 返回半开区间 [lo, hi):调用方独占这一段,服务端一经返回即视为已发出、绝不重发。
+// 调用方段内发号完毕(或进程退出)剩余的号直接作废,不回收。
+// error_code 沿用本文件约定:0 = 成功,其余取值来自 data_service 自己的错误码轴
+// (go/data_service/internal/constants/error_codes.go),不在 tip 码轴上,proto 里不写数字。
+type AllocateIdSegmentResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	ErrorCode     uint32                 `protobuf:"varint,1,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	Lo            uint64                 `protobuf:"varint,2,opt,name=lo,proto3" json:"lo,omitempty"` // inclusive
+	Hi            uint64                 `protobuf:"varint,3,opt,name=hi,proto3" json:"hi,omitempty"` // exclusive
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AllocateIdSegmentResponse) Reset() {
+	*x = AllocateIdSegmentResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[40]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AllocateIdSegmentResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AllocateIdSegmentResponse) ProtoMessage() {}
+
+func (x *AllocateIdSegmentResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[40]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AllocateIdSegmentResponse.ProtoReflect.Descriptor instead.
+func (*AllocateIdSegmentResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{40}
+}
+
+func (x *AllocateIdSegmentResponse) GetErrorCode() uint32 {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return 0
+}
+
+func (x *AllocateIdSegmentResponse) GetLo() uint64 {
+	if x != nil {
+		return x.Lo
+	}
+	return 0
+}
+
+func (x *AllocateIdSegmentResponse) GetHi() uint64 {
+	if x != nil {
+		return x.Hi
+	}
+	return 0
+}
+
 var File_proto_data_service_data_service_proto protoreflect.FileDescriptor
 
 const file_proto_data_service_data_service_proto_rawDesc = "" +
@@ -3018,7 +3134,15 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\vsnapshot_id\x18\x02 \x01(\x04R\n" +
 	"snapshotId\x12\x1d\n" +
 	"\n" +
-	"created_at\x18\x03 \x01(\x04R\tcreatedAt*\x87\x01\n" +
+	"created_at\x18\x03 \x01(\x04R\tcreatedAt\"G\n" +
+	"\x18AllocateIdSegmentRequest\x12\x17\n" +
+	"\abiz_tag\x18\x01 \x01(\tR\x06bizTag\x12\x12\n" +
+	"\x04step\x18\x02 \x01(\rR\x04step\"Z\n" +
+	"\x19AllocateIdSegmentResponse\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x01 \x01(\rR\terrorCode\x12\x0e\n" +
+	"\x02lo\x18\x02 \x01(\x04R\x02lo\x12\x0e\n" +
+	"\x02hi\x18\x03 \x01(\x04R\x02hi*\x87\x01\n" +
 	"\fSnapshotType\x12\x13\n" +
 	"\x0fSNAPSHOT_MANUAL\x10\x00\x12\x15\n" +
 	"\x11SNAPSHOT_PERIODIC\x10\x01\x12\x1c\n" +
@@ -3033,7 +3157,7 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x0eEVENT_RECHARGE\x10\x01\x12\x19\n" +
 	"\x15EVENT_PRE_MAINTENANCE\x10\x02\x12\x12\n" +
 	"\x0eEVENT_LEVEL_UP\x10\x03\x12\x15\n" +
-	"\x11EVENT_FIRST_LOGIN\x10\x042\xbc\x0e\n" +
+	"\x11EVENT_FIRST_LOGIN\x10\x042\xa4\x0f\n" +
 	"\vDataService\x12]\n" +
 	"\x0eLoadPlayerData\x12#.data_service.LoadPlayerDataRequest\x1a$.data_service.LoadPlayerDataResponse\"\x00\x12]\n" +
 	"\x0eSavePlayerData\x12#.data_service.SavePlayerDataRequest\x1a$.data_service.SavePlayerDataResponse\"\x00\x12]\n" +
@@ -3052,7 +3176,8 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\vRollbackAll\x12 .data_service.RollbackAllRequest\x1a!.data_service.RollbackAllResponse\"\x00\x12c\n" +
 	"\x10BatchRecallItems\x12%.data_service.BatchRecallItemsRequest\x1a&.data_service.BatchRecallItemsResponse\"\x00\x12l\n" +
 	"\x13QueryTransactionLog\x12(.data_service.QueryTransactionLogRequest\x1a).data_service.QueryTransactionLogResponse\"\x00\x12l\n" +
-	"\x13CreateEventSnapshot\x12(.data_service.CreateEventSnapshotRequest\x1a).data_service.CreateEventSnapshotResponse\"\x00B\x14Z\x12proto/data_serviceb\x06proto3"
+	"\x13CreateEventSnapshot\x12(.data_service.CreateEventSnapshotRequest\x1a).data_service.CreateEventSnapshotResponse\"\x00\x12f\n" +
+	"\x11AllocateIdSegment\x12&.data_service.AllocateIdSegmentRequest\x1a'.data_service.AllocateIdSegmentResponse\"\x00B\x14Z\x12proto/data_serviceb\x06proto3"
 
 var (
 	file_proto_data_service_data_service_proto_rawDescOnce sync.Once
@@ -3067,7 +3192,7 @@ func file_proto_data_service_data_service_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_data_service_data_service_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_data_service_data_service_proto_msgTypes = make([]protoimpl.MessageInfo, 42)
+var file_proto_data_service_data_service_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
 var file_proto_data_service_data_service_proto_goTypes = []any{
 	(SnapshotType)(0),                      // 0: data_service.SnapshotType
 	(RollbackScope)(0),                     // 1: data_service.RollbackScope
@@ -3111,15 +3236,17 @@ var file_proto_data_service_data_service_proto_goTypes = []any{
 	(*QueryTransactionLogResponse)(nil),    // 39: data_service.QueryTransactionLogResponse
 	(*CreateEventSnapshotRequest)(nil),     // 40: data_service.CreateEventSnapshotRequest
 	(*CreateEventSnapshotResponse)(nil),    // 41: data_service.CreateEventSnapshotResponse
-	nil,                                    // 42: data_service.LoadPlayerDataResponse.DataEntry
-	nil,                                    // 43: data_service.SavePlayerDataRequest.DataEntry
-	nil,                                    // 44: data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
-	(*emptypb.Empty)(nil),                  // 45: google.protobuf.Empty
+	(*AllocateIdSegmentRequest)(nil),       // 42: data_service.AllocateIdSegmentRequest
+	(*AllocateIdSegmentResponse)(nil),      // 43: data_service.AllocateIdSegmentResponse
+	nil,                                    // 44: data_service.LoadPlayerDataResponse.DataEntry
+	nil,                                    // 45: data_service.SavePlayerDataRequest.DataEntry
+	nil,                                    // 46: data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
+	(*emptypb.Empty)(nil),                  // 47: google.protobuf.Empty
 }
 var file_proto_data_service_data_service_proto_depIdxs = []int32{
-	42, // 0: data_service.LoadPlayerDataResponse.data:type_name -> data_service.LoadPlayerDataResponse.DataEntry
-	43, // 1: data_service.SavePlayerDataRequest.data:type_name -> data_service.SavePlayerDataRequest.DataEntry
-	44, // 2: data_service.BatchGetPlayerHomeZoneResponse.player_zone_map:type_name -> data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
+	44, // 0: data_service.LoadPlayerDataResponse.data:type_name -> data_service.LoadPlayerDataResponse.DataEntry
+	45, // 1: data_service.SavePlayerDataRequest.data:type_name -> data_service.SavePlayerDataRequest.DataEntry
+	46, // 2: data_service.BatchGetPlayerHomeZoneResponse.player_zone_map:type_name -> data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
 	0,  // 3: data_service.CreatePlayerSnapshotRequest.type:type_name -> data_service.SnapshotType
 	0,  // 4: data_service.SnapshotInfo.type:type_name -> data_service.SnapshotType
 	23, // 5: data_service.ListPlayerSnapshotsResponse.snapshots:type_name -> data_service.SnapshotInfo
@@ -3146,26 +3273,28 @@ var file_proto_data_service_data_service_proto_depIdxs = []int32{
 	34, // 26: data_service.DataService.BatchRecallItems:input_type -> data_service.BatchRecallItemsRequest
 	37, // 27: data_service.DataService.QueryTransactionLog:input_type -> data_service.QueryTransactionLogRequest
 	40, // 28: data_service.DataService.CreateEventSnapshot:input_type -> data_service.CreateEventSnapshotRequest
-	4,  // 29: data_service.DataService.LoadPlayerData:output_type -> data_service.LoadPlayerDataResponse
-	6,  // 30: data_service.DataService.SavePlayerData:output_type -> data_service.SavePlayerDataResponse
-	8,  // 31: data_service.DataService.GetPlayerField:output_type -> data_service.GetPlayerFieldResponse
-	10, // 32: data_service.DataService.SetPlayerField:output_type -> data_service.SetPlayerFieldResponse
-	45, // 33: data_service.DataService.RegisterPlayerZone:output_type -> google.protobuf.Empty
-	13, // 34: data_service.DataService.GetPlayerHomeZone:output_type -> data_service.GetPlayerHomeZoneResponse
-	15, // 35: data_service.DataService.BatchGetPlayerHomeZone:output_type -> data_service.BatchGetPlayerHomeZoneResponse
-	17, // 36: data_service.DataService.RemapHomeZoneForMerge:output_type -> data_service.RemapHomeZoneForMergeResponse
-	19, // 37: data_service.DataService.DeletePlayerData:output_type -> data_service.DeletePlayerDataResponse
-	21, // 38: data_service.DataService.CreatePlayerSnapshot:output_type -> data_service.CreatePlayerSnapshotResponse
-	24, // 39: data_service.DataService.ListPlayerSnapshots:output_type -> data_service.ListPlayerSnapshotsResponse
-	27, // 40: data_service.DataService.GetPlayerSnapshotDiff:output_type -> data_service.GetPlayerSnapshotDiffResponse
-	29, // 41: data_service.DataService.RollbackPlayer:output_type -> data_service.RollbackPlayerResponse
-	31, // 42: data_service.DataService.RollbackZone:output_type -> data_service.RollbackZoneResponse
-	33, // 43: data_service.DataService.RollbackAll:output_type -> data_service.RollbackAllResponse
-	36, // 44: data_service.DataService.BatchRecallItems:output_type -> data_service.BatchRecallItemsResponse
-	39, // 45: data_service.DataService.QueryTransactionLog:output_type -> data_service.QueryTransactionLogResponse
-	41, // 46: data_service.DataService.CreateEventSnapshot:output_type -> data_service.CreateEventSnapshotResponse
-	29, // [29:47] is the sub-list for method output_type
-	11, // [11:29] is the sub-list for method input_type
+	42, // 29: data_service.DataService.AllocateIdSegment:input_type -> data_service.AllocateIdSegmentRequest
+	4,  // 30: data_service.DataService.LoadPlayerData:output_type -> data_service.LoadPlayerDataResponse
+	6,  // 31: data_service.DataService.SavePlayerData:output_type -> data_service.SavePlayerDataResponse
+	8,  // 32: data_service.DataService.GetPlayerField:output_type -> data_service.GetPlayerFieldResponse
+	10, // 33: data_service.DataService.SetPlayerField:output_type -> data_service.SetPlayerFieldResponse
+	47, // 34: data_service.DataService.RegisterPlayerZone:output_type -> google.protobuf.Empty
+	13, // 35: data_service.DataService.GetPlayerHomeZone:output_type -> data_service.GetPlayerHomeZoneResponse
+	15, // 36: data_service.DataService.BatchGetPlayerHomeZone:output_type -> data_service.BatchGetPlayerHomeZoneResponse
+	17, // 37: data_service.DataService.RemapHomeZoneForMerge:output_type -> data_service.RemapHomeZoneForMergeResponse
+	19, // 38: data_service.DataService.DeletePlayerData:output_type -> data_service.DeletePlayerDataResponse
+	21, // 39: data_service.DataService.CreatePlayerSnapshot:output_type -> data_service.CreatePlayerSnapshotResponse
+	24, // 40: data_service.DataService.ListPlayerSnapshots:output_type -> data_service.ListPlayerSnapshotsResponse
+	27, // 41: data_service.DataService.GetPlayerSnapshotDiff:output_type -> data_service.GetPlayerSnapshotDiffResponse
+	29, // 42: data_service.DataService.RollbackPlayer:output_type -> data_service.RollbackPlayerResponse
+	31, // 43: data_service.DataService.RollbackZone:output_type -> data_service.RollbackZoneResponse
+	33, // 44: data_service.DataService.RollbackAll:output_type -> data_service.RollbackAllResponse
+	36, // 45: data_service.DataService.BatchRecallItems:output_type -> data_service.BatchRecallItemsResponse
+	39, // 46: data_service.DataService.QueryTransactionLog:output_type -> data_service.QueryTransactionLogResponse
+	41, // 47: data_service.DataService.CreateEventSnapshot:output_type -> data_service.CreateEventSnapshotResponse
+	43, // 48: data_service.DataService.AllocateIdSegment:output_type -> data_service.AllocateIdSegmentResponse
+	30, // [30:49] is the sub-list for method output_type
+	11, // [11:30] is the sub-list for method input_type
 	11, // [11:11] is the sub-list for extension type_name
 	11, // [11:11] is the sub-list for extension extendee
 	0,  // [0:11] is the sub-list for field type_name
@@ -3182,7 +3311,7 @@ func file_proto_data_service_data_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_data_service_data_service_proto_rawDesc), len(file_proto_data_service_data_service_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   42,
+			NumMessages:   44,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

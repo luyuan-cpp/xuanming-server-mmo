@@ -28,6 +28,17 @@ type Config struct {
 	// LeaseTTL:etcd 节点注册 keepalive 的租约 TTL(秒)。
 	LeaseTTL int64 `json:",default=60"`
 
+	// ClusterId:部署级集群号,snowflake 17 位 worker 段的 [cluster5] 部分
+	// (docs/design/node-id-overhaul-plan-20260908.md §5)。**运维按集群一次性设定,
+	// 策划不碰**;默认 0 = 单集群 / 存量 id 布局。etcd 槽位前缀带 c<cluster>,两个集群
+	// 共用一个 etcd 也不会撞号。必须 < 32。
+	ClusterId uint32 `json:",default=0"`
+
+	// SnowflakeCacheDir:snowflake 槽位的本地缓存目录(shared/snowflakealloc,设计稿 §3.5)。
+	// 启动时 etcd 不可达、且缓存里的上次水位确认在 F(2h)内,就用缓存的槽起服并后台重试
+	// 注册。留空关闭。默认相对服务工作目录(go/match/)指向仓库 run/(已 gitignore)。
+	SnowflakeCacheDir string `json:",default=../../run/snowflake"`
+
 	// KafkaWriteTimeoutSeconds:挑战 S2C 推送经 gate-{id} topic 的一次
 	// 同步 produce 的 writer 侧超时(秒)。与 scene_manager 同口径:
 	// 不用 caller context 取消,避免 WriteMessages 返回后批次仍在投递。

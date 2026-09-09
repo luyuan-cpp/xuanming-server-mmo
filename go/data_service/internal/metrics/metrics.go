@@ -89,6 +89,28 @@ var (
 		Help:      "Orphan characters (created after target_time) cleaned during zone/server rollback.",
 	}, []string{"scope"})
 
+	// ── Kafka 落库消费者(transaction_log / player_snapshot)──────
+	// up=0 且进程还活着 = 消费者因 DB 故障停下(宁可积压不丢审计),必须告警:
+	// 积压超过 topic 保留期(默认 30 天)就真丢了。
+	kafkaConsumerUp = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "kafka_consumer_up",
+		Help:      "1 while the consumer loop is running, 0 once it stopped (DB failure or shutdown).",
+	}, []string{"consumer"})
+
+	kafkaConsumerMessagesTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "kafka_consumer_messages_total",
+		Help:      "Consumed messages by consumer (transaction_log|player_snapshot) and outcome (inserted|duplicate|decode_error|invalid|oversize|db_error).",
+	}, []string{"consumer", "outcome"})
+
+	// ── AllocateIdSegment(号段发号)───────────────────────────────
+	idSegmentAllocateTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "id_segment_allocate_total",
+		Help:      "AllocateIdSegment outcomes by biz_tag (ok|invalid|exhausted|unknown_tag|db_error).",
+	}, []string{"biz_tag", "outcome"})
+
 	registerOnce sync.Once
 )
 
@@ -100,8 +122,36 @@ func register() {
 			versionMismatchTotal,
 			crossSceneTransitionLatency, crossSceneTransitionTotal,
 			rollbackTotal, rollbackPlayersAffectedTotal, rollbackOrphansCleanedTotal,
+			kafkaConsumerUp, kafkaConsumerMessagesTotal,
+			idSegmentAllocateTotal,
 		)
 	})
+}
+
+// SetKafkaConsumerUp flips the up gauge for one consumer ("transaction_log" | "player_snapshot").
+func SetKafkaConsumerUp(consumer string, up bool) {
+	register()
+	v := 0.0
+	if up {
+		v = 1
+	}
+	kafkaConsumerUp.WithLabelValues(consumer).Set(v)
+}
+
+// ObserveKafkaConsumerMessages adds n messages with one outcome for one consumer.
+func ObserveKafkaConsumerMessages(consumer, outcome string, n int) {
+	if n <= 0 {
+		return
+	}
+	register()
+	kafkaConsumerMessagesTotal.WithLabelValues(consumer, outcome).Add(float64(n))
+}
+
+// ObserveIdSegmentAllocate records one AllocateIdSegment outcome. biz_tag cardinality is
+// bounded by the store's tag validation and the handful of real tags (player/guild/item).
+func ObserveIdSegmentAllocate(bizTag, outcome string) {
+	register()
+	idSegmentAllocateTotal.WithLabelValues(bizTag, outcome).Inc()
 }
 
 // ── Observe helpers ─────────────────────────────────────────────────

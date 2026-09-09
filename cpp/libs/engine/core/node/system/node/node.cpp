@@ -22,7 +22,6 @@
 #include "rpc/service_metadata/gate_service_service_metadata.h"
 #include "rpc/service_metadata/rpc_event_registry.h"
 #include "thread_context/redis_manager.h"
-#include "thread_context/snow_flake_manager.h"
 #include "time/system/time.h"
 #include "core/utils/debug/stacktrace_system.h"
 #include "build_info/build_info.h"
@@ -550,7 +549,8 @@ void Node::StartKafkaPolling()
 bool Node::RegisterKafkaMessageHandler(const std::vector<std::string> &topics,
 									   const std::string &groupId,
 									   KafkaMessageHandler handler,
-									   const std::vector<int32_t> &partitions)
+									   const std::vector<int32_t> &partitions,
+									   const KafkaPartitionAssignPolicy &assignPolicy)
 {
 	if (topics.empty())
 	{
@@ -565,7 +565,7 @@ bool Node::RegisterKafkaMessageHandler(const std::vector<std::string> &topics,
 	}
 
 	auto &kafkaConfig = tlsNodeConfigManager.GetBaseDeployConfig().kafka();
-	if (!GetKafkaManager().Subscribe(kafkaConfig, topics, groupId, partitions, std::move(handler)))
+	if (!GetKafkaManager().Subscribe(kafkaConfig, topics, groupId, partitions, std::move(handler), assignPolicy))
 	{
 		LOG_ERROR << "Kafka subscribe failed. group_id=" << groupId;
 		return false;
@@ -741,11 +741,11 @@ void Node::OnNodeIdConflictShutdown(NodeIdConflictReason reason)
 
 	LOG_ERROR << "Node identity conflict detected (reason=" << static_cast<int>(reason)
 			  << "), node_id=" << GetNodeId()
-			  << ". Fencing ID generation and draining before exit.";
+			  << ". Draining before exit.";
 
-	// 1) 立刻停止发号。etcd 已经可以把这个 node_id 交给别的进程,再发一个号就是
-	//    确定性撞号。fence 必须在业务收尾之前 —— 收尾只需要存盘和路由,不需要新 ID。
-	tlsSnowflakeManager.Fence();
+	// 1) 发号不用管:永久 guid(item / tx / snapshot)走号段(GuidSegmentRegistry),号段在
+	//    AllocateIdSegment 提交时就已被数据库判定为用掉,与路由 node_id 无关 —— 失去路由身份
+	//    不会让手里的号变成别人的号,收尾期间照常可以发完(§7.5 第 1 / 6 条)。
 
 	// 2) 停掉所有会再次触发注册 / 冲突判定的重试,避免收尾期间又跑一遍分配流程 ——
 	//    这台节点已经不是 node_id 的合法持有者,重抢端口 / 重占 node_id 只会干扰接手的进程。
@@ -1389,14 +1389,21 @@ void Node::StartNodeRegistrationHealthMonitor()
 
 										   // Check lease deadline first — this catches network partitions where
 										   // the watch stream is dead and the local ServiceNodeList is stale.
+										   //
+										   // 失租**不再**直接走冲突关停:拿新 lease 重注册,分配键的 CAS 才是身份的裁判
+										   // (被别的 uuid 持有 → OnTxnFailed → OnNodeIdConflictShutdown)。
+										   // 永久 guid 走号段(GuidSegmentRegistry),唯一性由数据库的 CAS 领段保证,与 lease 无关。
 										   if (serviceDiscoveryManager.etcdService.IsLeasePresumablyExpired())
 										   {
-											   LOG_ERROR << "Lease deadline exceeded: no keepalive ACK from etcd within TTL. "
-															"node_id="
-														 << GetNodeInfo().node_id()
-														 << ". Etcd has likely expired our lease; another node may claim this ID. "
-															"Fencing ID generation, persisting and relocating players, then terminating.";
-											   OnNodeIdConflictShutdown(NodeIdConflictReason::kLeaseDeadlineExceeded);
+											   if (!reRegistrationRequested)
+											   {
+												   LOG_ERROR << "Lease deadline exceeded: no keepalive ACK from etcd within TTL. "
+																"node_id="
+															 << GetNodeInfo().node_id()
+															 << ". Re-granting a lease and re-attaching routing keys (no fence: identity is decided by the CAS).";
+												   serviceDiscoveryManager.etcdService.RequestReRegistration("lease deadline exceeded locally");
+												   reRegistrationRequested = true;
+											   }
 											   return;
 										   }
 
@@ -1420,7 +1427,7 @@ void Node::StartNodeRegistrationHealthMonitor()
 											   return;
 										   }
 
-										   serviceDiscoveryManager.etcdService.RequestReRegistration();
+										   serviceDiscoveryManager.etcdService.RequestReRegistration("health monitor missing local node snapshot");
 										   reRegistrationRequested = true;
 									   });
 }

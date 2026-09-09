@@ -1,6 +1,6 @@
 # 合服(Server Merge)设计文档
 
-> **文档状态**: v1 — 2026-05-15
+> **文档状态**: v2 — 2026-09-08(v1 2026-05-15)。**这是设计与历史决策文档;可逐字执行的 SOP 在 [`docs/ops/merge-zone-runbook.md`](../ops/merge-zone-runbook.md)。** 作废段落一律就地标注,不悄悄改写历史。
 > **范围**: 把散落在 `tools/merge_zone/main.go`、`mmo_cross_server_architecture.md §9`、`guild_ranking_architecture.md §合服工具`、`enter-scene-zone-routing.md §50` 的合服知识收口为单一权威来源。
 > **读者**: 运维、客服总监、新接手的 AI / 工程师。
 > **修订(2026-08-15)**: 全区全服数据层落地后(见 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) §D7),合服从"跨库搬数据"收敛为"`RemapHomeZoneForMerge` 改逻辑归属 + 业务数据合并",`tools/merge_zone` 职责相应收缩;Phase 2 之前本文流程仍是权威。
@@ -40,7 +40,11 @@
 
 ## 3. 已有工具(本节内容来自 `tools/merge_zone/main.go` 实测)
 
-### 3.1 Go CLI:`tools/merge_zone/main.go`
+> ⚠️ **2026-09-08 修订**:本节 v1(2026-05-15)描述的「3 步流程」在 2026-09 的大修中被整体替换。
+> 下面 §3.1 保留 v1 原文作为**历史记录**(它解释了当年为什么这么设计),
+> **当前权威的步骤顺序见 §3.1a**,可执行的 SOP 见 [`docs/ops/merge-zone-runbook.md`](../ops/merge-zone-runbook.md)。
+
+### 3.1 Go CLI:`tools/merge_zone/main.go`(**v1 原文,已被 §3.1a 取代**)
 
 独立 Go module(`tools/merge_zone/go.mod`),不依赖主项目。功能:
 
@@ -64,36 +68,139 @@
    └→ SCAN player:zone:* → GET → 若值=source 则 SET 为 target
 ```
 
+**这段原文里已经作废的三点**(留在这里是为了让读到旧 commit 的人对得上):
+
+1. **「玩家主数据不用搬」是错的**。玩家主数据在 `zone_<N>_db`(按 zone 分库),合服**必须**逐表拷贝
+   `zone_src_db → zone_dst_db`,否则 mapping 一改,玩家在目标库里什么都没有。这是现在的步骤 1,
+   也是整个流程里最关键的一步(`-skip-player-rows` 需要 `-i-know-global-player-table` 才允许,
+   而那个前提要等 TiDB 全局玩家层落地才成立)。
+2. **公会重名「跳过冲突继续写」已改成「中止」**。`deploy/mysql-init/guild_friend_tables.sql` 的
+   `UNIQUE KEY uk_name (name)` 是**全局**唯一(不带 zone_id),所以跨 zone 同名在库层面根本不可能,
+   旧的 JOIN 永远返回空。真要哪天改成 `(zone_id, name)`,正确做法是**中止**——跳过会把源区公会
+   连同成员一起留在一个已下线的 zone 里。
+3. **ZSET 合并从普通 pipeline 改成了 MULTI/EXEC**,并且要先拿 `guild_rank:maintenance_lock`。
+
+### 3.1a 当前实际步骤顺序(2026-09-08,真源 = `tools/merge_zone/main.go` 顶部注释)
+
+```
+P1  preflight   zone_<src>_db / zone_<dst>_db 都存在;从表清单 JSON 发现玩家表
+0   collect     扫一次 mapping 拿源区玩家 id(或从既有清单 RESUME);之后所有步骤复用这一份
+G   guard       0 个玩家 / 源库行数 > 映射数 / 与 -expected-src-players 不符 → 拒绝
+P2  preflight   scene_nodes:zone:{src}:load 必须空(源区无活节点)
+P3  preflight   db_task_zone_{src}[_g{gen}] 在 db_rpc_consumer_group 上 LAG=0
+P4  preflight   kafka:{retry,processing,dead}:queue:<topic> 三个列表都空
+P5  preflight   源区玩家没有在持的 lock:player:{id}
+P6  preflight   源区玩家没有 player:session:{id}
+F   fence       merge:in_progress:{src} 与 {dst} 同时打标(见 §3.5)
+M   manifest    **在任何写之前**落盘清单(玩家 id / 公会 id / ZSET 成员+分数 / 表名)
+1   player_rows zone_src_db → zone_dst_db 逐表拷贝 + 共享 DB 0 上的玩家缓存失效   ← 最关键
+2   player_blobs 跨 data Redis 拷 player:{id}:*(仅多集群;拷到的人数对不上就中止)
+3   guild_mysql  guild.zone_id 改写 + guild:v2 缓存失效(INCR generation + DEL)
+4   guild_rank   guild_rank:zone ZSET 合并(guild_rank:maintenance_lock + MULTI/EXEC)
+5   player_mapping player:zone:{id} 改写                                        ← 必须在 1/2 之后
+6   hot_state    scene_manager 源区热状态清理(可选,-clear-source-hot-state)
+7   post_merge_flag player_merge_notice:{pid} 打进 **login Redis(DB 0)**
+```
+
+两条顺序红线:**1 必须在 5 之前**(mapping 一改玩家就被路由到目标区,而他的行还在源库);
+**5 一旦跑完源区玩家在 mapping 里就消失了**,重新扫描会得到空集合——这正是清单存在的理由。
+
+三种模式:`-mode merge`(默认)、`-mode audit`(只读;`-verify-merged` 切换到合服后断言)、
+`-mode unmerge -manifest-path <file>`(按清单逐对象撤销)。外加独立的
+`-backfill-home-zone -zone <id>`(存量 `player:zone` 回填,**第一次合服前每个 zone 各跑一遍**)。
+
 ### 3.2 PowerShell 包装
 
-`tools/scripts/merge_zone.ps1` —— 自动 `go build` 并执行 CLI。`dev_tools.ps1 -Command merge-zone` 也走它。
+> ⚠️ **2026-09-08 更正**:v1 这里写的 `tools/scripts/merge_zone.ps1` **在仓库里从来不存在**。
+> 之前的 `dev_tools.ps1` 也确实没走通过——它在仓库根跑 `go run ./tools/merge_zone`,
+> 而 `tools/merge_zone` 是**独立 go module**,那条命令恒为 `go: cannot find main module`。
+> 换句话说:**这个入口在 2026-09 修复之前从来没有真正执行过一次合服。**
+
+真实入口是 `tools/scripts/dev_tools.ps1` 的三个命令,它们 `Push-Location tools\merge_zone` 之后
+直接 `go run .`,并由 `Get-MergeZoneArgs` 统一转发 MySQL DSN 与**四个 Redis 库**的地址 / 库号 / 密码:
+
+| 命令 | 作用 |
+|---|---|
+| `-Command merge-zone -MergeBackfillZone <id>` | 存量 `player:zone` 回填(合服前置) |
+| `-Command merge-zone -MergeSourceZone <s> -MergeTargetZone <d>` | 合服本体(`-DryRun` = 预演,不给 = `-apply`) |
+| `-Command merge-zone-audit ... [-VerifyMerged]` | 只读审计 / 合服后断言 |
+| `-Command merge-zone-unmerge -MergeManifestPath <f>` | 按清单撤销一次合服 |
+
+参数全表见 [`merge-zone-runbook.md §13`](../ops/merge-zone-runbook.md)。
+
+### 3.5 Redis 库地图与合服围栏(2026-09-08 新增)
+
+**库地图**(写错库不报错,只静默无效——这是合服最危险的失败形态):
+
+| 逻辑库 | DB | 键 | 配置来源 |
+|---|---|---|---|
+| mapping | **0** | `player:zone:{id}` / `lock:player:{id}` / `merge:in_progress:{zone}` | `data_service.yaml` → `MappingRedis` |
+| guild | 2 | `guild_rank:zone:{z}` / `guild:v2:{id}` / `guild_rank:maintenance_lock` | `guild.yaml` → `RedisClient.DB` |
+| friend | 3 | `friend:online:{pid}` | `friend.yaml` → `RedisClient.DB` |
+| login / shared | 0 | `player_merge_notice:{pid}` / `player:session:{pid}` / `kafka:*:queue:*` / `PlayerAllData:{pid}` | `login.yaml` → `Node.RedisClient.DB`;go/db、player_locator、scene_manager 同为 0 |
+| player data | 独立 | `player:{id}:*` | data_service 按 region 分的 Redis Cluster |
+
+> **mapping 恒为 DB 0,没有例外。** data_service 用 go-zero 的 `redis.MustNewRedis(MappingRedis)`,
+> 而 go-zero v1.10.0 的 `RedisConf` **没有 `DB` 字段** —— yaml 里写 `DB: 15` 会被反序列化直接忽略。
+> `data_service.yaml` 里那行 inert 的 `DB` 已经删除。**历史文档里的「mapping 在 DB 15」一直是错的**:
+> 按 15 跑,围栏与 remap 会一起指向 data_service 从不碰的库——审计恒绿、合服报告成功却一个 key 都没改。
+
+**围栏契约** `merge:in_progress:{zone}`(三方共享,改一处必须同步另外两处):
+
+- **在哪**:mapping Redis(DB 0)——必须和它守护的 `player:zone:*` 同库
+- **判据**:**键存在即封锁**,不解析值、不看 TTL;Redis 报错按封锁处理(fail-closed)
+- **谁写**:只有 `tools/merge_zone`(`SETNX`,src 与 dst 各一把),TTL = `-timeout + 30m`(下限 1h),后台每 `ttl/3` 续期
+- **谁清**:`tools/merge_zone` 退出时按 `run_id` 校验后 DEL;**TTL 只是进程被 kill 的兜底**
+- **谁看**:`data_service.RegisterPlayerZone`(被围栏 ⇒ 拒绝建映射)、`guild.CreateGuild`(被围栏 ⇒ 拒绝建帮;`MergeMarkerRedis` 整段缺失 = 闸门不生效)、
+  `data_service.RemapHomeZoneForMerge`(**反过来要求围栏必须在**,否则 `FailedPrecondition`)
 
 ### 3.3 联机版 RPC:`DataService/RemapHomeZoneForMerge`
 
-`proto/data_service/data_service.proto:25` 定义的 RPC,**只做步骤 3**(mapping 重映射,服务在线时也能执行)。MessageId = 129。Go 实现在 `dataserviceserver.go`。
+`proto/data_service/data_service.proto:25` 定义的 RPC,**只做步骤 5**(mapping 重映射)。Go 实现在 `dataserviceserver.go`。
 
-**用途**:小规模合服 / 客服热处理;不需要停服窗口的 mapping 修正。
+> ⚠️ **2026-09-08 修订:这个 RPC 现在有两道硬闸,v1 描述的「服务在线时也能执行」已经不成立。**
+>
+> 1. **必须带 `x-admin-token`**,且与 data_service 配置的 `AdminToken` 相符;
+>    **`AdminToken` 没配 = 该 RPC 停用**(不是免鉴权)。不满足 ⇒ `PermissionDenied`。
+> 2. **源 zone 必须已经立起 `merge:in_progress:{source}` 围栏**,否则 `FailedPrecondition` +
+>    `ErrCodeMergeFenceMissing`,零变更。理由不是形式主义:那个围栏同时在挡 `RegisterPlayerZone`,
+>    没有它就意味着源 zone 仍在接受新映射,本函数的 SCAN 游标扫过之后新写进来的玩家会永远留在源 zone。
+>    **`dry_run` 也要求围栏**——在没有封锁的库上数出来的数不作数。
+>
+> **用途因此收窄为**:合服窗口内由 `tools/merge_zone` 之外的路径做 mapping 修正(排障 / 客服热处理),
+> 而**不是**「不停服合服」。真正的合服走 CLI:它还要搬玩家主数据行,那件事这个 RPC 根本不做。
 
 ### 3.4 命令示例
 
+```powershell
+# 0. 前置:存量 player:zone 回填(第一次合服前,source 与 target 各跑一遍)
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeBackfillZone 102 -DryRun
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeBackfillZone 102
+
+# 1. 合服预演 / 正式执行(不给 -DryRun 就是 -apply;两者都不给会被工具拒绝)
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone `
+  -MergeSourceZone 102 -MergeTargetZone 101 -MergeAssumeKafkaDrained -DryRun
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone `
+  -MergeSourceZone 102 -MergeTargetZone 101 -MergeExpectedSrcPlayers <N> `
+  -MergeManifestPath <repo>\merge_102_to_101.json -MergeAssumeKafkaDrained
+
+# 2. 多 Redis 集群(生产)再加 blob 拷贝
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone `
+  -MergeSourceZone 102 -MergeTargetZone 101 -MergeMigratePlayerBlobs `
+  -MergeSourceDataRedis 10.1.2.3:6379,10.1.2.4:6379 `
+  -MergeTargetDataRedis 10.1.5.6:6379,10.1.5.7:6379
+
+# 3. 审计 / 合服后验证 / 撤销
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeSourceZone 102 -MergeTargetZone 101
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit -MergeSourceZone 102 -MergeTargetZone 101 `
+  -MergeExpectedSrcPlayers <N> -VerifyMerged
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge -MergeManifestPath <file> -DryRun
+```
+
 ```bash
-# 1. 同 Redis(开发 / 单机部署)— 最简单
-go run -C tools/merge_zone . -source-zone=102 -target-zone=101 -dry-run
-go run -C tools/merge_zone . -source-zone=102 -target-zone=101 -apply
-
-# 2. 多 Redis 集群(生产)— 需要 blob 拷贝
-go run -C tools/merge_zone . -source-zone=102 -target-zone=101 -dry-run \
-   -migrate-player-blobs \
-   -source-data-redis=10.1.2.3:6379,10.1.2.4:6379 \
-   -target-data-redis=10.1.5.6:6379,10.1.5.7:6379
-
-# 3. PowerShell 包装(更省心)
-pwsh -File tools/scripts/merge_zone.ps1 -SourceZone 102 -TargetZone 101 -DryRun
-pwsh -File tools/scripts/merge_zone.ps1 -SourceZone 102 -TargetZone 101 -Apply
-
-# 4. 联机版(只改 mapping,不停服)
-grpcurl -plaintext -d '{"source_zone_id":102,"target_zone_id":101,"dry_run":true}' \
-   data-service:8080 data_service.DataService/RemapHomeZoneForMerge
+# 直接跑 CLI 时:tools/merge_zone 是独立 go module,必须在**那个目录里**跑。
+# 在仓库根跑 `go run ./tools/merge_zone` 恒为 "go: cannot find main module"。
+cd tools/merge_zone && go run . -source-zone=102 -target-zone=101 -dry-run -assume-kafka-drained
 ```
 
 ---
@@ -183,60 +290,77 @@ WHERE s.zone_id = SOURCE
    - source/target Redis BGSAVE → 异地存储 `.rdb`
 3. **重名冲突预扫**:`-dry-run` 跑一遍,记录公会冲突 + 玩家重名(若已实现 #15)
 4. **客服培训**:准备投诉 FAQ、改名券发放流程、公会冲突处理预案
-5. **回滚预案**:如果合服中失败,执行流程 §5.5 — 把 mapping 改回去 + 恢复备份
+5. **回滚预案**:如果合服中失败,走 §5.5 —— **`merge-zone-unmerge -MergeManifestPath <清单>`**,
+   备份还原只是清单丢失时的兜底
+6. **存量映射回填**(2026-09-08 新增,**第一次合服前必做**):`-MergeBackfillZone` 对 source 与
+   target 各跑一遍。存量玩家历史上没有 `player:zone:{id}`,没有映射的玩家不会被合过去
 
 ### 5.2 停服窗口(T+0,通常凌晨 3-6 点 3 小时窗口)
 
+> **2026-09-08 重写**。v1 这一段有三处硬错误:引用了不存在的 `merge_zone.ps1`、topic 名写成
+> `db_task_topic`(真名 `db_task_zone_{zone}[_g{gen}]`)、把 blob 拷贝与主流程拆成「5a/5b 两步」
+> (工具是一条流水线,拆不开)。**可逐字执行的版本见 [`merge-zone-runbook.md §8`](../ops/merge-zone-runbook.md)**,
+> 本节只保留骨架供设计层对照。
+
 ```
-Step 1:关 source zone(玩家踢下线 + 阻止重连)
-─────────────────────────────────────────────
+Step 0:前置(可以在 T-7 就做完,不占窗口)
+──────────────────────────────────────────
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeBackfillZone <src>
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeBackfillZone <dst>
+# 存量玩家没有 player:zone 映射就不会被合过去;两个 zone 都要跑
+
+Step 1:网关置维护 + 踢人
+─────────────────────────
+# POST /admin/zones/<zoneId>/maintenance,头 X-Admin-Key,一次一个 zone
+# (v1 写的 POST /admin/maintenance + Bearer token 不存在)
+
+Step 2:关 source + target
+──────────────────────────
 pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-down -ZoneName <source>
-# 等待 5 分钟让 in-flight 写入落库
-
-Step 2:关 target zone(同样下线)
-─────────────────────────────────
 pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-down -ZoneName <target>
-# 两边都下,避免合服中途有玩家在 target 里继续写数据
+# ⚠️ 这条命令 = kubectl delete namespace mmorpg-zone-<name>,整个 zone 的负载被销毁。
+#    共享 infra(MySQL/Redis/Kafka/etcd)在 mmorpg-infra,不受影响。
 
-Step 3:刷干 Kafka in-flight
-────────────────────────────
-# 让 db_task_topic 的 consumer 消费完积压
-kafka-consumer-groups.sh --describe --group db_rpc_consumer_group \
-  --bootstrap-server <broker>
-# 等 LAG 全部 = 0
+Step 3:备份 MySQL + Redis
+──────────────────────────
+kubectl create job -n mmorpg-infra --from=cronjob/mysql-backup mysql-backup-pre-merge-$(date +%s)
+# mysql-backup CronJob 只在 infra namespace 有一份(不是 per-zone)
 
-Step 4:执行合服 dry-run(再确认一次)
-─────────────────────────────────────
-pwsh -File tools/scripts/merge_zone.ps1 -SourceZone <src> -TargetZone <dst> -DryRun
-# 检查输出:players_in_source / guild_rows / map_matched / map_updated 是否合理
+Step 4:第二次 dry-run(与 T-1 彩排的 players_in_source 必须一致)
+────────────────────────────────────────────────────────────────
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone `
+  -MergeSourceZone <src> -MergeTargetZone <dst> -MergeExpectedSrcPlayers <N> -DryRun
+# Kafka 积压门禁必须给来源:-MergeKafkaConsumerGroupsCmd(真查)或 -MergeAssumeKafkaDrained(声明)
+# 工具查的 topic 是 db_task_zone_<src>[_g<gen>],消费组 db_rpc_consumer_group
 
-Step 5:正式执行(顺序敏感 ⚠️)
-──────────────────────────────
-# 5a. 先拷 player blob(若多 Redis 集群)
-pwsh -File tools/scripts/merge_zone.ps1 -SourceZone <src> -TargetZone <dst> -Apply \
-  -MigratePlayerBlobs -SourceDataRedis <src-addrs> -TargetDataRedis <dst-addrs>
+Step 5:正式执行(一条命令跑完 §3.1a 的全部步骤,顺序由工具保证)
+─────────────────────────────────────────────────────────────────
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone `
+  -MergeSourceZone <src> -MergeTargetZone <dst> -MergeExpectedSrcPlayers <N> `
+  -MergeManifestPath <repo>\merge_<src>_to_<dst>.json -MergeClearSourceHotState
+# 多 Redis 集群再加 -MergeMigratePlayerBlobs -MergeSourceDataRedis/-MergeTargetDataRedis
+# **清单路径记进维护工单** —— 它是重跑与撤销的唯一凭据
 
-# 5b. 再改 guild MySQL + ZSET + mapping(默认行为)
-# 注意:5a 命令已经包含了所有步骤;若分两步执行需要显式 -SkipMapping 等开关
+Step 6:合服后断言
+──────────────────
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit `
+  -MergeSourceZone <src> -MergeTargetZone <dst> -MergeExpectedSrcPlayers <N> -VerifyMerged
+# 六条 block 级断言,含 verify:merge_fence(围栏没清干净 = 建号建帮被永久拒绝)
+# 退出码 0=干净 / 1=有 block / 2=审计自己没跑成(结论不可信,不要当 1 处理)
 
-Step 6:玩家重名处理(若 #15 已实现)
-────────────────────────────────────
-# 工具会自动改名 + 写补偿邮件;无需人工
-
-Step 7:启动 target zone(承接所有玩家)
-──────────────────────────────────────
-pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up \
-  -ZoneName <target> -ZoneId <dst-id> -NodeImage <image> -WaitReady
+Step 7:启动 target zone
+────────────────────────
+pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
+  -ZoneName <target> -ZoneId <dst-id> -WaitReady
 
 Step 8:source zone 永久关停
 ───────────────────────────
-# 不再启动 source zone 的 K8s namespace
-# 但保留 MySQL 备份至少 90 天(应对客诉)
+# 它的 namespace 在 Step 2 就已经被删掉了,没有「保留 N 天」这一步。
+# 要保的是 MySQL / Redis 备份(现行 90 天口径)+ 那份清单文件。
 
 Step 9:开服公告
 ───────────────
-# 「合服已完成,补偿礼包请到邮箱领取」
-# 客服值班 24 小时应对客诉
+# POST /admin/zones/<dst>/open;source 保持维护态 / 从服务器列表下架
 ```
 
 ### 5.3 验证阶段(开服后第一小时)
@@ -256,39 +380,56 @@ Step 9:开服公告
 - **D+30**:source zone 数据备份归档冷存储(S3 Glacier 等);本地 MySQL 备份可删除
 - **D+90**:source zone 备份彻底删除(GDPR / 数据生命周期合规)
 
-### 5.5 回滚(只在 step 5-7 失败时执行)
+### 5.5 回滚
 
-```
-Step R1:停 target(刚启动的)
-─────────────────────────
-pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-down -ZoneName <target>
+> 🚫 **v1 的手工六步回滚(R1~R6)已于 2026-09-08 整体作废并删除。**
+>
+> 作废的核心理由是 **R2 那一步会造成数据事故**:它让运维「临时跑
+> `RemapHomeZoneForMerge(target → src)`」把 mapping 改回去。但那个 RPC 是**按值匹配**的
+> (`SCAN player:zone:* → 值 == target ⇒ 改成 source`),它分不清「这次合过来的玩家」和
+> **「目标区原住民」**——一跑下去,target 自己的玩家会被一起送进那个已经下线的 source zone。
+> 原文那句「但要小心:target 原本的玩家不能被改」根本没有可执行的落实手段。
+>
+> 而且这条路今天已经走不通了:该 RPC 现在**要求 `x-admin-token`**(没配 = 停用)
+> **且要求源 zone 的 `merge:in_progress:{source}` 围栏存在**——合服跑完围栏已经被释放,
+> 调用只会拿到 `FailedPrecondition`。
+>
+> R3/R4 的「从备份 SQL 里 grep 出来 UPDATE 回去」同样已被逐对象撤销取代;R5 的结论
+> (blob 不删也安全)被保留进了新实现的说明里。
 
-Step R2:恢复 mapping
-────────────────────
-# 把 player:zone:* 中值=target 但**应该**是 source 的玩家改回 source
-# 工具未提供反向 CLI,手动 SCAN+SET 或临时跑 RemapHomeZoneForMerge(target → src)
-# 但要小心:target 原本的玩家不能被改
+**当前唯一正确的回滚路径:按清单逐对象撤销。**
 
-Step R3:恢复 guild zone_id
-──────────────────────────
-# 从备份 SQL 里 grep 出 guild WHERE zone_id=src 的原始记录,UPDATE 回去
-# 或直接 LOAD DATA INFILE 覆盖(更暴力)
+```powershell
+# 先预演,看会动多少、有多少行会被拒绝删除
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge `
+  -MergeManifestPath <repo>\merge_<src>_to_<dst>_<ts>.json -DryRun
 
-Step R4:恢复 ZSET
-─────────────────
-# 从 RDB 备份里把 guild_rank:zone:{src} 还原
-
-Step R5:恢复 player blob(若做过 5a 跨集群拷贝)
-─────────────────────────────────────────────
-# target data Redis 上把多出来的 player:{src-pids}:* 删除
-# (或不删,反正 mapping 改回去后没人会读)
-
-Step R6:重启两个 zone
-──────────────────────
-# source 和 target 都重新拉起
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge `
+  -MergeManifestPath <repo>\merge_<src>_to_<dst>_<ts>.json
 ```
 
-**关键提醒**:**回滚比合服难 10 倍**。所以 §5.1 备份必须严格做。
+撤销顺序与合服**完全相反**(先改路由,再往回搬数据,这样任何一步失败时玩家的归属都指向
+一个**确实有他数据**的 zone):`7' 清公告 flag → 5' mapping 回 src → 4' ZSET 回 src →
+3' guild.zone_id 回 src + 缓存失效 → 1' 删目标库里与源库逐字节相同的玩家行`。
+
+两条硬保证,正是 R2 缺的那两条:
+
+- **只碰清单里列出的玩家 / 公会 / ZSET 成员**——目标区原住民按构造安全,不靠人「小心」。
+- **1' 只删与源库逐字节相同的行**。任何一行在合服后被改过(玩家登录过、领过邮件)就
+  **拒绝删除并报出来**——那时删掉的不是「拷贝」,而是合服后产生的唯一一份数据。
+  源库的行从来没删过,所以留一份多余副本是安全的(mapping 已经指回源区,没人会读)。
+  `player:{id}:*` blob 同理不自动删。
+
+**边界**:
+
+- 适用面 = **合服刚跑完、还没开服**。已经开服且玩家在 target 玩过 ⇒ 1' 会大面积「REFUSED」,
+  得到一个半撤销状态;这时应当**不要**撤销,转为单玩家修复(`RollbackPlayer`)。
+- **清单丢了 = `-mode unmerge` 不可用**,只能退到备份还原(代价:target 在窗口后的写入全丢)。
+  所以清单必须跟着维护工单归档。
+
+完整 SOP 见 [`merge-zone-runbook.md §10`](../ops/merge-zone-runbook.md)。
+
+**关键提醒**:**回滚比合服难 10 倍**。所以 §5.1 备份必须严格做,§5.2 Step 5 的清单必须留档。
 
 ---
 
@@ -329,13 +470,20 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up -ZoneName z102 -Zone
 go run -C robot/clients/cmd/multi_zone_seeder . -zone=101 -count=100
 go run -C robot/clients/cmd/multi_zone_seeder . -zone=102 -count=100
 
+# 2b. 回填 player:zone(存量玩家没有映射就不会被合过去)
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeBackfillZone 101
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone -MergeBackfillZone 102
+
 # 3. dry-run 合服
-pwsh -File tools/scripts/merge_zone.ps1 -SourceZone 102 -TargetZone 101 -DryRun
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone `
+  -MergeSourceZone 102 -MergeTargetZone 101 -MergeAssumeKafkaDrained -DryRun
 
 # 4. 正式合服
 pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-down -ZoneName z101
 pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-down -ZoneName z102
-pwsh -File tools/scripts/merge_zone.ps1 -SourceZone 102 -TargetZone 101 -Apply
+pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone `
+  -MergeSourceZone 102 -MergeTargetZone 101 -MergeExpectedSrcPlayers <N> `
+  -MergeManifestPath <repo>\merge_102_to_101.json -MergeAssumeKafkaDrained
 pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up -ZoneName z101 -ZoneId 101
 
 # 5. 验证 source 角色能登录 target
@@ -351,10 +499,12 @@ go run -C robot/clients/cmd/login_smoke . -gate=<gate-addr> -accounts=<src-accou
 ## 8. 文档关系图
 
 ```
-本文件(server_merge_design.md) — 单一权威 SOP
-├─ 实现:tools/merge_zone/main.go(CLI 源码)
-├─ 实现:tools/scripts/merge_zone.ps1(包装)
-├─ 实现:proto/data_service/data_service.proto:25(联机 RPC)
+本文件(server_merge_design.md) — 设计与历史决策
+├─ 可执行 SOP:docs/ops/merge-zone-runbook.md ← **运维按它逐字执行,不要按本文**
+├─ 仍开着的口子:docs/design/server-merge-gap-fixes.md
+├─ 实现:tools/merge_zone/(独立 go module;main.go 顶部注释 = 步骤顺序真源)
+├─ 实现:tools/scripts/dev_tools.ps1 的 merge-zone / merge-zone-audit / merge-zone-unmerge
+├─ 实现:proto/data_service/data_service.proto:25(联机 RPC,现需 admin token + 围栏)
 ├─ 上游约束:mmo_cross_server_architecture.md §6/§9(player_id 设计 / 合服策略)
 ├─ 上游约束:enter-scene-zone-routing.md(home zone 路由约束)
 ├─ 引用:guild_ranking_architecture.md §合服工具(公会榜合并细节)
@@ -366,4 +516,19 @@ go run -C robot/clients/cmd/login_smoke . -gate=<gate-addr> -accounts=<src-accou
 
 ## 9. Changelog
 
+- **2026-09-08 v2**: 与 2026-09 的合服大修对齐。**历史叙述保留,作废段落就地标注而不是悄悄改写**:
+  - §3.1 保留 v1 原文并标「已被 §3.1a 取代」,另列出其中三条已作废的说法(玩家主数据必须搬 /
+    公会重名从「跳过」改「中止」/ ZSET 合并改 MULTI/EXEC + 维护锁)。
+  - **新增 §3.1a**(当前 P1→G→P2..P6→F→M→1..7 的真实步骤顺序)与 **§3.5**(Redis 库地图 + 围栏契约)。
+  - §3.2 更正:`tools/scripts/merge_zone.ps1` **从来不存在**;旧 `dev_tools.ps1` 在仓库根跑
+    `go run ./tools/merge_zone` 恒失败(独立 module)——**这个入口在修复前从没真正合过一次服**。
+  - §3.3 补上 `RemapHomeZoneForMerge` 现在的两道闸(admin token + 围栏必须在),用途收窄。
+  - §3.4 / §5.2 / §7.1 命令改为真实入口;topic 名从 `db_task_topic` 更正为 `db_task_zone_{zone}[_g{gen}]`;
+    网关维护接口更正为 `POST /admin/zones/{zoneId}/maintenance` + `X-Admin-Key`;
+    `mysql-backup` CronJob 只在 `mmorpg-infra` 有一份;`k8s-zone-down` = 删 namespace。
+  - **§5.5 删除 v1 的手工六步回滚**。R2 让运维跑 `RemapHomeZoneForMerge(target → src)`,而该 RPC
+    **按值匹配**,会把目标区原住民一起送进已下线的源区;今天它还要 admin token + 源区围栏,合服后
+    根本调不通。回滚改为指向 `merge-zone-unmerge -MergeManifestPath`(逐对象、只碰清单里的对象、
+    只删与源库逐字节相同的行)。
+  - §5.1 增加「存量 `player:zone` 回填」为强制前置。
 - **2026-05-15 v1**: 初版,从 `merge_zone/main.go`、`mmo_cross_server_architecture.md §9`、`guild_ranking_architecture.md §合服工具`、`enter-scene-zone-routing.md` 收口而成。明确 SOP、回滚流程、未覆盖项。

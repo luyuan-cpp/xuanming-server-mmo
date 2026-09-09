@@ -45,6 +45,14 @@ const nodeType = login_proto.ENodeType_LoginNodeService
 // 内能铸到的毫秒,继任者只需等墙钟越过水位即可,无需再加猜测性余量。
 const playerIDWatermarkLeadMs = 2000
 
+// PlayerId 的 bwmarrin node 段固定 13 位,切成 [cluster3][slot10](设计稿 §5)。
+// 存量 PlayerId 的 node 值 ≤ 几百 = 新布局 cluster 0 的 slot,逐位不撞;两个常量与
+// 配置里的 Snowflake.NodeBits 必须一致,启动时校验,不一致就拒绝起服。
+const (
+	playerIDNodeBits    = 13
+	playerIDClusterBits = 3
+)
+
 func main() {
 	flag.Parse()
 
@@ -68,7 +76,15 @@ func main() {
 		config.AppConfig.Node.ZoneId, config.AppConfig.Kafka.TopicGeneration)
 
 	// Ensure db_task topic exists with configured retention.
-	// Ephemeral topics (gate-*, scene-*) use broker default (short retention).
+	//
+	// 控制面命令 topic(gate-cmd_g<N> / scene-cmd_g<N>)**刻意不在这里建**:
+	// 它的分区数是不可变的寻址契约(partition = node_id % P),必须由基础设施
+	// 引导阶段统一按 256 分区 + 1 小时保留期建好 —— deploy/docker-compose.yml 的
+	// kafka-topic-init 或 k8s_deploy.ps1 -Command infra-kafka-topics,
+	// 且必须早于任何 gate/scene 启动。任何服务在这里抢先预建都会引入第二个真源,
+	// 分区数一旦与契约不符,命令就落到没人 assign 的分区上、静默全丢。
+	// 见 docs/design/control-plane-topic-partitioning-20260908.md §3.1 / §7。
+	// (老的一节点一 topic gate-<id> / scene-<id> 已停用,login 是最后一个切换的生产者。)
 	if err := kafkautil.EnsureTopics(config.AppConfig.Kafka.Brokers, []kafkautil.TopicSpec{
 		{
 			Name:        config.AppConfig.Kafka.Topic,
@@ -137,10 +153,12 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 	// 但写路径是 INSERT ... ON DUPLICATE KEY UPDATE —— 重复 PlayerId 不报错,
 	// 而是**静默改写另一个玩家的行**(串档),比报错更糟。唯一性必须在铸号侧保证。
 	//
-	// 与 guild / scene_manager 同一套机制:独立 lease + hostname 亲和 + 失租自 fencing。
-	// ⚠️ MaxWorkerID 必须显式钳到 bwmarrin 的 node 位宽(13 bit ⇒ 8191):
-	// snowflakealloc 默认上界取 shared/snowflake.NodeMask(131071),超出会让
-	// snowflake.NewNode 直接失败。
+	// 与 guild / scene_manager 同一套机制:独立 lease + hostname 亲和 + 隔离期选号 +
+	// 水位年龄自 fence。kind="login-player" 是全球唯一的 PlayerId 号源。
+	// ⚠️ 位宽必须显式告诉分配器:bwmarrin 的 13 位 node 段切成 [cluster3][slot10]
+	// (设计稿 §5),槽号 ≤ 1023,worker id = cluster<<10 | slot 直接喂给 bwmarrin。
+	// snowflakealloc 默认按 shared/snowflake 的 [cluster5][slot12] 切,喂给 13 位的
+	// bwmarrin 会溢出。
 	etcdCli, err := node.NewEtcdClient() // 复用 login 既有的 etcd 客户端工厂,不另拼一份配置
 	if err != nil {
 		logx.Errorf("Failed to create etcd client for snowflake worker id: %v", err)
@@ -153,17 +171,32 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 		logx.Errorf("Failed to get hostname: %v", err)
 		return err
 	}
-	maxWorkerID := uint64(1)<<uint(config.AppConfig.Snowflake.NodeBits) - 1
+	if config.AppConfig.Snowflake.NodeBits != playerIDNodeBits {
+		err = fmt.Errorf("Snowflake.NodeBits=%d but the PlayerId cluster/slot layout is fixed at %d bits "+
+			"(cluster%d/slot%d); changing NodeBits would invalidate every existing PlayerId",
+			config.AppConfig.Snowflake.NodeBits, playerIDNodeBits, playerIDClusterBits, playerIDNodeBits-playerIDClusterBits)
+		logx.Errorf("%v", err)
+		return err
+	}
 	sfCtx, sfCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	sfHandle, err := snowflakealloc.AllocateWithKeepAlive(sfCtx, etcdCli, "/login", hostname,
-		snowflakealloc.Options{LeaseTTL: 60, MaxWorkerID: maxWorkerID})
+	sfHandle, err := snowflakealloc.AllocateWithKeepAlive(sfCtx, etcdCli, "login-player", hostname,
+		snowflakealloc.Options{
+			LeaseTTL:     60,
+			ClusterID:    config.AppConfig.ClusterId,
+			ClusterBits:  playerIDClusterBits,
+			SlotBits:     playerIDNodeBits - playerIDClusterBits,
+			LegacyPrefix: "/login",
+			// 缓存文件名带监听端口:本地按 -Zone 起的两个 login 各自一份,不互相覆盖。
+			CachePath: snowflakealloc.DefaultCachePath(config.AppConfig.SnowflakeCacheDir, "login-player",
+				fmt.Sprintf("%s_%d", hostname, port)),
+		})
 	sfCancel()
 	if err != nil {
 		logx.Errorf("Failed to allocate snowflake worker id: %v", err)
 		return err
 	}
 	defer sfHandle.Close()
-	logx.Infof("Login snowflake worker id = %d (host=%s, max=%d)", sfHandle.WorkerID, hostname, maxWorkerID)
+	logx.Infof("Login snowflake %s worker_id=%d (host=%s)", sfHandle.LogFields(), sfHandle.WorkerID, hostname)
 
 	// 毫秒级水位地板:防"墙钟回拨 + 重启"跨进程重放 PlayerId。
 	//
@@ -193,9 +226,19 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 
 	ctx.SetNodeId(int64(sfHandle.WorkerID))
 
+	// 水位年龄自 fence(设计稿 §3.4):PlayerIDGen 与 shared/snowflake.Node 共用同一个
+	// FenceClock —— 距上次水位写成功超过 F(2h)就拒发,判定放在 Generate() 里。
+	// 同时把发号器登记到 Handle:Close() / 失去所有权时先 Fence 它。
+	ctx.SnowFlake.SetFenceClock(sfHandle.FenceClock())
+	sfHandle.AttachFencer(ctx.SnowFlake)
+
 	// **同步写一次水位再开始服务**:否则从这里到下面 goroutine 的第一个 tick 之间
 	// (≤1s)已经能铸 PlayerId,而 etcd 里还是前任的旧水位 —— 这段发出的号不被任何
-	// 地板覆盖,崩溃 + 时钟回拨即可被继任者重放。写失败只告警(同下面的循环)。
+	// 地板覆盖,崩溃 + 时钟回拨即可被继任者重放。秒级水位(隔离期用)与毫秒水位
+	// (bwmarrin 地板)各写一次;写失败只告警,但闸不 Ack ⇒ 发号器拒发到写成功为止。
+	if !sfHandle.SyncWatermark(context.Background()) {
+		logx.Error("Initial PlayerId slot watermark write failed; minting stays fenced until a watermark write succeeds")
+	}
 	if err := sfHandle.PutMsWatermark(context.Background(),
 		ctx.SnowFlake.NowUnixMs()+playerIDWatermarkLeadMs); err != nil {
 		logx.Errorf("Initial PlayerId ms watermark write failed (the first second of minting is "+
@@ -223,14 +266,16 @@ func startGRPCServer(cfg config.Config, ctx *svc.ServiceContext) error {
 		}
 	})
 
-	// 失租 = 本进程不再拥有这个机器位,必须立刻停止铸 PlayerId。
+	// Lost() = 本进程**确认**不再拥有这个槽(slots key 被挂到了别的 uuid 上),必须立刻
+	// 停止铸 PlayerId。lease 抖动 / etcd 不可达不会走到这里(分配器自己 reclaim),那段
+	// 时间由 Generate() 里的水位年龄判定兜住(ErrWatermarkStale,暂态)。
 	// **不能只靠停服**:go-zero 的 zrpc.RpcServer.Stop() 实测只有一行 logx.Close(),
 	// 既不拒新请求也不排空在途。所以正确性由 Fence() 保证(之后 Generate 一律失败,
 	// 建角整体失败),可用性由进程退出 + 编排重拉保证。
 	safego.Go("login.snowflake_lease_fence", func() {
 		<-sfHandle.Lost()
 		ctx.SnowFlake.Fence() // ① 先关闸
-		logx.Error("Login snowflake worker id lease lost; player id generator fenced, exiting to let the " +
+		logx.Error("Login snowflake slot ownership lost; player id generator fenced, exiting to let the " +
 			"orchestrator restart (zrpc Stop() only closes the logger and cannot stop serving)")
 		logx.Close() // ② 冲掉日志缓冲
 		os.Exit(1)   // ③ 退出;重启后拿新 worker id

@@ -12,6 +12,7 @@ import (
 	matchkafka "match/internal/kafka"
 	"match/internal/metrics"
 
+	"shared/kafkacmd"
 	"shared/kafkautil"
 	"shared/snowflake"
 	"shared/snowflakealloc"
@@ -83,15 +84,17 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic("failed to create etcd client: " + err.Error())
 	}
 
-	// 通过 shared/snowflakealloc 拿独立的 Snowflake worker id(照 scene_manager):
-	// prefix="/match" 与 NodeInfo.NodeId 解耦,reRegister 换业务 node_id 不影响发号;
-	// 同亲和键重启复用同一 worker id,Handle.NewNode 注入前任高水位地板。
+	// 通过 shared/snowflakealloc 申领独立的 Snowflake 槽位(照 scene_manager):
+	// kind="match" 与 NodeInfo.NodeId 解耦,reRegister 换业务 node_id 不影响发号;
+	// 同亲和键优雅重启复用同槽,Handle.NewNode 注入前任高水位地板 + 水位年龄自 fence。
+	// ClusterId 由运维按集群设定(默认 0);LegacyPrefix="/match" 让 cluster 0 在滚动升级期
+	// 仍读旧布局的水位 / 活 id(发布一版后可删)。
 	//
-	// 亲和键 = hostname#ListenOn 而非裸 hostname(设计决策 D5b):snowflakealloc
-	// 按亲和键复用 worker id 且不校验旧持有者是否存活(allocator.go 的 CAS 只比
-	// nodeKey 的 value),同一主机上两个 match 进程(本地双 zone / -Counts match=2)
-	// 用裸 hostname 会拿到同一 worker id → battle_id / challenge_id 撞号。加上监听
-	// 地址后同机多进程各自一把键;同一进程重启仍复用原 id。
+	// 亲和键 = hostname#ListenOn 而非裸 hostname(设计决策 D5b):同一主机上两个 match
+	// 进程(本地双 zone / -Counts match=2)用裸 hostname 会互相覆盖亲和键,失去"重启
+	// 复用同槽"这一优化(分配器如今只在前任优雅退出、三元组同 lease 时才复用,不会再
+	// 抢活着的槽,所以这只关乎复用率,不关乎正确性)。加上监听地址后同机多进程各自
+	// 一把键、各自一份本地缓存文件;同一进程重启仍复用原槽。
 	host, err := os.Hostname()
 	if err != nil {
 		panic(fmt.Sprintf("snowflake: failed to get hostname: %v", err))
@@ -99,11 +102,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	affinityKey := fmt.Sprintf("%s#%s", host, c.ListenOn)
 	allocCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	hd, err := snowflakealloc.AllocateWithKeepAlive(allocCtx, etcdCli, "/match", affinityKey, snowflakealloc.Options{LeaseTTL: 60})
+	hd, err := snowflakealloc.AllocateWithKeepAlive(allocCtx, etcdCli, "match", affinityKey, snowflakealloc.Options{
+		LeaseTTL:     60,
+		ClusterID:    c.ClusterId,
+		LegacyPrefix: "/match",
+		CachePath:    snowflakealloc.DefaultCachePath(c.SnowflakeCacheDir, "match", affinityKey),
+	})
 	if err != nil {
 		panic(fmt.Sprintf("snowflake worker id alloc failed: %v", err))
 	}
-	logx.Infof("[match] snowflake worker id = %d (affinity=%s)", hd.WorkerID, affinityKey)
+	logx.Infof("[match] snowflake %s worker_id=%d (affinity=%s)", hd.LogFields(), hd.WorkerID, affinityKey)
 
 	matchRds, sharedRds := NewRedisHandles(c)
 	sc := &ServiceContext{
@@ -124,9 +132,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 	sc.Kafka = &kafka.Writer{
 		Addr: kafka.TCP(c.Kafka.Brokers...),
-		// Hash 按消息 Key(player_id)选分区(项目不变量:kafka key =
-		// 业务实体 ID,同一玩家的推送必须有序)。
-		Balancer:               &kafka.Hash{},
+		// 控制面命令 topic(gate-cmd_gN)必须按 node_id % P 落到**指定分区**:
+		// 消费端 assign 的就是那一个分区,落错分区 = 目标 gate 永远收不到,
+		// 而 Kafka 一个错都不报(docs/design/control-plane-topic-partitioning-20260908.md)。
+		// kafka-go 的 Writer 在写入路径上忽略 Message.Partition、只问 Balancer。
+		//
+		// 其它 topic 仍走 Hash 按消息 Key(player_id)选分区(项目不变量:
+		// kafka key = 业务实体 ID,同一玩家的推送必须有序)。
+		Balancer:               &kafkacmd.CommandPartitionBalancer{Fallback: &kafka.Hash{}},
 		AllowAutoTopicCreation: true,
 		BatchTimeout:           10 * time.Millisecond,
 		MaxAttempts:            1,

@@ -5,11 +5,35 @@ Etcd:
     - 127.0.0.1:2379
   Key: dataservice.rpc
 
-# Global mapping Redis: stores player_id → home_zone_id
+# C++ 约定的 etcd 注册(node-id-overhaul-plan §6.4 Phase 5,internal/noderegistry):除了 go-zero 自己的
+# dataservice.rpc 键(C++ 看不见),data_service 还按 C++ NodeInfo 约定写两把 key,挂同一把租约:
+#   DataServiceNodeService.rpc/zone/<ZoneId>/node_type/26/node_id/<N>   → protojson NodeInfo(ip:port)
+#   DataServiceNodeService.rpc/allocated/node_type/26/node_id/<N>       → node uuid(node_id 跨 zone 唯一占位)
+# scene 靠它发现 data_service 并调 AllocateIdSegment 领 item / txlog / snapshot 号段,发现不到就永远过不了
+# DependencyGate,所以注册失败在启动期是致命的(panic,与 scene_manager 同)。注册在 gRPC 端口真正 accept 之后。
+# 对外 IP:POD_IP 环境变量优先(K8s Downward API),否则 ListenOn 的 host,0.0.0.0 时取本机非 loopback IP。
+# ZoneId:DataServiceNodeService 不是 zone-scoped 节点类型,C++ 发现侧不按 zone 过滤,填哪个 zone 都能被发现;
+#   写 Pod 所在的 zone 只是排障时对得上号。可省略(默认 0);k8s ConfigMap 写部署 zone。
+# LeaseTTL:上面那把租约的 TTL(秒),与 scene_manager / match 同形;k8s ConfigMap 从这里镜像。
+ZoneId: 1
+LeaseTTL: 60
+
+# Global mapping Redis: stores player_id → home_zone_id (player:zone:{id}),
+# 以及合服闸门 merge:in_progress:{zone}(见 internal/routing/router.go)。
+#
+# ⚠ 这里**没有 DB 键**,而且不能加:go-zero 的 redis.RedisConf 只有
+#   Host / Type / User / Pass / Tls / NonBlock / PingTimeout,压根没有 DB 字段。
+#   以前这里写着 `DB: 15`,go-zero 的 unmarshaler 按结构体字段取值、不认多余键,
+#   于是那一行被**静默忽略**,映射实际一直落在 **DB 0**(已实测确认)。
+#   删掉它是为了让文件与运行时一致 —— 留着比没有更危险:
+#   tools/merge_zone 有 -mapping-redis-db 参数,运维照着这份 yaml 填 15,
+#   合服标记与 remap 就会全部打进一个 data_service 从来不看的库,
+#   闸门形同虚设而且 remap 一个玩家都改不到,却报"成功"。
+#   真要分库,得先给 config.Config 加一段自带 DB 的结构(不能用 go-zero 的 RedisConf),
+#   同时改 tools/merge_zone 与所有直连这把 Redis 的运维脚本。
 MappingRedis:
   Host: 127.0.0.1:6379
   Type: node
-  DB: 15
 
 # Zone → Region → Redis Cluster routing
 Regions:
@@ -52,3 +76,69 @@ LoginAdminRpc:
     Hosts:
       - 127.0.0.1:2379
     Key: login.rpc
+
+# 运维 RPC 的共享口令。调用方放在 gRPC metadata 的 `x-admin-token` 里。
+# 目前只守着 RemapHomeZoneForMerge —— 一次调用改写全服玩家的归属 zone,而且没有
+# 反向操作(要改回去得先知道谁原本在哪个 zone,那份信息刚被覆盖掉)。
+#
+# **不写这一行(或写空串)= 该 RPC 整体停用**,不是免鉴权。这是刻意的默认值:
+# data_service 在集群内网无鉴权可达,默认敞开意味着任何能拨到它的进程都能搬全服玩家。
+# 合服维护窗口里临时下发,窗口结束撤掉;生产建议由 k8s Secret 注入而不是明文写在这里。
+#
+# 光有 token 还不够:remap 还要求源 zone 已立 merge:in_progress:{source} 标记
+# (见 internal/routing/router.go 的合服闸门契约),两道闸都过才执行。
+# AdminToken: ""
+
+# 全局库四张表(transaction_log / player_snapshot / rollback_audit_log / id_segment)的建表策略。
+# AutoMigrate=true:启动时按 proto(rollback_database_table.proto)用 proto2mysql 建表/补列。
+# 生产必须**显式**设 false(多副本并发 ALTER 会互相 MDL 阻塞),改在部署阶段跑一次:
+#   data_service -f etc/data_service.yaml -migrate
+# 整段 `Schema:` 缺失(或写成 `Schema: {}`)时按 true 处理 —— 安全默认是"表一定在"。
+# 注意这不是 go-zero 的 default 标签给的:go-zero 不下钻一个未出现的 optional 结构,
+# 所以 AutoMigrate 在代码里是 *bool,nil = 没配 = 建表(见 internal/config/config.go)。
+Schema:
+  AutoMigrate: true
+
+# 号段表 id_segment 的**行**生命周期(设计 node-id-overhaul-plan-20260908.md §7.5 第 7 条)。
+# 每一行都是一个永久身份(player_id / guild_id / item guid / tx_id / snapshot_id)的发号水位:
+# 行丢了(全局库 drop 重建、从旧备份恢复)而消费表还留着已发出的号,下一次发号会从 1 重来,
+# login 的 INSERT ... ON DUPLICATE KEY UPDATE 会静默覆盖别人的角色行。所以:
+#   AllowAutoSeed: 运行期遇到表里没有的 biz_tag 是否自动种一行从 1 起。
+#     **生产必须保持 false / 不写**(整段缺失 = false):缺行 → ErrCodeIdSegmentUnknownTag,不写任何行。
+#     这里 dev 设 true 只是为了本地随手换 tag 不必先跑迁移;k8s ConfigMap 按 profile 镜像本键
+#     (dev 取服务 yaml,staging/prod 固定 false)。
+#   BootstrapTags: 迁移(AutoMigrate / `-migrate`)用 INSERT IGNORE 预建的 tag,max_id=1 step=100
+#     version=0,幂等、绝不降低已有行。没配 = 默认五种。新增永久身份 = 在这里加 tag。
+# 迁移还会把 player / guild 行的 max_id 抬到 MAX(消费表主键)+1(只在同库能查到该表时;
+# item / txlog / snapshot 的号在 blob / Kafka 里查不到)。恢复全局库前必须按运维手册核对
+# max_id ≥ 消费表最大号,这是 ID 安全事件,不是普通的库恢复。
+IdSegment:
+  AllowAutoSeed: true      # dev only;生产必须 false
+  BootstrapTags: [player, guild, item, txlog, snapshot]
+
+# C++ scene 产出的交易流水 / 玩家快照落库消费者。Brokers 留空 = 不消费(本地无 Kafka 合法)。
+# Kafka 不可达不影响 Load/Save,只记日志并每 30s 后台重试。
+#
+# 真正使用的 topic 名 = <基名>_g<TopicGeneration>,即默认
+#   transaction_log_topic_g1 / player_snapshot_topic_g1
+# C++ 生产者(cpp/libs/modules/{transaction_log,snapshot}/*.h 里的 topic 常量)必须用同样的名字。
+# 为什么连第一代也带后缀:broker 开着 auto.create.topics.enable 且 num.partitions=1
+# (deploy/docker-compose.yml KAFKA_NUM_PARTITIONS=1),生产者一发消息就把**裸名字**的 topic
+# 自动建成 1 分区;EnsureTopics 拿 6/3 的契约去比只会永远报 partition contract mismatch,
+# 两条消费者一条都起不来。带代号的名字与那两个自动建出来的裸 topic 互不相干。
+# 部署侧应当预建这两个 topic 并给足分区(6 / 3),别依赖自动创建。
+#
+# 分区数是不可变契约(EnsureTopics 会拒绝与 broker 现状不一致的值),现在就定够。
+# 要改分区数 = TopicGeneration +1(换一批新 topic,老 topic 排空后删),
+# **绝不**原地扩分区:扩分区会重映射 key=player_id 的哈希,同一玩家的流水顺序就断了。
+Kafka:
+  Brokers:
+    - 127.0.0.1:9092
+  TopicGeneration: 1
+  TransactionLogTopic: transaction_log_topic   # 基名;有效名带 _g<TopicGeneration>
+  TransactionLogPartitions: 6
+  TransactionLogConsumerGroup: data_service-transaction-log
+  SnapshotTopic: player_snapshot_topic         # 基名;同上
+  SnapshotPartitions: 3
+  SnapshotConsumerGroup: data_service-player-snapshot
+  RetentionMs: 2592000000   # 30 天:消费者因 DB 故障停下期间的积压必须在此窗口内补完

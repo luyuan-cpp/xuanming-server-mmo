@@ -24,6 +24,12 @@ message ProcessClientPlayerMessageRequest
 {
   MessageContent message_content = 1;
   uint32 session_id = 2;
+  // 反向(gate -> scene)的身份栅栏,与 NodeMessageHeader.target_player_id 对称
+  // (routing-identity-audit-20260908.md R13 的反向面)。gate 复用 node_id 之后,
+  // scene 的 SessionMap 里可能仍留着"旧 gate 的同号 session -> A 玩家"的映射,
+  // 而新 gate 上同一个 session 号已经属于 B —— 不带玩家身份的话 B 的客户端消息
+  // 会被派发到 A 的实体上执行。0 = 老 gate(灰度窗口),scene 放行不校验。
+  uint64 player_id = 3;
 }
 
 message ProcessClientPlayerMessageResponse

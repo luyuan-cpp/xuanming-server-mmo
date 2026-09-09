@@ -45,7 +45,7 @@ func isSessionOnline(session *plpb.PlayerSession) bool {
 
 var errPlayerOffline = errors.New("玩家不在线")
 
-// pushToPlayer 把 S2C 消息经 Kafka gate-{id} 推给玩家客户端
+// pushToPlayer 把 S2C 消息经 Kafka gate-cmd_g<N> 的 gate_node_id % P 号分区推给玩家客户端
 // (设计决策 D6 下行路径;共享收口 kafkautil.PushToPlayer 会 fail-closed
 // 拒绝空 gate_instance_id,防僵尸不变量)。
 func pushToPlayer(svcCtx *svc.ServiceContext, playerId uint64, messageId uint32, msg proto.Message) error {

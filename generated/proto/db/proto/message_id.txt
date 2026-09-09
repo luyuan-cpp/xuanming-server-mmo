@@ -178,3 +178,4 @@
 177=BattleClientPlayerNotifyBattleAssigned
 178=BattleNodeIssueBattleTicket
 179=MatchServiceRequestBattleTicket
+180=DataServiceAllocateIdSegment

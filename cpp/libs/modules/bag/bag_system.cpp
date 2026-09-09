@@ -244,10 +244,12 @@ uint32_t Bag::ReserveForBatchAdd(const ItemCountMap &itemsToAdd,
 	// ③ 铸号。这个重载的调用方从不预设 guid,"要新建实例"就等价于"要铸号"。
 	//    plannedInstances == 0(纯并堆)时不会触发腾位(CanReserve 恒真),所以不必
 	//    担心"腾位后需求从 0 变正却铸不了号"。
-	if (plannedInstances > 0 && !ItemStore::CanMintGuid())
+	//    按需求量问(CanMintGuids):号段是有限库存,段尾只剩几个号时"能铸一个"不等于
+	//    "能铸完整批",半批落地就是复制道具的温床。
+	if (plannedInstances > 0 && !ItemStore::CanMintGuids(plannedInstances))
 	{
-		LOG_ERROR << "Bag::ReserveForBatchAdd: item guid generator unavailable (fenced or "
-			<< "uninitialised), refusing the whole batch of " << itemsToAdd.size()
+		LOG_ERROR << "Bag::ReserveForBatchAdd: item guid source unavailable (fenced, "
+			<< "uninitialised or segment exhausted), refusing the whole batch of " << itemsToAdd.size()
 			<< " config(s) needing " << plannedInstances << " new instance(s) for player "
 			<< PlayerGuid();
 		return PrintStackAndReturnError(kBagAddItemInvalidParam);
@@ -313,13 +315,17 @@ uint32_t Bag::ReserveForBatchAdd(const std::vector<InitItemParam> &itemsToAdd,
 	}
 
 	// ④ 铸号。除去沿用预设 guid 的那些,剩下要新建的实例都得铸号。
-	if (!ItemStore::CanMintGuid())
+	//    按需求量问(CanMintGuids):号段是有限库存,"能铸一个"不等于"能铸完整批"。
+	//    全部沿用预设 guid(需求 0)时至少要问 1 个 —— 下面的腾位分支仍然依赖发号源可用。
+	const std::size_t mintedInstances =
+		instancesNeeded > preassignedInstances ? instancesNeeded - preassignedInstances : 0;
+	if (!ItemStore::CanMintGuids(mintedInstances > 0 ? mintedInstances : 1))
 	{
-		if (instancesNeeded > preassignedInstances)
+		if (mintedInstances > 0)
 		{
-			LOG_ERROR << "Bag::ReserveForBatchAdd: item guid generator unavailable (fenced or "
-				<< "uninitialised), refusing the whole batch of " << itemsToAdd.size()
-				<< " piece(s) needing " << (instancesNeeded - preassignedInstances)
+			LOG_ERROR << "Bag::ReserveForBatchAdd: item guid source unavailable (fenced, "
+				<< "uninitialised or segment exhausted), refusing the whole batch of " << itemsToAdd.size()
+				<< " piece(s) needing " << mintedInstances
 				<< " minted instance(s) for player " << PlayerGuid();
 			return PrintStackAndReturnError(kBagAddItemInvalidParam);
 		}
@@ -596,11 +602,12 @@ uint32_t Bag::AddNonStackableItem(ItemComp itemProto, std::vector<Guid> *written
 	// 任何一个零副作用的预检排在它后面,就会出现"已经挤掉了玩家最早那件东西,
 	// 然后整批拒绝"—— 东西白丢了。这条纪律与三段式同源:所有可能失败且不改
 	// 状态的判断,一律排在唯一会改状态的那一步之前。
+	// willMint 时每一件都铸号(pieceCount 件);号段是有限库存,按件数问,别问"能铸一个"。
 	const bool willMint = !honorPreassignedGuid || ItemStore::IsInvalidGuid(itemProto);
-	if (willMint && !ItemStore::CanMintGuid())
+	if (willMint && !ItemStore::CanMintGuids(pieceCount))
 	{
-		LOG_ERROR << "AddNonStackableItem: item guid generator unavailable (fenced or uninitialised), "
-			<< "refusing to add config " << itemProto.config_id() << " x" << pieceCount
+		LOG_ERROR << "AddNonStackableItem: item guid source unavailable (fenced, uninitialised or "
+			<< "segment exhausted), refusing to add config " << itemProto.config_id() << " x" << pieceCount
 			<< " for player " << PlayerGuid();
 		return PrintStackAndReturnError(kBagAddItemInvalidParam);
 	}
@@ -751,10 +758,13 @@ uint32_t Bag::AddStackableItem(ItemComp itemProto, uint32_t maxStackSize,
 		//
 		// 这里刻意**保守**:万一腾位之后重新规划发现全并得进去、根本不用铸号,
 		// 我们也已经拒绝了。宁可少收一次,不可错杀一件。
-		if (!ItemStore::CanMintGuid())
+		// 按**上界**问:腾位可能挤掉本次打算并进去的未满堆,重规划后新建实例只会比现在
+		// 的 newInstanceCount 多,最多是"一个都并不进去"的 StacksNeededFor(size)。号段是
+		// 有限库存,库存够这个上界才保证重规划后不会在循环中途铸出哨兵。
+		if (!ItemStore::CanMintGuids(ItemStore::StacksNeededFor(itemProto.size(), maxStackSize)))
 		{
-			LOG_ERROR << "AddStackableItem: item guid generator unavailable (fenced or uninitialised), "
-				<< "refusing to add config " << itemProto.config_id() << " x" << itemProto.size()
+			LOG_ERROR << "AddStackableItem: item guid source unavailable (fenced, uninitialised or "
+				<< "segment exhausted), refusing to add config " << itemProto.config_id() << " x" << itemProto.size()
 				<< " for player " << PlayerGuid();
 			return PrintStackAndReturnError(kBagAddItemInvalidParam);
 		}

@@ -12,6 +12,10 @@ import (
 
 // Layout matches C++ SnowFlake: [time:32][node:17][step:15]
 // Epoch: 2026-03-14 00:00:00 UTC (1773446400)
+//
+// 17 位 worker(node)段对本包是**不透明**的一个整数:发号器只要求它 ≤ NodeMask,
+// 不知道也不关心它内部有没有子段。部署拓扑(cluster / slot)的拆合是分配器的事,
+// 见 shared/snowflakealloc/layout.go —— 那边用这里的公开位宽 NodeBits / StepBits 拆 id。
 const (
 	Epoch    uint64 = 1773446400
 	NodeBits uint64 = 17
@@ -61,6 +65,14 @@ type Node struct {
 	// 而不必跟发号路径抢 mu(失租时发号可能正阻塞在 waitNextTime 里)。
 	fenced atomic.Bool
 
+	// fenceClock 是"按水位年龄自 fence"的闸(见 FenceClock):持有者每秒把水位写进
+	// etcd,写成功即 Ack;距上次 Ack 超过 F 就拒发。判定放在 Generate() 里而不是只靠
+	// 后台 ticker,堵住"进程解冻后请求线程先于 ticker 发出第一个号"的竞争。
+	// nil = 不启用(裸 NewNode 的测试 / 无分配器场景)。
+	fenceClock atomic.Pointer[FenceClock]
+	// lastStaleLogSec 限制水位过期拒发的 ERROR 日志为每墙钟秒一条(atomic,无锁路径)。
+	lastStaleLogSec atomic.Int64
+
 	// bootGuardPending 表示 NewNode 的启动 guard 刚把 step 池置满、且尚未被首个
 	// Generate() 消化。只用于抑制"guard 造成的首次耗尽"的误报,不影响发号语义。
 	bootGuardPending bool
@@ -70,12 +82,13 @@ type Node struct {
 // step 置满,于是第一个 ID 一定落在下一秒。
 //
 // 这不是保守,是必需的:
-//   - worker id / node_id 的回收是"上一任进程退出即释放" —— internal/node.Close()
-//     与 snowflakealloc.Handle.Close() 都会立刻 Delete key + Revoke lease;
-//   - snowflakealloc 还有 hostname 亲和,同一台机器上重启**必然**拿回同一个 worker id;
+//   - snowflakealloc 有 hostname 亲和:前任优雅退出(Close 写 released 标记,
+//     **不** Delete key、**不** Revoke lease,key 随 lease 自然过期)后,同一台机器上
+//     重启会通过复用分支拿回同一个 worker id,并以前任水位为地板;
+//   - internal/node.Close() 那套服务发现 key 仍是"退出即释放",但它不再参与发号;
 //   - 本包是秒级时间戳,新进程从 step=0 重新开始。
 //
-// 三者叠加的结果是:进程在同一日历秒内重启,新老进程发出来的号**逐位相同**。
+// 叠加的结果是:进程在同一日历秒内重启,新老进程发出来的号**逐位相同**。
 // C++ 侧一直用 SnowFlakeGuard 挡这个窗口(见 etcd_service.cpp ActivateSnowFlakeAfterGuard),
 // Go 侧此前没有任何防护 —— 见 docs/design/snowflake-node-id-lease-recycling.md 里
 // "Go lacks the SnowFlakeGuard mechanism" 那条,当时被判成"hostname key 就是 guard",
@@ -160,14 +173,46 @@ func (n *Node) Fence() { n.fenced.Store(true) }
 // IsFenced 供调用方在昂贵操作前提前判断,避免做完一堆活才发现发不了号。
 func (n *Node) IsFenced() bool { return n.fenced.Load() }
 
+// SetFenceClock 挂上"按水位年龄自 fence"的闸。由 snowflakealloc.Handle.NewNode 调用;
+// 之后每次 Generate 先问 fc.Stale(),过期即拒发(ErrWatermarkStale)。
+// 传 nil 等于摘掉闸。
+func (n *Node) SetFenceClock(fc *FenceClock) { n.fenceClock.Store(fc) }
+
+// FenceClock 返回当前挂着的闸(可能为 nil)。
+func (n *Node) FenceClock() *FenceClock { return n.fenceClock.Load() }
+
+// checkWatermarkAge 是 Generate 的入口判定:距上次水位写成功超过 F 就拒发。
+// 日志按墙钟秒限频 —— 过期期间每次请求都会走到这里。
+func (n *Node) checkWatermarkAge() error {
+	fc := n.fenceClock.Load()
+	if fc == nil {
+		return nil
+	}
+	stale, age := fc.Stale()
+	if !stale {
+		return nil
+	}
+	if sec := time.Now().Unix(); n.lastStaleLogSec.Swap(sec) != sec {
+		logx.Errorf("[snowflake] watermark ack is %v old (budget %v): worker_id=%d cannot prove it still "+
+			"owns its slot — refusing to mint until the next successful watermark write",
+			age.Truncate(time.Second), fc.Budget(), n.nodeID)
+	}
+	return ErrWatermarkStale
+}
+
 // Generate 产生一个全局唯一 ID。
 //
 // 返回 ErrFenced 表示本进程已失去 worker id 所有权,**这次操作必须整体失败**。
+// 返回 ErrWatermarkStale 表示水位太久没写成功(etcd 不通 / 进程曾被冻结),
+// 同样整体失败,但等水位再次写成功即自愈。
 // 调用方不得把错误吞掉后用 0 或自造 id 继续 —— 那正是撞号要防的东西。
 func (n *Node) Generate() (uint64, error) {
 	// 先查闸再上锁:失租时发号路径可能正阻塞在 waitNextTime 里,不该再排队等锁。
 	if n.fenced.Load() {
 		return 0, ErrFenced
+	}
+	if err := n.checkWatermarkAge(); err != nil {
+		return 0, err
 	}
 
 	n.mu.Lock()
@@ -257,6 +302,10 @@ func (n *Node) Generate() (uint64, error) {
 	// 另一个进程可能已经拿着同一个 worker id 在发号了。
 	if n.fenced.Load() {
 		return 0, ErrFenced
+	}
+	// 同理复查水位年龄:进程若在等待期间被冻结,解冻后这里是第一道闸。
+	if err := n.checkWatermarkAge(); err != nil {
+		return 0, err
 	}
 
 	return (n.lastTime << timeShift) |

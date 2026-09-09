@@ -312,6 +312,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransactionLogEntry final : public 
     kBalanceBeforeFieldNumber = 11,
     kBalanceAfterFieldNumber = 12,
     kCorrelationIdFieldNumber = 13,
+    kZoneIdFieldNumber = 15,
   };
   // string extra = 14;
   void clear_extra() ;
@@ -458,11 +459,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransactionLogEntry final : public 
   void _internal_set_correlation_id(::uint64_t value);
 
   public:
+  // uint32 zone_id = 15;
+  void clear_zone_id() ;
+  [[nodiscard]] ::uint32_t zone_id() const;
+  void set_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_zone_id() const;
+  void _internal_set_zone_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:TransactionLogEntry)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 14,
+      ::google::protobuf::internal::TcParseTable<4, 15,
                           0, 41,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -505,6 +516,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TransactionLogEntry final : public 
     ::uint64_t balance_before_;
     ::uint64_t balance_after_;
     ::uint64_t correlation_id_;
+    ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1113,6 +1125,30 @@ inline void TransactionLogEntry::set_allocated_extra(::std::string* PROTOBUF_NUL
     _impl_.extra_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:TransactionLogEntry.extra)
+}
+
+// uint32 zone_id = 15;
+inline void TransactionLogEntry::clear_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+}
+inline ::uint32_t TransactionLogEntry::zone_id() const {
+  // @@protoc_insertion_point(field_get:TransactionLogEntry.zone_id)
+  return _internal_zone_id();
+}
+inline void TransactionLogEntry::set_zone_id(::uint32_t value) {
+  _internal_set_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  // @@protoc_insertion_point(field_set:TransactionLogEntry.zone_id)
+}
+inline ::uint32_t TransactionLogEntry::_internal_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.zone_id_;
+}
+inline void TransactionLogEntry::_internal_set_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.zone_id_ = value;
 }
 
 // -------------------------------------------------------------------

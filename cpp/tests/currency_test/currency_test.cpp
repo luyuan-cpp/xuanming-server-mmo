@@ -10,7 +10,7 @@
 #include "proto/common/component/currency_comp.pb.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include <thread_context/ecs_context.h>
-#include <thread_context/snow_flake_manager.h>
+#include "modules/id_segment/guid_segment_registry.h"
 
 template <class MessageKey, class MessageValue>
 struct MessageAsyncClientTestPeer
@@ -499,9 +499,24 @@ TEST(CurrencyTest, GetBalanceDefaultZero)
 
 int main(int argc, char** argv)
 {
-    // 生产线程会在节点身份分配后初始化发号器；单测没有完整启动链。
-    // 显式使用非零节点号，避免交易流水因保留 node_id=0 被 fail-closed 丢弃。
-    tlsSnowflakeManager.OnNodeStart(1);
+    // 生产线程由 scene 的 ConfigureGuidSegmentClients 按配置启用 txlog 号段并经 DataService 领首段;
+    // 单测没有那条启动链。给 txlog 种类装一个不回话的假传输并直接投一段大范围,
+    // 避免交易流水因 tx_id 号段未就绪被 fail-closed 丢弃(那条路径由 bag_test 专门覆盖)。
+    {
+        auto &txlog = tlsGuidSegmentRegistry.Get(GuidKind::kTxLog);
+        GuidSegmentClient::Options options;
+        options.kindName = "txlog";
+        options.initialStep = 1000000;
+        const bool enabled = txlog.Enable(
+            options, [](const std::string &, uint32_t) { return true; },
+            [](GuidSegmentClient::TimerKind, double, std::function<void()>) {});
+        if (!enabled)
+        {
+            return 1;
+        }
+        txlog.Warm();
+        txlog.OnResponse(0, 1, uint64_t{1} << 50);
+    }
     testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

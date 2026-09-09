@@ -12,6 +12,7 @@ import (
 	"player_locator/internal/config"
 	smpb "proto/scene_manager"
 	"shared/generated/table"
+	"shared/kafkacmd"
 )
 
 type ServiceContext struct {
@@ -36,9 +37,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	w := &kafkago.Writer{
 		Addr: kafkago.TCP(c.Kafka.Brokers...),
-		// Hash 按 Key(player_id)选分区,保证同一玩家的事件有序
+		// 控制面命令 topic(gate-cmd_gN)必须按 node_id % P 落到**指定分区**:
+		// 消费端 assign 的就是那一个分区,落错分区 = 目标 gate 永远收不到,
+		// 而 Kafka 一个错都不报(docs/design/control-plane-topic-partitioning-20260908.md)。
+		// kafka-go 的 Writer 在写入路径上忽略 Message.Partition、只问 Balancer。
+		//
+		// 其它 topic 仍走 Hash 按 Key(player_id)选分区,保证同一玩家的事件有序
 		// (项目不变量:kafka key = 业务实体 ID)。LeastBytes 忽略 Key。
-		Balancer: &kafkago.Hash{},
+		Balancer: &kafkacmd.CommandPartitionBalancer{Fallback: &kafkago.Hash{}},
 		// 必须显式设置:kafka-go 直接构造 Writer 时 RequiredAcks 零值是
 		// RequireNone(fire-and-forget,写进 socket 即返回 nil,broker 端
 		// leader 切换/落盘前崩溃全都不可见)。而 LeaseMonitor 的受理协议

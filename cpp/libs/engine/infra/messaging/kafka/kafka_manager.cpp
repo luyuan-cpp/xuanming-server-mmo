@@ -67,7 +67,8 @@ bool KafkaManager::Subscribe(const KafkaConfig& config,
 	const std::vector<std::string>& topics,
 	const std::string& groupId,
 	const std::vector<int32_t>& partitions,
-	KafkaMessageCallback callback) {
+	KafkaMessageCallback callback,
+	const KafkaPartitionAssignPolicy& assignPolicy) {
 	if (consumersStopped_ || shutdown_) {
 		LOG_WARN << "KafkaManager: shutdown has started; rejecting new consumer subscription.";
 		return false;
@@ -94,7 +95,8 @@ bool KafkaManager::Subscribe(const KafkaConfig& config,
 		effectiveGroupId,
 		topics,
 		partitions,
-		callback
+		callback,
+		assignPolicy
 	)) {
 		LOG_ERROR << "KafkaManager: Failed to initialize Kafka consumer for topics: "
 			<< boost::algorithm::join(topics, ",");

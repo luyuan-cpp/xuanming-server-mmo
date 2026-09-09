@@ -94,7 +94,8 @@ func register() {
 
 // BlobObserver 把 dbguard 的量测结果接到 prometheus 上。
 //
-// label 基数是有界的:table 来自 mysql_database_table_list.json(11 张),
+// label 基数是有界的:table 来自 mysql_database_table_list.json(9 张;player_snapshot /
+// rollback_audit_log 只在全局库 data_service,已从 zone 清单摘掉),
 // column 来自 proto 声明(每表 ≤ 10 列)—— 不含 player_id 之类的高基数维度
 // (见仓库 CLAUDE.md §9)。
 type BlobObserver struct{}

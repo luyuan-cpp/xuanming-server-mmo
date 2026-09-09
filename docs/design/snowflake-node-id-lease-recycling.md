@@ -1,5 +1,10 @@
 # SnowFlake Node ID Lease-Based Recycling
 
+> **2026-09-08:本文已作废,仅存历史。** 两侧都不再用"hostname 双 key / 最小空闲位 / lease 回收"这套:
+> 现状(最久未用 + 隔离期、持久水位墓碑、按水位年龄自 fence、lease 只做活性)见
+> [node-id-overhaul-plan-20260908.md](./node-id-overhaul-plan-20260908.md) 与 [snowflake-id-allocation.md](./snowflake-id-allocation.md)。
+> 下文"Correctness: Equal"那张表在 2026-07-29 就被证伪,现在整套比较对象都不存在了。
+
 **Date:** 2026-04-15
 
 ## Problem

@@ -34,9 +34,12 @@ struct PendingNodeRemoval
 
 enum class NodeIdConflictReason
 {
-    kLeaseExpiredByEtcd,    // keepalive returned TTL=0
-    kLeaseDeadlineExceeded, // local health monitor: no ACK within TTL
-    kReRegistrationFailed,  // re-register CAS failed, another node owns this ID
+    // 2026-09-08 起前两个不再触发冲突关停:失租只是拿新 lease 重注册(EtcdService::
+    // RequestReRegistration),身份由分配键的 CAS 决定。枚举值保留给日志 / 外部 hook 的
+    // 签名兼容,当前唯一的触发源是 kReRegistrationFailed。
+    kLeaseExpiredByEtcd,    // keepalive returned TTL=0(已不再触发)
+    kLeaseDeadlineExceeded, // local health monitor: no ACK within TTL(已不再触发)
+    kReRegistrationFailed,  // re-register CAS failed / Watch 发现 node_id 被别的 uuid 持有
 };
 
 class Node : muduo::noncopyable
@@ -170,7 +173,8 @@ public:
     bool RegisterKafkaMessageHandler(const std::vector<std::string> &topics,
                                      const std::string &groupId,
                                      KafkaMessageHandler handler,
-                                     const std::vector<int32_t> &partitions = {});
+                                     const std::vector<int32_t> &partitions = {},
+                                     const KafkaPartitionAssignPolicy &assignPolicy = {});
 
     // gRPC server: register a service before StartRpcServer().
     void RegisterGrpcService(grpc::Service *service);
@@ -297,9 +301,22 @@ protected:
 //
 struct DependencyGate
 {
+    struct ExtraCondition
+    {
+        std::string name;
+        std::function<bool()> ready;
+    };
+
     TimerTaskComp probeTimer;
     bool ready{false};
     uint32_t waitLogTick{0};
+    // 除服务发现之外的就绪条件(例如 scene 的 "id segments ready"),WaitAndRun 之前 AddCondition。
+    std::vector<ExtraCondition> extraConditions;
+
+    void AddCondition(std::string name, std::function<bool()> readyFn)
+    {
+        extraConditions.push_back(ExtraCondition{std::move(name), std::move(readyFn)});
+    }
 
     // nodeName: e.g. "Scene", "Gate" — used only in log messages.
     // requiredNodeTypes: service types to wait for.
@@ -319,19 +336,31 @@ struct DependencyGate
                                     return;
 
                                 auto missing = node.CollectMissingDiscoveredServiceNodes(requiredNodeTypes);
-                                if (!missing.empty())
+                                std::string missingConditions;
+                                for (const auto &condition : extraConditions)
+                                {
+                                    if (!condition.ready())
+                                    {
+                                        if (!missingConditions.empty())
+                                            missingConditions += ",";
+                                        missingConditions += condition.name;
+                                    }
+                                }
+                                if (!missing.empty() || !missingConditions.empty())
                                 {
                                     if (++waitLogTick % logEveryNTicks == 0)
                                     {
                                         LOG_INFO << nodeName << " startup waiting dependencies: missing="
-                                                 << Node::FormatNodeTypeNames(missing);
+                                                 << Node::FormatNodeTypeNames(missing)
+                                                 << " conditions=" << (missingConditions.empty() ? "(none)" : missingConditions);
                                     }
                                     return;
                                 }
 
                                 ready = true;
                                 LOG_INFO << nodeName << " dependency ready: all required nodes discovered. "
-                                         << "required=" << Node::FormatNodeTypeNames(requiredNodeTypes);
+                                         << "required=" << Node::FormatNodeTypeNames(requiredNodeTypes)
+                                         << " conditions=" << extraConditions.size();
                                 onReady(node);
                             });
     }

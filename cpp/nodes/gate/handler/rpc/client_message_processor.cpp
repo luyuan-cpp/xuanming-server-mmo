@@ -411,6 +411,14 @@ void RpcClientSessionHandler::HandleConnectionDisconnection(const muduo::net::Tc
 				{
 					ProcessClientPlayerMessageRequest exitMsg;
 					exitMsg.set_session_id(sessionId);
+					// 反向身份栅栏(routing-identity-audit-20260908.md R13 的反向面):
+					// scene 的 SessionMap 里可能还留着"旧 gate 的同号 session -> 别的玩家"
+					// 的映射,不带玩家身份的话这条 ExitGame 会把**别人**踢下线。
+					// 未绑定玩家(kInvalidGuid)时留 0 走兼容位。
+					if (hasBoundPlayer)
+					{
+						exitMsg.set_player_id(playerId);
+					}
 					exitMsg.mutable_message_content()->set_message_id(ScenePlayerExitGameMessageId);
 					(*rpcClient)->CallRemoteMethod(SceneProcessClientPlayerMessageMessageId, exitMsg);
 					sceneNotified = true;
@@ -691,6 +699,13 @@ void HandleTcpNodeMessage(const SessionInfo &session, const RpcClientMessagePtr 
 	ProcessClientPlayerMessageRequest message;
 	message.mutable_message_content()->set_serialized_message(request->body());
 	message.set_session_id(sessionId);
+	// 反向身份栅栏(R13):gate 的 routing node_id 被复用后,scene 侧同号 session 可能
+	// 仍映射着前任 gate 上的另一个玩家 —— 不带玩家身份的话,本客户端的每一条业务消息
+	// 都会被派发到**那个玩家**的实体上执行。未绑定玩家(kInvalidGuid)时留 0 走兼容位。
+	if (session.playerId != kInvalidGuid && session.playerId != 0)
+	{
+		message.set_player_id(session.playerId);
+	}
 	message.mutable_message_content()->set_id(request->id());
 	message.mutable_message_content()->set_message_id(request->message_id());
 	(*tcpNode)->CallRemoteMethod(SceneProcessClientPlayerMessageMessageId, message);

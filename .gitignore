@@ -67,6 +67,10 @@ vsout/
 # Runtime artifacts (logs, pid files, scratch dumps) — separate from build outputs in bin/
 run/*
 !run/README.md
+# snowflake 槽位本地缓存(design: node-id-overhaul-plan-20260908.md §3.5)。
+# Go 服务默认写 run/snowflake/(已被 run/* 覆盖);C++ scene 默认写 <cwd>/data/,从 bin 起就是 bin/data/。
+bin/data/snowflake-*.json
+data/snowflake-*.json
 
 # Robot 行为/压测明细是每次运行重新生成的本地产物，可能超过 GitHub 单文件 100 MiB 限制。
 robot/behavior_test_results.csv

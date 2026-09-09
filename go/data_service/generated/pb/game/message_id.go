@@ -180,3 +180,4 @@ const ClientRpcRouterForwardMessageId = 176
 const BattleClientPlayerNotifyBattleAssignedMessageId = 177
 const BattleNodeIssueBattleTicketMessageId = 178
 const MatchServiceRequestBattleTicketMessageId = 179
+const DataServiceAllocateIdSegmentMessageId = 180

@@ -1,0 +1,143 @@
+{
+  "schema": "Slot selection vectors shared by the Go and C++ snowflake slot allocators (design doc docs/design/node-id-overhaul-plan-20260908.md section 3.2). used = slots holding a live lease; watermarks / legacy_watermarks = slot -> epoch seconds of the last persisted watermark (merged by max; legacy_watermarks is optional and models the pre-overhaul key layout that cluster 0 still reads); now = wall clock in the same epoch seconds; quarantine_sec = Q; max_slot = inclusive upper bound. Rule: candidates are slots not in used, slot <= max_slot, and (watermark == 0 or now - watermark >= Q, with a watermark in the future never eligible); pick the candidate with the smallest watermark (0 = never used wins), ties broken by the smallest slot; expect_slot null means fail-closed (no candidate).",
+  "cases": [
+    {
+      "name": "empty_pool_picks_zero",
+      "used": [],
+      "watermarks": {},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 4095,
+      "expect_slot": 0
+    },
+    {
+      "name": "skips_live_slots_smallest_never_used",
+      "used": [0, 1],
+      "watermarks": {},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 4095,
+      "expect_slot": 2
+    },
+    {
+      "name": "pool_exhausted_all_live",
+      "used": [0, 1, 2],
+      "watermarks": {},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 2,
+      "expect_slot": null
+    },
+    {
+      "name": "all_quarantined_fail_closed",
+      "used": [],
+      "watermarks": {"0": 990, "1": 995, "2": 999},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 2,
+      "expect_slot": null
+    },
+    {
+      "name": "never_used_wins_over_oldest_used",
+      "used": [],
+      "watermarks": {"0": 100},
+      "now": 100000,
+      "quarantine_sec": 10,
+      "max_slot": 4095,
+      "expect_slot": 1
+    },
+    {
+      "name": "least_recently_used_among_all_used_before",
+      "used": [],
+      "watermarks": {"0": 500, "1": 300, "2": 400},
+      "now": 10000,
+      "quarantine_sec": 100,
+      "max_slot": 2,
+      "expect_slot": 1
+    },
+    {
+      "name": "tie_break_smallest_slot",
+      "used": [],
+      "watermarks": {"0": 300, "1": 300, "2": 300},
+      "now": 10000,
+      "quarantine_sec": 100,
+      "max_slot": 2,
+      "expect_slot": 0
+    },
+    {
+      "name": "recent_slot_excluded_even_if_free",
+      "used": [],
+      "watermarks": {"0": 300, "1": 950, "2": 400},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 2,
+      "expect_slot": 0
+    },
+    {
+      "name": "exactly_at_quarantine_boundary_is_eligible",
+      "used": [],
+      "watermarks": {"0": 900},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 0,
+      "expect_slot": 0
+    },
+    {
+      "name": "one_second_short_of_quarantine_is_not_eligible",
+      "used": [],
+      "watermarks": {"0": 901},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 0,
+      "expect_slot": null
+    },
+    {
+      "name": "future_watermark_from_clock_skew_is_not_eligible",
+      "used": [1],
+      "watermarks": {"0": 2000},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 1,
+      "expect_slot": null
+    },
+    {
+      "name": "live_slot_ignored_even_with_ancient_watermark",
+      "used": [0],
+      "watermarks": {"0": 1, "1": 500},
+      "now": 10000,
+      "quarantine_sec": 100,
+      "max_slot": 1,
+      "expect_slot": 1
+    },
+    {
+      "name": "legacy_only_watermark_quarantines_slot",
+      "used": [],
+      "watermarks": {},
+      "legacy_watermarks": {"0": 950},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 1,
+      "expect_slot": 1
+    },
+    {
+      "name": "legacy_and_new_merge_by_max",
+      "used": [],
+      "watermarks": {"0": 100},
+      "legacy_watermarks": {"0": 950},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 0,
+      "expect_slot": null
+    },
+    {
+      "name": "legacy_older_than_new_does_not_lower_watermark",
+      "used": [],
+      "watermarks": {"0": 950, "1": 300},
+      "legacy_watermarks": {"0": 100},
+      "now": 1000,
+      "quarantine_sec": 100,
+      "max_slot": 1,
+      "expect_slot": 1
+    }
+  ]
+}

@@ -1,31 +1,47 @@
-// Package snowflakealloc 提供基于 etcd 的 Snowflake worker id 分配器。
+// Package snowflakealloc 提供基于 etcd 的 Snowflake 槽位(worker id)分配器。
 //
 // 与服务发现层的 NodeInfo.NodeId 分配解耦:
 //   - NodeInfo.NodeId 由 node allocator(go/<service>/internal/node) 管理,
 //     用于 C++ 端服务发现路由。
-//   - Snowflake worker id 由本包管理,用于 ID 生成器的种子。
+//   - Snowflake 槽位由本包管理,用于 ID 生成器的 worker 段。
 //
-// 解耦的好处:即使 NodeInfo 在边缘场景(reRegister CAS 失败、etcd 短暂分裂)
-// 出问题,Snowflake ID 也不受影响 —— 因为 worker id 由独立 lease 锚定到 hostname。
+// 2026-09-08 改造(docs/design/node-id-overhaul-plan-20260908.md §3 / §5),核心三条:
 //
-// hostname 亲和性:
-//   - 同 hostname 重启 → 复用同一个 worker id(避免 worker id 变化导致的
-//     Snowflake 时间戳回退冲突)
-//   - 不同 hostname → 双 key CAS 拿一个空闲 worker id
+//  1. **lease 只做活性,不拿 lease 证明唯一性。** 唯一性由三样东西保证:
+//     持久水位 wm[slot](持有者每秒写,无 lease,既是继任者的地板也是墓碑)、
+//     隔离期 Q(申领者跳过 now − wm < Q 的槽)、自 fence 期限 F = Q/2(持有者距上次
+//     水位写成功超过 F 就停发)。不等式 `T_ack + F < wm + Q` 让前任与继任者永不同时发号。
+//     TTL 从此只是活性参数,60 还是 180 不再影响 ID 正确性。
+//  2. **选号是"最久未用 + 隔离期",不是"最小空闲"。** 见 selection.go。
+//  3. **etcd 是弱依赖。** 水位写失败只记账;lease 丢了先重新挂回去(reclaim),只有
+//     "槽被别人挂到了另一个 uuid"才算真的失去所有权;启动时 etcd 不通可以用本地缓存起。
+//
+// etcd key 协议(Go / C++ 共用):
+//
+//	/snowflake/<kind>/c<cluster>/slots/<slot>        = <holder uuid>   挂 lease(只表活性)
+//	/snowflake/<kind>/c<cluster>/affinity/<host>     = <slot>          挂 lease(同主机优雅重启复用)
+//	/snowflake/<kind>/c<cluster>/released/<host>     = "released"      挂 lease(前任已 fence 并优雅退出)
+//	/snowflake/<kind>/c<cluster>/watermark/<slot>    = <epochSec>      **不挂 lease**,guard + 墓碑
+//	/snowflake/<kind>/c<cluster>/watermark_ms/<slot> = <unixMs>        不挂 lease,login 的毫秒地板
+//
+// worker id = (cluster << SlotBits) | slot(layout.go);发号器只认合成后的 worker id,
+// 对 cluster / slot 的切分一无所知。
 //
 // 用法:
 //
-//	leaseID, workerID, err := snowflakealloc.AllocateWithKeepAlive(
-//	    ctx, cli, "/guild", os.Hostname(), 60)
-//	if err != nil { panic(err) }
-//	sf := snowflake.NewNode(workerID)
+//	h, err := snowflakealloc.AllocateWithKeepAlive(ctx, cli, "guild", hostname,
+//	    snowflakealloc.Options{LeaseTTL: 60, ClusterID: cfg.ClusterId, LegacyPrefix: "/guild"})
+//	sf := h.NewNode()
+//	go func() { <-h.Lost(); sf.Fence(); os.Exit(1) }()
 //
-// 关键:**prefix 必须按服务区分**,否则两个服务的 worker id 池会互相干扰。
-// 推荐 prefix:"/guild" / "/scene_manager" / "/<service_name>"。
+// **kind 必须按服务区分**,否则两个服务的槽池会互相干扰。
 package snowflakealloc
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -39,289 +55,619 @@ import (
 	"shared/snowflake"
 )
 
-// Options 控制分配器行为。
+// ErrNoSlotAvailable 表示候选集为空:所有槽要么被活着的持有者占着,要么还在隔离期内。
+// fail-closed —— 4096 个槽(login 1024)在现实中不可能耗尽,除非一小时内重启上千次。
+var ErrNoSlotAvailable = errors.New("snowflakealloc: no slot available (all held or quarantined)")
+
+// ErrInvalidOptions 表示 Options 自相矛盾(F ≥ Q、cluster 越界……),启动前就该发现。
+var ErrInvalidOptions = errors.New("snowflakealloc: invalid options")
+
+// Options 控制分配器行为。零值字段取默认。
 type Options struct {
-	// LeaseTTL 是 etcd lease 的 TTL(秒)。0 时默认 60。
+	// LeaseTTL 是 etcd lease 的 TTL(秒)。0 时默认 60。只影响服务发现多快摘掉死节点,
+	// **不再影响 ID 正确性**(见包注释)。
 	LeaseTTL int64
-	// MaxWorkerID 是 worker id 上限(含)。0 时默认取 shared/snowflake.NodeMask。
-	// 调用方可以传更小的值,如果 Snowflake 实现位宽更窄(例如 bwmarrin 是 10 bit)。
-	MaxWorkerID uint64
+
+	// ClusterID 是部署级集群号(运维在 ConfigMap / env 一次性设定,策划不碰),默认 0。
+	// 必须 < 1<<ClusterBits。
+	ClusterID uint32
+
+	// ClusterBits / SlotBits 是 worker 段的切分(见 layout.go)。0 时取本包默认的
+	// ClusterBits / SlotBits(5 / 12)。login 的 bwmarrin 13 位 node 段传
+	// PlayerIDClusterBits / PlayerIDSlotBits(3 / 10)。
+	ClusterBits uint
+	SlotBits    uint
+
+	// MaxSlot 是槽号上限(含)。0 时默认 (1<<SlotBits)-1。只能调小不能调大。
+	MaxSlot uint64
+
+	// Quarantine 是隔离期 Q:一个槽的水位距今不足 Q 就不许被申领。0 时默认 4h。
+	// 下界推导:Q ≥ 2 × (TTL_max 180s + 最大时钟偏差 + drain 预算 15s + 冻结感知延迟)。
+	Quarantine time.Duration
+
+	// FenceAfter 是自 fence 期限 F:距上次水位写成功超过 F,发号器拒发。0 时默认 2h。
+	// 必须 < Quarantine(通常取 Q/2)。
+	FenceAfter time.Duration
+
+	// CachePath 是本地缓存文件(见 cache.go)。空 = 关闭。消费方用 DefaultCachePath 生成。
+	// 写盘策略是固定的(设计稿 §7.5-5,用户拍板):申领 / reclaim 后的第一次 Ack 写一次,
+	// Close() 写一次,etcd 水位写失败期间每拍写;稳态**一次都不写**,没有周期刷新可配。
+	CachePath string
+
+	// LegacyPrefix 是改造前的 etcd 前缀("/guild" / "/login" / "/match" / "/scene_manager")。
+	// 非空且 ClusterID==0 时,申领会额外读旧布局的水位(snowflake_guard / guard_ms)取 max,
+	// 并把旧布局仍活着的 worker id(snowflake_ids / snowflake_nodes)算作已占 —— 覆盖
+	// 滚动升级期新老版本并存的窗口。**发布一版之后可以删掉这条兼容读**。
+	LegacyPrefix string
 }
 
-func (o Options) ttl() int64 {
-	if o.LeaseTTL <= 0 {
-		return 60
+// resolvedOptions 是校验并填好默认值后的 Options。
+type resolvedOptions struct {
+	ttl         int64
+	cluster     uint32
+	clusterBits uint
+	slotBits    uint
+	maxSlot     uint64
+	quarantine  time.Duration
+	fenceAfter  time.Duration
+	cachePath   string
+	legacy      string
+}
+
+const (
+	defaultLeaseTTL   = 60
+	defaultQuarantine = 4 * time.Hour
+	defaultFenceAfter = 2 * time.Hour
+)
+
+func (o Options) resolve() (resolvedOptions, error) {
+	r := resolvedOptions{
+		ttl:         o.LeaseTTL,
+		cluster:     o.ClusterID,
+		clusterBits: o.ClusterBits,
+		slotBits:    o.SlotBits,
+		maxSlot:     o.MaxSlot,
+		quarantine:  o.Quarantine,
+		fenceAfter:  o.FenceAfter,
+		cachePath:   o.CachePath,
+		legacy:      o.LegacyPrefix,
 	}
-	return o.LeaseTTL
-}
-
-func (o Options) maxWorkerID() uint64 {
-	if o.MaxWorkerID == 0 {
-		return uint64(snowflake.NodeMask)
+	if r.ttl <= 0 {
+		r.ttl = defaultLeaseTTL
 	}
-	return o.MaxWorkerID
+	if r.clusterBits == 0 {
+		r.clusterBits = ClusterBits
+	}
+	if r.slotBits == 0 {
+		r.slotBits = SlotBits
+	}
+	if r.clusterBits+r.slotBits > 63 {
+		return r, fmt.Errorf("%w: cluster%d+slot%d bits too wide", ErrInvalidOptions, r.clusterBits, r.slotBits)
+	}
+	if uint64(r.cluster) > (uint64(1)<<r.clusterBits)-1 {
+		return r, fmt.Errorf("%w: ClusterID %d exceeds %d bits", ErrInvalidOptions, r.cluster, r.clusterBits)
+	}
+	slotCap := (uint64(1) << r.slotBits) - 1
+	if r.maxSlot == 0 {
+		r.maxSlot = slotCap
+	}
+	if r.maxSlot > slotCap {
+		return r, fmt.Errorf("%w: MaxSlot %d exceeds %d bits", ErrInvalidOptions, r.maxSlot, r.slotBits)
+	}
+	if r.quarantine <= 0 {
+		r.quarantine = defaultQuarantine
+	}
+	if r.fenceAfter <= 0 {
+		r.fenceAfter = defaultFenceAfter
+	}
+	// F ≤ Q/2 —— 不是"F < Q"就够。Q − F 是整套协议的安全余量:前任最晚停发时刻
+	// (T_ack + F)必须早于继任者最早申领时刻(wm + Q),中间那段 Q − F 要吃掉
+	// 时钟偏差、优雅排空、以及"冻结的进程多久才感知到自己被冻结"。设计稿 §1.2 直接
+	// 把它定成 F = Q/2(4h / 2h)。F = 0.9Q 这种配置在数学上仍满足 F < Q,却把余量
+	// 压到几乎为零 —— 拒掉,别让它悄悄进配置文件。
+	if r.fenceAfter > r.quarantine/2 {
+		return r, fmt.Errorf("%w: FenceAfter %v must be <= Quarantine/2 (%v); Q-F is the margin that absorbs "+
+			"clock skew, drain and freeze-detection latency", ErrInvalidOptions, r.fenceAfter, r.quarantine/2)
+	}
+	return r, nil
 }
 
-// nodeKey 是 hostname → workerID 映射,用来支持 "同 hostname 重启复用同 id"。
+// legacyMirror 报告是否处于**滚动升级过渡期**:cluster 0 且配了改造前的 etcd 前缀。
 //
-//	<prefix>/snowflake_nodes/<hostname> = <id>
-// leaseAlive 判断 nodeKey 当前挂着的 lease 是否仍存活(TTL > 0)。
-// lease==0(key 无 lease)或 TimeToLive 返回 TTL<=0(已过期 / 已 revoke)视为已死;
-// 查询出错时按"存活"处理 —— fail-closed:宁可多分配一个新 id,也不能抢活着的 id
-// (抢到手的代价是原持有者 keepalive 检测到 ownership lost 后 fence + 退出)。
-func leaseAlive(ctx context.Context, cli *clientv3.Client, lease int64) bool {
-	if lease == 0 {
-		return false
+// 过渡期里灰度的两半各说各话:新二进制读写 /snowflake/<kind>/c0/**,旧二进制只认
+// <legacy>/snowflake_ids/ 与 <legacy>/snowflake_guard/。只让新版本"避开旧版本"是
+// **单向**的 —— 旧二进制看不见新槽,照样能把同一个 worker id 分出去(见 allocate /
+// reclaim / tryReuse 里的镜像写)。所以过渡期两边都要留脚印。
+// **发布一版之后这个方法与它所有调用点一起删。**
+func (r resolvedOptions) legacyMirror() bool { return r.cluster == 0 && r.legacy != "" }
+
+// ---- key 布局 ---------------------------------------------------------------
+
+func rootKey(kind string, cluster uint32) string {
+	return fmt.Sprintf("/snowflake/%s/c%d", kind, cluster)
+}
+
+func slotsPrefix(kind string, cluster uint32) string { return rootKey(kind, cluster) + "/slots/" }
+func slotKey(kind string, cluster uint32, slot uint64) string {
+	return slotsPrefix(kind, cluster) + strconv.FormatUint(slot, 10)
+}
+func affinityKey(kind string, cluster uint32, host string) string {
+	return rootKey(kind, cluster) + "/affinity/" + host
+}
+
+// releasedKey 是 Close() 留下的"已 fence 并优雅释放"标记(挂在持有者当前 lease 上)。
+// 同主机后继进程**只有看到它**才允许复用原槽;lease 死了但没标记(崩溃)→ 不复用,
+// 走正常申领(受隔离期约束)。复用 Txn 必须同时删掉它(设计稿 §2.0b):否则
+// A 退出写标记 → A' 复用成功但标记还在 → A” 第二个进程凭标记把活着的 A' 的槽抢走。
+func releasedKey(kind string, cluster uint32, host string) string {
+	return rootKey(kind, cluster) + "/released/" + host
+}
+
+func watermarkPrefix(kind string, cluster uint32) string {
+	return rootKey(kind, cluster) + "/watermark/"
+}
+
+// watermarkKey 记录某个槽**最近一次发号所在的秒**(自 snowflake.Epoch 起,含前推)。
+// 刻意**不挂 lease**:它必须比持有者活得久 —— 下一任要靠它把发号起点抬到前任高水位
+// 之上,申领者要靠它判断隔离期。量级是每槽一行,被 MaxSlot 封死,不会无界增长。
+func watermarkKey(kind string, cluster uint32, slot uint64) string {
+	return watermarkPrefix(kind, cluster) + strconv.FormatUint(slot, 10)
+}
+
+// watermarkMsKey 是毫秒级持久水位,给 **bwmarrin 布局**的消费方(login PlayerId)用。
+// 与 watermarkKey 的秒级 / snowflake.Epoch 口径完全独立:值统一存 **Unix 毫秒**。
+func watermarkMsKey(kind string, cluster uint32, slot uint64) string {
+	return rootKey(kind, cluster) + "/watermark_ms/" + strconv.FormatUint(slot, 10)
+}
+
+// 旧布局(改造前)的 key,只在 cluster 0 兼容读**与过渡期镜像写**。发布一版之后可删。
+func legacyGuardPrefix(prefix string) string   { return prefix + "/snowflake_guard/" }
+func legacyGuardMsPrefix(prefix string) string { return prefix + "/guard_ms/" }
+func legacyIDPrefix(prefix string) string      { return prefix + "/snowflake_ids/" }
+func legacyNodePrefix(prefix string) string    { return prefix + "/snowflake_nodes/" }
+
+// legacyIDKey 是旧二进制的"槽位已占"占位键(<legacy>/snowflake_ids/<id> = <host>)。
+// 过渡期新二进制申领成功时把它一并挂到自己的 lease 上:旧二进制的双 key CAS 条件
+// 里有 CreateRevision(idKey)==0,这一把 Put 让它直接失败;它的 scanUsedWorkerIDs
+// 也会把这个槽算成已占。**过渡专用,发布一版之后删。**
+func legacyIDKey(prefix string, slot uint64) string {
+	return legacyIDPrefix(prefix) + strconv.FormatUint(slot, 10)
+}
+
+// legacyGuardKey / legacyGuardMsKey 是旧二进制读地板用的水位键。过渡期把新水位镜像
+// 过去,旧二进制接手这个槽时才有地板可用(它只会去 readGuard 旧 key)。
+// **过渡专用,发布一版之后删。**
+func legacyGuardKey(prefix string, slot uint64) string {
+	return legacyGuardPrefix(prefix) + strconv.FormatUint(slot, 10)
+}
+
+func legacyGuardMsKey(prefix string, slot uint64) string {
+	return legacyGuardMsPrefix(prefix) + strconv.FormatUint(slot, 10)
+}
+
+// newHolderID 生成持有者 uuid(128 bit 随机,hex)。不引 uuid 库:shared 模块里它只是
+// 间接依赖,这里 16 字节随机数就够了。
+func newHolderID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("snowflakealloc: crypto/rand unavailable: " + err.Error())
 	}
-	resp, err := cli.TimeToLive(ctx, clientv3.LeaseID(lease))
+	return hex.EncodeToString(b[:])
+}
+
+// ---- 申领 ----------------------------------------------------------------------
+
+// claim 是一次成功申领的结果。
+type claim struct {
+	lease       clientv3.LeaseID
+	slot        uint64
+	uuid        string
+	incarnation int64 // slots key 的 mod_revision(= Txn 提交的 revision)
+	reused      bool
+}
+
+// allocate 为 (kind, cluster, host) 申领一个槽。
+//
+//  1. 拿一个新 lease。
+//  2. 同主机亲和复用:**只在** affinity/<host> 与 released/<host> 都在、且与 slots/<slot>
+//     三者挂在同一个 lease 上时(= 前任那套完整的三元组,前任已 fence 并优雅退出)才复用。
+//     Txn 把三者改挂到新 lease 并**删掉 released**。三元组不一致(affinity 被同主机的
+//     另一个进程改挂过 / 前任崩溃没写 released)→ 不复用也不抢,走 3。
+//  3. 扫 slots/(已占)与 watermark/(隔离期),按 selection.go 选槽,
+//     CAS If CreateRev(slots/<slot>)==0 Then Put slots + affinity。失败重扫重试。
+//     候选为空 → ErrNoSlotAvailable。
+//
+// 亲和键被别人占着**永远不会阻塞申领**:fresh 路径只 CAS slots key,affinity 直接覆盖
+// (最新的进程拥有亲和;被覆盖的一方只损失"重启复用同槽"这一优化,不损失正确性 ——
+// 复用前提是三元组同 lease,被覆盖的 affinity 与它的 released 不在同一个 lease 上)。
+func allocate(ctx context.Context, cli *clientv3.Client, kind, host string, r resolvedOptions) (*claim, error) {
+	if kind == "" || strings.ContainsAny(kind, "/ ") {
+		return nil, fmt.Errorf("%w: bad kind %q", ErrInvalidOptions, kind)
+	}
+	if host == "" || strings.Contains(host, "/") {
+		return nil, fmt.Errorf("%w: bad host %q", ErrInvalidOptions, host)
+	}
+
+	leaseResp, err := cli.Grant(ctx, r.ttl)
 	if err != nil {
-		logx.Errorf("[snowflakealloc] TimeToLive(lease=%d) failed, treating holder as alive: %v", lease, err)
-		return true
+		return nil, fmt.Errorf("snowflakealloc: grant lease: %w", err)
 	}
-	return resp.TTL > 0
-}
+	lease := leaseResp.ID
+	uuid := newHolderID()
+	revoke := func() { _, _ = cli.Revoke(context.Background(), lease) }
 
-// releasedKey 是 Close() 留下的"已优雅释放"标记(挂在同一 lease 上,随 lease 一起消失)。
-// value 固定为非数字的 "released":scanUsedWorkerIDs 按 nodeKey 前缀扫时会尝试把 value
-// 解析成 id,非数字直接忽略,不会把它误算成占用。
-// 语义:同 hostname 的后继进程只有在(lease 已死)或(有此标记 = 前任已优雅退出)时
-// 才允许接管原 worker id;lease 活着且无标记 = 前任仍在运行(或刚崩溃、lease 未到期),
-// 一律不抢,改派生键分配新 id。
-func releasedKey(prefix, hostname string) string {
-	return nodeKey(prefix, hostname) + "/released"
-}
+	aKey := affinityKey(kind, r.cluster, host)
+	rKey := releasedKey(kind, r.cluster, host)
 
-func nodeKey(prefix, hostname string) string {
-	return fmt.Sprintf("%s/snowflake_nodes/%s", prefix, hostname)
-}
-
-// idKey 是 workerID 占位 key,反向映射回 hostname,用于扫描已占 ID。
-//
-//	<prefix>/snowflake_ids/<id> = <hostname>
-func idKey(prefix string, id uint64) string {
-	return fmt.Sprintf("%s/snowflake_ids/%d", prefix, id)
-}
-
-// guardKey 记录某个 worker id **最近一次发号所在的秒**(自 snowflake.Epoch 起)。
-//
-//	<prefix>/snowflake_guard/<id> = <epochSec>
-//
-// 刻意**不挂 lease**:它必须比持有者活得久 —— 下一任拿到同一个 worker id 时要靠它
-// 把发号起点抬到前任高水位之上。挂了 lease 就会随前任一起消失,等于没有。
-// 量级是每个 worker id 一行,被池上界(NodeMask)封死,不会无界增长。
-// 这是 C++ 侧 `SETEX snowflake_guard:{node_type}:{node_id} 600 {now}` 的等价物。
-func guardKey(prefix string, id uint64) string {
-	return fmt.Sprintf("%s/snowflake_guard/%d", prefix, id)
-}
-
-func nodeKeyPrefix(prefix string) string {
-	return prefix + "/snowflake_nodes/"
-}
-
-func idKeyPrefix(prefix string) string {
-	return prefix + "/snowflake_ids/"
-}
-
-// Allocate 为 (prefix, hostname) 分配一个 Snowflake worker id。
-//
-// 行为:
-//  1. 拿一个新 lease,TTL 由 opts 决定。
-//  2. 如果 nodeKey(hostname) 还在(进程刚重启,etcd 老 lease 尚未过期或上次进程没等到 TTL):
-//     CAS 重新认领:If Value(nodeKey)==<oldID> Then Put nodeKey+idKey with new lease。
-//     成功就复用 oldID。
-//  3. 否则扫 idKeyPrefix + nodeKeyPrefix(后者是兼容 lease 过期前的并发场景)合并 used 集合,
-//     找最小空闲 worker id,**从 0 开始**(Snowflake worker_id=0 是合法的,无 "未分配" 哨兵语义,
-//     这点和 NodeInfo.NodeId 不同)。
-//  4. CAS If CreateRev(nodeKey)==0 AND CreateRev(idKey)==0 Then Put 双 key。
-//     成功返回 (leaseID, workerID, nil)。失败重新扫描重试(意味着别人并发抢到了)。
-//
-// 调用方负责处理 lease 的 KeepAlive,或使用 AllocateWithKeepAlive。
-//
-// 错误条件:worker id 池耗尽(used 集合 size > maxWorkerID),返回错误。
-func Allocate(ctx context.Context, cli *clientv3.Client, prefix, hostname string, opts Options) (clientv3.LeaseID, uint64, error) {
-	if prefix == "" {
-		return 0, 0, fmt.Errorf("snowflakealloc: empty prefix")
-	}
-	if hostname == "" {
-		return 0, 0, fmt.Errorf("snowflakealloc: empty hostname")
+	// 2) 亲和复用。
+	if c, err := tryReuse(ctx, cli, kind, host, uuid, lease, aKey, rKey, r); err != nil {
+		revoke()
+		return nil, err
+	} else if c != nil {
+		return c, nil
 	}
 
-	leaseResp, err := cli.Grant(ctx, opts.ttl())
-	if err != nil {
-		return 0, 0, fmt.Errorf("snowflakealloc: grant lease: %w", err)
-	}
-	leaseID := leaseResp.ID
-
-	nKey := nodeKey(prefix, hostname)
-	maxID := opts.maxWorkerID()
-
+	// 3) 正常申领,CAS 失败重试。
 	for {
 		select {
 		case <-ctx.Done():
-			_, _ = cli.Revoke(context.Background(), leaseID)
-			return 0, 0, ctx.Err()
+			revoke()
+			return nil, ctx.Err()
 		default:
 		}
 
-		// 1) 尝试复用 hostname 已有的 workerID。
-		// 注意:此处用 Value 比较而不是 CreateRevision == 0 —— 我们希望
-		// "如果 hostname 的 key 还在,且 value 是某个数字 X,就把同一个 X 用新 lease 抢回来"。
-		resp, err := cli.Get(ctx, nKey)
+		used, err := scanUsedSlots(ctx, cli, kind, r)
 		if err != nil {
-			_, _ = cli.Revoke(context.Background(), leaseID)
-			return 0, 0, fmt.Errorf("snowflakealloc: get nodeKey: %w", err)
+			revoke()
+			return nil, err
 		}
-		if len(resp.Kvs) > 0 {
-			released := false
-			if relResp, rerr := cli.Get(ctx, releasedKey(prefix, hostname)); rerr == nil && len(relResp.Kvs) > 0 {
-				released = true
-			}
-			if !released && leaseAlive(ctx, cli, resp.Kvs[0].Lease) {
-				// 亲和键上的持有者还活着(lease 未过期)且没有优雅释放标记:**不抢**。
-				// 2026-09-02 事故:同一主机上按 -Zone 起第二个 login,它按 hostname 亲和
-				// "复用"了 worker 0,把 nodeKey 挂到自己的新 lease 上,活着的 zone1 login
-				// 在 keepalive 里检测到 ownership lost 后 fence + 退出,整条登录链路 UNAVAILABLE。
-				// 亲和复用的本意是"进程重启、老 lease 尚未过期时拿回原 id",不是让同主机的
-				// 第二个进程抢活着的 id。但又不能停在原键上走新 id 分配 —— 下面的双 key CAS
-				// 要求 nodeKey 不存在,会永远失败直到 ctx 超时(kill 后 60s 内重启也会撞上:
-				// 进程已死、lease 尚在)。所以派生一个本进程独有的亲和键继续分配;旧 id 等旧
-				// lease 自然过期后释放。
-				derived := fmt.Sprintf("%s#%x", hostname, uint64(leaseID))
-				logx.Errorf("[snowflakealloc] affinity key busy with a live lease (prefix=%s, host=%s, lease=%d); "+
-					"allocating under derived key %q instead of stealing", prefix, hostname, resp.Kvs[0].Lease, derived)
-				hostname = derived
-				nKey = nodeKey(prefix, hostname)
-				continue
-			}
-			oldIDStr := string(resp.Kvs[0].Value)
-			if oldID, perr := strconv.ParseUint(oldIDStr, 10, 64); perr == nil && oldID <= maxID {
-				iKey := idKey(prefix, oldID)
-				// CAS: Value(nKey)==oldIDStr 才接管。这样防止 hostname key 过期后
-				// 别人已经抢过 oldID 又写回别的 value 的极端竞态。
-				txnResp, err := cli.Txn(ctx).
-					If(clientv3.Compare(clientv3.Value(nKey), "=", oldIDStr)).
-					Then(
-						clientv3.OpPut(nKey, oldIDStr, clientv3.WithLease(leaseID)),
-						clientv3.OpPut(iKey, hostname, clientv3.WithLease(leaseID)),
-					).
-					Commit()
-				if err == nil && txnResp.Succeeded {
-					logx.Infof("[snowflakealloc] reused worker_id=%d (prefix=%s, host=%s)", oldID, prefix, hostname)
-					return leaseID, oldID, nil
-				}
-				// CAS 失败 → key 的 value 已变(典型:lease 过期重写),继续走分配新 ID 流程
-			}
+		wm, err := scanWatermarks(ctx, cli, kind, r)
+		if err != nil {
+			revoke()
+			return nil, err
+		}
+		now := snowflake.NowEpochSec()
+		slot, ok := selectSlot(used, wm, now, uint64(r.quarantine/time.Second), r.maxSlot)
+		if !ok {
+			revoke()
+			return nil, fmt.Errorf("%w: kind=%s cluster=%d max_slot=%d used=%d quarantined=%d",
+				ErrNoSlotAvailable, kind, r.cluster, r.maxSlot, len(used), len(wm))
 		}
 
-		// 2) 扫 used 集合,找最小空闲 id。
-		used, err := scanUsedWorkerIDs(ctx, cli, prefix)
+		sKey := slotKey(kind, r.cluster, slot)
+		slotStr := strconv.FormatUint(slot, 10)
+		cmps := []clientv3.Cmp{clientv3.Compare(clientv3.CreateRevision(sKey), "=", 0)}
+		ops := []clientv3.Op{
+			clientv3.OpPut(sKey, uuid, clientv3.WithLease(lease)),
+			clientv3.OpPut(aKey, slotStr, clientv3.WithLease(lease)),
+		}
+		// 过渡期(见 legacyMirror):同一笔 Txn 里占住旧布局的 id 键。比较条件也一起加 ——
+		// scanUsedSlots 已经把旧 id 算成占用,这条 CreateRevision==0 只为堵住"扫描之后、
+		// 提交之前旧二进制抢先拿到同一个 id"的窗口,让互斥在两个方向上都是原子的。
+		if r.legacyMirror() {
+			lKey := legacyIDKey(r.legacy, slot)
+			cmps = append(cmps, clientv3.Compare(clientv3.CreateRevision(lKey), "=", 0))
+			ops = append(ops, clientv3.OpPut(lKey, host, clientv3.WithLease(lease)))
+		}
+		txn, err := cli.Txn(ctx).If(cmps...).Then(ops...).Commit()
 		if err != nil {
-			_, _ = cli.Revoke(context.Background(), leaseID)
-			return 0, 0, err
+			revoke()
+			return nil, fmt.Errorf("snowflakealloc: claim txn: %w", err)
 		}
-
-		var targetID uint64 = maxID + 1
-		for i := uint64(0); i <= maxID; i++ {
-			if !used[i] {
-				targetID = i
-				break
-			}
+		if txn.Succeeded {
+			logx.Infof("[snowflakealloc] allocated kind=%s worker=c%d:%d inc=%d (host=%s, previous_watermark=%d, now=%d)",
+				kind, r.cluster, slot, txn.Header.Revision, host, wm[slot], now)
+			return &claim{lease: lease, slot: slot, uuid: uuid, incarnation: txn.Header.Revision}, nil
 		}
-		if targetID > maxID {
-			_, _ = cli.Revoke(context.Background(), leaseID)
-			return 0, 0, fmt.Errorf("snowflakealloc: worker id pool exhausted (max %d, prefix=%s)", maxID, prefix)
-		}
-
-		// 3) 双 key CAS 抢占。两个 key 都必须不存在才能拿下,任何一个有人就放弃。
-		idStr := strconv.FormatUint(targetID, 10)
-		iKey := idKey(prefix, targetID)
-		txnResp, err := cli.Txn(ctx).
-			If(
-				clientv3.Compare(clientv3.CreateRevision(nKey), "=", 0),
-				clientv3.Compare(clientv3.CreateRevision(iKey), "=", 0),
-			).
-			Then(
-				clientv3.OpPut(nKey, idStr, clientv3.WithLease(leaseID)),
-				clientv3.OpPut(iKey, hostname, clientv3.WithLease(leaseID)),
-			).
-			Commit()
-		if err != nil {
-			_, _ = cli.Revoke(context.Background(), leaseID)
-			return 0, 0, fmt.Errorf("snowflakealloc: claim txn: %w", err)
-		}
-		if txnResp.Succeeded {
-			logx.Infof("[snowflakealloc] allocated worker_id=%d (prefix=%s, host=%s)", targetID, prefix, hostname)
-			return leaseID, targetID, nil
-		}
-		// CAS 失败 → 并发抢占,重试整个循环(重新扫 used)
+		// CAS 失败 → 并发抢占,重扫。
 	}
 }
 
-// scanUsedWorkerIDs 合并扫 idKey 前缀 + nodeKey 前缀,
-// 任一前缀显示的 id 都算占用。
-func scanUsedWorkerIDs(ctx context.Context, cli *clientv3.Client, prefix string) (map[uint64]bool, error) {
-	used := make(map[uint64]bool)
-
-	// idKey 前缀:value 是 hostname,key 尾部数字是 id
-	idResp, err := cli.Get(ctx, idKeyPrefix(prefix), clientv3.WithPrefix())
+// tryReuse 实现同主机亲和复用;不满足前提时返回 (nil, nil) 让调用方走正常申领。
+func tryReuse(ctx context.Context, cli *clientv3.Client, kind, host, uuid string, lease clientv3.LeaseID,
+	aKey, rKey string, r resolvedOptions) (*claim, error) {
+	// 一次 Txn 里读三把 key,拿到同一 revision 下的快照。
+	read, err := cli.Txn(ctx).Then(clientv3.OpGet(aKey), clientv3.OpGet(rKey)).Commit()
 	if err != nil {
-		return nil, fmt.Errorf("snowflakealloc: scan id prefix: %w", err)
+		return nil, fmt.Errorf("snowflakealloc: read affinity: %w", err)
 	}
-	idP := idKeyPrefix(prefix)
-	for _, kv := range idResp.Kvs {
-		tail := strings.TrimPrefix(string(kv.Key), idP)
-		if id, err := strconv.ParseUint(tail, 10, 64); err == nil {
-			used[id] = true
+	aKvs := read.Responses[0].GetResponseRange().Kvs
+	rKvs := read.Responses[1].GetResponseRange().Kvs
+	if len(aKvs) == 0 {
+		return nil, nil
+	}
+	if len(rKvs) == 0 {
+		// 亲和键在、没有 released:前任要么还活着(本地 -Zone 双进程,2026-09-02 事故),
+		// 要么崩溃了 lease 未到期。两种都不抢、不复用;fresh 路径也不会被它挡住。
+		logx.Infof("[snowflakealloc] affinity %s exists without a released marker; not reusing (kind=%s)", host, kind)
+		return nil, nil
+	}
+	predLease := aKvs[0].Lease
+	if predLease == 0 || rKvs[0].Lease != predLease {
+		logx.Infof("[snowflakealloc] affinity/released for %s are on different leases (%x vs %x); not reusing (kind=%s)",
+			host, aKvs[0].Lease, rKvs[0].Lease, kind)
+		return nil, nil
+	}
+	slotStr := string(aKvs[0].Value)
+	slot, perr := strconv.ParseUint(slotStr, 10, 64)
+	if perr != nil || slot > r.maxSlot {
+		return nil, nil
+	}
+	sKey := slotKey(kind, r.cluster, slot)
+	sResp, err := cli.Get(ctx, sKey)
+	if err != nil {
+		return nil, fmt.Errorf("snowflakealloc: read slot for reuse: %w", err)
+	}
+	if len(sResp.Kvs) == 0 || sResp.Kvs[0].Lease != predLease {
+		return nil, nil
+	}
+	predUUID := string(sResp.Kvs[0].Value)
+
+	ops := []clientv3.Op{
+		clientv3.OpPut(sKey, uuid, clientv3.WithLease(lease)),
+		clientv3.OpPut(aKey, slotStr, clientv3.WithLease(lease)),
+		// 2.0b:复用即消费掉 released,同主机的第三个进程不能再凭它接管活着的槽。
+		clientv3.OpDelete(rKey),
+	}
+	// 过渡期(见 legacyMirror):把旧布局的 id 键改挂到新 lease。这里用无条件 Put 而不是
+	// CreateRevision==0 —— 前任(同样是新二进制)大概率已经挂着它,而上面六条比较已经
+	// 证明整个三元组还是前任那一套,这个槽此刻没有第二个主人。
+	if r.legacyMirror() {
+		ops = append(ops, clientv3.OpPut(legacyIDKey(r.legacy, slot), host, clientv3.WithLease(lease)))
+	}
+	txn, err := cli.Txn(ctx).
+		If(
+			clientv3.Compare(clientv3.Value(aKey), "=", slotStr),
+			clientv3.Compare(clientv3.LeaseValue(aKey), "=", clientv3.LeaseID(predLease)),
+			clientv3.Compare(clientv3.CreateRevision(rKey), ">", 0),
+			clientv3.Compare(clientv3.LeaseValue(rKey), "=", clientv3.LeaseID(predLease)),
+			clientv3.Compare(clientv3.Value(sKey), "=", predUUID),
+			clientv3.Compare(clientv3.LeaseValue(sKey), "=", clientv3.LeaseID(predLease)),
+		).
+		Then(ops...).
+		Commit()
+	if err != nil {
+		return nil, fmt.Errorf("snowflakealloc: reuse txn: %w", err)
+	}
+	if !txn.Succeeded {
+		return nil, nil
+	}
+	logx.Infof("[snowflakealloc] reused kind=%s worker=c%d:%d inc=%d (host=%s, predecessor=%s)",
+		kind, r.cluster, slot, txn.Header.Revision, host, predUUID)
+	return &claim{lease: lease, slot: slot, uuid: uuid, incarnation: txn.Header.Revision, reused: true}, nil
+}
+
+// scanUsedSlots 返回 slots/ 下有 lease 的槽;cluster 0 兼容期还把旧布局的活 id 算进去。
+func scanUsedSlots(ctx context.Context, cli *clientv3.Client, kind string, r resolvedOptions) (map[uint64]bool, error) {
+	used := make(map[uint64]bool)
+	p := slotsPrefix(kind, r.cluster)
+	resp, err := cli.Get(ctx, p, clientv3.WithPrefix(), clientv3.WithKeysOnly())
+	if err != nil {
+		return nil, fmt.Errorf("snowflakealloc: scan slots: %w", err)
+	}
+	for _, kv := range resp.Kvs {
+		if s, perr := strconv.ParseUint(strings.TrimPrefix(string(kv.Key), p), 10, 64); perr == nil {
+			used[s] = true
 		}
 	}
-
-	// nodeKey 前缀:value 是 id 字符串
-	// 这个扫描是冗余的(idKey 已经覆盖),但保留以防 idKey 因运维误操作丢失却 nodeKey 还在的不对称状态。
-	nodeResp, err := cli.Get(ctx, nodeKeyPrefix(prefix), clientv3.WithPrefix())
+	if r.cluster != 0 || r.legacy == "" {
+		return used, nil
+	}
+	// 旧布局:snowflake_ids/<id> 与 snowflake_nodes/<host>=<id>。发布一版之后可删。
+	idP := legacyIDPrefix(r.legacy)
+	idResp, err := cli.Get(ctx, idP, clientv3.WithPrefix(), clientv3.WithKeysOnly())
 	if err != nil {
-		return nil, fmt.Errorf("snowflakealloc: scan node prefix: %w", err)
+		return nil, fmt.Errorf("snowflakealloc: scan legacy ids: %w", err)
+	}
+	for _, kv := range idResp.Kvs {
+		if s, perr := strconv.ParseUint(strings.TrimPrefix(string(kv.Key), idP), 10, 64); perr == nil {
+			used[s] = true
+		}
+	}
+	nodeResp, err := cli.Get(ctx, legacyNodePrefix(r.legacy), clientv3.WithPrefix())
+	if err != nil {
+		return nil, fmt.Errorf("snowflakealloc: scan legacy nodes: %w", err)
 	}
 	for _, kv := range nodeResp.Kvs {
-		if id, err := strconv.ParseUint(string(kv.Value), 10, 64); err == nil {
-			used[id] = true
+		if s, perr := strconv.ParseUint(string(kv.Value), 10, 64); perr == nil {
+			used[s] = true
 		}
 	}
-
 	return used, nil
 }
 
-// Handle 把 lease + worker id + keepalive 取消函数打包,方便调用方在进程退出时清理。
-type Handle struct {
-	LeaseID  clientv3.LeaseID
-	WorkerID uint64
-	// GuardEpochSec 是**前任持有者**在这个 worker id 上最后记录的发号秒(自 snowflake.Epoch 起)。
-	// 用 NewNode() 构造发号器时会被当作地板注入;0 表示这个 id 此前没人用过。
-	//
-	// ⚠️ Allocate 之后**只读**。曾经在 advanceGuard 里把它改写成"本进程刚写的水位",
-	// 那既与本注释的语义矛盾(它是继承来的地板,不是自己的水位),又让这个导出字段
-	// 与 keepalive goroutine 的写入发生数据竞争。自己的水位改用 guardWritten 跟踪。
-	GuardEpochSec uint64
-	prefix        string
-	cancel        context.CancelFunc
-	cli           *clientv3.Client
-	// host 是分配时实际写入 idKey 的亲和键(可能是派生键 hostname#lease),
-	// Close() 用它定位 releasedKey。
-	host string
+// scanWatermarks 读 watermark/ 全表;cluster 0 兼容期与旧布局的 snowflake_guard /
+// guard_ms 按槽取 max。发布一版之后可删兼容读。
+func scanWatermarks(ctx context.Context, cli *clientv3.Client, kind string, r resolvedOptions) (map[uint64]uint64, error) {
+	wm, err := scanSecMap(ctx, cli, watermarkPrefix(kind, r.cluster), 1)
+	if err != nil {
+		return nil, err
+	}
+	if r.cluster != 0 || r.legacy == "" {
+		return wm, nil
+	}
+	legacySec, err := scanSecMap(ctx, cli, legacyGuardPrefix(r.legacy), 1)
+	if err != nil {
+		return nil, err
+	}
+	wm = mergeWatermarks(wm, legacySec)
+	legacyMs, err := scanSecMap(ctx, cli, legacyGuardMsPrefix(r.legacy), 1000)
+	if err != nil {
+		return nil, err
+	}
+	// guard_ms 是 Unix 毫秒,换算成 snowflake.Epoch 起的秒。
+	for slot, unixSec := range legacyMs {
+		if unixSec > snowflake.Epoch {
+			legacyMs[slot] = unixSec - snowflake.Epoch
+		} else {
+			delete(legacyMs, slot)
+		}
+	}
+	return mergeWatermarks(wm, legacyMs), nil
+}
 
-	// guardMu 串行化水位推进,guardWritten 是本进程**已成功落盘**的最大水位。
+// scanSecMap 把 <prefix><slot>=<n> 读成 map[slot]=n/divisor。
+func scanSecMap(ctx context.Context, cli *clientv3.Client, prefix string, divisor uint64) (map[uint64]uint64, error) {
+	resp, err := cli.Get(ctx, prefix, clientv3.WithPrefix())
+	if err != nil {
+		return nil, fmt.Errorf("snowflakealloc: scan %s: %w", prefix, err)
+	}
+	out := make(map[uint64]uint64, len(resp.Kvs))
+	for _, kv := range resp.Kvs {
+		slot, perr := strconv.ParseUint(strings.TrimPrefix(string(kv.Key), prefix), 10, 64)
+		if perr != nil {
+			continue
+		}
+		v, perr := strconv.ParseUint(string(kv.Value), 10, 64)
+		if perr != nil {
+			continue
+		}
+		out[slot] = v / divisor
+	}
+	return out, nil
+}
+
+// readWatermarkFloor 读某个槽的持久水位(新 key,cluster 0 兼容期与旧 key 取 max)。
+// key 不存在返回 (0, 0, nil)(此前没人用过)。第二个返回值是**新 key** 的 ModRevision,
+// 给水位写的 CAS 当起点(见 putWatermarkLocked),0 = key 不存在。
+//
+// 抽成变量只为让测试注入读失败(F4 的 fail-closed 分支);生产路径恒等于下面这个实现。
+var readWatermarkFloorFn = readWatermarkFloor
+
+func readWatermarkFloor(ctx context.Context, cli *clientv3.Client, kind string, r resolvedOptions, slot uint64) (uint64, int64, error) {
+	floor, rev, err := readUintRev(ctx, cli, watermarkKey(kind, r.cluster, slot))
+	if err != nil {
+		return 0, 0, err
+	}
+	if r.cluster == 0 && r.legacy != "" {
+		if legacy, err := readUint(ctx, cli, legacyGuardKey(r.legacy, slot)); err != nil {
+			return 0, 0, err
+		} else if legacy > floor {
+			floor = legacy
+		}
+	}
+	return floor, rev, nil
+}
+
+// watermarkFloorReadAttempts 是申领后读地板的重试次数。地板是复用路径**唯一**的防线
+// (复用刻意跳过隔离期),一次 RPC 抖动就把它读丢太脆。
+const watermarkFloorReadAttempts = 3
+
+// readWatermarkFloorRetry 带界重试地读地板。
+//
+// 刻意**不继承调用方的 ctx**:消费方给整个申领 10s,走到这里预算可能已经花光,
+// 而"外层表快到点了"不是放弃读地板的理由 —— 读不到就只能 fail-closed(见调用点)。
+// 每次尝试用一个新的 etcdOpTimeout。
+func readWatermarkFloorRetry(cli *clientv3.Client, kind string, r resolvedOptions, slot uint64) (uint64, int64, error) {
+	var lastErr error
+	for i := 0; i < watermarkFloorReadAttempts; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), etcdOpTimeout)
+		floor, rev, err := readWatermarkFloorFn(ctx, cli, kind, r, slot)
+		cancel()
+		if err == nil {
+			return floor, rev, nil
+		}
+		lastErr = err
+		logx.Errorf("[snowflakealloc] read watermark floor attempt %d/%d failed (kind=%s cluster=%d slot=%d): %v",
+			i+1, watermarkFloorReadAttempts, kind, r.cluster, slot, err)
+		if i+1 < watermarkFloorReadAttempts {
+			time.Sleep(200 * time.Millisecond)
+		}
+	}
+	return 0, 0, lastErr
+}
+
+func readUint(ctx context.Context, cli *clientv3.Client, key string) (uint64, error) {
+	v, _, err := readUintRev(ctx, cli, key)
+	return v, err
+}
+
+// readUintRev 读一个十进制数值 key,同时返回它的 ModRevision(key 不存在时都是 0)。
+func readUintRev(ctx context.Context, cli *clientv3.Client, key string) (uint64, int64, error) {
+	resp, err := cli.Get(ctx, key)
+	if err != nil {
+		return 0, 0, err
+	}
+	if len(resp.Kvs) == 0 {
+		return 0, 0, nil
+	}
+	v, perr := strconv.ParseUint(string(resp.Kvs[0].Value), 10, 64)
+	if perr != nil {
+		return 0, 0, fmt.Errorf("malformed value %q at %s: %w", resp.Kvs[0].Value, key, perr)
+	}
+	return v, resp.Kvs[0].ModRevision, nil
+}
+
+// ---- Handle --------------------------------------------------------------------
+
+// Fencer 是"能被永久停用"的发号器:shared/snowflake.Node 与 login 的 PlayerIDGen 都满足。
+type Fencer interface{ Fence() }
+
+// Handle 把槽位、lease、keepalive / 水位 / reclaim 循环打包,方便调用方在进程退出时清理。
+type Handle struct {
+	// Kind / Cluster / Slot / WorkerID / UUID 分配之后只读。
+	Kind     string
+	Cluster  uint32
+	Slot     uint64
+	WorkerID uint64 // = ComposeWorkerID(Cluster, Slot),发号器吃的就是它
+	UUID     string
+	// GuardEpochSec 是这个槽上**前任**最后记录的水位(自 snowflake.Epoch 起,含前推)。
+	// NewNode() 会把它当地板注入;0 表示此前没人用过。分配之后只读。
+	GuardEpochSec uint64
+
+	r      resolvedOptions
+	cli    *clientv3.Client
+	host   string
+	cancel context.CancelFunc
+
+	// lease 是当前挂着 slots key 的 lease(reclaim 会换);incarnation 是最近一次
+	// 成功挂上 slots key 的 Txn revision(全局单调唯一,日志按它关联)。
+	lease       atomic.Int64
+	incarnation atomic.Int64
+	// registered = slots key 此刻确实挂在我们的 lease 上(本地缓存启动时为 false,
+	// 注册成功后置 true)。
+	registered atomic.Bool
+	// needReclaim = 有信号表明 slots key 可能不在我们的 lease 上,循环要去重新挂。
+	needReclaim atomic.Bool
+
+	// fence 是按水位年龄自 fence 的闸,每次水位写成功 Ack;发号器共用它。
+	fence *snowflake.FenceClock
+
+	fencersMu sync.Mutex
+	fencers   []Fencer
+
+	// guardMu 串行化水位推进;guardWritten / msWritten 是本进程**已成功落盘**的最大水位。
+	// 必须串行:NewNode() 的同步首写(调用方协程)与循环 goroutine 的 tick 并发;
+	// 锁跨 Txn 持有保证"值的顺序 = 落盘的顺序",水位绝不倒退。
 	//
-	// 必须串行的原因:advanceGuard 有两个调用方并发 —— NewNode() 的同步首写(调用方
-	// 协程)与 keepalive goroutine 的 tick,而 goroutine 在 NewNode() 之前就已启动。
-	// 不串行会有两个后果:①对 guardWritten 的读改写是数据竞争;②两次 Put 可能乱序
-	// 落盘,把已写的大值覆盖成小值 —— **水位倒退**,地板契约直接破,而这正是整套机制
-	// 要防的东西。锁跨 Put 持有是刻意的:它同时保证了"值的顺序 = 落盘的顺序"。
+	// guardRev / msRev 是两把水位 key 已知的 ModRevision,给写入的 CAS 用
+	// (见 putWatermarkLocked:etcd 的值比较是按字节的,"9" > "10",没法拿 Value 比大小)。
 	guardMu      sync.Mutex
 	guardWritten uint64
+	guardRev     int64
+	msWritten    uint64
+	msRev        int64
+	// 本地缓存的落盘状态(guardMu 下;设计稿 §7.5-5,用户拍板:**稳态零写盘**)。
+	// cache 是缓存文件的内存映像,每次 Ack / 每拍都更新;磁盘只在下面三种时刻写:
+	//   - cacheWrittenInc ≠ 当前 incarnation(申领 / reclaim 之后的第一次 Ack:身份落盘);
+	//   - watermarkDegraded(故障模式:上一次水位 Txn 出错 / 超时 / 归属不成立 / 缓存启动
+	//     尚未注册):故障期本地高水位是同主机 F 内重启时唯一罩得住已发号段的地板,每一拍
+	//     都要在 Txn **之前**落盘,第一次失败则在失败一返回时立刻写;
+	//   - Close()(最终值)。
+	// 稳态(上一拍已 Ack)一次都不写:继任者的地板在 etcd 里,磁盘那份只在"etcd 不通时起服"
+	// 才被读。代价是磁盘上的 LastAckWall 在健康运行期间不刷新 —— 健康跑了很久之后崩溃、
+	// 且重启那一刻 etcd 恰好也不通,缓存会因 LastAckWall 早于 F 而不可用,只能等 etcd;
+	// 这是双重故障,§7.5-5 明确接受。
+	// cacheDirty = 内存记录里有磁盘上还没有的变化,让"补写"不会重复写同一份内容。
+	// watermarkDegraded 的进入 / 退出各记一条日志(不是每拍),便于按日志对齐故障窗口。
+	cache             cacheRecord
+	cacheDirty        bool
+	cacheWrittenInc   int64
+	watermarkDegraded bool
+	lastCacheErr      time.Time
 
-	// node 是经 NewNode() 构造出的发号器(为空 = 调用方还没构造)。
-	// advanceGuard 靠它读真实高水位:发号器借位(step 耗尽 / 时钟停摆)时
-	// lastTime 会跑到墙钟前面,只写墙钟的水位对下一任就是低地板。
-	// 单写单读:NewNode 在启动期调用一次,之后只有 keepalive goroutine 读。
+	// node 是经 NewNode() 构造出的发号器(为空 = 调用方还没构造 / login 用的是 bwmarrin)。
+	// advanceGuard 靠它读真实高水位:借位时 lastTime 会跑到墙钟前面。
 	node atomic.Pointer[snowflake.Node]
 
 	closing  atomic.Bool
@@ -329,18 +675,10 @@ type Handle struct {
 	lostOnce sync.Once
 }
 
-// Lost 在本进程**不再持有** worker id 的 etcd 租约时关闭。
+// Lost 在本进程**真的不再持有**槽位时关闭:slots key 被挂到了别的 uuid 上
+// (运维手动清理 / 水位机制被绕过 / 旧版本二进制)。lease 丢了不算 —— 循环会先 reclaim。
 //
-// 为什么必须暴露:租约一过期,etcd 就可以把同一个 worker id 分给别的进程,
-// 而本进程的 snowflake.Node 完全不知道,会继续用这个 worker id 发号 —— 两边
-// 同一秒发出的号逐位相同。启动 guard 挡不住这种情况(它只覆盖"旧进程已经退出"
-// 的重启窗口)。
-//
-// C++ 侧对同一个问题的处理是 Node::OnNodeIdConflictShutdown:立刻 fence 发号器,
-// 存盘,然后退出。Go 服务没有"局内状态"要抢救,所以正确动作就是停止服务、
-// 让编排把它拉起来 —— 重启后会拿一个新租约,并被启动 guard 兜住。
-//
-// Close() 引起的正常关闭**不会**触发本 channel。
+// 消费方契约不变:收到即 Fence 发号器并退出,让编排重拉。Close() 引起的正常关闭不触发。
 func (h *Handle) Lost() <-chan struct{} {
 	if h == nil {
 		return nil
@@ -349,393 +687,943 @@ func (h *Handle) Lost() <-chan struct{} {
 }
 
 func (h *Handle) markLost() {
-	h.lostOnce.Do(func() { close(h.lost) })
+	h.lostOnce.Do(func() {
+		// 防御纵深:不等消费方,先把挂在本 Handle 上的发号器都关掉。
+		h.fenceAll()
+		close(h.lost)
+	})
 }
 
-// AllocateWithKeepAlive 调用 Allocate 并在后台启动 KeepAlive。
-// 返回的 Handle.Close() 会取消 KeepAlive 并 Revoke lease。
+func (h *Handle) lostClosed() bool {
+	select {
+	case <-h.lost:
+		return true
+	default:
+		return false
+	}
+}
+
+// Lease 返回当前 lease(本地缓存启动且尚未注册时为 0)。
+func (h *Handle) Lease() clientv3.LeaseID { return clientv3.LeaseID(h.lease.Load()) }
+
+// Incarnation 返回 slots key 最近一次成功挂上时的 revision。
+func (h *Handle) Incarnation() int64 { return h.incarnation.Load() }
+
+// Registered 返回 slots key 此刻是否确认挂在我们的 lease 上。
+func (h *Handle) Registered() bool { return h.registered.Load() }
+
+// FenceClock 返回自 fence 闸,给不走 NewNode 的发号器(login PlayerIDGen)共用。
+func (h *Handle) FenceClock() *snowflake.FenceClock { return h.fence }
+
+// LogFields 返回日志关联三字段:kind / worker=c<cluster>:<slot> / inc=<revision>。
+// slot 会随重启变,inc 全局单调唯一 —— 排查撞号按 inc。
+func (h *Handle) LogFields() string {
+	s := fmt.Sprintf("kind=%s worker=c%d:%d inc=%d", h.Kind, h.Cluster, h.Slot, h.Incarnation())
+	if !h.registered.Load() {
+		s += " (cached, unregistered)"
+	}
+	return s
+}
+
+// AttachFencer 登记一个发号器:Close() 与 markLost 会先 Fence 它们。NewNode 自动登记;
+// login 把 PlayerIDGen 挂上来。
+func (h *Handle) AttachFencer(f Fencer) {
+	if f == nil {
+		return
+	}
+	h.fencersMu.Lock()
+	h.fencers = append(h.fencers, f)
+	h.fencersMu.Unlock()
+}
+
+func (h *Handle) fenceAll() {
+	h.fencersMu.Lock()
+	fs := append([]Fencer(nil), h.fencers...)
+	h.fencersMu.Unlock()
+	for _, f := range fs {
+		f.Fence()
+	}
+}
+
+func (h *Handle) sKey() string { return slotKey(h.Kind, h.Cluster, h.Slot) }
+func (h *Handle) aKey() string { return affinityKey(h.Kind, h.Cluster, h.host) }
+
+// AllocateWithKeepAlive 申领槽位并在后台启动 keepalive / 水位 / reclaim 循环。
 //
-// keepalive goroutine 必须 drain 响应 channel —— 不读会导致 etcd client 的
-// 16-slot buffer 填满后频繁打 "lease keepalive response queue is full" 日志。
-// 这里用 for-range 静默吃掉响应,lease 本身由 etcd client 内部维护。
-func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, prefix, hostname string, opts Options) (*Handle, error) {
-	leaseID, workerID, err := Allocate(ctx, cli, prefix, hostname, opts)
+// 启动期弱依赖(设计稿 §3.5):申领失败且原因不是"候选为空 / 参数错"时,若本地缓存
+// 说 now − lastAckWall < F,就用缓存的槽起来,后台每 2s 重试注册;注册成功前水位
+// 不会 Ack,所以 F 规则仍然兜着。etcd 可达时缓存只做日志关联。
+func AllocateWithKeepAlive(ctx context.Context, cli *clientv3.Client, kind, hostname string, opts Options) (*Handle, error) {
+	r, err := opts.resolve()
 	if err != nil {
 		return nil, err
 	}
+	workerFor := func(slot uint64) (uint64, error) {
+		return ComposeWorkerID(r.cluster, slot, r.clusterBits, r.slotBits)
+	}
+
+	cl, err := allocate(ctx, cli, kind, hostname, r)
+	if err != nil {
+		if errors.Is(err, ErrNoSlotAvailable) || errors.Is(err, ErrInvalidOptions) || r.cachePath == "" {
+			return nil, err
+		}
+		rec, cerr := readCacheFile(r.cachePath)
+		if cerr != nil {
+			logx.Errorf("[snowflakealloc] allocation failed (%v) and local cache %s unusable (%v); cannot start",
+				err, r.cachePath, cerr)
+			return nil, err
+		}
+		age := time.Since(time.UnixMilli(rec.LastAckWall))
+		if rec.Kind != kind || rec.Cluster != r.cluster || rec.Slot > r.maxSlot || age < 0 || age >= r.fenceAfter {
+			logx.Errorf("[snowflakealloc] allocation failed (%v); local cache %s is not usable "+
+				"(kind=%s cluster=%d slot=%d ack_age=%v F=%v); cannot start",
+				err, r.cachePath, rec.Kind, rec.Cluster, rec.Slot, age.Truncate(time.Second), r.fenceAfter)
+			return nil, err
+		}
+		worker, werr := workerFor(rec.Slot)
+		if werr != nil {
+			return nil, werr
+		}
+		h := newHandle(cli, kind, hostname, r, worker, rec.Slot, rec.UUID)
+		h.incarnation.Store(rec.Incarnation)
+		// 地板 = max(最后一次写成功的水位, 本地高水位) + lead。
+		//
+		// 取 max 是必须的:前任(= 上一次的本进程)在 etcd 不通期间照样发号,那段时间
+		// LastWatermark 是**冻住的**,只有 LocalHighWaterSec 跟着走。少了它,同主机在 F 内
+		// 重启就会以一个罩不住前任借位 / 时钟回拨的地板起来。再 +lead 吃掉"最后一次落盘
+		// 之后又发了 <1s 号"的窗口;SetGuardTime 是 floor 语义,自动与 now 取 max。
+		floor := rec.LastWatermark
+		if rec.LocalHighWaterSec > floor {
+			floor = rec.LocalHighWaterSec
+		}
+		h.GuardEpochSec = floor + guardLeadSec
+		h.guardWritten = floor
+		h.msWritten = rec.LastWatermarkMs
+		if rec.LocalHighWaterMs > h.msWritten {
+			h.msWritten = rec.LocalHighWaterMs
+		}
+		h.cache = *rec
+		h.fence.SeedAck(time.UnixMilli(rec.LastAckWall))
+		h.needReclaim.Store(true)
+		// 能走到这里就是 etcd 不通:这一世还没有任何一次 Ack,发出去的号只有本地高水位能罩,
+		// 所以从第一拍起就按故障模式对待(每拍在 Txn 之前落盘),不等第一次 Txn 超时才发现要写。
+		// 进入故障模式的日志就是下面这条,ackLocked 退出时再记一条。
+		h.watermarkDegraded = true
+		logx.Errorf("[snowflakealloc] etcd unreachable (%v); booting from local cache %s: %s, last ack %v ago "+
+			"(F=%v) — registration will be retried every %v; minting stops if no ack lands within F; "+
+			"entering watermark outage mode: local high water is persisted every tick until a watermark lands",
+			err, r.cachePath, h.LogFields(), age.Truncate(time.Second), r.fenceAfter, reclaimRetryInterval)
+		kaCtx, cancel := context.WithCancel(context.Background())
+		h.cancel = cancel
+		go h.run(kaCtx, &loopState{})
+		return h, nil
+	}
+
+	worker, err := workerFor(cl.slot)
+	if err != nil {
+		_, _ = cli.Revoke(context.Background(), cl.lease)
+		return nil, err
+	}
+
+	// 读前任在这个槽上留下的高水位(带界重试:地板读丢一次就重放前任的号,代价太大)。
+	floor, floorRev, ferr := readWatermarkFloorRetry(cli, kind, r, cl.slot)
+	if ferr != nil && cl.reused {
+		// **复用路径 fail-closed**:复用是刻意跳过隔离期的(前任已 fence 并优雅退出),
+		// 于是水位地板是这条路径上**唯一**的跨重启防线;读不到它就等于没有防线。
+		// 撤销 lease 直接失败 —— 进程重启后会走正常申领,拿一个受隔离期保护的新槽。
+		_, _ = cli.Revoke(context.Background(), cl.lease)
+		return nil, fmt.Errorf("snowflakealloc: reused slot c%d:%d but its watermark floor is unreadable "+
+			"(kind=%s host=%s): %w; refusing to mint without the predecessor's floor", r.cluster, cl.slot, kind, hostname, ferr)
+	}
+
+	h := newHandle(cli, kind, hostname, r, worker, cl.slot, cl.uuid)
+	h.lease.Store(int64(cl.lease))
+	h.incarnation.Store(cl.incarnation)
+	h.registered.Store(true)
+	if ferr != nil {
+		// 全新申领:槽刚过完隔离期 Q,前任(如果有)早就停发 F 之前的事了,退化成只有
+		// 启动 guard 的旧强度不阻断启动。但**不能**把 guardWritten 当成 0 记下来 ——
+		// 那会让第一次 advanceGuard 以为"etcd 里没有更高的值",把别人写的高水位盖低。
+		// 留它不设(=0 且 guardRev=0),putWatermarkLocked 的 CAS 会去 etcd 里问真值。
+		logx.Errorf("[snowflakealloc] read watermark floor failed (%s): %v; falling back to boot-guard only — "+
+			"a clock-skewed takeover could replay the previous holder's ids", h.LogFields(), ferr)
+		// 兜一层本地缓存:同主机上一次就用的这个槽时,缓存里的水位同样是合法地板。
+		floor = h.floorFromCache(cl.slot)
+	} else {
+		h.guardWritten = floor
+		h.guardRev = floorRev
+	}
+	h.GuardEpochSec = floor
 
 	kaCtx, cancel := context.WithCancel(context.Background())
-	ch, err := cli.KeepAlive(kaCtx, leaseID)
+	h.cancel = cancel
+	ka, err := cli.KeepAlive(kaCtx, cl.lease)
 	if err != nil {
 		cancel()
-		_, _ = cli.Revoke(context.Background(), leaseID)
+		_, _ = cli.Revoke(context.Background(), cl.lease)
 		return nil, fmt.Errorf("snowflakealloc: keepalive: %w", err)
 	}
 
-	// 读前任在这个 worker id 上留下的高水位。读不到(首次使用 / 被运维清过)就是 0,
-	// 退化成只有启动 guard 的旧强度,不阻断启动。
-	guardSec, gerr := readGuard(ctx, cli, prefix, workerID)
-	if gerr != nil {
-		logx.Errorf("[snowflakealloc] read guard watermark failed (prefix=%s, worker_id=%d): %v; "+
-			"falling back to boot-guard only — a clock-skewed takeover could replay the previous holder's ids",
-			prefix, workerID, gerr)
-	}
+	// **申领后立刻同步写一次水位**(带槽归属校验):任何被持有的槽都必须有 ≥ 申领时刻的
+	// 水位,否则它在申领者眼里仍是"从没用过",隔离期对它无效。写失败只告警,闸不 Ack,
+	// 发号器会拒发到下一次写成功为止(fail-closed)。
+	h.advanceGuard(ctx)
 
-	h := &Handle{
-		LeaseID:       leaseID,
-		WorkerID:      workerID,
-		GuardEpochSec: guardSec,
-		// 起点 = 前任已落盘的水位:低于它的目标值无需重复写(它已经罩住了)。
-		guardWritten: guardSec,
-		prefix:       prefix,
-		cancel:       cancel,
-		cli:          cli,
-		lost:         make(chan struct{}),
-	}
-
-	// 所有权由 **key** 表达,而 KeepAlive 只观测 **lease** —— 两者错配就是静默双发号盲区:
-	// Allocate 的 hostname 复用分支是无条件抢占(只 CAS nodeKey 的 value),
-	// 别人接管时会把 nodeKey/idKey 直接 Put 到他自己的 lease 上。etcd 的 Put 只是把 key
-	// 从旧 lease 摘下改挂新 lease,**不会撤销也不会通知旧 lease** —— 于是被抢的一方
-	// KeepAlive 仍然成功、channel 不关、自 fencing 也不触发(它续租得好好的),
-	// 却已经不再拥有这个 worker id。运维直接 etcdctl del 同理。
-	// 所以必须补一条按 key 归属判定的通道:watch nodeKey,发现它改挂到别的 lease 或被删,
-	// 立刻 markLost。起点 revision 取自下面这次 Get,并在同一次 Get 里先校验一遍当前归属,
-	// 堵住"抢占发生在 Allocate 与 watch 之间"的窗口。
-	// Allocate 在亲和键被活持有者占用时会改用派生键(hostname#lease)分配,所以
-	// 这里不能用调用方传入的 hostname 反推 nodeKey,而要以 idKey 的 value(分配时
-	// 写入的实际亲和键)为准;读不到时退回传入的 hostname。
-	effectiveHost := hostname
-	if idResp, gerr := cli.Get(ctx, idKey(prefix, workerID)); gerr == nil && len(idResp.Kvs) > 0 && len(idResp.Kvs[0].Value) > 0 {
-		effectiveHost = string(idResp.Kvs[0].Value)
-	} else if gerr != nil {
-		logx.Errorf("[snowflakealloc] read idKey for effective affinity failed (prefix=%s, worker_id=%d): %v; watching %q",
-			prefix, workerID, gerr, hostname)
-	}
-	h.host = effectiveHost
-	nKey := nodeKey(prefix, effectiveHost)
-	ownershipRev, err := verifyKeyOwnership(ctx, cli, nKey, leaseID)
-	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("snowflakealloc: verify ownership: %w", err)
-	}
-	watchCh := cli.Watch(kaCtx, nKey, clientv3.WithRev(ownershipRev+1))
-
-	fenceAfter := selfFenceAfter(opts.ttl())
-	go func() {
-		// 自 fencing 看门狗:只靠"KeepAlive channel 关闭"感知失租**恒晚于服务端过期点**。
-		// clientv3(v3.5.x / v3.6.x 同)把 ka.deadline 设成 **收到响应的时刻** + TTL
-		// (lease.go 的 recvKeepAlive),而服务端的过期点是它**处理续租的时刻** + TTL,
-		// 前者恒晚一个 RTT;再叠加 deadlineLoop 每 1s 才扫一轮,channel 关闭时
-		// worker id 可能已经被 etcd 判过期、并分给别的进程了。
-		//
-		// 更关键的是:本包的消费方(guild / scene_manager)收到 Lost() 后走的是
-		// **优雅停** s.Stop(),排空在途请求期间仍会继续 Generate()。所以光"早点知道"不够,
-		// 还得留出足够排空的余量 —— 这里按 **发出请求侧的单调时间** 判定:距上一次成功续租
-		// 超过 fenceAfter(TTL 的 2/3)就主动认定失去身份。TTL=60s 时即 40s 触发,
-		// 此时服务端 lease 仍有约 20s 才过期,这 20s 就是留给优雅排空的预算(§租约与
-		// 重启时间预算必须闭合)。
-		//
-		// 不会误报:clientv3 的续租间隔是 TTL/3(20s),健康时距上次续租恒 ≤ ~20s < 40s。
-		//
-		// 节拍取 guardWriteInterval(1s)而不是 fenceAfter/4:持久水位的写入节奏
-		// 由水位契约决定(见 guardLeadSec),比 fencing 判定所需的粒度更密。
-		// 两件事共用这一个 ticker —— fencing 判定只是一次时间比较,提高频率无成本,
-		// 反而让失租感知更快;不为水位另起第二套定时器(§15.2)。
-		ticker := time.NewTicker(guardWriteInterval)
-		defer ticker.Stop()
-		lastRenew := time.Now() // 带单调读数,time.Since 不受墙钟跳变影响
-
-		for {
-			select {
-			case _, ok := <-ch:
-				if !ok {
-					h.onKeepAliveEnded(prefix, hostname)
-					return
-				}
-				lastRenew = time.Now()
-			case <-ticker.C:
-				if h.closing.Load() {
-					return
-				}
-				if since := time.Since(lastRenew); since >= fenceAfter {
-					h.onSelfFenced(prefix, hostname, since, fenceAfter)
-					return
-				}
-				// 顺带推进持久水位。复用这个已有的 ticker,不另起 goroutine / 第二套定时器。
-				// 地板契约:水位必须**不早于**最后一次发号所在的逻辑秒(见 advanceGuard
-				// 取 max 的注释);按 tick 粒度写意味着借位后最多一个 tick 内水位追平,
-				// 该窗口内前任崩溃仍有残余风险,但已从"整个借位期"缩到"单个 tick"。
-				h.advanceGuard(kaCtx)
-			case wr, ok := <-watchCh:
-				if h.closing.Load() {
-					return
-				}
-				if !ok || wr.Err() != nil {
-					// watch 断了就再也看不见被抢占,不能假装还持有所有权。
-					// fail-closed:按失去身份处理,交给编排重拉重新抢号。
-					h.onOwnershipLost(prefix, hostname,
-						fmt.Sprintf("ownership watch ended (closed=%v, err=%v)", !ok, wr.Err()))
-					return
-				}
-				for _, ev := range wr.Events {
-					if ev.Type == clientv3.EventTypeDelete {
-						h.onOwnershipLost(prefix, hostname, "node key deleted")
-						return
-					}
-					// 被接管时 value 不变(还是同一个 worker id),**变的是 lease** ——
-					// 所以只能比 lease,比 value 是看不出来的。
-					if ev.Kv != nil && clientv3.LeaseID(ev.Kv.Lease) != h.LeaseID {
-						h.onOwnershipLost(prefix, hostname,
-							fmt.Sprintf("node key re-attached to lease %x (ours is %x)",
-								ev.Kv.Lease, h.LeaseID))
-						return
-					}
-				}
-			}
-		}
-	}()
-
+	// 所有权由 **slots key 的 value** 表达,KeepAlive 只观测 lease —— 两者错配就是双发号盲区
+	// (etcd 的 Put 只把 key 从旧 lease 摘下改挂新 lease,不撤销也不通知旧 lease)。所以
+	// watch slots key:改挂到别的 uuid 立刻 markLost;DELETE 则先 reclaim 再定。
+	// 起点 = 申领 Txn 的 revision + 1,申领与 watch 之间没有窗口。
+	watch := cli.Watch(kaCtx, h.sKey(), clientv3.WithRev(cl.incarnation+1))
+	go h.run(kaCtx, &loopState{ka: ka, watch: watch})
 	return h, nil
 }
 
-// selfFenceAfter 是"距上次成功续租多久就主动认定失去 worker id"。
-// 取 TTL 的 2/3:既远大于 clientv3 的续租间隔(TTL/3)不会误报,
-// 又在服务端过期点之前留下约 TTL/3 的余量给调用方优雅排空。
-// TTL 极小时钳一个下界,避免 fenceAfter 退化到与续租间隔同量级而误报。
-func selfFenceAfter(ttlSec int64) time.Duration {
-	d := time.Duration(ttlSec) * time.Second * 2 / 3
-	if d < 2*time.Second {
-		d = 2 * time.Second
+func newHandle(cli *clientv3.Client, kind, host string, r resolvedOptions, worker, slot uint64, uuid string) *Handle {
+	h := &Handle{
+		Kind:     kind,
+		Cluster:  r.cluster,
+		Slot:     slot,
+		WorkerID: worker,
+		UUID:     uuid,
+		r:        r,
+		cli:      cli,
+		host:     host,
+		fence:    snowflake.NewFenceClock(r.fenceAfter),
+		lost:     make(chan struct{}),
 	}
-	return d
+	h.cache = cacheRecord{Kind: kind, Cluster: r.cluster, Slot: slot, UUID: uuid}
+	return h
 }
 
-// NewNode 用本 Handle 的 worker id 构造发号器,并把前任高水位作为**地板**注入。
+// floorFromCache 在 etcd 里的水位读不到时,退回本地缓存文件里的水位当地板。
 //
-// 请一律用它取代裸 snowflake.NewNode(h.WorkerID):裸构造只有"不在构造秒发号"的点排除,
-// 顶不住跨机时钟偏斜接管、本机时钟回拨、前任借过逻辑秒这三类情况。
+// 只有 (kind, cluster, slot) 三者都对上才作数 —— 那说明这台机器上一次跑的就是这个槽,
+// 缓存里的值是**本机前任**真实发过的秒,和 etcd 里那份是同一个含义。对不上就返回 0
+// (缓存属于别的槽,拿来当地板毫无意义)。读不到文件同样返回 0。
+func (h *Handle) floorFromCache(slot uint64) uint64 {
+	if h.r.cachePath == "" {
+		return 0
+	}
+	rec, err := readCacheFile(h.r.cachePath)
+	if err != nil || rec.Kind != h.Kind || rec.Cluster != h.Cluster || rec.Slot != slot {
+		return 0
+	}
+	floor := rec.LastWatermark
+	if rec.LocalHighWaterSec > floor {
+		floor = rec.LocalHighWaterSec
+	}
+	if floor > 0 {
+		logx.Errorf("[snowflakealloc] using the local cache watermark %d as the floor (%s): etcd read failed",
+			floor, h.LogFields())
+	}
+	return floor
+}
+
+// ---- 后台循环:keepalive 排空 / 水位 / watch / reclaim ---------------------------------
+
+const (
+	// guardWriteInterval 是持久水位的写入节拍(同时是循环的心跳)。
+	guardWriteInterval = time.Second
+	// guardLeadSec 是水位的**前推量**(秒),必须 **> 写入间隔**。
+	//
+	// 水位契约:任何时刻,已持久化的水位 ≥ 本进程可能发到的最大逻辑秒。
+	// 写入间隔 1s、前推 2s ⇒ 两次写入之间即使写不出去,上一次写的 (now+2) 也仍然
+	// 覆盖着这 1s 内能发到的秒。上界同样有约束:继任者拿它当地板,前推过大会撞上
+	// snowflake 的借位预算(maxBorrowAheadSec=10)直接发不出号。
+	guardLeadSec = 2
+	// reclaimRetryInterval 是 reclaim / 注册失败后的重试间隔。
+	reclaimRetryInterval = 2 * time.Second
+	// etcdOpTimeout 是循环内单次 etcd 操作(申领 / reclaim / 读地板 / released)的超时。
+	etcdOpTimeout = 3 * time.Second
+	// watermarkTxnTimeout 是 advanceGuard / PutMsWatermark 里**水位 Txn 专用**的超时,
+	// 覆盖 putWatermarkLocked 的整个调用(含 CAS 重试),刻意比 etcdOpTimeout 短。
+	// 它必须 **< guardLeadSec**,这是本地缓存"稳态零写盘"(设计稿 §7.5-5)的正确性前提:
+	//
+	//	稳态下缓存文件不再每拍预写本地高水位,于是从"上一次 Ack"到"发现这一拍写失败"之间
+	//	发出去的号,只有 etcd 里那条已 Ack 的水位罩着。上一拍在墙钟 T−1 写成功的值是
+	//	(T−1)+lead = T+1;这一拍在 T 发起的 Txn 最晚 T+1.5 返回失败,期间发出的号逻辑秒
+	//	≤ T+1 ≤ 已 Ack 水位 —— 仍被罩住。失败一返回,advanceGuard 立刻把本地高水位
+	//	(这一拍的 target = T+2)落盘并进入故障模式:此后每拍都在 Txn **之前**写,后面
+	//	发出的号全归本地高水位罩。两段拼起来没有空档。
+	//	若超时 ≥ lead(比如沿用 3s),T+2 这一秒的号会落在"etcd 没有、本地也没有"的窗口里。
+	//
+	// 借位不破坏这个论证:每拍 target 取 max(墙钟, 发号器高水位)+lead;借位速率 ≤ 1 逻辑秒 /
+	// snowflake.waitBudget(3s),而两次 Ack 之间最长 guardWriteInterval + watermarkTxnTimeout
+	// = 2.5s < 3s,所以失败窗口内高水位最多再涨 1 秒,仍在上一拍 lead(2s)之内。
+	watermarkTxnTimeout = 1500 * time.Millisecond
+)
+
+// 编译期钉死 watermarkTxnTimeout < guardLeadSec·1s:差值为负时对 uint 的常量转换不合法,
+// 改错任一常量直接编不过,不必等测试。
+const _ = uint(guardLeadSec*time.Second - watermarkTxnTimeout - 1)
+
+type loopState struct {
+	ka    <-chan *clientv3.LeaseKeepAliveResponse
+	watch clientv3.WatchChan
+	ticks uint64
+}
+
+// run 是唯一会改 lease / watch / keepalive channel 的 goroutine。
+//
+// 失租处理(设计稿 §1.3 / §3.4):keepalive 流结束、slots key 被删,都**不再**直接 markLost,
+// 而是 reclaim —— 重新 Grant 一个 lease,把 slots key 挂回去(If CreateRev==0 或
+// Value==uuid)。只有 key 被别的 uuid 占着才是真的失去所有权。
+func (h *Handle) run(kaCtx context.Context, st *loopState) {
+	ticker := time.NewTicker(guardWriteInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-kaCtx.Done():
+			return
+		case _, ok := <-st.ka:
+			if !ok {
+				if h.closing.Load() {
+					return
+				}
+				// keepalive 流结束 = lease 没了(过期 / 被撤销 / 客户端判过期)。
+				// 只是活性信号丢失,不等于所有权丢失:去看 slots key。
+				st.ka = nil
+				h.needReclaim.Store(true)
+				logx.Errorf("[snowflakealloc] keepalive stream ended (%s); attempting to reclaim the slot instead of giving up",
+					h.LogFields())
+				h.reclaim(kaCtx, st, "keepalive stream ended")
+			}
+		case <-ticker.C:
+			if h.closing.Load() {
+				return
+			}
+			st.ticks++
+			if h.needReclaim.Load() {
+				if st.ticks%uint64(reclaimRetryInterval/guardWriteInterval) == 0 {
+					h.reclaim(kaCtx, st, "periodic retry")
+				}
+			} else {
+				if st.watch == nil {
+					h.rewatch(kaCtx, st)
+				}
+				// 顺带推进持久水位:按 tick 粒度写,借位后最多一个 tick 内水位追平。
+				h.advanceGuard(kaCtx)
+				if h.needReclaim.Load() {
+					h.reclaim(kaCtx, st, "watermark txn found the slot not on our uuid")
+				}
+			}
+		case wr, ok := <-st.watch:
+			if h.closing.Load() {
+				return
+			}
+			if !ok || wr.Err() != nil {
+				// watch 断了不等于失去所有权(弱依赖):下一拍先 Get 校验归属再重新 watch。
+				logx.Errorf("[snowflakealloc] ownership watch ended (closed=%v err=%v; %s); will re-verify and re-watch",
+					!ok, wr.Err(), h.LogFields())
+				st.watch = nil
+				continue
+			}
+			for _, ev := range wr.Events {
+				if ev.Type == clientv3.EventTypeDelete {
+					h.needReclaim.Store(true)
+					h.reclaim(kaCtx, st, "slot key deleted")
+					continue
+				}
+				if ev.Kv == nil {
+					continue
+				}
+				if string(ev.Kv.Value) != h.UUID {
+					h.onOwnershipLost(fmt.Sprintf("slot key now holds uuid %s on lease %x", ev.Kv.Value, ev.Kv.Lease))
+					return
+				}
+				// 被接管时 value 可能不变(有人拿我们的 uuid 重挂),**变的是 lease** ——
+				// 我们自己的 reclaim 在提交前就已把新 lease 记下,所以这里不会误判自己。
+				if clientv3.LeaseID(ev.Kv.Lease) != h.Lease() {
+					h.onOwnershipLost(fmt.Sprintf("slot key re-attached to lease %x (ours is %x)", ev.Kv.Lease, h.Lease()))
+					return
+				}
+			}
+		}
+		if h.lostClosed() {
+			return
+		}
+	}
+}
+
+// reclaim 把 slots key 重新挂到我们的 lease 上。
+//
+// 判定顺序:
+//  1. Get slots key。value 是别人的 uuid → 所有权已丢,markLost。
+//  2. value 是我们、且 lease 正是当前 lease 且仍存活 → 虚惊(客户端侧误判),恢复 keepalive 即可。
+//  3. 否则 Grant 新 lease,**一笔** Txn:If CreateRev==0(key 已过期)Then Put;
+//     Else 内层 Txn If Value==uuid(还在旧 lease 上)Then Put。两支都不成立才去看是谁拿走了。
+//
+// ⚠️ 这里必须是**一笔**嵌套 Txn,不能拆成两笔"先比 CreateRev、再比 Value"。拆开时旧 lease 的
+// revoke 只要落在两笔中间,第二笔的 Value 比较就会在一把**已经不存在**的 key 上失败,
+// 随后的 Get 读到 0 条记录,代码却把它当成"被别人抢走"→ markLost → 消费方 Fence + 退出。
+// 而这恰恰是 reclaim 存在的理由(lease 抖动),没有任何人拿走这个槽。所以:
+// 只有 follow-up Get 读到一条 value ≠ 我们 uuid 的记录,才算真的失去所有权。
+//
+// etcd 不可达时什么都不改,留着 needReclaim 下一拍再试;这段时间发号器由 F 兜底。
+func (h *Handle) reclaim(kaCtx context.Context, st *loopState, reason string) {
+	ctx, cancel := context.WithTimeout(kaCtx, etcdOpTimeout)
+	defer cancel()
+
+	resp, err := h.cli.Get(ctx, h.sKey())
+	if err != nil {
+		logx.Errorf("[snowflakealloc] reclaim (%s) cannot read slot key (%s): %v; will retry", reason, h.LogFields(), err)
+		return
+	}
+	cur := h.Lease()
+	if len(resp.Kvs) == 1 {
+		kv := resp.Kvs[0]
+		if string(kv.Value) != h.UUID {
+			h.onOwnershipLost(fmt.Sprintf("reclaim (%s): slot key held by uuid %s on lease %x", reason, kv.Value, kv.Lease))
+			return
+		}
+		if cur != 0 && clientv3.LeaseID(kv.Lease) == cur {
+			if ttl, terr := h.cli.TimeToLive(ctx, cur); terr == nil && ttl.TTL > 0 {
+				if st.ka == nil {
+					if ch, kerr := h.cli.KeepAlive(kaCtx, cur); kerr == nil {
+						st.ka = ch
+					}
+				}
+				h.needReclaim.Store(false)
+				h.registered.Store(true)
+				if st.watch == nil {
+					st.watch = h.cli.Watch(kaCtx, h.sKey(), clientv3.WithRev(resp.Header.Revision+1))
+				}
+				logx.Infof("[snowflakealloc] reclaim (%s): slot still on our live lease %x, nothing to do (%s)",
+					reason, cur, h.LogFields())
+				return
+			}
+		}
+	}
+
+	lease, err := h.cli.Grant(ctx, h.r.ttl)
+	if err != nil {
+		logx.Errorf("[snowflakealloc] reclaim (%s) cannot grant lease (%s): %v; will retry", reason, h.LogFields(), err)
+		return
+	}
+	slotStr := strconv.FormatUint(h.Slot, 10)
+	puts := []clientv3.Op{
+		clientv3.OpPut(h.sKey(), h.UUID, clientv3.WithLease(lease.ID)),
+		clientv3.OpPut(h.aKey(), slotStr, clientv3.WithLease(lease.ID)),
+	}
+	// 过渡期(见 legacyMirror):旧布局的 id 键跟着换到新 lease,否则它随旧 lease 过期后
+	// 灰度中的旧二进制就看不见这个槽被占了。
+	if h.r.legacyMirror() {
+		puts = append(puts, clientv3.OpPut(legacyIDKey(h.r.legacy, h.Slot), h.host, clientv3.WithLease(lease.ID)))
+	}
+	txn, err := h.cli.Txn(ctx).
+		If(clientv3.Compare(clientv3.CreateRevision(h.sKey()), "=", 0)).
+		Then(puts...).
+		Else(clientv3.OpTxn(
+			[]clientv3.Cmp{clientv3.Compare(clientv3.Value(h.sKey()), "=", h.UUID)},
+			puts,
+			nil,
+		)).
+		Commit()
+	if err != nil {
+		_, _ = h.cli.Revoke(context.Background(), lease.ID)
+		logx.Errorf("[snowflakealloc] reclaim (%s) txn failed (%s): %v; will retry", reason, h.LogFields(), err)
+		return
+	}
+	// recreated = key 当时已经不存在了,是我们重新 Create 出来的。这条信息决定要不要
+	// 重读地板(见下面的 refloor):key 消失意味着我们的 lease 曾经过期,而过期时长
+	// 可能已经越过隔离期 Q —— 那期间别人可以合法申领这个槽、发一批号、再释放。
+	recreated := txn.Succeeded
+	inner := txn.Responses[0].GetResponseTxn()
+	if !txn.Succeeded && !inner.GetSucceeded() {
+		_, _ = h.cli.Revoke(context.Background(), lease.ID)
+		g, gerr := h.cli.Get(ctx, h.sKey())
+		switch {
+		case gerr != nil:
+			logx.Errorf("[snowflakealloc] reclaim (%s) lost both compares but the follow-up read failed (%s): %v; "+
+				"assuming a blip and retrying", reason, h.LogFields(), gerr)
+		case len(g.Kvs) == 1 && string(g.Kvs[0].Value) != h.UUID:
+			h.onOwnershipLost(fmt.Sprintf("reclaim (%s): slot key taken by uuid %s on lease %x",
+				reason, g.Kvs[0].Value, g.Kvs[0].Lease))
+		default:
+			// key 不见了 / 又变回我们的 uuid:没有任何人接管的证据,不许 markLost
+			// (那会让消费方 Fence + 退出)。留着 needReclaim,下一拍重试。
+			logx.Errorf("[snowflakealloc] reclaim (%s) raced with the key's own expiry (%s); nobody took the slot, retrying",
+				reason, h.LogFields())
+		}
+		return
+	}
+
+	prevInc := h.incarnation.Load()
+	h.lease.Store(int64(lease.ID))
+	h.incarnation.Store(txn.Header.Revision)
+	h.needReclaim.Store(false)
+	h.registered.Store(true)
+	// 重新 Create 出来的 key,或本进程已经因水位过期自 fence 过 —— 两者都意味着"这中间
+	// 可能有别人当过这个槽的主人",必须把 etcd 里现在的水位重新吃成地板。
+	if stale, _ := h.fence.Stale(); recreated || stale {
+		h.refloorFromWatermark(ctx, reason, recreated)
+	}
+	if ch, kerr := h.cli.KeepAlive(kaCtx, lease.ID); kerr == nil {
+		st.ka = ch
+	} else {
+		// 开不了 keepalive 流:lease 会在 TTL 后过期 → DELETE 事件 → 再来一次 reclaim。
+		st.ka = nil
+		logx.Errorf("[snowflakealloc] reclaim: keepalive on new lease %x failed: %v", lease.ID, kerr)
+	}
+	if st.watch == nil {
+		st.watch = h.cli.Watch(kaCtx, h.sKey(), clientv3.WithRev(txn.Header.Revision+1))
+	}
+	logx.Errorf("[snowflakealloc] reclaimed slot (%s): %s, incarnation %d -> %d, lease %x -> %x",
+		reason, h.LogFields(), prevInc, txn.Header.Revision, cur, lease.ID)
+}
+
+// refloorFromWatermark 在"槽 key 曾经消失过"或"本进程曾经因水位过期自 fence"之后,
+// 把 etcd 里当前的水位重新当地板吃回来(秒级喂 SetGuardTime,毫秒级抬 msWritten)。
+//
+// 为什么申领时读一次不够:reclaim 的 CreateRev==0 分支是一次**重新申领** —— key 之所以
+// 不存在,是因为我们的 lease 早就过期了。如果那段失联超过隔离期 Q,继任者 B 可以合法拿走
+// 这个槽、发一批号、再释放;等我们回来把 key 重新 Create 出来时,发号器还停在自己那口
+// (可能落后于 B 的)时钟上,没有任何东西把它抬到 B 的高水位之上。
+//
+// 读失败时只告警不阻断:putWatermarkLocked 的 CAS 是最后一道保险 —— 它发现 etcd 里的
+// 存值更高时会把存值当地板吃下去,而**闸只在那条路径上 Ack**,所以在地板补齐之前
+// 发号器根本不会恢复发号。
+func (h *Handle) refloorFromWatermark(ctx context.Context, reason string, recreated bool) {
+	floor, rev, err := readWatermarkFloorFn(ctx, h.cli, h.Kind, h.r, h.Slot)
+	if err != nil {
+		logx.Errorf("[snowflakealloc] reclaim (%s) could not re-read the watermark floor (%s): %v; "+
+			"the next watermark write will adopt whatever etcd holds before un-fencing", reason, h.LogFields(), err)
+		return
+	}
+	ms, msErr := readMsWatermarkRaw(ctx, h)
+
+	h.guardMu.Lock()
+	defer h.guardMu.Unlock()
+	if floor > h.guardWritten {
+		h.guardWritten = floor
+	}
+	h.guardRev = rev
+	if msErr == nil && ms > h.msWritten {
+		h.msWritten = ms
+	}
+	if n := h.node.Load(); n != nil && floor > 0 {
+		// 地板语义:只在比当前高水位更晚时才生效,绝不把发号器往回拨。
+		n.SetGuardTime(floor)
+	}
+	logx.Errorf("[snowflakealloc] reclaim (%s) re-applied the watermark floor sec=%d ms=%d (%s, recreated=%v): "+
+		"another holder may have used this slot while we were away", reason, floor, h.msWritten, h.LogFields(), recreated)
+}
+
+// readMsWatermarkRaw 读本槽的毫秒水位(新 key 与过渡期旧 key 取 max)。与 ReadMsWatermark
+// 的区别是它不碰 guardMu(调用方自己持锁),也不退回本地缓存。
+func readMsWatermarkRaw(ctx context.Context, h *Handle) (uint64, error) {
+	ms, err := readUint(ctx, h.cli, watermarkMsKey(h.Kind, h.Cluster, h.Slot))
+	if err != nil {
+		return 0, err
+	}
+	if h.r.legacyMirror() {
+		legacy, lerr := readUint(ctx, h.cli, legacyGuardMsKey(h.r.legacy, h.Slot))
+		if lerr != nil {
+			return 0, lerr
+		}
+		if legacy > ms {
+			ms = legacy
+		}
+	}
+	return ms, nil
+}
+
+// rewatch 在 watch 断掉后重建:先 Get 校验归属(不是我们的就交给 reclaim),再从当前
+// revision 之后开始 watch。etcd 不可达就留到下一拍。
+func (h *Handle) rewatch(kaCtx context.Context, st *loopState) {
+	ctx, cancel := context.WithTimeout(kaCtx, etcdOpTimeout)
+	defer cancel()
+	resp, err := h.cli.Get(ctx, h.sKey())
+	if err != nil {
+		return
+	}
+	if len(resp.Kvs) != 1 || string(resp.Kvs[0].Value) != h.UUID || clientv3.LeaseID(resp.Kvs[0].Lease) != h.Lease() {
+		h.needReclaim.Store(true)
+		return
+	}
+	st.watch = h.cli.Watch(kaCtx, h.sKey(), clientv3.WithRev(resp.Header.Revision+1))
+}
+
+// onOwnershipLost 在"slots key 归属已经不是自己"时调用。lease 可能仍然活着、KeepAlive
+// 也仍在成功 —— 但槽已经被别人接管,继续发号就是确定性撞号。
+func (h *Handle) onOwnershipLost(reason string) {
+	if h.closing.Load() {
+		return
+	}
+	logx.Errorf("[snowflakealloc] slot ownership lost (%s, host=%s): %s; another process now owns this worker id — "+
+		"generators fenced, caller MUST stop and let the orchestrator restart", h.LogFields(), h.host, reason)
+	h.markLost()
+}
+
+// ---- 水位 ------------------------------------------------------------------------
+
+// NewNode 用本 Handle 的 worker id 构造发号器,注入前任水位作地板、挂上自 fence 闸,
+// 并**同步写一次水位再把发号器交出去**。
+//
+// 请一律用它取代裸 snowflake.NewNode:裸构造只有"不在构造秒发号"的点排除,顶不住跨机
+// 时钟偏斜接管、本机时钟回拨、前任借过逻辑秒这三类情况;也没有自 fence。
 func (h *Handle) NewNode() *snowflake.Node {
 	n := snowflake.NewNode(h.WorkerID)
-	if h.GuardEpochSec > 0 {
-		n.SetGuardTime(h.GuardEpochSec)
+	// 地板取"申领时读到的前任水位"与"已确认落盘的水位"的**较大者**:申领时那次读可能
+	// 失败过(降级分支只有启动 guard),而在那之后的第一次水位写会通过 CAS 把 etcd 里的
+	// 真值吃进 guardWritten —— 那时发号器还没构造出来,SetGuardTime 无处可打。
+	h.guardMu.Lock()
+	floor := h.GuardEpochSec
+	if h.guardWritten > floor {
+		floor = h.guardWritten
 	}
-	// 留一份引用给 advanceGuard 读高水位(见 Handle.node 注释)。
+	h.guardMu.Unlock()
+	if floor > 0 {
+		// 地板语义 + 等待真实时钟越过(不借位),这是跨重启屏障的一部分,见 snowflake.go。
+		n.SetGuardTime(floor)
+	}
+	n.SetFenceClock(h.fence)
 	h.node.Store(n)
+	h.AttachFencer(n)
 
-	// **同步写一次水位再把发号器交出去**:否则从这里到 keepalive goroutine 的
-	// 第一个 tick 之间(≤guardWriteInterval),我们已经在发号,而 etcd 里还是
-	// 前任的旧水位 —— 这段发出的号不被任何地板覆盖,崩溃 + 时钟回拨即可被继任者重放。
-	// 写失败只告警不阻断:与 advanceGuard 同理,水位是"下一任的地板",
-	// 本进程自己的唯一性由 SetGuardTime 注入的地板与高水位单调保证。
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	// 同步首写:从这里到循环的第一个 tick 之间(≤1s)我们已经在发号,etcd 里必须已经有
+	// 覆盖这段的水位。写失败只告警,闸不 Ack ⇒ 发号器拒发到下一次写成功为止。
+	ctx, cancel := context.WithTimeout(context.Background(), etcdOpTimeout)
 	h.advanceGuard(ctx)
 	cancel()
 	return n
 }
 
-// readGuard 读某个 worker id 的持久高水位。key 不存在返回 0(此前没人用过)。
-func readGuard(ctx context.Context, cli *clientv3.Client, prefix string, id uint64) (uint64, error) {
-	resp, err := cli.Get(ctx, guardKey(prefix, id))
-	if err != nil {
-		return 0, err
-	}
-	if len(resp.Kvs) == 0 {
-		return 0, nil
-	}
-	sec, perr := strconv.ParseUint(string(resp.Kvs[0].Value), 10, 64)
-	if perr != nil {
-		return 0, fmt.Errorf("malformed guard value %q: %w", resp.Kvs[0].Value, perr)
-	}
-	return sec, nil
+// SyncWatermark 同步写一次秒级水位(带槽归属校验),供不走 NewNode 的消费方(login)
+// 在开始服务前调用。返回是否写成功(= 闸已 Ack)。
+func (h *Handle) SyncWatermark(ctx context.Context) bool {
+	h.advanceGuard(ctx)
+	stale, _ := h.fence.Stale()
+	return !stale
 }
 
-// advanceGuard 把本 worker id 的持久高水位推进到"墙钟秒与发号器真实高水位的较大者"。
-// 写失败只告警不阻断:水位是"下一任的地板",本进程自己的唯一性不依赖它。
+// advanceGuard 把本槽的持久水位推进到"墙钟秒与发号器真实高水位的较大者 + 前推量",
+// 并以 **slots key 仍是我们的 uuid** 为 Txn 条件。写成功 = 同时证明了所有权 ⇒ Ack 闸。
+// 返回值 = 这一次水位是否已经落定(闸 Ack 了),Close() 用它决定要不要写 released。
 //
-// 必须取 max 而不能只写墙钟:发号器在 step 耗尽 / 时钟停摆时会**借位**
-// (snowflake.Generate 的 default 分支,lastTime 跑到墙钟前面),此时只写墙钟
-// 的水位低于真实已发号的秒;若前任在借位窗口内崩溃,继任者以低地板 + step=0
-// 重发,与前任借位期间的号逐位相同。这正是 snowflake.go SetGuardTime 注释里
-// 点名要 guard 覆盖的第三类情况("前任因发满 step 池借过逻辑秒")。
-// 同理,回拨窗口内墙钟 <= GuardEpochSec 时也不能直接冻结 —— 高水位可能仍在涨。
-func (h *Handle) advanceGuard(ctx context.Context) {
+// 取 max 而不能只写墙钟:发号器在 step 耗尽 / 时钟停摆时会**借位**(lastTime 跑到墙钟
+// 前面),只写墙钟的水位罩不住借位期间发出的号。水位单调不回退,写失败只告警:
+// 水位是"下一任的地板",本进程自己的唯一性由地板 + 高水位单调 + F 保证。
+func (h *Handle) advanceGuard(ctx context.Context) bool {
 	target := snowflake.NowEpochSec()
 	if n := h.node.Load(); n != nil {
 		if hw := n.HighWaterEpochSec(); hw > target {
 			target = hw
 		}
 	}
-	// **前推 guardLeadSec**:水位的契约是"不早于本进程可能发到的最大逻辑秒",
-	// 而两次写入之间我们还在继续发号。只写当前值的话,[上次写入, 崩溃时刻] 这段
-	// (最长一个写入间隔)发出的号就超出了已持久化的水位 —— 继任者按该水位当地板
-	// 时罩不住这段,时钟回拨叠加即可重放。前推量 > 写入间隔就把这段覆盖掉了。
-	// 与 login 的毫秒级水位(1s 节拍 / 2s 前推)同一套推导,数值口径也一致。
 	target += guardLeadSec
 
-	// 锁跨 Put 持有:见 guardMu 注释 —— 它同时挡住数据竞争与"乱序落盘导致水位倒退"。
 	h.guardMu.Lock()
 	defer h.guardMu.Unlock()
-	if target <= h.guardWritten {
-		return // 水位没有前进,不重复写
+	if target < h.guardWritten {
+		// 继承的地板比现在还高(前任时钟超前):不回退,原值重写一遍换一次 Ack。
+		target = h.guardWritten
 	}
-	putCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	_, err := h.cli.Put(putCtx, guardKey(h.prefix, h.WorkerID), strconv.FormatUint(target, 10))
-	cancel()
+	// 本地高水位先记下(故障模式下这一步就落盘,稳态只改内存),再去写 etcd。稳态不预写
+	// 之所以安全,靠的是 Txn 超时 watermarkTxnTimeout < 前推量 guardLeadSec(见常量注释):
+	// 这一拍失败被发现之前发出的号仍在上一拍已 Ack 水位的 lead 之内。
+	h.noteLocalHighWaterLocked(target, 0)
+
+	legacyKey := ""
+	if h.r.legacyMirror() {
+		legacyKey = legacyGuardKey(h.r.legacy, h.Slot)
+	}
+	persisted, owned, err := h.putWatermarkLocked(ctx, watermarkKey(h.Kind, h.Cluster, h.Slot), legacyKey, &h.guardRev, target)
 	if err != nil {
-		logx.Errorf("[snowflakealloc] advance guard watermark failed (prefix=%s, worker_id=%d): %v",
-			h.prefix, h.WorkerID, err)
+		logx.Errorf("[snowflakealloc] advance watermark failed (%s): %v", h.LogFields(), err)
+		h.noteWatermarkWriteFailedLocked("sec watermark txn failed: " + err.Error())
+		return false
+	}
+	if !owned {
+		// 槽不在我们的 uuid 上(lease 过期被删 / 被接管 / 缓存启动尚未注册):不 Ack,
+		// 交给 reclaim 判定。这里不 markLost —— 过期被删是可恢复的。
+		h.needReclaim.Store(true)
+		h.noteWatermarkWriteFailedLocked("sec watermark txn: slot not on our uuid")
+		return false
+	}
+	if persisted > target {
+		// etcd 里的存值比我们要写的还高 —— 只可能是"这个槽在我们失联期间被别人当过主人"。
+		// 把它当地板吃下去再 Ack,否则解除自 fence 之后第一个号就落在前任发过的秒里。
+		if n := h.node.Load(); n != nil {
+			n.SetGuardTime(persisted)
+		}
+		logx.Errorf("[snowflakealloc] adopted a higher stored watermark %d (ours was %d; %s): "+
+			"another holder used this slot while we were away", persisted, target, h.LogFields())
+	}
+	h.guardWritten = persisted
+	h.ackLocked()
+	return true
+}
+
+// putWatermarkLocked 写一把持久水位 key(秒级或毫秒级)。调用方必须持 guardMu。
+// 返回 (etcd 里现在的值, 槽是否仍归我们, 错误)。
+//
+// 三件事一起做:
+//  1. **归属**:外层 Txn 条件 Value(slots/<slot>)==uuid —— 提交成功即证明所有权,可以 Ack 闸。
+//  2. **相对 etcd 单调**:内层 Txn 用 ModRevision CAS。本进程自己的 guardWritten 只能挡住
+//     自己写的值倒退,挡不住"申领时地板没读到 / 失联期间别人写过更高的值"这两类;
+//     真正的存值必须由 etcd 说了算。CAS 落空时 Else 分支把当前值读回来:存值 ≥ target
+//     就干脆不写(它已经罩住我们),否则用新 revision 再试一次。
+//     ⚠️ 不能用 Compare(Value, "<") 代替 —— etcd 的值比较是**按字节**的,"9" > "10"。
+//  3. **过渡镜像**(见 legacyMirror):同一笔 Txn 里把值写进旧布局的 key,灰度期的旧二进制
+//     接手这个槽时才有地板可读。**发布一版之后把 legacyKey 参数与它的 Put 一起删。**
+//
+// 超时是 **一个** watermarkTxnTimeout 罩住整个调用(两次 CAS 尝试共用一个 deadline),
+// 不是每次尝试各一个:稳态零写盘的论证要求"从发起到发现失败"整体 < guardLeadSec,
+// 两次各 1.5s 就是 3s,又把窗口撑回去了。
+func (h *Handle) putWatermarkLocked(ctx context.Context, key, legacyKey string, rev *int64, target uint64) (uint64, bool, error) {
+	value := strconv.FormatUint(target, 10)
+	putCtx, cancel := context.WithTimeout(ctx, watermarkTxnTimeout)
+	defer cancel()
+	for attempt := 0; attempt < 2; attempt++ {
+		ops := []clientv3.Op{clientv3.OpPut(key, value)}
+		if legacyKey != "" {
+			ops = append(ops, clientv3.OpPut(legacyKey, value))
+		}
+		txn, err := h.cli.Txn(putCtx).
+			If(clientv3.Compare(clientv3.Value(h.sKey()), "=", h.UUID)).
+			Then(clientv3.OpTxn(
+				[]clientv3.Cmp{clientv3.Compare(clientv3.ModRevision(key), "=", *rev)},
+				ops,
+				[]clientv3.Op{clientv3.OpGet(key)},
+			)).
+			Commit()
+		if err != nil {
+			return 0, true, err
+		}
+		if !txn.Succeeded {
+			return 0, false, nil
+		}
+		inner := txn.Responses[0].GetResponseTxn()
+		if inner.GetSucceeded() {
+			*rev = txn.Header.Revision
+			return target, true, nil
+		}
+		kvs := inner.Responses[0].GetResponseRange().Kvs
+		if len(kvs) == 0 {
+			// key 刚被删掉(运维清理):按"不存在"重来一次,这次 CAS 会成立。
+			*rev = 0
+			continue
+		}
+		*rev = kvs[0].ModRevision
+		stored, perr := strconv.ParseUint(string(kvs[0].Value), 10, 64)
+		if perr != nil {
+			return 0, true, fmt.Errorf("snowflakealloc: malformed watermark %q at %s: %w", kvs[0].Value, key, perr)
+		}
+		if stored >= target {
+			// 存值已经罩住我们:不写。归属已经被外层 Txn 证明,所以调用方照样可以 Ack。
+			return stored, true, nil
+		}
+	}
+	return 0, true, fmt.Errorf("snowflakealloc: watermark %s lost the CAS twice in a row (concurrent writer?)", key)
+}
+
+// noteLocalHighWaterLocked 在 guardMu 下记下"本进程打算发到的最高时刻",**不等 etcd**。
+// sec / ms 传 0 表示这一维不动。
+//
+// 这是 etcd 长时间不可达时唯一还在推进的地板来源:LastWatermark 冻在最后一次 Ack,
+// 而发号器还能再发 F 那么久(还可能借位、可能撞上墙钟回拨)。
+//
+// 稳态只改内存不写盘(§7.5-5):etcd 每秒都在确认水位,继任者的地板在 etcd 里;磁盘那份
+// 只在"etcd 不通时起服"才被读。故障模式(上一拍没 Ack 起)则每拍在 Txn **之前**落盘,
+// 之后发出的号全归它罩。第一次失败那一拍事先无从知道会失败,只能在失败返回后立刻补写
+// (noteWatermarkWriteFailedLocked);这段"发起到失败"的空档由 watermarkTxnTimeout <
+// guardLeadSec 保证仍在上一拍已 Ack 水位之内 —— 见常量注释。
+func (h *Handle) noteLocalHighWaterLocked(sec, ms uint64) {
+	if h.r.cachePath == "" {
 		return
 	}
-	h.guardWritten = target
+	changed := false
+	if sec > h.cache.LocalHighWaterSec {
+		h.cache.LocalHighWaterSec = sec
+		changed = true
+	}
+	if ms > h.cache.LocalHighWaterMs {
+		h.cache.LocalHighWaterMs = ms
+		changed = true
+	}
+	if !changed {
+		return
+	}
+	h.cacheDirty = true
+	if h.watermarkDegraded {
+		h.writeCacheLocked()
+	}
 }
 
-const (
-	// guardWriteInterval 是持久水位的写入节拍(同时也是 fencing 看门狗的 tick)。
-	guardWriteInterval = time.Second
-	// guardLeadSec 是水位的**前推量**(秒),必须 **> 写入间隔**。
-	//
-	// 水位契约:任何时刻,已持久化的水位 ≥ 本进程可能发到的最大逻辑秒。
-	// 写入间隔 1s、前推 2s ⇒ 两次写入之间即使写不出去,上一次写的 (now+2)
-	// 也仍然覆盖着这 1s 内能发到的秒,契约不破。
-	//
-	// 上界同样有约束:继任者拿它当地板,若前推过大(比如 20s),继任者的首个号
-	// 会被顶到墙钟前面很多,撞上 snowflake 的借位预算(maxBorrowAheadSec=10)
-	// 直接 fail-closed 发不出号。2s 既满足下界又远离上界,且正常重启耗时 > 2s,
-	// 继任者拿到手时墙钟通常已越过水位,零等待。
-	guardLeadSec = 2
-)
-
-// guardMsKey 是毫秒级持久水位 key,给 **bwmarrin 布局**的消费方(login PlayerId)用。
-// 与 guardKey 的秒级/snowflake.Epoch 口径完全独立:bwmarrin 是毫秒 epoch,秒级地板
-// 塞不进去;值统一存 **Unix 毫秒**(不带任何自定义 epoch),避免两套 epoch 换算错位。
-func guardMsKey(prefix string, id uint64) string {
-	return fmt.Sprintf("%s/guard_ms/%d", prefix, id)
+// noteWatermarkWriteFailedLocked 在 guardMu 下记录一次没有 Ack 的水位写(Txn 出错 / 超时 /
+// 槽不在我们 uuid 上):进入故障模式,并把 Txn 之前记下的本地高水位立刻落盘 —— 从这一刻
+// 起,直到下一次 Ack,磁盘上的这份就是同主机在 F 内重启时唯一罩得住已发号段的地板。
+//
+// 已经在故障模式里再次失败:这一拍的本地高水位在 Txn 之前就写过了(cacheDirty 已清),
+// flush 是空操作;日志只在**进入**时记一条,不然故障期每秒一行淹掉别的。
+func (h *Handle) noteWatermarkWriteFailedLocked(reason string) {
+	if !h.watermarkDegraded {
+		h.watermarkDegraded = true
+		logx.Errorf("[snowflakealloc] entering watermark outage mode (%s): %s; local high water will be "+
+			"persisted to %s every tick before the txn until a watermark lands", h.LogFields(), reason, h.r.cachePath)
+	}
+	h.flushCacheLocked()
 }
 
-// ReadMsWatermark 读本 worker id 的毫秒级持久水位(Unix ms)。key 不存在返回 0。
-// 读失败必须返回错误让调用方 fail-closed —— 水位是防跨重启重放的唯一地板,
-// 读不到就当 0 启动等于没有地板。
+// ackLocked 在 guardMu 下记录一次成功的水位写:Ack 闸 + 退出故障模式 + 更新本地缓存(内存)。
+//
+// 落盘只在身份(incarnation)变了的第一次 Ack:申领 / reclaim 之后老的 incarnation 已经没有
+// 意义,缓存启动路径靠它关联日志。其余 Ack **不写盘**(§7.5-5 稳态零写盘);恢复那一拍也不
+// 因为"刚从故障模式出来"而额外写 —— 它的本地高水位在 Txn 之前已经写过,LastAckWall 留给
+// Close() 或下一次故障的首写去刷新。
+func (h *Handle) ackLocked() {
+	h.fence.Ack()
+	if h.watermarkDegraded {
+		h.watermarkDegraded = false
+		logx.Infof("[snowflakealloc] leaving watermark outage mode (%s): watermark acked; local cache %s back to "+
+			"steady state (no writes until close, reclaim or the next failure)", h.LogFields(), h.r.cachePath)
+	}
+	if h.r.cachePath == "" {
+		return
+	}
+	inc := h.incarnation.Load()
+	h.cache.Incarnation = inc
+	h.cache.LastWatermark = h.guardWritten
+	h.cache.LastWatermarkMs = h.msWritten
+	h.cache.LastAckWall = h.fence.LastAckWall().UnixMilli()
+	h.cacheDirty = true
+	if inc != h.cacheWrittenInc {
+		h.writeCacheLocked()
+	}
+}
+
+// flushCacheLocked 在 guardMu 下把内存里尚未落盘的变化写出去;没有变化就不碰磁盘。
+func (h *Handle) flushCacheLocked() {
+	if h.r.cachePath == "" || !h.cacheDirty {
+		return
+	}
+	h.writeCacheLocked()
+}
+
+func (h *Handle) writeCacheLocked() {
+	if err := writeCacheFileFn(h.r.cachePath, &h.cache); err != nil {
+		// 缓存只影响"下次 etcd 不通时能不能起",限频告警即可。cacheDirty 留着,下一个
+		// 落盘时机再补写。
+		if time.Since(h.lastCacheErr) > time.Minute {
+			h.lastCacheErr = time.Now()
+			logx.Errorf("[snowflakealloc] write local cache %s failed: %v (boot without etcd will not be possible)",
+				h.r.cachePath, err)
+		}
+		return
+	}
+	h.cacheDirty = false
+	h.cacheWrittenInc = h.cache.Incarnation
+}
+
+// ReadMsWatermark 读本槽的毫秒级持久水位(Unix ms);key 不存在返回 0。cluster 0 兼容期
+// 与旧布局 <LegacyPrefix>/guard_ms/<slot> 取 max。读失败必须返回错误让调用方 fail-closed
+// —— 水位是防跨重启重放的唯一地板;只有本地缓存启动(尚未注册)时才退回缓存值。
 func (h *Handle) ReadMsWatermark(ctx context.Context) (uint64, error) {
-	resp, err := h.cli.Get(ctx, guardMsKey(h.prefix, h.WorkerID))
+	ms, err := readUint(ctx, h.cli, watermarkMsKey(h.Kind, h.Cluster, h.Slot))
+	if err == nil && h.r.legacyMirror() {
+		var legacy uint64
+		legacy, err = readUint(ctx, h.cli, legacyGuardMsKey(h.r.legacy, h.Slot))
+		if legacy > ms {
+			ms = legacy
+		}
+	}
+	h.guardMu.Lock()
+	cached := h.msWritten
+	registered := h.registered.Load()
+	h.guardMu.Unlock()
 	if err != nil {
+		if !registered && cached > 0 {
+			return cached, nil
+		}
 		return 0, err
 	}
-	if len(resp.Kvs) == 0 {
-		return 0, nil
-	}
-	ms, perr := strconv.ParseUint(string(resp.Kvs[0].Value), 10, 64)
-	if perr != nil {
-		return 0, fmt.Errorf("malformed ms watermark %q: %w", resp.Kvs[0].Value, perr)
+	if cached > ms {
+		ms = cached
 	}
 	return ms, nil
 }
 
-// PutMsWatermark 写毫秒级持久水位。写入节奏与前推量由调用方决定(它才知道
-// 自己发号器的时钟语义);本方法只保证单键覆盖写。写失败与 advanceGuard 同理
-// 只回错误不重试 —— 水位是"下一任的地板",本进程自己的唯一性不依赖它。
+// PutMsWatermark 写毫秒级持久水位(带槽归属校验,成功即 Ack 闸)。写入节奏与前推量由
+// 调用方决定(它才知道自己发号器的时钟语义);单调不回退。写失败只回错误不重试。
 func (h *Handle) PutMsWatermark(ctx context.Context, ms uint64) error {
-	putCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
-	defer cancel()
-	_, err := h.cli.Put(putCtx, guardMsKey(h.prefix, h.WorkerID), strconv.FormatUint(ms, 10))
-	return err
-}
+	h.guardMu.Lock()
+	defer h.guardMu.Unlock()
+	if ms < h.msWritten {
+		ms = h.msWritten
+	}
+	// 与 advanceGuard 同理:本地高水位先记下(故障模式落盘),再去写 etcd;Txn 同样受
+	// watermarkTxnTimeout 约束 —— 调用方(login)自己定前推量,须保证它 > 该超时 + 写入间隔。
+	h.noteLocalHighWaterLocked(0, ms)
 
-// verifyKeyOwnership 确认 nodeKey 当前确实挂在 leaseID 上,并返回可用作 watch 起点的 revision。
-// 堵住"Allocate 成功之后、watch 建立之前被人抢走"的窗口。
-func verifyKeyOwnership(ctx context.Context, cli *clientv3.Client, nKey string,
-	leaseID clientv3.LeaseID) (int64, error) {
-	resp, err := cli.Get(ctx, nKey)
+	legacyKey := ""
+	if h.r.legacyMirror() {
+		legacyKey = legacyGuardMsKey(h.r.legacy, h.Slot)
+	}
+	persisted, owned, err := h.putWatermarkLocked(ctx, watermarkMsKey(h.Kind, h.Cluster, h.Slot), legacyKey, &h.msRev, ms)
 	if err != nil {
-		return 0, err
+		h.noteWatermarkWriteFailedLocked("ms watermark txn failed: " + err.Error())
+		return err
 	}
-	if len(resp.Kvs) != 1 {
-		return 0, fmt.Errorf("node key %s missing right after allocation", nKey)
+	if !owned {
+		h.needReclaim.Store(true)
+		h.noteWatermarkWriteFailedLocked("ms watermark txn: slot not on our uuid")
+		return fmt.Errorf("snowflakealloc: slot %s not held by our uuid; ms watermark not written", h.LogFields())
 	}
-	if got := clientv3.LeaseID(resp.Kvs[0].Lease); got != leaseID {
-		return 0, fmt.Errorf("node key %s already re-attached to lease %x (ours is %x)", nKey, got, leaseID)
-	}
-	return resp.Header.Revision, nil
+	h.msWritten = persisted
+	h.ackLocked()
+	return nil
 }
 
-// onOwnershipLost 在"key 归属已经不是自己"时调用。与失租不同,这里 lease 可能仍然活着、
-// KeepAlive 也仍在成功 —— 但 worker id 已经被别人接管,继续发号就是确定性撞号。
-func (h *Handle) onOwnershipLost(prefix, hostname, reason string) {
-	if h.closing.Load() {
-		return
-	}
-	logx.Errorf("[snowflakealloc] worker id ownership lost (prefix=%s, host=%s, worker_id=%d): %s; "+
-		"the lease may still be alive but another process now owns this id — MUST stop minting IDs now",
-		prefix, hostname, h.WorkerID, reason)
-	h.markLost()
-}
+// ---- Close ---------------------------------------------------------------------------
 
-// onSelfFenced 在"距上次成功续租超过安全余量"时调用:此时**还没有**收到 channel 关闭,
-// 但已经无法证明自己仍持有 worker id,按 fail-closed 立即报信,不等 etcd 的确认。
-func (h *Handle) onSelfFenced(prefix, hostname string, since, budget time.Duration) {
-	if h.closing.Load() {
-		return
-	}
-	logx.Errorf("[snowflakealloc] no keepalive ack for %v (budget %v; prefix=%s, host=%s, worker_id=%d); "+
-		"cannot prove this process still owns the worker id — MUST stop minting IDs now, "+
-		"the etcd lease will expire shortly and the id may be handed to another process",
-		since, budget, prefix, hostname, h.WorkerID)
-	h.markLost()
-}
-
-// onKeepAliveEnded 在 KeepAlive 响应流结束时调用。
-// 结束有两种可能:Close() 主动取消,或者租约真的没了(etcd 不可达超过 TTL /
-// 租约被撤销)。只有后者是"身份丢失",要通知调用方停止发号。多次调用安全。
-func (h *Handle) onKeepAliveEnded(prefix, hostname string) {
-	if h.closing.Load() {
-		return
-	}
-	logx.Errorf("[snowflakealloc] keepalive channel closed (prefix=%s, host=%s, worker_id=%d); "+
-		"this process no longer owns the worker id and MUST stop minting IDs",
-		prefix, hostname, h.WorkerID)
-	h.markLost()
-}
-
-// Close 停止 KeepAlive。**刻意不 Revoke lease**:worker id 会在 lease 自然过期(TTL)
-// 之后才被释放,给下一个持有者留出一段隔离期。多次调用安全。
+// Close 优雅释放。顺序(设计稿 §3.3):
+//  1. Fence 所有登记的发号器 —— 之后一个号都发不出去;
+//  2. 同步写最终水位(带归属校验);
+//  3. 写 released/<host>(挂当前 lease):同主机后继进程据此复用原槽;
+//  4. 取消 keepalive / watch。
 //
-// 为什么不能 Revoke(这里曾经 Revoke,是一个真实缺陷):
-//   - 分配器取的是**最小空闲 id**(见 Allocate 第 2 步),所以刚被释放的 id 正是下一个
-//     启动者优先拿到的那个 —— 不是"可能撞",是"优先撞";
-//   - snowflake.NewNode 的启动 guard 只保证"绝不在构造那一秒发号"(**点排除**),
-//     它不是"以前任高水位为地板"。新持有者用的是**自己机器的时钟**:若它比前任慢
-//     (NTP 漂移 / 快照恢复 / 未同步),它的 now+1 可能仍 ≤ 前任最后发号的那一秒,
-//     于是逐位重发前任已经发出去的号,且全程静默无告警;
-//   - 立即 Revoke 恰好删掉了 lease TTL 这个唯一能吸收跨机时钟偏斜的缓冲,导致
-//     **优雅退出比崩溃退出更危险**(崩溃不走本函数,反而有 ≤TTL 的天然隔离)。
-//     去掉 Revoke 后两条退出路径行为一致。
-//
-// 代价:优雅退出后该 worker id 多占 ≤TTL(默认 60s)。池上界是 NodeMask=131071,
-// 且同 hostname 重启走 Allocate 的复用分支(nodeKey 仍在 ⇒ Value CAS 换新 lease,
-// 不消耗新槽位),所以耗尽需要 TTL 内出现十万级不同 hostname,现实中不可达。
-//
-// 注意这不是彻底修复,只是把可容忍的时钟偏斜从"数秒"抬到"≤TTL"。要在任意偏斜下都不撞,
-// 需要补 C++ 侧那套持久化水位(SETEX snowflake_guard + SetGuardTime 的地板语义)。
+// **刻意不 Revoke lease**:槽在 lease 自然过期(TTL)后才从 slots/ 消失,而且之后还要
+// 过隔离期 Q 才能被别人申领;优雅退出与崩溃退出因此行为一致。曾经这里 Revoke 过,
+// 配合"最小空闲"选号让刚释放的槽成为下一个启动者优先拿到的那个 —— 真实缺陷。
+// 多次调用安全。
 func (h *Handle) Close() {
-	if h == nil {
+	if h == nil || h.closing.Swap(true) {
 		return
 	}
-	// 先置标记再取消 keepalive,否则 goroutine 会把正常关闭误判成失租。
-	h.closing.Store(true)
+	h.fenceAll()
+
+	ctx, cancel := context.WithTimeout(context.Background(), etcdOpTimeout)
+	defer cancel()
+	if h.cli != nil && h.registered.Load() {
+		// released 是"后继进程可以**跳过隔离期**复用这个槽"的通行证,而复用路径唯一的
+		// 防线就是水位地板 —— 所以最终水位没写成功时**不许**发这张通行证:让后继进程走
+		// 正常申领,拿一个受隔离期保护的新槽,宁可换个槽也不要在没有地板的情况下复用。
+		finalWatermarkOK := h.advanceGuard(ctx)
+		if lease := h.Lease(); lease != 0 && finalWatermarkOK {
+			// 标记必须晚于 fence 与最终水位,否则同主机后继进程复用时前任还在发号。
+			// 尽力而为:写失败只损失"重启复用同槽"这一优化,不影响正确性。
+			txn, err := h.cli.Txn(ctx).
+				If(clientv3.Compare(clientv3.Value(h.sKey()), "=", h.UUID)).
+				Then(clientv3.OpPut(releasedKey(h.Kind, h.Cluster, h.host), "released", clientv3.WithLease(lease))).
+				Commit()
+			if err != nil || !txn.Succeeded {
+				logx.Errorf("[snowflakealloc] write released marker failed (%s, host=%s): err=%v succeeded=%v",
+					h.LogFields(), h.host, err, txn != nil && txn.Succeeded)
+			}
+		} else if !finalWatermarkOK {
+			logx.Errorf("[snowflakealloc] final watermark write failed on close (%s, host=%s); NOT writing the "+
+				"released marker — the next process on this host will take a fresh, quarantine-protected slot",
+				h.LogFields(), h.host)
+		}
+	}
+	// 稳态 Ack 不落盘,最后一次 Ack 只在内存里:退出前把它写出去(§7.5-5 的"Close 写一次"),
+	// 磁盘上的 LastAckWall 才是真实的"最后一次确认",同主机随后离线重启能用满 F 的资格窗口。
+	h.guardMu.Lock()
+	h.flushCacheLocked()
+	h.guardMu.Unlock()
 	if h.cancel != nil {
 		h.cancel()
 		h.cancel = nil
 	}
-	// 优雅释放标记:挂在仍存活的 lease 上,随它一起过期。同 hostname 的后继进程
-	// 据此判定"前任已退出,可以在 TTL 内接管原 worker id";没有标记(崩溃 / 仍在运行)
-	// 则后继进程走派生键拿新 id,不会抢活着的持有者(见 Allocate 复用分支)。
-	// 尽力而为:写失败只损失"重启复用同 id"这一优化,不影响正确性。
-	if h.cli != nil && h.LeaseID != 0 && h.host != "" {
-		putCtx, putCancel := context.WithTimeout(context.Background(), 2*time.Second)
-		if _, err := h.cli.Put(putCtx, releasedKey(h.prefix, h.host), "released", clientv3.WithLease(h.LeaseID)); err != nil {
-			logx.Errorf("[snowflakealloc] write released marker failed (prefix=%s, host=%s): %v", h.prefix, h.host, err)
-		}
-		putCancel()
-	}
-	h.LeaseID = 0
 }

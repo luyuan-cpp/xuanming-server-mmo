@@ -8,8 +8,6 @@
     "account_share_database",
     "player_centre_database",
     "player_database",
-    "player_database_1",
-    "player_snapshot",
-    "rollback_audit_log"
+    "player_database_1"
   ]
 }

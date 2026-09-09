@@ -2329,6 +2329,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProcessClientPlayerMessageRequest f
   // accessors -------------------------------------------------------
   enum : int {
     kMessageContentFieldNumber = 1,
+    kPlayerIdFieldNumber = 3,
     kSessionIdFieldNumber = 2,
   };
   // .MessageContent message_content = 1;
@@ -2347,6 +2348,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProcessClientPlayerMessageRequest f
   ::MessageContent* PROTOBUF_NONNULL _internal_mutable_message_content();
 
   public:
+  // uint64 player_id = 3;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
   // uint32 session_id = 2;
   void clear_session_id() ;
   [[nodiscard]] ::uint32_t session_id() const;
@@ -2361,7 +2372,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProcessClientPlayerMessageRequest f
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2391,6 +2402,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ProcessClientPlayerMessageRequest f
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::MessageContent* PROTOBUF_NULLABLE message_content_;
+    ::uint64_t player_id_;
     ::uint32_t session_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3211,7 +3223,7 @@ inline void ProcessClientPlayerMessageRequest::set_allocated_message_content(::M
 inline void ProcessClientPlayerMessageRequest::clear_session_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t ProcessClientPlayerMessageRequest::session_id() const {
   // @@protoc_insertion_point(field_get:ProcessClientPlayerMessageRequest.session_id)
@@ -3219,7 +3231,7 @@ inline ::uint32_t ProcessClientPlayerMessageRequest::session_id() const {
 }
 inline void ProcessClientPlayerMessageRequest::set_session_id(::uint32_t value) {
   _internal_set_session_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:ProcessClientPlayerMessageRequest.session_id)
 }
 inline ::uint32_t ProcessClientPlayerMessageRequest::_internal_session_id() const {
@@ -3229,6 +3241,30 @@ inline ::uint32_t ProcessClientPlayerMessageRequest::_internal_session_id() cons
 inline void ProcessClientPlayerMessageRequest::_internal_set_session_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = value;
+}
+
+// uint64 player_id = 3;
+inline void ProcessClientPlayerMessageRequest::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t ProcessClientPlayerMessageRequest::player_id() const {
+  // @@protoc_insertion_point(field_get:ProcessClientPlayerMessageRequest.player_id)
+  return _internal_player_id();
+}
+inline void ProcessClientPlayerMessageRequest::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:ProcessClientPlayerMessageRequest.player_id)
+}
+inline ::uint64_t ProcessClientPlayerMessageRequest::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void ProcessClientPlayerMessageRequest::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -8,11 +8,8 @@
 #include "grpc_client/grpc_init_client.h"
 #include "grpc_client/etcd/etcd_grpc_client.h"
 #include "node/system/grpc_channel_cache.h"
-#include "thread_context/redis_manager.h"
 #include "thread_context/node_context_manager.h"
 #include <node_config_manager.h>
-#include <thread_context/snow_flake_manager.h>
-#include <time/system/time.h>
 
 void EtcdService::Init() {
 	InitHandlers();
@@ -119,7 +116,8 @@ void EtcdService::InitTxnHandlers() {
 		}
 		// 超时定时器已由 TakePendingTxnKey 一并取消(两者成对维护)。
 
-		if (reply.succeeded())
+		// 重注册用的是"不存在或已是我的"嵌套 txn,外层 succeeded 只反映"不存在"那一半。
+		if (EtcdHelper::TxnClaimSucceeded(reply))
 		{
 			OnTxnSucceeded(key);
 		}
@@ -172,7 +170,7 @@ void EtcdService::OnTxnSucceeded(const std::string& key) {
 	if (IsNodePortKey(key)) {
 		if (registrationMode_ == RegistrationMode::kReRegisterExisting) {
 			// Re-register path keeps the same node_id and only refreshes lease-bound etcd records.
-			gNode->GetEtcdManager().RegisterNodeService();
+			gNode->GetEtcdManager().RegisterNodeService(/*reRegistering=*/true);
 			return;
 		}
 
@@ -190,7 +188,7 @@ void EtcdService::OnTxnSucceeded(const std::string& key) {
 		{
 			// Re-registration path: gRPC server stayed up across the lease loss,
 			// so peers won't get "connection refused" if we advertise immediately.
-			gNode->GetEtcdManager().PublishNodeInfoAfterAllocation();
+			gNode->GetEtcdManager().PublishNodeInfoAfterAllocation(/*reRegistering=*/true);
 			return;
 		}
 		// Initial boot: kick off RPC/gRPC startup now. The discovery publish is
@@ -199,7 +197,11 @@ void EtcdService::OnTxnSucceeded(const std::string& key) {
 		// bound. Without this deferral, scene_manager sees the node via etcd
 		// watch within milliseconds of the alloc-key txn, dials gRPC, and gets
 		// "connection refused" because StartGrpcServer hasn't run yet.
-		ActivateSnowFlakeAfterGuard();
+		//
+		// 路由 node_id 到手就起 RPC,**不等任何发号器**:永久 guid 走号段(scene 的
+		// GuidSegmentRegistry 经 DataService.AllocateIdSegment 领段,与 etcd 无关),
+		// scene 的 DependencyGate 用 "id segments ready" 条件挡住玩家进入;gate / battle 不铸永久 guid。
+		gNode->StartRpcServer();
 		return;
 	}
 
@@ -214,9 +216,8 @@ void EtcdService::OnTxnSucceeded(const std::string& key) {
 		return;
 	}
 
-	// Initial-boot serviceKey publish confirmed. SnowFlake was already activated
-	// from OnTxnSucceeded(allocKey) -> ActivateSnowFlakeAfterGuard (which also
-	// started the gRPC server, which then published the discovery key).
+	// Initial-boot serviceKey publish confirmed (OnTxnSucceeded(allocKey) started
+	// the RPC/gRPC servers, which then published the discovery key).
 	LOG_INFO << "Node service info published: node_id=" << gNode->GetNodeInfo().node_id();
 }
 
@@ -227,7 +228,7 @@ void EtcdService::PublishDiscoveryAfterGrpcReady()
 		// Re-registration already published in OnTxnSucceeded(allocKey).
 		return;
 	}
-	gNode->GetEtcdManager().PublishNodeInfoAfterAllocation();
+	gNode->GetEtcdManager().PublishNodeInfoAfterAllocation(/*reRegistering=*/false);
 }
 
 void EtcdService::OnTxnFailed(const std::string &key)
@@ -406,6 +407,22 @@ void EtcdService::RequestNodeLease()
 	leaseRequestInFlight_ = true;
 	LOG_INFO << "Requesting etcd lease. mode=" << RegistrationModeName(registrationMode_);
 	gNode->GetEtcdManager().RequestNodeLease();
+
+	// 与 txn 超时同一预算、同一理由(见 ArmTxnTimeout)。
+	constexpr double kLeaseGrantBudgetSec = 10.0;
+	leaseGrantTimeoutTimer_.RunAfter(kLeaseGrantBudgetSec, [this] { OnLeaseGrantTimeout(); });
+}
+
+void EtcdService::OnLeaseGrantTimeout()
+{
+	if (!leaseRequestInFlight_ || registrationStopped_)
+	{
+		return;
+	}
+	leaseRequestInFlight_ = false;
+	LOG_ERROR << "No etcd LeaseGrant response within the budget; retrying. mode="
+			  << RegistrationModeName(registrationMode_);
+	RequestNodeLease();
 }
 
 void EtcdService::StartLeaseKeepAlive()
@@ -425,6 +442,7 @@ void EtcdService::Shutdown()
 	acquirePortTimer.Cancel();
 	watchReconnectTimer.Cancel();
 	txnTimeoutTimer.Cancel();
+	leaseGrantTimeoutTimer_.Cancel();
 	leaseRequestInFlight_ = false;
 	SetRegistrationMode(RegistrationMode::kInitialBoot, "service shutdown");
 
@@ -440,20 +458,25 @@ void EtcdService::Shutdown()
 	gNode->GetEtcdManager().Shutdown();
 }
 
-void EtcdService::RequestReRegistration()
+void EtcdService::RequestReRegistration(const char *reason)
 {
-	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
+	if (registrationStopped_)
 	{
-		LOG_DEBUG << "Re-registration already in progress, skipping duplicate attempt.";
 		return;
 	}
-	SetRegistrationMode(RegistrationMode::kReRegisterExisting, "health monitor missing local node snapshot");
+	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
+	{
+		LOG_DEBUG << "Re-registration already in progress, skipping duplicate attempt. reason=" << reason;
+		return;
+	}
+	SetRegistrationMode(RegistrationMode::kReRegisterExisting, reason);
 	RequestNodeLease();
 }
 
 void EtcdService::OnLeaseGranted(const etcdserverpb::LeaseGrantResponse &reply)
 {
 	leaseRequestInFlight_ = false;
+	leaseGrantTimeoutTimer_.Cancel();
 	leaseId = reply.id();
 
 	if (leaseId <= 0)
@@ -558,14 +581,24 @@ void EtcdService::AcquirePortWithRetry()
 
 void EtcdService::OnKeepAliveResponse(const etcdserverpb::LeaseKeepAliveResponse &reply)
 {
+	if (reply.id() != leaseId)
+	{
+		// 失租重拿后,旧 lease 的最后几拍 TTL=0 应答还会从流上回来;按 id 过滤,
+		// 不然会把刚拿到的新 lease 再拖进一轮重注册。
+		LOG_INFO << "Ignoring keepalive response for stale lease " << reply.id() << " (current " << leaseId << ")";
+		return;
+	}
+
 	if (reply.ttl() <= 0)
 	{
-		LOG_ERROR << "Lease keepalive returned TTL=0, lease has expired on etcd server. "
-					 "node_id="
+		// lease 过期**不等于**身份被抢:etcd leader 切换、keepalive 被 IO 抢占、冻结感知
+		// 延迟都会走到这里。ID 唯一性不靠 lease(永久 guid 走号段,由数据库 CAS 领段保证),
+		// 路由身份靠分配键的 CAS。所以这里只是拿新 lease 把 key 重新挂上;
+		// 分配键的 value 若已经是别人的,重注册的 CAS 会失败并走 OnNodeIdConflictShutdown。
+		LOG_ERROR << "Lease keepalive returned TTL=0 (lease " << leaseId << " expired on etcd). node_id="
 				  << gNode->GetNodeInfo().node_id()
-				  << ". Another node may claim this ID - fencing ID generation, persisting and "
-					 "relocating players, then terminating.";
-		gNode->OnNodeIdConflictShutdown(NodeIdConflictReason::kLeaseExpiredByEtcd);
+				  << ". Re-granting a lease and re-attaching routing keys; identity is decided by the CAS, not by the lease.";
+		RequestReRegistration("keepalive returned TTL<=0");
 		return;
 	}
 
@@ -585,65 +618,7 @@ bool EtcdService::IsLeasePresumablyExpired() const
 	return elapsedSeconds > leaseTtlSeconds_;
 }
 
-// 激活本进程的业务发号器,并在此之前 **无条件** 打一个启动 guard。
-//
-// 为什么必须无条件:node_id 的唯一域是全局 (node_type, node_id)(见
-// MakeNodeAllocationKey),而 guard 是写在**分 zone 的 Redis**里的。所以
-//   * 跨 zone 复用同一个 node_id 时,新持有者根本读不到旧持有者写的 guard;
-//   * Redis 没连上时旧代码直接"不 guard"就开始发号。
-// 这两条路径下,只要旧持有者在同一日历秒里发过号(优雅退出 + 立刻重启就会发生),
-// 新持有者从 step=0 重新发,产出的 ID 与旧的**逐位相同**。
-//
-// 因此这里的规则改成:
-//   1. guard 底线 = 当前秒,永远生效(Redis 挂了、key 不存在都一样);
-//   2. 读到上一任写的 last_ts 时,取 max(last_ts, now) —— 覆盖"旧持有者所在机器
-//      时钟比本机快"的情况。
-// 代价是本进程第一个 ID 最多晚 1 秒发出,换掉一整类静默重号。
-void EtcdService::ActivateSnowFlakeAfterGuard()
-{
-	const auto &info = gNode->GetNodeInfo();
-	const std::string guardKey = EtcdManager::MakeSnowFlakeGuardKey(info);
-
-	auto activate = [](uint32_t nodeId, uint64_t guardSeconds, const char *source)
-	{
-		tlsSnowflakeManager.OnNodeStart(nodeId);
-		tlsSnowflakeManager.SetGuardTime(guardSeconds);
-		LOG_INFO << "SnowFlake activated: node_id=" << nodeId
-				 << ", guard_to=" << guardSeconds
-				 << " (" << source << "). First ID lands after that second.";
-		gNode->StartRpcServer();
-	};
-
-	auto &redis = tlsRedis.GetZoneRedis();
-	if (!redis || !redis->connected())
-	{
-		LOG_WARN << "Redis not connected; applying local-clock SnowFlake guard for node_id=" << info.node_id();
-		activate(info.node_id(), TimeSystem::NowSecondsUTC(), "local clock, redis unavailable");
-		return;
-	}
-
-	redis->command(
-		[nodeId = info.node_id(), guardKey, activate](hiredis::Hiredis *, redisReply *reply)
-		{
-			const uint64_t now = TimeSystem::NowSecondsUTC();
-			uint64_t guardSeconds = now;
-			const char *source = "local clock, no previous holder";
-
-			if (reply != nullptr && reply->type == REDIS_REPLY_STRING)
-			{
-				const uint64_t lastTs = std::strtoull(reply->str, nullptr, 10);
-				if (lastTs > guardSeconds)
-				{
-					guardSeconds = lastTs;
-					source = "previous holder last-seen (ahead of local clock)";
-				}
-				else
-				{
-					source = "local clock, previous holder seen";
-				}
-			}
-
-			activate(nodeId, guardSeconds, source);
-		},
-		"GET %s", guardKey.c_str());
-}
+// 2026-09-08 起这里不再激活任何发号器(旧 ActivateSnowFlakeAfterGuard:读分 zone Redis
+// 的 guard 后 OnNodeStart(路由 node_id) 再 StartRpcServer)。永久 guid 改走号段
+// (docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5),由 scene 的 GuidSegmentRegistry
+// 经 DataService 领段,与 etcd 注册流无关;RPC 服务器在分配键 CAS 成功时直接启动(OnTxnSucceeded)。

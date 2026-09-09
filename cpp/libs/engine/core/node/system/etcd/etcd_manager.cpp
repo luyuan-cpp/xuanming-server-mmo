@@ -3,12 +3,10 @@
 #include "node/system/node/node_util.h"
 #include <muduo/base/Logging.h>
 #include "etcd_helper.h"
-#include <thread_context/redis_manager.h>
 #include "grpc_client/etcd/etcd_grpc_client.h"
 #include "thread_context/node_context_manager.h"
 #include <node_config_manager.h>
 #include <node/system/node/node.h>
-#include <time/system/time.h>
 
 void EtcdManager::Shutdown()
 {
@@ -59,16 +57,21 @@ std::string EtcdManager::MakeNodeEtcdKey(const NodeInfo &info)
 	return MakeNodeEtcdPrefix(info) + std::to_string(info.node_id());
 }
 
-std::string EtcdManager::MakeNodeAllocationKey(const NodeInfo &info)
+std::string EtcdManager::MakeNodeAllocationPrefix(uint32_t nodeType)
 {
 	// Zone-independent: the key contains node_type and node_id only. Two
 	// zones issuing concurrent PutIfAbsent on the same (node_type, node_id)
 	// will see exactly one CAS succeed; the loser has to pick a different
 	// node_id. This matches the Go-side allocator layout so mixed-language
 	// deployments share a single source of truth for node_id uniqueness.
-	return GetServiceName(info.node_type()) +
-		   "/allocated/node_type/" + std::to_string(info.node_type()) +
-		   "/node_id/" + std::to_string(info.node_id());
+	return GetServiceName(nodeType) +
+		   "/allocated/node_type/" + std::to_string(nodeType) +
+		   "/node_id/";
+}
+
+std::string EtcdManager::MakeNodeAllocationKey(const NodeInfo &info)
+{
+	return MakeNodeAllocationPrefix(info.node_type()) + std::to_string(info.node_id());
 }
 
 std::string EtcdManager::MakeNodePortEtcdPrefix(const NodeInfo &nodeInfo)
@@ -81,7 +84,7 @@ std::string EtcdManager::MakeNodePortEtcdKey(const NodeInfo &nodeInfo)
 	return MakeNodePortEtcdPrefix(nodeInfo) + std::to_string(nodeInfo.endpoint().port());
 }
 
-void EtcdManager::RegisterNodeService()
+void EtcdManager::RegisterNodeService(bool reRegistering)
 {
 	// Two-phase CAS under the same lease:
 	//   Phase 1 (this call): claim the global allocation key
@@ -98,12 +101,24 @@ void EtcdManager::RegisterNodeService()
 	// for the same gate uuid and load-balance against phantom replicas.
 	const auto &info = gNode->GetNodeInfo();
 	const auto allocKey = MakeNodeAllocationKey(info);
-	LOG_INFO << "Claiming global node-id allocation: " << allocKey;
-	EtcdHelper::PutIfAbsent(allocKey, info.node_uuid(), 0, gNode->GetLeaseId());
+	if (reRegistering)
+	{
+		// 分配键的 value 就是本节点 uuid:"不存在,或者 value 是我的 uuid"才改挂新租约。
+		// 旧租约仍活着时 key 还在(VERSION!=0),以前的 VERSION==0 CAS 在这里必败,
+		// 而重注册模式下的 OnTxnFailed 把它判成"身份被抢"并自杀 —— 每次重注册都会
+		// 确定性地杀掉自己。只有 value 是**别人的** uuid 才是真的被抢。
+		LOG_INFO << "Re-claiming global node-id allocation (absent-or-owned): " << allocKey;
+		EtcdHelper::PutIfAbsentOrOwned(allocKey, info.node_uuid(), info.node_uuid(), gNode->GetLeaseId());
+	}
+	else
+	{
+		LOG_INFO << "Claiming global node-id allocation: " << allocKey;
+		EtcdHelper::PutIfAbsent(allocKey, info.node_uuid(), 0, gNode->GetLeaseId());
+	}
 	SetPendingTxnKey(allocKey);
 }
 
-void EtcdManager::PublishNodeInfoAfterAllocation()
+void EtcdManager::PublishNodeInfoAfterAllocation(bool reRegistering)
 {
 	// Second phase: allocation key CAS already succeeded, so (node_type,
 	// node_id) is globally reserved. Now publish NodeInfo for service
@@ -112,7 +127,18 @@ void EtcdManager::PublishNodeInfoAfterAllocation()
 	const auto &info = gNode->GetNodeInfo();
 	const auto serviceKey = MakeNodeEtcdKey(info);
 	LOG_INFO << "Registering node service to etcd with key: " << serviceKey;
-	EtcdHelper::PutIfAbsent(serviceKey, info, gNode->GetLeaseId());
+	if (reRegistering)
+	{
+		// 重注册时无条件改挂新租约。服务键的 value 是 NodeInfo JSON(player_count 会变),
+		// 没法用 Value==... 判"是不是我的";但它的身份由刚刚 CAS 成功的分配键定义 ——
+		// 同 zone 里持有同一 (node_type, node_id) 的只可能是分配键的持有者,也就是我们。
+		// 与端口 key 的重注册同一理由(RegisterNodePort)。
+		EtcdHelper::PutWithLease(serviceKey, info, gNode->GetLeaseId());
+	}
+	else
+	{
+		EtcdHelper::PutIfAbsent(serviceKey, info, gNode->GetLeaseId());
+	}
 	SetPendingTxnKey(serviceKey);
 	LOG_INFO << "Registered node to etcd: " << info.DebugString();
 }
@@ -169,39 +195,5 @@ void EtcdManager::StartLeaseKeepAlive()
 		etcdserverpb::LeaseKeepAliveRequest req;
 		req.set_id(gNode->GetLeaseId());
 		SendLeaseLeaseKeepAlive(tlsNodeContextManager.GetRegistry(EtcdNodeService), tlsNodeContextManager.GetGlobalEntity(EtcdNodeService), req);
-		LOG_DEBUG << "Keeping node alive, lease_id: " << gNode->GetLeaseId();
-
-		gNode->GetEtcdManager().WriteSnowFlakeGuard(); });
-}
-
-// guard key 必须与 node_id 的唯一域一致 —— 也就是 MakeNodeAllocationKey 用的
-// 全局 (node_type, node_id),**不带 zone**。旧 key 里带了 zone_id,于是
-// "zone 1 的 node_id=3 退出、zone 2 抢到 node_id=3" 这种正常的跨 zone 回收
-// 会读到一把不存在的 guard,新持有者直接从 step=0 开始发号,与旧持有者在同一秒
-// 发出的号逐位重复。
-//
-// 注意:guard 值本身仍然写在**分 zone 的 Redis 实例**里,所以跨 zone 时新持有者
-// 依然读不到旧值。这条路径由 ActivateSnowFlakeAfterGuard 的"无条件按本机当前秒
-// 兜底"覆盖;这里去掉 zone 段是为了同一 zone 内回收时不再漏读,并让 key 语义
-// 与唯一域对齐。
-std::string EtcdManager::MakeSnowFlakeGuardKey(const NodeInfo &info)
-{
-	return "snowflake_guard:" + std::to_string(info.node_type()) + ":" + std::to_string(info.node_id());
-}
-
-void EtcdManager::WriteSnowFlakeGuard()
-{
-	auto &redis = tlsRedis.GetZoneRedis();
-	if (!redis || !redis->connected())
-	{
-		return;
-	}
-
-	constexpr uint32_t guardTtl = 600; // 10 minutes — long enough for any restart scenario
-	const auto &info = gNode->GetNodeInfo();
-	std::string key = MakeSnowFlakeGuardKey(info);
-	uint64_t nowSeconds = TimeSystem::NowSecondsUTC();
-
-	redis->command([](hiredis::Hiredis *, redisReply *) {},
-				   "SETEX %s %u %llu", key.c_str(), guardTtl, static_cast<unsigned long long>(nowSeconds));
+		LOG_DEBUG << "Keeping node alive, lease_id: " << gNode->GetLeaseId(); });
 }

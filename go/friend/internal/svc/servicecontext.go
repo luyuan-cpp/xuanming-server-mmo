@@ -13,6 +13,7 @@ import (
 	"friend/internal/config"
 	friendkafka "friend/internal/kafka"
 	"shared/generated/table"
+	"shared/kafkacmd"
 	"shared/kafkautil"
 )
 
@@ -49,9 +50,14 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	if len(c.Kafka.Brokers) > 0 {
 		w = &kafkago.Writer{
 			Addr: kafkago.TCP(c.Kafka.Brokers...),
-			// Hash 按 Key(player_id/gate_id)选分区,保证同一实体的推送有序
-			// (项目不变量:kafka key = 业务实体 ID)。LeastBytes 忽略 Key。
-			Balancer: &kafkago.Hash{},
+			// 控制面命令 topic(gate-cmd_gN)必须按 node_id % P 落到**指定分区**:
+			// 消费端 assign 的就是那一个分区,落错分区 = 目标 gate 永远收不到,
+			// 而 Kafka 一个错都不报(docs/design/control-plane-topic-partitioning-20260908.md)。
+			// kafka-go 的 Writer 在写入路径上忽略 Message.Partition、只问 Balancer。
+			//
+			// 其它 topic 仍走 Hash 按 Key(player_id/gate_id)选分区,保证同一实体的
+			// 推送有序(项目不变量:kafka key = 业务实体 ID)。LeastBytes 忽略 Key。
+			Balancer: &kafkacmd.CommandPartitionBalancer{Fallback: &kafkago.Hash{}},
 			// kafka-go 的 RequiredAcks 零值是 RequireNone(fire-and-forget):
 			// 写进 socket 即返回 nil,broker 端 leader 切换/落盘前崩溃全部不可见,
 			// 于是 gate_push 依赖 WriteMessages 返回值的 fail-closed 语义形同虚设。

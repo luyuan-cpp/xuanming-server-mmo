@@ -17,7 +17,7 @@
       3. ⚠️ MySQL PITR is NOT automated — print runbook reference and pause
          for confirmation. Operator runs PITR manually, hits ENTER to continue.
       4. Redis FLUSHDB on the zone's data Redis (cache rebuilds from MySQL)
-      5. Kafka offset reset on db_task_topic (avoids replaying post-target writes)
+      5. Kafka offset reset on db_task_zone_<id> (avoids replaying post-target writes)
       6. `k8s-zone-up -ZoneName <zone> -ZoneId <id>` — restart zone
       7. Print verification checklist
 
@@ -59,7 +59,13 @@ param(
 
     # Kafka cluster bootstrap.
     [string]$KafkaBootstrap = "kafka:9092",
-    [string]$KafkaTopic = "db_task_topic",
+    # 留空 = 按 -ZoneId 推导成 db_task_zone_<id>（go/db 与 go/login 两侧都是这么拼的:
+    # go/db/internal/config.go DbTaskTopic / go/login/internal/config/config.go）。
+    # 旧默认值 "db_task_topic" 是个**全仓不存在的 topic** —— offset reset 会「成功」地
+    # 重置一个空 topic，回滚后 go/db 照样重放目标时间点之后的写入。
+    # go/db 的 Kafka.TopicGeneration > 1 时真实名字带 _g<gen> 后缀，这里推不出来,
+    # 必须显式传 -KafkaTopic。
+    [string]$KafkaTopic = "",
     [string]$KafkaGroup = "db_rpc_consumer_group",
 
     # Zone restart args.
@@ -81,6 +87,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# topic 名必须与 go/db 实际消费的一致,否则第 5 步会「成功」重置一个不存在的 topic。
+if ($KafkaTopic -eq "") { $KafkaTopic = "db_task_zone_$ZoneId" }
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
 

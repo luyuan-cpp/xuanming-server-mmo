@@ -45,6 +45,9 @@ const (
 	barrierSiteWorldChannelLazy = "world_channel_lazy"
 	barrierSiteOrphanCleanup    = "orphan_cleanup"
 	barrierSiteDeadNodeCleanup  = "dead_node_cleanup"
+	// barrierSiteStaleLocation:EnterScene 把已下线 zone 的陈旧 player location
+	// 当作不存在之前的判定点(见 enterscenelogic.go playerLocationOwnerGone)。
+	barrierSiteStaleLocation = "stale_location"
 )
 
 // ErrReentryBarrierPending 表示老属主节点刚判死,但再入屏障还没走完。

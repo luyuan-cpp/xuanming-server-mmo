@@ -14,7 +14,10 @@
 #include "battle/system/player_battle.h"
 #include "services/battle/data/battle_table_fingerprint.h"
 #include "kafka/system/kafka.h"
+#include "node_config_manager.h"
 #include "proto/contracts/kafka/scene_command.pb.h"
+#include "id_segment_bootstrap.h"
+#include "modules/id_segment/guid_segment_registry.h"
 
 #include <chrono>
 #include <limits>
@@ -69,8 +72,10 @@ int main(int argc, char *argv[])
 
         SceneHandler handler;
 		{
+        // DataServiceNodeService:永久 guid 号段经它的 AllocateIdSegment 领取(全局池 gRPC 节点,
+        // 在 DataServiceNodeService.rpc 前缀下发现)。不在白名单里发现了也不会建连。
         Node node(&loop, SceneNodeService,
-                  Node::CanConnectNodeTypeList{ SceneManagerNodeService },
+                  Node::CanConnectNodeTypeList{ SceneManagerNodeService, DataServiceNodeService },
                   &handler);
 
         node::entry::detail::ApplyPostConstructionHooks<SceneNodeHooks>(node);
@@ -82,10 +87,20 @@ int main(int argc, char *argv[])
         tlsRedisSystem.Initialize(&loop);
         World::InitializeSystemBeforeConnect();
 
+        // 永久 guid(item / tx_id / snapshot_id)全部走号段(docs/design/node-id-overhaul-plan-20260908.md
+        // §6 / §7.5):一种 GUID 一个 GuidSegmentClient 实例,按 BaseDeployConfig.id_segment 启用,
+        // 经 DataService.AllocateIdSegment 从全局库 id_segment 表领 [lo, hi)。scene 不再参与任何
+        // snowflake 槽位协议 —— 号段对节点数不敏感,10 万台 scene 也不会压垮协调器。
+        // 这里只配置传输、定时器和"DataService 连上即 Warm"的钩子,不发请求。
+        const std::size_t idSegmentKinds = ConfigureGuidSegmentClients(node);
+
         // SIGTERM / GM 共用这一个唯一的普通停机玩家存盘入口;
         // 先复制实体列表,再逐个走完整 HandleExitGameNode 流程。
         auto exitAllPlayers = [&context](Node &)
         {
+            // 停机后不再续段(定时器取消、不再发 gRPC);手里的号照常发完。
+            // 放在最前面与 dependencyGate / worldTimer 一起收,晚了会在拆传输层时再发请求。
+            tlsGuidSegmentRegistry.ShutdownAll();
             // 先停 Agones lifecycle worker 并 join,再动玩家数据。
             // 顺序不能反:worker 还在跑的时候进程正在退出,health / ready 请求
             // 会打到一个正在拆的对象上。
@@ -209,7 +224,12 @@ int main(int argc, char *argv[])
         node.SetConflictDrainComplete([](Node &)
                                       { return PlayerLifecycleSystem::IsEmergencyRelocateDrained(); });
 
-        node.SetAfterStart([&context](Node& n) {
+        node.SetAfterStart([&context, idSegmentKinds](Node& n) {
+            // 路由 node_id 到这里已是终值(StartRpcServer 打完 banner 才调 afterStartFn_),
+            // buff / skill 的临时 id 现在才能种 node 段。以前在 InitializeSystemBeforeConnect
+            // 里种,那时 node_id 恒 0。
+            World::OnRoutingNodeIdAllocated(n.GetNodeId());
+
             // Agones 生命周期。放在 SetAfterStart 里是有意的:此时 gRPC server
             // 已监听、依赖已初始化、etcd 注册已完成,进程确实可以接活了,
             // 这时候才有资格 POST /ready。提前 Ready 会让 Agones 把还没准备好的
@@ -290,6 +310,22 @@ int main(int argc, char *argv[])
             // turn-based-battle-server.md §3.2)。不进 20FPS World::Update。
             PlayerBattleSystem::StartReaper(n.GetLoop());
 
+            // 号段首段是启动硬依赖:每个启用的种类领到第一段 [lo, hi) 之前不放玩家进来 ——
+            // 拾取 / 交易流水 / 快照都要铸永久 guid,没段时一律 fail-closed(kInvalidGuid),
+            // 那不是"号段模式在跑"。运行期靠双 buffer 弱依赖,启动期必须硬等,这是设计取舍(§6.5)。
+            // Warm 主要由 ConfigureGuidSegmentClients 挂的"DataService 连上即 Warm"钩子触发;这里再
+            // 幂等地催一次,覆盖 DataService 早于本回调连上的情况。连不上时客户端自己按 500ms→5s 退避。
+            if (idSegmentKinds > 0)
+            {
+                tlsGuidSegmentRegistry.WarmAll();
+            }
+            else
+            {
+                LOG_WARN << "[idsegment] no GUID kind enabled in BaseDeployConfig.id_segment: "
+                         << "item / tx / snapshot minting will fail closed on this node";
+            }
+            context->dependencyGate.AddCondition("id segments ready", []
+                                                 { return tlsGuidSegmentRegistry.AllEnabledReady(); });
             context->dependencyGate.WaitAndRun(n, { SceneManagerNodeService },
                 [&context](auto&) {
                     context->worldTimer.RunEvery(tlsFrameTimeManager.frameTime.delta_time(), World::Update);

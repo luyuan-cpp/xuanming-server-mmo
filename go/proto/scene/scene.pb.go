@@ -96,8 +96,14 @@ type ProcessClientPlayerMessageRequest struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	MessageContent *base.MessageContent   `protobuf:"bytes,1,opt,name=message_content,json=messageContent,proto3" json:"message_content,omitempty"`
 	SessionId      uint32                 `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 反向(gate -> scene)的身份栅栏,与 NodeMessageHeader.target_player_id 对称
+	// (routing-identity-audit-20260908.md R13 的反向面)。gate 复用 node_id 之后,
+	// scene 的 SessionMap 里可能仍留着"旧 gate 的同号 session -> A 玩家"的映射,
+	// 而新 gate 上同一个 session 号已经属于 B —— 不带玩家身份的话 B 的客户端消息
+	// 会被派发到 A 的实体上执行。0 = 老 gate(灰度窗口),scene 放行不校验。
+	PlayerId      uint64 `protobuf:"varint,3,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ProcessClientPlayerMessageRequest) Reset() {
@@ -140,6 +146,13 @@ func (x *ProcessClientPlayerMessageRequest) GetMessageContent() *base.MessageCon
 func (x *ProcessClientPlayerMessageRequest) GetSessionId() uint32 {
 	if x != nil {
 		return x.SessionId
+	}
+	return 0
+}
+
+func (x *ProcessClientPlayerMessageRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
 	}
 	return 0
 }
@@ -706,11 +719,12 @@ const file_proto_scene_scene_proto_rawDesc = "" +
 	"\n" +
 	"session_id\x18\x02 \x01(\rR\tsessionId\x12\"\n" +
 	"\renter_gs_type\x18\x04 \x01(\rR\venterGsType\x12\x19\n" +
-	"\bscene_id\x18\x05 \x01(\x04R\asceneId\"|\n" +
+	"\bscene_id\x18\x05 \x01(\x04R\asceneId\"\x99\x01\n" +
 	"!ProcessClientPlayerMessageRequest\x128\n" +
 	"\x0fmessage_content\x18\x01 \x01(\v2\x0f.MessageContentR\x0emessageContent\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\rR\tsessionId\"}\n" +
+	"session_id\x18\x02 \x01(\rR\tsessionId\x12\x1b\n" +
+	"\tplayer_id\x18\x03 \x01(\x04R\bplayerId\"}\n" +
 	"\"ProcessClientPlayerMessageResponse\x128\n" +
 	"\x0fmessage_content\x18\x01 \x01(\v2\x0f.MessageContentR\x0emessageContent\x12\x1d\n" +
 	"\n" +

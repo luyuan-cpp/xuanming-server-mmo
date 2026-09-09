@@ -14,6 +14,10 @@ namespace muduo { namespace net { class EventLoop; } }
 
 using KafkaMessageCallback = std::function<void(const std::string& topic, const std::string& payload)>;
 
+// 只引策略结构体这一个小头文件,不引 kafka_consumer.h:后者会把 rdkafkacpp.h
+// 连同 LIBRDKAFKA_STATICLIB 的定义顺序要求带进每一个 include 了 node.h 的 TU。
+#include "messaging/kafka/kafka_partition_assign_policy.h"
+
 class KafkaConfig;
 class KafkaConsumer;
 
@@ -30,7 +34,8 @@ public:
 		const std::vector<std::string>& topics,
 		const std::string& groupId = {},
 		const std::vector<int32_t>& partitions = {},
-		KafkaMessageCallback callback = {});
+		KafkaMessageCallback callback = {},
+		const KafkaPartitionAssignPolicy& assignPolicy = {});
 	bool Publish(const std::string& topic, const std::string& msg);
 
 	// Cooperative poll from the muduo EventLoop. Becomes a near-no-op once

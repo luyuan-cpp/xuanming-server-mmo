@@ -8,7 +8,9 @@ import (
 
 	smpb "proto/scene_manager"
 	"scene_manager/internal/svc"
+	"shared/kafkacmd"
 
+	kafkago "github.com/segmentio/kafka-go"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -16,9 +18,20 @@ func getPlayerLocationKey(playerId uint64) string {
 	return fmt.Sprintf("player:%d:location", playerId)
 }
 
-// GateTopicName returns the Kafka topic name for a gate node.
+// GateTopicName returns the Kafka topic name for gate control-plane commands.
+//
+// 控制面已经从"一个 gate 一个 topic"改成"一个类型一个 topic + 按 node_id % P 定分区"
+// (docs/design/control-plane-topic-partitioning-20260908.md),所以 topic 名不再依赖
+// gateId —— 参数留着只为调用点可读,落点由 GateCommandMessageFor 一起算。
 func GateTopicName(gateId string) string {
-	return fmt.Sprintf("gate-%s", gateId)
+	return kafkacmd.GateCommandTopic()
+}
+
+// GateCommandMessageFor 组一条发往指定 gate 的命令消息(topic + 显式分区一起给)。
+// topic 与分区必须成对产生:分开拼一定会漂移,而漂移的表现是消息落到没人 assign
+// 的分区上、Kafka 一个错都不报。
+func GateCommandMessageFor(gateId string, key string, value []byte) (kafkago.Message, error) {
+	return kafkacmd.GateCommandMessage(gateId, key, value)
 }
 
 // GetPlayerLocation retrieves the current scene and node for a player

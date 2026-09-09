@@ -14,7 +14,12 @@ public:
     void StartWatchingPrefixes();
     void Shutdown();
     void RequestNodeLease();
-    void RequestReRegistration();
+
+    // 拿一个新 lease 并把端口 / 分配 / 服务三把 key 改挂上去,node_id 不变。
+    // 触发源:健康监控发现本节点快照消失、keepalive 返回 TTL<=0、本地 ACK 超时。
+    // 失租**不碰发号**(永久 guid 走号段,与 lease 无关):身份由 CAS 决定 —— 只有分配键的 value 已经是别人的
+    // uuid(OnTxnFailed → OnNodeIdConflictShutdown)才是真的被抢。
+    void RequestReRegistration(const char* reason);
 
     // 永久停掉注册流的所有重试(端口 / node_id / txn 超时兜底)。
     // 身份冲突收尾期间必须调用:这台节点已经不是 node_id 的合法持有者了,
@@ -60,12 +65,14 @@ private:
     void OnWatchResponse(const ::etcdserverpb::WatchResponse& response);
     void OnTxnSucceeded(const std::string& key);
     void OnTxnFailed(const std::string& key);
-    void ActivateSnowFlakeAfterGuard();
     // Allocates the RPC port and retries with backoff while none is available.
     // Reuses acquirePortTimer so there is a single retry path for the port phase.
     void AcquirePortWithRetry();
 
     void OnTxnTimeout();
+    // LeaseGrant 的 RPC 失败时生成的 client 不调 handler,leaseRequestInFlight_ 会永久卡住 ——
+    // etcd 抖一下就再也拿不到 lease。到期清标记重发。
+    void OnLeaseGrantTimeout();
     void SetRegistrationMode(RegistrationMode mode, const char* reason);
     const char* RegistrationModeName(RegistrationMode mode) const;
     bool IsNodePortKey(const std::string& key) const;
@@ -96,4 +103,5 @@ private:
 	TimerTaskComp acquirePortTimer;
 	TimerTaskComp watchReconnectTimer;
 	TimerTaskComp txnTimeoutTimer;
+	TimerTaskComp leaseGrantTimeoutTimer_;
 };

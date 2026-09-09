@@ -74,3 +74,7 @@ constexpr uint32_t DataServiceQueryTransactionLogIndex = 16;
 constexpr uint32_t DataServiceCreateEventSnapshotMessageId = 105;
 constexpr uint32_t DataServiceCreateEventSnapshotIndex = 17;
 #define DataServiceCreateEventSnapshotMethod  ::DataService_Stub::descriptor()->method(17)
+
+constexpr uint32_t DataServiceAllocateIdSegmentMessageId = 180;
+constexpr uint32_t DataServiceAllocateIdSegmentIndex = 18;
+#define DataServiceAllocateIdSegmentMethod  ::DataService_Stub::descriptor()->method(18)

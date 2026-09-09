@@ -18,7 +18,6 @@ import (
 	"proto/scene_manager"
 	"scene_manager/internal/svc"
 
-	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 )
@@ -237,8 +236,27 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	if locErr != nil {
 		return errResp(constants.ErrRedis, fmt.Sprintf("读取玩家当前位置失败，已拒绝进入场景: %v", locErr)), nil
 	}
+	currentZoneID := uint32(0)
+	if currentLoc != nil {
+		currentZoneID = currentLoc.ZoneId
+		if currentZoneID == 0 && currentLoc.SceneId != 0 {
+			currentZoneID = GetSceneZone(l.svcCtx, currentLoc.SceneId)
+		}
+	}
+	// 合服 / 下线 zone 留下的陈旧 location:旧 zone 里已经没有任何活着的场景
+	// 节点,就不存在「老节点还在存盘」这件事,下面两道交接门禁守护的对象已经
+	// 消失。此时把它当作没有位置记录处理,否则玩家从两条腿(经源区 Gate 走
+	// 重定向、经目标区 Gate 直接落点)都会被 ErrUnsafeCrossNodeHandoff 永久
+	// 挡在门外。判定规则见 playerLocationOwnerGone;拿不准一律沿用原拒绝。
+	if currentLoc != nil && l.playerLocationOwnerGone(currentLoc, currentZoneID) {
+		l.Logger.Infof("忽略已下线 zone 的陈旧玩家位置: player=%d stale_zone=%d stale_node=%s stale_scene=%d gate_zone=%d target_zone=%d",
+			in.PlayerId, currentZoneID, currentLoc.GetNodeId(), currentLoc.GetSceneId(), in.GateZoneId, targetZoneId)
+		// raw 一并清空:route 失败回滚时 CAS 会把 key DEL 掉而不是把陈旧值写回去;
+		// 正常落点则由第 6 步的 SET 直接覆盖。
+		currentLoc, currentLocRaw, currentZoneID = nil, "", 0
+	}
 	if targetZoneId == 0 {
-		if locErr == nil && currentLoc != nil && currentLoc.ZoneId != 0 {
+		if currentLoc != nil && currentLoc.ZoneId != 0 {
 			targetZoneId = currentLoc.ZoneId
 		}
 	}
@@ -246,7 +264,34 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		targetZoneId = in.GateZoneId
 	}
 
-	// 2. Resolve the target scene (sceneId + nodeId).
+	// 2. CROSS-ZONE CHECK —— 必须在解析目标场景**之前**决定。
+	//    Gate 不在目标 zone 时,本进程只负责把玩家送到目标 zone 的 Gate;目标
+	//    场景由第二条腿上目标 zone 自己的 EnterScene 解析。若先解析再重定向,
+	//    目标 zone 的过渡窗口(频道尚未建好 / 节点刚换代)会让第一条腿死在
+	//    ErrNoAvailableNode 上,玩家永远到不了目标区 —— 这正是合服后源区
+	//    玩家登录卡死的路径。这里不做任何预占,所以也没有需要成对释放的人数。
+	crossZoneRedirect := in.GateZoneId != 0 && targetZoneId != 0 && in.GateZoneId != targetZoneId
+	if crossZoneRedirect {
+		// 已有位置记录(且其节点仍可能在写)的跨区重定向会让后续请求落到另一
+		// 节点,而 ReleasePlayer 只保证存盘任务入队、不保证旧节点数据已持久化;
+		// 没有持久化交接屏障之前不能假装重定向成功。陈旧位置已在上面被过滤。
+		if currentLoc != nil && !l.svcCtx.Config.AllowUnsafeCrossNodeHandoff {
+			metrics.ObserveEnterSceneRejected(targetZoneId, "unsafe_handoff")
+			l.Logger.Errorf("拒绝不安全的跨区重定向: player=%d old_scene=%d old_node=%s old_zone=%d gate_zone=%d target_zone=%d",
+				in.PlayerId, currentLoc.GetSceneId(), currentLoc.GetNodeId(), currentZoneID, in.GateZoneId, targetZoneId)
+			return errResp(constants.ErrUnsafeCrossNodeHandoff,
+				"跨节点或已有位置的跨区切换缺少持久化交接屏障，已拒绝且未修改玩家状态"), nil
+		}
+		crossStart := time.Now()
+		// Redirect 只通知客户端换 Gate，并没有提交新的 PlayerLocation；旧场景
+		// 人数必须保留到后续 EnterScene 真正完成，不能在这里提前扣减。这样
+		// broker 失败也天然没有旧场景人数需要补偿。
+		resp, redirErr := l.handleCrossZoneRedirect(in, targetZoneId)
+		metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageCrossZone, time.Since(crossStart))
+		return resp, redirErr
+	}
+
+	// 3. Resolve the target scene (sceneId + nodeId).
 	resolveStart := time.Now()
 	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(in.SceneId, in.SceneConfId, targetZoneId)
 	metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageSceneResolve, time.Since(resolveStart))
@@ -270,16 +315,9 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 
 	// 在任何旧场景扣减、ReleasePlayer、位置写入或 Gate 路由之前关闭不安全的
 	// 交接窗口。当前 ReleasePlayer 只保证存盘任务入队，并不保证旧节点的数据
-	// 已持久化；因此跨节点进入新场景会读到陈旧快照。已有位置记录的跨区重定向
-	// 同样会让后续请求落到另一节点，不能继续假装重定向成功。
-	crossZoneRedirect := in.GateZoneId != 0 && targetZoneId != 0 && in.GateZoneId != targetZoneId
-	currentZoneID := uint32(0)
-	if currentLoc != nil {
-		currentZoneID = currentLoc.ZoneId
-		if currentZoneID == 0 && currentLoc.SceneId != 0 {
-			currentZoneID = GetSceneZone(l.svcCtx, currentLoc.SceneId)
-		}
-	}
+	// 已持久化；因此跨节点进入新场景会读到陈旧快照。(已有位置记录的跨区
+	// 重定向在第 2 步已经用同一门禁挡掉,走到这里的都是同 zone 落点。)
+	//
 	// NodeId 只在 zone 内唯一，不能只比较字符串。旧 zone 的 node "10" 与目标
 	// zone 的 node "10" 仍是两个进程；若把它当同节点，会跳过 ReleasePlayer 并
 	// 在没有落盘屏障时直接覆盖 location。仅以下两类能证明无需跨节点交接：
@@ -292,37 +330,18 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	samePhysicalNode := currentLoc != nil && currentLoc.NodeId != "" && currentLoc.NodeId == nodeId &&
 		currentZoneID != 0 && targetZoneId != 0 && currentZoneID == targetZoneId
 	crossNodeHandoff := currentLoc != nil && !samePlacement && !samePhysicalNode
-	existingLocationCrossZone := currentLoc != nil && crossZoneRedirect
-	if !l.svcCtx.Config.AllowUnsafeCrossNodeHandoff && (crossNodeHandoff || existingLocationCrossZone) {
+	if !l.svcCtx.Config.AllowUnsafeCrossNodeHandoff && crossNodeHandoff {
 		// 自动选择大世界频道会在 resolveSceneForEnter 内原子预占人数；拒绝
 		// 请求时必须成对释放，不能让失败请求污染调度负载。
 		if reserved {
 			DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
 		}
 		metrics.ObserveEnterSceneRejected(targetZoneId, "unsafe_handoff")
-		l.Logger.Errorf("拒绝不安全的场景交接: player=%d old_scene=%d old_node=%s old_zone=%d target_scene=%d target_node=%s target_zone=%d cross_zone=%t",
+		l.Logger.Errorf("拒绝不安全的场景交接: player=%d old_scene=%d old_node=%s old_zone=%d target_scene=%d target_node=%s target_zone=%d",
 			in.PlayerId, currentLoc.GetSceneId(), currentLoc.GetNodeId(), currentLoc.GetZoneId(),
-			sceneId, nodeId, targetZoneId, crossZoneRedirect)
+			sceneId, nodeId, targetZoneId)
 		return errResp(constants.ErrUnsafeCrossNodeHandoff,
 			"跨节点或已有位置的跨区切换缺少持久化交接屏障，已拒绝且未修改玩家状态"), nil
-	}
-
-	// 3. CROSS-ZONE CHECK: If gate is in a different zone, redirect the player.
-	if crossZoneRedirect {
-		crossStart := time.Now()
-		// The reserve in step 2 may have already INCR'd the target scene's
-		// counters; release them before bailing out so the redirect path
-		// doesn't leak. The follow-up EnterScene from the new gate will
-		// re-reserve from scratch.
-		if reserved {
-			DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
-		}
-		// Redirect 只通知客户端换 Gate，并没有提交新的 PlayerLocation；旧场景
-		// 人数必须保留到后续 EnterScene 真正完成，不能在这里提前扣减。这样
-		// broker 失败也天然没有旧场景人数需要补偿。
-		resp, redirErr := l.handleCrossZoneRedirect(in, targetZoneId)
-		metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageCrossZone, time.Since(crossStart))
-		return resp, redirErr
 	}
 
 	// 4. IDEMPOTENCY CHECK: Is player already in the same scene on the same node?
@@ -432,6 +451,48 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	return &scene_manager.EnterSceneResponse{ErrorCode: 0}, nil
 }
 
+// playerLocationOwnerGone 判定 loc 记录的属主节点是否已经**不可能**再写这名
+// 玩家的数据 —— 只有这时才允许把这条位置记录当作不存在,绕过交接门禁。
+//
+// 三个条件全部成立才算「已消失」,任何一个拿不准都 fail-closed(返回 false,
+// 沿用今天的 ErrUnsafeCrossNodeHandoff 拒绝):
+//
+//  1. loc 所在 zone 的节点负载集 scene_nodes:zone:{z}:load 为空 —— 整个 zone
+//     没有任何活着的场景节点(合服后源区永久下线就是这个形态)。只看单个
+//     node 不够:node_id 会被回收复用,老 zone 里换代顶上来的同号进程仍可能
+//     在写;zone 级别的空集才是「没人在写」的证据。
+//  2. IsNodeAlive(zone, node) 为 false —— 与 1 冗余,但它内部把 Redis 抖动
+//     当作存活、把重复 (zone,node) 身份当作不可信,正好补上 1 与本调用之间
+//     的状态变化窗口。
+//  3. 再入屏障已过(node:zone:{z}:{n}:death_at 不存在或已超过屏障时长)——
+//     节点刚从 etcd 消失时 C++ 老进程还有 kDrainBudget 的 emergency relocate
+//     在 SavePlayerToRedis;这段时间内它虽已不在负载集,却仍在写。屏障就是
+//     为这段窗口设的,这里不能绕过它。
+//
+// zone 无法确定(zone_id=0 且 scene:{id}:zone 也没了)时同样 fail-closed:
+// 没有 zone 就无法证明物理节点身份,与门禁本身的口径一致。
+func (l *EnterSceneLogic) playerLocationOwnerGone(loc *scene_manager.PlayerLocation, zoneID uint32) bool {
+	if loc == nil || zoneID == 0 {
+		return false
+	}
+	liveNodes, err := l.svcCtx.Redis.Zcard(nodeLoadKey(zoneID))
+	if err != nil {
+		l.Logger.Errorf("读取 zone 节点负载集失败,陈旧位置判定 fail-closed 沿用拒绝: zone=%d node=%s err=%v",
+			zoneID, loc.GetNodeId(), err)
+		return false
+	}
+	if liveNodes > 0 {
+		return false
+	}
+	if IsNodeAlive(l.svcCtx, zoneID, loc.GetNodeId()) {
+		return false
+	}
+	if loc.GetNodeId() != "" && reentryBarrierBlocks(l.svcCtx, zoneID, loc.GetNodeId(), barrierSiteStaleLocation) {
+		return false
+	}
+	return true
+}
+
 // handleCrossZoneRedirect assigns a Gate in the target zone and returns redirect info.
 // It also sends a RedirectToGateEvent to the current Gate via Kafka so the Gate can
 // push the redirect to the client immediately.
@@ -522,18 +583,18 @@ func (l *EnterSceneLogic) sendRedirectToGate(in *scene_manager.EnterSceneRequest
 		return fmt.Errorf("marshal GateCommand: %w", err)
 	}
 
-	topic := GateTopicName(in.GateId)
+	msg, err := GateCommandMessageFor(in.GateId, fmt.Sprintf("%d", in.PlayerId), bytes)
+	if err != nil {
+		return fmt.Errorf("address RedirectToGate command: %w", err)
+	}
 	// 不用可取消 context：kafka-go 在 context 返回后仍可能继续投递批次。
 	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 提供有界终态。
-	if err := l.svcCtx.Kafka.WriteMessages(context.Background(), kafkago.Message{
-		Topic: topic,
-		Key:   []byte(fmt.Sprintf("%d", in.PlayerId)),
-		Value: bytes,
-	}); err != nil {
-		return fmt.Errorf("push to Kafka topic %s: %w", topic, err)
+	if err := l.svcCtx.Kafka.WriteMessages(context.Background(), msg); err != nil {
+		return fmt.Errorf("push to Kafka topic %s partition %d: %w", msg.Topic, msg.Partition, err)
 	}
 
-	l.Logger.Infof("Pushed RedirectToGate to Kafka topic %s for player %d", topic, in.PlayerId)
+	l.Logger.Infof("Pushed RedirectToGate to Kafka %s/%d for player %d (gate %s)",
+		msg.Topic, msg.Partition, in.PlayerId, in.GateId)
 	return nil
 }
 
@@ -690,17 +751,17 @@ func (l *EnterSceneLogic) routePlayerToGate(in *scene_manager.EnterSceneRequest,
 		return fmt.Errorf("marshal GateCommand: %w", err)
 	}
 
-	topic := GateTopicName(in.GateId)
+	msg, err := GateCommandMessageFor(in.GateId, fmt.Sprintf("%d", in.PlayerId), bytes)
+	if err != nil {
+		return fmt.Errorf("address RoutePlayer command: %w", err)
+	}
 	// 不用可取消 context：kafka-go 在 context 返回后仍可能继续投递批次。
 	// 真实 writer 由 MaxAttempts=1 + WriteTimeout 提供有界终态。
-	if err := l.svcCtx.Kafka.WriteMessages(context.Background(), kafkago.Message{
-		Topic: topic,
-		Key:   []byte(fmt.Sprintf("%d", in.PlayerId)),
-		Value: bytes,
-	}); err != nil {
-		return fmt.Errorf("push to Kafka topic %s: %w", topic, err)
+	if err := l.svcCtx.Kafka.WriteMessages(context.Background(), msg); err != nil {
+		return fmt.Errorf("push to Kafka topic %s partition %d: %w", msg.Topic, msg.Partition, err)
 	}
 
-	l.Logger.Infof("Pushed RoutePlayer to Kafka topic %s for player %d -> node %s", topic, in.PlayerId, nodeId)
+	l.Logger.Infof("Pushed RoutePlayer to Kafka %s/%d for player %d (gate %s) -> node %s",
+		msg.Topic, msg.Partition, in.PlayerId, in.GateId, nodeId)
 	return nil
 }

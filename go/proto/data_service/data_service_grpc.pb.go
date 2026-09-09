@@ -38,6 +38,7 @@ const (
 	DataService_BatchRecallItems_FullMethodName       = "/data_service.DataService/BatchRecallItems"
 	DataService_QueryTransactionLog_FullMethodName    = "/data_service.DataService/QueryTransactionLog"
 	DataService_CreateEventSnapshot_FullMethodName    = "/data_service.DataService/CreateEventSnapshot"
+	DataService_AllocateIdSegment_FullMethodName      = "/data_service.DataService/AllocateIdSegment"
 )
 
 // DataServiceClient is the client API for DataService service.
@@ -73,6 +74,10 @@ type DataServiceClient interface {
 	BatchRecallItems(ctx context.Context, in *BatchRecallItemsRequest, opts ...grpc.CallOption) (*BatchRecallItemsResponse, error)
 	QueryTransactionLog(ctx context.Context, in *QueryTransactionLogRequest, opts ...grpc.CallOption) (*QueryTransactionLogResponse, error)
 	CreateEventSnapshot(ctx context.Context, in *CreateEventSnapshotRequest, opts ...grpc.CallOption) (*CreateEventSnapshotResponse, error)
+	// ── ID segment allocation (Leaf-segment) ────────────────────
+	// C++ scene 没有 MySQL 客户端,永久 ID(item guid 等)的号段经这里从 id_segment 表领取。
+	// 见 docs/design/node-id-overhaul-plan-20260908.md §6。
+	AllocateIdSegment(ctx context.Context, in *AllocateIdSegmentRequest, opts ...grpc.CallOption) (*AllocateIdSegmentResponse, error)
 }
 
 type dataServiceClient struct {
@@ -263,6 +268,16 @@ func (c *dataServiceClient) CreateEventSnapshot(ctx context.Context, in *CreateE
 	return out, nil
 }
 
+func (c *dataServiceClient) AllocateIdSegment(ctx context.Context, in *AllocateIdSegmentRequest, opts ...grpc.CallOption) (*AllocateIdSegmentResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(AllocateIdSegmentResponse)
+	err := c.cc.Invoke(ctx, DataService_AllocateIdSegment_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataServiceServer is the server API for DataService service.
 // All implementations must embed UnimplementedDataServiceServer
 // for forward compatibility.
@@ -296,6 +311,10 @@ type DataServiceServer interface {
 	BatchRecallItems(context.Context, *BatchRecallItemsRequest) (*BatchRecallItemsResponse, error)
 	QueryTransactionLog(context.Context, *QueryTransactionLogRequest) (*QueryTransactionLogResponse, error)
 	CreateEventSnapshot(context.Context, *CreateEventSnapshotRequest) (*CreateEventSnapshotResponse, error)
+	// ── ID segment allocation (Leaf-segment) ────────────────────
+	// C++ scene 没有 MySQL 客户端,永久 ID(item guid 等)的号段经这里从 id_segment 表领取。
+	// 见 docs/design/node-id-overhaul-plan-20260908.md §6。
+	AllocateIdSegment(context.Context, *AllocateIdSegmentRequest) (*AllocateIdSegmentResponse, error)
 	mustEmbedUnimplementedDataServiceServer()
 }
 
@@ -359,6 +378,9 @@ func (UnimplementedDataServiceServer) QueryTransactionLog(context.Context, *Quer
 }
 func (UnimplementedDataServiceServer) CreateEventSnapshot(context.Context, *CreateEventSnapshotRequest) (*CreateEventSnapshotResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method CreateEventSnapshot not implemented")
+}
+func (UnimplementedDataServiceServer) AllocateIdSegment(context.Context, *AllocateIdSegmentRequest) (*AllocateIdSegmentResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AllocateIdSegment not implemented")
 }
 func (UnimplementedDataServiceServer) mustEmbedUnimplementedDataServiceServer() {}
 func (UnimplementedDataServiceServer) testEmbeddedByValue()                     {}
@@ -705,6 +727,24 @@ func _DataService_CreateEventSnapshot_Handler(srv interface{}, ctx context.Conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataService_AllocateIdSegment_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AllocateIdSegmentRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).AllocateIdSegment(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_AllocateIdSegment_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).AllocateIdSegment(ctx, req.(*AllocateIdSegmentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataService_ServiceDesc is the grpc.ServiceDesc for DataService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -783,6 +823,10 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CreateEventSnapshot",
 			Handler:    _DataService_CreateEventSnapshot_Handler,
+		},
+		{
+			MethodName: "AllocateIdSegment",
+			Handler:    _DataService_AllocateIdSegment_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

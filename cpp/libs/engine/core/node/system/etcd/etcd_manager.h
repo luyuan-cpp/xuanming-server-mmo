@@ -32,20 +32,27 @@ public:
 
 	// Global-uniqueness allocation key for (node_type, node_id). Intentionally
 	// zone-independent: two zones must not both claim the same (node_type,
-	// node_id) or their Snowflake PlayerId/GuidId streams collide. See
-	// RegisterNodeService for the CAS protocol that honours this key.
+	// node_id), it is what makes the routing node_id unique. Since 2026-09-08
+	// this key is routing-only: permanent guids (item / tx / snapshot) come from
+	// id segments (GuidSegmentRegistry) and no longer encode a node_id at all.
+	// See RegisterNodeService for the CAS protocol.
+	std::string MakeNodeAllocationPrefix(uint32_t nodeType);
 	std::string MakeNodeAllocationKey(const NodeInfo &info);
 
 	std::string MakeNodePortEtcdPrefix(const NodeInfo &nodeInfo);
 
 	std::string MakeNodePortEtcdKey(const NodeInfo &nodeInfo);
 
-	void RegisterNodeService();
+	// reRegistering=true(临时失租后拿新租约重注册):分配键可能还挂在旧租约上,用
+	// "不存在或已是我的"CAS(EtcdHelper::PutIfAbsentOrOwned)改挂新租约。初始引导仍是
+	// 严格的 VERSION==0 CAS。
+	void RegisterNodeService(bool reRegistering = false);
 
 	// Second phase of node registration. Must only be called after the
 	// allocation key CAS (phase 1 of RegisterNodeService) succeeds —
 	// EtcdService::OnTxnSucceeded is responsible for that sequencing.
-	void PublishNodeInfoAfterAllocation();
+	// reRegistering=true 时无条件 Put(理由见实现)。
+	void PublishNodeInfoAfterAllocation(bool reRegistering = false);
 
 	void UpdateNodeInfo();
 
@@ -57,11 +64,9 @@ public:
 
 	void RequestNodeLease();
 
+	// 只续节点 lease。旧的 WriteSnowFlakeGuard / MakeSnowFlakeGuardKey(每拍往分 zone Redis
+	// 写 snowflake 水位)已删:永久 guid 改走号段,不再有需要跨重启保护的发号水位。
 	void StartLeaseKeepAlive();
-
-	static std::string MakeSnowFlakeGuardKey(const NodeInfo &info);
-
-	void WriteSnowFlakeGuard();
 
 private:
 	TimerTaskComp leaseKeepAliveTimer;

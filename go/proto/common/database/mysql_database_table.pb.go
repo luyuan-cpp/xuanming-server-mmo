@@ -637,240 +637,6 @@ func (x *PlayerDatabase_1) GetStressTestProbe() *component.PlayerStressTestProbe
 	return nil
 }
 
-// ─── Player snapshot table (for rollback) ────────────────────
-type PlayerSnapshot struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Id            uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`                                         // Auto-increment snapshot ID
-	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`             // Player this snapshot belongs to
-	ZoneId        uint32                 `protobuf:"varint,3,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                   // Player's home zone at snapshot time
-	SnapshotType  uint32                 `protobuf:"varint,4,opt,name=snapshot_type,json=snapshotType,proto3" json:"snapshot_type,omitempty"` // SnapshotType enum value
-	CreatedAt     uint64                 `protobuf:"varint,5,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`          // Unix timestamp of snapshot creation
-	Reason        string                 `protobuf:"bytes,6,opt,name=reason,proto3" json:"reason,omitempty"`                                  // Reason / description
-	Operator      string                 `protobuf:"bytes,7,opt,name=operator,proto3" json:"operator,omitempty"`                              // GM operator who created it
-	Data          []byte                 `protobuf:"bytes,8,opt,name=data,proto3" json:"data,omitempty"`                                      // Serialized snapshot data (proto SnapshotData)
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *PlayerSnapshot) Reset() {
-	*x = PlayerSnapshot{}
-	mi := &file_proto_common_database_mysql_database_table_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *PlayerSnapshot) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*PlayerSnapshot) ProtoMessage() {}
-
-func (x *PlayerSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_mysql_database_table_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use PlayerSnapshot.ProtoReflect.Descriptor instead.
-func (*PlayerSnapshot) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_mysql_database_table_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *PlayerSnapshot) GetId() uint64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *PlayerSnapshot) GetPlayerId() uint64 {
-	if x != nil {
-		return x.PlayerId
-	}
-	return 0
-}
-
-func (x *PlayerSnapshot) GetZoneId() uint32 {
-	if x != nil {
-		return x.ZoneId
-	}
-	return 0
-}
-
-func (x *PlayerSnapshot) GetSnapshotType() uint32 {
-	if x != nil {
-		return x.SnapshotType
-	}
-	return 0
-}
-
-func (x *PlayerSnapshot) GetCreatedAt() uint64 {
-	if x != nil {
-		return x.CreatedAt
-	}
-	return 0
-}
-
-func (x *PlayerSnapshot) GetReason() string {
-	if x != nil {
-		return x.Reason
-	}
-	return ""
-}
-
-func (x *PlayerSnapshot) GetOperator() string {
-	if x != nil {
-		return x.Operator
-	}
-	return ""
-}
-
-func (x *PlayerSnapshot) GetData() []byte {
-	if x != nil {
-		return x.Data
-	}
-	return nil
-}
-
-// ─── Rollback audit log ──────────────────────────────────────
-type RollbackAuditLog struct {
-	state                 protoimpl.MessageState `protogen:"open.v1"`
-	Id                    uint64                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
-	PlayerId              uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`                                            // 0 for zone/server rollback
-	ZoneId                uint32                 `protobuf:"varint,3,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                                                  // 0 for server-wide rollback
-	RollbackType          uint32                 `protobuf:"varint,4,opt,name=rollback_type,json=rollbackType,proto3" json:"rollback_type,omitempty"`                                // 1=player, 2=zone, 3=server
-	SnapshotIdUsed        uint64                 `protobuf:"varint,5,opt,name=snapshot_id_used,json=snapshotIdUsed,proto3" json:"snapshot_id_used,omitempty"`                        // Which snapshot was restored (single-player only)
-	PreRollbackSnapshotId uint64                 `protobuf:"varint,6,opt,name=pre_rollback_snapshot_id,json=preRollbackSnapshotId,proto3" json:"pre_rollback_snapshot_id,omitempty"` // Safety snapshot before rollback
-	TargetTime            uint64                 `protobuf:"varint,7,opt,name=target_time,json=targetTime,proto3" json:"target_time,omitempty"`                                      // Target rollback timestamp
-	PlayersAffected       uint32                 `protobuf:"varint,8,opt,name=players_affected,json=playersAffected,proto3" json:"players_affected,omitempty"`
-	PlayersFailed         uint32                 `protobuf:"varint,9,opt,name=players_failed,json=playersFailed,proto3" json:"players_failed,omitempty"`
-	Reason                string                 `protobuf:"bytes,10,opt,name=reason,proto3" json:"reason,omitempty"`
-	Operator              string                 `protobuf:"bytes,11,opt,name=operator,proto3" json:"operator,omitempty"`                     // GM operator
-	CreatedAt             uint64                 `protobuf:"varint,12,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"` // When the rollback was executed
-	unknownFields         protoimpl.UnknownFields
-	sizeCache             protoimpl.SizeCache
-}
-
-func (x *RollbackAuditLog) Reset() {
-	*x = RollbackAuditLog{}
-	mi := &file_proto_common_database_mysql_database_table_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *RollbackAuditLog) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*RollbackAuditLog) ProtoMessage() {}
-
-func (x *RollbackAuditLog) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_mysql_database_table_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use RollbackAuditLog.ProtoReflect.Descriptor instead.
-func (*RollbackAuditLog) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_mysql_database_table_proto_rawDescGZIP(), []int{10}
-}
-
-func (x *RollbackAuditLog) GetId() uint64 {
-	if x != nil {
-		return x.Id
-	}
-	return 0
-}
-
-func (x *RollbackAuditLog) GetPlayerId() uint64 {
-	if x != nil {
-		return x.PlayerId
-	}
-	return 0
-}
-
-func (x *RollbackAuditLog) GetZoneId() uint32 {
-	if x != nil {
-		return x.ZoneId
-	}
-	return 0
-}
-
-func (x *RollbackAuditLog) GetRollbackType() uint32 {
-	if x != nil {
-		return x.RollbackType
-	}
-	return 0
-}
-
-func (x *RollbackAuditLog) GetSnapshotIdUsed() uint64 {
-	if x != nil {
-		return x.SnapshotIdUsed
-	}
-	return 0
-}
-
-func (x *RollbackAuditLog) GetPreRollbackSnapshotId() uint64 {
-	if x != nil {
-		return x.PreRollbackSnapshotId
-	}
-	return 0
-}
-
-func (x *RollbackAuditLog) GetTargetTime() uint64 {
-	if x != nil {
-		return x.TargetTime
-	}
-	return 0
-}
-
-func (x *RollbackAuditLog) GetPlayersAffected() uint32 {
-	if x != nil {
-		return x.PlayersAffected
-	}
-	return 0
-}
-
-func (x *RollbackAuditLog) GetPlayersFailed() uint32 {
-	if x != nil {
-		return x.PlayersFailed
-	}
-	return 0
-}
-
-func (x *RollbackAuditLog) GetReason() string {
-	if x != nil {
-		return x.Reason
-	}
-	return ""
-}
-
-func (x *RollbackAuditLog) GetOperator() string {
-	if x != nil {
-		return x.Operator
-	}
-	return ""
-}
-
-func (x *RollbackAuditLog) GetCreatedAt() uint64 {
-	if x != nil {
-		return x.CreatedAt
-	}
-	return 0
-}
-
 var File_proto_common_database_mysql_database_table_proto protoreflect.FileDescriptor
 
 const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
@@ -935,33 +701,7 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x13attribute_component\x18\v \x01(\v2\x14.PlayerAttributeCompR\x12attributeComponent:D\x8a\x92\xf4\x01\x0fplayer_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbc\x01\n" +
 	"\x11player_database_1\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12B\n" +
-	"\x11stress_test_probe\x18\x02 \x01(\v2\x16.PlayerStressTestProbeR\x0fstressTestProbe:F\x8a\x92\xf4\x01\x11player_database_1\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xa4\x02\n" +
-	"\x0fplayer_snapshot\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1b\n" +
-	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x17\n" +
-	"\azone_id\x18\x03 \x01(\rR\x06zoneId\x12#\n" +
-	"\rsnapshot_type\x18\x04 \x01(\rR\fsnapshotType\x12\x1d\n" +
-	"\n" +
-	"created_at\x18\x05 \x01(\x04R\tcreatedAt\x12\x16\n" +
-	"\x06reason\x18\x06 \x01(\tR\x06reason\x12\x1a\n" +
-	"\boperator\x18\a \x01(\tR\boperator\x12\x12\n" +
-	"\x04data\x18\b \x01(\fR\x04data:?\x8a\x92\xf4\x01\x0fplayer_snapshot\x92\x92\xf4\x01\x02id\xb2\x92\xf4\x01\x02idڒ\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xde\x03\n" +
-	"\x12rollback_audit_log\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x1b\n" +
-	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x17\n" +
-	"\azone_id\x18\x03 \x01(\rR\x06zoneId\x12#\n" +
-	"\rrollback_type\x18\x04 \x01(\rR\frollbackType\x12(\n" +
-	"\x10snapshot_id_used\x18\x05 \x01(\x04R\x0esnapshotIdUsed\x127\n" +
-	"\x18pre_rollback_snapshot_id\x18\x06 \x01(\x04R\x15preRollbackSnapshotId\x12\x1f\n" +
-	"\vtarget_time\x18\a \x01(\x04R\n" +
-	"targetTime\x12)\n" +
-	"\x10players_affected\x18\b \x01(\rR\x0fplayersAffected\x12%\n" +
-	"\x0eplayers_failed\x18\t \x01(\rR\rplayersFailed\x12\x16\n" +
-	"\x06reason\x18\n" +
-	" \x01(\tR\x06reason\x12\x1a\n" +
-	"\boperator\x18\v \x01(\tR\boperator\x12\x1d\n" +
-	"\n" +
-	"created_at\x18\f \x01(\x04R\tcreatedAt:4\x8a\x92\xf4\x01\x12rollback_audit_log\x92\x92\xf4\x01\x02id\xb2\x92\xf4\x01\x02id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04B\x17Z\x15proto/common/databaseb\x06proto3"
+	"\x11stress_test_probe\x18\x02 \x01(\v2\x16.PlayerStressTestProbeR\x0fstressTestProbe:F\x8a\x92\xf4\x01\x11player_database_1\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04B\x17Z\x15proto/common/databaseb\x06proto3"
 
 var (
 	file_proto_common_database_mysql_database_table_proto_rawDescOnce sync.Once
@@ -975,7 +715,7 @@ func file_proto_common_database_mysql_database_table_proto_rawDescGZIP() []byte 
 	return file_proto_common_database_mysql_database_table_proto_rawDescData
 }
 
-var file_proto_common_database_mysql_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
+var file_proto_common_database_mysql_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*User)(nil),                             // 0: user
 	(*UserOauth)(nil),                        // 1: user_oauth
@@ -986,35 +726,33 @@ var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*PlayerCentreDatabase)(nil),             // 6: player_centre_database
 	(*PlayerDatabase)(nil),                   // 7: player_database
 	(*PlayerDatabase_1)(nil),                 // 8: player_database_1
-	(*PlayerSnapshot)(nil),                   // 9: player_snapshot
-	(*RollbackAuditLog)(nil),                 // 10: rollback_audit_log
-	(*base.AccountSimplePlayerList)(nil),     // 11: AccountSimplePlayerList
-	(*component.PlayerSceneContextComp)(nil), // 12: PlayerSceneContextComp
-	(*component.Transform)(nil),              // 13: Transform
-	(*component.PlayerUint64Comp)(nil),       // 14: PlayerUint64Comp
-	(*component.PlayerSkillListComp)(nil),    // 15: PlayerSkillListComp
-	(*component.PlayerUint32Comp)(nil),       // 16: PlayerUint32Comp
-	(*component.BaseAttributesComp)(nil),     // 17: BaseAttributesComp
-	(*component.LevelComp)(nil),              // 18: LevelComp
-	(*component.CurrencyComp)(nil),           // 19: CurrencyComp
-	(*component.PlayerStressTestProbe)(nil),  // 20: PlayerStressTestProbe
-	(*component.PlayerMergeStateComp)(nil),   // 21: PlayerMergeStateComp
-	(*component.PlayerAttributeComp)(nil),    // 22: PlayerAttributeComp
+	(*base.AccountSimplePlayerList)(nil),     // 9: AccountSimplePlayerList
+	(*component.PlayerSceneContextComp)(nil), // 10: PlayerSceneContextComp
+	(*component.Transform)(nil),              // 11: Transform
+	(*component.PlayerUint64Comp)(nil),       // 12: PlayerUint64Comp
+	(*component.PlayerSkillListComp)(nil),    // 13: PlayerSkillListComp
+	(*component.PlayerUint32Comp)(nil),       // 14: PlayerUint32Comp
+	(*component.BaseAttributesComp)(nil),     // 15: BaseAttributesComp
+	(*component.LevelComp)(nil),              // 16: LevelComp
+	(*component.CurrencyComp)(nil),           // 17: CurrencyComp
+	(*component.PlayerStressTestProbe)(nil),  // 18: PlayerStressTestProbe
+	(*component.PlayerMergeStateComp)(nil),   // 19: PlayerMergeStateComp
+	(*component.PlayerAttributeComp)(nil),    // 20: PlayerAttributeComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
-	11, // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
-	12, // 1: player_centre_database.scene_info:type_name -> PlayerSceneContextComp
-	13, // 2: player_database.transform:type_name -> Transform
-	14, // 3: player_database.uint64_pb_component:type_name -> PlayerUint64Comp
-	15, // 4: player_database.skill_list:type_name -> PlayerSkillListComp
-	16, // 5: player_database.uint32_pb_component:type_name -> PlayerUint32Comp
-	17, // 6: player_database.derived_attributes_component:type_name -> BaseAttributesComp
-	18, // 7: player_database.level_component:type_name -> LevelComp
-	19, // 8: player_database.currency:type_name -> CurrencyComp
-	20, // 9: player_database.stress_test_probe:type_name -> PlayerStressTestProbe
-	21, // 10: player_database.merge_state:type_name -> PlayerMergeStateComp
-	22, // 11: player_database.attribute_component:type_name -> PlayerAttributeComp
-	20, // 12: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
+	9,  // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
+	10, // 1: player_centre_database.scene_info:type_name -> PlayerSceneContextComp
+	11, // 2: player_database.transform:type_name -> Transform
+	12, // 3: player_database.uint64_pb_component:type_name -> PlayerUint64Comp
+	13, // 4: player_database.skill_list:type_name -> PlayerSkillListComp
+	14, // 5: player_database.uint32_pb_component:type_name -> PlayerUint32Comp
+	15, // 6: player_database.derived_attributes_component:type_name -> BaseAttributesComp
+	16, // 7: player_database.level_component:type_name -> LevelComp
+	17, // 8: player_database.currency:type_name -> CurrencyComp
+	18, // 9: player_database.stress_test_probe:type_name -> PlayerStressTestProbe
+	19, // 10: player_database.merge_state:type_name -> PlayerMergeStateComp
+	20, // 11: player_database.attribute_component:type_name -> PlayerAttributeComp
+	18, // 12: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
 	13, // [13:13] is the sub-list for method output_type
 	13, // [13:13] is the sub-list for method input_type
 	13, // [13:13] is the sub-list for extension type_name
@@ -1033,7 +771,7 @@ func file_proto_common_database_mysql_database_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_database_mysql_database_table_proto_rawDesc), len(file_proto_common_database_mysql_database_table_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   11,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

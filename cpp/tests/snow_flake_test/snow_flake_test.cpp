@@ -634,6 +634,27 @@ TEST(SnowFlakeRegression, AtomicStalledClockNeverReplaysIds)
 	EXPECT_GE(prev >> kTimeShift, 2000ULL);
 }
 
+// ---------------------------------------------------------------------------
+// guard 等待语义:地板秒必须被真实时间越过,首个号不借位、不复用 guard 秒
+// ---------------------------------------------------------------------------
+
+// 递增 mock 时钟:guard 秒 == 当前秒时,首个号必须落到 guard 之后的一秒,而不是借位或复用 guard 秒。
+TEST(SnowFlakeGuard, FirstIdLandsPastGuardSecondWithoutBorrowing)
+{
+	SnowFlake sf;
+	sf.set_node_id(5);
+	sf.set_epoch(1000);
+	sf.set_mock_now(1005); // now_epoch == 5,每读一次前进 1 秒(模拟真实时间流逝)
+	sf.SetGuardTime(1005);
+
+	const Guid first = sf.Generate();
+	EXPECT_GT(first >> kTimeShift, 5ULL) << "first id must be strictly after the guard second";
+	EXPECT_EQ(first & kStepMask, 0ULL) << "a fresh second starts at step 0";
+
+	const Guid second = sf.Generate();
+	EXPECT_GT(second, first);
+}
+
 int32_t main(int32_t argc, char** argv)
 {
 	testing::InitGoogleTest(&argc, argv);

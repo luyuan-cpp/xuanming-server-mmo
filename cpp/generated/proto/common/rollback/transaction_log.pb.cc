@@ -48,11 +48,11 @@ constexpr TransactionLogEntry::ParseTableT_ TransactionLogEntry::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(TransactionLogEntry, _impl_._has_bits_),
       0, // no _extensions_
-      14, 120,  // max_field_number, fast_idx_mask
+      15, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294950912,  // skipmap
+      4294934528,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      14,  // num_field_entries
+      15,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -119,7 +119,10 @@ constexpr TransactionLogEntry::ParseTableT_ TransactionLogEntry::InternalGenerat
       {::_pbi::TcParser::FastUS1,
        {114, 0, 0,
         PROTOBUF_FIELD_OFFSET(TransactionLogEntry, _impl_.extra_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 zone_id = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TransactionLogEntry, _impl_.zone_id_), 14>(),
+       {120, 14, 0,
+        PROTOBUF_FIELD_OFFSET(TransactionLogEntry, _impl_.zone_id_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -151,6 +154,8 @@ constexpr TransactionLogEntry::ParseTableT_ TransactionLogEntry::InternalGenerat
       {PROTOBUF_FIELD_OFFSET(TransactionLogEntry, _impl_.correlation_id_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // string extra = 14;
       {PROTOBUF_FIELD_OFFSET(TransactionLogEntry, _impl_.extra_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 zone_id = 15;
+      {PROTOBUF_FIELD_OFFSET(TransactionLogEntry, _impl_.zone_id_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -181,7 +186,8 @@ inline constexpr TransactionLogEntry::Impl_::Impl_(
         currency_delta_{::int64_t{0}},
         balance_before_{::uint64_t{0u}},
         balance_after_{::uint64_t{0u}},
-        correlation_id_{::uint64_t{0u}} {}
+        correlation_id_{::uint64_t{0u}},
+        zone_id_{0u} {}
 
 template <typename>
 constexpr TransactionLogEntry::TransactionLogEntry(::_pbi::ConstantInitialized,
@@ -435,7 +441,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::TransactionLogEntry, _impl_._has_bits_),
-        17, // hasbit index offset
+        18, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::TransactionLogEntry, _impl_.tx_id_),
         PROTOBUF_FIELD_OFFSET(::TransactionLogEntry, _impl_.timestamp_),
         PROTOBUF_FIELD_OFFSET(::TransactionLogEntry, _impl_.tx_type_),
@@ -450,6 +456,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::TransactionLogEntry, _impl_.balance_after_),
         PROTOBUF_FIELD_OFFSET(::TransactionLogEntry, _impl_.correlation_id_),
         PROTOBUF_FIELD_OFFSET(::TransactionLogEntry, _impl_.extra_),
+        PROTOBUF_FIELD_OFFSET(::TransactionLogEntry, _impl_.zone_id_),
         1,
         2,
         5,
@@ -464,6 +471,7 @@ const ::uint32_t
         12,
         13,
         0,
+        14,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::TransactionLogBatch, _impl_._has_bits_),
         4, // hasbit index offset
@@ -474,7 +482,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::TransactionLogEntry)},
-        {31, sizeof(::TransactionLogBatch)},
+        {33, sizeof(::TransactionLogBatch)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -484,7 +492,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2frollback_2ftransaction_5flog_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n+proto/common/rollback/transaction_log."
-    "proto\"\311\002\n\023TransactionLogEntry\022\r\n\005tx_id\030\001"
+    "proto\"\332\002\n\023TransactionLogEntry\022\r\n\005tx_id\030\001"
     " \001(\004\022\021\n\ttimestamp\030\002 \001(\004\022!\n\007tx_type\030\003 \001(\016"
     "2\020.TransactionType\022\023\n\013from_player\030\004 \001(\004\022"
     "\021\n\tto_player\030\005 \001(\004\022\021\n\titem_uuid\030\006 \001(\004\022\026\n"
@@ -492,28 +500,28 @@ const char descriptor_table_protodef_proto_2fcommon_2frollback_2ftransaction_5fl
     " \001(\r\022\025\n\rcurrency_type\030\t \001(\r\022\026\n\016currency_"
     "delta\030\n \001(\003\022\026\n\016balance_before\030\013 \001(\004\022\025\n\rb"
     "alance_after\030\014 \001(\004\022\026\n\016correlation_id\030\r \001"
-    "(\004\022\r\n\005extra\030\016 \001(\t\"<\n\023TransactionLogBatch"
-    "\022%\n\007entries\030\001 \003(\0132\024.TransactionLogEntry*"
-    "\377\003\n\017TransactionType\022\016\n\nTX_UNKNOWN\020\000\022\014\n\010T"
-    "X_TRADE\020\001\022\026\n\022TX_MAIL_ATTACHMENT\020\002\022\023\n\017TX_"
-    "AUCTION_SELL\020\003\022\022\n\016TX_AUCTION_BUY\020\004\022\031\n\025TX"
-    "_GUILD_BANK_DEPOSIT\020\005\022\032\n\026TX_GUILD_BANK_W"
-    "ITHDRAW\020\006\022\023\n\017TX_QUEST_REWARD\020\007\022\023\n\017TX_SYS"
-    "TEM_GRANT\020\010\022\017\n\013TX_GM_GRANT\020\t\022\020\n\014TX_GM_DE"
-    "DUCT\020\n\022\017\n\013TX_SHOP_BUY\020\013\022\020\n\014TX_SHOP_SELL\020"
-    "\014\022\023\n\017TX_ITEM_DESTROY\020\r\022\023\n\017TX_CURRENCY_AD"
-    "D\020\016\022\026\n\022TX_CURRENCY_DEDUCT\020\017\022\027\n\023TX_ROLLBA"
-    "CK_RESTORE\020\020\022\017\n\013TX_CLAWBACK\020\021\022\030\n\024TX_DEFE"
-    "RRED_CLAWBACK\020\022\022\023\n\017TX_BATCH_RECALL\020\023\022\021\n\r"
-    "TX_ITEM_AWARD\020\024\022\025\n\021TX_QUEST_COMPLETE\020\025\022\017"
-    "\n\013TX_LEVEL_UP\020\026\022\020\n\014TX_BUFF_GAIN\020\027B\021Z\017com"
-    "mon/rollbackb\006proto3"
+    "(\004\022\r\n\005extra\030\016 \001(\t\022\017\n\007zone_id\030\017 \001(\r\"<\n\023Tr"
+    "ansactionLogBatch\022%\n\007entries\030\001 \003(\0132\024.Tra"
+    "nsactionLogEntry*\377\003\n\017TransactionType\022\016\n\n"
+    "TX_UNKNOWN\020\000\022\014\n\010TX_TRADE\020\001\022\026\n\022TX_MAIL_AT"
+    "TACHMENT\020\002\022\023\n\017TX_AUCTION_SELL\020\003\022\022\n\016TX_AU"
+    "CTION_BUY\020\004\022\031\n\025TX_GUILD_BANK_DEPOSIT\020\005\022\032"
+    "\n\026TX_GUILD_BANK_WITHDRAW\020\006\022\023\n\017TX_QUEST_R"
+    "EWARD\020\007\022\023\n\017TX_SYSTEM_GRANT\020\010\022\017\n\013TX_GM_GR"
+    "ANT\020\t\022\020\n\014TX_GM_DEDUCT\020\n\022\017\n\013TX_SHOP_BUY\020\013"
+    "\022\020\n\014TX_SHOP_SELL\020\014\022\023\n\017TX_ITEM_DESTROY\020\r\022"
+    "\023\n\017TX_CURRENCY_ADD\020\016\022\026\n\022TX_CURRENCY_DEDU"
+    "CT\020\017\022\027\n\023TX_ROLLBACK_RESTORE\020\020\022\017\n\013TX_CLAW"
+    "BACK\020\021\022\030\n\024TX_DEFERRED_CLAWBACK\020\022\022\023\n\017TX_B"
+    "ATCH_RECALL\020\023\022\021\n\rTX_ITEM_AWARD\020\024\022\025\n\021TX_Q"
+    "UEST_COMPLETE\020\025\022\017\n\013TX_LEVEL_UP\020\026\022\020\n\014TX_B"
+    "UFF_GAIN\020\027B\021Z\017common/rollbackb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2frollback_2ftransaction_5flog_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2frollback_2ftransaction_5flog_2eproto = {
     false,
     false,
-    980,
+    997,
     descriptor_table_protodef_proto_2fcommon_2frollback_2ftransaction_5flog_2eproto,
     "proto/common/rollback/transaction_log.proto",
     &descriptor_table_proto_2fcommon_2frollback_2ftransaction_5flog_2eproto_once,
@@ -570,9 +578,9 @@ TransactionLogEntry::TransactionLogEntry(
                offsetof(Impl_, tx_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, tx_id_),
-           offsetof(Impl_, correlation_id_) -
+           offsetof(Impl_, zone_id_) -
                offsetof(Impl_, tx_id_) +
-               sizeof(Impl_::correlation_id_));
+               sizeof(Impl_::zone_id_));
 
   // @@protoc_insertion_point(copy_constructor:TransactionLogEntry)
 }
@@ -587,9 +595,9 @@ inline void TransactionLogEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, tx_id_),
            0,
-           offsetof(Impl_, correlation_id_) -
+           offsetof(Impl_, zone_id_) -
                offsetof(Impl_, tx_id_) +
-               sizeof(Impl_::correlation_id_));
+               sizeof(Impl_::zone_id_));
 }
 TransactionLogEntry::~TransactionLogEntry() {
   // @@protoc_insertion_point(destructor:TransactionLogEntry)
@@ -648,10 +656,10 @@ PROTOBUF_NOINLINE void TransactionLogEntry::Clear() {
         reinterpret_cast<char*>(&_impl_.item_uuid_) -
         reinterpret_cast<char*>(&_impl_.tx_id_)) + sizeof(_impl_.item_uuid_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     ::memset(&_impl_.item_quantity_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.correlation_id_) -
-        reinterpret_cast<char*>(&_impl_.item_quantity_)) + sizeof(_impl_.correlation_id_));
+        reinterpret_cast<char*>(&_impl_.zone_id_) -
+        reinterpret_cast<char*>(&_impl_.item_quantity_)) + sizeof(_impl_.zone_id_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -803,6 +811,15 @@ PROTOBUF_NOINLINE void TransactionLogEntry::Clear() {
     }
   }
 
+  // uint32 zone_id = 15;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_zone_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          15, this_._internal_zone_id(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -886,7 +903,7 @@ PROTOBUF_NOINLINE void TransactionLogEntry::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     // uint32 item_quantity = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_item_quantity() != 0) {
@@ -927,6 +944,13 @@ PROTOBUF_NOINLINE void TransactionLogEntry::Clear() {
       if (this_._internal_correlation_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_correlation_id());
+      }
+    }
+    // uint32 zone_id = 15;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_zone_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_zone_id());
       }
     }
   }
@@ -993,7 +1017,7 @@ void TransactionLogEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00003f00U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00007f00U)) {
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (from._internal_item_quantity() != 0) {
         _this->_impl_.item_quantity_ = from._impl_.item_quantity_;
@@ -1024,6 +1048,11 @@ void TransactionLogEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.correlation_id_ = from._impl_.correlation_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_zone_id() != 0) {
+        _this->_impl_.zone_id_ = from._impl_.zone_id_;
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -1046,8 +1075,8 @@ void TransactionLogEntry::InternalSwap(TransactionLogEntry* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.extra_, &other->_impl_.extra_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(TransactionLogEntry, _impl_.correlation_id_)
-      + sizeof(TransactionLogEntry::_impl_.correlation_id_)
+      PROTOBUF_FIELD_OFFSET(TransactionLogEntry, _impl_.zone_id_)
+      + sizeof(TransactionLogEntry::_impl_.zone_id_)
       - PROTOBUF_FIELD_OFFSET(TransactionLogEntry, _impl_.tx_id_)>(
           reinterpret_cast<char*>(&_impl_.tx_id_),
           reinterpret_cast<char*>(&other->_impl_.tx_id_));

@@ -125,7 +125,7 @@ var (
 		Namespace: metricNamespace,
 		Subsystem: "",
 		Name:      "apply_bind_gate_seconds",
-		Help:      "SendBindSessionToGate latency (Kafka send to gate-{gateId}).",
+		Help:      "SendBindSessionToGate latency (Kafka send to gate-cmd_g<N>, partition gateId%P).",
 		Labels:    []string{},
 		Buckets:   stageBuckets,
 	})

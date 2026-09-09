@@ -224,10 +224,12 @@ func main() {
 	// 所以这里先 fence 发号器、显式 flush Kafka，再退出让编排拉起新进程。
 	// os.Exit 不执行 defer，因此 flush 必须在强退分支里直接调用。
 	//
-	// ⏱ 时间预算(§租约与重启时间预算必须闭合):Lost() 由 snowflakealloc 的**自 fencing**
-	// 提前触发 —— 距上次成功续租超过 TTL 的 2/3(TTL=60s ⇒ 40s)就报信,而不是干等
-	// KeepAlive channel 关闭(那恒晚于服务端过期点)。收到信号时服务端 lease 通常还有
-	// 约 TTL/3(≈20s)才过期,这段余量用来让在途请求干净失败。
+	// Lost() 关闭 = 本进程**确认**不再是这个槽的持有者(slots key 被挂到了别的 uuid 上:
+	// 运维手动清理 / 水位机制被绕过 / 旧版本二进制)。
+	//
+	// ⏱ 时间预算:lease 抖动 / etcd 不可达**不再**触发 Lost()(snowflakealloc 会自己 reclaim);
+	// 这段时间的安全由发号器内部的水位年龄自 fence 兜住 —— 距上次水位写成功超过 F(2h)
+	// Generate 返回 ErrWatermarkStale(暂态,写成功即恢复),建场景整体失败但进程不退出。
 	//
 	// ⚠️ 顺序不能反,而且**不能只调 s.Stop()**:go-zero 的 zrpc.RpcServer.Stop() 实测
 	// (v1.9.2 / v1.10.0 同)只有一行 logx.Close(),既不拒新请求也不排空在途。

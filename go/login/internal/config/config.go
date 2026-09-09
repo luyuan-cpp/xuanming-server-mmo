@@ -6,6 +6,8 @@ import (
 
 	"github.com/IBM/sarama"
 	"github.com/zeromicro/go-zero/zrpc"
+
+	"shared/idsegment"
 )
 
 // Config is the top-level configuration.
@@ -20,6 +22,14 @@ type Config struct {
 	Kafka              KafkaConfig        `json:"Kafka"`
 	PlayerLocatorRpc   zrpc.RpcClientConf `json:"PlayerLocatorRpc"` // player_locator gRPC client
 	SceneManagerRpc    zrpc.RpcClientConf `json:"SceneManagerRpc"`  // scene_manager gRPC client
+	// DataServiceRpc 是 data_service 的 gRPC 客户端(etcd 发现,Key=dataservice.rpc)。
+	// login 目前只用它领 PlayerId 号段(AllocateIdSegment);IdSegment.Enabled=false 时
+	// 根本不拨号,所以标 optional —— 但 Enabled=true 而这块缺失会在启动时明确拒绝。
+	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc,optional"`
+	// IdSegment 控制 PlayerId 的号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
+	// 字段语义见 shared/idsegment.Conf。**没写这块 = 号段关闭 = 纯 snowflake 老路径**,
+	// 这就是设计稿 §6.4 说的「保留一个版本做回滚开关」。
+	IdSegment idsegment.Conf `json:"IdSegment,optional"`
 	// GateTokenSecret 已废弃:单个 string 无法不停服轮换,而且 gate token 与
 	// 排队 token 共用同一把密钥,信任域没拆。保留字段只为让 deploy/*.yaml 与
 	// tools/scripts/k8s_deploy.ps1 这些**仓外**部署产物在过渡期仍能起服
@@ -34,6 +44,15 @@ type Config struct {
 	KillSwitch    KillSwitchConf `json:"KillSwitch,optional"`
 	TableDir      string         `json:",default=../../generated/tables"`
 	AuthProviders AuthConfig     `json:"AuthProviders,optional"` // Third-party auth provider config
+	// ClusterId 是部署级集群号:PlayerId(bwmarrin 13 位 node 段)切成 [cluster3][slot10]
+	// 的 cluster 部分(docs/design/node-id-overhaul-plan-20260908.md §5)。**运维按集群
+	// 一次性设定,策划不碰**;默认 0 = 单集群 / 存量 PlayerId 布局。etcd 槽位前缀带
+	// c<cluster>,两个集群共用一个 etcd 也不会撞号。必须 < 8。
+	ClusterId uint32 `json:"ClusterId,default=0"`
+	// SnowflakeCacheDir 是 PlayerId 槽位的本地缓存目录(shared/snowflakealloc,设计稿 §3.5):
+	// 启动时 etcd 不可达、且缓存里的上次水位确认在 F(2h)内,就用缓存的槽起服并后台重试
+	// 注册。留空关闭。默认相对服务工作目录(go/login/)指向仓库 run/(已 gitignore)。
+	SnowflakeCacheDir string `json:"SnowflakeCacheDir,default=../../run/snowflake"`
 	// DevSkipAuth 是已废弃的不安全开关。保留字段只为让旧配置在启动时
 	// 明确失败,不能因为结构体删字段而静默忽略、让开发者误以为仍生效。
 	DevSkipAuth     bool                `json:"DevSkipAuth,optional"`
@@ -72,6 +91,51 @@ type Config struct {
 	// flip Enabled=true once the queue path has been validated end-to-end. See
 	// docs/design/login-queue-2026-05.md (added with this feature).
 	Queue QueueConf `json:"Queue,optional"`
+
+	// HomeZone 控制「按 data_service 的 player:zone 映射修正 zone」的两条链
+	// (internal/logic/pkg/homezone 包注释)。整块可缺省,缺省 = 角色列表刷新开、
+	// 进游戏重定向关(见 HomeZoneConf 各字段)。
+	HomeZone HomeZoneConf `json:"HomeZone,optional"`
+}
+
+// HomeZoneConf 是合服后 zone 归属修正的开关。
+//
+// 两个开关的默认方向**刻意不同**:
+//
+//   - 角色列表刷新(RefreshRoleListDisabled)沿用 KillSwitchConf 的纪律:go-zero 对整块
+//     缺失的 optional 结构体**不会**递归填内层 default,所以反向命名,零值 = 开着。
+//     它是合服后的**主修正机制**:客户端按刷新后的 zone_id 选区,直接连到归属 zone 的
+//     gate,根本不需要重定向。
+//   - 进游戏重定向(RedirectOnEnterEnabled)正向命名,零值 = 关。它依赖客户端实现
+//     SceneClientPlayerCommonRedirectToGate(msg 124:断开当前 gate、连 target_ip:port、
+//     首包 ClientTokenVerifyRequest、再走 Login + EnterGame)。EnterGame RPC 在触发重定向
+//     时已经回了成功并清掉登录会话,客户端若只是把 124 打个日志(Unity 端目前就是这样),
+//     玩家就卡在源 zone 的 gate 上既进不了场景也无法重试。**必须等客户端实现了 124 才能
+//     置 true**;参考实现见 robot/pkg/redirect.go(FollowRedirect)与
+//     robot/logic/handler/scene_client_player_common_redirect_to_gate.go。
+//
+// 关掉角色列表刷新只在 homezone 自身出问题需要止血时用;关掉后 login 退回修复前行为
+// (角色列表报建角 zone),不会拒绝任何请求。
+type HomeZoneConf struct {
+	// RefreshRoleListDisabled=true:Login 返回的角色列表不再用映射覆盖 zone_id。
+	RefreshRoleListDisabled bool `json:"RefreshRoleListDisabled,default=false"`
+	// RedirectOnEnterEnabled=true:EnterGame 按归属 zone 触发 scene_manager 的跨区重定向。
+	// 默认 false —— 客户端实现 msg 124 之前不许打开(见类型注释)。即使打开,也只对
+	// 「首次登录且 player_locator 里没有在场 scene」的请求生效:重连 / 顶号必须回到
+	// 原来的 scene,不能被归属 zone 覆盖(entergamelogic.go homeZoneOverrideAllowed)。
+	RedirectOnEnterEnabled bool `json:"RedirectOnEnterEnabled,default=false"`
+	// RoleListLookupTimeout 是 Login 角色列表那一次 BatchGetPlayerHomeZone 的预算;
+	// 0 = homezone.DefaultRoleListLookupTimeout(500ms)。登录链路上串行的一跳,
+	// 超时按失败处理(保留建角 zone),宁可偶尔给旧 zone 也不拖慢所有登录。
+	RoleListLookupTimeout time.Duration `json:"RoleListLookupTimeout,optional"`
+	// EnterLookupTimeout 是 EnterGame 那一次 GetPlayerHomeZone 的预算;
+	// 0 = homezone.DefaultEnterLookupTimeout(1.5s)。EnterGame 链路本身是异步的
+	// (5 分钟预算),可以比角色列表宽松。
+	EnterLookupTimeout time.Duration `json:"EnterLookupTimeout,optional"`
+	// RegisterTimeout 是 CreatePlayer 写 player:zone 映射(RegisterPlayerZone)的预算;
+	// 0 = homezone.DefaultRegisterTimeout(3s)。这条写失败建角**整体失败**
+	// (createplayerlogic.go),所以给得比查询宽。
+	RegisterTimeout time.Duration `json:"RegisterTimeout,optional"`
 }
 
 // QueueConf controls the login queue (Redis ZSET-backed) that throttles

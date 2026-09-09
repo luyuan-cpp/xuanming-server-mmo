@@ -46,6 +46,11 @@ func (f *fakeSnapshotStore) InsertSnapshot(_ context.Context, row *store.Snapsho
 	f.snapshotByID[id] = &copyRow
 	return id, nil
 }
+func (f *fakeSnapshotStore) InsertSnapshotIfGuidAbsent(ctx context.Context, row *store.SnapshotRow) (uint64, bool, error) {
+	// Kafka 落库入口,logic 层不调用;复用 InsertSnapshot 保持接口完整。
+	id, err := f.InsertSnapshot(ctx, row)
+	return id, err == nil, err
+}
 func (f *fakeSnapshotStore) GetSnapshotByID(_ context.Context, id uint64) (*store.SnapshotRow, error) {
 	return f.snapshotByID[id], nil
 }
@@ -76,6 +81,10 @@ type fakeTransactionLogStore struct {
 }
 
 func (f *fakeTransactionLogStore) Close() error { return nil }
+func (f *fakeTransactionLogStore) InsertBatchIgnore(_ context.Context, rows []*store.TransactionLogRow) (int64, error) {
+	// Kafka 落库入口,logic 层不调用;返回全部插入以满足接口。
+	return int64(len(rows)), nil
+}
 func (f *fakeTransactionLogStore) QueryLog(_ context.Context, query *store.TransactionLogQuery) ([]*store.TransactionLogRow, uint32, error) {
 	queryCopy := *query
 	f.queries = append(f.queries, &queryCopy)

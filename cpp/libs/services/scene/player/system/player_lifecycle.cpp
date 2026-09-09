@@ -73,7 +73,11 @@ namespace
 	// Sends a SendTipToClient message directly to the gate by session_id.
 	// Used during the async-load window when the player entity does not yet
 	// exist, so the entity-based PlayerTipSystem path is not available.
-	void SendTipToPendingSession(SessionId sessionId, uint32_t tipId)
+	//
+	// playerId 是 gate 侧的身份栅栏(routing-identity-audit-20260908.md R13):
+	// 这条路径没有玩家实体可取 Guid,但调用方两处都拿得到 player_id —— 必须传下来,
+	// 否则本函数会成为整条推送链上唯一一个不带身份的口子。
+	void SendTipToPendingSession(SessionId sessionId, Guid playerId, uint32_t tipId)
 	{
 		if (sessionId == 0)
 		{
@@ -103,7 +107,7 @@ namespace
 		TipInfoMessage tip;
 		tip.set_id(tipId);
 		SendMessageToClientViaGate(SceneClientPlayerCommonSendTipToClientMessageId,
-								   tip, *gateSessionPtr, sessionId);
+								   tip, *gateSessionPtr, sessionId, playerId);
 	}
 } // namespace
 
@@ -140,7 +144,7 @@ void PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed(Guid playerId,
 		if (sessionId != 0)
 		{
 			// Best-effort tip; safe even if the gate session is already gone.
-			SendTipToPendingSession(sessionId, kEnterSceneFailed);
+			SendTipToPendingSession(sessionId, playerId, kEnterSceneFailed);
 			SessionMap().erase(sessionId);
 		}
 		tlsPendingEnterMap.erase(pendingIt);
@@ -393,7 +397,7 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerGa
 	// 正常重试路径(与 HandlePlayerAsyncLoadFailed 的 RedisError 分支同款处理)。
 	if (targetScene == entt::null)
 	{
-		SendTipToPendingSession(enterInfo.session_id(), kEnterSceneFailed);
+		SendTipToPendingSession(enterInfo.session_id(), playerId, kEnterSceneFailed);
 		LOG_ERROR << "EnterScene: aborting entry for player " << playerId
 		          << " (scene_id=" << enterInfo.scene_id()
 		          << " unavailable); login state NOT set so a retry can still fire PlayerLoginEvent.";

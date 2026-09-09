@@ -41,6 +41,13 @@ Snowflake:
   NodeBits: 13
   StepBits: 9
 
+# 部署级集群号(PlayerId 13 位 node 段的 cluster 位,0..7)。运维按集群一次性设定,策划不碰;
+# 单集群 / 存量布局保持 0。两个集群共用一个 etcd 也不撞号。
+ClusterId: 0
+
+# PlayerId 槽位本地缓存目录:etcd 启动时不可达、缓存在 2h 内则用缓存的槽起服。留空关闭。
+SnowflakeCacheDir: ../../run/snowflake
+
 # Distributed lock config
 Locker:
   AccountLockTTL: 10 # 10 seconds
@@ -112,6 +119,65 @@ SceneManagerRpc:
   Timeout: 5000
   Middlewares:
     Breaker: false
+
+# DataService gRPC client (discovered via etcd)。login 用它:领 PlayerId 号段
+# (AllocateIdSegment)、建角登记归属 zone(RegisterPlayerZone)、登录 / 进游戏查归属
+# zone(GetPlayerHomeZone / BatchGetPlayerHomeZone,见 HomeZone 块)。
+# NonBlock: true —— 号段与归属查询都是弱依赖(设计稿 §6.5):data_service 没起时 login
+# 照常起服,领段失败按 IdSegment.FallbackToSnowflake 决定回退还是拒绝建角。
+# Middlewares.Breaker: true —— 归属查询串在**每次登录**的角色列表上。最难受的不是
+# data_service 干净地下线(那样 etcd 掉键、连接直接被摘掉),而是它**死了但键还在**:
+# 进程僵住 / 机器失联时,etcd 租约到期前那个 endpoint 仍在候选池里,go-zero 照样往它
+# 派请求,于是每一次 Login 都白等满 RoleListLookupTimeout 才回退到建角 zone ——
+# 全服登录延迟凭空抬高一个超时,一直抬到 etcd 把键摘掉为止。熔断器让失败到达阈值后
+# 直接快速失败(homezone 按「不可用→保留存量 zone」处理),半开探测恢复后自动回来。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: dataservice.rpc
+  Timeout: 3000
+  NonBlock: true
+  Middlewares:
+    Breaker: true
+
+# PlayerId 号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
+# Enabled:**只有显式写 true 才开**;整块不写 = 关 = 纯 snowflake 老路径(回滚开关)。
+# Step:**初始**领段长度;之后按 Leaf 口径动态调整 —— 一段不到 15 分钟用完则下次翻倍,
+#   超过 30 分钟则减半,夹在 [MinStep, MaxStep] 内(缺省 [10, 1000])。每天重启一次时浪费
+#   最多两段(当前段 + 预取段),动态 step 把它压到最小;双 buffer 意味着库倒下后还能发完两段。
+# FallbackToSnowflake:号段失败时回退 snowflake。回退是安全的(号段 [1, 2^55) 与存量
+#   snowflake PlayerId ≈2.8e17 起的值域不相交),但会让 snowflake 机器永远留着 ——
+#   默认 false:号段失败即建角失败(tip kLoginDataSerializeFailed),§6.4 的决定。
+IdSegment:
+  Enabled: true
+  Step: 100
+  MinStep: 10
+  MaxStep: 1000
+  FallbackToSnowflake: false
+
+# 合服后的 zone 归属修正(internal/logic/pkg/homezone)。走 DataServiceRpc 查
+# player:zone 映射。
+#
+# RefreshRoleListDisabled(反向命名,整块不写 = 开):Login 用映射覆盖角色列表的
+#   zone_id。这是合服后的**主修正机制**——客户端按它选区就直接连到归属 zone 的 gate。
+#   查询失败 / 映射为 0 一律保留建角 zone,不会拒绝登录;只在 homezone 自身需要止血时关。
+# RedirectOnEnterEnabled(正向命名,整块不写 = 关):EnterGame 按归属 zone 触发
+#   scene_manager 的跨区重定向(gate 推 msg 124 SceneClientPlayerCommonRedirectToGate)。
+#   ⚠️ 客户端实现 msg 124 之前**必须保持 false**:EnterGame RPC 在重定向时已回成功并清掉
+#   登录会话,客户端不按 124 换 gate 就会卡死。Unity 端目前只有未实现的 partial;
+#   参考实现是 robot/pkg/redirect.go FollowRedirect +
+#   robot/logic/handler/scene_client_player_common_redirect_to_gate.go。
+#   打开后也只对「首次登录且没有在场 scene」生效,重连 / 顶号永远回原 scene。
+# RoleListLookupTimeout:Login 角色列表那一次批量查询的预算(串在每次登录上,要短)。
+# EnterLookupTimeout:EnterGame 那一次单查的预算(异步链路,可宽)。
+# RegisterTimeout:CreatePlayer 登记 player:zone 的预算(写失败建角整体失败,给宽)。
+HomeZone:
+  RefreshRoleListDisabled: false
+  RedirectOnEnterEnabled: false
+  RoleListLookupTimeout: 500ms
+  EnterLookupTimeout: 1500ms
+  RegisterTimeout: 3s
 
 # ─────────────────────────────────────────────────────────────────────────
 # HMAC 密钥治理(见 internal/config/secrets.go 包注释)

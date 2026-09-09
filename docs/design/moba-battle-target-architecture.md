@@ -5,7 +5,7 @@
 (见 [turn-based-battle-server.md §18](./turn-based-battle-server.md#18-客户端直连-battle-节点票据入场战斗流量零字节经-gate2026-09-05已落码待验证));
 写本文时 battle 节点尚不存在,现状映射一节按 2026-09-05 的仓库状态重写。
 **来源:** 架构讨论。通用骨架部分为业界标准形态(LoL / Dota2 / 王者 / 绝地求生这类"会话制对局"的通用做法),现状映射部分已逐项对照本仓代码核实。
-**关联:** [moba-ds-server-interview-qa.md](./moba-ds-server-interview-qa.md)(DS 内部设计细则)、[moba-non-ds-server-interview-qa.md](./moba-non-ds-server-interview-qa.md)(外围系统)、[ARCH.md](./ARCH.md)(现有 MMO 拓扑)、[player_login_flow.md](./player_login_flow.md)(票据入场的现有实现)
+**关联:** [moba-ds-server-interview-qa.md](./moba-ds-server-interview-qa.md)(DS 内部设计细则)、[moba-non-ds-server-interview-qa.md](./moba-non-ds-server-interview-qa.md)(外围系统)、[ARCH.md](./ARCH.md)(现有 MMO 拓扑)、[player_login_flow.md](./player_login_flow.md)(票据入场的现有实现)、[session-extractability-mmo-slg.md](./session-extractability-mmo-slg.md)(本文这套判据能/不能套到 MMO、SLG 的哪些层)
 
 > **一句话判据:判断一个对局架构标不标准,只看一件事——战斗进程能不能被随时 kill 掉而不损坏任何持久数据。**
 > 能,就是标准的;不能,就还是"网关/场景服里长了个战斗模块"。

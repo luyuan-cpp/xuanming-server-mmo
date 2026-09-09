@@ -8,6 +8,7 @@ import (
 	"login/internal/constants"
 	"login/internal/logic/pkg/auth"
 	"login/internal/logic/pkg/ctxkeys"
+	"login/internal/logic/pkg/homezone"
 	"login/internal/logic/pkg/locker"
 	"login/internal/logic/pkg/loginsession"
 	"login/internal/logic/pkg/token"
@@ -135,11 +136,7 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 			}
 		}
 
-		if userAccount.SimplePlayers != nil {
-			for _, v := range userAccount.SimplePlayers.Players {
-				resp.Players = append(resp.Players, &login_proto.AccountSimplePlayerWrapper{Player: v})
-			}
-		}
+		resp.Players = l.roleListWithCurrentHomeZone(userAccount)
 		return resp, nil
 	}
 
@@ -215,13 +212,38 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 	}
 
 	// 7. Return player list
-	if userAccount.SimplePlayers != nil {
-		for _, v := range userAccount.SimplePlayers.Players {
-			resp.Players = append(resp.Players, &login_proto.AccountSimplePlayerWrapper{Player: v})
-		}
-	}
+	resp.Players = l.roleListWithCurrentHomeZone(userAccount)
 
 	return resp, nil
+}
+
+// roleListWithCurrentHomeZone 把账号 blob 里的角色列表转成响应,并用 data_service
+// 的 player:zone 映射覆盖每个角色的 zone_id。
+//
+// 账号 blob 里的 zone_id 只是建角时盖的章(createplayerlogic.go),合服只改映射
+// 不改 blob,所以直接返回它会把玩家引向已下线的源 zone。这里刻意**不把刷新后的
+// zone 回写 blob**:映射是唯一真源,回写等于制造第二份真相,再次合服 / 回滚时两
+// 份必然打架。映射查不到 / RPC 失败 / 开关关闭 → 原样返回建角 zone,登录不受影响。
+func (l *LoginLogic) roleListWithCurrentHomeZone(userAccount *login_proto_data_base.UserAccounts) []*login_proto.AccountSimplePlayerWrapper {
+	players := userAccount.GetSimplePlayers().GetPlayers()
+	return buildRoleList(l.ctx, l.svcCtx.HomeZone, config.AppConfig.HomeZone.RefreshRoleListDisabled, players)
+}
+
+// buildRoleList 是 roleListWithCurrentHomeZone 去掉 ServiceContext 依赖的纯函数版,
+// 单测直接打它。resolver 为 nil 或 disabled=true 时原样透传(不复制、不查询)。
+func buildRoleList(ctx context.Context, resolver *homezone.Resolver, disabled bool,
+	players []*login_proto_common.AccountSimplePlayer) []*login_proto.AccountSimplePlayerWrapper {
+	if len(players) == 0 {
+		return nil
+	}
+	if resolver != nil && !disabled {
+		players = resolver.RefreshRoleZones(ctx, players)
+	}
+	out := make([]*login_proto.AccountSimplePlayerWrapper, 0, len(players))
+	for _, v := range players {
+		out = append(out, &login_proto.AccountSimplePlayerWrapper{Player: v})
+	}
+	return out
 }
 
 func GetOrInitUserAccount(ctx context.Context, rdb *redis.Client, account string, ttl time.Duration) (*login_proto_data_base.UserAccounts, error) {

@@ -11,6 +11,7 @@ import (
 
 	"login/internal/logic/pkg/consistent"
 	db_proto "proto/db"
+	"shared/kafkacmd"
 	"shared/safego"
 
 	"github.com/IBM/sarama"
@@ -120,6 +121,11 @@ func NewKeyOrderedKafkaProducer(cfg config.KafkaConfig) (*KeyOrderedKafkaProduce
 	plainCfg.Producer.Return.Successes = true
 	plainCfg.Producer.Return.Errors = true
 	plainCfg.Producer.RequiredAcks = sarama.WaitForAll
+	// 控制面命令必须落在 node_id % P 算出来的那一个分区上(消费端只 assign 那一个),
+	// 而 sarama 默认的哈希分区器会覆盖 ProducerMessage.Partition。只装在 plainCfg 上:
+	// 上面那个 config(db_task 的事务/幂等生产者)一个字都没动,行为不变。
+	// 非命令 topic 在 NewCommandAwarePartitioner 里仍然拿默认哈希分区器。
+	plainCfg.Producer.Partitioner = NewCommandAwarePartitioner
 
 	plainProducer, err := sarama.NewSyncProducer(cfg.Brokers, plainCfg)
 	if err != nil {
@@ -366,10 +372,40 @@ func (p *KeyOrderedKafkaProducer) verifyPartitionContract(partitions []int32) er
 
 // SendToTopic sends raw bytes to an arbitrary Kafka topic using the non-transactional producer.
 // When key is non-empty, messages with the same key are routed to the same partition.
+//
+// 控制面命令 topic 走不了这条路:它的分区号必须是 node_id % P 显式算出来的,
+// 从这里发会带着零值 Partition 落到 0 号分区 —— 0 号分区上坐着 node_id 是 P 的
+// 倍数的那些节点,它们读到后按 target_instance_id 丢弃,等于静默丢命令。
+// 所以这里 fail-closed,逼调用方走 SendToTopicPartition。
 func (p *KeyOrderedKafkaProducer) SendToTopic(topic string, data []byte, key string) error {
+	if kafkacmd.IsCommandTopic(topic) {
+		return fmt.Errorf("refusing to send to command topic %s without an explicit partition: use SendToTopicPartition", topic)
+	}
 	msg := &sarama.ProducerMessage{
 		Topic: topic,
 		Value: sarama.ByteEncoder(data),
+	}
+	if key != "" {
+		msg.Key = sarama.StringEncoder(key)
+	}
+	_, _, err := p.plainProducer.SendMessage(msg)
+	return err
+}
+
+// SendToTopicPartition sends raw bytes to an explicit (topic, partition) using the
+// non-transactional producer. This is the control-plane command path.
+//
+// topic 与分区号是一对不可分的东西(见 shared/kafkacmd):调用方必须由
+// kafkacmd 一次性把两者算出来再传进来,不许在这里或别处单独拼其中一个。
+// key 仍然填(玩家 id),它不再决定落点,只用于日志与 broker 侧的可读性。
+func (p *KeyOrderedKafkaProducer) SendToTopicPartition(topic string, partition int32, data []byte, key string) error {
+	if partition < 0 {
+		return fmt.Errorf("send to %s rejected: negative partition %d", topic, partition)
+	}
+	msg := &sarama.ProducerMessage{
+		Topic:     topic,
+		Partition: partition,
+		Value:     sarama.ByteEncoder(data),
 	}
 	if key != "" {
 		msg.Key = sarama.StringEncoder(key)

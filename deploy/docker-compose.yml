@@ -23,7 +23,17 @@ services:
       - KAFKA_TRANSACTION_STATE_LOG_MIN_ISR=1
       - KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS=0
       - KAFKA_HEAP_OPTS=${KAFKA_HEAP_OPTS:--Xms128m -Xmx256m}
-      - KAFKA_LOG_RETENTION_MS=${KAFKA_LOG_RETENTION_MS:-60000}
+      # Broker default retention, i.e. the retention of every topic that does
+      # NOT declare its own: the per-node command topics (gate-<id>/scene-<id>)
+      # that the migration window still auto-creates, and game-events.
+      # It MUST exceed the longest a consumer can legally fall behind. The C++
+      # consumers pin max.poll.interval.ms=900000 (15 min,
+      # cpp/libs/engine/infra/messaging/kafka/kafka_consumer.cpp), so anything
+      # under 900s means a briefly-lagging gate loses BindSession/RoutePlayer
+      # instead of catching up, silently
+      # (docs/design/routing-identity-audit-20260908.md R11). Was 60000.
+      # 30 min = 2x that floor; deploy/env/kafka.*.env override per profile.
+      - KAFKA_LOG_RETENTION_MS=${KAFKA_LOG_RETENTION_MS:-1800000}
       - KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS=${KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS:-120000}
       - KAFKA_LOG_RETENTION_BYTES=${KAFKA_LOG_RETENTION_BYTES:-134217728}
       - KAFKA_LOG_SEGMENT_BYTES=${KAFKA_LOG_SEGMENT_BYTES:-16777216}
@@ -43,20 +53,46 @@ services:
       - kafka-data:/tmp/kraft-combined-logs
     user: "root:root"  # Windows permission workaround
 
-  # Pre-create per-node Kafka topics (gate-{1..N}, scene-{1..N}, centre-{1..N})
-  # so C++ consumers don't log "Unknown topic or partition" warnings on cold
-  # start before SceneManager / producers create them lazily. Counts are
-  # configurable via KAFKA_INIT_GATE_COUNT / KAFKA_INIT_SCENE_COUNT /
-  # KAFKA_INIT_CENTRE_COUNT (defaults 8 / 16 / 4 — generous for local dev).
+  # Pre-create the control-plane command topics (gate-cmd_g<N> / scene-cmd_g<N>)
+  # with their contracted partition count.
+  #
+  # 这里以前预建的是 per-node topic(gate-{1..N} / scene-{1..N} / centre-{1..N})。
+  # 那套寻址已经废弃(docs/design/control-plane-topic-partitioning-20260908.md):
+  # 一个节点一个 topic 在 10 万个 scene 进程下会把 controller 元数据压垮,
+  # 而且 topic 名与 consumer group 名里都带被回收复用的 node_id,冻结的前任会把
+  # 继任者的命令消费掉再丢弃(P1)。现在按 partition = node_id % P 寻址,
+  # 消费端 assign 自己的分区、不进 group。旧 topic 不再预建,停写后按 retention 过期。
+  #
+  # Also pre-creates data_service's two audit topics with their contracted
+  # partition counts (go/data_service/etc/data_service.yaml:
+  # Kafka.TransactionLogPartitions=6 / Kafka.SnapshotPartitions=3) and
+  # retention.ms=2592000000 (30d, Kafka.RetentionMs). This has to happen before
+  # any scene process produces: the broker above runs auto.create.topics.enable
+  # with KAFKA_NUM_PARTITIONS=1, so the first C++ message would otherwise
+  # auto-create the topic with 1 partition and data_service's EnsureTopics would
+  # refuse it forever ("partition contract mismatch"; the only symptom is one
+  # Error log line every 30s). Effective names carry the generation suffix
+  # (<base>_g<N>, config.go EffectiveTransactionLogTopic);
+  # KAFKA_INIT_AUDIT_TOPIC_GENERATION mirrors Kafka.TopicGeneration. A partition
+  # change is a generation bump (new *_g<N+1> topic, drain, delete the old one),
+  # never an in-place expansion: that re-hashes key=player_id and breaks
+  # per-player ordering. Idempotent (--if-not-exists); an existing *_gN topic
+  # with the wrong PartitionCount makes this container exit 1 instead of
+  # pretending — delete the auto-created topic and re-run kafka-topic-init.
   kafka-topic-init:
     image: apache/kafka:latest
     container_name: kafka-topic-init
     depends_on:
       - kafka
     environment:
-      - KAFKA_INIT_GATE_COUNT=${KAFKA_INIT_GATE_COUNT:-8}
-      - KAFKA_INIT_SCENE_COUNT=${KAFKA_INIT_SCENE_COUNT:-16}
-      - KAFKA_INIT_CENTRE_COUNT=${KAFKA_INIT_CENTRE_COUNT:-4}
+      # 控制面命令 topic 的分区契约。必须与 bin/etc/base_deploy_config.yaml 的
+      # Kafka.CommandTopicPartitions / CommandTopicGeneration、以及 Go 侧
+      # go/shared/kafkacmd/command_topic.go 的默认值(或 KAFKA_COMMAND_TOPIC_* 环境变量)
+      # 完全一致 —— 三处任一漂移,命令都会落到没人 assign 的分区上,静默全丢。
+      # 见 docs/design/control-plane-topic-partitioning-20260908.md。
+      - KAFKA_INIT_COMMAND_PARTITIONS=${KAFKA_INIT_COMMAND_PARTITIONS:-256}
+      - KAFKA_INIT_COMMAND_TOPIC_GENERATION=${KAFKA_INIT_COMMAND_TOPIC_GENERATION:-1}
+      - KAFKA_INIT_AUDIT_TOPIC_GENERATION=${KAFKA_INIT_AUDIT_TOPIC_GENERATION:-1}
     entrypoint:
       - /bin/sh
       - -c
@@ -71,17 +107,88 @@ services:
           echo "waiting for kafka broker ($$i/30)..."
           sleep 2
         done
+        # create_topic <name> [partitions=1] [topic config k=v]
+        # --partitions used to be hardcoded to 1; the audit topics need 6 / 3.
         create_topic() {
+          _cfg=""
+          if [ -n "$$3" ]; then _cfg="--config $$3"; fi
           /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 \
-            --create --if-not-exists --topic "$$1" --partitions 1 --replication-factor 1 \
+            --create --if-not-exists --topic "$$1" --partitions "$${2:-1}" --replication-factor 1 $$_cfg \
             >/dev/null 2>&1 && echo "  created: $$1" || echo "  exists : $$1"
         }
-        echo "Pre-creating per-node topics..."
-        for n in $$(seq 1 $${KAFKA_INIT_GATE_COUNT}); do create_topic "gate-$$n"; done
-        for n in $$(seq 1 $${KAFKA_INIT_SCENE_COUNT}); do create_topic "scene-$$n"; done
-        for n in $$(seq 1 $${KAFKA_INIT_CENTRE_COUNT}); do create_topic "centre-$$n"; done
-        # Shared event topic referenced by base_deploy_config.yaml
-        create_topic "game-events"
+        # ensure_retention <name> <retention_ms>: --config on create only applies at
+        # creation time, so a topic that already exists (auto-created by a producer, or
+        # created by an older init with a different value) silently inherits the broker
+        # default. That default is short by design (it is meant for topics with no
+        # contract), and inheriting it on a command topic is exactly R11: a briefly
+        # lagging gate loses BindSession/RoutePlayer instead of catching up.
+        # So declare it every run and read it back. Unlike the partition count,
+        # retention.ms is a mutable config -- re-setting it carries no routing risk.
+        ensure_retention() {
+          /opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:29092 \
+            --entity-type topics --entity-name "$$1" --alter --add-config "retention.ms=$$2" >/dev/null
+          # Anchor at start-of-line. --describe prints
+          #   "  retention.ms=3600000 sensitive=false synonyms={DYNAMIC_TOPIC_CONFIG:retention.ms=3600000, DEFAULT_CONFIG:log.retention.ms=...}"
+          # and a greedy .*retention\.ms= would run all the way to the *log.*retention.ms
+          # synonym, reading back the broker default and failing a correct config.
+          _gr=$$(/opt/kafka/bin/kafka-configs.sh --bootstrap-server kafka:29092 \
+            --entity-type topics --entity-name "$$1" --describe 2>/dev/null \
+            | sed -n 's/^[[:space:]]*retention\.ms=\([0-9][0-9]*\).*/\1/p' | head -n 1)
+          if [ "$$_gr" != "$$2" ]; then
+            echo "ERROR: topic $$1 retention.ms=$${_gr:-<inherited>} but it must be explicitly $$2" >&2
+            echo "       Retention must be declared per topic, never inherited from the broker" >&2
+            echo "       default, and must exceed the longest a consumer can lag" >&2
+            echo "       (C++ consumers pin max.poll.interval.ms=900000)." >&2
+            exit 1
+          fi
+          echo "  retention: $$1 retention.ms=$$2"
+        }
+        # assert_partitions <name> <expected>: --if-not-exists keeps whatever already
+        # exists, so an auto-created 1-partition topic would slip through silently.
+        assert_partitions() {
+          _got=$$(/opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:29092 --describe --topic "$$1" 2>/dev/null \
+            | sed -n 's/.*PartitionCount: *\([0-9]*\).*/\1/p' | head -n 1)
+          if [ "$$_got" != "$$2" ]; then
+            echo "ERROR: topic $$1 has PartitionCount=$${_got:-?} but the contract is $$2" >&2
+            echo "       (audit topics: go/data_service/etc/data_service.yaml; command topics:" >&2
+            echo "        bin/etc/base_deploy_config.yaml Kafka.CommandTopicPartitions)." >&2
+            echo "       Partition counts are immutable: bump the topic generation (new *_gN topic); never expand in place." >&2
+            echo "       If a producer auto-created this topic before this init ran, delete the topic and re-run kafka-topic-init." >&2
+            exit 1
+          fi
+          echo "  verified: $$1 partitions=$$2"
+        }
+        # 控制面命令 topic:一个节点类型一个 topic,固定分区数,partition = node_id % P。
+        # 旧的 per-node topic(gate-1..N / scene-1..N / centre-1..N)不再预建 ——
+        # 它们随生产者切换而停止被写入,已存在的按 retention 自然过期。
+        # 迁移窗口内老的消费路径还开着(Kafka.DisableLegacyPerNodeTopic=false),
+        # 那条路径上的 topic 由 broker 的 auto.create 兜底建成 1 分区,足够用。
+        cg="$${KAFKA_INIT_COMMAND_TOPIC_GENERATION}"
+        cparts="$${KAFKA_INIT_COMMAND_PARTITIONS}"
+        echo "Pre-creating control-plane command topics (generation g$$cg, partitions $$cparts)..."
+        # 保留 1 小时就够:消费者每次启动都 assign 到分区末尾(startAtEnd),没有任何人
+        # 会回放历史 —— 发给某个进程的命令不可能早于这个进程的启动时刻。
+        create_topic "gate-cmd_g$$cg" "$$cparts" "retention.ms=3600000"
+        assert_partitions "gate-cmd_g$$cg" "$$cparts"
+        ensure_retention "gate-cmd_g$$cg" 3600000
+        create_topic "scene-cmd_g$$cg" "$$cparts" "retention.ms=3600000"
+        assert_partitions "scene-cmd_g$$cg" "$$cparts"
+        ensure_retention "scene-cmd_g$$cg" 3600000
+        # Shared event topic referenced by base_deploy_config.yaml. It currently has no
+        # consumer (Kafka.GroupID is empty, so KafkaManager::Init skips the top-level
+        # subscribe), but declare the retention anyway so it never depends on whatever
+        # the broker default happens to be the day someone wires a consumer to it.
+        create_topic "game-events" 1 "retention.ms=3600000"
+        ensure_retention "game-events" 3600000
+        # data_service audit topics (see the comment above): contracted partitions + 30d retention.
+        g="$${KAFKA_INIT_AUDIT_TOPIC_GENERATION}"
+        echo "Pre-creating data_service audit topics (generation g$$g)..."
+        create_topic "transaction_log_topic_g$$g" 6 "retention.ms=2592000000"
+        assert_partitions "transaction_log_topic_g$$g" 6
+        ensure_retention "transaction_log_topic_g$$g" 2592000000
+        create_topic "player_snapshot_topic_g$$g" 3 "retention.ms=2592000000"
+        assert_partitions "player_snapshot_topic_g$$g" 3
+        ensure_retention "player_snapshot_topic_g$$g" 2592000000
         echo "Kafka topic init done."
     restart: "no"
 

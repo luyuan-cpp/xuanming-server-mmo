@@ -41,6 +41,7 @@ static const char* DataService_method_names[] = {
   "/data_service.DataService/BatchRecallItems",
   "/data_service.DataService/QueryTransactionLog",
   "/data_service.DataService/CreateEventSnapshot",
+  "/data_service.DataService/AllocateIdSegment",
 };
 
 std::unique_ptr< DataService::Stub> DataService::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -68,6 +69,7 @@ DataService::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channe
   , rpcmethod_BatchRecallItems_(DataService_method_names[15], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_QueryTransactionLog_(DataService_method_names[16], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_CreateEventSnapshot_(DataService_method_names[17], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_AllocateIdSegment_(DataService_method_names[18], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status DataService::Stub::LoadPlayerData(::grpc::ClientContext* context, const ::data_service::LoadPlayerDataRequest& request, ::data_service::LoadPlayerDataResponse* response) {
@@ -484,6 +486,29 @@ void DataService::Stub::async::CreateEventSnapshot(::grpc::ClientContext* contex
   return result;
 }
 
+::grpc::Status DataService::Stub::AllocateIdSegment(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest& request, ::data_service::AllocateIdSegmentResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::data_service::AllocateIdSegmentRequest, ::data_service::AllocateIdSegmentResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_AllocateIdSegment_, context, request, response);
+}
+
+void DataService::Stub::async::AllocateIdSegment(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest* request, ::data_service::AllocateIdSegmentResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::data_service::AllocateIdSegmentRequest, ::data_service::AllocateIdSegmentResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AllocateIdSegment_, context, request, response, std::move(f));
+}
+
+void DataService::Stub::async::AllocateIdSegment(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest* request, ::data_service::AllocateIdSegmentResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AllocateIdSegment_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::data_service::AllocateIdSegmentResponse>* DataService::Stub::PrepareAsyncAllocateIdSegmentRaw(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::data_service::AllocateIdSegmentResponse, ::data_service::AllocateIdSegmentRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_AllocateIdSegment_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::data_service::AllocateIdSegmentResponse>* DataService::Stub::AsyncAllocateIdSegmentRaw(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncAllocateIdSegmentRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 DataService::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       DataService_method_names[0],
@@ -665,6 +690,16 @@ DataService::Service::Service() {
              ::data_service::CreateEventSnapshotResponse* resp) {
                return service->CreateEventSnapshot(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      DataService_method_names[18],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< DataService::Service, ::data_service::AllocateIdSegmentRequest, ::data_service::AllocateIdSegmentResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](DataService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::data_service::AllocateIdSegmentRequest* req,
+             ::data_service::AllocateIdSegmentResponse* resp) {
+               return service->AllocateIdSegment(ctx, req, resp);
+             }, this)));
 }
 
 DataService::Service::~Service() {
@@ -790,6 +825,13 @@ DataService::Service::~Service() {
 }
 
 ::grpc::Status DataService::Service::CreateEventSnapshot(::grpc::ServerContext* context, const ::data_service::CreateEventSnapshotRequest* request, ::data_service::CreateEventSnapshotResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status DataService::Service::AllocateIdSegment(::grpc::ServerContext* context, const ::data_service::AllocateIdSegmentRequest* request, ::data_service::AllocateIdSegmentResponse* response) {
   (void) context;
   (void) request;
   (void) response;

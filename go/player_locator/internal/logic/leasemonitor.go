@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
-	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 
@@ -16,6 +15,7 @@ import (
 	kafkapb "proto/contracts/kafka"
 	pb "proto/player_locator"
 	smpb "proto/scene_manager"
+	"shared/kafkacmd"
 	"shared/safego"
 )
 
@@ -256,13 +256,17 @@ func sendLeaseExpiredToGate(ctx context.Context, svcCtx *svc.ServiceContext, ses
 		return fmt.Errorf("marshal GateCommand: %w", err)
 	}
 
-	topic := fmt.Sprintf("gate-%s", session.GateId)
-	if err := svcCtx.KafkaWriter.WriteMessages(ctx, kafkago.Message{
-		Topic: topic,
-		Key:   []byte(fmt.Sprintf("%d", session.PlayerId)),
-		Value: cmdBytes,
-	}); err != nil {
-		return fmt.Errorf("publish LeaseExpired to %s: %w", topic, err)
+	// topic + 分区必须一起算:控制面命令改成 gate-cmd_gN 的 node_id % P 号分区
+	// (docs/design/control-plane-topic-partitioning-20260908.md)。
+	// gate_id 解析不出数字就没法寻址,fail-closed 让 claim 留待重试,
+	// 不能把"发到 0 号分区"当成清理已完成。
+	msg, err := kafkacmd.GateCommandMessage(session.GateId,
+		fmt.Sprintf("%d", session.PlayerId), cmdBytes)
+	if err != nil {
+		return fmt.Errorf("address LeaseExpired command: %w", err)
+	}
+	if err := svcCtx.KafkaWriter.WriteMessages(ctx, msg); err != nil {
+		return fmt.Errorf("publish LeaseExpired to %s partition %d: %w", msg.Topic, msg.Partition, err)
 	}
 	return nil
 }

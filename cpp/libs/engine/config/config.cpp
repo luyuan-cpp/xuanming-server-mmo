@@ -115,6 +115,46 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		baseConfig.set_battle_max_connections(root["BattleMaxConnections"].as<uint32_t>());
 	}
 
+	// 集群号,缺省 0。C++ 侧 2026-09-08 起没有消费者(scene 退出了 snowflake 槽位协议,
+	// 永久 guid 走号段,不编码集群);只是原样读入,与 Go 服务的 ClusterId 保持同一份 yaml 口径。
+	// 不再提供 CLUSTER_ID 环境覆盖 —— 没有消费者就没有覆盖的理由。
+	if (root["ClusterId"])
+	{
+		baseConfig.set_cluster_id(root["ClusterId"].as<uint32_t>());
+	}
+
+	// 永久 guid 号段(见 config.proto IdSegmentConfig):一种 GUID 一块配置,按 Kind 名字
+	// 对上 GuidSegmentRegistry 里的实例(item / txlog / snapshot;以后 pet / guild 只加一块)。
+	// 逐键显式读,与本文件其他块一致;缺键 = proto 默认值(0),由 scene 侧的 Enable 校验并拒绝。
+	if (root["IdSegments"])
+	{
+		IdSegmentConfig &segConfig = *baseConfig.mutable_id_segment();
+		for (const auto &kindNode : root["IdSegments"])
+		{
+			IdSegmentKindConfig &kindConfig = *segConfig.add_kinds();
+			if (kindNode["Kind"])
+			{
+				kindConfig.set_kind(kindNode["Kind"].as<std::string>());
+			}
+			if (kindNode["Enabled"])
+			{
+				kindConfig.set_enabled(kindNode["Enabled"].as<bool>());
+			}
+			if (kindNode["InitialStep"])
+			{
+				kindConfig.set_initial_step(kindNode["InitialStep"].as<uint32_t>());
+			}
+			if (kindNode["MinStep"])
+			{
+				kindConfig.set_min_step(kindNode["MinStep"].as<uint32_t>());
+			}
+			if (kindNode["MaxStep"])
+			{
+				kindConfig.set_max_step(kindNode["MaxStep"].as<uint32_t>());
+			}
+		}
+	}
+
 	// Kafka config
 	if (root["Kafka"])
 	{
@@ -146,6 +186,20 @@ bool readBaseDeployConfig(const std::string &filename, BaseDeployConfig &baseCon
 		if (kafkaNode["AutoOffsetReset"])
 		{
 			kafkaConfig.set_auto_offset_reset(kafkaNode["AutoOffsetReset"].as<std::string>());
+		}
+		// 控制面命令 topic 的分区契约(docs/design/control-plane-topic-partitioning-20260908.md)。
+		// 三个键都可以不写:不写 = 0 = 用 node_command_topic.h 里的编译期默认值。
+		if (kafkaNode["CommandTopicPartitions"])
+		{
+			kafkaConfig.set_command_topic_partitions(kafkaNode["CommandTopicPartitions"].as<uint32_t>());
+		}
+		if (kafkaNode["CommandTopicGeneration"])
+		{
+			kafkaConfig.set_command_topic_generation(kafkaNode["CommandTopicGeneration"].as<uint32_t>());
+		}
+		if (kafkaNode["DisableLegacyPerNodeTopic"])
+		{
+			kafkaConfig.set_disable_legacy_per_node_topic(kafkaNode["DisableLegacyPerNodeTopic"].as<bool>());
 		}
 	}
 

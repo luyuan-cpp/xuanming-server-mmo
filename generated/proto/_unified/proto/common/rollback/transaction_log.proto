@@ -98,6 +98,12 @@ message TransactionLogEntry
 
   // Free-form metadata (JSON)
   string extra = 14;
+
+  // 捕获时刻所在的 zone(生产者填 GetZoneId())。
+  // 消费者(data_service 的 Kafka 落库)必须直接用这个值,不许回查 Router:
+  // 玩家的 home_zone 之后可能因合服而改变,回滚审计要的是"事发时在哪个 zone"。
+  // 见 docs/design/node-id-overhaul-plan-20260908.md §2.0c 第 1 步。
+  uint32 zone_id = 15;
 }
 
 // Batch wrapper for Kafka transport.

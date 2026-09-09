@@ -14,6 +14,9 @@ import (
 
 // gateCommandBuilder implements kafkautil.GateCommandBuilder using local proto imports.
 // 与 friend/guild 的同名实现逐字相同,仅 import 的 per-service game 包不同。
+//
+// TargetGateId 必须填,理由见 go/friend/internal/kafka/gate_command_builder.go 的同名注释
+// 与 docs/design/control-plane-topic-partitioning-20260908.md。
 type gateCommandBuilder struct{}
 
 // NewGateCommandBuilder returns a GateCommandBuilder for the match service.
@@ -21,7 +24,7 @@ func NewGateCommandBuilder() kafkautil.GateCommandBuilder {
 	return &gateCommandBuilder{}
 }
 
-func (b *gateCommandBuilder) BuildPushCommand(sessionID uint32, gateInstanceID string,
+func (b *gateCommandBuilder) BuildPushCommand(gateNodeID uint32, sessionID uint32, gateInstanceID string,
 	messageID uint32, body []byte,
 ) ([]byte, error) {
 	mc := &basepb.MessageContent{
@@ -39,13 +42,14 @@ func (b *gateCommandBuilder) BuildPushCommand(sessionID uint32, gateInstanceID s
 
 	cmd := &kafkapb.GateCommand{
 		EventId:          uint32(game.ContractsKafkaPushToPlayerEventEventId),
+		TargetGateId:     gateNodeID,
 		TargetInstanceId: gateInstanceID,
 		Payload:          payload,
 	}
 	return proto.Marshal(cmd)
 }
 
-func (b *gateCommandBuilder) BuildBroadcastCommand(sessionList []uint32, gateInstanceID string,
+func (b *gateCommandBuilder) BuildBroadcastCommand(gateNodeID uint32, sessionList []uint32, gateInstanceID string,
 	messageID uint32, body []byte,
 ) ([]byte, error) {
 	mc := &basepb.MessageContent{
@@ -70,13 +74,14 @@ func (b *gateCommandBuilder) BuildBroadcastCommand(sessionList []uint32, gateIns
 
 	cmd := &kafkapb.GateCommand{
 		EventId:          uint32(game.ContractsKafkaBroadcastToPlayersEventEventId),
+		TargetGateId:     gateNodeID,
 		TargetInstanceId: gateInstanceID,
 		Payload:          payload,
 	}
 	return proto.Marshal(cmd)
 }
 
-func (b *gateCommandBuilder) BuildBroadcastToSceneCommand(sceneID uint64, gateInstanceID string,
+func (b *gateCommandBuilder) BuildBroadcastToSceneCommand(gateNodeID uint32, sceneID uint64, gateInstanceID string,
 	messageID uint32, body []byte,
 ) ([]byte, error) {
 	mc := &basepb.MessageContent{
@@ -94,13 +99,14 @@ func (b *gateCommandBuilder) BuildBroadcastToSceneCommand(sceneID uint64, gateIn
 
 	cmd := &kafkapb.GateCommand{
 		EventId:          uint32(game.ContractsKafkaBroadcastToSceneEventEventId),
+		TargetGateId:     gateNodeID,
 		TargetInstanceId: gateInstanceID,
 		Payload:          payload,
 	}
 	return proto.Marshal(cmd)
 }
 
-func (b *gateCommandBuilder) BuildBroadcastToAllCommand(gateInstanceID string,
+func (b *gateCommandBuilder) BuildBroadcastToAllCommand(gateNodeID uint32, gateInstanceID string,
 	messageID uint32, body []byte,
 ) ([]byte, error) {
 	mc := &basepb.MessageContent{
@@ -117,6 +123,7 @@ func (b *gateCommandBuilder) BuildBroadcastToAllCommand(gateInstanceID string,
 
 	cmd := &kafkapb.GateCommand{
 		EventId:          uint32(game.ContractsKafkaBroadcastToAllEventEventId),
+		TargetGateId:     gateNodeID,
 		TargetInstanceId: gateInstanceID,
 		Payload:          payload,
 	}

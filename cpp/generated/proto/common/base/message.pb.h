@@ -1077,6 +1077,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeMessageHeader final : public ::
   enum : int {
     kNodeIdFieldNumber = 1,
     kSessionIdFieldNumber = 2,
+    kTargetPlayerIdFieldNumber = 3,
   };
   // uint32 node_id = 1;
   void clear_node_id() ;
@@ -1098,11 +1099,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeMessageHeader final : public ::
   void _internal_set_session_id(::uint32_t value);
 
   public:
+  // uint64 target_player_id = 3;
+  void clear_target_player_id() ;
+  [[nodiscard]] ::uint64_t target_player_id() const;
+  void set_target_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_target_player_id() const;
+  void _internal_set_target_player_id(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:NodeMessageHeader)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<2, 3,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1133,6 +1144,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED NodeMessageHeader final : public ::
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint32_t node_id_;
     ::uint32_t session_id_;
+    ::uint64_t target_player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7559,6 +7571,30 @@ inline ::uint32_t NodeMessageHeader::_internal_session_id() const {
 inline void NodeMessageHeader::_internal_set_session_id(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_id_ = value;
+}
+
+// uint64 target_player_id = 3;
+inline void NodeMessageHeader::clear_target_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t NodeMessageHeader::target_player_id() const {
+  // @@protoc_insertion_point(field_get:NodeMessageHeader.target_player_id)
+  return _internal_target_player_id();
+}
+inline void NodeMessageHeader::set_target_player_id(::uint64_t value) {
+  _internal_set_target_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:NodeMessageHeader.target_player_id)
+}
+inline ::uint64_t NodeMessageHeader::_internal_target_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_player_id_;
+}
+inline void NodeMessageHeader::_internal_set_target_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_player_id_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -15,6 +15,7 @@
 
 #include "engine/core/time/system/time.h"
 #include "engine/infra/messaging/kafka/kafka_producer.h"
+#include "node/system/node/node_command_route.h"
 #include "network/network_utils.h"
 #include "network/node_utils.h"
 #include "network/player_message_utils.h"
@@ -32,6 +33,9 @@
 
 // 时间->回合换算与回合常量的权威定义在回合引擎库(scene 可以依赖 battle 常量,反向禁止)。
 #include "services/battle/constants/turn_battle_constants.h"
+// 待结算记录的 Redis key / Lua 契约(R07)。battle 侧写、scene 侧读与销账,
+// 两端必须用**同一份**常量 —— 手抄两遍就是等着某天改一处漏一处。
+#include "services/battle/settlement/settlement_outbox.h"
 // 战斗配表指纹(六张战斗表确定性序列化 sha256,随快照携带给 match/battle 比对)。
 #include "services/battle/data/battle_table_fingerprint.h"
 
@@ -65,10 +69,17 @@ namespace
 	//       battle_node_id / deadline_ms / state / prepare_deadline_ms,供"实体没了但锁还在"
 	//       的路径重建冻结(完整下线再登录、备战到期后迟到的确认)。生命周期与锁完全同步:
 	//       同时 SET / 同 TTL / 同一条 Lua 里 EXPIRE / DEL,只在锁存在且值匹配时才被信任。
-	//   battle:settlement:pending:{player_id} = event —— 离线结算暂存(TTL 7 天)
+	//   battle:settlement:pending:{player_id}    = event —— 待结算记录(TTL 7 天)
+	//   battle:settlement:pending:id:{player_id} = battle_id —— 伴生 id(与上一条同 SET/同 TTL/同 DEL)
+	//
+	//   待结算记录的写者从"只有 scene 的离线分支"变成了"battle 结算时必写"(R07):
+	//   battle 先落库再投递,scene 应用后**条件销账**(id 匹配才删),未销账的由 battle
+	//   有界重投。因此 scene 的每一条"结算已定局"路径都必须销账 —— 漏一条的后果是
+	//   battle 一直重投到次数用尽,而且玩家下次登录会被登录钩子**再发一次奖励**。
 	constexpr char kBattleLockKeyFmt[] = "battle:lock:%llu";
 	constexpr char kBattleCtxKeyFmt[] = "battle:ctx:%llu";
-	constexpr char kPendingSettlementKeyFmt[] = "battle:settlement:pending:%llu";
+	constexpr const char *kPendingSettlementKeyFmt = battle_settlement::kPendingSettlementKeyFmt;
+	constexpr const char *kPendingSettlementIdKeyFmt = battle_settlement::kPendingSettlementIdKeyFmt;
 
 	// speed 缺配兜底:BaseAttributesComp.speed 为 0(存量数据未配置)时的默认出手速度。
 	// 高于引擎的怪物默认速度(kMonsterDefaultSpeed=5),保证缺配玩家不至于永远后手。
@@ -149,6 +160,60 @@ namespace
 			},
 			(std::string("EVAL %s 2 ") + kBattleLockKeyFmt + " " + kBattleCtxKeyFmt + " %llu").c_str(),
 			kDeleteLockIfMatchScript, playerId, playerId, battleId);
+	}
+
+	// 结算销账(R07):battle:settlement:pending:{id} 的值属于 battleId 才删两键。
+	// 这就是 battle 侧发件箱的 ACK —— battle 每 10s 探测一次伴生 id 键,值不再等于
+	// 自己的 battle_id 就停止重投。
+	//
+	// 必须**条件删**而不是无脑 DEL:玩家打完这一局立刻进下一局、下一局又结算时,
+	// 一条迟到的旧结算若无条件删,就把**新一局**的待结算记录抹掉了(与 battle:lock
+	// 的条件删同一条纪律)。fire-and-forget:失败最迟随 TTL 过期,代价是 battle 多重投几轮。
+	void ClearPendingSettlementIfMatch(const uint64_t playerId, const uint64_t battleId)
+	{
+		if (!RedisReady())
+		{
+			LOG_WARN << "[PlayerBattle] 结算销账跳过(Redis 未连接), player_id=" << playerId
+					 << " battle_id=" << battleId << ",battle 侧会重投到次数用尽(结算本身幂等)";
+			return;
+		}
+		tlsRedis.GetZoneRedis()->command(
+			[playerId, battleId](hiredis::Hiredis*, redisReply* reply) {
+				if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
+				{
+					LOG_ERROR << "[PlayerBattle] 结算销账 EVAL 失败, player_id=" << playerId
+							  << " battle_id=" << battleId;
+				}
+			},
+			(std::string("EVAL %s 2 ") + kPendingSettlementKeyFmt + " " +
+			 kPendingSettlementIdKeyFmt + " %llu").c_str(),
+			battle_settlement::kDeletePendingSettlementIfMatchScript, playerId, playerId, battleId);
+	}
+
+	// 写待结算记录(两键同 TTL)。离线分支仍然写:battle 已经写过同一份,这里是
+	// 幂等覆盖 + 续 TTL,同时兜住"老版本 battle 还没落库就投递"的灰度窗口。
+	void StorePendingSettlement(const uint64_t playerId, const uint64_t battleId,
+								const std::string& payload)
+	{
+		if (!RedisReady())
+		{
+			LOG_ERROR << "[PlayerBattle] 待结算记录写入失败(Redis 断连), player_id=" << playerId
+					  << " battle_id=" << battleId;
+			return;
+		}
+		tlsRedis.GetZoneRedis()->command(
+			[playerId, battleId](hiredis::Hiredis*, redisReply* reply) {
+				if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
+				{
+					LOG_ERROR << "[PlayerBattle] SET 待结算记录失败, player_id=" << playerId
+							  << " battle_id=" << battleId;
+				}
+			},
+			(std::string("EVAL %s 2 ") + kPendingSettlementKeyFmt + " " +
+			 kPendingSettlementIdKeyFmt + " %b %llu %u").c_str(),
+			battle_settlement::kSetPendingSettlementScript, playerId, playerId,
+			payload.data(), payload.size(), battleId,
+			PlayerBattleSystem::kPendingSettlementTtlSec);
 	}
 
 	// 从 InBattleComp 组 ctx 序列化(ctx 就是组件本身的镜像,不另造并行结构)
@@ -1051,29 +1116,20 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 				{
 					LOG_WARN << "[PlayerBattle] 离线结算丢弃: 战斗锁不存在(已作废?), player_id="
 							 << playerId << " battle_id=" << battleId;
+					// 判定为"这一局不再需要结算"就必须销账(条件删,只删仍属于本局的记录):
+					// 不销账的话 battle 会一直重投到次数用尽,而且记录会留到玩家下次登录
+					// 被登录钩子应用 —— 那等于把刚判废的结算又发了出去。
+					ClearPendingSettlementIfMatch(playerId, battleId);
 					return;
 				}
 				if (std::string(reply->str, reply->len) != std::to_string(battleId))
 				{
 					LOG_WARN << "[PlayerBattle] 离线结算丢弃: 战斗锁值不匹配, player_id=" << playerId
 							 << " battle_id=" << battleId;
+					ClearPendingSettlementIfMatch(playerId, battleId);
 					return;
 				}
-				if (!RedisReady())
-				{
-					LOG_ERROR << "[PlayerBattle] 离线结算暂存失败(Redis 断连), player_id=" << playerId;
-					return;
-				}
-				tlsRedis.GetZoneRedis()->command(
-					[playerId](hiredis::Hiredis*, redisReply* setReply) {
-						if (setReply == nullptr || setReply->type == REDIS_REPLY_ERROR)
-						{
-							LOG_ERROR << "[PlayerBattle] SET 离线结算失败, player_id=" << playerId;
-						}
-					},
-					(std::string("SET ") + kPendingSettlementKeyFmt + " %b EX %u").c_str(),
-					playerId, payload.data(), payload.size(),
-					PlayerBattleSystem::kPendingSettlementTtlSec);
+				StorePendingSettlement(playerId, battleId, payload);
 				LOG_INFO << "[PlayerBattle] 结算已暂存(玩家离线), player_id=" << playerId
 						 << " battle_id=" << battleId;
 			},
@@ -1087,6 +1143,9 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 	{
 		LOG_WARN << "[PlayerBattle] 结算丢弃: battle_id 不匹配(重复投递或已作废), player_id=" << playerId
 				 << " event_battle_id=" << battleId << " in_battle_id=" << inBattle->battle_id();
+		// 条件销账:只删仍指向本局的记录。玩家已经在打下一场时,记录早被那一局覆盖,
+		// 这里是无害的空操作;而真的是"重复投递"时,它让 battle 停止重投。
+		ClearPendingSettlementIfMatch(playerId, battleId);
 		return;
 	}
 	if (inBattle == nullptr)
@@ -1107,6 +1166,7 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 				{
 					LOG_WARN << "[PlayerBattle] 结算丢弃: 无 InBattleComp 且锁不在/值不匹配(重复投递或已作废), player_id="
 							 << playerId << " battle_id=" << battleId;
+					ClearPendingSettlementIfMatch(playerId, battleId);
 					return;
 				}
 				if (!tlsEcs.actorRegistry.valid(player) || GuidForLog(player) != playerId)
@@ -1128,6 +1188,8 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 				ApplySettlementToEntity(player, event.settlement());
 				// 组件可能在回调期间被登录重建/迟到确认挂回来(同 battle_id):一并摘除
 				ClearBattleFreeze(player, playerId, battleId);
+				// 销账 = 给 battle 侧发件箱的 ACK(R07),必须在应用之后
+				ClearPendingSettlementIfMatch(playerId, battleId);
 				PushBattleEndToPlayer(player, event.settlement());
 			},
 			(std::string("GET ") + kBattleLockKeyFmt).c_str(), playerId);
@@ -1136,6 +1198,16 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 
 	ApplySettlementToEntity(player, settlement);
 	ClearBattleFreeze(player, playerId, battleId);
+	// 销账 = 给 battle 侧发件箱的 ACK(R07):battle 探测到伴生 id 键已不属于本局就停止重投。
+	// 顺序不能反 —— 先销账后应用的话,应用中途进程崩溃就两头落空。
+	//
+	// 残留窗口(已知、刻意接受):"应用完成 → 本进程在销账落地前崩溃"会留下一条待结算
+	// 记录,玩家下次登录被补应用一次(重复入账)。这个窗口是微秒级、且需要进程恰好死在
+	// 这一行,与既有的 ClearBattleFreeze / ApplyPendingSettlement 的 DEL 同为
+	// fire-and-forget 语义,不是本次引入的新形状。用"锁还在才补应用"来收紧它是错的:
+	// 玩家离线超过锁 TTL(deadline+60s)后锁自然过期,而待结算记录还有 7 天,
+	// 按锁 gating 会把这类**合法**的离线结算判掉,那是真丢奖励。
+	ClearPendingSettlementIfMatch(playerId, battleId);
 	PushBattleEndToPlayer(player, settlement);
 }
 
@@ -1154,15 +1226,11 @@ void PlayerBattleSystem::ApplyPendingSettlement(entt::entity player, const ::Bat
 		tlsEcs.actorRegistry.remove<InBattleComp>(player);
 	}
 
-	// 清理 pending key + 锁(锁删除后 match 才放行下一次排队 —— 先应用再放开)。
-	// 锁按 battle_id 条件删:暂存时已校验锁值==battle_id,这里再条件删一次是防登录后
-	// 立刻备战的新战斗锁被误删(理论上登录钩子早于任何备战,纯防御)
-	if (RedisReady())
-	{
-		tlsRedis.GetZoneRedis()->command(
-			[](hiredis::Hiredis*, redisReply*) {},
-			(std::string("DEL ") + kPendingSettlementKeyFmt).c_str(), playerId);
-	}
+	// 清理待结算记录 + 锁(锁删除后 match 才放行下一次排队 —— 先应用再放开)。
+	// 两者都按 battle_id **条件删**:登录钩子理论上早于任何备战,但一旦顺序反过来,
+	// 无条件 DEL 会把玩家刚开始的下一场的记录/锁抹掉。条件删同时也是给 battle 侧
+	// 发件箱的 ACK(R07)。
+	ClearPendingSettlementIfMatch(playerId, settlement.battle_id());
 	DeleteBattleLockIfMatch(playerId, settlement.battle_id());
 
 	PushBattleEndToPlayer(player, settlement);
@@ -1195,7 +1263,8 @@ void PlayerBattleSystem::RebindBattleOnReconnect(entt::entity player)
 		return;
 	}
 
-	// BindBattleEvent 经 Kafka gate-{gate_id}(GateCommand;key=player_id 保序)
+	// BindBattleEvent 经 Kafka gate-cmd_g<N> 的 gate_node_id % P 号分区
+	// (GateCommand;key=player_id;分区由目标 gate 定死,同一 gate 的命令天然有序)
 	contracts::kafka::BindBattleEvent bindEvent;
 	bindEvent.set_session_id(gateRoute.sessionId);
 	bindEvent.set_battle_node_id(inBattle->battle_node_id());
@@ -1204,15 +1273,18 @@ void PlayerBattleSystem::RebindBattleOnReconnect(entt::entity player)
 
 	contracts::kafka::GateCommand command;
 	command.set_event_id(ContractsKafkaBindBattleEventEventId);
+	// 共享分区后的第一级(数字)过滤,理由见 node_kafka_command_filter.h。
+	command.set_target_gate_id(gateRoute.gateNodeId);
 	command.set_target_instance_id(gateRoute.gateInstanceId);
 	command.set_payload(bindEvent.SerializeAsString());
 
-	const std::string topic = "gate-" + std::to_string(gateRoute.gateNodeId);
-	const auto err = KafkaProducer::Instance().send(topic, command.SerializeAsString(),
-													std::to_string(playerId));
+	const auto route = node::kafka::ResolveCommandRoute(GateNodeService, gateRoute.gateNodeId);
+	const auto err = KafkaProducer::Instance().send(route.topic, command.SerializeAsString(),
+													std::to_string(playerId), route.partition);
 	if (err != RdKafka::ERR_NO_ERROR)
 	{
-		LOG_ERROR << "[PlayerBattle] BindBattleEvent 发送失败: topic=" << topic
+		LOG_ERROR << "[PlayerBattle] BindBattleEvent 发送失败: topic=" << route.topic
+				  << " partition=" << route.partition
 				  << " player_id=" << playerId << " battle_id=" << inBattle->battle_id()
 				  << " err=" << RdKafka::err2str(err);
 		return;
@@ -1275,9 +1347,13 @@ void PlayerBattleSystem::OnPlayerEnterScene(entt::entity player, uint32_t enterG
 					LOG_ERROR << "[PlayerBattle] 挂起结算解析失败,清理脏数据, player_id=" << playerId;
 					if (RedisReady())
 					{
+						// 脏数据解不出 battle_id,无从条件删;两键一起无条件删。
+						// 伴生 id 键必须一起删,否则它会永远指向一个再也读不出内容的记录,
+						// battle 侧发件箱据此判定"未销账"而重投到次数用尽。
 						tlsRedis.GetZoneRedis()->command(
 							[](hiredis::Hiredis*, redisReply*) {},
-							(std::string("DEL ") + kPendingSettlementKeyFmt).c_str(), playerId);
+							(std::string("DEL ") + kPendingSettlementKeyFmt + " " +
+							 kPendingSettlementIdKeyFmt).c_str(), playerId, playerId);
 					}
 					return;
 				}

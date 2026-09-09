@@ -1,10 +1,25 @@
 ﻿param(
 	[Parameter(Mandatory = $true)]
-	[ValidateSet("zone-up", "zone-down", "zone-status", "all-up", "all-down", "all-status", "infra-up", "infra-down", "infra-status")]
+	# infra-kafka-topics:只重跑审计 topic + 控制面命令 topic 的预建 Job(Apply-KafkaTopicInitJob)。
+	# Kafka 换成 StatefulSet + PVC 之后(R06),普通重启不再丢 topic;仍然保留这条止血路径,
+	# 因为**第一次从旧 emptyDir Deployment 切过来**、`infra-down` 删过 namespace(连 PVC 一起删)、
+	# 或者有人手工删过 topic 之后,topic 都是空的,而 scene 一发消息就会把它自动建成 1 分区。
+	# 不过发布门禁(与 *-down / *-status 同列),见 deploy/k8s/README.md「Kafka:StatefulSet + PVC」。
+	[ValidateSet("zone-up", "zone-down", "zone-status", "all-up", "all-down", "all-status", "infra-up", "infra-down", "infra-status", "infra-kafka-topics")]
 	[string]$Command,
 
 	[string]$ZoneName = "yesterday",
 	[int]$ZoneId = 101,
+	# 集群号(docs/design/node-id-overhaul-plan-20260908.md §5 改造 C):snowflake 的 17 位
+	# worker 段切成 [cluster5][node12],这里就是高 5 位,取值 0..31。
+	#
+	# 这是**部署级常量**,由运维在建集群时定一次,策划不碰、zones 配置里也没有它:
+	# 同一个 K8s 集群里所有 zone、全局池(match)和 C++ 节点必须写同一个值,否则
+	# 两套 cluster 号下相同 node 号发出的 id 会撞。所以 infra-up(Apply-GlobalGoSvcManifests)
+	# 与 zone-up(Apply-Zone)都从这一个参数取值,不允许各自另给。
+	# 默认 0 = 与存量 id 逐位兼容(旧 id 的 node17 实际值 ≤ 几百,等价于 cluster=0 的 node)。
+	[ValidateRange(0, 31)]
+	[int]$ClusterId = 0,
 	[string]$NamespacePrefix = "mmorpg-zone",
 	[string]$InfraNamespace = "mmorpg-infra",
 
@@ -293,6 +308,60 @@ function Get-AuthoritativeScalar {
 	return $r.Value
 }
 
+<#
+.SYNOPSIS
+	把某个顶层 YAML 块(键那一行 + 其下所有缩进行,含块内注释)逐字抽出来,查不到直接 throw。
+
+.DESCRIPTION
+	Get-AuthoritativeScalar 只能取标量。像 IdSegments 这种"块式序列 + 每项一个映射"的结构,
+	release_common.ps1 的扁平表模型表达不了(`- Kind: item` 被记成 IdSegments[0] 的整串,
+	后面几行会被折成 IdSegments.Enabled / IdSegments.MinStep …,最后一项覆盖前面的),
+	逐键取值只会取出一份错的。
+	所以这里退一步做整块字节级搬运:ConfigMap 与仓库那份**不可能**漂移,而不是抄一份常数
+	再靠人肉对齐 —— 键名写错在 C++ 侧是静默读不到(缺键 = proto 默认值),没有报错兜底。
+
+	截断规则:从顶格(零缩进)的 `<Key>:` 那行起,到下一行顶格非空内容为止;块尾空行丢弃。
+	只支持顶层块 —— 项目 etc/*.yaml 用到的就这一种。
+
+.OUTPUTS
+	[string] 块文本,行间以 CRLF 连接(与本脚本 here-string 的行尾一致)。
+#>
+function Get-AuthoritativeYamlBlock {
+	param(
+		[Parameter(Mandatory = $true)][string]$RelativePath,
+		[Parameter(Mandatory = $true)][string]$Key
+	)
+
+	$full = Join-Path $RepoRoot ($RelativePath -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+	if (-not (Test-Path -LiteralPath $full)) {
+		throw "生成 ConfigMap 失败:找不到权威配置 $RelativePath(fail-closed:不替你猜一份 ${Key})"
+	}
+
+	$lines = (Get-Content -LiteralPath $full -Raw) -split "`r?`n"
+	$start = -1
+	for ($i = 0; $i -lt $lines.Count; $i++) {
+		if ($lines[$i] -match ('^' + [regex]::Escape($Key) + '\s*:')) { $start = $i; break }
+	}
+	if ($start -lt 0) {
+		throw "生成 ConfigMap 失败:$RelativePath 里没有顶层块 ${Key}:(fail-closed:不替你猜一份 ${Key})"
+	}
+
+	$out = New-Object System.Collections.Generic.List[string]
+	$out.Add($lines[$start].TrimEnd())
+	for ($i = $start + 1; $i -lt $lines.Count; $i++) {
+		$line = $lines[$i]
+		if ([string]::IsNullOrWhiteSpace($line)) { $out.Add(''); continue }
+		# 顶格 = 下一个顶层键(或顶层注释),块到此为止
+		if ($line -notmatch '^\s') { break }
+		$out.Add($line.TrimEnd())
+	}
+	while ($out.Count -gt 0 -and [string]::IsNullOrWhiteSpace($out[$out.Count - 1])) {
+		$out.RemoveAt($out.Count - 1)
+	}
+
+	return ($out -join "`r`n")
+}
+
 # Go micro-service catalogue: name → { configMapName, manifestFile, port, configFlag, configFileName }
 #   Global = $true 的条目是**全局池**服务:只在 infra-up / all-up 的基础设施阶段部署到
 #   $InfraNamespace 一次,zone-up 跳过(见 Apply-GlobalGoSvcManifests)。
@@ -314,6 +383,22 @@ function Get-ZoneScopedGoSvcNames {
 function Get-GlobalGoSvcNames {
 	return @($GoSvcCatalogue.Keys | Where-Object { $GoSvcCatalogue[$_].Global })
 }
+
+# snowflake 槽位本地缓存目录(docs/design/node-id-overhaul-plan-20260908.md §3.5)。
+# Go 侧默认值是相对 cwd 的 ../../run/snowflake:容器里 WORKDIR 是 /app,归一化后是 /run/snowflake,
+# 能不能写取决于镜像是否以 root 跑、根文件系统是否只读 —— 部署侧不该赌这个。这里显式给一个
+# 可写路径,并让 login / scene-manager / match 的 Deployment 与 C++ gate/scene 的 Deployment / Fleet
+# 都在同一路径挂 emptyDir。缓存是**每个 Pod 自己的**启动期草稿(etcd 不可达时凭它续用上次的槽位,
+# 有效期 2h),不需要跨 Pod 共享、不需要持久卷:Pod 重建就重新申领,与设计一致。
+# C++ 通过环境变量 SNOWFLAKE_CACHE_DIR 读同一路径(只有 scene 启用发号槽会写,gate 收到也不写)。
+$SnowflakeCacheDir = "/tmp/snowflake"
+
+# data_service 全局库(SnapshotMySQL.DBName)。transaction_log / player_snapshot / rollback_audit_log /
+# id_segment 四张表由 data_service 启动期(或 -migrate)建在这里,所以库必须预先存在且账号有
+# CREATE 权限:infra-up 的 mysql-init-sql ConfigMap 会生成 02_k8s_global_db.sql 预建它并 GRANT 给
+# appuser(New-MysqlInitConfigMapYaml)。它是**全集群一份**,不按 zone 拆;与
+# go/data_service/etc/data_service.yaml 本地用的 testdb 刻意不同名 —— 生产库不叫 testdb。
+$GlobalDbName = "mmorpg_global"
 
 # Java service catalogue
 $JavaSvcCatalogue = @{
@@ -344,27 +429,55 @@ function Apply-OpsProfileDefaults {
 	}
 }
 
+# Kafka 保留期的**唯一一条规则**(routing-identity-audit-20260908.md R11):
+#
+#   任何"消费者可能落后"的 topic,保留期必须 > 消费者可能落后的最长时间,并留足余量。
+#
+# 落后多久算封顶,取决于消费者:
+#   * C++ 的 gate / scene 消费者把 max.poll.interval.ms 钉在 **900000**(15 分钟,
+#     cpp/libs/engine/infra/messaging/kafka/kafka_consumer.cpp)。也就是说 broker 眼里
+#     一个消费者"合法地"消失 15 分钟仍然算活着,回来时必须还能读到那 15 分钟的消息。
+#     保留期 < 900s 时它读不到的不是"旧数据",是 BindSession / RoutePlayer / KickPlayer,
+#     而且 Kafka 一个错都不报 —— 表现是玩家卡在登录或进世界。
+#   * db_task 那条链的封顶不是 poll 间隔而是 **MySQL 故障时长**:消费者停多久,
+#     积压就要留多久,否则丢的是玩家存档。
+#
+# 所以 $KafkaBrokerRetentionMs(broker 默认值,给所有没有自己 retention.ms 覆盖的 topic:
+# 迁移窗口里 auto-create 出来的 per-node topic gate-<id> / scene-<id>、game-events)
+# 一律 ≥ 2 × 900s;$KafkaDbTaskRetentionMs 按"能容忍多长的 DB 故障"给,不是按 poll 间隔给。
+# 有自己契约的 topic 不吃这两个值:审计 topic 30 天(data_service.yaml)、
+# 控制面命令 topic 1 小时(kafka-topic-init)、match-results 7 天(match 侧常量)。
 function Apply-KafkaProfileDefaults {
 	switch ($KafkaProfile) {
 		"dev" {
-			if ($KafkaBrokerRetentionMs -le 0) { $script:KafkaBrokerRetentionMs = 60000 }
-			if ($KafkaDbTaskRetentionMs -le 0) { $script:KafkaDbTaskRetentionMs = 300000 }
+			# 30 分钟 = 2 × max.poll.interval.ms。dev 也不能低于这条线:R11 的症状
+			# (落后的 gate 丢命令)在 dev 上同样会发生,只是更难归因。
+			if ($KafkaBrokerRetentionMs -le 0) { $script:KafkaBrokerRetentionMs = 1800000 }
+			# 1 小时:dev 允许 MySQL 挂一小时而不丢存档,再长没必要占盘。
+			if ($KafkaDbTaskRetentionMs -le 0) { $script:KafkaDbTaskRetentionMs = 3600000 }
 			if ($KafkaRetentionCheckIntervalMs -le 0) { $script:KafkaRetentionCheckIntervalMs = 120000 }
 			if ($KafkaRetentionBytes -le 0) { $script:KafkaRetentionBytes = 134217728 }
 			if ($KafkaSegmentBytes -le 0) { $script:KafkaSegmentBytes = 16777216 }
 			if ([string]::IsNullOrWhiteSpace($KafkaHeapOpts)) { $script:KafkaHeapOpts = "-Xms128m -Xmx256m" }
 		}
 		"prod-like" {
-			if ($KafkaBrokerRetentionMs -le 0) { $script:KafkaBrokerRetentionMs = 300000 }
-			if ($KafkaDbTaskRetentionMs -le 0) { $script:KafkaDbTaskRetentionMs = 600000 }
+			# 1 小时 = 4 × max.poll.interval.ms。
+			if ($KafkaBrokerRetentionMs -le 0) { $script:KafkaBrokerRetentionMs = 3600000 }
+			# 6 小时:一次有人值守的 MySQL 故障处理窗口。
+			if ($KafkaDbTaskRetentionMs -le 0) { $script:KafkaDbTaskRetentionMs = 21600000 }
 			if ($KafkaRetentionCheckIntervalMs -le 0) { $script:KafkaRetentionCheckIntervalMs = 120000 }
 			if ($KafkaRetentionBytes -le 0) { $script:KafkaRetentionBytes = 536870912 }
 			if ($KafkaSegmentBytes -le 0) { $script:KafkaSegmentBytes = 33554432 }
 			if ([string]::IsNullOrWhiteSpace($KafkaHeapOpts)) { $script:KafkaHeapOpts = "-Xms512m -Xmx1g" }
 		}
 		default {
-			if ($KafkaBrokerRetentionMs -le 0) { $script:KafkaBrokerRetentionMs = 300000 }
-			if ($KafkaDbTaskRetentionMs -le 0) { $script:KafkaDbTaskRetentionMs = 900000 }
+			if ($KafkaBrokerRetentionMs -le 0) { $script:KafkaBrokerRetentionMs = 3600000 }
+			# 24 小时:与 go/db/etc/db.yaml、go/login/etc/login.yaml 的 RetentionMs 默认值
+			# (86400000)对齐。以前这里是 900000,而 db 的 ConfigMap 不写 RetentionMs、
+			# 走 Go 结构体默认的 24h —— login 与 db 都会在启动时对同一个 db_task_zone_<N>
+			# 执行 IncrementalAlterConfigs(kafkautil.EnsureTopics),于是 topic 的保留期
+			# 在 15 分钟和 24 小时之间**随两个服务的重启顺序反复横跳**。对齐之后不再漂。
+			if ($KafkaDbTaskRetentionMs -le 0) { $script:KafkaDbTaskRetentionMs = 86400000 }
 			if ($KafkaRetentionCheckIntervalMs -le 0) { $script:KafkaRetentionCheckIntervalMs = 120000 }
 			if ($KafkaRetentionBytes -le 0) { $script:KafkaRetentionBytes = 536870912 }
 			if ($KafkaSegmentBytes -le 0) { $script:KafkaSegmentBytes = 33554432 }
@@ -489,6 +602,7 @@ metadata:
 function New-NodeConfigMapYaml {
 	param(
 		[Parameter(Mandatory = $true)][int]$CurrentZoneId,
+		[Parameter(Mandatory = $true)][int]$CurrentClusterId,
 		[Parameter(Mandatory = $true)][string]$ConfigName
 	)
 
@@ -517,6 +631,10 @@ function New-NodeConfigMapYaml {
 		throw "生成 node ConfigMap 失败:GateTokenSecret 为空。请先调用 Initialize-InjectedSecrets(写操作路径会自动调用),或注入 MMORPG_GATE_TOKEN_SECRET。"
 	}
 
+	# 永久 guid 号段。整块从权威文件原样搬运,而不是在这里抄一份常数:
+	# 键名 / 结构必须与 C++ 读法逐字对上(见下面模板处的注释),抄一份就是等着漂移。
+	$idSegmentsBlock = Get-AuthoritativeYamlBlock -RelativePath 'bin/etc/base_deploy_config.yaml' -Key 'IdSegments'
+
 	$baseDeployConfig = (@"
 Etcd:
   Hosts:
@@ -525,6 +643,11 @@ Etcd:
   NodeTTLSeconds: ${nodeTtlSeconds}
 GateTokenSecret: "${gateTokenSecret}"
 GateMaxConnections: ${gateMaxConnections}
+# ClusterId:部署级常量,运维建集群时定一次(k8s_deploy.ps1 -ClusterId,默认 0),策划不碰。
+# 它是 snowflake worker 段 [cluster5][node12] 的高 5 位(docs/design/node-id-overhaul-plan-20260908.md §5),
+# C++ 读进 BaseDeployConfig.cluster_id;同一集群里各 Go 服务 ConfigMap 写的是同一个值。
+# readBaseDeployConfig 按键名逐个取值,C++ 侧字段落地前多出这一键不会影响启动。
+ClusterId: ${CurrentClusterId}
 TableDataDirectory: "../generated/generated_tables/"
 DataRootDirectory: "/app/"
 LogLevel: 1
@@ -539,6 +662,10 @@ service_discovery_prefixes:
   - "SceneManagerNodeService.rpc"
   - "BattleNodeService.rpc"
   - "MatchNodeService.rpc"
+  # 全局数据服务(Go-Zero gRPC,全局池不分 zone):scene 经它调 AllocateIdSegment 领 GuidSegment 各 Kind 的号段。
+  # data_service 按 C++ 约定注册 NodeInfo(go/data_service/internal/noderegistry);缺这一条 scene 永远过不了
+  # DependencyGate。与 bin/etc/base_deploy_config.yaml 对齐。
+  - "DataServiceNodeService.rpc"
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
@@ -547,6 +674,21 @@ Kafka:
   GroupID: "game-consumer-group"
   EnableAutoCommit: true
   AutoOffsetReset: "earliest"
+# 永久 guid 号段(Leaf-segment,node-id-overhaul-plan §6 / §7.5):scene 经 DataService.AllocateIdSegment
+# 从全局库 id_segment 表按 Kind 领 [lo, hi) 双 buffer 发号;只有 scene 读,gate / battle 不铸这些 guid。
+#
+# 键名和结构是 C++ 那边的硬契约,不能自己发明:
+# cpp/libs/engine/config/config.cpp::readBaseDeployConfig(约 126-140 行)只认**顶层 IdSegments 列表**,
+# 逐项显式读 Kind / Enabled / InitialStep / MinStep / MaxStep 五个键。写成别的形状(2026-09-08 前这里
+# 生成的是一个 C++ 根本不读的 GuidSegment 顶层映射 + Kinds / Tag / Step 键名)不会报错,只会一个键都读不到 → IdSegmentConfig
+# 里 kinds 为空 → scene 的 Enable 校验拒绝 → DependencyGate "id segments ready" 永不放行,玩家进不来。
+# 而这份 ConfigMap 是 readOnly 整目录挂到 /app/bin/etc、**完全遮蔽**镜像里那份的,所以这里错=线上错。
+#
+# 下面整块由 Get-AuthoritativeYamlBlock 从 bin/etc/base_deploy_config.yaml 逐行原样搬运(含每个 Kind 的
+# 取值说明注释):单一真相在那份文件,改值 / 加种类(pet / guild …)只改那里,这里不留可漂移的副本。
+# 注:Kind 名要与 data-service 的 IdSegment.BootstrapTags 及 id_segment 表的种子行一一对应
+# (生产缺行 = ErrCodeIdSegmentUnknownTag,不自动补种)。
+${idSegmentsBlock}
 "@) -replace "`t", "  "
 
 	# SceneNodeType 在这里只是**文件基线**,gate / scene 共用同一份 ConfigMap。
@@ -604,6 +746,11 @@ function New-NodeDeploymentYaml {
 		$extraEnvLines += "`t`t`t- name: SCENE_NODE_TYPE"
 		$extraEnvLines += "`t`t`t  value: `"$SceneNodeType`""
 	}
+	# 发号槽本地缓存目录(见顶部 $SnowflakeCacheDir),下面 volumes 在同一路径挂 emptyDir。
+	# gate / scene 共用本模板:只有 scene 启用 SnowflakeSlotClient 会写它,gate 收到这个环境变量
+	# 什么也不做,统一注入省一个分支。
+	$extraEnvLines += "`t`t`t- name: SNOWFLAKE_CACHE_DIR"
+	$extraEnvLines += "`t`t`t  value: `"$SnowflakeCacheDir`""
 	$grpcEnvBlock = $extraEnvLines -join "`n"
 
 	return @"
@@ -644,6 +791,8 @@ $grpcEnvBlock
 			  readOnly: true
 			- name: node-logs
 			  mountPath: /app/bin/logs
+			- name: snowflake-cache
+			  mountPath: $SnowflakeCacheDir
 		  ports:
 			- containerPort: $RpcPort
 			  name: rpc
@@ -652,6 +801,8 @@ $grpcEnvBlock
 		  configMap:
 			name: $ConfigMapName
 		- name: node-logs
+		  emptyDir: {}
+		- name: snowflake-cache
 		  emptyDir: {}
 "@
 }
@@ -798,6 +949,10 @@ spec:
                   value: "$RpcPort"
                 - name: SCENE_NODE_TYPE
                   value: "$SceneNodeType"
+                # 发号槽本地缓存目录(见顶部 $SnowflakeCacheDir),volumes 里同一路径挂 emptyDir;
+                # 每个 GameServer Pod 自己一份,不跨 Pod 共享。
+                - name: SNOWFLAKE_CACHE_DIR
+                  value: "$SnowflakeCacheDir"
                 - name: AGONES_ENABLED
                   value: "1"$grpcPollersEnv
               volumeMounts:
@@ -806,6 +961,8 @@ spec:
                   readOnly: true
                 - name: node-logs
                   mountPath: /app/bin/logs
+                - name: snowflake-cache
+                  mountPath: $SnowflakeCacheDir
               ports:
                 - containerPort: $RpcPort
                   name: rpc
@@ -814,6 +971,8 @@ spec:
               configMap:
                 name: $ConfigMapName
             - name: node-logs
+              emptyDir: {}
+            - name: snowflake-cache
               emptyDir: {}
 "@
 }
@@ -992,6 +1151,63 @@ function Wait-ForDeploymentReady {
 	throw "Deployment rollout failed: namespace=$Namespace deployment=$DeploymentName"
 }
 
+# StatefulSet 版的 rollout 等待(etcd 与 kafka)。`kubectl rollout status statefulset/...`
+# 对 RollingUpdate 策略的 StatefulSet 有效,全部副本 Ready 才返回 0。
+# 之所以单独等它们:
+#   * etcd —— 全局池 match 与所有 zone 服务启动第一件事就是注册进 etcd,etcd 没形成
+#     quorum 之前把它们拉起来只会看到一串 "context deadline exceeded" 重启。
+#   * kafka —— broker 的 readiness 是 API 级探测(见 manifests/infra/kafka.yaml:9092 在
+#     日志恢复期间就已经 bind,TCP 探针会谎报就绪)。等它 Ready 之后再等
+#     kafka-topic-init,Job 失败时看到的就是真正的契约错误,而不是"broker 还没起来"。
+function Wait-ForStatefulSetReady {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$StatefulSetName
+	)
+
+	if ($DryRun) {
+		Write-Host "[dry-run] kubectl rollout status statefulset/$StatefulSetName -n $Namespace --timeout ${WaitTimeoutSeconds}s"
+		return
+	}
+
+	Invoke-Kubectl -Args @("rollout", "status", "statefulset/$StatefulSetName", "-n", $Namespace, "--timeout", ("{0}s" -f $WaitTimeoutSeconds)) -AllowFailure
+	if ($LASTEXITCODE -eq 0) {
+		return
+	}
+
+	Write-Host "StatefulSet not ready: namespace=$Namespace statefulset=$StatefulSetName"
+	# PVC 一起列:StatefulSet 起不来最常见的原因是 PVC Pending(没有默认 StorageClass)。
+	Invoke-Kubectl -Args @("get", "pods,pvc", "-n", $Namespace, "-l", "app=$StatefulSetName", "-o", "wide") -AllowFailure
+	Invoke-Kubectl -Args @("describe", "statefulset", $StatefulSetName, "-n", $Namespace) -AllowFailure
+	throw "StatefulSet rollout failed: namespace=$Namespace statefulset=$StatefulSetName"
+}
+
+# 一次性 Job 的完成等待(目前只有 kafka-topic-init 用)。
+# `kubectl wait --for=condition=complete` 只认 Complete:Job 失败(condition=Failed,backoffLimit 用尽)时
+# 它会一直等到超时,所以超时后把 describe 与 Pod 日志都打出来再 throw —— 分区契约不一致
+# ("PartitionCount=1 but the contract is 6")就是从这里看到的。
+function Wait-ForJobComplete {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$JobName
+	)
+
+	if ($DryRun) {
+		Write-Host "[dry-run] kubectl wait --for=condition=complete job/$JobName -n $Namespace --timeout ${WaitTimeoutSeconds}s"
+		return
+	}
+
+	Invoke-Kubectl -Args @("wait", "--for=condition=complete", "job/$JobName", "-n", $Namespace, "--timeout", ("{0}s" -f $WaitTimeoutSeconds)) -AllowFailure
+	if ($LASTEXITCODE -eq 0) {
+		return
+	}
+
+	Write-Host "Job not complete: namespace=$Namespace job=$JobName"
+	Invoke-Kubectl -Args @("describe", "job", $JobName, "-n", $Namespace) -AllowFailure
+	Invoke-Kubectl -Args @("logs", "job/$JobName", "-n", $Namespace, "--all-containers", "--tail", "100") -AllowFailure
+	throw "Job did not complete: namespace=$Namespace job=$JobName"
+}
+
 function Wait-ForZoneReady {
 	param(
 		[Parameter(Mandatory = $true)][string]$Namespace,
@@ -1047,7 +1263,8 @@ function Wait-ForZoneReady {
 function New-GoSvcConfigMapYaml {
 	param(
 		[Parameter(Mandatory = $true)][string]$SvcName,
-		[Parameter(Mandatory = $true)][int]$CurrentZoneId
+		[Parameter(Mandatory = $true)][int]$CurrentZoneId,
+		[Parameter(Mandatory = $true)][int]$CurrentClusterId
 	)
 
 	$info = $GoSvcCatalogue[$SvcName]
@@ -1071,9 +1288,36 @@ function New-GoSvcConfigMapYaml {
 	$loginQueueShardCount   = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Node.QueueShardCount'
 	$loginAccountLockTTL    = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Locker.AccountLockTTL'
 	$loginPlayerLockTTL     = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'Locker.PlayerLockTTL'
+	# PlayerId 号段长度(node-id-overhaul-plan §6.2:按「10 分钟峰值建角量」配)。IdSegment.Enabled 与
+	# FallbackToSnowflake **不**从 yaml 取:那两个是部署决策,在 login 模板里显式写死并注释。
+	$loginIdSegmentStep     = Get-AuthoritativeScalar -RelativePath 'go/login/etc/login.yaml' -KeyPath 'IdSegment.Step'
+
+	# data-service 全局库落库消费者(node-id-overhaul-plan §2.0c):topic 名必须与 C++ 生产者一致,
+	# 分区数是不可变契约(kafkautil.EnsureTopics 会拒绝与 broker 现状不一致的值),一律从服务 yaml 取。
+	$dsYaml                       = 'go/data_service/etc/data_service.yaml'
+	$dsKafkaTxTopic               = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.TransactionLogTopic'
+	$dsKafkaTxPartitions          = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.TransactionLogPartitions'
+	$dsKafkaTxConsumerGroup       = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.TransactionLogConsumerGroup'
+	$dsKafkaSnapshotTopic         = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.SnapshotTopic'
+	$dsKafkaSnapshotPartitions    = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.SnapshotPartitions'
+	$dsKafkaSnapshotConsumerGroup = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.SnapshotConsumerGroup'
+	$dsKafkaRetentionMs           = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.RetentionMs'
+	# 分区契约的代号,进有效 topic 名(<基名>_g<N>,config.go EffectiveTransactionLogTopic)。镜像进 ConfigMap 是为了
+	# 让「这个集群消费第几代 topic」一眼可见;Apply-KafkaTopicInitJob 用同一个键预建 topic,两边不会各说各话。
+	$dsKafkaTopicGeneration       = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.TopicGeneration'
+	$dsMysqlMaxOpenConn           = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'SnapshotMySQL.MaxOpenConn'
+	$dsMysqlMaxIdleConn           = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'SnapshotMySQL.MaxIdleConn'
+	# C++ 约定注册(DataServiceNodeService.rpc)那把 etcd 租约的 TTL:Go config 顶层键、默认 60
+	# (go/data_service/internal/config/config.go LeaseTTL),与 scene-manager / match 同形,同样从服务自己的 yaml 取。
+	$dsLeaseTTL                   = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'LeaseTTL'
 
 	$locatorNodeLeaseTTL    = Get-AuthoritativeScalar -RelativePath 'go/player_locator/etc/player_locator.yaml' -KeyPath 'Node.LeaseTTL'
 	$locatorLeaseTTLSeconds = Get-AuthoritativeScalar -RelativePath 'go/player_locator/etc/player_locator.yaml' -KeyPath 'Lease.DefaultTTLSeconds'
+
+	# scene-manager 的 LeaseTTL 在 Go config 顶层(go/scene_manager/internal/config/config.go,
+	# default 60),与 match 同形、与 login / player-locator 的 Node.LeaseTTL 不同层。
+	# 同样从服务自己的 yaml 取,不在这里另写一份常数。
+	$sceneManagerLeaseTTL   = Get-AuthoritativeScalar -RelativePath 'go/scene_manager/etc/scene_manager_service.yaml' -KeyPath 'LeaseTTL'
 
 	# match 的时间窗口全是"多实例 / 崩溃自愈"语义(锁 TTL、票据 TTL、战斗时限),
 	# 生成器里另抄一份就是又一处会漂移的常数,一律从服务自己的 yaml 取。
@@ -1143,6 +1387,26 @@ function New-GoSvcConfigMapYaml {
 	if ($SvcName -eq 'db' -and $ReleaseProfile -eq 'dev') {
 		$dbAutoCreateDatabase = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Database.AutoCreateDatabase'
 		$dbAutoMigrateSchema = Get-AuthoritativeScalar -RelativePath 'go/db/etc/db.yaml' -KeyPath 'ServerConfig.Database.AutoMigrateSchema'
+	}
+
+	# data_service 全局库四张表的建表策略(go/data_service/internal/config/config.go SchemaConfig),
+	# 与上面 db 的 AutoMigrateSchema 同一条纪律:dev 档镜像服务 yaml 的值(AutoMigrate=true,
+	# 起了就能用);staging/prod 固定 false —— 多副本同时启动会对同一张表并发 ALTER 互相 MDL 阻塞,
+	# 生产改在部署阶段单进程跑一次 `data_service -f /app/etc/data_service.yaml -migrate`
+	# (同一段代码,跑完即退)。设 false 时启动路径不碰任何 DDL。
+	$dataServiceAutoMigrate = 'false'
+	if ($SvcName -eq 'data-service' -and $ReleaseProfile -eq 'dev') {
+		$dataServiceAutoMigrate = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Schema.AutoMigrate'
+	}
+
+	# id_segment 的**行**播种策略(config.go IdSegmentConfig.AllowAutoSeed),与 Schema.AutoMigrate 同一条纪律:
+	# dev 档镜像服务 yaml 的值(true:空库起了就能建角,随手换 tag 不必先跑迁移);staging/prod 固定 false ——
+	# 生产里 biz_tag 行缺失只可能是全局库被 drop / 从旧备份恢复,自动从 1 播种等于把已发出的号再发一遍
+	# (login 的 INSERT ... ON DUPLICATE KEY UPDATE 会静默覆盖别人的角色行),必须由人核对消费侧最大号后处理
+	# (deploy/k8s/README.md「恢复全局库前须先核对 id_segment.max_id」)。false 时缺行 = ErrCodeIdSegmentUnknownTag,不写任何行。
+	$dataServiceAllowAutoSeed = 'false'
+	if ($SvcName -eq 'data-service' -and $ReleaseProfile -eq 'dev') {
+		$dataServiceAllowAutoSeed = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'IdSegment.AllowAutoSeed'
 	}
 
 	# login 的 go-zero Mode。secrets.go 只在 Mode=dev/test 时把密钥校验降级为 WARN,
@@ -1216,6 +1480,53 @@ DevRedis:
   Type: node
   DB: 0
 PlayerLockTTLSec: 3
+# C++ 约定的 etcd 注册(DataServiceNodeService.rpc/zone/<ZoneId>/node_type/26/node_id/<N> + 同前缀的
+# allocated 占位键,挂同一把租约):scene 靠它发现 data_service 并调 AllocateIdSegment 领 GuidSegment 号段,
+# go-zero 自己的 dataservice.rpc 键 C++ 看不见。注册在 gRPC 端口 accept 之后,失败即 panic(CrashLoopBackOff 可见)。
+# 对外 IP 取 Deployment 注入的 POD_IP(manifests/go-svc/data-service.yaml)。
+# ZoneId:DataServiceNodeService 不是 zone-scoped 节点类型,C++ 发现侧不按 zone 过滤,任何 zone 的 scene 都能
+# 发现任何 zone 的 data_service;写部署 zone 只是排障时对得上号。LeaseTTL 从服务 yaml 取(见生成器注释)。
+ZoneId: ${CurrentZoneId}
+LeaseTTL: ${dsLeaseTTL}
+# 全局库(node-id-overhaul-plan §2.0c / §6.2):transaction_log / player_snapshot / rollback_audit_log /
+# id_segment 四张表都在这里,由 data_service 按 proto 建表。库名 ${GlobalDbName} 由 infra-up 的
+# mysql-init-sql(02_k8s_global_db.sql)预建并 GRANT 给 appuser;账号沿用 db 服务同一组注入值
+# (MMORPG_MYSQL_USER / MMORPG_MYSQL_PASSWORD,dev 回落 root),换成别的账号要自己补 GRANT。
+# 以前这份 ConfigMap 没有本段,Go 默认值是 127.0.0.1:3306/testdb —— K8s 上必然连不上:
+# 三个 store 置 nil、AllocateIdSegment 不可用,login 开了 IdSegment 后建角会全部失败。
+SnapshotMySQL:
+  Host: "mysql.${InfraNamespace}:3306"
+  User: "${mysqlUser}"
+  Password: "${mysqlPassword}"
+  DBName: "${GlobalDbName}"
+  MaxOpenConn: ${dsMysqlMaxOpenConn}
+  MaxIdleConn: ${dsMysqlMaxIdleConn}
+# 建表策略(见生成器注释):dev = 服务 yaml 的值;staging/prod = false,部署阶段跑 -migrate。
+Schema:
+  AutoMigrate: ${dataServiceAutoMigrate}
+# id_segment 行播种策略(见生成器注释):dev = 服务 yaml 的值;staging/prod = false,缺行不自动播种,
+# 由人核对消费侧最大号后处理(README「恢复全局库前须先核对 id_segment.max_id」)。
+# BootstrapTags 与服务 yaml / DefaultIdSegmentBootstrapTags 同一份清单:迁移(AutoMigrate / -migrate)
+# 用 INSERT IGNORE 预建这些 biz_tag 行,幂等、绝不降低已有行的 max_id;新增永久身份两边同加。
+IdSegment:
+  AllowAutoSeed: ${dataServiceAllowAutoSeed}
+  BootstrapTags: [player, guild, item, txlog, snapshot]
+# C++ scene 产出的交易流水 / 玩家快照落库消费者。topic 名与分区数是不可变契约,值来自服务 yaml。
+# Kafka 不可达不影响 Load/Save,只记日志并每 30s 后台重试。
+# TopicGeneration 是分区契约的代号,进有效 topic 名(<基名>_g<N>);从服务 yaml 镜像过来,当前集群
+# 消费第几代 topic 在这里一眼可见。改分区数 = 这个数 +1(换一批新 topic),绝不原地扩分区;
+# infra-up 的 kafka-topic-init Job 按同一个值预建 topic(README「Kafka 审计 topic 预建」)。
+Kafka:
+  Brokers:
+    - "kafka.${InfraNamespace}:9092"
+  TopicGeneration: ${dsKafkaTopicGeneration}
+  TransactionLogTopic: ${dsKafkaTxTopic}
+  TransactionLogPartitions: ${dsKafkaTxPartitions}
+  TransactionLogConsumerGroup: ${dsKafkaTxConsumerGroup}
+  SnapshotTopic: ${dsKafkaSnapshotTopic}
+  SnapshotPartitions: ${dsKafkaSnapshotPartitions}
+  SnapshotConsumerGroup: ${dsKafkaSnapshotConsumerGroup}
+  RetentionMs: ${dsKafkaRetentionMs}
 "@
 		}
 		"login" {
@@ -1228,6 +1539,13 @@ Etcd:
   Hosts:
     - "etcd.${InfraNamespace}:2379"
   Key: login.rpc
+# ClusterId:部署级常量(-ClusterId,默认 0),snowflake worker 段的高位 cluster 号,
+# 与本集群其它 ConfigMap(C++ 节点 / scene-manager / match)必须同值。顶层键。
+# Go 侧字段(node-id-overhaul-plan §5 Phase 3)落地前 go-zero 忽略未知键,先写不伤。
+ClusterId: ${CurrentClusterId}
+# PlayerId 槽位本地缓存目录(生成器顶部 $SnowflakeCacheDir):manifests/go-svc/login.yaml 在同一
+# 路径挂 emptyDir。Go 默认的 ../../run/snowflake 在容器里落到 /run/snowflake,不该赌它可写。
+SnowflakeCacheDir: ${SnowflakeCacheDir}
 Node:
   ZoneId: ${CurrentZoneId}
   SessionExpireMin: ${loginSessionExpireMin}
@@ -1284,6 +1602,28 @@ SceneManagerRpc:
   Timeout: 5000
   Middlewares:
     Breaker: false
+# DataService gRPC 客户端:login 只用它领 PlayerId 号段(DataService.AllocateIdSegment)。
+# NonBlock: true —— 号段是弱依赖(node-id-overhaul-plan §6.5):data-service 没起时 login 照常起服,
+# 领段失败按 IdSegment.FallbackToSnowflake 决定回退还是拒绝建角。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - "etcd.${InfraNamespace}:2379"
+    Key: dataservice.rpc
+  Timeout: 3000
+  NonBlock: true
+  Middlewares:
+    Breaker: false
+# PlayerId 号段发号(node-id-overhaul-plan §6)。
+# Enabled 必须**显式写 true**:go-zero 对缺席的 optional 块不填 default,shared/idsegment 的规则是
+#   「整块不写 = 关 = 纯 snowflake 老路径」;漏写这一行等于静默回到旧发号,不会报错。
+# Step 从 go/login/etc/login.yaml 取(按「10 分钟峰值建角量」配,双 buffer = 库倒下后还能发完两段)。
+# FallbackToSnowflake 固定 false 是 §6.4 的决定:回退虽安全(号段 [1, 2^55) 与存量 snowflake 值域
+#   不相交)但会让 snowflake 机器永远留着;号段失败即建角失败,靠 data-service 的可用性兜底,不靠回退。
+IdSegment:
+  Enabled: true
+  Step: ${loginIdSegmentStep}
+  FallbackToSnowflake: false
 GateTokenSecret: "${gateTokenSecret}"
 # Secrets.InternalAuth:内部调用方身份声明(x-session-detail-bin)的验签密钥。
 #
@@ -1363,7 +1703,18 @@ Redis:
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
-NodeID: "node-1"
+# ZoneId / LeaseTTL 都在 Go config 顶层(config.go 默认 1 / 60)。以前这份模板没有 ZoneId,
+# 于是每个 zone 的 scene-manager 都按 zone 1 注册到 SceneManagerNodeService.rpc/zone/1/,
+# zone 102 的 scene 节点找不到自己的 SceneManager(node-id-overhaul-plan-20260908.md §2.0a)。
+# 原来的 NodeID: "node-1" 已 deprecated、零读取,一并删掉。
+ZoneId: ${CurrentZoneId}
+LeaseTTL: ${sceneManagerLeaseTTL}
+# ClusterId:部署级常量(-ClusterId,默认 0),snowflake worker 段的高位 cluster 号,
+# 与本集群其它 ConfigMap 必须同值。Go 侧字段落地前 go-zero 忽略未知键。
+ClusterId: ${CurrentClusterId}
+# snowflake 槽位本地缓存目录(生成器顶部 $SnowflakeCacheDir):manifests/go-svc/scene-manager.yaml
+# 在同一路径挂 emptyDir。Go 默认的 ../../run/snowflake 在容器里落到 /run/snowflake,不该赌它可写。
+SnowflakeCacheDir: ${SnowflakeCacheDir}
 # 选主 gauge(scene_manager_is_leader)与 EnterScene 分阶段指标都从这里出;
 # 不开的话 scene-manager.yaml 注释里让运维盯的告警口径全部落空。
 MetricsListenAddr: ":9150"
@@ -1396,6 +1747,12 @@ MatchRedis:
 # 全局池:ZoneId 只影响 etcd 注册路径,gate 按非 zone-scoped 前缀发现,任何 zone 的 gate 都能连到。
 ZoneId: ${CurrentZoneId}
 LeaseTTL: ${matchLeaseTTL}
+# ClusterId:部署级常量(-ClusterId,默认 0)。全局池也必须与本集群的 zone 服务同值 ——
+# cluster 段是「这个 K8s 集群」的号,不是 zone 的号;infra-up 与 zone-up 读的是同一个参数。
+ClusterId: ${CurrentClusterId}
+# snowflake 槽位本地缓存目录(生成器顶部 $SnowflakeCacheDir):manifests/go-svc/match.yaml 在同一
+# 路径挂 emptyDir。Go 默认的 ../../run/snowflake 在容器里落到 /run/snowflake,不该赌它可写。
+SnowflakeCacheDir: ${SnowflakeCacheDir}
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"
@@ -1432,7 +1789,8 @@ $($svcConfig -split "`n" | ForEach-Object { "    $_" } | Out-String)
 function Apply-GoSvcManifests {
 	param(
 		[Parameter(Mandatory = $true)][string]$Namespace,
-		[Parameter(Mandatory = $true)][int]$CurrentZoneId
+		[Parameter(Mandatory = $true)][int]$CurrentZoneId,
+		[Parameter(Mandatory = $true)][int]$CurrentClusterId
 	)
 
 	if ($SkipGoSvc) { return }
@@ -1445,7 +1803,7 @@ function Apply-GoSvcManifests {
 
 	# 全局服务(match)由 Apply-GlobalGoSvcManifests 在 infra 阶段部署,这里只放随 zone 走的
 	foreach ($svcName in (Get-ZoneScopedGoSvcNames)) {
-		Apply-OneGoSvc -SvcName $svcName -Namespace $Namespace -CurrentZoneId $CurrentZoneId
+		Apply-OneGoSvc -SvcName $svcName -Namespace $Namespace -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId
 	}
 }
 
@@ -1454,14 +1812,15 @@ function Apply-OneGoSvc {
 	param(
 		[Parameter(Mandatory = $true)][string]$SvcName,
 		[Parameter(Mandatory = $true)][string]$Namespace,
-		[Parameter(Mandatory = $true)][int]$CurrentZoneId
+		[Parameter(Mandatory = $true)][int]$CurrentZoneId,
+		[Parameter(Mandatory = $true)][int]$CurrentClusterId
 	)
 
 	$info = $GoSvcCatalogue[$SvcName]
 	$svcImage = "$GoSvcRegistry/$($info.ImageName):$GoSvcTag"
 
 	# Apply ConfigMap
-	$cmYaml = New-GoSvcConfigMapYaml -SvcName $SvcName -CurrentZoneId $CurrentZoneId
+	$cmYaml = New-GoSvcConfigMapYaml -SvcName $SvcName -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $cmYaml
 
 	# Apply manifest with image placeholder replaced
@@ -1495,7 +1854,8 @@ function Apply-GlobalGoSvcManifests {
 		# 全局服务没有"自己的 zone"。ZoneId 只决定 etcd 注册路径,gate 按非 zone-scoped
 		# 前缀发现 match(cpp node_util.cpp IsZoneScopedNodeType 不含它),所以填哪个 zone
 		# 都不影响路由;沿用命令行 -ZoneId 让 infra-up 与 zone-up 的取值口径一致。
-		Apply-OneGoSvc -SvcName $svcName -Namespace $InfraNamespace -CurrentZoneId $ZoneId
+		# ClusterId 同理但更硬:它是本集群的常量,全局池与 zone 服务必须同值,所以同样只认命令行 -ClusterId。
+		Apply-OneGoSvc -SvcName $svcName -Namespace $InfraNamespace -CurrentZoneId $ZoneId -CurrentClusterId $ClusterId
 	}
 	if ($WaitReady) {
 		foreach ($svcName in $globalNames) {
@@ -1839,6 +2199,8 @@ function Apply-Zone {
 	param(
 		[Parameter(Mandatory = $true)][string]$CurrentZoneName,
 		[Parameter(Mandatory = $true)][int]$CurrentZoneId,
+		# 与 -ZoneId 不同,它不来自 zones 配置:集群常量,调用方一律传命令行 -ClusterId。
+		[Parameter(Mandatory = $true)][int]$CurrentClusterId,
 		[Parameter(Mandatory = $true)][int]$CurrentCentreReplicas,
 		[Parameter(Mandatory = $true)][int]$CurrentGateReplicas,
 		[Parameter(Mandatory = $true)][int]$CurrentSceneReplicas,
@@ -1859,7 +2221,7 @@ function Apply-Zone {
 
 	$sceneKind = if ($SceneOrchestrator -eq "agones") { "agones.dev/v1 Fleet" } else { "apps/v1 Deployment" }
 
-	Write-Host "Applying zone deployment: zone=$CurrentZoneName zone_id=$CurrentZoneId namespace=$namespace"
+	Write-Host "Applying zone deployment: zone=$CurrentZoneName zone_id=$CurrentZoneId cluster_id=$CurrentClusterId namespace=$namespace"
 	Write-Host "Ops profile resolved: profile=$OpsProfile gate_service_type=$GateServiceType centre=$CurrentCentreReplicas gate=$CurrentGateReplicas"
 	Write-Host "Scene orchestrator: $SceneOrchestrator -> $sceneKind"
 	Write-Host "Scene pools resolved: $sceneSummary"
@@ -1876,7 +2238,7 @@ function Apply-Zone {
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $rbacYaml
 	}
 
-	$configMapYaml = New-NodeConfigMapYaml -CurrentZoneId $CurrentZoneId -ConfigName $configMapName
+	$configMapYaml = New-NodeConfigMapYaml -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId -ConfigName $configMapName
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $configMapYaml
 
 	$gateYaml = New-NodeDeploymentYaml -NodeName "gate" -Replicas $CurrentGateReplicas -RpcPort 18000 -StartCommand "./gate" -ConfigMapName $configMapName
@@ -1922,7 +2284,7 @@ function Apply-Zone {
 	$gateServiceYaml = New-GateServiceYaml -ServiceName $gateServiceName
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $gateServiceYaml
 
-	Apply-GoSvcManifests -Namespace $namespace -CurrentZoneId $CurrentZoneId
+	Apply-GoSvcManifests -Namespace $namespace -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId
 
 	Apply-JavaSvcManifests -Namespace $namespace
 
@@ -2002,6 +2364,12 @@ function Get-InfraZoneIds {
 	开头保证排在 00_init_zone_dbs.sql 之后、gateway_tables.sql 之前(initdb 按
 	文件名顺序执行);CREATE DATABASE IF NOT EXISTS 与 00_ 里的 zone_1/2 重叠无害。
 
+	另生成 02_k8s_global_db.sql 预建 data_service 的全局库 $GlobalDbName(全集群一份,
+	不按 zone 拆):data_service 启动期 / -migrate 要在里面 CREATE TABLE 四张表,库不在或
+	账号无权就只剩 "schema auto-migrate failed",AllocateIdSegment 随之不可用。
+	仓库里 00_init_zone_dbs.sql 顺带建的 testdb 只服务本地 compose 的
+	go/data_service/etc/data_service.yaml,在 K8s 上是一个没人用的空库,无害。
+
 	注意 initdb 只在数据目录为空的首次启动执行,PVC 已有数据时改 sql 不会重跑
 	(见 mysql.yaml 里 mysql-init 卷的注释)。
 #>
@@ -2034,6 +2402,20 @@ function New-MysqlInitConfigMapYaml {
 	$zoneSql += "FLUSH PRIVILEGES;"
 	$entries["01_k8s_zone_dbs.sql"] = (($zoneSql -join "`n") + "`n")
 
+	# 全局库(data_service SnapshotMySQL,见顶部 $GlobalDbName):全集群一份,不按 zone 拆。
+	# GRANT 给 appuser 与 zone 库同一口径;dev 档 data-service 用注入的 root 本来就有权,
+	# 这条 GRANT 是给 staging/prod 把 MMORPG_MYSQL_USER 注成 appuser 的部署用的。
+	$globalSql = @(
+		"-- 由 k8s_deploy.ps1 Apply-Infra 生成,不要手改:data_service 全局库",
+		"-- (transaction_log / player_snapshot / rollback_audit_log / id_segment 四张表由 data_service 按 proto 建)。",
+		"-- 全集群一份,不按 zone 拆;go-svc-data-service-config 的 SnapshotMySQL.DBName 指向它。",
+		"",
+		('CREATE DATABASE IF NOT EXISTS `{0}`;' -f $GlobalDbName),
+		('GRANT ALL PRIVILEGES ON `{0}`.* TO ''appuser''@''%'';' -f $GlobalDbName),
+		"FLUSH PRIVILEGES;"
+	)
+	$entries["02_k8s_global_db.sql"] = (($globalSql -join "`n") + "`n")
+
 	# 每个文件一个 data 键,内容用 YAML 字面块(|)带入:sql 里的反引号 / 引号 / 冒号
 	# 在字面块里都是纯文本,不需要转义;空行保留(YAML 允许字面块内空行)。
 	$dataBlock = foreach ($kv in $entries.GetEnumerator()) {
@@ -2053,6 +2435,92 @@ $($dataBlock -join "`n")
 "@
 }
 
+<#
+.SYNOPSIS
+	预建按分区契约寻址的 topic:data_service 的两个审计 topic(transaction_log / player_snapshot),
+	以及控制面命令 topic(gate-cmd_g<N> / scene-cmd_g<N>)。
+
+.DESCRIPTION
+	控制面命令 topic(docs/design/control-plane-topic-partitioning-20260908.md):
+	gate/scene 不再一个节点一个 topic,而是按 partition = node_id % P 各自 assign 一个分区。
+	分区数少一个,一批 node_id 就永远收不到命令,而且 Kafka 不报错 —— 所以它和审计 topic
+	一样必须在任何节点起来之前按契约建好,分区数取自 bin/etc/base_deploy_config.yaml
+	(gate/scene 消费者启动时拿去和 broker 核对的是同一份数字)。
+
+	broker(manifests/infra/kafka.yaml)开着 auto.create.topics.enable 且 num.partitions=1:
+	C++ scene 一发消息就会把 topic 自动建成 1 分区,而 data_service 的 kafkautil.EnsureTopics
+	拿 6 / 3 的契约去比只会永远报 "partition contract mismatch",两条落库消费者一条都起不来,
+	唯一症状是每 30s 一条 Error 日志。所以 topic 必须在**任何 scene 起来之前**由部署侧建好:
+	infra-up 在五个 infra manifest 之后、任何 zone 之前 apply 这个 Job;-WaitReady 会等它 Complete。
+
+	契约值(基名 / 分区数 / 保留期 / 代号)全部取自 go/data_service/etc/data_service.yaml,
+	与 data-service ConfigMap 同源;有效 topic 名 = <基名>_g<TopicGeneration>,与 Go 侧
+	EffectiveTransactionLogTopic() 同一条规则。改分区数 = TopicGeneration +1(新 topic),
+	绝不原地扩分区(重映射 key=player_id 的哈希,同一玩家的流水顺序就断了)。
+
+	Job 幂等(kafka-topics.sh --if-not-exists,再 --describe 核对 PartitionCount,不符即失败;
+	retention.ms 每次都用 kafka-configs.sh --alter 重新声明,不只在建 topic 那一刻生效)。
+	每次都先删旧 Job 再 apply:Job 的 template 不可变,而且必须能重跑 —— 第一次从旧 emptyDir
+	Deployment 切到 StatefulSet+PVC(R06)、`infra-down` 删过 namespace(PVC 一起没)、
+	或有人手工删过 topic 之后,topic 都是空的。单独的 infra-kafka-topics 命令就是干这个的。
+#>
+function Apply-KafkaTopicInitJob {
+	$manifestName = "kafka-topic-init.yaml"
+	$path = Join-Path $InfraManifestsDir $manifestName
+	if (-not (Test-Path $path)) {
+		throw "Infra manifest not found: $path(fail-closed:没有预建 Job,scene 会把审计 topic 自动建成 1 分区)"
+	}
+
+	$dsYaml = 'go/data_service/etc/data_service.yaml'
+	$generation = [int](Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.TopicGeneration')
+	if ($generation -le 0) { $generation = 1 }   # 与 Go 侧 topicForGeneration 一致:0 按第一代处理
+	$txTopic        = "{0}_g{1}" -f (Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.TransactionLogTopic'), $generation
+	$txPartitions   = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.TransactionLogPartitions'
+	$snapTopic      = "{0}_g{1}" -f (Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.SnapshotTopic'), $generation
+	$snapPartitions = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.SnapshotPartitions'
+	$retentionMs    = Get-AuthoritativeScalar -RelativePath $dsYaml -KeyPath 'Kafka.RetentionMs'
+
+	# 控制面命令 topic 的分区契约(docs/design/control-plane-topic-partitioning-20260908.md)。
+	# 权威值在 C++ 侧的 bin/etc/base_deploy_config.yaml —— 那是 gate/scene 消费者启动时
+	# 拿去和 broker 核对的同一份数字。这里读它、而不是在脚本里另写一个常数:
+	# 预建的分区数与消费者 assign 的分区号必须同源,否则命令会落到没人 assign 的分区上,
+	# 静默全丢且 Kafka 不报错。
+	$baseDeployYaml   = 'bin/etc/base_deploy_config.yaml'
+	$cmdPartitions    = [int](Get-AuthoritativeScalar -RelativePath $baseDeployYaml -KeyPath 'Kafka.CommandTopicPartitions')
+	$cmdGeneration    = [int](Get-AuthoritativeScalar -RelativePath $baseDeployYaml -KeyPath 'Kafka.CommandTopicGeneration')
+	if ($cmdPartitions -le 0) {
+		throw "bin/etc/base_deploy_config.yaml 的 Kafka.CommandTopicPartitions 必须 > 0(fail-closed:分区数是寻址协议)"
+	}
+	if ($cmdGeneration -le 0) { $cmdGeneration = 1 }   # 与两端 Normalize* 一致:0 按第一代处理
+	$gateCmdTopic  = "gate-cmd_g$cmdGeneration"
+	$sceneCmdTopic = "scene-cmd_g$cmdGeneration"
+
+	Write-Host "Kafka audit topic bootstrap: $txTopic(partitions=$txPartitions) $snapTopic(partitions=$snapPartitions) retention_ms=$retentionMs generation=g$generation"
+	Write-Host "Kafka command topic bootstrap: $gateCmdTopic / $sceneCmdTopic (partitions=$cmdPartitions)"
+
+	# Job 名固定,重跑必须先删:template 不可变,apply 同名 Job 会被拒。--ignore-not-found:首次是 no-op。
+	Invoke-Kubectl -Args @("delete", "job", "kafka-topic-init", "-n", $InfraNamespace, "--ignore-not-found")
+
+	$content = Get-Content -Path $path -Raw
+	$content = $content.Replace("__INFRA_NAMESPACE__", $InfraNamespace)
+	$content = $content.Replace("__KAFKA_AUDIT_TX_TOPIC__", $txTopic)
+	$content = $content.Replace("__KAFKA_AUDIT_TX_PARTITIONS__", [string]$txPartitions)
+	$content = $content.Replace("__KAFKA_AUDIT_SNAPSHOT_TOPIC__", $snapTopic)
+	$content = $content.Replace("__KAFKA_AUDIT_SNAPSHOT_PARTITIONS__", [string]$snapPartitions)
+	$content = $content.Replace("__KAFKA_AUDIT_RETENTION_MS__", [string]$retentionMs)
+	$content = $content.Replace("__KAFKA_GATE_COMMAND_TOPIC__", $gateCmdTopic)
+	$content = $content.Replace("__KAFKA_SCENE_COMMAND_TOPIC__", $sceneCmdTopic)
+	$content = $content.Replace("__KAFKA_COMMAND_PARTITIONS__", [string]$cmdPartitions)
+
+	# 与 Apply-Infra 同一条 fail-closed:任何双下划线大写占位没替换就拒绝 apply。
+	$leftover = [regex]::Matches($content, '__[A-Z][A-Z0-9_]*__') | ForEach-Object { $_.Value } | Sort-Object -Unique
+	if ($leftover.Count -gt 0) {
+		throw "infra manifest $manifestName 里有未替换的占位:$($leftover -join ', ')。请在 Apply-KafkaTopicInitJob 里补对应的 Replace。"
+	}
+
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $content
+}
+
 function Apply-Infra {
 	Write-Host "Deploying shared infrastructure to namespace $InfraNamespace"
 	Write-Host "Kafka profile: $KafkaProfile (broker_retention_ms=$KafkaBrokerRetentionMs db_task_retention_ms=$KafkaDbTaskRetentionMs)"
@@ -2066,6 +2534,34 @@ function Apply-Infra {
 		if (-not (Test-Path $path)) {
 			Write-Warning "Infra manifest not found: $path — skipping"
 			continue
+		}
+
+		if ($manifest -eq "etcd.yaml") {
+			# etcd 已从单副本 Deployment(emptyDir)改成 3 副本 StatefulSet + PVC
+			# (docs/design/node-id-overhaul-plan-20260908.md §7 Phase 0.5)。两者 kind 不同、名字相同,
+			# `kubectl apply` 只会新建 StatefulSet,不会回收旧 Deployment;而 Service `etcd`
+			# 的 selector(app=etcd)会同时命中新旧 Pod —— 客户端就会在「旧单机 etcd」和
+			# 「新集群」之间随机落点,两边数据各不相同,等于脑裂。所以先删旧 Deployment 再 apply。
+			# 旧 emptyDir 里的数据**不迁移**:里面只有 lease 绑定的节点注册与发号槽位,
+			# 节点重启就重新申领(见 deploy/k8s/README.md「etcd:3 副本 StatefulSet」一节)。
+			# --ignore-not-found:全新集群 / 已经切过的集群这里是 no-op。
+			Invoke-Kubectl -Args @("delete", "deployment", "etcd", "-n", $InfraNamespace, "--ignore-not-found")
+		}
+
+		if ($manifest -eq "kafka.yaml") {
+			# kafka 已从单副本 Deployment(emptyDir)改成 StatefulSet + PVC
+			# (routing-identity-audit-20260908.md R06),与上面 etcd 完全同形的 kind 变更:
+			# 两者 kind 不同、名字相同,`kubectl apply` 只会新建 StatefulSet,不会回收旧
+			# Deployment;而 Service `kafka` 的 selector(app=kafka)会同时命中新旧 Pod ——
+			# 客户端(以及 controller quorum 用的 kafka:9093)就会在"旧 emptyDir broker"和
+			# "新 PVC broker"之间随机落点,两边各有一套 topic 与 offset,等于脑裂。
+			# 所以先删旧 Deployment 再 apply。
+			# 旧 emptyDir 里的数据**不迁移**,而且本来就没有:旧 manifest 把卷挂在
+			# /tmp/kafka-logs,而镜像的 log.dirs 默认是 /tmp/kraft-combined-logs。
+			# 切换后 topic 全部为空,**必须重跑 infra-kafka-topics**(下面 Apply-KafkaTopicInitJob
+			# 在同一次 infra-up 里就会跑一遍;单独止血用 -Command infra-kafka-topics)。
+			# --ignore-not-found:全新集群 / 已经切过的集群这里是 no-op。
+			Invoke-Kubectl -Args @("delete", "deployment", "kafka", "-n", $InfraNamespace, "--ignore-not-found")
 		}
 
 		if ($manifest -eq "mysql.yaml") {
@@ -2100,7 +2596,24 @@ function Apply-Infra {
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $manifestContent
 	}
 
+	# data_service 审计 topic 预建 Job:必须在任何 zone(scene)之前落地,见 Apply-KafkaTopicInitJob 注释。
+	# 放在五个 infra manifest 之后即可:Job 自己会等 broker 可达,不要求 kafka Deployment 已 Ready。
+	Apply-KafkaTopicInitJob
+
 	Write-Host "Shared infrastructure deployed: namespace=$InfraNamespace"
+
+	if ($WaitReady) {
+		# 全局池 match 起来第一件事就是注册 etcd;-WaitReady 下先等 etcd 3 副本成 quorum 再拉它。
+		Wait-ForStatefulSetReady -Namespace $InfraNamespace -StatefulSetName "etcd"
+		# kafka 也是 StatefulSet + PVC(R06)。先等它 Ready 再等下面的预建 Job:
+		# Job 自己会等 broker 可达,但等到的超时长得像"契约错误";先在这里失败,
+		# 报的是 PVC Pending / 镜像拉不动这类真正的原因。
+		Wait-ForStatefulSetReady -Namespace $InfraNamespace -StatefulSetName "kafka"
+		# 审计 topic 必须在 scene 产出第一条消息之前按契约建好。-WaitReady 下等 Job Complete,
+		# all-up 里随后的 zone 就一定晚于它;不带 -WaitReady 时 zone-up 之前要自己核对
+		# `kubectl -n <infra> get job kafka-topic-init` 已 Complete(README「Kafka 审计 topic 预建」)。
+		Wait-ForJobComplete -Namespace $InfraNamespace -JobName "kafka-topic-init"
+	}
 
 	# 全局池服务(match)与基础设施同命运:一份、放 infra namespace、所有 zone 共用
 	Apply-GlobalGoSvcManifests
@@ -2113,7 +2626,12 @@ function Remove-Infra {
 
 function Show-InfraStatus {
 	Write-Host "Shared infrastructure status for namespace=$InfraNamespace"
-	Invoke-Kubectl -Args @("get", "deploy,po,svc,cm", "-n", $InfraNamespace) -AllowFailure
+	# sts / pvc / pdb:etcd(3 副本)与 kafka(单 broker)都是 StatefulSet,只看 deploy 会漏掉它们;
+	# PVC Pending(集群没有默认 StorageClass)是这两个起不来的头号原因,pdb 则解释为什么
+	# `kubectl drain` 会挂在 etcd / kafka 上(kafka 的 PDB 是 minAvailable: 1,不允许自愿驱逐)。
+	# job:kafka-topic-init(审计 + 控制面命令 topic 预建)的 COMPLETIONS 0/1 = 分区契约没建成,
+	# scene 起来前必须先看它。
+	Invoke-Kubectl -Args @("get", "deploy,sts,po,pvc,pdb,job,svc,cm", "-n", $InfraNamespace) -AllowFailure
 }
 
 function Resolve-ZonesConfigPath {
@@ -2129,7 +2647,7 @@ Apply-OpsProfileDefaults
 Apply-KafkaProfileDefaults
 Show-ExposureProfileWarning
 
-Write-Host "Release: profile=$ReleaseProfile image=$NodeImage pullPolicy=$ImagePullPolicy go_tag=$GoSvcTag java_tag=$JavaSvcTag"
+Write-Host "Release: profile=$ReleaseProfile image=$NodeImage pullPolicy=$ImagePullPolicy go_tag=$GoSvcTag java_tag=$JavaSvcTag cluster_id=$ClusterId"
 if ($script:ReleaseStamp.Ok -and $script:ReleaseStamp.Dirty) {
 	Write-Warning "工作树是脏的(git status 非空),镜像 tag 带 -dirty 后缀。生产发布(-ReleaseProfile prod)会拒绝这种 tag。"
 }
@@ -2151,8 +2669,16 @@ switch ($Command) {
 	"infra-status" {
 		Show-InfraStatus
 	}
+	"infra-kafka-topics" {
+		# 止血路径:切到 StatefulSet+PVC 之后 / infra-down 删过 PVC 之后 / 手工删过 topic 之后,
+		# topic 都是空的,scene 产出第一条消息之前必须重跑预建,否则会被 auto-create 成 1 分区。
+		Apply-KafkaTopicInitJob
+		if ($WaitReady) {
+			Wait-ForJobComplete -Namespace $InfraNamespace -JobName "kafka-topic-init"
+		}
+	}
 	"zone-up" {
-		Apply-Zone -CurrentZoneName $ZoneName -CurrentZoneId $ZoneId -CurrentCentreReplicas $CentreReplicas -CurrentGateReplicas $GateReplicas -CurrentSceneReplicas $SceneReplicas -CurrentSceneWorldReplicas $SceneWorldReplicas -CurrentSceneInstanceReplicas $SceneInstanceReplicas
+		Apply-Zone -CurrentZoneName $ZoneName -CurrentZoneId $ZoneId -CurrentClusterId $ClusterId -CurrentCentreReplicas $CentreReplicas -CurrentGateReplicas $GateReplicas -CurrentSceneReplicas $SceneReplicas -CurrentSceneWorldReplicas $SceneWorldReplicas -CurrentSceneInstanceReplicas $SceneInstanceReplicas
 	}
 	"zone-down" {
 		Remove-Zone -CurrentZoneName $ZoneName
@@ -2167,7 +2693,8 @@ switch ($Command) {
 		$zonesPath = Resolve-ZonesConfigPath
 		$zones = Get-ZonesFromJson -Path $zonesPath
 		foreach ($zone in $zones) {
-			Apply-Zone -CurrentZoneName $zone.name -CurrentZoneId $zone.zoneId -CurrentCentreReplicas $zone.centre -CurrentGateReplicas $zone.gate -CurrentSceneReplicas $zone.scene -CurrentSceneWorldReplicas $zone.scene_world -CurrentSceneInstanceReplicas $zone.scene_instance -CurrentSceneLegacyExplicit $zone.scene_legacy_explicit
+			# zones 配置里没有 cluster:它是集群常量,所有 zone 与 infra 阶段共用命令行 -ClusterId。
+			Apply-Zone -CurrentZoneName $zone.name -CurrentZoneId $zone.zoneId -CurrentClusterId $ClusterId -CurrentCentreReplicas $zone.centre -CurrentGateReplicas $zone.gate -CurrentSceneReplicas $zone.scene -CurrentSceneWorldReplicas $zone.scene_world -CurrentSceneInstanceReplicas $zone.scene_instance -CurrentSceneLegacyExplicit $zone.scene_legacy_explicit
 		}
 	}
 	"all-down" {

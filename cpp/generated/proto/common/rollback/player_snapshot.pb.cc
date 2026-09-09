@@ -390,11 +390,11 @@ constexpr PlayerSnapshotEntry::ParseTableT_ PlayerSnapshotEntry::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
+      9,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -404,10 +404,7 @@ constexpr PlayerSnapshotEntry::ParseTableT_ PlayerSnapshotEntry::InternalGenerat
       ::_pbi::TcParser::GetTable<::PlayerSnapshotEntry>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint64 total_bytes = 8;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerSnapshotEntry, _impl_.total_bytes_), 6>(),
-       {64, 6, 0,
-        PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.total_bytes_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 snapshot_id = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerSnapshotEntry, _impl_.snapshot_id_), 3>(),
        {8, 3, 0,
@@ -421,8 +418,8 @@ constexpr PlayerSnapshotEntry::ParseTableT_ PlayerSnapshotEntry::InternalGenerat
        {24, 5, 0,
         PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.snapshot_time_)}},
       // .SnapshotTrigger trigger = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerSnapshotEntry, _impl_.trigger_), 7>(),
-       {32, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerSnapshotEntry, _impl_.trigger_), 6>(),
+       {32, 6, 0,
         PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.trigger_)}},
       // bytes player_database_blob = 5;
       {::_pbi::TcParser::FastBS1,
@@ -436,6 +433,20 @@ constexpr PlayerSnapshotEntry::ParseTableT_ PlayerSnapshotEntry::InternalGenerat
       {::_pbi::TcParser::FastUS1,
        {58, 2, 0,
         PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.schema_version_)}},
+      // uint64 total_bytes = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerSnapshotEntry, _impl_.total_bytes_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.total_bytes_)}},
+      // uint32 zone_id = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerSnapshotEntry, _impl_.zone_id_), 7>(),
+       {72, 7, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.zone_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -446,7 +457,7 @@ constexpr PlayerSnapshotEntry::ParseTableT_ PlayerSnapshotEntry::InternalGenerat
       // uint64 snapshot_time = 3;
       {PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.snapshot_time_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // .SnapshotTrigger trigger = 4;
-      {PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.trigger_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      {PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.trigger_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // bytes player_database_blob = 5;
       {PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.player_database_blob_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
       // bytes player_database_1_blob = 6;
@@ -454,7 +465,9 @@ constexpr PlayerSnapshotEntry::ParseTableT_ PlayerSnapshotEntry::InternalGenerat
       // string schema_version = 7;
       {PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.schema_version_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // uint64 total_bytes = 8;
-      {PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.total_bytes_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.total_bytes_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 zone_id = 9;
+      {PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.zone_id_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -482,8 +495,9 @@ inline constexpr PlayerSnapshotEntry::Impl_::Impl_(
         snapshot_id_{::uint64_t{0u}},
         player_id_{::uint64_t{0u}},
         snapshot_time_{::uint64_t{0u}},
-        total_bytes_{::uint64_t{0u}},
-        trigger_{static_cast< ::SnapshotTrigger >(0)} {}
+        trigger_{static_cast< ::SnapshotTrigger >(0)},
+        zone_id_{0u},
+        total_bytes_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr PlayerSnapshotEntry::PlayerSnapshotEntry(::_pbi::ConstantInitialized,
@@ -1080,7 +1094,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerSnapshotEntry, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerSnapshotEntry, _impl_.snapshot_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerSnapshotEntry, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerSnapshotEntry, _impl_.snapshot_time_),
@@ -1089,14 +1103,16 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PlayerSnapshotEntry, _impl_.player_database_1_blob_),
         PROTOBUF_FIELD_OFFSET(::PlayerSnapshotEntry, _impl_.schema_version_),
         PROTOBUF_FIELD_OFFSET(::PlayerSnapshotEntry, _impl_.total_bytes_),
+        PROTOBUF_FIELD_OFFSET(::PlayerSnapshotEntry, _impl_.zone_id_),
         3,
         4,
         5,
-        7,
+        6,
         0,
         1,
         2,
-        6,
+        8,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ListSnapshotsRequest, _impl_._has_bits_),
         7, // hasbit index offset
@@ -1153,11 +1169,11 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::PlayerSnapshotEntry)},
-        {19, sizeof(::ListSnapshotsRequest)},
-        {30, sizeof(::ListSnapshotsResponse)},
-        {35, sizeof(::SnapshotDiffItem)},
-        {48, sizeof(::SnapshotDiffCurrency)},
-        {59, sizeof(::SnapshotDiff)},
+        {21, sizeof(::ListSnapshotsRequest)},
+        {32, sizeof(::ListSnapshotsResponse)},
+        {37, sizeof(::SnapshotDiffItem)},
+        {50, sizeof(::SnapshotDiffCurrency)},
+        {61, sizeof(::SnapshotDiff)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1171,37 +1187,38 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2frollback_2fplayer_5fsnapshot_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n+proto/common/rollback/player_snapshot."
-    "proto\"\342\001\n\023PlayerSnapshotEntry\022\023\n\013snapsho"
+    "proto\"\363\001\n\023PlayerSnapshotEntry\022\023\n\013snapsho"
     "t_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\025\n\rsnapsho"
     "t_time\030\003 \001(\004\022!\n\007trigger\030\004 \001(\0162\020.Snapshot"
     "Trigger\022\034\n\024player_database_blob\030\005 \001(\014\022\036\n"
     "\026player_database_1_blob\030\006 \001(\014\022\026\n\016schema_"
-    "version\030\007 \001(\t\022\023\n\013total_bytes\030\010 \001(\004\"^\n\024Li"
-    "stSnapshotsRequest\022\021\n\tplayer_id\030\001 \001(\004\022\022\n"
-    "\ntime_start\030\002 \001(\004\022\020\n\010time_end\030\003 \001(\004\022\r\n\005l"
-    "imit\030\004 \001(\r\"@\n\025ListSnapshotsResponse\022\'\n\ts"
-    "napshots\030\001 \003(\0132\024.PlayerSnapshotEntry\"\205\001\n"
-    "\020SnapshotDiffItem\022\021\n\titem_uuid\030\001 \001(\004\022\026\n\016"
-    "item_config_id\030\002 \001(\r\022\025\n\rquantity_diff\030\003 "
-    "\001(\005\022\033\n\023has_transfer_record\030\004 \001(\010\022\022\n\nrest"
-    "orable\030\005 \001(\010\"m\n\024SnapshotDiffCurrency\022\025\n\r"
-    "currency_type\030\001 \001(\r\022\r\n\005delta\030\002 \001(\003\022\033\n\023ha"
-    "s_transfer_record\030\003 \001(\010\022\022\n\nrestorable\030\004 "
-    "\001(\010\"\203\001\n\014SnapshotDiff\022\023\n\013snapshot_id\030\001 \001("
-    "\004\022\021\n\tplayer_id\030\002 \001(\004\022 \n\005items\030\003 \003(\0132\021.Sn"
-    "apshotDiffItem\022)\n\ncurrencies\030\004 \003(\0132\025.Sna"
-    "pshotDiffCurrency*\265\001\n\017SnapshotTrigger\022\024\n"
-    "\020SNAPSHOT_UNKNOWN\020\000\022\022\n\016SNAPSHOT_LOGIN\020\001\022"
-    "\023\n\017SNAPSHOT_LOGOUT\020\002\022\025\n\021SNAPSHOT_PERIODI"
-    "C\020\003\022\026\n\022SNAPSHOT_PRE_TRADE\020\004\022\034\n\030SNAPSHOT_"
-    "PRE_MAINTENANCE\020\005\022\026\n\022SNAPSHOT_GM_MANUAL\020"
-    "\006B\021Z\017common/rollbackb\006proto3"
+    "version\030\007 \001(\t\022\023\n\013total_bytes\030\010 \001(\004\022\017\n\007zo"
+    "ne_id\030\t \001(\r\"^\n\024ListSnapshotsRequest\022\021\n\tp"
+    "layer_id\030\001 \001(\004\022\022\n\ntime_start\030\002 \001(\004\022\020\n\010ti"
+    "me_end\030\003 \001(\004\022\r\n\005limit\030\004 \001(\r\"@\n\025ListSnaps"
+    "hotsResponse\022\'\n\tsnapshots\030\001 \003(\0132\024.Player"
+    "SnapshotEntry\"\205\001\n\020SnapshotDiffItem\022\021\n\tit"
+    "em_uuid\030\001 \001(\004\022\026\n\016item_config_id\030\002 \001(\r\022\025\n"
+    "\rquantity_diff\030\003 \001(\005\022\033\n\023has_transfer_rec"
+    "ord\030\004 \001(\010\022\022\n\nrestorable\030\005 \001(\010\"m\n\024Snapsho"
+    "tDiffCurrency\022\025\n\rcurrency_type\030\001 \001(\r\022\r\n\005"
+    "delta\030\002 \001(\003\022\033\n\023has_transfer_record\030\003 \001(\010"
+    "\022\022\n\nrestorable\030\004 \001(\010\"\203\001\n\014SnapshotDiff\022\023\n"
+    "\013snapshot_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022 \n"
+    "\005items\030\003 \003(\0132\021.SnapshotDiffItem\022)\n\ncurre"
+    "ncies\030\004 \003(\0132\025.SnapshotDiffCurrency*\265\001\n\017S"
+    "napshotTrigger\022\024\n\020SNAPSHOT_UNKNOWN\020\000\022\022\n\016"
+    "SNAPSHOT_LOGIN\020\001\022\023\n\017SNAPSHOT_LOGOUT\020\002\022\025\n"
+    "\021SNAPSHOT_PERIODIC\020\003\022\026\n\022SNAPSHOT_PRE_TRA"
+    "DE\020\004\022\034\n\030SNAPSHOT_PRE_MAINTENANCE\020\005\022\026\n\022SN"
+    "APSHOT_GM_MANUAL\020\006B\021Z\017common/rollbackb\006p"
+    "roto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2frollback_2fplayer_5fsnapshot_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2frollback_2fplayer_5fsnapshot_2eproto = {
     false,
     false,
-    1028,
+    1045,
     descriptor_table_protodef_proto_2fcommon_2frollback_2fplayer_5fsnapshot_2eproto,
     "proto/common/rollback/player_snapshot.proto",
     &descriptor_table_proto_2fcommon_2frollback_2fplayer_5fsnapshot_2eproto_once,
@@ -1260,9 +1277,9 @@ PlayerSnapshotEntry::PlayerSnapshotEntry(
                offsetof(Impl_, snapshot_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, snapshot_id_),
-           offsetof(Impl_, trigger_) -
+           offsetof(Impl_, total_bytes_) -
                offsetof(Impl_, snapshot_id_) +
-               sizeof(Impl_::trigger_));
+               sizeof(Impl_::total_bytes_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerSnapshotEntry)
 }
@@ -1279,9 +1296,9 @@ inline void PlayerSnapshotEntry::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, snapshot_id_),
            0,
-           offsetof(Impl_, trigger_) -
+           offsetof(Impl_, total_bytes_) -
                offsetof(Impl_, snapshot_id_) +
-               sizeof(Impl_::trigger_));
+               sizeof(Impl_::total_bytes_));
 }
 PlayerSnapshotEntry::~PlayerSnapshotEntry() {
   // @@protoc_insertion_point(destructor:PlayerSnapshotEntry)
@@ -1347,9 +1364,10 @@ PROTOBUF_NOINLINE void PlayerSnapshotEntry::Clear() {
   }
   if (BatchCheckHasBit(cached_has_bits, 0x000000f8U)) {
     ::memset(&_impl_.snapshot_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.trigger_) -
-        reinterpret_cast<char*>(&_impl_.snapshot_id_)) + sizeof(_impl_.trigger_));
+        reinterpret_cast<char*>(&_impl_.zone_id_) -
+        reinterpret_cast<char*>(&_impl_.snapshot_id_)) + sizeof(_impl_.zone_id_));
   }
+  _impl_.total_bytes_ = ::uint64_t{0u};
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -1401,7 +1419,7 @@ PROTOBUF_NOINLINE void PlayerSnapshotEntry::Clear() {
   }
 
   // .SnapshotTrigger trigger = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_trigger() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteEnumToArray(
@@ -1436,11 +1454,20 @@ PROTOBUF_NOINLINE void PlayerSnapshotEntry::Clear() {
   }
 
   // uint64 total_bytes = 8;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_total_bytes() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
           8, this_._internal_total_bytes(), target);
+    }
+  }
+
+  // uint32 zone_id = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_zone_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_zone_id(), target);
     }
   }
 
@@ -1512,18 +1539,27 @@ PROTOBUF_NOINLINE void PlayerSnapshotEntry::Clear() {
             this_._internal_snapshot_time());
       }
     }
-    // uint64 total_bytes = 8;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (this_._internal_total_bytes() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
-            this_._internal_total_bytes());
-      }
-    }
     // .SnapshotTrigger trigger = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_trigger() != 0) {
         total_size += 1 +
                       ::_pbi::WireFormatLite::EnumSize(this_._internal_trigger());
+      }
+    }
+    // uint32 zone_id = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_zone_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_zone_id());
+      }
+    }
+  }
+   {
+    // uint64 total_bytes = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_total_bytes() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_total_bytes());
       }
     }
   }
@@ -1588,14 +1624,19 @@ void PlayerSnapshotEntry::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      if (from._internal_total_bytes() != 0) {
-        _this->_impl_.total_bytes_ = from._impl_.total_bytes_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_trigger() != 0) {
         _this->_impl_.trigger_ = from._impl_.trigger_;
       }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_zone_id() != 0) {
+        _this->_impl_.zone_id_ = from._impl_.zone_id_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_total_bytes() != 0) {
+      _this->_impl_.total_bytes_ = from._impl_.total_bytes_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -1621,8 +1662,8 @@ void PlayerSnapshotEntry::InternalSwap(PlayerSnapshotEntry* PROTOBUF_RESTRICT PR
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.player_database_1_blob_, &other->_impl_.player_database_1_blob_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.schema_version_, &other->_impl_.schema_version_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.trigger_)
-      + sizeof(PlayerSnapshotEntry::_impl_.trigger_)
+      PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.total_bytes_)
+      + sizeof(PlayerSnapshotEntry::_impl_.total_bytes_)
       - PROTOBUF_FIELD_OFFSET(PlayerSnapshotEntry, _impl_.snapshot_id_)>(
           reinterpret_cast<char*>(&_impl_.snapshot_id_),
           reinterpret_cast<char*>(&other->_impl_.snapshot_id_));

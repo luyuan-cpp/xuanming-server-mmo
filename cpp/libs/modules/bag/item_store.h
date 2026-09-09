@@ -148,11 +148,17 @@ public:
                                                      std::size_t maxStackSize);
 
     // ── guid 发号(实例身份)────────────────────────────────────────
+    // 唯一发号源 = item 种类的号段实例(tlsGuidSegmentRegistry.Get(GuidKind::kItem));
+    // 拿不到号(未启用 / 两段耗尽且续段未到)返回 kInvalidGuid,**没有** snowflake 回退。
     [[nodiscard]] static Guid MintGuid();
 
-    // 发号器当前能否铸出合法 guid(未被 fence 且本线程已 OnNodeStart)。
+    // 发号源当前能否铸出合法 guid(号段:手里有号)。
     // 铸号型写入必须在**改动任何状态之前**用它 fail-closed,见 .cpp 注释。
-    [[nodiscard]] static bool CanMintGuid();
+    [[nodiscard]] static bool CanMintGuid() { return CanMintGuids(1); }
+
+    // 同上,但要求一次能铸出 count 个。号段是有限库存:段尾只剩 k 个而下一段又没到时,
+    // 一批要 n > k 个号的入包会在循环中途铸出哨兵、留下半批 —— 整批预检必须按需求量问。
+    [[nodiscard]] static bool CanMintGuids(std::size_t count);
 
     [[nodiscard]] static bool IsInvalidGuid(const ItemComp &item);
 

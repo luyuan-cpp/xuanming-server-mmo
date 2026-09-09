@@ -7,6 +7,8 @@ import (
 
 	kafkago "github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
+
+	"shared/kafkacmd"
 )
 
 // PlayerGateInfo holds the minimum session info needed to route a push to the right Gate.
@@ -19,22 +21,28 @@ type PlayerGateInfo struct {
 
 // GateCommandBuilder abstracts GateCommand + event payload construction.
 // Each service provides its own implementation using its local proto imports.
+//
+// 每个方法都多收一个 gateNodeID:控制面命令改成"一个类型一个 topic + 按
+// node_id % P 定分区"之后(docs/design/control-plane-topic-partitioning-20260908.md),
+// 同一个分区上坐着几百个 gate,GateCommand.target_gate_id 就从"可填可不填的冗余"
+// 变成了消费端的**第一级过滤**。留 0 等于把便宜的数字比对关掉,只剩每条消息一次
+// 字符串比对(target_instance_id)。
 type GateCommandBuilder interface {
 	// BuildPushCommand builds a serialized GateCommand wrapping a PushToPlayerEvent.
-	BuildPushCommand(sessionID uint32, gateInstanceID string,
+	BuildPushCommand(gateNodeID uint32, sessionID uint32, gateInstanceID string,
 		messageID uint32, body []byte) ([]byte, error)
 
 	// BuildBroadcastCommand builds a serialized GateCommand wrapping a BroadcastToPlayersEvent.
 	// When len(sessionList) >= BitmapThreshold and bitmap is smaller, bitmap encoding is used automatically.
-	BuildBroadcastCommand(sessionList []uint32, gateInstanceID string,
+	BuildBroadcastCommand(gateNodeID uint32, sessionList []uint32, gateInstanceID string,
 		messageID uint32, body []byte) ([]byte, error)
 
 	// BuildBroadcastToSceneCommand builds a serialized GateCommand wrapping a BroadcastToSceneEvent.
-	BuildBroadcastToSceneCommand(sceneID uint64, gateInstanceID string,
+	BuildBroadcastToSceneCommand(gateNodeID uint32, sceneID uint64, gateInstanceID string,
 		messageID uint32, body []byte) ([]byte, error)
 
 	// BuildBroadcastToAllCommand builds a serialized GateCommand wrapping a BroadcastToAllEvent.
-	BuildBroadcastToAllCommand(gateInstanceID string,
+	BuildBroadcastToAllCommand(gateNodeID uint32, gateInstanceID string,
 		messageID uint32, body []byte) ([]byte, error)
 }
 
@@ -42,7 +50,7 @@ type GateCommandBuilder interface {
 func PushToPlayer(ctx context.Context, w *kafkago.Writer, builder GateCommandBuilder,
 	info PlayerGateInfo, messageID uint32, body []byte,
 ) error {
-	// 不变量 2(CLAUDE.md §7):发往 gate-{id} topic 的命令必须带目标实例 uuid,
+	// 不变量 2(CLAUDE.md §7):发往 gate 的命令必须带目标实例 uuid,
 	// 空值 = 消费端 ValidateCommandTarget 的防僵尸过滤被关闭 —— gate 业务 node_id
 	// 会被回收复用,老 gate 未彻底退出时会把发给新 gate 的命令一并消费。
 	// 这里是所有 Go 服务推送的唯一共享收口,必须 fail-closed。
@@ -50,16 +58,22 @@ func PushToPlayer(ctx context.Context, w *kafkago.Writer, builder GateCommandBui
 		return fmt.Errorf("push to player %d rejected: empty gate_instance_id (gate=%s), anti-zombie filtering would be disabled",
 			info.PlayerID, info.GateID)
 	}
-	cmdBytes, err := builder.BuildPushCommand(info.SessionID, info.GateInstanceID, messageID, body)
+	// 拿不到数字节点号就没法算分区,必须 fail-closed:发到 0 号分区只会被
+	// node_id 是 P 的倍数的那些 gate 读到再丢弃,等于静默丢消息。
+	gateNodeID, err := kafkacmd.ParseNodeID(info.GateID)
+	if err != nil {
+		return fmt.Errorf("push to player %d rejected: %w", info.PlayerID, err)
+	}
+	cmdBytes, err := builder.BuildPushCommand(uint32(gateNodeID), info.SessionID, info.GateInstanceID, messageID, body)
 	if err != nil {
 		return fmt.Errorf("build push command: %w", err)
 	}
 
-	topic := fmt.Sprintf("gate-%s", info.GateID)
 	return w.WriteMessages(ctx, kafkago.Message{
-		Topic: topic,
-		Key:   []byte(strconv.FormatUint(info.PlayerID, 10)),
-		Value: cmdBytes,
+		Topic:     kafkacmd.GateCommandTopic(),
+		Partition: kafkacmd.GateCommandPartition(gateNodeID),
+		Key:       []byte(strconv.FormatUint(info.PlayerID, 10)),
+		Value:     cmdBytes,
 	})
 }
 
@@ -101,22 +115,31 @@ func BroadcastToPlayers(ctx context.Context, w *kafkago.Writer, builder GateComm
 	}
 
 	for _, g := range grouped {
-		cmdBytes, err := builder.BuildBroadcastCommand(g.sessions, g.instanceID, messageID, body)
+		gateNodeID, err := kafkacmd.ParseNodeID(g.gateID)
 		if err != nil {
-			logx.Errorf("BroadcastToPlayers: build command for gate-%s: %v", g.gateID, err)
+			logx.Errorf("BroadcastToPlayers: gate %q dropped: %v", g.gateID, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		cmdBytes, err := builder.BuildBroadcastCommand(uint32(gateNodeID), g.sessions, g.instanceID, messageID, body)
+		if err != nil {
+			logx.Errorf("BroadcastToPlayers: build command for gate %s: %v", g.gateID, err)
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
 
-		topic := fmt.Sprintf("gate-%s", g.gateID)
 		if err := w.WriteMessages(ctx, kafkago.Message{
-			Topic: topic,
-			Key:   []byte(g.gateID),
-			Value: cmdBytes,
+			Topic:     kafkacmd.GateCommandTopic(),
+			Partition: kafkacmd.GateCommandPartition(gateNodeID),
+			Key:       []byte(g.gateID),
+			Value:     cmdBytes,
 		}); err != nil {
-			logx.Errorf("BroadcastToPlayers: send to %s failed: %v", topic, err)
+			logx.Errorf("BroadcastToPlayers: send to gate %s (%s/%d) failed: %v",
+				g.gateID, kafkacmd.GateCommandTopic(), kafkacmd.GateCommandPartition(gateNodeID), err)
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -147,22 +170,31 @@ func BroadcastToScene(ctx context.Context, w *kafkago.Writer, builder GateComman
 			}
 			continue
 		}
-		cmdBytes, err := builder.BuildBroadcastToSceneCommand(sceneID, g.GateInstanceID, messageID, body)
+		gateNodeID, err := kafkacmd.ParseNodeID(g.GateID)
 		if err != nil {
-			logx.Errorf("BroadcastToScene: build command for gate-%s: %v", g.GateID, err)
+			logx.Errorf("BroadcastToScene: gate %q dropped: %v", g.GateID, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		cmdBytes, err := builder.BuildBroadcastToSceneCommand(uint32(gateNodeID), sceneID, g.GateInstanceID, messageID, body)
+		if err != nil {
+			logx.Errorf("BroadcastToScene: build command for gate %s: %v", g.GateID, err)
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
 
-		topic := fmt.Sprintf("gate-%s", g.GateID)
 		if err := w.WriteMessages(ctx, kafkago.Message{
-			Topic: topic,
-			Key:   []byte(g.GateID),
-			Value: cmdBytes,
+			Topic:     kafkacmd.GateCommandTopic(),
+			Partition: kafkacmd.GateCommandPartition(gateNodeID),
+			Key:       []byte(g.GateID),
+			Value:     cmdBytes,
 		}); err != nil {
-			logx.Errorf("BroadcastToScene: send to %s failed: %v", topic, err)
+			logx.Errorf("BroadcastToScene: send to gate %s (%s/%d) failed: %v",
+				g.GateID, kafkacmd.GateCommandTopic(), kafkacmd.GateCommandPartition(gateNodeID), err)
 			if firstErr == nil {
 				firstErr = err
 			}
@@ -185,22 +217,31 @@ func BroadcastToAll(ctx context.Context, w *kafkago.Writer, builder GateCommandB
 			}
 			continue
 		}
-		cmdBytes, err := builder.BuildBroadcastToAllCommand(g.GateInstanceID, messageID, body)
+		gateNodeID, err := kafkacmd.ParseNodeID(g.GateID)
 		if err != nil {
-			logx.Errorf("BroadcastToAll: build command for gate-%s: %v", g.GateID, err)
+			logx.Errorf("BroadcastToAll: gate %q dropped: %v", g.GateID, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		cmdBytes, err := builder.BuildBroadcastToAllCommand(uint32(gateNodeID), g.GateInstanceID, messageID, body)
+		if err != nil {
+			logx.Errorf("BroadcastToAll: build command for gate %s: %v", g.GateID, err)
 			if firstErr == nil {
 				firstErr = err
 			}
 			continue
 		}
 
-		topic := fmt.Sprintf("gate-%s", g.GateID)
 		if err := w.WriteMessages(ctx, kafkago.Message{
-			Topic: topic,
-			Key:   []byte(g.GateID),
-			Value: cmdBytes,
+			Topic:     kafkacmd.GateCommandTopic(),
+			Partition: kafkacmd.GateCommandPartition(gateNodeID),
+			Key:       []byte(g.GateID),
+			Value:     cmdBytes,
 		}); err != nil {
-			logx.Errorf("BroadcastToAll: send to %s failed: %v", topic, err)
+			logx.Errorf("BroadcastToAll: send to gate %s (%s/%d) failed: %v",
+				g.GateID, kafkacmd.GateCommandTopic(), kafkacmd.GateCommandPartition(gateNodeID), err)
 			if firstErr == nil {
 				firstErr = err
 			}

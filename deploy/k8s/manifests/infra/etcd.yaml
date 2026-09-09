@@ -1,8 +1,48 @@
+# etcd:3 副本 StatefulSet + 每 Pod 一块 PVC(docs/design/node-id-overhaul-plan-20260908.md §7 Phase 0.5)。
+#
+# 为什么不再是单副本 Deployment + emptyDir:
+#   - 所有节点 id / 发号槽位都是 etcd lease 绑定的。单副本 etcd 一重启(哪怕只是 Pod 漂移)
+#     全部 lease 消失,每个 C++ / Go 节点都会收到 ownership lost → 自 fence 退出。
+#     3 副本 + PDB minAvailable=2 之后,删任一 etcd Pod 集群仍有 quorum,lease 不丢。
+#   - emptyDir 随 Pod 消失;PVC 让成员重启后以同一身份(同名、同数据目录)回到集群,
+#     不需要 member add / remove 编排。
+#
+# 验收(§7 Phase 0.5):`kubectl -n <infra> delete pod etcd-1` 之后,任何 gate / scene / login 都不应 fence。
+#
+# 所有 __INFRA_NAMESPACE__ 占位由 k8s_deploy.ps1 Apply-Infra 在 apply 前替换成 -InfraNamespace。
+# 首次从旧单副本切换的注意事项见 deploy/k8s/README.md「etcd:3 副本 StatefulSet」。
+---
+# 客户端入口。名字必须保持 `etcd`:所有 ConfigMap 里写的地址都是 etcd.<InfraNamespace>:2379
+# (C++ base_deploy_config / 各 Go 服务 / Java gateway),改名等于全量改配置。
+# 只暴露 2379:peer 流量走下面的 headless Service,客户端不该碰 2380。
 apiVersion: v1
 kind: Service
 metadata:
   name: etcd
+  labels:
+    app: etcd
 spec:
+  type: ClusterIP
+  selector:
+    app: etcd
+  ports:
+    - name: client
+      port: 2379
+      targetPort: 2379
+---
+# headless Service:给每个成员一个稳定的 DNS 名 etcd-<n>.etcd-headless.<ns>.svc.cluster.local,
+# ETCD_INITIAL_CLUSTER 就是用这些名字写死的静态成员表。
+# publishNotReadyAddresses 必须为 true:成员在互相找到对方、选出 leader 之前不会 Ready,
+# 而 headless 默认只发布 Ready Pod 的地址 → 三个成员谁都解析不到谁,永远起不来。
+apiVersion: v1
+kind: Service
+metadata:
+  name: etcd-headless
+  labels:
+    app: etcd
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
   selector:
     app: etcd
   ports:
@@ -13,12 +53,31 @@ spec:
       port: 2380
       targetPort: 2380
 ---
-apiVersion: apps/v1
-kind: Deployment
+# 任何时刻至少 2 个成员在线 = 始终有 quorum。节点排空 / 升级时 K8s 据此拒绝同时驱逐两个。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
 metadata:
   name: etcd
 spec:
-  replicas: 1
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: etcd
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: etcd
+  labels:
+    app: etcd
+spec:
+  serviceName: etcd-headless
+  replicas: 3
+  # 必须 Parallel:静态引导的 3 成员集群要 2 个成员同时在线才能选出 leader,任何一个
+  # 单独起来都不会 Ready。默认 OrderedReady 会等 etcd-0 Ready 再建 etcd-1 → 死锁。
+  podManagementPolicy: Parallel
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
       app: etcd
@@ -27,6 +86,25 @@ spec:
       labels:
         app: etcd
     spec:
+      # 尽量把 3 个成员散到不同节点;单节点 kind / minikube 仍能调度(preferred 而非 required)。
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: etcd
+      # bitnami 镜像以 uid 1001 运行。云盘 / 本地盘挂上来的根目录是 root:root 0755,
+      # 不给 fsGroup 的话进程建不了数据目录,起手就 "permission denied"(emptyDir 时代
+      # 没这问题,因为 kubelet 建 emptyDir 是 0777)。
+      securityContext:
+        runAsUser: 1001
+        runAsNonRoot: true
+        fsGroup: 1001
+      # 给 etcd 留出 WAL fsync / snapshot 的时间;bitnami 镜像收到 SIGTERM 会正常关闭。
+      terminationGracePeriodSeconds: 30
       containers:
         - name: etcd
           # bitnami/etcd 的 tag 已全部下架(Docker Hub 拉取 404,2025-09 Bitnami 收编
@@ -36,29 +114,87 @@ spec:
           image: bitnamilegacy/etcd:latest
           imagePullPolicy: IfNotPresent
           env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # 成员名 = Pod 名(etcd-0 / etcd-1 / etcd-2),必须与 ETCD_INITIAL_CLUSTER 里的 key 一一对应。
+            - name: ETCD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
             - name: ALLOW_NONE_AUTHENTICATION
               value: "yes"
+            - name: ETCD_DATA_DIR
+              value: /bitnami/etcd/data
             - name: ETCD_LISTEN_CLIENT_URLS
               value: "http://0.0.0.0:2379"
+            - name: ETCD_LISTEN_PEER_URLS
+              value: "http://0.0.0.0:2380"
+            # 广播地址用每个 Pod 自己的 headless DNS 名,不再是 Service 名:客户端拿到
+            # 成员列表后是逐个成员直连的,三个成员都广播 etcd.<ns> 会让它们看起来是同一个。
             # __INFRA_NAMESPACE__ 由 k8s_deploy.ps1 Apply-Infra 在 apply 前替换成
             # -InfraNamespace 的值(所有 infra manifest 共用同一占位),以前这里写死
             # mmorpg-infra,换 namespace 部署时 etcd 会广播一个不存在的地址。
             - name: ETCD_ADVERTISE_CLIENT_URLS
-              value: "http://etcd.__INFRA_NAMESPACE__.svc.cluster.local:2379"
-            - name: ETCD_LISTEN_PEER_URLS
-              value: "http://0.0.0.0:2380"
+              value: "http://$(POD_NAME).etcd-headless.__INFRA_NAMESPACE__.svc.cluster.local:2379"
             - name: ETCD_INITIAL_ADVERTISE_PEER_URLS
-              value: "http://0.0.0.0:2380"
+              value: "http://$(POD_NAME).etcd-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380"
+            # 静态成员表。三个 name 必须与 StatefulSet 副本名一致;只在数据目录为空
+            # (首次引导)时生效,PVC 里已有数据的成员重启会忽略 initial-* 参数,直接以
+            # 原身份回到集群 —— 这正是用 PVC 而不是 emptyDir 的原因。
             - name: ETCD_INITIAL_CLUSTER
-              value: "default=http://0.0.0.0:2380"
+              value: "etcd-0=http://etcd-0.etcd-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380,etcd-1=http://etcd-1.etcd-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380,etcd-2=http://etcd-2.etcd-headless.__INFRA_NAMESPACE__.svc.cluster.local:2380"
+            - name: ETCD_INITIAL_CLUSTER_STATE
+              value: "new"
+            # 引导令牌:防止两套同名 etcd(比如两个 namespace 各一套)误把对方当成员。
+            - name: ETCD_INITIAL_CLUSTER_TOKEN
+              value: "mmorpg-etcd-__INFRA_NAMESPACE__"
           ports:
             - containerPort: 2379
               name: client
             - containerPort: 2380
               name: peer
+          # readiness 用线性一致的 /health:只有能服务一致读(有 leader、在 quorum 内)的
+          # 成员才进 Service `etcd` 的 endpoint,客户端不会被路由到掉队成员上。
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 2379
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # liveness 用 serializable=true(只看本成员进程活着,不要求 quorum):
+          # 否则集群一旦暂时失去 quorum,三个成员的 liveness 会同时失败、同时被重启,
+          # 重启本身又拖慢 quorum 恢复。不认识该参数的老版本 etcd 会退化成普通 /health
+          # (只是保护弱一点,不会误报)。阈值刻意给宽:重启是最后手段。
+          livenessProbe:
+            httpGet:
+              path: /health?serializable=true
+              port: 2379
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
           volumeMounts:
+            # 挂在 /bitnami/etcd(与 bitnami helm chart 一致),数据目录是其下的 data/。
             - name: etcd-data
-              mountPath: /bitnami/etcd/data
-      volumes:
-        - name: etcd-data
-          emptyDir: {}
+              mountPath: /bitnami/etcd
+  # 每个成员一块盘。不写 storageClassName = 用集群默认 StorageClass(kind 的 local-path、
+  # 云上的默认盘)。8Gi 对本项目的 key 量(节点注册、lease、发号水位、killswitch)是大冗余;
+  # 真正要盯的是 etcd 自身 2GB 默认 quota 与 compaction,不是 PVC 大小。
+  # 注意:删除 StatefulSet **不会**删这些 PVC(删 namespace 才会)。infra-down 是删 namespace,
+  # 所以 infra-down → infra-up 之后是一套全新的空 etcd。
+  volumeClaimTemplates:
+    - metadata:
+        name: etcd-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 8Gi

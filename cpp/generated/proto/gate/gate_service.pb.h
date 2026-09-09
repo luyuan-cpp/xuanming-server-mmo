@@ -927,6 +927,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToPlayersRequest final : p
   // accessors -------------------------------------------------------
   enum : int {
     kSessionListFieldNumber = 1,
+    kPlayerListFieldNumber = 5,
     kSessionBitmapFieldNumber = 4,
     kMessageContentFieldNumber = 2,
     kSessionBitmapBaseFieldNumber = 3,
@@ -949,6 +950,26 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToPlayersRequest final : p
   private:
   const ::google::protobuf::RepeatedField<::uint32_t>& _internal_session_list() const;
   ::google::protobuf::RepeatedField<::uint32_t>* PROTOBUF_NONNULL _internal_mutable_session_list();
+
+  public:
+  // repeated uint64 player_list = 5;
+  [[nodiscard]] int player_list_size()
+      const;
+  private:
+  int _internal_player_list_size() const;
+
+  public:
+  void clear_player_list() ;
+  [[nodiscard]] ::uint64_t player_list(int index) const;
+  void set_player_list(int index, ::uint64_t value);
+  void add_player_list(::uint64_t value);
+  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& player_list()
+      const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_player_list();
+
+  private:
+  const ::google::protobuf::RepeatedField<::uint64_t>& _internal_player_list() const;
+  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_player_list();
 
   public:
   // bytes session_bitmap = 4;
@@ -996,7 +1017,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToPlayersRequest final : p
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1027,6 +1048,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BroadcastToPlayersRequest final : p
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::RepeatedField<::uint32_t> session_list_;
     ::google::protobuf::internal::CachedSize _session_list_cached_byte_size_;
+    ::google::protobuf::RepeatedField<::uint64_t> player_list_;
+    ::google::protobuf::internal::CachedSize _player_list_cached_byte_size_;
     ::google::protobuf::internal::ArenaStringPtr session_bitmap_;
     ::MessageContent* PROTOBUF_NULLABLE message_content_;
     ::uint32_t session_bitmap_base_;
@@ -1599,7 +1622,7 @@ BroadcastToPlayersRequest::_internal_mutable_session_list() {
 
 // .MessageContent message_content = 2;
 inline bool BroadcastToPlayersRequest::has_message_content() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
   PROTOBUF_ASSUME(!value || _impl_.message_content_ != nullptr);
   return value;
 }
@@ -1620,16 +1643,16 @@ inline void BroadcastToPlayersRequest::unsafe_arena_set_allocated_message_conten
   }
   _impl_.message_content_ = reinterpret_cast<::MessageContent*>(value);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
   // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BroadcastToPlayersRequest.message_content)
 }
 inline ::MessageContent* PROTOBUF_NULLABLE BroadcastToPlayersRequest::release_message_content() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::MessageContent* released = _impl_.message_content_;
   _impl_.message_content_ = nullptr;
   if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
@@ -1649,7 +1672,7 @@ inline ::MessageContent* PROTOBUF_NULLABLE BroadcastToPlayersRequest::unsafe_are
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BroadcastToPlayersRequest.message_content)
 
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::MessageContent* temp = _impl_.message_content_;
   _impl_.message_content_ = nullptr;
   return temp;
@@ -1664,7 +1687,7 @@ inline ::MessageContent* PROTOBUF_NONNULL BroadcastToPlayersRequest::_internal_m
 }
 inline ::MessageContent* PROTOBUF_NONNULL BroadcastToPlayersRequest::mutable_message_content()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   ::MessageContent* _msg = _internal_mutable_message_content();
   // @@protoc_insertion_point(field_mutable:BroadcastToPlayersRequest.message_content)
   return _msg;
@@ -1681,9 +1704,9 @@ inline void BroadcastToPlayersRequest::set_allocated_message_content(::MessageCo
     if (message_arena != submessage_arena) {
       value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
     }
-    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
   }
 
   _impl_.message_content_ = reinterpret_cast<::MessageContent*>(value);
@@ -1694,7 +1717,7 @@ inline void BroadcastToPlayersRequest::set_allocated_message_content(::MessageCo
 inline void BroadcastToPlayersRequest::clear_session_bitmap_base() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_bitmap_base_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t BroadcastToPlayersRequest::session_bitmap_base() const {
   // @@protoc_insertion_point(field_get:BroadcastToPlayersRequest.session_bitmap_base)
@@ -1702,7 +1725,7 @@ inline ::uint32_t BroadcastToPlayersRequest::session_bitmap_base() const {
 }
 inline void BroadcastToPlayersRequest::set_session_bitmap_base(::uint32_t value) {
   _internal_set_session_bitmap_base(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:BroadcastToPlayersRequest.session_bitmap_base)
 }
 inline ::uint32_t BroadcastToPlayersRequest::_internal_session_bitmap_base() const {
@@ -1718,7 +1741,7 @@ inline void BroadcastToPlayersRequest::_internal_set_session_bitmap_base(::uint3
 inline void BroadcastToPlayersRequest::clear_session_bitmap() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.session_bitmap_.ClearToEmpty();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline const ::std::string& BroadcastToPlayersRequest::session_bitmap() const
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
@@ -1728,13 +1751,13 @@ inline const ::std::string& BroadcastToPlayersRequest::session_bitmap() const
 template <typename Arg_, typename... Args_>
 PROTOBUF_ALWAYS_INLINE void BroadcastToPlayersRequest::set_session_bitmap(Arg_&& arg, Args_... args) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   _impl_.session_bitmap_.SetBytes(static_cast<Arg_&&>(arg), args..., GetArena());
   // @@protoc_insertion_point(field_set:BroadcastToPlayersRequest.session_bitmap)
 }
 inline ::std::string* PROTOBUF_NONNULL BroadcastToPlayersRequest::mutable_session_bitmap()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   ::std::string* _s = _internal_mutable_session_bitmap();
   // @@protoc_insertion_point(field_mutable:BroadcastToPlayersRequest.session_bitmap)
   return _s;
@@ -1754,10 +1777,10 @@ inline ::std::string* PROTOBUF_NONNULL BroadcastToPlayersRequest::_internal_muta
 inline ::std::string* PROTOBUF_NULLABLE BroadcastToPlayersRequest::release_session_bitmap() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   // @@protoc_insertion_point(field_release:BroadcastToPlayersRequest.session_bitmap)
-  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
     return nullptr;
   }
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   auto* released = _impl_.session_bitmap_.Release();
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
     _impl_.session_bitmap_.Set("", GetArena());
@@ -1767,15 +1790,66 @@ inline ::std::string* PROTOBUF_NULLABLE BroadcastToPlayersRequest::release_sessi
 inline void BroadcastToPlayersRequest::set_allocated_session_bitmap(::std::string* PROTOBUF_NULLABLE value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (value != nullptr) {
-    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   } else {
-    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
   }
   _impl_.session_bitmap_.SetAllocated(value, GetArena());
   if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.session_bitmap_.IsDefault()) {
     _impl_.session_bitmap_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:BroadcastToPlayersRequest.session_bitmap)
+}
+
+// repeated uint64 player_list = 5;
+inline int BroadcastToPlayersRequest::_internal_player_list_size() const {
+  return _internal_player_list().size();
+}
+inline int BroadcastToPlayersRequest::player_list_size() const {
+  return _internal_player_list_size();
+}
+inline void BroadcastToPlayersRequest::clear_player_list() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_list_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t BroadcastToPlayersRequest::player_list(int index) const {
+  // @@protoc_insertion_point(field_get:BroadcastToPlayersRequest.player_list)
+  return _internal_player_list().Get(index);
+}
+inline void BroadcastToPlayersRequest::set_player_list(int index, ::uint64_t value) {
+  _internal_mutable_player_list()->Set(index, value);
+  // @@protoc_insertion_point(field_set:BroadcastToPlayersRequest.player_list)
+}
+inline void BroadcastToPlayersRequest::add_player_list(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _internal_mutable_player_list()
+      ->InternalAddWithArena<const ::google::protobuf::MessageLite*>(
+          internal_visibility(), this, value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:BroadcastToPlayersRequest.player_list)
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>& BroadcastToPlayersRequest::player_list() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BroadcastToPlayersRequest.player_list)
+  return _internal_player_list();
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL BroadcastToPlayersRequest::mutable_player_list()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:BroadcastToPlayersRequest.player_list)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_player_list();
+}
+inline const ::google::protobuf::RepeatedField<::uint64_t>&
+BroadcastToPlayersRequest::_internal_player_list() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_list_;
+}
+inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
+BroadcastToPlayersRequest::_internal_mutable_player_list() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.player_list_;
 }
 
 // -------------------------------------------------------------------

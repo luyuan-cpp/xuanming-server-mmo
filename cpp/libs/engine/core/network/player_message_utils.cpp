@@ -13,6 +13,8 @@
 #include "thread_context/node_context_manager.h"
 #include "utils/random/random.h"
 #include <thread_context/ecs_context.h>
+#include "broadcast_target_codec.h"
+#include <algorithm>
 
 void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Message &message, Guid playerId)
 {
@@ -50,10 +52,15 @@ void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Mess
 		return;
 	}
 
-	SendMessageToClientViaGate(messageId, message, *gateSessionPtr, playerSessionSnapshotPB->gate_session_id());
+	// 身份栅栏(R13):玩家实体的 Guid 是权威身份,一并带给 gate 供写 socket 前比对。
+	// try_get 而不是 get:极少数内部实体(测试桩 / 未完全构造的玩家)可能没有 Guid,
+	// 拿不到时带 0 走兼容位,总比在推送路径上抛异常好。
+	const auto *playerGuid = tlsEcs.actorRegistry.try_get<Guid>(playerEntity);
+	SendMessageToClientViaGate(messageId, message, *gateSessionPtr, playerSessionSnapshotPB->gate_session_id(),
+							   playerGuid != nullptr ? *playerGuid : kInvalidGuid);
 }
 
-void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Message &message, RpcSession &gate, SessionId sessionId)
+void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Message &message, RpcSession &gate, SessionId sessionId, Guid targetPlayerId)
 {
 	NodeRouteMessageRequest request;
 	const size_t byteSize = message.ByteSizeLong();
@@ -64,6 +71,13 @@ void SendMessageToClientViaGate(uint32_t messageId, const google::protobuf::Mess
 		return;
 	}
 	request.mutable_header()->set_session_id(sessionId);
+	// kInvalidGuid 与 0 在 gate 侧是同一个意思:"发送方没有玩家身份可带",走兼容位放行。
+	// 不能把 kInvalidGuid 原样塞进去 —— 它是 uint64 最大值,会被当成一个真实玩家号去比对,
+	// 从而把本该放行的兼容位变成必然失配的丢弃。
+	if (targetPlayerId != kInvalidGuid)
+	{
+		request.mutable_header()->set_target_player_id(targetPlayerId);
+	}
 	request.mutable_message_content()->set_message_id(messageId);
 	gate.SendRequest(GateSendMessageToPlayerMessageId, request);
 }
@@ -90,51 +104,10 @@ void SendMessageToGateById(uint32_t messageId, const google::protobuf::Message &
 	gateSessionPtr->SendRequest(messageId, message);
 }
 
-using BroadCastSessionIdList = std::unordered_set<SessionId>;
-
-// Choose bitmap or list encoding based on session count and density.
-// Bitmap: base(uint32) + N/8 bytes.  List: ~3 bytes per varint (session IDs > 16384).
-// Bitmap wins when density > ~4% and count >= threshold.
-static void EncodeBroadcastSessionList(BroadcastToPlayersRequest &request,
-									   const BroadCastSessionIdList &sessionIdList)
-{
-	constexpr size_t kBitmapThreshold = 32;
-
-	if (sessionIdList.size() >= kBitmapThreshold)
-	{
-		uint32_t minId = UINT32_MAX;
-		uint32_t maxId = 0;
-		for (const auto sessionId : sessionIdList)
-		{
-			if (sessionId < minId)
-				minId = sessionId;
-			if (sessionId > maxId)
-				maxId = sessionId;
-		}
-
-		const uint32_t span = maxId - minId + 1;
-		const size_t bitmapBytes = (span + 7) / 8;
-
-		// Use bitmap when it is smaller than varint list
-		if (bitmapBytes + 6 < sessionIdList.size() * 3)
-		{
-			request.set_session_bitmap_base(minId);
-			std::string bitmap(bitmapBytes, '\0');
-			for (const auto sessionId : sessionIdList)
-			{
-				const uint32_t offset = sessionId - minId;
-				bitmap[offset / 8] |= static_cast<char>(1 << (offset % 8));
-			}
-			request.set_session_bitmap(std::move(bitmap));
-			return;
-		}
-	}
-
-	for (const auto sessionId : sessionIdList)
-	{
-		request.mutable_session_list()->Add(sessionId);
-	}
-}
+// 广播目标:(session_id, player_id) 成对。编解码收在 broadcast_target_codec.h,
+// 与 gate 侧共用同一份顺序契约(R13)—— 两边各写一遍必然某天错开一格,
+// 而错开一格的表现是"每个人的身份都被比对成别人的"。
+using BroadCastSessionIdList = std::vector<broadcast_targets::Target>;
 
 template <typename PlayerContainer>
 void InternalBroadcast(uint32_t messageId, const google::protobuf::Message &message, const PlayerContainer &playerList)
@@ -166,7 +139,13 @@ void InternalBroadcast(uint32_t messageId, const google::protobuf::Message &mess
 		}
 		entt::entity gateNodeId = *gateEntityOpt;
 
-		gateList[gateNodeId].emplace(playerSessionSnapshotPB->gate_session_id());
+		// 身份栅栏(R13):带上玩家 Guid,gate 写每一条 socket 前比对。
+		// 拿不到 Guid(极少数未完全构造的实体)时填 0 = 兼容位,gate 放行不校验;
+		// 绝不能填 kInvalidGuid —— 那是 uint64 最大值,会被当成一个真实玩家号去比对。
+		const auto *playerGuid = tlsEcs.actorRegistry.try_get<Guid>(player);
+		gateList[gateNodeId].push_back(broadcast_targets::Target{
+			playerSessionSnapshotPB->gate_session_id(),
+			(playerGuid != nullptr && *playerGuid != kInvalidGuid) ? *playerGuid : 0});
 	}
 
 	const std::string serializedMessage = message.SerializeAsString();
@@ -184,7 +163,7 @@ void InternalBroadcast(uint32_t messageId, const google::protobuf::Message &mess
 		request.mutable_message_content()->set_message_id(messageId);
 		request.mutable_message_content()->set_serialized_message(serializedMessage);
 
-		EncodeBroadcastSessionList(request, sessionIdList);
+		broadcast_targets::Encode(request, sessionIdList);
 
 		gateNodeSession->SendRequest(GateBroadcastToPlayersMessageId, request);
 	}
@@ -441,6 +420,12 @@ void SendMessageToPlayerOnNode(uint32_t wrappedMessageId,
 		return;
 	}
 	request.mutable_header()->set_session_id(playerSessionSnapshotPB->gate_session_id());
+	// 身份栅栏(R13):目标节点按 session_id 反查玩家时用它复核,防"同号 session 已易主"。
+	if (const auto *playerGuid = tlsEcs.actorRegistry.try_get<Guid>(playerEntity);
+		playerGuid != nullptr && *playerGuid != kInvalidGuid)
+	{
+		request.mutable_header()->set_target_player_id(*playerGuid);
+	}
 
 	session->SendRequest(wrappedMessageId, request);
 }
@@ -486,6 +471,12 @@ void CallMethodOnPlayerNode(
 
 	request.mutable_message_content()->set_message_id(messageId);
 	request.mutable_header()->set_session_id(playerSessionSnapshotPB->gate_session_id());
+	// 身份栅栏(R13),与 SendMessageToPlayerOnNode 同一理由。
+	if (const auto *playerGuid = tlsEcs.actorRegistry.try_get<Guid>(player);
+		playerGuid != nullptr && *playerGuid != kInvalidGuid)
+	{
+		request.mutable_header()->set_target_player_id(*playerGuid);
+	}
 
 	session->CallRemoteMethod(remoteMethodId, request);
 }

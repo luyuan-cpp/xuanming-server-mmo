@@ -1,22 +1,36 @@
 #include "node_message_utils.h"
 #include "network/rpc_session.h"
 #include <network/rpc_client.h>
+#include <optional>
 #include "thread_context/redis_manager.h"
+#include "node/system/node/node_util.h"
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/common/base/message.pb.h"
 #include "thread_context/node_context_manager.h"
 
 namespace {
 
+// node_id 是业务节点号,不是 entt 实体整数:uuid 主键重构之后
+// (node_connector.cpp 改用 registry.create() 并按 uuid 建索引)两者不再相等,
+// 裸 `entt::entity{nodeId}` 要么撞不上有效槽位,要么撞上一个无关的节点实体并把消息
+// 送错地方。全仓统一走 FindNodeEntityByNodeId
+// (docs/design/routing-identity-audit-20260908.md R03 的同类残留)。
+std::optional<entt::entity> ResolveNodeEntity(NodeId nodeId, uint32_t nodeType, const char* context) {
+	auto entityOpt = NodeUtils::FindNodeEntityByNodeId(nodeType, nodeId);
+	if (!entityOpt) {
+		LOG_ERROR << context << ": node not found: " << nodeId << " of type: " << static_cast<int>(nodeType);
+	}
+	return entityOpt;
+}
+
 // Resolve a node's RpcSession in the per-type registry. Logs and returns null on failure.
 RpcSession* ResolveNodeSession(NodeId nodeId, uint32_t nodeType, const char* context) {
-	auto& registry = tlsNodeContextManager.GetRegistry(nodeType);
-	const entt::entity entity{ nodeId };
-	if (!registry.valid(entity)) {
-		LOG_ERROR << context << ": node not found: " << nodeId << " of type: " << static_cast<int>(nodeType);
+	const auto entityOpt = ResolveNodeEntity(nodeId, nodeType, context);
+	if (!entityOpt) {
 		return nullptr;
 	}
-	auto* session = registry.try_get<RpcSession>(entity);
+	auto& registry = tlsNodeContextManager.GetRegistry(nodeType);
+	auto* session = registry.try_get<RpcSession>(*entityOpt);
 	if (!session) {
 		LOG_ERROR << context << ": RpcSession not found for node: " << nodeId;
 	}
@@ -25,13 +39,12 @@ RpcSession* ResolveNodeSession(NodeId nodeId, uint32_t nodeType, const char* con
 
 // Resolve a node's RpcClient in the per-type registry. Logs and returns null on failure.
 RpcClient* ResolveNodeClient(NodeId nodeId, uint32_t nodeType, const char* context) {
-	auto& registry = tlsNodeContextManager.GetRegistry(nodeType);
-	const entt::entity entity{ nodeId };
-	if (!registry.valid(entity)) {
-		LOG_ERROR << context << ": node not found: " << nodeId << " of type: " << static_cast<int>(nodeType);
+	const auto entityOpt = ResolveNodeEntity(nodeId, nodeType, context);
+	if (!entityOpt) {
 		return nullptr;
 	}
-	auto* clientPtr = registry.try_get<RpcClientPtr>(entity);
+	auto& registry = tlsNodeContextManager.GetRegistry(nodeType);
+	auto* clientPtr = registry.try_get<RpcClientPtr>(*entityOpt);
 	if (!clientPtr) {
 		LOG_ERROR << context << ": RpcClientPtr not found for node: " << nodeId;
 		return nullptr;

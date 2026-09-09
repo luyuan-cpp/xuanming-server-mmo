@@ -1,6 +1,9 @@
 # 合服 — 差距修复方案
 
-> **生成日期**: 2026-05-17
+> **生成日期**: 2026-05-17;**状态更新 2026-09-08**
+> **⚠️ 先读**:本文靠前的「**状态更新(2026-09-08)**」一节 ——
+> 它取代了下面那张 2026-05-23 的 Reality Check 表,按「已闭合 A1~A6 / 仍开着 B1~B8」重新分列。
+> 本文其余部分是 2026-05 的原始决策记录,保留原样。
 > **前置阅读**: [`cross-server-rollback-merge-audit.md`](./cross-server-rollback-merge-audit.md)
 >
 > **范围**: 不重写已有的 `tools/merge_zone/` 工具(已 538 行成熟代码,5 步流程齐全)。
@@ -33,6 +36,37 @@
 > - 玩家通知 → 服务端链路 ready,等客户端
 >
 > 真正的"剩下没做":**客户端 UI 接 EnterGameResponse 两个新字段**(post_merge_notice_ts 弹通知 / force_rename_required 弹改名 UI;后者当前无机会触发但接口准备好)+ **改名 RPC 处理器加 `DEL player_force_rename:{id}` 收尾**(后续昵称字段启用时需要)。
+
+---
+
+## ⚠️⚠️ 状态更新(2026-09-08)—— 本节取代上面那张 2026-05-23 的表
+
+2026-09 的合服大修之后重新核对了一遍。**上面那张表里"已闭合"的判断有几条当时是错的**
+(链路存在 ≠ 链路通),下面按「已闭合 / 仍开着」重新分列。**这一节是当前权威。**
+
+### A. 已闭合(2026-09-08 核对通过)
+
+| # | 缺口 | 当时的症状 | 现在为什么闭合了 |
+|---|---|---|---|
+| **A1** | **账号 blob 里的角色 zone_id 会过期** | 合服不动账号系统,账号 blob 里存的是**建角时**的 zone;合服后玩家按旧 zone 进服 | **由登录侧解析闭合**。`Login` 返回的角色列表 zone_id 改为登录时按 data_service 的 `player:zone` 映射现场解析(`BatchGetPlayerHomeZone`);账号 blob 的 zone_id 从此只是建角提示。合服工具**不需要**改账号系统 |
+| **A2** | **`player:zone:{id}` 在生产从来没被写过** | 建号时不注册映射 ⇒ 合服按「值==source」改写时**根本扫不到人** ⇒ 合服「成功」但玩家全留在死区。这是整条链上最致命的一条,而且完全静默 | 两头都补上了:①`go/login` 的 `CreatePlayer` 现在**fail-closed** 地注册 `player:zone`(注册失败 ⇒ 建角失败,不允许产出没有映射的号);②存量玩家由 `merge_zone -backfill-home-zone -zone <id>` 回填(`SET NX`,从 `zone_<N>_db.player_database` 取真源)。③合服工具加了守卫:空映射 / 映射不全一律拒绝执行,并在报文里直接点名要先跑回填 |
+| **A3** | **合服公告 flag 写进了错的 Redis** | `player_merge_notice:{pid}` / `player_force_rename:{pid}` 被写进 **mapping 句柄**(当时默认 DB 15),而读它们的 `entergamelogic.go::consumePostMergeFlags` 用的是 login 的 `RedisClient`(**DB 0**)。**写 15 读 0 ⇒ 合服公告 UI 从来没有触发过一次**,而且失败完全静默(`redis.Nil` 被当成「这个玩家没有 flag」的正常情况) | 打标改由独立的 `-notice-redis-addr` / `-notice-redis-db` 指定,默认 **DB 0**,与 login 同库。撤销(`-mode unmerge`)会把这两把键删掉 |
+| **A4** | **审计里的 block 级门禁从设计上就拦不住任何东西** | 旧 `auditOnlineKeys` 在 **mapping Redis** 上查 `friend:online:{pid}`,而这把键由 go/friend 写在**它自己的 DB 3** ⇒ 恒查不到 ⇒ 恒「全部离线 ✅」;pipeline 错误还被 `_, _ = pipe.Exec(ctx)` 吞掉;文档写了「exit 2 = 基础设施错误」但 `runAuditEntry` 从来没返回过 2(连不上 Redis 只打一行 WARN 然后「通过」)。**一个不可能返回 block 的 block 级门禁,比没有门禁更危险** | 四个库各一个句柄(mapping 0 / guild 2 / friend 3 / shared 0);扫描失败一律 `Severity=block` 并标 `INFRA:`;句柄缺失让整个审计以 **exit 2** 结束(与 exit 1「查到了真问题」区分开)。pre-merge 现在有四条真能拦住 `-apply` 的门禁:`source_scene_nodes` / `online_presence` / `player_locks` / `kafka_db_task_queues` |
+| **A5** | **`-verify-merged` 是个空壳** | 它只是把报告标题从 "pre-merge" 换成 "POST-MERGE VERIFICATION",**一条断言都没有** | 现在是六条真断言:`verify:mapping_src`(源区必须排空 + 目标区不少于 `-expected-src-players`)、`verify:guild_zone`、`verify:guild_rank`(源 ZSET 消失 **且** 目标 ZCARD == MySQL 公会数)、`verify:target_zone_rows`(目标库 `player_database` 行数 >= 合入人数;没给期望值就降级成 warn 并明说是弱断言)、`verify:source_hot_state`(warn)、`verify:merge_fence`(围栏没清 = 建号建帮被永久拒绝) |
+| **A6** | 玩家主数据不搬 / 无并发保护 / 无回滚 | —— | 合服现在会逐表拷 `zone_src_db → zone_dst_db` 并失效共享 DB 0 上的缓存;`merge:in_progress:{zone}` 围栏挡住 data_service 建映射与 guild 建帮;清单在第一次写之前落盘,`-mode unmerge` 可按清单逐对象撤销 |
+
+### B. 仍然开着(必须知道,合服前逐条确认)
+
+| # | 缺口 | 后果 | 现在怎么办 |
+|---|---|---|---|
+| **B1** | **Unity 客户端不处理 `RedirectToGate`** | 服务端已经能在登录期把玩家重定向到归属 zone 的 gate(robot 已实测能跟随:连目标 gate → 校验 token → 重跑 Login + EnterGame),**但 Unity 客户端接不住这个包** | **`HomeZone.RedirectOnEnterEnabled` 必须在生产保持 `false`**(`go/login/etc/login.yaml` 默认就是 false,`config.go` 里也是 `default=false` 的正向命名)。合服后原 source 玩家靠「角色列表按现时 `player:zone` 解析」进对服,而不是靠进场重定向。**客户端接上之前不要打开这个开关** |
+| **B2** | **C++ 侧 Kafka 审计 topic 的世代后缀是编译期常量** | `cpp/libs/modules/transaction_log/transaction_log_system.h` 的 `kTransactionLogTopic = "transaction_log_topic_g1"` 与 `cpp/libs/modules/snapshot/snapshot_system.h` 的 `kPlayerSnapshotTopic = "player_snapshot_topic_g1"` **把 `_g1` 写死在字符串里**;Go 侧(`data_service/internal/config`)是 `基名 + "_g" + Kafka.TopicGeneration` **配置组合**出来的。改 yaml 不会改 C++ | **世代号变更必须是一次协同改动**:改 C++ 两个常量 + 重建并推 C++ 镜像 + 同步 Go 的 `TopicGeneration`,三件一起做、一起发。只改 yaml 会让两端写进**不同的 topic**,审计流从此对不上,而且没有任何报错 |
+| **B3** | **真实集群的合服演练一次都没跑过** | 目前所有结论来自代码审查 + 单测 / 集成测试(miniredis + 本地 MySQL)。「在真集群上端到端跑通过」这件事**从未发生** | 首次生产合服之前,在 staging 用生产快照恢复出两个 zone,跑一次完整的 `runbook §8`(含 `-VerifyMerged`)**再加一次 `§10` 的 `merge-zone-unmerge` 撤销**,并记录耗时与缺陷 |
+| **B4** | **`dev_tools.ps1` 不转发 `-kafka-group` / `-kafka-topic-generation`** | `Kafka.TopicGeneration ≠ 1` 或改过 GroupID 的环境里,P3 积压门禁会去查一个**不存在的 topic** | 这类环境绕过 ps1,在 `tools/merge_zone/` 目录内直接 `go run . -kafka-topic-generation <n> -kafka-group <g> ...`。(`dev_tools.ps1` 的参数块注释里 mapping 那行还写着「DB 15」,与实现不符,见 B6) |
+| **B5** | **guild 的 `MergeMarkerRedis` 可以整段缺失** | 缺失 = 建帮闸门**不生效**,合服窗口内玩家仍能在源 zone 建帮,那个公会不会被 `merge_zone` 搬走(它诞生在清单定稿之后) | 合服前确认 `go/guild/etc/guild.yaml` 的 `MergeMarkerRedis.Host` 指向 mapping Redis 且 `DB: 0`。这是刻意的可选项(guild 与 data_service 平时没有连线,强制它连会让没配的环境起不来),但**合服窗口里它是必需品** |
+| **B6** | **`tools/scripts/dev_tools.ps1` 参数块注释仍写「mapping DB 15」** | 纯文档漂移:实际兜底逻辑取 **0**(`Get-MergeZoneArgs` 里注释也已更正为 0),但参数块顶部那张速查表还是旧的,照它手填 `-MergeMappingRedisDB 15` 会让合服静默空转 | 待修(本轮不改 `tools/scripts/**`)。在它被改掉之前,**以本文与 `merge-zone-runbook.md §2` 的库地图为准** |
+| **B7** | 客户端未接 `EnterGameResponse` 的合服字段 | 服务端已把 `player_merge_notice:{pid}` 写进 login Redis(DB 0)并在首登时消费下发,但**客户端没有弹窗** | 客户端接上即可生效。`force_rename_required` 当前无机会触发(项目没有昵称字段),属 future-proof |
+| **B8** | `tools/data_consistency_check/` 没在生产 / staging 真跑过 | P2-K 的四个 invariant build 通过但没有真实运行证据 | 与 B3 一起在 staging 演练时跑一次 |
 
 ---
 
@@ -146,7 +180,7 @@ for _, p := range conflictPlayers {
 | **聊天历史** | 公屏聊天通常按 zone 分,**source zone 的历史**合服后还能查到吗? | 中 |
 | **拍卖会**(若存在) | 拍卖物品挂在 player_id 上,买家是 player_id,**理论上正常**,但**结算邮件**可能挂错 | 高 |
 | **公会申请 / 邮件附件 / 帮派任务进度** | 都挂 player_id,**理论上正常**,需审计 | 中 |
-| **player_to_account 反向索引** | merge 时不动账号系统,可能产生"账号属于哪个 zone"的语义模糊 | 低 |
+| **player_to_account 反向索引 / 账号 blob 里的角色 zone_id** | merge 时不动账号系统。**已由 login 侧解析闭合(2026-09-08)**:`Login` 返回的角色列表 zone_id 改为登录时按 data_service `player:zone` 映射解析(`BatchGetPlayerHomeZone`),`EnterGame` 按归属 zone 填 `EnterScene.ZoneId` 触发 scene_manager 既有跨区重定向;账号 blob 的 zone_id 只是建角提示,合服工具**不需要**改账号系统。详见 `enter-scene-zone-routing.md` §Login-side zone resolution | 已闭合 |
 
 ### 2.2 决策
 

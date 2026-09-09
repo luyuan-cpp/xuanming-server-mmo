@@ -98,7 +98,12 @@ type PlayerSnapshotEntry struct {
 	// Version tag — helps detect schema migration issues during restore.
 	SchemaVersion string `protobuf:"bytes,7,opt,name=schema_version,json=schemaVersion,proto3" json:"schema_version,omitempty"`
 	// Snapshot size in bytes (for monitoring / retention policies).
-	TotalBytes    uint64 `protobuf:"varint,8,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`
+	TotalBytes uint64 `protobuf:"varint,8,opt,name=total_bytes,json=totalBytes,proto3" json:"total_bytes,omitempty"`
+	// 捕获时刻所在的 zone(生产者填 GetZoneId())。
+	// 消费者必须直接用这个值,不许回查 Router:RollbackZone 要的是"快照时玩家在哪个 zone",
+	// 而不是消费当时的 home_zone(合服后两者会不同)。
+	// 见 docs/design/node-id-overhaul-plan-20260908.md §2.0c 第 1 步。
+	ZoneId        uint32 `protobuf:"varint,9,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -185,6 +190,13 @@ func (x *PlayerSnapshotEntry) GetSchemaVersion() string {
 func (x *PlayerSnapshotEntry) GetTotalBytes() uint64 {
 	if x != nil {
 		return x.TotalBytes
+	}
+	return 0
+}
+
+func (x *PlayerSnapshotEntry) GetZoneId() uint32 {
+	if x != nil {
+		return x.ZoneId
 	}
 	return 0
 }
@@ -518,7 +530,7 @@ var File_proto_common_rollback_player_snapshot_proto protoreflect.FileDescriptor
 
 const file_proto_common_rollback_player_snapshot_proto_rawDesc = "" +
 	"\n" +
-	"+proto/common/rollback/player_snapshot.proto\"\xd3\x02\n" +
+	"+proto/common/rollback/player_snapshot.proto\"\xec\x02\n" +
 	"\x13PlayerSnapshotEntry\x12\x1f\n" +
 	"\vsnapshot_id\x18\x01 \x01(\x04R\n" +
 	"snapshotId\x12\x1b\n" +
@@ -529,7 +541,8 @@ const file_proto_common_rollback_player_snapshot_proto_rawDesc = "" +
 	"\x16player_database_1_blob\x18\x06 \x01(\fR\x13playerDatabase1Blob\x12%\n" +
 	"\x0eschema_version\x18\a \x01(\tR\rschemaVersion\x12\x1f\n" +
 	"\vtotal_bytes\x18\b \x01(\x04R\n" +
-	"totalBytes\"\x83\x01\n" +
+	"totalBytes\x12\x17\n" +
+	"\azone_id\x18\t \x01(\rR\x06zoneId\"\x83\x01\n" +
 	"\x14ListSnapshotsRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +

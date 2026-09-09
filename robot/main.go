@@ -65,6 +65,17 @@ func main() {
 	stats := metrics.NewStats()
 	robotStatsRef = stats
 
+	// 跟随跨区重定向(msg 124)后要在新 gate 上重跑 Login + EnterGame,而"用哪种认证"
+	// 只有 main 知道(cfg.AuthType / 密码 / SA-Token / access_token)。pkg 层不能反向
+	// import main,所以把实现注册进去。见 pkg/redirect.go 与
+	// logic/handler/scene_client_player_common_redirect_to_gate.go。
+	// 传当前会话已有的 access_token:重定向发生在登录之后,能省掉一次主认证往返;
+	// 拿不到(空)时 loginAndEnterWithAuth 自己会回落到主认证。
+	pkg.SetRedirectRelogin(func(gc *pkg.GameClient) error {
+		access, _, accessExpire, _ := gc.SnapshotTokens()
+		return loginAndEnterWithAuth(gc, cfg, stats, access, accessExpire)
+	})
+
 	// Login-test mode: run the scenario suite and exit.
 	if cfg.Mode == "login-test" {
 		host, portStr, tokenPayload, tokenSig, err := resolveGateAddrLocal(cfg)

@@ -66,6 +66,22 @@ enum SnapshotEventType : int;
 extern const uint32_t SnapshotEventType_internal_data_[];
 enum SnapshotType : int;
 extern const uint32_t SnapshotType_internal_data_[];
+class AllocateIdSegmentRequest;
+struct AllocateIdSegmentRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AllocateIdSegmentRequestGlobalsTypeInternal AllocateIdSegmentRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AllocateIdSegmentRequest_class_data_;
+#else
+extern const AllocateIdSegmentRequestGlobalsTypeInternal AllocateIdSegmentRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class AllocateIdSegmentResponse;
+struct AllocateIdSegmentResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AllocateIdSegmentResponseGlobalsTypeInternal AllocateIdSegmentResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AllocateIdSegmentResponse_class_data_;
+#else
+extern const AllocateIdSegmentResponseGlobalsTypeInternal AllocateIdSegmentResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class BatchGetPlayerHomeZoneRequest;
 struct BatchGetPlayerHomeZoneRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -8532,6 +8548,449 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BatchGetPlayerHomeZoneRequest final
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateIdSegmentResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:data_service.AllocateIdSegmentResponse) */ {
+ public:
+  inline AllocateIdSegmentResponse() : AllocateIdSegmentResponse(nullptr) {}
+  ~AllocateIdSegmentResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AllocateIdSegmentResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AllocateIdSegmentResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AllocateIdSegmentResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AllocateIdSegmentResponse(const AllocateIdSegmentResponse& from) : AllocateIdSegmentResponse(nullptr, from) {}
+  inline AllocateIdSegmentResponse(AllocateIdSegmentResponse&& from) noexcept : AllocateIdSegmentResponse(nullptr, ::std::move(from)) {}
+  inline AllocateIdSegmentResponse& operator=(const AllocateIdSegmentResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AllocateIdSegmentResponse& operator=(AllocateIdSegmentResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AllocateIdSegmentResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AllocateIdSegmentResponse>(&AllocateIdSegmentResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 43;
+  friend void swap(AllocateIdSegmentResponse& a, AllocateIdSegmentResponse& b) { a.Swap(&b); }
+  inline void Swap(AllocateIdSegmentResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AllocateIdSegmentResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AllocateIdSegmentResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AllocateIdSegmentResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AllocateIdSegmentResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AllocateIdSegmentResponse& from) { AllocateIdSegmentResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AllocateIdSegmentResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "data_service.AllocateIdSegmentResponse"; }
+
+  explicit AllocateIdSegmentResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AllocateIdSegmentResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AllocateIdSegmentResponse& from);
+  AllocateIdSegmentResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AllocateIdSegmentResponse&& from) noexcept
+      : AllocateIdSegmentResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kLoFieldNumber = 2,
+    kHiFieldNumber = 3,
+    kErrorCodeFieldNumber = 1,
+  };
+  // uint64 lo = 2;
+  void clear_lo() ;
+  [[nodiscard]] ::uint64_t lo() const;
+  void set_lo(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_lo() const;
+  void _internal_set_lo(::uint64_t value);
+
+  public:
+  // uint64 hi = 3;
+  void clear_hi() ;
+  [[nodiscard]] ::uint64_t hi() const;
+  void set_hi(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_hi() const;
+  void _internal_set_hi(::uint64_t value);
+
+  public:
+  // uint32 error_code = 1;
+  void clear_error_code() ;
+  [[nodiscard]] ::uint32_t error_code() const;
+  void set_error_code(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_error_code() const;
+  void _internal_set_error_code(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:data_service.AllocateIdSegmentResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AllocateIdSegmentResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t lo_;
+    ::uint64_t hi_;
+    ::uint32_t error_code_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AllocateIdSegmentRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:data_service.AllocateIdSegmentRequest) */ {
+ public:
+  inline AllocateIdSegmentRequest() : AllocateIdSegmentRequest(nullptr) {}
+  ~AllocateIdSegmentRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AllocateIdSegmentRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AllocateIdSegmentRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AllocateIdSegmentRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AllocateIdSegmentRequest(const AllocateIdSegmentRequest& from) : AllocateIdSegmentRequest(nullptr, from) {}
+  inline AllocateIdSegmentRequest(AllocateIdSegmentRequest&& from) noexcept : AllocateIdSegmentRequest(nullptr, ::std::move(from)) {}
+  inline AllocateIdSegmentRequest& operator=(const AllocateIdSegmentRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AllocateIdSegmentRequest& operator=(AllocateIdSegmentRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AllocateIdSegmentRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AllocateIdSegmentRequest>(&AllocateIdSegmentRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 42;
+  friend void swap(AllocateIdSegmentRequest& a, AllocateIdSegmentRequest& b) { a.Swap(&b); }
+  inline void Swap(AllocateIdSegmentRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AllocateIdSegmentRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AllocateIdSegmentRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<AllocateIdSegmentRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const AllocateIdSegmentRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const AllocateIdSegmentRequest& from) { AllocateIdSegmentRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AllocateIdSegmentRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "data_service.AllocateIdSegmentRequest"; }
+
+  explicit AllocateIdSegmentRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AllocateIdSegmentRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AllocateIdSegmentRequest& from);
+  AllocateIdSegmentRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AllocateIdSegmentRequest&& from) noexcept
+      : AllocateIdSegmentRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kBizTagFieldNumber = 1,
+    kStepFieldNumber = 2,
+  };
+  // string biz_tag = 1;
+  void clear_biz_tag() ;
+  [[nodiscard]] const ::std::string& biz_tag() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_biz_tag(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_biz_tag();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_biz_tag();
+  void set_allocated_biz_tag(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_biz_tag() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_biz_tag(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_biz_tag();
+
+  public:
+  // uint32 step = 2;
+  void clear_step() ;
+  [[nodiscard]] ::uint32_t step() const;
+  void set_step(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_step() const;
+  void _internal_set_step(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:data_service.AllocateIdSegmentRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 53,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AllocateIdSegmentRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr biz_tag_;
+    ::uint32_t step_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SavePlayerDataRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:data_service.SavePlayerDataRequest) */ {
  public:
@@ -15335,6 +15794,174 @@ inline ::uint64_t CreateEventSnapshotResponse::_internal_created_at() const {
 inline void CreateEventSnapshotResponse::_internal_set_created_at(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_at_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// AllocateIdSegmentRequest
+
+// string biz_tag = 1;
+inline void AllocateIdSegmentRequest::clear_biz_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.biz_tag_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& AllocateIdSegmentRequest::biz_tag() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:data_service.AllocateIdSegmentRequest.biz_tag)
+  return _internal_biz_tag();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AllocateIdSegmentRequest::set_biz_tag(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.biz_tag_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:data_service.AllocateIdSegmentRequest.biz_tag)
+}
+inline ::std::string* PROTOBUF_NONNULL AllocateIdSegmentRequest::mutable_biz_tag()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_biz_tag();
+  // @@protoc_insertion_point(field_mutable:data_service.AllocateIdSegmentRequest.biz_tag)
+  return _s;
+}
+inline const ::std::string& AllocateIdSegmentRequest::_internal_biz_tag() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.biz_tag_.Get();
+}
+inline void AllocateIdSegmentRequest::_internal_set_biz_tag(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.biz_tag_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AllocateIdSegmentRequest::_internal_mutable_biz_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.biz_tag_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AllocateIdSegmentRequest::release_biz_tag() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:data_service.AllocateIdSegmentRequest.biz_tag)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.biz_tag_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.biz_tag_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AllocateIdSegmentRequest::set_allocated_biz_tag(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.biz_tag_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.biz_tag_.IsDefault()) {
+    _impl_.biz_tag_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:data_service.AllocateIdSegmentRequest.biz_tag)
+}
+
+// uint32 step = 2;
+inline void AllocateIdSegmentRequest::clear_step() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.step_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t AllocateIdSegmentRequest::step() const {
+  // @@protoc_insertion_point(field_get:data_service.AllocateIdSegmentRequest.step)
+  return _internal_step();
+}
+inline void AllocateIdSegmentRequest::set_step(::uint32_t value) {
+  _internal_set_step(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:data_service.AllocateIdSegmentRequest.step)
+}
+inline ::uint32_t AllocateIdSegmentRequest::_internal_step() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.step_;
+}
+inline void AllocateIdSegmentRequest::_internal_set_step(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.step_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// AllocateIdSegmentResponse
+
+// uint32 error_code = 1;
+inline void AllocateIdSegmentResponse::clear_error_code() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.error_code_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t AllocateIdSegmentResponse::error_code() const {
+  // @@protoc_insertion_point(field_get:data_service.AllocateIdSegmentResponse.error_code)
+  return _internal_error_code();
+}
+inline void AllocateIdSegmentResponse::set_error_code(::uint32_t value) {
+  _internal_set_error_code(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:data_service.AllocateIdSegmentResponse.error_code)
+}
+inline ::uint32_t AllocateIdSegmentResponse::_internal_error_code() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.error_code_;
+}
+inline void AllocateIdSegmentResponse::_internal_set_error_code(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.error_code_ = value;
+}
+
+// uint64 lo = 2;
+inline void AllocateIdSegmentResponse::clear_lo() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lo_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t AllocateIdSegmentResponse::lo() const {
+  // @@protoc_insertion_point(field_get:data_service.AllocateIdSegmentResponse.lo)
+  return _internal_lo();
+}
+inline void AllocateIdSegmentResponse::set_lo(::uint64_t value) {
+  _internal_set_lo(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:data_service.AllocateIdSegmentResponse.lo)
+}
+inline ::uint64_t AllocateIdSegmentResponse::_internal_lo() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.lo_;
+}
+inline void AllocateIdSegmentResponse::_internal_set_lo(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.lo_ = value;
+}
+
+// uint64 hi = 3;
+inline void AllocateIdSegmentResponse::clear_hi() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hi_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t AllocateIdSegmentResponse::hi() const {
+  // @@protoc_insertion_point(field_get:data_service.AllocateIdSegmentResponse.hi)
+  return _internal_hi();
+}
+inline void AllocateIdSegmentResponse::set_hi(::uint64_t value) {
+  _internal_set_hi(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:data_service.AllocateIdSegmentResponse.hi)
+}
+inline ::uint64_t AllocateIdSegmentResponse::_internal_hi() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.hi_;
+}
+inline void AllocateIdSegmentResponse::_internal_set_hi(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.hi_ = value;
 }
 
 #ifdef __GNUC__

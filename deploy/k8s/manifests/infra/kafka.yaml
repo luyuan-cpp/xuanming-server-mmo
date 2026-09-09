@@ -1,8 +1,45 @@
+# Kafka(KRaft 单 broker):StatefulSet + PVC,不再是 Deployment + emptyDir
+# (docs/design/routing-identity-audit-20260908.md R06)。
+#
+# 为什么换:
+#   - 旧写法是单副本 Deployment,数据目录是 emptyDir。broker 一重启(漂移 / OOM / 升级)
+#     **全部 topic、分区元数据与已提交 offset 一起消失**。消费者会静默地把 topic 自动
+#     重建成 1 分区(broker 开着 auto.create.topics.enable + num.partitions=1),
+#     而停机窗口里产出的每一条控制面命令在 librdkafka 的 5 分钟消息超时后直接丢掉;
+#     审计 topic 的预建 Job 还必须手工重跑一遍(deploy/k8s/AGENTS.md)。
+#   - 更糟的是旧 manifest 把 emptyDir 挂在 `/tmp/kafka-logs`,而 apache/kafka 镜像
+#     combined 模式的默认 `log.dirs` 是 `/tmp/kraft-combined-logs` —— 那块卷根本不是
+#     数据目录,日志一直写在容器可写层上。所以本文件显式设 KAFKA_LOG_DIRS,不赌镜像默认值。
+#   - 换 PVC 之后 broker 重启以同一身份、同一份日志回来:topic、分区数、offset 全部保留,
+#     `infra-kafka-topics` 不再是重启后的必修课(仍然幂等、随时可重跑)。
+#
+# **首次从旧 Deployment 切过来会丢掉现有的全部 topic 数据**:PVC 是空的,broker 会重新
+# format 存储目录。切完必须重跑一次
+# `pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-kafka-topics -WaitReady`
+# 把审计 topic 与控制面命令 topic 按分区契约重新建出来(README「Kafka:StatefulSet + PVC」)。
+#
+# 刻意保持**单 broker**(replicas: 1):仓库里所有 topic 都是 replication-factor 1
+# (kafka-topic-init.yaml / docker-compose.yml / kafkautil.EnsureTopics),
+# `min.insync.replicas` 用默认值,而 KAFKA_ADVERTISED_LISTENERS 广播的是 ClusterIP
+# Service 的 FQDN(多 broker 时每个 broker 必须广播自己的 Pod DNS,否则客户端拿到的
+# leader 地址会随机落到别的 broker 上)。把副本数改大而不同时改这三处 = 数据不但没有冗余,
+# 还会路由错乱。要上多 broker 是另一张票,见 README。
+#
+# 所有双下划线包裹的大写占位由 k8s_deploy.ps1 Apply-Infra 在 apply 前替换
+# (占位名不在注释里重复写:Apply-Infra 有一条 fail-closed 检查会把注释里的假占位
+#  也当成"没替换"而拒绝 apply,与 kafka-topic-init.yaml 同一条纪律)。
+---
+# 客户端入口。名字必须保持 `kafka`:所有 ConfigMap / base_deploy_config 里写的 broker
+# 地址都是 kafka.<InfraNamespace>:9092(C++ 节点、login/db/data-service/match/…),
+# 而且 broker 广播的也是这个名字的 FQDN。改名 = 全量改配置 + 广播地址失配。
 apiVersion: v1
 kind: Service
 metadata:
   name: kafka
+  labels:
+    app: kafka
 spec:
+  type: ClusterIP
   selector:
     app: kafka
   ports:
@@ -13,12 +50,64 @@ spec:
       port: 9093
       targetPort: 9093
 ---
-apiVersion: apps/v1
-kind: Deployment
+# headless Service:给 StatefulSet 一个稳定的 per-Pod DNS 名
+# (kafka-0.kafka-headless.<ns>.svc.cluster.local)。当前单 broker 用不到它做寻址
+# —— 客户端走上面的 ClusterIP `kafka`,controller quorum 也走 `kafka:9093`(见下面注释)
+# —— 但 StatefulSet 的 spec.serviceName 是必填项,而且将来上多 broker 时
+# KAFKA_ADVERTISED_LISTENERS 必须换成这些名字。
+# publishNotReadyAddresses: true 与 etcd.yaml 同理:broker 在完成日志恢复之前不 Ready,
+# 而 headless 默认只发布 Ready Pod 的地址,排障时按名字连不上。
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-headless
+  labels:
+    app: kafka
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: kafka
+  ports:
+    - name: kafka
+      port: 9092
+      targetPort: 9092
+    - name: controller
+      port: 9093
+      targetPort: 9093
+---
+# 单 broker 的 PDB 只有一种有意义的写法:minAvailable: 1 = **不允许自愿驱逐**。
+# 这不是洁癖 —— 整个控制面(gate/scene 的命令通道)、db_task 落库、审计流水都只有这一个
+# broker,自动化的节点排空 / 集群升级把它顺手赶走时,停机窗口里产出的命令会在 librdkafka
+# 的 5 分钟消息超时后直接丢。让 `kubectl drain` 挂住,是为了逼一次人工决策。
+#
+# **代价(必须知道)**:`kubectl drain <node>` 会一直等在这个 Pod 上。真要腾空节点时用
+#   kubectl delete pod kafka-0 -n <infra>      # 自愿删除不过 PDB,Pod 随即重建
+# 或 `kubectl drain --disable-eviction`(跳过 PDB)。PVC 是 ReadWriteOnce:用 local-path
+# 之类的本地盘时 Pod 只能回到原节点,换节点需要先处理存储。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
 metadata:
   name: kafka
+  labels:
+    app: kafka
 spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: kafka
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kafka
+  labels:
+    app: kafka
+spec:
+  serviceName: kafka-headless
   replicas: 1
+  updateStrategy:
+    type: RollingUpdate
   selector:
     matchLabels:
       app: kafka
@@ -27,15 +116,54 @@ spec:
       labels:
         app: kafka
     spec:
+      # PVC 的根目录挂上来是 root:root 0755,而镜像以 appuser(uid/gid 1000)运行,
+      # 不给 fsGroup 就是起手 "permission denied"(emptyDir 时代没这问题:kubelet 建的
+      # emptyDir 是 0777)。fsGroup 会把卷 chown 到该 gid 并把它加进进程的附加组,
+      # 所以不需要再钉 runAsUser —— 镜像换了 uid 也仍然写得进去。
+      # OnRootMismatch:只在根目录属主不对时才递归 chown,日志目录长大之后重启不会
+      # 每次都把几万个 segment 文件 chown 一遍(那会把启动拖成分钟级)。
+      securityContext:
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+      # 给 controlled shutdown 与日志 flush 留时间;被 SIGKILL 打断只会导致下次启动做
+      # 一次日志恢复(数据仍在 PVC 上),但恢复期 broker 不可用,能避免就避免。
+      terminationGracePeriodSeconds: 60
       containers:
         - name: kafka
           image: apache/kafka:latest
+          # 文件描述符上限(R06)。K8s 没有声明 ulimit 的字段,容器运行时的 nofile **软**限
+          # 因运行时/版本而异(Docker Desktop 给 1048576,不少 containerd 配置只给 1024)。
+          # 而这个 broker 光控制面命令 topic 就有 2×256 个分区,每个分区至少 3 个打开文件
+          # (segment + offset index + time index),再加审计 / db_task / 迁移窗口里残留的
+          # per-node topic,以及每个客户端连接一个 fd —— 1024 是必然 "Too many open files"
+          # (表现为分区离线、客户端连不上,而不是一条清楚的报错)。
+          #
+          # 所以在 exec 真正的入口之前把软限抬到硬限。软限只能升到硬限,不需要任何特权。
+          # 覆盖 command/args 就绕过了镜像的 ENTRYPOINT/CMD,这里显式把它接回来:
+          #   ENTRYPOINT ["/__cacert_entrypoint.sh"]  CMD ["/etc/kafka/docker/run"]
+          # 换镜像版本时用
+          #   docker image inspect apache/kafka:latest --format '{{json .Config.Entrypoint}} {{json .Config.Cmd}}'
+          # 核一遍;路径不对会立刻 CrashLoop 并打出 "not found",不会静默降级。
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              hard=$(ulimit -Hn 2>/dev/null || echo 1048576)
+              if [ "$hard" = "unlimited" ]; then hard=1048576; fi
+              ulimit -n "$hard" 2>/dev/null || echo "WARN: cannot raise nofile soft limit" >&2
+              echo "kafka fd limit: soft=$(ulimit -Sn) hard=$(ulimit -Hn)"
+              exec /__cacert_entrypoint.sh /etc/kafka/docker/run
           env:
             - name: KAFKA_NODE_ID
               value: "1"
             - name: KAFKA_PROCESS_ROLES
               value: "controller,broker"
             - name: KAFKA_CLUSTER_ID
+              value: "5L6g3nShT-eMCtK--X86sw"
+            # 镜像的 launch 脚本读的是 **CLUSTER_ID**(不是 KAFKA_CLUSTER_ID),
+            # 它自带的默认值恰好与上面同值,所以以前"碰巧"是对的。数据目录换成 PVC 之后
+            # 这件事变得要命:meta.properties 里记着 format 时用的 cluster id,与启动时的
+            # 值不一致 broker 会拒绝启动。显式钉住,不再赌镜像默认值。
+            - name: CLUSTER_ID
               value: "5L6g3nShT-eMCtK--X86sw"
             - name: KAFKA_CONTROLLER_LISTENER_NAMES
               value: "CONTROLLER"
@@ -47,12 +175,16 @@ spec:
             # 这里广播短名 "kafka",在 mmorpg-zone-* namespace 里解析不到,表现为
             # metadata 拉到了却 "dial tcp: lookup kafka: no such host"。
             # __INFRA_NAMESPACE__ 由 k8s_deploy.ps1 Apply-Infra 替换(与 etcd.yaml 同一占位)。
+            # 单 broker 才能广播 Service 名;多 broker 必须改成每 Pod 自己的
+            # kafka-<n>.kafka-headless.<ns> —— 见文件头。
             - name: KAFKA_ADVERTISED_LISTENERS
               value: "PLAINTEXT://kafka.__INFRA_NAMESPACE__.svc.cluster.local:9092"
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
             # controller quorum 只在 infra namespace 内部通信,短名足够;也不要写
             # FQDN,KRaft 单节点启动早于 DNS 就绪时 FQDN 解析失败会让 controller 起不来。
+            # 换成 StatefulSet 之后这一条不变:Service 名 `kafka` 没动,Pod 名从
+            # kafka-<rs>-<hash> 变成 kafka-0 与这里无关。
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
               value: "1@kafka:9093"
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
@@ -61,17 +193,34 @@ spec:
               value: "1"
             - name: KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS
               value: "0"
-            # --- Retention: broker default is short (5 min) for ephemeral topics.
-            # Persistent topics (db_task_zone_*) override via EnsureTopics at service startup.
+            # 数据目录。显式指定,不用镜像默认的 /tmp/kraft-combined-logs:
+            # 旧 manifest 把卷挂在 /tmp/kafka-logs(既不是默认值也没配 log.dirs),
+            # 等于挂了个没人写的空目录。KRaft combined 模式下 metadata.log.dir 默认取
+            # log.dirs 的第一项,所以元数据日志也落在这块 PVC 上。
+            - name: KAFKA_LOG_DIRS
+              value: "/var/lib/kafka/data"
+            # --- Retention: broker 默认保留期(topic 没有自己的 retention.ms 覆盖时生效)。
+            # **必须 > 消费者可能落后的最长时间**。C++ 消费者的 max.poll.interval.ms 是
+            # 900000(kafka_consumer.cpp),迁移窗口里还活着的 per-node topic
+            # (gate-<id> / scene-<id>)是 broker auto-create 出来的、只吃这个默认值 ——
+            # 保留期低于 900s 时,一个短暂落后的 gate 丢的是 BindSession / RoutePlayer,
+            # 而不是"追上来"(routing-identity-audit-20260908.md R11)。
+            # 具体数值由 k8s_deploy.ps1 的 -KafkaProfile 决定,规则写在 Apply-KafkaProfileDefaults。
+            # 有自己契约的 topic(审计 30 天、命令 topic 1 小时、db_task 见 ConfigMap)
+            # 由 kafka-topic-init Job / 各服务的 EnsureTopics 显式覆盖,不吃这个默认值。
             - name: KAFKA_LOG_RETENTION_MS
               value: "__KAFKA_LOG_RETENTION_MS__"
             - name: KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS
               value: "__KAFKA_LOG_RETENTION_CHECK_INTERVAL_MS__"
+            # 每分区的磁盘上限,是 PVC 的兜底闸(retention.ms 先到先删,这条防突发写爆盘)。
             - name: KAFKA_LOG_RETENTION_BYTES
               value: "__KAFKA_LOG_RETENTION_BYTES__"
             - name: KAFKA_LOG_SEGMENT_BYTES
               value: "__KAFKA_LOG_SEGMENT_BYTES__"
             # --- JVM heap (production, single-node KRaft)
+            # 注意:这个变量对 /opt/kafka/bin/*.sh 里的**所有**工具同样生效,包括下面
+            # 探针跑的 kafka-broker-api-versions.sh —— 所以探针那条命令里显式覆盖成
+            # 小堆,否则每次探测都会再起一个 -Xms512m 的 JVM 把 cgroup 撑到 OOMKilled。
             - name: KAFKA_HEAP_OPTS
               value: "__KAFKA_HEAP_OPTS__"
           ports:
@@ -79,16 +228,70 @@ spec:
               name: kafka
             - containerPort: 9093
               name: controller
+          # 探针为什么不能用 tcpSocket 做 readiness:KRaft 启动时 SocketServer 先把
+          # 9092 bind 上,要到启动的最后一步才 enableRequestProcessing。也就是说
+          # **日志恢复期间 TCP 连得上、请求不受理**。用 TCP 探针,Service `kafka` 会在
+          # broker 还没恢复完时就把它放进 endpoint,客户端拿到的是超时而不是重试。
+          # 所以 readiness / startup 走 API 级探测(kafka-broker-api-versions.sh),
+          # liveness 才用便宜的 TCP —— liveness 只负责判"JVM 死了/卡死",判错的代价是
+          # 重启,阈值给宽。
+          #
+          # KAFKA_HEAP_OPTS 在探针命令里被覆盖成 -Xms16m -Xmx64m:容器 env 里的
+          # -Xms512m -Xmx1g 会被这些工具脚本继承,和 broker 自己的 1G 堆叠在
+          # 同一个 memory limit 里,必 OOMKilled。这是本文件最容易踩的一颗雷。
+          startupProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - KAFKA_HEAP_OPTS="-Xms16m -Xmx64m" /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1
+            periodSeconds: 10
+            timeoutSeconds: 10
+            # 30 × 10s = 5 分钟。非正常关闭后的日志恢复(几百个分区)可能要几十秒到几分钟,
+            # startupProbe 期间 liveness / readiness 都不生效,不会被误杀。
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - KAFKA_HEAP_OPTS="-Xms16m -Xmx64m" /opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 >/dev/null 2>&1
+            # 每次探测要起一个 JVM(约 1~2s CPU),周期刻意放到 20s,不做秒级探测。
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 9092
+            periodSeconds: 20
+            timeoutSeconds: 5
+            # 重启单 broker = 控制面短暂停摆,是最后手段,阈值给宽(6 × 20s = 2 分钟)。
+            failureThreshold: 6
           volumeMounts:
             - name: kafka-data
-              mountPath: /tmp/kafka-logs
+              mountPath: /var/lib/kafka/data
+          # 换 PVC 之后 page cache 才真正起作用(emptyDir 时代读写都在节点临时盘上),
+          # 而且探针 JVM 会短暂再占几十 MB:1536Mi limit 配 -Xmx1g 的非堆余量太薄,抬到 2Gi。
+          # requests 抬到 300m/1Gi:512 个命令分区的 segment roll / retention 清理是持续的
+          # 后台工作,200m 的 request 在节点争用时会被限流到启动都变慢。
           resources:
             requests:
-              cpu: 200m
-              memory: 512Mi
+              cpu: 300m
+              memory: 1Gi
             limits:
               cpu: "2"
-              memory: 1536Mi
-      volumes:
-        - name: kafka-data
-          emptyDir: {}
+              memory: 2Gi
+  # 一块盘,跟着 Pod 身份走。不写 storageClassName = 用集群默认 StorageClass
+  # (kind 的 local-path、云上的默认盘)。20Gi 的实际约束是 retention:命令 topic 1 小时、
+  # db_task 见 go-svc ConfigMap 的 RetentionMs、审计 topic 30 天,再由 LOG_RETENTION_BYTES
+  # 每分区兜底。zone 数或 db_task 保留期显著变大时要一起复核这个尺寸。
+  # 注意:删 StatefulSet **不会**删这块 PVC(删 namespace 才会)。infra-down 是删 namespace,
+  # 所以 infra-down → infra-up 之后是一套全新的空 Kafka,必须重跑 infra-kafka-topics。
+  volumeClaimTemplates:
+    - metadata:
+        name: kafka-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 20Gi

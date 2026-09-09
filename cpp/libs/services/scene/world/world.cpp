@@ -31,7 +31,12 @@ void World::InitializeSystemBeforeConnect()
     tlsFrameTimeManager.frameTime.set_previous_time(GetTimeInMilliseconds());
     tlsFrameTimeManager.frameTime.set_target_fps(kTargetFPS);
     tlsFrameTimeManager.frameTime.set_delta_time(1.0 / tlsFrameTimeManager.frameTime.target_fps());
-    tlsIdGeneratorManager.SetNodeId(GetNodeInfo().node_id());
+    // 刻意**不**在这里 SetNodeId:此刻路由 node_id 还没分配(恒 0),见 OnRoutingNodeIdAllocated。
+}
+
+void World::OnRoutingNodeIdAllocated(uint32_t nodeId)
+{
+    tlsIdGeneratorManager.SetNodeId(nodeId);
 }
 
 void World::Update()

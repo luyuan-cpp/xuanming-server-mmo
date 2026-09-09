@@ -1,5 +1,17 @@
 # SnowFlake Guard & Node ID Conflict Handling
 
+> **2026-09-08 起本文大部分已被 [node-id-overhaul-plan-20260908.md](./node-id-overhaul-plan-20260908.md) 取代。**
+> 落码后的现状(与下文旧描述不同的地方):
+> - 发号 worker 与路由 node_id **已解耦**:scene 的 item/tx/snapshot 发号器从 `SnowflakeSlotClient` 拿槽位
+>   (`/snowflake/scene-item/c<cluster>/slots/<slot>`),worker = `(cluster<<12)|slot`;路由 node_id 只做 Kafka topic / 会话反查。
+> - **Redis guard(下文"Layer 3")已删除**:水位改写 etcd `/snowflake/<kind>/c<cluster>/watermark/<slot>`(无 lease),
+>   值 = `max(墙钟, 逻辑高水位)+2s`,与槽位申领在同一个 txn 里原子落第一笔。过渡期仍读旧 Redis guard 取 max,一个版本后删。
+> - 申领算法从"最小空闲位"改为"最久未用 + 隔离期 Q=4h";持有者按水位年龄自 fence(F=2h,判定在 `Generate()` 内)。
+> - **keepalive TTL<=0 / 本地 lease 超时不再 fence、不再退出**:走重注册 + 重挂槽位;只有 alloc key 被别的 uuid 抢走才走
+>   `OnNodeIdConflictShutdown`,只有 `slots/<slot>` 被别的 uuid 持有才永久 `Fence()`。`NodeIdConflictReason` 的前两个枚举值保留但不再触发。
+> - 验收里 "etcdctl lease revoke" 的预期从"fence + 改派 + 退出"改为"重注册 + 重挂,无 fence";日志多了 `worker=c<cluster>:<slot> inc=<rev>`。
+> 下文保留作历史与四层防护的推导过程。
+
 ## Problem Statement
 
 When a node experiences network partition:

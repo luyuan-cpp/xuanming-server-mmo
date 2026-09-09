@@ -31,6 +31,13 @@ ZoneId: 1
 # etcd 节点注册 keepalive 的租约 TTL(秒)。
 LeaseTTL: 60
 
+# 部署级集群号(snowflake worker 段的 cluster 位,0..31)。运维按集群一次性设定,策划不碰;
+# 单集群 / 存量布局保持 0。两个集群共用一个 etcd 也不撞号。
+ClusterId: 0
+
+# snowflake 槽位本地缓存目录:etcd 启动时不可达、缓存在 2h 内则用缓存的槽起服。留空关闭。
+SnowflakeCacheDir: ../../run/snowflake
+
 Kafka:
   Brokers:
     - 127.0.0.1:9092

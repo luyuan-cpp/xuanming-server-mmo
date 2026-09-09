@@ -21,7 +21,7 @@
     pwsh -File tools/scripts/kafka_offset_reset.ps1 `
         -BootstrapServer kafka:9092 `
         -Group db_rpc_consumer_group `
-        -Topic db_task_topic `
+        -Topic db_task_zone_101 `
         -ToDatetime "2026-05-15T03:17:00Z"
 
 .EXAMPLE
@@ -29,7 +29,7 @@
     pwsh -File tools/scripts/kafka_offset_reset.ps1 `
         -BootstrapServer kafka:9092 `
         -Group db_rpc_consumer_group `
-        -Topic db_task_topic `
+        -Topic db_task_zone_101 `
         -ToDatetime "2026-05-15T03:17:00Z" `
         -Apply
 
@@ -38,7 +38,7 @@
     pwsh -File tools/scripts/kafka_offset_reset.ps1 `
         -BootstrapServer kafka:9092 `
         -Group db_rpc_consumer_group `
-        -Topic db_task_topic `
+        -Topic db_task_zone_101 `
         -ToEarliest `
         -Apply
 
@@ -46,7 +46,7 @@
     # Nuclear: delete topic and recreate (zone rollback fallback when binlog spans > retention)
     pwsh -File tools/scripts/kafka_offset_reset.ps1 `
         -BootstrapServer kafka:9092 `
-        -Topic db_task_topic `
+        -Topic db_task_zone_101 `
         -DeleteAndRecreateTopic `
         -Partitions 5 `
         -ReplicationFactor 1 `

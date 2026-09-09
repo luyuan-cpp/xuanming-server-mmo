@@ -13,6 +13,53 @@ message KafkaConfig {
     string group_id = 3;                    // Consumer group ID
     bool enable_auto_commit = 4;            // Enable auto-commit
     string auto_offset_reset = 5;           // earliest / latest
+
+    // ---- 控制面命令 topic 的分区契约 ----
+    // docs/design/control-plane-topic-partitioning-20260908.md。
+    // 控制面命令(GateCommand / SceneCommand)从"一个节点一个 topic"改成
+    // "一个节点类型一个 topic + 固定分区数,partition = node_id % P"。
+    // 三个字段都是 0 = 用编译期默认值(node_command_topic.h 里的常量),
+    // 这样存量 yaml 不改也能起。
+
+    // P:分区数。**不可变契约**,与 db_task / 审计 topic 同一套纪律
+    // (docs/design/db-task-kafka-partition-contract.md):要改就 +1 代号换一批
+    // 新 topic,绝不原地扩分区 —— 扩分区会把 node_id % P 重映射,
+    // 命令就发到没人 assign 的分区上,静默全丢。0 = 256。
+    uint32 command_topic_partitions = 6;
+
+    // 代号,进 topic 名:`<类型>-cmd_g<N>`(与 data_service 的
+    // transaction_log_topic_g1 同形)。0 = 1。
+    uint32 command_topic_generation = 7;
+
+    // 迁移窗口开关:true = **不再**消费旧的 `<类型>-<node_id>` per-node topic。
+    // 默认 false(仍消费),因为生产者是分批切的(Go login 由另一路发布切换),
+    // producer 还在写老 topic 时把消费端关掉 = 命令全丢。
+    // 全部生产者切完后置 true,P1(僵尸进程与继任者共用 consumer group、
+    // 分区被判给僵尸导致继任者饿死)才算彻底关闭 —— 老路径仍是 group 订阅。
+    bool disable_legacy_per_node_topic = 8;
+}
+
+// 一种永久 guid 的号段配置(docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5)。
+// 号段 = scene 经 DataService.AllocateIdSegment 从全局库 id_segment 表领 [lo, hi),
+// 值域 [1, 2^55) 与存量 snowflake 号(≥ 6.7e16)不相交,新旧号在同一张表 / 玩家 blob 里共存、不迁数据。
+// 一种 GUID 一个客户端实例(C++ GuidSegmentRegistry),kind 名 = 注册表种类名 = id_segment.biz_tag。
+message IdSegmentKindConfig {
+    // 种类名:item / txlog / snapshot(以后 pet / guild …)。不认识的名字被忽略并记 ERROR。
+    string kind = 1;
+    // 关闭 = 这种 guid 在本节点**没有发号源**:没有 snowflake 回退(scene 已退出槽位协议),
+    // 每次铸号都 fail-closed。只用于故意停掉某种 guid 的场景,不是回滚开关。
+    bool enabled = 2;
+    // 动态 step(Leaf 口径):首次领段长度,以及上下限。一段不到 15 分钟用完 → 下次 ×2(≤ max_step),
+    // 超过 30 分钟才用完 → 下次 ÷2(≥ min_step)。0 = 钉在 initial_step 上(不扩 / 不缩)。
+    uint32 initial_step = 3;
+    uint32 min_step = 4;
+    uint32 max_step = 5;
+}
+
+// 永久 guid 号段总配置:每种 guid 一块。只有 scene 读;放在部署配置而不是 GameConfig,
+// 因为它是发号基础设施参数,不是玩法参数,而且只有这一份 yaml 不用改两处。
+message IdSegmentConfig {
+    repeated IdSegmentKindConfig kinds = 1;
 }
 
 // Base deploy config
@@ -72,6 +119,16 @@ message BaseDeployConfig {
     // battle 节点客户端面并发直连上限。0 = 关闭运维阈值(仅 dev/test);
     // 语义与 gate_max_connections 相同:超限连接在握手前即被拒。
     uint32 battle_max_connections = 17;
+
+    // 集群号:部署级常量,由运维一次性设定(ConfigMap / yaml),策划不碰,默认 0。
+    // 只有 Go 的 snowflake 槽位协议(login-player / guild / scene-manager / match)消费它,
+    // 作为 17 位 worker 字段的高 5 位([cluster5][node12]);C++ 侧 2026-09-08 起没有消费者
+    // (scene 的永久 guid 走号段,不编码集群),这里只是同一份 yaml 口径的原样读入。
+    // 取值 0..31。见 docs/design/node-id-overhaul-plan-20260908.md §5 / §7.5。
+    uint32 cluster_id = 18;
+
+    // 永久 guid 号段(item / txlog / snapshot 各一块,见 IdSegmentConfig)。
+    IdSegmentConfig id_segment = 19;
 }
 
 // Game config

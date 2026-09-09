@@ -1,17 +1,24 @@
 #include "battle_room_manager.h"
 
 #include <cstdlib>
+#include <limits>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <yaml-cpp/yaml.h>
+
+#include <muduo/contrib/hiredis/Hiredis.h>
+#include <hiredis/hiredis.h>
 
 #include "muduo/base/Logging.h"
 
 #include "engine/infra/messaging/kafka/kafka_producer.h"
 #include "node/system/node/node.h"
+#include "node/system/node/node_command_route.h"
 #include "node_config_manager.h"
+#include "thread_context/redis_manager.h"
 #include "time/system/time.h"
 
 #include "battle_security.h"
@@ -19,6 +26,12 @@
 
 #include "constants/turn_battle_constants.h"
 #include "data/battle_table_fingerprint.h"
+// 结算发件箱的纯判定 + Redis key/Lua 契约(R07)。
+#include "settlement/settlement_outbox.h"
+
+// player:{id}:location 是 scene_manager 写的跨运行时契约 key(单一共享 Redis,
+// cross-zone-matchmaking.md D12),重投时用它重新解析玩家当前所在的 scene。
+#include "proto/scene_manager/storage.pb.h"
 
 #include "proto/common/base/message.pb.h"
 #include "proto/common/event/battle_event.pb.h"
@@ -65,15 +78,22 @@ namespace
 
         contracts::kafka::GateCommand command;
         command.set_event_id(eventId);
+        // target_gate_id 是共享分区之后的**第一级**过滤:一个分区上坐着几百个 gate,
+        // 数字比对先把绝大多数命令挡掉,再轮到 target_instance_id 的字符串比对
+        // (node_kafka_command_filter.h)。以前一节点一 topic 时留 0 也能跑,现在留 0
+        // 等于把便宜那一级关掉。
+        command.set_target_gate_id(routing.gate_node_id());
         command.set_target_instance_id(routing.gate_instance_id());
         command.set_payload(std::move(payload));
 
-        const std::string topic = "gate-" + std::to_string(routing.gate_node_id());
-        const auto err = KafkaProducer::Instance().send(topic, command.SerializeAsString(),
-                                                        std::to_string(playerId));
+        // topic + 分区必须一起算,不能再自己拼 "gate-"+id(见 node_command_route.h)。
+        const auto route = node::kafka::ResolveCommandRoute(GateNodeService, routing.gate_node_id());
+        const auto err = KafkaProducer::Instance().send(route.topic, command.SerializeAsString(),
+                                                        std::to_string(playerId), route.partition);
         if (err != RdKafka::ERR_NO_ERROR)
         {
-            LOG_ERROR << "battle 出站 GateCommand 发送失败: topic=" << topic
+            LOG_ERROR << "battle 出站 GateCommand 发送失败: topic=" << route.topic
+                      << " partition=" << route.partition
                       << " player_id=" << playerId << " event_id=" << eventId << " err=" << err;
         }
     }
@@ -120,10 +140,52 @@ namespace
                         event.SerializeAsString());
     }
 
+    // 底层发送:显式给出 (scene_node_id, scene_instance_id)。
+    // topic=scene-cmd_g<N> 的 scene_node_id % P 号分区,key=player_id
+    // (同一玩家的确认/结算保序 —— 分区已由 node_id 定死,key 只影响同分区内的批次,
+    //  不影响落点,不变量 3 仍然成立)。
+    //
+    // sceneInstanceId 允许为空 —— 只有一种情况:结算**重投**时目标是刚从
+    // player:{id}:location 重新解析出来的 node_id,那里只有节点号没有实例 uuid。
+    // 留空后 gate/scene 侧的 ValidateCommandTarget 会跳过第二级过滤,语义变成
+    // "谁现在持有这个 node_id 就谁执行"——这正是重投想要的。为什么这样是安全的:
+    // 结算命令**自校验于玩家归属**(scene 侧 ApplySettlement 先 GetPlayer(player_id)),
+    // 不持有该玩家的 scene 只会把待结算记录原样再写一遍(幂等),不会误改任何人的数据。
+    // 首投仍然带 uuid,防僵尸这一级一点没松。
+    void SendSceneCommandTo(const uint32_t sceneNodeId, const std::string &sceneInstanceId,
+                            const uint64_t playerId, const uint32_t eventId,
+                            const std::string &payload, const uint64_t battleIdForLog)
+    {
+        if (sceneNodeId == 0)
+        {
+            LOG_ERROR << "battle 出站 scene 事件被拒: scene_node_id 为 0, player_id=" << playerId
+                      << " battle_id=" << battleIdForLog << " event_id=" << eventId;
+            return;
+        }
+
+        contracts::kafka::SceneCommand command;
+        command.set_command_type(contracts::kafka::SceneCommand::DispatchEvent);
+        command.set_player_id(playerId);
+        command.set_target_scene_id(sceneNodeId);
+        command.set_payload(payload);
+        command.set_target_instance_id(sceneInstanceId);
+        command.set_event_id(eventId);
+
+        const auto route = node::kafka::ResolveCommandRoute(SceneNodeService, sceneNodeId);
+        const auto err = KafkaProducer::Instance().send(route.topic, command.SerializeAsString(),
+                                                        std::to_string(playerId), route.partition);
+        if (err != RdKafka::ERR_NO_ERROR)
+        {
+            LOG_ERROR << "battle 出站 scene 事件发送失败: topic=" << route.topic
+                      << " partition=" << route.partition
+                      << " player_id=" << playerId << " battle_id=" << battleIdForLog
+                      << " event_id=" << eventId << " err=" << err;
+        }
+    }
+
     // 发一条进程内事件到玩家所在 scene:SceneCommand{DispatchEvent, eventId, message}。
-    // topic=scene-{scene_node_id},key=player_id(同一玩家的确认/结算保序,不变量 3),
     // target_instance_id=BattleRouting.scene_instance_id(不变量 2 fail-closed)。
-    // 结算事件与确认事件共用;eventId 用生成的 *EventEventId 常量。
+    // 确认事件走这里;结算走 SendSettlementCommand(重投时目标要重新解析,uuid 无从得知)。
     void SendSceneEvent(const ::BattleRouting &routing, const uint64_t playerId,
                         const uint32_t eventId, const google::protobuf::Message &message,
                         const uint64_t battleIdForLog)
@@ -135,32 +197,66 @@ namespace
             return;
         }
 
-        contracts::kafka::SceneCommand command;
-        command.set_command_type(contracts::kafka::SceneCommand::DispatchEvent);
-        command.set_player_id(playerId);
-        command.set_target_scene_id(routing.scene_node_id());
-        command.set_payload(message.SerializeAsString());
-        command.set_target_instance_id(routing.scene_instance_id());
-        command.set_event_id(eventId);
+        SendSceneCommandTo(routing.scene_node_id(), routing.scene_instance_id(), playerId, eventId,
+                           message.SerializeAsString(), battleIdForLog);
+    }
 
-        const std::string topic = "scene-" + std::to_string(routing.scene_node_id());
-        const auto err = KafkaProducer::Instance().send(topic, command.SerializeAsString(),
-                                                        std::to_string(playerId));
-        if (err != RdKafka::ERR_NO_ERROR)
+    // ---- 结算落库(R07):跨进程存储用共享 Redis ----
+    //
+    // 为什么 battle 用 tlsRedis 就够:zone_redis 在本仓部署里是**全服单一实例**
+    // (cross-zone-matchmaking.md D12 把它钉成不变量:player:{id}:location /
+    // player:session:{id} / battle:lock:{id} 三类跨运行时契约 key 都以它为准),
+    // 所以 battle 写的 battle:settlement:pending:* 与 scene 读写的是同一个库。
+    bool RedisReady()
+    {
+        auto &redis = tlsRedis.GetZoneRedis();
+        return redis && redis->connected();
+    }
+
+    // 从 player:{id}:location 解析出玩家当前所在的 scene node_id。0 = 解析不到。
+    // node_id 在这个 key 里是**十进制字符串**(scene_manager 的 enterscenelogic.go
+    // 用 strconv.ParseUint(nodeId, 10, 32) 校验过),不是实体句柄。
+    uint32_t ParseSceneNodeIdFromLocationReply(const redisReply *reply)
+    {
+        if (reply == nullptr || reply->type != REDIS_REPLY_STRING)
         {
-            LOG_ERROR << "battle 出站 scene 事件发送失败: topic=" << topic
-                      << " player_id=" << playerId << " battle_id=" << battleIdForLog
-                      << " event_id=" << eventId << " err=" << err;
+            return 0;
+        }
+        if (reply->len > static_cast<size_t>(std::numeric_limits<int>::max()))
+        {
+            return 0;
+        }
+        storage::PlayerLocation location;
+        if (!location.ParseFromArray(reply->str, static_cast<int>(reply->len)))
+        {
+            return 0;
+        }
+        if (location.node_id().empty())
+        {
+            return 0;
+        }
+        try
+        {
+            const auto parsed = std::stoull(location.node_id());
+            if (parsed == 0 || parsed > std::numeric_limits<uint32_t>::max())
+            {
+                return 0;
+            }
+            return static_cast<uint32_t>(parsed);
+        }
+        catch (const std::exception &)
+        {
+            return 0;
         }
     }
 
-    // 结算:每玩家一条 BattleSettlementEvent。scene 是结算的唯一应用者(宪法 §7 新增不变量 4)。
-    void SendSettlementEvent(const ::BattleRouting &routing, const uint64_t playerId,
-                             const ::BattleSettlementData &settlement)
+    // 结算命令的一次投递(首投与重投共用),payload 是序列化好的 BattleSettlementEvent。
+    void SendSettlementCommand(const uint32_t sceneNodeId, const std::string &sceneInstanceId,
+                               const uint64_t playerId, const uint64_t battleId,
+                               const std::string &payload)
     {
-        ::BattleSettlementEvent event;
-        *event.mutable_settlement() = settlement;
-        SendSceneEvent(routing, playerId, BattleSettlementEventEventId, event, settlement.battle_id());
+        SendSceneCommandTo(sceneNodeId, sceneInstanceId, playerId, BattleSettlementEventEventId,
+                           payload, battleId);
     }
 
     // 确认事件补发策略(与 scene 侧 player_battle.h 的锁保留期对齐):
@@ -536,6 +632,8 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
         response.mutable_error_message()->set_id(kPlayerNotFoundInSession);
         return;
     }
+    // R10:会话/gate 变过就地刷新路由,否则 Kafka→gate 的回落推送还投向旧会话。
+    RefreshRoutingFromSession(sessionDetails);
 
     auto *room = FindRoom(request.battle_id());
     if (room == nullptr)
@@ -571,6 +669,9 @@ void BattleRoomManager::HandleGetBattleState(const ::SessionDetails &sessionDeta
                                              ::BattleStateS2C &response)
 {
     const auto playerId = sessionDetails.player_id();
+    // R10:重连后客户端必发的第一条包就是 GetBattleState —— 这里刷新等于让路由
+    // 在"客户端一回来"的那一刻自愈。
+    RefreshRoutingFromSession(sessionDetails);
     auto *room = FindRoom(request.battle_id());
     // 参战者与观众都放行(观众重进观战画面补拉同一份快照,§10.5)
     const bool isMember =
@@ -735,6 +836,7 @@ void BattleRoomManager::HandleStopWatchBattle(const ::SessionDetails &sessionDet
         response.mutable_error_message()->set_id(kPlayerNotFoundInSession);
         return;
     }
+    RefreshRoutingFromSession(sessionDetails); // R10
 
     auto *room = FindRoom(request.battle_id());
     if (room == nullptr)
@@ -772,6 +874,7 @@ void BattleRoomManager::HandleSetAutoBattle(const ::SessionDetails &sessionDetai
         response.mutable_error_message()->set_id(kPlayerNotFoundInSession);
         return;
     }
+    RefreshRoutingFromSession(sessionDetails); // R10
 
     auto *room = FindRoom(request.battle_id());
     if (room == nullptr)
@@ -950,7 +1053,12 @@ void BattleRoomManager::FinishBattle(BattleRoom &room, const ::eBattleOutcome ou
         *end.mutable_settlement() = settlement;
         PushToPlayer(room, playerId, routing, BattleClientPlayerNotifyBattleEndMessageId, end);
 
-        SendSettlementEvent(routing, playerId, settlement);
+        // R07:先落库、后投递、未销账则重投(重投时重新解析目标)。
+        // 投递被推迟到 Redis 落库回调里,所以它现在**晚于**下面这条解绑发出。
+        // 这不破坏 §3.1 的顺序协议:那条协议约束的是"客户端先收终局包",而解绑走
+        // gate topic、结算走 scene topic,跨 topic 本来就没有顺序保证。真正要保的是
+        // "结算在被投递之前已经持久化",那正是这次调整的目的。
+        DispatchSettlementDurably(routing, playerId, settlement);
         SendUnbindBattle(routing, playerId, room.battleId);
     }
 
@@ -1288,6 +1396,246 @@ void BattleRoomManager::CloseDirectConnections(BattleRoom &room, const char *rea
         }
     }
     room.directConnByPlayer.clear();
+}
+
+// ---- 结算持久化 + 有界重投(R07) ----
+
+void BattleRoomManager::DispatchSettlementDurably(const ::BattleRouting &routing,
+                                                  const uint64_t playerId,
+                                                  const ::BattleSettlementData &settlement)
+{
+    const uint64_t battleId = settlement.battle_id();
+
+    ::BattleSettlementEvent event;
+    *event.mutable_settlement() = settlement;
+    std::string payload;
+    if (!event.SerializeToString(&payload))
+    {
+        LOG_ERROR << "battle 结算序列化失败: battle_id=" << battleId << " player_id=" << playerId;
+        return;
+    }
+
+    const uint32_t sceneNodeId = routing.scene_node_id();
+    const std::string sceneInstanceId = routing.scene_instance_id();
+
+    if (!RedisReady())
+    {
+        // 降级:落不了库就直接投一次。丢了只能靠 scene reaper 按 deadline 解冻
+        // (奖励确实会丢)—— 这与改造前的行为一致,不是新增的退化,但必须响一声。
+        LOG_ERROR << "metric=battle_settlement_not_durable battle_id=" << battleId
+                  << " player_id=" << playerId
+                  << ",Redis 不可用,结算未落库直接投递(投递丢失即奖励丢失)";
+        SendSettlementCommand(sceneNodeId, sceneInstanceId, playerId, battleId, payload);
+        return;
+    }
+
+    // EVAL 两键同 SET 同 TTL;成功回调里才投递,保证"记录先于命令存在"。
+    tlsRedis.GetZoneRedis()->command(
+        [this, battleId, playerId, payload, sceneNodeId, sceneInstanceId](hiredis::Hiredis *,
+                                                                          redisReply *reply)
+        {
+            const bool stored = reply != nullptr && reply->type != REDIS_REPLY_ERROR;
+            if (!stored)
+            {
+                LOG_ERROR << "metric=battle_settlement_not_durable battle_id=" << battleId
+                          << " player_id=" << playerId
+                          << ",待结算记录落库失败,仍尝试投递一次(投递丢失即奖励丢失)";
+                SendSettlementCommand(sceneNodeId, sceneInstanceId, playerId, battleId, payload);
+                return;
+            }
+            SendSettlementCommand(sceneNodeId, sceneInstanceId, playerId, battleId, payload);
+            EnqueuePendingSettlement(battleId, playerId, payload, sceneNodeId);
+        },
+        (std::string("EVAL %s 2 ") + battle_settlement::kPendingSettlementKeyFmt + " " +
+         battle_settlement::kPendingSettlementIdKeyFmt + " %b %llu %u")
+            .c_str(),
+        battle_settlement::kSetPendingSettlementScript, playerId, playerId,
+        payload.data(), payload.size(), battleId, kPendingSettlementTtlSec);
+}
+
+void BattleRoomManager::EnqueuePendingSettlement(const uint64_t battleId, const uint64_t playerId,
+                                                 std::string payload,
+                                                 const uint32_t originalSceneNodeId)
+{
+    PendingSettlement entry;
+    entry.battleId = battleId;
+    entry.playerId = playerId;
+    entry.payload = std::move(payload);
+    entry.originalSceneNodeId = originalSceneNodeId;
+    settlementOutbox_[{battleId, playerId}] = std::move(entry);
+
+    if (!settlementRetryTimer_.IsActive())
+    {
+        settlementRetryTimer_.RunEvery(kSettlementRetryIntervalSec,
+                                       [this]
+                                       { RetryPendingSettlements(); });
+    }
+}
+
+void BattleRoomManager::StopSettlementRetryTimerIfIdle()
+{
+    if (settlementOutbox_.empty() && settlementRetryTimer_.IsActive())
+    {
+        settlementRetryTimer_.Cancel();
+    }
+}
+
+void BattleRoomManager::RetryPendingSettlements()
+{
+    if (settlementOutbox_.empty())
+    {
+        StopSettlementRetryTimerIfIdle();
+        return;
+    }
+    if (!RedisReady())
+    {
+        // 探测不了销账就不能判定,更不能盲目重投:等下一轮。次数也不消耗 ——
+        // Redis 抖动不该把重投窗口白白烧掉。
+        LOG_WARN << "battle 结算重投本轮跳过(Redis 未连接), pending=" << settlementOutbox_.size();
+        return;
+    }
+
+    // 回调里会改 settlementOutbox_,先把本轮要处理的键抄一份。
+    std::vector<std::pair<uint64_t, uint64_t>> keys;
+    keys.reserve(settlementOutbox_.size());
+    for (const auto &[key, entry] : settlementOutbox_)
+    {
+        keys.push_back(key);
+    }
+    for (const auto &[battleId, playerId] : keys)
+    {
+        ProbeAndRetryOne(battleId, playerId);
+    }
+}
+
+void BattleRoomManager::ProbeAndRetryOne(const uint64_t battleId, const uint64_t playerId)
+{
+    // 第一跳:读伴生 id 键探测销账。
+    tlsRedis.GetZoneRedis()->command(
+        [this, battleId, playerId](hiredis::Hiredis *, redisReply *reply)
+        {
+            const auto it = settlementOutbox_.find({battleId, playerId});
+            if (it == settlementOutbox_.end())
+            {
+                return; // 回调期间已被别的路径摘掉
+            }
+            const bool stillOurs = reply != nullptr && reply->type == REDIS_REPLY_STRING &&
+                                   std::string(reply->str, reply->len) == std::to_string(battleId);
+            if (!stillOurs)
+            {
+                LOG_INFO << "battle 结算已销账: battle_id=" << battleId << " player_id=" << playerId
+                         << " attempts=" << it->second.attempts;
+                settlementOutbox_.erase(it);
+                StopSettlementRetryTimerIfIdle();
+                return;
+            }
+
+            // 第二跳:重新解析玩家当前所在的 scene。**绝不复用**开局时抓的 uuid ——
+            // R07 的失败序列里,那个 uuid 恰恰属于已经不在了的那个进程。
+            if (!RedisReady())
+            {
+                return;
+            }
+            tlsRedis.GetZoneRedis()->command(
+                [this, battleId, playerId](hiredis::Hiredis *, redisReply *locationReply)
+                {
+                    const auto entryIt = settlementOutbox_.find({battleId, playerId});
+                    if (entryIt == settlementOutbox_.end())
+                    {
+                        return;
+                    }
+                    auto &entry = entryIt->second;
+                    const uint32_t resolvedNodeId = ParseSceneNodeIdFromLocationReply(locationReply);
+
+                    battle_settlement::RetryInput input;
+                    input.pendingRecordStillOurs = true; // 第一跳已确认
+                    input.locationResolved = resolvedNodeId != 0;
+                    input.attemptsSoFar = entry.attempts;
+                    input.maxAttempts = kSettlementRetryMaxAttempts;
+
+                    const auto action = battle_settlement::ClassifyRetry(input);
+                    ++entry.attempts;
+
+                    switch (action)
+                    {
+                    case battle_settlement::RetryAction::kResend:
+                        LOG_WARN << "metric=battle_settlement_resend battle_id=" << battleId
+                                 << " player_id=" << playerId
+                                 << " original_scene_node_id=" << entry.originalSceneNodeId
+                                 << " resolved_scene_node_id=" << resolvedNodeId
+                                 << " attempt=" << entry.attempts
+                                 << ",结算未销账,按重新解析出的 scene 重投";
+                        // instance uuid 留空 = "谁现在持有这个 node_id 就谁执行"。
+                        SendSettlementCommand(resolvedNodeId, std::string{}, playerId, battleId,
+                                              entry.payload);
+                        return;
+                    case battle_settlement::RetryAction::kSkipNoTarget:
+                        LOG_INFO << "battle 结算重投本轮无目标(玩家不在任何场景): battle_id=" << battleId
+                                 << " player_id=" << playerId << " attempt=" << entry.attempts
+                                 << ",持久记录仍在,等玩家进场景时由登录钩子补应用";
+                        return;
+                    case battle_settlement::RetryAction::kExhausted:
+                        // 响亮但不致命:记录仍在 Redis 里(TTL 7 天),玩家下次进场景补应用。
+                        LOG_ERROR << "metric=battle_settlement_undelivered battle_id=" << battleId
+                                  << " player_id=" << playerId << " attempts=" << entry.attempts
+                                  << ",结算重投次数用尽仍未销账;待结算记录保留,"
+                                  << "由 scene 的 OnPlayerEnterScene 登录钩子兜底应用";
+                        settlementOutbox_.erase(entryIt);
+                        StopSettlementRetryTimerIfIdle();
+                        return;
+                    case battle_settlement::RetryAction::kDone:
+                        settlementOutbox_.erase(entryIt);
+                        StopSettlementRetryTimerIfIdle();
+                        return;
+                    }
+                },
+                "GET player:%llu:location", playerId);
+        },
+        (std::string("GET ") + battle_settlement::kPendingSettlementIdKeyFmt).c_str(), playerId);
+}
+
+void BattleRoomManager::RefreshRoutingFromSession(const ::SessionDetails &sessionDetails)
+{
+    // 只采信真的经 gate 转发过来的会话身份(直连面合成的那份没有 gate 身份)。
+    if (sessionDetails.gate_instance_id().empty() || sessionDetails.player_id() == 0)
+    {
+        return;
+    }
+
+    const auto playerId = sessionDetails.player_id();
+    auto refresh = [&sessionDetails, playerId](std::map<uint64_t, ::BattleRouting> &table,
+                                               const char *what, const uint64_t battleId)
+    {
+        const auto it = table.find(playerId);
+        if (it == table.end())
+        {
+            return;
+        }
+        auto &routing = it->second;
+        if (routing.session_id() == sessionDetails.session_id() &&
+            routing.gate_node_id() == sessionDetails.gate_node_id() &&
+            routing.gate_instance_id() == sessionDetails.gate_instance_id())
+        {
+            return;
+        }
+        LOG_INFO << "battle 刷新" << what << "路由(会话已变): battle_id=" << battleId
+                 << " player_id=" << playerId
+                 << " old_session_id=" << routing.session_id()
+                 << " new_session_id=" << sessionDetails.session_id()
+                 << " old_gate_node_id=" << routing.gate_node_id()
+                 << " new_gate_node_id=" << sessionDetails.gate_node_id();
+        routing.set_session_id(sessionDetails.session_id());
+        routing.set_gate_node_id(sessionDetails.gate_node_id());
+        routing.set_gate_instance_id(sessionDetails.gate_instance_id());
+    };
+
+    // 一个玩家同一时刻只可能在一个房间里参战(scene 侧 InBattleComp + battle:lock 串行化),
+    // 但可以同时观战别的局,所以两张表都扫。房间数是内存对象数量级,遍历成本可忽略。
+    for (auto &[battleId, room] : rooms_)
+    {
+        refresh(room->routingByPlayer, "参战", battleId);
+        refresh(room->routingByObserver, "观战", battleId);
+    }
 }
 
 void BattleRoomManager::HandleIssueBattleTicket(const ::IssueBattleTicketRequest &request,

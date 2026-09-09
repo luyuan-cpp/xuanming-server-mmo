@@ -41,6 +41,18 @@ const (
 	ErrIDGenUnavailable = uint32(table.GuildError_kGuildIdGenUnavailable)
 )
 
+// 合服闸门(logic.checkMergeFence)刻意**没有**在这里加码。
+//
+// 它拒绝时走 gRPC status(FailedPrecondition),不是 TipInfoMessage。理由是本文件
+// 顶上那条规矩:tip 码只能由 data/tip/Tip.xlsx 的 //guild_error 组发号,
+// 而 Tip.xlsx 与生成产物不在本次改动的范围内;借用别的段(common 的
+// kFeatureUnavailable 之类)会当场撞上 TestNoHandWrittenTipCodes 的护栏 ——
+// 那条护栏正是为了防止"随手挪一个别处的码"这种做法,不能为了省事把它绕开。
+//
+// 后果是玩家侧看到的是一条通用错误而不是定制文案。要补文案:往 Tip.xlsx 的
+// //guild_error 组加一行(例如 kGuildZoneMerging),重跑导表器,在上面的 const 块
+// 加一行引用,然后把 checkMergeFence 的返回改回 tipErr —— 调用点只有一处。
+
 // Default limits.
 const (
 	DefaultMaxMembers uint32 = 50

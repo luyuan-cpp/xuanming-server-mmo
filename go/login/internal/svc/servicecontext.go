@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"sync/atomic"
 
 	"github.com/bwmarrin/snowflake"
@@ -12,20 +11,20 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/zrpc"
-	"google.golang.org/protobuf/proto"
 
-	game "login/generated/pb/game"
 	"login/internal/config"
 	"login/internal/dispatcher"
 	"login/internal/kafka"
+	"login/internal/logic/pkg/homezone"
 	"login/internal/logic/pkg/loginqueue"
 	"login/internal/logic/pkg/node"
 	"login/internal/logic/pkg/token"
 	login_proto "proto/common/base"
-	kafkapb "proto/contracts/kafka"
+	dspb "proto/data_service"
 	plpb "proto/player_locator"
 	smpb "proto/scene_manager"
 	"shared/generated/table"
+	"shared/idsegment"
 	"shared/safego"
 	"time"
 )
@@ -34,7 +33,20 @@ type ServiceContext struct {
 	RedisClient *redis.Client
 	// SnowFlake 是 PlayerId 发号器。包了一层 fence 闸(见 player_id_gen.go):
 	// 失去 worker id 所有权后必须一个号都发不出去,不能靠"停服"兜底。
-	SnowFlake           *PlayerIDGen
+	SnowFlake *PlayerIDGen
+	// DataServiceClient 是 data_service 的 gRPC 客户端:PlayerId 号段和 HomeZone
+	// 映射查询共用。IdSegment.Enabled=false 且 DataServiceRpc 没配目标时为 nil。
+	DataServiceClient dspb.DataServiceClient
+	// PlayerIDSegment 是 PlayerId 号段客户端(shared/idsegment,biz_tag="player");
+	// IdSegment.Enabled=false 时为 nil。
+	PlayerIDSegment *idsegment.Client
+	// PlayerIDMinter 是建角发号的**唯一**入口:号段优先,按 IdSegment 配置决定要不要
+	// 回退到 SnowFlake。handler 不许绕过它直接碰 SnowFlake / PlayerIDSegment。
+	PlayerIDMinter *idsegment.Minter
+	// HomeZone 查 data_service 的 player:zone 映射(合服后的真归属)。Login 用它
+	// 修正角色列表的 zone_id,EnterGame 用它决定 EnterScene.ZoneId。永不为 nil;
+	// 没配 DataServiceRpc 时内部 Client 为 nil,所有查询按「不可用→保留存量」处理。
+	HomeZone            *homezone.Resolver
 	NodeInfo            login_proto.NodeInfo
 	KafkaClient         *kafka.KeyOrderedKafkaProducer
 	ExpandMonitor       *kafka.ExpandMonitor
@@ -178,6 +190,8 @@ func NewServiceContext() *ServiceContext {
 		TaskResultDispatcher: dispatcher.NewTaskResultDispatcher(redisClient, 30*time.Second),
 	}
 	sc.initLoginQueue()
+	sc.initPlayerIDMinter()
+	sc.initHomeZoneResolver() // 依赖 initPlayerIDMinter 可能已拨好的 DataServiceClient
 	return sc
 }
 
@@ -349,6 +363,7 @@ func (s *ServiceContext) initLoginQueue() {
 func (s *ServiceContext) Start() {
 	s.ExpandMonitor.Start()
 	s.startPreloadStatsLogger()
+	s.warmPlayerIDSegment()
 	if s.TaskResultDispatcher != nil {
 		s.TaskResultDispatcher.Start()
 	}
@@ -374,34 +389,19 @@ func (c *ServiceContext) SetNodeId(nodeId int64) {
 
 // SendBindSessionToGate sends a BindSession command to the target Gate via Kafka.
 // This replaces Centre's BindSessionToGate RPC.
+//
+// 寻址与两道 fail-closed 守卫都在 buildGateCommandMessage 里(gate_command.go),
+// 这里只负责组业务字段并把算好的 (topic, partition) 原样交给生产者。
 func (s *ServiceContext) SendBindSessionToGate(gateID string, gateInstanceID string,
 	sessionID uint32, playerID uint64, sessionVersion uint32, enterGsType uint32) error {
 
-	eventId := uint32(game.ContractsKafkaBindSessionEventEventId)
-
-	cmd := &kafkapb.GateCommand{
-		SessionId:        sessionID,
-		PlayerId:         playerID,
-		TargetInstanceId: gateInstanceID,
-		EventId:          eventId,
-		EnterGsType:      enterGsType,
-	}
-
-	gateNodeID, err := strconv.ParseUint(gateID, 10, 32)
+	msg, err := buildBindSessionCommand(gateID, gateInstanceID, sessionID, playerID, enterGsType)
 	if err != nil {
-		return fmt.Errorf("parse gate id %q: %w", gateID, err)
-	}
-	cmd.TargetGateId = uint32(gateNodeID)
-
-	data, err := proto.Marshal(cmd)
-	if err != nil {
-		return fmt.Errorf("marshal gate bind session command: %w", err)
+		return err
 	}
 
-	topic := fmt.Sprintf("gate-%s", gateID)
-	partitionKey := strconv.FormatUint(playerID, 10)
-	if err := s.KafkaClient.SendToTopic(topic, data, partitionKey); err != nil {
-		return fmt.Errorf("send gate bind session command to %s: %w", topic, err)
+	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+		return fmt.Errorf("send gate bind session command to %s/%d: %w", msg.Topic, msg.Partition, err)
 	}
 
 	return nil
@@ -409,30 +409,13 @@ func (s *ServiceContext) SendBindSessionToGate(gateID string, gateInstanceID str
 
 // KickSessionOnGate sends a KickPlayer command to the target Gate via Kafka.
 func (s *ServiceContext) KickSessionOnGate(gateID string, gateInstanceID string, sessionID uint32, playerID uint64) error {
-	eventId := uint32(game.ContractsKafkaKickPlayerEventEventId)
-
-	cmd := &kafkapb.GateCommand{
-		SessionId:        sessionID,
-		PlayerId:         playerID,
-		TargetInstanceId: gateInstanceID,
-		EventId:          eventId,
-	}
-
-	gateNodeID, err := strconv.ParseUint(gateID, 10, 32)
+	msg, err := buildKickPlayerCommand(gateID, gateInstanceID, sessionID, playerID)
 	if err != nil {
-		return fmt.Errorf("parse gate id %q: %w", gateID, err)
-	}
-	cmd.TargetGateId = uint32(gateNodeID)
-
-	data, err := proto.Marshal(cmd)
-	if err != nil {
-		return fmt.Errorf("marshal gate kick command: %w", err)
+		return err
 	}
 
-	topic := fmt.Sprintf("gate-%s", gateID)
-	partitionKey := strconv.FormatUint(cmd.PlayerId, 10)
-	if err := s.KafkaClient.SendToTopic(topic, data, partitionKey); err != nil {
-		return fmt.Errorf("send gate kick command to %s: %w", topic, err)
+	if err := s.KafkaClient.SendToTopicPartition(msg.Topic, msg.Partition, msg.Payload, msg.PartitionKey); err != nil {
+		return fmt.Errorf("send gate kick command to %s/%d: %w", msg.Topic, msg.Partition, err)
 	}
 
 	return nil
@@ -440,6 +423,9 @@ func (s *ServiceContext) KickSessionOnGate(gateID string, gateInstanceID string,
 
 func (s *ServiceContext) Stop() {
 	s.ExpandMonitor.Stop()
+	if s.PlayerIDSegment != nil {
+		s.PlayerIDSegment.Close()
+	}
 	if s.preloadStatsStop != nil {
 		close(s.preloadStatsStop)
 		s.preloadStatsStop = nil

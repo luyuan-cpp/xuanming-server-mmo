@@ -108,6 +108,97 @@ void EtcdHelper::PutWithLease(const std::string &key, const std::string &newValu
 	SendKVTxn(tlsNodeContextManager.GetRegistry(EtcdNodeService), tlsNodeContextManager.GetGlobalEntity(EtcdNodeService), txn);
 }
 
+void EtcdHelper::PutWithLease(const std::string &key, const NodeInfo &nodeInfo, int64_t lease)
+{
+	std::string jsonValue;
+	auto status = google::protobuf::util::MessageToJsonString(nodeInfo, &jsonValue);
+	if (!status.ok())
+	{
+		LOG_ERROR << " Failed to serialize NodeInfo to JSON. "
+				  << "Error: " << status.message().data();
+		return;
+	}
+
+	PutWithLease(key, jsonValue, lease);
+}
+
+etcdserverpb::TxnRequest EtcdHelper::BuildClaimIfAbsentOrOwnedTxn(const std::string &key,
+																	const std::string &value,
+																	const std::string &ownerValue,
+																	int64_t lease,
+																	const std::vector<etcdserverpb::RequestOp> &extraSuccessOps)
+{
+	etcdserverpb::TxnRequest txn;
+
+	auto &absent = *txn.add_compare();
+	absent.set_key(key);
+	absent.set_target(etcdserverpb::Compare::CREATE);
+	absent.set_result(etcdserverpb::Compare::EQUAL);
+	absent.set_create_revision(0);
+
+	auto appendClaim = [&](google::protobuf::RepeatedPtrField<etcdserverpb::RequestOp> &ops)
+	{
+		auto &put = *ops.Add()->mutable_request_put();
+		put.set_key(key);
+		put.set_value(value);
+		put.set_lease(lease);
+		for (const auto &extra : extraSuccessOps)
+		{
+			*ops.Add() = extra;
+		}
+	};
+	appendClaim(*txn.mutable_success());
+
+	// 外层 compare 失败 = key 存在。内层再问一次"是不是我的":Value 比较对不存在的 key
+	// 恒 false,所以内层不会误放行一个刚好在两次 compare 之间被删掉的 key。
+	auto &nested = *txn.add_failure()->mutable_request_txn();
+	auto &owned = *nested.add_compare();
+	owned.set_key(key);
+	owned.set_target(etcdserverpb::Compare::VALUE);
+	owned.set_result(etcdserverpb::Compare::EQUAL);
+	owned.set_value(ownerValue);
+	appendClaim(*nested.mutable_success());
+	auto &whoHolds = *nested.add_failure()->mutable_request_range();
+	whoHolds.set_key(key);
+
+	return txn;
+}
+
+void EtcdHelper::PutIfAbsentOrOwned(const std::string &key, const std::string &value, const std::string &ownerValue, int64_t lease)
+{
+	const auto txn = BuildClaimIfAbsentOrOwnedTxn(key, value, ownerValue, lease);
+	SendKVTxn(tlsNodeContextManager.GetRegistry(EtcdNodeService), tlsNodeContextManager.GetGlobalEntity(EtcdNodeService), txn);
+}
+
+bool EtcdHelper::TxnClaimSucceeded(const etcdserverpb::TxnResponse &reply)
+{
+	if (reply.succeeded())
+	{
+		return true;
+	}
+	// 嵌套形态:失败分支唯一的一个响应是内层 txn,它的 succeeded 才是"已经是我的"。
+	if (reply.responses_size() == 1 && reply.responses(0).has_response_txn())
+	{
+		return reply.responses(0).response_txn().succeeded();
+	}
+	return false;
+}
+
+const mvccpb::KeyValue *EtcdHelper::TxnClaimCurrentHolder(const etcdserverpb::TxnResponse &reply)
+{
+	if (reply.succeeded() || reply.responses_size() != 1 || !reply.responses(0).has_response_txn())
+	{
+		return nullptr;
+	}
+	const auto &nested = reply.responses(0).response_txn();
+	if (nested.succeeded() || nested.responses_size() != 1 || !nested.responses(0).has_response_range())
+	{
+		return nullptr;
+	}
+	const auto &range = nested.responses(0).response_range();
+	return range.kvs_size() > 0 ? &range.kvs(0) : nullptr;
+}
+
 void EtcdHelper::PutIfAbsent(const std::string &key, const NodeInfo &nodeInfo, int64_t lease)
 {
 	std::string jsonValue;

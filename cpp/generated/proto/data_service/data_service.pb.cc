@@ -113,6 +113,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
         // ::data_service::CreateEventSnapshotResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::AllocateIdSegmentRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
+        // ::data_service::AllocateIdSegmentResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
@@ -5880,6 +5884,315 @@ const ::_pbi::ClassData* BatchGetPlayerHomeZoneRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class AllocateIdSegmentResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AllocateIdSegmentResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_._has_bits_);
+};
+
+constexpr AllocateIdSegmentResponse::ParseTableT_ AllocateIdSegmentResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      3, 24,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967288,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      3,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::AllocateIdSegmentResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 error_code = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AllocateIdSegmentResponse, _impl_.error_code_), 2>(),
+       {8, 2, 0,
+        PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_.error_code_)}},
+      // uint64 lo = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AllocateIdSegmentResponse, _impl_.lo_), 0>(),
+       {16, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_.lo_)}},
+      // uint64 hi = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AllocateIdSegmentResponse, _impl_.hi_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_.hi_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 error_code = 1;
+      {PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_.error_code_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 lo = 2;
+      {PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_.lo_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 hi = 3;
+      {PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_.hi_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr AllocateIdSegmentResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        lo_{::uint64_t{0u}},
+        hi_{::uint64_t{0u}},
+        error_code_{0u} {}
+
+template <typename>
+constexpr AllocateIdSegmentResponse::AllocateIdSegmentResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AllocateIdSegmentResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AllocateIdSegmentResponse(arena);
+}
+constexpr auto AllocateIdSegmentResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(AllocateIdSegmentResponse), alignof(AllocateIdSegmentResponse));
+}
+constexpr auto AllocateIdSegmentResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AllocateIdSegmentResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AllocateIdSegmentResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AllocateIdSegmentResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AllocateIdSegmentResponse>(), &AllocateIdSegmentResponse::ByteSizeLong,
+              &AllocateIdSegmentResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[43],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AllocateIdSegmentResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AllocateIdSegmentResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AllocateIdSegmentResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AllocateIdSegmentResponse::InternalGenerateClassData_(
+            _default, &AllocateIdSegmentResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AllocateIdSegmentResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AllocateIdSegmentResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AllocateIdSegmentResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AllocateIdSegmentResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AllocateIdSegmentResponseGlobalsTypeInternal AllocateIdSegmentResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AllocateIdSegmentResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AllocateIdSegmentResponse_globals_.GetClassData();
+#else
+  return AllocateIdSegmentResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AllocateIdSegmentRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AllocateIdSegmentRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AllocateIdSegmentRequest, _impl_._has_bits_);
+};
+
+constexpr AllocateIdSegmentRequest::ParseTableT_ AllocateIdSegmentRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AllocateIdSegmentRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::data_service::AllocateIdSegmentRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 step = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AllocateIdSegmentRequest, _impl_.step_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(AllocateIdSegmentRequest, _impl_.step_)}},
+      // string biz_tag = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AllocateIdSegmentRequest, _impl_.biz_tag_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string biz_tag = 1;
+      {PROTOBUF_FIELD_OFFSET(AllocateIdSegmentRequest, _impl_.biz_tag_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 step = 2;
+      {PROTOBUF_FIELD_OFFSET(AllocateIdSegmentRequest, _impl_.step_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+      "\45\7\0\0\0\0\0\0"
+      "data_service.AllocateIdSegmentRequest"
+      "biz_tag"
+    }},
+  };
+}
+
+
+inline constexpr AllocateIdSegmentRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        biz_tag_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        step_{0u} {}
+
+template <typename>
+constexpr AllocateIdSegmentRequest::AllocateIdSegmentRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AllocateIdSegmentRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AllocateIdSegmentRequest(arena);
+}
+constexpr auto AllocateIdSegmentRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AllocateIdSegmentRequest), alignof(AllocateIdSegmentRequest));
+}
+constexpr auto AllocateIdSegmentRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AllocateIdSegmentRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<AllocateIdSegmentRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AllocateIdSegmentRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<AllocateIdSegmentRequest>(), &AllocateIdSegmentRequest::ByteSizeLong,
+              &AllocateIdSegmentRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AllocateIdSegmentRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[42],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AllocateIdSegmentRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AllocateIdSegmentRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AllocateIdSegmentRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AllocateIdSegmentRequest::InternalGenerateClassData_(
+            _default, &AllocateIdSegmentRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AllocateIdSegmentRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AllocateIdSegmentRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AllocateIdSegmentRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AllocateIdSegmentRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AllocateIdSegmentRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AllocateIdSegmentRequestGlobalsTypeInternal AllocateIdSegmentRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AllocateIdSegmentRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AllocateIdSegmentRequest_globals_.GetClassData();
+#else
+  return AllocateIdSegmentRequest_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class SavePlayerDataRequest::_Internal {
  public:
   using HasBits = decltype(::std::declval<SavePlayerDataRequest>()._impl_._has_bits_);
@@ -7473,6 +7786,22 @@ const ::uint32_t
         2,
         0,
         1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::AllocateIdSegmentRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::AllocateIdSegmentRequest, _impl_.biz_tag_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AllocateIdSegmentRequest, _impl_.step_),
+        0,
+        1,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::data_service::AllocateIdSegmentResponse, _impl_._has_bits_),
+        6, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::data_service::AllocateIdSegmentResponse, _impl_.error_code_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AllocateIdSegmentResponse, _impl_.lo_),
+        PROTOBUF_FIELD_OFFSET(::data_service::AllocateIdSegmentResponse, _impl_.hi_),
+        2,
+        0,
+        1,
 };
 
 static const ::_pbi::MigrationSchema
@@ -7519,6 +7848,8 @@ static const ::_pbi::MigrationSchema
         {407, sizeof(::data_service::QueryTransactionLogResponse)},
         {416, sizeof(::data_service::CreateEventSnapshotRequest)},
         {427, sizeof(::data_service::CreateEventSnapshotResponse)},
+        {436, sizeof(::data_service::AllocateIdSegmentRequest)},
+        {443, sizeof(::data_service::AllocateIdSegmentResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -7564,6 +7895,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::data_service::QueryTransactionLogResponse_globals_,
         &::data_service::CreateEventSnapshotRequest_globals_,
         &::data_service::CreateEventSnapshotResponse_globals_,
+        &::data_service::AllocateIdSegmentRequest_globals_,
+        &::data_service::AllocateIdSegmentResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -7684,62 +8017,68 @@ const char descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2ep
     "\n\014event_detail\030\003 \001(\t\022\020\n\010operator\030\004 \001(\t\"Z"
     "\n\033CreateEventSnapshotResponse\022\022\n\nerror_c"
     "ode\030\001 \001(\r\022\023\n\013snapshot_id\030\002 \001(\004\022\022\n\ncreate"
-    "d_at\030\003 \001(\004*\207\001\n\014SnapshotType\022\023\n\017SNAPSHOT_"
-    "MANUAL\020\000\022\025\n\021SNAPSHOT_PERIODIC\020\001\022\034\n\030SNAPS"
-    "HOT_PRE_MAINTENANCE\020\002\022\031\n\025SNAPSHOT_PRE_RO"
-    "LLBACK\020\003\022\022\n\016SNAPSHOT_LOGIN\020\004*8\n\rRollback"
-    "Scope\022\021\n\rROLLBACK_FULL\020\000\022\024\n\020ROLLBACK_PAR"
-    "TIAL\020\001*\212\001\n\021SnapshotEventType\022\033\n\027EVENT_LA"
-    "RGE_TRANSACTION\020\000\022\022\n\016EVENT_RECHARGE\020\001\022\031\n"
-    "\025EVENT_PRE_MAINTENANCE\020\002\022\022\n\016EVENT_LEVEL_"
-    "UP\020\003\022\025\n\021EVENT_FIRST_LOGIN\020\0042\274\016\n\013DataServ"
-    "ice\022]\n\016LoadPlayerData\022#.data_service.Loa"
-    "dPlayerDataRequest\032$.data_service.LoadPl"
-    "ayerDataResponse\"\000\022]\n\016SavePlayerData\022#.d"
-    "ata_service.SavePlayerDataRequest\032$.data"
-    "_service.SavePlayerDataResponse\"\000\022]\n\016Get"
-    "PlayerField\022#.data_service.GetPlayerFiel"
-    "dRequest\032$.data_service.GetPlayerFieldRe"
-    "sponse\"\000\022]\n\016SetPlayerField\022#.data_servic"
-    "e.SetPlayerFieldRequest\032$.data_service.S"
-    "etPlayerFieldResponse\"\000\022W\n\022RegisterPlaye"
-    "rZone\022\'.data_service.RegisterPlayerZoneR"
-    "equest\032\026.google.protobuf.Empty\"\000\022f\n\021GetP"
-    "layerHomeZone\022&.data_service.GetPlayerHo"
-    "meZoneRequest\032\'.data_service.GetPlayerHo"
-    "meZoneResponse\"\000\022u\n\026BatchGetPlayerHomeZo"
-    "ne\022+.data_service.BatchGetPlayerHomeZone"
-    "Request\032,.data_service.BatchGetPlayerHom"
-    "eZoneResponse\"\000\022r\n\025RemapHomeZoneForMerge"
-    "\022*.data_service.RemapHomeZoneForMergeReq"
-    "uest\032+.data_service.RemapHomeZoneForMerg"
-    "eResponse\"\000\022c\n\020DeletePlayerData\022%.data_s"
-    "ervice.DeletePlayerDataRequest\032&.data_se"
-    "rvice.DeletePlayerDataResponse\"\000\022o\n\024Crea"
-    "tePlayerSnapshot\022).data_service.CreatePl"
-    "ayerSnapshotRequest\032*.data_service.Creat"
-    "ePlayerSnapshotResponse\"\000\022l\n\023ListPlayerS"
-    "napshots\022(.data_service.ListPlayerSnapsh"
-    "otsRequest\032).data_service.ListPlayerSnap"
-    "shotsResponse\"\000\022r\n\025GetPlayerSnapshotDiff"
-    "\022*.data_service.GetPlayerSnapshotDiffReq"
-    "uest\032+.data_service.GetPlayerSnapshotDif"
-    "fResponse\"\000\022]\n\016RollbackPlayer\022#.data_ser"
-    "vice.RollbackPlayerRequest\032$.data_servic"
-    "e.RollbackPlayerResponse\"\000\022W\n\014RollbackZo"
-    "ne\022!.data_service.RollbackZoneRequest\032\"."
-    "data_service.RollbackZoneResponse\"\000\022T\n\013R"
-    "ollbackAll\022 .data_service.RollbackAllReq"
-    "uest\032!.data_service.RollbackAllResponse\""
-    "\000\022c\n\020BatchRecallItems\022%.data_service.Bat"
-    "chRecallItemsRequest\032&.data_service.Batc"
-    "hRecallItemsResponse\"\000\022l\n\023QueryTransacti"
-    "onLog\022(.data_service.QueryTransactionLog"
-    "Request\032).data_service.QueryTransactionL"
-    "ogResponse\"\000\022l\n\023CreateEventSnapshot\022(.da"
-    "ta_service.CreateEventSnapshotRequest\032)."
-    "data_service.CreateEventSnapshotResponse"
-    "\"\000B\033Z\031data_service/data_serviceb\006proto3"
+    "d_at\030\003 \001(\004\"9\n\030AllocateIdSegmentRequest\022\017"
+    "\n\007biz_tag\030\001 \001(\t\022\014\n\004step\030\002 \001(\r\"G\n\031Allocat"
+    "eIdSegmentResponse\022\022\n\nerror_code\030\001 \001(\r\022\n"
+    "\n\002lo\030\002 \001(\004\022\n\n\002hi\030\003 \001(\004*\207\001\n\014SnapshotType\022"
+    "\023\n\017SNAPSHOT_MANUAL\020\000\022\025\n\021SNAPSHOT_PERIODI"
+    "C\020\001\022\034\n\030SNAPSHOT_PRE_MAINTENANCE\020\002\022\031\n\025SNA"
+    "PSHOT_PRE_ROLLBACK\020\003\022\022\n\016SNAPSHOT_LOGIN\020\004"
+    "*8\n\rRollbackScope\022\021\n\rROLLBACK_FULL\020\000\022\024\n\020"
+    "ROLLBACK_PARTIAL\020\001*\212\001\n\021SnapshotEventType"
+    "\022\033\n\027EVENT_LARGE_TRANSACTION\020\000\022\022\n\016EVENT_R"
+    "ECHARGE\020\001\022\031\n\025EVENT_PRE_MAINTENANCE\020\002\022\022\n\016"
+    "EVENT_LEVEL_UP\020\003\022\025\n\021EVENT_FIRST_LOGIN\020\0042"
+    "\244\017\n\013DataService\022]\n\016LoadPlayerData\022#.data"
+    "_service.LoadPlayerDataRequest\032$.data_se"
+    "rvice.LoadPlayerDataResponse\"\000\022]\n\016SavePl"
+    "ayerData\022#.data_service.SavePlayerDataRe"
+    "quest\032$.data_service.SavePlayerDataRespo"
+    "nse\"\000\022]\n\016GetPlayerField\022#.data_service.G"
+    "etPlayerFieldRequest\032$.data_service.GetP"
+    "layerFieldResponse\"\000\022]\n\016SetPlayerField\022#"
+    ".data_service.SetPlayerFieldRequest\032$.da"
+    "ta_service.SetPlayerFieldResponse\"\000\022W\n\022R"
+    "egisterPlayerZone\022\'.data_service.Registe"
+    "rPlayerZoneRequest\032\026.google.protobuf.Emp"
+    "ty\"\000\022f\n\021GetPlayerHomeZone\022&.data_service"
+    ".GetPlayerHomeZoneRequest\032\'.data_service"
+    ".GetPlayerHomeZoneResponse\"\000\022u\n\026BatchGet"
+    "PlayerHomeZone\022+.data_service.BatchGetPl"
+    "ayerHomeZoneRequest\032,.data_service.Batch"
+    "GetPlayerHomeZoneResponse\"\000\022r\n\025RemapHome"
+    "ZoneForMerge\022*.data_service.RemapHomeZon"
+    "eForMergeRequest\032+.data_service.RemapHom"
+    "eZoneForMergeResponse\"\000\022c\n\020DeletePlayerD"
+    "ata\022%.data_service.DeletePlayerDataReque"
+    "st\032&.data_service.DeletePlayerDataRespon"
+    "se\"\000\022o\n\024CreatePlayerSnapshot\022).data_serv"
+    "ice.CreatePlayerSnapshotRequest\032*.data_s"
+    "ervice.CreatePlayerSnapshotResponse\"\000\022l\n"
+    "\023ListPlayerSnapshots\022(.data_service.List"
+    "PlayerSnapshotsRequest\032).data_service.Li"
+    "stPlayerSnapshotsResponse\"\000\022r\n\025GetPlayer"
+    "SnapshotDiff\022*.data_service.GetPlayerSna"
+    "pshotDiffRequest\032+.data_service.GetPlaye"
+    "rSnapshotDiffResponse\"\000\022]\n\016RollbackPlaye"
+    "r\022#.data_service.RollbackPlayerRequest\032$"
+    ".data_service.RollbackPlayerResponse\"\000\022W"
+    "\n\014RollbackZone\022!.data_service.RollbackZo"
+    "neRequest\032\".data_service.RollbackZoneRes"
+    "ponse\"\000\022T\n\013RollbackAll\022 .data_service.Ro"
+    "llbackAllRequest\032!.data_service.Rollback"
+    "AllResponse\"\000\022c\n\020BatchRecallItems\022%.data"
+    "_service.BatchRecallItemsRequest\032&.data_"
+    "service.BatchRecallItemsResponse\"\000\022l\n\023Qu"
+    "eryTransactionLog\022(.data_service.QueryTr"
+    "ansactionLogRequest\032).data_service.Query"
+    "TransactionLogResponse\"\000\022l\n\023CreateEventS"
+    "napshot\022(.data_service.CreateEventSnapsh"
+    "otRequest\032).data_service.CreateEventSnap"
+    "shotResponse\"\000\022f\n\021AllocateIdSegment\022&.da"
+    "ta_service.AllocateIdSegmentRequest\032\'.da"
+    "ta_service.AllocateIdSegmentResponse\"\000B\033"
+    "Z\031data_service/data_serviceb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps[1] = {
@@ -7749,13 +8088,13 @@ static ::absl::once_flag descriptor_table_proto_2fdata_5fservice_2fdata_5fservic
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto = {
     false,
     false,
-    6919,
+    7155,
     descriptor_table_protodef_proto_2fdata_5fservice_2fdata_5fservice_2eproto,
     "proto/data_service/data_service.proto",
     &descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_once,
     descriptor_table_proto_2fdata_5fservice_2fdata_5fservice_2eproto_deps,
     1,
-    42,
+    44,
     schemas,
     file_message_globals,
     TableStruct_proto_2fdata_5fservice_2fdata_5fservice_2eproto::offsets,
@@ -19289,6 +19628,497 @@ void CreateEventSnapshotResponse::InternalSwap(CreateEventSnapshotResponse* PROT
 }
 
 ::google::protobuf::Metadata CreateEventSnapshotResponse::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AllocateIdSegmentRequest::AllocateIdSegmentRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AllocateIdSegmentRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.AllocateIdSegmentRequest)
+}
+PROTOBUF_NDEBUG_INLINE AllocateIdSegmentRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::data_service::AllocateIdSegmentRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        biz_tag_(arena, from.biz_tag_) {}
+
+AllocateIdSegmentRequest::AllocateIdSegmentRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const AllocateIdSegmentRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AllocateIdSegmentRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  AllocateIdSegmentRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  _impl_.step_ = from._impl_.step_;
+
+  // @@protoc_insertion_point(copy_constructor:data_service.AllocateIdSegmentRequest)
+}
+PROTOBUF_NDEBUG_INLINE AllocateIdSegmentRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        biz_tag_(arena) {}
+
+inline void AllocateIdSegmentRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.step_ = {};
+}
+AllocateIdSegmentRequest::~AllocateIdSegmentRequest() {
+  // @@protoc_insertion_point(destructor:data_service.AllocateIdSegmentRequest)
+  SharedDtor(*this);
+}
+inline void AllocateIdSegmentRequest::SharedDtor(MessageLite& self) {
+  AllocateIdSegmentRequest& this_ = static_cast<AllocateIdSegmentRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.biz_tag_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AllocateIdSegmentRequest_class_data_ =
+        AllocateIdSegmentRequest::InternalGenerateClassData_(AllocateIdSegmentRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AllocateIdSegmentRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AllocateIdSegmentRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AllocateIdSegmentRequest_class_data_.tc_table);
+  return AllocateIdSegmentRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AllocateIdSegmentRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AllocateIdSegmentRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AllocateIdSegmentRequest_globals_));
+  return AllocateIdSegmentRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AllocateIdSegmentRequest::ParseTableT_
+    AllocateIdSegmentRequest::_table_ =
+        AllocateIdSegmentRequest::InternalGenerateParseTable_(AllocateIdSegmentRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AllocateIdSegmentRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.AllocateIdSegmentRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.biz_tag_.ClearNonDefaultToEmpty();
+  }
+  _impl_.step_ = 0u;
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AllocateIdSegmentRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AllocateIdSegmentRequest& this_ = static_cast<const AllocateIdSegmentRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AllocateIdSegmentRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AllocateIdSegmentRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.AllocateIdSegmentRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string biz_tag = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_biz_tag().empty()) {
+      const ::std::string& _s = this_._internal_biz_tag();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "data_service.AllocateIdSegmentRequest.biz_tag");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  // uint32 step = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_step() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_step(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.AllocateIdSegmentRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AllocateIdSegmentRequest::ByteSizeLong(const MessageLite& base) {
+  const AllocateIdSegmentRequest& this_ = static_cast<const AllocateIdSegmentRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AllocateIdSegmentRequest::ByteSizeLong() const {
+  const AllocateIdSegmentRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.AllocateIdSegmentRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // string biz_tag = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_biz_tag().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_biz_tag());
+      }
+    }
+    // uint32 step = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_step() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_step());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AllocateIdSegmentRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AllocateIdSegmentRequest*>(&to_msg);
+  auto& from = static_cast<const AllocateIdSegmentRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.AllocateIdSegmentRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_biz_tag().empty()) {
+        _this->_internal_set_biz_tag(from._internal_biz_tag());
+      } else {
+        if (_this->_impl_.biz_tag_.IsDefault()) {
+          _this->_internal_set_biz_tag("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_step() != 0) {
+        _this->_impl_.step_ = from._impl_.step_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AllocateIdSegmentRequest::CopyFrom(const AllocateIdSegmentRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.AllocateIdSegmentRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AllocateIdSegmentRequest::InternalSwap(AllocateIdSegmentRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.biz_tag_, &other->_impl_.biz_tag_, arena);
+  swap(_impl_.step_, other->_impl_.step_);
+}
+
+::google::protobuf::Metadata AllocateIdSegmentRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AllocateIdSegmentResponse::AllocateIdSegmentResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AllocateIdSegmentResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:data_service.AllocateIdSegmentResponse)
+}
+AllocateIdSegmentResponse::AllocateIdSegmentResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AllocateIdSegmentResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, AllocateIdSegmentResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE AllocateIdSegmentResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void AllocateIdSegmentResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, lo_),
+           0,
+           offsetof(Impl_, error_code_) -
+               offsetof(Impl_, lo_) +
+               sizeof(Impl_::error_code_));
+}
+AllocateIdSegmentResponse::~AllocateIdSegmentResponse() {
+  // @@protoc_insertion_point(destructor:data_service.AllocateIdSegmentResponse)
+  SharedDtor(*this);
+}
+inline void AllocateIdSegmentResponse::SharedDtor(MessageLite& self) {
+  AllocateIdSegmentResponse& this_ = static_cast<AllocateIdSegmentResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AllocateIdSegmentResponse_class_data_ =
+        AllocateIdSegmentResponse::InternalGenerateClassData_(AllocateIdSegmentResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AllocateIdSegmentResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AllocateIdSegmentResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AllocateIdSegmentResponse_class_data_.tc_table);
+  return AllocateIdSegmentResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AllocateIdSegmentResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AllocateIdSegmentResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AllocateIdSegmentResponse_globals_));
+  return AllocateIdSegmentResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AllocateIdSegmentResponse::ParseTableT_
+    AllocateIdSegmentResponse::_table_ =
+        AllocateIdSegmentResponse::InternalGenerateParseTable_(AllocateIdSegmentResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AllocateIdSegmentResponse::Clear() {
+// @@protoc_insertion_point(message_clear_start:data_service.AllocateIdSegmentResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    ::memset(&_impl_.lo_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.error_code_) -
+        reinterpret_cast<char*>(&_impl_.lo_)) + sizeof(_impl_.error_code_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AllocateIdSegmentResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AllocateIdSegmentResponse& this_ = static_cast<const AllocateIdSegmentResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AllocateIdSegmentResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AllocateIdSegmentResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:data_service.AllocateIdSegmentResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 error_code = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_error_code() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_error_code(), target);
+    }
+  }
+
+  // uint64 lo = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_lo() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_lo(), target);
+    }
+  }
+
+  // uint64 hi = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_hi() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_hi(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:data_service.AllocateIdSegmentResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AllocateIdSegmentResponse::ByteSizeLong(const MessageLite& base) {
+  const AllocateIdSegmentResponse& this_ = static_cast<const AllocateIdSegmentResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AllocateIdSegmentResponse::ByteSizeLong() const {
+  const AllocateIdSegmentResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:data_service.AllocateIdSegmentResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    // uint64 lo = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_lo() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_lo());
+      }
+    }
+    // uint64 hi = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_hi() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_hi());
+      }
+    }
+    // uint32 error_code = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_error_code() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_error_code());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AllocateIdSegmentResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AllocateIdSegmentResponse*>(&to_msg);
+  auto& from = static_cast<const AllocateIdSegmentResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:data_service.AllocateIdSegmentResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_lo() != 0) {
+        _this->_impl_.lo_ = from._impl_.lo_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_hi() != 0) {
+        _this->_impl_.hi_ = from._impl_.hi_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_error_code() != 0) {
+        _this->_impl_.error_code_ = from._impl_.error_code_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AllocateIdSegmentResponse::CopyFrom(const AllocateIdSegmentResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:data_service.AllocateIdSegmentResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AllocateIdSegmentResponse::InternalSwap(AllocateIdSegmentResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_.error_code_)
+      + sizeof(AllocateIdSegmentResponse::_impl_.error_code_)
+      - PROTOBUF_FIELD_OFFSET(AllocateIdSegmentResponse, _impl_.lo_)>(
+          reinterpret_cast<char*>(&_impl_.lo_),
+          reinterpret_cast<char*>(&other->_impl_.lo_));
+}
+
+::google::protobuf::Metadata AllocateIdSegmentResponse::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

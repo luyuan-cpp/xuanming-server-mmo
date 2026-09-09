@@ -39,6 +39,11 @@ service DataService {
   rpc BatchRecallItems(BatchRecallItemsRequest) returns (BatchRecallItemsResponse) {}
   rpc QueryTransactionLog(QueryTransactionLogRequest) returns (QueryTransactionLogResponse) {}
   rpc CreateEventSnapshot(CreateEventSnapshotRequest) returns (CreateEventSnapshotResponse) {}
+
+  // ── ID segment allocation (Leaf-segment) ────────────────────
+  // C++ scene 没有 MySQL 客户端,永久 ID(item guid 等)的号段经这里从 id_segment 表领取。
+  // 见 docs/design/node-id-overhaul-plan-20260908.md §6。
+  rpc AllocateIdSegment(AllocateIdSegmentRequest) returns (AllocateIdSegmentResponse) {}
 }
 
 // ── Load / Save ────────────────────────────────────────────────
@@ -363,4 +368,21 @@ message CreateEventSnapshotResponse {
   uint32 error_code = 1;
   uint64 snapshot_id = 2;
   uint64 created_at = 3;
+}
+
+// ── ID segment allocation ──────────────────────────────────────
+
+message AllocateIdSegmentRequest {
+  string biz_tag = 1;   // id_segment.biz_tag:"player" / "guild" / "item"
+  uint32 step = 2;      // 0 = 用表里配置的 step;>0 = 本次希望领取的段长(服务端可钳制)
+}
+
+// 返回半开区间 [lo, hi):调用方独占这一段,服务端一经返回即视为已发出、绝不重发。
+// 调用方段内发号完毕(或进程退出)剩余的号直接作废,不回收。
+// error_code 沿用本文件约定:0 = 成功,其余取值来自 data_service 自己的错误码轴
+// (go/data_service/internal/constants/error_codes.go),不在 tip 码轴上,proto 里不写数字。
+message AllocateIdSegmentResponse {
+  uint32 error_code = 1;
+  uint64 lo = 2;        // inclusive
+  uint64 hi = 3;        // exclusive
 }

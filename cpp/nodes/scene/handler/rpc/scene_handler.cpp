@@ -90,6 +90,46 @@ namespace
 		return priority == MESSAGE_PRIORITY_IMPORTANT;
 	}
 
+	// 反向身份栅栏(docs/design/routing-identity-audit-20260908.md R13 的反向面)。
+	//
+	// scene 的 SessionMap 是 session_id -> player_id 的**本地缓存**,而 session_id 的高位
+	// 嵌的是 gate 的 routing node_id —— 那个号是立刻复用的。gate G(node_id=3)重启后
+	// 继任者 G' 仍拿 3 号并从头发 session 号,于是 G' 上属于 B 玩家的 session 5 和
+	// scene 本地残留的"session 5 -> A 玩家"完全同号。既有的
+	// `snapshot->gate_session_id() != sessionId` 复核只能发现"同一个玩家换了会话",
+	// 对"同一个会话号换了玩家"完全失明:B 的客户端消息会被派发到 A 的实体上执行。
+	//
+	// 判据:发送方带了 player_id 就必须与 SessionMap 解析出的玩家一致。
+	// 返回 true = 放行。0 = 老 gate(灰度窗口)放行,只在首次记一行 INFO。
+	bool CheckRoutedPlayerIdentity(const char *where, const SessionId sessionId,
+								   const uint64_t mappedPlayerId, const uint64_t claimedPlayerId,
+								   const uint32_t messageId)
+	{
+		if (claimedPlayerId == 0)
+		{
+			// 迁移观测位:只打一次。逐条打等于把 scene 日志按客户端包速率放大。
+			static bool logged = false;
+			if (!logged)
+			{
+				logged = true;
+				LOG_INFO << where << ": routed message without player_id (legacy gate). "
+						 << "Reverse identity fence inactive for such messages; logged once. "
+						 << "See docs/design/routing-identity-audit-20260908.md R13.";
+			}
+			return true;
+		}
+		if (mappedPlayerId == claimedPlayerId)
+		{
+			return true;
+		}
+		// 这条必须是 WARN:它意味着 gate 的 node_id 被复用(或 session 序号回绕)之后,
+		// 有一条客户端消息本来会落到别的玩家身上。
+		LOG_WARN << where << ": session/player mismatch, dropping routed message. session_id="
+				 << sessionId << " mapped_player_id=" << mappedPlayerId
+				 << " claimed_player_id=" << claimedPlayerId << " message_id=" << messageId;
+		return false;
+	}
+
 } // namespace
 
 ///<<< END WRITING YOUR CODE
@@ -172,6 +212,13 @@ void SceneHandler::SendMessageToPlayer(::google::protobuf::RpcController* contro
 	{
 		LOG_ERROR << "Session ID not found: " << request->header().session_id()
 				  << ", message ID: " << request->message_content().message_id();
+		return;
+	}
+
+	if (!CheckRoutedPlayerIdentity("SendMessageToPlayer", request->header().session_id(), it->second,
+								   request->header().target_player_id(),
+								   request->message_content().message_id()))
+	{
 		return;
 	}
 
@@ -296,6 +343,12 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 		return;
 	}
 
+	if (!CheckRoutedPlayerIdentity("ProcessClientPlayerMessage", sessionId, it->second,
+								   request->player_id(), msg.message_id()))
+	{
+		return;
+	}
+
 	const auto player = tlsEcs.GetPlayer(it->second);
 	if (player == entt::null)
 	{
@@ -395,6 +448,13 @@ void SceneHandler::InvokePlayerService(::google::protobuf::RpcController* contro
 		LOG_ERROR << "session id not found " << request->header().session_id() << ","
 				  << " message id " << request->message_content().message_id();
 		SendErrorToClient(*request, *response, kSessionNotFound);
+		return;
+	}
+
+	if (!CheckRoutedPlayerIdentity("InvokePlayerService", request->header().session_id(), it->second,
+								   request->header().target_player_id(),
+								   request->message_content().message_id()))
+	{
 		return;
 	}
 
@@ -579,14 +639,24 @@ void SceneHandler::RoutePlayerStringMsg(::google::protobuf::RpcController* contr
 	nextRequest.mutable_node_list()->DeleteSubrange(0, 1);
 
 	const auto &nextNode = request->node_list(0);
-	entt::entity nextNodeEntity{nextNode.node_id()};
-	auto &nextRegistry = tlsNodeContextManager.GetRegistry(nextNode.node_type());
-	if (!nextRegistry.valid(nextNodeEntity))
+	// node_id 是**业务节点号**,不是 entt 实体整数 —— uuid 主键重构之后
+	// (node_connector.cpp 改用 registry.create() 并按 uuid 建索引)两者不再相等。
+	// 裸 `entt::entity{node_id}` 要么撞不上任何有效槽位(消息静默丢失),要么更糟:
+	// 撞上一个恰好有效但完全无关的节点实体,把玩家消息路由到错误的节点。
+	// 与 gate 侧已修的那处(gate_service_handler.cpp RoutePlayerMessage)对齐;
+	// 这里用带 zone 的版本,因为 node_id 在 zone-scoped 类型上只保证同 zone 内不歧义,
+	// 而多跳路由的下一跳按契约总在本 zone(跨 zone 由 SceneManager 层重定向)。
+	// 判据来源:docs/design/routing-identity-audit-20260908.md R03。
+	const auto nextNodeEntityOpt = NodeUtils::FindNodeEntityByZoneAndNodeId(
+		nextNode.node_type(), GetZoneId(), nextNode.node_id());
+	if (!nextNodeEntityOpt)
 	{
 		LOG_ERROR << "RoutePlayerStringMsg route dropped: next node not found, node_type=" << nextNode.node_type()
 				  << ", node_id=" << nextNode.node_id() << ", player_id=" << playerId;
 		return;
 	}
+	const entt::entity nextNodeEntity = *nextNodeEntityOpt;
+	auto &nextRegistry = tlsNodeContextManager.GetRegistry(nextNode.node_type());
 
 	const auto nextSession = nextRegistry.try_get<RpcSession>(nextNodeEntity);
 	if (!nextSession)

@@ -77,6 +77,22 @@ extern const ::google::protobuf::internal::ClassDataFull GameConfig_ZoneRedisCon
 #else
 extern const GameConfig_ZoneRedisConfigGlobalsTypeInternal GameConfig_ZoneRedisConfig_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class IdSegmentConfig;
+struct IdSegmentConfigGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern IdSegmentConfigGlobalsTypeInternal IdSegmentConfig_globals_;
+extern const ::google::protobuf::internal::ClassDataFull IdSegmentConfig_class_data_;
+#else
+extern const IdSegmentConfigGlobalsTypeInternal IdSegmentConfig_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class IdSegmentKindConfig;
+struct IdSegmentKindConfigGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern IdSegmentKindConfigGlobalsTypeInternal IdSegmentKindConfig_globals_;
+extern const ::google::protobuf::internal::ClassDataFull IdSegmentKindConfig_class_data_;
+#else
+extern const IdSegmentKindConfigGlobalsTypeInternal IdSegmentKindConfig_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class KafkaConfig;
 struct KafkaConfigGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -479,7 +495,10 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KafkaConfig final : public ::google
     kTopicsFieldNumber = 2,
     kGroupIdFieldNumber = 3,
     kAutoOffsetResetFieldNumber = 5,
+    kCommandTopicPartitionsFieldNumber = 6,
     kEnableAutoCommitFieldNumber = 4,
+    kDisableLegacyPerNodeTopicFieldNumber = 8,
+    kCommandTopicGenerationFieldNumber = 7,
   };
   // repeated string brokers = 1;
   [[nodiscard]] int brokers_size()
@@ -565,6 +584,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KafkaConfig final : public ::google
   ::std::string* PROTOBUF_NONNULL _internal_mutable_auto_offset_reset();
 
   public:
+  // uint32 command_topic_partitions = 6;
+  void clear_command_topic_partitions() ;
+  [[nodiscard]] ::uint32_t command_topic_partitions() const;
+  void set_command_topic_partitions(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_command_topic_partitions() const;
+  void _internal_set_command_topic_partitions(::uint32_t value);
+
+  public:
   // bool enable_auto_commit = 4;
   void clear_enable_auto_commit() ;
   [[nodiscard]] bool enable_auto_commit() const;
@@ -575,12 +604,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KafkaConfig final : public ::google
   void _internal_set_enable_auto_commit(bool value);
 
   public:
+  // bool disable_legacy_per_node_topic = 8;
+  void clear_disable_legacy_per_node_topic() ;
+  [[nodiscard]] bool disable_legacy_per_node_topic() const;
+  void set_disable_legacy_per_node_topic(bool value);
+
+  private:
+  bool _internal_disable_legacy_per_node_topic() const;
+  void _internal_set_disable_legacy_per_node_topic(bool value);
+
+  public:
+  // uint32 command_topic_generation = 7;
+  void clear_command_topic_generation() ;
+  [[nodiscard]] ::uint32_t command_topic_generation() const;
+  void set_command_topic_generation(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_command_topic_generation() const;
+  void _internal_set_command_topic_generation(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:KafkaConfig)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
-                          0, 58,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          0, 66,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -612,7 +661,264 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KafkaConfig final : public ::google
     ::google::protobuf::RepeatedPtrField<::std::string> topics_;
     ::google::protobuf::internal::ArenaStringPtr group_id_;
     ::google::protobuf::internal::ArenaStringPtr auto_offset_reset_;
+    ::uint32_t command_topic_partitions_;
     bool enable_auto_commit_;
+    bool disable_legacy_per_node_topic_;
+    ::uint32_t command_topic_generation_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fbase_2fconfig_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdSegmentKindConfig final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:IdSegmentKindConfig) */ {
+ public:
+  inline IdSegmentKindConfig() : IdSegmentKindConfig(nullptr) {}
+  ~IdSegmentKindConfig() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(IdSegmentKindConfig* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(IdSegmentKindConfig));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr IdSegmentKindConfig(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline IdSegmentKindConfig(const IdSegmentKindConfig& from) : IdSegmentKindConfig(nullptr, from) {}
+  inline IdSegmentKindConfig(IdSegmentKindConfig&& from) noexcept : IdSegmentKindConfig(nullptr, ::std::move(from)) {}
+  inline IdSegmentKindConfig& operator=(const IdSegmentKindConfig& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline IdSegmentKindConfig& operator=(IdSegmentKindConfig&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const IdSegmentKindConfig& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IdSegmentKindConfig>(&IdSegmentKindConfig_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 2;
+  friend void swap(IdSegmentKindConfig& a, IdSegmentKindConfig& b) { a.Swap(&b); }
+  inline void Swap(IdSegmentKindConfig* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(IdSegmentKindConfig* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] IdSegmentKindConfig* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<IdSegmentKindConfig>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const IdSegmentKindConfig& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const IdSegmentKindConfig& from) { IdSegmentKindConfig::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(IdSegmentKindConfig* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "IdSegmentKindConfig"; }
+
+  explicit IdSegmentKindConfig(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  IdSegmentKindConfig(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const IdSegmentKindConfig& from);
+  IdSegmentKindConfig(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, IdSegmentKindConfig&& from) noexcept
+      : IdSegmentKindConfig(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kKindFieldNumber = 1,
+    kEnabledFieldNumber = 2,
+    kInitialStepFieldNumber = 3,
+    kMinStepFieldNumber = 4,
+    kMaxStepFieldNumber = 5,
+  };
+  // string kind = 1;
+  void clear_kind() ;
+  [[nodiscard]] const ::std::string& kind() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_kind(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_kind();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_kind();
+  void set_allocated_kind(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_kind() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_kind(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_kind();
+
+  public:
+  // bool enabled = 2;
+  void clear_enabled() ;
+  [[nodiscard]] bool enabled() const;
+  void set_enabled(bool value);
+
+  private:
+  bool _internal_enabled() const;
+  void _internal_set_enabled(bool value);
+
+  public:
+  // uint32 initial_step = 3;
+  void clear_initial_step() ;
+  [[nodiscard]] ::uint32_t initial_step() const;
+  void set_initial_step(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_initial_step() const;
+  void _internal_set_initial_step(::uint32_t value);
+
+  public:
+  // uint32 min_step = 4;
+  void clear_min_step() ;
+  [[nodiscard]] ::uint32_t min_step() const;
+  void set_min_step(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_min_step() const;
+  void _internal_set_min_step(::uint32_t value);
+
+  public:
+  // uint32 max_step = 5;
+  void clear_max_step() ;
+  [[nodiscard]] ::uint32_t max_step() const;
+  void set_max_step(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_step() const;
+  void _internal_set_max_step(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:IdSegmentKindConfig)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 32,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const IdSegmentKindConfig& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr kind_;
+    bool enabled_;
+    ::uint32_t initial_step_;
+    ::uint32_t min_step_;
+    ::uint32_t max_step_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -676,7 +982,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig_ZoneRedisConfig final : 
   [[nodiscard]] static const GameConfig_ZoneRedisConfig& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GameConfig_ZoneRedisConfig>(&GameConfig_ZoneRedisConfig_globals_);
   }
-  static constexpr int kIndexInFileMessages = 3;
+  static constexpr int kIndexInFileMessages = 5;
   friend void swap(GameConfig_ZoneRedisConfig& a, GameConfig_ZoneRedisConfig& b) { a.Swap(&b); }
   inline void Swap(GameConfig_ZoneRedisConfig* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -867,6 +1173,218 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig_ZoneRedisConfig final : 
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IdSegmentConfig final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:IdSegmentConfig) */ {
+ public:
+  inline IdSegmentConfig() : IdSegmentConfig(nullptr) {}
+  ~IdSegmentConfig() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(IdSegmentConfig* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(IdSegmentConfig));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr IdSegmentConfig(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline IdSegmentConfig(const IdSegmentConfig& from) : IdSegmentConfig(nullptr, from) {}
+  inline IdSegmentConfig(IdSegmentConfig&& from) noexcept : IdSegmentConfig(nullptr, ::std::move(from)) {}
+  inline IdSegmentConfig& operator=(const IdSegmentConfig& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline IdSegmentConfig& operator=(IdSegmentConfig&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const IdSegmentConfig& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IdSegmentConfig>(&IdSegmentConfig_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 3;
+  friend void swap(IdSegmentConfig& a, IdSegmentConfig& b) { a.Swap(&b); }
+  inline void Swap(IdSegmentConfig* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(IdSegmentConfig* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] IdSegmentConfig* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<IdSegmentConfig>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const IdSegmentConfig& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const IdSegmentConfig& from) { IdSegmentConfig::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(IdSegmentConfig* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "IdSegmentConfig"; }
+
+  explicit IdSegmentConfig(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  IdSegmentConfig(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const IdSegmentConfig& from);
+  IdSegmentConfig(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, IdSegmentConfig&& from) noexcept
+      : IdSegmentConfig(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kKindsFieldNumber = 1,
+  };
+  // repeated .IdSegmentKindConfig kinds = 1;
+  [[nodiscard]] int kinds_size()
+      const;
+  private:
+  int _internal_kinds_size() const;
+
+  public:
+  void clear_kinds() ;
+  [[nodiscard]] const ::IdSegmentKindConfig& kinds(int index) const;
+  [[nodiscard]] ::IdSegmentKindConfig* PROTOBUF_NONNULL mutable_kinds(int index);
+  ::IdSegmentKindConfig* PROTOBUF_NONNULL add_kinds();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::IdSegmentKindConfig>&
+  kinds() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::IdSegmentKindConfig>* PROTOBUF_NONNULL
+  mutable_kinds();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::IdSegmentKindConfig>& _internal_kinds() const;
+  ::google::protobuf::RepeatedPtrField<::IdSegmentKindConfig>* PROTOBUF_NONNULL _internal_mutable_kinds();
+
+  public:
+  // @@protoc_insertion_point(class_scope:IdSegmentConfig)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          1, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const IdSegmentConfig& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::IdSegmentKindConfig > kinds_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fcommon_2fbase_2fconfig_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:GameConfig) */ {
  public:
@@ -923,7 +1441,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GameConfig final : public ::google:
   [[nodiscard]] static const GameConfig& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GameConfig>(&GameConfig_globals_);
   }
-  static constexpr int kIndexInFileMessages = 4;
+  static constexpr int kIndexInFileMessages = 6;
   friend void swap(GameConfig& a, GameConfig& b) { a.Swap(&b); }
   inline void Swap(GameConfig* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1155,7 +1673,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
   [[nodiscard]] static const BaseDeployConfig& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BaseDeployConfig>(&BaseDeployConfig_globals_);
   }
-  static constexpr int kIndexInFileMessages = 2;
+  static constexpr int kIndexInFileMessages = 4;
   friend void swap(BaseDeployConfig& a, BaseDeployConfig& b) { a.Swap(&b); }
   inline void Swap(BaseDeployConfig* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1257,6 +1775,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     kDataRootDirectoryFieldNumber = 14,
     kBattleTokenSecretFieldNumber = 16,
     kKafkaFieldNumber = 9,
+    kIdSegmentFieldNumber = 19,
     kLogLevelFieldNumber = 2,
     kKeepAliveIntervalFieldNumber = 5,
     kNodeTtlSecondsFieldNumber = 7,
@@ -1264,6 +1783,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     kNodeRemovalGraceSecondsFieldNumber = 13,
     kGateMaxConnectionsFieldNumber = 15,
     kBattleMaxConnectionsFieldNumber = 17,
+    kClusterIdFieldNumber = 18,
   };
   // repeated string etcd_hosts = 1;
   [[nodiscard]] int etcd_hosts_size()
@@ -1446,6 +1966,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
   ::KafkaConfig* PROTOBUF_NONNULL _internal_mutable_kafka();
 
   public:
+  // .IdSegmentConfig id_segment = 19;
+  [[nodiscard]] bool has_id_segment()
+      const;
+  void clear_id_segment() ;
+  [[nodiscard]] const ::IdSegmentConfig& id_segment() const;
+  [[nodiscard]] ::IdSegmentConfig* PROTOBUF_NULLABLE release_id_segment();
+  ::IdSegmentConfig* PROTOBUF_NONNULL mutable_id_segment();
+  void set_allocated_id_segment(::IdSegmentConfig* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_id_segment(::IdSegmentConfig* PROTOBUF_NULLABLE value);
+  ::IdSegmentConfig* PROTOBUF_NULLABLE unsafe_arena_release_id_segment();
+
+  private:
+  const ::IdSegmentConfig& _internal_id_segment() const;
+  ::IdSegmentConfig* PROTOBUF_NONNULL _internal_mutable_id_segment();
+
+  public:
   // uint32 log_level = 2;
   void clear_log_level() ;
   [[nodiscard]] ::uint32_t log_level() const;
@@ -1516,12 +2052,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
   void _internal_set_battle_max_connections(::uint32_t value);
 
   public:
+  // uint32 cluster_id = 18;
+  void clear_cluster_id() ;
+  [[nodiscard]] ::uint32_t cluster_id() const;
+  void set_cluster_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_cluster_id() const;
+  void _internal_set_cluster_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:BaseDeployConfig)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 17,
-                          2, 189,
+      ::google::protobuf::internal::TcParseTable<5, 19,
+                          3, 189,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1559,6 +2105,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     ::google::protobuf::internal::ArenaStringPtr data_root_directory_;
     ::google::protobuf::internal::ArenaStringPtr battle_token_secret_;
     ::KafkaConfig* PROTOBUF_NULLABLE kafka_;
+    ::IdSegmentConfig* PROTOBUF_NULLABLE id_segment_;
     ::uint32_t log_level_;
     ::uint32_t keep_alive_interval_;
     ::uint32_t node_ttl_seconds_;
@@ -1566,6 +2113,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseDeployConfig final : public ::g
     ::uint32_t node_removal_grace_seconds_;
     ::uint32_t gate_max_connections_;
     ::uint32_t battle_max_connections_;
+    ::uint32_t cluster_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -1932,7 +2480,7 @@ inline void KafkaConfig::set_allocated_group_id(::std::string* PROTOBUF_NULLABLE
 inline void KafkaConfig::clear_enable_auto_commit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.enable_auto_commit_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline bool KafkaConfig::enable_auto_commit() const {
   // @@protoc_insertion_point(field_get:KafkaConfig.enable_auto_commit)
@@ -1940,7 +2488,7 @@ inline bool KafkaConfig::enable_auto_commit() const {
 }
 inline void KafkaConfig::set_enable_auto_commit(bool value) {
   _internal_set_enable_auto_commit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:KafkaConfig.enable_auto_commit)
 }
 inline bool KafkaConfig::_internal_enable_auto_commit() const {
@@ -2014,6 +2562,301 @@ inline void KafkaConfig::set_allocated_auto_offset_reset(::std::string* PROTOBUF
     _impl_.auto_offset_reset_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:KafkaConfig.auto_offset_reset)
+}
+
+// uint32 command_topic_partitions = 6;
+inline void KafkaConfig::clear_command_topic_partitions() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.command_topic_partitions_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t KafkaConfig::command_topic_partitions() const {
+  // @@protoc_insertion_point(field_get:KafkaConfig.command_topic_partitions)
+  return _internal_command_topic_partitions();
+}
+inline void KafkaConfig::set_command_topic_partitions(::uint32_t value) {
+  _internal_set_command_topic_partitions(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:KafkaConfig.command_topic_partitions)
+}
+inline ::uint32_t KafkaConfig::_internal_command_topic_partitions() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.command_topic_partitions_;
+}
+inline void KafkaConfig::_internal_set_command_topic_partitions(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.command_topic_partitions_ = value;
+}
+
+// uint32 command_topic_generation = 7;
+inline void KafkaConfig::clear_command_topic_generation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.command_topic_generation_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t KafkaConfig::command_topic_generation() const {
+  // @@protoc_insertion_point(field_get:KafkaConfig.command_topic_generation)
+  return _internal_command_topic_generation();
+}
+inline void KafkaConfig::set_command_topic_generation(::uint32_t value) {
+  _internal_set_command_topic_generation(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:KafkaConfig.command_topic_generation)
+}
+inline ::uint32_t KafkaConfig::_internal_command_topic_generation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.command_topic_generation_;
+}
+inline void KafkaConfig::_internal_set_command_topic_generation(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.command_topic_generation_ = value;
+}
+
+// bool disable_legacy_per_node_topic = 8;
+inline void KafkaConfig::clear_disable_legacy_per_node_topic() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.disable_legacy_per_node_topic_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline bool KafkaConfig::disable_legacy_per_node_topic() const {
+  // @@protoc_insertion_point(field_get:KafkaConfig.disable_legacy_per_node_topic)
+  return _internal_disable_legacy_per_node_topic();
+}
+inline void KafkaConfig::set_disable_legacy_per_node_topic(bool value) {
+  _internal_set_disable_legacy_per_node_topic(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:KafkaConfig.disable_legacy_per_node_topic)
+}
+inline bool KafkaConfig::_internal_disable_legacy_per_node_topic() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.disable_legacy_per_node_topic_;
+}
+inline void KafkaConfig::_internal_set_disable_legacy_per_node_topic(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.disable_legacy_per_node_topic_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// IdSegmentKindConfig
+
+// string kind = 1;
+inline void IdSegmentKindConfig::clear_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kind_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& IdSegmentKindConfig::kind() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:IdSegmentKindConfig.kind)
+  return _internal_kind();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void IdSegmentKindConfig::set_kind(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.kind_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:IdSegmentKindConfig.kind)
+}
+inline ::std::string* PROTOBUF_NONNULL IdSegmentKindConfig::mutable_kind()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_kind();
+  // @@protoc_insertion_point(field_mutable:IdSegmentKindConfig.kind)
+  return _s;
+}
+inline const ::std::string& IdSegmentKindConfig::_internal_kind() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.kind_.Get();
+}
+inline void IdSegmentKindConfig::_internal_set_kind(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kind_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL IdSegmentKindConfig::_internal_mutable_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.kind_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE IdSegmentKindConfig::release_kind() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:IdSegmentKindConfig.kind)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.kind_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.kind_.Set("", GetArena());
+  }
+  return released;
+}
+inline void IdSegmentKindConfig::set_allocated_kind(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.kind_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.kind_.IsDefault()) {
+    _impl_.kind_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:IdSegmentKindConfig.kind)
+}
+
+// bool enabled = 2;
+inline void IdSegmentKindConfig::clear_enabled() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enabled_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline bool IdSegmentKindConfig::enabled() const {
+  // @@protoc_insertion_point(field_get:IdSegmentKindConfig.enabled)
+  return _internal_enabled();
+}
+inline void IdSegmentKindConfig::set_enabled(bool value) {
+  _internal_set_enabled(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:IdSegmentKindConfig.enabled)
+}
+inline bool IdSegmentKindConfig::_internal_enabled() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.enabled_;
+}
+inline void IdSegmentKindConfig::_internal_set_enabled(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.enabled_ = value;
+}
+
+// uint32 initial_step = 3;
+inline void IdSegmentKindConfig::clear_initial_step() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.initial_step_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t IdSegmentKindConfig::initial_step() const {
+  // @@protoc_insertion_point(field_get:IdSegmentKindConfig.initial_step)
+  return _internal_initial_step();
+}
+inline void IdSegmentKindConfig::set_initial_step(::uint32_t value) {
+  _internal_set_initial_step(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:IdSegmentKindConfig.initial_step)
+}
+inline ::uint32_t IdSegmentKindConfig::_internal_initial_step() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.initial_step_;
+}
+inline void IdSegmentKindConfig::_internal_set_initial_step(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.initial_step_ = value;
+}
+
+// uint32 min_step = 4;
+inline void IdSegmentKindConfig::clear_min_step() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_step_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t IdSegmentKindConfig::min_step() const {
+  // @@protoc_insertion_point(field_get:IdSegmentKindConfig.min_step)
+  return _internal_min_step();
+}
+inline void IdSegmentKindConfig::set_min_step(::uint32_t value) {
+  _internal_set_min_step(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:IdSegmentKindConfig.min_step)
+}
+inline ::uint32_t IdSegmentKindConfig::_internal_min_step() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.min_step_;
+}
+inline void IdSegmentKindConfig::_internal_set_min_step(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_step_ = value;
+}
+
+// uint32 max_step = 5;
+inline void IdSegmentKindConfig::clear_max_step() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_step_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t IdSegmentKindConfig::max_step() const {
+  // @@protoc_insertion_point(field_get:IdSegmentKindConfig.max_step)
+  return _internal_max_step();
+}
+inline void IdSegmentKindConfig::set_max_step(::uint32_t value) {
+  _internal_set_max_step(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:IdSegmentKindConfig.max_step)
+}
+inline ::uint32_t IdSegmentKindConfig::_internal_max_step() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_step_;
+}
+inline void IdSegmentKindConfig::_internal_set_max_step(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_step_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// IdSegmentConfig
+
+// repeated .IdSegmentKindConfig kinds = 1;
+inline int IdSegmentConfig::_internal_kinds_size() const {
+  return _internal_kinds().size();
+}
+inline int IdSegmentConfig::kinds_size() const {
+  return _internal_kinds_size();
+}
+inline void IdSegmentConfig::clear_kinds() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.kinds_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::IdSegmentKindConfig& IdSegmentConfig::kinds(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:IdSegmentConfig.kinds)
+  return _internal_kinds().Get(index);
+}
+inline ::IdSegmentKindConfig* PROTOBUF_NONNULL IdSegmentConfig::mutable_kinds(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:IdSegmentConfig.kinds)
+  return _internal_mutable_kinds()->Mutable(index);
+}
+inline ::IdSegmentKindConfig* PROTOBUF_NONNULL IdSegmentConfig::add_kinds()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::IdSegmentKindConfig* _add =
+      _internal_mutable_kinds()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:IdSegmentConfig.kinds)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::IdSegmentKindConfig>& IdSegmentConfig::kinds() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:IdSegmentConfig.kinds)
+  return _internal_kinds();
+}
+inline ::google::protobuf::RepeatedPtrField<::IdSegmentKindConfig>* PROTOBUF_NONNULL
+IdSegmentConfig::mutable_kinds() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:IdSegmentConfig.kinds)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_kinds();
+}
+inline const ::google::protobuf::RepeatedPtrField<::IdSegmentKindConfig>&
+IdSegmentConfig::_internal_kinds() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.kinds_;
+}
+inline ::google::protobuf::RepeatedPtrField<::IdSegmentKindConfig>* PROTOBUF_NONNULL
+IdSegmentConfig::_internal_mutable_kinds() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.kinds_;
 }
 
 // -------------------------------------------------------------------
@@ -2096,7 +2939,7 @@ BaseDeployConfig::_internal_mutable_etcd_hosts() {
 inline void BaseDeployConfig::clear_log_level() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.log_level_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint32_t BaseDeployConfig::log_level() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.log_level)
@@ -2104,7 +2947,7 @@ inline ::uint32_t BaseDeployConfig::log_level() const {
 }
 inline void BaseDeployConfig::set_log_level(::uint32_t value) {
   _internal_set_log_level(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.log_level)
 }
 inline ::uint32_t BaseDeployConfig::_internal_log_level() const {
@@ -2247,7 +3090,7 @@ BaseDeployConfig::_internal_mutable_service_discovery_prefixes() {
 inline void BaseDeployConfig::clear_keep_alive_interval() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.keep_alive_interval_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint32_t BaseDeployConfig::keep_alive_interval() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.keep_alive_interval)
@@ -2255,7 +3098,7 @@ inline ::uint32_t BaseDeployConfig::keep_alive_interval() const {
 }
 inline void BaseDeployConfig::set_keep_alive_interval(::uint32_t value) {
   _internal_set_keep_alive_interval(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.keep_alive_interval)
 }
 inline ::uint32_t BaseDeployConfig::_internal_keep_alive_interval() const {
@@ -2335,7 +3178,7 @@ inline void BaseDeployConfig::set_allocated_deployservice_prefix(::std::string* 
 inline void BaseDeployConfig::clear_node_ttl_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.node_ttl_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t BaseDeployConfig::node_ttl_seconds() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.node_ttl_seconds)
@@ -2343,7 +3186,7 @@ inline ::uint32_t BaseDeployConfig::node_ttl_seconds() const {
 }
 inline void BaseDeployConfig::set_node_ttl_seconds(::uint32_t value) {
   _internal_set_node_ttl_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.node_ttl_seconds)
 }
 inline ::uint32_t BaseDeployConfig::_internal_node_ttl_seconds() const {
@@ -2359,7 +3202,7 @@ inline void BaseDeployConfig::_internal_set_node_ttl_seconds(::uint32_t value) {
 inline void BaseDeployConfig::clear_health_check_interval() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.health_check_interval_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t BaseDeployConfig::health_check_interval() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.health_check_interval)
@@ -2367,7 +3210,7 @@ inline ::uint32_t BaseDeployConfig::health_check_interval() const {
 }
 inline void BaseDeployConfig::set_health_check_interval(::uint32_t value) {
   _internal_set_health_check_interval(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.health_check_interval)
 }
 inline ::uint32_t BaseDeployConfig::_internal_health_check_interval() const {
@@ -2673,7 +3516,7 @@ inline void BaseDeployConfig::set_allocated_table_data_format(::std::string* PRO
 inline void BaseDeployConfig::clear_node_removal_grace_seconds() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.node_removal_grace_seconds_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint32_t BaseDeployConfig::node_removal_grace_seconds() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.node_removal_grace_seconds)
@@ -2681,7 +3524,7 @@ inline ::uint32_t BaseDeployConfig::node_removal_grace_seconds() const {
 }
 inline void BaseDeployConfig::set_node_removal_grace_seconds(::uint32_t value) {
   _internal_set_node_removal_grace_seconds(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.node_removal_grace_seconds)
 }
 inline ::uint32_t BaseDeployConfig::_internal_node_removal_grace_seconds() const {
@@ -2761,7 +3604,7 @@ inline void BaseDeployConfig::set_allocated_data_root_directory(::std::string* P
 inline void BaseDeployConfig::clear_gate_max_connections() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gate_max_connections_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint32_t BaseDeployConfig::gate_max_connections() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.gate_max_connections)
@@ -2769,7 +3612,7 @@ inline ::uint32_t BaseDeployConfig::gate_max_connections() const {
 }
 inline void BaseDeployConfig::set_gate_max_connections(::uint32_t value) {
   _internal_set_gate_max_connections(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.gate_max_connections)
 }
 inline ::uint32_t BaseDeployConfig::_internal_gate_max_connections() const {
@@ -2849,7 +3692,7 @@ inline void BaseDeployConfig::set_allocated_battle_token_secret(::std::string* P
 inline void BaseDeployConfig::clear_battle_max_connections() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_max_connections_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint32_t BaseDeployConfig::battle_max_connections() const {
   // @@protoc_insertion_point(field_get:BaseDeployConfig.battle_max_connections)
@@ -2857,7 +3700,7 @@ inline ::uint32_t BaseDeployConfig::battle_max_connections() const {
 }
 inline void BaseDeployConfig::set_battle_max_connections(::uint32_t value) {
   _internal_set_battle_max_connections(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:BaseDeployConfig.battle_max_connections)
 }
 inline ::uint32_t BaseDeployConfig::_internal_battle_max_connections() const {
@@ -2867,6 +3710,128 @@ inline ::uint32_t BaseDeployConfig::_internal_battle_max_connections() const {
 inline void BaseDeployConfig::_internal_set_battle_max_connections(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_max_connections_ = value;
+}
+
+// uint32 cluster_id = 18;
+inline void BaseDeployConfig::clear_cluster_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cluster_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+}
+inline ::uint32_t BaseDeployConfig::cluster_id() const {
+  // @@protoc_insertion_point(field_get:BaseDeployConfig.cluster_id)
+  return _internal_cluster_id();
+}
+inline void BaseDeployConfig::set_cluster_id(::uint32_t value) {
+  _internal_set_cluster_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  // @@protoc_insertion_point(field_set:BaseDeployConfig.cluster_id)
+}
+inline ::uint32_t BaseDeployConfig::_internal_cluster_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cluster_id_;
+}
+inline void BaseDeployConfig::_internal_set_cluster_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cluster_id_ = value;
+}
+
+// .IdSegmentConfig id_segment = 19;
+inline bool BaseDeployConfig::has_id_segment() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000400U);
+  PROTOBUF_ASSUME(!value || _impl_.id_segment_ != nullptr);
+  return value;
+}
+inline void BaseDeployConfig::clear_id_segment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.id_segment_ != nullptr) _impl_.id_segment_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline const ::IdSegmentConfig& BaseDeployConfig::_internal_id_segment() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::IdSegmentConfig* p = _impl_.id_segment_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::IdSegmentConfig>(&::IdSegmentConfig_globals_);
+}
+inline const ::IdSegmentConfig& BaseDeployConfig::id_segment() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BaseDeployConfig.id_segment)
+  return _internal_id_segment();
+}
+inline void BaseDeployConfig::unsafe_arena_set_allocated_id_segment(
+    ::IdSegmentConfig* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.id_segment_);
+  }
+  _impl_.id_segment_ = reinterpret_cast<::IdSegmentConfig*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:BaseDeployConfig.id_segment)
+}
+inline ::IdSegmentConfig* PROTOBUF_NULLABLE BaseDeployConfig::release_id_segment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::IdSegmentConfig* released = _impl_.id_segment_;
+  _impl_.id_segment_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::IdSegmentConfig* PROTOBUF_NULLABLE BaseDeployConfig::unsafe_arena_release_id_segment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:BaseDeployConfig.id_segment)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::IdSegmentConfig* temp = _impl_.id_segment_;
+  _impl_.id_segment_ = nullptr;
+  return temp;
+}
+inline ::IdSegmentConfig* PROTOBUF_NONNULL BaseDeployConfig::_internal_mutable_id_segment() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.id_segment_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::IdSegmentConfig>(GetArena());
+    _impl_.id_segment_ = reinterpret_cast<::IdSegmentConfig*>(p);
+  }
+  return _impl_.id_segment_;
+}
+inline ::IdSegmentConfig* PROTOBUF_NONNULL BaseDeployConfig::mutable_id_segment()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::IdSegmentConfig* _msg = _internal_mutable_id_segment();
+  // @@protoc_insertion_point(field_mutable:BaseDeployConfig.id_segment)
+  return _msg;
+}
+inline void BaseDeployConfig::set_allocated_id_segment(::IdSegmentConfig* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.id_segment_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  }
+
+  _impl_.id_segment_ = reinterpret_cast<::IdSegmentConfig*>(value);
+  // @@protoc_insertion_point(field_set_allocated:BaseDeployConfig.id_segment)
 }
 
 // -------------------------------------------------------------------

@@ -22,6 +22,13 @@ metadata:
     tier: go-svc
 spec:
   replicas: 1
+  # Recreate 而不是默认的 RollingUpdate:滚动升级会让新旧两个实例同时跑一段时间。
+  # 快照落库消费者(player_snapshot)按 guid 去重是「单条语句 + 间隙锁」,两个实例重叠消费
+  # 同一分区不会写坏数据,但会互相等锁、消费组反复 rebalance、id_segment 行锁排队,没有任何好处。
+  # replicas 保持 1;换版本时短暂停一下,消息留在 topic 里(30 天保留期),起来接着消费;
+  # login 领号段是弱依赖(NonBlock,双 buffer),几秒的停顿吃不到。
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: data-service
@@ -38,6 +45,12 @@ spec:
           env:
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
+            # C++ 约定注册(DataServiceNodeService.rpc)写进 NodeInfo 的对外 IP(data_service.go advertisedHost):
+            # ListenOn 是 0.0.0.0,其它 Pod 连不上它,必须写 Pod 自己的 IP;与 login.yaml 同一写法。
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           args: ["-f", "/app/etc/data_service.yaml"]
           ports:
             - containerPort: 9000

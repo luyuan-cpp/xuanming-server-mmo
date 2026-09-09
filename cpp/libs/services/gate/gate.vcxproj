@@ -21,6 +21,7 @@
   <ItemGroup>
     <ClInclude Include="session\comp\session_info_comp.h" />
     <ClInclude Include="session\manager\session_manager.h" />
+    <ClInclude Include="session\system\session_identity_fence.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="session\manager\session_manager.cpp" />

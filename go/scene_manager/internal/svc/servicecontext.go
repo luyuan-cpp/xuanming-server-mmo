@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"shared/generated/table"
+	"shared/kafkacmd"
 	"shared/snowflake"
 	"shared/snowflakealloc"
 
@@ -51,17 +52,17 @@ func NewServiceContext(c config.Config) *ServiceContext {
 
 	table.LoadTables(c.TableDir, c.UseBinary)
 
-	// 通过 shared/snowflakealloc 拿一个独立于 NodeInfo.NodeId 的 Snowflake worker id。
+	// 通过 shared/snowflakealloc 申领一个独立于 NodeInfo.NodeId 的 Snowflake 槽位。
 	// 关键点:
-	//   - prefix="/scene_manager" 与历史 key 一致(老的 mustAllocNodeID 用的就是这套路径)。
+	//   - kind="scene-manager",槽池按 kind / cluster 隔离;LegacyPrefix="/scene_manager"
+	//     让 cluster 0 在滚动升级期仍读旧布局的水位 / 活 id(发布一版后可删)。
 	//   - 节点名 = hostname_监听端口,而不是裸 hostname:多副本部署后同一台机器
 	//     (本地 dev 双实例、k8s 同节点多 pod 用 hostNetwork 等)会跑多个实例,
-	//     裸 hostname 会让后启动的实例在 verify ownership 时撞 key 直接 panic。
-	//     端口是实例槽位的稳定标识,同槽位重启仍复用同一个 worker id;
-	//     换 key 的首次启动会分配新 id,snowflakealloc 的前任高水位地板与
-	//     lease 过期回收保证不会撞 ID。
-	//   - 这个 worker id 与 noderegistry 里分配的 NodeInfo.NodeId **解耦**,
+	//     端口是实例槽位的稳定标识,同槽位优雅重启仍复用同一个槽,本地缓存也各自一份;
+	//     换 key 的首次启动会申领新槽(最久未用 + 隔离期),前任高水位地板保证不会撞 ID。
+	//   - 这个槽与 noderegistry 里分配的 NodeInfo.NodeId **解耦**,
 	//     reRegister 切换 NodeInfo.NodeId 不会影响 Snowflake ID 生成。
+	//   - ClusterId 由运维按集群设定(默认 0),worker id = cluster<<12 | slot。
 	host, err := os.Hostname()
 	if err != nil {
 		panic(fmt.Sprintf("snowflake: failed to get hostname: %v", err))
@@ -72,11 +73,16 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	hd, err := snowflakealloc.AllocateWithKeepAlive(ctx, etcdCli, "/scene_manager", nodeName, snowflakealloc.Options{LeaseTTL: 60})
+	hd, err := snowflakealloc.AllocateWithKeepAlive(ctx, etcdCli, "scene-manager", nodeName, snowflakealloc.Options{
+		LeaseTTL:     60,
+		ClusterID:    c.ClusterId,
+		LegacyPrefix: "/scene_manager",
+		CachePath:    snowflakealloc.DefaultCachePath(c.SnowflakeCacheDir, "scene-manager", nodeName),
+	})
 	if err != nil {
 		panic(fmt.Sprintf("snowflake worker id alloc failed: %v", err))
 	}
-	logx.Infof("[scene_manager] snowflake worker id = %d (node=%s)", hd.WorkerID, nodeName)
+	logx.Infof("[scene_manager] snowflake %s worker_id=%d (node=%s)", hd.LogFields(), hd.WorkerID, nodeName)
 
 	sc := &ServiceContext{
 		Config: c,
@@ -93,11 +99,18 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	}
 	sc.Kafka = &kafka.Writer{
 		Addr: kafka.TCP(c.Kafka.Brokers...),
-		// Hash 按消息 Key 选分区。这里的 Key 都是 player_id(项目不变量:
-		// kafka key = 业务实体 ID,同一玩家的事件必须有序),LeastBytes
-		// 按字节量选分区、完全忽略 Key —— 玩家连续两次切场景的两条
-		// RoutePlayer 会落到不同分区被 gate 乱序消费,最终应用旧路由。
-		Balancer:               &kafka.Hash{},
+		// 控制面命令 topic(gate-cmd_gN)必须按 node_id % P 落到**指定分区**:
+		// 消费端 assign 的就是那一个分区,落错分区 = 目标 gate 永远收不到,
+		// 而 Kafka 一个错都不报(docs/design/control-plane-topic-partitioning-20260908.md)。
+		// kafka-go 的 Writer 在写入路径上忽略 Message.Partition、只问 Balancer,
+		// CommandPartitionBalancer 就是把它接回来的那一环。
+		//
+		// 其它 topic 仍走 Hash:Key 都是 player_id(项目不变量:kafka key = 业务实体 ID,
+		// 同一玩家的事件必须有序),LeastBytes 按字节量选分区、完全忽略 Key ——
+		// 玩家连续两次切场景的两条 RoutePlayer 会落到不同分区被乱序消费,最终应用旧路由。
+		//
+		// 命令 topic 上保序同样成立、而且更强:同一个 gate 的全部命令都在同一个分区里。
+		Balancer:               &kafkacmd.CommandPartitionBalancer{Fallback: &kafka.Hash{}},
 		AllowAutoTopicCreation: true,
 		BatchTimeout:           10 * time.Millisecond,
 		// WriteMessages 的调用 context 不可用超时取消：kafka-go 明确允许

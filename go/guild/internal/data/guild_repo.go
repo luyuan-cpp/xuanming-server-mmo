@@ -430,16 +430,26 @@ func (r *GuildRepo) RefreshPlayerGuildID(ctx context.Context, playerID uint64) (
 	return r.GetPlayerGuildID(ctx, playerID)
 }
 
-func (r *GuildRepo) DeleteGuild(ctx context.Context, guildID uint64) error {
-	memberIDs, err := r.deleteGuildFromMySQL(ctx, guildID)
+// DeleteGuild 删除公会,并返回**删除事务内 FOR UPDATE 读到的 zone_id**。
+//
+// 为什么要把 zone 带出来:行删掉之后就再也读不到权威 zone 了,而清榜(ZREM
+// per-zone ZSET)恰好发生在删除之后。调用方只剩两个来源可选 —— 这里返回的权威值,
+// 或者 guild:v2:{id} 缓存里那份可能过期 30 分钟的 ZoneID。合服刚把公会搬到目标 zone
+// 时,缓存里还是源 zone,按它 ZREM 会去删一个空 ZSET,把条目永远留在目标 zone 榜上
+// (榜首出现一个查不到名字的幽灵公会)。所以这个返回值不是顺手加的,它是清榜唯一
+// 可信的输入。
+//
+// 返回的 zone 在 err != nil 时无意义(恒 0)。
+func (r *GuildRepo) DeleteGuild(ctx context.Context, guildID uint64) (uint32, error) {
+	memberIDs, zoneID, err := r.deleteGuildFromMySQL(ctx, guildID)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	cacheErr := r.invalidateGuildCache(ctx, guildID)
 	for _, playerID := range memberIDs {
 		cacheErr = errors.Join(cacheErr, r.invalidatePlayerGuildCache(ctx, playerID))
 	}
-	return cacheErr
+	return zoneID, cacheErr
 }
 
 // ── MySQL queries ──────────────────────────────────────────────
@@ -496,63 +506,68 @@ func (r *GuildRepo) loadPlayerGuildFromMySQL(ctx context.Context, playerID uint6
 	return guildID, nil
 }
 
-func (r *GuildRepo) deleteGuildFromMySQL(ctx context.Context, guildID uint64) ([]uint64, error) {
+// deleteGuildFromMySQL 返回 (成员 id, 删除前 FOR UPDATE 读到的 zone_id, error)。
+// zone_id 与成员一起在同一把行锁下读出:见 DeleteGuild 的注释,它是清榜唯一可信的输入。
+func (r *GuildRepo) deleteGuildFromMySQL(ctx context.Context, guildID uint64) ([]uint64, uint32, error) {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer tx.Rollback()
 
 	// 与 AddMember/UpdateGuildScore 保持统一锁序：先 guild 行，再 membership。
 	// 反向锁序会在并发入会/解散时形成可避免的 InnoDB deadlock。
-	var lockedGuildID uint64
+	var (
+		lockedGuildID uint64
+		zoneID        uint32
+	)
 	if err := tx.QueryRowContext(ctx,
-		"SELECT guild_id FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&lockedGuildID); err != nil {
+		"SELECT guild_id, zone_id FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&lockedGuildID, &zoneID); err != nil {
 		if err == sql.ErrNoRows {
-			return nil, ErrGuildGone
+			return nil, 0, ErrGuildGone
 		}
-		return nil, err
+		return nil, 0, err
 	}
 
 	rows, err := tx.QueryContext(ctx,
 		"SELECT player_id FROM guild_member WHERE guild_id = ? FOR UPDATE", guildID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	var memberIDs []uint64
 	for rows.Next() {
 		var playerID uint64
 		if err := rows.Scan(&playerID); err != nil {
 			rows.Close()
-			return nil, err
+			return nil, 0, err
 		}
 		memberIDs = append(memberIDs, playerID)
 	}
 	if err := rows.Close(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	if _, err := tx.ExecContext(ctx, "DELETE FROM guild_member WHERE guild_id = ?", guildID); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	result, err := tx.ExecContext(ctx, "DELETE FROM guild WHERE guild_id = ?", guildID)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	affected, err := result.RowsAffected()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if affected == 0 {
-		return nil, ErrGuildGone
+		return nil, 0, ErrGuildGone
 	}
 	if err := tx.Commit(); err != nil {
-		return nil, err
+		return nil, 0, err
 	}
-	return memberIDs, nil
+	return memberIDs, zoneID, nil
 }
 
 func isDuplicateKey(err error) bool {
@@ -855,7 +870,20 @@ func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 	return nil
 }
 
-// RemoveGuildFromRank removes a guild from both global and per-zone ranking ZSETs.
+// RemoveGuildFromRank 把公会从全局榜和分区榜里摘掉。
+//
+// zoneID 是**提示**不是权威:
+//
+//  1. 公会行还在(降级 / 手工清榜)→ 用 FOR UPDATE 重读 MySQL 的 zone_id,
+//     与 UpdateGuildScore 同一口径,调用方传进来的值只用来记一条不一致日志。
+//  2. 公会行已删(DisbandGuild 的正常路径)→ 用调用方传进来的值,它必须来自
+//     DeleteGuild 的删除事务(见那边的注释),不能是 guild:v2:{id} 缓存。
+//
+// 无论走哪条,最后都再扫一遍 guild_rank:zone:* 把该 guildID 从**每一个**分区榜里
+// 摘掉。这一刀是给存量数据的:在本次修复之前,清榜用的是可能过期 30 分钟的缓存
+// zone,合服后解散的公会会在真正的分区榜里留下一个查不到名字的幽灵条目;
+// 只修新写入的路径,那些已经留下的条目永远不会自己消失。代价是一次 SCAN
+// (zone 数量级,而且整段已经在榜维护锁里),换"解散即从所有榜上消失"的确定性。
 func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zoneID uint32) error {
 	release, err := r.acquireRankLock(ctx)
 	if err != nil {
@@ -863,13 +891,71 @@ func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zon
 	}
 	defer release()
 
+	effectiveZone := zoneID
+	switch authoritativeZone, err := r.authoritativeZoneID(ctx, guildID); {
+	case err == nil:
+		if zoneID != 0 && zoneID != authoritativeZone {
+			logx.Errorf("RemoveGuildFromRank: caller zone %d ignored; guild %d belongs to zone %d",
+				zoneID, guildID, authoritativeZone)
+		}
+		effectiveZone = authoritativeZone
+	case errors.Is(err, ErrGuildGone):
+		// 行已经删了(解散)。调用方传进来的 zone 来自删除事务,就是权威值。
+	default:
+		return fmt.Errorf("read authoritative zone of guild %d: %w", guildID, err)
+	}
+
+	zoneKeys, err := r.allZoneRankKeys(ctx)
+	if err != nil {
+		return err
+	}
+	if effectiveZone > 0 {
+		// 分区榜可能因为没人推过分而还不存在;显式带上它,ZREM 对不存在的键是 no-op。
+		zoneKeys[zoneRankKey(effectiveZone)] = struct{}{}
+	}
+
 	pipe := r.rdb.Pipeline()
 	pipe.ZRem(ctx, guildRankKey, guildID)
-	if zoneID > 0 {
-		pipe.ZRem(ctx, zoneRankKey(zoneID), guildID)
+	for key := range zoneKeys {
+		pipe.ZRem(ctx, key, guildID)
 	}
 	_, err = pipe.Exec(ctx)
 	return err
+}
+
+// authoritativeZoneID 在一把行锁下读公会当前的 zone_id;行不存在返回 ErrGuildGone。
+// 与 UpdateGuildScore 里那段是同一条判据:MySQL 是归属的唯一真源,
+// guild:v2:{id} 缓存(TTL 30 分钟)在合服之后会有整整一个 TTL 指向旧 zone。
+func (r *GuildRepo) authoritativeZoneID(ctx context.Context, guildID uint64) (uint32, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var zoneID uint32
+	if err := tx.QueryRowContext(ctx,
+		"SELECT zone_id FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&zoneID); err != nil {
+		if err == sql.ErrNoRows {
+			return 0, ErrGuildGone
+		}
+		return 0, err
+	}
+	return zoneID, tx.Commit()
+}
+
+// allZoneRankKeys 列出当前存在的所有分区榜键(guild_rank:zone:*)。
+// SCAN 而不是 KEYS:分区榜数量与 zone 数同量级,但 KEYS 会阻塞整个 Redis。
+func (r *GuildRepo) allZoneRankKeys(ctx context.Context) (map[string]struct{}, error) {
+	keys := make(map[string]struct{})
+	iterator := r.rdb.Scan(ctx, 0, "guild_rank:zone:*", 1000).Iterator()
+	for iterator.Next(ctx) {
+		keys[iterator.Val()] = struct{}{}
+	}
+	if err := iterator.Err(); err != nil {
+		return nil, fmt.Errorf("scan per-zone rank keys: %w", err)
+	}
+	return keys, nil
 }
 
 func (r *GuildRepo) acquireRankLock(ctx context.Context) (func(), error) {

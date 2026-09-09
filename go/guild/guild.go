@@ -61,7 +61,7 @@ func main() {
 	}
 	logx.Infof("Guild node registered: id=%d uuid=%s", n.Info.NodeId, n.Info.NodeUuid)
 
-	// 通过 shared/snowflakealloc 独立分配 Snowflake worker id。
+	// 通过 shared/snowflakealloc 独立申领 Snowflake 槽位(worker id = cluster<<12 | slot)。
 	//
 	// 注意:**不再用 n.Info.NodeId 当 Snowflake worker id**。
 	// 理由:
@@ -69,10 +69,11 @@ func main() {
 	//      CAS 失败而变化(参考 scene_manager 的 reRegister 设计)。
 	//   2. Snowflake worker id 一旦变化,可能在同一毫秒里和上一个 worker id 的 ID 序列冲突
 	//      (理论上不会,但毫秒级时钟回退 + worker id 跳变是公认的潜在风险)。
-	//   3. 同 hostname 重启复用同 worker id,Snowflake 时间戳单调性更稳。
+	//   3. 同 hostname 优雅重启复用同槽,Snowflake 时间戳单调性更稳。
 	//   4. 与 scene_manager 模式一致,降低维护成本。
 	//
-	// prefix="/guild" 与其他服务的 prefix 不同,worker id 池互相隔离。
+	// kind="guild" 与其他服务不同,槽池互相隔离;ClusterId 由运维按集群设定(默认 0)。
+	// LegacyPrefix="/guild" 让 cluster 0 在滚动升级期仍读旧布局的水位 / 活 id(发布一版后可删)。
 	etcdCli, err := clientv3.New(clientv3.Config{
 		Endpoints:   config.AppConfig.Registry.Etcd.Hosts,
 		DialTimeout: config.AppConfig.Registry.Etcd.DialTimeout,
@@ -87,13 +88,20 @@ func main() {
 		logx.Must(fmt.Errorf("hostname: %w", err))
 	}
 	sfCtx, sfCancel := context.WithTimeout(context.Background(), 10*time.Second)
-	sfHandle, err := snowflakealloc.AllocateWithKeepAlive(sfCtx, etcdCli, "/guild", host_name, snowflakealloc.Options{LeaseTTL: 60})
+	sfHandle, err := snowflakealloc.AllocateWithKeepAlive(sfCtx, etcdCli, "guild", host_name, snowflakealloc.Options{
+		LeaseTTL:     60,
+		ClusterID:    config.AppConfig.ClusterId,
+		LegacyPrefix: "/guild",
+		// 缓存文件名带监听端口:同主机多实例各自一份,不互相覆盖。
+		CachePath: snowflakealloc.DefaultCachePath(config.AppConfig.SnowflakeCacheDir, "guild",
+			fmt.Sprintf("%s_%d", host_name, port)),
+	})
 	sfCancel()
 	if err != nil {
 		logx.Must(fmt.Errorf("snowflake worker id alloc: %w", err))
 	}
 	defer sfHandle.Close()
-	logx.Infof("Guild snowflake worker id = %d (host=%s)", sfHandle.WorkerID, host_name)
+	logx.Infof("Guild snowflake %s worker_id=%d (host=%s)", sfHandle.LogFields(), sfHandle.WorkerID, host_name)
 
 	// RPC 级热关停(shared/killswitch):线上某个方法把 DB 打爆时,往 etcd 写一个
 	// key 就能秒级把它短路掉,不必走一遍构建-发布-滚动更新。
@@ -126,7 +134,23 @@ func main() {
 		panic(fmt.Errorf("rebuild guild ranks from MySQL: %w", err))
 	}
 	onlineResolver := logic.NewOnlineStatusResolver(svcCtx.PlayerLocatorRedisClient)
-	guildLogic := logic.NewGuildLogic(repo, sf, onlineResolver)
+
+	// guild_id 发号策略(设计稿 §6.4):号段(svcCtx.GuildIDSegment,IdSegment.Enabled 时
+	// 已在 NewServiceContext 里接好 data_service)优先;是否回退到上面这个 snowflake 节点
+	// 由 IdSegment.FallbackToSnowflake 决定,默认不回退。snowflake 节点本身照旧申领 /
+	// 写水位 / 失租 fence —— 它既是可选回退,也是解码存量 guild_id 的依据。
+	guildIDs := svc.NewGuildIDMinter(config.AppConfig.IdSegment, svcCtx.GuildIDSegment, sf.Generate)
+	svcCtx.WarmGuildIDSegment()
+
+	// 合服闸门(可选):没配 MergeMarkerRedis 时 NewRedisMergeFence 返回 nil 指针,
+	// 必须显式转成 nil **接口** 再传下去 —— 直接传一个 nil 的具体类型指针,
+	// GuildLogic 里的 `l.mergeFence == nil` 会是 false,于是每次建帮都去调一个
+	// 空实现,反而把"未配置"变成一条隐蔽的运行期分支。
+	var mergeFence logic.MergeFence
+	if f := logic.NewRedisMergeFence(svcCtx.MergeMarkerRedisClient); f != nil {
+		mergeFence = f
+	}
+	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence)
 
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
@@ -138,15 +162,13 @@ func main() {
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks)...)
 	defer s.Stop()
 
-	// Snowflake worker id 的 etcd 租约丢了 = 本进程不再是这个 worker id 的合法持有者,
-	// etcd 随时会把它分给别的进程。再用 sf 发一个公会 ID 就是确定性撞号,所以主动停服,
-	// 让编排把进程拉起来 —— 重启会拿一个新租约,并被 snowflake 的启动 guard 兜住。
-	// s.Stop() 让下面的 s.Start() 返回,defer 链正常收尾。
+	// Lost() 关闭 = 本进程**确认**不再是这个槽的持有者(slots key 被挂到了别的 uuid 上:
+	// 运维手动清理 / 水位机制被绕过 / 旧版本二进制)。再用 sf 发一个公会 ID 就是确定性撞号,
+	// 所以主动退出,让编排把进程拉起来 —— 重启会申领一个新槽,并以前任水位为地板。
 	//
-	// ⏱ 时间预算(§租约与重启时间预算必须闭合):Lost() 由 snowflakealloc 的**自 fencing**
-	// 提前触发 —— 距上次成功续租超过 TTL 的 2/3(TTL=60s ⇒ 40s)就报信,而不是干等
-	// KeepAlive channel 关闭(那恒晚于服务端过期点)。收到信号时服务端 lease 通常还有
-	// 约 TTL/3(≈20s)才过期,这段余量用来让在途请求干净失败。
+	// ⏱ 时间预算:lease 抖动 / etcd 不可达**不再**触发 Lost()(snowflakealloc 会自己 reclaim);
+	// 这段时间的安全由发号器内部的水位年龄自 fence 兜住 —— 距上次水位写成功超过 F(2h)
+	// Generate 返回 ErrWatermarkStale(暂态,写成功即恢复),建帮整体失败但进程不退出。
 	//
 	// ⚠️ 顺序不能反,而且**不能只调 s.Stop()**:go-zero 的 zrpc.RpcServer.Stop() 实测
 	// (v1.9.2 / v1.10.0 同)只有一行 logx.Close(),既不拒新请求也不排空在途 ——

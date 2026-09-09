@@ -66,3 +66,23 @@ Player belongs to zone A and previously had a location in zone C:
 - **Home zone (authoritative for data routing)**: run `tools/merge_zone` (or `DataService/RemapHomeZoneForMerge`) to rewrite `player:zone:*` in mapping Redis; see `docs/design/guild_ranking_architecture_zh.md` §合服工具.
 - **Guild / 本服榜**: same tool updates MySQL `guild.zone_id` and merges `guild_rank:zone:{id}`.
 - **SceneManager hot state** (`scene:{id}:zone`, `player:{id}:location`, world channel sets): normally cleared or left to refresh on next login after a maintenance window; coordinate with ops (stale keys can cause wrong routing until overwritten).
+
+### Login-side zone resolution (added 2026-09-08)
+
+Three notions of "zone" coexist and only one is authoritative:
+
+| notion | where | who writes it | role after merge |
+|---|---|---|---|
+| physical zone | k8s namespace (gate/scene/login/scene_manager), picked by the client via server list + `/api/assign-gate` | deploy | may be decommissioned |
+| **home_zone** | data_service `player:zone:{player_id}` | `RegisterPlayerZone` at create; `tools/merge_zone` / `RemapHomeZoneForMerge` on merge | **single source of truth** for data routing, guild, leaderboard |
+| creation-time `zone_id` | account blob `AccountSimplePlayer.zone_id` (`proto/common/.../user_accounts.proto`) | `createplayerlogic.go`, once | hint only |
+
+Rules (implemented in `go/login/internal/logic/pkg/homezone`, wired via `ServiceContext.HomeZone`):
+
+1. **Role list zone = current home_zone resolved at login.** `Login` resolves every role's `player_id` with one `BatchGetPlayerHomeZone` (bounded, `HomeZone.LookupTimeout`, default 1.5s) and overwrites `zone_id` in the *response copy* when the mapping has a non-zero zone. Ids absent from the mapping or a failed RPC keep the stored creation-time value; login never fails because of it. The refreshed zone is **not** written back into the account blob — the mapping stays the only truth, and a second copy would fight it on the next merge/rollback.
+2. **EnterGame routes by home_zone via the existing cross-zone redirect.** Before `SceneManager.EnterScene`, `EnterGame` resolves `GetPlayerHomeZone(player_id)`. If it is non-zero and differs from `Node.ZoneId`, the request carries `ZoneId = home_zone`, `GateZoneId = login's zone`, `SceneId = 0`, so `enterscenelogic.go`'s `crossZoneRedirect` fires and the gate pushes `RedirectToGateEvent`. Lookup failure / zero → today's behaviour (`ZoneId = own zone`) with a WARN. `SceneId` is forced to 0 on redirect because `resolveScene` rejects a scene whose `scene:{id}:zone` is the old zone before the redirect check is reached.
+3. **Account blob `zone_id` is a creation-time hint only.** Nothing should route on it; merge tooling does not need to touch the account system.
+
+Switches: `HomeZone.RefreshRoleListDisabled` / `HomeZone.RedirectOnEnterDisabled` in `go/login/etc/login.yaml` (reverse-named; an absent block means both enabled, same rationale as `KillSwitch`).
+
+Known limits on the scene_manager side (not changed here): the redirect is evaluated **after** `resolveSceneForEnter`, so the target zone must have at least one live world channel, and a stale `player:{id}:location` from the old zone combined with `AllowUnsafeCrossNodeHandoff=false` returns `ErrUnsafeCrossNodeHandoff` instead of redirecting — merge maintenance must clear that hot state (see bullet above).

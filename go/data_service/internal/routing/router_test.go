@@ -44,6 +44,84 @@ func TestRegisterAndGetPlayerZone(t *testing.T) {
 	assert.Equal(t, uint32(5), zone)
 }
 
+// ── SETNX 语义 + 合服闸门 ───────────────────────────────────────
+
+// TestRegisterPlayerZone_NeverOverwritesDifferentZone 是本次修复的核心:
+// 合服把映射改到目标 zone 之后,任何"按建角 zone 重新登记"的路径都不许把它写回去。
+func TestRegisterPlayerZone_NeverOverwritesDifferentZone(t *testing.T) {
+	r, _ := newTestRouter(t)
+	ctx := context.Background()
+
+	require.NoError(t, r.RegisterPlayerZone(ctx, 7001, 3))
+
+	err := r.RegisterPlayerZone(ctx, 7001, 9)
+	require.Error(t, err)
+	var conflict *HomeZoneConflictError
+	require.ErrorAs(t, err, &conflict, "冲突必须是可判定的类型,调用方才能翻成专属错误码")
+	assert.Equal(t, uint64(7001), conflict.PlayerID)
+	assert.Equal(t, uint32(3), conflict.Existing, "错误里必须带上既有 zone")
+	assert.Equal(t, uint32(9), conflict.Requested)
+	assert.Contains(t, conflict.Error(), "already mapped to home zone 3")
+
+	// 拒绝必须是零变更
+	zone, err := r.GetPlayerHomeZone(ctx, 7001)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(3), zone)
+}
+
+// TestRegisterPlayerZone_SameZoneIsIdempotent:login 的 CreatePlayer 允许重试,
+// 重复登记同一个 zone 不能变成失败。
+func TestRegisterPlayerZone_SameZoneIsIdempotent(t *testing.T) {
+	r, _ := newTestRouter(t)
+	ctx := context.Background()
+
+	require.NoError(t, r.RegisterPlayerZone(ctx, 7002, 4))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 7002, 4))
+
+	zone, err := r.GetPlayerHomeZone(ctx, 7002)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(4), zone)
+}
+
+func TestRegisterPlayerZone_RefusedWhileZoneIsMerging(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+
+	// 合服工具立标记:键存在即封锁,值只是给人看的。
+	require.NoError(t, mr.Set(MergeFenceKey(12), `{"started_at":1757000000}`))
+
+	err := r.RegisterPlayerZone(ctx, 7003, 12)
+	require.Error(t, err)
+	assert.ErrorIs(t, err, ErrZoneMergeInProgress)
+
+	// 零变更:被闸门拒绝的登记不许留下半条映射。
+	_, err = r.GetPlayerHomeZone(ctx, 7003)
+	assert.ErrorIs(t, err, ErrHomeZoneNotMapped)
+
+	// 别的 zone 不受影响 —— 闸门是按 zone 的,不是全局的。
+	require.NoError(t, r.RegisterPlayerZone(ctx, 7004, 13))
+
+	// 标记清除后恢复放行(工具跑完 DEL,或 TTL 到期)。
+	mr.Del(MergeFenceKey(12))
+	require.NoError(t, r.RegisterPlayerZone(ctx, 7003, 12))
+}
+
+func TestIsMergeInProgress(t *testing.T) {
+	r, mr := newTestRouter(t)
+	ctx := context.Background()
+
+	assert.Equal(t, "merge:in_progress:42", MergeFenceKey(42), "键名是与合服工具共享的契约")
+
+	fenced, err := r.IsMergeInProgress(ctx, 42)
+	require.NoError(t, err)
+	assert.False(t, fenced)
+
+	require.NoError(t, mr.Set(MergeFenceKey(42), `{"started_at":1757000000}`))
+	fenced, err = r.IsMergeInProgress(ctx, 42)
+	require.NoError(t, err)
+	assert.True(t, fenced)
+}
+
 func TestGetPlayerHomeZone_NotFound(t *testing.T) {
 	r, _ := newTestRouter(t)
 	ctx := context.Background()
@@ -105,12 +183,15 @@ func TestClientForZone_DevMode(t *testing.T) {
 }
 
 func TestRemapHomeZoneForMerge_DryRun(t *testing.T) {
-	r, _ := newTestRouter(t)
+	r, mr := newTestRouter(t)
 	ctx := context.Background()
 
 	_ = r.RegisterPlayerZone(ctx, 101, 10)
 	_ = r.RegisterPlayerZone(ctx, 102, 10)
 	_ = r.RegisterPlayerZone(ctx, 103, 20)
+	// 闸门先立起来:remap(含 dry-run)要求源 zone 已被封锁,见下面的
+	// TestRemapHomeZoneForMerge_RefusedWithoutFence。
+	require.NoError(t, mr.Set(MergeFenceKey(10), `{"started_at":1757000000}`))
 
 	matched, updated, err := r.RemapHomeZoneForMerge(ctx, 10, 99, true)
 	assert.NoError(t, err)
@@ -122,11 +203,12 @@ func TestRemapHomeZoneForMerge_DryRun(t *testing.T) {
 }
 
 func TestRemapHomeZoneForMerge_Apply(t *testing.T) {
-	r, _ := newTestRouter(t)
+	r, mr := newTestRouter(t)
 	ctx := context.Background()
 
 	_ = r.RegisterPlayerZone(ctx, 201, 7)
 	_ = r.RegisterPlayerZone(ctx, 202, 8)
+	require.NoError(t, mr.Set(MergeFenceKey(7), `{"started_at":1757000000}`))
 
 	matched, updated, err := r.RemapHomeZoneForMerge(ctx, 7, 11, false)
 	assert.NoError(t, err)
@@ -137,6 +219,28 @@ func TestRemapHomeZoneForMerge_Apply(t *testing.T) {
 	assert.Equal(t, uint32(11), z201)
 	z202, _ := r.GetPlayerHomeZone(ctx, 202)
 	assert.Equal(t, uint32(8), z202)
+}
+
+// TestRemapHomeZoneForMerge_RefusedWithoutFence:没立标记就改写 = 源 zone 仍在
+// 接受新映射,SCAN 游标之后写进来的玩家会漏网。必须拒绝且零变更。
+func TestRemapHomeZoneForMerge_RefusedWithoutFence(t *testing.T) {
+	r, _ := newTestRouter(t)
+	ctx := context.Background()
+
+	_ = r.RegisterPlayerZone(ctx, 301, 5)
+
+	for _, dryRun := range []bool{true, false} {
+		matched, updated, err := r.RemapHomeZoneForMerge(ctx, 5, 6, dryRun)
+		require.Error(t, err, "dry_run=%t", dryRun)
+		assert.ErrorIs(t, err, ErrMergeFenceMissing)
+		assert.Contains(t, err.Error(), "merge:in_progress:5", "错误要告诉运维缺哪把键")
+		assert.Zero(t, matched)
+		assert.Zero(t, updated)
+	}
+
+	z301, err := r.GetPlayerHomeZone(ctx, 301)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(5), z301, "被拒绝的 remap 必须零变更")
 }
 
 func TestAcquireAndReleasePlayerLock(t *testing.T) {

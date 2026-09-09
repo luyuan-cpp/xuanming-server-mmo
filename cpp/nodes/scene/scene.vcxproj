@@ -229,6 +229,7 @@
     <ClCompile Include="handler\rpc\register_handler.cpp" />
     <ClCompile Include="handler\grpc\scene_node_service.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="id_segment_bootstrap.cpp" />
     <ClCompile Include="rpc_replies\gate_service_response_handler.cpp" />
     <ClCompile Include="rpc_replies\scene_manager_response_handler.cpp" />
     <ClCompile Include="rpc_replies\player\player_lifecycle_response_handler.cpp" />
@@ -241,6 +242,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="handler\event\scene_kafka_command_router.h" />
+    <ClInclude Include="id_segment_bootstrap.h" />
     <ClInclude Include="handler\event\actor_combat_state_event_handler.h" />
     <ClInclude Include="handler\event\actor_event_handler.h" />
     <ClInclude Include="handler\event\battle_event_handler.h" />

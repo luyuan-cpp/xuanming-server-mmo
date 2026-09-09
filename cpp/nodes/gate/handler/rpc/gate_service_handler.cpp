@@ -14,10 +14,46 @@
 #include "proto/common/base/message.pb.h"
 
 #include "proto/common/component/player_network_comp.pb.h"
+#include "network/broadcast_target_codec.h"
 #include <session/manager/session_manager.h>
+#include <session/system/session_identity_fence.h>
 
 #include <algorithm>
 #include <string>
+
+namespace
+{
+	// 身份栅栏(routing-identity-audit-20260908.md R13/R14)的两条日志。
+	//
+	// 失配:这是**真正要报警的那一条** —— 要么 routing node_id 被复用后 scene 反查到了
+	// 继任 gate,要么单个 gate 内 session 序号回绕后同号 session 已易主。两种都意味着
+	// 有一条推送本来会写进别人的 socket。带上两个 id 才能事后判断是哪一种。
+	void LogFenceMismatch(const char *where, uint32_t sessionId, uint64_t sessionPlayerId,
+						  uint64_t targetPlayerId, uint32_t messageId)
+	{
+		LOG_WARN << where << ": target player mismatch, dropping push. session_id=" << sessionId
+				 << " session_player_id=" << sessionPlayerId
+				 << " target_player_id=" << targetPlayerId
+				 << " message_id=" << messageId;
+	}
+
+	// 兼容位:老发送方不填 target_player_id。只在**首次**记一行 INFO ——
+	// 迁移窗口里这条会对每一条推送成立,逐条打就是把 gate 日志打爆(gate 日志曾因
+	// 逐条 WARN 涨到 ~2GB 并偷走 IO 线程 CPU)。看到这一行 = 灰度尚未完成;
+	// 一个版本之后 unfenced 将改为丢弃。
+	void LogFenceUnfencedOnce(const char *where)
+	{
+		static bool logged = false;
+		if (logged)
+		{
+			return;
+		}
+		logged = true;
+		LOG_INFO << where << ": received a push without target_player_id (legacy sender). "
+				 << "Identity fence is inactive for such messages; this is logged once. "
+				 << "See docs/design/routing-identity-audit-20260908.md R13.";
+	}
+} // namespace
 
 ///<<< END WRITING YOUR CODE
 
@@ -72,6 +108,21 @@ void GateHandler::SendMessageToPlayer(::google::protobuf::RpcController* control
 		LOG_ERROR << "SendMessageToPlayer: session has no connection, session_id="
 				  << request->header().session_id();
 		return;
+	}
+	// 身份栅栏(R13/R14):写 socket 之前确认这条推送的目标玩家就是本会话当前的主人。
+	switch (gate_session_fence::ClassifyPush(sessionIt->second.playerId,
+											 request->header().target_player_id()))
+	{
+	case gate_session_fence::PushVerdict::kDrop:
+		LogFenceMismatch("SendMessageToPlayer", request->header().session_id(),
+						 sessionIt->second.playerId, request->header().target_player_id(),
+						 request->message_content().message_id());
+		return;
+	case gate_session_fence::PushVerdict::kDeliverUnfenced:
+		LogFenceUnfencedOnce("SendMessageToPlayer");
+		break;
+	case gate_session_fence::PushVerdict::kDeliver:
+		break;
 	}
 	GetGateCodec().send(sessionIt->second.conn, request->message_content());
 	///<<< END WRITING YOUR CODE
@@ -171,7 +222,9 @@ void GateHandler::BroadcastToPlayers(::google::protobuf::RpcController* controll
 	::google::protobuf::Closure* done)
 {
 	///<<< BEGIN WRITING YOUR CODE
-	auto sendToSession = [&](uint32_t sessionId)
+	// (session_id, player_id) 的解码与顺序契约收在 broadcast_target_codec.h,
+	// 与 scene 侧的编码共用同一份实现 —— 两边各写一遍必然某天错开一格(R13)。
+	auto sendToSession = [&](uint32_t sessionId, uint64_t targetPlayerId)
 	{
 		auto sessionIt = tlsSessionManager.sessions().find(sessionId);
 		if (sessionIt == tlsSessionManager.sessions().end())
@@ -186,32 +239,23 @@ void GateHandler::BroadcastToPlayers(::google::protobuf::RpcController* controll
 		{
 			return;
 		}
+		// 身份栅栏(R13):广播和单播用同一条判据 —— 会话易主后这一条必须丢。
+		switch (gate_session_fence::ClassifyPush(sessionIt->second.playerId, targetPlayerId))
+		{
+		case gate_session_fence::PushVerdict::kDrop:
+			LogFenceMismatch("BroadcastToPlayers", sessionId, sessionIt->second.playerId,
+							 targetPlayerId, request->message_content().message_id());
+			return;
+		case gate_session_fence::PushVerdict::kDeliverUnfenced:
+			LogFenceUnfencedOnce("BroadcastToPlayers");
+			break;
+		case gate_session_fence::PushVerdict::kDeliver:
+			break;
+		}
 		GetGateCodec().send(sessionIt->second.conn, request->message_content());
 	};
 
-	if (!request->session_bitmap().empty())
-	{
-		const uint32_t base = request->session_bitmap_base();
-		const auto &bitmap = request->session_bitmap();
-		for (size_t i = 0; i < bitmap.size(); ++i)
-		{
-			const uint8_t byte = static_cast<uint8_t>(bitmap[i]);
-			for (int bit = 0; bit < 8; ++bit)
-			{
-				if (byte & (1 << bit))
-				{
-					sendToSession(base + static_cast<uint32_t>(i * 8 + bit));
-				}
-			}
-		}
-	}
-	else
-	{
-		for (auto &&sessionId : request->session_list())
-		{
-			sendToSession(sessionId);
-		}
-	}
+	broadcast_targets::ForEach(*request, sendToSession);
 	///<<< END WRITING YOUR CODE
 }
 
