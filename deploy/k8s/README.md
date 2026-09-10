@@ -560,15 +560,25 @@ curl http://127.0.0.1:18081/api/server-list
     改 step / 加种类(pet / guild …)只改那里,ConfigMap 不可能漂移;文件里没有 `IdSegments:` 则生成期直接 throw(fail-closed)。
   - 当前值(来自那份文件):`item` InitialStep 20000 / [1000, 1000000];`txlog` 50000 / [2000, 2000000];`snapshot` 2000 / [200, 100000]。
     `Kind` 名要与 data-service 的 `IdSegment.BootstrapTags` 及 `id_segment` 表的种子行一一对应(生产缺行 = `ErrCodeIdSegmentUnknownTag`,不自动补种)。
-- **审计 topic 世代号 `_g<N>` 在 C++ 侧是编译期硬编码的,ConfigMap 因此不生成任何对应键**:
-  `cpp/libs/modules/transaction_log/transaction_log_system.h:13` 的 `constexpr char kTransactionLogTopic[] = "transaction_log_topic_g1"`、
-  `cpp/libs/modules/snapshot/snapshot_system.h:12` 的 `constexpr char kPlayerSnapshotTopic[] = "player_snapshot_topic_g1"`,
-  两处都是常量;`config.cpp` 里**没有**任何读世代号的分支(在该文件里 grep `Generation` 零命中)。
-  修正前生成器往 ConfigMap 写 `AuditTopicGeneration: <N>`,C++ 从来没读过 —— 一个看着"已配置"其实无效的键比不写更危险,已删除。
-  - **漂移风险(未消除,只能人工守)**:改 `go/data_service/etc/data_service.yaml` 的 `Kafka.TopicGeneration` 只会改
-    Go 消费者和 `kafka-topic-init` Job 预建的 topic 名,C++ 生产者仍然写 `_g1`。两边分家的症状是静默的:
-    流水 / 快照进了一个没人消费的 topic,30 天后被保留期吃掉。**换代必须同一次提交改三处**——
-    上面两个 C++ 头文件的常量 + 服务 yaml 的 `Kafka.TopicGeneration`——并重新构建 node 镜像(改 yaml 不重新出包等于没改)。
+- **审计 topic 世代号 `_g<N>` 已改成配置驱动,ConfigMap 现在生成 `AuditTopicGeneration:`(2026-09-09)**:
+  C++ 侧留在代码里的只有**基名**——`cpp/libs/modules/transaction_log/transaction_log_system.h` 的
+  `kTransactionLogTopicBase = "transaction_log_topic"`、`cpp/libs/modules/snapshot/snapshot_system.h` 的
+  `kPlayerSnapshotTopicBase = "player_snapshot_topic"`;后缀由 `cpp/libs/modules/audit/audit_topic.h::AuditTopicName`
+  在发送时按 `BaseDeployConfig.audit_topic_generation`(`proto/common/base/config.proto` 字段 20)拼出来,
+  `config.cpp::readBaseDeployConfig` 逐键读 `AuditTopicGeneration`,缺键 / 0 = 第一代 `_g1`
+  (与 Go `topicForGeneration` 的 `generation == 0 → 1` 逐字同规则)。
+  改这个值不再需要改 C++ 代码,也不需要重出 node 镜像 —— 改配置 + 重启节点即可。
+  - **ConfigMap 的值从消费者那份 yaml 取**:`New-NodeConfigMapYaml` 用 `Get-YamlScalar` 读
+    `go/data_service/etc/data_service.yaml` 的 `Kafka.TopicGeneration`(缺席回落 1,与 C++ / Go 的 0→1 规则一致),
+    而不是从 `bin/etc/base_deploy_config.yaml` 再抄一份。同一个键还喂着 data-service 自己的 ConfigMap
+    (`$dsKafkaTopicGeneration`)和 `kafka-topic-init` 预建的 topic 名 —— 生产者、消费者、预建 Job 三边同源,不会各说各话。
+  - **漂移风险已消除,但两侧仍须同批次动**:K8s 上改 `Kafka.TopicGeneration` 后必须重跑 `zone-up`(重新生成 node ConfigMap)
+    + 重跑 `infra-kafka-topics` 预建新一代 topic,并滚更 gate/scene 让它们重新读配置;
+    本地 / 裸机跑的节点用的是 `bin/etc/base_deploy_config.yaml` 的 `AuditTopicGeneration`,那一份要与
+    `go/data_service/etc/data_service.yaml` 的 `Kafka.TopicGeneration` 手工保持相等(两份 yaml 各自是各自部署形态的真源)。
+    忘了任何一边的症状仍然是静默的:流水 / 快照进了一个没人消费的 topic,30 天后被保留期吃掉。
+    `tools/scripts/tests/k8s_deploy_contract.tests.ps1` 里有一条契约用例钉住"node ConfigMap 的 `AuditTopicGeneration`
+    == data-service 的 `Kafka.TopicGeneration`"。
 - 验收:
 
 ```powershell

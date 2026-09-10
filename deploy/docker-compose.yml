@@ -92,6 +92,9 @@ services:
       # 见 docs/design/control-plane-topic-partitioning-20260908.md。
       - KAFKA_INIT_COMMAND_PARTITIONS=${KAFKA_INIT_COMMAND_PARTITIONS:-256}
       - KAFKA_INIT_COMMAND_TOPIC_GENERATION=${KAFKA_INIT_COMMAND_TOPIC_GENERATION:-1}
+      # 审计 topic 世代号。三处必须相等:这里、go/data_service/etc/data_service.yaml 的
+      # Kafka.TopicGeneration(消费者)、bin/etc/base_deploy_config.yaml 的 AuditTopicGeneration
+      # (C++ 生产者;2026-09-09 起从编译期常量改成读配置,见 cpp/libs/modules/audit/audit_topic.h)。
       - KAFKA_INIT_AUDIT_TOPIC_GENERATION=${KAFKA_INIT_AUDIT_TOPIC_GENERATION:-1}
     entrypoint:
       - /bin/sh

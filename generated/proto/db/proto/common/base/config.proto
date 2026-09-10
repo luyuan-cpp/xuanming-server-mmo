@@ -129,6 +129,17 @@ message BaseDeployConfig {
 
     // 永久 guid 号段(item / txlog / snapshot 各一块,见 IdSegmentConfig)。
     IdSegmentConfig id_segment = 19;
+
+    // 审计 topic(transaction_log / player_snapshot)的**世代号**,进有效 topic 名:
+    // `<基名>_g<N>`,基名在 cpp/libs/modules/{transaction_log,snapshot} 的头文件里。
+    // 0 当 1 处理(proto3 没有 presence,存量 yaml 不写这一键也能起,名字仍规范)。
+    //
+    // **必须等于 go/data_service 的 Kafka.TopicGeneration**(go/data_service/etc/data_service.yaml):
+    // C++ 是这两个 topic 唯一的生产者,data_service 是唯一的消费者,名字是两边唯一的会合点。
+    // 两边分家不报任何错 —— 生产者写进一个没人消费的 topic,流水 / 快照在保留期(默认 30 天)
+    // 到期时被静默吃掉。2026-09-09 之前这个后缀是 C++ 编译期常量,换代要手改两个头文件并重出镜像;
+    // 现在收敛成这一个部署键(k8s 侧由 k8s_deploy.ps1 从 data_service.yaml 镜像进 node ConfigMap)。
+    uint32 audit_topic_generation = 20;
 }
 
 // Game config

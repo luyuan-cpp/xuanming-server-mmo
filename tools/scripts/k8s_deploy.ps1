@@ -635,6 +635,18 @@ function New-NodeConfigMapYaml {
 	# 键名 / 结构必须与 C++ 读法逐字对上(见下面模板处的注释),抄一份就是等着漂移。
 	$idSegmentsBlock = Get-AuthoritativeYamlBlock -RelativePath 'bin/etc/base_deploy_config.yaml' -Key 'IdSegments'
 
+	# 审计 topic 世代号。**真源取 data_service 那份而不是 bin/etc 那份**:C++ 是
+	# transaction_log / player_snapshot 唯一的生产者,go/data_service 是唯一的消费者,
+	# 消费者那边的 Kafka.TopicGeneration 同时还喂着 Apply-KafkaTopicInitJob 预建 topic 的名字
+	# (见 $dsKafkaTopicGeneration)。从同一个键派生,生产者、消费者、预建 Job 三边不可能各说各话。
+	# 缺席 = 1:与 C++ NormalizeAuditTopicGeneration / Go topicForGeneration 的 0→1 同一条规则,
+	# 所以这里不用 Get-AuthoritativeScalar(那个查不到就 throw),留给 yaml 可以不写这一键。
+	$auditTopicGeneration = 1
+	$auditGen = Get-YamlScalar -Path (Join-Path $RepoRoot ('go/data_service/etc/data_service.yaml' -replace '/', [System.IO.Path]::DirectorySeparatorChar)) -KeyPath 'Kafka.TopicGeneration'
+	if ($auditGen.Found -and -not [string]::IsNullOrWhiteSpace($auditGen.Value)) {
+		$auditTopicGeneration = $auditGen.Value
+	}
+
 	$baseDeployConfig = (@"
 Etcd:
   Hosts:
@@ -666,6 +678,15 @@ service_discovery_prefixes:
   # data_service 按 C++ 约定注册 NodeInfo(go/data_service/internal/noderegistry);缺这一条 scene 永远过不了
   # DependencyGate。与 bin/etc/base_deploy_config.yaml 对齐。
   - "DataServiceNodeService.rpc"
+# 审计 topic 世代号:C++ 生产者按 `<基名>_g<N>` 拼实际 topic 名(基名 transaction_log_topic /
+# player_snapshot_topic 是 cpp/libs/modules/{transaction_log,snapshot} 里的常量,后缀由本键来),
+# 读法见 config.cpp::readBaseDeployConfig 的 AuditTopicGeneration 分支 + modules/audit/audit_topic.h。
+# 值从 go/data_service/etc/data_service.yaml 的 Kafka.TopicGeneration 取:消费者(data-service)与
+# kafka-topic-init 预建的 topic 名都由那一个键派生,生产者跟着同一个键走,三边不可能分家。
+# 2026-09-09 之前 C++ 这个后缀是编译期常量、这里刻意不生成任何键;现在 C++ 真读了,必须生成 ——
+# 缺这一键 C++ 回落成第一代(_g1),消费者若已换代就是"生产者写进没人消费的 topic",
+# 不报任何错,流水 / 快照静默积压到保留期(30 天)被删。
+AuditTopicGeneration: ${auditTopicGeneration}
 Kafka:
   Brokers:
     - "kafka.${InfraNamespace}:9092"

@@ -37,6 +37,7 @@
     <ClCompile Include="transaction_log\transaction_log_system.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="audit\audit_topic.h" />
     <ClInclude Include="bag\bag_system.h" />
     <ClInclude Include="bag\bag_service.h" />
     <ClInclude Include="bag\item_system.h" />

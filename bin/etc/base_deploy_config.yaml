@@ -135,6 +135,26 @@ BattleTokenSecret: "local-dev-battle-token-secret-fedcba9876543210"
 # 回合制房间人数有界:参战 ≤10 + 观众 ≤20 每房,按单节点期望房间数留余量。
 BattleMaxConnections: 4096
 
+# 审计 topic(流水 / 快照)的世代号,进有效 topic 名:transaction_log_topic_g<N> / player_snapshot_topic_g<N>。
+# 基名是 C++ 常量(cpp/libs/modules/transaction_log/transaction_log_system.h、
+# cpp/libs/modules/snapshot/snapshot_system.h),后缀由本键拼(0 = 1)。
+#
+# **必须与 go/data_service/etc/data_service.yaml 的 Kafka.TopicGeneration 相等**:
+# C++ scene 是这两个 topic 唯一的生产者,go/data_service 的两条落库消费者是唯一的消费者,
+# topic 名是两边唯一的会合点。不一致不会有任何报错 —— 生产者往一个没人消费的 topic 写,
+# 流水 / 快照静默积压到保留期(默认 30 天)被删。
+#
+# 为什么第一代就带后缀:broker 开着 auto.create.topics.enable + num.partitions=1
+# (deploy/docker-compose.yml KAFKA_NUM_PARTITIONS=1),生产者一发消息就把**裸名字**的 topic
+# 自动建成 1 分区;消费端 kafkautil.EnsureTopics 拿 6 / 3 的分区契约去比,得到的永远是
+# "partition contract mismatch",两条消费者一条都起不来,唯一症状是每 30s 一条 Error 日志。
+# 带代号的名字与那两个被自动建出来的裸名 topic 互不相干,第一次就能按契约建成 6 / 3 分区。
+#
+# 换代(= 改分区数,绝不原地扩分区:扩分区会重映射 key=player_id 的哈希,同一玩家的流水顺序就断了)
+# 必须同一次提交改两处并重出/重滚镜像:本键 + data_service.yaml 的 Kafka.TopicGeneration。
+# K8s 上 node ConfigMap 里的这一键由 k8s_deploy.ps1 从 data_service.yaml 镜像生成(不抄这份)。
+AuditTopicGeneration: 1
+
 # 集群号(0..31):部署级常量,运维一次性设定,策划不碰。只有 Go 的 snowflake 槽位协议
 # (login-player / guild / scene-manager / match)消费它,作为 17 位 worker 字段的高 5 位;
 # C++ 侧 2026-09-08 起没有消费者(scene 的永久 guid 走号段,不编码集群),这里只是同一份口径。

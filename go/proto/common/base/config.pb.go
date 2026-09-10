@@ -372,9 +372,19 @@ type BaseDeployConfig struct {
 	// 取值 0..31。见 docs/design/node-id-overhaul-plan-20260908.md §5 / §7.5。
 	ClusterId uint32 `protobuf:"varint,18,opt,name=cluster_id,json=clusterId,proto3" json:"cluster_id,omitempty"`
 	// 永久 guid 号段(item / txlog / snapshot 各一块,见 IdSegmentConfig)。
-	IdSegment     *IdSegmentConfig `protobuf:"bytes,19,opt,name=id_segment,json=idSegment,proto3" json:"id_segment,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	IdSegment *IdSegmentConfig `protobuf:"bytes,19,opt,name=id_segment,json=idSegment,proto3" json:"id_segment,omitempty"`
+	// 审计 topic(transaction_log / player_snapshot)的**世代号**,进有效 topic 名:
+	// `<基名>_g<N>`,基名在 cpp/libs/modules/{transaction_log,snapshot} 的头文件里。
+	// 0 当 1 处理(proto3 没有 presence,存量 yaml 不写这一键也能起,名字仍规范)。
+	//
+	// **必须等于 go/data_service 的 Kafka.TopicGeneration**(go/data_service/etc/data_service.yaml):
+	// C++ 是这两个 topic 唯一的生产者,data_service 是唯一的消费者,名字是两边唯一的会合点。
+	// 两边分家不报任何错 —— 生产者写进一个没人消费的 topic,流水 / 快照在保留期(默认 30 天)
+	// 到期时被静默吃掉。2026-09-09 之前这个后缀是 C++ 编译期常量,换代要手改两个头文件并重出镜像;
+	// 现在收敛成这一个部署键(k8s 侧由 k8s_deploy.ps1 从 data_service.yaml 镜像进 node ConfigMap)。
+	AuditTopicGeneration uint32 `protobuf:"varint,20,opt,name=audit_topic_generation,json=auditTopicGeneration,proto3" json:"audit_topic_generation,omitempty"`
+	unknownFields        protoimpl.UnknownFields
+	sizeCache            protoimpl.SizeCache
 }
 
 func (x *BaseDeployConfig) Reset() {
@@ -540,6 +550,13 @@ func (x *BaseDeployConfig) GetIdSegment() *IdSegmentConfig {
 	return nil
 }
 
+func (x *BaseDeployConfig) GetAuditTopicGeneration() uint32 {
+	if x != nil {
+		return x.AuditTopicGeneration
+	}
+	return 0
+}
+
 // Game config
 type GameConfig struct {
 	state         protoimpl.MessageState      `protogen:"open.v1"`
@@ -694,7 +711,7 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\bmin_step\x18\x04 \x01(\rR\aminStep\x12\x19\n" +
 	"\bmax_step\x18\x05 \x01(\rR\amaxStep\"=\n" +
 	"\x0fIdSegmentConfig\x12*\n" +
-	"\x05kinds\x18\x01 \x03(\v2\x14.IdSegmentKindConfigR\x05kinds\"\xfc\x06\n" +
+	"\x05kinds\x18\x01 \x03(\v2\x14.IdSegmentKindConfigR\x05kinds\"\xb2\a\n" +
 	"\x10BaseDeployConfig\x12\x1d\n" +
 	"\n" +
 	"etcd_hosts\x18\x01 \x03(\tR\tetcdHosts\x12\x1b\n" +
@@ -718,7 +735,8 @@ const file_proto_common_base_config_proto_rawDesc = "" +
 	"\n" +
 	"cluster_id\x18\x12 \x01(\rR\tclusterId\x12/\n" +
 	"\n" +
-	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\"\xf0\x01\n" +
+	"id_segment\x18\x13 \x01(\v2\x10.IdSegmentConfigR\tidSegment\x124\n" +
+	"\x16audit_topic_generation\x18\x14 \x01(\rR\x14auditTopicGeneration\"\xf0\x01\n" +
 	"\n" +
 	"GameConfig\x12&\n" +
 	"\x0fscene_node_type\x18\x01 \x01(\rR\rsceneNodeType\x12\x17\n" +

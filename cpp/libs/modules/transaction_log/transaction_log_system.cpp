@@ -6,6 +6,7 @@
 #include "ecs_context.h"
 #include "engine/core/type_define/type_define.h"
 #include "engine/infra/messaging/kafka/kafka_producer.h"
+#include "modules/audit/audit_topic.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "node_config_manager.h"
 
@@ -78,7 +79,8 @@ void TransactionLogSystem::SendEntry(const TransactionLogEntry &entry)
     const std::string key = std::to_string(
         entry.from_player() != 0 ? entry.from_player() : entry.to_player());
 
-    auto err = KafkaProducer::Instance().send(kTransactionLogTopic, bytes, key);
+    // 有效 topic 名 = 基名 + 部署配置里的世代后缀(audit::AuditTopicName);别用基名直发。
+    auto err = KafkaProducer::Instance().send(audit::AuditTopicName(kTransactionLogTopicBase), bytes, key);
     if (err != RdKafka::ERR_NO_ERROR)
     {
         LOG_ERROR << "TransactionLogSystem: Kafka send failed for tx_id="

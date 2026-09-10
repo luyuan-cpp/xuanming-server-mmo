@@ -6,6 +6,7 @@
 #include "engine/core/type_define/type_define.h"
 #include "engine/core/time/system/time.h"
 #include "engine/infra/messaging/kafka/kafka_producer.h"
+#include "modules/audit/audit_topic.h"
 #include "modules/id_segment/guid_segment_registry.h"
 #include "node_config_manager.h"
 #include "services/scene/player/system/player_data_loader.h"
@@ -96,7 +97,8 @@ uint64_t SnapshotSystem::CaptureAndSend(entt::entity player, SnapshotTrigger tri
     }
 
     const std::string key = std::to_string(playerId);
-    auto err = KafkaProducer::Instance().send(kPlayerSnapshotTopic, bytes, key);
+    // 有效 topic 名 = 基名 + 部署配置里的世代后缀(audit::AuditTopicName);别用基名直发。
+    auto err = KafkaProducer::Instance().send(audit::AuditTopicName(kPlayerSnapshotTopicBase), bytes, key);
     if (err != RdKafka::ERR_NO_ERROR)
     {
         LOG_ERROR << "[SnapshotSystem] Kafka send failed for player " << playerId
