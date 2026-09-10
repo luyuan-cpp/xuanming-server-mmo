@@ -254,7 +254,7 @@ std::size_t ConfigureGuidSegmentClients(Node & /*node*/)
         {
             // 不 FATAL:滚动升级期间 yaml 可能已经写了新版本才认识的种类,旧二进制忽略即可。
             LOG_ERROR << "[idsegment] IdSegments entry with unknown Kind '" << kindConfig.kind()
-                      << "' ignored (known: item / txlog / snapshot; add new kinds to GUID_SEGMENT_KIND_LIST)";
+                      << "' ignored (known: item / txlog / snapshot; add new kinds to GuidKind + kGuidKindNames)";
             continue;
         }
         const auto index = static_cast<std::size_t>(kind);

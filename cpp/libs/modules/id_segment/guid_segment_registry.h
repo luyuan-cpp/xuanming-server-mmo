@@ -12,23 +12,24 @@
 // 永久 guid 种类注册表:一种 GUID 一个 GuidSegmentClient 实例(§7.5 第 3 条)。
 //
 // 加一种永久 guid(pet / guild …)只要两处:
-//   1. 下面的 GUID_SEGMENT_KIND_LIST 加一行 X(kPet, "pet") —— 枚举、名字、biz_tag 都从它派生;
+//   1. 下面的 GuidKind 加一个枚举项,并在 kGuidKindNames(.cpp)里加对应的一行名字
+//      —— 两者数量不一致会被 static_assert 当场拦下,漏改编译不过;
 //   2. bin/etc/base_deploy_config.yaml 的 IdSegments 里加一块(Kind: pet + step 三元组),
 //      以及 go 侧 id_segment 表的一行种子(迁移显式创建,生产不自动补种,§7.5 第 7 条)。
 // 业务侧用 tlsGuidSegmentRegistry.Get(GuidKind::kPet).TryNext(out) 取号即可。
 //
 // 名字既是注册表里的种类名,也是 id_segment.biz_tag —— 两边同一个字符串,免得配置里再对一遍表。
+//
+// 底层类型是 uint8_t:它表示的是**种类数量**(现在 3 种),不是 guid 的位宽
+// —— guid 的值是 Guid(uint64),见 guid_segment_client.h。255 种类别绰绰有余。
+// kCount 必须始终是最后一项:它既是种类数,也是所有按种类索引的数组的长度。
 // ─────────────────────────────────────────────────────────────────────────
-#define GUID_SEGMENT_KIND_LIST(X) \
-    X(kItem, "item")              \
-    X(kTxLog, "txlog")            \
-    X(kSnapshot, "snapshot")
-
 enum class GuidKind : uint8_t
 {
-#define GUID_SEGMENT_KIND_ENUM_ENTRY(name, tag) name,
-    GUID_SEGMENT_KIND_LIST(GUID_SEGMENT_KIND_ENUM_ENTRY)
-#undef GUID_SEGMENT_KIND_ENUM_ENTRY
+    kItem,
+    kTxLog,
+    kSnapshot,
+
     kCount
 };
 

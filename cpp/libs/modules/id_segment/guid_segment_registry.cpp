@@ -6,13 +6,16 @@ thread_local GuidSegmentRegistry tlsGuidSegmentRegistry;
 
 namespace
 {
+    // 顺序必须与 GuidKind 的枚举项**逐项对应**(下面的 static_assert 只拦数量不一致,
+    // 拦不住顺序写反 —— 加种类时照着枚举的顺序往后追加即可)。
+    // 这些字符串同时是 id_segment.biz_tag,改名等于换一张计数器行,不要随手改。
     constexpr const char *kGuidKindNames[] = {
-#define GUID_SEGMENT_KIND_NAME_ENTRY(name, tag) tag,
-        GUID_SEGMENT_KIND_LIST(GUID_SEGMENT_KIND_NAME_ENTRY)
-#undef GUID_SEGMENT_KIND_NAME_ENTRY
+        "item",     // GuidKind::kItem
+        "txlog",    // GuidKind::kTxLog
+        "snapshot", // GuidKind::kSnapshot
     };
     static_assert(sizeof(kGuidKindNames) / sizeof(kGuidKindNames[0]) == kGuidKindCount,
-                  "GUID_SEGMENT_KIND_LIST drives both the enum and the name table");
+                  "kGuidKindNames 必须与 GuidKind 一一对应:加了枚举项就得加名字");
 
     std::size_t IndexOf(GuidKind kind)
     {
