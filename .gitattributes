@@ -38,3 +38,7 @@
 *.gz binary
 *.nav binary
 *.navmesh binary
+
+# 补丁文件必须逐字节保留:内容是 CRLF 的 vcxproj diff,
+# 被 text=auto 归一成 LF 后在新 clone 上 git apply 必然失败。
+*.patch -text
