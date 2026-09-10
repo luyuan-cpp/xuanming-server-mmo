@@ -165,6 +165,9 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "rpc", "cpp\generated\rpc\rpc.vcxproj", "{356DE209-55AC-4AE6-9BAE-32D50D7EB473}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "core", "cpp\libs\engine\core\core.vcxproj", "{03F2DF47-F5B9-41E9-933B-903D317FEEB1}"
+	ProjectSection(ProjectDependencies) = postProject
+		{DCD4F63C-36D2-4639-83AC-DDB3FFC467C0} = {DCD4F63C-36D2-4639-83AC-DDB3FFC467C0}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "session", "cpp\libs\engine\session\session.vcxproj", "{FA8524DA-D5B6-4785-8B1C-F43E985E56AA}"
 EndProject
