@@ -90,7 +90,7 @@ Kafka:
   #   deploy/docker-compose.yml 的 kafka-topic-init
   #   deploy/k8s/manifests/infra/kafka-topic-init.yaml(值由 k8s_deploy.ps1 从本文件读)
   CommandTopicPartitions: 256
-  CommandTopicGeneration: 1
+  CommandTopicGeneration: 2
   # 迁移窗口开关。true = 不再消费旧的 `gate-<node_id>` / `scene-<node_id>`。
   # 生产者(含 Go login)全部切到新 topic 之前必须保持 false,否则命令全丢。
   #

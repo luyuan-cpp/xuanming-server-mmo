@@ -190,3 +190,7 @@ const ScenePetClientPlayerAllocatePetPointsMessageId = 186
 const ScenePetClientPlayerGmGrantPetMessageId = 187
 const ScenePetClientPlayerAutoAllocatePetPointsMessageId = 188
 const ScenePetClientPlayerRenamePetMessageId = 189
+const SceneActivityClientPlayerGetActivityListMessageId = 190
+const SceneBagClientPlayerGetBagMessageId = 191
+const SceneBagClientPlayerSortBagMessageId = 192
+const SceneMissionClientPlayerGetMissionListMessageId = 193

@@ -553,14 +553,14 @@ login 与 scene 都改,Redis 父 key 写入时序要与 scene HandlePlayerAsyncL
 **步骤**
 1. 策划表:新增 `LevelExp.xlsx`(level, exp_to_next)并写 `data/schema/levelexp_table.proto`(照 monster_table.proto),跑导表器(PATH 含 protoc 与 protoc-gen-go)。
 2. proto:`ExperienceComp { uint64 exp = 1; }` 加进 player_comp.proto,挂到 mysql_database_table.proto player_database 新字段号 10(产生 DB 新列 → 三份 mysql_database_table.sql 同步 + `go run ./cmd/migrate -command up` 上线前置,照 attribute_component 先例;K8s 上依赖 P1-03)。
-3. scene:新建 `PlayerExperienceSystem::AddExp(player, exp)`:累加、按 LevelExp 表循环升级到 kMaxLevel=200 上限、每升一级 trigger PlayerUpgradeEvent(属性系统已监听会 Recalculate + PushPanel + 加点池增长)。
+3. scene:新建 `PlayerExperienceSystem::AddExp(player, exp)`:累加、按 LevelExp 表循环升级到 kMaxLevel=85 上限(2026-09-10 由 200 改为 85)、每升一级 trigger PlayerUpgradeEvent(属性系统已监听会 Recalculate + PushPanel + 加点池增长)。
 4. `player_battle.cpp:993-997` 日志分支替换为 `PlayerExperienceSystem::AddExp(player, settlement.exp_gain())`,保留日志。
 5. bag_marshal / player_database_loader:ExperienceComp 随 PlayerAllData 存取(照 LevelComp,loader.cpp:77/102)。
 6. 测试:新建 experience_test(照 currency_test 工程结构)覆盖单级/连升多级/满级截断/升级事件次数,登记进 run_cpp_tests.ps1 与 game.sln;robot battle_smoke 结算后断言 LevelComp 上升或 exp 增加(读 AttributePanel)。
 
 **验收标准**
 - PVE 胜利结算后 Redis/DB 中 ExperienceComp.exp 增加 = 击杀怪物 exp_reward 之和。
-- exp 达阈值自动升级,面板 level 变化且属性重算、加点池按 points_per_level 增长;200 级封顶不越界。
+- exp 达阈值自动升级,面板 level 变化且属性重算、加点池按 points_per_level 增长;85 级封顶不越界。
 - run_cpp_tests.ps1 全绿;battle_smoke / attribute_smoke OK;AutoMigrateSchema=false 环境有 migrate 项。
 
 **验证方式**
@@ -582,7 +582,7 @@ proto/DB 新列牵动 proto2mysql 迁移与三份 SQL;连升多级会触发多�
 **领域** server-cpp · **工作量** M · **状态** open
 
 **背景与证据**
-`cpp/nodes/gate/gate_security.h` 的 GM 签名鉴权(VerifyGmRequestFromEnv,:270-360)全仓只在 `gate_service_handler.cpp:316` GmGracefulShutdown 一处使用;gate 对 `GmSetPlayerLevel|GmAddCurrency` 零命中;消息 175/37(`player_attribute_service_metadata.h:38`、`player_currency_service_metadata.h:6`)经 `client_message_processor.cpp:640-720` 与普通消息同路径转发到 scene;scene 侧 `player_attribute_handler.cpp:151` 注释「上线前经 gate GM 鉴权白名单收口」;docs §8、PROGRESS.md:3715 列为缺口。任何已登录客户端可把自己升到 200 级、加任意货币,是上线阻塞级漏洞;但 robot attribute_smoke 与 battle_smoke 依赖这两条,收口时必须保留 dev 通道。
+`cpp/nodes/gate/gate_security.h` 的 GM 签名鉴权(VerifyGmRequestFromEnv,:270-360)全仓只在 `gate_service_handler.cpp:316` GmGracefulShutdown 一处使用;gate 对 `GmSetPlayerLevel|GmAddCurrency` 零命中;消息 175/37(`player_attribute_service_metadata.h:38`、`player_currency_service_metadata.h:6`)经 `client_message_processor.cpp:640-720` 与普通消息同路径转发到 scene;scene 侧 `player_attribute_handler.cpp:151` 注释「上线前经 gate GM 鉴权白名单收口」;docs §8、PROGRESS.md:3715 列为缺口。任何已登录客户端可把自己升到满级(2026-09-10 起上限 85)、加任意货币,是上线阻塞级漏洞;但 robot attribute_smoke 与 battle_smoke 依赖这两条,收口时必须保留 dev 通道。
 
 **要改的文件**
 - `cpp/nodes/gate/gate_security.h`、`cpp/nodes/gate/handler/rpc/client_message_processor.cpp`、`cpp/nodes/gate/tests/gate_security_test.cpp`
@@ -1761,7 +1761,7 @@ docker compose -f E:\work\xuanming-server-mmo\deploy\docker-compose.yml --profil
 **领域** server-cpp · **工作量** M · **状态** needs-decision
 
 **背景与证据**
-`turn_battle_engine.cpp:511-524` FillDefaultActions 对怪物一律 BATTLE_ACTION_ATTACK、target 0 随机;`data/schema/monster_table.proto:17-27` 无技能列;`generated/tables/Skill.json` 首行 damage='100*level'(`skill_table.proto:78`);Class 表 init_speed=20(`class_table.proto:26`),`player-attribute-allocation.md` §8 记速度 1 级 23 > 全部怪物 8~20、体质 5 点让 1 号怪普攻归零(ApplyDamage `turn_battle_engine.cpp:1047-1056` 饱和到 0);PROGRESS.md:3707「记入缺口不擅改表(策划平衡项)」。PVE 已数据化到 15~24 回合,但怪物永远后手、逃跑 95% 饱和、低级投体质即无敌。
+`turn_battle_engine.cpp:511-524` FillDefaultActions 对怪物一律 BATTLE_ACTION_ATTACK、target 0 随机;`data/schema/monster_table.proto:17-27` 无技能列;`generated/tables/Skill.json` 首行 damage='100*level'(`skill_table.proto:78`);Class 表 init_speed=20(`class_table.proto:26`),`player-attribute-allocation.md` §8 记速度 1 级 23 > 全部怪物 8~20、体质 5 点让 1 号怪普攻归零(ApplyDamage `turn_battle_engine.cpp:1047-1056` 饱和到 0);PROGRESS.md:3707「记入缺口不擅改表(策划平衡项)」。PVE 已数据化到 15~24 回合,但怪物永远后手、逃跑 95% 饱和、低级投体质即无敌。**2026-09-10 更新**:角色属性系数已由策划上调(体质 50 血 + 5 防 / 灵力 40 法伤 + 10 蓝 / 力量 50 物伤 / 敏捷 3 速度),上述"5 点""15~24 回合"都是旧系数口径——新系数下 1 级投 2 点体质(或 3 级不投点)即让 1 号怪普攻归零,低级副本 1~2 回合结束,PVP 7 级起首击秒杀;最新定量见 `player-attribute-allocation.md` §8。本条剩余待决的是怪物侧强度。
 
 **要改的文件**
 - `data/Monster.xlsx`、`data/schema/monster_table.proto`、`data/Skill.xlsx`、`data/Class.xlsx`、`data/AttributeDimension.xlsx`
@@ -1775,7 +1775,7 @@ docker compose -f E:\work\xuanming-server-mmo\deploy\docker-compose.yml --profil
 4. 改表后跑导表器 + `cd go && build.bat`,重编 battle 库与节点;table_battle_data_provider_test 真表契约同步;battle_smoke 观察回合数与「怪物永远后手」「0 伤害事件流」消失。
 
 **验收标准**
-- 1 级玩家投 5 点体质对 1 号怪的事件流中 DAMAGE value > 0;同级怪物速度与玩家有交错,逃跑成功率不再饱和 95%;(若配技能)怪物回合内出现 SKILL 事件且单测确定性;turn_battle_engine_test 全绿;battle_smoke 15~30 回合内结束。
+- 1 级玩家投 2 点体质(2026-09-10 新系数下的归零阈值;旧系数口径为 5 点)对 1 号怪的事件流中 DAMAGE value > 0;同级怪物速度与玩家有交错,逃跑成功率不再饱和 95%;(若配技能)怪物回合内出现 SKILL 事件且单测确定性;turn_battle_engine_test 全绿;battle_smoke 回合区间按新系数重定(旧系数口径 15~30 回合)。
 
 **验证方式**
 ```powershell

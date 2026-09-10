@@ -1,0 +1,62 @@
+syntax = "proto3";
+option go_package = "db/proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/common/component/currency_comp.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 实例与布局分离；显示信息不写入玩家持久化记录。
+message BagItemInfo {
+  uint64 item_id = 1;
+  uint32 config_id = 2;
+  uint32 count = 3;
+  uint32 max_stack = 4;
+  uint32 equip_kind = 5;
+  string name = 6;        // 当前物品表尚无展示字段，缺配时为空。
+  string description = 7;
+  string icon_key = 8;
+}
+
+message BagSlotInfo {
+  uint32 slot = 1;
+  uint64 item_id = 2;
+  uint32 width = 3;
+  uint32 height = 4;
+}
+
+message BagLayoutInfo {
+  uint32 bag_type = 1;    // 0 人物背包 / 1 仓库 / 2 装备栏 / 3 临时格。
+  uint32 capacity = 2;
+  repeated BagSlotInfo slots = 3; // 顺序无语义，位置只认 slot。
+  bool can_sort = 4;
+}
+
+message BagInfo {
+  repeated BagItemInfo items = 1; // 顺序无语义，布局通过 item_id 关联。
+  BagLayoutInfo layout = 2;
+  CurrencyComp currency = 3;
+}
+
+message GetBagRequest { uint32 bag_type = 1; }
+message GetBagResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;
+}
+message SortBagRequest { uint32 bag_type = 1; }
+message SortBagResponse {
+  TipInfoMessage error_message = 1;
+  BagInfo bag = 2;
+  bool changed = 3;
+}
+
+service SceneBagClientPlayer {
+  option (OptionIsPlayerService) = true;
+  option (OptionIsClientProtocolService) = true;
+  // 纯读取；开窗不合堆、不整理、不创建缺失组件。
+  rpc GetBag (GetBagRequest) returns (GetBagResponse);
+  // 仅支持人物背包和仓库，玩家显式点击后走 BagService 审计入口。
+  rpc SortBag (SortBagRequest) returns (SortBagResponse);
+}

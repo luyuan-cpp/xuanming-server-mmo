@@ -4255,3 +4255,64 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - 未验证项：未做真实服务端到端、数据库迁移、压测或客户端验证；可选 no-raw-pointer-member 检查因本机工具缺失由既有构建脚本跳过。data_service 的 go mod verify 因本地 replace 的 proto/shared 缺 ziphash 未通过，包测试与 vet 已通过。protogen/go.sum 中同一错误包校验值在拉取前即存在，本次未改。
 - 分支审计：远端两个旧特性分支已删除且内容已合入 main；本地旧备份仅独有废弃 client/unity 指针，服务端内容已有等价提交。保存并验证 legacy-branch.bundle 后删除该分支，本地仅保留 main；旧的其他 stash 保持原样。
 - 本机按上游 third_party/patches/apply.ps1 应用了 librdkafka/ue5navmesh 编译补丁，补丁源已经在主干。并行任务的 tools/scripts/start_game.ps1 修改未纳入本次提交。
+## 2026-09-10 本机启动 Kafka 续接与 UI 联网准备
+
+- 修复一键启动遗漏正式 Kafka 预建的问题：tools/scripts/start_game.ps1 从本机配置读取命令代次/分区，调用正式 Compose 初始化器，只补缺失主题并回读分区、复制因子、保留期与清理策略；既有冲突直接拒绝，不删主题、不原地扩分区、不关闭断言。保留 Docker 遗留 socket 父目录备份修复。
+- 本机协调停服后将 bin/etc/base_deploy_config.yaml 的 Kafka.CommandTopicGeneration 从 1 切到 2，CommandTopicPartitions 保持 256。保留旧 gate-cmd_g1 / scene-cmd_g1；新建 gate-cmd_g2、scene-cmd_g2 各 256 分区，并补 game-events（1）、transaction_log_topic_g1（6）、player_snapshot_topic_g1（3），按正式规则保留命令/事件 1 小时、审计 30 天。配置备份与哈希在 ../tmp/ui-network-retry-20260910/generation-2/。
+- 启动顺序收为 db/data_service → gate/scene 的有效 etcd 注册与 Kafka handler 后启动标志 → battle → 四个 Go 命令生产者 → Java；生产者继承同代次进程环境，finally 恢复调用者环境。记录 PID、启动时间和契约，拒绝复用未知或旧代次进程。过期的 9 月 5 日 match 程序已由当前源码重建并安装，旧程序备份在 ../tmp/ui-network-retry-20260910/previous/match.exe。
+- 静态与模拟验证：PowerShell 语法、git diff --check 通过；内存替身覆盖正确契约、错误分区/保留期/清理策略拒绝、缺失预建、重复幂等、冲突发生在写入前、三个 INIT 环境覆盖以及调用者环境恢复，均通过。
+- 真实本机启动：启动器退出码 0；五主题预建及回读通过，上述服务依次就绪，06:30:08 复核网关 health=UP、一区 OPEN/SMOOTH，二区保持原有维护状态。日志：run/logs/game-launcher/20260910-062513-029/。本次只验证基础设施与服务就绪，未执行测试账号登录、进入角色或真实玩家 UI 操作，未进行压测。
+
+## 2026-09-10 角色属性加点系数调整 + 等级上限 85
+
+- `data/AttributeDimension.xlsx` 角色属性点(池 1)系数按策划口径改:体质每点 +50 气血上限、+5 防御(原 30/2);灵力每点 +40 法伤、+10 法力上限(原 3/20);力量每点 +50 物伤(原 5);敏捷每点 +3 速度(不变)。tooltip 文案同步写明数值。宝宝(401-404)、相性、仙魔系数未动;`base_per_level` 自然成长保持每级 1 点。
+- `PlayerAttributeSystem::kMaxLevel` 200 → 85(`player_attribute.h`),GmSetPlayerLevel 超 85 返回 kInvalidParameter;设计文档 §2.2 与 handoff-backlog 经验系统条目同步。
+- 未编译、未导表、未跑冒烟,待 Codex 验证。已知数值风险:防御系数由 2 升到 5,§8 记录的"低级怪普攻被防御减到 0"更严重;Pet.level_cap=120 高于角色上限,实际宝宝等级仍被 min(主人等级) 限到 85。
+
+## 2026-09-10 属性加点规则补回归单测(客户端坏数据)
+
+- 新增 `cpp/tests/turn_battle_engine_test/attribute_allocation_rules_test.cpp`(已登记 vcxproj / filters),`attribute_allocation_rules.h` 此前没有任何单测。21 条用例:uint32 绕回的负数(-1/-5/-100/INT32_MIN)按点数不足拒绝;两项增量 32 位求和会绕成 9 的攻击被 64 位累加拒绝;非本池维度 / 只增不减 / 跨维度挪点 / 单项上限 / 剩余点边界 / 幂等 / 解锁;85 级满级总量 425/85/26;总量与已用点饱和;自动加点建议原样过校验;HP/MP 按比例往返不回血。所有拒绝路径断言 deltaOut 清零。
+- 规则代码未改行为,只在 `ValidateAllocation` 的 64 位累加处补"为什么不能改窄"的注释;设计文档 §5 第 4 条、§7 同步。
+- 未编译、未运行,待 Codex:`pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle_engine`,期望 AttributeAllocationRulesTest 21 条全过且原有用例不回归。
+
+
+## 2026-09-10 Codex 验证：角色属性系数与 85 级上限
+
+- 源表核对：对 HEAD 恰好 5 个系数与 4 条 tooltip 变化。101–104 当前分别为体质 +50 气血/+5 防御、灵力 +40 法伤/+10 法力、力量 +50 物伤、敏捷 +3 速度；四项 base_per_level 均为 1，其余维度未变。
+- 导表通过：调用 tools/data_table_exporter 当前完整管线，临时 PATH 使用仓内 protoc 与本机 protoc-gen-go；部署目标限定服务端仓库，未同步独立客户端。源表、JSON、PB 共 17 行逐字段一致，其他 13 行与 HEAD 相同；manifest v8、27 张表的产物大小与 SHA256 全部匹配。按 data/AGENTS.md 要求运行 gen_schema_index.py，补齐此前过期的表索引。tip_enum_ids 状态仅被导表器改了行尾，内容完全一致。
+- 编译通过：MSBuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64 /p:PostBuildEventUseInBuild=false，退出码 0，0 警告/0 错误。PostBuildEvent 仅为运行中节点 exe 的复制，延后部署；全部工程正常编译，scene 新产物已在单测后安装。构建自带 no-raw-pointer-member 检查因本机缺工具自行 SKIP，不算静态检查通过。
+- 回合引擎单测通过：build/cpp/tests/turn_battle_engine_test.exe，60/60，退出码 0。过期的 robot.exe 已从当前源码重建，退出码 0，避免使用 9 月 4 日旧错误码断言。
+- scene 重启通过：先备份旧程序/日志/PID/契约并核验无客户端连接，仅替换 scene。新程序与 build 产物 SHA256 相同；新 PID 62140，node_id 2，TCP 20001/gRPC 50001，etcd 租约与新 UUID 启动成功日志一致。沿用 Kafka 命令 g2/256，只更新运行记录中的 scene；gate、battle 与 Go 进程未重启。
+- 属性冒烟未通过：robot 目录执行 robot.exe -c etc/attribute_smoke.yaml，退出码 1，ATTRIBUTE_SMOKE_FAIL step=login reason=create player: server error id:2020；尚未执行加点断言。已保留首次日志，未盲目重试。
+- 根因：本机 bin/go_services/data_service.exe 仍为 2026-09-05 旧产物，唯一注册指向本机 198.0.2.1:9000，AllocateIdSegment 返回 Unimplemented/unknown method，登录发号失败后返回 kLoginDataSerializeFailed(2020)。当前源码 data_service 已成功编译到证据目录 data_service-current.exe，尚未替换旧服务。
+- 继续冒烟的阻塞：当前 SnapshotMySQL 配置指向不存在的 testdb，appuser 也无该库权限，旧服务此前已因该问题关闭 snapshot/txlog store。直接替换新版仍会禁用 idsegment store。后续需确定并初始化本机全局库、授权并运行既有迁移，以及核对永久 ID 水位；涉及数据库/权限和范围扩展，按 AGENTS.md §10.2 等用户确认。只读聚合确认两 zone 的 1058 个角色均在旧 Snowflake 区间(<2^55 的角色为 0)、公会为 0；未核对 item blob 与 Kafka 的全部 ID 水位，不宣称五种号段可安全从 1 重建。
+- 等级边界（代码审计）：kMaxLevel=85 会拒绝 GM 超限请求，但加载器原样加载旧等级，旧存档若已>85 并不会自动降级；425 点以角色等级 85 且无额外赠点为前提。Pet.level_cap 仍为 120，宝宝实际限制为 min(主人等级,表上限)。这次未补迁移或修改宝宝/战斗逻辑。
+- 数值风险（静态推导，非战斗实测）：初始护甲 10、1 号怪普攻减防前 22，新系数下 1 级投入 2 点体质(含自然成长共 3 点、防御 15)已可让普攻归零；降低怪物强度会加剧问题。原文“无伤害事件流”不准确，现引擎仍发值为 0 的 DAMAGE 事件。
+- 证据目录：../tmp/attribute-verification-20260910/，含 export.log、generated-audit.json、msbuild-debug-x64.log、turn-battle-engine.log/XML、attribute-smoke-first.log、login-first-failure.log、data-service-build.log 与 scene-restart-20260910-075254-512/。本任务未修改已有 start_game.ps1、base_deploy_config.yaml、属性源表和常量；并行任务在本次构建后另增了属性规则注释/回归测试及设计说明，保留其更改；未提交或推送。
+
+- 收尾补验：07:57 并行任务新写入属性规则回归测试后，按测试脚本的 vcxproj 入口串行重编，完整引擎测试最终 **80/80 通过**，其中 AttributeAllocationRulesTest 实际 **20 条**（该并行交接写成 21 条，以上机结果为准）。日志 turn-battle-engine-final.log/XML；第三方 Abseil 缺 PDB 的 LNK4099 警告不影响通过。此前一次按 solution 短目标名调用报 MSB4057，已查明入口错误并改用工程路径，保留该次日志；不是源码编译失败。
+- 数据库只读核查补充：本机所有 schema 均无 id_segment，mmorpg 也没有可直接复用的号段水位；文档一处建议本地使用 mmorpg，另一处声称曾补建 testdb，现机与后者不符。无论选哪库均须确认既有永久 ID，再初始化，未擅改配置/数据库/权限。
+
+## 2026-09-10 属性加点审核修复(多代理审核后)
+
+- 审核:5 维度只读审核 + 逐维度对抗复核 + 查漏,共 11 个代理。27 条发现中 7 条被代码证据推翻(方案名 / 宝宝名非法 UTF-8 两条:protobuf 解析请求时已按 proto3 string 严格校验 UTF-8,到不了业务校验;其余是记录口径问题),其余为 low / info,仅 1 条 medium(设计文档的防御归零阈值仍按旧系数)。
+- 等级上限收口:新增纯规则头 `cpp/libs/services/scene/player/system/player_level_rules.h`(`playerlevel::kMaxLevel=85` / `IsValidLevel` / `ClampToMaxLevel`,已登记 scene.vcxproj / filters);`PlayerAttributeSystem::kMaxLevel` 改为它的别名,GmSetLevel 改用 IsValidLevel(行为不变)。`PlayerDatabaseMessageFieldsUnmarshal` 在 emplace LevelComp 后把 >85 的存档等级压回 85 并 LOG_WARN;登录 / 跨 zone 落地 / 回档都经这里。随后既有的 ConvergeOverAllocation 整池返还超出点数,宝宝等级随主人回到上限内。
+- 单测:attribute_allocation_rules_test.cpp 现为 23 条(AttributeAllocationRulesTest 21 + PlayerLevelRulesTest 2)。删掉只测死代码 SumPoints 的用例(生产上两份 UsedPoints 各自 64 位累加再饱和,位于匿名命名空间,暂无单测);满级总量改用 playerlevel::kMaxLevel 并钉死 85;新增等级合法范围、存档等级压回上限两条;自动加点补逐维断言,新增权重 0 跳过余数、AutoPlan 通用行输入两条;HP 往返用例改名 RescaleRoundTripHealingIsBounded,钉住极低血量有界例外(1 → 1 → 3,再往返不增长)。上文补单测段写的"21 条"是笔误,上机实为 20 条(见 Codex 段)。
+- 配表:AttributeDimension 101-104 的 desc 恢复原定性文案(面板不下发系数,文案写数字会与系数列形成两份真相);系数不变。**xlsx 已改,generated/tables 需重新导表**。
+- 文档:player-attribute-allocation.md §2.2 / §3.1 / §7 / §8 同步(防御归零阈值按新系数重算、PVP 首击秒杀、相性 / 仙魔 / 宝宝相对价值倒挂、改系数后存量角色首登 HP/MP、AttributeDimension 不在战斗表指纹里的滚动发布注意);player-pet.md §6、handoff-backlog P1-12 / P2-D2 按新系数与上限更正。
+- 未编译、未运行,待 Codex 串行执行:① 导表(与上一轮同一管线,核对 101-104 desc 恢复、系数不变);② MSBuild game.sln Debug/x64 /m:1;③ `pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle_engine`,期望 83/83(其中 AttributeAllocationRulesTest 21、PlayerLevelRulesTest 2);④ 冒烟仍被本机旧 data_service / testdb 阻塞(见 Codex 段),解除后跑 attribute_smoke / pet_smoke / battle_smoke。
+
+## 2026-09-10 背包、任务、活动 UI 的真实服务端读取接口
+
+- 新增 SceneBagClientPlayer.GetBag/SortBag、SceneMissionClientPlayer.GetMissionList、SceneActivityClientPlayer.GetActivityList。正式生成追加消息 190–193，全部旧 0–189 保持不变；协议/生成注册/C++工程接线完成。细节见 docs/design/player-features-ui.md。
+- 背包实例与布局分离，显式 0 起槽号、64 位实例 ID 与货币；读取不创建组件、不整理。显式整理仅人物背包/仓库，委托已有 BagService 继承冻结检查与销毁流水。新增只读 GetItemFootprintByGuid，不复制形状规则。
+- 任务只读当前配置和运行状态。现有任务未接持久化，领奖函数只清标记且发奖 handler 为空，因此 can_accept/can_claim=false，未暴露写 RPC。活动目录取现有 MissionTable type=2（15/16/17），未有排期故保持 UNSCHEDULED/不可参与；名称图标未配时返回空，未伪造玩家物品任务或节日奖励。
+- 构建生成器时命中 protogen/go.sum 既有错误哈希，按 Go 官方 sumdb、data_service 已修记录与本机缓存三方核验，仅修 proto2mysql v0.1.0 一行，版本和校验保持不变。正式生成临时关闭 Unity 输出，客户端代理独立生成。
+- 验证：最终 game.sln Debug/x64 /m:1（禁止PostBuild部署）退出码0；新接口/实际RPC错误转移测试13/13，完整背包158/158；Go proto模块编译检查通过；diff --check通过。首轮源码/测试工程问题已修并保留日志；第三方PDB警告不影响链接，no-raw-pointer-member因工具缺失SKIP。证据 ../tmp/features-backend-20260910/。
+- 最小部署仅新版gate+scene，四消息走原生SceneNodeService通道，其余Go仅增加常量无需重启。本任务未部署、启停、登录、清数据或初始化永久ID水位；真实联机验收仍未执行。
+
+## 2026-09-10 每小时同步前验证
+
+- 补齐属性源表审核后的正式导表，生成 manifest v9；27 张表源文件与产物大小、SHA256 全部匹配，属性 17 行源表、JSON、PB 逐字段一致。客户端有活跃任务，本轮导表未部署至客户端。
+- 当前服务端 game.sln Debug/x64 串行编译通过，未执行 PostBuild 的运行程序复制；战斗/属性测试 83/83、背包测试 158/158 通过。Go proto 模块检查通过（各包无测试，结论为编译通过）；PowerShell 启动脚本语法及 diff 检查通过。
+- 证据：../tmp/git-sync-20260910-1422/。第三方 PDB 缺失为既有链接警告，no-raw-pointer-member 因本机缺工具由构建脚本 SKIP，不计为检查通过。未重启、部署或运行需要修复数据库环境的联机冒烟。第三方子模块本地编译补丁保持原样。

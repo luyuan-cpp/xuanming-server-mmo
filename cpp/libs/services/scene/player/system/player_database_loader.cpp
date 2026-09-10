@@ -80,7 +80,15 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	// 上限此刻还没算(DerivedAttributesComp 由下面的 InitializeOnLoad 产出),
 	// 先按职业初值落地,拿到 outcome 决定后面要不要顶到真实上限。
 	const auto reviveOutcome = ApplyClassInitialAttributesOrReviveFromTable(baseAttrs);
-	tlsEcs.actorRegistry.emplace<LevelComp>(player, message.level_component());
+	auto& levelComp = tlsEcs.actorRegistry.emplace<LevelComp>(player, message.level_component());
+	// 等级上限下调(2026-09-10:200 → 85)前 GM 设过的超限存档、以及回档到这类快照,都在这里压回上限。
+	// 不压的话总点数 / 面板 / 战斗快照 / 怪物参考等级都按超限等级算;压完后下面 InitializeOnLoad 的
+	// "已分配 > 总量"收敛会整池返还多出的点,宝宝等级(跟随主人)也随之回到上限内。
+	if (const auto clamped = playerlevel::ClampToMaxLevel(levelComp.level()); clamped != levelComp.level()) {
+		LOG_WARN << "[PlayerInit] 存档等级超上限,压回上限: player_id=" << message.player_id()
+				 << " level=" << levelComp.level() << " -> " << clamped;
+		levelComp.set_level(clamped);
+	}
 	tlsEcs.actorRegistry.emplace<PlayerAttributeComp>(player, message.attribute_component());
 	tlsEcs.actorRegistry.emplace<PlayerPetComp>(player, message.pet_component());
 	tlsEcs.actorRegistry.emplace<CurrencyComp>(player, message.currency());

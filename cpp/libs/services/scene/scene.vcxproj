@@ -61,6 +61,7 @@
     <ClInclude Include="player\system\pet_rules.h" />
     <ClInclude Include="player\system\player_pet.h" />
     <ClInclude Include="player\system\attribute_allocation_rules.h" />
+    <ClInclude Include="player\system\player_level_rules.h" />
     <ClInclude Include="player\system\stress_test_probe.h" />
     <ClInclude Include="player\system\player_tip.h" />
     <ClInclude Include="spatial\comp\dt_crowd_comp.h" />
@@ -281,4 +282,8 @@
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>
+  <ItemGroup>
+    <ClCompile Include="player\system\player_feature_snapshot.cpp" />
+    <ClInclude Include="player\system\player_feature_snapshot.h" />
+  </ItemGroup>
 </Project>

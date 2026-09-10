@@ -351,7 +351,7 @@ bool RecalculateOne(entt::entity player, PetInstance& pet, const AttributePoolTa
 			pet.set_mana(std::min(pet.mana(), newDerived.maxMana));
 		}
 	} else {
-		// 加载 / 加点 / 洗点:按比例保持,一升一降往返零净得失
+		// 加载 / 加点 / 洗点:按比例保持,一升一降往返不净得(极低血量的有界例外见 RescaleCurrent)
 		// (否则"洗点降上限 → 再加回来"就是宝宝的免费回血,和角色那条被堵掉的路一模一样)
 		pet.set_health(attributerules::RescaleCurrent(pet.health(), oldDerived.maxHealth, newDerived.maxHealth));
 		pet.set_mana(attributerules::RescaleCurrent(pet.mana(), oldDerived.maxMana, newDerived.maxMana));

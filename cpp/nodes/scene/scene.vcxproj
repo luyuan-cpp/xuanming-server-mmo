@@ -283,4 +283,12 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <ItemGroup>
+    <ClCompile Include="handler\rpc\player\player_bag_handler.cpp" />
+    <ClInclude Include="handler\rpc\player\player_bag_handler.h" />
+    <ClCompile Include="handler\rpc\player\player_mission_handler.cpp" />
+    <ClInclude Include="handler\rpc\player\player_mission_handler.h" />
+    <ClCompile Include="handler\rpc\player\player_activity_handler.cpp" />
+    <ClInclude Include="handler\rpc\player\player_activity_handler.h" />
+  </ItemGroup>
 </Project>
