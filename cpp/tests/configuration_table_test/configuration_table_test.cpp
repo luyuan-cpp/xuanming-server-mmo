@@ -537,6 +537,51 @@ TEST(GameConfigEnvOverride, AcceptsAllFourSceneNodeTypeValues)
     ClearEnvVar("SCENE_NODE_TYPE");
 }
 
+// ---------------------------------------------------------------------------
+// Lookup 守卫宏
+// ---------------------------------------------------------------------------
+// 回归:LookupXxxOrContinue 曾把 continue 包在 do{...}while(0) 里。continue 绑定的是
+// 那个 do-while 自身,跳去求值 while(0) 判假即退出,控制流直接落到宏后面 —— 守卫
+// 沦为空操作。全仓 12 处调用点(bag / mission / buff / attribute)都在宏之后立刻
+// 解引用注入的行指针,所以配置表掉一行就是空指针崩溃,而不是"跳过这一条"。
+//
+// 两个用例互为对照:只钉"缺行要跳过",宏恒真跳过也能绿;只钉"有行不跳过",
+// 宏恒假不跳过也能绿。必须成对存在。
+
+TEST(LookupGuardMacro, OrContinueSkipsIterationWhenRowMissing)
+{
+	constexpr uint32_t kMissingId = 0xFFFFFFFFu;
+	ASSERT_EQ(TestTableManager::Instance().FindByIdSilent(kMissingId).first, nullptr)
+		<< "前提失效:id=" << kMissingId << " 不该存在于 Test 表";
+
+	int reachedBody = 0;
+	for (int i = 0; i < 1; ++i)
+	{
+		LookupTestOrContinue(kMissingId);
+		// 只有守卫失效才会走到这里。此时 testRow 就是调用方紧接着要解引用的那个空指针。
+		EXPECT_EQ(testRow, nullptr);
+		++reachedBody;
+	}
+	EXPECT_EQ(reachedBody, 0)
+		<< "守卫没有跳过迭代 —— continue 大概率又被包回 do{...}while(0) 了";
+}
+
+TEST(LookupGuardMacro, OrContinueDoesNotSkipWhenRowPresent)
+{
+	constexpr uint32_t kPresentId = 1u;
+	ASSERT_NE(TestTableManager::Instance().FindByIdSilent(kPresentId).first, nullptr)
+		<< "前提失效:Test 表缺 id=" << kPresentId;
+
+	int reachedBody = 0;
+	for (int i = 0; i < 1; ++i)
+	{
+		LookupTestOrContinue(kPresentId);
+		EXPECT_EQ(testRow->id(), kPresentId);
+		++reachedBody;
+	}
+	EXPECT_EQ(reachedBody, 1);
+}
+
 int main(int argc, char **argv)
 {
 	::testing::InitGoogleTest(&argc, argv);
