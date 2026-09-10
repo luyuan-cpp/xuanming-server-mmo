@@ -20,6 +20,7 @@ import (
 type attributepoolSnapshot struct {
     data   []*pb.AttributePoolTable
     kvData map[uint32]*pb.AttributePoolTable
+    idxOwnerType map[uint32][]*pb.AttributePoolTable
 }
 
 type AttributePoolTableManager struct {
@@ -40,6 +41,7 @@ func NewAttributePoolTableManager() *AttributePoolTableManager {
     m := &AttributePoolTableManager{}
     m.snap.Store(&attributepoolSnapshot{
         kvData: make(map[uint32]*pb.AttributePoolTable),
+        idxOwnerType: make(map[uint32][]*pb.AttributePoolTable),
     })
     return m
 }
@@ -69,10 +71,12 @@ func (m *AttributePoolTableManager) Load(configDir string, useBinary bool) error
 
     snap := &attributepoolSnapshot{
         kvData: make(map[uint32]*pb.AttributePoolTable, len(container.Data)),
+        idxOwnerType: make(map[uint32][]*pb.AttributePoolTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
+        snap.idxOwnerType[row.OwnerType] = append(snap.idxOwnerType[row.OwnerType], row)
     }
 
     snap.data = container.Data
@@ -92,6 +96,12 @@ func (m *AttributePoolTableManager) FindById(id uint32) (*pb.AttributePoolTable,
 }
 
 
+func (m *AttributePoolTableManager) GetByOwnerType(key uint32) []*pb.AttributePoolTable {
+    snap := m.snap.Load()
+    return snap.idxOwnerType[key]
+}
+
+
 
 // ---- Exists ----
 
@@ -108,6 +118,12 @@ func (m *AttributePoolTableManager) Exists(id uint32) bool {
 func (m *AttributePoolTableManager) Count() int {
     snap := m.snap.Load()
     return len(snap.data)
+}
+
+
+func (m *AttributePoolTableManager) CountByOwnerTypeIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxOwnerType[key])
 }
 
 

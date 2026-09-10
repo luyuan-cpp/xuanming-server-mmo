@@ -27,6 +27,7 @@ void AttributePoolTableManager::Load() {
     for (int32_t i = 0; i < snap->data.data_size(); ++i) {
         const auto& row_data = snap->data.data(i);
         snap->idMap.emplace(row_data.id(), &row_data);
+        snap->ownerTypeIndex[row_data.owner_type()].push_back(&row_data);
     }
 
     snapshot = std::move(snap);

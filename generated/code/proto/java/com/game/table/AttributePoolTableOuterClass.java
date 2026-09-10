@@ -45,16 +45,16 @@ public final class AttributePoolTableOuterClass extends com.google.protobuf.Gene
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\031attributepool_table.proto\"\321\001\n\022Attribut" +
+      "\n\031attributepool_table.proto\"\345\001\n\022Attribut" +
       "ePoolTable\022\n\n\002id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\024\n\014" +
       "unlock_level\030\003 \001(\r\022\030\n\020points_per_level\030\004" +
       " \001(\r\022\023\n\013base_points\030\005 \001(\r\022\025\n\rdimension_c" +
       "ap\030\006 \001(\r\022\027\n\017reset_cost_gold\030\007 \001(\004\022\036\n\026res" +
-      "et_free_below_level\030\010 \001(\r\022\014\n\004desc\030\t \001(\t\"" +
-      ";\n\026AttributePoolTableData\022!\n\004data\030\001 \003(\0132" +
-      "\023.AttributePoolTableBD\n\016com.game.tableB\034" +
-      "AttributePoolTableOuterClassP\001Z\022generate" +
-      "d/pb/tableb\006proto3"
+      "et_free_below_level\030\010 \001(\r\022\014\n\004desc\030\t \001(\t\022" +
+      "\022\n\nowner_type\030\n \001(\r\";\n\026AttributePoolTabl" +
+      "eData\022!\n\004data\030\001 \003(\0132\023.AttributePoolTable" +
+      "BD\n\016com.game.tableB\034AttributePoolTableOu" +
+      "terClassP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -65,7 +65,7 @@ public final class AttributePoolTableOuterClass extends com.google.protobuf.Gene
     internal_static_AttributePoolTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_AttributePoolTable_descriptor,
-        new java.lang.String[] { "Id", "Name", "UnlockLevel", "PointsPerLevel", "BasePoints", "DimensionCap", "ResetCostGold", "ResetFreeBelowLevel", "Desc", });
+        new java.lang.String[] { "Id", "Name", "UnlockLevel", "PointsPerLevel", "BasePoints", "DimensionCap", "ResetCostGold", "ResetFreeBelowLevel", "Desc", "OwnerType", });
     internal_static_AttributePoolTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_AttributePoolTableData_fieldAccessorTable = new

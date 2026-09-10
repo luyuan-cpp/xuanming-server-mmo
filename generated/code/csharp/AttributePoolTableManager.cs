@@ -34,6 +34,8 @@ namespace MmorpgClient.Table
         private static readonly JsonParser s_jsonParser =
             new JsonParser(JsonParser.Settings.Default.WithIgnoreUnknownFields(true));
 
+        private static readonly AttributePoolTable[] s_emptyRows = new AttributePoolTable[0];
+
         [ThreadStatic]
         private static Random s_random;
 
@@ -65,12 +67,14 @@ namespace MmorpgClient.Table
             public readonly AttributePoolTableData Container;
             public readonly RepeatedField<AttributePoolTable> Rows;
             public readonly Dictionary<uint, AttributePoolTable> KvData;
+            public readonly Dictionary<uint, IReadOnlyList<AttributePoolTable>> IdxOwnerType;
 
             public Snapshot(AttributePoolTableData container, int capacity)
             {
                 Container = container;
                 Rows = container.Data;
                 KvData = new Dictionary<uint, AttributePoolTable>(capacity);
+                IdxOwnerType = new Dictionary<uint, IReadOnlyList<AttributePoolTable>>();
             }
         }
 
@@ -117,9 +121,11 @@ namespace MmorpgClient.Table
             {
                 AttributePoolTable row = rows[i];
                 snap.KvData[row.Id] = row;
+                Index(snap.IdxOwnerType, row.OwnerType, row);
             }
 
             // 索引建完了,把所有桶从可变 List 冻成数组 —— 冻之前它们是可以被强转回 List 改掉的。
+            Freeze(snap.IdxOwnerType);
 
             // 原子换快照：到这一行为止读线程看到的都是上一代，之后看到的都是完整的新一代。
             _snapshot = snap;
@@ -162,6 +168,13 @@ namespace MmorpgClient.Table
             get { return _snapshot.KvData; }
         }
 
+        /// <summary>Secondary index lookup on owner_type; 未命中返回空集合。</summary>
+        public IReadOnlyList<AttributePoolTable> GetByOwnerType(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxOwnerType, key);
+        }
+
         // ---- Exists ----
 
         public bool Exists(uint id)
@@ -177,6 +190,12 @@ namespace MmorpgClient.Table
         {
             Snapshot snap = _snapshot;
             return snap.Rows.Count;
+        }
+
+        public int CountByOwnerTypeIndex(uint key)
+        {
+            Snapshot snap = _snapshot;
+            return Bucket(snap.IdxOwnerType, key).Count;
         }
 
         // ---- FindByIds (IN) ----
@@ -243,6 +262,30 @@ namespace MmorpgClient.Table
         }
 
         // ---- internals ----
+
+        private static void Index<TKey>(Dictionary<TKey, IReadOnlyList<AttributePoolTable>> map, TKey key, AttributePoolTable row)
+        {
+            // 建索引期间桶是 List(要 Add);Rebuild 末尾 Freeze() 会把它换成数组。
+            // 这个向下转换只在 Freeze 之前成立,而 Index 只在 Rebuild 的循环里调用。
+            IReadOnlyList<AttributePoolTable> existing;
+            List<AttributePoolTable> bucket;
+            if (map.TryGetValue(key, out existing))
+            {
+                bucket = (List<AttributePoolTable>)existing;
+            }
+            else
+            {
+                bucket = new List<AttributePoolTable>();
+                map[key] = bucket;
+            }
+            bucket.Add(row);
+        }
+
+        private static IReadOnlyList<AttributePoolTable> Bucket<TKey>(Dictionary<TKey, IReadOnlyList<AttributePoolTable>> map, TKey key)
+        {
+            IReadOnlyList<AttributePoolTable> bucket;
+            return map.TryGetValue(key, out bucket) ? bucket : s_emptyRows;
+        }
 
         /// <summary>
         /// 把索引里的桶从可变 List 冻成数组。**必须在 Rebuild 的最后调用**。

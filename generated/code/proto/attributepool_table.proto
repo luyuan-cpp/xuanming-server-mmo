@@ -18,6 +18,7 @@ message AttributePoolTable {
 	uint64 reset_cost_gold = 7;
 	uint32 reset_free_below_level = 8;
 	string desc = 9;
+	uint32 owner_type = 10;
 }
 
 message AttributePoolTableData {

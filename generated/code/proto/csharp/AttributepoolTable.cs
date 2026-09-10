@@ -22,19 +22,19 @@ public static partial class AttributepoolTableReflection {
   static AttributepoolTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChlhdHRyaWJ1dGVwb29sX3RhYmxlLnByb3RvItEBChJBdHRyaWJ1dGVQb29s",
+          "ChlhdHRyaWJ1dGVwb29sX3RhYmxlLnByb3RvIuUBChJBdHRyaWJ1dGVQb29s",
           "VGFibGUSCgoCaWQYASABKA0SDAoEbmFtZRgCIAEoCRIUCgx1bmxvY2tfbGV2",
           "ZWwYAyABKA0SGAoQcG9pbnRzX3Blcl9sZXZlbBgEIAEoDRITCgtiYXNlX3Bv",
           "aW50cxgFIAEoDRIVCg1kaW1lbnNpb25fY2FwGAYgASgNEhcKD3Jlc2V0X2Nv",
           "c3RfZ29sZBgHIAEoBBIeChZyZXNldF9mcmVlX2JlbG93X2xldmVsGAggASgN",
-          "EgwKBGRlc2MYCSABKAkiOwoWQXR0cmlidXRlUG9vbFRhYmxlRGF0YRIhCgRk",
-          "YXRhGAEgAygLMhMuQXR0cmlidXRlUG9vbFRhYmxlQkQKDmNvbS5nYW1lLnRh",
-          "YmxlQhxBdHRyaWJ1dGVQb29sVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRl",
-          "ZC9wYi90YWJsZWIGcHJvdG8z"));
+          "EgwKBGRlc2MYCSABKAkSEgoKb3duZXJfdHlwZRgKIAEoDSI7ChZBdHRyaWJ1",
+          "dGVQb29sVGFibGVEYXRhEiEKBGRhdGEYASADKAsyEy5BdHRyaWJ1dGVQb29s",
+          "VGFibGVCRAoOY29tLmdhbWUudGFibGVCHEF0dHJpYnV0ZVBvb2xUYWJsZU91",
+          "dGVyQ2xhc3NQAVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::AttributePoolTable), global::AttributePoolTable.Parser, new[]{ "Id", "Name", "UnlockLevel", "PointsPerLevel", "BasePoints", "DimensionCap", "ResetCostGold", "ResetFreeBelowLevel", "Desc" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::AttributePoolTable), global::AttributePoolTable.Parser, new[]{ "Id", "Name", "UnlockLevel", "PointsPerLevel", "BasePoints", "DimensionCap", "ResetCostGold", "ResetFreeBelowLevel", "Desc", "OwnerType" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::AttributePoolTableData), global::AttributePoolTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -86,6 +86,7 @@ public sealed partial class AttributePoolTable : pb::IMessage<AttributePoolTable
     resetCostGold_ = other.resetCostGold_;
     resetFreeBelowLevel_ = other.resetFreeBelowLevel_;
     desc_ = other.desc_;
+    ownerType_ = other.ownerType_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -203,6 +204,18 @@ public sealed partial class AttributePoolTable : pb::IMessage<AttributePoolTable
     }
   }
 
+  /// <summary>Field number for the "owner_type" field.</summary>
+  public const int OwnerTypeFieldNumber = 10;
+  private uint ownerType_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint OwnerType {
+    get { return ownerType_; }
+    set {
+      ownerType_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -227,6 +240,7 @@ public sealed partial class AttributePoolTable : pb::IMessage<AttributePoolTable
     if (ResetCostGold != other.ResetCostGold) return false;
     if (ResetFreeBelowLevel != other.ResetFreeBelowLevel) return false;
     if (Desc != other.Desc) return false;
+    if (OwnerType != other.OwnerType) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -243,6 +257,7 @@ public sealed partial class AttributePoolTable : pb::IMessage<AttributePoolTable
     if (ResetCostGold != 0UL) hash ^= ResetCostGold.GetHashCode();
     if (ResetFreeBelowLevel != 0) hash ^= ResetFreeBelowLevel.GetHashCode();
     if (Desc.Length != 0) hash ^= Desc.GetHashCode();
+    if (OwnerType != 0) hash ^= OwnerType.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -297,6 +312,10 @@ public sealed partial class AttributePoolTable : pb::IMessage<AttributePoolTable
       output.WriteRawTag(74);
       output.WriteString(Desc);
     }
+    if (OwnerType != 0) {
+      output.WriteRawTag(80);
+      output.WriteUInt32(OwnerType);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -343,6 +362,10 @@ public sealed partial class AttributePoolTable : pb::IMessage<AttributePoolTable
       output.WriteRawTag(74);
       output.WriteString(Desc);
     }
+    if (OwnerType != 0) {
+      output.WriteRawTag(80);
+      output.WriteUInt32(OwnerType);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -379,6 +402,9 @@ public sealed partial class AttributePoolTable : pb::IMessage<AttributePoolTable
     }
     if (Desc.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(Desc);
+    }
+    if (OwnerType != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(OwnerType);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -418,6 +444,9 @@ public sealed partial class AttributePoolTable : pb::IMessage<AttributePoolTable
     }
     if (other.Desc.Length != 0) {
       Desc = other.Desc;
+    }
+    if (other.OwnerType != 0) {
+      OwnerType = other.OwnerType;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -474,6 +503,10 @@ public sealed partial class AttributePoolTable : pb::IMessage<AttributePoolTable
           Desc = input.ReadString();
           break;
         }
+        case 80: {
+          OwnerType = input.ReadUInt32();
+          break;
+        }
       }
     }
   #endif
@@ -527,6 +560,10 @@ public sealed partial class AttributePoolTable : pb::IMessage<AttributePoolTable
         }
         case 74: {
           Desc = input.ReadString();
+          break;
+        }
+        case 80: {
+          OwnerType = input.ReadUInt32();
           break;
         }
       }

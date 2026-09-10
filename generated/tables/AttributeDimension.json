@@ -181,6 +181,62 @@
    "pool_id": 3,
    "sort": 4,
    "speed": 0.0
+  },
+  {
+   "base_per_level": 1,
+   "defense": 1.5,
+   "desc": "体质:提高宝宝气血上限和防御。",
+   "id": 401,
+   "magic_attack": 0.0,
+   "max_health": 25.0,
+   "max_mana": 0.0,
+   "name": "体质",
+   "physical_attack": 0.0,
+   "pool_id": 4,
+   "sort": 1,
+   "speed": 0.0
+  },
+  {
+   "base_per_level": 1,
+   "defense": 0.0,
+   "desc": "灵力:提高宝宝法力上限和法伤。",
+   "id": 402,
+   "magic_attack": 2.5,
+   "max_health": 0.0,
+   "max_mana": 15.0,
+   "name": "灵力",
+   "physical_attack": 0.0,
+   "pool_id": 4,
+   "sort": 2,
+   "speed": 0.0
+  },
+  {
+   "base_per_level": 1,
+   "defense": 0.0,
+   "desc": "力量:提高宝宝物伤。",
+   "id": 403,
+   "magic_attack": 0.0,
+   "max_health": 0.0,
+   "max_mana": 0.0,
+   "name": "力量",
+   "physical_attack": 4.0,
+   "pool_id": 4,
+   "sort": 3,
+   "speed": 0.0
+  },
+  {
+   "base_per_level": 1,
+   "defense": 0.0,
+   "desc": "敏捷:提高宝宝出手速度。",
+   "id": 404,
+   "magic_attack": 0.0,
+   "max_health": 0.0,
+   "max_mana": 0.0,
+   "name": "敏捷",
+   "physical_attack": 0.0,
+   "pool_id": 4,
+   "sort": 4,
+   "speed": 2.5
   }
  ]
 }

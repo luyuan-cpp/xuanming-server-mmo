@@ -1,0 +1,29 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "PetTableOuterClass";
+option java_multiple_files = true;
+
+
+message PetTable {
+	uint32 id = 1;
+	string name = 2;
+	string desc = 3;
+	uint32 model_id = 4;
+	uint32 quality = 5;
+	uint32 unlock_level = 6;
+	uint32 level_cap = 7;
+	uint64 init_health = 8;
+	uint64 init_mana = 9;
+	uint64 init_speed = 10;
+	repeated uint32 aptitude_min = 11;
+	repeated uint32 aptitude_max = 12;
+	repeated uint32 skill = 13;
+}
+
+message PetTableData {
+	repeated PetTable data = 1;
+}

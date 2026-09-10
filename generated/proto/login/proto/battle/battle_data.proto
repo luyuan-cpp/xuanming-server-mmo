@@ -50,6 +50,30 @@ message BattlePlayerSnapshot {
   uint64 physical_attack = 13;             // 二级属性(属性加点系统):物伤,scene 侧由 DerivedAttributes 填;引擎 InitPlayers 直接透传给 BattleActorState
   uint64 magic_attack = 14;                // 法伤
   uint64 defense = 15;                     // 防御
+  // 出战宝宝(宝宝系统,player-pet.md §5):与主人同队的独立行动单位。
+  // 核心线同时只能带 1 只,repeated 是为了二期多宠不改 wire。
+  repeated BattlePetSnapshot pets = 16;
+}
+
+// ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
+// 属性口径与玩家快照逐项对齐:base_attributes 带 speed(出手序)与当前 HP/MP,
+// max_* 与物伤/法伤/防御来自 PetSystem 现算的二级属性。
+message BattlePetSnapshot {
+  // SnowFlake guid(scene 的 item guid 发号器铸),直接作为局内 actor_id。
+  // 注意它与 player_id **不是**同一套位布局(AGENTS §7 不变量 1),数值域理论上可相交;
+  // 引擎 InitPets 因此显式查重,撞了拒绝开局,不靠"同域不撞"的假设。
+  uint64 pet_id = 1;
+  uint64 owner_player_id = 2;     // 主人;决定队伍与结算归属
+  string pet_name = 3;
+  uint32 pet_table_id = 4;
+  uint32 level = 5;
+  BaseAttributesComp base_attributes = 6;
+  uint64 max_health = 7;
+  uint64 max_mana = 8;
+  uint64 physical_attack = 9;
+  uint64 magic_attack = 10;
+  uint64 defense = 11;
+  repeated uint32 skill_table_ids = 12;
 }
 
 // ---- 战斗单位运行时状态(玩家与怪物统一;引擎状态用 proto 承载,宪法 §3) ----
@@ -57,6 +81,7 @@ enum eBattleActorType {
   BATTLE_ACTOR_TYPE_NONE = 0;
   BATTLE_ACTOR_TYPE_PLAYER = 1;
   BATTLE_ACTOR_TYPE_MONSTER = 2;
+  BATTLE_ACTOR_TYPE_PET = 3;     // 宝宝:与主人同队,无客户端行动权,由默认行动路径代打
 }
 
 message BattleActorState {
@@ -80,6 +105,8 @@ message BattleActorState {
   uint64 physical_attack = 18;      // 物伤(来自快照;怪物 0)
   uint64 magic_attack = 19;         // 法伤(来自快照;怪物 0)
   uint64 defense = 20;              // 防御(来自快照;怪物 0)
+  uint64 owner_player_id = 21;      // 仅宝宝有效:主人 player_id(结算按它归属到主人名下)
+  uint32 pet_table_id = 22;         // 仅宝宝有效(Pet 表 id)
 }
 
 // ---- 玩家行动指令 ----
@@ -157,4 +184,13 @@ message BattleSettlementData {
   bool is_dead = 11;
   bool fled = 12;
   uint32 total_rounds = 13;
+  repeated BattlePetSettlementData pets = 14;  // 该玩家出战宝宝的战后终值(scene 回写实例)
+}
+
+// ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
+message BattlePetSettlementData {
+  uint64 pet_id = 1;
+  uint64 health = 2;   // 战后终值
+  uint64 mana = 3;
+  bool is_dead = 4;
 }

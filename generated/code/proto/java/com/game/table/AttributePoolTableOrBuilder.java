@@ -75,4 +75,10 @@ public interface AttributePoolTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getDescBytes();
+
+  /**
+   * <code>uint32 owner_type = 10;</code>
+   * @return The ownerType.
+   */
+  int getOwnerType();
 }

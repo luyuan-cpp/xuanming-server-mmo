@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19\x61ttributepool_table.proto\"\xd1\x01\n\x12\x41ttributePoolTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x14\n\x0cunlock_level\x18\x03 \x01(\r\x12\x18\n\x10points_per_level\x18\x04 \x01(\r\x12\x13\n\x0b\x62\x61se_points\x18\x05 \x01(\r\x12\x15\n\rdimension_cap\x18\x06 \x01(\r\x12\x17\n\x0freset_cost_gold\x18\x07 \x01(\x04\x12\x1e\n\x16reset_free_below_level\x18\x08 \x01(\r\x12\x0c\n\x04\x64\x65sc\x18\t \x01(\t\";\n\x16\x41ttributePoolTableData\x12!\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x13.AttributePoolTableBD\n\x0e\x63om.game.tableB\x1c\x41ttributePoolTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19\x61ttributepool_table.proto\"\xe5\x01\n\x12\x41ttributePoolTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0c\n\x04name\x18\x02 \x01(\t\x12\x14\n\x0cunlock_level\x18\x03 \x01(\r\x12\x18\n\x10points_per_level\x18\x04 \x01(\r\x12\x13\n\x0b\x62\x61se_points\x18\x05 \x01(\r\x12\x15\n\rdimension_cap\x18\x06 \x01(\r\x12\x17\n\x0freset_cost_gold\x18\x07 \x01(\x04\x12\x1e\n\x16reset_free_below_level\x18\x08 \x01(\r\x12\x0c\n\x04\x64\x65sc\x18\t \x01(\t\x12\x12\n\nowner_type\x18\n \x01(\r\";\n\x16\x41ttributePoolTableData\x12!\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x13.AttributePoolTableBD\n\x0e\x63om.game.tableB\x1c\x41ttributePoolTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\034AttributePoolTableOuterClassP\001Z\022generated/pb/table'
   _globals['_ATTRIBUTEPOOLTABLE']._serialized_start=30
-  _globals['_ATTRIBUTEPOOLTABLE']._serialized_end=239
-  _globals['_ATTRIBUTEPOOLTABLEDATA']._serialized_start=241
-  _globals['_ATTRIBUTEPOOLTABLEDATA']._serialized_end=300
+  _globals['_ATTRIBUTEPOOLTABLE']._serialized_end=259
+  _globals['_ATTRIBUTEPOOLTABLEDATA']._serialized_start=261
+  _globals['_ATTRIBUTEPOOLTABLEDATA']._serialized_end=320
 # @@protoc_insertion_point(module_scope)

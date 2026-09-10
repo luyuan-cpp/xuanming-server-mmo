@@ -48,11 +48,11 @@ constexpr AttributePoolTable::ParseTableT_ AttributePoolTable::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(AttributePoolTable, _impl_._has_bits_),
       0, // no _extensions_
-      9, 120,  // max_field_number, fast_idx_mask
+      10, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294966784,  // skipmap
+      4294966272,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      9,  // num_field_entries
+      10,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -99,7 +99,10 @@ constexpr AttributePoolTable::ParseTableT_ AttributePoolTable::InternalGenerateP
       {::_pbi::TcParser::FastUS1,
        {74, 1, 0,
         PROTOBUF_FIELD_OFFSET(AttributePoolTable, _impl_.desc_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 owner_type = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AttributePoolTable, _impl_.owner_type_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(AttributePoolTable, _impl_.owner_type_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -126,6 +129,8 @@ constexpr AttributePoolTable::ParseTableT_ AttributePoolTable::InternalGenerateP
       {PROTOBUF_FIELD_OFFSET(AttributePoolTable, _impl_.reset_free_below_level_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string desc = 9;
       {PROTOBUF_FIELD_OFFSET(AttributePoolTable, _impl_.desc_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // uint32 owner_type = 10;
+      {PROTOBUF_FIELD_OFFSET(AttributePoolTable, _impl_.owner_type_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
     }},
     // no aux_entries
     {{
@@ -154,7 +159,8 @@ inline constexpr AttributePoolTable::Impl_::Impl_(
         base_points_{0u},
         reset_cost_gold_{::uint64_t{0u}},
         dimension_cap_{0u},
-        reset_free_below_level_{0u} {}
+        reset_free_below_level_{0u},
+        owner_type_{0u} {}
 
 template <typename>
 constexpr AttributePoolTable::AttributePoolTable(::_pbi::ConstantInitialized,
@@ -408,7 +414,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AttributePoolTable, _impl_._has_bits_),
-        12, // hasbit index offset
+        13, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::AttributePoolTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::AttributePoolTable, _impl_.name_),
         PROTOBUF_FIELD_OFFSET(::AttributePoolTable, _impl_.unlock_level_),
@@ -418,6 +424,7 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::AttributePoolTable, _impl_.reset_cost_gold_),
         PROTOBUF_FIELD_OFFSET(::AttributePoolTable, _impl_.reset_free_below_level_),
         PROTOBUF_FIELD_OFFSET(::AttributePoolTable, _impl_.desc_),
+        PROTOBUF_FIELD_OFFSET(::AttributePoolTable, _impl_.owner_type_),
         2,
         0,
         3,
@@ -427,6 +434,7 @@ const ::uint32_t
         6,
         8,
         1,
+        9,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AttributePoolTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -437,7 +445,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::AttributePoolTable)},
-        {21, sizeof(::AttributePoolTableData)},
+        {23, sizeof(::AttributePoolTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -446,22 +454,22 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_attributepool_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\031attributepool_table.proto\"\321\001\n\022Attribut"
+    "\n\031attributepool_table.proto\"\345\001\n\022Attribut"
     "ePoolTable\022\n\n\002id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\022\024\n\014"
     "unlock_level\030\003 \001(\r\022\030\n\020points_per_level\030\004"
     " \001(\r\022\023\n\013base_points\030\005 \001(\r\022\025\n\rdimension_c"
     "ap\030\006 \001(\r\022\027\n\017reset_cost_gold\030\007 \001(\004\022\036\n\026res"
-    "et_free_below_level\030\010 \001(\r\022\014\n\004desc\030\t \001(\t\""
-    ";\n\026AttributePoolTableData\022!\n\004data\030\001 \003(\0132"
-    "\023.AttributePoolTableBD\n\016com.game.tableB\034"
-    "AttributePoolTableOuterClassP\001Z\022generate"
-    "d/pb/tableb\006proto3"
+    "et_free_below_level\030\010 \001(\r\022\014\n\004desc\030\t \001(\t\022"
+    "\022\n\nowner_type\030\n \001(\r\";\n\026AttributePoolTabl"
+    "eData\022!\n\004data\030\001 \003(\0132\023.AttributePoolTable"
+    "BD\n\016com.game.tableB\034AttributePoolTableOu"
+    "terClassP\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_attributepool_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_attributepool_5ftable_2eproto = {
     false,
     false,
-    378,
+    398,
     descriptor_table_protodef_attributepool_5ftable_2eproto,
     "attributepool_table.proto",
     &descriptor_table_attributepool_5ftable_2eproto_once,
@@ -512,9 +520,9 @@ AttributePoolTable::AttributePoolTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, reset_free_below_level_) -
+           offsetof(Impl_, owner_type_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::reset_free_below_level_));
+               sizeof(Impl_::owner_type_));
 
   // @@protoc_insertion_point(copy_constructor:AttributePoolTable)
 }
@@ -530,9 +538,9 @@ inline void AttributePoolTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, reset_free_below_level_) -
+           offsetof(Impl_, owner_type_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::reset_free_below_level_));
+               sizeof(Impl_::owner_type_));
 }
 AttributePoolTable::~AttributePoolTable() {
   // @@protoc_insertion_point(destructor:AttributePoolTable)
@@ -597,7 +605,11 @@ PROTOBUF_NOINLINE void AttributePoolTable::Clear() {
         reinterpret_cast<char*>(&_impl_.dimension_cap_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.dimension_cap_));
   }
-  _impl_.reset_free_below_level_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    ::memset(&_impl_.reset_free_below_level_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.owner_type_) -
+        reinterpret_cast<char*>(&_impl_.reset_free_below_level_)) + sizeof(_impl_.owner_type_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -704,6 +716,15 @@ PROTOBUF_NOINLINE void AttributePoolTable::Clear() {
     }
   }
 
+  // uint32 owner_type = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_owner_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          10, this_._internal_owner_type(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -787,12 +808,19 @@ PROTOBUF_NOINLINE void AttributePoolTable::Clear() {
       }
     }
   }
-   {
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
     // uint32 reset_free_below_level = 8;
     if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_reset_free_below_level() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_reset_free_below_level());
+      }
+    }
+    // uint32 owner_type = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_owner_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_owner_type());
       }
     }
   }
@@ -863,9 +891,16 @@ void AttributePoolTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
-    if (from._internal_reset_free_below_level() != 0) {
-      _this->_impl_.reset_free_below_level_ = from._impl_.reset_free_below_level_;
+  if (BatchCheckHasBit(cached_has_bits, 0x00000300U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_reset_free_below_level() != 0) {
+        _this->_impl_.reset_free_below_level_ = from._impl_.reset_free_below_level_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_owner_type() != 0) {
+        _this->_impl_.owner_type_ = from._impl_.owner_type_;
+      }
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
@@ -890,8 +925,8 @@ void AttributePoolTable::InternalSwap(AttributePoolTable* PROTOBUF_RESTRICT PROT
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.desc_, &other->_impl_.desc_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(AttributePoolTable, _impl_.reset_free_below_level_)
-      + sizeof(AttributePoolTable::_impl_.reset_free_below_level_)
+      PROTOBUF_FIELD_OFFSET(AttributePoolTable, _impl_.owner_type_)
+      + sizeof(AttributePoolTable::_impl_.owner_type_)
       - PROTOBUF_FIELD_OFFSET(AttributePoolTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

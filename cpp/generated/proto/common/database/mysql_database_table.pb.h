@@ -33,6 +33,7 @@
 #include "proto/db/proto_option.pb.h"
 #include "proto/common/base/user_accounts.pb.h"
 #include "proto/common/component/player_attribute_comp.pb.h"
+#include "proto/common/component/player_pet_comp.pb.h"
 #include "proto/common/component/player_scene_comp.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
@@ -2148,6 +2149,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     kStressTestProbeFieldNumber = 9,
     kMergeStateFieldNumber = 10,
     kAttributeComponentFieldNumber = 11,
+    kPetComponentFieldNumber = 12,
     kPlayerIdFieldNumber = 1,
   };
   // .Transform transform = 2;
@@ -2310,6 +2312,22 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
   ::PlayerAttributeComp* PROTOBUF_NONNULL _internal_mutable_attribute_component();
 
   public:
+  // .PlayerPetComp pet_component = 12;
+  [[nodiscard]] bool has_pet_component()
+      const;
+  void clear_pet_component() ;
+  [[nodiscard]] const ::PlayerPetComp& pet_component() const;
+  [[nodiscard]] ::PlayerPetComp* PROTOBUF_NULLABLE release_pet_component();
+  ::PlayerPetComp* PROTOBUF_NONNULL mutable_pet_component();
+  void set_allocated_pet_component(::PlayerPetComp* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_pet_component(::PlayerPetComp* PROTOBUF_NULLABLE value);
+  ::PlayerPetComp* PROTOBUF_NULLABLE unsafe_arena_release_pet_component();
+
+  private:
+  const ::PlayerPetComp& _internal_pet_component() const;
+  ::PlayerPetComp* PROTOBUF_NONNULL _internal_mutable_pet_component();
+
+  public:
   // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -2324,8 +2342,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 11,
-                          10, 0,
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          11, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2363,6 +2381,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     ::PlayerStressTestProbe* PROTOBUF_NULLABLE stress_test_probe_;
     ::PlayerMergeStateComp* PROTOBUF_NULLABLE merge_state_;
     ::PlayerAttributeComp* PROTOBUF_NULLABLE attribute_component_;
+    ::PlayerPetComp* PROTOBUF_NULLABLE pet_component_;
     ::uint64_t player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3380,7 +3399,7 @@ inline void player_centre_database::set_allocated_scene_info(::PlayerSceneContex
 inline void player_database::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t player_database::player_id() const {
   // @@protoc_insertion_point(field_get:player_database.player_id)
@@ -3388,7 +3407,7 @@ inline ::uint64_t player_database::player_id() const {
 }
 inline void player_database::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:player_database.player_id)
 }
 inline ::uint64_t player_database::_internal_player_id() const {
@@ -4328,6 +4347,99 @@ inline void player_database::set_allocated_attribute_component(::PlayerAttribute
 
   _impl_.attribute_component_ = reinterpret_cast<::PlayerAttributeComp*>(value);
   // @@protoc_insertion_point(field_set_allocated:player_database.attribute_component)
+}
+
+// .PlayerPetComp pet_component = 12;
+inline bool player_database::has_pet_component() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000400U);
+  PROTOBUF_ASSUME(!value || _impl_.pet_component_ != nullptr);
+  return value;
+}
+inline const ::PlayerPetComp& player_database::_internal_pet_component() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::PlayerPetComp* p = _impl_.pet_component_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::PlayerPetComp>(&::PlayerPetComp_globals_);
+}
+inline const ::PlayerPetComp& player_database::pet_component() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.pet_component)
+  return _internal_pet_component();
+}
+inline void player_database::unsafe_arena_set_allocated_pet_component(
+    ::PlayerPetComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pet_component_);
+  }
+  _impl_.pet_component_ = reinterpret_cast<::PlayerPetComp*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.pet_component)
+}
+inline ::PlayerPetComp* PROTOBUF_NULLABLE player_database::release_pet_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::PlayerPetComp* released = _impl_.pet_component_;
+  _impl_.pet_component_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::PlayerPetComp* PROTOBUF_NULLABLE player_database::unsafe_arena_release_pet_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.pet_component)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::PlayerPetComp* temp = _impl_.pet_component_;
+  _impl_.pet_component_ = nullptr;
+  return temp;
+}
+inline ::PlayerPetComp* PROTOBUF_NONNULL player_database::_internal_mutable_pet_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.pet_component_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::PlayerPetComp>(GetArena());
+    _impl_.pet_component_ = reinterpret_cast<::PlayerPetComp*>(p);
+  }
+  return _impl_.pet_component_;
+}
+inline ::PlayerPetComp* PROTOBUF_NONNULL player_database::mutable_pet_component()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ::PlayerPetComp* _msg = _internal_mutable_pet_component();
+  // @@protoc_insertion_point(field_mutable:player_database.pet_component)
+  return _msg;
+}
+inline void player_database::set_allocated_pet_component(::PlayerPetComp* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.pet_component_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  }
+
+  _impl_.pet_component_ = reinterpret_cast<::PlayerPetComp*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.pet_component)
 }
 
 // -------------------------------------------------------------------

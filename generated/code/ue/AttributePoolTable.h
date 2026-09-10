@@ -26,6 +26,8 @@ struct FCfgAttributePoolSnapshot
 	TArray<FCfgAttributePoolRow> Rows;
 	/// id -> 行下标。
 	TMap<int32, int32> IdIndex;
+	/// owner_type -> 全部命中行的下标(二级索引)。
+	TMap<int32, TArray<int32>> OwnerTypeIndex;
 };
 
 /**
@@ -125,6 +127,16 @@ public:
 	// (主键那一层是另一回事:可重复主键在五门里都叫 FindAllById,那个名字是对的。)
 
 	// ---- 二级索引(idx / 标量外键自动索引)----
+
+	/// owner_type == Key 的全部行。
+	TArray<const FCfgAttributePoolRow*> GetByOwnerType(int32 Key) const;
+	/// 零分配版:下标数组,配 RowAt() 用。
+	const TArray<int32>& GetOwnerTypeIndices(int32 Key) const;
+	int32 CountByOwnerTypeIndex(int32 Key) const;
+	const TMap<int32, TArray<int32>>& GetOwnerTypeIndex() const
+	{
+		return Snapshot->OwnerTypeIndex;
+	}
 
 	// ---- repeated 标量的值索引 ----
 

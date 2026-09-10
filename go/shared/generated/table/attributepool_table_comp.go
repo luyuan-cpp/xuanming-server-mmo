@@ -49,6 +49,10 @@ type AttributePoolDescComp struct {
     Value string
 }
 
+type AttributePoolOwner_typeComp struct {
+    Value uint32
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -88,5 +92,9 @@ func MakeAttributePoolReset_free_below_levelComp(row *pb.AttributePoolTable) Att
 
 func MakeAttributePoolDescComp(row *pb.AttributePoolTable) AttributePoolDescComp {
     return AttributePoolDescComp{Value: row.Desc}
+}
+
+func MakeAttributePoolOwner_typeComp(row *pb.AttributePoolTable) AttributePoolOwner_typeComp {
+    return AttributePoolOwner_typeComp{Value: row.OwnerType}
 }
 

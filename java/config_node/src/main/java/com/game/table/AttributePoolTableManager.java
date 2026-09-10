@@ -31,16 +31,21 @@ public class AttributePoolTableManager {
 
 
 
+        final Map<Integer, List<AttributePoolTable>> idxOwnerType;
+
 
         Snapshot(AttributePoolTableData data,
-                 Map<Integer, AttributePoolTable> kvData) {
+                 Map<Integer, AttributePoolTable> kvData,
+                 Map<Integer, List<AttributePoolTable>> idxOwnerType) {
             this.data = data;
             this.kvData = kvData;
+            this.idxOwnerType = idxOwnerType;
         }
     }
 
     private Snapshot snapshot = new Snapshot(
             AttributePoolTableData.getDefaultInstance(),
+            Collections.emptyMap(),
             Collections.emptyMap()
     );
 
@@ -60,12 +65,14 @@ public class AttributePoolTableManager {
         AttributePoolTableData data = builder.build();
 
         Map<Integer, AttributePoolTable> kvData = new HashMap<>(data.getDataCount());
+        Map<Integer, List<AttributePoolTable>> idxOwnerType = new HashMap<>();
 
         for (AttributePoolTable row : data.getDataList()) {
             kvData.put(row.getId(), row);
+            idxOwnerType.computeIfAbsent(row.getOwnerType(), k -> new ArrayList<>()).add(row);
         }
 
-        this.snapshot = new Snapshot(data, kvData);
+        this.snapshot = new Snapshot(data, kvData, idxOwnerType);
     }
 
     public AttributePoolTableData findAll() {
@@ -87,6 +94,10 @@ public class AttributePoolTableManager {
 
 
 
+    public List<AttributePoolTable> getByOwnerType(int key) {
+        return snapshot.idxOwnerType.getOrDefault(key, Collections.emptyList());
+    }
+
 
 
 
@@ -106,6 +117,10 @@ public class AttributePoolTableManager {
 
 
 
+
+    public int countByOwnerTypeIndex(int key) {
+        return snapshot.idxOwnerType.getOrDefault(key, Collections.emptyList()).size();
+    }
 
 
     // ---- FindByIds (IN) ----

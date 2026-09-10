@@ -1,0 +1,36 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+// 宝宝(宠物)系统持久化数据,设计文档 docs/design/player-pet.md。
+//
+// 与角色属性加点(player_attribute_comp.proto)共用同一套表与纯规则:
+//   一级属性 = 表 AttributeDimension 中 owner_type=1(宝宝)的维度(体质/灵力/力量/敏捷),
+//              维度值 = 每级自然成长 × 宝宝等级 + 已分配点;
+//   点数总量 = 表 AttributePool 中 owner_type=1 的池按**宝宝等级**换算,不落库(与角色同口径);
+//   二级属性 = 现算不落库(PetSystem::ComputeDerived),没有第二份真相。
+//
+// 宝宝等级不独立成长:经验系统未接入前,宝宝等级 = min(主人等级, PetTable.level_cap),
+// 由 PetSystem 在每次重算时同步。这样全仓只有"主人等级"一个等级真相。
+
+// 一只宝宝
+message PetInstance {
+  uint64 pet_id = 1;          // SnowFlake guid,由 scene 节点铸(tlsSnowflakeManager)
+  uint32 pet_table_id = 2;    // 种类(Pet 表 id)
+  string name = 3;            // 玩家自定义名;空 = 用 PetTable.name
+  uint32 level = 4;           // 派生自主人等级(见文件头),存下来只为离线展示与结算夹取
+  map<uint32, uint32> allocated = 5;  // dimension_id -> 已分配点(只增不减;洗点走整池重置)
+  // dimension_id -> 资质(万分比,10000 = 100%)。出生时在 PetTable 的
+  // aptitude_min/aptitude_max 之间随机,之后不变(洗资质是二期)。
+  // 缺键按 10000 处理,老存档与改表都能自愈。
+  map<uint32, uint32> aptitude = 6;
+  uint64 health = 7;          // 当前气血(战斗结算回写,残血跨登录保留)
+  uint64 mana = 8;            // 当前法力
+  uint64 created_at = 9;      // 获得时间(Unix 秒)
+  repeated uint32 skill_table_ids = 10;  // 宝宝技能(SkillTable id),核心线来自 PetTable
+}
+
+// 玩家宝宝数据(持久化到 player_database.pet_component)
+message PlayerPetComp {
+  repeated PetInstance pets = 1;
+  uint64 active_pet_id = 2;   // 出战中的宝宝 pet_id;0 = 未出战
+}

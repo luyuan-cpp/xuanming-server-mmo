@@ -90,4 +90,8 @@ struct FCfgAttributePoolRow : public FTableRowBase
 	/** 说明 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|AttributePool")
 	FString desc;
+
+	/** 归属(0=角色,1=宝宝)。角色面板只出 owner_type=0 的池与其维度, 宝宝面板只出 owner_type=1 的;两边共用同一套加点纯规则(player-pet.md §3) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|AttributePool")
+	int32 owner_type = 0;
 };

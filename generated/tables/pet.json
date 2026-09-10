@@ -1,0 +1,100 @@
+{
+ "data": [
+  {
+   "aptitude_max": [
+    11000,
+    13000,
+    10000,
+    14000
+   ],
+   "aptitude_min": [
+    8000,
+    10000,
+    7000,
+    11000
+   ],
+   "desc": "灵狐:身法轻捷,出手快、法伤高。",
+   "id": 1,
+   "init_health": 400,
+   "init_mana": 200,
+   "init_speed": 12,
+   "level_cap": 120,
+   "model_id": 1001,
+   "name": "灵狐",
+   "quality": 1,
+   "unlock_level": 1
+  },
+  {
+   "aptitude_max": [
+    14000,
+    10000,
+    12000,
+    10000
+   ],
+   "aptitude_min": [
+    11000,
+    7000,
+    9000,
+    7000
+   ],
+   "desc": "石灵:皮糙肉厚,气血与防御出众。",
+   "id": 2,
+   "init_health": 700,
+   "init_mana": 80,
+   "init_speed": 6,
+   "level_cap": 120,
+   "model_id": 1002,
+   "name": "石灵",
+   "quality": 1,
+   "unlock_level": 1
+  },
+  {
+   "aptitude_max": [
+    12000,
+    10000,
+    14000,
+    11000
+   ],
+   "aptitude_min": [
+    9000,
+    7000,
+    11000,
+    8000
+   ],
+   "desc": "金猊:力量型战宠,物伤最高。",
+   "id": 3,
+   "init_health": 550,
+   "init_mana": 100,
+   "init_speed": 9,
+   "level_cap": 120,
+   "model_id": 1003,
+   "name": "金猊",
+   "quality": 2,
+   "unlock_level": 10
+  },
+  {
+   "aptitude_max": [
+    11000,
+    14000,
+    10000,
+    12000
+   ],
+   "aptitude_min": [
+    8000,
+    11000,
+    7000,
+    9000
+   ],
+   "desc": "云鹤:法系战宠,法伤与法力出众。",
+   "id": 4,
+   "init_health": 450,
+   "init_mana": 300,
+   "init_speed": 10,
+   "level_cap": 120,
+   "model_id": 1004,
+   "name": "云鹤",
+   "quality": 2,
+   "unlock_level": 10
+  }
+ ]
+}

@@ -472,8 +472,10 @@ type PlayerDatabase struct {
 	MergeState *component.PlayerMergeStateComp `protobuf:"bytes,10,opt,name=merge_state,json=mergeState,proto3" json:"merge_state,omitempty"`
 	// 属性加点(方案/已分配点/额外点/外部加成),设计文档 player-attribute-allocation.md
 	AttributeComponent *component.PlayerAttributeComp `protobuf:"bytes,11,opt,name=attribute_component,json=attributeComponent,proto3" json:"attribute_component,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// 宝宝(宠物):实例列表 + 出战中的宝宝,设计文档 player-pet.md
+	PetComponent  *component.PlayerPetComp `protobuf:"bytes,12,opt,name=pet_component,json=petComponent,proto3" json:"pet_component,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlayerDatabase) Reset() {
@@ -583,6 +585,13 @@ func (x *PlayerDatabase) GetAttributeComponent() *component.PlayerAttributeComp 
 	return nil
 }
 
+func (x *PlayerDatabase) GetPetComponent() *component.PlayerPetComp {
+	if x != nil {
+		return x.PetComponent
+	}
+	return nil
+}
+
 type PlayerDatabase_1 struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -641,7 +650,7 @@ var File_proto_common_database_mysql_database_table_proto protoreflect.FileDescr
 
 const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\"\xb5\x01\n" +
+	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\"\xb5\x01\n" +
 	"\x04user\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x19\n" +
@@ -681,7 +690,7 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x16player_centre_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x126\n" +
 	"\n" +
-	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xd3\x05\n" +
+	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\x88\x06\n" +
 	"\x0fplayer_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12(\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
@@ -698,7 +707,8 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\vmerge_state\x18\n" +
 	" \x01(\v2\x15.PlayerMergeStateCompR\n" +
 	"mergeState\x12E\n" +
-	"\x13attribute_component\x18\v \x01(\v2\x14.PlayerAttributeCompR\x12attributeComponent:D\x8a\x92\xf4\x01\x0fplayer_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbc\x01\n" +
+	"\x13attribute_component\x18\v \x01(\v2\x14.PlayerAttributeCompR\x12attributeComponent\x123\n" +
+	"\rpet_component\x18\f \x01(\v2\x0e.PlayerPetCompR\fpetComponent:D\x8a\x92\xf4\x01\x0fplayer_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbc\x01\n" +
 	"\x11player_database_1\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12B\n" +
 	"\x11stress_test_probe\x18\x02 \x01(\v2\x16.PlayerStressTestProbeR\x0fstressTestProbe:F\x8a\x92\xf4\x01\x11player_database_1\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04B\x17Z\x15proto/common/databaseb\x06proto3"
@@ -738,6 +748,7 @@ var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*component.PlayerStressTestProbe)(nil),  // 18: PlayerStressTestProbe
 	(*component.PlayerMergeStateComp)(nil),   // 19: PlayerMergeStateComp
 	(*component.PlayerAttributeComp)(nil),    // 20: PlayerAttributeComp
+	(*component.PlayerPetComp)(nil),          // 21: PlayerPetComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	9,  // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
@@ -752,12 +763,13 @@ var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	18, // 9: player_database.stress_test_probe:type_name -> PlayerStressTestProbe
 	19, // 10: player_database.merge_state:type_name -> PlayerMergeStateComp
 	20, // 11: player_database.attribute_component:type_name -> PlayerAttributeComp
-	18, // 12: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	21, // 12: player_database.pet_component:type_name -> PlayerPetComp
+	18, // 13: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
+	14, // [14:14] is the sub-list for method output_type
+	14, // [14:14] is the sub-list for method input_type
+	14, // [14:14] is the sub-list for extension type_name
+	14, // [14:14] is the sub-list for extension extendee
+	0,  // [0:14] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_mysql_database_table_proto_init() }

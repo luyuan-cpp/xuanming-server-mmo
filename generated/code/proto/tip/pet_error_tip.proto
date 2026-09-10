@@ -1,0 +1,46 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum pet_error {
+  kPet_errorOK = 0;
+
+  kPetNotFound = 26000;
+
+  kPetTableRowMissing = 26001;
+
+  kPetSlotFull = 26002;
+
+  kPetOwnerLevelNotEnough = 26003;
+
+  kPetAlreadyActive = 26004;
+
+  kPetNotActive = 26005;
+
+  kPetSummonCooldown = 26006;
+
+  kPetNameInvalid = 26007;
+
+  kPetInBattle = 26008;
+
+  kPetPointsNotEnough = 26009;
+
+  kPetPointsCannotDecrease = 26010;
+
+  kPetDimensionCapExceeded = 26011;
+
+  kPetDimensionNotFound = 26012;
+
+  kPetGoldNotEnough = 26013;
+
+  kPetNoAutoPlan = 26014;
+
+  kPetNothingToChange = 26015;
+
+  kPetIdGenerateFailed = 26016;
+
+};

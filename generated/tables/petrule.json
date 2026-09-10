@@ -1,0 +1,12 @@
+{
+ "data": [
+  {
+   "desc": "宝宝系统全局规则(单行)",
+   "id": 1,
+   "max_pets": 10,
+   "name_max_len": 8,
+   "rename_cost_gold": 200,
+   "summon_cooldown_seconds": 5
+  }
+ ]
+}

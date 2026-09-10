@@ -52,6 +52,8 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	MirrorTable = NewObject<UMirrorTable>(this);
 	MissionTable = NewObject<UMissionTable>(this);
 	MonsterTable = NewObject<UMonsterTable>(this);
+	PetTable = NewObject<UPetTable>(this);
+	PetRuleTable = NewObject<UPetRuleTable>(this);
 	RewardTable = NewObject<URewardTable>(this);
 	SkillTable = NewObject<USkillTable>(this);
 	SkillPermissionTable = NewObject<USkillPermissionTable>(this);
@@ -81,6 +83,8 @@ void UConfigSubsystem::Deinitialize()
 	MirrorTable = nullptr;
 	MissionTable = nullptr;
 	MonsterTable = nullptr;
+	PetTable = nullptr;
+	PetRuleTable = nullptr;
 	RewardTable = nullptr;
 	SkillTable = nullptr;
 	SkillPermissionTable = nullptr;
@@ -115,6 +119,8 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UMirrorTable::FileName(),
 		UMissionTable::FileName(),
 		UMonsterTable::FileName(),
+		UPetTable::FileName(),
+		UPetRuleTable::FileName(),
 		URewardTable::FileName(),
 		USkillTable::FileName(),
 		USkillPermissionTable::FileName(),
@@ -390,6 +396,34 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!MonsterTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (PetTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[Pet] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!PetTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (PetRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PetRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!PetRuleTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -887,6 +921,46 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!MonsterTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (PetTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[Pet] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UPetTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[Pet] 取不到 %s"), UPetTable::FileName());
+		bAllOk = false;
+	}
+	else if (!PetTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (PetRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PetRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UPetRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[PetRule] 取不到 %s"), UPetRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!PetRuleTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

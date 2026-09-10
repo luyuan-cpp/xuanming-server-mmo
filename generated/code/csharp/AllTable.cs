@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class AllTable
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 25;
+        public const int TableCount = 27;
 
         private static Action s_loadSuccessCallback;
 
@@ -57,6 +57,8 @@ namespace MmorpgClient.Table
                 MirrorTableManager.FileName(useBinary),
                 MissionTableManager.FileName(useBinary),
                 MonsterTableManager.FileName(useBinary),
+                PetTableManager.FileName(useBinary),
+                PetRuleTableManager.FileName(useBinary),
                 RewardTableManager.FileName(useBinary),
                 SkillTableManager.FileName(useBinary),
                 SkillPermissionTableManager.FileName(useBinary),
@@ -89,6 +91,8 @@ namespace MmorpgClient.Table
             MirrorTableManager.Instance.Load(configDir, useBinary);
             MissionTableManager.Instance.Load(configDir, useBinary);
             MonsterTableManager.Instance.Load(configDir, useBinary);
+            PetTableManager.Instance.Load(configDir, useBinary);
+            PetRuleTableManager.Instance.Load(configDir, useBinary);
             RewardTableManager.Instance.Load(configDir, useBinary);
             SkillTableManager.Instance.Load(configDir, useBinary);
             SkillPermissionTableManager.Instance.Load(configDir, useBinary);
@@ -157,6 +161,10 @@ namespace MmorpgClient.Table
                 MissionTableManager.Instance.LoadFromBytes, MissionTableManager.Instance.LoadFromJson);
             LoadOne(MonsterTableManager.FileName(useBinary), byteProvider, useBinary,
                 MonsterTableManager.Instance.LoadFromBytes, MonsterTableManager.Instance.LoadFromJson);
+            LoadOne(PetTableManager.FileName(useBinary), byteProvider, useBinary,
+                PetTableManager.Instance.LoadFromBytes, PetTableManager.Instance.LoadFromJson);
+            LoadOne(PetRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                PetRuleTableManager.Instance.LoadFromBytes, PetRuleTableManager.Instance.LoadFromJson);
             LoadOne(RewardTableManager.FileName(useBinary), byteProvider, useBinary,
                 RewardTableManager.Instance.LoadFromBytes, RewardTableManager.Instance.LoadFromJson);
             LoadOne(SkillTableManager.FileName(useBinary), byteProvider, useBinary,

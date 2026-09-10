@@ -23,6 +23,8 @@
 #include "mirror_table.h"
 #include "mission_table.h"
 #include "monster_table.h"
+#include "pet_table.h"
+#include "petrule_table.h"
 #include "reward_table.h"
 #include "skill_table.h"
 #include "skillpermission_table.h"
@@ -72,6 +74,10 @@ void LoadTables() {
     MissionTableManager::Instance().Load();
 
     MonsterTableManager::Instance().Load();
+
+    PetTableManager::Instance().Load();
+
+    PetRuleTableManager::Instance().Load();
 
     RewardTableManager::Instance().Load();
 
@@ -125,6 +131,10 @@ void LoadTables() {
 
     MonsterTableManager::Instance().LoadSuccess();
 
+    PetTableManager::Instance().LoadSuccess();
+
+    PetRuleTableManager::Instance().LoadSuccess();
+
     RewardTableManager::Instance().LoadSuccess();
 
     SkillTableManager::Instance().LoadSuccess();
@@ -144,7 +154,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(25);
+    static muduo::CountDownLatch latch(27);
 
     std::thread ActorActionCombatStateLoadThread([]() {
         void InitThreadLocalConfig();
@@ -298,6 +308,22 @@ void LoadTablesAsync() {
     });
     MonsterLoadThread.detach();
 
+    std::thread PetLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        PetTableManager::Instance().Load();
+        latch.countDown();
+    });
+    PetLoadThread.detach();
+
+    std::thread PetRuleLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        PetRuleTableManager::Instance().Load();
+        latch.countDown();
+    });
+    PetRuleLoadThread.detach();
+
     std::thread RewardLoadThread([]() {
         void InitThreadLocalConfig();
         InitThreadLocalConfig();
@@ -386,6 +412,10 @@ void LoadTablesAsync() {
     MissionTableManager::Instance().LoadSuccess();
 
     MonsterTableManager::Instance().LoadSuccess();
+
+    PetTableManager::Instance().LoadSuccess();
+
+    PetRuleTableManager::Instance().LoadSuccess();
 
     RewardTableManager::Instance().LoadSuccess();
 

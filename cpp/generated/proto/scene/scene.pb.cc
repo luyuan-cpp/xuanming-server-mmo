@@ -1619,6 +1619,153 @@ const ::_pbi::ClassData* ProcessClientPlayerMessageRequest_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class CreateSceneResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<CreateSceneResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(CreateSceneResponse, _impl_._has_bits_);
+};
+
+constexpr CreateSceneResponse::ParseTableT_ CreateSceneResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(CreateSceneResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      1,  // num_aux_entries
+      offsetof(ParseTableT_, aux_entries),
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::CreateSceneResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // .SceneInfoComp scene_info = 1;
+      {::_pbi::TcParser::FastMtS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(CreateSceneResponse, _impl_.scene_info_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // .SceneInfoComp scene_info = 1;
+      {PROTOBUF_FIELD_OFFSET(CreateSceneResponse, _impl_.scene_info_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+    }},
+    {{
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::SceneInfoComp>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::SceneInfoComp_globals_},
+        #endif
+    }},
+    {{
+    }},
+  };
+}
+
+
+inline constexpr CreateSceneResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        scene_info_{nullptr} {}
+
+template <typename>
+constexpr CreateSceneResponse::CreateSceneResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL CreateSceneResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) CreateSceneResponse(arena);
+}
+constexpr auto CreateSceneResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(CreateSceneResponse), alignof(CreateSceneResponse));
+}
+constexpr auto CreateSceneResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &CreateSceneResponse::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<CreateSceneResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &CreateSceneResponse::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<CreateSceneResponse>(), &CreateSceneResponse::ByteSizeLong,
+              &CreateSceneResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(CreateSceneResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fscene_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct CreateSceneResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr CreateSceneResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 CreateSceneResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(CreateSceneResponse::InternalGenerateClassData_(
+            _default, &CreateSceneResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<CreateSceneResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~CreateSceneResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) CreateSceneResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<CreateSceneResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(CreateSceneResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CreateSceneResponseGlobalsTypeInternal CreateSceneResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* CreateSceneResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return CreateSceneResponse_globals_.GetClassData();
+#else
+  return CreateSceneResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class PrepareBattleResponse::_Internal {
  public:
   using HasBits = decltype(::std::declval<PrepareBattleResponse>()._impl_._has_bits_);
@@ -1787,153 +1934,6 @@ const ::_pbi::ClassData* PrepareBattleResponse_get_class_data() {
   return PrepareBattleResponse_globals_.GetClassData();
 #else
   return PrepareBattleResponse_class_data_.base();
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-}
-}  // namespace
-#endif  // PROTOBUF_CUSTOM_VTABLE
-class CreateSceneResponse::_Internal {
- public:
-  using HasBits = decltype(::std::declval<CreateSceneResponse>()._impl_._has_bits_);
-  static constexpr ::int32_t kHasBitsOffset =
-      8 * PROTOBUF_FIELD_OFFSET(CreateSceneResponse, _impl_._has_bits_);
-};
-
-constexpr CreateSceneResponse::ParseTableT_ CreateSceneResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
-  return ParseTableT_{
-    {
-      PROTOBUF_FIELD_OFFSET(CreateSceneResponse, _impl_._has_bits_),
-      0, // no _extensions_
-      1, 0,  // max_field_number, fast_idx_mask
-      offsetof(ParseTableT_, field_lookup_table),
-      4294967294,  // skipmap
-      offsetof(ParseTableT_, field_entries),
-      1,  // num_field_entries
-      1,  // num_aux_entries
-      offsetof(ParseTableT_, aux_entries),
-      class_data,
-      nullptr,  // post_loop_handler
-      ::_pbi::TcParser::GenericFallback,  // fallback
-      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
-      ::_pbi::TcParser::GetTable<::CreateSceneResponse>(),  // to_prefetch
-      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
-    }, {{
-      // .SceneInfoComp scene_info = 1;
-      {::_pbi::TcParser::FastMtS1,
-       {10, 0, 0,
-        PROTOBUF_FIELD_OFFSET(CreateSceneResponse, _impl_.scene_info_)}},
-    }}, {{
-      65535, 65535
-    }}, {{
-      // .SceneInfoComp scene_info = 1;
-      {PROTOBUF_FIELD_OFFSET(CreateSceneResponse, _impl_.scene_info_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
-    }},
-    {{
-        #ifndef PROTOBUF_MESSAGE_GLOBALS
-        {::_pbi::TcParser::GetTable<::SceneInfoComp>()},
-        #else
-        {::_pbi::FieldAuxMessageGlobals(), &::SceneInfoComp_globals_},
-        #endif
-    }},
-    {{
-    }},
-  };
-}
-
-
-inline constexpr CreateSceneResponse::Impl_::Impl_(
-    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
-    ::_pbi::ConstantInitialized) noexcept
-      : _cached_size_{0},
-        scene_info_{nullptr} {}
-
-template <typename>
-constexpr CreateSceneResponse::CreateSceneResponse(::_pbi::ConstantInitialized,
-                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
-    : ::google::protobuf::Message(
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          class_data
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          ),
-      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
-}
-inline void* PROTOBUF_NONNULL CreateSceneResponse::PlacementNew_(
-    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
-  return ::new (mem) CreateSceneResponse(arena);
-}
-constexpr auto CreateSceneResponse::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(CreateSceneResponse), alignof(CreateSceneResponse));
-}
-constexpr auto CreateSceneResponse::InternalGenerateClassData_(
-    const MessageLite& prototype,
-    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
-  return ::google::protobuf::internal::ClassDataFull{
-      ::google::protobuf::internal::ClassData{
-          &prototype,
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-          &_table_.header,
-#else
-          tc_table,
-#endif
-          nullptr,  // IsInitialized
-          &CreateSceneResponse::MergeImpl,
-          ::google::protobuf::Message::GetNewImpl<CreateSceneResponse>(),
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-          &CreateSceneResponse::SharedDtor,
-          ::google::protobuf::Message::GetClearImpl<CreateSceneResponse>(), &CreateSceneResponse::ByteSizeLong,
-              &CreateSceneResponse::_InternalSerialize,
-#endif  // PROTOBUF_CUSTOM_VTABLE
-          PROTOBUF_FIELD_OFFSET(CreateSceneResponse, _impl_._cached_size_),
-          false,
-      },
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-      &::_pbi::kDescriptorMethods,
-      &descriptor_table_proto_2fscene_2fscene_2eproto,
-      nullptr,  // tracker
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  };
-}
-struct CreateSceneResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
-  constexpr CreateSceneResponseGlobalsTypeInternal()
-      :
-#ifndef PROTOBUF_MESSAGE_GLOBALS
-        _default(::_pbi::ConstantInitialized{},
-                 CreateSceneResponse_class_data_.base())
-#else   // !PROTOBUF_MESSAGE_GLOBALS
-        MessageGlobalsBase(CreateSceneResponse::InternalGenerateClassData_(
-            _default, &CreateSceneResponse_globals_._table.header)),
-        _default(::_pbi::ConstantInitialized{}, GetClassData()),
-        _table(::_pbi::PrivateAccess::GenerateParseTable<CreateSceneResponse>(
-            GetClassData()))
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-  {
-  }
-  ~CreateSceneResponseGlobalsTypeInternal() {}
-  union {
-    alignas(::_pbi::kMaxMessageAlignment) CreateSceneResponse _default;
-  };
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  decltype(::_pbi::PrivateAccess::GenerateParseTable<CreateSceneResponse>(
-      ::std::declval<const ::_pbi::ClassData*>())) _table;
-#endif
-};
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-static_assert(PROTOBUF_FIELD_OFFSET(CreateSceneResponseGlobalsTypeInternal, _default) ==
-              ::_pbi::MessageGlobalsBase::OffsetToDefault());
-#endif  // PROTOBUF_MESSAGE_GLOBALS
-
-PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
-    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST CreateSceneResponseGlobalsTypeInternal CreateSceneResponse_globals_
-        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
-#if defined(PROTOBUF_CUSTOM_VTABLE)
-namespace {
-const ::_pbi::ClassData* CreateSceneResponse_get_class_data() {
-#ifdef PROTOBUF_MESSAGE_GLOBALS
-  return CreateSceneResponse_globals_.GetClassData();
-#else
-  return CreateSceneResponse_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace

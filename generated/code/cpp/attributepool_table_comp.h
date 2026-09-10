@@ -50,6 +50,10 @@ struct AttributePoolDescComp {
     std::string_view value;
 };
 
+struct AttributePoolOwner_typeComp {
+    uint32_t value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -81,4 +85,7 @@ inline AttributePoolReset_free_below_levelComp MakeAttributePoolReset_free_below
 }
 inline AttributePoolDescComp MakeAttributePoolDescComp(const AttributePoolTable& row) {
     return { std::string_view(row.desc()) };
+}
+inline AttributePoolOwner_typeComp MakeAttributePoolOwner_typeComp(const AttributePoolTable& row) {
+    return { row.owner_type() };
 }

@@ -48,6 +48,8 @@
 #include "MirrorTable.h"
 #include "MissionTable.h"
 #include "MonsterTable.h"
+#include "PetTable.h"
+#include "PetRuleTable.h"
 #include "RewardTable.h"
 #include "SkillTable.h"
 #include "SkillPermissionTable.h"
@@ -92,7 +94,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 25;
+	static constexpr int32 TableCount = 27;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -201,6 +203,12 @@ public:
 	UMonsterTable* GetMonsterTable() const { return MonsterTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UPetTable* GetPetTable() const { return PetTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UPetRuleTable* GetPetRuleTable() const { return PetRuleTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	URewardTable* GetRewardTable() const { return RewardTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -257,6 +265,10 @@ private:
 	TObjectPtr<UMissionTable> MissionTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UMonsterTable> MonsterTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UPetTable> PetTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UPetRuleTable> PetRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<URewardTable> RewardTable;
 	UPROPERTY(Transient)

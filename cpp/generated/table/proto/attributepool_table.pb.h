@@ -237,6 +237,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePoolTable final : public :
     kResetCostGoldFieldNumber = 7,
     kDimensionCapFieldNumber = 6,
     kResetFreeBelowLevelFieldNumber = 8,
+    kOwnerTypeFieldNumber = 10,
   };
   // string name = 2;
   void clear_name() ;
@@ -338,11 +339,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePoolTable final : public :
   void _internal_set_reset_free_below_level(::uint32_t value);
 
   public:
+  // uint32 owner_type = 10;
+  void clear_owner_type() ;
+  [[nodiscard]] ::uint32_t owner_type() const;
+  void set_owner_type(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_owner_type() const;
+  void _internal_set_owner_type(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:AttributePoolTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
+      ::google::protobuf::internal::TcParseTable<4, 10,
                           0, 43,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -380,6 +391,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributePoolTable final : public :
     ::uint64_t reset_cost_gold_;
     ::uint32_t dimension_cap_;
     ::uint32_t reset_free_below_level_;
+    ::uint32_t owner_type_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -908,6 +920,30 @@ inline void AttributePoolTable::set_allocated_desc(::std::string* PROTOBUF_NULLA
     _impl_.desc_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:AttributePoolTable.desc)
+}
+
+// uint32 owner_type = 10;
+inline void AttributePoolTable::clear_owner_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_type_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t AttributePoolTable::owner_type() const {
+  // @@protoc_insertion_point(field_get:AttributePoolTable.owner_type)
+  return _internal_owner_type();
+}
+inline void AttributePoolTable::set_owner_type(::uint32_t value) {
+  _internal_set_owner_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:AttributePoolTable.owner_type)
+}
+inline ::uint32_t AttributePoolTable::_internal_owner_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.owner_type_;
+}
+inline void AttributePoolTable::_internal_set_owner_type(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.owner_type_ = value;
 }
 
 // -------------------------------------------------------------------

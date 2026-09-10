@@ -1,0 +1,22 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "PetRuleTableOuterClass";
+option java_multiple_files = true;
+
+
+message PetRuleTable {
+	uint32 id = 1;
+	uint32 max_pets = 2;
+	uint32 name_max_len = 3;
+	uint64 rename_cost_gold = 4;
+	uint32 summon_cooldown_seconds = 5;
+	string desc = 6;
+}
+
+message PetRuleTableData {
+	repeated PetRuleTable data = 1;
+}

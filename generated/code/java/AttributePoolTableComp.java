@@ -71,4 +71,10 @@ public final class AttributePoolTableComp {
         }
     }
 
+    public record Owner_type(int value) {
+        public static Owner_type from(AttributePoolTable row) {
+            return new Owner_type(row.getOwnerType());
+        }
+    }
+
 }

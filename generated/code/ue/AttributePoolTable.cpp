@@ -114,6 +114,7 @@ static void AttributePoolTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& Ro
 	AttributePoolTableCheckNarrowedField(RowObject, TEXT("dimension_cap"), TEXT("dimension_cap"), RowIndex, 2147483647.0, TEXT("uint32"));
 	AttributePoolTableCheckNarrowedField(RowObject, TEXT("reset_cost_gold"), TEXT("reset_cost_gold"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	AttributePoolTableCheckNarrowedField(RowObject, TEXT("reset_free_below_level"), TEXT("reset_free_below_level"), RowIndex, 2147483647.0, TEXT("uint32"));
+	AttributePoolTableCheckNarrowedField(RowObject, TEXT("owner_type"), TEXT("owner_type"), RowIndex, 2147483647.0, TEXT("uint32"));
 }
 
 bool UAttributePoolTable::LoadFromJson(const FString& JsonText, FString& OutError)
@@ -204,6 +205,7 @@ void UAttributePoolTable::BuildIndices(FSnapshot& Snap)
 				*LexToString(Row.id), *Existing, RowIndex);
 		}
 		Snap.IdIndex.Add(Row.id, RowIndex);
+		Snap.OwnerTypeIndex.FindOrAdd(Row.owner_type).Add(RowIndex);
 	}
 }
 
@@ -256,6 +258,29 @@ const FCfgAttributePoolRow* UAttributePoolTable::RandOne() const
 		return nullptr;
 	}
 	return &Snapshot->Rows[FMath::RandRange(0, Snapshot->Rows.Num() - 1)];
+}
+
+TArray<const FCfgAttributePoolRow*> UAttributePoolTable::GetByOwnerType(int32 Key) const
+{
+	TArray<const FCfgAttributePoolRow*> Result;
+	const TArray<int32>& Indices = GetOwnerTypeIndices(Key);
+	Result.Reserve(Indices.Num());
+	for (const int32 RowIndex : Indices)
+	{
+		Result.Add(&Snapshot->Rows[RowIndex]);
+	}
+	return Result;
+}
+
+const TArray<int32>& UAttributePoolTable::GetOwnerTypeIndices(int32 Key) const
+{
+	const TArray<int32>* Found = Snapshot->OwnerTypeIndex.Find(Key);
+	return Found != nullptr ? *Found : GAttributePoolEmptyIndices;
+}
+
+int32 UAttributePoolTable::CountByOwnerTypeIndex(int32 Key) const
+{
+	return GetOwnerTypeIndices(Key).Num();
 }
 
 TArray<const FCfgAttributePoolRow*> UAttributePoolTable::Where(TFunctionRef<bool(const FCfgAttributePoolRow&)> Pred) const

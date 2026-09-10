@@ -57,6 +57,7 @@ var Faults = []Fault{
 	{Code: 6002, Group: "bag_error", Name: "BagAddItemHasNotBaseComponent"},
 	{Code: 9000, Group: "entity_error", Name: "EntityTransformNotFound"},
 	{Code: 14008, Group: "guild_error", Name: "GuildIdGenUnavailable"},
+	{Code: 26016, Group: "pet_error", Name: "PetIdGenerateFailed"},
 }
 
 // faultSet 由 Faults 派生,不单独生成一份字面量:

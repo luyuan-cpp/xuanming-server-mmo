@@ -19,6 +19,7 @@
 #include "proto/scene/player_currency.pb.h"
 #include "proto/scene/player_lifecycle.pb.h"
 #include "proto/scene/player_movement.pb.h"
+#include "proto/scene/player_pet.pb.h"
 #include "proto/scene/player_rollback.pb.h"
 #include "proto/scene/player_scene.pb.h"
 #include "proto/scene/player_skill.pb.h"
@@ -45,6 +46,7 @@
 #include "rpc/service_metadata/player_currency_service_metadata.h"
 #include "rpc/service_metadata/player_lifecycle_service_metadata.h"
 #include "rpc/service_metadata/player_movement_service_metadata.h"
+#include "rpc/service_metadata/player_pet_service_metadata.h"
 #include "rpc/service_metadata/player_rollback_service_metadata.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
 #include "rpc/service_metadata/player_skill_service_metadata.h"
@@ -94,6 +96,7 @@ class SceneAttributeClientPlayerImpl final : public SceneAttributeClientPlayer {
 class SceneCurrencyClientPlayerImpl final : public SceneCurrencyClientPlayer {};
 class ScenePlayerImpl final : public ScenePlayer {};
 class SceneMovementClientPlayerImpl final : public SceneMovementClientPlayer {};
+class ScenePetClientPlayerImpl final : public ScenePetClientPlayer {};
 class SceneRollbackClientPlayerImpl final : public SceneRollbackClientPlayer {};
 class SceneSceneClientPlayerImpl final : public SceneSceneClientPlayer {};
 class SceneSkillClientPlayerImpl final : public SceneSkillClientPlayer {};
@@ -202,7 +205,7 @@ namespace scene_node{void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 181,
+static_assert(kMaxRpcMethodCount == 190,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -868,6 +871,53 @@ void InitMessageInfo()
         std::make_unique<::Empty>(),
         std::make_unique<SceneMovementClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
 
+    // --- ScenePetClientPlayer ---
+    gRpcMethodRegistry[ScenePetClientPlayerGetPetListMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "GetPetList",
+        std::make_unique<::GetPetListRequest>(),
+        std::make_unique<::GetPetListResponse>(),
+        std::make_unique<ScenePetClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerSummonPetMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "SummonPet",
+        std::make_unique<::SummonPetRequest>(),
+        std::make_unique<::SummonPetResponse>(),
+        std::make_unique<ScenePetClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerRecallPetMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "RecallPet",
+        std::make_unique<::RecallPetRequest>(),
+        std::make_unique<::RecallPetResponse>(),
+        std::make_unique<ScenePetClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerAllocatePetPointsMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "AllocatePetPoints",
+        std::make_unique<::AllocatePetPointsRequest>(),
+        std::make_unique<::AllocatePetPointsResponse>(),
+        std::make_unique<ScenePetClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerResetPetPointsMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "ResetPetPoints",
+        std::make_unique<::ResetPetPointsRequest>(),
+        std::make_unique<::ResetPetPointsResponse>(),
+        std::make_unique<ScenePetClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerAutoAllocatePetPointsMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "AutoAllocatePetPoints",
+        std::make_unique<::AutoAllocatePetPointsRequest>(),
+        std::make_unique<::AutoAllocatePetPointsResponse>(),
+        std::make_unique<ScenePetClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerRenamePetMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "RenamePet",
+        std::make_unique<::RenamePetRequest>(),
+        std::make_unique<::RenamePetResponse>(),
+        std::make_unique<ScenePetClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerNotifyPetListChangedMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "NotifyPetListChanged",
+        std::make_unique<::PetListChangedS2C>(),
+        std::make_unique<::Empty>(),
+        std::make_unique<ScenePetClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[ScenePetClientPlayerGmGrantPetMessageId] = RpcMethodMeta{
+        "ScenePetClientPlayer", "GmGrantPet",
+        std::make_unique<::GmGrantPetRequest>(),
+        std::make_unique<::GmGrantPetResponse>(),
+        std::make_unique<ScenePetClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+
     // --- SceneRollbackClientPlayer ---
     gRpcMethodRegistry[SceneRollbackClientPlayerGmAttachDebtMessageId] = RpcMethodMeta{
         "SceneRollbackClientPlayer", "GmAttachDebt",
@@ -1225,6 +1275,15 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneMovementClientPlayerNotifyActorMoveMessageId:
 	case SceneMovementClientPlayerNotifyActorMoveListMessageId:
 	case SceneMovementClientPlayerNotifyTeleportMessageId:
+	case ScenePetClientPlayerGetPetListMessageId:
+	case ScenePetClientPlayerSummonPetMessageId:
+	case ScenePetClientPlayerRecallPetMessageId:
+	case ScenePetClientPlayerAllocatePetPointsMessageId:
+	case ScenePetClientPlayerResetPetPointsMessageId:
+	case ScenePetClientPlayerAutoAllocatePetPointsMessageId:
+	case ScenePetClientPlayerRenamePetMessageId:
+	case ScenePetClientPlayerNotifyPetListChangedMessageId:
+	case ScenePetClientPlayerGmGrantPetMessageId:
 	case SceneSceneClientPlayerEnterSceneMessageId:
 	case SceneSceneClientPlayerNotifyEnterSceneMessageId:
 	case SceneSceneClientPlayerSceneInfoC2SMessageId:

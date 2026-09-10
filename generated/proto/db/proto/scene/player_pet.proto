@@ -1,0 +1,167 @@
+syntax = "proto3";
+option go_package = "db/proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/common/base/empty.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+// 宝宝(宠物)客户端协议,设计文档 docs/design/player-pet.md §4。
+//
+// 与属性加点同一套交互口径:全量下发(PetListInfo),客户端零配表(维度名/说明/上限/剩余点
+// 全由服务器给);每个写操作成功后回全量列表,客户端整体覆盖,不做增量合并。
+
+// 宝宝的一级属性维度(与角色面板同结构,取表 AttributeDimension 中 owner_type=1 的行)
+message PetDimensionInfo {
+  uint32 dimension_id = 1;
+  uint32 pool_id = 2;
+  string name = 3;         // 体质 / 灵力 / 力量 / 敏捷
+  string desc = 4;
+  uint32 allocated = 5;    // 已分配点
+  uint64 value = 6;        // 面板显示值 = 自然成长 + 已分配
+  uint32 cap = 7;          // 单项上限(0 = 不限)
+  uint32 sort = 8;
+  uint32 aptitude = 9;     // 该维度资质(万分比,10000 = 100%)
+}
+
+// 宝宝的二级属性(与角色 DerivedAttributeInfo 同六项)
+message PetDerivedInfo {
+  uint64 max_health = 1;
+  uint64 max_mana = 2;
+  uint64 physical_attack = 3;
+  uint64 magic_attack = 4;
+  uint64 speed = 5;
+  uint64 defense = 6;
+  uint64 health = 7;
+  uint64 mana = 8;
+}
+
+message PetInfo {
+  uint64 pet_id = 1;
+  uint32 pet_table_id = 2;
+  string name = 3;                       // 展示名(玩家未改名时是 PetTable.name)
+  uint32 level = 4;
+  uint32 quality = 5;                    // 品质(PetTable.quality)
+  uint32 model_id = 6;                   // 客户端模型
+  bool is_active = 7;                    // 是否出战中
+  uint32 total_points = 8;               // 宝宝属性点总量(按宝宝等级换算)
+  uint32 remaining_points = 9;           // 剩余可分配
+  uint32 pool_id = 10;                   // 宝宝属性点池 id(加点/洗点请求要带)
+  uint64 reset_cost_gold = 11;           // 当前等级下洗点金币(0 = 免费)
+  uint32 growth = 12;                    // 成长率(万分比):四维资质均值,服务器算好给,纯展示
+  repeated PetDimensionInfo dimensions = 13;
+  PetDerivedInfo derived = 14;
+  repeated uint32 skill_table_ids = 15;
+  string desc = 16;                      // 种类说明(PetTable.desc),客户端 tooltip 用
+}
+
+message PetListInfo {
+  repeated PetInfo pets = 1;
+  uint64 active_pet_id = 2;
+  uint32 max_pets = 3;          // 可携带上限(PetRule.max_pets)
+  uint64 rename_cost_gold = 4;  // 改名金币(0 = 免费)
+}
+
+message GetPetListRequest {
+}
+
+message GetPetListResponse {
+  TipInfoMessage error_message = 1;
+  PetListInfo pets = 2;
+}
+
+// 出战:同时只能有一只。重复召唤同一只 = 拒绝(kPetAlreadyActive)
+message SummonPetRequest {
+  uint64 pet_id = 1;
+}
+
+message SummonPetResponse {
+  TipInfoMessage error_message = 1;
+  PetListInfo pets = 2;
+}
+
+// 收回出战宝宝(战斗中拒绝:快照已出,收回会让局内单位与面板分叉)
+message RecallPetRequest {
+}
+
+message RecallPetResponse {
+  TipInfoMessage error_message = 1;
+  PetListInfo pets = 2;
+}
+
+// 确认加点:提交该宝宝"全部维度的目标已分配值"(全量、幂等),校验口径与角色一致
+message AllocatePetPointsRequest {
+  uint64 pet_id = 1;
+  map<uint32, uint32> allocated = 2;  // dimension_id -> 目标已分配点(缺省维度视为不变)
+}
+
+message AllocatePetPointsResponse {
+  TipInfoMessage error_message = 1;
+  PetListInfo pets = 2;
+}
+
+// 洗点:清空该宝宝的全部分配,点数返还;按 AttributePool 表扣金币
+message ResetPetPointsRequest {
+  uint64 pet_id = 1;
+}
+
+message ResetPetPointsResponse {
+  TipInfoMessage error_message = 1;
+  PetListInfo pets = 2;
+}
+
+// 自动加点:按 AttributeAutoPlan(宝宝池的通用方案)算建议分配,只算不落
+message AutoAllocatePetPointsRequest {
+  uint64 pet_id = 1;
+}
+
+message AutoAllocatePetPointsResponse {
+  TipInfoMessage error_message = 1;
+  uint64 pet_id = 2;
+  map<uint32, uint32> suggested = 3;  // dimension_id -> 建议的目标已分配点(含已分配部分)
+}
+
+message RenamePetRequest {
+  uint64 pet_id = 1;
+  string name = 2;
+}
+
+message RenamePetResponse {
+  TipInfoMessage error_message = 1;
+  PetListInfo pets = 2;
+}
+
+// 服务器主动推送(主人升级带动宝宝升级、战斗结算回写残血等):客户端整体覆盖
+message PetListChangedS2C {
+  PetListInfo pets = 1;
+}
+
+// GM:直接发一只宝宝(开发/测试用的唯一获取入口;捕捉/购买是二期,见设计文档 §8)。
+// ⚠ 今天这条**没有任何鉴权**,与既有的 GmSetPlayerLevel / GmAddCurrency 同状态
+//(gate 侧不存在按消息号的 GM 白名单)。上线前三条一起收口,见 player-pet.md §8。
+message GmGrantPetRequest {
+  uint32 pet_table_id = 1;
+}
+
+message GmGrantPetResponse {
+  TipInfoMessage error_message = 1;
+  PetListInfo pets = 2;
+  uint64 pet_id = 3;
+}
+
+service ScenePetClientPlayer {
+  option (OptionIsPlayerService) = true;
+  option (OptionIsClientProtocolService) = true;
+
+  rpc GetPetList (GetPetListRequest) returns (GetPetListResponse);
+  rpc SummonPet (SummonPetRequest) returns (SummonPetResponse);
+  rpc RecallPet (RecallPetRequest) returns (RecallPetResponse);
+  rpc AllocatePetPoints (AllocatePetPointsRequest) returns (AllocatePetPointsResponse);
+  rpc ResetPetPoints (ResetPetPointsRequest) returns (ResetPetPointsResponse);
+  rpc AutoAllocatePetPoints (AutoAllocatePetPointsRequest) returns (AutoAllocatePetPointsResponse);
+  rpc RenamePet (RenamePetRequest) returns (RenamePetResponse);
+  rpc NotifyPetListChanged (PetListChangedS2C) returns (Empty);
+  rpc GmGrantPet (GmGrantPetRequest) returns (GmGrantPetResponse);
+}

@@ -55,6 +55,10 @@ public class AllTable {
 
         MonsterTableManager.getInstance().load(configDir, useBinary);
 
+        PetTableManager.getInstance().load(configDir, useBinary);
+
+        PetRuleTableManager.getInstance().load(configDir, useBinary);
+
         RewardTableManager.getInstance().load(configDir, useBinary);
 
         SkillTableManager.getInstance().load(configDir, useBinary);
@@ -82,7 +86,7 @@ public class AllTable {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(25);
+        CountDownLatch latch = new CountDownLatch(27);
 
         new Thread(() -> {
             try {
@@ -276,6 +280,26 @@ public class AllTable {
 
         new Thread(() -> {
             try {
+                PetTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load Pet table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                PetRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load PetRule table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 RewardTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Reward table", e);
@@ -391,6 +415,10 @@ public class AllTable {
         MissionTableManager.getInstance().load(configDir, useBinary);
 
         MonsterTableManager.getInstance().load(configDir, useBinary);
+
+        PetTableManager.getInstance().load(configDir, useBinary);
+
+        PetRuleTableManager.getInstance().load(configDir, useBinary);
 
         RewardTableManager.getInstance().load(configDir, useBinary);
 

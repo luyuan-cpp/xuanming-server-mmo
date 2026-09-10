@@ -29,6 +29,7 @@ const (
 	EBattleActorType_BATTLE_ACTOR_TYPE_NONE    EBattleActorType = 0
 	EBattleActorType_BATTLE_ACTOR_TYPE_PLAYER  EBattleActorType = 1
 	EBattleActorType_BATTLE_ACTOR_TYPE_MONSTER EBattleActorType = 2
+	EBattleActorType_BATTLE_ACTOR_TYPE_PET     EBattleActorType = 3 // 宝宝:与主人同队,无客户端行动权,由默认行动路径代打
 )
 
 // Enum value maps for EBattleActorType.
@@ -37,11 +38,13 @@ var (
 		0: "BATTLE_ACTOR_TYPE_NONE",
 		1: "BATTLE_ACTOR_TYPE_PLAYER",
 		2: "BATTLE_ACTOR_TYPE_MONSTER",
+		3: "BATTLE_ACTOR_TYPE_PET",
 	}
 	EBattleActorType_value = map[string]int32{
 		"BATTLE_ACTOR_TYPE_NONE":    0,
 		"BATTLE_ACTOR_TYPE_PLAYER":  1,
 		"BATTLE_ACTOR_TYPE_MONSTER": 2,
+		"BATTLE_ACTOR_TYPE_PET":     3,
 	}
 )
 
@@ -503,8 +506,11 @@ type BattlePlayerSnapshot struct {
 	PhysicalAttack   uint64                        `protobuf:"varint,13,opt,name=physical_attack,json=physicalAttack,proto3" json:"physical_attack,omitempty"`      // 二级属性(属性加点系统):物伤,scene 侧由 DerivedAttributes 填;引擎 InitPlayers 直接透传给 BattleActorState
 	MagicAttack      uint64                        `protobuf:"varint,14,opt,name=magic_attack,json=magicAttack,proto3" json:"magic_attack,omitempty"`               // 法伤
 	Defense          uint64                        `protobuf:"varint,15,opt,name=defense,proto3" json:"defense,omitempty"`                                          // 防御
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 出战宝宝(宝宝系统,player-pet.md §5):与主人同队的独立行动单位。
+	// 核心线同时只能带 1 只,repeated 是为了二期多宠不改 wire。
+	Pets          []*BattlePetSnapshot `protobuf:"bytes,16,rep,name=pets,proto3" json:"pets,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BattlePlayerSnapshot) Reset() {
@@ -642,6 +648,151 @@ func (x *BattlePlayerSnapshot) GetDefense() uint64 {
 	return 0
 }
 
+func (x *BattlePlayerSnapshot) GetPets() []*BattlePetSnapshot {
+	if x != nil {
+		return x.Pets
+	}
+	return nil
+}
+
+// ---- 宝宝战斗快照:与主人同队、独立行动的战斗单位(设计文档 player-pet.md §5)----
+// 属性口径与玩家快照逐项对齐:base_attributes 带 speed(出手序)与当前 HP/MP,
+// max_* 与物伤/法伤/防御来自 PetSystem 现算的二级属性。
+type BattlePetSnapshot struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// SnowFlake guid(scene 的 item guid 发号器铸),直接作为局内 actor_id。
+	// 注意它与 player_id **不是**同一套位布局(AGENTS §7 不变量 1),数值域理论上可相交;
+	// 引擎 InitPets 因此显式查重,撞了拒绝开局,不靠"同域不撞"的假设。
+	PetId          uint64                        `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	OwnerPlayerId  uint64                        `protobuf:"varint,2,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"` // 主人;决定队伍与结算归属
+	PetName        string                        `protobuf:"bytes,3,opt,name=pet_name,json=petName,proto3" json:"pet_name,omitempty"`
+	PetTableId     uint32                        `protobuf:"varint,4,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`
+	Level          uint32                        `protobuf:"varint,5,opt,name=level,proto3" json:"level,omitempty"`
+	BaseAttributes *component.BaseAttributesComp `protobuf:"bytes,6,opt,name=base_attributes,json=baseAttributes,proto3" json:"base_attributes,omitempty"`
+	MaxHealth      uint64                        `protobuf:"varint,7,opt,name=max_health,json=maxHealth,proto3" json:"max_health,omitempty"`
+	MaxMana        uint64                        `protobuf:"varint,8,opt,name=max_mana,json=maxMana,proto3" json:"max_mana,omitempty"`
+	PhysicalAttack uint64                        `protobuf:"varint,9,opt,name=physical_attack,json=physicalAttack,proto3" json:"physical_attack,omitempty"`
+	MagicAttack    uint64                        `protobuf:"varint,10,opt,name=magic_attack,json=magicAttack,proto3" json:"magic_attack,omitempty"`
+	Defense        uint64                        `protobuf:"varint,11,opt,name=defense,proto3" json:"defense,omitempty"`
+	SkillTableIds  []uint32                      `protobuf:"varint,12,rep,packed,name=skill_table_ids,json=skillTableIds,proto3" json:"skill_table_ids,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *BattlePetSnapshot) Reset() {
+	*x = BattlePetSnapshot{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattlePetSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattlePetSnapshot) ProtoMessage() {}
+
+func (x *BattlePetSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattlePetSnapshot.ProtoReflect.Descriptor instead.
+func (*BattlePetSnapshot) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *BattlePetSnapshot) GetPetId() uint64 {
+	if x != nil {
+		return x.PetId
+	}
+	return 0
+}
+
+func (x *BattlePetSnapshot) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+func (x *BattlePetSnapshot) GetPetName() string {
+	if x != nil {
+		return x.PetName
+	}
+	return ""
+}
+
+func (x *BattlePetSnapshot) GetPetTableId() uint32 {
+	if x != nil {
+		return x.PetTableId
+	}
+	return 0
+}
+
+func (x *BattlePetSnapshot) GetLevel() uint32 {
+	if x != nil {
+		return x.Level
+	}
+	return 0
+}
+
+func (x *BattlePetSnapshot) GetBaseAttributes() *component.BaseAttributesComp {
+	if x != nil {
+		return x.BaseAttributes
+	}
+	return nil
+}
+
+func (x *BattlePetSnapshot) GetMaxHealth() uint64 {
+	if x != nil {
+		return x.MaxHealth
+	}
+	return 0
+}
+
+func (x *BattlePetSnapshot) GetMaxMana() uint64 {
+	if x != nil {
+		return x.MaxMana
+	}
+	return 0
+}
+
+func (x *BattlePetSnapshot) GetPhysicalAttack() uint64 {
+	if x != nil {
+		return x.PhysicalAttack
+	}
+	return 0
+}
+
+func (x *BattlePetSnapshot) GetMagicAttack() uint64 {
+	if x != nil {
+		return x.MagicAttack
+	}
+	return 0
+}
+
+func (x *BattlePetSnapshot) GetDefense() uint64 {
+	if x != nil {
+		return x.Defense
+	}
+	return 0
+}
+
+func (x *BattlePetSnapshot) GetSkillTableIds() []uint32 {
+	if x != nil {
+		return x.SkillTableIds
+	}
+	return nil
+}
+
 type BattleActorState struct {
 	state               protoimpl.MessageState        `protogen:"open.v1"`
 	ActorId             uint64                        `protobuf:"varint,1,opt,name=actor_id,json=actorId,proto3" json:"actor_id,omitempty"` // 玩家 = player_id;怪物 = 引擎生成的局内序号 id
@@ -664,13 +815,15 @@ type BattleActorState struct {
 	PhysicalAttack      uint64                        `protobuf:"varint,18,opt,name=physical_attack,json=physicalAttack,proto3" json:"physical_attack,omitempty"`                                                                                             // 物伤(来自快照;怪物 0)
 	MagicAttack         uint64                        `protobuf:"varint,19,opt,name=magic_attack,json=magicAttack,proto3" json:"magic_attack,omitempty"`                                                                                                      // 法伤(来自快照;怪物 0)
 	Defense             uint64                        `protobuf:"varint,20,opt,name=defense,proto3" json:"defense,omitempty"`                                                                                                                                 // 防御(来自快照;怪物 0)
+	OwnerPlayerId       uint64                        `protobuf:"varint,21,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`                                                                                              // 仅宝宝有效:主人 player_id(结算按它归属到主人名下)
+	PetTableId          uint32                        `protobuf:"varint,22,opt,name=pet_table_id,json=petTableId,proto3" json:"pet_table_id,omitempty"`                                                                                                       // 仅宝宝有效(Pet 表 id)
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
 
 func (x *BattleActorState) Reset() {
 	*x = BattleActorState{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[4]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -682,7 +835,7 @@ func (x *BattleActorState) String() string {
 func (*BattleActorState) ProtoMessage() {}
 
 func (x *BattleActorState) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[4]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -695,7 +848,7 @@ func (x *BattleActorState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleActorState.ProtoReflect.Descriptor instead.
 func (*BattleActorState) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{4}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *BattleActorState) GetActorId() uint64 {
@@ -838,6 +991,20 @@ func (x *BattleActorState) GetDefense() uint64 {
 	return 0
 }
 
+func (x *BattleActorState) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+func (x *BattleActorState) GetPetTableId() uint32 {
+	if x != nil {
+		return x.PetTableId
+	}
+	return 0
+}
+
 type BattleAction struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ActionType    EBattleActionType      `protobuf:"varint,1,opt,name=action_type,json=actionType,proto3,enum=EBattleActionType" json:"action_type,omitempty"`
@@ -850,7 +1017,7 @@ type BattleAction struct {
 
 func (x *BattleAction) Reset() {
 	*x = BattleAction{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[5]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -862,7 +1029,7 @@ func (x *BattleAction) String() string {
 func (*BattleAction) ProtoMessage() {}
 
 func (x *BattleAction) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[5]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -875,7 +1042,7 @@ func (x *BattleAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleAction.ProtoReflect.Descriptor instead.
 func (*BattleAction) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{5}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *BattleAction) GetActionType() EBattleActionType {
@@ -927,7 +1094,7 @@ type BattleEventItem struct {
 
 func (x *BattleEventItem) Reset() {
 	*x = BattleEventItem{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[6]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -939,7 +1106,7 @@ func (x *BattleEventItem) String() string {
 func (*BattleEventItem) ProtoMessage() {}
 
 func (x *BattleEventItem) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[6]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -952,7 +1119,7 @@ func (x *BattleEventItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleEventItem.ProtoReflect.Descriptor instead.
 func (*BattleEventItem) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{6}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *BattleEventItem) GetEventType() EBattleEventType {
@@ -1048,27 +1215,28 @@ func (x *BattleEventItem) GetTargetManaAfter() uint64 {
 
 // ---- 单个玩家的结算数据(battle -> scene,scene 是唯一应用者) ----
 type BattleSettlementData struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	BattleId        uint64                 `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
-	PlayerId        uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	Outcome         EBattleOutcome         `protobuf:"varint,3,opt,name=outcome,proto3,enum=EBattleOutcome" json:"outcome,omitempty"`
-	PlayerTeamIndex uint32                 `protobuf:"varint,4,opt,name=player_team_index,json=playerTeamIndex,proto3" json:"player_team_index,omitempty"`
-	Health          uint64                 `protobuf:"varint,5,opt,name=health,proto3" json:"health,omitempty"` // 战后终值,由 scene 回写
-	Mana            uint64                 `protobuf:"varint,6,opt,name=mana,proto3" json:"mana,omitempty"`
-	ExpGain         uint64                 `protobuf:"varint,7,opt,name=exp_gain,json=expGain,proto3" json:"exp_gain,omitempty"`
-	GoldGain        uint64                 `protobuf:"varint,8,opt,name=gold_gain,json=goldGain,proto3" json:"gold_gain,omitempty"`
-	ItemsConsumed   []*BattleItemEntry     `protobuf:"bytes,9,rep,name=items_consumed,json=itemsConsumed,proto3" json:"items_consumed,omitempty"` // scene 按实际持有校验扣除(防刷,不足按 0)
-	ItemsGained     []*BattleItemEntry     `protobuf:"bytes,10,rep,name=items_gained,json=itemsGained,proto3" json:"items_gained,omitempty"`      // 掉落
-	IsDead          bool                   `protobuf:"varint,11,opt,name=is_dead,json=isDead,proto3" json:"is_dead,omitempty"`
-	Fled            bool                   `protobuf:"varint,12,opt,name=fled,proto3" json:"fled,omitempty"`
-	TotalRounds     uint32                 `protobuf:"varint,13,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	state           protoimpl.MessageState     `protogen:"open.v1"`
+	BattleId        uint64                     `protobuf:"varint,1,opt,name=battle_id,json=battleId,proto3" json:"battle_id,omitempty"`
+	PlayerId        uint64                     `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Outcome         EBattleOutcome             `protobuf:"varint,3,opt,name=outcome,proto3,enum=EBattleOutcome" json:"outcome,omitempty"`
+	PlayerTeamIndex uint32                     `protobuf:"varint,4,opt,name=player_team_index,json=playerTeamIndex,proto3" json:"player_team_index,omitempty"`
+	Health          uint64                     `protobuf:"varint,5,opt,name=health,proto3" json:"health,omitempty"` // 战后终值,由 scene 回写
+	Mana            uint64                     `protobuf:"varint,6,opt,name=mana,proto3" json:"mana,omitempty"`
+	ExpGain         uint64                     `protobuf:"varint,7,opt,name=exp_gain,json=expGain,proto3" json:"exp_gain,omitempty"`
+	GoldGain        uint64                     `protobuf:"varint,8,opt,name=gold_gain,json=goldGain,proto3" json:"gold_gain,omitempty"`
+	ItemsConsumed   []*BattleItemEntry         `protobuf:"bytes,9,rep,name=items_consumed,json=itemsConsumed,proto3" json:"items_consumed,omitempty"` // scene 按实际持有校验扣除(防刷,不足按 0)
+	ItemsGained     []*BattleItemEntry         `protobuf:"bytes,10,rep,name=items_gained,json=itemsGained,proto3" json:"items_gained,omitempty"`      // 掉落
+	IsDead          bool                       `protobuf:"varint,11,opt,name=is_dead,json=isDead,proto3" json:"is_dead,omitempty"`
+	Fled            bool                       `protobuf:"varint,12,opt,name=fled,proto3" json:"fled,omitempty"`
+	TotalRounds     uint32                     `protobuf:"varint,13,opt,name=total_rounds,json=totalRounds,proto3" json:"total_rounds,omitempty"`
+	Pets            []*BattlePetSettlementData `protobuf:"bytes,14,rep,name=pets,proto3" json:"pets,omitempty"` // 该玩家出战宝宝的战后终值(scene 回写实例)
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
 func (x *BattleSettlementData) Reset() {
 	*x = BattleSettlementData{}
-	mi := &file_proto_battle_battle_data_proto_msgTypes[7]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1080,7 +1248,7 @@ func (x *BattleSettlementData) String() string {
 func (*BattleSettlementData) ProtoMessage() {}
 
 func (x *BattleSettlementData) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_battle_battle_data_proto_msgTypes[7]
+	mi := &file_proto_battle_battle_data_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1093,7 +1261,7 @@ func (x *BattleSettlementData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use BattleSettlementData.ProtoReflect.Descriptor instead.
 func (*BattleSettlementData) Descriptor() ([]byte, []int) {
-	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{7}
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *BattleSettlementData) GetBattleId() uint64 {
@@ -1187,6 +1355,82 @@ func (x *BattleSettlementData) GetTotalRounds() uint32 {
 	return 0
 }
 
+func (x *BattleSettlementData) GetPets() []*BattlePetSettlementData {
+	if x != nil {
+		return x.Pets
+	}
+	return nil
+}
+
+// ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
+type BattlePetSettlementData struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PetId         uint64                 `protobuf:"varint,1,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
+	Health        uint64                 `protobuf:"varint,2,opt,name=health,proto3" json:"health,omitempty"` // 战后终值
+	Mana          uint64                 `protobuf:"varint,3,opt,name=mana,proto3" json:"mana,omitempty"`
+	IsDead        bool                   `protobuf:"varint,4,opt,name=is_dead,json=isDead,proto3" json:"is_dead,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BattlePetSettlementData) Reset() {
+	*x = BattlePetSettlementData{}
+	mi := &file_proto_battle_battle_data_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BattlePetSettlementData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BattlePetSettlementData) ProtoMessage() {}
+
+func (x *BattlePetSettlementData) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_battle_battle_data_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BattlePetSettlementData.ProtoReflect.Descriptor instead.
+func (*BattlePetSettlementData) Descriptor() ([]byte, []int) {
+	return file_proto_battle_battle_data_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *BattlePetSettlementData) GetPetId() uint64 {
+	if x != nil {
+		return x.PetId
+	}
+	return 0
+}
+
+func (x *BattlePetSettlementData) GetHealth() uint64 {
+	if x != nil {
+		return x.Health
+	}
+	return 0
+}
+
+func (x *BattlePetSettlementData) GetMana() uint64 {
+	if x != nil {
+		return x.Mana
+	}
+	return 0
+}
+
+func (x *BattlePetSettlementData) GetIsDead() bool {
+	if x != nil {
+		return x.IsDead
+	}
+	return false
+}
+
 var File_proto_battle_battle_data_proto protoreflect.FileDescriptor
 
 const file_proto_battle_battle_data_proto_rawDesc = "" +
@@ -1209,7 +1453,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\tcaster_id\x18\x05 \x01(\x04R\bcasterId\"K\n" +
 	"\x0fBattleItemEntry\x12\"\n" +
 	"\ritem_table_id\x18\x01 \x01(\rR\vitemTableId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\x04R\x05count\"\xb6\x04\n" +
+	"\x05count\x18\x02 \x01(\x04R\x05count\"\xde\x04\n" +
 	"\x14BattlePlayerSnapshot\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1f\n" +
 	"\vplayer_name\x18\x02 \x01(\tR\n" +
@@ -1229,7 +1473,24 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11table_fingerprint\x18\f \x01(\tR\x10tableFingerprint\x12'\n" +
 	"\x0fphysical_attack\x18\r \x01(\x04R\x0ephysicalAttack\x12!\n" +
 	"\fmagic_attack\x18\x0e \x01(\x04R\vmagicAttack\x12\x18\n" +
-	"\adefense\x18\x0f \x01(\x04R\adefense\"\xaf\x06\n" +
+	"\adefense\x18\x0f \x01(\x04R\adefense\x12&\n" +
+	"\x04pets\x18\x10 \x03(\v2\x12.BattlePetSnapshotR\x04pets\"\xab\x03\n" +
+	"\x11BattlePetSnapshot\x12\x15\n" +
+	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12&\n" +
+	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\x12\x19\n" +
+	"\bpet_name\x18\x03 \x01(\tR\apetName\x12 \n" +
+	"\fpet_table_id\x18\x04 \x01(\rR\n" +
+	"petTableId\x12\x14\n" +
+	"\x05level\x18\x05 \x01(\rR\x05level\x12<\n" +
+	"\x0fbase_attributes\x18\x06 \x01(\v2\x13.BaseAttributesCompR\x0ebaseAttributes\x12\x1d\n" +
+	"\n" +
+	"max_health\x18\a \x01(\x04R\tmaxHealth\x12\x19\n" +
+	"\bmax_mana\x18\b \x01(\x04R\amaxMana\x12'\n" +
+	"\x0fphysical_attack\x18\t \x01(\x04R\x0ephysicalAttack\x12!\n" +
+	"\fmagic_attack\x18\n" +
+	" \x01(\x04R\vmagicAttack\x12\x18\n" +
+	"\adefense\x18\v \x01(\x04R\adefense\x12&\n" +
+	"\x0fskill_table_ids\x18\f \x03(\rR\rskillTableIds\"\xf9\x06\n" +
 	"\x10BattleActorState\x12\x19\n" +
 	"\bactor_id\x18\x01 \x01(\x04R\aactorId\x120\n" +
 	"\n" +
@@ -1256,7 +1517,10 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x0eformation_slot\x18\x11 \x01(\rR\rformationSlot\x12'\n" +
 	"\x0fphysical_attack\x18\x12 \x01(\x04R\x0ephysicalAttack\x12!\n" +
 	"\fmagic_attack\x18\x13 \x01(\x04R\vmagicAttack\x12\x18\n" +
-	"\adefense\x18\x14 \x01(\x04R\adefense\x1aF\n" +
+	"\adefense\x18\x14 \x01(\x04R\adefense\x12&\n" +
+	"\x0fowner_player_id\x18\x15 \x01(\x04R\rownerPlayerId\x12 \n" +
+	"\fpet_table_id\x18\x16 \x01(\rR\n" +
+	"petTableId\x1aF\n" +
 	"\x18SkillCooldownRoundsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xaa\x01\n" +
@@ -1282,7 +1546,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	" \x01(\rR\vitemTableId\x12\x19\n" +
 	"\bgroup_id\x18\v \x01(\rR\agroupId\x12\x1b\n" +
 	"\thit_index\x18\f \x01(\rR\bhitIndex\x12*\n" +
-	"\x11target_mana_after\x18\r \x01(\x04R\x0ftargetManaAfter\"\xc9\x03\n" +
+	"\x11target_mana_after\x18\r \x01(\x04R\x0ftargetManaAfter\"\xf7\x03\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -1297,11 +1561,18 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	" \x03(\v2\x10.BattleItemEntryR\vitemsGained\x12\x17\n" +
 	"\ais_dead\x18\v \x01(\bR\x06isDead\x12\x12\n" +
 	"\x04fled\x18\f \x01(\bR\x04fled\x12!\n" +
-	"\ftotal_rounds\x18\r \x01(\rR\vtotalRounds*k\n" +
+	"\ftotal_rounds\x18\r \x01(\rR\vtotalRounds\x12,\n" +
+	"\x04pets\x18\x0e \x03(\v2\x18.BattlePetSettlementDataR\x04pets\"u\n" +
+	"\x17BattlePetSettlementData\x12\x15\n" +
+	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
+	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +
+	"\x04mana\x18\x03 \x01(\x04R\x04mana\x12\x17\n" +
+	"\ais_dead\x18\x04 \x01(\bR\x06isDead*\x86\x01\n" +
 	"\x10eBattleActorType\x12\x1a\n" +
 	"\x16BATTLE_ACTOR_TYPE_NONE\x10\x00\x12\x1c\n" +
 	"\x18BATTLE_ACTOR_TYPE_PLAYER\x10\x01\x12\x1d\n" +
-	"\x19BATTLE_ACTOR_TYPE_MONSTER\x10\x02*\xa8\x01\n" +
+	"\x19BATTLE_ACTOR_TYPE_MONSTER\x10\x02\x12\x19\n" +
+	"\x15BATTLE_ACTOR_TYPE_PET\x10\x03*\xa8\x01\n" +
 	"\x11eBattleActionType\x12\x16\n" +
 	"\x12BATTLE_ACTION_NONE\x10\x00\x12\x18\n" +
 	"\x14BATTLE_ACTION_ATTACK\x10\x01\x12\x17\n" +
@@ -1345,7 +1616,7 @@ func file_proto_battle_battle_data_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_battle_battle_data_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
-var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_battle_battle_data_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_proto_battle_battle_data_proto_goTypes = []any{
 	(EBattleActorType)(0),                // 0: eBattleActorType
 	(EBattleActionType)(0),               // 1: eBattleActionType
@@ -1355,32 +1626,37 @@ var file_proto_battle_battle_data_proto_goTypes = []any{
 	(*BattleBuffEntry)(nil),              // 5: BattleBuffEntry
 	(*BattleItemEntry)(nil),              // 6: BattleItemEntry
 	(*BattlePlayerSnapshot)(nil),         // 7: BattlePlayerSnapshot
-	(*BattleActorState)(nil),             // 8: BattleActorState
-	(*BattleAction)(nil),                 // 9: BattleAction
-	(*BattleEventItem)(nil),              // 10: BattleEventItem
-	(*BattleSettlementData)(nil),         // 11: BattleSettlementData
-	nil,                                  // 12: BattleActorState.SkillCooldownRoundsEntry
-	(*component.BaseAttributesComp)(nil), // 13: BaseAttributesComp
+	(*BattlePetSnapshot)(nil),            // 8: BattlePetSnapshot
+	(*BattleActorState)(nil),             // 9: BattleActorState
+	(*BattleAction)(nil),                 // 10: BattleAction
+	(*BattleEventItem)(nil),              // 11: BattleEventItem
+	(*BattleSettlementData)(nil),         // 12: BattleSettlementData
+	(*BattlePetSettlementData)(nil),      // 13: BattlePetSettlementData
+	nil,                                  // 14: BattleActorState.SkillCooldownRoundsEntry
+	(*component.BaseAttributesComp)(nil), // 15: BaseAttributesComp
 }
 var file_proto_battle_battle_data_proto_depIdxs = []int32{
-	13, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
+	15, // 0: BattlePlayerSnapshot.base_attributes:type_name -> BaseAttributesComp
 	5,  // 1: BattlePlayerSnapshot.buffs:type_name -> BattleBuffEntry
 	6,  // 2: BattlePlayerSnapshot.items:type_name -> BattleItemEntry
 	4,  // 3: BattlePlayerSnapshot.routing:type_name -> BattleRouting
-	0,  // 4: BattleActorState.actor_type:type_name -> eBattleActorType
-	13, // 5: BattleActorState.attributes:type_name -> BaseAttributesComp
-	5,  // 6: BattleActorState.buffs:type_name -> BattleBuffEntry
-	12, // 7: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
-	1,  // 8: BattleAction.action_type:type_name -> eBattleActionType
-	2,  // 9: BattleEventItem.event_type:type_name -> eBattleEventType
-	3,  // 10: BattleSettlementData.outcome:type_name -> eBattleOutcome
-	6,  // 11: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
-	6,  // 12: BattleSettlementData.items_gained:type_name -> BattleItemEntry
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	8,  // 4: BattlePlayerSnapshot.pets:type_name -> BattlePetSnapshot
+	15, // 5: BattlePetSnapshot.base_attributes:type_name -> BaseAttributesComp
+	0,  // 6: BattleActorState.actor_type:type_name -> eBattleActorType
+	15, // 7: BattleActorState.attributes:type_name -> BaseAttributesComp
+	5,  // 8: BattleActorState.buffs:type_name -> BattleBuffEntry
+	14, // 9: BattleActorState.skill_cooldown_rounds:type_name -> BattleActorState.SkillCooldownRoundsEntry
+	1,  // 10: BattleAction.action_type:type_name -> eBattleActionType
+	2,  // 11: BattleEventItem.event_type:type_name -> eBattleEventType
+	3,  // 12: BattleSettlementData.outcome:type_name -> eBattleOutcome
+	6,  // 13: BattleSettlementData.items_consumed:type_name -> BattleItemEntry
+	6,  // 14: BattleSettlementData.items_gained:type_name -> BattleItemEntry
+	13, // 15: BattleSettlementData.pets:type_name -> BattlePetSettlementData
+	16, // [16:16] is the sub-list for method output_type
+	16, // [16:16] is the sub-list for method input_type
+	16, // [16:16] is the sub-list for extension type_name
+	16, // [16:16] is the sub-list for extension extendee
+	0,  // [0:16] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_battle_data_proto_init() }
@@ -1394,7 +1670,7 @@ func file_proto_battle_battle_data_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_battle_battle_data_proto_rawDesc), len(file_proto_battle_battle_data_proto_rawDesc)),
 			NumEnums:      4,
-			NumMessages:   9,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

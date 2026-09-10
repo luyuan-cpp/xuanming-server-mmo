@@ -284,6 +284,29 @@
         "AttributeNoAutoPlan": 25013,
         "AttributeNothingToChange": 25014
       }
+    },
+    "pet_error": {
+      "base": 26000,
+      "width": 1000,
+      "ids": {
+        "PetNotFound": 26000,
+        "PetTableRowMissing": 26001,
+        "PetSlotFull": 26002,
+        "PetOwnerLevelNotEnough": 26003,
+        "PetAlreadyActive": 26004,
+        "PetNotActive": 26005,
+        "PetSummonCooldown": 26006,
+        "PetNameInvalid": 26007,
+        "PetInBattle": 26008,
+        "PetPointsNotEnough": 26009,
+        "PetPointsCannotDecrease": 26010,
+        "PetDimensionCapExceeded": 26011,
+        "PetDimensionNotFound": 26012,
+        "PetGoldNotEnough": 26013,
+        "PetNoAutoPlan": 26014,
+        "PetNothingToChange": 26015,
+        "PetIdGenerateFailed": 26016
+      }
     }
   },
   "legacy_ids": {

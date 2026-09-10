@@ -205,6 +205,17 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int OWNER_TYPE_FIELD_NUMBER = 10;
+  private int ownerType_ = 0;
+  /**
+   * <code>uint32 owner_type = 10;</code>
+   * @return The ownerType.
+   */
+  @java.lang.Override
+  public int getOwnerType() {
+    return ownerType_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -246,6 +257,9 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 9, desc_);
     }
+    if (ownerType_ != 0) {
+      output.writeUInt32(10, ownerType_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -283,6 +297,10 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(desc_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(9, desc_);
+    }
+    if (ownerType_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(10, ownerType_);
     }
     return size;
   }
@@ -326,6 +344,8 @@ private static final long serialVersionUID = 0L;
         != other.getResetFreeBelowLevel()) return false;
     if (!getDesc()
         .equals(other.getDesc())) return false;
+    if (getOwnerType()
+        != other.getOwnerType()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -356,6 +376,8 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getResetFreeBelowLevel();
     hash = (37 * hash) + DESC_FIELD_NUMBER;
     hash = (53 * hash) + getDesc().hashCode();
+    hash = (37 * hash) + OWNER_TYPE_FIELD_NUMBER;
+    hash = (53 * hash) + getOwnerType();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -496,6 +518,7 @@ private static final long serialVersionUID = 0L;
       resetCostGold_ = 0L;
       resetFreeBelowLevel_ = 0;
       desc_ = "";
+      ownerType_ = 0;
       return this;
     }
 
@@ -556,6 +579,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000100) != 0)) {
         result.desc_ = desc_;
       }
+      if (((from_bitField0_ & 0x00000200) != 0)) {
+        result.ownerType_ = ownerType_;
+      }
     }
 
     @java.lang.Override
@@ -600,6 +626,9 @@ private static final long serialVersionUID = 0L;
         desc_ = other.desc_;
         bitField0_ |= 0x00000100;
         onChanged();
+      }
+      if (other.getOwnerType() != 0) {
+        setOwnerType(other.getOwnerType());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -672,6 +701,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000100;
               break;
             } // case 74
+            case 80: {
+              ownerType_ = input.readUInt32();
+              bitField0_ |= 0x00000200;
+              break;
+            } // case 80
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1053,6 +1087,38 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       desc_ = value;
       bitField0_ |= 0x00000100;
+      onChanged();
+      return this;
+    }
+
+    private int ownerType_ ;
+    /**
+     * <code>uint32 owner_type = 10;</code>
+     * @return The ownerType.
+     */
+    @java.lang.Override
+    public int getOwnerType() {
+      return ownerType_;
+    }
+    /**
+     * <code>uint32 owner_type = 10;</code>
+     * @param value The ownerType to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOwnerType(int value) {
+
+      ownerType_ = value;
+      bitField0_ |= 0x00000200;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 owner_type = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearOwnerType() {
+      bitField0_ = (bitField0_ & ~0x00000200);
+      ownerType_ = 0;
       onChanged();
       return this;
     }
