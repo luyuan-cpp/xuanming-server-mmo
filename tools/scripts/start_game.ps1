@@ -167,12 +167,32 @@ try {
                         Write-Host '  已备份 Docker 遗留通信目录。'
                     }
                 }
-                # Docker 的另一个独立通信端点也会在重启后残留；只备份 socket 本身。
-                $socketRoot = [IO.Path]::GetFullPath((Join-Path $env:LOCALAPPDATA 'docker-secrets-engine'))
-                $socketPath = [IO.Path]::GetFullPath((Join-Path $socketRoot 'engine.sock'))
-                if ((Split-Path -Parent $socketPath) -ne $socketRoot) { throw 'Docker socket 路径校验失败。' }
-                $socketFile = Get-ChildItem -LiteralPath $socketRoot -Filter 'engine.sock' -Force -ErrorAction SilentlyContinue
-                if ($socketFile) { Rename-Item -LiteralPath $socketPath -NewName "engine.sock.before-game-$stamp" }
+                # 失效的 socket 重解析点可能无法直接重命名；只备份其独立通信目录。
+                $socketParent = [IO.Path]::GetFullPath($env:LOCALAPPDATA).TrimEnd([IO.Path]::DirectorySeparatorChar)
+                $socketRoot = [IO.Path]::GetFullPath((Join-Path $socketParent 'docker-secrets-engine'))
+                if ((Split-Path -Parent $socketRoot) -ne $socketParent) { throw 'Docker 通信目录不在 LOCALAPPDATA 直属目录，已中止。' }
+                if (Test-Path -LiteralPath $socketRoot) {
+                    $socketDirectory = Get-Item -LiteralPath $socketRoot -Force
+                    if (-not $socketDirectory.PSIsContainer -or ($socketDirectory.Attributes -band [IO.FileAttributes]::ReparsePoint)) {
+                        throw 'Docker 通信目录不是普通目录或自身是重解析点，已中止。'
+                    }
+                    $socketEntries = @(Get-ChildItem -LiteralPath $socketRoot -Force)
+                    if ($socketEntries.Count -gt 0) {
+                        if ($socketEntries.Count -ne 1 -or $socketEntries[0].Name -cne 'engine.sock' -or $socketEntries[0].PSIsContainer) {
+                            throw 'Docker 通信目录包含 engine.sock 以外的内容，已中止且未移动任何内容。'
+                        }
+                        $socketBackupName = "docker-secrets-engine.before-game-$stamp"
+                        $socketBackupPath = [IO.Path]::GetFullPath((Join-Path $socketParent $socketBackupName))
+                        if ((Split-Path -Parent $socketBackupPath) -ne $socketParent -or (Test-Path -LiteralPath $socketBackupPath)) {
+                            throw 'Docker 通信目录备份目标异常或已存在，已中止且不会覆盖。'
+                        }
+                        if (Get-Process -Name 'Docker Desktop','com.docker.backend','dockerd','docker' -ErrorAction SilentlyContinue) {
+                            throw 'Docker 已在运行，已中止通信目录备份，请勿并行启动。'
+                        }
+                        Rename-Item -LiteralPath $socketRoot -NewName $socketBackupName
+                        Write-Host '  已备份 Docker 遗留 socket 通信目录。'
+                    }
+                }
                 Start-Process -FilePath $desktop -WindowStyle Hidden
             }
             Wait-Ready 'Docker Linux 引擎' { try { (Invoke-Docker @('info','--format','{{.OSType}}') 15).Code -eq 0 } catch { $false } } 300
