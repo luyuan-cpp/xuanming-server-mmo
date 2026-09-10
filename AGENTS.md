@@ -211,7 +211,7 @@
   - 示例见 `cpp/libs/modules/id_segment/guid_segment_registry.{h,cpp}`（`GuidKind` + `kGuidKindNames`）。
   - 允许的宏只有四类：头文件卫士；平台 / 编译期条件编译；必须拿到 `__FILE__`/`__LINE__` 的日志与断言；以及**必须往调用方注入控制流**（`return` / `continue` / `break`）因而函数写不出来的守卫宏——例如 `cpp/libs/engine/core/macros/return_define.h` 的 `ECS_GET_OR_RETURN` 系列。
   - 这四类之外一律用函数、模板或 `constexpr`。判据很简单：**这个宏是在生成声明，还是在做函数做不到的事？** 生成声明的一律不要。
-  - 枚举的底层类型按**取值个数**选，不要跟着被编号对象的位宽走（`GuidKind : uint8_t` 表示"种类数 ≤ 255"，与 guid 本身是 uint64 无关）。
+  - 枚举显式写出底层类型，不要依赖实现默认。宽度上**不为省字节而设人为上限**：与被编号对象保持同宽（如 `GuidKind : uint64_t` 对齐 `Guid`）比"算出现在只有 3 项所以 uint8 够用"更安全——种类会增长，而这类枚举通常只是少量常量，省下的字节没有意义。
 - 改动保持小而完整、可独立审阅和回滚；不在功能改动中夹带无关格式化、重命名或顺手重构。
 
 ### 11.3 正确性与生产质量

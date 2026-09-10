@@ -20,11 +20,12 @@
 //
 // 名字既是注册表里的种类名,也是 id_segment.biz_tag —— 两边同一个字符串,免得配置里再对一遍表。
 //
-// 底层类型是 uint8_t:它表示的是**种类数量**(现在 3 种),不是 guid 的位宽
-// —— guid 的值是 Guid(uint64),见 guid_segment_client.h。255 种类别绰绰有余。
+// 底层类型 uint64_t:与 Guid 同宽,种类数不设人为上限。它只用来给种类编号、
+// 索引下面按种类排的数组,不参与 guid 的位运算 —— guid 的值本身是 Guid(uint64),
+// 见 guid_segment_client.h。该枚举纯内存使用,不进协议、不落库,改宽度无兼容问题。
 // kCount 必须始终是最后一项:它既是种类数,也是所有按种类索引的数组的长度。
 // ─────────────────────────────────────────────────────────────────────────
-enum class GuidKind : uint8_t
+enum class GuidKind : uint64_t
 {
     kItem,
     kTxLog,
