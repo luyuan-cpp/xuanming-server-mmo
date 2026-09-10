@@ -179,3 +179,12 @@
 178=BattleNodeIssueBattleTicket
 179=MatchServiceRequestBattleTicket
 180=DataServiceAllocateIdSegment
+181=ScenePetClientPlayerGetPetList
+182=ScenePetClientPlayerResetPetPoints
+183=ScenePetClientPlayerSummonPet
+184=ScenePetClientPlayerNotifyPetListChanged
+185=ScenePetClientPlayerRecallPet
+186=ScenePetClientPlayerAllocatePetPoints
+187=ScenePetClientPlayerGmGrantPet
+188=ScenePetClientPlayerAutoAllocatePetPoints
+189=ScenePetClientPlayerRenamePet
