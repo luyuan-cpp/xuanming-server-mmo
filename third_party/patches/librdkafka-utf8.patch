@@ -1,0 +1,343 @@
+diff --git a/win32/interceptor_test/interceptor_test.vcxproj b/win32/interceptor_test/interceptor_test.vcxproj
+index e6828b2..ada91f4 100644
+--- a/win32/interceptor_test/interceptor_test.vcxproj
++++ b/win32/interceptor_test/interceptor_test.vcxproj
+@@ -28,7 +28,7 @@
+       <Optimization>Disabled</Optimization>
+       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+       <SDLCheck>true</SDLCheck>
+-      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
++      <AdditionalOptions>/utf-8 /J %(AdditionalOptions)</AdditionalOptions>
+       <AdditionalIncludeDirectories>$(SolutionDir)\..\src;$(SolutionDir)\..\src-cpp</AdditionalIncludeDirectories>
+     </ClCompile>
+   </ItemDefinitionGroup>
+@@ -40,12 +40,13 @@
+       <Optimization>Disabled</Optimization>
+       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+       <SDLCheck>true</SDLCheck>
+-      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
++      <AdditionalOptions>/utf-8 /J %(AdditionalOptions)</AdditionalOptions>
+       <AdditionalIncludeDirectories>$(SolutionDir)\..\src;$(SolutionDir)\..\src-cpp</AdditionalIncludeDirectories>
+     </ClCompile>
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+@@ -63,6 +64,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+diff --git a/win32/librdkafka.vcxproj b/win32/librdkafka.vcxproj
+index b31f895..ea5277c 100644
+--- a/win32/librdkafka.vcxproj
++++ b/win32/librdkafka.vcxproj
+@@ -1,4 +1,4 @@
+-<?xml version="1.0" encoding="utf-8"?>
++﻿<?xml version="1.0" encoding="utf-8"?>
+ <Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+   <PropertyGroup Label="Globals">
+     <ProjectGuid>{4BEBB59C-477B-4F7A-8AE8-4228D0861E54}</ProjectGuid>
+@@ -30,7 +30,7 @@
+       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+       <IntrinsicFunctions>true</IntrinsicFunctions>
+       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+-      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
++      <AdditionalOptions>/utf-8 /J %(AdditionalOptions)</AdditionalOptions>
+       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+     </ClCompile>
+     <Link>
+@@ -47,7 +47,7 @@
+       <InlineFunctionExpansion>Default</InlineFunctionExpansion>
+       <IntrinsicFunctions>true</IntrinsicFunctions>
+       <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+-      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
++      <AdditionalOptions>/utf-8 /J %(AdditionalOptions)</AdditionalOptions>
+       <RuntimeLibrary>MultiThreadedDebug</RuntimeLibrary>
+     </ClCompile>
+     <Link>
+@@ -58,6 +58,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+@@ -78,6 +79,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+diff --git a/win32/librdkafkacpp/librdkafkacpp.vcxproj b/win32/librdkafkacpp/librdkafkacpp.vcxproj
+index ffce701..73d0aa2 100644
+--- a/win32/librdkafkacpp/librdkafkacpp.vcxproj
++++ b/win32/librdkafkacpp/librdkafkacpp.vcxproj
+@@ -1,4 +1,4 @@
+-<?xml version="1.0" encoding="utf-8"?>
++﻿<?xml version="1.0" encoding="utf-8"?>
+ <Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+   <PropertyGroup Label="Globals">
+     <ProjectGuid>{E9641737-EE62-4EC8-88C8-792D2E3CE32D}</ProjectGuid>
+@@ -30,7 +30,7 @@
+       <Optimization>Disabled</Optimization>
+       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;LIBRDKAFKACPP_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+       <SDLCheck>true</SDLCheck>
+-      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
++      <AdditionalOptions>/utf-8 /J %(AdditionalOptions)</AdditionalOptions>
+       <AdditionalIncludeDirectories>
+       </AdditionalIncludeDirectories>
+     </ClCompile>
+@@ -43,13 +43,14 @@
+       <Optimization>Disabled</Optimization>
+       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;LIBRDKAFKACPP_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+       <SDLCheck>true</SDLCheck>
+-      <AdditionalOptions>/J %(AdditionalOptions)</AdditionalOptions>
++      <AdditionalOptions>/utf-8 /J %(AdditionalOptions)</AdditionalOptions>
+       <AdditionalIncludeDirectories>
+       </AdditionalIncludeDirectories>
+     </ClCompile>
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+@@ -66,6 +67,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+diff --git a/win32/openssl_engine_example/openssl_engine_example.vcxproj b/win32/openssl_engine_example/openssl_engine_example.vcxproj
+index 933d1c6..17f2e9c 100644
+--- a/win32/openssl_engine_example/openssl_engine_example.vcxproj
++++ b/win32/openssl_engine_example/openssl_engine_example.vcxproj
+@@ -1,4 +1,4 @@
+-<?xml version="1.0" encoding="utf-8"?>
++﻿<?xml version="1.0" encoding="utf-8"?>
+ <Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+   <Import Project="$(SolutionDir)common.vcxproj" />
+   <ItemGroup>
+@@ -56,6 +56,7 @@
+   </PropertyGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+       <WarningLevel>Level3</WarningLevel>
+       <Optimization>Disabled</Optimization>
+@@ -72,6 +73,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+       <WarningLevel>Level3</WarningLevel>
+       <Optimization>Disabled</Optimization>
+@@ -88,6 +90,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+       <Optimization>MaxSpeed</Optimization>
+@@ -108,6 +111,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+       <Optimization>MaxSpeed</Optimization>
+diff --git a/win32/rdkafka_complex_consumer_example_cpp/rdkafka_complex_consumer_example_cpp.vcxproj b/win32/rdkafka_complex_consumer_example_cpp/rdkafka_complex_consumer_example_cpp.vcxproj
+index 75d9449..605e596 100644
+--- a/win32/rdkafka_complex_consumer_example_cpp/rdkafka_complex_consumer_example_cpp.vcxproj
++++ b/win32/rdkafka_complex_consumer_example_cpp/rdkafka_complex_consumer_example_cpp.vcxproj
+@@ -21,6 +21,7 @@
+ 
+   <ItemDefinitionGroup>
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <Optimization>Enabled</Optimization>
+       <PreprocessorDefinitions>WIN32;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+@@ -34,6 +35,7 @@
+ 
+   <ItemDefinitionGroup Condition="'$(Configuration)'=='Debug'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <Optimization>Disabled</Optimization>
+       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+     </ClCompile>
+@@ -44,6 +46,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)'=='Release'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <Optimization>MaxSpeed</Optimization>
+       <FunctionLevelLinking>true</FunctionLevelLinking>
+       <IntrinsicFunctions>true</IntrinsicFunctions>
+diff --git a/win32/rdkafka_example/rdkafka_example.vcxproj b/win32/rdkafka_example/rdkafka_example.vcxproj
+index a5e35c5..21ab5c1 100644
+--- a/win32/rdkafka_example/rdkafka_example.vcxproj
++++ b/win32/rdkafka_example/rdkafka_example.vcxproj
+@@ -20,6 +20,7 @@
+ 
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+       <WarningLevel>Level3</WarningLevel>
+@@ -34,6 +35,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+       <WarningLevel>Level3</WarningLevel>
+@@ -48,6 +50,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+@@ -67,6 +70,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+diff --git a/win32/rdkafka_performance/rdkafka_performance.vcxproj b/win32/rdkafka_performance/rdkafka_performance.vcxproj
+index f481661..9cabe4d 100644
+--- a/win32/rdkafka_performance/rdkafka_performance.vcxproj
++++ b/win32/rdkafka_performance/rdkafka_performance.vcxproj
+@@ -19,6 +19,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+       <WarningLevel>Level3</WarningLevel>
+@@ -33,6 +34,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+       <WarningLevel>Level3</WarningLevel>
+@@ -47,6 +49,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+@@ -66,6 +69,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+diff --git a/win32/tests/tests.vcxproj b/win32/tests/tests.vcxproj
+index 812a267..090418c 100644
+--- a/win32/tests/tests.vcxproj
++++ b/win32/tests/tests.vcxproj
+@@ -1,4 +1,4 @@
+-<?xml version="1.0" encoding="utf-8"?>
++﻿<?xml version="1.0" encoding="utf-8"?>
+ <Project DefaultTargets="Build" ToolsVersion="12.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+   <PropertyGroup Label="Globals">
+     <ProjectGuid>{BE4E1264-5D13-423D-8191-71F7041459E7}</ProjectGuid>
+@@ -21,6 +21,7 @@
+ 
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+       <WarningLevel>Level3</WarningLevel>
+@@ -37,6 +38,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+       <WarningLevel>Level3</WarningLevel>
+@@ -53,6 +55,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+@@ -72,6 +75,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>
+       </PrecompiledHeader>
+diff --git a/win32/win_ssl_cert_store/win_ssl_cert_store.vcxproj b/win32/win_ssl_cert_store/win_ssl_cert_store.vcxproj
+index 4e741d4..73ccff1 100644
+--- a/win32/win_ssl_cert_store/win_ssl_cert_store.vcxproj
++++ b/win32/win_ssl_cert_store/win_ssl_cert_store.vcxproj
+@@ -56,6 +56,7 @@
+   </PropertyGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+       <WarningLevel>Level3</WarningLevel>
+       <Optimization>Disabled</Optimization>
+@@ -72,6 +73,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+       <WarningLevel>Level3</WarningLevel>
+       <Optimization>Disabled</Optimization>
+@@ -88,6 +90,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+       <Optimization>MaxSpeed</Optimization>
+@@ -108,6 +111,7 @@
+   </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+     <ClCompile>
++      <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
+       <WarningLevel>Level3</WarningLevel>
+       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+       <Optimization>MaxSpeed</Optimization>
