@@ -4243,3 +4243,15 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   7. 宝宝降级原本走按比例缩放,与文档和角色侧的"降级只夹"分叉;结算回写后没推列表;名字校验放行非法 UTF-8;资质单边缺配会掷出接近 0;改名同名重复扣费;缺角色 `SanitizeSchemes` 的对等物;技能有实例/表两份真相;资质槽位按表行序绑定(改成按 dimension_id 升序,插行不再整体错位)。
   8. 客户端:`BattleStage.PetOwnerResolver` 默认实现改为直接读 `owner_player_id`(正式战斗路径此前从未接上);`PartyCardOrder` 把宝宝当队友挤掉人类队友;满槽时列表末项被「出战」按钮压住;属性窗与宝宝窗互不关闭。
   9. 顺带修掉的既有缺陷:tip 码轴改段后,robot 的 attribute-smoke、客户端 `AttributeClient.DescribeTip`、`AttributeClientTests` 与属性设计文档仍写着旧的 130-144。两个 robot 冒烟的 tip 常量改成引用 `shared/generated/pb/table` 的生成枚举,再改号会在编译期断而不是静默失效。
+
+## 2026-09-10 主干拉取、依赖引用与宠物号段合并修复
+
+- 按用户授权完成主干拉取和冲突处理，允许提交、推送并只保留 main。本地 main 从 136a53e62 快进到 22ea4012c；本地临时追加的 9 个宠物消息在上游均已存在，保留上游 180=DataServiceAllocateIdSegment、181–189=宠物消息的唯一编号，未拼接冲突编号。源表及 C++/Go 注册一致；原文件备份在 run/git-sync-20260910。
+- Boost 错误指针 87db1d0 无法由官方仓库提供，单提交 dry-run 复现 not our ref。将 .gitmodules 恢复为 boostorg/boost，并固定官方 1.87.0 标签 c89e6267665516192015a9e40955e154466f4f68；递归子模块同步、重建匹配版本的 b2、强制刷新汇总头后，版本头与源头均为 1_87，所有子模块指针对齐。
+- data_service 新增的 proto2mysql v0.1.0 包校验值与 Go 官方 sum.golang.org 记录不符；按官方记录修正单行 go.sum，保留校验开启，版本与 go.mod 校验值均不变。修后该服务 test/vet 通过。
+- 修复真实合并接缝：scene 已退出 Snowflake 初始化，GrantPet 却仍调用旧发号器。宠物继续复用 item 域，改用 tlsGuidSegmentRegistry 的 TryNext；失败保持输出归零、不新增宠物。两条接口回归覆盖无号段拒绝、宠物与物品连续取号且不复用 ID。正确红灯在号段已准备好后返回 kPetIdGenerateFailed；修后两例转绿。
+- 第一轮 C++ 构建暴露 game.sln 缺少 core→infra 依赖：三个节点先链接旧 infra.lib，缺新版 KafkaManager::Subscribe 符号。补一条依赖边，完整项目图无循环；最终 game.sln Debug/x64、/m:1 构建退出码 0。
+- 验证：bag 145、Kafka 命令 13、路由身份 19、回合战斗 60、货币 24、Snowflake 27，共 288 个 C++ 用例通过。Go 的 proto/login/data_service/guild/match/scene_manager/player_locator/client_rpc_router 八模块 test/vet 通过；shared 的 idsegment/snowflake/snowflakealloc/kafkacmd 四包 test/vet 通过。日志在 run/git-sync-20260910。
+- 未验证项：未做真实服务端到端、数据库迁移、压测或客户端验证；可选 no-raw-pointer-member 检查因本机工具缺失由既有构建脚本跳过。data_service 的 go mod verify 因本地 replace 的 proto/shared 缺 ziphash 未通过，包测试与 vet 已通过。protogen/go.sum 中同一错误包校验值在拉取前即存在，本次未改。
+- 分支审计：远端两个旧特性分支已删除且内容已合入 main；本地旧备份仅独有废弃 client/unity 指针，服务端内容已有等价提交。保存并验证 legacy-branch.bundle 后删除该分支，本地仅保留 main；旧的其他 stash 保持原样。
+- 本机按上游 third_party/patches/apply.ps1 应用了 librdkafka/ue5navmesh 编译补丁，补丁源已经在主干。并行任务的 tools/scripts/start_game.ps1 修改未纳入本次提交。

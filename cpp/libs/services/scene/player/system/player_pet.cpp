@@ -11,7 +11,7 @@
 #include "engine/core/time/system/time.h"
 #include "network/player_message_utils.h"
 #include "thread_context/ecs_context.h"
-#include "thread_context/snow_flake_manager.h"
+#include "modules/id_segment/guid_segment_registry.h"
 
 #include "battle/system/player_battle.h"
 #include "modules/currency/constants/currency.h"
@@ -702,10 +702,11 @@ uint32_t PetSystem::GrantPet(entt::entity player, uint32_t petTableId, uint64_t&
 		return kPetSlotFull;
 	}
 
-	// 铸号必须在改动任何状态之前:发号失败(未初始化 / 已 fence)时什么都不留
-	const auto petId = tlsSnowflakeManager.GenerateItemGuid();
-	if (petId == kInvalidGuid) {
-		LOG_ERROR << "[PlayerPet] 铸 pet_id 失败(发号器未初始化或已 fence): player_id="
+	// 宠物沿用 item 身份域;scene 已退出 Snowflake 初始化,统一经号段取号。
+	// 铸号成功后才新增宠物,段未就绪或已耗尽时不留下半只宝宝。
+	Guid petId = kInvalidGuid;
+	if (!tlsGuidSegmentRegistry.Get(GuidKind::kItem).TryNext(petId)) {
+		LOG_ERROR << "[PlayerPet] 铸 pet_id 失败(item 号段未就绪或已耗尽): player_id="
 				  << GuidForLog(player);
 		return kPetIdGenerateFailed;
 	}

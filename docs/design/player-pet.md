@@ -122,9 +122,9 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
    与当前 HP/MP,`max_*` 与物伤 / 法伤 / 防御来自现算的二级属性。
    **死宝宝(health==0)不参战** —— 带进去就是开局即倒的空单位。
 2. **引擎 `InitPets`**:在 `InitPlayers` 之后追加(阵位按插入序,主人先站前排),
-   `actor_id = pet_id`。**pet_id 与 player_id 不是同一套 SnowFlake 布局**
-   (pet_id 走 scene 的 item guid 发号器:17-bit worker / 秒级 epoch;player_id 走 login 的
-   bwmarrin 布局:13-bit node / 毫秒 epoch,AGENTS §7 不变量 1),数值域理论上可相交,
+   `actor_id = pet_id`。**pet_id 沿用 item 身份域,与 player_id 的独立域可能数值相交**。
+   scene 经 `tlsGuidSegmentRegistry.Get(GuidKind::kItem).TryNext` 从 item 号段取得 pet_id,
+   不再依赖 SnowFlake 发号器;两种身份域仍不能假设数值互斥,
    所以 `InitPets` 显式查重并在相撞时**拒绝开局**(fail-closed),而不是假设不会撞;
    同理宝宝的归属只认所在快照的 `player_id`,快照自带的 `owner_player_id` 只用于对账,
    `team_index` 跟随主人,`actor_type = BATTLE_ACTOR_TYPE_PET`。
@@ -167,8 +167,9 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
 ## 7. 不变量
 
 1. `PlayerPetComp` 的任何写入只经 `PetSystem` 的静态函数,每次写完都 `RecalculateAll`。
-2. `pet_id` 只由 scene 的 `tlsSnowflakeManager` 铸,且**铸号在改动任何状态之前** ——
-   发号器未初始化 / 已 fence 时返回 `kPetIdGenerateFailed`,不留半只宝宝。
+2. `pet_id` 只由 scene 经 `tlsGuidSegmentRegistry.Get(GuidKind::kItem).TryNext` 铸,
+   沿用 item 号段,且**铸号成功后才新增宠物**。号段未就绪或已耗尽等发号失败时
+   返回 `kPetIdGenerateFailed`,不新增任何宠物。
 3. 宝宝的二级属性任何时候都不落库、不缓存。
 4. 战斗在途 / 跨 zone 冻结期间拒绝一切宝宝写操作。
 5. 种类行缺失(改表 / 删行)时**保留实例**、召唤时拒绝、日志 WARN ——

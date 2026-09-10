@@ -9,6 +9,7 @@
 #include "modules/bag/bag_profile_registry.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/id_segment/guid_segment_registry.h"
+#include "player/system/player_pet.h"
 #include "modules/snapshot/snapshot_system.h"
 #include "modules/transaction_log/transaction_log_system.h"
 #include "modules/gain_block/gain_block_service.h"
@@ -21,6 +22,12 @@
 #include <vector>
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/bag_error_tip.pb.h"
+#include "table/proto/tip/pet_error_tip.pb.h"
+#include "table/code/pet_table.h"
+#include "table/code/petrule_table.h"
+#include "table/code/attributepool_table.h"
+#include "table/code/attributedimension_table.h"
+#include "proto/common/component/player_pet_comp.pb.h"
 #include "../test_config_helper.h"
 
 // ---------------------------------------------------------------------------
@@ -2896,6 +2903,63 @@ namespace
         return ids;
     }
 } // namespace
+
+// 宠物原来与物品共用 Snowflake 发号器;scene 改号段后两条入口仍须共用 item 域。
+class PetIdSegmentTest : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        PetTableManager::Instance().Load();
+        PetRuleTableManager::Instance().Load();
+        AttributePoolTableManager::Instance().Load();
+        AttributeDimensionTableManager::Instance().Load();
+        const auto &rows = PetTableManager::Instance().FindAll();
+        ASSERT_GT(rows.data_size(), 0);
+        ASSERT_FALSE(AttributePoolTableManager::Instance().GetByOwnerType(PetSystem::kPoolOwnerPet).empty());
+        petTableId = rows.data(0).id();
+        player = tlsEcs.actorRegistry.create();
+        tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    }
+
+    void TearDown() override
+    {
+        if (tlsEcs.actorRegistry.valid(player))
+            tlsEcs.actorRegistry.destroy(player);
+    }
+
+    ScopedItemSegmentOverride segment;
+    entt::entity player{entt::null};
+    uint32_t petTableId{0};
+};
+
+TEST_F(PetIdSegmentTest, GrantPetFailsWithoutRangeAndKeepsPetsUnchanged)
+{
+    const auto before = tlsEcs.actorRegistry.get<PlayerPetComp>(player).SerializeAsString();
+    uint64_t petId = 123;
+    EXPECT_EQ(kPetIdGenerateFailed, PetSystem::GrantPet(player, petTableId, petId));
+    EXPECT_EQ(0u, petId);
+    EXPECT_EQ(before, tlsEcs.actorRegistry.get<PlayerPetComp>(player).SerializeAsString());
+}
+
+TEST_F(PetIdSegmentTest, GrantPetSharesItemRangeWithoutReusingItemId)
+{
+    segment.item().Warm();
+    segment.item().OnResponse(0, 700, 710); // 号段 RPC 的 error_code=0 表示成功，与客户端 tip kSuccess 不同。
+    ASSERT_TRUE(segment.item().IsReady());
+    const auto itemId = ItemStore::MintGuid();
+    ASSERT_EQ(700u, itemId);
+
+    uint64_t petId = 0;
+    ASSERT_EQ(kSuccess, PetSystem::GrantPet(player, petTableId, petId));
+    EXPECT_EQ(701u, petId);
+    EXPECT_NE(itemId, petId);
+    const auto &pets = tlsEcs.actorRegistry.get<PlayerPetComp>(player);
+    ASSERT_EQ(1, pets.pets_size());
+    EXPECT_EQ(petId, pets.pets(0).pet_id());
+    EXPECT_EQ(petTableId, pets.pets(0).pet_table_id());
+    EXPECT_EQ(702u, ItemStore::MintGuid());
+}
 
 // ── 通用客户端:双 buffer / 单飞 / 校验 / 退避 ─────────────────────────────
 
