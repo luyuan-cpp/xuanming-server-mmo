@@ -58,3 +58,10 @@
 - `git diff --check` 通过。第三方 PDB 缺失产生既有 LNK4099 链接警告；可选 no-raw-pointer-member 因工具缺失 SKIP，不计为已执行静态检查。
 - 运行新接口只需受控更新 gate 与玩家绑定的 scene：四条消息均为 protocol=0 / SceneNodeService，通过原生场景通道转发，不经过 Go client_rpc_router。其它 Go 服务只追加未被现有流程调用的常量，因此本次无需重启；没有数据库迁移。新 handler 已由 `InitPlayerService` 注册到 scene。
 - 待部署产物在 `build/cpp/nodes/gate.exe`、`scene.exe`，哈希见证据目录 `registry-and-binaries.json`；本任务尚未复制到 bin 或重启。部署应保留现有 Kafka g2/256 和运行身份检查，连接已有角色后才能验证真实界面请求。
+### 已授权本地部署结果（2026-09-11）
+
+此前的未部署状态已解除。用户明确允许更新 gate、scene 并启动本地环境后，安装 9 月 10 日 10:28 的已验证构建，保留旧程序备份。运行 gate SHA256=EE0EF183CEF0FF6A2A2869A7F19DBBB7494E84C2B559DC95D4429B278D0CF34F；scene SHA256=8160A9ABB94D4B8DC99C83DC5890E23DFB876BCCA508E0AF7B52BB52A98BEB65。两进程与新启动记录一致，四 RPC 的源编号、生成注册和客户端常量核对通过。
+
+标准启动器 03:47:21 完成全部阶段。独立验收：七个命令服务 PID/启动时间/路径匹配 Kafka g2/256 清单；db/data_service 正常监听；scene 依赖就绪；网关 UP、一区 OPEN。客户端已打开到登录流程，未登录账号，未检验真实 UI RPC 回包。未清数据或初始化永久 ID 水位，任务奖励与活动排期的未实现边界不变。
+
+证据：../tmp/features-deploy-20260911/install-result.json、service-verification.json、startup-result.json；旧程序：previous-nodes。启动器日志：run/logs/game-launcher/20260911-034142-036/launcher.log。外层输出管道等待已清理，未捕获命令退出码；成功结论来自六步启动记录与独立运行时健康检查。

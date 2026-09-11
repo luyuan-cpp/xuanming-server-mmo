@@ -4340,3 +4340,20 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   - ⑤ start_game.ps1 的 Wait-Ready 探针一超时就中止整个启动。
   - ③④⑤已作为独立任务建议给用户。
   - **testdb.id_segment 现在是 player/item 号段的唯一水位**:只删重建 testdb、不同时清 zone 库与 Redis,会从 1 重新发号,覆盖角色。
+
+## 2026-09-11 Codex 属性验证最终收口（9 月 10 日实测补记）
+
+- 原始交接的四项验证已全部完成。本节记录 2026-09-10 的实际执行结果，2026-09-11 续接时直接复核原始日志并补齐汇总，未重复构建、测试或部署。
+- 导表：复核正式管线 manifest v9，27 张表产物校验一致；AttributeDimension 的 17 行源表、JSON、PB 逐字段一致。101–104 系数为体质 +50 气血/+5 防御、灵力 +40 法伤/+10 法力、力量 +50 物伤、敏捷 +3 速度。描述文案沿用后续审核恢复的定性说明，系数未变。
+- 编译与单测：game.sln Debug/x64、MSBuild /m:1 退出码 0，scene 编译通过；回合战斗/属性引擎 83/83 全过，退出码 0。最新构建未执行 PostBuild 程序复制；第三方 PDB 缺失的 LNK4099 警告不影响通过，no-raw-pointer-member 因缺工具 SKIP，不计为静态检查通过。实际证据：../tmp/git-sync-20260910-1422/ 的 export.log、source-audit.json、msbuild.exitcode、turn-battle-tests.exitcode 及对应测试日志。
+- scene 已在前轮安装含原始属性改动与 85 级 GM 上限的程序并核验重启；睡眠恢复后复用 11:56–12:02 重新启动的就绪服务栈。data_service/testdb/权限及号段此前已由并行任务修复，本轮保留现有 id_segment 水位，不重新初始化永久 ID。
+- 联机冒烟：在 robot 目录执行原命令 robot.exe -c etc/attribute_smoke.yaml，耗时约 69.2 秒、退出码 0；2026-09-10 12:27:37.599 输出 ATTRIBUTE_SMOKE_OK player_id=1 level=30 pools=3 dimensions=13 schemes=2 max_health=2000 gold=98500。建角进场、加点、非法请求守卫、方案隔离与切换、重登恢复、洗点均通过；重登保留已分配 25 点与气血上限 3250，洗点返还 150 点并扣除 500 金币。日志与退出码：../tmp/attribute-verification-20260910/continued-1150/attribute-smoke-run1.log、attribute-smoke-run1.exitcode。该冒烟仍不作为全部系数精确数值或 85 级联机边界的断言。
+- 已更新 ../tmp/attribute-verification-20260910/verification-summary.json，保留首次 tip 2020 失败的历史证据，并将阻塞状态改为已解除。后续 UI 接口及存档等级钳制的最新程序部署属于其他任务，本次冒烟不声称覆盖其运行时行为；未执行额外六个 Go 服务重建或三个 C++ 节点部署。防御平衡、Pet 表上限仍按既有设计待办处理。
+- 本次收尾仅追加本节并更新验证汇总，保留既有第三方子模块补丁；未提交或推送。
+
+## 2026-09-11 Codex 背包、任务、活动 UI 本地部署完成
+
+- 用户明确授权更新 gate、scene 并启动本地游戏环境。备份旧程序后安装 9 月 10 日 10:28 已验证构建，运行程序哈希、PID、启动时间和 Kafka g2/256 清单全部核对通过；四条新增 RPC 190–193 与客户端一致。
+- Docker 遗留通信 socket 已备份并恢复；Kafka 冷启动完成后标准启动器于 03:47:21 完成六步启动。独立检查网关 UP、一区 OPEN、scene 依赖就绪、db/data_service 监听正常，七个命令服务身份匹配清单。保留数据库、Redis、数据卷和永久 ID 水位。
+- 已安装三页原生 uGUI 的客户端并打开窗口。既有验证为客户端 78/78、背包 158/158、属性战斗 83/83；本轮未重复构建或单测。未登录账号，未验证真实玩家界面 RPC 回包；任务接取/领奖/持久化和正式活动排期仍未完成。
+- 证据与回退程序：../tmp/features-deploy-20260911/；客户端交付记录：../mmorpg-client/.codex-artifacts/gameplay-ui-20260910/delivery-status.json。启动命令退出码未捕获，依据启动日志和独立健康检查报告环境就绪；仅清理本轮空等的外层 PowerShell，保留后台服务。未提交或推送。
