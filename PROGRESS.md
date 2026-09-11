@@ -4316,3 +4316,27 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - 补齐属性源表审核后的正式导表，生成 manifest v9；27 张表源文件与产物大小、SHA256 全部匹配，属性 17 行源表、JSON、PB 逐字段一致。客户端有活跃任务，本轮导表未部署至客户端。
 - 当前服务端 game.sln Debug/x64 串行编译通过，未执行 PostBuild 的运行程序复制；战斗/属性测试 83/83、背包测试 158/158 通过。Go proto 模块检查通过（各包无测试，结论为编译通过）；PowerShell 启动脚本语法及 diff 检查通过。
 - 证据：../tmp/git-sync-20260910-1422/。第三方 PDB 缺失为既有链接警告，no-raw-pointer-member 因本机缺工具由构建脚本 SKIP，不计为检查通过。未重启、部署或运行需要修复数据库环境的联机冒烟。第三方子模块本地编译补丁保持原样。
+
+## 2026-09-10 修复"能选角色、进不了游戏"(Claude,解除上文 data_service / testdb 阻塞)
+
+- 现象:客户端选好职业点进入游戏失败。login CreatePlayer 调 data_service AllocateIdSegment 返回 Unimplemented → tip 2020;scene 一直卡在 DependencyGate "id segments ready"。根因与上文 Codex 段一致:① bin/go_services/data_service.exe 是 09-05 旧产物,没有号段 RPC,也不注册 DataServiceNodeService;② 全局库 testdb 不存在,appuser 无权限。
+- 只读审计(8 个代理 + 对抗复核):本机五种永久 ID 都没有 <2^55 的存量(1058 个角色最小 2.7458e17;公会 0 行;38 份 Redis PlayerAllData 与 4155 个 MySQL blob 单元里没有物品/宠物 guid;审计主题 offset 全 0;binlog 自 08-17 建库起从未出现 testdb / id_segment),号段从 1 起不会覆盖旧数据。但宠物 ID 与物品共用 item 号段:player 与 item 都从 1 起时,player_id=N 与 pet_id=N 同场战斗会撞 actor_id 被拒(turn_battle_engine.cpp InitPets)。经用户确认,本机 item 号段起点抬到 2^40。
+- 已执行(用户确认;未编译、未跑测试,遵守 §10.1):
+  1. MySQL:`CREATE DATABASE testdb` + `GRANT ALL ON testdb.* TO 'appuser'@'%'`(即 deploy/mysql-init/00_init_zone_dbs.sql 第 22-25 行,老数据卷需手补)。
+  2. 用 Codex 07:57 编好的当前源码 data_service(SHA256 15B45216…6F33,vcs.revision 61135a933)跑 `-migrate`,建 transaction_log / player_snapshot / rollback_audit_log / id_segment 并预建五行。
+  3. `UPDATE testdb.id_segment SET max_id=1099511627776 WHERE biz_tag='item'`(限定 max_id=1、version=0)。仅本机一次性处理,未进代码或部署配置;生产 bootstrap 仍全部从 1 起,见遗留 ④。
+  4. 替换 bin/go_services/data_service.exe;旧版备份 ../tmp/data-service-deploy-20260910-105333/data_service.exe.before-20260905,该目录另有 migrate 日志、授权与号段快照。
+- 插曲:10:56 电脑睡眠,11:30 唤醒后 Docker 与全部服务进程退出。第一次重跑 start_game.ps1 时,Kafka 冷启动下单次 `docker exec` 超过 20 秒,被 Wait-Ready 当成致命错误中止(探针异常未捕获)。Kafka 预热后第二次运行(11:56–12:02)全链路启动成功,日志 run/logs/game-launcher/20260910-115643-064/;启动器重新预建了 gate-cmd_g2 等 5 个缺失主题。
+- 核验(日志 / etcd / 库,**非客户端实测**):
+  - data_service PID 38536 为新版,IdSegmentStore 已连 testdb,etcd 有 DataServiceNodeService.rpc/zone/1/node_type/26/node_id/1。
+  - scene 领到 item [1099511627776, +20000)、txlog [1, 50001)、snapshot [1, 2001),12:01:48 打出 "Scene dependency ready"。
+  - login 启动即领到 player [1, 101);server-list zone-1 OPEN。
+  - 尚未用客户端或 robot 实测建角进场,冒烟待 Codex 执行(attribute_smoke / pet_smoke / battle_smoke)。
+- 遗留:
+  - ① data_service 注册地址是 netx.InternalIp() 取到的 198.0.2.1(本机 VPN tun 网卡)。VPN 断开时 scene/login 连不上,需要重启 data_service。
+  - ② bin 下 gate/scene 早于 d5f5a32ed。客户端新增的 190–193(背包/任务/活动)会被旧 gate 当非法包,累计 50 次踢线;需要 Codex 按 ../tmp/features-backend-20260910/ 部署新版 gate+scene。
+  - ③ db.exe 仍是 09-05 旧版,pet_component 不落 MySQL;Redis 残留的 consumer:applied 游标会让老角色早期存盘被当 stale 丢弃。
+  - ④ battle actor_id 与号段冲突需要正式修复(生产同样从 1 起)。
+  - ⑤ start_game.ps1 的 Wait-Ready 探针一超时就中止整个启动。
+  - ③④⑤已作为独立任务建议给用户。
+  - **testdb.id_segment 现在是 player/item 号段的唯一水位**:只删重建 testdb、不同时清 zone 库与 Redis,会从 1 重新发号,覆盖角色。
