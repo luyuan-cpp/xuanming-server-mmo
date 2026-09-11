@@ -207,4 +207,34 @@ TEST_F(PlayerFeatureSnapshotTest, ActivitiesOnlyExposeConfiguredEntriesWithoutIn
     }
 }
 
+TEST_F(PlayerFeatureSnapshotTest, MissingMiddleConditionDoesNotShiftLaterProgress) {
+    LoadMissions();
+    auto [row, error] = MissionTableManager::Instance().FindByIdSilent(7);
+    ASSERT_NE(nullptr, row);
+    auto& edited = *const_cast<MissionTable*>(row);
+    struct Restore { MissionTable& row; MissionTable saved; ~Restore() { row = std::move(saved); } } restore{edited, edited};
+    const auto validId = edited.condition_id(0);
+    edited.clear_condition_id();
+    edited.add_condition_id(validId);
+    edited.add_condition_id(999999);
+    edited.add_condition_id(validId);
+    auto& missions = tlsEcs.actorRegistry.emplace<MissionsContainerComp>(player).GetOrCreate(0);
+    auto& active = (*missions.GetMutableMissionList().mutable_missions())[7];
+    active.set_id(7);
+    active.add_progress(1);
+    active.add_progress(44);
+    active.add_progress(3);
+    GetMissionListResponse out;
+    ASSERT_EQ(kSuccess, PlayerMissionReadSystem::BuildList(player, out));
+    for (const auto& mission : out.missions()) {
+        if (mission.mission_id() != 7 || mission.scope() != 0) continue;
+        ASSERT_EQ(3, mission.objectives_size());
+        EXPECT_EQ(1u, mission.objectives(0).progress());
+        EXPECT_EQ(999999u, mission.objectives(1).condition_id());
+        EXPECT_EQ(2u, mission.objectives(2).objective_index());
+        EXPECT_EQ(3u, mission.objectives(2).progress());
+        return;
+    }
+    FAIL() << "任务快照缺失";
+}
 } // namespace

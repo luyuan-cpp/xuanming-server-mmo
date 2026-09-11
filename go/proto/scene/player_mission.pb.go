@@ -354,18 +354,70 @@ func (*GetMissionListRequest) Descriptor() ([]byte, []int) {
 	return file_proto_scene_player_mission_proto_rawDescGZIP(), []int{2}
 }
 
+type MissionActionRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Scope         uint32                 `protobuf:"varint,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	MissionId     uint32                 `protobuf:"varint,2,opt,name=mission_id,json=missionId,proto3" json:"mission_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *MissionActionRequest) Reset() {
+	*x = MissionActionRequest{}
+	mi := &file_proto_scene_player_mission_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *MissionActionRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*MissionActionRequest) ProtoMessage() {}
+
+func (x *MissionActionRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_scene_player_mission_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use MissionActionRequest.ProtoReflect.Descriptor instead.
+func (*MissionActionRequest) Descriptor() ([]byte, []int) {
+	return file_proto_scene_player_mission_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *MissionActionRequest) GetScope() uint32 {
+	if x != nil {
+		return x.Scope
+	}
+	return 0
+}
+
+func (x *MissionActionRequest) GetMissionId() uint32 {
+	if x != nil {
+		return x.MissionId
+	}
+	return 0
+}
+
 type GetMissionListResponse struct {
 	state           protoimpl.MessageState `protogen:"open.v1"`
 	ErrorMessage    *base.TipInfoMessage   `protobuf:"bytes,1,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	Missions        []*PlayerMissionInfo   `protobuf:"bytes,2,rep,name=missions,proto3" json:"missions,omitempty"`
-	StatePersistent bool                   `protobuf:"varint,3,opt,name=state_persistent,json=statePersistent,proto3" json:"state_persistent,omitempty"` // 现有任务尚未接存档，客户端不可承诺跨登录保留。
+	StatePersistent bool                   `protobuf:"varint,3,opt,name=state_persistent,json=statePersistent,proto3" json:"state_persistent,omitempty"` // 任务状态随完整玩家快照保存。
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
 
 func (x *GetMissionListResponse) Reset() {
 	*x = GetMissionListResponse{}
-	mi := &file_proto_scene_player_mission_proto_msgTypes[3]
+	mi := &file_proto_scene_player_mission_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -377,7 +429,7 @@ func (x *GetMissionListResponse) String() string {
 func (*GetMissionListResponse) ProtoMessage() {}
 
 func (x *GetMissionListResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_scene_player_mission_proto_msgTypes[3]
+	mi := &file_proto_scene_player_mission_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -390,7 +442,7 @@ func (x *GetMissionListResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetMissionListResponse.ProtoReflect.Descriptor instead.
 func (*GetMissionListResponse) Descriptor() ([]byte, []int) {
-	return file_proto_scene_player_mission_proto_rawDescGZIP(), []int{3}
+	return file_proto_scene_player_mission_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *GetMissionListResponse) GetErrorMessage() *base.TipInfoMessage {
@@ -450,7 +502,11 @@ const file_proto_scene_player_mission_proto_rawDesc = "" +
 	"\n" +
 	"configured\x18\x0e \x01(\bR\n" +
 	"configured\"\x17\n" +
-	"\x15GetMissionListRequest\"\xa9\x01\n" +
+	"\x15GetMissionListRequest\"K\n" +
+	"\x14MissionActionRequest\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\rR\x05scope\x12\x1d\n" +
+	"\n" +
+	"mission_id\x18\x02 \x01(\rR\tmissionId\"\xa9\x01\n" +
 	"\x16GetMissionListResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12.\n" +
 	"\bmissions\x18\x02 \x03(\v2\x12.PlayerMissionInfoR\bmissions\x12)\n" +
@@ -460,9 +516,11 @@ const file_proto_scene_player_mission_proto_rawDesc = "" +
 	"\x15PLAYER_MISSION_ACTIVE\x10\x01\x12\x1c\n" +
 	"\x18PLAYER_MISSION_COMPLETED\x10\x02\x12\x1c\n" +
 	"\x18PLAYER_MISSION_CLAIMABLE\x10\x03\x12\x19\n" +
-	"\x15PLAYER_MISSION_FAILED\x10\x042i\n" +
+	"\x15PLAYER_MISSION_FAILED\x10\x042\xf0\x01\n" +
 	"\x18SceneMissionClientPlayer\x12A\n" +
-	"\x0eGetMissionList\x12\x16.GetMissionListRequest\x1a\x17.GetMissionListResponse\x1a\n" +
+	"\x0eGetMissionList\x12\x16.GetMissionListRequest\x1a\x17.GetMissionListResponse\x12?\n" +
+	"\rAcceptMission\x12\x15.MissionActionRequest\x1a\x17.GetMissionListResponse\x12D\n" +
+	"\x12ClaimMissionReward\x12\x15.MissionActionRequest\x1a\x17.GetMissionListResponse\x1a\n" +
 	"\x80\xa8\xc3\x01\x01\x88\xa8\xc3\x01\x01B\x14\x98\xd4a\x03Z\vproto/scene\x80\x01\x01b\x06proto3"
 
 var (
@@ -478,24 +536,29 @@ func file_proto_scene_player_mission_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_scene_player_mission_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_scene_player_mission_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_scene_player_mission_proto_msgTypes = make([]protoimpl.MessageInfo, 5)
 var file_proto_scene_player_mission_proto_goTypes = []any{
 	(PlayerMissionStatus)(0),       // 0: PlayerMissionStatus
 	(*MissionObjectiveInfo)(nil),   // 1: MissionObjectiveInfo
 	(*PlayerMissionInfo)(nil),      // 2: PlayerMissionInfo
 	(*GetMissionListRequest)(nil),  // 3: GetMissionListRequest
-	(*GetMissionListResponse)(nil), // 4: GetMissionListResponse
-	(*base.TipInfoMessage)(nil),    // 5: TipInfoMessage
+	(*MissionActionRequest)(nil),   // 4: MissionActionRequest
+	(*GetMissionListResponse)(nil), // 5: GetMissionListResponse
+	(*base.TipInfoMessage)(nil),    // 6: TipInfoMessage
 }
 var file_proto_scene_player_mission_proto_depIdxs = []int32{
 	0, // 0: PlayerMissionInfo.status:type_name -> PlayerMissionStatus
 	1, // 1: PlayerMissionInfo.objectives:type_name -> MissionObjectiveInfo
-	5, // 2: GetMissionListResponse.error_message:type_name -> TipInfoMessage
+	6, // 2: GetMissionListResponse.error_message:type_name -> TipInfoMessage
 	2, // 3: GetMissionListResponse.missions:type_name -> PlayerMissionInfo
 	3, // 4: SceneMissionClientPlayer.GetMissionList:input_type -> GetMissionListRequest
-	4, // 5: SceneMissionClientPlayer.GetMissionList:output_type -> GetMissionListResponse
-	5, // [5:6] is the sub-list for method output_type
-	4, // [4:5] is the sub-list for method input_type
+	4, // 5: SceneMissionClientPlayer.AcceptMission:input_type -> MissionActionRequest
+	4, // 6: SceneMissionClientPlayer.ClaimMissionReward:input_type -> MissionActionRequest
+	5, // 7: SceneMissionClientPlayer.GetMissionList:output_type -> GetMissionListResponse
+	5, // 8: SceneMissionClientPlayer.AcceptMission:output_type -> GetMissionListResponse
+	5, // 9: SceneMissionClientPlayer.ClaimMissionReward:output_type -> GetMissionListResponse
+	7, // [7:10] is the sub-list for method output_type
+	4, // [4:7] is the sub-list for method input_type
 	4, // [4:4] is the sub-list for extension type_name
 	4, // [4:4] is the sub-list for extension extendee
 	0, // [0:4] is the sub-list for field type_name
@@ -512,7 +575,7 @@ func file_proto_scene_player_mission_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_scene_player_mission_proto_rawDesc), len(file_proto_scene_player_mission_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   4,
+			NumMessages:   5,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

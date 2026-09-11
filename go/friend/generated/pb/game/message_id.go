@@ -194,3 +194,5 @@ const SceneActivityClientPlayerGetActivityListMessageId = 190
 const SceneBagClientPlayerGetBagMessageId = 191
 const SceneBagClientPlayerSortBagMessageId = 192
 const SceneMissionClientPlayerGetMissionListMessageId = 193
+const SceneMissionClientPlayerAcceptMissionMessageId = 194
+const SceneMissionClientPlayerClaimMissionRewardMessageId = 195

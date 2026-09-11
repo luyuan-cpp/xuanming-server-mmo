@@ -16,6 +16,9 @@ import (
 type Player struct {
 	ID uint64
 
+	featureSequence  uint64
+	featureSnapshots map[uint32]FeatureSnapshot
+
 	mu             sync.RWMutex
 	entityID       uint64   // own entt entity in scene
 	knownEntities  []uint64 // all visible entities (including self)
@@ -99,7 +102,7 @@ type Player struct {
 	petLastTip     uint32            // 最近一次宝宝 RPC 的 error_message.id(0 = 成功)
 	petSuggested   map[uint32]uint32 // 最近一次自动加点建议(dimension_id → 目标已分配)
 	petSuggestPet  uint64
-	petLastGranted uint64            // 最近一次 GmGrantPet 返回的 pet_id
+	petLastGranted uint64 // 最近一次 GmGrantPet 返回的 pet_id
 }
 
 // NewPlayer creates a Player with an initialized scene-ready channel.

@@ -10,6 +10,7 @@ import "proto/common/component/actor_comp.proto";
 import "proto/common/component/player_comp.proto";
 import "proto/common/component/player_skill_comp.proto";
 import "proto/common/component/currency_comp.proto";
+import "proto/common/database/bag_quest_mail_data.proto";
 
 // ------------------- User basic info table -------------------
 message user
@@ -124,6 +125,9 @@ message player_database
   PlayerAttributeComp attribute_component = 11;
   // 宝宝(宠物):实例列表 + 出战中的宝宝,设计文档 player-pet.md
   PlayerPetComp pet_component = 12;
+  // 背包资产与任务领取权同属一条玩家数据库记录，随同一 DBTask 保存。
+  BagAllData bag_component = 13;
+  QuestAllData mission_component = 14;
 }
 
 message player_database_1

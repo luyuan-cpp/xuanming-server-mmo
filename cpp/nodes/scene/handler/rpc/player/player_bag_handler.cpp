@@ -17,6 +17,7 @@ const auto result = PlayerBagSystem::BuildSnapshot(player, request->bag_type(), 
         tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity()).set_id(result);
     }
 ///<<< END WRITING YOUR CODE
+
 }
 
 void SceneBagClientPlayerHandler::SortBag(entt::entity player,const ::SortBagRequest* request,
@@ -32,4 +33,5 @@ bool changed = false;
     }
     response->set_changed(changed);
 ///<<< END WRITING YOUR CODE
+
 }

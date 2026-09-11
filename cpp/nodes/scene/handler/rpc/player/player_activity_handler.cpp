@@ -16,4 +16,5 @@ const auto nowMs = static_cast<uint64_t>(muduo::Timestamp::now().microSecondsSin
     const auto result = PlayerActivityReadSystem::BuildList(player, nowMs, *response);
     if (result != kSuccess) tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity()).set_id(result);
 ///<<< END WRITING YOUR CODE
+
 }

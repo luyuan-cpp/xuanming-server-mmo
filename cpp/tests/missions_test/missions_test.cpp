@@ -2,6 +2,10 @@
 
 #include "table/code/condition_table.h"
 #include "table/code/mission_table.h"
+#include "table/code/item_table.h"
+#include "table/code/reward_table.h"
+#include "table/code/dungeon_table.h"
+#include "table/code/monster_table.h"
 #include "modules/condition/condition_type.h"
 #include "modules/mission/comp/mission_comp.h"
 #include "modules/mission/comp/missions_config_comp.h"
@@ -23,7 +27,7 @@
 entt::entity CreateTestPlayer()
 {
 	const auto player = tlsEcs.actorRegistry.create();
-	(void)tlsEcs.actorRegistry.get_or_emplace<Guid>(player);
+	(void)tlsEcs.actorRegistry.emplace<Guid>(player, Guid{100000} + entt::to_integral(player));
 	MissionEventHandler::Register();
 	return player;
 }
@@ -182,14 +186,16 @@ TEST(MissionsComp, ConditionTypeSize)
 	MissionSystem::HandleConditionEvent(condEv, missions, MissionConfig::GetSingleton());
 	EXPECT_EQ(1, missions.MissionSize());
 
-	// LevelUp
+    // 等级是当前拥有值；生产事件同时在 ID 槽和 amount 携带当前等级。
 	condEv.set_condition_type(static_cast<uint32_t>(eConditionType::kConditionLevelUp));
 	condEv.clear_condition_ids();
 	condEv.add_condition_ids(10);
+    condEv.set_amount(10);
 	MissionSystem::HandleConditionEvent(condEv, missions, MissionConfig::GetSingleton());
 	EXPECT_EQ(1, missions.MissionSize());
 
 	// Interaction — final condition, completes the mission
+    condEv.set_amount(1);
 	condEv.set_condition_type(static_cast<uint32_t>(eConditionType::kConditionInteraction));
 	condEv.clear_condition_ids();
 	condEv.add_condition_ids(1);
@@ -248,7 +254,7 @@ TEST(MissionsComp, EventTriggerMutableMission)
 	auto ev2 = MakeAcceptEvent(player, missionId2);
 	EXPECT_EQ(kSuccess, MissionSystem::AcceptMission(ev2, missions, MissionConfig::GetSingleton()));
 
-	// Fire conditions 1-4 with amount=4 to complete both missions
+	// 先完成前四个目标；顺序任务中的重复目标必须由后续独立事实推进。
 	auto condEv = MakeConditionEvent(player, eConditionType::kConditionKillMonster, 4);
 	for (uint32_t i = 1; i <= 4; ++i)
 	{
@@ -258,6 +264,10 @@ TEST(MissionsComp, EventTriggerMutableMission)
 	}
 
 	EXPECT_TRUE(missions.IsComplete(missionId1));
+    EXPECT_FALSE(missions.IsComplete(missionId2));
+    MissionSystem::HandleConditionEvent(condEv, missions, MissionConfig::GetSingleton());
+    EXPECT_FALSE(missions.IsComplete(missionId2));
+    MissionSystem::HandleConditionEvent(condEv, missions, MissionConfig::GetSingleton());
 	EXPECT_TRUE(missions.IsComplete(missionId2));
 }
 
@@ -300,8 +310,21 @@ TEST(MissionsComp, OnCompleteMission)
 		tlsEcs.dispatcher.update<AcceptMissionEvent>();
 		EXPECT_EQ(0, tlsEcs.dispatcher.size<AcceptMissionEvent>());
 
-		EXPECT_TRUE(missions.IsAccepted(++missionId));
-		EXPECT_FALSE(missions.IsComplete(missionId));
+        ++missionId;
+        if (missionId == 10 || missionId == 11)
+        {
+            // 正式接续门禁拒绝没有副本来源的怪物 3/4，不能让玩家卡在不可完成任务。
+            EXPECT_FALSE(missions.IsAccepted(missionId));
+            EXPECT_FALSE(missions.IsComplete(missionId));
+            // 保留模块级整条链规则覆盖；后续模拟事实不代表正式玩法存在该来源。
+            const auto rulesOnlyAccept = MakeAcceptEvent(player, missionId);
+            ASSERT_EQ(kSuccess, MissionSystem::AcceptMission(rulesOnlyAccept, missions, MissionConfig::GetSingleton()));
+        }
+        else
+        {
+            EXPECT_TRUE(missions.IsAccepted(missionId));
+        }
+        EXPECT_FALSE(missions.IsComplete(missionId));
 	}
 }
 
@@ -498,6 +521,11 @@ int main(int argc, char **argv)
 
 	ConditionTableManager::Instance().Load();
 	MissionTableManager::Instance().Load();
+    // 自动接续现在走正式接取门禁，奖励与物品表也必须可用。
+    RewardTableManager::Instance().Load();
+    ItemTableManager::Instance().Load();
+    DungeonTableManager::Instance().Load();
+    MonsterTableManager::Instance().Load();
 	testing::InitGoogleTest(&argc, argv);
 	return RUN_ALL_TESTS();
 }

@@ -71,6 +71,7 @@ public:
     BattleStateS2C BuildStateSnapshot() const;
 
 private:
+    friend class TurnBattleEngineDeathTestAccess; // 内存测试注入周期伤害来源，不新增业务控制接口
     // ---- 初始化 ----
 
     bool InitPlayers(const CreateBattleRequest& request);
@@ -139,7 +140,7 @@ private:
     // 落伤害:DEFEND 减半,ceil 取整,饱和到 0 HP;返回实际扣血
     uint64_t ApplyDamage(BattleActorState& target, double rawDamage);
     uint64_t ApplyHeal(BattleActorState& target, double rawHeal);
-    void HandleDeath(BattleActorState& target, TurnResultS2C& result);
+    void HandleDeath(BattleActorState& target, uint64_t sourceActorId, TurnResultS2C& result);
 
     // effect[] → buff:镜像 BuffSystem::AddOrUpdateBuff 的
     // 免疫检查 → 驱散 → 叠层/刷新 → 新建 → 子 buff 语义,时间维度换算为回合
@@ -183,6 +184,7 @@ private:
 
     // 引擎状态全部用 proto 消息承载(宪法 §3:不手写与 proto 重复的并行 struct)
     CreateBattleRequest createRequest;                    // 开局请求副本(种子/模式/配置)
+    std::vector<BattleMonsterDefeat> defeatedMonsters;    // 按实际死亡转移顺序记录玩家方击杀，不能按阵位重建
     std::vector<BattleActorState> actors;                 // 全部战斗单位,插入序稳定
     std::map<uint64_t, BattleAction> pendingActions;      // actor_id → 本回合行动(有序容器保确定性)
     std::map<uint64_t, BattleSettlementData> settlements; // player_id → 结算累积(道具消耗账本等)

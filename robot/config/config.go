@@ -32,6 +32,9 @@ type Config struct {
 	// 见 BattleSmoke 块)。
 	Mode string `yaml:"mode"`
 
+	// FeaturesSmoke only uses an explicitly selected existing account/character.
+	FeaturesSmoke FeaturesSmokeConfig `yaml:"features_smoke"`
+
 	// DataStress configures the data-consistency stress mode.
 	DataStress DataStressConfig `yaml:"data_stress"`
 
@@ -71,6 +74,20 @@ type Config struct {
 	// LLM settings (optional). When enabled, LLM decides actions instead of profile weights.
 	// Best for 1-10 robots to model realistic player behavior. Not for mass load testing.
 	LLM LLMConfig `yaml:"llm"`
+}
+
+// FeaturesSmokeConfig is opt-in: omitted write IDs and SortBag perform reads only.
+// Account must be explicit; no guessed account, account creation or GM progression.
+type FeaturesSmokeConfig struct {
+	Account         string `yaml:"account"`
+	PlayerID        uint64 `yaml:"player_id"`
+	BagType         uint32 `yaml:"bag_type"`
+	SortBag         bool   `yaml:"sort_bag"`
+	Scope           uint32 `yaml:"scope"`
+	AcceptMissionID uint32 `yaml:"accept_mission_id"`
+	ClaimMissionID  uint32 `yaml:"claim_mission_id"`
+	VerifyRelogin   bool   `yaml:"verify_relogin"`
+	BattleConfigID  uint32 `yaml:"battle_config_id"` // 0=跳过；1=显式单人任务战斗验收
 }
 
 // DataStressConfig configures the "data-stress" mode that drives repeated
@@ -135,6 +152,9 @@ type BattleSmokeConfig struct {
 	// Mode 是排队模式,当前只支持 "1v1"(MATCH_MODE_1V1,两人凑对)。
 	// 缺省 "1v1"。
 	Mode string `yaml:"mode"`
+
+	// FeaturesSmoke only uses an explicitly selected existing account/character.
+	FeaturesSmoke FeaturesSmokeConfig `yaml:"features_smoke"`
 }
 
 type LLMConfig struct {

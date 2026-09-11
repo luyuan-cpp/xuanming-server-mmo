@@ -4357,3 +4357,38 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - Docker 遗留通信 socket 已备份并恢复；Kafka 冷启动完成后标准启动器于 03:47:21 完成六步启动。独立检查网关 UP、一区 OPEN、scene 依赖就绪、db/data_service 监听正常，七个命令服务身份匹配清单。保留数据库、Redis、数据卷和永久 ID 水位。
 - 已安装三页原生 uGUI 的客户端并打开窗口。既有验证为客户端 78/78、背包 158/158、属性战斗 83/83；本轮未重复构建或单测。未登录账号，未验证真实玩家界面 RPC 回包；任务接取/领奖/持久化和正式活动排期仍未完成。
 - 证据与回退程序：../tmp/features-deploy-20260911/；客户端交付记录：../mmorpg-client/.codex-artifacts/gameplay-ui-20260910/delivery-status.json。启动命令退出码未捕获，依据启动日志和独立健康检查报告环境就绪；仅清理本轮空等的外层 PowerShell，保留后台服务。未提交或推送。
+
+## 2026-09-11 宝宝系统收尾:战斗局内 actor_id 撞号正式修复 + 宝宝限流表
+
+- **撞号修复**(即 09-10 遗留 ④):号段改造后 player_id 与 item/宠物 id 都从 1 起发。宝宝原先 `actor_id = pet_id`,N 号玩家带 N 号宝宝必然同号,`InitPets` 查重后拒绝开局;怪物原先 `1000000 + 序号`,第 100 万个玩家进 PVE 与 0 号怪同号,且怪物追加不查重 → 静默打错单位。
+  - `turn_battle_constants.h`:新增 `kEngineLocalActorIdFlag = 1<<63`;`kMonsterActorIdBase` / 新增 `kPetActorIdBase` 改为该保留段内的局内号。全仓只有引擎一处使用这两个常量,单测按符号引用,客户端 / robot / Go 均未写死数值。
+  - `battle_data.proto`:`BattleActorState` 新增 `pet_id = 23`(真实 pet_id)。**需要重新生成 C++ / Go / C# proto 产物**(含 robot/vendor)。
+  - `turn_battle_engine.cpp`:`InitPlayers` 对 bit63 置位的 player_id fail-closed;`InitPets` 发局内号、按 pet_id 查重复参战;`BuildSettlement` 回写真实 pet_id。
+  - 单测:三条宝宝用例改为按 pet_id 找局内单位;新增 `PetWithSameIdAsItsOwnerDoesNotCollide` / `PlayerWithLegacyMonsterBaseIdDoesNotShareActorWithMonster` / `PlayerIdInEngineLocalNamespaceIsRejected`。
+  - 本机 item 号段起点 2^40 的临时处理**不再必需,但也不要回退**(testdb.id_segment 是唯一水位,见 09-10 段)。
+- **限流表**:`data/MessageLimiter.xlsx` 补 181–189 中 8 条宝宝客户端请求(读 / 预览 10 次/秒,写 5 次/秒;184 是服务器推送,与属性的 170 一样不入表)。此前漏掉的后果是 UI 连点第 4 下"没反应"。**需要重新导表并重启 gate 才生效。**
+- 未编译、未运行(AGENTS §10.1)。待执行:① 导表;② proto 重生成;③ MSBuild game.sln Debug/x64 /m:1;④ `run_cpp_tests.ps1 -Build -Filter turn_battle_engine`(预期在 83 基础上 +3);⑤ 部署 gate / scene / battle,**并部署新版 db.exe**(09-10 遗留 ③:旧 db.exe 不落 pet_component,pet_smoke 第 11 步重登校验必然失败);⑥ `robot.exe -c etc/pet_smoke.yaml` 与 battle_smoke 回归(怪物 actor_id 数值变了,回合事件流里的怪物 id 随之变化)。
+
+
+## 2026-09-11 数值平衡:其它池同比上调 + 怪物重定(用户选定)
+
+- 用户选定:宝宝 / 相性 / 仙魔系数同比上调;调怪物,解决"防御让怪物打不出伤害、低级副本一两回合结束";联机冒烟交给 Codex。PVP 首击秒杀另议(见下)。
+- `data/AttributeDimension.xlsx`:201-205、301-304、401-404 各列乘以角色属性点同列涨幅(气血 ×5/3、法力 ×1/2、物伤 ×10、法伤 ×40/3、速度 ×1、防御 ×5/2),保持相对属性点的原倍率。新值:金相 53 法伤、木相 67 血 + 10 蓝、水相 12.5 防、火相 4 速、土相 60 物伤;仙攻 160、仙护 20、魔攻 120、魔体 167;宝宝 42 血 + 3.75 防 / 7.5 蓝 + 33 法伤 / 40 物伤 / 2.5 速。101-104 与 desc 未动。
+- `data/Monster.xlsx`:1-16 号的 health / strength / speed 按三档目标重算(护甲 / 抗性 / 暴击 / 奖励不变),目标、参照等级与换算见 player-attribute-allocation.md §8。新值(血 / 力量 / 速度):1 号 380/22/20、2 号 380/22/21、3 号 3040/89/37、4 号 4090/121/48、5 号 5570/154/56、6 号 6540/178/67、7 号 7670/211/77、8 号 9100/260/91、9 号 10830/301/107、10 号 11940/350/121、11 号 14190/407/142、12 号 14940/448/156、13 号 17520/529/180、14 号 18870/603/204、15 号 22260/709/239、16 号 50720/686/185。
+- 静态推算(口径 = CalculateFinalDamage + Recalculate + 通用自动加点,不算暴击,非战斗实测):1 级没加点单人副本 1 约 10 回合胜、剩约 60% 血(battle_smoke 的 robot_9001 即此场景,全自动 2 秒一回合,远低于 120 秒超时);1 级加点 4 回合;10~12 级通用单人副本 2 约 7 回合;3 人队 25~28 级副本 3 约 7~8 回合;单人 30 级打副本 3 会输。
+- 未处理:① PVP 同级首击秒杀,土相上调后更严重(7 / 30 / 85 级都是一下),需要引擎的 PVP 伤害规则,待用户决定;② 技能表 `10000*level` 占位值(与本次无关)。
+- 只改两张表 + 文档(player-attribute-allocation.md §2.2 / §8、player-pet.md §6、turn-based-battle-server.md §15.1、handoff-backlog P2-D2),无代码改动。未导表、未测试,待 Codex 串行执行:
+  1. 导表(与 manifest v9 同一正式管线),核对 AttributeDimension 17 行、Monster 16 行源表 / JSON / PB 逐字段一致;
+  2. `pwsh tools/scripts/run_cpp_tests.ps1 -Filter turn_battle_engine`(无代码改动;table_battle_data_provider_test 读真表),期望 83/83;
+  3. 重启 scene 与 battle 让新表生效(Monster 在 BattleTableFingerprint 里,两边必须同一版本表;match 为 warn 模式);
+  4. robot 目录依次跑 `robot.exe -c etc/battle_smoke.yaml`、`robot.exe -c etc/pet_smoke.yaml`、`robot.exe -c etc/attribute_smoke.yaml`,期望分别打出 BATTLE_SMOKE_OK、PET_SMOKE_OK、ATTRIBUTE_SMOKE_OK;battle_smoke 日志的 a_turns 推算在 10 左右,仅供参考,不作断言。失败时保留 robot 日志与 scene/battle 日志摘要。
+
+### 2026-09-11 背包任务活动交互续作（验证中）
+
+按用户继续完成要求，追加任务接取/真实发奖 RPC 194/195、生产数据库同一玩家行内背包/任务存档桥、活动绝对时间排期表和原生按钮忙碌/错误处理。0–193 不变，正式导表与协议生成成功。首次全量构建发现 loader 模板 include 路径错误，已修模板再生成，后续构建测试尚在执行。Robot 独立 features-smoke 11 顶层内存测试及 3 子用例通过并构建，未实际登录；Go db 发现丢失本地 proto2mysql replace 源，正在按原类型契约恢复。节庆日期未指定，仍未排期。设计详见 docs/design/player-features-ui.md 最新节；证据 E:/work/tmp/features-completion-20260911，不把旧 UI 或服务健康验收当作本轮玩法闭环完成。
+### 2026-09-11 背包任务活动交互续作验证通过并安装
+
+最终服务端构建0，完整背包214/214、任务16/16、战斗93/93，Unity96/96，26张原生视觉夹具验收；客户端最终0errors0warnings，289文件安装hash全一致，旧包备份保留。新增RPC194/195，旧0–193不变；真实领奖、存档、活动排期与结算去重已接通。本地新增背包/任务/宝宝三存档列及迁移台账，复核没有待执行DDL；gate/scene/battle/db四项已校验备份安装，标准启动正继续。已有类型漂移未修改，节庆日期未提供、未登录账号、未初始化ID水位或清数据。详见 docs/design/player-features-ui.md 最新节和 tmp/features-completion-20260911。
+### 2026-09-11 三页UI续作本地运行就绪
+
+启动器六阶段完成，网关UP/一区OPEN，游戏已打开。四新服务路径/哈希/监听独立验证通过，并补齐RPC路由50600与未来启动清单。证据 running-service-verification.json。客户端96、C++323及robot20项测试通过；等待已有账号实机联机验收与正式活动日期，没有自行登录。

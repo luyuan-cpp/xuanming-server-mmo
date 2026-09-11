@@ -1,10 +1,11 @@
-﻿#pragma once
+#pragma once
 
 #include <unordered_set>
 
 #include "engine/core/type_define/type_define.h"
 
 #include "bag_system.h"
+#include "proto/common/rollback/transaction_log.pb.h"
 
 // Per-player item block list (GM feature).
 // Stored separately from Bag — Bag is a pure container.
@@ -59,7 +60,8 @@ public:
 		entt::entity playerEntity,
 		Bag &bag,
 		const PlayerItemBlockList &blockList,
-		const ItemCountMap &itemsToAdd);
+		const ItemCountMap &itemsToAdd,
+		TransactionType txType = TX_SYSTEM_GRANT);
 
 	// Orchestrated batch AddItems carrying full ItemComp per piece
 	//   (mail attachments mixing equipment + stackable items): preserves
@@ -71,7 +73,8 @@ public:
 		entt::entity playerEntity,
 		Bag &bag,
 		const PlayerItemBlockList &blockList,
-		const std::vector<InitItemParam> &itemsToAdd);
+		const std::vector<InitItemParam> &itemsToAdd,
+		TransactionType txType = TX_SYSTEM_GRANT);
 
 	// Orchestrated RemoveItem:
 	//   capture item info → Bag::RemoveItem → transaction log

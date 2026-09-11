@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
+    <ClInclude Include="battle\system\battle_settlement_application_cache.h" />
     <ClInclude Include="actor\action_state\constants\actor_effect_state.h" />
     <ClInclude Include="actor\action_state\constants\actor_state.h" />
     <ClInclude Include="actor\action_state\system\actor_action_state.h" />
@@ -117,5 +118,13 @@
   <ItemGroup>
     <ClCompile Include="player\system\player_feature_snapshot.cpp" />
     <ClInclude Include="player\system\player_feature_snapshot.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="player\system\player_mission.cpp" />
+    <ClInclude Include="player\system\player_mission.h" />
+    <ClCompile Include="player\system\mission_marshal.cpp" />
+    <ClInclude Include="player\system\mission_marshal.h" />
+    <ClCompile Include="player\system\player_activity_schedule.cpp" />
+    <ClInclude Include="player\system\player_activity_schedule.h" />
   </ItemGroup>
 </Project>

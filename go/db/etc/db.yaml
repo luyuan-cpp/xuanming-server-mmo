@@ -58,8 +58,8 @@ ServerConfig:
     #     go run ./cmd/migrate -f etc/db.yaml -command up
     # 本地为了「起了就能用」保持 true;要临时回退线上行为可用环境变量
     # DB_AUTO_CREATE_DATABASE=1 / DB_AUTO_MIGRATE_SCHEMA=1 覆盖(见 README)。
-    AutoCreateDatabase: true
-    AutoMigrateSchema: true
+    AutoCreateDatabase: false
+    AutoMigrateSchema: false
     Migration:
       LockWaitSeconds: 5           # MDL 等待上限:撞上长事务时秒级失败,别堵死整表
       InnodbLockWaitSeconds: 5     # 行锁等待上限

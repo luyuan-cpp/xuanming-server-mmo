@@ -1,10 +1,16 @@
 
 #include "thread_context/ecs_context.h"
 #include "proto/common/database/mysql_database_table.pb.h"
+#include "player/system/bag_marshal.h"
+#include "player/system/mission_marshal.h"
 
 void {{.HandlerName}}MessageFieldsUnmarshal(entt::entity player, const {{.MessageType}}& message){
 	{{- range .Fields }}
-	{{- if .TypeName }}
+	{{- if eq .TypeName "BagAllData" }}
+	bag_marshal::Unmarshal(player, message.{{.Name}}());
+	{{- else if eq .TypeName "QuestAllData" }}
+	mission_marshal::Unmarshal(player, message.{{.Name}}());
+	{{- else if .TypeName }}
 	tlsEcs.actorRegistry.emplace<{{.TypeName}}>(player, message.{{.Name}}());
 	{{- end }}
 	{{- end }}
@@ -12,7 +18,11 @@ void {{.HandlerName}}MessageFieldsUnmarshal(entt::entity player, const {{.Messag
 
 void {{.HandlerName}}MessageFieldsMarshal(entt::entity player, {{.MessageType}}& message){
 	{{- range .Fields }}
-	{{- if .TypeName }}
+	{{- if eq .TypeName "BagAllData" }}
+	bag_marshal::Marshal(player, *message.mutable_{{.Name}}());
+	{{- else if eq .TypeName "QuestAllData" }}
+	mission_marshal::Marshal(player, *message.mutable_{{.Name}}());
+	{{- else if .TypeName }}
 	message.mutable_{{.Name}}()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<{{.TypeName}}>(player));
 	{{- end }}
 	{{- end }}

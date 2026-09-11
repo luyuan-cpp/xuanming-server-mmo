@@ -78,7 +78,7 @@ type Source interface {
 // 漂移迁移,由它自己的 checksum 去重。
 type ProtoSource struct {
 	// Model 必须已经 RegisterTable 过全部 Tables,否则拿不到建表语句。
-	Model *proto2mysql.PbMysqlDB
+	Model *proto2mysql.DB
 	// Tables 是表清单,顺序即建表顺序。
 	Tables []proto.Message
 	// AllowModifyColumn 为 true 时把「列类型漂移」也变成可执行的 MODIFY COLUMN。
@@ -207,7 +207,7 @@ type ColumnSpec struct {
 var createColumnRe = regexp.MustCompile("(?m)^\\s{2}(?:`([^`]+)`|([A-Za-z0-9_]+))\\s+(.+?),?$")
 
 // describeColumns 反解建表语句,返回 proto 声明的列。
-func describeColumns(model *proto2mysql.PbMysqlDB, msg proto.Message) []ColumnSpec {
+func describeColumns(model *proto2mysql.DB, msg proto.Message) []ColumnSpec {
 	ddl := model.GetCreateTableSQL(msg)
 	if ddl == "" {
 		return nil
@@ -252,7 +252,7 @@ var primaryKeyRe = regexp.MustCompile(`PRIMARY KEY \(([^)]*)\)`)
 //
 // 所以这里直接读 proto 的 OptionPrimaryKey 扩展(它才是人写下的意图),
 // 建表 SQL 只作为回退。
-func declaredPrimaryKey(model *proto2mysql.PbMysqlDB, msg proto.Message) string {
+func declaredPrimaryKey(model *proto2mysql.DB, msg proto.Message) string {
 	if pk := primaryKeyFromOptions(msg); pk != "" {
 		return pk
 	}

@@ -2,6 +2,7 @@ syntax = "proto3";
 option go_package = "db/proto/common/database";
 
 import "proto/common/component/item_base_comp.proto";
+import "proto/common/component/mission_comp.proto";
 
 // BagAllData — full snapshot of a player's bag/inventory state for
 // cross-zone migration, persistence, and rollback.
@@ -183,11 +184,21 @@ message QuestEntry {
   // (locked until quest module lands)
 }
 
+// 保存配置 ID 而非运行期位图下标，加载时重建索引；不保存 UI 追踪或排序。
+message QuestScopeData {
+  uint32 scope = 1;
+  MissionListComp mission_list = 2;
+  repeated uint32 completed_mission_ids = 3;
+  repeated uint32 claimable_mission_ids = 4;
+}
+
 message QuestAllData {
   repeated QuestEntry active = 1;
   // Completed-quest IDs. Used for prereq checks ("you must have
   // completed quest X to accept Y") and achievement counting.
   repeated uint32 completed = 2;
+  repeated QuestScopeData scopes = 3;
+  bool scoped_state_present = 4; // 区分正式空快照和仅有旧版 active/completed 的快照。
   // Daily/weekly reset trackers — completed-set above is permanent;
   // these are the periodic ones that respawn.
   // TODO: schema decision pending — may need separate per-period

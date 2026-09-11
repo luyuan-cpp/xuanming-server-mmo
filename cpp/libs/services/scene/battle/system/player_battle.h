@@ -106,12 +106,14 @@ public:
 	static constexpr uint32_t kPendingSettlementTtlSec = 7 * 24 * 3600;
 
 private:
+	friend class PlayerBattleSettlementTestAccess; // 内存测试共用应用入口，无网络测试钩子
 	// 组 BattlePlayerSnapshot(属性/等级/技能/参战 buff/道具副本/路由信息/配表指纹)。
 	// 失败时把拒绝原因写进 errorTipId 并返回 false(缺基础属性组件/缺会话快照)。
 	static bool BuildBattleSnapshot(entt::entity player, ::BattlePlayerSnapshot& snapshot, uint32_t& errorTipId);
 
-	// 把结算终值落到玩家实体(HP/MP 写 BaseAttributesComp + 属性脏位;金钱走 CurrencySystem)。
-	static void ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement);
+	// 把结算终值落到玩家实体；统一按 (player_id,battle_id) 有限去重。
+	// true=本次应用成功；false=重复已条件销账，或失败/处理中须保留 pending。
+	static bool ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement);
 
 	// RECONNECT 重绑:经 Kafka gate-{gate_id} 发 BindBattleEvent(GateCommand,
 	// target_instance_id 必填,宪法 §7 不变量 2),并推 BattleReconnectS2C。

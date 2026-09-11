@@ -35,6 +35,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fmission_2eproto, /* tracker*/ nullptr,},
         // ::GetMissionListRequest
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fmission_2eproto, /* tracker*/ nullptr,},
+        // ::MissionActionRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fmission_2eproto, /* tracker*/ nullptr,},
         // ::GetMissionListResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fscene_2fplayer_5fmission_2eproto, /* tracker*/ nullptr,},
 };
@@ -225,6 +227,154 @@ const ::_pbi::ClassData* MissionObjectiveInfo_get_class_data() {
   return MissionObjectiveInfo_globals_.GetClassData();
 #else
   return MissionObjectiveInfo_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class MissionActionRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<MissionActionRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(MissionActionRequest, _impl_._has_bits_);
+};
+
+constexpr MissionActionRequest::ParseTableT_ MissionActionRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(MissionActionRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      2, 8,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967292,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      2,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::MissionActionRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint32 mission_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MissionActionRequest, _impl_.mission_id_), 1>(),
+       {16, 1, 0,
+        PROTOBUF_FIELD_OFFSET(MissionActionRequest, _impl_.mission_id_)}},
+      // uint32 scope = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(MissionActionRequest, _impl_.scope_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(MissionActionRequest, _impl_.scope_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint32 scope = 1;
+      {PROTOBUF_FIELD_OFFSET(MissionActionRequest, _impl_.scope_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 mission_id = 2;
+      {PROTOBUF_FIELD_OFFSET(MissionActionRequest, _impl_.mission_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr MissionActionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        scope_{0u},
+        mission_id_{0u} {}
+
+template <typename>
+constexpr MissionActionRequest::MissionActionRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL MissionActionRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) MissionActionRequest(arena);
+}
+constexpr auto MissionActionRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(MissionActionRequest), alignof(MissionActionRequest));
+}
+constexpr auto MissionActionRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &MissionActionRequest::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<MissionActionRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &MissionActionRequest::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<MissionActionRequest>(), &MissionActionRequest::ByteSizeLong,
+              &MissionActionRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(MissionActionRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[3],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fscene_2fplayer_5fmission_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct MissionActionRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr MissionActionRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 MissionActionRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(MissionActionRequest::InternalGenerateClassData_(
+            _default, &MissionActionRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<MissionActionRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~MissionActionRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) MissionActionRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<MissionActionRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(MissionActionRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST MissionActionRequestGlobalsTypeInternal MissionActionRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* MissionActionRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return MissionActionRequest_globals_.GetClassData();
+#else
+  return MissionActionRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -728,7 +878,7 @@ constexpr auto GetMissionListResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[3],
+      &file_reflection_data[4],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fscene_2fplayer_5fmission_2eproto,
@@ -836,6 +986,13 @@ const ::uint32_t
         13,
         0x000, // bitmap
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::MissionActionRequest, _impl_._has_bits_),
+        5, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::MissionActionRequest, _impl_.scope_),
+        PROTOBUF_FIELD_OFFSET(::MissionActionRequest, _impl_.mission_id_),
+        0,
+        1,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::GetMissionListResponse, _impl_._has_bits_),
         6, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::GetMissionListResponse, _impl_.error_message_),
@@ -851,13 +1008,15 @@ static const ::_pbi::MigrationSchema
         {0, sizeof(::MissionObjectiveInfo)},
         {17, sizeof(::PlayerMissionInfo)},
         {48, sizeof(::GetMissionListRequest)},
-        {49, sizeof(::GetMissionListResponse)},
+        {49, sizeof(::MissionActionRequest)},
+        {56, sizeof(::GetMissionListResponse)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::MissionObjectiveInfo_globals_,
         &::PlayerMissionInfo_globals_,
         &::GetMissionListRequest_globals_,
+        &::MissionActionRequest_globals_,
         &::GetMissionListResponse_globals_,
 };
 const char descriptor_table_protodef_proto_2fscene_2fplayer_5fmission_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
@@ -877,18 +1036,23 @@ const char descriptor_table_protodef_proto_2fscene_2fplayer_5fmission_2eproto[] 
     "\treward_id\030\t \001(\r\022\023\n\013auto_reward\030\n \001(\010\022\022\n"
     "\ncan_accept\030\013 \001(\010\022\021\n\tcan_claim\030\014 \001(\010\022\032\n\022"
     "unavailable_reason\030\r \001(\t\022\022\n\nconfigured\030\016"
-    " \001(\010\"\027\n\025GetMissionListRequest\"\200\001\n\026GetMis"
-    "sionListResponse\022&\n\rerror_message\030\001 \001(\0132"
-    "\017.TipInfoMessage\022$\n\010missions\030\002 \003(\0132\022.Pla"
-    "yerMissionInfo\022\030\n\020state_persistent\030\003 \001(\010"
-    "*\250\001\n\023PlayerMissionStatus\022\037\n\033PLAYER_MISSI"
-    "ON_NOT_ACCEPTED\020\000\022\031\n\025PLAYER_MISSION_ACTI"
-    "VE\020\001\022\034\n\030PLAYER_MISSION_COMPLETED\020\002\022\034\n\030PL"
-    "AYER_MISSION_CLAIMABLE\020\003\022\031\n\025PLAYER_MISSI"
-    "ON_FAILED\020\0042i\n\030SceneMissionClientPlayer\022"
-    "A\n\016GetMissionList\022\026.GetMissionListReques"
-    "t\032\027.GetMissionListResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016"
-    "Z\005scene\200\001\001\230\324a\003b\006proto3"
+    " \001(\010\"\027\n\025GetMissionListRequest\"9\n\024Mission"
+    "ActionRequest\022\r\n\005scope\030\001 \001(\r\022\022\n\nmission_"
+    "id\030\002 \001(\r\"\200\001\n\026GetMissionListResponse\022&\n\re"
+    "rror_message\030\001 \001(\0132\017.TipInfoMessage\022$\n\010m"
+    "issions\030\002 \003(\0132\022.PlayerMissionInfo\022\030\n\020sta"
+    "te_persistent\030\003 \001(\010*\250\001\n\023PlayerMissionSta"
+    "tus\022\037\n\033PLAYER_MISSION_NOT_ACCEPTED\020\000\022\031\n\025"
+    "PLAYER_MISSION_ACTIVE\020\001\022\034\n\030PLAYER_MISSIO"
+    "N_COMPLETED\020\002\022\034\n\030PLAYER_MISSION_CLAIMABL"
+    "E\020\003\022\031\n\025PLAYER_MISSION_FAILED\020\0042\360\001\n\030Scene"
+    "MissionClientPlayer\022A\n\016GetMissionList\022\026."
+    "GetMissionListRequest\032\027.GetMissionListRe"
+    "sponse\022\?\n\rAcceptMission\022\025.MissionActionR"
+    "equest\032\027.GetMissionListResponse\022D\n\022Claim"
+    "MissionReward\022\025.MissionActionRequest\032\027.G"
+    "etMissionListResponse\032\n\200\250\303\001\001\210\250\303\001\001B\016Z\005sce"
+    "ne\200\001\001\230\324a\003b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fscene_2fplayer_5fmission_2eproto_deps[2] = {
@@ -899,13 +1063,13 @@ static ::absl::once_flag descriptor_table_proto_2fscene_2fplayer_5fmission_2epro
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fscene_2fplayer_5fmission_2eproto = {
     false,
     false,
-    1062,
+    1257,
     descriptor_table_protodef_proto_2fscene_2fplayer_5fmission_2eproto,
     "proto/scene/player_mission.proto",
     &descriptor_table_proto_2fscene_2fplayer_5fmission_2eproto_once,
     descriptor_table_proto_2fscene_2fplayer_5fmission_2eproto_deps,
     2,
-    4,
+    5,
     schemas,
     file_message_globals,
     TableStruct_proto_2fscene_2fplayer_5fmission_2eproto::offsets,
@@ -1916,6 +2080,234 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const GetMissionListRequest::ParseTableT_
 }
 // ===================================================================
 
+MissionActionRequest::MissionActionRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MissionActionRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:MissionActionRequest)
+}
+MissionActionRequest::MissionActionRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const MissionActionRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, MissionActionRequest_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE MissionActionRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void MissionActionRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, scope_),
+           0,
+           offsetof(Impl_, mission_id_) -
+               offsetof(Impl_, scope_) +
+               sizeof(Impl_::mission_id_));
+}
+MissionActionRequest::~MissionActionRequest() {
+  // @@protoc_insertion_point(destructor:MissionActionRequest)
+  SharedDtor(*this);
+}
+inline void MissionActionRequest::SharedDtor(MessageLite& self) {
+  MissionActionRequest& this_ = static_cast<MissionActionRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull MissionActionRequest_class_data_ =
+        MissionActionRequest::InternalGenerateClassData_(MissionActionRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MissionActionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MissionActionRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(MissionActionRequest_class_data_.tc_table);
+  return MissionActionRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+MissionActionRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&MissionActionRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&MissionActionRequest_globals_));
+  return MissionActionRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const MissionActionRequest::ParseTableT_
+    MissionActionRequest::_table_ =
+        MissionActionRequest::InternalGenerateParseTable_(MissionActionRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void MissionActionRequest::Clear() {
+// @@protoc_insertion_point(message_clear_start:MissionActionRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    ::memset(&_impl_.scope_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.mission_id_) -
+        reinterpret_cast<char*>(&_impl_.scope_)) + sizeof(_impl_.mission_id_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL MissionActionRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const MissionActionRequest& this_ = static_cast<const MissionActionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL MissionActionRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const MissionActionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:MissionActionRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint32 scope = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_scope() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          1, this_._internal_scope(), target);
+    }
+  }
+
+  // uint32 mission_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_mission_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_mission_id(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:MissionActionRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t MissionActionRequest::ByteSizeLong(const MessageLite& base) {
+  const MissionActionRequest& this_ = static_cast<const MissionActionRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t MissionActionRequest::ByteSizeLong() const {
+  const MissionActionRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:MissionActionRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    // uint32 scope = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_scope() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_scope());
+      }
+    }
+    // uint32 mission_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_mission_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_mission_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void MissionActionRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<MissionActionRequest*>(&to_msg);
+  auto& from = static_cast<const MissionActionRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:MissionActionRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_scope() != 0) {
+        _this->_impl_.scope_ = from._impl_.scope_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_mission_id() != 0) {
+        _this->_impl_.mission_id_ = from._impl_.mission_id_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void MissionActionRequest::CopyFrom(const MissionActionRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:MissionActionRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void MissionActionRequest::InternalSwap(MissionActionRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(MissionActionRequest, _impl_.mission_id_)
+      + sizeof(MissionActionRequest::_impl_.mission_id_)
+      - PROTOBUF_FIELD_OFFSET(MissionActionRequest, _impl_.scope_)>(
+          reinterpret_cast<char*>(&_impl_.scope_),
+          reinterpret_cast<char*>(&other->_impl_.scope_));
+}
+
+::google::protobuf::Metadata MissionActionRequest::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
 void GetMissionListResponse::clear_error_message() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.error_message_ != nullptr) _impl_.error_message_->Clear();
@@ -2226,6 +2618,20 @@ void SceneMissionClientPlayer::GetMissionList(::google::protobuf::RpcController*
   controller->SetFailed("Method GetMissionList() not implemented.");
   done->Run();
 }
+void SceneMissionClientPlayer::AcceptMission(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::MissionActionRequest* PROTOBUF_NONNULL,
+                         ::GetMissionListResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method AcceptMission() not implemented.");
+  done->Run();
+}
+void SceneMissionClientPlayer::ClaimMissionReward(::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+                         const ::MissionActionRequest* PROTOBUF_NONNULL,
+                         ::GetMissionListResponse* PROTOBUF_NONNULL,
+                         ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  controller->SetFailed("Method ClaimMissionReward() not implemented.");
+  done->Run();
+}
 
 void SceneMissionClientPlayer::CallMethod(
     const ::google::protobuf::MethodDescriptor* PROTOBUF_NONNULL method,
@@ -2236,6 +2642,14 @@ void SceneMissionClientPlayer::CallMethod(
   switch (method->index()) {
     case 0:
       this->GetMissionList(controller, ::google::protobuf::DownCastMessage<::GetMissionListRequest>(request),
+                   ::google::protobuf::DownCastMessage<::GetMissionListResponse>(response), done);
+      break;
+    case 1:
+      this->AcceptMission(controller, ::google::protobuf::DownCastMessage<::MissionActionRequest>(request),
+                   ::google::protobuf::DownCastMessage<::GetMissionListResponse>(response), done);
+      break;
+    case 2:
+      this->ClaimMissionReward(controller, ::google::protobuf::DownCastMessage<::MissionActionRequest>(request),
                    ::google::protobuf::DownCastMessage<::GetMissionListResponse>(response), done);
       break;
 
@@ -2251,6 +2665,10 @@ const ::google::protobuf::Message& SceneMissionClientPlayer::GetRequestPrototype
   switch (method->index()) {
     case 0:
       return ::GetMissionListRequest::default_instance();
+    case 1:
+      return ::MissionActionRequest::default_instance();
+    case 2:
+      return ::MissionActionRequest::default_instance();
 
     default:
       ABSL_LOG(FATAL) << "Bad method index; this should never happen.";
@@ -2264,6 +2682,10 @@ const ::google::protobuf::Message& SceneMissionClientPlayer::GetResponsePrototyp
   ABSL_DCHECK_EQ(method->service(), descriptor());
   switch (method->index()) {
     case 0:
+      return ::GetMissionListResponse::default_instance();
+    case 1:
+      return ::GetMissionListResponse::default_instance();
+    case 2:
       return ::GetMissionListResponse::default_instance();
 
     default:
@@ -2291,6 +2713,20 @@ void SceneMissionClientPlayer_Stub::GetMissionList(
     const ::GetMissionListRequest* PROTOBUF_NONNULL request, ::GetMissionListResponse* PROTOBUF_NONNULL response,
     ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
   channel_->CallMethod(descriptor()->method(0), controller,
+                       request, response, done);
+}
+void SceneMissionClientPlayer_Stub::AcceptMission(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::MissionActionRequest* PROTOBUF_NONNULL request, ::GetMissionListResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(1), controller,
+                       request, response, done);
+}
+void SceneMissionClientPlayer_Stub::ClaimMissionReward(
+    ::google::protobuf::RpcController* PROTOBUF_NULLABLE controller,
+    const ::MissionActionRequest* PROTOBUF_NONNULL request, ::GetMissionListResponse* PROTOBUF_NONNULL response,
+    ::google::protobuf::Closure* PROTOBUF_NULLABLE done) {
+  channel_->CallMethod(descriptor()->method(2), controller,
                        request, response, done);
 }
 // @@protoc_insertion_point(namespace_scope)

@@ -17,7 +17,7 @@ public:
 
 class PlayerMissionReadSystem {
 public:
-    // 任务领奖/存档链路尚未完成，因此只读目录和运行态，不开放写能力。
+    // 读取目录和运行态；操作能力复用正式写入口的只读资格校验。
     static uint32_t BuildList(entt::entity player, GetMissionListResponse& out);
 };
 

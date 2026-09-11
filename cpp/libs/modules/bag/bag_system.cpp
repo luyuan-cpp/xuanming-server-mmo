@@ -1,4 +1,4 @@
-﻿#include "bag_system.h"
+#include "bag_system.h"
 
 #include <algorithm>
 #include <unordered_set>
@@ -756,12 +756,15 @@ uint32_t Bag::AddStackableItem(ItemComp itemProto, uint32_t maxStackSize,
 		// 既不能先灌旧堆(违反三段),更不能先为了腾位销毁实例然后再失败
 		// —— 那会把玩家最早那件东西白白弄丢。
 		//
-		// 这里刻意**保守**:万一腾位之后重新规划发现全并得进去、根本不用铸号,
-		// 我们也已经拒绝了。宁可少收一次,不可错杀一件。
-		// 按**上界**问:腾位可能挤掉本次打算并进去的未满堆,重规划后新建实例只会比现在
-		// 的 newInstanceCount 多,最多是"一个都并不进去"的 StacksNeededFor(size)。号段是
-		// 有限库存,库存够这个上界才保证重规划后不会在循环中途铸出哨兵。
-		if (!ItemStore::CanMintGuids(ItemStore::StacksNeededFor(itemProto.size(), maxStackSize)))
+        // 放得下时 ReserveOrEvict 不会淘汰，精确新实例数与批量预检一致。
+        // 若在这里无条件要求整项数量的上界，部分合堆的批量可能先写入第一项、
+        // 再因第二项比实际需求更严的号段检查失败，留下可被重试重复发放的半批。
+        // 真需腾位时仍取保守上界：淘汰可能销毁计划合入的未满堆。
+        const bool fitsWithoutEviction = CanReserve(
+            {{itemProto.config_id(), static_cast<uint32_t>(newInstanceCount)}}, newInstanceCount);
+        const auto mintBudget = fitsWithoutEviction ? newInstanceCount :
+            ItemStore::StacksNeededFor(itemProto.size(), maxStackSize);
+        if (!ItemStore::CanMintGuids(mintBudget))
 		{
 			LOG_ERROR << "AddStackableItem: item guid source unavailable (fenced, uninitialised or "
 				<< "segment exhausted), refusing to add config " << itemProto.config_id() << " x" << itemProto.size()

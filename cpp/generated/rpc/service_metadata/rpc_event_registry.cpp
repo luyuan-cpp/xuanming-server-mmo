@@ -214,7 +214,7 @@ namespace scene_node{void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 194,
+static_assert(kMaxRpcMethodCount == 196,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -863,6 +863,16 @@ void InitMessageInfo()
         std::make_unique<::GetMissionListRequest>(),
         std::make_unique<::GetMissionListResponse>(),
         std::make_unique<SceneMissionClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneMissionClientPlayerAcceptMissionMessageId] = RpcMethodMeta{
+        "SceneMissionClientPlayer", "AcceptMission",
+        std::make_unique<::MissionActionRequest>(),
+        std::make_unique<::GetMissionListResponse>(),
+        std::make_unique<SceneMissionClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneMissionClientPlayerClaimMissionRewardMessageId] = RpcMethodMeta{
+        "SceneMissionClientPlayer", "ClaimMissionReward",
+        std::make_unique<::MissionActionRequest>(),
+        std::make_unique<::GetMissionListResponse>(),
+        std::make_unique<SceneMissionClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneMovementClientPlayer ---
     gRpcMethodRegistry[SceneMovementClientPlayerMoveStartMessageId] = RpcMethodMeta{
@@ -1306,6 +1316,8 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneCurrencyClientPlayerGmBlockCurrencyMessageId:
 	case SceneCurrencyClientPlayerGmUnblockCurrencyMessageId:
 	case SceneMissionClientPlayerGetMissionListMessageId:
+	case SceneMissionClientPlayerAcceptMissionMessageId:
+	case SceneMissionClientPlayerClaimMissionRewardMessageId:
 	case SceneMovementClientPlayerMoveStartMessageId:
 	case SceneMovementClientPlayerMoveStopMessageId:
 	case SceneMovementClientPlayerMoveSyncMessageId:

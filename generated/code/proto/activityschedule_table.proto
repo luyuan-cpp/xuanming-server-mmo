@@ -1,0 +1,20 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "ActivityScheduleTableOuterClass";
+option java_multiple_files = true;
+
+
+message ActivityScheduleTable {
+	uint32 id = 1;
+	bool enabled = 2;
+	uint64 baseline_start_at_ms = 3;
+	uint64 baseline_end_at_ms = 4;
+}
+
+message ActivityScheduleTableData {
+	repeated ActivityScheduleTable data = 1;
+}

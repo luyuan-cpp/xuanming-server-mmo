@@ -19,15 +19,18 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	SceneMissionClientPlayer_GetMissionList_FullMethodName = "/SceneMissionClientPlayer/GetMissionList"
+	SceneMissionClientPlayer_GetMissionList_FullMethodName     = "/SceneMissionClientPlayer/GetMissionList"
+	SceneMissionClientPlayer_AcceptMission_FullMethodName      = "/SceneMissionClientPlayer/AcceptMission"
+	SceneMissionClientPlayer_ClaimMissionReward_FullMethodName = "/SceneMissionClientPlayer/ClaimMissionReward"
 )
 
 // SceneMissionClientPlayerClient is the client API for SceneMissionClientPlayer service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SceneMissionClientPlayerClient interface {
-	// 只读目录与已有运行状态；领奖链路未完成前不暴露写 RPC。
 	GetMissionList(ctx context.Context, in *GetMissionListRequest, opts ...grpc.CallOption) (*GetMissionListResponse, error)
+	AcceptMission(ctx context.Context, in *MissionActionRequest, opts ...grpc.CallOption) (*GetMissionListResponse, error)
+	ClaimMissionReward(ctx context.Context, in *MissionActionRequest, opts ...grpc.CallOption) (*GetMissionListResponse, error)
 }
 
 type sceneMissionClientPlayerClient struct {
@@ -48,12 +51,33 @@ func (c *sceneMissionClientPlayerClient) GetMissionList(ctx context.Context, in 
 	return out, nil
 }
 
+func (c *sceneMissionClientPlayerClient) AcceptMission(ctx context.Context, in *MissionActionRequest, opts ...grpc.CallOption) (*GetMissionListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMissionListResponse)
+	err := c.cc.Invoke(ctx, SceneMissionClientPlayer_AcceptMission_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneMissionClientPlayerClient) ClaimMissionReward(ctx context.Context, in *MissionActionRequest, opts ...grpc.CallOption) (*GetMissionListResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetMissionListResponse)
+	err := c.cc.Invoke(ctx, SceneMissionClientPlayer_ClaimMissionReward_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneMissionClientPlayerServer is the server API for SceneMissionClientPlayer service.
 // All implementations must embed UnimplementedSceneMissionClientPlayerServer
 // for forward compatibility.
 type SceneMissionClientPlayerServer interface {
-	// 只读目录与已有运行状态；领奖链路未完成前不暴露写 RPC。
 	GetMissionList(context.Context, *GetMissionListRequest) (*GetMissionListResponse, error)
+	AcceptMission(context.Context, *MissionActionRequest) (*GetMissionListResponse, error)
+	ClaimMissionReward(context.Context, *MissionActionRequest) (*GetMissionListResponse, error)
 	mustEmbedUnimplementedSceneMissionClientPlayerServer()
 }
 
@@ -66,6 +90,12 @@ type UnimplementedSceneMissionClientPlayerServer struct{}
 
 func (UnimplementedSceneMissionClientPlayerServer) GetMissionList(context.Context, *GetMissionListRequest) (*GetMissionListResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetMissionList not implemented")
+}
+func (UnimplementedSceneMissionClientPlayerServer) AcceptMission(context.Context, *MissionActionRequest) (*GetMissionListResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AcceptMission not implemented")
+}
+func (UnimplementedSceneMissionClientPlayerServer) ClaimMissionReward(context.Context, *MissionActionRequest) (*GetMissionListResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ClaimMissionReward not implemented")
 }
 func (UnimplementedSceneMissionClientPlayerServer) mustEmbedUnimplementedSceneMissionClientPlayerServer() {
 }
@@ -107,6 +137,42 @@ func _SceneMissionClientPlayer_GetMissionList_Handler(srv interface{}, ctx conte
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneMissionClientPlayer_AcceptMission_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MissionActionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneMissionClientPlayerServer).AcceptMission(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneMissionClientPlayer_AcceptMission_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneMissionClientPlayerServer).AcceptMission(ctx, req.(*MissionActionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneMissionClientPlayer_ClaimMissionReward_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MissionActionRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneMissionClientPlayerServer).ClaimMissionReward(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneMissionClientPlayer_ClaimMissionReward_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneMissionClientPlayerServer).ClaimMissionReward(ctx, req.(*MissionActionRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneMissionClientPlayer_ServiceDesc is the grpc.ServiceDesc for SceneMissionClientPlayer service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -117,6 +183,14 @@ var SceneMissionClientPlayer_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetMissionList",
 			Handler:    _SceneMissionClientPlayer_GetMissionList_Handler,
+		},
+		{
+			MethodName: "AcceptMission",
+			Handler:    _SceneMissionClientPlayer_AcceptMission_Handler,
+		},
+		{
+			MethodName: "ClaimMissionReward",
+			Handler:    _SceneMissionClientPlayer_ClaimMissionReward_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

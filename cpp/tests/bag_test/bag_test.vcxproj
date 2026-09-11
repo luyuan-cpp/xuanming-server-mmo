@@ -168,4 +168,11 @@
     <ClCompile Include="..\..\nodes\scene\handler\rpc\player\player_bag_handler.cpp" />
     <ClCompile Include="..\..\nodes\scene\handler\rpc\player\player_mission_handler.cpp" />
     <ClCompile Include="..\..\nodes\scene\handler\rpc\player\player_activity_handler.cpp" />
-  </ItemGroup></Project>
+  </ItemGroup>  <ItemGroup>
+    <ClCompile Include="player_battle_settlement_test.cpp" />
+    <ClCompile Include="player_mission_system_test.cpp" />
+    <ClCompile Include="player_activity_schedule_test.cpp" />
+    <ClCompile Include="player_feature_persistence_test.cpp" />
+    <ClCompile Include="..\..\nodes\scene\handler\event\mission_event_handler.cpp" />
+  </ItemGroup>
+</Project>

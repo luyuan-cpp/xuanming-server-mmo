@@ -111,6 +111,13 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
         if (snapshot.player_id() == 0 || snapshot.team_index() > 1) {
             return false;
         }
+        // bit63 是引擎局内号(怪物 / 宝宝)的保留段:真实 player_id 不可能落进来,
+        // 落进来就是编排层把别的东西当成了 player_id,放进来会与局内单位撞号
+        if ((snapshot.player_id() & kEngineLocalActorIdFlag) != 0) {
+            LOG_ERROR << "CreateBattle player_id 落在引擎局内号保留段: battle_id="
+                      << request.battle_id() << " player_id=" << snapshot.player_id();
+            return false;
+        }
         if (FindActor(snapshot.player_id()) != nullptr) {
             return false;  // 重复参战
         }
@@ -151,24 +158,32 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
 }
 
 bool TurnBattleEngine::InitPets(const CreateBattleRequest& request) {
+    const auto petAlreadyJoined = [this](uint64_t petId) {
+        return std::any_of(actors.begin(), actors.end(), [petId](const BattleActorState& joined) {
+            return joined.actor_type() == BATTLE_ACTOR_TYPE_PET && joined.pet_id() == petId;
+        });
+    };
+
+    uint64_t petIndex = 0;  // 局内序号,按快照顺序递增,确定性
     for (const auto& snapshot : request.players()) {
         for (const auto& pet : snapshot.pets()) {
             if (pet.pet_id() == 0) {
                 return false;  // 快照非法:scene 不应产出无 id 的宝宝
             }
-            // pet_id 与 player_id 是**两套互不兼容的 SnowFlake 布局**(pet_id 走 scene 的
-            // item guid 发号器:17-bit worker / 秒级 epoch;player_id 走 login 的
-            // bwmarrin 布局:13-bit node / 毫秒 epoch,见 AGENTS §7 不变量 1)。
-            // 两个数值域理论上可以相交,所以这里不是"断言不会撞",而是**查重后 fail-closed**:
-            // 撞了就拒绝开局,绝不让一只宝宝顶替掉某个玩家的 actor。
-            if (FindActor(pet.pet_id()) != nullptr) {
-                LOG_ERROR << "CreateBattle 宝宝 actor_id 与既有单位相撞: battle_id="
+            // 同一只宝宝出现在两份快照里 = 编排层错误,拒绝开局
+            if (petAlreadyJoined(pet.pet_id())) {
+                LOG_ERROR << "CreateBattle 同一只宝宝重复参战: battle_id="
                           << request.battle_id() << " pet_id=" << pet.pet_id();
                 return false;
             }
 
             BattleActorState actor;
-            actor.set_actor_id(pet.pet_id());
+            // actor_id 用引擎局内号,**不用 pet_id**:号段改造后 player_id 与 pet_id 都从 1 起发,
+            // 直接用 pet_id 的话 N 号玩家带 N 号宝宝必然同号(见 kEngineLocalActorIdFlag)。
+            // 真实 pet_id 另存一个字段,结算回写只认它。
+            actor.set_actor_id(kPetActorIdBase + petIndex);
+            ++petIndex;
+            actor.set_pet_id(pet.pet_id());
             actor.set_actor_type(BATTLE_ACTOR_TYPE_PET);
             // 与主人同队:快照的 team_index 由 match 改写,宝宝只跟随,不自带阵营
             actor.set_team_index(snapshot.team_index());
@@ -675,7 +690,7 @@ void TurnBattleEngine::ExecuteAttack(BattleActorState& actor, uint64_t targetId,
     damageEvent->set_target_mana_after(target->attributes().mana());
 
     if (target->attributes().health() == 0) {
-        HandleDeath(*target, result);
+        HandleDeath(*target, actor.actor_id(), result);
     }
 }
 
@@ -782,7 +797,7 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
         damageEvent->set_target_mana_after(target.attributes().mana());
 
         if (target.attributes().health() == 0) {
-            HandleDeath(target, result);
+            HandleDeath(target, actor.actor_id(), result);
         }
     }
 
@@ -1034,7 +1049,7 @@ void TurnBattleEngine::ApplyBuffIntervalEffect(BattleActorState& actor,
             tickEvent->set_target_mana_after(actor.attributes().mana());
         }
         if (actor.attributes().health() == 0) {
-            HandleDeath(actor, result);
+            HandleDeath(actor, entry.caster_id(), result);
         }
         break;
     }
@@ -1132,7 +1147,24 @@ uint64_t TurnBattleEngine::ApplyHeal(BattleActorState& target, double rawHeal) {
     return healthAfter - healthBefore;
 }
 
-void TurnBattleEngine::HandleDeath(BattleActorState& target, TurnResultS2C& result) {
+void TurnBattleEngine::HandleDeath(BattleActorState& target, uint64_t sourceActorId,
+                                    TurnResultS2C& result) {
+    // 只在活体转入死亡时记一次；连续伤害或重复结算读取不能重记同一只怪。
+    if (target.is_dead() || target.attributes().health() != 0) {
+        return;
+    }
+    const auto* source = FindActor(sourceActorId);
+    const auto* owner = source != nullptr && source->actor_type() == BATTLE_ACTOR_TYPE_PET
+        ? FindActor(source->owner_player_id()) : source;
+    // 毒/灼烧沿用施加者归属；无来源、怪物自伤/友伤、环境死亡不能冒充玩家击杀。
+    // 施加者后来阵亡不抹掉已经生效的 DoT，其余存活队友仍按既有组队口径结算。
+    if (target.actor_type() == BATTLE_ACTOR_TYPE_MONSTER && target.team_index() == 1 &&
+        target.monster_table_id() != 0 && source != nullptr && source->team_index() == 0 &&
+        owner != nullptr && owner->actor_type() == BATTLE_ACTOR_TYPE_PLAYER && owner->team_index() == 0) {
+        auto& defeat = defeatedMonsters.emplace_back();
+        defeat.set_monster_config_id(target.monster_table_id());
+        defeat.set_count(1);
+    }
     target.set_is_dead(true);
     target.set_is_defending(false);
     // 死亡即清空 buff(回合制无复活流,不保留到期簿记)
@@ -1322,6 +1354,8 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
     settlement.set_player_id(playerId);
     settlement.set_outcome(outcome);
     settlement.set_total_rounds(CompletedRounds());
+    // BuildSettlement 可重复读取；只复制实际击杀簿，不按初始阵位推断先后。
+    settlement.clear_defeated_monsters();
 
     const auto* actor = FindActor(playerId);
     if (actor == nullptr) {
@@ -1339,7 +1373,7 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
             continue;
         }
         auto* petSettlement = settlement.add_pets();
-        petSettlement->set_pet_id(other.actor_id());
+        petSettlement->set_pet_id(other.pet_id());  // 真实 pet_id;actor_id 只是局内号
         petSettlement->set_health(other.attributes().health());
         petSettlement->set_mana(other.attributes().mana());
         petSettlement->set_is_dead(other.is_dead());
@@ -1353,11 +1387,9 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
         !actor->fled() && !actor->is_dead()) {
         uint64_t expSum = 0;
         uint64_t goldSum = 0;
-        for (const auto& other : actors) {
-            if (other.actor_type() != BATTLE_ACTOR_TYPE_MONSTER || !other.is_dead()) {
-                continue;
-            }
-            const MonsterTable* row = dataProvider->FindMonster(other.monster_table_id());
+        for (const auto& defeat : defeatedMonsters) {
+            *settlement.add_defeated_monsters() = defeat;
+            const MonsterTable* row = dataProvider->FindMonster(defeat.monster_config_id());
             if (row != nullptr) {
                 expSum += row->exp_reward();
                 goldSum += row->gold_reward();

@@ -19,6 +19,10 @@
 #include "table/code/item_table.h"
 #include "table/code/mission_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
+#include "table/proto/tip/mission_error_tip.pb.h"
+#include "services/scene/player/system/player_mission.h"
+#include "services/scene/player/system/player_activity_schedule.h"
+#include "engine/core/time/system/time.h"
 
 namespace {
 
@@ -32,7 +36,7 @@ const MissionsComp* FindScope(const MissionsContainerComp* container, uint32_t s
     return container == nullptr ? nullptr : container->Get(scope);
 }
 
-void FillMission(uint32_t missionId, uint32_t scope, const MissionsComp* missions,
+void FillMission(entt::entity player, uint64_t nowMs, uint32_t missionId, uint32_t scope, const MissionsComp* missions,
                  const MissionTable* row, PlayerMissionInfo& out)
 {
     out.set_mission_id(missionId);
@@ -53,19 +57,36 @@ void FillMission(uint32_t missionId, uint32_t scope, const MissionsComp* mission
         }
     }
 
-    // 不把当前只清领取位的 GetMissionReward 包装成领奖成功。
     out.set_can_accept(false);
     out.set_can_claim(false);
-    out.set_unavailable_reason("任务内容暂未开放");
-    if (row == nullptr) return;
+    if (row == nullptr) {
+        out.set_unavailable_reason("任务配置暂不可用");
+        return;
+    }
+    const auto accept = PlayerMissionSystem::CheckAccept(player, scope, missionId, nowMs);
+    const auto claim = PlayerMissionSystem::CheckClaim(player, scope, missionId);
+    out.set_can_accept(out.status() == PLAYER_MISSION_NOT_ACCEPTED && accept == kSuccess);
+    out.set_can_claim(out.status() == PLAYER_MISSION_CLAIMABLE && claim == kSuccess);
+    if (!out.can_accept() && !out.can_claim()) {
+        if (out.status() == PLAYER_MISSION_ACTIVE) out.set_unavailable_reason("完成任务目标后领取奖励");
+        else if (out.status() == PLAYER_MISSION_COMPLETED) out.set_unavailable_reason("任务已完成");
+        else if (out.status() == PLAYER_MISSION_FAILED) out.set_unavailable_reason("任务已失效");
+        else if (out.status() == PLAYER_MISSION_CLAIMABLE) out.set_unavailable_reason("当前状态暂不可领奖，请稍后重试");
+        else if (accept == kMissionTypeAlreadyExists) out.set_unavailable_reason("请先完成同类型任务");
+        else if (row->mission_type() == 2) {
+            PlayerActivityInfo schedule;
+            PlayerActivityScheduleSystem::BuildInfo(missionId, nowMs, schedule);
+            out.set_unavailable_reason(schedule.unavailable_reason());
+        }
+        else if (accept == kServiceUnavailable) out.set_unavailable_reason("任务所需玩法暂未开放");
+        else out.set_unavailable_reason("当前条件下暂不可接取");
+    }
     out.set_mission_type(row->mission_type());
     out.set_mission_sub_type(row->mission_sub_type());
     out.set_reward_id(row->reward_id());
     out.set_auto_reward(row->auto_reward() != 0);
 
-    // 当前接取实现遇缺失条件会跳过 progress 槽；用相同的有效条件序号读取，
-    // 同时保留原始 objective_index，客户端不能拿 repeated 下标当目标身份。
-    int progressIndex = 0;
+    // 进度槽与原始目标索引一致，缺失条件不能挤占后续目标的进度。
     for (int index = 0; index < row->condition_id_size(); ++index)
     {
         const uint32_t conditionId = row->condition_id(index);
@@ -76,9 +97,8 @@ void FillMission(uint32_t missionId, uint32_t scope, const MissionsComp* mission
         if (condition == nullptr) continue;
         const uint32_t overrideTarget = index < row->target_count_size() ? row->target_count(index) : 0;
         const uint32_t target = overrideTarget > 0 ? overrideTarget : condition->target_count();
-        const uint32_t progress = active != nullptr && progressIndex < active->progress_size()
-            ? active->progress(progressIndex) : 0;
-        ++progressIndex;
+        const uint32_t progress = active != nullptr && index < active->progress_size()
+            ? active->progress(index) : 0;
         objective->set_category(condition->condition_category());
         objective->set_target(target);
         objective->set_progress(progress);
@@ -163,14 +183,16 @@ uint32_t PlayerMissionReadSystem::BuildList(entt::entity player, GetMissionListR
             for (const auto& [id, mission] : missions.GetMissionList().missions()) keys.emplace(scope, id);
             for (const auto& [id, bitIndex] : MissionBitMap)
                 if (missions.IsComplete(id) || missions.IsClaimable(id)) keys.emplace(scope, id);
+            for (const auto id : missions.GetUnmappedCompletedIds()) keys.emplace(scope, id);
+            for (const auto id : missions.GetUnmappedClaimableIds()) keys.emplace(scope, id);
         }
     }
     for (const auto& [scope, id] : keys)
     {
         const auto [row, lookupResult] = MissionTableManager::Instance().FindByIdSilent(id);
-        FillMission(id, scope, FindScope(container, scope), row, *out.add_missions());
+        FillMission(player, TimeSystem::NowMillisecondsUTC(), id, scope, FindScope(container, scope), row, *out.add_missions());
     }
-    out.set_state_persistent(false);
+    out.set_state_persistent(container != nullptr);
     return kSuccess;
 }
 
@@ -184,12 +206,17 @@ uint32_t PlayerActivityReadSystem::BuildList(entt::entity player, uint64_t serve
     {
         if (row.mission_type() != 2) continue;
         auto* info = out.add_activities();
-        info->set_activity_id(row.id());
-        info->set_mission_id(row.id());
-        info->set_reward_id(row.reward_id());
-        info->set_status(PLAYER_ACTIVITY_UNSCHEDULED);
-        info->set_can_participate(false);
-        info->set_unavailable_reason("活动暂未开放，敬请期待");
+        PlayerActivityScheduleSystem::BuildInfo(row.id(), serverTimeMs, *info);
+        const auto acceptance = PlayerMissionSystem::CheckAccept(
+            player, MissionListComp::kPlayerMission, row.id(), serverTimeMs);
+        info->set_can_participate(info->status() == PLAYER_ACTIVITY_OPEN && acceptance == kSuccess);
+        if (info->status() == PLAYER_ACTIVITY_OPEN && !info->can_participate()) {
+            if (acceptance == kMissionIdRepeated || acceptance == kMissionAlreadyCompleted)
+                info->set_unavailable_reason("请在任务页查看活动进度");
+            else if (acceptance == kMissionTypeAlreadyExists)
+                info->set_unavailable_reason("请先完成同类型活动任务");
+            else info->set_unavailable_reason("活动所需玩法或当前状态暂不满足参与条件");
+        }
     }
     std::sort(out.mutable_activities()->begin(), out.mutable_activities()->end(),
         [](const PlayerActivityInfo& left, const PlayerActivityInfo& right) {

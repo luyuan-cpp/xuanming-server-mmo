@@ -371,4 +371,13 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
+  <ItemGroup>
+    <ClCompile Include="code\activityschedule_table.cpp" />
+    <ClCompile Include="code\activityschedule_table_fk.cpp" />
+    <ClCompile Include="proto\activityschedule_table.pb.cc" />
+    <ClInclude Include="code\activityschedule_table.h" />
+    <ClInclude Include="code\activityschedule_table_fk.h" />
+    <ClInclude Include="code\activityschedule_table_comp.h" />
+    <ClInclude Include="proto\activityschedule_table.pb.h" />
+  </ItemGroup>
 </Project>

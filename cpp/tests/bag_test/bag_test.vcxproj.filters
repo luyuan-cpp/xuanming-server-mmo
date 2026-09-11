@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
     <ClCompile Include="bag_test.cpp">
@@ -12,5 +12,12 @@
     <Filter Include="source">
       <UniqueIdentifier>{5f3fffc6-c25e-4376-b911-251d3222cb4c}</UniqueIdentifier>
     </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="player_battle_settlement_test.cpp" />
+    <ClCompile Include="player_mission_system_test.cpp" />
+    <ClCompile Include="player_activity_schedule_test.cpp" />
+    <ClCompile Include="player_feature_persistence_test.cpp" />
+    <ClCompile Include="..\..\nodes\scene\handler\event\mission_event_handler.cpp" />
   </ItemGroup>
 </Project>

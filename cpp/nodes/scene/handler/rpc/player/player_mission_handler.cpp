@@ -3,6 +3,8 @@
 
 ///<<< BEGIN WRITING YOUR CODE
 #include "services/scene/player/system/player_feature_snapshot.h"
+#include "services/scene/player/system/player_mission.h"
+#include "engine/core/time/system/time.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 ///<<< END WRITING YOUR CODE
@@ -14,4 +16,27 @@ void SceneMissionClientPlayerHandler::GetMissionList(entt::entity player,const :
 const auto result = PlayerMissionReadSystem::BuildList(player, *response);
     if (result != kSuccess) tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity()).set_id(result);
 ///<<< END WRITING YOUR CODE
+
+}
+
+void SceneMissionClientPlayerHandler::AcceptMission(entt::entity player,const ::MissionActionRequest* request,
+	::GetMissionListResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+auto result = PlayerMissionSystem::Accept(player, request->scope(), request->mission_id(), TimeSystem::NowMillisecondsUTC());
+    if (result == kSuccess) result = PlayerMissionReadSystem::BuildList(player, *response);
+    if (result != kSuccess) tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity()).set_id(result);
+///<<< END WRITING YOUR CODE
+
+}
+
+void SceneMissionClientPlayerHandler::ClaimMissionReward(entt::entity player,const ::MissionActionRequest* request,
+	::GetMissionListResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+auto result = PlayerMissionSystem::ClaimReward(player, request->scope(), request->mission_id());
+    if (result == kSuccess) result = PlayerMissionReadSystem::BuildList(player, *response);
+    if (result != kSuccess) tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity()).set_id(result);
+///<<< END WRITING YOUR CODE
+
 }

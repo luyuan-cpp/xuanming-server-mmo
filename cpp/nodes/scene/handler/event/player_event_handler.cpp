@@ -5,6 +5,9 @@
 #include "player/system/player_skill.h"
 #include "player/system/player_attribute.h"
 #include "player/system/player_pet.h"
+#include "player/system/player_mission.h"
+#include "modules/condition/condition_type.h"
+#include "proto/common/event/mission_event.pb.h"
 #include <muduo/base/Logging.h>
 #include "proto/common/component/player_login_comp.pb.h"
 ///<<< END WRITING YOUR CODE
@@ -52,6 +55,12 @@ void PlayerEventHandler::PlayerUpgradeEventHandler(const PlayerUpgradeEvent& eve
 	// 宝宝等级跟随主人(经验系统未接前这是宝宝唯一的成长通道),重算后推列表
 	PetSystem::RecalculateAll(player, PetSystem::RecalcReason::kLevelChanged);
 	PetSystem::PushList(player);
+    ConditionEvent progress;
+    progress.set_entity(entt::to_integral(player));
+    progress.set_condition_type(static_cast<uint32_t>(eConditionType::kConditionLevelUp));
+    progress.add_condition_ids(event.new_level());
+    progress.set_amount(event.new_level());
+    tlsEcs.dispatcher.trigger(progress);
 ///<<< END WRITING YOUR CODE
 }
 void PlayerEventHandler::InitializePlayerCompsEventHandler(const InitializePlayerCompsEvent& event)
@@ -65,6 +74,7 @@ void PlayerEventHandler::InitializePlayerCompsEventHandler(const InitializePlaye
 		return;
 	}
 
+    PlayerMissionSystem::Initialize(player);
 ///<<< END WRITING YOUR CODE
 }
 void PlayerEventHandler::PlayerLoginEventHandler(const PlayerLoginEvent& event)

@@ -5,6 +5,8 @@
 #include "player_skill.h"
 #include "player_attribute.h"
 #include "player_pet.h"
+#include "bag_marshal.h"
+#include "mission_marshal.h"
 #include "player_revive.h"
 #include "table/code/class_table.h"
 #include "muduo/base/Logging.h"
@@ -91,6 +93,9 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	}
 	tlsEcs.actorRegistry.emplace<PlayerAttributeComp>(player, message.attribute_component());
 	tlsEcs.actorRegistry.emplace<PlayerPetComp>(player, message.pet_component());
+    // 同一 player_database 行恢复背包资产与任务领取权；不重触发游戏事件。
+    bag_marshal::Unmarshal(player, message.bag_component());
+    mission_marshal::Unmarshal(player, message.mission_component());
 	tlsEcs.actorRegistry.emplace<CurrencyComp>(player, message.currency());
 	// 补缴欠款(debts)是 PlayerCurrencyComp 的运行时结构,持久化载体是
 	// CurrencyComp.debts。这一对 LoadFromProto/SaveToProto 之前从未被调用过 ——
@@ -116,6 +121,8 @@ void PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_level_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<LevelComp>(player));
 	message.mutable_attribute_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<PlayerAttributeComp>(player));
 	message.mutable_pet_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<PlayerPetComp>(player));
+    bag_marshal::Marshal(player, *message.mutable_bag_component());
+    mission_marshal::Marshal(player, *message.mutable_mission_component());
 	message.mutable_currency()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<CurrencyComp>(player));
 	// 必须在 CopyFrom 之后:CopyFrom 会覆盖整个 currency 子消息(含 debts),
 	// 反序会把刚写进去的欠款抹掉。

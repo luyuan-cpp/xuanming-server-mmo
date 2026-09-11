@@ -1,11 +1,13 @@
 #include <gtest/gtest.h>
 
 #include <memory>
+#include <stdexcept>
 #include <string>
 
 #include "constants/turn_battle_constants.h"
 #include "memory_battle_data_provider.h"
 #include "system/turn_battle_engine.h"
+#include "../../libs/services/scene/battle/system/battle_settlement_application_cache.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/skill_error_tip.pb.h"
 
@@ -15,6 +17,21 @@
 // 覆盖:确定性事件流 / 速度序 / 超时默认行动 / 冷却回合 / buff 到期·叠层·周期·驱散·免疫 /
 // 沉默许可 / 胜负边界(全灭·打满·平局)/ 结算数值 / FLEE·DEFEND·ITEM 路径 /
 // 二期:自动战斗(SetActorAuto·就绪·快照排除·确定性回归)/ 队伍人数上限(设计文档 §11)。
+
+namespace turnbattle {
+// 只注入当前客户端无法施加的非玩家来源周期伤害，不改公开业务接口。
+class TurnBattleEngineDeathTestAccess {
+public:
+    static bool AddBuff(TurnBattleEngine& engine, uint64_t targetId, uint32_t buffId,
+                        uint64_t sourceId) {
+        auto* target = engine.FindActor(targetId);
+        if (target == nullptr) return false;
+        TurnResultS2C result;
+        engine.AddBuffToActor(*target, buffId, sourceId, 0, result);
+        return true;
+    }
+};
+} // namespace turnbattle
 
 namespace {
 
@@ -1084,6 +1101,12 @@ TEST(TurnBattleEngineTest, RewardsAccumulateAcrossAllMonstersInGroup) {
     const auto settlement = engine.BuildSettlement(kPlayerA);
     EXPECT_EQ(settlement.exp_gain(), 25u);
     EXPECT_EQ(settlement.gold_gain(), 12u);
+    ASSERT_EQ(settlement.defeated_monsters_size(), 2);
+    EXPECT_EQ(settlement.defeated_monsters(0).monster_config_id(), kMonsterX);
+    EXPECT_EQ(settlement.defeated_monsters(1).monster_config_id(), kMonsterY);
+    EXPECT_EQ(settlement.defeated_monsters(0).count(), 1u);
+    EXPECT_EQ(settlement.defeated_monsters(1).count(), 1u);
+    EXPECT_EQ(engine.BuildSettlement(kPlayerA).defeated_monsters_size(), 2);
 }
 
 // 胜方里逃跑的玩家不发奖:结算条件是 SIDE_A_WIN && team_index==0 && !fled && !is_dead。
@@ -1132,6 +1155,9 @@ TEST(TurnBattleEngineTest, FledPlayerOnWinningTeamGetsNoReward) {
 
     const auto settlementB = engine.BuildSettlement(kPlayerB);
     EXPECT_TRUE(settlementB.fled());
+    EXPECT_EQ(settlementB.defeated_monsters_size(), 0);
+    ASSERT_EQ(settlementA.defeated_monsters_size(), 1);
+    EXPECT_EQ(settlementA.defeated_monsters(0).monster_config_id(), kRewardMonster);
     EXPECT_EQ(settlementB.exp_gain(), 0u) << "逃跑玩家不能吃队伍的胜利奖励";
     EXPECT_EQ(settlementB.gold_gain(), 0u);
 }
@@ -1182,6 +1208,9 @@ TEST(TurnBattleEngineTest, DeadPlayerOnWinningTeamGetsNoReward) {
 
     const auto settlementB = engine.BuildSettlement(kPlayerB);
     EXPECT_TRUE(settlementB.is_dead());
+    EXPECT_EQ(settlementB.defeated_monsters_size(), 0);
+    ASSERT_EQ(settlementA.defeated_monsters_size(), 1);
+    EXPECT_EQ(settlementA.defeated_monsters(0).monster_config_id(), kBruiserMonster);
     EXPECT_EQ(settlementB.exp_gain(), 0u) << "阵亡玩家不吃队伍的胜利奖励";
     EXPECT_EQ(settlementB.gold_gain(), 0u);
 }
@@ -1387,6 +1416,7 @@ TEST(TurnBattleEngineTest, PresentationSkillManaCostEmitsManaEventInSkillGroup) 
 // 宝宝(宠物)作为独立参战单位(player-pet.md §5)
 // ---------------------------------------------------------------------------
 
+
 namespace {
 
 // 给某个玩家快照挂一只出战宝宝
@@ -1408,7 +1438,17 @@ BattlePetSnapshot* AddPet(BattlePlayerSnapshot* owner, uint64_t petId, uint64_t 
     return pet;
 }
 
-constexpr uint64_t kPetA = 700001;
+constexpr uint64_t kPetA = 700001;  // 宝宝的真实 pet_id(不是它在战斗里的 actor_id)
+
+// 按真实 pet_id 找宝宝单位:宝宝的 actor_id 是引擎局内号(kPetActorIdBase 段),不等于 pet_id
+const BattleActorState* FindPetActor(const BattleStateS2C& state, uint64_t petId) {
+    for (const auto& actor : state.actors()) {
+        if (actor.actor_type() == BATTLE_ACTOR_TYPE_PET && actor.pet_id() == petId) {
+            return &actor;
+        }
+    }
+    return nullptr;
+}
 
 }  // namespace
 
@@ -1421,9 +1461,10 @@ TEST(TurnBattleEngineTest, PetJoinsOwnerTeamAndActsWithoutClientAction) {
     ASSERT_TRUE(engine.Initialize(request));
 
     const auto state = engine.BuildStateSnapshot();
-    const auto* petActor = FindStateActor(state, kPetA);
+    const auto* petActor = FindPetActor(state, kPetA);
     ASSERT_NE(petActor, nullptr);
-    EXPECT_EQ(petActor->actor_type(), BATTLE_ACTOR_TYPE_PET);
+    const uint64_t petActorId = petActor->actor_id();
+    EXPECT_EQ(petActorId, turnbattle::kPetActorIdBase);  // 第一只宝宝拿局内号段的第 0 号
     EXPECT_EQ(petActor->team_index(), 0u);
     EXPECT_EQ(petActor->owner_player_id(), kPlayerA);
     // 宝宝无客户端行动权:标 auto,不进就绪判定 —— 主人一提交行动就能结算
@@ -1435,12 +1476,12 @@ TEST(TurnBattleEngineTest, PetJoinsOwnerTeamAndActsWithoutClientAction) {
     // 从这里透传上去的(battle_room_manager.cpp),引擎自己返回的那份里恒为空
     const auto& order = engine.LastActionOrder();
     ASSERT_GE(order.size(), 2u);
-    EXPECT_EQ(order[0], kPetA);  // 速度 30 > 10
+    EXPECT_EQ(order[0], petActorId);  // 速度 30 > 10
 
     // 宝宝这一回合确实出了手(普攻由默认行动路径代打)
     bool petAttacked = false;
     for (const auto& event : result.events()) {
-        if (event.event_type() == BATTLE_EVENT_ATTACK && event.source_id() == kPetA) {
+        if (event.event_type() == BATTLE_EVENT_ATTACK && event.source_id() == petActorId) {
             petAttacked = true;
         }
     }
@@ -1454,12 +1495,16 @@ TEST(TurnBattleEngineTest, PetIsNotControllableByClient) {
     AddPet(owner, kPetA, 400, 400, 4, 30);
     ASSERT_TRUE(engine.Initialize(request));
 
+    const auto* petBefore = FindPetActor(engine.BuildStateSnapshot(), kPetA);
+    ASSERT_NE(petBefore, nullptr);
+    const uint64_t petActorId = petBefore->actor_id();
+
     // 对宝宝提交行动不落账(SubmitAction 只收 PLAYER),也不能给它开关自动战斗
-    EXPECT_FALSE(engine.SubmitAction(kPetA, MakeAction(BATTLE_ACTION_DEFEND)));
-    EXPECT_NE(engine.SetActorAuto(kPetA, false), 0u);
+    EXPECT_FALSE(engine.SubmitAction(petActorId, MakeAction(BATTLE_ACTION_DEFEND)));
+    EXPECT_NE(engine.SetActorAuto(petActorId, false), 0u);
 
     const auto state = engine.BuildStateSnapshot();
-    const auto* petActor = FindStateActor(state, kPetA);
+    const auto* petActor = FindPetActor(state, kPetA);
     ASSERT_NE(petActor, nullptr);
     EXPECT_TRUE(petActor->is_auto());
 }
@@ -1479,4 +1524,227 @@ TEST(TurnBattleEngineTest, PetFinalStateGoesIntoOwnerSettlement) {
     EXPECT_EQ(settlement.pets(0).pet_id(), kPetA);
     EXPECT_LE(settlement.pets(0).health(), 400u);
     EXPECT_FALSE(settlement.pets(0).is_dead());
+}
+
+// ---------------------------------------------------------------------------
+// 局内 actor_id 命名空间(2026-09-11):号段改造后 player_id / pet_id 都从 1 起发
+// ---------------------------------------------------------------------------
+
+TEST(TurnBattleEngineTest, PetWithSameIdAsItsOwnerDoesNotCollide) {
+    // 1 号玩家带 1 号宝宝是开服第一天就会发生的事。旧写法宝宝直接用 pet_id 当 actor_id,
+    // 这里会撞号、InitPets 拒绝开局
+    constexpr uint64_t kSameId = 5;
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9404, turnbattle::kMatchModePveSolo, 7);
+    auto* owner = AddPlayer(request, kSameId, 0, 1000, 1000, 5, 0, 0, 10);
+    AddPet(owner, kSameId, 400, 400, 4, 30);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto state = engine.BuildStateSnapshot();
+    const auto* player = FindStateActor(state, kSameId);
+    const auto* pet = FindPetActor(state, kSameId);
+    ASSERT_NE(player, nullptr);
+    ASSERT_NE(pet, nullptr);
+    EXPECT_EQ(player->actor_type(), BATTLE_ACTOR_TYPE_PLAYER);
+    EXPECT_NE(pet->actor_id(), player->actor_id());
+
+    // 结算按真实 pet_id 归还,而不是局内号
+    ASSERT_TRUE(engine.SubmitAction(kSameId, MakeAction(BATTLE_ACTION_DEFEND)));
+    engine.ResolveCurrentRound();
+    const auto settlement = engine.BuildSettlement(kSameId);
+    ASSERT_EQ(settlement.pets_size(), 1);
+    EXPECT_EQ(settlement.pets(0).pet_id(), kSameId);
+}
+
+TEST(TurnBattleEngineTest, PlayerWithLegacyMonsterBaseIdDoesNotShareActorWithMonster) {
+    // 旧 kMonsterActorIdBase = 1000000:第 100 万个玩家进 PVE 会与 0 号怪同号,
+    // 而怪物追加不查重 —— 两个单位共用一个 actor_id,按 id 找人时静默打错
+    constexpr uint64_t kMillionthPlayer = 1000000;
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9405, turnbattle::kMatchModePveSolo, 7);
+    AddPlayer(request, kMillionthPlayer, 0, 1000, 1000, 5, 0, 0, 10);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto state = engine.BuildStateSnapshot();
+    int holders = 0;
+    for (const auto& actor : state.actors()) {
+        if (actor.actor_id() == kMillionthPlayer) {
+            ++holders;
+        }
+    }
+    EXPECT_EQ(holders, 1);  // 只有玩家自己
+    const auto* monster = FindStateActor(state, kMonsterId);
+    ASSERT_NE(monster, nullptr);
+    EXPECT_EQ(monster->actor_type(), BATTLE_ACTOR_TYPE_MONSTER);
+}
+
+TEST(TurnBattleEngineTest, PlayerIdInEngineLocalNamespaceIsRejected) {
+    // bit63 是引擎局内号的保留段,真实 player_id 不可能落进来;落进来直接拒绝开局
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9406, turnbattle::kMatchModePveSolo, 7);
+    AddPlayer(request, turnbattle::kEngineLocalActorIdFlag | 42, 0, 1000, 1000, 5, 0, 0, 10);
+    EXPECT_FALSE(engine.Initialize(request));
+}
+
+// 与阵位顺序相反的击杀必须原样传到顺序任务，结算读取不能再次积累。
+TEST(TurnBattleEngineTest, SettlementKeepsActualKillOrderAndRepeatedReadIsStable) {
+    auto provider = MakeProvider();
+    constexpr uint32_t xId = 7701, yId = 7702;
+    for (const auto id : {xId, yId}) {
+        auto& row = provider->AddMonster(id);
+        row.set_health(8);
+        row.set_strength(1);
+        row.set_speed(1);
+        row.set_exp_reward(id == xId ? 10 : 15);
+        row.set_gold_reward(id == xId ? 5 : 7);
+    }
+    provider->SetDungeonMonsters(kDungeonConfig, {xId, yId});
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9701, turnbattle::kMatchModePveSolo, 7);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 20);
+    ASSERT_TRUE(engine.Initialize(request));
+    ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId + 1)));
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_ONGOING);
+    ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId)));
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    ASSERT_EQ(settlement.defeated_monsters_size(), 2);
+    EXPECT_EQ(settlement.defeated_monsters(0).monster_config_id(), yId);
+    EXPECT_EQ(settlement.defeated_monsters(1).monster_config_id(), xId);
+    EXPECT_EQ(settlement.defeated_monsters(0).count(), 1u);
+    EXPECT_EQ(settlement.defeated_monsters(1).count(), 1u);
+    EXPECT_EQ(settlement.gold_gain(), 12u);
+    EXPECT_EQ(settlement.exp_gain(), 25u);
+    EXPECT_EQ(engine.BuildSettlement(kPlayerA).SerializeAsString(), settlement.SerializeAsString());
+}
+
+TEST(TurnBattleEngineTest, SettlementKeepsPoisonAndBurnKillBeforeLaterSkillKill) {
+    for (const auto buffType : {turnbattle::kBuffTypePoison, turnbattle::kBuffTypeBurn}) {
+        SCOPED_TRACE(buffType);
+        auto provider = MakeProvider();
+        provider->AddBuff(kBuffPoison).set_buff_type(buffType);
+        constexpr uint32_t xId = 7711, yId = 7712;
+        for (const auto id : {xId, yId}) {
+            auto& row = provider->AddMonster(id);
+            row.set_health(8);
+            row.set_strength(1);
+            row.set_speed(1);
+            row.set_gold_reward(3);
+        }
+        provider->SetDungeonMonsters(kDungeonConfig, {xId, yId});
+        TurnBattleEngine engine(provider);
+        auto request = MakeRequest(9702, turnbattle::kMatchModePveSolo, 7);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 20);
+        ASSERT_TRUE(engine.Initialize(request));
+        ASSERT_TRUE(engine.SubmitAction(kPlayerA,
+            MakeAction(BATTLE_ACTION_SKILL, kMonsterId + 1, kSkillPoison)));
+        const auto first = engine.ResolveCurrentRound();
+        EXPECT_EQ(CountEvents(first, BATTLE_EVENT_DEATH), 1);
+        ASSERT_TRUE(engine.SubmitAction(kPlayerA,
+            MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillNuke)));
+        engine.ResolveCurrentRound();
+        ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+        const auto settlement = engine.BuildSettlement(kPlayerA);
+        ASSERT_EQ(settlement.defeated_monsters_size(), 2);
+        EXPECT_EQ(settlement.defeated_monsters(0).monster_config_id(), yId);
+        EXPECT_EQ(settlement.defeated_monsters(1).monster_config_id(), xId);
+        EXPECT_EQ(settlement.gold_gain(), 6u);
+        EXPECT_EQ(engine.BuildSettlement(kPlayerA).SerializeAsString(), settlement.SerializeAsString());
+    }
+}
+
+TEST(TurnBattleEngineTest, SettlementDoesNotCreditUnknownOrMonsterSourceDeath) {
+    for (const uint64_t sourceId : {uint64_t{0}, kMonsterId}) {
+        SCOPED_TRACE(sourceId);
+        auto provider = MakeProvider();
+        constexpr uint32_t xId = 7721, yId = 7722;
+        for (const auto id : {xId, yId}) {
+            auto& row = provider->AddMonster(id);
+            row.set_health(8);
+            row.set_strength(1);
+            row.set_speed(1);
+            row.set_gold_reward(3);
+        }
+        provider->SetDungeonMonsters(kDungeonConfig, {xId, yId});
+        TurnBattleEngine engine(provider);
+        auto request = MakeRequest(9703, turnbattle::kMatchModePveSolo, 7);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 20);
+        ASSERT_TRUE(engine.Initialize(request));
+        ASSERT_TRUE(turnbattle::TurnBattleEngineDeathTestAccess::AddBuff(
+            engine, kMonsterId + 1, kBuffPoison, sourceId));
+        ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_DEFEND)));
+        const auto first = engine.ResolveCurrentRound();
+        EXPECT_EQ(CountEvents(first, BATTLE_EVENT_DEATH), 1);
+        ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId)));
+        engine.ResolveCurrentRound();
+        ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+        const auto settlement = engine.BuildSettlement(kPlayerA);
+        ASSERT_EQ(settlement.defeated_monsters_size(), 1);
+        EXPECT_EQ(settlement.defeated_monsters(0).monster_config_id(), xId);
+        EXPECT_EQ(settlement.gold_gain(), 3u);
+    }
+}
+
+// 以两个已取得相同 Redis 锁结果的回调模拟 DEL 尚未完成的重复投递窗口。
+TEST(SettlementApplicationCacheTest, DuplicateCallbacksAndReloginDoNotRepeatSideEffects) {
+    using Cache = battle_settlement::SettlementApplicationCache;
+    Cache cache;
+    const auto now = Cache::Clock::time_point{};
+    int gold = 0, missionKills = 0;
+    auto apply = [&] { gold += 12; missionKills += 2; return true; };
+    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, apply), Cache::Result::Applied);
+    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, apply), Cache::Result::Duplicate);
+    // 缓存键独立于 entt::entity，下线重建并再收到旧 pending 仍是同一笔。
+    EXPECT_EQ(cache.Apply(kPlayerA, 100, now + std::chrono::seconds(2), apply), Cache::Result::Duplicate);
+    EXPECT_EQ(gold, 12);
+    EXPECT_EQ(missionKills, 2);
+    // 新局 id 不要求单调增大；同局其他玩家也不应被吞。
+    EXPECT_EQ(cache.Apply(kPlayerA, 99, now, apply), Cache::Result::Applied);
+    EXPECT_EQ(cache.Apply(kPlayerB, 100, now, apply), Cache::Result::Applied);
+    EXPECT_EQ(gold, 36);
+    EXPECT_EQ(missionKills, 6);
+}
+
+TEST(SettlementApplicationCacheTest, ReentryIsBlockedAndFailedApplicationCanRetry) {
+    using Cache = battle_settlement::SettlementApplicationCache;
+    Cache cache;
+    const auto now = Cache::Clock::time_point{};
+    int effects = 0;
+    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, [&] {
+        EXPECT_EQ(cache.Apply(kPlayerA, 100, now, [&] { ++effects; return true; }), Cache::Result::InFlight);
+        return false; // 模拟金币入口在产生任何副作用之前拒绝。
+    }), Cache::Result::Failed);
+    EXPECT_EQ(effects, 0);
+    EXPECT_EQ(cache.Size(), 0u);
+    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, [&] { ++effects; return true; }), Cache::Result::Applied);
+    EXPECT_EQ(effects, 1);
+}
+
+TEST(SettlementApplicationCacheTest, ExceptionBeforeEffectsReleasesReservation) {
+    using Cache = battle_settlement::SettlementApplicationCache;
+    Cache cache;
+    const auto now = Cache::Clock::time_point{};
+    EXPECT_THROW(cache.Apply(kPlayerA, 100, now, []() -> bool {
+        throw std::runtime_error("测试前置检查异常");
+    }), std::runtime_error);
+    EXPECT_EQ(cache.Size(), 0u);
+    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, [] { return true; }), Cache::Result::Applied);
+}
+
+TEST(SettlementApplicationCacheTest, CapacityNeverEvictsInflightAndRetentionIsFinite) {
+    using Cache = battle_settlement::SettlementApplicationCache;
+    Cache cache(1, std::chrono::seconds(10));
+    const auto now = Cache::Clock::time_point{};
+    EXPECT_EQ(cache.Apply(kPlayerA, 100, now, [&] {
+        EXPECT_EQ(cache.Apply(kPlayerB, 100, now, [] { return true; }), Cache::Result::Full);
+        EXPECT_EQ(cache.Size(), 1u);
+        return true;
+    }), Cache::Result::Applied);
+    EXPECT_EQ(cache.Apply(kPlayerA, 100, now + std::chrono::seconds(9), [] { return true; }), Cache::Result::Duplicate);
+    EXPECT_EQ(cache.Apply(kPlayerA, 100, now + std::chrono::seconds(10), [] { return true; }), Cache::Result::Applied);
+    // 满容量淘汰已完成旧项，不阻止合法新局，也不增长内存。
+    EXPECT_EQ(cache.Apply(kPlayerA, 101, now + std::chrono::seconds(11), [] { return true; }), Cache::Result::Applied);
+    EXPECT_EQ(cache.Size(), 1u);
 }

@@ -130,6 +130,7 @@ cd tools/data_table_exporter && py -m pytest -q
 
 | 表 | 源表 | 权威 schema | 列 | 字段 | 行 | 唯一键 | 多值键 | 索引 | 外键 | 位序 | 表达式 | 子消息 |
 |---|---|---|---:|---:|---:|---|---|---|---|---|---|---|
+| **ActivitySchedule** | `ActivitySchedule.xlsx` | `activityschedule_table.proto` | 4 | 4 | 3 | — | — | `id` | `id→Mission.id` | — | — | — |
 | **ActorActionCombatState** | `ActorActionCombatState.xlsx` | `actoractioncombatstate_table.proto` | 8 | 2 | 4 | — | — | — | — | — | — | `state` |
 | **ActorActionState** | `ActorActionState.xlsx` | `actoractionstate_table.proto` | 8 | 2 | 4 | — | — | — | — | — | — | `state` |
 | **AttributeAutoPlan** | `AttributeAutoPlan.xlsx` | `attributeautoplan_table.proto` | 14 | 6 | 10 | — | — | `class_id` `pool_id` | `pool_id→AttributePool.id` `dimension→AttributeDimension.id` | — | — | — |
@@ -145,7 +146,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **EquipSlot** | `EquipSlot.xlsx` | `equipslot_table.proto` | 2 | 2 | 3 | — | — | — | — | — | — | — |
 | **GlobalVariable** | `GlobalVariable.xlsx` | `globalvariable_table.proto` | 8 | 1 | 16 | — | — | — | — | — | — | — |
 | **Item** | `Item.xlsx` | `item_table.proto` | 3 | 3 | 28 | — | — | — | — | — | — | — |
-| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 13 | — | — | — | — | — | — | — |
+| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 21 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
 | **Monster** | `Monster.xlsx` | `monster_table.proto` | 10 | 9 | 16 | — | — | — | — | — | — | — |
@@ -158,6 +159,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 
-合计 **27** 张表、**321** 个物理列、**187** 个进产物的字段。
+合计 **28** 张表、**325** 个物理列、**191** 个进产物的字段。
 
 <!-- END GENERATED -->

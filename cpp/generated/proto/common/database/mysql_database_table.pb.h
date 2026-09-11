@@ -39,6 +39,7 @@
 #include "proto/common/component/player_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
+#include "proto/common/database/bag_quest_mail_data.pb.h"
 // @@protoc_insertion_point(includes)
 
 // Must be included last.
@@ -2150,6 +2151,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     kMergeStateFieldNumber = 10,
     kAttributeComponentFieldNumber = 11,
     kPetComponentFieldNumber = 12,
+    kBagComponentFieldNumber = 13,
+    kMissionComponentFieldNumber = 14,
     kPlayerIdFieldNumber = 1,
   };
   // .Transform transform = 2;
@@ -2328,6 +2331,38 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
   ::PlayerPetComp* PROTOBUF_NONNULL _internal_mutable_pet_component();
 
   public:
+  // .BagAllData bag_component = 13;
+  [[nodiscard]] bool has_bag_component()
+      const;
+  void clear_bag_component() ;
+  [[nodiscard]] const ::BagAllData& bag_component() const;
+  [[nodiscard]] ::BagAllData* PROTOBUF_NULLABLE release_bag_component();
+  ::BagAllData* PROTOBUF_NONNULL mutable_bag_component();
+  void set_allocated_bag_component(::BagAllData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_bag_component(::BagAllData* PROTOBUF_NULLABLE value);
+  ::BagAllData* PROTOBUF_NULLABLE unsafe_arena_release_bag_component();
+
+  private:
+  const ::BagAllData& _internal_bag_component() const;
+  ::BagAllData* PROTOBUF_NONNULL _internal_mutable_bag_component();
+
+  public:
+  // .QuestAllData mission_component = 14;
+  [[nodiscard]] bool has_mission_component()
+      const;
+  void clear_mission_component() ;
+  [[nodiscard]] const ::QuestAllData& mission_component() const;
+  [[nodiscard]] ::QuestAllData* PROTOBUF_NULLABLE release_mission_component();
+  ::QuestAllData* PROTOBUF_NONNULL mutable_mission_component();
+  void set_allocated_mission_component(::QuestAllData* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_mission_component(::QuestAllData* PROTOBUF_NULLABLE value);
+  ::QuestAllData* PROTOBUF_NULLABLE unsafe_arena_release_mission_component();
+
+  private:
+  const ::QuestAllData& _internal_mission_component() const;
+  ::QuestAllData* PROTOBUF_NONNULL _internal_mutable_mission_component();
+
+  public:
   // uint64 player_id = 1;
   void clear_player_id() ;
   [[nodiscard]] ::uint64_t player_id() const;
@@ -2342,8 +2377,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 12,
-                          11, 0,
+      ::google::protobuf::internal::TcParseTable<4, 14,
+                          13, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2382,6 +2417,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED player_database final : public ::go
     ::PlayerMergeStateComp* PROTOBUF_NULLABLE merge_state_;
     ::PlayerAttributeComp* PROTOBUF_NULLABLE attribute_component_;
     ::PlayerPetComp* PROTOBUF_NULLABLE pet_component_;
+    ::BagAllData* PROTOBUF_NULLABLE bag_component_;
+    ::QuestAllData* PROTOBUF_NULLABLE mission_component_;
     ::uint64_t player_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -3399,7 +3436,7 @@ inline void player_centre_database::set_allocated_scene_info(::PlayerSceneContex
 inline void player_database::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint64_t player_database::player_id() const {
   // @@protoc_insertion_point(field_get:player_database.player_id)
@@ -3407,7 +3444,7 @@ inline ::uint64_t player_database::player_id() const {
 }
 inline void player_database::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:player_database.player_id)
 }
 inline ::uint64_t player_database::_internal_player_id() const {
@@ -4440,6 +4477,192 @@ inline void player_database::set_allocated_pet_component(::PlayerPetComp* PROTOB
 
   _impl_.pet_component_ = reinterpret_cast<::PlayerPetComp*>(value);
   // @@protoc_insertion_point(field_set_allocated:player_database.pet_component)
+}
+
+// .BagAllData bag_component = 13;
+inline bool player_database::has_bag_component() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000800U);
+  PROTOBUF_ASSUME(!value || _impl_.bag_component_ != nullptr);
+  return value;
+}
+inline const ::BagAllData& player_database::_internal_bag_component() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::BagAllData* p = _impl_.bag_component_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::BagAllData>(&::BagAllData_globals_);
+}
+inline const ::BagAllData& player_database::bag_component() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.bag_component)
+  return _internal_bag_component();
+}
+inline void player_database::unsafe_arena_set_allocated_bag_component(
+    ::BagAllData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.bag_component_);
+  }
+  _impl_.bag_component_ = reinterpret_cast<::BagAllData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.bag_component)
+}
+inline ::BagAllData* PROTOBUF_NULLABLE player_database::release_bag_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ::BagAllData* released = _impl_.bag_component_;
+  _impl_.bag_component_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::BagAllData* PROTOBUF_NULLABLE player_database::unsafe_arena_release_bag_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.bag_component)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ::BagAllData* temp = _impl_.bag_component_;
+  _impl_.bag_component_ = nullptr;
+  return temp;
+}
+inline ::BagAllData* PROTOBUF_NONNULL player_database::_internal_mutable_bag_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.bag_component_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::BagAllData>(GetArena());
+    _impl_.bag_component_ = reinterpret_cast<::BagAllData*>(p);
+  }
+  return _impl_.bag_component_;
+}
+inline ::BagAllData* PROTOBUF_NONNULL player_database::mutable_bag_component()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ::BagAllData* _msg = _internal_mutable_bag_component();
+  // @@protoc_insertion_point(field_mutable:player_database.bag_component)
+  return _msg;
+}
+inline void player_database::set_allocated_bag_component(::BagAllData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.bag_component_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  }
+
+  _impl_.bag_component_ = reinterpret_cast<::BagAllData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.bag_component)
+}
+
+// .QuestAllData mission_component = 14;
+inline bool player_database::has_mission_component() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00001000U);
+  PROTOBUF_ASSUME(!value || _impl_.mission_component_ != nullptr);
+  return value;
+}
+inline const ::QuestAllData& player_database::_internal_mission_component() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::QuestAllData* p = _impl_.mission_component_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::QuestAllData>(&::QuestAllData_globals_);
+}
+inline const ::QuestAllData& player_database::mission_component() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:player_database.mission_component)
+  return _internal_mission_component();
+}
+inline void player_database::unsafe_arena_set_allocated_mission_component(
+    ::QuestAllData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.mission_component_);
+  }
+  _impl_.mission_component_ = reinterpret_cast<::QuestAllData*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:player_database.mission_component)
+}
+inline ::QuestAllData* PROTOBUF_NULLABLE player_database::release_mission_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ::QuestAllData* released = _impl_.mission_component_;
+  _impl_.mission_component_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::QuestAllData* PROTOBUF_NULLABLE player_database::unsafe_arena_release_mission_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:player_database.mission_component)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ::QuestAllData* temp = _impl_.mission_component_;
+  _impl_.mission_component_ = nullptr;
+  return temp;
+}
+inline ::QuestAllData* PROTOBUF_NONNULL player_database::_internal_mutable_mission_component() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.mission_component_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::QuestAllData>(GetArena());
+    _impl_.mission_component_ = reinterpret_cast<::QuestAllData*>(p);
+  }
+  return _impl_.mission_component_;
+}
+inline ::QuestAllData* PROTOBUF_NONNULL player_database::mutable_mission_component()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ::QuestAllData* _msg = _internal_mutable_mission_component();
+  // @@protoc_insertion_point(field_mutable:player_database.mission_component)
+  return _msg;
+}
+inline void player_database::set_allocated_mission_component(::QuestAllData* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.mission_component_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  }
+
+  _impl_.mission_component_ = reinterpret_cast<::QuestAllData*>(value);
+  // @@protoc_insertion_point(field_set_allocated:player_database.mission_component)
 }
 
 // -------------------------------------------------------------------

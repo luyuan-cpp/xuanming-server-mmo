@@ -9,7 +9,7 @@ package database
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
-	_ "proto/common/component"
+	component "proto/common/component"
 	reflect "reflect"
 	sync "sync"
 	unsafe "unsafe"
@@ -299,19 +299,90 @@ func (x *QuestEntry) GetAcceptedAtMs() uint64 {
 	return 0
 }
 
+// 保存配置 ID 而非运行期位图下标，加载时重建索引；不保存 UI 追踪或排序。
+type QuestScopeData struct {
+	state               protoimpl.MessageState     `protogen:"open.v1"`
+	Scope               uint32                     `protobuf:"varint,1,opt,name=scope,proto3" json:"scope,omitempty"`
+	MissionList         *component.MissionListComp `protobuf:"bytes,2,opt,name=mission_list,json=missionList,proto3" json:"mission_list,omitempty"`
+	CompletedMissionIds []uint32                   `protobuf:"varint,3,rep,packed,name=completed_mission_ids,json=completedMissionIds,proto3" json:"completed_mission_ids,omitempty"`
+	ClaimableMissionIds []uint32                   `protobuf:"varint,4,rep,packed,name=claimable_mission_ids,json=claimableMissionIds,proto3" json:"claimable_mission_ids,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *QuestScopeData) Reset() {
+	*x = QuestScopeData{}
+	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *QuestScopeData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*QuestScopeData) ProtoMessage() {}
+
+func (x *QuestScopeData) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use QuestScopeData.ProtoReflect.Descriptor instead.
+func (*QuestScopeData) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_bag_quest_mail_data_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *QuestScopeData) GetScope() uint32 {
+	if x != nil {
+		return x.Scope
+	}
+	return 0
+}
+
+func (x *QuestScopeData) GetMissionList() *component.MissionListComp {
+	if x != nil {
+		return x.MissionList
+	}
+	return nil
+}
+
+func (x *QuestScopeData) GetCompletedMissionIds() []uint32 {
+	if x != nil {
+		return x.CompletedMissionIds
+	}
+	return nil
+}
+
+func (x *QuestScopeData) GetClaimableMissionIds() []uint32 {
+	if x != nil {
+		return x.ClaimableMissionIds
+	}
+	return nil
+}
+
 type QuestAllData struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	Active []*QuestEntry          `protobuf:"bytes,1,rep,name=active,proto3" json:"active,omitempty"`
 	// Completed-quest IDs. Used for prereq checks ("you must have
 	// completed quest X to accept Y") and achievement counting.
-	Completed     []uint32 `protobuf:"varint,2,rep,packed,name=completed,proto3" json:"completed,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Completed          []uint32          `protobuf:"varint,2,rep,packed,name=completed,proto3" json:"completed,omitempty"`
+	Scopes             []*QuestScopeData `protobuf:"bytes,3,rep,name=scopes,proto3" json:"scopes,omitempty"`
+	ScopedStatePresent bool              `protobuf:"varint,4,opt,name=scoped_state_present,json=scopedStatePresent,proto3" json:"scoped_state_present,omitempty"` // 区分正式空快照和仅有旧版 active/completed 的快照。
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *QuestAllData) Reset() {
 	*x = QuestAllData{}
-	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[3]
+	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -323,7 +394,7 @@ func (x *QuestAllData) String() string {
 func (*QuestAllData) ProtoMessage() {}
 
 func (x *QuestAllData) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[3]
+	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -336,7 +407,7 @@ func (x *QuestAllData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QuestAllData.ProtoReflect.Descriptor instead.
 func (*QuestAllData) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_bag_quest_mail_data_proto_rawDescGZIP(), []int{3}
+	return file_proto_common_database_bag_quest_mail_data_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *QuestAllData) GetActive() []*QuestEntry {
@@ -351,6 +422,20 @@ func (x *QuestAllData) GetCompleted() []uint32 {
 		return x.Completed
 	}
 	return nil
+}
+
+func (x *QuestAllData) GetScopes() []*QuestScopeData {
+	if x != nil {
+		return x.Scopes
+	}
+	return nil
+}
+
+func (x *QuestAllData) GetScopedStatePresent() bool {
+	if x != nil {
+		return x.ScopedStatePresent
+	}
+	return false
 }
 
 // MailAllData — placeholder + design note.
@@ -396,7 +481,7 @@ type MailEntry struct {
 
 func (x *MailEntry) Reset() {
 	*x = MailEntry{}
-	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[4]
+	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -408,7 +493,7 @@ func (x *MailEntry) String() string {
 func (*MailEntry) ProtoMessage() {}
 
 func (x *MailEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[4]
+	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -421,7 +506,7 @@ func (x *MailEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailEntry.ProtoReflect.Descriptor instead.
 func (*MailEntry) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_bag_quest_mail_data_proto_rawDescGZIP(), []int{4}
+	return file_proto_common_database_bag_quest_mail_data_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *MailEntry) GetMailId() uint64 {
@@ -496,7 +581,7 @@ type MailAllData struct {
 
 func (x *MailAllData) Reset() {
 	*x = MailAllData{}
-	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[5]
+	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -508,7 +593,7 @@ func (x *MailAllData) String() string {
 func (*MailAllData) ProtoMessage() {}
 
 func (x *MailAllData) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[5]
+	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -521,7 +606,7 @@ func (x *MailAllData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MailAllData.ProtoReflect.Descriptor instead.
 func (*MailAllData) Descriptor() ([]byte, []int) {
-	return file_proto_common_database_bag_quest_mail_data_proto_rawDescGZIP(), []int{5}
+	return file_proto_common_database_bag_quest_mail_data_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *MailAllData) GetMails() []*MailEntry {
@@ -560,7 +645,7 @@ type BagAllData_DynamicBagData struct {
 
 func (x *BagAllData_DynamicBagData) Reset() {
 	*x = BagAllData_DynamicBagData{}
-	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[6]
+	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -572,7 +657,7 @@ func (x *BagAllData_DynamicBagData) String() string {
 func (*BagAllData_DynamicBagData) ProtoMessage() {}
 
 func (x *BagAllData_DynamicBagData) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[6]
+	mi := &file_proto_common_database_bag_quest_mail_data_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -620,7 +705,7 @@ var File_proto_common_database_bag_quest_mail_data_proto protoreflect.FileDescri
 
 const file_proto_common_database_bag_quest_mail_data_proto_rawDesc = "" +
 	"\n" +
-	"/proto/common/database/bag_quest_mail_data.proto\x1a+proto/common/component/item_base_comp.proto\"\xb2\x01\n" +
+	"/proto/common/database/bag_quest_mail_data.proto\x1a+proto/common/component/item_base_comp.proto\x1a)proto/common/component/mission_comp.proto\"\xb2\x01\n" +
 	"\tItemEntry\x12\x1b\n" +
 	"\titem_uuid\x18\x01 \x01(\x04R\bitemUuid\x12\x1b\n" +
 	"\tconfig_id\x18\x02 \x01(\rR\bconfigId\x12\x1d\n" +
@@ -650,10 +735,17 @@ const file_proto_common_database_bag_quest_mail_data_proto_rawDesc = "" +
 	"\tconfig_id\x18\x01 \x01(\rR\bconfigId\x12\x1a\n" +
 	"\bprogress\x18\x02 \x01(\rR\bprogress\x12\x14\n" +
 	"\x05state\x18\x03 \x01(\rR\x05state\x12$\n" +
-	"\x0eaccepted_at_ms\x18\x04 \x01(\x04R\facceptedAtMs\"Q\n" +
+	"\x0eaccepted_at_ms\x18\x04 \x01(\x04R\facceptedAtMs\"\xc3\x01\n" +
+	"\x0eQuestScopeData\x12\x14\n" +
+	"\x05scope\x18\x01 \x01(\rR\x05scope\x123\n" +
+	"\fmission_list\x18\x02 \x01(\v2\x10.MissionListCompR\vmissionList\x122\n" +
+	"\x15completed_mission_ids\x18\x03 \x03(\rR\x13completedMissionIds\x122\n" +
+	"\x15claimable_mission_ids\x18\x04 \x03(\rR\x13claimableMissionIds\"\xac\x01\n" +
 	"\fQuestAllData\x12#\n" +
 	"\x06active\x18\x01 \x03(\v2\v.QuestEntryR\x06active\x12\x1c\n" +
-	"\tcompleted\x18\x02 \x03(\rR\tcompleted\"\xd3\x02\n" +
+	"\tcompleted\x18\x02 \x03(\rR\tcompleted\x12'\n" +
+	"\x06scopes\x18\x03 \x03(\v2\x0f.QuestScopeDataR\x06scopes\x120\n" +
+	"\x14scoped_state_present\x18\x04 \x01(\bR\x12scopedStatePresent\"\xd3\x02\n" +
 	"\tMailEntry\x12\x17\n" +
 	"\amail_id\x18\x01 \x01(\x04R\x06mailId\x12\x1b\n" +
 	"\tsender_id\x18\x02 \x01(\x04R\bsenderId\x12\x18\n" +
@@ -683,28 +775,32 @@ func file_proto_common_database_bag_quest_mail_data_proto_rawDescGZIP() []byte {
 	return file_proto_common_database_bag_quest_mail_data_proto_rawDescData
 }
 
-var file_proto_common_database_bag_quest_mail_data_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_proto_common_database_bag_quest_mail_data_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
 var file_proto_common_database_bag_quest_mail_data_proto_goTypes = []any{
 	(*ItemEntry)(nil),                 // 0: ItemEntry
 	(*BagAllData)(nil),                // 1: BagAllData
 	(*QuestEntry)(nil),                // 2: QuestEntry
-	(*QuestAllData)(nil),              // 3: QuestAllData
-	(*MailEntry)(nil),                 // 4: MailEntry
-	(*MailAllData)(nil),               // 5: MailAllData
-	(*BagAllData_DynamicBagData)(nil), // 6: BagAllData.DynamicBagData
+	(*QuestScopeData)(nil),            // 3: QuestScopeData
+	(*QuestAllData)(nil),              // 4: QuestAllData
+	(*MailEntry)(nil),                 // 5: MailEntry
+	(*MailAllData)(nil),               // 6: MailAllData
+	(*BagAllData_DynamicBagData)(nil), // 7: BagAllData.DynamicBagData
+	(*component.MissionListComp)(nil), // 8: MissionListComp
 }
 var file_proto_common_database_bag_quest_mail_data_proto_depIdxs = []int32{
 	0, // 0: BagAllData.items:type_name -> ItemEntry
-	6, // 1: BagAllData.dynamic_bags:type_name -> BagAllData.DynamicBagData
-	2, // 2: QuestAllData.active:type_name -> QuestEntry
-	0, // 3: MailEntry.attached_items:type_name -> ItemEntry
-	4, // 4: MailAllData.mails:type_name -> MailEntry
-	0, // 5: BagAllData.DynamicBagData.items:type_name -> ItemEntry
-	6, // [6:6] is the sub-list for method output_type
-	6, // [6:6] is the sub-list for method input_type
-	6, // [6:6] is the sub-list for extension type_name
-	6, // [6:6] is the sub-list for extension extendee
-	0, // [0:6] is the sub-list for field type_name
+	7, // 1: BagAllData.dynamic_bags:type_name -> BagAllData.DynamicBagData
+	8, // 2: QuestScopeData.mission_list:type_name -> MissionListComp
+	2, // 3: QuestAllData.active:type_name -> QuestEntry
+	3, // 4: QuestAllData.scopes:type_name -> QuestScopeData
+	0, // 5: MailEntry.attached_items:type_name -> ItemEntry
+	5, // 6: MailAllData.mails:type_name -> MailEntry
+	0, // 7: BagAllData.DynamicBagData.items:type_name -> ItemEntry
+	8, // [8:8] is the sub-list for method output_type
+	8, // [8:8] is the sub-list for method input_type
+	8, // [8:8] is the sub-list for extension type_name
+	8, // [8:8] is the sub-list for extension extendee
+	0, // [0:8] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_bag_quest_mail_data_proto_init() }
@@ -718,7 +814,7 @@ func file_proto_common_database_bag_quest_mail_data_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_database_bag_quest_mail_data_proto_rawDesc), len(file_proto_common_database_bag_quest_mail_data_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   8,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

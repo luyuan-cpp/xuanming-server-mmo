@@ -43,15 +43,20 @@ message PlayerMissionInfo {
 }
 
 message GetMissionListRequest {}
+message MissionActionRequest {
+  uint32 scope = 1;
+  uint32 mission_id = 2;
+}
 message GetMissionListResponse {
   TipInfoMessage error_message = 1;
   repeated PlayerMissionInfo missions = 2;
-  bool state_persistent = 3; // 现有任务尚未接存档，客户端不可承诺跨登录保留。
+  bool state_persistent = 3; // 任务状态随完整玩家快照保存。
 }
 
 service SceneMissionClientPlayer {
   option (OptionIsPlayerService) = true;
   option (OptionIsClientProtocolService) = true;
-  // 只读目录与已有运行状态；领奖链路未完成前不暴露写 RPC。
   rpc GetMissionList (GetMissionListRequest) returns (GetMissionListResponse);
+  rpc AcceptMission (MissionActionRequest) returns (GetMissionListResponse);
+  rpc ClaimMissionReward (MissionActionRequest) returns (GetMissionListResponse);
 }

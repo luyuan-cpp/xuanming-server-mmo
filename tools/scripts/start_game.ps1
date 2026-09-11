@@ -12,7 +12,7 @@ $ErrorActionPreference = 'Stop'
 $serverRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $logDir = Join-Path $serverRoot "run/logs/game-launcher/$stamp"
-$services = @('db','data_service','scene_manager','player_locator','login','match')
+$services = @('db','data_service','client_rpc_router','scene_manager','player_locator','login','match')
 $gatewayUrl = 'http://127.0.0.1:8081'
 $oldPath = $env:PATH
 $oldPassword = $env:LOGIN_DEV_PASSWORD_SHARED_SECRET
@@ -105,13 +105,13 @@ function Get-LocalKafkaContract {
 }
 function Assert-LocalKafkaTopic($Spec) {
     $topic = $Spec.Name
-    $metadata = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--describe','--topic',$topic) 30
+    $metadata = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--describe','--topic',$topic) 60
     $header = [regex]::Match($metadata.Out,'(?m)^\s*Topic:\s+\S+.*?\bPartitionCount:\s*(\d+)\s+ReplicationFactor:\s*(\d+)')
     if ($metadata.Code -ne 0 -or -not $header.Success) { throw "无法读取 Kafka 主题 $topic 的完整元数据。" }
     if ([long]$header.Groups[1].Value -ne $Spec.Partitions -or [int]$header.Groups[2].Value -ne 1) {
         throw "Kafka 主题 $topic 分区或副本契约不符（应为 $($Spec.Partitions) 分区、1 副本）。保留现有主题，必须协调换代，禁止原地扩分区。"
     }
-    $configs = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-configs.sh','--bootstrap-server','localhost:9092','--entity-type','topics','--entity-name',$topic,'--describe','--all') 30
+    $configs = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-configs.sh','--bootstrap-server','localhost:9092','--entity-type','topics','--entity-name',$topic,'--describe','--all') 60
     # 锚定行首，只读取有效值，不能误取 synonyms 内的 broker 默认保留期。
     $retention = [regex]::Match($configs.Out,'(?m)^\s*retention\.ms=(-?\d+)\b')
     $cleanup = [regex]::Match($configs.Out,'(?m)^\s*cleanup\.policy=(\S+)')
@@ -120,7 +120,7 @@ function Assert-LocalKafkaTopic($Spec) {
     }
 }
 function Initialize-LocalKafkaTopics($Contract, [string[]]$ComposeArguments) {
-    $listing = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--list') 30
+    $listing = Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--list') 60
     if ($listing.Code -ne 0) { throw '无法列出 Kafka 主题，已停止预建。' }
     $existing = @($listing.Out -split '\r?\n' | ForEach-Object { $_.Trim() })
     $missing = @()
@@ -363,7 +363,7 @@ try {
         Wait-Ready 'etcd' { (Invoke-Docker @('exec','etcd','etcdctl','endpoint','health')).Code -eq 0 }
         Wait-Ready 'Redis' { (Invoke-Docker @('exec','redis','redis-cli','ping')).Out.Trim() -eq 'PONG' }
         Wait-Ready 'Redis Cluster' { (Invoke-Docker @('exec','redis-cluster-0','redis-cli','-p','7000','cluster','info')).Out -match 'cluster_state:ok' }
-        Wait-Ready 'Kafka' { (Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--list') 20).Code -eq 0 }
+        Wait-Ready 'Kafka' { (Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--list') 60).Code -eq 0 }
         Write-Step '3/6 启动存档服务'
         # login、scene_manager、player_locator、match 由 dev_tools 的子进程继承同一契约。
         $env:KAFKA_COMMAND_TOPIC_PARTITIONS = [string]$kafkaContract.Partitions
@@ -394,7 +394,7 @@ try {
         Assert-NodeStartup 'battle'
         Wait-LocalNode 'battle'
         Write-Step '5/6 启动登录、匹配服务和游戏网关'
-        Start-LocalGoServices @('scene_manager','player_locator','login','match')
+        Start-LocalGoServices @('client_rpc_router','scene_manager','player_locator','login','match')
         $gatewayProcess = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'java.exe' -and $_.CommandLine -and $_.CommandLine.Contains($jar.FullName) } | Select-Object -First 1
         if (-not $gatewayProcess) {
             if (Test-Tcp 8081) { throw '8081 端口被其他程序占用，未启动重复网关。' }
