@@ -20,14 +20,17 @@ import (
 type missionSnapshot struct {
     data   []*pb.MissionTable
     kvData map[uint32]*pb.MissionTable
-    idxCondition_id map[uint32][]*pb.MissionTable
-    idxNext_mission_id map[uint32][]*pb.MissionTable
-    idxTarget_count map[uint32][]*pb.MissionTable
+    idxConditionId map[uint32][]*pb.MissionTable
+    idxNextMissionId map[uint32][]*pb.MissionTable
+    idxTargetCount map[uint32][]*pb.MissionTable
     idxRewardId map[uint32][]*pb.MissionTable
 }
 
 type MissionTableManager struct {
     // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    //
+    // 热更契约:返回出去的 *pb 行属于**当时**那个快照。Go 有 GC,存着不会崩,
+    // 但会永远拿到热更前的旧值。调用方**只存 id**,用的时候现查。
     // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
     // 并发读就是数据竞争(go test -race 会报)。
     // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
@@ -41,9 +44,9 @@ func NewMissionTableManager() *MissionTableManager {
     m := &MissionTableManager{}
     m.snap.Store(&missionSnapshot{
         kvData: make(map[uint32]*pb.MissionTable),
-        idxCondition_id: make(map[uint32][]*pb.MissionTable),
-        idxNext_mission_id: make(map[uint32][]*pb.MissionTable),
-        idxTarget_count: make(map[uint32][]*pb.MissionTable),
+        idxConditionId: make(map[uint32][]*pb.MissionTable),
+        idxNextMissionId: make(map[uint32][]*pb.MissionTable),
+        idxTargetCount: make(map[uint32][]*pb.MissionTable),
         idxRewardId: make(map[uint32][]*pb.MissionTable),
     })
     return m
@@ -74,22 +77,22 @@ func (m *MissionTableManager) Load(configDir string, useBinary bool) error {
 
     snap := &missionSnapshot{
         kvData: make(map[uint32]*pb.MissionTable, len(container.Data)),
-        idxCondition_id: make(map[uint32][]*pb.MissionTable),
-        idxNext_mission_id: make(map[uint32][]*pb.MissionTable),
-        idxTarget_count: make(map[uint32][]*pb.MissionTable),
+        idxConditionId: make(map[uint32][]*pb.MissionTable),
+        idxNextMissionId: make(map[uint32][]*pb.MissionTable),
+        idxTargetCount: make(map[uint32][]*pb.MissionTable),
         idxRewardId: make(map[uint32][]*pb.MissionTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
         for _, elem := range row.ConditionId {
-            snap.idxCondition_id[elem] = append(snap.idxCondition_id[elem], row)
+            snap.idxConditionId[elem] = append(snap.idxConditionId[elem], row)
         }
         for _, elem := range row.NextMissionId {
-            snap.idxNext_mission_id[elem] = append(snap.idxNext_mission_id[elem], row)
+            snap.idxNextMissionId[elem] = append(snap.idxNextMissionId[elem], row)
         }
         for _, elem := range row.TargetCount {
-            snap.idxTarget_count[elem] = append(snap.idxTarget_count[elem], row)
+            snap.idxTargetCount[elem] = append(snap.idxTargetCount[elem], row)
         }
         snap.idxRewardId[row.RewardId] = append(snap.idxRewardId[row.RewardId], row)
     }
@@ -111,21 +114,21 @@ func (m *MissionTableManager) FindById(id uint32) (*pb.MissionTable, bool) {
 }
 
 
-func (m *MissionTableManager) FindByCondition_idIndex(key uint32) []*pb.MissionTable {
+func (m *MissionTableManager) FindByConditionIdIndex(key uint32) []*pb.MissionTable {
     snap := m.snap.Load()
-    return snap.idxCondition_id[key]
+    return snap.idxConditionId[key]
 }
 
 
-func (m *MissionTableManager) FindByNext_mission_idIndex(key uint32) []*pb.MissionTable {
+func (m *MissionTableManager) FindByNextMissionIdIndex(key uint32) []*pb.MissionTable {
     snap := m.snap.Load()
-    return snap.idxNext_mission_id[key]
+    return snap.idxNextMissionId[key]
 }
 
 
-func (m *MissionTableManager) FindByTarget_countIndex(key uint32) []*pb.MissionTable {
+func (m *MissionTableManager) FindByTargetCountIndex(key uint32) []*pb.MissionTable {
     snap := m.snap.Load()
-    return snap.idxTarget_count[key]
+    return snap.idxTargetCount[key]
 }
 
 
@@ -154,21 +157,21 @@ func (m *MissionTableManager) Count() int {
 }
 
 
-func (m *MissionTableManager) CountByCondition_idIndex(key uint32) int {
+func (m *MissionTableManager) CountByConditionIdIndex(key uint32) int {
     snap := m.snap.Load()
-    return len(snap.idxCondition_id[key])
+    return len(snap.idxConditionId[key])
 }
 
 
-func (m *MissionTableManager) CountByNext_mission_idIndex(key uint32) int {
+func (m *MissionTableManager) CountByNextMissionIdIndex(key uint32) int {
     snap := m.snap.Load()
-    return len(snap.idxNext_mission_id[key])
+    return len(snap.idxNextMissionId[key])
 }
 
 
-func (m *MissionTableManager) CountByTarget_countIndex(key uint32) int {
+func (m *MissionTableManager) CountByTargetCountIndex(key uint32) int {
     snap := m.snap.Load()
-    return len(snap.idxTarget_count[key])
+    return len(snap.idxTargetCount[key])
 }
 
 

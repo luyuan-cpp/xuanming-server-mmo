@@ -13,15 +13,6 @@ func GetTestMultiKeyTestRefRow(row *pb.TestMultiKeyTable) (*pb.TestTable, bool) 
     return TestTableManagerInstance.FindById(row.TestRef)
 }
 
-// GetTestMultiKeyTestRefRowById resolves TestMultiKey.test_ref -> Test row (by TestMultiKey id).
-func GetTestMultiKeyTestRefRowById(tableId uint32) (*pb.TestTable, bool) {
-    row, ok := TestMultiKeyTableManagerInstance.FindById(tableId)
-    if !ok {
-        return nil, false
-    }
-    return GetTestMultiKeyTestRefRow(row)
-}
-
 // GetTestMultiKeyTestRefsRows resolves TestMultiKey.test_refs[] -> Test rows.
 func GetTestMultiKeyTestRefsRows(row *pb.TestMultiKeyTable) []*pb.TestTable {
     var result []*pb.TestTable
@@ -31,15 +22,6 @@ func GetTestMultiKeyTestRefsRows(row *pb.TestMultiKeyTable) []*pb.TestTable {
         }
     }
     return result
-}
-
-// GetTestMultiKeyTestRefsRowsById resolves TestMultiKey.test_refs[] -> Test rows (by TestMultiKey id).
-func GetTestMultiKeyTestRefsRowsById(tableId uint32) []*pb.TestTable {
-    row, ok := TestMultiKeyTableManagerInstance.FindById(tableId)
-    if !ok {
-        return nil
-    }
-    return GetTestMultiKeyTestRefsRows(row)
 }
 
 // ---------------------------------------------------------------------------

@@ -20,11 +20,14 @@ import (
 type skillpermissionSnapshot struct {
     data   []*pb.SkillPermissionTable
     kvData map[uint32]*pb.SkillPermissionTable
-    idxSkill_type map[uint32][]*pb.SkillPermissionTable
+    idxSkillType map[uint32][]*pb.SkillPermissionTable
 }
 
 type SkillPermissionTableManager struct {
     // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    //
+    // 热更契约:返回出去的 *pb 行属于**当时**那个快照。Go 有 GC,存着不会崩,
+    // 但会永远拿到热更前的旧值。调用方**只存 id**,用的时候现查。
     // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
     // 并发读就是数据竞争(go test -race 会报)。
     // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
@@ -38,7 +41,7 @@ func NewSkillPermissionTableManager() *SkillPermissionTableManager {
     m := &SkillPermissionTableManager{}
     m.snap.Store(&skillpermissionSnapshot{
         kvData: make(map[uint32]*pb.SkillPermissionTable),
-        idxSkill_type: make(map[uint32][]*pb.SkillPermissionTable),
+        idxSkillType: make(map[uint32][]*pb.SkillPermissionTable),
     })
     return m
 }
@@ -68,13 +71,13 @@ func (m *SkillPermissionTableManager) Load(configDir string, useBinary bool) err
 
     snap := &skillpermissionSnapshot{
         kvData: make(map[uint32]*pb.SkillPermissionTable, len(container.Data)),
-        idxSkill_type: make(map[uint32][]*pb.SkillPermissionTable),
+        idxSkillType: make(map[uint32][]*pb.SkillPermissionTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
         for _, elem := range row.SkillType {
-            snap.idxSkill_type[elem] = append(snap.idxSkill_type[elem], row)
+            snap.idxSkillType[elem] = append(snap.idxSkillType[elem], row)
         }
     }
 
@@ -95,9 +98,9 @@ func (m *SkillPermissionTableManager) FindById(id uint32) (*pb.SkillPermissionTa
 }
 
 
-func (m *SkillPermissionTableManager) FindBySkill_typeIndex(key uint32) []*pb.SkillPermissionTable {
+func (m *SkillPermissionTableManager) FindBySkillTypeIndex(key uint32) []*pb.SkillPermissionTable {
     snap := m.snap.Load()
-    return snap.idxSkill_type[key]
+    return snap.idxSkillType[key]
 }
 
 
@@ -120,9 +123,9 @@ func (m *SkillPermissionTableManager) Count() int {
 }
 
 
-func (m *SkillPermissionTableManager) CountBySkill_typeIndex(key uint32) int {
+func (m *SkillPermissionTableManager) CountBySkillTypeIndex(key uint32) int {
     snap := m.snap.Load()
-    return len(snap.idxSkill_type[key])
+    return len(snap.idxSkillType[key])
 }
 
 

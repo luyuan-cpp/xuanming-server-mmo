@@ -15,15 +15,14 @@ import (
 
 
 
-// testSnapshot holds all parsed data and indices.
+// petruleSnapshot holds all parsed data and indices.
 // Load() builds a new snapshot and swaps it in, replacing the old one.
-type testSnapshot struct {
-    data   []*pb.TestTable
-    kvData map[uint32]*pb.TestTable
-    idxEffect map[uint32][]*pb.TestTable
+type petruleSnapshot struct {
+    data   []*pb.PetRuleTable
+    kvData map[uint32]*pb.PetRuleTable
 }
 
-type TestTableManager struct {
+type PetRuleTableManager struct {
     // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
     //
     // 热更契约:返回出去的 *pb 行属于**当时**那个快照。Go 有 GC,存着不会崩,
@@ -32,25 +31,24 @@ type TestTableManager struct {
     // 并发读就是数据竞争(go test -race 会报)。
     // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
     // 表缩小时 data[rand.IntN(len(data))] 会越界。
-    snap atomic.Pointer[testSnapshot]
+    snap atomic.Pointer[petruleSnapshot]
 }
 
-var TestTableManagerInstance = NewTestTableManager()
+var PetRuleTableManagerInstance = NewPetRuleTableManager()
 
-func NewTestTableManager() *TestTableManager {
-    m := &TestTableManager{}
-    m.snap.Store(&testSnapshot{
-        kvData: make(map[uint32]*pb.TestTable),
-        idxEffect: make(map[uint32][]*pb.TestTable),
+func NewPetRuleTableManager() *PetRuleTableManager {
+    m := &PetRuleTableManager{}
+    m.snap.Store(&petruleSnapshot{
+        kvData: make(map[uint32]*pb.PetRuleTable),
     })
     return m
 }
 
-func (m *TestTableManager) Load(configDir string, useBinary bool) error {
-    var container pb.TestTableData
+func (m *PetRuleTableManager) Load(configDir string, useBinary bool) error {
+    var container pb.PetRuleTableData
 
     if useBinary {
-        path := filepath.Join(configDir, "test.pb")
+        path := filepath.Join(configDir, "petrule.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
             return fmt.Errorf("failed to read file: %w", err)
@@ -59,7 +57,7 @@ func (m *TestTableManager) Load(configDir string, useBinary bool) error {
             return fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
-        path := filepath.Join(configDir, "test.json")
+        path := filepath.Join(configDir, "petrule.json")
         raw, err := os.ReadFile(path)
         if err != nil {
             return fmt.Errorf("failed to read file: %w", err)
@@ -69,16 +67,12 @@ func (m *TestTableManager) Load(configDir string, useBinary bool) error {
         }
     }
 
-    snap := &testSnapshot{
-        kvData: make(map[uint32]*pb.TestTable, len(container.Data)),
-        idxEffect: make(map[uint32][]*pb.TestTable),
+    snap := &petruleSnapshot{
+        kvData: make(map[uint32]*pb.PetRuleTable, len(container.Data)),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
-        for _, elem := range row.Effect {
-            snap.idxEffect[elem] = append(snap.idxEffect[elem], row)
-        }
     }
 
     snap.data = container.Data
@@ -86,28 +80,22 @@ func (m *TestTableManager) Load(configDir string, useBinary bool) error {
     return nil
 }
 
-func (m *TestTableManager) FindAll() []*pb.TestTable {
+func (m *PetRuleTableManager) FindAll() []*pb.PetRuleTable {
     snap := m.snap.Load()
     return snap.data
 }
 
-func (m *TestTableManager) FindById(id uint32) (*pb.TestTable, bool) {
+func (m *PetRuleTableManager) FindById(id uint32) (*pb.PetRuleTable, bool) {
     snap := m.snap.Load()
     row, ok := snap.kvData[id]
     return row, ok
 }
 
 
-func (m *TestTableManager) FindByEffectIndex(key uint32) []*pb.TestTable {
-    snap := m.snap.Load()
-    return snap.idxEffect[key]
-}
-
-
 
 // ---- Exists ----
 
-func (m *TestTableManager) Exists(id uint32) bool {
+func (m *PetRuleTableManager) Exists(id uint32) bool {
     snap := m.snap.Load()
     _, ok := snap.kvData[id]
     return ok
@@ -117,24 +105,18 @@ func (m *TestTableManager) Exists(id uint32) bool {
 
 // ---- Count ----
 
-func (m *TestTableManager) Count() int {
+func (m *PetRuleTableManager) Count() int {
     snap := m.snap.Load()
     return len(snap.data)
-}
-
-
-func (m *TestTableManager) CountByEffectIndex(key uint32) int {
-    snap := m.snap.Load()
-    return len(snap.idxEffect[key])
 }
 
 
 
 // ---- FindByIds (IN) ----
 
-func (m *TestTableManager) FindByIds(ids []uint32) []*pb.TestTable {
+func (m *PetRuleTableManager) FindByIds(ids []uint32) []*pb.PetRuleTable {
     snap := m.snap.Load()
-    result := make([]*pb.TestTable, 0, len(ids))
+    result := make([]*pb.PetRuleTable, 0, len(ids))
     for _, id := range ids {
         if row, ok := snap.kvData[id]; ok {
             result = append(result, row)
@@ -145,7 +127,7 @@ func (m *TestTableManager) FindByIds(ids []uint32) []*pb.TestTable {
 
 // ---- RandOne ----
 
-func (m *TestTableManager) RandOne() (*pb.TestTable, bool) {
+func (m *PetRuleTableManager) RandOne() (*pb.PetRuleTable, bool) {
     snap := m.snap.Load()
     if len(snap.data) == 0 {
         return nil, false
@@ -157,9 +139,9 @@ func (m *TestTableManager) RandOne() (*pb.TestTable, bool) {
 
 // ---- Where / First ----
 
-func (m *TestTableManager) Where(pred func(*pb.TestTable) bool) []*pb.TestTable {
+func (m *PetRuleTableManager) Where(pred func(*pb.PetRuleTable) bool) []*pb.PetRuleTable {
     snap := m.snap.Load()
-    var result []*pb.TestTable
+    var result []*pb.PetRuleTable
     for _, row := range snap.data {
         if pred(row) {
             result = append(result, row)
@@ -168,7 +150,7 @@ func (m *TestTableManager) Where(pred func(*pb.TestTable) bool) []*pb.TestTable 
     return result
 }
 
-func (m *TestTableManager) First(pred func(*pb.TestTable) bool) (*pb.TestTable, bool) {
+func (m *PetRuleTableManager) First(pred func(*pb.PetRuleTable) bool) (*pb.PetRuleTable, bool) {
     snap := m.snap.Load()
     for _, row := range snap.data {
         if pred(row) {

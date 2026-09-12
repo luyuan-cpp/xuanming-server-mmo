@@ -15,16 +15,17 @@ import (
 
 
 
-// mirrorSnapshot holds all parsed data and indices.
+// petSnapshot holds all parsed data and indices.
 // Load() builds a new snapshot and swaps it in, replacing the old one.
-type mirrorSnapshot struct {
-    data   []*pb.MirrorTable
-    kvData map[uint32]*pb.MirrorTable
-    idxSceneId map[uint32][]*pb.MirrorTable
-    idxMainSceneId map[uint32][]*pb.MirrorTable
+type petSnapshot struct {
+    data   []*pb.PetTable
+    kvData map[uint32]*pb.PetTable
+    idxAptitudeMin map[uint32][]*pb.PetTable
+    idxAptitudeMax map[uint32][]*pb.PetTable
+    idxSkill map[uint32][]*pb.PetTable
 }
 
-type MirrorTableManager struct {
+type PetTableManager struct {
     // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
     //
     // 热更契约:返回出去的 *pb 行属于**当时**那个快照。Go 有 GC,存着不会崩,
@@ -33,26 +34,27 @@ type MirrorTableManager struct {
     // 并发读就是数据竞争(go test -race 会报)。
     // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
     // 表缩小时 data[rand.IntN(len(data))] 会越界。
-    snap atomic.Pointer[mirrorSnapshot]
+    snap atomic.Pointer[petSnapshot]
 }
 
-var MirrorTableManagerInstance = NewMirrorTableManager()
+var PetTableManagerInstance = NewPetTableManager()
 
-func NewMirrorTableManager() *MirrorTableManager {
-    m := &MirrorTableManager{}
-    m.snap.Store(&mirrorSnapshot{
-        kvData: make(map[uint32]*pb.MirrorTable),
-        idxSceneId: make(map[uint32][]*pb.MirrorTable),
-        idxMainSceneId: make(map[uint32][]*pb.MirrorTable),
+func NewPetTableManager() *PetTableManager {
+    m := &PetTableManager{}
+    m.snap.Store(&petSnapshot{
+        kvData: make(map[uint32]*pb.PetTable),
+        idxAptitudeMin: make(map[uint32][]*pb.PetTable),
+        idxAptitudeMax: make(map[uint32][]*pb.PetTable),
+        idxSkill: make(map[uint32][]*pb.PetTable),
     })
     return m
 }
 
-func (m *MirrorTableManager) Load(configDir string, useBinary bool) error {
-    var container pb.MirrorTableData
+func (m *PetTableManager) Load(configDir string, useBinary bool) error {
+    var container pb.PetTableData
 
     if useBinary {
-        path := filepath.Join(configDir, "mirror.pb")
+        path := filepath.Join(configDir, "pet.pb")
         raw, err := os.ReadFile(path)
         if err != nil {
             return fmt.Errorf("failed to read file: %w", err)
@@ -61,7 +63,7 @@ func (m *MirrorTableManager) Load(configDir string, useBinary bool) error {
             return fmt.Errorf("failed to parse binary: %w", err)
         }
     } else {
-        path := filepath.Join(configDir, "mirror.json")
+        path := filepath.Join(configDir, "pet.json")
         raw, err := os.ReadFile(path)
         if err != nil {
             return fmt.Errorf("failed to read file: %w", err)
@@ -71,16 +73,24 @@ func (m *MirrorTableManager) Load(configDir string, useBinary bool) error {
         }
     }
 
-    snap := &mirrorSnapshot{
-        kvData: make(map[uint32]*pb.MirrorTable, len(container.Data)),
-        idxSceneId: make(map[uint32][]*pb.MirrorTable),
-        idxMainSceneId: make(map[uint32][]*pb.MirrorTable),
+    snap := &petSnapshot{
+        kvData: make(map[uint32]*pb.PetTable, len(container.Data)),
+        idxAptitudeMin: make(map[uint32][]*pb.PetTable),
+        idxAptitudeMax: make(map[uint32][]*pb.PetTable),
+        idxSkill: make(map[uint32][]*pb.PetTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
-        snap.idxSceneId[row.SceneId] = append(snap.idxSceneId[row.SceneId], row)
-        snap.idxMainSceneId[row.MainSceneId] = append(snap.idxMainSceneId[row.MainSceneId], row)
+        for _, elem := range row.AptitudeMin {
+            snap.idxAptitudeMin[elem] = append(snap.idxAptitudeMin[elem], row)
+        }
+        for _, elem := range row.AptitudeMax {
+            snap.idxAptitudeMax[elem] = append(snap.idxAptitudeMax[elem], row)
+        }
+        for _, elem := range row.Skill {
+            snap.idxSkill[elem] = append(snap.idxSkill[elem], row)
+        }
     }
 
     snap.data = container.Data
@@ -88,34 +98,40 @@ func (m *MirrorTableManager) Load(configDir string, useBinary bool) error {
     return nil
 }
 
-func (m *MirrorTableManager) FindAll() []*pb.MirrorTable {
+func (m *PetTableManager) FindAll() []*pb.PetTable {
     snap := m.snap.Load()
     return snap.data
 }
 
-func (m *MirrorTableManager) FindById(id uint32) (*pb.MirrorTable, bool) {
+func (m *PetTableManager) FindById(id uint32) (*pb.PetTable, bool) {
     snap := m.snap.Load()
     row, ok := snap.kvData[id]
     return row, ok
 }
 
 
-func (m *MirrorTableManager) GetBySceneId(key uint32) []*pb.MirrorTable {
+func (m *PetTableManager) FindByAptitudeMinIndex(key uint32) []*pb.PetTable {
     snap := m.snap.Load()
-    return snap.idxSceneId[key]
+    return snap.idxAptitudeMin[key]
 }
 
 
-func (m *MirrorTableManager) GetByMainSceneId(key uint32) []*pb.MirrorTable {
+func (m *PetTableManager) FindByAptitudeMaxIndex(key uint32) []*pb.PetTable {
     snap := m.snap.Load()
-    return snap.idxMainSceneId[key]
+    return snap.idxAptitudeMax[key]
+}
+
+
+func (m *PetTableManager) FindBySkillIndex(key uint32) []*pb.PetTable {
+    snap := m.snap.Load()
+    return snap.idxSkill[key]
 }
 
 
 
 // ---- Exists ----
 
-func (m *MirrorTableManager) Exists(id uint32) bool {
+func (m *PetTableManager) Exists(id uint32) bool {
     snap := m.snap.Load()
     _, ok := snap.kvData[id]
     return ok
@@ -125,30 +141,36 @@ func (m *MirrorTableManager) Exists(id uint32) bool {
 
 // ---- Count ----
 
-func (m *MirrorTableManager) Count() int {
+func (m *PetTableManager) Count() int {
     snap := m.snap.Load()
     return len(snap.data)
 }
 
 
-func (m *MirrorTableManager) CountBySceneIdIndex(key uint32) int {
+func (m *PetTableManager) CountByAptitudeMinIndex(key uint32) int {
     snap := m.snap.Load()
-    return len(snap.idxSceneId[key])
+    return len(snap.idxAptitudeMin[key])
 }
 
 
-func (m *MirrorTableManager) CountByMainSceneIdIndex(key uint32) int {
+func (m *PetTableManager) CountByAptitudeMaxIndex(key uint32) int {
     snap := m.snap.Load()
-    return len(snap.idxMainSceneId[key])
+    return len(snap.idxAptitudeMax[key])
+}
+
+
+func (m *PetTableManager) CountBySkillIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxSkill[key])
 }
 
 
 
 // ---- FindByIds (IN) ----
 
-func (m *MirrorTableManager) FindByIds(ids []uint32) []*pb.MirrorTable {
+func (m *PetTableManager) FindByIds(ids []uint32) []*pb.PetTable {
     snap := m.snap.Load()
-    result := make([]*pb.MirrorTable, 0, len(ids))
+    result := make([]*pb.PetTable, 0, len(ids))
     for _, id := range ids {
         if row, ok := snap.kvData[id]; ok {
             result = append(result, row)
@@ -159,7 +181,7 @@ func (m *MirrorTableManager) FindByIds(ids []uint32) []*pb.MirrorTable {
 
 // ---- RandOne ----
 
-func (m *MirrorTableManager) RandOne() (*pb.MirrorTable, bool) {
+func (m *PetTableManager) RandOne() (*pb.PetTable, bool) {
     snap := m.snap.Load()
     if len(snap.data) == 0 {
         return nil, false
@@ -171,9 +193,9 @@ func (m *MirrorTableManager) RandOne() (*pb.MirrorTable, bool) {
 
 // ---- Where / First ----
 
-func (m *MirrorTableManager) Where(pred func(*pb.MirrorTable) bool) []*pb.MirrorTable {
+func (m *PetTableManager) Where(pred func(*pb.PetTable) bool) []*pb.PetTable {
     snap := m.snap.Load()
-    var result []*pb.MirrorTable
+    var result []*pb.PetTable
     for _, row := range snap.data {
         if pred(row) {
             result = append(result, row)
@@ -182,7 +204,7 @@ func (m *MirrorTableManager) Where(pred func(*pb.MirrorTable) bool) []*pb.Mirror
     return result
 }
 
-func (m *MirrorTableManager) First(pred func(*pb.MirrorTable) bool) (*pb.MirrorTable, bool) {
+func (m *PetTableManager) First(pred func(*pb.PetTable) bool) (*pb.PetTable, bool) {
     snap := m.snap.Load()
     for _, row := range snap.data {
         if pred(row) {
@@ -191,10 +213,6 @@ func (m *MirrorTableManager) First(pred func(*pb.MirrorTable) bool) (*pb.MirrorT
     }
     return nil, false
 }
-// FK: scene_id → BaseScene.id
-
-// FK: main_scene_id → World.id
-
 
 // ---- Composite Key ----
 

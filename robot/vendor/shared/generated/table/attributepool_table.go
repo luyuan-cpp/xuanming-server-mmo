@@ -20,10 +20,14 @@ import (
 type attributepoolSnapshot struct {
     data   []*pb.AttributePoolTable
     kvData map[uint32]*pb.AttributePoolTable
+    idxOwnerType map[uint32][]*pb.AttributePoolTable
 }
 
 type AttributePoolTableManager struct {
     // snap 指向不可变快照:Load 先整批建好新 snapshot,再原子换指针;读侧无锁 Load()。
+    //
+    // 热更契约:返回出去的 *pb 行属于**当时**那个快照。Go 有 GC,存着不会崩,
+    // 但会永远拿到热更前的旧值。调用方**只存 id**,用的时候现查。
     // 不能退回裸字段 —— 热更的本质就是「服务跑着的时候再 Load 一次」,那一刻裸赋值与
     // 并发读就是数据竞争(go test -race 会报)。
     // 访问方法一律**在开头取一次**本地快照再用:同一次调用里多次 Load 可能拿到不同快照,
@@ -37,6 +41,7 @@ func NewAttributePoolTableManager() *AttributePoolTableManager {
     m := &AttributePoolTableManager{}
     m.snap.Store(&attributepoolSnapshot{
         kvData: make(map[uint32]*pb.AttributePoolTable),
+        idxOwnerType: make(map[uint32][]*pb.AttributePoolTable),
     })
     return m
 }
@@ -66,10 +71,12 @@ func (m *AttributePoolTableManager) Load(configDir string, useBinary bool) error
 
     snap := &attributepoolSnapshot{
         kvData: make(map[uint32]*pb.AttributePoolTable, len(container.Data)),
+        idxOwnerType: make(map[uint32][]*pb.AttributePoolTable),
     }
 
     for _, row := range container.Data {
         snap.kvData[row.Id] = row
+        snap.idxOwnerType[row.OwnerType] = append(snap.idxOwnerType[row.OwnerType], row)
     }
 
     snap.data = container.Data
@@ -89,6 +96,12 @@ func (m *AttributePoolTableManager) FindById(id uint32) (*pb.AttributePoolTable,
 }
 
 
+func (m *AttributePoolTableManager) GetByOwnerType(key uint32) []*pb.AttributePoolTable {
+    snap := m.snap.Load()
+    return snap.idxOwnerType[key]
+}
+
+
 
 // ---- Exists ----
 
@@ -105,6 +118,12 @@ func (m *AttributePoolTableManager) Exists(id uint32) bool {
 func (m *AttributePoolTableManager) Count() int {
     snap := m.snap.Load()
     return len(snap.data)
+}
+
+
+func (m *AttributePoolTableManager) CountByOwnerTypeIndex(key uint32) int {
+    snap := m.snap.Load()
+    return len(snap.idxOwnerType[key])
 }
 
 
