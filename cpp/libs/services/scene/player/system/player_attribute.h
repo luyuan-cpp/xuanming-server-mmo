@@ -6,6 +6,8 @@
 
 #include <entt/src/entt/entity/entity.hpp>
 
+#include "player_level_rules.h"
+
 class AttributePanelInfo;
 
 // 角色属性加点系统(问道式三池:属性点 / 相性点 / 仙魔点),设计文档
@@ -25,7 +27,8 @@ public:
 
 	// 重算的触发原因:决定当前 HP/MP 怎么跟随上限变化(评审 2026-09-04 堵住"降后再升"白嫖回血):
 	//   kLevelChanged  升级:上限抬高按绝对增量补当前值(升级手感);降级只夹。
-	//   其它(加载/加点/切方案/洗点):按比例保持 hp = hp × newMax / oldMax,一升一降往返零净得失,
+	//   其它(加载/加点/切方案/洗点):按比例保持 hp = hp × newMax / oldMax,一升一降往返不净得
+	//                 (极低血量因"活着至少留 1"最多回升到 oldMax/newMax,有上界且不累积),
 	//                 切方案 / 洗点 / 重新加点都不能成为回血手段(turn-based-battle-server.md D4 残血带出战斗)。
 	enum class RecalcReason : uint8_t { kLoad, kLevelChanged, kAllocate, kSchemeSwitch, kReset };
 
@@ -57,6 +60,6 @@ public:
 	// 主动推面板(升级 / GM / 外部加成变化)
 	static void PushPanel(entt::entity player);
 
-	// 等级上限(表未定义前的保守值)
-	static constexpr uint32_t kMaxLevel = 200;
+	// 角色等级上限:唯一真相在 player_level_rules.h(playerlevel::kMaxLevel),这里只是别名
+	static constexpr uint32_t kMaxLevel = playerlevel::kMaxLevel;
 };

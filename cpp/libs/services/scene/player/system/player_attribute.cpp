@@ -396,7 +396,8 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 
 	// 当前 HP/MP 跟随上限(见 RecalcReason 注释):
 	//   升级:抬高按绝对增量补(降级只夹);
-	//   加载/加点/切方案/洗点:按比例保持 —— 降后再升往返零净得失,堵住"切方案/洗点当治疗"。
+	//   加载/加点/切方案/洗点:按比例保持 —— 降后再升往返不净得(极低血量因"至少留 1"有上界的回升例外,
+	//   见 RescaleCurrent),堵住"切方案/洗点当治疗"。
 	if (reason == RecalcReason::kLevelChanged) {
 		if (baseAttrs->health() > 0 && derived.max_health() > oldMaxHealth && oldMaxHealth > 0) {
 			baseAttrs->set_health(baseAttrs->health() + (derived.max_health() - oldMaxHealth));
@@ -706,7 +707,7 @@ uint32_t PlayerAttributeSystem::GmSetLevel(entt::entity player, uint32_t level) 
 	if (const auto err = CheckWritable(player); err != kSuccess) {
 		return err;
 	}
-	if (level == 0 || level > kMaxLevel) {
+	if (!playerlevel::IsValidLevel(level)) {
 		return kInvalidParameter;
 	}
 	auto& levelComp = tlsEcs.actorRegistry.get_or_emplace<LevelComp>(player);

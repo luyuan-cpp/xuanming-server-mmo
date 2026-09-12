@@ -17,6 +17,7 @@ struct IMissionConfig
     virtual const ::google::protobuf::RepeatedField<uint32_t>& GetNextMissionTableIds(uint32_t missionTableId) const = 0;
     virtual bool CheckTypeRepeated() const = 0;
     virtual bool HasKey(uint32_t id) const = 0;
+    virtual bool IsConditionOrdered(uint32_t id) const { return false; }
 };
 
 struct MissionConfig : public IMissionConfig
@@ -66,6 +67,11 @@ struct MissionConfig : public IMissionConfig
     }
 
     bool CheckTypeRepeated() const override { return true; }
+    bool IsConditionOrdered(uint32_t missionTableId) const override
+    {
+        LookupMissionOrReturnFalse(missionTableId);
+        return missionRow->condition_order() == 1;
+    }
     bool HasKey(uint32_t missionTableId) const override { LookupMissionOrReturnFalse(missionTableId); return true; }
 
 private:

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include <cassert>
 #include <cstddef>
@@ -369,6 +369,12 @@ public:
     // 拆分前这里是遍历 posToGuid 比对 value 的 O(n) 线扫;布局层有了自己的
     // 反向索引之后是 O(1)。语义完全不变。
     uint32_t GetItemPosByGuid(Guid guid) const { return layout_->SlotOf(guid); }
+    // 只读展示占位；形状仍由桥层的唯一配置入口决定，调用者不自行猜测。
+    [[nodiscard]] Footprint GetItemFootprintByGuid(Guid guid) const
+    {
+        const auto* item = store_.Find(guid);
+        return item != nullptr ? FootprintFor(item->config_id()) : Footprint{0, 0};
+    }
 
     // 跨层一致性:每个实例恰好占一个槽位,且槽位数不超过容量。
     //

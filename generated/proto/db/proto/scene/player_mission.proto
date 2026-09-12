@@ -1,0 +1,62 @@
+syntax = "proto3";
+option go_package = "db/proto/scene";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+
+option cc_generic_services = true;
+option (OptionFileDefaultNode) = NODE_SCENE;
+
+enum PlayerMissionStatus {
+  PLAYER_MISSION_NOT_ACCEPTED = 0;
+  PLAYER_MISSION_ACTIVE = 1;
+  PLAYER_MISSION_COMPLETED = 2;
+  PLAYER_MISSION_CLAIMABLE = 3;
+  PLAYER_MISSION_FAILED = 4;
+}
+
+message MissionObjectiveInfo {
+  uint32 objective_index = 1; // 显式目标序号，同 condition_id 可出现多次。
+  uint32 condition_id = 2;
+  uint32 category = 3;
+  uint32 progress = 4;
+  uint32 target = 5;
+  bool completed = 6;
+  string description = 7; // 配置没有文案时为空，不伪造 NPC/地图坐标。
+}
+
+message PlayerMissionInfo {
+  uint32 mission_id = 1;
+  uint32 scope = 2;
+  uint32 mission_type = 3;
+  uint32 mission_sub_type = 4;
+  PlayerMissionStatus status = 5;
+  string name = 6;
+  string description = 7;
+  repeated MissionObjectiveInfo objectives = 8;
+  uint32 reward_id = 9;
+  bool auto_reward = 10;
+  bool can_accept = 11;
+  bool can_claim = 12;
+  string unavailable_reason = 13;
+  bool configured = 14; // 区分存量任务缺表和正式目录条目。
+}
+
+message GetMissionListRequest {}
+message MissionActionRequest {
+  uint32 scope = 1;
+  uint32 mission_id = 2;
+}
+message GetMissionListResponse {
+  TipInfoMessage error_message = 1;
+  repeated PlayerMissionInfo missions = 2;
+  bool state_persistent = 3; // 任务状态随完整玩家快照保存。
+}
+
+service SceneMissionClientPlayer {
+  option (OptionIsPlayerService) = true;
+  option (OptionIsClientProtocolService) = true;
+  rpc GetMissionList (GetMissionListRequest) returns (GetMissionListResponse);
+  rpc AcceptMission (MissionActionRequest) returns (GetMissionListResponse);
+  rpc ClaimMissionReward (MissionActionRequest) returns (GetMissionListResponse);
+}

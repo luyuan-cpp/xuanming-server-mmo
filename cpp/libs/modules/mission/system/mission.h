@@ -31,7 +31,8 @@ public:
 	static uint32_t AcceptMission(const AcceptMissionEvent& acceptEvent, MissionsComp& missionComp, const IMissionConfig& config);
 	static uint32_t AbandonMission(const AbandonParam& param, MissionsComp& missionComp, const IMissionConfig& config);
 	static void CompleteAllMissions(entt::entity player, MissionsComp& missionComp);
-	static void HandleConditionEvent(const ConditionEvent& conditionEvent, MissionsComp& missionComp, const IMissionConfig& config);
+	// onlyMissionId limits owned/history refresh to a newly accepted mission; live events use the default fan-out.
+	static void HandleConditionEvent(const ConditionEvent& conditionEvent, MissionsComp& missionComp, const IMissionConfig& config, uint32_t onlyMissionId = 0);
 
 private:
 	// NOTE: CompleteAllMissions (above, public) and OnMissionCompletion (below, private)

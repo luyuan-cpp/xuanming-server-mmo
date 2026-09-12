@@ -478,6 +478,8 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
 
 ### 15.1 策划表加列(走 tools/data_table_exporter 重导)
 - `Monster.xlsx`:health/strength/armor/resistance/critchance/speed(uint64)+ exp_reward/gold_reward;16 只怪分级。
+  **2026-09-11 重定**:角色属性系数上调后按新口径重算 1-16 的 health / strength / speed(护甲 / 抗性 / 暴击 / 奖励不变);
+  新手教学怪 / 普通怪 / 首领三档目标、参照等级与换算公式见 `player-attribute-allocation.md` §8。
 - `Dungeon.xlsx`:`monster`(repeated fk:Monster)怪物组;副本1=[1,2]/副本2=[6,7]/副本3=[11,12,16]。
 - `Class.xlsx`:init_health/mana/strength/armor/resistance/critchance/speed(职业初始属性)。
 - **导表 PATH 必须同时含 protoc 与 protoc-gen-go/grpc**,否则 Go 侧 proto 静默不重生成。

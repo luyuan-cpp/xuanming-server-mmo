@@ -15,9 +15,12 @@
 #include "proto/login/login.pb.h"
 #include "proto/match/match_service.pb.h"
 #include "proto/scene/client_player_common.pb.h"
+#include "proto/scene/player_activity.pb.h"
 #include "proto/scene/player_attribute.pb.h"
+#include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_currency.pb.h"
 #include "proto/scene/player_lifecycle.pb.h"
+#include "proto/scene/player_mission.pb.h"
 #include "proto/scene/player_movement.pb.h"
 #include "proto/scene/player_pet.pb.h"
 #include "proto/scene/player_rollback.pb.h"
@@ -42,9 +45,12 @@
 #include "rpc/service_metadata/login_service_metadata.h"
 #include "rpc/service_metadata/match_service_service_metadata.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
+#include "rpc/service_metadata/player_activity_service_metadata.h"
 #include "rpc/service_metadata/player_attribute_service_metadata.h"
+#include "rpc/service_metadata/player_bag_service_metadata.h"
 #include "rpc/service_metadata/player_currency_service_metadata.h"
 #include "rpc/service_metadata/player_lifecycle_service_metadata.h"
+#include "rpc/service_metadata/player_mission_service_metadata.h"
 #include "rpc/service_metadata/player_movement_service_metadata.h"
 #include "rpc/service_metadata/player_pet_service_metadata.h"
 #include "rpc/service_metadata/player_rollback_service_metadata.h"
@@ -92,9 +98,12 @@
 
 class GateImpl final : public Gate {};
 class SceneClientPlayerCommonImpl final : public SceneClientPlayerCommon {};
+class SceneActivityClientPlayerImpl final : public SceneActivityClientPlayer {};
 class SceneAttributeClientPlayerImpl final : public SceneAttributeClientPlayer {};
+class SceneBagClientPlayerImpl final : public SceneBagClientPlayer {};
 class SceneCurrencyClientPlayerImpl final : public SceneCurrencyClientPlayer {};
 class ScenePlayerImpl final : public ScenePlayer {};
+class SceneMissionClientPlayerImpl final : public SceneMissionClientPlayer {};
 class SceneMovementClientPlayerImpl final : public SceneMovementClientPlayer {};
 class ScenePetClientPlayerImpl final : public ScenePetClientPlayer {};
 class SceneRollbackClientPlayerImpl final : public SceneRollbackClientPlayer {};
@@ -205,7 +214,7 @@ namespace scene_node{void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& ,
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 190,
+static_assert(kMaxRpcMethodCount == 196,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -743,6 +752,13 @@ void InitMessageInfo()
         std::make_unique<::Empty>(),
         std::make_unique<SceneClientPlayerCommonImpl>(), 0, common::base::eNodeType::SceneNodeService};
 
+    // --- SceneActivityClientPlayer ---
+    gRpcMethodRegistry[SceneActivityClientPlayerGetActivityListMessageId] = RpcMethodMeta{
+        "SceneActivityClientPlayer", "GetActivityList",
+        std::make_unique<::GetActivityListRequest>(),
+        std::make_unique<::GetActivityListResponse>(),
+        std::make_unique<SceneActivityClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+
     // --- SceneAttributeClientPlayer ---
     gRpcMethodRegistry[SceneAttributeClientPlayerGetAttributePanelMessageId] = RpcMethodMeta{
         "SceneAttributeClientPlayer", "GetAttributePanel",
@@ -790,6 +806,18 @@ void InitMessageInfo()
         std::make_unique<::GmSetPlayerLevelResponse>(),
         std::make_unique<SceneAttributeClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
 
+    // --- SceneBagClientPlayer ---
+    gRpcMethodRegistry[SceneBagClientPlayerGetBagMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "GetBag",
+        std::make_unique<::GetBagRequest>(),
+        std::make_unique<::GetBagResponse>(),
+        std::make_unique<SceneBagClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneBagClientPlayerSortBagMessageId] = RpcMethodMeta{
+        "SceneBagClientPlayer", "SortBag",
+        std::make_unique<::SortBagRequest>(),
+        std::make_unique<::SortBagResponse>(),
+        std::make_unique<SceneBagClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+
     // --- SceneCurrencyClientPlayer ---
     gRpcMethodRegistry[SceneCurrencyClientPlayerGmAddCurrencyMessageId] = RpcMethodMeta{
         "SceneCurrencyClientPlayer", "GmAddCurrency",
@@ -828,6 +856,23 @@ void InitMessageInfo()
         std::make_unique<::GameNodeExitGameRequest>(),
         std::make_unique<::google::protobuf::Empty>(),
         std::make_unique<ScenePlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+
+    // --- SceneMissionClientPlayer ---
+    gRpcMethodRegistry[SceneMissionClientPlayerGetMissionListMessageId] = RpcMethodMeta{
+        "SceneMissionClientPlayer", "GetMissionList",
+        std::make_unique<::GetMissionListRequest>(),
+        std::make_unique<::GetMissionListResponse>(),
+        std::make_unique<SceneMissionClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneMissionClientPlayerAcceptMissionMessageId] = RpcMethodMeta{
+        "SceneMissionClientPlayer", "AcceptMission",
+        std::make_unique<::MissionActionRequest>(),
+        std::make_unique<::GetMissionListResponse>(),
+        std::make_unique<SceneMissionClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneMissionClientPlayerClaimMissionRewardMessageId] = RpcMethodMeta{
+        "SceneMissionClientPlayer", "ClaimMissionReward",
+        std::make_unique<::MissionActionRequest>(),
+        std::make_unique<::GetMissionListResponse>(),
+        std::make_unique<SceneMissionClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneMovementClientPlayer ---
     gRpcMethodRegistry[SceneMovementClientPlayerMoveStartMessageId] = RpcMethodMeta{
@@ -1253,6 +1298,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneClientPlayerCommonSendTipToClientMessageId:
 	case SceneClientPlayerCommonKickPlayerMessageId:
 	case SceneClientPlayerCommonRedirectToGateMessageId:
+	case SceneActivityClientPlayerGetActivityListMessageId:
 	case SceneAttributeClientPlayerGetAttributePanelMessageId:
 	case SceneAttributeClientPlayerAllocateAttributePointsMessageId:
 	case SceneAttributeClientPlayerResetAttributePointsMessageId:
@@ -1262,11 +1308,16 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneAttributeClientPlayerRenameAttributeSchemeMessageId:
 	case SceneAttributeClientPlayerNotifyAttributePanelChangedMessageId:
 	case SceneAttributeClientPlayerGmSetPlayerLevelMessageId:
+	case SceneBagClientPlayerGetBagMessageId:
+	case SceneBagClientPlayerSortBagMessageId:
 	case SceneCurrencyClientPlayerGmAddCurrencyMessageId:
 	case SceneCurrencyClientPlayerGmDeductCurrencyMessageId:
 	case SceneCurrencyClientPlayerGetCurrencyListMessageId:
 	case SceneCurrencyClientPlayerGmBlockCurrencyMessageId:
 	case SceneCurrencyClientPlayerGmUnblockCurrencyMessageId:
+	case SceneMissionClientPlayerGetMissionListMessageId:
+	case SceneMissionClientPlayerAcceptMissionMessageId:
+	case SceneMissionClientPlayerClaimMissionRewardMessageId:
 	case SceneMovementClientPlayerMoveStartMessageId:
 	case SceneMovementClientPlayerMoveStopMessageId:
 	case SceneMovementClientPlayerMoveSyncMessageId:

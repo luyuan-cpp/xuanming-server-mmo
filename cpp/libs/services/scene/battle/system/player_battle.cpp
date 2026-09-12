@@ -1,4 +1,5 @@
 #include "player_battle.h"
+#include "battle_settlement_application_cache.h"
 
 #include <muduo/base/Logging.h>
 #include <muduo/net/EventLoop.h>
@@ -30,6 +31,8 @@
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/player_pet.h"
+#include "modules/condition/condition_type.h"
+#include "proto/common/event/mission_event.pb.h"
 #include "player/system/player_revive.h"
 
 // 时间->回合换算与回合常量的权威定义在回合引擎库(scene 可以依赖 battle 常量,反向禁止)。
@@ -90,6 +93,10 @@ namespace
 	muduo::net::TimerId gReaperTimerId;
 	bool gReaperActive = false;
 	muduo::net::EventLoop* gReaperLoop = nullptr;
+
+    // 场景 loop 内跨实体生命周期的有限去重，覆盖正常下线重建与 Redis DEL 尚未完成窗口。
+    // 不持久化，不承诺进程崩溃后的 exactly-once；已完成项最多保留 pending 的 7 天。
+    thread_local battle_settlement::SettlementApplicationCache gSettlementApplications;
 
 	bool RedisReady()
 	{
@@ -1002,101 +1009,153 @@ void PlayerBattleSystem::RestoreBattleFreezeOnLogin(entt::entity player, const u
 		kGetLockAndCtxScript, playerId, playerId);
 }
 
-void PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement)
+bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::BattleSettlementData& settlement)
 {
-	const uint64_t playerId = GuidForLog(player);
+    if (!tlsEcs.actorRegistry.valid(player)) return false;
+    const uint64_t playerId = GuidForLog(player);
+    const uint64_t battleId = settlement.battle_id();
+    if (playerId == 0 || playerId != settlement.player_id() || battleId == 0)
+    {
+        LOG_ERROR << "[PlayerBattle] 应用结算失败: 实体或结算归属非法, player_id=" << playerId
+                  << " battle_id=" << battleId;
+        return false;
+    }
 
-	auto* baseAttributes = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player);
-	if (baseAttributes == nullptr)
-	{
-		LOG_ERROR << "[PlayerBattle] 应用结算失败: 缺 BaseAttributesComp, player_id=" << playerId
-				  << " battle_id=" << settlement.battle_id();
-		return;
-	}
-
-	// HP/MP 终值回写(引擎输出已按快照上限饱和,这里再按派生上限夹一次,防御引擎侧越界)
-	uint64_t health = settlement.health();
-	if (const auto* derived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(player);
-		derived != nullptr && derived->max_health() > 0)
-	{
-		health = std::min<uint64_t>(health, derived->max_health());
-	}
-	baseAttributes->set_health(health);
-	uint64_t mana = settlement.mana();
-	if (const auto* derived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(player);
-		derived != nullptr && derived->max_mana() > 0)
-	{
-		mana = std::min<uint64_t>(mana, derived->max_mana());
-	}
-	baseAttributes->set_mana(mana);
-	// 阵亡基础复活(与登录加载同一规则,产品完整死亡/复活流程未定前的基线):
-	// 不复活的话 0 血玩家会再次排队、被快照进新局、引擎开局即判负(2026-09-02 冒烟实测,
-	// 离线挂起结算在登录后补应用时也走这里,登录时的复活判定早已跑完、拦不住)。
-	if (settlement.is_dead() || health == 0)
-	{
-		// 回满到玩家真实上限(属性加点算出的 DerivedAttributesComp);取不到才退回职业初值 ——
-		// 只回 ClassTable 的 1 级初值会把等级/加点成长吞掉(20 级 max_health 约 1100,初值 500)。
-		const auto* derivedForRevive = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(player);
-		ReviveBaseAttributesIfDead(*baseAttributes,
-			derivedForRevive != nullptr ? derivedForRevive->max_health() : 0,
-			derivedForRevive != nullptr ? derivedForRevive->max_mana() : 0);
-		LOG_INFO << "[PlayerBattle] 结算阵亡基础复活: player_id=" << playerId
-				 << " battle_id=" << settlement.battle_id()
-				 << " health=" << baseAttributes->health() << " mana=" << baseAttributes->mana();
-	}
-	ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kHealth);
-	ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kEnergy);
-
-	// 出战宝宝的终值回写(阵亡宝宝在 PetSystem 内回满,理由见那里的注释)。
-	// 回写完必须推一次列表:玩家战后打开宝宝面板看到的应该是战后血量,
-	// 不推的话面板会一直停在战前那份(设计文档 player-pet.md §4 承诺的推送时机)。
-	if (settlement.pets_size() > 0)
-	{
-		for (const auto& petSettlement : settlement.pets())
+    using ApplicationCache = battle_settlement::SettlementApplicationCache;
+    const auto status = gSettlementApplications.Apply(playerId, battleId,
+        ApplicationCache::Clock::now(), [&]() -> bool {
+		auto* baseAttributes = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(player);
+		if (baseAttributes == nullptr)
 		{
-			PetSystem::ApplyBattleSettlement(player, petSettlement);
+			LOG_ERROR << "[PlayerBattle] 应用结算失败: 缺 BaseAttributesComp, player_id=" << playerId
+					  << " battle_id=" << settlement.battle_id();
+			return false;
 		}
-		PetSystem::PushList(player);
-	}
 
-	// 金钱:走统一入账入口(补缴/封禁钩子都在里面,禁止直写 CurrencyComp)
-	if (settlement.gold_gain() > 0)
-	{
-		const auto err = CurrencySystem::AddCurrency(
-			player, kCurrencyGold, static_cast<int64_t>(settlement.gold_gain()));
-		if (err != kSuccess)
+	    // 唯一会正常返回失败的入账入口必须在 HP/宝宝/任务副作用之前执行。
+	    // 拒绝时不标记完成、不销账，保留 pending 等服务恢复后重投。
+	    if (settlement.gold_gain() > 0)
+	    {
+	        if (settlement.gold_gain() > static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+	        {
+	            LOG_ERROR << "[PlayerBattle] 金钱结算超出入账范围: player_id=" << playerId
+	                      << " battle_id=" << battleId;
+	            return false;
+	        }
+	        const auto err = CurrencySystem::AddCurrency(
+	            player, kCurrencyGold, static_cast<int64_t>(settlement.gold_gain()));
+	        if (err != kSuccess)
+	        {
+	            LOG_WARN << "[PlayerBattle] 金钱入账失败，保留结算待重投: player_id=" << playerId
+	                     << " battle_id=" << battleId << " err=" << err;
+	            return false;
+	        }
+	    }
+		// HP/MP 终值回写(引擎输出已按快照上限饱和,这里再按派生上限夹一次,防御引擎侧越界)
+		uint64_t health = settlement.health();
+		if (const auto* derived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(player);
+			derived != nullptr && derived->max_health() > 0)
 		{
-			LOG_WARN << "[PlayerBattle] 金钱入账失败: player_id=" << playerId
+			health = std::min<uint64_t>(health, derived->max_health());
+		}
+		baseAttributes->set_health(health);
+		uint64_t mana = settlement.mana();
+		if (const auto* derived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(player);
+			derived != nullptr && derived->max_mana() > 0)
+		{
+			mana = std::min<uint64_t>(mana, derived->max_mana());
+		}
+		baseAttributes->set_mana(mana);
+		// 阵亡基础复活(与登录加载同一规则,产品完整死亡/复活流程未定前的基线):
+		// 不复活的话 0 血玩家会再次排队、被快照进新局、引擎开局即判负(2026-09-02 冒烟实测,
+		// 离线挂起结算在登录后补应用时也走这里,登录时的复活判定早已跑完、拦不住)。
+		if (settlement.is_dead() || health == 0)
+		{
+			// 回满到玩家真实上限(属性加点算出的 DerivedAttributesComp);取不到才退回职业初值 ——
+			// 只回 ClassTable 的 1 级初值会把等级/加点成长吞掉(20 级 max_health 约 1100,初值 500)。
+			const auto* derivedForRevive = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(player);
+			ReviveBaseAttributesIfDead(*baseAttributes,
+				derivedForRevive != nullptr ? derivedForRevive->max_health() : 0,
+				derivedForRevive != nullptr ? derivedForRevive->max_mana() : 0);
+			LOG_INFO << "[PlayerBattle] 结算阵亡基础复活: player_id=" << playerId
 					 << " battle_id=" << settlement.battle_id()
-					 << " gold=" << settlement.gold_gain() << " err=" << err;
+					 << " health=" << baseAttributes->health() << " mana=" << baseAttributes->mana();
 		}
-	}
+		ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kHealth);
+		ActorAttributeCalculatorSystem::MarkAttributeForUpdate(player, kEnergy);
 
-	// 经验:全仓当前没有经验值组件/升级结算系统(只有 PlayerUpgradeEvent 事件壳),
-	// 一期仅记日志留痕,接入后在此入账(见 open_issues)
-	if (settlement.exp_gain() > 0)
-	{
-		LOG_INFO << "[PlayerBattle] 经验结算暂缓(经验系统未接入): player_id=" << playerId
-				 << " battle_id=" << settlement.battle_id() << " exp=" << settlement.exp_gain();
-	}
+		// 出战宝宝的终值回写(阵亡宝宝在 PetSystem 内回满,理由见那里的注释)。
+		// 回写完必须推一次列表:玩家战后打开宝宝面板看到的应该是战后血量,
+		// 不推的话面板会一直停在战前那份(设计文档 player-pet.md §4 承诺的推送时机)。
+		if (settlement.pets_size() > 0)
+		{
+			for (const auto& petSettlement : settlement.pets())
+			{
+				PetSystem::ApplyBattleSettlement(player, petSettlement);
+			}
+			PetSystem::PushList(player);
+		}
 
-	// 道具:背包系统尚未挂载玩家实体,消耗扣除(防刷:按实际持有校验,不足按 0)与
-	// 掉落发放都无从落地,一期仅记日志(见 open_issues)
-	if (settlement.items_consumed_size() > 0 || settlement.items_gained_size() > 0)
-	{
-		LOG_INFO << "[PlayerBattle] 道具结算暂缓(背包系统未挂载): player_id=" << playerId
+		// 经验:全仓当前没有经验值组件/升级结算系统(只有 PlayerUpgradeEvent 事件壳),
+		// 一期仅记日志留痕,接入后在此入账(见 open_issues)
+		if (settlement.exp_gain() > 0)
+		{
+			LOG_INFO << "[PlayerBattle] 经验结算暂缓(经验系统未接入): player_id=" << playerId
+					 << " battle_id=" << settlement.battle_id() << " exp=" << settlement.exp_gain();
+		}
+
+		// 道具:背包系统尚未挂载玩家实体,消耗扣除(防刷:按实际持有校验,不足按 0)与
+		// 掉落发放都无从落地,一期仅记日志(见 open_issues)
+		if (settlement.items_consumed_size() > 0 || settlement.items_gained_size() > 0)
+		{
+			LOG_INFO << "[PlayerBattle] 道具结算暂缓(背包系统未挂载): player_id=" << playerId
+					 << " battle_id=" << settlement.battle_id()
+					 << " consumed=" << settlement.items_consumed_size()
+					 << " gained=" << settlement.items_gained_size();
+		}
+
+	    // 只有 battle 最终结算携带的真实击杀事实推进任务，由同一应用缓存保护金币和进度。
+	    // 每只怪一条事实，顺序任务不会用同一次击杀跨过后续相同目标。
+	    for (const auto& defeat : settlement.defeated_monsters()) {
+	        if (defeat.monster_config_id() == 0) continue;
+	        for (uint32_t index = 0; index < defeat.count(); ++index) {
+	            ConditionEvent progress;
+	            progress.set_entity(entt::to_integral(player));
+	            progress.set_condition_type(static_cast<uint32_t>(eConditionType::kConditionKillMonster));
+	            progress.add_condition_ids(defeat.monster_config_id());
+	            progress.set_amount(1);
+	            tlsEcs.dispatcher.trigger(progress);
+	        }
+	    }
+		LOG_INFO << "[PlayerBattle] 结算已应用: player_id=" << playerId
 				 << " battle_id=" << settlement.battle_id()
-				 << " consumed=" << settlement.items_consumed_size()
-				 << " gained=" << settlement.items_gained_size();
-	}
-
-	LOG_INFO << "[PlayerBattle] 结算已应用: player_id=" << playerId
-			 << " battle_id=" << settlement.battle_id()
-			 << " outcome=" << settlement.outcome()
-			 << " health=" << health << " mana=" << settlement.mana()
-			 << " gold=" << settlement.gold_gain()
-			 << " is_dead=" << settlement.is_dead()
-			 << " rounds=" << settlement.total_rounds();
+				 << " outcome=" << settlement.outcome()
+				 << " health=" << health << " mana=" << settlement.mana()
+				 << " gold=" << settlement.gold_gain()
+				 << " is_dead=" << settlement.is_dead()
+				 << " rounds=" << settlement.total_rounds();
+        return true;
+    });
+    if (status == ApplicationCache::Result::Applied) return true;
+    if (status == ApplicationCache::Result::Duplicate)
+    {
+        // 应用过但上次 Redis 清理可能未完成；只重试条件销账，不重复发奖或推任务。
+        // 重登补发旧局时不能摘掉新局组件，两个 Redis 清理也都校验 battle_id。
+        if (const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+            current != nullptr && current->battle_id() == battleId)
+        {
+            tlsEcs.actorRegistry.remove<InBattleComp>(player);
+        }
+        ClearPendingSettlementIfMatch(playerId, battleId);
+        DeleteBattleLockIfMatch(playerId, battleId);
+        LOG_INFO << "[PlayerBattle] 重复结算已跳过并重试条件销账: player_id=" << playerId
+                 << " battle_id=" << battleId;
+        return false;
+    }
+    // InFlight 不能提前 ACK；Failed/Full 保留记录供重投，避免永久吞掉合法结算。
+    LOG_WARN << "[PlayerBattle] 结算本次未应用，保留待重投: player_id=" << playerId
+             << " battle_id=" << battleId << " status=" << static_cast<int>(status);
+    return false;
 }
 
 void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
@@ -1131,6 +1190,14 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 		}
 		tlsRedis.GetZoneRedis()->command(
 			[playerId, battleId, payload = std::move(payload)](hiredis::Hiredis*, redisReply* reply) {
+                // 无回复/Redis 错误不是锁不存在，不能销账丢掉可恢复的奖励。
+                if (reply == nullptr ||
+                    (reply->type != REDIS_REPLY_STRING && reply->type != REDIS_REPLY_NIL))
+                {
+                    LOG_WARN << "[PlayerBattle] 结算查锁失败，保留待重投: player_id=" << playerId
+                             << " battle_id=" << battleId;
+                    return;
+                }
 				if (reply == nullptr || reply->type != REDIS_REPLY_STRING)
 				{
 					LOG_WARN << "[PlayerBattle] 离线结算丢弃: 战斗锁不存在(已作废?), player_id="
@@ -1180,6 +1247,14 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 		}
 		tlsRedis.GetZoneRedis()->command(
 			[player, playerId, battleId, event](hiredis::Hiredis*, redisReply* reply) {
+                // 无回复/Redis 错误不是锁不存在，不能销账丢掉可恢复的奖励。
+                if (reply == nullptr ||
+                    (reply->type != REDIS_REPLY_STRING && reply->type != REDIS_REPLY_NIL))
+                {
+                    LOG_WARN << "[PlayerBattle] 结算查锁失败，保留待重投: player_id=" << playerId
+                             << " battle_id=" << battleId;
+                    return;
+                }
 				if (reply == nullptr || reply->type != REDIS_REPLY_STRING ||
 					std::string(reply->str, reply->len) != std::to_string(battleId))
 				{
@@ -1204,7 +1279,7 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 				}
 				LOG_WARN << "[PlayerBattle] metric=battle_settlement_applied_by_lock player_id=" << playerId
 						 << " battle_id=" << battleId << ",无 InBattleComp,按锁值匹配应用结算";
-				ApplySettlementToEntity(player, event.settlement());
+				if (!ApplySettlementToEntity(player, event.settlement())) return;
 				// 组件可能在回调期间被登录重建/迟到确认挂回来(同 battle_id):一并摘除
 				ClearBattleFreeze(player, playerId, battleId);
 				// 销账 = 给 battle 侧发件箱的 ACK(R07),必须在应用之后
@@ -1215,7 +1290,7 @@ void PlayerBattleSystem::ApplySettlement(const ::BattleSettlementEvent& event)
 		return;
 	}
 
-	ApplySettlementToEntity(player, settlement);
+	if (!ApplySettlementToEntity(player, settlement)) return;
 	ClearBattleFreeze(player, playerId, battleId);
 	// 销账 = 给 battle 侧发件箱的 ACK(R07):battle 探测到伴生 id 键已不属于本局就停止重投。
 	// 顺序不能反 —— 先销账后应用的话,应用中途进程崩溃就两头落空。
@@ -1235,7 +1310,7 @@ void PlayerBattleSystem::ApplyPendingSettlement(entt::entity player, const ::Bat
 	const auto& settlement = event.settlement();
 	const uint64_t playerId = settlement.player_id();
 
-	ApplySettlementToEntity(player, settlement);
+	if (!ApplySettlementToEntity(player, settlement)) return;
 
 	// 理论上离线结算与"实体上还挂着 InBattleComp"不共存(实体重建后组件不落库),
 	// 防御性摘除:同 battle_id 才摘,避免误伤登录后刚备战的新战斗

@@ -1,0 +1,25 @@
+syntax = "proto3";
+
+// ActivitySchedule 表的权威 schema。源表 data/ActivitySchedule.xlsx。
+// 每个活动任务只有一个绝对时间窗，任务与奖励仍由 Mission 表定义。
+// 时间统一为 UTC Unix 毫秒；开启区间为 [baseline_start_at_ms, baseline_end_at_ms)。
+// 本阶段不自动顺延、不按节日美术或客户端时钟开放活动。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message ActivityScheduleTable {
+  option (cfg_sheet)       = "ActivitySchedule";
+  option (cfg_source_file) = "ActivitySchedule.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 活动任务编号，必须对应 Mission.mission_type=2
+  uint32 id = 1 [(cfg_fk) = "Mission"];
+  // 是否启用排期；启用前必须填写有效的开始与结束时间
+  bool enabled = 2;
+  // UTC Unix 开始毫秒；0 表示未填写
+  uint64 baseline_start_at_ms = 3;
+  // UTC Unix 结束毫秒；必须晚于开始时间，结束时刻不可接取
+  uint64 baseline_end_at_ms = 4;
+}

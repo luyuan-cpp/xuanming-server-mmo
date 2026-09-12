@@ -29,6 +29,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 
+#include "ActivityScheduleTable.h"
 #include "ActorActionCombatStateTable.h"
 #include "ActorActionStateTable.h"
 #include "AttributeAutoPlanTable.h"
@@ -94,7 +95,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 27;
+	static constexpr int32 TableCount = 28;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -144,6 +145,9 @@ public:
 	FString GetConfigDir() const { return ConfigDir; }
 
 	// ---- 取表 ----
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UActivityScheduleTable* GetActivityScheduleTable() const { return ActivityScheduleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UActorActionCombatStateTable* GetActorActionCombatStateTable() const { return ActorActionCombatStateTable; }
@@ -227,6 +231,8 @@ public:
 	UWorldTable* GetWorldTable() const { return WorldTable; }
 
 private:
+	UPROPERTY(Transient)
+	TObjectPtr<UActivityScheduleTable> ActivityScheduleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UActorActionCombatStateTable> ActorActionCombatStateTable;
 	UPROPERTY(Transient)

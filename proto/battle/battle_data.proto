@@ -59,9 +59,9 @@ message BattlePlayerSnapshot {
 // 属性口径与玩家快照逐项对齐:base_attributes 带 speed(出手序)与当前 HP/MP,
 // max_* 与物伤/法伤/防御来自 PetSystem 现算的二级属性。
 message BattlePetSnapshot {
-  // SnowFlake guid(scene 的 item guid 发号器铸),直接作为局内 actor_id。
-  // 注意它与 player_id **不是**同一套位布局(AGENTS §7 不变量 1),数值域理论上可相交;
-  // 引擎 InitPets 因此显式查重,撞了拒绝开局,不靠"同域不撞"的假设。
+  // 宝宝的永久 id(scene 从 item 号段取)。**不是**局内 actor_id:号段改造后 player_id 与
+  // pet_id 都从 1 起发,直接当 actor_id 会让 N 号玩家与 N 号宝宝同号。引擎给宝宝另发
+  // kPetActorIdBase 段的局内号,真实 pet_id 存进 BattleActorState.pet_id,结算回写只认它。
   uint64 pet_id = 1;
   uint64 owner_player_id = 2;     // 主人;决定队伍与结算归属
   string pet_name = 3;
@@ -85,7 +85,7 @@ enum eBattleActorType {
 }
 
 message BattleActorState {
-  uint64 actor_id = 1;              // 玩家 = player_id;怪物 = 引擎生成的局内序号 id
+  uint64 actor_id = 1;              // 玩家 = player_id;怪物 / 宝宝 = 引擎局内序号(bit63 打标,见 kEngineLocalActorIdFlag)
   eBattleActorType actor_type = 2;
   uint32 team_index = 3;
   string name = 4;
@@ -107,6 +107,7 @@ message BattleActorState {
   uint64 defense = 20;              // 防御(来自快照;怪物 0)
   uint64 owner_player_id = 21;      // 仅宝宝有效:主人 player_id(结算按它归属到主人名下)
   uint32 pet_table_id = 22;         // 仅宝宝有效(Pet 表 id)
+  uint64 pet_id = 23;               // 仅宝宝有效:真实 pet_id(结算回写认它;actor_id 是引擎局内号)
 }
 
 // ---- 玩家行动指令 ----
@@ -170,6 +171,11 @@ enum eBattleOutcome {
 }
 
 // ---- 单个玩家的结算数据(battle -> scene,scene 是唯一应用者) ----
+message BattleMonsterDefeat {
+  uint32 monster_config_id = 1;
+  uint32 count = 2;
+}
+
 message BattleSettlementData {
   uint64 battle_id = 1;
   uint64 player_id = 2;
@@ -185,6 +191,8 @@ message BattleSettlementData {
   bool fled = 12;
   uint32 total_rounds = 13;
   repeated BattlePetSettlementData pets = 14;  // 该玩家出战宝宝的战后终值(scene 回写实例)
+  // battle 根据真实阵亡怪物生成，scene 用于任务进度；客户端不能上报。
+  repeated BattleMonsterDefeat defeated_monsters = 15;
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----

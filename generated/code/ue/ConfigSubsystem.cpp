@@ -33,6 +33,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 	// 只建管理器,**不装载**:配置文件从哪来是工程决策(Content 目录 / pak /
 	// 下载目录),生成器不替工程猜。装载由调用方显式调 LoadAll。
+	ActivityScheduleTable = NewObject<UActivityScheduleTable>(this);
 	ActorActionCombatStateTable = NewObject<UActorActionCombatStateTable>(this);
 	ActorActionStateTable = NewObject<UActorActionStateTable>(this);
 	AttributeAutoPlanTable = NewObject<UAttributeAutoPlanTable>(this);
@@ -64,6 +65,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UConfigSubsystem::Deinitialize()
 {
+	ActivityScheduleTable = nullptr;
 	ActorActionCombatStateTable = nullptr;
 	ActorActionStateTable = nullptr;
 	AttributeAutoPlanTable = nullptr;
@@ -100,6 +102,7 @@ void UConfigSubsystem::Deinitialize()
 TArray<FString> UConfigSubsystem::TableFileNames()
 {
 	return TArray<FString>{
+		UActivityScheduleTable::FileName(),
 		UActorActionCombatStateTable::FileName(),
 		UActorActionStateTable::FileName(),
 		UAttributeAutoPlanTable::FileName(),
@@ -138,6 +141,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 	bool bAnySwapped = false;
 	FString Error;
 
+	if (ActivityScheduleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ActivitySchedule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!ActivityScheduleTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
 	if (ActorActionCombatStateTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[ActorActionCombatState] 管理器未创建"));
@@ -549,6 +566,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 	FString Error;
 	FString JsonText;
 
+	JsonText.Reset();
+	if (ActivityScheduleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ActivitySchedule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UActivityScheduleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[ActivitySchedule] 取不到 %s"), UActivityScheduleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!ActivityScheduleTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
 	JsonText.Reset();
 	if (ActorActionCombatStateTable == nullptr)
 	{

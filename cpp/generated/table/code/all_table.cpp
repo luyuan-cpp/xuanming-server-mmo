@@ -4,6 +4,7 @@
 #include <thread>
 #include "muduo/base/CountDownLatch.h"
 
+#include "activityschedule_table.h"
 #include "actoractioncombatstate_table.h"
 #include "actoractionstate_table.h"
 #include "attributeautoplan_table.h"
@@ -36,6 +37,8 @@
 LoadSuccessCallback loadSuccessCallback;
 
 void LoadTables() {
+
+    ActivityScheduleTableManager::Instance().Load();
 
     ActorActionCombatStateTableManager::Instance().Load();
 
@@ -92,6 +95,8 @@ void LoadTables() {
     WorldTableManager::Instance().Load();
 
 
+
+    ActivityScheduleTableManager::Instance().LoadSuccess();
 
     ActorActionCombatStateTableManager::Instance().LoadSuccess();
 
@@ -154,7 +159,15 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(27);
+    static muduo::CountDownLatch latch(28);
+
+    std::thread ActivityScheduleLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        ActivityScheduleTableManager::Instance().Load();
+        latch.countDown();
+    });
+    ActivityScheduleLoadThread.detach();
 
     std::thread ActorActionCombatStateLoadThread([]() {
         void InitThreadLocalConfig();
@@ -374,6 +387,8 @@ void LoadTablesAsync() {
 
     latch.wait();
 
+
+    ActivityScheduleTableManager::Instance().LoadSuccess();
 
     ActorActionCombatStateTableManager::Instance().LoadSuccess();
 

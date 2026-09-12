@@ -17,6 +17,8 @@ public class AllTable {
      */
     public static void loadTables(String configDir, boolean useBinary) throws Exception {
 
+        ActivityScheduleTableManager.getInstance().load(configDir, useBinary);
+
         ActorActionCombatStateTableManager.getInstance().load(configDir, useBinary);
 
         ActorActionStateTableManager.getInstance().load(configDir, useBinary);
@@ -86,7 +88,17 @@ public class AllTable {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(27);
+        CountDownLatch latch = new CountDownLatch(28);
+
+        new Thread(() -> {
+            try {
+                ActivityScheduleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load ActivitySchedule table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
 
         new Thread(() -> {
             try {
@@ -377,6 +389,8 @@ public class AllTable {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void reloadTables(String configDir, boolean useBinary) throws Exception {
+
+        ActivityScheduleTableManager.getInstance().load(configDir, useBinary);
 
         ActorActionCombatStateTableManager.getInstance().load(configDir, useBinary);
 

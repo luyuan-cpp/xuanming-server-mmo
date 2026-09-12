@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <ranges>
+#include <limits>
 #include <unordered_set>
 
 #include "muduo/base/Logging.h"
@@ -29,7 +30,9 @@ uint32_t MissionSystem::GetMissionReward(const GetRewardParam &param, MissionsCo
 		return PrintStackAndReturnError(kInvalidParameter);
 	}
 
-	const auto playerId = tlsEcs.actorRegistry.get<Guid>(param.playerEntity);
+	const auto* owner = tlsEcs.actorRegistry.try_get<Guid>(param.playerEntity);
+    if (owner == nullptr) return kInvalidParameter;
+    const auto playerId = *owner;
 
 	if (!missionComp.IsClaimable(param.missionId))
 	{
@@ -38,8 +41,8 @@ uint32_t MissionSystem::GetMissionReward(const GetRewardParam &param, MissionsCo
 		return PrintStackAndReturnError(kMissionIdNotInRewardList);
 	}
 
-	// Clear the claimable bit so the same reward cannot be claimed twice.
-	SetBit(MissionBitMap, missionComp.GetClaimableRewards(), param.missionId, false);
+	// 仅提交领取状态；生产发奖必须走 PlayerMissionSystem::ClaimReward。
+	missionComp.ClearClaimable(param.missionId);
 	LOG_INFO << "Reward claimed: missionId = " << param.missionId << ", playerId = " << playerId;
 	return kSuccess;
 }
@@ -50,7 +53,12 @@ uint32_t MissionSystem::CheckMissionAcceptance(const AcceptMissionEvent &acceptE
 
 	RETURN_ON_ERROR(missionComp.ValidateNotAccepted(missionId));
 	RETURN_ON_ERROR(missionComp.ValidateNotCompleted(missionId));
-	RETURN_IF_TRUE(!config.HasKey(missionId), kInvalidTableId);
+	RETURN_IF_TRUE(!config.HasKey(missionId) || !MissionBitMap.contains(missionId), kInvalidTableId);
+    for (const auto conditionId : config.GetConditionIds(missionId))
+    {
+        const auto [condition, error] = ConditionTableManager::Instance().FindByIdSilent(conditionId);
+        RETURN_IF_TRUE(condition == nullptr, kInvalidTableData);
+    }
 
 	// When a (sub)type may only be active once, reject a second mission of that type.
 	if (missionComp.IsMissionTypeNotRepeated())
@@ -112,7 +120,7 @@ uint32_t MissionSystem::AbandonMission(const AbandonParam &param, MissionsComp &
 										   << " playerId=" << entt::to_integral(param.playerEntity));
 	}
 
-	SetBit(MissionBitMap, missionComp.GetClaimableRewards(), param.missionId, false);
+	missionComp.ClearClaimable(param.missionId);
 	missionComp.GetMutableMissionList().mutable_missions()->erase(param.missionId);
 	missionComp.AbandonMission(param.missionId);
 	missionComp.GetMutableMissionList().mutable_mission_begin_time()->erase(param.missionId);
@@ -152,7 +160,9 @@ bool MissionSystem::AreAllConditionsFulfilled(const MissionComp &mission, uint32
 	const auto &conditionIds = config.GetConditionIds(missionId);
 	const auto &targetCounts = config.GetTargetCounts(missionId);
 
-	const int32_t slotCount = std::min<int32_t>(mission.progress_size(), conditionIds.size());
+    // 少目标的旧/损坏进度不能因为只遍历已有槽而提前完成。
+    if (conditionIds.empty() || mission.progress_size() != conditionIds.size()) return false;
+	const int32_t slotCount = mission.progress_size();
 	for (int32_t i = 0; i < slotCount; ++i)
 	{
 		const uint32_t targetCount = (i < targetCounts.size()) ? targetCounts.at(i) : 0;
@@ -164,7 +174,7 @@ bool MissionSystem::AreAllConditionsFulfilled(const MissionComp &mission, uint32
 	return true;
 }
 
-void MissionSystem::HandleConditionEvent(const ConditionEvent &conditionEvent, MissionsComp &missionComp, const IMissionConfig &config)
+void MissionSystem::HandleConditionEvent(const ConditionEvent &conditionEvent, MissionsComp &missionComp, const IMissionConfig &config, uint32_t onlyMissionId)
 {
 	if (conditionEvent.condition_ids().empty())
 	{
@@ -186,6 +196,7 @@ void MissionSystem::HandleConditionEvent(const ConditionEvent &conditionEvent, M
 	std::unordered_set<uint32_t> justCompleted;
 	for (const uint32_t missionId : watchersIt->second)
 	{
+        if (onlyMissionId != 0 && missionId != onlyMissionId) continue;
 		const auto missionIt = missions.find(missionId);
 		if (missionIt == missions.end())
 		{
@@ -193,6 +204,9 @@ void MissionSystem::HandleConditionEvent(const ConditionEvent &conditionEvent, M
 		}
 
 		MissionComp &mission = missionIt->second;
+        if (mission.id() != missionId || !config.HasKey(missionId) || missionComp.IsComplete(missionId) ||
+            mission.status() == MissionComp::E_MISSION_TIME_OUT || mission.status() == MissionComp::E_MISSION_FAILD)
+            continue;
 		if (!UpdateMissionProgress(conditionEvent, mission, config))
 		{
 			continue;
@@ -224,7 +238,7 @@ void MissionSystem::UnregisterMissionIndexes(MissionsComp &missionComp, uint32_t
 	RemoveMissionFromConditionIndex(missionComp, missionId, config);
 
 	const uint32_t missionSubType = config.GetMissionSubType(missionId);
-	if (missionSubType > 0 && missionComp.IsMissionTypeNotRepeated())
+	if (missionComp.IsMissionTypeNotRepeated())
 	{
 		missionComp.GetMutableTypeFilter().erase(
 			std::make_pair(config.GetMissionType(missionId), missionSubType));
@@ -243,16 +257,21 @@ bool MissionSystem::UpdateMissionProgress(const ConditionEvent &conditionEvent, 
 	const auto &conditionIds = config.GetConditionIds(mission.id());
 	const auto &targetCounts = config.GetTargetCounts(mission.id());
 
-	const int32_t slotCount = std::min<int32_t>(mission.progress_size(), conditionIds.size());
+    if (mission.progress_size() != conditionIds.size()) return false;
+	const int32_t slotCount = mission.progress_size();
+    const bool ordered = config.IsConditionOrdered(mission.id());
 	bool progressed = false;
 	for (int32_t i = 0; i < slotCount; ++i)
 	{
 		LookupConditionOrContinue(conditionIds.at(i));
 		const uint32_t targetCount = (i < targetCounts.size()) ? targetCounts.at(i) : 0;
+        if (ordered && condition_util::IsFulfilled(conditionIds.at(i), mission.progress(i), targetCount)) continue;
 		if (UpdateProgressIfConditionMatches(conditionEvent, mission, i, conditionRow, targetCount))
 		{
 			progressed = true;
 		}
+        // 顺序目标一条事实最多推进当前一格，不能同一击杀跨过重复的后续目标。
+        if (ordered) break;
 	}
 	return progressed;
 }
@@ -271,15 +290,32 @@ bool MissionSystem::UpdateProgressIfConditionMatches(const ConditionEvent &condi
 	{
 		return false;
 	}
-	if (!condition_util::MatchesEventSlots(conditionTable, conditionEvent.condition_ids()))
-	{
-		return false;
-	}
+    if (conditionTable->condition_category() == static_cast<uint32_t>(eConditionType::kConditionLevelUp))
+    {
+        // condition1 是等级门槛：已有 20 级的玩家接取“达到 10 级”也应满足。
+        if (!conditionTable->condition1().empty() && std::none_of(
+            conditionTable->condition1().begin(), conditionTable->condition1().end(),
+            [&conditionEvent](uint32_t level) { return conditionEvent.amount() >= level; })) return false;
+        if (!conditionTable->condition2().empty() || !conditionTable->condition3().empty() || !conditionTable->condition4().empty())
+            return false;
+    }
+    else if (!condition_util::MatchesEventSlots(conditionTable, conditionEvent.condition_ids()))
+    {
+        return false;
+    }
 
-	// Accumulate progress, then clamp to the target so it never overshoots.
-	const uint32_t newProgress = currentProgress + conditionEvent.amount();
-	mission.set_progress(index, condition_util::ClampIfFulfilled(conditionTable->id(), newProgress, targetCount));
-	return true;
+    const uint64_t target = targetCount > 0 ? targetCount : conditionTable->target_count();
+    const bool owned = conditionTable->quantity_type() == 1 ||
+        conditionTable->condition_category() == static_cast<uint32_t>(eConditionType::kConditionLevelUp);
+    const uint64_t candidate = owned ? conditionEvent.amount() :
+        uint64_t{currentProgress} + conditionEvent.amount();
+    // 累计目标饱和；严格 > 的完成值是 target+1，不能夹回 target 后又变成未完成。
+    const uint64_t ceiling = conditionTable->comparison_op() == 1 ? target + 1 : target;
+    const auto newProgress = static_cast<uint32_t>(std::min<uint64_t>(
+        owned ? candidate : std::min(candidate, ceiling), std::numeric_limits<uint32_t>::max()));
+    if (newProgress == currentProgress) return false;
+    mission.set_progress(index, newProgress);
+    return true;
 }
 
 // OnMissionCompletion — Per-mission completion handler for the normal
@@ -314,6 +350,8 @@ void MissionSystem::OnMissionCompletion(entt::entity playerEntity, const std::un
 		{
 		case RewardAction::kAutoGrant:
 		{
+            // 先保留待领取权，再尝试发奖；满包、禁发或号段不足都可以重试。
+            missionComp.RestoreClaimable(missionId);
 			OnMissionAwardEvent awardEvent;
 			awardEvent.set_entity(playerId);
 			awardEvent.set_mission_id(missionId);

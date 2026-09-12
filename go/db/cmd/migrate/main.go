@@ -110,11 +110,18 @@ func main() {
 	}
 }
 
-// openTarget 用与业务服务完全相同的连接参数打开目标库。
-// 共用 newMysqlConfig 是刻意的:sql_mode 等会话参数必须一致,否则迁移看到的
-// 严格程度和运行时不是一回事。
+// migrationMysqlConfig 复用业务服务的目标与严格模式,只为迁移台账开启时间解析。
+// schema_migrations 的 DATETIME 会被扫描到 time.Time / sql.NullTime;
+// ParseTime=false 时驱动返回 []byte,首次建台账后的 status/plan 就会失败。
+func migrationMysqlConfig() *mysql.Config {
+	myCnf := proto_sql.NewMysqlConfig()
+	myCnf.ParseTime = true
+	return myCnf
+}
+
+// openTarget 使用迁移专用的时间解析,保留业务连接的目标和会话约束。
 func openTarget() (*sql.DB, error) {
-	connector, err := mysql.NewConnector(proto_sql.NewMysqlConfig())
+	connector, err := mysql.NewConnector(migrationMysqlConfig())
 	if err != nil {
 		return nil, err
 	}
@@ -192,12 +199,12 @@ func runUp(ctx context.Context, runner *migrate.Runner, db *sql.DB, allowModify 
 }
 
 // buildModel 打开 proto2mysql 模型并注册全部表(纯内存,不产生 SQL)。
-func buildModel(db *sql.DB) (*proto2mysql.PbMysqlDB, []proto.Message, error) {
+func buildModel(db *sql.DB) (*proto2mysql.DB, []proto.Message, error) {
 	tables, err := proto_sql.TablesFromJSON()
 	if err != nil {
 		return nil, nil, err
 	}
-	model := proto2mysql.NewPbMysqlDB()
+	model := proto2mysql.NewDB()
 	if err := model.OpenDB(db, config.AppConfig.ServerConfig.Database.DBName); err != nil {
 		return nil, nil, err
 	}

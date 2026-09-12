@@ -33,7 +33,8 @@ public:
 
 	// 重算的触发原因(与 PlayerAttributeSystem::RecalcReason 同语义):
 	//   kLevelChanged 宝宝升级(主人升级带动):上限抬高按绝对增量补当前值,降级只夹;
-	//   其它:按比例保持,一升一降往返零净得失(不能把加点/洗点变成宝宝的治疗手段)。
+	//   其它:按比例保持,一升一降往返不净得(不能把加点/洗点变成宝宝的治疗手段;
+	//         极低血量因"至少留 1"有上界的回升例外,见 attributerules::RescaleCurrent)。
 	enum class RecalcReason : uint8_t { kLoad, kLevelChanged, kAllocate, kReset };
 
 	// 重算全部宝宝(同步等级 + 处理当前 HP/MP);不落库。

@@ -188,3 +188,9 @@
 187=ScenePetClientPlayerGmGrantPet
 188=ScenePetClientPlayerAutoAllocatePetPoints
 189=ScenePetClientPlayerRenamePet
+190=SceneActivityClientPlayerGetActivityList
+191=SceneBagClientPlayerGetBag
+192=SceneBagClientPlayerSortBag
+193=SceneMissionClientPlayerGetMissionList
+194=SceneMissionClientPlayerAcceptMission
+195=SceneMissionClientPlayerClaimMissionReward

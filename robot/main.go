@@ -76,6 +76,15 @@ func main() {
 		return loginAndEnterWithAuth(gc, cfg, stats, access, accessExpire)
 	})
 
+	// Features-smoke never invokes the common auto-create login/relogin path.
+	if cfg.Mode == "features-smoke" {
+		if err := RunFeaturesSmoke(cfg, stats); err != nil {
+			zap.L().Error("FEATURES_SMOKE_FAIL", zap.Error(err))
+			_ = zap.L().Sync()
+			os.Exit(1)
+		}
+		return
+	}
 	// Login-test mode: run the scenario suite and exit.
 	if cfg.Mode == "login-test" {
 		host, portStr, tokenPayload, tokenSig, err := resolveGateAddrLocal(cfg)

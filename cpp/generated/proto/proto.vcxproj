@@ -390,4 +390,12 @@
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>
+  <ItemGroup>
+    <ClCompile Include="scene\player_bag.pb.cc" />
+    <ClInclude Include="scene\player_bag.pb.h" />
+    <ClCompile Include="scene\player_mission.pb.cc" />
+    <ClInclude Include="scene\player_mission.pb.h" />
+    <ClCompile Include="scene\player_activity.pb.cc" />
+    <ClInclude Include="scene\player_activity.pb.h" />
+  </ItemGroup>
 </Project>

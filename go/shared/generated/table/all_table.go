@@ -12,6 +12,9 @@ var loadSuccessCallback func()
 // LoadTables loads all config tables synchronously.
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTables(configDir string, useBinary bool) {
+    if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load ActivitySchedule table: %v", err)
+    }
     if err := ActorActionCombatStateTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load ActorActionCombatState table: %v", err)
     }
@@ -103,7 +106,13 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(27)
+    wg.Add(28)
+    go func() {
+        defer wg.Done()
+        if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load ActivitySchedule table: %v", err)
+        }
+    }()
     go func() {
         defer wg.Done()
         if err := ActorActionCombatStateTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -282,6 +291,10 @@ func OnTablesLoadSuccess(cb func()) {
 // ReloadTables re-creates all table managers and loads fresh data.
 // Safe for hot-reload: replaces the global instances atomically.
 func ReloadTables(configDir string, useBinary bool) error {
+    newActivitySchedule := NewActivityScheduleTableManager()
+    if err := newActivitySchedule.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload ActivitySchedule failed: %w", err)
+    }
     newActorActionCombatState := NewActorActionCombatStateTableManager()
     if err := newActorActionCombatState.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload ActorActionCombatState failed: %w", err)
@@ -392,6 +405,7 @@ func ReloadTables(configDir string, useBinary bool) error {
     }
 
     // Swap all instances at once after all loads succeed.
+    ActivityScheduleTableManagerInstance = newActivitySchedule
     ActorActionCombatStateTableManagerInstance = newActorActionCombatState
     ActorActionStateTableManagerInstance = newActorActionState
     AttributeAutoPlanTableManagerInstance = newAttributeAutoPlan

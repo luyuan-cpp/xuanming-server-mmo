@@ -1,14 +1,37 @@
 {
   "schema_version": 1,
-  "version": 7,
-  "content_digest": "65f3cfc7ad58859311cd66815149220459e6d188b24ca51885afa6f2ec908b36",
-  "generated_at": "2026-09-10T02:08:11Z",
+  "version": 10,
+  "content_digest": "a0c067b1fa8f4cf43a4ee8dc2c2179f65d2b897b6afd1cb0d22c4ca779a94461",
+  "generated_at": "2026-09-11T12:06:00Z",
   "source_rev": {
-    "commit": "86d9a157fb5c65299ffb41895657fa6b76ab51c8",
-    "data_dirty": false
+    "commit": "3a1309b047779b6b41fa23238ac2917c96147932",
+    "data_dirty": true
   },
-  "table_count": 27,
+  "table_count": 28,
   "tables": [
+    {
+      "name": "ActivitySchedule",
+      "rows": 3,
+      "source": {
+        "file": "ActivitySchedule.xlsx",
+        "size": 4771,
+        "sha256": "bce6740d08f106e39812ebe48fd28efd4abb7d721f11331a606417c606a32f54"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "activityschedule.json",
+          "size": 316,
+          "sha256": "3fb85dcd16b3f1a462811ab0eba7482f54ab0d91c63d846e8a60cc84ea98a2ec"
+        },
+        {
+          "kind": "binary",
+          "file": "activityschedule.pb",
+          "size": 12,
+          "sha256": "eb05e1cbfc688d4a9f066ac25a31c77d4b2ba8b302ddd47ea22aceef8153a9e8"
+        }
+      ]
+    },
     {
       "name": "ActorActionCombatState",
       "rows": 4,
@@ -83,21 +106,21 @@
       "rows": 17,
       "source": {
         "file": "AttributeDimension.xlsx",
-        "size": 6230,
-        "sha256": "948dfb86b37e427e84e4fc758ca0151167a69faec030dcbe952e39740e8ea31a"
+        "size": 6238,
+        "sha256": "555bb9260fbb11694ad46fcce86ecf6c385af8f3f0d7654055a0ec90c24dcef3"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "attributedimension.json",
-          "size": 4748,
-          "sha256": "8abc6ea19d447fbf39b8d7d6e094bf0f7ec247659ccb7c89117a9298272236eb"
+          "size": 4758,
+          "sha256": "4f97641e34f8b2fb3330e4238785276d7874fe09694f0880215a4d831c1c3fb0"
         },
         {
           "kind": "binary",
           "file": "attributedimension.pb",
           "size": 1141,
-          "sha256": "0613f7d6db5f8362eea613ee3b4e5e558fe558ff4999aa045803c9a06fb1abc5"
+          "sha256": "851f0681953e73292b9c31758ac6d611c1df52785adc37ca8cec692448d55afb"
         }
       ]
     },
@@ -356,24 +379,24 @@
     },
     {
       "name": "MessageLimiter",
-      "rows": 13,
+      "rows": 21,
       "source": {
         "file": "MessageLimiter.xlsx",
-        "size": 5164,
-        "sha256": "684d118f4e56492ec40ac367bace3e7165588d9846cfb714749c275aeb51e61f"
+        "size": 5295,
+        "sha256": "6a5d21f3ea9d969af68a1638a0c4f36c8ca8f4dfbdb0c16686126abde95d01c8"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "messagelimiter.json",
-          "size": 1179,
-          "sha256": "3a09a417eb9d85880a7c0ea51a6960fac7a782d0c5c995dadb0e516a09caeb10"
+          "size": 1894,
+          "sha256": "e7b0fd7c389c7dd35730b423553deed3b3a01e3d0dab247da954561cf0fdef17"
         },
         {
           "kind": "binary",
           "file": "messagelimiter.pb",
-          "size": 154,
-          "sha256": "199a534cc5df9ad88700d8d19ccde1e6d8b2335a0a2705bb20fa8d3f8aaf5688"
+          "size": 250,
+          "sha256": "01126e07935703a1d5619fa9336e214591a022edb4dbb20731c1a49aec856a39"
         }
       ]
     },

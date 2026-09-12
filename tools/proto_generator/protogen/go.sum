@@ -12,7 +12,7 @@ github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD
 github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkryuEj+Srlc=
 github.com/jinzhu/now v1.1.5 h1:/o9tlHleP7gOFmsnYNz3RGnqzefHA47wQpKrrdTIwXQ=
 github.com/jinzhu/now v1.1.5/go.mod h1:d3SSVoowX0Lcu0IBviAWJpolVfI5UJVZZ7cO71lE/z8=
-github.com/luyuancpp/proto2mysql v0.1.0 h1:JrtGCOGpT3g07/fL8NZ2f1DHLAJ0eedj1rB7zzMpjIk=
+github.com/luyuancpp/proto2mysql v0.1.0 h1:da7YQBrZQIOkgb7ackCg1DcU/68xN4xQIy1tNqO0tSw=
 github.com/luyuancpp/proto2mysql v0.1.0/go.mod h1:090lbeAkv2cZ++KKKNpVaaP89Z4cQe0n9/ZrGN+saVQ=
 github.com/luyuancpp/protooption v0.0.21 h1:QdkreYCG2FMZhBrfxmBKz5bxSDnneUkCzYDZalqp8rg=
 github.com/luyuancpp/protooption v0.0.21/go.mod h1:uNz9kXwuEqmgeloQ96j+J0RNMLsDIKNN6sVNaxBZuWk=

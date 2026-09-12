@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class AllTable
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 27;
+        public const int TableCount = 28;
 
         private static Action s_loadSuccessCallback;
 
@@ -38,6 +38,7 @@ namespace MmorpgClient.Table
         {
             return new string[]
             {
+                ActivityScheduleTableManager.FileName(useBinary),
                 ActorActionCombatStateTableManager.FileName(useBinary),
                 ActorActionStateTableManager.FileName(useBinary),
                 AttributeAutoPlanTableManager.FileName(useBinary),
@@ -72,6 +73,7 @@ namespace MmorpgClient.Table
         /// <param name="useBinary">true to load .pb (proto binary), false to load .json.</param>
         public static void LoadTables(string configDir, bool useBinary)
         {
+            ActivityScheduleTableManager.Instance.Load(configDir, useBinary);
             ActorActionCombatStateTableManager.Instance.Load(configDir, useBinary);
             ActorActionStateTableManager.Instance.Load(configDir, useBinary);
             AttributeAutoPlanTableManager.Instance.Load(configDir, useBinary);
@@ -123,6 +125,8 @@ namespace MmorpgClient.Table
                 throw new ArgumentNullException("byteProvider");
             }
 
+            LoadOne(ActivityScheduleTableManager.FileName(useBinary), byteProvider, useBinary,
+                ActivityScheduleTableManager.Instance.LoadFromBytes, ActivityScheduleTableManager.Instance.LoadFromJson);
             LoadOne(ActorActionCombatStateTableManager.FileName(useBinary), byteProvider, useBinary,
                 ActorActionCombatStateTableManager.Instance.LoadFromBytes, ActorActionCombatStateTableManager.Instance.LoadFromJson);
             LoadOne(ActorActionStateTableManager.FileName(useBinary), byteProvider, useBinary,

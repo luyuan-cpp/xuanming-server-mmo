@@ -108,7 +108,19 @@ inline constexpr uint32_t kFormationFrontRowSize = 5;
 // ---- 怪物侧保守默认值(仅在 MonsterTable 查不到行/属性缺失时回退,2026-09-02 起
 //      正常从 MonsterTable 读属性;兜底怪 monster_table_id=0 走这些常量) ----
 
-inline constexpr uint64_t kMonsterActorIdBase = 1000000;  // 怪物局内 actor_id 起始值
+// ---- 局内 actor_id 命名空间 ----
+// 玩家单位直接用 player_id;非玩家单位(怪物 / 宝宝)用引擎局内序号,放进 bit63 打标的保留段。
+//
+// 为什么必须隔开(2026-09-11):ID 号段改造后,player_id 与 item/宠物 id 都由 data_service
+// 从 1 起递增发号。旧写法两处都会撞:
+//   - 宝宝直接拿 pet_id 当 actor_id:1 号玩家带着 1 号宝宝就同号,InitPets 查重后拒绝开局;
+//   - 怪物用 1000000 + 序号:第 100 万个玩家进 PVE 就与 0 号怪同号,而怪物追加**不查重**,
+//     伤害/目标按 actor_id 找人时会静默打错单位。
+// player_id 两个来源都 < 2^63(号段从 1 递增;遗留 bwmarrin SnowFlake 是正的 int64),
+// 且 InitPlayers 对 bit63 置位的 player_id 直接 fail-closed —— 这是被强制的不变量,不是假设。
+inline constexpr uint64_t kEngineLocalActorIdFlag = 1ULL << 63;
+inline constexpr uint64_t kMonsterActorIdBase = kEngineLocalActorIdFlag | (1ULL << 32);  // 怪物局内 actor_id 起始值
+inline constexpr uint64_t kPetActorIdBase = kEngineLocalActorIdFlag | (2ULL << 32);      // 宝宝局内 actor_id 起始值
 inline constexpr uint64_t kMonsterDefaultHealth = 300;
 inline constexpr uint64_t kMonsterDefaultStrength = 5;
 inline constexpr uint64_t kMonsterDefaultArmor = 2;

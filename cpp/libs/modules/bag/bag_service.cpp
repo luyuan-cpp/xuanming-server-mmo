@@ -1,4 +1,4 @@
-﻿#include "bag_service.h"
+#include "bag_service.h"
 
 #include "engine/core/error_handling/error_handling.h"
 #include "engine/core/macros/return_define.h"
@@ -136,7 +136,8 @@ uint32_t BagService::AddItems(
 	entt::entity playerEntity,
 	Bag &bag,
 	const PlayerItemBlockList &blockList,
-	const ItemCountMap &itemsToAdd)
+	const ItemCountMap &itemsToAdd,
+	TransactionType txType)
 {
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
 	// See AddItem above for rationale. Reject the whole batch early.
@@ -194,7 +195,7 @@ uint32_t BagService::AddItems(
 
 		TransactionLogSystem::LogItemCreate(
 			playerEntity, PrimaryWrittenGuid(writtenGuids),
-			configId, count, TX_SYSTEM_GRANT);
+			configId, count, txType);
 
 		AnomalyDetector::RecordItemGain(playerEntity, configId, count);
 	}
@@ -206,7 +207,8 @@ uint32_t BagService::AddItems(
 	entt::entity playerEntity,
 	Bag &bag,
 	const PlayerItemBlockList &blockList,
-	const std::vector<InitItemParam> &itemsToAdd)
+	const std::vector<InitItemParam> &itemsToAdd,
+	TransactionType txType)
 {
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
 	// See AddItem above for rationale. Reject the whole batch early.
@@ -265,7 +267,7 @@ uint32_t BagService::AddItems(
 			playerEntity, PrimaryWrittenGuid(writtenGuids),
 			param.itemPBComp.config_id(),
 			param.itemPBComp.size(),
-			TX_SYSTEM_GRANT);
+			txType);
 
 		AnomalyDetector::RecordItemGain(
 			playerEntity, param.itemPBComp.config_id(),

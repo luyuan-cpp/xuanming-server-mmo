@@ -119,7 +119,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/zlib/;../../../third_party/redis/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;../../../third_party/protobuf/third_party/abseil-cpp/;../../../third_party/ue5navmesh/Public;../../../third_party/grpc/include/;../../../third_party/spdlog/include/;../../../third_party/hexagons_grids/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../../third_party/xxhash/;../../../third_party/librdkafka/src-cpp/;../../libs/;../../libs/engine/;../../libs/services/scene/;../../generated/;../../libs/engine/core/;../../libs/engine/modules/;../../libs/engine/config/;./;../../libs/engine/infra/;../../../third_party/grpc/third_party/googletest/googletest/include/;../../../third_party/grpc/third_party/googletest/googlemock/include/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/zlib/;../../../third_party/redis/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;../../../third_party/protobuf/third_party/abseil-cpp/;../../../third_party/ue5navmesh/Public;../../../third_party/grpc/include/;../../../third_party/spdlog/include/;../../../third_party/hexagons_grids/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../../third_party/xxhash/;../../../third_party/librdkafka/src-cpp/;../../libs/;../../libs/engine/;../../libs/services/scene/;../../libs/services/player/;../../generated/;../../libs/engine/core/;../../libs/engine/modules/;../../libs/engine/config/;./;../../libs/engine/infra/;../../../third_party/grpc/third_party/googletest/googletest/include/;../../../third_party/grpc/third_party/googletest/googlemock/include/</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <DisableSpecificWarnings>4819;4244;4018;4267;4819;</DisableSpecificWarnings>
       <LanguageStandard_C>stdclatest</LanguageStandard_C>
@@ -146,7 +146,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/zlib/;../../../third_party/redis/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;../../../third_party/protobuf/third_party/abseil-cpp/;../../../third_party/ue5navmesh/Public;../../../third_party/grpc/include/;../../../third_party/spdlog/include/;../../../third_party/hexagons_grids/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../../third_party/xxhash/;../../../third_party/librdkafka/src-cpp/;../../libs/;../../libs/engine/;../../libs/services/scene/;../../generated/;../../libs/engine/core/;../../libs/engine/modules/;../../libs/engine/config/;./;../../libs/engine/infra/;../../../third_party/grpc/third_party/googletest/googletest/include/;../../../third_party/grpc/third_party/googletest/googlemock/include/</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/zlib/;../../../third_party/redis/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;../../../third_party/protobuf/third_party/abseil-cpp/;../../../third_party/ue5navmesh/Public;../../../third_party/grpc/include/;../../../third_party/spdlog/include/;../../../third_party/hexagons_grids/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../../third_party/xxhash/;../../../third_party/librdkafka/src-cpp/;../../libs/;../../libs/engine/;../../libs/services/scene/;../../libs/services/player/;../../generated/;../../libs/engine/core/;../../libs/engine/modules/;../../libs/engine/config/;./;../../libs/engine/infra/;../../../third_party/grpc/third_party/googletest/googletest/include/;../../../third_party/grpc/third_party/googletest/googlemock/include/</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
       <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
@@ -159,7 +159,20 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="bag_test.cpp" />
+    <ClCompile Include="player_feature_snapshot_test.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets"></ImportGroup>
+  <ItemGroup>
+    <ClCompile Include="player_feature_handler_test.cpp" />
+    <ClCompile Include="..\..\nodes\scene\handler\rpc\player\player_bag_handler.cpp" />
+    <ClCompile Include="..\..\nodes\scene\handler\rpc\player\player_mission_handler.cpp" />
+    <ClCompile Include="..\..\nodes\scene\handler\rpc\player\player_activity_handler.cpp" />
+  </ItemGroup>  <ItemGroup>
+    <ClCompile Include="player_battle_settlement_test.cpp" />
+    <ClCompile Include="player_mission_system_test.cpp" />
+    <ClCompile Include="player_activity_schedule_test.cpp" />
+    <ClCompile Include="player_feature_persistence_test.cpp" />
+    <ClCompile Include="..\..\nodes\scene\handler\event\mission_event_handler.cpp" />
+  </ItemGroup>
 </Project>

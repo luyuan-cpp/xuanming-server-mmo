@@ -7,6 +7,8 @@
 //   1) 某池在某等级一共有多少点;
 //   2) 一份"目标已分配"是否合法(只增不减 / 单项上限 / 总量不超剩余);
 //   3) 自动加点怎么把剩余点分下去(有上限池按优先序灌满,无上限池按权重比例)。
+//
+// 单测:cpp/tests/turn_battle_engine_test/attribute_allocation_rules_test.cpp(纯头文件,不需要链接 scene.lib)。
 
 #include <cstdint>
 #include <map>
@@ -48,8 +50,10 @@ inline uint32_t TotalPoints(const PoolRule& rule, uint32_t level, uint32_t bonus
     return total > UINT32_MAX ? UINT32_MAX : static_cast<uint32_t>(total);
 }
 
-// 当前值(HP/MP)随上限变化时按比例保持:活着的至少留 1,一升一降往返零净得失。
-// 角色(切方案/洗点/加点)与宝宝(加点/洗点/升级)共用,避免"改属性当治疗"的白嫖路径
+// 当前值(HP/MP)随上限变化时按比例保持:活着的至少留 1。一升一降往返不净得;唯一例外是极低血量时
+// "至少留 1"会让往返回升到 floor(oldMax/newMax),有上界,再往返也不再增长。
+// 角色(加载/加点/切方案/洗点)与宝宝(加载/加点/洗点)共用;两边的升级(kLevelChanged)都走
+// "按绝对增量补"分支,不经过本函数。避免"改属性当治疗"的白嫖路径
 // (评审 2026-09-04,player-attribute-allocation.md §3.1)。
 inline uint64_t RescaleCurrent(uint64_t current, uint64_t oldMax, uint64_t newMax) {
     if (current == 0 || newMax == 0) {
@@ -87,6 +91,8 @@ inline AllocError ValidateAllocation(const PoolRule& rule, uint32_t level,
     if (!IsUnlocked(rule, level)) {
         return AllocError::kPoolLocked;
     }
+    // 必须 64 位累加:目标值来自客户端,单项最大 UINT32_MAX(外挂发的负数也会绕成超大正数),
+    // 32 位累加时 UINT32_MAX + 10 会绕成 9,骗过下面的剩余点校验
     uint64_t delta = 0;
     for (const auto& [dimensionId, want] : target) {
         const auto it = current.find(dimensionId);

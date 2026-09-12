@@ -26,7 +26,7 @@ public:
     // ── Query ────────────────────────────────────────────────────────────
 
     [[nodiscard]] std::size_t MissionSize() const { return missionList_.missions().size(); }
-    [[nodiscard]] std::size_t CompleteSize() const { return completedMissions_.count(); }
+    [[nodiscard]] std::size_t CompleteSize() const { return completedMissions_.count() + unmappedCompletedIds_.size(); }
     [[nodiscard]] std::size_t TypeSetSize() const { return typeFilter_.size(); }
     [[nodiscard]] std::size_t CanGetRewardSize() const;
     MissionsBits& GetCompleteMissions() { return completedMissions_; }
@@ -34,7 +34,7 @@ public:
 
     [[nodiscard]] bool IsClaimable(const uint32_t missionId) const
     {
-        return TestBit(MissionBitMap, claimableRewards_, missionId);
+        return TestBit(MissionBitMap, claimableRewards_, missionId) || unmappedClaimableIds_.contains(missionId);
     }
 
     [[nodiscard]] bool IsAccepted(uint32_t missionId) const
@@ -46,7 +46,7 @@ public:
     {
         if (!MissionBitMap.contains(missionId))
         {
-            return false;
+            return unmappedCompletedIds_.contains(missionId);
         }
         return completedMissions_.test(MissionBitMap.at(missionId));
     }
@@ -78,6 +78,12 @@ public:
 
     void SetMissionTypeNotRepeated(bool value) { missionTypeNotRepeated_ = value; }
     void AbandonMission(uint32_t missionId);
+    void RestoreCompleted(uint32_t missionId);
+    void RestoreClaimable(uint32_t missionId);
+    void ClearClaimable(uint32_t missionId);
+    void RebuildIndexes(const IMissionConfig& config);
+    [[nodiscard]] const UInt32Set& GetUnmappedCompletedIds() const { return unmappedCompletedIds_; }
+    [[nodiscard]] const UInt32Set& GetUnmappedClaimableIds() const { return unmappedClaimableIds_; }
 
 private:
     MissionListComp missionList_;
@@ -86,6 +92,9 @@ private:
     bool missionTypeNotRepeated_{ true };
     MissionsBits completedMissions_;
     MissionsBits claimableRewards_;
+    // 配置删除后仍保留稳定任务 ID，避免下一次保存静默丢弃历史状态。
+    UInt32Set unmappedCompletedIds_;
+    UInt32Set unmappedClaimableIds_;
 };
 
 using PlayerMissionList = std::array<MissionsComp, MissionListComp::kPlayerMissionSize>;
@@ -102,6 +111,11 @@ struct MissionsContainerComp {
 		}
 		return it->second;
 	}
+
+    MissionsComp* GetMutable(uint32_t scope) {
+        auto it = map.find(scope);
+        return (it == map.end()) ? nullptr : &it->second;
+    }
 
 	const MissionsComp* Get(uint32_t scope) const {
 		auto it = map.find(scope);

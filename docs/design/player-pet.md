@@ -122,11 +122,18 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
    与当前 HP/MP,`max_*` 与物伤 / 法伤 / 防御来自现算的二级属性。
    **死宝宝(health==0)不参战** —— 带进去就是开局即倒的空单位。
 2. **引擎 `InitPets`**:在 `InitPlayers` 之后追加(阵位按插入序,主人先站前排),
-   `actor_id = pet_id`。**pet_id 沿用 item 身份域,与 player_id 的独立域可能数值相交**。
-   scene 经 `tlsGuidSegmentRegistry.Get(GuidKind::kItem).TryNext` 从 item 号段取得 pet_id,
-   不再依赖 SnowFlake 发号器;两种身份域仍不能假设数值互斥,
-   所以 `InitPets` 显式查重并在相撞时**拒绝开局**(fail-closed),而不是假设不会撞;
-   同理宝宝的归属只认所在快照的 `player_id`,快照自带的 `owner_player_id` 只用于对账,
+   宝宝的 `actor_id` 是**引擎局内号**(`kPetActorIdBase + 序号`),真实 pet_id 存在
+   `BattleActorState.pet_id`,结算回写只认后者。
+   **为什么不能直接用 pet_id(2026-09-11 修正)**:scene 经
+   `tlsGuidSegmentRegistry.Get(GuidKind::kItem).TryNext` 从 item 号段取 pet_id,而号段改造后
+   player_id 与 item id **都从 1 起递增**。最初的 `actor_id = pet_id` 让 N 号玩家带 N 号宝宝必然同号,
+   `InitPets` 查重后拒绝开局 —— 上线第一天就会出现"带宝宝进不了战斗"。本机当时靠把 item 号段起点
+   抬到 2^40 临时躲开,那只是数据库里的一次性处理,不是修复。
+   现在非玩家单位(怪物 / 宝宝)的局内号统一放进 bit63 打标的保留段(`kEngineLocalActorIdFlag`),
+   `InitPlayers` 对落进这个段的 player_id 直接拒绝开局,所以撞号在构造上不可能发生。
+   怪物顺手一起迁了:旧的 `kMonsterActorIdBase = 1000000` 在第 100 万个玩家进 PVE 时会与 0 号怪同号,
+   而怪物追加不查重,是静默打错单位。
+   宝宝的归属只认所在快照的 `player_id`,快照自带的 `owner_player_id` 只用于对账,
    `team_index` 跟随主人,`actor_type = BATTLE_ACTOR_TYPE_PET`。
 3. **结算**:`BuildSettlement` 把该主人名下的宝宝终值塞进
    `BattleSettlementData.pets`;scene 的 `ApplySettlementToEntity` 按现算上限夹后落实例。
@@ -154,8 +161,9 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
   石灵(肉)、金猊(物理)、云鹤(法系)。
 - **`PetRule`** —— 单行全局:`max_pets` / `name_max_len` / `rename_cost_gold` / `summon_cooldown_seconds`。
 - **`AttributePool` 新增行 4**:宝宝属性点,1 级解锁、每级 5 点、`owner_type=1`、洗点 300 金、30 级以下免费。
-- **`AttributeDimension` 新增 401-404**:宝宝的体质 / 灵力 / 力量 / 敏捷,系数比角色低一档
-  (体质 25 血 + 1.5 防 / 灵力 15 蓝 + 2.5 法伤 / 力量 4 物伤 / 敏捷 2.5 速度)。
+- **`AttributeDimension` 新增 401-404**:宝宝的体质 / 灵力 / 力量 / 敏捷,系数比角色低一档。
+  2026-09-11 随角色系数上调按原倍率同步:体质 42 血 + 3.75 防 / 灵力 7.5 蓝 + 33 法伤 / 力量 40 物伤 / 敏捷 2.5 速度
+  (原 25 + 1.5 / 15 + 2.5 / 4 / 2.5;角色现为 50 + 5 / 10 + 40 / 50 / 3,换算规则见 `player-attribute-allocation.md` §2.2)。
 - **`AttributeAutoPlan` 新增行 4**:宝宝通用方案(力量 3 : 体质 2 : 敏捷 1)。
   **刻意不投灵力**:核心线宝宝只普攻(`PetTable.skill` 全 0),灵力给的法伤与法力上限
   对它零收益,推荐方案往那里投点等于白扔。宝宝接技能书之后要把 402 加回来。

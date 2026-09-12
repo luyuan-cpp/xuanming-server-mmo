@@ -16,7 +16,7 @@ import (
 
 func newTestSource(t *testing.T, allowModify bool) *ProtoSource {
 	t.Helper()
-	model := proto2mysql.NewPbMysqlDB()
+	model := proto2mysql.NewDB()
 	tables := []proto.Message{&dbpb.PlayerDatabase{}, &dbpb.PlayerSnapshot{}}
 	for _, tbl := range tables {
 		model.RegisterTable(tbl)
@@ -53,7 +53,7 @@ func TestBaselineChecksumTracksTableSetNotDDLText(t *testing.T) {
 		t.Fatalf("baseline a: %v", err)
 	}
 
-	model := proto2mysql.NewPbMysqlDB()
+	model := proto2mysql.NewDB()
 	// 换个顺序注册同一组表,checksum 必须不变。
 	tables := []proto.Message{&dbpb.PlayerSnapshot{}, &dbpb.PlayerDatabase{}}
 	for _, tbl := range tables {
@@ -67,7 +67,7 @@ func TestBaselineChecksumTracksTableSetNotDDLText(t *testing.T) {
 		t.Fatalf("table-set checksum must be order independent: %s vs %s", a.Checksum, b.Checksum)
 	}
 
-	model2 := proto2mysql.NewPbMysqlDB()
+	model2 := proto2mysql.NewDB()
 	tables2 := []proto.Message{&dbpb.PlayerDatabase{}}
 	model2.RegisterTable(tables2[0])
 	c, err := (&ProtoSource{Model: model2, Tables: tables2}).Baseline()
