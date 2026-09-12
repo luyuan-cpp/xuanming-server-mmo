@@ -104,3 +104,11 @@ features-smoke 现支持显式 battle_config_id=1 的完整单人验收链，要
 标准启动器完成全部六阶段，网关 UP、一区 OPEN，最终游戏窗口已打开。独立校验 gate/scene/battle/db 四个运行进程的绝对路径、候选 SHA256 和监听端口均通过。另发现启动器遗漏 gate 的 gRPC 路由依赖 client_rpc_router：现已从既有源码通过全模块测试/构建，补入标准启动清单并由正式服务管理器启动，50600 监听和运行文件哈希核对通过。该无状态路由不使用账号、Redis 或 Kafka。外层 PowerShell 受后台子进程继承输出管道影响仍可能等待，未将未捕获的命令退出码写成0；成功依据六步启动日志及独立运行时复核。
 
 最终证据为 E:/work/tmp/features-completion-20260911/running-service-verification.json、final-validation-summary.json、router-install.json 与 router-tests.log。任务实施和本地运行已完成；尚未执行真实账号联机验证，等待用户指定已有本地测试账号，未自行使用存储凭据。春节/元宵/中秋活动正式日期仍未提供，保持未排期。
+
+## 2026-09-12 本地续作复核
+
+本次标准启动器于 02:00:51 完成六阶段并打开游戏；02:04:49 独立复核 gate、scene、battle、db、client_rpc_router 五个运行程序的绝对路径、候选 SHA256 和监听端口全部匹配，网关 UP、一区 OPEN，客户端仅一个运行进程。证据在 E:/work/tmp/features-recheck-20260912/running-service-verification.json；保留已有数据库及服务数据。
+
+客户端包已在 9 月 11 日 11:04、11:37 被后续登录界面构建更新，因此不能再用 09:16 的旧安装清单判断当前包。最终 prelogin-hero-center 构建直接输出 showcase_player，Succeeded、0 errors、503 条既有图形/推理着色器警告。本次只读核对其构建源工程 citymove_verify_project 与正式客户端中三页 UI、数据客户端及资源共 60 文件，哈希全部一致；未恢复旧包。构建来源与逐文件比对见同目录 client-build-provenance.json。旧 96 项 Unity 与 323 项 C++ 结果仍属于既有验证，本次没有重新运行这些测试。
+
+功能实施与本地启动完成，真实账号的接取、战斗、领奖、拒绝重复领取及重登验收仍等待用户指定已有测试账号名，未自行选择账号或读取登录凭据。活动 15/16/17 仍未收到正式日期，保持未排期。
