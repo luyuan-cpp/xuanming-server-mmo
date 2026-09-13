@@ -6,10 +6,12 @@
 // PlayerAttributeSystem 负责把表行 / 组件翻译成这里的输入,这里只回答三个问题:
 //   1) 某池在某等级一共有多少点;
 //   2) 一份"目标已分配"是否合法(只增不减 / 单项上限 / 总量不超剩余);
-//   3) 自动加点怎么把剩余点分下去(有上限池按优先序灌满,无上限池按权重比例)。
+//   3) 自动加点怎么把剩余点分下去(有上限池按优先序灌满,无上限池按权重比例);
+//   4) 角色属性点里"玩家分配的那部分"换算成多少二级属性(百分比 + 集中投资公式,2026-09-13)。
 //
 // 单测:cpp/tests/turn_battle_engine_test/attribute_allocation_rules_test.cpp(纯头文件,不需要链接 scene.lib)。
 
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <vector>
@@ -170,6 +172,69 @@ inline void DistributePoints(const PoolRule& rule, const std::vector<uint32_t>& 
         allocated[order[i]] += 1;
         --left;
     }
+}
+
+// ---- 角色属性点的加点收益(2026-09-13 策划公式,设计文档 §3.1) ----
+//
+//   有效点数 E(n) = n × (1 + bonus × n ÷ scale)
+//   属性增量     = 标准基础属性 × 比例 × E(n) ÷ E(scale)
+//
+// scale = 该维度满级时最多能分到的点数(角色属性点池 = 85 × 5 = 425),E(scale) = scale × (1 + bonus)
+// (= 510,即策划公式里的除数)。所以满投正好拿到 AttributeAllocRatio 表定的比例,分散投则按 E(n) 打折
+// —— 这就是"集中投资"的来源:同样 425 点,全投一项有效点 510,四项各 106 点合计约 445.15,
+// 集中投比分散投多约 14.6%(反过来说分散投少约 12.7%)。
+//
+// scale 与除数**不进表,由池表与等级上限现算**(评审 2026-09-13):它们完全由 AttributePool 的
+// points_per_level / dimension_cap 与 playerlevel::kMaxLevel 决定。手抄一份到表里就是第二份真相 ——
+// 改等级上限或每级点数时忘了同步,满投会悄悄超过表定比例,且零报错。表里只配 bonus。
+// "标准基础属性"= 职业初值 + 85 级自然成长(不含加点、不含装备),由调用方按表算好传进来。
+
+inline constexpr double kDefaultEfficiencyBonus = 0.20;
+
+struct AllocFormulaRule {
+    double efficiencyBonus = kDefaultEfficiencyBonus;
+    uint32_t fullInvestmentPoints = 425;  // scale:该维度满级时最多能分到的点数
+};
+
+// 该池单个维度在 maxLevel 时最多能分到多少点:不限单项 → 满级总点数;限单项 → min(单项上限, 满级总点数)。
+// 不计 bonus_points:额外点目前没有写入方,有了之后 n 可能超过 scale、收益超过表定比例(设计文档 §8)。
+inline uint32_t FullInvestmentPoints(const PoolRule& rule, uint32_t maxLevel) {
+    const uint32_t total = TotalPoints(rule, maxLevel, 0);
+    return (rule.dimensionCap > 0 && rule.dimensionCap < total) ? rule.dimensionCap : total;
+}
+
+// bonus 取表值:0 是合法值(纯线性,没有集中投资倾向);负数 / 非有限数是坏表,退回策划默认 0.20
+inline AllocFormulaRule MakeFormulaRule(double tableBonus, uint32_t fullInvestmentPoints) {
+    AllocFormulaRule rule;
+    if (std::isfinite(tableBonus) && tableBonus >= 0.0) {
+        rule.efficiencyBonus = tableBonus;
+    }
+    rule.fullInvestmentPoints = fullInvestmentPoints;
+    return rule;
+}
+
+inline double EffectivePoints(uint32_t allocated, const AllocFormulaRule& rule) {
+    const double n = static_cast<double>(allocated);
+    if (rule.fullInvestmentPoints == 0) {
+        return n;  // 该池满级也分不到点(解锁等级高于上限),不会有已分配;防御除零
+    }
+    return n * (1.0 + rule.efficiencyBonus * n / static_cast<double>(rule.fullInvestmentPoints));
+}
+
+// 满投时的有效点数 E(scale) = scale × (1 + bonus),即公式里的除数
+inline double FullInvestmentEffectivePoints(const AllocFormulaRule& rule) {
+    return static_cast<double>(rule.fullInvestmentPoints) * (1.0 + rule.efficiencyBonus);
+}
+
+// 一个维度对一项二级属性的增量。ratio 是该维度对该属性的满投比例(AttributeAllocRatio 表);
+// 比例为 0 的属性直接得 0,不做任何除法。
+inline double AllocatedIncrement(double standardBase, double ratio, uint32_t allocated,
+                                 const AllocFormulaRule& rule) {
+    const double divisor = FullInvestmentEffectivePoints(rule);
+    if (ratio <= 0.0 || allocated == 0 || standardBase <= 0.0 || divisor <= 0.0) {
+        return 0.0;
+    }
+    return standardBase * ratio * EffectivePoints(allocated, rule) / divisor;
 }
 
 }  // namespace attributerules

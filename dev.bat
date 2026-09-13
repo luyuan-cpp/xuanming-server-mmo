@@ -30,6 +30,8 @@ if /I "%CMD%"=="robot"      goto :robot
 if /I "%CMD%"=="robot-zones" goto :robot_zones
 if /I "%CMD%"=="infra"      goto :infra
 if /I "%CMD%"=="infra-down"  goto :infra_down
+if /I "%CMD%"=="obs"        goto :obs
+if /I "%CMD%"=="obs-down"   goto :obs_down
 if /I "%CMD%"=="build"      goto :build
 if /I "%CMD%"=="proto"      goto :proto
 if /I "%CMD%"=="export"     goto :export
@@ -75,10 +77,12 @@ echo     19. Stop SA-Token
 echo     20. Start multi (2 gate + 4 scene + login*2 + scene_mgr*2 + locator*2 + data*2)
 echo     21. Start zones (2 zones x 2 gate + 4 scene + per-zone Go services)
 echo     22. Robot zones (parallel robot.exe per zone for two-zone stress)
+echo     23. Obs         (docker-compose up: Grafana + Loki + Alloy log viewer)
+echo     24. Obs down    (docker-compose down: Grafana + Loki + Alloy)
 echo.
 echo     0.  Exit
 echo.
-set /p "CHOICE=  Pick [0-22]: "
+set /p "CHOICE=  Pick [0-24]: "
 
 if "%CHOICE%"=="0" exit /b 0
 
@@ -104,6 +108,8 @@ if "%CHOICE%"=="19" call :stop_satoken  & goto :menu_return
 if "%CHOICE%"=="20" call :start_multi   & goto :menu_return
 if "%CHOICE%"=="21" call :start_zones   & goto :menu_return
 if "%CHOICE%"=="22" call :robot_zones   & goto :menu_return
+if "%CHOICE%"=="23" call :obs           & goto :menu_return
+if "%CHOICE%"=="24" call :obs_down      & goto :menu_return
 
 echo   Invalid choice.
 goto :menu
@@ -454,6 +460,25 @@ echo Infrastructure stopped.
 exit /b 0
 
 :: ================================================================
+:obs
+echo Starting log viewer stack (docker-compose: Grafana + Loki + Alloy)...
+docker compose -f deploy\docker-compose.observability.yml up -d
+if errorlevel 1 ( echo docker-compose up failed. & pause & exit /b 1 )
+echo.
+echo Log viewer running. Open http://localhost:3000  (dashboard: "游戏服务日志总览")
+echo   Loki API  : http://localhost:3100    Alloy UI: http://localhost:12345
+echo   Collecting: run\logs\go_services, run\logs\cpp_nodes, run\logs\java (see docs\ops\grafana-loki-local-logs.md)
+exit /b 0
+
+:: ================================================================
+:obs_down
+echo Stopping log viewer stack...
+docker compose -f deploy\docker-compose.observability.yml down
+if errorlevel 1 ( echo docker-compose down failed. & pause & exit /b 1 )
+echo Log viewer stopped (Loki data volume kept; use "docker compose -f deploy\docker-compose.observability.yml down -v" to wipe).
+exit /b 0
+
+:: ================================================================
 :build
 echo [1/2] Building C++ (game.sln Debug x64)...
 set "MSBUILD_EXE="
@@ -677,6 +702,8 @@ echo     robot          Build + run robot load-test client
 echo     robot ^<cfg^>    Use custom config (default: robot\etc\robot.yaml)
 echo     infra          Start local infra (Kafka/Redis/MySQL/etcd)
 echo     infra-down     Stop local infra
+echo     obs            Start Grafana + Loki + Alloy log viewer (http://localhost:3000)
+echo     obs-down       Stop the log viewer stack
 echo     build          Compile C++ + Go (no launch)
 echo     proto          Regenerate proto code
 echo     export         Run Excel data table exporter (Python)

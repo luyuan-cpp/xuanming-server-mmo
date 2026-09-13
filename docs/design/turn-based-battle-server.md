@@ -131,8 +131,9 @@ session_id / 各类 table_id / 回合数 `uint32`;时间戳 `uint64` 毫秒;属�
   damage / bonus_damage / health_regeneration 表达式(`SetDamageParam({casterLevel})` 两步调用照旧);
 - 校验链照搬:ValidateTarget / CheckCooldown / CheckPlayerLevel / CheckBuff(SkillPermission)/ CheckState,
   **去掉** CheckCasting / CheckRecovery / CheckChannel(相位概念随 timer 一起删除);
-- 伤害公式照搬 `CalculateFinalDamage` 语义:`base*(1+strength*0.1) - armor`,`*(1-resistance*0.01)`,
-  `critchance/100` 概率 ×2,饱和到 0;
+- 伤害公式与实时技能共用纯规则 `system/combat_damage_rules.h`(2026-09-13 起比例减伤,常驻减伤封顶 60%;
+  非 PVE 对局再 × `kPvpDamageScale` = 0.2;`critchance/100` 概率 ×2)。公式细节见 `player-attribute-allocation.md` §3.2;
+  改前的"攻击减防御"口径(`base*(1+strength*0.1) - armor`,`*(1-resistance*0.01)`)已废弃;
 - buff 语义照搬:max_layer 叠层 / immune_tag / dispel_tag / sub_buff / target_sub_buff / interval_effect。
 
 **时间→回合换算**(v1 策略,后续可在 Excel 加回合列覆盖):
@@ -478,8 +479,8 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
 
 ### 15.1 策划表加列(走 tools/data_table_exporter 重导)
 - `Monster.xlsx`:health/strength/armor/resistance/critchance/speed(uint64)+ exp_reward/gold_reward;16 只怪分级。
-  **2026-09-11 重定**:角色属性系数上调后按新口径重算 1-16 的 health / strength / speed(护甲 / 抗性 / 暴击 / 奖励不变);
-  新手教学怪 / 普通怪 / 首领三档目标、参照等级与换算公式见 `player-attribute-allocation.md` §8。
+  **2026-09-13 重定**(取代从未导表的 2026-09-11 那版):按加点百分比公式 + 比例减伤重算 1-16 的 health / strength / speed
+  (护甲 / 抗性 / 暴击 / 奖励不变);新手教学怪 / 普通怪 / 首领三档目标、参照等级与新值见 `player-attribute-allocation.md` §8。
 - `Dungeon.xlsx`:`monster`(repeated fk:Monster)怪物组;副本1=[1,2]/副本2=[6,7]/副本3=[11,12,16]。
 - `Class.xlsx`:init_health/mana/strength/armor/resistance/critchance/speed(职业初始属性)。
 - **导表 PATH 必须同时含 protoc 与 protoc-gen-go/grpc**,否则 Go 侧 proto 静默不重生成。

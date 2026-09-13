@@ -9,3 +9,9 @@ management:
     web:
       exposure:
         include: health,info
+
+# 日志:控制台一行一条 JSON(logstash 风格),与 gateway_node 一致,便于 Alloy 采进 Loki。
+logging:
+  structured:
+    format:
+      console: logstash

@@ -1,0 +1,15 @@
+# Grafana 启动时从 /var/lib/grafana/dashboards 目录自动导入看板 JSON。
+# 在网页里改过的看板可以保存回来,但下次改 JSON 文件时会以文件为准。
+apiVersion: 1
+
+providers:
+  - name: xuanming-local
+    orgId: 1
+    folder: 玄冥本地
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

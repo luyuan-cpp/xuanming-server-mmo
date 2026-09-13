@@ -1,0 +1,86 @@
+# 本地日志观测台:Loki(存日志)+ Alloy(采集本机日志文件)+ Grafana(看)。
+#
+#   启动:dev.bat obs        (等价 docker compose -f deploy\docker-compose.observability.yml up -d)
+#   停止:dev.bat obs-down
+#   打开:http://localhost:3000   (本地开发免登录,匿名即管理员)
+#
+# 和 deploy/docker-compose.yml(Kafka/Redis/MySQL/etcd)互不依赖,可以单独起停。
+# 采集的是宿主机 run/logs 下的文件,服务本身不用改任何代码;三种语言各自的
+# 解析规则在 observability/alloy/config.alloy。
+name: xuanming-observability
+
+services:
+  loki:
+    image: grafana/loki:3.5
+    container_name: xm-loki
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki/loki.yaml:/etc/loki/loki.yaml:ro
+      - loki-data:/loki
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  alloy:
+    image: grafana/alloy:latest
+    container_name: xm-alloy
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "12345:12345"   # Alloy 自带的调试页面:http://localhost:12345
+    volumes:
+      - ./observability/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ../run/logs:/host/run/logs:ro
+      - ../bin/logs:/host/bin/logs:ro
+      - alloy-data:/var/lib/alloy/data
+    depends_on:
+      - loki
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: xm-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      # 本地开发免登录:匿名访问即管理员。不要把这套配置原样搬到公网。
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: "Admin"
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_SECURITY_ADMIN_USER: "admin"
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+      GF_USERS_DEFAULT_LANGUAGE: "zh-Hans"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+      GF_NEWS_NEWS_FEED_ENABLED: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - loki
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+volumes:
+  loki-data:
+  alloy-data:
+  grafana-data:

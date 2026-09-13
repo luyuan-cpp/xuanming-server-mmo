@@ -41,6 +41,9 @@ type enterGameSessionState struct {
 	gateInstanceID string
 	account        string
 	requestID      string
+	classID        uint32
+	playerLockKey  string
+	playerLockToken string
 }
 
 func NewEnterGameLogic(ctx context.Context, svcCtx *svc.ServiceContext) *EnterGameLogic {
@@ -91,6 +94,8 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	}
 
 	flowState := buildEnterGameSessionState(in, sessionDetails, account)
+	flowState.playerLockKey = tryLocker.Key
+	flowState.playerLockToken = tryLocker.Value
 
 	// Lock release is deferred until either the early-return paths below run
 	// (validation failure / pool reject) or the background goroutine finishes
@@ -128,9 +133,11 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	}
 
 	found := false
-	for _, p := range userAccount.SimplePlayers.GetPlayers() {
-		if p.PlayerId == in.PlayerId {
+	for _, p := range userAccount.GetSimplePlayers().GetPlayers() {
+		if p.GetPlayerId() == in.PlayerId {
 			found = true
+			// 职业只能来自已验证归属的账号角色记录，不能由入场请求自由指定。
+			flowState.classID = p.GetClassId()
 			break
 		}
 	}
@@ -247,10 +254,10 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	)
 
 	onPreloadComplete := func(err error) {
-		// Stop the heartbeat first so it cannot race with Release.
-		stopHeartbeat()
 		defer chainCancel()
 		defer releaseLock()
+		// 会话落盘和职业补齐期间继续续租；退出时先停心跳，再释放锁。
+		defer stopHeartbeat()
 
 		// preloadSeconds: from chain start to the moment the dispatcher
 		// callback fires. Includes Kafka send + DB worker turnaround +
@@ -330,6 +337,7 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		// Pool saturated — outer defer will release the lock since the
 		// goroutine never ran. Surface back-pressure to the client.
 		chainCancel()
+		stopHeartbeat()
 		resp.ErrorMessage.Id = uint32(table.LoginError_kLoginInProgress)
 		return resp, nil
 	}
@@ -464,6 +472,9 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	}
 
 	decision := sessionmanager.DecideEnterGame(existing, state.account)
+	if err := l.backfillPlayerClass(ctx, existing, state); err != nil {
+		return decision, err
+	}
 
 	// Stage observation: persistEnterGameSession (SetSession or Reconnect).
 	// Label by decision so the reconnect (CAS) tail doesn't get hidden by the

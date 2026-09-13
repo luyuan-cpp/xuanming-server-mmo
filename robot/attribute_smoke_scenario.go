@@ -238,7 +238,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 		zap.Uint32("delta", delta), zap.Int("dimensions", len(suggested)))
 
 	// ---- 步骤 5:确认加点 → 剩余点归零、二级属性变大 ----
-	healthBefore := fresh.Derived.MaxHealth
+	derivedBefore := derivedSum(fresh.Derived)
 	panel, err = session.call(game.SceneAttributeClientPlayerAllocateAttributePointsMessageId,
 		&scene.AllocateAttributePointsRequest{PoolId: attrPoolPrimary, Allocated: suggested})
 	if err != nil {
@@ -248,8 +248,10 @@ func RunAttributeSmoke(cfg *config.Config) {
 	if primary.Remaining != 0 {
 		fail("allocate-remaining", "分完后剩余点应为 0,实为 %d", primary.Remaining)
 	}
-	if panel.Derived.MaxHealth <= healthBefore {
-		fail("derived-not-growing", "加点后气血上限没变大:%d -> %d", healthBefore, panel.Derived.MaxHealth)
+	// 只断言"六项二级属性上限总和变大",不绑定哪一项:自动加点方案是表驱动的(2026-09-13 起全投本职业主属性,
+	// 通用档全投力量 → 只涨物伤),原先写死"气血上限变大"会随方案调整误报
+	if derivedSum(panel.Derived) <= derivedBefore {
+		fail("derived-not-growing", "加点后二级属性没变大:总和 %d -> %d", derivedBefore, derivedSum(panel.Derived))
 	}
 	zap.L().Info("[attribute-smoke] step 5: allocate applied",
 		zap.Uint64("max_health", panel.Derived.MaxHealth),
@@ -379,6 +381,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 	persistSchemes := len(panel.Schemes)
 	persistActive := panel.ActiveSchemeId
 	persistMaxHealth := panel.Derived.MaxHealth
+	persistDerived := derivedSum(panel.Derived)
 	reborn, err := session.relogin(cfg)
 	if err != nil {
 		fail("relogin", "%v", err)
@@ -399,9 +402,9 @@ func RunAttributeSmoke(cfg *config.Config) {
 	if got := allocatedOf(panel, anyDim); got != persistAlloc {
 		fail("persist-alloc", "重登后 dimension=%d 已分配 %d,期望 %d", anyDim, got, persistAlloc)
 	}
-	if panel.Derived.MaxHealth != persistMaxHealth {
-		fail("persist-derived", "重登后气血上限 %d,期望 %d(二级属性应由持久化的分配重算出同样的值)",
-			panel.Derived.MaxHealth, persistMaxHealth)
+	if panel.Derived.MaxHealth != persistMaxHealth || derivedSum(panel.Derived) != persistDerived {
+		fail("persist-derived", "重登后气血上限 %d / 二级属性总和 %d,期望 %d / %d(二级属性应由持久化的分配重算出同样的值)",
+			panel.Derived.MaxHealth, derivedSum(panel.Derived), persistMaxHealth, persistDerived)
 	}
 	zap.L().Info("[attribute-smoke] step 12: relogin restored persisted state",
 		zap.Uint64("player", gc.PlayerId), zap.Int("schemes", len(panel.Schemes)),
@@ -574,6 +577,15 @@ func (s *attributeSmokeSession) waitSuggestion(poolId uint32) (map[uint32]uint32
 // ---------------------------------------------------------------------------
 // 面板取值
 // ---------------------------------------------------------------------------
+
+// derivedSum 是六项二级属性**上限**之和(不含当前气血 / 法力):用来断言"加点确实生效",
+// 而不绑定具体涨了哪一项 —— 涨哪一项由自动加点方案表决定。
+func derivedSum(d *scene.DerivedAttributeInfo) uint64 {
+	if d == nil {
+		return 0
+	}
+	return d.MaxHealth + d.MaxMana + d.PhysicalAttack + d.MagicAttack + d.Speed + d.Defense
+}
 
 func findPool(panel *scene.AttributePanelInfo, poolId uint32) *scene.AttributePoolInfo {
 	if panel == nil {

@@ -18,8 +18,10 @@
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/system/attribute_allocation_rules.h"
+#include "player/system/player_level_rules.h"
 
 #include "rpc/service_metadata/player_attribute_service_metadata.h"
+#include "table/code/attributeallocratio_table.h"
 #include "table/code/attributeautoplan_table.h"
 #include "table/code/attributedimension_table.h"
 #include "table/code/attributepool_table.h"
@@ -163,7 +165,7 @@ uint32_t TotalPoints(entt::entity player, const PlayerAttributeComp& comp, const
 	return attributerules::TotalPoints(ToRule(pool), PlayerLevel(player), BonusPoints(comp, pool.id()));
 }
 
-// 维度面板值 = 每级自然成长 × 等级 + 已分配 + 外部加成
+// 维度面板值 = 每级自然成长 × 等级 + 已分配 + 外部加成(面板显示的是点数,与换算口径无关)
 uint64_t DimensionValue(entt::entity player, const PlayerAttributeComp& comp,
 						const AttributeScheme* scheme, const AttributeDimensionTable& dim) {
 	uint64_t value = static_cast<uint64_t>(dim.base_per_level()) * PlayerLevel(player);
@@ -172,6 +174,92 @@ uint64_t DimensionValue(entt::entity player, const PlayerAttributeComp& comp,
 	}
 	value += BonusValue(comp, dim.id());
 	return value;
+}
+
+// 六项二级属性的临时累加器(与 DerivedAttributesComp 同六项)
+struct DerivedAccumulator {
+	double maxHealth = 0.0;
+	double maxMana = 0.0;
+	double physicalAttack = 0.0;
+	double magicAttack = 0.0;
+	double speed = 0.0;
+	double defense = 0.0;
+
+	void AddLinear(const AttributeDimensionTable& dim, double points) {
+		maxHealth += dim.max_health() * points;
+		maxMana += dim.max_mana() * points;
+		physicalAttack += dim.physical_attack() * points;
+		magicAttack += dim.magic_attack() * points;
+		speed += dim.speed() * points;
+		defense += dim.defense() * points;
+	}
+};
+
+DerivedAccumulator ClassInitialValues(const ClassTable* classRow) {
+	DerivedAccumulator acc;
+	if (classRow != nullptr) {
+		acc.maxHealth = static_cast<double>(classRow->init_health());
+		acc.maxMana = static_cast<double>(classRow->init_mana());
+		acc.speed = static_cast<double>(classRow->init_speed());
+	}
+	return acc;
+}
+
+// "85 级标准基础属性" = 职业初值 + 每个角色维度的自然成长 × 等级上限(不含加点、不含装备)。
+// 加点公式的分母基准。按表现算而不是单独配一套数:改职业初值或自然成长时它自动跟着变,
+// 不会出现"标准值还是旧的、实际成长已经改了"的第二份真相(2026-09-13 用户选定)。
+DerivedAccumulator StandardBaseAtLevelCap(const ClassTable* classRow) {
+	auto acc = ClassInitialValues(classRow);
+	const auto& dims = AttributeDimensionTableManager::Instance().FindAll().data();
+	for (const auto& dim : dims) {
+		if (!IsPlayerDimension(dim) || dim.base_per_level() == 0) {
+			continue;
+		}
+		acc.AddLinear(dim, static_cast<double>(dim.base_per_level()) * playerlevel::kMaxLevel);
+	}
+	return acc;
+}
+
+// 加点公式常量:bonus 取 AttributeRule 表;scale(满投点数)与除数按维度所属池 + 等级上限现算,
+// 不进表(那是池表与 kMaxLevel 的第二份真相,见 attributerules 注释)。相性池单项上限 50,
+// 给相性维度加比例行时满投就按 50 点算,不会被角色属性点的 425 尺度压到 1/10。
+attributerules::AllocFormulaRule FormulaRuleFor(const AttributePoolTable& pool) {
+	const auto* rule = RuleRow();
+	const double bonus = rule != nullptr ? rule->alloc_efficiency_bonus() : attributerules::kDefaultEfficiencyBonus;
+	return attributerules::MakeFormulaRule(
+		bonus, attributerules::FullInvestmentPoints(ToRule(pool), playerlevel::kMaxLevel));
+}
+
+// 该维度对该职业的加点收益比例行:先找玩家职业专属行,没有退到 class_id=0 兜底;都没有返回 nullptr
+// (= 这个维度不走百分比公式,例如相性 / 仙魔池,继续按每点固定加值)
+const AttributeAllocRatioTable* FindAllocRatio(uint32_t dimensionId, uint32_t classId) {
+	const AttributeAllocRatioTable* fallback = nullptr;
+	const auto& rows = AttributeAllocRatioTableManager::Instance().FindAll().data();
+	for (const auto& row : rows) {
+		if (row.dimension_id() != dimensionId) {
+			continue;
+		}
+		if (classId != 0 && row.class_id() == classId) {
+			return &row;
+		}
+		if (row.class_id() == 0) {
+			fallback = &row;
+		}
+	}
+	return fallback;
+}
+
+// 玩家分配的点按百分比公式换算(2026-09-13):增量 = 标准基础属性 × 比例 × E(n) ÷ d,逐项累加
+void AddAllocatedByFormula(DerivedAccumulator& acc, const DerivedAccumulator& standard,
+						   const AttributeAllocRatioTable& ratio, uint32_t allocated,
+						   const attributerules::AllocFormulaRule& rule) {
+	using attributerules::AllocatedIncrement;
+	acc.maxHealth += AllocatedIncrement(standard.maxHealth, ratio.max_health(), allocated, rule);
+	acc.maxMana += AllocatedIncrement(standard.maxMana, ratio.max_mana(), allocated, rule);
+	acc.physicalAttack += AllocatedIncrement(standard.physicalAttack, ratio.physical_attack(), allocated, rule);
+	acc.magicAttack += AllocatedIncrement(standard.magicAttack, ratio.magic_attack(), allocated, rule);
+	acc.speed += AllocatedIncrement(standard.speed, ratio.speed(), allocated, rule);
+	acc.defense += AllocatedIncrement(standard.defense, ratio.defense(), allocated, rule);
 }
 
 uint32_t MapAllocError(AllocError err) {
@@ -351,29 +439,36 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 	}
 	const auto* scheme = ActiveScheme(comp);
 	const auto* classRow = ResolveClassRow(player);
+	const auto classId = PlayerClassId(player);
+	const auto level = PlayerLevel(player);
 
-	double maxHealth = classRow != nullptr ? static_cast<double>(classRow->init_health()) : 0.0;
-	double maxMana = classRow != nullptr ? static_cast<double>(classRow->init_mana()) : 0.0;
-	double physicalAttack = 0.0;
-	double magicAttack = 0.0;
-	double speed = classRow != nullptr ? static_cast<double>(classRow->init_speed()) : 0.0;
-	double defense = 0.0;
+	// 二级属性 = 职业初值
+	//          + Σ (自然成长 × 等级 + 外部加成) × 每点固定系数            ← 所有维度,老口径
+	//          + Σ 玩家分配点 → 有比例表的维度走百分比公式(2026-09-13),没有的仍按每点固定系数
+	// 自然成长与装备加成不走公式:策划公式只定义"加点收益",白送的点与装备值保持原样(用户 2026-09-13 选定)。
+	auto acc = ClassInitialValues(classRow);
+	const auto standard = StandardBaseAtLevelCap(classRow);
 
 	const auto& dims = AttributeDimensionTableManager::Instance().FindAll().data();
 	for (const auto& dim : dims) {
 		if (!IsPlayerDimension(dim)) {
 			continue;  // 宝宝维度不进角色二级属性
 		}
-		const auto value = static_cast<double>(DimensionValue(player, comp, scheme, dim));
-		if (value == 0.0) {
+		const double natural = static_cast<double>(dim.base_per_level()) * level + BonusValue(comp, dim.id());
+		if (natural > 0.0) {
+			acc.AddLinear(dim, natural);
+		}
+		const uint32_t allocated = scheme != nullptr ? AllocatedIn(*scheme, dim.id()) : 0;
+		if (allocated == 0) {
 			continue;
 		}
-		maxHealth += dim.max_health() * value;
-		maxMana += dim.max_mana() * value;
-		physicalAttack += dim.physical_attack() * value;
-		magicAttack += dim.magic_attack() * value;
-		speed += dim.speed() * value;
-		defense += dim.defense() * value;
+		const auto* ratio = FindAllocRatio(dim.id(), classId);
+		const auto [pool, poolErr] = AttributePoolTableManager::Instance().FindByIdSilent(dim.pool_id());
+		if (ratio != nullptr && pool != nullptr) {
+			AddAllocatedByFormula(acc, standard, *ratio, allocated, FormulaRuleFor(*pool));
+		} else {
+			acc.AddLinear(dim, static_cast<double>(allocated));
+		}
 	}
 
 	auto toU64 = [](double v) -> uint64_t {
@@ -384,12 +479,12 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 	auto& derived = tlsEcs.actorRegistry.get_or_emplace<DerivedAttributesComp>(player);
 	const uint64_t oldMaxHealth = derived.max_health();
 	const uint64_t oldMaxMana = derived.max_mana();
-	derived.set_max_health(std::max<uint64_t>(toU64(maxHealth), 1));
-	derived.set_max_mana(toU64(maxMana));
-	derived.set_physical_attack(toU64(physicalAttack));
-	derived.set_magic_attack(toU64(magicAttack));
-	derived.set_speed(toU64(speed));
-	derived.set_defense(toU64(defense));
+	derived.set_max_health(std::max<uint64_t>(toU64(acc.maxHealth), 1));
+	derived.set_max_mana(toU64(acc.maxMana));
+	derived.set_physical_attack(toU64(acc.physicalAttack));
+	derived.set_magic_attack(toU64(acc.magicAttack));
+	derived.set_speed(toU64(acc.speed));
+	derived.set_defense(toU64(acc.defense));
 
 	// 速度直写基础属性:回合引擎出手序 / 逃跑判定只读 BaseAttributesComp.speed
 	baseAttrs->set_speed(derived.speed());

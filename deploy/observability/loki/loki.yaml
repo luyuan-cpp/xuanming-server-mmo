@@ -1,0 +1,87 @@
+# Loki 单机(single-binary)配置:本地开发用,日志落在容器内 /loki(docker 卷 loki-data)。
+# 只保留 7 天;超过 30 天的旧行直接拒收(本机日志文件可能几周没清)。
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: warn
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+ingester:
+  # 首次接入时 Alloy 会把几小时前的旧日志一次灌进来;这些老时间戳的块在内存里
+  # 待着不落盘就查不到,把闲置落盘时间从默认 30m 缩短到 10m。
+  chunk_idle_period: 10m
+  max_chunk_age: 2h
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+storage_config:
+  tsdb_shipper:
+    active_index_directory: /loki/tsdb-index
+    cache_location: /loki/tsdb-cache
+  filesystem:
+    directory: /loki/chunks
+
+limits_config:
+  # Loki 3.x 里这是 per-tenant 限制(不再在 querier 段)。默认只向 ingester 查最近 3h:
+  # 首次接入时 Alloy 会把几小时前的旧日志灌进来,它们在内存里、没落盘,超过 3h 的就查不到,
+  # 要等 chunk_idle_period 落盘才出现。放宽到 30 天,和 reject_old_samples_max_age 对齐。
+  query_ingesters_within: 720h
+  reject_old_samples: true
+  reject_old_samples_max_age: 720h   # 30 天前的行不收
+  retention_period: 168h              # 只留 7 天
+  allow_structured_metadata: true
+  volume_enabled: true                # Grafana「日志量」面板 / Logs Drilldown 需要
+  discover_log_levels: true           # 没打 level 标签的行由 Loki 自己猜一个 detected_level
+  ingestion_rate_mb: 16
+  ingestion_burst_size_mb: 32
+  per_stream_rate_limit: 8MB
+  per_stream_rate_limit_burst: 32MB
+  max_query_series: 2000
+
+compactor:
+  working_directory: /loki/compactor
+  retention_enabled: true
+  delete_request_store: filesystem
+  compaction_interval: 10m
+  retention_delete_delay: 2h
+
+pattern_ingester:
+  enabled: true                       # Grafana Logs Drilldown 的「模式」视图
+
+ruler:
+  storage:
+    type: local
+    local:
+      directory: /loki/rules
+  rule_path: /loki/rules-temp
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+analytics:
+  reporting_enabled: false

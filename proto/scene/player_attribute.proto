@@ -20,7 +20,9 @@ message AttributeDimensionInfo {
   string name = 3;
   string desc = 4;         // 悬浮说明,如"体质:提高气血上限和防御。"
   uint32 allocated = 5;    // 当前方案已分配点
-  uint64 value = 6;        // 面板显示值 = 自然成长 + 已分配 + 外部加成
+  uint64 value = 6;        // 面板显示值 = 自然成长 + 已分配 + 外部加成。只是**点数**,不能反推收益:
+                           // 2026-09-13 起角色属性点的已分配部分按百分比公式换算,与自然成长的每点系数差几十倍
+
   uint32 cap = 7;          // 可分配上限(0 = 不限;相性 = 50)
   uint32 sort = 8;
 }

@@ -4408,3 +4408,22 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - 实际客户端首轮在配置2传送等待中复现旧 gate 路由缺口:Go已改场景但gate仅在首次登录转发入场。已补同节点换图的LOGIN_NONE转发、重复路由幂等与发送前置失败保留状态,避免重跑登录事件;gate构建通过,路由身份测试26/26（新增7条）,保留首轮失败与修复验证证据。
 
 - 最终正式客户端联机验收通过:run4完成2→3→4→1四次真实传送、三地日景/节庆切换和四图移动,得到7张实机截图;所有出生误差/导航不一致/移动重定位为0。服务端逐次确认目标地图出生,gate13588与scene27624保持运行。完整证据 ../tmp/festival-final-server-deployment-evidence.json/.log 与 ../tmp/festival_live_verify_20260913_run4/festival-map-verification.json。
+
+## 2026-09-13 角色属性点改为百分比 + 集中投资公式(策划口径)
+
+- 用户给定公式:E(n) = n × (1 + 0.2 × n ÷ 425),属性增量 = 85 级标准基础属性 × 比例 × E(n) ÷ 510;比例分"非对应职业 / 对应职业"两档(力量→物伤 25% / 破军 30%;灵力→法伤 22.5% / 玄霄 27%、法力两档 15%;敏捷→速度 16.67% / 逐风 20%;体质→气血 20.83% / 丹心 25%、防御 10% / 12%)。四项决策由用户选定:标准基础属性按现有表算(职业初值 + 85 级自然成长,算出 气血 4750 / 法力 1050 / 物伤 4250 / 法伤 3400 / 速度 275 / 防御 425)、按职业各一套(走 ClassTable 行)、每级白送的点保留旧系数只换玩家分配的点、只改角色四项不动相性 / 仙魔 / 宝宝。
+- 新表 `AttributeAllocRatio`(8 行,dimension × class,class_id=0 兜底,查找顺序同 AutoPlan;职业 id 1 破军 / 2 玄霄 / 3 丹心 / 4 逐风,与客户端 RoleFlowUi 一致);`AttributeRule` 加 `alloc_efficiency_bonus / alloc_efficiency_scale / alloc_divisor` 三列。纯规则 `attributerules::EffectivePoints / AllocatedIncrement / SanitizeFormulaRule`;`Recalculate` 拆成"自然成长 + 装备按每点系数"与"分配点按公式"两段,没有比例行的维度(相性 / 仙魔)仍走每点系数,宝宝系统完全不受影响。
+- 单测 `AllocFormulaTest` 6 条钉住策划表全部验收数字、集中投资倾向(四项各 106 点总有效点 445 < 510)、半投只拿 45.7%、坏表退回默认值。
+- 设计文档 §2.2 / §3.1 / §8 同步;§8 明写:旧口径的怪物重定与 PVP 首击推算整体过期,相性 / 仙魔相对属性点再次倒挂(金相满投 +2650 法伤 > 灵力满投 +918),两件事待用户拍板。
+- **职业分支要等 class_id 打通才生效**:scene 现在拿到的 class 仍是 0,所有人都走非对应职业档。并行会话 09-13 04:25 正在 login 侧写 `player_class_backfill.go`(未提交),它通了本改动自动生效。
+- 存量角色影响:改表后首登走 kLoad,已分配点的收益从每点 +50 缩到公式值,上限大幅下降,HP/MP 被夹到新上限(改属性不当治疗的既有护栏)。
+- 未编译、未导表、未运行(AGENTS §10.1)。待执行:① `dev.bat gen`(新表 + AttributeRule 三列)+ `gen_schema_index.py`;② MSBuild game.sln Debug/x64 /m:1;③ `run_cpp_tests.ps1 -Build -Filter turn_battle_engine`(预期原基数 +6 条 AllocFormulaTest);④ 部署 scene 后跑 attribute_smoke(它只断言"加点后气血变大 / 重登一致 / 洗点返还",不钉具体数值,应仍通过);⑤ 用 GM 把某账号设 85 级、力量满投 425,面板物伤应 = 4250 + 1062(非破军)= 5312。
+- **同日评审修复**:多代理评审给出 15 条发现(三方证伪跑到一半撞额度,余下 13 条逐条亲自复算,全部属实)。已修:
+  1. 公式里的 425 / 510 从 AttributeRule 表删掉(那两列从未导出过,无需 reserved),改为按维度所属池 + `kMaxLevel` 现算(`FullInvestmentPoints` / `MakeFormulaRule` / `FullInvestmentEffectivePoints`)。原先手抄一份:改等级上限时满投会悄悄拿到 +30% 而非 +25% 且零报错;给相性维度加比例行会被 425 尺度压到 1/10。当前数值不变(425 / 510)。**上一条"AttributeRule 加三列"应读作一列 `alloc_efficiency_bonus`**。
+  2. `alloc_efficiency_bonus` 填 0 现为合法值(纯线性),只拒绝负数 / 非有限数。
+  3. 注释"集中投多约 17%"改为 14.6%(分散投少 12.7%);单测期望值 445.3 → 445.15;新增 3 条(满投点数按池现算、改等级上限后仍拿满比例、相性池按自身上限拿满比例),AllocFormulaTest 共 9 条(上一条说 6 条)。
+  4. `AttributeAutoPlan` 属性点池方案改为全投本职业主属性(通用档 / 破军力量、玄霄灵力、丹心体质(新增行 31)、逐风敏捷(新增行 41)):原 3:1:1 在集中投资公式下比满投少 9.3% 有效点。attribute_smoke 步骤 5 原断言"加点后气血上限变大"会随之误报,改为"六项二级属性上限总和变大";重登校验补总和相等。
+  5. table.vcxproj 补 `attributeallocratio_table_fk.h`,filters 补新表 7 个条目;`gen_schema_index.py` 重生 data/AGENTS.md 索引(否则导表器 CI 的 `--check` 会红)。
+  6. 文档:§2.2 旧系数只作用于自然成长 / 装备、"同比换算"规则失效、自动加点方案新口径;§3.1 面板 value 只是点数、单点分配边际(速度 / 防御 12 点才 +1);§8 30 级通用号估算补上土相 1800(新口径 ≈ 3635,土相是力量加点的 5 倍多)、滚动发布窗口改为三表 + scene 二进制、`bonus_points` 超过满投点数的缺口。proto `AttributeDimensionInfo.value` 注释同步。
+- 仍未编译 / 导表 / 运行。待执行清单同上一条,第 ③ 条预期 AllocFormulaTest 9 条;第 ⑤ 条数值不变(85 级非破军力量满投面板物伤 = 4250 + 1062 = 5312)。新增待拍板:单点分配无反馈是否可接受。
+

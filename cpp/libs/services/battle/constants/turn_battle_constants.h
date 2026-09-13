@@ -75,6 +75,11 @@ inline constexpr uint32_t kCombatStateSilence = 1;
 // (建议后续在表里给普攻固定一行,见任务返回的 open_issues)
 inline constexpr double kBasicAttackBaseDamage = 10.0;
 
+// PVP 伤害系数(2026-09-13 用户选定):非 PVE 对局里玩家与宝宝的直接伤害(普攻 / 技能)再乘本值。
+// 加点百分比公式 + 比例减伤口径下,同级同配置 1v1 普攻一下就接近或超过对方气血上限(首击秒杀);
+// 乘 0.2 后约 5 下打死(推算见 player-attribute-allocation.md §8)。毒 / 灼烧等周期伤害是表里的固定值,不乘。
+inline constexpr double kPvpDamageScale = 0.2;
+
 // 逃跑成功率:base + 速度差 * 系数,夹在 [min, max](PVE 可逃,PVP 一期不可逃)
 inline constexpr double kFleeBaseChance = 0.5;
 inline constexpr double kFleeSpeedFactor = 0.01;

@@ -110,6 +110,15 @@ management:
     web:
       exposure:
         include: health,info
+
+# 日志:控制台按 logstash 风格输出一行一条 JSON(@timestamp / level / logger_name /
+# thread_name / message / stack_trace),与 Go 侧 go-zero 的 JSON 一致,由
+# deploy/observability/alloy/config.alloy 采进 Loki(见 docs/ops/grafana-loki-local-logs.md)。
+# 想临时恢复人类可读的文本格式:启动时加 --logging.structured.format.console=
+logging:
+  structured:
+    format:
+      console: logstash
 # CI smoke: this trailing comment exists only to dirty the file enough
 # to fire .github/workflows/login-path-tests.yml on a verification PR.
 # It can be reverted before merge — content is documentation-only.

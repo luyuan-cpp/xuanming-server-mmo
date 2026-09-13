@@ -1,11 +1,13 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <memory>
 #include <stdexcept>
 #include <string>
 
 #include "constants/turn_battle_constants.h"
 #include "memory_battle_data_provider.h"
+#include "system/combat_damage_rules.h"
 #include "system/turn_battle_engine.h"
 #include "../../libs/services/scene/battle/system/battle_settlement_application_cache.h"
 #include "table/proto/tip/common_error_tip.pb.h"
@@ -444,7 +446,14 @@ TEST(TurnBattleEngineTest, SnapshotRegenBuffHealsAtRoundEnd) {
     EXPECT_EQ(tickEvent->value(), 25u);
     const auto* playerState = FindStateActor(result.state(), kPlayerA);
     ASSERT_NE(playerState, nullptr);
-    EXPECT_EQ(playerState->attributes().health(), 125u);
+    // 比例减伤下怪物普攻至少打出四成,玩家本回合也会挨一下(防御中再减半):终值 = 100 − 挨打 + 回血 25
+    uint64_t damageTaken = 0;
+    for (const auto& event : result.events()) {
+        if (event.event_type() == BATTLE_EVENT_DAMAGE && event.target_id() == kPlayerA) {
+            damageTaken += event.value();
+        }
+    }
+    EXPECT_EQ(playerState->attributes().health(), 100u - damageTaken + 25u);
 }
 
 // ---------------------------------------------------------------------------
@@ -547,24 +556,25 @@ TEST(TurnBattleEngineTest, SimultaneousPoisonDeathIsDrawAndDefendHalvesTick) {
 TEST(TurnBattleEngineTest, DamageFormulaMatchesRealtimeSemantics) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9015, turnbattle::kMatchModePveSolo, 1);
-    // strength=4,无暴击;怪物默认 armor=2、resistance=0
+    // strength=4,无暴击;怪物默认 armor=2、resistance=0,怪物等级取参战玩家最高等级 10
     AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 0, 10);
     ASSERT_TRUE(engine.Initialize(request));
 
     engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillDamage));
     const auto result = engine.ResolveCurrentRound();
 
-    // 50 * (1 + 4*0.1) = 70;70 - 2 = 68;68 * (1 - 0) = 68
+    // 原始 50 * (1 + 4*0.1) = 70;等级系数 30 + 10*10 = 130;受伤比例 130 / (2 + 130) ≈ 0.9848
+    // 70 * 0.9848 ≈ 68.94 → 向上取整 69
     const auto* damageEvent = FindFirstEvent(result, BATTLE_EVENT_DAMAGE);
     ASSERT_NE(damageEvent, nullptr);
-    EXPECT_EQ(damageEvent->value(), 68u);
+    EXPECT_EQ(damageEvent->value(), 69u);
     EXPECT_FALSE(damageEvent->is_critical());
     EXPECT_EQ(damageEvent->target_health_after(),
-              turnbattle::kMonsterDefaultHealth - 68);
+              turnbattle::kMonsterDefaultHealth - 69);
 
     const auto* monster = FindStateActor(result.state(), kMonsterId);
     ASSERT_NE(monster, nullptr);
-    EXPECT_EQ(monster->attributes().health(), turnbattle::kMonsterDefaultHealth - 68);
+    EXPECT_EQ(monster->attributes().health(), turnbattle::kMonsterDefaultHealth - 69);
 }
 
 // ---------------------------------------------------------------------------
@@ -643,12 +653,18 @@ TEST(TurnBattleEngineTest, ItemHealsAndConsumptionGoesIntoSettlement) {
     EXPECT_EQ(itemEvent->value(), 100u);
     EXPECT_EQ(itemEvent->target_health_after(), 150u);
 
-    // 第 2 次使用:150 → 200(封顶),回 50
+    // 第 2 次使用:回满封顶 200。比例减伤下第 1 回合怪物普攻至少打出四成,回合末血量低于 150,
+    // 所以这次实际回复量 = 200 − 回合初血量(仍小于药量 100,验证的是封顶)
+    const auto* afterFirstRound = FindStateActor(result.state(), kPlayerA);
+    ASSERT_NE(afterFirstRound, nullptr);
+    const uint64_t healthBeforeSecond = afterFirstRound->attributes().health();
+    ASSERT_GT(healthBeforeSecond, 100u);
     engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, kPlayerA, 0, kItemPotion));
     result = engine.ResolveCurrentRound();
     const auto* secondItemEvent = FindFirstEvent(result, BATTLE_EVENT_ITEM);
     ASSERT_NE(secondItemEvent, nullptr);
-    EXPECT_EQ(secondItemEvent->value(), 50u);
+    EXPECT_EQ(secondItemEvent->value(), 200u - healthBeforeSecond);
+    EXPECT_EQ(secondItemEvent->target_health_after(), 200u);
 
     // 副本已用尽:第 3 次提交不落账
     EXPECT_FALSE(engine.SubmitAction(kPlayerA,
@@ -875,7 +891,7 @@ TEST(TurnBattleEngineTest, MonsterAttributesFromTableEnableMultiRoundAndRewards)
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9030, turnbattle::kMatchModePveSolo, 7);
-    // 玩家:1000 HP、力量 20(普攻 10*(1+2.0)-5=25)、速度 20(先手)。
+    // 玩家:1000 HP、力量 20(普攻 30,怪物护甲 5 → 30 * 130 / 135 ≈ 29)、速度 20(先手)。
     AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/20);
     ASSERT_TRUE(engine.Initialize(request));
 
@@ -886,7 +902,7 @@ TEST(TurnBattleEngineTest, MonsterAttributesFromTableEnableMultiRoundAndRewards)
     EXPECT_EQ(monsterActor->attributes().health(), 200u);
     EXPECT_EQ(monsterActor->max_health(), 200u);
 
-    // 玩家逐回合普攻,战斗应持续多回合(200/25≈8 回合),不再一击秒杀
+    // 玩家逐回合普攻,战斗应持续多回合(200/29≈7 回合),不再一击秒杀
     int rounds = 0;
     while (engine.Outcome() == BATTLE_OUTCOME_ONGOING && rounds < 30) {
         engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
@@ -936,9 +952,9 @@ TEST(TurnBattleEngineTest, PlayerDefeatYieldsNoReward) {
 TEST(TurnBattleEngineTest, DerivedPhysicalAttackIsAdditiveOnBasicAttack) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9201, turnbattle::kMatchModePveSolo, 1);
-    // 基线同 DamageFormulaMatchesRealtimeSemantics(strength=4、怪物默认 armor=2、resistance=0),
+    // 基线同 DamageFormulaMatchesRealtimeSemantics(strength=4、怪物默认 armor=2、resistance=0、等级系数 130),
     // 再叠属性加点二级属性 physical_attack=50:
-    //   普攻 10 * (1 + 4*0.1) + 50 = 64;64 - 2(armor) - 0(defense) = 62
+    //   普攻 10 * (1 + 4*0.1) + 50 = 64;64 * 130 / (2 + 130) ≈ 63.03 → 向上取整 64
     // speed=50 > 怪物默认 5,玩家先手,首个伤害事件即玩家普攻。
     auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/0, /*crit*/0, /*speed*/50);
     snapshot->set_physical_attack(50);
@@ -951,14 +967,14 @@ TEST(TurnBattleEngineTest, DerivedPhysicalAttackIsAdditiveOnBasicAttack) {
     const auto* damageEvent = FindFirstEvent(result, BATTLE_EVENT_DAMAGE);
     ASSERT_NE(damageEvent, nullptr);
     EXPECT_EQ(damageEvent->source_id(), kPlayerA);
-    EXPECT_EQ(damageEvent->value(), 62u);
+    EXPECT_EQ(damageEvent->value(), 64u);
 }
 
 TEST(TurnBattleEngineTest, DerivedMagicAttackIsAdditiveOnSkill) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9202, turnbattle::kMatchModePveSolo, 1);
-    // 同 DamageFormulaMatchesRealtimeSemantics 的技能基线(50 * 1.4 - 2 = 68),叠 magic_attack=20:
-    //   50 * (1 + 4*0.1) + 20 = 90;90 - 2 = 88
+    // 同 DamageFormulaMatchesRealtimeSemantics 的技能基线(受伤比例 130 / 132),叠 magic_attack=20:
+    //   50 * (1 + 4*0.1) + 20 = 90;90 * 130 / 132 ≈ 88.64 → 向上取整 89
     auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/10);
     snapshot->set_magic_attack(20);
     snapshot->set_physical_attack(999);  // 技能只吃法伤
@@ -969,12 +985,12 @@ TEST(TurnBattleEngineTest, DerivedMagicAttackIsAdditiveOnSkill) {
 
     const auto* damageEvent = FindFirstEvent(result, BATTLE_EVENT_DAMAGE);
     ASSERT_NE(damageEvent, nullptr);
-    EXPECT_EQ(damageEvent->value(), 88u);
+    EXPECT_EQ(damageEvent->value(), 89u);
 }
 
-TEST(TurnBattleEngineTest, DerivedDefenseReducesIncomingDamageAdditively) {
-    // 玩家 speed=1 < 怪物默认 5:怪物先手。怪物普攻 10 * (1 + 5*0.1) = 15,
-    // 玩家 armor=0、resistance=0,故受伤 = 15 - defense。defense=5 → 10。
+TEST(TurnBattleEngineTest, DerivedDefenseReducesIncomingDamageProportionally) {
+    // 玩家 speed=1 < 怪物默认 5:怪物先手。怪物普攻 10 * (1 + 5*0.1) = 15;
+    // 玩家 armor=0、resistance=0、等级 10(等级系数 130),受伤比例 = 130 / (防御 + 130),最低 0.4。
     auto makeRun = [](uint64_t defense) {
         TurnBattleEngine engine(MakeProvider());
         auto request = MakeRequest(9203, turnbattle::kMatchModePveSolo, 1);
@@ -984,18 +1000,73 @@ TEST(TurnBattleEngineTest, DerivedDefenseReducesIncomingDamageAdditively) {
         EXPECT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId)));
         return engine.ResolveCurrentRound();
     };
+    const auto healthAfter = [](const TurnResultS2C& result) -> uint64_t {
+        const auto* player = FindStateActor(result.state(), kPlayerA);
+        EXPECT_NE(player, nullptr);
+        return player != nullptr ? player->attributes().health() : 0;
+    };
 
-    const auto without = makeRun(0);
-    const auto with = makeRun(5);
+    // 防御 0:全额 15
+    EXPECT_EQ(healthAfter(makeRun(0)), 985u);
 
-    const auto* plain = FindStateActor(without.state(), kPlayerA);
-    const auto* guarded = FindStateActor(with.state(), kPlayerA);
-    ASSERT_NE(plain, nullptr);
-    ASSERT_NE(guarded, nullptr);
-    // defense=0 时公式与老口径逐字节一致(15 点),defense=5 时正好少挨 5 点
-    EXPECT_EQ(plain->attributes().health(), 985u);
-    EXPECT_EQ(guarded->attributes().health(), 990u);
-    EXPECT_EQ(guarded->defense(), 5u);
+    // 防御 = 等级系数 130:减半,7.5 → 向上取整 8
+    const auto halved = makeRun(130);
+    EXPECT_EQ(healthAfter(halved), 992u);
+    const auto* halvedPlayer = FindStateActor(halved.state(), kPlayerA);
+    ASSERT_NE(halvedPlayer, nullptr);
+    EXPECT_EQ(halvedPlayer->defense(), 130u);
+
+    // 防御再高也只减六成。减法口径下这里是 0 伤害 —— 2026-09-10 低级怪全体打不动人的根因
+    EXPECT_EQ(healthAfter(makeRun(1000000)),
+              1000u - static_cast<uint64_t>(std::ceil(15.0 * (1.0 - combatdamage::kMaxPassiveReduction))));
+}
+
+// PVP(非 PVE 模式)的直接伤害再乘 kPvpDamageScale:同级同配置首击秒杀的对策(2026-09-13)
+TEST(TurnBattleEngineTest, PvpDirectDamageIsScaled) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9204, 3 /* PVP */, 1);
+    // A 力量 21:普攻 10 * (1 + 2.1) = 31;B 护甲 0、防御 0、抗性 0、等级 10 → 受伤比例 1
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/21, /*armor*/0, /*crit*/0, /*speed*/10);
+    AddPlayer(request, kPlayerB, 1, 1000, 1000, /*strength*/0, /*armor*/0, /*crit*/0, /*speed*/5);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB)));
+    ASSERT_TRUE(engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_ATTACK, kPlayerA)));
+    const auto result = engine.ResolveCurrentRound();
+
+    const auto* damageEvent = FindFirstEvent(result, BATTLE_EVENT_DAMAGE);
+    ASSERT_NE(damageEvent, nullptr);
+    EXPECT_EQ(damageEvent->source_id(), kPlayerA);  // A 速度快,先出手
+    // 31 * 0.2 = 6.2 → 向上取整 7;PVE 口径(不乘系数)是 31
+    EXPECT_EQ(damageEvent->value(), 7u);
+}
+
+// 技能按 SkillTable.damage_type 选攻击:物理技能吃物伤、法伤不混入;attack_multiplier 放大攻击那部分
+TEST(TurnBattleEngineTest, PhysicalSkillUsesPhysicalAttackWithMultiplier) {
+    constexpr uint32_t kSkillPhysical = 105;
+    auto provider = MakeProvider();
+    auto& skill = provider->AddSkill(kSkillPhysical);
+    skill.add_targeting_mode(1);
+    skill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
+    skill.set_damage_type(combatdamage::kPhysicalDamage);
+    skill.set_attack_multiplier(2.0);
+    provider->SetSkillDamage(kSkillPhysical, 50.0);
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9205, turnbattle::kMatchModePveSolo, 1);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/10);
+    snapshot->set_physical_attack(30);
+    snapshot->set_magic_attack(999);  // 物理技能不得吃法伤
+    snapshot->add_skill_table_ids(kSkillPhysical);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillPhysical)));
+    const auto result = engine.ResolveCurrentRound();
+
+    const auto* damageEvent = FindFirstEvent(result, BATTLE_EVENT_DAMAGE);
+    ASSERT_NE(damageEvent, nullptr);
+    // 50 * (1 + 4*0.1) + 30 * 2 = 130;130 * 130 / (2 + 130) ≈ 128.03 → 向上取整 129
+    EXPECT_EQ(damageEvent->value(), 129u);
 }
 
 TEST(TurnBattleEngineTest, MonsterRowWithoutStatsFallsBackToDefaults) {
@@ -1076,7 +1147,7 @@ TEST(TurnBattleEngineTest, RewardsAccumulateAcrossAllMonstersInGroup) {
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9042, turnbattle::kMatchModePveSolo, 13);
-    // 玩家力量 20 → 普攻 10*(1+2.0)=30(怪物护甲 0),每只 2 刀;怪物力量 1 打不穿护甲 10
+    // 玩家力量 20 → 普攻 10*(1+2.0)=30(怪物护甲 0、受伤比例 1),每只 2 刀;怪物力量 1 每下只打几点
     AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 20);
     ASSERT_TRUE(engine.Initialize(request));
 
@@ -1116,7 +1187,7 @@ TEST(TurnBattleEngineTest, FledPlayerOnWinningTeamGetsNoReward) {
     constexpr uint32_t kRewardMonster = 7006;
     auto& monster = provider->AddMonster(kRewardMonster);
     monster.set_health(150);
-    monster.set_strength(1);   // 打不穿玩家护甲,不会误杀
+    monster.set_strength(1);   // 每下只打几点,不会误杀
     monster.set_speed(1);      // 最慢:B 的逃跑成功率被夹到上限 0.95
     monster.set_exp_reward(40);
     monster.set_gold_reward(20);
@@ -1255,7 +1326,7 @@ TEST(TurnBattleEngineTest, EveryQualifyingTeamMemberGetsFullReward) {
 // 打满不是平局 —— 进攻方(A 方)判负(设计文档 §5.1),这条把上限与判负口径一起钉住。
 TEST(TurnBattleEngineTest, MaxRoundsFallsBackToDefaultAndAttackerLosesOnTimeout) {
     constexpr uint32_t kTankMonster = 7010;
-    // 僵局局面:玩家力量 0 且每回合防御(打不动怪),怪物力量 1 打不穿玩家护甲(每回合 1 点)
+    // 僵局局面:玩家力量 0 且每回合防御(打不动怪),怪物力量 1 伤害很低(比例减伤、防御减半后每回合约 6 点)
     const auto playStalemate = [](const std::shared_ptr<MemoryBattleDataProvider>& provider,
                                   uint64_t battleId) {
         TurnBattleEngine engine(provider);

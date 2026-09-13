@@ -1,0 +1,371 @@
+// ============================================================================
+// Grafana Alloy 采集配置:把本机三种语言的服务日志文件送进 Loki。
+//
+// 宿主机目录 -> 容器目录(见 deploy/docker-compose.observability.yml):
+//   xuanming-server-mmo/run/logs -> /host/run/logs (只读)
+//   xuanming-server-mmo/bin/logs -> /host/bin/logs (只读,暂未采集,见文末说明)
+//
+// 统一的 Loki 标签(label)约定,三种语言一致:
+//   job      = go_services | cpp_nodes | java      日志来源
+//   lang     = go | cpp | java
+//   service  = login / db / scene_manager / gate / scene / battle / gateway ...
+//   zone     = 1 / 2 ...   只有实例名带 zN_ 前缀时才有,否则没有这个标签
+//   instance = 启动脚本里的实例名,如 z2_login / data_service_1 / z1_gate
+//   stream   = stdout | stderr
+//   level    = trace / debug / info / warn / error / fatal / stat ... 统一小写
+//   filename = 采集的文件路径(Alloy 自动加)
+// ============================================================================
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+  external_labels = {
+    env = "local",
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 1. Go 服务(go-zero logx,一行一条 JSON)
+//    文件:run/logs/go_services/<instance>.stdout.log / .stderr.log
+//    行例:{"@timestamp":"2026-09-13T03:07:37.138-04:00","caller":"login/login.go:67",
+//          "content":"...","level":"info"}
+// ---------------------------------------------------------------------------
+local.file_match "go_services" {
+  path_targets = [
+    { __path__ = "/host/run/logs/go_services/*.stdout.log" },
+    { __path__ = "/host/run/logs/go_services/*.stderr.log" },
+  ]
+  sync_period       = "5s"
+  ignore_older_than = "48h"
+}
+
+loki.source.file "go_services" {
+  targets    = local.file_match.go_services.targets
+  forward_to = [loki.process.go_services.receiver]
+
+  file_watch {
+    min_poll_frequency = "500ms"
+    max_poll_frequency = "2s"
+  }
+}
+
+loki.process "go_services" {
+  forward_to = [loki.write.local.receiver]
+
+  // 去掉 Windows 行尾的 \r
+  stage.replace {
+    expression = `(\r)$`
+    replace    = ""
+  }
+
+  // 文件名 -> zone(可选)/ instance / stream / service
+  stage.regex {
+    source     = "filename"
+    expression = `/z(?P<zone>\d+)_[^/]+$`
+  }
+  stage.regex {
+    source     = "filename"
+    expression = `/(?P<instance>[^/]+)\.(?P<stream>stdout|stderr)\.log$`
+  }
+  stage.regex {
+    source     = "instance"
+    expression = `^(?:z\d+_)?(?P<service>[a-z_]+?)(?:_\d+)?$`
+  }
+  stage.labels {
+    values = {
+      zone     = "",
+      instance = "",
+      stream   = "",
+      service  = "",
+    }
+  }
+  stage.static_labels {
+    values = {
+      job  = "go_services",
+      lang = "go",
+    }
+  }
+
+  // 只有 JSON 行才解析时间戳 / 级别;panic 之类的纯文本行原样保留
+  stage.match {
+    selector = `{job="go_services"} |~ "^\\{" |~ "\"level\":\"[A-Za-z]+\""`
+
+    stage.json {
+      expressions = {
+        ts     = `"@timestamp"`,
+        level  = "level",
+        caller = "caller",
+      }
+    }
+    stage.timestamp {
+      source            = "ts"
+      format            = "RFC3339Nano"
+      action_on_failure = "fudge"
+    }
+    stage.template {
+      source   = "level"
+      template = `{{ ToLower .Value }}`
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+    stage.structured_metadata {
+      values = { caller = "" }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 2. C++ 节点(muduo 日志经 LogToConsole 打到控制台,启动脚本重定向到文件)
+//    文件:run/logs/cpp_nodes/<instance>.stdout.log / .stderr.log
+//    行例:20260913 15:24:58.979463 36460 INFO  Node created ... - E:\...\node.cpp:366
+//    特点:带 ANSI 颜色码;时间是东八区(Node::SetupTimeZone 固定 +8);
+//          Build Info 之类的多行消息只有第一行带时间戳。
+// ---------------------------------------------------------------------------
+local.file_match "cpp_nodes" {
+  path_targets = [
+    { __path__ = "/host/run/logs/cpp_nodes/*.stdout.log" },
+    { __path__ = "/host/run/logs/cpp_nodes/*.stderr.log" },
+  ]
+  sync_period       = "5s"
+  ignore_older_than = "48h"
+}
+
+loki.source.file "cpp_nodes" {
+  targets    = local.file_match.cpp_nodes.targets
+  forward_to = [loki.process.cpp_nodes.receiver]
+
+  file_watch {
+    min_poll_frequency = "500ms"
+    max_poll_frequency = "2s"
+  }
+}
+
+loki.process "cpp_nodes" {
+  forward_to = [loki.write.local.receiver]
+
+  // 去掉控制台颜色码(ESC[...m)和 \r
+  stage.replace {
+    expression = `(\x1b\[[0-9;]*m|\r)`
+    replace    = ""
+  }
+
+  // 多行合并:只有以 muduo 时间戳开头的行才是新的一条,其余并入上一条
+  stage.multiline {
+    firstline     = `^\d{8} \d{2}:\d{2}:\d{2}\.\d{6} \d+ [A-Z]+ `
+    max_wait_time = "2s"
+    max_lines     = 64
+  }
+
+  // 文件名 -> zone(可选)/ instance / stream / service
+  stage.regex {
+    source     = "filename"
+    expression = `/z(?P<zone>\d+)_[^/]+$`
+  }
+  stage.regex {
+    source     = "filename"
+    expression = `/(?P<instance>[^/]+)\.(?P<stream>stdout|stderr)\.log$`
+  }
+  stage.regex {
+    source     = "instance"
+    expression = `^(?:z\d+_)?(?P<service>[a-z]+?)(?:_\d+)?$`
+  }
+  stage.labels {
+    values = {
+      zone     = "",
+      instance = "",
+      stream   = "",
+      service  = "",
+    }
+  }
+  stage.static_labels {
+    values = {
+      job  = "cpp_nodes",
+      lang = "cpp",
+    }
+  }
+
+  // 只有标准 muduo 行才解析时间戳 / 级别;版本 banner 等杂行原样保留
+  stage.match {
+    selector = `{job="cpp_nodes"} |~ "^\\d{8} \\d{2}:\\d{2}:\\d{2}\\.\\d{6} \\d+ (TRACE|DEBUG|INFO|WARN|ERROR|FATAL|SYSERR) "`
+
+    stage.regex {
+      expression = `^(?P<ts>\d{8} \d{2}:\d{2}:\d{2}\.\d{6}) (?P<tid>\d+) (?P<level>[A-Z]+) `
+    }
+    stage.timestamp {
+      source            = "ts"
+      format            = "20060102 15:04:05.000000"
+      location          = "Asia/Shanghai"
+      action_on_failure = "fudge"
+    }
+    stage.template {
+      source   = "level"
+      template = `{{ ToLower .Value }}`
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+    stage.structured_metadata {
+      values = { tid = "" }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. Java(Spring Boot:gateway_node / config_node / sa-token demo)
+//    文件:run/logs/java/*.log、run/logs/game-launcher/<时间戳>/gateway.*.log、run/logs/sa_token.log
+//    两种行都认:
+//      A. JSON(application.yaml 打开 logging.structured.format.console=logstash 后):
+//         {"@timestamp":"...","@version":"1","message":"...","logger_name":"...",
+//          "thread_name":"main","level":"INFO","level_value":20000}
+//      B. Spring Boot 默认文本:
+//         2026-09-05T02:13:53.989-04:00  INFO 26768 --- [gateway-node] [ main] c.game.X : 消息
+//    堆栈续行(不以 { 或日期开头)并入上一条。
+// ---------------------------------------------------------------------------
+local.file_match "java" {
+  path_targets = [
+    { __path__ = "/host/run/logs/java/*.log" },
+    { __path__ = "/host/run/logs/game-launcher/*/gateway.*.log" },
+    { __path__ = "/host/run/logs/sa_token.log" },
+  ]
+  sync_period       = "5s"
+  ignore_older_than = "48h"
+}
+
+loki.source.file "java" {
+  targets    = local.file_match.java.targets
+  forward_to = [loki.process.java.receiver]
+
+  file_watch {
+    min_poll_frequency = "500ms"
+    max_poll_frequency = "2s"
+  }
+}
+
+loki.process "java" {
+  forward_to = [loki.write.local.receiver]
+
+  stage.replace {
+    expression = `(\r)$`
+    replace    = ""
+  }
+
+  stage.multiline {
+    firstline     = `^(\{|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})`
+    max_wait_time = "2s"
+    max_lines     = 256
+  }
+
+  // 文件名 -> service(gateway / config_node / sa_token)
+  stage.regex {
+    source     = "filename"
+    expression = `/(?P<service>gateway|config_node|sa_token)[^/]*\.log$`
+  }
+  stage.labels {
+    values = { service = "" }
+  }
+  stage.static_labels {
+    values = {
+      job  = "java",
+      lang = "java",
+    }
+  }
+
+  // A. JSON 行
+  stage.match {
+    selector = `{job="java"} |~ "^\\{" |~ "\"level\":\"[A-Za-z]+\""`
+
+    stage.json {
+      expressions = {
+        ts     = `"@timestamp"`,
+        level  = "level",
+        logger = "logger_name",
+        thread = "thread_name",
+      }
+    }
+    stage.timestamp {
+      source            = "ts"
+      format            = "RFC3339Nano"
+      action_on_failure = "fudge"
+    }
+    stage.template {
+      source   = "level"
+      template = `{{ ToLower .Value }}`
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+    stage.structured_metadata {
+      values = {
+        logger = "",
+        thread = "",
+      }
+    }
+  }
+
+  // B. Spring Boot 默认文本行
+  stage.match {
+    selector = `{job="java"} |~ "^\\d{4}-\\d{2}-\\d{2}T\\S+\\s+(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\\s+\\d+\\s+---\\s"`
+
+    stage.regex {
+      expression = `^(?P<ts>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+(?:[+-]\d{2}:\d{2}|Z)?)\s+(?P<level>[A-Z]+)\s+(?P<pid>\d+)\s+---\s+(?:\[(?P<app>[^\]]*)\]\s+)?\[\s*(?P<thread>[^\]]*)\]\s+(?P<logger>\S+)\s*:\s`
+    }
+    stage.timestamp {
+      source            = "ts"
+      format            = "RFC3339Nano"
+      action_on_failure = "fudge"
+    }
+    stage.template {
+      source   = "level"
+      template = `{{ ToLower .Value }}`
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+    stage.structured_metadata {
+      values = {
+        logger = "",
+        thread = "",
+      }
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 说明:bin/logs/cpp_nodes/<node>.<utc时间>.<主机>.<pid>.log 是 muduo 自己滚动写的
+// 同一份内容(没有颜色码,但文件名里没有 zone / 实例信息)。为了不重复入库,
+// 这里只采集启动脚本重定向出来的 run/logs/cpp_nodes/*.stdout.log。
+// 如果某次节点不是用 tools/scripts/cpp_nodes.ps1 起的(没有 stdout 重定向),
+// 可以临时把下面这段取消注释,按 pid 区分实例:
+//
+// local.file_match "cpp_files" {
+//   path_targets      = [{ __path__ = "/host/bin/logs/cpp_nodes/*.log" }]
+//   sync_period       = "5s"
+//   ignore_older_than = "48h"
+// }
+// loki.source.file "cpp_files" {
+//   targets    = local.file_match.cpp_files.targets
+//   forward_to = [loki.process.cpp_files.receiver]
+// }
+// loki.process "cpp_files" {
+//   forward_to = [loki.write.local.receiver]
+//   stage.multiline {
+//     firstline = `^\d{8} \d{2}:\d{2}:\d{2}\.\d{6} \d+ [A-Z]+ `
+//   }
+//   stage.regex {
+//     source     = "filename"
+//     expression = `/(?P<service>[a-z]+)\.\d{8}-\d{6}\.[^.]+\.(?P<pid>\d+)\.log$`
+//   }
+//   stage.labels {
+//     values = { service = "", pid = "" }
+//   }
+//   stage.static_labels {
+//     values = { job = "cpp_files", lang = "cpp" }
+//   }
+// }

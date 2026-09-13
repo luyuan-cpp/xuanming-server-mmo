@@ -119,12 +119,14 @@ private:
 
     // ---- 伤害/治疗/buff ----
 
-    // 伤害公式镜像实时战斗 CalculateFinalDamage:
-    // base*(1+strength*0.1) + attackBonus - armor - defense,再 *(1-resistance*0.01),
-    // critchance/100 概率 ×2,饱和到 0。attackBonus = 攻方物伤(普攻)或法伤(技能),
-    // defense = 守方防御(属性加点二级属性,怪物为 0)。isCritical 回传是否暴击
+    // 伤害公式与实时技能共用 combat_damage_rules.h(比例减伤,常驻减伤封顶 60%):
+    // attack 普攻取物伤、技能按 SkillTable.damage_type 取物伤或法伤;attackMultiplier 取 attack_multiplier。
+    // 非 PVE 对局再乘 kPvpDamageScale,之后 critchance/100 概率 ×2。isCritical 回传是否暴击
     double CalculateFinalDamage(const BattleActorState& caster, const BattleActorState& target,
-                                double baseDamage, uint64_t attackBonus, bool& isCritical);
+                                double baseDamage, uint64_t attack, double attackMultiplier,
+                                bool& isCritical);
+    // 当前对局是否 PVE(单人 / 组队):决定能否逃跑、是否乘 PVP 伤害系数
+    bool IsPveMatch() const;
     // 命中判定骨架(表现规格 D1):命中率 = kBaseHitRate(一期表无命中/闪避列)。
     // 命中率 >= 100 直接返回 true 且不消耗随机数,保证既有回放基线不变;
     // 二期接表后在此处减去目标闪避并用 Rand01 掷骰

@@ -76,4 +76,9 @@ message SkillTable {
   // 所需状态
   uint32 cooldown_id = 19;
   string damage = 20 [(cfg_expr_type) = "double", (cfg_expr_param) = "level"];
+  // 伤害类型(2026-09-13):0 = 法术,吃法伤(缺省,老行保持原行为);1 = 物理,吃物伤。
+  // 与 skill_type(施法行为位)无关;取值见 cpp/libs/services/battle/system/combat_damage_rules.h
+  uint32 damage_type = 24;
+  // 攻击倍率:伤害里物伤 / 法伤那部分乘以本值;0 = 按 1 倍(老行兼容),负数视为坏表、不加攻击
+  double attack_multiplier = 25;
 }

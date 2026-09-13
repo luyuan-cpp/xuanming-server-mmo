@@ -65,6 +65,9 @@
     <ClInclude Include="code\attributedimension_table_comp.h" />
     <ClInclude Include="code\attributedimension_table_fk.h" />
     <ClInclude Include="code\attributepool_table.h" />
+    <ClInclude Include="code\attributeallocratio_table.h" />
+    <ClInclude Include="code\attributeallocratio_table_comp.h" />
+    <ClInclude Include="code\attributeallocratio_table_fk.h" />
     <ClInclude Include="code\pet_table.h" />
     <ClInclude Include="code\pet_table_comp.h" />
     <ClInclude Include="code\petrule_table.h" />
@@ -105,6 +108,7 @@
     <ClInclude Include="proto\attributeautoplan_table.pb.h" />
     <ClInclude Include="proto\attributedimension_table.pb.h" />
     <ClInclude Include="proto\attributepool_table.pb.h" />
+    <ClInclude Include="proto\attributeallocratio_table.pb.h" />
     <ClInclude Include="proto\pet_table.pb.h" />
     <ClInclude Include="proto\petrule_table.pb.h" />
     <ClInclude Include="proto\attributerule_table.pb.h" />
@@ -159,6 +163,8 @@
     <ClCompile Include="code\attributeautoplan_table.cpp" />
     <ClCompile Include="code\attributedimension_table.cpp" />
     <ClCompile Include="code\attributepool_table.cpp" />
+    <ClCompile Include="code\attributeallocratio_table.cpp" />
+    <ClCompile Include="code\attributeallocratio_table_fk.cpp" />
     <ClCompile Include="code\pet_table.cpp" />
     <ClCompile Include="code\petrule_table.cpp" />
     <ClCompile Include="code\attributerule_table.cpp" />
@@ -190,6 +196,7 @@
     <ClCompile Include="proto\attributeautoplan_table.pb.cc" />
     <ClCompile Include="proto\attributedimension_table.pb.cc" />
     <ClCompile Include="proto\attributepool_table.pb.cc" />
+    <ClCompile Include="proto\attributeallocratio_table.pb.cc" />
     <ClCompile Include="proto\pet_table.pb.cc" />
     <ClCompile Include="proto\petrule_table.pb.cc" />
     <ClCompile Include="proto\attributerule_table.pb.cc" />

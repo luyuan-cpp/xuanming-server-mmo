@@ -4,6 +4,7 @@
 #include <cmath>
 
 #include "data/table_battle_data_provider.h"
+#include "system/combat_damage_rules.h"
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/skill_error_tip.pb.h"
@@ -363,9 +364,7 @@ uint32_t TurnBattleEngine::CheckActionPrerequisites(const BattleActorState& acto
         return kSuccess;
     case BATTLE_ACTION_FLEE: {
         // PVE 可逃,PVP 一期不可逃(设计文档 §5.1)
-        const bool isPve = createRequest.match_mode() == kMatchModePveSolo ||
-                           createRequest.match_mode() == kMatchModePveTeam;
-        return isPve ? kSuccess : kInvalidParameter;
+        return IsPveMatch() ? kSuccess : kInvalidParameter;
     }
     case BATTLE_ACTION_ITEM: {
         // 道具从快照副本扣:提交时校验持有数
@@ -678,9 +677,9 @@ void TurnBattleEngine::ExecuteAttack(BattleActorState& actor, uint64_t targetId,
     }
 
     bool isCritical = false;
-    // 普攻吃"物伤"(属性加点二级属性),技能吃"法伤"(见 ExecuteSkill)
+    // 普攻是物理攻击:吃物伤、倍率 1;技能按表选物伤 / 法伤(见 ApplySkillToTarget)
     const double finalDamage = CalculateFinalDamage(actor, *target, kBasicAttackBaseDamage,
-                                                    actor.physical_attack(), isCritical);
+                                                    actor.physical_attack(), 1.0, isCritical);
     const uint64_t dealt = ApplyDamage(*target, finalDamage);
 
     auto* damageEvent = AppendEvent(result, BATTLE_EVENT_DAMAGE, actor.actor_id(), targetId);
@@ -784,8 +783,10 @@ void TurnBattleEngine::ApplySkillToTarget(BattleActorState& actor, const BattleA
 
     if (baseDamage > 0) {
         bool isCritical = false;
-        const double finalDamage =
-            CalculateFinalDamage(actor, target, baseDamage, actor.magic_attack(), isCritical);
+        const uint64_t attack = combatdamage::SelectAttack(
+            skillRow.damage_type(), actor.physical_attack(), actor.magic_attack());
+        const double finalDamage = CalculateFinalDamage(actor, target, baseDamage, attack,
+                                                        skillRow.attack_multiplier(), isCritical);
         const uint64_t dealt = ApplyDamage(target, finalDamage);
 
         auto* damageEvent =
@@ -902,11 +903,8 @@ void TurnBattleEngine::ExecuteItem(BattleActorState& actor, const BattleAction& 
 }
 
 void TurnBattleEngine::ExecuteFlee(BattleActorState& actor, TurnResultS2C& result) {
-    const bool isPve = createRequest.match_mode() == kMatchModePveSolo ||
-                       createRequest.match_mode() == kMatchModePveTeam;
-
     bool success = false;
-    if (isPve) {
+    if (IsPveMatch()) {
         // 成功率基于速度差:base + 系数 * (自身速度 - 存活敌方最高速度),夹在上下限内
         const double speedDiff = static_cast<double>(actor.attributes().speed()) -
                                  static_cast<double>(MaxAliveEnemySpeed(actor));
@@ -1090,26 +1088,31 @@ void TurnBattleEngine::UpdateOutcome() {
 // 伤害 / 治疗 / 死亡
 // ---------------------------------------------------------------------------
 
+bool TurnBattleEngine::IsPveMatch() const {
+    return createRequest.match_mode() == kMatchModePveSolo ||
+           createRequest.match_mode() == kMatchModePveTeam;
+}
+
 double TurnBattleEngine::CalculateFinalDamage(const BattleActorState& caster,
                                               const BattleActorState& target, double baseDamage,
-                                              uint64_t attackBonus, bool& isCritical) {
+                                              uint64_t attack, double attackMultiplier,
+                                              bool& isCritical) {
     isCritical = false;
 
-    // critchance 为整数百分比口径,换算后夹到 [0,1](镜像实时 CalculateFinalDamage)
+    // critchance 为整数百分比口径,换算后夹到 [0,1](与实时 CalculateFinalDamage 一致)
     const double critChance = std::clamp(
         static_cast<double>(caster.attributes().critchance()) / 100.0, 0.0, 1.0);
-    const double strength = static_cast<double>(caster.attributes().strength());
-    const double armor = static_cast<double>(target.attributes().armor());
-    const double resistance = static_cast<double>(target.attributes().resistance());
-    // 属性加点二级属性:攻方物伤/法伤加法进 base,守方防御加法进减伤
-    // (怪物/老存档两项皆 0,公式与实时 CalculateFinalDamage 老口径逐字节一致)
-    const double defense = static_cast<double>(target.defense());
+    // 目标等级:玩家 / 宝宝取快照等级,怪物取参战玩家最高等级(InitMonsters)
+    double finalDamage = combatdamage::DamageBeforeCritical(
+        baseDamage, caster.attributes().strength(), attack, attackMultiplier,
+        target.attributes().armor(), target.defense(), target.attributes().resistance(),
+        target.level());
+    if (!IsPveMatch()) {
+        finalDamage *= kPvpDamageScale;
+    }
 
-    double finalDamage = baseDamage * (1 + strength * 0.1) + static_cast<double>(attackBonus);
-    finalDamage = finalDamage - armor - defense;
-    finalDamage *= (1 - resistance * 0.01);
-
-    // 暴击只走引擎 RNG;critChance 为 0 时不消耗随机数(与实时短路口径一致)
+    // 暴击只走引擎 RNG;critChance 为 0 时不消耗随机数(与实时短路口径一致)。
+    // 掷骰位置与改公式前相同,同种子回放的随机数消费序列不变
     if (critChance > 0.0 && Rand01() < critChance) {
         finalDamage *= 2;
         isCritical = true;
@@ -1127,12 +1130,11 @@ uint64_t TurnBattleEngine::ApplyDamage(BattleActorState& target, double rawDamag
         rawDamage *= 0.5;
     }
 
-    // 镜像实时 ApplyDamage:ceil 取整,饱和到 0
-    const auto damage = static_cast<uint64_t>(std::ceil(rawDamage));
+    // 与实时 ApplyDamage 共用落血规则:向上取整、不超过当前气血、非有限数不落血
     const uint64_t healthBefore = target.attributes().health();
-    const uint64_t healthAfter = healthBefore > damage ? healthBefore - damage : 0;
-    target.mutable_attributes()->set_health(healthAfter);
-    return healthBefore - healthAfter;
+    const uint64_t damage = combatdamage::DamageToHealth(rawDamage, healthBefore);
+    target.mutable_attributes()->set_health(healthBefore - damage);
+    return damage;
 }
 
 uint64_t TurnBattleEngine::ApplyHeal(BattleActorState& target, double rawHeal) {

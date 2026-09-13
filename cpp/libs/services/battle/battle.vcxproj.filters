@@ -27,6 +27,9 @@
     <ClInclude Include="system\turn_battle_engine.h">
       <Filter>system</Filter>
     </ClInclude>
+    <ClInclude Include="system\combat_damage_rules.h">
+      <Filter>system</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="data\battle_table_fingerprint.cpp">

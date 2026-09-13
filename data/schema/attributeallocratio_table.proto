@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+// AttributeAllocRatio 表的权威 schema。源表 data/AttributeAllocRatio.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 角色属性点的**加点收益比例**(2026-09-13 策划公式,player-attribute-allocation.md §3.1):
+//   属性增量 = 85 级标准基础属性 × 本表比例 × E(n) ÷ divisor,E(n) = n × (1 + bonus × n ÷ scale)
+// 每个维度两行:class_id=0 是非对应职业的兜底比例;class_id=N 是对应职业的加成比例。
+// 查找顺序与 AttributeAutoPlan 相同:先找玩家职业的行,没有再退到 class_id=0。
+// 职业 id 与客户端 RoleFlowUi 一致:1 破军(物攻)/ 2 玄霄(法术)/ 3 丹心(治疗)/ 4 逐风(先手)。
+// 只覆盖角色属性点池(101-104);相性 / 仙魔 / 宝宝池仍走 AttributeDimension 的每点固定加值。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message AttributeAllocRatioTable {
+  option (cfg_sheet)       = "AttributeAllocRatio";
+  option (cfg_source_file) = "AttributeAllocRatio.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 行 id
+  uint32 id = 1;
+  // 维度(AttributeDimension.id,只能是角色属性点池的维度)
+  uint32 dimension_id = 2 [(cfg_fk) = "AttributeDimension", (cfg_index) = true];
+  // 职业(0 = 非对应职业兜底;N = 对应职业专属)
+  uint32 class_id = 3 [(cfg_index) = true];
+  // 满投时气血上限相对标准基础属性的比例(0.25 = +25%)
+  double max_health = 4;
+  // 满投时法力上限比例
+  double max_mana = 5;
+  // 满投时物伤比例
+  double physical_attack = 6;
+  // 满投时法伤比例
+  double magic_attack = 7;
+  // 满投时速度比例
+  double speed = 8;
+  // 满投时防御比例
+  double defense = 9;
+  // 说明
+  string desc = 10;
+}

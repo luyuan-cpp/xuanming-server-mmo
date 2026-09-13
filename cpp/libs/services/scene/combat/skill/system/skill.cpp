@@ -26,6 +26,7 @@
 #include "rpc/service_metadata/player_skill_service_metadata.h"
 #include "proto/common/component/actor_combat_state_comp.pb.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"  // DerivedAttributesComp(属性加点二级属性)
+#include "services/battle/system/combat_damage_rules.h"  // 与回合引擎共用的伤害公式
 
 #include "time/comp/timer_task_comp.h"
 #include "time/system/time_cooldown.h"
@@ -518,7 +519,10 @@ bool IsTargetDead(entt::entity targetEntity) {
 }
 
 
-double CalculateFinalDamage(const entt::entity casterEntity, const entt::entity target, double baseDamage) {
+// 实时技能伤害:公式与回合引擎共用 combat_damage_rules.h(比例减伤,常驻减伤封顶 60%)。
+// 技能按 SkillTable.damage_type 选物伤 / 法伤;实时侧没有 PVP 对局概念,不乘 PVP 伤害系数。
+double CalculateFinalDamage(const entt::entity casterEntity, const entt::entity target, double baseDamage,
+							const SkillTable& skillRow) {
 	const auto *casterAttributes = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(casterEntity);
 	const auto *targetAttributes = tlsEcs.actorRegistry.try_get<BaseAttributesComp>(target);
 	if (!casterAttributes || !targetAttributes)
@@ -529,32 +533,37 @@ double CalculateFinalDamage(const entt::entity casterEntity, const entt::entity 
 	// 没有任何一处写 critchance,所以恒为 0 = 永不暴击;一旦有人按字面填 5(5%),
 	// 就会变成 5.0 > 随机数恒成立 = 100% 暴击。这里显式按百分比换算并夹到 [0,1]。
 	const double critChance = std::clamp(static_cast<double>(casterAttributes->critchance()) / 100.0, 0.0, 1.0);
-	double strength = casterAttributes->strength();
-	double armor = targetAttributes->armor();
-	double resistance = targetAttributes->resistance();
-	// 属性加点二级属性(与回合引擎 CalculateFinalDamage 同口径):实时技能吃法伤,守方防御加法减伤
-	double attackBonus = 0.0;
-	double defense = 0.0;
+	uint64_t physicalAttack = 0;
+	uint64_t magicAttack = 0;
 	if (const auto* casterDerived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(casterEntity))
 	{
-		attackBonus = static_cast<double>(casterDerived->magic_attack());
+		physicalAttack = casterDerived->physical_attack();
+		magicAttack = casterDerived->magic_attack();
 	}
+	uint64_t defense = 0;
 	if (const auto* targetDerived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(target))
 	{
-		defense = static_cast<double>(targetDerived->defense());
+		defense = targetDerived->defense();
+	}
+	// 没有等级组件的目标(部分 NPC)按 1 级算
+	uint32_t targetLevel = 1;
+	if (const auto* targetLevelComp = tlsEcs.actorRegistry.try_get<LevelComp>(target))
+	{
+		targetLevel = targetLevelComp->level();
 	}
 
-	// Apply crit and penetration modifiers
-    double finalDamage = baseDamage * (1 + strength * 0.1) + attackBonus;
-    finalDamage = finalDamage - armor - defense;
-    finalDamage *= (1 - resistance * 0.01);
+	double finalDamage = combatdamage::DamageBeforeCritical(
+		baseDamage, casterAttributes->strength(),
+		combatdamage::SelectAttack(skillRow.damage_type(), physicalAttack, magicAttack),
+		skillRow.attack_multiplier(),
+		targetAttributes->armor(), defense, targetAttributes->resistance(), targetLevel);
 
-    // rand() 是全局非线程安全且未播种的 C 运行时状态,战斗判定统一走 tlsRandom。
-    if (critChance > 0.0 && tlsRandom.RandReal<double>(0.0, 1.0) < critChance) {
-        finalDamage *= 2;
-    }
+	// rand() 是全局非线程安全且未播种的 C 运行时状态,战斗判定统一走 tlsRandom。
+	if (critChance > 0.0 && tlsRandom.RandReal<double>(0.0, 1.0) < critChance) {
+		finalDamage *= 2;
+	}
 
-    return std::max(finalDamage, 0.0);
+	return std::max(finalDamage, 0.0);
 }
 
 
@@ -600,7 +609,7 @@ void CalculateSkillDamage(const entt::entity casterEntity, DamageEventComp& dama
 	damageEvent.set_attacker_id(entt::to_integral(casterEntity));
 
     double baseDamage = SkillTableManager::Instance().GetDamage(skillContext->skilltableid());
-    double finalDamage = CalculateFinalDamage(casterEntity, targetEntity, baseDamage);
+    double finalDamage = CalculateFinalDamage(casterEntity, targetEntity, baseDamage, *skillRow);
     damageEvent.set_damage(finalDamage);
 }
 
@@ -611,14 +620,9 @@ void TriggerBeforeDamageEvents(const entt::entity casterEntity, const entt::enti
 }
 
 void ApplyDamage(BaseAttributesComp& baseAttributesPBComponent, const DamageEventComp& damageEvent) {
-    const auto damage = static_cast<uint64_t>(std::ceil(damageEvent.damage()));
-
-    if (baseAttributesPBComponent.health() > damage) {
-        baseAttributesPBComponent.set_health(baseAttributesPBComponent.health() - damage);
-    }
-    else {
-        baseAttributesPBComponent.set_health(0);
-    }
+    // 与回合引擎共用落血规则:向上取整、不超过当前气血;buff 改写后的伤害若为 NaN / 无穷,不进整数转换
+    const uint64_t health = baseAttributesPBComponent.health();
+    baseAttributesPBComponent.set_health(health - combatdamage::DamageToHealth(damageEvent.damage(), health));
 }
 
 void TriggerBeKillEvent(const entt::entity casterEntity, const entt::entity target) {

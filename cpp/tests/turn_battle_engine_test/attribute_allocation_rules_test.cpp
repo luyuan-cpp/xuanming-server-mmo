@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include <limits>
 
 #include <cstdint>
 #include <map>
@@ -13,7 +14,13 @@
 // (-1 → 4294967295);多个超大值相加若用 32 位累加,会绕回一个小数骗过"剩余点"校验。
 // 放在 battle 测试工程:规则是纯 inline 头函数,不需要链接 scene.lib(同 player_revive_rule_test)。
 
+using attributerules::AllocatedIncrement;
 using attributerules::AllocError;
+using attributerules::AllocFormulaRule;
+using attributerules::EffectivePoints;
+using attributerules::FullInvestmentEffectivePoints;
+using attributerules::FullInvestmentPoints;
+using attributerules::MakeFormulaRule;
 using attributerules::DistributePoints;
 using attributerules::PoolRule;
 using attributerules::RescaleCurrent;
@@ -350,4 +357,123 @@ TEST(AttributeAllocationRulesTest, RescaleKeepsAliveAndDeadStates) {
     EXPECT_EQ(RescaleCurrent(500, 1000, 0), 0u);
     EXPECT_EQ(RescaleCurrent(800, 0, 500), 500u);
     EXPECT_EQ(RescaleCurrent(300, 1000, 1000), 300u);
+}
+
+// ---------------------------------------------------------------------------
+// 加点收益公式(2026-09-13):E(n) = n × (1 + 0.2 × n ÷ s),增量 = 标准基础 × 比例 × E(n) ÷ E(s)
+// 角色属性点池 s = 425、E(s) = 510,即策划原话里的两个常数。85 级标准基础属性按现有表算 ——
+// 物伤 4250 / 法伤 3400 / 法力 1050 / 速度 275 / 气血 4750 / 防御 425(职业初值 + 每级自然成长 1 点 × 85 × 系数)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr double kStdPhysical = 4250.0;
+constexpr double kStdMagic = 3400.0;
+constexpr double kStdMana = 1050.0;
+constexpr double kStdSpeed = 275.0;
+constexpr double kStdHealth = 4750.0;
+constexpr double kStdDefense = 425.0;
+constexpr uint32_t kFullPoints = 425;  // 85 级 × 每级 5 点
+
+// 与 data/AttributePool.xlsx 行 1-3 一致:属性点 / 相性点 / 仙魔点
+PoolRule MakePool(uint32_t unlockLevel, uint32_t pointsPerLevel, uint32_t dimensionCap) {
+    PoolRule rule;
+    rule.unlockLevel = unlockLevel;
+    rule.pointsPerLevel = pointsPerLevel;
+    rule.dimensionCap = dimensionCap;
+    return rule;
+}
+PoolRule PrimaryPool() { return MakePool(1, 5, 0); }
+PoolRule AffinityPool() { return MakePool(1, 1, 50); }
+PoolRule ImmortalPool() { return MakePool(60, 1, 0); }
+
+AllocFormulaRule PrimaryRule() { return MakeFormulaRule(0.20, kFullPoints); }
+
+}  // namespace
+
+TEST(AllocFormulaTest, FullInvestmentPointsComeFromPoolAndLevelCap) {
+    // 策划公式里的 425 不是手填常数,而是"角色属性点满级能分到的点数",按池表 + 等级上限现算
+    EXPECT_EQ(FullInvestmentPoints(PrimaryPool(), playerlevel::kMaxLevel), 425u);  // 85 × 5
+    EXPECT_EQ(FullInvestmentPoints(AffinityPool(), playerlevel::kMaxLevel), 50u);  // 85 点被单项上限 50 截断
+    EXPECT_EQ(FullInvestmentPoints(ImmortalPool(), playerlevel::kMaxLevel), 26u);  // 60~85 级共 26 点
+}
+
+TEST(AllocFormulaTest, EffectivePointsEndpoints) {
+    const auto rule = PrimaryRule();
+    EXPECT_DOUBLE_EQ(EffectivePoints(0, rule), 0.0);
+    // 满投 425:E = 425 × (1 + 0.2) = 510,正好是除数,所以满投拿满表定比例
+    EXPECT_DOUBLE_EQ(EffectivePoints(kFullPoints, rule), 510.0);
+    EXPECT_DOUBLE_EQ(FullInvestmentEffectivePoints(rule), 510.0);
+}
+
+TEST(AllocFormulaTest, ConcentratedInvestmentBeatsSpreading) {
+    // 425 点全投一项 E = 510;四项各 106 点 = 4 × E(106) = 4 × 111.2875 = 445.15。
+    // 集中投比分散投多约 14.6%(分散投少约 12.7%),这是策划要的"集中投资"倾向
+    const auto rule = PrimaryRule();
+    const double concentrated = EffectivePoints(kFullPoints, rule);
+    const double spread = 4.0 * EffectivePoints(106, rule);
+    EXPECT_NEAR(spread, 445.15, 0.01);
+    EXPECT_NEAR(concentrated / spread, 1.146, 0.001);
+}
+
+TEST(AllocFormulaTest, FullInvestmentMatchesDesignerTable) {
+    const auto rule = PrimaryRule();
+    // 力量→物伤:非对应 +25% = 1062.5;破军 +30% = 1275
+    EXPECT_NEAR(AllocatedIncrement(kStdPhysical, 0.25, kFullPoints, rule), 1062.5, 1e-6);
+    EXPECT_NEAR(AllocatedIncrement(kStdPhysical, 0.30, kFullPoints, rule), 1275.0, 1e-6);
+    // 灵力→法伤:非对应 +22.5% = 765;玄霄 +27% = 918;法力两档同为 +15% = 157.5
+    EXPECT_NEAR(AllocatedIncrement(kStdMagic, 0.225, kFullPoints, rule), 765.0, 1e-6);
+    EXPECT_NEAR(AllocatedIncrement(kStdMagic, 0.27, kFullPoints, rule), 918.0, 1e-6);
+    EXPECT_NEAR(AllocatedIncrement(kStdMana, 0.15, kFullPoints, rule), 157.5, 1e-6);
+    // 敏捷→速度:非对应 +16.67% = 45.8425;逐风 +20% = 55
+    EXPECT_NEAR(AllocatedIncrement(kStdSpeed, 0.1667, kFullPoints, rule), 45.8425, 1e-6);
+    EXPECT_NEAR(AllocatedIncrement(kStdSpeed, 0.20, kFullPoints, rule), 55.0, 1e-6);
+    // 体质→气血 / 防御:非对应 +20.83% = 989.425 / +10% = 42.5;丹心 +25% = 1187.5 / +12% = 51
+    EXPECT_NEAR(AllocatedIncrement(kStdHealth, 0.2083, kFullPoints, rule), 989.425, 1e-6);
+    EXPECT_NEAR(AllocatedIncrement(kStdHealth, 0.25, kFullPoints, rule), 1187.5, 1e-6);
+    EXPECT_NEAR(AllocatedIncrement(kStdDefense, 0.10, kFullPoints, rule), 42.5, 1e-6);
+    EXPECT_NEAR(AllocatedIncrement(kStdDefense, 0.12, kFullPoints, rule), 51.0, 1e-6);
+}
+
+TEST(AllocFormulaTest, PartialInvestmentIsSubLinear) {
+    // 投一半(212 点)拿不到一半收益:E(212) = 212 × (1 + 0.2 × 212/425) ≈ 233.15,占 510 的 45.7%
+    const auto rule = PrimaryRule();
+    const double half = AllocatedIncrement(kStdPhysical, 0.25, 212, rule);
+    const double full = AllocatedIncrement(kStdPhysical, 0.25, kFullPoints, rule);
+    EXPECT_LT(half, full * 0.5);
+    EXPECT_NEAR(half / full, 0.457, 0.002);
+}
+
+TEST(AllocFormulaTest, ZeroRatioOrZeroPointsGiveNothing) {
+    const auto rule = PrimaryRule();
+    EXPECT_DOUBLE_EQ(AllocatedIncrement(kStdPhysical, 0.0, kFullPoints, rule), 0.0);
+    EXPECT_DOUBLE_EQ(AllocatedIncrement(kStdPhysical, 0.25, 0, rule), 0.0);
+    EXPECT_DOUBLE_EQ(AllocatedIncrement(0.0, 0.25, kFullPoints, rule), 0.0);
+    // 满级也分不到点的池(scale = 0):不做除法,直接 0
+    EXPECT_DOUBLE_EQ(AllocatedIncrement(kStdPhysical, 0.25, 10, MakeFormulaRule(0.20, 0)), 0.0);
+}
+
+TEST(AllocFormulaTest, BonusFromTable) {
+    // 负数 / 非有限数是坏表,退回策划默认 0.20
+    EXPECT_DOUBLE_EQ(MakeFormulaRule(-0.5, kFullPoints).efficiencyBonus, 0.20);
+    EXPECT_DOUBLE_EQ(MakeFormulaRule(std::numeric_limits<double>::quiet_NaN(), kFullPoints).efficiencyBonus, 0.20);
+    // 0 是合法值 = 纯线性:投一半正好一半,满投仍正好拿满比例(评审 2026-09-13:原先 0 被当坏表改回 0.20)
+    const auto linear = MakeFormulaRule(0.0, kFullPoints);
+    EXPECT_DOUBLE_EQ(EffectivePoints(212, linear), 212.0);
+    EXPECT_NEAR(AllocatedIncrement(kStdPhysical, 0.25, kFullPoints, linear), 1062.5, 1e-6);
+}
+
+TEST(AllocFormulaTest, FullInvestmentStaysExactWhenLevelCapChanges) {
+    // 评审 2026-09-13:scale / 除数原先手填在表里(425 / 510)。等级上限改成 100 而忘改表时,
+    // 100 级满投 500 点会拿到 5000 × 25% × E(500)/510 ≈ 1514 物伤(+30%,不是表定的 +25%),且零报错。
+    // 现在 scale 按池 + 等级上限现算,满投永远正好拿满比例
+    const auto rule = MakeFormulaRule(0.20, FullInvestmentPoints(PrimaryPool(), 100));
+    EXPECT_EQ(rule.fullInvestmentPoints, 500u);
+    EXPECT_NEAR(AllocatedIncrement(5000.0, 0.25, 500, rule), 1250.0, 1e-6);
+}
+
+TEST(AllocFormulaTest, CappedPoolReachesFullRatioAtItsOwnCap) {
+    // 相性池单项上限 50:若误用角色属性点的 425 尺度,满投 50 点只拿 E(50)/510 ≈ 10% 的比例
+    const auto rule = MakeFormulaRule(0.20, FullInvestmentPoints(AffinityPool(), playerlevel::kMaxLevel));
+    EXPECT_NEAR(AllocatedIncrement(kStdMagic, 0.25, 50, rule), 850.0, 1e-6);
 }

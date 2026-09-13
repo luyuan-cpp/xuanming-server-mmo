@@ -22,7 +22,17 @@ dev clean-logs    # Delete all log files under run\logs
 dev logs          # Interactive menu to pick a process to tail
 dev logs <name>   # Tail a specific process (e.g. dev logs login)
 dev logs all      # Dump last 60 lines of every process
+dev obs           # Grafana + Loki + Alloy: 三种语言的日志合在一个网页里看 (http://localhost:3000)
+dev obs-down      # 停掉上面的观测台
 ```
+
+### 本地 Grafana / Loki 日志台(2026-09-13)
+
+`dev obs` 起 `deploy/docker-compose.observability.yml`:Alloy 盯着 `run/logs/{go_services,cpp_nodes,java}`
+下的文件,按语言各自的格式解析(Go = go-zero JSON,C++ = muduo 文本,Java = Spring Boot JSON/文本),
+打上 `job / service / zone / instance / level` 标签送进 Loki,Grafana 预置了数据源和看板「游戏服务日志总览」。
+服务本身不用改代码(Java 只加了一段 `logging.structured` 配置)。
+详细的接入方式、标签约定、常用查询和排障见 [grafana-loki-local-logs.md](grafana-loki-local-logs.md)。
 
 ## Production (K8s)
 

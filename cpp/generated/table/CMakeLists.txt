@@ -67,6 +67,8 @@ set(SOURCE_FILES
     code/world_table.cpp
     code/world_table_fk.cpp
     code/attributeautoplan_table.cpp
+    code/attributeallocratio_table.cpp
+    code/attributeallocratio_table_fk.cpp
     code/attributeautoplan_table_fk.cpp
     code/attributedimension_table.cpp
     code/attributedimension_table_fk.cpp
@@ -116,6 +118,7 @@ set(SOURCE_FILES
     proto/tip/team_error_tip.pb.cc
     proto/world_table.pb.cc
     proto/attributeautoplan_table.pb.cc
+    proto/attributeallocratio_table.pb.cc
     proto/attributedimension_table.pb.cc
     proto/attributepool_table.pb.cc
     proto/attributerule_table.pb.cc
