@@ -31,8 +31,8 @@ int CountLoadedTiles(const dtNavMesh& navMesh)
 	return count;
 }
 
-// 加载 + 初始化 + 出生点探针。返回 nullptr 表示该文件不可用(已打 ERROR)。
-std::shared_ptr<NavComp> LoadAndProbe(const std::string& navPath, const uint32_t sceneConfigId)
+// 同一文件只加载与初始化一次;每个场景自己的出生点在注册前单独验证。
+std::shared_ptr<NavComp> LoadNavFile(const std::string& navPath)
 {
 	// 堆上就地构造:navQuery.init 会把 &navMesh 存进内部裸指针,
 	// 对象必须先落在最终地址上再做加载/初始化(旧写法先在栈上装好
@@ -53,6 +53,12 @@ std::shared_ptr<NavComp> LoadAndProbe(const std::string& navPath, const uint32_t
 		return nullptr;
 	}
 
+	return nav;
+}
+
+bool ProbeSceneSpawn(const std::shared_ptr<NavComp>& nav, const std::string& navPath,
+	const uint32_t sceneConfigId)
+{
 	// 数据契约自检:场景出生点必须落在网格上。旧的 UE 占位 bin(厘米单位、
 	// UE 布局,20648 字节)能"成功加载",但和天墉城地图毫无关系 —— 若照常
 	// 注册,进场落位会把出生点判成非法、移动裁决把玩家拉进墙里。这种网格
@@ -70,7 +76,7 @@ std::shared_ptr<NavComp> LoadAndProbe(const std::string& navPath, const uint32_t
 				  << " orig=(" << params->orig[0] << "," << params->orig[1] << "," << params->orig[2] << ")"
 				  << " tile=" << params->tileWidth << "x" << params->tileHeight
 				  << " spawn=(" << spawn.x() << "," << spawn.y() << "," << spawn.z() << ")";
-		return nullptr;
+		return false;
 	}
 	LOG_INFO << "nav loaded: " << navPath
 			 << " tiles=" << tiles
@@ -78,14 +84,14 @@ std::shared_ptr<NavComp> LoadAndProbe(const std::string& navPath, const uint32_t
 			 << " tile=" << params->tileWidth << "x" << params->tileHeight
 			 << " spawn=(" << spawn.x() << "," << spawn.y() << "," << spawn.z() << ")"
 			 << " snapped=(" << snappedSpawn.x() << "," << snappedSpawn.y() << "," << snappedSpawn.z() << ")";
-	return nav;
+	return true;
 }
 
 }  // namespace
 
 void NavigationSystem::LoadNavBins()
 {
-	// 同一个 nav_bin_file 只加载/探针一次,多个场景配置 id 共享(21 行 → 3 个文件)。
+	// 同一个 nav_bin_file 只加载一次,每一行的出生点仍须分别验证。
 	// 失败的文件也记下来,避免每行重复加载、重复刷 21 条同样的 ERROR。
 	std::unordered_map<std::string, std::shared_ptr<NavComp>> byPath;
 
@@ -100,9 +106,9 @@ void NavigationSystem::LoadNavBins()
 		auto it = byPath.find(navPath);
 		if (it == byPath.end())
 		{
-			it = byPath.emplace(navPath, LoadAndProbe(navPath, item.id())).first;
+			it = byPath.emplace(navPath, LoadNavFile(navPath)).first;
 		}
-		if (!it->second)
+		if (!it->second || !ProbeSceneSpawn(it->second, navPath, item.id()))
 		{
 			continue;
 		}

@@ -2,87 +2,150 @@
  "data": [
   {
    "id": 1,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 2,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/penglai_scene.bin",
+   "spawn_x": 170.0,
+   "spawn_y": 220.0,
+   "spawn_z": 0.0
   },
   {
    "id": 3,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/donghai_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 4,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/lanxian_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 5,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 6,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 7,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 8,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 9,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 10,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 11,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 12,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 13,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 14,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 15,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 16,
-   "nav_bin_file": "data/scene_nav_bin/main_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/main_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 17,
-   "nav_bin_file": "data/scene_nav_bin/dungeon_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/dungeon_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 18,
-   "nav_bin_file": "data/scene_nav_bin/dungeon_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/dungeon_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 19,
-   "nav_bin_file": "data/scene_nav_bin/dungeon_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/dungeon_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 20,
-   "nav_bin_file": "data/scene_nav_bin/mirror_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/mirror_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   },
   {
    "id": 21,
-   "nav_bin_file": "data/scene_nav_bin/mirror_scene.bin"
+   "nav_bin_file": "data/scene_nav_bin/mirror_scene.bin",
+   "spawn_x": 180.0,
+   "spawn_y": 200.0,
+   "spawn_z": 0.0
   }
  ]
 }

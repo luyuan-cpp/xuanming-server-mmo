@@ -60,4 +60,14 @@ struct FCfgBaseSceneRow : public FTableRowBase
 
 	UPROPERTY(BlueprintReadOnly, Category = "Config|BaseScene")
 	FString nav_bin_file;
+
+	/** 服务器 Z-up 出生坐标。Unity (x,y,z) 对应服务器 (z,x,y)。 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|BaseScene")
+	double spawn_x = 0.0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|BaseScene")
+	double spawn_y = 0.0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|BaseScene")
+	double spawn_z = 0.0;
 };

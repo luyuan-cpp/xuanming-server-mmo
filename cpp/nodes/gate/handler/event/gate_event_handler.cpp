@@ -15,29 +15,29 @@
 #include "network/rpc_client.h"
 #include "node/system/node/node_util.h"
 #include "battle_binding_helper.h"
+#include "scene_route_helper.h"
 
 // Forward player entry from Gate to Scene via gRPC PlayerEnterGameNode.
 // Gate is the bridge: it holds the TCP session and routes the RPC to the
 // correct Scene node using the entity ID from RoutePlayerEvent.
-static void ForwardPlayerToScene(SessionId sessionId, uint32_t enterGsType,
+static bool ForwardPlayerToScene(SessionId sessionId, uint32_t enterGsType,
                                  uint64_t sceneNodeId, uint64_t playerId, uint64_t sceneId)
 {
-    if (enterGsType == 0)
-        return; // LOGIN_NONE, nothing to forward
+    // LOGIN_NONE 用于已登录角色换图;调用方负责区分无需入场与换图。
 
     auto &sceneRegistry = tlsNodeContextManager.GetRegistry(SceneNodeService);
     entt::entity sceneEntity{sceneNodeId};
     if (!sceneRegistry.valid(sceneEntity))
     {
         LOG_ERROR << "ForwardPlayerToScene: scene node entity invalid, scene_node_id=" << sceneNodeId;
-        return;
+        return false;
     }
 
     const auto *rpcClient = sceneRegistry.try_get<RpcClientPtr>(sceneEntity);
     if (!rpcClient || !*rpcClient)
     {
         LOG_ERROR << "ForwardPlayerToScene: RpcClient not found for scene_node_id=" << sceneNodeId;
-        return;
+        return false;
     }
 
     PlayerEnterGameNodeRequest req;
@@ -51,6 +51,7 @@ static void ForwardPlayerToScene(SessionId sessionId, uint32_t enterGsType,
     LOG_DEBUG << "ForwardPlayerToScene: sent PlayerEnterGameNode to scene_node=" << sceneNodeId
               << " player=" << playerId << " session=" << sessionId
               << " scene_id=" << sceneId << " enter_gs_type=" << enterGsType;
+    return true;
 }
 ///<<< END WRITING YOUR CODE
 void GateEventHandler::Register()
@@ -114,7 +115,6 @@ void GateEventHandler::RoutePlayerEventHandler(const contracts::kafka::RoutePlay
     }
 
     it->second.SetEntityId(SceneNodeService, entt::to_integral(*targetNodeEntity));
-    it->second.sceneId = event.scene_id();
 
     // Use player_id from the event if session doesn't have it yet (BindSession may not have arrived).
     if (event.player_id() != 0 && it->second.playerId == kInvalidGuid)
@@ -127,14 +127,12 @@ void GateEventHandler::RoutePlayerEventHandler(const contracts::kafka::RoutePlay
               << " scene_entity=" << entt::to_integral(*targetNodeEntity)
               << " scene_id=" << event.scene_id();
 
-    // Consume pending login type if BindSession arrived before RoutePlayer.
-    const auto pendingType = it->second.pendingEnterGsType;
-    if (pendingType != 0)
+    // 登录后仍须把目标场景通知 scene;只修改 gate 路由会让角色停留旧地图。
+    gate_scene_route::ApplyRoute(it->second, event.scene_id(), [&](const uint32_t enterType)
     {
-        it->second.pendingEnterGsType = 0;
-        ForwardPlayerToScene(sessionId, pendingType, entt::to_integral(*targetNodeEntity),
-                             it->second.playerId, it->second.sceneId);
-    }
+        return ForwardPlayerToScene(sessionId, enterType, entt::to_integral(*targetNodeEntity),
+                                    it->second.playerId, event.scene_id());
+    });
 ///<<< END WRITING YOUR CODE
 }
 void GateEventHandler::KickPlayerEventHandler(const contracts::kafka::KickPlayerEvent& event)
@@ -249,13 +247,14 @@ void GateEventHandler::BindSessionEventHandler(const contracts::kafka::BindSessi
     it->second.sessionVersion = event.session_version();
 
     // If scene node already assigned (same-Gate reconnect), forward immediately.
-    if (it->second.HasEntityId(SceneNodeService))
+    if (it->second.HasEntityId(SceneNodeService) && it->second.sceneId != 0 && enterGsType != 0)
     {
         const auto sceneNodeId = it->second.GetEntityId(SceneNodeService);
-        ForwardPlayerToScene(sessionId, enterGsType, sceneNodeId,
-                             playerId, it->second.sceneId);
+        // 节点连接暂未就绪时保留待入场类型,后续路由重投仍能补发。
+        it->second.pendingEnterGsType = ForwardPlayerToScene(sessionId, enterGsType, sceneNodeId,
+                                                            playerId, it->second.sceneId) ? 0 : enterGsType;
     }
-    else
+    else if (enterGsType != 0)
     {
         // Scene not yet assigned — store for RoutePlayerEvent to consume.
         it->second.pendingEnterGsType = enterGsType;

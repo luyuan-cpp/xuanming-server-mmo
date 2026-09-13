@@ -1,11 +1,13 @@
 // navmesh_baker: 离线烘焙场景导航网格(寻路阻挡数据)。
 //
-// 输入(二选一):
+// 输入(三选一):
 //   --painted-city <TianyongPaintedCity.cs>
 //       直接解析客户端天墉城 painted-city 源文件里内嵌的 WalkMaskBase64
 //       (150x150 可走位图,单格 2m,覆盖 Unity 世界 x∈[50,350] z∈[0,300]),
 //       按"可走格出地面 quad、不可走格留洞"生成三角面。这份 mask 就是客户端
 //       TianyongPaintedCity.IsPaintingWalkable 的判定数据,两端语义一比一。
+//   --mask-base64 <walkmask.txt>
+//       独立地图的相同150×150位图,必须显式传 --probe 指定该场景出生点。
 //   --obj <mesh.obj>
 //       通用 OBJ 三角网输入(未来真 3D 场景从 Unity 导出用这条路)。
 //
@@ -215,6 +217,34 @@ bool ExtractWalkMask(const std::string& csPath, std::vector<uint8_t>& mask)
 	{
 		std::fprintf(stderr, "error: mask too short: %zu bytes, expected >= %zu\n",
 			mask.size(), expected);
+		return false;
+	}
+	return true;
+}
+
+// 独立地图资源使用同一 150×150、MSB-first 位图契约,避免伪造 C# 源文件。
+bool LoadMaskBase64(const std::string& path, std::vector<uint8_t>& mask)
+{
+	std::ifstream file(path, std::ios::binary);
+	if (!file)
+	{
+		std::fprintf(stderr, "error: cannot open %s\n", path.c_str());
+		return false;
+	}
+	std::stringstream text;
+	text << file.rdbuf();
+	const size_t expected = (kMaskResolution * kMaskResolution + 7) / 8;
+	std::string encoded;
+	for (const char c : text.str())
+	{
+		if (!std::isspace(static_cast<unsigned char>(c))) encoded.push_back(c);
+	}
+	// 2813 字节编码恰好一个末尾 '=';不接受中间 padding 或截断数据。
+	const size_t encodedSize = ((expected + 2) / 3) * 4;
+	if (encoded.size() != encodedSize || encoded.find('=') != encodedSize - 1 ||
+		!DecodeBase64(encoded, mask) || mask.size() != expected)
+	{
+		std::fprintf(stderr, "error: mask must be valid base64 for exactly %zu bytes\n", expected);
 		return false;
 	}
 	return true;
@@ -628,9 +658,15 @@ struct ProbePoint
 bool ParseProbe(const std::string& text, ProbePoint& out)
 {
 	double x = 0, y = 0, z = 0;
-	if (std::sscanf(text.c_str(), "%lf,%lf,%lf", &x, &y, &z) != 3)
+	int parsed = 0;
+	if (std::sscanf(text.c_str(), "%lf,%lf,%lf%n", &x, &y, &z, &parsed) != 3 ||
+		!std::isfinite(x) || !std::isfinite(y) || !std::isfinite(z))
 	{
 		return false;
+	}
+	for (size_t i = static_cast<size_t>(parsed); i < text.size(); ++i)
+	{
+		if (!std::isspace(static_cast<unsigned char>(text[i]))) return false;
 	}
 	out.v[0] = x;
 	out.v[1] = y;
@@ -680,6 +716,7 @@ bool ProbeNavMesh(const dtNavMesh& navMesh, const std::vector<ProbePoint>& probe
 int main(int argc, char** argv)
 {
 	std::string paintedCityPath;
+	std::string maskBase64Path;
 	std::string objPath;
 	std::string outPath;
 	BakeConfig bake;
@@ -693,6 +730,7 @@ int main(int argc, char** argv)
 		auto next = [&]() -> const char* { return i + 1 < argc ? argv[++i] : ""; };
 		if (arg == "--filter-ledges") filterLedgesArg = std::atoi(next());
 		else if (arg == "--painted-city") paintedCityPath = next();
+		else if (arg == "--mask-base64") maskBase64Path = next();
 		else if (arg == "--obj") objPath = next();
 		else if (arg == "--out") outPath = next();
 		else if (arg == "--cs") bake.cellSize = std::atof(next());
@@ -719,17 +757,24 @@ int main(int argc, char** argv)
 			return 1;
 		}
 	}
-	if (outPath.empty() || (paintedCityPath.empty() == objPath.empty()))
+	if (outPath.empty() || (static_cast<int>(!paintedCityPath.empty()) +
+		static_cast<int>(!maskBase64Path.empty()) + static_cast<int>(!objPath.empty()) != 1))
 	{
 		std::fprintf(stderr,
-			"usage: navmesh_baker (--painted-city <TianyongPaintedCity.cs> | --obj <mesh.obj>)"
+			"usage: navmesh_baker (--painted-city <TianyongPaintedCity.cs> | --mask-base64 <mask.txt> | --obj <mesh.obj>)"
 			" --out <scene.bin>\n"
 			"       [--cs 0.25] [--ch 0.2] [--agent-radius 0] [--agent-height 1.8]"
 			" [--agent-climb 0.35] [--tile-size 128]\n"
 			"       [--probe x,y,z ...] [--no-default-probe] [--filter-ledges 0|1]\n");
 		return 1;
 	}
-	bake.filterLedges = filterLedgesArg >= 0 ? filterLedgesArg != 0 : paintedCityPath.empty();
+	if (!maskBase64Path.empty() && probes.empty())
+	{
+		std::fprintf(stderr, "error: --mask-base64 requires at least one explicit --probe x,y,z (scene spawn)\n");
+		return 1;
+	}
+	bake.filterLedges = filterLedgesArg >= 0 ? filterLedgesArg != 0 :
+		(paintedCityPath.empty() && maskBase64Path.empty());
 	std::printf("ledge filter: %s\n", bake.filterLedges ? "on" : "off (mesh boundary flush with mask)");
 	if (!paintedCityPath.empty() && defaultProbe)
 	{
@@ -746,6 +791,12 @@ int main(int argc, char** argv)
 	{
 		std::vector<uint8_t> mask;
 		if (!ExtractWalkMask(paintedCityPath, mask)) return 1;
+		mesh = BuildMaskGeometry(mask);
+	}
+	else if (!maskBase64Path.empty())
+	{
+		std::vector<uint8_t> mask;
+		if (!LoadMaskBase64(maskBase64Path, mask)) return 1;
 		mesh = BuildMaskGeometry(mask);
 	}
 	else if (!LoadObj(objPath, mesh))

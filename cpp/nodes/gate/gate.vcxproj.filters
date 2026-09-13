@@ -62,6 +62,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="handler\event\scene_route_helper.h">
+      <Filter>handler\event</Filter>
+    </ClInclude>
     <ClInclude Include="handler\event\battle_binding_helper.h">
       <Filter>Header Files</Filter>
     </ClInclude>

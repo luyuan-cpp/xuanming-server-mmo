@@ -88,7 +88,7 @@
       <AdditionalOptions>/utf-8 %(AdditionalOptions)</AdditionalOptions>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NOMINMAX;WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
@@ -103,7 +103,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NOMINMAX;WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
@@ -115,9 +115,10 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
+      <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <WarningLevel>Level3</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NOMINMAX;WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/zlib/;../../../third_party/redis/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;../../../third_party/protobuf/third_party/abseil-cpp/;../../../third_party/ue5navmesh/Public;../../../third_party/grpc/include/;../../../third_party/spdlog/include/;../../../third_party/hexagons_grids/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../../third_party/xxhash/;../../../third_party/librdkafka/src-cpp/;../../libs/;../../libs/engine/;../../libs/services/scene/;../../libs/services/player/;../../generated/;../../libs/engine/core/;../../libs/engine/modules/;../../libs/engine/config/;./;../../libs/engine/infra/;../../../third_party/grpc/third_party/googletest/googletest/include/;../../../third_party/grpc/third_party/googletest/googlemock/include/</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
@@ -127,7 +128,6 @@
       <ObjectFileName>$(IntDir)%(RelativeDir)</ObjectFileName>
       <EnableParallelCodeGeneration>false</EnableParallelCodeGeneration>
       <MultiProcessorCompilation>true</MultiProcessorCompilation>
-      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <RuntimeTypeInfo>true</RuntimeTypeInfo>
     </ClCompile>
@@ -140,15 +140,15 @@
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
+      <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
       <WarningLevel>Level3</WarningLevel>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>NDEBUG;_CONSOLE;WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>NOMINMAX;NDEBUG;_CONSOLE;WIN32;_CRT_SECURE_NO_WARNINGS;_WINSOCK_DEPRECATED_NO_WARNINGS;_CRT_SECURE_NO_DEPRECATE;_CRT_NONSTDC_NO_DEPRECATE;ENTT_ID_TYPE=uint64_t;_TCHAR_DEFINED;UNICODE;_SILENCE_ALL_CXX23_DEPRECATION_WARNINGS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <AdditionalIncludeDirectories>../../../third_party/;../../../third_party/boost/;../../../third_party/zlib/;../../../third_party/redis/;../../../third_party/muduo/;../../../third_party/muduo/contrib/windows/include/;../../../third_party/redis/deps/;../../../third_party/protobuf/third_party/abseil-cpp/;../../../third_party/ue5navmesh/Public;../../../third_party/grpc/include/;../../../third_party/spdlog/include/;../../../third_party/hexagons_grids/;../../../third_party/grpc/third_party/protobuf/src/;../../../third_party/grpc/third_party/abseil-cpp/;../../../third_party/xxhash/;../../../third_party/librdkafka/src-cpp/;../../libs/;../../libs/engine/;../../libs/services/scene/;../../libs/services/player/;../../generated/;../../libs/engine/core/;../../libs/engine/modules/;../../libs/engine/config/;./;../../libs/engine/infra/;../../../third_party/grpc/third_party/googletest/googletest/include/;../../../third_party/grpc/third_party/googletest/googlemock/include/</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpplatest</LanguageStandard>
-      <AdditionalOptions>/utf-8 /bigobj %(AdditionalOptions)</AdditionalOptions>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -174,5 +174,8 @@
     <ClCompile Include="player_activity_schedule_test.cpp" />
     <ClCompile Include="player_feature_persistence_test.cpp" />
     <ClCompile Include="..\..\nodes\scene\handler\event\mission_event_handler.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="scene_spawn_test.cpp" />
   </ItemGroup>
 </Project>

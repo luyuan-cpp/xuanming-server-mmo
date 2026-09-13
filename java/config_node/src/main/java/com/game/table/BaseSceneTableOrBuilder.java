@@ -27,4 +27,22 @@ public interface BaseSceneTableOrBuilder extends
    */
   com.google.protobuf.ByteString
       getNavBinFileBytes();
+
+  /**
+   * <code>double spawn_x = 3;</code>
+   * @return The spawnX.
+   */
+  double getSpawnX();
+
+  /**
+   * <code>double spawn_y = 4;</code>
+   * @return The spawnY.
+   */
+  double getSpawnY();
+
+  /**
+   * <code>double spawn_z = 5;</code>
+   * @return The spawnZ.
+   */
+  double getSpawnZ();
 }

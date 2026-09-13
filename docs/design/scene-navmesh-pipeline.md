@@ -111,3 +111,71 @@ playerHeight/playerStepOffset)。速度信任上限 `kMaxTrustedClientSpeed=10`
      MoveSync 上报非法点后收到 MoveAckS2C.server_location ≠ 上报点);
    - 沿街道正常行走不应收到纠偏 MoveAck。
    失败时保留 scene 节点 stdout/log 尾部 200 行。
+
+
+## 7. 2026-09-12 三地节庆地图接入
+
+三地的日景和节庆画面各两张,同一地区共享一份保守可走位图。地图资源与
+原图尺寸不决定服务器的单位:仍沿用 Unity 米制 300×300 地面、x=50–350、
+z=0–300,150×150 位图每格 2m、从画面上方向下排列、MSB-first 共 2813 字节。
+
+| 场景配置 ID | 地点 | nav_bin_file 文件名 | Unity 出生点 | 服务器出生点 |
+|---|---|---|---|---|
+| 1 及原有其它场景 | 天墉城 | main/dungeon/mirror_scene.bin | (200,0,180) | (180,200,0) |
+| 2 | 蓬莱岛 | penglai_scene.bin | (220,0,170) | (170,220,0) |
+| 3 | 东海渔村 | donghai_scene.bin | (200,0,180) | (180,200,0) |
+| 4 | 揽仙镇 | lanxian_scene.bin | (200,0,180) | (180,200,0) |
+
+这些 ID 已在 World 表中,继续走现有 EnterSceneC2S(scene_config_id, scene_id=0)
+路由,无需新增协议或临时预览场景。日景/节庆切换是客户端画面状态,不新建网络场景。
+同节点传送到不同配置地图时采用目标出生点;同配置换线、重登仍保留合法保存位置。
+
+出生坐标从 `data/schema/basescene_table.proto` 与 `data/BaseScene.xlsx` 正式增加
+`spawn_x/y/z` 三个 double 字段,字段号 3/4/5。唯一消费点仍为
+`SceneSpawnSystem::DefaultSpawnFor`。无场景/旧表无出生列时保留天墉兼容值;
+所有正式行都显式填值。网格文件按路径只加载一次,但每行出生点都要通过探针才注册。
+
+新地图位图在独立客户端的
+`Assets/Resources/World/FestivalRegions/{penglai,donghai,lanxian}/walkmask.txt`。
+烘焙器 `--mask-base64 <文件>` 直接接受这些资源,与旧 C# 入口走同一几何管线。
+此模式必须显式 `--probe x,y,z`,不偷偷套天墉出生点,且拒绝错误长度/编码、空几何、
+不在网格的探针以及非有限坐标。`--painted-city` 的原用法与默认天墉探针保持兼容。
+
+示例(工作目录为服务端仓库):
+
+```powershell
+tools/navmesh_baker/build/Release/navmesh_baker.exe --mask-base64 ../mmorpg-client/Assets/Resources/World/FestivalRegions/penglai/walkmask.txt --probe 220,0,170 --out data/scene_nav_bin/penglai_scene.bin
+```
+
+出包后须先重编并部署所有读取 BaseScene 的服务,再重启本地 scene 加载配置与网格。
+Go 的 JSON 表解析拒绝未知字段,因此本机 scene_manager/player_locator/login 也须更新;
+friend/guild 如有部署同样需要重编。仅复制新 JSON 给旧 Go 程序会在启动时拒绝 spawn_x。
+不要清理数据库或重置角色;
+旧地图非法存档坐标由进场逻辑自然修复。验证入口为烘焙器的 `test_baker.py`、
+现有 bag_test 工程中的独立 `SceneSpawnTest` 和客户端真实登录/传送/移动验收。
+
+
+## 8. 2026-09-13 接入验证
+
+- 三份最终位图与客户端资源逐字节一致,蓬莱/东海/揽仙分别含 2265/2218/2295 个可走格,
+  烘焙为 34/40/45 个 tile,文件为 86064/80520/102088 字节。保留不收缩边缘的旧烘焙规则;
+  各自出生探针返回精确配置坐标,天墉及原有其它场景继续使用 61 tile 网格。
+- `table`、`scene` 静态库、`scene` 节点及 `bag_test` 四个工程按 Debug/x64、`/m:1`
+  串行构建通过。完整 `bag_test` 为 220/220,其中 `SceneSpawnTest` 6/6 覆盖 21 行导航
+  注册、三图网格独立、非法存档修复、同图重入保位、跨图出生及无导航兼容。
+  烘焙器契约测试 6/6,覆盖独立位图与旧入口一致、缺失/非法出生、坏编码及空几何拒绝。
+- 导表 manifest v13 的 28 张表所有源文件、JSON/PB 产物大小与 SHA256 匹配;
+  正式新增 BaseScene 的 Go 绑定及五个读取者 scene_manager/player_locator/login/friend/guild
+  均编译通过;前三个已部署本机运行目录,后两个未启用。Go 表包既有测试仍引用已经移除的
+  TestMultiKey/Buff `FindBy*` API 而无法编译,本轮未更改这些测试或对应表,不计入通过项。
+- 证据位于工作区 `../tmp/festival-final-*`,含构建日志、C++ XML、烘焙日志及
+  `festival-final-server-validation.json`(位图与 bin 哈希对应)。独立代码复核未发现本轮
+  同节点传送阻塞问题;跨节点切换仍遵守既有的上游安全门禁。
+
+- 正式客户端首轮登录成功后,传送到配置2停在加载态:Go 已发送新 RoutePlayer,但 gate
+  只在待登录类型非零时通知 scene。修复后同节点不同场景实例使用 LOGIN_NONE 入场,
+  不重复触发登录事件;相同路由重投不重复入场。发送前置检查失败不提交新场景或消费待
+  登录类型,缺少场景实例的 BindSession 继续等待。gate 串行重编通过,路由身份测试26/26,
+  其中7条覆盖两种登录顺序、重复投递、跨图、同图换线和暂缺RPC连接后的重投恢复。
+
+- 正式客户端最终联机验收 PASS:2→3→4→1 四次服务端入场、三地日景/节庆与返城7张截图;各图出生误差、导航不一致和移动重定位均为0。服务端入场原始行、进程PID/启动时间、4图网格及BaseScene运行文件SHA256收在 `../tmp/festival-final-server-deployment-evidence.json/.log`。

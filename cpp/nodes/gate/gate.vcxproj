@@ -42,6 +42,7 @@
     <ClInclude Include="gate_router_mode.h" />
     <ClInclude Include="gate_version.h" />
     <ClInclude Include="handler\event\battle_binding_helper.h" />
+    <ClInclude Include="handler\event\scene_route_helper.h" />
     <ClInclude Include="handler\event\match_event_handler.h" />
     <ClInclude Include="handler\event\event_handler.h" />
     <ClInclude Include="handler\event\gate_event_handler.h" />

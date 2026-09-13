@@ -22,15 +22,16 @@ public static partial class BasesceneTableReflection {
   static BasesceneTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChViYXNlc2NlbmVfdGFibGUucHJvdG8iMgoOQmFzZVNjZW5lVGFibGUSCgoC",
-          "aWQYASABKA0SFAoMbmF2X2Jpbl9maWxlGAIgASgJIjMKEkJhc2VTY2VuZVRh",
-          "YmxlRGF0YRIdCgRkYXRhGAEgAygLMg8uQmFzZVNjZW5lVGFibGVCQAoOY29t",
-          "LmdhbWUudGFibGVCGEJhc2VTY2VuZVRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5l",
-          "cmF0ZWQvcGIvdGFibGViBnByb3RvMw=="));
+          "ChViYXNlc2NlbmVfdGFibGUucHJvdG8iZQoOQmFzZVNjZW5lVGFibGUSCgoC",
+          "aWQYASABKA0SFAoMbmF2X2Jpbl9maWxlGAIgASgJEg8KB3NwYXduX3gYAyAB",
+          "KAESDwoHc3Bhd25feRgEIAEoARIPCgdzcGF3bl96GAUgASgBIjMKEkJhc2VT",
+          "Y2VuZVRhYmxlRGF0YRIdCgRkYXRhGAEgAygLMg8uQmFzZVNjZW5lVGFibGVC",
+          "QAoOY29tLmdhbWUudGFibGVCGEJhc2VTY2VuZVRhYmxlT3V0ZXJDbGFzc1AB",
+          "WhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::BaseSceneTable), global::BaseSceneTable.Parser, new[]{ "Id", "NavBinFile" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::BaseSceneTable), global::BaseSceneTable.Parser, new[]{ "Id", "NavBinFile", "SpawnX", "SpawnY", "SpawnZ" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::BaseSceneTableData), global::BaseSceneTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -75,6 +76,9 @@ public sealed partial class BaseSceneTable : pb::IMessage<BaseSceneTable>
   public BaseSceneTable(BaseSceneTable other) : this() {
     id_ = other.id_;
     navBinFile_ = other.navBinFile_;
+    spawnX_ = other.spawnX_;
+    spawnY_ = other.spawnY_;
+    spawnZ_ = other.spawnZ_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -108,6 +112,42 @@ public sealed partial class BaseSceneTable : pb::IMessage<BaseSceneTable>
     }
   }
 
+  /// <summary>Field number for the "spawn_x" field.</summary>
+  public const int SpawnXFieldNumber = 3;
+  private double spawnX_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double SpawnX {
+    get { return spawnX_; }
+    set {
+      spawnX_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "spawn_y" field.</summary>
+  public const int SpawnYFieldNumber = 4;
+  private double spawnY_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double SpawnY {
+    get { return spawnY_; }
+    set {
+      spawnY_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "spawn_z" field.</summary>
+  public const int SpawnZFieldNumber = 5;
+  private double spawnZ_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double SpawnZ {
+    get { return spawnZ_; }
+    set {
+      spawnZ_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -125,6 +165,9 @@ public sealed partial class BaseSceneTable : pb::IMessage<BaseSceneTable>
     }
     if (Id != other.Id) return false;
     if (NavBinFile != other.NavBinFile) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(SpawnX, other.SpawnX)) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(SpawnY, other.SpawnY)) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(SpawnZ, other.SpawnZ)) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -134,6 +177,9 @@ public sealed partial class BaseSceneTable : pb::IMessage<BaseSceneTable>
     int hash = 1;
     if (Id != 0) hash ^= Id.GetHashCode();
     if (NavBinFile.Length != 0) hash ^= NavBinFile.GetHashCode();
+    if (SpawnX != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(SpawnX);
+    if (SpawnY != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(SpawnY);
+    if (SpawnZ != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(SpawnZ);
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -160,6 +206,18 @@ public sealed partial class BaseSceneTable : pb::IMessage<BaseSceneTable>
       output.WriteRawTag(18);
       output.WriteString(NavBinFile);
     }
+    if (SpawnX != 0D) {
+      output.WriteRawTag(25);
+      output.WriteDouble(SpawnX);
+    }
+    if (SpawnY != 0D) {
+      output.WriteRawTag(33);
+      output.WriteDouble(SpawnY);
+    }
+    if (SpawnZ != 0D) {
+      output.WriteRawTag(41);
+      output.WriteDouble(SpawnZ);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -178,6 +236,18 @@ public sealed partial class BaseSceneTable : pb::IMessage<BaseSceneTable>
       output.WriteRawTag(18);
       output.WriteString(NavBinFile);
     }
+    if (SpawnX != 0D) {
+      output.WriteRawTag(25);
+      output.WriteDouble(SpawnX);
+    }
+    if (SpawnY != 0D) {
+      output.WriteRawTag(33);
+      output.WriteDouble(SpawnY);
+    }
+    if (SpawnZ != 0D) {
+      output.WriteRawTag(41);
+      output.WriteDouble(SpawnZ);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -193,6 +263,15 @@ public sealed partial class BaseSceneTable : pb::IMessage<BaseSceneTable>
     }
     if (NavBinFile.Length != 0) {
       size += 1 + pb::CodedOutputStream.ComputeStringSize(NavBinFile);
+    }
+    if (SpawnX != 0D) {
+      size += 1 + 8;
+    }
+    if (SpawnY != 0D) {
+      size += 1 + 8;
+    }
+    if (SpawnZ != 0D) {
+      size += 1 + 8;
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -211,6 +290,15 @@ public sealed partial class BaseSceneTable : pb::IMessage<BaseSceneTable>
     }
     if (other.NavBinFile.Length != 0) {
       NavBinFile = other.NavBinFile;
+    }
+    if (other.SpawnX != 0D) {
+      SpawnX = other.SpawnX;
+    }
+    if (other.SpawnY != 0D) {
+      SpawnY = other.SpawnY;
+    }
+    if (other.SpawnZ != 0D) {
+      SpawnZ = other.SpawnZ;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -239,6 +327,18 @@ public sealed partial class BaseSceneTable : pb::IMessage<BaseSceneTable>
           NavBinFile = input.ReadString();
           break;
         }
+        case 25: {
+          SpawnX = input.ReadDouble();
+          break;
+        }
+        case 33: {
+          SpawnY = input.ReadDouble();
+          break;
+        }
+        case 41: {
+          SpawnZ = input.ReadDouble();
+          break;
+        }
       }
     }
   #endif
@@ -264,6 +364,18 @@ public sealed partial class BaseSceneTable : pb::IMessage<BaseSceneTable>
         }
         case 18: {
           NavBinFile = input.ReadString();
+          break;
+        }
+        case 25: {
+          SpawnX = input.ReadDouble();
+          break;
+        }
+        case 33: {
+          SpawnY = input.ReadDouble();
+          break;
+        }
+        case 41: {
+          SpawnZ = input.ReadDouble();
           break;
         }
       }

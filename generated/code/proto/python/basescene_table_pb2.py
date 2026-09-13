@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15\x62\x61sescene_table.proto\"2\n\x0e\x42\x61seSceneTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x14\n\x0cnav_bin_file\x18\x02 \x01(\t\"3\n\x12\x42\x61seSceneTableData\x12\x1d\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x0f.BaseSceneTableB@\n\x0e\x63om.game.tableB\x18\x42\x61seSceneTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x15\x62\x61sescene_table.proto\"e\n\x0e\x42\x61seSceneTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x14\n\x0cnav_bin_file\x18\x02 \x01(\t\x12\x0f\n\x07spawn_x\x18\x03 \x01(\x01\x12\x0f\n\x07spawn_y\x18\x04 \x01(\x01\x12\x0f\n\x07spawn_z\x18\x05 \x01(\x01\"3\n\x12\x42\x61seSceneTableData\x12\x1d\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x0f.BaseSceneTableB@\n\x0e\x63om.game.tableB\x18\x42\x61seSceneTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\030BaseSceneTableOuterClassP\001Z\022generated/pb/table'
   _globals['_BASESCENETABLE']._serialized_start=25
-  _globals['_BASESCENETABLE']._serialized_end=75
-  _globals['_BASESCENETABLEDATA']._serialized_start=77
-  _globals['_BASESCENETABLEDATA']._serialized_end=128
+  _globals['_BASESCENETABLE']._serialized_end=126
+  _globals['_BASESCENETABLEDATA']._serialized_start=128
+  _globals['_BASESCENETABLEDATA']._serialized_end=179
 # @@protoc_insertion_point(module_scope)

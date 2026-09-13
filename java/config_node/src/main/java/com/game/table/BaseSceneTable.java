@@ -99,6 +99,39 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int SPAWN_X_FIELD_NUMBER = 3;
+  private double spawnX_ = 0D;
+  /**
+   * <code>double spawn_x = 3;</code>
+   * @return The spawnX.
+   */
+  @java.lang.Override
+  public double getSpawnX() {
+    return spawnX_;
+  }
+
+  public static final int SPAWN_Y_FIELD_NUMBER = 4;
+  private double spawnY_ = 0D;
+  /**
+   * <code>double spawn_y = 4;</code>
+   * @return The spawnY.
+   */
+  @java.lang.Override
+  public double getSpawnY() {
+    return spawnY_;
+  }
+
+  public static final int SPAWN_Z_FIELD_NUMBER = 5;
+  private double spawnZ_ = 0D;
+  /**
+   * <code>double spawn_z = 5;</code>
+   * @return The spawnZ.
+   */
+  @java.lang.Override
+  public double getSpawnZ() {
+    return spawnZ_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -119,6 +152,15 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(navBinFile_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 2, navBinFile_);
     }
+    if (java.lang.Double.doubleToRawLongBits(spawnX_) != 0) {
+      output.writeDouble(3, spawnX_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(spawnY_) != 0) {
+      output.writeDouble(4, spawnY_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(spawnZ_) != 0) {
+      output.writeDouble(5, spawnZ_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -129,6 +171,18 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(navBinFile_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(2, navBinFile_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(spawnX_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(3, spawnX_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(spawnY_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(4, spawnY_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(spawnZ_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(5, spawnZ_);
     }
     return size;
   }
@@ -158,6 +212,15 @@ private static final long serialVersionUID = 0L;
         != other.getId()) return false;
     if (!getNavBinFile()
         .equals(other.getNavBinFile())) return false;
+    if (java.lang.Double.doubleToLongBits(getSpawnX())
+        != java.lang.Double.doubleToLongBits(
+            other.getSpawnX())) return false;
+    if (java.lang.Double.doubleToLongBits(getSpawnY())
+        != java.lang.Double.doubleToLongBits(
+            other.getSpawnY())) return false;
+    if (java.lang.Double.doubleToLongBits(getSpawnZ())
+        != java.lang.Double.doubleToLongBits(
+            other.getSpawnZ())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -173,6 +236,15 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getId();
     hash = (37 * hash) + NAV_BIN_FILE_FIELD_NUMBER;
     hash = (53 * hash) + getNavBinFile().hashCode();
+    hash = (37 * hash) + SPAWN_X_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getSpawnX()));
+    hash = (37 * hash) + SPAWN_Y_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getSpawnY()));
+    hash = (37 * hash) + SPAWN_Z_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getSpawnZ()));
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -306,6 +378,9 @@ private static final long serialVersionUID = 0L;
       bitField0_ = 0;
       id_ = 0;
       navBinFile_ = "";
+      spawnX_ = 0D;
+      spawnY_ = 0D;
+      spawnZ_ = 0D;
       return this;
     }
 
@@ -345,6 +420,15 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000002) != 0)) {
         result.navBinFile_ = navBinFile_;
       }
+      if (((from_bitField0_ & 0x00000004) != 0)) {
+        result.spawnX_ = spawnX_;
+      }
+      if (((from_bitField0_ & 0x00000008) != 0)) {
+        result.spawnY_ = spawnY_;
+      }
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        result.spawnZ_ = spawnZ_;
+      }
     }
 
     @java.lang.Override
@@ -366,6 +450,15 @@ private static final long serialVersionUID = 0L;
         navBinFile_ = other.navBinFile_;
         bitField0_ |= 0x00000002;
         onChanged();
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getSpawnX()) != 0) {
+        setSpawnX(other.getSpawnX());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getSpawnY()) != 0) {
+        setSpawnY(other.getSpawnY());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getSpawnZ()) != 0) {
+        setSpawnZ(other.getSpawnZ());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -403,6 +496,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000002;
               break;
             } // case 18
+            case 25: {
+              spawnX_ = input.readDouble();
+              bitField0_ |= 0x00000004;
+              break;
+            } // case 25
+            case 33: {
+              spawnY_ = input.readDouble();
+              bitField0_ |= 0x00000008;
+              break;
+            } // case 33
+            case 41: {
+              spawnZ_ = input.readDouble();
+              bitField0_ |= 0x00000010;
+              break;
+            } // case 41
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -520,6 +628,102 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       navBinFile_ = value;
       bitField0_ |= 0x00000002;
+      onChanged();
+      return this;
+    }
+
+    private double spawnX_ ;
+    /**
+     * <code>double spawn_x = 3;</code>
+     * @return The spawnX.
+     */
+    @java.lang.Override
+    public double getSpawnX() {
+      return spawnX_;
+    }
+    /**
+     * <code>double spawn_x = 3;</code>
+     * @param value The spawnX to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSpawnX(double value) {
+
+      spawnX_ = value;
+      bitField0_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double spawn_x = 3;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSpawnX() {
+      bitField0_ = (bitField0_ & ~0x00000004);
+      spawnX_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private double spawnY_ ;
+    /**
+     * <code>double spawn_y = 4;</code>
+     * @return The spawnY.
+     */
+    @java.lang.Override
+    public double getSpawnY() {
+      return spawnY_;
+    }
+    /**
+     * <code>double spawn_y = 4;</code>
+     * @param value The spawnY to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSpawnY(double value) {
+
+      spawnY_ = value;
+      bitField0_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double spawn_y = 4;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSpawnY() {
+      bitField0_ = (bitField0_ & ~0x00000008);
+      spawnY_ = 0D;
+      onChanged();
+      return this;
+    }
+
+    private double spawnZ_ ;
+    /**
+     * <code>double spawn_z = 5;</code>
+     * @return The spawnZ.
+     */
+    @java.lang.Override
+    public double getSpawnZ() {
+      return spawnZ_;
+    }
+    /**
+     * <code>double spawn_z = 5;</code>
+     * @param value The spawnZ to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSpawnZ(double value) {
+
+      spawnZ_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double spawn_z = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSpawnZ() {
+      bitField0_ = (bitField0_ & ~0x00000010);
+      spawnZ_ = 0D;
       onChanged();
       return this;
     }

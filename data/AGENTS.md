@@ -137,7 +137,7 @@ cd tools/data_table_exporter && py -m pytest -q
 | **AttributeDimension** | `AttributeDimension.xlsx` | `attributedimension_table.proto` | 12 | 12 | 17 | — | — | `pool_id` | `pool_id→AttributePool.id` | — | — | — |
 | **AttributePool** | `AttributePool.xlsx` | `attributepool_table.proto` | 10 | 10 | 4 | — | — | `owner_type` | — | — | — | — |
 | **AttributeRule** | `AttributeRule.xlsx` | `attributerule_table.proto` | 6 | 6 | 1 | — | — | — | — | — | — | — |
-| **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 2 | 2 | 21 | — | — | — | — | — | — | — |
+| **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 5 | 5 | 21 | — | — | — | — | — | — | — |
 | **Buff** | `Buff.xlsx` | `buff_table.proto` | 32 | 22 | 20 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
 | **Class** | `Class.xlsx` | `class_table.proto` | 11 | 9 | 9 | — | — | — | — | — | — | — |
 | **Condition** | `Condition.xlsx` | `condition_table.proto` | 20 | 10 | 29 | — | — | — | — | — | — | — |
@@ -159,6 +159,6 @@ cd tools/data_table_exporter && py -m pytest -q
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 
-合计 **28** 张表、**325** 个物理列、**191** 个进产物的字段。
+合计 **28** 张表、**328** 个物理列、**194** 个进产物的字段。
 
 <!-- END GENERATED -->

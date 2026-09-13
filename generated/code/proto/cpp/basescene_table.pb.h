@@ -229,6 +229,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseSceneTable final : public ::goo
   // accessors -------------------------------------------------------
   enum : int {
     kNavBinFileFieldNumber = 2,
+    kSpawnXFieldNumber = 3,
+    kSpawnYFieldNumber = 4,
+    kSpawnZFieldNumber = 5,
     kIdFieldNumber = 1,
   };
   // string nav_bin_file = 2;
@@ -246,6 +249,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseSceneTable final : public ::goo
   ::std::string* PROTOBUF_NONNULL _internal_mutable_nav_bin_file();
 
   public:
+  // double spawn_x = 3;
+  void clear_spawn_x() ;
+  [[nodiscard]] double spawn_x() const;
+  void set_spawn_x(double value);
+
+  private:
+  double _internal_spawn_x() const;
+  void _internal_set_spawn_x(double value);
+
+  public:
+  // double spawn_y = 4;
+  void clear_spawn_y() ;
+  [[nodiscard]] double spawn_y() const;
+  void set_spawn_y(double value);
+
+  private:
+  double _internal_spawn_y() const;
+  void _internal_set_spawn_y(double value);
+
+  public:
+  // double spawn_z = 5;
+  void clear_spawn_z() ;
+  [[nodiscard]] double spawn_z() const;
+  void set_spawn_z(double value);
+
+  private:
+  double _internal_spawn_z() const;
+  void _internal_set_spawn_z(double value);
+
+  public:
   // uint32 id = 1;
   void clear_id() ;
   [[nodiscard]] ::uint32_t id() const;
@@ -260,7 +293,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseSceneTable final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
+      ::google::protobuf::internal::TcParseTable<3, 5,
                           0, 35,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -290,6 +323,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseSceneTable final : public ::goo
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr nav_bin_file_;
+    double spawn_x_;
+    double spawn_y_;
+    double spawn_z_;
     ::uint32_t id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -529,7 +565,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BaseSceneTableData final : public :
 inline void BaseSceneTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t BaseSceneTable::id() const {
   // @@protoc_insertion_point(field_get:BaseSceneTable.id)
@@ -537,7 +573,7 @@ inline ::uint32_t BaseSceneTable::id() const {
 }
 inline void BaseSceneTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:BaseSceneTable.id)
 }
 inline ::uint32_t BaseSceneTable::_internal_id() const {
@@ -611,6 +647,78 @@ inline void BaseSceneTable::set_allocated_nav_bin_file(::std::string* PROTOBUF_N
     _impl_.nav_bin_file_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:BaseSceneTable.nav_bin_file)
+}
+
+// double spawn_x = 3;
+inline void BaseSceneTable::clear_spawn_x() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spawn_x_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline double BaseSceneTable::spawn_x() const {
+  // @@protoc_insertion_point(field_get:BaseSceneTable.spawn_x)
+  return _internal_spawn_x();
+}
+inline void BaseSceneTable::set_spawn_x(double value) {
+  _internal_set_spawn_x(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:BaseSceneTable.spawn_x)
+}
+inline double BaseSceneTable::_internal_spawn_x() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spawn_x_;
+}
+inline void BaseSceneTable::_internal_set_spawn_x(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spawn_x_ = value;
+}
+
+// double spawn_y = 4;
+inline void BaseSceneTable::clear_spawn_y() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spawn_y_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline double BaseSceneTable::spawn_y() const {
+  // @@protoc_insertion_point(field_get:BaseSceneTable.spawn_y)
+  return _internal_spawn_y();
+}
+inline void BaseSceneTable::set_spawn_y(double value) {
+  _internal_set_spawn_y(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:BaseSceneTable.spawn_y)
+}
+inline double BaseSceneTable::_internal_spawn_y() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spawn_y_;
+}
+inline void BaseSceneTable::_internal_set_spawn_y(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spawn_y_ = value;
+}
+
+// double spawn_z = 5;
+inline void BaseSceneTable::clear_spawn_z() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spawn_z_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline double BaseSceneTable::spawn_z() const {
+  // @@protoc_insertion_point(field_get:BaseSceneTable.spawn_z)
+  return _internal_spawn_z();
+}
+inline void BaseSceneTable::set_spawn_z(double value) {
+  _internal_set_spawn_z(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:BaseSceneTable.spawn_z)
+}
+inline double BaseSceneTable::_internal_spawn_z() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.spawn_z_;
+}
+inline void BaseSceneTable::_internal_set_spawn_z(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.spawn_z_ = value;
 }
 
 // -------------------------------------------------------------------

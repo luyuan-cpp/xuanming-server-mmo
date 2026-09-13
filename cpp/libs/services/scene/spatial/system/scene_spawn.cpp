@@ -1,6 +1,9 @@
 #include "scene_spawn.h"
 
+#include <cmath>
+
 #include "muduo/base/Logging.h"
+#include "table/code/basescene_table.h"
 
 #include "generated/attribute/actorbaseattributess2c_attribute_sync.h"
 #include "modules/scene/comp/scene_comp.h"
@@ -39,11 +42,20 @@ uint64_t GuidForLog(const entt::entity player)
 
 }  // namespace
 
-Location SceneSpawnSystem::DefaultSpawnFor(const uint32_t /*sceneConfigId*/)
+Location SceneSpawnSystem::DefaultSpawnFor(const uint32_t sceneConfigId)
 {
-	// 所有场景当前共用天墉城一张图(main/dungeon/mirror 三个 bin 是同一次烘焙的
-	// 拷贝),出生点只有一份;分场景后此处改查 BaseScene 表(见 nav.h 注释)。
 	Location spawn;
+	const auto* row = BaseSceneTableManager::Instance().FindByIdSilent(sceneConfigId).first;
+	if (row != nullptr && std::isfinite(row->spawn_x()) && std::isfinite(row->spawn_y()) &&
+		std::isfinite(row->spawn_z()) &&
+		(row->spawn_x() != 0.0 || row->spawn_y() != 0.0 || row->spawn_z() != 0.0))
+	{
+		spawn.set_x(row->spawn_x());
+		spawn.set_y(row->spawn_y());
+		spawn.set_z(row->spawn_z());
+		return spawn;
+	}
+	// 未载表/旧版表没有出生列时保留原天墉出生点,兼容旧配置与无场景兜底。
 	spawn.set_x(kTianyongSpawnX);
 	spawn.set_y(kTianyongSpawnY);
 	spawn.set_z(kTianyongSpawnZ);
@@ -76,7 +88,8 @@ bool SceneSpawnSystem::IsUnsetLocation(const Vector3& location)
 	return location.x() == 0.0 && location.y() == 0.0 && location.z() == 0.0;
 }
 
-bool SceneSpawnSystem::EnsureValidEnterLocation(const entt::entity player, const entt::entity scene)
+bool SceneSpawnSystem::EnsureValidEnterLocation(
+	const entt::entity player, const entt::entity scene, const bool useSceneSpawn)
 {
 	const auto* sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(scene);
 	if (sceneInfo == nullptr)
@@ -92,7 +105,13 @@ bool SceneSpawnSystem::EnsureValidEnterLocation(const entt::entity player, const
 	bool relocated = false;
 	const char* reason = nullptr;
 
-	if (nav != nullptr)
+	if (useSceneSpawn)
+	{
+		accepted = ResolveSpawnOnMesh(nav, sceneConfigId);
+		relocated = true;
+		reason = "map changed";
+	}
+	else if (nav != nullptr)
 	{
 		Location snapped;
 		if (NavQuerySystem::SnapToMesh(*nav, current, snapped))

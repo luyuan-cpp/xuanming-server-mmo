@@ -29,4 +29,22 @@ public final class BaseSceneTableComp {
         }
     }
 
+    public record Spawn_x(double value) {
+        public static Spawn_x from(BaseSceneTable row) {
+            return new Spawn_x(row.getSpawnX());
+        }
+    }
+
+    public record Spawn_y(double value) {
+        public static Spawn_y from(BaseSceneTable row) {
+            return new Spawn_y(row.getSpawnY());
+        }
+    }
+
+    public record Spawn_z(double value) {
+        public static Spawn_z from(BaseSceneTable row) {
+            return new Spawn_z(row.getSpawnZ());
+        }
+    }
+
 }

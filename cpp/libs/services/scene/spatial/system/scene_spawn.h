@@ -22,8 +22,8 @@ struct NavComp;
 class SceneSpawnSystem
 {
 public:
-	// 场景配置 id → 出生点(服务器坐标,未吸附)。当前所有场景同一张天墉城图,
-	// 统一返回 kTianyongSpawn*;分场景后改为读 BaseScene 表。
+	// 场景配置 id → BaseScene 表出生点(服务器坐标,未吸附)。
+	// 未载表/旧版表未配置时保持天墉默认值兼容。
 	static Location DefaultSpawnFor(uint32_t sceneConfigId);
 
 	// 出生点吸附到该场景导航网格后的合法落点。nav 为空(场景无导航,fail-open)
@@ -35,9 +35,10 @@ public:
 	//   - 在网格上 → 写回吸附后的点(修正高度/贴边毫米级误差),不算改写;
 	//   - 不在网格上 → 改写为 ResolveSpawnOnMesh 的出生点;
 	//   - 场景无导航(fail-open)→ 只把全零的"未初始化"位置改写为出生点。
+	//   - useSceneSpawn=true → 换地图时直接采用目标出生点,不复用旧地图坐标。
 	// 返回 true 表示位置被改写(调用方可据此打日志/置脏位)。
 	// 必须在 SceneEntityComp 绑定之后、自身 ActorCreate 下发之前调用。
-	static bool EnsureValidEnterLocation(entt::entity player, entt::entity scene);
+	static bool EnsureValidEnterLocation(entt::entity player, entt::entity scene, bool useSceneSpawn = false);
 
 	// 玩家当前所在场景的合法兜底点:移动裁决发现"服务器当前位置与上报位置
 	// 都不在网格上"时用它代替原地不动(原地本身就是非法点,回 ack 只会把

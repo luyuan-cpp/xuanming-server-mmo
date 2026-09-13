@@ -48,11 +48,11 @@ constexpr BaseSceneTable::ParseTableT_ BaseSceneTable::InternalGenerateParseTabl
     {
       PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_._has_bits_),
       0, // no _extensions_
-      2, 8,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967292,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      2,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -62,21 +62,42 @@ constexpr BaseSceneTable::ParseTableT_ BaseSceneTable::InternalGenerateParseTabl
       ::_pbi::TcParser::GetTable<::BaseSceneTable>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BaseSceneTable, _impl_.id_), 4>(),
+       {8, 4, 0,
+        PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.id_)}},
       // string nav_bin_file = 2;
       {::_pbi::TcParser::FastUS1,
        {18, 0, 0,
         PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.nav_bin_file_)}},
-      // uint32 id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(BaseSceneTable, _impl_.id_), 1>(),
-       {8, 1, 0,
-        PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.id_)}},
+      // double spawn_x = 3;
+      {::_pbi::TcParser::FastF64S1,
+       {25, 1, 0,
+        PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.spawn_x_)}},
+      // double spawn_y = 4;
+      {::_pbi::TcParser::FastF64S1,
+       {33, 2, 0,
+        PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.spawn_y_)}},
+      // double spawn_z = 5;
+      {::_pbi::TcParser::FastF64S1,
+       {41, 3, 0,
+        PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.spawn_z_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint32 id = 1;
-      {PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // string nav_bin_file = 2;
       {PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.nav_bin_file_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+      // double spawn_x = 3;
+      {PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.spawn_x_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+      // double spawn_y = 4;
+      {PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.spawn_y_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
+      // double spawn_z = 5;
+      {PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.spawn_z_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
     }},
     // no aux_entries
     {{
@@ -95,6 +116,9 @@ inline constexpr BaseSceneTable::Impl_::Impl_(
         nav_bin_file_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
+        spawn_x_{0},
+        spawn_y_{0},
+        spawn_z_{0},
         id_{0u} {}
 
 template <typename>
@@ -349,11 +373,17 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BaseSceneTable, _impl_._has_bits_),
-        5, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::BaseSceneTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::BaseSceneTable, _impl_.nav_bin_file_),
-        1,
+        PROTOBUF_FIELD_OFFSET(::BaseSceneTable, _impl_.spawn_x_),
+        PROTOBUF_FIELD_OFFSET(::BaseSceneTable, _impl_.spawn_y_),
+        PROTOBUF_FIELD_OFFSET(::BaseSceneTable, _impl_.spawn_z_),
+        4,
         0,
+        1,
+        2,
+        3,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::BaseSceneTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -364,7 +394,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::BaseSceneTable)},
-        {7, sizeof(::BaseSceneTableData)},
+        {13, sizeof(::BaseSceneTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -373,18 +403,19 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_basescene_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025basescene_table.proto\"2\n\016BaseSceneTabl"
-    "e\022\n\n\002id\030\001 \001(\r\022\024\n\014nav_bin_file\030\002 \001(\t\"3\n\022B"
-    "aseSceneTableData\022\035\n\004data\030\001 \003(\0132\017.BaseSc"
-    "eneTableB@\n\016com.game.tableB\030BaseSceneTab"
-    "leOuterClassP\001Z\022generated/pb/tableb\006prot"
-    "o3"
+    "\n\025basescene_table.proto\"e\n\016BaseSceneTabl"
+    "e\022\n\n\002id\030\001 \001(\r\022\024\n\014nav_bin_file\030\002 \001(\t\022\017\n\007s"
+    "pawn_x\030\003 \001(\001\022\017\n\007spawn_y\030\004 \001(\001\022\017\n\007spawn_z"
+    "\030\005 \001(\001\"3\n\022BaseSceneTableData\022\035\n\004data\030\001 \003"
+    "(\0132\017.BaseSceneTableB@\n\016com.game.tableB\030B"
+    "aseSceneTableOuterClassP\001Z\022generated/pb/"
+    "tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_basescene_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_basescene_5ftable_2eproto = {
     false,
     false,
-    202,
+    253,
     descriptor_table_protodef_basescene_5ftable_2eproto,
     "basescene_table.proto",
     &descriptor_table_basescene_5ftable_2eproto_once,
@@ -430,7 +461,13 @@ BaseSceneTable::BaseSceneTable(
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
   new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
-  _impl_.id_ = from._impl_.id_;
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, spawn_x_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, spawn_x_),
+           offsetof(Impl_, id_) -
+               offsetof(Impl_, spawn_x_) +
+               sizeof(Impl_::id_));
 
   // @@protoc_insertion_point(copy_constructor:BaseSceneTable)
 }
@@ -442,7 +479,12 @@ PROTOBUF_NDEBUG_INLINE BaseSceneTable::Impl_::Impl_(
 
 inline void BaseSceneTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
-  _impl_.id_ = {};
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, spawn_x_),
+           0,
+           offsetof(Impl_, id_) -
+               offsetof(Impl_, spawn_x_) +
+               sizeof(Impl_::id_));
 }
 BaseSceneTable::~BaseSceneTable() {
   // @@protoc_insertion_point(destructor:BaseSceneTable)
@@ -496,7 +538,11 @@ PROTOBUF_NOINLINE void BaseSceneTable::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.nav_bin_file_.ClearNonDefaultToEmpty();
   }
-  _impl_.id_ = 0u;
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
+    ::memset(&_impl_.spawn_x_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.id_) -
+        reinterpret_cast<char*>(&_impl_.spawn_x_)) + sizeof(_impl_.id_));
+  }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -521,7 +567,7 @@ PROTOBUF_NOINLINE void BaseSceneTable::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint32 id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -536,6 +582,33 @@ PROTOBUF_NOINLINE void BaseSceneTable::Clear() {
       ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
           _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "BaseSceneTable.nav_bin_file");
       target = stream->WriteStringMaybeAliased(2, _s, target);
+    }
+  }
+
+  // double spawn_x = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_spawn_x()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          3, this_._internal_spawn_x(), target);
+    }
+  }
+
+  // double spawn_y = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_spawn_y()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          4, this_._internal_spawn_y(), target);
+    }
+  }
+
+  // double spawn_z = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_spawn_z()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          5, this_._internal_spawn_z(), target);
     }
   }
 
@@ -564,7 +637,7 @@ PROTOBUF_NOINLINE void BaseSceneTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string nav_bin_file = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_nav_bin_file().empty()) {
@@ -572,8 +645,26 @@ PROTOBUF_NOINLINE void BaseSceneTable::Clear() {
                                         this_._internal_nav_bin_file());
       }
     }
-    // uint32 id = 1;
+    // double spawn_x = 3;
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_spawn_x()) != 0) {
+        total_size += 9;
+      }
+    }
+    // double spawn_y = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_spawn_y()) != 0) {
+        total_size += 9;
+      }
+    }
+    // double spawn_z = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_spawn_z()) != 0) {
+        total_size += 9;
+      }
+    }
+    // uint32 id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_id());
@@ -597,7 +688,7 @@ void BaseSceneTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000003U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_nav_bin_file().empty()) {
         _this->_internal_set_nav_bin_file(from._internal_nav_bin_file());
@@ -608,6 +699,21 @@ void BaseSceneTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_spawn_x()) != 0) {
+        _this->_impl_.spawn_x_ = from._impl_.spawn_x_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_spawn_y()) != 0) {
+        _this->_impl_.spawn_y_ = from._impl_.spawn_y_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_spawn_z()) != 0) {
+        _this->_impl_.spawn_z_ = from._impl_.spawn_z_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
       }
@@ -633,7 +739,12 @@ void BaseSceneTable::InternalSwap(BaseSceneTable* PROTOBUF_RESTRICT PROTOBUF_NON
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.nav_bin_file_, &other->_impl_.nav_bin_file_, arena);
-  swap(_impl_.id_, other->_impl_.id_);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.id_)
+      + sizeof(BaseSceneTable::_impl_.id_)
+      - PROTOBUF_FIELD_OFFSET(BaseSceneTable, _impl_.spawn_x_)>(
+          reinterpret_cast<char*>(&_impl_.spawn_x_),
+          reinterpret_cast<char*>(&other->_impl_.spawn_x_));
 }
 
 ::google::protobuf::Metadata BaseSceneTable::GetMetadata() const {

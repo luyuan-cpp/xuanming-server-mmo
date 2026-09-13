@@ -25,6 +25,9 @@ type BaseSceneTable struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	NavBinFile    string                 `protobuf:"bytes,2,opt,name=nav_bin_file,json=navBinFile,proto3" json:"nav_bin_file,omitempty"`
+	SpawnX        float64                `protobuf:"fixed64,3,opt,name=spawn_x,json=spawnX,proto3" json:"spawn_x,omitempty"`
+	SpawnY        float64                `protobuf:"fixed64,4,opt,name=spawn_y,json=spawnY,proto3" json:"spawn_y,omitempty"`
+	SpawnZ        float64                `protobuf:"fixed64,5,opt,name=spawn_z,json=spawnZ,proto3" json:"spawn_z,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -71,6 +74,27 @@ func (x *BaseSceneTable) GetNavBinFile() string {
 		return x.NavBinFile
 	}
 	return ""
+}
+
+func (x *BaseSceneTable) GetSpawnX() float64 {
+	if x != nil {
+		return x.SpawnX
+	}
+	return 0
+}
+
+func (x *BaseSceneTable) GetSpawnY() float64 {
+	if x != nil {
+		return x.SpawnY
+	}
+	return 0
+}
+
+func (x *BaseSceneTable) GetSpawnZ() float64 {
+	if x != nil {
+		return x.SpawnZ
+	}
+	return 0
 }
 
 type BaseSceneTableData struct {
@@ -121,11 +145,14 @@ var File_basescene_table_proto protoreflect.FileDescriptor
 
 const file_basescene_table_proto_rawDesc = "" +
 	"\n" +
-	"\x15basescene_table.proto\"B\n" +
+	"\x15basescene_table.proto\"\x8d\x01\n" +
 	"\x0eBaseSceneTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12 \n" +
 	"\fnav_bin_file\x18\x02 \x01(\tR\n" +
-	"navBinFile\"9\n" +
+	"navBinFile\x12\x17\n" +
+	"\aspawn_x\x18\x03 \x01(\x01R\x06spawnX\x12\x17\n" +
+	"\aspawn_y\x18\x04 \x01(\x01R\x06spawnY\x12\x17\n" +
+	"\aspawn_z\x18\x05 \x01(\x01R\x06spawnZ\"9\n" +
 	"\x12BaseSceneTableData\x12#\n" +
 	"\x04data\x18\x01 \x03(\v2\x0f.BaseSceneTableR\x04dataB@\n" +
 	"\x0ecom.game.tableB\x18BaseSceneTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

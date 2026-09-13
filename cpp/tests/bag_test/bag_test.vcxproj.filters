@@ -20,4 +20,7 @@
     <ClCompile Include="player_feature_persistence_test.cpp" />
     <ClCompile Include="..\..\nodes\scene\handler\event\mission_event_handler.cpp" />
   </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="scene_spawn_test.cpp" />
+  </ItemGroup>
 </Project>

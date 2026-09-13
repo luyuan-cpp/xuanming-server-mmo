@@ -1,4 +1,5 @@
 #include <gtest/gtest.h>
+#include "../../nodes/gate/handler/event/scene_route_helper.h"
 
 #include <cstdint>
 #include <string>
@@ -396,6 +397,89 @@ TEST(SettlementOutbox, PendingRecordKeysAreDistinctAndPlayerScoped)
 	// 伴生键必须是 blob 键的独立命名空间,不能是它的前缀(否则 SCAN/DEL 会互相波及)。
 	EXPECT_EQ(idKey.rfind("battle:settlement:pending:id:", 0), 0u);
 	EXPECT_NE(blobKey.rfind("battle:settlement:pending:id:", 0), 0u);
+}
+
+// 覆盖真实入场所需的会话状态和转发副作用,不依赖网络或全局节点注册。
+TEST(SceneRouteEntry, LoginThenTravelForwardsWithoutRepeatingLogin)
+{
+    SessionInfo session;
+    session.pendingEnterGsType = 1;
+    std::vector<uint32_t> forwarded;
+    auto send = [&](uint32_t type) { forwarded.push_back(type); return true; };
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1001, send));
+    EXPECT_EQ(0u, session.pendingEnterGsType);
+    for (const uint64_t scene : {2001u, 3001u, 4001u, 1001u})
+    {
+        ASSERT_TRUE(gate_scene_route::ApplyRoute(session, scene, send));
+        EXPECT_EQ(scene, session.sceneId);
+    }
+    EXPECT_EQ((std::vector<uint32_t>{1, 0, 0, 0, 0}), forwarded);
+}
+
+TEST(SceneRouteEntry, DuplicateRouteDoesNotEnterAgain)
+{
+    SessionInfo session;
+    session.sceneId = 2001;
+    int sends = 0;
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 2001, [&](uint32_t) { ++sends; return true; }));
+    EXPECT_EQ(0, sends);
+    EXPECT_EQ(2001u, session.sceneId);
+}
+
+TEST(SceneRouteEntry, RouteBeforeLoginBindingWaitsForLogin)
+{
+    SessionInfo session;
+    std::vector<uint32_t> forwarded;
+    auto send = [&](uint32_t type) { forwarded.push_back(type); return true; };
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 1001, send));
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 1001, send));
+    EXPECT_TRUE(forwarded.empty());
+    session.pendingEnterGsType = 2;
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1001, send));
+    EXPECT_EQ((std::vector<uint32_t>{2}), forwarded);
+    EXPECT_EQ(0u, session.pendingEnterGsType);
+}
+
+TEST(SceneRouteEntry, AnotherInstanceOfSameMapStillNeedsEntry)
+{
+    SessionInfo session;
+    session.sceneId = 1001;
+    std::vector<uint32_t> forwarded;
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1002, [&](uint32_t type) { forwarded.push_back(type); return true; }));
+    EXPECT_EQ((std::vector<uint32_t>{0}), forwarded);
+}
+
+TEST(SceneRouteEntry, MissingDestinationDoesNotConsumeLoginOrClearRoute)
+{
+    SessionInfo session;
+    session.sceneId = 1001;
+    session.pendingEnterGsType = 1;
+    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 0, [](uint32_t) { ADD_FAILURE(); return true; }));
+    EXPECT_EQ(1u, session.pendingEnterGsType);
+    EXPECT_EQ(1001u, session.sceneId);
+}
+
+TEST(SceneRouteEntry, MissingRpcClientCanRetrySameTravelEvent)
+{
+    SessionInfo session;
+    session.sceneId = 1001;
+    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 2001, [](uint32_t) { return false; }));
+    EXPECT_EQ(1001u, session.sceneId);
+    int sends = 0;
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 2001, [&](uint32_t type) { EXPECT_EQ(0u, type); ++sends; return true; }));
+    EXPECT_EQ(1, sends);
+    EXPECT_EQ(2001u, session.sceneId);
+}
+
+TEST(SceneRouteEntry, MissingRpcClientDoesNotConsumePendingLogin)
+{
+    SessionInfo session;
+    session.pendingEnterGsType = 1;
+    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 1001, [](uint32_t) { return false; }));
+    EXPECT_EQ(0u, session.sceneId);
+    EXPECT_EQ(1u, session.pendingEnterGsType);
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 1001, [](uint32_t type) { EXPECT_EQ(1u, type); return true; }));
+    EXPECT_EQ(0u, session.pendingEnterGsType);
 }
 
 int main(int argc, char **argv)

@@ -16,4 +16,8 @@ message BaseSceneTable {
 
   uint32 id = 1;
   string nav_bin_file = 2;
+  // 服务器 Z-up 出生坐标。Unity (x,y,z) 对应服务器 (z,x,y)。
+  double spawn_x = 3;
+  double spawn_y = 4;
+  double spawn_z = 5;
 }

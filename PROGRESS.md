@@ -4394,3 +4394,17 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 启动器六阶段完成，网关UP/一区OPEN，游戏已打开。四新服务路径/哈希/监听独立验证通过，并补齐RPC路由50600与未来启动清单。证据 running-service-verification.json。客户端96、C++323及robot20项测试通过；等待已有账号实机联机验收与正式活动日期，没有自行登录。
 
 - 2026-09-12：背包/任务/活动续作只读核查及本地重启完成，02:04:49 五项服务路径/哈希/监听、网关 UP、一区 OPEN、单客户端进程通过。当前游戏包为后续 11:37 登录界面构建（0 errors、503 warnings），三页 UI 相关 60 源文件与正式仓库哈希一致，保留后续更新。新证据 E:/work/tmp/features-recheck-20260912；历史测试未重复运行。真实账号全链路验收仍待指定已有账号，节日 15/16/17 仍待日期，不自行登录、不修改永久 ID 水位。
+
+
+## 2026-09-13 蓬莱岛、东海渔村、揽仙镇正式地图接入
+
+- 用户明确要求完成后提交并接入游戏。沿用既有场景配置 2/3/4,增加三份独立导航网格;BaseScene 正式新增 double 出生坐标,同地图重入保留合法位置,同节点跨地图采用目标出生点。客户端日景/节庆换图共用各地区同一份导航,不新增协议。具体契约见 docs/design/scene-navmesh-pipeline.md §7–8。
+- 导表按 schema 源与 xlsx 正式生成,manifest v13 的 28 张表所有源文件和产物大小、哈希匹配;未夹带 Monster 平衡运行数据。三地最终位图已与客户端 SHA256 锁定,分别烘焙 34/40/45 tile,出生探针精确通过;天墉及原有其它场景使用已更新的 61 tile 网格。
+- 四个 C++ 工程 Debug/x64、/m:1 构建通过,完整 bag_test 220/220（含6条出生/导航回归）和烘焙器契约6/6通过。独立代码审查确认落位在下发 EnterScene/ActorCreate 前完成、21行导航逐行探针注册。证据 ../tmp/festival-final-*。
+- Go 的旧 JSON 配表读取器会拒绝新增 spawn_x 字段,真实启动暴露后已重编并部署 scene_manager/player_locator/login;friend/guild 也编译通过但本机未启用。BaseScene 生成包编译通过;Go 表包既有测试引用旧 TestMultiKey/Buff FindBy* API 而无法编译,未掩盖或擅改无关生成测试。第三方 C++ 缺 PDB 警告及缺工具跳过 no-raw-pointer 检查不计入通过项。
+
+- 本机启动最终完成 6/6;网关 http://127.0.0.1:8081/actuator/health=UP,一区 OPEN。新 scene 实际日志注册全部21地图,重编的三个 Go 配表读取者运行正常且无 unknown spawn 字段。首次中断产生的 match 仅按标准工具单独停止后恢复,未清数据库、重置角色或改变代次。运行证据 ../tmp/festival-final-service-health.json;正式客户端游历验收由客户端任务继续执行。
+
+- 实际客户端首轮在配置2传送等待中复现旧 gate 路由缺口:Go已改场景但gate仅在首次登录转发入场。已补同节点换图的LOGIN_NONE转发、重复路由幂等与发送前置失败保留状态,避免重跑登录事件;gate构建通过,路由身份测试26/26（新增7条）,保留首轮失败与修复验证证据。
+
+- 最终正式客户端联机验收通过:run4完成2→3→4→1四次真实传送、三地日景/节庆切换和四图移动,得到7张实机截图;所有出生误差/导航不一致/移动重定位为0。服务端逐次确认目标地图出生,gate13588与scene27624保持运行。完整证据 ../tmp/festival-final-server-deployment-evidence.json/.log 与 ../tmp/festival_live_verify_20260913_run4/festival-map-verification.json。

@@ -201,6 +201,14 @@ void PlayerSceneSystem::HandleEnterScene(entt::entity player, entt::entity scene
 		return;
 	}
 
+	// 同图换线保留坐标,换地图使用目标出生点;判断须在旧场景绑定被替换前完成。
+	bool mapChanged = false;
+	if (oldSceneComp != nullptr && oldSceneComp->sceneEntity != entt::null)
+	{
+		const auto* oldInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(oldSceneComp->sceneEntity);
+		mapChanged = oldInfo != nullptr && oldInfo->scene_config_id() != sceneInfo->scene_config_id();
+	}
+
 	// 1. Leave old scene if player is already in one.
 	if (oldSceneComp != nullptr && oldSceneComp->sceneEntity != entt::null
 	    && oldSceneComp->sceneEntity != scene)
@@ -234,8 +242,8 @@ void PlayerSceneSystem::HandleEnterScene(entt::entity player, entt::entity scene
 	// 存着旧地图/别的场景的坐标),必须在自身 ActorCreate(4.5)与 AOI 广播之前
 	// 校验它在目标场景导航网格上,不在就落到场景出生点。否则客户端会本地把
 	// 人挪到城内、服务器仍在 (0,0,0),首次移动的 MoveAck 把客户端拉回原点卡死
-	// (2026-09-05 移动诊断)。跨场景切换/跨 zone 迁移的合法坐标原样保留。
-	SceneSpawnSystem::EnsureValidEnterLocation(player, scene);
+	// (2026-09-05 移动诊断)。同图换线/重登保留合法坐标,换地图落到目标出生点。
+	SceneSpawnSystem::EnsureValidEnterLocation(player, scene, mapChanged);
 
 	// 4. Notify client of scene entry.
 	EnterSceneS2C message;

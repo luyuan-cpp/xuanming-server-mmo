@@ -45,12 +45,13 @@ public final class BaseSceneTableOuterClass extends com.google.protobuf.Generate
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025basescene_table.proto\"2\n\016BaseSceneTabl" +
-      "e\022\n\n\002id\030\001 \001(\r\022\024\n\014nav_bin_file\030\002 \001(\t\"3\n\022B" +
-      "aseSceneTableData\022\035\n\004data\030\001 \003(\0132\017.BaseSc" +
-      "eneTableB@\n\016com.game.tableB\030BaseSceneTab" +
-      "leOuterClassP\001Z\022generated/pb/tableb\006prot" +
-      "o3"
+      "\n\025basescene_table.proto\"e\n\016BaseSceneTabl" +
+      "e\022\n\n\002id\030\001 \001(\r\022\024\n\014nav_bin_file\030\002 \001(\t\022\017\n\007s" +
+      "pawn_x\030\003 \001(\001\022\017\n\007spawn_y\030\004 \001(\001\022\017\n\007spawn_z" +
+      "\030\005 \001(\001\"3\n\022BaseSceneTableData\022\035\n\004data\030\001 \003" +
+      "(\0132\017.BaseSceneTableB@\n\016com.game.tableB\030B" +
+      "aseSceneTableOuterClassP\001Z\022generated/pb/" +
+      "tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -61,7 +62,7 @@ public final class BaseSceneTableOuterClass extends com.google.protobuf.Generate
     internal_static_BaseSceneTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_BaseSceneTable_descriptor,
-        new java.lang.String[] { "Id", "NavBinFile", });
+        new java.lang.String[] { "Id", "NavBinFile", "SpawnX", "SpawnY", "SpawnZ", });
     internal_static_BaseSceneTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_BaseSceneTableData_fieldAccessorTable = new

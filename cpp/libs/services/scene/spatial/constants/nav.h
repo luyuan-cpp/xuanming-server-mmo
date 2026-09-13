@@ -28,13 +28,9 @@ constexpr double kMoveCorrectionEpsilon = 0.5;
 // 该点落在中央大道(客户端 WalkMask 里 x∈[190,206] 的可走走廊),烘焙器
 // --painted-city 模式会在出包时探针校验它在网格上(navmesh_baker --probe)。
 //
-// 目前所有场景配置共用同一张天墉城地图:BaseScene 表 nav_bin_file 指向
-// main(id 1-16)/dungeon(17-19)/mirror(20-21) 三个文件,但三份都是同一次
-// 烘焙的拷贝(scene-navmesh-pipeline.md §6),所以出生点也只有一份,
-// LoadNavBins 的出生点探针对三份都成立。真正分场景(副本/镜像烘自己的图)
-// 后必须把出生点迁到 BaseScene 表列(spawn_x/spawn_y/spawn_z)并按行探针,
-// 否则不含 (200,0,180) 的副本网格会被探针误拒;
-// SceneSpawnSystem::DefaultSpawnFor 是唯一读取点。
+// 各地图出生点的权威来源是 BaseScene 表 spawn_x/y/z,由
+// SceneSpawnSystem::DefaultSpawnFor 唯一读取。下列常量只用于未载表/旧版表
+// 兼容与无场景兜底,新地图不得再追加并行常量。
 // ---------------------------------------------------------------------------
 constexpr double kTianyongSpawnX = 180.0;
 constexpr double kTianyongSpawnY = 200.0;
