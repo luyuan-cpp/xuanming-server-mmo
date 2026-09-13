@@ -13,7 +13,7 @@
 #include "core/utils/debug/stacktrace_system.h"
 #include "error_reporter/error_reporter.h"
 #include "thread_context/trace_context_tls.h"
-#include <thread_context/rpc_request_context.h>
+#include <network/rpc_controller.h>
 
 using namespace std::placeholders;
 
@@ -311,8 +311,6 @@ void GameChannel::HandleRpcMessage(const TcpConnectionPtr &conn, const RpcMessag
 
     TrafficStatsCollector::Instance().RecordRecv(rpcMessage.message_id(), static_cast<uint32_t>(messageSize));
 
-    tlsRpc.conn = conn;
-
     switch (rpcMessage.type())
     {
     case GameMessageType::RESPONSE:
@@ -455,7 +453,14 @@ void GameChannel::ProcessMessage(const TcpConnectionPtr &conn, const GameRpcMess
     }
 
     MessagePtr response(service->GetResponsePrototype(method).New());
-    service->CallMethod(method, nullptr, boost::get_pointer(request), boost::get_pointer(response), nullptr);
+    // 本次调用的 ctx(Go 的 ctx 语义):栈上构造、CallMethod 返回即析构,随调用链显式下传。
+    // 取代了原先"tlsRpc.conn = conn 且从不清空"的 thread_local 强引用 —— 那个引用会
+    // 活过连接生命周期并干扰 TcpClient 析构时的 use_count 唯一性判断(见 network/rpc_controller.h)。
+    // 规则:handler 内不得同步释放本连接所属 RpcClient 的最后一个引用 —— 回调期间 muduo
+    // 的 tie_ 守卫与这个栈对象各持一份强引用,~TcpClient 会因 use_count>1 跳过 forceClose;
+    // 节点摘除必须经 queueInLoop 延后到本次派发之外(node.cpp 的 DestroyEntity 路径已如此)。
+    RpcController rpcContext(conn);
+    service->CallMethod(method, &rpcContext, boost::get_pointer(request), boost::get_pointer(response), nullptr);
 
     if (Empty::GetDescriptor() == response->GetDescriptor())
     {

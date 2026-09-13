@@ -13,7 +13,7 @@
 #include "thread_context/node_context_manager.h"
 #include "proto/common/base/message.pb.h"
 #include "proto/common/event/node_event.pb.h"
-#include <thread_context/rpc_request_context.h>
+#include <network/rpc_controller.h>
 
 static uint32_t kNodeTypeToMessageId[eNodeType_ARRAYSIZE] = {
 	0,
@@ -54,13 +54,16 @@ void NodeHandshakeManager::TryRegisterNodeSession(uint32_t nodeType, const muduo
 
 
 void NodeHandshakeManager::OnNodeHandshake(
+	const RpcController& ctx,
 	const NodeHandshakeRequest& request,
 	NodeHandshakeResponse& response
 ) const {
-	if (!tlsRpc.conn)
+	// 连接随 ctx 显式传入(Go 的 ctx 语义),不再从 thread_local 取。
+	const TcpConnectionPtr& rpcConn = ctx.conn();
+	if (!rpcConn)
 	{
 		response.mutable_error_message()->set_id(kFailedToRegisterTheNode);
-		LOG_ERROR << "No current connection in thread-local storage.";
+		LOG_ERROR << "No connection on the RPC context.";
 		return;
 	}
 
@@ -114,14 +117,13 @@ void NodeHandshakeManager::OnNodeHandshake(
 		return true;
 		};
 
-	auto& conn = tlsRpc.conn;
 	if (!IsTcpNodeType(peerNode.node_type()))
 	{
 		response.mutable_error_message()->set_id(kFailedToRegisterTheNode);
 		LOG_ERROR << "Invalid node type for registration: " << peerNode.node_type();
 		return;
 	}
-	if (tryRegister(conn, peerNode.node_type())) {
+	if (tryRegister(rpcConn, peerNode.node_type())) {
 		response.mutable_error_message()->set_id(kCommon_errorOK);
 		LOG_INFO << "Node registration succeeded: " << peerNode.DebugString();
 		return;

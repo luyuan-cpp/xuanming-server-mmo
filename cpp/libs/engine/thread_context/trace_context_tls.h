@@ -32,8 +32,9 @@
 namespace tracing {
 
 // The TLS slot. `extern thread_local` rather than `inline thread_local`
-// keeps the symbol single-definition across translation units; matches
-// the pattern of `tlsRpc` in `rpc_request_context.h`.
+// keeps the symbol single-definition across translation units.
+// (Per-RPC-call state deliberately does NOT live in TLS any more; it travels
+// explicitly as RpcController — see network/rpc_controller.h.)
 extern thread_local TraceContext tlsTrace;
 
 // Cached 8-char hex prefix for the current trace. Empty when tlsTrace

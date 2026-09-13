@@ -23,7 +23,6 @@
     <ClCompile Include="lua_state.cpp" />
     <ClCompile Include="node_context_manager.cpp" />
     <ClCompile Include="redis_manager.cpp" />
-    <ClCompile Include="rpc_request_context.cpp" />
     <ClCompile Include="snow_flake_manager.cpp" />
     <ClCompile Include="trace_context_tls.cpp" />
   </ItemGroup>
@@ -32,7 +31,6 @@
     <ClInclude Include="lua_state.h" />
     <ClInclude Include="node_context_manager.h" />
     <ClInclude Include="redis_manager.h" />
-    <ClInclude Include="rpc_request_context.h" />
     <ClInclude Include="snow_flake_manager.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

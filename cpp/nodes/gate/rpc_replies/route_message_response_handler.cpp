@@ -9,7 +9,6 @@
 #include "session/manager/session_manager.h"
 #include "rpc/service_metadata/gate_service_service_metadata.h"
 #include "proto/common/base/message.pb.h"
-#include <thread_context/rpc_request_context.h>
 
 using namespace muduo;
 using namespace muduo::net;
@@ -19,12 +18,9 @@ extern ProtobufDispatcher gRpcResponseDispatcher;
 void OnServiceRouteNodeStringMsgReply(const TcpConnectionPtr& conn, const std::shared_ptr<::RouteMessageResponse>& replied, Timestamp timestamp)
 {
 	///<<< BEGIN WRITING YOUR CODE
-	defer(tlsRpc.SetNextRouteNodeType(UINT32_MAX));
-	defer(tlsRpc.SetNextRouteNodeId(UINT32_MAX));
-	defer(tlsRpc.SetCurrentSessionId(kInvalidSessionId));
-
-	tlsRpc.SetCurrentSessionId(replied->session_id());
-
+	// 响应路径没有 CallMethod,也就没有 per-call RpcController;本函数已显式收到 conn,
+	// 会话 id 直接取 replied->session_id()。原先写进 thread_local tlsRpc 的路由/会话字段
+	// 全仓无读者,随 tlsRpc 一并移除(见 docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md §7.2)。
 	if (replied->route_nodes_size() <= 0)
 	{
 		LOG_ERROR << "msg list empty:" << replied->DebugString();

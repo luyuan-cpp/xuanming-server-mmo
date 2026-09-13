@@ -11,6 +11,7 @@
 #include "battle/system/player_battle.h"
 #include "rpc/player_service_interface.h"
 #include "network/rpc_session.h"
+#include "network/rpc_controller.h"
 #include "network/network_constants.h"
 #include "network/error_handling_system.h"
 #include "proto/common/component/player_async_comp.pb.h"
@@ -865,6 +866,6 @@ void SceneHandler::NodeHandshake(::google::protobuf::RpcController* controller, 
 	::google::protobuf::Closure* done)
 {
 	///<<< BEGIN WRITING YOUR CODE
-	gNode->GetNodeRegistrationManager().OnNodeHandshake(*request, *response);
+	gNode->GetNodeRegistrationManager().OnNodeHandshake(RpcController::From(controller), *request, *response);
 	///<<< END WRITING YOUR CODE
 }

@@ -55,6 +55,7 @@ $projects = [ordered]@{
     'proto_field_checker_test' = 'cpp\tests\proto_field_checker_test\proto_field_checker_test.vcxproj'
     'readfile2string_test'     = 'cpp\tests\readfile2string_test\readfile2string.vcxproj'
     'reward_test'              = 'cpp\tests\reward_test\reward.vcxproj'
+    'rpc_controller_test'      = 'cpp\tests\rpc_controller_test\rpc_controller_test.vcxproj'
     'skill_test'               = 'cpp\tests\skill_test\skill_test.vcxproj'
     'snow_flake_test'          = 'cpp\tests\snow_flake_test\snow_flake.vcxproj'
     'time_meter_test'          = 'cpp\tests\time_meter_test\time_meter_test.vcxproj'
@@ -110,11 +111,18 @@ if ($Build) {
     }
 }
 
-# 运行期 DLL:缺了会以 0xC0000135 静默退出,连 gtest 头一行都不会打
+# 运行期 DLL:缺了会以 0xC0000135 静默退出,连 gtest 头一行都不会打。
+# zlibd.dll 并不在 bin/ 下(节点静态链 zlib),只在 gRPC 的安装目录里;凡是把
+# game_channel / ProtobufCodecLite 链进来的测试(帧尾 adler32 校验)都要它 ——
+# rpc_controller_test 首跑就栽在这。按目录顺序找,找到第一份就用。
+$dllSourceDirs = @('bin', 'third_party\grpc\install_vs2026_dbg\bin')
 foreach ($dll in @('zlibd.dll', 'rdkafka.dll', 'rdkafka++.dll')) {
-    $src = Join-Path $repoRoot "bin\$dll"
-    if ((Test-Path $src) -and (Test-Path $testOutDir)) {
-        Copy-Item $src $testOutDir -Force -ErrorAction SilentlyContinue
+    foreach ($dir in $dllSourceDirs) {
+        $src = Join-Path $repoRoot (Join-Path $dir $dll)
+        if ((Test-Path $src) -and (Test-Path $testOutDir)) {
+            Copy-Item $src $testOutDir -Force -ErrorAction SilentlyContinue
+            break
+        }
     }
 }
 
@@ -129,8 +137,18 @@ foreach ($name in $projects.Keys) {
     }
     $stdout = [IO.Path]::GetTempFileName()
     $stderr = "$stdout.err"
-    $proc = Start-Process -FilePath $exe -WorkingDirectory $repoRoot -NoNewWindow -PassThru `
-        -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    # 启动失败(被安全软件拦截、文件被占用、Access is denied)只记一条 FAIL 继续跑下一个;
+    # 不能让整张汇总表随 $ErrorActionPreference='Stop' 一起消失
+    # (2026-09-13 agones_lifecycle_test.exe 一个 Access is denied 就把全套 21 个工程的结果吞掉了)。
+    try {
+        $proc = Start-Process -FilePath $exe -WorkingDirectory $repoRoot -NoNewWindow -PassThru `
+            -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+    }
+    catch {
+        $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "启动失败:$($_.Exception.Message)" })
+        $failed++
+        continue
+    }
     if (-not $proc.WaitForExit($TimeoutSeconds * 1000)) {
         try { $proc.Kill() } catch { }
         $results.Add([pscustomobject]@{ 名称 = $name; 构建 = 'OK'; 结果 = "超时 ${TimeoutSeconds}s 被杀" })

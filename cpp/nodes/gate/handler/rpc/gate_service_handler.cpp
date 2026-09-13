@@ -8,6 +8,7 @@
 #include "gate_security.h"
 #include "node/system/node/node.h"
 #include "network/rpc_client.h"
+#include "network/rpc_controller.h"
 #include "thread_context/node_context_manager.h"
 #include "rpc/service_metadata/scene_service_metadata.h"
 #include "rpc/service_metadata/gate_service_service_metadata.h"
@@ -295,7 +296,7 @@ void GateHandler::NodeHandshake(::google::protobuf::RpcController* controller, c
 	::google::protobuf::Closure* done)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	gNode->GetNodeRegistrationManager().OnNodeHandshake(*request, *response);
+	gNode->GetNodeRegistrationManager().OnNodeHandshake(RpcController::From(controller), *request, *response);
 ///<<< END WRITING YOUR CODE
 }
 
@@ -346,8 +347,9 @@ void GateHandler::GmGracefulShutdown(::google::protobuf::RpcController* controll
 	// 为什么签名寄生在 operator 字段而不是新增 proto 字段:
 	// GmGracefulShutdownRequest 只有 operator / reason 两个字段
 	// (proto/common/base/gm_admin.proto),而这条 RPC 走的是 muduo GameChannel
-	// 通道 —— CallMethod 的 controller 与 done 都恒为 nullptr
-	// (game_channel.cpp:451),**没有任何 metadata 边信道**可用;改 proto 则要
+	// 通道 —— CallMethod 传入的 controller 是本次调用的 RpcController(只携带所在
+	// 连接,**不是 metadata 边信道**,见 network/rpc_controller.h),done 仍恒为
+	// nullptr(见 GameChannel::ProcessMessage);改 proto 则要
 	// 连带重生成 C++/Go/Java 三侧产物,不在本次可验证范围内。信封格式与
 	// canonical 串的完整定义见 gate_security.h。
 	//
@@ -396,7 +398,7 @@ void GateHandler::GmGracefulShutdown(::google::protobuf::RpcController* controll
 
 	// 应答由框架负责发送,这里**不能**碰 done。
 	//
-	// GameChannel::CallMethod 传进来的 done 恒为 nullptr(见 game_channel.cpp:451),
+	// GameChannel::ProcessMessage 调 CallMethod 时传进来的 done 恒为 nullptr,
 	// 应答是在 CallMethod 返回之后由框架序列化 response 再发出的。旧代码 `done->Run()`
 	// 是确定性的空指针解引用:GM 一敲停机,进程当场崩在这一行 —— 上面刚把所有客户端
 	// forceClose 了,而 gNode->Shutdown() 的租约注销与优雅收尾根本没机会跑,
