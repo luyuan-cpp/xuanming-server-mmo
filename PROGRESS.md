@@ -4427,3 +4427,20 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   6. 文档:§2.2 旧系数只作用于自然成长 / 装备、"同比换算"规则失效、自动加点方案新口径;§3.1 面板 value 只是点数、单点分配边际(速度 / 防御 12 点才 +1);§8 30 级通用号估算补上土相 1800(新口径 ≈ 3635,土相是力量加点的 5 倍多)、滚动发布窗口改为三表 + scene 二进制、`bonus_points` 超过满投点数的缺口。proto `AttributeDimensionInfo.value` 注释同步。
 - 仍未编译 / 导表 / 运行。待执行清单同上一条,第 ③ 条预期 AllocFormulaTest 9 条;第 ⑤ 条数值不变(85 级非破军力量满投面板物伤 = 4250 + 1062 = 5312)。新增待拍板:单点分配无反馈是否可接受。
 
+## 2026-09-14 本地日志台(Grafana + Loki + Alloy)修正与复核
+
+- 09-13 接入的三语言日志台已随提交 f5983bd86 进入 main。本轮在其上修正,改动未提交。
+- C++ 解析:muduo 行头的线程号右对齐补空格,原规则让线程号小于 10000 的节点(本机 scene)整份日志没有级别。新增 gRPC/abseil stderr 行的级别和 UTC 时间解析,去掉 muduo 并不输出的 SYSERR。
+- 镜像钉死为 Loki 3.5.8 / Alloy v1.10.0 / Grafana 13.2.1。Alloy v1.19.2 的 loki.source.file 有读取位置回归:大段读取后只记第一行的偏移,重启后几乎整文件重读。该回归在一次性容器的本地文件上复现,v1.10.0 正常。
+- Loki:删掉 3.5 已不存在的 query_ingesters_within(曾导致容器反复重启);chunk_idle_period 设为 3m;旧样本拒收年龄与 7 天保留期对齐。
+- 看板:警告面板纳入 go-zero 的 slow/alert;关键字改用反引号原始字符串,正则里的反斜杠不再让面板报错。
+- dev.bat obs 提示改为纯 ASCII,并列出全部采集路径。docs/ops/grafana-loki-local-logs.md 按审查意见改正 Java 启动路径、标签表和级别表,补充排障与自检命令;log-management.md 同步修改。
+- 验证:清空数据卷后重采 7010 条,"文件 × 级别" 45 行与 loki.echo 试跑一致;看板 6 个查询经 Grafana API 执行通过(错误 37、警告 25);追加行 3 秒内被采到;runbook §5.1–§5.3 的命令按原文执行通过;dev.bat 在 cmd 中用替身副本跑通。未测游戏服务真实运行时的持续采集。
+- 协作纪律:09-13 验证 Java 配置时,Claude 执行过两次 mvnw package(gateway_node、config_node),违反 AGENTS §10.1。本轮未再执行任何构建。
+
+## 2026-09-14 本地日志台真实起服复核
+
+- 用 start_game.ps1(不开客户端)起全套服务,6/6 通过。18 个正在写的日志文件里,能解析的最新一行都已进 Loki,最新一条约 20 秒前写入;gate/scene/battle 带 zone=1,网关按 JSON 解析出级别。看板默认的最近 1 小时窗口经 Grafana API 查询,显示 11 个服务、错误 13、警告 5。
+- C++ 节点 stdout 重定向写文件有缓冲,文件末尾常停在半行,Alloy 等整行才读。停服脚本强制结束进程后半行不会补写,Loki 各少最后一条;完整内容在 bin/logs/cpp_nodes 的 muduo 文件里。已写进 runbook 排障表。
+- 启动器的坑:经 WMI 用 `cmd /c ... > 文件` 包一层启动时,预建 Kafka 主题那一步让启动器收到 ^C 退出,主题其实已建好;改为直接 pwsh 启动后正常。run/pids/gateway_node.pid 记录的是 Oracle javapath 壳进程,杀掉它后网关 JVM 仍在,需要按命令行找子进程停。
+- 验证后已停掉本次拉起的 Go、C++ 服务和网关 JVM,8081 等端口已释放。Kafka 容器此前在 22 小时前异常退出,本次重新拉起后保持运行。

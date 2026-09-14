@@ -159,7 +159,8 @@
             "text": "",
             "value": ""
           }
-        ]
+        ],
+        "description": "直接写正则,例如 kafka|redis 或 player_id=\\d+;不要输入反引号 `"
       }
     ]
   },
@@ -185,7 +186,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (service) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"$level\"} |~ \"(?i)$search\" [$__auto]))",
+          "expr": "sum by (service) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"$level\"} |~ `(?i)$search` [$__auto]))",
           "legendFormat": "{{service}}",
           "queryType": "range"
         }
@@ -238,7 +239,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (service, level) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"warn|error|fatal|severe|syserr\"} |~ \"(?i)$search\" [$__auto]))",
+          "expr": "sum by (service, level) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"warn|slow|alert|error|fatal|severe\"} |~ `(?i)$search` [$__auto]))",
           "legendFormat": "{{service}} · {{level}}",
           "queryType": "range"
         }
@@ -257,7 +258,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": ".*(error|fatal|severe|syserr).*"
+              "options": ".*(error|fatal|severe).*"
             },
             "properties": [
               {
@@ -272,7 +273,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": ".*warn.*"
+              "options": ".*(warn|slow|alert).*"
             },
             "properties": [
               {
@@ -319,7 +320,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal|severe|syserr\"} |~ \"(?i)$search\" [$__range]))",
+          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal|severe\"} |~ `(?i)$search` [$__range]))",
           "queryType": "instant",
           "instant": true
         }
@@ -363,7 +364,7 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "警告条数(所选时间段)",
+      "title": "警告条数(含 Go 慢调用 slow)",
       "datasource": {
         "type": "loki",
         "uid": "loki"
@@ -381,7 +382,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"warn\"} |~ \"(?i)$search\" [$__range]))",
+          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"warn|slow|alert\"} |~ `(?i)$search` [$__range]))",
           "queryType": "instant",
           "instant": true
         }
@@ -493,7 +494,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "topk(8, sum by (service, lang) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal|severe|syserr\"} |~ \"(?i)$search\" [$__range])))",
+          "expr": "topk(8, sum by (service, lang) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal|severe\"} |~ `(?i)$search` [$__range])))",
           "legendFormat": "{{service}} ({{lang}})",
           "queryType": "instant",
           "instant": true
@@ -547,7 +548,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "{job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"$level\"} |~ \"(?i)$search\"",
+          "expr": "{job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"$level\"} |~ `(?i)$search`",
           "maxLines": 1000,
           "queryType": "range"
         }

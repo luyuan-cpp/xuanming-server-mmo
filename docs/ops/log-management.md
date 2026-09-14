@@ -28,7 +28,8 @@ dev obs-down      # 停掉上面的观测台
 
 ### 本地 Grafana / Loki 日志台(2026-09-13)
 
-`dev obs` 起 `deploy/docker-compose.observability.yml`:Alloy 盯着 `run/logs/{go_services,cpp_nodes,java}`
+`dev obs` 起 `deploy/docker-compose.observability.yml`:Alloy 盯着 `run/logs/go_services`、`run/logs/cpp_nodes`、
+`run/logs/java`、`run/logs/game-launcher/<时间戳>/gateway.*.log`(start_game.ps1 起的网关)和 `run/logs/sa_token.log`
 下的文件,按语言各自的格式解析(Go = go-zero JSON,C++ = muduo 文本,Java = Spring Boot JSON/文本),
 打上 `job / service / zone / instance / level` 标签送进 Loki,Grafana 预置了数据源和看板「游戏服务日志总览」。
 服务本身不用改代码(Java 只加了一段 `logging.structured` 配置)。
@@ -79,5 +80,7 @@ Container runtime handles log rotation automatically:
 
 - K8s deployments: logs go to stdout, collected by Fluentd into Elasticsearch. No application-level rotation needed.
 - Docker Compose (local infra): use Docker's built-in log rotation via `deploy/docker-compose.yml` logging config.
-- C++ nodes: `spdlog` writes to stderr, captured by process manager or redirected to file in local dev.
-- Go services: `logx` (go-zero) writes to stderr, same capture pattern.
+- C++ nodes:muduo 日志经 `Node::AsyncOutput` 同时写 `bin/logs/cpp_nodes/` 滚动文件和控制台;本地由 `cpp_nodes.ps1` 把控制台
+  stdout/stderr 分别重定向到 `run/logs/cpp_nodes/<实例>.stdout.log / .stderr.log`(stderr 里主要是 gRPC/abseil 自己的日志)。
+- Go services:go-zero `logx` 控制台模式下 info/debug/stat 写 stdout,error/slow 等告警级别写 stderr;本地由 `go_services.ps1` 分别重定向到
+  `run/logs/go_services/<实例>.stdout.log / .stderr.log`。

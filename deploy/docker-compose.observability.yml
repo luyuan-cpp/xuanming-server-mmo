@@ -7,11 +7,17 @@
 # 和 deploy/docker-compose.yml(Kafka/Redis/MySQL/etcd)互不依赖,可以单独起停。
 # 采集的是宿主机 run/logs 下的文件,服务本身不用改任何代码;三种语言各自的
 # 解析规则在 observability/alloy/config.alloy。
+#
+# 镜像版本全部钉死(2026-09-14 本机验证过的组合),不要改回 latest:
+#   grafana/alloy 停在 v1.10.0:v1.19.2 的 loki.source.file 有读取位置回归——一次读很多行后,
+#   positions.yml 里只记下「第一行之后」的偏移。Alloy 一重启(包括 Docker Desktop 重启)就把
+#   文件几乎从头再读一遍,没解析出时间戳的行(启动 banner、JVM 警告等)会重复入库。
+#   升级 Alloy 前先跑 docs/ops/grafana-loki-local-logs.md 里的「读取位置自检」。
 name: xuanming-observability
 
 services:
   loki:
-    image: grafana/loki:3.5
+    image: grafana/loki:3.5.8
     container_name: xm-loki
     command: ["-config.file=/etc/loki/loki.yaml"]
     ports:
@@ -27,7 +33,7 @@ services:
         max-file: "3"
 
   alloy:
-    image: grafana/alloy:latest
+    image: grafana/alloy:v1.10.0   # 故意不用最新版,原因见文件头
     container_name: xm-alloy
     command:
       - run
@@ -51,7 +57,7 @@ services:
         max-file: "3"
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.2.1
     container_name: xm-grafana
     ports:
       - "3000:3000"

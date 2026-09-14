@@ -125,8 +125,12 @@ loki.process "go_services" {
 // 2. C++ 节点(muduo 日志经 LogToConsole 打到控制台,启动脚本重定向到文件)
 //    文件:run/logs/cpp_nodes/<instance>.stdout.log / .stderr.log
 //    行例:20260913 15:24:58.979463 36460 INFO  Node created ... - E:\...\node.cpp:366
-//    特点:带 ANSI 颜色码;时间是东八区(Node::SetupTimeZone 固定 +8);
+//    特点:带 ANSI 颜色码;时间是东八区(Windows 下 Node::SetupTimeZone 固定 +8);
+//          线程号右对齐占 5 列,不足 5 位时前面补空格,例如 "...370638  5584 INFO";
 //          Build Info 之类的多行消息只有第一行带时间戳。
+//    stderr 里主要是 gRPC / abseil 自己的日志,例如
+//          E0913 07:40:56.694940   52672 chttp2_transport.cc:1425] ... GOAWAY ... too_many_pings
+//          首字母是级别,时间是 UTC 且不带年份。
 // ---------------------------------------------------------------------------
 local.file_match "cpp_nodes" {
   path_targets = [
@@ -156,9 +160,11 @@ loki.process "cpp_nodes" {
     replace    = ""
   }
 
-  // 多行合并:只有以 muduo 时间戳开头的行才是新的一条,其余并入上一条
+  // 多行合并:以 muduo 时间戳开头(或 gRPC/abseil 的 E0913 这种行头)的行才是新的一条,
+  // 其余并入上一条。注意 muduo 的线程号右对齐占 5 列:线程号不足 5 位时前面补空格,
+  // 例如 "20260913 14:51:55.370638  5584 INFO",所以时间和线程号之间用 " +" 而不是单个空格。
   stage.multiline {
-    firstline     = `^\d{8} \d{2}:\d{2}:\d{2}\.\d{6} \d+ [A-Z]+ `
+    firstline     = `^(\d{8} \d{2}:\d{2}:\d{2}\.\d{6} +\d+ [A-Z]+ |[EWIF]\d{4} \d{2}:\d{2}:\d{2}\.\d{6} +\d+ )`
     max_wait_time = "2s"
     max_lines     = 64
   }
@@ -191,12 +197,13 @@ loki.process "cpp_nodes" {
     }
   }
 
-  // 只有标准 muduo 行才解析时间戳 / 级别;版本 banner 等杂行原样保留
+  // 标准 muduo 行:解析时间戳 / 级别;版本 banner 等杂行原样保留、不打 level。
+  // muduo 只输出 TRACE/DEBUG/INFO/WARN/ERROR/FATAL 六种,LOG_SYSERR 实际按 ERROR 输出。
   stage.match {
-    selector = `{job="cpp_nodes"} |~ "^\\d{8} \\d{2}:\\d{2}:\\d{2}\\.\\d{6} \\d+ (TRACE|DEBUG|INFO|WARN|ERROR|FATAL|SYSERR) "`
+    selector = `{job="cpp_nodes"} |~ "^\\d{8} \\d{2}:\\d{2}:\\d{2}\\.\\d{6} +\\d+ (TRACE|DEBUG|INFO|WARN|ERROR|FATAL) "`
 
     stage.regex {
-      expression = `^(?P<ts>\d{8} \d{2}:\d{2}:\d{2}\.\d{6}) (?P<tid>\d+) (?P<level>[A-Z]+) `
+      expression = `^(?P<ts>\d{8} \d{2}:\d{2}:\d{2}\.\d{6}) +(?P<tid>\d+) (?P<level>[A-Z]+) `
     }
     stage.timestamp {
       source            = "ts"
@@ -207,6 +214,37 @@ loki.process "cpp_nodes" {
     stage.template {
       source   = "level"
       template = `{{ ToLower .Value }}`
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+    stage.structured_metadata {
+      values = { tid = "" }
+    }
+  }
+
+  // gRPC / abseil 自己写到 stderr 的行,例如:
+  //   E0913 07:40:56.694940   52672 chttp2_transport.cc:1425] ipv4:127.0.0.1:53000: Received a GOAWAY ...
+  // 首字母是级别(E=error W=warn I=info F=fatal);时间是 UTC 且不带年份,年份取采集时的当年。
+  stage.match {
+    selector = `{job="cpp_nodes"} |~ "^[EWIF]\\d{4} \\d{2}:\\d{2}:\\d{2}\\.\\d{6} +\\d+ "`
+
+    stage.regex {
+      expression = `^(?P<glog_level>[EWIF])(?P<glog_md>\d{4}) (?P<glog_time>\d{2}:\d{2}:\d{2}\.\d{6}) +(?P<tid>\d+) `
+    }
+    stage.template {
+      source   = "glog_ts"
+      template = `{{ now | date "2006" }}{{ .glog_md }} {{ .glog_time }}`
+    }
+    stage.timestamp {
+      source            = "glog_ts"
+      format            = "20060102 15:04:05.000000"
+      location          = "UTC"
+      action_on_failure = "fudge"
+    }
+    stage.template {
+      source   = "level"
+      template = `{{ if eq .glog_level "E" }}error{{ else if eq .glog_level "W" }}warn{{ else if eq .glog_level "F" }}fatal{{ else }}info{{ end }}`
     }
     stage.labels {
       values = { level = "" }
@@ -356,7 +394,7 @@ loki.process "java" {
 // loki.process "cpp_files" {
 //   forward_to = [loki.write.local.receiver]
 //   stage.multiline {
-//     firstline = `^\d{8} \d{2}:\d{2}:\d{2}\.\d{6} \d+ [A-Z]+ `
+//     firstline = `^\d{8} \d{2}:\d{2}:\d{2}\.\d{6} +\d+ [A-Z]+ `
 //   }
 //   stage.regex {
 //     source     = "filename"

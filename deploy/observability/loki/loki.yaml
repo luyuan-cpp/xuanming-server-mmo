@@ -1,5 +1,5 @@
 # Loki 单机(single-binary)配置:本地开发用,日志落在容器内 /loki(docker 卷 loki-data)。
-# 只保留 7 天;超过 30 天的旧行直接拒收(本机日志文件可能几周没清)。
+# 只保留 7 天;时间戳早于 7 天的旧行直接拒收(本机日志文件可能几周没清,旧行没必要入库)。
 auth_enabled: false
 
 server:
@@ -20,9 +20,11 @@ common:
       store: inmemory
 
 ingester:
-  # 首次接入时 Alloy 会把几小时前的旧日志一次灌进来;这些老时间戳的块在内存里
-  # 待着不落盘就查不到,把闲置落盘时间从默认 30m 缩短到 10m。
-  chunk_idle_period: 10m
+  # Loki 3.5 只向 ingester 内存查「最近约 max_chunk_age + chunk_idle_period」这一段;
+  # 首次接入时 Alloy 会把几小时前的旧日志一次灌进来,这些老时间戳的块在内存里
+  # 没落盘前查不到。把闲置落盘时间从默认 30m 缩短到 3m,旧日志要晚几分钟才出现(本机实测 7 分钟内);
+  # 实时写入的新日志不受影响,立刻可见。(3.x 已没有 query_ingesters_within 这个键)
+  chunk_idle_period: 3m
   max_chunk_age: 2h
 
 schema_config:
@@ -43,12 +45,8 @@ storage_config:
     directory: /loki/chunks
 
 limits_config:
-  # Loki 3.x 里这是 per-tenant 限制(不再在 querier 段)。默认只向 ingester 查最近 3h:
-  # 首次接入时 Alloy 会把几小时前的旧日志灌进来,它们在内存里、没落盘,超过 3h 的就查不到,
-  # 要等 chunk_idle_period 落盘才出现。放宽到 30 天,和 reject_old_samples_max_age 对齐。
-  query_ingesters_within: 720h
   reject_old_samples: true
-  reject_old_samples_max_age: 720h   # 30 天前的行不收
+  reject_old_samples_max_age: 168h   # 超过 7 天的旧行不收,和下面的保留天数对齐(否则收进来也会很快被删掉)
   retention_period: 168h              # 只留 7 天
   allow_structured_metadata: true
   volume_enabled: true                # Grafana「日志量」面板 / Logs Drilldown 需要
