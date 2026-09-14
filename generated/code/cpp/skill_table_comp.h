@@ -82,6 +82,14 @@ struct SkillDamageComp {
     std::string_view value;
 };
 
+struct SkillDamage_typeComp {
+    uint32_t value;
+};
+
+struct SkillAttack_multiplierComp {
+    double value;
+};
+
 struct SkillSkill_typeComp {
     std::span<const uint32_t> values;
 };
@@ -149,6 +157,12 @@ inline SkillCooldown_idComp MakeSkillCooldown_idComp(const SkillTable& row) {
 }
 inline SkillDamageComp MakeSkillDamageComp(const SkillTable& row) {
     return { std::string_view(row.damage()) };
+}
+inline SkillDamage_typeComp MakeSkillDamage_typeComp(const SkillTable& row) {
+    return { row.damage_type() };
+}
+inline SkillAttack_multiplierComp MakeSkillAttack_multiplierComp(const SkillTable& row) {
+    return { row.attack_multiplier() };
 }
 inline SkillSkill_typeComp MakeSkillSkill_typeComp(const SkillTable& row) {
     const auto& rf = row.skill_type();

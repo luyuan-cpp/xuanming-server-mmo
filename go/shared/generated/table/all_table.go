@@ -21,6 +21,9 @@ func LoadTables(configDir string, useBinary bool) {
     if err := ActorActionStateTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load ActorActionState table: %v", err)
     }
+    if err := AttributeAllocRatioTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load AttributeAllocRatio table: %v", err)
+    }
     if err := AttributeAutoPlanTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load AttributeAutoPlan table: %v", err)
     }
@@ -106,7 +109,7 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(28)
+    wg.Add(29)
     go func() {
         defer wg.Done()
         if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -123,6 +126,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
         defer wg.Done()
         if err := ActorActionStateTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load ActorActionState table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := AttributeAllocRatioTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load AttributeAllocRatio table: %v", err)
         }
     }()
     go func() {
@@ -303,6 +312,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newActorActionState.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload ActorActionState failed: %w", err)
     }
+    newAttributeAllocRatio := NewAttributeAllocRatioTableManager()
+    if err := newAttributeAllocRatio.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload AttributeAllocRatio failed: %w", err)
+    }
     newAttributeAutoPlan := NewAttributeAutoPlanTableManager()
     if err := newAttributeAutoPlan.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload AttributeAutoPlan failed: %w", err)
@@ -408,6 +421,7 @@ func ReloadTables(configDir string, useBinary bool) error {
     ActivityScheduleTableManagerInstance = newActivitySchedule
     ActorActionCombatStateTableManagerInstance = newActorActionCombatState
     ActorActionStateTableManagerInstance = newActorActionState
+    AttributeAllocRatioTableManagerInstance = newAttributeAllocRatio
     AttributeAutoPlanTableManagerInstance = newAttributeAutoPlan
     AttributeDimensionTableManagerInstance = newAttributeDimension
     AttributePoolTableManagerInstance = newAttributePool

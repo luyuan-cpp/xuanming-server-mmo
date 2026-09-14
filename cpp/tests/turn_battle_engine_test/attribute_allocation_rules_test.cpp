@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 #include <limits>
 
+#include <cmath>
 #include <cstdint>
 #include <map>
 #include <vector>
@@ -47,20 +48,22 @@ PoolRule MakeAttributePool() {
     return rule;
 }
 
-// 镜像行 2(相性点):1 级解锁、每级 1 点、单项上限 50
-PoolRule MakeAffinityPool() {
+// 有单项上限的池:通用夹具,不对应任何表行(2026-09-14 相性点池已删,单项上限规则仍在,这里保住覆盖)。
+// 1 级解锁、每级 1 点、单项上限 50
+PoolRule MakeCappedPool() {
     PoolRule rule;
-    rule.poolId = 2;
+    rule.poolId = 90;
     rule.unlockLevel = 1;
     rule.pointsPerLevel = 1;
     rule.dimensionCap = 50;
     return rule;
 }
 
-// 镜像行 3(仙魔点):60 级解锁、每级 1 点
-PoolRule MakeImmortalPool() {
+// 高等级才解锁的池:通用夹具,不对应任何表行(2026-09-14 仙魔点池已删,解锁规则仍在,这里保住覆盖)。
+// 60 级解锁、每级 1 点
+PoolRule MakeLockedPool() {
     PoolRule rule;
-    rule.poolId = 3;
+    rule.poolId = 91;
     rule.unlockLevel = 60;
     rule.pointsPerLevel = 1;
     rule.dimensionCap = 0;
@@ -73,8 +76,9 @@ std::map<uint32_t, uint32_t> AttributeCurrent(uint32_t constitution, uint32_t sp
     return {{kConstitution, constitution}, {kSpirit, spirit}, {kStrength, strength}, {kAgility, agility}};
 }
 
-std::map<uint32_t, uint32_t> AffinityCurrent(uint32_t metal) {
-    return {{201, metal}, {202, 0}, {203, 0}, {204, 0}, {205, 0}};
+// 有上限池五个维度的当前已分配(维度号是夹具自取,不对应表行)
+std::map<uint32_t, uint32_t> CappedCurrent(uint32_t first) {
+    return {{9001, first}, {9002, 0}, {9003, 0}, {9004, 0}, {9005, 0}};
 }
 
 }  // namespace
@@ -120,24 +124,24 @@ TEST(AttributeAllocationRulesTest, MultipleHugeTargetsExceedEvenMaxRemaining) {
 
 // 有上限池:超单项上限拒绝,超大值同样先撞上限;恰好到上限放行
 TEST(AttributeAllocationRulesTest, CapIsEnforcedPerDimension) {
-    const auto current = AffinityCurrent(48);
+    const auto current = CappedCurrent(48);
     uint32_t delta = kGarbage;
-    EXPECT_EQ(ValidateAllocation(MakeAffinityPool(), kLevel, current, {{201, 51}}, 100, delta),
+    EXPECT_EQ(ValidateAllocation(MakeCappedPool(), kLevel, current, {{9001, 51}}, 100, delta),
               AllocError::kCapExceeded);
     EXPECT_EQ(delta, 0u);
 
     delta = kGarbage;
-    EXPECT_EQ(ValidateAllocation(MakeAffinityPool(), kLevel, current, {{201, UINT32_MAX}}, 100, delta),
+    EXPECT_EQ(ValidateAllocation(MakeCappedPool(), kLevel, current, {{9001, UINT32_MAX}}, 100, delta),
               AllocError::kCapExceeded);
     EXPECT_EQ(delta, 0u);
 
-    EXPECT_EQ(ValidateAllocation(MakeAffinityPool(), kLevel, current, {{201, 50}}, 100, delta), AllocError::kOk);
+    EXPECT_EQ(ValidateAllocation(MakeCappedPool(), kLevel, current, {{9001, 50}}, 100, delta), AllocError::kOk);
     EXPECT_EQ(delta, 2u);
 }
 
 // 不属于本池的维度(别的池 / 表里没有 / 0)一律拒绝,客户端不能往请求里塞任意键
 TEST(AttributeAllocationRulesTest, DimensionOutsidePoolIsRejected) {
-    for (const uint32_t dimensionId : {201u, 999u, 0u}) {
+    for (const uint32_t dimensionId : {9001u, 999u, 0u}) {
         uint32_t delta = kGarbage;
         EXPECT_EQ(ValidateAllocation(MakeAttributePool(), kLevel, AttributeCurrent(0), {{dimensionId, 1}}, 10, delta),
                   AllocError::kDimensionNotInPool)
@@ -205,14 +209,14 @@ TEST(AttributeAllocationRulesTest, NothingToChangeIsRejected) {
     EXPECT_EQ(delta, 0u);
 }
 
-// 未解锁池拒绝(仙魔点 60 级解锁)
+// 未解锁池拒绝(夹具:60 级解锁)
 TEST(AttributeAllocationRulesTest, LockedPoolIsRejected) {
-    const std::map<uint32_t, uint32_t> current{{301, 0}, {302, 0}, {303, 0}, {304, 0}};
+    const std::map<uint32_t, uint32_t> current{{9101, 0}, {9102, 0}, {9103, 0}, {9104, 0}};
     uint32_t delta = kGarbage;
-    EXPECT_EQ(ValidateAllocation(MakeImmortalPool(), 59, current, {{301, 1}}, 10, delta), AllocError::kPoolLocked);
+    EXPECT_EQ(ValidateAllocation(MakeLockedPool(), 59, current, {{9101, 1}}, 10, delta), AllocError::kPoolLocked);
     EXPECT_EQ(delta, 0u);
 
-    EXPECT_EQ(ValidateAllocation(MakeImmortalPool(), 60, current, {{301, 1}}, 10, delta), AllocError::kOk);
+    EXPECT_EQ(ValidateAllocation(MakeLockedPool(), 60, current, {{9101, 1}}, 10, delta), AllocError::kOk);
     EXPECT_EQ(delta, 1u);
 }
 
@@ -220,19 +224,19 @@ TEST(AttributeAllocationRulesTest, LockedPoolIsRejected) {
 // 总量换算
 // ---------------------------------------------------------------------------
 
-// 满级总量:属性点 425、相性点 85、仙魔点 26(60 级起每级 1 点)。
+// 满级总量:属性点 425;夹具里的有上限池 85、60 级解锁池 26(60 级起每级 1 点)。
 // 上限 85 是策划定的硬约束(2026-09-10);改它要同步设计文档 §2.2 与经验表,所以这里钉死
 TEST(AttributeAllocationRulesTest, TotalPointsAtLevelCap) {
     ASSERT_EQ(playerlevel::kMaxLevel, 85u);
-    ASSERT_GE(playerlevel::kMaxLevel, MakeImmortalPool().unlockLevel);  // 满级前仙魔池必须能解锁
+    ASSERT_GE(playerlevel::kMaxLevel, MakeLockedPool().unlockLevel);  // 夹具解锁等级须在上限内,下面的满级总量才有意义
 
     EXPECT_EQ(TotalPoints(MakeAttributePool(), playerlevel::kMaxLevel, 0), 425u);
-    EXPECT_EQ(TotalPoints(MakeAffinityPool(), playerlevel::kMaxLevel, 0), 85u);
-    EXPECT_EQ(TotalPoints(MakeImmortalPool(), playerlevel::kMaxLevel, 0), 26u);
+    EXPECT_EQ(TotalPoints(MakeCappedPool(), playerlevel::kMaxLevel, 0), 85u);
+    EXPECT_EQ(TotalPoints(MakeLockedPool(), playerlevel::kMaxLevel, 0), 26u);
 
     EXPECT_EQ(TotalPoints(MakeAttributePool(), 1, 0), 5u);
-    EXPECT_EQ(TotalPoints(MakeImmortalPool(), 59, 0), 0u);
-    EXPECT_EQ(TotalPoints(MakeImmortalPool(), 60, 0), 1u);
+    EXPECT_EQ(TotalPoints(MakeLockedPool(), 59, 0), 0u);
+    EXPECT_EQ(TotalPoints(MakeLockedPool(), 60, 0), 1u);
 }
 
 // 额外点极大时总量饱和到 UINT32_MAX,不绕回小数
@@ -312,11 +316,11 @@ TEST(AttributeAllocationRulesTest, GenericAutoPlanRowDistribution) {
 
 // 有上限池:按优先序灌到上限,不超上限、不超剩余
 TEST(AttributeAllocationRulesTest, CappedPoolDistributionRespectsCapAndRemaining) {
-    auto allocated = AffinityCurrent(49);
-    DistributePoints(MakeAffinityPool(), {201, 202, 203}, {}, 3, allocated);
-    EXPECT_EQ(allocated.at(201), 50u);
-    EXPECT_EQ(allocated.at(202), 2u);
-    EXPECT_EQ(allocated.at(203), 0u);
+    auto allocated = CappedCurrent(49);
+    DistributePoints(MakeCappedPool(), {9001, 9002, 9003}, {}, 3, allocated);
+    EXPECT_EQ(allocated.at(9001), 50u);
+    EXPECT_EQ(allocated.at(9002), 2u);
+    EXPECT_EQ(allocated.at(9003), 0u);
 }
 
 // 权重全 0 / 剩余 0:什么都不分
@@ -362,20 +366,21 @@ TEST(AttributeAllocationRulesTest, RescaleKeepsAliveAndDeadStates) {
 // ---------------------------------------------------------------------------
 // 加点收益公式(2026-09-13):E(n) = n × (1 + 0.2 × n ÷ s),增量 = 标准基础 × 比例 × E(n) ÷ E(s)
 // 角色属性点池 s = 425、E(s) = 510,即策划原话里的两个常数。85 级标准基础属性按现有表算 ——
-// 物伤 4250 / 法伤 3400 / 法力 1050 / 速度 275 / 气血 4750 / 防御 425(职业初值 + 每级自然成长 1 点 × 85 × 系数)
+// 物伤 4250 / 法伤 3400 / 法力 4200 / 速度 3300 / 气血 4750 / 防御 5100(职业初值 + 每级自然成长 1 点 × 85 × 系数;
+// 2026-09-14 起三项单位放大:速度 ×12 = 初值 240 + 每点 36 × 85,防御 ×12 = 每点 60 × 85,法力 ×4 = 初值 800 + 每点 40 × 85)
 // ---------------------------------------------------------------------------
 
 namespace {
 
 constexpr double kStdPhysical = 4250.0;
 constexpr double kStdMagic = 3400.0;
-constexpr double kStdMana = 1050.0;
-constexpr double kStdSpeed = 275.0;
+constexpr double kStdMana = 4200.0;
+constexpr double kStdSpeed = 3300.0;
 constexpr double kStdHealth = 4750.0;
-constexpr double kStdDefense = 425.0;
+constexpr double kStdDefense = 5100.0;
 constexpr uint32_t kFullPoints = 425;  // 85 级 × 每级 5 点
 
-// 与 data/AttributePool.xlsx 行 1-3 一致:属性点 / 相性点 / 仙魔点
+// PrimaryPool 与 data/AttributePool.xlsx 行 1(属性点)一致;CappedPool / LockedPool 是通用夹具,不对应表行
 PoolRule MakePool(uint32_t unlockLevel, uint32_t pointsPerLevel, uint32_t dimensionCap) {
     PoolRule rule;
     rule.unlockLevel = unlockLevel;
@@ -384,8 +389,8 @@ PoolRule MakePool(uint32_t unlockLevel, uint32_t pointsPerLevel, uint32_t dimens
     return rule;
 }
 PoolRule PrimaryPool() { return MakePool(1, 5, 0); }
-PoolRule AffinityPool() { return MakePool(1, 1, 50); }
-PoolRule ImmortalPool() { return MakePool(60, 1, 0); }
+PoolRule CappedPool() { return MakePool(1, 1, 50); }
+PoolRule LockedPool() { return MakePool(60, 1, 0); }
 
 AllocFormulaRule PrimaryRule() { return MakeFormulaRule(0.20, kFullPoints); }
 
@@ -394,8 +399,8 @@ AllocFormulaRule PrimaryRule() { return MakeFormulaRule(0.20, kFullPoints); }
 TEST(AllocFormulaTest, FullInvestmentPointsComeFromPoolAndLevelCap) {
     // 策划公式里的 425 不是手填常数,而是"角色属性点满级能分到的点数",按池表 + 等级上限现算
     EXPECT_EQ(FullInvestmentPoints(PrimaryPool(), playerlevel::kMaxLevel), 425u);  // 85 × 5
-    EXPECT_EQ(FullInvestmentPoints(AffinityPool(), playerlevel::kMaxLevel), 50u);  // 85 点被单项上限 50 截断
-    EXPECT_EQ(FullInvestmentPoints(ImmortalPool(), playerlevel::kMaxLevel), 26u);  // 60~85 级共 26 点
+    EXPECT_EQ(FullInvestmentPoints(CappedPool(), playerlevel::kMaxLevel), 50u);  // 85 点被单项上限 50 截断
+    EXPECT_EQ(FullInvestmentPoints(LockedPool(), playerlevel::kMaxLevel), 26u);  // 60~85 级共 26 点
 }
 
 TEST(AllocFormulaTest, EffectivePointsEndpoints) {
@@ -421,18 +426,18 @@ TEST(AllocFormulaTest, FullInvestmentMatchesDesignerTable) {
     // 力量→物伤:非对应 +25% = 1062.5;破军 +30% = 1275
     EXPECT_NEAR(AllocatedIncrement(kStdPhysical, 0.25, kFullPoints, rule), 1062.5, 1e-6);
     EXPECT_NEAR(AllocatedIncrement(kStdPhysical, 0.30, kFullPoints, rule), 1275.0, 1e-6);
-    // 灵力→法伤:非对应 +22.5% = 765;玄霄 +27% = 918;法力两档同为 +15% = 157.5
+    // 灵力→法伤:非对应 +22.5% = 765;玄霄 +27% = 918;法力两档同为 +15% = 630
     EXPECT_NEAR(AllocatedIncrement(kStdMagic, 0.225, kFullPoints, rule), 765.0, 1e-6);
     EXPECT_NEAR(AllocatedIncrement(kStdMagic, 0.27, kFullPoints, rule), 918.0, 1e-6);
-    EXPECT_NEAR(AllocatedIncrement(kStdMana, 0.15, kFullPoints, rule), 157.5, 1e-6);
-    // 敏捷→速度:非对应 +16.67% = 45.8425;逐风 +20% = 55
-    EXPECT_NEAR(AllocatedIncrement(kStdSpeed, 0.1667, kFullPoints, rule), 45.8425, 1e-6);
-    EXPECT_NEAR(AllocatedIncrement(kStdSpeed, 0.20, kFullPoints, rule), 55.0, 1e-6);
-    // 体质→气血 / 防御:非对应 +20.83% = 989.425 / +10% = 42.5;丹心 +25% = 1187.5 / +12% = 51
+    EXPECT_NEAR(AllocatedIncrement(kStdMana, 0.15, kFullPoints, rule), 630.0, 1e-6);
+    // 敏捷→速度:非对应 +16.67% = 550.11;逐风 +20% = 660
+    EXPECT_NEAR(AllocatedIncrement(kStdSpeed, 0.1667, kFullPoints, rule), 550.11, 1e-6);
+    EXPECT_NEAR(AllocatedIncrement(kStdSpeed, 0.20, kFullPoints, rule), 660.0, 1e-6);
+    // 体质→气血 / 防御:非对应 +20.83% = 989.425 / +10% = 510;丹心 +25% = 1187.5 / +12% = 612
     EXPECT_NEAR(AllocatedIncrement(kStdHealth, 0.2083, kFullPoints, rule), 989.425, 1e-6);
     EXPECT_NEAR(AllocatedIncrement(kStdHealth, 0.25, kFullPoints, rule), 1187.5, 1e-6);
-    EXPECT_NEAR(AllocatedIncrement(kStdDefense, 0.10, kFullPoints, rule), 42.5, 1e-6);
-    EXPECT_NEAR(AllocatedIncrement(kStdDefense, 0.12, kFullPoints, rule), 51.0, 1e-6);
+    EXPECT_NEAR(AllocatedIncrement(kStdDefense, 0.10, kFullPoints, rule), 510.0, 1e-6);
+    EXPECT_NEAR(AllocatedIncrement(kStdDefense, 0.12, kFullPoints, rule), 612.0, 1e-6);
 }
 
 TEST(AllocFormulaTest, PartialInvestmentIsSubLinear) {
@@ -473,7 +478,36 @@ TEST(AllocFormulaTest, FullInvestmentStaysExactWhenLevelCapChanges) {
 }
 
 TEST(AllocFormulaTest, CappedPoolReachesFullRatioAtItsOwnCap) {
-    // 相性池单项上限 50:若误用角色属性点的 425 尺度,满投 50 点只拿 E(50)/510 ≈ 10% 的比例
-    const auto rule = MakeFormulaRule(0.20, FullInvestmentPoints(AffinityPool(), playerlevel::kMaxLevel));
+    // 有单项上限的池(上限 50):若误用角色属性点的 425 尺度,满投 50 点只拿 E(50)/510 ≈ 10% 的比例
+    const auto rule = MakeFormulaRule(0.20, FullInvestmentPoints(CappedPool(), playerlevel::kMaxLevel));
     EXPECT_NEAR(AllocatedIncrement(kStdMagic, 0.25, 50, rule), 850.0, 1e-6);
 }
+
+// 验收口径(用户 2026-09-14 "按玩家能接受的范围调整数值"):每分配 1 点,这一维涨的每一项二级属性都至少 +1。
+// 二级属性是整数(向下取整),所以逐点检查 floor(增量) 严格递增;职业初值、自然成长都是整数,不影响取整。
+// 速度 ×12 / 防御 ×12 / 法力 ×4 之前,敏捷每点 +0.09 速度、体质每点 +0.08 防御、灵力每点 +0.31 法力,这里会红。
+TEST(AllocFormulaTest, EveryAllocatedPointRaisesEachStatByAtLeastOne) {
+    const auto rule = PrimaryRule();
+    struct Case {
+        const char* name;
+        double standard;
+        double ratio;
+    };
+    const Case cases[] = {
+        {"体质→气血(非对应)", kStdHealth, 0.2083}, {"体质→气血(丹心)", kStdHealth, 0.25},
+        {"体质→防御(非对应)", kStdDefense, 0.10},  {"体质→防御(丹心)", kStdDefense, 0.12},
+        {"灵力→法伤(非对应)", kStdMagic, 0.225},   {"灵力→法伤(玄霄)", kStdMagic, 0.27},
+        {"灵力→法力", kStdMana, 0.15},
+        {"力量→物伤(非对应)", kStdPhysical, 0.25}, {"力量→物伤(破军)", kStdPhysical, 0.30},
+        {"敏捷→速度(非对应)", kStdSpeed, 0.1667},  {"敏捷→速度(逐风)", kStdSpeed, 0.20},
+    };
+    for (const auto& c : cases) {
+        double previous = 0.0;
+        for (uint32_t n = 1; n <= kFullPoints; ++n) {
+            const double current = std::floor(AllocatedIncrement(c.standard, c.ratio, n, rule));
+            ASSERT_GE(current, previous + 1.0) << c.name << " 第 " << n << " 点";
+            previous = current;
+        }
+    }
+}
+

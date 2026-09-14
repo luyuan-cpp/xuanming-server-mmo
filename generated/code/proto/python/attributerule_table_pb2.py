@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19\x61ttributerule_table.proto\"\xaf\x01\n\x12\x41ttributeRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x13\n\x0bmax_schemes\x18\x02 \x01(\r\x12\x19\n\x11\x66ree_scheme_count\x18\x03 \x01(\r\x12\x1f\n\x17\x63reate_scheme_cost_gold\x18\x04 \x01(\x04\x12\x1f\n\x17switch_cooldown_seconds\x18\x05 \x01(\r\x12\x1b\n\x13scheme_name_max_len\x18\x06 \x01(\r\";\n\x16\x41ttributeRuleTableData\x12!\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x13.AttributeRuleTableBD\n\x0e\x63om.game.tableB\x1c\x41ttributeRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x19\x61ttributerule_table.proto\"\xcf\x01\n\x12\x41ttributeRuleTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x13\n\x0bmax_schemes\x18\x02 \x01(\r\x12\x19\n\x11\x66ree_scheme_count\x18\x03 \x01(\r\x12\x1f\n\x17\x63reate_scheme_cost_gold\x18\x04 \x01(\x04\x12\x1f\n\x17switch_cooldown_seconds\x18\x05 \x01(\r\x12\x1b\n\x13scheme_name_max_len\x18\x06 \x01(\r\x12\x1e\n\x16\x61lloc_efficiency_bonus\x18\x07 \x01(\x01\";\n\x16\x41ttributeRuleTableData\x12!\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\x13.AttributeRuleTableBD\n\x0e\x63om.game.tableB\x1c\x41ttributeRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -33,7 +33,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\034AttributeRuleTableOuterClassP\001Z\022generated/pb/table'
   _globals['_ATTRIBUTERULETABLE']._serialized_start=30
-  _globals['_ATTRIBUTERULETABLE']._serialized_end=205
-  _globals['_ATTRIBUTERULETABLEDATA']._serialized_start=207
-  _globals['_ATTRIBUTERULETABLEDATA']._serialized_end=266
+  _globals['_ATTRIBUTERULETABLE']._serialized_end=237
+  _globals['_ATTRIBUTERULETABLEDATA']._serialized_start=239
+  _globals['_ATTRIBUTERULETABLEDATA']._serialized_end=298
 # @@protoc_insertion_point(module_scope)

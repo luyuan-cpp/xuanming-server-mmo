@@ -4427,6 +4427,45 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   6. 文档:§2.2 旧系数只作用于自然成长 / 装备、"同比换算"规则失效、自动加点方案新口径;§3.1 面板 value 只是点数、单点分配边际(速度 / 防御 12 点才 +1);§8 30 级通用号估算补上土相 1800(新口径 ≈ 3635,土相是力量加点的 5 倍多)、滚动发布窗口改为三表 + scene 二进制、`bonus_points` 超过满投点数的缺口。proto `AttributeDimensionInfo.value` 注释同步。
 - 仍未编译 / 导表 / 运行。待执行清单同上一条,第 ③ 条预期 AllocFormulaTest 9 条;第 ⑤ 条数值不变(85 级非破军力量满投面板物伤 = 4250 + 1062 = 5312)。新增待拍板:单点分配无反馈是否可接受。
 
+
+## 2026-09-13 伤害公式改比例减伤 + PVP 伤害系数 + 怪物按新口径重定(用户选定由 Claude 接手做完)
+
+- 背景:用户 09-13 批准的 Codex 加点方案包含"防御改比例减伤、常驻减伤封顶 60%、技能按物理 / 法术取攻击";Codex 04:17 只写了未接线的 `combat_damage_rules.h` 就停了。用户选定由 Claude 接手做完,再按新口径重算怪物与 PVP(此前用户已选"加 PVP 伤害系数")。
+- 伤害纯规则 `cpp/libs/services/battle/system/combat_damage_rules.h`(登记 battle.vcxproj / filters):原始 = base × (1 + 力量 × 0.1) + 攻击 × 攻击倍率;受伤比例 = max(0.4, (30 + 10 × 目标等级) ÷ (护甲 + 防御 + 30 + 10 × 目标等级) × (1 − 抗性));目标等级夹到 1..85(镜像 playerlevel::kMaxLevel,单测守一致);落血 DamageToHealth(向上取整、不超过气血、NaN / 无穷不落血)。等级系数沿用 Codex 头文件的 30 + 10×L(Codex 调查稿写过 100 + 20×L,未采用;新加点口径下玩家防御约 5×L,两者常驻减伤约 33% 与 20%)。
+- 回合引擎 `turn_battle_engine.{h,cpp}`:CalculateFinalDamage 改走共用规则并新增 attackMultiplier 参数;普攻 = 物伤 × 1;技能按 `Skill.damage_type` 选物伤 / 法伤、乘 `Skill.attack_multiplier`;非 PVE 对局 × `kPvpDamageScale = 0.2`(turn_battle_constants.h);暴击掷骰位置不变(同种子 RNG 消费序列不变);ApplyDamage 改用 DamageToHealth;新增 IsPveMatch() 收拢两处重复的 PVE 判断。周期伤害(毒 / 灼烧)不乘 PVP 系数。
+- 实时技能 `cpp/libs/services/scene/combat/skill/system/skill.cpp`:CalculateFinalDamage 用同一份公式,多带 `const SkillTable&` 选攻击;目标无 LevelComp 按 1 级;ApplyDamage 改用 DamageToHealth。实时侧没有 PVP 系数。
+- 配表:`data/schema/skill_table.proto` 新增 `damage_type = 24`(0 法术缺省 / 1 物理)、`attack_multiplier = 25`(0 按 1 倍);`data/Skill.xlsx` 追加两列,现有 13 行填 0 / 1(行为不变)。`data/Monster.xlsx` 1-16 按新口径重定 health / strength / speed,新值与三档目标见 player-attribute-allocation.md §8,取代 09-11 那版(那版从未导表)。
+- 单测:新增 `cpp/tests/turn_battle_engine_test/combat_damage_rules_test.cpp` 9 条(登记 vcxproj / filters)。`turn_battle_engine_test.cpp`:4 条精确伤害断言改为新口径(技能 69、物伤普攻 64、法伤技能 89;防御测试改名 DerivedDefenseReducesIncomingDamageProportionally,防御 0 / 130 / 1000000 → 985 / 992 / 994);2 条因怪物现在总能打出伤害而失效的断言改为按实际计算(SnapshotRegenBuffHealsAtRoundEnd 按实际挨打、ItemHealsAndConsumptionGoesIntoSettlement 第二瓶按缺口封顶);新增 PvpDirectDamageIsScaled(期望 7)、PhysicalSkillUsesPhysicalAttackWithMultiplier(期望 129);同步 5 处引用旧减法口径的注释。其余依赖伤害结论的用例(奖励、结算、回合上限、宝宝)已逐条手算,结论不变。
+- 文档:player-attribute-allocation.md §3.2 公式、§8 平衡结论;turn-based-battle-server.md §5.1、§15.1。
+- 依赖与风险:① 怪物数值依赖另一会话 09-13 未提交、未编译的加点百分比公式,两者须一起导表验证;② 表指纹含 Skill / Monster,scene 与 battle 必须同一版本表;伤害公式同时改在 battle 与 scene 两个二进制里,部署须一起替换;③ 未查客户端是否本地预算伤害。
+- 未导表、未编译、未测试(AGENTS §10.1),待 Codex 串行执行:
+  1. 导表(`dev.bat gen` 正式管线,会一并带上另一会话的 AttributeAllocRatio / AttributeRule / AttributeAutoPlan),再跑 `gen_schema_index.py`;核对 Skill 13 行 damage_type = 0、attack_multiplier = 1,Monster 16 行与 §8 新值一致;
+  2. MSBuild game.sln Debug/x64 `/m:1`(battle、scene 库与节点);
+  3. `pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle_engine`:期望全过,含新增 CombatDamageRulesTest 9 条与 TurnBattleEngineTest 新增 2 条;另一会话的 AllocFormulaTest 若失败单独记录;
+  4. 替换 battle + scene 后在 robot 目录跑 `robot.exe -c etc/battle_smoke.yaml`(期望 BATTLE_SMOKE_OK)、`etc/attribute_smoke.yaml`、`etc/pet_smoke.yaml`;失败保留 robot 与 battle / scene 日志摘要。
+
+## 2026-09-14 删相性点 / 仙魔点 + 速度单位 ×12 + 怪物与 PVP 系数按最终口径重定(用户 09-14 三项拍板)
+
+- 用户决定:① 怪物按新口径重定;② 去除相性点 / 仙魔点;③ "按照玩家能接受的范围调整数值"。第 ③ 条落成可验证的验收口径:**每分配 1 点,面板上至少有一项数字变化**,外加副本胜率 / 回合数与同级 PVP 打几下落在 09-11 / 09-13 定的目标附近。
+- **删两池**:`AttributePool` 行 2 / 3、`AttributeDimension` 201-205 / 301-304、`AttributeAutoPlan` 2 / 3 / 12 / 13 / 22 / 23(三张表 fk 相连,须同批导表)。服务端代码按表遍历、不写死池号,存档里的分配由 `SanitizeSchemes` 加载时清掉。attribute_smoke 删预备段的相性洗点与步骤 8 / 9(否则步骤 0 就因 kAttributePoolNotFound 退出),规则单测的相性 / 仙魔夹具改为通用的 CappedPool / LockedPool(单项上限与未解锁两条规则宝宝池仍在用,覆盖保留)。Tip 码不删(通用规则码,仍被代码引用)。客户端未改:`AttributePanel` 本来就按名称过滤掉相性 / 仙魔页签,池不再下发后该过滤只是无害兜底。
+- **速度单位 ×12**:按验收口径只有敏捷不达标(分配 1 点 +0.09 速度)。`Class.init_speed` 20 → 240、维度 104 速度 3 → 36、404 为 2.5 → 30、`Pet.init_speed` ×12、`Monster.speed` 重算、`kMonsterDefaultSpeed` 5 → 60、scene `kFallbackBattleSpeed` 10 → 120、`kFleeSpeedFactor` 0.01 → 0.01/12。全仓只读扫描确认:速度只用于回合出手序(纯相对比较)与逃跑(速度差 × 系数);走路速度来自客户端上报 Velocity,实时战斗 / AOI / 冷却 / 动画都不读。`turn_battle_engine_test` 的速度数字统一 ×12(AddPlayer 68 / AddPet 4 / set_speed 11 处),出手序与逃跑成功率与改前等价;否则兜底怪 5 → 60 会打断 6 条出手序断言。敏捷分配每点现 +1.08 速度。防御(每点 +0.08)/ 法力(+0.31)是次要属性,没放大:要放大须连带护甲、等级减伤系数与技能耗蓝,牵动 09-13 刚改、未编译的伤害公式,留作下一轮。
+- **怪物重定**:09-13 另一会话按比例减伤已重定一版并提交(f5983bd86),但参照号物伤含相性土相(验算 3 号怪:含土相 1430 血、去掉约 760)。按同样三档目标、最终口径重算,新值见 player-attribute-allocation.md §8:普通怪血量约减半、力量不变、速度 ×12 后重算。
+- **PVP 系数**:`kPvpDamageScale` 0.2 → 0.3。0.2 按含相性伤害标定,删相性后同级 1v1 要 7~15 下;0.3 为 7 / 10 / 30 / 60 / 85 级 10 / 8 / 6 / 5 / 5 下(全暴击 5 / 5 / 3 / 3 / 3)。单测 PvpDirectDamageIsScaled 期望 7 → 10。
+- **模拟验收**(3000 场,暴击 / 随机目标 / 出手序同引擎):1 级没加点单人副本 1 胜率 100%、9 回合、剩 57% 血(battle_smoke 与 features-smoke 场景);10~12 级副本 2 100% / 6~7 回合;25~28 级 3 人副本 3 100% / 6~8 回合;30 级单人副本 3 必输(预期)。脚本与数据在 scratchpad(balance_v2.py / balance_v2.json),**非真实战斗**。
+- 文档:player-attribute-allocation.md(标题 / §1 / §2.2 / §3.1 / §3.2 / §5 / §7 / §8)、turn-based-battle-server.md §5.1 / §15.1、player-pet.md §6;代码注释:player_attribute.cpp、两个 proto、attributeallocratio schema。`gen_schema_index.py` 已重生 data/AGENTS.md 索引。
+- 未导表、未编译、未测试(AGENTS §10.1),待 Codex 串行执行(与 09-13 两条待办合并成一次):
+  1. `dev.bat gen` 正式导表 + `gen_schema_index.py --check`;核对:AttributePool 只剩 1 / 4 两行、AttributeDimension 只剩 101-104 / 401-404、AttributeAutoPlan 只剩 1 / 4 / 11 / 21 / 31 / 41、Class 九行 init_speed = 240、Monster 16 行与 §8 一致。
+  2. MSBuild game.sln Debug/x64 `/m:1`(battle、scene 库与节点)。
+  3. `pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle_engine`:全过。重点看 PvpDirectDamageIsScaled(期望 10)、AllocFormulaTest(速度期望 550.11 / 660)、全部出手序与逃跑用例。`table_battle_data_provider_test` 读真表,必须在第 1 步导表之后跑。
+  4. 同批替换 battle + scene(+ db,见 09-10 遗留 ③),清在途战斗房间;在 robot 目录依次跑 `etc/attribute_smoke.yaml`(10 步)、`etc/pet_smoke.yaml`、`etc/battle_smoke.yaml`。失败保留 robot 与节点日志摘要。
+  5. 验收手测:GM 设 85 级、属性点全投敏捷的非逐风号,面板速度应 = floor(240 + 36 × 85 + 3300 × 16.67%) = floor(3300 + 550.11) = 3850(逐风 = 3300 + 660 = 3960);每点敏捷面板速度都 +1 以上。
+- **同日对抗评审修复**(5 维度查错 + 每条 3 方证伪,29 个代理):8 条发现,7 条成立,1 条驳回。已修:
+  1. `SetActorAutoRejectsMonsterDeadAndFledActors` 死亡玩家段必红:PVP 对局里 nuke 1000 乘系数后只打 300,杀不死 500 血的 B(09-13 引入 0.2 系数时就已失效,当时打 200)。B 改为 250 血。
+  2. 上面第 5 步验收速度原写 4090(职业初值 240 重复加了一次),正确为 3850(逐风 3960)。
+  3. 设计文档 §8 仍写"class_id 未下发 scene / backfill 未提交",已按 f5983bd86 更正;09-14 推算口径注明"非对应职业档是保守基准"。
+  4. player-pet.md §6 把 09-14 的速度 30 写进了 09-11 那句,已恢复 2.5 / 3;handoff-backlog P2-D2 追加 09-13/14 进展;player_attribute.h 类注释去掉"三池"。
+  评审同时核对无问题:速度 ×12 替换只改了速度参数;逃跑成功率新旧公式在用例用到的速度差上逐位一致(浮点 1 ULP 差异只出现在用例没用到的差值上);怪物数值、PVP 下数、每点可见数字独立重算与表一致;表 fk 无残留引用;robot 与规则单测无遗留符号。
+
 ## 2026-09-14 本地日志台(Grafana + Loki + Alloy)修正与复核
 
 - 09-13 接入的三语言日志台已随提交 f5983bd86 进入 main。本轮在其上修正,改动未提交。
@@ -4444,3 +4483,140 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - C++ 节点 stdout 重定向写文件有缓冲,文件末尾常停在半行,Alloy 等整行才读。停服脚本强制结束进程后半行不会补写,Loki 各少最后一条;完整内容在 bin/logs/cpp_nodes 的 muduo 文件里。已写进 runbook 排障表。
 - 启动器的坑:经 WMI 用 `cmd /c ... > 文件` 包一层启动时,预建 Kafka 主题那一步让启动器收到 ^C 退出,主题其实已建好;改为直接 pwsh 启动后正常。run/pids/gateway_node.pid 记录的是 Oracle javapath 壳进程,杀掉它后网关 JVM 仍在,需要按命令行找子进程停。
 - 验证后已停掉本次拉起的 Go、C++ 服务和网关 JVM,8081 等端口已释放。Kafka 容器此前在 22 小时前异常退出,本次重新拉起后保持运行。
+
+## 2026-09-14 防御单位 ×12 + 法力单位 ×4(补完"每分配 1 点都看得见")
+
+- 背景:同日第 ③ 条"按玩家能接受的范围调整数值"的验收口径,上一轮只做到"每点至少一项可见"(速度 ×12);体质分配每点只 +0.08 防御、灵力 +0.31 法力,要攒 12 / 4 点才涨 1。用户说"继续",本轮补完:每分配 1 点,这一维涨的**每一项**二级属性都至少 +1。
+- **表**(5 张):`Class` 九行 init_armor 10 → 120、init_mana 200 → 800;`AttributeDimension` 101 防御 5 → 60、102 法力 10 → 40、401 防御 3.75 → 45、402 法力 7.5 → 30;`Pet.init_mana` 200 / 80 / 100 / 300 → 800 / 320 / 400 / 1200;`Monster.armor` 16 行 ×12(3~35 → 36~420);`Skill` 1 号 cost_resource {id=1} 10 → 40(id=2 引擎不读,不动)。
+- **伤害公式**:`combat_damage_rules.h` 新增 `kDefenseUnitScale = 12`,等级系数 30 + 10 × 等级 → 360 + 120 × 等级;`kMonsterDefaultArmor` 2 → 24。护甲、防御、等级系数同乘 12,受伤比例是同一个分数(整数输入,逐位相同),09-14 定的怪物血量 / 力量、副本胜率、PVP 下数全部照旧。法力上限与耗蓝同乘 4,续航不变。
+- **存档**:
+  - 护甲:全仓只有建号时写一次(player_revive.h),没有运行时写入方。`PlayerAttributeSystem::Recalculate` 末尾改为每次按 `Class.init_armor` 重写,老号登录即纠正,不需要版本号。
+  - 当前法力:随存档落库、登录只夹不补、全仓没有自然回蓝,不迁移的话满蓝老号长期停在 1/4。新增 `PlayerAttributeComp.attribute_unit_version = 7`(proto)与纯规则头 `attribute_unit_migration.h`:加载时版本 < 1 就把角色本人(仅 `PlayerReviveOutcome::kUntouched`,新号 / 复活号随后顶满)和每只宝宝的当前法力饱和 ×4,再盖版本 1;调用点在 `player_database_loader.cpp`,两个 `InitializeOnLoad` 之前,迁移时打一行 INFO。登记 scene.vcxproj / filters。
+- **单测**:
+  - 新增 `attribute_unit_migration_test.cpp`(4 条,登记 turn_battle_engine_test.vcxproj / filters)。
+  - `combat_damage_rules_test`:手算点、单调性、减半点输入 ×12;`LevelFactor(1 / 85)` 40 / 880 → 480 / 10560;新增 `DefenseUnitScaleKeepsReceivedRatio`。
+  - `attribute_allocation_rules_test`:标准基础法力 1050 → 4200、防御 425 → 5100,满投期望 157.5 / 42.5 / 51 → 630 / 510 / 612;新增 `EveryAllocatedPointRaisesEachStatByAtLeastOne`(1..425 点逐点,11 个比例档)。
+  - `turn_battle_engine_test`:`DerivedDefenseReducesIncomingDamageProportionally` 减半点防御 130 → 1560;`MonsterAttributesFromTableEnableMultiRoundAndRewards` 夹具怪护甲 5 → 60(保持原减伤);注释里的 130 / 132 全部换成 1560 / 1584。
+  - **顺手修一条既有错误**:`MonsterRowWithoutStatsFallsBackToDefaults` 期望 11 回合是 09-13 改比例减伤前"攻击减护甲"口径(30 − 2 = 28)留下的;比例口径下每下 ceil(30 × 130 / 132) = 30,300 血 10 回合。期望改 10,注释同步。该用例从 f5983bd86 起应当就是红的。
+  - 其它夹具(player_revive_rule_test 的护甲 10、耗蓝用例的 30 / 100、PVP 与出手序用例的玩家护甲)是自造数据或不断言伤害值,不受影响,未改。
+- 文档:player-attribute-allocation.md §2.2 / §3.1 / §3.2 / §5 / §7 / §8,player-pet.md §6,turn-based-battle-server.md §15.1;代码注释:combat_damage_rules.h、turn_battle_constants.h、player_attribute.cpp / .h、player_attribute_comp.proto。
+- 未重生 proto、未导表、未编译、未测试(AGENTS §10.1),待 Codex 串行执行(可与上一条 09-14 待办合并为一次):
+  1. 重生 proto(新增字段 7):C++ 与 Go 产物(`cd go && build.bat`),robot vendor 如引用该消息一并更新。
+  2. `dev.bat gen` 正式导表 + `gen_schema_index.py --check`。核对:Class 九行 init_mana = 800、init_armor = 120;AttributeDimension 101 / 102 / 401 / 402 的 defense / max_mana = 60 / 40 / 45 / 30;Pet init_mana = 800 / 320 / 400 / 1200;Monster armor = 36 / 48 / 60 / 72 / 84 / 96 / 120 / 144 / 168 / 192 / 216 / 240 / 264 / 300 / 336 / 420;Skill 1 号耗蓝 40。
+  3. MSBuild game.sln Debug/x64 `/m:1`(proto、table、battle、scene 库、turn_battle_engine_test、battle / scene 节点)。
+  4. `pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle_engine`:全过。重点:`AttributeUnitMigrationTest.*`、`CombatDamageRulesTest.DefenseUnitScaleKeepsReceivedRatio`、`AllocFormulaTest.EveryAllocatedPointRaisesEachStatByAtLeastOne`、`MonsterRowWithoutStatsFallsBackToDefaults`(期望 10)、`DerivedDefenseReducesIncomingDamageProportionally`、`table_battle_data_provider_test`(读真表,须在第 2 步之后)。失败保留 gtest 输出原文。
+  5. 同批替换 battle + scene 二进制与五张表,清在途战斗房间;robot 依次跑 `etc/attribute_smoke.yaml`、`etc/pet_smoke.yaml`、`etc/battle_smoke.yaml`。
+  6. 验收手测:① 已有老号(本轮之前建的)登录,scene 日志应有一行"存档数值单位迁移到 v1",满蓝老号面板法力仍为满;第二次登录不再出现该行。② GM 设 85 级,非丹心号属性点全投体质:防御 = 60 × 85 + 510 = 5610(丹心 5712);非对应号全投灵力:法力 = 800 + 40 × 85 + 630 = 4830。③ 任意号分配 1 点体质 / 灵力,面板防御 / 法力都 +1 以上。④ 1 级没加点号打副本 1 仍约 9 回合胜(减伤比例不变)。
+
+- **同日对抗评审修复**(2 个评审代理:代码与迁移 / 单测算术与文档;均只读):
+  1. **旧单位战斗结算会覆盖迁移后的法力**(成立,中):结算里的 mana 是绝对值,离线挂起结算存 Redis 7 天、在登录迁移之后才应用。例:旧版本满蓝 200 放技能剩 190、下线 → 新版本登录迁移成 800 → 补应用挂起结算写回 190,版本号已是 1,永久停在 190/800。部署时在途、发件箱重投同理。修复:`BattleSettlementData.attribute_unit_version = 16`(proto),回合引擎 `BuildSettlement` 盖 `turnbattle::kAttributeUnitVersion`;scene `ApplySettlementToEntity` 应用角色与宝宝法力前用 `attributeunit::ManaToCurrentUnit` 换算(旧结算没有这个字段 = 0 → ×4)。版本常量挪到 `turn_battle_constants.h` 做唯一真相,迁移头引用它。单测:`AttributeUnitMigrationTest.ManaToCurrentUnitConvertsOnlyLegacyValues`、engine 结算盖戳断言、bag_test `LegacyUnitSettlementManaIsConvertedToCurrentUnit`(190 → 760)。
+  2. **scene / battle 二进制不同版本时指纹拦不住**(存疑,低成本补上):战斗表指纹只哈希六张表,单位常量编在代码里。`battle_table_fingerprint.cpp` 末尾追加一段 `attribute_unit_version`,新旧二进制混跑时指纹必然不同,按现有 warn / enforce 配置报出。副作用:本次发布后所有指纹值都会变,scene 与 battle 必须同批上线(本来就要求)。
+  3. 文档把"旧二进制配新表时 10 级常驻减伤约 7% → 48%"只算了护甲,改为含防御与抗性的约 35% → 60% 封顶(新二进制配旧表约 35% → 8.5%);`combat_damage_rules_test` 注释"85 级满投防御约 150"改为"30 级自然成长防御 150"(不影响断言)。
+  4. 已知不修、写进部署约束:新旧 scene 混跑或不回滚数据库的二进制回滚,已迁移的号会被旧二进制把法力夹回旧上限,再升级不会二次换算(停在约 1/4,需 GM 回满)。Monster.health 与 HEAD 的差异是同日前一条"怪物重定",非本次误改。
+  评审同时确认:单测期望全部按真实计算顺序复算通过(含 1..425 逐点、`EXPECT_DOUBLE_EQ` 逐位相等、fallback 怪 10 回合);唯一加载入口是 `PlayerDatabaseMessageFieldsUnmarshal`(首登 / 重连 / 跨 zone 落地都走它),回档按整块恢复;Buff / Item 表与实时 buff 没有法力或护甲定值;客户端只显示服务端下发值。
+- **待 Codex 清单修订**(替换上面第 1、3、4 步,其余不变):
+  1. 重生 proto(两个新字段:`PlayerAttributeComp.attribute_unit_version = 7`、`BattleSettlementData.attribute_unit_version = 16`):`pwsh tools/scripts/dev_tools.ps1 -Command proto-gen-run`(注意 proto-gen.exe 陈旧二进制问题,见 PROGRESS 2804-2816 行附近);**C++ 的 .pb.h 必须重生,只跑 `cd go && build.bat` 不够**。核对 `cpp/generated/proto/common/component/player_attribute_comp.pb.h` 与 `battle_data.pb.h` 里能搜到 `attribute_unit_version`。
+  3. MSBuild game.sln Debug/x64 `/m:1`(proto、table、battle、scene 库、turn_battle_engine_test、bag_test、battle / scene 节点)。
+  4. `pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle_engine` 与 bag_test(含 `PlayerBattleSettlementTest.*`):全过。
+  部署约束:scene 与 battle 全部节点、五张表同一批替换;不支持不回滚数据库的二进制回滚;发布前清在途战斗房间。挂起结算不需要清(已按版本换算)。
+
+## 2026-09-14 帮会接入客户端:按 zone 隔离(Claude,未编译)
+
+- 用户要求:客户端帮会界面已拼好,实现帮会;按 zone id 区分,不做全服帮会。决策与改动集见 [docs/design/guild-zone-client-access.md](docs/design/guild-zone-client-access.md)。
+- 形态:guild 仍全局一份(D-2),客户端经 gate → client_rpc_router 到达(只承诺路由服模式)。客户端来源请求身份取会话、zone 取 data_service 归属映射;别区帮会查不到、加不进,榜单只看本区;帮名仍全局唯一;`UpdateGuildScore` 由 `go/guild/internal/session` 方法白名单对客户端拒绝(D-9)。无会话的内部调用行为不变。
+- 协议 / 表:`guild.proto` 标 `OptionIsClientProtocolService`;Tip.xlsx guild 段加 `GuildNameInvalid` / `GuildNameTaken` / `GuildAnnouncementTooLong` / `GuildHomeZoneUnknown`;MessageLimiter 加 9 个公会消息号。
+- 其它:公告服务端 ≤600 字节(gate 单包 1KB,原客户端 500 字会被 gate 丢弃)、客户端改 200 字;guild.yaml 删 go-zero `Etcd.Key`(D-13)、Prometheus 9170 → 9220(与 match 撞号);`go_services.ps1` / `start_game.ps1` 登记 guild;robot 新增 `guild-smoke`(`etc/guild_smoke.yaml`,robot_9201–9203)。客户端(`mmorpg-client`)同步 `GuildClient.cs` / `GuildWindow.cs` / 用例 / `Docs/GuildUI.md`。
+- 本批写作时 chat v1 的并行会话同时在改 `go_services.ps1` / `start_game.ps1` / `robot/config` / `robot/main.go`,本批只做了精确插入,未动对方内容。
+- 未导表、未重生 proto、未编译、未测试(AGENTS §10.1)。待 Codex 按设计文档 §6 顺序执行:导表 → proto-gen-run(核对 `IsClientMessageId` 与 `route_table.go`,恢复 Agones 块)→ `go/guild` build + test(集成用例的 `GUILD_TEST_MYSQL_DSN` 必须指向一次性测试库,且连跑 `rank_zone_integration_test.go` 与 `merge_fence_test.go`)→ robot `go mod vendor` + build → MSBuild `/m:1` proto → rpc → gate → 客户端 `gen_proto.ps1` + 编译体检 + Guild EditMode → 路由服模式起服跑 `robot.exe -c etc/guild_smoke.yaml` 期望 `GUILD_SMOKE_OK`。
+- 上线前:存量角色若没有归属映射会被 `kGuildHomeZoneUnknown` 拒绝,先按 zone 跑 `tools/merge_zone -backfill-home-zone -zone N`。
+
+## 2026-09-14 微服务接入 zone 契约 + go/shared/noderegistry + go/chat v1 + chat-smoke(未编译,待 Codex 验证)
+
+- **背景**:Go 业务微服务(friend / guild / chat / team / mail …)接入 zone 体系一直没有统一口径。本批做了两件事:
+  - 契约 v1:3 名架构师起草、3 名反驳者挑战、3 名裁判收敛。正式文档见 [docs/design/microservice-zone-contract-20260914.md](docs/design/microservice-zone-contract-20260914.md)。
+  - 落地首个消费者 chat。
+- **契约要点**:
+  - 业务服务一律全局一份、多副本;客户端经 gate → client_rpc_router 到达;服务看不到发起 zone。
+  - 注册发现收口到新包 `go/shared/noderegistry`,key 形状与 C++ 逐字一致。
+  - 失租后先重夺原 id;抢不回时 chat 换 id 继续,login 类服务退出(D-11)。
+  - 客户端入口只承诺路由服模式,翻转在部署层,C++ 默认值不改(D-12)。
+  - 全局服务 yaml 的 go-zero `Etcd.Key` 显式留空,不能省略这一行(D-13)。
+  - 三条决策已追加到 `docs/design/xuanming-port-decisions-20260910.md` 末尾。
+- **做了什么**:
+  - `go/shared/noderegistry`:
+    - 唯一注册实现:CAS 分配、双 key 同 Txn 写入;
+    - `safego` keepalive + 两档失租策略;
+    - `RegisterAfterListening` 先探端口再注册;
+    - `Close` 等 keepalive 退出后,条件删除双 key 再 Revoke;
+    - 单测与 `integration` 标签的集成测试。
+  - `go/chat` v1(proto 不改):
+    - 只开 WORLD / PRIVATE;TEAM / SYSTEM 回 kFeatureUnavailable。
+    - 历史存 ChatRedis 的 LIST(200 条 / 7 天)。
+    - 两态幂等键 pending / done;限速 5 次 / 秒;按字节限长 512。
+    - 拦截器链:grpcstats → killswitch → session → serverbase,有守链测试。
+    - 错误码只引用 common 段生成常量;指标端口 :9210;零 MySQL、零推送。
+  - 部署:
+    - `go_services.ps1` / `go_svc_image.ps1` / `k8s_deploy.ps1` / `start_game.ps1` 登记 chat;新建 `deploy/k8s/manifests/go-svc/chat.yaml`。
+    - 路由服 K8s 链补了镜像目录、GoSvcCatalogue、ConfigMap case、C++ `service_discovery_prefixes`。
+    - 本地 `start_game.ps1 -GateRouterMode` 默认 `'1'`;K8s `k8s_deploy.ps1 -GateRouterMode` 默认 `"0"`。
+  - robot:新增 `mode: chat-smoke`。A、B 分登两个 zone,依次验证 WORLD 可见且 sender 被覆盖、私聊可见、600 字节被 chat 拒、同 request_id 重发只存一条;输出 `CHAT_SMOKE_OK` / `CHAT_SMOKE_FAIL step= reason=`。
+- **文件清单**:
+  - 新建:
+    - `go/shared/noderegistry/{registry.go, registry_test.go, registry_integration_test.go}`
+    - `go/chat/{go.mod, go.sum, chat.go, chat_test.go, etc/chat.yaml}`
+    - `go/chat/internal/{config/config.go, constants/constants.go, session/session.go, svc/servicecontext.go, server/chatserver.go, logic/chat_logic.go, logic/chat_logic_test.go}`
+    - `deploy/k8s/manifests/go-svc/chat.yaml`
+    - `robot/etc/chat_smoke.yaml`、`robot/chat_smoke_scenario.go`
+    - `docs/design/microservice-zone-contract-20260914.md`
+  - 修改:
+    - `go/shared/go.mod`(google/uuid 挪进直接 require)
+    - `tools/scripts/{go_services.ps1, go_svc_image.ps1, k8s_deploy.ps1, start_game.ps1}`
+    - `robot/{config/config.go, main.go}`、`robot/logic/handler/{client_player_chat_send_chat.go, client_player_chat_pull_chat_history.go}`
+    - `docs/design/xuanming-port-decisions-20260910.md`(只追加 D-11 / D-12 / D-13)
+    - `PROGRESS.md`(本条)
+- **验证状态**:**未编译、未运行**(AGENTS.md §10.1)。没跑过 gofmt / go build / go vet / go test / robot / 起服,任何行为都以 Codex 的运行结果为准。
+- **Codex 清单**:按设计文档 §12 顺序执行:
+  1. noderegistry 的 gofmt + vet + 单测;
+  2. noderegistry 集成测试(需 etcd,不能 SKIP);
+  3. `go/chat` 的 `go mod tidy` + vet + test,并回归 client_rpc_router / match 的 build;
+  4. `go_services.ps1 -Command build -Services chat`;
+  5. robot `go build -mod=vendor`;
+  6. 父 shell 设 `$env:GATE_CLIENT_RPC_ROUTER='1'` 后 `dev-start-zones -Zones 1,2`,zone_config 插 zone 2 行;核对 gate 日志「出口模式=router」、etcd 有 `ChatNodeService.rpc/zone/...` 且没有 `chat.rpc` 键;
+  7. `robot.exe -c etc/chat_smoke.yaml` 连续两次 `CHAT_SMOKE_OK`;
+  8. 按端口杀一个 chat 实例,等 ≥70s 再跑仍 OK;
+  9. 失败保留 `run/logs/go_services/chat*.log`、路由服与 gate 日志、robot 日志。
+- **已知缺口**:
+  1. 路由服 K8s manifest 不在仓库里(草稿在会话 scratchpad,需另行指派落地)。`infra-up` 暂时整条跳过路由服,K8s 上 chat 部署得起但玩家不可达。
+  2. 路由服在 K8s 上会把 ListenOn 的 `0.0.0.0` 写进 NodeInfo(`go/client_rpc_router/client_rpc_router_service.go:69-70`),需改成优先 POD_IP。
+  3. MessageLimiter 表里没有 28 / 61,gate 默认 3 次 / 窗口比 chat 更严。
+  4. ChatRedis 与 match 共用 `redis-match-cluster`(volatile-lru),数据成为唯一权威前必须换独立的 noeviction 实例。
+  5. Windows 上 chat 没有优雅停机,在途请求可能被截断。
+  6. `start_game.ps1` 现在缺 chat.exe 会在第 1 步拒启。
+  7. 本地 `client_rpc_router.yaml` 仍写 `Key: client_rpc_router.rpc`,K8s 已留空。
+  8. `tools/scripts/README.md` 与 `deploy/k8s` 的服务清单文档未同步。
+  9. 实现比契约更严的几处(注册器校验、条件删除、两态幂等、request_id ≤64 字节、robot 自带登录),见设计文档 §14.2,待架构确认。
+
+## 2026-09-14 聚宝斋(人民币寄售交易)设计落档(Claude,未落码)
+
+- 用户要求:客户端聚宝斋界面已拼好,实现聚宝斋;按 zone id 区分、可能全服;卖号、卖装备、卖游戏币。用户拍板:**结算 = 人民币**;**首批 = 游戏币 + 装备道具 + 宠物 + 角色**。
+- 设计文档:[docs/design/jubaozhai-market.md](docs/design/jubaozhai-market.md)。要点:全局 Go 服务 `trade`(复用 `TradeNodeService=12`,不改 C++ 枚举)+ `SceneNodeGrpc` 新增 `TradeDebit / TradeAbortDebit / TradeCredit` + login 角色锁定与过户;`market_zone` = 卖家 home_zone(服务端查),`Market.Scope: zone|global` 配置切换;资产幂等账本(DEBIT / CREDIT 两条 seq 流 + 水位位图)与 D1 合并为一个组件;支付走 Provider 接口,本地 mock 渠道。
+- 三路只读核查纠正/新发现(证据见设计 §2):背包**已**持久化(`xuanming-port-feasibility` §8.1 "零调用点"过时);按 guid 全或无扣物、宠物移出、D1/D1b 幂等发放**均未落码**;账号角色列表**只在 Redis(TTL 12h)**无 MySQL 写入;无登录冻结闸;**GM 客户端消息(GmAddCurrency 等)无鉴权**——后两者是真钱交易上线闸(设计 §12)。
+- 端口:trade gRPC 50800、metrics 9230(9220 已被同日 guild 改动占用)。tip 段提议 `//trade_error base=20000 width=1000`。
+- 待产品确认:公示/寄售时长、手续费与冷静期、角色交易是否强制离帮/清好友、可交易币种、「货架」语义与上架界面缺稿(设计 §1 J-O1~O5)。
+- 分期(设计 §13):P0-a GM 鉴权 / P0-b 账号持久化 → P1 服务骨架 + 浏览接线 → P2 C++ 资产原语 → P3 币/物/宠端到端 → P4 角色 → P5 真实支付与合规 → P6 拍卖/联系卖家。粗估 P1 10–12、P2+P3 35–45、P4 8–10 人日。
+- 本条只落文档,未改代码、未编译。按 AGENTS §10.2(预计 30+ 文件)等待用户授权再开 P1。
+
+## 2026-09-14(续)chat 批次复核收尾:路由服 K8s 链补齐 + 启动器不再因缺 chat.exe 拒启(Claude,未编译)
+
+- 复核:本批文件逐个复读,并对照本机模块缓存里 go-zero v1.10.0 源码核对 redis(`SetnxExCtx` / `EvalCtx` / `LrangeCtx` / `GetCtx` / `DelCtx`)、conf(`MustLoad` 末尾调 `Validate`)、zrpc(`HasEtcd` 需 Hosts 与 Key 都非空)、`netx.InternalIp` 的签名与行为;shared 的 `safego.Run`、`killswitch.SetRules`、serverbase 符号与 robot 辅助函数均存在。评审智能体修掉的阻塞项(K8s ConfigMap 缺 `Etcd.Key` → CrashLoop)与主要项(ConfigMap 漏 `IgnoreContentMethods`)已确认在盘上。
+- 新改:
+  - `go/client_rpc_router/client_rpc_router_service.go`:注册 NodeInfo 时经 `advertisedHost` 优先 `POD_IP`,不再把 ListenOn 的 `0.0.0.0` 原样写进 etcd;本地 `127.0.0.1:50600` 行为不变。
+  - `deploy/k8s/manifests/go-svc/client-rpc-router.yaml`:新建(replicas 2 + 反亲和 + 同文件 PDB,50600 / 9200,Downward API 注入 `POD_IP`)。
+  - `tools/scripts/start_game.ps1`:chat 列为可选服务,缺 chat.exe 时告警并跳过,不再拒绝整个一键启动(本机目前没有 chat.exe,Go 工具链也不在本机)。guild 由 guild 批次决定,缺 guild.exe 仍会拒启。
+  - 注释 / 文档同步:`k8s_deploy.ps1`、`deploy/k8s/manifests/go-svc/chat.yaml`、`go/chat/internal/svc/servicecontext.go`、`docs/design/microservice-zone-contract-20260914.md` §11 / §12 / §14。
+- K8s `-GateRouterMode` 默认仍为 `"0"`:路由服链登记齐了,但一次都没在 K8s 上以路由模式跑过。
+- Codex 追加验证(在设计文档 §12 清单之外):
+  1. `cd go/client_rpc_router && go vet ./... && go test ./...`,通过后 `pwsh -File tools/scripts/go_services.ps1 -Command build -Services client_rpc_router` 重编 exe。
+  2. `pwsh -NoProfile -File tools/scripts/start_game.ps1 -CheckOnly`:没有 chat.exe 时应打出“缺少 chat.exe,本次跳过 chat”告警且不抛错(若 guild.exe 也缺,会在 guild 上抛错,那是 guild 批次的既定行为)。
+  3. `k8s_deploy.ps1 -Command infra-up -DryRun ...`(参数同设计文档 §12 ⑩)的输出应含 client-rpc-router 的 Deployment(带 `POD_IP`)与 PDB,不再出现 `skipping client-rpc-router`。
+- 验证状态:未编译、未运行。

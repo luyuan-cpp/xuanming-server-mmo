@@ -42,6 +42,13 @@ type Config struct {
 	// 缺省(cross_zone=false)跑原 PVE + 观战流程。
 	BattleSmoke BattleSmokeConfig `yaml:"battle_smoke"`
 
+	// ChatSmoke 是 "chat-smoke" 模式的子开关(见 ChatSmokeConfig / chat_smoke_scenario.go)。
+	// 缺省(cross_zone=false)两个机器人都登 zone_id,做同 zone 弱验收。
+	ChatSmoke ChatSmokeConfig `yaml:"chat_smoke"`
+
+	// GuildSmoke 是 "guild-smoke" 模式的子开关(见 GuildSmokeConfig / guild_smoke_scenario.go)。
+	GuildSmoke GuildSmokeConfig `yaml:"guild_smoke"`
+
 	// CurrencyCrash configures the "currency-crash-snapshot" mode used by
 	// docs/notes/currency-crash-window-verification.md. Driven by an external
 	// PowerShell script that runs the robot twice per case (pre/post kill) so
@@ -157,6 +164,49 @@ type BattleSmokeConfig struct {
 	FeaturesSmoke FeaturesSmokeConfig `yaml:"features_smoke"`
 }
 
+// ChatSmokeConfig 配置 "chat-smoke" 模式(zone_contract_v1 §9 冒烟段)。
+//
+// cross_zone=true 时:机器人 A 登 zone_a、B 登 zone_b,并断言两人的 gate 地址不同 ——
+// chat 是全局服务,只有真落在两个 zone 的 gate 上,"B 看到 A 的消息"才证明跨 zone 可达。
+// cross_zone=false 时 zone_a / zone_b 无效,两人都登顶层 zone_id(同 zone 弱验收)。
+type ChatSmokeConfig struct {
+	CrossZone bool `yaml:"cross_zone"`
+
+	// ZoneA / ZoneB 是两个机器人各自登录的 zone;cross_zone=true 时必须非 0 且不同
+	// (0 会被 server-list 自动选区顶掉,两人可能落进同一 zone)。
+	ZoneA uint32 `yaml:"zone_a"`
+	ZoneB uint32 `yaml:"zone_b"`
+}
+
+// GuildSmokeConfig 配置 "guild-smoke" 模式(docs/design/guild-zone-client-access.md §6)。
+//
+// 机器人 A(帮主)与 B(成员)登 zone_a;cross_zone=true 时 C 登 zone_b,
+// 断言别区的帮会对 C 表现为不存在、加不进去、本区榜上没有。
+type GuildSmokeConfig struct {
+	CrossZone bool `yaml:"cross_zone"`
+
+	// ZoneA 必须非 0:冒烟要断言新建帮会的 zone_id 等于 A 的归属区,0 会被 server-list 自动选区顶掉。
+	ZoneA uint32 `yaml:"zone_a"`
+	// ZoneB 仅 cross_zone=true 时使用,必须非 0 且与 ZoneA 不同。
+	ZoneB uint32 `yaml:"zone_b"`
+}
+
+func (c *GuildSmokeConfig) validate() error {
+	if c.ZoneA == 0 {
+		return fmt.Errorf("zone_a must be set (non-zero)")
+	}
+	if !c.CrossZone {
+		return nil
+	}
+	if c.ZoneB == 0 {
+		return fmt.Errorf("zone_b must be set (non-zero) when cross_zone is true")
+	}
+	if c.ZoneA == c.ZoneB {
+		return fmt.Errorf("zone_a and zone_b must differ when cross_zone is true (got %d)", c.ZoneA)
+	}
+	return nil
+}
+
 type LLMConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Endpoint string `yaml:"endpoint"` // e.g. "http://localhost:11434/v1/chat/completions"
@@ -217,10 +267,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke":
+	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, or pet-smoke)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, or guild-smoke)", c.Mode)
 	}
 	if c.AuthType == "satoken" && c.SaTokenAddr == "" {
 		return fmt.Errorf("satoken_addr must be set when auth_type is satoken")
@@ -229,6 +279,28 @@ func (c *Config) validate() error {
 		if err := c.BattleSmoke.validate(); err != nil {
 			return fmt.Errorf("battle_smoke: %w", err)
 		}
+	}
+	if c.Mode == "chat-smoke" && c.ChatSmoke.CrossZone {
+		if err := c.ChatSmoke.validate(); err != nil {
+			return fmt.Errorf("chat_smoke: %w", err)
+		}
+	}
+	if c.Mode == "guild-smoke" {
+		if err := c.GuildSmoke.validate(); err != nil {
+			return fmt.Errorf("guild_smoke: %w", err)
+		}
+	}
+	return nil
+}
+
+// validate 只在 cross_zone=true 时被调用:两个 zone 必须显式给出且不同,
+// 否则冒烟结论(chat 跨 zone 可达)不成立。
+func (c *ChatSmokeConfig) validate() error {
+	if c.ZoneA == 0 || c.ZoneB == 0 {
+		return fmt.Errorf("zone_a and zone_b must be set (non-zero) when cross_zone is true")
+	}
+	if c.ZoneA == c.ZoneB {
+		return fmt.Errorf("zone_a and zone_b must differ when cross_zone is true (got %d)", c.ZoneA)
 	}
 	return nil
 }

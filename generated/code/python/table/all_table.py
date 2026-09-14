@@ -25,7 +25,7 @@ sys.path 说明
 为什么加载是「先全读、后全换」
 ==============================
 每个管理器把「读盘建索引」（``build_snapshot``）和「换上去」（``apply_snapshot``）
-拆成了两步。这里先把 28 张表全部读完，一张都没换；
+拆成了两步。这里先把 29 张表全部读完，一张都没换；
 中途任何一张读失败，异常直接抛出去，**一张表都不会被换掉** ——
 进程继续跑在上一批完整的配置上，而不是半新半旧。
 """
@@ -40,6 +40,7 @@ from typing import Any, Protocol
 from .activityschedule_table import ActivityScheduleTableManager
 from .actoractioncombatstate_table import ActorActionCombatStateTableManager
 from .actoractionstate_table import ActorActionStateTableManager
+from .attributeallocratio_table import AttributeAllocRatioTableManager
 from .attributeautoplan_table import AttributeAutoPlanTableManager
 from .attributedimension_table import AttributeDimensionTableManager
 from .attributepool_table import AttributePoolTableManager
@@ -80,6 +81,7 @@ MANAGERS: dict[str, TableManager] = {
     "ActivitySchedule": ActivityScheduleTableManager.instance(),
     "ActorActionCombatState": ActorActionCombatStateTableManager.instance(),
     "ActorActionState": ActorActionStateTableManager.instance(),
+    "AttributeAllocRatio": AttributeAllocRatioTableManager.instance(),
     "AttributeAutoPlan": AttributeAutoPlanTableManager.instance(),
     "AttributeDimension": AttributeDimensionTableManager.instance(),
     "AttributePool": AttributePoolTableManager.instance(),
@@ -124,7 +126,7 @@ def _apply(staged: list[tuple[TableManager, Any]]) -> None:
 
 
 def load_tables(config_dir: str | Path, use_binary: bool = False) -> None:
-    """串行加载全部 28 张表。
+    """串行加载全部 29 张表。
 
     :param use_binary: True 读 ``*.pb``（proto 二进制），False 读 ``*.json``。
         口径与 Go/Java 的 ``useBinary`` 一致。

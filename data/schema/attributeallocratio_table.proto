@@ -10,7 +10,7 @@ syntax = "proto3";
 // 每个维度两行:class_id=0 是非对应职业的兜底比例;class_id=N 是对应职业的加成比例。
 // 查找顺序与 AttributeAutoPlan 相同:先找玩家职业的行,没有再退到 class_id=0。
 // 职业 id 与客户端 RoleFlowUi 一致:1 破军(物攻)/ 2 玄霄(法术)/ 3 丹心(治疗)/ 4 逐风(先手)。
-// 只覆盖角色属性点池(101-104);相性 / 仙魔 / 宝宝池仍走 AttributeDimension 的每点固定加值。
+// 只覆盖角色属性点池(101-104);宝宝池(401-404)仍走 AttributeDimension 的每点固定加值。
 
 package mmorpg.cfgtable.v1;
 

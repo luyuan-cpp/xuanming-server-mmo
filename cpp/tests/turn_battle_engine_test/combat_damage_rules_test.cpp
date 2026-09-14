@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <limits>
+#include <utility>
 
 #include "services/battle/system/combat_damage_rules.h"
 #include "services/scene/player/system/player_level_rules.h"
@@ -22,26 +24,26 @@ using combatdamage::LevelFactor;
 using combatdamage::ReceivedRatio;
 using combatdamage::SelectAttack;
 
-// 手算一个中间点:力量 20、攻击 100、护甲 10 + 防御 40、抗性 5%、目标 10 级
-//   原始伤害 = 10 × (1 + 20 × 0.1) + 100 = 130;等级系数 = 30 + 10 × 10 = 130
-//   受伤比例 = 130 ÷ (50 + 130) × 0.95
+// 手算一个中间点:力量 20、攻击 100、护甲 120 + 防御 480、抗性 5%、目标 10 级(防御单位 ×12)
+//   原始伤害 = 10 × (1 + 20 × 0.1) + 100 = 130;等级系数 = 360 + 120 × 10 = 1560
+//   受伤比例 = 1560 ÷ (600 + 1560) × 0.95 = 130 ÷ 180 × 0.95(同一个分数,逐位相同)
 TEST(CombatDamageRulesTest, FormulaAtHandComputedPoint) {
     const double expectedRatio = 130.0 / 180.0 * 0.95;
-    EXPECT_DOUBLE_EQ(ReceivedRatio(10, 40, 5, 10), expectedRatio);
-    EXPECT_DOUBLE_EQ(DamageBeforeCritical(10.0, 20, 100, 1.0, 10, 40, 5, 10), 130.0 * expectedRatio);
+    EXPECT_DOUBLE_EQ(ReceivedRatio(120, 480, 5, 10), expectedRatio);
+    EXPECT_DOUBLE_EQ(DamageBeforeCritical(10.0, 20, 100, 1.0, 120, 480, 5, 10), 130.0 * expectedRatio);
 }
 
 // 防御越高受伤越少;但护甲 / 防御 / 抗性堆多高,常驻减伤都不超过 60%(减法口径下会直接归零)
 TEST(CombatDamageRulesTest, ReductionIsMonotonicAndCappedAtSixtyPercent) {
     double previous = 1.0;
-    for (const uint64_t defense : {0ull, 50ull, 130ull, 1000ull, 100000ull}) {
+    for (const uint64_t defense : {0ull, 600ull, 1560ull, 12000ull, 1200000ull}) {
         const double ratio = ReceivedRatio(0, defense, 0, 10);
         EXPECT_LE(ratio, previous) << "defense=" << defense;
         EXPECT_GE(ratio, 1.0 - kMaxPassiveReduction) << "defense=" << defense;
         previous = ratio;
     }
     EXPECT_DOUBLE_EQ(ReceivedRatio(0, 0, 0, 10), 1.0);
-    EXPECT_DOUBLE_EQ(ReceivedRatio(0, 130, 0, 10), 0.5);                          // 防御 = 等级系数时减半
+    EXPECT_DOUBLE_EQ(ReceivedRatio(0, 1560, 0, 10), 0.5);                         // 防御 = 等级系数时减半
     EXPECT_DOUBLE_EQ(ReceivedRatio(0, 0, 100, 10), 1.0 - kMaxPassiveReduction);  // 满抗性也只减六成
     EXPECT_DOUBLE_EQ(ReceivedRatio(0, 0, 250, 10), 1.0 - kMaxPassiveReduction);  // 抗性超过 100% 按 100% 算
 }
@@ -54,9 +56,9 @@ TEST(CombatDamageRulesTest, HugeDefenseDoesNotOverflow) {
 
 // 目标等级夹到 1..85:0 级按 1 级,超上限按上限
 TEST(CombatDamageRulesTest, TargetLevelIsClamped) {
-    EXPECT_DOUBLE_EQ(LevelFactor(1), 40.0);
+    EXPECT_DOUBLE_EQ(LevelFactor(1), 480.0);
     EXPECT_DOUBLE_EQ(LevelFactor(0), LevelFactor(1));
-    EXPECT_DOUBLE_EQ(LevelFactor(85), 880.0);
+    EXPECT_DOUBLE_EQ(LevelFactor(85), 10560.0);
     EXPECT_DOUBLE_EQ(LevelFactor(200), LevelFactor(85));
 }
 
@@ -101,3 +103,21 @@ TEST(CombatDamageRulesTest, DamageToHealthRoundsUpAndSaturates) {
         EXPECT_EQ(DamageToHealth(bad, 100), 0u) << "raw=" << bad;
     }
 }
+
+// 防御单位 ×12(2026-09-14):护甲、防御、等级系数同乘 12 时,受伤比例与改前完全一致(输入都是整数,是同一个分数)
+TEST(CombatDamageRulesTest, DefenseUnitScaleKeepsReceivedRatio) {
+    EXPECT_DOUBLE_EQ(combatdamage::kDefenseUnitScale, 12.0);
+    // 旧单位下的(护甲, 防御):玩家职业护甲 10 + 防御 40、兜底怪护甲 2、高护甲 100、30 级自然成长防御 150
+    const std::pair<uint64_t, uint64_t> kOldUnitCases[] = {{10, 40}, {2, 0}, {100, 0}, {10, 150}};
+    for (const uint32_t level : {1u, 10u, 85u}) {
+        const double oldFactor = 30.0 + 10.0 * static_cast<double>(level);
+        for (const auto& [armor, defense] : kOldUnitCases) {
+            const double oldRatio =
+                oldFactor / (static_cast<double>(armor) + static_cast<double>(defense) + oldFactor);
+            EXPECT_DOUBLE_EQ(ReceivedRatio(armor * 12, defense * 12, 0, level),
+                             std::max(1.0 - kMaxPassiveReduction, oldRatio))
+                << "level=" << level << " armor=" << armor << " defense=" << defense;
+        }
+    }
+}
+

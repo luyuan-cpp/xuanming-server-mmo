@@ -43,6 +43,7 @@
     <ClInclude Include="player\system\pet_rules.h" />
     <ClInclude Include="player\system\player_pet.h" />
     <ClInclude Include="player\system\attribute_allocation_rules.h" />
+    <ClInclude Include="player\system\attribute_unit_migration.h" />
     <ClInclude Include="player\system\player_level_rules.h" />
     <ClInclude Include="player\system\player_tip.h" />
     <ClInclude Include="player\system\stress_test_probe.h" />

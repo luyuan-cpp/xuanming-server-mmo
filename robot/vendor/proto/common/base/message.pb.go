@@ -145,11 +145,23 @@ func (x *MessageContent) GetErrorMessage() *TipInfoMessage {
 
 // Node message header
 type NodeMessageHeader struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	NodeId        uint32                 `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`          // Node ID
-	SessionId     uint32                 `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // Session ID
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	NodeId    uint32                 `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`          // Node ID
+	SessionId uint32                 `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"` // Session ID
+	// 目标玩家身份栅栏(routing-identity-audit-20260908.md R13/R14)。
+	//
+	// 为什么 session_id 不够:session_id 的高位嵌的是 gate 的 routing node_id,
+	// 而 node_id 是**立刻复用**的 —— gate G(node_id=3)重启后 G' 仍拿 3 号,
+	// scene 用旧 session_id 反查会命中 G',把 A 玩家的推送写进 G' 上另一个玩家的
+	// socket。低位的 17 位序号在**单个 gate 实例内**累计 131071 条连接后还会回绕,
+	// 所以只带 gate 实例 uuid 的代次栅栏挡不住"同一代次内 session 复用"(R14)。
+	// player_id 两种情况都挡得住,故这里带的是玩家而不是 gate 代次。
+	//
+	// 兼容位:0 = 发送方尚未升级(灰度窗口),收方**放行**并只在首次记一条 INFO
+	// 供迁移观测。灰度一个版本之后本字段变为必填,收方对 0 直接丢弃。
+	TargetPlayerId uint64 `protobuf:"varint,3,opt,name=target_player_id,json=targetPlayerId,proto3" json:"target_player_id,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *NodeMessageHeader) Reset() {
@@ -192,6 +204,13 @@ func (x *NodeMessageHeader) GetNodeId() uint32 {
 func (x *NodeMessageHeader) GetSessionId() uint32 {
 	if x != nil {
 		return x.SessionId
+	}
+	return 0
+}
+
+func (x *NodeMessageHeader) GetTargetPlayerId() uint64 {
+	if x != nil {
+		return x.TargetPlayerId
 	}
 	return 0
 }
@@ -1743,11 +1762,12 @@ const file_proto_common_base_message_proto_rawDesc = "" +
 	"\n" +
 	"message_id\x18\x02 \x01(\rR\tmessageId\x12\x0e\n" +
 	"\x02id\x18\x03 \x01(\x04R\x02id\x124\n" +
-	"\rerror_message\x18\x04 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"K\n" +
+	"\rerror_message\x18\x04 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\"u\n" +
 	"\x11NodeMessageHeader\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\rR\x06nodeId\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\x02 \x01(\rR\tsessionId\"\x7f\n" +
+	"session_id\x18\x02 \x01(\rR\tsessionId\x12(\n" +
+	"\x10target_player_id\x18\x03 \x01(\x04R\x0etargetPlayerId\"\x7f\n" +
 	"\x17NodeRouteMessageRequest\x128\n" +
 	"\x0fmessage_content\x18\x01 \x01(\v2\x0f.MessageContentR\x0emessageContent\x12*\n" +
 	"\x06header\x18\x02 \x01(\v2\x12.NodeMessageHeaderR\x06header\"\x80\x01\n" +

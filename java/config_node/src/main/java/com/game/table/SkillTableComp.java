@@ -119,6 +119,18 @@ public final class SkillTableComp {
         }
     }
 
+    public record Damage_type(int value) {
+        public static Damage_type from(SkillTable row) {
+            return new Damage_type(row.getDamageType());
+        }
+    }
+
+    public record Attack_multiplier(double value) {
+        public static Attack_multiplier from(SkillTable row) {
+            return new Attack_multiplier(row.getAttackMultiplier());
+        }
+    }
+
     public record Skill_type(List<Integer> values) {
         public static Skill_type from(SkillTable row) {
             return new Skill_type(row.getSkillTypeList());

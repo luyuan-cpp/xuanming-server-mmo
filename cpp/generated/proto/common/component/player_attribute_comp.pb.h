@@ -643,6 +643,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAttributeComp final : public 
     kActiveSchemeIdFieldNumber = 2,
     kNextSchemeIdFieldNumber = 3,
     kLastSwitchTimeFieldNumber = 4,
+    kAttributeUnitVersionFieldNumber = 7,
     kBonusPointsFieldNumber = 5,
     kBonusValuesFieldNumber = 6,
   };
@@ -697,6 +698,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAttributeComp final : public 
   void _internal_set_last_switch_time(::uint64_t value);
 
   public:
+  // uint32 attribute_unit_version = 7;
+  void clear_attribute_unit_version() ;
+  [[nodiscard]] ::uint32_t attribute_unit_version() const;
+  void set_attribute_unit_version(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_attribute_unit_version() const;
+  void _internal_set_attribute_unit_version(::uint32_t value);
+
+  public:
   // map<uint32, uint32> bonus_points = 5;
   [[nodiscard]] int bonus_points_size()
       const;
@@ -733,7 +744,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAttributeComp final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 6,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           3, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -766,6 +777,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerAttributeComp final : public 
     ::uint32_t active_scheme_id_;
     ::uint32_t next_scheme_id_;
     ::uint64_t last_switch_time_;
+    ::uint32_t attribute_unit_version_;
     ::google::protobuf::internal::MapField<PlayerAttributeComp_BonusPointsEntry_DoNotUse, ::uint32_t, ::uint32_t> bonus_points_;
     ::google::protobuf::internal::MapField<PlayerAttributeComp_BonusValuesEntry_DoNotUse, ::uint32_t, ::uint32_t> bonus_values_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -1056,7 +1068,7 @@ inline int PlayerAttributeComp::bonus_points_size() const {
 inline void PlayerAttributeComp::clear_bonus_points() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bonus_points_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PlayerAttributeComp::_internal_bonus_points() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1072,7 +1084,7 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerA
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerAttributeComp::mutable_bonus_points()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_mutable_map:PlayerAttributeComp.bonus_points)
   return _internal_mutable_bonus_points();
 }
@@ -1087,7 +1099,7 @@ inline int PlayerAttributeComp::bonus_values_size() const {
 inline void PlayerAttributeComp::clear_bonus_values() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.bonus_values_.Clear();
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline const ::google::protobuf::Map<::uint32_t, ::uint32_t>& PlayerAttributeComp::_internal_bonus_values() const {
   ::google::protobuf::internal::TSanRead(&_impl_);
@@ -1103,9 +1115,33 @@ inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerA
 }
 inline ::google::protobuf::Map<::uint32_t, ::uint32_t>* PROTOBUF_NONNULL PlayerAttributeComp::mutable_bonus_values()
     ABSL_ATTRIBUTE_LIFETIME_BOUND {
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_mutable_map:PlayerAttributeComp.bonus_values)
   return _internal_mutable_bonus_values();
+}
+
+// uint32 attribute_unit_version = 7;
+inline void PlayerAttributeComp::clear_attribute_unit_version() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_unit_version_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t PlayerAttributeComp::attribute_unit_version() const {
+  // @@protoc_insertion_point(field_get:PlayerAttributeComp.attribute_unit_version)
+  return _internal_attribute_unit_version();
+}
+inline void PlayerAttributeComp::set_attribute_unit_version(::uint32_t value) {
+  _internal_set_attribute_unit_version(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:PlayerAttributeComp.attribute_unit_version)
+}
+inline ::uint32_t PlayerAttributeComp::_internal_attribute_unit_version() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attribute_unit_version_;
+}
+inline void PlayerAttributeComp::_internal_set_attribute_unit_version(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attribute_unit_version_ = value;
 }
 
 #ifdef __GNUC__

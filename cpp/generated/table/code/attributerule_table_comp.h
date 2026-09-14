@@ -38,6 +38,10 @@ struct AttributeRuleScheme_name_max_lenComp {
     uint32_t value;
 };
 
+struct AttributeRuleAlloc_efficiency_bonusComp {
+    double value;
+};
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -60,4 +64,7 @@ inline AttributeRuleSwitch_cooldown_secondsComp MakeAttributeRuleSwitch_cooldown
 }
 inline AttributeRuleScheme_name_max_lenComp MakeAttributeRuleScheme_name_max_lenComp(const AttributeRuleTable& row) {
     return { row.scheme_name_max_len() };
+}
+inline AttributeRuleAlloc_efficiency_bonusComp MakeAttributeRuleAlloc_efficiency_bonusComp(const AttributeRuleTable& row) {
+    return { row.alloc_efficiency_bonus() };
 }

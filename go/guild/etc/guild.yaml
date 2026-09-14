@@ -3,10 +3,9 @@ Name: guild.rpc
 ListenOn: 127.0.0.1:50300
 Timeout: 10000
 
-Etcd:
-  Hosts:
-    - 127.0.0.1:2379
-  Key: guild.rpc
+# 刻意不写 go-zero 的 Etcd.Key(port-decisions D-13):guild 是全局服务,客户端经 gate → client_rpc_router
+# 按 GuildNodeService.rpc/ 前缀的 NodeInfo 找到它(internal/node),没有任何 Go 服务按 go-zero key 发现 guild;
+# 写了反而会被本地 go_services.ps1 -Zone 加上 .z<N> 后缀,把同一个全局服务切成按 zone 的碎片。
 
 # Global Redis (not per-zone — guilds are cross-zone)
 RedisClient:
@@ -100,8 +99,9 @@ ClusterId: 0
 SnowflakeCacheDir: ../../run/snowflake
 
 # Prometheus 抓取端点,由 go-zero core/service 自带的 agent 暴露(不要另起 promhttp)。
-# 端口分工:login 9101 / scene_manager 9150 / db 9160 / guild 9170 / friend 9180 /
-# player_locator 9190。dev 下绑 127.0.0.1,避免指标泄到本机以外;
+# 端口分工:login 9101 / scene_manager 9150 / db 9160 / friend 9180 / player_locator 9190 /
+# client_rpc_router 9200 / chat 9210 / guild 9220(原 9170 与 match 撞号,本机同时起两者时后起者的
+# /metrics 绑不上)。dev 下绑 127.0.0.1,避免指标泄到本机以外;
 # staging/prod 改绑 0.0.0.0 让 Prometheus / Grafana 抓得到。
 # 留空 Host 即彻底关闭 /metrics(go-zero 的 StartAgent 直接 return)。
 #
@@ -113,5 +113,5 @@ SnowflakeCacheDir: ../../run/snowflake
 # 以及 shared/safego 的 safego_panic_total{point}(压测期应恒 0)。
 Prometheus:
   Host: 127.0.0.1
-  Port: 9170
+  Port: 9220
   Path: /metrics

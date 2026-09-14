@@ -36,6 +36,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	ActivityScheduleTable = NewObject<UActivityScheduleTable>(this);
 	ActorActionCombatStateTable = NewObject<UActorActionCombatStateTable>(this);
 	ActorActionStateTable = NewObject<UActorActionStateTable>(this);
+	AttributeAllocRatioTable = NewObject<UAttributeAllocRatioTable>(this);
 	AttributeAutoPlanTable = NewObject<UAttributeAutoPlanTable>(this);
 	AttributeDimensionTable = NewObject<UAttributeDimensionTable>(this);
 	AttributePoolTable = NewObject<UAttributePoolTable>(this);
@@ -68,6 +69,7 @@ void UConfigSubsystem::Deinitialize()
 	ActivityScheduleTable = nullptr;
 	ActorActionCombatStateTable = nullptr;
 	ActorActionStateTable = nullptr;
+	AttributeAllocRatioTable = nullptr;
 	AttributeAutoPlanTable = nullptr;
 	AttributeDimensionTable = nullptr;
 	AttributePoolTable = nullptr;
@@ -105,6 +107,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UActivityScheduleTable::FileName(),
 		UActorActionCombatStateTable::FileName(),
 		UActorActionStateTable::FileName(),
+		UAttributeAllocRatioTable::FileName(),
 		UAttributeAutoPlanTable::FileName(),
 		UAttributeDimensionTable::FileName(),
 		UAttributePoolTable::FileName(),
@@ -175,6 +178,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!ActorActionStateTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (AttributeAllocRatioTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeAllocRatio] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!AttributeAllocRatioTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -618,6 +635,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!ActorActionStateTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (AttributeAllocRatioTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeAllocRatio] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UAttributeAllocRatioTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[AttributeAllocRatio] 取不到 %s"), UAttributeAllocRatioTable::FileName());
+		bAllOk = false;
+	}
+	else if (!AttributeAllocRatioTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

@@ -221,7 +221,11 @@
         "GuildNotLeader": 14005,
         "GuildNoPermission": 14006,
         "GuildNotRanked": 14007,
-        "GuildIdGenUnavailable": 14008
+        "GuildIdGenUnavailable": 14008,
+        "GuildNameInvalid": 14009,
+        "GuildNameTaken": 14010,
+        "GuildAnnouncementTooLong": 14011,
+        "GuildHomeZoneUnknown": 14012
       }
     },
     "friend_error": {

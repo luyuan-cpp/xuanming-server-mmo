@@ -65,7 +65,7 @@ func TestMintGuildID(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			l := NewGuildLogic(nil, tc.ids, nil, nil)
+			l := NewGuildLogic(nil, tc.ids, nil, nil, nil)
 			id, tip := l.mintGuildID(context.Background(), 1001)
 			if tc.wantTip != 0 {
 				if tip == nil || tip.Id != tc.wantTip {

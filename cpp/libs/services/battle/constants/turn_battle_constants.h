@@ -17,6 +17,14 @@ inline constexpr uint64_t kRoundDurationMs = 6000;
 // DungeonTable.time_limit 为 0 时的回合上限缺省值
 inline constexpr uint32_t kDefaultMaxRounds = 30;
 
+// ---- 数值单位版本(2026-09-14) ----
+// 0 = 旧单位;1 = 防御 ×12 / 法力 ×4 之后的单位。三处读它,不许各写一份:
+//   scene 存档迁移(services/scene/player/system/attribute_unit_migration.h)、
+//   结算单位戳(BattleSettlementData.attribute_unit_version,本库 BuildSettlement 盖)、
+//   战斗表指纹(data/battle_table_fingerprint.cpp,让新旧二进制混跑时指纹对不上)。
+// 以后再改数值单位:这里加 1,并在 attribute_unit_migration.h 的 ManaToCurrentUnit 追加一段换算,不要改旧段。
+inline constexpr uint32_t kAttributeUnitVersion = 1;
+
 // ---- 匹配模式(镜像 proto/match/match_service.proto 的 MatchMode,决定逃跑规则等) ----
 
 inline constexpr uint32_t kMatchModePveSolo = 4;
@@ -76,13 +84,18 @@ inline constexpr uint32_t kCombatStateSilence = 1;
 inline constexpr double kBasicAttackBaseDamage = 10.0;
 
 // PVP 伤害系数(2026-09-13 用户选定):非 PVE 对局里玩家与宝宝的直接伤害(普攻 / 技能)再乘本值。
-// 加点百分比公式 + 比例减伤口径下,同级同配置 1v1 普攻一下就接近或超过对方气血上限(首击秒杀);
-// 乘 0.2 后约 5 下打死(推算见 player-attribute-allocation.md §8)。毒 / 灼烧等周期伤害是表里的固定值,不乘。
-inline constexpr double kPvpDamageScale = 0.2;
+// 加点百分比公式 + 比例减伤口径下,同级同配置 1v1 普攻一下就接近或超过对方气血上限(首击秒杀)。
+// 2026-09-14 删相性 / 仙魔后重新标定 0.2 → 0.3:0.2 是按含相性土相的伤害标的,删掉后同级通用 1v1 在
+// 7 / 10 / 30 / 60 / 85 级要 15 / 13 / 9 / 8 / 7 下;0.3 为 10 / 8 / 6 / 5 / 5 下(全暴击 5 / 5 / 3 / 3 / 3),
+// 贴近原定"30 级以上约 5 下、全暴击 3~4 下"(推算见 player-attribute-allocation.md §8)。
+// 毒 / 灼烧等周期伤害是表里的固定值,不乘。
+inline constexpr double kPvpDamageScale = 0.3;
 
 // 逃跑成功率:base + 速度差 * 系数,夹在 [min, max](PVE 可逃,PVP 一期不可逃)
+// 速度单位 2026-09-14 起 ×12(让敏捷每分配 1 点面板至少 +1 速度),系数同除 12:
+// 同样的相对速度差给出与改前相同的成功率。这是全仓唯一把速度差绝对值换成概率的地方
 inline constexpr double kFleeBaseChance = 0.5;
-inline constexpr double kFleeSpeedFactor = 0.01;
+inline constexpr double kFleeSpeedFactor = 0.01 / 12.0;
 inline constexpr double kFleeMinChance = 0.05;
 inline constexpr double kFleeMaxChance = 0.95;
 
@@ -102,7 +115,7 @@ inline constexpr uint32_t kMaxSubBuffDepth = 8;
 inline constexpr uint32_t kBaseHitRate = 100;
 
 // SkillTable.cost_resource[].cost_resource_id 中表示"法力"的资源 id
-// (Skill.xlsx 第 1 行示例为 {id=1,cost=10},id=2 语义未定,引擎只消费 id=1;
+// (Skill.xlsx 第 1 行为 {id=1,cost=40}(2026-09-14 法力单位 ×4,原 10),id=2 语义未定,引擎只消费 id=1;
 // 其余资源 id 一期忽略,见任务 open_issues)
 inline constexpr uint32_t kSkillCostResourceMana = 1;
 
@@ -128,10 +141,10 @@ inline constexpr uint64_t kMonsterActorIdBase = kEngineLocalActorIdFlag | (1ULL 
 inline constexpr uint64_t kPetActorIdBase = kEngineLocalActorIdFlag | (2ULL << 32);      // 宝宝局内 actor_id 起始值
 inline constexpr uint64_t kMonsterDefaultHealth = 300;
 inline constexpr uint64_t kMonsterDefaultStrength = 5;
-inline constexpr uint64_t kMonsterDefaultArmor = 2;
+inline constexpr uint64_t kMonsterDefaultArmor = 24;  // 2026-09-14 防御单位 ×12(原 2)
 inline constexpr uint64_t kMonsterDefaultResistance = 0;
 inline constexpr uint64_t kMonsterDefaultCritChance = 0;
-inline constexpr uint64_t kMonsterDefaultSpeed = 5;
+inline constexpr uint64_t kMonsterDefaultSpeed = 60;  // 2026-09-14 速度单位 ×12(原 5)
 
 // 时间(毫秒)换算回合:rounds = max(1, ceil(ms / kRoundDurationMs))
 inline constexpr uint32_t RoundsFromMilliseconds(uint64_t durationMs) {

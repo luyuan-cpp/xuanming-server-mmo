@@ -10,7 +10,7 @@
 
 class AttributePanelInfo;
 
-// 角色属性加点系统(问道式三池:属性点 / 相性点 / 仙魔点),设计文档
+// 角色属性加点系统(属性点池;2026-09-14 删相性点 / 仙魔点池),设计文档
 // docs/design/player-attribute-allocation.md。
 //
 // 唯一入口不变量:PlayerAttributeComp 的任何写入只经本类静态函数;
@@ -32,7 +32,7 @@ public:
 	//                 切方案 / 洗点 / 重新加点都不能成为回血手段(turn-based-battle-server.md D4 残血带出战斗)。
 	enum class RecalcReason : uint8_t { kLoad, kLevelChanged, kAllocate, kSchemeSwitch, kReset };
 
-	// 重算二级属性(DerivedAttributesComp + BaseAttributesComp.speed),按 reason 处理当前 HP/MP;不落库。
+	// 重算二级属性(DerivedAttributesComp + BaseAttributesComp.speed / armor(职业初值)),按 reason 处理当前 HP/MP;不落库。
 	// kLoad / kLevelChanged 还会先做"已分配 > 总量"的收敛(降级 / 改表后整池清零返还),防止低等级号带着高等级面板。
 	static void Recalculate(entt::entity player, RecalcReason reason = RecalcReason::kLoad);
 

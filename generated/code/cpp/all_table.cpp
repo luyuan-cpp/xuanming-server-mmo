@@ -7,6 +7,7 @@
 #include "activityschedule_table.h"
 #include "actoractioncombatstate_table.h"
 #include "actoractionstate_table.h"
+#include "attributeallocratio_table.h"
 #include "attributeautoplan_table.h"
 #include "attributedimension_table.h"
 #include "attributepool_table.h"
@@ -43,6 +44,8 @@ void LoadTables() {
     ActorActionCombatStateTableManager::Instance().Load();
 
     ActorActionStateTableManager::Instance().Load();
+
+    AttributeAllocRatioTableManager::Instance().Load();
 
     AttributeAutoPlanTableManager::Instance().Load();
 
@@ -102,6 +105,8 @@ void LoadTables() {
 
     ActorActionStateTableManager::Instance().LoadSuccess();
 
+    AttributeAllocRatioTableManager::Instance().LoadSuccess();
+
     AttributeAutoPlanTableManager::Instance().LoadSuccess();
 
     AttributeDimensionTableManager::Instance().LoadSuccess();
@@ -159,7 +164,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(28);
+    static muduo::CountDownLatch latch(29);
 
     std::thread ActivityScheduleLoadThread([]() {
         void InitThreadLocalConfig();
@@ -184,6 +189,14 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     ActorActionStateLoadThread.detach();
+
+    std::thread AttributeAllocRatioLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        AttributeAllocRatioTableManager::Instance().Load();
+        latch.countDown();
+    });
+    AttributeAllocRatioLoadThread.detach();
 
     std::thread AttributeAutoPlanLoadThread([]() {
         void InitThreadLocalConfig();
@@ -393,6 +406,8 @@ void LoadTablesAsync() {
     ActorActionCombatStateTableManager::Instance().LoadSuccess();
 
     ActorActionStateTableManager::Instance().LoadSuccess();
+
+    AttributeAllocRatioTableManager::Instance().LoadSuccess();
 
     AttributeAutoPlanTableManager::Instance().LoadSuccess();
 

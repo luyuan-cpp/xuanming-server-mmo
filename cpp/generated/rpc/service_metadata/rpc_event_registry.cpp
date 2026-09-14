@@ -1279,6 +1279,16 @@ bool IsClientMessageId(uint32_t messageId)
 	case BattleClientPlayerNotifyBattleAssignedMessageId:
 	case ClientPlayerChatSendChatMessageId:
 	case ClientPlayerChatPullChatHistoryMessageId:
+	case GuildServiceCreateGuildMessageId:
+	case GuildServiceGetGuildMessageId:
+	case GuildServiceGetPlayerGuildMessageId:
+	case GuildServiceJoinGuildMessageId:
+	case GuildServiceLeaveGuildMessageId:
+	case GuildServiceDisbandGuildMessageId:
+	case GuildServiceSetAnnouncementMessageId:
+	case GuildServiceUpdateGuildScoreMessageId:
+	case GuildServiceGetGuildRankMessageId:
+	case GuildServiceGetGuildRankByGuildMessageId:
 	case ClientPlayerLoginLoginMessageId:
 	case ClientPlayerLoginCreatePlayerMessageId:
 	case ClientPlayerLoginEnterGameMessageId:

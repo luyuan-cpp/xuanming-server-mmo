@@ -205,3 +205,123 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 1. 全量导表(需 protoc 35.1)、C++ 构建、Java 构建
 2. `git add` / `git commit`
 3. 本文件是**未跟踪文件**,要不要进仓由你定
+
+---
+
+> 以下三条为 2026-09-14 追加,来源 [microservice-zone-contract-20260914.md](./microservice-zone-contract-20260914.md)
+> (Go 微服务接入 zone 契约 v1)。它们推翻或补充了既有决策,按本文「凡冲突以本文为准」的口径生效。
+> 相关代码**未编译、未运行**,行为以 Codex 验证结果为准。
+
+## D-11 Go 服务注册的失租口径:**先重夺原 id;抢不回时,无状态全局服务换 id 继续,持久身份服务退出**
+
+(来源:契约 §2)
+
+**结论**
+
+- `go/shared/noderegistry` 的 keepalive 丢租后,一律先用 CAS 重夺原 node_id。allocKey 不存在,或值仍是本进程 uuid,都算重夺成功。
+- 原 id 已被别的实例占用时,按 `Spec.OnReclaimFailed` 走:
+  - `ReallocateNewID`(默认,chat 用):分配新 id,改写发现键,回调 `OnNodeIDChanged`,进程继续服务。
+  - `ExitProcess`(login,以及任何用 NodeId 派生持久身份或 per-node topic `{type}-{id}` 的服务):Revoke 新租约 → 冲日志 → `os.Exit(1)`,交给编排器重启。
+- **发现租约与发号器租约分开,不共用 lease。** noderegistry 不提供 `Lost()`;snowflake worker id 丢失所有权,只听 `snowflakealloc.Handle.Lost()`。
+
+**理由**
+
+1. 对 chat 这类无状态全局服务,node_id 只是发现路径里的一个编号。换号只让路由服镜像里的 key 变一下,不碰任何持久身份。为这个退出进程,等于把一次 etcd 抖动放大成一次重启。
+2. 真正怕换号的,是「node_id = worker id / topic 名」的服务。这条等式只对 C++ 节点和 login 成立,所以退出策略留给它们,不强加给全体 Go 服务。
+3. 两把租约合并后,发现键一抖就会连带 fence 发号器。发号器的正确性不能寄托在发现键上。
+
+**被推翻的旧条目**:`xuanming-port-feasibility-20260902.md` §8「D9 纠正」(:233)与 D9 行(:250)。它们要求第②层(注册重注册)一律按 login / C++ 口径「重夺同 id,否则退出」,不按 friend 的「换 id 继续」。
+
+**前提为何不成立**:那条纠正的依据是「C++ 注册的 node_id 就是 snowflake worker id」,然后推广到全体 Go 服务。但 Go 全局服务的 worker id 由 `shared/snowflakealloc` 独立分配(friend 重注册注释里「换 ID 安全」的理由就是这个),chat v1 更是根本没有发号器(契约 §4)。对它们来说 node_id ≠ worker id,「换号 = 丢身份」不成立。login 仍按原口径(`ExitProcess`),C++ 不动。
+
+**证据**
+
+| 事实 | file:line |
+|---|---|
+| 两档策略、两把租约分开、不提供 `Lost()`,写在包注释里 | `go/shared/noderegistry/registry.go:20-37`、`:76-82` |
+| 发号器失租信号 | `go/shared/snowflakealloc/allocator.go:682`(`func (h *Handle) Lost()`) |
+| friend 既有副本就是换 id 继续,理由是 worker id 独立分配 | `go/friend/internal/node/node.go:223-231`、`:278-287` |
+| login 的原 id 被接管就退出;发号器失租也退出 | `go/login/internal/logic/pkg/etcd/registry.go:147-150`;`go/login/login.go:278-281` |
+| C++ 重夺条件是「allocKey 不存在,或值是我的 uuid」 | `cpp/libs/engine/core/node/system/etcd/etcd_manager.cpp:103-106` |
+| 被推翻条目原文 | `docs/design/xuanming-port-feasibility-20260902.md:233`、`:250` |
+
+**本条不改的**:既有 7 份非 login 副本和 login 的异源实现,本轮都不动。后续把 login 迁到 shared 版时,必须选 `ExitProcess`。
+
+---
+
+## D-12 新 Go 服务的客户端入口:**只承诺路由服模式;「翻转」落在部署层,C++ 默认值不改**
+
+(来源:契约 §1)
+
+**结论**
+
+- chat,以及之后经 gate 暴露给客户端的 Go 业务服务(guild 已按同口径接入),只保证在 `GATE_CLIENT_RPC_ROUTER=1` 下可达,即 gate → client_rpc_router → 服务。直连模式下不可达是设计内的,**不补 gate 直连白名单**。
+- C++ 默认值和它的单测一字不改:`gate_router_mode.h` 规定未设即直连,`gate_security_test.cpp` 断言「默认必须落在旧模式」。
+- 翻转落在部署层:
+  - **本地**:`start_game.ps1 -GateRouterMode`,默认 `'1'`。起 gate 前设 env,脚本结束还原旧值。`dev_tools.ps1 dev-start-zones` / `cpp_nodes.ps1` 由父 shell 设 env。
+  - **K8s**:`k8s_deploy.ps1 -GateRouterMode`,默认 `"0"`,只注入 gate Deployment。翻成 1 要同时满足三件事:K8s 上以路由模式跑通过一次 battle-smoke、路由服 manifest 已落地、路由服用 POD_IP 通告。
+- 回退到直连,等于 chat 等只承诺路由模式的服务同时不可达。回退前先用 killswitch 关掉对应方法,并发公告。
+
+**理由**
+
+1. 每加一个服务就改 gate 白名单、重编 gate、滚动重启踢在线玩家,正是 `client-rpc-router.md` §1 要消灭的成本。给 chat 补直连白名单,等于走回旧路。
+2. C++ 默认值是灰度开关的安全兜底(拼错宁可留在直连)。改它会连带 battle 等既有直连路径的回归面;部署层参数则可以逐个环境翻,一行就能回退。
+3. K8s 和本地默认值不同,是因为 K8s 上路由服的部署链还没补齐:manifest 缺失,而路由服注册的地址取 ListenOn 的 host,在 Pod 里会是 0.0.0.0。此时开路由模式,K8s 上所有 gRPC 类客户端消息都会不可达。
+
+**补充的旧条目**:`client-rpc-router.md` D34(:31):gate 双模式,默认旧模式,默认值在冒烟通过后翻转,再删旧路径。
+
+**前提为何不再完整**:D34 写作时,所有客户端可达的服务在两种模式下都可达,「翻转」可以理解成一次性修改 C++ 默认值。chat(以及 guild)出现后,有了**只在路由模式下可达**的服务:翻转不再是可选的清理,而是这些服务的上线前提。本地和 K8s 的就绪程度又不同,只能在部署层按环境分别翻。D34 的「默认旧模式、C++ 默认值不动」保留;「何时删旧路径」仍待拍板。
+
+**证据**
+
+| 事实 | file:line |
+|---|---|
+| 直连白名单里没有 Chat;路由模式白名单只有 Scene + ClientRpcRouter | `cpp/nodes/gate/main.cpp:207-209` |
+| C++ 默认关,只认 `1` / `true` / `on` | `cpp/nodes/gate/gate_router_mode.h:31-39`、`:51-55` |
+| 单测钉死默认旧模式 | `cpp/nodes/gate/tests/gate_security_test.cpp:102-105` |
+| 启动日志打「出口模式=router/direct」,这两个词被单测钉死 | `cpp/nodes/gate/main.cpp:225`;`cpp/nodes/gate/tests/gate_security_test.cpp:170-172` |
+| 本地参数、设置 env、还原旧值 | `tools/scripts/start_game.ps1:20`、`:33`、`:397-403`、`:451` |
+| K8s 参数与注入 gate env | `tools/scripts/k8s_deploy.ps1:120-135`、`:806-812` |
+| chat 两条路由表项 `ClientProtocol: true` | `go/client_rpc_router/generated/pb/game/route_table.go:39-40` |
+| 路由服注册地址直接取 ListenOn 的 host | `go/client_rpc_router/client_rpc_router_service.go:69-70` |
+| D34 原文 | `docs/design/client-rpc-router.md:31` |
+
+---
+
+## D-13 全局服务 yaml 不注册 go-zero 发现键:**有 `Etcd` 段就显式写 `Key: ""`,不写 `<svc>.rpc`;等首个 Go 调用方出现再同批拍 `.z<N>` 豁免**
+
+(来源:契约 §7 yaml 锚点;措辞按 go-zero 源码核对结果修正)
+
+**结论**
+
+- 全局 Go 服务(`$GoSvcCatalogue` 里 `Global = $true`,chat 起)的 zrpc 服务端 `Etcd` 段,只为 noderegistry / killswitch 提供 `Hosts`,`Key` 显式留空。
+- **不能整行省略 `Key`**:go-zero v1.10.0 的 `discov.EtcdConf.Key` 没有 optional 标签,`Etcd` 段存在而缺 `Key` 时,`conf.MustLoad` 直接 Fatal(`"Etcd.Key" is not set`)。
+- yaml 里根本没有 zrpc 顶层 `Etcd` 段的服务(如 guild 用自定义的 `Registry.Etcd`),不写即可。
+- 服务自己的 `config.Validate` 应拒绝非空的 `Etcd.Key`(chat 已做)。
+- 不声明任何指向全局服务的 `RpcClient.Etcd.Key`。首个需要经 go-zero 发现某个全局服务的 Go 调用方出现时,同批拍板两件事:该 key 叫什么;`go_services.ps1 -Zone` 如何对它豁免 `.z<N>` 后缀。
+
+**理由**
+
+1. 全局服务靠 C++ 约定的 `<ENodeType名>.rpc/zone/...` NodeInfo 被 gate / 路由服发现。go-zero 键此时没有任何消费者,只是多一条没人读的注册。
+2. 本地多 zone 启动时,`go_services.ps1 -Zone` 会给**所有** `Key: <id>.rpc` 行加 `.z<N>`,把一个全局服务切成按 zone 隔离的负载均衡组。这和「全局一份」正相反,而且出错时完全静默。
+3. `Key` 为空串时 `RpcServerConf.HasEtcd()` 返回 false,go-zero 不发布键;空串也匹配不上 `-Zone` 的正则,不会被改写。
+4. 没有调用方就先拍 `.z<N>` 豁免规则,是在为假想需求做设计(AGENTS.md §11.2 YAGNI)。
+
+**被修正的旧口径**:goctl 模板和既有 zone 内服务一律写 `Etcd.Key: <svc>.rpc`(例:`go/client_rpc_router/etc/client_rpc_router.yaml:9`),`go_services.ps1 -Zone` 的正则则按「每个 Go 服务都按 zone 部署」一刀切加后缀。
+
+**前提为何不成立**:D-2 之后,friend / guild / chat / team / mail 进了全局池,不再每 zone 一份。对它们来说,「每个 key 按 zone 隔离」这个前提本身就是错的。另外,契约草案 §7 原写「不写 Key」,核对 go-zero 源码后改为「显式留空」(K8s ConfigMap 如果按「不写」生成,Pod 会 CrashLoop),以本条为准。
+
+**证据**
+
+| 事实 | file:line |
+|---|---|
+| `RpcServerConf.Etcd` 整段是 optional,但段内 `Key` 不是 optional | go-zero v1.10.0 `zrpc/config.go:41`;`core/discov/config.go:15` |
+| 段存在时,缺非 optional 标量字段即报错 | go-zero v1.10.0 `core/mapping/unmarshaler.go:966-969` |
+| `HasEtcd()` 要求 Hosts 和 Key 都非空;为 false 时不发布 | go-zero v1.10.0 `zrpc/config.go:78-80`、`zrpc/server.go:42-43` |
+| `-Zone` 给所有 `.rpc` key 加 `.z<N>` | `tools/scripts/go_services.ps1:360-370` |
+| chat 本地 yaml 显式写 `Key: ""` | `go/chat/etc/chat.yaml:14-21` |
+| chat 的 Validate 拒绝非空 Key | `go/chat/internal/config/config.go:119-120` |
+| K8s ConfigMap 同样写 `Key: ""` | `tools/scripts/k8s_deploy.ps1:1898-1907` |
+| guild yaml 没有 zrpc 顶层 Etcd 段,发现走自定义 `Registry.Etcd` | `go/guild/etc/guild.yaml:6-8`、`:44-48` |
+
+**遗留**:路由服也是全局池。它的 K8s ConfigMap 已按本条写 `Key: ""`(`k8s_deploy.ps1:1957-1964`),但本地 `go/client_rpc_router/etc/client_rpc_router.yaml:9` 仍是 `Key: client_rpc_router.rpc`。本批未改,留待路由服迁 shared 版 noderegistry 时一并处理。

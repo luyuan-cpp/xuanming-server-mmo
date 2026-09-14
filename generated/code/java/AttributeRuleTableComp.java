@@ -53,4 +53,10 @@ public final class AttributeRuleTableComp {
         }
     }
 
+    public record Alloc_efficiency_bonus(double value) {
+        public static Alloc_efficiency_bonus from(AttributeRuleTable row) {
+            return new Alloc_efficiency_bonus(row.getAllocEfficiencyBonus());
+        }
+    }
+
 }

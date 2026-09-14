@@ -170,6 +170,18 @@ public interface SkillTableOrBuilder extends
       getDamageBytes();
 
   /**
+   * <code>uint32 damage_type = 24;</code>
+   * @return The damageType.
+   */
+  int getDamageType();
+
+  /**
+   * <code>double attack_multiplier = 25;</code>
+   * @return The attackMultiplier.
+   */
+  double getAttackMultiplier();
+
+  /**
    * <code>repeated .Skillrequired_item required_item = 21;</code>
    */
   java.util.List<com.game.table.Skillrequired_item> 

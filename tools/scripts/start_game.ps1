@@ -5,20 +5,38 @@
 .DESCRIPTION
     双击根目录启动入口。-OpenClient 同时打开游戏；-CheckOnly 仅检查运行文件。
     运行日志：run/logs/game-launcher。服务在后台运行，关闭启动窗口不影响服务。
+.PARAMETER GateRouterMode
+    gate 的客户端 RPC 路由模式（环境变量 GATE_CLIENT_RPC_ROUTER，cpp/nodes/gate/gate_router_mode.h），
+    默认 '1' = 开：gate 只连 client_rpc_router，登录 / 匹配 / 聊天 / 帮会都经路由服转发。
+    '0' = 回退到旧的逐服务直连：**直连模式下 chat 与 guild 不可达**——gate 直连白名单（cpp/nodes/gate/main.cpp）里没有
+    Chat / Guild，进程照样在跑，但任何玩家的聊天、帮会请求都到不了它们（docs/design/client-rpc-router.md D34）。
+    只用于排障回退，回退前先 killswitch 关 chat / guild 方法并公告。
+    翻转落在部署层、不改 C++ 默认值：gate 进程启动时读一次该变量并缓存，所以只对本次新拉起的 gate 生效；
+    已在运行的 gate 保持原模式，换模式要先有序停掉 gate 再启动。
+    用 '1'/'0' 字符串而不是 [bool]：根目录 .cmd 经 pwsh -File 原样透传 %*，实参都是字符串，
+    写成 `启动服务器.cmd -GateRouterMode 0` 即可；与 k8s_deploy.ps1 -GateRouterMode 同一口径。
 #>
 [CmdletBinding()]
-param([switch]$OpenClient, [string]$ClientPath = '', [switch]$CheckOnly)
+param([switch]$OpenClient, [string]$ClientPath = '', [switch]$CheckOnly, [ValidateSet('1','0')][string]$GateRouterMode = '1')
 $ErrorActionPreference = 'Stop'
 $serverRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
 $logDir = Join-Path $serverRoot "run/logs/game-launcher/$stamp"
-$services = @('db','data_service','client_rpc_router','scene_manager','player_locator','login','match')
+# chat / guild 只承诺路由服模式可达（见 -GateRouterMode），与 client_rpc_router 一起列入；缺 exe 时的处理见下方 $optionalServices。
+$services = @('db','data_service','client_rpc_router','scene_manager','player_locator','login','match','chat','guild')
+# 可选服务：缺 exe 时只告警并跳过，不拒绝整个启动。chat 是新服务，本机 bin/go_services 可能还没有它的 exe
+#（Go 工具链不在本机时由 Codex 构建）；为一个聊天服务拒启会让登录、匹配一起不可用。chat 缺席时玩家的聊天请求
+# 得到“服务不可用”，其余功能不受影响。guild 同理：它和 chat 同一天才加进一键启动，本机同样可能还没有 exe。
+# 已有服务（db / login / match 等）仍是必需的：它们缺 exe 说明环境本身不完整，应当在第 1 步就拒启。
+$optionalServices = @('chat','guild')
+$skippedServices = @()
 $gatewayUrl = 'http://127.0.0.1:8081'
 $oldPath = $env:PATH
 $oldPassword = $env:LOGIN_DEV_PASSWORD_SHARED_SECRET
 $oldRpcPort = $env:RPC_PORT
 $oldCommandPartitions = $env:KAFKA_COMMAND_TOPIC_PARTITIONS
 $oldCommandGeneration = $env:KAFKA_COMMAND_TOPIC_GENERATION
+$oldGateClientRpcRouter = $env:GATE_CLIENT_RPC_ROUTER
 $ownsMutex = $false
 $transcribing = $false
 $resultCode = 0
@@ -290,7 +308,14 @@ try {
     $jar = Get-ChildItem -LiteralPath (Join-Path $serverRoot 'java/gateway_node/target') -Filter 'gateway-node-*.jar' | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     if (-not $jar) { throw '缺少已构建的 Java 网关 jar。' }
     foreach ($service in $services) {
-        if (-not (Test-Path -LiteralPath (Join-Path $serverRoot "bin/go_services/$service.exe")) -and -not (Test-Path -LiteralPath (Join-Path $serverRoot "go/$service/$service.exe"))) { throw "缺少 $service.exe，请先构建对应服务。" }
+        if (-not (Test-Path -LiteralPath (Join-Path $serverRoot "bin/go_services/$service.exe")) -and -not (Test-Path -LiteralPath (Join-Path $serverRoot "go/$service/$service.exe"))) {
+            if ($service -in $optionalServices) {
+                Write-Warning "缺少 $service.exe，本次跳过 $service（对应请求会回「服务不可用」），其余服务照常启动；构建后重新运行即可。"
+                $skippedServices += $service
+                continue
+            }
+            throw "缺少 $service.exe，请先构建对应服务。"
+        }
     }
     foreach ($node in @('gate','scene','battle')) {
         if (-not (Test-Path -LiteralPath (Join-Path $serverRoot "bin/$node.exe"))) { throw "缺少 bin/$node.exe。" }
@@ -382,6 +407,14 @@ try {
         Write-Step '4/6 启动一区 Kafka 消费者和战斗服'
         $env:PATH = (Join-Path $serverRoot 'third_party/grpc/install_vs2026_dbg/bin') + ';' + $oldPath
         $env:RPC_PORT = $null
+        # 路由模式翻转落在部署层（C++ 默认值不改）：gate 启动时读一次 GATE_CLIENT_RPC_ROUTER 并缓存，
+        # 必须在 cpp-node-start 之前设好，经 dev_tools 子进程继承；scene / battle / Go 服务继承到也不读。
+        $env:GATE_CLIENT_RPC_ROUTER = $GateRouterMode
+        if ($GateRouterMode -eq '1') {
+            Write-Host '  gate 路由模式：GATE_CLIENT_RPC_ROUTER=1（经 client_rpc_router 转发，chat 可达）'
+        } else {
+            Write-Host '  gate 路由模式：GATE_CLIENT_RPC_ROUTER=0（直连模式，chat 不可达）' -ForegroundColor Yellow
+        }
         Invoke-Dev 'gate' @('-Command','cpp-node-start','-CppNodes','gate','-GateCount','1','-SceneCount','0','-BattleCount','0','-Zone','1','-NodeIp','loopback')
         Assert-NodeStartup 'gate'
         Invoke-Dev 'scene' @('-Command','cpp-node-start','-CppNodes','scene','-GateCount','0','-SceneCount','1','-BattleCount','0','-Zone','1','-NodeIp','loopback')
@@ -393,8 +426,11 @@ try {
         Invoke-Dev 'battle' @('-Command','cpp-node-start','-CppNodes','battle','-GateCount','0','-SceneCount','0','-BattleCount','1','-Zone','1','-NodeIp','loopback')
         Assert-NodeStartup 'battle'
         Wait-LocalNode 'battle'
-        Write-Step '5/6 启动登录、匹配服务和游戏网关'
-        Start-LocalGoServices @('client_rpc_router','scene_manager','player_locator','login','match')
+        Write-Step '5/6 启动登录、匹配、聊天、帮会服务和游戏网关'
+        # chat / guild 与路由服同为 Tier 1（chat 只依赖 etcd + Redis；guild 另依赖 MySQL 与 data_service）；
+        # 直连模式下它们也照样起，只是玩家不可达（见 -GateRouterMode）。
+        # 第 1 步因缺 exe 跳过的可选服务不在这里启动，否则 Start-LocalGoServices 会因“没有启动记录”抛错。
+        Start-LocalGoServices @(@('client_rpc_router','scene_manager','player_locator','login','match','chat','guild') | Where-Object { $_ -notin $skippedServices })
         $gatewayProcess = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'java.exe' -and $_.CommandLine -and $_.CommandLine.Contains($jar.FullName) } | Select-Object -First 1
         if (-not $gatewayProcess) {
             if (Test-Tcp 8081) { throw '8081 端口被其他程序占用，未启动重复网关。' }
@@ -426,6 +462,7 @@ try {
     $env:RPC_PORT = $oldRpcPort
     $env:KAFKA_COMMAND_TOPIC_PARTITIONS = $oldCommandPartitions
     $env:KAFKA_COMMAND_TOPIC_GENERATION = $oldCommandGeneration
+    $env:GATE_CLIENT_RPC_ROUTER = $oldGateClientRpcRouter
     if ($transcribing) { Stop-Transcript | Out-Null }
     if ($ownsMutex) { $mutex.ReleaseMutex() }
     if ($mutex) { $mutex.Dispose() }

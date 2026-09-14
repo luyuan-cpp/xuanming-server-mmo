@@ -35,20 +35,23 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_guild_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025guild_error_tip.proto*\367\001\n\013guild_error\022"
+    "\n\025guild_error_tip.proto*\341\002\n\013guild_error\022"
     "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu"
     "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot"
     "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea"
     "derCantLeave\020\264m\022\024\n\017kGuildNotLeader\020\265m\022\027\n"
     "\022kGuildNoPermission\020\266m\022\024\n\017kGuildNotRanke"
-    "d\020\267m\022\033\n\026kGuildIdGenUnavailable\020\270mB$\n\016com"
-    ".game.tableZ\022generated/pb/tableb\006proto3"
+    "d\020\267m\022\033\n\026kGuildIdGenUnavailable\020\270m\022\026\n\021kGu"
+    "ildNameInvalid\020\271m\022\024\n\017kGuildNameTaken\020\272m\022"
+    "\036\n\031kGuildAnnouncementTooLong\020\273m\022\032\n\025kGuil"
+    "dHomeZoneUnknown\020\274mB$\n\016com.game.tableZ\022g"
+    "enerated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_guild_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_guild_5ferror_5ftip_2eproto = {
     false,
     false,
-    319,
+    425,
     descriptor_table_protodef_guild_5ferror_5ftip_2eproto,
     "guild_error_tip.proto",
     &descriptor_table_guild_5ferror_5ftip_2eproto_once,
@@ -67,7 +70,7 @@ guild_error_descriptor() {
   return file_level_enum_descriptors_guild_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t guild_error_internal_data_[] = {
-    65536u, 589824u, 14005u, 14003u, 14007u, 14001u, 14004u, 14006u, 14008u, 14000u, 14002u, };
+    65536u, 851968u, 14007u, 14003u, 14011u, 14001u, 14005u, 14009u, 14012u, 14000u, 14002u, 14004u, 14006u, 14008u, 14010u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

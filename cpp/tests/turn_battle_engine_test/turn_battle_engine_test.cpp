@@ -16,6 +16,8 @@
 // 回合制战斗引擎单元测试(设计文档 §5.1)。
 //
 // 表管理器依赖用 MemoryBattleDataProvider 注入隔离,不依赖 Excel 数据与配置加载;
+// 速度数字 2026-09-14 起统一 ×12(速度单位放大,见 turn_battle_constants.h 的 kFleeSpeedFactor):
+// 相对大小与逃跑成功率与改前等价,出手序 / 逃跑结论不变。
 // 覆盖:确定性事件流 / 速度序 / 超时默认行动 / 冷却回合 / buff 到期·叠层·周期·驱散·免疫 /
 // 沉默许可 / 胜负边界(全灭·打满·平局)/ 结算数值 / FLEE·DEFEND·ITEM 路径 /
 // 二期:自动战斗(SetActorAuto·就绪·快照排除·确定性回归)/ 队伍人数上限(设计文档 §11)。
@@ -216,7 +218,7 @@ TEST(TurnBattleEngineTest, SameSeedSameCommandsProduceIdenticalEventStream) {
     const auto runBattle = [](uint64_t seed) {
         TurnBattleEngine engine(MakeProvider());
         auto request = MakeRequest(9001, turnbattle::kMatchModePveSolo, seed);
-        AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 50, 10);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 50, 120);
         EXPECT_TRUE(engine.Initialize(request));
 
         std::string stream;
@@ -244,8 +246,8 @@ TEST(TurnBattleEngineTest, SameSeedSameCommandsProduceIdenticalEventStream) {
 TEST(TurnBattleEngineTest, TurnOrderIsSpeedDescending) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9002, 3 /* PVP 1v1 */, 1);
-    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 10);
-    AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 20);
+    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 120);
+    AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 240);
     ASSERT_TRUE(engine.Initialize(request));
 
     engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
@@ -254,14 +256,14 @@ TEST(TurnBattleEngineTest, TurnOrderIsSpeedDescending) {
     const auto result = engine.ResolveCurrentRound();
     ASSERT_GE(result.events_size(), 1);
     EXPECT_EQ(result.events(0).event_type(), BATTLE_EVENT_ATTACK);
-    EXPECT_EQ(result.events(0).source_id(), kPlayerB);  // 速度 20 先手
+    EXPECT_EQ(result.events(0).source_id(), kPlayerB);  // 速度 240 先手
 }
 
 TEST(TurnBattleEngineTest, TurnOrderTieBreaksByActorIdAscending) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9003, 3, 1);
-    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 10);
-    AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 10);
+    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 120);
+    AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
@@ -279,7 +281,7 @@ TEST(TurnBattleEngineTest, TurnOrderTieBreaksByActorIdAscending) {
 TEST(TurnBattleEngineTest, TimeoutFillsDefaultBasicAttack) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9004, turnbattle::kMatchModePveSolo, 1);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 0, 10);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 玩家不提交任何行动,直接结算(等价回合超时)
@@ -287,7 +289,7 @@ TEST(TurnBattleEngineTest, TimeoutFillsDefaultBasicAttack) {
 
     EXPECT_EQ(CountEvents(result, BATTLE_EVENT_ATTACK), 2);  // 玩家默认普攻 + 怪物普攻
     ASSERT_GE(result.events_size(), 1);
-    // 玩家速度 10 > 怪物默认速度,先手是玩家的默认普攻
+    // 玩家速度 120 > 怪物默认速度 60,先手是玩家的默认普攻
     EXPECT_EQ(result.events(0).event_type(), BATTLE_EVENT_ATTACK);
     EXPECT_EQ(result.events(0).source_id(), kPlayerA);
     EXPECT_EQ(result.events(0).target_id(), kMonsterId);
@@ -300,7 +302,7 @@ TEST(TurnBattleEngineTest, TimeoutFillsDefaultBasicAttack) {
 TEST(TurnBattleEngineTest, CooldownConvertsToRoundsAndBlocksResubmission) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9005, turnbattle::kMatchModePveSolo, 1);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 10);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 第 1 回合:技能可用
@@ -330,7 +332,7 @@ TEST(TurnBattleEngineTest, CooldownConvertsToRoundsAndBlocksResubmission) {
 TEST(TurnBattleEngineTest, PoisonBuffTicksEachRoundAndExpiresAfterTwoRounds) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9006, turnbattle::kMatchModePveSolo, 1);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 10);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 第 1 回合:挂毒 → BUFF_ADD;回合末第一跳(每层 10 点)
@@ -361,7 +363,7 @@ TEST(TurnBattleEngineTest, PoisonBuffTicksEachRoundAndExpiresAfterTwoRounds) {
 TEST(TurnBattleEngineTest, BuffStacksUpToMaxLayer) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9007, turnbattle::kMatchModePveSolo, 1);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 10);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 连续 4 回合重复挂毒:层数 1→2→3→3(max_layer=3 封顶)
@@ -383,7 +385,7 @@ TEST(TurnBattleEngineTest, BuffStacksUpToMaxLayer) {
 TEST(TurnBattleEngineTest, DispelSkillRemovesPoisonWithoutLeavingEntry) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9008, turnbattle::kMatchModePveSolo, 1);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 10);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 第 1 回合挂毒
@@ -404,8 +406,8 @@ TEST(TurnBattleEngineTest, DispelSkillRemovesPoisonWithoutLeavingEntry) {
 TEST(TurnBattleEngineTest, ImmuneTagBlocksPoison) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9009, 3 /* PVP */, 1);
-    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 10);
-    auto* defender = AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 5);
+    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 120);
+    auto* defender = AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 60);
     // B 携带免疫毒 tag 的参战 buff(无限持续,remain_rounds=0 哨兵)
     auto* immuneEntry = defender->add_buffs();
     immuneEntry->set_buff_id(900);
@@ -428,7 +430,7 @@ TEST(TurnBattleEngineTest, ImmuneTagBlocksPoison) {
 TEST(TurnBattleEngineTest, SnapshotRegenBuffHealsAtRoundEnd) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9010, turnbattle::kMatchModePveSolo, 1);
-    auto* snapshot = AddPlayer(request, kPlayerA, 0, 100, 200, 0, 100, 0, 10);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 100, 200, 0, 100, 0, 120);
     // 参战携带周期回血 buff(remain_rounds 已是回合口径:2 回合)
     auto* regenEntry = snapshot->add_buffs();
     regenEntry->set_buff_id(901);
@@ -463,7 +465,7 @@ TEST(TurnBattleEngineTest, SnapshotRegenBuffHealsAtRoundEnd) {
 TEST(TurnBattleEngineTest, SilenceBlocksGeneralSkillButAllowsBasicAttack) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9011, turnbattle::kMatchModePveSolo, 1);
-    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 10);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
     auto* silenceEntry = snapshot->add_buffs();
     silenceEntry->set_buff_id(902);
     silenceEntry->set_buff_table_id(kBuffSilence);
@@ -485,7 +487,7 @@ TEST(TurnBattleEngineTest, SilenceBlocksGeneralSkillButAllowsBasicAttack) {
 TEST(TurnBattleEngineTest, KillingAllMonstersWinsSideA) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9012, turnbattle::kMatchModePveSolo, 1);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 10);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillNuke));
@@ -508,7 +510,7 @@ TEST(TurnBattleEngineTest, MaxRoundsExhaustionDefeatsAttacker) {
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9013, turnbattle::kMatchModePveSolo, 1);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 10);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_DEFEND));
@@ -525,8 +527,8 @@ TEST(TurnBattleEngineTest, MaxRoundsExhaustionDefeatsAttacker) {
 TEST(TurnBattleEngineTest, SimultaneousPoisonDeathIsDrawAndDefendHalvesTick) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9014, 3 /* PVP */, 1);
-    AddPlayer(request, kPlayerA, 0, 15, 15, 0, 100, 0, 10);
-    AddPlayer(request, kPlayerB, 1, 15, 15, 0, 100, 0, 5);
+    AddPlayer(request, kPlayerA, 0, 15, 15, 0, 100, 0, 120);
+    AddPlayer(request, kPlayerB, 1, 15, 15, 0, 100, 0, 60);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 第 1 回合:互相挂毒;回合末各掉 10 → 双方剩 5
@@ -556,14 +558,14 @@ TEST(TurnBattleEngineTest, SimultaneousPoisonDeathIsDrawAndDefendHalvesTick) {
 TEST(TurnBattleEngineTest, DamageFormulaMatchesRealtimeSemantics) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9015, turnbattle::kMatchModePveSolo, 1);
-    // strength=4,无暴击;怪物默认 armor=2、resistance=0,怪物等级取参战玩家最高等级 10
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 0, 10);
+    // strength=4,无暴击;怪物默认 armor=24、resistance=0,怪物等级取参战玩家最高等级 10
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kMonsterId, kSkillDamage));
     const auto result = engine.ResolveCurrentRound();
 
-    // 原始 50 * (1 + 4*0.1) = 70;等级系数 30 + 10*10 = 130;受伤比例 130 / (2 + 130) ≈ 0.9848
+    // 原始 50 * (1 + 4*0.1) = 70;等级系数 360 + 120*10 = 1560;受伤比例 1560 / (24 + 1560) ≈ 0.9848(防御单位 ×12,与改前 130/132 逐位相同)
     // 70 * 0.9848 ≈ 68.94 → 向上取整 69
     const auto* damageEvent = FindFirstEvent(result, BATTLE_EVENT_DAMAGE);
     ASSERT_NE(damageEvent, nullptr);
@@ -585,7 +587,7 @@ TEST(TurnBattleEngineTest, FleeIsDeterministicAndConsistentWithOutcome) {
     const auto runFlee = [](uint64_t seed) {
         TurnBattleEngine engine(MakeProvider());
         auto request = MakeRequest(9016, turnbattle::kMatchModePveSolo, seed);
-        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 50);  // 高速,逃跑成功率高
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 600);  // 高速,逃跑成功率高
         EXPECT_TRUE(engine.Initialize(request));
 
         engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_FLEE));
@@ -619,8 +621,8 @@ TEST(TurnBattleEngineTest, FleeIsDeterministicAndConsistentWithOutcome) {
 TEST(TurnBattleEngineTest, FleeIsRejectedInPvp) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9017, 3 /* PVP 一期不可逃 */, 1);
-    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 10);
-    AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 5);
+    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 120);
+    AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 60);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 逃跑提交不落账;超时结算按默认普攻
@@ -637,7 +639,7 @@ TEST(TurnBattleEngineTest, FleeIsRejectedInPvp) {
 TEST(TurnBattleEngineTest, ItemHealsAndConsumptionGoesIntoSettlement) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9018, turnbattle::kMatchModePveSolo, 1);
-    auto* snapshot = AddPlayer(request, kPlayerA, 0, 50, 200, 0, 100, 0, 10);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 50, 200, 0, 100, 0, 120);
     auto* item = snapshot->add_items();
     item->set_item_table_id(kItemPotion);
     item->set_count(2);
@@ -684,7 +686,7 @@ TEST(TurnBattleEngineTest, ItemHealsAndConsumptionGoesIntoSettlement) {
 TEST(TurnBattleEngineTest, StateSnapshotTracksPendingActorsAndRoundIndex) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9019, turnbattle::kMatchModePveSolo, 1);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 10);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     auto state = engine.BuildStateSnapshot();
@@ -709,7 +711,7 @@ TEST(TurnBattleEngineTest, StateSnapshotTracksPendingActorsAndRoundIndex) {
 TEST(TurnBattleEngineTest, AutoActorCountsAsReadyAndActsWithDefaultAttack) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9020, turnbattle::kMatchModePveSolo, 1);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 0, 10);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 未提交且未挂机:不就绪;开挂机后无需提交即就绪(提前结算的判据)
@@ -717,7 +719,7 @@ TEST(TurnBattleEngineTest, AutoActorCountsAsReadyAndActsWithDefaultAttack) {
     ASSERT_EQ(engine.SetActorAuto(kPlayerA, true), 0u);
     EXPECT_TRUE(engine.AllPlayersReady());
 
-    // 结算走默认普攻代打:玩家速度 10 > 怪物默认 5,首事件是玩家对怪的普攻
+    // 结算走默认普攻代打:玩家速度 120 > 怪物默认 60,首事件是玩家对怪的普攻
     const auto result = engine.ResolveCurrentRound();
     ASSERT_GE(result.events_size(), 1);
     EXPECT_EQ(result.events(0).event_type(), BATTLE_EVENT_ATTACK);
@@ -734,7 +736,7 @@ TEST(TurnBattleEngineTest, SetActorAutoRejectsMonsterDeadAndFledActors) {
     {
         TurnBattleEngine engine(MakeProvider());
         auto request = MakeRequest(9021, turnbattle::kMatchModePveSolo, 1);
-        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 10);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 120);
         ASSERT_TRUE(engine.Initialize(request));
         EXPECT_EQ(engine.SetActorAuto(kMonsterId, true), static_cast<uint32_t>(kInvalidParameter));
         EXPECT_EQ(engine.SetActorAuto(999999u, true), static_cast<uint32_t>(kInvalidParameter));
@@ -744,9 +746,9 @@ TEST(TurnBattleEngineTest, SetActorAutoRejectsMonsterDeadAndFledActors) {
     {
         TurnBattleEngine engine(MakeProvider());
         auto request = MakeRequest(9022, 3 /* PVP */, 1);
-        AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 10);
-        AddPlayer(request, kPlayerB, 1, 500, 500, 0, 0, 0, 5);  // 无甲,一击可杀
-        AddPlayer(request, kPlayerC, 1, 500, 500, 0, 100, 0, 5);
+        AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 120);
+        AddPlayer(request, kPlayerB, 1, 250, 250, 0, 0, 0, 60);  // 无甲、250 血:PVP 下 nuke 1000 × kPvpDamageScale(0.3) = 300,仍一击可杀
+        AddPlayer(request, kPlayerC, 1, 500, 500, 0, 100, 0, 60);
         ASSERT_TRUE(engine.Initialize(request));
 
         engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kPlayerB, kSkillNuke));
@@ -767,8 +769,8 @@ TEST(TurnBattleEngineTest, SetActorAutoRejectsMonsterDeadAndFledActors) {
         for (uint64_t seed = 1; seed <= 32 && !verified; ++seed) {
             TurnBattleEngine engine(MakeProvider());
             auto request = MakeRequest(9023, turnbattle::kMatchModePveTeam, seed);
-            AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 50);  // 高速,逃跑成功率高
-            AddPlayer(request, kPlayerB, 0, 1000, 1000, 0, 100, 0, 10);
+            AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 600);  // 高速,逃跑成功率高
+            AddPlayer(request, kPlayerB, 0, 1000, 1000, 0, 100, 0, 120);
             ASSERT_TRUE(engine.Initialize(request));
 
             engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_FLEE));
@@ -796,7 +798,7 @@ TEST(TurnBattleEngineTest, AutoModeMatchesManualDefaultAttackEventStream) {
         TurnBattleEngine engine(MakeProvider());
         auto request = MakeRequest(9024, turnbattle::kMatchModePveSolo, seed);
         // 高暴击逼引擎大量消耗 RNG,任何随机路径分叉都会导致字节流不一致
-        AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 50, 10);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 4, 100, 50, 120);
         EXPECT_TRUE(engine.Initialize(request));
         if (useAuto) {
             EXPECT_EQ(engine.SetActorAuto(kPlayerA, true), 0u);
@@ -824,8 +826,8 @@ TEST(TurnBattleEngineTest, AutoModeMatchesManualDefaultAttackEventStream) {
 TEST(TurnBattleEngineTest, SnapshotMarksAutoActorAndExcludesFromPending) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9025, 3 /* PVP */, 1);
-    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 10);
-    AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 5);
+    AddPlayer(request, kPlayerA, 0, 500, 500, 0, 100, 0, 120);
+    AddPlayer(request, kPlayerB, 1, 500, 500, 0, 100, 0, 60);
     ASSERT_TRUE(engine.Initialize(request));
 
     ASSERT_EQ(engine.BuildStateSnapshot().pending_actor_ids_size(), 2);
@@ -858,7 +860,7 @@ TEST(TurnBattleEngineTest, InitializeEnforcesTeamSizeLimit) {
         TurnBattleEngine engine(MakeProvider());
         auto request = MakeRequest(9026, turnbattle::kMatchModePveTeam, 1);
         for (uint64_t offset = 0; offset < turnbattle::kMaxBattleTeamSize + 1; ++offset) {
-            AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 0, 100, 0, 10);
+            AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 0, 100, 0, 120);
         }
         EXPECT_FALSE(engine.Initialize(request));
     }
@@ -868,7 +870,7 @@ TEST(TurnBattleEngineTest, InitializeEnforcesTeamSizeLimit) {
         TurnBattleEngine engine(MakeProvider());
         auto request = MakeRequest(9027, turnbattle::kMatchModePveTeam, 1);
         for (uint64_t offset = 0; offset < turnbattle::kMaxBattleTeamSize; ++offset) {
-            AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 0, 100, 0, 10);
+            AddPlayer(request, kPlayerA + offset, 0, 1000, 1000, 0, 100, 0, 120);
         }
         EXPECT_TRUE(engine.Initialize(request));
     }
@@ -878,21 +880,21 @@ TEST(TurnBattleEngineTest, InitializeEnforcesTeamSizeLimit) {
 // 玩家击杀怪物后结算累加 MonsterTable.exp_reward/gold_reward。
 TEST(TurnBattleEngineTest, MonsterAttributesFromTableEnableMultiRoundAndRewards) {
     auto provider = MakeProvider();
-    // 表配怪物:200 HP、护甲 5、速度 8(慢于玩家),奖励经验 50 金币 25。
+    // 表配怪物:200 HP、护甲 60(防御单位 ×12,原 5)、速度 96(慢于玩家),奖励经验 50 金币 25。
     constexpr uint32_t kMonsterTableId = 7000;
     auto& monster = provider->AddMonster(kMonsterTableId);
     monster.set_health(200);
     monster.set_strength(10);
-    monster.set_armor(5);
-    monster.set_speed(8);
+    monster.set_armor(60);
+    monster.set_speed(96);
     monster.set_exp_reward(50);
     monster.set_gold_reward(25);
     provider->SetDungeonMonsters(kDungeonConfig, {kMonsterTableId});
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9030, turnbattle::kMatchModePveSolo, 7);
-    // 玩家:1000 HP、力量 20(普攻 30,怪物护甲 5 → 30 * 130 / 135 ≈ 29)、速度 20(先手)。
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/20);
+    // 玩家:1000 HP、力量 20(普攻 30,怪物护甲 60 → 30 * 1560 / 1620 ≈ 29)、速度 240(先手)。
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/240);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 怪物从表读到 200 HP(不是常量 300),证明读表生效
@@ -916,6 +918,8 @@ TEST(TurnBattleEngineTest, MonsterAttributesFromTableEnableMultiRoundAndRewards)
     const auto settlement = engine.BuildSettlement(kPlayerA);
     EXPECT_EQ(settlement.exp_gain(), 50u);
     EXPECT_EQ(settlement.gold_gain(), 25u);
+    // 结算盖数值单位版本:scene 据此识别旧 battle 二进制的结算并换算法力(attribute_unit_migration.h)
+    EXPECT_EQ(settlement.attribute_unit_version(), turnbattle::kAttributeUnitVersion);
 
     // 败方(此局无败玩家)/逃跑玩家不发奖的语义:阵亡玩家 exp_gain 应为 0
     // (此处玩家胜,单独验证"未击杀/失败不发奖"由 outcome 分支保证,不再造局)
@@ -928,14 +932,14 @@ TEST(TurnBattleEngineTest, PlayerDefeatYieldsNoReward) {
     auto& boss = provider->AddMonster(kBossTableId);
     boss.set_health(100000);     // 打不死
     boss.set_strength(1000);     // 秒玩家
-    boss.set_speed(100);         // 先手
+    boss.set_speed(1200);         // 先手
     boss.set_exp_reward(9999);
     boss.set_gold_reward(9999);
     provider->SetDungeonMonsters(kDungeonConfig, {kBossTableId});
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9031, turnbattle::kMatchModePveSolo, 7);
-    AddPlayer(request, kPlayerA, 0, 50, 50, 5, 0, 0, 1);  // 脆弱、后手
+    AddPlayer(request, kPlayerA, 0, 50, 50, 5, 0, 0, 12);  // 脆弱、后手
     ASSERT_TRUE(engine.Initialize(request));
     engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId));
     engine.ResolveCurrentRound();
@@ -952,11 +956,11 @@ TEST(TurnBattleEngineTest, PlayerDefeatYieldsNoReward) {
 TEST(TurnBattleEngineTest, DerivedPhysicalAttackIsAdditiveOnBasicAttack) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9201, turnbattle::kMatchModePveSolo, 1);
-    // 基线同 DamageFormulaMatchesRealtimeSemantics(strength=4、怪物默认 armor=2、resistance=0、等级系数 130),
+    // 基线同 DamageFormulaMatchesRealtimeSemantics(strength=4、怪物默认 armor=24、resistance=0、等级系数 1560),
     // 再叠属性加点二级属性 physical_attack=50:
-    //   普攻 10 * (1 + 4*0.1) + 50 = 64;64 * 130 / (2 + 130) ≈ 63.03 → 向上取整 64
-    // speed=50 > 怪物默认 5,玩家先手,首个伤害事件即玩家普攻。
-    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/0, /*crit*/0, /*speed*/50);
+    //   普攻 10 * (1 + 4*0.1) + 50 = 64;64 * 1560 / (24 + 1560) ≈ 63.03 → 向上取整 64
+    // speed=600 > 怪物默认 60,玩家先手,首个伤害事件即玩家普攻。
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/0, /*crit*/0, /*speed*/600);
     snapshot->set_physical_attack(50);
     snapshot->set_magic_attack(999);  // 普攻只吃物伤,法伤不得混入
     ASSERT_TRUE(engine.Initialize(request));
@@ -973,9 +977,9 @@ TEST(TurnBattleEngineTest, DerivedPhysicalAttackIsAdditiveOnBasicAttack) {
 TEST(TurnBattleEngineTest, DerivedMagicAttackIsAdditiveOnSkill) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9202, turnbattle::kMatchModePveSolo, 1);
-    // 同 DamageFormulaMatchesRealtimeSemantics 的技能基线(受伤比例 130 / 132),叠 magic_attack=20:
-    //   50 * (1 + 4*0.1) + 20 = 90;90 * 130 / 132 ≈ 88.64 → 向上取整 89
-    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/10);
+    // 同 DamageFormulaMatchesRealtimeSemantics 的技能基线(受伤比例 1560 / 1584),叠 magic_attack=20:
+    //   50 * (1 + 4*0.1) + 20 = 90;90 * 1560 / 1584 ≈ 88.64 → 向上取整 89
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/120);
     snapshot->set_magic_attack(20);
     snapshot->set_physical_attack(999);  // 技能只吃法伤
     ASSERT_TRUE(engine.Initialize(request));
@@ -989,12 +993,12 @@ TEST(TurnBattleEngineTest, DerivedMagicAttackIsAdditiveOnSkill) {
 }
 
 TEST(TurnBattleEngineTest, DerivedDefenseReducesIncomingDamageProportionally) {
-    // 玩家 speed=1 < 怪物默认 5:怪物先手。怪物普攻 10 * (1 + 5*0.1) = 15;
-    // 玩家 armor=0、resistance=0、等级 10(等级系数 130),受伤比例 = 130 / (防御 + 130),最低 0.4。
+    // 玩家 speed=12 < 怪物默认 60:怪物先手。怪物普攻 10 * (1 + 5*0.1) = 15;
+    // 玩家 armor=0、resistance=0、等级 10(等级系数 1560),受伤比例 = 1560 / (防御 + 1560),最低 0.4。
     auto makeRun = [](uint64_t defense) {
         TurnBattleEngine engine(MakeProvider());
         auto request = MakeRequest(9203, turnbattle::kMatchModePveSolo, 1);
-        auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/0, /*crit*/0, /*speed*/1);
+        auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/0, /*crit*/0, /*speed*/12);
         snapshot->set_defense(defense);
         EXPECT_TRUE(engine.Initialize(request));
         EXPECT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId)));
@@ -1009,12 +1013,12 @@ TEST(TurnBattleEngineTest, DerivedDefenseReducesIncomingDamageProportionally) {
     // 防御 0:全额 15
     EXPECT_EQ(healthAfter(makeRun(0)), 985u);
 
-    // 防御 = 等级系数 130:减半,7.5 → 向上取整 8
-    const auto halved = makeRun(130);
+    // 防御 = 等级系数 1560:减半,7.5 → 向上取整 8
+    const auto halved = makeRun(1560);
     EXPECT_EQ(healthAfter(halved), 992u);
     const auto* halvedPlayer = FindStateActor(halved.state(), kPlayerA);
     ASSERT_NE(halvedPlayer, nullptr);
-    EXPECT_EQ(halvedPlayer->defense(), 130u);
+    EXPECT_EQ(halvedPlayer->defense(), 1560u);
 
     // 防御再高也只减六成。减法口径下这里是 0 伤害 —— 2026-09-10 低级怪全体打不动人的根因
     EXPECT_EQ(healthAfter(makeRun(1000000)),
@@ -1026,8 +1030,8 @@ TEST(TurnBattleEngineTest, PvpDirectDamageIsScaled) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9204, 3 /* PVP */, 1);
     // A 力量 21:普攻 10 * (1 + 2.1) = 31;B 护甲 0、防御 0、抗性 0、等级 10 → 受伤比例 1
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/21, /*armor*/0, /*crit*/0, /*speed*/10);
-    AddPlayer(request, kPlayerB, 1, 1000, 1000, /*strength*/0, /*armor*/0, /*crit*/0, /*speed*/5);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/21, /*armor*/0, /*crit*/0, /*speed*/120);
+    AddPlayer(request, kPlayerB, 1, 1000, 1000, /*strength*/0, /*armor*/0, /*crit*/0, /*speed*/60);
     ASSERT_TRUE(engine.Initialize(request));
 
     ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB)));
@@ -1037,8 +1041,8 @@ TEST(TurnBattleEngineTest, PvpDirectDamageIsScaled) {
     const auto* damageEvent = FindFirstEvent(result, BATTLE_EVENT_DAMAGE);
     ASSERT_NE(damageEvent, nullptr);
     EXPECT_EQ(damageEvent->source_id(), kPlayerA);  // A 速度快,先出手
-    // 31 * 0.2 = 6.2 → 向上取整 7;PVE 口径(不乘系数)是 31
-    EXPECT_EQ(damageEvent->value(), 7u);
+    // 31 * 0.3 = 9.3 → 向上取整 10;PVE 口径(不乘系数)是 31(2026-09-14 系数 0.2 → 0.3)
+    EXPECT_EQ(damageEvent->value(), 10u);
 }
 
 // 技能按 SkillTable.damage_type 选攻击:物理技能吃物伤、法伤不混入;attack_multiplier 放大攻击那部分
@@ -1054,7 +1058,7 @@ TEST(TurnBattleEngineTest, PhysicalSkillUsesPhysicalAttackWithMultiplier) {
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9205, turnbattle::kMatchModePveSolo, 1);
-    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/10);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/4, /*armor*/100, /*crit*/0, /*speed*/120);
     snapshot->set_physical_attack(30);
     snapshot->set_magic_attack(999);  // 物理技能不得吃法伤
     snapshot->add_skill_table_ids(kSkillPhysical);
@@ -1065,7 +1069,7 @@ TEST(TurnBattleEngineTest, PhysicalSkillUsesPhysicalAttackWithMultiplier) {
 
     const auto* damageEvent = FindFirstEvent(result, BATTLE_EVENT_DAMAGE);
     ASSERT_NE(damageEvent, nullptr);
-    // 50 * (1 + 4*0.1) + 30 * 2 = 130;130 * 130 / (2 + 130) ≈ 128.03 → 向上取整 129
+    // 50 * (1 + 4*0.1) + 30 * 2 = 130;130 * 1560 / (24 + 1560) ≈ 128.03 → 向上取整 129
     EXPECT_EQ(damageEvent->value(), 129u);
 }
 
@@ -1077,7 +1081,7 @@ TEST(TurnBattleEngineTest, MonsterRowWithoutStatsFallsBackToDefaults) {
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9040, turnbattle::kMatchModePveSolo, 11);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/20);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/240);
     ASSERT_TRUE(engine.Initialize(request));
 
     const auto state = engine.BuildStateSnapshot();  // 快照要先落地:指向临时对象的指针在整句结束后悬空
@@ -1090,7 +1094,8 @@ TEST(TurnBattleEngineTest, MonsterRowWithoutStatsFallsBackToDefaults) {
     EXPECT_EQ(monster->attributes().speed(), turnbattle::kMonsterDefaultSpeed);
     EXPECT_EQ(monster->monster_table_id(), kBareMonster);
 
-    // 回退常量必须给出一个「真能打」的对手:玩家普攻 10*(1+2.0)-2=28,300 血要 11 刀。
+    // 回退常量必须给出一个「真能打」的对手:玩家普攻 10*(1+2.0) = 30,受伤比例 1560/(24+1560) → 29.55 → 向上取整 30,
+    // 300 血要 10 刀。(原期望 11 是 2026-09-13 改比例减伤前"攻击减护甲"口径 30-2=28 留下的,改公式时漏改)
     // 只断言 Outcome==ONGOING 是恒真的(刚 Initialize 完必然如此),抓不到任何回归。
     int rounds = 0;
     while (engine.Outcome() == BATTLE_OUTCOME_ONGOING && rounds < 30) {
@@ -1099,7 +1104,7 @@ TEST(TurnBattleEngineTest, MonsterRowWithoutStatsFallsBackToDefaults) {
         ++rounds;
     }
     EXPECT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
-    EXPECT_EQ(rounds, 11) << "回退怪物 300 血/护甲 2,应打满 11 回合而不是开局即结束";
+    EXPECT_EQ(rounds, 10) << "回退怪物 300 血/护甲 24,应打满 10 回合而不是开局即结束";
 }
 
 // 表配了血量但速度为 0 → 只有速度回退常量(0 速会破坏出手序),其余一律按表
@@ -1114,7 +1119,7 @@ TEST(TurnBattleEngineTest, MonsterZeroSpeedInTableFallsBackToDefaultSpeed) {
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9041, turnbattle::kMatchModePveSolo, 12);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 20);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 240);
     ASSERT_TRUE(engine.Initialize(request));
 
     const auto state = engine.BuildStateSnapshot();  // 快照要先落地:指向临时对象的指针在整句结束后悬空
@@ -1134,13 +1139,13 @@ TEST(TurnBattleEngineTest, RewardsAccumulateAcrossAllMonstersInGroup) {
     auto& x = provider->AddMonster(kMonsterX);
     x.set_health(60);
     x.set_strength(1);
-    x.set_speed(3);
+    x.set_speed(36);
     x.set_exp_reward(10);
     x.set_gold_reward(5);
     auto& y = provider->AddMonster(kMonsterY);
     y.set_health(60);
     y.set_strength(1);
-    y.set_speed(2);
+    y.set_speed(24);
     y.set_exp_reward(15);
     y.set_gold_reward(7);
     provider->SetDungeonMonsters(kDungeonConfig, {kMonsterX, kMonsterY});
@@ -1148,7 +1153,7 @@ TEST(TurnBattleEngineTest, RewardsAccumulateAcrossAllMonstersInGroup) {
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9042, turnbattle::kMatchModePveSolo, 13);
     // 玩家力量 20 → 普攻 10*(1+2.0)=30(怪物护甲 0、受伤比例 1),每只 2 刀;怪物力量 1 每下只打几点
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 20);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 240);
     ASSERT_TRUE(engine.Initialize(request));
 
     int rounds = 0;
@@ -1188,15 +1193,15 @@ TEST(TurnBattleEngineTest, FledPlayerOnWinningTeamGetsNoReward) {
     auto& monster = provider->AddMonster(kRewardMonster);
     monster.set_health(150);
     monster.set_strength(1);   // 每下只打几点,不会误杀
-    monster.set_speed(1);      // 最慢:B 的逃跑成功率被夹到上限 0.95
+    monster.set_speed(12);      // 最慢:B 的逃跑成功率被夹到上限 0.95
     monster.set_exp_reward(40);
     monster.set_gold_reward(20);
     provider->SetDungeonMonsters(kDungeonConfig, {kRewardMonster});
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9043, turnbattle::kMatchModePveTeam, 21);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/30);
-    AddPlayer(request, kPlayerB, 0, 1000, 1000, /*strength*/0, /*armor*/10, /*crit*/0, /*speed*/120);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/360);
+    AddPlayer(request, kPlayerB, 0, 1000, 1000, /*strength*/0, /*armor*/10, /*crit*/0, /*speed*/1440);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 第一阶段:A 防御拖时间,B 反复逃跑直到成功(0.95/次,种子固定 → 确定性)
@@ -1241,15 +1246,15 @@ TEST(TurnBattleEngineTest, DeadPlayerOnWinningTeamGetsNoReward) {
     auto& monster = provider->AddMonster(kBruiserMonster);
     monster.set_health(400);   // 够 A 慢慢磨,给怪物足够回合打到 B
     monster.set_strength(20);  // 普攻 10*(1+2.0)=30,足以一击带走 1 血的 B
-    monster.set_speed(1);
+    monster.set_speed(12);
     monster.set_exp_reward(60);
     monster.set_gold_reward(30);
     provider->SetDungeonMonsters(kDungeonConfig, {kBruiserMonster});
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9044, turnbattle::kMatchModePveTeam, 33);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/30);
-    AddPlayer(request, kPlayerB, 0, 1, 1, /*strength*/0, /*armor*/0, /*crit*/0, /*speed*/2);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/360);
+    AddPlayer(request, kPlayerB, 0, 1, 1, /*strength*/0, /*armor*/0, /*crit*/0, /*speed*/24);
     ASSERT_TRUE(engine.Initialize(request));
 
     // 第一阶段:A 防御拖回合,等怪物随机选到 B 把他打死(种子固定 → 确定性)
@@ -1294,15 +1299,15 @@ TEST(TurnBattleEngineTest, EveryQualifyingTeamMemberGetsFullReward) {
     auto& monster = provider->AddMonster(kSharedMonster);
     monster.set_health(120);
     monster.set_strength(1);
-    monster.set_speed(1);
+    monster.set_speed(12);
     monster.set_exp_reward(80);
     monster.set_gold_reward(40);
     provider->SetDungeonMonsters(kDungeonConfig, {kSharedMonster});
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9055, turnbattle::kMatchModePveTeam, 7);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/30);
-    AddPlayer(request, kPlayerB, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/25);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/360);
+    AddPlayer(request, kPlayerB, 0, 1000, 1000, /*strength*/20, /*armor*/10, /*crit*/0, /*speed*/300);
     ASSERT_TRUE(engine.Initialize(request));
 
     int rounds = 0;
@@ -1331,7 +1336,7 @@ TEST(TurnBattleEngineTest, MaxRoundsFallsBackToDefaultAndAttackerLosesOnTimeout)
                                   uint64_t battleId) {
         TurnBattleEngine engine(provider);
         auto request = MakeRequest(battleId, turnbattle::kMatchModePveSolo, 7);
-        AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/0, /*armor*/10, /*crit*/0, /*speed*/20);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/0, /*armor*/10, /*crit*/0, /*speed*/240);
         EXPECT_TRUE(engine.Initialize(request));
         int rounds = 0;
         while (engine.Outcome() == BATTLE_OUTCOME_ONGOING && rounds < 60) {
@@ -1346,7 +1351,7 @@ TEST(TurnBattleEngineTest, MaxRoundsFallsBackToDefaultAndAttackerLosesOnTimeout)
         auto& monster = provider->AddMonster(monsterId);
         monster.set_health(100000);  // 打不死,只能靠回合上限收场
         monster.set_strength(1);
-        monster.set_speed(1);
+        monster.set_speed(12);
         provider->SetDungeonMonsters(kDungeonConfig, {monsterId});
         return provider;
     };
@@ -1387,15 +1392,15 @@ int main(int argc, char** argv) {
 TEST(TurnBattleEngineTest, PresentationGroupIdSharedWithinActionDistinctAcrossActions) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9101, 3 /* PVP 1v1 */, 1);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, 0, /*speed*/10);
-    AddPlayer(request, kPlayerB, 1, 1000, 1000, /*strength*/20, /*armor*/10, 0, /*speed*/20);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, /*strength*/20, /*armor*/10, 0, /*speed*/120);
+    AddPlayer(request, kPlayerB, 1, 1000, 1000, /*strength*/20, /*armor*/10, 0, /*speed*/240);
     ASSERT_TRUE(engine.Initialize(request));
 
     engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB));
     ASSERT_TRUE(engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_ATTACK, kPlayerA)));
     const auto result = engine.ResolveCurrentRound();
 
-    // 行动序:B(速度 20)先手,A 后手;battle 节点把它填进 TurnResultS2C.action_order
+    // 行动序:B(速度 240)先手,A 后手;battle 节点把它填进 TurnResultS2C.action_order
     ASSERT_EQ(engine.LastActionOrder().size(), 2u);
     EXPECT_EQ(engine.LastActionOrder()[0], kPlayerB);
     EXPECT_EQ(engine.LastActionOrder()[1], kPlayerA);
@@ -1424,8 +1429,8 @@ TEST(TurnBattleEngineTest, PresentationGroupIdSharedWithinActionDistinctAcrossAc
 TEST(TurnBattleEngineTest, PresentationFormationSlotIncrementsPerTeamInSnapshotOrder) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9102, turnbattle::kMatchModePveTeam, 1);
-    AddPlayer(request, kPlayerA, 0, 500, 500, 20, 10, 0, 10);
-    AddPlayer(request, kPlayerB, 0, 500, 500, 20, 10, 0, 9);
+    AddPlayer(request, kPlayerA, 0, 500, 500, 20, 10, 0, 120);
+    AddPlayer(request, kPlayerB, 0, 500, 500, 20, 10, 0, 108);
     ASSERT_TRUE(engine.Initialize(request));
 
     const auto state = engine.BuildStateSnapshot();
@@ -1450,7 +1455,7 @@ TEST(TurnBattleEngineTest, PresentationSkillManaCostEmitsManaEventInSkillGroup) 
 
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9103, turnbattle::kMatchModePveSolo, 1);
-    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 20);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 20, 10, 0, 240);
     snapshot->set_max_mana(100);
     snapshot->mutable_base_attributes()->set_mana(100);
     ASSERT_TRUE(engine.Initialize(request));
@@ -1526,9 +1531,9 @@ const BattleActorState* FindPetActor(const BattleStateS2C& state, uint64_t petId
 TEST(TurnBattleEngineTest, PetJoinsOwnerTeamAndActsWithoutClientAction) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9401, turnbattle::kMatchModePveSolo, 31337);
-    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 10);
+    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 120);
     // 宝宝比主人快:出手序里应排在主人之前
-    AddPet(owner, kPetA, 400, 400, 4, 30);
+    AddPet(owner, kPetA, 400, 400, 4, 360);
     ASSERT_TRUE(engine.Initialize(request));
 
     const auto state = engine.BuildStateSnapshot();
@@ -1547,7 +1552,7 @@ TEST(TurnBattleEngineTest, PetJoinsOwnerTeamAndActsWithoutClientAction) {
     // 从这里透传上去的(battle_room_manager.cpp),引擎自己返回的那份里恒为空
     const auto& order = engine.LastActionOrder();
     ASSERT_GE(order.size(), 2u);
-    EXPECT_EQ(order[0], petActorId);  // 速度 30 > 10
+    EXPECT_EQ(order[0], petActorId);  // 速度 360 > 120
 
     // 宝宝这一回合确实出了手(普攻由默认行动路径代打)
     bool petAttacked = false;
@@ -1562,8 +1567,8 @@ TEST(TurnBattleEngineTest, PetJoinsOwnerTeamAndActsWithoutClientAction) {
 TEST(TurnBattleEngineTest, PetIsNotControllableByClient) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9402, turnbattle::kMatchModePveSolo, 4242);
-    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 10);
-    AddPet(owner, kPetA, 400, 400, 4, 30);
+    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 120);
+    AddPet(owner, kPetA, 400, 400, 4, 360);
     ASSERT_TRUE(engine.Initialize(request));
 
     const auto* petBefore = FindPetActor(engine.BuildStateSnapshot(), kPetA);
@@ -1583,8 +1588,8 @@ TEST(TurnBattleEngineTest, PetIsNotControllableByClient) {
 TEST(TurnBattleEngineTest, PetFinalStateGoesIntoOwnerSettlement) {
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9403, turnbattle::kMatchModePveSolo, 55);
-    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 10);
-    AddPet(owner, kPetA, 400, 400, 4, 30);
+    auto* owner = AddPlayer(request, kPlayerA, 0, 1000, 1000, 5, 0, 0, 120);
+    AddPet(owner, kPetA, 400, 400, 4, 360);
     ASSERT_TRUE(engine.Initialize(request));
 
     ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId)));
@@ -1607,8 +1612,8 @@ TEST(TurnBattleEngineTest, PetWithSameIdAsItsOwnerDoesNotCollide) {
     constexpr uint64_t kSameId = 5;
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9404, turnbattle::kMatchModePveSolo, 7);
-    auto* owner = AddPlayer(request, kSameId, 0, 1000, 1000, 5, 0, 0, 10);
-    AddPet(owner, kSameId, 400, 400, 4, 30);
+    auto* owner = AddPlayer(request, kSameId, 0, 1000, 1000, 5, 0, 0, 120);
+    AddPet(owner, kSameId, 400, 400, 4, 360);
     ASSERT_TRUE(engine.Initialize(request));
 
     const auto state = engine.BuildStateSnapshot();
@@ -1633,7 +1638,7 @@ TEST(TurnBattleEngineTest, PlayerWithLegacyMonsterBaseIdDoesNotShareActorWithMon
     constexpr uint64_t kMillionthPlayer = 1000000;
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9405, turnbattle::kMatchModePveSolo, 7);
-    AddPlayer(request, kMillionthPlayer, 0, 1000, 1000, 5, 0, 0, 10);
+    AddPlayer(request, kMillionthPlayer, 0, 1000, 1000, 5, 0, 0, 120);
     ASSERT_TRUE(engine.Initialize(request));
 
     const auto state = engine.BuildStateSnapshot();
@@ -1653,7 +1658,7 @@ TEST(TurnBattleEngineTest, PlayerIdInEngineLocalNamespaceIsRejected) {
     // bit63 是引擎局内号的保留段,真实 player_id 不可能落进来;落进来直接拒绝开局
     TurnBattleEngine engine(MakeProvider());
     auto request = MakeRequest(9406, turnbattle::kMatchModePveSolo, 7);
-    AddPlayer(request, turnbattle::kEngineLocalActorIdFlag | 42, 0, 1000, 1000, 5, 0, 0, 10);
+    AddPlayer(request, turnbattle::kEngineLocalActorIdFlag | 42, 0, 1000, 1000, 5, 0, 0, 120);
     EXPECT_FALSE(engine.Initialize(request));
 }
 
@@ -1665,14 +1670,14 @@ TEST(TurnBattleEngineTest, SettlementKeepsActualKillOrderAndRepeatedReadIsStable
         auto& row = provider->AddMonster(id);
         row.set_health(8);
         row.set_strength(1);
-        row.set_speed(1);
+        row.set_speed(12);
         row.set_exp_reward(id == xId ? 10 : 15);
         row.set_gold_reward(id == xId ? 5 : 7);
     }
     provider->SetDungeonMonsters(kDungeonConfig, {xId, yId});
     TurnBattleEngine engine(provider);
     auto request = MakeRequest(9701, turnbattle::kMatchModePveSolo, 7);
-    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 20);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 240);
     ASSERT_TRUE(engine.Initialize(request));
     ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kMonsterId + 1)));
     engine.ResolveCurrentRound();
@@ -1701,13 +1706,13 @@ TEST(TurnBattleEngineTest, SettlementKeepsPoisonAndBurnKillBeforeLaterSkillKill)
             auto& row = provider->AddMonster(id);
             row.set_health(8);
             row.set_strength(1);
-            row.set_speed(1);
+            row.set_speed(12);
             row.set_gold_reward(3);
         }
         provider->SetDungeonMonsters(kDungeonConfig, {xId, yId});
         TurnBattleEngine engine(provider);
         auto request = MakeRequest(9702, turnbattle::kMatchModePveSolo, 7);
-        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 20);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 240);
         ASSERT_TRUE(engine.Initialize(request));
         ASSERT_TRUE(engine.SubmitAction(kPlayerA,
             MakeAction(BATTLE_ACTION_SKILL, kMonsterId + 1, kSkillPoison)));
@@ -1735,13 +1740,13 @@ TEST(TurnBattleEngineTest, SettlementDoesNotCreditUnknownOrMonsterSourceDeath) {
             auto& row = provider->AddMonster(id);
             row.set_health(8);
             row.set_strength(1);
-            row.set_speed(1);
+            row.set_speed(12);
             row.set_gold_reward(3);
         }
         provider->SetDungeonMonsters(kDungeonConfig, {xId, yId});
         TurnBattleEngine engine(provider);
         auto request = MakeRequest(9703, turnbattle::kMatchModePveSolo, 7);
-        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 20);
+        AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 240);
         ASSERT_TRUE(engine.Initialize(request));
         ASSERT_TRUE(turnbattle::TurnBattleEngineDeathTestAccess::AddBuff(
             engine, kMonsterId + 1, kBuffPoison, sourceId));

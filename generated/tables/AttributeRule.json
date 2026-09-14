@@ -1,6 +1,7 @@
 {
  "data": [
   {
+   "alloc_efficiency_bonus": 0.2,
    "create_scheme_cost_gold": 1000,
    "free_scheme_count": 1,
    "id": 1,

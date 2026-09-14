@@ -76,6 +76,14 @@ $Catalogue = [ordered]@{
     "scene-manager" = @{ Dir = "scene_manager";   Entry = "scene_manager_service.go"; ImageName = "mmorpg-scene-manager" }
     # 与 k8s_deploy.ps1 $GoSvcCatalogue 的 match 条目配对(ImageName 必须一致,否则 infra-up 拉不到镜像)
     match           = @{ Dir = "match";           Entry = "match_service.go";       ImageName = "mmorpg-match" }
+    # 全局聊天 chat v1:与 k8s_deploy.ps1 $GoSvcCatalogue 的 chat 条目配对(ImageName 必须一致,理由同 match)。
+    # chat 只承诺经 gate → 路由服可达(docs/design/client-rpc-router.md D34;
+    # docs/design/xuanming-port-decisions-20260910.md D-12),所以镜像必须和下面的路由服成对发布。
+    chat            = @{ Dir = "chat";            Entry = "chat.go";                ImageName = "mmorpg-chat" }
+    # 客户端 RPC 路由服:GATE_CLIENT_RPC_ROUTER=1 时 gate 唯一的 gRPC 目标(契约 zone_contract_v1 §1/§7 路由服部署链)。
+    # 与 k8s_deploy.ps1 $GoSvcCatalogue 的 client-rpc-router 条目配对(ImageName 必须一致)。
+    # 发布顺序:改 proto 后路由服先、gate 后(新消息号两边生成物必须同一次 proto-gen)。
+    "client-rpc-router" = @{ Dir = "client_rpc_router"; Entry = "client_rpc_router_service.go"; ImageName = "mmorpg-client-rpc-router" }
 }
 
 # 先把每个元素再按逗号拆一次,兼容 "a,b"(单字符串)和 a,b(数组)两种传法。

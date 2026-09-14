@@ -107,7 +107,8 @@ $GoBinDir   = Join-Path $RepoRoot "bin\go_services"
 #               not see this; they still discover endpoints via etcd (so rolling
 #               upgrades / hot updates / canary releases are unaffected).
 #               Tier 0 = infra-adjacent (db, data_service)
-#               Tier 1 = scene_manager (depended by player_locator), client_rpc_router (gate 的唯一 gRPC 目标)
+#               Tier 1 = scene_manager (depended by player_locator), client_rpc_router (gate 的唯一 gRPC 目标),
+#                        chat (只依赖 etcd + Redis,经路由服可达)
 #               Tier 2 = player_locator (depended by login)
 #               Tier 3 = login (top of the dial chain)
 $ServiceCatalogue = [ordered]@{
@@ -133,6 +134,25 @@ $ServiceCatalogue = [ordered]@{
     # 端口 50600 与 match 的 50500 同一安全区间(已观测的 Windows 保留区 50000-50171 与 51573-51872 之间),
     # 与 go/client_rpc_router/etc/client_rpc_router.yaml 的 ListenOn 保持一致。
     client_rpc_router = @{ Dir = "client_rpc_router"; Entry = "client_rpc_router_service.go"; Port = 50600; Desc = "Client RPC Router (gate 唯一 gRPC 目标)"; ConfigFlag = "-f"; ConfigFile = "etc/client_rpc_router.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    # 全局聊天 chat v1:全局一份、可多开、无状态(历史 / 幂等 / 限速全在 ChatRedis),多实例只在路由服与
+    # NodeInfo 视角等价;本地双 zone 仍按既有规则每 zone 起一份(-Zone 位移端口与 ZoneId),不另开特例。
+    # **前提:gate 必须以路由服模式启动(GATE_CLIENT_RPC_ROUTER=1)**。chat 只承诺经 gate → client_rpc_router
+    # 到达;直连模式下 gate 白名单(cpp/nodes/gate/main.cpp)里没有 Chat,任何 zone 的玩家都到不了它 ——
+    # 进程照样起得来、端口照样 LISTEN,所以「服务在跑」不等于「玩家可达」(start_game.ps1 -GateRouterMode 默认开)。
+    # Tier 1:它不拨任何 Go 服务(只连 etcd 注册 + Redis),没理由排在 login 之后;与路由服同批起,玩家登录后即可用。
+    # 端口 50700 与 match 50500 / 路由服 50600 同一安全区间(已观测的 Windows 保留区 50000-50171 与 51573-51872 之间)。
+    # 注意 -Zone 2 位移后是 51700,恰好落在已观测的 51573-51872 里:由 Resolve-BindablePort 自动上挪并走派生 yaml,
+    # 路由服经 etcd NodeInfo 发现实际端口,不受影响(ZonePortShift 刻意不为它改)。
+    # 必须与 go/chat/etc/chat.yaml 的 ListenOn、k8s_deploy.ps1 $GoSvcCatalogue 的 Port、manifests/go-svc/chat.yaml 保持一致。
+    chat              = @{ Dir = "chat"; Entry = "chat.go"; Port = 50700; Desc = "Chat (全局聊天,路由服可达)"; ConfigFlag = "-f"; ConfigFile = "etc/chat.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    # 公会 guild:全局一份(port-decisions D-2),帮会按 zone_id **数据维度**隔离而不是按部署隔离 ——
+    # 客户端请求属于哪个区由 guild 查 data_service 的玩家归属映射决定(docs/design/guild-zone-client-access.md)。
+    # 与 chat 一样**只承诺路由服模式可达**(GATE_CLIENT_RPC_ROUTER=1):直连模式下 gate 白名单里没有 Guild,
+    # 进程在跑、端口在听,玩家照样到不了它。
+    # Tier 1:只依赖基础设施(MySQL / Redis / etcd)与 data_service(Tier 0;号段 + 归属 zone,NonBlock 拨号),不拨 login 等服务。
+    # 多开安全:建帮 / 入会 / 公告都是 MySQL 事务,启动时的榜单重建有 Redis 维护锁(guild_rank:maintenance_lock)。
+    # 端口 50300 与 go/guild/etc/guild.yaml 的 ListenOn 一致;-Zone 2 位移后 51300,不在已观测的保留区间内。
+    guild             = @{ Dir = "guild"; Entry = "guild.go"; Port = 50300; Desc = "Guild (公会,按 zone 隔离,路由服可达)"; ConfigFlag = "-f"; ConfigFile = "etc/guild.yaml"; AllowMultiInstance = $true; Tier = 1 }
 }
 
 # Derived per-instance config files live here so the source tree stays clean.

@@ -19,7 +19,19 @@ const guildIDBizTag = "guild"
 // 尽早暴露在启动日志里;超时不阻止起服(号段是弱依赖,见 shared/idsegment 包注释)。
 const guildIDWarmTimeout = 5 * time.Second
 
-// initGuildIDSegment 按 IdSegment 配置拨 data_service 并建号段客户端;Enabled=false 什么都不做。
+// initDataServiceClient 按 DataServiceRpc 建 data_service 客户端。guild 用它做两件事:
+// 领 guild_id 号段(initGuildIDSegment)与查玩家归属 zone(logic.DataServiceHomeZone,客户端请求的
+// zone 隔离)。没配目标时保持 nil,由两个使用方各自决定拒启(号段)还是拒请求(归属 zone)。
+// 配置里 NonBlock: true,data_service 暂未起时不阻塞 guild 起服。
+func (s *ServiceContext) initDataServiceClient() {
+	if !hasRpcTarget(s.Config.DataServiceRpc) {
+		return
+	}
+	conn := zrpc.MustNewClient(s.Config.DataServiceRpc)
+	s.DataServiceClient = dspb.NewDataServiceClient(conn.Conn())
+}
+
+// initGuildIDSegment 按 IdSegment 配置建号段客户端;Enabled=false 什么都不做。
 func (s *ServiceContext) initGuildIDSegment() {
 	cfg := s.Config.IdSegment
 	if !cfg.Enabled {
@@ -27,14 +39,12 @@ func (s *ServiceContext) initGuildIDSegment() {
 			"set IdSegment.Enabled=true + DataServiceRpc to mint from id_segment biz_tag=%s)", guildIDBizTag)
 		return
 	}
-	if !hasRpcTarget(s.Config.DataServiceRpc) {
+	if s.DataServiceClient == nil {
 		// 开了号段却没配 data_service 客户端:静默退回 snowflake 会让运维以为号段已上线,
-		// 所以这里直接拒绝起服。
+		// 所以这里直接拒绝起服。客户端由 initDataServiceClient 按 DataServiceRpc 建。
 		panic(fmt.Errorf("IdSegment.Enabled=true but DataServiceRpc has no Etcd.Key / Endpoints / Target " +
 			"(guild needs data_service.AllocateIdSegment to mint guild ids)"))
 	}
-	conn := zrpc.MustNewClient(s.Config.DataServiceRpc)
-	s.DataServiceClient = dspb.NewDataServiceClient(conn.Conn())
 
 	seg, err := idsegment.New(
 		idsegment.Adapt(s.DataServiceClient.AllocateIdSegment,

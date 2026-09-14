@@ -66,7 +66,7 @@ public final class SkillTableOuterClass extends com.google.protobuf.GeneratedFil
       "urce\022\036\n\026required_resource_type\030\001 \001(\r\022\037\n\027" +
       "required_resource_value\030\002 \001(\r\"J\n\022Skillco" +
       "st_resource\022\030\n\020cost_resource_id\030\001 \001(\r\022\032\n" +
-      "\022cost_resource_cost\030\002 \001(\r\"\262\004\n\nSkillTable" +
+      "\022cost_resource_cost\030\002 \001(\r\"\342\004\n\nSkillTable" +
       "\022\n\n\002id\030\001 \001(\r\022\022\n\nskill_type\030\002 \003(\r\022\026\n\016targ" +
       "eting_mode\030\003 \003(\r\022\026\n\016require_target\030\004 \001(\r" +
       "\022\025\n\rtarget_status\030\005 \001(\r\022\022\n\ncast_point\030\006 " +
@@ -77,13 +77,14 @@ public final class SkillTableOuterClass extends com.google.protobuf.GeneratedFil
       "nge\030\016 \001(\001\022\021\n\tmax_range\030\017 \001(\001\022\021\n\tmin_rang" +
       "e\030\020 \001(\001\022\023\n\013self_status\030\021 \001(\r\022\027\n\017required" +
       "_status\030\022 \001(\r\022\023\n\013cooldown_id\030\023 \001(\r\022\016\n\006da" +
-      "mage\030\024 \001(\t\022*\n\rrequired_item\030\025 \003(\0132\023.Skil" +
-      "lrequired_item\0222\n\021required_resource\030\026 \003(" +
-      "\0132\027.Skillrequired_resource\022*\n\rcost_resou" +
-      "rce\030\027 \003(\0132\023.Skillcost_resource\"+\n\016SkillT" +
-      "ableData\022\031\n\004data\030\001 \003(\0132\013.SkillTableB<\n\016c" +
-      "om.game.tableB\024SkillTableOuterClassP\001Z\022g" +
-      "enerated/pb/tableb\006proto3"
+      "mage\030\024 \001(\t\022\023\n\013damage_type\030\030 \001(\r\022\031\n\021attac" +
+      "k_multiplier\030\031 \001(\001\022*\n\rrequired_item\030\025 \003(" +
+      "\0132\023.Skillrequired_item\0222\n\021required_resou" +
+      "rce\030\026 \003(\0132\027.Skillrequired_resource\022*\n\rco" +
+      "st_resource\030\027 \003(\0132\023.Skillcost_resource\"+" +
+      "\n\016SkillTableData\022\031\n\004data\030\001 \003(\0132\013.SkillTa" +
+      "bleB<\n\016com.game.tableB\024SkillTableOuterCl" +
+      "assP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -112,7 +113,7 @@ public final class SkillTableOuterClass extends com.google.protobuf.GeneratedFil
     internal_static_SkillTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_SkillTable_descriptor,
-        new java.lang.String[] { "Id", "SkillType", "TargetingMode", "RequireTarget", "TargetStatus", "CastPoint", "RecoveryTime", "Immediate", "Effect", "ChannelThink", "ChannelFinish", "ThinkInterval", "ChannelTime", "Range", "MaxRange", "MinRange", "SelfStatus", "RequiredStatus", "CooldownId", "Damage", "RequiredItem", "RequiredResource", "CostResource", });
+        new java.lang.String[] { "Id", "SkillType", "TargetingMode", "RequireTarget", "TargetStatus", "CastPoint", "RecoveryTime", "Immediate", "Effect", "ChannelThink", "ChannelFinish", "ThinkInterval", "ChannelTime", "Range", "MaxRange", "MinRange", "SelfStatus", "RequiredStatus", "CooldownId", "Damage", "DamageType", "AttackMultiplier", "RequiredItem", "RequiredResource", "CostResource", });
     internal_static_SkillTableData_descriptor =
       getDescriptor().getMessageType(4);
     internal_static_SkillTableData_fieldAccessorTable = new

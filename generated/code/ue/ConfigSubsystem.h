@@ -32,6 +32,7 @@
 #include "ActivityScheduleTable.h"
 #include "ActorActionCombatStateTable.h"
 #include "ActorActionStateTable.h"
+#include "AttributeAllocRatioTable.h"
 #include "AttributeAutoPlanTable.h"
 #include "AttributeDimensionTable.h"
 #include "AttributePoolTable.h"
@@ -95,7 +96,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 28;
+	static constexpr int32 TableCount = 29;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -154,6 +155,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UActorActionStateTable* GetActorActionStateTable() const { return ActorActionStateTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UAttributeAllocRatioTable* GetAttributeAllocRatioTable() const { return AttributeAllocRatioTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UAttributeAutoPlanTable* GetAttributeAutoPlanTable() const { return AttributeAutoPlanTable; }
@@ -237,6 +241,8 @@ private:
 	TObjectPtr<UActorActionCombatStateTable> ActorActionCombatStateTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UActorActionStateTable> ActorActionStateTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UAttributeAllocRatioTable> AttributeAllocRatioTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UAttributeAutoPlanTable> AttributeAutoPlanTable;
 	UPROPERTY(Transient)

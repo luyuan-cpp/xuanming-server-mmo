@@ -360,6 +360,28 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int DAMAGE_TYPE_FIELD_NUMBER = 24;
+  private int damageType_ = 0;
+  /**
+   * <code>uint32 damage_type = 24;</code>
+   * @return The damageType.
+   */
+  @java.lang.Override
+  public int getDamageType() {
+    return damageType_;
+  }
+
+  public static final int ATTACK_MULTIPLIER_FIELD_NUMBER = 25;
+  private double attackMultiplier_ = 0D;
+  /**
+   * <code>double attack_multiplier = 25;</code>
+   * @return The attackMultiplier.
+   */
+  @java.lang.Override
+  public double getAttackMultiplier() {
+    return attackMultiplier_;
+  }
+
   public static final int REQUIRED_ITEM_FIELD_NUMBER = 21;
   @SuppressWarnings("serial")
   private java.util.List<com.game.table.Skillrequired_item> requiredItem_;
@@ -579,6 +601,12 @@ private static final long serialVersionUID = 0L;
     for (int i = 0; i < costResource_.size(); i++) {
       output.writeMessage(23, costResource_.get(i));
     }
+    if (damageType_ != 0) {
+      output.writeUInt32(24, damageType_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(attackMultiplier_) != 0) {
+      output.writeDouble(25, attackMultiplier_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -719,6 +747,14 @@ private static final long serialVersionUID = 0L;
           }
           size += 2 * count;
         }
+    if (damageType_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(24, damageType_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(attackMultiplier_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(25, attackMultiplier_);
+    }
     return size;
   }
   @java.lang.Override
@@ -788,6 +824,11 @@ private static final long serialVersionUID = 0L;
         != other.getCooldownId()) return false;
     if (!getDamage()
         .equals(other.getDamage())) return false;
+    if (getDamageType()
+        != other.getDamageType()) return false;
+    if (java.lang.Double.doubleToLongBits(getAttackMultiplier())
+        != java.lang.Double.doubleToLongBits(
+            other.getAttackMultiplier())) return false;
     if (!getRequiredItemList()
         .equals(other.getRequiredItemList())) return false;
     if (!getRequiredResourceList()
@@ -856,6 +897,11 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getCooldownId();
     hash = (37 * hash) + DAMAGE_FIELD_NUMBER;
     hash = (53 * hash) + getDamage().hashCode();
+    hash = (37 * hash) + DAMAGE_TYPE_FIELD_NUMBER;
+    hash = (53 * hash) + getDamageType();
+    hash = (37 * hash) + ATTACK_MULTIPLIER_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getAttackMultiplier()));
     if (getRequiredItemCount() > 0) {
       hash = (37 * hash) + REQUIRED_ITEM_FIELD_NUMBER;
       hash = (53 * hash) + getRequiredItemList().hashCode();
@@ -1019,27 +1065,29 @@ private static final long serialVersionUID = 0L;
       requiredStatus_ = 0;
       cooldownId_ = 0;
       damage_ = "";
+      damageType_ = 0;
+      attackMultiplier_ = 0D;
       if (requiredItemBuilder_ == null) {
         requiredItem_ = java.util.Collections.emptyList();
       } else {
         requiredItem_ = null;
         requiredItemBuilder_.clear();
       }
-      bitField0_ = (bitField0_ & ~0x00100000);
+      bitField0_ = (bitField0_ & ~0x00400000);
       if (requiredResourceBuilder_ == null) {
         requiredResource_ = java.util.Collections.emptyList();
       } else {
         requiredResource_ = null;
         requiredResourceBuilder_.clear();
       }
-      bitField0_ = (bitField0_ & ~0x00200000);
+      bitField0_ = (bitField0_ & ~0x00800000);
       if (costResourceBuilder_ == null) {
         costResource_ = java.util.Collections.emptyList();
       } else {
         costResource_ = null;
         costResourceBuilder_.clear();
       }
-      bitField0_ = (bitField0_ & ~0x00400000);
+      bitField0_ = (bitField0_ & ~0x01000000);
       return this;
     }
 
@@ -1074,27 +1122,27 @@ private static final long serialVersionUID = 0L;
 
     private void buildPartialRepeatedFields(com.game.table.SkillTable result) {
       if (requiredItemBuilder_ == null) {
-        if (((bitField0_ & 0x00100000) != 0)) {
+        if (((bitField0_ & 0x00400000) != 0)) {
           requiredItem_ = java.util.Collections.unmodifiableList(requiredItem_);
-          bitField0_ = (bitField0_ & ~0x00100000);
+          bitField0_ = (bitField0_ & ~0x00400000);
         }
         result.requiredItem_ = requiredItem_;
       } else {
         result.requiredItem_ = requiredItemBuilder_.build();
       }
       if (requiredResourceBuilder_ == null) {
-        if (((bitField0_ & 0x00200000) != 0)) {
+        if (((bitField0_ & 0x00800000) != 0)) {
           requiredResource_ = java.util.Collections.unmodifiableList(requiredResource_);
-          bitField0_ = (bitField0_ & ~0x00200000);
+          bitField0_ = (bitField0_ & ~0x00800000);
         }
         result.requiredResource_ = requiredResource_;
       } else {
         result.requiredResource_ = requiredResourceBuilder_.build();
       }
       if (costResourceBuilder_ == null) {
-        if (((bitField0_ & 0x00400000) != 0)) {
+        if (((bitField0_ & 0x01000000) != 0)) {
           costResource_ = java.util.Collections.unmodifiableList(costResource_);
-          bitField0_ = (bitField0_ & ~0x00400000);
+          bitField0_ = (bitField0_ & ~0x01000000);
         }
         result.costResource_ = costResource_;
       } else {
@@ -1166,6 +1214,12 @@ private static final long serialVersionUID = 0L;
       }
       if (((from_bitField0_ & 0x00080000) != 0)) {
         result.damage_ = damage_;
+      }
+      if (((from_bitField0_ & 0x00100000) != 0)) {
+        result.damageType_ = damageType_;
+      }
+      if (((from_bitField0_ & 0x00200000) != 0)) {
+        result.attackMultiplier_ = attackMultiplier_;
       }
     }
 
@@ -1267,11 +1321,17 @@ private static final long serialVersionUID = 0L;
         bitField0_ |= 0x00080000;
         onChanged();
       }
+      if (other.getDamageType() != 0) {
+        setDamageType(other.getDamageType());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getAttackMultiplier()) != 0) {
+        setAttackMultiplier(other.getAttackMultiplier());
+      }
       if (requiredItemBuilder_ == null) {
         if (!other.requiredItem_.isEmpty()) {
           if (requiredItem_.isEmpty()) {
             requiredItem_ = other.requiredItem_;
-            bitField0_ = (bitField0_ & ~0x00100000);
+            bitField0_ = (bitField0_ & ~0x00400000);
           } else {
             ensureRequiredItemIsMutable();
             requiredItem_.addAll(other.requiredItem_);
@@ -1284,7 +1344,7 @@ private static final long serialVersionUID = 0L;
             requiredItemBuilder_.dispose();
             requiredItemBuilder_ = null;
             requiredItem_ = other.requiredItem_;
-            bitField0_ = (bitField0_ & ~0x00100000);
+            bitField0_ = (bitField0_ & ~0x00400000);
             requiredItemBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetRequiredItemFieldBuilder() : null;
@@ -1297,7 +1357,7 @@ private static final long serialVersionUID = 0L;
         if (!other.requiredResource_.isEmpty()) {
           if (requiredResource_.isEmpty()) {
             requiredResource_ = other.requiredResource_;
-            bitField0_ = (bitField0_ & ~0x00200000);
+            bitField0_ = (bitField0_ & ~0x00800000);
           } else {
             ensureRequiredResourceIsMutable();
             requiredResource_.addAll(other.requiredResource_);
@@ -1310,7 +1370,7 @@ private static final long serialVersionUID = 0L;
             requiredResourceBuilder_.dispose();
             requiredResourceBuilder_ = null;
             requiredResource_ = other.requiredResource_;
-            bitField0_ = (bitField0_ & ~0x00200000);
+            bitField0_ = (bitField0_ & ~0x00800000);
             requiredResourceBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetRequiredResourceFieldBuilder() : null;
@@ -1323,7 +1383,7 @@ private static final long serialVersionUID = 0L;
         if (!other.costResource_.isEmpty()) {
           if (costResource_.isEmpty()) {
             costResource_ = other.costResource_;
-            bitField0_ = (bitField0_ & ~0x00400000);
+            bitField0_ = (bitField0_ & ~0x01000000);
           } else {
             ensureCostResourceIsMutable();
             costResource_.addAll(other.costResource_);
@@ -1336,7 +1396,7 @@ private static final long serialVersionUID = 0L;
             costResourceBuilder_.dispose();
             costResourceBuilder_ = null;
             costResource_ = other.costResource_;
-            bitField0_ = (bitField0_ & ~0x00400000);
+            bitField0_ = (bitField0_ & ~0x01000000);
             costResourceBuilder_ = 
               com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
                  internalGetCostResourceFieldBuilder() : null;
@@ -1543,6 +1603,16 @@ private static final long serialVersionUID = 0L;
               }
               break;
             } // case 186
+            case 192: {
+              damageType_ = input.readUInt32();
+              bitField0_ |= 0x00100000;
+              break;
+            } // case 192
+            case 201: {
+              attackMultiplier_ = input.readDouble();
+              bitField0_ |= 0x00200000;
+              break;
+            } // case 201
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -2396,12 +2466,76 @@ private static final long serialVersionUID = 0L;
       return this;
     }
 
+    private int damageType_ ;
+    /**
+     * <code>uint32 damage_type = 24;</code>
+     * @return The damageType.
+     */
+    @java.lang.Override
+    public int getDamageType() {
+      return damageType_;
+    }
+    /**
+     * <code>uint32 damage_type = 24;</code>
+     * @param value The damageType to set.
+     * @return This builder for chaining.
+     */
+    public Builder setDamageType(int value) {
+
+      damageType_ = value;
+      bitField0_ |= 0x00100000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 damage_type = 24;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearDamageType() {
+      bitField0_ = (bitField0_ & ~0x00100000);
+      damageType_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private double attackMultiplier_ ;
+    /**
+     * <code>double attack_multiplier = 25;</code>
+     * @return The attackMultiplier.
+     */
+    @java.lang.Override
+    public double getAttackMultiplier() {
+      return attackMultiplier_;
+    }
+    /**
+     * <code>double attack_multiplier = 25;</code>
+     * @param value The attackMultiplier to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAttackMultiplier(double value) {
+
+      attackMultiplier_ = value;
+      bitField0_ |= 0x00200000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double attack_multiplier = 25;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAttackMultiplier() {
+      bitField0_ = (bitField0_ & ~0x00200000);
+      attackMultiplier_ = 0D;
+      onChanged();
+      return this;
+    }
+
     private java.util.List<com.game.table.Skillrequired_item> requiredItem_ =
       java.util.Collections.emptyList();
     private void ensureRequiredItemIsMutable() {
-      if (!((bitField0_ & 0x00100000) != 0)) {
+      if (!((bitField0_ & 0x00400000) != 0)) {
         requiredItem_ = new java.util.ArrayList<com.game.table.Skillrequired_item>(requiredItem_);
-        bitField0_ |= 0x00100000;
+        bitField0_ |= 0x00400000;
        }
     }
 
@@ -2551,7 +2685,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearRequiredItem() {
       if (requiredItemBuilder_ == null) {
         requiredItem_ = java.util.Collections.emptyList();
-        bitField0_ = (bitField0_ & ~0x00100000);
+        bitField0_ = (bitField0_ & ~0x00400000);
         onChanged();
       } else {
         requiredItemBuilder_.clear();
@@ -2628,7 +2762,7 @@ private static final long serialVersionUID = 0L;
         requiredItemBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillrequired_item, com.game.table.Skillrequired_item.Builder, com.game.table.Skillrequired_itemOrBuilder>(
                 requiredItem_,
-                ((bitField0_ & 0x00100000) != 0),
+                ((bitField0_ & 0x00400000) != 0),
                 getParentForChildren(),
                 isClean());
         requiredItem_ = null;
@@ -2639,9 +2773,9 @@ private static final long serialVersionUID = 0L;
     private java.util.List<com.game.table.Skillrequired_resource> requiredResource_ =
       java.util.Collections.emptyList();
     private void ensureRequiredResourceIsMutable() {
-      if (!((bitField0_ & 0x00200000) != 0)) {
+      if (!((bitField0_ & 0x00800000) != 0)) {
         requiredResource_ = new java.util.ArrayList<com.game.table.Skillrequired_resource>(requiredResource_);
-        bitField0_ |= 0x00200000;
+        bitField0_ |= 0x00800000;
        }
     }
 
@@ -2791,7 +2925,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearRequiredResource() {
       if (requiredResourceBuilder_ == null) {
         requiredResource_ = java.util.Collections.emptyList();
-        bitField0_ = (bitField0_ & ~0x00200000);
+        bitField0_ = (bitField0_ & ~0x00800000);
         onChanged();
       } else {
         requiredResourceBuilder_.clear();
@@ -2868,7 +3002,7 @@ private static final long serialVersionUID = 0L;
         requiredResourceBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillrequired_resource, com.game.table.Skillrequired_resource.Builder, com.game.table.Skillrequired_resourceOrBuilder>(
                 requiredResource_,
-                ((bitField0_ & 0x00200000) != 0),
+                ((bitField0_ & 0x00800000) != 0),
                 getParentForChildren(),
                 isClean());
         requiredResource_ = null;
@@ -2879,9 +3013,9 @@ private static final long serialVersionUID = 0L;
     private java.util.List<com.game.table.Skillcost_resource> costResource_ =
       java.util.Collections.emptyList();
     private void ensureCostResourceIsMutable() {
-      if (!((bitField0_ & 0x00400000) != 0)) {
+      if (!((bitField0_ & 0x01000000) != 0)) {
         costResource_ = new java.util.ArrayList<com.game.table.Skillcost_resource>(costResource_);
-        bitField0_ |= 0x00400000;
+        bitField0_ |= 0x01000000;
        }
     }
 
@@ -3031,7 +3165,7 @@ private static final long serialVersionUID = 0L;
     public Builder clearCostResource() {
       if (costResourceBuilder_ == null) {
         costResource_ = java.util.Collections.emptyList();
-        bitField0_ = (bitField0_ & ~0x00400000);
+        bitField0_ = (bitField0_ & ~0x01000000);
         onChanged();
       } else {
         costResourceBuilder_.clear();
@@ -3108,7 +3242,7 @@ private static final long serialVersionUID = 0L;
         costResourceBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
             com.game.table.Skillcost_resource, com.game.table.Skillcost_resource.Builder, com.game.table.Skillcost_resourceOrBuilder>(
                 costResource_,
-                ((bitField0_ & 0x00400000) != 0),
+                ((bitField0_ & 0x01000000) != 0),
                 getParentForChildren(),
                 isClean());
         costResource_ = null;

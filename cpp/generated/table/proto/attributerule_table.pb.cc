@@ -48,11 +48,11 @@ constexpr AttributeRuleTable::ParseTableT_ AttributeRuleTable::InternalGenerateP
     {
       PROTOBUF_FIELD_OFFSET(AttributeRuleTable, _impl_._has_bits_),
       0, // no _extensions_
-      6, 56,  // max_field_number, fast_idx_mask
+      7, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967232,  // skipmap
+      4294967168,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      6,  // num_field_entries
+      7,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -84,10 +84,13 @@ constexpr AttributeRuleTable::ParseTableT_ AttributeRuleTable::InternalGenerateP
        {40, 4, 0,
         PROTOBUF_FIELD_OFFSET(AttributeRuleTable, _impl_.switch_cooldown_seconds_)}},
       // uint32 scheme_name_max_len = 6;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AttributeRuleTable, _impl_.scheme_name_max_len_), 5>(),
-       {48, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AttributeRuleTable, _impl_.scheme_name_max_len_), 6>(),
+       {48, 6, 0,
         PROTOBUF_FIELD_OFFSET(AttributeRuleTable, _impl_.scheme_name_max_len_)}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // double alloc_efficiency_bonus = 7;
+      {::_pbi::TcParser::FastF64S1,
+       {57, 5, 0,
+        PROTOBUF_FIELD_OFFSET(AttributeRuleTable, _impl_.alloc_efficiency_bonus_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -102,7 +105,9 @@ constexpr AttributeRuleTable::ParseTableT_ AttributeRuleTable::InternalGenerateP
       // uint32 switch_cooldown_seconds = 5;
       {PROTOBUF_FIELD_OFFSET(AttributeRuleTable, _impl_.switch_cooldown_seconds_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 scheme_name_max_len = 6;
-      {PROTOBUF_FIELD_OFFSET(AttributeRuleTable, _impl_.scheme_name_max_len_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AttributeRuleTable, _impl_.scheme_name_max_len_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // double alloc_efficiency_bonus = 7;
+      {PROTOBUF_FIELD_OFFSET(AttributeRuleTable, _impl_.alloc_efficiency_bonus_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
     }},
     // no aux_entries
     {{
@@ -120,6 +125,7 @@ inline constexpr AttributeRuleTable::Impl_::Impl_(
         create_scheme_cost_gold_{::uint64_t{0u}},
         free_scheme_count_{0u},
         switch_cooldown_seconds_{0u},
+        alloc_efficiency_bonus_{0},
         scheme_name_max_len_{0u} {}
 
 template <typename>
@@ -374,18 +380,20 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AttributeRuleTable, _impl_._has_bits_),
-        9, // hasbit index offset
+        10, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::AttributeRuleTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::AttributeRuleTable, _impl_.max_schemes_),
         PROTOBUF_FIELD_OFFSET(::AttributeRuleTable, _impl_.free_scheme_count_),
         PROTOBUF_FIELD_OFFSET(::AttributeRuleTable, _impl_.create_scheme_cost_gold_),
         PROTOBUF_FIELD_OFFSET(::AttributeRuleTable, _impl_.switch_cooldown_seconds_),
         PROTOBUF_FIELD_OFFSET(::AttributeRuleTable, _impl_.scheme_name_max_len_),
+        PROTOBUF_FIELD_OFFSET(::AttributeRuleTable, _impl_.alloc_efficiency_bonus_),
         0,
         1,
         3,
         2,
         4,
+        6,
         5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AttributeRuleTableData, _impl_._has_bits_),
@@ -397,7 +405,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::AttributeRuleTable)},
-        {15, sizeof(::AttributeRuleTableData)},
+        {17, sizeof(::AttributeRuleTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -406,21 +414,22 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_attributerule_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\031attributerule_table.proto\"\257\001\n\022Attribut"
+    "\n\031attributerule_table.proto\"\317\001\n\022Attribut"
     "eRuleTable\022\n\n\002id\030\001 \001(\r\022\023\n\013max_schemes\030\002 "
     "\001(\r\022\031\n\021free_scheme_count\030\003 \001(\r\022\037\n\027create"
     "_scheme_cost_gold\030\004 \001(\004\022\037\n\027switch_cooldo"
     "wn_seconds\030\005 \001(\r\022\033\n\023scheme_name_max_len\030"
-    "\006 \001(\r\";\n\026AttributeRuleTableData\022!\n\004data\030"
-    "\001 \003(\0132\023.AttributeRuleTableBD\n\016com.game.t"
-    "ableB\034AttributeRuleTableOuterClassP\001Z\022ge"
-    "nerated/pb/tableb\006proto3"
+    "\006 \001(\r\022\036\n\026alloc_efficiency_bonus\030\007 \001(\001\";\n"
+    "\026AttributeRuleTableData\022!\n\004data\030\001 \003(\0132\023."
+    "AttributeRuleTableBD\n\016com.game.tableB\034At"
+    "tributeRuleTableOuterClassP\001Z\022generated/"
+    "pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_attributerule_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_attributerule_5ftable_2eproto = {
     false,
     false,
-    344,
+    376,
     descriptor_table_protodef_attributerule_5ftable_2eproto,
     "attributerule_table.proto",
     &descriptor_table_attributerule_5ftable_2eproto_once,
@@ -517,7 +526,7 @@ PROTOBUF_NOINLINE void AttributeRuleTable::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.scheme_name_max_len_) -
         reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.scheme_name_max_len_));
@@ -591,11 +600,20 @@ PROTOBUF_NOINLINE void AttributeRuleTable::Clear() {
   }
 
   // uint32 scheme_name_max_len = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     if (this_._internal_scheme_name_max_len() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           6, this_._internal_scheme_name_max_len(), target);
+    }
+  }
+
+  // double alloc_efficiency_bonus = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_alloc_efficiency_bonus()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          7, this_._internal_alloc_efficiency_bonus(), target);
     }
   }
 
@@ -624,7 +642,7 @@ PROTOBUF_NOINLINE void AttributeRuleTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     // uint32 id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_id() != 0) {
@@ -660,8 +678,14 @@ PROTOBUF_NOINLINE void AttributeRuleTable::Clear() {
             this_._internal_switch_cooldown_seconds());
       }
     }
-    // uint32 scheme_name_max_len = 6;
+    // double alloc_efficiency_bonus = 7;
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_alloc_efficiency_bonus()) != 0) {
+        total_size += 9;
+      }
+    }
+    // uint32 scheme_name_max_len = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (this_._internal_scheme_name_max_len() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_scheme_name_max_len());
@@ -685,7 +709,7 @@ void AttributeRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
@@ -712,6 +736,11 @@ void AttributeRuleTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (::absl::bit_cast<::uint64_t>(from._internal_alloc_efficiency_bonus()) != 0) {
+        _this->_impl_.alloc_efficiency_bonus_ = from._impl_.alloc_efficiency_bonus_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       if (from._internal_scheme_name_max_len() != 0) {
         _this->_impl_.scheme_name_max_len_ = from._impl_.scheme_name_max_len_;
       }

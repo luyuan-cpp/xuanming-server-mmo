@@ -155,6 +155,22 @@ func main() {
 		return
 	}
 
+	// Chat-smoke 模式:两个机器人做「全局聊天 go/chat v1」端到端冒烟
+	// (A/B 分登两个 zone → WORLD 发 + 拉 → PRIVATE 发 + 拉 → chat 侧超长拒绝 → 同 request_id 幂等)。
+	// 见 chat_smoke_scenario.go 与 zone 接入契约 v1 §9 冒烟段;前置条件写在 etc/chat_smoke.yaml 文件头。
+	if cfg.Mode == "chat-smoke" {
+		RunChatSmoke(cfg)
+		return
+	}
+
+	// Guild-smoke 模式:三个机器人做「公会按 zone 隔离」端到端冒烟
+	// (建帮 zone 由服务端决定 → 同区可见 / 可加入 → 别区不可见 / 不可加入 / 同名被拒 → 公告权限 → 身份伪造与内部方法被拒 → 解散)。
+	// 见 guild_smoke_scenario.go 与 docs/design/guild-zone-client-access.md;前置条件写在 etc/guild_smoke.yaml 文件头。
+	if cfg.Mode == "guild-smoke" {
+		RunGuildSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {

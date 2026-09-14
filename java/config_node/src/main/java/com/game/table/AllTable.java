@@ -23,6 +23,8 @@ public class AllTable {
 
         ActorActionStateTableManager.getInstance().load(configDir, useBinary);
 
+        AttributeAllocRatioTableManager.getInstance().load(configDir, useBinary);
+
         AttributeAutoPlanTableManager.getInstance().load(configDir, useBinary);
 
         AttributeDimensionTableManager.getInstance().load(configDir, useBinary);
@@ -88,7 +90,7 @@ public class AllTable {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(28);
+        CountDownLatch latch = new CountDownLatch(29);
 
         new Thread(() -> {
             try {
@@ -115,6 +117,16 @@ public class AllTable {
                 ActorActionStateTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load ActorActionState table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                AttributeAllocRatioTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load AttributeAllocRatio table", e);
             } finally {
                 latch.countDown();
             }
@@ -395,6 +407,8 @@ public class AllTable {
         ActorActionCombatStateTableManager.getInstance().load(configDir, useBinary);
 
         ActorActionStateTableManager.getInstance().load(configDir, useBinary);
+
+        AttributeAllocRatioTableManager.getInstance().load(configDir, useBinary);
 
         AttributeAutoPlanTableManager.getInstance().load(configDir, useBinary);
 

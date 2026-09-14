@@ -174,9 +174,13 @@ inline const AttributeAutoPlanTableData& FindAllAttributeAutoPlanTable() {
     const auto [attributeAutoPlanRow, attributeAutoPlanResult] = AttributeAutoPlanTableManager::Instance().FindByIdSilent(tableId); \
     do { if (!(attributeAutoPlanRow)) { TableLookupLogMissing("AttributeAutoPlan", tableId, __FILE__, __LINE__); return; } } while(0)
 
+// OrContinue 是唯一不能套 do{...}while(0) 的一个:continue 会绑定到 do-while 自身,
+// 跳去求值 while(0) 判假退出,于是控制流直接落到宏后面 —— 守卫变成空操作,
+// 调用方紧接着解引用空行指针。(return 系列不受影响,return 能穿透 do-while。)
+// 少了这层包装也没有代价:宏本身要声明两个变量,从来就不能当单语句塞进无括号 if。
 #define LookupAttributeAutoPlanOrContinue(tableId) \
     const auto [attributeAutoPlanRow, attributeAutoPlanResult] = AttributeAutoPlanTableManager::Instance().FindByIdSilent(tableId); \
-    do { if (!(attributeAutoPlanRow)) { TableLookupLogMissing("AttributeAutoPlan", tableId, __FILE__, __LINE__); continue; } } while(0)
+    if (!(attributeAutoPlanRow)) { TableLookupLogMissing("AttributeAutoPlan", tableId, __FILE__, __LINE__); continue; }
 
 #define LookupAttributeAutoPlanOrReturnFalse(tableId) \
     const auto [attributeAutoPlanRow, attributeAutoPlanResult] = AttributeAutoPlanTableManager::Instance().FindByIdSilent(tableId); \

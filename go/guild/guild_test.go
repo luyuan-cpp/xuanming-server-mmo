@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"strings"
 	"testing"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/proto"
 
+	"guild/internal/session"
+	base "proto/common/base"
 	pb "proto/guild"
 	"shared/killswitch"
 )
@@ -123,5 +128,33 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 	}
 	if !handlerCalled {
 		t.Fatal("无规则时 handler 必须被调用(fail-open)")
+	}
+}
+
+// TestSessionGateWiredIntoUnaryChain 证明会话准入**确实挂在**拦截器链上:带客户端会话调用
+// 内部方法 UpdateGuildScore 必须在 handler 之前被拒。与 killswitch 那条同理 —— 删掉
+// buildUnaryInterceptors 里 session 那一行,其余测试与联调全绿,客户端却能任意改公会积分。
+func TestSessionGateWiredIntoUnaryChain(t *testing.T) {
+	raw, err := proto.Marshal(&base.SessionDetails{SessionId: 1, PlayerId: 42})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := metadata.NewIncomingContext(context.Background(),
+		metadata.Pairs(session.MetadataKey, base64.StdEncoding.EncodeToString(raw)))
+
+	handlerCalled := false
+	info := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_UpdateGuildScore_FullMethodName}
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{})), info,
+		func(ctx context.Context, req any) (any, error) {
+			handlerCalled = true
+			return &pb.UpdateGuildScoreResponse{}, nil
+		})
+
+	_, err = h(ctx, &pb.UpdateGuildScoreRequest{GuildId: 1, Score: 999999})
+	if handlerCalled {
+		t.Fatal("客户端会话调用 UpdateGuildScore 走到了 handler:会话准入没有挂上拦截器链")
+	}
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("期望 PermissionDenied,得到 %v", err)
 	}
 }

@@ -37,6 +37,10 @@ type AttributeRuleScheme_name_max_lenComp struct {
     Value uint32
 }
 
+type AttributeRuleAlloc_efficiency_bonusComp struct {
+    Value float64
+}
+
 
 // ============================================================
 // Factory helpers — build component from a proto row
@@ -64,5 +68,9 @@ func MakeAttributeRuleSwitch_cooldown_secondsComp(row *pb.AttributeRuleTable) At
 
 func MakeAttributeRuleScheme_name_max_lenComp(row *pb.AttributeRuleTable) AttributeRuleScheme_name_max_lenComp {
     return AttributeRuleScheme_name_max_lenComp{Value: row.SchemeNameMaxLen}
+}
+
+func MakeAttributeRuleAlloc_efficiency_bonusComp(row *pb.AttributeRuleTable) AttributeRuleAlloc_efficiency_bonusComp {
+    return AttributeRuleAlloc_efficiency_bonusComp{Value: row.AllocEfficiencyBonus}
 }
 

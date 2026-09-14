@@ -1,0 +1,124 @@
+# client-rpc-router:客户端 RPC 路由服(docs/design/client-rpc-router.md;契约 zone_contract_v1 §1 路由服部署链)。
+#
+# **全局池,只部署到 mmorpg-infra namespace 一次,不进任何 zone namespace。**
+# GATE_CLIENT_RPC_ROUTER=1 时它是 gate 唯一的 gRPC 目标;gate 按非 zone-scoped 的
+# ClientRpcRouterNodeService.rpc 前缀发现它(node_util.cpp IsGlobalPoolNodeType),全 zone 的 gate 随机连。
+# k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,
+# infra-up / all-up 在基础设施阶段部署。ConfigMap go-svc-client-rpc-router-config 由脚本生成。
+#
+# 对外地址:路由服写进 NodeInfo 的 IP 优先取下面注入的 POD_IP(client_rpc_router_service.go advertisedHost),
+# 不能原样写 ListenOn 的 0.0.0.0,否则 gate 拨不通。
+# 部署了不等于 gate 会用它:gate 是否只连路由服由 k8s_deploy.ps1 -GateRouterMode 决定(默认 "0")。
+apiVersion: v1
+kind: Service
+metadata:
+  name: client-rpc-router
+  labels:
+    app: client-rpc-router
+    tier: go-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: client-rpc-router
+  ports:
+    - name: grpc
+      port: 50600
+      targetPort: 50600
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: client-rpc-router
+  labels:
+    app: client-rpc-router
+    tier: go-svc
+spec:
+  # 无状态(无 Redis / Kafka / DB):node_id 由 etcd CAS 分配,gate 随机挑。replicas>=2 是「容错不降级」的最低冗余;
+  # 崩溃切换窗口 = ConfigMap 的 LeaseTTL(gate 侧挑实例不看连接状态时,死实例的 key 在租约到期前仍会被挑中)。
+  replicas: 2
+  selector:
+    matchLabels:
+      app: client-rpc-router
+  template:
+    metadata:
+      labels:
+        app: client-rpc-router
+        tier: go-svc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9200"
+        prometheus.io/path: "/metrics"
+    spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点,否则单节点故障等于路由模式下全部客户端 RPC 不可用
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: client-rpc-router
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: client-rpc-router
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
+              value: warn
+            # 写进 NodeInfo 的对外 IP(client_rpc_router_service.go advertisedHost 优先读它)
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          args: ["-f", "/app/etc/client_rpc_router.yaml"]
+          ports:
+            - containerPort: 50600
+              name: grpc
+            # 与 ConfigMap 的 MetricsListenAddr ":9200" 及上面 prometheus.io/port 注解一致(9200 = 路由服)
+            - containerPort: 9200
+              name: metrics
+          readinessProbe:
+            grpc:
+              port: 50600
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 50600
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/etc
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: svc-config
+          configMap:
+            name: go-svc-client-rpc-router-config
+---
+# PDB 与主 manifest 同文件:k8s_deploy.ps1 只 apply 目录条目里的主 manifest。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: client-rpc-router-pdb
+  labels:
+    app: client-rpc-router
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: client-rpc-router

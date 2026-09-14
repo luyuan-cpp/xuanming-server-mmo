@@ -1,0 +1,26 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "AttributeAllocRatioTableOuterClass";
+option java_multiple_files = true;
+
+
+message AttributeAllocRatioTable {
+	uint32 id = 1;
+	uint32 dimension_id = 2;
+	uint32 class_id = 3;
+	double max_health = 4;
+	double max_mana = 5;
+	double physical_attack = 6;
+	double magic_attack = 7;
+	double speed = 8;
+	double defense = 9;
+	string desc = 10;
+}
+
+message AttributeAllocRatioTableData {
+	repeated AttributeAllocRatioTable data = 1;
+}

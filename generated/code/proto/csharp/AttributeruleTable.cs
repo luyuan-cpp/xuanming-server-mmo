@@ -22,18 +22,19 @@ public static partial class AttributeruleTableReflection {
   static AttributeruleTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChlhdHRyaWJ1dGVydWxlX3RhYmxlLnByb3RvIq8BChJBdHRyaWJ1dGVSdWxl",
+          "ChlhdHRyaWJ1dGVydWxlX3RhYmxlLnByb3RvIs8BChJBdHRyaWJ1dGVSdWxl",
           "VGFibGUSCgoCaWQYASABKA0SEwoLbWF4X3NjaGVtZXMYAiABKA0SGQoRZnJl",
           "ZV9zY2hlbWVfY291bnQYAyABKA0SHwoXY3JlYXRlX3NjaGVtZV9jb3N0X2dv",
           "bGQYBCABKAQSHwoXc3dpdGNoX2Nvb2xkb3duX3NlY29uZHMYBSABKA0SGwoT",
-          "c2NoZW1lX25hbWVfbWF4X2xlbhgGIAEoDSI7ChZBdHRyaWJ1dGVSdWxlVGFi",
-          "bGVEYXRhEiEKBGRhdGEYASADKAsyEy5BdHRyaWJ1dGVSdWxlVGFibGVCRAoO",
-          "Y29tLmdhbWUudGFibGVCHEF0dHJpYnV0ZVJ1bGVUYWJsZU91dGVyQ2xhc3NQ",
-          "AVoSZ2VuZXJhdGVkL3BiL3RhYmxlYgZwcm90bzM="));
+          "c2NoZW1lX25hbWVfbWF4X2xlbhgGIAEoDRIeChZhbGxvY19lZmZpY2llbmN5",
+          "X2JvbnVzGAcgASgBIjsKFkF0dHJpYnV0ZVJ1bGVUYWJsZURhdGESIQoEZGF0",
+          "YRgBIAMoCzITLkF0dHJpYnV0ZVJ1bGVUYWJsZUJECg5jb20uZ2FtZS50YWJs",
+          "ZUIcQXR0cmlidXRlUnVsZVRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQv",
+          "cGIvdGFibGViBnByb3RvMw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::AttributeRuleTable), global::AttributeRuleTable.Parser, new[]{ "Id", "MaxSchemes", "FreeSchemeCount", "CreateSchemeCostGold", "SwitchCooldownSeconds", "SchemeNameMaxLen" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::AttributeRuleTable), global::AttributeRuleTable.Parser, new[]{ "Id", "MaxSchemes", "FreeSchemeCount", "CreateSchemeCostGold", "SwitchCooldownSeconds", "SchemeNameMaxLen", "AllocEfficiencyBonus" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::AttributeRuleTableData), global::AttributeRuleTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -82,6 +83,7 @@ public sealed partial class AttributeRuleTable : pb::IMessage<AttributeRuleTable
     createSchemeCostGold_ = other.createSchemeCostGold_;
     switchCooldownSeconds_ = other.switchCooldownSeconds_;
     schemeNameMaxLen_ = other.schemeNameMaxLen_;
+    allocEfficiencyBonus_ = other.allocEfficiencyBonus_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -163,6 +165,18 @@ public sealed partial class AttributeRuleTable : pb::IMessage<AttributeRuleTable
     }
   }
 
+  /// <summary>Field number for the "alloc_efficiency_bonus" field.</summary>
+  public const int AllocEfficiencyBonusFieldNumber = 7;
+  private double allocEfficiencyBonus_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double AllocEfficiencyBonus {
+    get { return allocEfficiencyBonus_; }
+    set {
+      allocEfficiencyBonus_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -184,6 +198,7 @@ public sealed partial class AttributeRuleTable : pb::IMessage<AttributeRuleTable
     if (CreateSchemeCostGold != other.CreateSchemeCostGold) return false;
     if (SwitchCooldownSeconds != other.SwitchCooldownSeconds) return false;
     if (SchemeNameMaxLen != other.SchemeNameMaxLen) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(AllocEfficiencyBonus, other.AllocEfficiencyBonus)) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -197,6 +212,7 @@ public sealed partial class AttributeRuleTable : pb::IMessage<AttributeRuleTable
     if (CreateSchemeCostGold != 0UL) hash ^= CreateSchemeCostGold.GetHashCode();
     if (SwitchCooldownSeconds != 0) hash ^= SwitchCooldownSeconds.GetHashCode();
     if (SchemeNameMaxLen != 0) hash ^= SchemeNameMaxLen.GetHashCode();
+    if (AllocEfficiencyBonus != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(AllocEfficiencyBonus);
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -239,6 +255,10 @@ public sealed partial class AttributeRuleTable : pb::IMessage<AttributeRuleTable
       output.WriteRawTag(48);
       output.WriteUInt32(SchemeNameMaxLen);
     }
+    if (AllocEfficiencyBonus != 0D) {
+      output.WriteRawTag(57);
+      output.WriteDouble(AllocEfficiencyBonus);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -273,6 +293,10 @@ public sealed partial class AttributeRuleTable : pb::IMessage<AttributeRuleTable
       output.WriteRawTag(48);
       output.WriteUInt32(SchemeNameMaxLen);
     }
+    if (AllocEfficiencyBonus != 0D) {
+      output.WriteRawTag(57);
+      output.WriteDouble(AllocEfficiencyBonus);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -300,6 +324,9 @@ public sealed partial class AttributeRuleTable : pb::IMessage<AttributeRuleTable
     }
     if (SchemeNameMaxLen != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(SchemeNameMaxLen);
+    }
+    if (AllocEfficiencyBonus != 0D) {
+      size += 1 + 8;
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -330,6 +357,9 @@ public sealed partial class AttributeRuleTable : pb::IMessage<AttributeRuleTable
     }
     if (other.SchemeNameMaxLen != 0) {
       SchemeNameMaxLen = other.SchemeNameMaxLen;
+    }
+    if (other.AllocEfficiencyBonus != 0D) {
+      AllocEfficiencyBonus = other.AllocEfficiencyBonus;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -374,6 +404,10 @@ public sealed partial class AttributeRuleTable : pb::IMessage<AttributeRuleTable
           SchemeNameMaxLen = input.ReadUInt32();
           break;
         }
+        case 57: {
+          AllocEfficiencyBonus = input.ReadDouble();
+          break;
+        }
       }
     }
   #endif
@@ -415,6 +449,10 @@ public sealed partial class AttributeRuleTable : pb::IMessage<AttributeRuleTable
         }
         case 48: {
           SchemeNameMaxLen = input.ReadUInt32();
+          break;
+        }
+        case 57: {
+          AllocEfficiencyBonus = input.ReadDouble();
           break;
         }
       }

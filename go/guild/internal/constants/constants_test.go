@@ -33,15 +33,19 @@ import (
 // 覆盖率检查放过,但至少 constants.go 里的引用本身仍由发号器保证正确。
 func tipCodes() map[string]uint32 {
 	return map[string]uint32{
-		"ErrAlreadyInGuild":   ErrAlreadyInGuild,
-		"ErrGuildNotFound":    ErrGuildNotFound,
-		"ErrNotInGuild":       ErrNotInGuild,
-		"ErrGuildFull":        ErrGuildFull,
-		"ErrLeaderCantLeave":  ErrLeaderCantLeave,
-		"ErrNotLeader":        ErrNotLeader,
-		"ErrNoPermission":     ErrNoPermission,
-		"ErrNotRanked":        ErrNotRanked,
-		"ErrIDGenUnavailable": ErrIDGenUnavailable,
+		"ErrAlreadyInGuild":      ErrAlreadyInGuild,
+		"ErrGuildNotFound":       ErrGuildNotFound,
+		"ErrNotInGuild":          ErrNotInGuild,
+		"ErrGuildFull":           ErrGuildFull,
+		"ErrLeaderCantLeave":     ErrLeaderCantLeave,
+		"ErrNotLeader":           ErrNotLeader,
+		"ErrNoPermission":        ErrNoPermission,
+		"ErrNotRanked":           ErrNotRanked,
+		"ErrIDGenUnavailable":    ErrIDGenUnavailable,
+		"ErrGuildNameInvalid":    ErrGuildNameInvalid,
+		"ErrGuildNameTaken":      ErrGuildNameTaken,
+		"ErrAnnouncementTooLong": ErrAnnouncementTooLong,
+		"ErrHomeZoneUnknown":     ErrHomeZoneUnknown,
 	}
 }
 

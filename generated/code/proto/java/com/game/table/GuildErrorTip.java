@@ -71,6 +71,22 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildIdGenUnavailable = 14008;</code>
      */
     kGuildIdGenUnavailable(14008),
+    /**
+     * <code>kGuildNameInvalid = 14009;</code>
+     */
+    kGuildNameInvalid(14009),
+    /**
+     * <code>kGuildNameTaken = 14010;</code>
+     */
+    kGuildNameTaken(14010),
+    /**
+     * <code>kGuildAnnouncementTooLong = 14011;</code>
+     */
+    kGuildAnnouncementTooLong(14011),
+    /**
+     * <code>kGuildHomeZoneUnknown = 14012;</code>
+     */
+    kGuildHomeZoneUnknown(14012),
     UNRECOGNIZED(-1),
     ;
 
@@ -123,6 +139,22 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildIdGenUnavailable = 14008;</code>
      */
     public static final int kGuildIdGenUnavailable_VALUE = 14008;
+    /**
+     * <code>kGuildNameInvalid = 14009;</code>
+     */
+    public static final int kGuildNameInvalid_VALUE = 14009;
+    /**
+     * <code>kGuildNameTaken = 14010;</code>
+     */
+    public static final int kGuildNameTaken_VALUE = 14010;
+    /**
+     * <code>kGuildAnnouncementTooLong = 14011;</code>
+     */
+    public static final int kGuildAnnouncementTooLong_VALUE = 14011;
+    /**
+     * <code>kGuildHomeZoneUnknown = 14012;</code>
+     */
+    public static final int kGuildHomeZoneUnknown_VALUE = 14012;
 
 
     public final int getNumber() {
@@ -159,6 +191,10 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
         case 14006: return kGuildNoPermission;
         case 14007: return kGuildNotRanked;
         case 14008: return kGuildIdGenUnavailable;
+        case 14009: return kGuildNameInvalid;
+        case 14010: return kGuildNameTaken;
+        case 14011: return kGuildAnnouncementTooLong;
+        case 14012: return kGuildHomeZoneUnknown;
         default: return null;
       }
     }
@@ -224,14 +260,17 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025guild_error_tip.proto*\367\001\n\013guild_error\022" +
+      "\n\025guild_error_tip.proto*\341\002\n\013guild_error\022" +
       "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu" +
       "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot" +
       "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea" +
       "derCantLeave\020\264m\022\024\n\017kGuildNotLeader\020\265m\022\027\n" +
       "\022kGuildNoPermission\020\266m\022\024\n\017kGuildNotRanke" +
-      "d\020\267m\022\033\n\026kGuildIdGenUnavailable\020\270mB$\n\016com" +
-      ".game.tableZ\022generated/pb/tableb\006proto3"
+      "d\020\267m\022\033\n\026kGuildIdGenUnavailable\020\270m\022\026\n\021kGu" +
+      "ildNameInvalid\020\271m\022\024\n\017kGuildNameTaken\020\272m\022" +
+      "\036\n\031kGuildAnnouncementTooLong\020\273m\022\032\n\025kGuil" +
+      "dHomeZoneUnknown\020\274mB$\n\016com.game.tableZ\022g" +
+      "enerated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

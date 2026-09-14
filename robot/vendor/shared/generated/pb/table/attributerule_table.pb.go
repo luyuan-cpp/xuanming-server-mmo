@@ -29,6 +29,7 @@ type AttributeRuleTable struct {
 	CreateSchemeCostGold  uint64                 `protobuf:"varint,4,opt,name=create_scheme_cost_gold,json=createSchemeCostGold,proto3" json:"create_scheme_cost_gold,omitempty"`
 	SwitchCooldownSeconds uint32                 `protobuf:"varint,5,opt,name=switch_cooldown_seconds,json=switchCooldownSeconds,proto3" json:"switch_cooldown_seconds,omitempty"`
 	SchemeNameMaxLen      uint32                 `protobuf:"varint,6,opt,name=scheme_name_max_len,json=schemeNameMaxLen,proto3" json:"scheme_name_max_len,omitempty"`
+	AllocEfficiencyBonus  float64                `protobuf:"fixed64,7,opt,name=alloc_efficiency_bonus,json=allocEfficiencyBonus,proto3" json:"alloc_efficiency_bonus,omitempty"`
 	unknownFields         protoimpl.UnknownFields
 	sizeCache             protoimpl.SizeCache
 }
@@ -105,6 +106,13 @@ func (x *AttributeRuleTable) GetSchemeNameMaxLen() uint32 {
 	return 0
 }
 
+func (x *AttributeRuleTable) GetAllocEfficiencyBonus() float64 {
+	if x != nil {
+		return x.AllocEfficiencyBonus
+	}
+	return 0
+}
+
 type AttributeRuleTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*AttributeRuleTable  `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -153,7 +161,7 @@ var File_attributerule_table_proto protoreflect.FileDescriptor
 
 const file_attributerule_table_proto_rawDesc = "" +
 	"\n" +
-	"\x19attributerule_table.proto\"\x8f\x02\n" +
+	"\x19attributerule_table.proto\"\xc5\x02\n" +
 	"\x12AttributeRuleTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1f\n" +
 	"\vmax_schemes\x18\x02 \x01(\rR\n" +
@@ -161,7 +169,8 @@ const file_attributerule_table_proto_rawDesc = "" +
 	"\x11free_scheme_count\x18\x03 \x01(\rR\x0ffreeSchemeCount\x125\n" +
 	"\x17create_scheme_cost_gold\x18\x04 \x01(\x04R\x14createSchemeCostGold\x126\n" +
 	"\x17switch_cooldown_seconds\x18\x05 \x01(\rR\x15switchCooldownSeconds\x12-\n" +
-	"\x13scheme_name_max_len\x18\x06 \x01(\rR\x10schemeNameMaxLen\"A\n" +
+	"\x13scheme_name_max_len\x18\x06 \x01(\rR\x10schemeNameMaxLen\x124\n" +
+	"\x16alloc_efficiency_bonus\x18\a \x01(\x01R\x14allocEfficiencyBonus\"A\n" +
 	"\x16AttributeRuleTableData\x12'\n" +
 	"\x04data\x18\x01 \x03(\v2\x13.AttributeRuleTableR\x04dataBD\n" +
 	"\x0ecom.game.tableB\x1cAttributeRuleTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"

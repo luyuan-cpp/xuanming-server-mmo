@@ -2,12 +2,12 @@
  "data": [
   {
    "id": 1,
-   "init_armor": 10,
+   "init_armor": 120,
    "init_critchance": 10,
    "init_health": 500,
-   "init_mana": 200,
+   "init_mana": 800,
    "init_resistance": 5,
-   "init_speed": 20,
+   "init_speed": 240,
    "init_strength": 20,
    "skill": [
     1,
@@ -17,12 +17,12 @@
   },
   {
    "id": 2,
-   "init_armor": 10,
+   "init_armor": 120,
    "init_critchance": 10,
    "init_health": 500,
-   "init_mana": 200,
+   "init_mana": 800,
    "init_resistance": 5,
-   "init_speed": 20,
+   "init_speed": 240,
    "init_strength": 20,
    "skill": [
     1,
@@ -32,12 +32,12 @@
   },
   {
    "id": 3,
-   "init_armor": 10,
+   "init_armor": 120,
    "init_critchance": 10,
    "init_health": 500,
-   "init_mana": 200,
+   "init_mana": 800,
    "init_resistance": 5,
-   "init_speed": 20,
+   "init_speed": 240,
    "init_strength": 20,
    "skill": [
     1,
@@ -47,12 +47,12 @@
   },
   {
    "id": 4,
-   "init_armor": 10,
+   "init_armor": 120,
    "init_critchance": 10,
    "init_health": 500,
-   "init_mana": 200,
+   "init_mana": 800,
    "init_resistance": 5,
-   "init_speed": 20,
+   "init_speed": 240,
    "init_strength": 20,
    "skill": [
     1,
@@ -62,12 +62,12 @@
   },
   {
    "id": 5,
-   "init_armor": 10,
+   "init_armor": 120,
    "init_critchance": 10,
    "init_health": 500,
-   "init_mana": 200,
+   "init_mana": 800,
    "init_resistance": 5,
-   "init_speed": 20,
+   "init_speed": 240,
    "init_strength": 20,
    "skill": [
     1,
@@ -77,12 +77,12 @@
   },
   {
    "id": 6,
-   "init_armor": 10,
+   "init_armor": 120,
    "init_critchance": 10,
    "init_health": 500,
-   "init_mana": 200,
+   "init_mana": 800,
    "init_resistance": 5,
-   "init_speed": 20,
+   "init_speed": 240,
    "init_strength": 20,
    "skill": [
     1,
@@ -92,12 +92,12 @@
   },
   {
    "id": 7,
-   "init_armor": 10,
+   "init_armor": 120,
    "init_critchance": 10,
    "init_health": 500,
-   "init_mana": 200,
+   "init_mana": 800,
    "init_resistance": 5,
-   "init_speed": 20,
+   "init_speed": 240,
    "init_strength": 20,
    "skill": [
     1,
@@ -107,12 +107,12 @@
   },
   {
    "id": 8,
-   "init_armor": 10,
+   "init_armor": 120,
    "init_critchance": 10,
    "init_health": 500,
-   "init_mana": 200,
+   "init_mana": 800,
    "init_resistance": 5,
-   "init_speed": 20,
+   "init_speed": 240,
    "init_strength": 20,
    "skill": [
     1,
@@ -122,12 +122,12 @@
   },
   {
    "id": 9,
-   "init_armor": 10,
+   "init_armor": 120,
    "init_critchance": 10,
    "init_health": 500,
-   "init_mana": 200,
+   "init_mana": 800,
    "init_resistance": 5,
-   "init_speed": 20,
+   "init_speed": 240,
    "init_strength": 20,
    "skill": [
     1,

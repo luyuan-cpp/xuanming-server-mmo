@@ -9,6 +9,8 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
+	"os"
 	"strings"
 
 	"client_rpc_router/internal/config"
@@ -23,6 +25,7 @@ import (
 	"shared/grpcstats"
 
 	"github.com/zeromicro/go-zero/core/conf"
+	"github.com/zeromicro/go-zero/core/netx"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
@@ -66,12 +69,14 @@ func main() {
 
 	// 照 C++ NodeInfo 约定注册进 etcd(PROTOCOL_GRPC),gate 按
 	// ClientRpcRouterNodeService.rpc/ 前缀发现本服务。
-	host, port := parseListenOn(c.ListenOn)
+	// 写进 NodeInfo 的是**对外地址**而不是监听地址:K8s 上 ListenOn 恒为 0.0.0.0,原样注册的话
+	// gate 拿到 0.0.0.0 拨不通(本地 ListenOn=127.0.0.1 不受影响)。口径与 chat / data_service 的 advertisedHost 一致。
+	listenHost, port := parseListenOn(c.ListenOn)
 	nr, err := noderegistry.Register(
 		svcCtx.Etcd,
 		uint32(base.ENodeType_ClientRpcRouterNodeService),
 		c.ZoneId,
-		host, port,
+		advertisedHost(listenHost), port,
 		c.LeaseTTL,
 	)
 	if err != nil {
@@ -113,4 +118,30 @@ func parseListenOn(listenOn string) (string, uint32) {
 		fmt.Sscanf(parts[1], "%d", &port)
 	}
 	return host, port
+}
+
+// isUnspecifiedHost:""、0.0.0.0、:: 这类"监听所有网卡"的 host,不能原样写进 NodeInfo。
+func isUnspecifiedHost(host string) bool {
+	if host == "" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsUnspecified()
+}
+
+// advertisedHost 决定写进 NodeInfo 的 IP(与 go/chat/chat.go、go/data_service/data_service.go 同一口径):
+//  1. POD_IP 环境变量(K8s Downward API,manifests/go-svc/client-rpc-router.yaml 注入)优先;
+//  2. 否则 ListenOn 写了具体 host 就用它(本地 127.0.0.1:50600);
+//  3. 否则取本机第一个非 loopback IP;拿不到退回 127.0.0.1(至少本机的 gate 还连得上)。
+func advertisedHost(listenHost string) string {
+	if podIP := os.Getenv("POD_IP"); podIP != "" {
+		return podIP
+	}
+	if !isUnspecifiedHost(listenHost) {
+		return listenHost
+	}
+	if ip := netx.InternalIp(); ip != "" {
+		return ip
+	}
+	return "127.0.0.1"
 }

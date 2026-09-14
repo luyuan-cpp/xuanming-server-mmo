@@ -1,0 +1,132 @@
+# chat:全局聊天 v1(WORLD 全服唯一世界频道 + PRIVATE 私聊;历史 = 7 天 / 200 条尽力而为窗口)。
+#
+# **全局池,只部署到 mmorpg-infra namespace 一次,不进任何 zone namespace。**
+# 世界频道本就全服唯一(chat:{world}:log),私聊 key 只含两端 player_id,不含 zone;客户端经
+# gate → client-rpc-router 到达,路由服对 ChatNodeService 不做 zone 过滤(ZoneScopedNodeTypes 默认仅 Login),
+# 所以全 zone 的玩家都会被随机路由到这里的实例。
+# k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,
+# infra-up / all-up 在基础设施阶段部署。ConfigMap go-svc-chat-config 由脚本生成。
+#
+# ⚠ 已知前提:chat 只承诺路由服模式可达。路由服部署链(镜像 / 目录 / ConfigMap / manifests/go-svc/client-rpc-router.yaml /
+# C++ 发现前缀 / 按 POD_IP 通告)已登记齐,但 gate 的 GATE_CLIENT_RPC_ROUTER 在 K8s 上默认 "0"(k8s_deploy.ps1 -GateRouterMode)。
+# 所以默认部署下这份 Deployment 起得来、探针绿,但玩家够不着;以 -GateRouterMode 1 部署并跑通 battle-smoke 之后才算真正可用。
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat
+  labels:
+    app: chat
+    tier: go-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: chat
+  ports:
+    - name: grpc
+      port: 50700
+      targetPort: 50700
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat
+  labels:
+    app: chat
+    tier: go-svc
+spec:
+  # 多实例安全:实例无状态 —— 历史写入是一条 Lua(LPUSH+LTRIM+EXPIRE)、幂等是 SET NX、限速是 INCR+EXPIRE,
+  # 全是单 key 原子操作,不需要实例间协调;node_id 由 etcd CAS 分配(go/shared/noderegistry),路由服随机挑。
+  # replicas>=2 是「容错不降级」的最低冗余。注意崩溃切换窗口 = ConfigMap 的 LeaseTTL:
+  # 路由服 PickRandom 不看连接状态,死实例的注册 key 在租约到期前仍会被挑中。
+  replicas: 2
+  selector:
+    matchLabels:
+      app: chat
+  template:
+    metadata:
+      labels:
+        app: chat
+        tier: go-svc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9210"
+        prometheus.io/path: "/metrics"
+    spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点,否则单节点故障等于全池不可用
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: chat
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: chat
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
+              value: warn
+            # C++ 约定注册(ChatNodeService.rpc)写进 NodeInfo 的对外 IP(chat.go advertisedHost 优先读它):
+            # ListenOn 是 0.0.0.0,不能原样写;不注入时退回 netx.InternalIp(第一块非 loopback 网卡),
+            # 多网卡 / sidecar / 部分 CNI 下可能选错网卡,路由服拨不通。与 data-service.yaml / login.yaml 同一写法。
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          args: ["-f", "/app/etc/chat.yaml"]
+          ports:
+            - containerPort: 50700
+              name: grpc
+            # 与 ConfigMap 的 MetricsListenAddr ":9210" 及上面 prometheus.io/port 注解一致(9210 = chat)
+            - containerPort: 9210
+              name: metrics
+          readinessProbe:
+            grpc:
+              port: 50700
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 50700
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              # 先留 5s 让 Service 摘掉 endpoint;etcd 注册(noderegistry.Close)由进程收到 SIGTERM 后
+              # 在 grpc Stop 之前删除,路由服 watch 到删除后不再挑这个实例。
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/etc
+              readOnly: true
+            # 不挂 snowflake-cache:chat v1 不发号、不接 snowflakealloc,没有启动期槽位草稿要缓存。
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: svc-config
+          configMap:
+            name: go-svc-chat-config
+---
+# PDB 与主 manifest 同文件:k8s_deploy.ps1 只 apply 目录条目里的主 manifest。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: chat-pdb
+  labels:
+    app: chat
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: chat

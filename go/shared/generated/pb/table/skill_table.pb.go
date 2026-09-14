@@ -199,6 +199,8 @@ type SkillTable struct {
 	RequiredStatus   uint32                   `protobuf:"varint,18,opt,name=required_status,json=requiredStatus,proto3" json:"required_status,omitempty"`
 	CooldownId       uint32                   `protobuf:"varint,19,opt,name=cooldown_id,json=cooldownId,proto3" json:"cooldown_id,omitempty"`
 	Damage           string                   `protobuf:"bytes,20,opt,name=damage,proto3" json:"damage,omitempty"`
+	DamageType       uint32                   `protobuf:"varint,24,opt,name=damage_type,json=damageType,proto3" json:"damage_type,omitempty"`
+	AttackMultiplier float64                  `protobuf:"fixed64,25,opt,name=attack_multiplier,json=attackMultiplier,proto3" json:"attack_multiplier,omitempty"`
 	RequiredItem     []*SkillrequiredItem     `protobuf:"bytes,21,rep,name=required_item,json=requiredItem,proto3" json:"required_item,omitempty"`
 	RequiredResource []*SkillrequiredResource `protobuf:"bytes,22,rep,name=required_resource,json=requiredResource,proto3" json:"required_resource,omitempty"`
 	CostResource     []*SkillcostResource     `protobuf:"bytes,23,rep,name=cost_resource,json=costResource,proto3" json:"cost_resource,omitempty"`
@@ -376,6 +378,20 @@ func (x *SkillTable) GetDamage() string {
 	return ""
 }
 
+func (x *SkillTable) GetDamageType() uint32 {
+	if x != nil {
+		return x.DamageType
+	}
+	return 0
+}
+
+func (x *SkillTable) GetAttackMultiplier() float64 {
+	if x != nil {
+		return x.AttackMultiplier
+	}
+	return 0
+}
+
 func (x *SkillTable) GetRequiredItem() []*SkillrequiredItem {
 	if x != nil {
 		return x.RequiredItem
@@ -454,7 +470,7 @@ const file_skill_table_proto_rawDesc = "" +
 	"\x17required_resource_value\x18\x02 \x01(\rR\x15requiredResourceValue\"l\n" +
 	"\x12Skillcost_resource\x12(\n" +
 	"\x10cost_resource_id\x18\x01 \x01(\rR\x0ecostResourceId\x12,\n" +
-	"\x12cost_resource_cost\x18\x02 \x01(\rR\x10costResourceCost\"\xcb\x06\n" +
+	"\x12cost_resource_cost\x18\x02 \x01(\rR\x10costResourceCost\"\x99\a\n" +
 	"\n" +
 	"SkillTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x1d\n" +
@@ -481,7 +497,10 @@ const file_skill_table_proto_rawDesc = "" +
 	"\x0frequired_status\x18\x12 \x01(\rR\x0erequiredStatus\x12\x1f\n" +
 	"\vcooldown_id\x18\x13 \x01(\rR\n" +
 	"cooldownId\x12\x16\n" +
-	"\x06damage\x18\x14 \x01(\tR\x06damage\x128\n" +
+	"\x06damage\x18\x14 \x01(\tR\x06damage\x12\x1f\n" +
+	"\vdamage_type\x18\x18 \x01(\rR\n" +
+	"damageType\x12+\n" +
+	"\x11attack_multiplier\x18\x19 \x01(\x01R\x10attackMultiplier\x128\n" +
 	"\rrequired_item\x18\x15 \x03(\v2\x13.Skillrequired_itemR\frequiredItem\x12D\n" +
 	"\x11required_resource\x18\x16 \x03(\v2\x17.Skillrequired_resourceR\x10requiredResource\x128\n" +
 	"\rcost_resource\x18\x17 \x03(\v2\x13.Skillcost_resourceR\fcostResource\"1\n" +

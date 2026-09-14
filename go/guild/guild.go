@@ -23,6 +23,7 @@ import (
 	"guild/internal/logic"
 	"guild/internal/node"
 	"guild/internal/server"
+	"guild/internal/session"
 	"guild/internal/svc"
 	base "proto/common/base"
 	pb "proto/guild"
@@ -150,7 +151,15 @@ func main() {
 	if f := logic.NewRedisMergeFence(svcCtx.MergeMarkerRedisClient); f != nil {
 		mergeFence = f
 	}
-	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence)
+	// 帮会按 zone 隔离:客户端请求的 zone 取 data_service 的玩家归属映射(logic/home_zone.go)。
+	// 没配 DataServiceRpc 时保持 nil 接口:内部调用照常,客户端请求一律按服务不可用拒绝。
+	var homeZones logic.HomeZoneLookup
+	if svcCtx.DataServiceClient != nil {
+		homeZones = logic.NewDataServiceHomeZone(svcCtx.DataServiceClient, logic.DefaultHomeZoneLookupTimeout)
+	} else {
+		logx.Error("Guild: DataServiceRpc 未配置,无法判定玩家归属 zone,所有客户端帮会请求将被拒绝")
+	}
+	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence, homeZones)
 
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
@@ -216,7 +225,13 @@ func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor
 		//    它们的账记在 killswitch_blocked_total{method} 上。
 		ks.UnaryServerInterceptor(),
 
-		// ③ in-band 故障拦截器:本服务的 handler 一律 `return resp, nil`,把失败塞进
+		// ③ 会话与方法准入(internal/session):客户端来源的身份只认 gate 注入的会话,
+		//    内部方法(UpdateGuildScore)对客户端一律 PermissionDenied。放在热关停之后:
+		//    被关停的方法不必解码会话;放在 serverbase 之前:被拒绝的调用没进业务链路,
+		//    不该计入 rpc_duration_seconds(grpcstats 仍统计到它们)。
+		session.UnaryServerInterceptor(session.ClientMethods),
+
+		// ④ in-band 故障拦截器:本服务的 handler 一律 `return resp, nil`,把失败塞进
 		//    响应体的 TipInfoMessage —— gRPC status 恒 OK,go-zero 自带的指标拦截器会把
 		//    每一次「发号器被 fence」都记成一次成功请求。这层把响应体里的码读出来定性,
 		//    故障打日志 + 计数,业务拒绝只计数。它不改响应内容、不吞错,对客户端无感。

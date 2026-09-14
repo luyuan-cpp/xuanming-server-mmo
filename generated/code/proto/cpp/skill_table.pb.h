@@ -914,6 +914,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
     kSelfStatusFieldNumber = 17,
     kRequiredStatusFieldNumber = 18,
     kCooldownIdFieldNumber = 19,
+    kDamageTypeFieldNumber = 24,
+    kAttackMultiplierFieldNumber = 25,
   };
   // repeated uint32 skill_type = 2;
   [[nodiscard]] int skill_type_size()
@@ -1213,12 +1215,32 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
   void _internal_set_cooldown_id(::uint32_t value);
 
   public:
+  // uint32 damage_type = 24;
+  void clear_damage_type() ;
+  [[nodiscard]] ::uint32_t damage_type() const;
+  void set_damage_type(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_damage_type() const;
+  void _internal_set_damage_type(::uint32_t value);
+
+  public:
+  // double attack_multiplier = 25;
+  void clear_attack_multiplier() ;
+  [[nodiscard]] double attack_multiplier() const;
+  void set_attack_multiplier(double value);
+
+  private:
+  double _internal_attack_multiplier() const;
+  void _internal_set_attack_multiplier(double value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SkillTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 23,
-                          3, 41,
+      ::google::protobuf::internal::TcParseTable<5, 25,
+                          3, 49,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1272,6 +1294,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SkillTable final : public ::google:
     ::uint32_t self_status_;
     ::uint32_t required_status_;
     ::uint32_t cooldown_id_;
+    ::uint32_t damage_type_;
+    double attack_multiplier_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -2261,6 +2285,54 @@ inline void SkillTable::set_allocated_damage(::std::string* PROTOBUF_NULLABLE va
     _impl_.damage_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:SkillTable.damage)
+}
+
+// uint32 damage_type = 24;
+inline void SkillTable::clear_damage_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.damage_type_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00800000U);
+}
+inline ::uint32_t SkillTable::damage_type() const {
+  // @@protoc_insertion_point(field_get:SkillTable.damage_type)
+  return _internal_damage_type();
+}
+inline void SkillTable::set_damage_type(::uint32_t value) {
+  _internal_set_damage_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00800000U);
+  // @@protoc_insertion_point(field_set:SkillTable.damage_type)
+}
+inline ::uint32_t SkillTable::_internal_damage_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.damage_type_;
+}
+inline void SkillTable::_internal_set_damage_type(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.damage_type_ = value;
+}
+
+// double attack_multiplier = 25;
+inline void SkillTable::clear_attack_multiplier() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attack_multiplier_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x01000000U);
+}
+inline double SkillTable::attack_multiplier() const {
+  // @@protoc_insertion_point(field_get:SkillTable.attack_multiplier)
+  return _internal_attack_multiplier();
+}
+inline void SkillTable::set_attack_multiplier(double value) {
+  _internal_set_attack_multiplier(value);
+  SetHasBit(_impl_._has_bits_[0], 0x01000000U);
+  // @@protoc_insertion_point(field_set:SkillTable.attack_multiplier)
+}
+inline double SkillTable::_internal_attack_multiplier() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.attack_multiplier_;
+}
+inline void SkillTable::_internal_set_attack_multiplier(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.attack_multiplier_ = value;
 }
 
 // repeated .Skillrequired_item required_item = 21;

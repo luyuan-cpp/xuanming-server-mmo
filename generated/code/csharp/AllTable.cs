@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class AllTable
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 28;
+        public const int TableCount = 29;
 
         private static Action s_loadSuccessCallback;
 
@@ -41,6 +41,7 @@ namespace MmorpgClient.Table
                 ActivityScheduleTableManager.FileName(useBinary),
                 ActorActionCombatStateTableManager.FileName(useBinary),
                 ActorActionStateTableManager.FileName(useBinary),
+                AttributeAllocRatioTableManager.FileName(useBinary),
                 AttributeAutoPlanTableManager.FileName(useBinary),
                 AttributeDimensionTableManager.FileName(useBinary),
                 AttributePoolTableManager.FileName(useBinary),
@@ -76,6 +77,7 @@ namespace MmorpgClient.Table
             ActivityScheduleTableManager.Instance.Load(configDir, useBinary);
             ActorActionCombatStateTableManager.Instance.Load(configDir, useBinary);
             ActorActionStateTableManager.Instance.Load(configDir, useBinary);
+            AttributeAllocRatioTableManager.Instance.Load(configDir, useBinary);
             AttributeAutoPlanTableManager.Instance.Load(configDir, useBinary);
             AttributeDimensionTableManager.Instance.Load(configDir, useBinary);
             AttributePoolTableManager.Instance.Load(configDir, useBinary);
@@ -131,6 +133,8 @@ namespace MmorpgClient.Table
                 ActorActionCombatStateTableManager.Instance.LoadFromBytes, ActorActionCombatStateTableManager.Instance.LoadFromJson);
             LoadOne(ActorActionStateTableManager.FileName(useBinary), byteProvider, useBinary,
                 ActorActionStateTableManager.Instance.LoadFromBytes, ActorActionStateTableManager.Instance.LoadFromJson);
+            LoadOne(AttributeAllocRatioTableManager.FileName(useBinary), byteProvider, useBinary,
+                AttributeAllocRatioTableManager.Instance.LoadFromBytes, AttributeAllocRatioTableManager.Instance.LoadFromJson);
             LoadOne(AttributeAutoPlanTableManager.FileName(useBinary), byteProvider, useBinary,
                 AttributeAutoPlanTableManager.Instance.LoadFromBytes, AttributeAutoPlanTableManager.Instance.LoadFromJson);
             LoadOne(AttributeDimensionTableManager.FileName(useBinary), byteProvider, useBinary,

@@ -36,7 +36,7 @@ func TestCreateGuild_RefusedWhileZoneIsMerging(t *testing.T) {
 	fence := &fakeFence{merging: true}
 	// repo/ids 都传 nil:闸门在 CreateGuild 的**第一行**,拒绝时不该碰到它们。
 	// 这条断言本身就是"闸门必须在铸号之前"的证明 —— 顺序错了这里会 nil panic。
-	l := NewGuildLogic(nil, nil, nil, fence)
+	l := NewGuildLogic(nil, nil, nil, fence, nil)
 
 	resp, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{
 		PlayerId: 1001, Name: "merging-zone-guild", ZoneId: 7,
@@ -53,7 +53,7 @@ func TestCreateGuild_RefusedWhileZoneIsMerging(t *testing.T) {
 // TestCreateGuild_FenceUnreadableFailsClosed:查不到闸门状态 ≠ 没有闸门。
 func TestCreateGuild_FenceUnreadableFailsClosed(t *testing.T) {
 	fence := &fakeFence{err: errors.New("dial tcp: connection refused")}
-	l := NewGuildLogic(nil, nil, nil, fence)
+	l := NewGuildLogic(nil, nil, nil, fence, nil)
 
 	_, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{
 		PlayerId: 1002, Name: "unreadable-fence", ZoneId: 7,
@@ -67,21 +67,21 @@ func TestCreateGuild_FenceUnreadableFailsClosed(t *testing.T) {
 // TestCheckMergeFence_SkippedWhenNotConfigured:没配 MergeMarkerRedis 时闸门整体跳过,
 // 建帮照常 —— 否则所有还没配这段的环境会因为一个可选加固而建不了公会。
 func TestCheckMergeFence_SkippedWhenNotConfigured(t *testing.T) {
-	l := NewGuildLogic(nil, nil, nil, nil)
+	l := NewGuildLogic(nil, nil, nil, nil, nil)
 	require.NoError(t, l.checkMergeFence(context.Background(), 7))
 }
 
 // TestCheckMergeFence_ZoneZeroIsNotChecked:zone 0 没有对应的标记键,查它没有意义。
 func TestCheckMergeFence_ZoneZeroIsNotChecked(t *testing.T) {
 	fence := &fakeFence{merging: true}
-	l := NewGuildLogic(nil, nil, nil, fence)
+	l := NewGuildLogic(nil, nil, nil, fence, nil)
 	require.NoError(t, l.checkMergeFence(context.Background(), 0))
 	assert.Zero(t, fence.calls, "zone=0 不该产生一次 Redis 往返")
 }
 
 func TestCheckMergeFence_PassesWhenMarkerAbsent(t *testing.T) {
 	fence := &fakeFence{merging: false}
-	l := NewGuildLogic(nil, nil, nil, fence)
+	l := NewGuildLogic(nil, nil, nil, fence, nil)
 	require.NoError(t, l.checkMergeFence(context.Background(), 7))
 	assert.Equal(t, 1, fence.calls)
 }

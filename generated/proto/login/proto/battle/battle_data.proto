@@ -193,6 +193,10 @@ message BattleSettlementData {
   repeated BattlePetSettlementData pets = 14;  // 该玩家出战宝宝的战后终值(scene 回写实例)
   // battle 根据真实阵亡怪物生成，scene 用于任务进度；客户端不能上报。
   repeated BattleMonsterDefeat defeated_monsters = 15;
+  // 数值单位版本(2026-09-14 起,取值见 turn_battle_constants.h 的 kAttributeUnitVersion;0 = 旧 battle 二进制产出)。
+  // mana 与 pets[].mana 是绝对值:离线挂起(Redis 7 天)、部署时在途、发件箱重投的旧结算若原样写回,
+  // 会把登录时已 ×4 迁移的法力永久写回旧单位。scene 应用时按本字段换算到当前单位。
+  uint32 attribute_unit_version = 16;
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----

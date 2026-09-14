@@ -45,4 +45,10 @@ public interface AttributeRuleTableOrBuilder extends
    * @return The schemeNameMaxLen.
    */
   int getSchemeNameMaxLen();
+
+  /**
+   * <code>double alloc_efficiency_bonus = 7;</code>
+   * @return The allocEfficiencyBonus.
+   */
+  double getAllocEfficiencyBonus();
 }

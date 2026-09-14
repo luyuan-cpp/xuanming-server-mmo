@@ -1,0 +1,43 @@
+# chat-smoke 配置:两个机器人对全局聊天服务 go/chat v1 做端到端冒烟(zone 接入契约 v1 §9 冒烟段)
+#
+# 流程:A 登 zone_a、B 登 zone_b(断言 gate 地址不同)→ A 发 WORLD "world <nonce>" → B 拉 WORLD 看到且 sender==A
+#       → A 私聊 B → B 拉 PRIVATE(peer=A)看到 → A 发 600 字节 → chat 回 kMessageSizeExceeded
+#       → A 用同一 request_id 重发 WORLD → B 拉到的历史里该 nonce 仍只一条。
+#
+# 前置(缺一条就会失败,失败原因会写进 CHAT_SMOKE_FAIL 的 reason):
+#   1. 两个 zone 的 gate 都以环境变量 GATE_CLIENT_RPC_ROUTER=1 启动(路由服模式)。
+#      chat 的客户端入口只承诺路由服模式;直连模式下 gate 到不了 chat,冒烟会报 kServiceUnavailable。
+#      start_game.ps1 默认已开(-GateRouterMode);dev_tools.ps1 dev-start-zones / cpp_nodes.ps1 需由父 shell 先设该变量。
+#   2. client-rpc-router 与 chat 服务已起(chat 全局一份即可,两个 zone 的路由服都能发现它)。
+#   3. zone_config 里有 zone 2 的行(assign-gate 才能把 B 分到 zone 2 的 gate)。
+#   4. 从 robot/ 目录运行(table_dir 是相对路径 ../generated/tables)。
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/chat_smoke.yaml
+# 退出码 0 = 全部断言通过(日志有 CHAT_SMOKE_OK player_a=… player_b=… gate_a=… gate_b=… 一行);
+# 退出码 1 = 任一步失败(日志有 CHAT_SMOKE_FAIL step=… reason=…)。
+#
+# 固定账号 robot_9005(A)/ robot_9006(B):前缀必须是 robot_ 才走 login 侧 DevPasswordAuth;
+# 与 battle-smoke(9001/9002)、跨 zone 匹配(9003/9004)、属性(9101)错开,避免并行冒烟互相顶号。
+# 可重复运行:每次用新的随机 nonce 与 request_id,不依赖上一轮留下的聊天历史。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # cross_zone=true 时不用此字段选区(A/B 各按 chat_smoke.zone_a/zone_b 登录);false 时两人都登这个 zone
+robot_count: 2 # 语义占位:本模式固定 A/B 两个机器人,不按此展开
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号 robot_9005/9006(见上)
+password: "123456"
+skill_ids: [] # 本模式不放技能
+table_dir: "../generated/tables"
+action_interval: 3 # 本模式不跑场景 AI 循环,保留默认
+report_interval: 5
+
+mode: "chat-smoke"
+
+# 子开关(见 config.ChatSmokeConfig / chat_smoke_scenario.go)
+chat_smoke:
+  cross_zone: true # false = 同 zone 弱验收(两人都登 zone_id,不断言 gate 不同)
+  zone_a: 1 # 机器人 A(发送方)登录的 zone
+  zone_b: 2 # 机器人 B(拉历史方)登录的 zone;cross_zone=true 时必须与 zone_a 不同
+
+# 认证:password 模式(robot_ 前缀账号走 DevPasswordAuth)
+auth_type: "password"

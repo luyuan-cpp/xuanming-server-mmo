@@ -10,7 +10,7 @@
 //
 //   原始伤害 = 基础伤害 × (1 + 力量 × 0.1) + 攻击 × 攻击倍率
 //   受伤比例 = max(1 − 60%, 等级系数 ÷ (护甲 + 防御 + 等级系数) × (1 − 抗性%))
-//   等级系数 = 30 + 10 × 目标等级(目标等级夹到 1..85)
+//   等级系数 = 360 + 120 × 目标等级(目标等级夹到 1..85;2026-09-14 防御单位 ×12,原 30 + 10 × 等级)
 //   伤害     = 原始伤害 × 受伤比例
 //
 // 为什么不再用"攻击减防御":减法口径下防御一旦超过攻击,伤害直接归零(2026-09-10 系数上调后低级怪全体打不动人);
@@ -25,8 +25,12 @@ inline constexpr uint32_t kPhysicalDamage = 1;  // 物理:吃物伤
 
 // 常驻减伤(护甲 + 防御 + 抗性)上限;主动防御(DEFEND 减半)不算在内,由引擎另外处理
 inline constexpr double kMaxPassiveReduction = 0.60;
-inline constexpr double kLevelFactorBase = 30.0;
-inline constexpr double kLevelFactorPerLevel = 10.0;
+// 防御单位倍率(2026-09-14 ×12,让每分配 1 点体质面板至少 +1 防御):护甲、防御、等级系数必须同乘,
+// 受伤比例 K ÷ (护甲 + 防御 + K) 才保持不变(三者都是整数时逐位相同)。抗性是百分比,不乘。
+// 改倍率要连带 Class.init_armor、Monster.armor、AttributeDimension 101 / 401 的 defense 系数与 kMonsterDefaultArmor。
+inline constexpr double kDefenseUnitScale = 12.0;
+inline constexpr double kLevelFactorBase = 30.0 * kDefenseUnitScale;      // 360
+inline constexpr double kLevelFactorPerLevel = 10.0 * kDefenseUnitScale;  // 120
 // 目标等级上限。镜像 scene 的 playerlevel::kMaxLevel(battle 库不 include scene 头文件),单测守住两边一致
 inline constexpr uint32_t kLevelFactorMaxLevel = 85;
 

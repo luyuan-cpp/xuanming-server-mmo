@@ -114,6 +114,17 @@ private static final long serialVersionUID = 0L;
     return schemeNameMaxLen_;
   }
 
+  public static final int ALLOC_EFFICIENCY_BONUS_FIELD_NUMBER = 7;
+  private double allocEfficiencyBonus_ = 0D;
+  /**
+   * <code>double alloc_efficiency_bonus = 7;</code>
+   * @return The allocEfficiencyBonus.
+   */
+  @java.lang.Override
+  public double getAllocEfficiencyBonus() {
+    return allocEfficiencyBonus_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -146,6 +157,9 @@ private static final long serialVersionUID = 0L;
     if (schemeNameMaxLen_ != 0) {
       output.writeUInt32(6, schemeNameMaxLen_);
     }
+    if (java.lang.Double.doubleToRawLongBits(allocEfficiencyBonus_) != 0) {
+      output.writeDouble(7, allocEfficiencyBonus_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -173,6 +187,10 @@ private static final long serialVersionUID = 0L;
     if (schemeNameMaxLen_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(6, schemeNameMaxLen_);
+    }
+    if (java.lang.Double.doubleToRawLongBits(allocEfficiencyBonus_) != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeDoubleSize(7, allocEfficiencyBonus_);
     }
     return size;
   }
@@ -210,6 +228,9 @@ private static final long serialVersionUID = 0L;
         != other.getSwitchCooldownSeconds()) return false;
     if (getSchemeNameMaxLen()
         != other.getSchemeNameMaxLen()) return false;
+    if (java.lang.Double.doubleToLongBits(getAllocEfficiencyBonus())
+        != java.lang.Double.doubleToLongBits(
+            other.getAllocEfficiencyBonus())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -234,6 +255,9 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getSwitchCooldownSeconds();
     hash = (37 * hash) + SCHEME_NAME_MAX_LEN_FIELD_NUMBER;
     hash = (53 * hash) + getSchemeNameMaxLen();
+    hash = (37 * hash) + ALLOC_EFFICIENCY_BONUS_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        java.lang.Double.doubleToLongBits(getAllocEfficiencyBonus()));
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -371,6 +395,7 @@ private static final long serialVersionUID = 0L;
       createSchemeCostGold_ = 0L;
       switchCooldownSeconds_ = 0;
       schemeNameMaxLen_ = 0;
+      allocEfficiencyBonus_ = 0D;
       return this;
     }
 
@@ -422,6 +447,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000020) != 0)) {
         result.schemeNameMaxLen_ = schemeNameMaxLen_;
       }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.allocEfficiencyBonus_ = allocEfficiencyBonus_;
+      }
     }
 
     @java.lang.Override
@@ -453,6 +481,9 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getSchemeNameMaxLen() != 0) {
         setSchemeNameMaxLen(other.getSchemeNameMaxLen());
+      }
+      if (java.lang.Double.doubleToRawLongBits(other.getAllocEfficiencyBonus()) != 0) {
+        setAllocEfficiencyBonus(other.getAllocEfficiencyBonus());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -510,6 +541,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000020;
               break;
             } // case 48
+            case 57: {
+              allocEfficiencyBonus_ = input.readDouble();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 57
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -715,6 +751,38 @@ private static final long serialVersionUID = 0L;
     public Builder clearSchemeNameMaxLen() {
       bitField0_ = (bitField0_ & ~0x00000020);
       schemeNameMaxLen_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private double allocEfficiencyBonus_ ;
+    /**
+     * <code>double alloc_efficiency_bonus = 7;</code>
+     * @return The allocEfficiencyBonus.
+     */
+    @java.lang.Override
+    public double getAllocEfficiencyBonus() {
+      return allocEfficiencyBonus_;
+    }
+    /**
+     * <code>double alloc_efficiency_bonus = 7;</code>
+     * @param value The allocEfficiencyBonus to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAllocEfficiencyBonus(double value) {
+
+      allocEfficiencyBonus_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>double alloc_efficiency_bonus = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAllocEfficiencyBonus() {
+      bitField0_ = (bitField0_ & ~0x00000040);
+      allocEfficiencyBonus_ = 0D;
       onChanged();
       return this;
     }

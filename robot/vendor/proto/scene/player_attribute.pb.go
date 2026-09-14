@@ -23,7 +23,7 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
-// 维度(体质/灵力/... 金木水火土 ... 仙攻/仙护/魔攻/魔体)
+// 维度(角色属性点池:体质 / 灵力 / 力量 / 敏捷;2026-09-14 删相性 / 仙魔两池)
 type AttributeDimensionInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	DimensionId   uint32                 `protobuf:"varint,1,opt,name=dimension_id,json=dimensionId,proto3" json:"dimension_id,omitempty"`
@@ -31,8 +31,8 @@ type AttributeDimensionInfo struct {
 	Name          string                 `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	Desc          string                 `protobuf:"bytes,4,opt,name=desc,proto3" json:"desc,omitempty"`            // 悬浮说明,如"体质:提高气血上限和防御。"
 	Allocated     uint32                 `protobuf:"varint,5,opt,name=allocated,proto3" json:"allocated,omitempty"` // 当前方案已分配点
-	Value         uint64                 `protobuf:"varint,6,opt,name=value,proto3" json:"value,omitempty"`         // 面板显示值 = 自然成长 + 已分配 + 外部加成
-	Cap           uint32                 `protobuf:"varint,7,opt,name=cap,proto3" json:"cap,omitempty"`             // 可分配上限(0 = 不限;相性 = 50)
+	Value         uint64                 `protobuf:"varint,6,opt,name=value,proto3" json:"value,omitempty"`         // 面板显示值 = 自然成长 + 已分配 + 外部加成。只是**点数**,不能反推收益:
+	Cap           uint32                 `protobuf:"varint,7,opt,name=cap,proto3" json:"cap,omitempty"`             // 可分配上限(0 = 不限)
 	Sort          uint32                 `protobuf:"varint,8,opt,name=sort,proto3" json:"sort,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -124,7 +124,7 @@ func (x *AttributeDimensionInfo) GetSort() uint32 {
 	return 0
 }
 
-// 点数池(属性点 / 相性点 / 仙魔点)
+// 点数池(角色目前只有属性点池;2026-09-14 删相性点 / 仙魔点池)
 type AttributePoolInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	PoolId        uint32                 `protobuf:"varint,1,opt,name=pool_id,json=poolId,proto3" json:"pool_id,omitempty"`

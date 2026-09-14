@@ -180,6 +180,14 @@ struct FCfgSkillRow : public FTableRowBase
 	UPROPERTY()
 	FString damage;
 
+	/** 伤害类型(2026-09-13):0 = 法术,吃法伤(缺省,老行保持原行为);1 = 物理,吃物伤。 与 skill_type(施法行为位)无关;取值见 cpp/libs/services/battle/system/combat_damage_rules.h */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	int32 damage_type = 0;
+
+	/** 攻击倍率:伤害里物伤 / 法伤那部分乘以本值;0 = 按 1 倍(老行兼容),负数视为坏表、不加攻击 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
+	double attack_multiplier = 0.0;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Skill")
 	TArray<FCfgSkillRequiredItem> required_item;
 

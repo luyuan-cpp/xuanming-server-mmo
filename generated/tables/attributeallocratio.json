@@ -1,0 +1,100 @@
+{
+ "data": [
+  {
+   "class_id": 0,
+   "defense": 0.0,
+   "desc": "力量→物伤:非对应职业 +25%",
+   "dimension_id": 103,
+   "id": 1,
+   "magic_attack": 0.0,
+   "max_health": 0.0,
+   "max_mana": 0.0,
+   "physical_attack": 0.25,
+   "speed": 0.0
+  },
+  {
+   "class_id": 1,
+   "defense": 0.0,
+   "desc": "力量→物伤:破军 +30%",
+   "dimension_id": 103,
+   "id": 2,
+   "magic_attack": 0.0,
+   "max_health": 0.0,
+   "max_mana": 0.0,
+   "physical_attack": 0.3,
+   "speed": 0.0
+  },
+  {
+   "class_id": 0,
+   "defense": 0.0,
+   "desc": "灵力→法伤 +22.5% / 法力 +15%:非对应职业",
+   "dimension_id": 102,
+   "id": 3,
+   "magic_attack": 0.225,
+   "max_health": 0.0,
+   "max_mana": 0.15,
+   "physical_attack": 0.0,
+   "speed": 0.0
+  },
+  {
+   "class_id": 2,
+   "defense": 0.0,
+   "desc": "灵力→法伤 +27% / 法力 +15%:玄霄",
+   "dimension_id": 102,
+   "id": 4,
+   "magic_attack": 0.27,
+   "max_health": 0.0,
+   "max_mana": 0.15,
+   "physical_attack": 0.0,
+   "speed": 0.0
+  },
+  {
+   "class_id": 0,
+   "defense": 0.0,
+   "desc": "敏捷→速度:非对应职业 +16.67%",
+   "dimension_id": 104,
+   "id": 5,
+   "magic_attack": 0.0,
+   "max_health": 0.0,
+   "max_mana": 0.0,
+   "physical_attack": 0.0,
+   "speed": 0.1667
+  },
+  {
+   "class_id": 4,
+   "defense": 0.0,
+   "desc": "敏捷→速度:逐风 +20%",
+   "dimension_id": 104,
+   "id": 6,
+   "magic_attack": 0.0,
+   "max_health": 0.0,
+   "max_mana": 0.0,
+   "physical_attack": 0.0,
+   "speed": 0.2
+  },
+  {
+   "class_id": 0,
+   "defense": 0.1,
+   "desc": "体质→气血 +20.83% / 防御 +10%:非对应职业",
+   "dimension_id": 101,
+   "id": 7,
+   "magic_attack": 0.0,
+   "max_health": 0.2083,
+   "max_mana": 0.0,
+   "physical_attack": 0.0,
+   "speed": 0.0
+  },
+  {
+   "class_id": 3,
+   "defense": 0.12,
+   "desc": "体质→气血 +25% / 防御 +12%:丹心",
+   "dimension_id": 101,
+   "id": 8,
+   "magic_attack": 0.0,
+   "max_health": 0.25,
+   "max_mana": 0.0,
+   "physical_attack": 0.0,
+   "speed": 0.0
+  }
+ ]
+}

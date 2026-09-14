@@ -78,4 +78,8 @@ struct FCfgAttributeRuleRow : public FTableRowBase
 	/** 方案名最大字符数 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|AttributeRule")
 	int32 scheme_name_max_len = 0;
+
+	/** 加点效率系数 b:E(n) = n × (1 + b × n ÷ s)。策划口径 0.20;填 0 = 纯线性(没有集中投资倾向),负数按坏表退回 0.20。 s(满投点数,角色属性点 = 425)与除数 E(s)(= 510)不进表,由池表与等级上限现算(player-attribute-allocation.md §3.1) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|AttributeRule")
+	double alloc_efficiency_bonus = 0.0;
 };

@@ -103,6 +103,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		GateCommandBuilder:       guildkafka.NewGateCommandBuilder(),
 		MergeMarkerRedisClient:   newMergeMarkerRedis(c),
 	}
+	sc.initDataServiceClient()
 	sc.initGuildIDSegment()
 	return sc
 }

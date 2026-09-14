@@ -9,6 +9,7 @@ import (
 	"math"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -28,6 +29,10 @@ var (
 	ErrGuildFull = errors.New("guild is full")
 	// ErrPlayerAlreadyInGuild:唯一索引 uk_player 拒绝了跨公会重复 membership。
 	ErrPlayerAlreadyInGuild = errors.New("player already belongs to a guild")
+	// ErrGuildNameTaken:唯一索引 uk_name 拒绝了重名(帮名全局唯一,不分 zone)。
+	ErrGuildNameTaken = errors.New("guild name already taken")
+	// ErrGuildZoneMismatch:目标公会不属于入会方要求的 zone(按 zone 隔离的入会)。
+	ErrGuildZoneMismatch = errors.New("guild belongs to another zone")
 	// ErrAnnouncementForbidden:MySQL 权威 membership 不存在或角色不是 officer/leader。
 	ErrAnnouncementForbidden = errors.New("guild announcement update is not authorized")
 	// ErrLegacyRankSnapshotMismatch:迁移时 Redis 旧榜并非 MySQL 公会全集，禁止
@@ -268,6 +273,9 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
 		guild.GuildID, guild.Name, guild.LeaderID, guild.Level,
 		guild.Announcement, guild.CreateTimeMs, guild.MaxMembers, guild.ZoneID); err != nil {
+		if isDuplicateKeyOn(err, guildNameUniqueKey) {
+			return ErrGuildNameTaken
+		}
 		return fmt.Errorf("insert guild %d: %w", guild.GuildID, err)
 	}
 	if _, err := tx.ExecContext(ctx,
@@ -293,6 +301,13 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 // 满员判定必须在事务内数 guild_member 行:读缓存里 len(Members) 的旧实现在两个
 // 并发入会时会双双通过检查,把公会挤超编。
 func (r *GuildRepo) AddMember(ctx context.Context, guildID, playerID uint64, role uint32) error {
+	return r.AddMemberInZone(ctx, guildID, playerID, role, 0)
+}
+
+// AddMemberInZone 同 AddMember,并在同一把公会行锁下校验公会归属:requiredZone>0 且公会
+// 不在该 zone → ErrGuildZoneMismatch;requiredZone=0 不校验。zone 必须在事务里按权威行判,
+// 不能读 guild:v2:{id} 缓存 —— 合服刚把公会搬走时缓存里的 zone_id 可能还是源 zone。
+func (r *GuildRepo) AddMemberInZone(ctx context.Context, guildID, playerID uint64, role uint32, requiredZone uint32) error {
 	now := time.Now().UnixMilli()
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -302,15 +317,18 @@ func (r *GuildRepo) AddMember(ctx context.Context, guildID, playerID uint64, rol
 	defer tx.Rollback()
 
 	// FOR UPDATE 锁住公会行:并发 AddMember 在此串行化,行数判定不再有竞态窗口;
-	// 同时兼做存在性校验(公会刚被解散 → ErrGuildGone)。
-	var maxMembers uint32
+	// 同时兼做存在性校验(公会刚被解散 → ErrGuildGone)与 zone 归属校验。
+	var maxMembers, zoneID uint32
 	err = tx.QueryRowContext(ctx,
-		"SELECT max_members FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&maxMembers)
+		"SELECT max_members, zone_id FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&maxMembers, &zoneID)
 	if err == sql.ErrNoRows {
 		return ErrGuildGone
 	}
 	if err != nil {
 		return fmt.Errorf("lock guild %d: %w", guildID, err)
+	}
+	if requiredZone != 0 && zoneID != requiredZone {
+		return ErrGuildZoneMismatch
 	}
 
 	var memberCount uint32
@@ -573,6 +591,20 @@ func (r *GuildRepo) deleteGuildFromMySQL(ctx context.Context, guildID uint64) ([
 func isDuplicateKey(err error) bool {
 	var mysqlErr *mysqlDriver.MySQLError
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
+}
+
+// guildNameUniqueKey 是 guild 表帮名唯一索引名(deploy/mysql-init/guild_friend_tables.sql)。
+const guildNameUniqueKey = "uk_name"
+
+// isDuplicateKeyOn 判断是否撞了指定的唯一索引。1062 只说明"有重复",要区分是哪个索引只能看消息:
+// MySQL 8 / TiDB 形如 "Duplicate entry 'x' for key 'guild.uk_name'",5.7 不带表名前缀。
+// 按**结尾**匹配:帮名本身出现在消息中段,名字里含 "uk_name" 不能让主键冲突被误判成重名。
+func isDuplicateKeyOn(err error, key string) bool {
+	var mysqlErr *mysqlDriver.MySQLError
+	if !errors.As(err, &mysqlErr) || mysqlErr.Number != 1062 {
+		return false
+	}
+	return strings.HasSuffix(mysqlErr.Message, "'"+key+"'") || strings.HasSuffix(mysqlErr.Message, "."+key+"'")
 }
 
 // ── Ranking (Redis ZSET) ───────────────────────────────────────
@@ -1006,10 +1038,16 @@ func (r *GuildRepo) GetGuildRankPage(ctx context.Context, zoneID, page, pageSize
 		return nil, uint32(total), nil
 	}
 
-	start := int64((page - 1) * pageSize)
-	stop := start + int64(pageSize) - 1
+	// 请求字段是 uint32:先提升到 uint64 再相乘,避免高页码环绕回榜首。
+	// 内部调用的 pageSize 也可能为 MaxUint32,乘积可超过 MaxInt64;
+	// 先按实际榜长判断空页,再转换 Redis 使用的有符号下标。
+	start := uint64(page-1) * uint64(pageSize)
+	if start >= uint64(total) {
+		return nil, uint32(total), nil
+	}
+	stop := min(start+uint64(pageSize)-1, uint64(total)-1)
 
-	members, err := r.rdb.ZRevRangeWithScores(ctx, key, start, stop).Result()
+	members, err := r.rdb.ZRevRangeWithScores(ctx, key, int64(start), int64(stop)).Result()
 	if err != nil {
 		return nil, 0, fmt.Errorf("zrevrange %s: %w", key, err)
 	}

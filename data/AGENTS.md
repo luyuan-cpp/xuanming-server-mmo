@@ -134,9 +134,9 @@ cd tools/data_table_exporter && py -m pytest -q
 | **ActorActionCombatState** | `ActorActionCombatState.xlsx` | `actoractioncombatstate_table.proto` | 8 | 2 | 4 | — | — | — | — | — | — | `state` |
 | **ActorActionState** | `ActorActionState.xlsx` | `actoractionstate_table.proto` | 8 | 2 | 4 | — | — | — | — | — | — | `state` |
 | **AttributeAllocRatio** | `AttributeAllocRatio.xlsx` | `attributeallocratio_table.proto` | 10 | 10 | 8 | — | — | `dimension_id` `class_id` | `dimension_id→AttributeDimension.id` | — | — | — |
-| **AttributeAutoPlan** | `AttributeAutoPlan.xlsx` | `attributeautoplan_table.proto` | 14 | 6 | 12 | — | — | `class_id` `pool_id` | `pool_id→AttributePool.id` `dimension→AttributeDimension.id` | — | — | — |
-| **AttributeDimension** | `AttributeDimension.xlsx` | `attributedimension_table.proto` | 12 | 12 | 17 | — | — | `pool_id` | `pool_id→AttributePool.id` | — | — | — |
-| **AttributePool** | `AttributePool.xlsx` | `attributepool_table.proto` | 10 | 10 | 4 | — | — | `owner_type` | — | — | — | — |
+| **AttributeAutoPlan** | `AttributeAutoPlan.xlsx` | `attributeautoplan_table.proto` | 14 | 6 | 6 | — | — | `class_id` `pool_id` | `pool_id→AttributePool.id` `dimension→AttributeDimension.id` | — | — | — |
+| **AttributeDimension** | `AttributeDimension.xlsx` | `attributedimension_table.proto` | 12 | 12 | 8 | — | — | `pool_id` | `pool_id→AttributePool.id` | — | — | — |
+| **AttributePool** | `AttributePool.xlsx` | `attributepool_table.proto` | 10 | 10 | 2 | — | — | `owner_type` | — | — | — | — |
 | **AttributeRule** | `AttributeRule.xlsx` | `attributerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
 | **BaseScene** | `BaseScene.xlsx` | `basescene_table.proto` | 5 | 5 | 21 | — | — | — | — | — | — | — |
 | **Buff** | `Buff.xlsx` | `buff_table.proto` | 32 | 22 | 20 | — | — | — | — | — | `health_regeneration:double` `bonus_damage:double` | — |
@@ -154,12 +154,12 @@ cd tools/data_table_exporter && py -m pytest -q
 | **Pet** | `Pet.xlsx` | `pet_table.proto` | 22 | 13 | 4 | — | — | — | — | — | — | — |
 | **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 6 | 6 | 1 | — | — | — | — | — | — | — |
 | **Reward** | `Reward.xlsx` | `reward_table.proto` | 5 | 2 | 7 | — | — | — | — | `id` | — | `reward` |
-| **Skill** | `Skill.xlsx` | `skill_table.proto` | 45 | 23 | 13 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
+| **Skill** | `Skill.xlsx` | `skill_table.proto` | 47 | 25 | 13 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
 | **SkillPermission** | `SkillPermission.xlsx` | `skillpermission_table.proto` | 7 | 2 | 3 | — | — | — | — | — | — | — |
 | **Test** | `Test.xlsx` | `test_table.proto` | 24 | 6 | 6 | — | — | — | — | — | — | `testobj` |
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 
-合计 **29** 张表、**339** 个物理列、**205** 个进产物的字段。
+合计 **29** 张表、**341** 个物理列、**207** 个进产物的字段。
 
 <!-- END GENERATED -->

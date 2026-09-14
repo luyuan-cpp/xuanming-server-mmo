@@ -81,6 +81,14 @@ type SkillDamageComp struct {
     Value string
 }
 
+type SkillDamage_typeComp struct {
+    Value uint32
+}
+
+type SkillAttack_multiplierComp struct {
+    Value float64
+}
+
 type SkillSkill_typeComp struct {
     Values []uint32
 }
@@ -164,6 +172,14 @@ func MakeSkillCooldown_idComp(row *pb.SkillTable) SkillCooldown_idComp {
 
 func MakeSkillDamageComp(row *pb.SkillTable) SkillDamageComp {
     return SkillDamageComp{Value: row.Damage}
+}
+
+func MakeSkillDamage_typeComp(row *pb.SkillTable) SkillDamage_typeComp {
+    return SkillDamage_typeComp{Value: row.DamageType}
+}
+
+func MakeSkillAttack_multiplierComp(row *pb.SkillTable) SkillAttack_multiplierComp {
+    return SkillAttack_multiplierComp{Value: row.AttackMultiplier}
 }
 
 func MakeSkillSkill_typeComp(row *pb.SkillTable) SkillSkill_typeComp {

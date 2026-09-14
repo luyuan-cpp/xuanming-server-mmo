@@ -15,6 +15,7 @@ message AttributeRuleTable {
 	uint64 create_scheme_cost_gold = 4;
 	uint32 switch_cooldown_seconds = 5;
 	uint32 scheme_name_max_len = 6;
+	double alloc_efficiency_bonus = 7;
 }
 
 message AttributeRuleTableData {

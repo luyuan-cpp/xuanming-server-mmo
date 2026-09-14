@@ -233,6 +233,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributeRuleTable final : public :
     kCreateSchemeCostGoldFieldNumber = 4,
     kFreeSchemeCountFieldNumber = 3,
     kSwitchCooldownSecondsFieldNumber = 5,
+    kAllocEfficiencyBonusFieldNumber = 7,
     kSchemeNameMaxLenFieldNumber = 6,
   };
   // uint32 id = 1;
@@ -285,6 +286,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributeRuleTable final : public :
   void _internal_set_switch_cooldown_seconds(::uint32_t value);
 
   public:
+  // double alloc_efficiency_bonus = 7;
+  void clear_alloc_efficiency_bonus() ;
+  [[nodiscard]] double alloc_efficiency_bonus() const;
+  void set_alloc_efficiency_bonus(double value);
+
+  private:
+  double _internal_alloc_efficiency_bonus() const;
+  void _internal_set_alloc_efficiency_bonus(double value);
+
+  public:
   // uint32 scheme_name_max_len = 6;
   void clear_scheme_name_max_len() ;
   [[nodiscard]] ::uint32_t scheme_name_max_len() const;
@@ -299,7 +310,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributeRuleTable final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
+      ::google::protobuf::internal::TcParseTable<3, 7,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -333,6 +344,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AttributeRuleTable final : public :
     ::uint64_t create_scheme_cost_gold_;
     ::uint32_t free_scheme_count_;
     ::uint32_t switch_cooldown_seconds_;
+    double alloc_efficiency_bonus_;
     ::uint32_t scheme_name_max_len_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -692,7 +704,7 @@ inline void AttributeRuleTable::_internal_set_switch_cooldown_seconds(::uint32_t
 inline void AttributeRuleTable::clear_scheme_name_max_len() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scheme_name_max_len_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t AttributeRuleTable::scheme_name_max_len() const {
   // @@protoc_insertion_point(field_get:AttributeRuleTable.scheme_name_max_len)
@@ -700,7 +712,7 @@ inline ::uint32_t AttributeRuleTable::scheme_name_max_len() const {
 }
 inline void AttributeRuleTable::set_scheme_name_max_len(::uint32_t value) {
   _internal_set_scheme_name_max_len(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:AttributeRuleTable.scheme_name_max_len)
 }
 inline ::uint32_t AttributeRuleTable::_internal_scheme_name_max_len() const {
@@ -710,6 +722,30 @@ inline ::uint32_t AttributeRuleTable::_internal_scheme_name_max_len() const {
 inline void AttributeRuleTable::_internal_set_scheme_name_max_len(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.scheme_name_max_len_ = value;
+}
+
+// double alloc_efficiency_bonus = 7;
+inline void AttributeRuleTable::clear_alloc_efficiency_bonus() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.alloc_efficiency_bonus_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline double AttributeRuleTable::alloc_efficiency_bonus() const {
+  // @@protoc_insertion_point(field_get:AttributeRuleTable.alloc_efficiency_bonus)
+  return _internal_alloc_efficiency_bonus();
+}
+inline void AttributeRuleTable::set_alloc_efficiency_bonus(double value) {
+  _internal_set_alloc_efficiency_bonus(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:AttributeRuleTable.alloc_efficiency_bonus)
+}
+inline double AttributeRuleTable::_internal_alloc_efficiency_bonus() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.alloc_efficiency_bonus_;
+}
+inline void AttributeRuleTable::_internal_set_alloc_efficiency_bonus(double value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.alloc_efficiency_bonus_ = value;
 }
 
 // -------------------------------------------------------------------

@@ -24,16 +24,20 @@ const (
 type GuildError int32
 
 const (
-	GuildError_kGuild_errorOK         GuildError = 0
-	GuildError_kGuildAlreadyInGuild   GuildError = 14000
-	GuildError_kGuildNotFound         GuildError = 14001
-	GuildError_kGuildNotInGuild       GuildError = 14002
-	GuildError_kGuildFull             GuildError = 14003
-	GuildError_kGuildLeaderCantLeave  GuildError = 14004
-	GuildError_kGuildNotLeader        GuildError = 14005
-	GuildError_kGuildNoPermission     GuildError = 14006
-	GuildError_kGuildNotRanked        GuildError = 14007
-	GuildError_kGuildIdGenUnavailable GuildError = 14008
+	GuildError_kGuild_errorOK            GuildError = 0
+	GuildError_kGuildAlreadyInGuild      GuildError = 14000
+	GuildError_kGuildNotFound            GuildError = 14001
+	GuildError_kGuildNotInGuild          GuildError = 14002
+	GuildError_kGuildFull                GuildError = 14003
+	GuildError_kGuildLeaderCantLeave     GuildError = 14004
+	GuildError_kGuildNotLeader           GuildError = 14005
+	GuildError_kGuildNoPermission        GuildError = 14006
+	GuildError_kGuildNotRanked           GuildError = 14007
+	GuildError_kGuildIdGenUnavailable    GuildError = 14008
+	GuildError_kGuildNameInvalid         GuildError = 14009
+	GuildError_kGuildNameTaken           GuildError = 14010
+	GuildError_kGuildAnnouncementTooLong GuildError = 14011
+	GuildError_kGuildHomeZoneUnknown     GuildError = 14012
 )
 
 // Enum value maps for GuildError.
@@ -49,18 +53,26 @@ var (
 		14006: "kGuildNoPermission",
 		14007: "kGuildNotRanked",
 		14008: "kGuildIdGenUnavailable",
+		14009: "kGuildNameInvalid",
+		14010: "kGuildNameTaken",
+		14011: "kGuildAnnouncementTooLong",
+		14012: "kGuildHomeZoneUnknown",
 	}
 	GuildError_value = map[string]int32{
-		"kGuild_errorOK":         0,
-		"kGuildAlreadyInGuild":   14000,
-		"kGuildNotFound":         14001,
-		"kGuildNotInGuild":       14002,
-		"kGuildFull":             14003,
-		"kGuildLeaderCantLeave":  14004,
-		"kGuildNotLeader":        14005,
-		"kGuildNoPermission":     14006,
-		"kGuildNotRanked":        14007,
-		"kGuildIdGenUnavailable": 14008,
+		"kGuild_errorOK":            0,
+		"kGuildAlreadyInGuild":      14000,
+		"kGuildNotFound":            14001,
+		"kGuildNotInGuild":          14002,
+		"kGuildFull":                14003,
+		"kGuildLeaderCantLeave":     14004,
+		"kGuildNotLeader":           14005,
+		"kGuildNoPermission":        14006,
+		"kGuildNotRanked":           14007,
+		"kGuildIdGenUnavailable":    14008,
+		"kGuildNameInvalid":         14009,
+		"kGuildNameTaken":           14010,
+		"kGuildAnnouncementTooLong": 14011,
+		"kGuildHomeZoneUnknown":     14012,
 	}
 )
 
@@ -95,7 +107,7 @@ var File_guild_error_tip_proto protoreflect.FileDescriptor
 
 const file_guild_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15guild_error_tip.proto*\xf7\x01\n" +
+	"\x15guild_error_tip.proto*\xe1\x02\n" +
 	"\vguild_error\x12\x12\n" +
 	"\x0ekGuild_errorOK\x10\x00\x12\x19\n" +
 	"\x14kGuildAlreadyInGuild\x10\xb0m\x12\x13\n" +
@@ -107,7 +119,11 @@ const file_guild_error_tip_proto_rawDesc = "" +
 	"\x0fkGuildNotLeader\x10\xb5m\x12\x17\n" +
 	"\x12kGuildNoPermission\x10\xb6m\x12\x14\n" +
 	"\x0fkGuildNotRanked\x10\xb7m\x12\x1b\n" +
-	"\x16kGuildIdGenUnavailable\x10\xb8mB$\n" +
+	"\x16kGuildIdGenUnavailable\x10\xb8m\x12\x16\n" +
+	"\x11kGuildNameInvalid\x10\xb9m\x12\x14\n" +
+	"\x0fkGuildNameTaken\x10\xbam\x12\x1e\n" +
+	"\x19kGuildAnnouncementTooLong\x10\xbbm\x12\x1a\n" +
+	"\x15kGuildHomeZoneUnknown\x10\xbcmB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

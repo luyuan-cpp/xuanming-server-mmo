@@ -221,8 +221,8 @@ DerivedAccumulator StandardBaseAtLevelCap(const ClassTable* classRow) {
 }
 
 // 加点公式常量:bonus 取 AttributeRule 表;scale(满投点数)与除数按维度所属池 + 等级上限现算,
-// 不进表(那是池表与 kMaxLevel 的第二份真相,见 attributerules 注释)。相性池单项上限 50,
-// 给相性维度加比例行时满投就按 50 点算,不会被角色属性点的 425 尺度压到 1/10。
+// 不进表(那是池表与 kMaxLevel 的第二份真相,见 attributerules 注释)。池若有单项上限,满投按上限算,
+// 不会被属性点池的 425 尺度压小。
 attributerules::AllocFormulaRule FormulaRuleFor(const AttributePoolTable& pool) {
 	const auto* rule = RuleRow();
 	const double bonus = rule != nullptr ? rule->alloc_efficiency_bonus() : attributerules::kDefaultEfficiencyBonus;
@@ -231,7 +231,7 @@ attributerules::AllocFormulaRule FormulaRuleFor(const AttributePoolTable& pool) 
 }
 
 // 该维度对该职业的加点收益比例行:先找玩家职业专属行,没有退到 class_id=0 兜底;都没有返回 nullptr
-// (= 这个维度不走百分比公式,例如相性 / 仙魔池,继续按每点固定加值)
+// (= 这个维度不走百分比公式,继续按每点固定加值;2026-09-14 起角色只剩属性点池,四个维度都有比例行,这里只是兜底)
 const AttributeAllocRatioTable* FindAllocRatio(uint32_t dimensionId, uint32_t classId) {
 	const AttributeAllocRatioTable* fallback = nullptr;
 	const auto& rows = AttributeAllocRatioTableManager::Instance().FindAll().data();
@@ -488,6 +488,14 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 
 	// 速度直写基础属性:回合引擎出手序 / 逃跑判定只读 BaseAttributesComp.speed
 	baseAttrs->set_speed(derived.speed());
+
+	// 护甲按职业表直写(2026-09-14 防御单位 ×12 时加):护甲只在新号初始化时写一次、随存档落库,不重写的话
+	// 老号会一直停在旧单位(10,新表 120),而伤害公式的等级系数已经 ×12 —— 老号的护甲减伤只剩 1/12。
+	// 全仓没有 buff / 装备 / GM 在运行时改护甲,这里直写不会冲掉任何东西;以后装备要加护甲,必须在这里累加,
+	// 不能直接改 BaseAttributesComp.armor。
+	if (classRow != nullptr) {
+		baseAttrs->set_armor(classRow->init_armor());
+	}
 
 	// 当前 HP/MP 跟随上限(见 RecalcReason 注释):
 	//   升级:抬高按绝对增量补(降级只夹);

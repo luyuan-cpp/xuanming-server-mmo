@@ -1,11 +1,11 @@
 syntax = "proto3";
 option go_package = "login/proto/common/component";
 
-// 角色属性加点(问道式三池:属性点 / 相性点 / 仙魔点),设计文档
+// 角色属性加点(属性点池;2026-09-14 删相性点 / 仙魔点池),设计文档
 // docs/design/player-attribute-allocation.md。
 //
 // 数据分层:
-//   一级属性 = 表 AttributeDimension 的维度(体质/灵力/力量/敏捷、金木水火土、仙攻/仙护/魔攻/魔体),
+//   一级属性 = 表 AttributeDimension 的维度(角色:体质/灵力/力量/敏捷),
 //              维度值 = 每级自然成长 × 等级 + 已分配点 + 外部加成(bonus_values);
 //   二级属性 = DerivedAttributesComp(气血/法力上限、物伤、法伤、速度、防御),
 //              由 PlayerAttributeSystem::Recalculate 按表系数重算,不落库。
@@ -27,4 +27,7 @@ message PlayerAttributeComp {
   uint64 last_switch_time = 4;         // 上次切换方案的 Unix 秒(切换冷却)
   map<uint32, uint32> bonus_points = 5;  // pool_id -> 等级之外获得的额外点(道具/任务奖励)
   map<uint32, uint32> bonus_values = 6;  // dimension_id -> 外部加成(装备/丹药),不占点、随方案不变
+  // 数值单位版本(2026-09-14 起):0 = 旧存档;1 = 法力单位 ×4。加载时发现旧版本就把当前法力(角色 + 宝宝)换算后盖戳,
+  // 只做一次。规则与调用约定见 cpp/libs/services/scene/player/system/attribute_unit_migration.h
+  uint32 attribute_unit_version = 7;
 }

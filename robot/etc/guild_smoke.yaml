@@ -1,0 +1,41 @@
+# guild-smoke 配置:三个机器人对公会服务 go/guild 做「按 zone 隔离」端到端冒烟
+# (docs/design/guild-zone-client-access.md §6)
+#
+# 流程:A 建帮(请求体 zone 填错)→ 帮会落在 zone_a → A 重复建帮被拒 → B 在本区榜上看到
+#       → C(zone_b)看不见 / 查不到名次 / 加不进 / 同名被拒 → B 未入帮改公告被拒 → B 加入
+#       → A 改公告、B 读到;超长公告被拒 → B 伪造 player_id=A 退帮,服务端按会话让 B 退出
+#       → A 直调 UpdateGuildScore 拿不到业务回包、积分不变 → A 解散。
+#
+# 前置(缺一条就会失败,原因写进 GUILD_SMOKE_FAIL 的 reason):
+#   1. gate 以 GATE_CLIENT_RPC_ROUTER=1 启动(路由服模式);guild 的客户端入口只承诺路由服模式。
+#      start_game.ps1 默认已开;cross_zone=true 时两个 zone 的 gate 都要开。
+#   2. client_rpc_router、data_service、guild 已起(guild 全局一份即可);proto 已按本次改动重生成
+#      (gate 白名单 / 路由表里 GuildService 为客户端协议),gate 与路由服已换上新二进制。
+#   3. MessageLimiter / Tip 表已导出,gate 已重启(否则公会消息号吃默认 3 次 / 窗口限速)。
+#   4. robot_9201 / 9202 首次在 zone_a 建角、robot_9203 首次在 zone_b 建角(归属区映射在建角时登记);
+#      之前在别的区登录过的账号,第 1 步"帮会落区"断言会失败。
+#   5. 从 robot/ 目录运行(table_dir 是相对路径)。
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/guild_smoke.yaml
+# 退出码 0 = 全部断言通过(日志有 GUILD_SMOKE_OK guild_id=… 一行);退出码 1 = 任一步失败(GUILD_SMOKE_FAIL step=…)。
+# 可重复运行:预备段先把三个账号带出任何帮会,帮名带随机后缀。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 本模式不用此字段选区(A/B 登 guild_smoke.zone_a,C 登 zone_b)
+robot_count: 3 # 语义占位:本模式固定 A/B/C 三个机器人
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号 robot_9201/9202/9203
+password: "123456"
+skill_ids: []
+table_dir: "../generated/tables"
+action_interval: 3
+report_interval: 5
+
+mode: "guild-smoke"
+
+guild_smoke:
+  cross_zone: true # false = 只跑同区步骤(不登录 C,跳过第 4 步)
+  zone_a: 1 # A(帮主)与 B(成员)登录的 zone
+  zone_b: 2 # C 登录的 zone;cross_zone=true 时必须与 zone_a 不同
+
+auth_type: "password"

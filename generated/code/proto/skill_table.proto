@@ -44,6 +44,8 @@ message SkillTable {
 	uint32 required_status = 18;
 	uint32 cooldown_id = 19;
 	string damage = 20;
+	uint32 damage_type = 24;
+	double attack_multiplier = 25;
 	repeated Skillrequired_item required_item = 21;
 	repeated Skillrequired_resource required_resource = 22;
 	repeated Skillcost_resource cost_resource = 23;

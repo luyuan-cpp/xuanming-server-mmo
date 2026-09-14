@@ -1,6 +1,7 @@
 {
  "data": [
   {
+   "attack_multiplier": 1.0,
    "cast_point": 1.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -8,7 +9,7 @@
    "cooldown_id": 1,
    "cost_resource": [
     {
-     "cost_resource_cost": 10,
+     "cost_resource_cost": 40,
      "cost_resource_id": 1
     },
     {
@@ -25,6 +26,7 @@
     }
    ],
    "damage": "100*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -75,6 +77,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -99,6 +102,7 @@
     }
    ],
    "damage": "100*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -149,6 +153,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -173,6 +178,7 @@
     }
    ],
    "damage": "1000*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -222,6 +228,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -246,6 +253,7 @@
     }
    ],
    "damage": "10000*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -296,6 +304,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -320,6 +329,7 @@
     }
    ],
    "damage": "10000*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -370,6 +380,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -394,6 +405,7 @@
     }
    ],
    "damage": "100*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -444,6 +456,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -468,6 +481,7 @@
     }
    ],
    "damage": "1000*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -518,6 +532,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -542,6 +557,7 @@
     }
    ],
    "damage": "10000*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -592,6 +608,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -616,6 +633,7 @@
     }
    ],
    "damage": "100*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -665,6 +683,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -689,6 +708,7 @@
     }
    ],
    "damage": "1000*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -735,6 +755,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -759,6 +780,7 @@
     }
    ],
    "damage": "10000*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -809,6 +831,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.0,
    "channel_finish": 1,
    "channel_think": 1,
@@ -833,6 +856,7 @@
     }
    ],
    "damage": "10000*level",
+   "damage_type": 0,
    "effect": [
     1,
     1,
@@ -883,6 +907,7 @@
    "think_interval": 0
   },
   {
+   "attack_multiplier": 1.0,
    "cast_point": 0.3,
    "channel_finish": 1,
    "channel_think": 1,
@@ -907,6 +932,7 @@
     }
    ],
    "damage": "10000*level",
+   "damage_type": 0,
    "effect": [
     14,
     16,

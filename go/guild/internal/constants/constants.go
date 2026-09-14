@@ -39,6 +39,15 @@ const (
 	// ErrIDGenUnavailable:发号器已被 fence(worker id 的 etcd 租约丢了),
 	// 本次建帮整体失败。客户端重试即可 —— 进程会退出并由编排重拉、重新拿号。
 	ErrIDGenUnavailable = uint32(table.GuildError_kGuildIdGenUnavailable)
+	// ErrGuildNameInvalid:帮名为空、超过 MaxGuildNameRunes、不是合法 UTF-8 或含控制字符。
+	ErrGuildNameInvalid = uint32(table.GuildError_kGuildNameInvalid)
+	// ErrGuildNameTaken:uk_name 全局唯一索引拒绝(帮名跨 zone 唯一,合服不必改名)。
+	ErrGuildNameTaken = uint32(table.GuildError_kGuildNameTaken)
+	// ErrAnnouncementTooLong:公告超过 MaxAnnouncementBytes。
+	ErrAnnouncementTooLong = uint32(table.GuildError_kGuildAnnouncementTooLong)
+	// ErrHomeZoneUnknown:data_service 里没有该玩家的归属 zone 映射,无法判定他属于哪个区的帮会。
+	// 是数据状态不是故障:存量玩家需要运维跑 tools/merge_zone -backfill-home-zone 补映射。
+	ErrHomeZoneUnknown = uint32(table.GuildError_kGuildHomeZoneUnknown)
 )
 
 // 合服闸门(logic.checkMergeFence)刻意**没有**在这里加码。
@@ -57,6 +66,18 @@ const (
 const (
 	DefaultMaxMembers uint32 = 50
 	DefaultInitLevel  uint32 = 1
+)
+
+// 客户端输入上限。服务端必须自己校验:客户端的限制随时可以被绕过。
+const (
+	// MaxGuildNameRunes 按 Unicode 字符数计,与客户端输入框的 24 字一致。
+	MaxGuildNameRunes = 24
+	// MaxAnnouncementBytes 按 UTF-8 **字节**计(约 200 个汉字)。不能按字数给到 500:
+	// gate 对单个客户端包有 1KB 上限(CheckMessageSize),500 个汉字 ≈ 1500 字节,
+	// 请求在 gate 就被丢掉,玩家只会看到超时。600 字节加上 guild_id / player_id 与信封仍 < 1KB。
+	MaxAnnouncementBytes = 600
+	// MaxRankPageSize 限制客户端单次拉榜条数;每条都要回表补名字 / 人数。
+	MaxRankPageSize uint32 = 50
 )
 
 // TipClassifier 返回本服务的 in-band 业务码定性函数,供 serverbase.UnaryInterceptor 使用。

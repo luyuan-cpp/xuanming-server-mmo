@@ -27,7 +27,7 @@ public static partial class SkillTableReflection {
           "dWUYAiABKAQiWQoWU2tpbGxyZXF1aXJlZF9yZXNvdXJjZRIeChZyZXF1aXJl",
           "ZF9yZXNvdXJjZV90eXBlGAEgASgNEh8KF3JlcXVpcmVkX3Jlc291cmNlX3Zh",
           "bHVlGAIgASgNIkoKElNraWxsY29zdF9yZXNvdXJjZRIYChBjb3N0X3Jlc291",
-          "cmNlX2lkGAEgASgNEhoKEmNvc3RfcmVzb3VyY2VfY29zdBgCIAEoDSKyBAoK",
+          "cmNlX2lkGAEgASgNEhoKEmNvc3RfcmVzb3VyY2VfY29zdBgCIAEoDSLiBAoK",
           "U2tpbGxUYWJsZRIKCgJpZBgBIAEoDRISCgpza2lsbF90eXBlGAIgAygNEhYK",
           "DnRhcmdldGluZ19tb2RlGAMgAygNEhYKDnJlcXVpcmVfdGFyZ2V0GAQgASgN",
           "EhUKDXRhcmdldF9zdGF0dXMYBSABKA0SEgoKY2FzdF9wb2ludBgGIAEoARIV",
@@ -37,19 +37,21 @@ public static partial class SkillTableReflection {
           "bmVsX3RpbWUYDSABKA0SDQoFcmFuZ2UYDiABKAESEQoJbWF4X3JhbmdlGA8g",
           "ASgBEhEKCW1pbl9yYW5nZRgQIAEoARITCgtzZWxmX3N0YXR1cxgRIAEoDRIX",
           "Cg9yZXF1aXJlZF9zdGF0dXMYEiABKA0SEwoLY29vbGRvd25faWQYEyABKA0S",
-          "DgoGZGFtYWdlGBQgASgJEioKDXJlcXVpcmVkX2l0ZW0YFSADKAsyEy5Ta2ls",
-          "bHJlcXVpcmVkX2l0ZW0SMgoRcmVxdWlyZWRfcmVzb3VyY2UYFiADKAsyFy5T",
-          "a2lsbHJlcXVpcmVkX3Jlc291cmNlEioKDWNvc3RfcmVzb3VyY2UYFyADKAsy",
-          "Ey5Ta2lsbGNvc3RfcmVzb3VyY2UiKwoOU2tpbGxUYWJsZURhdGESGQoEZGF0",
-          "YRgBIAMoCzILLlNraWxsVGFibGVCPAoOY29tLmdhbWUudGFibGVCFFNraWxs",
-          "VGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJvdG8z"));
+          "DgoGZGFtYWdlGBQgASgJEhMKC2RhbWFnZV90eXBlGBggASgNEhkKEWF0dGFj",
+          "a19tdWx0aXBsaWVyGBkgASgBEioKDXJlcXVpcmVkX2l0ZW0YFSADKAsyEy5T",
+          "a2lsbHJlcXVpcmVkX2l0ZW0SMgoRcmVxdWlyZWRfcmVzb3VyY2UYFiADKAsy",
+          "Fy5Ta2lsbHJlcXVpcmVkX3Jlc291cmNlEioKDWNvc3RfcmVzb3VyY2UYFyAD",
+          "KAsyEy5Ta2lsbGNvc3RfcmVzb3VyY2UiKwoOU2tpbGxUYWJsZURhdGESGQoE",
+          "ZGF0YRgBIAMoCzILLlNraWxsVGFibGVCPAoOY29tLmdhbWUudGFibGVCFFNr",
+          "aWxsVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90YWJsZWIGcHJv",
+          "dG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
           new pbr::GeneratedClrTypeInfo(typeof(global::Skillrequired_item), global::Skillrequired_item.Parser, new[]{ "RequiredItemType", "RequiredItemValue" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::Skillrequired_resource), global::Skillrequired_resource.Parser, new[]{ "RequiredResourceType", "RequiredResourceValue" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::Skillcost_resource), global::Skillcost_resource.Parser, new[]{ "CostResourceId", "CostResourceCost" }, null, null, null, null),
-          new pbr::GeneratedClrTypeInfo(typeof(global::SkillTable), global::SkillTable.Parser, new[]{ "Id", "SkillType", "TargetingMode", "RequireTarget", "TargetStatus", "CastPoint", "RecoveryTime", "Immediate", "Effect", "ChannelThink", "ChannelFinish", "ThinkInterval", "ChannelTime", "Range", "MaxRange", "MinRange", "SelfStatus", "RequiredStatus", "CooldownId", "Damage", "RequiredItem", "RequiredResource", "CostResource" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::SkillTable), global::SkillTable.Parser, new[]{ "Id", "SkillType", "TargetingMode", "RequireTarget", "TargetStatus", "CastPoint", "RecoveryTime", "Immediate", "Effect", "ChannelThink", "ChannelFinish", "ThinkInterval", "ChannelTime", "Range", "MaxRange", "MinRange", "SelfStatus", "RequiredStatus", "CooldownId", "Damage", "DamageType", "AttackMultiplier", "RequiredItem", "RequiredResource", "CostResource" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::SkillTableData), global::SkillTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -817,6 +819,8 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     requiredStatus_ = other.requiredStatus_;
     cooldownId_ = other.cooldownId_;
     damage_ = other.damage_;
+    damageType_ = other.damageType_;
+    attackMultiplier_ = other.attackMultiplier_;
     requiredItem_ = other.requiredItem_.Clone();
     requiredResource_ = other.requiredResource_.Clone();
     costResource_ = other.costResource_.Clone();
@@ -1066,6 +1070,30 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     }
   }
 
+  /// <summary>Field number for the "damage_type" field.</summary>
+  public const int DamageTypeFieldNumber = 24;
+  private uint damageType_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint DamageType {
+    get { return damageType_; }
+    set {
+      damageType_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "attack_multiplier" field.</summary>
+  public const int AttackMultiplierFieldNumber = 25;
+  private double attackMultiplier_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public double AttackMultiplier {
+    get { return attackMultiplier_; }
+    set {
+      attackMultiplier_ = value;
+    }
+  }
+
   /// <summary>Field number for the "required_item" field.</summary>
   public const int RequiredItemFieldNumber = 21;
   private static readonly pb::FieldCodec<global::Skillrequired_item> _repeated_requiredItem_codec
@@ -1134,6 +1162,8 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     if (RequiredStatus != other.RequiredStatus) return false;
     if (CooldownId != other.CooldownId) return false;
     if (Damage != other.Damage) return false;
+    if (DamageType != other.DamageType) return false;
+    if (!pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.Equals(AttackMultiplier, other.AttackMultiplier)) return false;
     if(!requiredItem_.Equals(other.requiredItem_)) return false;
     if(!requiredResource_.Equals(other.requiredResource_)) return false;
     if(!costResource_.Equals(other.costResource_)) return false;
@@ -1164,6 +1194,8 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     if (RequiredStatus != 0) hash ^= RequiredStatus.GetHashCode();
     if (CooldownId != 0) hash ^= CooldownId.GetHashCode();
     if (Damage.Length != 0) hash ^= Damage.GetHashCode();
+    if (DamageType != 0) hash ^= DamageType.GetHashCode();
+    if (AttackMultiplier != 0D) hash ^= pbc::ProtobufEqualityComparers.BitwiseDoubleEqualityComparer.GetHashCode(AttackMultiplier);
     hash ^= requiredItem_.GetHashCode();
     hash ^= requiredResource_.GetHashCode();
     hash ^= costResource_.GetHashCode();
@@ -1259,6 +1291,14 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     requiredItem_.WriteTo(output, _repeated_requiredItem_codec);
     requiredResource_.WriteTo(output, _repeated_requiredResource_codec);
     costResource_.WriteTo(output, _repeated_costResource_codec);
+    if (DamageType != 0) {
+      output.WriteRawTag(192, 1);
+      output.WriteUInt32(DamageType);
+    }
+    if (AttackMultiplier != 0D) {
+      output.WriteRawTag(201, 1);
+      output.WriteDouble(AttackMultiplier);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -1343,6 +1383,14 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     requiredItem_.WriteTo(ref output, _repeated_requiredItem_codec);
     requiredResource_.WriteTo(ref output, _repeated_requiredResource_codec);
     costResource_.WriteTo(ref output, _repeated_costResource_codec);
+    if (DamageType != 0) {
+      output.WriteRawTag(192, 1);
+      output.WriteUInt32(DamageType);
+    }
+    if (AttackMultiplier != 0D) {
+      output.WriteRawTag(201, 1);
+      output.WriteDouble(AttackMultiplier);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -1406,6 +1454,12 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     }
     if (Damage.Length != 0) {
       size += 2 + pb::CodedOutputStream.ComputeStringSize(Damage);
+    }
+    if (DamageType != 0) {
+      size += 2 + pb::CodedOutputStream.ComputeUInt32Size(DamageType);
+    }
+    if (AttackMultiplier != 0D) {
+      size += 2 + 8;
     }
     size += requiredItem_.CalculateSize(_repeated_requiredItem_codec);
     size += requiredResource_.CalculateSize(_repeated_requiredResource_codec);
@@ -1475,6 +1529,12 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
     }
     if (other.Damage.Length != 0) {
       Damage = other.Damage;
+    }
+    if (other.DamageType != 0) {
+      DamageType = other.DamageType;
+    }
+    if (other.AttackMultiplier != 0D) {
+      AttackMultiplier = other.AttackMultiplier;
     }
     requiredItem_.Add(other.requiredItem_);
     requiredResource_.Add(other.requiredResource_);
@@ -1593,6 +1653,14 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
           costResource_.AddEntriesFrom(input, _repeated_costResource_codec);
           break;
         }
+        case 192: {
+          DamageType = input.ReadUInt32();
+          break;
+        }
+        case 201: {
+          AttackMultiplier = input.ReadDouble();
+          break;
+        }
       }
     }
   #endif
@@ -1705,6 +1773,14 @@ public sealed partial class SkillTable : pb::IMessage<SkillTable>
         }
         case 186: {
           costResource_.AddEntriesFrom(ref input, _repeated_costResource_codec);
+          break;
+        }
+        case 192: {
+          DamageType = input.ReadUInt32();
+          break;
+        }
+        case 201: {
+          AttackMultiplier = input.ReadDouble();
           break;
         }
       }

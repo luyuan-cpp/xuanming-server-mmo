@@ -27,4 +27,12 @@ enum guild_error {
 
   kGuildIdGenUnavailable = 14008;
 
+  kGuildNameInvalid = 14009;
+
+  kGuildNameTaken = 14010;
+
+  kGuildAnnouncementTooLong = 14011;
+
+  kGuildHomeZoneUnknown = 14012;
+
 };

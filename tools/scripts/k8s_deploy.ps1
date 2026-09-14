@@ -117,6 +117,23 @@
 	[ValidateSet("ClusterIP", "NodePort", "LoadBalancer")]
 	[string]$GateServiceType = "NodePort",
 	[int]$GateServicePort = 18000,
+	# gate 的客户端 RPC 路由模式:写进 gate Deployment 的环境变量 GATE_CLIENT_RPC_ROUTER
+	# (cpp/nodes/gate/gate_router_mode.h;docs/design/client-rpc-router.md D34)。
+	#   "1" = gate 只连路由服 client-rpc-router,chat 等只承诺路由模式的服务才可达;
+	#   "0" = 旧的逐服务直连,chat 不可达。
+	# **默认 "0",在 K8s 上以路由模式跑通一次 battle-smoke 之前不翻默认值**。路由服部署链已登记齐:
+	# go_svc_image.ps1 镜像、$GoSvcCatalogue 条目、New-GoSvcConfigMapYaml 的 client-rpc-router case、
+	# manifests/go-svc/client-rpc-router.yaml(注入 POD_IP)、node-config service_discovery_prefixes 的
+	# ClientRpcRouterNodeService.rpc;路由服按 POD_IP 通告对外地址(client_rpc_router_service.go advertisedHost)。
+	# 以上都还没在 K8s 上实跑过(未编译、未部署),开 "1" 前要先确认路由服 Deployment 就绪,
+	# 否则 gate 白名单里唯一的 gRPC 目标拨不通,登录 / 匹配 / 聊天全部 no_target。
+	# 开启前置(docs/design/xuanming-port-decisions-20260910.md D-12):路由服镜像构建通过、infra-up 部署就绪,
+	# 并在 K8s 上以路由模式跑通一次 battle-smoke 之后再翻默认值。反向回退到 "0" = chat 及所有只承诺路由模式的服务同时不可达,
+	# 回退前先 killswitch 关 chat 方法并公告。
+	# 只收 "0" / "1":gate 侧除 1/true/on 以外一律当关,拼错会静默落回直连,不如在脚本入口就拒。
+	# 用字符串而不是 [bool]/[switch]:值原样写进 env,两边字面值一致,kubectl 里看到的就是传进来的。
+	[ValidateSet("0", "1")]
+	[string]$GateRouterMode = "0",
 
 	[switch]$SkipInfra,
 	[switch]$SkipGoSvc,
@@ -374,6 +391,17 @@ $GoSvcCatalogue = @{
 	# 回合制战斗匹配:全局池、不分 zone(docs/design/cross-zone-matchmaking.md D1/D10),
 	# 与 battle 池同形态。gate 发现它走非 zone-scoped 前缀,所以放 infra namespace 一份即可。
 	match           = @{ ConfigMap = "go-svc-match-config";           Manifest = "match.yaml";           Port = 50500; ConfigFlag = "-f";              ConfigFile = "match_service.yaml";            ImageName = "mmorpg-match"; Global = $true }
+	# 全局聊天 chat v1:世界频道全服唯一、私聊 key 不含 zone,表里天然有跨 zone 的行,所以是全局池(Global),
+	# 与 match 同形态放 infra namespace 一份。客户端只经 gate → client-rpc-router 到达它;路由服在 K8s 上
+	# 真正跑起来之前(见下一条与 -GateRouterMode 参数注释),它「部署得起来但玩家不可达」,是已知缺口而不是配置错误。
+	chat            = @{ ConfigMap = "go-svc-chat-config";            Manifest = "chat.yaml";            Port = 50700; ConfigFlag = "-f";              ConfigFile = "chat.yaml";                     ImageName = "mmorpg-chat"; Global = $true }
+	# 客户端 RPC 路由服(契约 zone_contract_v1 §1 路由服部署链):GATE_CLIENT_RPC_ROUTER=1 时 gate 唯一的 gRPC 目标。
+	# 全局池(node_util.cpp IsGlobalPoolNodeType 含 ClientRpcRouter),与 match / chat 同放 infra namespace。
+	# 端口 50600 与 go/client_rpc_router/etc/client_rpc_router.yaml、go_services.ps1 一致;metrics 9200。
+	# manifest 在 deploy/k8s/manifests/go-svc/client-rpc-router.yaml(照 match.yaml:replicas 2 + podAntiAffinity + PDB,
+	# 50600/9200,注入 POD_IP);路由服写进 NodeInfo 的是 POD_IP 而不是 ListenOn 的 0.0.0.0(client_rpc_router_service.go advertisedHost)。
+	# 部署了不等于 gate 会用它:gate 是否只连路由服由 -GateRouterMode 决定,默认 "0"。
+	"client-rpc-router" = @{ ConfigMap = "go-svc-client-rpc-router-config"; Manifest = "client-rpc-router.yaml"; Port = 50600; ConfigFlag = "-f"; ConfigFile = "client_rpc_router.yaml"; ImageName = "mmorpg-client-rpc-router"; Global = $true }
 }
 
 # 目录里非全局(= 随 zone 部署)的服务名。两处 zone 循环共用,避免各写一遍过滤条件。
@@ -673,6 +701,9 @@ service_discovery_prefixes:
   # JoinQueue 报 "Node not found ... message id: 157";这份 ConfigMap 以只读整目录挂载覆盖镜像里的 bin/etc。
   - "SceneManagerNodeService.rpc"
   - "BattleNodeService.rpc"
+  # 客户端 RPC 路由服(Go-Zero,全局池):GATE_CLIENT_RPC_ROUTER=1 时 gate 唯一的 gRPC 目标(契约 zone_contract_v1 §1)。
+  # 与 bin/etc/base_deploy_config.yaml 对齐;-GateRouterMode 0 时 gate 发现到也不连,多这一条无副作用。
+  - "ClientRpcRouterNodeService.rpc"
   - "MatchNodeService.rpc"
   # 全局数据服务(Go-Zero gRPC,全局池不分 zone):scene 经它调 AllocateIdSegment 领 GuidSegment 各 Kind 的号段。
   # data_service 按 C++ 约定注册 NodeInfo(go/data_service/internal/noderegistry);缺这一条 scene 永远过不了
@@ -772,6 +803,14 @@ function New-NodeDeploymentYaml {
 	# 什么也不做,统一注入省一个分支。
 	$extraEnvLines += "`t`t`t- name: SNOWFLAKE_CACHE_DIR"
 	$extraEnvLines += "`t`t`t  value: `"$SnowflakeCacheDir`""
+	# 客户端 RPC 路由模式(脚本参数 -GateRouterMode,默认 "0";开启前置见参数处注释)。只给 gate 注入:
+	# scene 不读这个变量,写进 scene 的 Deployment 只会让人误以为它也分模式。
+	# "0" 也显式写出而不是省略:`kubectl get deploy gate -o yaml` 一眼就能看出这个 zone 的 gate 跑在哪个模式,
+	# 不必再去翻 C++ 默认值;将来翻转默认值时 diff 里也看得见。
+	if ($NodeName -eq 'gate') {
+		$extraEnvLines += "`t`t`t- name: GATE_CLIENT_RPC_ROUTER"
+		$extraEnvLines += "`t`t`t  value: `"$GateRouterMode`""
+	}
 	$grpcEnvBlock = $extraEnvLines -join "`n"
 
 	return @"
@@ -1365,6 +1404,58 @@ function New-GoSvcConfigMapYaml {
 	# (core/stores/redis/redisclustermanager.go splitClusterAddrs)。
 	$matchRedisClusterHosts = @(0..5 | ForEach-Object { "redis-match-cluster-$_.redis-match-cluster.${InfraNamespace}.svc.cluster.local:6379" }) -join ','
 
+	# chat 的契约值(超时预算 / 租约 / 长度闸 / 限速 / 历史窗口)同样只从服务自己的 yaml 取,不在这里另抄常数。
+	# 与上面 match 那组不同,这里**只在生成 chat 自己的 ConfigMap 时求值**:本函数也被 zone-up 为 db / login 等
+	# 逐个调用,无条件读的话,go/chat 尚未落地或 chat.yaml 缺键会把所有 Go 服务的 ConfigMap 一起拖挂
+	# (Get-AuthoritativeScalar 查不到即 throw)。生成 chat 时照样 fail-closed。
+	$chatYaml                = 'go/chat/etc/chat.yaml'
+	$chatName                = ''
+	$chatTimeout             = ''
+	$chatLeaseTTL            = ''
+	$chatMaxContentBytes     = ''
+	$chatRateLimitPerSecond  = ''
+	$chatHistoryMaxEntries   = ''
+	$chatHistoryTTLSeconds   = ''
+	$chatOptionalLines       = ''
+	if ($SvcName -eq 'chat') {
+		# Name 也取服务 yaml:go-zero ServiceConf.Name 是必填键,两边写同一个名字,日志 / 链路里才对得上。
+		$chatName               = Get-AuthoritativeScalar -RelativePath $chatYaml -KeyPath 'Name'
+		$chatTimeout            = Get-AuthoritativeScalar -RelativePath $chatYaml -KeyPath 'Timeout'
+		$chatLeaseTTL           = Get-AuthoritativeScalar -RelativePath $chatYaml -KeyPath 'LeaseTTL'
+		$chatMaxContentBytes    = Get-AuthoritativeScalar -RelativePath $chatYaml -KeyPath 'MaxContentBytes'
+		$chatRateLimitPerSecond = Get-AuthoritativeScalar -RelativePath $chatYaml -KeyPath 'RateLimitPerSecond'
+		$chatHistoryMaxEntries  = Get-AuthoritativeScalar -RelativePath $chatYaml -KeyPath 'HistoryMaxEntries'
+		$chatHistoryTTLSeconds  = Get-AuthoritativeScalar -RelativePath $chatYaml -KeyPath 'HistoryTTLSeconds'
+		# 下面三项是查询条数 / 幂等窗口的调参值,允许缺席:yaml 里有就逐字镜像,没有就整行不写、交给 Go 侧 default
+		# (照 match 的 MatchedTicketTTLSeconds 写法)。这样 ConfigMap 永远等于服务 yaml 的形状,
+		# 不会出现「本地没配、K8s 却多写了一个值」的漂移,go/chat 与本脚本也能分开落地。
+		$chatOptional = New-Object System.Collections.Generic.List[string]
+		$chatYamlFull = Join-Path $RepoRoot ($chatYaml -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+		foreach ($chatKey in @('HistoryDefaultLimit', 'HistoryMaxLimit', 'RequestIdTTLSeconds')) {
+			$chatScalar = Get-YamlScalar -Path $chatYamlFull -KeyPath $chatKey
+			if ($chatScalar.Found) {
+				$chatOptional.Add("${chatKey}: $($chatScalar.Value)")
+			}
+		}
+		$chatOptionalLines = $chatOptional -join "`n"
+	}
+
+	# 路由服 client-rpc-router 的契约值(契约 zone_contract_v1 §1):超时预算 / 租约同样只从服务自己的 yaml 取。
+	# 与 chat 同理只在生成它自己的 ConfigMap 时求值,免得路由服 yaml 缺键把别的服务的 ConfigMap 一起拖挂。
+	# Timeout 必须 > ForwardTimeoutMs(路由服 config.Validate),而 chat 的 Timeout 又必须 <= ForwardTimeoutMs - 1000,
+	# 三个数全从各自 yaml 读,改一处就在本地和 K8s 同时生效,不会出现 K8s 上预算链断开。
+	$routerYaml             = 'go/client_rpc_router/etc/client_rpc_router.yaml'
+	$routerName             = ''
+	$routerTimeout          = ''
+	$routerLeaseTTL         = ''
+	$routerForwardTimeoutMs = ''
+	if ($SvcName -eq 'client-rpc-router') {
+		$routerName             = Get-AuthoritativeScalar -RelativePath $routerYaml -KeyPath 'Name'
+		$routerTimeout          = Get-AuthoritativeScalar -RelativePath $routerYaml -KeyPath 'Timeout'
+		$routerLeaseTTL         = Get-AuthoritativeScalar -RelativePath $routerYaml -KeyPath 'LeaseTTL'
+		$routerForwardTimeoutMs = Get-AuthoritativeScalar -RelativePath $routerYaml -KeyPath 'ForwardTimeoutMs'
+	}
+
 	$mysqlUser = $script:MysqlUser
 	$mysqlPassword = $script:MysqlPassword
 	$redisPassword = $script:RedisPassword
@@ -1791,6 +1882,99 @@ PveTeamSizeByConfigId:
 MetricsListenAddr: ":9170"
 "@
 		}
+		"chat" {
+@"
+Name: ${chatName}
+ListenOn: 0.0.0.0:50700
+# zrpc 服务端超时(毫秒),必须 <= 路由服 ForwardTimeoutMs - 1000,否则路由服先超时会把 chat 的正常慢响应判成故障。
+Timeout: ${chatTimeout}
+# go-zero Stat 拦截器默认按 INFO 打每个请求的整包 JSON:SendChat 请求体就是聊天正文(含私聊),
+# 不能进 Pod 日志 / Loki(AGENTS.md §11.3 敏感信息最少暴露)。只屏蔽内容,不关 Stat —— 慢调用告警照常保留。
+# 与 go/chat/etc/chat.yaml 同一段,两边必须一致。
+Middlewares:
+  StatConf:
+    IgnoreContentMethods:
+      - /chatpb.ClientPlayerChat/SendChat
+# Etcd 段 **Key 显式留空**:chat 按 C++ 约定注册 ChatNodeService.rpc/zone/<z>/...(go/shared/noderegistry),
+# 路由服按这个前缀发现它;没有任何 Go 调用方经 go-zero 发现键找 chat,填了 Key 只会多一条无人消费的注册,
+# 本地 -Zone 派生还会给它加 .z<N> 后缀。等首个 Go 调用方出现再同批拍板(port-decisions D-13)。
+# ⚠ 不能整行省略 Key:go-zero v1.10.0 的 discov.EtcdConf.Key 不是 optional,Etcd 段存在而缺 Key 时
+#   conf.MustLoad 直接 Fatal("Etcd.Key" is not set,core/mapping processNamedFieldWithoutValue),
+#   Pod 会 CrashLoop。空串 → HasEtcd()=false → go-zero 不注册;chat 的 config.Validate 只拒非空 Key。
+Etcd:
+  Hosts:
+    - "etcd.${InfraNamespace}:2379"
+  Key: ""
+# 双句柄:
+#   Redis     = SharedRedis,既有共享单库(写者含 C++ scene,不能集群化);chat 私有 key 只在 ChatRedis 缺省时才回落到这里。
+#   ChatRedis = chat 私有 key(chat:{world}:log / chat:{p:<小id>:<大id>}:log / chat:{req:...} / chat:{rl:...}),
+#               全是单 key 操作,集群安全。go-zero redis.RedisConf 形状,不写 DB。
+Redis:
+  Host: redis.${InfraNamespace}:6379
+  Type: node
+  Key: chatservice
+# 注意:ChatRedis 复用 match 的 redis-match-cluster(同一个六节点集群),不是 chat 的独立实例。
+#   该集群 maxmemory 512mb + maxmemory-policy volatile-lru(manifests/infra/redis-match-cluster.yaml):
+#   chat 的历史 LIST / 幂等 / 限速 key 都带 TTL,内存吃紧时会被优先淘汰,还会与 match 的锁 / 票据争同一份内存,
+#   聊天历史可能提前消失、反过来也可能挤掉 match 带 TTL 的 key。
+#   v1 可接受的前提是「历史 = 7 天 / 200 条尽力而为窗口,不是权威账本」;一旦 chat 的某类数据成为唯一权威,
+#   staging/prod 必须换独立实例且 maxmemory-policy=noeviction,并按 chat 的量级重新定 maxmemory。
+ChatRedis:
+  Host: ${matchRedisClusterHosts}
+  Type: cluster
+# 全局池:ZoneId 只影响注册路径,路由服对 ChatNodeService 不做 zone 过滤(ZoneScopedNodeTypes 默认仅 Login),
+# 任何 zone 的玩家都会被路由到这里的实例;业务代码不读它。取命令行 -ZoneId(Apply-GlobalGoSvcManifests),
+# 与 match 同口径;Go 侧 config.Validate 拒 0。
+ZoneId: ${CurrentZoneId}
+# 租约 TTL(秒)= 崩溃后路由服仍可能把请求打到死实例的最长窗口(PickRandom 不看连接状态)。
+LeaseTTL: ${chatLeaseTTL}
+# 正文按字节限长(gate 的 1024B 整包闸之后的第二道闸);超限或 trim 后为空回 kMessageSizeExceeded。
+MaxContentBytes: ${chatMaxContentBytes}
+# 每玩家每秒发送上限(gate 每会话每消息号 3 次/秒之后的第二道闸)。
+RateLimitPerSecond: ${chatRateLimitPerSecond}
+HistoryMaxEntries: ${chatHistoryMaxEntries}
+HistoryTTLSeconds: ${chatHistoryTTLSeconds}
+${chatOptionalLines}
+# 与 manifests/go-svc/chat.yaml 的 metrics 容器端口 / prometheus.io/port 注解一致(9210 = chat)
+MetricsListenAddr: ":9210"
+# 留空 = shared/killswitch 的 DefaultPrefix(/mmorpg/killswitch/),与其它服务共用同一棵规则树。
+KillSwitchPrefix: ""
+"@
+		}
+		"client-rpc-router" {
+@"
+Name: ${routerName}
+ListenOn: 0.0.0.0:50600
+# zrpc 服务端整体超时(毫秒):必须 0 或 > ForwardTimeoutMs(路由服 config.Validate 强制),
+# 否则转发链上游先于目标超时,把目标的正常慢响应误判成故障。
+Timeout: ${routerTimeout}
+# **必带**(契约 §1;路由服 config.Validate 缺了直接拒启动):go-zero Stat 拦截器默认按 INFO 打整包,
+# ForwardRequest.body 一解码就是目标请求原文 —— 登录消息即明文账号密码,聊天即私聊正文。
+Middlewares:
+  StatConf:
+    IgnoreContentMethods:
+      - /client_rpc_router.ClientRpcRouter/Forward
+# Etcd 段 Key 显式留空(与 chat 同理,port-decisions D-13):gate 按 ClientRpcRouterNodeService.rpc 前缀发现
+# 路由服(C++ NodeInfo 约定),没有 Go 调用方经 go-zero 发现键找它;K8s 上填了 Key 只会多一条无人消费的注册。
+# 不能整行省略 Key:go-zero v1.10.0 EtcdConf.Key 不是 optional,缺了 conf.MustLoad 直接 Fatal。
+# 路由服的 etcd 客户端只用 Etcd.Hosts(internal/svc NewServiceContext),与 Key 无关。
+Etcd:
+  Hosts:
+    - "etcd.${InfraNamespace}:2379"
+  Key: ""
+# 全局池:ZoneId 只影响路由服自己的注册路径,gate 按非 zone-scoped 前缀发现它;取命令行 -ZoneId,与 match / chat 同口径。
+ZoneId: ${CurrentZoneId}
+LeaseTTL: ${routerLeaseTTL}
+# 单次向目标业务服务 Invoke 的超时(毫秒)。chat 等业务服务的 Timeout 必须 <= 它 - 1000(契约 §3 超时预算)。
+ForwardTimeoutMs: ${routerForwardTimeoutMs}
+# 只挑与发起 gate 同 zone 实例的目标节点类型(设计决策 D33;契约 §1 只允许 Login)。
+# 新业务服务(chat 等)**不得**加进来:加了就只能被本 zone 的 gate 路由到,全局池语义被悄悄破坏。
+ZoneScopedNodeTypes:
+  - LoginNodeService
+# 端口分工(契约 §7):9200 = 路由服;与 manifests/go-svc/client-rpc-router.yaml 的 metrics 容器端口 / 注解一致。
+MetricsListenAddr: ":9200"
+"@
+		}
 		default {
 			throw "Unknown Go service: $SvcName"
 		}
@@ -1840,16 +2024,20 @@ function Apply-OneGoSvc {
 	$info = $GoSvcCatalogue[$SvcName]
 	$svcImage = "$GoSvcRegistry/$($info.ImageName):$GoSvcTag"
 
+	# manifest 缺席就整条跳过,**连 ConfigMap 也不 apply**:以前是先 apply ConfigMap 再发现 manifest 不在,
+	# 留下一份没有 Deployment 消费的孤儿 ConfigMap。目录里允许「部署链先登记、manifest 后落地」的条目
+	# (client-rpc-router 曾经如此,现已落地),所以这里是预期内的跳过而不是错误。
+	$manifestPath = Join-Path $GoSvcManifestsDir $info.Manifest
+	if (-not (Test-Path $manifestPath)) {
+		Write-Warning "Go service manifest not found: $manifestPath – skipping $SvcName (ConfigMap not applied)"
+		return
+	}
+
 	# Apply ConfigMap
 	$cmYaml = New-GoSvcConfigMapYaml -SvcName $SvcName -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $cmYaml
 
 	# Apply manifest with image placeholder replaced
-	$manifestPath = Join-Path $GoSvcManifestsDir $info.Manifest
-	if (-not (Test-Path $manifestPath)) {
-		Write-Warning "Go service manifest not found: $manifestPath – skipping $SvcName"
-		return
-	}
 	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
 	$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
 	$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
@@ -1858,7 +2046,7 @@ function Apply-OneGoSvc {
 	Write-Host "  [applied] $SvcName -> $svcImage (port $($info.Port) pullPolicy=$svcPullPolicy)"
 }
 
-# 全局池 Go 服务(目录里 Global = $true,目前只有 match):部署到 $InfraNamespace 一次。
+# 全局池 Go 服务(目录里 Global = $true,目前是 match / chat / client-rpc-router):部署到 $InfraNamespace 一次。
 # 由 Apply-Infra 调用,所以 infra-up / all-up 都会带上;zone-up 不碰它。
 function Apply-GlobalGoSvcManifests {
 	if ($SkipGoSvc) { return }
@@ -1880,6 +2068,12 @@ function Apply-GlobalGoSvcManifests {
 	}
 	if ($WaitReady) {
 		foreach ($svcName in $globalNames) {
+			# 与 Apply-OneGoSvc 同一判据:manifest 缺席 = 没部署,等它只会在 rollout status 上白白超时,
+			# 拖垮整条 -WaitReady(Java 服务那段 skip-wait 同一理由)。
+			if (-not (Test-Path (Join-Path $GoSvcManifestsDir $GoSvcCatalogue[$svcName].Manifest))) {
+				Write-Host "  [skip-wait] ${svcName}: manifest 不存在,未部署,不等待"
+				continue
+			}
 			Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName $svcName
 		}
 	}

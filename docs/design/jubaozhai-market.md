@@ -1,0 +1,291 @@
+# 聚宝斋(玩家间人民币寄售交易)设计 — 2026-09-14
+
+> 状态:**设计稿,未落码**。客户端界面已拼好(`mmorpg-client` 的 `Assets/Scripts/UI/Ugui/Jubaozhai/`、`Docs/JUBAOZHAI_UI.md`),本文件定义服务端与接线。
+> 调研依据:2026-09-14 三路只读核查(资产原语 / 新服务接线 / 账号与 zone 模型),结论与证据摘要见 §2。
+
+## 0. 结论(先读这节)
+
+1. 聚宝斋 = 一个**全局 Go 服务 `trade`**(产品名聚宝斋)+ **C++ scene 上新增的三条资产 RPC** + **login 上的角色过户**。按 zone 分区还是全服,由服务端配置 `Market.Scope` 决定,商品上记 `market_zone`(卖家 home_zone,服务端查,不信客户端)。
+2. 难点不在列表和界面,在"**东西和钱怎么安全换手**"。今天仓库里**没有**托管扣出、幂等发放、角色过户、登录冻结这四样原语(§2),必须先补。
+3. 结算是人民币(J-1)。服务端只做**订单状态机 + 支付渠道接口**;本地和冒烟用 `mock` 渠道跑通,真实渠道、实名/防沉迷、卖家提现后接(P5)。
+4. 首批四类商品都在范围(J-2),但按依赖分期:游戏币/装备道具/宠物共用一套资产通路(P2→P3);角色交易额外依赖"账号数据持久化"(P0-b→P4)。
+5. **两道上线闸,不过不许开真钱交易**:GM 客户端消息无鉴权(能直接刷钱再卖钱);账号数据只在 Redis(角色过户无持久化落点)。
+
+## 1. 已拍板 / 待拍板
+
+| 编号 | 决策 | 状态 |
+|---|---|---|
+| J-1 | 结算币种 = 人民币。价格以**分**(uint64 `price_fen`)存储与传输 | 用户 2026-09-14 拍板 |
+| J-2 | 首批商品 = 游戏币、装备道具、宠物、角色 | 用户 2026-09-14 拍板 |
+| J-3 | 按 zone 区分、可切全服(本文 §4 给出形态) | 用户需求;形态为本文提议 |
+| J-4 | 服务域名 `trade`:proto 放 `proto/trade/`、`package trade;`,复用已存在的 `TradeNodeService=12` / `NODE_TRADE=17`,不改 C++ 枚举 | 本文提议 |
+| J-5 | 资产幂等账本与 D1(`xuanming-port-feasibility-20260902.md` §8.1)**合并为同一组件**,不做两套 | 本文提议 |
+| J-6 | 存储落独立全局库 `mmorpg_trade`,DDL 带 TiDB `/*T!*/` 方言。契约 §4 规定首个建表的全局服务开工前**必须先拍 D4**(库归属 + 迁移器 vs 手写 `deploy/mysql-init`),本文推荐"每服务一库 + 迁移器" | **P1 建表前须拍 D4** |
+| J-7 | tip 段 `//trade_error base=20000 width=1000`(17000–19999 留给 mail/chat/rank) | 本文提议 |
+| J-O1 | 公示期 / 寄售期时长(默认 公示 48h、寄售 7d,可配) | **待产品确认** |
+| J-O2 | 平台手续费率(默认 5%,向上取整到分),卖家收入冷静期(默认 3 天) | **待产品确认** |
+| J-O3 | 角色交易:是否强制离帮(默认是)、好友关系是否清空(默认保留) | **待产品确认** |
+| J-O4 | 可交易货币种类(默认只放 `kCurrencyGold`;元宝 `kCurrencyDiamond` 默认关,绑定元宝永不) | **待产品确认** |
+| J-O5 | 侧栏「货架」语义(本文假设 = 我的商品 + 我的订单)、上架界面(现有 7 张设计稿无上架流程) | **待产品/美术确认** |
+
+## 2. 现状核实(2026-09-14)
+
+| 能力 | 结论 | 证据 |
+|---|---|---|
+| 背包持久化 | **已有**。`player_database.bag_component = 13`,登录/存盘/跨 zone/快照均有调用点(`xuanming-port-feasibility` §8.1 的"零调用点"已过时) | `proto/common/database/mysql_database_table.proto:129`;`player_database_loader.cpp:97,124` |
+| 按 guid 批量扣物品(全或无) | **没有**。`BagService::RemoveItem` 单件、零生产调用;`ReserveForBatchRemove` 不存在;失败一律 `kInvalidParameter` | `cpp/libs/modules/bag/bag_service.h:44-81` |
+| 物品预设 guid 回包 | **已有**(`InitItemParam.itemPBComp.item_id` + 撞号预检) | `item_system.h:7-11`;`bag_system.cpp:293-314` |
+| 物品可交易/绑定列 | **没有**。Item 表只有 `id/max_stack_size/equip_kind`;`ItemEntry` 9/10 号字段只是注释 | `data/schema/item_table.proto`;`bag_quest_mail_data.proto:82-83` |
+| 货币 | 已持久化,**只能在线改**,接口无 txType/correlation;入账会被补缴扣、被 GM 封禁拒 | `currency_system.h:36-47`;`currency_system.cpp:88-147` |
+| 宠物 | 已持久化、有 `pet_id`;**无移除接口**,`GrantPet` 不支持预设 id;出战用标量 `active_pet_id` | `player_pet_comp.proto:17,35`;`player-pet.md` §8.4 |
+| 幂等发放 / 托管(D1/D1b) | **没有落码**,只在文档里 | `cpp/ go/ proto/` 零命中 |
+| transaction_log 交易类型 | 枚举有 `TX_TRADE/TX_AUCTION_SELL/TX_AUCTION_BUY`,**零写入方**;`LogItemTransfer` 零调用 | `transaction_log.proto:22-65` |
+| 战斗中闸 | Bag/Currency 写入口**不拦** `InBattleComp`(只拦跨 zone 冻结) | `bag_service.cpp:82` 等 |
+| Go → scene 同步调用 | **已有**:`SceneNodeGrpc`(match `PrepareBattle` 范式,读 `player:%d:location` 寻址) | `proto/scene_manager/scene_node_service.proto`;`go/match/internal/logic/gather.go:282` |
+| scene → Go | 只允许 SceneManager / DataService | `cpp/nodes/scene/main.cpp:78` |
+| 账号 ↔ 角色 | 账号角色列表**只在 Redis `account:{account}`,TTL 12h,找不到 MySQL 写入**;反查键 `player_to_account:{id}` 永不过期且 EnterGame 会据此自愈回写 | `go/login/etc/login.yaml:68`;`entergamelogic.go:144-190` |
+| 登录冻结 / 封禁 | **没有**任何字段或闸;踢人 `KickPlayerEvent` 只有 session_id,提示写死"顶号" | `gate_event_handler.cpp:160` |
+| 角色名 / 等级对 Go 可见 | **无角色名**;等级只在 `level_component` blob,Go 读不到 | `entergamelogic.go:428-433` |
+| GM 客户端消息 | `GmAddCurrency` / `GmGrantPet` / `GmSetPlayerLevel` 作为客户端消息开放、**无鉴权** | `proto/scene/player_currency.proto:65-73`;`player-pet.md:191-194` |
+| 新服务客户端可达 | 只在路由服模式(`GATE_CLIENT_RPC_ROUTER=1`)可达;K8s 路由服部署链仍缺 | `cpp/nodes/gate/main.cpp:206-209` |
+| 新 Go 服务接入口径 | 以 `microservice-zone-contract-20260914.md` 为准(§2 注册 / §3 客户端入口 / §4 数据归属 / §7 部署登记,chat v1 为首个样板) | 该文档 2026-09-14 由并行会话落地 |
+
+## 3. 术语与界面映射
+
+- **商品(listing)**:卖家上架的一份资产 + 一口价。**订单(order)**:买家对商品的一次购买。
+- **托管(escrow / debit)**:上架时把资产从卖家身上扣出,快照存到交易库。**交付(credit)**:把快照里的资产发给买家;下架/过期时发回卖家(**回退**)。
+- **公示期**:商品可见、可收藏、**不可买**;**寄售期**:可买。
+- 界面映射(`JubaozhaiTab` / `JubaozhaiSection`):
+  - 顶部「公示列表」= `PUBLIC_NOTICE`;「寄售列表」= `ON_SALE` / `LOCKED`(锁定中显示"交易中")。
+  - 侧栏「寄售」= 一口价商品;「拍卖」= 竞价(P6,v1 返回空并提示未开放);「货架」= 我的商品 + 我的订单(J-O5)。
+  - 类目 `JubaozhaiCategory`(角色/宠物/武器/防具/套装/法宝/首饰/召唤令)与子类由**配置表列**给出(§6.2),服务端返回类目 key,客户端只做展示映射。
+
+## 4. zone 模型
+
+- `market_zone`:商品所属的**逻辑市场分区** = 上架时卖家的 home_zone,由服务端调 `DataService.BatchGetPlayerHomeZone` 写入,**不接受客户端传值**;未映射时 fail-closed 拒绝上架/下单(契约 §4)。无论当前是否全服都写,切换不补数据。
+- 配置 `Market.Scope`:
+  - `zone`:浏览只返回 `market_zone = 买家 home_zone`;下单时服务端再校验一致(`kTradeZoneMismatch`)。
+  - `global`:浏览不按分区过滤;客户端可传 `zone_filter`(0 = 全部)仅作筛选;允许跨区购买。
+- 不照搬 guild `GetGuildRank` "客户端传 0 即全服"的做法:市场范围是服务端策略,不是客户端参数。
+- 跨区交付天然成立:资产经 `player:%d:location` 找到买家当前所在 scene;角色过户不改 home_zone(映射是 SETNX 永不覆盖),买家选该区进入即可。
+- 合服:`tools/merge_zone` 加一步 `UPDATE trade_listing SET market_zone=dst WHERE market_zone=src`,`-verify-merged` 校验源区计数为 0;订单、流水、审计表保留原 zone 列(`server_merge_design.md:456` 口径)。
+- 合服闸:上架、下单、交付前查 `merge:in_progress:{zone}`,读失败按"合服中"处理(fail-closed),照抄 `go/guild/internal/logic/merge_fence.go`。
+
+## 5. 状态机
+
+### 5.1 商品
+
+```
+ESCROWING ──托管成功──▶ PUBLIC_NOTICE ──公示期满──▶ ON_SALE ──下单──▶ LOCKED ──支付成功──▶ SOLD(终态,交付归订单)
+    │                        │                         │  ▲                 │
+    │托管被拒                │卖家下架                 │  └──订单关闭(未付)─┘
+    ▼                        ▼                         ▼
+ESCROW_REJECTED(终态)     RETURNING ◀──卖家下架/寄售期满──┘
+                             │回退交付成功
+                             ▼
+                          RETURNED(终态)
+```
+
+- `LOCKED` 期间不可下架;订单关闭时若寄售期已过,直接转 `RETURNING`。
+- 每个卖家同时最多 1 条 `ESCROWING`(保证 scene 结果环不被挤掉,§6.1);在售条数上限可配。
+
+### 5.2 订单
+
+```
+CREATED ──向渠道下单──▶ PAYING ──验签回调 + 主动查单双确认──▶ PAID ──▶ DELIVERING ──交付成功──▶ DELIVERED ──冷静期满──▶ SETTLED
+   │                      │                                     │            │
+   └──支付窗口超时(先向渠道关单/查单,确认未付)──▶ CLOSED_UNPAID    └─交付永久失败─▶ REFUNDING ──▶ REFUNDED
+                                                                          (商品转 RETURNING)
+```
+
+- 支付窗口默认 15 分钟;关单后才到的支付回调 → 自动退款(`LATE_PAID_REFUNDING` 分支,记审计)。
+- **"已支付"只认渠道**:验签回调 + 主动查单,金额/币种/商户单号三项一致;客户端任何"我付了"都不算。
+- 渠道交易号唯一索引,同一回调重复到达幂等。
+- 交付的暂时失败(背包满、战斗中、离线)不算失败,保持 `DELIVERING` 重试;只有 scene 返回终局拒绝才转退款并告警人工。
+
+## 6. 资产通路(核心)
+
+### 6.1 原则
+
+1. 资产**在玩家身上时**权威在 C++ player blob;**托管期间**权威在交易库的快照。
+2. 所有资产移动只走 `SceneNodeGrpc` 同步 RPC 到玩家当前所在 scene,scene 在 loop 线程**同一次处理**内完成"校验 → 应用 → 记账 → 写 transaction_log"。
+3. **玩家资产指令账本 `PlayerAssetOpLedgerComp`**(J-5,与 D1 合并):
+   - 两条独立 seq 流:`DEBIT`(托管扣出)与 `CREDIT`(发放)。满足 D1 硬边界"扣减不进同一条 seq 流"。
+   - Go 在写商品/订单的**同一个事务**里为 `(player_id, stream)` 分配单调 seq 并写 outbox 行(`trade_asset_op`)。
+   - scene 持久化每条流的 `watermark` + 1024 位位图,落 `player_database` 下一个空闲字段号;加载、存盘、跨 zone 快照三处一起接。**不能按时间裁剪、不能只存内存**(否则重放双发)。
+   - DEBIT 另存最近 8 条结果环(含资产快照),用于"scene 已扣但回包丢了"时重试取回快照。
+4. **结局一旦决定就固定**:scene 见过某 seq,结局(`APPLIED` / `REJECTED`)落盘,重试返回同一结局。暂时性条件(背包满、战斗中、跨区冻结、玩家不在本节点)返回 `RETRY` / `NOT_HERE`,**不**记账。
+5. **`TradeAbortDebit(seq)`**:scene 未见过该 seq 则记为 `REJECTED` 占位;见过则返回原结局。Go 靠它确定性收口任何悬挂的托管。
+6. **只在玩家在线时应用**。Go 的 reconcile 循环扫描未决 outbox,按 `player:%d:location` 批量查在线者重投;离线玩家的发放等其上线,延迟 ≤ 扫描周期(默认 2s)。v1 不做登录时 scene 主动拉取;若日后要做,按契约 §8 走直连 gRPC(专用 READY 选择器 + `nodeTypeNameMap` + 前缀表 + scene 白名单),**不能借路由服**。
+7. 重复投递安全(scene 幂等),所以多副本 reconcile 用行级租约只为省流量,不为正确性。
+
+### 6.2 各类商品
+
+| 类别 | 托管(DEBIT) | 交付(CREDIT) | 需要新写的原语 |
+|---|---|---|---|
+| **游戏币** | `DeductCurrency(kCurrencyGold, n)`,tx=`TX_AUCTION_SELL`,correlation=listing_id | `AddCurrency`,tx=`TX_AUCTION_BUY`;照常经过补缴抵扣(统一入口);GM 封禁 → 终局拒绝 → 退款 + 告警 | Currency 增减接口加 txType + correlation_id;区分"余额不足/冻结"错误码;可交易币种白名单(J-O4) |
+| **装备道具** | 按 `item_uuid` 列表全或无扣出(一条商品最多 8 件,用于"套装");只允许主背包、非穿戴中;Item 表 `tradable=false` 一律拒(默认 false,fail-closed) | 以快照 `ItemEntry` 预设 guid 回包,保留原 `item_uuid` | `Bag::ReserveForBatchRemove` + `BagService::RemoveItemsByGuid`(全或无、拦冻结与战斗、带流水);Item 表加 `tradable` / `market_category` / `market_subcategory` 三列 |
+| **宠物** | 按 `pet_id` 移出;出战中拒绝(`kTradePetActive`,提示先收回) | `GrantPet` 以快照 `PetInstance` 预设 `pet_id` 回填 | `PetSystem::RemovePetForTrade`;`GrantPet` 支持预设 id + 撞号检查;Pet 表加 `market_subcategory` 列(界面的 普通/灵兽/变异/神兽/元灵 与表里 quality 1-4 不同轴) |
+| **角色** | 见 §6.3 | login `TransferPlayer` | 见 §6.3 |
+
+scene 侧所有 DEBIT/CREDIT 入口统一拦:跨区冻结、`InBattleComp`(局中挡一切背包写,`moba-battle-target-architecture.md:113` 红线)、玩家不在本节点。
+
+### 6.3 角色交易
+
+- **交易的是角色,不是账号**:把角色从卖家账号挪到买家账号。账号级找回/改密与已售角色无关,规避"卖号后找回"。
+- 前置 **P0-b**:账号角色列表今天只在 Redis(TTL 12h),必须先有持久化权威存储;冻结标记与归属写在**同一条记录**(`AccountSimplePlayer.trade_lock_listing_id`),过户时原子一起改。**不放共享 Redis 单独键**(共享库 allkeys-lfu 会淘汰,冻结丢失 = 公示期内卖家上线改角色)。
+- 上架流程:
+  1. 卖家以该角色在线发起;条件:非帮主且已离帮(J-O3)、不在战斗、角色数据已加载。
+  2. Go 事务:商品 `ESCROWING` + DEBIT op(kind=`CHARACTER_LOCK`)。
+  3. Go 调 login `LockPlayerForTrade(player_id, listing_id)`(幂等;此后 EnterGame 拒绝 `kTradeCharacterLocked`)。
+  4. Go 调 scene `TradeDebit(CHARACTER_LOCK)`:scene 挂交易锁组件(拒绝该玩家一切客户端写消息)→ 存盘 → 从落盘后状态生成展示快照(职业、等级、属性摘要、宠物数、游戏币、装备摘要)→ 带原因踢下线。
+  5. 快照入库,商品转 `PUBLIC_NOTICE`。
+- 下架/过期:login `UnlockPlayerForTrade`。
+- 交付:login `TransferPlayer(tx_id, player_id, from_account, to_account)`:
+  - 按账号字典序拿两把 `account_lock:create:{acc}`,再拿 `player_locker:{id}`;
+  - 校验卖家仍拥有且锁的是本 listing、买家角色数 < `MaxPlayersPerAccount`;
+  - 同时改两账号记录 **和 `player_to_account:{id}`**(不改的话卖家 EnterGame 会自愈把角色写回卖家);清锁;按 tx_id 幂等。
+  - 买家角色位满:下单时就拒;交付时满则保持 `DELIVERING` 并提示腾位,超过期限(默认 3 天)退款。
+- 需要顺带改:`KickPlayerEvent` 加原因字段,gate 不再写死"顶号"提示;`RemovePlayersFromAccounts` 补账号锁(与过户/建角并发会互相覆盖)。
+- 买卖双方身份取**账号**:`player:session:{id}` 的 `account` 字段;同账号不能自买。
+
+### 6.4 `SceneNodeGrpc` 新增 RPC(草案)
+
+```proto
+rpc TradeDebit(TradeDebitRequest) returns (TradeDebitResponse) {}
+rpc TradeAbortDebit(TradeAbortDebitRequest) returns (TradeDebitResponse) {}
+rpc TradeCredit(TradeCreditRequest) returns (TradeCreditResponse) {}
+
+enum TradeAssetOpOutcome { TRADE_OP_UNKNOWN = 0; TRADE_OP_APPLIED = 1; TRADE_OP_REJECTED = 2; TRADE_OP_RETRY = 3; TRADE_OP_NOT_HERE = 4; }
+
+message TradeDebitRequest {
+  uint64 player_id = 1;
+  uint64 seq = 2;            // DEBIT 流 seq,Go 分配
+  uint64 correlation_id = 3; // listing_id,进 transaction_log
+  oneof asset {
+    TradeCurrencyAmount currency = 10;
+    TradeItemGuids items = 11;     // repeated uint64 item_uuid,≤8
+    uint64 pet_id = 12;
+    TradeCharacterLock character = 13;
+  }
+}
+message TradeDebitResponse {
+  TipInfoMessage error_message = 1;
+  TradeAssetOpOutcome outcome = 2;
+  TradeAssetSnapshot snapshot = 3; // APPLIED 时必填;重试从结果环取回
+}
+message TradeCreditRequest {
+  uint64 player_id = 1;
+  uint64 seq = 2;            // CREDIT 流 seq
+  uint64 correlation_id = 3; // order_id(退回卖家时为 listing_id)
+  TradeAssetSnapshot asset = 4;
+}
+```
+
+`TradeAssetSnapshot` 为 oneof `{ currency; repeated ItemEntry items; PetInstance pet; TradeCharacterSummary character }`,定义放 `proto/common/`,Go 与 C++ 共用,避免并行 struct(AGENTS §3)。
+
+## 7. 支付(人民币)
+
+- Go 接口(`internal/payment`):
+  ```go
+  type Provider interface {
+      CreatePayment(ctx context.Context, o PayOrder) (PayIntent, error) // 返回 pay_url / 二维码内容
+      ParseNotify(r *http.Request) (Notify, error)                      // 验签;失败不落任何状态
+      Query(ctx context.Context, orderID uint64) (PayStatus, error)
+      Close(ctx context.Context, orderID uint64) error
+      Refund(ctx context.Context, req RefundRequest) (RefundStatus, error)
+  }
+  ```
+- `mock` 渠道:**只在 `Mode: dev` 下允许**,配置校验不通过即拒启动;确认支付走内部 `TradeAdmin.MockConfirmPayment`(非客户端协议,robot/GM 用)。
+- 真实渠道(P5):微信支付 / 支付宝适配同一接口;回调 HTTP 监听独立端口经 ingress 暴露;商户密钥只经环境变量 / K8s Secret 注入,不进 git、不进日志(AGENTS §9)。
+- 客户端**永不处理支付凭证**:服务端返回 `pay_url` / 二维码内容,客户端打开系统浏览器或展示二维码,然后轮询订单状态。
+- 金额:`fee_fen = ceil(price_fen × fee_bps / 10000)`,`seller_proceeds_fen = price_fen − fee_fen`;价格上下限可配。
+- 卖家收入进 `trade_seller_ledger`:`PENDING`(冷静期,留给拒付/风控回收)→ `AVAILABLE` → `WITHDRAWN`。v1 只记账 + 管理端导出,提现是 P5。
+- `BuyerEligibility` 接口(实名、防沉迷、未成年人消费限制):v1 mock 放行;**真钱上线前必须接入**。
+
+## 8. 数据(库 `mmorpg_trade`,J-6)
+
+主键全部 `NONCLUSTERED` + `SHARD_ROW_ID_BITS=4`(`global-data-layer-tidb-decision.md` D3,同一份 DDL 在 MySQL/TiDB 可跑)。id 由 `shared/idsegment` 发号(业务键 `trade_listing` / `trade_order`,§7.1 单一生产者 = trade 服务)。
+
+| 表 | 用途 | 关键列 / 索引 |
+|---|---|---|
+| `trade_listing` | 商品 | `listing_id` PK;`seller_player_id`、`seller_account`、`market_zone`、`seller_zone_at_listing`、`kind`(1 币/2 物品/3 宠物/4 角色)、`category`、`subcategory`、`title`、`level`、`price_fen`、`status`、`notice_end_ms`、`sale_end_ms`、`active_order_id`、`snapshot`(`TradeAssetSnapshot` 二进制)、`version`;索引 `(market_zone,status,category,subcategory,price_fen)`、`(status,sale_end_ms)`、`(seller_player_id,status)` |
+| `trade_order` | 订单 | `order_id` PK;`listing_id`、`buyer_player_id`、`buyer_account`、`buyer_zone_at_order`、`price_fen`、`fee_fen`、`status`、`provider`、`provider_trade_no` 唯一、`pay_expire_ms`、`paid_ms`、`delivered_ms`、`version`;索引 `(buyer_player_id,status)`、`(status,pay_expire_ms)` |
+| `trade_player_op_seq` | 每玩家每流 seq | PK `(player_id, stream)`,`next_seq`;事务内 `FOR UPDATE` |
+| `trade_asset_op` | 资产指令 outbox | PK `(player_id, stream, seq)`;`op_kind`、`ref_id`、`payload`、`outcome`、`attempts`、`next_attempt_ms`、`lease_until_ms`、`result`;索引 `(outcome,next_attempt_ms)` |
+| `trade_seller_ledger` | 卖家收入 | `order_id` 唯一;`amount_fen`、`status`、`available_at_ms` |
+| `trade_payment_event` | 渠道回调去重与审计 | 唯一 `(provider, provider_event_id)`;只存摘要,不存原文敏感字段 |
+| `trade_favorite` | 收藏 | PK `(player_id, listing_id)` |
+| `trade_audit_log` | 商品/订单状态迁移流水(只追加) | `ref_kind`、`ref_id`、`from_status`、`to_status`、`actor`、`reason`、`zone_at_event`、`at_ms` |
+
+- 所有状态迁移:`SELECT … FOR UPDATE` + `version` CAS,迁移与审计、outbox 同事务。
+- 无 Redis 权威数据。浏览 v1 直接走索引查 MySQL(类目必选,分页页长上限 20);搜索只做名称/编号匹配,流量上来再加检索引擎。
+- 不写入 zone 库(`db_task_zone_N`),不碰玩家主数据表。
+
+## 9. 协议(`proto/trade/jubaozhai.proto`,`package trade;`)
+
+客户端服务 `ClientPlayerJubaozhai`(`OptionIsClientProtocolService = true`;请求**不带**调用者 player_id,身份只取 gate 注入的会话 metadata,照 `go/chat/internal/session`):
+
+| 方法 | 说明 |
+|---|---|
+| `BrowseListings` | tab / section / category / subcategory / search / sort / page / page_size / zone_filter / favorites_only → 摘要列表、总数、页数、`market_scope`、`server_now_ms`(客户端用它算剩余时间,不信本地钟) |
+| `GetListingDetail` | 展示快照;不暴露卖家 player_id / 账号,只给卖家所属区 |
+| `SetFavorite` | 收藏 / 取消 |
+| `CreateListing` | oneof 资产 + `price_fen` + `client_request_id`(同玩家去重) |
+| `CancelListing` | 仅 `PUBLIC_NOTICE` / `ON_SALE` |
+| `GetMyShelf` | 我的商品 + 我的订单(含"待上线交付""背包满待整理") |
+| `CreateOrder` | `listing_id` + `client_request_id` → 订单 + 支付意图(`pay_mode` = MOCK / URL / QR) |
+| `GetOrder` | 订单状态轮询 |
+
+内部服务 `TradeAdmin`(非客户端协议):`MockConfirmPayment`(dev)、`SeedListing`(dev,P1 联调用)、`ReconcileNow`、`FreezeListing`(GM 风控)。login 侧新增 `LockPlayerForTrade` / `UnlockPlayerForTrade` / `TransferPlayer`,挂 LoginAdmin 服务下,不对客户端开放。
+
+tip 段 `trade_error`(J-7)首批码(A 列码名全局唯一,fault 列只标渠道故障类):
+`kTradeListingNotFound` `kTradeListingNotOnSale` `kTradeListingInPublicNotice` `kTradeListingLocked` `kTradeListingBusy` `kTradeCannotBuyOwn` `kTradeZoneMismatch` `kTradeAssetNotTradable` `kTradeAssetInsufficient` `kTradeAssetBusy` `kTradePetActive` `kTradeCharacterLocked` `kTradeCharacterInGuild` `kTradeAccountSlotsFull` `kTradePriceOutOfRange` `kTradeTooManyListings` `kTradeOrderNotFound` `kTradeOrderExpired` `kTradeBuyerNotEligible` `kTradeMergeInProgress` `kTradeFeatureDisabled` `kTradePaymentUnavailable`(fault)。
+
+## 10. 服务骨架与接线(照 `go/chat`)
+
+- `go/trade`:`trade.go`、`etc/trade.yaml`(gRPC **50800**、metrics **9230**——9220 已被 guild 占用,不写 go-zero `Etcd.Key`,Timeout ≤ 4000)、`internal/{config,constants,session,server,svc,logic,data,payment,reconcile}`。
+- 拦截器链 `grpcstats → killswitch → session → serverbase`;注册用 `go/shared/noderegistry`,失租 `ReallocateNewID`。
+- 登记:`tools/proto_generator/protogen/etc/proto_gen.yaml` 的 `domain_meta.trade`;`go_services.ps1`、`go_svc_image.ps1`、`k8s_deploy.ps1`、`deploy/k8s/manifests/go-svc/trade.yaml`、`start_game.ps1`。
+- 客户端可达只承诺路由服模式;K8s 上与 chat 同样受"路由服部署链缺失"影响。
+- 指标(低基数,不带 player_id):商品/订单状态迁移计数(按 kind、to_status)、渠道回调结果、outbox 积压 gauge、交付延迟直方图、reconcile 轮次耗时。
+
+## 11. 客户端改动
+
+- 新增 `Assets/Scripts/Game/Jubaozhai/JubaozhaiClient.cs`,照 `GuildClient` 的会话代次隔离(换角/断线丢弃旧回包)。
+- `JubaozhaiState` 目前是"整份快照 + 本地筛选分页";服务端分页后改为**增量 API**:保留 `SetListings` 与离线演示,新增服务端分页注入(条目 + 总数 + 页码),筛选/翻页触发请求。不动已拼好的皮肤布局。
+- 价格:`Price = price_fen / 100m`;剩余时间用 `server_now_ms` 校正。
+- 「购买」仅在 `ON_SALE` 且非自己的商品时可点:`CreateOrder` → 支付弹窗(dev 显示"模拟支付",正式显示二维码/跳转)→ 轮询 `GetOrder`。
+- 「货架」接 `GetMyShelf`;**上架界面缺设计稿**(J-O5),P3 前需要补。
+- 「联系卖家」依赖 chat 私聊,保持未开放;「估价」「规则」文案后续由服务端配置下发。
+- 生成脚本 `tools/gen_proto.ps1` / `gen_messageids.ps1` 需显式 `-ProtoRoot E:\work\xuanming-server-mmo`(默认值按旧子模块布局,会解析错)。
+
+## 12. 安全与合规上线闸
+
+1. **GM 客户端消息鉴权**(P0-a):`GmAddCurrency` / `GmGrantPet` / `GmSetPlayerLevel` 等要么关闭、要么鉴权。不收口 = 刷出资产直接卖人民币。
+2. **账号数据持久化**(P0-b):角色交易的前置,见 §6.3。
+3. **实名 / 防沉迷 / 未成年人消费限制**:`BuyerEligibility` 接入真实实现。
+4. **经营与支付合规**:人民币虚拟物品交易平台涉及的资质、运营主体与支付签约由业务/法务确认,工程侧不能替代。
+5. **风控**:同账号自买自卖拒绝;价格上下限;单账号在售数上限;新获得物品上架冷却(需要 `ItemEntry` 获得时间,P3 后);异常高频下单限速(gate 每消息号 3 次/秒是第一道)。
+6. **回档交互**:`single_player_rollback` "有合法交易流水的转移排除在恢复范围之外";所有托管/交付写 transaction_log,correlation_id = listing_id / order_id。
+
+## 13. 分期与验收
+
+| 期 | 内容 | 依赖 | 验收(由 Codex 执行) |
+|---|---|---|---|
+| **P0-a** | GM 客户端消息鉴权收口 | — | robot 发 `GmAddCurrency` 被拒;GM 通道仍可用 |
+| **P0-b** | 账号角色列表持久化(login) | — | 清空 Redis 后角色列表不丢;并发建角/删除不互相覆盖 |
+| **P1** | proto + tip 段 + `go/trade` 骨架(浏览/详情/收藏/货架/dev 种子商品)+ 建表 + 五处登记 + 客户端接线 + robot `trade-smoke` | — | 客户端打开聚宝斋拉到服务端种子商品;`zone` 与 `global` 两种 scope 的过滤结果符合 §4;`TestNoHandWrittenTipCodes` 通过 |
+| **P2** | C++ 资产原语:账本组件 + 持久化;`TradeDebit/AbortDebit/Credit`;Bag 按 guid 全或无;Currency txType;Pet 移出/预设回填;Item/Pet 表新列 | P1 proto | 单测覆盖:重复 seq 返回同一结局、APPLIED 后响应丢失重试取回快照、Abort 占位、战斗中/跨区冻结返回 RETRY、全或无不部分扣 |
+| **P3** | 游戏币/装备道具/宠物 端到端:上架→公示→寄售→下单→mock 支付→交付→卖家入账→冷静期;下架/过期回退;reconcile | P2 | robot:卖家在 zone1、买家在 zone2 完成三类交易;买家离线付款后上线自动到账;重复支付回调不重复交付;kill trade 进程中途重启后状态收敛 |
+| **P4** | 角色交易:login 锁/过户/踢人原因;scene 交易锁 + 快照 | P0-b、P3 | 公示期内卖家无法登录该角色;过户后买家账号可进入、卖家列表消失且卖家 EnterGame 不能自愈写回 |
+| **P5** | 真实支付渠道、实名防沉迷、提现、对账 | 商务/合规 | 渠道沙箱全流程;对账差异为 0 |
+| **P6** | 拍卖(竞价)、联系卖家、估价 | chat 私聊 | — |
+
+粗估(不含 P5 商务周期):P1 ≈ 10–12 人日;P2+P3 ≈ 35–45 人日;P4 ≈ 8–10 人日。
+
+## 14. 与其他文档的关系
+
+- 取代 `xuanming-port-feasibility-20260902.md` 中 auction(24 人日)条目的实现路线;其 §8.1 D1 发物入口与本文 §6.1 账本合并实现(J-5),落码时两边文档同步改。
+- `xuanming-port-decisions-20260910.md:144` 计划中的 `trade` tip 段由本文 J-7 落实。
+- `server_merge_design.md` 合服步骤需追加 §4 的 `market_zone` 改写。

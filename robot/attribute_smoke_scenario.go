@@ -3,15 +3,14 @@ package main
 // attribute-smoke 场景:单机器人对本地服务端做「角色属性加点」端到端冒烟。
 //
 // 兑现 docs/design/player-attribute-allocation.md 的服务端契约,逐条断言:
-//   0. 预备(让脚本可重复运行):等级归 1、两个池洗点(1 级免费)、切回首个方案、GM 发金币;
+//   0. 预备(让脚本可重复运行):等级归 1、属性点池洗点(1 级免费)、切回首个方案、GM 发金币;
 //   1. GetAttributePanel 拿到全量面板(池 / 维度 / 方案 / 二级属性都非空);
 //   2. GmSetPlayerLevel 1 → 30:属性点总量恰好 +145(AttributePool 行 1:每级 5 点,总量不落库、按等级换算);
 //   3. AutoAllocateAttributePoints 只算不落 —— 面板不变,建议里的增量总和 = 剩余点;
 //   4. AllocateAttributePoints 按建议提交 → 剩余点归零、二级属性真实变大;
-//   5. 幂等:重发同一份"目标值"被判"无变化"(tip 144),不重复扣点;
-//   6. 只增不减:提交比已分配更小的值被拒(tip 134);
-//   7. 相性池单项上限:提交超过 dimension_cap 被拒(tip 135);
-//   8. 未解锁池(仙魔点,60 级解锁)在低等级被拒(tip 131);
+//   5. 幂等:重发同一份"目标值"被判"无变化"(kAttributeNothingToChange),不重复扣点;
+//   6. 只增不减:提交比已分配更小的值被拒(kAttributePointsCannotDecrease);
+//      (原 7 相性池单项上限 / 8 仙魔池未解锁两步 2026-09-14 随两池删除;规则由纯规则单测覆盖)
 //   9. CreateAttributeScheme:金币按面板下发的 create_scheme_cost_gold 精确扣减;
 //      SwitchAttributeScheme 到新方案 → 新方案是干净的(分配为 0、点数满额);
 //      等切换冷却过去后切回 → 原方案的加点原样恢复(方案互不串档);
@@ -53,12 +52,8 @@ const attributeSmokeRpcTimeout = 10 * time.Second
 // 预备阶段发的金币:覆盖一次开方案(1000)+ 一次 30 级洗点(500)再留余量。
 const attributeSmokeGoldGrant int64 = 100000
 
-// 池 id 与表 data/AttributePool.xlsx 对齐(1 属性点 / 2 相性点 / 3 仙魔点)。
-const (
-	attrPoolPrimary  uint32 = 1
-	attrPoolAffinity uint32 = 2
-	attrPoolImmortal uint32 = 3
-)
+// 池 id 与表 data/AttributePool.xlsx 对齐:角色只剩属性点池(2026-09-14 删相性点 / 仙魔点池)。
+const attrPoolPrimary uint32 = 1
 
 // AttributePool 行 1 的 points_per_level(表值;冒烟用它算 1→30 级应得的精确点数)。
 const attrPrimaryPointsPerLevel uint32 = 5
@@ -68,9 +63,7 @@ const attrPrimaryPointsPerLevel uint32 = 5
 // (commit 95b5641d0)之后就全部作废了,负向断言(期待被拒的那几步)因此永远对不上且零报错。
 // 改成引用枚举后,再发生一次同类改号会在编译期断,而不是在冒烟里静默变绿/变红。
 var (
-	tipAttributePoolLocked           = uint32(tiptable.AttributeError_kAttributePoolLocked)
 	tipAttributePointsCannotDecrease = uint32(tiptable.AttributeError_kAttributePointsCannotDecrease)
-	tipAttributeDimensionCapExceeded = uint32(tiptable.AttributeError_kAttributeDimensionCapExceeded)
 	tipAttributeSchemeLimitReached   = uint32(tiptable.AttributeError_kAttributeSchemeLimitReached)
 	tipAttributeSchemeSwitchCooldown = uint32(tiptable.AttributeError_kAttributeSchemeSwitchCooldown)
 	tipAttributeNothingToChange      = uint32(tiptable.AttributeError_kAttributeNothingToChange)
@@ -141,7 +134,7 @@ func RunAttributeSmoke(cfg *config.Config) {
 		}
 	}
 	// 1 级洗点免费(reset_free_below_level=30);没有分配时服务器回"无变化",同样视为干净
-	for _, poolId := range []uint32{attrPoolPrimary, attrPoolAffinity} {
+	for _, poolId := range []uint32{attrPoolPrimary} {
 		p, tip, err := session.callTolerant(game.SceneAttributeClientPlayerResetAttributePointsMessageId,
 			&scene.ResetAttributePointsRequest{PoolId: poolId}, tipAttributeNothingToChange)
 		if err != nil {
@@ -280,34 +273,9 @@ func RunAttributeSmoke(cfg *config.Config) {
 		fail("decrease-guard", "减点应回 tip=%d,实得 %d", tipAttributePointsCannotDecrease, tip)
 	}
 
-	// ---- 步骤 8:相性单项上限 ----
-	affinity := findPool(panel, attrPoolAffinity)
-	if affinity == nil || affinity.DimensionCap == 0 {
-		fail("affinity-cap", "相性池缺失或没有单项上限:%v", affinity)
-	}
-	affinityDim := firstDimensionOfPool(panel, attrPoolAffinity)
-	over := map[uint32]uint32{affinityDim: affinity.DimensionCap + 1}
-	if tip := session.callExpectTip(game.SceneAttributeClientPlayerAllocateAttributePointsMessageId,
-		&scene.AllocateAttributePointsRequest{PoolId: attrPoolAffinity, Allocated: over}); tip != tipAttributeDimensionCapExceeded {
-		fail("cap-guard", "超相性上限(%d)应回 tip=%d,实得 %d",
-			affinity.DimensionCap, tipAttributeDimensionCapExceeded, tip)
-	}
-
-	// ---- 步骤 9:未解锁池 ----
-	immortal := findPool(panel, attrPoolImmortal)
-	if immortal == nil {
-		fail("immortal-missing", "面板里没有仙魔池")
-	}
-	if immortal.Unlocked {
-		fail("immortal-unlocked", "%d 级不该解锁仙魔池(unlock_level=%d)", panel.Level, immortal.UnlockLevel)
-	}
-	immortalDim := firstDimensionOfPool(panel, attrPoolImmortal)
-	if tip := session.callExpectTip(game.SceneAttributeClientPlayerAllocateAttributePointsMessageId,
-		&scene.AllocateAttributePointsRequest{PoolId: attrPoolImmortal,
-			Allocated: map[uint32]uint32{immortalDim: 1}}); tip != tipAttributePoolLocked {
-		fail("locked-guard", "未解锁池加点应回 tip=%d,实得 %d", tipAttributePoolLocked, tip)
-	}
-	zap.L().Info("[attribute-smoke] steps 6-9: guards ok(幂等 / 只增不减 / 上限 / 未解锁)")
+	// 原步骤 8(相性池单项上限)/ 步骤 9(仙魔池未解锁)随两池删除一并移除(2026-09-14);
+	// "单项上限"与"未解锁"两条规则宝宝池仍在用,由纯规则单测 attribute_allocation_rules_test 覆盖。
+	zap.L().Info("[attribute-smoke] steps 6-7: guards ok(幂等 / 只增不减)")
 
 	// ---- 步骤 10:方案:开新方案精确扣金币、新方案干净、切回后不串档 ----
 	allocatedInScheme1 := allocatedOf(panel, anyDim)
@@ -606,18 +574,6 @@ func allocatedOf(panel *scene.AttributePanelInfo, dimensionId uint32) uint32 {
 	for _, dimension := range panel.Dimensions {
 		if dimension.DimensionId == dimensionId {
 			return dimension.Allocated
-		}
-	}
-	return 0
-}
-
-func firstDimensionOfPool(panel *scene.AttributePanelInfo, poolId uint32) uint32 {
-	if panel == nil {
-		return 0
-	}
-	for _, dimension := range panel.Dimensions {
-		if dimension.PoolId == poolId {
-			return dimension.DimensionId
 		}
 	}
 	return 0

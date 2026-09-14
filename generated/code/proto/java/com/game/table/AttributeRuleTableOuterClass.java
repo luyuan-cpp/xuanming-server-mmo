@@ -45,15 +45,16 @@ public final class AttributeRuleTableOuterClass extends com.google.protobuf.Gene
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\031attributerule_table.proto\"\257\001\n\022Attribut" +
+      "\n\031attributerule_table.proto\"\317\001\n\022Attribut" +
       "eRuleTable\022\n\n\002id\030\001 \001(\r\022\023\n\013max_schemes\030\002 " +
       "\001(\r\022\031\n\021free_scheme_count\030\003 \001(\r\022\037\n\027create" +
       "_scheme_cost_gold\030\004 \001(\004\022\037\n\027switch_cooldo" +
       "wn_seconds\030\005 \001(\r\022\033\n\023scheme_name_max_len\030" +
-      "\006 \001(\r\";\n\026AttributeRuleTableData\022!\n\004data\030" +
-      "\001 \003(\0132\023.AttributeRuleTableBD\n\016com.game.t" +
-      "ableB\034AttributeRuleTableOuterClassP\001Z\022ge" +
-      "nerated/pb/tableb\006proto3"
+      "\006 \001(\r\022\036\n\026alloc_efficiency_bonus\030\007 \001(\001\";\n" +
+      "\026AttributeRuleTableData\022!\n\004data\030\001 \003(\0132\023." +
+      "AttributeRuleTableBD\n\016com.game.tableB\034At" +
+      "tributeRuleTableOuterClassP\001Z\022generated/" +
+      "pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -64,7 +65,7 @@ public final class AttributeRuleTableOuterClass extends com.google.protobuf.Gene
     internal_static_AttributeRuleTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_AttributeRuleTable_descriptor,
-        new java.lang.String[] { "Id", "MaxSchemes", "FreeSchemeCount", "CreateSchemeCostGold", "SwitchCooldownSeconds", "SchemeNameMaxLen", });
+        new java.lang.String[] { "Id", "MaxSchemes", "FreeSchemeCount", "CreateSchemeCostGold", "SwitchCooldownSeconds", "SchemeNameMaxLen", "AllocEfficiencyBonus", });
     internal_static_AttributeRuleTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_AttributeRuleTableData_fieldAccessorTable = new

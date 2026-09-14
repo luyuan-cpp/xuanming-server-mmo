@@ -498,11 +498,11 @@ constexpr SkillTable::ParseTableT_ SkillTable::InternalGenerateParseTable_(const
     {
       PROTOBUF_FIELD_OFFSET(SkillTable, _impl_._has_bits_),
       0, // no _extensions_
-      23, 248,  // max_field_number, fast_idx_mask
+      25, 248,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4286578688,  // skipmap
+      4261412864,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      23,  // num_field_entries
+      25,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -605,8 +605,14 @@ constexpr SkillTable::ParseTableT_ SkillTable::InternalGenerateParseTable_(const
       {::_pbi::TcParser::FastMtR2,
        {442, 5, 2,
         PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.cost_resource_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint32 damage_type = 24;
+      {::_pbi::TcParser::FastV32S2,
+       {448, 23, 0,
+        PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.damage_type_)}},
+      // double attack_multiplier = 25;
+      {::_pbi::TcParser::FastF64S2,
+       {457, 24, 0,
+        PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.attack_multiplier_)}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
       {::_pbi::TcParser::MiniParse, {}},
@@ -662,6 +668,10 @@ constexpr SkillTable::ParseTableT_ SkillTable::InternalGenerateParseTable_(const
       {PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.required_resource_), _Internal::kHasBitsOffset + 4, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
       // repeated .Skillcost_resource cost_resource = 23;
       {PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.cost_resource_), _Internal::kHasBitsOffset + 5, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMessage | ::_fl::kTvTable)},
+      // uint32 damage_type = 24;
+      {PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.damage_type_), _Internal::kHasBitsOffset + 23, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // double attack_multiplier = 25;
+      {PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.attack_multiplier_), _Internal::kHasBitsOffset + 24, 0, (0 | ::_fl::kFcOptional | ::_fl::kDouble)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -681,7 +691,7 @@ constexpr SkillTable::ParseTableT_ SkillTable::InternalGenerateParseTable_(const
         #endif
     }},
     {{
-      "\12\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\6\0\0\0"
+      "\12\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\6\0\0\0\0\0\0\0\0\0\0\0"
       "SkillTable"
       "damage"
     }},
@@ -744,7 +754,9 @@ inline constexpr SkillTable::Impl_::Impl_(
         min_range_{0},
         self_status_{0u},
         required_status_{0u},
-        cooldown_id_{0u} {}
+        cooldown_id_{0u},
+        damage_type_{0u},
+        attack_multiplier_{0} {}
 
 template <typename>
 constexpr SkillTable::SkillTable(::_pbi::ConstantInitialized,
@@ -1019,7 +1031,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_._has_bits_),
-        26, // hasbit index offset
+        28, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.skill_type_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.targeting_mode_),
@@ -1040,6 +1052,8 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.required_status_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.cooldown_id_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.damage_),
+        PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.damage_type_),
+        PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.attack_multiplier_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.required_item_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.required_resource_),
         PROTOBUF_FIELD_OFFSET(::SkillTable, _impl_.cost_resource_),
@@ -1063,6 +1077,8 @@ const ::uint32_t
         21,
         22,
         6,
+        23,
+        24,
         3,
         4,
         5,
@@ -1079,7 +1095,7 @@ static const ::_pbi::MigrationSchema
         {7, sizeof(::Skillrequired_resource)},
         {14, sizeof(::Skillcost_resource)},
         {21, sizeof(::SkillTable)},
-        {70, sizeof(::SkillTableData)},
+        {74, sizeof(::SkillTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1097,7 +1113,7 @@ const char descriptor_table_protodef_skill_5ftable_2eproto[] ABSL_ATTRIBUTE_SECT
     "urce\022\036\n\026required_resource_type\030\001 \001(\r\022\037\n\027"
     "required_resource_value\030\002 \001(\r\"J\n\022Skillco"
     "st_resource\022\030\n\020cost_resource_id\030\001 \001(\r\022\032\n"
-    "\022cost_resource_cost\030\002 \001(\r\"\262\004\n\nSkillTable"
+    "\022cost_resource_cost\030\002 \001(\r\"\342\004\n\nSkillTable"
     "\022\n\n\002id\030\001 \001(\r\022\022\n\nskill_type\030\002 \003(\r\022\026\n\016targ"
     "eting_mode\030\003 \003(\r\022\026\n\016require_target\030\004 \001(\r"
     "\022\025\n\rtarget_status\030\005 \001(\r\022\022\n\ncast_point\030\006 "
@@ -1108,19 +1124,20 @@ const char descriptor_table_protodef_skill_5ftable_2eproto[] ABSL_ATTRIBUTE_SECT
     "nge\030\016 \001(\001\022\021\n\tmax_range\030\017 \001(\001\022\021\n\tmin_rang"
     "e\030\020 \001(\001\022\023\n\013self_status\030\021 \001(\r\022\027\n\017required"
     "_status\030\022 \001(\r\022\023\n\013cooldown_id\030\023 \001(\r\022\016\n\006da"
-    "mage\030\024 \001(\t\022*\n\rrequired_item\030\025 \003(\0132\023.Skil"
-    "lrequired_item\0222\n\021required_resource\030\026 \003("
-    "\0132\027.Skillrequired_resource\022*\n\rcost_resou"
-    "rce\030\027 \003(\0132\023.Skillcost_resource\"+\n\016SkillT"
-    "ableData\022\031\n\004data\030\001 \003(\0132\013.SkillTableB<\n\016c"
-    "om.game.tableB\024SkillTableOuterClassP\001Z\022g"
-    "enerated/pb/tableb\006proto3"
+    "mage\030\024 \001(\t\022\023\n\013damage_type\030\030 \001(\r\022\031\n\021attac"
+    "k_multiplier\030\031 \001(\001\022*\n\rrequired_item\030\025 \003("
+    "\0132\023.Skillrequired_item\0222\n\021required_resou"
+    "rce\030\026 \003(\0132\027.Skillrequired_resource\022*\n\rco"
+    "st_resource\030\027 \003(\0132\023.Skillcost_resource\"+"
+    "\n\016SkillTableData\022\031\n\004data\030\001 \003(\0132\013.SkillTa"
+    "bleB<\n\016com.game.tableB\024SkillTableOuterCl"
+    "assP\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_skill_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_skill_5ftable_2eproto = {
     false,
     false,
-    945,
+    993,
     descriptor_table_protodef_skill_5ftable_2eproto,
     "skill_table.proto",
     &descriptor_table_skill_5ftable_2eproto_once,
@@ -1899,9 +1916,9 @@ SkillTable::SkillTable(
                offsetof(Impl_, id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, id_),
-           offsetof(Impl_, cooldown_id_) -
+           offsetof(Impl_, attack_multiplier_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::cooldown_id_));
+               sizeof(Impl_::attack_multiplier_));
 
   // @@protoc_insertion_point(copy_constructor:SkillTable)
 }
@@ -1949,9 +1966,9 @@ inline void SkillTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, cooldown_id_) -
+           offsetof(Impl_, attack_multiplier_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::cooldown_id_));
+               sizeof(Impl_::attack_multiplier_));
 }
 SkillTable::~SkillTable() {
   // @@protoc_insertion_point(destructor:SkillTable)
@@ -2031,11 +2048,12 @@ PROTOBUF_NOINLINE void SkillTable::Clear() {
         reinterpret_cast<char*>(&_impl_.think_interval_) -
         reinterpret_cast<char*>(&_impl_.require_target_)) + sizeof(_impl_.think_interval_));
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     ::memset(&_impl_.channel_time_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.cooldown_id_) -
-        reinterpret_cast<char*>(&_impl_.channel_time_)) + sizeof(_impl_.cooldown_id_));
+        reinterpret_cast<char*>(&_impl_.damage_type_) -
+        reinterpret_cast<char*>(&_impl_.channel_time_)) + sizeof(_impl_.damage_type_));
   }
+  _impl_.attack_multiplier_ = 0;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -2285,6 +2303,24 @@ PROTOBUF_NOINLINE void SkillTable::Clear() {
     }
   }
 
+  // uint32 damage_type = 24;
+  if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+    if (this_._internal_damage_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          24, this_._internal_damage_type(), target);
+    }
+  }
+
+  // double attack_multiplier = 25;
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (::absl::bit_cast<::uint64_t>(this_._internal_attack_multiplier()) != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteDoubleToArray(
+          25, this_._internal_attack_multiplier(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -2424,7 +2460,7 @@ PROTOBUF_NOINLINE void SkillTable::Clear() {
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     // uint32 channel_time = 13;
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (this_._internal_channel_time() != 0) {
@@ -2469,6 +2505,21 @@ PROTOBUF_NOINLINE void SkillTable::Clear() {
       if (this_._internal_cooldown_id() != 0) {
         total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
                                         this_._internal_cooldown_id());
+      }
+    }
+    // uint32 damage_type = 24;
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (this_._internal_damage_type() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_damage_type());
+      }
+    }
+  }
+   {
+    // double attack_multiplier = 25;
+    if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+      if (::absl::bit_cast<::uint64_t>(this_._internal_attack_multiplier()) != 0) {
+        total_size += 10;
       }
     }
   }
@@ -2572,7 +2623,7 @@ void SkillTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x007f0000U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x00ff0000U)) {
     if (CheckHasBit(cached_has_bits, 0x00010000U)) {
       if (from._internal_channel_time() != 0) {
         _this->_impl_.channel_time_ = from._impl_.channel_time_;
@@ -2608,6 +2659,16 @@ void SkillTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.cooldown_id_ = from._impl_.cooldown_id_;
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00800000U)) {
+      if (from._internal_damage_type() != 0) {
+        _this->_impl_.damage_type_ = from._impl_.damage_type_;
+      }
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x01000000U)) {
+    if (::absl::bit_cast<::uint64_t>(from._internal_attack_multiplier()) != 0) {
+      _this->_impl_.attack_multiplier_ = from._impl_.attack_multiplier_;
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -2636,8 +2697,8 @@ void SkillTable::InternalSwap(SkillTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL oth
   _impl_.cost_resource_.InternalSwap(&other->_impl_.cost_resource_);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.damage_, &other->_impl_.damage_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.cooldown_id_)
-      + sizeof(SkillTable::_impl_.cooldown_id_)
+      PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.attack_multiplier_)
+      + sizeof(SkillTable::_impl_.attack_multiplier_)
       - PROTOBUF_FIELD_OFFSET(SkillTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

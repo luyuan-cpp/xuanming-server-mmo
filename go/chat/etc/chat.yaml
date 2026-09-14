@@ -1,0 +1,83 @@
+# Chat 服务配置(契约 zone_contract_v1 §3/§4/§7/§9)
+# 全局服务:全服一份、多副本;客户端只经 gate → 路由服到达(路由模式)。
+Name: chat.rpc
+ListenOn: 127.0.0.1:50700
+
+# zrpc 服务端整体超时(毫秒)。必须 ≤ 路由服 ForwardTimeoutMs(5000)− 1000:
+# chat 要先于路由服超时把 in-band 结果回去,否则"写入已生效 + 客户端看到失败"会诱发重发。
+# config.Validate 拒绝 0 与 >4000。
+Timeout: 4000
+
+# etcd:只给 shared/noderegistry 注册 ChatNodeService.rpc/... 与 shared/killswitch 用。
+# Key 必须留空(契约 D-13):v1 没有 Go 调用方按 go-zero key 发现 chat,填了 Key 会让 go-zero
+# 额外注册 chat.rpc,且被 go_services.ps1 -Zone 按 .z<N> 切分。config.Validate 拒绝非空 Key。
+# ⚠ 这里必须**显式写 Key: ""**,不能整行省略:go-zero 的 EtcdConf.Key 不是 optional,
+# Etcd 段存在而缺 Key 时 conf 加载直接报 "Etcd.Key" is not set(core/mapping
+# processNamedFieldWithoutValue)。空串 → HasEtcd()=false → 不注册 go-zero key;
+# -Zone 的改写正则只匹配 "Key: <id>.rpc",空串不会被改。
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  Key: ""
+
+# go-zero Stat 拦截器默认按 INFO 打每个请求的整包 JSON:SendChat 请求体就是聊天正文(含私聊),
+# 不应落日志。只屏蔽内容,不关 Stat —— 慢调用告警照常保留。
+Middlewares:
+  StatConf:
+    IgnoreContentMethods:
+      - /chatpb.ClientPlayerChat/SendChat
+
+# ---- 双存储(契约 §4)----
+# Redis:既有共享库。chat v1 不读任何契约 key,它只是 ChatRedis 未配置时的回落目标。
+#   这是 zrpc.RpcServerConf 自带的 Redis(RedisKeyConf)段:Key 仅在 Auth=true 时使用,
+#   但字段不是 optional,Redis 段存在时必须显式写(空串即可),否则加载报 "Redis.Key" is not set。
+#   不写 DB(契约 §4)。
+Redis:
+  Host: 127.0.0.1:6379
+  Type: node
+  Key: ""
+
+# ChatRedis:chat 私有 key(chat:{world}:log / chat:{p:a:b}:log / chat:{req:pid}:rid / chat:{rl:pid})。
+# 全部单 key 操作,Redis Cluster 安全。本地集群样例 = docker compose --profile redis-cluster
+# (6 节点 3 主 3 从,与 match 的 MatchRedis 同一套);Host 逗号分隔种子地址,Type 必须是 cluster。
+# 整段删掉即回落到上面的共享库,启动时打 WARN 并在横幅打印 shared-fallback 落点 ——
+# 只允许本地单库形态:共享库是 allkeys-lfu,聊天历史会被当缓存淘汰。
+# ⚠ staging/prod 必须指向独立实例且 maxmemory-policy=noeviction(历史 LIST 是这类数据的唯一副本)。
+ChatRedis:
+  Host: 127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005
+  Type: cluster
+
+# etcd 注册路径 <Prefix>/zone/<z>/... 用的 zone id;必填非 0。chat 是全局服务,
+# zone 只影响注册路径,业务代码禁止读它做分支(契约 §0)。K8s 由 ConfigMap 注入 CurrentZoneId。
+ZoneId: 1
+
+# etcd 节点注册租约 TTL(秒)= 崩溃场景的切换窗口(路由服 PickRandom 不看连接状态)。
+LeaseTTL: 60
+
+# Prometheus /metrics。端口分工:9101 login / 9150 scene_manager / 9160 db / 9170 match /
+# 9180 friend / 9190 player_locator / 9200 路由服 / 9210 chat。置空关闭。
+# 指标:chat_send_total{channel,outcome} / chat_pull_total{channel,outcome},
+# 以及 shared/serverbase 的 rpc_inband_*、shared/killswitch 的 killswitch_blocked_total。
+MetricsListenAddr: ":9210"
+
+# ---- 聊天阈值(契约 §3/§9;k8s_deploy.ps1 用 Get-AuthoritativeScalar 从本文件读)----
+# 单条内容最大字节数(不是字符数:512 字节 ≈ 170 个汉字)。gate 对整包 >1024B 先拒一道。
+MaxContentBytes: 512
+# 每玩家每秒最多发几条(gate 每会话每消息号 3 次/秒是第一道)。
+RateLimitPerSecond: 5
+# 每个频道 LIST 保留最近条数。
+HistoryMaxEntries: 200
+# 频道 LIST TTL(秒),每次写入续期;7 天。历史是尽力而为窗口,不是权威账本。
+HistoryTTLSeconds: 604800
+# PullChatHistory.limit=0 时的默认条数与上限。
+HistoryDefaultLimit: 20
+HistoryMaxLimit: 50
+# SendChat 幂等键 TTL(秒)。
+RequestIdTTLSeconds: 60
+
+# RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
+# 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。
+# 关停发言:etcdctl put /mmorpg/killswitch/chatpb.ClientPlayerChat/SendChat '{"deny":true,"reason":"..."}'
+# 关停整个服务:etcdctl put /mmorpg/killswitch/chatpb.ClientPlayerChat/'*' true
+# 恢复:etcdctl del 对应的 key。
+KillSwitchPrefix: ""

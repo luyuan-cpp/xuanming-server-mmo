@@ -8,6 +8,7 @@
 #include "bag_marshal.h"
 #include "mission_marshal.h"
 #include "player_revive.h"
+#include "attribute_unit_migration.h"
 #include "table/code/class_table.h"
 #include "muduo/base/Logging.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"  // DerivedAttributesComp
@@ -102,6 +103,13 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	// 于是 GM 挂上的欠款、以及 AddCurrency 已扣到一半的补缴进度(debt.paid),
 	// 玩家一下线重登就整体消失,补缴机制被「重登一次」完整绕过。
 	tlsEcs.actorRegistry.get_or_emplace<PlayerCurrencyComp>(player).LoadFromProto(message.currency());
+	// 存档数值单位迁移(2026-09-14 法力单位 ×4):必须在下面两个 InitializeOnLoad 之前,
+	// 否则当前法力只会被夹到新上限、不会换算(规则见 attribute_unit_migration.h)
+	if (attributeunit::MigrateLoadedAttributeUnits(baseAttrs, tlsEcs.actorRegistry.get<PlayerAttributeComp>(player),
+			tlsEcs.actorRegistry.get<PlayerPetComp>(player), reviveOutcome == PlayerReviveOutcome::kUntouched)) {
+		LOG_INFO << "[PlayerInit] 存档数值单位迁移到 v" << attributeunit::kCurrentVersion
+				 << ": player_id=" << message.player_id() << " mana=" << baseAttrs.mana();
+	}
 	// 属性加点:补默认方案 + 按等级/方案重算二级属性(max_health 等此前无写者,战斗快照靠它)
 	PlayerAttributeSystem::InitializeOnLoad(player);
 	// 宝宝:同步等级(跟随主人)+ 按上限夹当前 HP/MP;必须在主人等级已 emplace 之后

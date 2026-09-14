@@ -30,6 +30,7 @@
 #include "google/protobuf/repeated_field.h"  // IWYU pragma: export
 #include "google/protobuf/extension_set.h"  // IWYU pragma: export
 #include "google/protobuf/unknown_field_set.h"
+#include "proto/db/proto_option.pb.h"
 #include "proto/common/base/tip.pb.h"
 // @@protoc_insertion_point(includes)
 
