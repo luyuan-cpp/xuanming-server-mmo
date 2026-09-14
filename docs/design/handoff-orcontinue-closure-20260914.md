@@ -189,9 +189,9 @@ git grep --cached -l 'continue; } } while(0)' -- generated/code/cpp cpp/generate
 | 3.3d | 红：MissingRow 用例 | FAILED | | |
 | 3.3e | 红：PresentRow 用例 | PASSED | | |
 | 3.3f | 还原后 | 2/2 PASSED | | |
-| 3.4a | CI 执行单元测试 | success | | |
-| 3.4b | CI 表管理器产物无漂移 | success（或仅列与本项无关的文件） | | |
-| 3.4c | CI 其余步骤新出现的红 | 逐条列出 | | |
+| 3.4a | CI 执行单元测试 | success | success，129 passed in 2.16s | Ubuntu，run `34857249677`，提交 `3ab20cf77` |
+| 3.4b | CI 表管理器产物无漂移 | success（或仅列与本项无关的文件） | skipped | 前置真实表校验失败，未执行到此步 |
+| 3.4c | CI 其余步骤新出现的红 | 逐条列出 | 真实 Tip 码轴与业务表引用检查 failure | workflow 第 118、206 行仍导入旧 `core.excel_reader`；首个调用使 29 张表报 `Cannot parse type declaration`，详见 §八 |
 
 ---
 
@@ -213,6 +213,9 @@ git grep --cached -l 'continue; } } while(0)' -- generated/code/cpp cpp/generate
 ## 八、2026-09-14 合并提交检查
 
 - 已快进到 `8487d5e1f`，原计划的 28 个生成表头修复已随远程更新进入主干。本轮提交范围收敛为 `test_manifest.py` 的两行小写文件名修复与本交接记录。
-- 使用本机既有 Python 3.14t 运行完整 exporter tests：129/129 通过；Windows 结果不替代 Linux 文件名敏感性验证，推送后的 CI 结果另行核验。
+- 使用本机既有 Python 3.14t 运行完整 exporter tests：129/129 通过；随后 Ubuntu CI 同样 129/129 通过，已取得 Linux 文件名敏感环境下的实际证据。
 - 沙盒生成不覆盖仓内产物。原始 `--compare` 返回 1：962 项中 952 相同、10 项差异；逐一确认四对 JSON 路径仅大小写不同且内容一致，两个 Go 差异是被 Git 忽略的旧一级输出缓存。正式 `go/shared/generated` 的 126 个文件全部与沙盒部署结果字节一致。两棵 C++ 表头树均无 do-while 包装的 OrContinue 宏。
 - 本机证据保存在仓库同级 `merge-backup-20260914-102631` 的 `exporter-tests.log`、`table-sandbox.log`、`generated-verification.json`。本轮未执行历史方案中的 RED 切换、客户端或压测验收。
+
+- 推送后 CI：[run 34857249677](https://github.com/luyuan-cpp/xuanming-server-mmo/actions/runs/34857249677)，提交 `3ab20cf77`。单测通过后，“校验真实 Tip 码轴与业务表引用”失败；后续门禁 skipped，整个 workflow 仍为 failure。
+- 失败定界：workflow 两处仍从 `core.excel_reader` 导入旧 5 行表头读取函数；schema 迁移后真实表不再在第 2 行填写类型，29 张表因此统一解析失败。两处旧调用均来自 `d007e448e`，本次测试修复未修改 workflow、reader 或表源。后续应独立将这两处导入切到正式 `core.table_source.read_all_tables`，然后重跑全部真实表门禁。本次只记录该既有缺口。
