@@ -1034,7 +1034,8 @@ TEST(TurnBattleEngineTest, PvpDirectDamageIsScaled) {
     AddPlayer(request, kPlayerB, 1, 1000, 1000, /*strength*/0, /*armor*/0, /*crit*/0, /*speed*/60);
     ASSERT_TRUE(engine.Initialize(request));
 
-    ASSERT_TRUE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB)));
+    // SubmitAction 返回全员就绪状态；A 已提交，仍需等待 B。
+    ASSERT_FALSE(engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK, kPlayerB)));
     ASSERT_TRUE(engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_ATTACK, kPlayerA)));
     const auto result = engine.ResolveCurrentRound();
 
