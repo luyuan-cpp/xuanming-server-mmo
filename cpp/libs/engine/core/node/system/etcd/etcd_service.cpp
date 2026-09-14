@@ -446,13 +446,15 @@ void EtcdService::Shutdown()
 	leaseRequestInFlight_ = false;
 	SetRegistrationMode(RegistrationMode::kInitialBoot, "service shutdown");
 
+	// 一次清空全部 11 个生成层的 etcd 应答 handler,而不是手列 6 个:此前漏掉的
+	// AsyncLeaseLeaseKeepAliveHandler(:101 以 [this] 绑定)会在 ~Node 之后仍持有悬空的
+	// EtcdService*;今天不可达(唯一的 CQ 轮询 grpcHandlerTimer 已在上面 Cancel,且
+	// EtcdService 随 Node 死在 loop 退出之后),但 AGENTS.md §11.7 的精神是"对象没了
+	// 回调自动失效",不该靠"恰好没人再轮询"。gate main.cpp:280 经 SetIfEmptyHandler
+	// 塞进 Revoke / TimeToLive / Leases 的 [&context] 闭包也一并清掉。
+	// 见 docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md §7.13。
 	auto emptyHandler = [](const ClientContext &, const ::google::protobuf::Message &) {};
-	etcdserverpb::AsyncKVRangeHandler = emptyHandler;
-	etcdserverpb::AsyncKVPutHandler = emptyHandler;
-	etcdserverpb::AsyncKVDeleteRangeHandler = emptyHandler;
-	etcdserverpb::AsyncKVTxnHandler = emptyHandler;
-	etcdserverpb::AsyncWatchWatchHandler = emptyHandler;
-	etcdserverpb::AsyncLeaseLeaseGrantHandler = emptyHandler;
+	etcdserverpb::SetEtcdHandler(emptyHandler);
 
 	EtcdHelper::StopAllWatching();
 	gNode->GetEtcdManager().Shutdown();

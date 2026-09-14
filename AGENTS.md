@@ -256,3 +256,17 @@
 - **命名跟着分层走**：通用接口名不得泄漏某一种布局的实现细节（`GridsNeededFor` 这种名字把「要几个实例」和「占几格」混成一件事，应为 `StacksNeededFor`）。
 
 新增或修改上述系统前，先按本节确认分层再动手；已上线结构受 §11.3 向后兼容约束，改动需配版本、迁移与回滚方案。
+
+### 11.7 连接与回调生命周期（muduo，强制）
+
+**应用层不拥有连接，也不裸绑自己。** 存连接只存 `weak_ptr`、用时 `lock()`；绑进回调只绑 `weak_ptr<自己>`，对象没了回调自动失效。
+
+这是 2026-09-13 gate 在 `TcpConnection.cc:71 assert(state_ == kDisconnected)` 崩溃、随后又暴露 use-after-free 的完整教训，推导与证据见 `docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md` §8.0。所有坑的共同根源只有一个：应用层和 muduo 抢连接的所有权，或者把裸 `this` 交给 muduo 之后自己先死了。
+
+- **连接的所有权只在 muduo（`TcpServer` / `TcpClient`）手里。** 应用层任何寿命长于一次回调的地方——成员、ECS 组件、容器、定时器 / `queueInLoop` 闭包、thread_local——只能存 `std::weak_ptr<TcpConnection>`，用时 `lock()`，锁不住就当连接不存在。**禁止**长期持有 `TcpConnectionPtr` 强引用：它会让死连接连同 fd、缓冲区、`GameChannel` 一起钉在内存里（muduo 的 `handleClose` 不关 fd，留给析构），还会把 `TcpClient::~TcpClient` 的 `use_count()==1` 判断带偏、跳过 `forceClose()`。
+- **绑进 muduo 回调（`set*Callback`、定时器、`queueInLoop`）的对象一律以 `weak_ptr<自己>` 捕获**（`enable_shared_from_this`），回调先 `lock()`，失败即返回。muduo 会把回调拷到 `TcpConnection` 上，且 `forceClose` 一律排队到下一轮，所以"对象已析构、回调才到"是必然而非偶然。**禁止**用裸 `this` / 裸指针 `std::bind` 进这些回调；与被绑对象同寿命的成员（如 `RpcServer` 自己的 `tcpServer`）除外。
+- **拆对象就是直接销毁。** 有了上两条，不需要析构函数摘回调，不需要"延迟关闭"兜底列表，不需要"DOWN 时记得清 X"的手动约定；剩下的 DOWN 清理只有记录卫生的意义。任何"为了不崩而不销毁"的写法都是在掩盖上两条的违例，必须回到根因。
+- **节点摘除只在 `queueInLoop` 里做**，不在连接自己的回调栈上。
+- **关机先排空再 `quit()`**：`quit()` 经**两跳 `queueInLoop`** 排到队列末尾，靠 FIFO 让排队的 `forceCloseInLoop`（第一趟）与 `connectDestroyed`（第二趟）都跑完；少一趟就是 `TcpConnection.cc:71` 或 `Channel.cc:43` 的 assert。关闭完成标记和通知必须在最后一跳的 `quit()` 之后、完成锁内发出，解锁后不再访问 Node，保证析构等待与 fallback 不会提前结束。**不要用定时器**：Windows 的 loop 是 `poll → handleEvents → timerQueue_->loop() → doPendingFunctors`，定时器恰在 N+1 趟到期时 `quit_` 先置位、只剩一趟——它"通常"能跑完，不是"必然"。
+
+新写或修改任何持有连接、绑进回调的类时只问两句：**"我存的是 weak 吗？""我绑的是 weak 吗？"** 两个都是，这一类问题与你无关。参考实现：`GameChannel::LockConnection`、`RpcClient::connect()`、`RpcSession::connection`、`BattleClientEdge::DirectSession`。回归测试：`cpp/tests/rpc_controller_test/rpc_client_lifecycle_test.cpp`。

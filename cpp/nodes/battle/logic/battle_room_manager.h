@@ -177,7 +177,9 @@ private:
         uint64_t confirmResendUntilMs = 0;
         // player_id(参战者或观众)→ 已验证的客户端直连;缺项 = 该玩家走 Kafka→gate 回落。
         // 有序容器:与 routingByPlayer 同口径,收尾遍历顺序稳定。
-        std::map<uint64_t, muduo::net::TcpConnectionPtr> directConnByPlayer;
+        // weak_ptr(AGENTS.md §11.7:应用层不拥有连接):连接由 edge 的 TcpServer 拥有,这里只是
+        // "谁走直连"的索引;对端断开后 lock() 失败 == 缺项,自然回落 Kafka,不会钉住死连接和 fd。
+        std::map<uint64_t, std::weak_ptr<muduo::net::TcpConnection>> directConnByPlayer;
     };
 
     BattleRoom *FindRoom(uint64_t battleId);

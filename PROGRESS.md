@@ -4620,3 +4620,29 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   2. `pwsh -NoProfile -File tools/scripts/start_game.ps1 -CheckOnly`:没有 chat.exe 时应打出“缺少 chat.exe,本次跳过 chat”告警且不抛错(若 guild.exe 也缺,会在 guild 上抛错,那是 guild 批次的既定行为)。
   3. `k8s_deploy.ps1 -Command infra-up -DryRun ...`(参数同设计文档 §12 ⑩)的输出应含 client-rpc-router 的 Deployment(带 `POD_IP`)与 PDB,不再出现 `skipping client-rpc-router`。
 - 验证状态:未编译、未运行。
+
+## 2026-09-14 本机服务器重建并启动（未启动客户端）
+
+- 用户要求编译并启动服务器，并明确不启动客户端；确认旧 Docker 数据已清理，授权重建开发环境。当前采用 Windows 原生 gate/scene/battle、七个 Go 服务、Java 网关，Docker 运行 MySQL/Redis/Redis Cluster/Kafka/etcd。
+- C++ Debug/x64 按 `/m:1 /nr:false` 串行构建；补齐 gate_event_handler.cpp、gate_service_handler.cpp、scene_response_handler.cpp 六处 weak_ptr 访问遗漏。三个节点构建通过，现有 RpcController/连接生命周期测试 11/11；未执行压测或客户端登录验收。
+- 七个 Go 服务构建通过。Java 按本机既有 Java 21 兼容目标构建，独立 Unix domain 临时目录修复测试环境异常，64/64 测试通过；未改 pom.xml。
+- Docker 引擎异常及遗留 socket 阻塞已恢复，通信目录仅备份改名。依用户确认重新下载依赖镜像并初始化空开发库；原有其它磁盘上的数据未恢复或覆盖。
+- 空库迁移发现当前 go.mod 指向的本地依赖 D:/luyuan/proto2mysql-v0.1.0 缺失键类型修复；已在该本地依赖补齐字符串/二进制主键、唯一键、索引列的 VARCHAR(191)/VARBINARY(191) 映射，非键字段保持 TEXT/BLOB。新增八个回归子用例先红后绿，重编 db/data_service/迁移工具；一区正式迁移及最终 plan 均 exit=0，全局四张表及五类号段种子初始化通过。
+- 正式 start_game.ps1 六阶段完成，11 项原生服务进程和端口核验通过；网关 http://127.0.0.1:8081 健康 UP，一区 OPEN；四个 Go Kafka 消费组 Stable。旧程序有备份，安装 SHA256 已核对，未提交代码。
+- 本次证据：run/logs/server-build-20260914-052225/result.json、running-verification.json；启动记录：run/logs/game-launcher/20260914-060218-372/launcher.log。C++ 可选 no-raw-pointer-member 检查因工具缺失显示 SKIP，不等同静态检查通过。
+
+## 2026-09-14 gate 连接生命周期第二批:评审收口 + 「this 进回调」全仓普查(Claude,未编译)
+
+- 四视角对抗评审(44 agent)13 项确认已全部处理:唯一真代码项 ML-1 —— 关机 `quit()` 由 `runAfter(0.05)` 改两跳 `queueInLoop`(定时器在事件相位触发,恰在 N+1 趟到期就只剩一趟);ChatGPT 10:30 再把完成标记挪进最内跳(对:`~Node` fallback 靠标记决定要不要重驱动 loop)。其余 12 项为文档/注释与已修代码不一致,已改;评审报的 10 处 `SessionInfo::conn` 漏改经现场 grep 核为 ChatGPT 05:22 轮已补齐(gate 下 16 处 = 15 读 lock + 1 赋值)。
+- 「this 进回调」全仓普查(12 agent 全返):grep 枚举 93 站点 → 分析补到 113,**零确认悬空**(不逃逸 46 / 有守卫 31 / 同寿 35 / 风险 1 被反驳为不可达)。唯一修复:`etcd_service.cpp` `Shutdown()` 改 `SetEtcdHandler(emptyHandler)` 清全部 11 个 handler(原手列 6 个漏 keepalive 的 `[this]`)。记录不改项(`[&context]`/`[&n]` 只靠声明顺序、`gNode` 退出窗口、etcd Watch CQ 带未完成 op 收尾、gRPC 线程 `runInLoop+future.get()` 死锁耦合)与一条 muduo_windows `TimerQueue` 同批跳过已取消定时器的事实修正,见事故 §7.13。
+- 验收口径写入事故 §7.12 末尾与交接 §7.6:"设计上关死"≠"负载下 7 天不涨",G6 7 天 soak 列为上线门禁。
+- 状态:本批 26 文件**仍未提交**(`8487d5e1f` 不含本批);`core.lib` 与三节点 exe 落后源码(两跳精修 + etcd 修复在 10:30 构建之后);交接 §8.2 GREEN 行引用的 `merge-backup-20260914-102631/test-rpc_controller.log` 是 `run_cpp_tests.ps1` 的汇总表(`rpc_controller_test OK 11/11 全过`),是有效证据但非逐用例原始输出;因 10:30 后 `node.cpp` / `etcd_service.cpp` 又改过,11/11 需重跑并把原始 gtest 输出落到 `tmp\gtest_green.txt`。
+
+## 2026-09-14 合并交付最终验证（Codex）
+
+- 用户明确要求合并、提交并 push。先保存原工作区、未跟踪文件与子模块状态，再快进到 `8487d5e1f`，回放独立改动；双方原进度记录均保留。生成产物已由远程收录，本轮无需重复提交。
+- 连接生命周期修复按 26 文件单独交付，包含 weak 回调/连接访问、RpcSession 断开清理、Node 两跳排空后的完成通知，以及后续新增的 etcd 全量 handler 清理。两份本机 Go replace 路径配置及第三方子模块工作区保留、不混提。
+- 构建 17/17 通过；新增 etcd 修复后再次构建 core 与三个节点，4/4 通过，并重新 Build 与运行全部 C++ 测试：22/22 工程、596/596 用例通过。连接测试另留原始 gtest 输出 11/11。PVP 测试修正 `SubmitAction` 全员就绪断言后 120/120，独立提交 `004dc79b8`；生产战斗代码未改。
+- 导表 Python 测试本机与 Ubuntu 均 129/129；[CI run 34857249677](https://github.com/luyuan-cpp/xuanming-server-mmo/actions/runs/34857249677) 的后续真实表校验因既有 workflow 旧读表入口失败，整体 workflow 仍未通过，已在 OrContinue 交接记录定界。
+- 本轮未部署/启动服务、未启动客户端，未做 Node 析构运行时验收、RED 分组或压测；可选 no-raw-pointer-member 检查 SKIP。以前的启动记录不是本轮最终源码的运行时证据。
+- 证据与原始备份位于仓库同级 `merge-backup-20260914-102631`；最终构建、测试与源文件快照见 `validation-summary-final.json`、`final-build-results.json`、`final-cpp-tests.log`、`final-rpc-controller-raw.log`、`pre-final-build-manifest.json`。完整范围与待验收项目见 `docs/design/handoff-gate-dtor-fix-verify-and-stress-20260914.md` §8–§10。

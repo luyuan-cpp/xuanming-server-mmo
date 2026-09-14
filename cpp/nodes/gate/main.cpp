@@ -244,9 +244,9 @@ int main(int argc, char *argv[])
                 LOG_INFO << "Disconnecting " << sessions.size() << " client sessions before shutdown...";
                 for (auto &[sessionId, info] : sessions)
                 {
-                    if (info.conn)
+                    if (const auto conn = info.conn.lock())
                     {
-                        info.conn->forceClose();
+                        conn->forceClose();
                     }
                 }
                 LOG_INFO << "All client sessions disconnected.";
@@ -283,10 +283,12 @@ int main(int argc, char *argv[])
                 if (!sd) return;
                 auto it = tlsSessionManager.sessions().find(sd->session_id());
                 if (it == tlsSessionManager.sessions().end()) return;
+                const auto clientConn = it->second.conn.lock();
+                if (!clientConn) return;   // 会话记录还在但连接已释放(仅关机窗口可能):当断开处理
 
                 // If reply is already MessageContent, send directly.
                 if (reply.GetDescriptor() == MessageContent::descriptor()) {
-                    context.rpcClientHandler.SendMessageToClient(it->second.conn, reply);
+                    context.rpcClientHandler.SendMessageToClient(clientConn, reply);
                     return;
                 }
 
@@ -300,7 +302,7 @@ int main(int argc, char *argv[])
                 MessageContent mc;
                 mc.set_serialized_message(reply.SerializeAsString());
                 mc.set_message_id(typeIt->second);
-                context.rpcClientHandler.SendMessageToClient(it->second.conn, mc); });
+                context.rpcClientHandler.SendMessageToClient(clientConn, mc); });
 
             // Post-startup: attach client TCP callbacks + initialize session ID generator.
             // Override connection/message callbacks BEFORE WaitAndRun so that any

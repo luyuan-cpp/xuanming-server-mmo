@@ -32,7 +32,18 @@ void NodeHandshakeManager::TryRegisterNodeSession(uint32_t nodeType, const muduo
 		if (client->GetConnection() == nullptr || client->GetConnection().get() != conn.get()) continue;
 		LOG_INFO << "Peer address match in " << NodeUtils::GetRegistryName(registry)
 			<< ": " << conn->peerAddress().toIpPort();
-		auto clientCopy = client;
+		// 弱捕获,不能按值捕获 TcpConnectionPtr / RpcClientPtr。这个闭包会在
+		// EventLoop 的定时器队列里活最长 0.5s;若节点恰在这个窗口内被摘除
+		// (etcd DELETE → DestroyEntity → ~RpcClient → ~TcpClient),闭包里的那份
+		// 强引用会把 muduo TcpClient::~TcpClient 的
+		//   unique = connection_.use_count() == 1
+		// 带成 false,forceClose() 被跳过,连接在 kConnected 态一直悬到闭包销毁,
+		// 最后在 TcpConnection.cc:71 的 assert(state_ == kDisconnected) 上炸 ——
+		// 与已修掉的 tlsRpc.conn 是同一形状的缺陷,只是持有者从 thread_local 换成
+		// 了定时器闭包(docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md §7)。
+		// weak_ptr 不参与 use_count;触发时 lock() 失败就说明节点已经走了,放弃重试即可。
+		std::weak_ptr<muduo::net::TcpConnection> weakConn = conn;
+		std::weak_ptr<RpcClient> weakClient = client;
 		// One-shot retry. The retry chain naturally terminates when the
 		// peer replies success: OnHandshakeReplied calls
 		// registry.remove<TimerTaskComp>(entity), so this timer (and any
@@ -40,7 +51,10 @@ void NodeHandshakeManager::TryRegisterNodeSession(uint32_t nodeType, const muduo
 		// fails, OnHandshakeReplied schedules another RunAfter(0.5),
 		// keeping retries paced at ~2/s instead of the busy 500ms loop the
 		// previous RunEvery would spin even after success.
-		registry.get_or_emplace<TimerTaskComp>(entity).RunAfter(0.5, [conn, nodeType, clientCopy]() {
+		registry.get_or_emplace<TimerTaskComp>(entity).RunAfter(0.5, [weakConn, nodeType, weakClient]() {
+			// 在回调内部才升成强引用,且只活到本次回调返回,不会外泄。
+			auto conn = weakConn.lock();
+			auto clientCopy = weakClient.lock();
 			if (!conn || !conn->connected() || !clientCopy || !clientCopy->connected()) {
 				return;
 			}
@@ -139,13 +153,20 @@ void NodeHandshakeManager::OnHandshakeReplied(const NodeHandshakeResponse& respo
 		LOG_TRACE << "Registration failed: " << response.DebugString();
 		for (const auto& [entity, client, nodeInfo] : registry.view<RpcClientPtr, NodeInfo>().each()) {
 			if (!NodeUtils::IsSameNode(nodeInfo.node_uuid(), response.peer_node().node_uuid())) continue;
-			auto clientCopy = client;
+			// 与 TryRegisterNodeSession 里那一处同属一条重试链,同样弱捕获。
+			// 这里只捕获 RpcClientPtr、没有 TcpConnectionPtr:只要别处不再持有这条
+			// 出站连接,~RpcClient 会先释放 channel_ 再释放 client_,~TcpClient 看到的
+			// 连接 use_count 仍为 1,forceClose 照常执行 —— 所以运行期它并不会引发本事故。
+			// 改弱是为了让整条重试链都不延长 RpcClient 的寿命、与上面写明的规则一致,
+			// 而不是修一个已经触发的缺陷。
+			std::weak_ptr<RpcClient> weakClient = client;
 			// One-shot retry on handshake failure. The retry chain stops
 			// the moment the peer replies success — OnHandshakeReplied
 			// removes TimerTaskComp from this entity. RunEvery here would
 			// keep firing every 500ms even after the success reply
 			// arrives, double-handshaking the peer indefinitely.
-			registry.get_or_emplace<TimerTaskComp>(entity).RunAfter(0.5, [clientCopy, nodeType]() {
+			registry.get_or_emplace<TimerTaskComp>(entity).RunAfter(0.5, [weakClient, nodeType]() {
+				auto clientCopy = weakClient.lock();
 				if (!clientCopy || !clientCopy->connected()) {
 					return;
 				}

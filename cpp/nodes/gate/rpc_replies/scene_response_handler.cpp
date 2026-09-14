@@ -75,7 +75,10 @@ void OnSceneProcessClientPlayerMessageReply(const muduo::net::TcpConnectionPtr& 
         return;
     }
 
-    GetGateCodec().send(sessionIt->second.conn, replied->message_content());
+    if (const auto clientConn = sessionIt->second.conn.lock())
+    {
+        GetGateCodec().send(clientConn, replied->message_content());
+    }
 ///<<< END WRITING YOUR CODE
 }
 

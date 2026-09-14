@@ -120,6 +120,18 @@ GameChannel::~GameChannel()
     LOG_DEBUG << "GameChannel destroyed: " << this;
 }
 
+TcpConnectionPtr GameChannel::LockConnection(const char *what) const
+{
+    TcpConnectionPtr conn = connection_.lock();
+    if (!conn)
+    {
+        // 连接已断且对象已被 muduo 释放:直接丢弃,绝不往空指针上 send。
+        // 出站侧重连成功后 RpcClient::onConnection 会 SetConnection 新连接。
+        LOG_WARN << "[GameChannel] " << what << " dropped: connection is gone";
+    }
+    return conn;
+}
+
 // ====================== Private Methods ======================
 
 bool GameChannel::IsValidMessageId(uint32_t messageId) const
@@ -156,7 +168,10 @@ void GameChannel::SendRpcRequestMessage(GameMessageType type, uint32_t messageId
 
     const auto rpcSize = static_cast<uint32_t>(LogIfMessageTooLarge(rpcMessage));
 
-    codec_.send(connection_, rpcMessage);
+    const TcpConnectionPtr conn = LockConnection("SendRpcRequestMessage");
+    if (!conn)
+        return;
+    codec_.send(conn, rpcMessage);
 
     LogMessageStatistics(rpcMessage, rpcSize);
     TrafficStatsCollector::Instance().RecordSend(messageId, rpcSize);
@@ -179,7 +194,10 @@ void GameChannel::SendRpcResponseMessage(GameMessageType type, uint32_t messageI
 
     const auto rpcSize = static_cast<uint32_t>(LogIfMessageTooLarge(rpcMessage));
 
-    codec_.send(connection_, rpcMessage);
+    const TcpConnectionPtr conn = LockConnection("SendRpcResponseMessage");
+    if (!conn)
+        return;
+    codec_.send(conn, rpcMessage);
 
     LogMessageStatistics(rpcMessage, rpcSize);
     TrafficStatsCollector::Instance().RecordSend(messageId, rpcSize);
@@ -302,7 +320,7 @@ void GameChannel::HandleIncomingMessage(const TcpConnectionPtr &connection, mudu
 
 void GameChannel::HandleRpcMessage(const TcpConnectionPtr &conn, const RpcMessagePtr &messagePtr, muduo::Timestamp receiveTime)
 {
-    assert(conn == connection_);
+    assert(conn == connection_.lock());
     const auto &rpcMessage = *messagePtr;
 
     const size_t messageSize = LogIfMessageTooLarge(rpcMessage);
@@ -532,7 +550,10 @@ void GameChannel::SendGameRpcMessage(const GameRpcMessage &message)
 {
     const auto cachedSize = LogIfMessageTooLarge(message);
 
-    codec_.send(connection_, message);
+    const TcpConnectionPtr conn = LockConnection("SendGameRpcMessage");
+    if (!conn)
+        return;
+    codec_.send(conn, message);
 
     LogMessageStatistics(message, static_cast<uint32_t>(cachedSize));
     TrafficStatsCollector::Instance().RecordSend(message.message_id(), static_cast<uint32_t>(cachedSize));

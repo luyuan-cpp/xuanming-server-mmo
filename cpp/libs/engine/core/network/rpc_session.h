@@ -17,7 +17,8 @@ public:
 
     [[nodiscard]] bool IsConnected() const
     {
-        return connection && connection->connected();
+        const auto conn = connection.lock();
+        return conn && conn->connected();
     }
 
     void CallRemoteMethod(uint32_t messageId, const ::google::protobuf::Message& request) const
@@ -56,7 +57,9 @@ public:
         channel_->SendRouteResponse(messageId, id, messageBytes);
     }
 
-    muduo::net::TcpConnectionPtr connection;
+    // weak_ptr:应用层不拥有入站连接(§8 连接生命周期约定)。对端断开后这个组件不再钉住
+    // 死连接和它的 fd;RpcServer 的 DOWN 分支会顺手把组件摘掉,那只是记录卫生,不是释放的前提。
+    std::weak_ptr<muduo::net::TcpConnection> connection;
 
 private:
     GameChannelPtr channel_;

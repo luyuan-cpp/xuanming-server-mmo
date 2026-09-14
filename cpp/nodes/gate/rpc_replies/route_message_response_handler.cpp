@@ -41,10 +41,16 @@ void OnServiceRouteNodeStringMsgReply(const TcpConnectionPtr& conn, const std::s
 		return;
 	}
 
+	const auto clientConn = it->second.conn.lock();
+	if (!clientConn)
+	{
+		LOG_DEBUG << "client connection already released, session id: " << replied->session_id();
+		return;
+	}
 	MessageContent message;
 	message.set_serialized_message(replied->body());
 	message.set_message_id(route_data.message_id());
-	GetGateCodec().send(it->second.conn, message);
+	GetGateCodec().send(clientConn, message);
 	///<<< END WRITING YOUR CODE
 }
 

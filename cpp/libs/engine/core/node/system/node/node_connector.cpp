@@ -104,13 +104,21 @@ void NodeConnector::ConnectToTcpNode(const NodeInfo &nodeInfo)
 				 << ", uuid: " << nodeInfo.node_uuid();
 
 		// Same uuid resurfacing while the previous client is still tracked is
-		// effectively a re-registration after a transient drop; surrender the
-		// old client to the disconnect list so its lifecycle is wound down,
-		// then fall through to create a fresh entity.
-		if (auto *existingClient = targetRegistry.try_get<RpcClientPtr>(existingEntity))
-		{
-			gNode->GetDisconnectedClientList().push_back(*existingClient);
-		}
+		// effectively a re-registration after a transient drop. Destroying the
+		// entity releases the RpcClientPtr component — normally the last owner
+		// of the old RpcClient — so the old link is torn down right here:
+		// ~TcpClient sees use_count()==1 and forceClose()s it (kConnected ->
+		// kDisconnected on the next loop turn); the callbacks muduo still holds
+		// are bound to weak_ptrs, so once the RpcClient is gone they do nothing.
+		// Then fall through and create a fresh entity for the new registration.
+		//
+		// 历史:这里曾把旧 client push 进 Node::disconnectedClientList(只进不出)来
+		// "延迟关闭" —— 那是为绕开 TcpConnection.cc:71 的 assert 加的兜底:当年
+		// thread_local tlsRpc.conn 多持一根引用会让 ~TcpClient 跳过 forceClose,而
+		// 同步销毁又会让 handleClose 回调进已释放的 RpcClient(UAF)。不销毁就两个都
+		// 碰不到,代价是旧 RpcClient 与连接泄漏到进程退出、enableRetry 还会对同一端点
+		// 重连出第二条链路。两处根因已修(tlsRpc 整删;RpcClient 的回调改 weak_ptr 绑定),
+		// 兜底随之移除。见 docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md §7.3 / §8.0。
 		targetRegistry.destroy(existingEntity);
 		break;
 	}
