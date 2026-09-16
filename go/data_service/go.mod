@@ -123,3 +123,7 @@ require (
 replace proto => ../proto
 
 replace shared => ../shared
+
+// 本地修复版:与 go/db/go.mod 同源。上游 v0.1.0 已被重打 tag,内容校验和与
+// 本模块 go.sum 记录不符,只能走本地目录覆盖。上游打新 tag 后删除本行并升级 require 版本。
+replace github.com/luyuancpp/proto2mysql => ../../../../proto2mysql-v0.1.0

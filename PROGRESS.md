@@ -4646,3 +4646,26 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - 导表 Python 测试本机与 Ubuntu 均 129/129；[CI run 34857249677](https://github.com/luyuan-cpp/xuanming-server-mmo/actions/runs/34857249677) 的后续真实表校验因既有 workflow 旧读表入口失败，整体 workflow 仍未通过，已在 OrContinue 交接记录定界。
 - 本轮未部署/启动服务、未启动客户端，未做 Node 析构运行时验收、RED 分组或压测；可选 no-raw-pointer-member 检查 SKIP。以前的启动记录不是本轮最终源码的运行时证据。
 - 证据与原始备份位于仓库同级 `merge-backup-20260914-102631`；最终构建、测试与源文件快照见 `validation-summary-final.json`、`final-build-results.json`、`final-cpp-tests.log`、`final-rpc-controller-raw.log`、`pre-final-build-manifest.json`。完整范围与待验收项目见 `docs/design/handoff-gate-dtor-fix-verify-and-stress-20260914.md` §8–§10。
+
+### 2026-09-14 22:58 本机服务器再次启动（未启动客户端）
+
+- 按用户“开始”继续启动本机服务器。启动前服务器进程与 Docker 引擎均未运行；Docker 恢复期间依次遇到遗留 Unix socket、WSL 数据盘识别和旧进程未退出错误。已保留失败日志，仅备份 Docker 通信目录并重启其进程/WSL 环境；没有删除或重建数据库数据盘、容器卷。
+- 当前启动清单新增 chat/guild：补编译 chat，并备份、更新旧 guild.exe；两项 go build -mod=readonly 均通过，未修改业务源码。
+- 最终 3 个 C++ 节点、9 个 Go 服务和 Java 网关共 13 个进程及其监听端口验证通过；网关健康状态 UP，一区 OPEN。match 当前端口 50500，player_locator 当前端口 53200，按现有配置和启动器 PID 记录核验。
+- gate/scene/battle 为本机 Windows 进程；Docker 运行数据库、Redis、etcd、Kafka 依赖。未启动客户端，未进行客户端登录或端到端验证，未提交代码。
+- 本次证据：run/logs/server-start-20260914-2237/result.json、built-services.json；具体成功启动器日志路径记录在 result.json 的 LauncherLog。
+
+### 2026-09-14 23:10 用户授权后启动客户端
+
+- 用户明确允许启动客户端，并指定 D:/luyuan/wuxingqitan/mmorpg-client。旧播放器目录已不存在，使用已安装 Unity 6000.6.0f1 和项目 ShowcaseBuild.Build 构建到同级 tmp/showcase_player。
+- Unity 返回 Succeeded，0 errors、497 warnings，最终退出码 0；构建自动生成的设置符号及 3 个 .meta 文件已备份到本次日志目录并撤销，客户端工作区恢复构建前状态。
+- 已打开 mmorpg.exe（PID 39800），窗口存在且响应正常；Player.log 确认 AppBootstrap 和原生 uGUI 选服界面初始化。启动参数使用 http://127.0.0.1:8081，启动前网关 UP。未执行账号登录或完整游戏验证。
+- 日志与证据：run/logs/client-start-20260914-230609/unity-build.log、Player.log、launch.json。
+
+## 2026-09-15 网络故障、网络分区与进程暂停调研迁入
+
+- 用户确认原 Pandora-Server 目录已删除，指定将既有调研补入本仓库。从保留的正式稿和独立复核记录恢复，来源路径与 SHA256 记在报告末尾。
+- 正式报告：[游戏服务器网络故障、网络分区与进程暂停调研](docs/notes/2026-09-14-network-failures-and-process-pauses.md)；历史审计：[独立证据复核记录](docs/notes/2026-09-14-network-failures-and-process-pauses-verification.md)。保留四类资料、24 条编号证据、11 项排除清单及各自来源和口径。
+- 适配本项目的 scene 所有权、EnterScene 交接和单写者设计入口；在场景所有权设计中加入调研链接。原项目未恢复的四份检索草稿不保留失效链接。
+- 复核日期仍为 2026-09-14。本轮检查恢复内容、编号对应和新增本地链接，未重新联网复核外部原文；不将历史复核结论扩展为当前实现或故障演练证据。
+- 仅修改文档，保留原有未提交进度和其他工作区改动；未调整配置、未编译、未运行测试或故障演练，未执行 Git/SVN add、commit 或 push。
