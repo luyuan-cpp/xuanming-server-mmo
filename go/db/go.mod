@@ -7,7 +7,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
-	github.com/luyuancpp/proto2mysql v0.1.1
+	github.com/luyuancpp/proto2mysql v0.1.1-0.20260914130151-f3b308f37020
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.10.0
@@ -127,5 +127,6 @@ replace shared => ../shared
 
 replace proto => ../proto
 
-// 与 schemamigrate/trade 同步固定迁名后的发布包，保留校验，不依赖仓库外目录。
-replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1
+// 存量字符串/二进制主键依赖 f3b308f 的 VARCHAR(191)/VARBINARY(191) 完整列修复，v0.1.1 不含该修复。
+// 固定 canonical 远程提交的伪版本，保留校验，不依赖仓库外目录。
+replace github.com/luyuancpp/proto2mysql v0.1.1-0.20260914130151-f3b308f37020 => github.com/luyuan-cpp/proto2mysql v0.1.1-0.20260914130151-f3b308f37020
