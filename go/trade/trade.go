@@ -39,6 +39,7 @@ import (
 
 	"schemamigrate"
 
+	"shared/buildinfo"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
@@ -61,6 +62,10 @@ var (
 	// 跑一次 schemamigrate.Up(与 Schema.AutoMigrate=true 的启动路径是同一份表清单与选项),跑完即退出。
 	// 退出码按 schemamigrate.ExitCode:0 成功 / 1 错误 / 3 锁被占(K8s Job 按 backoff 重试)/ 4 需人工。
 	migrateOnly = flag.Bool("migrate", false, "run schemamigrate.Up on mmorpg_trade and exit (0 ok / 1 error / 3 lock busy / 4 manual)")
+	// 改列授权只属于显式迁移,不得被常驻服务启动期的 AutoMigrate 继承。
+	allowModify = flag.Bool("allow-modify", false, "仅与 -migrate 一起使用:人工确认影响后允许 MODIFY COLUMN;常驻启动禁止使用")
+
+	showVersion = flag.Bool("version", false, "打印版本信息并退出")
 )
 
 // nodeType 本服务的节点类型。TradeNodeService=12 早已在 node.proto 里,proto 不改(P1-1)。
@@ -79,18 +84,36 @@ const migrateRemedyCommand = "trade -f etc/trade.yaml -migrate"
 
 func main() {
 	flag.Parse()
+	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
+	// (shared/buildinfo;理由同 cpp/nodes/gate/gate_version.h 头注释)。-migrate 形态同样先打,迁移 Job 日志可追溯。
+	fmt.Println(buildinfo.StartupLine("trade"))
+	if *showVersion {
+		return
+	}
+	if err := validateMigrationFlags(*migrateOnly, *allowModify); err != nil {
+		fmt.Fprintf(os.Stderr, "[trade] %v\n", err)
+		os.Exit(schemamigrate.ExitFailed)
+	}
 
 	var c config.Config
 	// conf.MustLoad 会自动调用 (*Config).Validate(go-zero v1.10.0),不合法即 Fatalf 退出,理由同 chat.go。
 	conf.MustLoad(*configFile, &c)
 
 	if *migrateOnly {
-		os.Exit(runMigration(c))
+		os.Exit(runMigration(c, *allowModify, svc.OpenMySQL, schemamigrate.Up))
 	}
 	if err := runTrade(c); err != nil {
 		fmt.Fprintf(os.Stderr, "[trade] %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// validateMigrationFlags 在读配置、连接数据库之前拒绝意外的常驻改列授权。
+func validateMigrationFlags(migrateOnly, allowModify bool) error {
+	if allowModify && !migrateOnly {
+		return errors.New("-allow-modify 必须与 -migrate 一起使用;常驻启动不允许 MODIFY COLUMN")
+	}
+	return nil
 }
 
 // runTrade 是常驻服务形态。启动失败与正常退出走同一条收尾(lifecycle.Shutdown),返回的 error 决定退出码。
@@ -366,10 +389,11 @@ func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan sch
 }
 
 // runMigration 是 -migrate 的实现:只连 MySQL,不起 gRPC、不连 etcd / data_service。
+// allowModify 只接收本次显式迁移的命令行授权,启动期 ensureSchema 不使用它。
 // 输出走 stdout / stderr,退出码按 schemamigrate.ExitCode(D-14),部署脚本与 K8s Job 直接读。
-func runMigration(c config.Config) int {
+func runMigration(c config.Config, allowModify bool, openMySQL func(config.MySQLConf) (*sql.DB, error), up schemaRunner) int {
 	fmt.Printf("trade schema migration: %s\n", svc.MySQLTarget(c.MySQL))
-	db, err := svc.OpenMySQL(c.MySQL)
+	db, err := openMySQL(c.MySQL)
 	if err != nil {
 		code := schemamigrate.ExitCode(schemamigrate.Report{}, err)
 		fmt.Fprintf(os.Stderr, "schema migration FAILED (exit %d): %v\n", code, err)
@@ -377,7 +401,9 @@ func runMigration(c config.Config) int {
 	}
 	defer func() { _ = db.Close() }()
 
-	report, err := schemamigrate.Up(context.Background(), db, schemaOptions())
+	opts := schemaOptions()
+	opts.AllowModifyColumn = allowModify
+	report, err := up(context.Background(), db, opts)
 	printReport(os.Stdout, report)
 	code := schemamigrate.ExitCode(report, err)
 	switch {

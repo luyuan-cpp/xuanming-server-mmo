@@ -11,6 +11,9 @@
 // IMPORTANT: Handle* methods run on the event loop thread.
 //   - Do NOT perform blocking I/O or long-running operations.
 //   - Always return grpc::Status::OK; communicate errors via response fields.
+//   - Each RPC wrapper also has a WRITING YOUR CODE section that runs on the gRPC
+//     thread BEFORE dispatch (admission checks such as Agones permits); only that
+//     section may return a non-OK status.
 class SceneNodeGrpcImpl final : public scene_node::SceneNodeGrpc::Service
 {
 public:

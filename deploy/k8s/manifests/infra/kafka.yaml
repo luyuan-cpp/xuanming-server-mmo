@@ -50,13 +50,9 @@ spec:
       port: 9093
       targetPort: 9093
 ---
-# headless Service:给 StatefulSet 一个稳定的 per-Pod DNS 名
-# (kafka-0.kafka-headless.<ns>.svc.cluster.local)。当前单 broker 用不到它做寻址
-# —— 客户端走上面的 ClusterIP `kafka`,controller quorum 也走 `kafka:9093`(见下面注释)
-# —— 但 StatefulSet 的 spec.serviceName 是必填项,而且将来上多 broker 时
-# KAFKA_ADVERTISED_LISTENERS 必须换成这些名字。
-# publishNotReadyAddresses: true 与 etcd.yaml 同理:broker 在完成日志恢复之前不 Ready,
-# 而 headless 默认只发布 Ready Pod 的地址,排障时按名字连不上。
+# headless Service:给 StatefulSet 一个稳定的 per-Pod DNS 名。
+# controller quorum 通过它自举；publishNotReadyAddresses=true 保证 broker 未 Ready 时
+# 也能连到自己的控制器。客户端仍走普通 kafka Service，保留 API readiness 门禁。
 apiVersion: v1
 kind: Service
 metadata:
@@ -181,12 +177,11 @@ spec:
               value: "PLAINTEXT://kafka.__INFRA_NAMESPACE__.svc.cluster.local:9092"
             - name: KAFKA_LISTENER_SECURITY_PROTOCOL_MAP
               value: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
-            # controller quorum 只在 infra namespace 内部通信,短名足够;也不要写
-            # FQDN,KRaft 单节点启动早于 DNS 就绪时 FQDN 解析失败会让 controller 起不来。
-            # 换成 StatefulSet 之后这一条不变:Service 名 `kafka` 没动,Pod 名从
-            # kafka-<rs>-<hash> 变成 kafka-0 与这里无关。
+            # 不能使用普通 kafka Service：它只发布 Ready Pod，而 broker 注册到控制器
+            # 才能通过 API 探针，形成启动死锁。headless 已发布未 Ready 地址，先完成自举。
+            # 固定单 broker kafka-0；扩为多 broker 时必须重新设计完整 controller quorum。
             - name: KAFKA_CONTROLLER_QUORUM_VOTERS
-              value: "1@kafka:9093"
+              value: "1@kafka-0.kafka-headless.__INFRA_NAMESPACE__.svc.cluster.local:9093"
             - name: KAFKA_INTER_BROKER_LISTENER_NAME
               value: "PLAINTEXT"
             - name: KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR

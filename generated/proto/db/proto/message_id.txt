@@ -194,3 +194,8 @@
 193=SceneMissionClientPlayerGetMissionList
 194=SceneMissionClientPlayerAcceptMission
 195=SceneMissionClientPlayerClaimMissionReward
+196=ClientPlayerJubaozhaiBrowseListings
+197=ClientPlayerJubaozhaiGetListingDetail
+198=ClientPlayerJubaozhaiSetFavorite
+199=TradeAdminSeedListing
+200=ClientPlayerJubaozhaiGetMyShelf

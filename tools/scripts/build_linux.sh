@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# build_linux.sh — Linux build for the C++ game nodes (gate + scene).
+# build_linux.sh — Linux build for the C++ game nodes (gate + scene + battle).
 #
 # This is the CANONICAL Linux build entry point. `deploy/k8s/Dockerfile.cpp`
 # invokes it inside the builder stage, and it can also be run directly on a
@@ -26,6 +26,17 @@
 #   --jobs N           Parallelism (default: nproc).
 #   --dry-run          Print what would run and exit. Lets the flag/order logic
 #                      be checked from a non-Linux shell.
+#
+# 环境变量(发布版本戳,默认关):
+#   MMORPG_STAMP_BUILD=1   把 -DBUILD_GIT_SHA=\"<12位sha>\" 追加进每个工程的
+#                          CMAKE_CXX_FLAGS(保留已有 flags),gate_version.h /
+#                          build_info.h 启动行里的 commit 就来自它。只给发布流水线用。
+#   MMORPG_BUILD_COMMIT    要写进去的 12 位小写 sha(可带 -dirty)。不给则取
+#                          `git rev-parse --short=12 HEAD`(脏树加 -dirty);
+#                          Docker builder 阶段没有 .git,必须显式给。
+# 为什么默认关:CMAKE_CXX_FLAGS 是所有编译单元共享的,每次提交都换 sha =
+# 开发机增量构建每次全量重编 C++(几十分钟)。日常版本号走镜像 ENV
+# (MMORPG_BUILD_* / GATE_BUILD_*),头文件在宏为 unknown 时回落读它。
 #
 # NOTE on the project list: it lives HERE and nowhere else.
 # tools/archived/autogen.sh used to carry its own copy; it now delegates to
@@ -61,7 +72,8 @@ while [ $# -gt 0 ]; do
             ;;
         --jobs=*)         JOBS="${1#--jobs=}" ;;
         -h|--help)
-            sed -n '2,40p' "$0"
+            # 打印到 `set -euo pipefail` 之前的整段头注释;别写死行号,头注释一加长就截断。
+            sed -n '2,/^set -euo pipefail/p' "$0" | sed '$d'
             exit 0
             ;;
         *)
@@ -88,6 +100,7 @@ LIB_PROJECTS=(
     "cpp/libs/engine/infra"
     "cpp/libs/engine/thread_context"
     "cpp/libs/modules"
+    "cpp/libs/services/battle"
     "cpp/libs/services/scene"
     "cpp/libs/services/gate"
 )
@@ -97,9 +110,42 @@ LIB_PROJECTS=(
 EXE_PROJECTS=(
     "cpp/nodes/gate"
     "cpp/nodes/scene"
+    "cpp/nodes/battle"
 )
 
-BINARIES=("gate" "scene")
+BINARIES=("gate" "scene" "battle")
+
+# ── 发布版本戳(MMORPG_STAMP_BUILD,见头注释) ───────────────────────────────
+# 显式开关打开却拿不到合法 sha 时直接失败(exit 2):发布流水线要的是"二进制里有
+# commit",悄悄退回 unknown 等于开关没生效,而且要到线上看启动日志才发现。
+STAMP_BUILD="${MMORPG_STAMP_BUILD:-0}"
+STAMP_SHA=""
+STAMP_FLAG=""
+case "$STAMP_BUILD" in
+    0|"") ;;
+    1)
+        if [ -n "${MMORPG_BUILD_COMMIT:-}" ]; then
+            STAMP_SHA="$MMORPG_BUILD_COMMIT"
+        elif git -C "$REPO_ROOT" rev-parse --git-dir >/dev/null 2>&1; then
+            STAMP_SHA="$(git -C "$REPO_ROOT" rev-parse --short=12 HEAD)"
+            if [ -n "$(git -C "$REPO_ROOT" status --porcelain 2>/dev/null)" ]; then
+                STAMP_SHA="${STAMP_SHA}-dirty"
+            fi
+        fi
+        if ! printf '%s' "$STAMP_SHA" | grep -Eq '^[0-9a-f]{12}(-dirty)?$'; then
+            echo "build_linux.sh: MMORPG_STAMP_BUILD=1 但拿不到合法的 12 位小写 commit(得到 '$STAMP_SHA')。" >&2
+            echo "  没有 .git 的环境(如 Docker builder 阶段)必须同时传 MMORPG_BUILD_COMMIT=<12 位 sha>。" >&2
+            exit 2
+        fi
+        # 值里的 \" 是给 make 调起的 /bin/sh 看的:CMake 把 CMAKE_CXX_FLAGS 原样拼进编译命令,
+        # shell 剥掉反斜杠后编译器收到 -DBUILD_GIT_SHA="<sha>",宏才是字符串字面量。
+        STAMP_FLAG="-DBUILD_GIT_SHA=\\\"${STAMP_SHA}\\\""
+        ;;
+    *)
+        echo "build_linux.sh: MMORPG_STAMP_BUILD 只接受 0 或 1,得到 '$STAMP_BUILD'" >&2
+        exit 2
+        ;;
+esac
 
 echo "=== build_linux.sh ==="
 echo "  repo root  : $REPO_ROOT"
@@ -108,6 +154,7 @@ echo "  jobs       : $JOBS"
 echo "  skip deps  : $SKIP_DEPS"
 echo "  generate   : $([ "$SKIP_GENERATE" -eq 1 ] && echo no || echo yes)"
 echo "  split debug: $SPLIT_DEBUG"
+echo "  stamp sha  : $([ -n "$STAMP_SHA" ] && echo "$STAMP_SHA" || echo "off(MMORPG_STAMP_BUILD 未开)")"
 echo ""
 
 run() {
@@ -118,11 +165,53 @@ run() {
     "$@"
 }
 
+# 算出本工程要传给 cmake 的 CMAKE_CXX_FLAGS;输出到 stdout,返回 1 表示"不传,保持缓存原样"。
+#
+# 为什么要读 CMakeCache.txt:-DCMAKE_CXX_FLAGS 一旦传过就写进缓存,之后不传也一直生效。
+#   * 开戳:以缓存里已有的 flags(首次配置则取 CMake 自己会用的 $CXXFLAGS)为底,先剔掉
+#     旧戳再追加新戳 —— 不覆盖别人的 flags,也不会叠出两个 BUILD_GIT_SHA;
+#   * 不开戳:只有缓存里残留旧戳时才传"剔掉旧戳后的 flags",否则一个参数都不加。
+#     不清的话,在同一构建目录里开过一次戳,之后的日常构建会一直打着那个过期 sha,
+#     比 unknown 更误导。
+resolve_cxx_flags() {
+    local cache="$1/CMakeCache.txt"
+    local base="${CXXFLAGS:-}"
+    local had_cache=0
+    if [ -f "$cache" ]; then
+        had_cache=1
+        # 类型段不写死 STRING:首次由 -D 传入时 CMake 可能记成 UNINITIALIZED。
+        base="$(awk '/^CMAKE_CXX_FLAGS:[A-Z]+=/ { sub(/^CMAKE_CXX_FLAGS:[A-Z]+=/, ""); print; exit }' "$cache")"
+    fi
+    local stripped
+    stripped="$(printf '%s' "$base" | sed -E 's/(^| )-DBUILD_GIT_SHA=[^ ]*//g; s/^ +//; s/ +$//')"
+    if [ -n "$STAMP_FLAG" ]; then
+        printf '%s' "${stripped:+$stripped }$STAMP_FLAG"
+        return 0
+    fi
+    if [ "$had_cache" -eq 1 ] && [ "$stripped" != "$base" ]; then
+        printf '%s' "$stripped"
+        return 0
+    fi
+    return 1
+}
+
 buildproject() {
     local dir="$1"
+    local flags
+    # 可选的 -DCMAKE_CXX_FLAGS 放进位置参数:空的 "$@" 在 set -u 下也安全
+    # (空数组 "${arr[@]}" 在 bash < 4.4 会报 unbound variable)。
+    set --
+    if flags="$(resolve_cxx_flags "$REPO_ROOT/$dir/.build")"; then
+        set -- "-DCMAKE_CXX_FLAGS=$flags"
+    fi
     echo "--- building $dir ---"
     if [ "$DRY_RUN" -eq 1 ]; then
-        echo "[dry-run] cmake -S $dir -B $dir/.build -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_PREFIX_PATH=/usr/local"
+        local shown=""
+        if [ $# -gt 0 ]; then
+            shown=" '$1'"
+        fi
+        # 这一行的格式被 .github/workflows/cpp-build-ci.yml 用 sed 解析工程目录,附加参数只能追加在行尾。
+        echo "[dry-run] cmake -S $dir -B $dir/.build -DCMAKE_BUILD_TYPE=$BUILD_TYPE -DCMAKE_PREFIX_PATH=/usr/local$shown"
         echo "[dry-run] cmake --build $dir/.build -j $JOBS"
         return 0
     fi
@@ -133,7 +222,8 @@ buildproject() {
     fi
     cmake -S "$REPO_ROOT/$dir" -B "$REPO_ROOT/$dir/.build" \
         -DCMAKE_BUILD_TYPE="$BUILD_TYPE" \
-        -DCMAKE_PREFIX_PATH="/usr/local"
+        -DCMAKE_PREFIX_PATH="/usr/local" \
+        "$@"
     cmake --build "$REPO_ROOT/$dir/.build" -j "$JOBS"
     echo "--- $dir ok ---"
     echo ""
@@ -145,7 +235,7 @@ buildproject() {
 if [ "$SKIP_DEPS" -eq 0 ]; then
     echo "[1] submodules + third-party dependencies"
     run git submodule update --init --recursive
-    run bash "$ARCHIVED_DIR/setup_dependencies.sh"
+    run env BUILD_JOBS="$JOBS" bash "$ARCHIVED_DIR/setup_dependencies.sh"
     echo ""
 else
     echo "[1] skipped (--skip-deps)"

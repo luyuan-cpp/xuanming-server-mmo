@@ -30,6 +30,10 @@ namespace guildpb {
 
 // ── Service definition ─────────────────────────────────────────────────────
 //
+// 客户端经 gate → client_rpc_router 到达(只承诺路由服模式)。
+// 身份与 zone 一律由服务端决定:请求体里的 player_id / zone_id 只对内部调用(无会话)生效。
+// 本开关是服务级的,UpdateGuildScore 也会进 gate 白名单与路由表;
+// 它对客户端的拒绝在 go/guild/internal/session 的方法白名单里(port-decisions D-9)。
 class GuildService final {
  public:
   static constexpr char const* service_full_name() {

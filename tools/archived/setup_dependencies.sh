@@ -13,7 +13,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$REPO_ROOT"
 
-CPU=$(nproc 2>/dev/null || echo 4)
+CPU=${BUILD_JOBS:-$(nproc 2>/dev/null || echo 4)}
 echo "Build parallelism: $CPU"
 
 LIB_DIR="$REPO_ROOT/lib"

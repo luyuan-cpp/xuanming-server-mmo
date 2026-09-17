@@ -1,0 +1,433 @@
+name: 服务端版本发布
+
+# 这个 workflow 存在的理由:
+#   docs/design/release-packaging-standard-20260914.md §4 P4。一次发布要同时满足两条:
+#     1. 同一个版本号四处一致:git tag = publish_images.ps1 / make_release.ps1 的 -Version
+#        = CHANGELOG.md 的 [X.Y.Z] 段 = 镜像自报版本(OCI label / /app/BUILD_INFO);
+#     2. 产物来自干净、可追溯的提交。
+#   个人开发机做不到第 2 条(工作树常年是脏的,本地镜像缓存也可能混进旧层),所以放到托管 runner
+#   上全新检出后跑。逻辑全部在 tools/scripts 的 pwsh 脚本里,本文件只做薄调用:
+#   本机与 CI 走同一个入口,CI 上出的问题能在本机用同一条命令复现(docs/ops/release-checklist.md §2)。
+#
+# 刻意不做的事(2026-09-14 用户拍板,设计文档 §5):
+#   * 不推镜像、不打 git tag、不部署、不使用任何 secret(AGENTS.md §9)。产物只作为本次 run 的
+#     Actions artifact 上传,由人下载后决定推送 / 打 tag / 部署。
+#   * 不装 syft / cosign / trivy / goreleaser。
+#
+# 只允许手动触发:出一个版本是人的决定,不能因为合进一个提交就自动出版本。
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "发布版本号:vX.Y.Z 或 vX.Y.Z-预发布标识(小写 v);CHANGELOG.md 里必须已有非空的 ## [X.Y.Z] 段"
+        required: true
+        type: string
+      families:
+        # cpp 需要 Linux 运行时 staging:build_linux.sh 的产物经 k8s_stage_runtime.ps1 填进
+        # deploy/k8s/runtime/linux(不入库)。全新检出的托管 runner 上没有这份 staging,
+        # publish_images.ps1 会在构建前以 "Linux 运行时 staging 不完整" 拒绝,所以默认不含 cpp;
+        # C++ 镜像请在备好 staging 的 Linux 机器上本地跑 publish_images.ps1。
+        description: "镜像族,逗号分隔:go / java / cpp(cpp 需要 Linux 运行时 staging,托管 runner 上没有)"
+        required: false
+        default: "go,java"
+        type: string
+      proto2mysql_ref:
+        # go/db 与 go/data_service 的 go.mod 把 proto2mysql replace 到仓库外的本地修复版目录,
+        # 仓库里没有能可靠确定其内容对应哪个提交的信息,只能由人显式给出。
+        # go.mod 去掉该 replace(上游修复打 tag 后)就不再需要这个输入。
+        description: "proto2mysql 的 40 位 commit sha(含 go/db 所需修复);go.mod 仍 replace 到仓库外目录且 families 含 go 时必填"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # 全仓库同一时刻只跑一个发布:两个 run 用同一版本号从不同提交各出一份包,
+  # 会得到两份同名不同内容的 artifact,事后无从判断哪份才是"那个版本"。
+  # 不取消进行中的发布:半途取消只会留下半截产物。
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: 发布 ${{ inputs.version }}
+    # 运行镜像全部是 linux/amd64;托管 ubuntu runner 自带 docker(BuildKit)、git 与 pwsh
+    runs-on: ubuntu-latest
+    # Go 服务逐个多阶段构建(各 module 各自 go mod download)+ Java maven 打包 + 逐个 docker save
+    timeout-minutes: 180
+    env:
+      # 输入一律经环境变量进脚本,不在 run 里直接展开 ${{ inputs.* }}(防脚本注入)
+      RELEASE_VERSION: ${{ inputs.version }}
+      RELEASE_FAMILIES: ${{ inputs.families }}
+      PROTO2MYSQL_REF: ${{ inputs.proto2mysql_ref }}
+    steps:
+      - name: 释放磁盘空间
+        # 与 cpp-build-ci.yml 同一做法:默认镜像预装的 Android SDK / .NET / GHC 占十几 GB,
+        # 十来个服务镜像的构建层加上逐个 docker save 的 tar 很容易撑爆根分区。
+        shell: bash
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+                      /usr/local/share/boost "$AGENT_TOOLSDIRECTORY" || true
+          df -h /
+
+      - uses: actions/checkout@v4
+        with:
+          # 全量历史 + tag:下面要核对 git tag 是否已被别的提交占用
+          fetch-depth: 0
+          # 本流程不推送任何东西,不把 token 留在 .git/config 里
+          persist-credentials: false
+
+      - name: 环境自检
+        shell: bash
+        run: |
+          set -euo pipefail
+          for cmd in pwsh docker git; do
+            if ! command -v "$cmd" >/dev/null 2>&1; then
+              echo "::error::runner 上没有 $cmd,无法发布"
+              exit 1
+            fi
+          done
+          pwsh -NoProfile -Command '$PSVersionTable.PSVersion.ToString()'
+          docker version --format 'docker server {{.Server.Version}}'
+          docker buildx version
+
+      - name: 校验版本号、CHANGELOG 段落、git tag 与镜像族
+        id: meta
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ws = $env:GITHUB_WORKSPACE
+          . (Join-Path $ws 'tools' 'scripts' 'lib' 'release_common.ps1')
+
+          $problems = New-Object System.Collections.Generic.List[string]
+
+          # 版本号与 CHANGELOG 规则只在 release_common.ps1 定义一次(make_release.ps1 同口径),这里不另写正则。
+          # 在几十分钟的构建之前先查:make_release.ps1 最后也会查,但那时构建时间已经花掉了。
+          $versionCheck = Test-ReleaseVersion -Version $env:RELEASE_VERSION
+          if (-not $versionCheck.Ok) {
+              $problems.Add($versionCheck.Reason)
+          }
+          else {
+              $changelog = Test-ChangelogReleaseSection -ChangelogPath (Join-Path $ws 'CHANGELOG.md') -Version $env:RELEASE_VERSION
+              if (-not $changelog.Ok) { $problems.Add($changelog.Reason) }
+
+              # 四处一致之一是 git tag:tag 已存在却指向别的提交,说明这个版本号已经被占用
+              $head = (& git -C $ws rev-parse HEAD | Out-String).Trim()
+              $tagCommit = (& git -C $ws rev-parse -q --verify "refs/tags/$($env:RELEASE_VERSION)^{commit}" 2>$null | Out-String).Trim()
+              if ($tagCommit -and $tagCommit -cne $head) {
+                  $problems.Add("git tag $($env:RELEASE_VERSION) 已存在且指向 ${tagCommit},本次检出的是 ${head}:版本号已被别的提交占用,请换新版本号")
+              }
+          }
+
+          # 取值与 tools/scripts/publish_images.ps1 的 FamilySpecs 一致;这里只为在构建前拒掉拼写错误,脚本里仍会再校验
+          $knownFamilies = @('cpp', 'go', 'java')
+          $families = @(([string]$env:RELEASE_FAMILIES) -split ',' | ForEach-Object { $_.Trim().ToLowerInvariant() } | Where-Object { $_ } | Select-Object -Unique)
+          if ($families.Count -eq 0) { $problems.Add('families 为空,可选 go / java / cpp') }
+          $unknown = @($families | Where-Object { $knownFamilies -notcontains $_ })
+          if ($unknown.Count -gt 0) { $problems.Add("未知的镜像族:$($unknown -join ', '),可选 go / java / cpp") }
+
+          if ($problems.Count -gt 0) {
+              Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '### 发布被拒绝:输入校验未通过'
+              foreach ($p in $problems) {
+                  Write-Output "::error::$p"
+                  Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- $p"
+              }
+              exit 1
+          }
+
+          if ($families -contains 'cpp') {
+              Write-Output '::warning::families 含 cpp:需要 deploy/k8s/runtime/linux 下的 Linux 运行时 staging,全新检出的托管 runner 上没有,publish_images.ps1 会在构建前拒绝'
+          }
+          $familyList = @($knownFamilies | Where-Object { $families -contains $_ }) -join ','
+          $hasGo = if ($families -contains 'go') { 'true' } else { 'false' }
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "families=$familyList"
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "has_go=$hasGo"
+          exit 0
+
+      - name: 契约测试(tools/scripts/tests)
+        shell: bash
+        run: |
+          set -uo pipefail
+          DIR=tools/scripts/tests
+          # 执行方式照抄 .github/workflows/deploy-config-tests.yml:一级目录 *.ps1、跳过下划线开头的辅助脚本、
+          # 统一 `pwsh -NoProfile -File`、不走 Pester。改那边的口径时同步这里。
+          # 与那边的区别:发布流程里"目录不存在 / 一个测试都没有"一律判红 —— 门禁没跑不能当成门禁过了。
+          if [ ! -d "$DIR" ]; then
+            echo "::error::$DIR 不存在,发布前的契约测试无从执行"
+            exit 1
+          fi
+
+          mapfile -t ALL < <(find "$DIR" -maxdepth 1 -type f -name '*.ps1' | sort)
+          PLAIN=()
+          for f in ${ALL[@]+"${ALL[@]}"}; do
+            case "$(basename "$f")" in
+              _*) echo "跳过辅助脚本 $f" ;;
+              *)  PLAIN+=("$f") ;;
+            esac
+          done
+          if [ "${#PLAIN[@]}" -eq 0 ]; then
+            echo "::error::$DIR 下没有可执行的契约测试"
+            exit 1
+          fi
+
+          FAILED=()
+          for t in "${PLAIN[@]}"; do
+            echo "=== $t ==="
+            if pwsh -NoProfile -File "$t"; then
+              echo "PASS $t"
+            else
+              echo "::error file=$t::契约测试失败(退出码 $?)"
+              FAILED+=("$t")
+            fi
+          done
+
+          {
+            echo "### 发布前契约测试"
+            echo ""
+            echo "- 执行:${#PLAIN[@]},失败:${#FAILED[@]}"
+            for f in ${FAILED[@]+"${FAILED[@]}"}; do
+              echo "  - \`$f\`"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${#FAILED[@]}" -gt 0 ]; then
+            echo "::error::${#FAILED[@]} 个契约测试失败,不发布"
+            exit 1
+          fi
+
+      - name: 定位 go.mod 的仓库外 replace 模块
+        id: ext
+        if: steps.meta.outputs.has_go == 'true'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sep = [System.IO.Path]::DirectorySeparatorChar
+          $ws = [System.IO.Path]::GetFullPath($env:GITHUB_WORKSPACE).TrimEnd($sep)
+          $goRoot = Join-Path $ws 'go'
+
+          # 判据与 tools/scripts/go_svc_image.ps1 的 Get-ExternalBuildContexts 一致:本地路径形式的 replace,
+          # 解析后落在仓库外。版本形式的 `replace <模块> vX => github.com/<owner>/<repo> vX` 顺带记下:
+          # 它是"模块路径的旧名已迁到哪个公开仓库"的仓库内证据(go/schemamigrate/go.mod),
+          # 优先于从模块路径直接推(旧用户名靠 GitHub 重定向,被抢注即断)。
+          $external = [ordered]@{}
+          $canonicalRepo = @{}
+          foreach ($mod in @(Get-ChildItem -LiteralPath $goRoot -Filter 'go.mod' -File -Recurse -Depth 1)) {
+              $relMod = [System.IO.Path]::GetRelativePath($ws, $mod.FullName)
+              foreach ($line in [System.IO.File]::ReadAllLines($mod.FullName)) {
+                  if ($line -match '^\s*replace\s+(\S+)(\s+v\S+)?\s+=>\s+(\.\.?/\S*)\s*$') {
+                      $module = $Matches[1]
+                      $target = [System.IO.Path]::GetFullPath((Join-Path $mod.DirectoryName $Matches[3])).TrimEnd($sep)
+                      if ($target -eq $ws -or $target.StartsWith($ws + $sep)) { continue }
+                      if (-not $external.Contains($target)) {
+                          $external[$target] = @{ Module = $module; Conflict = $false; Sources = (New-Object System.Collections.Generic.List[string]) }
+                      }
+                      if ($external[$target].Module -cne $module) { $external[$target].Conflict = $true }
+                      $external[$target].Sources.Add("${relMod}: $($line.Trim())")
+                  }
+                  elseif ($line -match '^\s*replace\s+(\S+)(\s+v\S+)?\s+=>\s+github\.com/([^/\s]+)/([^/\s]+)\s+v\S+\s*$') {
+                      $canonicalRepo[$Matches[1]] = "$($Matches[3])/$($Matches[4])"
+                  }
+              }
+          }
+
+          if ($external.Count -eq 0) {
+              Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'needed=false'
+              Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '- 仓库外 replace 模块:go/*/go.mod 里没有,无需准备'
+              exit 0
+          }
+
+          $problems = New-Object System.Collections.Generic.List[string]
+          $target = [string]@($external.Keys)[0]
+          $entry = $external[$target]
+          $module = [string]$entry.Module
+          $sources = $entry.Sources -join ';'
+          $repository = ''
+          $ref = [string]$env:PROTO2MYSQL_REF
+
+          if ($external.Count -gt 1) {
+              $problems.Add("go.mod 里有 $($external.Count) 个不同的仓库外 replace 目标($(@($external.Keys) -join ', ')),本流程只支持一个(proto2mysql)")
+          }
+          if ($entry.Conflict) {
+              $problems.Add("同一个仓库外目录 $target 被 replace 成了不同模块:$sources")
+          }
+          if ($module.Split('/')[-1] -cne 'proto2mysql') {
+              $problems.Add("仓库外 replace 模块 $module 不在支持清单里(只支持 proto2mysql,与 tools/scripts/go_svc_image.ps1 的 ExternalReplaceStages 一致):$sources")
+          }
+          if ($canonicalRepo.ContainsKey($module)) {
+              $repository = [string]$canonicalRepo[$module]
+          }
+          elseif ($module -cmatch '^github\.com/([^/]+)/([^/]+)$') {
+              $repository = "$($Matches[1])/$($Matches[2])"
+          }
+          else {
+              $problems.Add("模块路径 $module 不是 github.com/<owner>/<repo> 形式,推不出公开仓库地址")
+          }
+          if ([string]::IsNullOrEmpty($ref)) {
+              $problems.Add("$sources 把 $module 指向仓库外的本地修复版目录 ${target}。该目录的内容不等于 require 行里的版本(见对应 go.mod 注释),仓库里没有能可靠确定其提交的信息,不能猜。请在输入 proto2mysql_ref 填含该修复的 40 位 commit sha;或先给修复打 tag、删掉 replace 并升级 require(D-14)。")
+          }
+          elseif ($ref -cnotmatch '^[0-9a-f]{40}$') {
+              $problems.Add("proto2mysql_ref='$ref' 不是 40 位小写 commit sha:tag 与分支都可能被移动(proto2mysql 的 v0.1.0 就被移动过),发布只接受不可变的提交号")
+          }
+          if (Test-Path -LiteralPath $target) {
+              $problems.Add("replace 目标 $target 在 runner 上已存在,拒绝覆盖(托管 runner 上不应出现;自托管 runner 请先清理)")
+          }
+
+          if ($problems.Count -gt 0) {
+              Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '### 发布被拒绝:无法可靠准备 go.mod 的仓库外 replace 模块'
+              foreach ($p in $problems) {
+                  Write-Output "::error::$p"
+                  Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- $p"
+              }
+              exit 1
+          }
+
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value 'needed=true'
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "module=$module"
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "repository=$repository"
+          Add-Content -LiteralPath $env:GITHUB_OUTPUT -Value "target=$target"
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- 仓库外 replace 模块:$module <- $repository@$ref -> $target(来源:$sources)"
+          exit 0
+
+      - name: 检出仓库外 replace 模块
+        if: steps.ext.outputs.needed == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.ext.outputs.repository }}
+          ref: ${{ inputs.proto2mysql_ref }}
+          # actions/checkout 只允许落在 $GITHUB_WORKSPACE 之下;下一步再整体移到 replace 期望的位置
+          path: .release-ext/proto2mysql
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: 移到 go.mod replace 期望的位置
+        if: steps.ext.outputs.needed == 'true'
+        shell: pwsh
+        env:
+          EXT_MODULE: ${{ steps.ext.outputs.module }}
+          EXT_REPOSITORY: ${{ steps.ext.outputs.repository }}
+          EXT_TARGET: ${{ steps.ext.outputs.target }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $stageRoot = Join-Path $env:GITHUB_WORKSPACE '.release-ext'
+          $src = Join-Path $stageRoot 'proto2mysql'
+          $problems = New-Object System.Collections.Generic.List[string]
+
+          # 检出的必须真是 replace 的那个模块、那个提交:旧仓库名被抢注后重定向到别处、ref 解析偏了,都在这里拦住
+          $declared = ''
+          $goMod = Join-Path $src 'go.mod'
+          if ([System.IO.File]::Exists($goMod)) {
+              foreach ($line in [System.IO.File]::ReadAllLines($goMod)) {
+                  if ($line -match '^\s*module\s+(\S+)') { $declared = $Matches[1].Trim('"'); break }
+              }
+          }
+          if ($declared -cne $env:EXT_MODULE) {
+              $problems.Add("检出的仓库 $($env:EXT_REPOSITORY) 声明的模块是 '$declared',不是 replace 的 $($env:EXT_MODULE)")
+          }
+          $head = (& git -C $src rev-parse HEAD 2>$null | Out-String).Trim()
+          if ($head -cne $env:PROTO2MYSQL_REF) {
+              $problems.Add("检出的提交 '$head' 不是输入的 proto2mysql_ref=$($env:PROTO2MYSQL_REF)")
+          }
+          if ($problems.Count -gt 0) {
+              Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value '### 发布被拒绝:仓库外 replace 模块检出结果不符'
+              foreach ($p in $problems) {
+                  Write-Output "::error::$p"
+                  Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- $p"
+              }
+              exit 1
+          }
+
+          [System.IO.Directory]::CreateDirectory((Split-Path -Parent $env:EXT_TARGET)) | Out-Null
+          Move-Item -LiteralPath $src -Destination $env:EXT_TARGET
+          # 工作区里不能留下任何东西:publish_images.ps1 的 release 轨要求工作树干净
+          Remove-Item -LiteralPath $stageRoot -Recurse -Force
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value "- proto2mysql 已放到 $($env:EXT_TARGET)(commit $head)"
+          exit 0
+
+      - name: 工作树必须干净
+        shell: bash
+        run: |
+          set -euo pipefail
+          # publish_images.ps1 的 release 轨遇到脏树会拒绝;在长构建之前先查,并把脏在哪里打出来。
+          # 常见来源:契约测试往仓库里写了临时文件、仓库外模块没移干净。
+          status="$(git status --porcelain=v1 --untracked-files=all)"
+          if [ -n "$status" ]; then
+            echo "::error::工作树不干净,release 轨拒绝发布"
+            echo "$status"
+            {
+              echo "### 发布被拒绝:工作树不干净"
+              echo '```'
+              echo "$status"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: 构建镜像并发布离线包(publish_images.ps1)
+        shell: bash
+        env:
+          # 制品根放 runner 临时目录:本流程只产出 Actions artifact,不写任何共享盘
+          MMORPG_ARTIFACT_ROOT: ${{ runner.temp }}/mmorpg-artifacts
+          FAMILIES: ${{ steps.meta.outputs.families }}
+        run: |
+          set -euo pipefail
+          pwsh -NoProfile -File tools/scripts/publish_images.ps1 -Version "$RELEASE_VERSION" -Families "$FAMILIES"
+
+      - name: 生成 release manifest(make_release.ps1)
+        shell: bash
+        env:
+          MMORPG_ARTIFACT_ROOT: ${{ runner.temp }}/mmorpg-artifacts
+        run: |
+          set -euo pipefail
+          # 显式指定镜像版本目录,不依赖 latest.json 指针:manifest 必须引用本次 run 刚发布的那一份
+          pwsh -NoProfile -File tools/scripts/make_release.ps1 -Version "$RELEASE_VERSION" -ImagesVersion "$RELEASE_VERSION"
+
+      - name: 上传发布制品
+        uses: actions/upload-artifact@v4
+        with:
+          name: mmorpg-release-${{ inputs.version }}
+          # 两个路径的公共上级是 releases/,artifact 内保持 images/<ver>/ 与 manifests/<ver>.* 的相对布局,
+          # 下载解压到 <制品根>/releases/ 即可被 fetch_images.ps1 / release_preflight.ps1 直接使用
+          path: |
+            ${{ runner.temp }}/mmorpg-artifacts/releases/images/${{ inputs.version }}/
+            ${{ runner.temp }}/mmorpg-artifacts/releases/manifests/${{ inputs.version }}.json
+            ${{ runner.temp }}/mmorpg-artifacts/releases/manifests/${{ inputs.version }}.md
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: 写发布摘要
+        shell: pwsh
+        env:
+          FAMILIES: ${{ steps.meta.outputs.families }}
+          EXT_NEEDED: ${{ steps.ext.outputs.needed }}
+          EXT_REPOSITORY: ${{ steps.ext.outputs.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $version = $env:RELEASE_VERSION
+          $imagesDir = Join-Path $env:RUNNER_TEMP 'mmorpg-artifacts' 'releases' 'images' $version
+          $info = [System.IO.File]::ReadAllText((Join-Path $imagesDir 'build-info.json')) | ConvertFrom-Json
+          $entries = @([System.IO.File]::ReadAllText((Join-Path $imagesDir 'images-manifest.json')) | ConvertFrom-Json)
+          $proto2mysql = if ($env:EXT_NEEDED -eq 'true') { "$($env:EXT_REPOSITORY)@$($env:PROTO2MYSQL_REF)" } else { '不需要' }
+
+          $lines = New-Object System.Collections.Generic.List[string]
+          $lines.Add("### 发布制品 $version")
+          $lines.Add('')
+          $lines.Add('| 项 | 值 |')
+          $lines.Add('|---|---|')
+          $lines.Add("| 版本 | $version |")
+          $lines.Add("| 镜像 tag | $($info.image_tag) |")
+          $lines.Add("| 镜像数 | $($info.image_count) |")
+          $lines.Add("| commit | $($info.commit) |")
+          $lines.Add("| 镜像族 | $($env:FAMILIES) |")
+          $lines.Add("| 配置表摘要 | $($info.tables_sha256)($($info.tables_file_count) 张) |")
+          $lines.Add("| proto2mysql | $proto2mysql |")
+          $lines.Add("| Actions artifact | mmorpg-release-$version(保留 90 天) |")
+          $lines.Add('')
+          $lines.Add('镜像清单:')
+          foreach ($e in $entries) { $lines.Add("- $($e.ref)") }
+          $lines.Add('')
+          $lines.Add('本流程**未推送镜像、未打 git tag、未部署**。后续步骤由人执行,见 docs/ops/release-checklist.md §2。')
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value $lines.ToArray()
+          exit 0

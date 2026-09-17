@@ -9,6 +9,7 @@ runtime/linux/
   bin/
     gate
     scene
+    battle
     zoneinfo/
   generated/
     generated_tables/

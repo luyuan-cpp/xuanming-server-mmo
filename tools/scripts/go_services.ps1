@@ -802,10 +802,41 @@ function Invoke-List {
     Write-Host ""
 }
 
+# 本地 exe 注入与 deploy/k8s/Dockerfile.go-svc 同一组 go/shared/buildinfo 变量,服务启动首行
+# `service starting ... version= commit=` 才能自报版本。-X 目标不存在时链接器静默忽略、构建照样成功,
+# 所以 buildinfo 的变量名 / 包路径改动时这里与 Dockerfile.go-svc 必须同步,否则版本号悄悄变回 dev / unknown。
+function Get-GoBuildInfoLdflags {
+    # release_common.ps1 只定义函数与常量表,dot-source 无副作用;放在函数内,只有 build 命令才加载。
+    . (Join-Path $ScriptDir "lib/release_common.ps1")
+
+    # 版本号只来自发布流程(MMORPG_RELEASE_VERSION),本地随手构建一律 dev,不从 git tag 猜。
+    $version = "dev"
+    if (-not [string]::IsNullOrWhiteSpace($env:MMORPG_RELEASE_VERSION)) {
+        $versionCheck = Test-ReleaseVersion -Version $env:MMORPG_RELEASE_VERSION
+        if (-not $versionCheck.Ok) { throw "环境变量 MMORPG_RELEASE_VERSION 不合法:$($versionCheck.Reason)" }
+        $version = $env:MMORPG_RELEASE_VERSION
+    }
+
+    # 脏树带 -dirty:本地 exe 常从未提交的代码编出来,commit 不标脏会让人误以为跑的就是那个 commit。
+    # 取不到 git 戳时注入 unknown,buildinfo 会回落读 go build 自动嵌入的 vcs.revision。
+    $commit = "unknown"
+    $stamp = Get-GitReleaseStamp -RepoRoot $RepoRoot
+    if ($stamp.Ok) {
+        $commit = if ($stamp.Dirty) { "$($stamp.Commit)-dirty" } else { $stamp.Commit }
+    }
+    $buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+
+    return "-X shared/buildinfo.Version=$version -X shared/buildinfo.Commit=$commit -X shared/buildinfo.BuildTime=$buildTime"
+}
+
 function Invoke-Build {
     $names = Resolve-ServiceList -Requested $Services
     $outDir = Join-Path $RepoRoot "bin\go_services"
     if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
+
+    # 同一批构建共用一份版本戳(BuildTime 一致,便于按批次比对)。
+    $ldflags = Get-GoBuildInfoLdflags
+    Write-Host "[stamp] $ldflags" -ForegroundColor DarkGray
 
     $failed = @()
     foreach ($name in $names) {
@@ -823,7 +854,8 @@ function Invoke-Build {
 
         Push-Location $svcDir
         try {
-            go build -o $outExe "./$($info.Entry)"
+            # -trimpath:exe 里不留本机绝对路径(与镜像构建同口径,panic 栈按模块路径显示)。
+            go build -trimpath -ldflags $ldflags -o $outExe "./$($info.Entry)"
             if ($LASTEXITCODE -ne 0) {
                 Write-Host "[FAIL]  $name" -ForegroundColor Red
                 $failed += $name

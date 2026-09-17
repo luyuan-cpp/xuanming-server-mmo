@@ -1,4 +1,4 @@
-﻿param(
+param(
 	[Parameter(Mandatory = $true)]
 	# infra-kafka-topics:只重跑审计 topic + 控制面命令 topic 的预建 Job(Apply-KafkaTopicInitJob)。
 	# Kafka 换成 StatefulSet + PVC 之后(R06),普通重启不再丢 topic;仍然保留这条止血路径,
@@ -55,6 +55,10 @@
 	[string]$KafkaHeapOpts = "",
 	[int]$CentreReplicas = 1,
 	[int]$GateReplicas = 2,
+	# battle 是不分 zone 的全局池，只由 infra-up / all-up 部署一次。
+	# 默认与本地 cpp_nodes.ps1 一样为 1；0 表示不装配，不删除已部署的池。
+	[ValidateRange(0, 65535)]
+	[int]$BattleReplicas = 1,
 	# Scene 角色拆分(见 docs/ops/scene-node-role-split.md):
 	#   -SceneReplicas        legacy 单池,生成一个名为 scene 的 Deployment(SCENE_NODE_TYPE=0)
 	#   -SceneWorldReplicas   拆分池 scene-world    (SCENE_NODE_TYPE=0)
@@ -638,7 +642,8 @@ function New-NodeConfigMapYaml {
 	param(
 		[Parameter(Mandatory = $true)][int]$CurrentZoneId,
 		[Parameter(Mandatory = $true)][int]$CurrentClusterId,
-		[Parameter(Mandatory = $true)][string]$ConfigName
+		[Parameter(Mandatory = $true)][string]$ConfigName,
+		[switch]$IncludeBattleSettings
 	)
 
 	# 这三个值以前要么写死、要么根本没生成,而这份 ConfigMap 是以 readOnly 整目录
@@ -654,6 +659,12 @@ function New-NodeConfigMapYaml {
 	$keepaliveInterval = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Etcd.KeepaliveInterval'
 	# gate 并发连接上限。0 = 不限,字段注释写明「生产必须配」。
 	$gateMaxConnections = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'GateMaxConnections'
+	# 与 topic-init 的预建值同源，挂载 ConfigMap 后不能退回 C++ 默认的 g1/旧分区数。
+	$commandTopicPartitions = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Kafka.CommandTopicPartitions'
+	$commandTopicGeneration = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'Kafka.CommandTopicGeneration'
+	if ([int]$commandTopicPartitions -le 0 -or [int]$commandTopicGeneration -le 0) {
+		throw "生成 node ConfigMap 失败:Kafka.CommandTopicPartitions / CommandTopicGeneration 必须为正数。"
+	}
 	# gate 客户端令牌 HMAC 密钥。缺这一项时 gate 在 prod 运行模式下会 LOG_FATAL
 	# 拒绝启动(cpp/nodes/gate/main.cpp::ValidateGateTokenSecretOrDie),而部署链
 	# 从不设置 GATE_RUN_MODE,ResolveRunModeOnce 默认就是 prod —— 也就是说这一项
@@ -664,6 +675,26 @@ function New-NodeConfigMapYaml {
 		# 会让 gate 起不来的 ConfigMap。空串在这里是静默故障(要到 Pod
 		# CrashLoopBackOff 才看得见),throw 是当场可读的错误。
 		throw "生成 node ConfigMap 失败:GateTokenSecret 为空。请先调用 Initialize-InjectedSecrets(写操作路径会自动调用),或注入 MMORPG_GATE_TOKEN_SECRET。"
+	}
+
+	$battleSettingsBlock = ''
+	if ($IncludeBattleSettings) {
+		# 只有 battle 池解析自己的密钥；zone/status/down 不因无关密钥而被阻断。
+		$battleTokenSecret = Resolve-InjectedSecret -EnvName 'MMORPG_BATTLE_TOKEN_SECRET' `
+			-DevFallback 'change-me-in-production-battle-ticket-shared-key' `
+			-ReleaseProfile $ReleaseProfile -Purpose 'Battle 直连票据 HMAC 共享密钥' -MinLength 32
+		# K8s 不注入 BATTLE_RUN_MODE，运行时按 prod 执行，dev 发布也必须满足其启动门禁。
+		if ([System.Text.Encoding]::UTF8.GetByteCount($battleTokenSecret.Trim()) -lt 32) {
+			throw '生成 battle ConfigMap 失败:MMORPG_BATTLE_TOKEN_SECRET 去除首尾空白后必须至少 32 字节。'
+		}
+		if ($battleTokenSecret.Trim() -ceq $gateTokenSecret.Trim()) {
+			throw '生成 battle ConfigMap 失败:MMORPG_BATTLE_TOKEN_SECRET 必须与 MMORPG_GATE_TOKEN_SECRET 不同。'
+		}
+		$battleMaxConnections = Get-AuthoritativeScalar -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'BattleMaxConnections'
+		if ([int]$battleMaxConnections -lt 1 -or [int]$battleMaxConnections -gt 65535) {
+			throw '生成 battle ConfigMap 失败:BattleMaxConnections 必须在 1..65535。'
+		}
+		$battleSettingsBlock = "BattleTokenSecret: `"${battleTokenSecret}`"`nBattleMaxConnections: ${battleMaxConnections}"
 	}
 
 	# 永久 guid 号段。整块从权威文件原样搬运,而不是在这里抄一份常数:
@@ -690,6 +721,7 @@ Etcd:
   NodeTTLSeconds: ${nodeTtlSeconds}
 GateTokenSecret: "${gateTokenSecret}"
 GateMaxConnections: ${gateMaxConnections}
+${battleSettingsBlock}
 # ClusterId:部署级常量,运维建集群时定一次(k8s_deploy.ps1 -ClusterId,默认 0),策划不碰。
 # 它是 snowflake worker 段 [cluster5][node12] 的高 5 位(docs/design/node-id-overhaul-plan-20260908.md §5),
 # C++ 读进 BaseDeployConfig.cluster_id;同一集群里各 Go 服务 ConfigMap 写的是同一个值。
@@ -731,6 +763,8 @@ Kafka:
   Topics:
     - "game-events"
   GroupID: "game-consumer-group"
+  CommandTopicPartitions: ${commandTopicPartitions}
+  CommandTopicGeneration: ${commandTopicGeneration}
   EnableAutoCommit: true
   AutoOffsetReset: "earliest"
 # 永久 guid 号段(Leaf-segment,node-id-overhaul-plan §6 / §7.5):scene 经 DataService.AllocateIdSegment
@@ -818,7 +852,30 @@ function New-NodeDeploymentYaml {
 		$extraEnvLines += "`t`t`t- name: GATE_CLIENT_RPC_ROUTER"
 		$extraEnvLines += "`t`t`t  value: `"$GateRouterMode`""
 	}
+	# node-logs emptyDir 会遮住镜像目录；Node 构造器立即打开 logs/cpp_nodes/<role>，先建父目录。
 	$grpcEnvBlock = $extraEnvLines -join "`n"
+	$battlePortAndProbes = ''
+	if ($NodeName -eq 'battle') {
+		# C++ 非 gate TCP 合法区间为 20000..35535，gRPC 固定派生为 TCP+30000。
+		if ($RpcPort -lt 20000 -or $RpcPort -gt 35535) {
+			throw 'battle RPC_PORT 必须在 20000..35535，保证派生 gRPC 端口不越界。'
+		}
+		$battleGrpcPort = $RpcPort + 30000
+		# C++ 尚未注册 grpc.health.v1；用实际监听端口，不能套 Go 的 gRPC health 探针。
+		$battlePortAndProbes = @"
+			- containerPort: $battleGrpcPort
+			  name: grpc
+		  startupProbe:
+			tcpSocket:
+			  port: $RpcPort
+			periodSeconds: 2
+			failureThreshold: 90
+		  readinessProbe:
+			tcpSocket:
+			  port: $battleGrpcPort
+			periodSeconds: 5
+"@
+	}
 
 	return @"
 apiVersion: apps/v1
@@ -841,7 +898,7 @@ spec:
 		  imagePullPolicy: $ImagePullPolicy
 		  workingDir: /app/bin
 		  command: ["/bin/sh", "-lc"]
-		  args: ["$StartCommand"]
+		  args: ["mkdir -p /app/bin/logs/cpp_nodes && $StartCommand"]
 		  env:
 			- name: POD_IP
 			  valueFrom:
@@ -863,6 +920,7 @@ $grpcEnvBlock
 		  ports:
 			- containerPort: $RpcPort
 			  name: rpc
+$battlePortAndProbes
 	  volumes:
 		- name: node-config
 		  configMap:
@@ -1004,7 +1062,7 @@ spec:
               imagePullPolicy: $ImagePullPolicy
               workingDir: /app/bin
               command: ["/bin/sh", "-lc"]
-              args: ["$StartCommand"]
+              args: ["mkdir -p /app/bin/logs/cpp_nodes && $StartCommand"]
               env:
                 - name: POD_IP
                   valueFrom:
@@ -2217,54 +2275,139 @@ function Apply-GoSvcMigrateJob {
 	Write-Warning ("dev 档未带 -WaitReady:不等 {0} 结束就 apply {1} Deployment(staging/prod 恒等,不走这里)。核对 'kubectl -n {2} get job {0}'(COMPLETIONS 1/1)与 'kubectl -n {2} logs job/{0}'。" -f $jobName, $SvcName, $Namespace)
 }
 
-# 读一次迁移 Job 的状态,返回 absent / running / complete / failed / unknown(kubectl 本身失败,如 API 暂时不可达)。
-# FailureTarget(K8s 1.31+ 先于 Failed 出现)只在 status.active 为 0 时算 failed:此时控制器不会再建 Pod,
-# 也没有 Pod 还在跑,既可以立刻中断发布,也可以安全删除;active 仍 > 0 时按 running 处理。
+# 迁移查询/诊断专用:HTTP 请求与整个 kubectl 进程都有截止。仅加 --request-timeout 仍不能
+# 限制凭证插件等请求之外的等待;外层 Stopwatch 也不能打断阻塞的原生命令。
+# 保留 context/kubeconfig,参数逐项传递,不经 shell 拼接;结果不用 LASTEXITCODE 跨函数传递。
+function Invoke-GoSvcMigrateKubectl {
+	param(
+		[Parameter(Mandatory = $true)][string[]]$Args,
+		[ValidateRange(0.001, 2147483)][double]$TimeoutSeconds = 10
+	)
+	$allArgs = @((Build-KubectlBaseArgs)) + $Args
+	$timeoutMs = [int][Math]::Ceiling($TimeoutSeconds * 1000)
+	$allArgs += "--request-timeout=${timeoutMs}ms"
+	if ($DryRun) {
+		Write-Host "[dry-run] kubectl $($allArgs -join ' ') (process timeout ${timeoutMs}ms)"
+		return [pscustomobject]@{ ExitCode = 0; Output = ''; ErrorOutput = ''; TimedOut = $false }
+	}
+	$process = [System.Diagnostics.Process]::new()
+	try {
+		$process.StartInfo.FileName = (Get-Command kubectl -CommandType Application -ErrorAction Stop).Source
+		$process.StartInfo.UseShellExecute = $false
+		$process.StartInfo.CreateNoWindow = $true
+		$process.StartInfo.RedirectStandardOutput = $true
+		$process.StartInfo.RedirectStandardError = $true
+		$process.StartInfo.StandardOutputEncoding = [System.Text.Encoding]::UTF8
+		$process.StartInfo.StandardErrorEncoding = [System.Text.Encoding]::UTF8
+		foreach ($arg in $allArgs) { $process.StartInfo.ArgumentList.Add([string]$arg) }
+		$null = $process.Start()
+		$stdout = $process.StandardOutput.ReadToEndAsync()
+		$stderr = $process.StandardError.ReadToEndAsync()
+		if (-not $process.WaitForExit($timeoutMs)) {
+			# 仅杀本次查询及其凭证插件子进程,不触碰集群工作负载;清理最多再等 1s。
+			try { $process.Kill($true) } catch { }
+			$null = $process.WaitForExit(1000)
+			return [pscustomobject]@{ ExitCode = -1; Output = ''; ErrorOutput = "kubectl 查询/诊断超过 ${timeoutMs}ms"; TimedOut = $true }
+		}
+		# 继承管道的后台子进程也不能让收尾无限阻塞。
+		if (-not [System.Threading.Tasks.Task]::WaitAll([System.Threading.Tasks.Task[]]@($stdout, $stderr), 1000)) {
+			return [pscustomobject]@{ ExitCode = -1; Output = ''; ErrorOutput = 'kubectl 输出管道未关闭'; TimedOut = $true }
+		}
+		return [pscustomobject]@{ ExitCode = $process.ExitCode; Output = $stdout.Result; ErrorOutput = $stderr.Result; TimedOut = $false }
+	} catch {
+		return [pscustomobject]@{ ExitCode = -1; Output = ''; ErrorOutput = $_.Exception.Message; TimedOut = $false }
+	} finally {
+		$process.Dispose()
+	}
+}
+
+# 发布失败可在 FailureTarget 时立即报告;删除前必须逐个核对该 Job UID 所属 Pod 全终态。
+# active=0 不包括 terminating Pod;旧 K8s 的 Failed/Complete 也可能早于 Pod 全退出。
 function Get-GoSvcMigrateJobState {
 	param(
 		[Parameter(Mandatory = $true)][string]$Namespace,
-		[Parameter(Mandatory = $true)][string]$JobName
+		[Parameter(Mandatory = $true)][string]$JobName,
+		[ValidateRange(0.001, 2147483)][double]$TimeoutSeconds = 10,
+		[switch]$RequirePodsTerminal
 	)
+	$budget = [System.Diagnostics.Stopwatch]::StartNew()
+	try {
+		$result = Invoke-GoSvcMigrateKubectl -Args @("get", "job", $JobName, "-n", $Namespace, "--ignore-not-found", "-o", "json") -TimeoutSeconds $TimeoutSeconds
+		if ($result.ExitCode -ne 0) { return 'unknown' }
+		if ([string]::IsNullOrWhiteSpace($result.Output)) { return 'absent' }
+		$job = $result.Output | ConvertFrom-Json -ErrorAction Stop
+		if ([string]::IsNullOrWhiteSpace($job.metadata.uid)) { return 'unknown' }
+		$trueTypes = @($job.status.conditions | Where-Object { $_.status -eq 'True' } | ForEach-Object { $_.type })
+		$state = 'running'
+		if ($trueTypes -contains 'Failed' -or $trueTypes -contains 'FailureTarget') { $state = 'failed' }
+		elseif ($trueTypes -contains 'Complete') { $state = 'complete' }
+		if (-not $RequirePodsTerminal -or $state -eq 'running') { return $state }
 
-	$raw = Invoke-Kubectl -Args @("get", "job", $JobName, "-n", $Namespace, "--ignore-not-found", "-o", "json") -AllowFailure
-	if ($LASTEXITCODE -ne 0) { return 'unknown' }
-	$text = ($raw -join "`n")
-	if ([string]::IsNullOrWhiteSpace($text)) { return 'absent' }
-
-	$job = $text | ConvertFrom-Json
-	$trueTypes = @($job.status.conditions | Where-Object { $_.status -eq 'True' } | ForEach-Object { $_.type })
-	$active = 0
-	if ($null -ne $job.status.active) { $active = [int]$job.status.active }
-
-	if ($trueTypes -contains 'Failed') { return 'failed' }
-	if ($trueTypes -contains 'FailureTarget' -and $active -eq 0) { return 'failed' }
-	if ($trueTypes -contains 'Complete') { return 'complete' }
-	return 'running'
+		$remaining = $TimeoutSeconds - $budget.Elapsed.TotalSeconds
+		if ($remaining -lt 0.001) { return 'unknown' }
+		$result = Invoke-GoSvcMigrateKubectl -Args @("get", "pods", "-n", $Namespace, "-l", "job-name=$JobName", "-o", "json") -TimeoutSeconds $remaining
+		if ($result.ExitCode -ne 0) { return 'unknown' }
+		$pods = $result.Output | ConvertFrom-Json -ErrorAction Stop
+		if ($null -eq $pods -or $null -eq $pods.PSObject.Properties['items'] -or $null -eq $pods.items) { return 'unknown' }
+		foreach ($pod in $pods.items) {
+			$owned = @($pod.metadata.ownerReferences | Where-Object { $_.kind -eq 'Job' -and $_.uid -eq $job.metadata.uid })
+			if ($owned.Count -gt 0 -and $pod.status.phase -notin @('Succeeded', 'Failed')) { return 'running' }
+		}
+		return $state
+	} catch {
+		# API/JSON/凭证异常只能说明未知,既不能当成不存在,也不能放行删除。
+		return 'unknown'
+	}
 }
 
-# 在迁移 Job 等待预算(Get-GoSvcMigrateJobWaitSeconds = max(-WaitTimeoutSeconds, $GoSvcMigrateJobMinWaitSeconds))内
-# 轮询到 Job 离开 running / unknown,返回最后一次读到的状态(超时时仍是 running / unknown)。
-# 两个调用方(删前在途检查、apply 后终态轮询)共用这一个预算来源,不各自读 -WaitTimeoutSeconds。
-# 总预算用单调时钟(AGENTS.md §11.3),不用"次数 × sleep"。
+# 两段等待共用单调总预算,每次查询只分到剩余时间(最多 10s),sleep 也不能越过截止。
 function Wait-GoSvcMigrateJobSettled {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$JobName,
+		[switch]$RequirePodsTerminal
+	)
+	$budgetSeconds = Get-GoSvcMigrateJobWaitSeconds
+	$budget = [System.Diagnostics.Stopwatch]::StartNew()
+	$state = 'unknown'
+	while ($true) {
+		$remaining = $budgetSeconds - $budget.Elapsed.TotalSeconds
+		if ($remaining -lt 0.001) { return $state }
+		$state = Get-GoSvcMigrateJobState -Namespace $Namespace -JobName $JobName -TimeoutSeconds ([Math]::Min([double]10, $remaining)) -RequirePodsTerminal:$RequirePodsTerminal
+		if ($state -ne 'running' -and $state -ne 'unknown') { return $state }
+		$remaining = $budgetSeconds - $budget.Elapsed.TotalSeconds
+		if ($remaining -lt 0.001) { return $state }
+		Start-Sleep -Milliseconds ([int][Math]::Min(5000, [Math]::Floor($remaining * 1000)))
+	}
+}
+
+# 诊断共用一个短预算,错误只作补充信息,绝不替换调用方的迁移失败/超时错误。
+function Write-GoSvcMigrateJobDiagnostics {
 	param(
 		[Parameter(Mandatory = $true)][string]$Namespace,
 		[Parameter(Mandatory = $true)][string]$JobName
 	)
-
-	$budgetSeconds = Get-GoSvcMigrateJobWaitSeconds
 	$budget = [System.Diagnostics.Stopwatch]::StartNew()
-	$state = Get-GoSvcMigrateJobState -Namespace $Namespace -JobName $JobName
-	while (($state -eq 'running' -or $state -eq 'unknown') -and $budget.Elapsed.TotalSeconds -lt $budgetSeconds) {
-		Start-Sleep -Seconds 5
-		$state = Get-GoSvcMigrateJobState -Namespace $Namespace -JobName $JobName
+	$commands = @(
+		,@("describe", "job", $JobName, "-n", $Namespace)
+		,@("get", "pods", "-n", $Namespace, "-l", "job-name=$JobName", "-o", "wide")
+		,@("logs", "job/$JobName", "-n", $Namespace, "--all-containers", "--tail", "100")
+	)
+	foreach ($commandArgs in $commands) {
+		$remaining = 10 - $budget.Elapsed.TotalSeconds
+		if ($remaining -lt 0.001) { break }
+		try {
+			$result = Invoke-GoSvcMigrateKubectl -Args $commandArgs -TimeoutSeconds ([Math]::Min([double]3, $remaining))
+			if ($result.Output) { Write-Host $result.Output }
+			if ($result.ExitCode -ne 0) { Write-Warning "迁移诊断不可用: $($result.ErrorOutput)" -WarningAction Continue }
+		} catch {
+			Write-Warning "迁移诊断不可用: $($_.Exception.Message)" -WarningAction Continue
+		}
 	}
-	return $state
 }
-
 # 删 <svc>-migrate 之前的在途检查。场景:上一次发布等 Job 超时中断(锁忙在 backoff、DDL 慢),运维按提示重跑发布,
 # 而旧 Job 其实还在跑 —— 此时直接 delete 会 SIGTERM 正在执行 DDL 的迁移容器,台账停在 dirty=1,之后每次 -migrate
-# 都以 1 退出。所以:不存在 / 已终态(Complete / Failed)→ 放行;在途或状态读不到 → 在预算内等它到终态;
+# 都以 1 退出。所以:不存在 / Job 终态且其 UID 所属 Pod 全终态 → 放行;在途或状态读不到 → 在预算内等;
 # 仍等不到 → throw,且**不删**。DryRun 不连集群,只打印这一步。
 function Assert-GoSvcMigrateJobNotInFlight {
 	param(
@@ -2274,23 +2417,19 @@ function Assert-GoSvcMigrateJobNotInFlight {
 
 	$budgetSeconds = Get-GoSvcMigrateJobWaitSeconds
 	if ($DryRun) {
-		Write-Host "[dry-run] check job/$JobName -n $Namespace not in flight before delete (running = wait until Complete / Failed --timeout ${budgetSeconds}s, still running = abort without deleting)"
+		Write-Host "[dry-run] check job/$JobName -n $Namespace not in flight before delete (wait for Job and its UID-owned Pods to terminate --timeout ${budgetSeconds}s, unknown/running = abort without deleting)"
 		return
 	}
 
-	$state = Get-GoSvcMigrateJobState -Namespace $Namespace -JobName $JobName
-	if ($state -ne 'running' -and $state -ne 'unknown') { return }
-
-	Write-Host "上一次 $JobName 仍在执行(或状态读不到:$state),先等它到终态再删(预算 ${budgetSeconds}s;删在途迁移会留下 dirty 台账)"
-	$state = Wait-GoSvcMigrateJobSettled -Namespace $Namespace -JobName $JobName
+	$state = Wait-GoSvcMigrateJobSettled -Namespace $Namespace -JobName $JobName -RequirePodsTerminal
 	if ($state -ne 'running' -and $state -ne 'unknown') {
-		Write-Host "上一次 $JobName 已结束(state=$state),继续先删再建。"
+		Write-Host "上一次 $JobName 可安全替换(state=$state,UID 所属 Pod 均已终止),继续先删再建。"
 		return
 	}
 
-	Invoke-Kubectl -Args @("get", "pods", "-n", $Namespace, "-l", "job-name=$JobName", "-o", "wide") -AllowFailure
+	try { Write-GoSvcMigrateJobDiagnostics -Namespace $Namespace -JobName $JobName } catch { Write-Warning "迁移诊断失败: $($_.Exception.Message)" -WarningAction Continue }
 	throw ("上一次迁移 Job {0} 在 {1}s 内仍未结束(namespace={2} state={3}),发布中断,未删除它,也未 apply 新 Job 与服务 Deployment。" +
-		"等 'kubectl -n {2} get job {0}' 出现 COMPLETIONS 1/1 或 Failed(ACTIVE 为 0)后再重跑同一条发布命令;" +
+		"等 Job 及其 UID 所属 Pod 均进入终态后再重跑同一条发布命令(ACTIVE 为 0 本身不代表安全);" +
 		"**不要手工 delete 在途 Job**:打断 DDL 会把 schema_migrations 台账留在 dirty,之后每次迁移都会以 1 失败。") -f $JobName, $budgetSeconds, $Namespace, $state
 }
 
@@ -2326,13 +2465,11 @@ function Wait-ForGoSvcMigrateJob {
 		default { 'timeout' }
 	}
 	Write-Host "Migrate Job not complete: namespace=$Namespace job=$JobName verdict=$verdict"
-	Invoke-Kubectl -Args @("describe", "job", $JobName, "-n", $Namespace) -AllowFailure
-	Invoke-Kubectl -Args @("get", "pods", "-n", $Namespace, "-l", "job-name=$JobName", "-o", "wide") -AllowFailure
-	Invoke-Kubectl -Args @("logs", "job/$JobName", "-n", $Namespace, "--all-containers", "--tail", "100") -AllowFailure
+	try { Write-GoSvcMigrateJobDiagnostics -Namespace $Namespace -JobName $JobName } catch { Write-Warning "迁移诊断失败: $($_.Exception.Message)" -WarningAction Continue }
 	throw ("迁移 Job {0} 未成功(namespace={1} 结果={2}),发布中断,{3} Deployment 未 apply。看报告:kubectl -n {1} logs job/{0}。" +
 		"退出码(go/schemamigrate):1 失败(库不存在 / 连不上 / dirty 台账 / DDL 报错,库名见日志)、4 需人工(类型漂移 / 缺主键 / 表清单异常)、" +
 		"3 锁忙(timeout 时可能仍在 backoff 重试)。" +
-		"重跑前:timeout 时先确认 'kubectl -n {1} get job {0}' 的 ACTIVE 为 0(重跑时脚本也会先检查,在途 Job 不删,等不到就再次中断);" +
+		"重跑前:确认该 Job UID 所属 Pod 均处于 Succeeded/Failed 终态(ACTIVE 为 0 仍可能有 terminating Pod;重跑时脚本也会检查,在途或状态未知时不删);" +
 		"日志里是 dirty 台账(schemamigrate.ErrDirty)时重跑不会自己好,先人工核对 schema_migrations 与表的实际结构再清 dirty;" +
 		"其余原因修复后重跑同一条 infra-up / all-up(已终态的 Job 会先删再建,迁移幂等)。") -f $JobName, $Namespace, $verdict, $SvcName
 }
@@ -3097,7 +3234,27 @@ function Apply-KafkaTopicInitJob {
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $content
 }
 
+function Apply-BattlePool {
+	param([Parameter(Mandatory = $true)][string]$ConfigMapYaml)
+
+	# 客户端必须连房间所在实例的 POD_IP:20000，不能由一个 Service 随机分流。
+	# 集群外客户端需要另外完成逐实例入口映射；这里不虚构一个可公网访问的地址。
+	Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $ConfigMapYaml
+	$battleYaml = New-NodeDeploymentYaml -NodeName 'battle' -Replicas $BattleReplicas `
+		-RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config'
+	Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $battleYaml
+	if ($WaitReady) {
+		Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName 'battle'
+	}
+}
+
 function Apply-Infra {
+	# 先生成并校验 battle 配置，密钥/契约错误必须发生在任何基础设施写操作之前。
+	$battleConfigMapYaml = $null
+	if ($BattleReplicas -gt 0) {
+		$battleConfigMapYaml = New-NodeConfigMapYaml -CurrentZoneId $ZoneId -CurrentClusterId $ClusterId `
+			-ConfigName 'battle-node-config' -IncludeBattleSettings
+	}
 	Write-Host "Deploying shared infrastructure to namespace $InfraNamespace"
 	Write-Host "Kafka profile: $KafkaProfile (broker_retention_ms=$KafkaBrokerRetentionMs db_task_retention_ms=$KafkaDbTaskRetentionMs)"
 	Ensure-Namespace -Namespace $InfraNamespace
@@ -3189,6 +3346,10 @@ function Apply-Infra {
 		# all-up 里随后的 zone 就一定晚于它;不带 -WaitReady 时 zone-up 之前要自己核对
 		# `kubectl -n <infra> get job kafka-topic-init` 已 Complete(README「Kafka 审计 topic 预建」)。
 		Wait-ForJobComplete -Namespace $InfraNamespace -JobName "kafka-topic-init"
+	}
+
+	if ($BattleReplicas -gt 0) {
+		Apply-BattlePool -ConfigMapYaml $battleConfigMapYaml
 	}
 
 	# 全局池服务(match)与基础设施同命运:一份、放 infra namespace、所有 zone 共用

@@ -18,6 +18,7 @@ import (
 	"scene_manager/internal/noderegistry"
 	"scene_manager/internal/server"
 	"scene_manager/internal/svc"
+	"shared/buildinfo"
 	"shared/generated/table"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -36,12 +37,20 @@ import (
 
 var configFile = flag.String("f", "etc/scene_manager_service.yaml", "the config file")
 
+var showVersion = flag.Bool("version", false, "打印版本信息并退出")
+
 // safePointSnowflakeLeaseWatch 是 snowflake worker id 租约丢失守望者的
 // safego 点位名(会变成 safego_panic_total 的 label,必须是常量)。
 const safePointSnowflakeLeaseWatch = "scene_manager.snowflake_lease_watch"
 
 func main() {
 	flag.Parse()
+	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
+	// (shared/buildinfo;理由同 cpp/nodes/gate/gate_version.h 头注释)。
+	fmt.Println(buildinfo.StartupLine("scene_manager"))
+	if *showVersion {
+		return
+	}
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)

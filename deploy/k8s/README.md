@@ -29,9 +29,17 @@ This directory contains Kubernetes-only deployment assets for opening game zones
 
 ## Runtime Image Flow
 
-- Production K8s image uses `deploy/k8s/Dockerfile.runtime`.
-- Do not use the repository root `Dockerfile` as the production K8s runtime image.
-- Required staging layout is documented in `deploy/k8s/runtime/README.md`.
+C++ 节点镜像有两条现役路径(2026-09-16 按代码核对;详表与风险见 `deploy/k8s/AGENTS.md`「C++ 节点镜像:两条路径」):
+
+| 路径 | 编译在哪 | 调用方 | 发布门禁 |
+|---|---|---|---|
+| `deploy/k8s/Dockerfile.runtime` | 镜像外:Linux 主机 `build_linux.sh` → `k8s-stage-runtime` 拷进 `deploy/k8s/runtime/linux/` | `k8s-build-image` / `k8s-push-image` / `k8s-release-zone` / `k8s-release-all`(`tools/scripts/k8s_image.ps1`,`-DockerfilePath` 默认值)、`publish_images.ps1` 的 cpp 族 | 有:`release-*` 跑不可变 tag 校验 + `release_preflight.ps1` |
+| `deploy/k8s/Dockerfile.cpp` | 镜像内全量编译(gRPC `v1.83.0` 起) | `k8s-build-all`、`.github/workflows/cpp-build-ci.yml`(只到 `--target builder`) | 无 |
+
+- 版本化发布(`publish_images.ps1` → `make_release.ps1`,见下方「发布打包」)走 `Dockerfile.runtime`。
+- ⚠️ 两条路径的运行层**不等价**:`Dockerfile.cpp` 额外带了 `/usr/local/lib/*.so*`、`data/scene_nav_bin/` 并把表文件名转小写,staging 契约里没有这三样;runtime 路径的镜像真实起过一次 scene 之前,不要假定二者可互换。
+- Do not use the repository root `Dockerfile` as a K8s image(它是 C++ 开发工具链镜像)。
+- Required staging layout is documented in `deploy/k8s/runtime/README.md`. 根 `.dockerignore` 不得排除 `deploy/k8s/runtime/linux/`(`Dockerfile.runtime` 以仓库根为 context COPY 它)。
 - Current manifests assume Linux containers. Windows `.exe` outputs under `bin/` are not deployable to this image.
 
 ### Preflight Runtime Image
@@ -40,21 +48,26 @@ This directory contains Kubernetes-only deployment assets for opening game zones
 pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-image-preflight
 ```
 
-### Build C++ Nodes (Docker multi-stage — recommended)
+### Build C++ Nodes
+
+容器内全量编译(`Dockerfile.cpp`,等价于 `k8s-build-all` 的 C++ 段;首次 30–60 分钟):
 
 ```bash
-# Build everything from repo root — outputs gate + scene Linux binaries
-docker build -f deploy/k8s/Dockerfile.cpp -t mmorpg-nodes:latest .
+# 从仓库根执行 — 产出含 gate + scene + battle 的完整运行镜像
+docker build -f deploy/k8s/Dockerfile.cpp -t mmorpg-node:<tag> .
+# 只导出分离符号 → ./debug-symbols/*.debug
+docker build -f deploy/k8s/Dockerfile.cpp --target=symbols -o ./debug-symbols .
 ```
 
-Or build on a Linux host directly:
+或在 Linux 主机上直接编译(`Dockerfile.runtime` 路径的前置步骤)。仓库里**没有** `build_grpc_linux.sh`:
+`build_linux.sh` 不带 `--skip-deps` 时会先 `git submodule update --init --recursive`,
+再跑 `tools/archived/setup_dependencies.sh` 编 gRPC / muduo / librdkafka / yaml-cpp / hiredis / zlib(已装且源码 stamp 未变则跳过)。
 
 ```bash
-# 1. Build gRPC dependencies (one-time)
-bash tools/scripts/build_grpc_linux.sh
-
-# 2. Build gate + scene
-bash tools/scripts/build_linux.sh --release
+# 产出 bin/{gate,scene,battle};--split-debug 另出 bin/symbols/*.debug(publish_images.ps1 归档用)
+bash tools/scripts/build_linux.sh --relwithdebinfo --split-debug
+# 内存紧张时限制并行度
+bash tools/scripts/build_linux.sh --relwithdebinfo --split-debug --jobs 4
 ```
 
 ### Stage Runtime Files
@@ -66,7 +79,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-stage-runtime `
   -TableSource generated/tables
 ```
 
-This copies Linux `gate` / `scene` binaries plus local `zoneinfo` and generated tables into `deploy/k8s/runtime/linux`.
+This copies Linux `gate` / `scene` / `battle` binaries plus local `zoneinfo` and generated tables into `deploy/k8s/runtime/linux`.
 
 ### Build Runtime Image
 
@@ -178,6 +191,51 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-zone-up `
 ```
 
 Omit `-JavaSvcRegistry` or pass `-SkipJavaSvc` to skip Java service deployment.
+
+## 发布打包(版本库外制品 + release manifest)
+
+标准与分批方案见 [docs/design/release-packaging-standard-20260914.md](../../docs/design/release-packaging-standard-20260914.md),
+发布步骤清单见 [docs/ops/release-checklist.md](../../docs/ops/release-checklist.md)。本节只列入口与约定。
+
+- **制品根**:环境变量 `MMORPG_ARTIFACT_ROOT`,缺省 `<仓库父目录>/artifacts`,**不在仓库内**。布局:
+  `{snapshots|releases}/images/<版本>/{images/*.tar, images-manifest.json, build-info.json, symbols/*.debug, sha256sums.txt}`、
+  `{snapshots|releases}/images/latest.json`、`releases/manifests/<vX.Y.Z>.{json,md}`。
+  版本目录已存在即拒绝覆盖(不可变),先写 `.tmp-*` 再整目录 rename(原子);快照轨目录名 `g<sha12>`,发布轨 `vX.Y.Z`。
+- **镜像 tag 与版本**:给 `-Version vX.Y.Z`(或 `MMORPG_RELEASE_VERSION`)时 tag = `vX.Y.Z-<sha12>`,否则 `<sha12>`;
+  发布轨拒绝脏树。所有运行镜像带 OCI label(`org.opencontainers.image.{version,revision,created,source,title}`)
+  与 `/app/BUILD_INFO`;`publish_images.ps1` 核对 `org.opencontainers.image.revision` == 当前 commit,不符即拒绝。
+  出事时 `kubectl exec <pod> -- cat /app/BUILD_INFO` 确认 Pod 实际跑的提交。
+- **每个镜像单独 `docker save`**:规避"两个镜像层链完全相同时批量 save 丢一个"的坑;`import_images.ps1` 逐个 load 后核对镜像 ID。
+- **发布集合只有 cpp / go / java 三族**(`-Families`);`Dockerfile.robot` / `Dockerfile.sandbox-mock` 是测试工具镜像,不进制品目录。
+  cpp 族走 `k8s_image.ps1`(`Dockerfile.runtime`),打包前先在 Linux 主机 `build_linux.sh --relwithdebinfo --split-debug` + `k8s-stage-runtime`。
+- **推 registry 是受限操作**(AGENTS §9):只推用户明确指定的 dev registry,AI 不执行 push;推送后用 `-DigestsOut` 记录 digest 再交给 `make_release.ps1`。
+
+```powershell
+# 快照轨(工作树必须干净):构建三族镜像 → 逐个 docker save → snapshots/images/g<sha12>/
+pwsh -File tools/scripts/publish_images.ps1
+
+# 发布轨:版本号注入镜像 → releases/images/v1.2.3/
+pwsh -File tools/scripts/publish_images.ps1 -Version v1.2.3
+# CI 重跑幂等:-SkipBuild 只收集已按当前提交构建好的镜像;-SkipIfExists 在同一提交的版本目录已存在时 exit 0
+pwsh -File tools/scripts/publish_images.ps1 -Version v1.2.3 -SkipBuild -SkipIfExists
+# 本机没有 Linux staging 时只发 Go 与 Java
+pwsh -File tools/scripts/publish_images.ps1 -Families go,java
+
+# (可选)推送并把 digest 合并写进同一个 JSON
+pwsh -File tools/scripts/k8s_image.ps1     -Command push-image -ImageRepository <registry>/mmorpg-node -Version v1.2.3 -DigestsOut ./image-digests.json
+pwsh -File tools/scripts/go_svc_image.ps1  -Command push-all   -Registry <registry> -Version v1.2.3 -DigestsOut ./image-digests.json
+pwsh -File tools/scripts/java_svc_image.ps1 -Command push      -Registry <registry> -Version v1.2.3 -DigestsOut ./image-digests.json
+
+# release manifest:CHANGELOG.md 必须有 "## [1.2.3]" 段 → releases/manifests/v1.2.3.md 与 .json(.json 最后落,是"已发布"哨兵)
+pwsh -File tools/scripts/make_release.ps1 -Version v1.2.3 -ImageDigestsFile ./image-digests.json
+
+# 目标机:先校验再落地(缺省 deploy/offline-images/v1.2.3,不入库,根 .dockerignore 已排除)→ 离线导入
+pwsh -File tools/scripts/fetch_images.ps1 -Channel release -Version v1.2.3
+pwsh -File tools/scripts/import_images.ps1 -Dir deploy/offline-images/v1.2.3
+
+# 快照清理:默认 dry-run,加 -Force 才删;releases/ 永不触碰
+pwsh -File tools/scripts/artifacts_retention.ps1 -KeepLast 10
+```
 
 ## Ops Recommendation
 
@@ -527,7 +585,7 @@ pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -GoSvcRegistry local -
 在 A 档 infra 之上把 `yesterday`(zone_id=1)拉起来:Go 五服务 + Java 网关,C++ 节点用占位镜像。
 
 ```powershell
-. E:\work	oolsuildenv.ps1
+. E:\work\tools\buildenv.ps1
 # Go 服务镜像(db 需要宿主上检出 E:\work\proto2mysql;所有服务都会打包 generated/tables)
 pwsh -File tools/scripts/go_svc_image.ps1 -Command build-all -Registry local -Tag <tag>
 # Java 网关镜像(Dockerfile.java-svc 的 build context 是 java/gateway_node)

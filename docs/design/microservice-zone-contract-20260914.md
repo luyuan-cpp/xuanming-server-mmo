@@ -736,3 +736,11 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 - **最终版本复验**：聊天最终镜像`local/mmorpg-chat:chat-verify-20260915-final`（manifest index `sha256:58102cf2d455450f4923b3b552e3eaf64f11c96d2512a182c3176ad273551b48`）；路由服`local/mmorpg-client-rpc-router:chat-verify-20260915`。恢复最终双副本并正常关闭旧孤立Pod后，向最终容器发送真实SIGTERM：K8s记录exitCode=0/Completed，日志先收到信号再完成registry.Close，旧nodeUuid消失，容器恢复Ready。随后`probe-final.log`再次exit=0、123断言；源码hash仍与测试版本一致。
 - **清理与复现**：隔离namespace已删除并等待确认，原`mmorpg-infra`/`mmorpg-zone-yesterday`仍在。夹具、探针、镜像构建日志、完整结果与清理证据位于`run/verify-chat-k8s-20260915/`，入口`prepare-fixture.ps1`、`fixture-usage.txt`、`verification-summary.json`。Docker首次启动的遗留socket问题仅按现有流程备份通信目录恢复，未重置数据卷。
 - **验收边界**：此次K8s链路为probe→router→chat→Redis，不包含C++ gate/login/battle；含gate的本地双zone chat-smoke证据见§15。K8s的GateRouterMode默认翻转仍须另跑battle-smoke。24s硬截止本身未主动触发，Windows用stdin取消模拟退出context而非真实控制台Ctrl+C；未运行race detector。etcd删除失败仍靠租约清理，跨Redis slot的历史写入/claim提交仍是既有尽力幂等语义。
+
+## §17 2026-09-16 完整K8s Battle验收计划
+
+- 继续项：在本机kind新建`chat-full-verify-20260916`隔离命名空间，运行真实gateway→gate→login/scene/match→battle直连的原始robot battle-smoke；必须得到`BATTLE_SMOKE_OK`及玩家/观战直连回合断言，不用gRPC探针替代TCP客户端。
+- 当前阻塞：已有`local/mmorpg-node:410b5283d822-dirty`实际指向Alpine占位镜像，没有C++程序；Linux构建清单、镜像/runtime staging及K8s装配均遗漏battle。以`.vcxproj`为源补齐生成器/构建入口/镜像产物，CMake仅在隔离构建环境自动生成。
+- 部署范围：battle是全局池，只在infra装配；保留GateRouterMode默认值。Kafka命令topic代数与分区数从现有权威配置读取；全新DB使用正式migrate入口建表。测试数据全部使用本次emptyDir存储，不清理或复用现有游戏数据库。
+- 构建资源：Docker有32 CPU、约15.2GiB内存，给C++构建增加可配置并行度，验证时限制并发，避免按CPU数启动32个高内存编译器。gRPC/protobuf使用仓库已固定的v1.83.0/v35.1，保持源码版本一致。
+- 验证与清理：先检查构建/部署契约，再导入本地镜像、启动独立基础设施并迁移、运行原robot；保留首败及修复复验日志、源码/镜像标识、注册/直连证据。完成后仅删除本次命名空间。本节当前为实施计划，实际结果另追加，不视为已通过。

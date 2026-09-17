@@ -285,3 +285,10 @@ java/config_node/src/main/java/com/game/table/bit_index/
 **/__pycache__/
 tools/docs/protogen/
 .claude/worktrees/
+
+# 发布制品不入库(docs/design/release-packaging-standard-20260914.md §2.1、§4 P2):
+# - deploy/offline-images/ : fetch_images.ps1 从制品目录拉到本机的镜像版本目录(单个 tar 可达 GB 级)
+# - /artifacts/            : 制品根默认在仓库**父**目录(MMORPG_ARTIFACT_ROOT 可改);
+#                            误把制品根指到仓库根下时兜底,防止 `git add -A` 把制品带进版本库
+deploy/offline-images/
+/artifacts/

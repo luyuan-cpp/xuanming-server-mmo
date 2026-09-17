@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	db_grpc "proto/db"
+	"shared/buildinfo"
 	"shared/grpcstats"
 	"shared/kafkautil"
 	"shared/killswitch"
@@ -32,12 +33,20 @@ import (
 
 var configFile = flag.String("f", "etc/db.yaml", "the config file")
 
+var showVersion = flag.Bool("version", false, "打印版本信息并退出")
+
 // killSwitchEtcdDialTimeout 与 scene_manager 建 etcd 客户端时的取值一致(5s)。
 // 只影响 killswitch 自己的 watch 连接,拨不通也只是退回全放行。
 const killSwitchEtcdDialTimeout = 5 * time.Second
 
 func main() {
 	flag.Parse()
+	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
+	// (shared/buildinfo;理由同 cpp/nodes/gate/gate_version.h 头注释)。
+	fmt.Println(buildinfo.StartupLine("db"))
+	if *showVersion {
+		return
+	}
 
 	// Load config
 	conf.MustLoad(*configFile, &config.AppConfig)

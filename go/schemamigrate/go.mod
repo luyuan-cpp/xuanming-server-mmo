@@ -19,3 +19,6 @@ require (
 	golang.org/x/text v0.20.0 // indirect
 	gorm.io/gorm v1.30.0 // indirect
 )
+
+// 上游仓库已迁名；旧仓名的代理缓存内容不同。固定新仓名发布包，保留校验，不依赖仓库外目录。
+replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1

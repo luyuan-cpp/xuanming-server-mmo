@@ -169,8 +169,8 @@ func TestIsGeneratedTipRefRejectsOtherShapes(t *testing.T) {
 		"uint32(table.TradeError_kTradeListingNotFound)": true,
 		"uint32(table.CommonError_kInvalidParameter)":    true,
 		"uint32(table.GuildError_kGuildNotFound)":        false,
-		"uint32(20001)":                                  false,
-		"20001":                                          false,
+		"uint32(20001)": false,
+		"20001":         false,
 		"uint32(other.TradeError_kTradeListingNotFound)": false,
 		"uint64(table.TradeError_kTradeListingNotFound)": false,
 	}

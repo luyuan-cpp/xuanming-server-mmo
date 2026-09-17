@@ -1,6 +1,12 @@
 # ── Docker build-context exclusions ──────────────────────────────
-# Keeps the context small for Go/Java service builds.
-# The C++ Dockerfile.cpp selectively COPYs what it needs.
+# 只对"以仓库根为 build context"的构建生效:deploy/k8s/Dockerfile.cpp、
+# Dockerfile.runtime(tools/scripts/k8s_image.ps1)、Dockerfile.robot(robot_stress.ps1)、根 Dockerfile。
+# Go 服务(context=go/)、Java(context=java/<svc>/)、sandbox-mock(context=go/)、
+# robot/Dockerfile(context=robot/)不读这个文件。
+# 模式都以 context 根为锚点:`bin/` 只排除根下的 bin/,不影响 deploy/k8s/runtime/linux/bin。
+# 排除一个被 COPY 的路径不会"少传点文件",而是让构建直接报
+#   failed to compute cache key: "/<路径>": not found
+# 改这里之前先 grep 上面几个 Dockerfile 的 COPY 源。
 
 # ── Large third-party sources (cloned inside Docker instead) ───
 third_party/grpc/
@@ -31,14 +37,26 @@ java/**/target/
 # Go build caches
 go/**/tmp/
 
-# Deploy staging (runtime image has its own COPY)
-deploy/k8s/runtime/linux/
+# Deploy staging:deploy/k8s/runtime/linux/ **不能**排除。
+# k8s_image.ps1 build-image(k8s-build-image / k8s-release-* / publish_images.ps1 的 cpp 族)
+# 以仓库根为 context 执行 Dockerfile.runtime 的 `COPY ${RUNTIME_ROOT}/ /app/`,
+# 默认 RUNTIME_ROOT=deploy/k8s/runtime/linux;以前这里排除了它,该路径必然 not found。
+# Dockerfile.cpp 不 COPY 它,BuildKit 只传 COPY 引用到的路径,不会把 staging 带进 C++ 全量构建。
 
 # Docs and non-build assets
 docs/
-robot/
 data/
 test/
+
+# robot/ 是 Dockerfile.robot 的构建输入(COPY robot/ + -mod=vendor),不能整目录排除;
+# 以前整目录排除导致该镜像构建不出来。只排除本地运行产物与 Windows 调试二进制:
+# go build 需要的是 *.go、go.mod/go.sum、vendor/ 与各子包目录,robot 无 go:embed。
+robot/logs/
+robot/*.exe
+robot/__debug_bin*
+robot/*.csv
+robot/*.jsonl
+robot/.last_stress_dir.txt
 
 # ...but the navmesh binaries under data/ ARE a build input:
 # deploy/k8s/Dockerfile.cpp stage 3 does
@@ -56,3 +74,12 @@ test/
 *.log
 bin/logs/
 run/
+
+# 发布制品与离线镜像包(docs/design/release-packaging-standard-20260914.md):
+# 版本库外的制品根默认在 <仓库父目录>/artifacts,MMORPG_ARTIFACT_ROOT 指到仓库内时同样不进 context;
+# fetch_images.ps1 默认落地到 deploy/offline-images/<版本>。镜像 tar 动辄数百 MB,
+# 进了 context 会把每次构建拖慢到传输 tar。截至 2026-09-16,所有 Dockerfile 都不 COPY *.tar
+# (仓库内唯二的 tar 是 third_party/boost/libs/{beast,url}/test/fuzz/seeds.tar,Boost 只作头文件用)。
+deploy/offline-images/
+artifacts/
+**/*.tar

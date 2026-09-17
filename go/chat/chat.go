@@ -26,6 +26,7 @@ import (
 	chatpb "proto/chat"
 	base "proto/common/base"
 
+	"shared/buildinfo"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/noderegistry"
@@ -44,6 +45,8 @@ import (
 
 var configFile = flag.String("f", "etc/chat.yaml", "the config file")
 
+var showVersion = flag.Bool("version", false, "打印版本信息并退出")
+
 // nodeType 本服务的节点类型。ChatNodeService=9 早已在 node.proto 里,proto 不改(契约 §9)。
 const nodeType = base.ENodeType_ChatNodeService
 
@@ -57,6 +60,12 @@ const (
 
 func main() {
 	flag.Parse()
+	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
+	// (shared/buildinfo;理由同 cpp/nodes/gate/gate_version.h 头注释)。
+	fmt.Println(buildinfo.StartupLine("chat"))
+	if *showVersion {
+		return
+	}
 
 	var c config.Config
 	// conf.MustLoad 会自动调用 (*Config).Validate(go-zero v1.10.0 core/conf LoadFromJsonBytes 末尾的

@@ -91,12 +91,12 @@ func TestListingRepoIntegration(t *testing.T) {
 	hour := uint64(time.Hour.Milliseconds())
 
 	seed := []*tradepb.TradeListingRecord{
-		itListing(101, 1, 1, "青锋剑", 500, 10, listed, itNow-hour, itNow+hour),       // 寄售中 zone1
+		itListing(101, 1, 1, "青锋剑", 500, 10, listed, itNow-hour, itNow+hour),        // 寄售中 zone1
 		itListing(102, 1, 1, "100%_纯钢剑", 300, 30, listed, itNow-hour, itNow+2*hour), // 寄售中 zone1,标题含通配符
 		itListing(103, 2, 2, "玄铁剑", 400, 20, locked, itNow-hour, itNow+hour),        // 锁定 zone2,寄售列表可见
-		itListing(104, 1, 1, "公示剑", 900, 5, listed, itNow+hour, itNow+3*hour),        // 公示中
-		itListing(105, 1, 1, "过期剑", 100, 1, listed, itNow-2*hour, itNow-hour),        // 已过寄售期
-		itListing(106, 2, 2, "已售剑", 100, 1, sold, itNow-2*hour, itNow+hour),          // 已售
+		itListing(104, 1, 1, "公示剑", 900, 5, listed, itNow+hour, itNow+3*hour),       // 公示中
+		itListing(105, 1, 1, "过期剑", 100, 1, listed, itNow-2*hour, itNow-hour),       // 已过寄售期
+		itListing(106, 2, 2, "已售剑", 100, 1, sold, itNow-2*hour, itNow+hour),         // 已售
 	}
 	for _, rec := range seed {
 		require.NoError(t, repo.InsertListing(ctx, rec))

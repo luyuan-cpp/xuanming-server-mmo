@@ -1,4 +1,5 @@
-﻿<#
+﻿#requires -Version 7
+<#
 .SYNOPSIS
     Build and push Docker images for Go micro-services.
 
@@ -19,14 +20,22 @@
     # Build + push in one shot
     pwsh -File tools/scripts/go_svc_image.ps1 -Command release-all `
         -Registry ghcr.io/luyuancpp -Tag v1
+
+    # 发布版本构建(tag = v1.2.3-<12位commit>,镜像与二进制自报 v1.2.3;脏树直接拒绝),
+    # 推送后把 registry digest 记进 JSON
+    pwsh -File tools/scripts/go_svc_image.ps1 -Command release-all `
+        -Registry ghcr.io/luyuancpp -Version v1.2.3 -DigestsOut <制品目录>/image-digests.json
+
+    # 机器可读镜像清单:每行一个完整引用,无其它输出(publish_images.ps1 用)
+    pwsh -File tools/scripts/go_svc_image.ps1 -Command list-refs -Registry local -Version v1.2.3
 #>
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("build-all", "push-all", "release-all", "list")]
+    [ValidateSet("build-all", "push-all", "release-all", "list", "list-refs")]
     [string]$Command,
 
     [string]$Registry = "ghcr.io/luyuancpp",
-    # 留空 = git 短 sha(脏树带 -dirty)。不再默认 latest:
+    # 留空 = git 短 sha(脏树带 -dirty);给了 -Version 时为 <版本号>-<sha>。不再默认 latest:
     # 可变 tag 会让 `kubectl rollout undo` 退回同一个 digest。
     [string]$Tag = "",
     # 只处理目录里的这几个服务(逗号分隔,如 match,login)。留空 = 全部。
@@ -41,31 +50,72 @@ param(
     # "Cannot convert value to type System.String" 而不是进到下面的 split;
     # `pwsh -File ... -Services "a,b"` 传的是单个字符串,两种形态这里都接。
     [string[]]$Services = @(),
+    # 发布版本号 vX.Y.Z[-预发布标识](格式由 lib/release_common.ps1 Test-ReleaseVersion 唯一定义)。留空 = 快照构建。
+    # 非空时:未显式给 -Tag 则 tag = <版本号>-<12位commit>;注入镜像 / 二进制的 BUILD_VERSION = 该版本号。
+    # 次优先来源是环境变量 MMORPG_RELEASE_VERSION(发布流水线设一次,三个镜像脚本同口径)。
+    [string]$Version = "",
+    # 只对 push-all / release-all 有效:每推完一个镜像回读 registry digest,合并写进这个 JSON
+    # ({ "<repo:tag>": "<repo@sha256:...>" })。tag 只是别名,部署 / 回滚要按 digest 定位。留空 = 不记录。
+    [string]$DigestsOut = "",
     [switch]$DryRun
 )
 
 $ErrorActionPreference = "Stop"
 
+# 路径一律用 '/' 分段:Windows 与 Linux pwsh 都认;反斜杠在 Linux 上只是文件名里的普通字符。
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot  = Resolve-Path (Join-Path $ScriptDir "..\..")
+$RepoRoot  = Resolve-Path (Join-Path $ScriptDir "../..")
 $GoRoot    = Join-Path $RepoRoot "go"
-$Dockerfile = Join-Path $RepoRoot "deploy\k8s\Dockerfile.go-svc"
+$Dockerfile = Join-Path $RepoRoot "deploy/k8s/Dockerfile.go-svc"
 # 策划表(各 Go 服务 TableDir 默认 ../../generated/tables),随镜像打包
-$TablesDir = Join-Path $RepoRoot "generated\tables"
+$TablesDir = Join-Path $RepoRoot "generated/tables"
 
-. (Join-Path $ScriptDir "lib\release_common.ps1")
+. (Join-Path $ScriptDir "lib/release_common.ps1")
+
+if (-not [string]::IsNullOrWhiteSpace($DigestsOut) -and $Command -notin @("push-all", "release-all")) {
+    throw "-DigestsOut 只对 push-all / release-all 有效(digest 在推送之后才存在),当前命令:$Command"
+}
+
+# 发布版本号:-Version > MMORPG_RELEASE_VERSION > 空(快照)。两个来源同一套校验,拼进 tag / 注入镜像之前拦住非法值。
+$ReleaseVersion = ""
+if (-not [string]::IsNullOrWhiteSpace($Version)) {
+    $versionCheck = Test-ReleaseVersion -Version $Version
+    if (-not $versionCheck.Ok) { throw "-Version 不合法:$($versionCheck.Reason)" }
+    $ReleaseVersion = $Version
+}
+elseif (-not [string]::IsNullOrWhiteSpace($env:MMORPG_RELEASE_VERSION)) {
+    $versionCheck = Test-ReleaseVersion -Version $env:MMORPG_RELEASE_VERSION
+    if (-not $versionCheck.Ok) { throw "环境变量 MMORPG_RELEASE_VERSION 不合法:$($versionCheck.Reason)" }
+    $ReleaseVersion = $env:MMORPG_RELEASE_VERSION
+}
 
 $script:ReleaseStamp = Get-GitReleaseStamp -RepoRoot $RepoRoot
 if ([string]::IsNullOrWhiteSpace($Tag)) {
     if (-not $script:ReleaseStamp.Ok) {
         throw "无法生成不可变镜像 tag:$($script:ReleaseStamp.Reason)。请显式传 -Tag。"
     }
-    $Tag = $script:ReleaseStamp.Tag
+    # 无版本号:<sha12> / <sha12>-dirty(与旧行为一致);有版本号:<vX.Y.Z>-<sha12>,脏树由 Get-ReleaseImageTag 抛出拒绝。
+    $Tag = Get-ReleaseImageTag -Version $ReleaseVersion -Commit $script:ReleaseStamp.Commit -Dirty:([bool]$script:ReleaseStamp.Dirty)
+}
+
+# 显式 -Tag 绕过了上面的脏树判定,构建类命令再兜一次:挂发布版本号的镜像必须能从一个干净 commit 还原,
+# 否则 BUILD_VERSION=v1.2.3 的二进制里可能是未提交的代码,版本号反而成了误导。
+if ($ReleaseVersion -and $Command -in @("build-all", "release-all")) {
+    if (-not $script:ReleaseStamp.Ok) {
+        throw "发布版本 $ReleaseVersion 需要可追溯的 git commit:$($script:ReleaseStamp.Reason)"
+    }
+    if ($script:ReleaseStamp.Dirty) {
+        throw "发布版本 $ReleaseVersion 不接受脏工作树(git status 非空):脏树产物无法从 commit $($script:ReleaseStamp.Commit) 还原。请先提交或清理工作树。"
+    }
 }
 
 # 注入到镜像里的版本戳(ldflags + OCI label + /app/BUILD_INFO)
+# BUILD_VERSION:有发布版本号用版本号,否则沿用镜像 tag(快照镜像的"版本"就是 commit)。
+$BuildVersion = if ($ReleaseVersion) { $ReleaseVersion } else { $Tag }
 $BuildCommit = if ($script:ReleaseStamp.Ok) { $script:ReleaseStamp.Commit } else { "unknown" }
 $BuildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+# docker 可执行命令:与 release_common.ps1 同一入口,MMORPG_DOCKER_COMMAND 可换成契约测试桩。
+$DockerCommand = Resolve-ReleaseDockerCommand
 
 # Service catalogue: name → { Dir (in go/), Entry (.go file), ImageName }
 $Catalogue = [ordered]@{
@@ -86,7 +136,7 @@ $Catalogue = [ordered]@{
     "client-rpc-router" = @{ Dir = "client_rpc_router"; Entry = "client_rpc_router_service.go"; ImageName = "mmorpg-client-rpc-router" }
     # 聚宝斋 trade:与 k8s_deploy.ps1 $GoSvcCatalogue 的 trade 条目配对(ImageName 必须一致)。只经路由服可达,与路由服成对发布。
     # go/trade/go.mod 的 `replace schemamigrate => ../schemamigrate` 在 go/ 之内,由 Dockerfile.go-svc 的
-    # `COPY schemamigrate/` 带入,不走 ExternalReplaceStages;schemamigrate 依赖的 proto2mysql 用已发布 tag(不 replace)。
+    # `COPY schemamigrate/` 带入,不走 ExternalReplaceStages;schemamigrate 依赖的 proto2mysql 用已发布 tag(仅远程仓名映射,不使用本地目录 replace)。
     # 同一镜像既跑 trade Deployment,也跑 trade-migrate Job(args 加 -migrate,D-14)。
     trade           = @{ Dir = "trade";           Entry = "trade.go";               ImageName = "mmorpg-trade" }
 }
@@ -170,9 +220,12 @@ function Invoke-BuildAll {
             "-f", $Dockerfile,
             "--build-arg", "SERVICE=$($info.Dir)",
             "--build-arg", "ENTRY=$($info.Entry)",
-            "--build-arg", "BUILD_VERSION=$Tag",
+            "--build-arg", "BUILD_VERSION=$BuildVersion",
             "--build-arg", "BUILD_COMMIT=$BuildCommit",
-            "--build-arg", "BUILD_TIME=$BuildTime"
+            "--build-arg", "BUILD_TIME=$BuildTime",
+            # 与 Dockerfile 里的 LABEL 同值,命令行再传一次:发布脚本按这个 label 核对 revision == 当前 commit,
+            # 不依赖 Dockerfile 那行 LABEL 有没有被改掉。
+            "--label", "org.opencontainers.image.revision=$BuildCommit"
         )
         # 宿主设置了 GOPROXY(buildenv.ps1 → goproxy.cn)就透传给 Dockerfile 的 ARG GOPROXY,
         # 否则 builder 阶段走 proxy.golang.org,国内网络下 `go mod download` 会超时。
@@ -188,9 +241,9 @@ function Invoke-BuildAll {
         $buildArgs += @("-t", $fullImage, $GoRoot)
 
         if ($DryRun) {
-            Write-Host "  [dry-run] docker $($buildArgs -join ' ')" -ForegroundColor DarkGray
+            Write-Host "  [dry-run] $DockerCommand $($buildArgs -join ' ')" -ForegroundColor DarkGray
         } else {
-            & docker @buildArgs
+            & $DockerCommand @buildArgs
             if ($LASTEXITCODE -ne 0) {
                 throw "Docker build failed for $svc"
             }
@@ -208,14 +261,34 @@ function Invoke-PushAll {
         Write-Host "[push] $svc -> $fullImage" -ForegroundColor Magenta
 
         if ($DryRun) {
-            Write-Host "  [dry-run] docker push $fullImage" -ForegroundColor DarkGray
+            Write-Host "  [dry-run] $DockerCommand push $fullImage" -ForegroundColor DarkGray
+            if (-not [string]::IsNullOrWhiteSpace($DigestsOut)) {
+                Write-Host "  [dry-run] 回读 digest 并记录到 $DigestsOut" -ForegroundColor DarkGray
+            }
         } else {
-            & docker push $fullImage
+            & $DockerCommand push $fullImage
             if ($LASTEXITCODE -ne 0) {
                 throw "Docker push failed for $svc"
             }
+            if (-not [string]::IsNullOrWhiteSpace($DigestsOut)) {
+                # 推一个记一个:中途失败时已推成功的镜像 digest 不丢,重跑时同 ref 同 digest 幂等。
+                $pushed = Get-PushedImageDigest -ImageRef $fullImage
+                if (-not $pushed.Ok) {
+                    throw "镜像已推送但回读 digest 失败($svc):$($pushed.Reason)"
+                }
+                Write-ImageDigestRecord -Path $DigestsOut -ImageRef $fullImage -Digest $pushed.Digest
+                Write-Host "  [digest] $($pushed.Digest)" -ForegroundColor DarkGray
+            }
             Write-Host "  [ok] $fullImage" -ForegroundColor Green
         }
+    }
+}
+
+# 机器可读清单:每行一个完整镜像引用,只走 Write-Output。调用方(publish_images.ps1)逐行解析,
+# 这里不能加任何提示 —— `pwsh -File` 起子进程时 Write-Host 同样会进 stdout。
+function Invoke-ListRefs {
+    foreach ($kv in $Catalogue.GetEnumerator()) {
+        Write-Output (Get-ImageFullName -ImageName $kv.Value.ImageName)
     }
 }
 
@@ -235,4 +308,5 @@ switch ($Command) {
     "push-all"    { Invoke-PushAll }
     "release-all" { Invoke-BuildAll; Invoke-PushAll }
     "list"        { Invoke-List }
+    "list-refs"   { Invoke-ListRefs }
 }

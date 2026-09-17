@@ -1,4 +1,22 @@
-FROM ubuntu:24.04
+# ────────────────────────────────────────────────────────────────
+# C++ 游戏节点(gate / scene / battle)的生产运行镜像:只打包
+# deploy/k8s/runtime/linux 里预先编好的 Linux 二进制,不在镜像里编译。
+# build context = 仓库根;由 tools/scripts/k8s_image.ps1 build-image 调用。
+#
+# 基础镜像钉 index digest(多架构清单的摘要,按平台自动选子清单):
+#   2026-09-16 用 `docker buildx imagetools inspect ubuntu:24.04` 查得。
+#   更新方法:重跑同一命令取 "Digest:" 行 → 替换下面的 @sha256 → 同步
+#   Dockerfile.cpp 运行阶段(两份运行镜像必须同一基础层)→ 实跑镜像验证后再提交。
+#   只写 tag 时 24.04 每隔几周就被重建一次,同一 commit 两次构建会得到不同的系统库。
+#
+# 版本注入(docs/design/release-packaging-standard-20260914.md 接口 D):
+#   --build-arg BUILD_VERSION / BUILD_COMMIT(12 位 sha)/ BUILD_TIME(UTC yyyy-MM-ddTHH:mm:ssZ)
+#   → OCI LABEL + /app/BUILD_INFO + 运行期环境变量 MMORPG_BUILD_* / GATE_BUILD_*
+#   (build_info.h / gate_version.h 在编译期宏为 unknown 时回落读取)。
+#   注意:这里的 BUILD_COMMIT 是"打包镜像时的仓库 commit",不一定是二进制的编译 commit;
+#   二进制若经 build_linux.sh MMORPG_STAMP_BUILD=1 注入过宏,启动行以宏为准。
+# ────────────────────────────────────────────────────────────────
+FROM ubuntu:24.04@sha256:69cecf4bbf72d2d44a9eef1b71fb98c7fb973d78af11399deccef19beb008ad9
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -9,10 +27,48 @@ RUN apt-get update \
     tzdata \
     && rm -rf /var/lib/apt/lists/*
 
+# 非 root 运行(固定 uid/gid 10001,与 Go 服务镜像同一约定)。固定数字而不是只写用户名:
+# K8s securityContext.runAsNonRoot 只认数字 uid,镜像里写用户名时 kubelet 无法校验。
+RUN groupadd --system --gid 10001 mmorpg \
+    && useradd --system --uid 10001 --gid 10001 --home-dir /app --no-create-home \
+       --shell /usr/sbin/nologin mmorpg
+
 ARG RUNTIME_ROOT=deploy/k8s/runtime/linux
 
 WORKDIR /app
 COPY ${RUNTIME_ROOT}/ /app/
 
-RUN mkdir -p /app/bin/etc /app/bin/logs \
-    && chmod +x /app/bin/gate /app/bin/scene
+# 运行期写路径审计(2026-09-16,结论见交付说明):
+#   * logs/(cwd=/app/bin 下的相对路径):muduo 异步日志 logs/cpp_nodes/<node>.*.log、
+#     error_reporter 的 logs/error_reporter_dump_*.jsonl、game_channel 调试用 logs/oversized_rpc.log。
+#     muduo 的 AppendFile 只 fopen 不建目录,所以 logs/cpp_nodes 要预建。
+#     K8s 下 k8s_deploy.ps1 在 /app/bin/logs 挂 emptyDir(0777),会遮住这里预建的子目录。
+#   * /tmp/snowflake:K8s 挂 emptyDir;/tmp 本身是 1777,裸 docker run 也可写。
+#   * bin/etc:K8s 只读挂 ConfigMap,节点只读不写。
+#   * 其余(bin/ 二进制、generated_tables、zoneinfo)只读,保持 root 所有,运行用户不可改。
+#   * core dump:cwd /app/bin 对 10001 不可写;按宿主 core_pattern(绝对路径或管道)收集。
+RUN mkdir -p /app/bin/etc /app/bin/logs/cpp_nodes \
+    && chmod +x /app/bin/gate /app/bin/scene /app/bin/battle \
+    && chown -R 10001:10001 /app/bin/logs
+
+# 每次构建都会变的 ARG 放在最后:ARG 值变化会让其后所有 RUN 缓存失效,
+# 放在 apt / COPY 之前等于每个 commit 都重装系统包。
+ARG BUILD_VERSION=unknown
+ARG BUILD_COMMIT=unknown
+ARG BUILD_TIME=unknown
+
+LABEL org.opencontainers.image.title="mmorpg-node" \
+      org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIME}" \
+      org.opencontainers.image.source="https://github.com/luyuan-cpp/xuanming-server-mmo"
+
+ENV MMORPG_BUILD_VERSION="${BUILD_VERSION}" \
+    MMORPG_BUILD_COMMIT="${BUILD_COMMIT}" \
+    GATE_BUILD_VERSION="${BUILD_VERSION}" \
+    GATE_BUILD_COMMIT="${BUILD_COMMIT}"
+
+# 一行一个键,与 Dockerfile.go-svc / Dockerfile.java-svc 同格式:`kubectl exec <pod> -- cat /app/BUILD_INFO`。
+RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' "$BUILD_VERSION" "$BUILD_COMMIT" "$BUILD_TIME" > /app/BUILD_INFO
+
+USER 10001:10001

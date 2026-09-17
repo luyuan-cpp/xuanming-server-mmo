@@ -8,7 +8,8 @@
 deploy/k8s/
 ├── manifests/         # Infra and workload manifests
 ├── runtime/           # Staged runtime files for Linux image
-├── Dockerfile.runtime # Production K8s runtime image
+├── Dockerfile.cpp     # C++ 节点镜像:容器内全量编译(k8s-build-all / cpp-build-ci)
+├── Dockerfile.runtime # C++ 节点镜像:打包预编译 staging(k8s-build-image / k8s-release-* / publish_images)
 ├── zones.*            # One-click zone config examples / ops presets
 └── README.md          # Authoritative flow description
 ```
@@ -18,14 +19,15 @@ deploy/k8s/
 |------|----------|-------|
 | End-to-end flow | `README.md` | One-zone/all-zone operations |
 | Runtime staging layout | `runtime/README.md` | Required Linux file layout |
-| Runtime image | `Dockerfile.runtime` | Use this, not root Dockerfile |
+| C++ 节点镜像 | `Dockerfile.cpp` / `Dockerfile.runtime` | 两条现役路径,分工见下方「C++ 节点镜像:两条路径」;都不是根 `Dockerfile` |
+| 发布打包 | `tools/scripts/publish_images.ps1` 等 | 见下方「发布打包」 |
 | Infra manifests | `manifests/infra/` | Shared infra (etcd/redis/kafka/mysql) deployed to `mmorpg-infra` namespace. etcd is a 3-replica StatefulSet + PVC + PDB; redis/kafka/mysql are still single-replica Deployments |
 | Script entrypoint | `tools/scripts/dev_tools.ps1` | `k8s-*` commands drive this subtree |
 
 ## CONVENTIONS
 - This subtree is Kubernetes-only; do not mix docker-compose/local process assumptions into it.
-- Production image must use `deploy/k8s/Dockerfile.runtime`.
-- Runtime expects Linux binaries staged under `deploy/k8s/runtime/linux/`.
+- C++ 节点镜像只从 `deploy/k8s/Dockerfile.cpp` 或 `deploy/k8s/Dockerfile.runtime` 出;带发布门禁(不可变 tag + `release_preflight.ps1`)的入口目前只有 `Dockerfile.runtime` 这条(`k8s_image.ps1`),分工见「C++ 节点镜像:两条路径」。
+- `Dockerfile.runtime` expects Linux binaries staged under `deploy/k8s/runtime/linux/`(根 `.dockerignore` 不得排除该目录)。
 - Managed cloud generally uses `LoadBalancer`; bare metal generally uses `NodePort` + external L4.
 - Prefer explicit `-OpsProfile managed-cloud` / `-OpsProfile bare-metal` in commands and docs.
 
@@ -101,8 +103,38 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-push-image -ImageRepository 
   - RBAC:`kubectl -n <zone-ns> apply -f deploy/k8s/manifests/go-svc/scene-manager-agones-rbac.yaml`(全 namespace 级 Role,无 cluster-admin)。启用后 scene-manager Deployment 要把 `serviceAccountName` 指到 `scene-manager`。
   - `Agones.Enabled=true` 但分配器构造失败时 scene-manager 会 **panic 起不来**,不会静默降级 —— 静默降级等于绕过容量约束还没人发现。
 
-## KNOWN BREAKAGE — Dockerfile.cpp 构建不出来(未修,需人工决策)
-- `Dockerfile.cpp` 第 100 行 `COPY tools/scripts/build_linux.sh` 与第 106 行 `RUN bash tools/scripts/build_linux.sh ...` 引用的脚本**在仓库里不存在**:工作区没有、`git ls-files` 没有、`git log -- tools/scripts/build_linux.sh` 无任何提交记录。因此 `k8s-build-all` 的 C++ 镜像这一段必然在 stage 2 失败。
-- 同文件第 38 行克隆 gRPC `--branch v1.78.x`,而 `.gitmodules` 的 `third_party/grpc` 钉的是 `branch = v1.80.x` —— 两条构建路径用的不是同一个 gRPC 大版本。
-- 现有规范无法唯一决定该补哪个版本的 `build_linux.sh`、也无法唯一决定 gRPC 该对齐到 1.78 还是 1.80,**不要凭猜测补文件**。
-- 当前可用的 K8s 镜像路径仍然是 `Dockerfile.runtime` + `k8s-stage-runtime`(预先在 Linux 上构建好二进制再 staging),见上文 COMMANDS。
+## C++ 节点镜像:两条路径(2026-09-16 按代码核对,未实跑)
+| | `Dockerfile.cpp` | `Dockerfile.runtime` |
+|---|---|---|
+| 在哪编译 | 镜像内:deps 阶段编 gRPC `v1.83.0` 等,builder 阶段 `build_linux.sh --skip-deps --relwithdebinfo --split-debug` | 镜像外:Linux 主机 `bash tools/scripts/build_linux.sh`,再 `k8s-stage-runtime` 拷进 `deploy/k8s/runtime/linux/` |
+| 调用方 | `dev_tools.ps1 -Command k8s-build-all`;`.github/workflows/cpp-build-ci.yml`(只到 `--target builder`,当编译门禁);`k8s_image.ps1 -DockerfilePath deploy/k8s/Dockerfile.cpp` 也能用,但其预检仍要求 staging 目录齐全 | `tools/scripts/k8s_image.ps1`(`-DockerfilePath` 默认值):`k8s-build-image` / `k8s-push-image` / `k8s-release-zone` / `k8s-release-all`;`publish_images.ps1` 的 cpp 族 |
+| 发布门禁 | 无 | `release-zone` / `release-all` 跑不可变 tag 校验 + `release_preflight.ps1` |
+| 运行层内容 | `bin/{gate,scene,battle}`、`/usr/local/lib/*.so*`、`data/scene_nav_bin/`、表文件名转小写、`bin/zoneinfo` 软链 | 只有 staging 里的东西:`bin/{gate,scene,battle}`、`bin/zoneinfo/`、`generated/generated_tables/`(契约见 `runtime/README.md`) |
+
+- 两条都是现役入口,旧文档里"生产只准用 `Dockerfile.runtime`"与"`Dockerfile.cpp` 是推荐路径"两种说法都不完整,以上表为准。版本化发布(`publish_images.ps1` → `make_release.ps1`)走 `Dockerfile.runtime`,C++ 分离符号取宿主 `bin/symbols/*.debug`。
+- ⚠️ **两条路径的运行层不等价**:staging 契约里没有 `.so`、导航网格数据,也不做表名转小写,而 `Dockerfile.cpp` 对这三样各有一步。在 runtime 路径产出的镜像真实起过一次 scene 之前,不要假定二者可互换。
+- 根 `.dockerignore` 以前排除了 `deploy/k8s/runtime/linux/`,`k8s-build-image` 的 `COPY ${RUNTIME_ROOT}/` 必然 not found;2026-09-16 已去掉该排除。
+- 旧的 KNOWN BREAKAGE 已过时并删除:`tools/scripts/build_linux.sh` 已入库(提交 `31e4d1d4c`);`Dockerfile.cpp` 克隆 gRPC `v1.83.0` 并校验 revision,与 `.gitmodules` 的 `branch = v1.83.x` 一致。
+
+## 发布打包
+- 标准与分批方案:`docs/design/release-packaging-standard-20260914.md`;发布步骤清单:`docs/ops/release-checklist.md`。
+- 制品根 = `MMORPG_ARTIFACT_ROOT`(缺省 `<仓库父目录>/artifacts`,**不在仓库内**);版本目录不可变、原子上线、带 `sha256sums.txt`;快照轨 `snapshots/images/g<sha12>/`,发布轨 `releases/images/vX.Y.Z/`,`releases/` 永不清理。
+- 镜像 tag:给 `-Version vX.Y.Z`(或 `MMORPG_RELEASE_VERSION`)时为 `vX.Y.Z-<sha12>`,否则 `<sha12>`;发布轨拒绝脏树。镜像内 `/app/BUILD_INFO` 与 OCI label `org.opencontainers.image.revision` 自报 commit,`publish_images.ps1` 校验 label == 当前 commit。
+- 发布集合只有 cpp / go / java 三族;robot、sandbox-mock 是测试工具镜像,不进制品目录。
+- 推 registry 属于 AGENTS §9 受限操作:只推用户明确指定的 dev registry,AI 不执行 push。
+
+```bash
+# 快照轨(工作树必须干净):构建三族镜像 → 逐个 docker save → snapshots/images/g<sha12>/
+pwsh -File tools/scripts/publish_images.ps1
+# 发布轨:版本号注入镜像 → releases/images/v1.2.3/;CI 重跑加 -SkipBuild -SkipIfExists
+pwsh -File tools/scripts/publish_images.ps1 -Version v1.2.3
+# (可选)推送并记录 digest;k8s_image.ps1 push-image / java_svc_image.ps1 push 同样收 -Version / -DigestsOut
+pwsh -File tools/scripts/go_svc_image.ps1 -Command push-all -Registry <registry> -Version v1.2.3 -DigestsOut ./image-digests.json
+# release manifest:CHANGELOG.md 必须有 "## [1.2.3]" 段 → releases/manifests/v1.2.3.{md,json}
+pwsh -File tools/scripts/make_release.ps1 -Version v1.2.3 -ImageDigestsFile ./image-digests.json
+# 目标机:校验后落地(缺省 deploy/offline-images/v1.2.3)→ 离线导入并逐个核对镜像 ID
+pwsh -File tools/scripts/fetch_images.ps1 -Channel release -Version v1.2.3
+pwsh -File tools/scripts/import_images.ps1 -Dir deploy/offline-images/v1.2.3
+# 快照清理(默认 dry-run,加 -Force 才删;releases/ 不碰)
+pwsh -File tools/scripts/artifacts_retention.ps1 -KeepLast 10
+```

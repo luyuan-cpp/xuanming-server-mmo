@@ -35,6 +35,12 @@ on:
       - "go/*/etc/**"
       - "deploy/k8s/manifests/**"
       - ".github/workflows/deploy-config-tests.yml"
+      - "deploy/k8s/Dockerfile*"
+      - ".dockerignore"
+      - "Dockerfile"
+      - "robot/Dockerfile"
+      - "CHANGELOG.md"
+      - ".github/workflows/release.yml"
   pull_request:
     branches: [main]
     paths:
@@ -46,6 +52,14 @@ on:
       # k8s 清单：端口/服务名/镜像 tag 与 etc/*.yaml 对账的对面
       - "deploy/k8s/manifests/**"
       - ".github/workflows/deploy-config-tests.yml"
+      # 镜像构建输入:版本注入 / OCI label / 构建上下文排除规则改了,发布契约测试要重跑
+      - "deploy/k8s/Dockerfile*"
+      - ".dockerignore"
+      - "Dockerfile"
+      - "robot/Dockerfile"
+      # 发布版本号与 CHANGELOG 段落规则由契约测试守(release_common / make_release)
+      - "CHANGELOG.md"
+      - ".github/workflows/release.yml"
   workflow_dispatch:
 
 permissions:

@@ -355,9 +355,13 @@ func TestBrowseValidation(t *testing.T) {
 	}{
 		{"tab 未指定", func(in *tradepb.BrowseListingsRequest) { in.Tab = tradepb.ListingTab_LISTING_TAB_UNSPECIFIED }},
 		{"tab 未知", func(in *tradepb.BrowseListingsRequest) { in.Tab = tradepb.ListingTab(3) }},
-		{"section 未指定", func(in *tradepb.BrowseListingsRequest) { in.Section = tradepb.ListingSection_LISTING_SECTION_UNSPECIFIED }},
+		{"section 未指定", func(in *tradepb.BrowseListingsRequest) {
+			in.Section = tradepb.ListingSection_LISTING_SECTION_UNSPECIFIED
+		}},
 		{"section 未知", func(in *tradepb.BrowseListingsRequest) { in.Section = tradepb.ListingSection(3) }},
-		{"category 未指定", func(in *tradepb.BrowseListingsRequest) { in.Category = tradepb.ListingCategory_LISTING_CATEGORY_UNSPECIFIED }},
+		{"category 未指定", func(in *tradepb.BrowseListingsRequest) {
+			in.Category = tradepb.ListingCategory_LISTING_CATEGORY_UNSPECIFIED
+		}},
 		{"category 越界", func(in *tradepb.BrowseListingsRequest) { in.Category = tradepb.ListingCategory(10) }},
 		{"武器子类越界", func(in *tradepb.BrowseListingsRequest) { in.Subcategory = 6 }},
 		{"套装不许有子类", func(in *tradepb.BrowseListingsRequest) {

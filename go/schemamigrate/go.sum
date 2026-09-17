@@ -8,8 +8,8 @@ github.com/jinzhu/inflection v1.0.0 h1:K317FqzuhWc8YvSVlFMCCUb36O/S9MCKRDI7QkRKD
 github.com/jinzhu/inflection v1.0.0/go.mod h1:h+uFLlag+Qp1Va5pdKtLDYj+kHp5pxUVkryuEj+Srlc=
 github.com/jinzhu/now v1.1.5 h1:/o9tlHleP7gOFmsnYNz3RGnqzefHA47wQpKrrdTIwXQ=
 github.com/jinzhu/now v1.1.5/go.mod h1:d3SSVoowX0Lcu0IBviAWJpolVfI5UJVZZ7cO71lE/z8=
-github.com/luyuancpp/proto2mysql v0.1.1 h1:s5du1nFVJmZR1McB07imYWZyjnOTaLlCVkILLKG1rDg=
-github.com/luyuancpp/proto2mysql v0.1.1/go.mod h1:H5MAT55JUBrI7Xc6ja4yJORKv1HQlPO7q5mlUisMBNA=
+github.com/luyuan-cpp/proto2mysql v0.1.1 h1:GsmiAKiXCiGjZaRCVutAsrlpShyZRcz71mVrAf+7U5A=
+github.com/luyuan-cpp/proto2mysql v0.1.1/go.mod h1:090lbeAkv2cZ++KKKNpVaaP89Z4cQe0n9/ZrGN+saVQ=
 golang.org/x/text v0.20.0 h1:gK/Kv2otX8gz+wn7Rmb3vT96ZwuoxnQlY+HlJVj7Qug=
 golang.org/x/text v0.20.0/go.mod h1:D4IsuqiFMhST5bX19pQ9ikHC2GsaKyk/oF+pn3ducp4=
 google.golang.org/protobuf v1.36.11 h1:fV6ZwhNocDyBLK0dj+fg8ektcVegBBuEolpbTQyBNVE=

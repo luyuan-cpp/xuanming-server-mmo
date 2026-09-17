@@ -20,6 +20,7 @@ import (
 	"data_service/internal/svc"
 	base "proto/common/base"
 	"proto/data_service"
+	"shared/buildinfo"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/safego"
@@ -42,6 +43,8 @@ var configFile = flag.String("f", "etc/data_service.yaml", "the config file")
 // 跑一次 store.MigrateSchema(与 Schema.AutoMigrate=true 的启动路径是同一段代码),
 // 跑完即退出,不起 gRPC、不连 Redis。生产把 AutoMigrate 设 false,部署阶段单进程跑这个。
 var migrateOnly = flag.Bool("migrate", false, "run the global-DB schema migration (proto2mysql) and exit")
+
+var showVersion = flag.Bool("version", false, "打印版本信息并退出")
 
 // killSwitchEtcdDialTimeout 与 scene_manager 建 etcd 客户端时的取值一致(5s)。
 // 只影响 killswitch 自己的 watch 连接,拨不通也只是退回全放行。
@@ -69,6 +72,12 @@ const nodeRegisterListenPoll = 100 * time.Millisecond
 
 func main() {
 	flag.Parse()
+	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
+	// (shared/buildinfo;理由同 cpp/nodes/gate/gate_version.h 头注释)。-migrate 形态同样先打,迁移 Job 日志可追溯。
+	fmt.Println(buildinfo.StartupLine("data_service"))
+	if *showVersion {
+		return
+	}
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)

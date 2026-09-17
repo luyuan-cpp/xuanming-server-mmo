@@ -3,34 +3,88 @@
 #
 # Build context MUST be the java/<service>/ directory.
 #
-# Usage:
+# Usage(日常请走 tools/scripts/java_svc_image.ps1,它会传下面的版本 build-arg 与 revision label):
 #   docker build -f deploy/k8s/Dockerfile.java-svc \
-#     -t mmorpg-gateway:latest  java/gateway_node/
+#     --build-arg BUILD_VERSION=<版本> --build-arg BUILD_COMMIT=<12位sha> \
+#     --build-arg BUILD_TIME=<UTC yyyy-MM-ddTHH:mm:ssZ> --build-arg IMAGE_TITLE=mmorpg-gateway \
+#     -t mmorpg-gateway:<tag>  java/gateway_node/
+#
+# 版本注入(docs/design/release-packaging-standard-20260914.md 接口 D):
+#   BUILD_VERSION / BUILD_COMMIT → mvn -Dmmorpg.build.version / -Dmmorpg.build.commit
+#   → jar 内 META-INF/build-info.properties → /actuator/info 的 build 段;
+#   同时写 OCI LABEL 与 /app/BUILD_INFO。
+#
+# 基础镜像钉 index digest,2026-09-16 用 `docker buildx imagetools inspect <image:tag>` 查得:
+#   eclipse-temurin:23.0.2_7-jdk        与当时的 23-jdk 同一 digest(内容未变,只是把 tag 写精确)
+#   eclipse-temurin:23.0.2_7-jre-alpine 与当时的 23-jre-alpine 同一 digest
+# 更新方法:重跑该命令取 "Digest:" 行替换 @sha256,构建镜像并跑 login-path-tests 后再提交。
+# 风险:Java 23 是非 LTS,23.0.2+7(2025-01)是最后一个更新;换 21/25 LTS 要连 pom 的
+# java.version 一起评审,不在本次范围。
 # ────────────────────────────────────────────────────────────────
 
 # ── Build stage ──────────────────────────────────────────────────
 # Use Debian-based JDK because protobuf-maven-plugin downloads a
 # glibc-linked protoc binary that does not run on musl/Alpine.
-FROM eclipse-temurin:23-jdk AS builder
+FROM eclipse-temurin:23.0.2_7-jdk@sha256:83177670e43c17769a5402a60601545318e45e63adf634fb5022340e516cded4 AS builder
 
 RUN apt-get update && apt-get install -y --no-install-recommends maven \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
+
+# 依赖层:只拷 pom.xml 预热 ~/.m2,pom 不变就命中缓存。
+# 必须在声明 BUILD_* 之前:ARG 值一变,其后所有 RUN 缓存失效,放前面等于每个 commit 重下全部依赖。
+# go-offline 对部分插件的运行期依赖解析不全,失败不致命 —— 缺的由下面 package 在线补齐,
+# 真正的构建门禁是 package 那一步。
+COPY pom.xml /src/pom.xml
+RUN mvn -B -q dependency:go-offline \
+    || echo "dependency:go-offline 未完全成功,缺失依赖由 package 在线补齐" >&2
+
 COPY . /src/
 
+ARG BUILD_VERSION=unknown
+ARG BUILD_COMMIT=unknown
+
 RUN mvn clean package -DskipTests -q \
+        "-Dmmorpg.build.version=${BUILD_VERSION}" \
+        "-Dmmorpg.build.commit=${BUILD_COMMIT}" \
     && cp target/*.jar /app.jar
 
 # ── Runtime stage ────────────────────────────────────────────────
-FROM eclipse-temurin:23-jre-alpine
+FROM eclipse-temurin:23.0.2_7-jre-alpine@sha256:88593498863c64b43be16e8357a3c70ea475fc20a93bf1e07f4609213a357c87
 
-RUN apk add --no-cache ca-certificates tzdata
+# 非 root 运行(uid/gid 10001,与 Go / C++ 镜像同一约定)。
+# 写路径审计(2026-09-16):日志只打 console(application.yaml logging.structured);
+# 内嵌 Tomcat 工作目录与 JVM hsperfdata 在 java.io.tmpdir=/tmp(1777);
+# K8s 把 ConfigMap 只读挂到 /app/config;java/gateway_node/src/main 无文件写调用。
+# 所以 /app 下不需要可写目录,jar 保持 root 所有、运行用户只读。
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -S -g 10001 mmorpg \
+    && adduser -S -D -H -h /app -s /sbin/nologin -u 10001 -G mmorpg mmorpg
 
 WORKDIR /app
 
 COPY --from=builder /app.jar /app/service.jar
 
 EXPOSE 5555 5556 8081
+
+# 版本戳 ARG 放在运行阶段末尾,只让下面几层随 commit 失效。
+ARG BUILD_VERSION=unknown
+ARG BUILD_COMMIT=unknown
+ARG BUILD_TIME=unknown
+# 一份 Dockerfile 服务多个 Java 服务,title 由构建脚本按镜像名传入。
+ARG IMAGE_TITLE=mmorpg-java-svc
+
+LABEL org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIME}" \
+      org.opencontainers.image.source="https://github.com/luyuan-cpp/xuanming-server-mmo" \
+      org.opencontainers.image.title="${IMAGE_TITLE}"
+
+# 一行一个键,与 Dockerfile.go-svc 同格式:`kubectl exec <pod> -- cat /app/BUILD_INFO`。
+RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
+      "${BUILD_VERSION}" "${BUILD_COMMIT}" "${BUILD_TIME}" > /app/BUILD_INFO
+
+USER 10001:10001
 
 ENTRYPOINT ["java", "-jar", "/app/service.jar"]

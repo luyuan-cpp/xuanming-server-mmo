@@ -84,7 +84,7 @@ func startTestServer(t *testing.T) *testServer {
 }
 
 func (ts *testServer) releaseHold() { ts.releaseOnce.Do(func() { close(ts.impl.release) }) }
-func (ts *testServer) unblock() { ts.unblockOnce.Do(func() { close(ts.impl.blocked) }) }
+func (ts *testServer) unblock()     { ts.unblockOnce.Do(func() { close(ts.impl.blocked) }) }
 
 func (ts *testServer) ping(timeout time.Duration) error {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)

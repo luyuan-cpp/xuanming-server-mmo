@@ -274,7 +274,9 @@ func TestValidSeedRequest(t *testing.T) {
 		mutate func(in *tradepb.SeedListingRequest)
 	}{
 		{"seller=0", func(in *tradepb.SeedListingRequest) { in.SellerPlayerId = 0 }},
-		{"类目 0", func(in *tradepb.SeedListingRequest) { in.Category = tradepb.ListingCategory_LISTING_CATEGORY_UNSPECIFIED }},
+		{"类目 0", func(in *tradepb.SeedListingRequest) {
+			in.Category = tradepb.ListingCategory_LISTING_CATEGORY_UNSPECIFIED
+		}},
 		{"类目 10", func(in *tradepb.SeedListingRequest) { in.Category = tradepb.ListingCategory(10) }},
 		{"子类越界", func(in *tradepb.SeedListingRequest) { in.Subcategory = 6 }},
 		{"标题为空", func(in *tradepb.SeedListingRequest) { in.Title = "" }},
@@ -282,7 +284,9 @@ func TestValidSeedRequest(t *testing.T) {
 		{"标题超长", func(in *tradepb.SeedListingRequest) { in.Title = strings.Repeat("剑", constants.MaxTitleRunes+1) }},
 		{"标题含换行", func(in *tradepb.SeedListingRequest) { in.Title = "a\nb" }},
 		{"摘要超长", func(in *tradepb.SeedListingRequest) { in.Summary = strings.Repeat("a", constants.MaxSummaryRunes+1) }},
-		{"描述超长", func(in *tradepb.SeedListingRequest) { in.Description = strings.Repeat("a", constants.MaxDescriptionRunes+1) }},
+		{"描述超长", func(in *tradepb.SeedListingRequest) {
+			in.Description = strings.Repeat("a", constants.MaxDescriptionRunes+1)
+		}},
 		{"描述含控制字符", func(in *tradepb.SeedListingRequest) { in.Description = "a\x01" }},
 		{"图标键字符集", func(in *tradepb.SeedListingRequest) { in.IconKey = "Icon-A" }},
 		{"等级超限", func(in *tradepb.SeedListingRequest) { in.Level = constants.MaxLevel + 1 }},

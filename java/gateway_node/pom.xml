@@ -23,6 +23,13 @@
         <jetcd.version>0.8.5</jetcd.version>
         <protobuf.version>3.25.5</protobuf.version>
         <jvm.warning.suppression.args>-XX:+EnableDynamicAgentLoading -Xshare:off</jvm.warning.suppression.args>
+        <!-- 发布版本戳(docs/design/release-packaging-standard-20260914.md P1),由
+             spring-boot-maven-plugin 的 build-info 写进 META-INF/build-info.properties,
+             actuator /actuator/info 的 build 段读它。镜像构建(deploy/k8s/Dockerfile.java-svc)用
+             -Dmmorpg.build.version / -Dmmorpg.build.commit 覆盖;本地与 CI 的 mvn test 不传,取下面默认值。
+             命令行 -D 的优先级高于这里的 properties,所以默认值不会盖掉传入值。 -->
+        <mmorpg.build.version>${project.version}</mmorpg.build.version>
+        <mmorpg.build.commit>unknown</mmorpg.build.commit>
     </properties>
 
     <dependencies>
@@ -143,6 +150,27 @@
                 <configuration>
                     <jvmArguments>${jvm.warning.suppression.args}</jvmArguments>
                 </configuration>
+                <executions>
+                    <execution>
+                        <!-- build-info 默认绑定 generate-resources,mvn test / package 都会生成。
+                             build-info goal 没有 version 参数,build.version 固定取 project.version;
+                             additionalProperties 在 spring-boot-loader-tools 3.4.3 的 BuildPropertiesWriter
+                             里排在标准字段之后写入,同名 version 会覆盖它(2026-09-16 核对该版本字节码)。
+                             升级 Spring Boot 后若这里失效,表现是 /actuator/info 的 build.version 变回
+                             project.version,而不是构建失败,升级时要回归一次。
+                             值不能为 null(插件会拒),所以两个属性都在 <properties> 里给了默认值。 -->
+                        <id>build-info</id>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                        <configuration>
+                            <additionalProperties>
+                                <version>${mmorpg.build.version}</version>
+                                <commit>${mmorpg.build.commit}</commit>
+                            </additionalProperties>
+                        </configuration>
+                    </execution>
+                </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

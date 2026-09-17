@@ -23,6 +23,7 @@ import (
 	"friend/internal/svc"
 	base "proto/common/base"
 	pb "proto/friend"
+	"shared/buildinfo"
 	"shared/grpcstats"
 	"shared/killswitch"
 	"shared/serverbase"
@@ -30,10 +31,18 @@ import (
 
 var configFile = flag.String("f", "etc/friend.yaml", "config file path")
 
+var showVersion = flag.Bool("version", false, "打印版本信息并退出")
+
 const nodeType = uint32(base.ENodeType_FriendNodeService)
 
 func main() {
 	flag.Parse()
+	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
+	// (shared/buildinfo;理由同 cpp/nodes/gate/gate_version.h 头注释)。
+	fmt.Println(buildinfo.StartupLine("friend"))
+	if *showVersion {
+		return
+	}
 	conf.MustLoad(*configFile, &config.AppConfig)
 
 	svcCtx := svc.NewServiceContext(config.AppConfig)

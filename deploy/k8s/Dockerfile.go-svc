@@ -8,14 +8,23 @@
 #   docker build -f deploy/k8s/Dockerfile.go-svc \
 #     --build-arg SERVICE=login \
 #     --build-arg ENTRY=login.go \
-#     -t mmorpg-login:latest  go/
+#     --build-context tables=generated/tables \
+#     -t mmorpg-login:<tag>  go/
 #
 #   db 额外需要仓库外的 proto2mysql(见下方 proto2mysql stage 说明):
 #   docker build -f deploy/k8s/Dockerfile.go-svc \
 #     --build-arg SERVICE=db --build-arg ENTRY=db.go \
 #     --build-context proto2mysql=../proto2mysql \
 #     -t mmorpg-db:<tag>  go/
-#   平时走 tools/scripts/go_svc_image.ps1,它会自动解析 go.mod 的 replace 并追加该参数。
+#   平时走 tools/scripts/go_svc_image.ps1,它会自动解析 go.mod 的 replace 并追加该参数,
+#   并注入 BUILD_VERSION / BUILD_COMMIT / BUILD_TIME 与 --label org.opencontainers.image.revision。
+#
+# 基础镜像钉 digest(tag@sha256):tag 在 registry 上会被重推(补丁、换底层 alpine),只钉 tag 时
+# "同一份 Dockerfile 两次构建出不同的镜像",回滚与事故复现都无从谈起。
+# digest 为 2026-09-16 用 `docker buildx imagetools inspect <image:tag>` 查到的 index digest
+# (多架构清单列表的摘要,输出里第一段 "Digest:" 行)。更新方法:改 tag → 重新 inspect 取该行 →
+# 同时改 FROM 行(builder 还要改下方 GOVERSION 断言)→ 走 go_svc_image.ps1 构建一遍验证。
+# 不用 `# syntax=` / `RUN --mount`:内网 / 国内机器构建时不去 Docker Hub 额外拉 dockerfile frontend。
 # ────────────────────────────────────────────────────────────────
 
 # ── 仓库外 replace 模块(可选)──────────────────────────────────────
@@ -40,38 +49,46 @@ FROM scratch AS proto2mysql
 FROM scratch AS tables
 
 # ── Build stage ──────────────────────────────────────────────────
-# go/db/go.mod 已声明 go 1.26.5,golang:1.24 基础镜像会在 `go mod download` 时按
-# GOTOOLCHAIN=auto 再去下载一个 1.26 工具链(国内网络下经常超时),干脆直接用 1.26。
-# 其余服务(go 1.24.5)向后兼容。
-FROM golang:1.26-alpine AS builder
+# 精确到补丁版本并断言,与 go/db/go.mod、go/data_service/go.mod、go/trade/go.mod 的 `go 1.26.5` 对齐。
+# 以前是 golang:1.26-alpine:1.26.x 的补丁升级会在无人察觉时换掉编译器,"同一 commit 两次构建
+# 二进制不同"。其余服务(go 1.24.5)向后兼容。升级 Go 时 FROM 的 tag/digest 与下方断言一起改。
+FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder
 
 ARG SERVICE
 ARG ENTRY
 # 默认官方代理;国内构建由 tools/scripts/go_svc_image.ps1 把宿主的 $env:GOPROXY
-# (buildenv.ps1 设为 goproxy.cn)透传进来,否则模块下载会卡死。
-ARG GOPROXY=https://proxy.golang.org,direct
+# (buildenv.ps1 设为 goproxy.cn)原样透传进来,否则模块下载会卡死。
+# **分隔符用 `|` 而不是 `,`**:逗号只在代理返回 404/410 时才退到下一个源,网络层错误
+# (unexpected EOF / 超时 / 连接重置)直接失败,后面的 direct 根本轮不到;竖线是"任何错误都回退"。
+# A 仓 2026-08-12 事故:代理抖动不回退 → 批量构建必有失败 → 兜底用了旧镜像 → 上线即 CrashLoop。
+# 宿主透传的值不做改写,宿主侧也应写成 `|` 分隔。
+ARG GOPROXY=https://proxy.golang.org|direct
 
-# 版本戳。由 tools/scripts/go_svc_image.ps1 从 git 注入,默认 unknown。
-# 既写进二进制的 ldflags,也落一份 /app/BUILD_INFO —— 后者是
-# `kubectl exec … cat /app/BUILD_INFO` 能直接看到的判据,不依赖服务自己打印。
-ARG BUILD_VERSION=unknown
-ARG BUILD_COMMIT=unknown
-ARG BUILD_TIME=unknown
+# GOTOOLCHAIN=local:禁止 go 命令在构建期按 go.mod 静默下载别的工具链 —— 版本不符直接失败,
+# 而不是"镜像里的编译器其实不是断言过的那个"。CGO_ENABLED=0 产出静态二进制,运行镜像不依赖 musl 动态库。
+ENV CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOTOOLCHAIN=local GOPROXY=${GOPROXY}
 
+RUN actual="$(go env GOVERSION)" \
+    && test "$actual" = "go1.26.5" \
+    || (echo "ERROR: Dockerfile.go-svc 要求 go1.26.5,实际 ${actual}" && exit 1)
+
+# git 只给 GOPROXY 的 direct 回退用(按 VCS 直接拉模块)。
 RUN apk add --no-cache git
 
 WORKDIR /src
 
-# Copy shared local modules (used by replace directives in go.mod)
-COPY proto/  /src/proto/
-COPY shared/ /src/shared/
+# ── 依赖层:先只放 go.mod / go.sum,单独 go mod download ──────────────
+# 本层 cache key 只取决于依赖声明,业务代码改动不会让它失效;BUILD_* 版本戳也刻意没在这之前声明
+# (ARG 一旦声明,其后每个 RUN 都隐式带着它参与缓存计算,每次都变的 BUILD_TIME 会击穿依赖缓存)。
+# go mod download 需要 replace 目标的 go.mod 已在位(proto / shared / schemamigrate 在 go/ 内,
+# proto2mysql 走命名上下文),源码此时不需要。
+COPY proto/go.mod proto/go.sum /src/proto/
+COPY shared/go.mod shared/go.sum /src/shared/
 # 建表模块 go/schemamigrate(port-decisions D-14):建表服务(trade 等)经 go.mod
 # `replace schemamigrate => ../schemamigrate` 依赖它,位置与 shared 同级(/src/schemamigrate)。
 # 非建表服务不引用它,多拷一个小目录无副作用。它依赖的 proto2mysql 是已发布 tag,走 go mod download。
-COPY schemamigrate/ /src/schemamigrate/
-
-# Copy the target service
-COPY ${SERVICE}/ /src/${SERVICE}/
+COPY schemamigrate/go.mod schemamigrate/go.sum /src/schemamigrate/
+COPY ${SERVICE}/go.mod ${SERVICE}/go.sum /src/${SERVICE}/
 
 # 仓库外 replace 模块落到 /proto2mysql:go.mod 里的相对路径 `../../../proto2mysql`
 # 从 /src/<service>/ 出发向上越过根目录后仍归一化为 /proto2mysql,与宿主上
@@ -79,50 +96,54 @@ COPY ${SERVICE}/ /src/${SERVICE}/
 COPY --from=proto2mysql / /proto2mysql/
 
 WORKDIR /src/${SERVICE}
+RUN go mod download
 
-# -X main.<var> 只有当目标 package main 里真的声明了同名字符串变量时才生效;
-# 变量还没加时链接器静默忽略,不会让构建失败。Go 侧补上
-#   var buildVersion, buildCommit, buildTime string
-# 并在启动首行打印之后,这里不用再改。
-RUN GOPROXY=${GOPROXY} go mod download \
-    && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-    go build -ldflags="-s -w \
-        -X main.buildVersion=${BUILD_VERSION} \
-        -X main.buildCommit=${BUILD_COMMIT} \
-        -X main.buildTime=${BUILD_TIME}" \
-    -o /app/service ${ENTRY}
+# ── 源码层 ────────────────────────────────────────────────────────
+# Copy shared local modules (used by replace directives in go.mod)
+COPY proto/  /src/proto/
+COPY shared/ /src/shared/
+COPY schemamigrate/ /src/schemamigrate/
+# Copy the target service
+COPY ${SERVICE}/ /src/${SERVICE}/
 
-# ── Runtime stage ────────────────────────────────────────────────
-FROM alpine:3.20
-
-RUN apk add --no-cache ca-certificates tzdata
-
-WORKDIR /app
-
+# 版本戳。由 tools/scripts/go_svc_image.ps1 从 git 注入,默认 unknown。到这里才声明,理由见依赖层注释。
+# 既写进二进制(shared/buildinfo,服务启动首行 `service starting ... version= commit=` 自报),
+# 也落一份 /app/BUILD_INFO —— 后者是 `kubectl exec … cat /app/BUILD_INFO` 能直接看到的判据,不依赖服务自己打印。
 ARG BUILD_VERSION=unknown
 ARG BUILD_COMMIT=unknown
 ARG BUILD_TIME=unknown
 
-# OCI 标准标签,`docker inspect` / registry UI 直接可读
-LABEL org.opencontainers.image.version="${BUILD_VERSION}" \
-      org.opencontainers.image.revision="${BUILD_COMMIT}" \
-      org.opencontainers.image.created="${BUILD_TIME}"
+# -X 目标是 go/shared/buildinfo 的包级变量(所有 Go 服务 main 都 import 它)。
+# 链接器对不存在的 -X 目标静默忽略、构建照样成功:改那边的变量名 / 包路径时必须同步这里与
+# tools/scripts/go_services.ps1 的本地构建,否则版本号又会悄悄变回 dev / unknown。
+# -trimpath:二进制里不留构建机绝对路径,同一 commit 在不同机器上构建的产物可比对。
+RUN go build -trimpath \
+    -ldflags="-s -w \
+        -X shared/buildinfo.Version=${BUILD_VERSION} \
+        -X shared/buildinfo.Commit=${BUILD_COMMIT} \
+        -X shared/buildinfo.BuildTime=${BUILD_TIME}" \
+    -o /app/service ${ENTRY}
 
-# 运行期判据:出事时 `kubectl exec <pod> -- cat /app/BUILD_INFO`
-# 就能确认这个 Pod 到底跑的是哪个 commit,不用去猜 tag 有没有被覆盖。
-RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
-      "${BUILD_VERSION}" "${BUILD_COMMIT}" "${BUILD_TIME}" > /app/BUILD_INFO
+# ── Runtime stage ────────────────────────────────────────────────
+# alpine 3.20 沿用原有大版本,只钉到补丁 + digest。注意 3.20 分支上游已停止维护(3.20.10 是
+# 最后一个补丁,registry 标注 2026-04-16 构建);升到与 builder 同代的 alpine 3.24 另行评审。
+FROM alpine:3.20.10@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 
-COPY --from=builder /app/service /app/service
+# 非 root 运行(uid/gid 10001,与 A 仓一致):容器逃逸 / 任意文件写漏洞时不直接拿到 root。
+# 预建并交给 10001 的目录(2026-09-16 写路径审计:各服务 etc/*.yaml、服务代码里的文件写调用、
+# deploy/k8s/manifests/go-svc/*.yaml 的 volumeMounts):
+#   - /app、/generated:工作目录与策划表目录;
+#   - /run/snowflake:SnowflakeCacheDir 默认值 ../../run/snowflake 从 WORKDIR /app 归一化后的路径
+#     (login / match / scene_manager / guild 的 shared/snowflakealloc 会 MkdirAll + 写临时文件 + rename)。
+#     K8s 上 ConfigMap 把它改成 /tmp/snowflake 并挂 emptyDir,这里兜的是 docker run / 未覆盖配置的场景。
+# 各服务 etc/*.yaml 没有 Log 段,go-zero logx 默认 console 输出到 stdout/stderr,不写日志文件。
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -S -g 10001 mmorpg \
+    && adduser -S -D -H -h /app -s /sbin/nologin -u 10001 -G mmorpg mmorpg \
+    && mkdir -p /app /generated/tables /run/snowflake \
+    && chown 10001:10001 /app /generated /generated/tables /run/snowflake
 
-# Each service keeps its etc/ config inside the image as a default.
-# K8s deployments override it via ConfigMap mount at /app/etc/.
-ARG SERVICE
-COPY ${SERVICE}/etc/ /app/etc/
-
-# Optional data directory (e.g., db/data/ with table JSON definitions)
-# The wildcard pattern avoids build failure if the dir doesn't exist.
-COPY ${SERVICE}/data*/ /app/data/
+WORKDIR /app
 
 # 策划表落到 /generated/tables:WORKDIR 是 /app,TableDir 默认值 ../../generated/tables
 # 从 /app 向上归一化后正是 /generated/tables,所以各服务 etc/*.yaml 与 K8s ConfigMap
@@ -132,13 +153,49 @@ COPY ${SERVICE}/data*/ /app/data/
 # (如 actoractioncombatstate.json),而 generated/tables/ 导出的是大驼峰
 # (ActorActionCombatState.json)。Windows 文件系统不分大小写所以本地从没暴露,
 # Linux 容器里一定读不到。这里是部署侧兜底,根因在导表/生成器命名不一致。
-COPY --from=tables / /generated/tables/
+# 用 COPY --chown 而不是事后 chown -R:后者会把整份文件在新层里再存一遍。
+COPY --chown=10001:10001 --from=tables / /generated/tables/
 RUN set -e; cd /generated/tables; for f in *.json; do \
       [ -e "$f" ] || continue; \
       lower="$(printf '%s' "$f" | tr 'A-Z' 'a-z')"; \
       [ "$f" = "$lower" ] || mv "$f" "$lower"; \
     done
 
+# Each service keeps its etc/ config inside the image as a default.
+# K8s deployments override it via ConfigMap mount at /app/etc/.
+ARG SERVICE
+COPY --chown=10001:10001 ${SERVICE}/etc/ /app/etc/
+
+# Optional data directory (e.g., db/data/ with table JSON definitions)
+# The wildcard pattern avoids build failure if the dir doesn't exist.
+COPY --chown=10001:10001 ${SERVICE}/data*/ /app/data/
+
+COPY --chown=10001:10001 --from=builder /app/service /app/service
+
+# 版本戳 ARG 放在运行阶段末尾:ARG 之后的每个 RUN 都隐式带着它参与缓存计算,
+# 放前面会让上面的 apk / 表文件改名层每次构建都失效。
+ARG BUILD_VERSION=unknown
+ARG BUILD_COMMIT=unknown
+ARG BUILD_TIME=unknown
+
+# OCI 标准标签,`docker inspect` / registry UI 直接可读。
+# revision 另由 go_svc_image.ps1 以 --label 再传一次同值:发布脚本按该 label 与当前 commit 比对。
+LABEL org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIME}" \
+      org.opencontainers.image.source="https://github.com/luyuan-cpp/xuanming-server-mmo" \
+      org.opencontainers.image.title="${SERVICE}"
+
+# 运行期判据:出事时 `kubectl exec <pod> -- cat /app/BUILD_INFO`
+# 就能确认这个 Pod 到底跑的是哪个 commit,不用去猜 tag 有没有被覆盖。
+RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
+      "${BUILD_VERSION}" "${BUILD_COMMIT}" "${BUILD_TIME}" > /app/BUILD_INFO
+
+USER 10001:10001
+
 EXPOSE 8080
 
+# 不写 HEALTHCHECK:与 A 仓做法一致,健康检查交给 K8s probe(Docker HEALTHCHECK 在 K8s 里不生效,
+# 写了只会让本地 docker run 与集群行为不一致)。
+# exec 形式:业务进程是 PID 1,直接收到 SIGTERM 走优雅停机。
 ENTRYPOINT ["/app/service"]

@@ -186,6 +186,20 @@ function Test-Tcp([int]$Port) {
     catch { return $false }
     finally { $socket.Dispose() }
 }
+# 网关 PID 以健康检查通过后真正监听 8081 的进程为准。Oracle 的 javapath\java.exe 只是个壳：
+# Start-Process 拿到的是壳进程，真正的 JVM 是它的子进程，按壳的 PID 停不掉网关，8081 会一直被占着。
+# 监听者不是本仓网关 jar 时不写 PID，并删掉旧记录，避免有人按过期 PID 停错进程。
+function Save-GatewayPid([string]$JarPath) {
+    $pidPath = Join-Path $serverRoot 'run/pids/gateway_node.pid'
+    $listener = Get-NetTCPConnection -State Listen -LocalPort 8081 -ErrorAction SilentlyContinue | Select-Object -First 1
+    $owner = if ($listener) { Get-CimInstance Win32_Process -Filter "ProcessId=$($listener.OwningProcess)" -ErrorAction SilentlyContinue }
+    if ($owner -and $owner.Name -eq 'java.exe' -and $owner.CommandLine -and $owner.CommandLine.Contains($JarPath)) {
+        $owner.ProcessId | Set-Content -LiteralPath $pidPath
+        return
+    }
+    Remove-Item -LiteralPath $pidPath -ErrorAction SilentlyContinue
+    Write-Warning '未能确认监听 8081 的是本仓网关 JVM，本次没有写入 run/pids/gateway_node.pid。'
+}
 function Get-MatchingProcess([int]$ProcessId, [string[]]$Paths) {
     $candidate = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
     if ($candidate -and $candidate.Path -and ($candidate.Path -in $Paths)) { return $candidate }
@@ -478,9 +492,9 @@ try {
             $javaTmp = Join-Path $serverRoot "run/java-tmp-$stamp"
             New-Item -ItemType Directory -Path $javaTmp | Out-Null
             $gatewayProcess = Start-Process -FilePath $java -WorkingDirectory (Join-Path $serverRoot 'java/gateway_node') -ArgumentList @("`"-Djdk.net.unixdomain.tmpdir=$javaTmp`"",'-jar',"`"$($jar.FullName)`"") -WindowStyle Hidden -RedirectStandardOutput (Join-Path $logDir 'gateway.stdout.log') -RedirectStandardError (Join-Path $logDir 'gateway.stderr.log') -PassThru
-            $gatewayProcess.Id | Set-Content -LiteralPath (Join-Path $serverRoot 'run/pids/gateway_node.pid')
         }
         Wait-Ready '网关健康检查' { try { (Invoke-RestMethod "$gatewayUrl/actuator/health" -TimeoutSec 5).status -eq 'UP' } catch { $false } }
+        Save-GatewayPid $jar.FullName
         Write-Step '6/6 检查区服入口'
         Wait-Ready '一区开放' { try { @((Invoke-RestMethod "$gatewayUrl/api/server-list" -TimeoutSec 5).zones | Where-Object { $_.zone_id -eq 1 -and $_.status -eq 'OPEN' }).Count -gt 0 } catch { $false } }
         Write-Host "`n服务器已启动。网关：$gatewayUrl，选择一区。" -ForegroundColor Green

@@ -92,11 +92,8 @@ type PlayerAttributeComp struct {
 	LastSwitchTime uint64                 `protobuf:"varint,4,opt,name=last_switch_time,json=lastSwitchTime,proto3" json:"last_switch_time,omitempty"`                                                                 // 上次切换方案的 Unix 秒(切换冷却)
 	BonusPoints    map[uint32]uint32      `protobuf:"bytes,5,rep,name=bonus_points,json=bonusPoints,proto3" json:"bonus_points,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // pool_id -> 等级之外获得的额外点(道具/任务奖励)
 	BonusValues    map[uint32]uint32      `protobuf:"bytes,6,rep,name=bonus_values,json=bonusValues,proto3" json:"bonus_values,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"varint,2,opt,name=value"` // dimension_id -> 外部加成(装备/丹药),不占点、随方案不变
-	// 数值单位版本(2026-09-14 起):0 = 旧存档;1 = 法力单位 ×4。加载时发现旧版本就把当前法力(角色 + 宝宝)换算后盖戳,
-	// 只做一次。规则与调用约定见 cpp/libs/services/scene/player/system/attribute_unit_migration.h
-	AttributeUnitVersion uint32 `protobuf:"varint,7,opt,name=attribute_unit_version,json=attributeUnitVersion,proto3" json:"attribute_unit_version,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *PlayerAttributeComp) Reset() {
@@ -171,13 +168,6 @@ func (x *PlayerAttributeComp) GetBonusValues() map[uint32]uint32 {
 	return nil
 }
 
-func (x *PlayerAttributeComp) GetAttributeUnitVersion() uint32 {
-	if x != nil {
-		return x.AttributeUnitVersion
-	}
-	return 0
-}
-
 var File_proto_common_component_player_attribute_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_player_attribute_comp_proto_rawDesc = "" +
@@ -189,15 +179,14 @@ const file_proto_common_component_player_attribute_comp_proto_rawDesc = "" +
 	"\tallocated\x18\x03 \x03(\v2\x1f.AttributeScheme.AllocatedEntryR\tallocated\x1a<\n" +
 	"\x0eAllocatedEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\x85\x04\n" +
+	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\"\xcf\x03\n" +
 	"\x13PlayerAttributeComp\x12*\n" +
 	"\aschemes\x18\x01 \x03(\v2\x10.AttributeSchemeR\aschemes\x12(\n" +
 	"\x10active_scheme_id\x18\x02 \x01(\rR\x0eactiveSchemeId\x12$\n" +
 	"\x0enext_scheme_id\x18\x03 \x01(\rR\fnextSchemeId\x12(\n" +
 	"\x10last_switch_time\x18\x04 \x01(\x04R\x0elastSwitchTime\x12H\n" +
 	"\fbonus_points\x18\x05 \x03(\v2%.PlayerAttributeComp.BonusPointsEntryR\vbonusPoints\x12H\n" +
-	"\fbonus_values\x18\x06 \x03(\v2%.PlayerAttributeComp.BonusValuesEntryR\vbonusValues\x124\n" +
-	"\x16attribute_unit_version\x18\a \x01(\rR\x14attributeUnitVersion\x1a>\n" +
+	"\fbonus_values\x18\x06 \x03(\v2%.PlayerAttributeComp.BonusValuesEntryR\vbonusValues\x1a>\n" +
 	"\x10BonusPointsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\rR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\rR\x05value:\x028\x01\x1a>\n" +

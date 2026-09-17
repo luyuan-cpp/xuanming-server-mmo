@@ -128,6 +128,12 @@ func (p *codeParser) handleGlobalCode(line string) bool {
 }
 
 func (p *codeParser) handleMethodCode(line string) {
+	// 生成函数的结束大括号固定顶格。旧包装函数没有守护段时也必须在此结束匹配,
+	// 否则下一个函数的守护段会被归给当前方法;守护段内的自定义代码不参与边界识别。
+	if !p.inMethodCode && strings.TrimRight(line, "\r\n") == "}" {
+		p.currentMethod = nil
+		return
+	}
 	if p.currentMethod == nil {
 		for _, method := range *p.methods {
 			handlerName := p.methodFunc(method, p.funcParam)

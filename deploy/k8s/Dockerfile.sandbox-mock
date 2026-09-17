@@ -3,13 +3,28 @@
 #
 # Build context MUST be the go/ directory so the replace directives
 # in go/login/go.mod resolve (../proto, ../shared).
+# 以 go/ 为 context 时根 .dockerignore 不生效。
 #
 # Usage:
 #   docker build -f deploy/k8s/Dockerfile.sandbox-mock \
-#     -t mmorpg-sandbox-mock:latest  go/
+#     --build-arg BUILD_VERSION=<版本或 tag> --build-arg BUILD_COMMIT=<12 位 sha> \
+#     --build-arg BUILD_TIME=<UTC yyyy-MM-ddTHH:mm:ssZ> \
+#     --label org.opencontainers.image.revision=<12 位 sha> \
+#     -t mmorpg-sandbox-mock:<tag>  go/
+#   deploy/docker-compose.login-stack.yml 的 sandbox-mock 服务不传 BUILD_*,镜像内版本信息为 unknown。
+#
+# 基础镜像钉 digest(2026-09-16 查询,均为多平台 index digest):
+#   docker buildx imagetools inspect golang:1.24.5-alpine3.22   → 取顶部 Digest
+#   docker buildx imagetools inspect alpine:3.20.10             → 同上
+#   升级时 tag 与 digest 同批改;Go 版本跟随 go/login/go.mod 的 go 指令,并同步下方 GOVERSION 断言。
 # ────────────────────────────────────────────────────────────────
 
-FROM golang:1.24-alpine AS builder
+FROM golang:1.24.5-alpine3.22@sha256:daae04ebad0c21149979cd8e9db38f565ecefd8547cf4a591240dc1972cf1399 AS builder
+
+# local:禁止按 go.mod 自动下载别的工具链(国内网络下常超时,且会让编译器版本脱离基础镜像)。
+ENV GOTOOLCHAIN=local
+RUN test "$(go env GOVERSION)" = "go1.24.5"
+
 RUN apk add --no-cache git
 WORKDIR /src
 
@@ -21,15 +36,36 @@ COPY login/  /src/login/
 WORKDIR /src/login
 RUN go mod download \
     && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-        go build -ldflags="-s -w" -o /app/sandbox_mock ./cmd/sandbox_mock
+        go build -trimpath -ldflags="-s -w" -o /app/sandbox_mock ./cmd/sandbox_mock
 
 # ── Runtime ──────────────────────────────────────────────────────
-FROM alpine:3.20
+# 3.20 分支已停止维护(2026-04);这里只收紧到精确补丁版本,换分支与其它 alpine 运行镜像同批做。
+FROM alpine:3.20.10@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 RUN apk add --no-cache ca-certificates
 WORKDIR /app
 COPY --from=builder /app/sandbox_mock /app/sandbox_mock
 
+# 每次构建都变的 ARG 放在最后,避免击穿上面几层缓存。
+ARG BUILD_VERSION=unknown
+ARG BUILD_COMMIT=unknown
+ARG BUILD_TIME=unknown
+
+LABEL org.opencontainers.image.title="mmorpg-sandbox-mock" \
+      org.opencontainers.image.version="${BUILD_VERSION}" \
+      org.opencontainers.image.revision="${BUILD_COMMIT}" \
+      org.opencontainers.image.created="${BUILD_TIME}" \
+      org.opencontainers.image.source="https://github.com/luyuan-cpp/xuanming-server-mmo"
+
+RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
+      "${BUILD_VERSION}" "${BUILD_COMMIT}" "${BUILD_TIME}" > /app/BUILD_INFO \
+    && chmod 0555 /app/sandbox_mock \
+    && chmod 0444 /app/BUILD_INFO
+
 EXPOSE 18090
+
+# 非 root(10001)。写路径审计(go/login/cmd/sandbox_mock/main.go):只用标准库 net/http,
+# 日志走 stderr,不落盘;18090 是非特权端口。所以不需要任何可写目录。
+USER 10001:10001
 
 # Listen on all interfaces inside the container; the compose file
 # publishes :18090 to the host so curl smoke tests don't change.

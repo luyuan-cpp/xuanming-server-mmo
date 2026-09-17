@@ -188,6 +188,7 @@ proto/guild
 proto/login
 proto/match
 proto/scene
+proto/trade
 # shared v0.0.0 => ../go/shared
 ## explicit; go 1.24.5
 shared/generated/pb/table

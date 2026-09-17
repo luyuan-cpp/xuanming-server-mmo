@@ -182,6 +182,38 @@ func TestReadCodeSections_GrpcWrapperLegacyFileHasNoPreDispatchSections(t *testi
 	}
 }
 
+// 无守护段的旧包装函数结束后,不能把后续 Handle* 的守护段归给它。
+func TestReadCodeSections_GrpcWrapperWithoutSectionDoesNotCaptureNextHandler(t *testing.T) {
+	setParserTestNaming(t)
+	methods := buildParserTestMethods("SceneNodeGrpc", "CreateScene", "DestroyScene")
+	cpp := strings.Join([]string{
+		_config.Global.Naming.YourCodePair,
+		"grpc::Status SceneNodeGrpcImpl::CreateScene(grpc::ServerContext* context)",
+		"{",
+		"    loop_.runInLoop([] {",
+		"        do_work();",
+		"    });",
+		"    return grpc::Status::OK;",
+		"}",
+		"void SceneNodeGrpcImpl::HandleDestroyScene(const ::DestroySceneRequest* request)",
+		"{",
+		_config.Global.Naming.YourCodeBegin,
+		"    handle_destroy_scene_impl();",
+		_config.Global.Naming.YourCodeEnd,
+		"}",
+	}, "\n")
+
+	codeMap, _, err := ReadCodeSectionsFromFile(writeParserTempFile(t, cpp), &methods, GenerateGrpcWrapperNameWrapper, "")
+	if err != nil {
+		t.Fatalf("ReadCodeSectionsFromFile failed: %v", err)
+	}
+	for _, method := range methods {
+		key := GenerateGrpcWrapperNameWrapper(method, "")
+		if codeMap[key] != _config.Global.Naming.YourCodePair {
+			t.Fatalf("wrapper %q without a section captured unrelated code: %q", key, codeMap[key])
+		}
+	}
+}
 func setParserTestNaming(t *testing.T) {
 	t.Helper()
 	oldNaming := _config.Global.Naming

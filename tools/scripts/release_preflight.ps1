@@ -1,7 +1,7 @@
 ﻿#requires -Version 7
 <#
 .SYNOPSIS
-    发布前配置门禁。把 docs/ops/release-checklist.md §A.2 的人工勾选框变成可执行判据。
+    发布前配置门禁。把 docs/ops/release-checklist.md 附录 A.2 的人工勾选框变成可执行判据。
 
 .DESCRIPTION
     为什么不是"两边一致就算过":三处默认值本来就一致 —— 全是同一个占位串
@@ -17,6 +17,11 @@
     绝不"跳过 = 通过"。唯一的例外是"必须关断的开关":代码侧默认值已核实为关,
     键缺失等价于关,这类检查显式标注 MissingPolicy=pass-off 并在输出里说明。
 
+    给了 -ReleaseVersion 时追加 H 节"制品与版本"检查(版本号、CHANGELOG 段落、制品目录
+    sha256sums、build-info 版本与脏树、release manifest、镜像 tag 与制品 commit 对应);
+    不给时整节不跑,k8s_image.ps1 / k8s_deploy.ps1 的既有调用行为完全不变。
+    制品目录布局见 docs/ops/release-checklist.md §1。
+
     退出码:
       0 = 无 FAIL(可能有 WARN)
       1 = 存在 FAIL,阻断发布
@@ -29,6 +34,10 @@
 .EXAMPLE
     # 本地看一眼,不阻断
     pwsh -File tools/scripts/release_preflight.ps1 -ReleaseProfile dev
+
+.EXAMPLE
+    # 版本发布门禁:配置 + 制品(制品根默认取 $env:MMORPG_ARTIFACT_ROOT,再默认 <仓库父目录>/artifacts)
+    pwsh -File tools/scripts/release_preflight.ps1 -ReleaseVersion v1.2.3 -ImageTag v1.2.3-0ddfcad4a8bb
 #>
 param(
     # dev  : 只跑结构性检查(键在不在、tag 可不可变),密钥类降级为 WARN
@@ -46,6 +55,14 @@ param(
     [int]$MinKafkaBrokers = 3,
     [int]$MinLeaseTtlSeconds = 30,
 
+    # 待发布的版本号(vX.Y.Z)。给了才跑 H 节"制品与版本"检查。
+    # 新参数刻意排在已有参数之后:脚本参数默认可按位置绑定,插在中间会让旧的位置参数错位。
+    [string]$ReleaseVersion = "",
+
+    # 制品根目录。留空按 lib/artifacts_lib.ps1 的 Get-ArtifactRoot 口径
+    # ($env:MMORPG_ARTIFACT_ROOT,再默认 <仓库父目录>/artifacts)。只在给了 -ReleaseVersion 时使用。
+    [string]$ArtifactRoot = "",
+
     # 只打印结果不返回非 0(给"看一眼"用,发布路径绝不能加)
     [switch]$NoFailExit,
 
@@ -55,8 +72,10 @@ param(
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$RepoRoot = (Resolve-Path (Join-Path $ScriptDir "..\..")).Path
-. (Join-Path $ScriptDir "lib\release_common.ps1")
+# 逐级 Split-Path 上溯而不是拼 "..\..":反斜杠在 Linux pwsh 里是普通字符,
+# 而调用本脚本的契约测试在 deploy-config-tests.yml / release.yml 里跑在 ubuntu-latest 上。
+$RepoRoot = (Resolve-Path (Split-Path -Parent (Split-Path -Parent $ScriptDir))).Path
+. (Join-Path $ScriptDir "lib" "release_common.ps1")
 
 # 密钥类检查在 dev 下降级成 WARN;staging/prod 是硬 FAIL。
 $SecretSeverity = if ($ReleaseProfile -eq 'dev') { 'WARN' } else { 'FAIL' }
@@ -426,6 +445,172 @@ else {
 # C++ 节点日志级别:0=DEBUG。生产开 DEBUG 会把热点路径打爆(见 base_deploy_config.yaml 注释)
 Test-NumericFloor -Id 'debug.cpp.loglevel' -RelativePath 'bin/etc/base_deploy_config.yaml' -KeyPath 'LogLevel' -Floor 1 `
     -Why "0=DEBUG,生产开着会在 AOI/移动热点路径上产生海量日志。"
+
+# ─────────────────────────────────────────────────────────────────
+# H. 制品与版本(仅在给了 -ReleaseVersion 时检查)
+# ─────────────────────────────────────────────────────────────────
+
+<#
+.SYNOPSIS
+    检查待发布版本的制品本身:存在、完整、确实是这个版本、来自干净工作树、release manifest 已落盘。
+
+.DESCRIPTION
+    为什么预检要查制品:配置全对、要部署的却是另一版镜像(或 tar 被截断/篡改、版本目录是脏树产物),
+    一样是事故。A 仓的预检只查配置且没接进流水线(docs/design/release-packaging-standard-20260914.md §2.11)。
+
+    fail-safe 与上面各节一致:目录/文件/字段缺失、JSON 解析失败一律 FAIL,不跳过。
+    版本号本身不合法时后续检查全都无从谈起,只登记这一条就返回。
+#>
+function Invoke-ReleaseArtifactChecks {
+    $versionTarget = "-ReleaseVersion=$ReleaseVersion"
+    $versionCheck = Test-ReleaseVersion -Version $ReleaseVersion
+    if (-not $versionCheck.Ok) {
+        Add-Result -Id 'release.version' -Status 'FAIL' -Target $versionTarget -Detail $versionCheck.Reason
+        return
+    }
+    Add-Result -Id 'release.version' -Status 'PASS' -Target $versionTarget -Detail "合法的发布版本号。"
+
+    # 版本号四处一致之一:CHANGELOG 段落(与 make_release.ps1 同口径,找不到或为空都算失败)
+    $changelog = Test-ChangelogReleaseSection -ChangelogPath (Join-Path $RepoRoot 'CHANGELOG.md') -Version $ReleaseVersion
+    $changelogTarget = "CHANGELOG.md $($changelog.Heading)"
+    if ($changelog.Ok) {
+        Add-Result -Id 'release.changelog' -Status 'PASS' -Target $changelogTarget -Detail "段落存在且非空。"
+    }
+    else {
+        Add-Result -Id 'release.changelog' -Status 'FAIL' -Target $changelogTarget -Detail $changelog.Reason
+    }
+
+    # 制品库按需加载:不给 -ReleaseVersion 的既有调用方不依赖它
+    $libPath = Join-Path $ScriptDir 'lib' 'artifacts_lib.ps1'
+    if (-not (Test-Path -LiteralPath $libPath -PathType Leaf)) {
+        Add-Result -Id 'release.artifact.dir' -Status 'FAIL' -Target $libPath -Detail "制品库脚本缺失,无法定位与校验制品,按 fail-safe 判 FAIL。"
+        return
+    }
+    . $libPath
+
+    try {
+        $channelRoot = Get-ChannelRoot -Channel release -Override $ArtifactRoot
+    }
+    catch {
+        Add-Result -Id 'release.artifact.dir' -Status 'FAIL' -Target "-ArtifactRoot=$ArtifactRoot" -Detail "解析制品根失败:$($_.Exception.Message)"
+        return
+    }
+
+    $versionDir = Join-Path $channelRoot 'images' $ReleaseVersion
+    $manifestPath = Join-Path $channelRoot 'manifests' "$ReleaseVersion.json"
+    $buildInfo = $null
+
+    if (-not [System.IO.Directory]::Exists($versionDir)) {
+        Add-Result -Id 'release.artifact.dir' -Status 'FAIL' -Target $versionDir `
+            -Detail "版本目录不存在:还没用 publish_images.ps1 -Version $ReleaseVersion 发布过,或 -ArtifactRoot / MMORPG_ARTIFACT_ROOT 指错了地方。"
+    }
+    else {
+        Add-Result -Id 'release.artifact.dir' -Status 'PASS' -Target $versionDir -Detail "版本目录存在。"
+
+        try {
+            Test-Sha256Sums -Dir $versionDir | Out-Null
+            Add-Result -Id 'release.artifact.sha256sums' -Status 'PASS' -Target $versionDir -Detail "目录内文件与 sha256sums.txt 完全一致。"
+        }
+        catch {
+            Add-Result -Id 'release.artifact.sha256sums' -Status 'FAIL' -Target $versionDir -Detail $_.Exception.Message
+        }
+
+        $buildInfoPath = Join-Path $versionDir 'build-info.json'
+        try {
+            $buildInfo = [System.IO.File]::ReadAllText($buildInfoPath) | ConvertFrom-Json
+        }
+        catch {
+            $buildInfo = $null
+            Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.json 缺失或不是合法 JSON:$($_.Exception.Message)"
+        }
+
+        if ($null -ne $buildInfo) {
+            # app_version 接受带 v 与不带 v 两种写法:两者指同一个版本,不存在歧义
+            $appVersion = [string]$buildInfo.app_version
+            if ([string]::IsNullOrWhiteSpace($appVersion)) {
+                Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.app_version 为空,无法证明这份制品就是 $ReleaseVersion。"
+            }
+            elseif ($appVersion -cne $ReleaseVersion -and $appVersion -cne $versionCheck.Normalized) {
+                Add-Result -Id 'release.buildinfo.version' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.app_version='$appVersion' 与 -ReleaseVersion=$ReleaseVersion 不一致:版本目录名与制品内容对不上。"
+            }
+            else {
+                Add-Result -Id 'release.buildinfo.version' -Status 'PASS' -Target $buildInfoPath -Detail "app_version='$appVersion'。"
+            }
+
+            $dirty = $buildInfo.dirty
+            if ($dirty -is [bool] -and -not $dirty) {
+                Add-Result -Id 'release.buildinfo.clean' -Status 'PASS' -Target $buildInfoPath -Detail "dirty=false。"
+            }
+            else {
+                Add-Result -Id 'release.buildinfo.clean' -Status 'FAIL' -Target $buildInfoPath -Detail "build-info.dirty='$dirty'(缺失或不是 false 一律拒):脏树产物无法从 commit 还原,不能发布。"
+            }
+
+            # 上面 A~G 节读的是**当前工作树**的配置文件。工作树不在制品 commit 上时,那些结论不代表
+            # 要发布的版本 —— 只提醒不阻断(预检也会在别的 commit 上被用来"看一眼")。
+            $artifactCommit = [string]$buildInfo.commit
+            $stamp = Get-GitReleaseStamp -RepoRoot $RepoRoot
+            if (-not $stamp.Ok) {
+                Add-Result -Id 'release.buildinfo.commit' -Status 'WARN' -Target $buildInfoPath -Detail "读不到当前工作树 commit($($stamp.Reason)),无法确认上面的配置检查对应该版本。"
+            }
+            elseif ($artifactCommit -cne $stamp.Commit) {
+                Add-Result -Id 'release.buildinfo.commit' -Status 'WARN' -Target $buildInfoPath -Detail "制品 commit='$artifactCommit',当前工作树 HEAD=$($stamp.Commit):上面的配置检查读的是当前工作树,结论不代表该版本。请在发布 commit 上重跑预检。"
+            }
+            elseif ($stamp.Dirty) {
+                Add-Result -Id 'release.buildinfo.commit' -Status 'WARN' -Target $buildInfoPath -Detail "当前工作树有未提交改动:上面的配置检查读到的可能不是该版本提交的配置。"
+            }
+            else {
+                Add-Result -Id 'release.buildinfo.commit' -Status 'PASS' -Target $buildInfoPath -Detail "制品 commit 与当前工作树 HEAD 一致且工作树干净。"
+            }
+        }
+    }
+
+    # manifest JSON 是 make_release.ps1 最后才写的"已发布"哨兵:存在即说明 release 记录完整落盘
+    if (-not [System.IO.File]::Exists($manifestPath)) {
+        Add-Result -Id 'release.manifest' -Status 'FAIL' -Target $manifestPath -Detail "release manifest 不存在:还没跑 make_release.ps1 -Version $ReleaseVersion,或它中途失败。"
+    }
+    else {
+        $manifestText = [System.IO.File]::ReadAllText($manifestPath)
+        $manifestOk = $false
+        $manifestReason = "文件为空。"
+        if (-not [string]::IsNullOrWhiteSpace($manifestText)) {
+            try {
+                $manifestText | ConvertFrom-Json | Out-Null
+                $manifestOk = $true
+            }
+            catch {
+                $manifestReason = "不是合法 JSON:$($_.Exception.Message)"
+            }
+        }
+        if ($manifestOk) {
+            Add-Result -Id 'release.manifest' -Status 'PASS' -Target $manifestPath -Detail "manifest 存在且是合法 JSON。"
+        }
+        else {
+            Add-Result -Id 'release.manifest' -Status 'FAIL' -Target $manifestPath -Detail "release manifest $manifestReason"
+        }
+    }
+
+    # 要部署的 tag 必须就是这份制品:形状由 Get-ReleaseImageTag 决定,commit 必须与 build-info 对上
+    if (-not [string]::IsNullOrWhiteSpace($ImageTag)) {
+        $tagTarget = "tag=$ImageTag"
+        $tagMatch = [regex]::Match($ImageTag, '^' + [regex]::Escape($ReleaseVersion) + '-([0-9a-f]{12})\z')
+        if (-not $tagMatch.Success) {
+            Add-Result -Id 'release.imagetag.commit' -Status 'FAIL' -Target $tagTarget -Detail "版本发布的镜像 tag 必须形如 $ReleaseVersion-<12 位小写 commit>(Get-ReleaseImageTag 口径)。"
+        }
+        elseif ($null -eq $buildInfo) {
+            Add-Result -Id 'release.imagetag.commit' -Status 'FAIL' -Target $tagTarget -Detail "build-info.json 不可读,无法核对 tag 里的 commit,按 fail-safe 判 FAIL。"
+        }
+        elseif ($tagMatch.Groups[1].Value -cne [string]$buildInfo.commit) {
+            Add-Result -Id 'release.imagetag.commit' -Status 'FAIL' -Target $tagTarget -Detail "tag 里的 commit=$($tagMatch.Groups[1].Value) 与 build-info.commit='$($buildInfo.commit)' 不一致:要部署的镜像不是这份制品。"
+        }
+        else {
+            Add-Result -Id 'release.imagetag.commit' -Status 'PASS' -Target $tagTarget -Detail "tag 的 commit 与 build-info.commit 一致。"
+        }
+    }
+}
+
+if (-not [string]::IsNullOrWhiteSpace($ReleaseVersion)) {
+    Invoke-ReleaseArtifactChecks
+}
 
 # ─────────────────────────────────────────────────────────────────
 # 汇总输出

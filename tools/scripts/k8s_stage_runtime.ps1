@@ -41,7 +41,7 @@ $runtimeRootPath = Resolve-WorkspacePath -Path $RuntimeRoot
 $zoneInfoSourcePath = Resolve-WorkspacePath -Path $ZoneInfoSource
 $tableSourcePath = Resolve-WorkspacePath -Path $TableSource
 
-$requiredBinaryNames = @("gate", "scene")
+$requiredBinaryNames = @("gate", "scene", "battle")
 foreach ($binaryName in $requiredBinaryNames) {
     $binaryPath = Join-Path $binarySourceRootPath $binaryName
     if (-not (Test-Path $binaryPath)) {

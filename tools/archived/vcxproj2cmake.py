@@ -7,14 +7,15 @@ vcxproj2cmake.py — Generate per-project CMakeLists.txt from *.vcxproj
 Run from repo root:
     python3 tools/archived/vcxproj2cmake.py
 
-Current project structure (active nodes: gate + scene only):
+Current project structure (active nodes: gate + scene + battle):
   - third_party/         → navmesh/hexagon static lib
   - cpp/generated/       → proto, rpc, table, grpc_client, proto_helpers
   - cpp/libs/engine/     → core, config, session, infra, thread_context
   - cpp/libs/modules/    → bag, mission, currency, etc.
-  - cpp/libs/services/   → scene, gate, player (header-only)
+  - cpp/libs/services/   → battle, scene, gate, player (header-only)
   - cpp/nodes/gate/      → gate executable
   - cpp/nodes/scene/     → scene executable
+  - cpp/nodes/battle/    → battle executable
 
 On Linux, muduo comes from third_party/muduo-linux (NOT muduo_windows).
 gRPC/protobuf/abseil are installed to /usr/local via setup_dependencies.sh.
@@ -394,10 +395,13 @@ if __name__ == "__main__":
     print("[12/15] modules")
     generate("./cpp/libs/modules/modules.vcxproj", "./cpp/libs/modules/", "lib")
 
-    print("[13/15] services/scene")
+    print("[13/15] services/battle")
+    generate("./cpp/libs/services/battle/battle.vcxproj", "./cpp/libs/services/battle/", "lib")
+
+    print("[14/15] services/scene")
     generate("./cpp/libs/services/scene/scene.vcxproj", "./cpp/libs/services/scene/", "lib")
 
-    print("[14/15] services/gate")
+    print("[15/15] services/gate")
     generate("./cpp/libs/services/gate/gate.vcxproj", "./cpp/libs/services/gate/", "lib")
 
     # NOTE: services/player is header-only (0 .cpp files) — no CMake needed
@@ -414,4 +418,7 @@ if __name__ == "__main__":
     generate("./cpp/nodes/scene/scene.vcxproj", "./cpp/nodes/scene/", "exe")
 
     print()
-    print("=== Done. Run autogen.sh to build. ===")
+    print("[exe] nodes/battle")
+    generate("./cpp/nodes/battle/battle.vcxproj", "./cpp/nodes/battle/", "exe")
+
+    print("=== Done. Run tools/scripts/build_linux.sh to build. ===")

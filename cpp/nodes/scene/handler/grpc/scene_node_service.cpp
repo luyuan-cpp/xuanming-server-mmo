@@ -202,6 +202,8 @@ grpc::Status SceneNodeGrpcImpl::DestroyScene(grpc::ServerContext* /*context*/,
     const ::DestroySceneRequest* request,
     ::Empty* response)
 {
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
     std::promise<void> promise;
     auto future = promise.get_future();
 
@@ -218,6 +220,8 @@ grpc::Status SceneNodeGrpcImpl::ReleasePlayer(grpc::ServerContext* /*context*/,
     const ::scene_node::ReleasePlayerRequest* request,
     ::Empty* response)
 {
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
     std::promise<void> promise;
     auto future = promise.get_future();
 
@@ -234,6 +238,8 @@ grpc::Status SceneNodeGrpcImpl::PrepareBattle(grpc::ServerContext* /*context*/,
     const ::PrepareBattleRequest* request,
     ::PrepareBattleResponse* response)
 {
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
     std::promise<void> promise;
     auto future = promise.get_future();
 
@@ -250,6 +256,8 @@ grpc::Status SceneNodeGrpcImpl::CancelBattlePrepare(grpc::ServerContext* /*conte
     const ::CancelBattlePrepareRequest* request,
     ::Empty* response)
 {
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
     std::promise<void> promise;
     auto future = promise.get_future();
 

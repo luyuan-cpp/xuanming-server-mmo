@@ -1462,9 +1462,14 @@ void PlayerBattleSystem::OnPlayerEnterScene(entt::entity player, uint32_t enterG
 				 << "(battle:lock 未解,排队仍被挡,下次登录再补)";
 	}
 
-	// 2) 战斗中重连:实体仍存活且挂着 InBattleComp -> 重发 gate 绑定 + 提示客户端补拉
-	//    (完整下线再登录的重绑走上面的 RestoreBattleFreezeOnLogin 回调)
-	if (enterGsType == LOGIN_RECONNECT && tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+	// 2) 战斗中换了会话:实体仍存活且挂着 InBattleComp -> 重发 gate 绑定 + 提示客户端补拉
+	//    (完整下线再登录的重绑走上面的 RestoreBattleFreezeOnLogin 回调)。
+	//    RECONNECT 与 REPLACE 都算换会话:跨 gate 重定向(RedirectToGate)后旧会话通常仍是 Online,
+	//    login 判成 REPLACE 而不是 RECONNECT;只认 RECONNECT 会让重定向后的玩家既拿不到
+	//    重绑也拿不到重连提示,战斗在客户端侧断掉(turn-based-battle-server.md §18.7 待修项)。
+	//    LOGIN_FIRST 不进这里:首登实体是新建的,没有 InBattleComp,由第 1 步按锁 + ctx 重建。
+	if ((enterGsType == LOGIN_RECONNECT || enterGsType == LOGIN_REPLACE) &&
+		tlsEcs.actorRegistry.any_of<InBattleComp>(player))
 	{
 		RebindBattleOnReconnect(player);
 	}

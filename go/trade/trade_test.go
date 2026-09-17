@@ -290,7 +290,10 @@ func TestNodeInfoValueMatchesRegistryContract(t *testing.T) {
 	if mirror.NodeId != 7 || mirror.ZoneId != 2 || mirror.NodeUuid != "uuid-trade-test" {
 		t.Fatalf("身份字段不符: %+v", mirror)
 	}
-	if mirror.NodeType != uint32(base.ENodeType_TradeNodeService) || mirror.NodeType != 12 {
+	if uint32(base.ENodeType_TradeNodeService) != 12 {
+		t.Fatalf("TradeNodeService 枚举值应为 12,实际 %d", base.ENodeType_TradeNodeService)
+	}
+	if mirror.NodeType != uint32(base.ENodeType_TradeNodeService) {
 		t.Fatalf("nodeType 应为 TradeNodeService(12),实际 %d", mirror.NodeType)
 	}
 	if mirror.ProtocolType != uint32(base.ENodeProtocolType_PROTOCOL_GRPC) {
@@ -372,6 +375,9 @@ func TestEnsureSchema(t *testing.T) {
 			if len(active.opts.Tables) != len(data.Tables()) {
 				t.Errorf("表清单应来自 data.Tables()(%d 张),实际 %d 张", len(data.Tables()), len(active.opts.Tables))
 			}
+			if active.opts.AllowModifyColumn {
+				t.Error("常驻启动的 Up / Plan 不得获得 MODIFY COLUMN 授权")
+			}
 			if tc.wantErr != (err != nil) {
 				t.Fatalf("wantErr=%v,实际 err=%v", tc.wantErr, err)
 			}
@@ -380,6 +386,63 @@ func TestEnsureSchema(t *testing.T) {
 			}
 			if tc.err != nil && !errors.Is(err, tc.err) {
 				t.Errorf("错误应包裹原始错误 %v,实际: %v", tc.err, err)
+			}
+		})
+	}
+}
+
+func TestValidateMigrationFlags(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		migrateOnly bool
+		allowModify bool
+		wantErr     bool
+	}{
+		{name: "常驻启动"},
+		{name: "默认迁移", migrateOnly: true},
+		{name: "显式迁移授权改列", migrateOnly: true, allowModify: true},
+		{name: "常驻启动不得授权改列", allowModify: true, wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateMigrationFlags(tc.migrateOnly, tc.allowModify)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("wantErr=%v,实际 err=%v", tc.wantErr, err)
+			}
+			if tc.wantErr && !strings.Contains(err.Error(), "-migrate") {
+				t.Fatalf("拒绝信息必须说明缺少 -migrate: %v", err)
+			}
+		})
+	}
+}
+
+func TestRunMigrationModifyAuthorization(t *testing.T) {
+	for _, allowModify := range []bool{false, true} {
+		name := "默认迁移保留类型漂移供人工处理"
+		if allowModify {
+			name = "显式授权传给迁移器"
+		}
+		t.Run(name, func(t *testing.T) {
+			up := &fakeSchemaRunner{}
+			wantCode := schemamigrate.ExitOK
+			if !allowModify {
+				up.report.Manual = []string{"列类型漂移"}
+				wantCode = schemamigrate.ExitManual
+			}
+			openCalls := 0
+			openMySQL := func(c config.MySQLConf) (*sql.DB, error) {
+				openCalls++
+				// sql.Open 只创建连接池;假 Up 不发查询,整个测试不连接数据库。
+				return sql.Open("mysql", "test@tcp(127.0.0.1:1)/mmorpg_trade")
+			}
+			code := runMigration(config.Config{}, allowModify, openMySQL, up.run)
+			if code != wantCode || openCalls != 1 || up.calls != 1 {
+				t.Fatalf("迁移应执行一次并保留退出码: code=%d want=%d open=%d up=%d", code, wantCode, openCalls, up.calls)
+			}
+			if up.opts.AllowModifyColumn != allowModify {
+				t.Fatalf("迁移授权未正确传递: got=%v want=%v", up.opts.AllowModifyColumn, allowModify)
+			}
+			if up.opts.Database != data.DatabaseName || len(up.opts.Tables) != len(data.Tables()) {
+				t.Fatalf("迁移授权不得改变目标库或表清单: %+v", up.opts)
 			}
 		})
 	}

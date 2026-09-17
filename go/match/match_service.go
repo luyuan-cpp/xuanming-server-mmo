@@ -23,6 +23,7 @@ import (
 	kafkapb "proto/contracts/kafka"
 	matchpb "proto/match"
 
+	"shared/buildinfo"
 	"shared/grpcstats"
 	"shared/safego"
 
@@ -38,8 +39,16 @@ import (
 
 var configFile = flag.String("f", "etc/match_service.yaml", "the config file")
 
+var showVersion = flag.Bool("version", false, "打印版本信息并退出")
+
 func main() {
 	flag.Parse()
+	// 版本行直写 stdout,先于读配置与 logx 初始化:进程在配置 / 依赖阶段就崩溃时也已留下"跑的是哪一版"
+	// (shared/buildinfo;理由同 cpp/nodes/gate/gate_version.h 头注释)。
+	fmt.Println(buildinfo.StartupLine("match"))
+	if *showVersion {
+		return
+	}
 
 	var c config.Config
 	conf.MustLoad(*configFile, &c)

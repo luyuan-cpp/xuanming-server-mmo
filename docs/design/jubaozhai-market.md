@@ -266,6 +266,7 @@ message TradeCreditRequest {
 - **`Mode: dev` 必须显式写**:go-zero 默认 `pro`,不写则本地 SeedListing 不可用;K8s 非 dev 档锁 `pro`。
 - **`DataServiceRpc.Etcd.Key: dataservice.rpc` 是允许的**:D-13 禁的是"指向全局服务的 RpcClient Key",data_service 按 zone 部署不在其列(`xuanming-port-decisions-20260910.md` D-13 原文);契约 §7 "不声明任何 RpcClient 的 Etcd.Key" 措辞过宽。本地 `-Zone N` 会把它改写成 `.zN`,连本 zone 的 data_service;映射存储是全局的,结果等价。
 - 登记:`tools/proto_generator/protogen/etc/proto_gen.yaml` 的 `domain_meta.trade`;`go_services.ps1`、`start_game.ps1`(可选服务)、`go_svc_image.ps1`、`deploy/k8s/Dockerfile.go-svc`(COPY schemamigrate)、`.github/workflows/go-modules-ci.yml`、`k8s_deploy.ps1`(目录、ConfigMap、data-service BootstrapTags、migrate Job)、`deploy/k8s/manifests/go-svc/trade.yaml`、`deploy/mysql-init/00_init_zone_dbs.sql`、data_service 号段 BootstrapTags。
+- **显式改列授权(D-14)**:`trade -f <yaml> -migrate -allow-modify` 才允许按 proto 修改已存在列的类型;单独 `-allow-modify` 在读取配置前拒绝,常驻启动与默认迁移均不自动改列。默认 Job 不带该参数,类型漂移以 4 退出,经人工审查后再显式执行。
 - **D-14 第 9 条上线清单**:`trade_listing.market_zone` 带 home_zone 语义 → `tools/merge_zone` 需改写步骤(P1 同批落);audit auditor、data_consistency_check、TiDB BR 按库恢复清单列为 **P3 上线前**必做项(P1 只有 dev 种子数据,无玩家资产)。
 - 客户端可达只承诺路由服模式;K8s 路由服 manifest 与 POD_IP 通告已补齐,但尚未在 K8s 上以路由模式跑通 battle-smoke,默认仍为 0。
 - 指标(低基数,不带 player_id):商品/订单状态迁移计数(按 kind、to_status)、渠道回调结果、outbox 积压 gauge、交付延迟直方图、reconcile 轮次耗时。
