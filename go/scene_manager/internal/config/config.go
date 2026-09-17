@@ -40,6 +40,11 @@ type Config struct {
 	// (补频道 / rebalance / 孤儿与空闲副本清理 / 自动扩缩容 / Agones 对账)
 	// 只在领导者上执行;领导者失联后,其余副本最迟 ~TTL 内接管。
 	// 心跳续期间隔 = TTL/3。见 internal/logic/leader_gate.go。
+	// 下限约束:go-zero Redis 客户端 socket 读写上界 ~6s(读 3s + 写 3s,不认 ctx 截止时间;按本模块
+	// go.mod 的 go-zero v1.10.0 / go-redis v9.17.3 核对,升级须复核 shared/leader/store_gozero.go),
+	// 加上写之前受续期 ctx 超时 2s 约束的排队 / 重试退避 / 拨号,单次续期最坏 maxCall = 8s。
+	// 自我降级要赶在锁过期之前,须 maxCall < TTL/3,即 TTL > 24s。默认 30s 得到 20s 降级门槛,
+	// 降级最晚 28s 完成、早于 30s 过期;低于下限时选主器任一续期出错即降级,并记错误日志。
 	LeaderLockTTLSeconds int64 `json:",default=30"`
 
 	// LeaderLockKey:选主锁的 Redis key,留空用默认 scene_manager:leader:lock。

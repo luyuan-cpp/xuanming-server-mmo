@@ -36,6 +36,7 @@ const (
 	stepPlayerRows    = "player_rows"     // zone_src_db → zone_dst_db 玩家行拷贝
 	stepPlayerBlobs   = "player_blobs"    // 跨 data Redis 的 player:{id}:* 拷贝
 	stepGuildMySQL    = "guild_mysql"     // guild.zone_id 改写 + 缓存失效
+	stepTradeMySQL    = "trade_mysql"     // trade_listing.market_zone 改写(聚宝斋,trade_step.go)
 	stepGuildRank     = "guild_rank"      // guild_rank:zone ZSET 合并
 	stepPlayerMapping = "player_mapping"  // player:zone:{id} 改写
 	stepHotState      = "hot_state"       // scene_manager 热状态清理
@@ -75,6 +76,11 @@ type mergeManifest struct {
 	// Tables:实际拷贝的玩家表(zone 库内的表名,不带库前缀)。撤销时按这个
 	// 列表删目标库的行 —— 绝不按「当前发现的表」删,否则新加的表会被误删。
 	Tables []string `json:"tables"`
+	// TradeListingIDs:改写前 market_zone=src 的聚宝斋商品 id(trade_step.go)。撤销只把其中
+	// 当前 market_zone=dst 的改回 src。它是本版本新增字段,**不升 manifestVersion**:既有
+	// 字段语义没变;旧清单没有它 = 当时的工具没碰过 trade,读出来为空,撤销自然跳过,
+	// 续跑时 trade 步骤也会按「未完成」重新收集。
+	TradeListingIDs []uint64 `json:"trade_listing_ids"`
 
 	Steps map[string]manifestStep `json:"steps"`
 }

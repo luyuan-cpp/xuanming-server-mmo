@@ -44,6 +44,8 @@ set(SOURCE_FILES
     friend/friend_grpc_client.cpp
     grpc_init_client.cpp
     guild/guild_grpc_client.cpp
+    trade/jubaozhai_grpc_client.cpp
+    trade/trade_admin_grpc_client.cpp
     login/login_grpc_client.cpp
     scene_manager/scene_manager_service_grpc_client.cpp
     scene_manager/scene_node_service_grpc_client.cpp

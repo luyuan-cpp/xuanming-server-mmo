@@ -1,0 +1,142 @@
+# trade:聚宝斋 P1(浏览 / 详情 / 收藏 / 货架 + 内部 TradeAdmin.SeedListing;docs/design/jubaozhai-market.md)。
+#
+# **全局池,只部署到 mmorpg-infra namespace 一次,不进任何 zone namespace。**
+# 商品按 market_zone(卖家上架时的 home_zone)分市场,但表里天然有跨 zone 的行(D-2),所以与 chat 同形态;
+# 客户端经 gate → client-rpc-router 到达,路由服对 TradeNodeService 不做 zone 过滤。
+# k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,
+# infra-up / all-up 在基础设施阶段部署。ConfigMap go-svc-trade-config 由脚本生成。
+#
+# 库与表(port-decisions D-14):
+#   - 独占库 mmorpg_trade 由 mysql-init-sql ConfigMap 带入的 deploy/mysql-init/00_init_zone_dbs.sql 预建 + GRANT appuser
+#     (建库只登记那一处;initdb 只对空 PVC 生效,存量 PVC 手工补,见 deploy/k8s/README.md「聚宝斋 trade」)。
+#   - 表由同目录 trade-migrate.yaml 这个 Job(同一镜像 + 同一 ConfigMap,`-migrate`)建。k8s_deploy.ps1 在本 Deployment
+#     **之前**先 delete 再 apply 它(上一次的 Job 还在途则先等它结束,绝不删在途 Job)。
+#     staging/prod **恒等** Job Complete 才 apply 本文件,Failed / 超时即中断发布(D-14 第 4 条,不受 -WaitReady 控制);
+#     dev 档只在 -WaitReady 下等。
+#   - staging/prod 的 ConfigMap 固定 Schema.AutoMigrate=false:启动路径只跑一次只读 plan,有待执行语句或需人工项就拒绝启动
+#     (fail-closed,日志打印补救命令),所以 Job 没跑成功时这里会 CrashLoop —— 这是预期,先看 `kubectl logs job/trade-migrate`。
+#
+# ⚠ 已知前提:trade 只承诺路由服模式可达。gate 的 GATE_CLIENT_RPC_ROUTER 在 K8s 上默认 "0"(k8s_deploy.ps1 -GateRouterMode),
+# 所以默认部署下这份 Deployment 起得来、探针绿,但玩家够不着;以 -GateRouterMode 1 部署之后才算真正可用。
+#
+# 连接数:ConfigMap 的 MySQL.MaxOpenConn × replicas 要算进 MySQL 的 max_connections。
+apiVersion: v1
+kind: Service
+metadata:
+  name: trade
+  labels:
+    app: trade
+    tier: go-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: trade
+  ports:
+    - name: grpc
+      port: 50800
+      targetPort: 50800
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trade
+  labels:
+    app: trade
+    tier: go-svc
+spec:
+  # 多实例安全:P1 只有读 + 收藏写(INSERT IGNORE / DELETE,幂等),listing_id 由 data_service 号段发,
+  # 实例之间不需要协调;node_id 由 etcd CAS 分配(go/shared/noderegistry),路由服随机挑。
+  # 启动期迁移(仅 dev 档 AutoMigrate=true)由 go/schemamigrate 的 GET_LOCK 串行化,两副本同时起不会并发 DDL。
+  # replicas>=2 是「容错不降级」的最低冗余。崩溃切换窗口 = ConfigMap 的 LeaseTTL(路由服 PickRandom 不看连接状态)。
+  replicas: 2
+  selector:
+    matchLabels:
+      app: trade
+  template:
+    metadata:
+      labels:
+        app: trade
+        tier: go-svc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9230"
+        prometheus.io/path: "/metrics"
+    spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点,否则单节点故障等于全池不可用
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: trade
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: trade
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
+              value: warn
+            # C++ 约定注册(TradeNodeService.rpc)写进 NodeInfo 的对外 IP:ListenOn 是 0.0.0.0,不能原样写;
+            # 不注入时退回第一块非 loopback 网卡,多网卡 / sidecar / 部分 CNI 下可能选错,路由服拨不通。
+            # 与 chat.yaml / data-service.yaml / login.yaml 同一写法。
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          args: ["-f", "/app/etc/trade.yaml"]
+          ports:
+            - containerPort: 50800
+              name: grpc
+            # 与 ConfigMap 的 MetricsListenAddr ":9230" 及上面 prometheus.io/port 注解一致(9230 = trade)
+            - containerPort: 9230
+              name: metrics
+          readinessProbe:
+            grpc:
+              port: 50800
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 50800
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              # 先留 5s 让 Service 摘掉 endpoint;etcd 注册(noderegistry.Close)由进程收到 SIGTERM 后
+              # 在 grpc Stop 之前删除,路由服 watch 到删除后不再挑这个实例。
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/etc
+              readOnly: true
+            # 不挂 snowflake-cache:trade 只用 data_service 号段发 listing_id(无 snowflake 回退),没有启动期槽位草稿要缓存。
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: svc-config
+          configMap:
+            name: go-svc-trade-config
+---
+# PDB 与主 manifest 同文件:k8s_deploy.ps1 只 apply 目录条目里的主 manifest。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: trade-pdb
+  labels:
+    app: trade
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: trade

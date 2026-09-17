@@ -96,7 +96,7 @@ INSERT INTO player_snapshot (...) SELECT ?,... FROM DUAL
 每一行都是一个永久身份的发号水位。行只会在**全局库被 drop 重建、或从旧备份恢复**时消失 / 回退,而消费表(`player_database` / `guild` / 玩家 blob 里的物品、Kafka 里的流水与快照)还留着已发出的号;此时从 1 重发,login 的 `INSERT ... ON DUPLICATE KEY UPDATE` 会**静默覆盖别人的角色行**,没有任何报错。所以计数器必须有一条"库被重置也活得下来"的底线:
 
 - **运行期不补种**(`IdSegment.AllowAutoSeed`,没配 = false):缺行 → `ErrCodeIdSegmentUnknownTag`(20,进 `FaultCodeSet` 告警),不写任何行,Error 日志点名 tag 与补救步骤。dev yaml 显式 `true` 只为本地随手换 tag,k8s ConfigMap 按 profile 镜像(staging/prod 固定 false)。
-- **行由迁移显式创建**(`IdSegment.BootstrapTags`,没配 = `player, guild, item, txlog, snapshot`):`-migrate` 与 AutoMigrate 都在四张表就位之后对每个 tag `INSERT IGNORE ... (max_id=1, step=100, version=0)`,幂等,**绝不降低**已有行的 max_id;每行创建 / 已存在各打一条 Info。清单里出现非法 tag(不匹配 `^[a-z0-9_]{1,64}$`)整次迁移失败。新增一种永久身份 = 加一个 tag。
+- **行由迁移显式创建**(`IdSegment.BootstrapTags`,没配 = `player, guild, item, txlog, snapshot, trade_listing`;`trade_listing` 是聚宝斋商品号,2026-09-14 加入):`-migrate` 与 AutoMigrate 都在四张表就位之后对每个 tag `INSERT IGNORE ... (max_id=1, step=100, version=0)`,幂等,**绝不降低**已有行的 max_id;每行创建 / 已存在各打一条 Info。清单里出现非法 tag(不匹配 `^[a-z0-9_]{1,64}$`)整次迁移失败。新增一种永久身份 = 加一个 tag。
 - **地板校验**(`store/schema.go: idSegmentFloorSources` → `raiseIdSegmentFloor`):迁移接着对 `player` / `guild` 两行做 `max_id ← MAX(主键 < 2^55) + 1`(只在 `MAX ≥ max_id` 时;`< 2^55` 排除存量 snowflake 号;UPDATE 带 `max_id < ?` 守卫,与并发发号互斥安全)。消费表必须与 `id_segment` **同库**才查得到(`INFORMATION_SCHEMA.COLUMNS` 探测,不在就 Info 跳过);抬升时打 Error `id_segment counter was behind the consuming table — backup restore?`,出现即意味着库曾被重置,按下面的手册排查已被覆盖的行。`item` / `txlog` / `snapshot` **做不了**这种校验:item guid 在 zone 库的玩家 blob 里;tx_id / snapshot_id 所在的 `transaction_log` / `player_snapshot` 与 `id_segment` 同库、会被一起恢复到旧水位,而真正"已发出"的集合在 Kafka 积压与 C++ 进程手里的段里(重放的旧流水会与重发的新号撞 `tx_id` 主键,`INSERT IGNORE` 静默丢掉**新**的流水)。
 
 **运维手册(恢复全局库 = ID 安全事件,不是普通库恢复)**:恢复 `id_segment` 所在的全局库之前,必须先核对每个 tag 的 `max_id ≥ 消费侧最大号 + 1` —— `player` 看各 zone 库 `MAX(player_database.player_id) WHERE player_id < 2^55`,`guild` 看 `MAX(guild.guild_id)`,`item` 看各 zone 库 blob 里 bag 的最大 guid,`txlog` / `snapshot` 看两个 Kafka topic 里的最大 `tx_id` / `snapshot_id`;不够就手工 `UPDATE id_segment SET max_id = <最大号 + 1>, version = version + 1` 抬上去,再启动 data_service / 跑 `-migrate`。迁移里的自动地板校验只是同库能查到时的兜底,"跳过"不代表安全。回归用例:`store/id_segment_integration_test.go`(缺行拒绝零写入 / bootstrap 幂等不降位 / 地板抬升与 snowflake 号排除 / dev 补种)、`logic/id_segment_integration_test.go`(错误码定性)。
@@ -117,7 +117,7 @@ Schema:
   AutoMigrate: true            # 没配 = true;生产显式设 false,改跑 data_service -f <yaml> -migrate
 IdSegment:
   AllowAutoSeed: true          # 没配 = false(生产必须 false):运行期遇到缺行是否自动种一行从 1 起
-  BootstrapTags: [player, guild, item, txlog, snapshot]   # 没配 = 这五种;迁移 INSERT IGNORE 预建,绝不降位
+  BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing]   # 没配 = 这份默认清单;迁移 INSERT IGNORE 预建,绝不降位
 Kafka:
   Brokers: [127.0.0.1:9092]    # 留空 = 不消费(本地无 Kafka 合法)
   TopicGeneration: 1           # 有效 topic 名 = <基名>_g<N>;改分区数就 +1,绝不原地扩分区

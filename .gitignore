@@ -160,6 +160,8 @@ java/config_node/target/
 # Dead Go stub directories (no service code, only generated pb.go)
 # 聊天服务已落地，源码纳入版本控制；仅忽略本地生成的重复协议编号。
 go/chat/generated/
+# 聚宝斋 trade 同口径:服务代码不引用本目录下生成的重复协议编号。
+go/trade/generated/
 go/common/
 go/contracts/
 go/etcd/

@@ -8,6 +8,8 @@
     <ClCompile Include="scene_manager\scene_manager_service_grpc_client.cpp" />
     <ClCompile Include="chat\chat_grpc_client.cpp" />
     <ClCompile Include="guild\guild_grpc_client.cpp" />
+    <ClCompile Include="trade\jubaozhai_grpc_client.cpp" />
+    <ClCompile Include="trade\trade_admin_grpc_client.cpp" />
     <ClCompile Include="friend\friend_grpc_client.cpp" />
     <ClCompile Include="scene_manager\scene_node_service_grpc_client.cpp" />
     <ClCompile Include="db\db_grpc_client.cpp" />
@@ -21,6 +23,8 @@
     <ClInclude Include="data_service\data_service_grpc_client.h" />
     <ClInclude Include="chat\chat_grpc_client.h" />
     <ClInclude Include="guild\guild_grpc_client.h" />
+    <ClInclude Include="trade\jubaozhai_grpc_client.h" />
+    <ClInclude Include="trade\trade_admin_grpc_client.h" />
     <ClInclude Include="friend\friend_grpc_client.h" />
     <ClInclude Include="scene_manager\scene_node_service_grpc_client.h" />
     <ClInclude Include="db\db_grpc_client.h" />

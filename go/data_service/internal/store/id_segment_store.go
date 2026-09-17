@@ -38,10 +38,11 @@ const (
 	idSegmentTxAttempts = 4
 )
 
-// DefaultIdSegmentBootstrapTags 是设计 §6.4 / §7.5 第 1 条里走号段的五种永久身份,
-// 与 config.DefaultIdSegmentBootstrapTags 同一份清单(config 包不能被本包 import,反向也不行)。
+// DefaultIdSegmentBootstrapTags 是走号段的永久身份清单:设计 §6.4 / §7.5 第 1 条的五种
+// (player / guild / item / txlog / snapshot)加聚宝斋 trade_listing(docs/design/jubaozhai-market.md),
+// 与 config.DefaultIdSegmentBootstrapTags **必须一致**(config 包不能被本包 import,反向也不行)。
 // 迁移路径以 config 的 EffectiveBootstrapTags 为准;这份给 main 的 -migrate 摘要和测试用。
-var DefaultIdSegmentBootstrapTags = []string{"player", "guild", "item", "txlog", "snapshot"}
+var DefaultIdSegmentBootstrapTags = []string{"player", "guild", "item", "txlog", "snapshot", "trade_listing"}
 
 var (
 	// ErrIdSegmentExhausted:max_id + step 会越过 2^55,fail-closed,表状态零变更。

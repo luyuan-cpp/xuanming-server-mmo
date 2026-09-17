@@ -10,8 +10,7 @@
 // 算法:对六张已加载的 proto 表对象(Skill/Buff/Cooldown/SkillPermission/Dungeon/Monster)
 // 逐张做确定性序列化(CodedOutputStream::SetSerializationDeterministic(true),
 // map 字段按 key 排序),按固定表序拼接(每段前缀表名 + 段长,防止"表 A 尾巴 +
-// 表 B 头部"错位碰撞),最后再拼数值单位版本 kAttributeUnitVersion(2026-09-14 起:同表不同单位的二进制
-// 也必须判为不一致),整体 sha256 后取 hex 前 32 位(16 字节)。
+// 表 B 头部"错位碰撞),整体 sha256 后取 hex 前 32 位(16 字节)。
 // 只看表内容,不看文件路径/json 与 pb 二进制格式/加载顺序:同一份数据无论从
 // skill.json 还是 skill.pb 加载,指纹相同。
 //

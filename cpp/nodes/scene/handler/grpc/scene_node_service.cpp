@@ -165,6 +165,27 @@ grpc::Status SceneNodeGrpcImpl::CreateScene(grpc::ServerContext* /*context*/,
     const ::CreateSceneRequest* request,
     ::CreateSceneResponse* response)
 {
+///<<< BEGIN WRITING YOUR CODE
+    // Agones 高密度模式:进程必须先被 Allocate,才能创建第一个场景。
+    //
+    // 刻意放在 runInLoop 之前(gRPC 线程上):POST /allocate 是网络调用,
+    // 放进事件循环会卡住整个逻辑帧;这里阻塞的只是一个 gRPC 池线程,
+    // 且等待有上限(LifecycleOptions::allocateWaitTimeout)。
+    //
+    // 失败一律 fail-closed:不建实体,返回非 OK,让 SceneManager 回滚重试,
+    // 而不是留下一个 Agones 不知道的房间。createPermit 必须活到本函数返回
+    // (覆盖 future.get()),在途创建才能阻止提前回到 Ready。
+    //
+    // 2026-09-15 恢复:原块在 commit 6c4021ae5 被 proto 重生成吞掉(当时位于守护段外)。
+    auto createPermit = agones::SceneLifecycle::Instance().AcquireCreatePermitBlocking();
+    if (!createPermit)
+    {
+        LOG_ERROR << "[gRPC] CreateScene rejected: Agones allocate not confirmed, scene_id="
+                  << request->scene_id() << " state="
+                  << agones::ToString(agones::SceneLifecycle::Instance().State());
+        return grpc::Status(grpc::StatusCode::UNAVAILABLE, "agones allocate not confirmed");
+    }
+///<<< END WRITING YOUR CODE
     std::promise<void> promise;
     auto future = promise.get_future();
 

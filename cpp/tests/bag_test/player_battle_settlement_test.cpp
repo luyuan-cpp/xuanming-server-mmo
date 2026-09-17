@@ -13,7 +13,6 @@
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/common/event/battle_event.pb.h"
 #include "proto/common/event/mission_event.pb.h"
-#include "services/battle/constants/turn_battle_constants.h"
 #include "services/scene/battle/system/player_battle.h"
 #include "thread_context/ecs_context.h"
 
@@ -43,7 +42,6 @@ protected:
         settlement.set_outcome(BATTLE_OUTCOME_SIDE_A_WIN);
         settlement.set_health(80);
         settlement.set_mana(20);
-        settlement.set_attribute_unit_version(turnbattle::kAttributeUnitVersion);  // 新 battle 二进制产出的结算
         settlement.set_gold_gain(12);
         for (const auto configId : {uint32_t{7002}, uint32_t{7001}}) {
             auto* defeat = settlement.add_defeated_monsters();
@@ -149,19 +147,5 @@ TEST_F(PlayerBattleSettlementTest, WrongPlayerCannotApplyOrPoisonValidRetry) {
     settlement.set_player_id(playerId);
     EXPECT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
-}
-// 旧 battle 二进制产出的结算(没有单位版本戳)法力是旧单位:应用时 ×4,不能把登录迁移后的法力写回旧值。
-// 例:旧版本满蓝 200 放 1 号技能剩 190,下线;新版本登录迁移成 800,再补应用挂起结算 → 应为 760 而不是 190。
-TEST_F(PlayerBattleSettlementTest, LegacyUnitSettlementManaIsConvertedToCurrentUnit) {
-    settlement.clear_attribute_unit_version();
-    settlement.set_mana(190);
-    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
-    EXPECT_EQ(tlsEcs.actorRegistry.get<BaseAttributesComp>(player).mana(), 760u);
-
-    // 新版本产出的结算原样应用
-    settlement.set_battle_id(702);
-    settlement.set_attribute_unit_version(turnbattle::kAttributeUnitVersion);
-    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
-    EXPECT_EQ(tlsEcs.actorRegistry.get<BaseAttributesComp>(player).mana(), 190u);
 }
 } // namespace

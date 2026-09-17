@@ -4,13 +4,16 @@
 // (scene-manager.yaml 的部署注释里说的"正解"就是这次抽取)。语义与 login
 // 侧完全一致:
 //   - 竞选:SET key value NX EX ttl,成功即领导者;
-//   - 心跳:每 ttl/3 用 Lua 校验属主后 PEXPIRE 续期,给瞬时 Redis 抖动
-//     留 2~3 次重试机会;
-//   - 自我降级:距上次续期**成功**超过 2/3 ttl 仍未确认到属主,就主动让位。
-//     不能等"某次成功续期读到 0"才认输 —— Redis 单边不可达时续期只会一直
-//     报错、永远读不到 0,而服务端的 key 照常过期、被别的副本抢走,那就是
-//     双领导。2/3 ttl 保证本副本在 key 服务端过期前至少 ttl/3 就退位,
-//     与 shared/snowflakealloc 的租约自 fencing 是同一个模式;
+//   - 心跳:每 ttl/3 用 Lua 校验属主后 PEXPIRE 续期,失联后容忍 1 个出错拍;
+//   - 自我降级:续期报错且距上次**成功续期的发出时刻**达到门槛就主动让位。门槛由
+//     FenceAfter(ttl, 心跳间隔, 单次续期最坏耗时) 算出:失联后第 1 个出错拍卡满
+//     最坏耗时也不降级,第 2 个出错拍必定降级且在 key 服务端过期前完成。最坏耗时
+//     不能只看续期 ctx 超时 —— go-redis 默认不把 ctx 截止时间用到 socket 读写上,
+//     socket 读写另受客户端读写超时之和约束(由 Store 经 CallBounder 报告),两段相加
+//     见 CallBudget;TTL 太短满足不了时退化为任一续期出错即降级,并记错误日志。不能等"某次成功续期读到 0"
+//     才认输 —— Redis 单边不可达时续期只会一直报错、永远读不到 0,而服务端的 key
+//     照常过期、被别的副本抢走,那就是双领导。与 shared/snowflakealloc 的租约自
+//     fencing、login pkg/locker 的锁心跳同一模式;
 //   - 丢锁(key 过期被别的副本抢走):立刻取消领导者上下文,退回候选者
 //     循环;其余副本最迟 ~ttl 内接管;
 //   - 释放:退出临界区时 Lua 校验属主后 DEL,尽力而为 —— 释放失败也只是
@@ -58,6 +61,15 @@ type Store interface {
 	SetNX(ctx context.Context, key, value string, ttl time.Duration) (bool, error)
 	// EvalInt 执行 Lua 脚本并按整数返回结果。
 	EvalInt(ctx context.Context, script string, keys []string, args ...string) (int64, error)
+}
+
+// CallBounder 是 Store 的可选能力:报告单次调用 socket 写 + 读这一段的上界,不是整次调用的最坏耗时 ——
+// 写之前的连接池排队 / 重试退避 / 拨号受调用方 ctx 截止时间约束,心跳用 CallBudget 把续期 ctx 超时
+// 加上去再算降级门槛;新建连接时的 HELLO / AUTH 握手读写仍不在其内。
+// 返回 0 表示客户端认 ctx 截止时间,单次调用由调用方的 ctx 超时封顶;返回 UnboundedCall
+// 表示可能无限期阻塞。不实现时按"认 ctx 截止时间"处理。
+type CallBounder interface {
+	MaxCallDuration() time.Duration
 }
 
 // Options 是 New 的可选项。零值可用。
@@ -139,6 +151,9 @@ func (e *Elector) Run(ctx context.Context, whileLeader func(ctx context.Context)
 		}
 
 		val := e.id + ":" + randomToken()
+		// SETNX 发出时刻:服务端写入不早于它,key 最早在它 +TTL 过期,
+		// 本任期心跳的自我降级从这里起算。
+		campaignAt := time.Now()
 		ok, err := e.store.SetNX(ctx, e.key, val, e.ttl)
 		if err != nil {
 			// 竞选失败必须出声:Redis ACL/网络长期不通时,否则所有副本都
@@ -163,7 +178,7 @@ func (e *Elector) Run(ctx context.Context, whileLeader func(ctx context.Context)
 		e.mu.Lock()
 		e.leadCancel = leadCancel
 		e.mu.Unlock()
-		stopHB := e.startHeartbeat(val, interval, func(err error) {
+		stopHB := e.startHeartbeat(val, interval, campaignAt, func(err error) {
 			logx.Errorf("[leader] lost leadership key=%s id=%s: %v", e.key, e.id, err)
 			leadCancel()
 		})
@@ -205,44 +220,90 @@ func (e *Elector) Stop() {
 
 // startHeartbeat 起一个续期 goroutine,返回停止函数。两条降级路径:
 //   - 续期成功但返回 0:属主已换人,立刻 onLost;
-//   - 续期持续报错:距上次成功超过 2/3 TTL 就自我降级(见包注释)。
+//   - 续期持续报错:距上次成功续期达到 FenceAfter 门槛就自我降级。
 //     只把错误当瞬时抖动无限重试是不行的 —— Redis 单边不可达时本副本
 //     永远读不到 0,而 key 在服务端照常过期、被人抢走,即双领导。
-func (e *Elector) startHeartbeat(val string, interval time.Duration, onLost func(error)) (stop func()) {
+//
+// acquiredAt 是本任期 SETNX 的发出时刻,作为"上次成功"的初值,续期节拍也从它排起。
+// stop 返回后 onLost 不会再被调用,在途的那次续期回来也不会。定时器到点后在发出续期前、
+// 续期返回后各查一次 stop:select 在 stopCh 与定时器同时就绪时随机选,必须让 stop 胜出 ——
+// 否则可有可无的最后一次续期会把 key 再延长一个 TTL,拖慢 Run 收尾时带属主校验的释放与交接。
+func (e *Elector) startHeartbeat(val string, interval time.Duration, acquiredAt time.Time, onLost func(error)) (stop func()) {
 	stopCh := make(chan struct{})
 	doneCh := make(chan struct{})
 
+	// 门槛都是为了赶在服务端 key 过期之前退位:
+	//   - lastOK 记续期请求**发出**的时刻:PEXPIRE 不早于它执行,key 最早在
+	//     lastOK+TTL 过期。记回包时刻会晚一个成功往返;出错回包又比成功快
+	//     (如连接被拒)时,第 2 个出错拍的"距上次成功"够不到门槛,拖到第 3 拍
+	//     ≈ TTL 才降级,和 key 过期赛跑。
+	//   - renewTimeout 只是续期 ctx 的超时,封不住一次调用:客户端不认 ctx 截止时间时
+	//     (go-redis 默认、go-zero Redis),socket 读写另受它自己的读写超时之和约束
+	//     (CallBounder 报告的值),写之前的排队 / 重试退避 / 拨号又先吃掉最多 renewTimeout。
+	//     所以 maxCall 取两段之和(CallBudget),门槛公式与三条约束见 FenceAfter;
+	//     新建连接时的 HELLO / AUTH 握手读写仍不在其内。
+	//   - 满足不了约束(TTL/3 不大于 maxCall)时 FenceAfter 退化为任一续期出错即降级,
+	//     这时慢调用仍可能拖过 key 过期,只能靠调大 TTL,每个任期记一次错误日志。
+	renewTimeout := min(2*time.Second, e.ttl/8)
+	maxCall := renewTimeout
+	if b, ok := e.store.(CallBounder); ok {
+		maxCall = CallBudget(renewTimeout, b.MaxCallDuration())
+	}
+	fenceAfter, guaranteed := FenceAfter(e.ttl, interval, maxCall)
+	if !guaranteed {
+		logx.Errorf("[leader] heartbeat key=%s ttl=%s interval=%s: ttl too short for client worst-case call %s, "+
+			"cannot guarantee self-fencing before lock expiry; demoting on any renew error; set ttl > 3x%s with margin",
+			e.key, e.ttl, interval, maxCall, maxCall)
+	}
+
 	go func() {
 		defer close(doneCh)
-		fenceAfter := e.ttl * 2 / 3
-		lastOK := time.Now()
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
+		lastOK := acquiredAt
+		// 按 lastOK 排拍,不按本 goroutine 起动时刻起 ticker:SETNX 往返与同步的当选回调都在
+		// 心跳起动之前,错相位的节拍会让第 2 个出错拍拖过 key 过期(见 FenceAfter 前提)。
+		next := lastOK.Add(interval)
+		timer := time.NewTimer(time.Until(next))
+		defer timer.Stop()
 		for {
 			select {
 			case <-stopCh:
 				return
-			case <-ticker.C:
-				renewCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			case <-timer.C:
+				// select 在 stopCh 与定时器同时就绪时随机选;先让 stop 生效,不再发出多余的续期。
+				select {
+				case <-stopCh:
+					return
+				default:
+				}
+				sentAt := time.Now()
+				renewCtx, cancel := context.WithTimeout(context.Background(), renewTimeout)
 				res, err := e.store.EvalInt(renewCtx, renewScript, []string{e.key},
 					val, fmt.Sprintf("%d", e.ttl.Milliseconds()))
 				cancel()
+				// 续期在途时 stop 可能已被调用:Run 已在收尾,此后不得再 onLost。
+				select {
+				case <-stopCh:
+					return
+				default:
+				}
 				if err != nil {
 					logx.Errorf("[leader] heartbeat renew error key=%s: %v", e.key, err)
 					if since := time.Since(lastOK); since >= fenceAfter {
-						// 自我降级要赶在 key 服务端过期(TTL)之前,留出
-						// ≥TTL/3 的余量给在途动作干净收尾。
-						onLost(fmt.Errorf("no successful renew for %s (>= %s), self-fencing: last err: %w",
-							since, fenceAfter, err))
+						onLost(fmt.Errorf("no successful renew for %s (>= %s, ttl %s), self-fencing: last err: %w",
+							since, fenceAfter, e.ttl, err))
 						return
 					}
+					next = next.Add(interval)
+					timer.Reset(time.Until(next))
 					continue
 				}
 				if res == 0 {
 					onLost(fmt.Errorf("lock %s no longer owned by %s", e.key, e.id))
 					return
 				}
-				lastOK = time.Now()
+				lastOK = sentAt
+				next = sentAt.Add(interval)
+				timer.Reset(time.Until(next))
 			}
 		}
 	}()

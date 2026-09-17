@@ -34,7 +34,6 @@
 #include "modules/condition/condition_type.h"
 #include "proto/common/event/mission_event.pb.h"
 #include "player/system/player_revive.h"
-#include "player/system/attribute_unit_migration.h"
 
 // 时间->回合换算与回合常量的权威定义在回合引擎库(scene 可以依赖 battle 常量,反向禁止)。
 #include "services/battle/constants/turn_battle_constants.h"
@@ -1061,9 +1060,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 			health = std::min<uint64_t>(health, derived->max_health());
 		}
 		baseAttributes->set_health(health);
-		// 旧 battle 二进制产出的结算(离线挂起 / 部署时在途 / 重投)法力是旧单位,先换算再夹上限,
-		// 否则会把登录时已迁移的法力永久写回旧值(2026-09-14 法力单位 ×4,见 attribute_unit_migration.h)
-		uint64_t mana = attributeunit::ManaToCurrentUnit(settlement.mana(), settlement.attribute_unit_version());
+		uint64_t mana = settlement.mana();
 		if (const auto* derived = tlsEcs.actorRegistry.try_get<DerivedAttributesComp>(player);
 			derived != nullptr && derived->max_mana() > 0)
 		{
@@ -1095,11 +1092,7 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 		{
 			for (const auto& petSettlement : settlement.pets())
 			{
-				// 宝宝法力与主人同一个单位版本(版本戳在外层结算上),同样先换算
-				auto converted = petSettlement;
-				converted.set_mana(
-					attributeunit::ManaToCurrentUnit(petSettlement.mana(), settlement.attribute_unit_version()));
-				PetSystem::ApplyBattleSettlement(player, converted);
+				PetSystem::ApplyBattleSettlement(player, petSettlement);
 			}
 			PetSystem::PushList(player);
 		}

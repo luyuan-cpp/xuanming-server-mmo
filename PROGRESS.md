@@ -4620,3 +4620,229 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   2. `pwsh -NoProfile -File tools/scripts/start_game.ps1 -CheckOnly`:没有 chat.exe 时应打出“缺少 chat.exe,本次跳过 chat”告警且不抛错(若 guild.exe 也缺,会在 guild 上抛错,那是 guild 批次的既定行为)。
   3. `k8s_deploy.ps1 -Command infra-up -DryRun ...`(参数同设计文档 §12 ⑩)的输出应含 client-rpc-router 的 Deployment(带 `POD_IP`)与 PDB,不再出现 `skipping client-rpc-router`。
 - 验证状态:未编译、未运行。
+
+## 2026-09-14(续二)D-14 新全局服务库归属与建表方式拍板 + 启动器 guild 可选(Claude,只落文档与脚本)
+
+- 用户 09-14 指示「按最标准的做」。按移植决策文档的标准做法原则(目标系统已有形态优先、不改已上线数据编码、不推翻有书面权衡的决定)处理上一条列出的三个待定项:
+  1. K8s `k8s_deploy.ps1 -GateRouterMode` 默认保持 `"0"`:沿用 D34 的先扩后迁再收,在 K8s 上以路由模式跑通 battle-smoke 之前不翻。无改动。
+  2. `tools/scripts/start_game.ps1`:guild 与 chat 同列为可选服务,缺 exe 只告警并跳过;db / login / match 等既有服务缺 exe 仍在第 1 步拒启。
+  3. D4 拍板,写成 `docs/design/xuanming-port-decisions-20260910.md` 的 D-14。草案「照 data_service 用 CreateOrUpdateTable」经三路对抗核验被推翻:B 有两套现役建表形态,go/db runner 对「无锁自动 MODIFY」有书面反对。定稿:
+     - 每个建表的新全局服务独占逻辑库 `mmorpg_<svc>`;表以 proto 为唯一事实源。
+     - 迁移取 go/db runner 语义(台账、GET_LOCK、锁与语句超时、库名断言、默认只 ADD COLUMN、MODIFY 要 `-allow-modify`),抽成独立 module `go/schemamigrate`,只保留 ProtoSource。
+     - 入口是服务二进制 `-migrate`;staging/prod 由每服务一个 K8s Job 在 Deployment 之前执行。
+     - 建库只登记 `deploy/mysql-init/00_init_zone_dbs.sql`;`deploy/mysql-init` 从此禁止新增业务表。
+     - proto2mysql 钉 ≥v0.1.1 的不可变 tag;禁止 string 主键;string 索引列限长 ≤191;每表至多一个唯一键。
+     - 不引入 golang-migrate。推翻可行性文档 D4 O2 收窄版,部分保留 :245,修订 D12「禁直接 require proto2mysql」。
+- 按「不实现没有调用者的能力」,`go/schemamigrate` 抽取、runner 缺陷修复、migrate Job 模板都随首个建表服务(mail 或聚宝斋 trade)同批落地,本条不写代码。
+- 核验中确认的既有缺口(未修,已写进 D-14 遗留):
+  - K8s 上没有任何 Job 执行 `data_service -migrate`,staging/prod 首次拉起无人建全局库表(与 handoff P1-03 同类)。
+  - data_service 迁移无锁,而它随 zone 多实例部署。
+  - proto2mysql 的 `v0.1.0` tag 被移动过,data_service 钉的那份不认 TiDB 选项。
+  - go/db runner 基线应用后再新增的表永远建不出来。
+- 文档同步:可行性文档加指向 D-14 的修订提示;`docs/design/microservice-zone-contract-20260914.md` 标 D4 已拍;`docs/design/jubaozhai-market.md` J-6 状态改为按 D-14。
+- 验证状态:本条只改文档与启动脚本,Claude 未运行任何命令验证。
+
+## 2026-09-14 Codex 接手聊天验收：编译/单测/注册集成/部署检查完成
+
+- 使用已缓存的 Windows Go 1.26.5，无需安装；CGO_ENABLED=0。日志统一保存在 `run/verify-chat-20260914/`，细节已补到 `docs/design/microservice-zone-contract-20260914.md` §15。
+- 修复 `.gitignore` 遗留的 `go/chat/` 忽略规则，聊天源码现可提交，仅忽略 `go/chat/generated/`；并行“提交并推送所有更改”任务已把此前部分改动收进 8487d5e1f，本任务没有执行提交/推送。
+- 修复聊天幂等占用归属：每次 pending 加随机 token，释放/完结均用单 key Lua 比较完整 token，避免旧请求在 TTL 过期后删除新请求的 done 或提前完成新 pending。两个公开 SendChat 行为回归先红后绿，保留跨 slot 尽力幂等的既定语义。
+- 修复 `start_game.ps1` 缺可选 exe 告警中弯引号引起的实测参数绑定错误；缺 chat.exe 的 CheckOnly 复验 exit=0。当前 chat/guild 均为可选，原交接中的 guild 必需说明已过时。
+- 已通过：noderegistry vet + 13单元 + 13真实etcd集成(无SKIP)；chat tidy + vet +20测试；router vet/test/build与新增通告地址回归；match build；robot在并行guild完成vendor同步后build/vet通过；同zone负例按预期拒绝；Windows与Linux chat构建通过。
+- 4个PS脚本解析、K8s infra/zone 0/1 DryRun及YAML结构验证通过；非法模式2按预期拒绝。未apply，K8s默认仍0。
+- 两个chat实例已启动：z1_chat端口50700、z2_chat端口52700，etcd node_id=1/2，两把服务key+两把分配key，无chat.rpc额外注册；metrics9210/11210均HTTP200。没有清理已有数据库、Redis或Kafka数据。
+- 完整chat-smoke待同机帮会验证任务完成双区节点和网关启动后复用；本任务独立robot程序在 `run/verify-chat-20260914/robot.exe`，需以 `robot/` 为工作目录。额外gRPC直连探针仅生成/编译，执行因共享Redis写入授权范围被自动审批拒绝，没有发送RPC，后续优先执行用户附件指定的chat_smoke.yaml。
+- 复核补记：Linux的go-zero停机计时与main的nr.Close无同步，etcd慢时不能保证先注销后停gRPC；Windows也无框架自动排空。仅修正代码/设计中不准确的保证，未声称此项已修复或经过Linux活体验证。
+
+## 2026-09-14 聚宝斋 P1 进行中(Claude,占位说明,完成后另起条目收口)
+
+- 用户授权开 P1,D4 按 [port-decisions D-14](docs/design/xuanming-port-decisions-20260910.md) 落地。**本批作为"首个建表服务"同批落 `go/schemamigrate`(从 `go/db/internal/migrate` 抽取 + 修"后加表建不出来"缺陷)与 trade 的 `-migrate` Job**——并行会话请勿同时新建 `go/schemamigrate`。
+- 已落:`proto/trade/jubaozhai.proto`(客户端协议 4 方法)、`proto/trade/trade_admin.proto`(内部 SeedListing)、`data/tip/Tip.xlsx` 新段 `//trade_error base=20000 width=1000`(4 码)。进行中:`go/trade`、登记脚本、robot trade-smoke、客户端接线。
+
+## 2026-09-14 Codex 聊天验收收口：双区两次通过、单实例故障切换通过
+
+- 首次原始 `chat_smoke.yaml` 在二区进场失败：`player_database` 缺 pet/bag/mission 三列，DB任务重试后进入死信队列，聊天RPC尚未开始。并行帮会任务使用既有迁移器补齐并核验列及台账；本任务未修改数据库结构，保留首败 `run/verify-chat-20260914/chat-smoke-run1.log`。
+- 结构修正后原始聊天冒烟连续两次通过：`chat-smoke-run2.log`、`chat-smoke-run3.log`，均 exit=0，恰一行 `CHAT_SMOKE_OK`。账号9005/9006对应玩家603/702，gate为127.0.0.1:10000/11010，两区均router模式。世界消息、私聊、sender覆盖、600字节拒绝、重复request_id只存一条均通过。
+- 故障切换：只停止本任务原z1_chat PID76160，等待超过70秒并核验etcd只剩zone2/node_id2；`chat-smoke-failover.log`同样exit=0与`CHAT_SMOKE_OK`。完成后恢复z1_chat PID45288，z2_chat PID54168保留；两份etcd记录及metrics9210/11210均正常。
+- Windows与Linux/amd64聊天程序均编译通过；同zone伪跨区配置负例已验证。其他编译、静态、单测、真实etcd和部署检查结果见前一条与设计§15。
+- 本地验收完成。未部署K8s，默认GateRouterMode仍0；Linux停机计时与nr.Close不同步的已知限制如实保留。额外直连探针的执行被自动审批拒绝后没有绕行；最终只使用用户附件明确指定的原始机器人场景完成验收。
+
+## 2026-09-14 Codex D-14 交接复核：启动器缺文件分支验证与文档时序补齐
+
+- 核对 D-14、可行性文首修订声明、zone 契约 D4 和聚宝斋 J-6，已统一为每服务独库、proto 唯一表结构源、go/db runner 语义与服务内 -migrate；可行性文档旧 golang-migrate / SQLSource / D12 禁令已被明确取代。
+- 补严 D-14：staging/prod 必须等迁移 Job 成功后才部署服务，失败或超时中断发布；该前置门禁不受可选 -WaitReady 控制。只完善决策文字，实现与验证仍属已开工的聚宝斋 P1。
+- 修正 D-13 理由和聚宝斋两处旧路由说明：manifest 与 POD_IP 通告已补齐，K8s 默认仍 0，切换前仍需 K8s 路由模式 battle-smoke。契约对应待拍表已由并行会话同步，本轮未重复编辑。
+- 本轮直接从 start_game.ps1 AST 提取原文件检查段，在内存模拟路径存在性：全齐、缺 chat、缺 guild、两者皆缺、分别缺 db/login/match、go/<svc>/<svc>.exe 回退路径共 8 项通过；两个脚本解析通过，k8s_deploy.ps1 参数默认 0。证据及可复现命令：run/verify-d14-20260914/launcher-checks.json、launcher-checks.ps1。首次验证脚本的告警捕获写法不适用于普通脚本块，改为捕获警告流后通过，启动器本身未修改。
+- 并行状态：聊天两次跨区与单实例故障切换已有 CHAT_SMOKE_OK（见前条及 run/verify-chat-20260914）；guild 的 grpcEndpoint 修复及双区冒烟仍由原任务负责；聚宝斋 P1 已承接 go/schemamigrate 与 trade-migrate Job。本轮未启动/停止服务、未执行数据库操作、未修改服务代码，未验证 K8s 实际部署。
+
+## 2026-09-14 Codex 帮会验收完成：生成/编译/真实集成/双区冒烟通过
+
+- 设计与复验命令已更新到 `docs/design/guild-zone-client-access.md` §6–7,客户端 `Docs/GuildUI.md` 同步;日志集中在 `run/logs/guild-verify-20260914/`,入口 `verification-summary.json`。
+- 已完成导表(29表、12部署成功)、生成器重编与服务端/客户端 proto 生成、guild/router/robot 构建/vet、C++ proto→table→core→rpc→gate-lib→gate 串行 Debug x64 构建。新 gate 已用于两区,新 guild 已启动并被 router 发现。
+- guild 普通测试54通过、MySQL/逻辑集成33通过、真实etcd节点集成7通过,均0失败/0跳过;客户端283源文件检查0错误,隔离Unity帮会EditMode30/30通过。六个客户端帮会文件与测试时哈希一致,正式Unity未关闭。
+- 实测修复:排行榜大页码整数溢出(16个分页边界子例);guild注册补grpcEndpoint(真实etcd回归先红后绿);metrics旧测试9170改9220。收紧烟测内部方法断言,补正DataServiceRpc注释;旧节点类型复用测试只修随机前缀夹具。
+- 账号9201–9203在Redis/MySQL与反向角色映射预检均未使用。完整双区烟测最终于09:46:38 EDT退出0,`GUILD_SMOKE_OK guild_id=101 zone_a=1 player_a=602 player_b=601 player_c=701`。本区创建/排行/入帮、跨区不可见与拒绝入帮、全服名称唯一、公告限制、伪造PlayerId退帮均通过。step9后积分仍0,router同时记录UpdateGuildScore的PermissionDenied,guild/session拒绝日志对应。
+- 首轮二区进场失败来自zone_2_db旧存档表缺pet/bag/mission三列,使用官方db迁移器默认ADD补齐,账本dirty=0;两处已有VARCHAR(191)与MEDIUMTEXT差异未改,迁移仍报告NEEDS-REVIEW/exit status4,详见设计§7。第二轮暴露注册缺grpcEndpoint,修复重编后才重跑;两轮原始失败日志均保留。
+- 烟测已解散测试帮会;guild/guild_member、全局/两区榜均为0,账号保留。运行中服务保留供本地联调,未清空共享存储或停止并行chat。二区Kafka首次建topic的metadata可见性竞态已记录,本轮未改通用初始化代码。
+- 本轮未做旧角色home-zone全量回填、游戏内界面手测、独立客户端打包、压力测试或K8s部署。附加C++原始指针检查因工具缺失由仓库脚本自动跳过。启动器guild/chat现均可选,不能以CheckOnly绿灯代替帮会进程/注册验收。
+- 本任务未commit/push;并行提交任务已将此前部分修复及生成产物纳入server 8487d5e1f/client e1c7126。其他会话继续开发trade等,后续新增协议不在本条验证范围。
+
+
+## 2026-09-15 更正:撤回防御 ×12 / 法力 ×4 的存档与结算单位迁移(项目未上线,没有老号)
+
+- **本节取代**「## 2026-09-14 防御单位 ×12 + 法力单位 ×4(补完"每分配 1 点都看得见")」一节里的两份 Codex 清单(原第 1~6 步与「待 Codex 清单修订」)。那两份里的"重生两个新字段"、`AttributeUnitMigrationTest.*`、bag_test 迁移用例、"存档数值单位迁移到 v1"日志手测、"挂起结算不需要清"全部作废。防御 ×12 / 法力 ×4 本身(五张表、伤害公式 `kDefenseUnitScale`、`Recalculate` 护甲重写、每点可见单测)保留。
+- 背景:用户 09-14 确认项目还没上线、没有老号。同日为老存档做的迁移、以及因评审补的结算版本戳,已随 server 8487d5e1f / client e1c7126 提交(连同按含新字段 proto 生成的产物)。本次在工作区撤回:
+  - proto:`PlayerAttributeComp.attribute_unit_version = 7`、`BattleSettlementData.attribute_unit_version = 16`(开发期字段,按 AGENTS §4 直接删,不写 reserved)。
+  - 代码:`attribute_unit_migration.h` 与 `player_database_loader.cpp` 的调用;`player_battle.cpp` 应用结算前的角色 / 宝宝法力换算;`turnbattle::kAttributeUnitVersion`、`BuildSettlement` 盖戳、`battle_table_fingerprint.cpp/.h` 的单位版本段;scene.vcxproj / filters 登记。
+  - 单测:`attribute_unit_migration_test.cpp` 及 turn_battle_engine_test.vcxproj / filters 登记、engine 结算盖戳断言、bag_test `LegacyUnitSettlementManaIsConvertedToCurrentUnit` 与夹具盖戳行。撤回后这些文件与 d349a8f88 一致(player_battle.cpp 另有同日速度 ×12 的 `kFallbackBattleSpeed`)。
+  - 文档:player-attribute-allocation.md §2.2 / §5 / §7 / §8、player-pet.md §6 里的迁移、回滚须知、指纹并入版本描述。
+  - 保留:`Recalculate` 每次按 `Class.init_armor` 重写护甲(改表后已建角色含本地测试号立即生效,与 speed 直写同口径)。本地测试号的当前法力只夹不补,偏低但可用,阵亡复活或重建号即回满。
+- 撤回后核查(评审工作流 27 个代理:残留 / 代码 / 文档三个方向查错,每条 2 名怀疑者驳斥;只读,未编译):手写代码与文档零残留;撤回文件与迁移前一致;保留的护甲重写正确,撤回后的测试不依赖被删符号。成立的 9 条全是交接遗漏,已并入下面清单:生成产物过期(含 `generated/proto` 拷贝、robot vendor、客户端 C#)、清单漏 bag_test、更正条目位置与措辞、验收手测"非玄霄"限定误导(玄霄法力比例同为 15%)。驳回 3 条。
+- 本会话同日曾把这次更正、清单与补充三条追加在「Codex 帮会验收完成」一节末尾(未提交),位置与指代不清,已并入本节。
+- **待 Codex 清单(最终版)**,串行执行:
+  1. 重生 proto:`pwsh tools/scripts/dev_tools.ps1 -Command proto-gen-run`(留意 proto-gen.exe 陈旧二进制问题)。完成后在 `cpp/generated`、`go/proto`、`generated/proto` 下搜 `attribute_unit_version` 应为 0 条(`tools/generated/temp` 被 gitignore,不计)。
+  2. robot vendor:`cd robot && go mod vendor`(拉不到私有模块时按 turn-based-battle-server.md 验证清单的办法,把 `go/proto/battle/battle_data.pb.go`、`go/proto/common/component/player_attribute_comp.pb.go` 原样复制到 `robot/vendor/proto/` 对应位置),再 `go build ./... && go vet ./...`。`robot/vendor/proto` 下搜 `attribute_unit_version` 应为 0 条,刷新后的 vendor 随本次一起提交。
+  3. 客户端:在 `E:\work\mmorpg-client` 跑 `pwsh -File tools/gen_proto.ps1 -ProtoRoot E:/work/xuanming-server-mmo`(默认 ProtoRoot 会解析成 `E:\`,必须显式传),核对 `Assets/Scripts/Proto/Generated/PlayerAttributeComp.cs`、`BattleData.cs` 里没有 `AttributeUnitVersion`,再跑 `pwsh -File tools/client_compile_check.ps1`;改动提交到客户端仓库。
+  4. `dev.bat gen` 正式导表 + `python tools/data_table_exporter/tools/gen_schema_index.py --check`。核对:Class 九行 init_mana = 800、init_armor = 120、init_speed = 240;AttributeDimension 只剩 101-104 / 401-404,101 / 102 / 401 / 402 的 defense / max_mana = 60 / 40 / 45 / 30;Pet init_mana = 800 / 320 / 400 / 1200;Monster armor = 36 / 48 / 60 / 72 / 84 / 96 / 120 / 144 / 168 / 192 / 216 / 240 / 264 / 300 / 336 / 420;Skill 1 号耗蓝 40。
+  5. 编译:删了 proto 字段,按 AGENTS §4.3 须完整编译所有启用 module。MSBuild game.sln Debug/x64 `/m:1` 全量(至少 proto、table、battle、scene 库与节点、turn_battle_engine_test、bag_test);Go 侧 `cd go && build.bat` 或各服务 `go build ./...`。
+  6. 单测:`pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter turn_battle_engine` 与 `-Filter bag_test` 都全过。重点:`AllocFormulaTest.EveryAllocatedPointRaisesEachStatByAtLeastOne`、`CombatDamageRulesTest.DefenseUnitScaleKeepsReceivedRatio`、`CombatDamageRulesTest.TargetLevelIsClamped`(480 / 10560)、`MonsterRowWithoutStatsFallsBackToDefaults`(期望 10)、`DerivedDefenseReducesIncomingDamageProportionally`、`PvpDirectDamageIsScaled`(期望 10)、`table_battle_data_provider_test`(读真表,须在第 4 步之后)、`PlayerBattleSettlementTest.*`。失败保留 gtest 输出原文。
+  7. 重启 battle 与 scene(换五张表,本地在途战斗房间随之清空),robot 依次跑 `etc/attribute_smoke.yaml`、`etc/pet_smoke.yaml`、`etc/battle_smoke.yaml`。失败保留 robot 与节点日志摘要。
+  8. 验收手测:① GM 设 85 级,非丹心号属性点全投体质,防御 = 60 × 85 + 510 = 5610(丹心 5712);任意职业全投灵力,法力 = 800 + 40 × 85 + 630 = 4830(玄霄只是法伤比例更高,法力比例同为 15%)。② 任意号分配 1 点体质 / 灵力,面板防御 / 法力都 +1 以上。③ 1 级没加点号打副本 1 仍约 9 回合胜。
+
+## 2026-09-15 Chat 停机修复与隔离K8s补验完成（Codex）
+
+- chat统一注销尝试→gRPC排空→资源/框架收尾，补启动期信号及晚到Server清理；Linux自动停机预算设为24s兜底。Windows全包27 PASS/1 Linux专属SKIP，vet/build通过；Linux真实SIGTERM等7个入口PASS，两项overlay故障注入均按预期红。详见microservice-zone-contract-20260914.md §16及run/verify-chat-20260914/chat-lifecycle-verification.md。
+- 本地kind隔离namespace运行官方chat/router双副本+全新etcd/Redis Cluster：初轮123断言、保留原幸存Pod的故障切换145断言、最终镜像123断言全部通过。发现/指标/PDB/日志正文检查23项通过；最终容器真实SIGTERM exit=0并恢复Ready、旧注册身份清理。
+- 一次性namespace已清理，证据和可重复夹具保存于run/verify-chat-k8s-20260915/。范围为router→chat链路，K8s含gate的battle-smoke及默认路由模式翻转仍未实施；硬截止/注销失败/跨slot尽力幂等边界已记录。未提交或推送代码。
+- 收尾已通过正式`go_services.ps1 -Command build -Services chat`更新本地`bin/go_services/chat.exe`，构建日志及SHA256保存在本次验收目录。
+
+## 2026-09-15 login 锁心跳自我降级(与 shared/leader 对齐)
+
+- 缺陷:`go/login/internal/logic/pkg/locker/player_locker.go` 的 `Lock.StartHeartbeat` 续期报错一律 `continue`,`onLost` 只在续期读到 0(属主已换)时触发。Redis 单边不可达时续期只会报错、永远读不到 0,服务端 key 照常过期被别人抢走,本进程仍当自己持锁 → 双属主(login 排队 dispatcher 双 leader / 同一玩家两条 EnterGame 链)。与 08-15 修过的 `shared/leader.startHeartbeat` 同病。
+- 修复(只改 locker 包):续期报错且距上次续期成功超过门槛就 `onLost` 并退出心跳。门槛 `min(2/3 TTL, TTL − interval − 续期超时)`;lastOK 记续期请求**发出**时刻,初值取 `TryLock` 发 SETNX 的时刻(新增未导出字段 `acquiredAt`);续期超时封顶 TTL/8(生产 30s / 120s 仍为 2s)。按推荐 interval=TTL/3,失联后第 2 个出错拍必降级,最晚约 2/3 TTL + 续期超时,赶在服务端过期前;一次瞬时报错不会误降级。ttl<=0 按 interval×3 推导(旧行为会发 PEXPIRE 0 直接删锁);两者都非法时记错、不起心跳。`stop()` 改 sync.Once,可重复/并发调用;tick 与 stop 同时就绪时先认 stop;onLost 至多一次,stop 返回后不再触发,onLost 内不得同步调 stop。
+- 顺带发现(未改,不在本次范围):`shared/leader` 用"2/3 TTL 门槛 + 回包时刻记 lastOK",出错回包比成功快(如连接被拒)时会漏过第 2 个出错拍、拖到第 3 拍 ≈ TTL 才降级,与 key 过期赛跑。建议另开任务按同一门槛修 shared/leader。
+- 调用方审计(均未改):dispatcher 的 onLost → leader 指标置 0 + 取消 drainCtx;dispatchOnce 每个 zone 前查 ctx,Redis 调用随 ctx 取消,至多收尾一次在途调用即退出,比 key 过期早约 TTL/3 − 续期超时。EnterGame 的 onLost → chainCancel:预载、GetSession、SetSession/Reconnect、EnterScene 都走 chainCtx,职业补齐 Lua 另有锁令牌校验;`SendBindSessionToGate` 不带 ctx,取消若恰落在会话落盘与 bind 之间,bind 仍会发出但随后 EnterScene 失败、登录会话不清,客户端重试即可(旧的读到 0 丢锁路径同样如此)。已知小问题未改:丢锁时 `observeTotal` 可能记两次(LockLost + 之后回调里的失败结果)。
+- 单测:新增 `go/login/internal/logic/pkg/locker/player_locker_test.go`(复用 go.mod 已有的 miniredis,用 PreHook 只拦 EVAL 注入错误,无新依赖):① 先续期成功再持续报错 → onLost 恰 1 次、距最后成功续期在 (interval, TTL − interval/2) 内、错误含 self-fencing、stop 不挂;② 奇数次续期报错/偶数次成功 → 不降级、key 仍属本锁;③ key 被他人改写 → 立即 onLost、不动他人锁。
+- **未编译,待编译验证**:`cd go/login && go vet ./internal/logic/pkg/locker/ && go test -race -count=3 ./internal/logic/pkg/locker/ ./internal/logic/pkg/loginqueue/ && go build ./...`(loginqueue 的 dispatcher 集成测试 lockTTL=2s,续期超时随之变为 250ms,顺带回归)。
+## 2026-09-15 TiDB 数据层交付复核:v0.1.0 版本钉错更正 + v0.1.2 预备分支 + 本机一区重新拉起(Claude)
+
+用户问"做完了吗",复核 08-17 交付时发现结论有误,按"做完为止"继续处理。
+
+### 核实出的问题
+- **proto2mysql v0.1.0 是坏 tag**:Go 代理 / sumdb 永久缓存的 `v0.1.0` 是 `9ad991c`(`@v/v0.1.0.info` Origin.Hash,07-29 首次缓存),不含 TiDB 选项;仓库里 tag 之后被移到 `2aca007`,缓存改不回来。08-16 go/db 编译拉到的就是 `9ad991c`,**服务产出的建表语句从未带 TiDB 方言**。08-17 条目里"§D3 处方落地验证"只验证了手写 DDL 在 TiDB 上的语法,不是服务产出——已在决策文档 §6 第 2、3 步更正。
+- 现状:go/db 以 `replace => ../../../proto2mysql` 读本机工作区(分支 `codex/save-local-key-column-20260914` 的 `f3b308f`,含 TiDB 选项 + 字符串主键 VARCHAR(191) 修复),data_service 与 protogen 仍钉 v0.1.0(`9ad991c`),go/schemamigrate 钉 v0.1.1。与 D-14 遗留记录一致。
+- **go/db 不能单独升 v0.1.1**:v0.1.1(`e90a5f0`)的主键子句走 `indexColumn`,字符串主键产出 MEDIUMTEXT + `PRIMARY KEY (account(191))`;存量库 `user_accounts.account` 已是 VARCHAR(191),schema 同步会判为拓宽去 MODIFY 主键列 → Error 1170 → db 起不来(源码静态推导,未运行)。上游 main(`83fed85`)更进一步直接拒绝字符串主键(另一会话 09-15 静态核验),所以不能基于 main 出 tag 给 go/db 用。
+
+### 已做
+- `docs/design/global-data-layer-tidb-decision.md` §6:第 2 步补 v0.1.0 缓存事实与 ≥v0.1.1 口径;第 3 步状态由"待 Codex 编译"改为真实状态(已编译起服,但 TiDB 选项在服务产出里未生效)。
+- **v0.1.2 预备分支(未提交、未打 tag)**:`E:\work\proto2mysql-release` 为 git worktree,分支 `release/v0.1.2` = `v0.1.1` + `git cherry-pick -n f3b308f`(无冲突,已暂存),另把修复处与测试头的注释改为库内约束说明(未暂存)。静态核对:`local_key_column_test.go` 三条断言与 v0.1.1 的类型映射、主键拼接格式一致(VARCHAR 后 `indexColumn` 不再补前缀)。**未运行 go test。**用独立 worktree 是因为 go/db 的 replace 读 `E:\work\proto2mysql` 工作树,切那边分支会悄悄改变其他会话正在编的代码。
+- **本机一区重新拉起**(`tools/scripts/start_game.ps1`,经 WMI 脱离工具进程组):首次在第 5/6 步失败——login 绑定 `127.0.0.1:53000` 报 WSAEACCES(10013);事后 53000 不在 `netsh ... excludedportrange` 且可绑定,判断为 Docker/WSL 刚启动时动态保留区间变化导致的瞬时失败。重跑前需先 `go_services.ps1 -Command stop -Services match`:首轮在 login 处中断,match 已启动却没来得及写 `run/pids/kafka_command_contract.json`,重跑会在第 3 步契约校验被拒。停 match 后重跑成功,12:15 `/api/server-list` 一区 OPEN/SMOOTH、`/actuator/health` UP、login 监听 53000;二区 MAINTENANCE 属预期(启动器只起一区)。未跑 robot 冒烟(AGENTS §10.1)。
+
+### 需要人执行(AGENTS §9 禁 AI 提交/打 tag/推送;D-14 遗留"主键修复进 tag 由人执行")
+1. Codex 在 `E:\work\proto2mysql-release`:`go build ./... && go test ./...`,再 `cd tools/proto2sql && go test ./...`;通过标准全绿,失败保留完整输出。
+2. 人工审阅后提交,打 `v0.1.2` 并推送(tag 一经代理缓存即不可变,必须先测后打)。
+3. 服务器侧同批:go/db 删 `go.mod` 末尾 replace 并 require `v0.1.2`,同步删 `tools/scripts/go_svc_image.ps1:110-118` 的命名构建上下文;data_service、`tools/proto_generator/protogen` require `v0.1.2`(go/schemamigrate 可一并对齐,归聚宝斋 P1 负责人决定);各 module `go mod tidy && go build ./... && go test ./...`。data_service 从 `9ad991c` 跨过 v0.1.1 的 breaking 改动,重点看编译;升级后 db 首启确认无"表名守卫"Fatal 且不对 `user_accounts.account` 发 MODIFY。
+4. 长期待拍板:上游 main 已拒绝字符串主键,后续基于 main 的版本给 go/db 用之前,要么把三张字符串主键表(user_accounts / account_share_database / user_oauth)改整数代理主键,要么维护分叉补丁。
+
+### 仍未做(不阻塞 Unity 联调)
+- TiDB Phase 1 第 5-7 步:Dumpling+Lightning 迁移工具、L1-L4+chaos 在 TiDB 上验收、回档 runbook TiDB 版(迁生产硬前置)。
+- 启动器缺陷未修:一批 Go 服务中途失败时,已启动但未写契约记录的服务会使重跑被拒(`start_game.ps1` `Start-LocalGoServices` 逐个 Wait-Ready 后才 `Save-LocalCommandContract`)。
+
+## 2026-09-15(续)锁心跳降级门槛按客户端真实调用上限计算(shared/leader + login locker)
+
+- **更正**同日"login 锁心跳自我降级"条目:其中"门槛 `min(2/3 TTL, TTL − interval − 续期超时)`""续期超时封顶 TTL/8 所以第 1 个出错拍卡满超时也够不到门槛"的说法不成立。续期 ctx 超时封不住一次调用:go-redis v9.16.0 未开 `Options.ContextTimeoutEnabled` 时给 socket 读写传 `context.Background()`(redis.go ~609/626/668),单次调用上界是 ReadTimeout+WriteTimeout。`Options.init()` 后:ReadTimeout 0→3s、-1→0(不设截止,无上界)、-2→-1(禁用截止,无上界);WriteTimeout 0→同 ReadTimeout、-1→0、-2→-1(均无上界)。login 生产客户端(`go/login/internal/svc/servicecontext.go` ~99-104)用默认值 → 3s+3s、不认 ctx;go-zero v1.9.2 `core/stores/redis/redisclientmanager.go` 建 go-redis 客户端不设任何超时字段也不开 ContextTimeoutEnabled → 同样 ~3s 读 + 3s 写,且 `*redis.Redis` 不暴露选项。旧公式在 TTL 30s / 间隔 10s 下门槛 18s,第 1 个出错拍卡 6s 在 16s 返回尚安全,但换评审建议的 `ttl − interval − maxCall`(=14s)就会在第 1 拍误降级,说明必须按约束推导而不是凑式子。
+- **公式**(`go/shared/leader/fence.go` 导出 `FenceAfter(ttl, interval, maxCall) (fenceAfter, guaranteed)`,两个模块共用):lastOK 记最后一次成功续期的发出时刻,失联后第 n 个出错拍最晚在 lastOK+n·interval+maxCall 返回。三条约束:(a) 第 1 个出错拍卡满 maxCall 不降级 → fenceAfter > interval+maxCall;(b) 第 2 个出错拍必降级 → fenceAfter ≤ 2·interval(下方留余量吸收 tick 抖动);(c) 该次降级最晚 lastOK+2·interval+maxCall 完成,须 < lastOK+ttl。`guaranteed = maxCall < interval && 2·interval+maxCall < ttl`(先比前者,`UnboundedCall`=MaxInt64 不参与加法不溢出);满足时 fenceAfter = (3·interval+maxCall)/2(区间中点,两侧余量各 (interval−maxCall)/2),否则 fenceAfter = interval 且 guaranteed=false(任一续期出错即降级,记错误日志,建议 TTL > 3·maxCall 并留余量)。
+- **maxCall 取法**:续期 ctx 超时仍是 `min(2s, ttl/8)`。shared/leader 新增可选能力 `CallBounder{MaxCallDuration()}`(0 = 客户端认 ctx 截止时间);`goRedisStore` 用导出的 `GoRedisMaxCallDuration((*redis.Client).Options())`(ContextTimeoutEnabled→0;任一超时 ≤0→UnboundedCall;否则读+写),`goZeroStore` 写死 6s(注释钉 go-zero v1.9.2,升级须复核)。Elector 取 max(续期超时, CallBounder 值);login locker 取 `max(续期超时, leader.GoRedisMaxCallDuration(client.Options()))`。生产结果:scene_manager 选主 TTL 30s → 18s;login DispatcherLockTTL 30s → 18s;PlayerLockTTL 120s → 63s,均 guaranteed。`scene_manager/internal/config/config.go` 的 `LeaderLockTTLSeconds` 注释补了 TTL > 18s 下限说明,默认值不变。loginqueue 集成测试 lockTTL=2s + 默认客户端 → 不满足,会退化为任一续期出错即降级并记错误日志(这些用例不注入续期错误,行为不变)。
+- **stop 竞态**:两处心跳在续期调用返回后、判错之前加非阻塞 stop 复查;续期在途时 stop 被调用,回来后不再 onLost(Elector 原先没有任何 stop 复查,login 只有续期前复查)。
+- 已知未覆盖:`GoRedisMaxCallDuration` 只计命令本身一轮读写;可重试错误(如 EOF)快速失败后在 ctx 未过期时的重发、新建连接握手(HELLO/AUTH)各自还有一轮读写,极端情况下单次调用可超过该上界。
+- **单测**:① `fence_test.go` `TestFenceAfter` 表驱动无时钟:(30s,10s,2s)→16s/true、(30s,10s,6s)→18s/true、(12s,4s,6s)→4s/false、(30s,10s,10s)→10s/false 边界、(30s,10s,Unbounded)→10s/false 不溢出、(3s,1s,375ms)→1687.5ms/true;② `TestGoRedisMaxCallDuration`:默认 6s、ContextTimeoutEnabled 0、ReadTimeout -1/-2 → Unbounded、500ms+250ms → 750ms(只建客户端不拨号);③ `leader_test.go` `TestSelfFencingBeforeExpiryWhenErrorsReturnFasterThanRenews` 改为按次数断言:TTL 3s、成功续期延迟 150ms,降级回调里读"最近成功后续期报错次数"必须 == 2(新增 `eventuallyWithin`,原 `eventually` 调用点不变);④ login `player_locker_test.go`:夹具客户端开 ContextTimeoutEnabled(maxCall = 续期超时),用例 1/2 TTL 改 3s;用例 1 在 onLost 时读"最近放行后失败 EVAL 数"== 2;新增 `TestStartHeartbeat_FenceClockStartsAtLockAcquisition`(拿锁后 800ms 才起心跳、EVAL 全失败 → 第 1 个失败即 onLost)与 `TestStartHeartbeat_NoOnLostAfterStopDuringInflightRenew`(拿锁后 1.8s 起心跳、EVAL 失败且服务端延迟 500ms 回包,EVAL 到达即 stop → onLost 0 次、stop 3s 内返回)。
+- **未编译,待编译验证**(按顺序):
+  1. `cd go/shared && go vet ./leader/... && go test -count=3 ./leader/...`
+  2. `cd go/login && go vet ./internal/logic/pkg/locker/... && go test -count=3 ./internal/logic/pkg/locker/... ./internal/logic/pkg/loginqueue/... && go build ./...`
+  3. `cd go/scene_manager && go build ./... && go test -count=1 ./internal/logic/... ./internal/svc/...`
+
+## 2026-09-15 恢复 Agones 建场景许可 + gRPC 包装函数加"投递前"守护段(Claude,组队 J-28 ④ 前置)
+
+- **问题**:commit `6c4021ae5`(2026-09-02)的 proto 重生成删掉了 `cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 中 gRPC `CreateScene` 包装函数里的 `AcquireCreatePermitBlocking` 块(20 行,位于守护段外)。此后 SceneManager 走的 gRPC 建场景路径不申请 Agones 许可;`scene_handler.cpp:732-733` 注释仍声称 gRPC 路径用阻塞版。
+- **恢复**:原块放回 `SceneNodeGrpcImpl::CreateScene`,位于 `runInLoop` 之前(gRPC 线程上阻塞,不卡逻辑帧),包在 `///<<< BEGIN/END WRITING YOUR CODE` 内;失败返回 `UNAVAILABLE`,permit 活到函数返回。
+- **防再吞(生成器)**:`tools/proto_generator/protogen/internal/grpc_handler_gen.go` 为每个 gRPC 包装函数在 promise 之前生成一个守护段,第二遍解析以 `Impl::<Method>(grpc::ServerContext` 为键收集(`GenerateGrpcWrapperNameWrapper`),旧文件无该段时回落默认空段;头文件模板注释说明只有该段可返回非 OK。重生成后 `scene_node_service.cpp`、`battle_node.cpp`、`battle_client_player_service.cpp` 的每个包装函数会多出一对空守护段(预期差异)。
+- **测试**:`code_parser_test.go` 新增包装函数守护段捕获/同前缀方法不串/旧格式回落两例;新文件 `grpc_handler_gen_test.go` 渲染→回写→再渲染逐字节一致,且许可代码位于 promise 之前。
+- **⚠ 生效前提**:`dev_tools.ps1 proto-gen-run` 用的是预编译 `tools/proto_generator/protogen/proto-gen.exe`,**必须先重编该 exe**,否则任何会话再跑一次重生成仍会吞掉恢复的块。
+- **未编译,待 Codex 验证**(按顺序):
+  1. `cd tools/proto_generator/protogen && go vet ./internal/... && go test -count=1 ./internal/...`(通过标准:全绿,含上述 3 个新用例)
+  2. 重编 `proto-gen.exe`(按该目录现有构建方式),确认新 exe 时间戳更新
+  3. 串行 `/m:1` 编译 `cpp/nodes/scene` 工程;`grep -n AcquireCreatePermitBlocking cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 必须命中
+  4. (等 trade 会话提交后,随组队批 0 一起)重生成一次,复查第 3 步 grep 仍命中、三个 gRPC handler 文件只多出空守护段
+
+## 2026-09-15(续)锁心跳续期节拍按 lastOK 排拍 + 评审小项(shared/leader + login locker)
+
+- **更正**上一条"锁心跳降级门槛按客户端真实调用上限计算":原 `fence.go` 注释"心跳晚于拿锁起动时……方向偏安全"不成立。两处心跳 lastOK 初值是 SETNX 发出时刻,但 ticker 在心跳 goroutine 起动时才建,每拍都晚一段起动延迟 d(Elector:go-zero SETNX 往返 + 同步 `OnStateChange(true)`;login:调用方拿锁后的 Redis 往返)。首个出错拍快速失败且 d < (interval+maxCall)/2 时逃过门槛,第 2 个出错拍卡满 maxCall 在 acquiredAt+d+2·interval+maxCall 返回,d ≥ ttl−2·interval−maxCall 即晚于 key 过期;TTL 30s / interval 10s / maxCall 6s(scene_manager 选主、login dispatcher)时 d∈[4s,8s) 会双属主约 1s。PlayerLock(interval 40s)不在范围内。旧代码同样有此缺陷,非本轮回归。
+- **修复**:`leader.startHeartbeat` 与 `locker.StartHeartbeat` 由 `time.Ticker` 改为按 lastOK 排拍的 `time.Timer`:初值 next = acquiredAt+interval;出错 next += interval;成功 next = sentAt+interval;已过则立即发出。失联后第 n 个出错拍不早于 lastOK+n·interval,约束 (b) 不再依赖 tick 相位;起动延迟只要求 d+maxCall < ttl。`FenceAfter` 注释改写为真实前提。
+- **FenceAfter 退化分支**由 `(interval, false)` 改为 `(0, false)`(偏离上一条写的设计值):门槛压在节拍周期上时,第 1 拍还是第 2 拍降级取决于毫秒级触发抖动;语义仍是"任一续期报错即降级"。`TestFenceAfter` 的 (12s,4s,6s)、(30s,10s,10s)、(30s,10s,Unbounded) 三例期望改为 0/false。
+- **GoRedisMaxCallDuration** 判定顺序:任一超时 < 0 → UnboundedCall(go-redis v9.16.0 / v9.17.3 `internal/pool/conn.go` 的 WithReader/WithWriter 只在 timeout >= 0 时设 socket 截止,ContextTimeoutEnabled 也用不上)→ ContextTimeoutEnabled → 0 → 任一 == 0 → UnboundedCall → 读+写。新增用例:CTE+ReadTimeout -2、CTE+WriteTimeout -2 → Unbounded;CTE+ReadTimeout -1(初始化后 0,deadline 直接取 ctx)→ 0。
+- **goZeroStore 6s 注释**改钉实际链接版本:唯一调用方 scene_manager 的 go.mod 选中 go-zero v1.10.0 + go-redis v9.17.3(已核对 v1.10.0 `redisclientmanager.go` 同样不设任何超时字段),要求任何调用 NewGoZeroStore 的模块升级 go-zero / go-redis 时复核;`scene_manager/internal/config/config.go` 的 `LeaderLockTTLSeconds` 注释同步。
+- **单测**:① `leader_test.go`:fakeStore 新增 `failDelay`(只作用于报错的续期);新增 `failsAtFirstDemotion` 辅助、`TestHeartbeatScheduleAlignsWithCampaignNotHeartbeatStart`(当选回调阻塞 700ms、报错 300ms 回包 → 降级时出错计数 == 2;按起动时刻起 ticker 为 1)、`TestHeartbeatFenceUsesStoreCallBound`(`boundedStore` 报告 1.5s 上限 → 计数 == 1;忽略 CallBounder 为 2)。② login `player_locker_test.go`:evalFault 新增 `passDelay`;用例 `SelfFencesBeforeExpiryOnPersistentRenewErrors` 放行 EVAL 延迟 150ms(使"lastOK 记回包时刻 + 2/3 TTL 门槛"回归稳定落到第 3 拍);`FenceClockStartsAtLockAcquisition` 起心跳延迟 800ms → 2s(首拍立即发出,计数 1);`NoOnLostAfterStopDuringInflightRenew` 只改注释;新增 `newHeartbeatFixtureWithOptions`、`TestStartHeartbeat_RenewScheduleAlignsWithLockAcquisition`(延迟 700ms、报错 300ms 回包 → 计数 2)、`TestStartHeartbeat_FenceUsesClientWorstCaseCall`(不开 CTE、读写超时 600ms → maxCall 1.2s → 计数 1)。各断言两侧约 300ms 余量。
+- **未编译,待编译验证**(按顺序):
+  1. `cd go/shared && go vet ./leader/... && go test -count=3 ./leader/...`
+  2. `cd go/login && go vet ./internal/logic/pkg/locker/... && go test -count=3 ./internal/logic/pkg/locker/... ./internal/logic/pkg/loginqueue/... && go build ./...`
+  3. `cd go/scene_manager && go build ./... && go test -count=1 ./internal/logic/... ./internal/svc/...`
+
+## 2026-09-15 聚宝斋 P1 落码收口(Claude,未编译、未运行;取代 09-14 "进行中"占位条目)
+
+- 用户 09-14 授权开 P1、D4 按推荐 → 落为 port-decisions **D-14**。设计 [docs/design/jubaozhai-market.md](docs/design/jubaozhai-market.md)(§1 决策、§3 类目/子类编码契约、§5.1 阶段由时间推导、§8 表、§9 协议与会话口径、§10 接线、§11 客户端、§13 验收)。
+- **交付**(七个工作包,各经两路审稿 + 跨包一致性核对,均无遗留不一致):
+  - 契约:`proto/trade/{jubaozhai,trade_admin,trade_table}.proto`;Tip 段 `//trade_error base=20000`(TradeListingNotFound / TradeHomeZoneUnknown / TradeFavoriteLimitReached / TradeFeatureDisabled);MessageLimiter 196/197/200 = 10 次/秒、198 = 5 次/秒。
+  - `go/schemamigrate`(新 module,go 1.26.5,require proto2mysql v0.1.1):抽自 go/db runner(台账逐字同形、同锁名前缀、dirty 拒绝、语句硬超时 + 旁路 KILL),修"基线后加表建不出来";go/db 本轮不改。
+  - `go/trade`:ClientPlayerJubaozhai 4 方法 + TradeAdmin.SeedListing(仅 Mode dev/test);guild 式会话白名单;home_zone 经 BatchGetPlayerHomeZone(未映射 fail-closed);Market.Scope zone|global;整请求预算 = Timeout − 500ms,故障 in-band;`-migrate` 与启动期迁移;`internal/lifecycle` 为 chat 同名包副本(待抽 go/shared)。
+  - 登记:proto_gen.yaml、go_services.ps1、start_game.ps1(trade 可选 + mmorpg_trade 库预检)、go_svc_image.ps1、Dockerfile.go-svc(COPY schemamigrate)、mysql-init 建库、data_service BootstrapTags(代码两处 + yaml + K8s)、.gitignore(go/trade/generated/)。
+  - K8s:trade.yaml + trade-migrate Job(podFailurePolicy 1/4 失败、3 重试;staging/prod 恒等 Job,dev 看 -WaitReady;不删在途 Job;等待预算 max(-WaitTimeoutSeconds, 300))、README/AGENTS 存量 PVC 补建库。
+  - `tools/merge_zone` 步骤 3b / 撤销 3b' / verify:trade_listing(只改清单 listing_id、分批、复查中止保留围栏);dev_tools `-MergeSkipTradeMySql`;runbook 与 server_merge_design 同步。工作包越过规格"≤6 文件"门槛(8 个,含 2 个测试),**接受**:全部是按 guild 步骤模板插入,测试文件不可省。
+  - robot `trade-smoke`(`etc/trade_smoke.yaml`,账号 **robot_9401–9403**,93xx 已归 team-smoke;TradeAdmin 经 gRPC 直连 50800 播种;期望 `TRADE_SMOKE_OK scope=zone|global`)。
+  - 客户端(已由其他会话随生成物提交 `mmorpg-client a83fa64`):JubaozhaiClient + JubaozhaiState 服务端分页模式,只有 "rpc timeout" 才隔离;gen_proto.ps1 加 jubaozhai / trade_error_tip / common_error_tip。
+  - 手工登记 trade C++ 生成物:`cpp/generated/{proto,grpc_client,rpc,table}` 的 CMakeLists + vcxproj + filters(含尚未生成的 `trade/*.grpc.pb.cc`)。
+- **⚠ 阻塞与风险(先处理)**:
+  1. **C++ 构建当前会断**:09-15 12:05 另一会话跑的 proto-gen 已生成 trade 的 C++ gRPC 客户端(`grpc_init_client.cpp` 已引用),但**没生成 `proto/trade/{jubaozhai,trade_admin}.grpc.pb.{h,cc}`**——protogen `internal/generator/cpp/gen.go:204` 按 PATH 找 `grpc_cpp_plugin`,本机只有 `third_party/grpc/install_vs2026/bin/grpc_cpp_plugin.exe`(E:/work/tools/bin 已清空)。
+  2. `proto/message_id.txt` 的 196–200 已分配但**未提交**;并行会话再加方法会撞号。组队会话(09-15 Agones 条目第 4 步)也在等 trade 提交后再重生成。提交需用户发话。
+  3. `github.com/luyuancpp/proto2mysql v0.1.1` 本机模块缓存没有,tidy 须能经 GOPROXY 拉到;拉不到则 schemamigrate / trade / trade 镜像都编不了(打 tag / push 需人执行)。trade 表全是整数主键,不受 v0.1.1 字符串主键前缀问题影响。
+- **Codex 验证清单(按序)**:
+  0. 前置:buildenv(Go 1.26.5、GOPROXY goproxy.cn);把 `third_party/grpc/install_vs2026/bin` 加进 PATH;按 09-15 Agones 条目先重编 `proto-gen.exe`(否则重生成会再吞 Agones 块)。
+  1. 导表(Tip + MessageLimiter):核对 `go/shared/generated/tip/segments.go` 有 trade 段、`generated/tables/messagelimiter.json` 有 196/197/198/200。
+  2. `pwsh tools/scripts/dev_tools.ps1 -Command proto-gen-run`:核对 `cpp/generated/proto/trade/jubaozhai.grpc.pb.{h,cc}`、`trade_admin.grpc.pb.{h,cc}` 出现;`kMaxRpcMethodCount = 201`;`grep AcquireCreatePermitBlocking cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 仍命中;message_id.txt 196–200 不变。
+  3. `go/schemamigrate`:`go mod tidy`、`go vet ./...`、`go test ./...`、`go test -race -count=200 -run TestInterruptedStatementIsKilledAndLeavesLedgerDirty ./...`;可选 `SCHEMAMIGRATE_TEST_MYSQL_DSN` 一次性库 + `-tags integration`。
+  4. `go/trade`:`go mod tidy`、`gofmt -l .`(空)、`go vet ./...`、`go build ./...`、`go test ./...`、`GOOS=linux go vet ./...`;可选 `TRADE_TEST_MYSQL_DSN` 一次性库 + `-tags integration ./internal/data/...`。
+  5. `go/data_service`:`go test ./internal/config/... ./internal/store/...`;`tools/merge_zone`:`go vet ./...`、`go vet -tags merge_integration ./...`、`go test ./...`,本机 MySQL/Redis 在线时 `go test -tags merge_integration -run "TestIT_" -v ./...`(需触发器权限)。
+  6. `robot/`:`go mod tidy && go mod vendor && go build -mod=vendor -o robot.exe . && go vet -mod=vendor . ./config/...`。
+  7. `go/client_rpc_router` 重编 + 测试(路由表含 196/197/198/200 ClientProtocol=true、199 false);`go_services.ps1 -Command build -Services trade`。
+  8. C++ MSBuild Debug/x64 串行 `/m:1`:proto → table → rpc → grpc_client → gate → scene(及 run_cpp_tests.ps1 受影响工程)。
+  9. 脚本:k8s_deploy.ps1 语法解析 + `infra-up -DryRun` dev(带/不带 -WaitReady)与 prod(不带 -WaitReady 也等 Job)渲染核对;`start_game.ps1 -CheckOnly`。
+  10. 本机端到端:存量卷补建 `mmorpg_trade`(start_game 预检失败时会打印命令);data_service 重启或 `-migrate` 建出 trade_listing 号段行;`trade -f etc/trade.yaml -migrate` 两次(2 条 → 0 条);路由服模式(`GATE_CLIENT_RPC_ROUTER=1`)起双 zone;robot `etc/trade_smoke.yaml` 在 `Market.Scope: zone` 与 `global` 各跑一次期望 `TRADE_SMOKE_OK`;失败保留 FAIL 行、trade `[trade]` 日志、路由服 `/trade.*` 日志。
+  11. 客户端:`tools/client_compile_check.ps1` 退出码 0;Unity EditMode `MmorpgClient.Tests.EditMode.Jubaozhai` + JubaozhaiModelTests + Guild 回归(-runTests 不带 -quit);进角色按 U 看到种子商品、收藏重进仍在、拍卖页显示未开放。
+- **P3 前 / 上线前待办**:D-14 第 9 条的 audit auditor、data_consistency_check、TiDB BR 清单;trade 写入口接合服围栏;lifecycle 抽 go/shared;`tools/scripts/tests/k8s_deploy_contract.tests.ps1` 补 trade 用例;runbook "dry-run 不写清单"与代码不符(既有问题);P0-a GM 客户端消息鉴权、P0-b 账号数据持久化。
+
+## 2026-09-15(续)单点收尾验收:锁心跳编译测试全绿 + 本地一区栈复验 + 两个新缺陷登记(Claude)
+
+- **编译测试证据**(Go 1.26.5 本机模块缓存工具链,`GOTOOLCHAIN=local`;最终代码,即下方"最终对抗审查"一节改完之后;覆盖同日三条锁心跳条目末尾的"未编译,待编译验证"):
+  - gofmt -l(go/shared/leader、go/login/internal/logic/pkg/locker、scene_manager config.go)无输出。
+  - `go/shared`:`go vet ./leader/...` 通过;`go test -count=3 ./leader/...` 12 个用例 ×3 = 36 次全过(含 TestFenceAfter、TestCallBudget、TestGoRedisMaxCallDuration、TestHeartbeatScheduleAlignsWithCampaignNotHeartbeatStart、TestHeartbeatFenceUsesStoreCallBound、TestHeartbeatFenceClockStartsAtCampaign)。
+  - `go/login`:`go build ./...`、`go vet` 锁包与排队包通过;`go test -count=3 ./internal/logic/pkg/locker/... ./internal/logic/pkg/loginqueue/...` 全过(锁包 7 个用例 ×3 = 21 次)。
+  - `go/scene_manager`:`go build ./...`、`go vet ./internal/config/...`、`go test -count=1 ./internal/logic/... ./internal/svc/...` 全过。
+  - 测试加固后复测(TestHeartbeatFenceUsesStoreCallBound 读写上界 1.5s→800ms、login SelfFences 读超时 400→500ms、FenceUsesClientWorstCaseCall 读写 600/600→500/300ms):gofmt 无输出;shared/leader 36 次、login 锁包 21 次全过。**变异验证**:把 `CallBudget` 的相加临时改为取最大值,上述两个用例均按预期失败(拖到第 2 个出错拍才降级),证明能抓住"相加退化成取最大值"的回归;fence.go 已恢复,哈希一致。
+  - 同日早些时候(锁心跳改动之前)scene_manager 全量 build/vet/test 与 shared/leader 测试也已在当前 HEAD 上复验通过。
+  - 注意:bin/go_services 下 login.exe / scene_manager.exe 仍是 09-14 构建,未包含本批心跳修复;下次按 go_services.ps1 build 重编后生效(运行中重编会因文件占用失败)。
+- **最终对抗审查**(三视角 + 逐条反驳,18 个 agent):确认 12 条、驳回 3 条,核实后全部为 minor,无可导致线上双属主的缺陷。据此再改一轮(最终代码以此为准,**取代**同日三条锁心跳条目里的对应数值与说法):
+  - 单次续期最坏耗时改为**相加**:`leader.CallBudget(续期 ctx 超时, 客户端 socket 读写上界)`。go-redis 不开 ContextTimeoutEnabled 时,连接池等待 / 重试退避 / 拨号受 ctx 截止约束,之后的 socket 写与读只受 WriteTimeout / ReadTimeout 约束,所以上界是二者之和(之前取较大值漏算了池等待)。默认客户端:2s + 3s + 3s = **8s**。仍未覆盖:新连接握手(HELLO/AUTH)各自一轮读写。
+  - 保证成立时降级门槛改为 **2·interval**(不再取区间中点):按 lastOK 排拍后第 n 个出错拍在单调时钟上恰排在 lastOK+n·interval、不会提前触发,中点留出的余量没有用处,只会缩小第 1 个出错拍迟到或变慢时的容忍度(容忍度 = interval − maxCall)。保证条件不变:maxCall < interval 且 2·interval + maxCall < ttl。
+  - 生产数值:scene_manager 选主、login DispatcherLockTTL(30s)→ 门槛 **20s**,降级最晚 28s 完成;login PlayerLockTTL(120s)→ **80s**;scene_manager `LeaderLockTTLSeconds` 下限改为 **TTL > 24s**(注释已同步)。
+  - shared/leader 心跳补上"定时器触发后、发出续期前"的非阻塞 stop 检查(login 原本就有):二者同时就绪时 stop 优先,避免优雅退出时多续一次期、拖慢属主校验释放与交接。
+  - 测试加固:补"只把 lastOK 回退成回包时刻"与"选主初值取竞选时刻"两个回归;放宽几处离判定边界过近的计时余量;在途续期期间 stop 的用例不再依赖 375ms 的 ctx 窗口。
+- **更正同日首条"login 锁心跳自我降级"中未被后续条目明确取代的说法**:
+  - "失联后第 2 个出错拍必降级,最晚约 2/3 TTL + 续期超时"作废,以 FenceAfter 约束 (c) 为准:降级最晚在 lastOK + 2·interval + maxCall 完成。
+  - "dispatcher 至多收尾一次在途调用即退出,比 key 过期早约 TTL/3 − 续期超时"不成立:login Redis 客户端未开 ContextTimeoutEnabled,取消 drainCtx 不会中断已在 socket 读写中的调用,降级后在途调用最多还能持续 ReadTimeout + WriteTimeout(6s)。30s 的 dispatcher 锁在最坏情况下(28s 降级 + 6s 尾巴)可能越过 key 过期,属已知残余。可选后续:login 客户端开启 ContextTimeoutEnabled,或调大 DispatcherLockTTL。EnterGame 的 PlayerLock(120s)余量充足。
+  - 首条"建议另开任务按同一门槛修 shared/leader"已由同日两条(续)条目与本条完成,**不要再按旧门槛重做**。
+  - 同日"续期节拍按 lastOK 排拍"条目中旧 ticker 缺陷的双属主窗口"约 1s"偏小:起动延迟 d∈[4s,8s) 时窗口为 d − 4s,最长接近 4s(旧代码同样存在,非本轮回归)。
+- **robot login-test 冒烟(本地一区,start_game.ps1 管理的栈)**:22/23。
+  - SceneSwitch 通过,用例本身正确:开发配置 `WorldChannelCountByConfId: "1": 16`(Redis `SCARD world_channels:zone:1:1` = 16),同图请求会被分到人数最少的另一个频道,是真实换频道。08-17 失败的真因是当时 gate 登录后不转发 RoutePlayer,已由 cd918f4f8(09-13)修复。当天一度把用例改成"换地图"的改动已完全撤回。
+  - SkillCast 失败 = **新登记缺陷**:场景节点新启动后第一个进场角色实体 id 为 0(`actorRegistry.create()`),而 `skill.cpp:94/365` 把 `target_id <= 0` 当"无目标"拒绝需要目标的技能(proto3 默认值 0 与实体 0 无法区分),该角色永远不能被技能选中。robot 侧遵守"target_id > 0"契约没有错(一度改 robot 的改动已完全撤回);Unity ActorWorld 能接受实体 0,但同样会被服务端拒技能。建议服务端预占实体 0,已开任务卡。
+- **本地栈事故与恢复**:12:03 起的 C++ 节点在 12:11:34 出现 librdkafka "1/1 brokers are down" 后,login/scene_manager 发往 `gate-cmd_g2`(分区与 target_instance_id 均正确)的 BindSession/RoutePlayer/Kick 不再生效,表现为"能登录进不了场景、顶号不踢人"(冒烟 18/23)。仅重启 C++ 节点(二进制不变)即恢复 22/23;按原步骤重跑启动器未复现断连。根因未坐实,现场证据已留存,已开任务卡(补命令消费可观测性 + 可控复现)。恢复过程中曾在启动器之外拉起 C++ 节点,导致启动器按 `run/pids/kafka_command_contract.json` 拒启;已按记录停掉三个节点并由 start_game.ps1 重新拉起,契约登记一致(gate/scene/battle 均 generation=2、partitions=256)。
+- **仍保留的开发期设置**:`go/scene_manager/etc/scene_manager_service.yaml` 的 `AllowUnsafeCrossNodeHandoff: true`(持久化交接屏障落地前的 dev 便利,压测/正确性验证时改回 false)。
+- **proto2mysql 注意**(详见同日"TiDB 数据层交付复核"条目):origin/main `83fed85` 在建表校验里直接拒绝 string/bytes 主键,go/db 的 user_accounts / user_oauth / account_share_database 会因此无条件拒启;f3b308f 直接 cherry-pick 到 main 也不够(VARCHAR(191) 不带 NOT NULL 仍被拒)。release/v0.1.2 基于 v0.1.1 切暂时可用,长期需人拍板:改整数代理主键,或维护带 NOT NULL 与改上游测试的分叉补丁。打 tag / 推送由人执行。

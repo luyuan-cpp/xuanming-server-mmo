@@ -29,11 +29,11 @@ func TestEtcYamlEnablesPrometheus(t *testing.T) {
 	if c.Prometheus.Path != "/metrics" {
 		t.Errorf("Prometheus.Path = %q,期望 /metrics", c.Prometheus.Path)
 	}
-	// 端口分工:login 9101 / scene_manager 9150 / db 9160 / guild 9170 /
-	// friend 9180 / player_locator 9190。撞端口会让两个服务里后起的那个
+	// 端口分工:login 9101 / scene_manager 9150 / db 9160 / match 9170 /
+	// friend 9180 / player_locator 9190 / guild 9220。撞端口会让两个服务里后起的那个
 	// 静默拿不到 /metrics(ListenAndServe 报错只落一行日志)。
-	if c.Prometheus.Port != 9170 {
-		t.Errorf("Prometheus.Port = %d,公会服务约定用 9170", c.Prometheus.Port)
+	if c.Prometheus.Port != 9220 {
+		t.Errorf("Prometheus.Port = %d,公会服务约定用 9220", c.Prometheus.Port)
 	}
 }
 

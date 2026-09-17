@@ -33,8 +33,9 @@ type Config struct {
 
 	// DataServiceRpc 是 data_service 的 gRPC 客户端(etcd 发现,Key=dataservice.rpc),
 	// 与 login 的 PlayerLocatorRpc / SceneManagerRpc 同一套 zrpc+etcd 写法。
-	// guild 目前只用它领 guild_id 号段(AllocateIdSegment);IdSegment.Enabled=false 时
-	// 根本不拨号,所以标 optional —— 但 Enabled=true 而这块缺失会在启动时明确拒绝。
+	// 用于查询角色归属区(GetPlayerHomeZone)及领取 guild_id 号段(AllocateIdSegment)。
+	// 配置目标即拨号,不受 IdSegment.Enabled 控制;缺失时客户端归属区查询不可用,
+	// 且 IdSegment.Enabled=true 会在启动时明确拒绝。
 	DataServiceRpc zrpc.RpcClientConf `json:"DataServiceRpc,optional"`
 	// IdSegment 控制 guild_id 的号段发号(docs/design/node-id-overhaul-plan-20260908.md §6)。
 	// 字段语义见 shared/idsegment.Conf。**没写这块 = 号段关闭 = 纯 snowflake 老路径**

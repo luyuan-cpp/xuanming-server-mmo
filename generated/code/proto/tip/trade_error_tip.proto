@@ -1,0 +1,20 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum trade_error {
+  kTrade_errorOK = 0;
+
+  kTradeListingNotFound = 20000;
+
+  kTradeHomeZoneUnknown = 20001;
+
+  kTradeFavoriteLimitReached = 20002;
+
+  kTradeFeatureDisabled = 20003;
+
+};

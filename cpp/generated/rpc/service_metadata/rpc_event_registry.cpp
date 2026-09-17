@@ -32,6 +32,8 @@
 #include "proto/scene/scene_admin.pb.h"
 #include "proto/scene_manager/scene_manager_service.pb.h"
 #include "proto/scene_manager/scene_node_service.pb.h"
+#include "proto/trade/jubaozhai.pb.h"
+#include "proto/trade/trade_admin.pb.h"
 
 #include "rpc/service_metadata/player_battle_service_metadata.h"
 #include "rpc/service_metadata/battle_node_service_metadata.h"
@@ -62,6 +64,8 @@
 #include "rpc/service_metadata/scene_admin_service_metadata.h"
 #include "rpc/service_metadata/scene_manager_service_service_metadata.h"
 #include "rpc/service_metadata/scene_node_service_service_metadata.h"
+#include "rpc/service_metadata/jubaozhai_service_metadata.h"
+#include "rpc/service_metadata/trade_admin_service_metadata.h"
 
 #include "proto/common/event/mission_event.pb.h"
 #include "proto/common/event/scene_event.pb.h"
@@ -210,11 +214,16 @@ namespace scene_node{void SendSceneNodeGrpcDestroyScene(entt::registry& , entt::
 namespace scene_node{void SendSceneNodeGrpcReleasePlayer(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace scene_node{void SendSceneNodeGrpcPrepareBattle(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace scene_node{void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace trade{void SendClientPlayerJubaozhaiBrowseListings(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace trade{void SendClientPlayerJubaozhaiGetListingDetail(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace trade{void SendClientPlayerJubaozhaiSetFavorite(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace trade{void SendClientPlayerJubaozhaiGetMyShelf(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace trade{void SendTradeAdminSeedListing(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 196,
+static_assert(kMaxRpcMethodCount == 201,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1260,6 +1269,35 @@ void InitMessageInfo()
         std::make_unique<::CancelBattlePrepareRequest>(),
         std::make_unique<::Empty>(),
         nullptr, 1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcCancelBattlePrepare};
+
+    // --- ClientPlayerJubaozhai ---
+    gRpcMethodRegistry[ClientPlayerJubaozhaiBrowseListingsMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "BrowseListings",
+        std::make_unique<::trade::BrowseListingsRequest>(),
+        std::make_unique<::trade::BrowseListingsResponse>(),
+        nullptr, 1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiBrowseListings};
+    gRpcMethodRegistry[ClientPlayerJubaozhaiGetListingDetailMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "GetListingDetail",
+        std::make_unique<::trade::GetListingDetailRequest>(),
+        std::make_unique<::trade::GetListingDetailResponse>(),
+        nullptr, 1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiGetListingDetail};
+    gRpcMethodRegistry[ClientPlayerJubaozhaiSetFavoriteMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "SetFavorite",
+        std::make_unique<::trade::SetFavoriteRequest>(),
+        std::make_unique<::trade::SetFavoriteResponse>(),
+        nullptr, 1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiSetFavorite};
+    gRpcMethodRegistry[ClientPlayerJubaozhaiGetMyShelfMessageId] = RpcMethodMeta{
+        "ClientPlayerJubaozhai", "GetMyShelf",
+        std::make_unique<::trade::GetMyShelfRequest>(),
+        std::make_unique<::trade::GetMyShelfResponse>(),
+        nullptr, 1, common::base::eNodeType::TradeNodeService, trade::SendClientPlayerJubaozhaiGetMyShelf};
+
+    // --- TradeAdmin ---
+    gRpcMethodRegistry[TradeAdminSeedListingMessageId] = RpcMethodMeta{
+        "TradeAdmin", "SeedListing",
+        std::make_unique<::trade::SeedListingRequest>(),
+        std::make_unique<::trade::SeedListingResponse>(),
+        nullptr, 1, common::base::eNodeType::TradeNodeService, trade::SendTradeAdminSeedListing};
 }
 
 bool IsClientMessageId(uint32_t messageId)
@@ -1357,6 +1395,10 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSkillClientPlayerNotifySkillUsedMessageId:
 	case SceneSkillClientPlayerNotifySkillInterruptedMessageId:
 	case SceneSkillClientPlayerListSkillsMessageId:
+	case ClientPlayerJubaozhaiBrowseListingsMessageId:
+	case ClientPlayerJubaozhaiGetListingDetailMessageId:
+	case ClientPlayerJubaozhaiSetFavoriteMessageId:
+	case ClientPlayerJubaozhaiGetMyShelfMessageId:
 		return true;
 	default:
 		return false;

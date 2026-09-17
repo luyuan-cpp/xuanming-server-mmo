@@ -60,7 +60,7 @@ descriptor 全部字段——存量库缺这一列时**整行玩家数据读写�
   `Pet.init_mana` ×4,`Monster.armor` ×12,引擎兜底 `kMonsterDefaultArmor` 2 → 24,伤害公式等级系数 30 + 10 × 等级 → 360 + 120 × 等级
   (`combat_damage_rules.h` 的 `kDefenseUnitScale`),`Skill` 1 号耗蓝 10 → 40。护甲、防御、等级系数同乘 12,受伤比例逐位不变
   (整数输入、同一个分数);法力上限与耗蓝同乘 4,一管蓝放几次技能不变。抗性是百分比,不乘。
-  存档:护甲由 `Recalculate` 按职业表重写(§3.1),当前法力由加载迁移 ×4 一次(§5)。
+  项目未上线、没有老存档,不做存档迁移;护甲由 `Recalculate` 每次按职业表重写(§3.1)。
   `desc` 只写定性说明、不写系数数字:面板不下发系数,文案里写数字就成了第二份真相,改系数时极易漏改。
 - **角色等级上限 85**(`player_level_rules.h` 的 `playerlevel::kMaxLevel`,`PlayerAttributeSystem::kMaxLevel` 是它的别名;
   2026-09-10 由 200 改为 85)。经验表未落地前是代码常量。`GmSetPlayerLevel` 越界即 `kInvalidParameter`;
@@ -137,8 +137,8 @@ message PlayerAttributeComp {
 
 `Recalculate` 一次算完六项写进 `DerivedAttributesComp`,并把 `speed` **同步直写**
 `BaseAttributesComp.speed` —— 回合引擎的出手序与逃跑判定只读后者,不同步就等于加了敏捷不生效。
-`BaseAttributesComp.armor` 同样每次按 `Class.init_armor` 重写(2026-09-14 起):护甲只在建号时写一次、随存档落库,
-不重写的话老号停在旧单位(10,新表 120),而等级系数已 ×12,护甲减伤只剩 1/12。全仓没有运行时改护甲的地方;
+`BaseAttributesComp.armor` 同样每次按 `Class.init_armor` 重写(2026-09-14 起):护甲原本只在建号时写一次、随存档落库,
+改表后已建的角色(含本地测试号)不会跟着变;重写后以职业表为准。全仓没有运行时改护甲的地方;
 以后装备要加护甲,须在 `Recalculate` 里累加,不能直接改 `BaseAttributesComp.armor`。
 
 当前 HP/MP 跟随上限的规则(`PlayerAttributeSystem::RecalcReason`;2026-09-04 评审后收紧):
@@ -218,13 +218,6 @@ message PlayerAttributeComp {
   写了就是数据分叉(`cross-zone-readiness-audit.md` §11.1);
 - **战斗在途(`InBattleComp`)拒绝一切写** —— `BattlePlayerSnapshot` 已出,改属性会让局内数值与面板分叉;
 - **表里已删除的维度会在加载时静默清理**(`SanitizeSchemes`),点数自动返还,老存档自愈;
-- **存档数值单位只换算一次**(2026-09-14):`PlayerAttributeComp.attribute_unit_version` 记存档的单位版本,
-  加载时低于当前版本就把当前法力(角色 + 每只宝宝)×4 再盖戳,版本号与法力在同一行落库,不会乘了没盖戳;
-  新号 / 阵亡复活的号只盖戳、不乘本人法力(随后顶满),宝宝照乘。规则 `attribute_unit_migration.h`
-  (纯函数,饱和乘法),必须在 `PlayerAttributeSystem` / `PetSystem` 的 `InitializeOnLoad` 之前调用;单测 `AttributeUnitMigrationTest`。
-  战斗结算里的法力也是绝对值,且离线挂起结算在登录迁移**之后**才应用:`BattleSettlementData.attribute_unit_version`
-  由回合引擎盖戳(常量 `turnbattle::kAttributeUnitVersion` 是唯一真相),scene 应用前按它换算角色与宝宝法力,
-  否则旧 battle 二进制的结算会把迁移好的法力永久写回旧单位(单测 `LegacyUnitSettlementManaIsConvertedToCurrentUnit`);
 - 洗点 / 开新方案的金币**必须走 `CurrencySystem`**(补缴与封禁钩子都在里面),禁止直写 `CurrencyComp`;
   先扣费成功再改数据,扣费失败什么都不动。
 
@@ -252,8 +245,7 @@ message PlayerAttributeComp {
   自动加点逐维分配(权重比例 / 余数按优先序补齐 / 权重 0 跳过)且建议可原样通过校验、HP/MP 按比例往返不回血
   (极低血量有界例外)。已用点 `UsedPoints`(角色 / 宝宝各一份,64 位累加后饱和)在匿名命名空间里,暂无单测。
 - **每点可见与单位放大**(2026-09-14):`AllocFormulaTest.EveryAllocatedPointRaisesEachStatByAtLeastOne`(1..425 点逐点);
-  `CombatDamageRulesTest.DefenseUnitScaleKeepsReceivedRatio`(护甲 / 防御 / 等级系数同乘 12 后受伤比例不变);
-  `AttributeUnitMigrationTest`(旧存档法力 ×4 只做一次、新号不乘本人、已是新版本不动、饱和不溢出)。
+  `CombatDamageRulesTest.DefenseUnitScaleKeepsReceivedRatio`(护甲 / 防御 / 等级系数同乘 12 后受伤比例不变)。
 - **端到端**:`robot/robot.exe -c etc/attribute_smoke.yaml`(`attribute_smoke_scenario.go`,10 步):预备(等级归 1 /
   属性点池洗点 / 切回首方案 / GM 发币,同账号可反复跑)→ 面板形状 → 1→30 级属性点恰好 +145 → 自动加点只算不落 →
   确认后剩余归零、二级属性变大 → 幂等 / 只增不减(2026-09-14 删相性超上限 / 仙魔未解锁两步,规则由纯规则单测覆盖)→ 开方案精确扣金币、
@@ -315,9 +307,8 @@ message PlayerAttributeComp {
   不当治疗"护栏的预期副作用;要满状态上线需一次性 GM 回满或数据迁移。
   2026-09-14 删相性 / 仙魔后同理:老号首登少了这两池的加成,上限下降,HP/MP 被夹到新上限;分配到 201-205 / 301-304 的点
   由 `SanitizeSchemes` 清掉,不返还(池已不存在)。落库的 `BaseAttributesComp.speed` 是旧单位,登录时 `Recalculate` 按新单位覆盖。
-  防御 ×12 / 法力 ×4 同理:护甲登录时按职业表重写;当前法力走 `attribute_unit_version` 迁移 ×4 一次(§5),
-  满蓝老号登录仍满蓝,不会被夹到 1/4。**回滚须知**:退回旧二进制期间登录的号,法力会被夹回旧上限;
-  再升级时若版本号已随存档保留(proto 未知字段通常原样保留),不会再换算,法力停在约 1/4,须 GM 回满。
+  防御 ×12 / 法力 ×4:项目未上线、没有老存档,不做迁移。本地测试号登录时护甲按职业表重写;当前法力只夹不补,
+  会偏低但可用(阵亡复活或重建号即回满)。
 - **滚动发布窗口**:`AttributeDimension` / `AttributeAllocRatio` / `AttributeRule` 都不在 `BattleTableFingerprint` 里
   (只算 skill / buff / cooldown / skillpermission / dungeon / monster),跨 zone PVP 的快照由各 zone 用本地表和本地 scene
   二进制算。2026-09-13 起分叉已不只是表值:旧 scene 根本不读比例表,按(自然 + 分配)× 每点系数算。新旧镜像的 zone
@@ -326,10 +317,9 @@ message PlayerAttributeComp {
   2026-09-14 速度单位 ×12 同理:`Class` / `AttributeDimension` / `Pet` / `Monster` 四张表与 battle(`kMonsterDefaultSpeed` /
   `kFleeSpeedFactor` / `kPvpDamageScale`)、scene(`kFallbackBattleSpeed`)两个二进制必须同一批替换;混跑时新旧单位的单位
   同场出手,旧单位一方几乎永远后手。发布前清掉在途战斗房间(快照是旧单位)。
-  防御 ×12 / 法力 ×4 再加 `Skill` 表、proto(`attribute_unit_version`)与两个二进制里的 `combat_damage_rules.h`
+  防御 ×12 / 法力 ×4 再加 `Skill` 表与两个二进制里的 `combat_damage_rules.h`
   (battle 回合引擎与 scene 实时技能都编进它)、`kMonsterDefaultArmor`:旧二进制配新表时等级系数仍是 30 + 10 × 等级、
   护甲却是 120、防御按新系数 60 / 点,10 级玩家常驻减伤(护甲 + 防御 + 抗性 5%)从约 35% 顶到 60% 封顶(不封顶约 85%);
   新二进制配旧表则反过来,护甲与防御一起几乎失效,减伤从约 35% 掉到约 8.5%。表与二进制必须同一批替换。
-  数值单位版本(`kAttributeUnitVersion`)已并入战斗表指纹:scene 与 battle 二进制版本不一致时指纹对不上,按指纹配置 warn / enforce 报出。
 - **tip 文案**:服务端只下发裸编号;客户端 `AttributeClient.DescribeTip` 镜像了 `Tip.xlsx` 的 attribute_error 组
   (25000-25014,base=25000)做中文映射,改表要同步。全仓统一的 tip 文案下发机制仍是缺口。

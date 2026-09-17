@@ -171,6 +171,14 @@ func main() {
 		return
 	}
 
+	// Trade-smoke 模式:三个机器人做「聚宝斋 P1」端到端冒烟
+	// (gRPC 直连 TradeAdmin 造种子 → TradeAdmin 经 gate 不可达 → 市场范围过滤 → 公示 / 分页 / 拍卖未开放 → 详情可见性 → 收藏 → 货架)。
+	// 见 trade_smoke_scenario.go 与 docs/design/jubaozhai-market.md §9;前置条件写在 etc/trade_smoke.yaml 文件头。
+	if cfg.Mode == "trade-smoke" {
+		RunTradeSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {

@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net"
@@ -17,6 +18,7 @@ import (
 
 	"chat/internal/config"
 	"chat/internal/constants"
+	"chat/internal/lifecycle"
 	"chat/internal/server"
 	"chat/internal/session"
 	"chat/internal/svc"
@@ -32,6 +34,7 @@ import (
 	"github.com/zeromicro/go-zero/core/conf"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/netx"
+	"github.com/zeromicro/go-zero/core/proc"
 	"github.com/zeromicro/go-zero/core/service"
 	"github.com/zeromicro/go-zero/zrpc"
 	"google.golang.org/grpc"
@@ -50,10 +53,6 @@ const (
 	listenProbeTimeout = 30 * time.Second
 	// registerTimeout:注册整体(探端口 + etcd CAS)的上限,须大于 listenProbeTimeout。
 	registerTimeout = 45 * time.Second
-	// shutdownDrainTimeout:注销后等 gRPC 服务退出的上限。Linux 上 SIGTERM/SIGINT 会触发
-	// go-zero proc 在 1s 后 GracefulStop 并在 5.5s 强杀(core/proc/shutdown.go),
-	// 所以 5s 足够覆盖正常排空;Windows 本地 go-zero 不接管信号,等满这段就直接退出。
-	shutdownDrainTimeout = 5 * time.Second
 )
 
 func main() {
@@ -64,15 +63,54 @@ func main() {
 	// validate(v)),不合法即 log.Fatalf("error: config file <path>, <Validate 的错误>") 退出。
 	// 所以这里不再显式调 c.Validate():那一段永远走不到,留着只会让人以为错误前缀是它打的。
 	conf.MustLoad(*configFile, &c)
+	if err := runChat(c); err != nil {
+		fmt.Fprintf(os.Stderr, "[chat] %v\n", err)
+		os.Exit(1)
+	}
+}
+
+func runChat(c config.Config) (runErr error) {
+	// 从启动阶段起接管取消:信号会打断注册请求,失败路径也执行同一资源收尾。
+	ctx, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stopSignals()
+	lifecycle.Configure(&c.RpcServerConf)
+	finished := make(chan struct{})
+	defer close(finished)
+	go func() {
+		select {
+		case <-finished:
+			return
+		case <-ctx.Done():
+		case <-proc.Done():
+			// proc 在 init 已接管信号；补收配置加载期发生、NotifyContext 未看到的退出。
+			stopSignals()
+		}
+		timer := time.NewTimer(lifecycle.HardTimeout)
+		defer timer.Stop()
+		select {
+		case <-finished:
+		case <-timer.C:
+			fmt.Fprintln(os.Stderr, "[chat] 已到24s停机硬截止,强制退出;不能确认在途请求已完成")
+			os.Exit(1)
+		}
+	}()
+	// 已在配置加载期收到退出时不再建立依赖或注册。proc.Done 在 Windows 为 nil。
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-proc.Done():
+		return nil
+	default:
+	}
 	listenHost, port, err := c.ListenHostPort()
 	if err != nil {
-		logx.Must(err)
+		return err
 	}
 
 	svcCtx := svc.NewServiceContext(c)
 
 	// Prometheus /metrics(MetricsListenAddr 为空则不开)。
-	svc.StartMetrics(c.MetricsListenAddr)
+	stopMetrics := svc.StartMetrics(c.MetricsListenAddr)
 
 	// RPC 级热关停(shared/killswitch,D-1 验收第四条):线上某个方法出事时往 etcd 写一个 key
 	// 秒级短路它。复用 svcCtx 的 etcd 客户端;Start 非阻塞,etcd 不可达一律放行(fail-open)。
@@ -80,28 +118,60 @@ func main() {
 	ks := killswitch.New(killswitch.Config{Prefix: c.KillSwitchPrefix})
 	ks.Start(ksCtx, svcCtx.Etcd)
 
-	s := zrpc.MustNewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
+	var serverSlot lifecycle.ServerSlot
+	shutdown := &lifecycle.Shutdown{
+		DrainTimeout:    lifecycle.DrainTimeout,
+		FinishTimeout:   lifecycle.FinishTimeout,
+		CloseResources:  func() { ksCancel(); stopMetrics(); svcCtx.Stop() },
+		FinishFramework: proc.Shutdown,
+	}
+	defer func() {
+		stopSignals() // 启动失败也从这里启动同一个24s退出硬截止。
+		shutdown.Server = serverSlot.TakeForShutdown()
+		runErr = errors.Join(runErr, shutdown.Stop())
+		_ = logx.Close()
+	}()
+	serverReady := make(chan struct{})
+	s, err := zrpc.NewServer(c.RpcServerConf, func(grpcServer *grpc.Server) {
 		chatpb.RegisterClientPlayerChatServer(grpcServer, server.NewChatServer(svcCtx))
 		if c.Mode == service.DevMode || c.Mode == service.TestMode {
 			reflection.Register(grpcServer)
 		}
+		serverSlot.Publish(grpcServer)
+		close(serverReady)
 	})
+	if err != nil {
+		return fmt.Errorf("chat RPC 构造失败: %w", err)
+	}
 	// go-zero 自带的 trace / recover / stat / prometheus / breaker / shedding / timeout 拦截器
-	// 在 MustNewServer 里已先加入,位于下面这条链的外层;"grpcstats 最外"指本服务自己的链内。
+	// 在 NewServer 里已先加入,位于下面这条链的外层;"grpcstats 最外"指本服务自己的链内。
 	s.AddUnaryInterceptors(buildUnaryInterceptors(ks)...)
 
-	// **先起 gRPC,再注册**:Start 阻塞到服务退出,所以放后台 goroutine;注册前由
-	// RegisterAfterListening 探到端口可连才写 etcd。
-	// 刻意用裸 go 而不是 safego.Go:Start 在监听失败时 panic,那就应该让进程死掉
-	// (进程拉起方 / K8s 可见),而不是被 safego 兜成一个指标后继续以"已注册但不可达"的状态跑。
+	// 先启动gRPC再注册。保存真实Server用于主动排空,Start错误经通道交回主线程,
+	// 让监听失败、注册失败和收到启动期信号都能清理已创建的资源。
 	serveDone := make(chan struct{})
+	serveErr := make(chan error, 1)
+	shutdown.ServeDone = serveDone
 	go func() {
-		defer close(serveDone)
+		var startErr error
+		defer func() {
+			if recovered := recover(); recovered != nil {
+				startErr = fmt.Errorf("gRPC Start失败: %v", recovered)
+			}
+			serveErr <- startErr
+			close(serveDone)
+		}()
 		s.Start()
 	}()
-
+	select {
+	case <-serverReady:
+	case <-ctx.Done():
+		return nil
+	case err := <-serveErr:
+		return fmt.Errorf("chat监听未就绪: %v", err)
+	}
 	advertiseHost := advertisedHost(listenHost)
-	regCtx, regCancel := context.WithTimeout(context.Background(), registerTimeout)
+	regCtx, regCancel := context.WithTimeout(ctx, registerTimeout)
 	nr, err := noderegistry.RegisterAfterListening(regCtx, svcCtx.Etcd, dialAddress(listenHost, port), listenProbeTimeout,
 		noderegistry.Spec{
 			// Prefix 由枚举名派生,不手写(契约 §2):"ChatNodeService.rpc"。
@@ -119,8 +189,12 @@ func main() {
 		})
 	regCancel()
 	if err != nil {
-		logx.Must(fmt.Errorf("chat 节点注册 etcd 失败: %w", err))
+		if ctx.Err() != nil {
+			return nil
+		}
+		return fmt.Errorf("chat 节点注册 etcd 失败: %w", err)
 	}
+	shutdown.Unregister = nr.Close
 	nr.KeepAlive()
 
 	fmt.Println("\n=============================================================")
@@ -139,31 +213,13 @@ func main() {
 	}
 	fmt.Println("=============================================================")
 
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	select {
-	case sig := <-sigCh:
-		logx.Infof("[chat] 收到信号 %v,开始退出", sig)
-	case <-serveDone:
-		logx.Error("[chat] gRPC 服务意外退出,开始退出")
+	case <-ctx.Done():
+		logx.Info("[chat] 收到退出信号,先注销再排空RPC")
+	case err := <-serveErr:
+		return fmt.Errorf("chat gRPC服务提前退出: %v", err)
 	}
-
-	// 退出顺序(契约 §2):
-	//  ① nr.Close():一个 Txn 删双 key + Revoke。必须先于 gRPC 停止 —— 路由服 PickRandom
-	//    不看连接状态,只要 key 还在就会继续选中本节点,先停服再注销 = 这段窗口内的请求全部失败;
-	//  ② 取消 killswitch watch:它和 ① 共用 etcd 客户端,必须在 svcCtx.Stop 关连接之前停;
-	//  ③ 等 gRPC 排空:go-zero 的 RpcServer.Stop() 只 logx.Close(),真正的 GracefulStop 由 proc
-	//    的 shutdown listener 在收到信号 1s 后执行,所以这里等 serveDone(有上限);
-	//  ④ s.Stop()(刷日志)→ svcCtx.Stop()(关 etcd)。
-	nr.Close()
-	ksCancel()
-	select {
-	case <-serveDone:
-	case <-time.After(shutdownDrainTimeout):
-		logx.Infof("[chat] gRPC 服务 %v 内未退出(非 Linux 平台 go-zero 不接管信号),直接退出", shutdownDrainTimeout)
-	}
-	s.Stop()
-	svcCtx.Stop()
+	return nil
 }
 
 // buildUnaryInterceptors 组装本服务的一元拦截器链(契约 §3 新口径)。

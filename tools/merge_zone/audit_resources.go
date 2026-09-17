@@ -105,6 +105,10 @@ type auditConfig struct {
 	tableCandidates []string
 	// topicGeneration: db_task topic 的代号(go/db/etc/db.yaml Kafka.TopicGeneration)。
 	topicGeneration uint32
+	// tradeSchema / skipTrade:聚宝斋库名与跳过声明(-trade-schema / -skip-trade-mysql)。
+	// 跳过时 verify:trade_listing 标 warn「NOT VERIFIED」,不伪装成通过。
+	tradeSchema string
+	skipTrade   bool
 }
 
 // auditEntryParams is the pure-data input for runAuditEntry. main.go owns
@@ -143,6 +147,8 @@ type auditEntryParams struct {
 	expectedSrcPlayers int64
 	tableCandidates    []string
 	topicGeneration    uint32
+	tradeSchema        string
+	skipTrade          bool
 }
 
 // firstNonEmpty returns a if non-empty, else b. Avoids a one-line helper
@@ -231,6 +237,8 @@ func runAuditEntry(p auditEntryParams) {
 		expectedSrcPlayers: p.expectedSrcPlayers,
 		tableCandidates:    p.tableCandidates,
 		topicGeneration:    p.topicGeneration,
+		tradeSchema:        p.tradeSchema,
+		skipTrade:          p.skipTrade,
 	}
 
 	mode := "pre-merge"
@@ -305,6 +313,7 @@ func runAuditMode(ctx context.Context, cfg auditConfig) []ResourceAudit {
 			verifyMappingDrained,
 			verifyGuildZoneDrained,
 			verifyGuildRankZSets,
+			verifyTradeMarketZoneDrained, // trade_listing.market_zone=src 必须为 0(trade_step.go)
 			verifyTargetZoneRows,
 			verifySourceHotStateGone,
 			verifyFenceReleased,

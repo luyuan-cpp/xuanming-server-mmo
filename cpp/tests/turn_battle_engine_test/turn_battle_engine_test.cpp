@@ -918,8 +918,6 @@ TEST(TurnBattleEngineTest, MonsterAttributesFromTableEnableMultiRoundAndRewards)
     const auto settlement = engine.BuildSettlement(kPlayerA);
     EXPECT_EQ(settlement.exp_gain(), 50u);
     EXPECT_EQ(settlement.gold_gain(), 25u);
-    // 结算盖数值单位版本:scene 据此识别旧 battle 二进制的结算并换算法力(attribute_unit_migration.h)
-    EXPECT_EQ(settlement.attribute_unit_version(), turnbattle::kAttributeUnitVersion);
 
     // 败方(此局无败玩家)/逃跑玩家不发奖的语义:阵亡玩家 exp_gain 应为 0
     // (此处玩家胜,单独验证"未击杀/失败不发奖"由 outcome 分支保证,不再造局)

@@ -279,6 +279,21 @@
     <ClCompile Include="guild\guild.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="trade\jubaozhai.grpc.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="trade\jubaozhai.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="trade\trade_admin.grpc.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="trade\trade_admin.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="trade\trade_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="scene\player_currency.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -579,6 +594,21 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="guild\guild.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="trade\jubaozhai.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="trade\jubaozhai.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="trade\trade_admin.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="trade\trade_admin.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="trade\trade_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="scene\player_currency.pb.h">

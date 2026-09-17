@@ -1,0 +1,59 @@
+# trade-smoke 配置:三个机器人对聚宝斋服务 go/trade(P1:浏览 / 详情 / 收藏 / 货架)做端到端冒烟
+# (docs/design/jubaozhai-market.md §9)
+#
+# 流程:gRPC 直连 TradeAdmin.SeedListing 造 A 寄售 / C 寄售 / A 公示三条武器商品(标题带本轮 nonce),
+#       断言 market_zone = 卖家归属区 → A 经 gate 发 TradeAdmin 消息号必须超时(gate 丢弃)
+#       → 按 expect_scope 断言市场范围(zone:B 看不到别区 C 的、zone_filter 被忽略;global:zone_filter 生效)
+#       → 公示 / 寄售页签分离 → page_size 钳到 20、page 钳到末页 → 拍卖分区 TradeFeatureDisabled
+#       → 详情(本人 is_mine、别人看、不存在、zone scope 下别区不可见)→ 收藏开 / 关往返 → 货架只含本人商品。
+#
+# 前置(缺一条就会失败,原因写进 TRADE_SMOKE_FAIL 的 reason):
+#   1. gate 以 GATE_CLIENT_RPC_ROUTER=1 启动(路由服模式);已在跑的 gate 不会换模式,要重启。
+#      start_game.ps1 默认已开;cross_zone=true 时两个 zone 的 gate 都要开。
+#   2. proto 已按聚宝斋改动重生成(路由表里 /trade.ClientPlayerJubaozhai/* 为客户端协议、TradeAdmin 不是;
+#      gate 白名单含 ClientPlayerJubaozhai 四个消息号),gate 与 client_rpc_router 已换上新二进制。
+#   3. client_rpc_router、data_service、trade 已起(trade 全局一份即可):
+#      - trade.yaml 为 Mode: dev(或 test),否则 SeedListing 回 PermissionDenied;
+#      - mmorpg_trade 库已建(deploy/mysql-init;存量卷手工补建),表已迁移
+#        (dev 下 Schema.AutoMigrate 启动即建;或手工 `trade -f etc/trade.yaml -migrate`);
+#      - data_service 的号段 BootstrapTags 含 trade_listing;
+#      - trade 的 gRPC 地址与下面 admin_addr 一致(本地 127.0.0.1:50800)。
+#   4. Tip 表已导出 trade_error(robot 编译依赖生成枚举);MessageLimiter 若没加聚宝斋行,保持 request_interval_ms=1100。
+#   5. robot 已 `go mod tidy && go mod vendor` 并以 -mod=vendor 重编(vendor 要有 proto/trade 与新的 tip 枚举)。
+#   6. zone_config 有 zone_b 那一行(cross_zone=true 时)。
+#   7. robot_9401 / 9402 首次在 zone_a 建角、robot_9403 首次在 zone_b 建角(归属区映射在建角时登记);
+#      之前在别的区登录过的账号,第 1 步 market_zone 断言或第 3 步范围断言会失败。
+#      不用 93xx:robot_9301-9304 已预留给 team-smoke(docs/design/team-system.md §I.5,且其 9303 在 zone_a 建角),
+#      共用会互相定死归属区、并行跑还会互相顶号。
+#   8. 从 robot/ 目录运行(table_dir 是相对路径)。
+#
+# 两种市场范围各跑一次(Market.Scope 是 trade 进程级配置):
+#   a) trade.yaml Market.Scope: zone   → 重启 trade → 本文件 expect_scope: "zone"   → 跑一次;
+#   b) trade.yaml Market.Scope: global → 重启 trade → 本文件 expect_scope: "global" → 跑一次。
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/trade_smoke.yaml
+# 退出码 0 = 全部断言通过(日志有 TRADE_SMOKE_OK scope=… 一行);退出码 1 = 任一步失败(TRADE_SMOKE_FAIL step=…)。
+# 可重复运行:每轮种子标题带新 nonce,断言只按本轮 listing_id 找商品;P1 没有下架,种子商品会逐轮累积。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 本模式不用此字段选区(A/B 登 trade_smoke.zone_a,C 登 zone_b)
+robot_count: 3 # 语义占位:本模式固定 A/B/C 三个机器人
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号 robot_9401/9402/9403
+password: "123456"
+skill_ids: []
+table_dir: "../generated/tables"
+action_interval: 3
+report_interval: 5
+
+mode: "trade-smoke"
+
+trade_smoke:
+  cross_zone: true # false = C 也登 zone_a,跳过跨区断言
+  zone_a: 1 # 卖家 A 与买家 B 登录的 zone
+  zone_b: 2 # 卖家兼买家 C 登录的 zone;cross_zone=true 时必须与 zone_a 不同
+  admin_addr: "127.0.0.1:50800" # trade gRPC 地址,种子经它直连 TradeAdmin.SeedListing(不带会话 metadata)
+  expect_scope: "zone" # 必须与 trade.yaml Market.Scope 一致:zone | global
+  request_interval_ms: 1100 # 同一机器人相邻请求最小间隔;gate 默认限流档 3 次 / 窗口
+
+auth_type: "password"

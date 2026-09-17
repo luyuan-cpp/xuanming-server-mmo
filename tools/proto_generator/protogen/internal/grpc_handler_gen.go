@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"strings"
 	"text/template"
 
 	_config "protogen/internal/config"
@@ -15,6 +16,10 @@ type GrpcHandlerMethod struct {
 	Code        string
 	HasCode     bool
 	IsVoidResponse bool
+	// PreDispatchCode 是 gRPC 包装函数里、投递到事件循环之前的守护段(含首尾标记)。
+	// 用于必须在 gRPC 线程上完成的准入检查(如 Agones 建场景许可),可返回非 OK。
+	// 包装函数原本没有守护段,守护段外的手写代码会被重生成吞掉(commit 6c4021ae5 事故)。
+	PreDispatchCode string
 }
 
 // GrpcHandlerHeadData holds data for generating a gRPC service handler header.
@@ -51,6 +56,9 @@ func GetGrpcServiceHandlerHeadStr(methods RPCMethods) (string, error) {
 // IMPORTANT: Handle* methods run on the event loop thread.
 //   - Do NOT perform blocking I/O or long-running operations.
 //   - Always return grpc::Status::OK; communicate errors via response fields.
+//   - Each RPC wrapper also has a WRITING YOUR CODE section that runs on the gRPC
+//     thread BEFORE dispatch (admission checks such as Agones permits); only that
+//     section may return a non-OK status.
 class {{.Service}}Impl final : public {{.Package}}{{.Service}}::Service
 {
 public:
@@ -119,6 +127,7 @@ grpc::Status {{ $.Service }}Impl::{{ .HandlerName }}(grpc::ServerContext* /*cont
     const {{ .CppRequest }}* request,
     {{ .CppResponse }}* response)
 {
+{{ .PreDispatchCode }}
     std::promise<void> promise;
     auto future = promise.get_future();
 
@@ -138,6 +147,10 @@ grpc::Status {{ $.Service }}Impl::{{ .HandlerName }}(grpc::ServerContext* /*cont
 
 	emptyStr := ""
 	yourCodesMap, firstCode, _ := ReadCodeSectionsFromFile(dst, &methods, GenerateGrpcHandlerNameWrapper, emptyStr)
+	// 第二遍按包装函数签名取"投递前"守护段。解析器只在命中方法签名之后才收集守护段,
+	// Handle* 的签名不含 "(grpc::ServerContext",所以两遍互不串段;
+	// 旧文件的包装函数没有守护段时由 fillMissingMethods 补默认空段。
+	preDispatchMap, _, _ := ReadCodeSectionsFromFile(dst, &methods, GenerateGrpcWrapperNameWrapper, emptyStr)
 
 	first := methods[0]
 
@@ -146,13 +159,18 @@ grpc::Status {{ $.Service }}Impl::{{ .HandlerName }}(grpc::ServerContext* /*cont
 		handlerName := methodInfo.Method()
 		lookupKey := GenerateGrpcHandlerNameWrapper(methodInfo, emptyStr)
 		code, exists := yourCodesMap[lookupKey]
+		preDispatchCode, ok := preDispatchMap[GenerateGrpcWrapperNameWrapper(methodInfo, emptyStr)]
+		if !ok {
+			preDispatchCode = _config.Global.Naming.YourCodePair
+		}
 		methodList = append(methodList, GrpcHandlerMethod{
-			HandlerName:    handlerName,
-			CppRequest:     methodInfo.CppRequest(),
-			CppResponse:    methodInfo.CppResponse(),
-			Code:           code,
-			HasCode:        exists,
-			IsVoidResponse: isVoidResponse(methodInfo),
+			HandlerName:     handlerName,
+			CppRequest:      methodInfo.CppRequest(),
+			CppResponse:     methodInfo.CppResponse(),
+			Code:            code,
+			HasCode:         exists,
+			IsVoidResponse:  isVoidResponse(methodInfo),
+			PreDispatchCode: strings.TrimRight(preDispatchCode, "\n"),
 		})
 	}
 
@@ -171,6 +189,12 @@ grpc::Status {{ $.Service }}Impl::{{ .HandlerName }}(grpc::ServerContext* /*cont
 // GenerateGrpcHandlerNameWrapper generates the method lookup key for code parsing.
 func GenerateGrpcHandlerNameWrapper(info *MethodInfo, _ string) string {
 	return info.Service() + "Impl::Handle" + info.Method() + "("
+}
+
+// GenerateGrpcWrapperNameWrapper 生成 gRPC 包装函数(投递前守护段)的查找键。
+// 带上 "(grpc::ServerContext" 是为了不与 Handle* 键、以及同名前缀方法(如 Create / CreateScene)互相命中。
+func GenerateGrpcWrapperNameWrapper(info *MethodInfo, _ string) string {
+	return info.Service() + "Impl::" + info.Method() + "(grpc::ServerContext"
 }
 
 // cppPackagePrefix returns the C++ namespace prefix with trailing :: if non-empty.

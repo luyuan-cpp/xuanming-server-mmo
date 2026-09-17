@@ -174,6 +174,9 @@
     [string]$MergeKafkaGroup = "",
     [int]$MergeKafkaTopicGeneration = -1,
     [switch]$MergeAssumeKafkaDrained,
+    # 聚宝斋步骤 3b(tools/merge_zone -skip-trade-mysql):merge_zone 默认要求 mmorpg_trade.trade_listing 存在(fail-closed)。
+    # 只在确实没有部署 trade 的环境显式跳过;跳过后 -VerifyMerged 的 verify:trade_listing 记 warn "NOT VERIFIED",不算通过。
+    [switch]$MergeSkipTradeMySql,
     # merge-zone-audit only — switches to post-merge verification mode that
     # asserts source-zone state has been emptied. See merge-zone-runbook.md §5.
     [switch]$VerifyMerged,
@@ -811,6 +814,9 @@ function Get-MergeZoneArgs {
     if ($MergeTargetDataRedis -ne "")    { $a += @("-target-data-redis", $MergeTargetDataRedis, "-target-data-redis-db", $MergeTargetDataRedisDB) }
     if ($MergeDataRedisPassword -ne "")  { $a += @("-data-redis-password", $MergeDataRedisPassword) }
     if ($MergeExpectedSrcPlayers -ge 0)  { $a += @("-expected-src-players", $MergeExpectedSrcPlayers) }
+    # trade 跳过开关放在公共参数里:merge-zone / merge-zone-unmerge / merge-zone-audit 必须同一口径,
+    # 否则合服跳过了 3b、审计却仍去查 trade 库(恒报 INFRA),或反过来。
+    if ($MergeSkipTradeMySql)            { $a += "-skip-trade-mysql" }
     Write-Host "merge_zone: mapping=$mapAddr db=$mapDB | guild=$MergeRedisAddr db=$MergeRedisDB | login db=$MergeNoticeRedisDB | friend db=$MergeFriendRedisDB" -ForegroundColor DarkGray
     return $a
 }

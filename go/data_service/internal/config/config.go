@@ -91,12 +91,15 @@ type IdSegmentConfig struct {
 	BootstrapTags []string `json:",optional"`
 }
 
-// DefaultIdSegmentBootstrapTags 是设计 §6.4 / §7.5 第 1 条里走号段的五种永久身份:
-// player / guild(Go login / guild)与 item / txlog / snapshot(C++ scene)。
-// 与 store.DefaultIdSegmentBootstrapTags 同一份清单(config 不能 import store)。
-var DefaultIdSegmentBootstrapTags = []string{"player", "guild", "item", "txlog", "snapshot"}
+// DefaultIdSegmentBootstrapTags 是走号段的永久身份清单:设计 §6.4 / §7.5 第 1 条的
+// player / guild(Go login / guild)与 item / txlog / snapshot(C++ scene),
+// 以及聚宝斋 trade_listing(Go trade 的 listing_id,docs/design/jubaozhai-market.md)。
+// 与 store.DefaultIdSegmentBootstrapTags **必须一致**(config 不能 import store,只能两处各写一份),
+// 还要与 etc/data_service.yaml 的 IdSegment.BootstrapTags、k8s_deploy.ps1 data-service ConfigMap 同步。
+// trade_listing 的消费表在独占库 mmorpg_trade,不在本服务全局库里,所以不进 schema.go 的水位地板校验。
+var DefaultIdSegmentBootstrapTags = []string{"player", "guild", "item", "txlog", "snapshot", "trade_listing"}
 
-// EffectiveBootstrapTags 是迁移路径实际预建的 tag 清单:没配 = 默认五种。
+// EffectiveBootstrapTags 是迁移路径实际预建的 tag 清单:没配 = 默认清单。
 // 返回副本,免得调用方改到包级默认值。
 func (c IdSegmentConfig) EffectiveBootstrapTags() []string {
 	src := c.BootstrapTags

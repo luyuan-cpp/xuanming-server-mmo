@@ -15,7 +15,7 @@ This directory contains Kubernetes-only deployment assets for opening game zones
 ## Directory Layout
 
 - `manifests/infra/`: infra resources applied per namespace (`etcd`, `redis`, `kafka`, `mysql`). `etcd` is a 3-replica StatefulSet with one PVC per member (see "etcd:3 副本 StatefulSet" below) and `kafka` is a **single-broker** StatefulSet with one PVC (see "Kafka:StatefulSet + PVC" below); `redis` / `mysql` are still single-replica Deployments.
-- `manifests/go-svc/`: Go micro-service K8s manifests (`db`, `data-service`, `login`, `player-locator`, `scene-manager`, `match`). `guild` has no manifest / ConfigMap yet (see "snowflake 缓存目录 / PlayerId 号段 / data_service 全局库" below).
+- `manifests/go-svc/`: Go micro-service K8s manifests (`db`, `data-service`, `login`, `player-locator`, `scene-manager`, `match`, `trade` + its `trade-migrate` schema Job). `guild` has no manifest / ConfigMap yet (see "snowflake 缓存目录 / PlayerId 号段 / data_service 全局库" below). trade 见下面「聚宝斋 trade」。
 - `Dockerfile.go-svc`: multi-stage Dockerfile for building Go service images.
 - `zones.sample.json`: sample multi-zone definition file (JSON).
 - `zones.sample.yaml`: sample multi-zone definition file (YAML).
@@ -109,6 +109,7 @@ Each service gets its own image: `{registry}/mmorpg-{service}:{tag}`.
 | player-locator | `mmorpg-player-locator` |
 | scene-manager | `mmorpg-scene-manager` |
 | match | `mmorpg-match` (global pool, deployed by `infra-up`, not per zone) |
+| trade | `mmorpg-trade` (global pool, deployed by `infra-up`; the same image also runs the `trade-migrate` Job) |
 
 ### Build all Go service images
 
@@ -257,8 +258,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - `-SkipInfra`: deploy only node workloads (skip `etcd`/`redis`/`kafka`).
 - `-ClusterId`: deployment-level cluster number, `0..31`, default `0`. Becomes the `cluster` segment of every snowflake id minted in this cluster, so `infra-up` and every `zone-up` / `all-up` against the same cluster must pass the same value (the script reads one parameter for both paths; `zones.json` deliberately has no per-zone override). Leave it at `0` unless you are standing up a second, independent cluster that must never collide with the first. Only `tools/scripts/k8s_deploy.ps1` accepts it today; `dev_tools.ps1`'s `k8s-*` wrappers do not forward it yet.
 - `-DryRun`: print kubectl commands without applying.
-- `-WaitReady`: wait for `centre` / `gate` / `scene` deployments to roll out. On `infra-up` / `all-up` it also waits for the `etcd` StatefulSet to reach quorum before the global `match` service is applied, and then for the `kafka-topic-init` Job to complete, so the audit topics exist with their contracted partition counts before any zone is applied (see "Kafka 审计 topic 预建" below). `infra-kafka-topics -WaitReady` waits for the same Job.
-- `-WaitTimeoutSeconds`: rollout wait timeout per deployment.
+- `-WaitReady`: wait for `centre` / `gate` / `scene` deployments to roll out. On `infra-up` / `all-up` it also waits for the `etcd` StatefulSet to reach quorum before the global `match` service is applied, and then for the `kafka-topic-init` Job to complete, so the audit topics exist with their contracted partition counts before any zone is applied (see "Kafka 审计 topic 预建" below). `infra-kafka-topics -WaitReady` waits for the same Job. For the global `trade` service on the `dev` profile it also waits for `deploy/mysql` and then for the `trade-migrate` Job to reach Complete before the `trade` Deployment is applied; a Failed Job (or a timeout) aborts the release. On `staging` / `prod` that migrate-Job gate always runs, with or without `-WaitReady` (port-decisions D-14 item 4; see "聚宝斋 trade" below).
+- `-WaitTimeoutSeconds`: rollout wait timeout per deployment (default `180`). It is also the base budget of the two `trade-migrate` waits: the pre-delete check that waits for a previous in-flight Job to finish (runs on every profile, but only waits when that Job is still active), and the poll of the new Job for Complete / Failed (always on `staging` / `prod`, on `dev` only with `-WaitReady`). Each of those two waits uses `max(-WaitTimeoutSeconds, 300)` (`$GoSvcMigrateJobMinWaitSeconds` in the script), because a normal migrate Pod needs scheduling + image pull + the `wait-mysql` initContainer (up to 150 + 8 s) + the migration itself. The `deploy/mysql` rollout wait in front of the Job still uses `-WaitTimeoutSeconds` alone, so for the first `infra-up` on a fresh cluster pass a larger value (e.g. `600`); otherwise a slow MySQL pull / initdb is reported as a timeout and the release stops (re-running the same command resumes: an in-flight Job is waited on, never deleted).
 - `-KubeContext`: pass an explicit kube context.
 - `-KubeConfig`: pass an explicit kubeconfig path.
 - `-NamespacePrefix`: change namespace prefix.
@@ -330,7 +331,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   - `Kafka.TopicGeneration`:同样从服务 yaml 镜像(当前 `1`),有效 topic 名 = `<基名>_g<N>`,当前集群消费第几代 topic 在 ConfigMap 里一眼可见;
     改分区数 = 这个数 +1,绝不原地扩分区,见下面「Kafka 审计 topic 预建」。
   - `IdSegment`:`AllowAutoSeed` dev 档取服务 yaml 的值(`true`),staging / prod 固定 `false`(与 `Schema.AutoMigrate` 同一条纪律;为什么见下面「恢复全局库」一条);
-    `BootstrapTags: [player, guild, item, txlog, snapshot]` 与服务 yaml / Go 的 `DefaultIdSegmentBootstrapTags` 同一份清单,新增永久身份两边同加。
+    `BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing]` 与服务 yaml / Go 的 `DefaultIdSegmentBootstrapTags` 同一份清单,新增永久身份两边同加
+    (`trade_listing` = 聚宝斋 listing_id,2026-09-14 加,见下面「聚宝斋 trade」)。
   - `manifests/go-svc/data-service.yaml` 的 Deployment 现在是 `strategy: Recreate` + `replicas: 1`:快照消费者按 guid 去重是「单条语句 + 间隙锁」,
     两个实例重叠不会写坏数据,但会互相等锁、消费组反复 rebalance,没有任何好处;换版本时短暂停一下,消息留在 topic 里(30 天保留期)。
 - **全局库预建**:`infra-up` 的 `mysql-init-sql` ConfigMap 现在多生成一份 `02_k8s_global_db.sql`
@@ -341,14 +343,16 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   否则 data-service 只剩 `schema auto-migrate failed`,login 建角全部失败。
   本地 compose 的对应物是 `deploy/mysql-init/00_init_zone_dbs.sql` 顺带建的 `testdb`(`go/data_service/etc/data_service.yaml` 用),同样只对空数据卷生效。
 - **恢复全局库前须先核对 `id_segment.max_id` ≥ 消费表最大号(这是 ID 安全事件,不是普通的库恢复)**:`id_segment` 每行是一种永久身份的发号水位
-  (`biz_tag` = `player` / `guild` / `item` / `txlog` / `snapshot`;`max_id` 是下一个要发出去的号,领段 = `SELECT ... FOR UPDATE` 后 `max_id += step`)。
+  (`biz_tag` = `player` / `guild` / `item` / `txlog` / `snapshot` / `trade_listing`;`max_id` 是下一个要发出去的号,领段 = `SELECT ... FOR UPDATE` 后 `max_id += step`)。
   把 `mmorpg_global` 从备份恢复,就是把水位倒回备份时刻,而备份之后领走的号早已成了消费侧的真实主键(各 zone 库 `player_database.player_id`、
   `guild.guild_id`、玩家 blob 里 bag 的 item guid、Kafka 两个 topic 里的 tx_id / snapshot_id)—— 水位一回退,下一次领段就把这些号**再发一遍**:
   login 的 `INSERT ... ON DUPLICATE KEY UPDATE` 会静默覆盖别人的角色行,流水表的 `INSERT IGNORE` 会静默丢掉**新**流水。顺序必须是:
   1. 先停 data-service,并重启所有持有号段的进程(login / guild / scene):它们内存里还攥着恢复点之后领到的段,不清掉,抬水位也挡不住它们把段发完。
   2. 对每个 `biz_tag` 拿到消费侧最大号:`player` = **每个 zone 库**的 `SELECT MAX(player_id) FROM player_database` 取最大;`guild` = `SELECT MAX(guild_id) FROM guild`;
      `item` = 各 zone 库玩家 blob 里 bag 的最大 guid;`txlog` / `snapshot` = Kafka `transaction_log_topic_g<N>` / `player_snapshot_topic_g<N>` 里的最大 tx_id / snapshot_id
-     (`transaction_log` / `player_snapshot` 表与 `id_segment` 同库,恢复后同库 `MAX()` 不是独立证据)。
+     (`transaction_log` / `player_snapshot` 表与 `id_segment` 同库,恢复后同库 `MAX()` 不是独立证据);
+     `trade_listing` = `SELECT MAX(listing_id) FROM mmorpg_trade.trade_listing`(独占库,不在全局库里,`-migrate` 不会替你查)。
+     登记 / 核对 / 恢复这些库时,聚宝斋独占库 `mmorpg_trade` 与 `mmorpg_global` 要分开处理,别只恢复其中一个。
   3. `SELECT biz_tag, max_id FROM id_segment`,凡 `max_id` ≤ 对应最大号的:`UPDATE id_segment SET max_id = <最大号> + 1 + 余量 WHERE biz_tag = '<tag>'`(余量 ≥ 一个 step)。
   4. 然后才跑 `-migrate` / 起 data-service。`-migrate` 自带的地板校验(`raiseIdSegmentFloor`)只在**同一个库**里查得到 `player_database` / `guild` 时才抬水位 ——
      K8s 上 player 表在各 zone 库、全局库里没有,它只会打 Info,不代表安全;`item` / `txlog` / `snapshot` 根本没有自动校验。
@@ -357,6 +361,67 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - **guild 还没有 K8s ConfigMap / manifest**(存量缺口:`$GoSvcCatalogue` 没有它,`manifests/go-svc/` 也没有 `guild.yaml`,`go_svc_image.ps1` 之外没人碰它)。
   补的时候除了 MySQL DataSource / Redis 之外,还要写 `ClusterId`、`SnowflakeCacheDir`(+ 同名 emptyDir)、`DataServiceRpc`、`IdSegment`,
   形状照 `go/guild/etc/guild.yaml`;guild_id 号段与 PlayerId 走同一个 `AllocateIdSegment`、同一张 `id_segment` 表(不同 `biz_tag`)。
+
+## 聚宝斋 trade:独占库 `mmorpg_trade` + `trade-migrate` Job(2026-09-14,port-decisions D-14 / docs/design/jubaozhai-market.md)
+
+trade 是全局池服务(`$GoSvcCatalogue.trade`,`Global = $true`):`infra-up` / `all-up` 在基础设施阶段部署到 `mmorpg-infra` 一份,`zone-up` 跳过。
+
+- **可达性**:只承诺路由服模式。客户端经 gate → `client-rpc-router` → trade;K8s 默认 `-GateRouterMode "0"`,
+  此时 Deployment 起得来、探针绿,但玩家够不着(与 chat 同一已知缺口)。内部方法 `TradeAdmin.SeedListing` 不经 gate(gate 不认它的消息号),
+  只在 `Mode ∈ {dev, test}` 时可用,否则回 gRPC `PermissionDenied`。
+- **工作负载**:`manifests/go-svc/trade.yaml` = Service `trade`(50800)+ Deployment(`replicas: 2`、podAntiAffinity、grpc 探针、
+  `preStop sleep 5`、Downward API `POD_IP`、metrics 9230)+ 同文件 PDB `trade-pdb`。ConfigMap `go-svc-trade-config` 由脚本生成。
+- **ConfigMap 键**与 `go/trade/etc/trade.yaml` / `go/trade/internal/config` 逐字一致;契约值只从服务 yaml 取,且只在生成 trade 自己的 ConfigMap 时求值
+  (yaml 缺键即 fail-closed,不会拖挂别的服务的 ConfigMap):
+  - 从服务 yaml 取:`Name`、`Timeout`、`LeaseTTL`、`MySQL.DBName` / `MaxOpenConn` / `MaxIdleConn`、`DataServiceRpc.Timeout`、
+    `Market.Scope` / `DefaultPageSize` / `MaxPageSize` / `MaxPage` / `MaxFavoritesPerPlayer`;`IdSegment.Step` / `MinStep` / `MaxStep` 有就镜像、没有就整行不写。
+  - 部署侧写死:`ListenOn: 0.0.0.0:50800`、`Etcd.Key: ""`(D-13)、`ZoneId`(命令行 `-ZoneId`)、`MetricsListenAddr: ":9230"`、`KillSwitchPrefix: ""`、
+    `MySQL.Host: mysql.<InfraNamespace>:3306`、账号 = `MMORPG_MYSQL_USER` / `MMORPG_MYSQL_PASSWORD` 注入值(dev 回落 root)、
+    `DataServiceRpc.Etcd.Key: dataservice.rpc`(`NonBlock: true`,Breaker 关)、`IdSegment.Enabled: true` / `FallbackToSnowflake: false`。
+  - **按档位锁死**:`Mode` 与 `Schema.AutoMigrate` 只有 `-ReleaseProfile dev` 取服务 yaml 的值;staging / prod 固定 `Mode: pro`
+    (SeedListing 造数入口关死)与 `AutoMigrate: false`(表只由 Job 建)。
+- **建库**:`mmorpg_trade` 只登记在 `deploy/mysql-init/00_init_zone_dbs.sql`(`CREATE DATABASE ... utf8mb4_unicode_ci` + `GRANT ALL ... TO 'appuser'@'%'`),
+  `infra-up` 的 `mysql-init-sql` ConfigMap 把整个目录原样带入;脚本**不**另生成建库 sql(D-14 第 5 条,`02_k8s_global_db.sql` 不是范式)。
+  initdb 只在 mysql PVC 为空时执行:**存量 PVC 要手工执行**
+  (`kubectl exec -n mmorpg-infra deploy/mysql -- sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_trade DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_trade.* TO '"'"'appuser'"'"'@'"'"'%'"'"'; FLUSH PRIVILEGES;"'`),
+  否则 `trade-migrate` 以退出码 1 失败(日志点名库名),发布在 trade Deployment 之前中断。本地 compose 的存量卷同理,见该 sql 文件里的注释。
+- **建表**:`manifests/go-svc/trade-migrate.yaml` 一次性 Job,与 trade Deployment 同镜像、同 ConfigMap,`args: ["-f", "/app/etc/trade.yaml", "-migrate"]`
+  (只连 MySQL 跑 `go/schemamigrate`,不起 gRPC、不连 etcd / data-service)。目录条目用 `MigrateJob = "trade-migrate.yaml"` 登记,
+  以后的建表服务照这个字段加,不要另写 Job 调度逻辑。
+  - **门禁**(D-14 第 4 条,**不受 `-WaitReady` 控制**):`staging` / `prod` 恒等 Job Complete 才 apply trade Deployment;
+    `dev` 档只在 `-WaitReady` 下等(dev 的 `AutoMigrate=true`,服务启动期自己也会在同一把锁下迁移)。
+  - **等待预算**:两段 Job 等待(下面的在途检查与终态轮询)各用 `max(-WaitTimeoutSeconds, 300)` 秒。默认 180s 装不下
+    "调度 / 拉镜像 + initContainer 等 3306(≤ 158s)+ 迁移",所以脚本有下限 `$GoSvcMigrateJobMinWaitSeconds = 300`;
+    它与 `trade-migrate.yaml` 的 `WAIT_MYSQL_TIMEOUT_SECONDS` 联动,**改其一必须核对另一个**。Job 前面的 `deploy/mysql` rollout 等待
+    仍只用 `-WaitTimeoutSeconds`:全新集群首次 `infra-up` 建议带 `-WaitTimeoutSeconds 600`,否则 MySQL 拉镜像 / initdb 慢会被判超时、中断发布。
+  - **顺序**(`Apply-OneGoSvc` → `Apply-GoSvcMigrateJob`):apply ConfigMap →(门禁)等 `deploy/mysql` 滚动完成 →
+    检查上一次 `trade-migrate` 是否在途 → `kubectl delete job trade-migrate --ignore-not-found` → apply Job →(门禁)轮询 Job 终态 → apply trade Deployment。
+    Job **Failed 或超时即中断发布**:打印 describe / Pod 列表 / `kubectl logs job/trade-migrate`,trade Deployment 不 apply。
+  - **不删在途 Job**:迁移 runner 执行 DDL 前先在 `schema_migrations` 写 `dirty=1`、成功后才清零。删掉正在跑的 Job(Pod 被 SIGTERM)
+    打断 DDL 会把台账留在 dirty,之后每次 `-migrate` 都以 1 退出、被 FailJob 直接判失败,只能人工清台账。
+    所以脚本删之前先读 Job 状态:不存在或已 Complete / Failed 才删;在途就在同一预算(`max(-WaitTimeoutSeconds, 300)`)内等它到终态,等不到就中断发布且**不删**。
+    kafka-topic-init 没有台账,才能无脑先删再建;**不要手工 `kubectl delete job trade-migrate` 一个 ACTIVE 不为 0 的 Job**。
+    轮询同时认 `Complete` 与 `Failed`(以及 1.31+ 的 `FailureTarget`),不用 `kubectl wait --for=condition=complete`,否则 FailJob 要白等到超时。
+  - **退出码**:0 成功 → Complete;3 锁忙 → 按 `backoffLimit: 4` 退避重试;1 失败 / 4 需人工(类型漂移、缺主键、表清单异常)→
+    `podFailurePolicy` 的 `FailJob` 立即失败。`podFailurePolicy` 需要 **Kubernetes ≥ 1.26**,且 Pod 必须 `restartPolicy: Never`。
+    Go panic(2)、OOMKilled(137)与 initContainer 失败走 backoff 重试;节点驱逐(`DisruptionTarget`)不计次数。
+  - **initContainer `wait-mysql`**(同一镜像里 busybox 的 `nc`)等 `mysql.<InfraNamespace>:3306` 可连,预算 `WAIT_MYSQL_TIMEOUT_SECONDS=150`
+    (按 `/proc/uptime` 单调计时;截止后最多再跑一轮 `nc -w 3` + `sleep 5`,硬上限 158s;超时以 1 退出,走 backoff 重试):
+    mysql 的 readinessProbe 走 localhost socket,initdb 期间 Pod 就可能 Ready 而 3306 还没开;不等的话 `-migrate` 以 1 退出,被当成不可重试。
+  - 只有 `dev` 档不带 `-WaitReady` 时脚本才只打印核对命令、不等 Job:自己看 `kubectl -n mmorpg-infra get job trade-migrate`(COMPLETIONS `1/1`)
+    与 `kubectl -n mmorpg-infra logs job/trade-migrate`。`infra-status` 的 `job` 一栏也会列它。
+  - staging / prod 的 trade 启动路径只跑一次只读 plan,有待执行语句或需人工项就拒绝启动(CrashLoop)并打印补救命令;
+    先看 Job 日志修根因,**不要**把 `Schema.AutoMigrate` 改成 true 绕过。
+  - **重跑迁移**:先确认 `kubectl -n mmorpg-infra get job trade-migrate` 的 ACTIVE 为 0(已 Complete 或 Failed),再跑一次同一条 `infra-up`
+    (已终态的 Job 会先删再建,迁移幂等;在途的脚本会先等,等不到就再次中断)。上一次因**超时**中断时,旧 Job 可能还在 backoff 重试或执行 DDL,尤其要先看这一步。
+    日志里是 **dirty 台账**(`schemamigrate.ErrDirty`,退出码 1)时重跑不会自己好:先人工核对 `mmorpg_trade.schema_migrations` 的 dirty 行与表的实际结构,
+    确认那条迁移做完或补做后再清 dirty,然后重跑。
+- **号段**:listing_id 走 data-service 号段(`biz_tag = trade_listing`),data-service ConfigMap 的 `IdSegment.BootstrapTags` 已加。
+  staging / prod 的 `AllowAutoSeed` 固定 `false`:**存量集群要先让 data-service 跑一次 `-migrate`**(INSERT IGNORE,幂等)把 `trade_listing` 行建出来,
+  否则 trade 领段拿到 `ErrCodeIdSegmentUnknownTag`,SeedListing 回 `kServiceUnavailable`。恢复 `mmorpg_global` 时的水位核对见上一节。
+- **连接数**:`MySQL.MaxOpenConn` × 2 个副本(外加 Job 的连接)要算进 MySQL 的 `max_connections`。
+- **上线前未做(P3)**:`mmorpg_trade` 的 audit auditor / data_consistency_check、TiDB BR 按库恢复清单;
+  `trade_listing.market_zone` 带 home_zone 语义,合服改写步骤在 `tools/merge_zone`。
 
 ## Kafka 审计 topic 预建(kafka-topic-init,2026-09-08,node-id-overhaul-plan §2.0c)
 
@@ -515,6 +580,7 @@ kubectl exec -n mmorpg-infra etcd-0 -- etcdctl get --prefix --keys-only LoginNod
 #      dataservice.rpc/ scenemanagerservice.rpc/ 的 go-zero 发现键
 # 3. MySQL 初始化 SQL 生效:zone_config 在 mmorpg 库,zone_1_db / zone_2_db / zone_101_db / zone_102_db 已建;
 #    mmorpg_global(data-service 全局库,02_k8s_global_db.sql)已建且 appuser 有权(2026-09-08 起,存量 PVC 需手工补,见上节)
+#    mmorpg_trade(聚宝斋 trade 独占库,00_init_zone_dbs.sql 原样带入)已建且 appuser 有权(2026-09-14 起,存量 PVC 需手工补,见「聚宝斋 trade」)
 kubectl exec -n mmorpg-infra deploy/mysql -- sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SELECT * FROM mmorpg.zone_config"'
 # 4. Java 网关 zone 目录
 kubectl port-forward -n mmorpg-zone-yesterday svc/gateway 18081:8081

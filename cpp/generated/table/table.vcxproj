@@ -132,6 +132,7 @@
     <ClInclude Include="proto\tip\guild_error_tip.pb.h" />
     <ClInclude Include="proto\tip\login_error_tip.pb.h" />
     <ClInclude Include="proto\tip\match_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\trade_error_tip.pb.h" />
     <ClInclude Include="proto\tip\mission_error_tip.pb.h" />
     <ClInclude Include="proto\tip\mount_error_tip.pb.h" />
     <ClInclude Include="proto\tip\reward_error_tip.pb.h" />
@@ -220,6 +221,7 @@
     <ClCompile Include="proto\tip\guild_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\login_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\match_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\trade_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\mission_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\mount_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\reward_error_tip.pb.cc" />

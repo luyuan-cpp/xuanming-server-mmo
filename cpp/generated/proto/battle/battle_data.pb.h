@@ -2346,7 +2346,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     kIsDeadFieldNumber = 11,
     kFledFieldNumber = 12,
     kTotalRoundsFieldNumber = 13,
-    kAttributeUnitVersionFieldNumber = 16,
   };
   // repeated .BattleItemEntry items_consumed = 9;
   [[nodiscard]] int items_consumed_size()
@@ -2542,21 +2541,11 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
   void _internal_set_total_rounds(::uint32_t value);
 
   public:
-  // uint32 attribute_unit_version = 16;
-  void clear_attribute_unit_version() ;
-  [[nodiscard]] ::uint32_t attribute_unit_version() const;
-  void set_attribute_unit_version(::uint32_t value);
-
-  private:
-  ::uint32_t _internal_attribute_unit_version() const;
-  void _internal_set_attribute_unit_version(::uint32_t value);
-
-  public:
   // @@protoc_insertion_point(class_scope:BattleSettlementData)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 16,
+      ::google::protobuf::internal::TcParseTable<4, 15,
                           4, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -2600,7 +2589,6 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleSettlementData final : public
     bool is_dead_;
     bool fled_;
     ::uint32_t total_rounds_;
-    ::uint32_t attribute_unit_version_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7174,30 +7162,6 @@ inline ::google::protobuf::RepeatedPtrField<::BattleMonsterDefeat>* PROTOBUF_NON
 BattleSettlementData::_internal_mutable_defeated_monsters() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.defeated_monsters_;
-}
-
-// uint32 attribute_unit_version = 16;
-inline void BattleSettlementData::clear_attribute_unit_version() {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.attribute_unit_version_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
-}
-inline ::uint32_t BattleSettlementData::attribute_unit_version() const {
-  // @@protoc_insertion_point(field_get:BattleSettlementData.attribute_unit_version)
-  return _internal_attribute_unit_version();
-}
-inline void BattleSettlementData::set_attribute_unit_version(::uint32_t value) {
-  _internal_set_attribute_unit_version(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
-  // @@protoc_insertion_point(field_set:BattleSettlementData.attribute_unit_version)
-}
-inline ::uint32_t BattleSettlementData::_internal_attribute_unit_version() const {
-  ::google::protobuf::internal::TSanRead(&_impl_);
-  return _impl_.attribute_unit_version_;
-}
-inline void BattleSettlementData::_internal_set_attribute_unit_version(::uint32_t value) {
-  ::google::protobuf::internal::TSanWrite(&_impl_);
-  _impl_.attribute_unit_version_ = value;
 }
 
 // -------------------------------------------------------------------

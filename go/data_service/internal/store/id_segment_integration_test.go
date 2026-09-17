@@ -318,7 +318,7 @@ func TestIdSegmentStore_AutoSeedStillWorksWhenAllowed(t *testing.T) {
 	assert.Equal(t, int64(2), db.Count(t, "id_segment", ""))
 }
 
-// TestMigrateSchema_BootstrapsIdSegmentRowsIdempotently 迁移按 BootstrapTags 预建五行
+// TestMigrateSchema_BootstrapsIdSegmentRowsIdempotently 迁移按 BootstrapTags 为默认清单每个 tag 预建一行
 // (max_id=1, step=100, version=0),重复跑零变更,且**绝不降低**已推进的 max_id。
 func TestMigrateSchema_BootstrapsIdSegmentRowsIdempotently(t *testing.T) {
 	db := storetest.NewEmptyDB(t)

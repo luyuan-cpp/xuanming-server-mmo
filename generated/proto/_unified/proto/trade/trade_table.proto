@@ -1,0 +1,70 @@
+syntax = "proto3";
+option go_package = "proto/trade";
+
+import "proto/db/proto_option.proto";
+import "proto/trade/jubaozhai.proto";
+
+package trade;
+
+// 聚宝斋独占库 mmorpg_trade 的表结构,唯一事实源(port-decisions D-14)。
+// - 建表 / 加列只经 go/schemamigrate 的 ProtoSource;业务 SQL 手写,行直接扫进本文件的 message,不另写 Go struct(AGENTS §3)。
+// - D-14 §2 约束:主键只用整数列;string 列建成 MEDIUMTEXT,进索引只按 191 前缀;每表至多一个唯一键。
+// - proto2mysql 按字段号识别列:字段号上线后不复用,删列写 reserved(AGENTS §4)。
+// - 本文件不进客户端 gen_proto.ps1 清单。
+
+// 商品存储状态。公示期 / 寄售期不是存储状态,而是 LISTED 按时间推导出的展示阶段(ListingPhase),
+// 这样到期不需要后台任务改状态,也不存在"状态已过期但没人改"的窗口。
+enum ListingStatus {
+  LISTING_STATUS_UNSPECIFIED = 0;
+  LISTING_STATUS_ESCROWING = 1;       // P3:托管扣出中
+  LISTING_STATUS_LISTED = 2;          // 已上架:公示或寄售,按 notice_end_ms / sale_end_ms 推导
+  LISTING_STATUS_LOCKED = 3;          // P3:有未完成订单
+  LISTING_STATUS_SOLD = 4;            // P3
+  LISTING_STATUS_RETURNING = 5;       // P3:回退交付中
+  LISTING_STATUS_RETURNED = 6;        // P3
+  LISTING_STATUS_ESCROW_REJECTED = 7; // P3
+}
+
+message TradeListingRecord {
+  option(OptionTableName) = "trade_listing";
+  option(OptionPrimaryKey) = "listing_id";
+  // 三条联合索引:本区浏览 / 全服浏览 / 卖家货架。
+  option(OptionIndex) = "market_zone,status,category,subcategory,price_fen;status,category,subcategory,price_fen;seller_player_id,listing_id";
+  // 号段发号的整数主键 + 追加写为主,按 TiDB 决策 D3 处方 NONCLUSTERED + 打散。
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 listing_id = 1;              // data_service 号段,biz_tag = trade_listing
+  uint64 seller_player_id = 2;
+  string seller_account = 3;          // P3 下单判"同账号不能自买"用;P1 种子为空串
+  uint32 market_zone = 4;             // 逻辑市场分区 = 上架时卖家 home_zone;合服时改写
+  uint32 seller_zone_at_listing = 5;  // 上架时 home_zone 原值;合服不改,审计用
+  ListingCategory category = 6;
+  uint32 subcategory = 7;             // 0 = 无子类;编码见 docs/design/jubaozhai-market.md §3
+  string title = 8;
+  uint32 level = 9;
+  uint64 price_fen = 10;              // 单位:分
+  ListingStatus status = 11;
+  string summary = 12;
+  string description = 13;
+  string icon_key = 14;
+  uint64 notice_end_ms = 15;          // 公示结束;等于上架时刻表示无公示期
+  uint64 sale_end_ms = 16;            // 寄售结束
+  uint64 created_ms = 17;
+  uint64 updated_ms = 18;
+  uint64 version = 19;                // 状态迁移 CAS(P3 起使用)
+}
+
+message TradeFavoriteRecord {
+  option(OptionTableName) = "trade_favorite";
+  option(OptionPrimaryKey) = "player_id,listing_id";
+  option(OptionIndex) = "listing_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint64 listing_id = 2;
+  uint64 created_ms = 3;
+}

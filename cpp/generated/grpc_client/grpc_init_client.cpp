@@ -103,6 +103,20 @@ namespace scene_node {
     void HandleSceneNodeServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
 
+namespace trade {
+    void SetJubaozhaiHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetJubaozhaiIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void InitJubaozhaiGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
+    void HandleJubaozhaiCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
+}
+
+namespace trade {
+    void SetTradeAdminHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetTradeAdminIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void InitTradeAdminGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
+    void HandleTradeAdminCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
+}
+
 void SetIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler){
 
     ::SetBattleNodeIfEmptyHandler(handler);
@@ -128,6 +142,10 @@ void SetIfEmptyHandler(const std::function<void(const ClientContext&, const ::go
     scene_manager::SetSceneManagerServiceIfEmptyHandler(handler);
 
     scene_node::SetSceneNodeServiceIfEmptyHandler(handler);
+
+    trade::SetJubaozhaiIfEmptyHandler(handler);
+
+    trade::SetTradeAdminIfEmptyHandler(handler);
 
 }
 
@@ -156,6 +174,10 @@ void SetHandler(const std::function<void(const ClientContext&, const ::google::p
     scene_manager::SetSceneManagerServiceHandler(handler);
 
     scene_node::SetSceneNodeServiceHandler(handler);
+
+    trade::SetJubaozhaiHandler(handler);
+
+    trade::SetTradeAdminHandler(handler);
 
 }
 
@@ -221,6 +243,14 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 (messageId == 122u || messageId == 123u || messageId == 128u || messageId == 142u || messageId == 145u)) {
                 scene_node::HandleSceneNodeServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
+            else if (common::base::eNodeType::TradeNodeService == nodeType &&
+                (messageId == 196u || messageId == 197u || messageId == 198u || messageId == 200u)) {
+                trade::HandleJubaozhaiCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
+            }
+            else if (common::base::eNodeType::TradeNodeService == nodeType &&
+                (messageId == 199u)) {
+                trade::HandleTradeAdminCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
+            }
         }
     }
 }
@@ -263,5 +293,11 @@ void InitGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, ent
     }
     if (common::base::eNodeType::SceneManagerNodeService == nodeType) {
         scene_node::InitSceneNodeServiceGrpcNode(channel, registry, nodeEntity);
+    }
+    if (common::base::eNodeType::TradeNodeService == nodeType) {
+        trade::InitJubaozhaiGrpcNode(channel, registry, nodeEntity);
+    }
+    if (common::base::eNodeType::TradeNodeService == nodeType) {
+        trade::InitTradeAdminGrpcNode(channel, registry, nodeEntity);
     }
 }

@@ -9,8 +9,6 @@
 
 #include "core/utils/encode/sha256.h"
 
-#include "constants/turn_battle_constants.h"
-
 #include "table/code/skill_table.h"
 #include "table/code/buff_table.h"
 #include "table/code/cooldown_table.h"
@@ -79,14 +77,6 @@ namespace turnbattle
 		AppendTableSection(buffer, "skillpermission", skillPermission);
 		AppendTableSection(buffer, "dungeon", dungeon);
 		AppendTableSection(buffer, "monster", monster);
-		// 数值单位版本也进指纹(2026-09-14 防御 ×12 / 法力 ×4):同一份表配不同单位的二进制(新 scene + 旧 battle)
-		// 算出的减伤 / 耗蓝不一样,但表字节相同,只比表会漏判。放最后一段,段名前缀与表段同口径防错位碰撞。
-		buffer.append("attribute_unit_version");
-		buffer.push_back('\0');
-		for (int shift = 24; shift >= 0; shift -= 8)
-		{
-			buffer.push_back(static_cast<char>((kAttributeUnitVersion >> shift) & 0xFF));
-		}
 
 		return Sha256::HashToHex(buffer).substr(0, kHexLength);
 	}

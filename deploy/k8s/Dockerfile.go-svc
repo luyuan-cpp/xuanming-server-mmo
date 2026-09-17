@@ -65,6 +65,10 @@ WORKDIR /src
 # Copy shared local modules (used by replace directives in go.mod)
 COPY proto/  /src/proto/
 COPY shared/ /src/shared/
+# 建表模块 go/schemamigrate(port-decisions D-14):建表服务(trade 等)经 go.mod
+# `replace schemamigrate => ../schemamigrate` 依赖它,位置与 shared 同级(/src/schemamigrate)。
+# 非建表服务不引用它,多拷一个小目录无副作用。它依赖的 proto2mysql 是已发布 tag,走 go mod download。
+COPY schemamigrate/ /src/schemamigrate/
 
 # Copy the target service
 COPY ${SERVICE}/ /src/${SERVICE}/

@@ -1,0 +1,45 @@
+syntax = "proto3";
+option go_package = "db/proto/trade";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+import "proto/trade/jubaozhai.proto";
+
+package trade;
+
+option cc_generic_services = false;
+option (OptionFileDefaultNode) = NODE_TRADE;
+
+// 聚宝斋内部服务(docs/design/jubaozhai-market.md §9)。
+// 刻意不标 OptionIsClientProtocolService,且与客户端协议分文件:
+//   - gate 的 IsClientMessageId 不收这些消息号,客户端发来直接丢弃;
+//   - 路由服对 ClientProtocol=false 的条目回信封拒绝;
+//   - trade 的会话拦截器对带会话 metadata 的调用回 PermissionDenied;
+//   - 客户端 gen_proto.ps1 不列本文件,内部 schema 不进客户端包。
+
+// 造一条已上架商品,只用于本地联调与 robot 冒烟;不移动任何资产。
+// 只在 Mode=dev|test 下可用,否则回 gRPC PermissionDenied。
+// 刻意没有 market_zone 字段:服务端按卖家查 home_zone,与正式上架同一条路径。
+message SeedListingRequest {
+  uint64 seller_player_id = 1;
+  ListingCategory category = 2;
+  uint32 subcategory = 3;
+  string title = 4;
+  uint32 level = 5;
+  uint64 price_fen = 6;
+  string summary = 7;
+  string description = 8;
+  string icon_key = 9;
+  uint64 notice_duration_ms = 10; // 0 = 无公示期,直接进入寄售
+  uint64 sale_duration_ms = 11;   // 必须 > 0
+}
+
+message SeedListingResponse {
+  TipInfoMessage error_message = 1;
+  uint64 listing_id = 2;
+  uint32 market_zone = 3; // 服务端写入的市场分区,供冒烟断言
+}
+
+service TradeAdmin {
+  rpc SeedListing (SeedListingRequest) returns (SeedListingResponse);
+}

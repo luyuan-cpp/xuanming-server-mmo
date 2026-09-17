@@ -96,6 +96,7 @@ M   manifest    **在任何写之前**落盘清单(玩家 id / 公会 id / ZSET 
 1   player_rows zone_src_db → zone_dst_db 逐表拷贝 + 共享 DB 0 上的玩家缓存失效   ← 最关键
 2   player_blobs 跨 data Redis 拷 player:{id}:*(仅多集群;拷到的人数对不上就中止)
 3   guild_mysql  guild.zone_id 改写 + guild:v2 缓存失效(INCR generation + DEL)
+3b  trade_mysql  聚宝斋 trade_listing.market_zone 改写(只改清单 listing_id,分批;复查源区仍有商品则中止不标完成)
 4   guild_rank   guild_rank:zone ZSET 合并(guild_rank:maintenance_lock + MULTI/EXEC)
 5   player_mapping player:zone:{id} 改写                                        ← 必须在 1/2 之后
 6   hot_state    scene_manager 源区热状态清理(可选,-clear-source-hot-state)
@@ -409,7 +410,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge `
 ```
 
 撤销顺序与合服**完全相反**(先改路由,再往回搬数据,这样任何一步失败时玩家的归属都指向
-一个**确实有他数据**的 zone):`7' 清公告 flag → 5' mapping 回 src → 4' ZSET 回 src →
+一个**确实有他数据**的 zone):`7' 清公告 flag → 5' mapping 回 src → 4' ZSET 回 src → 3b' trade_listing.market_zone 回 src →
 3' guild.zone_id 回 src + 缓存失效 → 1' 删目标库里与源库逐字节相同的玩家行`。
 
 两条硬保证,正是 R2 缺的那两条:
@@ -447,7 +448,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge `
 按位置透明原则,friend service 不感知 zone(只看 player_id),合服后**自动一致**,无需迁移。`zone_data_rollback.md §2.1` 已确认这一点。
 
 ### 6.4 拍卖行 / 跨服市场
-当前架构未实现拍卖行。如未来加入,合服时需要类似 guild 的处理(zone_id 改写 + 重名冲突)。
+~~当前架构未实现拍卖行。~~ 聚宝斋(`docs/design/jubaozhai-market.md`)的商品表 `mmorpg_trade.trade_listing` 带 `market_zone`(= 卖家上架时 home_zone),已由 `tools/merge_zone` 步骤 3b / 撤销 3b' / `verify:trade_listing` 处理(2026-09-14);`seller_zone_at_listing` 作为审计原值不改。商品标题不要求唯一,无重名冲突。P3 的订单、卖家收入、审计表保留原 zone 列,不在合服改写范围;P3 起上架 / 下单 / 交付必须读合服围栏。
 
 ### 6.5 玩家在线计数 / 服务器排名
 这些是 ops 视图,合服后 source 服从列表里下架即可。不涉及数据迁移。

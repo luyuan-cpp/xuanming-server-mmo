@@ -49,6 +49,9 @@ type Config struct {
 	// GuildSmoke 是 "guild-smoke" 模式的子开关(见 GuildSmokeConfig / guild_smoke_scenario.go)。
 	GuildSmoke GuildSmokeConfig `yaml:"guild_smoke"`
 
+	// TradeSmoke 是 "trade-smoke" 模式的子开关(见 TradeSmokeConfig / trade_smoke_scenario.go)。
+	TradeSmoke TradeSmokeConfig `yaml:"trade_smoke"`
+
 	// CurrencyCrash configures the "currency-crash-snapshot" mode used by
 	// docs/notes/currency-crash-window-verification.md. Driven by an external
 	// PowerShell script that runs the robot twice per case (pre/post kill) so
@@ -207,6 +210,59 @@ func (c *GuildSmokeConfig) validate() error {
 	return nil
 }
 
+// TradeSmokeConfig 配置 "trade-smoke" 模式(聚宝斋 P1,docs/design/jubaozhai-market.md §9)。
+//
+// 卖家 A 与买家 B 登 zone_a;cross_zone=true 时卖家兼买家 C 登 zone_b(否则也登 zone_a,跳过跨区断言)。
+// 种子商品经 gRPC 直连 trade 的 TradeAdmin.SeedListing 造(不经 gate),其余请求全部经 gate → 路由服。
+type TradeSmokeConfig struct {
+	CrossZone bool `yaml:"cross_zone"`
+
+	// ZoneA 必须非 0:冒烟要断言种子商品的 market_zone 等于 A 的归属区,0 会被 server-list 自动选区顶掉。
+	ZoneA uint32 `yaml:"zone_a"`
+	// ZoneB 仅 cross_zone=true 时使用,必须非 0 且与 ZoneA 不同。
+	ZoneB uint32 `yaml:"zone_b"`
+
+	// AdminAddr 是 trade 的 gRPC 监听地址(host:port),缺省 127.0.0.1:50800。
+	// trade 是全局服务、只有一份,直接写地址,不走 etcd 发现、也不做 zone 端口位移。
+	AdminAddr string `yaml:"admin_addr"`
+
+	// ExpectScope 必须与 trade.yaml 的 Market.Scope 一致("zone" | "global"),
+	// 用来断言浏览响应的 market_scope 并选择范围断言分支;不给缺省值,避免跑错档位还假绿。
+	ExpectScope string `yaml:"expect_scope"`
+
+	// RequestIntervalMs 是同一机器人相邻两个经 gate 的请求的最小间隔,缺省 1100:
+	// 聚宝斋消息号不在 MessageLimiter 表里时吃 gate 默认档 3 次 / 窗口(推导见 chat_smoke_scenario.go)。
+	RequestIntervalMs int `yaml:"request_interval_ms"`
+}
+
+func (c *TradeSmokeConfig) validate() error {
+	if c.ZoneA == 0 {
+		return fmt.Errorf("zone_a must be set (non-zero)")
+	}
+	if c.AdminAddr == "" {
+		return fmt.Errorf("admin_addr must be set")
+	}
+	switch c.ExpectScope {
+	case "zone", "global":
+		// valid
+	default:
+		return fmt.Errorf("expect_scope must be zone or global (got %q)", c.ExpectScope)
+	}
+	if c.RequestIntervalMs <= 0 {
+		return fmt.Errorf("request_interval_ms must be > 0 (got %d)", c.RequestIntervalMs)
+	}
+	if !c.CrossZone {
+		return nil
+	}
+	if c.ZoneB == 0 {
+		return fmt.Errorf("zone_b must be set (non-zero) when cross_zone is true")
+	}
+	if c.ZoneA == c.ZoneB {
+		return fmt.Errorf("zone_a and zone_b must differ when cross_zone is true (got %d)", c.ZoneA)
+	}
+	return nil
+}
+
 type LLMConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Endpoint string `yaml:"endpoint"` // e.g. "http://localhost:11434/v1/chat/completions"
@@ -227,6 +283,8 @@ func Load(path string) (*Config, error) {
 		ReportInterval: 5,
 		TableDir:       "../generated/tables",
 		BattleSmoke:    BattleSmokeConfig{Mode: "1v1"},
+		// trade-smoke 缺省:trade 本地 gRPC 端口 50800;间隔 1100ms 适配 gate 默认限流档。
+		TradeSmoke: TradeSmokeConfig{AdminAddr: "127.0.0.1:50800", RequestIntervalMs: 1100},
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
@@ -267,10 +325,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke":
+	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke", "trade-smoke":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, or guild-smoke)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, guild-smoke, or trade-smoke)", c.Mode)
 	}
 	if c.AuthType == "satoken" && c.SaTokenAddr == "" {
 		return fmt.Errorf("satoken_addr must be set when auth_type is satoken")
@@ -288,6 +346,11 @@ func (c *Config) validate() error {
 	if c.Mode == "guild-smoke" {
 		if err := c.GuildSmoke.validate(); err != nil {
 			return fmt.Errorf("guild_smoke: %w", err)
+		}
+	}
+	if c.Mode == "trade-smoke" {
+		if err := c.TradeSmoke.validate(); err != nil {
+			return fmt.Errorf("trade_smoke: %w", err)
 		}
 	}
 	return nil

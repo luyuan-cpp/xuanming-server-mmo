@@ -14,6 +14,8 @@ package main
 //     TestMain 建、结束时 DROP。真实的 mmorpg / zone_1_db / zone_2_db 一个字节不碰。
 //     guild 表建在 merge_zone_it_db 里(DSN 的默认库),所以代码里那些不带库名的
 //     `FROM guild` 落在一次性库上。
+//   - MySQL(聚宝斋):一次性库 merge_zone_it_trade,经 -trade-schema 指过去。真实的
+//     mmorpg_trade 一个字节不碰 —— 这正是 -trade-schema 这个 flag 存在的唯一理由。
 //   - Redis:用 DB 9/10/11/12(mapping/guild/shared/friend),**且只在它们本来
 //     就是空的时候跑**。非空就 skip 而不是 flush —— 谁也不知道那里面是谁的数据。
 //     生产默认的 15/2/0/3 由 merge_unit_test.go 的常量测试守住,这里不碰。
@@ -43,6 +45,7 @@ const (
 	itDstZone = uint32(902)
 
 	itGuildDB   = "merge_zone_it_db"
+	itTradeDB   = "merge_zone_it_trade"
 	itMappingRD = 9
 	itGuildRD   = 10
 	itSharedRD  = 11
@@ -107,7 +110,7 @@ func TestMain(m *testing.M) {
 }
 
 func itDropAll(db *sql.DB) {
-	for _, s := range []string{zoneDBName(itSrcZone), zoneDBName(itDstZone), itGuildDB} {
+	for _, s := range []string{zoneDBName(itSrcZone), zoneDBName(itDstZone), itGuildDB, itTradeDB} {
 		_, _ = db.Exec("DROP DATABASE IF EXISTS " + s)
 	}
 	ctx := context.Background()
@@ -126,6 +129,7 @@ func itCreateAll(db *sql.DB) error {
 		"CREATE DATABASE " + itGuildDB,
 		"CREATE DATABASE " + zoneDBName(itSrcZone),
 		"CREATE DATABASE " + zoneDBName(itDstZone),
+		"CREATE DATABASE " + itTradeDB,
 		// 镜像 deploy/mysql-init/guild_friend_tables.sql(name 全局 UNIQUE)。
 		`CREATE TABLE ` + itGuildDB + `.guild (
 			guild_id BIGINT UNSIGNED NOT NULL, name VARCHAR(64) NOT NULL,
@@ -140,6 +144,12 @@ func itCreateAll(db *sql.DB) error {
 		`CREATE TABLE ` + itGuildDB + `.guild_member (
 			guild_id BIGINT UNSIGNED NOT NULL, player_id BIGINT UNSIGNED NOT NULL,
 			PRIMARY KEY (guild_id, player_id))`,
+		// 只建合服步骤读写的列 + 按 market_zone / 卖家查的索引。完整形状由 go/schemamigrate
+		// 按 proto/trade/trade_table.proto 生成,这里不复刻第二份表结构。
+		`CREATE TABLE ` + itTradeDB + `.trade_listing (
+			listing_id BIGINT UNSIGNED NOT NULL, seller_player_id BIGINT UNSIGNED NOT NULL,
+			market_zone INT UNSIGNED NOT NULL DEFAULT 0, seller_zone_at_listing INT UNSIGNED NOT NULL DEFAULT 0,
+			PRIMARY KEY (listing_id), KEY idx_market_zone (market_zone), KEY idx_seller (seller_player_id, listing_id))`,
 	}
 	for _, zone := range []uint32{itSrcZone, itDstZone} {
 		s := zoneDBName(zone)
@@ -206,6 +216,9 @@ func itReset(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	if _, err := db.Exec("DELETE FROM " + itTradeDB + ".trade_listing"); err != nil {
+		t.Fatal(err)
+	}
 	for _, dbi := range []int{itMappingRD, itGuildRD, itSharedRD, itFriendRD} {
 		if err := itRedis(t, dbi).FlushDB(ctx).Err(); err != nil {
 			t.Fatal(err)
@@ -264,6 +277,25 @@ func itCount(t *testing.T, db *sql.DB, table string) int {
 		t.Fatal(err)
 	}
 	return n
+}
+
+// itSeedListing 在一次性 trade 库里造一条商品。
+func itSeedListing(t *testing.T, db *sql.DB, listingID, seller uint64, marketZone, sellerZoneAtListing uint32) {
+	t.Helper()
+	if _, err := db.Exec("INSERT INTO "+itTradeDB+".trade_listing (listing_id, seller_player_id, market_zone, seller_zone_at_listing) VALUES (?,?,?,?)",
+		listingID, seller, marketZone, sellerZoneAtListing); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// itListingZones 读一条商品的 market_zone 与 seller_zone_at_listing。
+func itListingZones(t *testing.T, db *sql.DB, listingID uint64) (marketZone, sellerZoneAtListing uint32) {
+	t.Helper()
+	if err := db.QueryRow("SELECT market_zone, seller_zone_at_listing FROM "+itTradeDB+".trade_listing WHERE listing_id = ?",
+		listingID).Scan(&marketZone, &sellerZoneAtListing); err != nil {
+		t.Fatal(err)
+	}
+	return marketZone, sellerZoneAtListing
 }
 
 // ── 表发现 ───────────────────────────────────────────────────
@@ -652,6 +684,125 @@ func TestIT_MigrateGuildZone(t *testing.T) {
 	}
 }
 
+// ── 聚宝斋 trade_listing ─────────────────────────────────────
+
+func TestIT_TradeMarketZone_RewriteVerifyRestore(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	db := itOpen(t)
+	itSeedListing(t, db, 7001, 9901, itSrcZone, itSrcZone)
+	itSeedListing(t, db, 7002, 9902, itSrcZone, 900)       // 更早一次合服搬进 901 的商品
+	itSeedListing(t, db, 7101, 9950, itDstZone, itDstZone) // 目标区原住民
+
+	// 门禁:库在且表在才放行;库不在、库在表不在都拒绝。
+	if err := assertTradeListingReady(ctx, db, itTradeDB); err != nil {
+		t.Fatalf("the trade table exists but was refused: %v", err)
+	}
+	if err := assertTradeListingReady(ctx, db, "merge_zone_it_no_such_trade"); err == nil {
+		t.Error("a missing trade schema must be refused (fail-closed)")
+	}
+	if err := assertTradeListingReady(ctx, db, itGuildDB); err == nil {
+		t.Error("a schema without trade_listing (trade never migrated) must be refused")
+	}
+
+	ids, err := collectTradeListingIDsInZone(ctx, db, itTradeDB, itSrcZone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(ids) != "[7001 7002]" {
+		t.Fatalf("source listing ids = %v, want [7001 7002]", ids)
+	}
+
+	cfg := auditConfig{db: db, tradeSchema: itTradeDB, src: itSrcZone, dst: itDstZone}
+	if r := verifyTradeMarketZoneDrained(ctx, cfg); r.Severity != "block" || isInfraAudit(r) {
+		t.Errorf("before the rewrite the verifier must block on real data: %+v", r)
+	}
+
+	// 清单收集之后才落到源区的商品(P1 trade 不读合服围栏):改写只动清单里的 id,它必须原地不动。
+	itSeedListing(t, db, 7003, 9903, itSrcZone, itSrcZone)
+
+	// dry-run 只数清单里的,不写。
+	if n, err := migrateTradeMarketZone(ctx, db, itTradeDB, ids, itSrcZone, itDstZone, true); err != nil || n != 2 {
+		t.Fatalf("dry-run: n=%d err=%v", n, err)
+	}
+	if n := itCount(t, db, itTradeDB+".trade_listing WHERE market_zone = 901"); n != 3 {
+		t.Fatalf("dry-run wrote: %d listings left in the source zone, want 3", n)
+	}
+
+	if n, err := migrateTradeMarketZone(ctx, db, itTradeDB, ids, itSrcZone, itDstZone, false); err != nil || n != 2 {
+		t.Fatalf("apply: n=%d err=%v", n, err)
+	}
+	if mz, _ := itListingZones(t, db, 7003); mz != itSrcZone {
+		t.Errorf("listing 7003 is not in the manifest but was rewritten to market_zone=%d", mz)
+	}
+	// 复查口径:源区剩 1 条,merge_run.go 步骤 3b 据此中止且不标记完成;-verify-merged 也必须拦住。
+	if left, err := countTradeListingsInZone(ctx, db, itTradeDB, itSrcZone); err != nil || left != 1 {
+		t.Fatalf("source zone left=%d err=%v, want 1 (the listing outside the manifest)", left, err)
+	}
+	if r := verifyTradeMarketZoneDrained(ctx, cfg); r.Severity != "block" || isInfraAudit(r) {
+		t.Errorf("a listing left in the source zone must block the verifier: %+v", r)
+	}
+
+	// 续跑口径:重新收集并进清单,再改写。
+	more, err := collectTradeListingIDsInZone(ctx, db, itTradeDB, itSrcZone)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids = sortedUint64(append(ids, more...))
+	if fmt.Sprint(ids) != "[7001 7002 7003]" {
+		t.Fatalf("merged manifest ids = %v, want [7001 7002 7003]", ids)
+	}
+	if n, err := migrateTradeMarketZone(ctx, db, itTradeDB, ids, itSrcZone, itDstZone, false); err != nil || n != 1 {
+		t.Fatalf("resume apply: n=%d err=%v, want 1 row", n, err)
+	}
+	if n := itCount(t, db, itTradeDB+".trade_listing WHERE market_zone = 901"); n != 0 {
+		t.Errorf("%d listings left in the source zone", n)
+	}
+	if n := itCount(t, db, itTradeDB+".trade_listing WHERE market_zone = 902"); n != 4 {
+		t.Errorf("target zone has %d listings, want 4", n)
+	}
+	// 空清单什么都不改。
+	if n, err := migrateTradeMarketZone(ctx, db, itTradeDB, nil, itSrcZone, itDstZone, false); err != nil || n != 0 {
+		t.Errorf("empty manifest: n=%d err=%v, want 0 rows", n, err)
+	}
+	// seller_zone_at_listing 是审计原值,合服不改。
+	if _, at := itListingZones(t, db, 7001); at != itSrcZone {
+		t.Errorf("seller_zone_at_listing of 7001 = %d, want %d (must not be rewritten)", at, itSrcZone)
+	}
+	if _, at := itListingZones(t, db, 7002); at != 900 {
+		t.Errorf("seller_zone_at_listing of 7002 = %d, want 900 (must not be rewritten)", at)
+	}
+	if r := verifyTradeMarketZoneDrained(ctx, cfg); r.Severity != "info" {
+		t.Errorf("after the rewrite the verifier must pass: %+v", r)
+	}
+	// 重跑幂等。
+	if n, err := migrateTradeMarketZone(ctx, db, itTradeDB, ids, itSrcZone, itDstZone, false); err != nil || n != 0 {
+		t.Errorf("re-run: n=%d err=%v, want 0 rows", n, err)
+	}
+
+	// 撤销:只改清单 id 里当前在 dst 的;原住民 7101 不在清单里,不动。
+	if n, err := restoreTradeMarketZone(ctx, db, itTradeDB, ids, itSrcZone, itDstZone, true); err != nil || n != 3 {
+		t.Fatalf("restore dry-run: n=%d err=%v", n, err)
+	}
+	if n := itCount(t, db, itTradeDB+".trade_listing WHERE market_zone = 902"); n != 4 {
+		t.Fatalf("restore dry-run wrote: target zone has %d listings", n)
+	}
+	if n, err := restoreTradeMarketZone(ctx, db, itTradeDB, ids, itSrcZone, itDstZone, false); err != nil || n != 3 {
+		t.Fatalf("restore: n=%d err=%v", n, err)
+	}
+	for _, id := range []uint64{7001, 7002, 7003} {
+		if mz, _ := itListingZones(t, db, id); mz != itSrcZone {
+			t.Errorf("listing %d market_zone = %d after restore, want %d", id, mz, itSrcZone)
+		}
+	}
+	if mz, _ := itListingZones(t, db, 7101); mz != itDstZone {
+		t.Errorf("target-zone native listing moved by the restore: market_zone=%d", mz)
+	}
+	if n, err := restoreTradeMarketZone(ctx, db, itTradeDB, ids, itSrcZone, itDstZone, false); err != nil || n != 0 {
+		t.Errorf("restore re-run: n=%d err=%v, want 0 rows", n, err)
+	}
+}
+
 // ── 围栏与锁 ─────────────────────────────────────────────────
 
 func TestIT_MergeFence_RefusesASecondRunAndReleasesOnlyItsOwn(t *testing.T) {
@@ -858,6 +1009,7 @@ func itRun(t *testing.T, args ...string) (string, int) {
 		"-scene-redis-db", strconv.Itoa(itSceneRD),
 		"-table-list-json", itTableListFile(t),
 		"-assume-kafka-drained",
+		"-trade-schema", itTradeDB,
 	}
 	cmd := exec.Command(itBinary, append(base, args...)...)
 	out, err := cmd.CombinedOutput()
@@ -895,6 +1047,10 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 	guildRdb.Set(ctx, guildCacheKey(11), `{"zone_id":901}`, 0)
 	// 从源库读出来、缓存在共享 DB 0 上的那份必须被清掉。
 	shared.Set(ctx, "PlayerAllData:9901", "stale", 0)
+	// 聚宝斋:源区两条(7002 是更早一次合服搬进 901 的)+ 目标区原住民一条。
+	itSeedListing(t, db, 7001, 9901, itSrcZone, itSrcZone)
+	itSeedListing(t, db, 7002, 9902, itSrcZone, 900)
+	itSeedListing(t, db, 7101, 9950, itDstZone, itDstZone)
 
 	manifest := filepath.Join(t.TempDir(), "merge.json")
 	zoneArgs := []string{"-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest}
@@ -912,6 +1068,9 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 	}
 	if v, _ := mapRdb.Get(ctx, playerZoneKeyPrefix+"9901").Result(); v != "901" {
 		t.Fatalf("dry-run remapped: %q", v)
+	}
+	if n := itCount(t, db, itTradeDB+".trade_listing WHERE market_zone = 901"); n != 2 {
+		t.Fatalf("dry-run rewrote trade listings: %d left in the source zone", n)
 	}
 
 	// 2) apply。
@@ -966,6 +1125,22 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 	if len(man.PlayerIDs) != 3 || len(man.GuildIDs) != 1 || len(man.RankMembers) != 1 {
 		t.Errorf("manifest scope wrong: %d players %d guilds %d rank", len(man.PlayerIDs), len(man.GuildIDs), len(man.RankMembers))
 	}
+	// 聚宝斋:源区商品全部改到目标区,seller_zone_at_listing 保持原值,清单记下被搬的 id。
+	if n := itCount(t, db, itTradeDB+".trade_listing WHERE market_zone = 901"); n != 0 {
+		t.Errorf("%d trade listings left in the source zone", n)
+	}
+	if n := itCount(t, db, itTradeDB+".trade_listing WHERE market_zone = 902"); n != 3 {
+		t.Errorf("target zone has %d trade listings, want 3 (2 merged + 1 native)", n)
+	}
+	if _, at := itListingZones(t, db, 7002); at != 900 {
+		t.Errorf("seller_zone_at_listing was rewritten: %d", at)
+	}
+	if !man.stepDone(stepTradeMySQL) {
+		t.Errorf("step %s not recorded in the manifest", stepTradeMySQL)
+	}
+	if fmt.Sprint(man.TradeListingIDs) != "[7001 7002]" {
+		t.Errorf("manifest trade listing ids = %v, want [7001 7002]", man.TradeListingIDs)
+	}
 
 	// 3) -verify-merged 全绿。
 	out, code = itRun(t, "-mode", "audit", "-source-zone", "901", "-target-zone", "902",
@@ -975,6 +1150,9 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 	}
 	if !strings.Contains(out, "0 block(s)") {
 		t.Errorf("post-merge verification reported blockers:\n%s", out)
+	}
+	if !strings.Contains(out, "verify:trade_listing") {
+		t.Errorf("post-merge verification did not check trade_listing:\n%s", out)
 	}
 
 	// 4) 重跑 -apply 是幂等的(读清单,不重新扫描)。
@@ -987,6 +1165,9 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 	}
 	if n := itCount(t, db, zoneDBName(itDstZone)+".player_database"); n != 4 {
 		t.Errorf("the re-run duplicated rows: %d", n)
+	}
+	if n := itCount(t, db, itTradeDB+".trade_listing WHERE market_zone = 902"); n != 3 {
+		t.Errorf("the re-run changed trade listings: %d in the target zone", n)
 	}
 
 	// 5) unmerge 撤回,只碰清单里的对象。
@@ -1015,6 +1196,14 @@ func TestIT_EndToEnd_MergeVerifyUnmerge(t *testing.T) {
 	if n, _ := shared.Exists(ctx, "player_merge_notice:9901").Result(); n != 0 {
 		t.Error("the merge notice survived the unmerge")
 	}
+	for _, id := range []uint64{7001, 7002} {
+		if mz, _ := itListingZones(t, db, id); mz != itSrcZone {
+			t.Errorf("trade listing %d not restored to the source zone: market_zone=%d", id, mz)
+		}
+	}
+	if mz, _ := itListingZones(t, db, 7101); mz != itDstZone {
+		t.Errorf("a target-zone native trade listing was moved by the unmerge: market_zone=%d", mz)
+	}
 }
 
 func TestIT_EndToEnd_RefusesEmptySourceAndSkipPlayerRowsWithoutAttestation(t *testing.T) {
@@ -1036,6 +1225,181 @@ func TestIT_EndToEnd_RefusesEmptySourceAndSkipPlayerRowsWithoutAttestation(t *te
 	}
 	if !strings.Contains(out, "i-know-global-player-table") {
 		t.Errorf("the refusal should name the attestation flag:\n%s", out)
+	}
+
+	// 聚宝斋库不在 = 拒绝(fail-closed),在任何写之前;报错要点名迁移命令与 -skip-trade-mysql。
+	// 后给的 -trade-schema 覆盖 itRun 基础参数里的那个。
+	out, code = itRun(t, "-source-zone", "901", "-target-zone", "902", "-dry-run",
+		"-trade-schema", "merge_zone_it_no_such_trade", "-manifest-path", filepath.Join(t.TempDir(), "m2.json"))
+	if code == 0 {
+		t.Fatalf("a merge without the trade schema was accepted:\n%s", out)
+	}
+	if !strings.Contains(out, "-skip-trade-mysql") || !strings.Contains(out, "-migrate") {
+		t.Errorf("the trade refusal should name the migration and the skip flag:\n%s", out)
+	}
+	// 显式 -skip-trade-mysql:越过 trade 门禁,停在后面的空源区守卫上 —— 证明跳过确实生效、且只跳过 trade。
+	out, code = itRun(t, "-source-zone", "901", "-target-zone", "902", "-dry-run", "-skip-trade-mysql",
+		"-trade-schema", "merge_zone_it_no_such_trade", "-manifest-path", filepath.Join(t.TempDir(), "m3.json"))
+	if code == 0 {
+		t.Fatalf("an empty source zone was accepted:\n%s", out)
+	}
+	if !strings.Contains(out, "trade SKIPPED") || !strings.Contains(out, "silent no-op") {
+		t.Errorf("-skip-trade-mysql should pass the trade gate and stop at the empty-source guard:\n%s", out)
+	}
+}
+
+func TestIT_Unmerge_RefusesMissingTradeSchemaBeforeAnyWrite(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	mapRdb := itRedis(t, itMappingRD)
+	// 合服之后的状态:玩家已指向目标区,清单里记着一条搬过的聚宝斋商品。
+	dstVal := strconv.FormatUint(uint64(itDstZone), 10)
+	mapRdb.Set(ctx, playerZoneKeyPrefix+"9961", dstVal, 0)
+	manifest := filepath.Join(t.TempDir(), "merge.json")
+	m := newMergeManifest("run-trade-preflight", itSrcZone, itDstZone, "it", time.Now())
+	m.PlayerIDs = []uint64{9961}
+	m.TradeListingIDs = []uint64{7201}
+	if err := saveManifest(manifest, m); err != nil {
+		t.Fatal(err)
+	}
+
+	// -trade-schema 指错:必须在 5' mapping 改回之前就拒绝(先证明,再写)。
+	out, code := itRun(t, "-mode", "unmerge", "-manifest-path", manifest, "-apply",
+		"-trade-schema", "merge_zone_it_no_such_trade")
+	if code == 0 {
+		t.Fatalf("an unmerge whose manifest lists trade listings was accepted without the trade schema:\n%s", out)
+	}
+	if !strings.Contains(out, "trade listings to restore") {
+		t.Errorf("the refusal should say why (trade listings in the manifest):\n%s", out)
+	}
+	if v, _ := mapRdb.Get(ctx, playerZoneKeyPrefix+"9961").Result(); v != dstVal {
+		t.Errorf("the mapping was restored before the trade preflight refused: %q", v)
+	}
+	for _, z := range []uint32{itSrcZone, itDstZone} {
+		if n, _ := mapRdb.Exists(ctx, mergeFenceKey(z)).Result(); n != 0 {
+			t.Errorf("merge fence for zone %d left behind by a refused unmerge", z)
+		}
+	}
+}
+
+// 步骤 3b 复查中止经真二进制走一遍「中止 → 重跑」:runMerge 用 log.Fatal 中止,defer 的
+// fence.release 不执行,围栏按设计留在本次 run_id 上。断言:非 0 退出、步骤不标完成、文案给出
+// GET/DEL 指引且 run_id 对得上;不 DEL 直接重跑被围栏拒;照文案 DEL 后原命令重跑成功。
+//
+// 「清单落盘之后才进源区的商品」用触发器确定性制造:步骤 1 往目标库插玩家行时,触发器顺手往
+// 源区插一条商品 —— 它必然发生在清单落盘之后、步骤 3b 之前,不靠时序赛跑。
+// (「dry-run 写好清单后再插商品」造不出中止:-apply 的清单阶段会把它重新并进清单。)
+func TestIT_TradeMarketZone_ResidualAbortKeepsFenceThenResumesAfterDEL(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	db := itOpen(t)
+	mapRdb := itRedis(t, itMappingRD)
+
+	itSeedPlayers(t, []uint64{9971}, true)
+	itSeedListing(t, db, 7001, 9971, itSrcZone, itSrcZone)
+
+	trigger := zoneDBName(itDstZone) + ".it_trade_late_listing"
+	if _, err := db.Exec(fmt.Sprintf("CREATE TRIGGER %s AFTER INSERT ON %s.player_centre_database FOR EACH ROW "+
+		"INSERT IGNORE INTO %s.trade_listing (listing_id, seller_player_id, market_zone, seller_zone_at_listing) "+
+		"VALUES (7003, NEW.player_id, %d, %d)", trigger, zoneDBName(itDstZone), itTradeDB, itSrcZone, itSrcZone)); err != nil {
+		t.Fatalf("create trigger (needs TRIGGER privilege; with binlog on also SUPER or log_bin_trust_function_creators): %v", err)
+	}
+	t.Cleanup(func() { _, _ = db.Exec("DROP TRIGGER IF EXISTS " + trigger) })
+
+	manifest := filepath.Join(t.TempDir(), "merge.json")
+	args := []string{"-source-zone", "901", "-target-zone", "902", "-manifest-path", manifest,
+		"-apply", "-expected-src-players", "1"}
+	srcFence, dstFence := mergeFenceKey(itSrcZone), mergeFenceKey(itDstZone)
+
+	// 1) 首跑:步骤 1 的触发器落下 7003;3b 只搬清单里的 7001,复查剩 1 条 → 中止。
+	out, code := itRun(t, args...)
+	if code == 0 {
+		t.Fatalf("the merge passed although a listing reached the source zone after the manifest was written:\n%s", out)
+	}
+	if !strings.Contains(out, "is NOT marked done") || !strings.Contains(out, "DEL "+srcFence+" "+dstFence) {
+		t.Errorf("the 3b abort must say how to clear the fence before re-running:\n%s", out)
+	}
+	if mz, _ := itListingZones(t, db, 7001); mz != itDstZone {
+		t.Errorf("manifest listing 7001 market_zone = %d, want %d", mz, itDstZone)
+	}
+	if mz, _ := itListingZones(t, db, 7003); mz != itSrcZone {
+		t.Errorf("listing 7003 is outside the manifest but was rewritten to market_zone=%d", mz)
+	}
+	man, err := loadManifest(manifest)
+	if err != nil || man == nil {
+		t.Fatalf("manifest after the abort: %v", err)
+	}
+	if !man.stepDone(stepPlayerRows) {
+		t.Errorf("step %s should be done before 3b (the trigger fires there)", stepPlayerRows)
+	}
+	if man.stepDone(stepTradeMySQL) || man.stepDone(stepPlayerMapping) {
+		t.Errorf("steps after the 3b abort must not be marked done: %+v", man.Steps)
+	}
+	if fmt.Sprint(man.TradeListingIDs) != "[7001]" {
+		t.Errorf("manifest trade listing ids = %v, want [7001]", man.TradeListingIDs)
+	}
+	if v, _ := mapRdb.Get(ctx, playerZoneKeyPrefix+"9971").Result(); v != "901" {
+		t.Errorf("mapping flipped although step 3b aborted: %q", v)
+	}
+
+	// 2) 围栏按设计留着,挂在本次 run_id 上,且文案里的 run_id 与之一致(运维 GET 核对用)。
+	for _, key := range []string{srcFence, dstFence} {
+		raw, gerr := mapRdb.Get(ctx, key).Result()
+		if gerr != nil {
+			t.Fatalf("%s should be left in place after the 3b abort: %v", key, gerr)
+		}
+		var v mergeInProgressValue
+		if uerr := json.Unmarshal([]byte(raw), &v); uerr != nil {
+			t.Fatalf("%s value: %v", key, uerr)
+		}
+		if v.RunID == "" || !strings.Contains(out, "still owned by run_id="+v.RunID) {
+			t.Errorf("abort message does not name the run_id held by %s (%q):\n%s", key, v.RunID, out)
+		}
+	}
+
+	// 3) 不 DEL 直接重跑:被残留围栏拒绝(文案预告的那句),且在任何写之前。
+	out, code = itRun(t, args...)
+	if code == 0 || !strings.Contains(out, "another merge is already fencing zone") {
+		t.Fatalf("a re-run without clearing the fence should be refused by the fence (exit=%d):\n%s", code, out)
+	}
+	if mz, _ := itListingZones(t, db, 7003); mz != itSrcZone {
+		t.Errorf("the refused re-run rewrote listing 7003: market_zone=%d", mz)
+	}
+
+	// 4) 照文案:停种子入口(删触发器)→ DEL 两把围栏 → 原命令重跑。
+	if _, err := db.Exec("DROP TRIGGER " + trigger); err != nil {
+		t.Fatal(err)
+	}
+	if err := mapRdb.Del(ctx, srcFence, dstFence).Err(); err != nil {
+		t.Fatal(err)
+	}
+	out, code = itRun(t, args...)
+	if code != 0 {
+		t.Fatalf("re-run after DEL exit=%d\n%s", code, out)
+	}
+	if !strings.Contains(out, "RESUME") {
+		t.Errorf("the re-run did not consume the manifest:\n%s", out)
+	}
+	if n := itCount(t, db, itTradeDB+".trade_listing WHERE market_zone = 901"); n != 0 {
+		t.Errorf("%d trade listings left in the source zone after the resumed run", n)
+	}
+	man, err = loadManifest(manifest)
+	if err != nil || man == nil {
+		t.Fatalf("manifest after the resumed run: %v", err)
+	}
+	if fmt.Sprint(man.TradeListingIDs) != "[7001 7003]" {
+		t.Errorf("resumed manifest trade listing ids = %v, want [7001 7003]", man.TradeListingIDs)
+	}
+	if !man.stepDone(stepTradeMySQL) || !man.stepDone(stepPlayerMapping) {
+		t.Errorf("resumed run did not finish the remaining steps: %+v", man.Steps)
+	}
+	if v, _ := mapRdb.Get(ctx, playerZoneKeyPrefix+"9971").Result(); v != "902" {
+		t.Errorf("mapping not remapped by the resumed run: %q", v)
+	}
+	for _, key := range []string{srcFence, dstFence} {
+		if n, _ := mapRdb.Exists(ctx, key).Result(); n != 0 {
+			t.Errorf("%s left behind by the resumed run", key)
+		}
 	}
 }
 

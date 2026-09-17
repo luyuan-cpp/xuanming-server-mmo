@@ -402,6 +402,13 @@ $GoSvcCatalogue = @{
 	# 50600/9200,注入 POD_IP);路由服写进 NodeInfo 的是 POD_IP 而不是 ListenOn 的 0.0.0.0(client_rpc_router_service.go advertisedHost)。
 	# 部署了不等于 gate 会用它:gate 是否只连路由服由 -GateRouterMode 决定,默认 "0"。
 	"client-rpc-router" = @{ ConfigMap = "go-svc-client-rpc-router-config"; Manifest = "client-rpc-router.yaml"; Port = 50600; ConfigFlag = "-f"; ConfigFile = "client_rpc_router.yaml"; ImageName = "mmorpg-client-rpc-router"; Global = $true }
+	# 聚宝斋 trade(docs/design/jubaozhai-market.md,P1):商品表天然有跨 zone 的行,所以是全局池(Global),与 chat 同放 infra namespace。
+	# 客户端只经 gate → client-rpc-router 可达;-GateRouterMode 默认 "0" 下「部署得起来但玩家不可达」,与 chat 同一已知缺口。
+	# 端口 50800 / metrics 9230 与 go/trade/etc/trade.yaml、go_services.ps1 一致;ImageName 与 go_svc_image.ps1 的 trade 条目一致。
+	# 独占库 mmorpg_trade(port-decisions D-14):库由 mysql-init-sql 带入的 deploy/mysql-init/00_init_zone_dbs.sql 预建(建库只登记那一处);
+	# 表由 MigrateJob 登记的 trade-migrate Job 建 —— Apply-OneGoSvc 在 ConfigMap 之后、Deployment 之前 delete + apply 它
+	# (Apply-GoSvcMigrateJob)。MigrateJob 是可选字段,只有建表服务才写。
+	trade           = @{ ConfigMap = "go-svc-trade-config";           Manifest = "trade.yaml";           Port = 50800; ConfigFlag = "-f";              ConfigFile = "trade.yaml";                    ImageName = "mmorpg-trade"; Global = $true; MigrateJob = "trade-migrate.yaml" }
 }
 
 # 目录里非全局(= 随 zone 部署)的服务名。两处 zone 循环共用,避免各写一遍过滤条件。
@@ -1456,6 +1463,62 @@ function New-GoSvcConfigMapYaml {
 		$routerForwardTimeoutMs = Get-AuthoritativeScalar -RelativePath $routerYaml -KeyPath 'ForwardTimeoutMs'
 	}
 
+	# 聚宝斋 trade 的契约值:键名与 go/trade/etc/trade.yaml、go/trade/internal/config 逐字一致,值只从服务 yaml 取。
+	# 与 chat 同理**只在生成 trade 自己的 ConfigMap 时求值**:go/trade 尚未落地或 trade.yaml 缺键时,
+	# 不能把 zone-up 里 db / login 等服务的 ConfigMap 一起拖挂;生成 trade 时照样 fail-closed。
+	$tradeYaml                   = 'go/trade/etc/trade.yaml'
+	$tradeName                   = ''
+	$tradeTimeout                = ''
+	$tradeLeaseTTL               = ''
+	$tradeMysqlDBName            = ''
+	$tradeMysqlMaxOpenConn       = ''
+	$tradeMysqlMaxIdleConn       = ''
+	$tradeDataServiceTimeout     = ''
+	$tradeMarketScope            = ''
+	$tradeMarketDefaultPageSize  = ''
+	$tradeMarketMaxPageSize      = ''
+	$tradeMarketMaxPage          = ''
+	$tradeMarketMaxFavorites     = ''
+	$tradeIdSegmentOptionalLines = ''
+	# 非 dev 档的固定值(见下面 if 块里的注释)。
+	$tradeMode                   = 'pro'
+	$tradeAutoMigrate            = 'false'
+	if ($SvcName -eq 'trade') {
+		$tradeName                  = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Name'
+		$tradeTimeout               = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Timeout'
+		$tradeLeaseTTL              = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'LeaseTTL'
+		# 库名同样取服务 yaml:D-14 规定本地与 K8s 同名(mmorpg_trade),go/trade 的 config.Validate 还会断言它等于
+		# 代码常量 data.DatabaseName;库本身由 mysql-init-sql 预建,这里不另写一份库名常数。
+		$tradeMysqlDBName           = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'MySQL.DBName'
+		$tradeMysqlMaxOpenConn      = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'MySQL.MaxOpenConn'
+		$tradeMysqlMaxIdleConn      = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'MySQL.MaxIdleConn'
+		$tradeDataServiceTimeout    = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'DataServiceRpc.Timeout'
+		$tradeMarketScope           = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Market.Scope'
+		$tradeMarketDefaultPageSize = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Market.DefaultPageSize'
+		$tradeMarketMaxPageSize     = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Market.MaxPageSize'
+		$tradeMarketMaxPage         = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Market.MaxPage'
+		$tradeMarketMaxFavorites    = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Market.MaxFavoritesPerPlayer'
+		# IdSegment 的 Enabled / FallbackToSnowflake 是部署决策,在 case 里写死并注释;Step / MinStep / MaxStep 是调参值,
+		# 允许缺席:yaml 里有就逐字镜像,没有就整行不写、交给 shared/idsegment 的默认(照 chat 可选键的写法)。
+		$tradeIdSegmentOptional = New-Object System.Collections.Generic.List[string]
+		$tradeYamlFull = Join-Path $RepoRoot ($tradeYaml -replace '/', [System.IO.Path]::DirectorySeparatorChar)
+		foreach ($tradeKey in @('Step', 'MinStep', 'MaxStep')) {
+			$tradeScalar = Get-YamlScalar -Path $tradeYamlFull -KeyPath "IdSegment.$tradeKey"
+			if ($tradeScalar.Found -and -not [string]::IsNullOrWhiteSpace($tradeScalar.Value)) {
+				$tradeIdSegmentOptional.Add("  ${tradeKey}: $($tradeScalar.Value)")
+			}
+		}
+		$tradeIdSegmentOptionalLines = $tradeIdSegmentOptional -join "`n"
+		# Mode 决定 TradeAdmin.SeedListing 是否可用(方法内只放行 dev/test,聚宝斋 P1-5);Schema.AutoMigrate 决定启动路径是否执行 DDL。
+		# 与 data-service 的 Schema.AutoMigrate、login 的 Mode 同一条纪律:dev 档镜像服务 yaml 的值;staging/prod 固定
+		# Mode: pro(种子造数入口关死,不能带着 dev 造数能力上线)与 AutoMigrate: false(表只由 trade-migrate Job 建,
+		# 启动路径只跑一次只读 plan,有待执行语句或需人工项就拒绝启动)。
+		if ($ReleaseProfile -eq 'dev') {
+			$tradeMode        = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Mode'
+			$tradeAutoMigrate = Get-AuthoritativeScalar -RelativePath $tradeYaml -KeyPath 'Schema.AutoMigrate'
+		}
+	}
+
 	$mysqlUser = $script:MysqlUser
 	$mysqlPassword = $script:MysqlPassword
 	$redisPassword = $script:RedisPassword
@@ -1622,7 +1685,7 @@ Schema:
 # 用 INSERT IGNORE 预建这些 biz_tag 行,幂等、绝不降低已有行的 max_id;新增永久身份两边同加。
 IdSegment:
   AllowAutoSeed: ${dataServiceAllowAutoSeed}
-  BootstrapTags: [player, guild, item, txlog, snapshot]
+  BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing]
 # C++ scene 产出的交易流水 / 玩家快照落库消费者。topic 名与分区数是不可变契约,值来自服务 yaml。
 # Kafka 不可达不影响 Load/Save,只记日志并每 30s 后台重试。
 # TopicGeneration 是分区契约的代号,进有效 topic 名(<基名>_g<N>);从服务 yaml 镜像过来,当前集群
@@ -1975,6 +2038,74 @@ ZoneScopedNodeTypes:
 MetricsListenAddr: ":9200"
 "@
 		}
+		"trade" {
+@"
+Name: ${tradeName}
+ListenOn: 0.0.0.0:50800
+# zrpc 服务端超时(毫秒),必须 <= 路由服 ForwardTimeoutMs - 1000(契约 §3),否则路由服先超时会把 trade 的正常慢响应判成故障。
+Timeout: ${tradeTimeout}
+# go-zero Mode:TradeAdmin.SeedListing 只在 dev/test 放行(方法内检查,否则 gRPC PermissionDenied)。
+# dev 档 = go/trade/etc/trade.yaml 的值;staging/prod 固定 pro(见生成器注释)。显式写出,不赌 go-zero 缺省值。
+Mode: ${tradeMode}
+# Etcd 段 **Key 显式留空**(port-decisions D-13,与 chat 同理):trade 按 C++ 约定注册 TradeNodeService.rpc/zone/<z>/...
+# (go/shared/noderegistry),路由服按这个前缀发现它;没有任何 Go 调用方经 go-zero 发现键找 trade。
+# 不能整行省略 Key:go-zero v1.10.0 的 EtcdConf.Key 不是 optional,缺了 conf.MustLoad 直接 Fatal,Pod 会 CrashLoop。
+Etcd:
+  Hosts:
+    - "etcd.${InfraNamespace}:2379"
+  Key: ""
+# 全局池:ZoneId 只影响注册路径,业务代码不读它做分支;取命令行 -ZoneId(Apply-GlobalGoSvcManifests),与 match / chat 同口径。
+ZoneId: ${CurrentZoneId}
+# 租约 TTL(秒)= 崩溃后路由服仍可能把请求打到死实例的最长窗口(PickRandom 不看连接状态)。
+LeaseTTL: ${tradeLeaseTTL}
+# 与 manifests/go-svc/trade.yaml 的 metrics 容器端口 / prometheus.io/port 注解一致(9230 = trade)
+MetricsListenAddr: ":9230"
+# 留空 = shared/killswitch 的 DefaultPrefix(/mmorpg/killswitch/),与其它服务共用同一棵规则树。
+KillSwitchPrefix: ""
+# 独占库(port-decisions D-14):库 ${tradeMysqlDBName} 由 infra-up 的 mysql-init-sql(原样带入 deploy/mysql-init/00_init_zone_dbs.sql)
+# 预建并 GRANT 给 appuser;账号沿用 db / data-service 同一组注入值(MMORPG_MYSQL_USER / MMORPG_MYSQL_PASSWORD,dev 回落 root),
+# 换成别的账号要自己补 GRANT。MaxOpenConn × Deployment 副本数(2)要算进 MySQL 的 max_connections。
+MySQL:
+  Host: "mysql.${InfraNamespace}:3306"
+  User: "${mysqlUser}"
+  Password: "${mysqlPassword}"
+  DBName: "${tradeMysqlDBName}"
+  MaxOpenConn: ${tradeMysqlMaxOpenConn}
+  MaxIdleConn: ${tradeMysqlMaxIdleConn}
+# 建表策略(D-14 第 4 条,见生成器注释):dev = 服务 yaml 的值(启动期 schemamigrate.Up,GET_LOCK 保护多副本);
+# staging/prod = false:表只由 trade-migrate Job 建,启动路径只跑只读 plan,不净即拒启并打印补救命令。
+Schema:
+  AutoMigrate: ${tradeAutoMigrate}
+# 卖家 / 买家 home_zone 查询(BatchGetPlayerHomeZone,未映射 / 故障一律 fail-closed)与 listing_id 号段(AllocateIdSegment)。
+# data-service 按 zone namespace 各部署一份,但 go-zero 发现键 dataservice.rpc 不分 zone、全局库只有一份,
+# 所以 infra namespace 里的 trade 发现到哪个实例应答都一样。这是 trade 作为**调用方**的发现键,
+# 不是 D-13 禁止的「全局服务自己的 go-zero 注册 Key」。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - "etcd.${InfraNamespace}:2379"
+    Key: dataservice.rpc
+  Timeout: ${tradeDataServiceTimeout}
+  NonBlock: true
+  Middlewares:
+    Breaker: false
+# listing_id 号段(biz_tag = trade_listing,已进本脚本 data-service ConfigMap 的 IdSegment.BootstrapTags)。
+# Enabled 必须**显式写 true**:go-zero 对缺席的 optional 块不填 default,go/trade 的 config.Validate 拒绝 false。
+# FallbackToSnowflake 固定 false:trade 没有 snowflake 回退,号段失败即本次发号失败(SeedListing 回 kServiceUnavailable)。
+# Step / MinStep / MaxStep 从服务 yaml 逐字镜像,缺席则整行不写。
+IdSegment:
+  Enabled: true
+${tradeIdSegmentOptionalLines}
+  FallbackToSnowflake: false
+# 市场范围与分页 / 收藏上限,全部从服务 yaml 取。Scope ∈ {zone, global}:zone = 只看 / 只收藏本 home_zone 市场的商品。
+Market:
+  Scope: ${tradeMarketScope}
+  DefaultPageSize: ${tradeMarketDefaultPageSize}
+  MaxPageSize: ${tradeMarketMaxPageSize}
+  MaxPage: ${tradeMarketMaxPage}
+  MaxFavoritesPerPlayer: ${tradeMarketMaxFavorites}
+"@
+		}
 		default {
 			throw "Unknown Go service: $SvcName"
 		}
@@ -1989,6 +2120,221 @@ data:
   ${configFileName}: |
 $($svcConfig -split "`n" | ForEach-Object { "    $_" } | Out-String)
 "@
+}
+
+# 迁移 Job 两段等待(删前的在途检查 Assert-GoSvcMigrateJobNotInFlight、apply 后的终态轮询 Wait-ForGoSvcMigrateJob)
+# 的预算下限,单位秒。实际预算 = max(-WaitTimeoutSeconds, 本值),统一由 Get-GoSvcMigrateJobWaitSeconds 给出。
+# 为什么要下限:-WaitTimeoutSeconds 默认 180s 是按 Deployment rollout 定的,而 staging/prod 恒等迁移 Job(D-14 第 4 条)。
+# 一次**正常**的迁移 Pod 要走完:调度 + 首次拉 mmorpg-<svc> 镜像(Job 先于 Deployment,是该镜像在节点上的第一个消费者)
+#   + initContainer wait-mysql 等 3306(manifests/go-svc/trade-migrate.yaml 的 WAIT_MYSQL_TIMEOUT_SECONDS=150,
+#     截止后最多再多一轮 sleep 5 + nc -w 3,硬上限 158s)
+#   + 迁移本身(go/schemamigrate 每条 DDL 硬超时 60s;P1 两张表,正常几秒)。
+# 158 + 约 60(调度 / 拉镜像)+ 约 60(迁移)≈ 280,取 300。预算装不下这些时,全新集群 initdb 还没开 3306 的
+# 正常等待会被脚本误判为超时、中断发布。改大 WAIT_MYSQL_TIMEOUT_SECONDS(或别的建表服务的 Job 等得更久)时必须同步抬高本值。
+$GoSvcMigrateJobMinWaitSeconds = 300
+
+# 迁移 Job 等待的实际预算(秒):-WaitTimeoutSeconds 与下限 $GoSvcMigrateJobMinWaitSeconds 取大。
+# 只抬不降:显式传更大的 -WaitTimeoutSeconds(如全新集群首次 infra-up 传 600)照样生效。
+function Get-GoSvcMigrateJobWaitSeconds {
+	return [Math]::Max($WaitTimeoutSeconds, $GoSvcMigrateJobMinWaitSeconds)
+}
+
+<#
+.SYNOPSIS
+	建表服务的一次性迁移 Job(<svc>-migrate):确认上一次不在途 → delete → apply → 门禁下等它结束。
+
+.DESCRIPTION
+	port-decisions D-14 第 4 条:staging/prod 的服务 ConfigMap 固定 Schema.AutoMigrate=false,表只由这个 Job 建。
+	Job 与服务 Deployment 同一镜像、同一 ConfigMap,args 为 -f /app/etc/<yaml> -migrate(服务二进制自带的迁移入口,
+	go/schemamigrate 的退出码:0 成功 / 1 失败 / 3 锁忙 / 4 需人工)。形状照 Apply-KafkaTopicInitJob:
+	Job 名固定、template 不可变,每次先删再 apply;重跑幂等(schemamigrate 自带台账 + GET_LOCK)。
+
+	重试语义写在 manifest 的 podFailurePolicy 里(1 / 4 → FailJob 立即失败,3 → 按 backoffLimit 重试),脚本自己不重试。
+
+	门禁(D-14 第 4 条原文"此门禁不受 -WaitReady 控制"):
+	  staging / prod:**恒等**。先等 mysql Deployment 就绪(Job 的 initContainer 还会再等 3306 可连,理由见 manifest 注释),
+	    apply 后在迁移 Job 等待预算(Get-GoSvcMigrateJobWaitSeconds = max(-WaitTimeoutSeconds, $GoSvcMigrateJobMinWaitSeconds))
+	    内轮询 Job 终态;Failed 或超时即打印 describe / Pod / 日志并 throw,调用方的 Deployment 不会被 apply。
+	  dev:只在 -WaitReady 下同上;不带 -WaitReady 时不等 Job,Deployment 紧接着 apply —— dev 档 AutoMigrate=true,
+	    服务启动期自己也会迁移(同一把 GET_LOCK),脚本只打印核对命令。
+
+	删之前先确认上一次的 Job 不在途(与门禁无关、各档都做):kafka-topic-init 可以无脑先删再建,是因为它没有台账;
+	迁移 runner 执行 DDL 前先写 dirty=1、成功后才清零,删掉在途 Job(Pod 被 SIGTERM / SIGKILL)打断 DDL 会把台账
+	留在 dirty,之后每次 -migrate 都以 1 退出、被 FailJob 直接判失败,只能人工清台账。所以在途就先在
+	迁移 Job 等待预算(同上,Get-GoSvcMigrateJobWaitSeconds)内等它到终态;等不到就 throw,绝不删在途 Job。
+#>
+function Apply-GoSvcMigrateJob {
+	param(
+		[Parameter(Mandatory = $true)][string]$SvcName,
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$SvcImage,
+		[Parameter(Mandatory = $true)][string]$PullPolicy
+	)
+
+	$info = $GoSvcCatalogue[$SvcName]
+	$jobName = "$SvcName-migrate"
+	$path = Join-Path $GoSvcManifestsDir $info.MigrateJob
+	# fail-closed:主 manifest 在、迁移 Job 却不在,staging/prod 的 Deployment 必然因 plan 不净拒启;
+	# 与其部署一个注定 CrashLoop 的服务,不如在这里直接拦下(与主 manifest 缺席时"整条跳过"的口径刻意不同)。
+	if (-not (Test-Path $path)) {
+		throw "Go service migrate Job manifest not found: $path($SvcName 的目录条目声明了 MigrateJob;fail-closed:表建不出来就不部署服务)"
+	}
+
+	$content = Get-Content -Path $path -Raw
+	$content = $content.Replace("PLACEHOLDER_IMAGE", $SvcImage)
+	$content = $content.Replace("PLACEHOLDER_PULL_POLICY", $PullPolicy)
+	# initContainer 等 MySQL 用的地址:Job 与 MySQL 不一定同 namespace(目录允许非 Global 服务将来也挂 MigrateJob),写 FQDN 前缀。
+	$content = $content.Replace("__INFRA_NAMESPACE__", $InfraNamespace)
+	# 与 Apply-Infra 同一条 fail-closed:任何占位没替换就拒绝 apply,不把占位原样送进集群。
+	$leftover = [regex]::Matches($content, '(__[A-Z][A-Z0-9_]*__|PLACEHOLDER_[A-Z_]+)') | ForEach-Object { $_.Value } | Sort-Object -Unique
+	if ($leftover.Count -gt 0) {
+		throw "migrate Job manifest $($info.MigrateJob) 里有未替换的占位:$($leftover -join ', ')。请在 Apply-GoSvcMigrateJob 里补对应的 Replace。"
+	}
+
+	# D-14 第 4 条:staging/prod 的迁移门禁不受 -WaitReady 控制,恒等 Job Complete、失败或超时中断发布;
+	# 只有 dev 档把"等不等"交给 -WaitReady(dev 服务启动期自己也会迁移)。
+	$gateOnJob = [bool]$WaitReady -or ($ReleaseProfile -ne 'dev')
+
+	if ($gateOnJob) {
+		# MySQL 起不来时 -migrate 连库失败以 1 退出,会被 podFailurePolicy 当成不可重试直接判 Job 失败;
+		# 先等 mysql Deployment 滚动完成,把"镜像还在拉 / Pod 还没调度"这类原因挡在 Job 之外,失败时报的也是真实原因。
+		# (本函数只经 Apply-Infra → Apply-GlobalGoSvcManifests 调到,mysql.yaml 在同一次 Apply-Infra 里已 apply。)
+		Wait-ForDeploymentReady -Namespace $InfraNamespace -DeploymentName "mysql"
+	}
+
+	# 删之前确认上一次的 Job 不在途:删掉在途迁移会打断 DDL、把台账留在 dirty(理由见函数头注释)。
+	Assert-GoSvcMigrateJobNotInFlight -Namespace $Namespace -JobName $jobName
+
+	# Job 名固定,重跑必须先删:template 不可变,apply 同名 Job 会被拒。--ignore-not-found:首次是 no-op。
+	Invoke-Kubectl -Args @("delete", "job", $jobName, "-n", $Namespace, "--ignore-not-found")
+	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $content
+	Write-Host "  [applied] $jobName -> $SvcImage (D-14 建表 Job,先于 $SvcName Deployment)"
+
+	if ($gateOnJob) {
+		Wait-ForGoSvcMigrateJob -Namespace $Namespace -JobName $jobName -SvcName $SvcName
+		return
+	}
+	Write-Warning ("dev 档未带 -WaitReady:不等 {0} 结束就 apply {1} Deployment(staging/prod 恒等,不走这里)。核对 'kubectl -n {2} get job {0}'(COMPLETIONS 1/1)与 'kubectl -n {2} logs job/{0}'。" -f $jobName, $SvcName, $Namespace)
+}
+
+# 读一次迁移 Job 的状态,返回 absent / running / complete / failed / unknown(kubectl 本身失败,如 API 暂时不可达)。
+# FailureTarget(K8s 1.31+ 先于 Failed 出现)只在 status.active 为 0 时算 failed:此时控制器不会再建 Pod,
+# 也没有 Pod 还在跑,既可以立刻中断发布,也可以安全删除;active 仍 > 0 时按 running 处理。
+function Get-GoSvcMigrateJobState {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$JobName
+	)
+
+	$raw = Invoke-Kubectl -Args @("get", "job", $JobName, "-n", $Namespace, "--ignore-not-found", "-o", "json") -AllowFailure
+	if ($LASTEXITCODE -ne 0) { return 'unknown' }
+	$text = ($raw -join "`n")
+	if ([string]::IsNullOrWhiteSpace($text)) { return 'absent' }
+
+	$job = $text | ConvertFrom-Json
+	$trueTypes = @($job.status.conditions | Where-Object { $_.status -eq 'True' } | ForEach-Object { $_.type })
+	$active = 0
+	if ($null -ne $job.status.active) { $active = [int]$job.status.active }
+
+	if ($trueTypes -contains 'Failed') { return 'failed' }
+	if ($trueTypes -contains 'FailureTarget' -and $active -eq 0) { return 'failed' }
+	if ($trueTypes -contains 'Complete') { return 'complete' }
+	return 'running'
+}
+
+# 在迁移 Job 等待预算(Get-GoSvcMigrateJobWaitSeconds = max(-WaitTimeoutSeconds, $GoSvcMigrateJobMinWaitSeconds))内
+# 轮询到 Job 离开 running / unknown,返回最后一次读到的状态(超时时仍是 running / unknown)。
+# 两个调用方(删前在途检查、apply 后终态轮询)共用这一个预算来源,不各自读 -WaitTimeoutSeconds。
+# 总预算用单调时钟(AGENTS.md §11.3),不用"次数 × sleep"。
+function Wait-GoSvcMigrateJobSettled {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$JobName
+	)
+
+	$budgetSeconds = Get-GoSvcMigrateJobWaitSeconds
+	$budget = [System.Diagnostics.Stopwatch]::StartNew()
+	$state = Get-GoSvcMigrateJobState -Namespace $Namespace -JobName $JobName
+	while (($state -eq 'running' -or $state -eq 'unknown') -and $budget.Elapsed.TotalSeconds -lt $budgetSeconds) {
+		Start-Sleep -Seconds 5
+		$state = Get-GoSvcMigrateJobState -Namespace $Namespace -JobName $JobName
+	}
+	return $state
+}
+
+# 删 <svc>-migrate 之前的在途检查。场景:上一次发布等 Job 超时中断(锁忙在 backoff、DDL 慢),运维按提示重跑发布,
+# 而旧 Job 其实还在跑 —— 此时直接 delete 会 SIGTERM 正在执行 DDL 的迁移容器,台账停在 dirty=1,之后每次 -migrate
+# 都以 1 退出。所以:不存在 / 已终态(Complete / Failed)→ 放行;在途或状态读不到 → 在预算内等它到终态;
+# 仍等不到 → throw,且**不删**。DryRun 不连集群,只打印这一步。
+function Assert-GoSvcMigrateJobNotInFlight {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$JobName
+	)
+
+	$budgetSeconds = Get-GoSvcMigrateJobWaitSeconds
+	if ($DryRun) {
+		Write-Host "[dry-run] check job/$JobName -n $Namespace not in flight before delete (running = wait until Complete / Failed --timeout ${budgetSeconds}s, still running = abort without deleting)"
+		return
+	}
+
+	$state = Get-GoSvcMigrateJobState -Namespace $Namespace -JobName $JobName
+	if ($state -ne 'running' -and $state -ne 'unknown') { return }
+
+	Write-Host "上一次 $JobName 仍在执行(或状态读不到:$state),先等它到终态再删(预算 ${budgetSeconds}s;删在途迁移会留下 dirty 台账)"
+	$state = Wait-GoSvcMigrateJobSettled -Namespace $Namespace -JobName $JobName
+	if ($state -ne 'running' -and $state -ne 'unknown') {
+		Write-Host "上一次 $JobName 已结束(state=$state),继续先删再建。"
+		return
+	}
+
+	Invoke-Kubectl -Args @("get", "pods", "-n", $Namespace, "-l", "job-name=$JobName", "-o", "wide") -AllowFailure
+	throw ("上一次迁移 Job {0} 在 {1}s 内仍未结束(namespace={2} state={3}),发布中断,未删除它,也未 apply 新 Job 与服务 Deployment。" +
+		"等 'kubectl -n {2} get job {0}' 出现 COMPLETIONS 1/1 或 Failed(ACTIVE 为 0)后再重跑同一条发布命令;" +
+		"**不要手工 delete 在途 Job**:打断 DDL 会把 schema_migrations 台账留在 dirty,之后每次迁移都会以 1 失败。") -f $JobName, $budgetSeconds, $Namespace, $state
+}
+
+# 迁移 Job 的终态等待。与 Wait-ForJobComplete(kafka-topic-init 用)不同,这里要**同时**认 Complete 与 Failed:
+# podFailurePolicy 把退出码 1 / 4 判成 FailJob,而 `kubectl wait --for=condition=complete` 遇到 Failed 会一直等到超时,
+# 发布者要白等 WaitTimeoutSeconds 才看到"需人工"。所以轮询 status.conditions:见到 Failed(或 K8s 1.31+ 先出现的
+# FailureTarget)立刻停;超时同样 throw —— 锁忙(退出码 3)还在 backoff 重试时也不算完成,不能 apply Deployment。
+function Wait-ForGoSvcMigrateJob {
+	param(
+		[Parameter(Mandatory = $true)][string]$Namespace,
+		[Parameter(Mandatory = $true)][string]$JobName,
+		[Parameter(Mandatory = $true)][string]$SvcName
+	)
+
+	$budgetSeconds = Get-GoSvcMigrateJobWaitSeconds
+	if ($DryRun) {
+		Write-Host "[dry-run] wait job/$JobName -n $Namespace until condition Complete (Failed / FailureTarget = abort) --timeout ${budgetSeconds}s"
+		return
+	}
+
+	Write-Host "Waiting for migrate Job: namespace=$Namespace job=$JobName (timeout ${budgetSeconds}s = max(-WaitTimeoutSeconds ${WaitTimeoutSeconds}, floor ${GoSvcMigrateJobMinWaitSeconds}))"
+	$state = Wait-GoSvcMigrateJobSettled -Namespace $Namespace -JobName $JobName
+
+	if ($state -eq 'complete') {
+		Write-Host "Migrate Job complete: namespace=$Namespace job=$JobName"
+		return
+	}
+
+	# running / unknown 走到这里 = 预算用完;absent = 刚 apply 的 Job 被人删了,同样不能 apply Deployment。
+	$verdict = switch ($state) {
+		'failed' { 'failed' }
+		'absent' { 'absent' }
+		default { 'timeout' }
+	}
+	Write-Host "Migrate Job not complete: namespace=$Namespace job=$JobName verdict=$verdict"
+	Invoke-Kubectl -Args @("describe", "job", $JobName, "-n", $Namespace) -AllowFailure
+	Invoke-Kubectl -Args @("get", "pods", "-n", $Namespace, "-l", "job-name=$JobName", "-o", "wide") -AllowFailure
+	Invoke-Kubectl -Args @("logs", "job/$JobName", "-n", $Namespace, "--all-containers", "--tail", "100") -AllowFailure
+	throw ("迁移 Job {0} 未成功(namespace={1} 结果={2}),发布中断,{3} Deployment 未 apply。看报告:kubectl -n {1} logs job/{0}。" +
+		"退出码(go/schemamigrate):1 失败(库不存在 / 连不上 / dirty 台账 / DDL 报错,库名见日志)、4 需人工(类型漂移 / 缺主键 / 表清单异常)、" +
+		"3 锁忙(timeout 时可能仍在 backoff 重试)。" +
+		"重跑前:timeout 时先确认 'kubectl -n {1} get job {0}' 的 ACTIVE 为 0(重跑时脚本也会先检查,在途 Job 不删,等不到就再次中断);" +
+		"日志里是 dirty 台账(schemamigrate.ErrDirty)时重跑不会自己好,先人工核对 schema_migrations 与表的实际结构再清 dirty;" +
+		"其余原因修复后重跑同一条 infra-up / all-up(已终态的 Job 会先删再建,迁移幂等)。") -f $JobName, $Namespace, $verdict, $SvcName
 }
 
 function Apply-GoSvcManifests {
@@ -2039,6 +2385,14 @@ function Apply-OneGoSvc {
 
 	# Apply manifest with image placeholder replaced
 	$svcPullPolicy = Resolve-ImagePullPolicy -ImageRef $svcImage
+
+	# 建表服务(目录条目带 MigrateJob,port-decisions D-14 第 4 条):<svc>-migrate Job 与 Deployment 同镜像、同 ConfigMap,
+	# 必须排在上面的 ConfigMap 之后、下面的 Deployment 之前;门禁生效时(staging/prod 恒生效,dev 仅 -WaitReady)
+	# Job 没 Complete 就 throw,Deployment 不 apply。
+	if ($info.MigrateJob) {
+		Apply-GoSvcMigrateJob -SvcName $SvcName -Namespace $Namespace -SvcImage $svcImage -PullPolicy $svcPullPolicy
+	}
+
 	$manifestContent = (Get-Content $manifestPath -Raw) -replace 'PLACEHOLDER_IMAGE', $svcImage
 	$manifestContent = $manifestContent -replace 'PLACEHOLDER_PULL_POLICY', $svcPullPolicy
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $Namespace) -InputContent $manifestContent
@@ -2046,7 +2400,9 @@ function Apply-OneGoSvc {
 	Write-Host "  [applied] $SvcName -> $svcImage (port $($info.Port) pullPolicy=$svcPullPolicy)"
 }
 
-# 全局池 Go 服务(目录里 Global = $true,目前是 match / chat / client-rpc-router):部署到 $InfraNamespace 一次。
+# 全局池 Go 服务(目录里 Global = $true,目前是 match / chat / client-rpc-router / trade):部署到 $InfraNamespace 一次。
+# trade 带 MigrateJob:它的 trade-migrate Job 在 Apply-OneGoSvc 里先于 Deployment 跑
+# (staging/prod 恒等 Complete,dev 仅 -WaitReady 下等;D-14 第 4 条)。
 # 由 Apply-Infra 调用,所以 infra-up / all-up 都会带上;zone-up 不碰它。
 function Apply-GlobalGoSvcManifests {
 	if ($SkipGoSvc) { return }
@@ -2585,6 +2941,11 @@ function Get-InfraZoneIds {
 	仓库里 00_init_zone_dbs.sql 顺带建的 testdb 只服务本地 compose 的
 	go/data_service/etc/data_service.yaml,在 K8s 上是一个没人用的空库,无害。
 
+	新全局服务的独占库(port-decisions D-14 第 5 条,目前是聚宝斋 trade 的 mmorpg_trade)**只登记在
+	00_init_zone_dbs.sql**,由上面的循环原样带进本 ConfigMap;这里**不要**再生成第二份建库 sql。
+	02_k8s_global_db.sql 是因为本地(testdb)与 K8s(mmorpg_global)库名不同才单独生成的,不是范式。
+	表不在 initdb 里建:trade 的表由 manifests/go-svc/trade-migrate.yaml 这个 Job 建(Apply-GoSvcMigrateJob)。
+
 	注意 initdb 只在数据目录为空的首次启动执行,PVC 已有数据时改 sql 不会重跑
 	(见 mysql.yaml 里 mysql-init 卷的注释)。
 #>
@@ -2846,6 +3207,8 @@ function Show-InfraStatus {
 	# `kubectl drain` 会挂在 etcd / kafka 上(kafka 的 PDB 是 minAvailable: 1,不允许自愿驱逐)。
 	# job:kafka-topic-init(审计 + 控制面命令 topic 预建)的 COMPLETIONS 0/1 = 分区契约没建成,
 	# scene 起来前必须先看它。
+	# job 一栏同样列出建表 Job trade-migrate(D-14):COMPLETIONS 0/1 且 ACTIVE 0 = 迁移失败,
+	# 看 `kubectl -n <infra> logs job/trade-migrate`;ACTIVE 不为 0 时不要手工 delete(会留下 dirty 台账)。
 	Invoke-Kubectl -Args @("get", "deploy,sts,po,pvc,pdb,job,svc,cm", "-n", $InfraNamespace) -AllowFailure
 }
 

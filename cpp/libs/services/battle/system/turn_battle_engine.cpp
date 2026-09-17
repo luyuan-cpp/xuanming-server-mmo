@@ -1356,8 +1356,6 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
     settlement.set_player_id(playerId);
     settlement.set_outcome(outcome);
     settlement.set_total_rounds(CompletedRounds());
-    // 结算里的法力是绝对值:盖数值单位版本,scene 才能识别并换算旧 battle 二进制产出的结算(attribute_unit_migration.h)
-    settlement.set_attribute_unit_version(kAttributeUnitVersion);
     // BuildSettlement 可重复读取；只复制实际击杀簿，不按初始阵位推断先后。
     settlement.clear_defeated_monsters();
 

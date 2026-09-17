@@ -7,6 +7,8 @@
 
 ---
 
+> **2026-09-14 修订提示**:§8 的 D4(:202、:230、:245、:291、:397)与 D12「禁直接 require proto2mysql」(:253,连同 :25 的 builder 描述)已由 [xuanming-port-decisions-20260910.md](xuanming-port-decisions-20260910.md) D-14 推翻或修订。与本文冲突处以决策文档为准。
+
 ## 0. 结论先行
 
 | 问题 | 答案 |

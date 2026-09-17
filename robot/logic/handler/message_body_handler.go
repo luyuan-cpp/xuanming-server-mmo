@@ -101,6 +101,10 @@ var messageHandlers = map[uint32]handlerFunc{
 	game.SceneSkillClientPlayerNotifySkillUsedMessageId: unmarshalAndCall(SceneSkillClientPlayerNotifySkillUsedHandler),
 	game.SceneSkillClientPlayerNotifySkillInterruptedMessageId: unmarshalAndCall(SceneSkillClientPlayerNotifySkillInterruptedHandler),
 	game.SceneSkillClientPlayerListSkillsMessageId: unmarshalAndCall(SceneSkillClientPlayerListSkillsHandler),
+	game.ClientPlayerJubaozhaiBrowseListingsMessageId: unmarshalAndCall(ClientPlayerJubaozhaiBrowseListingsHandler),
+	game.ClientPlayerJubaozhaiGetListingDetailMessageId: unmarshalAndCall(ClientPlayerJubaozhaiGetListingDetailHandler),
+	game.ClientPlayerJubaozhaiSetFavoriteMessageId: unmarshalAndCall(ClientPlayerJubaozhaiSetFavoriteHandler),
+	game.ClientPlayerJubaozhaiGetMyShelfMessageId: unmarshalAndCall(ClientPlayerJubaozhaiGetMyShelfHandler),
 }
 
 func MessageBodyHandler(client *pkg.GameClient, response *base.MessageContent) {

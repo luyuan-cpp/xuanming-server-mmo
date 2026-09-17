@@ -92,7 +92,7 @@
 | **判据** | **键存在即封锁**。不看值、不看剩余 TTL。Redis 报错一律按「封锁」处理(fail-closed) |
 | **谁写** | 只有 `tools/merge_zone`(merge 与 unmerge 两种模式都写)。`SETNX`——已经有别人的围栏就**拒绝启动**并把对方的 JSON 打出来 |
 | **TTL** | `-timeout + 30m`,下限 1 小时。默认 `-timeout=2h` ⇒ **TTL 2h30m**。后台 goroutine 每 `ttl/3` 续期一次 |
-| **谁清** | `tools/merge_zone` 退出时(成功或失败)显式 DEL,Lua 先比对 `run_id` 再删——不会误删接手者的围栏。**TTL 只是进程被 kill 时的兜底,不是正常清除手段** |
+| **谁清** | `tools/merge_zone` **正常结束时**显式 DEL,Lua 先比对 `run_id` 再删——不会误删接手者的围栏。**中止退出(`log.Fatalf` 路径不跑 defer)时围栏保留**,直到 TTL 或人工清理:续跑前 `GET merge:in_progress:<SRC>` 核对 run_id 与中止日志一致,再 `DEL merge:in_progress:<SRC> merge:in_progress:<DST>` 并立即重跑。TTL 是进程被 kill / 中止时的兜底,不是正常清除手段 |
 | **dry-run** | **不写**围栏,但会检查是否撞上别人的;撞上就拒绝 |
 
 **谁在看这面旗**(三个消费者,契约必须字字一致):
@@ -168,6 +168,7 @@ Run `-backfill-home-zone -zone <S> -apply` first, then re-run this merge
 | 1 | player_rows | `zone_src_db.<表> → zone_dst_db.<表>` 逐表拷贝 **+ 共享 DB 0 上的玩家缓存失效** | 是 |
 | 2 | player_blobs | 跨 data Redis 拷 `player:{id}:*`(仅 `-MergeMigratePlayerBlobs`)。拷到的玩家数 ≠ 清单数 ⇒ **中止** | 是 |
 | 3 | guild_mysql | `guild.zone_id` 改写 + `guild:v2` 缓存失效(INCR generation + DEL) | 是 |
+| 3b | trade_mysql | 聚宝斋 `mmorpg_trade.trade_listing.market_zone` 由 src 改写为 dst,**只改清单里的 listing_id**,每 1000 条一批;`seller_zone_at_listing` 不改。实写后复查源区计数,仍 > 0 ⇒ **中止且不标完成**(清单落盘后又有商品进源区)。**中止时围栏仍挂在本次 run_id 上**,续跑步骤照工具打印的指引:停上架入口 → 确认没有存活的 merge_zone 进程 → `GET` 核对 run_id → `DEL` 两把围栏 → 立即用原命令重跑(重跑会把新商品并入清单续搬);不 DEL 直接重跑会被围栏拒绝。库 / 表 / 列缺失在前置检查即拒绝,只有显式 `-MergeSkipTradeMySql` 才跳过 | 是 |
 | 4 | guild_rank | `guild_rank:zone` ZSET 合并,在 `guild_rank:maintenance_lock` 下用 MULTI/EXEC | 是 |
 | 5 | player_mapping | `player:zone:{id}` 由 src 改写为 dst | 是 |
 | 6 | hot_state | 清源区 scene_manager 热状态(仅 `-MergeClearSourceHotState`) | 是 |
@@ -398,11 +399,14 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit `
 | `verify:mapping_src` | mapping 里 `home_zone==src` 的玩家数 == 0;且 `home_zone==dst` 的数 >= `-MergeExpectedSrcPlayers` | block |
 | `verify:guild_zone` | `SELECT COUNT(*) FROM guild WHERE zone_id=src` == 0 | block |
 | `verify:guild_rank` | `guild_rank:zone:{src}` 不存在;且 `ZCARD guild_rank:zone:{dst}` == `COUNT(guild WHERE zone_id=dst)` | block |
+| `verify:trade_listing` | `SELECT COUNT(*) FROM mmorpg_trade.trade_listing WHERE market_zone=src` == 0 | block(加 `-MergeSkipTradeMySql` 时为 warn "NOT VERIFIED",不算通过) |
 | `verify:target_zone_rows` | `zone_<dst>_db.player_database` 行数 >= `-MergeExpectedSrcPlayers` | block(没给期望值时降级为 warn,并明说这是弱断言) |
 | `verify:source_hot_state` | 源区 scene_manager 键已清空 | warn(不影响数据正确性) |
 | `verify:merge_fence` | `merge:in_progress:{src|dst}` **都不存在** | block |
 
 **任何 block → 进 §10。** exit 2(INFRA)不是「通过」,是「没查成」。
+
+> 聚宝斋前置:合服与 `-VerifyMerged` 之前,trade 必须已对 `mmorpg_trade` 跑过 `trade -f etc/trade.yaml -migrate`(或 K8s `trade-migrate` Job Complete),否则前置检查 P1 / `verify:trade_listing` 会以缺表拒绝。合服窗口内 trade 的上架入口必须停(P3 起由合服围栏 `merge:in_progress:{zone}` 保证;P1 只有 dev 种子入口)。
 
 ### Step 6 [10 min] zone-up(只 up target)
 
@@ -448,7 +452,7 @@ curl -X POST https://<gateway>/admin/zones/<DST_ID>/open -H "X-Admin-Key: <admin
 | **落在哪** | `dev_tools.ps1` 强制算成**仓库根的绝对路径**:`<repo>\merge_<src>_to_<dst>_<UTCts>.json`;`-MergeManifestPath` 可指定 |
 | **什么时候写** | **第一次写之前**。之后每完成一步 `markStep` + 落盘一次 |
 | **怎么写** | 同目录 `.tmp` + rename(原子),进程被 kill 不会留下半个 JSON |
-| **内容** | `version` / `run_id`(与围栏里的同一个值)/ `source_zone` / `target_zone` / `operator` / `player_ids` / `guild_ids` / `rank_members`(成员+分数)/ `tables` / `steps` |
+| **内容** | `version` / `run_id`(与围栏里的同一个值)/ `source_zone` / `target_zone` / `operator` / `player_ids` / `guild_ids` / `rank_members`(成员+分数)/ `trade_listing_ids`(聚宝斋商品,步骤 3b 只改这些 id)/ `tables` / `steps` |
 | **重跑** | 同一个 `-MergeManifestPath` 再跑一次:已完成的步骤按 `steps` 跳过,玩家 id **从清单读而不重新扫描**(日志打 `RESUME: ...`) |
 | **不匹配** | 清单的 src/dst 与本次调用不一致 ⇒ 硬失败(复制粘贴错路径的保护) |
 
@@ -480,6 +484,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge `
 7'  清掉 player_merge_notice:{pid} / player_force_rename:{pid}
 5'  player:zone:{id} 改回 src(只改当前值确实是 dst 的那些)
 4'  guild_rank ZSET 成员按原分数 ZADD 回 src、从 dst ZREM
+3b' trade_listing.market_zone 改回 src(只改清单里、当前确实在 dst 的 listing_id)
 3'  guild.zone_id 改回 src(只改清单里的 guild_id)+ guild:v2 缓存失效
 1'  删目标库里那些**与源库逐字节相同**的玩家行
 ```

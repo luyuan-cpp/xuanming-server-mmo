@@ -1,7 +1,7 @@
 # Go 微服务接入 zone 体系的契约 v1(首个落地:chat)
 
 **Created:** 2026-09-14
-**状态:** 契约已定。经 3 名架构师起草、3 名反驳者挑战、3 名裁判收敛。本批代码与脚本**未编译、未运行**,待 Codex 按 §12 验证。
+**状态:** 契约已定。经 3 名架构师起草、3 名反驳者挑战、3 名裁判收敛。2026-09-14 Codex 已完成聊天/注册包单测、真实 etcd 集成、路由服与 robot 构建及脚本检查；运行验收记录见 §15。
 **关联:** [xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md)(D-1 / D-2 / D-9,以及本批新增的 D-11 / D-12 / D-13)、[client-rpc-router.md](./client-rpc-router.md)(D29–D34)、[cross-zone-matchmaking.md](./cross-zone-matchmaking.md)(D11)、[guild-zone-client-access.md](./guild-zone-client-access.md)(同口径的并行批次)、[xuanming-port-feasibility-20260902.md](./xuanming-port-feasibility-20260902.md) §8
 
 > 本文是契约的正式版。之后接入的每个 Go 业务服务(friend / guild / team / mail / leaderboard / …)都照这份做。
@@ -31,7 +31,7 @@
 |---|---|---|
 | §7「`Etcd:` 只写 `Hosts`,不写 Key」 | **`Key: ""` 显式留空** | go-zero v1.10.0 的 `discov.EtcdConf.Key` 不是 optional。`Etcd` 段存在而缺 Key 时,`conf.MustLoad` 会 Fatal,K8s 上 Pod 会 CrashLoop(见 D-13 证据) |
 | §2「扫描已占 id 时跳过 `/allocated/` 子树」 | **两棵子树的 key 都算占号** | 两棵子树合起来是超集,只会让可用 id 变少,不会撞号;真正防撞号的是 allocKey 上的 CAS(§2.3)。扫描结果只是跳过已占 id 的优化:少跳过一个 id,最多多一次 CAS 失败再试下一个 |
-| §9「幂等:SET NX EX 60」 | **两态幂等键 `pending` / `done`** | 只有一态时,首发还在写入,重发就会被当成功回,消息实际可能丢了。两态下,读到 `pending` 回限速码让客户端重试(§9.3) |
+| §9「幂等:SET NX EX 60」 | **两态幂等键 `pending:<token>` / `done`** | 只有一态时,首发还在写入,重发就会被当成功回,消息实际可能丢了。两态下,读到 `pending` 回限速码让客户端重试(§9.3) |
 | §7 第 5 条「`-GateRouterMode` 默认 `$true`」 | **`[string]`,取值 `'1'` / `'0'`,默认 `'1'`** | 根目录 `启动服务器.cmd` 经 `pwsh -File` 透传的是字符串;与 K8s 同口径 |
 
 ---
@@ -214,7 +214,7 @@ func AllocationKey(prefix string, nodeType, nodeId uint32) string
 ## §4 数据归属
 
 - **表的落点**:新全局服务的表落全局库,不落 `zone_{N}_db`;主键只用 player_id / 业务 id,不含 zone。
-  - chat v1 **零 MySQL**。首个要建表的全局服务(mail)开工前,必须先拍 D4(库归属 + 迁移器)。
+  - chat v1 **零 MySQL**。首个要建表的全局服务按 [port-decisions D-14](xuanming-port-decisions-20260910.md) 落库与建表:每服务一库 `mmorpg_<svc>`,表以 proto 为源,迁移走 `go/schemamigrate` + 服务 `-migrate` 的 K8s Job(随该服务同批落地)。
 - **`zone_id` 列就是 home_zone**:唯一写入路径是服务端调 `BatchGetPlayerHomeZone`;未映射时 fail-closed,拒绝创建。
   - guild 旧的 `req.ZoneId` 直落不作先例。chat v1 没有归属数据,不接 `merge:in_progress` 围栏。
 - **Redis 双句柄**:
@@ -309,7 +309,7 @@ func AllocationKey(prefix string, nodeType, nodeId uint32) string
   - PRIVATE:私聊。
   - TEAM / SYSTEM / UNSPECIFIED 回 `kFeatureUnavailable`(`constants.go:30`)。
 - 启动顺序(`go/chat/chat.go`):MustLoad(含 Validate)→ svcCtx → metrics → killswitch → MustNewServer + 拦截器链 → `go s.Start()` → `RegisterAfterListening`(`ReallocateNewID`)→ `KeepAlive` → 打横幅。
-- 退出顺序:`nr.Close()` → 取消 killswitch watch → 最多等 5s 排空 → `s.Stop()` → `svcCtx.Stop()`(`chat.go:152-165`)。
+- 退出顺序（2026-09-15 修正）：`nr.Close()` 注销尝试返回 → 真实 `grpc.Server.GracefulStop`（最多5s，超时异步Stop并报告失败）→ 取消killswitch、关闭metrics及etcd → `proc.Shutdown`/等待Start（共2s）→ 刷日志。Linux框架自动停机推迟至24s硬截止，正常预算内由chat串行收尾；启动期退出信号和晚到Server也进入统一清理。Close不返回删除确认，etcd传输失败仍依赖LeaseTTL。见§16。
 - 写进 NodeInfo 的 IP:优先 `POD_IP`,其次 ListenOn 的 host,再次 `netx.InternalIp`,最后 `127.0.0.1`(`chat.go:235-240`)。
   - 为什么:容器里 ListenOn 恒为 `0.0.0.0`,把它写进 NodeInfo,别的 Pod 连不上。
 
@@ -331,13 +331,13 @@ func AllocationKey(prefix string, nodeType, nodeId uint32) string
 
 **两态幂等键**(相对草案的修订):
 
-- 占位:`SET NX EX` 写入 `pending`。
-- 写入成功后,用一条 Lua 做「仍是 pending 才改 done 并重置 EX」,避免覆盖别人重新占的在途状态。
+- 占位:`SET NX EX` 写入 `pending:<随机 token>`；每次占用使用独立 token。
+- 写入成功后,用一条 Lua 比较完整 `pending:<token>`，仅本次仍持有占用时改 `done` 并重置 EX；旧请求不能完结新请求的在途状态。
 - 重发时读键:
   - 读到 `done`:回成功,不重写(outcome=duplicate)。
   - 读到 `pending` 或空:回 `kRateLimitExceeded`(业务拒绝码,不是 fault 码;outcome=in_flight),让客户端稍后重试。
   - GET 出错:回 `kServiceUnavailable`。
-- 占住幂等键之后,任何一步失败(限速、Redis 故障)都会释放它,客户端可以用同一 `request_id` 重试。
+- 占住幂等键之后,任何一步失败(限速、Redis 故障)都用 Lua 比较完整 token 后释放自己的占用，客户端可以用同一 `request_id` 重试；旧请求不能删除新请求的 pending/done。
 - `request_id` 为空时不做幂等。
 - 为什么:只有一态时,首发写入还在路上,重发就被当成功回;首发一旦失败,消息静默丢失,客户端却以为发出去了。
 
@@ -402,7 +402,7 @@ func AllocationKey(prefix string, nodeType, nodeId uint32) string
 
 ## §11 本批交付物
 
-> 全部**未编译、未运行**(AGENTS.md §10.1)。「一句话」描述的是意图,行为以 §12 的运行结果为准。
+> 本节列的是原实现范围；Codex 的实际编译、测试和运行证据见 §15。
 
 ### 11.1 文件清单
 
@@ -661,10 +661,10 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 
 | 项 | 为什么现在不拍 | 触发点 |
 |---|---|---|
-| D4 全局库归属 + 迁移器 | chat 零 MySQL | mail 或任何首个建表的全局服务开工前 |
+| ~~D4 全局库归属 + 迁移器~~ **已拍:port-decisions D-14** | chat 零 MySQL | 首个建表的全局服务同批落 `go/schemamigrate` 与 migrate Job |
 | killswitch 是否加 zone 维度 | 全局服务本就看不到 zone(§0),需求未出现 | 出现「只关某个 zone 的某个方法」的运维需求时 |
 | 推送缓冲(#286 / `shared/pushbuffer`) | chat v1 不推送 | chat v1.1 私聊单播立项时 |
-| K8s 路由模式默认翻转时间 | 路由服 manifest 与通告 IP 未落地(§14) | K8s 上以路由模式跑通过一次 battle-smoke 之后 |
+| K8s 路由模式默认翻转时间 | 隔离K8s的router→chat已实跑通过(§16)，含gate的battle-smoke尚未验证 | K8s 上以路由模式跑通过一次 battle-smoke 之后 |
 | C++ → Go 东西向调用的身份 | chat v1 没有这条边(§8) | 首个 scene → 全局 Go 服务的调用出现时 |
 | D34 何时删直连旧路径 | 仍有依赖直连的环境(K8s) | K8s 翻转且稳定之后 |
 | chat 私有 tip 段 | Tip.xlsx 未开 chat 段 | 导表器开段后,把 common 码替换成 chat 段码 |
@@ -677,13 +677,13 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
 
 ### 14.1 缺口
 
-1. ~~路由服 K8s manifest 不在仓库里~~ **已补(2026-09-14 复核)**:`deploy/k8s/manifests/go-svc/client-rpc-router.yaml`。未在 K8s 实跑;`-GateRouterMode` 默认仍为 `"0"`,默认部署下 chat 部署得起但玩家不可达。
-2. ~~路由服在 K8s 上会通告 `0.0.0.0`~~ **已修(2026-09-14 复核)**:`client_rpc_router_service.go` 改为经 `advertisedHost` 优先 `POD_IP`(与 chat / data_service 同口径);本地 `ListenOn=127.0.0.1` 行为不变。未编译,Codex 需重编路由服并跑其既有测试。
+1. ~~路由服 K8s manifest 不在仓库里~~ **已补(2026-09-14 复核)**:`deploy/k8s/manifests/go-svc/client-rpc-router.yaml`。2026-09-15已在本地kind隔离环境实跑router→chat(§16)；`-GateRouterMode` 默认仍为 `"0"`，默认部署下玩家仍不可达，翻转门禁仍是含gate的battle-smoke。
+2. ~~路由服在 K8s 上会通告 `0.0.0.0`~~ **已修(2026-09-14 复核)**:`client_rpc_router_service.go` 改为经 `advertisedHost` 优先 `POD_IP`(与 chat / data_service 同口径);本地 `ListenOn=127.0.0.1` 行为不变。Codex 已通过路由服 vet、单测和 build，并补充 Pod IP 优先及通配地址回退回归测试。
 3. **gate MessageLimiter 表里没有 28 / 61**:默认档比 chat 自己的限速更严,真实客户端快速发言会先被 gate 拒。
 4. **ChatRedis 与 match 共用 `redis-match-cluster`**(512mb,volatile-lru):聊天历史可能被提前淘汰,并与 match 争内存。chat 数据一旦成为唯一权威,必须换独立的 noeviction 实例。
-5. **Windows 上没有优雅停机**:go-zero 在 Windows 上不接管信号,chat 注销后等满 5s 就退出,在途请求可能被截断。Linux 上由 proc 在收到信号后 1s 执行 GracefulStop。
+5. **正常停机顺序已修复并活体验证（2026-09-15）**：chat持有真实gRPC Server，在注销尝试返回后主动排空，再关闭依赖和框架；Linux默认1s自动停止推迟到24s硬截止，Windows使用同一主动清理路径。真实Linux SIGTERM、慢注销超过1.5s、在途/永久阻塞请求及启动期信号均验证通过；最终K8s容器收到SIGTERM后exit=0，旧注册身份已清理并恢复Ready。硬截止/SIGKILL不保证在途业务完成，注销传输失败仍依赖租约TTL；详细边界见§16。
 6. **go-zero 版本不一致**:shared 模块实际依赖 go-zero v1.9.2,chat 是 v1.10.0。chat 模块内经 MVS 统一到 v1.10.0;noderegistry 用到的 logx API 两个版本都有。
-7. **`start_game.ps1` 对 guild.exe 仍是必需**:chat 已改为可选服务(缺 chat.exe 只告警并跳过,2026-09-14 复核);guild 由 guild 批次决定,缺 guild.exe 仍会在第 1 步拒启。
+7. **`start_game.ps1` 的 chat / guild 均为可选服务**:缺 exe 时告警并跳过。Codex 实跑修复了警告内弯引号导致的 PowerShell 参数绑定失败，修复后缺 chat.exe 的 CheckOnly 已通过。
 8. **`dev_tools.ps1` 的 `k8s-*` 包装不透传 `-GateRouterMode`**,只能直接调 `k8s_deploy.ps1`。
 9. **服务清单文档未同步**:`tools/scripts/README.md`、`deploy/k8s/AGENTS.md`、`deploy/k8s/README.md` 不在本批范围。
 10. **`OnNodeIDChanged` 回调里调 `Close()` 不会死锁**,但会等满 closeTimeout(5s)。
@@ -707,3 +707,32 @@ $env:GATE_CLIENT_RPC_ROUTER = '1'
   - `-GateRouterMode` 是 `[string]` 类型,取 `'1'` / `'0'`。
   - ConfigMap 里 `HistoryDefaultLimit` / `HistoryMaxLimit` / `RequestIdTTLSeconds` 为可选读取,yaml 里没写就不生成对应行。
   - chat 的契约值只在生成 chat 的 ConfigMap 时求值,避免 chat.yaml 缺失时拖垮所有 Go 服务的 ConfigMap 生成。
+
+## §15 2026-09-14 Codex 验证记录
+
+- 使用本机已有 Go 1.26.5（模块缓存内工具链），CGO_ENABLED=0；未安装工具。详细日志：`run/verify-chat-20260914/`。
+- `shared/noderegistry`：gofmt、vet、13 个单元测试通过；真实本地 etcd 的 13 个集成测试通过，没有 SKIP。覆盖并发分配、双 key 同租约、失租重夺/换号/退出和条件清理。
+- `chat`：`go mod tidy`、vet、20 个顶层测试通过（入口 7 + logic 13）。两个新增请求过期交错用例先红后绿，证明旧请求不能释放成功重试或提前完结新 pending。保持原 Redis key 和跨频道 request_id 语义；token 不把跨 slot 写历史与 claim 更新变成原子事务，迟到写/提交结果不确定时仍可能偶发重复。
+- 修正 `.gitignore` 的旧 `go/chat/` 规则，聊天源码已可纳入版本控制，仅忽略重复生成编号目录。
+- 路由服：vet、全包测试和 build 通过；新增 Pod IP/具体地址/通配监听的注册回归测试通过。match build 通过。
+- robot：首次 vendor 构建因并行 guild 批次缺少 `proto/guild` 失败；该批次完成 vendor 同步后，重新构建和定向 vet 通过。本批独立冒烟程序为 `run/verify-chat-20260914/robot.exe`，从 `robot/` 工作目录运行。
+- 项目脚本已构建 `bin/go_services/chat.exe`；两个实际实例 z1_chat:50700 / z2_chat:52700 启动成功（ZonePortShift=2000）。etcd 有两个服务 key 及两个分配 key，无 `chat.rpc` 额外注册；指标 9210/11210 均 HTTP 200。
+- 4 个部署/启动脚本解析通过；infra-up 和 zone-up 的模式 0/1 DryRun 通过、模式 2 按预期拒绝，渲染 YAML 结构检查通过。未 apply 到 K8s；K8s 默认仍为直连模式 0。
+- 启动器缺 chat.exe 的 CheckOnly 首次失败于中文弯引号；改成「服务不可用」后复验 exit=0，保留首败与复验日志。
+- 经 gate 的双 zone chat-smoke 已连续两次通过（chat-smoke-run2.log / run3.log，均 exit=0、各一行 CHAT_SMOKE_OK）。A/B 分别为玩家603/702，gate 127.0.0.1:10000 / 127.0.0.1:11010，两区 gate 均为 router；世界/私聊可见、sender覆盖、600字节拒绝、同request_id只存一条均通过。首轮 run1 在二区登录预加载阶段失败，原因是 zone_2_db.player_database 缺 pet/bag/mission 三列；并行帮会任务按正式迁移补齐并核验后才重跑，首败日志保留。
+- Linux/amd64 交叉编译通过；机器人配置负例（cross_zone=true 且 zone_a=zone_b）按预期在连接前 exit=1，错误包含 zone_a and zone_b must differ。
+- 单实例故障切换通过：只终止本任务创建的 z1_chat，等待超过70秒，核验 etcd 服务记录仅剩 zone2/node_id2，然后原始 chat-smoke 再次 exit=0 / CHAT_SMOKE_OK（chat-smoke-failover.log）。测试后已恢复 z1_chat；两份注册和 metrics9210/11210 HTTP200 均复核正常。
+- 验收结论：本地跨区聊天与故障切换已通过；K8s仅做渲染检查和Linux构建，不等于集群实跑；Linux停机顺序与Redis尽力幂等限制仍见§14.1/§9.3。
+
+## §16 2026-09-15 停机修复与隔离K8s补验
+
+- **代码范围**：`go/chat/chat.go`、`internal/lifecycle/`、`internal/svc/servicecontext.go`及生命周期/metrics回归测试。保留zrpc和既有中间件，不修改协议、依赖版本或聊天存储语义。官方`chat.go`单文件构建入口通过；已用`go_services.ps1 -Command build -Services chat`更新本地`bin/go_services/chat.exe`，日志与SHA256保存在本次K8s验证目录。设计与命令证据见`run/verify-chat-20260914/chat-lifecycle-verification.md`。
+- **停机机制**：正常预算内先注销尝试，再5s排空RPC，关闭metrics/killswitch/etcd，最后2s框架收尾和日志。忽略取消的handler可能使GracefulStop/Stop阻塞，因此强制Stop与框架收尾异步发起并有限等待，超时明确报错。24s总硬截止兼容K8s30s宽限中5s preStop；启动期信号通过proc.Done桥接，晚到Server通过ServerSlot交接，避免继续注册或漏关监听。
+- **回归结果**：Windows全包27个顶层PASS（含1个子进程辅助入口）、1个Linux专属SKIP、0FAIL；vet与单文件build通过。Linux隔离Alpine容器内7个顶层PASS（含1辅助入口），真实SIGTERM覆盖慢注销超过1.5s仍能接RPC、在途请求完成、永久阻塞handler有限退出、并发Stop、启动前信号和Server交接。metrics关闭后同端口可重新监听。两项`go -overlay`故障注入分别恢复默认1s预算、移除启动期取消防护，均按预期失败；它们不是完整旧版本重建。
+- **K8s环境**：本地`kind-mmorpg`（Kubernetes v1.37.0），新建`chat-verify-20260915`；全新emptyDir etcd、node Redis、三主Redis Cluster（16384 slots、noeviction）及专用probe Pod。使用官方`go_svc_image.ps1`/`Dockerfile.go-svc`构建镜像，官方配置函数生成CM，原chat/router Deployment保留双副本、POD_IP、gRPC探针、PDB与指标。测试夹具只替换命名空间、缓存镜像和三主seeds。未使用现存游戏数据；三主Redis仅验证Cluster命令兼容，不代表存储HA验收。
+- **初轮链路**：`probe-full.log` exit=0 / `K8S_CHAT_PROBE_OK`，123断言。不同来源zone 101/202经两个router到chat，验证WORLD、双向PRIVATE、session发送者覆盖、服务端时间、600字节拒绝、缺会话拒绝、即时幂等；逐个router与chat读回同一历史。
+- **发现/指标**：`discovery-metrics-report.json`的23项断言通过。chat/router各2条NodeInfo，两种endpoint IP均等于对应PodIP，无额外`chat.rpc`/`client_rpc_router.rpc`键。四个实例metrics均HTTP200（各服务Pod本机wget），两个PDB均minAvailable=1/disruptionsAllowed=1；服务日志未出现测试聊天nonce。
+- **单幸存者故障切换**：先孤立本次chat Deployment/ReplicaSet以阻止自动补副本，再强制删除一个已按UID核验的chat Pod。运行时已无该task；132s后etcd只剩原幸存Pod，UID不变、restartCount=0。`probe-failover.log` exit=0，145断言；先只读故障前历史，再用新nonce验证新WORLD/PRIVATE及即时重试。没有把已经超过60s幂等TTL的旧request_id当成去重保证。
+- **最终版本复验**：聊天最终镜像`local/mmorpg-chat:chat-verify-20260915-final`（manifest index `sha256:58102cf2d455450f4923b3b552e3eaf64f11c96d2512a182c3176ad273551b48`）；路由服`local/mmorpg-client-rpc-router:chat-verify-20260915`。恢复最终双副本并正常关闭旧孤立Pod后，向最终容器发送真实SIGTERM：K8s记录exitCode=0/Completed，日志先收到信号再完成registry.Close，旧nodeUuid消失，容器恢复Ready。随后`probe-final.log`再次exit=0、123断言；源码hash仍与测试版本一致。
+- **清理与复现**：隔离namespace已删除并等待确认，原`mmorpg-infra`/`mmorpg-zone-yesterday`仍在。夹具、探针、镜像构建日志、完整结果与清理证据位于`run/verify-chat-k8s-20260915/`，入口`prepare-fixture.ps1`、`fixture-usage.txt`、`verification-summary.json`。Docker首次启动的遗留socket问题仅按现有流程备份通信目录恢复，未重置数据卷。
+- **验收边界**：此次K8s链路为probe→router→chat→Redis，不包含C++ gate/login/battle；含gate的本地双zone chat-smoke证据见§15。K8s的GateRouterMode默认翻转仍须另跑battle-smoke。24s硬截止本身未主动触发，Windows用stdin取消模拟退出context而非真实控制台Ctrl+C；未运行race detector。etcd删除失败仍靠租约清理，跨Redis slot的历史写入/claim提交仍是既有尽力幂等语义。

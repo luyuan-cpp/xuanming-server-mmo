@@ -26,6 +26,7 @@ package main
 //	1  player_rows  zone_src_db → zone_dst_db 逐表拷贝 + 共享缓存失效  ← 最关键
 //	2  player_blobs data Redis 的 player:{id}:* 拷贝(仅多集群)
 //	3  guild_mysql  guild.zone_id 改写 + guild:v2 缓存失效
+//	3b trade_mysql  mmorpg_trade.trade_listing.market_zone 改写(seller_zone_at_listing 不改,见 trade_step.go)
 //	4  guild_rank   guild_rank:zone ZSET 合并(maintenance_lock + MULTI/EXEC)
 //	5  player_mapping player:zone:{id} 改写            ← 必须在 1/2 之后
 //	6  hot_state    scene_manager 源区热状态清理(可选)
@@ -110,6 +111,8 @@ type options struct {
 	migrateBlobs  bool
 	skipBlobs     bool
 	clearHotState bool
+	skipTrade     bool
+	tradeSchema   string
 
 	allowEmptySource   bool
 	expectedSrcPlayers int64
@@ -176,6 +179,11 @@ func main() {
 
 	flag.BoolVar(&o.skipGuild, "skip-guild-mysql", false, "Skip the guild.zone_id update + guild cache invalidation")
 	flag.BoolVar(&o.skipRank, "skip-guild-rank", false, "Skip the guild_rank:zone ZSET merge")
+	flag.BoolVar(&o.skipTrade, "skip-trade-mysql", false,
+		"Skip the trade_listing.market_zone rewrite (jubaozhai). ONLY for environments where the trade service was never deployed. "+
+			"Without it a missing trade schema/table refuses the merge; with it -verify-merged reports the trade row as NOT VERIFIED")
+	flag.StringVar(&o.tradeSchema, "trade-schema", defaultTradeSchema,
+		"trade database reached through -mysql-dsn (go/trade forces MySQL.DBName=mmorpg_trade; override only for isolated tests)")
 	flag.BoolVar(&o.skipMapping, "skip-player-mapping", false, "Skip the player:zone remapping")
 	flag.BoolVar(&o.skipRows, "skip-player-rows", false,
 		"Skip copying player rows from zone_<src>_db to zone_<dst>_db. ONLY valid once player main data is global (TiDB Phase 2); requires -i-know-global-player-table")
@@ -256,6 +264,10 @@ func main() {
 	if o.sourceZone != 0 && o.sourceZone == o.targetZone {
 		fail("source and target zone must be different")
 	}
+	// 库名会直接拼进 SQL 标识符:merge / audit / unmerge 都可能用到,任何模式下先验形状。
+	if err := validateTradeSchemaName(o.tradeSchema); err != nil {
+		fail("%v", err)
+	}
 
 	switch o.mode {
 	case "audit":
@@ -291,6 +303,8 @@ func main() {
 			expectedSrcPlayers: o.expectedSrcPlayers,
 			tableCandidates:    tables,
 			topicGeneration:    uint32(o.kafkaTopicGen),
+			tradeSchema:        o.tradeSchema,
+			skipTrade:          o.skipTrade,
 		})
 		return
 

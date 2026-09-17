@@ -489,8 +489,8 @@ void PlayerAttributeSystem::Recalculate(entt::entity player, RecalcReason reason
 	// 速度直写基础属性:回合引擎出手序 / 逃跑判定只读 BaseAttributesComp.speed
 	baseAttrs->set_speed(derived.speed());
 
-	// 护甲按职业表直写(2026-09-14 防御单位 ×12 时加):护甲只在新号初始化时写一次、随存档落库,不重写的话
-	// 老号会一直停在旧单位(10,新表 120),而伤害公式的等级系数已经 ×12 —— 老号的护甲减伤只剩 1/12。
+	// 护甲按职业表直写(2026-09-14 防御单位 ×12 时加):护甲原本只在新号初始化时写一次、随存档落库,改表后已建的角色
+	// (含本地测试号)不会跟着变;这里每次重算都以 Class.init_armor 为准,与上面 speed 直写同口径。
 	// 全仓没有 buff / 装备 / GM 在运行时改护甲,这里直写不会冲掉任何东西;以后装备要加护甲,必须在这里累加,
 	// 不能直接改 BaseAttributesComp.armor。
 	if (classRow != nullptr) {

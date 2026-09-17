@@ -3,6 +3,7 @@
 package svc
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"sync"
@@ -167,11 +168,11 @@ func ObservePull(channel string, outcome string) {
 // StartMetrics 启动 Prometheus /metrics 端点;addr 为空则关闭(与 match metrics.Start 同模式)。
 // 计数器只在这里注册进默认 registry:单测里没调 StartMetrics 也能正常 Inc,不会重复注册 panic。
 // 默认 registry 里同时还有 shared/killswitch、shared/serverbase、shared/safego 自己注册的指标,
-// 同一个 /metrics 一并暴露。
-func StartMetrics(addr string) {
+// 同一个 /metrics 一并暴露。返回幂等关闭函数,由chat在RPC排空后关闭指标端口。
+func StartMetrics(addr string) func() {
 	if addr == "" {
 		logx.Info("[chat] MetricsListenAddr empty; Prometheus /metrics endpoint disabled")
-		return
+		return func() {}
 	}
 	registerMetricsOnce.Do(func() {
 		prometheus.MustRegister(sendTotal, pullTotal)
@@ -189,4 +190,15 @@ func StartMetrics(addr string) {
 			logx.Errorf("[chat] metrics HTTP server exited: %v", err)
 		}
 	}()
+	var stopOnce sync.Once
+	return func() {
+		stopOnce.Do(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			if err := srv.Shutdown(ctx); err != nil {
+				logx.Errorf("[chat] metrics排空超时,关闭连接: %v", err)
+				_ = srv.Close()
+			}
+		})
+	}
 }

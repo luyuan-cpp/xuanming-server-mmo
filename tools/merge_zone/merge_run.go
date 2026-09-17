@@ -40,6 +40,7 @@ func runMerge(o options) {
 	log.Printf("    redis: mapping=%s/db%d guild=%s/db%d login=%s/db%d friend=%s/db%d scene=%s/db%d",
 		o.mappingAddr, o.mappingDB, o.redisAddr, o.redisDB, o.noticeAddr, o.noticeDB,
 		o.friendAddr, o.friendDB, o.sceneAddr, o.sceneDB)
+	log.Printf("    trade: schema=%s skip=%v", o.tradeSchema, o.skipTrade)
 
 	// ── 句柄 ────────────────────────────────────────────────
 	db := mustOpenMySQL(ctx, o.mysqlDSN)
@@ -79,6 +80,20 @@ func runMerge(o options) {
 			"Refusing to merge without knowing where player main data lives", srcSchema, playerIDColumn, tableCandidates)
 	}
 	log.Printf("preflight P1 OK: player tables in %s = %v", srcSchema, playerTables)
+
+	// P1(续) 聚宝斋库。trade_listing.market_zone 带 home_zone 语义(见 trade_step.go),
+	// 不改写 = 源区商品在 zone 市场里对所有人消失。库 / 表不在就拒绝:「查不到」与
+	// 「没有商品」在这里分不开(-mysql-dsn 指错实例也是这个症状)。
+	if o.skipTrade {
+		log.Printf("preflight P1: trade SKIPPED (-skip-trade-mysql) — %s.market_zone will NOT be rewritten",
+			tradeListingQualified(o.tradeSchema))
+	} else {
+		if err := assertTradeListingReady(ctx, db, o.tradeSchema); err != nil {
+			log.Fatalf("preflight P1: %v (run the trade migration first — `trade -f etc/trade.yaml -migrate` — "+
+				"or pass -skip-trade-mysql ONLY if the trade service was never deployed in this environment)", err)
+		}
+		log.Printf("preflight P1 OK: %s exists", tradeListingQualified(o.tradeSchema))
+	}
 
 	lagSrc := buildLagSource(o)
 
@@ -159,8 +174,20 @@ func runMerge(o options) {
 			m.RankMembers = members
 		}
 	}
+	// 聚宝斋商品 id:只要 trade 步骤还没做完,每次都把「当前 market_zone=src」并进清单。
+	// 与公会的「清单为空才收集」不同:步骤 3b 只改清单里的 id,而清单可能是 T-1 dry-run
+	// 或上次中断(3b 复查拒绝)的运行留下的 —— 之后新落到源区的商品不并进来就永远搬不走,
+	// 3b 的复查会一直拒绝。步骤做完之后不再收集:那时源区已是 0,清单里的 id 就是撤销的唯一依据。
+	if !o.skipTrade && !m.stepDone(stepTradeMySQL) {
+		lids, terr := collectTradeListingIDsInZone(ctx, db, o.tradeSchema, src)
+		if terr != nil {
+			log.Fatalf("list trade listings in source zone: %v", terr)
+		}
+		m.TradeListingIDs = sortedUint64(append(m.TradeListingIDs, lids...))
+	}
 	log.Printf("Manifest: %d players, %d guilds, %d rank members, tables=%v",
 		len(m.PlayerIDs), len(m.GuildIDs), len(m.RankMembers), m.Tables)
+	log.Printf("Manifest: %d trade listings (trade skip=%v)", len(m.TradeListingIDs), o.skipTrade)
 	if err := saveManifest(manifestPath, m); err != nil {
 		log.Fatalf("write manifest before first write: %v", err)
 	}
@@ -233,6 +260,37 @@ func runMerge(o options) {
 			rows, verbWrite(o.dryRun), src, dst, inv)
 		if !o.dryRun {
 			persist(stepGuildMySQL, fmt.Sprintf("rows=%d cache_invalidated=%d", rows, inv))
+		}
+	}
+
+	// ── 3b: 聚宝斋 trade_listing.market_zone ─────────────────
+	// 放在 mapping 翻转(5)之前,与 guild 同理:所有 zone 列先改完再翻路由。
+	if !o.skipTrade && !m.stepDone(stepTradeMySQL) {
+		// 只改清单里的 id(清单先于写):清单之外的商品一个字节都不动。
+		rows, terr := migrateTradeMarketZone(ctx, db, o.tradeSchema, m.TradeListingIDs, src, dst, o.dryRun)
+		if terr != nil {
+			log.Fatalf("trade MySQL: %v", terr)
+		}
+		summary.tradeListingRows = rows
+		// 复查:源区还有商品 = 清单落盘之后又有商品落到源区(P1 trade 不读合服围栏)。
+		// 中止且**不 persist**:重跑时本步骤仍未完成,清单阶段会先把它们并进清单再搬。
+		// 只打 WARN 继续是 fail-open —— 步骤一旦标记完成就不会再收集,那几条既搬不走、也撤不回。
+		// log.Fatal 不跑 defer:围栏留在本次 run_id 上,且**故意不提前释放**(理由见
+		// tradeResidualAbortMessage),文案里写明核对 run_id → DEL → 重跑。
+		if !o.dryRun {
+			left, cerr := countTradeListingsInZone(ctx, db, o.tradeSchema, src)
+			if cerr != nil {
+				log.Fatalf("trade MySQL: %v", cerr)
+			}
+			if left > 0 {
+				log.Fatal(tradeResidualAbortMessage(rows, len(m.TradeListingIDs), left, src, dst,
+					runID, o.mappingAddr, o.mappingDB))
+			}
+		}
+		log.Printf("MySQL: %d trade_listing rows %s (market_zone %d → %d; seller_zone_at_listing untouched)",
+			rows, verbWrite(o.dryRun), src, dst)
+		if !o.dryRun {
+			persist(stepTradeMySQL, fmt.Sprintf("rows=%d manifest_listings=%d", rows, len(m.TradeListingIDs)))
 		}
 	}
 
@@ -313,6 +371,7 @@ type mergeSummary struct {
 	blobPlayers, blobKeys int
 	guildRows             int64
 	guildCacheInvalidated int
+	tradeListingRows      int64
 	rankMembers           int
 	mapMatched            int
 	mapUpdated            int
@@ -322,9 +381,9 @@ type mergeSummary struct {
 }
 
 func (s mergeSummary) String() string {
-	return fmt.Sprintf("player_rows=[%s] blob_players=%d blob_keys=%d guild_rows=%d guild_cache=%d "+
+	return fmt.Sprintf("player_rows=[%s] blob_players=%d blob_keys=%d guild_rows=%d guild_cache=%d trade_listings=%d "+
 		"rank_entries=%d map_matched=%d map_updated=%d hot_locations=%d notice=%d rename=%d",
-		s.rows, s.blobPlayers, s.blobKeys, s.guildRows, s.guildCacheInvalidated,
+		s.rows, s.blobPlayers, s.blobKeys, s.guildRows, s.guildCacheInvalidated, s.tradeListingRows,
 		s.rankMembers, s.mapMatched, s.mapUpdated, s.hotState.LocationsDeleted, s.noticeStamped, s.renameStamped)
 }
 

@@ -38,6 +38,10 @@ var RouteTable = map[uint32]RouteEntry{
 	BattleNodeRemoveObserverMessageId:                   {FullMethod: "/BattleNode/RemoveObserver", NodeType: base.ENodeType_BattleNodeService, ClientProtocol: false, Service: "BattleNode", Method: "RemoveObserver"},
 	ClientPlayerChatPullChatHistoryMessageId:            {FullMethod: "/chatpb.ClientPlayerChat/PullChatHistory", NodeType: base.ENodeType_ChatNodeService, ClientProtocol: true, Service: "ClientPlayerChat", Method: "PullChatHistory"},
 	ClientPlayerChatSendChatMessageId:                   {FullMethod: "/chatpb.ClientPlayerChat/SendChat", NodeType: base.ENodeType_ChatNodeService, ClientProtocol: true, Service: "ClientPlayerChat", Method: "SendChat"},
+	ClientPlayerJubaozhaiBrowseListingsMessageId:        {FullMethod: "/trade.ClientPlayerJubaozhai/BrowseListings", NodeType: base.ENodeType_TradeNodeService, ClientProtocol: true, Service: "ClientPlayerJubaozhai", Method: "BrowseListings"},
+	ClientPlayerJubaozhaiGetListingDetailMessageId:      {FullMethod: "/trade.ClientPlayerJubaozhai/GetListingDetail", NodeType: base.ENodeType_TradeNodeService, ClientProtocol: true, Service: "ClientPlayerJubaozhai", Method: "GetListingDetail"},
+	ClientPlayerJubaozhaiGetMyShelfMessageId:            {FullMethod: "/trade.ClientPlayerJubaozhai/GetMyShelf", NodeType: base.ENodeType_TradeNodeService, ClientProtocol: true, Service: "ClientPlayerJubaozhai", Method: "GetMyShelf"},
+	ClientPlayerJubaozhaiSetFavoriteMessageId:           {FullMethod: "/trade.ClientPlayerJubaozhai/SetFavorite", NodeType: base.ENodeType_TradeNodeService, ClientProtocol: true, Service: "ClientPlayerJubaozhai", Method: "SetFavorite"},
 	ClientPlayerLoginCreatePlayerMessageId:              {FullMethod: "/loginpb.ClientPlayerLogin/CreatePlayer", NodeType: base.ENodeType_LoginNodeService, ClientProtocol: true, Service: "ClientPlayerLogin", Method: "CreatePlayer"},
 	ClientPlayerLoginDisconnectMessageId:                {FullMethod: "/loginpb.ClientPlayerLogin/Disconnect", NodeType: base.ENodeType_LoginNodeService, ClientProtocol: true, Service: "ClientPlayerLogin", Method: "Disconnect"},
 	ClientPlayerLoginEnterGameMessageId:                 {FullMethod: "/loginpb.ClientPlayerLogin/EnterGame", NodeType: base.ENodeType_LoginNodeService, ClientProtocol: true, Service: "ClientPlayerLogin", Method: "EnterGame"},
@@ -114,6 +118,7 @@ var RouteTable = map[uint32]RouteEntry{
 	SceneNodeGrpcDestroySceneMessageId:                  {FullMethod: "/scene_node.SceneNodeGrpc/DestroyScene", NodeType: base.ENodeType_SceneManagerNodeService, ClientProtocol: false, Service: "SceneNodeGrpc", Method: "DestroyScene"},
 	SceneNodeGrpcPrepareBattleMessageId:                 {FullMethod: "/scene_node.SceneNodeGrpc/PrepareBattle", NodeType: base.ENodeType_SceneManagerNodeService, ClientProtocol: false, Service: "SceneNodeGrpc", Method: "PrepareBattle"},
 	SceneNodeGrpcReleasePlayerMessageId:                 {FullMethod: "/scene_node.SceneNodeGrpc/ReleasePlayer", NodeType: base.ENodeType_SceneManagerNodeService, ClientProtocol: false, Service: "SceneNodeGrpc", Method: "ReleasePlayer"},
+	TradeAdminSeedListingMessageId:                      {FullMethod: "/trade.TradeAdmin/SeedListing", NodeType: base.ENodeType_TradeNodeService, ClientProtocol: false, Service: "TradeAdmin", Method: "SeedListing"},
 	WatchWatchMessageId:                                 {FullMethod: "/etcdserverpb.Watch/Watch", NodeType: base.ENodeType_EtcdNodeService, ClientProtocol: false, Service: "Watch", Method: "Watch"},
 }
 

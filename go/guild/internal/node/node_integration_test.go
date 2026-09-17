@@ -254,19 +254,24 @@ func TestAllocDifferentTypeReuse(t *testing.T) {
 	defer cli.Close()
 	ntA := uniqueNodeType()
 	ntB := uniqueNodeType()
-	defer cleanupNodeType(t, cli, ntA)
-	defer cleanupNodeType(t, cli, ntB)
+	// 合法节点类型有各自的服务前缀；测试用的未定义枚举不能都落入空名前缀 .rpc。
+	// 用独立命名空间模拟真实前缀隔离，清理也只覆盖本测试发布的 key。
+	namespace := uuid.New().String()
+	prefixA := fmt.Sprintf("guild-node-test-%s-type-%d.rpc", namespace, ntA)
+	prefixB := fmt.Sprintf("guild-node-test-%s-type-%d.rpc", namespace, ntB)
+	defer cli.Delete(context.Background(), prefixA+"/", clientv3.WithPrefix())
+	defer cli.Delete(context.Background(), prefixB+"/", clientv3.WithPrefix())
 
 	leaseA := grantLease(t, cli, 30)
 	leaseB := grantLease(t, cli, 30)
 	defer cli.Revoke(context.Background(), leaseA)
 	defer cli.Revoke(context.Background(), leaseB)
 
-	idA, err := allocateNodeID(context.Background(), cli, rpcPrefix(ntA), makeInfo(ntA, 1), leaseA)
+	idA, err := allocateNodeID(context.Background(), cli, prefixA, makeInfo(ntA, 1), leaseA)
 	if err != nil {
 		t.Fatalf("alloc A: %v", err)
 	}
-	idB, err := allocateNodeID(context.Background(), cli, rpcPrefix(ntB), makeInfo(ntB, 1), leaseB)
+	idB, err := allocateNodeID(context.Background(), cli, prefixB, makeInfo(ntB, 1), leaseB)
 	if err != nil {
 		t.Fatalf("alloc B: %v", err)
 	}

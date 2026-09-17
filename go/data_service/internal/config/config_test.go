@@ -88,7 +88,7 @@ Schema: {}
 
 // TestIdSegmentDefaultsWhenBlockAbsent 锁死设计 §7.5 第 7 条的生产安全值:yaml 里没有
 // `IdSegment:` 段时,运行期**不得**自动补种号段行(AllowAutoSeed=false),而迁移仍然要
-// 预建五种永久身份的行。这里 AllowAutoSeed 用的是裸 bool:go-zero 不回填未出现结构里的
+// 预建默认清单里每种永久身份的行。这里 AllowAutoSeed 用的是裸 bool:go-zero 不回填未出现结构里的
 // default,但本键的安全值恰好就是零值,所以块缺失得到的正是生产语义。
 func TestIdSegmentDefaultsWhenBlockAbsent(t *testing.T) {
 	c := loadYaml(t, minimalYaml)
@@ -122,7 +122,7 @@ IdSegment:
 	if !c.IdSegment.AllowAutoSeed {
 		t.Fatal("IdSegment.AllowAutoSeed=true must be honoured")
 	}
-	// 只写 AllowAutoSeed 不写 BootstrapTags:清单仍是默认五种,不是空。
+	// 只写 AllowAutoSeed 不写 BootstrapTags:清单仍是默认清单,不是空。
 	if got, want := c.IdSegment.EffectiveBootstrapTags(), DefaultIdSegmentBootstrapTags; !equalStrings(got, want) {
 		t.Fatalf("bootstrap tags = %v, want %v", got, want)
 	}

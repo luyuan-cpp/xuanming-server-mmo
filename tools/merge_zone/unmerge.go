@@ -12,6 +12,7 @@ package main
 //	7' 清掉 player_merge_notice:{pid}(合服没发生过,不该弹公告)
 //	5' player:zone:{id} 改回 src            ← 先做,路由回源区
 //	4' guild_rank ZSET 成员 ZADD 回 src、从 dst ZREM
+//	3b' trade_listing.market_zone 改回 src(只改清单里、当前确实在 dst 的 listing_id)
 //	3' guild.zone_id 改回 src(只改清单里的 guild_id)+ 缓存失效
 //	1' 删目标库里那些**与源库逐字节相同**的玩家行
 //
@@ -55,6 +56,8 @@ func runUnmerge(o options) {
 		src, dst, m.RunID, m.StartedAt, o.dryRun)
 	log.Printf("    scope: %d players, %d guilds, %d rank members, tables=%v",
 		len(m.PlayerIDs), len(m.GuildIDs), len(m.RankMembers), m.Tables)
+	log.Printf("    scope: %d trade listings (schema=%s; restored only where market_zone is still %d)",
+		len(m.TradeListingIDs), o.tradeSchema, dst)
 	log.Printf("    NOTHING outside this list is touched — target-zone natives are safe by construction.")
 
 	db := mustOpenMySQL(ctx, o.mysqlDSN)
@@ -65,6 +68,14 @@ func runUnmerge(o options) {
 	defer guildRdb.Close()
 	sharedRdb := mustDial(ctx, "login/shared(DB0)", o.noticeAddr, o.noticePwd, o.noticeDB)
 	defer sharedRdb.Close()
+
+	// 聚宝斋前置:清单里有商品 id = 当初真的搬过,库 / 表必须在。放在任何写之前 ——
+	// -trade-schema 指错时,不能等 5' mapping / 4' ZSET 已经改回之后才在 3b' 失败(先证明,再写)。
+	if len(m.TradeListingIDs) > 0 {
+		if err := assertTradeListingReady(ctx, db, o.tradeSchema); err != nil {
+			log.Fatalf("preflight: manifest lists %d trade listings to restore, but %v", len(m.TradeListingIDs), err)
+		}
+	}
 
 	// 撤销期间同样上围栏:别人不许在这两个 zone 里建新对象。
 	runID := newRunID(src, dst, time.Now())
@@ -100,6 +111,23 @@ func runUnmerge(o options) {
 			log.Fatalf("restore rank ZSET: %v", rerr)
 		}
 		log.Printf("Redis rank: %d members restored to guild_rank:zone:%d", n, src)
+	}
+
+	// 3b' 聚宝斋商品 market_zone 改回,只针对清单里的 listing_id 且当前确实是 dst 的。
+	// 与 3' 一样不看 -skip-* 开关:清单里有 id 就说明当初真的收集过。清单里没有 id
+	// (旧清单 / 合服时 -skip-trade-mysql)就什么都不做。
+	tradeRestored := 0
+	if len(m.TradeListingIDs) > 0 {
+		n, terr := restoreTradeMarketZone(ctx, db, o.tradeSchema, m.TradeListingIDs, src, dst, o.dryRun)
+		if terr != nil {
+			log.Fatalf("restore trade market_zone: %v", terr)
+		}
+		tradeRestored = n
+		verb := "restored"
+		if o.dryRun {
+			verb = "would be restored"
+		}
+		log.Printf("MySQL: %d of %d manifest trade listings %s to market_zone=%d", n, len(m.TradeListingIDs), verb, src)
 	}
 
 	// 3' guild.zone_id 改回,只针对清单里的 guild_id。
@@ -156,8 +184,8 @@ func runUnmerge(o options) {
 			totalRefused, refusedSample, src, dstSchema)
 	}
 
-	log.Printf("=== Unmerge done (players=%d guilds=%d rank=%d rows_deleted=%d rows_refused=%d) ===",
-		len(m.PlayerIDs), len(m.GuildIDs), len(m.RankMembers), totalDeleted, totalRefused)
+	log.Printf("=== Unmerge done (players=%d guilds=%d rank=%d trade_listings=%d/%d rows_deleted=%d rows_refused=%d) ===",
+		len(m.PlayerIDs), len(m.GuildIDs), len(m.RankMembers), tradeRestored, len(m.TradeListingIDs), totalDeleted, totalRefused)
 	if o.migrateBlobs {
 		log.Printf("NOTE: player:{id}:* blobs copied into the target data Redis are NOT deleted. " +
 			"With the mapping restored nobody reads them; delete manually only after verifying the source copies.")

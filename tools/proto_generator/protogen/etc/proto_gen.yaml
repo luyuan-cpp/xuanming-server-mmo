@@ -417,6 +417,20 @@ domain_meta:
         handler: "go/generated/guild/handler"
         grpc: "go/generated/guild/grpc"
 
+  # 聚宝斋 trade(docs/design/jubaozhai-market.md;P1 规格 P1-1/P1-2):Go 服务 go/trade 实现
+  # ClientPlayerJubaozhai(客户端 4 方法,经 gate → client_rpc_router 可达)与 TradeAdmin(内部种子)。
+  # 形状照 guild:只出 Go outputs,不出 cpp。
+  # trade_table.proto 同目录,是 go/schemamigrate 建表的事实源(port-decisions D-14)。
+  trade:
+    source: "{{proto_dir}}trade/"
+    rpc:
+      type: grpc
+    outputs:
+      go:
+        proto: "go/generated/trade/proto"
+        handler: "go/generated/trade/handler"
+        grpc: "go/generated/trade/grpc"
+
   friend:
     source: "{{proto_dir}}friend/"
     rpc:

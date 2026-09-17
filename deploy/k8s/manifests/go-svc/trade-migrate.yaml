@@ -1,0 +1,136 @@
+# trade-migrate:聚宝斋 trade 独占库 mmorpg_trade 的建表 / 加列 Job(port-decisions D-14 第 4 条)。
+#
+# 与 manifests/go-svc/trade.yaml 同一镜像、同一 ConfigMap(go-svc-trade-config),跑服务二进制自带的迁移入口:
+#   /app/service -f /app/etc/trade.yaml -migrate
+# 只连 MySQL 跑 go/schemamigrate 的 Up,打印报告后按退出码退出;不起 gRPC、不连 etcd / data_service。
+# 表结构以 proto/trade/trade_table.proto 为唯一事实源。库本身由 mysql-init-sql 预建,本 Job 不建库
+# (库不存在时以 1 退出,日志里点名库名;存量 PVC 的补建命令见 deploy/k8s/README.md「聚宝斋 trade」)。
+#
+# 放置与调用:本文件放在 go-svc/ 而不是 infra/ —— 它消费的是 go-svc 的镜像占位与脚本生成的服务 ConfigMap,
+# 只能跟着服务走(kafka-topic-init 属于 infra 自身,所以在 infra/)。k8s_deploy.ps1 的 $GoSvcCatalogue.trade
+# 用 MigrateJob 字段登记本文件;Apply-OneGoSvc 在 apply 服务 ConfigMap 之后、trade Deployment 之前调用
+# Apply-GoSvcMigrateJob:先 `kubectl delete job trade-migrate --ignore-not-found` 再 apply(Job template 不可变,
+# 而且必须能重跑;迁移本身幂等:schema_migrations 台账 + GET_LOCK 互斥)。
+# 删之前先确认上一次的本 Job 不在途:runner 执行 DDL 前写 dirty=1、成功后才清零,删掉在途 Job 会把台账留在 dirty,
+# 之后每次 -migrate 都以 1 退出(被下面的 FailJob 直接判失败)。在途就等它到终态,等不到就中断发布、不删。
+# 门禁(D-14 第 4 条,不受 -WaitReady 控制):staging/prod 恒等本 Job 结束,Complete 才 apply Deployment;
+# Failed / 超时则中断发布,提示 `kubectl -n mmorpg-infra logs job/trade-migrate`。dev 档只在 -WaitReady 下等。
+# 镜像、拉取策略与 infra namespace 三个占位由 Apply-GoSvcMigrateJob 在 apply 前替换,漏替换即拒绝 apply。
+#
+# 退出码(go/schemamigrate 的 ExitCode)与 Job 语义:
+#   0 成功(含"多余列" WARN)                              → Complete
+#   3 锁忙(另一个实例正在迁移同一个库)                     → 可重试:不命中下面的 FailJob 规则,按 backoffLimit 退避重试
+#   1 失败 / 4 需人工(类型漂移、缺主键、表清单异常)        → 不可重试:podFailurePolicy FailJob,Job 立刻 Failed,不白烧重试
+#   其余非 0(Go panic = 2、OOMKilled = 137 等)与 initContainer 失败 → 同样按 backoffLimit 重试
+# ⚠ podFailurePolicy 需要 Kubernetes ≥ 1.26(1.26 起 beta 默认开启,1.31 GA);低于 1.26 的集群 API 会拒绝这个字段。
+# ⚠ 前提是 Pod 模板 restartPolicy: Never:OnFailure 下容器在原 Pod 内原地重启,退出码规则无从匹配,API 直接拒绝这份 Job。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: trade-migrate
+  labels:
+    # 刻意不用 app: trade:trade Service / PDB 的 selector 是 app=trade,迁移 Pod 混进去会被当成 gRPC 后端。
+    app: trade-migrate
+    tier: go-svc
+spec:
+  # 只给"锁忙 / 意外崩溃 / MySQL 迟迟不可连"留重试余量:默认退避 10s → 20s → 40s → 80s,4 次后 Job Failed。
+  backoffLimit: 4
+  # 不设 ttlSecondsAfterFinished:完成记录与 Pod 日志留着,infra-status / `kubectl logs job/trade-migrate`
+  # 能看到上一次迁移报告;重跑由脚本先删再 apply(只删已终态的 Job,在途的先等)。
+  podFailurePolicy:
+    rules:
+      # 1 = 迁移失败(库不存在 / 连不上 / dirty 台账 / DDL 报错 / 库名断言不符 …),4 = 需人工:
+      # 重试不会自己变好,立即判 Job 失败,让发布停在 Deployment 之前。
+      - action: FailJob
+        onExitCodes:
+          containerName: trade-migrate
+          operator: In
+          values: [1, 4]
+      # 节点排空 / 抢占导致的驱逐不是迁移本身的问题,不计入 backoffLimit。
+      - action: Ignore
+        onPodConditions:
+          - type: DisruptionTarget
+  template:
+    metadata:
+      labels:
+        app: trade-migrate
+        tier: go-svc
+    spec:
+      restartPolicy: Never
+      initContainers:
+        # 等 MySQL 的 3306 真正可连再跑迁移。manifests/infra/mysql.yaml 的 readinessProbe 走 localhost socket,
+        # initdb 期间(临时实例 --skip-networking)Pod 就可能被判 Ready;而 -migrate 连不上会以 1 退出,
+        # 被上面的 FailJob 规则当成"不可重试"直接判 Job 失败(全新集群第一次 infra-up 必踩)。
+        # 所以这里只等 TCP 可连。上限按**时间预算**算,不用"轮数 × sleep"(AGENTS.md §11.3):
+        #   WAIT_MYSQL_TIMEOUT_SECONDS=150,截止时间取自 /proc/uptime(开机秒数,单调,不受 NTP 调时影响);
+        #   每轮 nc -w 3 + sleep 5,截止后最多再跑一轮 → 硬上限 = WAIT_MYSQL_TIMEOUT_SECONDS + 8s = 158s(不含调度 / 拉镜像)。
+        # ⚠ 这个上限要明显小于 k8s_deploy.ps1 的 $GoSvcMigrateJobMinWaitSeconds(300,脚本等本 Job 的预算下限):
+        #   staging/prod 恒等本 Job,预算装不下"拉镜像 + 本等待 + 迁移"时,正常等待会被脚本误判超时、中断发布。改其一必须核对另一个。
+        # 超时以 1 退出 —— 这是 initContainer 的退出码,不命中 FailJob 规则
+        # (规则限定 containerName: trade-migrate),走 backoffLimit 重试。
+        # 复用同一个 alpine 运行镜像里 busybox 的 nc,不引入新镜像;镜像里没有 nc 时只打印并放行
+        # (等待只是把竞态挡在迁移之外,迁移本身仍 fail-closed)。
+        - name: wait-mysql
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: MYSQL_ADDR
+              value: "mysql.__INFRA_NAMESPACE__"
+            # 等 3306 的总预算(秒)。约束见上面注释:与 k8s_deploy.ps1 的 $GoSvcMigrateJobMinWaitSeconds 联动。
+            - name: WAIT_MYSQL_TIMEOUT_SECONDS
+              value: "150"
+          command:
+            - sh
+            - -c
+            - |
+              if ! command -v nc >/dev/null 2>&1; then
+                echo "nc not found in image, skip waiting for $MYSQL_ADDR:3306"
+                exit 0
+              fi
+              uptime_s() { cut -d. -f1 /proc/uptime; }
+              deadline=$(( $(uptime_s) + $WAIT_MYSQL_TIMEOUT_SECONDS ))
+              while :; do
+                if nc -z -w 3 "$MYSQL_ADDR" 3306; then
+                  echo "$MYSQL_ADDR:3306 reachable"
+                  exit 0
+                fi
+                now=$(uptime_s)
+                if [ "$now" -ge "$deadline" ]; then
+                  echo "ERROR: $MYSQL_ADDR:3306 not reachable within ${WAIT_MYSQL_TIMEOUT_SECONDS}s" >&2
+                  exit 1
+                fi
+                echo "waiting for $MYSQL_ADDR:3306 ($(( deadline - now ))s left)..."
+                sleep 5
+              done
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+      containers:
+        - name: trade-migrate
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
+              value: warn
+          # 与 trade.yaml 的 args 只差最后一个 -migrate:同一份 ConfigMap,库名 / 账号 / 超时与服务完全一致,
+          # 不会出现"Job 迁的库和服务连的库不是同一个"。
+          args: ["-f", "/app/etc/trade.yaml", "-migrate"]
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/etc
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: svc-config
+          configMap:
+            name: go-svc-trade-config

@@ -616,11 +616,11 @@ constexpr PlayerAttributeComp::ParseTableT_ PlayerAttributeComp::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      6, 24,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      6,  // num_field_entries
       3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
@@ -630,7 +630,10 @@ constexpr PlayerAttributeComp::ParseTableT_ PlayerAttributeComp::InternalGenerat
       ::_pbi::TcParser::GetTable<::PlayerAttributeComp>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 last_switch_time = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerAttributeComp, _impl_.last_switch_time_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.last_switch_time_)}},
       // repeated .AttributeScheme schemes = 1;
       {::_pbi::TcParser::FastMtR1,
        {10, 0, 0,
@@ -643,16 +646,6 @@ constexpr PlayerAttributeComp::ParseTableT_ PlayerAttributeComp::InternalGenerat
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerAttributeComp, _impl_.next_scheme_id_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.next_scheme_id_)}},
-      // uint64 last_switch_time = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PlayerAttributeComp, _impl_.last_switch_time_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.last_switch_time_)}},
-      {::_pbi::TcParser::MiniParse, {}},
-      {::_pbi::TcParser::MiniParse, {}},
-      // uint32 attribute_unit_version = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(PlayerAttributeComp, _impl_.attribute_unit_version_), 4>(),
-       {56, 4, 0,
-        PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.attribute_unit_version_)}},
     }}, {{
       65535, 65535
     }}, {{
@@ -665,11 +658,9 @@ constexpr PlayerAttributeComp::ParseTableT_ PlayerAttributeComp::InternalGenerat
       // uint64 last_switch_time = 4;
       {PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.last_switch_time_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // map<uint32, uint32> bonus_points = 5;
-      {PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.bonus_points_), _Internal::kHasBitsOffset + 5, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
+      {PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.bonus_points_), _Internal::kHasBitsOffset + 4, 1, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
       // map<uint32, uint32> bonus_values = 6;
-      {PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.bonus_values_), _Internal::kHasBitsOffset + 6, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
-      // uint32 attribute_unit_version = 7;
-      {PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.attribute_unit_version_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.bonus_values_), _Internal::kHasBitsOffset + 5, 2, (0 | ::_fl::kFcRepeated | ::_fl::kMap)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -700,7 +691,6 @@ inline constexpr PlayerAttributeComp::Impl_::Impl_(
         active_scheme_id_{0u},
         next_scheme_id_{0u},
         last_switch_time_{::uint64_t{0u}},
-        attribute_unit_version_{0u},
         bonus_points_ { visibility, ::_pbi::InternalMetadataOffset::Build<
             ::PlayerAttributeComp,
             PROTOBUF_FIELD_OFFSET(::PlayerAttributeComp, _impl_.bonus_points_)>()
@@ -843,21 +833,19 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerAttributeComp, _impl_._has_bits_),
-        10, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerAttributeComp, _impl_.schemes_),
         PROTOBUF_FIELD_OFFSET(::PlayerAttributeComp, _impl_.active_scheme_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerAttributeComp, _impl_.next_scheme_id_),
         PROTOBUF_FIELD_OFFSET(::PlayerAttributeComp, _impl_.last_switch_time_),
         PROTOBUF_FIELD_OFFSET(::PlayerAttributeComp, _impl_.bonus_points_),
         PROTOBUF_FIELD_OFFSET(::PlayerAttributeComp, _impl_.bonus_values_),
-        PROTOBUF_FIELD_OFFSET(::PlayerAttributeComp, _impl_.attribute_unit_version_),
         0,
         1,
         2,
         3,
-        5,
-        6,
         4,
+        5,
 };
 
 static const ::_pbi::MigrationSchema
@@ -883,23 +871,22 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fattri
     "me_id\030\001 \001(\r\022\014\n\004name\030\002 \001(\t\0222\n\tallocated\030\003"
     " \003(\0132\037.AttributeScheme.AllocatedEntry\0320\n"
     "\016AllocatedEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 "
-    "\001(\r:\0028\001\"\206\003\n\023PlayerAttributeComp\022!\n\007schem"
+    "\001(\r:\0028\001\"\346\002\n\023PlayerAttributeComp\022!\n\007schem"
     "es\030\001 \003(\0132\020.AttributeScheme\022\030\n\020active_sch"
     "eme_id\030\002 \001(\r\022\026\n\016next_scheme_id\030\003 \001(\r\022\030\n\020"
     "last_switch_time\030\004 \001(\004\022;\n\014bonus_points\030\005"
     " \003(\0132%.PlayerAttributeComp.BonusPointsEn"
     "try\022;\n\014bonus_values\030\006 \003(\0132%.PlayerAttrib"
-    "uteComp.BonusValuesEntry\022\036\n\026attribute_un"
-    "it_version\030\007 \001(\r\0322\n\020BonusPointsEntry\022\013\n\003"
-    "key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0322\n\020BonusVal"
-    "uesEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001"
-    "B\022Z\020common/componentb\006proto3"
+    "uteComp.BonusValuesEntry\0322\n\020BonusPointsE"
+    "ntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002 \001(\r:\0028\001\0322\n\020"
+    "BonusValuesEntry\022\013\n\003key\030\001 \001(\r\022\r\n\005value\030\002"
+    " \001(\r:\0028\001B\022Z\020common/componentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fattribute_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fattribute_5fcomp_2eproto = {
     false,
     false,
-    628,
+    596,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fattribute_5fcomp_2eproto,
     "proto/common/component/player_attribute_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fattribute_5fcomp_2eproto_once,
@@ -1379,9 +1366,9 @@ PlayerAttributeComp::PlayerAttributeComp(
                offsetof(Impl_, active_scheme_id_),
            reinterpret_cast<const char*>(&from._impl_) +
                offsetof(Impl_, active_scheme_id_),
-           offsetof(Impl_, attribute_unit_version_) -
+           offsetof(Impl_, last_switch_time_) -
                offsetof(Impl_, active_scheme_id_) +
-               sizeof(Impl_::attribute_unit_version_));
+               sizeof(Impl_::last_switch_time_));
 
   // @@protoc_insertion_point(copy_constructor:PlayerAttributeComp)
 }
@@ -1410,9 +1397,9 @@ inline void PlayerAttributeComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE aren
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, active_scheme_id_),
            0,
-           offsetof(Impl_, attribute_unit_version_) -
+           offsetof(Impl_, last_switch_time_) -
                offsetof(Impl_, active_scheme_id_) +
-               sizeof(Impl_::attribute_unit_version_));
+               sizeof(Impl_::last_switch_time_));
 }
 PlayerAttributeComp::~PlayerAttributeComp() {
   // @@protoc_insertion_point(destructor:PlayerAttributeComp)
@@ -1465,14 +1452,14 @@ PROTOBUF_NOINLINE void PlayerAttributeComp::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     _impl_.schemes_.Clear();
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007eU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003eU)) {
     ::memset(&_impl_.active_scheme_id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.attribute_unit_version_) -
-        reinterpret_cast<char*>(&_impl_.active_scheme_id_)) + sizeof(_impl_.attribute_unit_version_));
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+        reinterpret_cast<char*>(&_impl_.last_switch_time_) -
+        reinterpret_cast<char*>(&_impl_.active_scheme_id_)) + sizeof(_impl_.last_switch_time_));
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       _impl_.bonus_points_.Clear();
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       _impl_.bonus_values_.Clear();
     }
   }
@@ -1540,7 +1527,7 @@ PROTOBUF_NOINLINE void PlayerAttributeComp::Clear() {
   }
 
   // map<uint32, uint32> bonus_points = 5;
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (!this_._internal_bonus_points().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -1563,7 +1550,7 @@ PROTOBUF_NOINLINE void PlayerAttributeComp::Clear() {
   }
 
   // map<uint32, uint32> bonus_values = 6;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     if (!this_._internal_bonus_values().empty()) {
       using MapType = ::google::protobuf::Map<::uint32_t, ::uint32_t>;
       using WireHelper = _pbi::MapEntryFuncs<::uint32_t, ::uint32_t,
@@ -1582,15 +1569,6 @@ PROTOBUF_NOINLINE void PlayerAttributeComp::Clear() {
               6, entry.first, entry.second, target, stream);
         }
       }
-    }
-  }
-
-  // uint32 attribute_unit_version = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-    if (this_._internal_attribute_unit_version() != 0) {
-      target = stream->EnsureSpace(target);
-      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
-          7, this_._internal_attribute_unit_version(), target);
     }
   }
 
@@ -1619,7 +1597,7 @@ PROTOBUF_NOINLINE void PlayerAttributeComp::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // repeated .AttributeScheme schemes = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size += 1UL * this_._internal_schemes_size();
@@ -1648,15 +1626,8 @@ PROTOBUF_NOINLINE void PlayerAttributeComp::Clear() {
             this_._internal_last_switch_time());
       }
     }
-    // uint32 attribute_unit_version = 7;
-    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (this_._internal_attribute_unit_version() != 0) {
-        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
-            this_._internal_attribute_unit_version());
-      }
-    }
     // map<uint32, uint32> bonus_points = 5;
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_bonus_points_size());
       for (const auto& entry : this_._internal_bonus_points()) {
@@ -1666,7 +1637,7 @@ PROTOBUF_NOINLINE void PlayerAttributeComp::Clear() {
       }
     }
     // map<uint32, uint32> bonus_values = 6;
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       total_size +=
           1 * ::google::protobuf::internal::FromIntSize(this_._internal_bonus_values_size());
       for (const auto& entry : this_._internal_bonus_values()) {
@@ -1694,7 +1665,7 @@ void PlayerAttributeComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       _this->_internal_mutable_schemes()->InternalMergeFromWithArena(
           ::google::protobuf::MessageLite::internal_visibility(), arena,
@@ -1716,14 +1687,9 @@ void PlayerAttributeComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000010U)) {
-      if (from._internal_attribute_unit_version() != 0) {
-        _this->_impl_.attribute_unit_version_ = from._impl_.attribute_unit_version_;
-      }
-    }
-    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       _this->_impl_.bonus_points_.MergeFrom(from._impl_.bonus_points_);
     }
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
       _this->_impl_.bonus_values_.MergeFrom(from._impl_.bonus_values_);
     }
   }
@@ -1746,8 +1712,8 @@ void PlayerAttributeComp::InternalSwap(PlayerAttributeComp* PROTOBUF_RESTRICT PR
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   _impl_.schemes_.InternalSwap(&other->_impl_.schemes_);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.attribute_unit_version_)
-      + sizeof(PlayerAttributeComp::_impl_.attribute_unit_version_)
+      PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.last_switch_time_)
+      + sizeof(PlayerAttributeComp::_impl_.last_switch_time_)
       - PROTOBUF_FIELD_OFFSET(PlayerAttributeComp, _impl_.active_scheme_id_)>(
           reinterpret_cast<char*>(&_impl_.active_scheme_id_),
           reinterpret_cast<char*>(&other->_impl_.active_scheme_id_));

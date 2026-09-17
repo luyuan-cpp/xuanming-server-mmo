@@ -1,0 +1,100 @@
+# 聚宝斋 trade 服务配置(docs/design/jubaozhai-market.md;契约 microservice-zone-contract-20260914 §2/§3/§4/§7;D-14)
+# 全局服务:全服一份、多副本;客户端只经 gate → 路由服到达(路由模式)。
+# 本文件的键名与 internal/config/config.go、k8s_deploy.ps1 的 trade ConfigMap 三处必须逐字一致。
+Name: trade.rpc
+ListenOn: 127.0.0.1:50800
+
+# zrpc 服务端整体超时(毫秒)。必须 ≤ 路由服 ForwardTimeoutMs(5000)− 1000(契约 §3),
+# config.Validate 拒绝 <1000 与 >4000。
+# 逻辑层整请求 I/O 预算 = Timeout − 500ms(config.InBandReplyReserve):依赖变慢时先在预算内
+# in-band 回 kServiceUnavailable,不让 go-zero 超时拦截器抢先回 DeadlineExceeded(P1-9)。
+Timeout: 4000
+
+# go-zero 的 Mode 默认是 pro。TradeAdmin.SeedListing 只在 dev / test 下可用,本地必须显式写 dev,
+# 否则 robot trade-smoke 播种会得到 PermissionDenied。K8s 非 dev 档由 ConfigMap 固定为 pro。
+Mode: dev
+
+# etcd:只给 shared/noderegistry 注册 TradeNodeService.rpc/... 与 shared/killswitch 用。
+# Key 必须显式写空串(契约 D-13):不能整行省略(go-zero EtcdConf.Key 非 optional),
+# 填了 Key 会让 go-zero 额外注册 trade.rpc。config.Validate 拒绝非空 Key。
+Etcd:
+  Hosts:
+    - 127.0.0.1:2379
+  Key: ""
+
+# etcd 注册路径 <Prefix>/zone/<z>/... 用的 zone id;必填非 0。trade 是全局服务,
+# zone 只影响注册路径,业务代码禁止读它做分支(契约 §0)。
+# ⚠ 顶层唯一一处 ZoneId,且必须写在任何嵌套段之前:go_services.ps1 -Zone 只改写文件里第一处 ZoneId。
+ZoneId: 1
+
+# etcd 节点注册租约 TTL(秒)= 崩溃场景的切换窗口(路由服 PickRandom 不看连接状态)。
+LeaseTTL: 60
+
+# Prometheus /metrics。端口分工:9210 chat / 9220 guild / 9230 trade。置空关闭。
+# 必须是顶层单行:-Zone 的端口位移正则只认这个形状。
+# 指标:trade_home_zone_lookup_total{result} / trade_seed_listing_total{result},
+# 以及 shared/serverbase 的 rpc_inband_*、shared/killswitch 的 killswitch_blocked_total。
+MetricsListenAddr: ":9230"
+
+# RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
+# 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。
+# 关停浏览:etcdctl put /mmorpg/killswitch/trade.ClientPlayerJubaozhai/BrowseListings '{"deny":true,"reason":"..."}'
+# 关停整个客户端服务:etcdctl put /mmorpg/killswitch/trade.ClientPlayerJubaozhai/'*' true
+# 恢复:etcdctl del 对应的 key。
+KillSwitchPrefix: ""
+
+# ---- 独占库 mmorpg_trade(D-14 第 1、5 条)----
+# 库由 deploy/mysql-init/00_init_zone_dbs.sql 预建(存量卷需手工执行那两行);表由 schemamigrate 按
+# proto/trade/trade_table.proto 建。DBName 必须等于代码常量 mmorpg_trade(config.Validate 断言)。
+# 本地凭据与 go/data_service/etc/data_service.yaml 的 SnapshotMySQL 同账号;K8s 由 ConfigMap 注入。
+MySQL:
+  Host: 127.0.0.1:3306
+  User: appuser
+  Password: apppass123
+  DBName: mmorpg_trade
+  MaxOpenConn: 20
+  MaxIdleConn: 5
+
+# 建表策略(D-14 第 4 条):
+#   AutoMigrate 不写或 true:启动时跑 schemamigrate.Up(有 GET_LOCK,多副本并发安全);
+#     出错或出现需人工项(类型漂移 / 缺主键)即拒绝启动。
+#   false:启动时只跑一次只读 plan,有待执行语句或需人工项就拒绝启动,并打印补救命令
+#     trade -f etc/trade.yaml -migrate
+# K8s 非 dev 档由 ConfigMap 固定 false,表由 trade-migrate Job 建。
+Schema:
+  AutoMigrate: true
+
+# data_service 客户端:查玩家 home_zone(BatchGetPlayerHomeZone)与领 listing_id 号段(AllocateIdSegment)。
+# 无条件拨号,是 P1 的硬依赖。这里写 Key: dataservice.rpc 不违反 D-13:D-13 禁止的是指向**全局服务**的
+# RpcClient Key,data_service 按 zone 部署(port-decisions D-13 原文)。
+# -Zone N 时本行会被改写为 dataservice.rpc.zN,连本 zone 的 data_service;映射存储是全局 Redis,行为等价。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: dataservice.rpc
+  Timeout: 3000
+  NonBlock: true
+  Middlewares:
+    Breaker: false
+
+# listing_id 号段(shared/idsegment.Conf,biz_tag = trade_listing)。
+# Enabled 必须 true、FallbackToSnowflake 必须 false:trade 没有 snowflake 可回退,号段失败即本次上架失败。
+# biz_tag 必须登记进 data_service 的 BootstrapTags,否则生产(AllowAutoSeed=false)发号被拒。
+IdSegment:
+  Enabled: true
+  Step: 100
+  MinStep: 10
+  MaxStep: 1000
+  FallbackToSnowflake: false
+
+# 市场参数(设计 §3/§8)。
+#   Scope: zone   浏览 / 详情 / 收藏按调用者 home_zone 过滤,别区商品对调用者"不存在",zone_filter 被忽略;
+#          global 全服可见,zone_filter≠0 时按它过滤。
+#   页长上限 20;页码上限 100(防深分页扫表);每玩家收藏上限 100(软上限,见 SetFavorite 注释)。
+Market:
+  Scope: zone
+  DefaultPageSize: 20
+  MaxPageSize: 20
+  MaxPage: 100
+  MaxFavoritesPerPlayer: 100

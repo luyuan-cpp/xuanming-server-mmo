@@ -153,6 +153,16 @@ $ServiceCatalogue = [ordered]@{
     # 多开安全:建帮 / 入会 / 公告都是 MySQL 事务,启动时的榜单重建有 Redis 维护锁(guild_rank:maintenance_lock)。
     # 端口 50300 与 go/guild/etc/guild.yaml 的 ListenOn 一致;-Zone 2 位移后 51300,不在已观测的保留区间内。
     guild             = @{ Dir = "guild"; Entry = "guild.go"; Port = 50300; Desc = "Guild (公会,按 zone 隔离,路由服可达)"; ConfigFlag = "-f"; ConfigFile = "etc/guild.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    # 聚宝斋 trade(docs/design/jubaozhai-market.md):全局一份(TradeNodeService),商品按 market_zone **数据维度**
+    # 隔离,与 chat / guild 一样**只承诺路由服模式可达**(GATE_CLIENT_RPC_ROUTER=1)。
+    # Tier 1:依赖 MySQL 独占库 mmorpg_trade(库由 deploy/mysql-init/00_init_zone_dbs.sql 预建,表由 trade 启动期
+    # schemamigrate 或 `trade -f etc/trade.yaml -migrate` 建,port-decisions D-14)与 data_service(Tier 0;
+    # listing_id 号段 biz_tag=trade_listing + BatchGetPlayerHomeZone,NonBlock 拨号),不拨 login 等服务。
+    # 多开安全:P1 只有只读浏览 + 收藏(INSERT IGNORE / DELETE 幂等)+ 内部种子,无进程内共享状态。
+    # 端口 50800 / metrics 9230 与 go/trade/etc/trade.yaml 一致;-Zone 2 位移后 51800 / 10230,51800 可能落入历史观测的
+    # 保留区 51573-51872,由 Resolve-BindablePort 自动上挪(同 chat)。trade.yaml 形状满足本脚本 -Zone 改写:
+    # 顶层单行 ListenOn / MetricsListenAddr、顶层 ZoneId 写在所有嵌套段之前、DataServiceRpc.Etcd.Key: dataservice.rpc 会被加 .z<N>。
+    trade             = @{ Dir = "trade"; Entry = "trade.go"; Port = 50800; Desc = "Trade (聚宝斋,按 market_zone 隔离,路由服可达)"; ConfigFlag = "-f"; ConfigFile = "etc/trade.yaml"; AllowMultiInstance = $true; Tier = 1 }
 }
 
 # Derived per-instance config files live here so the source tree stays clean.

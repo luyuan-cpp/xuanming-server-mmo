@@ -4,7 +4,8 @@
 # 流程:A 建帮(请求体 zone 填错)→ 帮会落在 zone_a → A 重复建帮被拒 → B 在本区榜上看到
 #       → C(zone_b)看不见 / 查不到名次 / 加不进 / 同名被拒 → B 未入帮改公告被拒 → B 加入
 #       → A 改公告、B 读到;超长公告被拒 → B 伪造 player_id=A 退帮,服务端按会话让 B 退出
-#       → A 直调 UpdateGuildScore 拿不到业务回包、积分不变 → A 解散。
+#       → A 直调 UpdateGuildScore 收到 kServiceUnavailable、随后查榜积分不变 → A 解散。
+#       验收同时核对路由服该方法 code=PermissionDenied 日志;超时不能算通过。
 #
 # 前置(缺一条就会失败,原因写进 GUILD_SMOKE_FAIL 的 reason):
 #   1. gate 以 GATE_CLIENT_RPC_ROUTER=1 启动(路由服模式);guild 的客户端入口只承诺路由服模式。

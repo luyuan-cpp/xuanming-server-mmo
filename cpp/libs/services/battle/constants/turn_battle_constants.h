@@ -17,14 +17,6 @@ inline constexpr uint64_t kRoundDurationMs = 6000;
 // DungeonTable.time_limit 为 0 时的回合上限缺省值
 inline constexpr uint32_t kDefaultMaxRounds = 30;
 
-// ---- 数值单位版本(2026-09-14) ----
-// 0 = 旧单位;1 = 防御 ×12 / 法力 ×4 之后的单位。三处读它,不许各写一份:
-//   scene 存档迁移(services/scene/player/system/attribute_unit_migration.h)、
-//   结算单位戳(BattleSettlementData.attribute_unit_version,本库 BuildSettlement 盖)、
-//   战斗表指纹(data/battle_table_fingerprint.cpp,让新旧二进制混跑时指纹对不上)。
-// 以后再改数值单位:这里加 1,并在 attribute_unit_migration.h 的 ManaToCurrentUnit 追加一段换算,不要改旧段。
-inline constexpr uint32_t kAttributeUnitVersion = 1;
-
 // ---- 匹配模式(镜像 proto/match/match_service.proto 的 MatchMode,决定逃跑规则等) ----
 
 inline constexpr uint32_t kMatchModePveSolo = 4;

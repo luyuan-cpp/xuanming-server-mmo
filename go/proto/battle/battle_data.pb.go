@@ -1292,12 +1292,8 @@ type BattleSettlementData struct {
 	Pets            []*BattlePetSettlementData `protobuf:"bytes,14,rep,name=pets,proto3" json:"pets,omitempty"` // 该玩家出战宝宝的战后终值(scene 回写实例)
 	// battle 根据真实阵亡怪物生成，scene 用于任务进度；客户端不能上报。
 	DefeatedMonsters []*BattleMonsterDefeat `protobuf:"bytes,15,rep,name=defeated_monsters,json=defeatedMonsters,proto3" json:"defeated_monsters,omitempty"`
-	// 数值单位版本(2026-09-14 起,取值见 turn_battle_constants.h 的 kAttributeUnitVersion;0 = 旧 battle 二进制产出)。
-	// mana 与 pets[].mana 是绝对值:离线挂起(Redis 7 天)、部署时在途、发件箱重投的旧结算若原样写回,
-	// 会把登录时已 ×4 迁移的法力永久写回旧单位。scene 应用时按本字段换算到当前单位。
-	AttributeUnitVersion uint32 `protobuf:"varint,16,opt,name=attribute_unit_version,json=attributeUnitVersion,proto3" json:"attribute_unit_version,omitempty"`
-	unknownFields        protoimpl.UnknownFields
-	sizeCache            protoimpl.SizeCache
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *BattleSettlementData) Reset() {
@@ -1433,13 +1429,6 @@ func (x *BattleSettlementData) GetDefeatedMonsters() []*BattleMonsterDefeat {
 		return x.DefeatedMonsters
 	}
 	return nil
-}
-
-func (x *BattleSettlementData) GetAttributeUnitVersion() uint32 {
-	if x != nil {
-		return x.AttributeUnitVersion
-	}
-	return 0
 }
 
 // ---- 出战宝宝的结算数据(随主人的 BattleSettlementData 一起回 scene)----
@@ -1630,7 +1619,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x11target_mana_after\x18\r \x01(\x04R\x0ftargetManaAfter\"W\n" +
 	"\x13BattleMonsterDefeat\x12*\n" +
 	"\x11monster_config_id\x18\x01 \x01(\rR\x0fmonsterConfigId\x12\x14\n" +
-	"\x05count\x18\x02 \x01(\rR\x05count\"\xf0\x04\n" +
+	"\x05count\x18\x02 \x01(\rR\x05count\"\xba\x04\n" +
 	"\x14BattleSettlementData\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12)\n" +
@@ -1647,8 +1636,7 @@ const file_proto_battle_battle_data_proto_rawDesc = "" +
 	"\x04fled\x18\f \x01(\bR\x04fled\x12!\n" +
 	"\ftotal_rounds\x18\r \x01(\rR\vtotalRounds\x12,\n" +
 	"\x04pets\x18\x0e \x03(\v2\x18.BattlePetSettlementDataR\x04pets\x12A\n" +
-	"\x11defeated_monsters\x18\x0f \x03(\v2\x14.BattleMonsterDefeatR\x10defeatedMonsters\x124\n" +
-	"\x16attribute_unit_version\x18\x10 \x01(\rR\x14attributeUnitVersion\"u\n" +
+	"\x11defeated_monsters\x18\x0f \x03(\v2\x14.BattleMonsterDefeatR\x10defeatedMonsters\"u\n" +
 	"\x17BattlePetSettlementData\x12\x15\n" +
 	"\x06pet_id\x18\x01 \x01(\x04R\x05petId\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x12\n" +

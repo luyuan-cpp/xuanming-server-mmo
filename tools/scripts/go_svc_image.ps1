@@ -84,6 +84,11 @@ $Catalogue = [ordered]@{
     # 与 k8s_deploy.ps1 $GoSvcCatalogue 的 client-rpc-router 条目配对(ImageName 必须一致)。
     # 发布顺序:改 proto 后路由服先、gate 后(新消息号两边生成物必须同一次 proto-gen)。
     "client-rpc-router" = @{ Dir = "client_rpc_router"; Entry = "client_rpc_router_service.go"; ImageName = "mmorpg-client-rpc-router" }
+    # 聚宝斋 trade:与 k8s_deploy.ps1 $GoSvcCatalogue 的 trade 条目配对(ImageName 必须一致)。只经路由服可达,与路由服成对发布。
+    # go/trade/go.mod 的 `replace schemamigrate => ../schemamigrate` 在 go/ 之内,由 Dockerfile.go-svc 的
+    # `COPY schemamigrate/` 带入,不走 ExternalReplaceStages;schemamigrate 依赖的 proto2mysql 用已发布 tag(不 replace)。
+    # 同一镜像既跑 trade Deployment,也跑 trade-migrate Job(args 加 -migrate,D-14)。
+    trade           = @{ Dir = "trade";           Entry = "trade.go";               ImageName = "mmorpg-trade" }
 }
 
 # 先把每个元素再按逗号拆一次,兼容 "a,b"(单字符串)和 a,b(数组)两种传法。

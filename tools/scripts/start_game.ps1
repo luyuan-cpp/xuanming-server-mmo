@@ -29,6 +29,17 @@ $services = @('db','data_service','client_rpc_router','scene_manager','player_lo
 # 得到“服务不可用”，其余功能不受影响。guild 同理：它和 chat 同一天才加进一键启动，本机同样可能还没有 exe。
 # 已有服务（db / login / match 等）仍是必需的：它们缺 exe 说明环境本身不完整，应当在第 1 步就拒启。
 $optionalServices = @('chat','guild')
+# 聚宝斋 trade(P1)：新服务，按可选处理，以下两种情况跳过它、其余服务照常启动（缺席时只影响聚宝斋请求）：
+#   1. 缺 exe（第 1 步，与 chat / guild 同一逻辑）；
+#   2. MySQL 独占库 mmorpg_trade 未就绪（第 2 步 MySQL 健康后预检：库不存在或 appuser 无权限）。
+# 第 2 条的取舍依据（AGENTS §11.3）：已初始化过的本机 MySQL 数据卷不会重跑 initdb，必然没有这个新库；
+# trade 连不上库会在启动期直接退出，Start-LocalGoServices 随即抛错，整个一键启动会停在网关之前，
+# 为聚宝斋拖垮登录 / 匹配不可接受。fail-closed 仍在 trade 进程自身（库不在即拒启），这里只是不让它连坐。
+# exe 与库都就绪、但 trade 因其他原因（建表需人工、data_service 不可达等）起不来时，仍按原逻辑中止启动。
+# -CheckOnly 不启动 Docker，不做库预检。trade 还依赖 data_service（第 3 步已起）。
+# 与 chat / guild 一样只承诺路由服模式可达。单独追加，不改上面两行数组。
+$services += 'trade'
+$optionalServices += 'trade'
 $skippedServices = @()
 $gatewayUrl = 'http://127.0.0.1:8081'
 $oldPath = $env:PATH
@@ -389,6 +400,34 @@ try {
         Wait-Ready 'Redis' { (Invoke-Docker @('exec','redis','redis-cli','ping')).Out.Trim() -eq 'PONG' }
         Wait-Ready 'Redis Cluster' { (Invoke-Docker @('exec','redis-cluster-0','redis-cli','-p','7000','cluster','info')).Out -match 'cluster_state:ok' }
         Wait-Ready 'Kafka' { (Invoke-Docker @('exec','kafka','/opt/kafka/bin/kafka-topics.sh','--bootstrap-server','localhost:9092','--list') 60).Code -eq 0 }
+        if ('trade' -notin $skippedServices) {
+            # 聚宝斋 trade 的库预检（为什么跳过而不是拒启，见脚本顶部 $optionalServices 处）。
+            # 以 appuser 身份查询：容器环境变量 MYSQL_USER / MYSQL_PASSWORD 就是 deploy/docker-compose.yml 给 appuser 的账号，
+            # 与 go/trade/etc/trade.yaml 的 MySQL.User 相同；information_schema.SCHEMATA 只列出该账号有权限的库，
+            # 所以一次查询同时覆盖“库存在”和“已授权”。密码只在容器内由 sh 展开，不出现在本机命令行和启动日志里。
+            $tradeDbProblem = ''
+            try {
+                $tradeDbProbe = Invoke-Docker @('exec','mysql','sh','-c','mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ''mmorpg_trade''"')
+                if ($tradeDbProbe.Code -ne 0) {
+                    $tradeDbProblem = "查询失败（docker exec 退出码 $($tradeDbProbe.Code)）"
+                } elseif ($tradeDbProbe.Out.Trim() -cne 'mmorpg_trade') {
+                    $tradeDbProblem = '库不存在，或 appuser 对它没有权限'
+                }
+            } catch {
+                $tradeDbProblem = "查询异常：$($_.Exception.Message)"
+            }
+            if ($tradeDbProblem) {
+                $skippedServices += 'trade'
+                # 补建命令：PowerShell 7 里整行粘贴执行；root 密码取自容器环境变量，不回显。
+                $tradeDbFixCommand = @'
+  docker --context desktop-linux exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_trade DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_trade.* TO appuser@''%''; FLUSH PRIVILEGES;"'
+'@
+                Write-Warning "聚宝斋库 mmorpg_trade 未就绪（$tradeDbProblem），本次跳过 trade（聚宝斋请求会回「服务不可用」），其余服务照常启动。"
+                Write-Host '  已有数据的 MySQL 卷不会重跑 deploy/mysql-init，需要用 root 补建库并授权一次（在 PowerShell 7 中执行下面这行）：' -ForegroundColor Yellow
+                Write-Host $tradeDbFixCommand -ForegroundColor Yellow
+                Write-Host '  补建后重新运行本启动脚本即可。'
+            }
+        }
         Write-Step '3/6 启动存档服务'
         # login、scene_manager、player_locator、match 由 dev_tools 的子进程继承同一契约。
         $env:KAFKA_COMMAND_TOPIC_PARTITIONS = [string]$kafkaContract.Partitions
@@ -431,6 +470,8 @@ try {
         # 直连模式下它们也照样起，只是玩家不可达（见 -GateRouterMode）。
         # 第 1 步因缺 exe 跳过的可选服务不在这里启动，否则 Start-LocalGoServices 会因“没有启动记录”抛错。
         Start-LocalGoServices @(@('client_rpc_router','scene_manager','player_locator','login','match','chat','guild') | Where-Object { $_ -notin $skippedServices })
+        # 聚宝斋 trade 单独一批：被跳过（缺 exe，或第 2 步预检发现 mmorpg_trade 未就绪）时不调用，避免把空列表传给 -GoServices（空 = 全部服务）。
+        if ('trade' -notin $skippedServices) { Start-LocalGoServices @('trade') }
         $gatewayProcess = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'java.exe' -and $_.CommandLine -and $_.CommandLine.Contains($jar.FullName) } | Select-Object -First 1
         if (-not $gatewayProcess) {
             if (Test-Tcp 8081) { throw '8081 端口被其他程序占用，未启动重复网关。' }

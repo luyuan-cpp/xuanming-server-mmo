@@ -109,6 +109,7 @@ set(SOURCE_FILES
     proto/tip/guild_error_tip.pb.cc
     proto/tip/login_error_tip.pb.cc
     proto/tip/match_error_tip.pb.cc
+    proto/tip/trade_error_tip.pb.cc
     proto/tip/pet_error_tip.pb.cc
     proto/tip/mission_error_tip.pb.cc
     proto/tip/mount_error_tip.pb.cc

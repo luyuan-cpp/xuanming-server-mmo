@@ -115,6 +115,11 @@
     <ClCompile Include="gate\gate_service.pb.cc" />
     <ClCompile Include="guild\guild.grpc.pb.cc" />
     <ClCompile Include="guild\guild.pb.cc" />
+    <ClCompile Include="trade\jubaozhai.grpc.pb.cc" />
+    <ClCompile Include="trade\jubaozhai.pb.cc" />
+    <ClCompile Include="trade\trade_admin.grpc.pb.cc" />
+    <ClCompile Include="trade\trade_admin.pb.cc" />
+    <ClCompile Include="trade\trade_table.pb.cc" />
     <ClCompile Include="login\login.grpc.pb.cc" />
     <ClCompile Include="login\login.pb.cc" />
     <ClCompile Include="scene\client_player_common.pb.cc" />
@@ -221,6 +226,11 @@
     <ClInclude Include="gate\gate_service.pb.h" />
     <ClInclude Include="guild\guild.grpc.pb.h" />
     <ClInclude Include="guild\guild.pb.h" />
+    <ClInclude Include="trade\jubaozhai.grpc.pb.h" />
+    <ClInclude Include="trade\jubaozhai.pb.h" />
+    <ClInclude Include="trade\trade_admin.grpc.pb.h" />
+    <ClInclude Include="trade\trade_admin.pb.h" />
+    <ClInclude Include="trade\trade_table.pb.h" />
     <ClInclude Include="login\login.grpc.pb.h" />
     <ClInclude Include="login\login.pb.h" />
     <ClInclude Include="scene\client_player_common.pb.h" />

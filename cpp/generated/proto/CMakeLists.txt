@@ -115,6 +115,11 @@ set(SOURCE_FILES
     gate/gate_service.pb.cc
     guild/guild.grpc.pb.cc
     guild/guild.pb.cc
+    trade/jubaozhai.grpc.pb.cc
+    trade/jubaozhai.pb.cc
+    trade/trade_admin.grpc.pb.cc
+    trade/trade_admin.pb.cc
+    trade/trade_table.pb.cc
     login/login.grpc.pb.cc
     login/login.pb.cc
     scene/client_player_common.pb.cc

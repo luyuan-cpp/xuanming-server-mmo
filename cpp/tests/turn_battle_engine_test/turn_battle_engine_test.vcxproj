@@ -167,7 +167,6 @@
     <ClCompile Include="player_revive_rule_test.cpp" />
     <ClCompile Include="attribute_allocation_rules_test.cpp" />
     <ClCompile Include="combat_damage_rules_test.cpp" />
-    <ClCompile Include="attribute_unit_migration_test.cpp" />
     <ClCompile Include="table_battle_data_provider_test.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

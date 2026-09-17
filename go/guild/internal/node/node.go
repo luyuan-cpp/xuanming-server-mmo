@@ -88,6 +88,8 @@ func NewNode(nodeType uint32, ip string, port uint32) (*Node, error) {
 			Ip:   ip,
 			Port: port,
 		},
+		// 路由服只从 grpcEndpoint 选择 gRPC 目标；Endpoint 保留既有服务发现兼容字段。
+		GrpcEndpoint: &base.EndpointComp{Ip: ip, Port: port},
 		ZoneId:       cfg.Node.ZoneId,
 		LaunchTime:   uint64(time.Now().Unix()),
 		ProtocolType: uint32(base.ENodeProtocolType_PROTOCOL_GRPC),

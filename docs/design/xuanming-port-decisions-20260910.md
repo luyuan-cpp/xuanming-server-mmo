@@ -266,7 +266,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 
 1. 每加一个服务就改 gate 白名单、重编 gate、滚动重启踢在线玩家,正是 `client-rpc-router.md` §1 要消灭的成本。给 chat 补直连白名单,等于走回旧路。
 2. C++ 默认值是灰度开关的安全兜底(拼错宁可留在直连)。改它会连带 battle 等既有直连路径的回归面;部署层参数则可以逐个环境翻,一行就能回退。
-3. K8s 和本地默认值不同,是因为 K8s 上路由服的部署链还没补齐:manifest 缺失,而路由服注册的地址取 ListenOn 的 host,在 Pod 里会是 0.0.0.0。此时开路由模式,K8s 上所有 gRPC 类客户端消息都会不可达。
+3. K8s 路由服 manifest 与 POD_IP 通告已补齐,但尚未在 K8s 上以路由模式跑通 battle-smoke。因此 K8s 默认仍为 0,本地默认仍为 1;按 D34 验证后再切换 K8s 默认值。
 
 **补充的旧条目**:`client-rpc-router.md` D34(:31):gate 双模式,默认旧模式,默认值在冒烟通过后翻转,再删旧路径。
 
@@ -325,3 +325,177 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 | guild yaml 没有 zrpc 顶层 Etcd 段,发现走自定义 `Registry.Etcd` | `go/guild/etc/guild.yaml:6-8`、`:44-48` |
 
 **遗留**:路由服也是全局池。它的 K8s ConfigMap 已按本条写 `Key: ""`(`k8s_deploy.ps1:1957-1964`),但本地 `go/client_rpc_router/etc/client_rpc_router.yaml:9` 仍是 `Key: client_rpc_router.rpc`。本批未改,留待路由服迁 shared 版 noderegistry 时一并处理。
+
+---
+
+## D-14 新全局服务的库归属与建表方式:**每服务一库;表以 proto 为源;迁移用 go/db runner 的语义,抽成独立 module,由服务二进制 `-migrate` 在 K8s Job 里跑**
+
+(来源:契约 §4「首个建表服务开工前先拍 D4」,聚宝斋 J-6。注意:本条与可行性文档 §8 表里的 D14「mission 事实源」不是同一条。)
+(本条只落决策,不含代码。`go/schemamigrate`、runner 缺陷修复与 migrate Job 按第 9 条随首个建表服务同批落地,届时代码以 Codex 验证结果为准。)
+
+**结论**
+
+1. **库归属**
+   - 每个要建表的新全局服务(mail、trade 起)独占一个逻辑库 `mmorpg_<svc>`,本地和 K8s 同名。
+   - 不落 `zone_{N}_db`,不借 data_service 的 `mmorpg_global`,也不往共享库 `mmorpg` 加表。
+2. **表结构以 proto 为唯一事实源**
+   - 每张表对应一个 message,`OptionTableName` 锁定表名,启动和迁移时都要过表名守卫。
+   - TiDB 方言只用 proto 选项 500021-500024 表达,业务代码不手写 `/*T!*/`。
+   - 列形状受 proto2mysql 表达力约束:
+     - 主键只用整数列:id_segment 或 snowflake 发的 `uint64`,或由整数、枚举列组成的复合键。**禁止 string/bytes 主键。**
+     - string 列可以进索引或唯一键,但应用层必须限长 ≤191 字符,因为库只按 191 前缀建索引。
+     - 每表最多一个 `UNIQUE KEY`。
+   - 超出上述约束时,要在该服务的设计文档里书面申请「手写预建 DDL + 列存在性漂移检查」例外(照 `id_segment` 先例),不许默默手写。
+3. **迁移器取 go/db runner 的语义,不取 data_service 的 `CreateOrUpdateTable` 形态**
+   - 把 `go/db/internal/migrate` 的 `plan.go` 和 `runner.go` 抽成独立 module `go/schemamigrate`。只保留 `ProtoSource`,不做 `SQLSource`。
+   - 保证项:
+     - `schema_migrations` 台账,dirty 时拒绝继续;
+     - 按库名 `GET_LOCK` 跨实例互斥;
+     - 会话级 `lock_wait_timeout`,外加每条语句的硬超时;
+     - 断言 `SELECT DATABASE()` 等于代码里的库名常量;
+     - 漂移默认只执行 `ADD COLUMN`;类型漂移、多余列、缺主键只报告,要显式 `-allow-modify` 才生成 `MODIFY`。
+   - 抽取时必须先修一个缺陷:基线跑过之后,再新增的表永远建不出来(见证据表)。
+   - 库名断言自带实现,不复用 `dbguard`:它是 go/db 的 internal 包,语义也是按 ZoneId 推导。
+4. **入口与执行时机**
+   - 入口是服务自己二进制上的 `-migrate` flag,形状照 data_service,和服务同一个镜像。
+   - `-migrate` 调用 `go/schemamigrate`,退出码:0 成功(含「多余列」WARN);1 失败;3 锁忙;4 需人工(类型漂移、缺主键、表清单异常)。
+   - dev 档:启动期允许 `Schema.AutoMigrate=true`,有锁保护,多副本并发安全。
+   - staging/prod 档:
+     - 固定 `false`;
+     - 每个服务一个 `<svc>-migrate` Job,照 `kafka-topic-init`:同一镜像和 ConfigMap,args 为 `-f <yaml> -migrate`;
+     - `k8s_deploy.ps1` 在 infra 阶段、服务 Deployment 之前,先 delete 再 apply 这个 Job;
+     - staging/prod 必须等迁移 Job Complete 后才 apply 服务 Deployment;失败或超时中断发布,此门禁不受 `-WaitReady` 控制;
+     - 退出码 3 由 Job 的 backoff 重试;1 或 4 直接中断发布。
+   - `AutoMigrate=false` 时,启动路径只跑一次 plan(只读)。发现待执行语句或需人工项就拒绝启动(fail-closed),并打印补救命令。
+5. **建库**
+   - `CREATE DATABASE IF NOT EXISTS mmorpg_<svc>` 加 `GRANT ... TO 'appuser'@'%'` **只登记一处**:`deploy/mysql-init/00_init_zone_dbs.sql`。K8s ConfigMap 会原样带入这份文件,不要再在 `k8s_deploy.ps1` 里生成第二份。`02_k8s_global_db.sql` 是因为本地和 K8s 库名不同才单独生成的,不是范式。
+   - initdb 只在空数据卷执行。已初始化的本地卷和已有数据的 PVC,要在 `deploy/k8s/README.md` 写手工步骤,照 `mmorpg_global` 的写法。库不存在时,migrate Job 以 1 退出并点名库名。
+   - `deploy/mysql-init` 从本条起**禁止新增业务表**。存量 `guild_friend_tables.sql` / `gateway_tables.sql` 保留不动。
+6. **跨服务**
+   - 跨服务读数据只经对方 gRPC,不跨库 JOIN。mail 取公会成员经 guild gRPC。
+   - 各服务共用 `appuser`,它对多个库有 ALL 权限,所以「不跨库访问」目前**只是约定**,机械防线是第 3 条的库名断言。每服务独立账号在 TiDB 用户体系重议时再定。
+7. **proto2mysql 版本口径**
+   - `go/schemamigrate` 必须 require 一个**未被移动过、至少含 TiDB 选项和 191 索引前缀**的 tag(≥ `v0.1.1`)。
+   - 不许 require `v0.1.0`:这个 tag 被移动过。
+   - 不许 replace 到仓库外目录。
+   - 本地主键 `VARCHAR(191)` 修复只在未推送的分支上。它进入某个 tag 之前,第 2 条的「禁止 string 主键」不放宽。打 tag 需要人执行(AGENTS.md §9)。
+8. **存量不动**
+   - friend、guild 和 gateway 的 `zone_config` 表留在 `mmorpg`,`guild_schema_migration` 门表照旧,不变量按 D-10 保留。
+   - TiDB Phase 1 是逻辑库对逻辑库迁移,库名不改。
+   - data_service 和 go/db 本轮不改迁移路径(见遗留)。
+9. **每个新库的上线清单**
+   - 新 biz_tag 进 data_service 的 `BootstrapTags`;
+   - 在设计文档里声明行是否带 `zone_id` / `home_zone`,决定是否需要 merge_zone 步骤;
+   - 补 audit auditor 和 data_consistency_check;
+   - 进 TiDB BR 按库恢复清单。
+   - 备份 CronJob 是 `--all-databases`,无需改。
+10. **不引入** golang-migrate,不建 `go/tools/migrate`,不写「两工具互拒台账」。
+
+**理由**
+
+1. **B 手里有两套现役建表形态,其中一套对另一套有书面反对。**
+   - go/db runner 的包注释写明它存在的理由:多副本并发 ALTER 会造成 MDL 阻塞;proto2mysql 自动 `MODIFY` 是「一次无人批准的在线 DDL」。
+   - data_service 恰好是这种形态:无台账、无锁、无 `lock_wait_timeout`。
+   - 按决策原则「有书面权衡的既有决策不推翻」,选 go/db 的语义。data_service 只贡献入口形状(同二进制 flag,镜像里就有)。
+2. **无锁形态在 B 上已经不安全。**
+   - data_service 自己的注释承认多副本并发 ALTER 的风险,可它在 K8s 上是随 zone 部署的(不是 Global),全局库只有一份。多 zone 时,dev 档的 AutoMigrate 已经会并发。
+   - 新全局服务的模板是 `replicas: 2`。
+3. **为什么抽 module,而不是直接 import 或放进 go/shared。**
+   - `go/db/internal/...` 受 Go internal 规则约束,其他 module 导入不了。
+   - go/shared 是 `go 1.24.5`,proto2mysql 是 `go 1.26.5`。推断:放进 shared 会在 tidy 时把所有依赖 shared 的 module 的 go 指令抬到 1.26.5。D-5 就是出于同样的理由换了落点。
+   - 独立 module 只波及真正建表的服务。
+4. **入口用服务 flag,不用 `cmd/migrate`。** 镜像只编 ENTRY 这一个二进制,`cmd/migrate` 不在镜像里(P1-03 的证据之一)。用服务 flag,Job 可以直接复用服务镜像。
+5. **为什么不取 A 的 golang-migrate(推翻可行性文档 :230、:397)。**
+   - B 已有同职责的 runner(原则 1)。
+   - 手写 SQL 迁移文件等于和 proto 并行维护一份结构,正是 `ProtoSource` 注释引 AGENTS.md §3 所禁止的。
+   - 新增依赖需要说明现有能力为何不足(§11.2),这里说明不了。
+   - 「互拒台账」是同时养两套迁移器才有的代价。
+   - D-10 规定「按 B 的形状重写」,A 的关系表改写成 proto message。
+6. **为什么每服务一库。**
+   - `mmorpg_global` 装着 `id_segment`,恢复它是一次 ID 安全事件。业务表混进去,会把业务库的恢复和发号水位绑在一起。
+   - `mmorpg` 是 merge_zone DSN 的默认库,里面还有 mysql-init 手写的存量表。
+   - `zone_{N}_db` 不能装跨 zone 的行(D-2)。
+   - 单独成库后,按库备份和恢复(TiDB BR)、日后按库授权,都有自然边界。
+7. **为什么版本 ≥ v0.1.1。**
+   - data_service 钉的 `9ad991c` 不认 TiDB 选项,生成的 DDL 会静默丢掉方言。
+   - 更早的版本对 string 索引列不加前缀,直接报 MySQL 1170。
+   - `v0.1.0` 这个 tag 在缓存里和仓库里指向不同的 commit,新 module 拉到哪份不确定。
+
+**被推翻 / 修订的旧条目**
+
+- `xuanming-port-feasibility-20260902.md` :230、:397(§10 #4)「D4 O2 收窄版:A 的 tools/migrate 搬进 B 作 go/tools/migrate + 两工具互拒」:**推翻**。
+- 同文件 :245「D4 原推荐」:**部分保留**。
+  - 保留:runner 升格为 `go/schemamigrate`、proto 表走 `ProtoSource`、每服务一库、关闭 mysql-init 新增业务表。
+  - 删去:`SQLSource`,以及「移植 A 的 expand-only 门禁」。runner 的漂移默认只 ADD,本身就是 expand-only。
+- 同文件 :253「D12 禁直接 require proto2mysql」:**修订**为「建表的新 module 经 `go/schemamigrate` 依赖 proto2mysql,go 指令 1.26.5;其余新 module 仍按 D12 钉 1.24.5」。同时 :25「CI builder 1.24-alpine」一并作废。
+- 同文件 :202 D4「手写 mysql-init vs ProtoSource」:定为 `ProtoSource`。
+- 同文件 :291「D4 落地前用 `deploy/mysql-init/grant_tables.sql` 过渡」:**作废**,该文件不存在。
+- `jubaozhai-market.md` J-6「每服务一库 + 迁移器」:按本条落地。§8「DDL 带 `/*T!*/`」改由 proto 选项生成。
+
+**前提为何不成立**
+
+- **:230 的第一个前提**是「必须加 `SQLSource` 装 A 的 96 个 golang-migrate SQL,而 runner 的 Up 写死 Baseline+Drift,要重写应用循环」。
+  - 按 D-10,搬入服务的表按 B 的形状改写进 proto,不需要逐文件台账。
+  - 对 `ProtoSource` 来说,Baseline+Drift 恰好够用。
+- **:230 的第二个前提**是「runner 零测试」。现在 `plan_test.go` 已有 283 行,只有 `runner.go` 仍无测试。这是抽取时必须补的项,不是否决理由。
+- **:253 的前提**是「builder 为 1.24-alpine + GOTOOLCHAIN=local」。
+  - 现行 builder 已是 `golang:1.26-alpine`,CI 按各 module 的 go.mod 取版本。
+  - data_service 早已直连 require proto2mysql,并且在镜像目录里。
+- **本条草案曾把「data_service -migrate」当成「B 已接进 K8s 的形态」**,这也不成立。K8s 上没有任何 Job、initContainer 或命令去执行 `-migrate`,staging/prod 首次拉起时无人建表。go/db 的同类缺口(P1-03)仍是 open。所以本条必须补 Job,不能写成「照已有」。
+
+**证据**
+
+| 事实 | file:line |
+|---|---|
+| go/db runner 的存在理由与五项保证(台账 / 只 up / GET_LOCK / 超时 / 不自动改列) | `go/db/internal/migrate/plan.go:1-19` |
+| 书面反对「proto2mysql 无版本、无锁超时地自动 MODIFY」 | `go/db/internal/logic/pkg/proto_sql/db.go:48-54` |
+| ProtoSource 不手写 SQL 的理由;基线 checksum 只算表名集合;`AllowModifyColumn` 默认 false | `plan.go:75-78`、`:86` |
+| 漂移只把缺列变成 ADD COLUMN,其余进 warnings | `plan.go:122`,`:141`(查不到表只告警) |
+| **缺陷**:基线 version 已应用、checksum 变了(= 新增了表)就只打 WARN 不重跑;漂移阶段对查不到的表也只告警 ⇒ 后加的表永远建不出来 | `go/db/internal/migrate/runner.go:397-404`;`plan.go:141` |
+| Up 固定为 Baseline + Drift 两步 | `runner.go:174`、`:188` |
+| 库名白名单走 internal 包 dbguard;会话超时;GET_LOCK;台账建表 | `runner.go:12`、`:244`、`:265`、`:295`、`:323` |
+| cmd/migrate 按 ZoneId 推导库名;`-allow-modify`;退出码 3 锁忙、4 需人工 | `go/db/cmd/migrate/main.go:53`、`:63`、`:178`、`:197` |
+| data_service 迁移直接 CreateOrUpdateTable,无锁、无台账;自陈多副本并发 ALTER 风险 | `go/data_service/internal/store/schema.go:117-127`、`:150-170` |
+| data_service 唯一手写 DDL 例外(string 主键撞 1170)与只做列漂移检查 | `schema.go:28-51`、`:150-157` |
+| 表名守卫是复制件(不能依赖 go/db internal) | `schema.go:66-68` |
+| 已有表不补索引,靠 ensureIndexes | `schema.go:215-221` |
+| `-migrate` flag 形态,跑完即退 | `go/data_service/data_service.go:41-44`、`:225-240` |
+| data-service 随 zone 部署(非 Global),全局库只有一份 | `tools/scripts/k8s_deploy.ps1:387`;`deploy/k8s/README.md:321` |
+| 全局服务模板是多副本 | `deploy/k8s/manifests/go-svc/chat.yaml:41`;`match.yaml:36` |
+| data-service Deployment args 只有 `-f`;K8s 命令集没有 migrate;go/db 同类缺口 open | `data-service.yaml:54`;`k8s_deploy.ps1:8`、`:1495-1496`;`docs/design/handoff-backlog-2026-09-05.md:202` |
+| staging/prod 固定 AutoMigrate=false | `k8s_deploy.ps1:1500-1512` |
+| 一次性 Job 接进部署流程的先例(infra manifest 之后、zone 之前;先 delete 再 apply) | `deploy/k8s/manifests/infra/kafka-topic-init.yaml:15-16`、`:42-57`;`k8s_deploy.ps1:2814-2816` |
+| mysql-init 目录原样打进 K8s ConfigMap;02_ 只因库名与本地不同才生成 | `k8s_deploy.ps1:2597-2601`、`:2620-2632`、`:424-429` |
+| initdb 只对空卷执行;存量 PVC 手工补建先例 | `deploy/mysql-init/00_init_zone_dbs.sql:18-23`;`deploy/k8s/README.md:339-341` |
+| MYSQL_USER 只自动授权 `mmorpg`,其余库要显式 GRANT | `00_init_zone_dbs.sql:1-3` |
+| mysql-init 现有业务表(存量豁免) | `deploy/mysql-init/guild_friend_tables.sql:6-67` |
+| data_service require `v0.1.0`,go.sum 与缓存为 `9ad991c`;仓库里 `v0.1.0^{}` = `2aca007`(tag 被移动) | `go/data_service/go.mod:3`、`:9`;`go.sum:131`;模块缓存 `proto2mysql/@v/v0.1.0.info`;`E:/work/proto2mysql` `git rev-parse v0.1.0^{}` |
+| go/db replace 到仓库外;镜像靠命名构建上下文带入 | `go/db/go.mod:10`、`:132`;`tools/scripts/go_svc_image.ps1:110-118` |
+| TiDB 选项 500021-24 在 B 的 proto 已声明;`9ad991c` 的 options.go 无 TiDB | `proto/db/proto_option.proto:93-100`;`git grep -i tidb 9ad991c -- options.go` 零命中 |
+| string 非主键列一律 MEDIUMTEXT;191 索引前缀从 v0.1.1 起 | proto2mysql `83fed85` `proto2mysql.go:403`、`:599`;`e90a5f0`(v0.1.1)`proto2mysql.go:485` |
+| 每表只有一个 UNIQUE KEY | proto2mysql `83fed85` `proto2mysql.go:927-938` |
+| 主键 VARCHAR(191) 修复只在未推送分支 `codex/save-local-key-column-20260914` | proto2mysql `f3b308f` `proto2mysql.go:135`;`git branch -a --contains f3b308f` |
+| 库自陈:无版本概念时 MODIFY/CHANGE 会在新旧副本间来回翻 | proto2mysql `83fed85` `proto2mysql.go:65-71`、`:185-191` |
+| builder 已是 1.26;CI 按 module go.mod 取版本;shared / chat 仍 1.24.5 | `deploy/k8s/Dockerfile.go-svc:43-46`;`.github/workflows/go-modules-ci.yml:189`;`go/shared/go.mod:3`;`go/chat/go.mod:3` |
+| 镜像只 COPY proto / shared / 目标服务 | `Dockerfile.go-svc:65-70` |
+| TiDB D3「不在业务代码手写 DDL」;D9 只定迁 TiDB 不定库名;迁移是逻辑库对逻辑库;TiDB 建库权限未做 | `docs/design/global-data-layer-tidb-decision.md:85`、`:138-141`、`:173`、`:172` |
+| 聚宝斋 §8 每张表至多一个唯一键;发号 biz_tag 由 idsegment | `docs/design/jubaozhai-market.md:208`、`:213`、`:216-217` |
+| 契约要求首个建表服务先拍 D4 | `docs/design/microservice-zone-contract-20260914.md:216-217` |
+| 被推翻 / 修订条目原文 | `xuanming-port-feasibility-20260902.md:25`、`:202`、`:230`、`:245`、`:253`、`:291`、`:397` |
+
+**代价**
+
+- **工作量**:抽 `go/schemamigrate`、修「后加表」缺陷、库名断言、补 runner 测试、接 Job,推断 4~6 人日(未核算)。可行性文档 :245 原估 15 人日,那个数含 SQLSource 和 A 的门禁。
+- **A 侧改写量未清点**:A 的关系表改写成 proto message 的量没算过。A 的 96 个 SQL 里有多少属于本期要搬的服务,需要按服务清点。
+- **proto2mysql 表达力**:只能用整数主键;string 索引列只按前 191 字符生效;每表一个唯一键。超出的只能走书面例外。
+- **只做加法**:迁移不删列、不改名、不自动改类型,也不给已有表补索引。破坏性变更要单独设计,人工带 `-allow-modify` 或走运维 DDL,并按 AGENTS.md §11.3 配版本、灰度、回滚。
+- **建表服务的 go 指令升到 1.26.5**,与其余新 module 分成两档。
+- **存量环境补建库是手工步骤**。「不跨库」在共用 `appuser` 下只是约定。
+
+**本条不改的 / 遗留**
+
+- **data_service**:`-migrate` 仍然无锁,且随 zone 多实例。后续迁到 `go/schemamigrate`(`id_segment` 手写例外保留)。本轮不动。
+- **go/db**:仍用 internal 的 runner,replace 到仓库外。抽取落地后改为 import `go/schemamigrate`,并与 P1-03 的 Job 同批处理。
+- **proto2mysql 版本**:data_service(`9ad991c`)和 go/db(本地分支 `f3b308f`)要对齐到同一个不可变 tag。主键修复需要进 tag,由人执行。
+- **guild 没有 K8s ConfigMap 和 manifest**(`deploy/k8s/README.md:357`),mail 经 guild gRPC 这条路在 K8s 上暂不可达。
+- **TiDB 上 `mmorpg_<svc>` 由谁建、授权给谁**:随 TiDB 决策 §6 第 4 项一并定。

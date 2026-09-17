@@ -26,8 +26,8 @@ type ServiceContext struct {
 	DB                       *sql.DB
 	KafkaWriter              *kafkago.Writer
 	GateCommandBuilder       kafkautil.GateCommandBuilder
-	// DataServiceClient 是 data_service 的 gRPC 客户端;目前只给 guild_id 号段用,
-	// IdSegment.Enabled=false 时为 nil(不拨号)。
+	// DataServiceClient 用于查询角色归属区及领取 guild_id 号段。
+	// 配置了 DataServiceRpc 就拨号,与 IdSegment.Enabled 无关。
 	DataServiceClient dspb.DataServiceClient
 	// GuildIDSegment 是 guild_id 号段客户端(shared/idsegment,biz_tag="guild");
 	// IdSegment.Enabled=false 时为 nil。发号策略(是否回退 snowflake)在 guild.go 里

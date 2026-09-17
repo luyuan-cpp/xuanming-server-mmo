@@ -311,6 +311,16 @@
         "PetNothingToChange": 26015,
         "PetIdGenerateFailed": 26016
       }
+    },
+    "trade_error": {
+      "base": 20000,
+      "width": 1000,
+      "ids": {
+        "TradeListingNotFound": 20000,
+        "TradeHomeZoneUnknown": 20001,
+        "TradeFavoriteLimitReached": 20002,
+        "TradeFeatureDisabled": 20003
+      }
     }
   },
   "legacy_ids": {

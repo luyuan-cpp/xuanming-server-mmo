@@ -1,0 +1,161 @@
+syntax = "proto3";
+option go_package = "login/proto/trade";
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/tip.proto";
+
+package trade;
+
+option cc_generic_services = false;
+option (OptionFileDefaultNode) = NODE_TRADE;
+
+// 聚宝斋客户端协议(docs/design/jubaozhai-market.md §9)。
+// 身份只取 gate 注入的会话 metadata,请求里刻意没有 player_id。
+// 业务结果一律放在响应体 error_message 里;外层信封错误只表示没到达业务逻辑。
+// 消息名刻意不带 Jubaozhai 前缀:客户端 MmorpgClient.Game.Jubaozhai 里有同名模型类。
+
+// 商品类目。1-8 与客户端 JubaozhaiCategory 顺序一致(客户端值 = 本值 - 1)。
+enum ListingCategory {
+  LISTING_CATEGORY_UNSPECIFIED = 0;
+  LISTING_CATEGORY_CHARACTER = 1;
+  LISTING_CATEGORY_PET = 2;
+  LISTING_CATEGORY_WEAPON = 3;
+  LISTING_CATEGORY_ARMOR = 4;
+  LISTING_CATEGORY_SET = 5;
+  LISTING_CATEGORY_TREASURE = 6;
+  LISTING_CATEGORY_JEWELRY = 7;
+  LISTING_CATEGORY_SUMMONING_ORDER = 8;
+  // 游戏币。客户端目前没有该类目页签(设计 J-O5)。
+  LISTING_CATEGORY_CURRENCY = 9;
+}
+
+// 顶部页签。
+enum ListingTab {
+  LISTING_TAB_UNSPECIFIED = 0;
+  LISTING_TAB_PUBLIC_NOTICE = 1; // 公示列表:可看、可收藏、不可买
+  LISTING_TAB_ON_SALE = 2;       // 寄售列表
+}
+
+// 侧栏分区。「货架」不是浏览分区,走 GetMyShelf。
+enum ListingSection {
+  LISTING_SECTION_UNSPECIFIED = 0;
+  LISTING_SECTION_CONSIGNMENT = 1; // 一口价寄售
+  LISTING_SECTION_AUCTION = 2;     // 竞价(P6),当前回 TradeFeatureDisabled
+}
+
+// 排序。所有排序都以 listing_id 作最终决胜列,保证翻页不重不漏。
+enum ListingSort {
+  LISTING_SORT_DEFAULT = 0;        // 新上架在前
+  LISTING_SORT_PRICE_ASC = 1;
+  LISTING_SORT_PRICE_DESC = 2;
+  LISTING_SORT_LEVEL_DESC = 3;
+  LISTING_SORT_REMAINING_ASC = 4;  // 公示列表按公示结束,寄售列表按寄售结束
+}
+
+// 展示阶段,由服务端按存储状态与 server_now_ms 推导,不落库。
+enum ListingPhase {
+  LISTING_PHASE_UNSPECIFIED = 0;
+  LISTING_PHASE_PUBLIC_NOTICE = 1;
+  LISTING_PHASE_ON_SALE = 2;
+  LISTING_PHASE_LOCKED = 3;  // 有未完成订单(P3)
+  LISTING_PHASE_ENDED = 4;   // 已过期 / 已售 / 已下架
+}
+
+// 市场范围,服务端配置 Market.Scope 决定,客户端不能指定。
+enum MarketScope {
+  MARKET_SCOPE_UNSPECIFIED = 0;
+  MARKET_SCOPE_ZONE = 1;   // 只看、只买本区(卖家 home_zone == 买家 home_zone)
+  MARKET_SCOPE_GLOBAL = 2; // 全服
+}
+
+message ListingSummary {
+  uint64 listing_id = 1;
+  ListingCategory category = 2;
+  // 子类编码:0 = 无子类;否则为该类目子类表里的 1 起序号(编码表见设计 §3)。
+  uint32 subcategory = 3;
+  string title = 4;
+  uint32 level = 5;
+  uint64 price_fen = 6;       // 价格,单位:分
+  ListingPhase phase = 7;
+  uint64 notice_end_ms = 8;   // 公示结束(Unix 毫秒);等于上架时刻表示无公示期
+  uint64 sale_end_ms = 9;     // 寄售结束(Unix 毫秒)
+  uint32 market_zone = 10;    // 商品所属逻辑市场分区(卖家上架时的 home_zone)
+  bool is_favorite = 11;      // 调用者是否已收藏
+  bool is_mine = 12;          // 是否调用者自己上架
+  string summary = 13;        // 列表"信息"列的一行摘要
+  string icon_key = 14;       // 客户端图标资源键
+}
+
+message ListingDetail {
+  ListingSummary summary = 1;
+  string description = 2;
+}
+
+message BrowseListingsRequest {
+  ListingTab tab = 1;
+  ListingSection section = 2;
+  ListingCategory category = 3;  // 必填
+  uint32 subcategory = 4;        // 0 = 全部
+  string search = 5;             // 名称包含匹配,或纯数字时同时按编号精确匹配;最多 64 个字符
+  ListingSort sort = 6;
+  uint32 page = 7;               // 从 1 起;0 视为 1;超过末页按末页
+  uint32 page_size = 8;          // 0 取服务端默认;超过上限按上限
+  uint32 zone_filter = 9;        // 仅 MARKET_SCOPE_GLOBAL 下生效;0 = 全部区
+  bool favorites_only = 10;
+}
+
+message BrowseListingsResponse {
+  TipInfoMessage error_message = 1;
+  repeated ListingSummary listings = 2;
+  uint32 total_count = 3;
+  uint32 page = 4;          // 钳制后的页码
+  uint32 page_size = 5;     // 钳制后的页长
+  uint32 page_count = 6;    // 至少为 1
+  MarketScope market_scope = 7;
+  uint64 server_now_ms = 8; // 客户端据此计算剩余时间,不信本地钟
+}
+
+message GetListingDetailRequest {
+  uint64 listing_id = 1;
+}
+
+message GetListingDetailResponse {
+  TipInfoMessage error_message = 1;
+  ListingDetail detail = 2;
+  uint64 server_now_ms = 3;
+}
+
+message SetFavoriteRequest {
+  uint64 listing_id = 1;
+  bool favorite = 2;
+}
+
+message SetFavoriteResponse {
+  TipInfoMessage error_message = 1;
+  uint64 listing_id = 2;
+  bool favorite = 3;        // 服务端确认后的收藏状态
+}
+
+message GetMyShelfRequest {
+  uint32 page = 1;
+  uint32 page_size = 2;
+}
+
+message GetMyShelfResponse {
+  TipInfoMessage error_message = 1;
+  repeated ListingSummary listings = 2;
+  uint32 total_count = 3;
+  uint32 page = 4;
+  uint32 page_size = 5;
+  uint32 page_count = 6;
+  uint64 server_now_ms = 7;
+}
+
+service ClientPlayerJubaozhai {
+  option (OptionIsClientProtocolService) = true;
+
+  rpc BrowseListings (BrowseListingsRequest) returns (BrowseListingsResponse);
+  rpc GetListingDetail (GetListingDetailRequest) returns (GetListingDetailResponse);
+  rpc SetFavorite (SetFavoriteRequest) returns (SetFavoriteResponse);
+  rpc GetMyShelf (GetMyShelfRequest) returns (GetMyShelfResponse);
+}
