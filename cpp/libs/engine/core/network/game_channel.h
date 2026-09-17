@@ -83,8 +83,17 @@ private:
 
     void SendGameRpcMessage(const GameRpcMessage &message);
 
+    // 只在真正要发送时把连接锁成强引用;锁不住(连接已断、对象已被 muduo 释放)就丢弃并告警。
+    TcpConnectionPtr LockConnection(const char *what) const;
+
     RpcCodec codec_;
-    TcpConnectionPtr connection_;
+    // 连接生命周期约定(docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md §8):
+    // 应用层不拥有 TcpConnection,只存 weak_ptr。这里改成 weak 之后:
+    //  - 出站(RpcClient 持有的 channel):DOWN 后不再钉住死连接和它的 fd,不必等重连覆盖;
+    //  - 入站(RpcServer 存进 conn context 的 channel):conn→context→channel→conn 的引用环不复存在,
+    //    DOWN 分支清 context 只是卫生,不再是释放连接的前提;
+    //  - 对 muduo TcpClient::~TcpClient 的 use_count()==1 判断永远不会造成干扰。
+    std::weak_ptr<muduo::net::TcpConnection> connection_;
     const std::map<std::string, ProtobufService *> *services_ = nullptr;
     ProtobufDispatcher dispatcher_;
 };

@@ -102,9 +102,9 @@ void GateHandler::SendMessageToPlayer(::google::protobuf::RpcController* control
 		LOG_DEBUG << "Connection ID not found for PlayerMessage, session ID: " << request->header().session_id() << ", message ID:" << request->message_content().message_id();
 		return;
 	}
-	// conn 为空即空指针解引用。BroadcastToScene/BroadcastToAll 一直有这个判定,
-	// 这几条推送路径漏了 —— 统一补齐。
-	if (!sessionIt->second.conn)
+	// 会话不持有连接；发送前锁定，连接已释放时丢弃本次推送。
+	auto conn = sessionIt->second.conn.lock();
+	if (!conn)
 	{
 		LOG_ERROR << "SendMessageToPlayer: session has no connection, session_id="
 				  << request->header().session_id();
@@ -125,7 +125,7 @@ void GateHandler::SendMessageToPlayer(::google::protobuf::RpcController* control
 	case gate_session_fence::PushVerdict::kDeliver:
 		break;
 	}
-	GetGateCodec().send(sessionIt->second.conn, request->message_content());
+	GetGateCodec().send(conn, request->message_content());
 	///<<< END WRITING YOUR CODE
 }
 
@@ -175,7 +175,10 @@ void GateHandler::RoutePlayerMessage(::google::protobuf::RpcController* controll
 		outbound.set_id(routedClientRequest.id());
 		outbound.set_message_id(routedClientRequest.message_id());
 		outbound.set_serialized_message(routedClientRequest.body());
-		GetGateCodec().send(targetSessionIt->second.conn, outbound);
+		if (const auto conn = targetSessionIt->second.conn.lock())
+		{
+			GetGateCodec().send(conn, outbound);
+		}
 		return;
 	}
 
@@ -236,7 +239,8 @@ void GateHandler::BroadcastToPlayers(::google::protobuf::RpcController* controll
 			LOG_DEBUG << "Connection ID not found for BroadCast2PlayerMessage, session ID: " << sessionId << ", message ID:" << request->message_content().message_id();
 			return;
 		}
-		if (!sessionIt->second.conn)
+		auto conn = sessionIt->second.conn.lock();
+		if (!conn)
 		{
 			return;
 		}
@@ -253,7 +257,7 @@ void GateHandler::BroadcastToPlayers(::google::protobuf::RpcController* controll
 		case gate_session_fence::PushVerdict::kDeliver:
 			break;
 		}
-		GetGateCodec().send(sessionIt->second.conn, request->message_content());
+		GetGateCodec().send(conn, request->message_content());
 	};
 
 	broadcast_targets::ForEach(*request, sendToSession);
@@ -268,9 +272,13 @@ void GateHandler::BroadcastToScene(::google::protobuf::RpcController* controller
 	const uint64_t sceneId = request->scene_id();
 	for (auto &[sessionId, info] : tlsSessionManager.sessions())
 	{
-		if (info.sceneId == sceneId && info.conn)
+		if (info.sceneId != sceneId)
 		{
-			GetGateCodec().send(info.conn, request->message_content());
+			continue;
+		}
+		if (const auto conn = info.conn.lock())
+		{
+			GetGateCodec().send(conn, request->message_content());
 		}
 	}
 	///<<< END WRITING YOUR CODE
@@ -283,9 +291,9 @@ void GateHandler::BroadcastToAll(::google::protobuf::RpcController* controller, 
 	///<<< BEGIN WRITING YOUR CODE
 	for (auto &[sessionId, info] : tlsSessionManager.sessions())
 	{
-		if (info.conn)
+		if (const auto conn = info.conn.lock())
 		{
-			GetGateCodec().send(info.conn, request->message_content());
+			GetGateCodec().send(conn, request->message_content());
 		}
 	}
 	///<<< END WRITING YOUR CODE
@@ -386,9 +394,9 @@ void GateHandler::GmGracefulShutdown(::google::protobuf::RpcController* controll
 	uint32_t count = 0;
 	for (auto& [sessionId, info] : sessions)
 	{
-		if (info.conn)
+		if (const auto conn = info.conn.lock())
 		{
-			info.conn->forceClose();
+			conn->forceClose();
 			++count;
 		}
 	}

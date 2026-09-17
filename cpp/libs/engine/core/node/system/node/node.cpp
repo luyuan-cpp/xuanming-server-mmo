@@ -1079,14 +1079,45 @@ void Node::FinalizeShutdownInLoop()
 	muduo::Logger::setOutput(LogToConsole);
 #endif
 	logSystem.stop();
-	LOG_DEBUG << "Node shutdown complete.";
 
+	// 不能在这里直接 quit()。Windows 控制台 Ctrl+C / 关窗走 SetConsoleCtrlHandler →
+	// Shutdown() → queueInLoop(ShutdownInLoop),于是本函数是在 doPendingFunctors 里跑的:
+	// beforeShutdownFn_ 刚对每个客户端会话 forceClose(),它们的 forceCloseInLoop 被排进
+	// 了**刚被 swap 出来的新队列**;没有 gRPC server 的节点(gate)又在同一栈里同步走到
+	// 这里 —— 此时 quit() 会让 loop() 在 while(!quit_) 处退出,muduo_windows 的 ~EventLoop
+	// 不排空 pendingFunctors_,forceCloseInLoop 永不执行,连接停在 kDisconnecting,最后在
+	// thread_local(gate 的 tlsSessionManager)析构、EventLoop 已死之后释放最后一根引用,
+	// 撞 TcpConnection.cc:71 assert(state_ == kDisconnected)。
+	//
+	// 需要排空的不是一趟而是**两趟**:第 N+1 趟 forceCloseInLoop → handleClose(它把
+	// connectDestroyed 再排进队列),第 N+2 趟 connectDestroyed → channel_->remove() 清掉
+	// addedToLoop_;少一趟,~Channel 会在 EventLoop 析构时撞 assert(!addedToLoop_)。
+	//
+	// 用**两跳 queueInLoop**,靠队列的 FIFO 把 quit() 排到两趟之后:
+	//   本趟(N)  :forceCloseInLoop×k 已在队,再排入外跳;
+	//   N+1      :forceCloseInLoop×k 各自把 connectDestroyed 排入队列,然后外跳跑、
+	//              把内跳排在它们之后;
+	//   N+2      :connectDestroyed×k 先跑,内跳最后 quit()。
+	// 顺序由队列保证,与 poll 何时返回无关。**不能用定时器**(09-14 评审推翻过一版
+	// runAfter(0.05) 的写法):Windows 的 loop 是 poll → handleEvents → timerQueue_->loop()
+	// → doPendingFunctors,定时器若恰在 N+1 趟到期,quit_ 先置位、本趟只跑完
+	// forceCloseInLoop 就退出,connectDestroyed 永远不跑,assert 照撞。
+	// 完成标记必须等最后一跳执行完 quit() 才置位,否则析构的 fallback 会跳过排空,
+	// EventLoop 外的析构也可能提前释放仍被这两跳捕获的 Node。notify 在锁内完成,
+	// 等待方取得锁时已没有后续 Node 访问;解锁后不得再访问任何成员。
+	// 见 docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md §7.11。
+	auto *const loop = eventLoop;
+	loop->queueInLoop([this, loop]
 	{
-		std::lock_guard<std::mutex> lock(shutdownCompletionMutex_);
-		shutdownComplete_ = true;
-	}
-	shutdownCompletionCv_.notify_all();
-	eventLoop->quit();
+		loop->queueInLoop([this, loop]
+		{
+			loop->quit();
+			LOG_DEBUG << "Node shutdown complete.";
+			std::lock_guard<std::mutex> lock(shutdownCompletionMutex_);
+			shutdownComplete_ = true;
+			shutdownCompletionCv_.notify_all();
+		});
+	});
 }
 
 void Node::InitLogSystem()

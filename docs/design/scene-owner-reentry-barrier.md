@@ -3,6 +3,8 @@
 状态:待评审(本文只定方案供拍板,未落任何强耦合代码)
 关联:`docs/design/player-async-save-loss-windows.md`、`go/player_locator/internal/logic/session_cas.go`(已有的会话代际 CAS,是本方案要对齐的范式)
 
+外部证据（2026-09-15 补入）：[游戏服务器网络故障、网络分区与进程暂停调研](../notes/2026-09-14-network-failures-and-process-pauses.md)，附 [2026-09-14 独立复核记录](../notes/2026-09-14-network-failures-and-process-pauses-verification.md)。历史事故与典型暂停时长不能为本文的 drain 预算、调度余量或再入等待提供硬上界；旧实例恢复、迟到写入和实际接管边界仍须项目故障演练验证。本次补充不表示本文方案已落码或通过运行时验收。
+
 ## 0. 一句话
 
 etcd 租约到期时,Go scene_manager 和 C++ scene 节点会**各自独立**对同一个信号做反应,两条时间线之间**没有任何互相等待**——新节点可能在老节点还在存盘 drain 时就 load 了旧状态,造成同一玩家在两个节点上双写、回档。修法是给"新节点接管"加一道**再入屏障**(等老节点一定停笔),再给玩家数据加一个**owner_epoch CAS**(迟到写一律拒),两层叠加。

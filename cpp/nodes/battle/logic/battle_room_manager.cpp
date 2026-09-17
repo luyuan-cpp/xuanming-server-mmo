@@ -1189,12 +1189,17 @@ void BattleRoomManager::PushToPlayer(const BattleRoom &room, const uint64_t play
     if (edge_ != nullptr)
     {
         const auto it = room.directConnByPlayer.find(playerId);
-        if (it != room.directConnByPlayer.end() && it->second && it->second->connected())
+        muduo::net::TcpConnectionPtr conn;
+        if (it != room.directConnByPlayer.end())
+        {
+            conn = it->second.lock();   // 锁不住 == 直连已断 == 缺项 → 走下面的 Kafka 回落
+        }
+        if (conn && conn->connected())
         {
             ::MessageContent content;
             content.set_message_id(messageId);
             content.set_serialized_message(message.SerializeAsString());
-            edge_->Send(it->second, content);
+            edge_->Send(conn, content);
             return;
         }
     }
@@ -1307,14 +1312,14 @@ bool BattleRoomManager::AttachDirectConnection(const uint64_t battleId, const ui
     }
 
     auto &slot = room->directConnByPlayer[playerId];
-    if (slot && slot != conn)
+    if (const auto old = slot.lock(); old && old != conn)
     {
         // 重连:先关旧的。forceClose 是 queueInLoop 异步的,旧连接的断开回调在本函数
         // 返回后才跑,那时 slot 已指向新连接,DetachDirectConnection 按身份比对不会误摘。
         LOG_INFO << "battle 直连重连,替换旧连接: battle_id=" << battleId << " player_id=" << playerId
-                 << " old_peer=" << slot->peerAddress().toIpPort()
+                 << " old_peer=" << old->peerAddress().toIpPort()
                  << " new_peer=" << conn->peerAddress().toIpPort();
-        slot->forceClose();
+        old->forceClose();
     }
     slot = conn;
     if (gateSessionId != nullptr)
@@ -1333,7 +1338,7 @@ void BattleRoomManager::DetachDirectConnection(const uint64_t battleId, const ui
         return;
     }
     const auto it = room->directConnByPlayer.find(playerId);
-    if (it != room->directConnByPlayer.end() && it->second == conn)
+    if (it != room->directConnByPlayer.end() && it->second.lock() == conn)
     {
         room->directConnByPlayer.erase(it);
     }
@@ -1370,11 +1375,11 @@ void BattleRoomManager::CloseDirectConnectionOf(BattleRoom &room, const uint64_t
     {
         return;
     }
-    if (it->second && it->second->connected())
+    if (const auto conn = it->second.lock(); conn && conn->connected())
     {
         LOG_INFO << "battle 关闭玩家直连: battle_id=" << room.battleId << " player_id=" << playerId
                  << " reason=" << reason;
-        ShutdownDirectConnAfterThisLoop(it->second);
+        ShutdownDirectConnAfterThisLoop(conn);
     }
     // 表里立刻摘除:从此对该玩家的 S2C 回落 Kafka→gate,不再往一条正在关闭的连接上写
     room.directConnByPlayer.erase(it);
@@ -1388,9 +1393,9 @@ void BattleRoomManager::CloseDirectConnections(BattleRoom &room, const char *rea
     }
     LOG_INFO << "battle 关闭房间全部直连: battle_id=" << room.battleId
              << " count=" << room.directConnByPlayer.size() << " reason=" << reason;
-    for (auto &[playerId, conn] : room.directConnByPlayer)
+    for (auto &[playerId, weakConn] : room.directConnByPlayer)
     {
-        if (conn && conn->connected())
+        if (const auto conn = weakConn.lock(); conn && conn->connected())
         {
             ShutdownDirectConnAfterThisLoop(conn);
         }

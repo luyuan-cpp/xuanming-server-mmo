@@ -50,7 +50,10 @@ struct SessionInfo
 	}
 
 	Guid playerId{kInvalidGuid};
-	muduo::net::TcpConnectionPtr conn;
+	// weak_ptr(AGENTS.md §11.7:应用层不拥有连接):客户端连接由 gate 的 TcpServer 拥有,会话表只是索引。
+	// 会话在 DOWN 回调里同步 erase、TcpServer 在那之后才放手,所以稳态下记录存在时 lock() 必成功;
+	// 改 weak 是为了任何路径(含关机)都不可能把死连接连 fd 钉在 thread_local 的会话表里。
+	std::weak_ptr<muduo::net::TcpConnection> conn;
 	MessageLimiter messageLimiter;
 	uint32_t sessionVersion{UINT32_MAX};
 	uint32_t pendingEnterGsType{0}; // Pending login type to forward to Scene once scene node is assigned

@@ -12,7 +12,12 @@
 #include "rpc_connection_event.h"
 #include <thread_context/ecs_context.h>
 
-class RpcClient : muduo::noncopyable
+// 连接生命周期约定(docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md §8):
+//  1. 连接的所有权只在 muduo(这里是 client_)手里;本类和 GameChannel 只存 weak_ptr。
+//  2. 绑进 muduo 回调的不是裸 this,而是 weak_ptr<自己>:对象没了,回调 lock() 失败即返回。
+// 于是本类**不需要析构函数**去摘回调,也不需要任何"延迟关闭"兜底 —— 直接销毁就是安全的:
+// ~TcpClient 见 use_count()==1 会 forceClose,之后到达的 handleClose 回调发现对象已亡就什么都不做。
+class RpcClient : muduo::noncopyable, public std::enable_shared_from_this<RpcClient>
 {
 public:
     RpcClient(muduo::net::EventLoop* loop,
@@ -20,10 +25,7 @@ public:
         : client_(loop, serverAddr, "RpcClient"),
         channel_(std::make_shared<GameChannel>())
     {
-        client_.setConnectionCallback(
-            std::bind(&RpcClient::onConnection, this, std::placeholders::_1));
-        client_.setMessageCallback(
-            std::bind(&GameChannel::HandleIncomingMessage, muduo::get_pointer(channel_), std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+        // 回调在 connect() 里绑:构造函数里还拿不到 weak_from_this()。
         client_.enableRetry();
     }
 
@@ -59,6 +61,31 @@ public:
 
     void connect()
     {
+        // 必须由 shared_ptr 持有(make_shared)才能 weak_from_this();栈上构造直接 fail-fast,
+        // 否则回调永远 lock 不到自己、悄悄变哑。
+        if (weak_from_this().expired())
+        {
+            LOG_FATAL << "RpcClient must be owned by shared_ptr before connect()";
+        }
+        // muduo 会把这两个回调拷到 TcpConnection 上,并可能在本对象析构之后才调用
+        // (forceClose 一律 queueInLoop)。绑 weak_ptr:对象已亡则回调什么都不做。
+        std::weak_ptr<RpcClient> weakSelf = weak_from_this();
+        std::weak_ptr<GameChannel> weakChannel = channel_;
+        client_.setConnectionCallback([weakSelf](const muduo::net::TcpConnectionPtr& conn)
+        {
+            if (const auto self = weakSelf.lock())
+            {
+                self->onConnection(conn);
+            }
+        });
+        client_.setMessageCallback([weakChannel](const muduo::net::TcpConnectionPtr& conn,
+                                                 muduo::net::Buffer* buf, muduo::Timestamp ts)
+        {
+            if (const auto channel = weakChannel.lock())
+            {
+                channel->HandleIncomingMessage(conn, buf, ts);
+            }
+        });
         channel_->SetServiceMap(&services_);
         client_.connect();
     }
@@ -99,15 +126,8 @@ public:
         channel_->RouteMessageToNode(message_id, request);
     }
 
-	muduo::net::TcpConnectionPtr GetConnection() const {
-if (client_.connection() == nullptr)
-		{
-			static muduo::net::TcpConnectionPtr c;
-			return c;
-		}
-
-		return client_.connection();
-	}
+    // 没连接时 TcpClient::connection() 本来就返回空指针,不需要再造一个 static 哨兵。
+    muduo::net::TcpConnectionPtr GetConnection() const { return client_.connection(); }
 
 private:
     // Disconnects within this window after the initial successful connect are

@@ -129,4 +129,4 @@ replace proto => ../proto
 
 // 本地修复版:键列 string/bytes 映射 VARCHAR(191)/VARBINARY(191)(Error 1170)。
 // 上游打新 tag 后删除本行并升级 require 版本。
-replace github.com/luyuancpp/proto2mysql => ../../../proto2mysql
+replace github.com/luyuancpp/proto2mysql => ../../../../proto2mysql-v0.1.0

@@ -63,7 +63,7 @@ def test_manifest_records_row_count_and_sha256(cfg):
     assert len(mission["source"]["sha256"]) == 64
 
     art = next(a for a in mission["artifacts"] if a["kind"] == "json")
-    data = (cfg.json_dir / "Mission.json").read_bytes()
+    data = (cfg.json_dir / "mission.json").read_bytes()
     assert art["sha256"] == hashlib.sha256(data).hexdigest()
     assert art["size"] == len(data)
 
@@ -144,5 +144,5 @@ def test_json_overwrites_stale_rows_when_table_becomes_empty(cfg):
     )])
     generate_json(cfg, empty_tables)
 
-    payload = json.loads((cfg.json_dir / "Permission.json").read_text(encoding="utf-8"))
+    payload = json.loads((cfg.json_dir / "permission.json").read_text(encoding="utf-8"))
     assert payload == {"data": []}

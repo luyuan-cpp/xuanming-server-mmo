@@ -15,6 +15,7 @@
 #include <google/protobuf/service.h>
 
 #include "rpc_connection_event.h"
+#include "node/system/node/node_util.h"   // NodeUtils::RemoveRpcSessionsBoundTo
 
 using namespace muduo;
 using namespace muduo::net;
@@ -69,7 +70,15 @@ void RpcServer::onConnection(const TcpConnectionPtr& conn)
   else
   {
     conn->setContext(GameChannelPtr());
-    // FIXME:
+    // 入站节点链路断开:摘掉所有仍引用这条连接的 RpcSession 组件。
+    // RpcSession::connection 现已是 weak_ptr(§7.4 / §8.0),不摘也不会把连接对象钉住;
+    // 仍要摘,是为了让路由方**立刻**看到"节点不可达"(try_get<RpcSession> 为空),
+    // 而不是留一个 lock() 永远失败的空壳,等到对端 etcd 键过期(NodeTTLSeconds,默认
+    // 180s)触发 DestroyEntity 才消失。消费方(player_message_utils / node_message_utils /
+    // scene_handler ...)本来就按 try_get<RpcSession> 为空处理"节点不可达",与此前
+    // IsConnected()==false 的分支等价;重注册时 tryRegister 先 remove 再 emplace,组件已不在也无副作用。
+    // 见 docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md §7.4。
+    NodeUtils::RemoveRpcSessionsBoundTo(conn);
   }
 }
 

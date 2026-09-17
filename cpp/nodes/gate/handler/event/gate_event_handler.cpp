@@ -148,7 +148,7 @@ void GateEventHandler::KickPlayerEventHandler(const contracts::kafka::KickPlayer
         return;
     }
 
-    auto conn = it->second.conn;
+    auto conn = it->second.conn.lock();
     if (!conn || !conn->connected())
     {
         LOG_DEBUG << "KickPlayer: connection already closed. session_id=" << sessionId;
@@ -208,7 +208,7 @@ void GateEventHandler::PlayerLeaseExpiredEventHandler(const contracts::kafka::Pl
         return;
     }
 
-    auto conn = it->second.conn;
+    auto conn = it->second.conn.lock();
     if (conn)
     {
         // forceClose(而非 shutdown):对端已经假死,不能指望它配合四次挥手。
@@ -279,7 +279,7 @@ void GateEventHandler::RedirectToGateEventHandler(const contracts::kafka::Redire
         return;
     }
 
-    auto conn = it->second.conn;
+    auto conn = it->second.conn.lock();
     if (!conn || !conn->connected())
     {
         LOG_DEBUG << "RedirectToGate: connection already closed, session_id=" << sessionId;
@@ -314,13 +314,14 @@ if (sessionIt == tlsSessionManager.sessions().end())
     LOG_WARN << "PushToPlayer: session already gone (disconnect race), session_id=" << event.session_id();
     return;
 }
-// conn 为空即空指针解引用(同 gate_service_handler 的推送路径)。
-if (!sessionIt->second.conn)
+// 会话不持有连接；发送前锁定，连接已释放时丢弃本次推送。
+auto conn = sessionIt->second.conn.lock();
+if (!conn)
 {
     LOG_ERROR << "PushToPlayer: session has no connection, session_id=" << event.session_id();
     return;
 }
-GetGateCodec().send(sessionIt->second.conn, event.message_content());
+GetGateCodec().send(conn, event.message_content());
 ///<<< END WRITING YOUR CODE
 }
 void GateEventHandler::BroadcastToPlayersEventHandler(const contracts::kafka::BroadcastToPlayersEvent& event)
@@ -331,9 +332,10 @@ auto sendToSession = [&](uint32_t sessionId)
     auto sessionIt = tlsSessionManager.sessions().find(sessionId);
     if (sessionIt == tlsSessionManager.sessions().end())
         return;
-    if (!sessionIt->second.conn)
+    auto conn = sessionIt->second.conn.lock();
+    if (!conn)
         return;
-    GetGateCodec().send(sessionIt->second.conn, event.message_content());
+    GetGateCodec().send(conn, event.message_content());
 };
 
 if (!event.session_bitmap().empty())

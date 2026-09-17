@@ -48,7 +48,6 @@ public:
     using RpcServerPtr = std::unique_ptr<muduo::net::RpcServer>;
     using ServiceList = std::vector<::google::protobuf::Service *>;
     using CanConnectNodeTypeList = std::set<uint32_t>;
-    using ClientList = std::vector<RpcClientPtr>;
 
     using PartitionClassIds = std::vector<int32_t>;
 
@@ -83,7 +82,6 @@ public:
     KafkaManager &GetKafkaManager() { return kafkaManager; }
     virtual google::protobuf::Service *GetNodeReplyService() { return replyService_; }
     muduo::AsyncLogging &Log() { return logSystem; }
-    ClientList &GetDisconnectedClientList() { return disconnectedClientList; }
     CanConnectNodeTypeList &GetTargetNodeTypeWhitelist() { return targetNodeTypeWhitelist; }
     NodeHandshakeManager &GetNodeRegistrationManager() { return nodeRegistrationManager; }
     ServiceDiscoveryManager &GetServiceDiscoveryManager() { return serviceDiscoveryManager; }
@@ -249,7 +247,6 @@ protected:
     // The producer is non-blocking and flushes via KafkaManager::Shutdown.
     // No EventLoop timer is required for either path.
     CanConnectNodeTypeList targetNodeTypeWhitelist;
-    ClientList disconnectedClientList;
     std::unordered_map<std::string, int64_t> revision;
     bool hasSentRange{false};
     bool hasSentWatch{false};

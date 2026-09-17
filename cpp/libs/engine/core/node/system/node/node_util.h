@@ -2,7 +2,9 @@
 #include "proto/common/base/node.pb.h"
 #include "proto/common/base/common.pb.h"
 #include "entt/src/entt/entt.hpp"
+#include <muduo/net/TcpConnection.h>
 #include <algorithm>
+#include <cstddef>
 #include <optional>
 #include <string>
 
@@ -91,6 +93,14 @@ namespace NodeUtils
 	eNodeType GetRegistryType(const entt::registry &registry);
 	bool IsSameNode(const std::string &uuid1, const std::string &uuid2);
 	bool IsNodeConnected(uint32_t nodeType, const NodeInfo &info);
+
+	// 摘掉所有(任意节点类型注册表里)仍引用这条 TcpConnection 的 RpcSession 组件,返回摘掉的个数。
+	// 给 RpcServer 的 DOWN 回调用。RpcSession::connection 是 weak_ptr,不摘也不会钉住连接对象;
+	// 摘是为了让路由方立刻看到"节点不可达",而不是留一个 lock() 永远失败的空壳等到 etcd 键过期。
+	// 匹配按 lock() 后的指针精确比对,顺带清掉 weak 已过期的会话。
+	// 只能在 loop 线程调用(tlsNodeContextManager 是 thread_local)。
+	// 见 docs/ops/incident-gate-tcpconnection-dtor-assert-2026-09-13.md §7.4。
+	std::size_t RemoveRpcSessionsBoundTo(const muduo::net::TcpConnectionPtr &conn);
 
 	// True for services whose node_id is only unique within a zone and whose
 	// runtime contract is "caller only talks to the same zone". The local

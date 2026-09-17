@@ -3,7 +3,9 @@
 
 #include "proto/common/base/common.pb.h"
 #include <network/rpc_client.h>
+#include <network/rpc_session.h>
 #include "thread_context/node_context_manager.h"
+#include <vector>
 
 // Static node-type-to-name map
 const std::unordered_map<eNodeType, std::string> nodeTypeNameMap = {
@@ -202,4 +204,39 @@ bool NodeUtils::IsNodeConnected(uint32_t nodeType, const NodeInfo &info)
 	}
 
 	return false;
+}
+
+std::size_t NodeUtils::RemoveRpcSessionsBoundTo(const muduo::net::TcpConnectionPtr &conn)
+{
+	if (!conn)
+	{
+		return 0;
+	}
+	std::size_t removed = 0;
+	for (auto &registry : tlsNodeContextManager.GetAllRegistries())
+	{
+		// 先收集再删:不在正在迭代的视图上就地 remove,不依赖 EnTT 对"当前元素可删"的保证。
+		// 顺带把 weak 已过期(对端早已断开、组件却没摘)的会话一并清掉:它们已经不指向任何连接。
+		std::vector<entt::entity> bound;
+		for (const auto &[entity, session] : registry.view<RpcSession>().each())
+		{
+			const auto sessionConn = session.connection.lock();
+			if (!sessionConn || sessionConn.get() == conn.get())
+			{
+				bound.push_back(entity);
+			}
+		}
+		for (const entt::entity entity : bound)
+		{
+			registry.remove<RpcSession>(entity);
+			++removed;
+		}
+	}
+	if (removed > 0)
+	{
+		// INFO 级:这是节点链路断开时唯一可在默认日志级别看到的"已摘"证据(运行时验收用)。
+		LOG_INFO << "Detached " << removed << " RpcSession(s) from closed connection "
+				 << conn->peerAddress().toIpPort();
+	}
+	return removed;
 }
