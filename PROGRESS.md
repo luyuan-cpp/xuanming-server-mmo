@@ -4894,4 +4894,30 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - 正式报告：[游戏服务器网络故障、网络分区与进程暂停调研](docs/notes/2026-09-14-network-failures-and-process-pauses.md)；历史审计：[独立证据复核记录](docs/notes/2026-09-14-network-failures-and-process-pauses-verification.md)。保留四类资料、24 条编号证据、11 项排除清单及各自来源和口径。
 - 适配本项目的 scene 所有权、EnterScene 交接和单写者设计入口；在场景所有权设计中加入调研链接。原项目未恢复的四份检索草稿不保留失效链接。
 - 复核日期仍为 2026-09-14。本轮检查恢复内容、编号对应和新增本地链接，未重新联网复核外部原文；不将历史复核结论扩展为当前实现或故障演练证据。
+
+## 2026-09-16 聚宝斋 P1 Codex 验证（端到端尚未通过）
+
+- 核查后确认原交接已过时：`cecb52995` 已包含 `proto/trade`、`go/trade`、`go/schemamigrate` 与消息号 196–200；并行任务随后合并并提交到 `1f971aecc`。本任务未执行 git add/commit/push。四个缺失 C++ gRPC 文件已由并行生成任务补齐并收录；`kMaxRpcMethodCount=201`、Agones 创建许可守护块和 trade 路由权限核对正确。
+- 本任务改动：对 5 个 trade 测试文件执行 gofmt；修复 `k8s_deploy.ps1` 两处 `Math.Min` 误选整数重载、令亚秒剩余预算变成 0 的问题；为 3 个迁移门禁 mock 添加高级函数参数绑定，清理与并行任务重复添加的属性。保留其他任务对迁移授权、依赖来源、发布脚本的改动。
+- trade：Go 1.26.5 Windows 的 vet/build/默认单测通过（81 个顶层测试、0 失败），Linux vet 通过；并行任务后续改了启动代码与依赖路径，已对最终源码再次 vet/test 与 Linux vet，测试前后源文件哈希一致。官方 `go_services.ps1 -Command build -Services trade` 退出 0，`bin/go_services/trade.exe` 已生成。
+- router：vet/test/build 全部退出 0。robot：当前 vendor 构建与 vet 全部退出 0，验证用二进制保存在本轮 run 目录。`merge_zone` 的普通 vet、带 merge_integration 标签的 vet、默认 test 全部退出 0；未跑真实合服集成测试。
+- data_service：原 `go.mod` 的本地 replace 指向不存在的 `E:/proto2mysql-v0.1.0`，不能宣称原配置构建通过。仅在本轮临时 modfile 中把三个本地 replace 指向现有路径后，config 测试通过；store 编译通过但默认标签无测试。主模块配置未由本任务修改。
+- schemamigrate：复用 D-14 任务的 canonical 依赖单测通过记录和隔离 MySQL 迁移证据（首次 2 条变更，重复 0 条）。Windows race 首次因缺 gcc 无法编译；用户明确同意临时容器安装后，以已有 Go 1.26.8/Linux 镜像安装 gcc/musl-dev，执行 `go test -mod=readonly -p=2 -race -count=200 -run TestInterruptedStatementIsKilledAndLeavesLedgerDirty -json ./...`，200/200 通过、0 race 报告，源码哈希不变。版本与清单 1.26.5 的差异已记录；专用容器已删除并核验不存在，未改 Windows 工具环境。
+- 部署脚本：语法与三档 dry-run（dev 不带/带 WaitReady、prod 不带 WaitReady 仍等待迁移）通过；迁移门禁最终稳定快照 23/23 通过；完整部署契约最终 40/40 通过。期间共享脚本受并行修改，一轮旧断言/新产物混合失败已保留，最终测试起止哈希及源快照存档，不能把快照绿灯扩大为之后所有并行改动已验证。start_game -CheckOnly 退出 0（当时 trade 尚按缺 exe 跳过；此后已单独构建成功）。
+- 客户端：离线编译检查退出 0（291 文件、0 错误）；独立快照 Unity EditMode 86/86 通过、0 跳过（聚宝斋 Client 39 / 分页 11 / 模型 6，Guild Client 18 / Window 12，含真实资源测试）。首轮快照缺传递截图模块，按主工程锁定版本补齐后通过；未修改或关闭用户正在使用的主 Unity 工程。这不代替真实进游戏验收。
+- **实际冒烟未通过**：zone 模式机器人退出 1，日志为 `TRADE_SMOKE_FAIL step=login ... AssignGate failed after retries`；`127.0.0.1:8081` 健康检查连接拒绝。基础栈先因 Kafka topic-init 超过启动器 240 秒退出（初始化稍后成功），后续启动又在 db 报 `db_task_zone_1 is still absent after create`。环境由其他并行任务继续恢复；尚未到 trade 业务调用，global 模式未跑。
+- **未完成门禁**：共享 C++ `/m:1` 构建仍由属性验证任务执行，未见完整构建退出码，本任务未并发再起 MSBuild；受影响 C++ 测试未在本任务最终复跑。双 zone 的两轮 `TRADE_SMOKE_OK`、客户端按 U 拉取商品与收藏重登仍保留的真实验收均未取得。P1 仍不能宣称完成；P2/P3 未在本轮开工。
+- 本轮统一证据：`run/verify-trade-p1-20260916/verification-summary.json`；其下 `client/`、`scripts/`、`support/`、`race/` 保存 XML、日志、退出码与哈希。共享 C++ 日志：`run/verify-attribute-20260916/build-game.log`；迁移幂等证据：`run/verify-d14-20260916/trade-cli-summary.json`。
+
+## 2026-09-16 D-14 迁移实现验收与启动器复核（Codex）
+
+- 范围：对 09-15 已落码的 P1 中 `go/schemamigrate`、trade 迁移入口与 K8s Job 做补验和修复；不将本批通过等同于聚宝斋完整 P1 已验收。
+- 修复依赖：旧仓名 `github.com/luyuancpp/proto2mysql@v0.1.1` 的代理缓存缺少 TiDB/unknown-fields 功能；schemamigrate 与 trade 均以版本限定的远程 replace 指向 `github.com/luyuan-cpp/proto2mysql v0.1.1`（e90a5f0360eaf65794550713514a77f5a57c52a8，checksum `h1:GsmiAKiXCiGjZaRCVutAsrlpShyZRcz71mVrAf+7U5A=`）。go.sum 正常生成，未关校验、未引入仓库外目录 replace。D-14 第 7 条已补记主调用模块必须同步声明的原因。
+- 修复授权边界：补 `trade -migrate -allow-modify`，单独 `-allow-modify` 在读配置前拒绝；常驻启动和默认迁移仍不自动改列。独立 MySQL 的真实 CLI 验证首次建表 2 条、重复 0 条；类型漂移默认 exit 4 且列保持原样，显式授权后 exit 0、恢复 proto 类型。最新编译程序再次验证参数拒绝路径。
+- 修复发布门禁：迁移查询同时设置 HTTP 与整个进程截止，并受剩余等待预算约束；诊断失败不覆盖原错误。删除旧 Job 前必须确认 Job 及其 UID 所属 Pod 均终态，未知或查询失败不放行，不能只看 ACTIVE=0。README、AGENTS 和脚本提示已同步。
+- 自动验证：schemamigrate 单测 51 个 PASS（含子用例）；真实 MySQL 8.0 `TestIntegrationUpLifecycle` 通过（含基线后加表、加列、类型漂移、锁忙与 dirty）；Linux 假驱动取消迁移回归 `-race -count=200` 为 200/200、无 race 告警；迁移门禁回归 23/23、现有部署生成器契约 40/40。并行任务加入 trade 版本信息后，重新对当前源码执行 Go 1.26.5 的 vet、全包 test、build，均 exit 0，223 PASS、0 skip，被测输入哈希前后相同；产物仅落证据目录，未覆盖正式 exe。
+- K8s 实跑：通过仓库正式 Dockerfile 构建迁移镜像，在已有 kind 集群创建专属 `d14-verify-20260916` namespace 和空 MySQL。实际 `trade-migrate` 首次 Complete；正式迁移函数在 `ReleaseProfile=prod`、`WaitReady=false`、`Mode=pro`、`AutoMigrate=false` 下重复执行为 0 条；人为给空测试表制造类型漂移后，Pod exit 4 命中 FailJob，门禁抛错、后续 Deployment 步骤未到达，列未自动修改。该镜像早于随后并行加入的版本信息代码；当前源码的独立构建结果另存，不混为同一镜像验收。
+- 原三个待定项复核：K8s GateRouterMode 默认仍为 0；启动器的 8 个隔离检查分支通过，chat/guild 缺 exe 只告警跳过，db/login/match 缺 exe 仍拒启；D-14 现已完成本批实现与验收。帮会任务已报告构建/双区冒烟完成；聊天任务的后续工作仍在其原任务进行，未接管或重启其服务。
+- 边界：本次无 TiDB 实例验收，200 次 race 不代表真实数据库取消 DDL 压测；聚宝斋 zone/global robot 全链路、客户端验收与 P3 上线清单另计。未切换 K8s 默认模式，未执行完整游戏部署，未执行 Git 提交或推送。
+- 证据：`run/verify-d14-20260916/README.md`、`verification-summary.json`、`trade-current-result.json`、`k8s-prod-gate-summary.json` 及原始日志。专属 MySQL 容器和 kind namespace 均已删除，现有游戏环境未清理；仅保留可复验镜像、独立程序和证据。决策文档、聚宝斋状态及运维说明已同步。
 - 仅修改文档，保留原有未提交进度和其他工作区改动；未调整配置、未编译、未运行测试或故障演练，未执行 Git/SVN add、commit 或 push。

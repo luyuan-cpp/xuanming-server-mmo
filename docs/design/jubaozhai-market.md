@@ -1,6 +1,6 @@
 # 聚宝斋(玩家间人民币寄售交易)设计 — 2026-09-14
 
-> 状态:**P1 已落码(2026-09-15),未编译、未运行,待 Codex 按 PROGRESS 同日条目验证**;P0 / P2 起未开工。客户端界面已拼好(`mmorpg-client` 的 `Assets/Scripts/UI/Ugui/Jubaozhai/`、`Docs/JUBAOZHAI_UI.md`),本文件定义服务端与接线。
+> 状态:**P1 已落码(2026-09-15);2026-09-16 Go 模块编译/单测、D-14 迁移入口和隔离 MySQL / kind Job 已验证,全链路 robot 与客户端验收仍待完成**;P0 / P2 起未开工。客户端界面已拼好(`mmorpg-client` 的 `Assets/Scripts/UI/Ugui/Jubaozhai/`、`Docs/JUBAOZHAI_UI.md`),本文件定义服务端与接线。
 > 调研依据:2026-09-14 三路只读核查(资产原语 / 新服务接线 / 账号与 zone 模型),结论与证据摘要见 §2。
 
 ## 0. 结论(先读这节)

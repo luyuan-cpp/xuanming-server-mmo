@@ -3368,8 +3368,8 @@ function Show-InfraStatus {
 	# `kubectl drain` 会挂在 etcd / kafka 上(kafka 的 PDB 是 minAvailable: 1,不允许自愿驱逐)。
 	# job:kafka-topic-init(审计 + 控制面命令 topic 预建)的 COMPLETIONS 0/1 = 分区契约没建成,
 	# scene 起来前必须先看它。
-	# job 一栏同样列出建表 Job trade-migrate(D-14):COMPLETIONS 0/1 且 ACTIVE 0 = 迁移失败,
-	# 看 `kubectl -n <infra> logs job/trade-migrate`;ACTIVE 不为 0 时不要手工 delete(会留下 dirty 台账)。
+	# job 一栏同样列出建表 Job trade-migrate(D-14):失败须核对 status.conditions(Failed/FailureTarget),
+	# 看 `kubectl -n <infra> logs job/trade-migrate`;删除前须确认该 Job UID 所属 Pod 均终态,ACTIVE=0 本身不代表安全。
 	Invoke-Kubectl -Args @("get", "deploy,sts,po,pvc,pdb,job,svc,cm", "-n", $InfraNamespace) -AllowFailure
 }
 

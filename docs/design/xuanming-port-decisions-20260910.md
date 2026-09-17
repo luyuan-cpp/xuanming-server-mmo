@@ -331,7 +331,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 ## D-14 新全局服务的库归属与建表方式:**每服务一库;表以 proto 为源;迁移用 go/db runner 的语义,抽成独立 module,由服务二进制 `-migrate` 在 K8s Job 里跑**
 
 (来源:契约 §4「首个建表服务开工前先拍 D4」,聚宝斋 J-6。注意:本条与可行性文档 §8 表里的 D14「mission 事实源」不是同一条。)
-(本条只落决策,不含代码。`go/schemamigrate`、runner 缺陷修复与 migrate Job 按第 9 条随首个建表服务同批落地,届时代码以 Codex 验证结果为准。)
+(2026-09-14 本条先落决策;2026-09-15 随首个建表服务 trade 落地 `go/schemamigrate`、runner 缺陷修复与 migrate Job。2026-09-16 已完成迁移模块、trade 迁移入口及隔离 MySQL / kind 发布门禁验证,结果见 PROGRESS 同日 D-14 条目;聚宝斋 P1 全链路与 TiDB 实例验收另计。)
 
 **结论**
 
@@ -363,7 +363,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
    - staging/prod 档:
      - 固定 `false`;
      - 每个服务一个 `<svc>-migrate` Job,照 `kafka-topic-init`:同一镜像和 ConfigMap,args 为 `-f <yaml> -migrate`;
-     - `k8s_deploy.ps1` 在 infra 阶段、服务 Deployment 之前,先 delete 再 apply 这个 Job;
+     - `k8s_deploy.ps1` 在 infra 阶段、服务 Deployment 之前,先确认旧 Job 及其 UID 所属 Pod 均终态,再 delete / apply;在途或状态未知时等待,超时拒删(ACTIVE=0 仍可能有 terminating Pod);
      - staging/prod 必须等迁移 Job Complete 后才 apply 服务 Deployment;失败或超时中断发布,此门禁不受 `-WaitReady` 控制;
      - 退出码 3 由 Job 的 backoff 重试;1 或 4 直接中断发布。
    - `AutoMigrate=false` 时,启动路径只跑一次 plan(只读)。发现待执行语句或需人工项就拒绝启动(fail-closed),并打印补救命令。

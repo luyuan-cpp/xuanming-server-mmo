@@ -317,7 +317,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - `-ClusterId`: deployment-level cluster number, `0..31`, default `0`. Becomes the `cluster` segment of every snowflake id minted in this cluster, so `infra-up` and every `zone-up` / `all-up` against the same cluster must pass the same value (the script reads one parameter for both paths; `zones.json` deliberately has no per-zone override). Leave it at `0` unless you are standing up a second, independent cluster that must never collide with the first. Only `tools/scripts/k8s_deploy.ps1` accepts it today; `dev_tools.ps1`'s `k8s-*` wrappers do not forward it yet.
 - `-DryRun`: print kubectl commands without applying.
 - `-WaitReady`: wait for `centre` / `gate` / `scene` deployments to roll out. On `infra-up` / `all-up` it also waits for the `etcd` StatefulSet to reach quorum before the global `match` service is applied, and then for the `kafka-topic-init` Job to complete, so the audit topics exist with their contracted partition counts before any zone is applied (see "Kafka 审计 topic 预建" below). `infra-kafka-topics -WaitReady` waits for the same Job. For the global `trade` service on the `dev` profile it also waits for `deploy/mysql` and then for the `trade-migrate` Job to reach Complete before the `trade` Deployment is applied; a Failed Job (or a timeout) aborts the release. On `staging` / `prod` that migrate-Job gate always runs, with or without `-WaitReady` (port-decisions D-14 item 4; see "聚宝斋 trade" below).
-- `-WaitTimeoutSeconds`: rollout wait timeout per deployment (default `180`). It is also the base budget of the two `trade-migrate` waits: the pre-delete check that waits for a previous in-flight Job to finish (runs on every profile, but only waits when that Job is still active), and the poll of the new Job for Complete / Failed (always on `staging` / `prod`, on `dev` only with `-WaitReady`). Each of those two waits uses `max(-WaitTimeoutSeconds, 300)` (`$GoSvcMigrateJobMinWaitSeconds` in the script), because a normal migrate Pod needs scheduling + image pull + the `wait-mysql` initContainer (up to 150 + 8 s) + the migration itself. The `deploy/mysql` rollout wait in front of the Job still uses `-WaitTimeoutSeconds` alone, so for the first `infra-up` on a fresh cluster pass a larger value (e.g. `600`); otherwise a slow MySQL pull / initdb is reported as a timeout and the release stops (re-running the same command resumes: an in-flight Job is waited on, never deleted).
+- `-WaitTimeoutSeconds`: rollout wait timeout per deployment (default `180`). It is also the base budget of the two `trade-migrate` waits: the pre-delete check that waits for a previous in-flight Job to finish (runs on every profile and waits until the Job has a completion/failure condition and every Pod owned by its UID is Succeeded or Failed; terminating Pods and unknown/query-failure states never permit deletion), and the poll of the new Job for Complete / Failed (always on `staging` / `prod`, on `dev` only with `-WaitReady`). Each of those two waits uses `max(-WaitTimeoutSeconds, 300)` (`$GoSvcMigrateJobMinWaitSeconds` in the script), because a normal migrate Pod needs scheduling + image pull + the `wait-mysql` initContainer (up to 150 + 8 s) + the migration itself. The `deploy/mysql` rollout wait in front of the Job still uses `-WaitTimeoutSeconds` alone, so for the first `infra-up` on a fresh cluster pass a larger value (e.g. `600`); otherwise a slow MySQL pull / initdb is reported as a timeout and the release stops (re-running the same command resumes: an in-flight Job is waited on, never deleted).
 - `-KubeContext`: pass an explicit kube context.
 - `-KubeConfig`: pass an explicit kubeconfig path.
 - `-NamespacePrefix`: change namespace prefix.
@@ -457,9 +457,9 @@ trade 是全局池服务(`$GoSvcCatalogue.trade`,`Global = $true`):`infra-up` / 
     Job **Failed 或超时即中断发布**:打印 describe / Pod 列表 / `kubectl logs job/trade-migrate`,trade Deployment 不 apply。
   - **不删在途 Job**:迁移 runner 执行 DDL 前先在 `schema_migrations` 写 `dirty=1`、成功后才清零。删掉正在跑的 Job(Pod 被 SIGTERM)
     打断 DDL 会把台账留在 dirty,之后每次 `-migrate` 都以 1 退出、被 FailJob 直接判失败,只能人工清台账。
-    所以脚本删之前先读 Job 状态:不存在或已 Complete / Failed 才删;在途就在同一预算(`max(-WaitTimeoutSeconds, 300)`)内等它到终态,等不到就中断发布且**不删**。
-    kafka-topic-init 没有台账,才能无脑先删再建;**不要手工 `kubectl delete job trade-migrate` 一个 ACTIVE 不为 0 的 Job**。
-    轮询同时认 `Complete` 与 `Failed`(以及 1.31+ 的 `FailureTarget`),不用 `kubectl wait --for=condition=complete`,否则 FailJob 要白等到超时。
+    所以脚本删之前先读 Job 和所属 Pod 状态:Job 不存在才可直接继续;存在时须有 `Complete` / `Failed` / `FailureTarget` 条件,且按该 Job UID 核对所属 Pod 全部为 `Succeeded` / `Failed`,才可删除。仍在途、状态未知或查询失败时在同一预算(`max(-WaitTimeoutSeconds, 300)`)内等待,等不到就中断发布且**不删**。
+    kafka-topic-init 没有台账,才能无脑先删再建;**不要手工删除仍有非终态所属 Pod 的 `trade-migrate` Job**。`ACTIVE=0` 不含正在 terminating 的 Pod,不能单独作为安全删除判据。
+    发布门禁的轮询同时认 `Complete` 与 `Failed`(以及 1.31+ 的 `FailureTarget`),失败条件出现即中断发布,不必等 Pod 清理完;重跑时的删前检查仍须核对 UID 所属 Pod 均终态。不用 `kubectl wait --for=condition=complete`,否则 FailJob 要白等到超时。
   - **退出码**:0 成功 → Complete;3 锁忙 → 按 `backoffLimit: 4` 退避重试;1 失败 / 4 需人工(类型漂移、缺主键、表清单异常)→
     `podFailurePolicy` 的 `FailJob` 立即失败。`podFailurePolicy` 需要 **Kubernetes ≥ 1.26**,且 Pod 必须 `restartPolicy: Never`。
     Go panic(2)、OOMKilled(137)与 initContainer 失败走 backoff 重试;节点驱逐(`DisruptionTarget`)不计次数。
@@ -470,8 +470,8 @@ trade 是全局池服务(`$GoSvcCatalogue.trade`,`Global = $true`):`infra-up` / 
     与 `kubectl -n mmorpg-infra logs job/trade-migrate`。`infra-status` 的 `job` 一栏也会列它。
   - staging / prod 的 trade 启动路径只跑一次只读 plan,有待执行语句或需人工项就拒绝启动(CrashLoop)并打印补救命令;
     先看 Job 日志修根因,**不要**把 `Schema.AutoMigrate` 改成 true 绕过。
-  - **重跑迁移**:先确认 `kubectl -n mmorpg-infra get job trade-migrate` 的 ACTIVE 为 0(已 Complete 或 Failed),再跑一次同一条 `infra-up`
-    (已终态的 Job 会先删再建,迁移幂等;在途的脚本会先等,等不到就再次中断)。上一次因**超时**中断时,旧 Job 可能还在 backoff 重试或执行 DDL,尤其要先看这一步。
+  - **重跑迁移**:先核对 `trade-migrate` 的 `status.conditions` 与 `metadata.uid`,确认该 UID 所属 Pod 均为 `Succeeded` / `Failed`,再跑一次同一条 `infra-up`
+    (满足上述删前条件的 Job 会先删再建,迁移幂等;仍有非终态所属 Pod、状态未知或查询失败时脚本会先等,等不到就再次中断且不删)。`ACTIVE=0` 不能代替所属 Pod 终态检查;上一次因**超时**中断时,旧 Job 可能还在 backoff 重试或执行 DDL,尤其要先看这一步。
     日志里是 **dirty 台账**(`schemamigrate.ErrDirty`,退出码 1)时重跑不会自己好:先人工核对 `mmorpg_trade.schema_migrations` 的 dirty 行与表的实际结构,
     确认那条迁移做完或补做后再清 dirty,然后重跑。
 - **号段**:listing_id 走 data-service 号段(`biz_tag = trade_listing`),data-service ConfigMap 的 `IdSegment.BootstrapTags` 已加。

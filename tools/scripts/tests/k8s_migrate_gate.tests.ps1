@@ -278,7 +278,7 @@ Test-Case '诊断意外抛错仍保留发布失败的原始原因' {
 Test-Case '查询进程保留参数边界并在 CLI 阻塞时硬截止' {
     Reset-MigrateFixture
     Restore-ProductionFunction 'Invoke-GoSvcMigrateKubectl'
-    $script:FixturePwshPath = [Environment]::ProcessPath
+    $script:FixturePwshPath = (Get-Process -Id $PID).Path
     $fixture = Join-Path ([IO.Path]::GetTempPath()) ('d14-kubectl-fixture-' + [guid]::NewGuid().ToString('N') + '.ps1')
     [IO.File]::WriteAllText($fixture, @'
 if ($args[0] -eq 'sleep') { Start-Sleep -Seconds 30 }
