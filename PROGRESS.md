@@ -4963,3 +4963,36 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - **剩余联机项尚未通过、尚未执行**：原 attribute/pet/battle 三条 robot 冒烟；85 级基础/全体/全灵数值与首点加点增益；新建 1 级账号副本回合数。已编译并核对独立数值机器人 `numeric-robot-final.exe`（唯一构建 `numeric-final-20260916-225040-3bf077a8`），原始断言保留，执行入口为 `run-smokes.ps1 -Suite original` 后 `-Suite numeric`。数值测试硬超时或中止不会执行恢复逻辑，只有实际恢复成功标记可记为已恢复。
 - 联机前需协调本地共享栈：23:37 仍有聚宝斋验收的独立 gate/scene 与公共旧节点同时运行；9 个已安装 Go 服务也均与本轮产物不同，已有运行 PID。本任务未覆盖、启停这些服务，已向用户询问等并行验收结束或立即切换。取得可用窗口后重新核查活动测试和节点身份，同批更新节点/表及需要更新的 Go 服务，经本地正式启动器检查健康与一区 OPEN，再顺序执行五项验收。
 - 边界：no-raw-pointer-member 因工具缺失输出 SKIP，不能视为通过；第三方库缺调试 PDB 的 LNK4099 与 protobuf map.h 的 C4244 已保留日志。本轮没有生产发布，也没有执行 git add/commit/push；并行任务提交不计为本任务操作。
+
+## 2026-09-17 聚宝斋 P1 继续修复（双区冒烟通过，客户端重登收尾）
+
+- 修复 Kafka 创建 topic 后立即查 metadata 的启动竞态：仅在创建成功或 AlreadyExists 后有界等待可见，保留精确分区、不可变 marker 与增量 retention 配置契约。回归先红后绿，包测试/vet 与隔离真实 Kafka 集成通过；10 秒是轮询截止，在途 Sarama 调用仍受原有 socket 超时约束。
+- data_service 移除不存在的仓库外 replace，固定 canonical proto2mysql v0.1.1；原 go.mod 下默认测试 99 个顶层 / 107 个含子用例通过，vet 通过，395 个输入哈希无变化。db 不能直接用该版本：它缺失存量字符串主键修复，故固定 canonical 公开提交 f3b308f37020 的伪版本 v0.1.1-0.20260914130151-f3b308f37020，保留 go.sum 校验；9 张登记表、完整字符串/二进制主键和 TiDB 选项回归先红后绿，默认测试 55 个顶层 / 73 个含子用例、vet/build 全通过，379 个输入无变化。未用临时 modfile，也未执行 db DDL。
+- 存量本地 mmorpg_trade 库补建并授权后，trade 正式迁移两次为 2 条→0 条；trade_listing 号段已就绪。安装含 trade 路由的 gate/router，独立增加二区五个进程，不中断一区原进程。真实机器人依次输出 TRADE_SMOKE_OK scope=zone（商品 1/2）、scope=global（101/102）；二区切换最终 db-fixed 后再次 zone 通过（201/202）。市场已恢复 zone，原配置未改。
+- C++ 复用并行属性任务最终串行 game.sln 构建成功证据；本任务独立运行 message_limiter / routing_identity / kafka_command / proto_field_checker 共 51/51，通过且无跳过。实际双区冒烟用 gate SHA256 3A8453B1FEBC33D8DE7944783D80A95224BFA3AE7E9618AC68E0B1F7FB211A31 与 09-13 旧 scene；最终新 gate/scene 已编译，但不是上述冒烟所用程序，不能混报。
+- 独立 Unity 工程的真实窗口 live-03 已完成登录、浏览服务端商品、详情和收藏；主动断线时发现 GateTcpClient 两处 catch filter 在 _running=false 后漏接关闭异常，尚未完成重登。新增本地 TCP 生命周期回归红测 3/8、修复后 8/8：正常关闭不再逃逸异常，真实读写/解码错误仍上报，Reader/Writer 互相唤醒收尾，Connected 关闭后不再空引用，旧连接回调隔离保持。修复与最终联网复验继续收尾，不能据此先宣称客户端全链通过。
+- 03:00 检查原生服务已全部退出且 Docker 引擎不可用；按既有启动流程恢复，保留数据卷，确认商品 9 条、收藏 1 条仍在。db-fixed 已安装正式运行目录，旧 exe 有备份。客户端使用生产入口按钮调用与 U 相同的 Toggle；快照为 Legacy Input，不声称自动化实际按下 U。
+- 既有边界：f3b308f 的 user_oauth.provider_id / user_phone.phone 非主键 TEXT 唯一索引仍有历史建表限制；本轮恢复既有主键行为不等于全部新建表迁移兼容。未验证真实 TiDB、合服迁移或人工 U 键；P2/P3 不在本轮。前轮 200 次 race 已通过且临时容器已删除。没有执行 git add/commit/push；共享自动保存提交不计为本任务操作。
+- 证据：run/verify-trade-p1-20260917/ 下 kafka/summary.json、support/final-summary.json、support/db-review/fixed-tests-summary.json、source-recheck-20260917.json、trade-smoke-*.log、cpp-tests/results.json、client-live/ 与 runtime-resume/；前轮记录和失败现场保留。
+## 2026-09-17 聚宝斋 P1 客户端修复后联网验收通过（Codex）
+
+- 最终客户端修复已同步独立客户端主仓：只修改 Assets/Scripts/Net/GateTcpClient.cs，新增对应 Net 生命周期回归。扩大 EditMode 回归 102/102（TCP 8、聚宝斋 56、BattleDirectLink 38），0 失败/0 跳过；当前主仓运行时编译 307 文件、0 错误。正常关闭异常不再逃出线程，真实网络/解码故障仍上报，旧连接回调隔离保持；独立复核通过。
+- 原商品已过期，因此通过本机正式 TradeAdmin.SeedListing 创建商品 301（卖家为此前真实冒烟账号的 player 1012、market_zone=1、2 小时有效）；没有改旧商品或直接写库。live-04 真实 Unity PlayMode 1/1、exit=0，03:21:55 EDT 输出 TRADE_CLIENT_LIVE_OK：robot_9411/player1014 浏览→详情→服务端确认收藏→主动断线清空客户端状态→新真实 TCP 连接重登同角色→仅看收藏仍有 301→拍卖显示“尚未开放”。5 张真实 Canvas 截图齐全，重登收藏与拍卖截图已人工查看；关键网络/协议/聚宝斋输入前后哈希稳定。
+- 补完清单第 5 项真实合服集成：Go 1.26.5 默认依赖、offline、GOMAXPROCS=2、-p=2/-parallel=1，25/25 顶层测试（含子例 33 PASS），0 失败/0 跳过。执行前确认四个固定专用测试库不存在、Redis DB9–12 为空且无客户端；执行后四库不存在、四分库为空，无残留测试进程，22 个源码/mod 输入不变。包括 trade market_zone 改写/验证/恢复与残留商品阻断保持围栏的真实测试，不只是编译检查。
+- 本地一区已恢复：8081 health=UP、一区 OPEN、10000 gate、50800 trade；db 为最终 DB84CA45597836F1C5F1BA4DB6DC2DDF68BB6D104982D4C7873B007CEEEDBA8A。恢复中发现另一个任务已持有启动 mutex，本任务退让，最终启动由该任务完成；保留成功日志和独立健康验证，未把未捕获的启动进程退出码写成 0。服务保留运行，二区当前 MAINTENANCE；恢复前双区 zone/global 三轮冒烟证据继续有效，不冒充恢复后又跑过双区。
+- 验收边界：本轮在独立快照调用生产入口按钮，与 U 调用同一 Toggle；Legacy Input 下未实际注入/人工按 U。生产聚宝斋窗口与修复网络源码一致，其他任务正在修改的共享字体/主题未混入快照，不能宣称主 Unity 逐像素同版。P1 浏览/详情/收藏/货架的本地自动化验收通过；P2/P3 上架、支付与真实资产交易仍未实施。前条“未验证合服迁移”由本条的隔离真实集成结果取代，不代表对现有游戏区执行过合服。
+- 最终汇总：run/verify-trade-p1-20260917/verification-summary.json；客户端 client-live/live-04/results.xml、stages.jsonl、04-relogin-favorite.png；TCP 红绿与联合回归 client-live/tcp-dispose/；合服 merge-integration/run-20260917-031619-628/result.json；恢复 runtime-resume/ready.json。本任务没有执行 git add/commit/push，保留其他会话改动。
+
+## 2026-09-17 主机再次重启后拉起本地一区:启动器一次通过 + robot login-test 23/23(Claude)
+
+- 背景:09-17 00:01 主机重启(系统事件日志无崩溃记录)。09-16 同名条目里挂的"负载降下来后自动复跑冒烟"后台任务随重启中断、没有产出结果,由本条取代。
+- **拉起**:03:05 Docker 引擎就绪后 `docker start kafka`,按退出码判 broker 就绪(重启后只剩 1 个 topic,再次印证 Kafka 数据不落持久卷,任务卡尚未处理);03:08:59 经 WMI 跑 `tools/scripts/start_game.ps1`,6 步一次通过,03:19:21 一区 OPEN,没有出现 09-16 的命令超时、db panic、第 5 步超时。期间本机 kind 集群容器 `mmorpg-control-plane` 占约 5 核 / 4.7GB,空闲内存约 0.6GB,第 3 步"预建缺失 Kafka 主题"耗时约 7 分钟,仍在启动器预算内。
+- 同时段聚宝斋任务发现启动 mutex 已被本条的启动器持有而退让,随后在这套栈上完成 Unity 真实联网验收(上条 03:21:55 `TRADE_CLIENT_LIVE_OK`),可作为客户端侧可连通的独立证据。
+- **运行进程**:gate / scene / battle / db / data_service / scene_manager / player_locator / login / match / chat / guild / trade 共 12 个原生进程,网关 8081 `/actuator/health` = UP。二进制:db SHA256 前缀 `DB84CA45597836F1`(09-16 23:51,与上条聚宝斋最终版一致;其中是否包含"建 topic 后有界等待可见"修复未核对,不把"本次 db 未 panic"归因于它)、gate `3A8453B1FEBC33D8`(09-16 23:29)、scene 09-13 02:40、login / player_locator / scene_manager 09-14 09:17–09:18。
+- **robot login-test**(`robot.exe -c <scratchpad>/robot.logintest.pw.yaml`,即 `robot/etc/robot_smoke.yaml` 改 `mode: login-test`、`robot_count: 2`、开发密钥):03:26:16–03:27:07 **23/23 通过,0 失败**。
+  - 与 09-16 重负载下的 15/23 相比,7 项 `enter game: server error id:2005`(玩家锁忙)全部消失;NormalLogin 326ms,BatchConcurrentLogin 5/5、最大 347ms。二进制与 09-16 相同(login / scene_manager / player_locator 未换),支持"09-16 的失败由负载导致"的判断。
+  - AccountDisplacement(顶号踢人)与 SceneSwitch(频道通知 1→2)通过,说明本次 C++ 节点能正常执行 Kafka 下发的命令(未再现 09-15 的节点坏状态)。
+  - **SkillCast 通过不代表实体 id 0 缺陷已修**:本轮目标实体 id 为 1(`target=1`)。scene 03:17 启动后、冒烟开始前已有其他角色进过场景(推断为聚宝斋 Unity 验收角色),占掉了实体 0。节点刚重启、robot 是首个进场角色时仍会失败,任务卡照旧。
+- **仍需注意**:运行中的 login / scene_manager 仍是 09-14 构建,不含 09-15 的锁心跳修复(源码已由共享保存提交 `cecb52995` 入库,内容核对为最终版:`CallBudget` 相加、`2·interval` 门槛)。本轮冒烟验证的是旧二进制上的登录/进场链路,不能据此说明心跳修复已在运行环境生效;需按 `go_services.ps1` 重编并重启这两个服务后另行验证。
+- 冒烟会覆盖被 git 跟踪的 `robot/login_test_results.csv`(同目录 `behavior_test_results.*` 已在 `.gitignore`),工作区因此出现该文件的改动,属测试输出,未回退。
+- 未改任何服务代码,未执行 git add/commit/push;服务保留运行。

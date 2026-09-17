@@ -57,6 +57,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# ValidateSet 不区分大小写,-Channel Release 能进来;后面 build-info 身份核对是区分大小写的比较,
+# 不先归一会把合法的发布版本报成"身份与目录不符",把运维引去查根本没问题的制品
+$Channel = $Channel.ToLowerInvariant()
+
 $ScriptDir = $PSScriptRoot
 $RepoRoot = Split-Path -Parent (Split-Path -Parent $ScriptDir)
 . (Join-Path $ScriptDir 'lib' 'artifacts_lib.ps1')

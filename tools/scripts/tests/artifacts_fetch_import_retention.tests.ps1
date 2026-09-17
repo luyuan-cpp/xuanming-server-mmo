@@ -12,10 +12,14 @@
                .Id 口径不同(发布机与本机镜像存储不同)时按真 tar 里的 manifest.json / index.json 复核
                —— 真 tar 用 System.Formats.Tar 现场生成,需要 pwsh 7.3+
       - retention:默认 dry-run 不删、-Force 删最旧、releases/ 不动、latest.json 指向的不删、
-               .tmp-* 与非快照名目录不删、.deleting-* 残留被 -Force 清掉、制品根不存在报错不创建
+               .tmp-* 与非快照名目录不删(超过 24 小时的 .tmp-* 给 WARN)、.deleting-* 残留被 -Force 清掉、
+               制品根不存在报错不创建
 
     制品根一律用 -ArtifactRoot 指到本测试的临时目录;环境变量 MMORPG_ARTIFACT_ROOT 被指向一个
-    "陷阱"目录,脚本若忽略 -ArtifactRoot 就会建出它,最后一条用例专门抓这个。
+    "陷阱"制品根 —— 它是合法的制品根,里面有 3 个诱饵快照(g0000000dead0..2)和 latest.json。
+    脚本若忽略 -ArtifactRoot 而落到环境变量上:fetch 会读到诱饵,retention -Force 会删掉最旧的诱饵。
+    最后一条用例核对诱饵原样未动、所有子进程输出里从未出现陷阱路径与诱饵版本名。
+    (陷阱若只是"不存在的目录"抓不住这种回归:fetch / retention 带 -MustExist,只会报错不会建出它)
     负向用例一律断言错误文本,不只断退出码。
 
 .EXAMPLE
@@ -60,9 +64,14 @@ function Get-TextSha256 {
     finally { $sha.Dispose() }
 }
 
+# 汇总所有子进程输出,给末尾的隔离自检检查"是否出现过陷阱制品根"
+$script:AllToolOutput = New-Object System.Text.StringBuilder
+
 function Invoke-Tool {
     param([string]$ScriptName, [string[]]$Arguments)
-    return Invoke-ToolScript -ScriptName $ScriptName -Arguments $Arguments -Env $script:ChildEnv
+    $result = Invoke-ToolScript -ScriptName $ScriptName -Arguments $Arguments -Env $script:ChildEnv
+    [void]$script:AllToolOutput.Append([string]$result.Output)
+    return $result
 }
 
 function Assert-ToolFailed {
@@ -220,6 +229,17 @@ $script:BaseTime = [datetime]::new(2026, 1, 1, 0, 0, 0, [System.DateTimeKind]::U
 
 try {
 
+    # 陷阱制品根(见文件头):3 个诱饵快照按时间从旧到新,latest 指向最新的一个。
+    # retention 任一 -KeepLast 1/2 -Force 用例若落到这里,都会删掉 g0000000dead0
+    $script:TrapVersions = @('g0000000dead0', 'g0000000dead1', 'g0000000dead2')
+    for ($i = 0; $i -lt $script:TrapVersions.Count; $i++) {
+        $trapFx = New-ImageVersionFixture -Root $script:TrapRoot -Version $script:TrapVersions[$i] -ImageCount 1
+        [System.IO.Directory]::SetLastWriteTimeUtc($trapFx.VersionDir, $script:BaseTime.AddYears(-3).AddDays($i))
+    }
+    $script:TrapImagesDir = Join-Path $script:TrapRoot 'snapshots' 'images'
+    Set-LatestPointer -ChannelRoot (Join-Path $script:TrapRoot 'snapshots') -Kind images -Version $script:TrapVersions[2]
+    $script:TrapLatestText = [System.IO.File]::ReadAllText((Join-Path $script:TrapImagesDir 'latest.json'))
+
     # ─────────────────────────────────────────────────────────────
     # 1. fetch_images.ps1
     # ─────────────────────────────────────────────────────────────
@@ -337,6 +357,17 @@ try {
         Assert-ToolSucceeded -Result $r -Because '合法发布版本应当拉取成功'
         $info = Get-Content -LiteralPath (Join-Path $out 'build-info.json') -Raw | ConvertFrom-Json
         Assert-Equal -Expected 'release' -Actual $info.channel -Because '应当从 releases/ 轨道取,而不是 snapshots/'
+    }
+
+    Test-Case 'fetch:-Channel 大小写不敏感(Release)-> 按发布轨正常落地,不误报身份不符' {
+        $root = New-CaseDir -Name 'fetch-release-case-root'
+        New-ImageVersionFixture -Root $root -Channel release -Version 'v1.2.3' -ImageCount 1 | Out-Null
+        $out = Join-Path (New-CaseDir -Name 'fetch-release-case-out') 'v1.2.3'
+
+        $r = Invoke-Tool -ScriptName 'fetch_images.ps1' -Arguments @('-Channel', 'Release', '-Version', 'v1.2.3', '-ArtifactRoot', $root, '-OutDir', $out)
+        Assert-ToolSucceeded -Result $r -Because 'ValidateSet 放行了 Release,build-info 身份核对不能因大小写把合法发布版本判成不符'
+        Assert-NotMatch -Text $r.Output -Pattern '身份与目录不符' -Because '大小写不同不是制品被搬动或改名'
+        Assert-True -Condition ([System.IO.File]::Exists((Join-Path $out 'build-info.json'))) -Because '应当落地发布版本目录'
     }
 
     Test-Case 'fetch:发布轨版本号不合法(大写 V) -> 拒绝' {
@@ -537,13 +568,15 @@ try {
         Assert-Equal -Expected (@($oldest, (New-SnapshotName 4), (New-SnapshotName 5)) -join ',') -Actual (Get-SnapshotNames $fx.SnapImages) -Because 'latest 指向的版本 + 最新 2 个保留,其余删除'
     }
 
-    Test-Case 'retention:.tmp-* 与非快照名目录即使最旧也不删' {
+    Test-Case 'retention:.tmp-* 与非快照名目录即使最旧也不删;超过 24 小时的 .tmp-* 给出 WARN' {
         $fx = New-RetentionFixture -Name 'ret-skip'
         New-DatedDir -Path (Join-Path $fx.SnapImages ('.tmp-' + (New-SnapshotName 9) + '-4242')) -WriteTimeUtc $script:BaseTime.AddYears(-2)
         New-DatedDir -Path (Join-Path $fx.SnapImages 'manual-backup') -WriteTimeUtc $script:BaseTime.AddYears(-2)
 
         $r = Invoke-Tool -ScriptName 'artifacts_retention.ps1' -Arguments @('-ArtifactRoot', $fx.Root, '-KeepLast', '1', '-Force')
-        Assert-ToolSucceeded -Result $r -Because '清理应当成功'
+        Assert-ToolSucceeded -Result $r -Because '清理应当成功(遗留 staging 只提示,不算失败)'
+        Assert-Match -Text $r.Output -Pattern '\[WARN\] 疑似被中断发布遗留的 staging.*snapshots/images/\.tmp-g000000000009-4242' -Because '被中断发布遗留的 staging 不删,但必须看得见,否则排期清理一直假绿'
+        Assert-Match -Text $r.Output -Pattern '1 个疑似遗留 staging 待人工确认' -Because '汇总行应写出遗留 staging 数量'
         $left = Get-SnapshotNames $fx.SnapImages
         Assert-Match -Text $left -Pattern '\.tmp-g000000000009-4242' -Because '发布中的 staging 目录不得被删'
         Assert-Match -Text $left -Pattern 'manual-backup' -Because '不是快照版本名的目录不得被删'
@@ -568,6 +601,7 @@ try {
         $dry = Invoke-Tool -ScriptName 'artifacts_retention.ps1' -Arguments @('-ArtifactRoot', $fx.Root, '-KeepLast', '3')
         Assert-ToolSucceeded -Result $dry -Because 'dry-run 应当成功'
         Assert-Match -Text $dry.Output -Pattern '将清理上次未删完的残留' -Because 'dry-run 应列出 .deleting-* 残留'
+        Assert-NotMatch -Text $dry.Output -Pattern '疑似被中断发布遗留的 staging' -Because '刚创建的 .tmp-*(可能正在发布)不得报成遗留'
         Assert-True -Condition ([System.IO.Directory]::Exists($residue)) -Because 'dry-run 不得删除残留'
 
         $r = Invoke-Tool -ScriptName 'artifacts_retention.ps1' -Arguments @('-ArtifactRoot', $fx.Root, '-KeepLast', '3', '-Force')
@@ -593,8 +627,17 @@ try {
     # 4. 隔离自检
     # ─────────────────────────────────────────────────────────────
 
-    Test-Case '自检:所有脚本都尊重 -ArtifactRoot,没有落到环境变量指向的陷阱目录' {
-        Assert-True -Condition (-not [System.IO.Directory]::Exists($script:TrapRoot)) -Because "出现了 $($script:TrapRoot) = 某个脚本忽略了 -ArtifactRoot"
+    Test-Case '自检:所有脚本都尊重 -ArtifactRoot,环境变量指向的陷阱制品根原样未动、输出里从未出现' {
+        foreach ($v in $script:TrapVersions) {
+            $msg = ''
+            try { Test-Sha256Sums -Dir (Join-Path $script:TrapImagesDir $v) } catch { $msg = $_.Exception.Message }
+            Assert-Equal -Expected '' -Actual $msg -Because "诱饵快照 $v 被删或被改 = 某个脚本忽略了 -ArtifactRoot、落到了环境变量上"
+        }
+        $entries = @(Get-ChildItem -LiteralPath $script:TrapImagesDir -Force | ForEach-Object Name)
+        Assert-Equal -Expected 4 -Actual $entries.Count -Because "陷阱 snapshots/images 只应有 3 个诱饵 + latest.json(实际:$($entries -join ','))"
+        Assert-Equal -Expected $script:TrapLatestText -Actual ([System.IO.File]::ReadAllText((Join-Path $script:TrapImagesDir 'latest.json'))) -Because '陷阱 latest.json 不得被改写'
+        Assert-True -Condition ($script:AllToolOutput.Length -gt 0) -Because '自检依赖前面用例的子进程输出,输出为空说明汇总没接上'
+        Assert-NotMatch -Text $script:AllToolOutput.ToString() -Pattern '(env-trap-root|g0000000dead)' -Because '子进程输出出现陷阱制品根或诱饵版本 = 某个脚本读了环境变量而不是 -ArtifactRoot'
     }
 }
 finally {
