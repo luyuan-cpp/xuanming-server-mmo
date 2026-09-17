@@ -39,11 +39,11 @@ param(
     # 可变 tag 会让 `kubectl rollout undo` 退回同一个 digest。
     [string]$Tag = "",
     # 只处理目录里的这几个服务(逗号分隔,如 match,login)。留空 = 全部。
-    # 目录是顺序遍历、一个失败就 throw,以前想单独构建 match 也得先等 db 过——
-    # 而 go/db/go.mod 把 proto2mysql replace 到仓库外(../../../proto2mysql),
-    # 以 go/ 为 build context 根本带不进镜像,db 一挂后面全都不构建。
-    # (db 现在由 Get-ExternalBuildContexts 以 --build-context 带入仓库外目录,
-    #  但宿主没检出 proto2mysql 时仍会失败,所以按需过滤依旧有用。)
+    # 目录是顺序遍历、一个失败就 throw,以前想单独构建 match 也得先等 db 过。
+    # 现状(2026-09-16):go/db、go/data_service 的 go.mod 是
+    # `replace github.com/luyuancpp/proto2mysql => ../../../../proto2mysql-v0.1.0`,目录名与下方
+    # ExternalReplaceStages / Dockerfile 占位 stage(proto2mysql)对不上,Get-ExternalBuildContexts 直接 throw。
+    # 根因修好之前,不带 -Services 的 build-all 会在第一个服务 db 上失败;构建其它服务要显式 -Services 排除 db、data-service。
     #
     # 类型是 [string[]] 而不是 [string]:从 PowerShell 里 `& go_svc_image.ps1 -Services a,b`
     # 调用时,逗号表达式先被解析成数组,[string] 参数会直接报
@@ -98,8 +98,11 @@ if ([string]::IsNullOrWhiteSpace($Tag)) {
     $Tag = Get-ReleaseImageTag -Version $ReleaseVersion -Commit $script:ReleaseStamp.Commit -Dirty:([bool]$script:ReleaseStamp.Dirty)
 }
 
-# 显式 -Tag 绕过了上面的脏树判定,构建类命令再兜一次:挂发布版本号的镜像必须能从一个干净 commit 还原,
-# 否则 BUILD_VERSION=v1.2.3 的二进制里可能是未提交的代码,版本号反而成了误导。
+# 显式 -Tag 绕过了上面的脏树判定与 tag 生成,构建类命令再兜一次:
+#   - 挂发布版本号的镜像必须能从一个干净 commit 还原,否则 BUILD_VERSION=v1.2.3 的二进制里可能是未提交的代码;
+#   - tag 必须就是 Get-ReleaseImageTag 给出的 <版本号>-<12位commit>,否则镜像 tag / OCI label / 二进制自报版本
+#     三处对不上(如 -Version v1.2.3 -Tag latest 或 -Tag v1.2.4-<sha>),回滚与复盘按 tag 找到的不是它声称的那一版。
+# publish_images.ps1 传的 -Tag 就是同一个函数算出来的,不受影响。
 if ($ReleaseVersion -and $Command -in @("build-all", "release-all")) {
     if (-not $script:ReleaseStamp.Ok) {
         throw "发布版本 $ReleaseVersion 需要可追溯的 git commit:$($script:ReleaseStamp.Reason)"
@@ -107,13 +110,19 @@ if ($ReleaseVersion -and $Command -in @("build-all", "release-all")) {
     if ($script:ReleaseStamp.Dirty) {
         throw "发布版本 $ReleaseVersion 不接受脏工作树(git status 非空):脏树产物无法从 commit $($script:ReleaseStamp.Commit) 还原。请先提交或清理工作树。"
     }
+    $expectedTag = Get-ReleaseImageTag -Version $ReleaseVersion -Commit $script:ReleaseStamp.Commit
+    if ($Tag -cne $expectedTag) {
+        throw "发布版本 $ReleaseVersion 的镜像 tag 必须是 $expectedTag(<版本号>-<12位commit>),实际 -Tag 为 '$Tag'。不传 -Tag 即自动生成。"
+    }
 }
 
 # 注入到镜像里的版本戳(ldflags + OCI label + /app/BUILD_INFO)
 # BUILD_VERSION:有发布版本号用版本号,否则沿用镜像 tag(快照镜像的"版本"就是 commit)。
 $BuildVersion = if ($ReleaseVersion) { $ReleaseVersion } else { $Tag }
 $BuildCommit = if ($script:ReleaseStamp.Ok) { $script:ReleaseStamp.Commit } else { "unknown" }
-$BuildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+# InvariantCulture:自定义格式里的 ':' 是"时间分隔符"占位,部分区域性(如 fi-FI)会换成 '.',
+# 产出 2026-09-16T08.00.00Z 这种不符合接口约定的 created label。
+$BuildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ", [System.Globalization.CultureInfo]::InvariantCulture)
 # docker 可执行命令:与 release_common.ps1 同一入口,MMORPG_DOCKER_COMMAND 可换成契约测试桩。
 $DockerCommand = Resolve-ReleaseDockerCommand
 
@@ -162,14 +171,18 @@ function Get-ImageFullName {
 
 # 仓库外的本地 replace 模块 → docker `--build-context <名字>=<宿主目录>`。
 #
-# 背景:go/db/go.mod 有 `replace github.com/luyuancpp/proto2mysql => ../../../proto2mysql`,
+# 背景:go/db/go.mod 当初是 `replace github.com/luyuancpp/proto2mysql => ../../../proto2mysql`,
 # 目标在仓库外,以 go/ 为 build context 带不进镜像,db 镜像以前在任何环境都构建不了。
 # Dockerfile.go-svc 为它声明了一个空的 `FROM scratch AS proto2mysql` 占位 stage,
 # BuildKit 允许命名上下文按名字覆盖同名 stage,所以这里只要把宿主目录传进去即可,
-# go.mod 一行不用改。目录名(模块路径最后一段)就是 stage 名,两边必须一致。
+# go.mod 一行不用改。目录名(replace 目标路径最后一段)就是 stage 名,两边必须一致。
 #
 # 只处理 Dockerfile 里有对应 stage 的模块(白名单),其它 replace(../proto、../shared)
 # 本来就在 go/ 里,由 COPY 正常带入。
+#
+# 现状(2026-09-16):db / data_service 的 replace 已改成 ../../../../proto2mysql-v0.1.0,目录名不在白名单,
+# 下面会 throw。根因方向是像 go/schemamigrate/go.mod 那样 require 已发布 tag(只做远程仓名映射)并删掉本地
+# replace,随后删掉这份白名单与 Dockerfile 占位 stage —— 而不是再加一个 proto2mysql-v0.1.0 stage 继续依赖宿主目录。
 $script:ExternalReplaceStages = @("proto2mysql")
 
 function Get-ExternalBuildContexts {
@@ -190,7 +203,7 @@ function Get-ExternalBuildContexts {
 
         $stage = Split-Path -Leaf $abs
         if ($script:ExternalReplaceStages -notcontains $stage) {
-            throw "go.mod 里有指向仓库外的 replace($line),但 Dockerfile.go-svc 没有名为 '$stage' 的占位 stage;请先在 Dockerfile 里加 `FROM scratch AS $stage` + COPY,并把名字加进 go_svc_image.ps1 的 ExternalReplaceStages。"
+            throw "go.mod 里有指向仓库外的 replace($line),但 Dockerfile.go-svc 没有名为 '$stage' 的占位 stage。优先改为 require 已发布 tag 并删掉这条本地 replace(参照 go/schemamigrate/go.mod);确需宿主目录时才在 Dockerfile 里加 `FROM scratch AS $stage` + COPY,并把名字加进 go_svc_image.ps1 的 ExternalReplaceStages。"
         }
         if (-not (Test-Path $abs -PathType Container)) {
             throw "go.mod 里 replace 指向的仓库外目录不存在:$abs(来自 $goMod 的 `"$line`")。请先把该仓库检出到这个路径,否则镜像里 go build 找不到模块。"

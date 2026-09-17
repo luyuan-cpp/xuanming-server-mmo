@@ -171,8 +171,8 @@ Battle ──result──▶ 结算服
 
 ### 仍是缺口
 
-1. **收缩阶段**:gate 仍中继战斗消息(回落路径),Unity 客户端尚未接直连(客户端仓独立);等直连失败率数据后删 gate 中继;
-2. **部署形态**:battle 无 K8s manifest,直连需要 hostPort / NodePort 暴露(C 档待办);
+1. **收缩阶段**(2026-09-16 更正):Unity 客户端已接直连(客户端仓 `b5cf6ef`,2026-09-06);本机一键启动已默认路由模式,gate 不再中继战斗;剩余 = K8s `-GateRouterMode` 默认翻转 + 删 gate 中继代码,门禁与顺序见 [turn-based-battle-server.md §19](./turn-based-battle-server.md#19-收缩阶段决策--换会话重绑修复2026-09-16) D36 / D37("直连失败率数据"前提已作废:项目未上线、无老客户端);
+2. **部署形态**(2026-09-16 更正):battle 的 Deployment / ConfigMap / 密钥注入已由 `k8s_deploy.ps1`(`Apply-BattlePool`)生成,但只开 containerPort,`NodeInfo.endpoint` 通告 POD_IP,集群外客户端不可达——与 gate 是同一个未解问题(脚本 `Show-ExposureProfileWarning` 明写"翻译要在 login 侧做");并行会话正在做"完整 K8s Battle 验收"(microservice-zone-contract §17),对外入口形态(hostPort / NodePort / 外部 L4)随其拍板;
 3. 落点粒度已由事实拍板为 **一进程 N 房**(单 battle 进程多房间,§8),隔离(单房异常不掀翻进程)只有 timer 回调按 battle_id 重查这一层,无 try/catch 熔断 —— 待补;
 4. 票据吊销 / 每消息 HMAC / 观众连接上限单独配置(§18.7)。
 

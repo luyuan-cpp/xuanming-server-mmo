@@ -57,7 +57,7 @@ on:
       - ".dockerignore"
       - "Dockerfile"
       - "robot/Dockerfile"
-      # 发布版本号与 CHANGELOG 段落规则由契约测试守(release_common / make_release)
+      # CHANGELOG 段落格式是 make_release.ps1 / release_preflight.ps1 / release.yml 的发布输入
       - "CHANGELOG.md"
       - ".github/workflows/release.yml"
   workflow_dispatch:

@@ -7,6 +7,8 @@
 #     --build-arg BUILD_TIME=<UTC yyyy-MM-ddTHH:mm:ssZ> \
 #     --label org.opencontainers.image.revision=<12 位 sha> \
 #     -t mmorpg-robot:<tag> .
+#   注意:robot_stress.ps1 目前只传 -f / -t,不传 BUILD_* 与 revision label,
+#   经它构建的镜像 OCI label 与 /app/BUILD_INFO 均为 unknown(脚本侧待补,见发布打包标准 P3)。
 #
 # 为什么走 vendor 而不是 go mod download:
 #   robot/go.mod 把 proto / shared replace 到 ../go/proto、../go/shared。旧写法
@@ -32,7 +34,10 @@ RUN test "$(go env GOVERSION)" = "go1.24.5"
 
 WORKDIR /src/robot
 COPY robot/ ./
-RUN CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/robot .
+# 只读权限在 builder 里定好:COPY --from 会保留权限位。若在运行阶段再 chmod,overlay 会把整个
+# 二进制复制进新层(镜像里存两份),且那层排在 BUILD_* ARG 之后,每次构建都重生成。
+RUN CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/robot . \
+    && chmod 0555 /out/robot
 
 # ── Runtime stage ────────────────────────────────────────────────
 # alpine 3.20 分支已停止维护(2026-04),这里只把原先的 3.20 收紧到精确补丁版本,不顺手换分支;
@@ -65,7 +70,6 @@ LABEL org.opencontainers.image.title="mmorpg-robot" \
 
 RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
       "${BUILD_VERSION}" "${BUILD_COMMIT}" "${BUILD_TIME}" > /app/BUILD_INFO \
-    && chmod 0555 /app/robot \
     && chmod 0444 /app/BUILD_INFO
 
 USER 10001:10001

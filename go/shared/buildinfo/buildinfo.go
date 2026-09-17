@@ -15,8 +15,10 @@
 //
 //   - Commit 未注入("unknown" 或空串)时,才读 debug.ReadBuildInfo 的 vcs.revision(截 12 位,
 //     与 tools/scripts/lib/release_common.ps1 Get-GitReleaseStamp 口径一致)/ vcs.time / vcs.modified。
-//     覆盖在 git 工作区里裸 `go build` 的场景;取不到 vcs 信息时(测试二进制、build context 不含 .git
-//     的镜像内编译)仍是 unknown —— 镜像内编译必须靠 -X 注入。
+//     只覆盖在 git 工作区里**按包**构建的场景(`go build .`、`go build ./xxx`)。按文件列表构建
+//     (`go build login.go`、`go run login.go`)时包路径是 command-line-arguments、不归属任何模块,
+//     Go 不嵌 vcs.* —— tools/scripts/go_services.ps1 的 build / start 与 Dockerfile.go-svc 都是这种写法,
+//     所以这两处必须靠 -X 注入;测试二进制、build context 不含 .git 的镜像内编译同样取不到,结果仍是 unknown。
 //   - 显式注入的 Commit 永远优先:脚本注入时已自带 -dirty 后缀,不再用 vcs.modified 二次判断。
 //   - Version 没注入就保持 "dev",不从 vcs 推版本号 —— 发布版本号只来自发布流程(-Version / MMORPG_RELEASE_VERSION)。
 //

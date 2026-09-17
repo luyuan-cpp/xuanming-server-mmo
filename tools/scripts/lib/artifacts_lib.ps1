@@ -64,7 +64,7 @@ function Test-SnapshotVersionName {
 
 <#
 .SYNOPSIS
-    解析制品根目录,不存在则创建。
+    解析制品根目录,不存在则创建(带 -MustExist 时改为抛异常、不创建)。
 
 .DESCRIPTION
     优先级:-Override > $env:MMORPG_ARTIFACT_ROOT > <仓库父目录>/artifacts。
@@ -73,11 +73,18 @@ function Test-SnapshotVersionName {
     不写死盘符:A 仓写死 'F:\work\artifacts',换机器/换 Linux CI 就指到不存在的盘。
     制品根刻意放在仓库**外**,避免 GB 级 tar 被 `git add -A` 带进版本库。
 
+    -MustExist 给只读用途(fetch / retention)用:路径写错、计划任务没带上环境变量、共享盘没挂上时,
+    "不存在就创建"会悄悄建出一个空制品根 —— retention 从此每次都"无快照需要清理"地假绿、真实制品根
+    一直没人清;fetch 则把真正原因报成"制品不存在"。发布类调用方(publish / make_release)不带它。
+
 .OUTPUTS
     [string] 绝对路径(不带尾部分隔符)。
 #>
 function Get-ArtifactRoot {
-    param([string]$Override)
+    param(
+        [string]$Override,
+        [switch]$MustExist
+    )
 
     $raw = if (-not [string]::IsNullOrWhiteSpace($Override)) {
         $Override
@@ -93,6 +100,9 @@ function Get-ArtifactRoot {
 
     $root = Resolve-ArtifactFullPath -Path $raw
     if (-not [System.IO.Directory]::Exists($root)) {
+        if ($MustExist) {
+            throw "制品根不存在:$root(检查 -ArtifactRoot / MMORPG_ARTIFACT_ROOT,或共享盘是否已挂载)"
+        }
         [System.IO.Directory]::CreateDirectory($root) | Out-Null
     }
     return $root
@@ -102,17 +112,22 @@ function Get-ArtifactRoot {
 .SYNOPSIS
     两轨分仓:snapshot -> <root>/snapshots(激进清理);release -> <root>/releases(永久保留)。
     目录不存在则创建。
+
+.DESCRIPTION
+    -MustExist:制品根必须已存在(见 Get-ArtifactRoot),且本调用**不创建任何目录**;
+    轨道目录可能不存在,由调用方自行判断(制品根在、轨道目录不在 = 该轨道还没发布过,不是配置错误)。
 #>
 function Get-ChannelRoot {
     param(
         [Parameter(Mandatory = $true)][ValidateSet('snapshot', 'release')][string]$Channel,
-        [string]$Override
+        [string]$Override,
+        [switch]$MustExist
     )
 
-    $root = Get-ArtifactRoot -Override $Override
+    $root = Get-ArtifactRoot -Override $Override -MustExist:$MustExist
     $sub = if ($Channel -eq 'release') { 'releases' } else { 'snapshots' }
     $dir = Join-Path $root $sub
-    if (-not [System.IO.Directory]::Exists($dir)) {
+    if (-not $MustExist -and -not [System.IO.Directory]::Exists($dir)) {
         [System.IO.Directory]::CreateDirectory($dir) | Out-Null
     }
     return $dir
@@ -247,6 +262,12 @@ function Test-Sha256Sums {
     调用方把内容全部写进 staging,再调 Complete-AtomicDir 一次 rename 上线。
     FinalDir 已存在时按不可变原则拒绝;CI 重跑想静默成功由调用方先 Test-Path 走 -SkipIfExists。
     staging 与 FinalDir 同父目录,保证 rename 不跨卷;.tmp- 前缀让 retention 跳过它。
+
+    同名 staging 已存在时抛异常、**不删除**:PID 会复用,容器里的 pwsh 常是个位数 PID,
+    制品根放共享盘时两台机器 / 两个容器可能以相同 PID 并发发布同一版本 —— 删掉等于毁掉对方
+    正在写的 staging,两边随后写进同一个目录,先 rename 的一方会发布一个校验和自洽、内容混杂的版本。
+    代价:被强杀留下的残留会挡住同 PID 的下一次发布,需人工确认后删除;retention 也不清 .tmp-*。
+    Exists 与 CreateDirectory 之间仍有极小的检查-创建窗口(.NET 没有"目录已存在即失败"的创建原语)。
 #>
 function New-AtomicStaging {
     param([Parameter(Mandatory = $true)][string]$FinalDir)
@@ -260,8 +281,9 @@ function New-AtomicStaging {
         [System.IO.Directory]::CreateDirectory($parent) | Out-Null
     }
     $staging = Join-Path $parent (".tmp-" + (Split-Path -Leaf $final) + "-" + $PID)
-    # 同 PID 残留只可能来自本进程更早一次中断的尝试,可以安全清掉
-    if ([System.IO.Directory]::Exists($staging)) { Remove-Item -LiteralPath $staging -Recurse -Force }
+    if ([System.IO.Directory]::Exists($staging) -or [System.IO.File]::Exists($staging)) {
+        throw "staging 已存在:$staging(可能是共享盘或容器里同 PID 的并发发布,也可能是上次被强杀留下的残留;确认没有发布在进行后手工删除再重试)"
+    }
     [System.IO.Directory]::CreateDirectory($staging) | Out-Null
     return $staging
 }
@@ -337,12 +359,16 @@ function Set-LatestPointer {
         [System.IO.Directory]::CreateDirectory($kindDir) | Out-Null
     }
     $dest = Join-Path $kindDir 'latest.json'
-    $tmp = Join-Path $kindDir (".latest.json.tmp-" + $PID)
+    # 临时名带 guid:共享盘上同 PID 的两个发布者若共用一个临时名,一方的 File.Move 会找不到文件,
+    # 在版本目录已上线之后才失败
+    $tmp = Join-Path $kindDir (".latest.json.tmp-" + $PID + "-" + [guid]::NewGuid().ToString('N'))
 
     $payload = [ordered]@{
         version      = $Version
         channel      = $channel
-        published_at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+        # InvariantCulture 且分隔符加引号:自定义格式里的 ':' 是区域时间分隔符,fi-FI 等区域会输出 '.'
+        # (与 publish_images.ps1 的 published_at 同一写法)
+        published_at = [DateTime]::UtcNow.ToString("yyyy-MM-dd'T'HH':'mm':'ss'Z'", [System.Globalization.CultureInfo]::InvariantCulture)
     }
     $json = ($payload | ConvertTo-Json -Depth 3) + "`n"
     try {
@@ -365,7 +391,11 @@ function Set-LatestPointer {
       3. 逐个拼 "<sha256 小写 hex>  <文件名>\n"
       4. 整段文本按 UTF-8(无 BOM)编码后再算 sha256
 
-    只认 .json:服务读的是 json,.pb 是同源生成物、同步变化;
+    只认 .json 是接口 B 的约定,**不是**"服务只读 json":C++ 节点在 TableDataFormat=binary 时读 .pb
+    (cpp/libs/engine/config/config.cpp 的 UseProtoBinaryTables;本机 bin/etc/base_deploy_config.yaml 即为 binary),
+    Go scene_manager 在 UseBinary=true 时也读 .pb。导表器同源生成 .json 与 .pb,正常流程两者同步变化,
+    但摘要不覆盖 .pb:.pb 被单独改坏或漏生成时 tables_sha256 不变,追溯不到实际加载的表。
+    要纳入 .pb 必须改接口 B,并由 publish / make_release / release_preflight 各方同步改测试,不能在这里单方面改算法。
     大小写敏感 + 序数排序保证 Windows 与 Linux 上同一份表算出同一个摘要。
     目录不存在或一个 json 都没有时抛异常:发布记录里出现"0 张表"只会是表生成步骤漏跑。
 

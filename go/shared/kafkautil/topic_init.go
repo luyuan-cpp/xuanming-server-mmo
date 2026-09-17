@@ -1,10 +1,12 @@
 package kafkautil
 
 import (
+	"context"
 	"crypto/sha256"
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/IBM/sarama"
 	"github.com/zeromicro/go-zero/core/logx"
@@ -16,6 +18,13 @@ type TopicSpec struct {
 	Partitions    int32
 	RetentionMs   int64 // -1 = use broker default
 	ReplicaFactor int16 // 0 = use default (1)
+}
+
+// 只暴露初始化需要的管理操作，测试不连接真实 Kafka。
+type topicAdmin interface {
+	ListTopics() (map[string]sarama.TopicDetail, error)
+	CreateTopic(string, *sarama.TopicDetail, bool) error
+	IncrementalAlterConfig(sarama.ConfigResourceType, string, map[string]sarama.IncrementalAlterConfigsEntry, bool) error
 }
 
 // EnsureTopics creates missing topics, verifies an immutable partition-count
@@ -33,6 +42,10 @@ func EnsureTopics(brokers []string, specs []TopicSpec) error {
 	}
 	defer admin.Close()
 
+	return ensureTopics(admin, specs, time.Now, time.Sleep)
+}
+
+func ensureTopics(admin topicAdmin, specs []TopicSpec, now func() time.Time, sleep func(time.Duration)) error {
 	existing, err := admin.ListTopics()
 	if err != nil {
 		return fmt.Errorf("kafka list topics: %w", err)
@@ -68,13 +81,11 @@ func EnsureTopics(brokers []string, specs []TopicSpec) error {
 			logx.Infof("kafka topic create requested: %s (partitions=%d, retention=%dms)",
 				spec.Name, spec.Partitions, spec.RetentionMs)
 
-			// login and db can race on first boot. Refresh metadata even when
-			// CreateTopic returned TopicAlreadyExists, then verify that the
-			// winner created the exact same routing contract.
-			var err error
-			existing, err = admin.ListTopics()
+			// 创建成功不代表每个 broker 已看到新 topic。login/db 并发启动时
+			// AlreadyExists 也需等 metadata 可见，再沿用下面的分区和 marker 校验。
+			existing, err = waitForCreatedTopicMetadata(admin, spec.Name, now, sleep)
 			if err != nil {
-				return fmt.Errorf("kafka refresh topics after creating %s: %w", spec.Name, err)
+				return err
 			}
 		}
 
@@ -136,6 +147,37 @@ func EnsureTopics(brokers []string, specs []TopicSpec) error {
 	}
 
 	return nil
+}
+
+const (
+	topicMetadataVisibilityTimeout = 10 * time.Second
+	topicMetadataPollInterval      = 100 * time.Millisecond
+)
+
+// 只重试已请求创建却暂不可见的 metadata；查询错误直接返回，不能掩盖权限或网络故障。
+// 截止使用单调时间并计入查询耗时。Sarama 的 ListTopics 不接受 context，单次在途
+// 查询仍受其 socket 超时约束；这里不另开无法取消的 goroutine，也不在截止后继续操作。
+func waitForCreatedTopicMetadata(admin topicAdmin, topic string, now func() time.Time, sleep func(time.Duration)) (map[string]sarama.TopicDetail, error) {
+	deadline := now().Add(topicMetadataVisibilityTimeout)
+	for now().Before(deadline) {
+		topics, err := admin.ListTopics()
+		if err != nil {
+			return nil, fmt.Errorf("kafka refresh topics after creating %s: %w", topic, err)
+		}
+		remaining := deadline.Sub(now())
+		if remaining <= 0 {
+			break
+		}
+		if _, exists := topics[topic]; exists {
+			return topics, nil
+		}
+		delay := topicMetadataPollInterval
+		if delay > remaining {
+			delay = remaining
+		}
+		sleep(delay)
+	}
+	return nil, fmt.Errorf("kafka topic %s metadata still absent or query unfinished within %s after create: %w", topic, topicMetadataVisibilityTimeout, context.DeadlineExceeded)
 }
 
 func partitionContractMarker(topic string, partitions int32) (prefix, name string) {

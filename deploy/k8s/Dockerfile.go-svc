@@ -11,12 +11,11 @@
 #     --build-context tables=generated/tables \
 #     -t mmorpg-login:<tag>  go/
 #
-#   db 额外需要仓库外的 proto2mysql(见下方 proto2mysql stage 说明):
-#   docker build -f deploy/k8s/Dockerfile.go-svc \
-#     --build-arg SERVICE=db --build-arg ENTRY=db.go \
-#     --build-context proto2mysql=../proto2mysql \
-#     -t mmorpg-db:<tag>  go/
-#   平时走 tools/scripts/go_svc_image.ps1,它会自动解析 go.mod 的 replace 并追加该参数,
+#   db / data_service 依赖仓库外的 proto2mysql(见下方 proto2mysql stage 说明)。
+#   **现状(2026-09-16)这两个镜像构建不了**:它们的 go.mod 已改成 replace ../../../../proto2mysql-v0.1.0,
+#   与本文件的占位 stage 名、COPY 目标 /proto2mysql 都对不上,go_svc_image.ps1 会直接拒绝;
+#   根因修复(改 require 已发布 tag、删本地 replace)另立任务。
+#   平时走 tools/scripts/go_svc_image.ps1,它会自动解析 go.mod 的 replace 并追加 --build-context,
 #   并注入 BUILD_VERSION / BUILD_COMMIT / BUILD_TIME 与 --label org.opencontainers.image.revision。
 #
 # 基础镜像钉 digest(tag@sha256):tag 在 registry 上会被重推(补丁、换底层 alpine),只钉 tag 时
@@ -28,8 +27,10 @@
 # ────────────────────────────────────────────────────────────────
 
 # ── 仓库外 replace 模块(可选)──────────────────────────────────────
-# go/db/go.mod 把 proto2mysql replace 到仓库外(`../../../proto2mysql`),以 go/
+# go/db/go.mod 当初把 proto2mysql replace 到仓库外(`../../../proto2mysql`),以 go/
 # 为 build context 带不进镜像,db 镜像在任何环境都构建不了(2026-09-03 kind 实跑)。
+# (2026-09-16 起 go.mod 改成 `../../../../proto2mysql-v0.1.0`,本 stage 已对不上,见文件头"现状";
+#  根因修好后本 stage 与下方 COPY --from=proto2mysql 应一并删除。)
 #
 # 解法:BuildKit 的命名上下文可以**按名字覆盖同名 stage**。这里先声明一个空的
 # scratch stage 占位;tools/scripts/go_svc_image.ps1 在宿主上解析到该 replace
@@ -54,8 +55,10 @@ FROM scratch AS tables
 # 二进制不同"。其余服务(go 1.24.5)向后兼容。升级 Go 时 FROM 的 tag/digest 与下方断言一起改。
 FROM golang:1.26.5-alpine@sha256:0178a641fbb4858c5f1b48e34bdaabe0350a330a1b1149aabd498d0699ff5fb2 AS builder
 
-ARG SERVICE
-ARG ENTRY
+# SERVICE / ENTRY 不在阶段开头声明:ARG 一旦声明,其后每个 RUN 都隐式带着它参与缓存计算,
+# 放这里会让下面与服务无关的 GOVERSION 断言、apk add git 两层按服务各缓存一份(N 个服务首次构建各联网装一遍)。
+# 所以 SERVICE 到第一次用它的 COPY 前才声明,ENTRY 与 BUILD_* 一起放到 go build 前。
+
 # 默认官方代理;国内构建由 tools/scripts/go_svc_image.ps1 把宿主的 $env:GOPROXY
 # (buildenv.ps1 设为 goproxy.cn)原样透传进来,否则模块下载会卡死。
 # **分隔符用 `|` 而不是 `,`**:逗号只在代理返回 404/410 时才退到下一个源,网络层错误
@@ -88,11 +91,13 @@ COPY shared/go.mod shared/go.sum /src/shared/
 # `replace schemamigrate => ../schemamigrate` 依赖它,位置与 shared 同级(/src/schemamigrate)。
 # 非建表服务不引用它,多拷一个小目录无副作用。它依赖的 proto2mysql 是已发布 tag,走 go mod download。
 COPY schemamigrate/go.mod schemamigrate/go.sum /src/schemamigrate/
+ARG SERVICE
 COPY ${SERVICE}/go.mod ${SERVICE}/go.sum /src/${SERVICE}/
 
-# 仓库外 replace 模块落到 /proto2mysql:go.mod 里的相对路径 `../../../proto2mysql`
+# 仓库外 replace 模块落到 /proto2mysql:当初 go.mod 里的相对路径 `../../../proto2mysql`
 # 从 /src/<service>/ 出发向上越过根目录后仍归一化为 /proto2mysql,与宿主上
 # go/<service>/../../../proto2mysql 的相对深度一致,所以 replace 行不用改。
+# 现在的 `../../../../proto2mysql-v0.1.0` 在镜像里归一化为 /proto2mysql-v0.1.0,与这里不一致(见文件头"现状")。
 COPY --from=proto2mysql / /proto2mysql/
 
 WORKDIR /src/${SERVICE}
@@ -109,6 +114,7 @@ COPY ${SERVICE}/ /src/${SERVICE}/
 # 版本戳。由 tools/scripts/go_svc_image.ps1 从 git 注入,默认 unknown。到这里才声明,理由见依赖层注释。
 # 既写进二进制(shared/buildinfo,服务启动首行 `service starting ... version= commit=` 自报),
 # 也落一份 /app/BUILD_INFO —— 后者是 `kubectl exec … cat /app/BUILD_INFO` 能直接看到的判据,不依赖服务自己打印。
+ARG ENTRY
 ARG BUILD_VERSION=unknown
 ARG BUILD_COMMIT=unknown
 ARG BUILD_TIME=unknown
@@ -129,19 +135,23 @@ RUN go build -trimpath \
 # 最后一个补丁,registry 标注 2026-04-16 构建);升到与 builder 同代的 alpine 3.24 另行评审。
 FROM alpine:3.20.10@sha256:d9e853e87e55526f6b2917df91a2115c36dd7c696a35be12163d44e6e2a4b6bc
 
-# 非 root 运行(uid/gid 10001,与 A 仓一致):容器逃逸 / 任意文件写漏洞时不直接拿到 root。
-# 预建并交给 10001 的目录(2026-09-16 写路径审计:各服务 etc/*.yaml、服务代码里的文件写调用、
+# 非 root 运行(uid/gid 10001,与 A 仓及 Dockerfile.runtime / java-svc / robot 一致):容器逃逸 / 任意文件写漏洞时不直接拿到 root。
+# 属主按"只把确实要写的交出去"划分(2026-09-16 写路径审计:各服务 etc/*.yaml、服务代码里的文件写调用、
 # deploy/k8s/manifests/go-svc/*.yaml 的 volumeMounts):
-#   - /app、/generated:工作目录与策划表目录;
-#   - /run/snowflake:SnowflakeCacheDir 默认值 ../../run/snowflake 从 WORKDIR /app 归一化后的路径
-#     (login / match / scene_manager / guild 的 shared/snowflakealloc 会 MkdirAll + 写临时文件 + rename)。
+#   - /run/snowflake:唯一要写的目录,归 10001。SnowflakeCacheDir 默认值 ../../run/snowflake 从 WORKDIR /app
+#     归一化后就是它(login / match / scene_manager / guild 的 shared/snowflakealloc 会 MkdirAll + 写临时文件 + rename)。
 #     K8s 上 ConfigMap 把它改成 /tmp/snowflake 并挂 emptyDir,这里兜的是 docker run / 未覆盖配置的场景。
-# 各服务 etc/*.yaml 没有 Log 段,go-zero logx 默认 console 输出到 stdout/stderr,不写日志文件。
+#   - /app、/generated/tables 以及其中的二进制、默认配置、策划表:只读,目录和文件都保持 root 所有(10001 可读、可执行)。
+#     目录也不交出去:目录写权限等于能删除 / 替换其中文件,进程被 RCE 后就能换掉自己的二进制或改表;
+#     docker-compose `restart: unless-stopped` 会保留容器可写层,被换掉的二进制重启后照样跑。
+#   - 各服务 etc/*.yaml 没有 Log 段,go-zero logx 默认 console 输出到 stdout/stderr,不写日志文件;
+#     go-zero 的 goroutine / pprof dump 写 os.TempDir()(/tmp,1777)。
+#     将来若开 Log.Mode=file 且用相对路径(落到 /app/logs),在这里单独预建该目录并 chown 或挂卷,不要把 /app 整个交出去。
 RUN apk add --no-cache ca-certificates tzdata \
     && addgroup -S -g 10001 mmorpg \
     && adduser -S -D -H -h /app -s /sbin/nologin -u 10001 -G mmorpg mmorpg \
     && mkdir -p /app /generated/tables /run/snowflake \
-    && chown 10001:10001 /app /generated /generated/tables /run/snowflake
+    && chown 10001:10001 /run/snowflake
 
 WORKDIR /app
 
@@ -153,8 +163,8 @@ WORKDIR /app
 # (如 actoractioncombatstate.json),而 generated/tables/ 导出的是大驼峰
 # (ActorActionCombatState.json)。Windows 文件系统不分大小写所以本地从没暴露,
 # Linux 容器里一定读不到。这里是部署侧兜底,根因在导表/生成器命名不一致。
-# 用 COPY --chown 而不是事后 chown -R:后者会把整份文件在新层里再存一遍。
-COPY --chown=10001:10001 --from=tables / /generated/tables/
+# 不加 --chown:表文件保持 root 所有、运行用户只读(理由见上方属主划分);改名这步在 USER 之前以 root 执行。
+COPY --from=tables / /generated/tables/
 RUN set -e; cd /generated/tables; for f in *.json; do \
       [ -e "$f" ] || continue; \
       lower="$(printf '%s' "$f" | tr 'A-Z' 'a-z')"; \
@@ -163,14 +173,15 @@ RUN set -e; cd /generated/tables; for f in *.json; do \
 
 # Each service keeps its etc/ config inside the image as a default.
 # K8s deployments override it via ConfigMap mount at /app/etc/.
+# 本段 COPY 都不加 --chown:二进制、默认配置、data 保持 root 所有、运行用户只读(理由见上方属主划分)。
 ARG SERVICE
-COPY --chown=10001:10001 ${SERVICE}/etc/ /app/etc/
+COPY ${SERVICE}/etc/ /app/etc/
 
 # Optional data directory (e.g., db/data/ with table JSON definitions)
 # The wildcard pattern avoids build failure if the dir doesn't exist.
-COPY --chown=10001:10001 ${SERVICE}/data*/ /app/data/
+COPY ${SERVICE}/data*/ /app/data/
 
-COPY --chown=10001:10001 --from=builder /app/service /app/service
+COPY --from=builder /app/service /app/service
 
 # 版本戳 ARG 放在运行阶段末尾:ARG 之后的每个 RUN 都隐式带着它参与缓存计算,
 # 放前面会让上面的 apk / 表文件改名层每次构建都失效。

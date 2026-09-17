@@ -10,6 +10,7 @@
 #     --build-arg BUILD_VERSION=<版本或 tag> --build-arg BUILD_COMMIT=<12 位 sha> \
 #     --build-arg BUILD_TIME=<UTC yyyy-MM-ddTHH:mm:ssZ> \
 #     --label org.opencontainers.image.revision=<12 位 sha> \
+#     [--build-arg GOPROXY="<宿主代理>|direct"] \
 #     -t mmorpg-sandbox-mock:<tag>  go/
 #   deploy/docker-compose.login-stack.yml 的 sandbox-mock 服务不传 BUILD_*,镜像内版本信息为 unknown。
 #
@@ -21,22 +22,37 @@
 
 FROM golang:1.24.5-alpine3.22@sha256:daae04ebad0c21149979cd8e9db38f565ecefd8547cf4a591240dc1972cf1399 AS builder
 
+# 默认官方代理;国内构建用 --build-arg GOPROXY=<宿主 $env:GOPROXY> 透传(compose 目前不传,走默认)。
+# 分隔符用 `|`:任何错误都回退到下一个源;`,` 只在代理返回 404/410 时回退,代理抖动会直接失败
+# (与 Dockerfile.go-svc 同一约定,A 仓 2026-08-12 事故)。
+ARG GOPROXY=https://proxy.golang.org|direct
+
 # local:禁止按 go.mod 自动下载别的工具链(国内网络下常超时,且会让编译器版本脱离基础镜像)。
-ENV GOTOOLCHAIN=local
+ENV GOTOOLCHAIN=local GOPROXY=${GOPROXY}
 RUN test "$(go env GOVERSION)" = "go1.24.5"
 
+# git 只给 GOPROXY 的 direct 回退用(按 VCS 直接拉模块);代理正常时用不到。
 RUN apk add --no-cache git
 WORKDIR /src
 
-# Pull in the shared local modules referenced via replace directives.
+# ── 依赖层:只放 go.mod / go.sum,单独 go mod download ──────────────
+# replace 目标(../proto、../shared)的 go.mod 必须先在位才能解析模块图,源码此时不需要;
+# 这样 login 源码改动不会让约百个依赖重新下载。
+COPY proto/go.mod proto/go.sum /src/proto/
+COPY shared/go.mod shared/go.sum /src/shared/
+COPY login/go.mod login/go.sum /src/login/
+WORKDIR /src/login
+RUN go mod download
+
+# ── 源码层 ────────────────────────────────────────────────────────
 COPY proto/  /src/proto/
 COPY shared/ /src/shared/
 COPY login/  /src/login/
 
-WORKDIR /src/login
-RUN go mod download \
-    && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
-        go build -trimpath -ldflags="-s -w" -o /app/sandbox_mock ./cmd/sandbox_mock
+# 只读权限在 builder 里定好(COPY --from 保留权限位);运行阶段再 chmod 会让二进制在镜像里存两份。
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+        go build -trimpath -ldflags="-s -w" -o /app/sandbox_mock ./cmd/sandbox_mock \
+    && chmod 0555 /app/sandbox_mock
 
 # ── Runtime ──────────────────────────────────────────────────────
 # 3.20 分支已停止维护(2026-04);这里只收紧到精确补丁版本,换分支与其它 alpine 运行镜像同批做。
@@ -58,7 +74,6 @@ LABEL org.opencontainers.image.title="mmorpg-sandbox-mock" \
 
 RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
       "${BUILD_VERSION}" "${BUILD_COMMIT}" "${BUILD_TIME}" > /app/BUILD_INFO \
-    && chmod 0555 /app/sandbox_mock \
     && chmod 0444 /app/BUILD_INFO
 
 EXPOSE 18090

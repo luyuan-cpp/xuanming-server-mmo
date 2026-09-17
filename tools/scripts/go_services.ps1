@@ -809,22 +809,44 @@ function Get-GoBuildInfoLdflags {
     # release_common.ps1 只定义函数与常量表,dot-source 无副作用;放在函数内,只有 build 命令才加载。
     . (Join-Path $ScriptDir "lib/release_common.ps1")
 
+    $stamp = Get-GitReleaseStamp -RepoRoot $RepoRoot
+
     # 版本号只来自发布流程(MMORPG_RELEASE_VERSION),本地随手构建一律 dev,不从 git tag 猜。
+    # 与 go_svc_image.ps1 同口径 fail-closed:挂发布版本号的产物必须能从一个干净 commit 还原,
+    # 否则 exe 自报 v1.2.3、里面却是未提交的代码。环境变量多半是发布会话残留的,本地调试先清掉它。
     $version = "dev"
     if (-not [string]::IsNullOrWhiteSpace($env:MMORPG_RELEASE_VERSION)) {
-        $versionCheck = Test-ReleaseVersion -Version $env:MMORPG_RELEASE_VERSION
+        $releaseVersion = $env:MMORPG_RELEASE_VERSION
+        $versionCheck = Test-ReleaseVersion -Version $releaseVersion
         if (-not $versionCheck.Ok) { throw "环境变量 MMORPG_RELEASE_VERSION 不合法:$($versionCheck.Reason)" }
-        $version = $env:MMORPG_RELEASE_VERSION
+        if (-not $stamp.Ok) {
+            throw "发布版本 $releaseVersion 需要可追溯的 git commit:$($stamp.Reason)。本地调试构建请先 Remove-Item Env:MMORPG_RELEASE_VERSION。"
+        }
+        if ($stamp.Dirty) {
+            throw "发布版本 $releaseVersion 不接受脏工作树(git status 非空):脏树产物无法从 commit $($stamp.Commit) 还原。请先提交或清理工作树;本地调试构建请先 Remove-Item Env:MMORPG_RELEASE_VERSION。"
+        }
+        $version = $releaseVersion
     }
 
     # 脏树带 -dirty:本地 exe 常从未提交的代码编出来,commit 不标脏会让人误以为跑的就是那个 commit。
-    # 取不到 git 戳时注入 unknown,buildinfo 会回落读 go build 自动嵌入的 vcs.revision。
+    # 取不到 git 戳时注入 unknown:本脚本按文件构建(go build ./<entry>.go),Go 不给这种构建嵌 vcs.*,
+    # buildinfo 没有可回落的来源,启动行如实显示 commit=unknown(见 go/shared/buildinfo 包注释)。
     $commit = "unknown"
-    $stamp = Get-GitReleaseStamp -RepoRoot $RepoRoot
+    $buildTime = "unknown"
     if ($stamp.Ok) {
         $commit = if ($stamp.Dirty) { "$($stamp.Commit)-dirty" } else { $stamp.Commit }
+        # BuildTime 取 HEAD 的提交时间(UTC),不取墙钟:-X 的值参与 go 的链接缓存键,墙钟每秒都变,
+        # 会让没改代码的服务也全部重新链接、重写 exe —— 空构建多耗链接时间,服务正在跑、exe 被占用时必然 [FAIL]。
+        # 口径同 SOURCE_DATE_EPOCH 惯例,也与 buildinfo 回落时拿 vcs.time(同为提交时间)当 BuildTime 一致。
+        # 代价:脏树 exe 的 build_time 是 HEAD 提交时间而非实际编译时间,要看编译时间请看 exe 文件修改时间。
+        $commitEpoch = (& git -C $RepoRoot show -s --format=%ct HEAD 2>$null)
+        $epochSeconds = 0L
+        if ($LASTEXITCODE -eq 0 -and [long]::TryParse(("$commitEpoch").Trim(), [ref]$epochSeconds)) {
+            # InvariantCulture:自定义格式里的 ':' 是"时间分隔符"占位,部分区域性(如 fi-FI)会换成 '.'。
+            $buildTime = [DateTimeOffset]::FromUnixTimeSeconds($epochSeconds).UtcDateTime.ToString(
+                "yyyy-MM-ddTHH:mm:ssZ", [System.Globalization.CultureInfo]::InvariantCulture)
+        }
     }
-    $buildTime = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 
     return "-X shared/buildinfo.Version=$version -X shared/buildinfo.Commit=$commit -X shared/buildinfo.BuildTime=$buildTime"
 }
@@ -834,7 +856,7 @@ function Invoke-Build {
     $outDir = Join-Path $RepoRoot "bin\go_services"
     if (-not (Test-Path $outDir)) { New-Item -ItemType Directory -Path $outDir -Force | Out-Null }
 
-    # 同一批构建共用一份版本戳(BuildTime 一致,便于按批次比对)。
+    # 同一批构建共用一份版本戳(git 只查一次,整批 ldflags 相同)。
     $ldflags = Get-GoBuildInfoLdflags
     Write-Host "[stamp] $ldflags" -ForegroundColor DarkGray
 

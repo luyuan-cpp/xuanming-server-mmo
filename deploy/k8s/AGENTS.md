@@ -26,7 +26,7 @@ deploy/k8s/
 
 ## CONVENTIONS
 - This subtree is Kubernetes-only; do not mix docker-compose/local process assumptions into it.
-- C++ 节点镜像只从 `deploy/k8s/Dockerfile.cpp` 或 `deploy/k8s/Dockerfile.runtime` 出;带发布门禁(不可变 tag + `release_preflight.ps1`)的入口目前只有 `Dockerfile.runtime` 这条(`k8s_image.ps1`),分工见「C++ 节点镜像:两条路径」。
+- C++ 节点镜像只从 `deploy/k8s/Dockerfile.cpp` 或 `deploy/k8s/Dockerfile.runtime` 出,分工见「C++ 节点镜像:两条路径」。发布门禁(不可变 tag + `release_preflight.ps1`)挂在部署侧:`k8s_deploy.ps1 -ReleaseProfile staging|prod` 的 `zone-up` / `all-up` / `infra-up` 对任意 `-NodeImage` 都查,与镜像出自哪个 Dockerfile 无关;`k8s_image.ps1 release-zone|release-all` 只是在构建前多查一次。
 - `Dockerfile.runtime` expects Linux binaries staged under `deploy/k8s/runtime/linux/`(根 `.dockerignore` 不得排除该目录)。
 - Managed cloud generally uses `LoadBalancer`; bare metal generally uses `NodePort` + external L4.
 - Prefer explicit `-OpsProfile managed-cloud` / `-OpsProfile bare-metal` in commands and docs.
@@ -108,11 +108,11 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-push-image -ImageRepository 
 |---|---|---|
 | 在哪编译 | 镜像内:deps 阶段编 gRPC `v1.83.0` 等,builder 阶段 `build_linux.sh --skip-deps --relwithdebinfo --split-debug` | 镜像外:Linux 主机 `bash tools/scripts/build_linux.sh`,再 `k8s-stage-runtime` 拷进 `deploy/k8s/runtime/linux/` |
 | 调用方 | `dev_tools.ps1 -Command k8s-build-all`;`.github/workflows/cpp-build-ci.yml`(只到 `--target builder`,当编译门禁);`k8s_image.ps1 -DockerfilePath deploy/k8s/Dockerfile.cpp` 也能用,但其预检仍要求 staging 目录齐全 | `tools/scripts/k8s_image.ps1`(`-DockerfilePath` 默认值):`k8s-build-image` / `k8s-push-image` / `k8s-release-zone` / `k8s-release-all`;`publish_images.ps1` 的 cpp 族 |
-| 发布门禁 | 无 | `release-zone` / `release-all` 跑不可变 tag 校验 + `release_preflight.ps1` |
-| 运行层内容 | `bin/{gate,scene,battle}`、`/usr/local/lib/*.so*`、`data/scene_nav_bin/`、表文件名转小写、`bin/zoneinfo` 软链 | 只有 staging 里的东西:`bin/{gate,scene,battle}`、`bin/zoneinfo/`、`generated/generated_tables/`(契约见 `runtime/README.md`) |
+| 构建入口自带门禁 | 无(`k8s-build-all` 只构建) | 仅 `release-zone` / `release-all` 构建前跑不可变 tag 校验 + `release_preflight.ps1`;`build-image` / `publish_images.ps1` 不跑。部署侧门禁对两条路径一视同仁(见 CONVENTIONS) |
+| 运行层内容 | apt 装 `ca-certificates libgcc-s1 libstdc++6 libcurl4 libssl3t64 libzstd1 tzdata`;`bin/{gate,scene,battle}`、`/usr/local/lib/*.so*` + `ldconfig`、`data/scene_nav_bin/`、表文件名转小写、`bin/zoneinfo` 软链 | apt 装 `ca-certificates libgcc-s1 libstdc++6 libcurl4 tzdata`;其余只有 staging 里的东西:`bin/{gate,scene,battle}`、`bin/zoneinfo/`、`generated/generated_tables/`(契约见 `runtime/README.md`) |
 
 - 两条都是现役入口,旧文档里"生产只准用 `Dockerfile.runtime`"与"`Dockerfile.cpp` 是推荐路径"两种说法都不完整,以上表为准。版本化发布(`publish_images.ps1` → `make_release.ps1`)走 `Dockerfile.runtime`,C++ 分离符号取宿主 `bin/symbols/*.debug`。
-- ⚠️ **两条路径的运行层不等价**:staging 契约里没有 `.so`、导航网格数据,也不做表名转小写,而 `Dockerfile.cpp` 对这三样各有一步。在 runtime 路径产出的镜像真实起过一次 scene 之前,不要假定二者可互换。
+- ⚠️ **两条路径的运行层不等价**(上表"运行层内容"行,按代码核对,不保证穷尽):`Dockerfile.runtime` 与 staging 契约里没有 `/usr/local/lib/*.so*`(及 `ldconfig`)、导航网格数据、表名转小写,apt 也少了 `libssl3t64`、`libzstd1`;二进制若动态链接 libssl / libzstd,runtime 路径的镜像会在加载共享库时起不来。在 runtime 路径产出的镜像真实起过一次 scene 之前,不要假定二者可互换。
 - 根 `.dockerignore` 以前排除了 `deploy/k8s/runtime/linux/`,`k8s-build-image` 的 `COPY ${RUNTIME_ROOT}/` 必然 not found;2026-09-16 已去掉该排除。
 - 旧的 KNOWN BREAKAGE 已过时并删除:`tools/scripts/build_linux.sh` 已入库(提交 `31e4d1d4c`);`Dockerfile.cpp` 克隆 gRPC `v1.83.0` 并校验 revision,与 `.gitmodules` 的 `branch = v1.83.x` 一致。
 
@@ -123,15 +123,19 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-push-image -ImageRepository 
 - 发布集合只有 cpp / go / java 三族;robot、sandbox-mock 是测试工具镜像,不进制品目录。
 - 推 registry 属于 AGENTS §9 受限操作:只推用户明确指定的 dev registry,AI 不执行 push。
 
-```bash
+```powershell
 # 快照轨(工作树必须干净):构建三族镜像 → 逐个 docker save → snapshots/images/g<sha12>/
 pwsh -File tools/scripts/publish_images.ps1
-# 发布轨:版本号注入镜像 → releases/images/v1.2.3/;CI 重跑加 -SkipBuild -SkipIfExists
-pwsh -File tools/scripts/publish_images.ps1 -Version v1.2.3
-# (可选)推送并记录 digest;k8s_image.ps1 push-image / java_svc_image.ps1 push 同样收 -Version / -DigestsOut
-pwsh -File tools/scripts/go_svc_image.ps1 -Command push-all -Registry <registry> -Version v1.2.3 -DigestsOut ./image-digests.json
+# 发布轨:版本号注入镜像 → releases/images/v1.2.3/;CI 重跑加 -SkipBuild -SkipIfExists(-Registry 保持相同)
+# -Registry = 最终推送的前缀,镜像 ref 按它命名;不填则出包与推送都用默认 ghcr.io/luyuancpp
+pwsh -File tools/scripts/publish_images.ps1 -Version v1.2.3 -Registry <registry>
+# (可选)推送并记录 digest:<registry> 必须与出包一致(push 不重新打 tag,make_release 要求 ref 逐一对应);
+# 记录文件放仓库外,放仓库内会让工作树变脏,后续带 -Version 的推送被拒。
+# k8s_image.ps1 push-image -ImageRepository <registry>/mmorpg-node、java_svc_image.ps1 push 同样收 -Version / -DigestsOut
+$digests = Join-Path (Split-Path $PWD.Path -Parent) 'image-digests-v1.2.3.json'   # 当前目录 = 仓库根
+pwsh -File tools/scripts/go_svc_image.ps1 -Command push-all -Registry <registry> -Version v1.2.3 -DigestsOut $digests
 # release manifest:CHANGELOG.md 必须有 "## [1.2.3]" 段 → releases/manifests/v1.2.3.{md,json}
-pwsh -File tools/scripts/make_release.ps1 -Version v1.2.3 -ImageDigestsFile ./image-digests.json
+pwsh -File tools/scripts/make_release.ps1 -Version v1.2.3 -ImageDigestsFile $digests
 # 目标机:校验后落地(缺省 deploy/offline-images/v1.2.3)→ 离线导入并逐个核对镜像 ID
 pwsh -File tools/scripts/fetch_images.ps1 -Channel release -Version v1.2.3
 pwsh -File tools/scripts/import_images.ps1 -Dir deploy/offline-images/v1.2.3

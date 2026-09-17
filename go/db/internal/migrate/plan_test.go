@@ -281,3 +281,27 @@ func TestBaselineAlwaysEmitsDeclaredPrimaryKey(t *testing.T) {
 		t.Fatalf("player_database 主键必须是 player_id,实际:\n%s", playerDB)
 	}
 }
+
+// 依赖发布包必须读取 proto 中的 TiDB 选项，不能误用旧仓名同版本的缓存内容。
+func TestBaselineEmitsPlayerTiDBOptions(t *testing.T) {
+	migration, err := newTestSource(t, false).Baseline()
+	if err != nil {
+		t.Fatalf("生成基线: %v", err)
+	}
+	for _, statement := range migration.Statements {
+		if !strings.HasPrefix(statement, "CREATE TABLE IF NOT EXISTS `player_database`") {
+			continue
+		}
+		for _, option := range []string{
+			"PRIMARY KEY (`player_id`) /*T![clustered_index] NONCLUSTERED */",
+			"SHARD_ROW_ID_BITS=4",
+			"PRE_SPLIT_REGIONS=4",
+		} {
+			if !strings.Contains(statement, option) {
+				t.Errorf("玩家表缺少声明的 TiDB 选项 %q:\n%s", option, statement)
+			}
+		}
+		return
+	}
+	t.Fatal("基线中缺少 player_database")
+}

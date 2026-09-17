@@ -15,6 +15,10 @@ Kafka 扩分区会重映射一部分 key；新 partition 的 offset 与旧 parti
 
 1. `kafkautil.EnsureTopics` 只创建缺失 topic，绝不原地扩分区；已存在 topic 的
    broker/config partition 数不等时启动失败。
+   创建成功或返回 AlreadyExists 后，metadata 可能延迟可见；仅对这种缺失状态按
+   100ms 间隔等待，10 秒单调截止内复查，查询错误直接失败。出现后仍须验证精确
+   分区数及 marker，超时不得继续更新 retention。单次 Sarama 查询受原 socket
+   超时约束，10 秒是轮询预算，不是强制取消在途 RPC 的硬截止。
 2. 首次成功校验时创建一个 broker 侧不可变 marker topic，名称包含 data topic
    的 SHA-256 和 partition 数。即使运维先在 broker 扩分区、再把配置改成相同数，
    旧 marker 仍会让启动失败。

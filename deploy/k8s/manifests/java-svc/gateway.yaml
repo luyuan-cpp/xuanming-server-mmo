@@ -41,10 +41,23 @@ spec:
           env:
             - name: SPRING_PROFILES_ACTIVE
               value: k8s
+            # 显式限制堆，避免 JDK/cgroup 组合误按宿主内存计算最大堆。
+            # 1Gi 容器预算中保留 640Mi 给 metaspace、线程栈、直接缓冲区及其他 native 内存。
+            - name: JAVA_TOOL_OPTIONS
+              value: "-Xms64m -Xmx384m"
           volumeMounts:
             - name: svc-config
               mountPath: /app/config
               readOnly: true
+          # Spring/JPA 冷启动在资源受限时可能超过 liveness 的失败预算。
+          # startupProbe 成功前暂停 readiness/liveness，避免启动尚未完成就反复被杀。
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8081
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 60
           readinessProbe:
             httpGet:
               path: /actuator/health
@@ -60,10 +73,10 @@ spec:
           resources:
             requests:
               cpu: 200m
-              memory: 256Mi
+              memory: 512Mi
             limits:
               cpu: "1"
-              memory: 512Mi
+              memory: 1Gi
       volumes:
         - name: svc-config
           configMap:

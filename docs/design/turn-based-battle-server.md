@@ -535,7 +535,7 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
 
 ## 18. 客户端直连 battle 节点:票据入场,战斗流量零字节经 gate(2026-09-05,已落码待验证)
 
-> 状态:**已落码;2026-09-05 静态评审 22 条已修;proto-gen / C++ Debug 全量 0 error / Go / robot / 两份 gtest 全绿;整栈冒烟(§18.8 第 5-6 步)待本机基础设施(镜像与 Maven 需下载)**。目标形态与判据见
+> 状态:**已落码;2026-09-05 静态评审 22 条已修;proto-gen / C++ Debug 全量 0 error / Go / robot / 两份 gtest 全绿;整栈冒烟(§18.8 第 5-6 步)已于 2026-09-05(3) 通过——旧模式与路由模式两轮 `BATTLE_SMOKE_OK`,`a_direct_turns == 总回合数`,战斗帧零回落 gate(PROGRESS.md 同日条目)。Unity 客户端 2026-09-06 提交 `b5cf6ef` 接入(`BattleDirectLink` + `DirectRoutingBattleTransport`),Unity 实机对真 battle 的端到端直连尚未跑过。收缩阶段决策见 §19(2026-09-16)。** 目标形态与判据见
 > [moba-battle-target-architecture.md](./moba-battle-target-architecture.md)(会话制对局标准形态:
 > 大厅一条连接走 gate,战斗另一条连接直连 battle,票据入场,battle 可随时 kill)。
 > 本节只写"改了什么、契约是什么、怎么验",不重复目标文档的论证。
@@ -603,7 +603,7 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
 
 - **收缩阶段 = `GATE_CLIENT_RPC_ROUTER` 路由模式**(见 [client-rpc-router.md](./client-rpc-router.md) D33 / D34):gate 设该环境变量后白名单只剩 `{Scene(TCP), ClientRpcRouter}`,不再中继任何 battle 消息、忽略 Bind/Unbind 事件,直连成为唯一战斗通路;票据补签因此改道 `MatchService.RequestBattleTicket → BattleNode.IssueBattleTicket`(D25 已按此口径更新),`skip_direct_connect: true` 的回落路径在路由模式下预期失败。默认仍是旧模式(D34),翻转前提不变:客户端直连失败率数据 + scene 的 RECONNECT 链路换成推 `BattleAssignedS2C`;
 - **收缩(contract)**:默认翻转到路由模式后再删 gate 的 battle 中继代码(四类白名单、Bind/Unbind 事件、`SetIfEmptyHandler` 桥接);
-- **待修(服务端,2026-09-05 客户端接入时发现)**:`RedirectToGate`(跨区 / gate 迁移)后战斗既收不到重绑也收不到重连提示。判据链:`DecideEnterGame` 只在旧会话 `State==StateDisconnecting` 时判 `ShortReconnect`,而 gate 迁移时旧会话通常仍是 `StateOnline` → 判 `ReplaceLogin` → `enter_gs_type=LOGIN_REPLACE`;此时 `player_battle.cpp` 的 `OnPlayerEnterScene` 两步守卫都不触发 —— 第 1 步 `RestoreBattleFreezeOnLogin` 被 `!any_of<InBattleComp>` 挡住(同区迁移实体还在),第 2 步要求 `enterGsType == LOGIN_RECONNECT`。后果:`BindBattleEvent` 不重发 → 新 gate 上没有该会话的 battle 绑定 → **gate 中继路径同样断**(`requiresSessionBinding` 命中 BattleNodeService),`BattleReconnectS2C` 也不推。修法:第 2 步的条件改成「有 `InBattleComp` 且本次是换会话类登录(RECONNECT **或** REPLACE)」,或在 `RestoreBattleFreezeOnLogin` 之外单列一条「会话换了就重绑」的路径。**客户端已先自愈**(`GameClient.RedirectFlow` 在重定向成功后用捕获的 battle_id 主动走 `MatchService.RequestBattleTicket` 补签重建直连,该链路经 match 随机路由、不依赖 gate 绑定),所以路由模式下不受影响;但旧模式下服务端不修就仍是断的;
+- **已修(2026-09-16,见 §19 D38;原文保留作判据链)**:`RedirectToGate`(跨区 / gate 迁移)后战斗既收不到重绑也收不到重连提示。判据链:`DecideEnterGame` 只在旧会话 `State==StateDisconnecting` 时判 `ShortReconnect`,而 gate 迁移时旧会话通常仍是 `StateOnline` → 判 `ReplaceLogin` → `enter_gs_type=LOGIN_REPLACE`;此时 `player_battle.cpp` 的 `OnPlayerEnterScene` 两步守卫都不触发 —— 第 1 步 `RestoreBattleFreezeOnLogin` 被 `!any_of<InBattleComp>` 挡住(同区迁移实体还在),第 2 步要求 `enterGsType == LOGIN_RECONNECT`。后果:`BindBattleEvent` 不重发 → 新 gate 上没有该会话的 battle 绑定 → **gate 中继路径同样断**(`requiresSessionBinding` 命中 BattleNodeService),`BattleReconnectS2C` 也不推。修法:第 2 步的条件改成「有 `InBattleComp` 且本次是换会话类登录(RECONNECT **或** REPLACE)」,或在 `RestoreBattleFreezeOnLogin` 之外单列一条「会话换了就重绑」的路径。**客户端已先自愈**(`GameClient.RedirectFlow` 在重定向成功后用捕获的 battle_id 主动走 `MatchService.RequestBattleTicket` 补签重建直连,该链路经 match 随机路由、不依赖 gate 绑定),所以路由模式下不受影响;但旧模式下服务端不修就仍是断的;
 - 每消息 HMAC(`hmac-message-signing.md` 的 slice B)—— 直连面与 gate 同样只有 adler32,两处一起做;
 - 票据吊销(踢人 / 封号中途):目前靠房间销毁;需要时加 `RevokeTicket` 走 match→battle gRPC;
 - 观众直连上限单独配置(现在与参战者共享 `battle_max_connections`)。
@@ -634,3 +634,30 @@ obot.exe -c etc/battle_smoke_cross_zone.yaml` → `CROSS_ZONE_MATCH_OK … a_dir
    - `BattleTokenSecret: ""` + 不设 `BATTLE_RUN_MODE` 启动 battle → 进程 FATAL `Refusing to start: battle_token_secret is empty while run_mode=prod`;加 `BATTLE_RUN_MODE=dev` → 启动成功并打 `SECURITY WARNING`,冒烟仍过(`signature_checked=0`);
    - 用 `nc`/裸 TCP 连 battle TCP 端口不发任何东西 → 10s 后被关(`handshake_timeout` 采样日志)。
 7. 以上任一步失败:保留 battle 日志(`run/logs/cpp_nodes/battle*`)、robot 日志与失败 step 名,不重试、不改判据。
+
+## 19. 收缩阶段决策 + 换会话重绑修复(2026-09-16)
+
+> 背景:用户 2026-09-16 拍板"先把客户端直连 battle 做完"。核对结果:§18 的服务端、Unity 客户端(`b5cf6ef`)、robot 冒烟三边在 9 月 5-6 日已全部落地并通过,本机一键启动(`start_game.ps1 -GateRouterMode` 默认 `'1'`)已跑在路由模式,gate 已不中继战斗。所以"做完"= 收缩阶段的几件收尾,而不是重做。本节只记决策与本轮改动;K8s 对外入口由并行会话(microservice-zone-contract §17 "完整 K8s Battle 验收")负责,不在此重复。
+
+### 19.1 决策
+
+| # | 决策 | 理由 |
+|---|------|------|
+| D36 | **翻转默认到路由模式的前提改为"K8s 上以路由模式跑通 battle-smoke"一条**;§18.7 / D34 原前提之一"客户端直连失败率数据"作废 | 那条前提是为"老客户端仍走 gate 中继"的过渡期准备的;项目未上线、没有老客户端(memory:xuanming-prelaunch-no-legacy-data),expand→migrate→contract 里的 migrate 窗口不存在。本地已翻;K8s `k8s_deploy.ps1 -GateRouterMode` 默认 `"0"` 待并行会话的 K8s battle 验收通过后翻,C++ 默认值按 D-12 不改 |
+| D37 | **gate 中继代码与 Kafka Bind/Unbind 契约在 K8s 路由模式 battle-smoke 通过后同批删**,不提前删 | 路由模式是 chat / guild / trade 等新服务共同的唯一形态,直连模式代码是它们目前唯一的回退面(D-12);在 K8s 未实跑前删码等于拆掉所有人的回退。删码清单沿用 battle-transport-decision.md D6 修订 + §18.7 收缩条 |
+| D38 | **scene 换会话重绑:RECONNECT 与 REPLACE 都触发,只推 `BattleReconnectS2C`,不新增 scene→battle gRPC** | 客户端收到重连提示后已按 §18.2 走 `MatchService.RequestBattleTicket` 补签重建直连(`GameClient.RedirectFlow` 也如此自愈),服务端不需要拿票据;新增 scene→battle 同步调用会打破 D6 "没有 C++ 节点同步调 battle"。`BindBattleEvent` 继续发(旧模式还在用),随 D37 一并删 |
+| D39 | **Kafka→gate 的 S2C 回落收缩后只保留 `NotifyBattleAssigned` / `NotifyBattleStart` / `NotifyBattleReconnect`**(它们发生在直连建立前,必须经大厅);战斗帧(`NotifyTurnResult` / `NotifyBattleEnd` / `NotifySpectate*`)在无直连时**不再回落、直接不发**,客户端靠重连后 `GetBattleState` 补拉 | 直连是唯一战斗通路(D33);保留战斗帧回落等于维持两条代码路径。代价:连不上 battle 端口的客户端不能战斗——与 LoL / 王者要求 UDP 可达同一口径,写进客户端提示 |
+| D40 | **`SubmitBattleAction` 加回合号做幂等**列为收缩后的第一项后续,不在本轮 | 收缩后直连抖动丢一手 = 该回合默认普攻;有回合号客户端才能安全重发。改 proto,受 regen 解冻约束 |
+
+### 19.2 本轮改动
+
+- `cpp/libs/services/scene/battle/system/player_battle.cpp` `OnPlayerEnterScene` 第 2 步:条件由 `enterGsType == LOGIN_RECONNECT` 改为 `LOGIN_RECONNECT || LOGIN_REPLACE`(D38)。判据链见 §18.7 原文:跨 gate 重定向后旧会话通常仍 `Online`,login 判 `REPLACE`,原条件漏掉这条路径。`LOGIN_FIRST` 不进该分支(首登实体新建、无 `InBattleComp`,由第 1 步按锁 + ctx 重建)。
+- 文档:§18 状态行改为已冒烟通过;§18.7 待修项标记已修;[moba-battle-target-architecture.md](./moba-battle-target-architecture.md) §六 过时缺口更正。
+
+### 19.3 未编译,待 Codex 验证(按序)
+
+1. **C++ scene 串行编译**(仓库根):`msbuild game.sln /m:1 /p:Configuration=Debug /p:Platform=x64 /t:scene`;期望 0 error,`bin/scene.exe` 更新。并行会话正在改 `cpp/nodes/scene/handler/grpc/scene_node_service.*`,若因其未完成改动报错,只保留错误摘要、不改判据。
+2. **整栈冒烟回归(当前 HEAD)**:§18.8 第 5 步三条(直连 / `skip_direct_connect` 回落 / 跨 zone)。注意路由模式下 `skip_direct_connect: true` 预期失败(client-rpc-router.md §7.5),只在 `GATE_CLIENT_RPC_ROUTER=0` 下跑回落那条。
+3. **D38 专项(旧模式)**:双 gate 起服,robot 战斗中触发 `RedirectToGate`(或用 `dev_tools.ps1` 把玩家的 gate 迁移),期望:目标 gate 日志出现 `BindBattleEvent` 处理记录、客户端收到 `NotifyBattleReconnect`(消息号 `BattleClientPlayerNotifyBattleReconnectMessageId`)、随后 `GetBattleState` 成功、战斗继续到 `BATTLE_SMOKE_OK`;改动前同一场景战斗断掉(对照)。
+4. **Unity 实机**(客户端仓 `tools/run_crosszone_pair.ps1`):`DevAutoPilot` 的 `BattleEnd` 行 `direct_turns == turns`,battle 日志有 `battle 直连握手成功 … signature_checked=1` 与 `battle 关闭房间全部直连`。
+5. 任一步失败:保留 scene / gate / battle 日志与失败 step 名,不重试、不改判据。

@@ -5,11 +5,14 @@
 
 .DESCRIPTION
     三个脚本都以子进程跑(与真实使用方式一致:pwsh -File),断言退出码 + 输出文本 + 文件系统结果。
-      - fetch:坏制品不落地、正常落地可复验、已存在目录无 -Force 不动、-Force 完整替换、路径穿越拒绝
+      - fetch:坏制品不落地、正常落地可复验、已存在目录无 -Force 不动、-Force 只替换旧落地目录
+               (非落地目录即使带 -Force 也拒绝)、目录名与 build-info 不符拒绝、路径穿越拒绝、制品根不存在报错不创建
       - import:docker 用临时目录里生成的桩 .ps1 代替(记录收到的参数,对 inspect 回显预设镜像 ID),
-               不依赖真实 docker;镜像 ID 与清单不符必须失败并报出 ref
+               不依赖真实 docker;镜像 ID 与清单不符必须失败并报出 ref;缺 sha256sums.txt 默认拒绝;
+               .Id 口径不同(发布机与本机镜像存储不同)时按真 tar 里的 manifest.json / index.json 复核
+               —— 真 tar 用 System.Formats.Tar 现场生成,需要 pwsh 7.3+
       - retention:默认 dry-run 不删、-Force 删最旧、releases/ 不动、latest.json 指向的不删、
-               .tmp-* 与非快照名目录不删
+               .tmp-* 与非快照名目录不删、.deleting-* 残留被 -Force 清掉、制品根不存在报错不创建
 
     制品根一律用 -ArtifactRoot 指到本测试的临时目录;环境变量 MMORPG_ARTIFACT_ROOT 被指向一个
     "陷阱"目录,脚本若忽略 -ArtifactRoot 就会建出它,最后一条用例专门抓这个。
@@ -151,6 +154,44 @@ exit 9
     return [pscustomobject]@{ Path = $stubPath; LogPath = $logPath }
 }
 
+<#
+.SYNOPSIS
+    把 fixture 第 1 个镜像的假 tar 换成 docker save 的最小真骨架(manifest.json + index.json + config blob),
+    清单 image_id 改成 config digest(经典存储发布机记录的 .Id),重生成校验和。
+
+.OUTPUTS
+    @{ Ref; ConfigId = 'sha256:<config>'; TargetId = 'sha256:<index>' }(TargetId 即 containerd 存储导入后的 .Id)
+#>
+function Set-FixtureSaveLikeArchive {
+    param([Parameter(Mandatory = $true)]$Fixture)
+
+    try { Add-Type -AssemblyName System.Formats.Tar -ErrorAction Stop } catch { }
+    if ($null -eq ('System.Formats.Tar.TarFile' -as [type])) { throw '生成真 tar 需要 pwsh 7.3+(System.Formats.Tar)' }
+
+    $entry = $Fixture.Entries[0]
+    $configJson = '{"architecture":"amd64","os":"linux","rootfs":{"type":"layers","diff_ids":[]}}'
+    $configHex = Get-TextSha256 -Text $configJson
+    $targetId = 'sha256:' + (Get-TextSha256 -Text "index-$($entry.ref)")
+
+    $src = New-CaseDir -Name ('tar-src-' + [guid]::NewGuid().ToString('N'))
+    Write-TestFile -Path (Join-Path $src 'blobs' 'sha256' $configHex) -Content $configJson
+    Write-TestFile -Path (Join-Path $src 'manifest.json') -Content (ConvertTo-Json -Depth 5 -InputObject @(
+            [ordered]@{ Config = "blobs/sha256/$configHex"; RepoTags = @($entry.ref); Layers = @() }))
+    Write-TestFile -Path (Join-Path $src 'index.json') -Content (ConvertTo-Json -Depth 5 -InputObject ([ordered]@{
+                schemaVersion = 2
+                manifests     = @([ordered]@{ mediaType = 'application/vnd.oci.image.index.v1+json'; digest = $targetId; size = 1 })
+            }))
+
+    $tarPath = Join-Path $Fixture.VersionDir 'images' $entry.file
+    [System.IO.File]::Delete($tarPath)
+    [System.Formats.Tar.TarFile]::CreateFromDirectory($src, $tarPath, $false)
+
+    $entry.image_id = 'sha256:' + $configHex
+    Write-TestFile -Path (Join-Path $Fixture.VersionDir 'images-manifest.json') -Content (@($Fixture.Entries) | ConvertTo-Json -Depth 5 -AsArray)
+    New-Sha256Sums -Dir $Fixture.VersionDir | Out-Null
+    return [pscustomobject]@{ Ref = $entry.ref; ConfigId = $entry.image_id; TargetId = $targetId }
+}
+
 function Get-StubCalls {
     param([string]$LogPath)
     if (-not [System.IO.File]::Exists($LogPath)) { return , @() }
@@ -233,21 +274,52 @@ try {
         Assert-Equal -Expected 'keep-me.txt' -Actual $names -Because '被拒时原目录必须原样保留'
     }
 
-    Test-Case 'fetch:-Force 替换已存在的 OutDir,旧文件消失、新内容可复验、无备份残留' {
+    Test-Case 'fetch:-Force 替换已存在的旧落地目录,旧文件消失、新内容可复验、无备份残留' {
         $root = New-CaseDir -Name 'fetch-force-root'
         New-ImageVersionFixture -Root $root -Version 'g0123456789ab' | Out-Null
         $outParent = New-CaseDir -Name 'fetch-force-out'
         $out = Join-Path $outParent 'g0123456789ab'
-        Write-TestFile -Path (Join-Path $out 'stale.txt') -Content 'old'
+        # 旧目录造成一次落地的形状:-Force 只替换落地目录
+        Write-TestFile -Path (Join-Path $out 'images' 'stale.tar') -Content 'old'
+        Write-TestFile -Path (Join-Path $out 'images-manifest.json') -Content '[]'
+        New-Sha256Sums -Dir $out | Out-Null
 
         $r = Invoke-Tool -ScriptName 'fetch_images.ps1' -Arguments @('-ArtifactRoot', $root, '-Version', 'g0123456789ab', '-OutDir', $out, '-Force')
-        Assert-ToolSucceeded -Result $r -Because '-Force 应当允许替换'
-        Assert-True -Condition (-not [System.IO.File]::Exists((Join-Path $out 'stale.txt'))) -Because '旧目录里的文件不得混进新目录(混进去会被判清单外文件)'
+        Assert-ToolSucceeded -Result $r -Because '-Force 应当允许替换旧落地目录'
+        Assert-True -Condition (-not [System.IO.File]::Exists((Join-Path $out 'images' 'stale.tar'))) -Because '旧目录里的文件不得混进新目录(混进去会被判清单外文件)'
         $msg = ''
         try { Test-Sha256Sums -Dir $out } catch { $msg = $_.Exception.Message }
         Assert-Equal -Expected '' -Actual $msg -Because '替换后的目录必须能通过复验'
         $names = @(Get-ChildItem -LiteralPath $outParent -Force | ForEach-Object Name) -join ','
         Assert-Equal -Expected 'g0123456789ab' -Actual $names -Because '替换后不得残留 .fetching-* / .replaced-* 目录'
+    }
+
+    Test-Case 'fetch:-Force 也不替换非落地目录(父目录 / 无关目录误传成 OutDir)-> 拒绝,原内容不动' {
+        $root = New-CaseDir -Name 'fetch-force-notlanding-root'
+        New-ImageVersionFixture -Root $root -Version 'g0123456789ab' | Out-Null
+        $outParent = New-CaseDir -Name 'fetch-force-notlanding-parent'
+        $out = Join-Path $outParent 'offline-images'
+        # 形似 deploy/offline-images:里面是别的已落地版本 + 无关文件
+        Write-TestFile -Path (Join-Path $out 'keep-me.txt') -Content 'precious'
+        Write-TestFile -Path (Join-Path $out 'g00000000000a' 'sha256sums.txt') -Content ''
+
+        $r = Invoke-Tool -ScriptName 'fetch_images.ps1' -Arguments @('-ArtifactRoot', $root, '-Version', 'g0123456789ab', '-OutDir', $out, '-Force')
+        Assert-ToolFailed -Result $r -Pattern '不是 fetch 落地目录' -Because '-Force 只替换旧落地目录,误传父目录时不得整棵挪走删除'
+        Assert-True -Condition ([System.IO.File]::Exists((Join-Path $out 'keep-me.txt'))) -Because '被拒时无关文件必须还在'
+        Assert-True -Condition ([System.IO.File]::Exists((Join-Path $out 'g00000000000a' 'sha256sums.txt'))) -Because '被拒时其它已落地版本必须还在'
+        $names = @(Get-ChildItem -LiteralPath $outParent -Force | ForEach-Object Name) -join ','
+        Assert-Equal -Expected 'offline-images' -Actual $names -Because '被拒时不得留下 .fetching-* / .replaced-* 目录'
+    }
+
+    Test-Case 'fetch:目录名与 build-info 不符(制品目录被手工改名)-> 拒绝并报"身份与目录不符"' {
+        $root = New-CaseDir -Name 'fetch-identity-root'
+        $fx = New-ImageVersionFixture -Root $root -Version 'g0123456789ab' -ImageCount 1
+        [System.IO.Directory]::Move($fx.VersionDir, (Join-Path (Split-Path -Parent $fx.VersionDir) 'g00000000000a'))
+        $out = Join-Path (New-CaseDir -Name 'fetch-identity-out') 'g00000000000a'
+
+        $r = Invoke-Tool -ScriptName 'fetch_images.ps1' -Arguments @('-ArtifactRoot', $root, '-Version', 'g00000000000a', '-OutDir', $out)
+        Assert-ToolFailed -Result $r -Pattern '镜像制品身份与目录不符' -Because '校验和不覆盖目录名,改名后的制品必须靠 build-info 身份核对拦下'
+        Assert-True -Condition (-not [System.IO.Directory]::Exists($out)) -Because '身份不符时不得落地'
     }
 
     Test-Case 'fetch:发布轨缺 -Version -> 拒绝' {
@@ -371,6 +443,46 @@ try {
         Assert-ToolFailed -Result $r -Pattern 'docker load 失败' -Because 'load 退出码非 0 不能当成功'
     }
 
+    Test-Case 'import:缺 sha256sums.txt 默认拒绝且不调 docker;带 -AllowMissingChecksums 才导入' {
+        $root = New-CaseDir -Name 'import-nosums-root'
+        $fx = New-ImageVersionFixture -Root $root -Version 'g0123456789ab' -ImageCount 1
+        Remove-Item -LiteralPath (Join-Path $fx.VersionDir 'sha256sums.txt') -Force
+        $stub = New-DockerStub -Dir (New-CaseDir -Name 'import-nosums-stub') -IdByRef (Get-IdMap $fx)
+
+        $r1 = Invoke-Tool -ScriptName 'import_images.ps1' -Arguments @('-Dir', $fx.VersionDir, '-DockerCommand', $stub.Path)
+        Assert-ToolFailed -Result $r1 -Pattern '缺少 sha256sums\.txt.拒绝导入' -Because 'publish / fetch 产出的目录必定带校验文件,缺失默认 fail-closed'
+        Assert-Equal -Expected 0 -Actual ((Get-StubCalls -LogPath $stub.LogPath).Count) -Because '缺校验文件时不得调用 docker'
+
+        $r2 = Invoke-Tool -ScriptName 'import_images.ps1' -Arguments @('-Dir', $fx.VersionDir, '-DockerCommand', $stub.Path, '-AllowMissingChecksums')
+        Assert-ToolSucceeded -Result $r2 -Because '显式 -AllowMissingChecksums 时应当导入'
+        Assert-Match -Text $r2.Output -Pattern '\[WARN\].*AllowMissingChecksums' -Because '降级放行必须留下 WARN'
+        Assert-Equal -Expected 2 -Actual ((Get-StubCalls -LogPath $stub.LogPath).Count) -Because '1 个镜像应 load + inspect 各 1 次'
+    }
+
+    Test-Case 'import:本机 .Id 与清单不同但同属归档内镜像身份(发布机与本机镜像存储不同)-> 成功' {
+        $root = New-CaseDir -Name 'import-crossstore-root'
+        $fx = New-ImageVersionFixture -Root $root -Version 'g0123456789ab' -ImageCount 1
+        $archive = Set-FixtureSaveLikeArchive -Fixture $fx
+        # 发布机经典存储记录的是 config digest;本机 containerd 存储导入后 .Id 是 index digest
+        $stub = New-DockerStub -Dir (New-CaseDir -Name 'import-crossstore-stub') -IdByRef @{ ($archive.Ref) = $archive.TargetId }
+
+        $r = Invoke-Tool -ScriptName 'import_images.ps1' -Arguments @('-Dir', $fx.VersionDir, '-DockerCommand', $stub.Path)
+        Assert-ToolSucceeded -Result $r -Because '.Id 口径不同但都指向归档里同一个镜像时不能误报 ID 不符'
+        Assert-Match -Text $r.Output -Pattern '镜像存储口径不同' -Because '应当说明是按归档内 digest 复核通过的'
+    }
+
+    Test-Case 'import:本机 .Id 不在归档内镜像身份里(真 tar)-> 失败并报出 ref' {
+        $root = New-CaseDir -Name 'import-crossstore-bad-root'
+        $fx = New-ImageVersionFixture -Root $root -Version 'g0123456789ab' -ImageCount 1
+        $archive = Set-FixtureSaveLikeArchive -Fixture $fx
+        $stub = New-DockerStub -Dir (New-CaseDir -Name 'import-crossstore-bad-stub') -IdByRef @{ ($archive.Ref) = ('sha256:' + ('e' * 64)) }
+
+        $r = Invoke-Tool -ScriptName 'import_images.ps1' -Arguments @('-Dir', $fx.VersionDir, '-DockerCommand', $stub.Path)
+        Assert-ToolFailed -Result $r -Pattern ('镜像 ID 不符[\s\S]*' + [regex]::Escape($archive.Ref)) -Because '本机 tag 指向的镜像不在归档身份里,复核后仍必须判不符'
+        Assert-Match -Text $r.Output -Pattern ('归档内镜像身份[\s\S]*' + [regex]::Escape($archive.TargetId)) -Because '复核失败时应列出归档里的身份,便于排查'
+        Assert-NotMatch -Text $r.Output -Pattern '导入完成' -Because 'ID 不符时不得打印成功汇总'
+    }
+
     # ─────────────────────────────────────────────────────────────
     # 3. artifacts_retention.ps1
     # ─────────────────────────────────────────────────────────────
@@ -444,6 +556,37 @@ try {
         $r = Invoke-Tool -ScriptName 'artifacts_retention.ps1' -Arguments @('-ArtifactRoot', $fx.Root, '-KeepLast', '0', '-Force')
         Assert-ToolFailed -Result $r -Pattern '-KeepLast 至少为 1' -Because '保留 0 个等于全删'
         Assert-Equal -Expected ((1..5 | ForEach-Object { New-SnapshotName $_ }) -join ',') -Actual (Get-SnapshotNames $fx.SnapImages) -Because '参数非法时不得删除任何目录'
+    }
+
+    Test-Case 'retention:.deleting-* 残留 dry-run 只列出、-Force 清掉;.tmp-* 不动;删除后不留 .deleting-*' {
+        $fx = New-RetentionFixture -Name 'ret-residue'
+        $residue = Join-Path $fx.SnapImages ('.deleting-' + (New-SnapshotName 7) + '-' + ('0' * 32))
+        Write-TestFile -Path (Join-Path $residue 'images' 'half.tar') -Content 'half-deleted'
+        $staging = Join-Path $fx.SnapImages ('.tmp-' + (New-SnapshotName 8) + '-4242')
+        Write-TestFile -Path (Join-Path $staging 'build-info.json') -Content '{}'
+
+        $dry = Invoke-Tool -ScriptName 'artifacts_retention.ps1' -Arguments @('-ArtifactRoot', $fx.Root, '-KeepLast', '3')
+        Assert-ToolSucceeded -Result $dry -Because 'dry-run 应当成功'
+        Assert-Match -Text $dry.Output -Pattern '将清理上次未删完的残留' -Because 'dry-run 应列出 .deleting-* 残留'
+        Assert-True -Condition ([System.IO.Directory]::Exists($residue)) -Because 'dry-run 不得删除残留'
+
+        $r = Invoke-Tool -ScriptName 'artifacts_retention.ps1' -Arguments @('-ArtifactRoot', $fx.Root, '-KeepLast', '3', '-Force')
+        Assert-ToolSucceeded -Result $r -Because '-Force 清理应当成功'
+        # 目录名含 "." 前缀,区域排序下位置不稳定:逐项断言而不是比对整串
+        $left = Get-SnapshotNames $fx.SnapImages
+        Assert-NotMatch -Text $left -Pattern '\.deleting-' -Because '残留与本次删除的临时名都不得留下'
+        Assert-Match -Text $left -Pattern '\.tmp-g000000000008-4242' -Because '发布中的 staging 目录不得被删'
+        foreach ($i in 3..5) { Assert-Match -Text $left -Pattern (New-SnapshotName $i) -Because "最新 3 个快照保留($(New-SnapshotName $i))" }
+        foreach ($i in 1..2) { Assert-NotMatch -Text $left -Pattern (New-SnapshotName $i) -Because "过期快照应被删($(New-SnapshotName $i))" }
+    }
+
+    Test-Case 'fetch / retention:制品根不存在 -> 报"制品根不存在"并失败,且不创建该目录' {
+        $missing = Join-Path $script:TempRoot 'no-such-artifact-root'
+        $r1 = Invoke-Tool -ScriptName 'fetch_images.ps1' -Arguments @('-ArtifactRoot', $missing, '-Version', 'g0123456789ab', '-OutDir', (Join-Path $script:TempRoot 'fetch-missing-root-out'))
+        Assert-ToolFailed -Result $r1 -Pattern '制品根不存在' -Because 'fetch 指错制品根时要报出真正原因,而不是"制品不存在"'
+        $r2 = Invoke-Tool -ScriptName 'artifacts_retention.ps1' -Arguments @('-ArtifactRoot', $missing, '-Force')
+        Assert-ToolFailed -Result $r2 -Pattern '制品根不存在' -Because '排期任务指错制品根不能"无快照需要清理"地假绿'
+        Assert-True -Condition (-not [System.IO.Directory]::Exists($missing)) -Because '只读用途不得建出制品根'
     }
 
     # ─────────────────────────────────────────────────────────────

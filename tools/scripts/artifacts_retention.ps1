@@ -14,6 +14,12 @@
         删掉它等于让所有不带 -Version 的目标机拉取失败;latest.json 存在但读不懂时拒绝清理(fail-closed)
       - releases/ 下的发布版本是不可变永久制品,本脚本不读也不写
       - 默认 dry-run 只打印计划,加 -Force 才真删
+      - 删除先同目录 rename 成 .deleting-<名>-<guid>(原子下线),再递归删:直接删到一半失败
+        (Windows 上 tar 正被共享读取 / 杀毒扫描)会留下名字合法、内容残缺的"版本"。
+        单个版本下线或删除失败只记下来继续处理下一个,最后以非 0 退出汇总;
+        上次没删完的 .deleting-* 残留在下一次 -Force 运行时清掉
+      - 制品根必须已存在,不会被创建:计划任务没带上 MMORPG_ARTIFACT_ROOT 或共享盘没挂上时报错退出,
+        而不是在错误位置建个空目录再"无快照需要清理"地假绿
 
     建议构建机排期周跑(Windows 计划任务 / cron)。
 
@@ -40,7 +46,7 @@ $ErrorActionPreference = 'Stop'
 try {
     if ($KeepLast -lt 1) { throw "-KeepLast 至少为 1(实际 $KeepLast):快照全删会让 fetch_images.ps1 无版本可拉。" }
 
-    $snapRoot = Get-ChannelRoot -Channel 'snapshot' -Override $ArtifactRoot
+    $snapRoot = Get-ChannelRoot -Channel 'snapshot' -Override $ArtifactRoot -MustExist
     $imagesRoot = Join-Path $snapRoot 'images'
     if (-not [System.IO.Directory]::Exists($imagesRoot)) {
         Write-Host "[ OK ] $imagesRoot 不存在,无快照需要清理(releases/ 永不触碰)。" -ForegroundColor Green
@@ -90,22 +96,65 @@ try {
         $toDelete.Add($d)
     }
 
-    if ($toDelete.Count -eq 0) {
+    # 上次中断留下的 .deleting-*:以 . 开头,上面的候选枚举一律跳过,不专门处理就永久占着磁盘
+    $residues = @(Get-ChildItem -LiteralPath $imagesRoot -Directory -Force | Where-Object {
+            $_.Name.StartsWith('.deleting-', [System.StringComparison]::Ordinal) -and
+            ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0
+        })
+
+    if ($toDelete.Count -eq 0 -and $residues.Count -eq 0) {
         Write-Host "[ OK ] 快照共 $($sorted.Count) 个,保留最近 $KeepLast 个,无需清理(releases/ 永不触碰)。" -ForegroundColor Green
         exit 0
     }
 
-    foreach ($d in $toDelete) {
+    $failures = New-Object System.Collections.Generic.List[string]
+    foreach ($d in $residues) {
         $rel = "snapshots/images/$($d.Name)"
-        if ($Force) {
+        if (-not $Force) {
+            Write-Host "[DRY ] 将清理上次未删完的残留:$rel(加 -Force 执行)" -ForegroundColor Cyan
+            continue
+        }
+        try {
             Remove-Item -LiteralPath $d.FullName -Recurse -Force
-            Write-Host "[DEL ] $rel" -ForegroundColor Red
-        } else {
-            Write-Host "[DRY ] 将删除:$rel(加 -Force 执行)" -ForegroundColor Cyan
+            Write-Host "[DEL ] 残留 $rel" -ForegroundColor Red
+        }
+        catch {
+            $failures.Add("残留 $rel 删除失败:$($_.Exception.Message)")
+            Write-Host "[WARN] 残留 $rel 删除失败,继续处理其它目录" -ForegroundColor Yellow
         }
     }
+
+    foreach ($d in $toDelete) {
+        $rel = "snapshots/images/$($d.Name)"
+        if (-not $Force) {
+            Write-Host "[DRY ] 将删除:$rel(加 -Force 执行)" -ForegroundColor Cyan
+            continue
+        }
+        $trash = Join-Path $imagesRoot (".deleting-" + $d.Name + "-" + [guid]::NewGuid().ToString('N'))
+        try {
+            [System.IO.Directory]::Move($d.FullName, $trash)
+        }
+        catch {
+            $failures.Add("$rel 下线失败(可能有文件正被占用),本次未删:$($_.Exception.Message)")
+            Write-Host "[WARN] $rel 下线失败,跳过" -ForegroundColor Yellow
+            continue
+        }
+        try {
+            Remove-Item -LiteralPath $trash -Recurse -Force
+            Write-Host "[DEL ] $rel" -ForegroundColor Red
+        }
+        catch {
+            $failures.Add("$rel 已下线但删除未完成,下次 -Force 运行会继续清理 $(Split-Path -Leaf $trash):$($_.Exception.Message)")
+            Write-Host "[WARN] $rel 已下线但删除未完成" -ForegroundColor Yellow
+        }
+    }
+
+    if ($failures.Count -gt 0) {
+        throw "快照清理未全部完成($($failures.Count) 项):`n$($failures -join "`n")"
+    }
     $verb = if ($Force) { '已删除' } else { '待删除(dry-run,未改动任何文件)' }
-    Write-Host "[ OK ] $($toDelete.Count) 个过期快照$verb;保留最近 $KeepLast 个;releases/ 未触碰。" -ForegroundColor Green
+    $residueNote = if ($residues.Count -gt 0) { "(另有上次未删完的残留 $($residues.Count) 个)" } else { '' }
+    Write-Host "[ OK ] $($toDelete.Count) 个过期快照$verb$residueNote;保留最近 $KeepLast 个;releases/ 未触碰。" -ForegroundColor Green
     exit 0
 }
 catch {

@@ -4894,6 +4894,26 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - 正式报告：[游戏服务器网络故障、网络分区与进程暂停调研](docs/notes/2026-09-14-network-failures-and-process-pauses.md)；历史审计：[独立证据复核记录](docs/notes/2026-09-14-network-failures-and-process-pauses-verification.md)。保留四类资料、24 条编号证据、11 项排除清单及各自来源和口径。
 - 适配本项目的 scene 所有权、EnterScene 交接和单写者设计入口；在场景所有权设计中加入调研链接。原项目未恢复的四份检索草稿不保留失效链接。
 - 复核日期仍为 2026-09-14。本轮检查恢复内容、编号对应和新增本地链接，未重新联网复核外部原文；不将历史复核结论扩展为当前实现或故障演练证据。
+- 仅修改文档，保留原有未提交进度和其他工作区改动；未调整配置、未编译、未运行测试或故障演练，未执行 Git/SVN add、commit 或 push。
+
+## 2026-09-16 客户端直连 battle 收口 + 跨 zone 场景传送设计定稿(Claude,未编译、未提交)
+
+用户拍板"客户端直连 battle 与跨 zone 场景传送两个都做,先直连"。先做了 7 路只读摸底(决策 / battle 节点 / gate 客户端面 / match 票据 / Unity 客户端 / 跨 zone / 工作树),结论改变了任务口径:
+
+### 直连 battle:已在 9 月 5-6 日全部落地,本轮只做收尾
+- 事实:服务端 §18(battle 自签 HMAC 票据、自身 TCP 端口开客户端面)、Unity 客户端 `b5cf6ef`(`BattleDirectLink` + `DirectRoutingBattleTransport`)、robot 冒烟 2026-09-05(3) 两轮 `BATTLE_SMOKE_OK` 且战斗帧零回落;`start_game.ps1` 默认路由模式,gate 已不中继战斗。此前会话记忆里"直连还没落"是 9-02 的过时记录,已在对话中更正。
+- 代码:`player_battle.cpp OnPlayerEnterScene` 第 2 步条件放宽到 `LOGIN_RECONNECT || LOGIN_REPLACE`(§18.7 登记的 RedirectToGate 后战斗断的服务端缺陷;D38 只推 `BattleReconnectS2C`,客户端已会补签重建直连)。
+- 文档:`turn-based-battle-server.md` §18 状态行改为已冒烟通过、§18.7 待修项标记已修、新增 §19(D36 翻转前提改为 K8s 路由模式 battle-smoke 通过、"直连失败率数据"前提因无老客户端作废;D37 gate 中继代码在 K8s 实跑通过后同批删;D39 收缩后 Kafka 回落只留 Assigned/Start/Reconnect;D40 SubmitBattleAction 回合号幂等列为后续);`moba-battle-target-architecture.md` §六 两条过时缺口更正(客户端已接、manifest 已有但对外入口仍缺)。
+- K8s 对外地址(POD_IP 不可达)与 gate 是同一个问题,并行会话正做"完整 K8s Battle 验收"(`k8s_deploy.ps1` / `Dockerfile.cpp` / `build_linux.sh` 均为其未提交改动),本轮不碰这些文件。
+- 未编译:验证清单见 §19.3(scene 串行编译 → §18.8 第 5 步回归 → D38 专项:旧模式下战斗中跨 gate 重定向后战斗继续 → Unity 实机 `run_crosszone_pair.ps1`)。
+
+### 跨 zone 场景传送:设计定稿,未落码
+- 新增 `docs/design/cross-zone-scene-travel.md`:CZ-1 路径 = 重定向 + 目标 zone 直接加载(player_migrate 数据搬运下线,只留 Frozen/标记);CZ-2 访客数据仍归 home_zone,存盘 `DBTask` 按 home_zone 选 topic(TiDB Phase 2 第一步)、生产 Redis 物理共享写进契约;CZ-3 `RoutePlayerEvent` 下发 `home_zone_id`;CZ-4 两道换手门 = owner_epoch CAS(Go 写 + C++ 校验同批)+ 源已落盘 handoff 标记,`EnterScene` 据此放行、生产不再依赖 `AllowUnsafeCrossNodeHandoff`;CZ-5 源端"冻结→存盘→标记→EnterScene(目标 zone)→销毁";CZ-6 访客业务范围(观光/PVE/副本/战斗/聊天;组队按 team D.3 同区,帮会/榜单/聚宝斋按 home_zone);CZ-7 入口 `ScenePlayer.TravelToZone` 客户端 RPC;CZ-8 重定向票据加 `player_id` + `target_zone_id`,目标 zone login 不按 home_zone 弹回;CZ-9 回家同链反向 + Offline-Return;CZ-10 不搬 mail。
+- 分三阶段落码(阶段 1 纯服务端归属与屏障、阶段 2 入口与访客识别、阶段 3 收尾),每阶段独立可回退。**落码前置**:并行会话 trade 的导表/生成/提交完成、regen 解冻(team-system J-28 ④ / J-30);与 team 批 3(同改 `player_battle.cpp`)协调。
+- 待用户确认三个默认值(设计文档 §8):生产 Redis 全 zone 物理共享;访客业务范围;传送入口在场景内发起。
+
+### 工作树
+- 仅改 `player_battle.cpp`、上述 3 份设计文档与本文件;其余 35 M + 16 ?? 属并行会话(trade / K8s battle / 发版工具),未触碰。
 
 ## 2026-09-16 聚宝斋 P1 Codex 验证（端到端尚未通过）
 
@@ -4920,4 +4940,14 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - 原三个待定项复核：K8s GateRouterMode 默认仍为 0；启动器的 8 个隔离检查分支通过，chat/guild 缺 exe 只告警跳过，db/login/match 缺 exe 仍拒启；D-14 现已完成本批实现与验收。帮会任务已报告构建/双区冒烟完成；聊天任务的后续工作仍在其原任务进行，未接管或重启其服务。
 - 边界：本次无 TiDB 实例验收，200 次 race 不代表真实数据库取消 DDL 压测；聚宝斋 zone/global robot 全链路、客户端验收与 P3 上线清单另计。未切换 K8s 默认模式，未执行完整游戏部署，未执行 Git 提交或推送。
 - 证据：`run/verify-d14-20260916/README.md`、`verification-summary.json`、`trade-current-result.json`、`k8s-prod-gate-summary.json` 及原始日志。专属 MySQL 容器和 kind namespace 均已删除，现有游戏环境未清理；仅保留可复验镜像、独立程序和证据。决策文档、聚宝斋状态及运维说明已同步。
-- 仅修改文档，保留原有未提交进度和其他工作区改动；未调整配置、未编译、未运行测试或故障演练，未执行 Git/SVN add、commit 或 push。
+
+## 2026-09-16 主机重启后重新拉起本地一区 + 发现 Kafka 数据不落持久卷(Claude)
+
+- 背景:09-15 23:49 主机重启,09-16 晚用户确认状态时服务器进程全无、Docker 刚启动。按开机 runbook 经 WMI 跑 `tools/scripts/start_game.ps1`。
+- **发现 1:本地 Kafka 数据不持久。** `deploy/docker-compose.yml` 把命名卷 `kafka-data` 挂到 `/tmp/kraft-combined-logs`,但没设 `KAFKA_LOG_DIRS`(broker 日志 `log.dirs = null`),apache/kafka 镜像实际写容器内 `/tmp/kafka-logs`;挂载卷始终为空(0 个文件)。重启后 `Loaded 0 logs`:全部 topic、`__consumer_offsets`、db 写回积压丢失。启动器第 3 步用 kafka-topic-init 重建了 5 个 topic(gate-cmd_g2 / scene-cmd_g2 各 256 分区、game-events、两个审计 topic),所以本地能继续用;已开任务卡改 compose(设 `KAFKA_LOG_DIRS` 指向卷并核对 cluster id)。09-15 `docker start kafka` 后只剩 1 个 topic 是同一根因。
+- **发现 2:机器负载导致启动器超时。** 同时段另一会话在跑 `run/verify-chat-k8s-full-20260916/` 的三个 `docker build`(C++ 镜像 BUILD_JOBS=4、Go 镜像、Java 镜像),CPU 100%、可用内存 0.9-2.7GB、vmmemWSL 10.8GB;一次 `kafka-topics.sh --list` 要 21-27s。第 1 次启动器在"预建缺失 Kafka 主题"处报"命令超时:docker.exe(240 秒)"退出,但 topic-init 容器实际已把 topic 建完;第 2 次重跑跳过预建。
+- **发现 3:db 在 Kafka 慢时 fail-closed 过早。** 第 2 次启动器在第 3 步报 "db 已退出":db.stderr `panic: Kafka db-task partition contract rejected: kafka topic db_task_zone_1 is still absent after create`——db 自己发起了创建(partitions=10),但在其校验等待窗口内 broker 元数据还没传播开;几十秒后 topic 实际已存在(`--list` 可见)。与 runbook 第 17 条"Kafka 慢起 db/login panic"同类:重跑启动器即可通过。建议后续给 `go/shared/kafkautil` 的建后校验加与负载相称的重试/等待上限(未改)。
+- **第 3 次启动器**:第 3、4 步通过(db / data_service / gate / scene / battle 就绪并登记契约),第 5 步拉 Go 服务批次的子命令超过 240s 预算被启动器判超时;client_rpc_router / scene_manager / chat / guild / match 实际已起,但 **player_locator 与 login 起来后因拨号超时退出**(player_locator 拨 scenemanagerservice.rpc `context deadline exceeded`;login 拨 playerlocator.rpc 失败),网关未启动。当时可用内存 0.5GB、CPU 100%。
+- **手工补完第 5/6 步**(不再整栈重跑,避免反复超时):用 `go_services.ps1 -Command start-exe -NoTier` 依次拉 player_locator(等 53200 监听)→ login(等 53000),环境变量与启动器一致(`KAFKA_COMMAND_TOPIC_PARTITIONS=256`、`KAFKA_COMMAND_TOPIC_GENERATION=2`、开发登录密钥);按启动器同样的参数起网关 jar 并写 `run/pids/gateway_node.pid`;等 `/actuator/health` UP 与一区 OPEN;最后把 `run/pids/kafka_command_contract.json` 里 scene_manager / player_locator / login / match 四条按 `Save-LocalCommandContract` 的同一格式补成当前真实 PID 与启动时刻(这些进程确实在 g2/256 契约环境下启动),保证下次一键启动器不会因"不能确认契约"拒启。
+- **结果**:23:14 一区 OPEN,13 个进程全部存活(db / data_service / client_rpc_router / scene_manager / player_locator / login / match / chat / guild + gate / scene / battle + 网关 8081);trade 因缺 exe 与 mmorpg_trade 库未就绪被启动器按可选服务跳过。重负载下 robot login-test **15/23**:NormalLogin、SceneSwitch、MultiRobotBehavior、CurrencyCrashWindow、BatchConcurrentLogin、AccessTokenReconnect 等通过;7 项失败均为 `enter game: server error id:2005`(玩家锁忙)——同一账号紧接着再次进游戏时上一条进游戏链路尚未收尾;login 日志同期有 `EnterGame apply session failed [PlayerId=1001]: ... DeadlineExceeded`,EnterGame 应答耗时由 09-15 的 12-18ms 升至 70-97ms,判定为负载所致(同一批二进制 09-15 为 22/23,未改任何服务代码);第 8 项 SkillCast 为已登记的实体 id 0 缺陷。已挂后台任务:另一会话的镜像构建结束后自动复跑冒烟,结论追加在本条之后。观察(原因未查):robot_0001 的 player_id 由 09-15 的 901 变为 1001。
+- 未改任何服务代码;runbook 记忆已补重启拉起顺序、Kafka 就绪判据(看 `--list` 退出码而非 topic 数)与负载下的超时预算。

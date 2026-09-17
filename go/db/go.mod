@@ -7,7 +7,7 @@ require (
 	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
-	github.com/luyuancpp/proto2mysql v0.1.0
+	github.com/luyuancpp/proto2mysql v0.1.1
 	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.10.0
@@ -127,6 +127,5 @@ replace shared => ../shared
 
 replace proto => ../proto
 
-// 本地修复版:键列 string/bytes 映射 VARCHAR(191)/VARBINARY(191)(Error 1170)。
-// 上游打新 tag 后删除本行并升级 require 版本。
-replace github.com/luyuancpp/proto2mysql => ../../../../proto2mysql-v0.1.0
+// 与 schemamigrate/trade 同步固定迁名后的发布包，保留校验，不依赖仓库外目录。
+replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1

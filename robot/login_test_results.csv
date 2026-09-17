@@ -1,29 +1,29 @@
 timestamp,account,scenario,latency_ms,success,stuck,error,attempt,concurrent
-2026-09-15T12:56:48.3481561-04:00,robot_0001,NormalLogin,306,true,false,,0,0
-2026-09-15T12:56:51.517186-04:00,robot_0001,LoginLogoutCycle,2667,true,false,,0,0
-2026-09-15T12:56:52.2371096-04:00,robot_0001,WrongPassword,217,true,false,,0,0
-2026-09-15T12:56:53.0442618-04:00,robot_0001,DuplicateEnterGame,303,true,false,,0,0
-2026-09-15T12:56:53.8055864-04:00,robot_0001,DuplicateLoginRequest,259,true,false,,0,0
-2026-09-15T12:56:55.0921111-04:00,robot_0001,AccountDisplacement,782,true,false,,0,0
-2026-09-15T12:56:55.8849212-04:00,robot_0001,ConcurrentSameAccount,289,true,false,,0,0
-2026-09-15T12:56:57.0753155-04:00,robot_0001,RapidReconnect,687,true,false,,0,0
-2026-09-15T12:56:58.5728199-04:00,robot_0001,DisconnectDuringLogin,995,true,false,,0,0
-2026-09-15T12:57:00.1352844-04:00,robot_0001,DisconnectDuringEnter,1059,true,false,,0,0
-2026-09-15T12:57:04.95767-04:00,robot_0001,RapidDisconnectReconnect,4319,true,false,,0,0
-2026-09-15T12:57:06.537687-04:00,robot_0001,AccessTokenReconnect,1076,true,false,,0,0
-2026-09-15T12:57:07.9103952-04:00,robot_0001,DifferentAccountSequential,870,true,false,,0,0
-2026-09-15T12:57:09.2152855-04:00,robot_0001,LeaveAndReEnter,801,true,false,,0,0
-2026-09-15T12:57:10.8861176-04:00,robot_0001,LeaveAndReLogin,1168,true,false,,0,0
-2026-09-15T12:57:14.7073582-04:00,robot_0001,RapidLoginSpam,3317,true,false,,0,0
-2026-09-15T12:57:16.2055948-04:00,robot_0001,MessageBeforeLogin,995,true,false,,0,0
-2026-09-15T12:57:16.9985961-04:00,robot_0001,LoginStuckDetection,291,true,false,,0,0
-2026-09-15T12:57:17.8247303-04:00,robot_0100,BatchConcurrentLogin,323,true,false,,0,5
-2026-09-15T12:57:17.8252559-04:00,robot_0101,BatchConcurrentLogin,273,true,false,,0,5
-2026-09-15T12:57:17.8710375-04:00,robot_0102,BatchConcurrentLogin,268,true,false,,0,5
-2026-09-15T12:57:17.9322223-04:00,robot_0103,BatchConcurrentLogin,279,true,false,,0,5
-2026-09-15T12:57:17.9777817-04:00,robot_0104,BatchConcurrentLogin,274,true,false,,0,5
-2026-09-15T12:57:17.9788932-04:00,robot_0001,BatchConcurrentLogin,478,true,false,,0,0
-2026-09-15T12:57:23.3818794-04:00,robot_0001,SkillCast,4900,false,false,no visible/self entity found for skill cast,0,0
-2026-09-15T12:57:25.9799252-04:00,robot_0001,SceneSwitch,2096,true,false,,0,0
-2026-09-15T12:57:34.4720721-04:00,robot_0001,MultiRobotBehavior,7990,true,false,,0,0
-2026-09-15T12:57:36.8537657-04:00,robot_0001,CurrencyCrashWindow,1872,true,false,,0,0
+2026-09-16T23:15:00.8567098-04:00,robot_0001,NormalLogin,2337,true,false,,0,0
+2026-09-16T23:15:02.3392999-04:00,robot_0001,LoginLogoutCycle,965,false,false,cycle 0 login: enter game: server error id:2005,0,0
+2026-09-16T23:15:03.5455229-04:00,robot_0001,WrongPassword,641,true,false,,0,0
+2026-09-16T23:15:05.3819559-04:00,robot_0001,DuplicateEnterGame,1322,false,false,first enter: enter game: server error id:2005,0,0
+2026-09-16T23:15:07.8567751-04:00,robot_0001,DuplicateLoginRequest,1906,true,false,,0,0
+2026-09-16T23:15:11.8427189-04:00,robot_0001,AccountDisplacement,3117,false,false,B login: enter game: server error id:2005,0,0
+2026-09-16T23:15:13.5877273-04:00,robot_0001,ConcurrentSameAccount,1226,true,false,,0,0
+2026-09-16T23:15:15.6201065-04:00,robot_0001,RapidReconnect,1526,false,false,reconnect login: enter game: server error id:2005,0,0
+2026-09-16T23:15:19.4740185-04:00,robot_0001,DisconnectDuringLogin,3001,true,false,,0,0
+2026-09-16T23:15:21.7345983-04:00,robot_0001,DisconnectDuringEnter,1731,true,false,,0,0
+2026-09-16T23:15:24.9690565-04:00,robot_0001,RapidDisconnectReconnect,2674,false,false,cycle 0 login1: enter game: server error id:2005,0,0
+2026-09-16T23:15:28.9771022-04:00,robot_0001,AccessTokenReconnect,3505,true,false,,0,0
+2026-09-16T23:15:31.7386206-04:00,robot_0001,DifferentAccountSequential,2254,true,false,,0,0
+2026-09-16T23:15:35.0961694-04:00,robot_0001,LeaveAndReEnter,2849,true,false,,0,0
+2026-09-16T23:15:39.3543426-04:00,robot_0001,LeaveAndReLogin,3744,false,false,re-login: enter game: server error id:2005,0,0
+2026-09-16T23:15:43.990894-04:00,robot_0001,RapidLoginSpam,4123,true,false,,0,0
+2026-09-16T23:15:46.1917849-04:00,robot_0001,MessageBeforeLogin,1649,true,false,,0,0
+2026-09-16T23:15:47.3036599-04:00,robot_0001,LoginStuckDetection,589,false,false,stuck=false err=enter game: server error id:2005,0,0
+2026-09-16T23:15:48.4659287-04:00,robot_0100,BatchConcurrentLogin,658,true,false,,0,5
+2026-09-16T23:15:48.5613495-04:00,robot_0101,BatchConcurrentLogin,702,true,false,,0,5
+2026-09-16T23:15:48.7576415-04:00,robot_0102,BatchConcurrentLogin,848,true,false,,0,5
+2026-09-16T23:15:48.8325276-04:00,robot_0104,BatchConcurrentLogin,819,true,false,,0,5
+2026-09-16T23:15:49.119003-04:00,robot_0103,BatchConcurrentLogin,1159,true,false,,0,5
+2026-09-16T23:15:49.1200151-04:00,robot_0001,BatchConcurrentLogin,1311,true,false,,0,0
+2026-09-16T23:15:55.7381201-04:00,robot_0001,SkillCast,6110,false,false,no visible/self entity found for skill cast,0,0
+2026-09-16T23:16:00.8119911-04:00,robot_0001,SceneSwitch,4541,true,false,,0,0
+2026-09-16T23:16:10.392883-04:00,robot_0001,MultiRobotBehavior,9067,true,false,,0,0
+2026-09-16T23:16:14.7600258-04:00,robot_0001,CurrencyCrashWindow,3864,true,false,,0,0

@@ -30,7 +30,9 @@ RUN test "$(go env GOVERSION)" = "go1.24.5"
 
 WORKDIR /src
 COPY . .
-RUN CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/robot .
+# 只读权限在 builder 里定好(COPY --from 保留权限位);运行阶段再 chmod 会让二进制在镜像里存两份。
+RUN CGO_ENABLED=0 go build -mod=vendor -trimpath -ldflags="-s -w" -o /out/robot . \
+    && chmod 0555 /out/robot
 
 # ── Runtime stage ────────────────────────────────────────────────
 # 3.20 分支已停止维护(2026-04);这里只收紧到精确补丁版本,换分支与其它 alpine 运行镜像同批做。
@@ -60,7 +62,6 @@ LABEL org.opencontainers.image.title="mmorpg-robot" \
 
 RUN printf 'version=%s\ncommit=%s\nbuilt_at=%s\n' \
       "${BUILD_VERSION}" "${BUILD_COMMIT}" "${BUILD_TIME}" > /app/BUILD_INFO \
-    && chmod 0555 /app/robot \
     && chmod 0444 /app/BUILD_INFO
 
 USER 10001:10001

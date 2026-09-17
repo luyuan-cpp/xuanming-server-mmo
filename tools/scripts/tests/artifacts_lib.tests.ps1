@@ -136,6 +136,20 @@ try {
         Assert-True -Condition ([System.IO.Directory]::Exists($snap) -and [System.IO.Directory]::Exists($rel)) -Because '轨道目录应当被创建'
     }
 
+    Test-Case '制品根 -MustExist:不存在时抛"制品根不存在"且不创建;存在时 Get-ChannelRoot -MustExist 不建轨道目录' {
+        $missing = Join-Path $script:TempRoot 'root-missing'
+        $msg1 = Get-ThrownMessage { Get-ArtifactRoot -Override $missing -MustExist }
+        Assert-Match -Text $msg1 -Pattern '制品根不存在' -Because '只读用途(fetch / retention)指向不存在的制品根必须报错,不能悄悄建一个空根'
+        $msg2 = Get-ThrownMessage { Get-ChannelRoot -Channel snapshot -Override $missing -MustExist }
+        Assert-Match -Text $msg2 -Pattern '制品根不存在' -Because 'Get-ChannelRoot -MustExist 同样不得替调用方建出制品根'
+        Assert-True -Condition (-not [System.IO.Directory]::Exists($missing)) -Because '-MustExist 不得创建制品根'
+
+        $existing = New-CaseDir -Name 'root-mustexist'
+        $snap = Get-ChannelRoot -Channel snapshot -Override $existing -MustExist
+        Assert-True -Condition (Test-SamePath $snap (Join-Path $existing 'snapshots')) -Because "轨道路径错误:$snap"
+        Assert-True -Condition (-not [System.IO.Directory]::Exists($snap)) -Because '-MustExist 不创建轨道目录,轨道是否发布过由调用方判断'
+    }
+
     # ─────────────────────────────────────────────────────────────
     # 2. sha256sums 生成与校验
     # ─────────────────────────────────────────────────────────────
@@ -270,6 +284,18 @@ try {
         Assert-Equal -Expected 'theirs.txt' -Actual $names -Because '对方已发布的目录必须原样保留(A 用 Move-Item 会把 staging 嵌进去)'
     }
 
+    Test-Case '同名 staging 已存在(同 PID 并发发布或强杀残留)-> 抛"staging 已存在",不删其中内容' {
+        $parent = New-CaseDir -Name 'atomic-staging-exists'
+        $final = Join-Path $parent 'g0123456789ab'
+        $other = Join-Path $parent ".tmp-g0123456789ab-$PID"
+        Write-TestFile -Path (Join-Path $other 'theirs.tar') -Content 'in-progress'
+
+        $msg = Get-ThrownMessage { New-AtomicStaging -FinalDir $final }
+        Assert-Match -Text $msg -Pattern 'staging 已存在' -Because '同名 staging 可能属于共享盘上另一个同 PID 的发布者,不能删'
+        Assert-True -Condition ([System.IO.File]::Exists((Join-Path $other 'theirs.tar'))) -Because '已存在 staging 里的文件必须原样保留'
+        Assert-True -Condition (-not [System.IO.Directory]::Exists($final)) -Because '被拒时不得创建 FinalDir'
+    }
+
     # ─────────────────────────────────────────────────────────────
     # 4. latest 指针
     # ─────────────────────────────────────────────────────────────
@@ -297,6 +323,23 @@ try {
         Set-LatestPointer -ChannelRoot $relRoot -Kind images -Version 'v1.2.3'
         $obj3 = Get-Content -LiteralPath (Join-Path $relRoot 'images' 'latest.json') -Raw | ConvertFrom-Json
         Assert-Equal -Expected 'release' -Actual $obj3.channel -Because 'releases 目录下的指针 channel 必须是 release'
+    }
+
+    Test-Case 'latest 指针:当前区域的时间分隔符不是 ":" 时 published_at 仍是 UTC yyyy-MM-ddTHH:mm:ssZ' {
+        $root = Join-Path $script:TempRoot 'root-latest-culture'
+        $snapRoot = Get-ChannelRoot -Channel snapshot -Override $root
+        # 克隆不变区域再改分隔符,而不是取 fi-FI:CI 若以 .NET 全球化不变模式运行,具名区域取不到,用例会变成空转
+        $culture = [System.Globalization.CultureInfo]::InvariantCulture.Clone()
+        $culture.DateTimeFormat.TimeSeparator = '.'
+        $savedCulture = [System.Globalization.CultureInfo]::CurrentCulture
+        try {
+            [System.Globalization.CultureInfo]::CurrentCulture = $culture
+            Set-LatestPointer -ChannelRoot $snapRoot -Kind images -Version 'g0123456789ab'
+        }
+        finally { [System.Globalization.CultureInfo]::CurrentCulture = $savedCulture }
+
+        $raw = [System.IO.File]::ReadAllText((Join-Path $snapRoot 'images' 'latest.json'))
+        Assert-Match -Text $raw -Pattern '"published_at":\s*"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z"' -Because '时间分隔符必须固定为 ":",不随区域设置变成 "."'
     }
 
     Test-Case 'latest 指针:版本号含路径分隔符 / ChannelRoot 不是轨道目录时拒绝' {
@@ -338,7 +381,7 @@ try {
         Assert-Equal -Expected (Get-TextSha256 -Text $text) -Actual $r.Sha256 -Because '摘要 = sha256(逐行 "<sha256>  <文件名>\n" 按序数排序拼接)'
 
         Write-TestFile -Path (Join-Path $dir 'item.pb') -Content 'pb-bytes-changed'
-        Assert-Equal -Expected $r.Sha256 -Actual ((Get-TablesDigest -TablesDir $dir).Sha256) -Because '.pb 变化不影响摘要'
+        Assert-Equal -Expected $r.Sha256 -Actual ((Get-TablesDigest -TablesDir $dir).Sha256) -Because '接口 B 约定摘要只覆盖 *.json,.pb 变化不改变摘要(C++ TableDataFormat=binary 时这是已知盲区;改口径须先改接口 B 并同步各方测试)'
 
         Write-TestFile -Path (Join-Path $dir 'item.json') -Content '{"id":100}'
         Assert-True -Condition ((Get-TablesDigest -TablesDir $dir).Sha256 -ne $r.Sha256) -Because 'json 内容变化必须改变摘要'

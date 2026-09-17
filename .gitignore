@@ -290,5 +290,8 @@ tools/docs/protogen/
 # - deploy/offline-images/ : fetch_images.ps1 从制品目录拉到本机的镜像版本目录(单个 tar 可达 GB 级)
 # - /artifacts/            : 制品根默认在仓库**父**目录(MMORPG_ARTIFACT_ROOT 可改);
 #                            误把制品根指到仓库根下时兜底,防止 `git add -A` 把制品带进版本库
+# - *.tar                  : 手工 docker save 到仓库任意位置的镜像包同样不入库(与 .dockerignore 的 **/*.tar 口径一致);
+#                            只影响未跟踪文件,强制拦截靠 GitHub push ruleset,需仓库管理员另行配置
 deploy/offline-images/
 /artifacts/
+*.tar
