@@ -27,13 +27,22 @@ static constexpr const char* kSaveAndMarkLuaScript = R"(
 // ARGV[1]=payload, ARGV[2]=调用方缓存的期望值。
 // 比对与写入在同一段脚本里完成,没有 GET→SET 之间的 TOCTOU。
 //
-// 注意 Redis Lua 里 GET 缺键返回 false,与任何字符串都不相等,所以 guard 键
-// 不存在同样返回 0(fail-closed)。这是有意为之:调用方既然带着非 0 的期望
-// 值来,sidecar 却查不到,说明键被清或键名劈叉,此时写下去等于在没有归属
-// 证据的情况下覆盖数据。兼容窗口(epoch==0 未铸造)由调用方走无 guard 的
-// Save 跳过校验,不在脚本里放宽。
+// guard 键**不存在**时放行,并把它补种成调用方的期望值(Redis Lua 里 GET 缺键
+// 返回 false)。guard 键只由铸造方 INCR,从不删除,缺键只可能是 Redis 被清空 /
+// 重启丢数据 —— 此刻数据键本身也没了。若按"不相等"拒绝,一次 Redis 清空会让
+// 全服在线玩家在下一个周期存盘被逐个判成"已废黜"、不存盘销毁,内存里那份唯一
+// 完好的状态反而被丢掉。补种而不是只放行:铸造方之后在它之上继续 INCR,代际
+// 保持单调,不会从 1 重铸出一个与旧持有者相同的值。
+// 残余风险(接受并记录):Redis 清空的同时恰好还有一个被废黜的僵尸节点,且它
+// 抢在合法持有者之前存盘,它会补种自己的旧值、合法持有者随后被拒。两件小概率
+// 事件叠加,且僵尸本身由再入屏障先行兜住。
+// 键存在但不相等 → 返回 0(已被废黜)。兼容窗口(epoch==0 未铸造)由调用方走
+// 无 guard 的 Save 跳过校验,不在脚本里放宽。
 static constexpr const char* kSaveIfGuardLuaScript = R"(
-    if redis.call('GET', KEYS[2]) ~= ARGV[2] then
+    local cur = redis.call('GET', KEYS[2])
+    if cur == false then
+        redis.call('SET', KEYS[2], ARGV[2])
+    elseif cur ~= ARGV[2] then
         return 0
     end
     redis.call('SET', KEYS[1], ARGV[1])
@@ -146,13 +155,17 @@ public:
 
 	// 带 guard 的存盘被 Redis 原子拒绝(Lua 返回 0)的通知。
 	//
-	// 这不是故障,是"被废黜":本节点缓存的归属值已落后于 Redis,说明
-	// scene_manager 已把该玩家改派给别的节点。所以它既不走 save_failed_callback_
-	// (那一条的含义是"Redis 不可用,仍在重试"),也不重试 —— 再存只会再被拒,
-	// 而且每次重试都是在给已经不属于自己的数据制造覆盖窗口。同 key 排队中的
-	// 更新值一并丢弃,理由相同。调用方据此销毁本地实体、停止对该玩家的一切
-	// 存盘,且不得发 relocate(reentry-barrier §3.3 / §6.2)。
-	using SaveRejectedCallback = std::function<void(MessageKey, const std::string& redisKey)>;
+	// 这不是故障,是"这份期望值已作废":发出这次存盘时缓存的归属值落后于 Redis。
+	// 所以它既不走 save_failed_callback_(那一条的含义是"Redis 不可用,仍在重试"),
+	// 也不原样重试 —— 同一个期望值再存只会再被拒。
+	//
+	// guardExpected 是**被拒的那一份**期望值,调用方必须拿它与自己当前缓存的值比:
+	// 相等 = 自己确实已被废黜(销毁本地实体、停止一切存盘、不得发 relocate,
+	// reentry-barrier §3.3 / §6.2);不相等 = 被拒的只是一笔旧代际的在途写,自己
+	// 已经拿到了更新的归属,应当用新值重新存盘而不是自毁。
+	// 同 key 排队中的值:期望值与被拒的相同 → 一并丢弃(发出去只会再收一个 0);
+	// 期望值不同 → 它带着更新的归属,照常发出,此时不回调(那笔旧写已被它取代)。
+	using SaveRejectedCallback = std::function<void(MessageKey, const std::string& redisKey, const std::string& guardExpected)>;
 
 	using HiredisPtr = std::unique_ptr<hiredis::Hiredis>;
 
@@ -682,23 +695,39 @@ private:
 			return;
 		}
 
-		// 带 guard 的脚本返回整数 0 = 归属校验不通过,本节点已被废黜。
-		// 这是终态而不是错误:不重试(再存只会再被拒),不走 save_failed_callback_
-		// (那条语义是"Redis 不可用,仍在重试"),也不发布 save_callback_(调用方
-		// 会把它当成功并继续退出链)。同 key 排队中的更新值一并丢弃 —— 它带的是
-		// 同一份已作废的归属,发出去只会再收一个 0,却多开一次覆盖窗口。
+		// 带 guard 的脚本返回整数 0 = 这份期望值的归属校验不通过。
+		// 不原样重试(再存只会再被拒),不走 save_failed_callback_(那条语义是
+		// "Redis 不可用,仍在重试"),也不发布 save_callback_(调用方会把它当成功并
+		// 继续退出链)。
+		// 同 key 排队中的值按期望值分两种:与被拒的相同 → 同一份已作废的归属,丢弃
+		// (发出去只会再收一个 0,却多开一次覆盖窗口);不同 → 调用方在这笔写在途期间
+		// 拿到了更新的归属,那份更新的快照照常发出,由它的结果决定后续,这里不回调。
 		// 只对带 guard 的 element 解释这个 0:普通脚本恒返回 1,若真收到 0 是
 		// 服务端异常,维持旧行为(按成功处理)而不是静默丢数据。
 		if (!element->guard_key.empty() && reply->type == REDIS_REPLY_INTEGER && reply->integer == 0)
 		{
+			saving_queue_.erase(inFlight);
+			if (auto newer = pending_save_queue_.find(element->redis_key);
+				newer != pending_save_queue_.end())
+			{
+				auto next = newer->second;
+				pending_save_queue_.erase(newer);
+				if (next->guard_expected != element->guard_expected)
+				{
+					LOG_WARN << "Redis Save rejected by owner guard for key: " << element->redis_key
+							 << " expected=" << element->guard_expected
+							 << " -- superseded by a pending value with newer guard=" << next->guard_expected
+							 << ", issuing it";
+					IssueSave(next);
+					return;
+				}
+			}
 			LOG_WARN << "Redis Save rejected by owner guard for key: " << element->redis_key
 					 << " guard=" << element->guard_key << " expected=" << element->guard_expected
-					 << " -- this node no longer owns the data; dropping in-flight and pending values";
-			saving_queue_.erase(inFlight);
-			pending_save_queue_.erase(element->redis_key);
+					 << " -- dropping in-flight and same-guard pending values";
 			if (save_rejected_callback_)
 			{
-				save_rejected_callback_(element->message_key, element->redis_key);
+				save_rejected_callback_(element->message_key, element->redis_key, element->guard_expected);
 			}
 			return;
 		}

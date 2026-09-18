@@ -24,9 +24,15 @@ type Config struct {
 	// DataServiceRpc 是 data_service 的 gRPC 客户端(etcd 发现,Key=dataservice.rpc)。
 	// scene_manager 只用它查玩家归属 zone(GetPlayerHomeZone),结果随 RoutePlayerEvent
 	// 下发给 scene 节点决定存盘落库目的地(cross-zone-scene-travel.md CZ-3)。
-	// 标 optional:本地单区联调可以不配,此时归属 zone 一律按 gate zone 处理并打 WARN;
-	// 多 zone 部署**必须**配,否则访客的存盘会落错库而且没有任何报错。
+	// 标 optional 只为让进程能起来:没配时 EnterScene 默认**拒绝**(fail-closed),因为
+	// 多 zone 下「按 gate zone 当归属」会让访客的存盘落错库而且没有任何报错。
+	// 单 zone 联调确实不想起 data_service 时,显式打开 AllowGateZoneAsHomeZone。
 	DataServiceRpc zrpc.RpcClientConf `json:",optional"`
+
+	// AllowGateZoneAsHomeZone:没配 DataServiceRpc 时,是否把 gate zone 当玩家归属 zone。
+	// 只有单 zone 部署才成立(gate zone 恒等于 home zone)。默认 false;多 zone 部署
+	// 打开它 = 访客数据写进目标 zone 的库。配了 DataServiceRpc 时本开关不起作用。
+	AllowGateZoneAsHomeZone bool `json:",default=false"`
 
 	// HomeZoneLookupTimeoutMs 是 EnterScene 里那一次 GetPlayerHomeZone 的预算(毫秒)。
 	// 它串在每一次进场景上,超时按「归属未知」拒绝并让上游重试(不会退回进程 zone),

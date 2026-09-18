@@ -412,8 +412,8 @@ TEST(CurrencyTest, RedisLoadOversizePayloadFailsClosed)
 // MessageAsyncClient 带归属校验的存盘(reentry-barrier §6.2 方案 a)
 // ---------------------------------------------------------------------------
 
-// guard 不等 → Lua 返回 0:是终态"被废黜",不是故障。必须只回 rejected 回调,
-// 不回成功、不回失败、不重试,且同 key 排队中的更新值也一并丢弃。
+// guard 不等 → Lua 返回 0:是终态"这份期望值已作废",不是故障。必须只回 rejected 回调,
+// 不回成功、不回失败、不重试,且同 key 排队中**期望值相同**的更新值也一并丢弃。
 TEST(CurrencyTest, RedisGuardedSaveRejectedIsTerminalAndDropsPending)
 {
     using Client = MessageAsyncClient<Guid, CurrencyComp>;
@@ -426,12 +426,14 @@ TEST(CurrencyTest, RedisGuardedSaveRejectedIsTerminalAndDropsPending)
     int rejectedCount = 0;
     Guid rejectedKey = 0;
     std::string rejectedRedisKey;
+    std::string rejectedGuard;
     client.SetSaveCallback([&](Guid, CurrencyComp&) { ++savedCount; });
     client.SetSaveFailedCallback([&](Guid, const std::string&, int) { ++failedCount; });
-    client.SetSaveRejectedCallback([&](Guid key, const std::string& redisKey) {
+    client.SetSaveRejectedCallback([&](Guid key, const std::string& redisKey, const std::string& guardExpected) {
         ++rejectedCount;
         rejectedKey = key;
         rejectedRedisKey = redisKey;
+        rejectedGuard = guardExpected;
         // 回调时队列必须已经清干净:调用方会在回调里销毁实体,之后不能再有任何
         // 针对该 key 的写入冒出来。
         EXPECT_EQ(0u, client.in_flight_save_count());
@@ -456,8 +458,45 @@ TEST(CurrencyTest, RedisGuardedSaveRejectedIsTerminalAndDropsPending)
     EXPECT_EQ(1, rejectedCount);
     EXPECT_EQ(kPlayerId, rejectedKey);
     EXPECT_EQ(inFlight->redis_key, rejectedRedisKey);
+    // 调用方要拿"被拒的那一份期望值"与实体当前缓存的 epoch 比,才能区分
+    // "自己被废黜"与"只是一笔旧代际的在途写"。
+    EXPECT_EQ("7", rejectedGuard);
     EXPECT_EQ(0u, client.in_flight_save_count());
     EXPECT_EQ(0u, client.pending_save_count());
+}
+
+// 在途存盘(guard=7)被拒时,排队中的值已经带着更新的归属(guard=8):调用方在这笔写
+// 在途期间拿到了新 epoch,仍是合法持有者。那份更新的快照必须照常发出,不能被当成
+// "同一份已作废的归属"丢掉;此时也不回 rejected(那笔旧写已被它取代)。
+TEST(CurrencyTest, RedisGuardedSaveRejectedKeepsPendingValueWithNewerGuard)
+{
+    using Client = MessageAsyncClient<Guid, CurrencyComp>;
+    using Peer = MessageAsyncClientTestPeer<Guid, CurrencyComp>;
+
+    Client::HiredisPtr hiredis;
+    Client client(hiredis);
+    int savedCount = 0;
+    int rejectedCount = 0;
+    client.SetSaveCallback([&](Guid, CurrencyComp&) { ++savedCount; });
+    client.SetSaveRejectedCallback([&](Guid, const std::string&, const std::string&) { ++rejectedCount; });
+
+    constexpr Guid kPlayerId = 10005;
+    const std::string guardKey = "player:10005:owner_epoch";
+    const auto inFlight = Peer::TrackGuardedSave(client, kPlayerId, guardKey, "7");
+    client.Save(std::make_shared<CurrencyComp>(), kPlayerId, guardKey, "8");
+    ASSERT_EQ(1u, client.in_flight_save_count());
+    ASSERT_EQ(1u, client.pending_save_count());
+
+    redisReply reply{};
+    reply.type = REDIS_REPLY_INTEGER;
+    reply.integer = 0;
+    Peer::DeliverSaved(client, &reply, inFlight);
+
+    EXPECT_EQ(0, savedCount);
+    EXPECT_EQ(0, rejectedCount) << "a stale in-flight write superseded by a newer-guard value is not a deposal";
+    EXPECT_EQ(0u, client.in_flight_save_count());
+    // 本用例没有真实 hiredis 连接,IssueSave 会把它放回 pending 等重连;关键是它**还在**。
+    EXPECT_EQ(1u, client.pending_save_count());
 }
 
 // guard 相等 → Lua 返回 1:与无 guard 的存盘完全一样走成功回调。
@@ -475,7 +514,7 @@ TEST(CurrencyTest, RedisGuardedSaveAcceptedCompletesNormally)
         ++savedCount;
         savedKey = key;
     });
-    client.SetSaveRejectedCallback([&](Guid, const std::string&) { ++rejectedCount; });
+    client.SetSaveRejectedCallback([&](Guid, const std::string&, const std::string&) { ++rejectedCount; });
 
     constexpr Guid kPlayerId = 10004;
     const auto inFlight = Peer::TrackGuardedSave(client, kPlayerId, "player:10004:owner_epoch", "7");

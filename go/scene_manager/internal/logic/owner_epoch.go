@@ -39,11 +39,20 @@ import (
 //
 //	KEYS[1] = player:{id}:owner_epoch
 //	KEYS[2] = player:{id}:location
+//	KEYS[3] = player:{id}:handoff
 //	ARGV[1] = 调用方读到的当前 epoch(十进制;键不存在按 "0")
 //	ARGV[2] = 已带上 epoch+1 的 PlayerLocation 字节
+//	ARGV[3] = 本次放行所凭的 handoff 标记原文;空串 = 本次不凭标记(首次落点 / 等待落点)
 //
-// 返回 INCR 之后的新 epoch;CAS 不过返回 0(什么都不改)。键不存在时 GET 给
-// false,与 "0" 归一后比对,这样首次铸造与「回滚到 0」之后的再铸造走同一条路。
+// 返回 INCR 之后的新 epoch;epoch CAS 不过返回 0;标记已不是预检时那一份返回 -1。
+// 两种失败都什么都不改。键不存在时 GET 给 false,与 "0" 归一后比对,这样首次铸造与
+// 「回滚到 0」之后的再铸造走同一条路。
+//
+// 标记为什么要在这段 Lua 里再比一次:源 scene 等应答超时(或收到失败应答)后要决定
+// 「解冻继续玩」还是「我已被放行、销毁实体」。它的做法是先 DEL 自己写的标记、再 GET
+// owner_epoch —— 只要标记检查与铸造是同一个原子步骤,DEL 之后就不可能再有凭这份标记的
+// 放行,于是「epoch 没变」就严格等价于「没被放行」。若只在预检里读标记,一个卡了很久的
+// EnterScene 可以在源端解冻之后才铸造,同一名玩家在两个 zone 同时活着。
 const luaMintEpochAndSetLocation = `
 local cur = redis.call("GET", KEYS[1])
 if cur == false then
@@ -51,6 +60,9 @@ if cur == false then
 end
 if cur ~= ARGV[1] then
     return 0
+end
+if ARGV[3] ~= "" and redis.call("GET", KEYS[3]) ~= ARGV[3] then
+    return -1
 end
 local minted = redis.call("INCR", KEYS[1])
 redis.call("SET", KEYS[2], ARGV[2])
@@ -115,6 +127,11 @@ return 1
 // errOwnerEpochConflict 表示铸造 epoch 时 CAS 失败:有并发的 EnterScene 抢先推进了
 // epoch。Redis 未被改动,调用方翻成 constants.ErrOwnerEpochConflict(可重试)。
 var errOwnerEpochConflict = errors.New("owner epoch advanced by a concurrent EnterScene")
+
+// errHandoffWithdrawn 表示预检时读到的 handoff 标记在落点那一刻已经不在(或被换过):
+// 源 scene 撤回了交接(应答超时 / 玩家取消),它即将解冻继续持有玩家。Redis 未被改动,
+// 调用方翻成 constants.ErrHandoffPending(可重试)。
+var errHandoffWithdrawn = errors.New("handoff marker withdrawn by the source scene")
 
 // currentOwnerEpoch 读当前归属 epoch,不铸造。键不存在返回 0(旧版 / 从未分配)。
 // 值损坏(非十进制整数)按错误返回:那是存储被写坏,不是可以猜的状态。
