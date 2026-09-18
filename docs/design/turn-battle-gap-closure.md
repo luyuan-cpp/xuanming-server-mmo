@@ -1,6 +1,9 @@
 # 回合制战斗缺口收口 G1–G9(2026-09-17)
 
-> 状态:**已落码,未编译、未导表、未运行,待 Codex 验证**(AGENTS §10.1)。验证清单见 §7。
+> 状态:**已落码;导表与 proto 重生成已执行(2026-09-18);未编译、未跑测试、未跑冒烟**。
+> 用户 2026-09-18 明确指示"不用等 Codex,你帮他做完,不用编译,直接合并到 main",
+> 因此 §7 的第 1、2 步已由本会话执行完毕并入库(结果见 §8),第 3–6 步(编译 / 单测 / 冒烟 / 客户端)
+> 按用户指示跳过 —— **代码与生成产物从未被编译器看过,正确性未经机器验证**。
 >
 > 背景:用户连问三轮"战斗掉落要不要 snowflake iid / 战斗里的背包会不会不同步 / 冷却和 buff 是不是快照副本",
 > 三轮各跑了一次对抗核验(3 个反驳者 + 1 个完整性审稿,逐文件读码)。核验没有推翻任何一条主线结论
@@ -138,7 +141,7 @@
 - **逐件 `AddItems(vector<InitItemParam>)` 重载没有 correlationId/extra**:战斗掉落不走它,
   邮件/托管接入时要补,否则那条路的流水同样没有来源。
 
-## 7. 未编译,待 Codex 验证(按序)
+## 7. 验证清单(第 1、2 步已执行,见 §8;第 3–6 步按用户指示跳过)
 
 工作目录除特别说明外均为仓库根 `E:\work\xuanming-server-mmo`。**动手前先 `git status --porcelain --ignore-submodules=all`**:本轮工作区里还有并行会话的改动(帮会二期、发布打包、merge_zone、go/guild、go/friend),不要把它们混进同一次验证结论。
 
@@ -171,3 +174,54 @@
    `pwsh -File E:\work\mmorpg-client\tools\gen_proto.ps1 -ProtoRoot E:\work\xuanming-server-mmo`、`gen_messageids.ps1`、`client_compile_check.ps1`。
    本轮客户端无代码改动,`self_items` 是新增可选字段,老客户端忽略即可。
 7. 任一步失败:保留该步完整 stdout/stderr(导表器是 fail-closed,报错即"产出未落盘")、MSBuild 首个 error 段、scene/battle 日志与失败 step 名;**不重试、不改判据**,回报后等决策。
+
+## 8. 已执行:导表 + proto 重生成(2026-09-18)
+
+本会话按用户指示替 Codex 跑完了生成链的两步。**这两步不是编译**,产物已随仓库的每小时自动提交进入 `main`。
+
+### 8.1 实际执行的命令
+
+```
+# PATH 前置(E:\work\tools 已被清空,protoc 用仓内的,protoc-gen-go 在用户 go/bin)
+PATH=C:\Users\luyua\go\bin;<repo>\third_party\grpc\install_vs2026_dbg\bin;%PATH%
+
+py -3 tools/data_table_exporter/tools/sandbox_export.py --out <tmp> --compare   # 零副作用预检
+py -3 tools/data_table_exporter/run.py tools/data_table_exporter/exporter_config.yaml
+py -3 tools/data_table_exporter/tools/gen_schema_index.py
+pwsh -NoProfile -File tools/scripts/dev_tools.ps1 -Command proto-gen-run -UseBinary \
+     -ConfigPath tools/proto_generator/protogen/etc/proto_gen.yaml
+```
+
+`dev.bat gen` 没有直接用:它的失败路径带 `pause`,非交互会卡住;`proto-gen-build`(内部是 `go build`)
+也没跑 —— 用的是现成的 `proto-gen.exe`(2026-09-16 22:14 构建)。`cd go && build.bat`(goctl)同样未跑。
+
+### 8.2 结果与核对
+
+| 检查项 | 结果 |
+|---|---|
+| 导表 | `===== Data Table Exporter: DONE =====`,`Deploy: 12 OK, 0 failed`,manifest version=17 / 31 张表 |
+| Item 表产物 | `ItemTable` 生成出 `battle_usable=4` / `battle_heal_hp=5` / `battle_heal_mp=6`;`item.json` 里物品 10 = 回血 300、物品 11 = 回蓝 120,其余为 0 |
+| Monster 表产物 | 生成出子消息 `Monsterdrop{drop_item,drop_count,drop_rate}` 与 `repeated Monsterdrop drop = 10`;1 号怪 `[{10,1,10000}]`、2 号怪 `[{10,1,5000},{11,1,2000}]`、3 号怪空 |
+| C++ / Go 访问器 | `item_table.pb.h` 有 `battle_usable()`;`monster_table.pb.h` 有 `class Monsterdrop` 与 `drop(int)`;Go 侧 `BattleUsable` 已生成 |
+| proto 重生成 | 完成(47s);`player_battle.pb.h` 含 `self_items`(36 处),Go 侧同样生成 |
+| **Agones 正向断言** | `grep -c AcquireCreatePermitBlocking cpp/nodes/scene/handler/grpc/scene_node_service.cpp` = **1,命中**(regen 没有吞掉这个块) |
+| 工程登记 | `proto.vcxproj` / `table.vcxproj` 未登记的 `.pb.cc` = **0**(本轮只给既有表加列、给既有 message 加字段,不产生新文件) |
+| 客户端仓 | 生成器写入后 `../mmorpg-client` 无非预期改动(仅 2 个与本任务无关的 Qdao 测试文件处于修改态) |
+
+### 8.3 ⚠ 这次 regen 顺带材料化了并行会话的改动
+
+`proto/message_id.txt` 除本任务外还变了两处,**都来自并行的帮会二期会话**(它们的 proto 已在 `main` 上):
+
+- 新增 8 条:`216=GuildServiceTransferGuildLeader` … `223=GuildServiceReviewGuildApplication`;
+- **号位重分配**:`19` 从 `GuildServiceJoinGuild` 改判给 `GuildServiceSetGuildMemberRole` ——
+  因为它们把 `rpc JoinGuild` 删掉换成了 `ApplyJoinGuild`,19 号空出来被发号器回收再分配。
+
+这不是本任务引入的,但**是本次 regen 把它落盘的**。`message_id` 是客户端可见契约,
+帮会会话需要知道 19 号已经易主(项目未上线、无老客户端,开发期可接受)。
+本任务自己没有新增任何 RPC,`self_items` 只是给既有 message 加字段,**不影响任何消息号**。
+
+### 8.4 仍然没做的(用户明确跳过)
+
+C++ 串行编译、C++ 单测(`run_cpp_tests.ps1`)、robot `battle_smoke`、客户端 `gen_proto` / 编译体检。
+因此:**本轮代码从未被编译器看过**。§7 的第 3–6 步原样保留,谁要跑照着跑即可。
+风险集中在三处 —— 新写的 C++ 是否编得过、18 个新单测是否真的绿、掉落与用药的端到端是否跑通。

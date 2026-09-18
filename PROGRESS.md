@@ -5114,3 +5114,12 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - 两条与本次改动无关、但记下来免得下次误判:
   - `gen_schema_index.py --check` 当前报"索引块已腐坏",差异全部来自并行会话在途的表(新增 GuildLevel / GuildRule、Item 3→6 列、MessageLimiter 34→46 行、Monster 10→16 列含 drop),与防御 / 法力数值无关;这些表尚未提交,本轮不重生索引,留给对应会话导表时一并更新。
   - 09-17 新加的 `Item.battle_heal_mp`(战斗中用药回蓝,引擎读表不写死)填值时要按**新法力单位**:85 级法力上限约 4830,旧单位下的"回 50 蓝"现在只相当于 12.5 蓝。
+
+## 2026-09-18 回合制战斗缺口 G1-G9:导表 + proto 重生成已执行(Claude,仍未编译)
+
+- 用户 09-18 指示"不用等 Codex,你帮他做完,不用编译,直接合并到 main"。据此执行了 [turn-battle-gap-closure.md](docs/design/turn-battle-gap-closure.md) §7 的第 1、2 步,结果记在该文档新增的 §8;第 3-6 步(C++ 编译 / 单测 / robot 冒烟 / 客户端 gen)按指示跳过。
+- 导表:沙盒预检(`sandbox_export.py --compare`)→ 正式导表(`run.py`,`===== Data Table Exporter: DONE =====`,`Deploy: 12 OK, 0 failed`,manifest v17 / 31 表)→ `gen_schema_index.py` 刷新索引。Item 表三列与 Monster 掉落槽的产物逐项核对通过:C++ `battle_usable()` / `class Monsterdrop` / `drop(int)`、Go `BattleUsable`、`item.json` 物品 10 回血 300 与物品 11 回蓝 120、`monster.json` 1 号怪必掉、2 号怪两槽。
+- proto 重生成:用现成 `proto-gen.exe`(`-UseBinary`;没跑 `proto-gen-build`,它内部是 `go build`;`cd go && build.bat` 同样没跑)。`self_items` 已进 C++ 与 Go 产物;**Agones 正向断言命中**(`grep -c AcquireCreatePermitBlocking scene_node_service.cpp` = 1,regen 没吞掉那个块);`proto.vcxproj` 与 `table.vcxproj` 未登记的 `.pb.cc` 均为 0(本轮只给既有表加列、给既有 message 加字段,不产生新文件);客户端仓无非预期改动。
+- **⚠ 副作用:这次 regen 顺带把并行帮会会话的 proto 改动落盘到 `proto/message_id.txt`** —— 新增 8 条 Guild 方法(216-223),且 **19 号从 `GuildServiceJoinGuild` 改判给 `GuildServiceSetGuildMemberRole`**(帮会会话删掉了 `rpc JoinGuild`、换成 `ApplyJoinGuild`,19 号空出后被发号器回收再分配)。不是本任务引入,但由本次生成落的盘;`message_id` 是客户端可见契约,帮会会话需知悉 19 号已易主(项目未上线、无老客户端,开发期可接受)。本任务零新增 RPC,`self_items` 只是给既有 message 加字段,不影响任何消息号。
+- **仍未编译**:本轮代码从未被编译器看过,18 个新单测未跑,`battle_smoke` 未跑。风险集中在三处 —— 新写的 C++ 能不能编过、单测是否真绿、掉落与用药的端到端是否跑通。
+- 工作区说明:仓库的每小时自动 WIP 提交已把上述代码与生成产物全部收进 `main`;本条对应的可识别提交只含文档更新。
