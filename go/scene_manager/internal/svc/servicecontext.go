@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	dspb "proto/data_service"
 	"shared/generated/table"
 	"shared/kafkacmd"
 	"shared/snowflake"
@@ -19,7 +20,9 @@ import (
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
+	"google.golang.org/grpc"
 )
 
 // KafkaWriter 把同步发布与关闭收进同一接口，使 Stop 能统一释放 writer，
@@ -29,11 +32,22 @@ type KafkaWriter interface {
 	Close() error
 }
 
+// HomeZoneClient 是 scene_manager 对 data_service 的**唯一**依赖面:查玩家归属 zone。
+// 刻意只收窄到这一个方法:dspb.DataServiceClient 天然满足它,而单测用假实现替换时
+// 不必把整个 DataServiceClient 的十几个方法都桩出来。
+type HomeZoneClient interface {
+	GetPlayerHomeZone(ctx context.Context, in *dspb.GetPlayerHomeZoneRequest, opts ...grpc.CallOption) (*dspb.GetPlayerHomeZoneResponse, error)
+}
+
 type ServiceContext struct {
-	Config      config.Config
-	Redis       *redis.Redis
-	Kafka       KafkaWriter
-	Etcd        *clientv3.Client
+	Config config.Config
+	Redis  *redis.Redis
+	Kafka  KafkaWriter
+	Etcd   *clientv3.Client
+	// HomeZone 查 data_service 的 player:zone 映射,EnterScene 用它填
+	// RoutePlayerEvent.home_zone_id。yaml 没配 DataServiceRpc 时为 nil,
+	// 调用方按「本地单区联调」处理(归属 = gate zone,WARN 计数)。
+	HomeZone    HomeZoneClient
 	SceneIDGen  *snowflake.Node
 	snowflakeHd *snowflakealloc.Handle // 持有 worker id 的 etcd lease,进程退出时 Close
 	stopOnce    sync.Once
@@ -128,7 +142,23 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		Async:      false,
 		Completion: sc.handleKafkaCompletion,
 	}
+	sc.HomeZone = newHomeZoneClient(c.DataServiceRpc)
 	return sc
+}
+
+// newHomeZoneClient 按 DataServiceRpc 拨 data_service;没配目标(本地单区联调)返回 nil。
+//
+// 与 login 的 initHomeZoneResolver 同一判据(Etcd.Key / Endpoints / Target 任一非空
+// 即视为已配置)。这里不 panic 也不降级成假客户端:nil 是一个显式状态,EnterScene
+// 看到 nil 会按 gate zone 处理并 WARN 计数,多 zone 部署漏配能在指标上看见。
+func newHomeZoneClient(c zrpc.RpcClientConf) HomeZoneClient {
+	if c.Etcd.Key == "" && len(c.Endpoints) == 0 && c.Target == "" {
+		logx.Error("[home-zone] DataServiceRpc not configured: RoutePlayerEvent.home_zone_id will fall back to " +
+			"the gate zone for every player (only acceptable for single-zone dev)")
+		return nil
+	}
+	conn := zrpc.MustNewClient(c)
+	return dspb.NewDataServiceClient(conn.Conn())
 }
 
 func (sc *ServiceContext) handleKafkaCompletion(messages []kafka.Message, err error) {

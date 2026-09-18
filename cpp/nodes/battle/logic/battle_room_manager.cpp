@@ -569,7 +569,13 @@ void BattleRoomManager::HandleCreateBattle(const ::CreateBattleRequest &request,
         // 直连落点分配先于开战包(同 key 保序,D26):客户端拿到票据后建第二条连接,
         // 此刻还没有直连,两条都经 Kafka→gate 回落下发
         PushAssignment(*roomPtr, playerId, routing, ::BATTLE_TICKET_ROLE_PARTICIPANT);
-        PushToPlayer(*roomPtr, playerId, routing, BattleClientPlayerNotifyBattleStartMessageId, start);
+        // 每人一份:剔除他人冷却、填本人道具余量(G7)。开局冷却本就是空的,
+        // 这里主要是把 self_items 带给客户端,让道具面板一开局就有数
+        ::BattleStartS2C personalStart = start;
+        RedactStateForViewer(*personalStart.mutable_state(), playerId);
+        FillSelfItems(*roomPtr, *personalStart.mutable_state(), playerId);
+        PushToPlayer(*roomPtr, playerId, routing, BattleClientPlayerNotifyBattleStartMessageId,
+                     personalStart);
         // 向玩家所在 scene 确认开局:PREPARING→FIGHTING,作废期限切到本房间的正式 deadline
         // (与 battleTimer 同一个值,scene reaper 与房间强制收尾的时限口径一致)
         SendBattleConfirmedEvent(routing, playerId, battleId, deadlineMs);
@@ -654,12 +660,27 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
         return;
     }
 
-    // 非法行动(死亡/已逃/校验链不过)引擎不落账,按未提交处理,
-    // 回合超时的默认普攻兜底(引擎契约);对客户端一律回 OK,不泄漏校验细节
+    // 先查后提交:校验码回给提交者(G2)。原先"一律回 OK"会让玩家点了吃药、
+    // 客户端显示成功、回合结算却变成默认普攻,连原因都看不到 —— 玩家资产路径
+    // 不许静默降级(AGENTS §11.3)。ValidateAction 零副作用,与 SubmitAction 的
+    // 接受条件逐条同源。
+    const uint32_t validation = room->engine.ValidateAction(playerId, request.action());
+    if (validation != kSuccess)
+    {
+        LOG_DEBUG << "SubmitBattleAction 校验不过: battle_id=" << request.battle_id()
+                  << " player_id=" << playerId << " action=" << request.action().action_type()
+                  << " code=" << validation;
+        response.mutable_error_message()->set_id(validation);
+        return;
+    }
+
+    // 非法行动引擎不落账,按未提交处理,回合超时的默认普攻兜底(引擎契约)
     const bool allReady = room->engine.SubmitAction(playerId, request.action());
     if (allReady)
     {
-        // 全员就绪提前结算,不等 action_deadline
+        // 全员就绪提前结算,不等 action_deadline。
+        // 注意:ResolveRound 可能走到 FinishBattle + rooms_.erase,之后 room 悬空 ——
+        // 任何依赖 room 的响应字段都必须在这一行之前填完
         ResolveRound(room->battleId);
     }
 }
@@ -692,6 +713,14 @@ void BattleRoomManager::HandleGetBattleState(const ::SessionDetails &sessionDeta
     response.set_battle_id(room->battleId);
     // 引擎无时钟,行动截止由节点回填
     response.set_action_deadline_ms(room->actionDeadlineMs);
+    // 补拉路径同样要脱敏 + 带本人道具余量(D39:收缩后客户端丢帧只能靠这条补,
+    // 只改广播不改这里,重连一次就把对手冷却全看见了)
+    const bool isObserver = room->routingByPlayer.find(playerId) == room->routingByPlayer.end();
+    RedactStateForViewer(response, isObserver ? 0 : playerId);
+    if (!isObserver)
+    {
+        FillSelfItems(*room, response, playerId);
+    }
 }
 
 void BattleRoomManager::HandleAddObserver(const ::AddObserverRequest &request,
@@ -1098,15 +1127,57 @@ void BattleRoomManager::BroadcastTurnResult(const BattleRoom &room, const ::Turn
 {
     // 每玩家一条 PushToPlayerEvent,key=player_id:保证同一玩家的
     // TurnResult 与随后的 BattleEnd 在 gate 侧有序(宪法 §7 不变量 3)。
+    // 每人一份拷贝:事件流(events/action_order)人人相同,只有 state 按视角裁剪(G7)。
+    // 本来就是每个收信人各序列化一次,这里只多一次消息对象拷贝。
     for (const auto &[playerId, routing] : room.routingByPlayer)
     {
-        PushToPlayer(room, playerId, routing, BattleClientPlayerNotifyTurnResultMessageId, result);
+        ::TurnResultS2C personal = result;
+        RedactStateForViewer(*personal.mutable_state(), playerId);
+        FillSelfItems(room, *personal.mutable_state(), playerId);
+        PushToPlayer(room, playerId, routing, BattleClientPlayerNotifyTurnResultMessageId,
+                     personal);
     }
-    // 观众收同一份 payload,消息号不同(D8:客户端观战/参战两套状态机互不干扰)
-    for (const auto &[observerId, routing] : room.routingByObserver)
+    // 观众版只做一份(全员冷却都剔除、不带任何人的道具余量),消息号不同
+    //(D8:客户端观战/参战两套状态机互不干扰)
+    if (!room.routingByObserver.empty())
     {
-        PushToPlayer(room, observerId, routing,
-                     BattleClientPlayerNotifySpectateTurnResultMessageId, result);
+        ::TurnResultS2C spectate = result;
+        RedactStateForViewer(*spectate.mutable_state(), 0);
+        for (const auto &[observerId, routing] : room.routingByObserver)
+        {
+            PushToPlayer(room, observerId, routing,
+                         BattleClientPlayerNotifySpectateTurnResultMessageId, spectate);
+        }
+    }
+}
+
+void BattleRoomManager::RedactStateForViewer(::BattleStateS2C &state,
+                                             const uint64_t viewerPlayerId) const
+{
+    for (auto &actor : *state.mutable_actors())
+    {
+        // "自己的单位" = 本人 + 本人的宝宝(宝宝 actor_id 是局内号,归属看 owner_player_id)
+        const bool isOwn = viewerPlayerId != 0 &&
+                           (actor.actor_id() == viewerPlayerId ||
+                            actor.owner_player_id() == viewerPlayerId);
+        if (!isOwn)
+        {
+            actor.clear_skill_cooldown_rounds();
+        }
+    }
+}
+
+void BattleRoomManager::FillSelfItems(const BattleRoom &room, ::BattleStateS2C &state,
+                                      const uint64_t viewerPlayerId) const
+{
+    state.clear_self_items();
+    if (viewerPlayerId == 0)
+    {
+        return;
+    }
+    for (const auto &item : room.engine.SelfItems(viewerPlayerId))
+    {
+        *state.add_self_items() = item;
     }
 }
 
@@ -1118,6 +1189,8 @@ void BattleRoomManager::PushSpectateState(const BattleRoom &room, const uint64_t
     state.mutable_state()->set_battle_id(room.battleId);
     // 引擎无时钟,行动截止由节点按房间 timer 回填(与参战者首帧同口径)
     state.mutable_state()->set_action_deadline_ms(room.actionDeadlineMs);
+    // 观众视角:全员冷却剔除,不带任何人的道具余量(G7)
+    RedactStateForViewer(*state.mutable_state(), 0);
     state.set_observer_count(static_cast<uint32_t>(room.routingByObserver.size()));
 
     PushToPlayer(room, observerId, routing, BattleClientPlayerNotifySpectateStateMessageId, state);

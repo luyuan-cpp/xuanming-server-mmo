@@ -370,7 +370,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 5. **建库**
    - `CREATE DATABASE IF NOT EXISTS mmorpg_<svc>` 加 `GRANT ... TO 'appuser'@'%'` **只登记一处**:`deploy/mysql-init/00_init_zone_dbs.sql`。K8s ConfigMap 会原样带入这份文件,不要再在 `k8s_deploy.ps1` 里生成第二份。`02_k8s_global_db.sql` 是因为本地和 K8s 库名不同才单独生成的,不是范式。
    - initdb 只在空数据卷执行。已初始化的本地卷和已有数据的 PVC,要在 `deploy/k8s/README.md` 写手工步骤,照 `mmorpg_global` 的写法。库不存在时,migrate Job 以 1 退出并点名库名。
-   - `deploy/mysql-init` 从本条起**禁止新增业务表**。存量 `guild_friend_tables.sql` / `gateway_tables.sql` 保留不动。
+   - `deploy/mysql-init` 从本条起**禁止新增业务表**。存量 `gateway_tables.sql` 保留不动;`guild_friend_tables.sql` 只保留 friend 三表(见 §8 修订)。
 6. **跨服务**
    - 跨服务读数据只经对方 gRPC,不跨库 JOIN。mail 取公会成员经 guild gRPC。
    - 各服务共用 `appuser`,它对多个库有 ALL 权限,所以「不跨库访问」目前**只是约定**,机械防线是第 3 条的库名断言。每服务独立账号在 TiDB 用户体系重议时再定。
@@ -379,9 +379,23 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
    - 不许 require `v0.1.0`:这个 tag 被移动过。
    - **2026-09-16 实测补充**:旧 module 路径 `github.com/luyuancpp/proto2mysql@v0.1.1` 的代理缓存仍是无 TiDB / unknown-fields 解码的旧内容,不能仅按版本字符串验收。`go/schemamigrate` 与主调用模块 `go/trade` 均保留旧 import/require,使用版本限定的远程映射 `replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1`。新仓名发布包由官方 Go 代理核验到 `e90a5f0360eaf65794550713514a77f5a57c52a8`,包校验值 `h1:GsmiAKiXCiGjZaRCVutAsrlpShyZRcz71mVrAf+7U5A=`;两份 go.sum 由正常 tidy 生成,不关闭校验。以后新增主调用模块也须声明这条映射,因为依赖 module 的 replace 不传递。
    - 不许 replace 到仓库外目录。
+   - **replace 只在主模块生效**(2026-09-17 补,帮会二期 B1):`go/schemamigrate` 若以 module 路径 replace 解析
+     proto2mysql(例如 `=> github.com/luyuan-cpp/proto2mysql v0.1.1`),依赖它的建表服务 module(trade、guild)
+     必须写逐字相同的 replace,并让各自 `go.sum` 的 `h1:` 与 schemamigrate 一致;schemamigrate 改为 require
+     正式 tag 后同步删除。这不属于"replace 到仓库外目录"。
    - 本地主键 `VARCHAR(191)` 修复只在未推送的分支上。它进入某个 tag 之前,第 2 条的「禁止 string 主键」不放宽。打 tag 需要人执行(AGENTS.md §9)。
-8. **存量不动**
-   - friend、guild 和 gateway 的 `zone_config` 表留在 `mmorpg`,`guild_schema_migration` 门表照旧,不变量按 D-10 保留。
+8. **存量不动,guild 除外**(2026-09-17 修订,帮会二期 B1,用户决策)
+   - friend 表与 gateway 的 `zone_config` 表留在 `mmorpg`,不变量按 D-10 保留。
+   - **guild 例外**:项目未上线、无存量数据,`guild` / `guild_member` 与帮会二期新表迁入独占库 `mmorpg_guild`,
+     以 `proto/guild/guild_db.proto` 为源,由 `go/schemamigrate` 迁移(`-migrate` + dev 档 `Schema.AutoMigrate`,照 trade);
+     后续表由各批次在同一 proto 里追加。
+   - `guild_friend_tables.sql` 删除帮会表与遗留迁移过程;`guild_schema_migration` 门表、`MigrateLegacyRankScores`、
+     friend 的 `friend_capacity_backfill_v1` 门一并删除。friend 缺容量行时按 friend 表的权威边重算。
+   - 帮名唯一键改为 `uk_guild(name_norm)`,规范化(NFKC → TrimSpace → 小写)在 Go 侧完成,不依赖库的排序规则;
+     tools/merge_zone 与 data_consistency_check 经 `-guild-schema`(默认 `mmorpg_guild`)限定库名(B1b)。
+   - 开发期改表纪律(只追加;索引组只追加到末尾;缺普通索引即拒启)见 `docs/design/guild-phase2/01-storage.md` §6.4。
+   - §9 清单对 `mmorpg_guild` 的结论:带 zone 的行只有 `guild.zone_id`(merge_zone 步骤 3 已覆盖);
+     biz_tag `guild` 已在 BootstrapTags,`guild_asset_op` 随 B5 加入;TiDB BR 按库恢复清单加入 `mmorpg_guild`。
    - TiDB Phase 1 是逻辑库对逻辑库迁移,库名不改。
    - data_service 和 go/db 本轮不改迁移路径(见遗留)。
 9. **每个新库的上线清单**

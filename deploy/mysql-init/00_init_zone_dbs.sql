@@ -36,4 +36,15 @@ GRANT ALL PRIVILEGES ON `testdb`.* TO 'appuser'@'%';
 CREATE DATABASE IF NOT EXISTS mmorpg_trade DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 GRANT ALL PRIVILEGES ON `mmorpg_trade`.* TO 'appuser'@'%';
 
+-- mmorpg_guild:帮会 guild 服务独占库(go/guild/etc/guild.yaml MySQL.DataSource 的库名;
+-- go/guild/internal/config.Validate 断言 DSN 库名等于它)。按 port-decisions D-14(§8 已修订:
+-- 帮会表一并迁入),这里只建库 + 授权;表以 proto/guild/guild_db.proto 为源,由 go/schemamigrate
+-- 建(guild 启动期 Schema.AutoMigrate,或 `guild -f etc/guild.yaml -migrate`),不要往 mysql-init 加帮会表。
+-- appuser 没有全局 CREATE 权限,库必须在 guild 启动前就存在。
+-- 已初始化过的本地数据卷不会重跑 initdb:用 root 手工执行下面两句(再 FLUSH PRIVILEGES),或重建数据卷;
+-- tools/scripts/start_game.ps1 在 MySQL 就绪后预检本库,不就绪时跳过 guild 并打印补建命令。
+-- K8s:mysql-init-sql ConfigMap 原样带入本文件,新 PVC 首次 initdb 建库;已有 PVC 手工补建(见 deploy/k8s/README.md)。
+CREATE DATABASE IF NOT EXISTS mmorpg_guild DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON `mmorpg_guild`.* TO 'appuser'@'%';
+
 FLUSH PRIVILEGES;

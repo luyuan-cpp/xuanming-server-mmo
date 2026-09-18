@@ -13,6 +13,7 @@
 #include "combat/skill/comp/skill_comp.h"
 #include "combat/skill/constants/skill.h"
 #include "player/comp/player_frozen_comp.h"  // cross-zone-readiness-audit.md §11.3 / §11.4
+#include "proto/common/component/battle_comp.pb.h"  // InBattleComp:回合制战斗局中闸(§5.3 冻结清单)
 #include "spatial/system/view.h"
 #include "proto/common/event/combat_event.pb.h"
 #include "proto/common/event/skill_event.pb.h"
@@ -216,6 +217,15 @@ uint32_t CheckItemUse(const entt::entity casterEntity, const SkillTable* skillTa
 uint32_t SkillSystem::CheckSkillPrerequisites(const entt::entity casterEntity, const ::ReleaseSkillRequest* request) {
 	LookupSkillOrReturnError(request->skill_table_id());
 
+	// 回合制战斗在途:实时技能一律拒绝(moba-battle-target-architecture.md 红线 2
+	// "局中挡背包/交易/换装",turn-based-battle-server.md §5.3 冻结清单)。
+	// 玩家的战斗数值已经被快照带进 battle 节点,此刻在场景里放技能既改不了局内状态,
+	// 又会在结算回写 HP 时被整体覆盖 —— 打了等于白打,还会误伤旁人。
+	// 不走 MAKE_ERROR_MSG:这是玩家高频可触发的业务拒绝,刷栈没有意义。
+	if (tlsEcs.actorRegistry.any_of<InBattleComp>(casterEntity)) {
+		return kSkillCannotBeCastInCurrentState;
+	}
+
 	RETURN_ON_ERROR(ValidateTarget(request));
 	RETURN_ON_ERROR(CheckCooldown(casterEntity, skillRow));
 	RETURN_ON_ERROR(CheckCasting(casterEntity, skillRow));
@@ -393,6 +403,12 @@ uint32_t SkillSystem::ValidateTarget(const ::ReleaseSkillRequest* request) {
 				"target_id=" << request->target_id()
 				<< " skill_table_id=" << request->skill_table_id()
 				<< " reason=invalid_entity_type");
+		}
+
+		// 目标在回合制战斗里:不受实时技能影响。它的 HP 权威在 battle 节点的快照副本上,
+		// 结算会用终值整体覆盖,此刻在场景里扣的血只会被吞掉(或在覆盖前误导表现)。
+		if (tlsEcs.actorRegistry.any_of<InBattleComp>(target)) {
+			return kSkillInvalidTarget;
 		}
 
 		return kSuccess;
@@ -682,6 +698,17 @@ void SkillSystem::HandleSkillSpell(const entt::entity casterEntity, const uint64
 		return;
 	}
     
+	// 施法瞬间目标还在场景里、cast_point 定时器触发时它已经进了回合制战斗:整体早退。
+	// 必须在这里拦(而不是照抄 CalculateSkillDamage 里对 PlayerFrozenComp 的那段) ——
+	// 那段只是 return 让伤害留 0,后面 DealDamage 照跑,NextBasicAttack 的加成伤害仍会落血。
+	if (tlsEcs.actorRegistry.any_of<InBattleComp>(targetEntity))
+	{
+		LOG_INFO << "[TurnBattle] 落点期目标已进入回合制战斗,技能整体丢弃. caster="
+				 << entt::to_integral(casterEntity) << " target=" << entt::to_integral(targetEntity)
+				 << " skill_id=" << skillId;
+		return;
+	}
+
 	DamageEventComp damageEvent;
 	damageEvent.set_skill_id(skillId);
 	damageEvent.set_target(skillContext->target());

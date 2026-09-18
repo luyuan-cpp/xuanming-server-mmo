@@ -317,6 +317,43 @@ uint32_t BagService::RemoveItem(
 	return result;
 }
 
+uint32_t BagService::RemoveItemsClamped(
+	entt::entity playerEntity,
+	Bag &bag,
+	const ItemCountMap &itemsToRemove,
+	std::vector<DrainedInstance> *drainedOut,
+	uint64_t correlationId,
+	const std::string &extra)
+{
+	// 冻结期一件都不扣:理由同 RemoveItem —— 迁移在途时源端扣数,目标端拿到的
+	// 快照里那笔数量还在,等于凭空多出来。调用方必须把这个返回值当"没扣成",
+	// 而不是"扣了 0 个"。
+	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	{
+		LOG_WARN << "BagService::RemoveItemsClamped rejected: player frozen for cross-zone "
+				 << "migration. player=" << bag.PlayerGuid()
+				 << " configs=" << itemsToRemove.size();
+		return PrintStackAndReturnError(kInvalidParameter);
+	}
+
+	std::vector<DrainedInstance> drained;
+	const auto result = bag.RemoveItemsClamped(itemsToRemove, &drained);
+
+	// 逐条落流水:一条回执一个 item_uuid。这里不能像入包那样只记第一个 guid ——
+	// 一笔消耗可能横跨好几堆,少记一条就是少一条追溯线索。
+	for (const auto &entry : drained)
+	{
+		TransactionLogSystem::LogItemDestroy(
+			playerEntity, entry.guid, entry.configId, entry.amount, correlationId, extra);
+	}
+
+	if (drainedOut != nullptr)
+	{
+		drainedOut->insert(drainedOut->end(), drained.begin(), drained.end());
+	}
+	return result;
+}
+
 uint32_t BagService::MergeAndCompact(
 	entt::entity playerEntity,
 	Bag &bag,

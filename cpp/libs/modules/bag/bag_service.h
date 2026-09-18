@@ -1,6 +1,8 @@
 #pragma once
 
+#include <string>
 #include <unordered_set>
+#include <vector>
 
 #include "engine/core/type_define/type_define.h"
 
@@ -82,6 +84,28 @@ public:
 		entt::entity playerEntity,
 		Bag &bag,
 		Guid guid);
+
+	// Orchestrated 按数量扣除(config_id → count),**按实际持有夹紧**:
+	//   frozen check → Bag::RemoveItemsClamped → 逐条回执落 TX_ITEM_DESTROY。
+	//
+	// 用在"账已经在别处记好、这里只负责把数量落到背包"的场景 —— 今天唯一的
+	// 生产调用方是战斗结算的道具消耗:引擎在快照副本上记的账本可能比玩家此刻
+	// 真实持有的多(中途丢了/被扣了),契约是"不足按 0 处理并记日志,防刷"
+	// (docs/design/turn-based-battle-server.md §5.3),所以不能用全或无的语义。
+	//
+	// correlationId / extra 落进流水(战斗传 battle_id 与来源 JSON),否则事后
+	// 查不出这瓶药是哪一场战斗喝掉的,反刷追溯链断在这里。
+	// drainedOut(可为 nullptr)按抽取顺序给出被扣的 (guid, config, 数量);
+	// 调用方把它的总量与请求量一比,就知道夹紧了多少、要不要告警。
+	//
+	// 返回:跨 zone 冻结期返回 kInvalidParameter(一件不扣);其余恒 kSuccess。
+	static uint32_t RemoveItemsClamped(
+		entt::entity playerEntity,
+		Bag &bag,
+		const ItemCountMap &itemsToRemove,
+		std::vector<DrainedInstance> *drainedOut = nullptr,
+		uint64_t correlationId = 0,
+		const std::string &extra = {});
 
 	// Orchestrated MergeAndCompact (背包整理):
 	//   frozen check → Bag::MergeAndCompact → transaction log per retired instance

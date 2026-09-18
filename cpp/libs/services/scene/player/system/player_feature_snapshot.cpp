@@ -10,6 +10,7 @@
 #include "modules/bag/bag_service.h"
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/condition/condition_util.h"
+#include "proto/common/component/battle_comp.pb.h"  // InBattleComp:回合制战斗在途拒绝整理背包
 #include "modules/mission/comp/mission_comp.h"
 #include "proto/common/component/currency_comp.pb.h"
 #include "proto/scene/player_activity.pb.h"
@@ -163,6 +164,14 @@ uint32_t PlayerBagSystem::Sort(entt::entity player, uint32_t bagType, BagInfo& o
     if (bags == nullptr) return kServiceUnavailable;
     auto& bag = bags->bags[bagType];
     if (!bag.IsLayerConsistent()) return kInvalidTableData;
+    // 回合制战斗在途拒绝整理(moba-battle-target-architecture.md 红线 2)。
+    // 整理会合并堆并退役一批 item_uuid,而结算扣除的流水正是按 item_uuid 关联的;
+    // 战斗中整理会让"快照那一刻的实例集合"与结算落地时的对不上。
+    if (tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+    {
+        return kInvalidParameter;
+    }
+
     const uint32_t result = BagService::SortByPlayerRequest(player, bag, &changed);
     if (result != kSuccess) return result;
     return BuildSnapshot(player, bagType, out);

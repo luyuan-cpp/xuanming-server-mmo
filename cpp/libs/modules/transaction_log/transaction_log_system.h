@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "entt/src/entt/entity/entity.hpp"
 #include "modules/currency/constants/currency.h"
 #include "proto/common/rollback/transaction_log.pb.h"
@@ -66,19 +68,27 @@ public:
         uint64_t correlationId = 0);
 
     // Log an item being created (quest reward, GM grant, etc.).
+    // correlationId / extra 可选:战斗掉落传 battle_id 与来源 JSON,
+    // TX_ITEM_AWARD 的 proto 注释要求 extra 带来源(monster_id / drop_table),
+    // 否则回滚重放无法判断这笔奖励是否仍然有效。
     static void LogItemCreate(
         entt::entity player,
         uint64_t itemUuid,
         uint32_t configId,
         uint32_t quantity,
-        TransactionType txType);
+        TransactionType txType,
+        uint64_t correlationId = 0,
+        const std::string &extra = {});
 
     // Log an item being destroyed / consumed.
+    // correlationId / extra 同上:战斗内消耗的药水靠它关联回具体哪一场战斗。
     static void LogItemDestroy(
         entt::entity player,
         uint64_t itemUuid,
         uint32_t configId,
-        uint32_t quantity);
+        uint32_t quantity,
+        uint64_t correlationId = 0,
+        const std::string &extra = {});
 
     // ── Generic / low-level ──────────────────────────────────────────────
 

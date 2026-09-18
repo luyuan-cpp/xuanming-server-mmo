@@ -377,7 +377,8 @@ uint32_t Bag::CheckItemsAvailable(const ItemCountMap &requiredItems)
 										: PrintStackAndReturnError(kBagInsufficientItems);
 }
 
-uint32_t Bag::RemoveItems(const ItemCountMap &itemsToRemove)
+uint32_t Bag::RemoveItems(const ItemCountMap &itemsToRemove,
+						  std::vector<DrainedInstance> *drainedOut)
 {
 	// 事务语义:先确认每种物品都够扣,任何一种不够就整体失败,绝不做部分删除。
 	RETURN_ON_ERROR(CheckItemsAvailable(itemsToRemove));
@@ -386,10 +387,44 @@ uint32_t Bag::RemoveItems(const ItemCountMap &itemsToRemove)
 	// 这与 RemoveItem(guid) 的"彻底销毁 + 释放槽位"是两回事。
 	for (const auto &[configId, count] : itemsToRemove)
 	{
-		store_.DrainStacks(configId, count);
+		DrainOneConfig(configId, count, drainedOut);
 	}
 	AssertLayerConsistency();
 	return kSuccess;
+}
+
+uint32_t Bag::RemoveItemsClamped(const ItemCountMap &itemsToRemove,
+								 std::vector<DrainedInstance> *drainedOut)
+{
+	// 与上面唯一的差别:不做 CheckItemsAvailable。每个 config 扣多少由实例层
+	// 按实际持有夹紧,扣不满不算失败 —— 调用方比对请求量与回执总量就知道差了多少。
+	for (const auto &[configId, count] : itemsToRemove)
+	{
+		DrainOneConfig(configId, count, drainedOut);
+	}
+	AssertLayerConsistency();
+	return kSuccess;
+}
+
+void Bag::DrainOneConfig(uint32_t configId, uint32_t count,
+						 std::vector<DrainedInstance> *drainedOut)
+{
+	if (count == 0)
+	{
+		return;  // 0 数量的条目直接跳过,免得在回执里留一串 amount=0 的噪声
+	}
+	if (drainedOut == nullptr)
+	{
+		store_.DrainStacks(configId, count);
+		return;
+	}
+	// 实例层只知道 guid 与数量,config 由桥层补齐(分层:ItemStore 不向上暴露 config 语义)
+	std::vector<ItemStore::StackDrain> drains;
+	store_.DrainStacks(configId, count, &drains);
+	for (const auto &drain : drains)
+	{
+		drainedOut->push_back(DrainedInstance{drain.guid, configId, drain.amount});
+	}
 }
 
 uint32_t Bag::RemoveItemByPos(const RemoveItemByPosParam &param)

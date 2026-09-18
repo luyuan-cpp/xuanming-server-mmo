@@ -45,6 +45,13 @@ public:
         return row;
     }
 
+    // 战斗道具行:battle_usable / battle_heal_hp / battle_heal_mp 三列由用例自己填
+    ItemTable& AddItem(uint32_t itemTableId) {
+        auto& row = itemRows[itemTableId];
+        row.set_id(itemTableId);
+        return row;
+    }
+
     void SetCooldownMs(uint32_t cooldownTableId, uint64_t durationMs) {
         cooldownDurations[cooldownTableId] = durationMs;
     }
@@ -92,6 +99,11 @@ public:
         return it == monsterRows.end() ? nullptr : &it->second;
     }
 
+    const ItemTable* FindItem(uint32_t itemTableId) const override {
+        const auto it = itemRows.find(itemTableId);
+        return it == itemRows.end() ? nullptr : &it->second;
+    }
+
     uint64_t GetCooldownDurationMs(uint32_t cooldownTableId) const override {
         const auto it = cooldownDurations.find(cooldownTableId);
         return it == cooldownDurations.end() ? 0 : it->second;
@@ -126,6 +138,7 @@ private:
     std::map<uint32_t, SkillPermissionTable> permissionRows;
     std::map<uint32_t, DungeonTable> dungeonRows;
     std::map<uint32_t, MonsterTable> monsterRows;
+    std::map<uint32_t, ItemTable> itemRows;
     std::map<uint32_t, uint64_t> cooldownDurations;
     std::map<uint32_t, std::vector<uint32_t>> dungeonMonsterIds;
     std::map<uint32_t, double> skillDamageValues;

@@ -18,12 +18,7 @@ var (
 	// ErrRequestNotFound:不存在处于 pending 状态的好友申请。
 	// AcceptFriend 以此 fail-closed —— 没有申请就不允许建立关系。
 	ErrRequestNotFound = errors.New("no pending friend request")
-	// ErrFriendCapacityMigrationNotReady:friend_capacity 虽可能已经建表，但历史
-	// friend 边尚未与 ready 标记原子提交；此时任何 0 初始化都会破坏硬上限。
-	ErrFriendCapacityMigrationNotReady = errors.New("friend capacity migration is not ready")
 )
-
-const friendCapacityMigrationKey = "friend_capacity_backfill_v1"
 
 type FriendEntry struct {
 	FriendPlayerID uint64 `json:"friend_player_id"`
@@ -52,44 +47,6 @@ func NewFriendRepo(rdb *redis.Client, db *sql.DB, defaultTTL time.Duration) *Fri
 		db:         db,
 		defaultTTL: defaultTTL,
 	}
-}
-
-// RequireFriendCapacityReady 是 friend 写路径的 durable readiness gate。
-// CREATE TABLE 在 MySQL 中会隐式提交，所以“表存在”不能证明历史容量已经回填。
-func (r *FriendRepo) RequireFriendCapacityReady(ctx context.Context) error {
-	return requireFriendCapacityReady(ctx, r.db, false)
-}
-
-type migrationStateQuerier interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}
-
-func requireFriendCapacityReady(ctx context.Context, queryer migrationStateQuerier, lock bool) error {
-	query := "SELECT state FROM guild_schema_migration WHERE migration_key = ?"
-	if lock {
-		// 与迁移把 marker 改回 pending 的 UPDATE 互斥；共享锁持有到好友事务提交，
-		// 因此 pending 一旦可见，后续事务都无法越过门禁。
-		query += " FOR SHARE"
-	}
-	var state string
-	err := queryer.QueryRowContext(ctx, query, friendCapacityMigrationKey).Scan(&state)
-	if err == sql.ErrNoRows {
-		return friendCapacityMigrationStateError("", false)
-	}
-	if err != nil {
-		return fmt.Errorf("read friend capacity migration gate: %w", err)
-	}
-	return friendCapacityMigrationStateError(state, true)
-}
-
-func friendCapacityMigrationStateError(state string, found bool) error {
-	if found && state == "ready" {
-		return nil
-	}
-	if !found {
-		state = "missing"
-	}
-	return fmt.Errorf("%w: state=%s", ErrFriendCapacityMigrationNotReady, state)
 }
 
 // ── Redis key helpers ──────────────────────────────────────────
@@ -199,9 +156,6 @@ func (r *FriendRepo) AcceptFriend(ctx context.Context, fromPlayerID, toPlayerID 
 		return err
 	}
 	defer tx.Rollback()
-	if err := requireFriendCapacityReady(ctx, tx, true); err != nil {
-		return err
-	}
 
 	// 先用主键锁定并验证申请，但暂不修改 status。若大量申请同时指向一个玩家，
 	// 过早的 status=1->2 会让事务并发删除/插入同一 idx_to_player 前缀，真实
@@ -338,9 +292,6 @@ func (r *FriendRepo) RemoveFriend(ctx context.Context, playerID, targetPlayerID 
 		return err
 	}
 	defer tx.Rollback()
-	if err := requireFriendCapacityReady(ctx, tx, true); err != nil {
-		return err
-	}
 	firstID, secondID := playerID, targetPlayerID
 	if firstID > secondID {
 		firstID, secondID = secondID, firstID
@@ -406,11 +357,6 @@ func (r *FriendRepo) invalidateCaches(ctx context.Context, keys ...string) error
 func (r *FriendRepo) ensureFriendCapacityRows(ctx context.Context, playerIDs ...uint64) error {
 	if len(playerIDs) == 0 {
 		return nil
-	}
-	// 即使进程启动时检查过，也在写路径重查：运维重跑迁移会先把状态持久化为
-	// pending。服务若未按要求停写，这里仍拒绝制造 0 行。
-	if err := r.RequireFriendCapacityReady(ctx); err != nil {
-		return err
 	}
 	firstID, secondID := playerIDs[0], playerIDs[0]
 	if len(playerIDs) > 1 {

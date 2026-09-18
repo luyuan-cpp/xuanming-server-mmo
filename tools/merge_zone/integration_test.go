@@ -12,8 +12,9 @@ package main
 // 隔离策略:
 //   - MySQL:只用一次性库 zone_901_db / zone_902_db / merge_zone_it_db,
 //     TestMain 建、结束时 DROP。真实的 mmorpg / zone_1_db / zone_2_db 一个字节不碰。
-//     guild 表建在 merge_zone_it_db 里(DSN 的默认库),所以代码里那些不带库名的
-//     `FROM guild` 落在一次性库上。
+//     friend / friend_request 建在 merge_zone_it_db(DSN 的默认库)里。
+//   - MySQL(帮会):一次性库 merge_zone_it_guild,经 -guild-schema 指过去。帮会表自
+//     二期 B1 起住在独占库 mmorpg_guild(D-14 §8),真实库一个字节不碰。
 //   - MySQL(聚宝斋):一次性库 merge_zone_it_trade,经 -trade-schema 指过去。真实的
 //     mmorpg_trade 一个字节不碰 —— 这正是 -trade-schema 这个 flag 存在的唯一理由。
 //   - Redis:用 DB 9/10/11/12(mapping/guild/shared/friend),**且只在它们本来
@@ -44,8 +45,9 @@ const (
 	itSrcZone = uint32(901)
 	itDstZone = uint32(902)
 
-	itGuildDB   = "merge_zone_it_db"
-	itTradeDB   = "merge_zone_it_trade"
+	itDefaultDB = "merge_zone_it_db"    // -mysql-dsn 的默认库:friend / friend_request
+	itGuildDB   = "merge_zone_it_guild" // -guild-schema 指过去:guild / guild_member
+	itTradeDB   = "merge_zone_it_trade" // -trade-schema 指过去:trade_listing
 	itMappingRD = 9
 	itGuildRD   = 10
 	itSharedRD  = 11
@@ -56,7 +58,7 @@ const (
 var itBinary string
 
 func itDSN() string {
-	return itMySQLBase + itGuildDB + "?charset=utf8mb4&parseTime=true&loc=Local&multiStatements=true"
+	return itMySQLBase + itDefaultDB + "?charset=utf8mb4&parseTime=true&loc=Local&multiStatements=true"
 }
 
 func TestMain(m *testing.M) {
@@ -110,7 +112,7 @@ func TestMain(m *testing.M) {
 }
 
 func itDropAll(db *sql.DB) {
-	for _, s := range []string{zoneDBName(itSrcZone), zoneDBName(itDstZone), itGuildDB, itTradeDB} {
+	for _, s := range []string{zoneDBName(itSrcZone), zoneDBName(itDstZone), itDefaultDB, itGuildDB, itTradeDB} {
 		_, _ = db.Exec("DROP DATABASE IF EXISTS " + s)
 	}
 	ctx := context.Background()
@@ -121,29 +123,34 @@ func itDropAll(db *sql.DB) {
 	}
 }
 
-// itCreateAll 建三份一次性库。player 表的形状镜像 proto2mysql 的产物:
+// itCreateAll 建四份一次性库。player 表的形状镜像 proto2mysql 的产物:
 // player_id 主键 + 若干 MEDIUMBLOB 组件列。列的具体内容对合服无关紧要,
 // 关键是「有 player_id 列」与「两库列结构一致」。
 func itCreateAll(db *sql.DB) error {
 	stmts := []string{
+		"CREATE DATABASE " + itDefaultDB,
 		"CREATE DATABASE " + itGuildDB,
 		"CREATE DATABASE " + zoneDBName(itSrcZone),
 		"CREATE DATABASE " + zoneDBName(itDstZone),
 		"CREATE DATABASE " + itTradeDB,
-		// 镜像 deploy/mysql-init/guild_friend_tables.sql(name 全局 UNIQUE)。
+		// 只建合服步骤读写的列。完整形状由 go/schemamigrate 按 proto/guild/guild_db.proto
+		// 生成,这里不复刻第二份表结构。name_norm 是 go/guild 侧算好写进来的规范化名
+		// (NFKC → TrimSpace → 小写),唯一键 uk_guild 建在它上面;这里用生成列顶替那段
+		// 规范化,只为让「插入重名必然失败」这条不变量在测试里也成立。
 		`CREATE TABLE ` + itGuildDB + `.guild (
 			guild_id BIGINT UNSIGNED NOT NULL, name VARCHAR(64) NOT NULL,
+			name_norm VARCHAR(191) AS (LOWER(name)) STORED,
 			zone_id INT UNSIGNED NOT NULL DEFAULT 0, score BIGINT NOT NULL DEFAULT 0,
-			PRIMARY KEY (guild_id), UNIQUE KEY uk_name (name), KEY idx_zone (zone_id))`,
-		`CREATE TABLE ` + itGuildDB + `.friend (
-			player_id BIGINT UNSIGNED NOT NULL, friend_player_id BIGINT UNSIGNED NOT NULL,
-			PRIMARY KEY (player_id, friend_player_id))`,
-		`CREATE TABLE ` + itGuildDB + `.friend_request (
-			player_id BIGINT UNSIGNED NOT NULL, target_id BIGINT UNSIGNED NOT NULL,
-			status TINYINT NOT NULL DEFAULT 1, PRIMARY KEY (player_id, target_id))`,
+			PRIMARY KEY (guild_id), UNIQUE KEY uk_guild (name_norm), KEY idx_guild_0 (zone_id))`,
 		`CREATE TABLE ` + itGuildDB + `.guild_member (
 			guild_id BIGINT UNSIGNED NOT NULL, player_id BIGINT UNSIGNED NOT NULL,
 			PRIMARY KEY (guild_id, player_id))`,
+		`CREATE TABLE ` + itDefaultDB + `.friend (
+			player_id BIGINT UNSIGNED NOT NULL, friend_player_id BIGINT UNSIGNED NOT NULL,
+			PRIMARY KEY (player_id, friend_player_id))`,
+		`CREATE TABLE ` + itDefaultDB + `.friend_request (
+			player_id BIGINT UNSIGNED NOT NULL, target_id BIGINT UNSIGNED NOT NULL,
+			status TINYINT NOT NULL DEFAULT 1, PRIMARY KEY (player_id, target_id))`,
 		// 只建合服步骤读写的列 + 按 market_zone / 卖家查的索引。完整形状由 go/schemamigrate
 		// 按 proto/trade/trade_table.proto 生成,这里不复刻第二份表结构。
 		`CREATE TABLE ` + itTradeDB + `.trade_listing (
@@ -211,8 +218,13 @@ func itReset(t *testing.T) {
 			}
 		}
 	}
-	for _, tbl := range []string{"guild", "friend", "friend_request", "guild_member"} {
+	for _, tbl := range []string{"guild", "guild_member"} {
 		if _, err := db.Exec("DELETE FROM " + itGuildDB + "." + tbl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tbl := range []string{"friend", "friend_request"} {
+		if _, err := db.Exec("DELETE FROM " + itDefaultDB + "." + tbl); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -644,12 +656,36 @@ func TestIT_AssertNoGuildNameCollision(t *testing.T) {
 	if _, err := db.Exec("INSERT INTO " + itGuildDB + ".guild (guild_id, name, zone_id) VALUES (11,'alpha',901),(21,'beta',902)"); err != nil {
 		t.Fatal(err)
 	}
-	// name 全局 UNIQUE ⇒ 跨 zone 重名不可能存在 ⇒ 探测恒通过。
-	if err := assertNoGuildNameCollision(ctx, db, itSrcZone, itDstZone); err != nil {
-		t.Fatalf("guild.name is globally unique, so no collision is possible: %v", err)
+	// name_norm 全局 UNIQUE(uk_guild)⇒ 跨 zone 重名不可能存在 ⇒ 探测恒通过。
+	if err := assertNoGuildNameCollision(ctx, db, itGuildDB, itSrcZone, itDstZone); err != nil {
+		t.Fatalf("guild.name_norm is globally unique, so no collision is possible: %v", err)
 	}
 	if _, err := db.Exec("INSERT INTO " + itGuildDB + ".guild (guild_id, name, zone_id) VALUES (12,'beta',901)"); err == nil {
-		t.Fatal("the schema no longer enforces UNIQUE(name); the collision path must be revisited")
+		t.Fatal("the schema no longer enforces UNIQUE(name_norm); the collision path must be revisited")
+	}
+	// 大小写只差的名字规范化后是同一个 name_norm,同样进不来。
+	if _, err := db.Exec("INSERT INTO " + itGuildDB + ".guild (guild_id, name, zone_id) VALUES (13,'BETA',901)"); err == nil {
+		t.Fatal("uk_guild is on name_norm, so a case-only variant must be rejected too")
+	}
+}
+
+// TestIT_AssertGuildTablesReady:库在 + 两张表在才放行。库不在、库在表不在都必须拒绝 ——
+// 这两种情况和「这个区一个公会都没有」在查询结果上长得一样,放过去就是静默漏搬。
+func TestIT_AssertGuildTablesReady(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	db := itOpen(t)
+	if err := assertGuildTablesReady(ctx, db, itGuildDB); err != nil {
+		t.Fatalf("the guild tables exist but were refused: %v", err)
+	}
+	if err := assertGuildTablesReady(ctx, db, "merge_zone_it_no_such_guild"); err == nil {
+		t.Error("a missing guild schema must be refused (fail-closed)")
+	}
+	if err := assertGuildTablesReady(ctx, db, itDefaultDB); err == nil {
+		t.Error("a schema without the guild tables (guild never migrated) must be refused")
+	}
+	if err := assertGuildTablesReady(ctx, db, "merge_zone_it_guild;DROP DATABASE x"); err == nil {
+		t.Error("a schema name that is not a plain identifier must be refused before any SQL")
 	}
 }
 
@@ -660,20 +696,20 @@ func TestIT_MigrateGuildZone(t *testing.T) {
 	if _, err := db.Exec("INSERT INTO " + itGuildDB + ".guild (guild_id, name, zone_id) VALUES (11,'a',901),(12,'b',901),(21,'c',902)"); err != nil {
 		t.Fatal(err)
 	}
-	gids, err := collectGuildIDsInZone(ctx, db, itSrcZone)
+	gids, err := collectGuildIDsInZone(ctx, db, itGuildDB, itSrcZone)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(gids) != 2 || gids[0] != 11 {
 		t.Fatalf("guild ids = %v", gids)
 	}
-	if n, err := migrateGuildZone(ctx, db, itSrcZone, itDstZone, true); err != nil || n != 2 {
+	if n, err := migrateGuildZone(ctx, db, itGuildDB, itSrcZone, itDstZone, true); err != nil || n != 2 {
 		t.Fatalf("dry-run: n=%d err=%v", n, err)
 	}
 	if n := itCount(t, db, itGuildDB+".guild WHERE zone_id = 901"); n != 2 {
 		t.Fatalf("dry-run wrote: %d rows still in 901, want 2", n)
 	}
-	if n, err := migrateGuildZone(ctx, db, itSrcZone, itDstZone, false); err != nil || n != 2 {
+	if n, err := migrateGuildZone(ctx, db, itGuildDB, itSrcZone, itDstZone, false); err != nil || n != 2 {
 		t.Fatalf("apply: n=%d err=%v", n, err)
 	}
 	if n := itCount(t, db, itGuildDB+".guild WHERE zone_id = 901"); n != 0 {
@@ -701,7 +737,7 @@ func TestIT_TradeMarketZone_RewriteVerifyRestore(t *testing.T) {
 	if err := assertTradeListingReady(ctx, db, "merge_zone_it_no_such_trade"); err == nil {
 		t.Error("a missing trade schema must be refused (fail-closed)")
 	}
-	if err := assertTradeListingReady(ctx, db, itGuildDB); err == nil {
+	if err := assertTradeListingReady(ctx, db, itDefaultDB); err == nil {
 		t.Error("a schema without trade_listing (trade never migrated) must be refused")
 	}
 
@@ -713,7 +749,7 @@ func TestIT_TradeMarketZone_RewriteVerifyRestore(t *testing.T) {
 		t.Fatalf("source listing ids = %v, want [7001 7002]", ids)
 	}
 
-	cfg := auditConfig{db: db, tradeSchema: itTradeDB, src: itSrcZone, dst: itDstZone}
+	cfg := auditConfig{db: db, tradeSchema: itTradeDB, guildSchema: itGuildDB, src: itSrcZone, dst: itDstZone}
 	if r := verifyTradeMarketZoneDrained(ctx, cfg); r.Severity != "block" || isInfraAudit(r) {
 		t.Errorf("before the rewrite the verifier must block on real data: %+v", r)
 	}
@@ -1010,6 +1046,7 @@ func itRun(t *testing.T, args ...string) (string, int) {
 		"-table-list-json", itTableListFile(t),
 		"-assume-kafka-drained",
 		"-trade-schema", itTradeDB,
+		"-guild-schema", itGuildDB,
 	}
 	cmd := exec.Command(itBinary, append(base, args...)...)
 	out, err := cmd.CombinedOutput()
@@ -1246,6 +1283,35 @@ func TestIT_EndToEnd_RefusesEmptySourceAndSkipPlayerRowsWithoutAttestation(t *te
 	if !strings.Contains(out, "trade SKIPPED") || !strings.Contains(out, "silent no-op") {
 		t.Errorf("-skip-trade-mysql should pass the trade gate and stop at the empty-source guard:\n%s", out)
 	}
+
+	// 帮会库不在 = 拒绝(fail-closed),在任何写之前;报错要点名迁移命令与两个跳过开关。
+	out, code = itRun(t, "-source-zone", "901", "-target-zone", "902", "-dry-run",
+		"-guild-schema", "merge_zone_it_no_such_guild", "-manifest-path", filepath.Join(t.TempDir(), "m4.json"))
+	if code == 0 {
+		t.Fatalf("a merge without the guild schema was accepted:\n%s", out)
+	}
+	if !strings.Contains(out, "-skip-guild-mysql") || !strings.Contains(out, "-migrate") {
+		t.Errorf("the guild refusal should name the migration and the skip flags:\n%s", out)
+	}
+	// 只给一个跳过开关不够:榜单步同样读 guild 表,门禁必须照拦。
+	out, code = itRun(t, "-source-zone", "901", "-target-zone", "902", "-dry-run", "-skip-guild-mysql",
+		"-guild-schema", "merge_zone_it_no_such_guild", "-manifest-path", filepath.Join(t.TempDir(), "m5.json"))
+	if code == 0 {
+		t.Fatalf("-skip-guild-mysql alone slipped past the guild gate:\n%s", out)
+	}
+	if !strings.Contains(out, "-skip-guild-rank") {
+		t.Errorf("the refusal should say that the rank step also needs the table:\n%s", out)
+	}
+	// 两个都给:越过帮会门禁,停在后面的空源区守卫上。
+	out, code = itRun(t, "-source-zone", "901", "-target-zone", "902", "-dry-run",
+		"-skip-guild-mysql", "-skip-guild-rank",
+		"-guild-schema", "merge_zone_it_no_such_guild", "-manifest-path", filepath.Join(t.TempDir(), "m6.json"))
+	if code == 0 {
+		t.Fatalf("an empty source zone was accepted:\n%s", out)
+	}
+	if !strings.Contains(out, "guild SKIPPED") || !strings.Contains(out, "silent no-op") {
+		t.Errorf("both guild skips should pass the guild gate and stop at the empty-source guard:\n%s", out)
+	}
 }
 
 func TestIT_Unmerge_RefusesMissingTradeSchemaBeforeAnyWrite(t *testing.T) {
@@ -1274,6 +1340,40 @@ func TestIT_Unmerge_RefusesMissingTradeSchemaBeforeAnyWrite(t *testing.T) {
 	}
 	if v, _ := mapRdb.Get(ctx, playerZoneKeyPrefix+"9961").Result(); v != dstVal {
 		t.Errorf("the mapping was restored before the trade preflight refused: %q", v)
+	}
+	for _, z := range []uint32{itSrcZone, itDstZone} {
+		if n, _ := mapRdb.Exists(ctx, mergeFenceKey(z)).Result(); n != 0 {
+			t.Errorf("merge fence for zone %d left behind by a refused unmerge", z)
+		}
+	}
+}
+
+func TestIT_Unmerge_RefusesMissingGuildSchemaBeforeAnyWrite(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	mapRdb := itRedis(t, itMappingRD)
+	// 合服之后的状态:玩家已指向目标区,清单里记着一个搬过的公会。
+	dstVal := strconv.FormatUint(uint64(itDstZone), 10)
+	mapRdb.Set(ctx, playerZoneKeyPrefix+"9962", dstVal, 0)
+	manifest := filepath.Join(t.TempDir(), "merge.json")
+	m := newMergeManifest("run-guild-preflight", itSrcZone, itDstZone, "it", time.Now())
+	m.PlayerIDs = []uint64{9962}
+	m.GuildIDs = []uint64{11}
+	if err := saveManifest(manifest, m); err != nil {
+		t.Fatal(err)
+	}
+
+	// -guild-schema 指错:必须在 5' mapping 改回之前就拒绝(先证明,再写)。
+	out, code := itRun(t, "-mode", "unmerge", "-manifest-path", manifest, "-apply",
+		"-guild-schema", "merge_zone_it_no_such_guild")
+	if code == 0 {
+		t.Fatalf("an unmerge whose manifest lists guilds was accepted without the guild schema:\n%s", out)
+	}
+	if !strings.Contains(out, "guilds to restore") {
+		t.Errorf("the refusal should say why (guilds in the manifest):\n%s", out)
+	}
+	if v, _ := mapRdb.Get(ctx, playerZoneKeyPrefix+"9962").Result(); v != dstVal {
+		t.Errorf("the mapping was restored before the guild preflight refused: %q", v)
 	}
 	for _, z := range []uint32{itSrcZone, itDstZone} {
 		if n, _ := mapRdb.Exists(ctx, mergeFenceKey(z)).Result(); n != 0 {
@@ -1407,7 +1507,8 @@ func TestIT_Audit_ExitsTwoWhenAHandleIsMissing(t *testing.T) {
 	itReset(t)
 	// 指向一个没人监听的 Redis:审计跑不成,必须 exit 2(不是 0,也不是 1)。
 	cmd := exec.Command(itBinary, "-mode", "audit", "-source-zone", "901", "-target-zone", "902",
-		"-mysql-dsn", itDSN(), "-redis-addr", "127.0.0.1:6399", "-table-list-json", itTableListFile(t))
+		"-mysql-dsn", itDSN(), "-redis-addr", "127.0.0.1:6399", "-table-list-json", itTableListFile(t),
+		"-guild-schema", itGuildDB, "-trade-schema", itTradeDB)
 	out, err := cmd.CombinedOutput()
 	code := 0
 	if ee, ok := err.(*exec.ExitError); ok {

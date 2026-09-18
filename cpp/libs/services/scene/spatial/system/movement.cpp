@@ -3,6 +3,7 @@
 #include "generated/attribute/actorbaseattributess2c_attribute_sync.h"
 #include "player/comp/afk_comp.h"
 #include "player/comp/player_frozen_comp.h"
+#include "proto/common/component/battle_comp.pb.h"  // InBattleComp:战斗在途不积分位移
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/scene/player_state_attribute_sync.pb.h"
 #include "spatial/comp/nav_comp.h"
@@ -45,8 +46,10 @@ void MovementSystem::Update(const double delta)
 	// has the marshaled Transform and any further movement here would be
 	// discarded on ACK + DestroyPlayer. See cross-zone-readiness-audit.md
 	// §11.2 (passive-tick exclusion catalogue).
+	// InBattleComp:回合制战斗在途不积分位移(进战时的残留速度会让玩家在战斗中
+	// 一路飘走,战后位置与客户端画面对不上)
 	auto view = tlsEcs.actorRegistry.view<Transform, Velocity>(
-		entt::exclude<Acceleration, AfkComp, PlayerFrozenComp>);
+		entt::exclude<Acceleration, AfkComp, PlayerFrozenComp, InBattleComp>);
 	for (auto&& [entity, transform, velocity] : view.each())
 	{
 		if (velocity.x() == 0.0 && velocity.y() == 0.0 && velocity.z() == 0.0)

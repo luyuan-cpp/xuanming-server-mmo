@@ -52,6 +52,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -162,6 +163,11 @@ func discoverPlayerTables(ctx context.Context, db *sql.DB, schema string, candid
 	sort.Strings(out)
 	return out, nil
 }
+
+// schemaNamePattern:MySQL 未加引号标识符里最保守的子集,长度上限 64 同 MySQL。
+// 库名不是绑定参数,只能直接拼进语句,所以形状校验是这条拼接唯一的注入防线;
+// -trade-schema / -guild-schema 共用它。
+var schemaNamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
 
 // assertSchemaExists 是目标区存在性的硬证据:zone_{N}_db 建过没有。
 // 合服前 zone-up 过的 zone 一定有这个库(go/db 的 AutoCreateDatabase 或

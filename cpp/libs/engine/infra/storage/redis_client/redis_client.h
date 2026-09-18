@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <functional>
 #include <string>
 #include <memory>
 #include <unordered_map>
@@ -16,6 +17,25 @@
 #include "engine/core/type_define/type_define.h"
 
 static constexpr const char* kSaveAndMarkLuaScript = R"(
+    redis.call('SET', KEYS[1], ARGV[1])
+    redis.call('SADD', 'dirty_keys_set', KEYS[1])
+    return 1
+)";
+
+// 带归属校验的存盘变体(scene-owner-reentry-barrier.md §6.2 方案 a)。
+// KEYS[1]=数据键, KEYS[2]=guard 键(如 player:{id}:owner_epoch),
+// ARGV[1]=payload, ARGV[2]=调用方缓存的期望值。
+// 比对与写入在同一段脚本里完成,没有 GET→SET 之间的 TOCTOU。
+//
+// 注意 Redis Lua 里 GET 缺键返回 false,与任何字符串都不相等,所以 guard 键
+// 不存在同样返回 0(fail-closed)。这是有意为之:调用方既然带着非 0 的期望
+// 值来,sidecar 却查不到,说明键被清或键名劈叉,此时写下去等于在没有归属
+// 证据的情况下覆盖数据。兼容窗口(epoch==0 未铸造)由调用方走无 guard 的
+// Save 跳过校验,不在脚本里放宽。
+static constexpr const char* kSaveIfGuardLuaScript = R"(
+    if redis.call('GET', KEYS[2]) ~= ARGV[2] then
+        return 0
+    end
     redis.call('SET', KEYS[1], ARGV[1])
     redis.call('SADD', 'dirty_keys_set', KEYS[1])
     return 1
@@ -92,6 +112,12 @@ public:
 		// Set when the element is enqueued into pending_retry_queue_ /
 		// pending_save_queue_.
 		std::chrono::steady_clock::time_point next_retry_at{};
+		// 归属校验(仅 Save 路径)。guard_key 为空 = 无校验,行为与旧 Save 完全
+		// 一致;非空时只有 Redis 里 guard_key 的当前值与 guard_expected 逐字节
+		// 相等才允许写入。两者随 element 走,重试 / NOSCRIPT 重发都用发起时的
+		// 期望值,不回头问调用方 —— 一次存盘绑定的是"发起那一刻我自认的归属"。
+		std::string guard_key;
+		std::string guard_expected;
 	};
 
 	using ElementPtr = std::shared_ptr<Element>;
@@ -118,8 +144,25 @@ public:
 	// load_failed_callback_,存盘路径缺这一半是接口级的不对称。
 	using SaveFailedCallback = std::function<void(MessageKey, const std::string& redisKey, int retryCount)>;
 
+	// 带 guard 的存盘被 Redis 原子拒绝(Lua 返回 0)的通知。
+	//
+	// 这不是故障,是"被废黜":本节点缓存的归属值已落后于 Redis,说明
+	// scene_manager 已把该玩家改派给别的节点。所以它既不走 save_failed_callback_
+	// (那一条的含义是"Redis 不可用,仍在重试"),也不重试 —— 再存只会再被拒,
+	// 而且每次重试都是在给已经不属于自己的数据制造覆盖窗口。同 key 排队中的
+	// 更新值一并丢弃,理由相同。调用方据此销毁本地实体、停止对该玩家的一切
+	// 存盘,且不得发 relocate(reentry-barrier §3.3 / §6.2)。
+	using SaveRejectedCallback = std::function<void(MessageKey, const std::string& redisKey)>;
+
 	using HiredisPtr = std::unique_ptr<hiredis::Hiredis>;
 
+	// 回调绑定约定:本类所有 hiredis 回调都以裸 this 经 std::bind 绑定,而不是
+	// AGENTS §11.7 要求的 weak_ptr。这是 §11.7 允许的"与被绑对象同寿命"例外:
+	// 本类由 RedisSystem 以 thread_local 独占持有,hiredis_ 由同线程的
+	// RedisManager 持有,两者寿命都覆盖整个 EventLoop;回调与 loop 同线程,
+	// 且 RedisSystem::Shutdown 先摘定时器与重连回调再释放本类。若将来本类改为
+	// 可在 loop 存活期间随意销毁(例如按玩家创建),必须改成
+	// enable_shared_from_this + weak_ptr 捕获,不能沿用这里的写法。
 	explicit MessageAsyncClient(HiredisPtr& hiredis)
 		: hiredis_(hiredis)
 	{
@@ -131,44 +174,23 @@ public:
 	void SetLoadCallback(const EventCallback& cb) { load_callback_ = cb; }
 	void SetLoadFailedCallback(const FailedCallback& cb) { load_failed_callback_ = cb; }
 	void SetSaveFailedCallback(const SaveFailedCallback& cb) { save_failed_callback_ = cb; }
+	void SetSaveRejectedCallback(const SaveRejectedCallback& cb) { save_rejected_callback_ = cb; }
 
 
 	void Save(const MessageValuePtr& message, const MessageKey& key)
 	{
-		ElementPtr element = std::make_shared<Element>();
-		element->message_key = key;
-		element->redis_key = full_name() + ":" + std::to_string(key);
-		element->message_value = message;
+		EnqueueSave(message, key, std::string(), std::string());
+	}
 
-		// Serialize once; retry path re-uses this buffer.
-		const size_t size = message->ByteSizeLong();
-		element->serialized_payload.resize(size);
-		if (size > 0 && !message->SerializeToArray(element->serialized_payload.data(), static_cast<int>(size)))
-		{
-			LOG_ERROR << "SerializeToArray failed for key " << key;
-			return;
-		}
-
-		// A key may have only one write in flight. If a periodic save is still
-		// waiting for its reply when logout produces a newer full snapshot, keep
-		// only that newer value and do not let the older completion finish logout.
-		// This also prevents an old failed retry from overwriting a later success.
-		if (saving_queue_.find(element->redis_key) != saving_queue_.end())
-		{
-			pending_save_queue_[element->redis_key] = element;
-			return;
-		}
-
-		if (!hiredis_ || !hiredis_->connected())
-		{
-			LOG_WARN << "Redis not connected, queueing Save for retry: " << element->redis_key;
-			// next_retry_at default-constructed (epoch); periodic timer will pick it up
-			// as soon as Redis reconnects.
-			pending_save_queue_[element->redis_key] = element;
-			return;
-		}
-
-		IssueSave(element);
+	// 带归属校验的存盘:只有 Redis 里 guardKey 的当前值 == guardExpected 时才
+	// 原子地写入并标脏,否则整条写入被丢弃并回调 save_rejected_callback_
+	// (见 kSaveIfGuardLuaScript)。guardKey 为空退化为无校验的 Save。
+	// 期望值按调用方与铸造方约定的文本格式传入(owner_epoch 是纯十进制整数
+	// 字符串),本类不解释其含义,只做逐字节比对。
+	void Save(const MessageValuePtr& message, const MessageKey& key,
+			  const std::string& guardKey, const std::string& guardExpected)
+	{
+		EnqueueSave(message, key, guardKey, guardExpected);
 	}
 
 	void AsyncLoad(const MessageKey& key, int retry_count = 0)
@@ -257,9 +279,13 @@ public:
 		// Cached EVALSHA hash is bound to the previous server connection;
 		// drop it so we re-SCRIPT LOAD on the new connection. A SCRIPT LOAD that
 		// was in flight on the dead connection will never clear this flag.
-		script_sha1_.clear();
-		script_load_in_flight_ = false;
-		EnsureScriptLoaded();
+		// 两个脚本槽位都要清:带 guard 的存盘与普通存盘各有一份 SHA。
+		for (ScriptSlot* slot : {&save_script_, &guard_script_})
+		{
+			slot->sha1.clear();
+			slot->load_in_flight = false;
+			EnsureScriptLoaded(*slot);
+		}
 
 		const auto now = std::chrono::steady_clock::now();
 		for (auto &[k, v] : loading_queue_)
@@ -405,11 +431,68 @@ private:
 		}
 	}
 
-	// Lazily load the SET+SADD Lua script and cache its SHA1 for EVALSHA.
-	// Called eagerly from OnReconnected and lazily from IssueSave when sha is empty.
-	void EnsureScriptLoaded()
+	// 一段 Lua 脚本在当前连接上的缓存状态。sha1 为空 = 尚未加载(发命令时走
+	// EVAL 兜底),load_in_flight 挡住重复 SCRIPT LOAD。普通存盘与带 guard 的
+	// 存盘各一份,因为 SHA 是按脚本文本算的。
+	struct ScriptSlot
 	{
-		if (!script_sha1_.empty() || script_load_in_flight_)
+		const char* source = nullptr;
+		std::string sha1;
+		bool load_in_flight = false;
+	};
+
+	// 两条 Save 重载共用的入队逻辑;guardKey 为空即无校验。
+	void EnqueueSave(const MessageValuePtr& message, const MessageKey& key,
+					 const std::string& guardKey, const std::string& guardExpected)
+	{
+		ElementPtr element = std::make_shared<Element>();
+		element->message_key = key;
+		element->redis_key = full_name() + ":" + std::to_string(key);
+		element->message_value = message;
+		element->guard_key = guardKey;
+		element->guard_expected = guardExpected;
+
+		// Serialize once; retry path re-uses this buffer.
+		const size_t size = message->ByteSizeLong();
+		element->serialized_payload.resize(size);
+		if (size > 0 && !message->SerializeToArray(element->serialized_payload.data(), static_cast<int>(size)))
+		{
+			LOG_ERROR << "SerializeToArray failed for key " << key;
+			return;
+		}
+
+		// A key may have only one write in flight. If a periodic save is still
+		// waiting for its reply when logout produces a newer full snapshot, keep
+		// only that newer value and do not let the older completion finish logout.
+		// This also prevents an old failed retry from overwriting a later success.
+		if (saving_queue_.find(element->redis_key) != saving_queue_.end())
+		{
+			pending_save_queue_[element->redis_key] = element;
+			return;
+		}
+
+		if (!hiredis_ || !hiredis_->connected())
+		{
+			LOG_WARN << "Redis not connected, queueing Save for retry: " << element->redis_key;
+			// next_retry_at default-constructed (epoch); periodic timer will pick it up
+			// as soon as Redis reconnects.
+			pending_save_queue_[element->redis_key] = element;
+			return;
+		}
+
+		IssueSave(element);
+	}
+
+	ScriptSlot& ScriptSlotFor(const Element& element)
+	{
+		return element.guard_key.empty() ? save_script_ : guard_script_;
+	}
+
+	// Lazily load a Lua script and cache its SHA1 for EVALSHA.
+	// Called eagerly from OnReconnected and lazily from IssueSave when sha is empty.
+	void EnsureScriptLoaded(ScriptSlot& slot)
+	{
+		if (!slot.sha1.empty() || slot.load_in_flight)
 		{
 			return;
 		}
@@ -417,22 +500,67 @@ private:
 		{
 			return;
 		}
-		script_load_in_flight_ = true;
-		hiredis_->command(std::bind(&MessageAsyncClient::OnSaveScriptLoaded, this, std::placeholders::_1, std::placeholders::_2),
-						  "SCRIPT LOAD %s", kSaveAndMarkLuaScript);
+		slot.load_in_flight = true;
+		hiredis_->command(std::bind(&MessageAsyncClient::OnScriptLoaded, this, std::placeholders::_1, std::placeholders::_2, std::ref(slot)),
+						  "SCRIPT LOAD %s", slot.source);
 	}
 
-	void OnSaveScriptLoaded(hiredis::Hiredis * /*c*/, redisReply *reply)
+	void OnScriptLoaded(hiredis::Hiredis * /*c*/, redisReply *reply, ScriptSlot& slot)
 	{
-		script_load_in_flight_ = false;
+		slot.load_in_flight = false;
 		if (!reply || reply->type != REDIS_REPLY_STRING)
 		{
 			LOG_ERROR << "SCRIPT LOAD failed for " << full_name()
 					  << " (reply " << (reply ? std::to_string(reply->type) : std::string("null")) << "); will retry on next save";
 			return;
 		}
-		script_sha1_.assign(reply->str, reply->len);
-		LOG_INFO << "SCRIPT LOAD ok for " << full_name() << " sha1=" << script_sha1_;
+		slot.sha1.assign(reply->str, reply->len);
+		LOG_INFO << "SCRIPT LOAD ok for " << full_name() << " sha1=" << slot.sha1;
+	}
+
+	// 按 element 是否带 guard 选脚本与参数形状发出写命令。
+	// useEvalSha=false 用于 SCRIPT LOAD 尚未完成、或刚收到 NOSCRIPT 的场合,
+	// 此时把脚本全文随命令发出,保证不因缓存缺失而丢一次存盘。
+	// 参数顺序是与 Lua 脚本的契约:普通版 KEYS[1]=数据键 / ARGV[1]=payload;
+	// guard 版 KEYS[1]=数据键, KEYS[2]=guard 键 / ARGV[1]=payload, ARGV[2]=期望值。
+	int SendSaveCommand(const ElementPtr &element, bool useEvalSha)
+	{
+		const hiredis::Hiredis::CommandCallback onSaved =
+			std::bind(&MessageAsyncClient::OnSaved, this, std::placeholders::_1, std::placeholders::_2, element);
+		const ScriptSlot& slot = ScriptSlotFor(*element);
+		if (element->guard_key.empty())
+		{
+			if (useEvalSha)
+			{
+				return hiredis_->command(onSaved,
+										 "EVALSHA %b 1 %b %b",
+										 slot.sha1.data(), slot.sha1.size(),
+										 element->redis_key.c_str(), element->redis_key.length(),
+										 element->serialized_payload.data(), element->serialized_payload.size());
+			}
+			return hiredis_->command(onSaved,
+									 "EVAL %s 1 %b %b",
+									 slot.source,
+									 element->redis_key.c_str(), element->redis_key.length(),
+									 element->serialized_payload.data(), element->serialized_payload.size());
+		}
+		if (useEvalSha)
+		{
+			return hiredis_->command(onSaved,
+									 "EVALSHA %b 2 %b %b %b %b",
+									 slot.sha1.data(), slot.sha1.size(),
+									 element->redis_key.c_str(), element->redis_key.length(),
+									 element->guard_key.c_str(), element->guard_key.length(),
+									 element->serialized_payload.data(), element->serialized_payload.size(),
+									 element->guard_expected.c_str(), element->guard_expected.length());
+		}
+		return hiredis_->command(onSaved,
+								 "EVAL %s 2 %b %b %b %b",
+								 slot.source,
+								 element->redis_key.c_str(), element->redis_key.length(),
+								 element->guard_key.c_str(), element->guard_key.length(),
+								 element->serialized_payload.data(), element->serialized_payload.size(),
+								 element->guard_expected.c_str(), element->guard_expected.length());
 	}
 
 	void IssueSave(const ElementPtr &element)
@@ -452,27 +580,12 @@ private:
 			return;
 		}
 
-		EnsureScriptLoaded();
+		ScriptSlot& slot = ScriptSlotFor(*element);
+		EnsureScriptLoaded(slot);
 
 		saving_queue_[element->redis_key] = element;
-		int ret = REDIS_OK;
-		if (!script_sha1_.empty())
-		{
-			ret = hiredis_->command(std::bind(&MessageAsyncClient::OnSaved, this, std::placeholders::_1, std::placeholders::_2, element),
-									"EVALSHA %b 1 %b %b",
-									script_sha1_.data(), script_sha1_.size(),
-									element->redis_key.c_str(), element->redis_key.length(),
-									element->serialized_payload.data(), element->serialized_payload.size());
-		}
-		else
-		{
-			// Fall back to EVAL while SCRIPT LOAD is in flight or after a failure.
-			ret = hiredis_->command(std::bind(&MessageAsyncClient::OnSaved, this, std::placeholders::_1, std::placeholders::_2, element),
-									"EVAL %s 1 %b %b",
-									kSaveAndMarkLuaScript,
-									element->redis_key.c_str(), element->redis_key.length(),
-									element->serialized_payload.data(), element->serialized_payload.size());
-		}
+		// Fall back to EVAL while SCRIPT LOAD is in flight or after a failure.
+		const int ret = SendSaveCommand(element, /*useEvalSha=*/!slot.sha1.empty());
 
 		if (ret != REDIS_OK)
 		{
@@ -547,17 +660,15 @@ private:
 		{
 			const std::string err = reply->str ? reply->str : "";
 			// NOSCRIPT: server flushed scripts (FLUSHALL/SCRIPT FLUSH/restart) -> reload and retry as EVAL once.
+			// 只清 element 自己用的那个槽位:两份脚本独立缓存,另一份未必也丢了。
 			if (err.compare(0, 8, "NOSCRIPT") == 0)
 			{
 				LOG_WARN << "EVALSHA NOSCRIPT for key: " << element->redis_key << " -- reloading script and retrying";
-				script_sha1_.clear();
-				EnsureScriptLoaded();
+				ScriptSlot& slot = ScriptSlotFor(*element);
+				slot.sha1.clear();
+				EnsureScriptLoaded(slot);
 				// Immediate retry as EVAL (do not increment retry_count for this case).
-				const int ret = hiredis_->command(std::bind(&MessageAsyncClient::OnSaved, this, std::placeholders::_1, std::placeholders::_2, element),
-												  "EVAL %s 1 %b %b",
-												  kSaveAndMarkLuaScript,
-												  element->redis_key.c_str(), element->redis_key.length(),
-												  element->serialized_payload.data(), element->serialized_payload.size());
+				const int ret = SendSaveCommand(element, /*useEvalSha=*/false);
 				if (ret != REDIS_OK)
 				{
 					saving_queue_.erase(element->redis_key);
@@ -568,6 +679,27 @@ private:
 			LOG_ERROR << "Redis Save error for key: " << element->redis_key << " err=" << err;
 			saving_queue_.erase(inFlight);
 			QueueSaveForRetry(element);
+			return;
+		}
+
+		// 带 guard 的脚本返回整数 0 = 归属校验不通过,本节点已被废黜。
+		// 这是终态而不是错误:不重试(再存只会再被拒),不走 save_failed_callback_
+		// (那条语义是"Redis 不可用,仍在重试"),也不发布 save_callback_(调用方
+		// 会把它当成功并继续退出链)。同 key 排队中的更新值一并丢弃 —— 它带的是
+		// 同一份已作废的归属,发出去只会再收一个 0,却多开一次覆盖窗口。
+		// 只对带 guard 的 element 解释这个 0:普通脚本恒返回 1,若真收到 0 是
+		// 服务端异常,维持旧行为(按成功处理)而不是静默丢数据。
+		if (!element->guard_key.empty() && reply->type == REDIS_REPLY_INTEGER && reply->integer == 0)
+		{
+			LOG_WARN << "Redis Save rejected by owner guard for key: " << element->redis_key
+					 << " guard=" << element->guard_key << " expected=" << element->guard_expected
+					 << " -- this node no longer owns the data; dropping in-flight and pending values";
+			saving_queue_.erase(inFlight);
+			pending_save_queue_.erase(element->redis_key);
+			if (save_rejected_callback_)
+			{
+				save_rejected_callback_(element->message_key, element->redis_key);
+			}
 			return;
 		}
 
@@ -698,10 +830,11 @@ private:
 	LoadingQueue pending_retry_queue_;
 	LoadingQueue saving_queue_;
 	LoadingQueue pending_save_queue_;
-	std::string script_sha1_;
-	bool script_load_in_flight_ = false;
+	ScriptSlot save_script_{kSaveAndMarkLuaScript};
+	ScriptSlot guard_script_{kSaveIfGuardLuaScript};
 	EventCallback save_callback_;
 	SaveFailedCallback save_failed_callback_;
+	SaveRejectedCallback save_rejected_callback_;
 	EventCallback load_callback_;
 	FailedCallback load_failed_callback_;
 };

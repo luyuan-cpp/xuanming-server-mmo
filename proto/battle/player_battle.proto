@@ -24,6 +24,10 @@ message BattleStateS2C {
   uint64 action_deadline_ms = 4;          // 本回合行动提交截止(Unix 毫秒)
   eBattleOutcome outcome = 5;
   repeated uint64 pending_actor_ids = 6;  // 尚未提交行动的单位
+  // 收信人本人的剩余战斗道具(item_table_id → 剩余个数,按 id 升序)。
+  // 只在发给本人的那一份里填,观众与其他参战者收到的恒为空 —— 道具余量是私有信息。
+  // 有了它,客户端重连补拉后不再对"已经用掉几个"一无所知(原先只能靠累计回合事件推算)。
+  repeated BattleItemEntry self_items = 7;
 }
 
 message BattleStartS2C {

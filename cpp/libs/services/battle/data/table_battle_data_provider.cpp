@@ -6,6 +6,7 @@
 #include "table/code/skillpermission_table.h"
 #include "table/code/dungeon_table.h"
 #include "table/code/monster_table.h"
+#include "table/code/item_table.h"
 
 namespace turnbattle {
 
@@ -28,6 +29,10 @@ const DungeonTable* TableBattleDataProvider::FindDungeon(uint32_t dungeonTableId
 
 const MonsterTable* TableBattleDataProvider::FindMonster(uint32_t monsterTableId) const {
     return MonsterTableManager::Instance().FindByIdSilent(monsterTableId).first;
+}
+
+const ItemTable* TableBattleDataProvider::FindItem(uint32_t itemTableId) const {
+    return ItemTableManager::Instance().FindByIdSilent(itemTableId).first;
 }
 
 uint64_t TableBattleDataProvider::GetCooldownDurationMs(uint32_t cooldownTableId) const {

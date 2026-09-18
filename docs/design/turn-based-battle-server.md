@@ -144,7 +144,10 @@ session_id / 各类 table_id / 回合数 `uint32`;时间戳 `uint64` 毫秒;属�
 - 回合结构:收集全员行动(带 `action_deadline`)→ 按 `speed` 降序结算(同速按 actor_id 稳定序)
   → 逐个执行(死亡单位跳过)→ 回合末 buff tick(周期效果/持续减一/到期移除)→ 胜负判定;
 - 行动类型:`ATTACK`(普攻)/ `SKILL` / `DEFEND`(本回合受伤减半)/ `FLEE`(逃跑,成功率基于速度差,
-  PVE 可逃,PVP 一期不可逃)/ `ITEM`(从快照道具副本扣,结算回写);
+  PVE 可逃,PVP 一期不可逃)/ `ITEM`(从快照道具副本扣,结算回写;效果读 `ItemTable.battle_*` 列,
+  可指向同队存活单位,PVP 每人每场限 `kMaxItemUsesPerBattlePvp` 次 —— 2026-09-17 D44/D45/D47,见 §20);
+- 技能只收回合制可施放的类型(剔除被动 / 开关 / 持续施法);快照带来的 buff 进引擎前先清洗
+  (剔除控制类与瞬时类、`caster_id` 域改写)—— D49/D50,见 §20;
 - 超时/掉线默认行动:普攻(随机存活敌方目标,用引擎 RNG 保确定性);
 - 胜负:一方全灭;`max_rounds`(DungeonTable.time_limit 换算或默认 30 回合)打满 → 进攻方判负;
 - RNG:`std::mt19937_64(seed)`,所有随机(暴击/默认目标/逃跑)只走引擎 RNG,禁 `tlsRandom`/`rand()`。
@@ -197,8 +200,11 @@ class TurnBattleEngine {
   pending(§3.2);
 - 登录链路挂钩:加载完成后应用 pending 结算;RECONNECT 且有 InBattleComp → 重发 BindBattleEvent;
 - reaper:低频扫描(挂 timer 或并入既有慢频系统),`deadline_ms` 过期即作废解冻;
-- 冻结清单(InBattleComp 存在时拒绝):再次排队/开战、交易、使用改属性道具、切场景、跨 zone 迁移;
-  放行:聊天、邮件收取(不动战斗属性部分)、好友。
+- 冻结清单(InBattleComp 存在时拒绝):再次排队/开战、交易、使用改属性道具、切场景、跨 zone 迁移、
+  **实时技能(施法者与目标两侧)、移动上报与位移积分、背包整理、GM 回滚类写操作**(2026-09-17 D48);
+  放行:聊天、邮件收取(不动战斗属性部分)、好友、任务领奖(只增不减,方向安全)。
+  **闸只放客户端入口层与实时战斗落点,不得下沉到 `BagService` / `CurrencySystem`** ——
+  结算入账时 `InBattleComp` 还挂着,下沉会把结算自己挡住。
 
 ### 5.4 match 服务 `go/match/`
 
@@ -498,7 +504,9 @@ B 收到观战结束推送;B 观战中点排队 → 观战被清退(NotifySpecta
   已初始化但 health=0(阵亡)→ 恢复满血满蓝(基础复活,防永久卡死)。残血带出战斗(D4)在同会话 battle→battle 保持,不受影响(此函数只在 DB 加载/登录跑)。
 
 ### 15.4 已知缺口
-- 经验/道具落地:引擎已产出 exp_gain/items_gained,scene 侧金币真入账,经验/掉落需先建经验/等级/背包系统。
+- ~~经验/道具落地~~:**道具与掉落已于 2026-09-17 落地**(引擎摇掉落 → scene 真扣真发,见 §20 与
+  [turn-battle-gap-closure.md](./turn-battle-gap-closure.md));**经验仍未入账** —— 全仓没有经验值组件与升级
+  结算系统(只有 `LevelComp` 与 `PlayerUpgradeEvent` 事件壳),结算里仍只记日志。
 - 怪物 AI 用技能未做(只普攻);技能 damage 表达式对低级 PVE 偏大,配怪技能前要重平衡。
 - class_id 未随 PlayerAllData 下发 scene,玩家初始属性/技能暂全职业统一(取 Class 首行)。
 - 完整死亡/复活流程(复活点/惩罚/道具)待产品细化。**基线(2026-09-02)**:战斗结算把玩家打到 0 血
@@ -661,3 +669,15 @@ obot.exe -c etc/battle_smoke_cross_zone.yaml` → `CROSS_ZONE_MATCH_OK … a_dir
 3. **D38 专项(旧模式)**:双 gate 起服,robot 战斗中触发 `RedirectToGate`(或用 `dev_tools.ps1` 把玩家的 gate 迁移),期望:目标 gate 日志出现 `BindBattleEvent` 处理记录、客户端收到 `NotifyBattleReconnect`(消息号 `BattleClientPlayerNotifyBattleReconnectMessageId`)、随后 `GetBattleState` 成功、战斗继续到 `BATTLE_SMOKE_OK`;改动前同一场景战斗断掉(对照)。
 4. **Unity 实机**(客户端仓 `tools/run_crosszone_pair.ps1`):`DevAutoPilot` 的 `BattleEnd` 行 `direct_turns == turns`,battle 日志有 `battle 直连握手成功 … signature_checked=1` 与 `battle 关闭房间全部直连`。
 5. 任一步失败:保留 scene / gate / battle 日志与失败 step 名,不重试、不改判据。
+
+## 20. 回合制战斗缺口收口 G1–G9 索引(2026-09-17)
+
+- 详细设计、决策 D41–D50、改动集与 Codex 验证清单:[turn-battle-gap-closure.md](./turn-battle-gap-closure.md)。
+- 一句话:掉落(Monster 表加 `drop` 槽 + 引擎终局摇点 + scene 真入包)、战斗内用药(Item 表加三列、
+  可给队友、PVP 限次、提交回错误码)、消耗按实际持有夹紧扣除并逐条落流水、局中闸补五处、
+  快照 buff 与技能进引擎前清洗、战斗状态按收信人裁剪并回传本人道具余量、Item 表并入配表指纹。
+- **契约影响**:配表指纹变更(scene 与 battle 必须同版本同批替换);`BattleStateS2C` 新增
+  `self_items = 7`(需 regen);tip 零新增。
+- G9(结算路由固定在开局)已由 2026-09-08 的 R07 结算出箱修掉主体,本轮只更正文档口径,
+  残留是首投最多约 10s 的延迟。§3.2 / §6 / §7 对 `battle:settlement:pending:*` 写者的描述仍是
+  R07 之前的旧口径(写者不只 scene,battle 节点也先写),待一并订正。

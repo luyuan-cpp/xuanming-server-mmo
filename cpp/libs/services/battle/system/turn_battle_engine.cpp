@@ -8,6 +8,7 @@
 #include "muduo/base/Logging.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "table/proto/tip/skill_error_tip.pb.h"
+#include "table/proto/tip/bag_error_tip.pb.h"
 
 // 回合制战斗确定性引擎实现(设计文档 §5.1)。
 //
@@ -103,6 +104,13 @@ bool TurnBattleEngine::Initialize(const CreateBattleRequest& request) {
         return false;
     }
 
+    // 快照 buff 清洗必须等全部单位就位:caster_id 的域改写要能查到本局 actor
+    for (auto& actor : actors) {
+        if (actor.actor_type() == BATTLE_ACTOR_TYPE_PLAYER) {
+            SanitizeSnapshotBuffs(actor);
+        }
+    }
+
     initialized = true;
     return true;
 }
@@ -146,7 +154,14 @@ bool TurnBattleEngine::InitPlayers(const CreateBattleRequest& request) {
                 nextBuffInstanceId = buff.buff_id() + 1;
             }
         }
+        // 技能只收回合制可施放的(G6):被动/开关/持续施法进来会被当成普通技能打出伤害。
+        // scene 出快照时已过滤一遍,这里是引擎侧兜底 —— 快照来自另一进程,不能只信它。
+        // actor.skill_table_ids 同时是客户端可见的"本局可用技能"列表。
         for (const auto skillTableId : snapshot.skill_table_ids()) {
+            const auto* skillRow = dataProvider->FindSkill(skillTableId);
+            if (skillRow == nullptr || !IsTurnBattleCastableSkill(*skillRow)) {
+                continue;
+            }
             actor.add_skill_table_ids(skillTableId);
         }
         actors.emplace_back(std::move(actor));
@@ -313,6 +328,21 @@ bool TurnBattleEngine::SubmitAction(uint64_t actorId, const BattleAction& action
     return AllPlayersReady();
 }
 
+uint32_t TurnBattleEngine::ValidateAction(uint64_t actorId, const BattleAction& action) const {
+    // 与 SubmitAction 的接受条件逐条对齐:两者判据不一致会让客户端收到"成功"却没落账。
+    if (!initialized || outcome != BATTLE_OUTCOME_ONGOING) {
+        return kInvalidParameter;
+    }
+    const auto* actor = FindActor(actorId);
+    if (actor == nullptr || actor->actor_type() != BATTLE_ACTOR_TYPE_PLAYER) {
+        return kInvalidParameter;
+    }
+    if (!IsActorActive(*actor)) {
+        return kThisEntityIsInvalid;
+    }
+    return CheckActionPrerequisites(*actor, action);
+}
+
 uint32_t TurnBattleEngine::SetActorAuto(uint64_t actorId, bool enabled) {
     // 只翻转状态位,不消耗 RNG、不触发结算:确定性由默认行动路径保证,
     // "开 auto 后立即结算"由节点在查 AllPlayersReady 后自行调 ResolveCurrentRound
@@ -366,20 +396,8 @@ uint32_t TurnBattleEngine::CheckActionPrerequisites(const BattleActorState& acto
         // PVE 可逃,PVP 一期不可逃(设计文档 §5.1)
         return IsPveMatch() ? kSuccess : kInvalidParameter;
     }
-    case BATTLE_ACTION_ITEM: {
-        // 道具从快照副本扣:提交时校验持有数
-        for (const auto& snapshot : createRequest.players()) {
-            if (snapshot.player_id() != actor.actor_id()) {
-                continue;
-            }
-            for (const auto& item : snapshot.items()) {
-                if (item.item_table_id() == action.item_table_id() && item.count() > 0) {
-                    return kSuccess;
-                }
-            }
-        }
-        return kInvalidParameter;
-    }
+    case BATTLE_ACTION_ITEM:
+        return CheckItemUse(actor, action);
     case BATTLE_ACTION_SKILL: {
         const auto* skillRow = dataProvider->FindSkill(action.skill_table_id());
         if (skillRow == nullptr) {
@@ -390,6 +408,11 @@ uint32_t TurnBattleEngine::CheckActionPrerequisites(const BattleActorState& acto
         if (std::find(ownedSkills.begin(), ownedSkills.end(), action.skill_table_id()) ==
             ownedSkills.end()) {
             return kInvalidParameter;
+        }
+        // 类型白名单(G6):InitPlayers 已把不可施放的类型剔出列表,这里是第二道闸,
+        // 防止日后有人绕过 skill_table_ids 直接塞技能 id
+        if (!IsTurnBattleCastableSkill(*skillRow)) {
+            return kSkillCannotBeCastInCurrentState;
         }
         if (const auto result = ValidateSkillTarget(actor, *skillRow, action.target_id());
             result != kSuccess) {
@@ -412,6 +435,54 @@ uint32_t TurnBattleEngine::CheckActionPrerequisites(const BattleActorState& acto
     default:
         return kInvalidParameter;
     }
+}
+
+uint32_t TurnBattleEngine::CheckItemUse(const BattleActorState& actor,
+                                       const BattleAction& action) const {
+    // 提交期与出手期共用这一份判据:两处判据分叉会让"提交时说行、出手时落空"重新出现。
+    const auto* itemRow = dataProvider->FindItem(action.item_table_id());
+    if (itemRow == nullptr) {
+        return kInvalidTableId;
+    }
+    if (itemRow->battle_usable() == 0) {
+        // 不是战斗消耗品(装备/材料/任务道具):快照本来就不会带它进来,
+        // 这里挡的是客户端自造 item_table_id
+        return kInvalidParameter;
+    }
+    if (FindItemEntry(actor.actor_id(), action.item_table_id()) == nullptr) {
+        return kBagInsufficientItems;  // 副本里没有或已用尽
+    }
+    // PVP 限次:不限次用药可以把回合拖满,而打满 max_rounds 判进攻方负(§5.1)
+    if (!IsPveMatch()) {
+        const auto used = itemUseCounts.find(actor.actor_id());
+        if (used != itemUseCounts.end() && used->second >= kMaxItemUsesPerBattlePvp) {
+            return kInvalidParameter;
+        }
+    }
+    // 目标:0 或自己 = 自疗;其余必须是同队存活单位(含队友的宝宝),不能给敌方用药
+    if (action.target_id() != 0 && action.target_id() != actor.actor_id()) {
+        const auto* target = FindActor(action.target_id());
+        if (target == nullptr || !IsActorActive(*target)) {
+            return kSkillInvalidTargetId;
+        }
+        if (target->team_index() != actor.team_index()) {
+            return kSkillInvalidTarget;
+        }
+    }
+    return kSuccess;
+}
+
+bool TurnBattleEngine::IsTurnBattleCastableSkill(const SkillTable& skillRow) const {
+    // 黑名单而不是白名单:表里存量技能未必都填了 skill_type,白名单会把没填的一律判死。
+    // 被动技能没有施放动作;开关技能是状态切换;持续施法依赖引擎已删除的相位概念 ——
+    // 这三类若被当成普通技能提交,会按 damage 表达式打出玩家本不该有的伤害。
+    for (const auto skillTypeBit : skillRow.skill_type()) {
+        if (skillTypeBit == kSkillTypeBitPassive || skillTypeBit == kSkillTypeBitToggle ||
+            skillTypeBit == kSkillTypeBitChannel) {
+            return false;
+        }
+    }
+    return true;
 }
 
 uint32_t TurnBattleEngine::CheckSkillCost(const BattleActorState& actor,
@@ -571,6 +642,10 @@ TurnResultS2C TurnBattleEngine::ResolveCurrentRound() {
 
     // 6. 胜负判定(含 max_rounds 打满进攻方判负)
     UpdateOutcome();
+
+    // 7. 掉落掷点:只在刚判出玩家方获胜时摇一次。放在这里(而不是逐怪死亡时)是因为
+    //    此后不再有任何战斗随机消费,同种子回放基线不被平移
+    RollDrops();
 
     pendingActions.clear();
     if (outcome == BATTLE_OUTCOME_ONGOING) {
@@ -857,27 +932,25 @@ void TurnBattleEngine::ExecuteDefend(BattleActorState& actor, TurnResultS2C& res
 
 void TurnBattleEngine::ExecuteItem(BattleActorState& actor, const BattleAction& action,
                                    TurnResultS2C& result) {
-    // 从快照道具副本扣数,结算时经 items_consumed 回写 scene(scene 按实际持有校验,防刷)
-    BattleItemEntry* itemEntry = nullptr;
-    for (auto& snapshot : *createRequest.mutable_players()) {
-        if (snapshot.player_id() != actor.actor_id()) {
-            continue;
-        }
-        for (auto& item : *snapshot.mutable_items()) {
-            if (item.item_table_id() == action.item_table_id() && item.count() > 0) {
-                itemEntry = &item;
-                break;
-            }
-        }
-        break;
+    // 出手期重跑校验:提交到出手之间,目标可能被别人打死、PVP 限次可能已被同回合的
+    // 另一次提交用掉。不过则行动落空(不降级普攻 —— 玩家点的是"吃药",降级成普攻
+    // 会打出他没点过的伤害;技能那边降级是因为技能本就是攻击行为)。
+    if (CheckItemUse(actor, action) != kSuccess) {
+        return;
     }
-    if (itemEntry == nullptr) {
-        return;  // 副本内无此道具或已用尽,行动落空
+    const auto* itemRow = dataProvider->FindItem(action.item_table_id());
+    BattleItemEntry* itemEntry = FindItemEntry(actor.actor_id(), action.item_table_id());
+    const uint64_t targetId = action.target_id() == 0 ? actor.actor_id() : action.target_id();
+    BattleActorState* target = FindActor(targetId);
+    if (itemRow == nullptr || itemEntry == nullptr || target == nullptr) {
+        return;  // CheckItemUse 已保证三者都在,这里是最后防线
     }
 
+    // 先扣副本再落效果:效果可能因满血而为 0,但药是真用掉了(与实时侧口径一致)
     itemEntry->set_count(itemEntry->count() - 1);
+    ++itemUseCounts[actor.actor_id()];
 
-    // 结算账本累加消耗
+    // 结算账本累加消耗(scene 侧按实际持有夹紧扣除,见设计 §5.3)
     auto& settlement = settlements[actor.actor_id()];
     BattleItemEntry* consumedEntry = nullptr;
     for (auto& consumed : *settlement.mutable_items_consumed()) {
@@ -892,14 +965,25 @@ void TurnBattleEngine::ExecuteItem(BattleActorState& actor, const BattleAction& 
     }
     consumedEntry->set_count(consumedEntry->count() + 1);
 
-    // v1 保守效果:固定回血(ItemTable 未接入回合引擎,见 open_issues)
-    const uint64_t healed = ApplyHeal(actor, static_cast<double>(kDefaultItemHealHp));
+    // 效果按 ItemTable 表列:回血、回蓝可同时非 0
+    const uint64_t healed = itemRow->battle_heal_hp() > 0
+                                ? ApplyHeal(*target, static_cast<double>(itemRow->battle_heal_hp()))
+                                : 0;
+    uint64_t restoredMana = 0;
+    if (itemRow->battle_heal_mp() > 0 && !target->is_dead()) {
+        const uint64_t manaBefore = target->attributes().mana();
+        const uint64_t manaAfter =
+            std::min<uint64_t>(target->max_mana(), manaBefore + itemRow->battle_heal_mp());
+        restoredMana = manaAfter - manaBefore;
+        target->mutable_attributes()->set_mana(manaAfter);
+    }
 
-    auto* itemEvent = AppendEvent(result, BATTLE_EVENT_ITEM, actor.actor_id(), actor.actor_id());
+    // value 取回血量;纯回蓝药回蓝量,客户端两个 after 字段都能拿到终值
+    auto* itemEvent = AppendEvent(result, BATTLE_EVENT_ITEM, actor.actor_id(), target->actor_id());
     itemEvent->set_item_table_id(action.item_table_id());
-    itemEvent->set_value(healed);
-    itemEvent->set_target_health_after(actor.attributes().health());
-    itemEvent->set_target_mana_after(actor.attributes().mana());
+    itemEvent->set_value(healed > 0 ? healed : restoredMana);
+    itemEvent->set_target_health_after(target->attributes().health());
+    itemEvent->set_target_mana_after(target->attributes().mana());
 }
 
 void TurnBattleEngine::ExecuteFlee(BattleActorState& actor, TurnResultS2C& result) {
@@ -1082,6 +1166,118 @@ void TurnBattleEngine::UpdateOutcome() {
         // max_rounds 打满:进攻方(A 方)判负(设计文档 §5.1)
         outcome = BATTLE_OUTCOME_SIDE_B_WIN;
     }
+}
+
+void TurnBattleEngine::RollDrops() {
+    // 只有玩家方(team 0)真正打赢才掉落;平局/打满回合/被团灭都不掉。
+    if (outcome != BATTLE_OUTCOME_SIDE_A_WIN || defeatedMonsters.empty()) {
+        return;
+    }
+    // 遍历序必须固定:settlements 是 std::map(player_id 升序),defeatedMonsters 是击杀序,
+    // drop 槽按表内顺序。三层都确定 → 同种子同战斗必然掉出同样的东西。
+    for (auto& [playerId, settlement] : settlements) {
+        const auto* actor = FindActor(playerId);
+        // 发奖条件与经验/金币完全一致(BuildSettlement):玩家方、未逃跑、未阵亡
+        if (actor == nullptr || actor->team_index() != 0 || actor->fled() || actor->is_dead()) {
+            continue;
+        }
+        for (const auto& defeat : defeatedMonsters) {
+            const auto* monsterRow = dataProvider->FindMonster(defeat.monster_config_id());
+            if (monsterRow == nullptr) {
+                continue;
+            }
+            const uint32_t killCount = defeat.count() == 0 ? 1 : defeat.count();
+            for (const auto& drop : monsterRow->drop()) {
+                // 坏表判定:三列缺一即空槽(导表器允许整槽留空)
+                if (drop.drop_item() == 0 || drop.drop_count() == 0 || drop.drop_rate() == 0) {
+                    continue;
+                }
+                for (uint32_t kill = 0; kill < killCount; ++kill) {
+                    // 每人、每只、每槽各掷一次:组队 PVE 里每个合格成员独立得掉落,
+                    // 与经验/金币"人人全额"的口径一致,不做分赃
+                    if (Rand01() * static_cast<double>(kDropRateDenominator) >=
+                        static_cast<double>(drop.drop_rate())) {
+                        continue;
+                    }
+                    BattleItemEntry* gained = nullptr;
+                    for (auto& entry : *settlement.mutable_items_gained()) {
+                        if (entry.item_table_id() == drop.drop_item()) {
+                            gained = &entry;
+                            break;
+                        }
+                    }
+                    if (gained == nullptr) {
+                        gained = settlement.add_items_gained();
+                        gained->set_item_table_id(drop.drop_item());
+                    }
+                    gained->set_count(gained->count() + drop.drop_count());
+                }
+            }
+        }
+    }
+}
+
+void TurnBattleEngine::SanitizeSnapshotBuffs(BattleActorState& actor) const {
+    // 快照 buff 来自 scene 的实时战斗世界,直接照搬会出三类问题(G5):
+    //   ① 控制类(眩晕/冰冻/沉默)按表全量时长换算,场景里只剩半秒的控制进战斗会变成整整几回合;
+    //   ② 瞬时 buff(非无限且 duration<=0)在实时侧是"挂上即到期",快照却把它当无限持续;
+    //   ③ caster_id 是 scene 的 entt 实体整数,与局内 actor_id 不是一个域,
+    //      恰好等于某个 player_id 时会被当成那名玩家(叠层隔离、BUFF_TICK 来源都用它)。
+    std::vector<BattleBuffEntry> kept;
+    kept.reserve(static_cast<size_t>(actor.buffs_size()));
+    for (const auto& buff : actor.buffs()) {
+        const auto* buffRow = dataProvider->FindBuff(buff.buff_table_id());
+        if (buffRow == nullptr) {
+            continue;  // 两端表版本不一致时宁可丢这条,也不让引擎带着空行跑
+        }
+        const uint32_t buffType = buffRow->buff_type();
+        if (buffType == kBuffTypeStun || buffType == kBuffTypeFreeze ||
+            buffType == kBuffTypeSilence) {
+            continue;
+        }
+        if (buffRow->infinite_duration() == 0 && buffRow->duration() <= 0) {
+            continue;
+        }
+        BattleBuffEntry entry = buff;
+        // caster 认不出来就置 0(= 无施法者):FindActor 找不到 0,叠层按"不同施法者"处理,
+        // BUFF_TICK/BUFF_REMOVE 事件的 source 也不会指向一个不相干的玩家
+        if (entry.caster_id() != 0 && FindActor(entry.caster_id()) == nullptr) {
+            entry.set_caster_id(0);
+        }
+        // 夹到表全量时长:快照给 0(无限)而表本身有限时,按表纠正
+        if (buffRow->infinite_duration() == 0) {
+            const uint32_t tableRounds = RoundsFromSeconds(buffRow->duration());
+            if (entry.remain_rounds() == 0 || entry.remain_rounds() > tableRounds) {
+                entry.set_remain_rounds(tableRounds);
+            }
+        }
+        kept.emplace_back(std::move(entry));
+    }
+    actor.clear_buffs();
+    for (auto& entry : kept) {
+        *actor.add_buffs() = std::move(entry);
+    }
+}
+
+std::vector<BattleItemEntry> TurnBattleEngine::SelfItems(uint64_t playerId) const {
+    std::vector<BattleItemEntry> items;
+    for (const auto& snapshot : createRequest.players()) {
+        if (snapshot.player_id() != playerId) {
+            continue;
+        }
+        for (const auto& item : snapshot.items()) {
+            if (item.count() == 0) {
+                continue;  // 用光的条目不下发,客户端按"没有这一项"处理
+            }
+            items.emplace_back(item);
+        }
+        break;
+    }
+    std::sort(items.begin(), items.end(),
+              [](const BattleItemEntry& lhs, const BattleItemEntry& rhs) {
+                  return lhs.item_table_id() < rhs.item_table_id();
+              });
+    return items;
 }
 
 // ---------------------------------------------------------------------------
@@ -1450,6 +1646,39 @@ const BattleActorState* TurnBattleEngine::FindActor(uint64_t actorId) const {
         if (actor.actor_id() == actorId) {
             return &actor;
         }
+    }
+    return nullptr;
+}
+
+BattleItemEntry* TurnBattleEngine::FindItemEntry(uint64_t playerId, uint32_t itemTableId) {
+    // 剩余数的唯一真相是开局请求副本:ExecuteItem 在它上面原地递减,
+    // BattleActorState 不承载道具(道具属于玩家资产,不是战斗单位状态)
+    for (auto& snapshot : *createRequest.mutable_players()) {
+        if (snapshot.player_id() != playerId) {
+            continue;
+        }
+        for (auto& item : *snapshot.mutable_items()) {
+            if (item.item_table_id() == itemTableId && item.count() > 0) {
+                return &item;
+            }
+        }
+        return nullptr;  // 本人快照已找到,不必再扫别人
+    }
+    return nullptr;
+}
+
+const BattleItemEntry* TurnBattleEngine::FindItemEntry(uint64_t playerId,
+                                                       uint32_t itemTableId) const {
+    for (const auto& snapshot : createRequest.players()) {
+        if (snapshot.player_id() != playerId) {
+            continue;
+        }
+        for (const auto& item : snapshot.items()) {
+            if (item.item_table_id() == itemTableId && item.count() > 0) {
+                return &item;
+            }
+        }
+        return nullptr;
     }
     return nullptr;
 }

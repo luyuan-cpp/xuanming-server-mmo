@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <exception>
 #include <limits>
+#include <map>
 #include <string>
 #include <utility>
 #include <vector>
@@ -27,6 +28,9 @@
 #include "actor/attribute/constants/actor_state_attribute_calculator_constants.h"
 #include "actor/attribute/system/actor_attribute_calculator.h"
 #include "combat/buff/comp/buff_comp.h"
+#include "combat/buff/constants/buff.h"
+#include "modules/bag/bag_service.h"
+#include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
@@ -40,10 +44,12 @@
 // 待结算记录的 Redis key / Lua 契约(R07)。battle 侧写、scene 侧读与销账,
 // 两端必须用**同一份**常量 —— 手抄两遍就是等着某天改一处漏一处。
 #include "services/battle/settlement/settlement_outbox.h"
-// 战斗配表指纹(六张战斗表确定性序列化 sha256,随快照携带给 match/battle 比对)。
+// 战斗配表指纹(七张战斗表确定性序列化 sha256,随快照携带给 match/battle 比对)。
 #include "services/battle/data/battle_table_fingerprint.h"
 
 #include "table/code/buff_table.h"
+#include "table/code/item_table.h"
+#include "table/code/skill_table.h"
 #include "table/proto/tip/common_error_tip.pb.h"
 
 #include "proto/common/base/common.pb.h"
@@ -369,6 +375,108 @@ namespace
 
 	// 推 BattleEndS2C(结算入账通知;battle 节点也会在战斗结束时推一份,
 	// 客户端按 battle_id 幂等处理;离线补应用路径则只有这一份)
+	// 结算道具落地:先按实际持有夹紧扣消耗,再把掉落塞进背包。
+	// 全程不返回失败 —— 见调用处注释(金币已入账,失败会导致重投时重复加钱)。
+	void ApplySettlementItems(entt::entity player, uint64_t playerId,
+							  const ::BattleSettlementData& settlement)
+	{
+		auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player);
+		if (bags == nullptr)
+		{
+			// 玩家实体没经过背包还原(理论上登录链一定挂了,这里是防御)
+			LOG_ERROR << "[PlayerBattle] 道具结算跳过: 玩家无背包组件, player_id=" << playerId
+					  << " battle_id=" << settlement.battle_id();
+			return;
+		}
+		auto& inventory = bags->bags[kInventory];
+		const uint64_t battleId = settlement.battle_id();
+		const std::string extra = "{\"source\":\"battle\",\"battle_id\":" +
+								  std::to_string(battleId) + "}";
+
+		// ① 消耗:引擎账本记的是"在战斗副本里用掉了几个",玩家真实持有可能更少
+		//    (战斗中途被别处扣走)。契约是按实际持有夹紧、不足按 0 并记日志防刷。
+		if (settlement.items_consumed_size() > 0)
+		{
+			ItemCountMap consumed;
+			uint64_t requestedTotal = 0;
+			for (const auto& item : settlement.items_consumed())
+			{
+				if (item.item_table_id() == 0 || item.count() == 0)
+				{
+					continue;
+				}
+				// BattleItemEntry.count 是 uint64,ItemCountMap 的值是 uint32:必须夹一次,
+				// 否则高位截断会把一个天文数字变成小数量(或反过来)
+				const uint64_t clamped =
+					std::min<uint64_t>(item.count(), std::numeric_limits<uint32_t>::max());
+				consumed[item.item_table_id()] += static_cast<uint32_t>(clamped);
+				requestedTotal += clamped;
+			}
+			if (!consumed.empty())
+			{
+				std::vector<DrainedInstance> drained;
+				const auto result = BagService::RemoveItemsClamped(
+					player, inventory, consumed, &drained, battleId, extra);
+				uint64_t drainedTotal = 0;
+				for (const auto& entry : drained)
+				{
+					drainedTotal += entry.amount;
+				}
+				if (result != kSuccess)
+				{
+					LOG_ERROR << "[PlayerBattle] 道具消耗扣除被拒: player_id=" << playerId
+							  << " battle_id=" << battleId << " err=" << result;
+				}
+				else if (drainedTotal < requestedTotal)
+				{
+					// 防刷信号:账面用了 N 个、实际只扣到 M 个。正常玩法下不该出现
+					// (战斗期间背包扣减入口已被 InBattle 闸挡住),出现即值得查
+					LOG_WARN << "[PlayerBattle] 道具消耗按实际持有夹紧: player_id=" << playerId
+							 << " battle_id=" << battleId << " requested=" << requestedTotal
+							 << " drained=" << drainedTotal;
+				}
+			}
+		}
+
+		// ② 掉落:主背包放不下就退到临时格(kTemporary 的设计语义就是掉落溢出缓冲,
+		//    FIFO 淘汰最旧的)。两处都失败才算丢,记 ERROR 等人查。
+		if (settlement.items_gained_size() > 0)
+		{
+			ItemCountMap gained;
+			for (const auto& item : settlement.items_gained())
+			{
+				if (item.item_table_id() == 0 || item.count() == 0)
+				{
+					continue;
+				}
+				const uint64_t clamped =
+					std::min<uint64_t>(item.count(), std::numeric_limits<uint32_t>::max());
+				gained[item.item_table_id()] += static_cast<uint32_t>(clamped);
+			}
+			if (!gained.empty())
+			{
+				const PlayerItemBlockList emptyBlockList;
+				const auto* blockList = tlsEcs.actorRegistry.try_get<PlayerItemBlockList>(player);
+				const auto& effectiveBlockList =
+					blockList == nullptr ? emptyBlockList : *blockList;
+				auto result = BagService::AddItems(player, inventory, effectiveBlockList, gained,
+												   TX_ITEM_AWARD);
+				if (result != kSuccess)
+				{
+					LOG_WARN << "[PlayerBattle] 掉落入主背包失败,改投临时格: player_id=" << playerId
+							 << " battle_id=" << battleId << " err=" << result;
+					result = BagService::AddItems(player, bags->bags[kTemporary],
+												  effectiveBlockList, gained, TX_ITEM_AWARD);
+				}
+				if (result != kSuccess)
+				{
+					LOG_ERROR << "[PlayerBattle] 掉落发放失败(主背包与临时格都放不下): player_id="
+							  << playerId << " battle_id=" << battleId << " err=" << result;
+				}
+			}
+		}
+	}
+
 	void PushBattleEndToPlayer(entt::entity player, const ::BattleSettlementData& settlement)
 	{
 		::BattleEndS2C message;
@@ -478,15 +586,41 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 		*snapshot.add_pets() = petSnapshot;
 	}
 
-	// —— 技能列表 ——
+	// —— 技能列表:只带回合制真能施放的(G6)——
+	// 被动技能没有施放动作、开关技能是状态切换、持续施法依赖引擎已删除的相位概念;
+	// 三者若进了快照,引擎会把它们当普通技能按 damage 表达式打出伤害。
+	// 这里是第一道过滤,引擎 InitPlayers 还有一道(快照来自本进程也不能单点信任)。
 	if (const auto* skillList = tlsEcs.actorRegistry.try_get<PlayerSkillListComp>(player))
 	{
 		for (const auto& skill : skillList->skill_list())
 		{
-			if (skill.skill_table_id() != 0)
+			if (skill.skill_table_id() == 0)
 			{
-				snapshot.add_skill_table_ids(skill.skill_table_id());
+				continue;
 			}
+			const auto* skillRow =
+				SkillTableManager::Instance().FindByIdSilent(skill.skill_table_id()).first;
+			if (skillRow == nullptr)
+			{
+				continue;
+			}
+			bool castableInTurnBattle = true;
+			// 表里存的是位号(0..5)不是掩码,别和 scene 侧 eSkillType 的 1<<n 混用
+			for (const auto skillTypeBit : skillRow->skill_type())
+			{
+				if (skillTypeBit == turnbattle::kSkillTypeBitPassive ||
+					skillTypeBit == turnbattle::kSkillTypeBitToggle ||
+					skillTypeBit == turnbattle::kSkillTypeBitChannel)
+				{
+					castableInTurnBattle = false;
+					break;
+				}
+			}
+			if (!castableInTurnBattle)
+			{
+				continue;
+			}
+			snapshot.add_skill_table_ids(skill.skill_table_id());
 		}
 	}
 
@@ -501,14 +635,42 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 			{
 				continue;
 			}
+			// 控制类不带进战斗(G5)。理由是时长口径:场景里只剩半秒的眩晕,这里
+			// 按表全量时长换算会变成整整几个回合,玩家开局就被跳过好几手;
+			// 而 PVP 里对手可以在应战前挂个控制再进局。控制的归属应当是战斗内产生的。
+			const uint32_t buffType = buffRow->buff_type();
+			if (buffType == kBuffTypeStun || buffType == kBuffTypeFreeze ||
+				buffType == kBuffTypeSilence)
+			{
+				continue;
+			}
+			// 瞬时 buff(非无限且 duration<=0)在实时侧是"挂上即到期";原先这里把它
+			// 当成无限持续带进去,战斗内永不消失。与引擎口径对齐:直接不带。
+			if (buffRow->infinite_duration() == 0 && buffRow->duration() <= 0)
+			{
+				continue;
+			}
 			auto* buffEntry = snapshot.add_buffs();
 			buffEntry->set_buff_id(buffId);
 			buffEntry->set_buff_table_id(entry.buffPb.buff_table_id());
 			buffEntry->set_layer(std::max<uint32_t>(entry.buffPb.layer(), 1));
-			buffEntry->set_caster_id(entry.buffPb.caster());
+			// caster 域转换(G5):BuffComp.caster 是 scene 的 entt 实体整数,而引擎的
+			// actor_id 域是 player_id(或带 bit63 的局内号)。原样塞过去,一旦某个
+			// entt 整数恰好等于某玩家的 player_id,引擎就会把这条 buff 算到那名玩家头上
+			// (叠层隔离、BUFF_TICK 事件来源都按它判)。只有"施法者就是自己"这一种情形
+			// 能可靠映射;其余一律置 0 = 无施法者。
+			uint64_t casterActorId = 0;
+			if (entry.buffPb.caster() != 0 &&
+				entry.buffPb.caster() == static_cast<uint64_t>(entt::to_integral(player)))
+			{
+				casterActorId = playerId;
+			}
+			buffEntry->set_caster_id(casterActorId);
 			// 剩余时长拿不到(TimerTaskComp 设计上不暴露 deadline,BuffComp 也没有到期字段),
-			// 一期按表全量时长换算回合:rounds = max(1, ceil(ms / 6000));现状见 open_issues。
-			if (buffRow->infinite_duration() != 0 || buffRow->duration() <= 0)
+			// 仍按表全量时长换算回合:rounds = max(1, ceil(ms / 6000))。
+			// 这对增益是偏宽、对减益是偏严,但控制类已被上面剔除,剩下的都是周期效果类,
+			// 影响有界。要精确剩余时长必须给 BuffComp 加到期时间字段(另开任务)。
+			if (buffRow->infinite_duration() != 0)
 			{
 				buffEntry->set_remain_rounds(0); // 0 = 无限持续
 			}
@@ -519,8 +681,35 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 		}
 	}
 
-	// —— 战斗道具副本:背包系统尚未挂载玩家实体(见 player/system/bag_marshal.h 现状说明),
-	//    一期传空;接入后在此按"可战斗消耗品"过滤生成副本。——
+	// —— 战斗道具副本(G2)——
+	// 只从主背包取、且只取 ItemTable.battle_usable 非 0 的物品。
+	//   * 只取主背包:仓库/装备栏不参战;临时格(kTemporary)是掉落溢出缓冲,会 FIFO
+	//     淘汰旧物 —— 把它计进副本,战斗中一次掉落就可能把"账面上还有的药"挤掉,
+	//     于是结算扣除按实际持有夹紧时凭空少扣,白赚一次回血。
+	//   * 这是一份**数量副本**,不带 guid/格子:实例身份归 scene(战斗掉落 iid 归属决策),
+	//     战斗服只拿可丢弃的派生副本(D1)。
+	if (const auto* bags = tlsEcs.actorRegistry.try_get<PlayerBagsComp>(player))
+	{
+		std::map<uint32_t, uint64_t> battleItems;  // 有序:同一背包每次出的副本顺序稳定
+		bags->bags[kInventory].ForEachItem([&battleItems](Guid, const ItemComp& item) {
+			if (item.size() == 0)
+			{
+				return;  // 被抽空的僵尸堆
+			}
+			const auto* itemRow = ItemTableManager::Instance().FindByIdSilent(item.config_id()).first;
+			if (itemRow == nullptr || itemRow->battle_usable() == 0)
+			{
+				return;
+			}
+			battleItems[item.config_id()] += item.size();
+		});
+		for (const auto& [configId, count] : battleItems)
+		{
+			auto* itemEntry = snapshot.add_items();
+			itemEntry->set_item_table_id(configId);
+			itemEntry->set_count(count);
+		}
+	}
 
 	// —— 路由 ——
 	auto* routing = snapshot.mutable_routing();
@@ -542,7 +731,7 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 	// team_index:阵营分配是 match 的编排职责,scene 不感知,由 match 在 CreateBattle 前改写
 	snapshot.set_team_index(0);
 
-	// 配表指纹:本节点六张战斗表的指纹(表加载完成时已缓存),match 比对全员一致、
+	// 配表指纹:本节点七张战斗表的指纹(表加载完成时已缓存),match 比对全员一致、
 	// battle 开局时再与自身比对(cross-zone-matchmaking.md §10)
 	snapshot.set_table_fingerprint(turnbattle::BattleTableFingerprint::Current());
 	return true;
@@ -1105,14 +1294,15 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 					 << " battle_id=" << settlement.battle_id() << " exp=" << settlement.exp_gain();
 		}
 
-		// 道具:背包系统尚未挂载玩家实体,消耗扣除(防刷:按实际持有校验,不足按 0)与
-		// 掉落发放都无从落地,一期仅记日志(见 open_issues)
+		// 道具:先扣消耗、再发掉落(G1/G3)。
+		//
+		// **这一段任何失败都不能让整笔结算失败**:走到这里金币已经入账,返回 false
+		// 会让应用缓存把这次记录抹掉、pending 保留,重投时金币会再加一次
+		// (battle_settlement_application_cache.h 的契约:返回 false 必须在不可重复的
+		// 副作用之前)。所以道具的失败一律记日志 + 继续,由流水与告警去兜。
 		if (settlement.items_consumed_size() > 0 || settlement.items_gained_size() > 0)
 		{
-			LOG_INFO << "[PlayerBattle] 道具结算暂缓(背包系统未挂载): player_id=" << playerId
-					 << " battle_id=" << settlement.battle_id()
-					 << " consumed=" << settlement.items_consumed_size()
-					 << " gained=" << settlement.items_gained_size();
+			ApplySettlementItems(player, playerId, settlement);
 		}
 
 	    // 只有 battle 最终结算携带的真实击杀事实推进任务，由同一应用缓存保护金币和进度。

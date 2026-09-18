@@ -10,9 +10,10 @@
 #include "table/proto/skillpermission_table.pb.h"
 #include "table/proto/dungeon_table.pb.h"
 #include "table/proto/monster_table.pb.h"
+#include "table/proto/item_table.pb.h"
 
 // 战斗配表指纹单测(cross-zone-matchmaking.md §10):
-// 直接构造六张表的 proto 对象喂 ComputeFrom,不依赖表管理器/Excel 数据。
+// 直接构造七张表的 proto 对象喂 ComputeFrom,不依赖表管理器/Excel 数据。
 // 覆盖:同一份表两次计算相同;改任一张表的任一字段则不同;长度/字符集契约。
 
 namespace {
@@ -26,9 +27,11 @@ struct TableSet {
     SkillPermissionTableData permission;
     DungeonTableData dungeon;
     MonsterTableData monster;
+    ItemTableData item;
 
     std::string Fingerprint() const {
-        return BattleTableFingerprint::ComputeFrom(skill, buff, cooldown, permission, dungeon, monster);
+        return BattleTableFingerprint::ComputeFrom(skill, buff, cooldown, permission, dungeon,
+                                                   monster, item);
     }
 };
 

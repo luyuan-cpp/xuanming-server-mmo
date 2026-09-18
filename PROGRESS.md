@@ -4996,3 +4996,53 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - **仍需注意**:运行中的 login / scene_manager 仍是 09-14 构建,不含 09-15 的锁心跳修复(源码已由共享保存提交 `cecb52995` 入库,内容核对为最终版:`CallBudget` 相加、`2·interval` 门槛)。本轮冒烟验证的是旧二进制上的登录/进场链路,不能据此说明心跳修复已在运行环境生效;需按 `go_services.ps1` 重编并重启这两个服务后另行验证。
 - 冒烟会覆盖被 git 跟踪的 `robot/login_test_results.csv`(同目录 `behavior_test_results.*` 已在 `.gitignore`),工作区因此出现该文件的改动,属测试输出,未回退。
 - 未改任何服务代码,未执行 git add/commit/push;服务保留运行。
+## 2026-09-17 帮会二期设计定稿(Claude,未落码)
+
+- 用户 09-15 拍板"管理与审批 / 成员名字 / 捐献升级商店 / 帮会活动"四项全做,并定下四条结构决策:银两=金币、灵石=钻石(不新增货币类型);**通用资产通道由帮会先做**(聚宝斋 P2 复用,接口去掉 Trade 前缀);活动都在帮会界面参与(不做地图交互);帮会全部表迁入独立库 `mmorpg_guild`(修订 D-14 §8)。
+- 设计落 [docs/design/guild-phase2/](docs/design/guild-phase2/):README(决策 / 待拍板 / 默认数值 / 批次总表)+ 六节正文(存储、管理审批、名字、资产通道、经济、活动)+ `90-consistency.md`(跨节修正清单,**效力高于各节原文**)+ `91-batches-and-codex.md`(批次与 Codex 验证)。
+- 产出方式:全局命名契约由本会话手写,六节各经"起草 → 对抗式评审 → 修订"三轮(共 96 条评审意见逐条采纳 / 驳回,记录在各节附录),最后一轮跨节一致性检查列出 D1–D10 待拍板、X-01~X-16 阻断级修正、Y/G 系列重要项与全局缺口。
+- 规模:20 个批次、约 380 个手改文件,每批 ≤30 个文件且开工前单独授权;B3(名字)与 B4(资产通道)可整体对调。
+- **未落码、未编译、未验证**。开工前需用户拍板:D2 离帮退款规则、U1"当期"含义、U2 阵亡是否得奖、货币改名范围、D1 默认数值;技术向 D3/D4/D6/D7/D8/D9/D10 按 90 清单推荐执行。
+- **B1 硬前置(非代码)**:聚宝斋会话先提交 `go/schemamigrate` 未提交的 proto2mysql replace,或给 proto2mysql 打 v0.1.2 tag,否则帮会建表拿不到 191 索引前缀与 TiDB 选项。
+
+## 2026-09-16/17 发布打包体系 P1–P4 落码(对标 A 仓,Claude,未编译未验证)
+
+- 用户要求"按 GitHub `luyuan-go/xuanming-server`(A 仓,Pandora)的大厂发布打包标准做到我们 server 下面"。调研 → 设计 → 落码,设计与实施状态见 [docs/design/release-packaging-standard-20260914.md](docs/design/release-packaging-standard-20260914.md)(§2 A 的标准条目含 A 仓证据路径、§3 差距表、§4 分批方案、**§7 实施状态与遗留缺口**)。
+- A 的标准本质是四层分离 + 三条铁律:版本库只放源码 → CI 构建 → 版本库外**不可变**制品目录(不可覆盖 / 原子 staging+rename / 带 `sha256sums.txt` 与 `build-info.json`)→ 按 release manifest 发布与回滚;发布 tag 必须含 git sha、部署以 registry digest 为准;版本号编译期注入二进制并在启动首行自报。
+- §5 四个待拍板项用户未逐项回答,**按推荐项默认执行**:沿用 GitHub Actions(不引 Jenkins)、P1–P4 全做、不装 syft/cosign/trivy/goreleaser、不引入 MinIO/Harbor/Argo CD。理由:A 选 Jenkins 是因为要在本机 cook UE 客户端,B 服务端代码在 GitHub 且已有 7 条 Actions(A 自己的文档也这么建议)。
+- 落码范围(§7.1):`go/shared/buildinfo` + 11 个服务启动首行与 `-version`;五个 Dockerfile 加固(基础镜像钉 digest、非 root 10001、OCI label、`-trimpath`、`GOTOOLCHAIN=local`、依赖层与版本 ARG 分层);制品线 `lib/artifacts_lib.ps1` + `publish_images` / `make_release` / `fetch_images` / `import_images` / `artifacts_retention`;`CHANGELOG.md`(Keep a Changelog);门禁 `Test-ReleaseVersion` / `Get-ReleaseImageTag` / `Get-PushedImageDigest` / `Write-ImageDigestRecord`、`release_preflight` 制品检查、`.github/workflows/release.yml`(手动触发、不推镜像不打 tag 不用 secret);5 个新契约测试;`docs/ops/release-checklist.md` 重写(原 05 月登录专项移到附录)。
+- 产出方式:7 个工作包并行实现(文件所有权互斥)→ 每包 3 视角评审(静态正确性 / 标准符合度 / 回归与安全)→ 修复者逐条核实后修。评审 60+ 条发现;**go / cppjava / gate / artifact-release 四包的修复,以及跨包集成审查、完整性审查因额度中断未跑**,主会话据评审结论手工补了 4 项(§7.2),其中两项是阻断级:
+  - `.gitignore` 漏忽略 `bin/{gate,scene,battle}`、`bin/symbols/`、`**/.build/`、`deploy/k8s/runtime/linux/` —— 三份评审独立报出:这些是 `build_linux.sh` / `k8s_stage_runtime.ps1` 的产物,不忽略则凡在 Linux 上编译过的机器工作树必脏,而 C++ 发布轨拒绝脏树,"能构建"与"能发布"互斥。
+  - `release.yml` 的仓库外 replace 判据只比模块路径、不比目录名,与 `go_svc_image.ps1` 的实际口径不符,`proto2mysql-v0.1.0` 会放行后在构建阶段才失败。
+- **遗留缺口见 §7.3**,其中 1 项阻断:`go/db`、`go/data_service` 的 go.mod 把 proto2mysql replace 到仓库外 `../../../../proto2mysql-v0.1.0`,与 Dockerfile 占位 stage 名对不上,**这两个镜像当前构建不了**(属 proto2mysql 版本治理任务,与帮会 B1 前置同源)。其余:C++ 镜像 revision label 证明不了二进制出自该提交、release.yml 缺单测门禁、preflight 缺"digest 已记录"检查、跨包集成与完整性审查未执行。
+- **未编译、未运行、未按 §6 验证**(AGENTS §10.1 由 Codex 执行);未 docker push、未 git tag/push。Codex 验证清单见 §6 与本条关联的交付说明。
+
+## 2026-09-17 帮会二期 B1:帮会迁入独占库 mmorpg_guild(Claude,未编译)
+
+- 用户 09-17 拍板三条产品规则后授权"全部"开工。B1 按 [docs/design/guild-phase2/01-storage.md](docs/design/guild-phase2/01-storage.md) 落码,**23 个手改文件**(与设计清单一致),未导表、未重生 proto、未编译、未测试。
+- 新建 `proto/guild/guild_db.proto`:四张表 message(`guild` / `guild_player_state` / `guild_member` / `guild_application`),整数主键、每表至多一个唯一键、TiDB 选项,后续表由 B5/B6 在同一文件追加。
+- go/guild 接 `go/schemamigrate`:新增 `-migrate` 入口(退出码 0/1/3/4)、启动期按 `Schema.AutoMigrate` 跑 Up 或只读 Plan、锁忙进程内重试 3 次、**缺普通索引一律拒启**(schemamigrate 只报 Warning,不会自动补建);go 指令升 1.26.5,proto2mysql 的 replace 与 schemamigrate 逐字一致。
+- 帮名唯一键从 `uk_name(name)` 改为 `uk_guild(name_norm)`,规范化(NFKC → TrimSpace → 小写)在 Go 侧完成,不再依赖库排序规则;新增 `guild.funds`、`guild_member.contribution_total/balance`(B1 恒 0,B5 起写入);repo 时间戳改 uint64;成员读补 `ORDER BY player_id`。
+- 删除遗留迁移:`MigrateLegacyRankScores`、`guild_schema_migration` 门表及 friend 对它的依赖(friend 容量缺行改为按权威边重算,保留同名不变量测试)。
+- 超时预算:`Timeout` 10000 → 4000(路由服 5s − 1s),`DataServiceRpc.Timeout` 3000 → 2000,`config.Validate` 强制区间与预算关系并断言 DSN 库名;新增整请求预算拦截器(Timeout − 500ms)挂在链最内层。
+- 建库授权只登记 `00_init_zone_dbs.sql`;`guild_friend_tables.sql` 只剩 friend 三表;`start_game.ps1` 加 `mmorpg_guild` 预检(不就绪只跳过 guild);C++ 生成物 `guild_db.pb.cc/.h` 手工登记进 CMakeLists / vcxproj / filters;D-14 §5/§7/§8 同步修订。
+- 待 Codex 按设计 §18 串行验证:proto2mysql 解析核对(硬前置)→ proto-gen → `go/guild` tidy/build/vet/test → C++ proto 工程 → 建库 → 真库测试(`GUILD_TEST_MYSQL_DSN` / `GUILD_IT_MYSQL_DSN`)→ `-migrate` 两次 → friend → 静态检查 → 本地端到端 + guild-smoke。
+- 切库步骤见设计 §19;**B2 验收前不要删 `mmorpg` 里的旧帮会表**。B1b(merge_zone / data_consistency_check 的 `-guild-schema`)紧随其后,B1 与 B1b 之间不得执行真实合服。
+
+## 2026-09-17 回合制战斗缺口收口 G1–G9(Claude,未编译、未导表,待 Codex 验证)
+
+- 背景:用户连问三轮"战斗掉落要不要 snowflake iid / 战斗里的背包会不会不同步 / 冷却和 buff 是不是快照副本",每轮跑一次对抗核验(3 反驳者 + 1 完整性审稿,逐文件读码)。核验没推翻主线结论(iid 归 scene 铸、battle 只有可丢弃副本、引擎跑在 battle 节点),但翻出 9 个真实缺口;用户随后说"那你补完整给我",本轮一次收口。设计、决策 D41–D50、改动集、验证清单全在 [docs/design/turn-battle-gap-closure.md](docs/design/turn-battle-gap-closure.md)。
+- 配表:`ItemTable` 加 `battle_usable` / `battle_heal_hp` / `battle_heal_mp`(物品 10 = 回血 300,11 = 回蓝 120);`MonsterTable` 加 `Monsterdrop` 子消息 + `repeated drop = 10 [(cfg_slots)=2]`(1 号怪必掉 1 个物品 10,2 号怪掉 10/11,其余留空待策划)。两张 xlsx 用 openpyxl 改的,导表前先关 Excel。
+- 引擎(`cpp/libs/services/battle/`):新增 `ValidateAction`(零副作用校验查询)、`CheckItemUse`、`RollDrops`(终局一次性摇,不平移同种子回放基线)、`SelfItems`、`SanitizeSnapshotBuffs`、`IsTurnBattleCastableSkill`;`ExecuteItem` 改为出手期重校验 + 读 `ItemTable` 效果 + 支持指向同队存活单位;`BattleDataProvider` 加 `FindItem`(三处实现同步);指纹加第七张 Item 表;删 `kDefaultItemHealHp`,加 `kDropRateDenominator` / `kMaxItemUsesPerBattlePvp=5`。
+- battle 节点:`RedactStateForViewer` + `FillSelfItems`,四个下发点(开战首帧 / 回合广播 / 重连补拉 / 观战首帧)按收信人出包——对手与观众不再看到别人的技能冷却,本人拿到剩余道具数;`HandleSubmitBattleAction` 先校验再提交,把 tip 码回给提交者(原先一律回 OK)。
+- 背包域:`ItemStore::DrainStacks` 返回实扣量 + 逐堆 guid 回执;`Bag` 加 `DrainedInstance` 与 `RemoveItemsClamped`(按实际持有夹紧,永不因"不够"失败);`BagService::RemoveItemsClamped` 逐条落 `TX_ITEM_DESTROY`;`LogItemCreate/LogItemDestroy` 加 `correlationId`/`extra` 尾参(战斗传 `battle_id` 与来源 JSON),**不动 `transaction_log.proto`**。
+- scene:快照三段补齐(技能按类型过滤、buff 剔除控制类与瞬时类并把 `caster_id` 从 entt 整数域映射到 actor_id 域、道具副本只从主背包取 `battle_usable` 物品);结算 `ApplySettlementItems` 先夹紧扣消耗再发掉落,主背包放不下退临时格,**道具任何失败都不让整笔结算失败**(金币已入账,返回 false 会导致重投重复加钱)。
+- 局中闸(D48)补五处:实时技能(施法者 / 目标 / 落点期)、移动上报与位移积分、背包整理、GM 回滚类写操作。**闸只放入口层,不下沉 `BagService`/`CurrencySystem`** —— 结算入账时 `InBattleComp` 还挂着。
+- 测试:引擎 +9、bag +3、结算 +4 共 16 个用例(掉落必掉/概率 0 不掉、表驱动效果与回蓝、非战斗道具被拒、给队友用药与给敌方被拒、PVP 限次、`SelfItems` 余量、buff 清洗、被动技能不可提交、夹紧扣除与回执、真扣真发与重投不双扣)。
+- **⚠ 阻塞与风险**:
+  1. **改表即改战斗指纹**,scene 与 battle 必须同版本同批替换,只重编一端会触发 mismatch 告警(match/battle 默认都是 `warn`,不拒开局但结论不可信)。
+  2. 引用新表列(`battle_usable` / `drop`)与新 proto 字段(`self_items`)的 C++ 代码,**在导表 + regen 之前必然编不过**,顺序写死在设计文档 §7。
+  3. 导表与 regen 会写同级客户端仓 `..\mmorpg-client`(表代码与 handler),跑之前确认这是可接受的副作用。
+  4. 属性数值 09-16 的 Codex 验收封存包基于改前引擎源码,本轮改了引擎,**该验收包即失效**,需重跑。
+  5. 工作区同时有并行会话的改动(帮会二期 B1、发布打包、merge_zone、go/guild、go/friend),本条只涵盖上面列出的 36 个文件 + 1 个新设计文档,其余未触碰。
+- 未编译、未导表、未运行:验证清单见 [turn-battle-gap-closure.md](docs/design/turn-battle-gap-closure.md) §7(导表 → proto-gen → C++ 串行 `/m:1` → 单测 → robot battle_smoke → 可选客户端)。

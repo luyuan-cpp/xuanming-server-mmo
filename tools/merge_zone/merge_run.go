@@ -41,6 +41,7 @@ func runMerge(o options) {
 		o.mappingAddr, o.mappingDB, o.redisAddr, o.redisDB, o.noticeAddr, o.noticeDB,
 		o.friendAddr, o.friendDB, o.sceneAddr, o.sceneDB)
 	log.Printf("    trade: schema=%s skip=%v", o.tradeSchema, o.skipTrade)
+	log.Printf("    guild: schema=%s skip_mysql=%v skip_rank=%v", o.guildSchema, o.skipGuild, o.skipRank)
 
 	// ── 句柄 ────────────────────────────────────────────────
 	db := mustOpenMySQL(ctx, o.mysqlDSN)
@@ -93,6 +94,22 @@ func runMerge(o options) {
 				"or pass -skip-trade-mysql ONLY if the trade service was never deployed in this environment)", err)
 		}
 		log.Printf("preflight P1 OK: %s exists", tradeListingQualified(o.tradeSchema))
+	}
+
+	// P1(续) 帮会库。帮会表自二期 B1 起住在独占库 mmorpg_guild(D-14 §8),不在
+	// -mysql-dsn 的默认库里。理由与聚宝斋同:「查不到」与「这个区没有公会」在查询结果上
+	// 分不开,放过去 = 公会连同成员被漏在一个已下线的 zone 里。MySQL 步和榜单步都要读
+	// guild 表,所以两个跳过开关都给了才算真正不碰帮会。
+	if o.skipGuild && o.skipRank {
+		log.Printf("preflight P1: guild SKIPPED (-skip-guild-mysql -skip-guild-rank) — %s.zone_id will NOT be rewritten",
+			guildQualified(o.guildSchema, guildTable))
+	} else {
+		if err := assertGuildTablesReady(ctx, db, o.guildSchema); err != nil {
+			log.Fatalf("preflight P1: %v (run the guild migration first — `guild -f etc/guild.yaml -migrate` — "+
+				"or pass -skip-guild-mysql and -skip-guild-rank ONLY if the guild service was never deployed in this environment)", err)
+		}
+		log.Printf("preflight P1 OK: %s and %s exist",
+			guildQualified(o.guildSchema, guildTable), guildQualified(o.guildSchema, guildMemberTable))
 	}
 
 	lagSrc := buildLagSource(o)
@@ -160,7 +177,7 @@ func runMerge(o options) {
 	m.Tables = playerTables
 	if !o.skipGuild || !o.skipRank {
 		if len(m.GuildIDs) == 0 {
-			gids, gerr := collectGuildIDsInZone(ctx, db, src)
+			gids, gerr := collectGuildIDsInZone(ctx, db, o.guildSchema, src)
 			if gerr != nil {
 				log.Fatalf("list guilds in source zone: %v", gerr)
 			}
@@ -241,10 +258,10 @@ func runMerge(o options) {
 
 	// ── 3: guild MySQL + 缓存失效 ───────────────────────────
 	if !o.skipGuild && !m.stepDone(stepGuildMySQL) {
-		if err := assertNoGuildNameCollision(ctx, db, src, dst); err != nil {
+		if err := assertNoGuildNameCollision(ctx, db, o.guildSchema, src, dst); err != nil {
 			log.Fatalf("guild: %v", err)
 		}
-		rows, gerr := migrateGuildZone(ctx, db, src, dst, o.dryRun)
+		rows, gerr := migrateGuildZone(ctx, db, o.guildSchema, src, dst, o.dryRun)
 		if gerr != nil {
 			log.Fatalf("guild MySQL: %v", gerr)
 		}

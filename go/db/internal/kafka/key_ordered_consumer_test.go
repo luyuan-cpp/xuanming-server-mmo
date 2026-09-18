@@ -34,6 +34,10 @@
 //     after a newer fresh delivery used to win coalescing by queue position,
 //     ACK the fresh offset, and regress MySQL. Coalescing now compares
 //     (origin partition, offset+1) and ACKs skipped retry receipts.
+//   - TC7 (owner_epoch 守卫,reentry-barrier §6.3):seq 只证明「同分区内更晚到」,
+//     被废黜节点的迟到写可以带更大的 offset。落库前比对 DBTask.owner_epoch 与
+//     player:{id}:owner_epoch,小于即丢;合并器把 epoch 变化当段边界,否则新主的
+//     写会先被老写按 offset 合并掉、老写再被守卫丢弃,MySQL 少一版。
 package kafka
 
 import (
@@ -215,6 +219,10 @@ func newTestWorker(t *testing.T, partition int32) (*worker, *miniredis.Miniredis
 		retryProcessingKey: "kafka:retry:processing:test-db-task",
 		retryDeadQueueKey:  "kafka:dead:queue:test-db-task",
 		wg:                 &sync.WaitGroup{},
+
+		// 与 buildWorker 同款生产读取器,跑在 miniredis 上;需要隔离读失败分支的
+		// 用例再把它换成 fakeOwnerEpochReader。
+		ownerEpochs: redisOwnerEpochReader{rc: rc},
 	}
 	return w, mr, newHarness(t)
 }
@@ -908,6 +916,382 @@ func TestPoisonKafkaPayloadIsPersistedBeforeAck(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
+// TC7 — owner_epoch 守卫(reentry-barrier §6.3 / cross-zone-scene-travel CZ-4)
+// ---------------------------------------------------------------------------
+
+// fakeOwnerEpochReader 是 map 实现的测试替身。它存在的唯一理由是「读失败」分支:
+// miniredis 一关,applied-seq 的 GET 会先失败,隔离不出 epoch 读失败这一支。
+type fakeOwnerEpochReader struct {
+	mu     sync.Mutex
+	epochs map[uint64]uint64
+	err    error
+	reads  int
+}
+
+func (f *fakeOwnerEpochReader) ReadOwnerEpoch(_ context.Context, playerID uint64) (uint64, bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.reads++
+	if f.err != nil {
+		return 0, false, f.err
+	}
+	epoch, ok := f.epochs[playerID]
+	return epoch, ok, nil
+}
+
+func (f *fakeOwnerEpochReader) readCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.reads
+}
+
+// makeEpochWriteTask 在 makeWriteTask 之上补生产者持有的归属 epoch。
+func makeEpochWriteTask(t *testing.T, key uint64, msgType string, seq uint64, epoch uint64) *workerTask {
+	t.Helper()
+	wt := makeWriteTask(t, key, msgType, seq)
+	wt.dbTask.OwnerEpoch = epoch
+	return wt
+}
+
+// attachKafkaClaim 把一个 dbTask 源任务包成带 claimAcker 的 Kafka 源任务,让用例能
+// 断言「offset 有没有被 ACK」。offset = seq-1,与 ConsumeClaim 的 seq=offset+1 对应。
+func attachKafkaClaim(t *testing.T, w *worker, wt *workerTask) *recordingSession {
+	t.Helper()
+	claimCtx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	session := &recordingSession{ctx: claimCtx}
+	offset := int64(wt.seq) - 1
+	acker := newClaimAcker(session, offset, cancel)
+	msg := &sarama.ConsumerMessage{Topic: w.topic, Partition: wt.originPartition, Offset: offset}
+	acker.track(msg)
+	wt.kafkaMsg = msg
+	wt.acker = acker
+	wt.claimCtx = claimCtx
+	return session
+}
+
+func setOwnerEpoch(t *testing.T, w *worker, key uint64, epoch uint64) {
+	t.Helper()
+	// 与 scene_manager 的 INCR 产物同形:纯十进制字符串。
+	require.NoError(t, w.redisClient.Set(w.ctx, ownerEpochKey(key), strconv.FormatUint(epoch, 10), 0).Err())
+}
+
+// 键格式是三方契约(Go scene_manager 铸造 / C++ Lua 比对 / 这里比对),字节级钉死。
+func TestOwnerEpochKey_ContractIsByteExact(t *testing.T) {
+	assert.Equal(t, "player:12345:owner_epoch", ownerEpochKey(12345))
+	assert.NotContains(t, ownerEpochKey(1), "{", "must not carry data_service-style hash-tag braces")
+}
+
+func TestCheckOwnerEpoch_Verdicts(t *testing.T) {
+	const player uint64 = 7001
+	cases := []struct {
+		name      string
+		taskEpoch uint64
+		reader    ownerEpochReader
+		wantOut   string
+		wantRej   bool
+		wantErr   bool
+		wantReads int
+	}{
+		{name: "zero epoch is legacy and never reads redis", taskEpoch: 0,
+			reader: &fakeOwnerEpochReader{epochs: map[uint64]uint64{player: 5}}, wantOut: "legacy_zero"},
+		{name: "zero epoch tolerates missing reader", taskEpoch: 0, reader: nil, wantOut: "legacy_zero"},
+		{name: "missing key is allowed", taskEpoch: 5,
+			reader: &fakeOwnerEpochReader{epochs: map[uint64]uint64{}}, wantOut: "missing_key", wantReads: 1},
+		{name: "stored zero counts as not minted, same as missing", taskEpoch: 5,
+			reader: &fakeOwnerEpochReader{epochs: map[uint64]uint64{player: 0}}, wantOut: "missing_key", wantReads: 1},
+		{name: "older epoch is stale and rejected", taskEpoch: 3,
+			reader: &fakeOwnerEpochReader{epochs: map[uint64]uint64{player: 5}}, wantOut: "stale", wantRej: true, wantReads: 1},
+		{name: "equal epoch matches", taskEpoch: 5,
+			reader: &fakeOwnerEpochReader{epochs: map[uint64]uint64{player: 5}}, wantOut: "match", wantReads: 1},
+		{name: "newer epoch (redis re-minted) is allowed", taskEpoch: 9,
+			reader: &fakeOwnerEpochReader{epochs: map[uint64]uint64{player: 2}}, wantOut: "ahead", wantReads: 1},
+		{name: "read failure is an error, not a verdict", taskEpoch: 5,
+			reader: &fakeOwnerEpochReader{err: errors.New("redis down")}, wantErr: true, wantReads: 1},
+		{name: "missing reader with real epoch fails closed", taskEpoch: 5, reader: nil, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			verdict, err := checkOwnerEpoch(context.Background(), tc.reader, tc.taskEpoch, player)
+			if tc.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.wantOut, verdict.outcome)
+				assert.Equal(t, tc.wantRej, verdict.reject)
+			}
+			if fake, ok := tc.reader.(*fakeOwnerEpochReader); ok {
+				assert.Equal(t, tc.wantReads, fake.readCount())
+			}
+		})
+	}
+}
+
+func TestRedisOwnerEpochReader(t *testing.T) {
+	mr := miniredis.RunT(t)
+	rc := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { _ = rc.Close() })
+	reader := redisOwnerEpochReader{rc: rc}
+	ctx := context.Background()
+
+	_, found, err := reader.ReadOwnerEpoch(ctx, 8001)
+	require.NoError(t, err)
+	assert.False(t, found, "absent key is 'not found', not an error")
+
+	// INCR 铸造出来的就是这种值。
+	require.NoError(t, rc.Incr(ctx, ownerEpochKey(8001)).Err())
+	epoch, found, err := reader.ReadOwnerEpoch(ctx, 8001)
+	require.NoError(t, err)
+	assert.True(t, found)
+	assert.Equal(t, uint64(1), epoch)
+
+	require.NoError(t, rc.Set(ctx, ownerEpochKey(8002), "not-a-number", 0).Err())
+	_, _, err = reader.ReadOwnerEpoch(ctx, 8002)
+	require.Error(t, err, "a hand-corrupted key must surface as retryable error, never as missing")
+
+	mr.Close()
+	_, _, err = reader.ReadOwnerEpoch(ctx, 8001)
+	require.Error(t, err)
+}
+
+// 小于 → 丢弃是终态:不落库、不进重试、不进死信、不推进 cursor,但 Kafka offset 要 ACK
+// (否则这条被废黜的写会在每次 rebalance 后重放,永远堵着分区)。
+func TestOwnerEpochGuard_StaleWriteIsDroppedTerminally(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	const key uint64 = 6001
+	const msgType = "taskpb.TaskResult"
+	setOwnerEpoch(t, w, key, 5)
+
+	stale := makeEpochWriteTask(t, key, msgType, 10, 3)
+	session := attachKafkaClaim(t, w, stale)
+	w.handleTask(stale, true)
+
+	assert.Empty(t, h.callsForKey(key), "deposed node's write must not reach MySQL")
+	assert.Equal(t, []int64{9}, session.marked(), "dropped write is terminal: its offset must be ACKed")
+	readyLen, err := w.redisClient.LLen(w.ctx, w.retryQueueKey).Result()
+	require.NoError(t, err)
+	assert.Zero(t, readyLen, "stale-owner write must not be retried")
+	deadLen, err := w.redisClient.LLen(w.ctx, w.retryDeadQueueKey).Result()
+	require.NoError(t, err)
+	assert.Zero(t, deadLen, "stale-owner write is not an ordering conflict; no quarantine")
+	_, err = w.redisClient.Get(w.ctx, appliedSeqKey(w.topic, key, msgType)).Result()
+	assert.ErrorIs(t, err, redis.Nil, "a dropped write was never applied; cursor must not move")
+}
+
+func TestOwnerEpochGuard_StaleRetryAcksItsReceipt(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	const key uint64 = 6002
+	const msgType = "taskpb.TaskResult"
+	setOwnerEpoch(t, w, key, 5)
+
+	stale := makeEpochWriteTask(t, key, msgType, 10, 3)
+	stale.fromRetry = true
+	stale.retryReceipt = []byte("receipt-stale-owner")
+	require.NoError(t, w.redisClient.LPush(w.ctx, w.retryProcessingKey, stale.retryReceipt).Err())
+	w.handleTask(stale, true)
+
+	assert.Empty(t, h.callsForKey(key))
+	for _, q := range []string{w.retryProcessingKey, w.retryQueueKey, w.retryDeadQueueKey} {
+		n, err := w.redisClient.LLen(w.ctx, q).Result()
+		require.NoError(t, err)
+		assert.Zero(t, n, "queue %s must be empty after terminal drop", q)
+	}
+}
+
+func TestOwnerEpochGuard_AllowedVerdictsReachMySQL(t *testing.T) {
+	const msgType = "taskpb.TaskResult"
+	cases := []struct {
+		name       string
+		key        uint64
+		redisEpoch uint64 // 0 = 不建键
+		taskEpoch  uint64
+	}{
+		{name: "equal epoch", key: 6101, redisEpoch: 5, taskEpoch: 5},
+		{name: "missing key", key: 6102, redisEpoch: 0, taskEpoch: 5},
+		{name: "task ahead of re-minted redis", key: 6103, redisEpoch: 2, taskEpoch: 5},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			w, _, h := newTestWorker(t, 0)
+			if tc.redisEpoch != 0 {
+				setOwnerEpoch(t, w, tc.key, tc.redisEpoch)
+			}
+			wt := makeEpochWriteTask(t, tc.key, msgType, 10, tc.taskEpoch)
+			session := attachKafkaClaim(t, w, wt)
+			w.handleTask(wt, true)
+
+			calls := h.callsForKey(tc.key)
+			require.Len(t, calls, 1)
+			assert.Equal(t, wt.dbTask.TaskId, calls[0].taskID)
+			assert.Equal(t, []int64{9}, session.marked())
+			cursor, err := w.redisClient.Get(w.ctx, appliedSeqKey(w.topic, tc.key, msgType)).Result()
+			require.NoError(t, err)
+			assert.Equal(t, "v2:0:10", cursor, "an applied write advances the cursor as before")
+		})
+	}
+}
+
+// 兼容窗口:旧版生产者不填 epoch(0),守卫必须完全旁路 —— 连 Redis 都不读,
+// 否则升级期每条存盘多一次 GET,而且没有任何 epoch 可比。
+func TestOwnerEpochGuard_ZeroEpochBypassesReader(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	const key uint64 = 6201
+	fake := &fakeOwnerEpochReader{epochs: map[uint64]uint64{key: 5}}
+	w.ownerEpochs = fake
+
+	legacy := makeEpochWriteTask(t, key, "taskpb.TaskResult", 10, 0)
+	w.handleTask(legacy, true)
+
+	require.Len(t, h.callsForKey(key), 1, "legacy producer must be allowed during the compat window")
+	assert.Zero(t, fake.readCount(), "epoch 0 must not cost a Redis round trip")
+}
+
+// 读失败既不能放行(Redis 抖一下就串档)也不能原地丢(丢盘):走既有可重试路径。
+func TestOwnerEpochGuard_ReadFailureIsRetriedNotDropped(t *testing.T) {
+	const key uint64 = 6301
+	const msgType = "taskpb.TaskResult"
+
+	t.Run("kafka origin goes to retry queue then ACKs", func(t *testing.T) {
+		w, _, h := newTestWorker(t, 0)
+		w.ownerEpochs = &fakeOwnerEpochReader{err: errors.New("redis timeout")}
+		wt := makeEpochWriteTask(t, key, msgType, 10, 5)
+		session := attachKafkaClaim(t, w, wt)
+		w.handleTask(wt, true)
+
+		assert.Empty(t, h.callsForKey(key), "must not reach MySQL while ownership is unknown")
+		readyLen, err := w.redisClient.LLen(w.ctx, w.retryQueueKey).Result()
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), readyLen, "exactly one durable retry copy")
+		assert.Equal(t, []int64{9}, session.marked(), "Kafka ACKs only after the retry copy is durable")
+		_, err = w.redisClient.Get(w.ctx, appliedSeqKey(w.topic, key, msgType)).Result()
+		assert.ErrorIs(t, err, redis.Nil, "deferred task must not publish an applied cursor")
+
+		popped, err := w.redisClient.RPop(w.ctx, w.retryQueueKey).Bytes()
+		require.NoError(t, err)
+		gotSeq, gotPartition, hasPartition, taskBytes := unwrapRetryPayload(popped)
+		assert.Equal(t, uint64(10), gotSeq)
+		assert.True(t, hasPartition)
+		assert.Equal(t, int32(0), gotPartition)
+		var retried db_proto.DBTask
+		require.NoError(t, proto.Unmarshal(taskBytes, &retried))
+		assert.Equal(t, uint64(5), retried.OwnerEpoch, "retry payload must carry the epoch so the guard re-runs on replay")
+	})
+
+	t.Run("retry origin moves receipt back to ready", func(t *testing.T) {
+		w, _, h := newTestWorker(t, 0)
+		w.ownerEpochs = &fakeOwnerEpochReader{err: errors.New("redis timeout")}
+		wt := makeEpochWriteTask(t, key, msgType, 10, 5)
+		wt.fromRetry = true
+		wt.retryReceipt = []byte("receipt-read-failure")
+		require.NoError(t, w.redisClient.LPush(w.ctx, w.retryProcessingKey, wt.retryReceipt).Err())
+		w.handleTask(wt, true)
+
+		assert.Empty(t, h.callsForKey(key))
+		processingLen, err := w.redisClient.LLen(w.ctx, w.retryProcessingKey).Result()
+		require.NoError(t, err)
+		assert.Zero(t, processingLen, "receipt must leave processing")
+		readyLen, err := w.redisClient.LLen(w.ctx, w.retryQueueKey).Result()
+		require.NoError(t, err)
+		assert.Equal(t, int64(1), readyLen, "receipt must be back in ready for another attempt")
+		deadLen, err := w.redisClient.LLen(w.ctx, w.retryDeadQueueKey).Result()
+		require.NoError(t, err)
+		assert.Zero(t, deadLen, "a transient read failure is not a dead-letter reason")
+	})
+}
+
+// 丢弃不推进 cursor,但绝不能因此卡住同 key 之后的正常写。
+func TestOwnerEpochGuard_DroppedWriteDoesNotBlockLaterWrites(t *testing.T) {
+	w, _, h := newTestWorker(t, 0)
+	const key uint64 = 6401
+	const msgType = "taskpb.TaskResult"
+	setOwnerEpoch(t, w, key, 5)
+
+	w.handleTask(makeEpochWriteTask(t, key, msgType, 10, 3), true) // deposed node, dropped
+	w.handleTask(makeEpochWriteTask(t, key, msgType, 11, 5), true) // current owner
+
+	calls := h.callsForKey(key)
+	require.Len(t, calls, 1)
+	assert.Equal(t, uint64(11), extractSeqFromTaskID(calls[0].taskID))
+	cursor, err := w.redisClient.Get(w.ctx, appliedSeqKey(w.topic, key, msgType)).Result()
+	require.NoError(t, err)
+	assert.Equal(t, "v2:0:11", cursor)
+
+	// 同一条被丢的老写重复投递(rebalance 重放):cursor 已在前面,seq 守卫先挡;
+	// 即使 cursor 没推进,epoch 守卫也会再挡一次。两道门任一都不能让它落库。
+	w.handleTask(makeEpochWriteTask(t, key, msgType, 10, 3), true)
+	assert.Len(t, h.callsForKey(key), 1)
+}
+
+// 合并器:epoch 变化必须当段边界。否则老节点带更大 offset 的迟到写会按 offset 赢得
+// 合并、把新主的写 ACK 掉,再被守卫丢弃 —— 新主那一版就从 MySQL 消失了。
+func TestProcessTaskBatch_EpochChangeIsNotCoalescedByOffset(t *testing.T) {
+	const msgType = "taskpb.TaskResult"
+
+	t.Run("zombie write with higher offset must not eat the new owner's write", func(t *testing.T) {
+		w, _, h := newTestWorker(t, 0)
+		const key uint64 = 6501
+		setOwnerEpoch(t, w, key, 2)
+		newOwner := makeEpochWriteTask(t, key, msgType, 99, 2)
+		zombie := makeEpochWriteTask(t, key, msgType, 100, 1)
+		w.processTaskBatch([]*workerTask{newOwner, zombie}, true)
+
+		calls := h.callsForKey(key)
+		require.Len(t, calls, 1, "exactly the new owner's write must land")
+		assert.Equal(t, newOwner.dbTask.TaskId, calls[0].taskID)
+		cursor, err := w.redisClient.Get(w.ctx, appliedSeqKey(w.topic, key, msgType)).Result()
+		require.NoError(t, err)
+		assert.Equal(t, "v2:0:99", cursor, "the dropped zombie write must not become the cursor")
+		for _, q := range []string{w.retryQueueKey, w.retryDeadQueueKey} {
+			n, err := w.redisClient.LLen(w.ctx, q).Result()
+			require.NoError(t, err)
+			assert.Zero(t, n, "queue %s must stay empty", q)
+		}
+	})
+
+	t.Run("normal handoff order still lands only the new owner's write", func(t *testing.T) {
+		w, _, h := newTestWorker(t, 0)
+		const key uint64 = 6502
+		setOwnerEpoch(t, w, key, 2)
+		oldOwner := makeEpochWriteTask(t, key, msgType, 100, 1)
+		newOwner := makeEpochWriteTask(t, key, msgType, 101, 2)
+		w.processTaskBatch([]*workerTask{oldOwner, newOwner}, true)
+
+		calls := h.callsForKey(key)
+		require.Len(t, calls, 1)
+		assert.Equal(t, newOwner.dbTask.TaskId, calls[0].taskID)
+	})
+
+	t.Run("same epoch still coalesces to the latest offset", func(t *testing.T) {
+		w, _, h := newTestWorker(t, 0)
+		const key uint64 = 6503
+		setOwnerEpoch(t, w, key, 2)
+		w.processTaskBatch([]*workerTask{
+			makeEpochWriteTask(t, key, msgType, 1, 2),
+			makeEpochWriteTask(t, key, msgType, 2, 2),
+			makeEpochWriteTask(t, key, msgType, 3, 2),
+		}, true)
+
+		calls := h.callsForKey(key)
+		require.Len(t, calls, 1, "epoch awareness must not disable coalescing within one ownership period")
+		assert.Equal(t, uint64(3), extractSeqFromTaskID(calls[0].taskID))
+	})
+
+	t.Run("legacy zero epoch does not split a segment", func(t *testing.T) {
+		w, _, h := newTestWorker(t, 0)
+		const key uint64 = 6504
+		setOwnerEpoch(t, w, key, 2)
+		w.processTaskBatch([]*workerTask{
+			makeEpochWriteTask(t, key, msgType, 1, 0),
+			makeEpochWriteTask(t, key, msgType, 2, 2),
+		}, true)
+
+		calls := h.callsForKey(key)
+		require.Len(t, calls, 1, "0 is 'unknown', never a divergence")
+		assert.Equal(t, uint64(2), extractSeqFromTaskID(calls[0].taskID))
+	})
+}
+
+// ---------------------------------------------------------------------------
 // TC6 — high-concurrency soak (smoke; runs in seconds)
 // ---------------------------------------------------------------------------
 
@@ -1043,9 +1427,4 @@ func TestConcurrentWorkers_FinalStateIsGlobalMax(t *testing.T) {
 		calls := h.callsForKey(k)
 		require.NotEmpty(t, calls, "key %d had no effective writes", k)
 		last := extractSeqFromTaskID(calls[len(calls)-1].taskID)
-		assert.Equal(t, uint64(writesPerPlayer), last,
-			"key %d: final applied seq must be the global max", k)
-	}
-	t.Logf("soak: produced=%d, totalKeys=%d, writesPerPlayer=%d",
-		produced.Load(), totalKeys, writesPerPlayer)
-}
+		assert.Equal(t, uint64(writesPerP

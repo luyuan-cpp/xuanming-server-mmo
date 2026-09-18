@@ -41,7 +41,7 @@ const (
 	ErrIDGenUnavailable = uint32(table.GuildError_kGuildIdGenUnavailable)
 	// ErrGuildNameInvalid:帮名为空、超过 MaxGuildNameRunes、不是合法 UTF-8 或含控制字符。
 	ErrGuildNameInvalid = uint32(table.GuildError_kGuildNameInvalid)
-	// ErrGuildNameTaken:uk_name 全局唯一索引拒绝(帮名跨 zone 唯一,合服不必改名)。
+	// ErrGuildNameTaken:uk_guild(name_norm)全局唯一索引拒绝(帮名跨 zone 唯一,合服不必改名)。
 	ErrGuildNameTaken = uint32(table.GuildError_kGuildNameTaken)
 	// ErrAnnouncementTooLong:公告超过 MaxAnnouncementBytes。
 	ErrAnnouncementTooLong = uint32(table.GuildError_kGuildAnnouncementTooLong)

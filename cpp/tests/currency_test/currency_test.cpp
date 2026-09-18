@@ -32,6 +32,25 @@ struct MessageAsyncClientTestPeer
     {
         client.OnLoaded(nullptr, reply, element);
     }
+
+    // 模拟一条带 guard 的存盘已经发出、正在等回包(不连 Redis,直接登记进 saving_queue_)。
+    static ElementPtr TrackGuardedSave(Client& client, const MessageKey& key,
+                                       const std::string& guardKey, const std::string& guardExpected)
+    {
+        auto element = std::make_shared<Element>();
+        element->message_key = key;
+        element->redis_key = client.full_name() + ":" + std::to_string(key);
+        element->message_value = std::make_shared<MessageValue>();
+        element->guard_key = guardKey;
+        element->guard_expected = guardExpected;
+        client.saving_queue_[element->redis_key] = element;
+        return element;
+    }
+
+    static void DeliverSaved(Client& client, redisReply* reply, const ElementPtr& element)
+    {
+        client.OnSaved(nullptr, reply, element);
+    }
 };
 
 // ---------------------------------------------------------------------------
@@ -387,6 +406,91 @@ TEST(CurrencyTest, RedisLoadOversizePayloadFailsClosed)
     EXPECT_EQ(0u, client.in_flight_load_count());
     EXPECT_EQ(0u, client.pending_load_count());
     EXPECT_FALSE(element->message_value);
+}
+
+// ---------------------------------------------------------------------------
+// MessageAsyncClient 带归属校验的存盘(reentry-barrier §6.2 方案 a)
+// ---------------------------------------------------------------------------
+
+// guard 不等 → Lua 返回 0:是终态"被废黜",不是故障。必须只回 rejected 回调,
+// 不回成功、不回失败、不重试,且同 key 排队中的更新值也一并丢弃。
+TEST(CurrencyTest, RedisGuardedSaveRejectedIsTerminalAndDropsPending)
+{
+    using Client = MessageAsyncClient<Guid, CurrencyComp>;
+    using Peer = MessageAsyncClientTestPeer<Guid, CurrencyComp>;
+
+    Client::HiredisPtr hiredis;
+    Client client(hiredis);
+    int savedCount = 0;
+    int failedCount = 0;
+    int rejectedCount = 0;
+    Guid rejectedKey = 0;
+    std::string rejectedRedisKey;
+    client.SetSaveCallback([&](Guid, CurrencyComp&) { ++savedCount; });
+    client.SetSaveFailedCallback([&](Guid, const std::string&, int) { ++failedCount; });
+    client.SetSaveRejectedCallback([&](Guid key, const std::string& redisKey) {
+        ++rejectedCount;
+        rejectedKey = key;
+        rejectedRedisKey = redisKey;
+        // 回调时队列必须已经清干净:调用方会在回调里销毁实体,之后不能再有任何
+        // 针对该 key 的写入冒出来。
+        EXPECT_EQ(0u, client.in_flight_save_count());
+        EXPECT_EQ(0u, client.pending_save_count());
+    });
+
+    constexpr Guid kPlayerId = 10003;
+    const std::string guardKey = "player:10003:owner_epoch";
+    const auto inFlight = Peer::TrackGuardedSave(client, kPlayerId, guardKey, "7");
+    // 同 key 的后续存盘在前一条回包前到达,按既有规则排进 pending(不碰 hiredis)。
+    client.Save(std::make_shared<CurrencyComp>(), kPlayerId, guardKey, "7");
+    ASSERT_EQ(1u, client.in_flight_save_count());
+    ASSERT_EQ(1u, client.pending_save_count());
+
+    redisReply reply{};
+    reply.type = REDIS_REPLY_INTEGER;
+    reply.integer = 0;
+    Peer::DeliverSaved(client, &reply, inFlight);
+
+    EXPECT_EQ(0, savedCount);
+    EXPECT_EQ(0, failedCount);
+    EXPECT_EQ(1, rejectedCount);
+    EXPECT_EQ(kPlayerId, rejectedKey);
+    EXPECT_EQ(inFlight->redis_key, rejectedRedisKey);
+    EXPECT_EQ(0u, client.in_flight_save_count());
+    EXPECT_EQ(0u, client.pending_save_count());
+}
+
+// guard 相等 → Lua 返回 1:与无 guard 的存盘完全一样走成功回调。
+TEST(CurrencyTest, RedisGuardedSaveAcceptedCompletesNormally)
+{
+    using Client = MessageAsyncClient<Guid, CurrencyComp>;
+    using Peer = MessageAsyncClientTestPeer<Guid, CurrencyComp>;
+
+    Client::HiredisPtr hiredis;
+    Client client(hiredis);
+    int savedCount = 0;
+    int rejectedCount = 0;
+    Guid savedKey = 0;
+    client.SetSaveCallback([&](Guid key, CurrencyComp&) {
+        ++savedCount;
+        savedKey = key;
+    });
+    client.SetSaveRejectedCallback([&](Guid, const std::string&) { ++rejectedCount; });
+
+    constexpr Guid kPlayerId = 10004;
+    const auto inFlight = Peer::TrackGuardedSave(client, kPlayerId, "player:10004:owner_epoch", "7");
+    ASSERT_EQ(1u, client.in_flight_save_count());
+
+    redisReply reply{};
+    reply.type = REDIS_REPLY_INTEGER;
+    reply.integer = 1;
+    Peer::DeliverSaved(client, &reply, inFlight);
+
+    EXPECT_EQ(1, savedCount);
+    EXPECT_EQ(kPlayerId, savedKey);
+    EXPECT_EQ(0, rejectedCount);
+    EXPECT_EQ(0u, client.in_flight_save_count());
+    EXPECT_EQ(0u, client.pending_save_count());
 }
 
 // ---------------------------------------------------------------------------

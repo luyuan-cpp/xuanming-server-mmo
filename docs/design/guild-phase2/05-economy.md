@@ -1,3 +1,15 @@
+> ## 决策覆盖(2026-09-17,效力高于本节正文与 90 清单)
+>
+> **D2 = 资金照记给帮会,不退款。** 本节正文按"退款"方案写,以下按用户决策作废并替换:
+>
+> 1. **删除退款分支**:不新增 `GUILD_ASSET_OP_KIND_DONATE_REFUND = 4`,不新增 `TX_GUILD_DONATE_REFUND`,`kAssetOpStreamRules` 的 GUILD_CREDIT 一行**不改**(B4a 的 scene 白名单与 `static_assert` 均不动)。`Finalize` 的 §5.22 表删去 DONATE_REFUND 的三行与"插退款指令"SQL(§5.22 末)、删去 §5.21 第 1 步的退款准备(`refundOpID` / `EnsureSeqRow(GUILD_CREDIT)` / `errRefundNotPrepared` / `ErrRefundBlocked` / `guild_asset_refund_blocked_total` / `guild_asset_refund_total`)。
+> 2. **R5 改为**:捐献结算时**不再检查捐献者是否仍是成员**。`DONATE + APPLIED` 一律按 `op.guild_id`(请求时绑定的帮会)记资金与帮贡;若该帮会行已不存在(已解散),资金与帮贡都记不上,计 `guild_asset_orphan_total{kind="donate",what="guild_gone"}` 并 INFO,不做补偿。成员行不存在时只跳过帮贡、资金照记。
+> 3. **R8 改为**:今日次数在提交 PENDING 时占用;只有 REJECTED / ABORTED 退回,APPLIED 保留(退款一档取消)。
+> 4. **保留**:离帮 / 被踢 / 解散三个事务仍把该玩家未结算捐献的 `deadline_ms` 提前到"现在"(B2 的三条 UPDATE 保留),让还没扣款的指令尽快中止、次数退回;这是唯一保留的离帮处理。
+> 5. **B5a 文件数 −1**(不改 `transaction_log.proto`),B5b 逻辑相应变简;§5.43 偏差 7 作废。
+>
+> 其余(U1 与本节无关,货币三项改名照做)不变。
+
 # S5 捐献、帮会升级与帮会商店(B5a-d)
 > 本节由 9 个分部合并而成(原分部名保留在小标题里),另附对抗评审处理记录。
 

@@ -87,7 +87,10 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
   产出 `<制品根>/releases/images/vX.Y.Z/`;日志里的 `tag=` 即本版本镜像 tag `vX.Y.Z-<12位commit>`。
 - [ ] **④(人工)推送镜像并记录 digest**。要按 digest 部署就必须在 ⑤ 之前做:manifest 生成后不可变,补不进 digest。记录文件放在版本目录**之外**,在同一提交的干净检出上执行,`<registry>` 与 ③ 一致:
   ```powershell
-  $digests = "./image-digests-vX.Y.Z.json"
+  # 写在仓库**外**(当前目录 = 仓库根):它不被 .gitignore 忽略,留在仓库里会让工作树变脏,
+  # 下一次 ③ publish_images.ps1 的发布轨与 release.yml 的"工作树必须干净"就会拒绝发布。
+  # 与 deploy/k8s/README.md、deploy/k8s/AGENTS.md 同一写法。
+  $digests = Join-Path (Split-Path $PWD.Path -Parent) 'image-digests-vX.Y.Z.json'
   pwsh -File tools/scripts/k8s_image.ps1      -Command push-image -ImageRepository <registry>/mmorpg-node -Version vX.Y.Z -DigestsOut $digests
   pwsh -File tools/scripts/go_svc_image.ps1   -Command push-all   -Registry <registry> -Version vX.Y.Z -DigestsOut $digests
   pwsh -File tools/scripts/java_svc_image.ps1 -Command push       -Registry <registry> -Version vX.Y.Z -DigestsOut $digests
@@ -95,7 +98,7 @@ GitHub Actions 的 `release.yml` 覆盖其中 ③⑤(外加版本号、CHANGELOG
   只推 ③ 实际发布了的镜像族:`make_release.ps1 -ImageDigestsFile` 要求记录**恰好**覆盖 manifest 里的全部镜像。同一 ref 被记成不同 digest 时 `Write-ImageDigestRecord` 会拒绝——说明同名 tag 被推成了另一份内容,查清再继续。
 - [ ] **⑤ 生成 release manifest**:
   ```powershell
-  pwsh -File tools/scripts/make_release.ps1 -Version vX.Y.Z -ImageDigestsFile ./image-digests-vX.Y.Z.json
+  pwsh -File tools/scripts/make_release.ps1 -Version vX.Y.Z -ImageDigestsFile $digests   # $digests 同 ④,在仓库外
   # 纯离线交付、不推 registry 时省略 -ImageDigestsFile
   ```
   修复内容优先级 `-Notes` > `-NotesFile` > CHANGELOG 段落;校验制品 `sha256sums`、`build-info.app_version == -Version`、`dirty=false`;先写 `.md`,最后写 `releases/manifests/vX.Y.Z.json`。结尾打印打 tag 的命令。

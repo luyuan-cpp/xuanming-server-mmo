@@ -41,4 +41,19 @@ const (
 	// **一个字节都不改**地拒绝,由上游带着同样的 scene_conf_id 退避重试。
 	// 这是可重试的瞬时拒绝,不是故障。
 	ErrSceneReentryBarrier uint32 = 17
+	// ErrHandoffPending: 玩家已有位置记录且需要换到别的节点 / zone,但源 scene 还
+	// 没有写出「已落盘」标记(player:{id}:handoff 的 epoch != 当前 owner_epoch)。
+	// 源节点可能仍在 SavePlayerToRedis,此刻放行就是新节点读到旧快照。与
+	// ErrSceneReentryBarrier 同款语义:**一个字节都不改**地拒绝,上游退避重试,
+	// 源 scene 落地并写标记后自然放行。见 cross-zone-scene-travel.md CZ-4。
+	ErrHandoffPending uint32 = 18
+	// ErrOwnerEpochConflict: 本次 EnterScene 铸出 epoch N 之后、写 location 之前,
+	// 有并发的 EnterScene 抢先铸了 N+1,Lua CAS 拒绝了本次写入。本次没有发出任何
+	// 路由,玩家归属仍由后到者决定;上游重试即可。可重试,不是故障。
+	ErrOwnerEpochConflict uint32 = 19
+	// ErrHomeZoneUnavailable: data_service 的 GetPlayerHomeZone 超时 / 不可用,
+	// 查不到玩家的归属 zone。归属 zone 决定存盘落哪个库,未知时**不得**静默落进程
+	// zone 库(cross-zone-scene-travel.md §6 不变量 2),所以拒绝并让上游重试。
+	// 「映射里确实没有这个玩家」不走这个码(那是首登,按 gate zone 处理)。
+	ErrHomeZoneUnavailable uint32 = 20
 )

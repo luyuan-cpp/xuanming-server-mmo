@@ -442,6 +442,31 @@ try {
                 Write-Host '  补建后重新运行本启动脚本即可。'
             }
         }
+        if ('guild' -notin $skippedServices) {
+            # 帮会 guild 的独占库预检（帮会二期 B1：帮会表已迁入 mmorpg_guild，由 go/schemamigrate 建表）。
+            # 探测方式与上面 trade 相同：以 appuser 身份查 information_schema.SCHEMATA，一次覆盖“库存在”和“已授权”。
+            $guildDbProblem = ''
+            try {
+                $guildDbProbe = Invoke-Docker @('exec','mysql','sh','-c','mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ''mmorpg_guild''"')
+                if ($guildDbProbe.Code -ne 0) {
+                    $guildDbProblem = "查询失败（docker exec 退出码 $($guildDbProbe.Code)）"
+                } elseif ($guildDbProbe.Out.Trim() -cne 'mmorpg_guild') {
+                    $guildDbProblem = '库不存在，或 appuser 对它没有权限'
+                }
+            } catch {
+                $guildDbProblem = "查询异常：$($_.Exception.Message)"
+            }
+            if ($guildDbProblem) {
+                $skippedServices += 'guild'
+                $guildDbFixCommand = @'
+  docker --context desktop-linux exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_guild DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_guild.* TO appuser@''%''; FLUSH PRIVILEGES;"'
+'@
+                Write-Warning "帮会库 mmorpg_guild 未就绪（$guildDbProblem），本次跳过 guild（帮会请求会回「服务不可用」），其余服务照常启动。"
+                Write-Host '  已有数据的 MySQL 卷不会重跑 deploy/mysql-init，需要用 root 补建库并授权一次（在 PowerShell 7 中执行下面这行）：' -ForegroundColor Yellow
+                Write-Host $guildDbFixCommand -ForegroundColor Yellow
+                Write-Host '  补建后重新运行本启动脚本即可。'
+            }
+        }
         Write-Step '3/6 启动存档服务'
         # login、scene_manager、player_locator、match 由 dev_tools 的子进程继承同一契约。
         $env:KAFKA_COMMAND_TOPIC_PARTITIONS = [string]$kafkaContract.Partitions
