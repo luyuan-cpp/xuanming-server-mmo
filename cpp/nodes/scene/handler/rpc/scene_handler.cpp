@@ -151,15 +151,22 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	auto playerIt = tlsEcs.playerList.find(request->player_id());
 
 	// Carry session/login/scene context through the async load pipeline.
-	PlayerGameNodeEntryInfoComp enterInfo;
-	enterInfo.set_session_id(request->session_id());
-	enterInfo.set_enter_gs_type(request->enter_gs_type());
-	enterInfo.set_scene_id(request->scene_id());
+	PlayerEnterContext ctx;
+	ctx.enterInfo.set_session_id(request->session_id());
+	ctx.enterInfo.set_enter_gs_type(request->enter_gs_type());
+	ctx.enterInfo.set_scene_id(request->scene_id());
+	// 归属字段(gate 从 RoutePlayerEvent 透传):home_zone 决定落库 topic,owner_epoch 是存盘 CAS 的
+	// 期望值。必须跟着"这一次路由决策"走,节点不得自己读 Redis(cross-zone-scene-travel.md CZ-3、
+	// reentry-barrier §3.3)。0 = 上游未填,EnterScene 里不覆盖已有值。
+	ctx.homeZoneId = request->home_zone_id();
+	ctx.ownerEpoch = request->owner_epoch();
 
-	// 2. If player is already online, enter scene directly
+	// 2. If player is already online, enter scene directly.
+	//    重连 / 顶号复用实体:EnterScene 用 ctx 里的非 0 epoch 更新 PlayerOwnerEpochComp
+	//    (Go 给重连发的是当前值),否则实体会一直拿首登那次的 epoch 存盘。
 	if (playerIt != tlsEcs.playerList.end())
 	{
-		PlayerLifecycleSystem::EnterScene(playerIt->second, enterInfo);
+		PlayerLifecycleSystem::EnterScene(playerIt->second, ctx);
 		return;
 	}
 
@@ -188,12 +195,12 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	auto& pendingMap = PlayerLifecycleSystem::GetPendingEnterMap();
 	auto pendingIt = pendingMap.find(request->player_id());
 	if (pendingIt != pendingMap.end()
-		&& pendingIt->second.session_id() != 0
-		&& pendingIt->second.session_id() != request->session_id())
+		&& pendingIt->second.enterInfo.session_id() != 0
+		&& pendingIt->second.enterInfo.session_id() != request->session_id())
 	{
-		SessionMap().erase(pendingIt->second.session_id());
+		SessionMap().erase(pendingIt->second.enterInfo.session_id());
 	}
-	pendingMap[request->player_id()] = enterInfo;
+	pendingMap[request->player_id()] = ctx;
 
 	tlsRedisSystem.GetPlayerDataRedis()->AsyncLoad(request->player_id());
 	///<<< END WRITING YOUR CODE

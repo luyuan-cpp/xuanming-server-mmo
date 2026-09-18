@@ -449,6 +449,11 @@ uint32_t TurnBattleEngine::CheckItemUse(const BattleActorState& actor,
         // 这里挡的是客户端自造 item_table_id
         return kInvalidParameter;
     }
+    if (itemRow->battle_heal_hp() == 0 && itemRow->battle_heal_mp() == 0) {
+        // 标了可用但两列效果都是 0(配表半填):放行等于"药被吃掉、回合被浪费",
+        // 玩家资产白白损失。提交期就拒,ExecuteItem 共用本判据,自然也不会扣副本
+        return kInvalidParameter;
+    }
     if (FindItemEntry(actor.actor_id(), action.item_table_id()) == nullptr) {
         return kBagInsufficientItems;  // 副本里没有或已用尽
     }
@@ -569,7 +574,14 @@ uint32_t TurnBattleEngine::CheckBuff(const BattleActorState& actor,
         if (columnIndex >= permissionRow->skill_type_size()) {
             return kInvalidTableData;
         }
-        if (const auto cell = permissionRow->skill_type(columnIndex); cell != kSuccess) {
+        const auto cell = permissionRow->skill_type(columnIndex);
+        // 0 是"这格没填"而不是任何一个 tip 码(tip 轴里 kSuccess=1000、kCommon_errorOK=0)。
+        // 原样返回 0 会让节点把它写进 error_message.id,客户端读成"成功"却没落账 ——
+        // 正是 G2 要消灭的静默降级。坏表按坏表报。
+        if (cell == 0) {
+            return kInvalidTableData;
+        }
+        if (cell != kSuccess) {
             return cell;
         }
     }
@@ -933,14 +945,25 @@ void TurnBattleEngine::ExecuteDefend(BattleActorState& actor, TurnResultS2C& res
 void TurnBattleEngine::ExecuteItem(BattleActorState& actor, const BattleAction& action,
                                    TurnResultS2C& result) {
     // 出手期重跑校验:提交到出手之间,目标可能被别人打死、PVP 限次可能已被同回合的
-    // 另一次提交用掉。不过则行动落空(不降级普攻 —— 玩家点的是"吃药",降级成普攻
-    // 会打出他没点过的伤害;技能那边降级是因为技能本就是攻击行为)。
-    if (CheckItemUse(actor, action) != kSuccess) {
-        return;
+    // 另一次提交用掉。不过则先回落自疗(见下),连自疗都不合法才落空。
+    // 注意始终不降级成普攻:玩家点的是"吃药",降级会打出他没点过的伤害;
+    // 技能那边之所以降级,是因为技能本身就是攻击行为。
+    BattleAction effective = action;
+    if (CheckItemUse(actor, effective) != kSuccess) {
+        // 目标在提交之后、出手之前被打死是最常见的一种:回落成自疗,而不是让整个回合
+        // 静默蒸发(玩家点的是"吃药",药还在身上,自疗仍然是他本意的一部分)。
+        // 回落后再校验一次:连自疗都不合法(道具用尽 / PVP 限次)才真正落空。
+        if (effective.target_id() == 0 || effective.target_id() == actor.actor_id()) {
+            return;
+        }
+        effective.set_target_id(actor.actor_id());
+        if (CheckItemUse(actor, effective) != kSuccess) {
+            return;
+        }
     }
-    const auto* itemRow = dataProvider->FindItem(action.item_table_id());
-    BattleItemEntry* itemEntry = FindItemEntry(actor.actor_id(), action.item_table_id());
-    const uint64_t targetId = action.target_id() == 0 ? actor.actor_id() : action.target_id();
+    const auto* itemRow = dataProvider->FindItem(effective.item_table_id());
+    BattleItemEntry* itemEntry = FindItemEntry(actor.actor_id(), effective.item_table_id());
+    const uint64_t targetId = effective.target_id() == 0 ? actor.actor_id() : effective.target_id();
     BattleActorState* target = FindActor(targetId);
     if (itemRow == nullptr || itemEntry == nullptr || target == nullptr) {
         return;  // CheckItemUse 已保证三者都在,这里是最后防线
@@ -954,14 +977,14 @@ void TurnBattleEngine::ExecuteItem(BattleActorState& actor, const BattleAction& 
     auto& settlement = settlements[actor.actor_id()];
     BattleItemEntry* consumedEntry = nullptr;
     for (auto& consumed : *settlement.mutable_items_consumed()) {
-        if (consumed.item_table_id() == action.item_table_id()) {
+        if (consumed.item_table_id() == effective.item_table_id()) {
             consumedEntry = &consumed;
             break;
         }
     }
     if (consumedEntry == nullptr) {
         consumedEntry = settlement.add_items_consumed();
-        consumedEntry->set_item_table_id(action.item_table_id());
+        consumedEntry->set_item_table_id(effective.item_table_id());
     }
     consumedEntry->set_count(consumedEntry->count() + 1);
 
@@ -980,7 +1003,7 @@ void TurnBattleEngine::ExecuteItem(BattleActorState& actor, const BattleAction& 
 
     // value 取回血量;纯回蓝药回蓝量,客户端两个 after 字段都能拿到终值
     auto* itemEvent = AppendEvent(result, BATTLE_EVENT_ITEM, actor.actor_id(), target->actor_id());
-    itemEvent->set_item_table_id(action.item_table_id());
+    itemEvent->set_item_table_id(effective.item_table_id());
     itemEvent->set_value(healed > 0 ? healed : restoredMana);
     itemEvent->set_target_health_after(target->attributes().health());
     itemEvent->set_target_mana_after(target->attributes().mana());
@@ -1186,38 +1209,38 @@ void TurnBattleEngine::RollDrops() {
             if (monsterRow == nullptr) {
                 continue;
             }
-            const uint32_t killCount = defeat.count() == 0 ? 1 : defeat.count();
+            // defeatedMonsters 每条恒为一次击杀(HandleDeath 逐只 emplace,count 固定写 1),
+            // count 字段只为协议兼容保留。这里不按 count 放大,与 BuildSettlement 的
+            // 经验/金币聚合口径保持一致 —— 两处口径分叉会让"掉落比经验多算一份"。
             for (const auto& drop : monsterRow->drop()) {
                 // 坏表判定:三列缺一即空槽(导表器允许整槽留空)
                 if (drop.drop_item() == 0 || drop.drop_count() == 0 || drop.drop_rate() == 0) {
                     continue;
                 }
-                for (uint32_t kill = 0; kill < killCount; ++kill) {
-                    // 每人、每只、每槽各掷一次:组队 PVE 里每个合格成员独立得掉落,
-                    // 与经验/金币"人人全额"的口径一致,不做分赃
-                    if (Rand01() * static_cast<double>(kDropRateDenominator) >=
-                        static_cast<double>(drop.drop_rate())) {
-                        continue;
-                    }
-                    BattleItemEntry* gained = nullptr;
-                    for (auto& entry : *settlement.mutable_items_gained()) {
-                        if (entry.item_table_id() == drop.drop_item()) {
-                            gained = &entry;
-                            break;
-                        }
-                    }
-                    if (gained == nullptr) {
-                        gained = settlement.add_items_gained();
-                        gained->set_item_table_id(drop.drop_item());
-                    }
-                    gained->set_count(gained->count() + drop.drop_count());
+                // 每人、每只、每槽各掷一次:组队 PVE 里每个合格成员独立得掉落,
+                // 与经验/金币"人人全额"的口径一致,不做分赃
+                if (Rand01() * static_cast<double>(kDropRateDenominator) >=
+                    static_cast<double>(drop.drop_rate())) {
+                    continue;
                 }
+                BattleItemEntry* gained = nullptr;
+                for (auto& entry : *settlement.mutable_items_gained()) {
+                    if (entry.item_table_id() == drop.drop_item()) {
+                        gained = &entry;
+                        break;
+                    }
+                }
+                if (gained == nullptr) {
+                    gained = settlement.add_items_gained();
+                    gained->set_item_table_id(drop.drop_item());
+                }
+                gained->set_count(gained->count() + drop.drop_count());
             }
         }
     }
 }
 
-void TurnBattleEngine::SanitizeSnapshotBuffs(BattleActorState& actor) const {
+void TurnBattleEngine::SanitizeSnapshotBuffs(BattleActorState& actor) {
     // 快照 buff 来自 scene 的实时战斗世界,直接照搬会出三类问题(G5):
     //   ① 控制类(眩晕/冰冻/沉默)按表全量时长换算,场景里只剩半秒的控制进战斗会变成整整几回合;
     //   ② 瞬时 buff(非无限且 duration<=0)在实时侧是"挂上即到期",快照却把它当无限持续;
@@ -1580,7 +1603,9 @@ BattleSettlementData TurnBattleEngine::BuildSettlement(uint64_t playerId) const 
     // 奖励:仅在玩家侧(A 方=team 0)获胜时结算,给未逃跑的存活参战者。
     // 经验/金币 = 本场被击杀怪物 MonsterTable.exp_reward/gold_reward 之和;
     // 队伍 PVE 每个达成条件的成员各得全额(经典 MMO 组队口径)。
-    // 逃跑或阵亡的玩家不发奖。掉落 items_gained 依赖掉落表,留待后续接入。
+    // 逃跑或阵亡的玩家不发奖(与 RollDrops 的发奖条件逐条同源)。掉落 items_gained 由
+    // RollDrops 在终局一次性摇定并写进 settlements,这里只原样带出 —— 本函数必须保持
+    // const 且可重复读(节点 outbox 会重投、重复读同一份结算)。
     if (outcome == BATTLE_OUTCOME_SIDE_A_WIN && actor->team_index() == 0 &&
         !actor->fled() && !actor->is_dead()) {
         uint64_t expSum = 0;

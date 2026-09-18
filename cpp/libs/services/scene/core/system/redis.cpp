@@ -23,6 +23,9 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     playerRedis->SetLoadFailedCallback(PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed);
     playerRedis->SetSaveCallback(PlayerLifecycleSystem::HandlePlayerAsyncSaved);
     playerRedis->SetSaveFailedCallback(PlayerLifecycleSystem::HandlePlayerAsyncSaveFailed);
+    // owner_epoch CAS 拒绝(Lua 比对 player:{id}:owner_epoch 不等)与"存盘失败"是两种语义:
+    // 失败要重试、拒绝是终态(本节点已被废黜,再试也是拒)。分开接线,别让废黜走进重试队列。
+    playerRedis->SetSaveRejectedCallback(PlayerLifecycleSystem::HandlePlayerSaveRejected);
 
     tlsRedis.SetReconnectCallback([this]()
                                   {
@@ -66,6 +69,15 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
                      << " skipped=" << stats.skipped
                      << " skip_pct=" << (pctTenths / 10) << "."
                      << (pctTenths % 10) << "%";
+        }
+        // 归属健康计数单独一行、单独前缀,不动 [DirtySave] 的解析格式。
+        // 三个值在链路升级完成后都应恒 0;任一非 0 都是要查的信号(含义见 owner_epoch_stats)。
+        const auto ownerStats = owner_epoch_stats::Read();
+        if (ownerStats.Any())
+        {
+            LOG_WARN << "[OwnerEpoch] stale_owner_write_rejected=" << ownerStats.staleOwnerWriteRejected
+                     << " home_zone_unknown=" << ownerStats.homeZoneUnknown
+                     << " owner_epoch_unknown=" << ownerStats.ownerEpochUnknown;
         } });
     snapshotTimerActive_ = true;
 

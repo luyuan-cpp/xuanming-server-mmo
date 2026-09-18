@@ -232,6 +232,19 @@ TEST_F(PlayerBattleSettlementItemTest, ConsumedForItemPlayerDoesNotHaveDoesNotFa
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
 }
 
+TEST_F(PlayerBattleSettlementItemTest, ConsumedNonBattleItemIsRejectedNotDestroyed) {
+    // 反向校验:快照只会把 battle_usable 的物品放进副本,账本里出现别的 id 只可能是
+    // 陈旧的 battle 节点或伪造结算。放行等于让战斗服点名销毁玩家的任意物品。
+    constexpr uint32_t kNonBattleItem = 1;  // Item 表里 battle_usable = 0
+    GiveItem(kNonBattleItem, 3);
+    SetConsumed(kNonBattleItem, 3);
+
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+
+    EXPECT_EQ(Inventory().GetTotalItemCount(kNonBattleItem), 3u);  // 一件都没被扣
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+}
+
 TEST_F(PlayerBattleSettlementItemTest, RepeatedApplyDoesNotDoubleConsumeOrDoubleDrop) {
     GiveItem(kSettlementStackItem, 5);
     SetConsumed(kSettlementStackItem, 2);

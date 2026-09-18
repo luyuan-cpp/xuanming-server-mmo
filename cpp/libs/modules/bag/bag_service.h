@@ -58,12 +58,16 @@ public:
 	//   但注意:临时格(kTemporary)上 reserve 本身可能**已经销毁**了最早的物品来
 	//   腾位 —— 那些实例已落 LogItemDestroy,且即使后续失败也不会复活。调用方不能
 	//   把"返回失败"理解为"包与调用前完全一致"。
+	// correlationId / extra 落进流水(战斗掉落传 battle_id 与来源 JSON)。
+	// TX_ITEM_AWARD 的 proto 注释要求 extra 带来源,否则回滚重放无法判断这笔奖励是否仍有效。
 	static uint32_t AddItems(
 		entt::entity playerEntity,
 		Bag &bag,
 		const PlayerItemBlockList &blockList,
 		const ItemCountMap &itemsToAdd,
-		TransactionType txType = TX_SYSTEM_GRANT);
+		TransactionType txType = TX_SYSTEM_GRANT,
+		uint64_t correlationId = 0,
+		const std::string &extra = {});
 
 	// Orchestrated batch AddItems carrying full ItemComp per piece
 	//   (mail attachments mixing equipment + stackable items): preserves

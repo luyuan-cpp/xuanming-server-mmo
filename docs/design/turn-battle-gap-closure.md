@@ -18,7 +18,7 @@
 | G1 | 战斗掉落不落地 | 引擎 `BuildSettlement` 注释"掉落 items_gained 依赖掉落表,留待后续接入";`MonsterTable` 无掉落列;scene 侧只 `LOG_INFO` | Monster 表加 `drop` 槽;引擎终局摇点写 `items_gained`;scene 真入包(D41/D42/D43) |
 | G2 | 战斗内用药形同虚设 | 快照 `items` 一期传空;`ItemTable` 无战斗列;固定回血 100;`target_id` 被忽略只能自疗;非法 ITEM 静默换普攻且客户端收 OK;PVP 无限次用药 | Item 表加三列;效果读表;可给同队用;提交回错误码;PVP 限次(D44–D47) |
 | G3 | 消耗不真扣 | `Bag::RemoveItems` 全或无,`DrainStacks` 无回执,`BagService` 无按数量扣除入口,流水无战斗来源 | 实例层出回执、桥层加夹紧扣除、编排层逐条落流水(D43) |
-| G4 | 战斗中 scene 侧不设防 | 只有加点/宠物/切场景/镜像/跨 zone 有闸;实时技能、移动、背包整理、GM 回滚全无 | 五处补闸,口径写进冻结清单(D48) |
+| G4 | 战斗中 scene 侧不设防 | 只有加点/宠物/切场景/镜像/跨 zone 有闸;实时技能、实时 buff、移动、背包整理、GM 回滚全无 | 六处补闸,口径写进冻结清单(D48) |
 | G5 | 快照 buff 脏 | 全量拷(含眩晕/冰冻/沉默)、瞬时 buff 当无限、`caster_id` 是 scene 的 entt 整数 | scene 过滤 + 域映射,引擎侧再兜一层(D49) |
 | G6 | 快照技能不过滤 | 被动/开关/持续施法技能都能当普通技能提交并打出伤害 | scene 过滤 + 引擎黑名单(D50) |
 | G7 | 状态广播泄露 + 客户端看不到自己道具 | `BattleStateS2C` 把全员冷却发给对手与观众;本人剩余道具无字段承载,重连后归零 | 节点按收信人裁剪 + `self_items` 新字段(D45/D46) |
@@ -36,7 +36,7 @@
 | D45 | **ITEM 可以给同队存活单位用**(`target_id` 为 0 或自己 = 自疗);给敌方用药拒绝 | 协议注释本来就写着"ATTACK/SKILL/ITEM 的目标",客户端也一直在传目标——是引擎没读。组队 PVE 给队友喂药是回合制的基本盘 |
 | D46 | **`SubmitBattleAction` 回校验码**:引擎加零副作用的 `ValidateAction`,节点先查后提交,失败填 `error_message` | 原先"对客户端一律回 OK,不泄漏校验细节"的代价是:玩家点了吃药、客户端显示成功、回合结算却变成默认普攻,且无从得知原因。玩家资产路径不许静默降级(AGENTS §11.3)。不改 proto,不触发 regen |
 | D47 | **PVP 每人每场道具上限 `kMaxItemUsesPerBattlePvp = 5`,PVE 不限** | 打满 `max_rounds` 判进攻方负,而 PVP 一期不可逃:不限次用药的防守方可以靠海量药水拖满回合白赢,进攻方没有止损手段。5 是可调常量,调了要同步改本节 |
-| D48 | **局中闸补五处**:实时技能(施法者 + 目标 + 落点期)、移动上报与位移积分、背包整理、GM 回滚类写操作。**闸只放客户端入口层与实时战斗落点,绝不下沉到 `BagService` / `CurrencySystem`** | 下沉会把结算自己挡住:`ApplySettlementToEntity` 入账时 `InBattleComp` 还挂着(`ClearBattleFreeze` 在应用之后)。判定统一用 `any_of<InBattleComp>` 而不 include `player_battle.h`,避免 skill/buff/movement 这些底层 TU 反向依赖 scene 的战斗服务层 |
+| D48 | **局中闸补六处**:实时技能(施法者 + 目标 + 落点期)、**实时 buff 挂载**(`BuffSystem::AddOrUpdateBuff`,含服务端派生的子 buff)、移动上报、位移积分、背包整理、GM 回滚类写操作。**闸只放客户端入口层与实时战斗落点,绝不下沉到 `BagService` / `CurrencySystem`** | 下沉会把结算自己挡住:`ApplySettlementToEntity` 入账时 `InBattleComp` 还挂着(`ClearBattleFreeze` 在应用之后)。判定统一用 `any_of<InBattleComp>` 而不 include `player_battle.h`,避免 skill/buff/movement 这些底层 TU 反向依赖 scene 的战斗服务层 |
 | D49 | **快照 buff 剔除控制类(眩晕/冰冻/沉默)与瞬时类**;`caster_id` 只映射"施法者是自己"这一种,其余置 0 | 控制类按表全量时长换算,场景里只剩半秒的眩晕进战斗会变成整整几回合,PVP 里还能被对手在应战前挂上。`caster_id` 是 scene 的 entt 实体整数,与引擎 actor_id 不是一个域,恰好撞上某个 player_id 就会被算成那名玩家(叠层隔离、BUFF_TICK 来源都按它判) |
 | D50 | **技能过滤用黑名单**(剔除被动 / 开关 / 持续施法),不是白名单 | 存量 Skill 表未必每行都填了 `skill_type`,白名单会把没填的一律判死。黑名单只拦三类确定不该主动施放的 |
 
@@ -51,7 +51,7 @@
 | proto | `BattleStateS2C` 加 `repeated BattleItemEntry self_items = 7` | 需 regen(C++ / Go / 客户端 `gen_proto.ps1`);无新增 RPC,`message_id` 不变 |
 | 指纹 | `BattleTableFingerprint::ComputeFrom` 加第七参 `ItemTableData`,追加在末尾 | 指纹值必变;match 与 battle 两侧默认 `warn`,灰度期不一致只告警 |
 | tip | **零新增**。复用 `kInvalidParameter` / `kInvalidTableId` / `kBagInsufficientItems` / `kSkillInvalidTarget` / `kSkillInvalidTargetId` / `kSkillCannotBeCastInCurrentState` | 不动 `Tip.xlsx`(二进制文件,team / trade 会话也在排队改它) |
-| 流水 | `LogItemCreate` / `LogItemDestroy` 尾部加 `correlationId` / `extra` 默认参数;掉落用 `TX_ITEM_AWARD`,消耗用 `TX_ITEM_DESTROY`,两者都带 `battle_id` 与 `{"source":"battle","battle_id":N}` | 不动 `transaction_log.proto`(不新增枚举 = 不 regen);既有 6 处调用点零改动 |
+| 流水 | `LogItemCreate` / `LogItemDestroy` 尾部加 `correlationId` / `extra` 默认参数;`BagService::AddItems`(ItemCountMap 重载)同样加这两个尾参并透传 —— 否则掉落那一半的来源永远进不了流水。掉落用 `TX_ITEM_AWARD`,消耗用 `TX_ITEM_DESTROY`,两者都带 `battle_id` 与 `{"source":"battle","battle_id":N}` | 不动 `transaction_log.proto`(不新增枚举 = 不 regen);尾参带默认值,既有调用点零改动。**逐件重载 `AddItems(vector<InitItemParam>)` 本轮未加**(战斗掉落不走它),日后邮件/托管接入时需同步 |
 
 ## 4. 改动集(逐文件)
 
@@ -89,10 +89,31 @@
 - `nodes/scene/handler/rpc/player/player_movement_handler.cpp`:三个移动上报入口静默丢弃(响应是 `Empty`,回不了 tip;高频包不打日志)。
 - `nodes/scene/handler/rpc/player/player_rollback_handler.cpp`:`RejectIfFrozen` 并入战斗在途判定。
 
+**评审后追加的修正**(对抗评审 34 条发现、29 条经独立核实成立,已逐条处置)
+- `player_rollback_handler.cpp` 漏 `battle_comp.pb.h`(**编译不过**,实现者无法编译才会漏的那一类)。
+- `CheckBuff` 把 SkillPermission 表里"没填"的 0 格原样当错误码返回 → `ValidateAction` 可能回 0,
+  节点写进 `error_message.id` 会被客户端读成"成功"。改为坏表按 `kInvalidTableData` 报,节点再兜一层。
+- 结算消耗加**反向校验**:只扣 `battle_usable` 的物品。否则一个陈旧/伪造的 battle 节点可以
+  点名销毁玩家的任意物品(装备、任务道具)。快照出包与结算扣除共用 `IsBattleUsableItem` 一处判据。
+- 掉落入主包失败后**只补投没进去的那部分**:`BagService::AddItems` 返回失败不代表包没变
+  (临时格可能已腾位),整批重投等于凭空复制道具。
+- 跨 zone 冻结期**整笔结算延后**:原先 `gold_gain == 0` 而只有道具的结算无人拦,会被标记
+  Applied 而道具一件没动。现在在任何不可重复副作用之前 `return false` 保留 pending。
+- 消耗扣完顺手 `MergeAndCompact(kMergeOnly)` 回收 `size==0` 的僵尸堆(只回收、不挪位置),
+  否则主背包会被僵尸堆占满、后续掉落直接满包。
+- 出手期目标已死不再让整个回合静默蒸发,**回落成自疗**;`battle_usable=1` 但两列效果都为 0 的
+  半填配表在提交期就拒(否则药被吃掉、回合被浪费)。
+- `RollDrops` 去掉按 `defeat.count()` 放大(每条恒为一次击杀),与经验/金币聚合口径对齐。
+- `SanitizeSnapshotBuffs` 去掉 `const`(它改引擎自己的 actors);`RedactStateForViewer` 统一
+  `clear_self_items()`,不再依赖"引擎恰好不填"。
+
 **测试**
 - `cpp/tests/turn_battle_engine_test/`:`memory_battle_data_provider.h` 加 `AddItem`/`FindItem`;指纹用例加第七张表;既有 ITEM 用例改为表驱动(provider 里配回血 100,断言不变);新增 9 个用例(掉落必掉/概率 0 不掉、表驱动效果与回蓝、非战斗道具与未知 id 被拒、给队友用药与给敌方被拒、PVP 限次、`SelfItems` 余量、buff 清洗、被动技能不可提交)。
 - `cpp/tests/bag_test/bag_test.cpp`:3 个用例(夹紧扣除与回执、全或无语义不变、缺物品与 0 数量是空操作)。
-- `cpp/tests/bag_test/player_battle_settlement_test.cpp`:`PlayerBattleSettlementItemTest` 4 个用例(真扣真发、不足夹紧、完全没有也不失败、重投不双扣双发)。
+- `cpp/tests/bag_test/player_battle_settlement_test.cpp`:`PlayerBattleSettlementItemTest` 5 个用例(真扣真发、不足夹紧、完全没有也不失败、非战斗道具被拒不销毁、重投不双扣双发)。
+- `cpp/tests/bag_test/player_feature_snapshot_test.cpp`:`InBattleSortKeepsSourceLayoutUnchanged`(局中整理被拒且布局未动)。
+- `cpp/tests/turn_battle_engine_test/battle_table_fingerprint_test.cpp`:`MakeTables` 补 Item 行与 Monster 掉落槽,
+  并新增两个"改了就必须变指纹"的子断言 —— 否则 `ComputeFrom` 漏掉 Item 段也照样全绿。
 
 ## 5. 新增/收紧的不变量
 
@@ -109,6 +130,13 @@
 - **脱敏挡不住推算**:`TurnResultS2C.events` 带 `skill_table_id` / `buff_table_id`,对手查表仍可推算冷却与 buff 时长;`pending_actor_ids` 与 `is_auto` 也暴露"谁已出手/谁挂机"。本轮只堵"直接读"。
 - **`items_gained` 全部落在主背包或临时格**:没有邮件兜底(全仓无 mail 模块)。临时格是 FIFO 淘汰的溢出缓冲,极端情况下会挤掉更早的掉落。
 - **掉落数据只填了 1、2 号怪**:其余 14 只怪的 `drop` 留空,等策划。
+- **战斗期间 buff 只出不进**:新 buff(含存量 buff 的子 buff 派生)被丢弃,而 `BuffSystem::Update`
+  仍在给存量 buff 计时到期。要完全对称还得给 tick 也加 `exclude<InBattleComp>`,本轮判定为可接受
+  ——战斗期间场景 buff 的存续本就不进战斗判定。
+- **进战不清 `Velocity`**:tick 侧 `exclude<InBattleComp>` 只是把位移推迟到战斗结束那一刻。
+  要彻底应在挂 `InBattleComp` 时清零速度并打脏位,本轮未做。
+- **逐件 `AddItems(vector<InitItemParam>)` 重载没有 correlationId/extra**:战斗掉落不走它,
+  邮件/托管接入时要补,否则那条路的流水同样没有来源。
 
 ## 7. 未编译,待 Codex 验证(按序)
 
@@ -131,7 +159,9 @@
    - 期望 0 error;`bin/battle.exe`、`bin/scene.exe` 的 mtime 晚于所有 `lib/*.lib`。
    - scene.exe 在跑会占 PDB 导致 `LNK1201`,先停节点。
 4. **C++ 单测**:`pwsh tools/scripts/run_cpp_tests.ps1 -Build -Filter 'turn_battle_engine_test|bag_test|cross_zone_test'`。
-   - 期望退出码 0;基线 turn 115/115、bag 220/220,本轮新增 9 + 3 + 4 = 16 个用例,总数应为 turn 124、bag 227(以实际为准,关键是**无 `[FAILED]` 且退出码 0**)。
+   - 期望退出码 0;基线 turn 115/115、bag 220/220。本轮新增:引擎 9、bag 容器 3、结算 5、整理闸 1 = 18 个用例
+     (指纹用例是在既有用例内加断言,不增计数)。总数应为 turn 124、bag 229 左右 —— **以实际为准,
+     关键是无 `[FAILED]` 且退出码 0**。
    - 注意该脚本内置两个坑:测试 exe 需要 `bin/` 下的 `zlibd.dll`/`rdkafka*.dll`;退出码非 0 但没有 `[FAILED]` 行 = 用例中途 `LOG_FATAL`,判红。
 5. **robot 冒烟**(`cd robot`,先 `go mod vendor` 因为 regen 动过 `go/proto`):
    `.\robot.exe -c etc\battle_smoke.yaml`,期望 `BATTLE_SMOKE_OK`、退出码 0。

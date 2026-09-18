@@ -137,7 +137,9 @@ uint32_t BagService::AddItems(
 	Bag &bag,
 	const PlayerItemBlockList &blockList,
 	const ItemCountMap &itemsToAdd,
-	TransactionType txType)
+	TransactionType txType,
+	uint64_t correlationId,
+	const std::string &extra)
 {
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
 	// See AddItem above for rationale. Reject the whole batch early.
@@ -195,7 +197,7 @@ uint32_t BagService::AddItems(
 
 		TransactionLogSystem::LogItemCreate(
 			playerEntity, PrimaryWrittenGuid(writtenGuids),
-			configId, count, txType);
+			configId, count, txType, correlationId, extra);
 
 		AnomalyDetector::RecordItemGain(playerEntity, configId, count);
 	}

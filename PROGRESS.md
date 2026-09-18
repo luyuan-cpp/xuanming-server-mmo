@@ -5046,3 +5046,26 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   4. 属性数值 09-16 的 Codex 验收封存包基于改前引擎源码,本轮改了引擎,**该验收包即失效**,需重跑。
   5. 工作区同时有并行会话的改动(帮会二期 B1、发布打包、merge_zone、go/guild、go/friend),本条只涵盖上面列出的 36 个文件 + 1 个新设计文档,其余未触碰。
 - 未编译、未导表、未运行:验证清单见 [turn-battle-gap-closure.md](docs/design/turn-battle-gap-closure.md) §7(导表 → proto-gen → C++ 串行 `/m:1` → 单测 → robot battle_smoke → 可选客户端)。
+
+## 2026-09-17 帮会二期 B1b:合服/巡检工具按 `-guild-schema` 限定帮会表(Claude,未编译)
+
+- 接 B1(帮会表迁入独占库 `mmorpg_guild`)。B1 之后 `tools/merge_zone` 与 `tools/data_consistency_check` 里那些不带库名的 `FROM guild` 会落到 `-mysql-dsn` 的默认库上 —— 表不在那儿,合服会把整批公会静默漏掉。本批按 [01-storage.md](docs/design/guild-phase2/01-storage.md) §10/§11 落码,**11 个手改文件**(设计列 9 个,多出的两个见下),未编译、未测试。
+- `merge_zone`:新增 `-guild-schema`(默认 `mmorpg_guild`),`collectGuildIDsInZone` / `assertNoGuildNameCollision` / `migrateGuildZone` 与三处审计 SQL 全部改成「库名.表名」;新增 `assertGuildTablesReady`(校验库名形状 → 库在 → `guild` 有 zone_id/name/name_norm、`guild_member` 有 guild_id),合服前置与撤销前置(清单里有公会时)失败即 `log.Fatal`,一个字节都不写。
+- 重名探测改比 `name_norm`(uk_guild 所在列),不再比展示名:规范化在 go/guild 侧完成,按展示名比会漏掉 "青云门 " 与 "青云门"、"ABC" 与 "abc" 这类等价名。
+- `data_consistency_check`:同名 flag + 本地正则校验(独立 module 不复用 merge_zone 的函数),三条 `FROM guild` 限定库名,"表不存在报 info"的尽力语义不变。
+- 比设计多改两个文件:库名形状正则从 `trade_step.go` 的 `tradeSchemaNamePattern` 提到 `player_rows.go` 的 `schemaNamePattern`(trade / guild 共用一份,避免帮会代码引用 trade 命名的变量)。另外设计让把 `auditFriend` 注释里的 `guild_friend_tables.sql` 改成 `guild_db.proto`,实际那处讲的是 friend 表、仍由该 SQL 建,未改。
+- 测试:集成测试新增一次性库 `merge_zone_it_guild`(帮会两表建在那儿,friend 两表留在默认库 —— 帮会表必须搬出默认库,测试才能证明 flag 真生效),新增 `TestIT_AssertGuildTablesReady`、`TestIT_Unmerge_RefusesMissingGuildSchemaBeforeAnyWrite`、端到端拒绝用例(库不在 / 只给一个跳过开关 / 两个都给),单测新增 `TestGuildNamesMatchGuildService`、`TestValidateGuildSchemaName`。
+- 待 Codex 验证(工作目录 `tools/merge_zone` 与 `tools/data_consistency_check`):`go build ./...`、`go vet ./...`、`go test ./... -count=1`;真实 MySQL/Redis 在本机时再跑 `go test -tags merge_integration ./... -count=1`(会建/删 `merge_zone_it_*` 与 `zone_90{1,2}_db`,并要求 Redis DB 9/10/11/12 本来为空)。静态检查:`rg -n "uk_name|guild_friend_tables" tools/merge_zone tools/data_consistency_check` 应为 0 命中。
+- **B1 与 B1b 都落地前不得执行真实合服**;B1b 之后下一批是 B2s/B2c(管理与审批),顺序见 [91-batches-and-codex.md](docs/design/guild-phase2/91-batches-and-codex.md)。
+
+## 2026-09-17 晚:中午重启请求关停全栈后重新拉起 + 冒烟 21/23→22/23 + kind 集群抢占本机资源(Claude)
+
+- **停机原因**:11:55:19 系统事件 Id=1074 记录了一次用户发起的重启,机器最终没有重启成功(`LastBootUpTime` 仍是 00:01:31、连续运行 21.9 小时),但该请求把 Docker Desktop 与 12 个游戏进程全部终止(db.stderr 末条停在 11:55:22 的 killswitch watch canceled + close consumer group)。21:53 复查时服务器全停、Docker 引擎管道不存在。
+- **拉起失败三次的共同根因**:本机 kind 集群容器 `mmorpg-control-plane` 里有另一会话 09-16 留下的整套游戏栈(命名空间 `chat-full-verify-20260916`,21 个 Pod,已运行 23 小时,其中 db 重启 13 次、login 重启 13 次),持续占用约 7 个 CPU 核与 5.2GB;同处一个 WSL 虚拟机的 Kafka 被拖慢到 `docker exec kafka kafka-topics.sh --list` 单次 56 秒(09-16 重负载时也才 21 秒)。
+  - 21:54 起 Docker Desktop、容器按 restart policy 恢复 → 22:05 启动器第 2 步报"Docker Linux 引擎 300 秒内未就绪"(其内部每次 `docker.exe` 调用 15 秒上限被击穿)。
+  - 22:35 第二次:第 3 步"预建缺失 Kafka 主题" 240 秒超时;事后核对 5 个主题(gate-cmd_g2 / scene-cmd_g2 / game-events / transaction_log_topic_g1 / player_snapshot_topic_g1)其实都已建成,与 09-16 同一模式。
+  - 22:49 第三次:第 2 步 Kafka 就绪判定 60 秒超时(`Wait-Ready 'Kafka'` 的 `Invoke-Docker ... 60`,实测 56 秒,擦边失败)。
+  - **缓解手段(可逆,未触碰他人集群)**:对本项目 compose 起的四个容器提高 CPU 权重 `docker update --cpu-shares 8192 kafka mysql etcd redis`。cpu-shares 只在争抢时生效,`kafka-topics.sh --list` 由 56 秒降到 36.8 秒,进入 60 秒预算。还原方式:`docker update --cpu-shares 1024 <容器>`。
+  - 22:59 第四次启动器 6/6 通过,**23:14:59 一区 OPEN**。11 个原生进程(gate / scene / battle / db / data_service / scene_manager / player_locator / login / match / chat / trade)+ 网关 8081 health=UP;guild 本轮被启动器按可选服务跳过(凌晨那轮它在,原因未查)。
+- **robot login-test 两轮**:23:16:41 **21/23**(失败:RapidReconnect `enter game: server error id:2005`、SkillCast `no visible/self entity found`);23:18 复跑 **22/23**(失败只剩 RapidDisconnectReconnect,同样是 2005;SkillCast 通过)。两轮失败项不同且都是玩家锁忙,判定为负载下的偶发,不是回归 —— 同一批二进制在凌晨空载时是 23/23、09-16 重负载时是 15/23。
+- **未做的事**:没有删除或停止 kind 集群及其命名空间(他人验收环境),已向用户报告并等待决定;没有停止用户自己的 5 个雷电模拟器实例。未改任何服务代码,未执行 git add/commit/push。

@@ -109,9 +109,11 @@ private:
     // ITEM 校验:表行存在且 battle_usable、快照副本里还有余量、目标合法(自己或同队存活单位)、
     // PVP 场次未超每人上限。这是提交期与出手期共用的唯一判据。
     uint32_t CheckItemUse(const BattleActorState& actor, const BattleAction& action) const;
-    // 回合制可施放的技能类型白名单:放行 General / Activate / BasicAttack 位,
-    // 拒绝 Passive(被动) / Toggle(开关) / Channel(持续施法,引擎已删相位概念)。
+    // 回合制可施放的技能类型**黑名单**:拒绝 Passive(被动) / Toggle(开关) /
+    // Channel(持续施法,引擎已删相位概念);skill_type 为空或只含其它位号一律放行
+    // (存量表未必每行都填了 skill_type,白名单会把没填的全判死)。
     // 表里 skill_type 存的是位号(0..5),不是掩码。
+    // 与 scene 侧 player_battle.cpp 的快照过滤逐条同源:改一处必须同改另一处。
     bool IsTurnBattleCastableSkill(const SkillTable& skillRow) const;
 
     // ---- 回合结算 ----
@@ -141,7 +143,7 @@ private:
     void RollDrops();
     // 快照带入的 buff 清洗(G5):丢掉表缺失/控制类/瞬时类条目,把 caster_id 从
     // scene 的 entt 整数域改写到局内 actor_id 域(认不出来的一律置 0)。
-    void SanitizeSnapshotBuffs(BattleActorState& actor) const;
+    void SanitizeSnapshotBuffs(BattleActorState& actor);
 
     // ---- 伤害/治疗/buff ----
 

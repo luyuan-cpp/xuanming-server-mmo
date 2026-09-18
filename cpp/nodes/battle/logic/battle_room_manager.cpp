@@ -670,7 +670,14 @@ void BattleRoomManager::HandleSubmitBattleAction(const ::SessionDetails &session
         LOG_DEBUG << "SubmitBattleAction 校验不过: battle_id=" << request.battle_id()
                   << " player_id=" << playerId << " action=" << request.action().action_type()
                   << " code=" << validation;
-        response.mutable_error_message()->set_id(validation);
+        // 0 不是任何一个 tip 码(kCommon_errorOK=0),写进去客户端会读成"成功"却没落账。
+        // 引擎已把坏表格子转成 kInvalidTableData,这里是最后一道兜底。
+        if (validation == 0)
+        {
+            LOG_ERROR << "SubmitBattleAction 校验返回 0(坏表或引擎契约破坏): battle_id="
+                      << request.battle_id() << " player_id=" << playerId;
+        }
+        response.mutable_error_message()->set_id(validation != 0 ? validation : kInvalidParameter);
         return;
     }
 
@@ -1154,6 +1161,9 @@ void BattleRoomManager::BroadcastTurnResult(const BattleRoom &room, const ::Turn
 void BattleRoomManager::RedactStateForViewer(::BattleStateS2C &state,
                                              const uint64_t viewerPlayerId) const
 {
+    // 道具余量是私有信息:统一在这里清掉,再由 FillSelfItems 只给本人回填。
+    // 不依赖"BuildStateSnapshot 恰好不填 self_items"这一外部事实 —— 那是别处的实现细节。
+    state.clear_self_items();
     for (auto &actor : *state.mutable_actors())
     {
         // "自己的单位" = 本人 + 本人的宝宝(宝宝 actor_id 是局内号,归属看 owner_player_id)

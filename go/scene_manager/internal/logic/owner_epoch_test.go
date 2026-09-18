@@ -1,0 +1,681 @@
+package logic
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"testing"
+
+	"github.com/alicebob/miniredis/v2"
+	"github.com/segmentio/kafka-go"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+	gproto "google.golang.org/protobuf/proto"
+
+	kafkacontracts "proto/contracts/kafka"
+	dspb "proto/data_service"
+	"proto/scene_manager"
+	game "scene_manager/generated/pb/game"
+	"scene_manager/internal/constants"
+	"scene_manager/internal/svc"
+	"shared/ownerepoch"
+)
+
+// ---------------------------------------------------------------------------
+// owner_epoch 铸造 / handoff 换手门 / home_zone 查询(cross-zone-scene-travel.md
+// CZ-3 / CZ-4 / CZ-5,scene-owner-reentry-barrier.md §3.3)
+//
+// 这些用例只走 EnterScene 这一个公开入口,断言的是 Redis 里两把键的终态与
+// RoutePlayerEvent 里带出去的值 —— 那是 C++ 节点与 db 消费者真正依赖的契约。
+// ---------------------------------------------------------------------------
+
+// fakeHomeZoneClient 是 data_service GetPlayerHomeZone 的最小假实现。
+type fakeHomeZoneClient struct {
+	zone  uint32
+	err   error
+	calls int
+}
+
+func (f *fakeHomeZoneClient) GetPlayerHomeZone(_ context.Context, _ *dspb.GetPlayerHomeZoneRequest, _ ...grpc.CallOption) (*dspb.GetPlayerHomeZoneResponse, error) {
+	f.calls++
+	if f.err != nil {
+		return nil, f.err
+	}
+	return &dspb.GetPlayerHomeZoneResponse{HomeZoneId: f.zone}, nil
+}
+
+// capturingKafkaWriter 把发出的消息原样留下,供解码 RoutePlayerEvent。
+func capturingKafkaWriter(sc *svc.ServiceContext) *[]kafka.Message {
+	captured := &[]kafka.Message{}
+	sc.Kafka = &countingKafkaWriter{onWrite: func(msgs []kafka.Message) {
+		*captured = append(*captured, msgs...)
+	}}
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+	return captured
+}
+
+func decodeRoutePlayerEvent(t *testing.T, msg kafka.Message) *kafkacontracts.RoutePlayerEvent {
+	t.Helper()
+	cmd := &kafkacontracts.GateCommand{}
+	require.NoError(t, gproto.Unmarshal(msg.Value, cmd))
+	require.Equal(t, uint32(game.ContractsKafkaRoutePlayerEventEventId), cmd.EventId)
+	event := &kafkacontracts.RoutePlayerEvent{}
+	require.NoError(t, gproto.Unmarshal(cmd.Payload, event))
+	return event
+}
+
+func ownerEpochRaw(t *testing.T, sc *svc.ServiceContext, playerID uint64) string {
+	t.Helper()
+	raw, err := sc.Redis.Get(ownerepoch.OwnerEpochKey(playerID))
+	require.NoError(t, err)
+	return raw
+}
+
+// seedSceneOnNode 摆一个已存在的场景实例:scene→node 映射、zone 映射、人数。
+func seedSceneOnNode(mr *miniredis.Miniredis, zoneID uint32, sceneID uint64, nodeID string, playerCount string) {
+	mr.ZAdd(nodeLoadKey(zoneID), 0, nodeID)
+	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, sceneID), nodeID)
+	mr.Set(fmt.Sprintf(SceneZoneKeyFmt, sceneID), fmt.Sprintf("%d", zoneID))
+	mr.Set(fmt.Sprintf(InstancePlayerCountKey, sceneID), playerCount)
+}
+
+// writeHandoffMarker 模拟 C++ 源 scene 在 Redis 落地回调之后写出的交接标记。
+func writeHandoffMarker(t *testing.T, sc *svc.ServiceContext, playerID uint64, epoch uint64) {
+	t.Helper()
+	marker := ownerepoch.Handoff{Epoch: epoch, SavedAtMs: 1757000000000}
+	require.NoError(t, sc.Redis.Setex(ownerepoch.HandoffKey(playerID), marker.String(), int(ownerepoch.HandoffTTL.Seconds())))
+}
+
+// --- 铸造 ------------------------------------------------------------------
+
+func TestEnterScene_FirstLandingMintsEpochOneAndCarriesItInRouteEvent(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6101)
+		targetID = uint64(7101)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "0")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "首次分配从 1 开始铸造")
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	require.NotNil(t, loc)
+	assert.Equal(t, uint64(1), loc.OwnerEpoch, "location 里必须带同一个 epoch")
+	assert.Equal(t, targetID, loc.SceneId)
+
+	require.Len(t, *captured, 1)
+	event := decodeRoutePlayerEvent(t, (*captured)[0])
+	assert.Equal(t, uint64(1), event.OwnerEpoch, "路由事件必须带本次铸造的 epoch")
+	// 本进程没配 DataServiceRpc:归属按 gate zone 填,不能是 0。
+	assert.Equal(t, testZoneId, event.HomeZoneId)
+}
+
+func TestEnterScene_SamePlacementReconnectDoesNotMintEpoch(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6102)
+		sceneID  = uint64(7102)
+	)
+	seedSceneOnNode(mr, testZoneId, sceneID, "10", "1")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneID, "10", testZoneId))
+	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	beforeRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: sceneID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "同一落点重连不得推进 epoch:持有节点的缓存值必须仍然合法")
+	afterRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, beforeRaw, afterRaw, "重连不改写 location")
+	require.Len(t, *captured, 1)
+	event := decodeRoutePlayerEvent(t, (*captured)[0])
+	assert.Equal(t, uint64(1), event.OwnerEpoch, "重连事件原样带当前 epoch")
+	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneID))
+	assert.Equal(t, "1", count, "重连不重复计人数")
+}
+
+func TestMintEpochLuaRejectsStaleExpectedValueWithoutTouchingKeys(t *testing.T) {
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6103)
+	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "3"))
+	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), "old-location-bytes"))
+
+	// 调用方读到的是 2(并发请求已经推到 3):CAS 必须落败且两把键一个字节不动。
+	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation,
+		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID)},
+		"2", "new-location-bytes")
+	require.NoError(t, err)
+	assert.Equal(t, "0", fmt.Sprint(result))
+	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
+	locRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, "old-location-bytes", locRaw)
+
+	// 期望值对上:INCR 到 4 并写 location,一次原子完成。
+	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation,
+		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID)},
+		"3", "new-location-bytes")
+	require.NoError(t, err)
+	assert.Equal(t, "4", fmt.Sprint(result))
+	assert.Equal(t, "4", ownerEpochRaw(t, sc, playerID))
+	locRaw, _ = sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, "new-location-bytes", locRaw)
+}
+
+func TestMintEpochLuaTreatsMissingKeyAsZero(t *testing.T) {
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6104)
+
+	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation,
+		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID)},
+		"0", "loc")
+	require.NoError(t, err)
+	assert.Equal(t, "1", fmt.Sprint(result), "键不存在与 \"0\" 同义:首次铸造得到 1")
+
+	// 回滚到 "0" 之后再铸造同样得到 1,两条路径汇合。
+	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "0"))
+	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation,
+		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID)},
+		"0", "loc")
+	require.NoError(t, err)
+	assert.Equal(t, "1", fmt.Sprint(result))
+}
+
+func TestRollbackEpochFor(t *testing.T) {
+	assert.Equal(t, uint64(5), rollbackEpochFor(&scene_manager.PlayerLocation{OwnerEpoch: 5}, 6), "优先退回旧 location 记录的 epoch")
+	assert.Equal(t, uint64(5), rollbackEpochFor(&scene_manager.PlayerLocation{OwnerEpoch: 0}, 6), "旧 location 无 epoch 时退回 minted-1")
+	assert.Equal(t, uint64(0), rollbackEpochFor(nil, 1), "首次落点回滚退到 0")
+	assert.Equal(t, uint64(0), rollbackEpochFor(nil, 0))
+}
+
+// --- 换手门:标记 ------------------------------------------------------------
+
+func TestEnterScene_CrossNodeWithStaleMarkerIsRejectedAsHandoffPending(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6105)
+		oldScene = uint64(7105)
+		targetID = uint64(7205)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
+	mr.Set(nodePlayerCountKey(testZoneId, "20"), "4")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	// 标记来自更早一代(epoch 0):不能证明当前持有者已落盘。
+	writeHandoffMarker(t, sc, playerID, 0)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode)
+	assert.Empty(t, *captured, "拒绝时不得发路由")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "拒绝时不得铸造 epoch")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, oldScene, loc.SceneId)
+	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "20"))
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	assert.Equal(t, "4", targetCount)
+	assert.Equal(t, "4", nodeCount)
+	assert.Equal(t, "3", oldCount)
+}
+
+func TestEnterScene_CrossNodeWithCurrentMarkerIsAllowedAndMintsNextEpoch(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6106)
+		oldScene = uint64(7106)
+		targetID = uint64(7206)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
+	mr.Set(nodePlayerCountKey(testZoneId, "20"), "4")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	// 源 scene 已为当前 epoch(1)落盘并写标记。
+	writeHandoffMarker(t, sc, playerID, 1)
+	withReachableSceneNode(t, sc, "10", "20")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode, "标记齐 → 放行")
+
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "换手必须推进 epoch,旧节点的迟到写才会被拒")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, targetID, loc.SceneId)
+	assert.Equal(t, "20", loc.NodeId)
+	assert.Equal(t, uint64(2), loc.OwnerEpoch)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(2), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	assert.Equal(t, "5", targetCount)
+	assert.Equal(t, "2", oldCount)
+	// 标记由 scene_manager 只读不删,靠 TTL 过期。
+	markerRaw, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+	assert.NotEmpty(t, markerRaw)
+}
+
+func TestEnterScene_CrossZoneWithCurrentMarkerReleasesToAwaitingPlacement(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6107)
+		oldScene = uint64(7107)
+	)
+	seedSceneOnNode(mr, 1, oldScene, "10", "3")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	writeHandoffMarker(t, sc, playerID, 1)
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, zone uint32, pid uint64) (*scene_manager.RedirectToGateInfo, error) {
+		assert.Equal(t, uint32(2), zone)
+		assert.Equal(t, playerID, pid)
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: 0, SceneConfId: 0, ZoneId: 2,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	require.NotNil(t, resp.Redirect)
+
+	// 第一条腿:location 更新为等待落点(不是删除),epoch 推进,旧场景人数释放。
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, uint32(2), loc.ZoneId)
+	assert.Equal(t, "", loc.NodeId)
+	assert.Equal(t, uint64(0), loc.SceneId)
+	assert.Equal(t, uint64(2), loc.OwnerEpoch)
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	assert.Equal(t, "2", oldCount, "源 scene 收到应答后销毁实体,旧场景人数在放行时释放")
+	require.Len(t, *captured, 1, "RedirectToGateEvent 推给当前 Gate")
+}
+
+func TestEnterScene_CrossZoneRedirectKafkaFailureRestoresLocationAndEpoch(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Kafka = &countingKafkaWriter{err: errors.New("broker unavailable")}
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+
+	const (
+		playerID = uint64(6108)
+		oldScene = uint64(7108)
+	)
+	seedSceneOnNode(mr, 1, oldScene, "10", "3")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	writeHandoffMarker(t, sc, playerID, 1)
+	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, ZoneId: 2,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+
+	// 源 scene 会解冻继续持有玩家,它缓存的 epoch(1)必须仍然是 Redis 当前值。
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	restoredRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, oldRaw, restoredRaw, "location 退回精确旧值")
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	assert.Equal(t, "3", oldCount, "旧场景人数退回")
+}
+
+// --- 换手门:等待落点 --------------------------------------------------------
+
+func TestEnterScene_AwaitingPlacementSecondLegIsAllowedWithoutMarker(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6109)
+		targetID = uint64(7109)
+	)
+	seedSceneOnNode(mr, 2, targetID, "10", "0")
+	// 第一条腿留下的等待落点位置:zone 2、无节点、epoch 1。没有 handoff 标记。
+	placed, err := placePlayerLocation(sc, playerID, 0, "", 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), placed.epoch)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: 2,
+		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode, "没有节点持有玩家,第二条腿不需要标记")
+
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "落点照常铸造下一代")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, targetID, loc.SceneId)
+	assert.Equal(t, "10", loc.NodeId)
+	assert.Equal(t, uint32(2), loc.ZoneId)
+	assert.Equal(t, uint64(2), loc.OwnerEpoch)
+	require.Len(t, *captured, 1)
+	event := decodeRoutePlayerEvent(t, (*captured)[0])
+	assert.Equal(t, uint64(2), event.OwnerEpoch)
+	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	assert.Equal(t, "1", count)
+}
+
+func TestEnterScene_AwaitingPlacementCrossZoneAgainIsAllowedWithoutMarker(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	capturingKafkaWriter(sc)
+
+	const playerID = uint64(6110)
+	// zone 2 有活节点:等待落点的位置不会被当成「已下线 zone 的陈旧位置」过滤掉,
+	// 走的必须是 awaitingPlacement 放行,而不是陈旧位置放行。
+	mr.ZAdd(nodeLoadKey(2), 0, "10")
+	placed, err := placePlayerLocation(sc, playerID, 0, "", 2)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), placed.epoch)
+
+	// 玩家没跟着票据去 zone 2,而是从 zone 1 的 Gate 再次登录并要去 zone 3。
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, zone uint32, _ uint64) (*scene_manager.RedirectToGateInfo, error) {
+		assert.Equal(t, uint32(3), zone)
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.3.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, ZoneId: 3,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, uint32(3), loc.ZoneId)
+	assert.Equal(t, "", loc.NodeId)
+	assert.Equal(t, uint64(2), loc.OwnerEpoch)
+}
+
+// --- 路由失败回滚 -------------------------------------------------------------
+
+func TestEnterScene_RouteFailureAfterHandoffRestoresEpochForOldOwner(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Kafka = &countingKafkaWriter{err: errors.New("broker unavailable")}
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+
+	const (
+		playerID = uint64(6111)
+		oldScene = uint64(7111)
+		targetID = uint64(7211)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
+	mr.Set(nodePlayerCountKey(testZoneId, "10"), "3")
+	mr.Set(nodePlayerCountKey(testZoneId, "20"), "4")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	writeHandoffMarker(t, sc, playerID, 1)
+	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	withReachableSceneNode(t, sc, "10", "20")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "路由没发出去,epoch 必须退回旧持有者手里的值")
+	restoredRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, oldRaw, restoredRaw)
+	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	targetNode, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "20"))
+	oldNode, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	assert.Equal(t, "4", targetCount)
+	assert.Equal(t, "3", oldCount)
+	assert.Equal(t, "4", targetNode)
+	assert.Equal(t, "3", oldNode)
+}
+
+func TestRollbackPlayerPlacementSkipsWhenEpochAdvancedConcurrently(t *testing.T) {
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6112)
+	placed, err := placePlayerLocation(sc, playerID, 7112, "10", testZoneId)
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), placed.epoch)
+	// 并发请求已把归属推到 2(location 也换了)。
+	later, err := placePlayerLocation(sc, playerID, 7212, "20", testZoneId)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), later.epoch)
+
+	restored := rollbackPlayerPlacement(sc, NewEnterSceneLogic(context.Background(), sc).Logger, playerID, placed, "", 0)
+	assert.False(t, restored, "本次写入已被覆盖,回滚必须跳过")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, later.raw, raw)
+}
+
+// --- dev 旁路 -----------------------------------------------------------------
+
+func TestEnterScene_DevBypassSkipsMarkerButStillMintsEpoch(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Config.AllowUnsafeCrossNodeHandoff = true
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6113)
+		oldScene = uint64(7113)
+		targetID = uint64(7213)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	// 没有任何 handoff 标记。
+	withReachableSceneNode(t, sc, "10", "20")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode, "旁路只放宽标记要求")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "旁路不放宽 epoch:照样铸造")
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(2), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+}
+
+// --- home_zone --------------------------------------------------------------
+
+func TestEnterScene_HomeZoneMappedIsCarriedInRouteEvent(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	fake := &fakeHomeZoneClient{zone: 7}
+	sc.HomeZone = fake
+
+	const (
+		playerID = uint64(6114)
+		targetID = uint64(7114)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "0")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	assert.Equal(t, 1, fake.calls)
+	require.Len(t, *captured, 1)
+	event := decodeRoutePlayerEvent(t, (*captured)[0])
+	assert.Equal(t, uint32(7), event.HomeZoneId, "访客的存盘落库目的地由映射决定,不是进程 zone")
+}
+
+func TestEnterScene_HomeZoneUnmappedFallsBackToGateZone(t *testing.T) {
+	// 新版 data_service 的契约:NotFound + 文案;老版是 Unknown + 文案,两种都要认。
+	cases := []struct {
+		name     string
+		err      error
+		playerID uint64
+		targetID uint64
+	}{
+		{name: "not_found", err: status.Error(codes.NotFound, "error_code=2: no home zone mapping for player 6115"), playerID: 6115, targetID: 7115},
+		{name: "legacy_unknown", err: status.Error(codes.Unknown, "no home zone mapping for player 6116"), playerID: 6116, targetID: 7116},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc, mr := newTestSvcCtxWithWorldScenes(t)
+			captured := capturingKafkaWriter(sc)
+			sc.HomeZone = &fakeHomeZoneClient{err: tc.err}
+			seedSceneOnNode(mr, testZoneId, tc.targetID, "10", "0")
+
+			resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+				PlayerId: tc.playerID, SceneId: tc.targetID, ZoneId: testZoneId,
+				GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+			})
+			require.NoError(t, err)
+			assert.Equal(t, uint32(0), resp.ErrorCode, "未映射 = 首登,不是故障")
+			require.Len(t, *captured, 1)
+			assert.Equal(t, testZoneId, decodeRoutePlayerEvent(t, (*captured)[0]).HomeZoneId)
+		})
+	}
+}
+
+func TestEnterScene_HomeZoneUnavailableIsRejectedWithoutSideEffects(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	sc.HomeZone = &fakeHomeZoneClient{err: status.Error(codes.Unavailable, "error_code=8: mapping redis down")}
+
+	const (
+		playerID = uint64(6117)
+		targetID = uint64(7117)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	mr.Set(nodePlayerCountKey(testZoneId, "10"), "4")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test", RequestId: "home-zone-down",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrHomeZoneUnavailable, resp.ErrorCode, "归属未知不得静默落进程 zone 库")
+	assert.Empty(t, *captured)
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	assert.Nil(t, loc, "拒绝前不得写位置")
+	assert.Equal(t, "", ownerEpochRaw(t, sc, playerID), "拒绝前不得铸造 epoch")
+	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	assert.Equal(t, "4", count)
+	assert.Equal(t, "4", nodeCount)
+	exists, existsErr := sc.Redis.Exists(fmt.Sprintf("enter_scene:dedup:%d:home-zone-down", playerID))
+	require.NoError(t, existsErr)
+	assert.False(t, exists, "可重试拒绝必须释放 request_id 占位")
+}
+
+func TestEnterScene_HomeZoneUnavailableReleasesAutoReservedChannel(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	capturingKafkaWriter(sc)
+	sc.HomeZone = &fakeHomeZoneClient{err: status.Error(codes.DeadlineExceeded, "timeout")}
+
+	const (
+		playerID = uint64(6118)
+		targetID = uint64(7118)
+		confID   = uint64(8118)
+	)
+	// 自动选频道会在解析时预占人数,拒绝时必须成对释放。
+	mr.SAdd(worldChannelsKey(testZoneId, confID), fmt.Sprintf("%d", targetID))
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	mr.Set(nodePlayerCountKey(testZoneId, "10"), "4")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneConfId: confID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrHomeZoneUnavailable, resp.ErrorCode)
+	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	assert.Equal(t, "4", count, "拒绝后必须回滚频道预占")
+	assert.Equal(t, "4", nodeCount, "拒绝后必须回滚节点预占")
+}
+
+func TestEnterScene_HomeZoneNotQueriedWithoutGateRoute(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	fake := &fakeHomeZoneClient{err: status.Error(codes.Unavailable, "down")}
+	sc.HomeZone = fake
+
+	const (
+		playerID = uint64(6119)
+		targetID = uint64(7119)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "0")
+
+	// 没有 GateId 就不会发 RoutePlayerEvent,归属查询没有消费者,不该为它多一次 RPC。
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	assert.Equal(t, 0, fake.calls)
+}
+
+// --- 标记解析边界 -----------------------------------------------------------
+
+func TestCheckHandoffCommitted(t *testing.T) {
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6120)
+
+	verdict, err := checkHandoffCommitted(sc, playerID)
+	require.NoError(t, err)
+	assert.False(t, verdict.committed, "既无 epoch 也无标记:不放行")
+
+	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "4"))
+	verdict, err = checkHandoffCommitted(sc, playerID)
+	require.NoError(t, err)
+	assert.False(t, verdict.committed, "无标记:不放行")
+	assert.Equal(t, uint64(4), verdict.epoch)
+
+	writeHandoffMarker(t, sc, playerID, 3)
+	verdict, err = checkHandoffCommitted(sc, playerID)
+	require.NoError(t, err)
+	assert.False(t, verdict.committed, "旧一代的标记:不放行")
+
+	writeHandoffMarker(t, sc, playerID, 4)
+	verdict, err = checkHandoffCommitted(sc, playerID)
+	require.NoError(t, err)
+	assert.True(t, verdict.committed, "当前代际的标记:放行")
+
+	require.NoError(t, sc.Redis.Set(ownerepoch.HandoffKey(playerID), "garbage"))
+	verdict, err = checkHandoffCommitted(sc, playerID)
+	require.NoError(t, err, "标记写坏不是 Redis 故障")
+	assert.False(t, verdict.committed, "标记写坏:不放行")
+}

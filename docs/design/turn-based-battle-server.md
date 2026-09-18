@@ -201,7 +201,7 @@ class TurnBattleEngine {
 - 登录链路挂钩:加载完成后应用 pending 结算;RECONNECT 且有 InBattleComp → 重发 BindBattleEvent;
 - reaper:低频扫描(挂 timer 或并入既有慢频系统),`deadline_ms` 过期即作废解冻;
 - 冻结清单(InBattleComp 存在时拒绝):再次排队/开战、交易、使用改属性道具、切场景、跨 zone 迁移、
-  **实时技能(施法者与目标两侧)、移动上报与位移积分、背包整理、GM 回滚类写操作**(2026-09-17 D48);
+  **实时技能(施法者与目标两侧)、实时 buff 挂载、移动上报与位移积分、背包整理、GM 回滚类写操作**(2026-09-17 D48);
   放行:聊天、邮件收取(不动战斗属性部分)、好友、任务领奖(只增不减,方向安全)。
   **闸只放客户端入口层与实时战斗落点,不得下沉到 `BagService` / `CurrencySystem`** ——
   结算入账时 `InBattleComp` 还挂着,下沉会把结算自己挡住。

@@ -673,6 +673,13 @@ func assertGuildTablesReady(ctx context.Context, db *sql.DB, schema string) erro
 
 **清单兼容性**:manifest 不记录库名。项目未上线,不存在跨版本续跑的合服。
 
+**落码注记(2026-09-17,与上文的差异以本块为准)**:
+- 库名形状正则没有"复用 trade 的变量",而是从 `trade_step.go` 提到 `player_rows.go` 的 `schemaNamePattern`(紧挨 `assertSchemaExists`),trade / guild 各自的 `validate*SchemaName` 调它;`trade_step.go` 因此少了 `regexp` import。帮会代码引用一个 trade 命名的变量会误导下一个读码的人。
+- `auditFriend`(`audit_resources.go` 445 附近)那处 `see deploy/mysql-init/guild_friend_tables.sql` **不改**:它讲的是 friend 表,friend 三表仍由该 SQL 建。要改的是 `auditConfig.db` 的字段注释(`guild / friend / zone_{N}_db` → friend 与 zone 库,帮会/聚宝斋各在自己的库)。
+- 合服前置的跳过条件是 `o.skipGuild && o.skipRank`(两个都给才算跳过),照 trade 的写法给出 `guild SKIPPED` 日志;只给 `-skip-guild-mysql` 仍然拦,因为榜单步也读 guild 表。
+- 集成测试没有新增 `itGuildSchemaDB`,而是把原来的 `itGuildDB`("装帮会+friend 的默认库")拆成 `itDefaultDB = merge_zone_it_db`(friend 两表)与 `itGuildDB = merge_zone_it_guild`(帮会两表)。
+- 用例名按仓库既有命名落成 `TestGuildNamesMatchGuildService` / `TestValidateGuildSchemaName`(单测)与 `TestIT_AssertGuildTablesReady` / `TestIT_Unmerge_RefusesMissingGuildSchemaBeforeAnyWrite`(集成);合服拒绝的三种情形并入既有的 `TestIT_EndToEnd_RefusesEmptySourceAndSkipPlayerRowsWithoutAttestation`,与 trade 的同类断言并排。
+
 ## 11. tools/data_consistency_check(B1b)
 
 - `main.go` 第 72 行后加 `guildSchema := flag.String("guild-schema", "mmorpg_guild", "guild database reached through -mysql-dsn")`。用本地正则 `^[A-Za-z0-9_]{1,64}$` 校验,不合法则 `log.Fatal`(独立 module,不复用 merge_zone 的函数);校验通过后写入 `runConfig.guildSchema`。

@@ -26,7 +26,12 @@ const (
 
 // AssignGateForZone picks the least-loaded Gate in the target zone and signs
 // a redirect token. Returns nil if no gate is available.
-func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZoneId uint32) (*scene_manager.RedirectToGateInfo, error) {
+//
+// 票据绑定持票者(player_id)与目标 zone(target_zone_id):目标 zone 的 gate / login
+// 只接受本人持票,并且看到 target_zone_id == 本 zone 时不再按 home_zone 弹回
+// (cross-zone-scene-travel.md CZ-8,不变量 4)。这里只负责签进去;验签方是 gate
+// C++ 与 login,它们看到 player_id == 0 时按旧版签发者处理(兼容窗口)。
+func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZoneId uint32, playerID uint64) (*scene_manager.RedirectToGateInfo, error) {
 	if svcCtx.Config.GateTokenSecret == "" {
 		return nil, fmt.Errorf("GateTokenSecret not configured, cannot sign redirect token")
 	}
@@ -55,6 +60,8 @@ func AssignGateForZone(ctx context.Context, svcCtx *svc.ServiceContext, targetZo
 		GateNodeId:      best.NodeId,
 		ZoneId:          best.ZoneId,
 		ExpireTimestamp: expireTS,
+		PlayerId:        playerID,
+		TargetZoneId:    targetZoneId,
 	}
 	payloadBytes, err := proto.Marshal(payload)
 	if err != nil {

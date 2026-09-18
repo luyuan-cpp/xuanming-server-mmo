@@ -34,6 +34,7 @@
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "player/comp/player_frozen_comp.h"
+#include "player/system/player_lifecycle.h"  // IsCrossZoneFrozen:冻结期整笔结算延后重投
 #include "player/system/player_pet.h"
 #include "modules/condition/condition_type.h"
 #include "proto/common/event/mission_event.pb.h"
@@ -375,6 +376,14 @@ namespace
 
 	// 推 BattleEndS2C(结算入账通知;battle 节点也会在战斗结束时推一份,
 	// 客户端按 battle_id 幂等处理;离线补应用路径则只有这一份)
+	// 物品能否在回合制战斗里使用。快照出包与结算扣除共用这一处判据 ——
+	// 分成两处写,日后只改一边就会出现"能带进去却扣不掉"(或反过来)。
+	bool IsBattleUsableItem(uint32_t configId)
+	{
+		const auto* itemRow = ItemTableManager::Instance().FindByIdSilent(configId).first;
+		return itemRow != nullptr && itemRow->battle_usable() != 0;
+	}
+
 	// 结算道具落地:先按实际持有夹紧扣消耗,再把掉落塞进背包。
 	// 全程不返回失败 —— 见调用处注释(金币已入账,失败会导致重投时重复加钱)。
 	void ApplySettlementItems(entt::entity player, uint64_t playerId,
@@ -405,6 +414,15 @@ namespace
 				{
 					continue;
 				}
+				// 反向校验:快照只会把 battle_usable 的物品放进副本,所以账本里出现别的 id
+				// 只有两种可能 —— 陈旧的 battle 节点,或有人伪造结算。放行等于让战斗服
+				// 点名销毁玩家的任意物品(装备/任务道具),必须挡住并告警。
+				if (!IsBattleUsableItem(item.item_table_id()))
+				{
+					LOG_ERROR << "[PlayerBattle] 结算消耗含非战斗道具,已拒绝: player_id=" << playerId
+							  << " battle_id=" << battleId << " item=" << item.item_table_id();
+					continue;
+				}
 				// BattleItemEntry.count 是 uint64,ItemCountMap 的值是 uint32:必须夹一次,
 				// 否则高位截断会把一个天文数字变成小数量(或反过来)
 				const uint64_t clamped =
@@ -429,12 +447,18 @@ namespace
 				}
 				else if (drainedTotal < requestedTotal)
 				{
-					// 防刷信号:账面用了 N 个、实际只扣到 M 个。正常玩法下不该出现
-					// (战斗期间背包扣减入口已被 InBattle 闸挡住),出现即值得查
+					// 防刷信号:账面用了 N 个、实际只扣到 M 个。今天 scene 侧没有任何玩家可
+					// 触发的背包扣减入口(背包 RPC 只有 GetBag/SortBag,Sort 已加 InBattle 闸),
+					// 所以正常玩法下不该出现。日后新增扣减入口(交易/寄售/使用物品)必须各自
+					// 加 InBattle 闸(D48:闸只放入口层),否则这条 WARN 会变成常态。
 					LOG_WARN << "[PlayerBattle] 道具消耗按实际持有夹紧: player_id=" << playerId
 							 << " battle_id=" << battleId << " requested=" << requestedTotal
 							 << " drained=" << drainedTotal;
 				}
+				// 抽空的堆会留下 size==0 的实例继续占格(实例层的刻意行为),不回收的话
+				// 主背包会被僵尸堆占满,后面的掉落直接 kBagAddItemBagFull。
+				// kMergeOnly 只回收空实例、不重排槽位,不会洗掉跨服还原的位置。
+				BagService::MergeAndCompact(player, inventory, CompactPolicy::kMergeOnly);
 			}
 		}
 
@@ -459,14 +483,45 @@ namespace
 				const auto* blockList = tlsEcs.actorRegistry.try_get<PlayerItemBlockList>(player);
 				const auto& effectiveBlockList =
 					blockList == nullptr ? emptyBlockList : *blockList;
+
+				// 入包前抓一份各 config 的持有量:BagService::AddItems 返回失败**不代表包没变**
+				// (bag_service.h 的原子性口径明写:临时格可能已经淘汰了旧物)。直接把整批重投
+				// 临时格会把已经进了主包的那部分再发一遍 —— 凭空复制道具。
+				std::map<uint32_t, std::size_t> beforeCounts;
+				for (const auto& [configId, count] : gained)
+				{
+					beforeCounts[configId] = inventory.GetTotalItemCount(configId);
+				}
+
 				auto result = BagService::AddItems(player, inventory, effectiveBlockList, gained,
-												   TX_ITEM_AWARD);
+												   TX_ITEM_AWARD, battleId, extra);
 				if (result != kSuccess)
 				{
-					LOG_WARN << "[PlayerBattle] 掉落入主背包失败,改投临时格: player_id=" << playerId
-							 << " battle_id=" << battleId << " err=" << result;
-					result = BagService::AddItems(player, bags->bags[kTemporary],
-												  effectiveBlockList, gained, TX_ITEM_AWARD);
+					// 只补"确实没进去"的那部分:实收 = 现有 − 入包前
+					ItemCountMap remainder;
+					for (const auto& [configId, count] : gained)
+					{
+						const std::size_t landed =
+							inventory.GetTotalItemCount(configId) - beforeCounts[configId];
+						if (landed >= count)
+						{
+							continue;
+						}
+						remainder[configId] = count - static_cast<uint32_t>(landed);
+					}
+					LOG_WARN << "[PlayerBattle] 掉落入主背包失败,剩余改投临时格: player_id=" << playerId
+							 << " battle_id=" << battleId << " err=" << result
+							 << " remainder_configs=" << remainder.size();
+					if (!remainder.empty())
+					{
+						result = BagService::AddItems(player, bags->bags[kTemporary],
+													  effectiveBlockList, remainder, TX_ITEM_AWARD,
+													  battleId, extra);
+					}
+					else
+					{
+						result = kSuccess;  // 其实全进去了,上面的失败码来自已被淘汰的腾位动作
+					}
 				}
 				if (result != kSuccess)
 				{
@@ -696,8 +751,7 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 			{
 				return;  // 被抽空的僵尸堆
 			}
-			const auto* itemRow = ItemTableManager::Instance().FindByIdSilent(item.config_id()).first;
-			if (itemRow == nullptr || itemRow->battle_usable() == 0)
+			if (!IsBattleUsableItem(item.config_id()))
 			{
 				return;
 			}
@@ -1221,6 +1275,19 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
 					  << " battle_id=" << settlement.battle_id();
 			return false;
 		}
+
+	    // 跨 zone 冻结期整笔延后:此刻改源端资产,目标端已 marshal 的快照里还是旧值,
+	    // 改动等于丢失。金币路径本来就会被 AddCurrency 拒(返回 false 重投),但 gold_gain==0
+	    // 而只有道具的结算原先无人拦 —— 会被标记 Applied、道具却一件没动。
+	    // 这里必须在任何不可重复的副作用之前返回(应用缓存契约)。
+	    if ((settlement.gold_gain() > 0 || settlement.items_consumed_size() > 0 ||
+	         settlement.items_gained_size() > 0) &&
+	        PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+	    {
+	        LOG_WARN << "[PlayerBattle] 跨 zone 冻结中,保留结算待重投: player_id=" << playerId
+	                 << " battle_id=" << battleId;
+	        return false;
+	    }
 
 	    // 唯一会正常返回失败的入账入口必须在 HP/宝宝/任务副作用之前执行。
 	    // 拒绝时不标记完成、不销账，保留 pending 等服务恢复后重投。

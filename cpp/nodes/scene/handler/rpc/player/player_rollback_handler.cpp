@@ -6,6 +6,7 @@
 
 #include "core/utils/registry/game_registry.h"
 #include "services/scene/player/system/player_lifecycle.h" // IsCrossZoneFrozen — cross-zone-readiness-audit.md §11.1
+#include "proto/common/component/battle_comp.pb.h"  // InBattleComp:回合制战斗在途拒绝 GM 写操作
 #include "table/proto/tip/common_error_tip.pb.h"
 
 // Convenience: stamp kInvalidParameter into the global TipInfoMessage so
