@@ -24,14 +24,17 @@ const (
 // DBTask: DB operation task struct transmitted via Kafka
 // Usage: producer sends DB operation requests, consumer receives and executes
 type DBTask struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Key           uint64                 `protobuf:"varint,1,opt,name=key,proto3" json:"key,omitempty"`                                 // Business unique key (e.g. user ID, order ID) for locking and partition routing
-	WhereCase     string                 `protobuf:"bytes,2,opt,name=where_case,json=whereCase,proto3" json:"where_case,omitempty"`     // Query condition (read-only, e.g. "id=123 AND status=0")
-	Op            string                 `protobuf:"bytes,3,opt,name=op,proto3" json:"op,omitempty"`                                    // Operation type: "read" or "write"
-	MsgType       string                 `protobuf:"bytes,4,opt,name=msg_type,json=msgType,proto3" json:"msg_type,omitempty"`           // Target proto message type (e.g. "userpb.UserInfo") for deserializing body
-	Body          []byte                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`                                // Serialized business data (e.g. UserInfo bytes)
-	TaskId        string                 `protobuf:"bytes,6,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`              // Unique task ID for storing result in Redis (producer queries by this ID)
-	RetryCount    int32                  `protobuf:"varint,7,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"` // Retry count (default 0, +1 per retry, for max-retry control)
+	state      protoimpl.MessageState `protogen:"open.v1"`
+	Key        uint64                 `protobuf:"varint,1,opt,name=key,proto3" json:"key,omitempty"`                                 // Business unique key (e.g. user ID, order ID) for locking and partition routing
+	WhereCase  string                 `protobuf:"bytes,2,opt,name=where_case,json=whereCase,proto3" json:"where_case,omitempty"`     // Query condition (read-only, e.g. "id=123 AND status=0")
+	Op         string                 `protobuf:"bytes,3,opt,name=op,proto3" json:"op,omitempty"`                                    // Operation type: "read" or "write"
+	MsgType    string                 `protobuf:"bytes,4,opt,name=msg_type,json=msgType,proto3" json:"msg_type,omitempty"`           // Target proto message type (e.g. "userpb.UserInfo") for deserializing body
+	Body       []byte                 `protobuf:"bytes,5,opt,name=body,proto3" json:"body,omitempty"`                                // Serialized business data (e.g. UserInfo bytes)
+	TaskId     string                 `protobuf:"bytes,6,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`              // Unique task ID for storing result in Redis (producer queries by this ID)
+	RetryCount int32                  `protobuf:"varint,7,opt,name=retry_count,json=retryCount,proto3" json:"retry_count,omitempty"` // Retry count (default 0, +1 per retry, for max-retry control)
+	// 生产者(scene)持有的玩家归属 epoch。db 落库前与 player:{key}:owner_epoch 比对,小于当前值即被废黜节点的迟到写,
+	// 拒绝并计数 stale_owner_write_rejected;0 表示旧版生产者未填(兼容窗口内放行)。见 scene-owner-reentry-barrier.md §6.3。
+	OwnerEpoch    uint64 `protobuf:"varint,8,opt,name=owner_epoch,json=ownerEpoch,proto3" json:"owner_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -115,6 +118,13 @@ func (x *DBTask) GetRetryCount() int32 {
 	return 0
 }
 
+func (x *DBTask) GetOwnerEpoch() uint64 {
+	if x != nil {
+		return x.OwnerEpoch
+	}
+	return 0
+}
+
 // TaskResult: DB task execution result struct
 // Usage: consumer stores result in Redis after execution, for producer to query
 type TaskResult struct {
@@ -189,7 +199,7 @@ var File_proto_db_db_task_proto protoreflect.FileDescriptor
 
 const file_proto_db_db_task_proto_rawDesc = "" +
 	"\n" +
-	"\x16proto/db/db_task.proto\x12\x06taskpb\"\xb2\x01\n" +
+	"\x16proto/db/db_task.proto\x12\x06taskpb\"\xd3\x01\n" +
 	"\x06DBTask\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x1d\n" +
 	"\n" +
@@ -199,7 +209,9 @@ const file_proto_db_db_task_proto_rawDesc = "" +
 	"\x04body\x18\x05 \x01(\fR\x04body\x12\x17\n" +
 	"\atask_id\x18\x06 \x01(\tR\x06taskId\x12\x1f\n" +
 	"\vretry_count\x18\a \x01(\x05R\n" +
-	"retryCount\"n\n" +
+	"retryCount\x12\x1f\n" +
+	"\vowner_epoch\x18\b \x01(\x04R\n" +
+	"ownerEpoch\"n\n" +
 	"\n" +
 	"TaskResult\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x12\n" +

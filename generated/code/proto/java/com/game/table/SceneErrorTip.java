@@ -131,6 +131,22 @@ public final class SceneErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kEnterSceneFailed = 3023;</code>
      */
     kEnterSceneFailed(3023),
+    /**
+     * <code>kZoneTravelTargetZoneNotFound = 3024;</code>
+     */
+    kZoneTravelTargetZoneNotFound(3024),
+    /**
+     * <code>kZoneTravelInBattle = 3025;</code>
+     */
+    kZoneTravelInBattle(3025),
+    /**
+     * <code>kZoneTravelInTeam = 3026;</code>
+     */
+    kZoneTravelInTeam(3026),
+    /**
+     * <code>kZoneTravelTargetBusy = 3027;</code>
+     */
+    kZoneTravelTargetBusy(3027),
     UNRECOGNIZED(-1),
     ;
 
@@ -243,6 +259,22 @@ public final class SceneErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kEnterSceneFailed = 3023;</code>
      */
     public static final int kEnterSceneFailed_VALUE = 3023;
+    /**
+     * <code>kZoneTravelTargetZoneNotFound = 3024;</code>
+     */
+    public static final int kZoneTravelTargetZoneNotFound_VALUE = 3024;
+    /**
+     * <code>kZoneTravelInBattle = 3025;</code>
+     */
+    public static final int kZoneTravelInBattle_VALUE = 3025;
+    /**
+     * <code>kZoneTravelInTeam = 3026;</code>
+     */
+    public static final int kZoneTravelInTeam_VALUE = 3026;
+    /**
+     * <code>kZoneTravelTargetBusy = 3027;</code>
+     */
+    public static final int kZoneTravelTargetBusy_VALUE = 3027;
 
 
     public final int getNumber() {
@@ -294,6 +326,10 @@ public final class SceneErrorTip extends com.google.protobuf.GeneratedFile {
         case 3021: return kInvalidEnterSceneParameters;
         case 3022: return kCheckEnterSceneCreator;
         case 3023: return kEnterSceneFailed;
+        case 3024: return kZoneTravelTargetZoneNotFound;
+        case 3025: return kZoneTravelInBattle;
+        case 3026: return kZoneTravelInTeam;
+        case 3027: return kZoneTravelTargetBusy;
         default: return null;
       }
     }
@@ -359,7 +395,7 @@ public final class SceneErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025scene_error_tip.proto*\225\006\n\013scene_error\022" +
+      "\n\025scene_error_tip.proto*\207\007\n\013scene_error\022" +
       "\022\n\016kScene_errorOK\020\000\022\030\n\023kEnterSceneNotFou" +
       "nd\020\270\027\022\027\n\022kEnterSceneNotFull\020\271\027\022\030\n\023kEnter" +
       "SceneMainFull\020\272\027\022\032\n\025kEnterNodeUnavailabl" +
@@ -379,8 +415,11 @@ public final class SceneErrorTip extends com.google.protobuf.GeneratedFile {
       "entEmpty\020\313\027\022!\n\034kChangeSceneEnQueueNotSam" +
       "eGs\020\314\027\022!\n\034kInvalidEnterSceneParameters\020\315" +
       "\027\022\034\n\027kCheckEnterSceneCreator\020\316\027\022\026\n\021kEnte" +
-      "rSceneFailed\020\317\027B$\n\016com.game.tableZ\022gener" +
-      "ated/pb/tableb\006proto3"
+      "rSceneFailed\020\317\027\022\"\n\035kZoneTravelTargetZone" +
+      "NotFound\020\320\027\022\030\n\023kZoneTravelInBattle\020\321\027\022\026\n" +
+      "\021kZoneTravelInTeam\020\322\027\022\032\n\025kZoneTravelTarg" +
+      "etBusy\020\323\027B$\n\016com.game.tableZ\022generated/p" +
+      "b/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_scene_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025scene_error_tip.proto*\225\006\n\013scene_error\022"
+    "\n\025scene_error_tip.proto*\207\007\n\013scene_error\022"
     "\022\n\016kScene_errorOK\020\000\022\030\n\023kEnterSceneNotFou"
     "nd\020\270\027\022\027\n\022kEnterSceneNotFull\020\271\027\022\030\n\023kEnter"
     "SceneMainFull\020\272\027\022\032\n\025kEnterNodeUnavailabl"
@@ -55,14 +55,17 @@ const char descriptor_table_protodef_scene_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "entEmpty\020\313\027\022!\n\034kChangeSceneEnQueueNotSam"
     "eGs\020\314\027\022!\n\034kInvalidEnterSceneParameters\020\315"
     "\027\022\034\n\027kCheckEnterSceneCreator\020\316\027\022\026\n\021kEnte"
-    "rSceneFailed\020\317\027B$\n\016com.game.tableZ\022gener"
-    "ated/pb/tableb\006proto3"
+    "rSceneFailed\020\317\027\022\"\n\035kZoneTravelTargetZone"
+    "NotFound\020\320\027\022\030\n\023kZoneTravelInBattle\020\321\027\022\026\n"
+    "\021kZoneTravelInTeam\020\322\027\022\032\n\025kZoneTravelTarg"
+    "etBusy\020\323\027B$\n\016com.game.tableZ\022generated/p"
+    "b/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_scene_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_scene_5ferror_5ftip_2eproto = {
     false,
     false,
-    861,
+    975,
     descriptor_table_protodef_scene_5ferror_5ftip_2eproto,
     "scene_error_tip.proto",
     &descriptor_table_scene_5ferror_5ftip_2eproto_once,
@@ -81,7 +84,7 @@ scene_error_descriptor() {
   return file_level_enum_descriptors_scene_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t scene_error_internal_data_[] = {
-    65536u, 1572864u, 3015u, 3007u, 3020u, 3003u, 3011u, 3018u, 3022u, 3001u, 3005u, 3009u, 3013u, 3017u, 3019u, 3021u, 3023u, 3000u, 3002u, 3004u, 3006u, 3008u, 3010u, 3012u, 3014u, 3016u, };
+    65536u, 1835008u, 3015u, 3007u, 3023u, 3003u, 3011u, 3019u, 3026u, 3001u, 3005u, 3009u, 3013u, 3017u, 3021u, 3025u, 3027u, 3000u, 3002u, 3004u, 3006u, 3008u, 3010u, 3012u, 3014u, 3016u, 3018u, 3020u, 3022u, 3024u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

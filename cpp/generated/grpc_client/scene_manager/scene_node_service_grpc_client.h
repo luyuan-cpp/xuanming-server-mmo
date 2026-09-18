@@ -108,6 +108,63 @@ void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity
 void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, const ::CancelBattlePrepareRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
+#pragma region SceneNodeGrpcAssetDebit
+
+struct AsyncSceneNodeGrpcAssetDebitGrpcClient {
+    uint32_t messageId{ SceneNodeGrpcAssetDebitMessageId };
+    ClientContext context;
+    Status status;
+    ::AssetOpResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::AssetOpResponse>> response_reader;
+};
+
+class ::AssetOpRequest;
+using AsyncSceneNodeGrpcAssetDebitHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
+extern AsyncSceneNodeGrpcAssetDebitHandlerFunctionType AsyncSceneNodeGrpcAssetDebitHandler;
+
+void SendSceneNodeGrpcAssetDebit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request);
+void SendSceneNodeGrpcAssetDebit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendSceneNodeGrpcAssetDebit(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region SceneNodeGrpcAssetAbortDebit
+
+struct AsyncSceneNodeGrpcAssetAbortDebitGrpcClient {
+    uint32_t messageId{ SceneNodeGrpcAssetAbortDebitMessageId };
+    ClientContext context;
+    Status status;
+    ::AssetOpResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::AssetOpResponse>> response_reader;
+};
+
+class ::AssetOpRequest;
+using AsyncSceneNodeGrpcAssetAbortDebitHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
+extern AsyncSceneNodeGrpcAssetAbortDebitHandlerFunctionType AsyncSceneNodeGrpcAssetAbortDebitHandler;
+
+void SendSceneNodeGrpcAssetAbortDebit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request);
+void SendSceneNodeGrpcAssetAbortDebit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendSceneNodeGrpcAssetAbortDebit(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region SceneNodeGrpcAssetCredit
+
+struct AsyncSceneNodeGrpcAssetCreditGrpcClient {
+    uint32_t messageId{ SceneNodeGrpcAssetCreditMessageId };
+    ClientContext context;
+    Status status;
+    ::AssetOpResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::AssetOpResponse>> response_reader;
+};
+
+class ::AssetOpRequest;
+using AsyncSceneNodeGrpcAssetCreditHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
+extern AsyncSceneNodeGrpcAssetCreditHandlerFunctionType AsyncSceneNodeGrpcAssetCreditHandler;
+
+void SendSceneNodeGrpcAssetCredit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request);
+void SendSceneNodeGrpcAssetCredit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendSceneNodeGrpcAssetCredit(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
 void SetSceneNodeServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void SetSceneNodeServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void HandleSceneNodeServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);

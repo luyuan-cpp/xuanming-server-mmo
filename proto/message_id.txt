@@ -222,3 +222,7 @@
 221=GuildServiceListGuildApplications
 222=GuildServiceListMyGuildApplications
 223=GuildServiceReviewGuildApplication
+224=SceneNodeGrpcAssetDebit
+225=SceneNodeGrpcAssetCredit
+226=SceneSceneClientPlayerTravelToZone
+227=SceneNodeGrpcAssetAbortDebit

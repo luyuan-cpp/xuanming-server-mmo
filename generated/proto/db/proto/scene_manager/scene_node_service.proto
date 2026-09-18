@@ -1,6 +1,7 @@
 syntax = "proto3";
 package scene_node;
 
+import "proto/common/asset/asset_op.proto";
 import "proto/common/base/empty.proto";
 import "proto/scene/scene.proto";
 
@@ -26,6 +27,13 @@ service SceneNodeGrpc {
   rpc PrepareBattle(PrepareBattleRequest) returns (PrepareBattleResponse) {}
   // gather 失败的逐人回滚:battle_id 匹配才解冻,迟到/重复取消幂等忽略。
   rpc CancelBattlePrepare(CancelBattlePrepareRequest) returns (Empty) {}
+
+  // ---- 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §S4)----
+  // 结局写在 response.outcome;gRPC status 恒为 OK。同 seq 重复调用只读答复。
+  rpc AssetDebit(AssetOpRequest) returns (AssetOpResponse) {}
+  // 未见过的 seq 记 REJECTED 占位(reason=0);见过则回原结局。允许用于任何流。
+  rpc AssetAbortDebit(AssetOpRequest) returns (AssetOpResponse) {}
+  rpc AssetCredit(AssetOpRequest) returns (AssetOpResponse) {}
 }
 
 message ReleasePlayerRequest {

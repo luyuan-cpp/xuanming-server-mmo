@@ -309,6 +309,183 @@ void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& registry, entt::entity
     SendSceneNodeGrpcCancelBattlePrepare(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
+#pragma region SceneNodeGrpcAssetDebit
+boost::object_pool<AsyncSceneNodeGrpcAssetDebitGrpcClient> SceneNodeGrpcAssetDebitPool;
+using AsyncSceneNodeGrpcAssetDebitHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
+AsyncSceneNodeGrpcAssetDebitHandlerFunctionType AsyncSceneNodeGrpcAssetDebitHandler;
+
+void AsyncCompleteGrpcSceneNodeGrpcAssetDebit(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncSceneNodeGrpcAssetDebitGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncSceneNodeGrpcAssetDebitHandler) {
+            AsyncSceneNodeGrpcAssetDebitHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	SceneNodeGrpcAssetDebitPool.destroy(call);
+}
+
+void SendSceneNodeGrpcAssetDebit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(SceneNodeGrpcAssetDebitPool.construct());
+    call->response_reader = registry
+        .get<SceneNodeGrpcStubPtr>(nodeEntity)
+        ->PrepareAsyncAssetDebit(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetDebitMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendSceneNodeGrpcAssetDebit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(SceneNodeGrpcAssetDebitPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<SceneNodeGrpcStubPtr>(nodeEntity)
+        ->PrepareAsyncAssetDebit(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetDebitMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendSceneNodeGrpcAssetDebit(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::AssetOpRequest& derived = static_cast<const ::AssetOpRequest&>(message);
+    SendSceneNodeGrpcAssetDebit(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region SceneNodeGrpcAssetAbortDebit
+boost::object_pool<AsyncSceneNodeGrpcAssetAbortDebitGrpcClient> SceneNodeGrpcAssetAbortDebitPool;
+using AsyncSceneNodeGrpcAssetAbortDebitHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
+AsyncSceneNodeGrpcAssetAbortDebitHandlerFunctionType AsyncSceneNodeGrpcAssetAbortDebitHandler;
+
+void AsyncCompleteGrpcSceneNodeGrpcAssetAbortDebit(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncSceneNodeGrpcAssetAbortDebitGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncSceneNodeGrpcAssetAbortDebitHandler) {
+            AsyncSceneNodeGrpcAssetAbortDebitHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	SceneNodeGrpcAssetAbortDebitPool.destroy(call);
+}
+
+void SendSceneNodeGrpcAssetAbortDebit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(SceneNodeGrpcAssetAbortDebitPool.construct());
+    call->response_reader = registry
+        .get<SceneNodeGrpcStubPtr>(nodeEntity)
+        ->PrepareAsyncAssetAbortDebit(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetAbortDebitMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendSceneNodeGrpcAssetAbortDebit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(SceneNodeGrpcAssetAbortDebitPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<SceneNodeGrpcStubPtr>(nodeEntity)
+        ->PrepareAsyncAssetAbortDebit(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetAbortDebitMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendSceneNodeGrpcAssetAbortDebit(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::AssetOpRequest& derived = static_cast<const ::AssetOpRequest&>(message);
+    SendSceneNodeGrpcAssetAbortDebit(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region SceneNodeGrpcAssetCredit
+boost::object_pool<AsyncSceneNodeGrpcAssetCreditGrpcClient> SceneNodeGrpcAssetCreditPool;
+using AsyncSceneNodeGrpcAssetCreditHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::AssetOpResponse&)>;
+AsyncSceneNodeGrpcAssetCreditHandlerFunctionType AsyncSceneNodeGrpcAssetCreditHandler;
+
+void AsyncCompleteGrpcSceneNodeGrpcAssetCredit(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncSceneNodeGrpcAssetCreditGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncSceneNodeGrpcAssetCreditHandler) {
+            AsyncSceneNodeGrpcAssetCreditHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	SceneNodeGrpcAssetCreditPool.destroy(call);
+}
+
+void SendSceneNodeGrpcAssetCredit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(SceneNodeGrpcAssetCreditPool.construct());
+    call->response_reader = registry
+        .get<SceneNodeGrpcStubPtr>(nodeEntity)
+        ->PrepareAsyncAssetCredit(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetCreditMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendSceneNodeGrpcAssetCredit(entt::registry& registry, entt::entity nodeEntity, const ::AssetOpRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(SceneNodeGrpcAssetCreditPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<SceneNodeGrpcStubPtr>(nodeEntity)
+        ->PrepareAsyncAssetCredit(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(SceneNodeGrpcAssetCreditMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendSceneNodeGrpcAssetCredit(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::AssetOpRequest& derived = static_cast<const ::AssetOpRequest&>(message);
+    SendSceneNodeGrpcAssetCredit(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
 
 void HandleSceneNodeServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag) {
         switch (grpcTag->messageId) {
@@ -332,6 +509,18 @@ void HandleSceneNodeServiceCompletedQueueMessage(entt::registry& registry, entt:
             AsyncCompleteGrpcSceneNodeGrpcCancelBattlePrepare(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
+        case SceneNodeGrpcAssetDebitMessageId:
+            AsyncCompleteGrpcSceneNodeGrpcAssetDebit(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case SceneNodeGrpcAssetAbortDebitMessageId:
+            AsyncCompleteGrpcSceneNodeGrpcAssetAbortDebit(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case SceneNodeGrpcAssetCreditMessageId:
+            AsyncCompleteGrpcSceneNodeGrpcAssetCredit(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
         default:
             break;
         }
@@ -344,6 +533,9 @@ void SetSceneNodeServiceHandler(const std::function<void(const ClientContext&, c
     AsyncSceneNodeGrpcReleasePlayerHandler = handler;
     AsyncSceneNodeGrpcPrepareBattleHandler = handler;
     AsyncSceneNodeGrpcCancelBattlePrepareHandler = handler;
+    AsyncSceneNodeGrpcAssetDebitHandler = handler;
+    AsyncSceneNodeGrpcAssetAbortDebitHandler = handler;
+    AsyncSceneNodeGrpcAssetCreditHandler = handler;
 }
 
 void SetSceneNodeServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler) {
@@ -362,6 +554,15 @@ void SetSceneNodeServiceIfEmptyHandler(const std::function<void(const ClientCont
     }
     if (!AsyncSceneNodeGrpcCancelBattlePrepareHandler) {
         AsyncSceneNodeGrpcCancelBattlePrepareHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcAssetDebitHandler) {
+        AsyncSceneNodeGrpcAssetDebitHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcAssetAbortDebitHandler) {
+        AsyncSceneNodeGrpcAssetAbortDebitHandler = handler;
+    }
+    if (!AsyncSceneNodeGrpcAssetCreditHandler) {
+        AsyncSceneNodeGrpcAssetCreditHandler = handler;
     }
 }
 

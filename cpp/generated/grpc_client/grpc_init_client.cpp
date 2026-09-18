@@ -251,7 +251,7 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 scene_manager::HandleSceneManagerServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::SceneManagerNodeService == nodeType &&
-                (messageId == 122u || messageId == 123u || messageId == 128u || messageId == 142u || messageId == 145u)) {
+                (messageId == 122u || messageId == 123u || messageId == 128u || messageId == 142u || messageId == 145u || messageId == 224u || messageId == 225u || messageId == 227u)) {
                 scene_node::HandleSceneNodeServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::TeamNodeService == nodeType &&

@@ -489,6 +489,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLocation final : public ::goo
     kSceneIdFieldNumber = 1,
     kUpdateTimeFieldNumber = 3,
     kOwnerEpochFieldNumber = 5,
+    kPendingSceneConfIdFieldNumber = 6,
     kZoneIdFieldNumber = 4,
   };
   // string node_id = 2;
@@ -536,6 +537,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLocation final : public ::goo
   void _internal_set_owner_epoch(::uint64_t value);
 
   public:
+  // uint64 pending_scene_conf_id = 6;
+  void clear_pending_scene_conf_id() ;
+  [[nodiscard]] ::uint64_t pending_scene_conf_id() const;
+  void set_pending_scene_conf_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_pending_scene_conf_id() const;
+  void _internal_set_pending_scene_conf_id(::uint64_t value);
+
+  public:
   // uint32 zone_id = 4;
   void clear_zone_id() ;
   [[nodiscard]] ::uint32_t zone_id() const;
@@ -550,7 +561,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLocation final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 5,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 38,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -583,6 +594,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PlayerLocation final : public ::goo
     ::uint64_t scene_id_;
     ::uint64_t update_time_;
     ::uint64_t owner_epoch_;
+    ::uint64_t pending_scene_conf_id_;
     ::uint32_t zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -886,7 +898,7 @@ inline void PlayerLocation::_internal_set_update_time(::uint64_t value) {
 inline void PlayerLocation::clear_zone_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.zone_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint32_t PlayerLocation::zone_id() const {
   // @@protoc_insertion_point(field_get:storage.PlayerLocation.zone_id)
@@ -894,7 +906,7 @@ inline ::uint32_t PlayerLocation::zone_id() const {
 }
 inline void PlayerLocation::set_zone_id(::uint32_t value) {
   _internal_set_zone_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:storage.PlayerLocation.zone_id)
 }
 inline ::uint32_t PlayerLocation::_internal_zone_id() const {
@@ -928,6 +940,30 @@ inline ::uint64_t PlayerLocation::_internal_owner_epoch() const {
 inline void PlayerLocation::_internal_set_owner_epoch(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.owner_epoch_ = value;
+}
+
+// uint64 pending_scene_conf_id = 6;
+inline void PlayerLocation::clear_pending_scene_conf_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_scene_conf_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t PlayerLocation::pending_scene_conf_id() const {
+  // @@protoc_insertion_point(field_get:storage.PlayerLocation.pending_scene_conf_id)
+  return _internal_pending_scene_conf_id();
+}
+inline void PlayerLocation::set_pending_scene_conf_id(::uint64_t value) {
+  _internal_set_pending_scene_conf_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:storage.PlayerLocation.pending_scene_conf_id)
+}
+inline ::uint64_t PlayerLocation::_internal_pending_scene_conf_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_scene_conf_id_;
+}
+inline void PlayerLocation::_internal_set_pending_scene_conf_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_scene_conf_id_ = value;
 }
 
 #ifdef __GNUC__

@@ -87,6 +87,10 @@ enum scene_error : int {
   kInvalidEnterSceneParameters = 3021,
   kCheckEnterSceneCreator = 3022,
   kEnterSceneFailed = 3023,
+  kZoneTravelTargetZoneNotFound = 3024,
+  kZoneTravelInBattle = 3025,
+  kZoneTravelInTeam = 3026,
+  kZoneTravelTargetBusy = 3027,
   scene_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   scene_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -97,11 +101,11 @@ extern const uint32_t scene_error_internal_data_[];
 inline constexpr scene_error scene_error_MIN =
     static_cast<scene_error>(0);
 inline constexpr scene_error scene_error_MAX =
-    static_cast<scene_error>(3023);
+    static_cast<scene_error>(3027);
 [[nodiscard]] inline bool scene_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, scene_error_internal_data_);
 }
-inline constexpr int scene_error_ARRAYSIZE = 3023 + 1;
+inline constexpr int scene_error_ARRAYSIZE = 3027 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 scene_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(scene_error) {

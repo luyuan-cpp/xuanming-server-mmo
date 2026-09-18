@@ -477,8 +477,19 @@ type PlayerDatabase struct {
 	// 背包资产与任务领取权同属一条玩家数据库记录，随同一 DBTask 保存。
 	BagComponent     *BagAllData   `protobuf:"bytes,13,opt,name=bag_component,json=bagComponent,proto3" json:"bag_component,omitempty"`
 	MissionComponent *QuestAllData `protobuf:"bytes,14,opt,name=mission_component,json=missionComponent,proto3" json:"mission_component,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 15 预留给 B3a-1 的 PlayerProfileComp profile_component(尚未落码)。
+	// 字段号归属由 docs/design/guild-phase2/90-consistency.md G-03 裁决:
+	// 按 91-batches-and-codex.md 的批次顺序 B3a-1 取 15、B4a-1 取 16,
+	// S4 4.3.4 原文的"= 15"已作废。若主会话按 91 §1 末尾的"B3/B4 整体对调"
+	// 执行,则两者互换,但必须同批改掉 90-consistency.md G-03 与 91 的表格,
+	// 不能只在交付说明里口头交代。
+	//
+	// 通用资产通道账本(每流 seq 窗口),docs/design/guild-phase2/04-asset-channel.md §4.3.4。
+	// 必须与 currency / bag_component 同记录同 DBTask:账本与资产一起落盘、一起丢,
+	// 否则会出现"资产落了账本没落"的中间态,同一笔指令被重复应用(不变量 I3)。
+	AssetOpLedger *component.PlayerAssetOpLedgerComp `protobuf:"bytes,16,opt,name=asset_op_ledger,json=assetOpLedger,proto3" json:"asset_op_ledger,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PlayerDatabase) Reset() {
@@ -609,6 +620,13 @@ func (x *PlayerDatabase) GetMissionComponent() *QuestAllData {
 	return nil
 }
 
+func (x *PlayerDatabase) GetAssetOpLedger() *component.PlayerAssetOpLedgerComp {
+	if x != nil {
+		return x.AssetOpLedger
+	}
+	return nil
+}
+
 type PlayerDatabase_1 struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
 	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
@@ -667,7 +685,7 @@ var File_proto_common_database_mysql_database_table_proto protoreflect.FileDescr
 
 const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\n" +
-	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
+	"0proto/common/database/mysql_database_table.proto\x1a\x1bproto/db/proto_option.proto\x1a%proto/common/base/user_accounts.proto\x1a1proto/common/component/asset_op_ledger_comp.proto\x1a2proto/common/component/player_attribute_comp.proto\x1a,proto/common/component/player_pet_comp.proto\x1a.proto/common/component/player_scene_comp.proto\x1a'proto/common/component/actor_comp.proto\x1a(proto/common/component/player_comp.proto\x1a.proto/common/component/player_skill_comp.proto\x1a*proto/common/component/currency_comp.proto\x1a/proto/common/database/bag_quest_mail_data.proto\"\xb5\x01\n" +
 	"\x04user\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12!\n" +
 	"\fdisplay_name\x18\x02 \x01(\tR\vdisplayName\x12\x19\n" +
@@ -707,7 +725,7 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x16player_centre_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x126\n" +
 	"\n" +
-	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xf6\x06\n" +
+	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb8\a\n" +
 	"\x0fplayer_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12(\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
@@ -727,7 +745,8 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x13attribute_component\x18\v \x01(\v2\x14.PlayerAttributeCompR\x12attributeComponent\x123\n" +
 	"\rpet_component\x18\f \x01(\v2\x0e.PlayerPetCompR\fpetComponent\x120\n" +
 	"\rbag_component\x18\r \x01(\v2\v.BagAllDataR\fbagComponent\x12:\n" +
-	"\x11mission_component\x18\x0e \x01(\v2\r.QuestAllDataR\x10missionComponent:D\x8a\x92\xf4\x01\x0fplayer_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbc\x01\n" +
+	"\x11mission_component\x18\x0e \x01(\v2\r.QuestAllDataR\x10missionComponent\x12@\n" +
+	"\x0fasset_op_ledger\x18\x10 \x01(\v2\x18.PlayerAssetOpLedgerCompR\rassetOpLedger:D\x8a\x92\xf4\x01\x0fplayer_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbc\x01\n" +
 	"\x11player_database_1\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12B\n" +
 	"\x11stress_test_probe\x18\x02 \x01(\v2\x16.PlayerStressTestProbeR\x0fstressTestProbe:F\x8a\x92\xf4\x01\x11player_database_1\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04B\x17Z\x15proto/common/databaseb\x06proto3"
@@ -746,30 +765,31 @@ func file_proto_common_database_mysql_database_table_proto_rawDescGZIP() []byte 
 
 var file_proto_common_database_mysql_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
-	(*User)(nil),                             // 0: user
-	(*UserOauth)(nil),                        // 1: user_oauth
-	(*UserPhone)(nil),                        // 2: user_phone
-	(*UserPassword)(nil),                     // 3: user_password
-	(*UserAccounts)(nil),                     // 4: user_accounts
-	(*AccountShareDatabase)(nil),             // 5: account_share_database
-	(*PlayerCentreDatabase)(nil),             // 6: player_centre_database
-	(*PlayerDatabase)(nil),                   // 7: player_database
-	(*PlayerDatabase_1)(nil),                 // 8: player_database_1
-	(*base.AccountSimplePlayerList)(nil),     // 9: AccountSimplePlayerList
-	(*component.PlayerSceneContextComp)(nil), // 10: PlayerSceneContextComp
-	(*component.Transform)(nil),              // 11: Transform
-	(*component.PlayerUint64Comp)(nil),       // 12: PlayerUint64Comp
-	(*component.PlayerSkillListComp)(nil),    // 13: PlayerSkillListComp
-	(*component.PlayerUint32Comp)(nil),       // 14: PlayerUint32Comp
-	(*component.BaseAttributesComp)(nil),     // 15: BaseAttributesComp
-	(*component.LevelComp)(nil),              // 16: LevelComp
-	(*component.CurrencyComp)(nil),           // 17: CurrencyComp
-	(*component.PlayerStressTestProbe)(nil),  // 18: PlayerStressTestProbe
-	(*component.PlayerMergeStateComp)(nil),   // 19: PlayerMergeStateComp
-	(*component.PlayerAttributeComp)(nil),    // 20: PlayerAttributeComp
-	(*component.PlayerPetComp)(nil),          // 21: PlayerPetComp
-	(*BagAllData)(nil),                       // 22: BagAllData
-	(*QuestAllData)(nil),                     // 23: QuestAllData
+	(*User)(nil),                              // 0: user
+	(*UserOauth)(nil),                         // 1: user_oauth
+	(*UserPhone)(nil),                         // 2: user_phone
+	(*UserPassword)(nil),                      // 3: user_password
+	(*UserAccounts)(nil),                      // 4: user_accounts
+	(*AccountShareDatabase)(nil),              // 5: account_share_database
+	(*PlayerCentreDatabase)(nil),              // 6: player_centre_database
+	(*PlayerDatabase)(nil),                    // 7: player_database
+	(*PlayerDatabase_1)(nil),                  // 8: player_database_1
+	(*base.AccountSimplePlayerList)(nil),      // 9: AccountSimplePlayerList
+	(*component.PlayerSceneContextComp)(nil),  // 10: PlayerSceneContextComp
+	(*component.Transform)(nil),               // 11: Transform
+	(*component.PlayerUint64Comp)(nil),        // 12: PlayerUint64Comp
+	(*component.PlayerSkillListComp)(nil),     // 13: PlayerSkillListComp
+	(*component.PlayerUint32Comp)(nil),        // 14: PlayerUint32Comp
+	(*component.BaseAttributesComp)(nil),      // 15: BaseAttributesComp
+	(*component.LevelComp)(nil),               // 16: LevelComp
+	(*component.CurrencyComp)(nil),            // 17: CurrencyComp
+	(*component.PlayerStressTestProbe)(nil),   // 18: PlayerStressTestProbe
+	(*component.PlayerMergeStateComp)(nil),    // 19: PlayerMergeStateComp
+	(*component.PlayerAttributeComp)(nil),     // 20: PlayerAttributeComp
+	(*component.PlayerPetComp)(nil),           // 21: PlayerPetComp
+	(*BagAllData)(nil),                        // 22: BagAllData
+	(*QuestAllData)(nil),                      // 23: QuestAllData
+	(*component.PlayerAssetOpLedgerComp)(nil), // 24: PlayerAssetOpLedgerComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	9,  // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
@@ -787,12 +807,13 @@ var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	21, // 12: player_database.pet_component:type_name -> PlayerPetComp
 	22, // 13: player_database.bag_component:type_name -> BagAllData
 	23, // 14: player_database.mission_component:type_name -> QuestAllData
-	18, // 15: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
-	16, // [16:16] is the sub-list for method output_type
-	16, // [16:16] is the sub-list for method input_type
-	16, // [16:16] is the sub-list for extension type_name
-	16, // [16:16] is the sub-list for extension extendee
-	0,  // [0:16] is the sub-list for field type_name
+	24, // 15: player_database.asset_op_ledger:type_name -> PlayerAssetOpLedgerComp
+	18, // 16: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
+	17, // [17:17] is the sub-list for method output_type
+	17, // [17:17] is the sub-list for method input_type
+	17, // [17:17] is the sub-list for extension type_name
+	17, // [17:17] is the sub-list for extension extendee
+	0,  // [0:17] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_mysql_database_table_proto_init() }

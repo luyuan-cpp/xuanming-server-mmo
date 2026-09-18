@@ -57,4 +57,12 @@ enum scene_error {
 
   kEnterSceneFailed = 3023;
 
+  kZoneTravelTargetZoneNotFound = 3024;
+
+  kZoneTravelInBattle = 3025;
+
+  kZoneTravelInTeam = 3026;
+
+  kZoneTravelTargetBusy = 3027;
+
 };

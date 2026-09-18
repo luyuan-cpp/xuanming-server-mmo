@@ -21,6 +21,66 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type Monsterdrop struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	DropItem      uint32                 `protobuf:"varint,1,opt,name=drop_item,json=dropItem,proto3" json:"drop_item,omitempty"`
+	DropCount     uint32                 `protobuf:"varint,2,opt,name=drop_count,json=dropCount,proto3" json:"drop_count,omitempty"`
+	DropRate      uint32                 `protobuf:"varint,3,opt,name=drop_rate,json=dropRate,proto3" json:"drop_rate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Monsterdrop) Reset() {
+	*x = Monsterdrop{}
+	mi := &file_monster_table_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Monsterdrop) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Monsterdrop) ProtoMessage() {}
+
+func (x *Monsterdrop) ProtoReflect() protoreflect.Message {
+	mi := &file_monster_table_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Monsterdrop.ProtoReflect.Descriptor instead.
+func (*Monsterdrop) Descriptor() ([]byte, []int) {
+	return file_monster_table_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *Monsterdrop) GetDropItem() uint32 {
+	if x != nil {
+		return x.DropItem
+	}
+	return 0
+}
+
+func (x *Monsterdrop) GetDropCount() uint32 {
+	if x != nil {
+		return x.DropCount
+	}
+	return 0
+}
+
+func (x *Monsterdrop) GetDropRate() uint32 {
+	if x != nil {
+		return x.DropRate
+	}
+	return 0
+}
+
 type MonsterTable struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
@@ -32,13 +92,14 @@ type MonsterTable struct {
 	Speed         uint64                 `protobuf:"varint,7,opt,name=speed,proto3" json:"speed,omitempty"`
 	ExpReward     uint64                 `protobuf:"varint,8,opt,name=exp_reward,json=expReward,proto3" json:"exp_reward,omitempty"`
 	GoldReward    uint64                 `protobuf:"varint,9,opt,name=gold_reward,json=goldReward,proto3" json:"gold_reward,omitempty"`
+	Drop          []*Monsterdrop         `protobuf:"bytes,10,rep,name=drop,proto3" json:"drop,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *MonsterTable) Reset() {
 	*x = MonsterTable{}
-	mi := &file_monster_table_proto_msgTypes[0]
+	mi := &file_monster_table_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -50,7 +111,7 @@ func (x *MonsterTable) String() string {
 func (*MonsterTable) ProtoMessage() {}
 
 func (x *MonsterTable) ProtoReflect() protoreflect.Message {
-	mi := &file_monster_table_proto_msgTypes[0]
+	mi := &file_monster_table_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -63,7 +124,7 @@ func (x *MonsterTable) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MonsterTable.ProtoReflect.Descriptor instead.
 func (*MonsterTable) Descriptor() ([]byte, []int) {
-	return file_monster_table_proto_rawDescGZIP(), []int{0}
+	return file_monster_table_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *MonsterTable) GetId() uint32 {
@@ -129,6 +190,13 @@ func (x *MonsterTable) GetGoldReward() uint64 {
 	return 0
 }
 
+func (x *MonsterTable) GetDrop() []*Monsterdrop {
+	if x != nil {
+		return x.Drop
+	}
+	return nil
+}
+
 type MonsterTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*MonsterTable        `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -138,7 +206,7 @@ type MonsterTableData struct {
 
 func (x *MonsterTableData) Reset() {
 	*x = MonsterTableData{}
-	mi := &file_monster_table_proto_msgTypes[1]
+	mi := &file_monster_table_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -150,7 +218,7 @@ func (x *MonsterTableData) String() string {
 func (*MonsterTableData) ProtoMessage() {}
 
 func (x *MonsterTableData) ProtoReflect() protoreflect.Message {
-	mi := &file_monster_table_proto_msgTypes[1]
+	mi := &file_monster_table_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -163,7 +231,7 @@ func (x *MonsterTableData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MonsterTableData.ProtoReflect.Descriptor instead.
 func (*MonsterTableData) Descriptor() ([]byte, []int) {
-	return file_monster_table_proto_rawDescGZIP(), []int{1}
+	return file_monster_table_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *MonsterTableData) GetData() []*MonsterTable {
@@ -177,7 +245,12 @@ var File_monster_table_proto protoreflect.FileDescriptor
 
 const file_monster_table_proto_rawDesc = "" +
 	"\n" +
-	"\x13monster_table.proto\"\xfe\x01\n" +
+	"\x13monster_table.proto\"f\n" +
+	"\vMonsterdrop\x12\x1b\n" +
+	"\tdrop_item\x18\x01 \x01(\rR\bdropItem\x12\x1d\n" +
+	"\n" +
+	"drop_count\x18\x02 \x01(\rR\tdropCount\x12\x1b\n" +
+	"\tdrop_rate\x18\x03 \x01(\rR\bdropRate\"\xa0\x02\n" +
 	"\fMonsterTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12\x16\n" +
 	"\x06health\x18\x02 \x01(\x04R\x06health\x12\x1a\n" +
@@ -193,7 +266,9 @@ const file_monster_table_proto_rawDesc = "" +
 	"\n" +
 	"exp_reward\x18\b \x01(\x04R\texpReward\x12\x1f\n" +
 	"\vgold_reward\x18\t \x01(\x04R\n" +
-	"goldReward\"5\n" +
+	"goldReward\x12 \n" +
+	"\x04drop\x18\n" +
+	" \x03(\v2\f.MonsterdropR\x04drop\"5\n" +
 	"\x10MonsterTableData\x12!\n" +
 	"\x04data\x18\x01 \x03(\v2\r.MonsterTableR\x04dataB>\n" +
 	"\x0ecom.game.tableB\x16MonsterTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3"
@@ -210,18 +285,20 @@ func file_monster_table_proto_rawDescGZIP() []byte {
 	return file_monster_table_proto_rawDescData
 }
 
-var file_monster_table_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_monster_table_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
 var file_monster_table_proto_goTypes = []any{
-	(*MonsterTable)(nil),     // 0: MonsterTable
-	(*MonsterTableData)(nil), // 1: MonsterTableData
+	(*Monsterdrop)(nil),      // 0: Monsterdrop
+	(*MonsterTable)(nil),     // 1: MonsterTable
+	(*MonsterTableData)(nil), // 2: MonsterTableData
 }
 var file_monster_table_proto_depIdxs = []int32{
-	0, // 0: MonsterTableData.data:type_name -> MonsterTable
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	1, // [1:1] is the sub-list for extension extendee
-	0, // [0:1] is the sub-list for field type_name
+	0, // 0: MonsterTable.drop:type_name -> Monsterdrop
+	1, // 1: MonsterTableData.data:type_name -> MonsterTable
+	2, // [2:2] is the sub-list for method output_type
+	2, // [2:2] is the sub-list for method input_type
+	2, // [2:2] is the sub-list for extension type_name
+	2, // [2:2] is the sub-list for extension extendee
+	0, // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_monster_table_proto_init() }
@@ -235,7 +312,7 @@ func file_monster_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_monster_table_proto_rawDesc), len(file_monster_table_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   2,
+			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

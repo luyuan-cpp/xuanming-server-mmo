@@ -224,3 +224,7 @@ const GuildServiceNotifyGuildChangedMessageId = 220
 const GuildServiceListGuildApplicationsMessageId = 221
 const GuildServiceListMyGuildApplicationsMessageId = 222
 const GuildServiceReviewGuildApplicationMessageId = 223
+const SceneNodeGrpcAssetDebitMessageId = 224
+const SceneNodeGrpcAssetCreditMessageId = 225
+const SceneSceneClientPlayerTravelToZoneMessageId = 226
+const SceneNodeGrpcAssetAbortDebitMessageId = 227

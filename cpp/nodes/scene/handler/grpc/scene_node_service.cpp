@@ -334,3 +334,57 @@ grpc::Status SceneNodeGrpcImpl::CancelBattlePrepare(grpc::ServerContext* /*conte
     future.get();
     return grpc::Status::OK;
 }
+
+grpc::Status SceneNodeGrpcImpl::AssetDebit(grpc::ServerContext* /*context*/,
+    const ::AssetOpRequest* request,
+    ::AssetOpResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
+    std::promise<void> promise;
+    auto future = promise.get_future();
+
+    loop_.runInLoop([request, response, &promise]
+                    {
+        HandleAssetDebit(request, response);
+        promise.set_value(); });
+
+    future.get();
+    return grpc::Status::OK;
+}
+
+grpc::Status SceneNodeGrpcImpl::AssetAbortDebit(grpc::ServerContext* /*context*/,
+    const ::AssetOpRequest* request,
+    ::AssetOpResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
+    std::promise<void> promise;
+    auto future = promise.get_future();
+
+    loop_.runInLoop([request, response, &promise]
+                    {
+        HandleAssetAbortDebit(request, response);
+        promise.set_value(); });
+
+    future.get();
+    return grpc::Status::OK;
+}
+
+grpc::Status SceneNodeGrpcImpl::AssetCredit(grpc::ServerContext* /*context*/,
+    const ::AssetOpRequest* request,
+    ::AssetOpResponse* response)
+{
+///<<< BEGIN WRITING YOUR CODE
+///<<< END WRITING YOUR CODE
+    std::promise<void> promise;
+    auto future = promise.get_future();
+
+    loop_.runInLoop([request, response, &promise]
+                    {
+        HandleAssetCredit(request, response);
+        promise.set_value(); });
+
+    future.get();
+    return grpc::Status::OK;
+}

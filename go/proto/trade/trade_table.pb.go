@@ -88,6 +88,170 @@ func (ListingStatus) EnumDescriptor() ([]byte, []int) {
 	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{0}
 }
 
+// outbox 行做的是哪一步。与 stream 不是一回事:同为 TRADE_CREDIT 流,交付买家与退回卖家
+// 是两种 kind,对账与客服要分得开。
+type TradeAssetOpKind int32
+
+const (
+	TradeAssetOpKind_TRADE_ASSET_OP_KIND_UNSPECIFIED    TradeAssetOpKind = 0
+	TradeAssetOpKind_TRADE_ASSET_OP_KIND_ESCROW_DEBIT   TradeAssetOpKind = 1 // 上架托管:从卖家身上扣出(TRADE_DEBIT 流)
+	TradeAssetOpKind_TRADE_ASSET_OP_KIND_DELIVER_CREDIT TradeAssetOpKind = 2 // 交付:发给买家(TRADE_CREDIT 流,P3)
+	TradeAssetOpKind_TRADE_ASSET_OP_KIND_RETURN_CREDIT  TradeAssetOpKind = 3 // 回退:下架 / 过期 / 托管失败退回卖家(TRADE_CREDIT 流,P3)
+)
+
+// Enum value maps for TradeAssetOpKind.
+var (
+	TradeAssetOpKind_name = map[int32]string{
+		0: "TRADE_ASSET_OP_KIND_UNSPECIFIED",
+		1: "TRADE_ASSET_OP_KIND_ESCROW_DEBIT",
+		2: "TRADE_ASSET_OP_KIND_DELIVER_CREDIT",
+		3: "TRADE_ASSET_OP_KIND_RETURN_CREDIT",
+	}
+	TradeAssetOpKind_value = map[string]int32{
+		"TRADE_ASSET_OP_KIND_UNSPECIFIED":    0,
+		"TRADE_ASSET_OP_KIND_ESCROW_DEBIT":   1,
+		"TRADE_ASSET_OP_KIND_DELIVER_CREDIT": 2,
+		"TRADE_ASSET_OP_KIND_RETURN_CREDIT":  3,
+	}
+)
+
+func (x TradeAssetOpKind) Enum() *TradeAssetOpKind {
+	p := new(TradeAssetOpKind)
+	*p = x
+	return p
+}
+
+func (x TradeAssetOpKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TradeAssetOpKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_trade_trade_table_proto_enumTypes[1].Descriptor()
+}
+
+func (TradeAssetOpKind) Type() protoreflect.EnumType {
+	return &file_proto_trade_trade_table_proto_enumTypes[1]
+}
+
+func (x TradeAssetOpKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TradeAssetOpKind.Descriptor instead.
+func (TradeAssetOpKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{1}
+}
+
+// outbox 行的终局。数值由本表自己定(§4.43 #23:assetop.Status 只表达语义,不绑库值);
+// UNSPECIFIED=0 刻意不是 PENDING —— 写坏的零值行不会被重投循环当成待办领走。
+type TradeAssetOpStatus int32
+
+const (
+	TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_UNSPECIFIED     TradeAssetOpStatus = 0
+	TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_PENDING         TradeAssetOpStatus = 1
+	TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_APPLIED         TradeAssetOpStatus = 2
+	TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_REJECTED        TradeAssetOpStatus = 3 // scene 判拒(终局)
+	TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_ABORTED         TradeAssetOpStatus = 4 // 中止占位(AssetAbortDebit 回 REJECTED 且 reason=0)
+	TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_APPLIED_PARTIAL TradeAssetOpStatus = 5 // 部分发放:不入账、不退款,转人工补偿(§4.33)
+)
+
+// Enum value maps for TradeAssetOpStatus.
+var (
+	TradeAssetOpStatus_name = map[int32]string{
+		0: "TRADE_ASSET_OP_STATUS_UNSPECIFIED",
+		1: "TRADE_ASSET_OP_STATUS_PENDING",
+		2: "TRADE_ASSET_OP_STATUS_APPLIED",
+		3: "TRADE_ASSET_OP_STATUS_REJECTED",
+		4: "TRADE_ASSET_OP_STATUS_ABORTED",
+		5: "TRADE_ASSET_OP_STATUS_APPLIED_PARTIAL",
+	}
+	TradeAssetOpStatus_value = map[string]int32{
+		"TRADE_ASSET_OP_STATUS_UNSPECIFIED":     0,
+		"TRADE_ASSET_OP_STATUS_PENDING":         1,
+		"TRADE_ASSET_OP_STATUS_APPLIED":         2,
+		"TRADE_ASSET_OP_STATUS_REJECTED":        3,
+		"TRADE_ASSET_OP_STATUS_ABORTED":         4,
+		"TRADE_ASSET_OP_STATUS_APPLIED_PARTIAL": 5,
+	}
+)
+
+func (x TradeAssetOpStatus) Enum() *TradeAssetOpStatus {
+	p := new(TradeAssetOpStatus)
+	*p = x
+	return p
+}
+
+func (x TradeAssetOpStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TradeAssetOpStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_trade_trade_table_proto_enumTypes[2].Descriptor()
+}
+
+func (TradeAssetOpStatus) Type() protoreflect.EnumType {
+	return &file_proto_trade_trade_table_proto_enumTypes[2]
+}
+
+func (x TradeAssetOpStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TradeAssetOpStatus.Descriptor instead.
+func (TradeAssetOpStatus) EnumDescriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{2}
+}
+
+// ref_id 指向哪张表。
+type TradeAssetOpRefKind int32
+
+const (
+	TradeAssetOpRefKind_TRADE_ASSET_OP_REF_KIND_UNSPECIFIED TradeAssetOpRefKind = 0
+	TradeAssetOpRefKind_TRADE_ASSET_OP_REF_KIND_LISTING     TradeAssetOpRefKind = 1
+	TradeAssetOpRefKind_TRADE_ASSET_OP_REF_KIND_ORDER       TradeAssetOpRefKind = 2
+)
+
+// Enum value maps for TradeAssetOpRefKind.
+var (
+	TradeAssetOpRefKind_name = map[int32]string{
+		0: "TRADE_ASSET_OP_REF_KIND_UNSPECIFIED",
+		1: "TRADE_ASSET_OP_REF_KIND_LISTING",
+		2: "TRADE_ASSET_OP_REF_KIND_ORDER",
+	}
+	TradeAssetOpRefKind_value = map[string]int32{
+		"TRADE_ASSET_OP_REF_KIND_UNSPECIFIED": 0,
+		"TRADE_ASSET_OP_REF_KIND_LISTING":     1,
+		"TRADE_ASSET_OP_REF_KIND_ORDER":       2,
+	}
+)
+
+func (x TradeAssetOpRefKind) Enum() *TradeAssetOpRefKind {
+	p := new(TradeAssetOpRefKind)
+	*p = x
+	return p
+}
+
+func (x TradeAssetOpRefKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (TradeAssetOpRefKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_trade_trade_table_proto_enumTypes[3].Descriptor()
+}
+
+func (TradeAssetOpRefKind) Type() protoreflect.EnumType {
+	return &file_proto_trade_trade_table_proto_enumTypes[3]
+}
+
+func (x TradeAssetOpRefKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use TradeAssetOpRefKind.Descriptor instead.
+func (TradeAssetOpRefKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{3}
+}
+
 type TradeListingRecord struct {
 	state               protoimpl.MessageState `protogen:"open.v1"`
 	ListingId           uint64                 `protobuf:"varint,1,opt,name=listing_id,json=listingId,proto3" json:"listing_id,omitempty"` // data_service 号段,biz_tag = trade_listing
@@ -336,6 +500,297 @@ func (x *TradeFavoriteRecord) GetCreatedMs() uint64 {
 	return 0
 }
 
+// 每玩家每流的 seq 分配器。业务事务内 `SELECT ... FOR UPDATE` 后 +1,与 outbox 行同事务提交。
+//
+// epoch(流纪元)= 建行那一刻的毫秒。库被按备份恢复、next_seq 退回 1 时,纪元一定比 scene
+// 账本里记的更大,scene 按 §4.29 整条流重置,而不是把恢复出来的旧 seq 当成"已见过"(§4.43 #20)。
+type TradePlayerOpSeqRecord struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// AssetOpStream 的**数值**(3 = TRADE_DEBIT,4 = TRADE_CREDIT)。刻意不 import
+	// proto/common/asset/asset_op.proto 用枚举类型:表结构不该跟着另一条协议线的生成节奏走,
+	// 口径与同表的 tx_type(TransactionType 数值)一致。合法值由 Go 侧 assetop 约束。
+	Stream        uint32 `protobuf:"varint,2,opt,name=stream,proto3" json:"stream,omitempty"`
+	NextSeq       uint64 `protobuf:"varint,3,opt,name=next_seq,json=nextSeq,proto3" json:"next_seq,omitempty"` // 下一个要发的 seq;建行即为 1,seq=0 非法
+	Epoch         uint64 `protobuf:"varint,4,opt,name=epoch,proto3" json:"epoch,omitempty"`                    // 本行所属流纪元(建行毫秒);0 视为损坏,拒绝分配
+	UpdatedMs     uint64 `protobuf:"varint,5,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TradePlayerOpSeqRecord) Reset() {
+	*x = TradePlayerOpSeqRecord{}
+	mi := &file_proto_trade_trade_table_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TradePlayerOpSeqRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TradePlayerOpSeqRecord) ProtoMessage() {}
+
+func (x *TradePlayerOpSeqRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_table_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TradePlayerOpSeqRecord.ProtoReflect.Descriptor instead.
+func (*TradePlayerOpSeqRecord) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *TradePlayerOpSeqRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *TradePlayerOpSeqRecord) GetStream() uint32 {
+	if x != nil {
+		return x.Stream
+	}
+	return 0
+}
+
+func (x *TradePlayerOpSeqRecord) GetNextSeq() uint64 {
+	if x != nil {
+		return x.NextSeq
+	}
+	return 0
+}
+
+func (x *TradePlayerOpSeqRecord) GetEpoch() uint64 {
+	if x != nil {
+		return x.Epoch
+	}
+	return 0
+}
+
+func (x *TradePlayerOpSeqRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+// 资产指令 outbox。一行 = 一次"要对某玩家做的资产改动",由重投循环反复投递直到拿到终局。
+//
+// 唯一键并入 stream_epoch(§4.43 #20):不并入的话,库恢复后 next_seq 回到 1,新行会与恢复
+// 出来的旧行撞键,整个流从此写不进去。
+type TradeAssetOpRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	OpId          uint64                 `protobuf:"varint,1,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"`                      // id_segment 号段,biz_tag = trade_asset_op;同时作 correlation 兜底
+	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`          // 资产的主人:托管扣的是卖家,交付发的是买家
+	Stream        uint32                 `protobuf:"varint,3,opt,name=stream,proto3" json:"stream,omitempty"`                              // AssetOpStream 数值,同 TradePlayerOpSeqRecord.stream
+	StreamEpoch   uint64                 `protobuf:"varint,4,opt,name=stream_epoch,json=streamEpoch,proto3" json:"stream_epoch,omitempty"` // 分配 seq 时 seq 行上的 epoch,原样进请求
+	Seq           uint64                 `protobuf:"varint,5,opt,name=seq,proto3" json:"seq,omitempty"`
+	Kind          TradeAssetOpKind       `protobuf:"varint,6,opt,name=kind,proto3,enum=trade.TradeAssetOpKind" json:"kind,omitempty"`
+	Status        TradeAssetOpStatus     `protobuf:"varint,7,opt,name=status,proto3,enum=trade.TradeAssetOpStatus" json:"status,omitempty"`
+	Durable       bool                   `protobuf:"varint,8,opt,name=durable,proto3" json:"durable,omitempty"` // 终局是否已被 scene 确认落盘(APPLIED/REJECTED 都要 durable 才终结)
+	Attempts      uint32                 `protobuf:"varint,9,opt,name=attempts,proto3" json:"attempts,omitempty"`
+	NextAttemptMs uint64                 `protobuf:"varint,10,opt,name=next_attempt_ms,json=nextAttemptMs,proto3" json:"next_attempt_ms,omitempty"`
+	DeadlineMs    uint64                 `protobuf:"varint,11,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"` // 到期后改发 AssetAbortDebit;0 = 永不中止(交付类不设截止)
+	LeaseUntilMs  uint64                 `protobuf:"varint,12,opt,name=lease_until_ms,json=leaseUntilMs,proto3" json:"lease_until_ms,omitempty"`
+	LeaseToken    uint64                 `protobuf:"varint,13,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
+	TxType        uint32                 `protobuf:"varint,14,opt,name=tx_type,json=txType,proto3" json:"tx_type,omitempty"` // TransactionType 数值,进 scene 的 transaction_log
+	RefKind       TradeAssetOpRefKind    `protobuf:"varint,15,opt,name=ref_kind,json=refKind,proto3,enum=trade.TradeAssetOpRefKind" json:"ref_kind,omitempty"`
+	RefId         uint64                 `protobuf:"varint,16,opt,name=ref_id,json=refId,proto3" json:"ref_id,omitempty"`                   // listing_id 或 order_id;同时作请求的 correlation_id(开放项 J-A3)
+	Payload       []byte                 `protobuf:"bytes,17,opt,name=payload,proto3" json:"payload,omitempty"`                             // 序列化的 AssetBundle(proto/common/asset/asset_op.proto)
+	LastOutcome   uint32                 `protobuf:"varint,18,opt,name=last_outcome,json=lastOutcome,proto3" json:"last_outcome,omitempty"` // 最近一次 AssetOpOutcome 数值,只用于排障
+	LastReason    uint32                 `protobuf:"varint,19,opt,name=last_reason,json=lastReason,proto3" json:"last_reason,omitempty"`    // 最近一次 asset_error 段 tip 码,0 = 无
+	CreatedMs     uint64                 `protobuf:"varint,20,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	UpdatedMs     uint64                 `protobuf:"varint,21,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TradeAssetOpRecord) Reset() {
+	*x = TradeAssetOpRecord{}
+	mi := &file_proto_trade_trade_table_proto_msgTypes[3]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TradeAssetOpRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TradeAssetOpRecord) ProtoMessage() {}
+
+func (x *TradeAssetOpRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_trade_trade_table_proto_msgTypes[3]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TradeAssetOpRecord.ProtoReflect.Descriptor instead.
+func (*TradeAssetOpRecord) Descriptor() ([]byte, []int) {
+	return file_proto_trade_trade_table_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *TradeAssetOpRecord) GetOpId() uint64 {
+	if x != nil {
+		return x.OpId
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetStream() uint32 {
+	if x != nil {
+		return x.Stream
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetStreamEpoch() uint64 {
+	if x != nil {
+		return x.StreamEpoch
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetKind() TradeAssetOpKind {
+	if x != nil {
+		return x.Kind
+	}
+	return TradeAssetOpKind_TRADE_ASSET_OP_KIND_UNSPECIFIED
+}
+
+func (x *TradeAssetOpRecord) GetStatus() TradeAssetOpStatus {
+	if x != nil {
+		return x.Status
+	}
+	return TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_UNSPECIFIED
+}
+
+func (x *TradeAssetOpRecord) GetDurable() bool {
+	if x != nil {
+		return x.Durable
+	}
+	return false
+}
+
+func (x *TradeAssetOpRecord) GetAttempts() uint32 {
+	if x != nil {
+		return x.Attempts
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetNextAttemptMs() uint64 {
+	if x != nil {
+		return x.NextAttemptMs
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetDeadlineMs() uint64 {
+	if x != nil {
+		return x.DeadlineMs
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetLeaseUntilMs() uint64 {
+	if x != nil {
+		return x.LeaseUntilMs
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetLeaseToken() uint64 {
+	if x != nil {
+		return x.LeaseToken
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetTxType() uint32 {
+	if x != nil {
+		return x.TxType
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetRefKind() TradeAssetOpRefKind {
+	if x != nil {
+		return x.RefKind
+	}
+	return TradeAssetOpRefKind_TRADE_ASSET_OP_REF_KIND_UNSPECIFIED
+}
+
+func (x *TradeAssetOpRecord) GetRefId() uint64 {
+	if x != nil {
+		return x.RefId
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *TradeAssetOpRecord) GetLastOutcome() uint32 {
+	if x != nil {
+		return x.LastOutcome
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetLastReason() uint32 {
+	if x != nil {
+		return x.LastReason
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *TradeAssetOpRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
 var File_proto_trade_trade_table_proto protoreflect.FileDescriptor
 
 const file_proto_trade_trade_table_proto_rawDesc = "" +
@@ -373,7 +828,42 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"listing_id\x18\x02 \x01(\x04R\tlistingId\x12\x1d\n" +
 	"\n" +
 	"created_ms\x18\x03 \x01(\x04R\tcreatedMs:J\x8a\x92\xf4\x01\x0etrade_favorite\x92\x92\xf4\x01\x14player_id,listing_idڒ\xf4\x01\n" +
-	"listing_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xfb\x01\n" +
+	"listing_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xdb\x01\n" +
+	"\x16TradePlayerOpSeqRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
+	"\x06stream\x18\x02 \x01(\rR\x06stream\x12\x19\n" +
+	"\bnext_seq\x18\x03 \x01(\x04R\anextSeq\x12\x14\n" +
+	"\x05epoch\x18\x04 \x01(\x04R\x05epoch\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x05 \x01(\x04R\tupdatedMs:<\x8a\x92\xf4\x01\x13trade_player_op_seq\x92\x92\xf4\x01\x10player_id,stream\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xe5\x06\n" +
+	"\x12TradeAssetOpRecord\x12\x13\n" +
+	"\x05op_id\x18\x01 \x01(\x04R\x04opId\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x16\n" +
+	"\x06stream\x18\x03 \x01(\rR\x06stream\x12!\n" +
+	"\fstream_epoch\x18\x04 \x01(\x04R\vstreamEpoch\x12\x10\n" +
+	"\x03seq\x18\x05 \x01(\x04R\x03seq\x12+\n" +
+	"\x04kind\x18\x06 \x01(\x0e2\x17.trade.TradeAssetOpKindR\x04kind\x121\n" +
+	"\x06status\x18\a \x01(\x0e2\x19.trade.TradeAssetOpStatusR\x06status\x12\x18\n" +
+	"\adurable\x18\b \x01(\bR\adurable\x12\x1a\n" +
+	"\battempts\x18\t \x01(\rR\battempts\x12&\n" +
+	"\x0fnext_attempt_ms\x18\n" +
+	" \x01(\x04R\rnextAttemptMs\x12\x1f\n" +
+	"\vdeadline_ms\x18\v \x01(\x04R\n" +
+	"deadlineMs\x12$\n" +
+	"\x0elease_until_ms\x18\f \x01(\x04R\fleaseUntilMs\x12\x1f\n" +
+	"\vlease_token\x18\r \x01(\x04R\n" +
+	"leaseToken\x12\x17\n" +
+	"\atx_type\x18\x0e \x01(\rR\x06txType\x125\n" +
+	"\bref_kind\x18\x0f \x01(\x0e2\x1a.trade.TradeAssetOpRefKindR\arefKind\x12\x15\n" +
+	"\x06ref_id\x18\x10 \x01(\x04R\x05refId\x12\x18\n" +
+	"\apayload\x18\x11 \x01(\fR\apayload\x12!\n" +
+	"\flast_outcome\x18\x12 \x01(\rR\vlastOutcome\x12\x1f\n" +
+	"\vlast_reason\x18\x13 \x01(\rR\n" +
+	"lastReason\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\x14 \x01(\x04R\tcreatedMs\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x15 \x01(\x04R\tupdatedMs:\xa6\x01\x8a\x92\xf4\x01\x0etrade_asset_op\x92\x92\xf4\x01\x05op_idڒ\xf4\x01Ostatus,next_attempt_ms;player_id,stream,stream_epoch,status,seq;ref_kind,ref_id\xe2\x92\xf4\x01!player_id,stream,stream_epoch,seq\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xfb\x01\n" +
 	"\rListingStatus\x12\x1e\n" +
 	"\x1aLISTING_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18LISTING_STATUS_ESCROWING\x10\x01\x12\x19\n" +
@@ -382,7 +872,23 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\x13LISTING_STATUS_SOLD\x10\x04\x12\x1c\n" +
 	"\x18LISTING_STATUS_RETURNING\x10\x05\x12\x1b\n" +
 	"\x17LISTING_STATUS_RETURNED\x10\x06\x12\"\n" +
-	"\x1eLISTING_STATUS_ESCROW_REJECTED\x10\aB\rZ\vproto/tradeb\x06proto3"
+	"\x1eLISTING_STATUS_ESCROW_REJECTED\x10\a*\xac\x01\n" +
+	"\x10TradeAssetOpKind\x12#\n" +
+	"\x1fTRADE_ASSET_OP_KIND_UNSPECIFIED\x10\x00\x12$\n" +
+	" TRADE_ASSET_OP_KIND_ESCROW_DEBIT\x10\x01\x12&\n" +
+	"\"TRADE_ASSET_OP_KIND_DELIVER_CREDIT\x10\x02\x12%\n" +
+	"!TRADE_ASSET_OP_KIND_RETURN_CREDIT\x10\x03*\xf3\x01\n" +
+	"\x12TradeAssetOpStatus\x12%\n" +
+	"!TRADE_ASSET_OP_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dTRADE_ASSET_OP_STATUS_PENDING\x10\x01\x12!\n" +
+	"\x1dTRADE_ASSET_OP_STATUS_APPLIED\x10\x02\x12\"\n" +
+	"\x1eTRADE_ASSET_OP_STATUS_REJECTED\x10\x03\x12!\n" +
+	"\x1dTRADE_ASSET_OP_STATUS_ABORTED\x10\x04\x12)\n" +
+	"%TRADE_ASSET_OP_STATUS_APPLIED_PARTIAL\x10\x05*\x86\x01\n" +
+	"\x13TradeAssetOpRefKind\x12'\n" +
+	"#TRADE_ASSET_OP_REF_KIND_UNSPECIFIED\x10\x00\x12#\n" +
+	"\x1fTRADE_ASSET_OP_REF_KIND_LISTING\x10\x01\x12!\n" +
+	"\x1dTRADE_ASSET_OP_REF_KIND_ORDER\x10\x02B\rZ\vproto/tradeb\x06proto3"
 
 var (
 	file_proto_trade_trade_table_proto_rawDescOnce sync.Once
@@ -396,22 +902,30 @@ func file_proto_trade_trade_table_proto_rawDescGZIP() []byte {
 	return file_proto_trade_trade_table_proto_rawDescData
 }
 
-var file_proto_trade_trade_table_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_proto_trade_trade_table_proto_msgTypes = make([]protoimpl.MessageInfo, 2)
+var file_proto_trade_trade_table_proto_enumTypes = make([]protoimpl.EnumInfo, 4)
+var file_proto_trade_trade_table_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_proto_trade_trade_table_proto_goTypes = []any{
-	(ListingStatus)(0),          // 0: trade.ListingStatus
-	(*TradeListingRecord)(nil),  // 1: trade.TradeListingRecord
-	(*TradeFavoriteRecord)(nil), // 2: trade.TradeFavoriteRecord
-	(ListingCategory)(0),        // 3: trade.ListingCategory
+	(ListingStatus)(0),             // 0: trade.ListingStatus
+	(TradeAssetOpKind)(0),          // 1: trade.TradeAssetOpKind
+	(TradeAssetOpStatus)(0),        // 2: trade.TradeAssetOpStatus
+	(TradeAssetOpRefKind)(0),       // 3: trade.TradeAssetOpRefKind
+	(*TradeListingRecord)(nil),     // 4: trade.TradeListingRecord
+	(*TradeFavoriteRecord)(nil),    // 5: trade.TradeFavoriteRecord
+	(*TradePlayerOpSeqRecord)(nil), // 6: trade.TradePlayerOpSeqRecord
+	(*TradeAssetOpRecord)(nil),     // 7: trade.TradeAssetOpRecord
+	(ListingCategory)(0),           // 8: trade.ListingCategory
 }
 var file_proto_trade_trade_table_proto_depIdxs = []int32{
-	3, // 0: trade.TradeListingRecord.category:type_name -> trade.ListingCategory
+	8, // 0: trade.TradeListingRecord.category:type_name -> trade.ListingCategory
 	0, // 1: trade.TradeListingRecord.status:type_name -> trade.ListingStatus
-	2, // [2:2] is the sub-list for method output_type
-	2, // [2:2] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	1, // 2: trade.TradeAssetOpRecord.kind:type_name -> trade.TradeAssetOpKind
+	2, // 3: trade.TradeAssetOpRecord.status:type_name -> trade.TradeAssetOpStatus
+	3, // 4: trade.TradeAssetOpRecord.ref_kind:type_name -> trade.TradeAssetOpRefKind
+	5, // [5:5] is the sub-list for method output_type
+	5, // [5:5] is the sub-list for method input_type
+	5, // [5:5] is the sub-list for extension type_name
+	5, // [5:5] is the sub-list for extension extendee
+	0, // [0:5] is the sub-list for field type_name
 }
 
 func init() { file_proto_trade_trade_table_proto_init() }
@@ -425,8 +939,8 @@ func file_proto_trade_trade_table_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_trade_trade_table_proto_rawDesc), len(file_proto_trade_trade_table_proto_rawDesc)),
-			NumEnums:      1,
-			NumMessages:   2,
+			NumEnums:      4,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

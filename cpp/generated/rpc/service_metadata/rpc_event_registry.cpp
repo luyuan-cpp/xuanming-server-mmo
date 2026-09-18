@@ -226,6 +226,9 @@ namespace scene_node{void SendSceneNodeGrpcDestroyScene(entt::registry& , entt::
 namespace scene_node{void SendSceneNodeGrpcReleasePlayer(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace scene_node{void SendSceneNodeGrpcPrepareBattle(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace scene_node{void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace scene_node{void SendSceneNodeGrpcAssetDebit(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace scene_node{void SendSceneNodeGrpcAssetAbortDebit(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace scene_node{void SendSceneNodeGrpcAssetCredit(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace teampb{void SendClientPlayerTeamCreateTeam(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace teampb{void SendClientPlayerTeamGetMyTeam(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace teampb{void SendClientPlayerTeamApplyJoinTeam(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
@@ -250,7 +253,7 @@ namespace trade{void SendTradeAdminSeedListing(entt::registry& , entt::entity , 
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 224,
+static_assert(kMaxRpcMethodCount == 228,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -1142,6 +1145,11 @@ void InitMessageInfo()
         std::make_unique<::ActorListDestroyS2C>(),
         std::make_unique<::Empty>(),
         std::make_unique<SceneSceneClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSceneClientPlayerTravelToZoneMessageId] = RpcMethodMeta{
+        "SceneSceneClientPlayer", "TravelToZone",
+        std::make_unique<::TravelToZoneRequest>(),
+        std::make_unique<::TravelToZoneResponse>(),
+        std::make_unique<SceneSceneClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSkillClientPlayer ---
     gRpcMethodRegistry[SceneSkillClientPlayerReleaseSkillMessageId] = RpcMethodMeta{
@@ -1336,6 +1344,21 @@ void InitMessageInfo()
         std::make_unique<::CancelBattlePrepareRequest>(),
         std::make_unique<::Empty>(),
         nullptr, 1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcCancelBattlePrepare};
+    gRpcMethodRegistry[SceneNodeGrpcAssetDebitMessageId] = RpcMethodMeta{
+        "SceneNodeGrpc", "AssetDebit",
+        std::make_unique<::AssetOpRequest>(),
+        std::make_unique<::AssetOpResponse>(),
+        nullptr, 1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcAssetDebit};
+    gRpcMethodRegistry[SceneNodeGrpcAssetAbortDebitMessageId] = RpcMethodMeta{
+        "SceneNodeGrpc", "AssetAbortDebit",
+        std::make_unique<::AssetOpRequest>(),
+        std::make_unique<::AssetOpResponse>(),
+        nullptr, 1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcAssetAbortDebit};
+    gRpcMethodRegistry[SceneNodeGrpcAssetCreditMessageId] = RpcMethodMeta{
+        "SceneNodeGrpc", "AssetCredit",
+        std::make_unique<::AssetOpRequest>(),
+        std::make_unique<::AssetOpResponse>(),
+        nullptr, 1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcAssetCredit};
 
     // --- ClientPlayerTeam ---
     gRpcMethodRegistry[ClientPlayerTeamCreateTeamMessageId] = RpcMethodMeta{
@@ -1543,6 +1566,7 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSceneClientPlayerNotifyActorDestroyMessageId:
 	case SceneSceneClientPlayerNotifyActorListCreateMessageId:
 	case SceneSceneClientPlayerNotifyActorListDestroyMessageId:
+	case SceneSceneClientPlayerTravelToZoneMessageId:
 	case SceneSkillClientPlayerReleaseSkillMessageId:
 	case SceneSkillClientPlayerNotifySkillUsedMessageId:
 	case SceneSkillClientPlayerNotifySkillInterruptedMessageId:

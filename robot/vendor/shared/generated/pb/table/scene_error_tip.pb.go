@@ -49,6 +49,10 @@ const (
 	SceneError_kInvalidEnterSceneParameters           SceneError = 3021
 	SceneError_kCheckEnterSceneCreator                SceneError = 3022
 	SceneError_kEnterSceneFailed                      SceneError = 3023
+	SceneError_kZoneTravelTargetZoneNotFound          SceneError = 3024
+	SceneError_kZoneTravelInBattle                    SceneError = 3025
+	SceneError_kZoneTravelInTeam                      SceneError = 3026
+	SceneError_kZoneTravelTargetBusy                  SceneError = 3027
 )
 
 // Enum value maps for SceneError.
@@ -79,6 +83,10 @@ var (
 		3021: "kInvalidEnterSceneParameters",
 		3022: "kCheckEnterSceneCreator",
 		3023: "kEnterSceneFailed",
+		3024: "kZoneTravelTargetZoneNotFound",
+		3025: "kZoneTravelInBattle",
+		3026: "kZoneTravelInTeam",
+		3027: "kZoneTravelTargetBusy",
 	}
 	SceneError_value = map[string]int32{
 		"kScene_errorOK":                         0,
@@ -106,6 +114,10 @@ var (
 		"kInvalidEnterSceneParameters":           3021,
 		"kCheckEnterSceneCreator":                3022,
 		"kEnterSceneFailed":                      3023,
+		"kZoneTravelTargetZoneNotFound":          3024,
+		"kZoneTravelInBattle":                    3025,
+		"kZoneTravelInTeam":                      3026,
+		"kZoneTravelTargetBusy":                  3027,
 	}
 )
 
@@ -140,7 +152,7 @@ var File_scene_error_tip_proto protoreflect.FileDescriptor
 
 const file_scene_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15scene_error_tip.proto*\x95\x06\n" +
+	"\x15scene_error_tip.proto*\x87\a\n" +
 	"\vscene_error\x12\x12\n" +
 	"\x0ekScene_errorOK\x10\x00\x12\x18\n" +
 	"\x13kEnterSceneNotFound\x10\xb8\x17\x12\x17\n" +
@@ -166,7 +178,11 @@ const file_scene_error_tip_proto_rawDesc = "" +
 	"\x1ckChangeSceneEnQueueNotSameGs\x10\xcc\x17\x12!\n" +
 	"\x1ckInvalidEnterSceneParameters\x10\xcd\x17\x12\x1c\n" +
 	"\x17kCheckEnterSceneCreator\x10\xce\x17\x12\x16\n" +
-	"\x11kEnterSceneFailed\x10\xcf\x17B$\n" +
+	"\x11kEnterSceneFailed\x10\xcf\x17\x12\"\n" +
+	"\x1dkZoneTravelTargetZoneNotFound\x10\xd0\x17\x12\x18\n" +
+	"\x13kZoneTravelInBattle\x10\xd1\x17\x12\x16\n" +
+	"\x11kZoneTravelInTeam\x10\xd2\x17\x12\x1a\n" +
+	"\x15kZoneTravelTargetBusy\x10\xd3\x17B$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

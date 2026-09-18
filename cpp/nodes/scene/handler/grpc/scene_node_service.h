@@ -39,6 +39,18 @@ public:
         const ::CancelBattlePrepareRequest* request,
         ::Empty* response) override;
 
+    grpc::Status AssetDebit(grpc::ServerContext* context,
+        const ::AssetOpRequest* request,
+        ::AssetOpResponse* response) override;
+
+    grpc::Status AssetAbortDebit(grpc::ServerContext* context,
+        const ::AssetOpRequest* request,
+        ::AssetOpResponse* response) override;
+
+    grpc::Status AssetCredit(grpc::ServerContext* context,
+        const ::AssetOpRequest* request,
+        ::AssetOpResponse* response) override;
+
 private:
     // Handler functions -- run on the muduo event loop thread.
     // WARNING: Must complete quickly. The gRPC thread is blocked waiting via promise/future.
@@ -47,6 +59,9 @@ private:
     static void HandleReleasePlayer(const ::scene_node::ReleasePlayerRequest* request);
     static void HandlePrepareBattle(const ::PrepareBattleRequest* request, ::PrepareBattleResponse* response);
     static void HandleCancelBattlePrepare(const ::CancelBattlePrepareRequest* request);
+    static void HandleAssetDebit(const ::AssetOpRequest* request, ::AssetOpResponse* response);
+    static void HandleAssetAbortDebit(const ::AssetOpRequest* request, ::AssetOpResponse* response);
+    static void HandleAssetCredit(const ::AssetOpRequest* request, ::AssetOpResponse* response);
 
     muduo::net::EventLoop& loop_;
 };

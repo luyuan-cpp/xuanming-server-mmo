@@ -27,8 +27,14 @@ type SessionDetails struct {
 	PlayerId       uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	GateNodeId     uint32                 `protobuf:"varint,3,opt,name=gate_node_id,json=gateNodeId,proto3" json:"gate_node_id,omitempty"`            // Gate node ID (for Kafka routing)
 	GateInstanceId string                 `protobuf:"bytes,4,opt,name=gate_instance_id,json=gateInstanceId,proto3" json:"gate_instance_id,omitempty"` // Gate startup UUID (zombie-message protection)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 重定向票据绑定(cross-zone-scene-travel.md CZ-8)。gate 验签通过后从 GateTokenPayload 的
+	// player_id / target_zone_id 原样拷入;0 = 普通 AssignGate 票据(签票时还没登录)/ dev 旁路 /
+	// 旧版 gate。主判定在 login EnterGame:持票者不符即拒;target_zone_id == 本 zone 时不按
+	// home_zone 弹回。gate 只透传,不据此做业务决定。
+	TicketPlayerId     uint64 `protobuf:"varint,5,opt,name=ticket_player_id,json=ticketPlayerId,proto3" json:"ticket_player_id,omitempty"`
+	TicketTargetZoneId uint32 `protobuf:"varint,6,opt,name=ticket_target_zone_id,json=ticketTargetZoneId,proto3" json:"ticket_target_zone_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *SessionDetails) Reset() {
@@ -89,18 +95,34 @@ func (x *SessionDetails) GetGateInstanceId() string {
 	return ""
 }
 
+func (x *SessionDetails) GetTicketPlayerId() uint64 {
+	if x != nil {
+		return x.TicketPlayerId
+	}
+	return 0
+}
+
+func (x *SessionDetails) GetTicketTargetZoneId() uint32 {
+	if x != nil {
+		return x.TicketTargetZoneId
+	}
+	return 0
+}
+
 var File_proto_common_base_session_proto protoreflect.FileDescriptor
 
 const file_proto_common_base_session_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/common/base/session.proto\"\x98\x01\n" +
+	"\x1fproto/common/base/session.proto\"\xf5\x01\n" +
 	"\x0eSessionDetails\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12 \n" +
 	"\fgate_node_id\x18\x03 \x01(\rR\n" +
 	"gateNodeId\x12(\n" +
-	"\x10gate_instance_id\x18\x04 \x01(\tR\x0egateInstanceIdB\x13Z\x11proto/common/baseb\x06proto3"
+	"\x10gate_instance_id\x18\x04 \x01(\tR\x0egateInstanceId\x12(\n" +
+	"\x10ticket_player_id\x18\x05 \x01(\x04R\x0eticketPlayerId\x121\n" +
+	"\x15ticket_target_zone_id\x18\x06 \x01(\rR\x12ticketTargetZoneIdB\x13Z\x11proto/common/baseb\x06proto3"
 
 var (
 	file_proto_common_base_session_proto_rawDescOnce sync.Once

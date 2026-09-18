@@ -68,3 +68,98 @@ message TradeFavoriteRecord {
   uint64 listing_id = 2;
   uint64 created_ms = 3;
 }
+
+// ---------------------------------------------------------------------------
+// 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §S4)在 trade 侧的两张表。
+//
+// trade 独占 ASSET_OP_STREAM_TRADE_DEBIT / TRADE_CREDIT 两条流(不变量 I6 流独占),
+// 自己分配 seq、自己重投。语义与 guild 的 guild_player_op_seq / guild_asset_op 完全对称,
+// 表名与列按 §4.19 + §4.37 的形状,**不是**聚宝斋设计 §8 里更旧的那一版
+// (§8 写的是 PK(player_id,stream,seq) 且无纪元;04 文档效力更高,以它为准)。
+// ---------------------------------------------------------------------------
+
+// 每玩家每流的 seq 分配器。业务事务内 `SELECT ... FOR UPDATE` 后 +1,与 outbox 行同事务提交。
+//
+// epoch(流纪元)= 建行那一刻的毫秒。库被按备份恢复、next_seq 退回 1 时,纪元一定比 scene
+// 账本里记的更大,scene 按 §4.29 整条流重置,而不是把恢复出来的旧 seq 当成"已见过"(§4.43 #20)。
+message TradePlayerOpSeqRecord {
+  option(OptionTableName) = "trade_player_op_seq";
+  option(OptionPrimaryKey) = "player_id,stream";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  // AssetOpStream 的**数值**(3 = TRADE_DEBIT,4 = TRADE_CREDIT)。刻意不 import
+  // proto/common/asset/asset_op.proto 用枚举类型:表结构不该跟着另一条协议线的生成节奏走,
+  // 口径与同表的 tx_type(TransactionType 数值)一致。合法值由 Go 侧 assetop 约束。
+  uint32 stream = 2;
+  uint64 next_seq = 3;   // 下一个要发的 seq;建行即为 1,seq=0 非法
+  uint64 epoch = 4;      // 本行所属流纪元(建行毫秒);0 视为损坏,拒绝分配
+  uint64 updated_ms = 5;
+}
+
+// 资产指令 outbox。一行 = 一次"要对某玩家做的资产改动",由重投循环反复投递直到拿到终局。
+//
+// 唯一键并入 stream_epoch(§4.43 #20):不并入的话,库恢复后 next_seq 回到 1,新行会与恢复
+// 出来的旧行撞键,整个流从此写不进去。
+message TradeAssetOpRecord {
+  option(OptionTableName) = "trade_asset_op";
+  option(OptionPrimaryKey) = "op_id";
+  option(OptionUniqueKey) = "player_id,stream,stream_epoch,seq";
+  // idx_trade_asset_op_0 = 重投循环领取(ListDue);idx_..._1 = 分配 seq 时数本纪元未决行(I5);
+  // idx_..._2 = 按商品 / 订单查它的资产指令(货架与客服排障)。
+  option(OptionIndex) = "status,next_attempt_ms;player_id,stream,stream_epoch,status,seq;ref_kind,ref_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 op_id = 1;          // id_segment 号段,biz_tag = trade_asset_op;同时作 correlation 兜底
+  uint64 player_id = 2;      // 资产的主人:托管扣的是卖家,交付发的是买家
+  uint32 stream = 3;         // AssetOpStream 数值,同 TradePlayerOpSeqRecord.stream
+  uint64 stream_epoch = 4;   // 分配 seq 时 seq 行上的 epoch,原样进请求
+  uint64 seq = 5;
+  TradeAssetOpKind kind = 6;
+  TradeAssetOpStatus status = 7;
+  bool durable = 8;          // 终局是否已被 scene 确认落盘(APPLIED/REJECTED 都要 durable 才终结)
+  uint32 attempts = 9;
+  uint64 next_attempt_ms = 10;
+  uint64 deadline_ms = 11;   // 到期后改发 AssetAbortDebit;0 = 永不中止(交付类不设截止)
+  uint64 lease_until_ms = 12;
+  uint64 lease_token = 13;
+  uint32 tx_type = 14;       // TransactionType 数值,进 scene 的 transaction_log
+  TradeAssetOpRefKind ref_kind = 15;
+  uint64 ref_id = 16;        // listing_id 或 order_id;同时作请求的 correlation_id(开放项 J-A3)
+  bytes payload = 17;        // 序列化的 AssetBundle(proto/common/asset/asset_op.proto)
+  uint32 last_outcome = 18;  // 最近一次 AssetOpOutcome 数值,只用于排障
+  uint32 last_reason = 19;   // 最近一次 asset_error 段 tip 码,0 = 无
+  uint64 created_ms = 20;
+  uint64 updated_ms = 21;
+}
+
+// outbox 行做的是哪一步。与 stream 不是一回事:同为 TRADE_CREDIT 流,交付买家与退回卖家
+// 是两种 kind,对账与客服要分得开。
+enum TradeAssetOpKind {
+  TRADE_ASSET_OP_KIND_UNSPECIFIED = 0;
+  TRADE_ASSET_OP_KIND_ESCROW_DEBIT = 1;    // 上架托管:从卖家身上扣出(TRADE_DEBIT 流)
+  TRADE_ASSET_OP_KIND_DELIVER_CREDIT = 2;  // 交付:发给买家(TRADE_CREDIT 流,P3)
+  TRADE_ASSET_OP_KIND_RETURN_CREDIT = 3;   // 回退:下架 / 过期 / 托管失败退回卖家(TRADE_CREDIT 流,P3)
+}
+
+// outbox 行的终局。数值由本表自己定(§4.43 #23:assetop.Status 只表达语义,不绑库值);
+// UNSPECIFIED=0 刻意不是 PENDING —— 写坏的零值行不会被重投循环当成待办领走。
+enum TradeAssetOpStatus {
+  TRADE_ASSET_OP_STATUS_UNSPECIFIED = 0;
+  TRADE_ASSET_OP_STATUS_PENDING = 1;
+  TRADE_ASSET_OP_STATUS_APPLIED = 2;
+  TRADE_ASSET_OP_STATUS_REJECTED = 3;         // scene 判拒(终局)
+  TRADE_ASSET_OP_STATUS_ABORTED = 4;          // 中止占位(AssetAbortDebit 回 REJECTED 且 reason=0)
+  TRADE_ASSET_OP_STATUS_APPLIED_PARTIAL = 5;  // 部分发放:不入账、不退款,转人工补偿(§4.33)
+}
+
+// ref_id 指向哪张表。
+enum TradeAssetOpRefKind {
+  TRADE_ASSET_OP_REF_KIND_UNSPECIFIED = 0;
+  TRADE_ASSET_OP_REF_KIND_LISTING = 1;
+  TRADE_ASSET_OP_REF_KIND_ORDER = 2;
+}

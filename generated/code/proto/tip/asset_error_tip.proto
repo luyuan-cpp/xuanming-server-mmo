@@ -1,0 +1,30 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+
+
+enum asset_error {
+  kAsset_errorOK = 0;
+
+  kAssetCurrencyInsufficient = 27000;
+
+  kAssetBagFull = 27001;
+
+  kAssetInBattle = 27002;
+
+  kAssetFrozen = 27003;
+
+  kAssetInvalidBundle = 27004;
+
+  kAssetBlocked = 27005;
+
+  kAssetPlayerNotHere = 27006;
+
+  kAssetPartialApplied = 27007;
+
+  kAssetAuthFailed = 27008;
+
+};

@@ -92,7 +92,11 @@
         "ChangeSceneEnQueueNotSameGs": 3020,
         "InvalidEnterSceneParameters": 3021,
         "CheckEnterSceneCreator": 3022,
-        "EnterSceneFailed": 3023
+        "EnterSceneFailed": 3023,
+        "ZoneTravelTargetZoneNotFound": 3024,
+        "ZoneTravelInBattle": 3025,
+        "ZoneTravelInTeam": 3026,
+        "ZoneTravelTargetBusy": 3027
       }
     },
     "team_error": {
@@ -342,6 +346,21 @@
         "TradeHomeZoneUnknown": 20001,
         "TradeFavoriteLimitReached": 20002,
         "TradeFeatureDisabled": 20003
+      }
+    },
+    "asset_error": {
+      "base": 27000,
+      "width": 1000,
+      "ids": {
+        "AssetCurrencyInsufficient": 27000,
+        "AssetBagFull": 27001,
+        "AssetInBattle": 27002,
+        "AssetFrozen": 27003,
+        "AssetInvalidBundle": 27004,
+        "AssetBlocked": 27005,
+        "AssetPlayerNotHere": 27006,
+        "AssetPartialApplied": 27007,
+        "AssetAuthFailed": 27008
       }
     }
   },

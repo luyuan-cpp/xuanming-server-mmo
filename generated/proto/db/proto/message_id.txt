@@ -17,7 +17,7 @@
 16=SceneManagerDestroyScene
 17=ClientPlayerLoginLeaveGame
 18=SceneSceneTest
-19=GuildServiceJoinGuild
+19=GuildServiceSetGuildMemberRole
 20=KVPut
 21=SceneSceneClientPlayerNotifyActorCreate
 22=KVDeleteRange
@@ -214,3 +214,11 @@
 213=ClientPlayerTeamNotifyTeamSnapshot
 214=ClientPlayerTeamCreateTeam
 215=ClientPlayerTeamNotifyTeamInvite
+216=GuildServiceTransferGuildLeader
+217=GuildServiceKickGuildMember
+218=GuildServiceApplyJoinGuild
+219=GuildServiceCancelGuildApplication
+220=GuildServiceNotifyGuildChanged
+221=GuildServiceListGuildApplications
+222=GuildServiceListMyGuildApplications
+223=GuildServiceReviewGuildApplication
