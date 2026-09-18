@@ -90,6 +90,8 @@ set(SOURCE_FILES
     player/system/player_database_1_loader.cpp
     player/system/player_lifecycle.cpp
     player/system/player_scene.cpp
+    player/system/player_team.cpp
+    player/system/player_team_aoi.cpp
     player/system/player_skill.cpp
     player/system/player_attribute.cpp
     player/system/player_pet.cpp

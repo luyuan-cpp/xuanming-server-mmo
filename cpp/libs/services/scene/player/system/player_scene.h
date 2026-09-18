@@ -34,8 +34,4 @@ public:
 	// source-clone refusal path on SceneManager and is currently NOT
 	// supported by this helper (callers always pick a mirror template).
 	static bool RequestEnterMirrorScene(entt::entity player, uint32_t mirrorConfigId);
-
-private:
-	static void OnGetTeamInfo(entt::entity player, void* reply);
-	static void OnGetLeaderLocation(entt::entity player, void* reply);
 };

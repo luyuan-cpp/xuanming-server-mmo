@@ -31,8 +31,11 @@
     <ClCompile Include="client_rpc_router\client_rpc_router.grpc.pb.cc" />
     <ClCompile Include="common\component\battle_comp.pb.cc" />
     <ClCompile Include="common\event\battle_event.pb.cc" />
+    <ClCompile Include="common\event\team_event.pb.cc" />
     <ClCompile Include="chat\chat.pb.cc" />
     <ClCompile Include="chat\chat.grpc.pb.cc" />
+    <ClCompile Include="team\team.pb.cc" />
+    <ClCompile Include="team\team.grpc.pb.cc" />
     <ClCompile Include="common\base\common.pb.cc" />
     <ClCompile Include="common\base\config.pb.cc" />
     <ClCompile Include="common\base\empty.pb.cc" />
@@ -146,6 +149,8 @@
   <ItemGroup>
     <ClInclude Include="chat\chat.pb.h" />
     <ClInclude Include="chat\chat.grpc.pb.h" />
+    <ClInclude Include="team\team.pb.h" />
+    <ClInclude Include="team\team.grpc.pb.h" />
     <ClInclude Include="common\base\common.pb.h" />
     <ClInclude Include="common\base\config.pb.h" />
     <ClInclude Include="common\base\empty.pb.h" />
@@ -200,6 +205,7 @@
     <ClInclude Include="common\event\scene_event.pb.h" />
     <ClInclude Include="common\event\server_event.pb.h" />
     <ClInclude Include="common\event\skill_event.pb.h" />
+    <ClInclude Include="common\event\team_event.pb.h" />
     <ClInclude Include="common\options\attribute_sync_option.pb.h" />
     <ClInclude Include="common\rollback\player_snapshot.pb.h" />
     <ClInclude Include="common\rollback\transaction_log.pb.h" />

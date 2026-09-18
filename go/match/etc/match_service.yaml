@@ -82,8 +82,14 @@ TableFingerprintMode: warn
 # PVE 组队各 battle_config_id(DungeonTable id)的凑满人数。
 # ⚠ 一期临时配置:人数的权威来源是 DungeonTable.max_team_size,Go 侧尚无表管理器,
 # 待接导表数据后删除本段改为查表(见设计文档 §5.4)。yaml map 键必须是字符串。
+# 组队整队开战(ClientPlayerTeam.StartTeamMatch)也按它判副本人数上限,未配置的 id 回
+# TeamDungeonNotOpen(docs/design/team-system.md §E.1 / J-6)。
+# "1" 由 3 改为 5(2026-09-15 用户拍板 J-6):与 generated/tables/dungeon.json 中 id=1 的
+# max_team_size=5 对齐;match 侧另按 min(配置值, 5) 收口(gather.go kMaxBattleTeamSize)。
+# K8s ConfigMap 整块逐字搬运本段(k8s_deploy.ps1 Get-AuthoritativeYamlBlock),新增 id 只改这里;
+# 块内不要写顶格注释,顶格行会截断搬运。
 PveTeamSizeByConfigId:
-  "1": 3
+  "1": 5
 
 # Prometheus /metrics 端口。9101=login / 9150=scene_manager / 9160=db 已占,match 用 9170。
 # 置空可关闭。本机多实例时由 go_services.ps1 按实例派生不同端口。
@@ -116,3 +122,28 @@ RatingToleranceMaxWaitSeconds: 90
 RatingDrawRoundCap: 30
 # RatingDrawRoundCapByConfigId:
 #   "1": 300
+
+# ---- 组队(docs/design/team-system.md;team 模块与 MatchService 同进程、同端口)----
+# AllowCrossZone:是否允许不同 home zone 的玩家同队。默认 false:申请 / 审批 / 邀请 / 接受邀请
+#   比对对方 home zone 与队伍 zone,不一致回 TeamCrossZoneDenied。从 true 改回 false 只拦新增。
+#   靠改这里 + 重启所有 match 实例切换;混跑窗口看 team_cross_zone_allowed gauge(J-13a)。
+Team:
+  AllowCrossZone: false
+
+# data_service gRPC 客户端(etcd 发现):team 用 BatchGetPlayerHomeZone 查玩家 home zone,
+# 查询失败组队 fail-closed(TeamInternal),查不到映射回 TeamHomeZoneUnknown。
+# NonBlock: true 是硬要求:客户端在 ServiceContext 里构造,早于节点注册与起服;阻塞建连会让
+#   data_service 没起时整个 match(排队 / 切磋 / 观战)起不来。Go 侧对 false 也会强制改成 true。
+# Timeout: 1500 与 guild 的 home zone 查询预算同值,小于 team 自己的 3500ms 请求预算。
+# 注意:顶层 Timeout 保持 5000 不改(WatchBattle 同步链最坏 >4s,team-system.md §A.3 第 7 条)。
+# 本地 -Zone 派生会把 Key 改成 dataservice.rpc.z<N>(go_services.ps1),与同 zone 的 data_service 配对,
+#   和 guild / login 同一形态。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: dataservice.rpc
+  Timeout: 1500
+  NonBlock: true
+  Middlewares:
+    Breaker: false

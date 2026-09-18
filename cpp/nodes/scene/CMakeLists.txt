@@ -64,6 +64,7 @@ set(SOURCE_FILES
     handler/event/scene_event_handler.cpp
     handler/event/server_event_handler.cpp
     handler/event/skill_event_handler.cpp
+    handler/event/team_event_handler.cpp
     handler/rpc/scene_admin_handler.cpp
     handler/rpc/player/player_currency_handler.cpp
     handler/rpc/player/player_attribute_handler.cpp

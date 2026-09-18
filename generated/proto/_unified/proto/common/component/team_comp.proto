@@ -3,11 +3,16 @@ option go_package = "proto/common/component";
 
 
 
+// scene 玩家实体上的组队成员关系(设计文档 docs/design/team-system.md §B.3、§F.2)。
+// 真值在 SharedRedis team:player:<player_id> 的 hash 字段 tid / epoch,由 team 服务(match 进程)原子写入。
 message TeamId
 {
   uint64 team_id = 1;
+  uint64 membership_epoch = 2;   // 该玩家成员关系版本:scene 仅当 incoming epoch 更大时才改组件(乱序/重复信号安全)
 }
 
+// Redis team:<team_id> 的投影值(scene 读;team 服务在同一条 Lua 里与权威记录一起写)。
+// members 是集合语义,scene 不得依赖顺序(AGENTS §11.6)。
 message TeamInfo
 {
   uint64 team_id = 1;

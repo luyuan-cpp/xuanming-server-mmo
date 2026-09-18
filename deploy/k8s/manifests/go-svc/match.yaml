@@ -64,6 +64,14 @@ spec:
           env:
             - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
               value: warn
+            # 按 C++ 约定注册(MatchNodeService.rpc 与同进程组队的 TeamNodeService.rpc)时写进 NodeInfo 的
+            # 对外 IP(match_service.go advertisedHost 优先读它,docs/design/team-system.md §A.3):ListenOn 是
+            # 0.0.0.0,不能原样注册;不注入时退回第一块非 loopback 网卡,多网卡 / sidecar / 部分 CNI 下可能选错,
+            # gate / 路由服拨不通。与 chat.yaml / data-service.yaml / login.yaml 同一写法。
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           args: ["-f", "/app/etc/match_service.yaml"]
           ports:
             - containerPort: 50500

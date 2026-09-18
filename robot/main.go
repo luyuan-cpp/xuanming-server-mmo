@@ -179,6 +179,14 @@ func main() {
 		return
 	}
 
+	// Team-smoke 模式:四个机器人做「组队系统」端到端冒烟
+	// (建队 / 申请 / 审批 / 邀请 / 踢人 / 转让 → 同节点跟随 → 整队开战 → 战斗中开战被拒 → 跨区两形态 → 解散)。
+	// 见 team_smoke_scenario.go 与 docs/design/team-system.md §I.5;前置条件写在 etc/team_smoke.yaml 文件头。
+	if cfg.Mode == "team-smoke" {
+		RunTeamSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {

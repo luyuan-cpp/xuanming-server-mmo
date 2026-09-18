@@ -89,6 +89,7 @@ set(SOURCE_FILES
     common/event/scene_event.pb.cc
     common/event/server_event.pb.cc
     common/event/skill_event.pb.cc
+    common/event/team_event.pb.cc
     common/options/attribute_sync_option.pb.cc
     common/rollback/player_snapshot.pb.cc
     common/rollback/transaction_log.pb.cc
@@ -140,6 +141,8 @@ set(SOURCE_FILES
     scene_manager/scene_node_service.pb.cc
     scene_manager/storage.grpc.pb.cc
     scene_manager/storage.pb.cc
+    team/team.pb.cc
+    team/team.grpc.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

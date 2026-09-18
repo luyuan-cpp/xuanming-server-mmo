@@ -465,6 +465,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamId final : public ::google::pro
   // accessors -------------------------------------------------------
   enum : int {
     kTeamIdFieldNumber = 1,
+    kMembershipEpochFieldNumber = 2,
   };
   // uint64 team_id = 1;
   void clear_team_id() ;
@@ -476,11 +477,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamId final : public ::google::pro
   void _internal_set_team_id(::uint64_t value);
 
   public:
+  // uint64 membership_epoch = 2;
+  void clear_membership_epoch() ;
+  [[nodiscard]] ::uint64_t membership_epoch() const;
+  void set_membership_epoch(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_membership_epoch() const;
+  void _internal_set_membership_epoch(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:TeamId)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<0, 1,
+      ::google::protobuf::internal::TcParseTable<1, 2,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -510,6 +521,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TeamId final : public ::google::pro
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t team_id_;
+    ::uint64_t membership_epoch_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -554,6 +566,30 @@ inline ::uint64_t TeamId::_internal_team_id() const {
 inline void TeamId::_internal_set_team_id(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.team_id_ = value;
+}
+
+// uint64 membership_epoch = 2;
+inline void TeamId::clear_membership_epoch() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.membership_epoch_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint64_t TeamId::membership_epoch() const {
+  // @@protoc_insertion_point(field_get:TeamId.membership_epoch)
+  return _internal_membership_epoch();
+}
+inline void TeamId::set_membership_epoch(::uint64_t value) {
+  _internal_set_membership_epoch(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:TeamId.membership_epoch)
+}
+inline ::uint64_t TeamId::_internal_membership_epoch() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.membership_epoch_;
+}
+inline void TeamId::_internal_set_membership_epoch(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.membership_epoch_ = value;
 }
 
 // -------------------------------------------------------------------

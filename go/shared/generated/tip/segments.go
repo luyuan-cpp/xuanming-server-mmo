@@ -30,7 +30,7 @@ var Segments = []Segment{
 	{Domain: "common", Group: "common_error", Base: 1000, Width: 1000, Lo: 1000, Hi: 1018, Count: 19},
 	{Domain: "login", Group: "login_error", Base: 2000, Width: 1000, Lo: 2000, Hi: 2031, Count: 32},
 	{Domain: "scene", Group: "scene_error", Base: 3000, Width: 1000, Lo: 3000, Hi: 3023, Count: 24},
-	{Domain: "team", Group: "team_error", Base: 4000, Width: 1000, Lo: 4000, Hi: 4017, Count: 18},
+	{Domain: "team", Group: "team_error", Base: 4000, Width: 1000, Lo: 4000, Hi: 4030, Count: 31},
 	{Domain: "mission", Group: "mission_error", Base: 5000, Width: 1000, Lo: 5000, Hi: 5006, Count: 7},
 	{Domain: "bag", Group: "bag_error", Base: 6000, Width: 1000, Lo: 6000, Hi: 6014, Count: 15},
 	{Domain: "skill", Group: "skill_error", Base: 7000, Width: 1000, Lo: 7000, Hi: 7006, Count: 7},

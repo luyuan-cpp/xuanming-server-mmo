@@ -715,7 +715,7 @@ constexpr JoinQueueRequest::ParseTableT_ JoinQueueRequest::InternalGenerateParse
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(JoinQueueRequest, _impl_.map_config_id_), 3>(),
        {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.map_config_id_)}},
-      // repeated uint64 party_member_ids = 4;
+      // repeated uint64 party_member_ids = 4 [deprecated = true];
       {::_pbi::TcParser::FastV64P1,
        {34, 0, 0,
         PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.party_member_ids_)}},
@@ -737,7 +737,7 @@ constexpr JoinQueueRequest::ParseTableT_ JoinQueueRequest::InternalGenerateParse
       {PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.mode_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
       // uint32 map_config_id = 3;
       {PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.map_config_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
-      // repeated uint64 party_member_ids = 4;
+      // repeated uint64 party_member_ids = 4 [deprecated = true];
       {PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.party_member_ids_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcRepeated | ::_fl::kPackedUInt64)},
       // uint32 zone_id = 5;
       {PROTOBUF_FIELD_OFFSET(JoinQueueRequest, _impl_.zone_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
@@ -3322,80 +3322,80 @@ const char descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto[] A
     "\032\033proto/db/proto_option.proto\032\035proto/com"
     "mon/base/empty.proto\032\033proto/common/base/"
     "tip.proto\032 proto/battle/player_battle.pr"
-    "oto\"\241\001\n\020JoinQueueRequest\022\021\n\tplayer_id\030\001 "
+    "oto\"\245\001\n\020JoinQueueRequest\022\021\n\tplayer_id\030\001 "
     "\001(\004\022\036\n\004mode\030\002 \001(\0162\020.match.MatchMode\022\025\n\rm"
-    "ap_config_id\030\003 \001(\r\022\030\n\020party_member_ids\030\004"
-    " \003(\004\022\017\n\007zone_id\030\005 \001(\r\022\030\n\020battle_config_i"
-    "d\030\006 \001(\r\"e\n\021JoinQueueResponse\022\022\n\nerror_co"
-    "de\030\001 \001(\r\022\024\n\014queue_ticket\030\002 \001(\t\022&\n\rerror_"
-    "message\030\003 \001(\0132\017.TipInfoMessage\"=\n\022Cancel"
-    "QueueRequest\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014queue"
-    "_ticket\030\002 \001(\t\"*\n\025GetQueueStatusRequest\022\021"
-    "\n\tplayer_id\030\001 \001(\004\"r\n\026GetQueueStatusRespo"
-    "nse\022 \n\005state\030\001 \001(\0162\021.match.QueueState\022\036\n"
-    "\026estimated_wait_seconds\030\002 \001(\r\022\026\n\016queued_"
-    "seconds\030\003 \001(\r\"_\n\026ChallengePlayerRequest\022"
-    "\021\n\tplayer_id\030\001 \001(\004\022\030\n\020target_player_id\030\002"
-    " \001(\004\022\030\n\020battle_config_id\030\003 \001(\r\"W\n\027Challe"
-    "ngePlayerResponse\022\024\n\014challenge_id\030\001 \001(\004\022"
-    "&\n\rerror_message\030\002 \001(\0132\017.TipInfoMessage\""
-    "R\n\027RespondChallengeRequest\022\021\n\tplayer_id\030"
-    "\001 \001(\004\022\024\n\014challenge_id\030\002 \001(\004\022\016\n\006accept\030\003 "
-    "\001(\010\"B\n\030RespondChallengeResponse\022&\n\rerror"
-    "_message\030\001 \001(\0132\017.TipInfoMessage\"\213\001\n\022Chal"
-    "lengeInviteS2C\022\024\n\014challenge_id\030\001 \001(\004\022\025\n\r"
-    "challenger_id\030\002 \001(\004\022\027\n\017challenger_name\030\003"
-    " \001(\t\022\030\n\020battle_config_id\030\004 \001(\r\022\025\n\rexpire"
-    "s_at_ms\030\005 \001(\004\"R\n\022ChallengeResultS2C\022\024\n\014c"
-    "hallenge_id\030\001 \001(\004\022\020\n\010accepted\030\002 \001(\010\022\024\n\014r"
-    "esponder_id\030\003 \001(\004\":\n\022WatchBattleRequest\022"
-    "\021\n\tplayer_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001(\004\"P\n"
-    "\023WatchBattleResponse\022\021\n\tbattle_id\030\001 \001(\004\022"
-    "&\n\rerror_message\030\002 \001(\0132\017.TipInfoMessage\""
-    "\?\n\033ListWatchableBattlesRequest\022\021\n\tplayer"
-    "_id\030\001 \001(\004\022\r\n\005limit\030\002 \001(\r\"J\n\034ListWatchabl"
-    "eBattlesResponse\022*\n\007battles\030\001 \003(\0132\031.matc"
-    "h.BattleWatchSummary\"\216\001\n\022BattleWatchSumm"
-    "ary\022\021\n\tbattle_id\030\001 \001(\004\022\036\n\004mode\030\002 \001(\0162\020.m"
-    "atch.MatchMode\022\030\n\020battle_config_id\030\003 \001(\r"
-    "\022\024\n\014player_names\030\004 \003(\t\022\025\n\rcreated_at_ms\030"
-    "\005 \001(\004\"Z\n\024SpectateBattleRecord\022*\n\007summary"
-    "\030\001 \001(\0132\031.match.BattleWatchSummary\022\026\n\016bat"
-    "tle_node_id\030\002 \001(\r\"\243\001\n\013MatchResult\022\020\n\010mat"
-    "ch_id\030\001 \001(\t\022\036\n\004mode\030\002 \001(\0162\020.match.MatchM"
-    "ode\022\025\n\rmap_config_id\030\003 \001(\r\022\031\n\021dungeon_co"
-    "nfig_id\030\004 \001(\r\022\037\n\005teams\030\005 \003(\0132\020.match.Mat"
-    "chTeam\022\017\n\007zone_id\030\006 \001(\r\"3\n\tMatchTeam\022\022\n\n"
-    "team_index\030\001 \001(\r\022\022\n\nplayer_ids\030\002 \003(\004*\263\001\n"
-    "\tMatchMode\022\032\n\026MATCH_MODE_UNSPECIFIED\020\000\022\022"
-    "\n\016MATCH_MODE_5V5\020\001\022\022\n\016MATCH_MODE_3V3\020\002\022\022"
-    "\n\016MATCH_MODE_1V1\020\003\022\027\n\023MATCH_MODE_PVE_SOL"
-    "O\020\004\022\027\n\023MATCH_MODE_PVE_TEAM\020\005\022\034\n\030MATCH_MO"
-    "DE_PVP_CHALLENGE\020\006*\247\001\n\nQueueState\022\033\n\027QUE"
-    "UE_STATE_UNSPECIFIED\020\000\022\026\n\022QUEUE_STATE_QU"
-    "EUED\020\001\022\027\n\023QUEUE_STATE_MATCHED\020\002\022\025\n\021QUEUE"
-    "_STATE_READY\020\003\022\030\n\024QUEUE_STATE_ENTERING\020\004"
-    "\022\032\n\026QUEUE_STATE_NOT_QUEUED\020\0052\202\006\n\014MatchSe"
-    "rvice\022@\n\tJoinQueue\022\027.match.JoinQueueRequ"
-    "est\032\030.match.JoinQueueResponse\"\000\0222\n\013Cance"
-    "lQueue\022\031.match.CancelQueueRequest\032\006.Empt"
-    "y\"\000\022O\n\016GetQueueStatus\022\034.match.GetQueueSt"
-    "atusRequest\032\035.match.GetQueueStatusRespon"
-    "se\"\000\022R\n\017ChallengePlayer\022\035.match.Challeng"
-    "ePlayerRequest\032\036.match.ChallengePlayerRe"
-    "sponse\"\000\022U\n\020RespondChallenge\022\036.match.Res"
-    "pondChallengeRequest\032\037.match.RespondChal"
-    "lengeResponse\"\000\022<\n\025NotifyChallengeInvite"
-    "\022\031.match.ChallengeInviteS2C\032\006.Empty\"\000\022<\n"
-    "\025NotifyChallengeResult\022\031.match.Challenge"
-    "ResultS2C\032\006.Empty\"\000\022F\n\013WatchBattle\022\031.mat"
-    "ch.WatchBattleRequest\032\032.match.WatchBattl"
-    "eResponse\"\000\022R\n\023RequestBattleTicket\022\033.Req"
-    "uestBattleTicketRequest\032\034.RequestBattleT"
-    "icketResponse\"\000\022a\n\024ListWatchableBattles\022"
-    "\".match.ListWatchableBattlesRequest\032#.ma"
-    "tch.ListWatchableBattlesResponse\"\000\032\005\210\250\303\001"
-    "\001B\021Z\013match/match\230\324a\025b\006proto3"
+    "ap_config_id\030\003 \001(\r\022\034\n\020party_member_ids\030\004"
+    " \003(\004B\002\030\001\022\017\n\007zone_id\030\005 \001(\r\022\030\n\020battle_conf"
+    "ig_id\030\006 \001(\r\"e\n\021JoinQueueResponse\022\022\n\nerro"
+    "r_code\030\001 \001(\r\022\024\n\014queue_ticket\030\002 \001(\t\022&\n\rer"
+    "ror_message\030\003 \001(\0132\017.TipInfoMessage\"=\n\022Ca"
+    "ncelQueueRequest\022\021\n\tplayer_id\030\001 \001(\004\022\024\n\014q"
+    "ueue_ticket\030\002 \001(\t\"*\n\025GetQueueStatusReque"
+    "st\022\021\n\tplayer_id\030\001 \001(\004\"r\n\026GetQueueStatusR"
+    "esponse\022 \n\005state\030\001 \001(\0162\021.match.QueueStat"
+    "e\022\036\n\026estimated_wait_seconds\030\002 \001(\r\022\026\n\016que"
+    "ued_seconds\030\003 \001(\r\"_\n\026ChallengePlayerRequ"
+    "est\022\021\n\tplayer_id\030\001 \001(\004\022\030\n\020target_player_"
+    "id\030\002 \001(\004\022\030\n\020battle_config_id\030\003 \001(\r\"W\n\027Ch"
+    "allengePlayerResponse\022\024\n\014challenge_id\030\001 "
+    "\001(\004\022&\n\rerror_message\030\002 \001(\0132\017.TipInfoMess"
+    "age\"R\n\027RespondChallengeRequest\022\021\n\tplayer"
+    "_id\030\001 \001(\004\022\024\n\014challenge_id\030\002 \001(\004\022\016\n\006accep"
+    "t\030\003 \001(\010\"B\n\030RespondChallengeResponse\022&\n\re"
+    "rror_message\030\001 \001(\0132\017.TipInfoMessage\"\213\001\n\022"
+    "ChallengeInviteS2C\022\024\n\014challenge_id\030\001 \001(\004"
+    "\022\025\n\rchallenger_id\030\002 \001(\004\022\027\n\017challenger_na"
+    "me\030\003 \001(\t\022\030\n\020battle_config_id\030\004 \001(\r\022\025\n\rex"
+    "pires_at_ms\030\005 \001(\004\"R\n\022ChallengeResultS2C\022"
+    "\024\n\014challenge_id\030\001 \001(\004\022\020\n\010accepted\030\002 \001(\010\022"
+    "\024\n\014responder_id\030\003 \001(\004\":\n\022WatchBattleRequ"
+    "est\022\021\n\tplayer_id\030\001 \001(\004\022\021\n\tbattle_id\030\002 \001("
+    "\004\"P\n\023WatchBattleResponse\022\021\n\tbattle_id\030\001 "
+    "\001(\004\022&\n\rerror_message\030\002 \001(\0132\017.TipInfoMess"
+    "age\"\?\n\033ListWatchableBattlesRequest\022\021\n\tpl"
+    "ayer_id\030\001 \001(\004\022\r\n\005limit\030\002 \001(\r\"J\n\034ListWatc"
+    "hableBattlesResponse\022*\n\007battles\030\001 \003(\0132\031."
+    "match.BattleWatchSummary\"\216\001\n\022BattleWatch"
+    "Summary\022\021\n\tbattle_id\030\001 \001(\004\022\036\n\004mode\030\002 \001(\016"
+    "2\020.match.MatchMode\022\030\n\020battle_config_id\030\003"
+    " \001(\r\022\024\n\014player_names\030\004 \003(\t\022\025\n\rcreated_at"
+    "_ms\030\005 \001(\004\"Z\n\024SpectateBattleRecord\022*\n\007sum"
+    "mary\030\001 \001(\0132\031.match.BattleWatchSummary\022\026\n"
+    "\016battle_node_id\030\002 \001(\r\"\243\001\n\013MatchResult\022\020\n"
+    "\010match_id\030\001 \001(\t\022\036\n\004mode\030\002 \001(\0162\020.match.Ma"
+    "tchMode\022\025\n\rmap_config_id\030\003 \001(\r\022\031\n\021dungeo"
+    "n_config_id\030\004 \001(\r\022\037\n\005teams\030\005 \003(\0132\020.match"
+    ".MatchTeam\022\017\n\007zone_id\030\006 \001(\r\"3\n\tMatchTeam"
+    "\022\022\n\nteam_index\030\001 \001(\r\022\022\n\nplayer_ids\030\002 \003(\004"
+    "*\263\001\n\tMatchMode\022\032\n\026MATCH_MODE_UNSPECIFIED"
+    "\020\000\022\022\n\016MATCH_MODE_5V5\020\001\022\022\n\016MATCH_MODE_3V3"
+    "\020\002\022\022\n\016MATCH_MODE_1V1\020\003\022\027\n\023MATCH_MODE_PVE"
+    "_SOLO\020\004\022\027\n\023MATCH_MODE_PVE_TEAM\020\005\022\034\n\030MATC"
+    "H_MODE_PVP_CHALLENGE\020\006*\247\001\n\nQueueState\022\033\n"
+    "\027QUEUE_STATE_UNSPECIFIED\020\000\022\026\n\022QUEUE_STAT"
+    "E_QUEUED\020\001\022\027\n\023QUEUE_STATE_MATCHED\020\002\022\025\n\021Q"
+    "UEUE_STATE_READY\020\003\022\030\n\024QUEUE_STATE_ENTERI"
+    "NG\020\004\022\032\n\026QUEUE_STATE_NOT_QUEUED\020\0052\202\006\n\014Mat"
+    "chService\022@\n\tJoinQueue\022\027.match.JoinQueue"
+    "Request\032\030.match.JoinQueueResponse\"\000\0222\n\013C"
+    "ancelQueue\022\031.match.CancelQueueRequest\032\006."
+    "Empty\"\000\022O\n\016GetQueueStatus\022\034.match.GetQue"
+    "ueStatusRequest\032\035.match.GetQueueStatusRe"
+    "sponse\"\000\022R\n\017ChallengePlayer\022\035.match.Chal"
+    "lengePlayerRequest\032\036.match.ChallengePlay"
+    "erResponse\"\000\022U\n\020RespondChallenge\022\036.match"
+    ".RespondChallengeRequest\032\037.match.Respond"
+    "ChallengeResponse\"\000\022<\n\025NotifyChallengeIn"
+    "vite\022\031.match.ChallengeInviteS2C\032\006.Empty\""
+    "\000\022<\n\025NotifyChallengeResult\022\031.match.Chall"
+    "engeResultS2C\032\006.Empty\"\000\022F\n\013WatchBattle\022\031"
+    ".match.WatchBattleRequest\032\032.match.WatchB"
+    "attleResponse\"\000\022R\n\023RequestBattleTicket\022\033"
+    ".RequestBattleTicketRequest\032\034.RequestBat"
+    "tleTicketResponse\"\000\022a\n\024ListWatchableBatt"
+    "les\022\".match.ListWatchableBattlesRequest\032"
+    "#.match.ListWatchableBattlesResponse\"\000\032\005"
+    "\210\250\303\001\001B\021Z\013match/match\230\324a\025b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_deps[4] = {
@@ -3408,7 +3408,7 @@ static ::absl::once_flag descriptor_table_proto_2fmatch_2fmatch_5fservice_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto = {
     false,
     false,
-    3108,
+    3112,
     descriptor_table_protodef_proto_2fmatch_2fmatch_5fservice_2eproto,
     "proto/match/match_service.proto",
     &descriptor_table_proto_2fmatch_2fmatch_5fservice_2eproto_once,
@@ -3612,7 +3612,7 @@ PROTOBUF_NOINLINE void JoinQueueRequest::Clear() {
     }
   }
 
-  // repeated uint64 party_member_ids = 4;
+  // repeated uint64 party_member_ids = 4 [deprecated = true];
   if (CheckHasBit(cached_has_bits, 0x00000001U)) {
     {
       int byte_size = this_._impl_._party_member_ids_cached_byte_size_.Get();
@@ -3667,7 +3667,7 @@ PROTOBUF_NOINLINE void JoinQueueRequest::Clear() {
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
   if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
-    // repeated uint64 party_member_ids = 4;
+    // repeated uint64 party_member_ids = 4 [deprecated = true];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       total_size +=
           ::_pbi::WireFormatLite::UInt64SizeWithPackedTagSize(

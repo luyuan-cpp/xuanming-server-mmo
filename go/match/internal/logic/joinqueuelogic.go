@@ -212,17 +212,26 @@ func (l *JoinQueueLogic) JoinQueue(in *matchpb.JoinQueueRequest) (*matchpb.JoinQ
 	return &matchpb.JoinQueueResponse{QueueTicket: ticket.Ticket}, nil
 }
 
-// healOrphanQueuedTicket 识别并清掉"票据 queued 但队列里没有人"的残留(见
+// healOrphanQueuedTicket JoinQueue 的票据自愈,实现收口在包级函数 healOrphanTicket
+// (整队开战预检共用,team-system.md §E.1 第 5 步),行为与抽出前逐字一致。
+func (l *JoinQueueLogic) healOrphanQueuedTicket(playerId uint64, existing *queueTicket) (bool, error) {
+	return healOrphanTicket(l.svcCtx, l.Logger, playerId, existing)
+}
+
+// healOrphanTicket 识别并清掉"票据 queued 但队列里没有人"的残留(见
 // isQueuedTicketInQueue 的成因列表):票据与队列分属不同 slot,任何一处的
 // 崩溃/故障切换都能让两者脱节,而 matcher 只遍历队列、CancelQueue 是唯一能删票
 // 的路径 —— 玩家会被 ErrAlreadyQueued 卡满 6h。带 ticket id 且要求仍是 queued 的
 // CAS 删票:与此同时被 matcher 弹出推进 matched 的票据不会被误删。返回 true 表示
-// 旧票据已清、调用方可以继续按本次请求入队;false 表示确实在途(或已 matched)。
+// 旧票据已清、调用方可以继续按本次请求入队 / 开战;false 表示确实在途(或已 matched)。
+//
+// 前置条件:调用方已确认 battle:lock 不存在(ready 分支依赖它,见下)。
+// log 由调用方给(JoinQueue 带请求上下文的 Logger,整队开战给 logx.WithContext)。
 //
 // 与并发窗口的叠加(popGroup 弹出后尚未 setTicketMatched / requeueFront CAS 后
 // 尚未 LPUSH)都是良性:前者 matcher 的 CAS 失败把他剔出组,后者队列里多一份
 // 由 popGroup 去重,两条路都不会留下孤儿。
-func (l *JoinQueueLogic) healOrphanQueuedTicket(playerId uint64, existing *queueTicket) (bool, error) {
+func healOrphanTicket(svcCtx *svc.ServiceContext, log logx.Logger, playerId uint64, existing *queueTicket) (bool, error) {
 	if existing.State == ticketStateReady {
 		// ready = 开局成功后的短暂停留态(ReadyTicketTTLSeconds 自清)。走到这里说明
 		// 上面的 battle:lock 咨询性检查已经放行 —— 锁在结算应用/作废时被 scene 删除,
@@ -230,31 +239,31 @@ func (l *JoinQueueLogic) healOrphanQueuedTicket(playerId uint64, existing *queue
 		// 不能再拦"打完立刻再排"(2026-09-02 跨 zone 冒烟复跑:上一局 16s 前结束,
 		// ready 票据 TTL 60s 未到,JoinQueue 一直 ErrAlreadyQueued)。CAS 按 ticket id
 		// 删,避免误删并发新建的票据。matched 态不在此列:gather 在途,靠 matched TTL 自愈。
-		deleteTicketIfOwned(l.svcCtx, playerId, existing.Ticket)
-		l.Infof("[match] 清掉已结束战斗残留的 ready 票据 player=%d ticket=%s queue=%q",
+		deleteTicketIfOwned(svcCtx, playerId, existing.Ticket)
+		log.Infof("[match] 清掉已结束战斗残留的 ready 票据 player=%d ticket=%s queue=%q",
 			playerId, existing.Ticket, existing.QueueKey)
 		return true, nil
 	}
 	if existing.State != ticketStateQueued {
 		return false, nil
 	}
-	inQueue, err := isQueuedTicketInQueue(l.svcCtx, playerId, existing)
+	inQueue, err := isQueuedTicketInQueue(svcCtx, playerId, existing)
 	if err != nil {
 		return false, err
 	}
 	if inQueue {
 		return false, nil
 	}
-	deleted, err := cancelTicketIfQueued(l.svcCtx, playerId, existing.Ticket)
+	deleted, err := cancelTicketIfQueued(svcCtx, playerId, existing.Ticket)
 	if err != nil {
 		return false, err
 	}
 	if !deleted {
 		// 探测与删票之间被 matcher 推进了 matched(队列里没人是因为刚被弹出)。
-		l.Infof("[match] 票据在自愈前已被弹出 player=%d ticket=%s", playerId, existing.Ticket)
+		log.Infof("[match] 票据在自愈前已被弹出 player=%d ticket=%s", playerId, existing.Ticket)
 		return false, nil
 	}
-	l.Errorf("[match] 清掉崩溃残留的孤儿票据(queued 但不在队列)player=%d ticket=%s queue=%q enqueued_at_ms=%d",
+	log.Errorf("[match] 清掉崩溃残留的孤儿票据(queued 但不在队列)player=%d ticket=%s queue=%q enqueued_at_ms=%d",
 		playerId, existing.Ticket, existing.QueueKey, existing.EnqueuedAtMs)
 	return true, nil
 }

@@ -12,6 +12,8 @@ import (
 	matchkafka "match/internal/kafka"
 	"match/internal/metrics"
 
+	dspb "proto/data_service"
+
 	"shared/kafkacmd"
 	"shared/kafkautil"
 	"shared/snowflake"
@@ -21,6 +23,7 @@ import (
 	"github.com/segmentio/kafka-go"
 	"github.com/zeromicro/go-zero/core/logx"
 	"github.com/zeromicro/go-zero/core/stores/redis"
+	"github.com/zeromicro/go-zero/zrpc"
 	clientv3 "go.etcd.io/etcd/client/v3"
 )
 
@@ -54,10 +57,13 @@ type ServiceContext struct {
 	Kafka              *kafka.Writer
 	GateCommandBuilder kafkautil.GateCommandBuilder
 
-	// BattleIDGen 生产 battle_id 与 challenge_id(shared/snowflake 17-bit
-	// worker 布局)。SnowFlake 节点隔离不变量(宪法 §7):这两类 id 只能由
-	// match 节点生产,worker id 通过 etcd 前缀 "/match" 独立分配,与其它
-	// 节点类型的 worker 池互不相干。
+	// BattleIDGen 生产 battle_id / challenge_id / team_id(shared/snowflake 17-bit
+	// worker 布局)。SnowFlake 节点隔离不变量(AGENTS.md §7 #1):这三类 id 只能由
+	// match 节点生产,共用同一个生成器所以互不重复;worker 槽位按 snowflakealloc
+	// kind="match" 独立申领(cluster 0 兼容旧前缀 "/match"),与 NodeInfo.NodeId 及
+	// 其它节点类型的 worker 池互不相干。同进程第二次注册 TeamNodeService 不涉及
+	// snowflake 槽位(team-system.md §C.3)。失租被 fence 后 Generate 返回错误,
+	// 调用方必须整体失败,不许用 0 顶替。
 	BattleIDGen *snowflake.Node
 	snowflakeHd *snowflakealloc.Handle
 
@@ -71,6 +77,12 @@ type ServiceContext struct {
 	//   - BattleNodes:全局池,v1 随机选一个执行 CreateBattle。
 	SceneNodes  *discovery.NodeWatcher
 	BattleNodes *discovery.NodeWatcher
+
+	// DataServiceClient 是 data_service 的 gRPC 客户端,team 用它查玩家 home zone
+	// (BatchGetPlayerHomeZone,team-system.md §D.3)。DataServiceRpc 没配任何目标时为 nil,
+	// team 需要 home zone 的请求一律 fail-closed。连接是 NonBlock 的:data_service 没起
+	// 不阻塞 match 起服,调用时才返回 Unavailable。
+	DataServiceClient dspb.DataServiceClient
 
 	stopOnce sync.Once
 }
@@ -157,7 +169,29 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		metrics.SetDiscoveredNodes,
 		func(entry discovery.NodeEntry) { discovery.RemoveEndpointConn(entry.Endpoint) })
 
+	sc.DataServiceClient = NewDataServiceClient(c.DataServiceRpc)
+
 	return sc
+}
+
+// NewDataServiceClient 按配置建 data_service 客户端;配置里没有任何目标(etcd key /
+// 直连端点 / target)返回 nil,由 team 按 fail-closed 处理。
+//
+// 强制 NonBlock:本函数在 NewServiceContext 里调用,早于节点注册与 s.Start()。阻塞建连
+// 会把 data_service 从"组队的请求期依赖"升级成"整个 match 的启动依赖"(排队 / 切磋 / 观战
+// 一起不可用),所以 NonBlock=false 记错误日志后改为 true,而不是照配置阻塞。
+// 拆成独立函数是为了不起 etcd 也能测试。
+func NewDataServiceClient(c zrpc.RpcClientConf) dspb.DataServiceClient {
+	if c.Etcd.Key == "" && len(c.Endpoints) == 0 && c.Target == "" {
+		logx.Error("[match] DataServiceRpc 未配置:无法查询玩家 home zone,组队需要 home zone 的请求将一律失败")
+		return nil
+	}
+	if !c.NonBlock {
+		logx.Error("[match] DataServiceRpc.NonBlock=false 不被允许,已强制改为 true(阻塞建连会让 data_service 不可用时整个 match 起不来)")
+		c.NonBlock = true
+	}
+	conn := zrpc.MustNewClient(c)
+	return dspb.NewDataServiceClient(conn.Conn())
 }
 
 // NewRedisHandles 按配置建立 (MatchRedis, SharedRedis) 两个句柄。

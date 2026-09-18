@@ -29,6 +29,7 @@
 #include <engine/infra/messaging/kafka/kafka_producer.h>
 #include "core/system/redis.h"
 #include "player_scene.h"
+#include "player_team.h"
 #include "hexagons_grid.h"  // Hex —— 退出场景时要和 SceneEntityComp 成对摘掉
 #include "stress_test_probe.h"
 #include "player/constants/player.h"
@@ -406,6 +407,12 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerGa
 
 	// 3. Enter the scene: bind player to scene entity and send client notification.
 	PlayerSceneSystem::HandleEnterScene(player, targetScene);
+
+	// 3.5 组队:刷新 TeamId 并检查同节点跟随(team-system.md §F.2)。
+	//     放在 HandleEnterScene 之外:它对"已在目标场景"幂等早退,30s 宽限期内同场景重连
+	//     会走到那个早退,放在里面就会漏刷新。战斗在途的判定在跟随链内部直接读 battle:lock,
+	//     不依赖第 6 步冻结重建与本链的回调先后。
+	PlayerTeamSystem::OnEnteredScene(player);
 
 	// 4. Set login state for downstream systems (reconnect, first-login logic, etc.).
 	if (enterInfo.enter_gs_type() != 0)

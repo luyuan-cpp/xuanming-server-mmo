@@ -86,7 +86,7 @@ C++ 侧 `cpp/libs/engine/infra/storage/redis_client/redis_client.h` 基于 hired
 | # | 决策 | 理由 |
 |---|---|---|
 | D1 | **匹配池全局、不分 zone、不设 zone 优先级、不设降级开关** | 用户明确;现状 key 已全局;开关是"降级",与"容错不降级"相悖 |
-| D2 | **双存储**:match 私有 key(`match:*` / `challenge:*` / `spectate:*`)→ `MatchRedis`(可配 `Type: cluster`);跨运行时契约 key(`player:{id}:location` / `player:session:{id}` / `battle:lock:{id}`)→ `SharedRedis`(既有共享库,match 只读) | 契约 key 的写者是 scene_manager / player_locator / **C++ scene**,C++ 无集群客户端;按有界上下文拆存储是标准做法,且不动任何其他服务。`MatchRedis` 缺省时回落到 `Redis`(向后兼容,本地单库照跑) |
+| D2 | **双存储**:match 私有 key(`match:*` / `challenge:*` / `spectate:*`)→ `MatchRedis`(可配 `Type: cluster`);跨运行时契约 key(`player:{id}:location` / `player:session:{id}` / `battle:lock:{id}`)→ `SharedRedis`(既有共享库,match 只读)。**例外(2026-09-15,[team-system.md](team-system.md) DV-2 / J-2)**:match 进程内的 team 模块(`go/match/internal/team`)写 SharedRedis 的 `team:rec:*` / `team:<id>` / `team:player:*` / `team:invite:*` 四类 key;match 原有代码(队列 / 票据 / 切磋 / 观战)对 SharedRedis 仍只读 | 契约 key 的写者是 scene_manager / player_locator / **C++ scene**,C++ 无集群客户端;按有界上下文拆存储是标准做法,且不动任何其他服务。`MatchRedis` 缺省时回落到 `Redis`(向后兼容,本地单库照跑)。team 例外的理由:C++ scene 用 hiredis `GetZoneRedis()` 读 `team:<id>` 投影(无集群客户端),所以投影只能放 SharedRedis;权威记录、投影、玩家索引、邀请反查必须在同一条 Lua 里原子提交,四类 key 只能同库。写入范围限定这四类前缀,不扩大到其他契约 key |
 | D3 | **队列相关 key 共用 hash tag `{mq}` 同 slot**:`match:{mq}:index`(注册集)、`match:{mq}:queue:<mode>:<config>`、`match:{mq}:lock:<mode>:<config>`;入队用 Lua 原子 `SADD index + RPUSH queue` | 用注册集取代 SCAN;同 slot 让"注册集 ⊆ 队列集合"成为不变量(主从异步复制的故障切换不会让队列脱离注册集);队列操作 QPS 极低,单 slot 不是瓶颈(§6) |
 | D4 | 票据 `match:ticket:{pid}` 按玩家分布;新增 `zone_id`、`queue_key` 字段 | zone 用于可观测性与对局日志;`queue_key` 让取消 / 回队首不再重算 key(格式演进安全) |
 | D5 | **`matched` 态票据短 TTL**:弹组时按组大小计算 `max(MatchedTicketTTLSeconds, n×(removeObserverTimeout+prepareTimeout) + createTimeout + rollbackTimeout + 10s)`(2 人 30s / 5 人 48s / 10 人 78s;超时常量取自 gather.go,不另写数字);gather 失败进补偿前对幸存者按 `prepared×3+10` 续期;**票据所有写入带 ticket id 的 Lua CAS**(matched / ready / 回队首 / 失败删票 / 取消删票五处):票据过期被玩家重排后的新票据不会被迟到的旧 gather 写脏;CAS 失败的成员不进 gather(视为已取消出局);回队首**先 CAS 后 LPUSH**,LPUSH 失败则 CAS 删票不留反向孤儿;JoinQueue 遇 queued 票据先 `LPOS` 探测队列,不在则原地补入队(票据/队列分属两个 master 的故障切换组合丢失可自愈);JoinQueue 遇 **ready** 票据且 `battle:lock` 已不存在(战斗已结束)→ CAS 删票放行(2026-09-02 冒烟复跑:上一局 16s 前结束,ready 票据 TTL 60s 未到把"打完立刻再排"拒了一分钟) | 三视角复审(2026-09-02)逐条推翻了"固定 30s"与"先 LPUSH 后 CAS":gather 链路是 清退×n → Prepare×n → Create → (失败)Destroy+解冻×n,固定 30s 在 5 人组正常路径就会过期;scene 侧冻结由既有 deadline reaper 兜底(见 §5) |
@@ -155,6 +155,8 @@ list 与 rank 的全部 Lua 见 §11.3。
 | `player:<id>:location` | scene_manager | JoinQueue 取 zone;gather 定位 scene 节点;观战定位 |
 | `player:session:<id>` | player_locator | 挑战推送 / 观战路由取 gate |
 | `battle:lock:<id>` | C++ scene | 咨询性"是否在战斗中" |
+
+"match 只读"有唯一例外:team 模块写 `team:rec:*` / `team:<id>` / `team:player:*` / `team:invite:*`(D2 例外,key 全表与 Lua 见 [team-system.md](team-system.md) §C.1 / §C.5)。
 
 `MatchRedis` 未配置时两者同一实例(本地开发形态)。**这只适合本地**:评分 `match:rating:*` 无 TTL,共享库
 配了 `allkeys-*` 淘汰策略(本地 `deploy/docker-compose.yml:121` 就是 `allkeys-lfu`),评分会被当普通缓存淘汰、
@@ -283,6 +285,7 @@ MULTI、MGET(§10.0)。所以 SharedRedis **必须保持单实例(或主从哨�
 | scene_manager | 场景生命周期 Lua 7 key/3N key 跨 slot |
 | guild / friend | 非 0 号 DB(Cluster 只有 DB0);榜单重建跨 slot TxPipelined + RENAME;cache generation-CAS 2 key |
 | db | Kafka 重试三队列 RPOPLPUSH 跨 slot |
+| match(team 模块,2026-09-15 登记,[team-system.md](team-system.md) §C.5 / J-25) | **S_COMMIT**(唯一写脚本)一条 Lua 同时写 `team:rec:<tid>`、`team:<tid>`、全部增删成员的 `team:player:<pid>`、全部增删邀请的 `team:invite:<pid>`(跨 slot,CROSSSLOT);S_TOUCH(记录 + 投影 + 成员索引)、S_HEAL_ORPHAN(`team:player:<pid>` + `team:rec:<tid>`)、S_READ_MEMBERS 同样多 key。`team:<tid>` 是 C++ scene 既有契约 key 格式(不带花括号),集群化时要么全部改 hash tag 并同步改 scene,要么拆脚本并重新论证原子性 |
 | 运维 | `FLUSHALL` 在 Cluster 只清一个节点(CLAUDE.md §6.2 压测口径要改)|
 
 与跨 zone **匹配**无关但被审计顺带指出的既有问题(不在本轮):玩家实体跨 zone 迁移的 `ErrUnsafeCrossNodeHandoff`

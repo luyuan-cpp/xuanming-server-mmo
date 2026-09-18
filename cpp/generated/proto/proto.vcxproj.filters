@@ -189,6 +189,15 @@
     <ClCompile Include="common\event\skill_event.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="common\event\team_event.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="team\team.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="team\team.grpc.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="db\db.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -504,6 +513,15 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="common\event\skill_event.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\event\team_event.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="team\team.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="team\team.grpc.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="db\db.pb.h">

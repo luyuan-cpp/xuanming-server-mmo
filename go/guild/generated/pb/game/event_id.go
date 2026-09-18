@@ -48,3 +48,4 @@ const ContractsKafkaUnbindBattleEventEventId = 44
 const BattleConfirmedEventEventId = 45
 const ContractsKafkaBattleResultEventEventId = 46
 const ContractsKafkaBattleResultTeamEventId = 47
+const PlayerTeamRefreshEventEventId = 48

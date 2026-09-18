@@ -52,6 +52,9 @@ type Config struct {
 	// TradeSmoke 是 "trade-smoke" 模式的子开关(见 TradeSmokeConfig / trade_smoke_scenario.go)。
 	TradeSmoke TradeSmokeConfig `yaml:"trade_smoke"`
 
+	// TeamSmoke 是 "team-smoke" 模式的子开关(见 TeamSmokeConfig / team_smoke_scenario.go)。
+	TeamSmoke TeamSmokeConfig `yaml:"team_smoke"`
+
 	// CurrencyCrash configures the "currency-crash-snapshot" mode used by
 	// docs/notes/currency-crash-window-verification.md. Driven by an external
 	// PowerShell script that runs the robot twice per case (pre/post kill) so
@@ -263,6 +266,68 @@ func (c *TradeSmokeConfig) validate() error {
 	return nil
 }
 
+// TeamSmokeConfig 配置 "team-smoke" 模式(docs/design/team-system.md §I.5)。
+//
+// 机器人 A(队长)、B、D 登 zone_a;cross_zone=true 时 C 登 zone_b,并按 expect_cross_zone_allowed
+// 断言跨区组队被拒(X1)或放行(X2)。expect_cross_zone_allowed 必须与 match 的 Team.AllowCrossZone 一致。
+type TeamSmokeConfig struct {
+	CrossZone bool `yaml:"cross_zone"`
+	// ExpectCrossZoneAllowed:false 跑 X1(TeamCrossZoneDenied),true 跑 X2(跨区入队 + 不跟随 + 跨 zone 开战)。
+	// 只在 cross_zone=true 时有意义;cross_zone=false 却填 true 视为配置错误,避免"以为测了 X2 其实跳过了"。
+	ExpectCrossZoneAllowed bool `yaml:"expect_cross_zone_allowed"`
+
+	// ZoneA 必须非 0:冒烟要断言新队伍的 zone_id 等于 A 的 home zone,0 会被 server-list 自动选区顶掉。
+	ZoneA uint32 `yaml:"zone_a"`
+	// ZoneB 仅 cross_zone=true 时使用,必须非 0 且与 ZoneA 不同。
+	ZoneB uint32 `yaml:"zone_b"`
+
+	// BattleConfigId 是整队开战 / 单人 PVE 用的 DungeonTable id,必须非 0 且在 match 的 PveTeamSizeByConfigId 里配置。
+	BattleConfigId uint32 `yaml:"battle_config_id"`
+
+	// FollowSceneConfigIds 是换图候选(BaseScene id),至少 3 个互不相同的非 0 值:
+	// S6 要选一张与 A、B 当前地图都不同的图,两人最多占掉 2 个。
+	FollowSceneConfigIds []uint32 `yaml:"follow_scene_config_ids"`
+}
+
+// teamSmokeMinFollowSceneConfigs 是换图候选的最少个数(见 FollowSceneConfigIds 注释)。
+const teamSmokeMinFollowSceneConfigs = 3
+
+func (c *TeamSmokeConfig) validate() error {
+	if c.ZoneA == 0 {
+		return fmt.Errorf("zone_a must be set (non-zero)")
+	}
+	if c.BattleConfigId == 0 {
+		return fmt.Errorf("battle_config_id must be set (non-zero)")
+	}
+	seen := make(map[uint32]struct{}, len(c.FollowSceneConfigIds))
+	for _, id := range c.FollowSceneConfigIds {
+		if id == 0 {
+			return fmt.Errorf("follow_scene_config_ids must not contain 0")
+		}
+		if _, dup := seen[id]; dup {
+			return fmt.Errorf("follow_scene_config_ids must not contain duplicates (got %d twice)", id)
+		}
+		seen[id] = struct{}{}
+	}
+	if len(seen) < teamSmokeMinFollowSceneConfigs {
+		return fmt.Errorf("follow_scene_config_ids needs at least %d distinct scene config ids (got %d)",
+			teamSmokeMinFollowSceneConfigs, len(seen))
+	}
+	if !c.CrossZone {
+		if c.ExpectCrossZoneAllowed {
+			return fmt.Errorf("expect_cross_zone_allowed=true requires cross_zone=true (the cross-zone steps would be skipped)")
+		}
+		return nil
+	}
+	if c.ZoneB == 0 {
+		return fmt.Errorf("zone_b must be set (non-zero) when cross_zone is true")
+	}
+	if c.ZoneA == c.ZoneB {
+		return fmt.Errorf("zone_a and zone_b must differ when cross_zone is true (got %d)", c.ZoneA)
+	}
+	return nil
+}
+
 type LLMConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Endpoint string `yaml:"endpoint"` // e.g. "http://localhost:11434/v1/chat/completions"
@@ -325,10 +390,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke", "trade-smoke":
+	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, guild-smoke, or trade-smoke)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, guild-smoke, trade-smoke, or team-smoke)", c.Mode)
 	}
 	if c.AuthType == "satoken" && c.SaTokenAddr == "" {
 		return fmt.Errorf("satoken_addr must be set when auth_type is satoken")
@@ -351,6 +416,11 @@ func (c *Config) validate() error {
 	if c.Mode == "trade-smoke" {
 		if err := c.TradeSmoke.validate(); err != nil {
 			return fmt.Errorf("trade_smoke: %w", err)
+		}
+	}
+	if c.Mode == "team-smoke" {
+		if err := c.TeamSmoke.validate(); err != nil {
+			return fmt.Errorf("team_smoke: %w", err)
 		}
 	}
 	return nil

@@ -34,6 +34,7 @@
 #include "modules/condition/condition_type.h"
 #include "proto/common/event/mission_event.pb.h"
 #include "player/system/player_revive.h"
+#include "player/system/player_team.h"
 
 // 时间->回合换算与回合常量的权威定义在回合引擎库(scene 可以依赖 battle 常量,反向禁止)。
 #include "services/battle/constants/turn_battle_constants.h"
@@ -109,6 +110,22 @@ namespace
 	{
 		const auto* g = tlsEcs.actorRegistry.try_get<Guid>(player);
 		return g ? *g : 0;
+	}
+
+	// 摘 InBattleComp 的唯一入口(team-system.md §F.2):确实摘掉组件时回调组队系统,
+	// 补一次战斗中被跳过的跟随检查。所有解冻路径(结算、取消、备战作废、战斗作废、
+	// 重建撤销、重复结算销账)都必须走这里,漏一处就漏一次跟随。
+	// 调用方若还要条件删锁,应先发删锁命令再调本函数:跟随链会读 battle:lock fail-closed,
+	// 删锁先入 hiredis 管道可保证跟随链读到的是删锁之后的状态。
+	bool RemoveInBattleComp(entt::entity player)
+	{
+		if (!tlsEcs.actorRegistry.valid(player) || !tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+		{
+			return false;
+		}
+		tlsEcs.actorRegistry.remove<InBattleComp>(player);
+		PlayerTeamSystem::OnBattleFreezeCleared(player);
+		return true;
 	}
 
 	// battle:lock 条件操作的 Lua 脚本:GET 与 DEL/EXPIRE/SET 在服务端原子执行,
@@ -292,7 +309,7 @@ namespace
 				if (const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
 					current != nullptr && current->battle_id() == battleId)
 				{
-					tlsEcs.actorRegistry.remove<InBattleComp>(player);
+					RemoveInBattleComp(player);
 					LOG_WARN << "[PlayerBattle] metric=battle_freeze_rebuild_reverted player_id=" << playerId
 							 << " battle_id=" << battleId << ",重建期间锁已被删(结算/取消已收尾),撤销重建";
 				}
@@ -363,8 +380,9 @@ namespace
 	// 摘 InBattleComp + 条件删锁(结算已应用/取消/作废的统一收尾)
 	void ClearBattleFreeze(entt::entity player, const uint64_t playerId, const uint64_t battleId)
 	{
-		tlsEcs.actorRegistry.remove<InBattleComp>(player);
+		// 先发条件删锁再摘组件:摘组件会触发组队跟随链,它读 battle:lock fail-closed
 		DeleteBattleLockIfMatch(playerId, battleId);
+		RemoveInBattleComp(player);
 	}
 
 	// 推 BattleEndS2C(结算入账通知;battle 节点也会在战斗结束时推一份,
@@ -1142,13 +1160,15 @@ bool PlayerBattleSystem::ApplySettlementToEntity(entt::entity player, const ::Ba
     {
         // 应用过但上次 Redis 清理可能未完成；只重试条件销账，不重复发奖或推任务。
         // 重登补发旧局时不能摘掉新局组件，两个 Redis 清理也都校验 battle_id。
-        if (const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
-            current != nullptr && current->battle_id() == battleId)
-        {
-            tlsEcs.actorRegistry.remove<InBattleComp>(player);
-        }
+        const auto* current = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+        const bool removeCurrent = current != nullptr && current->battle_id() == battleId;
         ClearPendingSettlementIfMatch(playerId, battleId);
         DeleteBattleLockIfMatch(playerId, battleId);
+        // 先发条件删锁再摘组件(组队跟随链读 battle:lock fail-closed)
+        if (removeCurrent)
+        {
+            RemoveInBattleComp(player);
+        }
         LOG_INFO << "[PlayerBattle] 重复结算已跳过并重试条件销账: player_id=" << playerId
                  << " battle_id=" << battleId;
         return false;
@@ -1315,11 +1335,8 @@ void PlayerBattleSystem::ApplyPendingSettlement(entt::entity player, const ::Bat
 
 	// 理论上离线结算与"实体上还挂着 InBattleComp"不共存(实体重建后组件不落库),
 	// 防御性摘除:同 battle_id 才摘,避免误伤登录后刚备战的新战斗
-	if (const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
-		inBattle != nullptr && inBattle->battle_id() == settlement.battle_id())
-	{
-		tlsEcs.actorRegistry.remove<InBattleComp>(player);
-	}
+	const auto* inBattle = tlsEcs.actorRegistry.try_get<InBattleComp>(player);
+	const bool removeInBattle = inBattle != nullptr && inBattle->battle_id() == settlement.battle_id();
 
 	// 清理待结算记录 + 锁(锁删除后 match 才放行下一次排队 —— 先应用再放开)。
 	// 两者都按 battle_id **条件删**:登录钩子理论上早于任何备战,但一旦顺序反过来,
@@ -1327,6 +1344,12 @@ void PlayerBattleSystem::ApplyPendingSettlement(entt::entity player, const ::Bat
 	// 发件箱的 ACK(R07)。
 	ClearPendingSettlementIfMatch(playerId, settlement.battle_id());
 	DeleteBattleLockIfMatch(playerId, settlement.battle_id());
+
+	// 先发条件删锁再摘组件(组队跟随链读 battle:lock fail-closed)
+	if (removeInBattle)
+	{
+		RemoveInBattleComp(player);
+	}
 
 	PushBattleEndToPlayer(player, settlement);
 	LOG_INFO << "[PlayerBattle] 离线挂起结算已补应用: player_id=" << playerId
@@ -1534,7 +1557,8 @@ void PlayerBattleSystem::StartReaper(muduo::net::EventLoop* loop)
 						 << " prepare_deadline_ms=" << entry.deadlineMs
 						 << " now_ms=" << nowMs
 						 << ",备战作废摘组件(CreateBattle 未确认,match 断链或 gather 失败未取消);锁保留至 TTL 过期供迟到确认重建";
-				tlsEcs.actorRegistry.remove<InBattleComp>(entry.entity);
+				// 锁刻意保留:组队跟随链读到锁会 fail-closed 跳过,玩家下次进场再补
+				RemoveInBattleComp(entry.entity);
 				continue;
 			}
 			LOG_WARN << "[PlayerBattle] metric=battle_freeze_expired player_id=" << playerId

@@ -53,6 +53,7 @@ var Faults = []Fault{
 	{Code: 3018, Group: "scene_error", Name: "ChangeScenePlayerQueueComponentGsNull"},
 	{Code: 3019, Group: "scene_error", Name: "ChangeScenePlayerQueueComponentEmpty"},
 	{Code: 3023, Group: "scene_error", Name: "EnterSceneFailed"},
+	{Code: 4030, Group: "team_error", Name: "TeamInternal"},
 	{Code: 5003, Group: "mission_error", Name: "PlayerMissionComponentNotFound"},
 	{Code: 6002, Group: "bag_error", Name: "BagAddItemHasNotBaseComponent"},
 	{Code: 9000, Group: "entity_error", Name: "EntityTransformNotFound"},

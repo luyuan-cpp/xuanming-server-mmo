@@ -116,7 +116,20 @@
         "TeamDismissNotLeader": 4014,
         "TeamMemberListFull": 4015,
         "TeamCreateTeamMaxMemberSize": 4016,
-        "TeamPlayerNotFound": 4017
+        "TeamPlayerNotFound": 4017,
+        "TeamNotLeader": 4018,
+        "TeamHomeZoneUnknown": 4019,
+        "TeamCrossZoneDenied": 4020,
+        "TeamInviteNotFound": 4021,
+        "TeamInviteLimit": 4022,
+        "TeamInMatch": 4023,
+        "TeamMemberOffline": 4024,
+        "TeamMemberInBattle": 4025,
+        "TeamMemberNotReady": 4026,
+        "TeamDungeonNotOpen": 4027,
+        "TeamSizeExceeded": 4028,
+        "TeamStateChanged": 4029,
+        "TeamInternal": 4030
       }
     },
     "mission_error": {

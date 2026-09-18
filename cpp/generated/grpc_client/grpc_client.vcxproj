@@ -35,6 +35,7 @@
     <ClCompile Include="match\match_service_grpc_client.cpp" />
     <ClCompile Include="scene_manager\scene_manager_service_grpc_client.cpp" />
     <ClCompile Include="scene_manager\scene_node_service_grpc_client.cpp" />
+    <ClCompile Include="team\team_grpc_client.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="battle\battle_node_grpc_client.h" />
@@ -54,6 +55,7 @@
     <ClInclude Include="match\match_service_grpc_client.h" />
     <ClInclude Include="scene_manager\scene_manager_service_grpc_client.h" />
     <ClInclude Include="scene_manager\scene_node_service_grpc_client.h" />
+    <ClInclude Include="team\team_grpc_client.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>

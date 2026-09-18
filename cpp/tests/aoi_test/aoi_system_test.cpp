@@ -17,6 +17,7 @@
 #include "spatial/constants/aoi_priority.h"
 #include "spatial/system/grid.h"
 #include "spatial/system/interest.h"
+#include "player/system/player_team.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/team_comp.pb.h"
 #include "proto/common/event/scene_event.pb.h"
@@ -740,6 +741,358 @@ TEST_F(AoiPriorityPolicyTest, UpgradePriorityNoOpWhenWeightIsLower)
     ASSERT_NE(comp, nullptr);
     // Attacker weight (2) < quest NPC weight (3) in open-world → no change.
     EXPECT_EQ(comp->entries.at(target).priority, AoiPriority::kQuestNpc);
+}
+
+// ---------------------------------------------------------------------------
+// Fixture: 组队成员关系变化后的队友 AOI 优先级修正(team-system.md §F.4 / §I.4)
+// ---------------------------------------------------------------------------
+
+class AoiTeammateRefreshTest : public ::testing::Test
+{
+protected:
+    entt::entity sceneEntity = entt::null;
+
+    void SetUp() override
+    {
+        RegisterGlobalMessageComponents();
+        sceneEntity = tlsEcs.sceneRegistry.create();
+        tlsEcs.sceneRegistry.emplace<SceneGridListComp>(sceneEntity);
+    }
+
+    void TearDown() override
+    {
+        UnregisterGlobalMessageComponents();
+        tlsEcs.actorRegistry.clear();
+        tlsEcs.sceneRegistry.clear();
+    }
+
+    entt::entity SpawnAt(double x, double y)
+    {
+        auto e = tlsEcs.actorRegistry.create();
+        auto& t = tlsEcs.actorRegistry.emplace<Transform>(e);
+        t.mutable_location()->set_x(x);
+        t.mutable_location()->set_y(y);
+        tlsEcs.actorRegistry.emplace<SceneEntityComp>(e, SceneEntityComp{sceneEntity});
+        return e;
+    }
+
+    // 模拟 PlayerTeamSystem::ApplyMembership 对组件的写法:tid 非 0 写组件,tid 为 0 移除。
+    static void SetTeam(entt::entity e, uint64_t teamId)
+    {
+        if (teamId == 0)
+        {
+            tlsEcs.actorRegistry.remove<TeamId>(e);
+            return;
+        }
+        auto& team = tlsEcs.actorRegistry.emplace_or_replace<TeamId>(e);
+        team.set_team_id(teamId);
+    }
+
+    static AoiPriority PriorityOf(entt::entity watcher, entt::entity target)
+    {
+        return tlsEcs.actorRegistry.get<AoiListComp>(watcher).entries.at(target).priority;
+    }
+};
+
+// 已经互相可见之后才入队:只有入队者收到刷新,双向都要升到 kTeammate。
+TEST_F(AoiTeammateRefreshTest, JoinAfterMutualVisibilityUpgradesBothDirections)
+{
+    auto leader = SpawnAt(0, 0);
+    auto joiner = SpawnAt(5, 0);
+    SetTeam(leader, 42);
+
+    AoiSystem::Update(0.0);
+    ASSERT_TRUE(IsInAoiList(leader, joiner));
+    ASSERT_TRUE(IsInAoiList(joiner, leader));
+    ASSERT_EQ(PriorityOf(leader, joiner), AoiPriority::kNormal);
+    ASSERT_EQ(PriorityOf(joiner, leader), AoiPriority::kNormal);
+
+    SetTeam(joiner, 42);
+    PlayerTeamSystem::RefreshTeammateAoi(joiner);
+
+    EXPECT_EQ(PriorityOf(leader, joiner), AoiPriority::kTeammate);
+    EXPECT_EQ(PriorityOf(joiner, leader), AoiPriority::kTeammate);
+}
+
+// 离队:双向降回 kNormal;被 buff/skill 钉住的 kPinned 条目不受影响。
+TEST_F(AoiTeammateRefreshTest, LeaveDowngradesBothDirectionsButKeepsPinned)
+{
+    auto leaver = SpawnAt(0, 0);
+    auto mateB = SpawnAt(5, 0);
+    auto mateC = SpawnAt(0, 5);
+    SetTeam(leaver, 7);
+    SetTeam(mateB, 7);
+    SetTeam(mateC, 7);
+
+    AoiSystem::Update(0.0);
+    ASSERT_EQ(PriorityOf(leaver, mateB), AoiPriority::kTeammate);
+    ASSERT_EQ(PriorityOf(mateB, leaver), AoiPriority::kTeammate);
+    ASSERT_TRUE(InterestSystem::PinAoiEntity(leaver, mateC));
+    ASSERT_EQ(PriorityOf(leaver, mateC), AoiPriority::kPinned);
+
+    SetTeam(leaver, 0);
+    PlayerTeamSystem::RefreshTeammateAoi(leaver);
+
+    EXPECT_EQ(PriorityOf(leaver, mateB), AoiPriority::kNormal);
+    EXPECT_EQ(PriorityOf(mateB, leaver), AoiPriority::kNormal);
+    EXPECT_EQ(PriorityOf(leaver, mateC), AoiPriority::kPinned);
+    EXPECT_EQ(PriorityOf(mateC, leaver), AoiPriority::kNormal);
+    // 与离队者无关的队友关系保持不变
+    EXPECT_EQ(PriorityOf(mateB, mateC), AoiPriority::kTeammate);
+}
+
+// 换队:旧队友降级,新队友升级。
+TEST_F(AoiTeammateRefreshTest, SwitchTeamDowngradesOldAndUpgradesNew)
+{
+    auto mover = SpawnAt(0, 0);
+    auto oldMate = SpawnAt(5, 0);
+    auto newMate = SpawnAt(0, 5);
+    SetTeam(mover, 1);
+    SetTeam(oldMate, 1);
+    SetTeam(newMate, 2);
+
+    AoiSystem::Update(0.0);
+    ASSERT_EQ(PriorityOf(mover, oldMate), AoiPriority::kTeammate);
+    ASSERT_EQ(PriorityOf(mover, newMate), AoiPriority::kNormal);
+
+    SetTeam(mover, 2);
+    PlayerTeamSystem::RefreshTeammateAoi(mover);
+
+    EXPECT_EQ(PriorityOf(mover, oldMate), AoiPriority::kNormal);
+    EXPECT_EQ(PriorityOf(oldMate, mover), AoiPriority::kNormal);
+    EXPECT_EQ(PriorityOf(mover, newMate), AoiPriority::kTeammate);
+    EXPECT_EQ(PriorityOf(newMate, mover), AoiPriority::kTeammate);
+}
+
+// 兴趣条目不对称:我的表里没有对方(容量满被淘汰),对方表里有我。
+// 只有我收到刷新,对方表中关于我的条目也必须先升到 kTeammate、离队后再降回 kNormal。
+TEST_F(AoiTeammateRefreshTest, AsymmetricEntryIsFixedFromTheOtherSide)
+{
+    auto me = SpawnAt(0, 0);
+    auto other = SpawnAt(5, 0);
+    SetTeam(other, 9);
+
+    AoiSystem::Update(0.0);
+    ASSERT_TRUE(IsInAoiList(other, me));
+    // 模拟"我的兴趣表已满、对方被淘汰"
+    InterestSystem::RemoveAoiEntity(me, other);
+    ASSERT_FALSE(IsInAoiList(me, other));
+
+    SetTeam(me, 9);
+    PlayerTeamSystem::RefreshTeammateAoi(me);
+    EXPECT_EQ(PriorityOf(other, me), AoiPriority::kTeammate);
+    EXPECT_FALSE(IsInAoiList(me, other)) << "刷新只修正已有条目,不负责补插";
+
+    SetTeam(me, 0);
+    PlayerTeamSystem::RefreshTeammateAoi(me);
+    EXPECT_EQ(PriorityOf(other, me), AoiPriority::kNormal);
+    EXPECT_FALSE(IsInAoiList(me, other));
+}
+
+// 还没进过 AOI 格子(没有 Hex)的实体:静默返回,不崩溃。
+TEST_F(AoiTeammateRefreshTest, EntityWithoutGridPositionIsNoOp)
+{
+    auto loner = SpawnAt(0, 0);
+    SetTeam(loner, 3);
+    PlayerTeamSystem::RefreshTeammateAoi(loner);
+    EXPECT_EQ(tlsEcs.actorRegistry.try_get<AoiListComp>(loner), nullptr);
+}
+
+// DowngradePriority 只认标签:条目不是 from 时不动。
+TEST_F(AoiTeammateRefreshTest, DowngradePriorityOnlyMatchesExactTag)
+{
+    auto watcher = SpawnAt(0, 0);
+    auto target = SpawnAt(5, 0);
+
+    InterestSystem::AddAoiEntity(watcher, target, AoiPriority::kAttacker);
+    InterestSystem::DowngradePriority(watcher, target, AoiPriority::kTeammate, AoiPriority::kNormal);
+    EXPECT_EQ(PriorityOf(watcher, target), AoiPriority::kAttacker);
+
+    InterestSystem::DowngradePriority(watcher, target, AoiPriority::kAttacker, AoiPriority::kNormal);
+    EXPECT_EQ(PriorityOf(watcher, target), AoiPriority::kNormal);
+}
+
+// ---------------------------------------------------------------------------
+// 纯函数:PlayerTeamSystem::ShouldApplyMembership(team-system.md §F.2)
+// ---------------------------------------------------------------------------
+
+TEST(TeamMembershipRuleTest, OlderEpochIsIgnored)
+{
+    EXPECT_FALSE(PlayerTeamSystem::ShouldApplyMembership(5, true, 4, false));
+}
+
+TEST(TeamMembershipRuleTest, EqualEpochIsIgnored)
+{
+    EXPECT_FALSE(PlayerTeamSystem::ShouldApplyMembership(5, true, 5, false));
+}
+
+TEST(TeamMembershipRuleTest, NewerEpochIsApplied)
+{
+    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(5, true, 6, false));
+}
+
+TEST(TeamMembershipRuleTest, MissingComponentAlwaysApplies)
+{
+    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(0, false, 0, false));
+    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(0, false, 1700000000123ULL, false));
+}
+
+TEST(TeamMembershipRuleTest, KeyMissingForcesClearEvenWithNewerLocalEpoch)
+{
+    EXPECT_TRUE(PlayerTeamSystem::ShouldApplyMembership(9, true, 0, true));
+}
+
+// ---------------------------------------------------------------------------
+// 纯函数:PlayerTeamSystem::ParseTeamIndexReply(手工构造 redisReply)
+// ---------------------------------------------------------------------------
+
+class TeamIndexReplyParseTest : public ::testing::Test
+{
+protected:
+    // NIL 元素故意给一个非法 str + 巨大 len:解析器一旦对 NIL 元素读 str 就会越界/崩溃。
+    static redisReply MakeNil()
+    {
+        redisReply r{};
+        r.type = REDIS_REPLY_NIL;
+        r.str = nullptr;
+        r.len = static_cast<size_t>(-1);
+        return r;
+    }
+
+    static redisReply MakeString(std::string& storage)
+    {
+        redisReply r{};
+        r.type = REDIS_REPLY_STRING;
+        r.str = storage.data();
+        r.len = storage.size();
+        return r;
+    }
+
+    static redisReply MakeArray(redisReply** elements, size_t count)
+    {
+        redisReply r{};
+        r.type = REDIS_REPLY_ARRAY;
+        r.elements = count;
+        r.element = elements;
+        return r;
+    }
+};
+
+TEST_F(TeamIndexReplyParseTest, NullReplyIsUnknown)
+{
+    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(nullptr).kind, TeamIndexReplyKind::kUnknown);
+}
+
+TEST_F(TeamIndexReplyParseTest, ErrorReplyIsUnknown)
+{
+    std::string message = "ERR boom";
+    redisReply error = MakeString(message);
+    error.type = REDIS_REPLY_ERROR;
+    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&error).kind, TeamIndexReplyKind::kUnknown);
+}
+
+TEST_F(TeamIndexReplyParseTest, WrongArraySizeIsUnknown)
+{
+    std::string tid = "1";
+    redisReply tidReply = MakeString(tid);
+    redisReply* one[] = {&tidReply};
+    redisReply arrayOfOne = MakeArray(one, 1);
+    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&arrayOfOne).kind, TeamIndexReplyKind::kUnknown);
+
+    std::string epoch = "2";
+    std::string extra = "3";
+    redisReply epochReply = MakeString(epoch);
+    redisReply extraReply = MakeString(extra);
+    redisReply* three[] = {&tidReply, &epochReply, &extraReply};
+    redisReply arrayOfThree = MakeArray(three, 3);
+    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&arrayOfThree).kind, TeamIndexReplyKind::kUnknown);
+}
+
+TEST_F(TeamIndexReplyParseTest, TwoNilElementsMeanKeyMissing)
+{
+    redisReply tidNil = MakeNil();
+    redisReply epochNil = MakeNil();
+    redisReply* elements[] = {&tidNil, &epochNil};
+    redisReply array = MakeArray(elements, 2);
+
+    const auto parsed = PlayerTeamSystem::ParseTeamIndexReply(&array);
+    EXPECT_EQ(parsed.kind, TeamIndexReplyKind::kKeyMissing);
+    EXPECT_EQ(parsed.teamId, 0u);
+    EXPECT_EQ(parsed.epoch, 0u);
+}
+
+TEST_F(TeamIndexReplyParseTest, HalfNilHashIsUnknownWithoutReadingNil)
+{
+    std::string tid = "123";
+    redisReply tidReply = MakeString(tid);
+    redisReply epochNil = MakeNil();
+    redisReply* elements[] = {&tidReply, &epochNil};
+    redisReply array = MakeArray(elements, 2);
+    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&array).kind, TeamIndexReplyKind::kUnknown);
+
+    redisReply* reversed[] = {&epochNil, &tidReply};
+    redisReply reversedArray = MakeArray(reversed, 2);
+    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&reversedArray).kind, TeamIndexReplyKind::kUnknown);
+}
+
+TEST_F(TeamIndexReplyParseTest, StringElementsAreParsedAsDecimal)
+{
+    // 13 位毫秒 epoch(key 重建时 Redis TIME 起种)必须完整保留
+    std::string tid = "123456789012345678";
+    std::string epoch = "1700000000123";
+    redisReply tidReply = MakeString(tid);
+    redisReply epochReply = MakeString(epoch);
+    redisReply* elements[] = {&tidReply, &epochReply};
+    redisReply array = MakeArray(elements, 2);
+
+    const auto parsed = PlayerTeamSystem::ParseTeamIndexReply(&array);
+    EXPECT_EQ(parsed.kind, TeamIndexReplyKind::kPresent);
+    EXPECT_EQ(parsed.teamId, 123456789012345678ULL);
+    EXPECT_EQ(parsed.epoch, 1700000000123ULL);
+}
+
+TEST_F(TeamIndexReplyParseTest, ZeroTeamIdMeansLeftButEpochKept)
+{
+    std::string tid = "0";
+    std::string epoch = "42";
+    redisReply tidReply = MakeString(tid);
+    redisReply epochReply = MakeString(epoch);
+    redisReply* elements[] = {&tidReply, &epochReply};
+    redisReply array = MakeArray(elements, 2);
+
+    const auto parsed = PlayerTeamSystem::ParseTeamIndexReply(&array);
+    EXPECT_EQ(parsed.kind, TeamIndexReplyKind::kPresent);
+    EXPECT_EQ(parsed.teamId, 0u);
+    EXPECT_EQ(parsed.epoch, 42u);
+}
+
+TEST_F(TeamIndexReplyParseTest, MalformedNumbersAreUnknown)
+{
+    std::string good = "7";
+    redisReply goodReply = MakeString(good);
+
+    for (std::string bad : {std::string("12a"), std::string(""), std::string("-1"), std::string(" 5"),
+                            std::string("99999999999999999999999")})
+    {
+        redisReply badReply = MakeString(bad);
+        redisReply* elements[] = {&goodReply, &badReply};
+        redisReply array = MakeArray(elements, 2);
+        EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&array).kind, TeamIndexReplyKind::kUnknown)
+            << "epoch=\"" << bad << "\"";
+    }
+}
+
+TEST_F(TeamIndexReplyParseTest, IntegerElementsAreUnknown)
+{
+    redisReply tidInt{};
+    tidInt.type = REDIS_REPLY_INTEGER;
+    tidInt.integer = 1;
+    redisReply epochInt{};
+    epochInt.type = REDIS_REPLY_INTEGER;
+    epochInt.integer = 2;
+    redisReply* elements[] = {&tidInt, &epochInt};
+    redisReply array = MakeArray(elements, 2);
+    EXPECT_EQ(PlayerTeamSystem::ParseTeamIndexReply(&array).kind, TeamIndexReplyKind::kUnknown);
 }
 
 int main(int argc, char** argv)

@@ -1456,7 +1456,15 @@ function New-GoSvcConfigMapYaml {
 	$matchChallengeTTL          = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'ChallengeTTLSeconds'
 	$matchTicketTTL             = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'TicketTTLSeconds'
 	$matchReadyTicketTTL        = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'ReadyTicketTTLSeconds'
-	$matchPveTeamSizeConfig1    = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'PveTeamSizeByConfigId.1'
+	# PveTeamSizeByConfigId 是 map(键 = battle_config_id)。以前按标量只读键 "1",yaml 新增的 config id
+	# 在 K8s 上会静默缺失,PVE_TEAM 入队与组队整队开战一律按"未开放"拒绝,本地冒烟又发现不了。
+	# 改为整段逐字搬运(Get-AuthoritativeYamlBlock),ConfigMap 与服务 yaml 不会漂移(team-system.md §I.1 批 1 #28)。
+	$matchPveTeamSizeBlock      = Get-AuthoritativeYamlBlock -RelativePath $matchYaml -Key 'PveTeamSizeByConfigId'
+	# 组队(team-system.md §D.1):跨区开关与 data_service 客户端的超时 / NonBlock 从服务 yaml 取。
+	# NonBlock 必须为 true(data-service 没起不能拖垮 match 起服),Go 侧也会强制;这里照抄 yaml 便于一眼核对。
+	$matchTeamAllowCrossZone     = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'Team.AllowCrossZone'
+	$matchDataServiceRpcTimeout  = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'DataServiceRpc.Timeout'
+	$matchDataServiceRpcNonBlock = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'DataServiceRpc.NonBlock'
 	# MatchedTicketTTLSeconds 是本轮新增项(cross-zone-matchmaking.md D5,Go 侧缺省 30)。
 	# 和上面不同,它允许缺席:yaml 里没有就整行不写,交给 Go 的 default 标签,
 	# 这样 go/match 与部署脚本可以分开落地,不会让 infra-up 卡在别人的提交上。
@@ -1997,8 +2005,23 @@ ChallengeTTLSeconds: ${matchChallengeTTL}
 TicketTTLSeconds: ${matchTicketTTL}
 ReadyTicketTTLSeconds: ${matchReadyTicketTTL}
 ${matchMatchedTicketTTLLine}
-PveTeamSizeByConfigId:
-  "1": ${matchPveTeamSizeConfig1}
+# PveTeamSizeByConfigId 整块逐字搬自 go/match/etc/match_service.yaml:新增 config id 只改服务 yaml。
+# 组队整队开战也按它判副本人数上限,未配置的 id 回 TeamDungeonNotOpen。
+${matchPveTeamSizeBlock}
+# 组队(docs/design/team-system.md §D.1)。AllowCrossZone 切换要重启所有 match 实例(J-13a)。
+Team:
+  AllowCrossZone: ${matchTeamAllowCrossZone}
+# data_service 客户端:team 用 BatchGetPlayerHomeZone 查玩家 home zone,调用失败 fail-closed。
+# Etcd 指向集群 etcd,Key 与 data-service 自身注册一致(同 login 模板)。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - "etcd.${InfraNamespace}:2379"
+    Key: dataservice.rpc
+  Timeout: ${matchDataServiceRpcTimeout}
+  NonBlock: ${matchDataServiceRpcNonBlock}
+  Middlewares:
+    Breaker: false
 # 与 match.yaml 里的 metrics 容器端口一致
 MetricsListenAddr: ":9170"
 "@

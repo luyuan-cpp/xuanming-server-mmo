@@ -4963,3 +4963,22 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - **剩余联机项尚未通过、尚未执行**：原 attribute/pet/battle 三条 robot 冒烟；85 级基础/全体/全灵数值与首点加点增益；新建 1 级账号副本回合数。已编译并核对独立数值机器人 `numeric-robot-final.exe`（唯一构建 `numeric-final-20260916-225040-3bf077a8`），原始断言保留，执行入口为 `run-smokes.ps1 -Suite original` 后 `-Suite numeric`。数值测试硬超时或中止不会执行恢复逻辑，只有实际恢复成功标记可记为已恢复。
 - 联机前需协调本地共享栈：23:37 仍有聚宝斋验收的独立 gate/scene 与公共旧节点同时运行；9 个已安装 Go 服务也均与本轮产物不同，已有运行 PID。本任务未覆盖、启停这些服务，已向用户询问等并行验收结束或立即切换。取得可用窗口后重新核查活动测试和节点身份，同批更新节点/表及需要更新的 Go 服务，经本地正式启动器检查健康与一区 OPEN，再顺序执行五项验收。
 - 边界：no-raw-pointer-member 因工具缺失输出 SKIP，不能视为通过；第三方库缺调试 PDB 的 LNK4099 与 protobuf map.h 的 C4244 已保留日志。本轮没有生产发布，也没有执行 git add/commit/push；并行任务提交不计为本任务操作。
+
+## 2026-09-15 组队系统(team-in-match)批 0–4 手写部分落码(Claude,worktree 未合并,未编译)
+
+- 用户拍板:设计文档 §J 全部按推荐;J-6 把 `PveTeamSizeByConfigId` 的 `"1"` 从 3 改为 5;组队 UI 不做,客户端仓不动。
+- 位置:隔离 worktree `E:\work\xuanming-server-mmo-team3`,分支 `feature/team-system-v3`,基于 `2a2b793f8`。**未提交、未合并回主工作区**。迁移链:`feature/team-system`(基于 `8487d5e1f`)→ `-v2`(基于 `4069f33b0`,冲突 4 处:PROGRESS.md、player_battle.cpp include、robot main.go / config.go 的 trade 与 team 两段并存)→ 2026-09-17 `-v3`(冲突 2 处:PROGRESS.md、match_service.go 的 `showVersion` 与组队注册常量并存),均以补丁三方合并迁来并手工解决;旧 worktree 保留作备份。
+- 落码范围(79 个手写文件,详见 [docs/design/team-system.md](docs/design/team-system.md) 文末「实现记录」R.1):
+  - proto 契约与 C++ 工程登记;
+  - `go/match/internal/team`(Lua 存储、纯函数规则、服务层、整队开战编排、EndMatch)和 `internal/playercontract`;
+  - `logic.TeamBattleStarter` 票据端口;
+  - `match_service.go` 装配:同一 zrpc server 注册 ClientPlayerTeam;TeamNodeService 经 `shared/noderegistry.RegisterAfterListening` 第二次注册;两份注册都用 POD_IP 通告;先起 gRPC 再注册,注销先于停服;
+  - scene `PlayerTeamSystem`(同节点跟随、队友 AOI、冻结解除补跟随);
+  - robot `team-smoke`;合服 preflight P7。
+- 收尾交叉核对修掉 1 处跨模块不一致:服务端不给 RPC 调用者推快照,robot 原来却让队长等 `MATCH_STARTED`,必然超时;已改为队长以回包 STARTING 为准。
+- 未做(需要 regen 或被占用):`Tip.xlsx` 13 个新码与文案、`MessageLimiter.xlsx` 15 个额度、proto 生成、`robot go mod vendor`、port-feasibility D7 注记。清单见设计文档 R.4。
+- **客户端合并门禁**:本分支已把 team 块写进默认 `proto_gen.yaml`(必须在,DV-5 防丢号)。合入主工作区后、客户端 `tools/gen_proto.ps1` 收录 `proto/team/team.proto` 之前,**任何人不得用默认配置跑 `dev.bat proto` / `dev.bat gen`**:Unity 生成没有按域开关,会往 `mmorpg-client` 写 15 个 `ClientPlayerTeam*Handler.cs` 并重写 `HandlerRegistry.cs`,引用不存在的 `Teampb.*` → 客户端 CS0246。期间只改表跑 `dev.bat export`,proto 生成一律用 `enable_unity_client: false` 的副本。详见设计文档 §B.5、R.4 ⑧ 末尾。
+- 验证状态:**未生成、未编译、未测试,待 Codex 验证**。只跑过 `gofmt -l -e`(37 个 Go 文件)、PowerShell AST、PyYAML、`[xml]` 解析。生成前置引用见 R.2,偏离见 R.3,未决问题见 R.5。
+- 2026-09-16/17 评审(team-system-review):核实 13 条，确认 8 条全部已修，驳回 5 条。修了 5 处:整队过期后空视图 epoch=0 被客户端丢弃(S_READ 缺失回 nowMs、起种 nowms+1);多名成员索引错位时 `{-2}` 修复活锁(`RepairRemoveMembers` 级联);开战锁 EVAL 结果未知不补偿(后台 / 同步按 token 清锁);MATCH_FAILED 不带原因 tip;组队推送混进 `match_kafka_push_total`。另补了客户端合并门禁和 `team.proto` 协议号注释两处文档。终检未发现新问题，38 个 Go 文件 `gofmt -l -e` 通过。评审修复(含新增 `go/match/internal/logic/push_test.go`)已随补丁迁入 `-v3` 并暂存。**仍未编译、未测试,待 Codex 验证**。详见设计文档文末「评审记录(2026-09-16,team-system-review)」。
+- 2026-09-17 导表 + proto 生成 + 对齐收口(仍在 `-team3` worktree,未提交):`Tip.xlsx` 追加 13 个 team 错误码(**4018..4030**,`TeamInternal=4030` 是唯一 fault,team 段 `Count` 18→31);proto 生成拿到 **15 个消息号 201..215**(12 请求 + 3 个 `Notify*`:203/213/215)与 **event id 48 `PlayerTeamRefreshEvent`**,`kMaxRpcMethodCount` 216、`kMaxEventCount` 49;`route_table.go` 15 条全是 `TeamNodeService` + `ClientProtocol: true`;`MessageLimiter.xlsx` 追加 12 行(查询类 5/s、写操作 3/s,3 个 `Notify*` 按仓库惯例未进表,走 gate 默认 3/s)。护栏 16 条**全部 pass**,其中两条硬红线有实证:`mmorpg-client` 前后 `git status --porcelain` 均 0 行、主工作区 `third_party` 被修改文件数 0。手写侧只为对齐生成名改了 3 个文件(2 处注释 + `grpc_client.vcxproj.filters` 补 2 条 team 登记),**没有出现生成名对不上的情况**。82 个改动 Go 文件跑 `gofmt -l -e`,只报 2 个生成产物(`segments.go` 末尾缺换行、`message_body_handler.go` map 对齐),把 HEAD 版本导出跑同样被报出 → 生成器既有行为,按 AGENTS §3 未手改;**全部手写 Go 文件 gofmt 干净**。仍未做:`cd robot && go mod vendor`(robot 整包编译的硬前置)、port-feasibility D7 注记。**仍未编译、未测试**——本 worktree `third_party` 子模块目录是空的,C++ 编译前 Codex 需先 `git submodule update --init --recursive`(不能用 junction)。逐项数值、护栏证据与**给 Codex 的验证清单**见 [docs/design/team-system.md](docs/design/team-system.md) 文末「生成记录(2026-09-17)」与「给 Codex 的验证清单(2026-09-17 收口版)」。
+- 2026-09-18 补完 R.4 ② 的尾巴:`Tip.xlsx` 的 18 个**既有** team 码(4000..4017)B 列文案原本全空(客户端按 id 查文案会显示空白),现已补齐 —— 12 个有引用点的给玩家可读文案,6 个无引用点的填「(保留)」;脚本只写 B 列为空的行,没有覆盖任何已有文案。导表用**临时副本** `exporter_config.local.yaml`(`csharp.deploy: []`,跑完即删):仓内默认导表配置会把 C# 表产物部署进 `mmorpg-client`,直接跑就会写客户端仓。核对:`tip_text.json` 的 4000..4030 共 31 条全部非空,客户端仓 `git status --porcelain` 仍为 0 行。见设计文档 §GR.9。

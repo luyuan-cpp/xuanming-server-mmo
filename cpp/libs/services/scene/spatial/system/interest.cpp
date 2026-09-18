@@ -159,3 +159,19 @@ void InterestSystem::UpgradePriority(entt::entity watcher, entt::entity target, 
     }
 }
 
+void InterestSystem::DowngradePriority(entt::entity watcher, entt::entity target, AoiPriority from, AoiPriority to)
+{
+    if (watcher == entt::null || target == entt::null) return;
+
+    auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    if (comp == nullptr) return;
+
+    auto it = comp->entries.find(target);
+    if (it == comp->entries.end()) return;
+
+    // 只认标签不认权重:条目已被别的来源改成其它标签(如 kPinned / kAttacker)时,
+    // 那个来源才是它的所有者,这里不能越权回退。
+    if (it->second.priority != from) return;
+    it->second.priority = to;
+}
+

@@ -81,6 +81,19 @@ enum team_error : int {
   kTeamMemberListFull = 4015,
   kTeamCreateTeamMaxMemberSize = 4016,
   kTeamPlayerNotFound = 4017,
+  kTeamNotLeader = 4018,
+  kTeamHomeZoneUnknown = 4019,
+  kTeamCrossZoneDenied = 4020,
+  kTeamInviteNotFound = 4021,
+  kTeamInviteLimit = 4022,
+  kTeamInMatch = 4023,
+  kTeamMemberOffline = 4024,
+  kTeamMemberInBattle = 4025,
+  kTeamMemberNotReady = 4026,
+  kTeamDungeonNotOpen = 4027,
+  kTeamSizeExceeded = 4028,
+  kTeamStateChanged = 4029,
+  kTeamInternal = 4030,
   team_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   team_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -91,11 +104,11 @@ extern const uint32_t team_error_internal_data_[];
 inline constexpr team_error team_error_MIN =
     static_cast<team_error>(0);
 inline constexpr team_error team_error_MAX =
-    static_cast<team_error>(4017);
+    static_cast<team_error>(4030);
 [[nodiscard]] inline bool team_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, team_error_internal_data_);
 }
-inline constexpr int team_error_ARRAYSIZE = 4017 + 1;
+inline constexpr int team_error_ARRAYSIZE = 4030 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 team_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(team_error) {

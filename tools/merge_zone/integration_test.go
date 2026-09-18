@@ -933,6 +933,11 @@ func TestIT_Preflight_BlocksOnEachHazard(t *testing.T) {
 		{"session still online", fakeLagSource{}, func(t *testing.T) {
 			itRedis(t, itSharedRD).Set(context.Background(), "player:session:9711", "gate-3", time.Minute)
 		}, "P6"},
+		{"player still in a live team", fakeLagSource{}, func(t *testing.T) {
+			shared := itRedis(t, itSharedRD)
+			shared.HSet(context.Background(), teamPlayerIndexKey(9711), "tid", "880001", "epoch", "1")
+			shared.HSet(context.Background(), teamRecordKey("880001"), "ver", "1", "pb", "")
+		}, "P7"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -946,6 +951,21 @@ func TestIT_Preflight_BlocksOnEachHazard(t *testing.T) {
 				t.Errorf("expected %s in %q", c.expect, err)
 			}
 		})
+	}
+}
+
+// P7 只拦"指向活队伍"的索引:离队后保留的 tid=0 索引、队伍已过期的孤儿索引都不是在队,不该挡合服。
+func TestIT_Preflight_IgnoresStaleTeamIndexes(t *testing.T) {
+	itReset(t)
+	ctx := context.Background()
+	shared := itRedis(t, itSharedRD)
+	// 9721:离队后 tid 置 "0"、key 保留(§C.1)。
+	shared.HSet(ctx, teamPlayerIndexKey(9721), "tid", "0", "epoch", "5")
+	// 9722:索引仍指向 880002,但 team:rec:880002 已不存在(队伍 24h 过期后的孤儿索引)。
+	shared.HSet(ctx, teamPlayerIndexKey(9722), "tid", "880002", "epoch", "7")
+	// 9723:从没组过队,没有索引。
+	if err := runPreflight(ctx, itPreflightDeps(t, fakeLagSource{}), itPreflightParams([]uint64{9721, 9722, 9723})); err != nil {
+		t.Fatalf("stale team indexes must not block the merge: %v", err)
 	}
 }
 

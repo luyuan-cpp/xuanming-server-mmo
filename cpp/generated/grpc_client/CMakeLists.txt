@@ -49,6 +49,7 @@ set(SOURCE_FILES
     login/login_grpc_client.cpp
     scene_manager/scene_manager_service_grpc_client.cpp
     scene_manager/scene_node_service_grpc_client.cpp
+    team/team_grpc_client.cpp
 )
 
 add_library(grpc_client STATIC ${SOURCE_FILES})

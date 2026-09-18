@@ -102,3 +102,15 @@ void InterestSystem::UpgradePriority(entt::entity watcher, entt::entity target, 
     if (policy.GetWeight(priority) > policy.GetWeight(it->second.priority))
         it->second.priority = priority;
 }
+
+// 与生产实现同语义:条目标签恰好等于 from 才改成 to(team-system.md §F.4)。
+void InterestSystem::DowngradePriority(entt::entity watcher, entt::entity target, AoiPriority from, AoiPriority to)
+{
+    if (watcher == entt::null || target == entt::null) return;
+    auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    if (comp == nullptr) return;
+    auto it = comp->entries.find(target);
+    if (it == comp->entries.end()) return;
+    if (it->second.priority != from) return;
+    it->second.priority = to;
+}

@@ -1355,20 +1355,20 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED JoinQueueRequest final : public ::g
     kZoneIdFieldNumber = 5,
     kBattleConfigIdFieldNumber = 6,
   };
-  // repeated uint64 party_member_ids = 4;
-  [[nodiscard]] int party_member_ids_size()
+  // repeated uint64 party_member_ids = 4 [deprecated = true];
+  [[nodiscard]] [[deprecated]]  int party_member_ids_size()
       const;
   private:
   int _internal_party_member_ids_size() const;
 
   public:
-  void clear_party_member_ids() ;
-  [[nodiscard]] ::uint64_t party_member_ids(int index) const;
-  void set_party_member_ids(int index, ::uint64_t value);
-  void add_party_member_ids(::uint64_t value);
-  [[nodiscard]] const ::google::protobuf::RepeatedField<::uint64_t>& party_member_ids()
+  [[deprecated]]  void clear_party_member_ids() ;
+  [[nodiscard]] [[deprecated]] ::uint64_t party_member_ids(int index) const;
+  [[deprecated]] void set_party_member_ids(int index, ::uint64_t value);
+  [[deprecated]] void add_party_member_ids(::uint64_t value);
+  [[nodiscard]] [[deprecated]] const ::google::protobuf::RepeatedField<::uint64_t>& party_member_ids()
       const;
-  ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_party_member_ids();
+  [[deprecated]] ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL mutable_party_member_ids();
 
   private:
   const ::google::protobuf::RepeatedField<::uint64_t>& _internal_party_member_ids() const;
@@ -4762,7 +4762,7 @@ inline void JoinQueueRequest::_internal_set_map_config_id(::uint32_t value) {
   _impl_.map_config_id_ = value;
 }
 
-// repeated uint64 party_member_ids = 4;
+// repeated uint64 party_member_ids = 4 [deprecated = true];
 inline int JoinQueueRequest::_internal_party_member_ids_size() const {
   return _internal_party_member_ids().size();
 }

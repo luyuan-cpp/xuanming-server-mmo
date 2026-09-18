@@ -92,6 +92,18 @@ func RunChallengeGather(svcCtx *svc.ServiceContext, battleConfigId uint32, chall
 		[]uint64{challengerId, responderId}, false, false, nil)
 }
 
+// RunTeamGather 是整队开战(team-system.md §E.1 第 8 步)的 gather:roster 整组进同一条
+// 管线、一个 battle_id(不经 matcher 弹组)。模式固定 PVE_TEAM(全员 team_index=0),
+// requeueOnFail=false —— 失败时对**全员**按 tickets 做 CAS 删票,整队出局、不回队列
+// (§E.2 "不可拆分")。
+//
+// 契约:roster 由调用方排好序(队长在前,其余按 join_seq 升序),本函数原样作为
+// PrepareBattle / 快照顺序,不重排;tickets 是建票时记下的每人 ticket id。
+// 同步执行,返回是否开局成功;调用方负责放进后台 goroutine。
+func RunTeamGather(svcCtx *svc.ServiceContext, battleConfigId uint32, roster []uint64, tickets map[uint64]string) bool {
+	return runGather(svcCtx, matchpb.MatchMode_MATCH_MODE_PVE_TEAM, battleConfigId, roster, false, true, tickets)
+}
+
 func runGather(svcCtx *svc.ServiceContext, mode matchpb.MatchMode, battleConfigId uint32,
 	members []uint64, requeueOnFail bool, withTickets bool, tickets map[uint64]string,
 ) bool {

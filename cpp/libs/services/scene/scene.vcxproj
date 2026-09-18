@@ -57,6 +57,7 @@
     <ClInclude Include="player\system\player_data_loader.h" />
     <ClInclude Include="player\system\player_lifecycle.h" />
     <ClInclude Include="player\system\player_scene.h" />
+    <ClInclude Include="player\system\player_team.h" />
     <ClInclude Include="player\system\player_skill.h" />
     <ClInclude Include="player\system\player_attribute.h" />
     <ClInclude Include="player\system\pet_rules.h" />
@@ -114,6 +115,8 @@
     <ClCompile Include="battle\system\player_battle.cpp" />
     <ClCompile Include="player\system\player_lifecycle.cpp" />
     <ClCompile Include="player\system\player_scene.cpp" />
+    <ClCompile Include="player\system\player_team.cpp" />
+    <ClCompile Include="player\system\player_team_aoi.cpp" />
     <ClCompile Include="player\system\player_skill.cpp" />
     <ClCompile Include="player\system\player_attribute.cpp" />
     <ClCompile Include="player\system\player_pet.cpp" />

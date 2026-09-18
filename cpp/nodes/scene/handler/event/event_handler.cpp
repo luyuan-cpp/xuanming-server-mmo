@@ -13,6 +13,7 @@
 #include "scene_event_handler.h"
 #include "server_event_handler.h"
 #include "skill_event_handler.h"
+#include "team_event_handler.h"
 
 void RegisterNodeEvents() { EventHandler::Register(); }
 
@@ -31,6 +32,7 @@ PlayerMigrationEventHandler::Register();
 SceneEventHandler::Register();
 ServerEventHandler::Register();
 SkillEventHandler::Register();
+TeamEventHandler::Register();
 
 }
 
@@ -49,5 +51,6 @@ PlayerMigrationEventHandler::UnRegister();
 SceneEventHandler::UnRegister();
 ServerEventHandler::UnRegister();
 SkillEventHandler::UnRegister();
+TeamEventHandler::UnRegister();
 
 }

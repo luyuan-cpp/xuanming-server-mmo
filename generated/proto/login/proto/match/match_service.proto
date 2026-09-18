@@ -65,7 +65,9 @@ message JoinQueueRequest {
   uint64 player_id = 1;               // Initiating player
   MatchMode mode = 2;                 // Desired match mode (5v5, 3v3, 1v1)
   uint32 map_config_id = 3;           // Map template config ID (maps to scene_config_id)
-  repeated uint64 party_member_ids = 4; // Pre-made party (includes player_id)
+  // 从未生效(joinqueuelogic.go 只打一行日志后照单人入队);整队开战的唯一入口是
+  // ClientPlayerTeam.StartTeamMatch(docs/design/team-system.md DV-4)。字段号 4 保留不复用(AGENTS §4)。
+  repeated uint64 party_member_ids = 4 [deprecated = true];
   uint32 zone_id = 5;                 // Player's current zone
   uint32 battle_config_id = 6;        // 回合制战斗配置(DungeonTable id:怪物组/人数/回合上限)
 }
