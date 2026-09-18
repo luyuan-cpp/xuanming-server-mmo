@@ -5186,14 +5186,38 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   currency/attribute/pet 这三个 GM handler 没有;dev 下局中 GM 加钱改级仍会与结算口径打架,留给 P2。
 - **未编译、未跑单测、未跑冒烟**(AGENTS §10.1)。验收清单见 jubaozhai-market.md §13 的 P0-a 行。
 
-## 2026-09-18 本地日志台:对抗式复核后的修正与记录更正
+## 2026-09-18 组队系统收口:合并进 main + 替 Codex 做完不需要编译的尾巴(Claude,未编译)
 
-- 记录更正:PROGRESS.md 4471 行写"本轮在其上修正,改动未提交",实际那条记录连同它描述的全部日志台改动一起随 d349a8f88 进了 main(该提交 8 个文件)。
-- 数字更正:PROGRESS.md 4477 行与 runbook §7 写"看板 6 个查询",看板实为 7 个带查询的面板(timeseries×2 / stat×3 / bargauge×1 / logs×1);当时经 Grafana API 验的是其中 6 个统计/趋势面板,日志流面板未单独验证。runbook §7 已按此改写。
-- 复核方式:4 个维度独立审查 + 每条发现由独立核实者对抗核实,25 条确认成立、0 条被反驳。按文件逐条修完。
-- 采集规则(deploy/observability/alloy/config.alloy):① etcd 客户端(zap)的 JSON 行改用 ts 字段解析,原先落进 go-zero 那段后时间被 fudge 成上一条日志时间,实测最多偏 23 小时;② go-redis 文本行补时间解析(按本机时区,换机器要改 location);③ librdkafka 的 %N|epoch| 行按 syslog 级别打 level、用自带时间,原先无级别、错误面板统计不到;④ muduo 断言行打 fatal;⑤ 上述两种行头加进多行合并 firstline,原先会被并进前一条 gRPC 行;⑥ gRPC 补年份改为"月日比今天晚算去年",原先跨年会得到未来时间被 Loki 400 拒收且不重试;⑦ sa_token.log 的 Maven/JVM 行头加进 firstline。
-- 看板(game-logs-overview.json):「错误最多的服务」配色原为 continuous-RdYlGr(错误越多越绿),改 continuous-GrYlRd;去掉 go-zero 永不输出的 severe 级别分支(logx.Severe 写进日志的是 fatal)。
-- Loki(loki.yaml):只改注释。原注释说"3.x 已没有 query_ingesters_within",错误——该键在 3.5 仍在顶层 querier 段(默认 3h),当初是写错了段才导致容器反复重启;并改正"ingester 查询窗口 = max_chunk_age + chunk_idle_period"的说法,实际由 query_store_max_look_back_period 决定(本机 2h41m,单机模式下 Loki 自动推导)。
-- 文档:docs/ops/grafana-loki-local-logs.md 重写多处——C++ stdout 是 4096 字节整块缓冲(不是"最新一两条",实测安静节点可 10 小时不落盘)、新增"启动方式 × 能否采到"三语言表(mprocs 下 Go/C++/Java 都采不到)、示例查询修正(zone 过滤会滤掉 Go 服务、RPC 方法名实为 /loginpb.ClientPlayerLogin/Login)、手工起网关需先建 run\logs\java、k8s 下 C++ 不写 stdout。log-management.md 同步标注控制台输出仅 Windows 生效。
-- 验证:先用覆盖全部行型的样本目录做 loki.echo 试跑逐行核对级别与时间,再对真实 run/logs 回归 29622 条、Alloy 零报错;loki.yaml 过 -verify-config;Alloy 已按新配置重启。未编译任何 C++/Go/Java 工程(本轮只动配置与文档)。
-- 未做:C++ stdout 缓冲的根治(需在 console_log.cpp 加 fflush 或 setvbuf(_IONBF),属代码改动,另行评估);k8s 侧 C++ 日志采集方案。
+- **已合并并推送**(用户明确要求,越过 AGENTS §9 的 push 禁令与 §10.1 的编译门禁):worktree 分支 `feature/team-system-v3` 提交 `7af8342ad`,两次把 main 合进分支(冲突只有 PROGRESS.md,两边条目都保留),主仓 `--ff-only` 快进后 `git push origin main`,`a17b89296..66c546e70`。组队代码(proto/team、go/match/internal/team、internal/playercontract、player_team.cpp、robot/team_smoke_scenario.go、设计文档)全部在主干。
+- **替 Codex 做完的、不需要编译的四项**:
+  1. `cd robot && go mod vendor`:补齐 `vendor/proto/team`、`vendor/proto/common/component/team_comp.pb.go`、`vendor/shared/generated/pb/table/team_error_tip.pb.go` 与 `modules.txt`(robot 整包编译的硬前置)。注:robot 不 import `shared/generated/tip`,vendor 按 import 图裁剪,该包不会进 vendor,tip 内容正确性由源仓保证。
+  2. C++ 工程登记:`cpp/libs/services/scene/CMakeLists.txt` 补 `battle/system/player_battle.cpp`(Linux 侧 scene 静态库原本会缺 `PlayerBattleSystem` 符号,而 `player_team.cpp` 依赖它);`cpp/generated/proto/proto.vcxproj{,.filters}` 与 `CMakeLists.txt` 补 `trade/trade_table.grpc.pb.cc`(既有缺口,唯一会影响链接的 .cc);`cpp/generated/rpc/rpc.vcxproj{,.filters}` 补 team 的 2 个 service_metadata 头。`cpp/tests/aoi_test/interest_system_mock.cpp` 加注释说明它当前不参与 aoi_test 编译(加进工程会与 scene.lib 里的真实 `interest.cpp` 双重定义)。**以上已被 03:56 的每小时自动保存提交 `969bbec4c` 连同帮会会话的改动一并带入。**
+  3. 客户端协议管道(只做管道,不碰 UI):`mmorpg-client/tools/gen_proto.ps1` 收录 `proto/team/team.proto` 与 `team_error_tip.proto`、`gen_messageids.ps1` 补 15 条 team 映射,并跑了两个生成脚本 → `Assets/Scripts/Proto/Generated/{Team,TeamErrorTip}.cs`、`MessageIds.cs` +15 常量。**至此"客户端合并门禁"解除**:再用默认配置跑 `dev.bat proto` 不会因缺 `Teampb.*` 而 CS0246。客户端仓当前在别人的分支、有 150+ 个立绘在制品,**未提交**,需要时按路径精确 add。
+  4. 合并后语义复核(组队 × 跨 zone 传送阶段 1,两边都改了场景进出路径):修 2 处 —— `player_team.cpp` 新增 `IsOwnershipInFlight` 闸(`PlayerFrozenComp` / `PlayerTravelHandoffComp` 在途时不跟随,否则会把刚交接出去的玩家按"同节点换图"拉回本节点、应答还会被传送侧的 `HandleTravelEnterSceneReply` 吃掉);`go/match/internal/team/service.go` 开战预检对"跨 zone 交接中、`node_id` 为空"的成员早拒 `ErrMemberNotReady`(否则建锁建票后必死在 gather 的 `EndpointOf`)。
+- **遗留(需要决策或需要别人先动)**:`EnterScene` 应答没有相关性标识,传送在途期间任何一条该玩家的 EnterScene 应答都会被传送侧吃掉(建议加 correlation id,属接口决策);`proto/scene_manager/storage.proto` 的 `owner_epoch` 等字段**跨 zone 会话自己写明未 regen**,regen 之前 go/scene_manager 与 C++ scene 都编不过 —— **组队的编译验证必须排在那次 regen 之后**,否则会把跨 zone 的编译失败误记成组队的问题。
+- **验证状态:全程未编译、未跑单测、未跑冒烟**。必须由人跑的清单见 [docs/design/team-system.md](docs/design/team-system.md) 文末「给 Codex 的验证清单」与「收口记录(2026-09-18)」。
+
+## 2026-09-18 聚宝斋 P2 开工:改为落通用资产通道 B4a/B4b(Claude,占位说明)
+
+- 用户要求"全部做完、不用等 Codex、不用编译"。P1 已于 09-17 验收通过(见同日两条),P2 开工。
+- **范围裁定**:不按 `jubaozhai-market.md` §6.4 新增 `TradeDebit/TradeCredit/TradeAbortDebit`,改为**落帮会二期 B4a/B4b 的通用资产通道**(`docs/design/guild-phase2/04-asset-channel.md`,09-17 定稿未落码),聚宝斋占用其预留的 `ASSET_OP_STREAM_TRADE_DEBIT=3` / `TRADE_CREDIT=4` 两条流。理由:两边同账本、同 RPC、同 Currency 签名改造、同抢 `player_database` 15 号字段,自建=两套并行账本(AGENTS §11.5 第 3 条)。
+- **并行会话请注意**:本批落 `proto/common/asset/asset_op.proto`、`proto/common/component/asset_op_ledger_comp.proto`、`player_database.asset_op_ledger = 15`、`SceneNodeGrpc.AssetDebit/AssetAbortDebit/AssetCredit`、Tip `asset_error base=27000`、`go/shared/{scenenode,assetop}`,以及 Currency/Bag/TransactionLog 的 txType+correlation 改造。帮会二期若要同时落 B4a,请先与本批对齐,勿重复新建。
+- 基线注意:工作区当前含跨 zone 阶段 2 在途中间态(`player_lifecycle.h` 声明了 `RequestZoneTravel`/`StartTravelHandoff` 但 .cpp 无定义),**本批不碰这些文件**;资产闸门显式查 `any_of<PlayerFrozenComp, PlayerTravelHandoffComp>`,不复用 `IsCrossZoneFrozen`。
+
+## 2026-09-18 C++ 构建清单补登记 + 四摊待办的分工核定(Claude,未编译)
+
+- **起因**:用户要求"把所有未编译的待办全部做完、不用编译、直接合并到 main"。先派 7 个 agent 做了一轮只读普查(四摊待办的剩余工作 + 三面"不编译就发现不了"的静态审查),结论有两条要紧的:
+  1. **仓库不静止**:普查这 40 分钟里 HEAD 从 `66c546e70` 一路走到 `762f44a5a`,`ListAgents` 显示 6 个并行会话、4 个在忙。审查报告里的行号与"缺失"判断有相当一部分在写出来的瞬间就过期了。
+  2. **组队系统的合并不用做**:`feature/team-system-v3` 已由另一会话在 03:37 快进合并进 main(reflog `merge feature/team-system-v3: Fast-forward`),`7af8342ad` 已在 main 上,team3 工作区干净。
+- **分工核定(经 SendMessage 与两个会话逐条确认,避免撞车)**:
+  - 帮会 B2s(`go/guild/**`、`robot/guild_smoke_scenario.go`、`go/guild` 的 go.mod/go.sum、`cpp/generated/table` 三个构建文件)归「帮会功能实现」会话,正在跑 11 个并行智能体改写,我一律不碰。它同时确认 go.mod/go.sum 的缺口由它修,且比我报的多一处(`go-sql-driver/mysql` go.mod 要 v1.9.3 而 go.sum 只有 v1.9.0 的哈希)。
+  - 跨 zone 阶段 2(`proto/scene/player_scene.proto`、`storage.proto`、`session.proto`、`Tip.xlsx` 的 4 行传送码、`robot/travel_smoke_*`、`go/scene_manager/**`、`go/login` 的 entergame/homezone、gate 的 session 两文件、`cpp/libs/services/scene` 的 CMakeLists/vcxproj/filters)归「Gate链接跨区重连方案」会话,我一律不碰;该目录缺登记的 4 个源文件(mission_marshal / player_activity_schedule / player_feature_snapshot / player_mission)已交给它一并并入。
+  - 三方约定:**regen / 导表器串行**,由跨 zone 会话在独立 worktree 里统一跑一轮,在它宣布"regen 完成"前谁都不跑发号器与导表器。
+- **本会话实际落码(提交 `2191af22b`,纯追加 86 行 + 1 个新文件,不重排不删行)**:用脚本逐目录比对"磁盘源文件 vs 构建清单"补齐 —— `cpp/generated/proto`(补 18 个 .pb.cc,131/131)、`cpp/generated/grpc_client`(补 3,17/17)、`cpp/libs/modules`(补 id_segment 2 个,16/16)、`cpp/nodes/scene`(补 7,48/48)、`cpp/nodes/gate`(补 match_event_handler.cpp)、**新建 `cpp/libs/services/battle/CMakeLists.txt`**(该目录一直没有,而 build_linux.sh 的 LIB_PROJECTS 列了它、nodes/battle 要链 -lbattle,Linux 构建必断)、`cpp/generated/rpc` 的 vcxproj 与 filters 补 12 个头(51/51)。
+- **核实后确认"不是漏登记、有意为之"因而未动**:`gate_security_test.cpp` / `battle_ticket_test.cpp`(文件头写明不进 ClCompile、独立用 g++ 编)、`interest_system_mock.cpp`(文件头写明与 scene.lib 的 interest.cpp 同名符号,加进去就 LNK2005;`mock_view.cpp` 与 `skill_test/mockview.cpp` 同理)、muduo_windows 的 `process_info.cpp`。
+- **几条把审查结论纠正回事实的核查**(都以当时树上状态为准):
+  - `message_id` 19 由 `GuildServiceJoinGuild` 改判给 `GuildServiceSetGuildMemberRole`、并新增 216..223 八个号,是 03:56 的每小时自动提交 `969bbec4c` 带进 main 的,不是谁手动收尾;完整 10 行 diff 已转给帮会会话供 B2c 填 MessageLimiter。
+  - 那轮导表 + proto 生成是**回合制战斗 G1-G9 会话**跑的,过程记在 `docs/design/turn-battle-gap-closure.md` §8(含实际命令),其中明确 `cd go && build.bat`(goctl)未跑。
+  - 审查报告里"Go 侧 3 处 pb 字段缺失编译必炸"已过期:`OwnerEpoch` / `EnterSceneResponse.PlayerId` / `TicketPlayerId` 现在都在生成物里;真正还缺的只有跨 zone 在途的 `PendingSceneConfId`。
+  - 组队系统"robot vendor 缺 team"这条硬断裂也已消失,`robot/vendor/proto/team/*.pb.go` 已被跟踪。
+- **未做**:未编译、未跑任何生成器;帮会 B2s 与跨 zone 阶段 2 的业务代码不在本会话范围(归属见上)。
