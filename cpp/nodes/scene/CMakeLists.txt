@@ -89,6 +89,14 @@ set(SOURCE_FILES
     rpc_replies/player/player_rpc_response_handler.cpp
     rpc_replies/player/player_state_attribute_sync_response_handler.cpp
     rpc_replies/register_response_handler.cpp
+    # 2026-09-18 补登记:这 7 个在 scene.vcxproj 里都有,只有 Linux CMake 清单漏了。
+    handler/event/battle_event_handler.cpp
+    handler/grpc/scene_node_service.cpp
+    handler/rpc/player/player_activity_handler.cpp
+    handler/rpc/player/player_bag_handler.cpp
+    handler/rpc/player/player_mission_handler.cpp
+    handler/rpc/player/player_movement_handler.cpp
+    id_segment_bootstrap.cpp
 )
 
 find_package(absl CONFIG REQUIRED)

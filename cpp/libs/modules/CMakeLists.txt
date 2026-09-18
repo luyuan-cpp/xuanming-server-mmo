@@ -72,6 +72,9 @@ set(SOURCE_FILES
     snapshot/snapshot_system.cpp
     transaction_log/anomaly_detector.cpp
     transaction_log/transaction_log_system.cpp
+    # 2026-09-18 补登记:号段客户端与注册表,磁盘上已有但从未进清单。
+    id_segment/guid_segment_client.cpp
+    id_segment/guid_segment_registry.cpp
 )
 
 add_library(modules STATIC ${SOURCE_FILES})

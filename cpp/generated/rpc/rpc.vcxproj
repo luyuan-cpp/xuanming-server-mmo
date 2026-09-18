@@ -58,6 +58,18 @@
     <ClInclude Include="service_metadata\player_state_attribute_sync_service_metadata.h" />
     <ClInclude Include="service_metadata\team_service_metadata.h" />
     <ClInclude Include="service_metadata\rpc_event_registry.h" />
+    <ClInclude Include="service_metadata\battle_node_service_metadata.h" />
+    <ClInclude Include="service_metadata\client_rpc_router_service_metadata.h" />
+    <ClInclude Include="service_metadata\common_event_battle_event_event_id.h" />
+    <ClInclude Include="service_metadata\contracts_kafka_match_event_event_id.h" />
+    <ClInclude Include="service_metadata\match_service_service_metadata.h" />
+    <ClInclude Include="service_metadata\player_activity_service_metadata.h" />
+    <ClInclude Include="service_metadata\player_attribute_service_metadata.h" />
+    <ClInclude Include="service_metadata\player_bag_service_metadata.h" />
+    <ClInclude Include="service_metadata\player_battle_service_metadata.h" />
+    <ClInclude Include="service_metadata\player_mission_service_metadata.h" />
+    <ClInclude Include="service_metadata\player_movement_service_metadata.h" />
+    <ClInclude Include="service_metadata\player_pet_service_metadata.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="service_metadata\rpc_event_registry.cpp" />
