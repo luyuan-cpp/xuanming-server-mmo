@@ -5099,3 +5099,18 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - **部署**:`tools/scripts/k8s_deploy.ps1` 的 scene-manager ConfigMap 模板补 `DataServiceRpc` + `HomeZoneLookupTimeoutMs`(不补的话 K8s 下所有 EnterScene 回 20)。
 - **最该盯的回归点**:同节点换图 + 周期存盘时 `[OwnerEpoch] stale_owner_write_rejected` 必须恒 0;本地 `robot login-test` 应保持 23/23;dev 旁路下跨节点换图不应回档(旁路无标记放行不铸造 epoch)。
 - **未做**:阶段 2(`ScenePlayer.TravelToZone` + tip 码 + login 识别票据 `target_zone_id` + gate 验签绑定 `player_id` + 客户端调用点)、阶段 3;生产下客户端发起的跨节点换图仍被 18 拒(需要把那条路径改成"先存盘后请求"的释放链,另立任务)。未执行 git add/commit/push(仓库有每小时自动 WIP 提交,改动会被它带进去)。
+
+## 2026-09-18 防御 ×12 / 法力 ×4 收口核对(Claude,按用户"不用编译"指示只做静态核对)
+
+- 用户 09-18 指示:不等 Codex,把剩余项做完、不用编译、直接进 main。核对结果:**2026-09-15 更正一节的清单第 1~6 步都已由他人完成并进入 main**,本轮没有再改任何代码或表,只补这条记录。
+- 逐项核对(静态,本轮未编译、未跑单测、未跑冒烟):
+  1. 重生 proto:已完成。`git grep attribute_unit_version`(除 PROGRESS 历史条目外)全仓 0 条,`cpp/generated`、`go/proto`、`generated/proto`、`robot/vendor/proto` 均已干净;客户端 `Assets/Scripts/Proto/Generated/{PlayerAttributeComp,BattleData}.cs` 也是 0 条。
+  2. robot vendor:已随上条一并刷新,vendor 内无残留字段。
+  3. 客户端生成 + 编译体检:见 09-16 Codex 条目(291 文件、277 引用、0 错误)。
+  4. 导表:`generated/tables` 已是新值 —— class init_mana=800 / init_armor=120 / init_speed=240(九行一致);attributedimension 101 defense=60、102 max_mana=40、401 defense=45、402 max_mana=30,维度只剩 101-104 / 401-404;attributepool 只剩 1 / 4;attributeautoplan 只剩 1 / 4 / 11 / 21 / 31 / 41;monster armor = 36 / 48 / 60 / 72 / 84 / 96 / 120 / 144 / 168 / 192 / 216 / 240 / 264 / 300 / 336 / 420;pet init_mana = 800 / 320 / 400 / 1200;skill 1 号耗蓝 40(id=2 的 20 未动,引擎不读)。
+  5. 编译 + 6. 单测:09-16 Codex 条目已记录 —— C++ `game.sln` 全目标退出 0,turn 115/115、bag 220/220 共 335/335 全过;Go 14 个模块编译通过,robot vendor/build/vet 通过。
+  - 源码侧复核仍为撤回后的最终状态:`kDefenseUnitScale = 12`(等级系数 360 + 120 × 等级)、`kMonsterDefaultArmor = 24`、`kMonsterDefaultSpeed = 60`、`kPvpDamageScale = 0.3`、`kFleeSpeedFactor = 0.01/12`、`Recalculate` 按 `Class.init_armor` 重写护甲;单测期望 `LevelFactor(1)=480` / `LevelFactor(85)=10560`、减半点 1560、回退怪 10 回合、`kStdMana=4200` / `kStdDefense=5100`,以及 `DefenseUnitScaleKeepsReceivedRatio`、`EveryAllocatedPointRaisesEachStatByAtLeastOne` 均在位。
+- **唯一未完成项:联机验收**(09-16 Codex 条目的"剩余联机项"):attribute / pet / battle 三条 robot 冒烟,85 级全投体质防御 5610(丹心 5712)、全投灵力法力 4830、每点 +1 以上,1 级新号副本回合数。未做的原因有二:① 用户本轮指示不编译;② `run/verify-attribute-20260916/runtime-bundle/` 的二进制停在 09-16,之后 main 又落了组队(7af8342ad)、跨 zone 传送阶段 1(1f2bdd01c)等改动,拿旧二进制跑冒烟验证不了当前 main,要跑得先重编。取得独占本机窗口后按该条目的 `run-smokes.ps1 -Suite original` → `-Suite numeric` 执行。
+- 两条与本次改动无关、但记下来免得下次误判:
+  - `gen_schema_index.py --check` 当前报"索引块已腐坏",差异全部来自并行会话在途的表(新增 GuildLevel / GuildRule、Item 3→6 列、MessageLimiter 34→46 行、Monster 10→16 列含 drop),与防御 / 法力数值无关;这些表尚未提交,本轮不重生索引,留给对应会话导表时一并更新。
+  - 09-17 新加的 `Item.battle_heal_mp`(战斗中用药回蓝,引擎读表不写死)填值时要按**新法力单位**:85 级法力上限约 4830,旧单位下的"回 50 蓝"现在只相当于 12.5 蓝。
