@@ -299,7 +299,8 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		//  没有位置记录(干净登出后的首次落点)同样只送连接,由第二条腿铸造。
 		//  currentZoneID == 0(旧位置无法确定 zone)≠ 任何目标 zone,按 b) 过门,fail-closed。
 		leavingZone := currentLoc != nil && currentZoneID != targetZoneId
-		guard := placementGuard{observedEpoch: observedEpoch, mint: true}
+		// 目标地图随等待落点一起记下:第二条腿是目标 zone 的 login 发来的 EnterScene,不带地图。
+		guard := placementGuard{observedEpoch: observedEpoch, mint: true, pendingSceneConfID: in.SceneConfId}
 		if leavingZone && !awaitingPlacement {
 			resp, grant := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, observedEpoch, "跨区重定向")
 			if resp != nil {
@@ -315,8 +316,16 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	}
 
 	// 3. Resolve the target scene (sceneId + nodeId).
+	//    跨 zone 传送的第二条腿:请求本身不带地图(目标 zone 的 login 不知道玩家要去哪张图),
+	//    用第一条腿记在「等待落点」里的目标地图。只在这条记录仍然有效、且就是指向本次落点的
+	//    zone 时采用;请求自己指定了场景 / 地图则以请求为准。
+	sceneConfID := in.SceneConfId
+	if awaitingPlacement && !awaitingExpired && currentZoneID == targetZoneId &&
+		in.SceneId == 0 && sceneConfID == 0 {
+		sceneConfID = currentLoc.GetPendingSceneConfId()
+	}
 	resolveStart := time.Now()
-	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(in.SceneId, in.SceneConfId, targetZoneId)
+	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(in.SceneId, sceneConfID, targetZoneId)
 	metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageSceneResolve, time.Since(resolveStart))
 	if err != nil {
 		// 再入屏障未到是**可重试**的瞬时拒绝,不是"没有可用节点"。用独立错误码
@@ -546,7 +555,10 @@ func (l *EnterSceneLogic) requireHandoffCommitted(in *scene_manager.EnterSceneRe
 		return nil, handoffVerdict{epoch: observedEpoch}
 	}
 	metrics.ObserveEnterSceneRejected(targetZoneId, "handoff_pending")
-	l.Logger.Errorf("[Handoff] %s 拒绝:源 scene 尚未为当前归属代际写出落盘标记(可重试): player=%d owner_epoch=%d handoff=%q old_scene=%d old_node=%s old_zone=%d gate_zone=%d target_zone=%d",
+	// Infof 而不是 Errorf:这不是异常。scene 节点事先不知道目标场景在不在本节点,跨节点换图的
+	// 第一次请求注定拿到 18,它据此「冻结 → 存盘 → 写标记 → 重发」(player_lifecycle.cpp 的
+	// StartTravelHandoff)。真正的异常是同一玩家**连续**被 18 拒,那要看 handoff_pending 指标的速率。
+	l.Logger.Infof("[Handoff] %s 暂拒:源 scene 尚未为当前归属代际写出落盘标记(可重试): player=%d owner_epoch=%d handoff=%q old_scene=%d old_node=%s old_zone=%d gate_zone=%d target_zone=%d",
 		site, in.PlayerId, verdict.epoch, verdict.marker, currentLoc.GetSceneId(), currentLoc.GetNodeId(),
 		currentZoneID, in.GateZoneId, targetZoneId)
 	return errResp(constants.ErrHandoffPending,

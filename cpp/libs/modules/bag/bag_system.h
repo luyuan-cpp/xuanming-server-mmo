@@ -306,6 +306,28 @@ public:
     uint32_t RemoveItems(const ItemCountMap &itemsToRemove,
                          std::vector<DrainedInstance> *drainedOut = nullptr);
 
+    // ── 按 guid 的全或无扣出:reserve 段(聚宝斋 P2 托管)────────────────
+    //
+    // **纯预检、零副作用**,与 ReserveForBatchAdd 是同一套"规划 -> 预留 -> 提交"
+    // 纪律的另一半:它返回 kSuccess 之后,编排层逐个 RemoveItem 不会再失败。
+    //
+    // **与 RemoveItemsClamped 语义相反,不要复用它。** 那条路是"按 config 夹紧、
+    // 恒成功"(战斗结算消耗,契约就是不足按 0 处理);这条路是"按 guid 全或无",
+    // 少一件就整批拒 —— 托管的是玩家挂出去卖的**那一件具体装备**,夹紧等于凭空少卖。
+    //
+    // 只接受 `max_stack_size == 1` 的不可叠加实例,这是硬约束不是保守:可叠加物品
+    // 的预设 guid 在 AddStackableItem 里会被并堆重铸,发回来的 guid 根本不保证还
+    // 指向同一堆,"按 guid 还回去"在那一侧就不成立了。
+    //
+    // removableOut(可为 nullptr)按入参顺序给出**销毁前抓拍**的 (guid, config, size),
+    // 编排层拿它落流水 —— 与 ReserveForBatchAdd 的 evictedOut 同一个形状、同一个理由。
+    //
+    // 返回 kSuccess,或 kAssetInvalidBundle(REJECTED 类,终局拒绝):空列表、
+    // 同一 guid 报两次、guid 不在本包、config 查不到表、可叠加物品、实例 size != 1。
+    // 这些都是"重试也不会变好"的情形,所以不给 RETRY 类码。
+    uint32_t ReserveForBatchRemove(const std::vector<Guid> &guids,
+                                   std::vector<DestroyedInstance> *removableOut = nullptr);
+
     // 按实际持有夹紧:每个 config 扣 min(请求, 持有),永不因"不够"而失败,
     // 恒返回 kSuccess。战斗结算的道具消耗用它 —— 契约是"按实际持有校验扣除,
     // 不足按 0 处理并记日志,防刷"(设计文档 §5.3),全或无会在玩家中途丢了药时

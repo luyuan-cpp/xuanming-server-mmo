@@ -109,6 +109,7 @@ func (t RedirectTarget) Addr() string {
 //  4. 首包发 ClientTokenVerifyRequest,payload/signature 原样来自 notify;
 //  5. 在新连接上完整重跑 Login + EnterGame(token 只认证 TCP,不转移登录会话);
 //  6. 把握手期间攒下的推送补投递给 RecvLoop(新 zone 的 NotifyEnterScene 通常在里面)。
+//     这一步不持有 redirectMu:补投出来的若又是一条 msg 124,会在本 goroutine 里重入本函数。
 //
 // ⚠️ 调用者必须是 gc 自己的 RecvLoop goroutine(消息处理器天然满足)。
 // 理由见 GameClient.SwapConn:阻塞在旧连接 Recv() 上的 goroutine 在连接关闭后
@@ -127,6 +128,25 @@ func FollowRedirect(gc *GameClient, target RedirectTarget) error {
 		return ErrNoReloginFunc
 	}
 
+	if err := followRedirectLocked(gc, target, fn); err != nil {
+		return err
+	}
+
+	// 重登录用的是同步 send/recv,期间到达的推送被暂存了(GameClient.DeferMessage);
+	// RecvLoop 只在入口 replay 一次,所以这里必须显式补投,否则新 zone 的
+	// NotifyEnterScene 会被永远埋在暂存队列里,机器人卡在"等进场"。
+	//
+	// 补投必须在**放开 redirectMu 之后**做:暂存队列里可能就有一条 msg 124(目标 zone 的 login
+	// 又把人弹走 / 二次改派,且它赶在 EnterGameResponse 之前到达),补投会在**同一个 goroutine**里
+	// 重入 FollowRedirect。sync.Mutex 不可重入,握着锁补投就是自锁:RecvLoop 永久卡死,
+	// 上层只看得到超时。重入深度由 MaxRedirectHops 封顶。
+	gc.ReplayDeferred()
+	return nil
+}
+
+// followRedirectLocked 是 FollowRedirect 里需要 redirectMu 串行化的那一段:
+// 环路熔断计数 → 探测 → 换连接 → 验票 → 重登录。不含补投,原因见 FollowRedirect 末尾的注释。
+func followRedirectLocked(gc *GameClient, target RedirectTarget, fn ReloginFunc) error {
 	gc.redirectMu.Lock()
 	defer gc.redirectMu.Unlock()
 	if gc.redirectHops >= MaxRedirectHops {
@@ -162,11 +182,6 @@ func FollowRedirect(gc *GameClient, target RedirectTarget) error {
 	if err := fn(gc); err != nil {
 		return fmt.Errorf("redirect: relogin on %s: %w", target.Addr(), err)
 	}
-
-	// 重登录用的是同步 send/recv,期间到达的推送被暂存了(GameClient.DeferMessage);
-	// RecvLoop 只在入口 replay 一次,所以这里必须显式补投,否则新 zone 的
-	// NotifyEnterScene 会被永远埋在暂存队列里,机器人卡在"等进场"。
-	gc.ReplayDeferred()
 	return nil
 }
 

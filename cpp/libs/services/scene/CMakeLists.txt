@@ -85,8 +85,10 @@ set(SOURCE_FILES
     generated/attribute/attributedelta30framess2c_attribute_sync.cpp
     generated/attribute/attributedelta5framess2c_attribute_sync.cpp
     generated/attribute/attributedelta60framess2c_attribute_sync.cpp
-    kafka/system/kafka.cpp
     player/system/afk.cpp
+    # 通用资产通道(guild-phase2/04-asset-channel.md §S4):纯函数账本 + RPC 处理系统。
+    player/system/asset_op_ledger.cpp
+    player/system/asset_op_system.cpp
     player/system/player_database_loader.cpp
     player/system/player_database_1_loader.cpp
     player/system/player_lifecycle.cpp
@@ -99,7 +101,6 @@ set(SOURCE_FILES
     player/system/player_tip.cpp
     player/system/stress_test_probe.cpp
     player/system/bag_marshal.cpp
-    player/system/cross_zone_reaper.cpp
     spatial/system/aoi.cpp
     spatial/system/grid.cpp
     spatial/system/interest.cpp

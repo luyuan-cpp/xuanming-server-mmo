@@ -60,6 +60,13 @@ public:
 	//   把"返回失败"理解为"包与调用前完全一致"。
 	// correlationId / extra 落进流水(战斗掉落传 battle_id 与来源 JSON)。
 	// TX_ITEM_AWARD 的 proto 注释要求 extra 带来源,否则回滚重放无法判断这笔奖励是否仍有效。
+	//
+	// mutated(可为 nullptr)回答一个上面那段"原子性口径"注释点破、却没法从返回值读出来的
+	// 问题:**这次失败,包到底动过没有**。返回失败有两种:一件没碰(预检拒),和
+	// "临时格已经挤掉旧物、或前几个 config 已经写进去了"。通用资产通道靠它区分
+	// RETRY(可重投)与 APPLIED+partial(已经改了一半,必须记账转人工补偿)——
+	// 把两者混为一谈就会重复发放或永久少发(guild-phase2.md §S4 4.33)。
+	// 函数开头一律先置 false。
 	static uint32_t AddItems(
 		entt::entity playerEntity,
 		Bag &bag,
@@ -67,7 +74,8 @@ public:
 		const ItemCountMap &itemsToAdd,
 		TransactionType txType = TX_SYSTEM_GRANT,
 		uint64_t correlationId = 0,
-		const std::string &extra = {});
+		const std::string &extra = {},
+		bool *mutated = nullptr);
 
 	// Orchestrated batch AddItems carrying full ItemComp per piece
 	//   (mail attachments mixing equipment + stackable items): preserves
@@ -110,6 +118,39 @@ public:
 		std::vector<DrainedInstance> *drainedOut = nullptr,
 		uint64_t correlationId = 0,
 		const std::string &extra = {});
+
+	// Orchestrated 按 guid 全或无扣出(聚宝斋 P2 托管):
+	//   frozen check → Bag::ReserveForBatchRemove(纯预检)→ 逐个 Bag::RemoveItem
+	//   (**销毁实例**)→ 逐条落流水。
+	//
+	// **与 RemoveItemsClamped 语义相反,不要复用它。** 那条是按 config 夹紧、恒成功
+	// (战斗结算消耗);这条是按 guid 全或无,少一件就整批拒。托管的是玩家挂出去卖的
+	// 那一件具体装备,夹紧等于凭空少卖一件。
+	//
+	// **扣出必须销毁实例,不能留 size=0 的僵尸堆。** 托管之后权威转到交易库的快照上
+	// (docs/design/jubaozhai-market.md §6.1 第 1 条),玩家 blob 里若还留着同 guid 的
+	// 空壳,整理时会把它回收、跨 zone 快照会把它带走,而交易库里那份仍然存在 ——
+	// 同一个 item_uuid 两处都在,过户回来就是复制。所以走 Bag::RemoveItem(销毁 +
+	// 释放槽位),不走 Drain 那条"只扣数量、留着实例"的路。
+	//
+	// **只支持 `max_stack_size == 1` 的不可叠加物品**(由 ReserveForBatchRemove 把关):
+	// 可叠加物品的预设 guid 在 AddStackableItem 里会被并堆重铸,发回来对不上。
+	//
+	// **不拦战斗**(D48 红线):局中拦一切背包写的闸只许放在资产 RPC 入口层。下沉到
+	// 这里,战斗结算自己的扣物就会被自己拦住,结算永久卡死。
+	//
+	// txType 进流水(托管扣出传 TX_AUCTION_SELL),correlationId 传 listing_id。
+	// removedOut(可为 nullptr)按入参顺序给出销毁前抓拍的 (guid, config, size)。
+	//
+	// 返回:跨 zone 冻结期返回 kAssetFrozen(RETRY 类,一件不扣);预检不过返回
+	// kAssetInvalidBundle(REJECTED 类,一件不扣);其余 kSuccess。
+	static uint32_t RemoveItemsByGuid(
+		entt::entity playerEntity,
+		Bag &bag,
+		const std::vector<Guid> &guids,
+		TransactionType txType = TX_AUCTION_SELL,
+		uint64_t correlationId = 0,
+		std::vector<DestroyedInstance> *removedOut = nullptr);
 
 	// Orchestrated MergeAndCompact (背包整理):
 	//   frozen check → Bag::MergeAndCompact → transaction log per retired instance

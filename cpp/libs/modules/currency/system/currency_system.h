@@ -6,6 +6,7 @@
 #include "entt/src/entt/entity/entity.hpp"
 #include "modules/currency/constants/currency.h"
 #include "proto/common/component/currency_comp.pb.h"
+#include "proto/common/rollback/transaction_log.pb.h" // TransactionType — 流水分类随调用点传入
 
 // Stateless system that handles all currency mutations.
 // Every add/deduct goes through this system — no direct field writes.
@@ -33,12 +34,28 @@ public:
     // Add currency to a player. amount must be > 0; returns error code otherwise.
     // Automatically deducts from any outstanding debt (补缴) before crediting.
     // Writes a TransactionLogEntry to Kafka.
-    static uint32_t AddCurrency(entt::entity player, CurrencyType type, int64_t amount);
+    //
+    // txType / correlationId 落进流水(guild-phase2.md §S4 4.11)。**两个都有默认值**,
+    // 现有调用点一行不用改;通用资产通道按流的 tx 白名单传入具体类型,correlationId
+    // 传帮会 op_id / 聚宝斋 listing_id,事后能把"这笔钱"和"哪次业务操作"对上。
+    //
+    // 返回值口径(§4.10,与 kInvalidParameter 分家):
+    //   冻结      -> kAssetFrozen              (RETRY 类:条件会消失,调用方可重投)
+    //   封禁      -> kAssetBlocked             (REJECTED 类:终局拒绝)
+    //   amount<=0 / 类型越界 / 缺组件 -> kInvalidParameter(编程错误,不变)
+    static uint32_t AddCurrency(entt::entity player, CurrencyType type, int64_t amount,
+                                TransactionType txType = TX_CURRENCY_ADD,
+                                uint64_t correlationId = 0);
 
     // Deduct currency from a player. amount must be > 0; returns error code if
     // the parameter is invalid or the player has insufficient funds.
     // Writes a TransactionLogEntry to Kafka.
-    static uint32_t DeductCurrency(entt::entity player, CurrencyType type, int64_t amount);
+    //
+    // 返回值口径(§4.10):冻结 -> kAssetFrozen;余额不足 -> kAssetCurrencyInsufficient;
+    // amount<=0 / 类型越界 / 缺组件 -> kInvalidParameter(不变)。
+    static uint32_t DeductCurrency(entt::entity player, CurrencyType type, int64_t amount,
+                                   TransactionType txType = TX_CURRENCY_DEDUCT,
+                                   uint64_t correlationId = 0);
 
     // Query current balance (returns 0 if component missing).
     static uint64_t GetBalance(entt::entity player, CurrencyType type);

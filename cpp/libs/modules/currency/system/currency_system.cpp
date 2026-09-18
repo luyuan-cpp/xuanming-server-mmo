@@ -7,6 +7,7 @@
 
 #include "engine/core/error_handling/error_handling.h"
 #include "engine/core/time/system/time.h"
+#include "table/proto/tip/asset_error_tip.pb.h" // kAssetFrozen / kAssetBlocked / kAssetCurrencyInsufficient
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "core/utils/registry/game_registry.h"
 #include "modules/currency/comp/player_currency_comp.h"
@@ -56,7 +57,8 @@ uint64_t *CurrencySystem::ResolveCurrencyField(entt::entity player, CurrencyType
 // AddCurrency — the single unified entry point for all currency gains.
 // ---------------------------------------------------------------------------
 
-uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int64_t amount)
+uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int64_t amount,
+                                     TransactionType txType, uint64_t correlationId)
 {
     // ── Strict parameter validation ──────────────────────────────────────
     if (amount <= 0)
@@ -81,7 +83,10 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
                  << "CurrencyType=" << static_cast<uint32_t>(type)
                  << " amount=" << amount
                  << " entity=" << entt::to_integral(player);
-        return PrintStackAndReturnError(kInvalidParameter);
+        // 冻结是**会自己消失**的条件,与"参数写错了"根本不是一类。回 kInvalidParameter
+        // 时调用方无法区分二者,资产通道只能一律当终局拒绝,于是玩家过图的那几百毫秒里
+        // 到达的帮会发奖会被永久丢掉(guild-phase2.md §S4 4.10)。
+        return PrintStackAndReturnError(kAssetFrozen);
     }
 
     // ── Global (server-wide) block check ────────────────────────────────
@@ -90,7 +95,8 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     {
         LOG_WARN << "CurrencySystem::AddCurrency: currency GLOBALLY blocked. CurrencyType="
                  << static_cast<uint32_t>(type) << " entity=" << entt::to_integral(player);
-        return PrintStackAndReturnError(kInvalidParameter);
+        // 封禁是终局拒绝(REJECTED 类):资产通道据此记账并让业务侧退款,不重投。
+        return PrintStackAndReturnError(kAssetBlocked);
     }
 
     // ── Per-player GM block check ────────────────────────────────────────
@@ -98,7 +104,7 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     {
         LOG_WARN << "CurrencySystem::AddCurrency: currency blocked by GM. CurrencyType="
                  << static_cast<uint32_t>(type) << " entity=" << entt::to_integral(player);
-        return PrintStackAndReturnError(kInvalidParameter);
+        return PrintStackAndReturnError(kAssetBlocked);
     }
 
     uint64_t gain = static_cast<uint64_t>(amount);
@@ -156,7 +162,8 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
 
     // ── Transaction log ──────────────────────────────────────────────────
     TransactionLogSystem::LogCurrencyAdd(player, type,
-                                         static_cast<uint64_t>(amount), balanceBefore, *balance);
+                                         static_cast<uint64_t>(amount), balanceBefore, *balance,
+                                         txType, correlationId);
 
     // ── Anomaly detection ────────────────────────────────────────────────
     AnomalyDetector::RecordCurrencyGain(player, type, static_cast<uint64_t>(amount));
@@ -168,7 +175,8 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
 // DeductCurrency
 // ---------------------------------------------------------------------------
 
-uint32_t CurrencySystem::DeductCurrency(entt::entity player, CurrencyType type, int64_t amount)
+uint32_t CurrencySystem::DeductCurrency(entt::entity player, CurrencyType type, int64_t amount,
+                                        TransactionType txType, uint64_t correlationId)
 {
     // ── Strict parameter validation ──────────────────────────────────────
     if (amount <= 0)
@@ -189,7 +197,8 @@ uint32_t CurrencySystem::DeductCurrency(entt::entity player, CurrencyType type, 
                  << "CurrencyType=" << static_cast<uint32_t>(type)
                  << " amount=" << amount
                  << " entity=" << entt::to_integral(player);
-        return PrintStackAndReturnError(kInvalidParameter);
+        // 同 AddCurrency:RETRY 类,调用方重投即可,不是终局拒绝。
+        return PrintStackAndReturnError(kAssetFrozen);
     }
 
     uint64_t cost = static_cast<uint64_t>(amount);
@@ -206,7 +215,9 @@ uint32_t CurrencySystem::DeductCurrency(entt::entity player, CurrencyType type, 
                  << *balance << " requested=" << cost
                  << " CurrencyType=" << static_cast<uint32_t>(type)
                  << " entity=" << entt::to_integral(player);
-        return PrintStackAndReturnError(kInvalidParameter);
+        // 余额不足是终局拒绝,而且是**玩家看得懂的那一个**:回 kInvalidParameter 时
+        // 客户端只能弹"参数错误",帮会捐献失败的真实原因就此丢失。
+        return PrintStackAndReturnError(kAssetCurrencyInsufficient);
     }
 
     const uint64_t balanceBefore = *balance;
@@ -220,7 +231,8 @@ uint32_t CurrencySystem::DeductCurrency(entt::entity player, CurrencyType type, 
     comp->dirty = true;
 
     // ── Transaction log ──────────────────────────────────────────────────
-    TransactionLogSystem::LogCurrencyDeduct(player, type, cost, balanceBefore, *balance);
+    TransactionLogSystem::LogCurrencyDeduct(player, type, cost, balanceBefore, *balance,
+                                            txType, correlationId);
 
     return kSuccess;
 }

@@ -8,6 +8,11 @@
 #include "bag_marshal.h"
 #include "mission_marshal.h"
 #include "player_revive.h"
+// 通用资产通道:账本组件(持久化)+ 纯函数校验 + 运行时"账本损坏"标记。
+// 账本必须与 currency / bag_component 走同一次 Marshal、同一次 Redis SET(不变量 I3)。
+#include "proto/common/component/asset_op_ledger_comp.pb.h"
+#include "asset_op_ledger.h"
+#include "asset_op_system.h"
 #include "table/code/class_table.h"
 #include "muduo/base/Logging.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"  // DerivedAttributesComp
@@ -96,6 +101,15 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
     // 同一 player_database 行恢复背包资产与任务领取权；不重触发游戏事件。
     bag_marshal::Unmarshal(player, message.bag_component());
     mission_marshal::Unmarshal(player, message.mission_component());
+	// 通用资产通道账本:跟着同一条 player_database 行回来。校验不过只关掉这名玩家的
+	// 资产通道(挂 PlayerAssetOpLedgerInvalidComp,后续资产 RPC 一律 fail-closed),
+	// 不阻断登录 —— 账本坏掉不该让玩家进不去游戏,但绝不能拿坏账本继续记账。
+	auto& ledger = tlsEcs.actorRegistry.emplace<PlayerAssetOpLedgerComp>(player, message.asset_op_ledger());
+	if (auto err = ValidateAssetOpLedger(ledger); !err.empty()) {
+		LOG_ERROR << "[AssetOp] 账本损坏,资产通道对该玩家关闭 player_id=" << message.player_id()
+				  << " reason=" << err;
+		tlsEcs.actorRegistry.emplace_or_replace<PlayerAssetOpLedgerInvalidComp>(player);
+	}
 	tlsEcs.actorRegistry.emplace<CurrencyComp>(player, message.currency());
 	// 补缴欠款(debts)是 PlayerCurrencyComp 的运行时结构,持久化载体是
 	// CurrencyComp.debts。这一对 LoadFromProto/SaveToProto 之前从未被调用过 ——
@@ -123,6 +137,10 @@ void PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_pet_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<PlayerPetComp>(player));
     bag_marshal::Marshal(player, *message.mutable_bag_component());
     mission_marshal::Marshal(player, *message.mutable_mission_component());
+	// 资产通道账本与 currency / bag_component 同记录同 DBTask(不变量 I3)。
+	// 位置必须在下面那对 currency CopyFrom / SaveToProto **之外** —— 夹在中间会把
+	// 刚写进去的补缴欠款抹掉(见下条注释)。存盘路径非逐帧,沿用本函数的 get_or_emplace 写法。
+	message.mutable_asset_op_ledger()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<PlayerAssetOpLedgerComp>(player));
 	message.mutable_currency()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<CurrencyComp>(player));
 	// 必须在 CopyFrom 之后:CopyFrom 会覆盖整个 currency 子消息(含 debts),
 	// 反序会把刚写进去的欠款抹掉。

@@ -10,10 +10,8 @@
 #include "core/system/redis.h"
 #include "frame/manager/frame_time.h"
 #include "player/system/player_lifecycle.h"
-#include "player/system/cross_zone_reaper.h"
 #include "battle/system/player_battle.h"
 #include "services/battle/data/battle_table_fingerprint.h"
-#include "kafka/system/kafka.h"
 #include "node_config_manager.h"
 #include "proto/contracts/kafka/scene_command.pb.h"
 #include "id_segment_bootstrap.h"
@@ -111,7 +109,6 @@ int main(int argc, char *argv[])
             agones::SceneLifecycle::Instance().Stop();
 			context->dependencyGate.probeTimer.Cancel();
 			context->worldTimer.Cancel();
-			CrossZoneReaper::StopTick();
 			PlayerBattleSystem::StopReaper();
 			tlsRedisSystem.BeginShutdown();
 
@@ -258,52 +255,14 @@ int main(int argc, char *argv[])
                 }
             }
 
-            // Subscribe cross-zone migration topics.
-            //
-            // `player_migrate`     — destination side: receive players migrating
-            //                        INTO this zone's scene nodes from elsewhere
-            //                        (HandlePlayerMigration → InitPlayerFromAllData
-            //                        → publish ACK).
-            // `player_migrate_ack` — source side: receive ACKs confirming the
-            //                        destination loaded the player so we can
-            //                        clear PlayerFrozenComp + DestroyPlayer
-            //                        (HandlePlayerMigrationAck).
-            //
-            // groupId is per-node-id so each scene node has its own consumer
-            // group and consumes every relevant message — partition-key=playerId
-            // ensures same-player ordering. If you put multiple nodes in the
-            // same consumer group they'll round-robin partitions and miss ACKs
-            // intended for their own outgoing migrations.
-            //
-            // See docs/design/cross-zone-readiness-audit.md §3 (Kafka self-
-            // orchestrated design) and §10.3 option A (this wiring) for context.
-            // Without this subscription the audit doc's "件 2/件 3" code paths
-            // exist but never fire.
-            const std::string crossZoneGroupId =
-                "scene-cross-zone-" + std::to_string(n.GetNodeId());
-            if (!n.RegisterKafkaMessageHandler(
-                    {"player_migrate", "player_migrate_ack"},
-                    crossZoneGroupId,
-                    &KafkaSystem::KafkaMessageHandler))
-            {
-                LOG_ERROR << "Failed to subscribe cross-zone Kafka topics; "
-                          << "cross-zone migration will not work on this node "
-                          << "(group_id=" << crossZoneGroupId << ").";
-            }
-
-            // Start the cross-zone reaper. Without this the Frozen state
-            // pattern (player_lifecycle.cpp) can leak — a player whose
-            // `player_migrate_ack` is dropped or whose destination crashes
-            // would stay frozen forever. The reaper scans the Redis
-            // `player_migration:*` records every 10s, re-publishes
-            // migrations whose ACK is overdue, and unfreezes / notifies
-            // the client when retries are exhausted. It also performs a
-            // restart-recovery sweep on the way in (StartTick calls
-            // ScanAndRecover before arming the periodic timer) so source-
-            // side crashes don't leak Redis records either.
-            //
-            // See docs/design/cross-zone-readiness-audit.md §3.2 件 3 + §7.
-            CrossZoneReaper::StartTick(n.GetLoop());
+            // 这里原先订阅 player_migrate / player_migrate_ack 两个 Kafka topic 并启动 CrossZoneReaper,
+            // 属于"跨 zone 搬数据"那条链(Kafka 搬 PlayerAllData + ACK + reaper 重发)。该链已按
+            // docs/design/cross-zone-scene-travel.md CZ-1 下线:全仓从无触发点,且与"数据不搬家、
+            // 按 home_zone 落库"的决策冲突。跨 zone 现在走「重定向 + 目标 zone 直接从盘上加载」,
+            // 源端释放链在 PlayerLifecycleSystem(StartTravelHandoff …),冻结的超时恢复由它自己的
+            // 应答看门狗负责,不需要 reaper。
+            // broker 上残留的 consumer group `scene-cross-zone-{nodeId}`、两个 topic,以及 Redis 里的
+            // player_migration:* 记录(TTL 120s)都无害,不为它们写清理代码。
 
             // 回合制战斗冻结 reaper:30s 低频扫描 InBattleComp.deadline_ms,
             // 过期即作废解冻(battle 节点崩溃 / match 断链的补偿路径,

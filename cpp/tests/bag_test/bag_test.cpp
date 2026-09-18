@@ -17,6 +17,7 @@
 
 #include <functional>
 #include <iostream>
+#include <limits>
 #include <set>
 #include <string>
 #include <vector>
@@ -2959,6 +2960,186 @@ TEST_F(PetIdSegmentTest, GrantPetSharesItemRangeWithoutReusingItemId)
     EXPECT_EQ(petId, pets.pets(0).pet_id());
     EXPECT_EQ(petTableId, pets.pets(0).pet_table_id());
     EXPECT_EQ(702u, ItemStore::MintGuid());
+}
+
+// ---------------------------------------------------------------------------
+// 交易资产原语(聚宝斋 P2:取出用于交易 / 按快照整条还原)
+//
+// 只覆盖结构性判定与"整条保真"。冻结 / 传送在途 / 战斗中是暂时条件,按 D48 红线不在这一层判,
+// 由资产 RPC 入口层统一回 RETRY —— 所以这里没有、也不应该有那三条的用例。
+// ---------------------------------------------------------------------------
+class PetTradeAssetTest : public testing::Test
+{
+protected:
+    void SetUp() override
+    {
+        PetTableManager::Instance().Load();
+        PetRuleTableManager::Instance().Load();
+        AttributePoolTableManager::Instance().Load();
+        AttributeDimensionTableManager::Instance().Load();
+
+        const auto &rows = PetTableManager::Instance().FindAll();
+        ASSERT_GT(rows.data_size(), 0);
+        petTableId = rows.data(0).id();
+
+        // 池 id / 维度 id 都从表里取第一项,不写死 401:表里换编号时用例跟着走,不会静默失配。
+        for (const auto *pool : AttributePoolTableManager::Instance().GetByOwnerType(PetSystem::kPoolOwnerPet))
+        {
+            poolId = pool->id();
+            break;
+        }
+        ASSERT_NE(0u, poolId) << "AttributePool 缺 owner_type=1 的宝宝池";
+        for (const auto *dim : AttributeDimensionTableManager::Instance().GetByPoolId(poolId))
+        {
+            dimensionId = dim->id();
+            break;
+        }
+        ASSERT_NE(0u, dimensionId) << "宝宝池没有任何维度";
+
+        maxPets = 1;
+        const auto &ruleRows = PetRuleTableManager::Instance().FindAll().data();
+        if (ruleRows.size() > 0 && ruleRows.Get(0).max_pets() > 0)
+            maxPets = ruleRows.Get(0).max_pets();
+
+        player = tlsEcs.actorRegistry.create();
+        tlsEcs.actorRegistry.emplace<PlayerPetComp>(player);
+    }
+
+    void TearDown() override
+    {
+        if (tlsEcs.actorRegistry.valid(player))
+            tlsEcs.actorRegistry.destroy(player);
+    }
+
+    PlayerPetComp &Comp() { return tlsEcs.actorRegistry.get<PlayerPetComp>(player); }
+
+    /// 直接往组件里塞一只宝宝。交易原语不铸号,用例不需要号段客户端。
+    PetInstance &PushPet(uint64_t petId, uint32_t level)
+    {
+        auto *pet = Comp().add_pets();
+        pet->set_pet_id(petId);
+        pet->set_pet_table_id(petTableId);
+        pet->set_level(level);
+        pet->set_created_at(kCreatedAt);
+        pet->set_health(1);
+        pet->set_mana(1);
+        (*pet->mutable_aptitude())[dimensionId] = 12345;
+        (*pet->mutable_allocated())[dimensionId] = 7;
+        return *pet;
+    }
+
+    static constexpr uint64_t kCreatedAt = 1700000000;
+
+    entt::entity player{entt::null};
+    uint32_t petTableId{0};
+    uint32_t poolId{0};
+    uint32_t dimensionId{0};
+    uint32_t maxPets{1};
+};
+
+TEST_F(PetTradeAssetTest, RemoveForTradeMovesTheWholeInstanceOut)
+{
+    PushPet(900001, 85);
+
+    PetInstance snapshot;
+    ASSERT_EQ(kSuccess, PetSystem::RemovePetForTrade(player, 900001, snapshot));
+    EXPECT_EQ(0, Comp().pets_size()) << "取出后实例必须真的离开玩家";
+
+    EXPECT_EQ(900001u, snapshot.pet_id());
+    EXPECT_EQ(petTableId, snapshot.pet_table_id());
+    EXPECT_EQ(85u, snapshot.level());
+    EXPECT_EQ(kCreatedAt, snapshot.created_at());
+    ASSERT_EQ(1u, snapshot.aptitude().size());
+    EXPECT_EQ(12345u, snapshot.aptitude().at(dimensionId));
+    ASSERT_EQ(1u, snapshot.allocated().size());
+    EXPECT_EQ(7u, snapshot.allocated().at(dimensionId));
+}
+
+TEST_F(PetTradeAssetTest, RemoveForTradeRefusesActivePet)
+{
+    PushPet(900001, 30);
+    Comp().set_active_pet_id(900001);
+
+    PetInstance snapshot;
+    EXPECT_EQ(kPetAlreadyActive, PetSystem::RemovePetForTrade(player, 900001, snapshot));
+    EXPECT_EQ(1, Comp().pets_size());
+    EXPECT_EQ(0u, snapshot.pet_id()) << "失败必须留下空快照,不能让调用方托管半份数据";
+}
+
+TEST_F(PetTradeAssetTest, RemoveForTradeUnknownIdLeavesComponentUntouched)
+{
+    PushPet(900001, 30);
+    const auto before = Comp().SerializeAsString();
+
+    PetInstance snapshot;
+    EXPECT_EQ(kPetNotFound, PetSystem::RemovePetForTrade(player, 900002, snapshot));
+    EXPECT_EQ(before, Comp().SerializeAsString());
+}
+
+TEST_F(PetTradeAssetTest, RestoreKeepsIdentityWhenOwnerLevelIsLower)
+{
+    // 卖家 85 级的宝宝;买家(本用例的 player 没有 LevelComp,等于 1 级)收下它。
+    PushPet(900001, 85);
+    PetInstance snapshot;
+    ASSERT_EQ(kSuccess, PetSystem::RemovePetForTrade(player, 900001, snapshot));
+
+    ASSERT_EQ(kSuccess, PetSystem::RestorePetFromSnapshot(player, snapshot));
+    ASSERT_EQ(1, Comp().pets_size());
+    const auto &restored = Comp().pets(0);
+    EXPECT_EQ(900001u, restored.pet_id()) << "pet_id 必须原样保留,不能重新铸号";
+    EXPECT_EQ(85u, restored.level()) << "还原不按新主人等级重定级";
+    EXPECT_EQ(kCreatedAt, restored.created_at()) << "不盖新的获得时间";
+    EXPECT_EQ(12345u, restored.aptitude().at(dimensionId)) << "资质不重掷";
+    // 跨等级"不收敛"口径:还原这一刻保留加点分布(下一次重算仍会按现有口径清池,J-O2)。
+    EXPECT_EQ(7u, restored.allocated().at(dimensionId));
+}
+
+TEST_F(PetTradeAssetTest, RestoreClampsTamperedCurrentHealth)
+{
+    PushPet(900001, 20);
+    PetInstance snapshot;
+    ASSERT_EQ(kSuccess, PetSystem::RemovePetForTrade(player, 900001, snapshot));
+    snapshot.set_health(std::numeric_limits<uint64_t>::max());
+
+    ASSERT_EQ(kSuccess, PetSystem::RestorePetFromSnapshot(player, snapshot));
+    ASSERT_EQ(1, Comp().pets_size());
+    EXPECT_LT(Comp().pets(0).health(), std::numeric_limits<uint64_t>::max())
+        << "托管期快照写坏时不能凭空抬高血上限";
+}
+
+TEST_F(PetTradeAssetTest, RestoreRefusesDuplicatePetId)
+{
+    PushPet(900001, 20);
+    PetInstance snapshot;
+    ASSERT_EQ(kSuccess, PetSystem::RemovePetForTrade(player, 900001, snapshot));
+    PushPet(900001, 20); // 同一个 id 又出现在名下
+
+    EXPECT_EQ(kInvalidParameter, PetSystem::RestorePetFromSnapshot(player, snapshot));
+    EXPECT_EQ(1, Comp().pets_size()) << "撞号必须拒绝,不能覆盖已有的那一只";
+}
+
+TEST_F(PetTradeAssetTest, RestoreRefusesMalformedSnapshot)
+{
+    PetInstance empty;
+    EXPECT_EQ(kInvalidParameter, PetSystem::RestorePetFromSnapshot(player, empty));
+
+    PetInstance noTable;
+    noTable.set_pet_id(900001);
+    EXPECT_EQ(kInvalidParameter, PetSystem::RestorePetFromSnapshot(player, noTable));
+    EXPECT_EQ(0, Comp().pets_size());
+}
+
+TEST_F(PetTradeAssetTest, RestoreReportsSlotFullSoCallerCanRetry)
+{
+    PushPet(900001, 20);
+    PetInstance snapshot;
+    ASSERT_EQ(kSuccess, PetSystem::RemovePetForTrade(player, 900001, snapshot));
+
+    for (uint32_t i = 0; i < maxPets; ++i)
+        PushPet(910000 + i, 20);
+
+    EXPECT_EQ(kPetSlotFull, PetSystem::RestorePetFromSnapshot(player, snapshot));
+    EXPECT_EQ(static_cast<int>(maxPets), Comp().pets_size());
 }
 
 // ── 通用客户端:双 buffer / 单飞 / 校验 / 退避 ─────────────────────────────

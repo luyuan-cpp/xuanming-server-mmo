@@ -58,9 +58,10 @@ namespace
 	}
 
 	// 归属正在交接中的实体不得跟随(cross-zone-scene-travel.md CZ-4/CZ-5、player_ownership_comp.h)。
-	// 两种在途都保留着实体与 gate 会话,所以 HasLiveSession 看不出来:
-	//   PlayerFrozenComp        —— player_migrate 老路径已把玩家发往别的 zone,等 ACK / reaper 判定;
-	//   PlayerTravelHandoffComp —— 跨 zone 传送的交接已发起(handoff 标记已写、EnterScene 已发)。
+	// 交接在途时实体与 gate 会话都还在,所以 HasLiveSession 看不出来。两个组件由
+	// PlayerLifecycleSystem::StartTravelHandoff 成对挂上(跨 zone 传送 / 同 zone 跨节点换图),查两个是防御:
+	//   PlayerFrozenComp        —— 输入已冻结,盘上那份才是要交给目标节点的真值;
+	//   PlayerTravelHandoffComp —— 交接意图(存盘在途,或 handoff 标记已写、EnterScene 已发)。
 	// 此刻本节点手里的状态已落盘且不得再写,再替他发一次 EnterScene 会把刚交接出去的玩家按
 	// "同节点换图"重新落回本节点(scene_manager 对同物理节点的落点不过换手门、不铸 epoch,
 	// 见 enterscenelogic.go samePhysicalNode 分支),与在途的交接互相覆盖;应答还会被

@@ -653,6 +653,44 @@ func TestMintIsRefusedOnceTheSourceWithdrewItsHandoffMarker(t *testing.T) {
 	assert.Equal(t, uint64(2), placed.epoch)
 }
 
+// 跨 zone 传送指定的目标地图:第一条腿记进等待落点,第二条腿(请求不带地图)由 scene_manager 读出来用。
+func TestEnterScene_TravelTargetMapIsCarriedByAwaitingPlacement(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6126)
+		oldScene = uint64(7126)
+		confID   = uint64(3326)
+	)
+	seedSceneOnNode(mr, 1, oldScene, "10", "1")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	writeHandoffMarker(t, sc, playerID, 1)
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, ZoneId: 2, SceneConfId: confID,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode)
+
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, "", loc.NodeId)
+	assert.Equal(t, confID, loc.PendingSceneConfId, "目标地图必须随等待落点一起记下")
+
+	// 常规落点不得带着 pending 地图(它只属于等待落点)。
+	placed, err := placePlayerLocation(sc, playerID, 7226, "20", 2, placementGuard{observedEpoch: 2, mint: true})
+	require.NoError(t, err)
+	settled := &scene_manager.PlayerLocation{}
+	require.NoError(t, gproto.Unmarshal([]byte(placed.raw), settled))
+	assert.Equal(t, uint64(0), settled.PendingSceneConfId)
+}
+
 // EnterScene 的每一条返回路径都要回显 player_id(scene 节点的异步应答回调靠它对回玩家)。
 func TestEnterScene_ResponseEchoesPlayerID(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)

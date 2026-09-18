@@ -19,6 +19,8 @@
 // ⚠️ 跨节点相对包含与 scene_admin_handler.cpp 同一形态、同一理由(gate_security.h
 // 的正确归宿是 cpp/libs/engine/core/,搬迁牵动九个文件,另开一件事做)。
 
+#include <string_view>
+
 #include <muduo/base/Logging.h>
 
 #include "../../../../gate/gate_security.h"
@@ -40,6 +42,25 @@ inline const token_security::RunModeResolution &ResolveSceneRunModeOnce()
 inline token_security::RunMode CurrentSceneRunMode()
 {
 	return ResolveSceneRunModeOnce().mode;
+}
+
+// 方法名是不是 GM 指令:形如 `Gm` + 一个大写字母开头(GmAddCurrency / GmGrantPet)。
+//
+// 这是分发入口统一闸门(guild-phase2.md §S4 4.34)的判据。为什么按**名字**而不是
+// 像 gate 那样按 message_id 清单:
+//   * scene 这一侧拦的是 `ProcessClientPlayerMessage`,那里手上现成就有
+//     `MethodDescriptor::name()`,不需要再维护一份会漂移的号表;
+//   * 清单要人记得往里加 —— P0-a 的六条清单就漏掉了 SceneRollbackClientPlayer 的
+//     十二条(它们的 service 没标 OptionIsClientProtocolService,gate 挡得住,但
+//     scene 的 ProcessClientPlayerMessage 不看这个 option,直连 scene 端口照样打得进来)。
+//     前缀判据不需要任何人记得。
+//
+// 代价是它拦不住不叫 `Gm*` 的后门(`DebugGrant`、`GMGrant`)。这条缝由
+// client_gm_gate_test.cpp 的描述符扫描用例守住:遍历客户端 player service 的方法,
+// 凡是**不区分大小写**以 `gm` 开头的,都必须满足本谓词。
+inline bool IsClientGmMethodName(std::string_view name)
+{
+	return name.size() >= 3 && name[0] == 'G' && name[1] == 'm' && name[2] >= 'A' && name[2] <= 'Z';
 }
 
 // true = 本次调用应当被拒绝(调用点负责 SetTip + return)。

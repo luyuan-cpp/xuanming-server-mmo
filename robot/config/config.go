@@ -29,7 +29,8 @@ type Config struct {
 	// db-side verifier (see DataStress block); "currency-crash-snapshot" —
 	// 单次登录快照(见 CurrencyCrash 块); "battle-smoke" — 双机器人
 	// 回合制战斗 + 观战端到端冒烟(见 battle_smoke_scenario.go;子模式
-	// 见 BattleSmoke 块)。
+	// 见 BattleSmoke 块); "travel-smoke" — 单机器人跨 zone 场景传送往返
+	// 冒烟(见 travel_smoke_scenario.go / TravelSmoke 块)。
 	Mode string `yaml:"mode"`
 
 	// FeaturesSmoke only uses an explicitly selected existing account/character.
@@ -54,6 +55,9 @@ type Config struct {
 
 	// TeamSmoke 是 "team-smoke" 模式的子开关(见 TeamSmokeConfig / team_smoke_scenario.go)。
 	TeamSmoke TeamSmokeConfig `yaml:"team_smoke"`
+
+	// TravelSmoke 是 "travel-smoke" 模式的子开关(见 TravelSmokeConfig / travel_smoke_scenario.go)。
+	TravelSmoke TravelSmokeConfig `yaml:"travel_smoke"`
 
 	// CurrencyCrash configures the "currency-crash-snapshot" mode used by
 	// docs/notes/currency-crash-window-verification.md. Driven by an external
@@ -328,6 +332,44 @@ func (c *TeamSmokeConfig) validate() error {
 	return nil
 }
 
+// TravelSmokeConfig 配置 "travel-smoke" 模式(docs/design/cross-zone-scene-travel.md §5 阶段 3)。
+//
+// 单机器人登 home_zone → TravelToZone{visit_zone} → 跟随 msg 124 落到访客区 → 停留 → TravelToZone{home_zone} 回家。
+// 两个 zone 都必须显式给出:0 会被 server-list 自动选区顶掉,"从哪个区出发"就不确定了,
+// 而本冒烟的每条断言(票据 zone、gate 地址变化、金币不回档)都以"出发区 == 账号的 home zone"为前提。
+type TravelSmokeConfig struct {
+	// HomeZone 必须非 0,且是冒烟账号**首次建角**的 zone(home zone 在建角时登记,之后不随登录区变化)。
+	HomeZone uint32 `yaml:"home_zone"`
+	// VisitZone 是要去做客的 zone,必须非 0 且与 HomeZone 不同。
+	VisitZone uint32 `yaml:"visit_zone"`
+
+	// SceneConfigId 是 TravelToZoneRequest.scene_config_id(BaseScene id),去程与回程共用。
+	// 0 = 由目标 zone 的 scene_manager 按世界频道表挑默认大世界(与 proto 注释同义),此时不断言落地地图;
+	// 非 0 时断言落地后 NotifyEnterScene 的 scene_config_id 等于它,所以这张图必须两个 zone 都有。
+	SceneConfigId uint32 `yaml:"scene_config_id"`
+
+	// DwellSeconds 是到访客区后停留多久再回家,缺省 35:要熬过 home 区 login 的断线租约(30s),
+	// 才能抓到"租约到期清理误伤了已经搬到访客区的会话"这一类问题。0 = 不停留(只验链路通不通)。
+	DwellSeconds int `yaml:"dwell_seconds"`
+
+	// RequireMoveAck=true 时访客区收不到 MoveAck 即失败。缺省 false:MoveAck 只在服务器纠偏时才回,
+	// 场景没有导航网格时 fail-open 不回(player_movement_handler.cpp),不能当硬断言。
+	RequireMoveAck bool `yaml:"require_move_ack"`
+}
+
+func (c *TravelSmokeConfig) validate() error {
+	if c.HomeZone == 0 || c.VisitZone == 0 {
+		return fmt.Errorf("home_zone and visit_zone must be set (non-zero)")
+	}
+	if c.HomeZone == c.VisitZone {
+		return fmt.Errorf("home_zone and visit_zone must differ (got %d)", c.HomeZone)
+	}
+	if c.DwellSeconds < 0 {
+		return fmt.Errorf("dwell_seconds must be >= 0 (got %d)", c.DwellSeconds)
+	}
+	return nil
+}
+
 type LLMConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Endpoint string `yaml:"endpoint"` // e.g. "http://localhost:11434/v1/chat/completions"
@@ -350,6 +392,8 @@ func Load(path string) (*Config, error) {
 		BattleSmoke:    BattleSmokeConfig{Mode: "1v1"},
 		// trade-smoke 缺省:trade 本地 gRPC 端口 50800;间隔 1100ms 适配 gate 默认限流档。
 		TradeSmoke: TradeSmokeConfig{AdminAddr: "127.0.0.1:50800", RequestIntervalMs: 1100},
+		// travel-smoke 缺省:停留 35s,大于 login 断线租约 30s(见 TravelSmokeConfig.DwellSeconds)。
+		TravelSmoke: TravelSmokeConfig{DwellSeconds: 35},
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
@@ -390,10 +434,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke":
+	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "team-smoke", "travel-smoke":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, guild-smoke, trade-smoke, or team-smoke)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, guild-smoke, trade-smoke, team-smoke, or travel-smoke)", c.Mode)
 	}
 	if c.AuthType == "satoken" && c.SaTokenAddr == "" {
 		return fmt.Errorf("satoken_addr must be set when auth_type is satoken")
@@ -421,6 +465,11 @@ func (c *Config) validate() error {
 	if c.Mode == "team-smoke" {
 		if err := c.TeamSmoke.validate(); err != nil {
 			return fmt.Errorf("team_smoke: %w", err)
+		}
+	}
+	if c.Mode == "travel-smoke" {
+		if err := c.TravelSmoke.validate(); err != nil {
+			return fmt.Errorf("travel_smoke: %w", err)
 		}
 	}
 	return nil

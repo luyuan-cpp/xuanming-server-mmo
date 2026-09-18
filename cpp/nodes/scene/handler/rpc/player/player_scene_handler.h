@@ -35,6 +35,9 @@ public:
     static void NotifyActorListDestroy(entt::entity player,
         const ::ActorListDestroyS2C* request,
         ::Empty* response);
+    static void TravelToZone(entt::entity player,
+        const ::TravelToZoneRequest* request,
+        ::TravelToZoneResponse* response);
 
     void CallMethod(const ::google::protobuf::MethodDescriptor* method,
         entt::entity player,
@@ -98,6 +101,14 @@ public:
             NotifyActorListDestroy(player,
                 static_cast<const ::ActorListDestroyS2C*>(request),
                 static_cast<::Empty*>(response));
+			}
+            break;
+        case 8:
+			{
+            TravelToZone(player,
+                static_cast<const ::TravelToZoneRequest*>(request),
+                static_cast<::TravelToZoneResponse*>(response));
+            TRANSFER_ERROR_MESSAGE(static_cast<::TravelToZoneResponse*>(response));
 			}
             break;
         default:

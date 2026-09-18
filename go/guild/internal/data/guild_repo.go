@@ -35,6 +35,33 @@ var (
 	ErrGuildZoneMismatch = errors.New("guild belongs to another zone")
 	// ErrAnnouncementForbidden:MySQL 权威 membership 不存在或角色不是 officer/leader。
 	ErrAnnouncementForbidden = errors.New("guild announcement update is not authorized")
+
+	// 下面这组由 guild_manage_repo.go 的管理 / 审批事务返回(02-management.md §6.5)。
+	// 放在这里而不是那边,是为了让"哨兵错误"只有一个定义点:logic 层的 errors.Is 映射表
+	// 照着这一个 var 块写,新增哨兵时不必去两个文件里找。
+
+	// ErrNotGuildMember:操作者在 MySQL 权威表里已经不是该帮成员(缓存映射落后于真相)。
+	ErrNotGuildMember = errors.New("operator is not a member of the guild")
+	// ErrTargetNotMember:操作目标不在该帮(刚退帮 / 被别人踢了 / 客户端拿的是过期快照)。
+	ErrTargetNotMember = errors.New("target is not a member of the guild")
+	// ErrRankTooLow:锁内复核的权威 role 档位不足以执行该操作(constants.Rank)。
+	ErrRankTooLow = errors.New("operator rank too low")
+	// ErrOfficerLimit:长老数已达 GuildLevel[guild.level].max_officers。
+	ErrOfficerLimit = errors.New("officer limit reached")
+	// ErrLeaderCantLeave:帮主不能退帮 —— 否则帮会会留下无主状态,只能转让或解散。
+	ErrLeaderCantLeave = errors.New("leader cannot leave")
+	// ErrLeaderMismatch:guild.leader_id 与 role=3 的成员行对不上(同一事实的两份存储已被破坏)。
+	// 这时不猜哪份对,直接拒写:继续写只会让两份存储分叉得更远。
+	ErrLeaderMismatch = errors.New("guild leader_id disagrees with member roles")
+	// ErrGuildLevelConfigMissing:GuildLevel 配表缺该等级行,长老上限无从判定。
+	// 配表缺行按错误处理而不是默认放行 —— 默认值会悄悄绕过上限。
+	ErrGuildLevelConfigMissing = errors.New("guild level row missing in GuildLevel table")
+	// ErrApplicationNotFound:申请不存在、已过期、已被别人处理,或申请人已入他帮 / 归属区与帮会不符。
+	ErrApplicationNotFound = errors.New("guild application not found or expired")
+	// ErrApplicationLimit:本人待审申请数已达 GuildRule.max_pending_applications_per_player。
+	ErrApplicationLimit = errors.New("player pending application limit reached")
+	// ErrApplicationQueueFull:目标帮会待审申请数已达 GuildRule.max_pending_applications_per_guild。
+	ErrApplicationQueueFull = errors.New("guild pending application queue full")
 )
 
 // GuildData is the persistence-layer representation of a guild (stored in Redis + MySQL).
@@ -255,8 +282,13 @@ func (r *GuildRepo) cacheGeneration(ctx context.Context, key string) (string, er
 // 先写者已提交的字段(公告、成员列表)静默覆盖回旧值;删缓存则最坏
 // 只是多一次 MySQL 冷读,由 GetGuild 的 cache-aside 自愈。
 
-// CreateGuild 在单个事务里写入公会行 + 会长成员行。
+// CreateGuild 在单个事务里写入公会行 + 会长成员行 + 清掉建帮者本人的全部入帮申请。
 // 任何一步失败整体回滚 —— 不允许出现「有公会无会长」或「有会长无公会」的半态。
+//
+// 事务边界:经 inTx(op=create),因此与管理 / 审批事务共用同一套死锁重试与 READ COMMITTED。
+// 锁序 guild(INSERT 新行)→ guild_player_state → guild_member → guild_application,与 §6.1 一致。
+// 错误语义:ErrGuildNameTaken / ErrPlayerAlreadyInGuild / ErrWriteConflict;其余为内部错误。
+// 提交后的缓存失效走 invalidateAfterCommit,**不再**把失效失败当成建帮失败回给客户端。
 func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 	if len(guild.Members) != 1 {
 		return fmt.Errorf("create guild %d: expected exactly one founding member, got %d", guild.GuildID, len(guild.Members))
@@ -267,160 +299,67 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 	if !ok {
 		return fmt.Errorf("create guild %d: name fails normalization", guild.GuildID)
 	}
-
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
+	// 建帮者的串行化状态行必须在**事务外**建好(90-consistency X-10):
+	// 对不存在的行做加锁读再插入,在 TiDB 上锁不住后续插入,在 RR 下靠间隙锁互等。
+	if err := r.ensurePlayerStateRow(ctx, leader.PlayerID, guild.CreateTimeMs); err != nil {
 		return err
 	}
-	defer tx.Rollback()
 
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO guild (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, funds)
+	err := r.inTx(ctx, opCreate, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO guild (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, funds)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
-		guild.GuildID, guild.Name, nameNorm, guild.LeaderID, guild.Level,
-		guild.Announcement, guild.CreateTimeMs, guild.MaxMembers, guild.ZoneID); err != nil {
-		if isDuplicateKeyOn(err, guildNameUniqueKey) {
-			return ErrGuildNameTaken
+			guild.GuildID, guild.Name, nameNorm, guild.LeaderID, guild.Level,
+			guild.Announcement, guild.CreateTimeMs, guild.MaxMembers, guild.ZoneID); err != nil {
+			if isDuplicateKeyOn(err, guildNameUniqueKey) {
+				return ErrGuildNameTaken
+			}
+			return fmt.Errorf("insert guild %d: %w", guild.GuildID, err)
 		}
-		return fmt.Errorf("insert guild %d: %w", guild.GuildID, err)
-	}
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution_total, contribution_balance)
+		// 与"审批通过"抢同一个申请人状态行:两者都要给同一玩家插成员行,
+		// 由这把行锁串行,不再靠间隙锁。
+		if err := lockPlayerState(ctx, tx, leader.PlayerID); err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution_total, contribution_balance)
 		 VALUES (?, ?, ?, ?, ?, 0, 0)`,
-		guild.GuildID, leader.PlayerID, leader.Role, leader.JoinTimeMs, leader.LastActiveMs); err != nil {
-		if isDuplicateKey(err) {
-			return ErrPlayerAlreadyInGuild
+			guild.GuildID, leader.PlayerID, leader.Role, leader.JoinTimeMs, leader.LastActiveMs); err != nil {
+			if isDuplicateKey(err) {
+				return ErrPlayerAlreadyInGuild
+			}
+			return fmt.Errorf("insert founding member %d: %w", leader.PlayerID, err)
 		}
-		return fmt.Errorf("insert founding member %d: %w", leader.PlayerID, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	return errors.Join(
-		r.invalidateGuildCache(ctx, guild.GuildID),
-		r.invalidatePlayerGuildCache(ctx, leader.PlayerID),
-	)
-}
-
-// AddMember 在单个事务里完成「锁公会行 → 权威行数判满 → 插入成员」。
-// 满员判定必须在事务内数 guild_member 行:读缓存里 len(Members) 的旧实现在两个
-// 并发入会时会双双通过检查,把公会挤超编。
-func (r *GuildRepo) AddMember(ctx context.Context, guildID, playerID uint64, role uint32) error {
-	return r.AddMemberInZone(ctx, guildID, playerID, role, 0)
-}
-
-// AddMemberInZone 同 AddMember,并在同一把公会行锁下校验公会归属:requiredZone>0 且公会
-// 不在该 zone → ErrGuildZoneMismatch;requiredZone=0 不校验。zone 必须在事务里按权威行判,
-// 不能读 guild:v2:{id} 缓存 —— 合服刚把公会搬走时缓存里的 zone_id 可能还是源 zone。
-func (r *GuildRepo) AddMemberInZone(ctx context.Context, guildID, playerID uint64, role uint32, requiredZone uint32) error {
-	now := time.Now().UnixMilli()
-
-	tx, err := r.db.BeginTx(ctx, nil)
+		// 不变式 I2:成员行出现即清该玩家的全部申请(02-management.md §8.1)。
+		// 漏了这一步,建帮者日后解散 / 转让退帮时,72h 内的旧申请会按 I1 重新"复活",
+		// 他会莫名其妙被拉进一个早就忘了的帮会。
+		if _, err := tx.ExecContext(ctx, sqlDeletePlayerApplication, leader.PlayerID); err != nil {
+			return fmt.Errorf("delete applications of founder %d: %w", leader.PlayerID, err)
+		}
+		return nil
+	})
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
-
-	// FOR UPDATE 锁住公会行:并发 AddMember 在此串行化,行数判定不再有竞态窗口;
-	// 同时兼做存在性校验(公会刚被解散 → ErrGuildGone)与 zone 归属校验。
-	var maxMembers, zoneID uint32
-	err = tx.QueryRowContext(ctx,
-		"SELECT max_members, zone_id FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&maxMembers, &zoneID)
-	if err == sql.ErrNoRows {
-		return ErrGuildGone
-	}
-	if err != nil {
-		return fmt.Errorf("lock guild %d: %w", guildID, err)
-	}
-	if requiredZone != 0 && zoneID != requiredZone {
-		return ErrGuildZoneMismatch
-	}
-
-	var memberCount uint32
-	if err := tx.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM guild_member WHERE guild_id = ?", guildID).Scan(&memberCount); err != nil {
-		return fmt.Errorf("count members of guild %d: %w", guildID, err)
-	}
-	if memberCount >= maxMembers {
-		return ErrGuildFull
-	}
-
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution_total, contribution_balance)
-		 VALUES (?, ?, ?, ?, ?, 0, 0)`,
-		guildID, playerID, role, now, now); err != nil {
-		if isDuplicateKey(err) {
-			return ErrPlayerAlreadyInGuild
-		}
-		return fmt.Errorf("insert member %d into guild %d: %w", playerID, guildID, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-
-	return errors.Join(
-		r.invalidateGuildCache(ctx, guildID),
-		r.invalidatePlayerGuildCache(ctx, playerID),
-	)
+	r.invalidateAfterCommit(ctx, opCreate, guild.GuildID, leader.PlayerID)
+	return nil
 }
 
-// RemoveMember 删除成员行并失效相关缓存。成员行本就不存在也算成功(幂等)。
-func (r *GuildRepo) RemoveMember(ctx context.Context, guildID, playerID uint64) error {
-	if _, err := r.db.ExecContext(ctx,
-		"DELETE FROM guild_member WHERE guild_id = ? AND player_id = ?", guildID, playerID); err != nil {
-		return fmt.Errorf("remove member %d from guild %d: %w", playerID, guildID, err)
-	}
-	return errors.Join(
-		r.invalidateGuildCache(ctx, guildID),
-		r.invalidatePlayerGuildCache(ctx, playerID),
-	)
-}
-
-// UpdateAnnouncementAuthorized 在一个 MySQL 事务内锁定公会与操作者 membership，
-// 以权威 role 复核授权后才更新公告。Redis GuildData 只用于读加速，绝不参与授权。
+// UpdateAnnouncementAuthorized 是 UpdateAnnouncement 的薄包装,保留给不需要快照的调用点。
+// 授权复核、事务与缓存失效全在 UpdateAnnouncement 里(guild_manage_repo.go §8.7)。
+//
+// 语义相对旧实现有一处变化:提交后缓存失效失败**不再**返回错误 —— MySQL 已是真相,
+// 把失效失败报成写失败只会让客户端因为 Redis 抖动进入重连隔离,而公告其实已经改成功了。
 func (r *GuildRepo) UpdateAnnouncementAuthorized(ctx context.Context, guildID, playerID uint64, announcement string) error {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// 与 AddMember/DeleteGuild/UpdateGuildScore 保持统一锁序：先 guild，再 member。
-	var lockedGuildID uint64
-	if err := tx.QueryRowContext(ctx,
-		"SELECT guild_id FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&lockedGuildID); err != nil {
-		if err == sql.ErrNoRows {
-			return ErrGuildGone
-		}
-		return fmt.Errorf("lock guild %d for announcement: %w", guildID, err)
-	}
-
-	var role uint32
-	if err := tx.QueryRowContext(ctx,
-		"SELECT role FROM guild_member WHERE guild_id = ? AND player_id = ? FOR UPDATE",
-		guildID, playerID).Scan(&role); err != nil {
-		if err == sql.ErrNoRows {
-			return ErrAnnouncementForbidden
-		}
-		return fmt.Errorf("lock announcement operator %d in guild %d: %w", playerID, guildID, err)
-	}
-	if !canSetAnnouncement(role) {
-		return ErrAnnouncementForbidden
-	}
-
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE guild SET announcement = ? WHERE guild_id = ?", announcement, guildID); err != nil {
-		return fmt.Errorf("update announcement of guild %d: %w", guildID, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	return r.invalidateGuildCache(ctx, guildID)
+	_, err := r.UpdateAnnouncement(ctx, guildID, playerID, announcement)
+	return err
 }
 
+// canSetAnnouncement:长老与帮主可改公告。
+// 比 constants.Rank 不比 role 原值 —— role 编码不连续(2 是空号),
+// `role >= RoleOfficer` 会把未知编码一起放进来,等于凭空发权限。
 func canSetAnnouncement(role uint32) bool {
-	return role == constants.RoleOfficer || role == constants.RoleLeader
+	return constants.Rank(role) >= constants.RankOfficer
 }
 
 func (r *GuildRepo) invalidateGuildCache(ctx context.Context, guildID uint64) error {
@@ -454,32 +393,30 @@ func (r *GuildRepo) RefreshPlayerGuildID(ctx context.Context, playerID uint64) (
 	return r.GetPlayerGuildID(ctx, playerID)
 }
 
-// DeleteGuild 删除公会,并返回**删除事务内 FOR UPDATE 读到的 zone_id**。
-//
-// 为什么要把 zone 带出来:行删掉之后就再也读不到权威 zone 了,而清榜(ZREM
-// per-zone ZSET)恰好发生在删除之后。调用方只剩两个来源可选 —— 这里返回的权威值,
-// 或者 guild:v2:{id} 缓存里那份可能过期 30 分钟的 ZoneID。合服刚把公会搬到目标 zone
-// 时,缓存里还是源 zone,按它 ZREM 会去删一个空 ZSET,把条目永远留在目标 zone 榜上
-// (榜首出现一个查不到名字的幽灵公会)。所以这个返回值不是顺手加的,它是清榜唯一
-// 可信的输入。
-//
-// 返回的 zone 在 err != nil 时无意义(恒 0)。
-func (r *GuildRepo) DeleteGuild(ctx context.Context, guildID uint64) (uint32, error) {
-	memberIDs, zoneID, err := r.deleteGuildFromMySQL(ctx, guildID)
-	if err != nil {
-		return 0, err
-	}
-	cacheErr := r.invalidateGuildCache(ctx, guildID)
-	for _, playerID := range memberIDs {
-		cacheErr = errors.Join(cacheErr, r.invalidatePlayerGuildCache(ctx, playerID))
-	}
-	return zoneID, cacheErr
-}
+// 解散公会的入口是 guild_manage_repo.go 的 DisbandGuild:它在同一事务里按 MySQL 的
+// leader_id 复核授权、按不变式 I3 清申请、返回锁内读到的 zone 与成员名单。
+// 旧的 DeleteGuild(无授权、分两段写缓存)已删除,不留调用点。
 
 // ── MySQL queries ──────────────────────────────────────────────
 
+// queryer 是 *sql.DB 与 *sql.Tx 的公共读接口。
+//
+// 它存在的唯一理由:写事务要在最后一次写之后、提交之前读一份**含本次写**的权威快照
+// (02-management.md §6.3)。用同一个 loadGuild 走 tx,既避免抄第二份装配逻辑,
+// 也避免用提交后的 GetGuild —— 那一步若 Redis 失败,已提交的写会被报成失败。
+type queryer interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+}
+
 func (r *GuildRepo) loadGuildFromMySQL(ctx context.Context, guildID uint64) (*GuildData, error) {
-	row := r.db.QueryRowContext(ctx,
+	return loadGuild(ctx, r.db, guildID)
+}
+
+// loadGuild 装配一份完整的 GuildData(公会行 + 成员行,成员按 player_id 升序)。
+// 公会行不存在返回 (nil, nil);调用方按各自语义决定这是 ErrGuildGone 还是"未入帮"。
+func loadGuild(ctx context.Context, q queryer, guildID uint64) (*GuildData, error) {
+	row := q.QueryRowContext(ctx,
 		"SELECT guild_id, name, leader_id, level, COALESCE(announcement, ''), create_time_ms, max_members, zone_id, score, funds FROM guild WHERE guild_id = ?",
 		guildID)
 
@@ -494,7 +431,7 @@ func (r *GuildRepo) loadGuildFromMySQL(ctx context.Context, guildID uint64) (*Gu
 	}
 
 	// Load members
-	rows, err := r.db.QueryContext(ctx,
+	rows, err := q.QueryContext(ctx,
 		"SELECT player_id, role, join_time_ms, last_active_ms, contribution_total, contribution_balance FROM guild_member WHERE guild_id = ? ORDER BY player_id",
 		guildID)
 	if err != nil {
@@ -528,70 +465,6 @@ func (r *GuildRepo) loadPlayerGuildFromMySQL(ctx context.Context, playerID uint6
 		return 0, fmt.Errorf("query player guild %d: %w", playerID, err)
 	}
 	return guildID, nil
-}
-
-// deleteGuildFromMySQL 返回 (成员 id, 删除前 FOR UPDATE 读到的 zone_id, error)。
-// zone_id 与成员一起在同一把行锁下读出:见 DeleteGuild 的注释,它是清榜唯一可信的输入。
-func (r *GuildRepo) deleteGuildFromMySQL(ctx context.Context, guildID uint64) ([]uint64, uint32, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return nil, 0, err
-	}
-	defer tx.Rollback()
-
-	// 与 AddMember/UpdateGuildScore 保持统一锁序：先 guild 行，再 membership。
-	// 反向锁序会在并发入会/解散时形成可避免的 InnoDB deadlock。
-	var (
-		lockedGuildID uint64
-		zoneID        uint32
-	)
-	if err := tx.QueryRowContext(ctx,
-		"SELECT guild_id, zone_id FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&lockedGuildID, &zoneID); err != nil {
-		if err == sql.ErrNoRows {
-			return nil, 0, ErrGuildGone
-		}
-		return nil, 0, err
-	}
-
-	rows, err := tx.QueryContext(ctx,
-		"SELECT player_id FROM guild_member WHERE guild_id = ? FOR UPDATE", guildID)
-	if err != nil {
-		return nil, 0, err
-	}
-	var memberIDs []uint64
-	for rows.Next() {
-		var playerID uint64
-		if err := rows.Scan(&playerID); err != nil {
-			rows.Close()
-			return nil, 0, err
-		}
-		memberIDs = append(memberIDs, playerID)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, 0, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, 0, err
-	}
-
-	if _, err := tx.ExecContext(ctx, "DELETE FROM guild_member WHERE guild_id = ?", guildID); err != nil {
-		return nil, 0, err
-	}
-	result, err := tx.ExecContext(ctx, "DELETE FROM guild WHERE guild_id = ?", guildID)
-	if err != nil {
-		return nil, 0, err
-	}
-	affected, err := result.RowsAffected()
-	if err != nil {
-		return nil, 0, err
-	}
-	if affected == 0 {
-		return nil, 0, ErrGuildGone
-	}
-	if err := tx.Commit(); err != nil {
-		return nil, 0, err
-	}
-	return memberIDs, zoneID, nil
 }
 
 func isDuplicateKey(err error) bool {
@@ -784,8 +657,8 @@ func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 //
 //  1. 公会行还在(降级 / 手工清榜)→ 用 FOR UPDATE 重读 MySQL 的 zone_id,
 //     与 UpdateGuildScore 同一口径,调用方传进来的值只用来记一条不一致日志。
-//  2. 公会行已删(DisbandGuild 的正常路径)→ 用调用方传进来的值,它必须来自
-//     DeleteGuild 的删除事务(见那边的注释),不能是 guild:v2:{id} 缓存。
+//  2. 公会行已删(DisbandGuild 的正常路径)→ 用调用方传进来的值,它必须是
+//     DisbandResult.ZoneID(解散事务内 FOR UPDATE 读到的),不能是 guild:v2:{id} 缓存。
 //
 // 无论走哪条,最后都再扫一遍 guild_rank:zone:* 把该 guildID 从**每一个**分区榜里
 // 摘掉。这一刀是给存量数据的:在本次修复之前,清榜用的是可能过期 30 分钟的缓存

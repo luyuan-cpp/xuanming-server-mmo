@@ -93,6 +93,10 @@ type placementGuard struct {
 	// requiredMarker:非空 = 本次放行凭的是这份 handoff 标记原文,落点 Lua 里它必须
 	// 原样还在(见 luaMintEpochAndSetLocation)。只对 mint=true 有意义。
 	requiredMarker string
+	// pendingSceneConfID 不是并发前提,是随「等待落点」一起写进 location 的目标地图
+	// (PlayerLocation.pending_scene_conf_id);放在这里只为不再给 placePlayerLocation 加位置参数。
+	// 常规落点(nodeId 非空)必须留 0。
+	pendingSceneConfID uint64
 }
 
 // placePlayerLocation 写入 location,并按 mint 决定是否同时铸造新的归属 epoch;
@@ -133,6 +137,8 @@ func placePlayerLocation(svcCtx *svc.ServiceContext, playerId uint64, sceneId ui
 		UpdateTime: uint64(time.Now().Unix()),
 		ZoneId:     zoneId,
 		OwnerEpoch: placedEpoch,
+
+		PendingSceneConfId: guard.pendingSceneConfID,
 	}
 	data, err := proto.Marshal(loc)
 	if err != nil {

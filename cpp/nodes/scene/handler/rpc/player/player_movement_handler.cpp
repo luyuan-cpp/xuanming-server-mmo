@@ -16,6 +16,7 @@
 #include "spatial/system/nav_query.h"
 #include "spatial/system/scene_spawn.h"
 #include "proto/common/component/battle_comp.pb.h"  // InBattleComp:回合制战斗在途不收移动上报
+#include "player/comp/player_frozen_comp.h"         // PlayerFrozenComp:归属交接冻结期间不收移动上报
 #include "thread_context/ecs_context.h"
 #include "time/system/time.h"
 
@@ -162,7 +163,11 @@ void SceneMovementClientPlayerHandler::MoveStart(entt::entity player,const ::Mov
 	// 回合制战斗在途:不收移动上报(§5.3 冻结清单的"切场景"同源理由 —— 人在战斗里
 	// 不该在场景中跑动)。响应是 ::Empty,回不了 tip,只能静默丢;移动包是高频上报,
 	// 这里也不打日志,否则战斗期间会刷屏。
-	if (tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+	//
+	// 归属交接冻结中(PlayerFrozenComp:跨 zone 传送 / 同 zone 跨节点换图)同样丢弃:盘上那份
+	// 才是要交给目标节点的真值,冻结期间再写 Transform,别的玩家会看到他在"已经交出去"之后
+	// 还多走了一段。MovementSystem 的 tick 早已按 Frozen 排除,这里补上客户端上报这一路。
+	if (tlsEcs.actorRegistry.any_of<InBattleComp, PlayerFrozenComp>(player))
 	{
 		return;
 	}
@@ -179,7 +184,8 @@ void SceneMovementClientPlayerHandler::MoveStop(entt::entity player,const ::Move
 ///<<< BEGIN WRITING YOUR CODE
 	// 战斗在途同样不收;但"停"本身是安全的收敛动作,清零速度不会让玩家位移,
 	// 所以这里只跳过位置上报,仍然把速度清零(战斗结束后不至于带着旧速度继续飘)。
-	if (tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+	// 归属交接冻结中同理(交接未成解冻后,不至于带着冻结前的速度继续飘)。
+	if (tlsEcs.actorRegistry.any_of<InBattleComp, PlayerFrozenComp>(player))
 	{
 		ApplyReportedVelocity(player, Velocity());
 		return;
@@ -196,9 +202,9 @@ void SceneMovementClientPlayerHandler::MoveSync(entt::entity player,const ::Move
 	::Empty* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	if (tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+	if (tlsEcs.actorRegistry.any_of<InBattleComp, PlayerFrozenComp>(player))
 	{
-		return;  // 同 MoveStart:战斗在途的位置上报一律丢弃
+		return;  // 同 MoveStart:战斗在途 / 归属交接冻结中的位置上报一律丢弃
 	}
 	ApplyReportedLocation(player, request->location(), request->rotation(),
 		request->input_seq());

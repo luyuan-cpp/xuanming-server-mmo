@@ -24,4 +24,8 @@ message PlayerLocation {
   // 写入这条 location 时的归属 epoch(与 sidecar 键 player:{id}:owner_epoch 同一 Lua 原子写入)。
   // node_id 为空且 owner_epoch != 0 表示「跨 zone 交接已放行、等待目标 zone 落点」,此时没有节点持有该玩家。
   uint64 owner_epoch = 5;
+  // 只在「等待落点」里有意义:跨 zone 传送时玩家指定的目标地图(EnterSceneRequest.scene_conf_id)。
+  // 第一条腿放行时写入,第二条腿(目标 zone 的 login 发来的 EnterScene 不带地图)由 scene_manager
+  // 自己读出来选频道。不经票据 / login / 客户端转手,目标地图不会被持票者改写。0 = 默认大世界。
+  uint64 pending_scene_conf_id = 6;
 }

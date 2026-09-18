@@ -8,6 +8,7 @@
 #include "node/system/node/node.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_scene.h"
+#include "player/player_gm_guard.h" // 客户端 GM 指令统一闸门(guild-phase2 §S4 4.34)
 #include "battle/system/player_battle.h"
 #include "rpc/player_service_interface.h"
 #include "network/rpc_session.h"
@@ -160,6 +161,18 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	// reentry-barrier §3.3)。0 = 上游未填,EnterScene 里不覆盖已有值。
 	ctx.homeZoneId = request->home_zone_id();
 	ctx.ownerEpoch = request->owner_epoch();
+
+	// 1.5 本节点上的旧实体若正处于"归属交接已发起",且这次路由带来的 owner_epoch 比它缓存的新:
+	//     那次交接其实已被放行(EnterScene 应答丢了,30s 看门狗还没到期),玩家在别的节点 / zone
+	//     玩过之后又被派回本节点。旧实体的内存态停在交接那一刻,复用它 = 回档。
+	//     按"被废黜"销毁(不存盘),然后落到第 3 步从盘上重新加载。
+	//     epoch 相等(同 zone 重发后落回本节点)或为 0(上游未填)时返回 false,照旧复用实体。
+	if (playerIt != tlsEcs.playerList.end() &&
+		PlayerLifecycleSystem::DiscardStaleHandoffEntity(playerIt->second, ctx.ownerEpoch))
+	{
+		// 销毁会改 playerList,迭代器已失效,不得再用。
+		playerIt = tlsEcs.playerList.end();
+	}
 
 	// 2. If player is already online, enter scene directly.
 	//    重连 / 顶号复用实体:EnterScene 用 ctx 里的非 0 epoch 更新 PlayerOwnerEpochComp
@@ -422,7 +435,35 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 
 	// Dispatch to the concrete player service method
 	const MessageUniquePtr playerResponse(service->GetResponsePrototype(method).New());
-	serviceIt->second->CallMethod(method, player, playerRequest.get(), playerResponse.get());
+	if (scene_gm_guard::IsClientGmMethodName(method->name()) &&
+		scene_gm_guard::RejectGmClientRpc(method->name().c_str()))
+	{
+		// 客户端 GM 指令统一闸门(guild-phase2.md §S4 4.34)。
+		//
+		// 这里是客户端消息进 scene 的**唯一**入口:gate 发
+		// SceneProcessClientPlayerMessageMessageId(client_message_processor.cpp:699-711)
+		// 只走到这个函数。逐 handler 加闸必漏 —— P0-a 就漏掉了
+		// SceneRollbackClientPlayer 的十二条(GmExecuteRollback / GmClawbackItem 等):
+		// 它们的 service 没标 OptionIsClientProtocolService,gate 的清单挡得住,
+		// 但本函数不看这个 option,直连 scene RPC 端口照样能把 message_id 102-117
+		// 打进来,而那几条今天还是空桩,一旦实现就是客户端自助回档。
+		//
+		// 判据与 P0-a 同一套(SCENE_RUN_MODE,默认 prod = 拒绝,见
+		// cpp/nodes/gate/SECURITY.md §3),不另起一个环境变量 —— 同一件事两个开关
+		// 只会让运维在拒绝时不知道该看哪个。
+		//
+		// InvokePlayerService(下面那个)与 SendMessageToPlayer 是**节点路由**,不对
+		// 客户端开放,所以不在这里加闸;它们那侧的防护是各 Gm* handler 自己的
+		// scene_gm_guard::RejectGmClientRpc。将来若再有路径转发客户端消息,必须调
+		// 同一个谓词。
+		LOG_WARN << "ProcessClientPlayerMessage: client GM rejected method=" << method->name()
+				 << " player_id=" << it->second << " session=" << sessionId;
+		tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity()).set_id(kFeatureUnavailable);
+	}
+	else
+	{
+		serviceIt->second->CallMethod(method, player, playerRequest.get(), playerResponse.get());
+	}
 
 	// Populate synchronous response (if caller expects one)
 	if (response != nullptr && Empty::GetDescriptor() != playerResponse->GetDescriptor())
@@ -598,17 +639,13 @@ void SceneHandler::RoutePlayerStringMsg(::google::protobuf::RpcController* contr
 		const auto localPlayer = tlsEcs.GetPlayer(playerId);
 		if (localPlayer != entt::null && request->node_list_size() == 0)
 		{
-			// Cross-zone Frozen gate (cross-zone-readiness-audit.md §11.3).
-			// If the player is mid-cross-zone-migration the source-side
-			// entity is alive only to wait for the destination's ACK; any
-			// client message dispatched to it would mutate state that's
-			// about to be DestroyPlayer'd. Drop the message and let the
-			// client retry once the migration completes (the gate session
-			// is preserved across Frozen, so client stays connected).
+			// 归属交接冻结闸(跨 zone 传送 / 同 zone 跨节点换图,见 PlayerFrozenComp)。
+			// 冻结中的实体只是在等 scene_manager 的放行结果:盘上那份才是要交给目标节点的真值,
+			// 这时再把消息派给它,改出来的状态要么随实体销毁而丢失、要么与盘上分叉。
+			// 丢弃消息,交接出结果后客户端自行重试(gate 会话在冻结期间保留,连接不断)。
 			//
-			// IMPORTANT messages are logged as ERROR so ops can see if the
-			// destination zone is taking too long to ACK and clients are
-			// piling up retries — that's a reaper / ACK failure signal.
+			// IMPORTANT 消息打 ERROR:如果交接迟迟不出结果(scene_manager 不可达、应答看门狗在
+			// 反复重挂),客户端的重试会堆在这里,这是需要运维介入的信号。
 			if (PlayerLifecycleSystem::IsCrossZoneFrozen(localPlayer))
 			{
 				if (importantRoute)

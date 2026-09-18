@@ -187,6 +187,15 @@ func main() {
 		return
 	}
 
+	// Travel-smoke 模式:单机器人做「跨 zone 场景传送」往返端到端冒烟
+	// (登 home_zone → 非法目标被拒 → TravelToZone{visit_zone} → 跟随 msg 124 严格重登 → 访客区断言 → TravelToZone{home_zone} → 回家不回档)。
+	// 本模式会用「按 player_id 选角、绝不自动建角」的严格重登覆盖上面注册的通用重登(本模式独占进程,覆盖是安全的)。
+	// 见 travel_smoke_scenario.go 与 docs/design/cross-zone-scene-travel.md;前置条件写在 etc/travel_smoke.yaml 文件头。
+	if cfg.Mode == "travel-smoke" {
+		RunTravelSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {

@@ -98,7 +98,8 @@ void TransactionLogSystem::LogCurrencyAdd(
     uint64_t amount,
     uint64_t balanceBefore,
     uint64_t balanceAfter,
-    TransactionType txType)
+    TransactionType txType,
+    uint64_t correlationId)
 {
     TransactionLogEntry entry;
     entry.set_tx_id(GenerateTxId());
@@ -109,6 +110,7 @@ void TransactionLogSystem::LogCurrencyAdd(
     entry.set_currency_delta(static_cast<int64_t>(amount));
     entry.set_balance_before(balanceBefore);
     entry.set_balance_after(balanceAfter);
+    entry.set_correlation_id(correlationId);
     SendEntry(entry);
 }
 
@@ -118,7 +120,8 @@ void TransactionLogSystem::LogCurrencyDeduct(
     uint64_t amount,
     uint64_t balanceBefore,
     uint64_t balanceAfter,
-    TransactionType txType)
+    TransactionType txType,
+    uint64_t correlationId)
 {
     TransactionLogEntry entry;
     entry.set_tx_id(GenerateTxId());
@@ -129,6 +132,7 @@ void TransactionLogSystem::LogCurrencyDeduct(
     entry.set_currency_delta(-static_cast<int64_t>(amount));
     entry.set_balance_before(balanceBefore);
     entry.set_balance_after(balanceAfter);
+    entry.set_correlation_id(correlationId);
     SendEntry(entry);
 }
 
@@ -212,12 +216,13 @@ void TransactionLogSystem::LogItemDestroy(
     uint32_t configId,
     uint32_t quantity,
     uint64_t correlationId,
-    const std::string &extra)
+    const std::string &extra,
+    TransactionType txType)
 {
     TransactionLogEntry entry;
     entry.set_tx_id(GenerateTxId());
     entry.set_timestamp(NowUnixSeconds());
-    entry.set_tx_type(TX_ITEM_DESTROY);
+    entry.set_tx_type(txType);
     entry.set_from_player(ResolvePlayerId(player));
     entry.set_item_uuid(itemUuid);
     entry.set_item_config_id(configId);

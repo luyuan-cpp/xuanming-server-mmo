@@ -15,6 +15,12 @@ namespace
 {
 	// 四条 GM 货币 RPC 的统一前置闸(P0-a)。true = 已写 tip,调用点直接 return。
 	// 第一道锁在 gate(消息号 37 / 49 / 94 / 95),这里防绕开 gate 直连 scene。
+	//
+	// 第三道锁在分发入口 SceneHandler::ProcessClientPlayerMessage(guild-phase2 §S4 4.34):
+	// 它按 `Gm` 前缀拦住**全部**客户端 GM 指令,判据是同一个 SCENE_RUN_MODE。
+	// 本函数因此对客户端路径是冗余的 —— 留着不是忘了删:分发入口那道闸只管客户端
+	// 消息,而 SceneHandler::InvokePlayerService(节点路由)同样能调到下面这四条,
+	// 那条路只有这里挡得住。
 	bool RejectGmCurrencyRpc(const char* rpcName)
 	{
 		if (!scene_gm_guard::RejectGmClientRpc(rpcName))
@@ -37,7 +43,9 @@ void SceneCurrencyClientPlayerHandler::GmAddCurrency(entt::entity player,const :
 	// reminder: GM can absolutely fire while a player is mid cross-zone
 	// migration, and the source-side write would silently disappear.
 	const auto type = static_cast<CurrencyType>(request->currency_type());
-	const auto err = CurrencySystem::AddCurrency(player, type, request->amount());
+	// 流水记 TX_GM_GRANT 而不是 TX_CURRENCY_ADD:审计要能一眼分出"玩法产出"和
+	// "GM 凭空造的"。混在一起时,异常检测与回档差分都会把 GM 造币当成正常收入。
+	const auto err = CurrencySystem::AddCurrency(player, type, request->amount(), TX_GM_GRANT);
 	if (err != kSuccess)
 	{
 		tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity()).set_id(err);
@@ -55,7 +63,8 @@ void SceneCurrencyClientPlayerHandler::GmDeductCurrency(entt::entity player,cons
 	if (RejectGmCurrencyRpc("GmDeductCurrency")) return;
 	// Frozen check is enforced inside CurrencySystem::DeductCurrency.
 	const auto type = static_cast<CurrencyType>(request->currency_type());
-	const auto err = CurrencySystem::DeductCurrency(player, type, request->amount());
+	// 同上:GM 扣币记 TX_GM_DEDUCT,别混进玩法消费。
+	const auto err = CurrencySystem::DeductCurrency(player, type, request->amount(), TX_GM_DEDUCT);
 	if (err != kSuccess)
 	{
 		tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity()).set_id(err);

@@ -33,7 +33,6 @@
     <ClInclude Include="generated\attribute\attributedelta10framess2c_attribute_sync.h" />
     <ClInclude Include="generated\attribute\attributedelta30framess2c_attribute_sync.h" />
     <ClInclude Include="generated\attribute\attributedelta60framess2c_attribute_sync.h" />
-    <ClInclude Include="kafka\system\kafka.h" />
     <ClInclude Include="player\constants\player.h" />
     <ClInclude Include="player\system\player_data_loader.h" />
     <ClInclude Include="player\system\player_lifecycle.h" />
@@ -70,6 +69,8 @@
     <ClInclude Include="player\comp\afk_comp.h" />
     <ClInclude Include="player\comp\player_ownership_comp.h" />
     <ClInclude Include="player\system\afk.h" />
+    <ClInclude Include="player\system\asset_op_ledger.h" />
+    <ClInclude Include="player\system\asset_op_system.h" />
     <ClInclude Include="spatial\constants\aoi_priority.h" />
   </ItemGroup>
   <ItemGroup>
@@ -92,7 +93,6 @@
     <ClCompile Include="generated\attribute\attributedelta10framess2c_attribute_sync.cpp" />
     <ClCompile Include="generated\attribute\attributedelta30framess2c_attribute_sync.cpp" />
     <ClCompile Include="generated\attribute\attributedelta60framess2c_attribute_sync.cpp" />
-    <ClCompile Include="kafka\system\kafka.cpp" />
     <ClCompile Include="player\system\player_scene.cpp" />
     <ClCompile Include="player\system\player_team.cpp" />
     <ClCompile Include="player\system\player_team_aoi.cpp" />
@@ -117,6 +117,8 @@
     <ClCompile Include="player\system\player_database_1_loader.cpp" />
     <ClCompile Include="player\system\stress_test_probe.cpp" />
     <ClCompile Include="player\system\afk.cpp" />
+    <ClCompile Include="player\system\asset_op_ledger.cpp" />
+    <ClCompile Include="player\system\asset_op_system.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="player\system\player_feature_snapshot.cpp" />

@@ -64,6 +64,33 @@ public:
 	// petIdOut 仅在返回 kSuccess 时有效。
 	static uint32_t GrantPet(entt::entity player, uint32_t petTableId, uint64_t& petIdOut);
 
+	// —— 交易资产原语(聚宝斋 P2;通用资产通道 docs/design/guild-phase2/04-asset-channel.md §4.9)——
+	//
+	// 这两个函数是**纯原语**:只判"结构性"条件(实体在不在、宝宝在不在、出战没出战、槽位满没满),
+	// 一律**不判**跨 zone 冻结 / 传送在途 / 战斗中。那三条是"暂时条件",必须由资产 RPC 入口层
+	// (PlayerAssetOpSystem::Process)统一判成 RETRY 并且**不记账**;下沉到这一层就会被调用方
+	// 当成终局 REJECTED 记进账本,战斗中的一次交付会被永久判死(D48 红线,与 BagService /
+	// CurrencySystem 同一条纪律)。所以这里不复用 CheckWritable。
+	//
+	// 两者都不推列表、不写流水:推送与 transaction_log 由资产入口层在同一次处理里统一做,
+	// 否则"取出成功但回包丢了"的重投会推两次、记两条。
+	//
+	// 返回值给调用方的映射建议(入口层负责):kPetSlotFull → RETRY(买家腾位后可成),其余非
+	// kSuccess → REJECTED(终局)。
+
+	// 取出用于交易:把 petId 这只宝宝整条移出 PlayerPetComp,移出前的完整实例写进 snapshotOut。
+	// 快照就是托管期间的权威副本(聚宝斋 §6.1 第 1 条),调用方须原样持久化。
+	// 出战中的宝宝拒绝取出(kPetAlreadyActive),提示玩家先收回:出战态是战斗快照的输入,
+	// 让它在局中消失等于战斗单位凭空没了。
+	// 失败时 snapshotOut 被清空,组件不发生任何改动。
+	static uint32_t RemovePetForTrade(entt::entity player, uint64_t petId, PetInstance& snapshotOut);
+
+	// 还原:把 RemovePetForTrade 取到的快照**整条**放回(买家交付,或卖家下架回退)。
+	// 保留 pet_id / 资质 / 已分配点 / created_at / 当前 HP MP —— 刻意**不复用 GrantPet**:
+	// 它会重掷资质、按新主人等级重定级、回满血蓝、盖新 created_at,那样"买到的"就不是"卖出的"。
+	// pet_id 撞号拒绝(同一玩家名下已有该 id)。
+	static uint32_t RestorePetFromSnapshot(entt::entity player, const PetInstance& snapshot);
+
 	// —— 战斗接缝(scene/battle/system/player_battle.cpp 调用)——
 
 	// 出战宝宝的战斗快照。没有出战宝宝返回 false(不是错误)。

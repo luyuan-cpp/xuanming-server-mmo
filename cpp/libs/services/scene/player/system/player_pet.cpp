@@ -327,7 +327,9 @@ bool RecalculateOne(entt::entity player, PetInstance& pet, const AttributePoolTa
 	const auto oldDerived = previous != nullptr ? *previous : ComputeDerived(pet, *row, pool.id());
 	pet.set_level(newLevel);
 
-	// 已分配 > 总量的收敛(等级下降 / 改表缩点):整池清零返还,口径与角色一致
+	// 已分配 > 总量的收敛(等级下降 / 改表缩点):整池清零返还,口径与角色一致。
+	// ⚠ 跨等级交易(聚宝斋 P2)会撞上这条:高级卖家的宝宝还原给低级买家后,下一次重算
+	// 就会清空全部加点。RestorePetFromSnapshot 只保住了还原那一刻,产品口径待定(J-O2)。
 	const auto total = attributerules::TotalPoints(ToRule(pool), newLevel, 0);
 	if (UsedPoints(pet) > total) {
 		pet.mutable_allocated()->clear();
@@ -750,6 +752,97 @@ uint32_t PetSystem::GrantPet(entt::entity player, uint32_t petTableId, uint64_t&
 	petIdOut = petId;
 	LOG_INFO << "[PlayerPet] 发放宝宝: player_id=" << GuidForLog(player) << " pet_id=" << petId
 			 << " pet_table_id=" << petTableId << " level=" << pet->level();
+	return kSuccess;
+}
+
+uint32_t PetSystem::RemovePetForTrade(entt::entity player, uint64_t petId, PetInstance& snapshotOut) {
+	snapshotOut.Clear();
+	// 刻意不走 CheckWritable:冻结 / 传送在途 / 战斗中是暂时条件,由资产 RPC 入口层判 RETRY
+	// 并且不记账(见头文件)。这里只判结构性条件。
+	if (!tlsEcs.actorRegistry.valid(player)) {
+		return kEntityIsNull;
+	}
+	if (petId == 0) {
+		return kInvalidParameter;
+	}
+	auto& comp = EnsureComp(player);
+	// 出战中先拒:先判它再找宝宝,这样"出战中"永远压过"找不到"的可能歧义。
+	if (comp.active_pet_id() == petId) {
+		return kPetAlreadyActive;
+	}
+	int index = -1;
+	for (int i = 0; i < comp.pets_size(); ++i) {
+		if (comp.pets(i).pet_id() == petId) {
+			index = i;
+			break;
+		}
+	}
+	if (index < 0) {
+		return kPetNotFound;
+	}
+
+	// 先整条拷出再删:删完就没有第二次机会取快照了,而快照是托管期间唯一的权威副本。
+	snapshotOut = comp.pets(index);
+	comp.mutable_pets()->DeleteSubrange(index, 1);
+	LOG_INFO << "[PlayerPet] 取出交易: player_id=" << GuidForLog(player) << " pet_id=" << petId
+			 << " pet_table_id=" << snapshotOut.pet_table_id() << " level=" << snapshotOut.level()
+			 << " left=" << comp.pets_size();
+	return kSuccess;
+}
+
+uint32_t PetSystem::RestorePetFromSnapshot(entt::entity player, const PetInstance& snapshot) {
+	// 同 RemovePetForTrade:暂时条件不在这一层判。
+	if (!tlsEcs.actorRegistry.valid(player)) {
+		return kEntityIsNull;
+	}
+	if (snapshot.pet_id() == 0 || snapshot.pet_table_id() == 0) {
+		LOG_ERROR << "[PlayerPet] 还原快照字段缺失,拒绝: player_id=" << GuidForLog(player)
+				  << " pet_id=" << snapshot.pet_id() << " pet_table_id=" << snapshot.pet_table_id();
+		return kInvalidParameter;
+	}
+	auto& comp = EnsureComp(player);
+	// 撞号:同一 pet_id 已在名下。资产通道的 seq 账本负责幂等,所以走到这里的重复只可能是
+	// 数据事故(号段回退 / 快照被复制过),必须拒绝而不是覆盖 —— 覆盖会静默吃掉一只宝宝。
+	if (FindPet(comp, snapshot.pet_id()) != nullptr) {
+		LOG_ERROR << "[PlayerPet] 还原撞号,拒绝: player_id=" << GuidForLog(player)
+				  << " pet_id=" << snapshot.pet_id();
+		return kInvalidParameter;
+	}
+	if (static_cast<uint32_t>(comp.pets_size()) >= MaxPets()) {
+		// 槽位满不是终局:调用方应映射成 RETRY,让买家腾位后自动到账(见头文件)。
+		return kPetSlotFull;
+	}
+
+	auto* pet = comp.add_pets();
+	*pet = snapshot;
+
+	// **不调用 RecalculateOne**:它会把 level 同步成 min(新主人等级, level_cap),
+	// 随后发现 UsedPoints > TotalPoints(新等级) 就整池 clear() —— 85 级卖家的宝宝还原给
+	// 10 级买家会当场清空全部加点。这里按"不收敛"口径原样保留 level 与 allocated 分布。
+	// 注意这只挡住了还原这一刻:下次 InitializeOnLoad / 主人升级触发的 RecalculateAll 仍会
+	// 按现有口径清池(跨等级交易的产品口径待定,交付说明记为 J-O2)。
+	//
+	// 唯一的防御性处理:按快照自身的等级与资质现算上限,夹一次当前 HP/MP。
+	// 快照在托管期间存在交易库里,被篡改或写坏时不能让它凭空抬高血上限。
+	if (const auto* row = PetRow(pet->pet_table_id()); row != nullptr) {
+		if (const auto* pool = PetPool(); pool != nullptr) {
+			const auto derived = ComputeDerived(*pet, *row, pool->id());
+			pet->set_health(std::min(pet->health(), derived.maxHealth));
+			if (derived.maxMana > 0) {
+				pet->set_mana(std::min(pet->mana(), derived.maxMana));
+			}
+		}
+	} else {
+		// 种类行缺失只告警不拒绝:拒绝等于这只宝宝既回不到卖家也到不了买家(玩家资产不能悄悄没),
+		// 与 RecalculateOne 对缺表行的处置同口径。
+		LOG_WARN << "[PlayerPet] 还原时种类行缺失,仍然放回: player_id=" << GuidForLog(player)
+				 << " pet_id=" << pet->pet_id() << " pet_table_id=" << pet->pet_table_id();
+	}
+
+	LOG_INFO << "[PlayerPet] 还原交易宝宝: player_id=" << GuidForLog(player)
+			 << " pet_id=" << pet->pet_id() << " pet_table_id=" << pet->pet_table_id()
+			 << " level=" << pet->level() << " owner_level=" << OwnerLevel(player)
+			 << " total=" << comp.pets_size();
 	return kSuccess;
 }
 

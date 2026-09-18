@@ -81,6 +81,12 @@
     <ClCompile Include="common\component\actor_comp.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="common\asset\asset_op.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="common\component\asset_op_ledger_comp.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="common\component\buff_comp.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -411,6 +417,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="common\component\actor_comp.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\asset\asset_op.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\component\asset_op_ledger_comp.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="common\component\buff_comp.pb.h">
