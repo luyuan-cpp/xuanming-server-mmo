@@ -78,7 +78,7 @@ type ResourceAudit struct {
 //	                PlayerAllData:{pid} / {MsgType}:{pid} / player_merge_notice:{pid}
 //	                (go/login, go/db, go/player_locator, scene_manager 都是 DB 0)
 type auditConfig struct {
-	db        *sql.DB       // game MySQL — guild / friend / zone_{N}_db
+	db        *sql.DB       // game MySQL — friend / zone_{N}_db;帮会表在 guildSchema、聚宝斋在 tradeSchema
 	mappingDB *redis.Client // DB 0(go-zero RedisConf 无 DB 字段)
 	rankRDB   *redis.Client // DB 2
 	friendRDB *redis.Client // DB 3
@@ -447,7 +447,7 @@ func auditPlayerNameConflicts(ctx context.Context, cfg auditConfig) ResourceAudi
 // auditFriend — verify friend table won't break under merge.
 //
 // `friend(player_id, friend_player_id)` is keyed by player_id alone (no
-// zone_id column — see proto/guild/guild_db.proto). Because
+// zone_id column — see deploy/mysql-init/guild_friend_tables.sql). Because
 // player_id is globally unique (mmo_cross_server_architecture.md §"player_id
 // never encodes zone"), friend rows survive merge automatically.
 //

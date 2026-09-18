@@ -1427,4 +1427,9 @@ func TestConcurrentWorkers_FinalStateIsGlobalMax(t *testing.T) {
 		calls := h.callsForKey(k)
 		require.NotEmpty(t, calls, "key %d had no effective writes", k)
 		last := extractSeqFromTaskID(calls[len(calls)-1].taskID)
-		assert.Equal(t, uint64(writesPerP
+		assert.Equal(t, uint64(writesPerPlayer), last,
+			"key %d: final applied seq must be the global max", k)
+	}
+	t.Logf("soak: produced=%d, totalKeys=%d, writesPerPlayer=%d",
+		produced.Load(), totalKeys, writesPerPlayer)
+}
