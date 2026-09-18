@@ -666,6 +666,8 @@ func TestEnterScene_TravelTargetMapIsCarriedByAwaitingPlacement(t *testing.T) {
 	seedSceneOnNode(mr, 1, oldScene, "10", "1")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
 	writeHandoffMarker(t, sc, playerID, 1)
+	// 这张图在目标 zone 开着(频道集合非空):第一条腿的只读地图预检只看这一点,不解析、不预占。
+	mr.SAdd(worldChannelsKey(2, confID), "7226")
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
 	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
@@ -682,6 +684,9 @@ func TestEnterScene_TravelTargetMapIsCarriedByAwaitingPlacement(t *testing.T) {
 	require.NotNil(t, loc)
 	assert.Equal(t, "", loc.NodeId)
 	assert.Equal(t, confID, loc.PendingSceneConfId, "目标地图必须随等待落点一起记下")
+	reservedCount, countErr := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, uint64(7226)))
+	require.NoError(t, countErr)
+	assert.Equal(t, "", reservedCount, "第一条腿的地图预检是只读的,不得预占目标频道人数")
 
 	// 常规落点不得带着 pending 地图(它只属于等待落点)。
 	placed, err := placePlayerLocation(sc, playerID, 7226, "20", 2, placementGuard{observedEpoch: 2, mint: true})
@@ -689,6 +694,120 @@ func TestEnterScene_TravelTargetMapIsCarriedByAwaitingPlacement(t *testing.T) {
 	settled := &scene_manager.PlayerLocation{}
 	require.NoError(t, gproto.Unmarshal([]byte(placed.raw), settled))
 	assert.Equal(t, uint64(0), settled.PendingSceneConfId)
+}
+
+// 第一条腿:指定的目标地图在目标 zone 一个世界频道都没有(副本 / 镜像 conf、乱填的 id、只在别的
+// zone 开的图)→ 必须在不可回头点之前拒绝,一个字节都不改。源 scene 据此解冻并回 tip(CZ-5)。
+// 标记已就绪、gate 也签得出票据:能挡住这次放行的只有地图预检。
+func TestEnterScene_TravelToUnopenedMapIsRejectedBeforeReleasingOwnership(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6128)
+		oldScene = uint64(7128)
+		confID   = uint64(9328)
+	)
+	seedSceneOnNode(mr, 1, oldScene, "10", "3")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	writeHandoffMarker(t, sc, playerID, 1)
+	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		t.Error("地图预检不过就不该去签目标 zone 的票据")
+		return nil, errors.New("unexpected redirect")
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, ZoneId: 2, SceneConfId: confID,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrNoAvailableNode, resp.ErrorCode)
+	assert.Nil(t, resp.Redirect)
+
+	// 源 scene 仍持有玩家:它缓存的 epoch(1)、location、旧场景人数都必须原样。
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, oldRaw, raw, "被拒的传送不得留下等待落点")
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	assert.Equal(t, "3", oldCount)
+	assert.Empty(t, *captured, "被拒的传送不得发出 RedirectToGateEvent")
+}
+
+// 第二条腿:等待落点里记的目标地图在本 zone 解析不出来(两条腿之间频道被回收,或第一条腿的预检
+// 因 Redis 抖动放过了)→ 回落默认大世界,人必须能落地。走到这一步的玩家已被源 scene 销毁,没有
+// 「原地」可回;硬拒的话这条等待落点在票据有效期内会让他每一次登录都读到同一个 pending 值再失败一次。
+func TestEnterScene_TravelSecondLegFallsBackToDefaultWorldWhenPendingMapIsUnavailable(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID    = uint64(6127)
+		defaultConf = uint64(3327)
+		missingConf = uint64(9327)
+		defaultID   = uint64(7127)
+	)
+	// 默认大世界 = World 表第一行;单测里 World 表是空的,用覆盖值顶上。
+	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
+	mr.SAdd(worldChannelsKey(2, defaultConf), fmt.Sprintf("%d", defaultID))
+	seedSceneOnNode(mr, 2, defaultID, "10", "0")
+	mr.Set(nodePlayerCountKey(2, "10"), "0")
+	// 第一条腿留下的等待落点:zone 2、无节点、epoch 1,目标地图 missingConf 在 zone 2 没有任何频道。
+	placed, err := placePlayerLocation(sc, playerID, 0, "", 2,
+		placementGuard{observedEpoch: 0, mint: true, pendingSceneConfID: missingConf})
+	require.NoError(t, err)
+	require.Equal(t, uint64(1), placed.epoch)
+
+	// 目标 zone 的 login 发来的第二条腿:不带场景、不带地图。
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, ZoneId: 2,
+		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode, "pending 地图不可用不能把人挡在目标 zone 门外")
+
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, defaultID, loc.SceneId, "回落到默认大世界的频道")
+	assert.Equal(t, "10", loc.NodeId)
+	assert.Equal(t, uint64(0), loc.PendingSceneConfId, "落点之后 pending 地图清零,不再牵引后续登录")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "落点照常铸造下一代")
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(2), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, defaultID))
+	assert.Equal(t, "1", count)
+}
+
+// 请求自己指定的地图解析失败仍然硬拒:回落只属于「等待落点里记下的地图」。指定地图的请求,其发起方
+// (源 scene / 客户端)还持有玩家、能把失败告诉他;悄悄把人送进另一张图才是错的。
+func TestEnterScene_ExplicitMapIsNotSubjectToPendingMapFallback(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	capturingKafkaWriter(sc)
+
+	const (
+		playerID    = uint64(6129)
+		defaultConf = uint64(3329)
+		missingConf = uint64(9329)
+		defaultID   = uint64(7129)
+	)
+	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultConf}))
+	mr.SAdd(worldChannelsKey(2, defaultConf), fmt.Sprintf("%d", defaultID))
+	seedSceneOnNode(mr, 2, defaultID, "10", "0")
+	mr.Set(nodePlayerCountKey(2, "10"), "0")
+	_, err := placePlayerLocation(sc, playerID, 0, "", 2,
+		placementGuard{observedEpoch: 0, mint: true, pendingSceneConfID: defaultConf})
+	require.NoError(t, err)
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, ZoneId: 2, SceneConfId: missingConf,
+		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrNoAvailableNode, resp.ErrorCode)
+	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, defaultID))
+	assert.Equal(t, "0", count, "硬拒的请求不得占用默认大世界的人数")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "硬拒不改归属")
 }
 
 // EnterScene 的每一条返回路径都要回显 player_id(scene 节点的异步应答回调靠它对回玩家)。

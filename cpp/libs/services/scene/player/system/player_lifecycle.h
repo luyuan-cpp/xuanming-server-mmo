@@ -82,6 +82,107 @@ namespace owner_epoch_stats
 	}
 } // namespace owner_epoch_stats
 
+// 归属交接(跨 zone 传送 / 同 zone 跨节点换图)的成败计数。与 owner_epoch_stats 同一套写法
+// (relaxed atomic、不接 Prometheus),由 player_lifecycle.cpp 每 30s 打成一行 [TravelHandoff]
+// 日志:key=value 平铺、数值都是进程启动以来的累计值,有变化才打,级别 INFO。
+//
+// 为什么需要:生产配置(scene_manager AllowUnsafeCrossNodeHandoff=false)下每一次跨节点换图都走
+// 这条链,它是常规路径而不是异常路径。只有逐条日志的话,压测时「交接未成率」「冻结时长」无从统计,
+// 看门狗反复重挂也只能靠翻 ERROR 日志发现。与 owner_epoch_stats 分开:那三个值应恒 0、非 0 才打
+// WARN;这里的值平时就非 0,混进同一行会让那条 WARN 每 30s 必出、失去告警意义。
+//
+//   started                进入交接(已冻结、已发起存盘)的次数
+//   started_cross_zone     其中目标是别的 zone 的(跨 zone 传送);其余是同 zone 跨节点换图
+//   granted                放行:归属已交给目标,源实体不存盘销毁
+//   granted_without_reply  其中应答丢失 / 失败,靠核实 owner_epoch 或再入路由才知道已放行的。应接近 0
+//   resolved_in_place      同 zone 重发后落回本节点,静默解冻(不算失败)
+//   aborted                交接未成,解冻并回失败 tip。aborted / started = 交接未成率
+//   exit_wins              交接在途时玩家退出,交接作废(退出优先)
+//   save_watchdog_fired    交接存盘 30s 没落地,看门狗解冻(同时计入 aborted)
+//   reply_watchdog_fired   EnterScene 应答 30s 没到,看门狗去核实归属
+//   verify_rearmed         核实归属时 Redis 不可用 / 读失败,保持冻结并重挂看门狗。
+//                          持续增长 = 有玩家一直冻着出不来
+//   frozen_ms_total        走到终态(granted / resolved_in_place / aborted)的交接累计冻结毫秒数;
+//   frozen_ms_max          平均冻结时长 = frozen_ms_total / 三个终态之和,max 是单次最大值
+//
+// started 减去各终态 = 仍在途的 + 交接期间被存盘 CAS 拒而销毁的(后者已计入
+// owner_epoch_stats::StaleOwnerWriteRejected)。
+namespace travel_handoff_stats
+{
+	struct Counters
+	{
+		std::atomic<uint64_t> started{0};
+		std::atomic<uint64_t> startedCrossZone{0};
+		std::atomic<uint64_t> granted{0};
+		std::atomic<uint64_t> grantedWithoutReply{0};
+		std::atomic<uint64_t> resolvedInPlace{0};
+		std::atomic<uint64_t> aborted{0};
+		std::atomic<uint64_t> exitWins{0};
+		std::atomic<uint64_t> saveWatchdogFired{0};
+		std::atomic<uint64_t> replyWatchdogFired{0};
+		std::atomic<uint64_t> verifyRearmed{0};
+		std::atomic<uint64_t> frozenMsTotal{0};
+		std::atomic<uint64_t> frozenMsMax{0};
+	};
+
+	inline Counters& Get()
+	{
+		static Counters g_counters;
+		return g_counters;
+	}
+
+	inline void Inc(std::atomic<uint64_t>& counter) { counter.fetch_add(1, std::memory_order_relaxed); }
+
+	// 记一次走到终态的交接的冻结时长。max 用"读-比-写"而不是 CAS 循环:计数只在 scene 的
+	// 逻辑线程上写,relaxed 的含义与本文件其它计数一致(统计值,不参与任何判定)。
+	inline void ObserveFrozenMs(uint64_t frozenMs)
+	{
+		auto& counters = Get();
+		counters.frozenMsTotal.fetch_add(frozenMs, std::memory_order_relaxed);
+		if (frozenMs > counters.frozenMsMax.load(std::memory_order_relaxed))
+		{
+			counters.frozenMsMax.store(frozenMs, std::memory_order_relaxed);
+		}
+	}
+
+	struct Snapshot
+	{
+		uint64_t started{0};
+		uint64_t startedCrossZone{0};
+		uint64_t granted{0};
+		uint64_t grantedWithoutReply{0};
+		uint64_t resolvedInPlace{0};
+		uint64_t aborted{0};
+		uint64_t exitWins{0};
+		uint64_t saveWatchdogFired{0};
+		uint64_t replyWatchdogFired{0};
+		uint64_t verifyRearmed{0};
+		uint64_t frozenMsTotal{0};
+		uint64_t frozenMsMax{0};
+
+		bool operator==(const Snapshot&) const = default;
+	};
+
+	inline Snapshot Read()
+	{
+		const auto& counters = Get();
+		Snapshot snapshot;
+		snapshot.started = counters.started.load(std::memory_order_relaxed);
+		snapshot.startedCrossZone = counters.startedCrossZone.load(std::memory_order_relaxed);
+		snapshot.granted = counters.granted.load(std::memory_order_relaxed);
+		snapshot.grantedWithoutReply = counters.grantedWithoutReply.load(std::memory_order_relaxed);
+		snapshot.resolvedInPlace = counters.resolvedInPlace.load(std::memory_order_relaxed);
+		snapshot.aborted = counters.aborted.load(std::memory_order_relaxed);
+		snapshot.exitWins = counters.exitWins.load(std::memory_order_relaxed);
+		snapshot.saveWatchdogFired = counters.saveWatchdogFired.load(std::memory_order_relaxed);
+		snapshot.replyWatchdogFired = counters.replyWatchdogFired.load(std::memory_order_relaxed);
+		snapshot.verifyRearmed = counters.verifyRearmed.load(std::memory_order_relaxed);
+		snapshot.frozenMsTotal = counters.frozenMsTotal.load(std::memory_order_relaxed);
+		snapshot.frozenMsMax = counters.frozenMsMax.load(std::memory_order_relaxed);
+		return snapshot;
+	}
+} // namespace travel_handoff_stats
+
 class PlayerLifecycleSystem
 {
 public:
@@ -163,6 +264,9 @@ public:
 	// 返回 kTravelAccepted = 已受理(玩家已冻结、存盘已发起),**不代表已到达**:到达 = 客户端随后
 	// 收到 RedirectToGate;未成 = 随后收到 SendTipToClient 且已解冻。非 0 = 拒绝的 tip id,未改任何状态。
 	// 目标 zone 是否真的存在由 scene_manager 判(C++ 侧没有 zone 表):不存在时走"受理后未成"。
+	// sceneConfigId:0 = 由目标 zone 挑默认大世界;非 0 必须是 World 表登记的世界图,否则同步拒绝
+	// (kEnterSceneSceneNotFound)。这张图在目标 zone 开没开只有 scene_manager 知道:没开时同样走
+	// "受理后未成"(它在放行之前只读检查,未改任何状态)。
 	static uint32_t RequestZoneTravel(entt::entity player, uint32_t targetZoneId, uint32_t sceneConfigId);
 
 	// 发起一次归属交接的**唯一入口**:挂 PlayerTravelHandoffComp + PlayerFrozenComp,然后存盘;
@@ -173,12 +277,17 @@ public:
 	// 已经隔了一个往返,玩家可能刚进备战或刚断线,不能只信发请求那一刻的检查。
 	static uint32_t StartTravelHandoff(entt::entity player, uint32_t targetZoneId, uint64_t sceneId, uint32_t sceneConfigId);
 
-	// 普通 EnterScene(客户端换图 / 镜像自动进场)的发送侧闸:交接在途,或上一条 EnterScene 的应答
-	// 还没回来(短 TTL 内)时为真,调用方不得再发。理由见 PlayerSceneChangeInFlightComp。
+	// 普通 EnterScene(客户端换图 / 镜像自动进场 / 队伍跟随)的发送侧闸:交接在途,或上一条
+	// EnterScene 的应答还没回来(短 TTL 内)时为真,调用方不得再发。理由见 PlayerSceneChangeInFlightComp。
 	static bool IsSceneChangeBusy(entt::entity player);
 
 	// 发出普通 EnterScene **之前**调用,记下这次要去哪。应答只回显 player_id,18 到达时靠它起交接。
-	static void NoteSceneChangeRequested(entt::entity player, uint64_t sceneId, uint32_t sceneConfigId);
+	// 凡是替在线玩家发普通 EnterScene 的调用点都必须成对调用 IsSceneChangeBusy + 本函数:漏掉的那
+	// 一条,它的应答会把别人记下的在途目标摘掉。
+	// playerRequested = false:服务器替玩家发的(队伍跟随),被拒只记日志,不起交接、不回 tip
+	// (见 PlayerSceneChangeInFlightComp)。
+	static void NoteSceneChangeRequested(entt::entity player, uint64_t sceneId, uint32_t sceneConfigId,
+										 bool playerRequested = true);
 
 	// 交接是否已经发起(handoff 标记已写、EnterScene 已发)。此后本实体的去留只由 EnterScene 应答与
 	// 看门狗裁决:ReleasePlayer 不得把它推进退出流程(见 scene_node_service.cpp HandleReleasePlayer)。
@@ -207,6 +316,7 @@ public:
 	//
 	// 第一段 —— 实体上没有交接(PlayerTravelHandoffComp),看 PlayerSceneChangeInFlightComp:
 	//   * 没有                          → 疏散等别处发的请求,静默 no-op;
+	//   * 有,但 playerRequested=false  → 队伍跟随的应答:摘在途组件,被拒只记日志,到此为止;
 	//   * error_code == 18              → 目标场景在别的节点:用记下的目标 StartTravelHandoff(本 zone);
 	//   * 其它非 0                      → 换图失败,回 kEnterSceneFailed tip(此前客户端对失败毫无感知);
 	//   * 0                             → 同节点换图成功,只摘在途组件。
@@ -312,8 +422,10 @@ private:
 	// 挂看门狗:解冻一个可能已被放行的玩家 = 同一名玩家在两处同时活着。
 	// requestedAtMs 是交接代际,回调到达时不符即 no-op。
 	//   replyWasSuccess = false:应答超时 / 失败应答。归属没动 = 交接未成,回失败 tip。
-	//   replyWasSuccess = true :同 zone 放行的成功应答(无 redirect)。归属没动 = 重发后落回了本节点
-	//                            (同物理节点不铸造 epoch),静默解冻;归属已动 = 正常放行。
+	//   replyWasSuccess = true :同 zone 放行的成功应答(无 redirect),或进场路由已经把交接中的玩家
+	//                            就地放进了新场景(EnterScene 3.2 步,不等应答 —— 应答可能丢)。
+	//                            归属没动 = 重发后落回了本节点(同物理节点不铸造 epoch),静默解冻;
+	//                            归属已动 = 正常放行。
 	//                            这条路也必须经过第 1 步的 DEL:否则标记会带着没变的 epoch 再活 300s,
 	//                            玩家解冻后继续产生新状态,下一次跨节点 EnterScene 会凭这份旧标记被
 	//                            直接放行,新节点读到的是旧档。

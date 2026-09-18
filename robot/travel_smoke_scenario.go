@@ -3,9 +3,11 @@ package main
 // travel-smoke 场景:单机器人对「跨 zone 场景传送」做往返端到端冒烟
 // (docs/design/cross-zone-scene-travel.md §4 数据流 / §5 阶段 3):
 //
-//	T1 登 home_zone(首登允许建角:home zone 就是在建角时登记的)→ 记下 player_id、gate 地址、金币出发值;
+//	T1 登 home_zone(首登允许建角:home zone 就是在建角时登记的)→ 记下 player_id、gate 地址;
+//	   读金币 → 在 home 区 GmAddCurrency +11 并读回,得到**非 0 且刚刚才变过**的金币出发值(为什么必须这样见 travelSmokeHomeGoldDelta);
 //	   登录途中就被 msg 124 送走 = 上一轮死在访客区的残留,直接失败(此时"出发区 == home"不成立);
-//	T2 负向:TravelToZone{target_zone_id=0} 必须被**同步**拒绝(回包体 tip != 0)且不发生重定向;
+//	T2 负向:TravelToZone{target_zone_id=0} 必须被**同步**拒绝(回包体 tip != 0)且不发生重定向、金币不变;
+//	   T2b:TravelToZone{visit_zone, 不存在的 scene_config_id} 同样必须同步被拒(scene 在冻结之前按 World 表校验目标地图);
 //	T3 去程:TravelToZone{visit_zone} → 等 msg 124 → pkg.FollowRedirect(探测 / 先连新后关旧 / 票据原样验签 / 严格重登)
 //	   → 等排在 124 **之后**的 NotifyEnterScene;断言 player_id 不变、票据 zone == visit_zone、gate 地址变了;
 //	T4 访客区:金币 == 出发值(读到的是 home 刚落盘的档)→ GmAddCurrency +7 生效并可读回(scene(B) 可写)
@@ -16,7 +18,7 @@ package main
 // 结果约定(供外层脚本消费):
 //
 //	全过 → 日志一行 `TRAVEL_SMOKE_OK player_id=… home_zone=… visit_zone=… home_gate=… visit_gate=… back_gate=…
-//	        gold_home=… gold_back=… move_ack=… ticket_binding=… reject_tip=…`,退出码 0;
+//	        gold_home=… gold_back=… move_ack=… ticket_binding=… reject_tip=… reject_map_tip=…`,退出码 0;
 //	任一步失败 → `TRAVEL_SMOKE_FAIL step=… reason=…`,退出码 1。
 //
 // 与其它冒烟不一样、不照做就会假绿或卡死的四件事:
@@ -86,8 +88,20 @@ const (
 	travelSmokeRequestSpacing = 1100 * time.Millisecond
 	// 留底扫描的轮询粒度。
 	travelSmokePollInterval = 50 * time.Millisecond
+	// 出发前在 home 区用 GM 加的金币数,每轮**无条件**加。它让 T4「访客区金币 == 出发值」成为真断言:
+	//   - 出发值必须非 0:新建角金币是 0;访客区 scene 读不到档时会把人当新号建一个空实体(金币同样是 0)并照常进场,
+	//     之后 +7、读回、回家 == 7 全都成立,而空实体一存盘就按 home_zone 的 topic 覆盖原档(等级 / 背包全丢)。
+	//     出发值为 0 时 0 == 0 抓不到这种串档 —— 它恰恰是本冒烟最该抓的形态;
+	//   - 出发值必须是刚刚才变过的:余额几轮不变时,读到一份**旧**档也能相等。出发前几秒才加的这一笔
+	//     只存在于 scene(A) 的内存里,访客区读得到它,才证明读到的是传送前那次存盘(CZ-5「先存盘后放行」)。
+	// 不做成"为 0 才补"的分支:那样这段代码一辈子只在首轮跑一次,而且第二条保证就没有了。
+	// 与访客区的 7 取不同的小质数,日志里一眼分得清是哪一笔没到账。
+	travelSmokeHomeGoldDelta int64 = 11
 	// 访客区用 GM 加的金币数。选一个不起眼的小质数:回家后余额恰好多 7,几乎不可能是别的流程碰巧造成的。
 	travelSmokeGoldDelta int64 = 7
+	// T2b 用的"不存在的目标地图"。BaseScene / World 表的 id 都是小整数,这个值任何部署的 World 表里都不会有。
+	// 不能取 0:0 是合法值(= 由目标 zone 的 scene_manager 挑默认大世界)。
+	travelSmokeBogusSceneConfigId uint32 = 4000000000
 	// 移动探针上报的坐标:故意远在任何地图之外,服务器有导航网格时必然纠偏并回 MoveAck。
 	// 副作用:没有导航网格的场景 fail-open 会原样接受这个位置并存盘 —— 只影响本冒烟专用账号,
 	// 且下次进有导航网格的场景时 SceneSpawnSystem::EnsureValidEnterLocation 会把它改写回出生点。
@@ -206,13 +220,32 @@ func RunTravelSmoke(cfg *config.Config) {
 			"多半是上一轮死在访客区的残留。等票据 / 等待落点过期(300s)或清掉 player:{id}:location 后再跑",
 			sc.HomeZone, homeGate)
 	}
-	goldHome, err := bot.readGold()
+	goldLogin, err := bot.readGold()
 	if err != nil {
 		fail("home-gold-read", "%v", err)
 	}
+	// 造出发值:登录时的余额 + 一笔刚加的(travelSmokeHomeGoldDelta 的注释写了为什么不能直接拿登录余额当出发值)。
+	// 加完必须读回:balance_after 只说明 scene(A) 内存里改了,后面所有断言比的都是 GetCurrencyList 读到的值。
+	goldHome := goldLogin + uint64(travelSmokeHomeGoldDelta)
+	gold, err := bot.addGold(travelSmokeHomeGoldDelta)
+	if err != nil {
+		// 这是全程第一条 GM 指令,环境没放行 GM 时就死在这里。gate 的 GM 闸拒绝时**不回包**、只推一条 SendTipToClient,
+		// 所以表现是等回包超时,而不是带 tip 的拒绝。
+		fail("home-gold-seed", "%v(若是等回包超时,先查 home 区 gate 的 GATE_RUN_MODE 是不是 dev:gate 的 GM 闸拒绝时不回包)", err)
+	}
+	if gold != goldHome {
+		fail("home-gold-seed", "home 区 GmAddCurrency 回的 balance_after=%d,期望 %d(登录余额 %d + %d)",
+			gold, goldHome, goldLogin, travelSmokeHomeGoldDelta)
+	}
+	if gold, err = bot.readGold(); err != nil {
+		fail("home-gold-seed-readback", "%v", err)
+	}
+	if gold != goldHome {
+		fail("home-gold-seed-readback", "home 区加完再读金币=%d,期望 %d", gold, goldHome)
+	}
 	zap.L().Info("[travel-smoke] at home",
 		zap.Uint64("player_id", bot.homePlayer), zap.Uint32("home_zone", sc.HomeZone),
-		zap.String("home_gate", homeGate), zap.Uint64("gold_home", goldHome))
+		zap.String("home_gate", homeGate), zap.Uint64("gold_login", goldLogin), zap.Uint64("gold_home", goldHome))
 
 	// ---- T2:负向 —— 非法目标必须同步被拒,且不发生重定向 ----
 	// 0 在服务端任何一层都是非法 zone(PlayerTravelHandoffComp 注释:targetZoneId 0 非法),不依赖部署里有哪些 zone。
@@ -222,10 +255,24 @@ func RunTravelSmoke(cfg *config.Config) {
 	if err != nil {
 		fail("reject-invalid-zone", "%v", err)
 	}
+	// T2b:合法的目标 zone + 不存在的目标地图,同样必须**同步**被拒。
+	// scene_config_id 是客户端可控字段,scene 要在冻结之前按 World 表校验(RequestZoneTravel)。漏了这道校验,请求会被
+	// 受理 → 源端冻结、存盘、放行、销毁实体,目标 zone 才发现这张图落不进去,那时玩家已经没有"原地"可回
+	// (scene_manager 两条腿上各有一道兜底,但那是给漏网的请求准备的,不该靠它们挡客户端乱填的 id)。
+	// 这一步若报"回包 tip=0(被受理了)",expectTravelRejected 提示里的"没校验目标 zone"应读作"没校验目标地图";
+	// 此时服务端不会留下残局:scene_manager 第一条腿会拒掉这张图,源 scene 解冻并推一条 tip。
+	rejectMapTip, err := bot.expectTravelRejected(sc.VisitZone, travelSmokeBogusSceneConfigId)
+	if err != nil {
+		fail("reject-invalid-map", "scene_config_id=%d: %v", travelSmokeBogusSceneConfigId, err)
+	}
 	// 拒绝不该留下任何状态。会话是否还活着用一次读来验;"没被留在冻结 / 传送中"由 T3 被受理来证明
 	// (残留 PlayerFrozenComp / PlayerTravelHandoffComp 时 T3 会被同步拒绝)。
-	if _, err := bot.readGold(); err != nil {
+	// 读到的值也要比:丢掉返回值的读是空断言(会话活着但读到别的东西也算过)。
+	if gold, err = bot.readGold(); err != nil {
 		fail("reject-session-alive", "非法目标被拒之后会话不可用: %v", err)
+	}
+	if gold != goldHome {
+		fail("reject-session-alive", "非法目标被拒之后金币=%d,期望仍是出发值 %d(拒绝不该改动任何状态)", gold, goldHome)
 	}
 
 	// ---- T3:去访客区 ----
@@ -245,12 +292,15 @@ func RunTravelSmoke(cfg *config.Config) {
 
 	// ---- T4:访客区断言 ----
 	// 数据连续:scene(B) 从共享 Redis 读到的必须是 scene(A) 传送前刚落盘的那一份(CZ-5 "先存盘后放行")。
-	gold, err := bot.readGold()
-	if err != nil {
+	// 这条断言的分辨力来自 T1:出发值 = 登录余额 + 出发前几秒才加的一笔,所以读到 0 = 没读到档、被当新号建了空实体;
+	// 读到登录余额 = 读到的是旧档(传送前那次存盘没落地就放行了)。
+	if gold, err = bot.readGold(); err != nil {
 		fail("visit-gold-read", "%v", err)
 	}
 	if gold != goldHome {
-		fail("visit-gold", "访客区金币=%d,期望出发值 %d(读到的不是 home 区刚落盘的档,或被当成新号建了实体)", gold, goldHome)
+		fail("visit-gold", "访客区金币=%d,期望出发值 %d(= 登录余额 %d + 出发前在 home 区加的 %d)。"+
+			"读到 0 = 没读到档、被当成新号建了空实体(它一存盘就会覆盖原档);读到 %d = 读到的是旧档,传送前的存盘没落地就放行了",
+			gold, goldHome, goldLogin, travelSmokeHomeGoldDelta, goldLogin)
 	}
 	// scene(B) 可写:用请求 / 响应型 RPC 当硬断言(移动类 RPC 的返回是 Empty,见 probeMove)。
 	goldVisit := goldHome + uint64(travelSmokeGoldDelta)
@@ -258,7 +308,7 @@ func RunTravelSmoke(cfg *config.Config) {
 		fail("visit-gold-add", "%v", err)
 	}
 	if gold != goldVisit {
-		fail("visit-gold-add", "GmAddCurrency 回的 balance_after=%d,期望 %d(被拒时回的是 0)", gold, goldVisit)
+		fail("visit-gold-add", "访客区 GmAddCurrency 回的 balance_after=%d,期望 %d(出发值 %d + %d)", gold, goldVisit, goldHome, travelSmokeGoldDelta)
 	}
 	if gold, err = bot.readGold(); err != nil {
 		fail("visit-gold-readback", "%v", err)
@@ -324,9 +374,9 @@ func RunTravelSmoke(cfg *config.Config) {
 		ticketBinding = "checked"
 	}
 	zap.L().Info(fmt.Sprintf("TRAVEL_SMOKE_OK player_id=%d home_zone=%d visit_zone=%d home_gate=%s visit_gate=%s back_gate=%s "+
-		"gold_home=%d gold_back=%d move_ack=%t ticket_binding=%s reject_tip=%d",
+		"gold_home=%d gold_back=%d move_ack=%t ticket_binding=%s reject_tip=%d reject_map_tip=%d",
 		bot.homePlayer, sc.HomeZone, sc.VisitZone, homeGate, visitGate, backGate,
-		goldHome, goldBack, moveAck, ticketBinding, rejectTip))
+		goldHome, goldBack, moveAck, ticketBinding, rejectTip, rejectMapTip))
 	cleanup()
 	_ = zap.L().Sync()
 }
@@ -389,7 +439,10 @@ func travelSmokeIsRecorded(messageId uint32) bool {
 		game.SceneSceneClientPlayerNotifyEnterSceneMessageId,
 		game.SceneClientPlayerCommonSendTipToClientMessageId,
 		game.SceneClientPlayerCommonKickPlayerMessageId,
-		game.SceneMovementClientPlayerNotifyMoveAckMessageId:
+		game.SceneMovementClientPlayerNotifyMoveAckMessageId,
+		// 金币读写的回包:共享 helper 把"被拒"读成余额 0,要靠留底里的原始回包分辨(见 replyRejection)。
+		game.SceneCurrencyClientPlayerGetCurrencyListMessageId,
+		game.SceneCurrencyClientPlayerGmAddCurrencyMessageId:
 		return true
 	}
 	return false
@@ -509,19 +562,74 @@ func (b *travelSmokeBot) send(messageId uint32, request proto.Message) error {
 }
 
 // readGold / addGold 复用 currency_crash_window_scenario.go 的请求 / 等待对(它们每次调用都会复位各自的
-// ready 通道,可以反复调),只是套上本场景的请求节奏。前提是 onMessage 把回包转给了通用分发。
+// ready 通道,可以反复调),套上本场景的请求节奏,再补一道"被拒就是失败"。前提是 onMessage 把回包转给了通用分发。
+//
+// 为什么要补:共享 helper 分不清"余额是 0"和"请求被拒"——GetCurrencyList 的 handler 在回包带 error_message 时
+// 记一份空列表,Player.GetCurrencyValue 对"列表已到、槽位缺失"回 (0, true),于是 readGoldBalance 回 (0, nil);
+// gate 信封拒绝(限流)时回包体为空,解出来同样是空列表 / balance_after=0。本场景的断言全建立在余额上,
+// 把拒绝读成 0 会让失败原因指错方向(出发值为 0 的那一瞬间还会直接放过)。
+// 不改共享 helper:别的冒烟依赖它现在的语义;这里从自己的留底里看原始回包。
+//
+// 不按"列表为空 / 长度不足"判失败:新号还没有任何货币记录时,空列表是合法回包(T1 的第一次读就是它)。
+// 需要非 0 的地方由调用点拿余额与期望值比。
 func (b *travelSmokeBot) readGold() (uint64, error) {
 	b.pace()
+	since, _ := b.mark()
 	balance, err := readGoldBalance(b.gc, b.player, b.stats, travelSmokeRpcTimeout)
 	b.lastRequestAt = time.Now()
-	return balance, err
+	if err != nil {
+		return 0, err
+	}
+	if err := b.replyRejection(since, game.SceneCurrencyClientPlayerGetCurrencyListMessageId, &scene.GetCurrencyListResponse{}); err != nil {
+		return 0, fmt.Errorf("GetCurrencyList: %w", err)
+	}
+	return balance, nil
 }
 
 func (b *travelSmokeBot) addGold(amount int64) (uint64, error) {
 	b.pace()
+	since, _ := b.mark()
 	balance, err := gmAddGold(b.gc, b.player, b.stats, amount, travelSmokeRpcTimeout)
 	b.lastRequestAt = time.Now()
-	return balance, err
+	if err != nil {
+		return 0, err
+	}
+	if err := b.replyRejection(since, game.SceneCurrencyClientPlayerGmAddCurrencyMessageId, &scene.GmAddCurrencyResponse{}); err != nil {
+		return 0, fmt.Errorf("GmAddCurrency{amount=%d}: %w", amount, err)
+	}
+	return balance, nil
+}
+
+// travelSmokeTipReply 是带 error_message 的回包(请求 / 响应型 RPC 的回包都长这样)。
+type travelSmokeTipReply interface {
+	proto.Message
+	GetErrorMessage() *base.TipInfoMessage
+}
+
+// replyRejection 在共享 helper 已经等到回包之后调用:从 since 之后的留底里取最后一条 messageId 的回包,
+// 被拒(gate 信封 tip 或回包体 tip 非 0)就返回 error。reply 只是解码用的空壳,由调用方给出具体类型。
+//
+// 回包此刻一定已经在留底里:onMessage 先追加留底、再转发给通用分发,而 helper 等的 ready 通道是在转发里才关的。
+// 取最后一条而不是第一条:上一次请求超时后迟到的回包也可能落在 since 之后,离现在最近的那条才是本次的。
+func (b *travelSmokeBot) replyRejection(since int, messageId uint32, reply travelSmokeTipReply) error {
+	records, _ := b.snapshot(since)
+	for i := len(records) - 1; i >= 0; i-- {
+		r := records[i]
+		if r.messageId != messageId {
+			continue
+		}
+		if r.envelopeTip != 0 {
+			return fmt.Errorf("被 gate 信封拒绝 tip=%d(请求没到 scene:被限流了,检查 travelSmokeRequestSpacing)", r.envelopeTip)
+		}
+		if err := proto.Unmarshal(r.body, reply); err != nil {
+			return fmt.Errorf("decode reply(message_id=%d): %w", messageId, err)
+		}
+		if tip := reply.GetErrorMessage().GetId(); tip != 0 {
+			return fmt.Errorf("scene 业务拒绝 tip=%d(常见:跨 zone 冻结闸 / 货币封禁;GmAddCurrency 还可能是 scene 的 GM 闸 —— SCENE_RUN_MODE 不是 dev)", tip)
+		}
+		return nil
+	}
+	return fmt.Errorf("helper 已等到回包,留底里却没有 message_id=%d(travelSmokeIsRecorded 漏登记了这个消息号?)", messageId)
 }
 
 // gateAddr 返回当前连着的 gate("ip:port";重定向后是新 zone 的 gate)。

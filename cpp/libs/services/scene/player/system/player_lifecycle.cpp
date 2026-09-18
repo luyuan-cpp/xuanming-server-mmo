@@ -48,6 +48,7 @@
 #include "thread_context/node_context_manager.h"
 #include "rpc/service_metadata/client_player_common_service_metadata.h"
 #include "table/proto/tip/scene_error_tip.pb.h"
+#include "table/code/world_table.h" // RequestZoneTravel:目标地图必须是 World 表登记的世界图
 #include "proto/scene_manager/scene_manager_service.pb.h"
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
 #include "muduo/net/EventLoop.h"
@@ -136,6 +137,10 @@ namespace
 	// 传送交接的 EnterScene 应答预算。生成的 gRPC 客户端在 status 非 OK 时**不调**应答处理器,
 	// 而 scene_manager 不可达 / 连接被重置就是这种情况 —— 没有这道看门狗,玩家会以冻结态
 	// 永远挂在本节点。取值远大于 EnterScene 的正常耗时(压测 P99 亚秒),只兜真正的丢应答。
+	// 下限约束(别为了缩短"应答丢失时源实体冻结着留在场景里"的时间把它调小):必须远大于 scene_manager
+	// "铸造 epoch → Kafka 路由 ACK / 失败回滚"这段窗口(KafkaWriteTimeoutSeconds,默认 5s)。看门狗按
+	// owner_epoch 变没变裁决去留,落在窗口里会读到一个即将被回滚的新 epoch:实体销毁之后 location 又
+	// 指回本节点,玩家在线却没有实体。
 	constexpr double kTravelReplyBudgetSec = 30.0;
 
 	// PlayerSceneChangeInFlightComp 的有效期。EnterScene 正常亚秒返回;应答丢失时(scene_manager
@@ -143,6 +148,75 @@ namespace
 	// 代价:超过它才到的迟到应答可能被记到下一条请求头上(见 PlayerSceneChangeInFlightComp 的说明),
 	// 后果只是一次换图失败或多余的交接,不会双主 —— 去留始终由 owner_epoch 比对裁决。
 	constexpr uint64_t kSceneChangeInFlightTtlMs = 5000;
+
+	// [TravelHandoff] 汇总行的周期,与 RedisSystem 的 [DirtySave] / [OwnerEpoch] 同为 30s。
+	constexpr double kTravelHandoffStatsIntervalSec = 30.0;
+
+	// 一次交接走到终态(放行 / 就地解决 / 未成)时调用:终态计数 +1,并累计这次交接的冻结时长。
+	// 必须在摘 PlayerFrozenComp **之前**调 —— 冻结起点只记在那个组件上。
+	// 时钟回拨(now < frozenAtMs)按 0 计,不让一个负数把累计值冲成天文数字。
+	void ObserveTravelHandoffEnded(entt::entity player, std::atomic<uint64_t> &outcomeCounter)
+	{
+		travel_handoff_stats::Inc(outcomeCounter);
+		if (!tlsEcs.actorRegistry.valid(player))
+		{
+			return;
+		}
+		const auto *frozen = tlsEcs.actorRegistry.try_get<PlayerFrozenComp>(player);
+		if (frozen == nullptr)
+		{
+			return;
+		}
+		const int64_t nowMs = static_cast<int64_t>(TimeSystem::NowMillisecondsUTC());
+		travel_handoff_stats::ObserveFrozenMs(nowMs > frozen->frozenAtMs
+												  ? static_cast<uint64_t>(nowMs - frozen->frozenAtMs)
+												  : uint64_t{0});
+	}
+
+	// 第一次有交接发起时,在当前线程的 EventLoop 上挂一个 30s 周期定时器,把 travel_handoff_stats
+	// 打成一行 [TravelHandoff]。前缀与 key=value 布局是给 stress_summarize.ps1 之类的脚本解析用的,
+	// 改格式要同步解析方(目前还没有解析方)。
+	//
+	// 为什么挂在这里而不是 RedisSystem 那个 30s 快照定时器里:这些计数只属于本文件的交接链,
+	// 从没发生过交接的进程(单节点部署、dev 旁路、单测宿主)不需要这个定时器,也不该多一行日志。
+	// 回调不捕获任何对象、只读进程级原子计数,loop 析构时定时器随之销毁,不需要保存 TimerId 去取消
+	// (AGENTS §11.7 管的是"绑了对象的回调",这里没有对象)。
+	// 有变化才打:值都是累计值,长时间没有交接时不重复刷同一行。
+	void EnsureTravelHandoffStatsTimer()
+	{
+		static thread_local bool armed = false;
+		if (armed)
+		{
+			return;
+		}
+		auto *loop = muduo::net::EventLoop::getEventLoopOfCurrentThread();
+		if (loop == nullptr)
+		{
+			return; // 单测 / 无 loop 的宿主:不打汇总行,计数本身照常累加
+		}
+		armed = true;
+		loop->runEvery(kTravelHandoffStatsIntervalSec, [lastLogged = travel_handoff_stats::Snapshot{}]() mutable
+		{
+			const auto stats = travel_handoff_stats::Read();
+			if (stats == lastLogged)
+			{
+				return;
+			}
+			lastLogged = stats;
+			LOG_INFO << "[TravelHandoff] started=" << stats.started
+					 << " started_cross_zone=" << stats.startedCrossZone
+					 << " granted=" << stats.granted
+					 << " granted_without_reply=" << stats.grantedWithoutReply
+					 << " resolved_in_place=" << stats.resolvedInPlace
+					 << " aborted=" << stats.aborted
+					 << " exit_wins=" << stats.exitWins
+					 << " save_watchdog_fired=" << stats.saveWatchdogFired
+					 << " reply_watchdog_fired=" << stats.replyWatchdogFired
+					 << " verify_rearmed=" << stats.verifyRearmed
+					 << " frozen_ms_total=" << stats.frozenMsTotal
+					 << " frozen_ms_max=" << stats.frozenMsMax;
+		});
+	}
 } // namespace
 
 void PlayerLifecycleSystem::HandlePlayerAsyncLoadFailed(Guid playerId,
@@ -284,6 +358,7 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 		{
 			LOG_WARN << "HandlePlayerAsyncSaved: player " << playerId
 					 << " is exiting; dropping in-flight zone travel intent (exit wins)";
+			travel_handoff_stats::Inc(travel_handoff_stats::Get().exitWins);
 			tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(playerEntity);
 			tlsEcs.actorRegistry.remove<PlayerFrozenComp>(playerEntity);
 		}
@@ -393,6 +468,14 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	//     0 一律不覆盖(旧版 gate / scene_manager 未填,或首登时 Init 刚挂的零值组件);
 	//     epoch 取 max:见 PlayerOwnerEpochComp 的说明。
 	//     非 per-tick 路径,get_or_emplace 合规(AGENTS §7.5)。
+	//
+	//     先记下路由到达之前缓存的 epoch:下面按 max 覆盖之后,就分不出"这条路由带来的 epoch 与我
+	//     手里的是同一代"与"路由带来了更新的一代"了,而 3.2 步只认前者。
+	uint64_t epochBeforeRoute = 0;
+	if (const auto *cachedEpoch = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player))
+	{
+		epochBeforeRoute = cachedEpoch->epoch;
+	}
 	if (ctx.homeZoneId != 0)
 	{
 		auto &homeZone = tlsEcs.actorRegistry.get_or_emplace<PlayerHomeZoneComp>(player);
@@ -487,6 +570,34 @@ void PlayerLifecycleSystem::EnterScene(const entt::entity player, const PlayerEn
 	//     通道,客户端收到 EnterSceneS2C 后立刻发下一次换图时,上一条的应答可能还没到,留着它会把
 	//     这次合法请求误拒成"切换中"。随后到达的成功应答找不到在途组件,是静默 no-op。
 	tlsEcs.actorRegistry.remove<PlayerSceneChangeInFlightComp>(player);
+
+	// 3.2 同 zone 交接"重发后落回本节点"的就地收尾:同样不等 gRPC 应答。
+	//     交接重发的 EnterScene 若被 scene_manager 重新挑频道挑回了本节点(同物理节点不铸造 epoch),
+	//     路由走到这里时实体还带着 PlayerFrozenComp:玩家人已在新场景,输入却全被冻结闸丢弃。应答
+	//     正常到达时只差几毫秒;应答丢失(scene_manager 在路由 ACK 之后重启 / 断连,生成的 gRPC 客户端
+	//     status 非 OK 不回调)时要冻到 30s 看门狗,看门狗还会按"失败"回一条假的 kEnterSceneFailed。
+	//     判据:交接已发起、目标是本 zone 且没指定场景实例、路由带来的 epoch 非 0 且与路由到达前缓存的
+	//     是同一代。
+	//       * 指定了实例(sceneId != 0)的交接落不回本节点:实例所在节点是固定的,它在本节点的话
+	//         第一条请求就不会被 18 拒。此时到达的同代路由不是这次重发的结果,不动交接;
+	//       * 更新的一代到不了这里:scene_handler.cpp 已先走 DiscardStaleHandoffEntity 销毁重载;
+	//       * 更旧的一代是乱序到达的旧路由,不是这次重发的结果,不动交接;
+	//       * 跨 zone 传送不在此列:路由落到本节点说明不了那次传送的去留,仍由应答 / 看门狗裁决。
+	//     不直接 AbortTravelHandoff:同一代的路由也可能是交接之前那次同节点换图迟到的路由,或顶号重连
+	//     的同落点路由,此刻重发的那条请求也许正在 scene_manager 里铸造 epoch —— 未经核实就解冻,
+	//     等于同一名玩家在两处同时活着。走 ResolveTravelOutcome:先 DEL 标记再读 epoch,没变就静默解冻
+	//     (replyWasSuccess=true 取的正是"归属没动 = 换图已就地完成,不回失败 tip"这层含义),变了就按
+	//     被废黜销毁;之后到达的应答 / 看门狗因交接意图已摘而成为 no-op。
+	if (const auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(player);
+		travel != nullptr && travel->requestedAtMs != 0 && travel->targetZoneId == GetZoneId() &&
+		travel->sceneId == 0 && ctx.ownerEpoch != 0 && ctx.ownerEpoch == epochBeforeRoute)
+	{
+		LOG_INFO << "EnterScene: player " << playerId
+				 << " was placed on this node while its same-zone handoff is in flight (owner_epoch "
+				 << ctx.ownerEpoch << " unchanged); verifying and settling the handoff in place";
+		ResolveTravelOutcome(playerId, travel->requestedAtMs, "placed on this node by route",
+							 /*replyWasSuccess=*/true);
+	}
 
 	// 3.5 组队:刷新 TeamId 并检查同节点跟随(team-system.md §F.2)。
 	//     放在 HandleEnterScene 之外:它对"已在目标场景"幂等早退,30s 宽限期内同场景重连
@@ -733,10 +844,35 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 	if (tlsEcs.actorRegistry.valid(playerEntity) &&
 		tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(playerEntity))
 	{
+		// 先抄后摘:handoff 标记写没写过只有组件知道(requestedAtMs != 0 = BeginTravelHandoff 已发 SET)。
+		const bool handoffMarkWritten =
+			tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(playerEntity).requestedAtMs != 0;
 		LOG_INFO << "FinishExitAfterPersist: player " << playerId
-				 << " exited during ownership handoff; dropping handoff intent (exit wins)";
+				 << " exited during ownership handoff; dropping handoff intent (exit wins)"
+				 << " handoff_mark_written=" << handoffMarkWritten;
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().exitWins);
 		tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(playerEntity);
 		tlsEcs.actorRegistry.remove<PlayerFrozenComp>(playerEntity);
+
+		// 标记已写就必须撤回(与 AbortTravelHandoff 同一条 best-effort DEL)。scene_manager 这次若没有
+		// 推进 epoch(请求没发出去 / 回了非放行错误 / 重挑频道挑回本节点不铸造 / 路由失败回滚),标记
+		// "{E}:{ms}" 在 300s TTL 内仍等于当前 owner_epoch。玩家在 player_locator 30s 租约内重连回本节点
+		// (同落点不铸造,epoch 仍是 E)继续产生新状态,此后任一次跨节点 EnterScene 都会凭这份旧标记
+		// 免存盘过换手门:目标节点读到旧档(回档),本节点的释放存盘被 CAS 拒(假的双主告警)。
+		// 撤回的最坏后果:scene_manager 恰好卡在预检与铸造 Lua 之间 → Lua 回"标记已撤回"(18)、
+		// 未改任何状态,而玩家本来就在退出;它若已经铸造完,这次 DEL 无害。
+		// 必须排在下面的 DispatchEmergencyRelocate 之前:两条命令走同一条连接按序执行,先 DEL 后 SET,
+		// 疏散改派自己写的新标记不会被这次撤回误删。Redis 不通就只能靠 TTL 兜底。
+		// HandlePlayerAsyncSaved 里同名的"退出优先"分支不需要这一步:交接发起之后 SavePlayerToRedis
+		// 直接跳过、不会再有落地回调,走到那条分支时 requestedAtMs 必为 0(标记还没写)。
+		if (handoffMarkWritten)
+		{
+			if (auto &redis = tlsRedis.GetZoneRedis(); redis && redis->connected())
+			{
+				const std::string key = player_ownership::HandoffRedisKey(playerId);
+				redis->command([](hiredis::Hiredis *, redisReply *) {}, "DEL %s", key.c_str());
+			}
+		}
 	}
 
 	// Frozen 只应与 PlayerTravelHandoffComp 成对出现(上面已一起摘掉)。走到这里还带着 Frozen
@@ -1292,6 +1428,9 @@ void PlayerLifecycleSystem::DestroyDeposedPlayer(Guid playerId, const char *reas
 //                                                 epoch 已变 → DestroyDeposedPlayer;没变 → 静默解冻
 //                                             错误 / 超时                   → ResolveTravelOutcome:
 //                                                 epoch 已变 → DestroyDeposedPlayer;没变 → 解冻回 tip
+//   同 zone 重发后落回本节点时,进场路由可能先于应答到达(应答也可能丢):EnterScene 3.2 步不等应答,
+//   直接走 ResolveTravelOutcome 静默解冻。
+//   交接途中玩家退出:退出优先(FinishExitAfterPersist),标记已写则一并撤回。
 //
 // 为什么同 zone 换图是"被拒之后才交接"而不是每次都先存盘:scene 节点事先不知道目标场景在不在
 // 本节点(频道由 scene_manager 挑),同节点换图占绝大多数且不需要冻结 / 存盘 / 销毁。只在收到 18
@@ -1320,6 +1459,22 @@ uint32_t PlayerLifecycleSystem::RequestZoneTravel(entt::entity player, uint32_t 
 		LOG_WARN << "[ZoneTravel] rejected: bad target zone, player_id=" << playerId
 				 << " target_zone=" << targetZoneId << " self_zone=" << GetZoneId();
 		return kZoneTravelTargetZoneNotFound;
+	}
+
+	// 目标地图:0 = 由目标 zone 的 scene_manager 挑默认大世界;非 0 必须是 World 表登记过的世界图
+	// (World.scene_id 是 BaseScene id,与 scene_manager 的 worldConfIds / 世界频道同一口径)。
+	// scene_config_id 是客户端可控字段,必须在冻结之前查:一旦放行,源实体随即销毁,目标 zone 才发现
+	// 这张图落不进去(副本 / 镜像的 conf、乱填的 id)时玩家已经没有"原地"可回。后面还有两道:
+	// scene_manager 第一条腿只读检查目标 zone 有没有这张图的频道(World 表全服一份,某个 zone 没开
+	// 这张图只有它知道),第二条腿解析失败回落默认大世界。
+	// World 表为空 = 没载表(单测宿主),判不了就不拦,交给后面两道。
+	// 复用既有的 kEnterSceneSceneNotFound,不为它新开 tip 码。
+	if (sceneConfigId != 0 && WorldTableManager::Instance().Count() != 0 &&
+		WorldTableManager::Instance().CountBySceneIdIndex(sceneConfigId) == 0)
+	{
+		LOG_WARN << "[ZoneTravel] rejected: scene_config_id is not a world map, player_id=" << playerId
+				 << " target_zone=" << targetZoneId << " scene_config_id=" << sceneConfigId;
+		return kEnterSceneSceneNotFound;
 	}
 
 	// ── CZ-6:战斗在途 / 备战中不可传送 ──
@@ -1435,6 +1590,15 @@ uint32_t PlayerLifecycleSystem::StartTravelHandoff(entt::entity player, uint32_t
 	frozen.frozenAtMs = frozenAtMs;
 	frozen.toZoneId = targetZoneId;
 
+	// 成败计数从这里起算(此前的校验拒绝没有改状态,不算一次交接)。各终态在
+	// AbortTravelHandoff / 放行销毁 / "退出优先"分支里各记一次,见 travel_handoff_stats。
+	travel_handoff_stats::Inc(travel_handoff_stats::Get().started);
+	if (crossZone)
+	{
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().startedCrossZone);
+	}
+	EnsureTravelHandoffStatsTimer();
+
 	LOG_INFO << "[ZoneTravel] handoff started for player " << playerId
 			 << " target_zone=" << targetZoneId << (crossZone ? " (cross-zone)" : " (same-zone cross-node)")
 			 << " scene_id=" << sceneId << " scene_conf_id=" << sceneConfigId;
@@ -1481,6 +1645,7 @@ void PlayerLifecycleSystem::ArmTravelSaveWatchdog(Guid playerId, int64_t frozenA
 		// requestedAtMs 仍为 0 = 标记没写、EnterScene 没发,不可能被放行,可以直接解冻(不需要
 		// ResolveTravelOutcome)。那次存盘之后照常落地也无妨:届时实体上已没有交接意图,
 		// HandlePlayerAsyncSaved 按普通存盘处理。
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().saveWatchdogFired);
 		AbortTravelHandoff(playerId, "handoff save did not land in time");
 	});
 }
@@ -1505,7 +1670,8 @@ bool PlayerLifecycleSystem::IsSceneChangeBusy(entt::entity player)
 	return nowMs >= pending->sentAtMs && nowMs - pending->sentAtMs < kSceneChangeInFlightTtlMs;
 }
 
-void PlayerLifecycleSystem::NoteSceneChangeRequested(entt::entity player, uint64_t sceneId, uint32_t sceneConfigId)
+void PlayerLifecycleSystem::NoteSceneChangeRequested(entt::entity player, uint64_t sceneId, uint32_t sceneConfigId,
+													 bool playerRequested)
 {
 	if (!tlsEcs.actorRegistry.valid(player))
 	{
@@ -1517,6 +1683,7 @@ void PlayerLifecycleSystem::NoteSceneChangeRequested(entt::entity player, uint64
 	pending.sceneId = sceneId;
 	pending.sceneConfigId = sceneConfigId;
 	pending.sentAtMs = TimeSystem::NowMillisecondsUTC();
+	pending.playerRequested = playerRequested;
 }
 
 bool PlayerLifecycleSystem::IsHandoffRequested(entt::entity player)
@@ -1543,8 +1710,9 @@ bool PlayerLifecycleSystem::DiscardStaleHandoffEntity(entt::entity player, uint6
 	}
 	if (incomingOwnerEpoch <= cachedEpoch)
 	{
-		// 相等 = 同 zone 重发后落回了本节点(同物理节点不铸造 epoch),本实体就是合法持有者,照常复用,
-		//        随后到达的成功应答会经 ResolveTravelOutcome 静默解冻;
+		// 相等 = 同 zone 重发后落回了本节点(同物理节点不铸造 epoch),本实体就是合法持有者,照常复用;
+		//        EnterScene 3.2 步放进场景后立刻走 ResolveTravelOutcome 核实并静默解冻,不等应答
+		//        (应答可能丢),随后到达的成功应答是 no-op;
 		// 更小 = 乱序到达的旧路由,EnterScene 自己会按 max 忽略。
 		return false;
 	}
@@ -1559,6 +1727,9 @@ bool PlayerLifecycleSystem::DiscardStaleHandoffEntity(entt::entity player, uint6
 	LOG_WARN << "[ZoneTravel] re-entry with newer owner_epoch " << incomingOwnerEpoch << " (cached " << cachedEpoch
 			 << ") hit a stale in-handoff entity for player " << playerId
 			 << "; discarding it so the player is reloaded from storage";
+	// 这也是一次"放行了但应答没到"的终态,只是先于看门狗由再入路由发现。
+	travel_handoff_stats::Inc(travel_handoff_stats::Get().grantedWithoutReply);
+	ObserveTravelHandoffEnded(player, travel_handoff_stats::Get().granted);
 	DestroyDeposedPlayer(playerId, "handoff_superseded_by_reentry");
 	return true;
 }
@@ -1722,6 +1893,8 @@ void PlayerLifecycleSystem::ArmTravelReplyWatchdog(Guid playerId, uint64_t reque
 			return; // 已收到应答,或已是另一次传送
 		}
 		// 超时只说明应答没到,不说明没被放行:先核实,再决定解冻还是销毁。
+		// Redis 不可用时 ResolveTravelOutcome 会重挂本看门狗,每次到期都计一次(重挂另计 verify_rearmed)。
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().replyWatchdogFired);
 		ResolveTravelOutcome(playerId, requestedAtMs, "EnterScene reply timed out");
 	});
 }
@@ -1751,6 +1924,7 @@ void PlayerLifecycleSystem::ResolveTravelOutcome(Guid playerId, uint64_t request
 		// 判不清就不解冻。玩家保持冻结(他可以断线,退出优先),Redis 恢复后下一轮看门狗再判。
 		LOG_ERROR << "[ZoneTravel] cannot verify travel outcome for player " << playerId << " (" << reason
 				  << "): zone redis unavailable; keeping the player frozen and re-arming the watchdog";
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().verifyRearmed);
 		ArmTravelReplyWatchdog(playerId, requestedAtMs);
 		return;
 	}
@@ -1777,6 +1951,7 @@ void PlayerLifecycleSystem::ResolveTravelOutcome(Guid playerId, uint64_t request
 			{
 				LOG_ERROR << "[ZoneTravel] GET owner_epoch failed while verifying travel outcome for player "
 						  << playerId << "; keeping the player frozen and re-arming the watchdog";
+				travel_handoff_stats::Inc(travel_handoff_stats::Get().verifyRearmed);
 				ArmTravelReplyWatchdog(playerId, requestedAtMs);
 				return;
 			}
@@ -1800,12 +1975,15 @@ void PlayerLifecycleSystem::ResolveTravelOutcome(Guid playerId, uint64_t request
 				LOG_INFO << "[ZoneTravel] same-zone handoff granted for player " << playerId
 						 << ": owner_epoch " << cachedEpoch << " -> " << redisEpoch
 						 << "; destroying source-side entity";
+				ObserveTravelHandoffEnded(entity, travel_handoff_stats::Get().granted);
 				DestroyDeposedPlayer(playerId, "scene_handoff_granted", /*routine=*/true);
 				return;
 			}
 			LOG_WARN << "[ZoneTravel] travel for player " << playerId << " was granted although the reply was lost/failed ("
 					 << reasonText << "): owner_epoch " << cachedEpoch << " -> " << redisEpoch
 					 << "; destroying source-side entity";
+			travel_handoff_stats::Inc(travel_handoff_stats::Get().grantedWithoutReply);
+			ObserveTravelHandoffEnded(entity, travel_handoff_stats::Get().granted);
 			DestroyDeposedPlayer(playerId, "travel_granted_without_reply");
 		},
 		"GET %s", epochKey.c_str());
@@ -1813,6 +1991,7 @@ void PlayerLifecycleSystem::ResolveTravelOutcome(Guid playerId, uint64_t request
 	{
 		LOG_ERROR << "[ZoneTravel] redis command dispatch failed while verifying travel outcome for player "
 				  << playerId << "; keeping the player frozen and re-arming the watchdog";
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().verifyRearmed);
 		ArmTravelReplyWatchdog(playerId, requestedAtMs);
 	}
 }
@@ -1834,7 +2013,8 @@ void PlayerLifecycleSystem::HandleTravelEnterSceneReply(Guid playerId, const ::s
 		const auto *pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(playerEntity);
 		if (pending == nullptr)
 		{
-			// 疏散 / 队伍跟随等不挂在途组件的请求,或看门狗已先核实过的迟到应答。没有事可做。
+			// 疏散等不挂在途组件的请求、路由已先落地(EnterScene 3.1 已摘)的成功应答,或看门狗已先
+			// 核实过的迟到应答。没有事可做。
 			LOG_DEBUG << "[ZoneTravel] EnterScene reply for player " << playerId
 					  << " without an in-flight handoff or scene change; ignoring"
 					  << " error_code=" << resp.error_code() << " has_redirect=" << resp.has_redirect();
@@ -1843,6 +2023,19 @@ void PlayerLifecycleSystem::HandleTravelEnterSceneReply(Guid playerId, const ::s
 		// 先抄后摘:StartTravelHandoff 也会摘这个组件,之后 pending 指针即失效。
 		const PlayerSceneChangeInFlightComp target = *pending;
 		tlsEcs.actorRegistry.remove<PlayerSceneChangeInFlightComp>(playerEntity);
+
+		if (!target.playerRequested)
+		{
+			// 服务器替他发的队伍跟随:玩家没在等结果。被拒(含理论上不该出现的 18:跟随只发本节点上的
+			// 场景)只记日志、队员留在原场景,不起交接、不回 tip —— 跟随不跨节点拉人(team-system.md DV-6)。
+			if (resp.error_code() != 0)
+			{
+				LOG_INFO << "[ZoneTravel] team-follow EnterScene for player " << playerId
+						 << " was rejected by scene_manager code=" << resp.error_code()
+						 << " scene_id=" << target.sceneId << "; player stays in the current scene";
+			}
+			return;
+		}
 
 		if (resp.error_code() == kSmErrHandoffPending)
 		{
@@ -1914,6 +2107,7 @@ void PlayerLifecycleSystem::HandleTravelEnterSceneReply(Guid playerId, const ::s
 	LOG_INFO << "[ZoneTravel] handoff granted for player " << playerId
 			 << " -> gate " << resp.redirect().target_gate_ip() << ":" << resp.redirect().target_gate_port()
 			 << "; destroying source-side entity";
+	ObserveTravelHandoffEnded(playerEntity, travel_handoff_stats::Get().granted);
 	DestroyDeposedPlayer(playerId, "travel_redirect", /*routine=*/true);
 }
 
@@ -1943,6 +2137,10 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
 		LOG_INFO << "[ZoneTravel] handoff resolved in place for player " << playerId << ": " << reason
 				 << "; ownership unchanged, unfreezing silently";
 	}
+
+	// 终态计数:回失败 tip 的是"未成",静默解冻的是"就地解决"。排在摘 Frozen 之前(要读冻结起点)。
+	ObserveTravelHandoffEnded(playerEntity, notifyFailure ? travel_handoff_stats::Get().aborted
+														  : travel_handoff_stats::Get().resolvedInPlace);
 
 	// 解冻:StartTravelHandoff 用 PlayerFrozenComp 冻结输入,交接没发生就还给玩家。
 	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(playerEntity);

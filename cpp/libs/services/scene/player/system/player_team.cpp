@@ -17,6 +17,7 @@
 #include "modules/scene/comp/scene_comp.h"
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
+#include "player/system/player_lifecycle.h" // IsSceneChangeBusy / NoteSceneChangeRequested:普通 EnterScene 的发送侧闸
 
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
 #include "proto/common/component/player_comp.pb.h"
@@ -71,6 +72,16 @@ namespace
 	{
 		return tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player) ||
 			   tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player);
+	}
+
+	// 该玩家已有一条普通 EnterScene 在途(客户端换图 / 镜像自动进场 / 上一次跟随),应答还没回来。
+	// EnterSceneResponse 只回显 player_id:两条同时在途,跟随的应答会把客户端那条记下的目标
+	// (PlayerSceneChangeInFlightComp)摘掉,客户端那条随后到达的 18 找不到目标、同 zone 交接不发起,
+	// 玩家既没换成图也收不到任何提示。与 EnterSceneC2S / 镜像自动进场共用同一道发送侧闸,
+	// 玩家主动换图优先:跟随让路,下一次刷新信号(队长再换图 / 自己进场)会再查一遍。
+	bool IsSceneChangeInFlight(entt::entity player)
+	{
+		return PlayerLifecycleSystem::IsSceneChangeBusy(player);
 	}
 
 	// 会话仍然活着才允许请求 SceneManager(照 player_lifecycle.cpp HandlePlayerAsyncSaved 的判法):
@@ -362,6 +373,11 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=ownership_in_flight player_id=" << playerId;
 		return;
 	}
+	if (IsSceneChangeInFlight(player))
+	{
+		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=scene_change_in_flight player_id=" << playerId;
+		return;
+	}
 	if (!HasLiveSession(player, playerId))
 	{
 		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=session_not_live player_id=" << playerId;
@@ -403,6 +419,11 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 			if (IsOwnershipInFlight(player))
 			{
 				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=ownership_in_flight player_id=" << playerId;
+				return;
+			}
+			if (IsSceneChangeInFlight(player))
+			{
+				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=scene_change_in_flight player_id=" << playerId;
 				return;
 			}
 			if (!HasLiveSession(player, playerId))
@@ -474,6 +495,13 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 			request.set_zone_id(leaderLocation.zone_id());
 			// 不设 request_id:同 player_lifecycle.cpp DispatchEmergencyRelocate 的理由,
 			// SceneManager 的 60s 去重会吞掉同一玩家短时间内的第二次合法跟随
+
+			// 发送之前登记在途(与上面的 IsSceneChangeInFlight 成对):跟随在途期间客户端再发换图会被
+			// EnterSceneC2S 以"切换中"拒掉,两条应答不会串号。playerRequested=false:玩家没在等这条
+			// 请求的结果,被拒只记日志,不起交接、不回 tip(见 PlayerSceneChangeInFlightComp)。
+			// 应答 / 进场路由到达即摘;应答丢失靠短 TTL 失效。
+			PlayerLifecycleSystem::NoteSceneChangeRequested(player, leaderSceneId, /*sceneConfigId=*/0,
+															/*playerRequested=*/false);
 			scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, request);
 
 			// SceneManager 拒绝时只在其回包处理里记日志,队员留在原场景

@@ -147,12 +147,25 @@ void SceneNodeGrpcImpl::HandleReleasePlayer(const ::scene_node::ReleasePlayerReq
     //
     // **不要**在这里调 ResolveTravelOutcome:它第一步是 DEL handoff 标记,而 ReleasePlayer 可能早于
     // scene_manager 的铸造 Lua 到达 —— 等于源端自己把即将发生的放行撤回。
+    //
+    // 已知副作用(预期现象,压测时别当 bug 追):交接被放行到别的节点、而 EnterScene 应答又丢了
+    // (scene_manager 在路由 ACK 之后重启 / 断连,生成的 gRPC 客户端 status 非 OK 不回调)时,
+    // 本节点的源实体要等 30s 应答看门狗才销毁(日志 "travel_granted_without_reply")。这 30s 里它
+    // 以冻结态留在源场景的 AOI 内,周围玩家会看到一个不动的分身;真身已在目标节点。数据安全:
+    // 交接发起后本实体不再存盘,玩家再被派回本节点时 DiscardStaleHandoffEntity 会先销毁它再重载。
+    // **也不要**改成"收到 ReleasePlayer 后几秒只读一次 owner_epoch、变了就销毁"来缩短它:
+    // scene_manager 是先铸造 epoch、后发 Kafka 路由,路由失败(KafkaWriteTimeoutSeconds,默认 5s)
+    // 会把 epoch 与 location 一起回滚到本节点。探测落在这段窗口里会读到一个即将被回滚的新 epoch,
+    // 销毁实体之后 location 又指回本节点 —— 玩家在线却没有实体,只能重登;用一个观感问题换来
+    // 一个卡死问题。应答路径没有这个竞态(scene_manager 在路由 ACK / 回滚完成之后才回应答),
+    // 看门狗的 30s 则远大于那段窗口。
     if (PlayerLifecycleSystem::IsHandoffRequested(playerIt->second))
     {
         LOG_INFO << "[gRPC] ReleasePlayer: player " << playerId
                  << " has an ownership handoff in flight; leaving the outcome to the EnterScene reply / watchdog"
                  << " (target scene " << request->target_scene_id()
-                 << " on node " << request->target_node_id() << ")";
+                 << " on node " << request->target_node_id()
+                 << "; if the reply is lost the frozen source entity lingers until the reply watchdog fires)";
         return;
     }
 

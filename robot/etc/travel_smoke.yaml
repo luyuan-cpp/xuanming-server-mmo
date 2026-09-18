@@ -1,8 +1,11 @@
 # travel-smoke 配置:单机器人对「跨 zone 场景传送」做往返端到端冒烟
 # (docs/design/cross-zone-scene-travel.md §4 数据流 / §5 阶段 3;场景实现见 robot/travel_smoke_scenario.go)
 #
-# 流程:T1 登 home_zone,记下 player_id / gate 地址 / 金币出发值(登录途中就被 msg 124 送走 = 上一轮残留,直接失败)
-#       → T2 负向:TravelToZone{target_zone_id=0} 必须被同步拒绝(回包 tip != 0)且不发生重定向
+# 流程:T1 登 home_zone,记下 player_id / gate 地址(登录途中就被 msg 124 送走 = 上一轮残留,直接失败)
+#          → 读金币 → 在 home 区 GmAddCurrency +11 并读回 = 金币出发值。出发值必须非 0 且刚刚才变过:
+#            新建角金币是 0,访客区读不到档时建出的空实体也是 0,0 == 0 抓不到"空实体回写覆盖原档";余额不变时读到旧档也能相等
+#       → T2 负向:TravelToZone{target_zone_id=0} 必须被同步拒绝(回包 tip != 0)且不发生重定向、金币不变
+#          T2b:TravelToZone{visit_zone, 不存在的 scene_config_id} 同样必须同步被拒(scene 冻结前按 World 表校验目标地图)
 #       → T3 去程:TravelToZone{visit_zone} → 跟随 msg 124(探测 / 先连新后关旧 / 票据原样验签 / 严格重登)
 #          → 等排在 124 之后的 NotifyEnterScene;断言 player_id 不变、票据 zone == visit_zone、gate 地址变了
 #       → T4 访客区:金币 == 出发值 → GmAddCurrency +7 生效并可读回 → 移动探针(尽力而为)
@@ -26,11 +29,14 @@
 #      在别的区登录建过角的账号,"回家不回档"的前提不成立。前缀必须是 robot_ 才会命中 login 侧 DevPasswordAuth。
 #   6. scene_config_id 非 0 时,这张图必须两个 zone 都有主世界场景(去程与回程共用这一个值)。
 #   7. 从 robot/ 目录运行(table_dir 是相对路径)。
+#   8. **两个** zone 的 gate / scene 都放行 GM 客户端指令(GATE_RUN_MODE=dev、SCENE_RUN_MODE=dev;本地启动脚本缺省就是 dev)。
+#      金币断言靠 GmAddCurrency:home 区出发前加一笔、访客区再加一笔。gate 的 GM 闸拒绝时不回包(只推一条 tip),表现是等回包超时。
 #
 # 用法(robot/ 目录下):
 #   .\robot.exe -c etc/travel_smoke.yaml
 # 退出码 0 = 全部断言通过(日志有 TRAVEL_SMOKE_OK player_id=… 一行);退出码 1 = 任一步失败(TRAVEL_SMOKE_FAIL step=… reason=…)。
-# 跑一轮约 1 分钟(其中 35s 是停留)。可重复运行:每轮给该账号净加 7 金币,下一轮以新的余额为出发值。
+# 跑一轮约 1 分钟(其中 35s 是停留)。可重复运行:每轮给该账号净加 18 金币(home 区出发前 +11、访客区 +7),
+#   下一轮在新的余额上再加 11 作为出发值。TRAVEL_SMOKE_OK 里的 gold_home 是出发值(已含 +11),gold_back = gold_home + 7。
 #
 # 重跑注意:上一轮如果死在搬迁途中(旧连接已关、重登失败),LeaveGame / Disconnect 发不到任何 login,
 #   会留下 login 断线租约(30s)与 scene_manager 的「等待落点」(随票据 300s 过期)。

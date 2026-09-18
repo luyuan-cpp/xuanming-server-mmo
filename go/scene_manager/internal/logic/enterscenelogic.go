@@ -37,6 +37,33 @@ const (
 	enterSceneDedupePendingPrefix = "pending:"
 )
 
+// enter_scene_rejected_total 的 reason 取值(本文件发出的、与归属交接 / 跨 zone 传送有关的几种)。
+// 全部是固定字符串,低基数;玩家 id、标记原文只进日志。
+//
+// 换手门的 18 拆成三种,前缀统一为 handoff_pending:看总量用 reason=~"handoff_pending.*",
+// 告警只盯后两种。不拆的话,生产配置(AllowUnsafeCrossNodeHandoff=false)下每一次跨节点换图的
+// 第一跳都会 +1,这条指标的速率就只反映"换图有多频繁",看不出异常。
+//
+//	no_marker     预检时一份标记都没有。绝大多数是常规第一跳:源 scene 收到 18 才冻结 → 存盘 →
+//	              写标记 → 重发(player_lifecycle.cpp StartTravelHandoff)。少数是源节点硬崩后留下
+//	              的位置记录(标记永远不会出现,cross-zone-scene-travel.md §10.3 的已知限制)——
+//	              这种要对照同期的放行量看:只拒不放才是异常。
+//	stale_marker  有标记,但不是当前归属代际的(或写坏了)。源 scene 重发之后仍走到这里 = 它手里
+//	              缓存的 epoch 已经不是 Redis 当前值(已被废黜),是要查的信号。也有常规来源:
+//	              跨 zone 放行 / 疏散改派不删标记,旧标记在 300s TTL 内会被下一次跨节点换图的
+//	              第一跳读到 —— 所以它的基线不是 0,但远低于 no_marker。
+//	withdrawn     预检通过,落点 Lua 里再比时标记已被源 scene 撤回(应答超时 / 玩家退出)。
+const (
+	rejectReasonHandoffNoMarker    = "handoff_pending_no_marker"
+	rejectReasonHandoffStaleMarker = "handoff_pending_stale_marker"
+	rejectReasonHandoffWithdrawn   = "handoff_pending_withdrawn"
+	// 跨 zone 传送指定的地图在目标 zone 没有任何世界频道,第一条腿在不可回头点之前拒绝。
+	rejectReasonTravelMapUnavailable = "travel_map_unavailable"
+	// 第二条腿:第一条腿记下的目标地图解析失败,已回落默认大世界(人照常落地,不是拒绝整个请求;
+	// 记在这条指标上是因为"玩家指定的那张图"确实被拒了,而且它不该有稳定速率)。
+	rejectReasonPendingMapFallback = "pending_map_fallback"
+)
+
 const luaDeleteEnterSceneDedupeIfValue = `
 if redis.call("GET", KEYS[1]) == ARGV[1] then
     return redis.call("DEL", KEYS[1])
@@ -299,6 +326,17 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		//  没有位置记录(干净登出后的首次落点)同样只送连接,由第二条腿铸造。
 		//  currentZoneID == 0(旧位置无法确定 zone)≠ 任何目标 zone,按 b) 过门,fail-closed。
 		leavingZone := currentLoc != nil && currentZoneID != targetZoneId
+		// 指定了目标地图、且真的要动归属的放行,在不可回头点之前先**只读**看一眼这张图在目标 zone
+		// 开没开(CZ-5:失败要回源 scene 解冻并回 tip)。过了这一步就要铸 epoch、写等待落点、发 124,
+		// 源 scene 随即销毁实体 —— 地图问题留到第二条腿才发现,玩家已经没有"原地"可回。
+		// 与上面「不先解析场景」的约束不冲突:那条约束防的是预占式解析把**登录**重定向卡死在目标区的
+		// 过渡窗口里;login 发来的请求从不带 SceneConfId,只有 scene 替在线玩家发的跨 zone 传送会带,
+		// 拒绝它的后果只是玩家留在原地收到一条 tip。只送连接(!leavingZone)的重定向不写等待落点,不查。
+		if leavingZone && in.SceneConfId != 0 {
+			if resp := l.rejectTravelToUnopenedMap(in, targetZoneId); resp != nil {
+				return resp, nil
+			}
+		}
 		// 目标地图随等待落点一起记下:第二条腿是目标 zone 的 login 发来的 EnterScene,不带地图。
 		guard := placementGuard{observedEpoch: observedEpoch, mint: true, pendingSceneConfID: in.SceneConfId}
 		if leavingZone && !awaitingPlacement {
@@ -320,12 +358,28 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//    用第一条腿记在「等待落点」里的目标地图。只在这条记录仍然有效、且就是指向本次落点的
 	//    zone 时采用;请求自己指定了场景 / 地图则以请求为准。
 	sceneConfID := in.SceneConfId
+	// confFromPending:这次要解析的地图不是请求指定的,而是第一条腿记下的。它决定解析失败时能不能回落。
+	confFromPending := false
 	if awaitingPlacement && !awaitingExpired && currentZoneID == targetZoneId &&
 		in.SceneId == 0 && sceneConfID == 0 {
 		sceneConfID = currentLoc.GetPendingSceneConfId()
+		confFromPending = sceneConfID != 0
 	}
 	resolveStart := time.Now()
 	sceneId, nodeId, reserved, err := l.resolveSceneForEnter(in.SceneId, sceneConfID, targetZoneId)
+	if err != nil && confFromPending {
+		// 等待落点里记的地图解析不出来(两条腿之间频道被回收 / 节点全挂 / 满员,或第一条腿的只读检查
+		// 因 Redis 抖动放过了一张没开的图):回落到默认大世界再试一次,**人必须能落地**。
+		// 走到第二条腿的玩家已经被源 scene 销毁、没有"原地"可回;硬拒的话,等待落点在票据有效期
+		// (redirectTokenTTLSeconds)内会把他每一次登录都牵回本 zone、读到同一个 pending 值、再失败
+		// 一次,只能等过期。只对 pending 来的地图回落:请求自己指定的场景 / 地图解析失败仍然硬拒,
+		// 那种请求的发起方还持有玩家,能把失败告诉他。
+		// 第一次解析失败时 reserved 必为 false,没有需要成对释放的预占。
+		metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonPendingMapFallback)
+		l.Logger.Errorf("[Travel] 等待落点记下的目标地图不可用,回落默认大世界: player=%d target_zone=%d pending_scene_conf_id=%d err=%v",
+			in.PlayerId, targetZoneId, sceneConfID, err)
+		sceneId, nodeId, reserved, err = l.resolveSceneForEnter(0, 0, targetZoneId)
+	}
 	metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageSceneResolve, time.Since(resolveStart))
 	if err != nil {
 		// 再入屏障未到是**可重试**的瞬时拒绝,不是"没有可用节点"。用独立错误码
@@ -480,7 +534,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	if updateErr != nil {
 		DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
 		if errors.Is(updateErr, errHandoffWithdrawn) {
-			metrics.ObserveEnterSceneRejected(targetZoneId, "handoff_pending")
+			metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonHandoffWithdrawn)
 			l.Logger.Errorf("[Handoff] 落点时交接标记已被源 scene 撤回,本次不发路由: player=%d target_scene=%d target_node=%s",
 				in.PlayerId, sceneId, nodeId)
 			return errResp(constants.ErrHandoffPending, "源场景已撤回交接，请稍后重试；未修改玩家状态"), nil
@@ -531,7 +585,8 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 //
 // 拒绝是可重试的瞬时状态(与 ErrSceneReentryBarrier 同款):源 scene 的
 // SavePlayerToRedis 落地回调之后才写标记,上游退避重试就会放行;它不改任何状态。
-// site 只进日志,不进指标 label(指标 reason 固定 "handoff_pending")。
+// site 只进日志,不进指标 label。指标 reason 按「预检时有没有读到标记」分成
+// handoff_pending_no_marker / handoff_pending_stale_marker(含义与各自的基线见文件头的常量说明)。
 //
 // AllowUnsafeCrossNodeHandoff 是开发旁路:没有标记也放行,并且**不铸造** epoch,
 // 只做「epoch 没被并发推进才写 location」的 CAS。旁路走的是旧的竞态语义 —— 先异步
@@ -554,10 +609,17 @@ func (l *EnterSceneLogic) requireHandoffCommitted(in *scene_manager.EnterSceneRe
 			site, in.PlayerId, observedEpoch, currentLoc.GetSceneId(), currentLoc.GetNodeId(), currentZoneID, targetZoneId)
 		return nil, handoffVerdict{epoch: observedEpoch}
 	}
-	metrics.ObserveEnterSceneRejected(targetZoneId, "handoff_pending")
+	// 没有标记 = 常规第一跳;有标记却不是当前代际 = 源 scene 重发之后仍过不了门的那一类。
+	// 两者分开计数,后者才有告警价值(verdict.marker 是预检读到的标记原文,空串 = 没有标记)。
+	rejectReason := rejectReasonHandoffNoMarker
+	if verdict.marker != "" {
+		rejectReason = rejectReasonHandoffStaleMarker
+	}
+	metrics.ObserveEnterSceneRejected(targetZoneId, rejectReason)
 	// Infof 而不是 Errorf:这不是异常。scene 节点事先不知道目标场景在不在本节点,跨节点换图的
 	// 第一次请求注定拿到 18,它据此「冻结 → 存盘 → 写标记 → 重发」(player_lifecycle.cpp 的
-	// StartTravelHandoff)。真正的异常是同一玩家**连续**被 18 拒,那要看 handoff_pending 指标的速率。
+	// StartTravelHandoff)。真正的异常是重发之后仍被 18 拒,看 handoff_pending_stale_marker 的速率;
+	// scene 侧对应的是 [TravelHandoff] 汇总行里的 aborted。
 	l.Logger.Infof("[Handoff] %s 暂拒:源 scene 尚未为当前归属代际写出落盘标记(可重试): player=%d owner_epoch=%d handoff=%q old_scene=%d old_node=%s old_zone=%d gate_zone=%d target_zone=%d",
 		site, in.PlayerId, verdict.epoch, verdict.marker, currentLoc.GetSceneId(), currentLoc.GetNodeId(),
 		currentZoneID, in.GateZoneId, targetZoneId)
@@ -614,6 +676,34 @@ func awaitingPlacementExpired(loc *scene_manager.PlayerLocation, now time.Time) 
 	return now.Unix()-int64(loc.GetUpdateTime()) > redirectTokenTTLSeconds
 }
 
+// rejectTravelToUnopenedMap 是跨 zone 传送第一条腿上对目标地图的**只读**检查:目标 zone 里这张图
+// 一个世界频道都没登记过就拒绝(返回非 nil),此时一个字节都没改,源 scene 按失败应答解冻并回 tip。
+//
+// 只看频道集合(worldChannelsKey,world_channels:zone:{z}:{conf})是否为空,不做解析、不预占:
+//   - 集合为空 = 这张图此刻没在目标 zone 开着。副本 / 镜像的 conf id、客户端乱填的 id、只在别的
+//     zone 开的图都落在这里(频道集合只登记 World 表里的图,由世界频道初始化与自动扩缩容维护);
+//   - 集合非空但频道暂时全不可用(节点刚换代、满员)照常放行:陈旧频道由第二条腿的解析懒修复,
+//     真落不进去时第二条腿回落默认大世界。这里拒它,就把目标区的过渡窗口变成了"传送不可用"。
+//
+// Redis 读失败按放行处理(fail-open):这道检查只为给玩家一个更早、更准的拒绝,不是安全门;
+// 归属安全由后面的换手门与 epoch CAS 保证,地图兜底由第二条腿的回落保证。
+func (l *EnterSceneLogic) rejectTravelToUnopenedMap(in *scene_manager.EnterSceneRequest, targetZoneId uint32) *scene_manager.EnterSceneResponse {
+	channels, err := l.svcCtx.Redis.Scard(worldChannelsKey(targetZoneId, in.SceneConfId))
+	if err != nil {
+		l.Logger.Errorf("[Travel] 读目标 zone 的世界频道集合失败,跳过地图预检(第二条腿有回落兜底): player=%d target_zone=%d scene_conf_id=%d err=%v",
+			in.PlayerId, targetZoneId, in.SceneConfId, err)
+		return nil
+	}
+	if channels > 0 {
+		return nil
+	}
+	metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonTravelMapUnavailable)
+	l.Logger.Errorf("[Travel] 跨 zone 传送被拒:目标 zone 没有这张图的世界频道,未改任何状态: player=%d gate_zone=%d target_zone=%d scene_conf_id=%d",
+		in.PlayerId, in.GateZoneId, targetZoneId, in.SceneConfId)
+	return errResp(constants.ErrNoAvailableNode,
+		fmt.Sprintf("no world channel for conf %d in target zone %d; player state untouched", in.SceneConfId, targetZoneId))
+}
+
 // crossZonePlacement 描述跨 zone 重定向要不要动归属(由 EnterScene 第 2 步判定)。
 type crossZonePlacement struct {
 	// place=true:玩家要离开现在所在的 zone,把 location 改成目标 zone 的「等待落点」。
@@ -654,7 +744,7 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 		placed, placeErr = placePlayerLocation(l.svcCtx, in.PlayerId, 0, "", targetZoneId, placement.guard)
 		if placeErr != nil {
 			if errors.Is(placeErr, errHandoffWithdrawn) {
-				metrics.ObserveEnterSceneRejected(targetZoneId, "handoff_pending")
+				metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonHandoffWithdrawn)
 				l.Logger.Errorf("[Handoff] 跨区放行时交接标记已被源 scene 撤回,本次不发重定向: player=%d target_zone=%d",
 					in.PlayerId, targetZoneId)
 				return errResp(constants.ErrHandoffPending, "源场景已撤回交接，请稍后重试；未修改玩家状态"), nil
