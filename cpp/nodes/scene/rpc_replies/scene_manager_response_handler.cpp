@@ -9,6 +9,7 @@
 #include "proto/common/base/node.pb.h"
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/scene_manager/scene_manager_service.pb.h"
+#include "services/scene/player/system/player_lifecycle.h"
 #include "thread_context/ecs_context.h"
 
 void InitSceneManagerReply()
@@ -16,9 +17,19 @@ void InitSceneManagerReply()
     scene_manager::AsyncSceneManagerEnterSceneHandler =
         [](const grpc::ClientContext& /*ctx*/, const ::scene_manager::EnterSceneResponse& resp)
     {
+        // 应答回调里没有请求上下文,靠 scene_manager 回显的 player_id 把结果对回玩家。
+        // 跨 zone 传送的源端要据此收尾(放行 → 销毁本地实体;失败 → 核实后解冻),成功与
+        // 失败都要送到;没有传送意图的玩家在里面是 no-op。player_id == 0 = 旧版 scene_manager
+        // 未回显,传送只能靠应答看门狗收敛。
+        if (resp.player_id() != 0)
+        {
+            PlayerLifecycleSystem::HandleTravelEnterSceneReply(resp.player_id(), resp);
+        }
+
         if (resp.error_code() != 0)
         {
-            LOG_ERROR << "SceneManager.EnterScene error: code=" << resp.error_code()
+            LOG_ERROR << "SceneManager.EnterScene error: player=" << resp.player_id()
+                      << " code=" << resp.error_code()
                       << " msg=" << resp.error_message();
             return;
         }

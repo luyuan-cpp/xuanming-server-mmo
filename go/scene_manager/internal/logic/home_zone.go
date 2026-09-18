@@ -68,12 +68,26 @@ func isHomeZoneUnmapped(err error) bool {
 // 第二个返回值非 nil 表示本次 EnterScene 必须以它作为响应拒绝(可重试)。
 func (l *EnterSceneLogic) resolveHomeZone(in *scene_manager.EnterSceneRequest) (uint32, *scene_manager.EnterSceneResponse) {
 	if l.svcCtx.HomeZone == nil {
-		homeZoneUnconfiguredWarnOnce.Do(func() {
-			l.Logger.Errorf("[home-zone] WARN: DataServiceRpc 未配置,RoutePlayerEvent.home_zone_id 一律按 gate zone 填 "+
-				"(仅本地单区联调可接受;多 zone 部署下访客的存盘会落错库): player=%d gate_zone=%d",
-				in.PlayerId, in.GateZoneId)
-		})
 		metrics.ObserveHomeZoneLookup(in.GateZoneId, metrics.HomeZoneLookupUnconfigured)
+		// 没配 DataServiceRpc 时「按 gate zone 当归属」只对单 zone 成立。多 zone 下访客
+		// 的 gate zone ≠ home zone,存盘会写进目标 zone 的库,而且除了一条日志零报错
+		// (不变量 2)。所以默认 fail-closed,只有部署方显式声明自己是单 zone
+		// (AllowGateZoneAsHomeZone)才退回 gate zone。
+		if !l.svcCtx.Config.AllowGateZoneAsHomeZone {
+			homeZoneUnconfiguredWarnOnce.Do(func() {
+				l.Logger.Errorf("[home-zone] DataServiceRpc 未配置且 AllowGateZoneAsHomeZone=false:拒绝所有进场景请求。"+
+					"多 zone 部署必须给 scene_manager 配 DataServiceRpc(etcd Key=dataservice.rpc);"+
+					"单 zone 联调可显式置 AllowGateZoneAsHomeZone: true。player=%d gate_zone=%d",
+					in.PlayerId, in.GateZoneId)
+			})
+			metrics.ObserveEnterSceneRejected(in.GateZoneId, "home_zone_unavailable")
+			return 0, errResp(constants.ErrHomeZoneUnavailable,
+				"scene_manager 未配置 DataServiceRpc,无法确定玩家归属 zone;已拒绝且未修改玩家状态")
+		}
+		homeZoneUnconfiguredWarnOnce.Do(func() {
+			l.Logger.Errorf("[home-zone] WARN: DataServiceRpc 未配置,按 AllowGateZoneAsHomeZone=true 把 gate zone 当归属 zone "+
+				"(只对单 zone 部署正确): player=%d gate_zone=%d", in.PlayerId, in.GateZoneId)
+		})
 		return in.GateZoneId, nil
 	}
 

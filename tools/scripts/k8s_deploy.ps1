@@ -1954,6 +1954,21 @@ MetricsListenAddr: ":9150"
 # 跨 zone 重定向签发 gate 令牌要用,缺了 gate_redirect.go 直接返回
 # "GateTokenSecret not configured"。以前这份 ConfigMap 压根没有这一项。
 GateTokenSecret: "${gateTokenSecret}"
+# DataService gRPC 客户端:EnterScene 用它查玩家归属 zone(GetPlayerHomeZone),随 RoutePlayerEvent
+# 下发给 scene 决定存盘落哪个 zone 的库(cross-zone-scene-travel.md CZ-3)。K8s 是多 zone 形态,
+# 缺这一块 scene_manager 会 fail-closed 拒绝所有进场景(AllowGateZoneAsHomeZone 默认 false);
+# 而把开关打开则会让访客的存盘写进目标 zone 的库 —— 两种都不对,所以这里必须配。
+# data-service 是全局池(不分 zone),Key 不带 zone 后缀,与 login 的同名块一致。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - "etcd.${InfraNamespace}:2379"
+    Key: dataservice.rpc
+  Timeout: 3000
+  NonBlock: true
+  Middlewares:
+    Breaker: false
+HomeZoneLookupTimeoutMs: 1500
 "@
 		}
 		"match" {

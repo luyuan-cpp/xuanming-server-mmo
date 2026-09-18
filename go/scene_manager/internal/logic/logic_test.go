@@ -63,6 +63,10 @@ func newTestSvcCtx(t *testing.T, nodeID string) (*svc.ServiceContext, *miniredis
 	c := config.Config{}
 	c.NodeID = nodeID
 
+	// 单测的 svcCtx 不接 data_service:显式声明单 zone 语义(gate zone 即归属 zone),
+	// 否则 resolveHomeZone 按 fail-closed 拒绝所有带 GateId 的 EnterScene。
+	c.AllowGateZoneAsHomeZone = true
+
 	return &svc.ServiceContext{
 		Config:     c,
 		Redis:      rds,
@@ -424,6 +428,10 @@ func newTestSvcCtxWithWorldScenes(t *testing.T) (*svc.ServiceContext, *miniredis
 	// 节点。默认装上,个别要验证 RPC 失败的用例再自己覆盖 createShouldFail。
 	installDefaultFakeSceneNode(t)
 
+	// 单测的 svcCtx 不接 data_service:显式声明单 zone 语义(gate zone 即归属 zone),
+	// 否则 resolveHomeZone 按 fail-closed 拒绝所有带 GateId 的 EnterScene。
+	c.AllowGateZoneAsHomeZone = true
+
 	return &svc.ServiceContext{
 		Config:     c,
 		Redis:      rds,
@@ -720,14 +728,13 @@ func TestEnterScene_ExistingLocationCrossZoneRejectedWhileOldNodeAliveThenRedire
 	assert.Equal(t, "3", targetCount, "重定向不预占目标场景人数")
 	oldCount, _ = sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
 	assert.Equal(t, "5", oldCount, "陈旧位置已被当作不存在,死 zone 的旧场景计数不去碰")
-	// 第一条腿放行后 location 变成「等待落点」:目标 zone + 新 epoch,没有节点。
+	// 陈旧位置按「没有位置记录」处理:第一条腿只送连接,不写 location、不铸造 ——
+	// 归属由第二条腿在目标 zone 落点时决定(那时陈旧位置同样会被过滤掉)。
 	loc, locErr = GetPlayerLocation(ctx, sc, playerID)
 	require.NoError(t, locErr)
 	require.NotNil(t, loc)
-	assert.Equal(t, uint32(2), loc.ZoneId)
-	assert.Equal(t, "", loc.NodeId)
-	assert.Equal(t, uint64(0), loc.SceneId)
-	assert.NotEqual(t, uint64(0), loc.OwnerEpoch, "跨区放行必须铸造新的归属 epoch")
+	assert.Equal(t, oldScene, loc.SceneId, "只送连接的重定向不改 location")
+	assert.Equal(t, uint32(1), loc.ZoneId)
 }
 
 func TestEnterScene_ZoneScopedNodeIDCollisionStillRejectedWhileOldNodeAlive(t *testing.T) {
@@ -946,16 +953,15 @@ func TestEnterScene_RedirectWithoutTargetWorldChannelStillEmitsRedirectEvent(t *
 	assert.Equal(t, "10.2.0.9", event.TargetGateIp)
 	assert.Equal(t, []byte("sig"), event.TokenSignature)
 
-	// 首次落点的跨区重定向同样把归属推进到「等待落点」:第二条腿据此直接放行。
+	// 没有位置记录 = 没有持有者:第一条腿只送连接,归属(location + epoch)留给第二条腿
+	// 在目标 zone 落点时一次铸造。这里提前写「等待落点」只会在客户端没跟票据走时
+	// 留下一条把人牵去目标 zone 的记录。
 	loc, locErr := GetPlayerLocation(ctx, sc, playerID)
 	require.NoError(t, locErr)
-	require.NotNil(t, loc, "跨区放行必须提交等待落点位置")
-	assert.Equal(t, uint32(2), loc.ZoneId)
-	assert.Equal(t, "", loc.NodeId)
-	assert.Equal(t, uint64(1), loc.OwnerEpoch, "首次铸造的 epoch 从 1 开始")
+	assert.Nil(t, loc, "首次落点的重定向不写 location")
 	epochRaw, epochErr := sc.Redis.Get(ownerepoch.OwnerEpochKey(playerID))
 	require.NoError(t, epochErr)
-	assert.Equal(t, "1", epochRaw)
+	assert.Equal(t, "", epochRaw, "也不铸造 epoch")
 }
 
 func TestEnterScene_SameNodeSwitchStillSucceeds(t *testing.T) {
@@ -1255,13 +1261,14 @@ func TestEnterScene_RedirectKafkaFailureIsNotCached(t *testing.T) {
 	exists, existsErr := sc.Redis.Exists(fmt.Sprintf("enter_scene:dedup:%d:redirect-broker-failure", playerID))
 	require.NoError(t, existsErr)
 	assert.False(t, exists, "broker 未 ACK 时不得缓存 redirect 成功")
-	// broker 没 ACK = 客户端不会换 Gate,「等待落点」位置与刚铸造的 epoch 都必须退回。
+	// 没有位置记录的重定向本来就只送连接:broker 没 ACK 时同样不得留下任何归属状态。
+	// (带位置记录、真正离开 zone 的回滚见 owner_epoch_test.go。)
 	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
 	require.NoError(t, locErr)
 	assert.Nil(t, loc, "重定向未送达时不得留下等待落点位置")
 	epochRaw, epochErr := sc.Redis.Get(ownerepoch.OwnerEpochKey(playerID))
 	require.NoError(t, epochErr)
-	assert.Equal(t, "0", epochRaw, "首次铸造回滚后 epoch 退回 0")
+	assert.Equal(t, "", epochRaw, "从未铸造过的 epoch 键不应出现")
 }
 
 func TestEnterScene_DirectSuccessReplaysFullCachedResponse(t *testing.T) {

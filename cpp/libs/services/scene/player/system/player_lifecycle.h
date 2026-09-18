@@ -29,6 +29,9 @@ struct PlayerEnterContext
 // Replaces the std::any extra_data on MessageAsyncClient.
 using PendingEnterMap = std::unordered_map<Guid, PlayerEnterContext>;
 
+// 疏散 / 排空的改派票据,定义在 player_lifecycle.cpp(只有那里需要它的字段)。
+struct EmergencyRelocateTicket;
+
 // 归属 / epoch 健康计数。与 dirty_save_stats 同一套写法(relaxed atomic,
 // 由 RedisSystem 的 30s 快照定时器打成一行 [OwnerEpoch] 日志,任一非 0 才打、级别 WARN),
 // 不接 Prometheus 的理由也相同。
@@ -86,11 +89,6 @@ class PlayerLifecycleSystem
 public:
 	static PendingEnterMap& GetPendingEnterMap();
 
-	// 传送交接的 EnterScene 请求随 gRPC metadata 带上发起玩家 id(值为十进制字符串;生成的
-	// 客户端会先 Base64 再发)。EnterSceneResponse 里没有 player_id,应答处理方靠 scene_manager
-	// 在响应 header 里回显这个键来定位玩家(与 id_segment_bootstrap 的 x-idseg-seq 同款接口)。
-	static constexpr char kTravelPlayerIdMetaKey[] = "x-travel-player-id";
-
 	static void HandlePlayerAsyncLoaded(Guid player_id, const PlayerAllData& message);
 	static void HandlePlayerAsyncLoadFailed(Guid player_id,
 											MessageAsyncClient<Guid, PlayerAllData>::LoadFailureReason reason);
@@ -104,7 +102,7 @@ public:
 	// EnterScene、会拿着旧 epoch 撞门。同一次存盘并行发出的 DBTask 由 db 服务按
 	// DBTask.owner_epoch 独立拒绝(reentry-barrier §6.3),这里不用管。
 	// 由 MessageAsyncClient::SetSaveRejectedCallback 接线(core/system/redis.cpp)。
-	static void HandlePlayerSaveRejected(Guid player_id, const std::string& redisKey);
+	static void HandlePlayerSaveRejected(Guid player_id, const std::string& redisKey, const std::string& rejectedEpoch);
 
 	// 存盘连续失败达到告警阈值后的通知。底层仍保留最新 payload 继续重试。
 	//
@@ -178,9 +176,12 @@ public:
 	// 失败分支(无 epoch / Redis 断连 / 无 gate 会话 / 无 scene_manager)一律解冻回 tip,不悬挂。
 	static void BeginTravelHandoff(Guid playerId);
 
-	// 传送交接的 EnterScene 应答。由 scene_manager 应答处理方按 kTravelPlayerIdMetaKey 回显
-	// (或 Redirect 票据 GateTokenPayload.player_id)定位到玩家后调用。
-	//   * error_code != 0             → 目标 zone 不可用等:移除传送标记、解冻、回 tip,玩家留在本节点;
+	// 传送交接的 EnterScene 应答。scene_manager 在 EnterSceneResponse.player_id 里回显发起玩家,
+	// 应答处理方(rpc_replies/scene_manager_response_handler.cpp)对**每一条** EnterScene 应答都会调
+	// 进来;没有传送意图的玩家是静默 no-op。
+	//   * error_code != 0             → 不能直接解冻:失败应答不证明 scene_manager 没铸造过 epoch
+	//                                   (例如路由发送失败后的回滚本身也可能失败)。走 ResolveTravelOutcome
+	//                                   核实后再决定解冻还是销毁;
 	//   * 带 redirect                 → scene_manager 已放行并推进 epoch,本节点不再持有该玩家:
 	//                                   与退出同款销毁(摘场景 / 摘会话 / 销毁实体),**不再存盘**。
 	//   * 既无错误也无 redirect       → 协议异常,按失败处理并 LOG_ERROR。
@@ -256,9 +257,24 @@ private:
 	// 两个入口:存盘被 epoch CAS 拒(HandlePlayerSaveRejected)、传送交接被放行(EnterScene 应答 Redirect)。
 	static void DestroyDeposedPlayer(Guid playerId, const char *reasonTag);
 
-	// 传送失败 / 超时:摘 PlayerTravelHandoffComp + PlayerFrozenComp、best-effort 删 handoff 标记、回 tip。
-	// 已无传送意图(应答与看门狗只有一个能赢)时幂等 no-op。
+	// 传送未成 **且已确认没有被放行**:摘 PlayerTravelHandoffComp + PlayerFrozenComp、best-effort 删
+	// handoff 标记、回 tip。只有两种调用方:EnterScene 请求发出之前的失败分支(此时不可能被放行),
+	// 以及 ResolveTravelOutcome 核实过的分支。已无传送意图时幂等 no-op。
 	static void AbortTravelHandoff(Guid playerId, const char *reason);
+
+	// EnterScene 请求已经发出之后的"未成"(应答超时 / 失败应答):先判清楚自己有没有被放行。
+	//   1. DEL player:{id}:handoff —— scene_manager 的铸造 Lua 要求标记原样还在,DEL 之后
+	//      不可能再有凭这份标记的放行;
+	//   2. GET player:{id}:owner_epoch —— 与缓存值相等 = 确实没被放行 → AbortTravelHandoff(解冻);
+	//      不相等 = 已被放行(应答丢了 / 迟到)→ DestroyDeposedPlayer,玩家已在去目标 zone 的路上。
+	// 两条命令在同一条 Redis 连接上顺序发出,判定没有竞态窗口。Redis 不可用时保持冻结并重新
+	// 挂看门狗:解冻一个可能已被放行的玩家 = 同一名玩家在两个 zone 同时活着。
+	// requestedAtMs 是传送代际,回调到达时不符即 no-op。
+	static void ResolveTravelOutcome(Guid playerId, uint64_t requestedAtMs, const char *reason);
+
+	// 疏散 / 排空的改派请求本体(EnterScene(zone=本 zone, scene_id=0))。票据按值传入:
+	// 调用时本地实体多半已经销毁。
+	static void SendEmergencyRelocateEnterScene(Guid playerId, const EmergencyRelocateTicket &ticket);
 
 	// handoff 标记落地后向 scene_manager 请求 EnterScene(目标 zone)。gate / session 从实体上现取
 	// (与 DispatchEmergencyRelocate 不同:传送中实体还活着,不需要提前抄票据)。

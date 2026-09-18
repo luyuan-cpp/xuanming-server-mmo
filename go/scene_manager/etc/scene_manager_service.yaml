@@ -50,6 +50,9 @@ AllowUnsafeCrossNodeHandoff: true
 # 多 zone 部署必须配。
 # NonBlock: true —— data_service 没起时 scene_manager 照常起服,查询按不可用拒绝。
 # Breaker: true —— data_service "死了但 etcd 键还在"时快速失败,不让每次进场景都白等满超时。
+# 没配 DataServiceRpc 时是否把 gate zone 当归属 zone。只有单 zone 部署才成立,默认 false
+# (没配就拒绝进场景)。下面已配 DataServiceRpc,此开关不起作用,列在这里只为说明。
+AllowGateZoneAsHomeZone: false
 DataServiceRpc:
   Etcd:
     Hosts:

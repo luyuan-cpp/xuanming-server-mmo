@@ -166,6 +166,10 @@ func newIntegrationSvcCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minired
 	c.NodeLoadWeightSceneCount = 1.0
 	c.NodeLoadWeightPlayerCount = 0.01
 
+	// 单测的 svcCtx 不接 data_service:显式声明单 zone 语义(gate zone 即归属 zone),
+	// 否则 resolveHomeZone 按 fail-closed 拒绝所有带 GateId 的 EnterScene。
+	c.AllowGateZoneAsHomeZone = true
+
 	return &svc.ServiceContext{
 		Config:     c,
 		Redis:      rds,

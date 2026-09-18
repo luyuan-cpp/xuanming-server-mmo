@@ -114,11 +114,11 @@ func register() {
 // 归属 epoch 守卫的 outcome label 取值。与 internal/kafka 的守卫判定一一对应;
 // 集合有界(6 个),不含 player_id 等高基数维度(AGENTS.md §9)。
 const (
-	OwnerEpochMatch      = "match"       // 任务 epoch == Redis 当前值,放行
+	OwnerEpochMatch      = "match"       // 任务 epoch == 已落库的最大 epoch:同一持有者的后续写,放行
 	OwnerEpochLegacyZero = "legacy_zero" // 任务 epoch == 0:旧版生产者,兼容窗口内放行不比对
-	OwnerEpochMissingKey = "missing_key" // Redis 无该键:scene_manager 未铸造或被清过,放行
-	OwnerEpochAhead      = "ahead"       // 任务 epoch > Redis 当前值:Redis 被清过重新从 1 铸,放行
-	OwnerEpochStale      = "stale"       // 任务 epoch < Redis 当前值:被废黜节点的迟到写,拒绝
+	OwnerEpochFirst      = "first"       // 该 key 还没有带 epoch 的写落过库,放行
+	OwnerEpochAdvance    = "advance"     // 任务 epoch > 已落库的最大 epoch:归属变更后新主的第一笔写,放行
+	OwnerEpochStale      = "stale"       // 任务 epoch < 已落库的最大 epoch:新主落库之后才到的老 epoch 写,拒绝
 	OwnerEpochReadError  = "read_error"  // Redis 读失败:按可重试错误处理,不放行也不丢
 )
 

@@ -1,4 +1,7 @@
 #include "player_lifecycle.h"
+
+#include <cstdlib>
+
 #include "proto/common/event/actor_event.pb.h"
 #include "proto/common/component/player_async_comp.pb.h"
 #include "proto/common/component/player_comp.pb.h"
@@ -70,6 +73,10 @@ struct EmergencyRelocateTicket
 
 thread_local bool tlsEmergencyRelocating = false;
 thread_local std::unordered_map<Guid, EmergencyRelocateTicket> tlsEmergencyRelocateTickets;
+// 票据已消费、handoff 标记正在写、EnterScene 还没发出去的改派数。票据在发起写标记时就删了,
+// 不单独计这一段的话 IsEmergencyRelocateDrained 会在"改派请求其实还没发"时宣布收敛,
+// 节点随即 quit loop,Redis 回调再也不会来,这批玩家的改派就丢了。
+thread_local std::size_t tlsRelocateHandoffMarksInFlight = 0;
 
 namespace
 {
@@ -867,9 +874,11 @@ bool PlayerLifecycleSystem::IsEmergencyRelocateDrained()
 	{
 		return true;
 	}
-	// 票据清空 = 每个有会话的玩家都已存盘落地并派发过改派;
+	// 票据清空 = 每个有会话的玩家都已存盘落地并进入改派;
+	// 标记在途为 0 = 这些改派的 EnterScene 确实都发出去了(写 handoff 标记是异步的);
 	// 实体清空 = 本地不再持有任何玩家状态。
 	return tlsEmergencyRelocateTickets.empty() &&
+		   tlsRelocateHandoffMarksInFlight == 0 &&
 		   tlsEcs.actorRegistry.view<Player>().size() == 0;
 }
 
@@ -883,6 +892,60 @@ void PlayerLifecycleSystem::DispatchEmergencyRelocate(Guid playerId)
 	const EmergencyRelocateTicket ticket = it->second;
 	tlsEmergencyRelocateTickets.erase(it);
 
+	// 换手门(CZ-4):scene_manager 只凭 player:{id}:handoff 放行"已有位置记录的跨节点落点"。
+	// 走到这里时存盘已经落地(FinishExitAfterPersist 的前置条件),正是可以写标记的那一刻;
+	// 不写的话生产配置(AllowUnsafeCrossNodeHandoff=false)下疏散 / 排空的每一个玩家都会被
+	// ErrHandoffPending 挡回来,而本地实体马上就要销毁,玩家只能自己重登。
+	// 标记落地之后再发 EnterScene;实体此后立刻销毁,回调只用按值捕获的票据。
+	uint64_t ownerEpoch = 0;
+	if (const auto playerEntity = tlsEcs.GetPlayer(playerId); tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		if (const auto *epochComp = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(playerEntity))
+		{
+			ownerEpoch = epochComp->epoch;
+		}
+	}
+	auto &redis = tlsRedis.GetZoneRedis();
+	if (ownerEpoch == 0 || !redis || !redis->connected())
+	{
+		// epoch 未铸造(兼容窗口,scene_manager 侧也没有门可过)或 Redis 不可用:照旧直接发。
+		// 后者在生产下会被换手门拒绝 —— 写不出落盘凭证就不该被放行,这是 fail-closed 的本意。
+		if (ownerEpoch != 0)
+		{
+			LOG_ERROR << "[EmergencyRelocate] zone redis unavailable; handoff mark not written for player "
+					  << playerId << ", scene_manager will refuse the re-home until the player re-enters";
+		}
+		SendEmergencyRelocateEnterScene(playerId, ticket);
+		return;
+	}
+
+	const std::string key = player_ownership::HandoffRedisKey(playerId);
+	const std::string value = player_ownership::HandoffRedisValue(ownerEpoch, TimeSystem::NowMillisecondsUTC());
+	++tlsRelocateHandoffMarksInFlight;
+	const int ret = redis->command(
+		[playerId, ticket](hiredis::Hiredis *, redisReply *reply)
+		{
+			--tlsRelocateHandoffMarksInFlight;
+			if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
+			{
+				LOG_ERROR << "[EmergencyRelocate] SET handoff mark failed for player " << playerId
+						  << (reply != nullptr && reply->str != nullptr ? std::string(" err=") + reply->str : "")
+						  << "; requesting re-home anyway (scene_manager decides)";
+			}
+			SendEmergencyRelocateEnterScene(playerId, ticket);
+		},
+		"SET %s %s EX %d", key.c_str(), value.c_str(), player_ownership::kHandoffMarkTtlSec);
+	if (ret != REDIS_OK)
+	{
+		// 命令没发出去,回调不会来:自己把计数还回去。
+		--tlsRelocateHandoffMarksInFlight;
+		LOG_ERROR << "[EmergencyRelocate] redis command dispatch failed for player " << playerId;
+		SendEmergencyRelocateEnterScene(playerId, ticket);
+	}
+}
+
+void PlayerLifecycleSystem::SendEmergencyRelocateEnterScene(Guid playerId, const EmergencyRelocateTicket &ticket)
+{
 	const auto smEntity = GetSceneManagerEntity(playerId);
 	if (smEntity == entt::null)
 	{
@@ -1408,7 +1471,10 @@ bool PlayerLifecycleSystem::SavePlayerToRedis(entt::entity player)
 	{
 		owner_epoch_stats::IncHomeZoneUnknown();
 		homeZoneId = GetZoneId();
-		LOG_WARN << "[SavePlayerToRedis] home_zone unknown for player " << playerId
+		// 逐次只打 DEBUG:滚动升级窗口(旧 gate / 旧 scene_manager 不带 home_zone_id)里每个玩家
+		// 每次存盘都会走到这里,WARN 会刷屏。"不静默"由计数 + redis.cpp 里每 30s 一行的
+		// [OwnerEpoch] home_zone_unknown=N 汇总(WARN)保证。
+		LOG_DEBUG << "[SavePlayerToRedis] home_zone unknown for player " << playerId
 				 << "; falling back to process zone " << homeZoneId
 				 << " (metric=home_zone_unknown). Route chain must carry RoutePlayerEvent.home_zone_id.";
 	}
@@ -1485,14 +1551,33 @@ bool PlayerLifecycleSystem::SavePlayerToRedis(entt::entity player)
 	return true;
 }
 
-void PlayerLifecycleSystem::HandlePlayerSaveRejected(Guid playerId, const std::string &redisKey)
+void PlayerLifecycleSystem::HandlePlayerSaveRejected(Guid playerId, const std::string &redisKey, const std::string &rejectedEpoch)
 {
+	// 被拒的是"发出那次存盘时缓存的 epoch"。实体此刻缓存的值若已经不同,说明那只是
+	// 一笔旧代际的在途写(存盘发出之后、应答回来之前,新的路由事件把更新的 epoch 送到了
+	// 本实体)——本节点仍是合法持有者,不能自毁,用当前 epoch 重新存一次把状态落地。
+	// 只有被拒的值就是实体当前缓存的值,才说明 scene_manager 已把玩家改派给别人。
+	if (const auto playerEntity = tlsEcs.GetPlayer(playerId); tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		const auto *epochComp = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(playerEntity);
+		const std::string currentEpoch = std::to_string(epochComp != nullptr ? epochComp->epoch : 0);
+		if (currentEpoch != rejectedEpoch)
+		{
+			LOG_WARN << "HandlePlayerSaveRejected: stale in-flight save rejected for player " << playerId
+					 << " key=" << redisKey << " rejected_epoch=" << rejectedEpoch
+					 << " current_epoch=" << currentEpoch << " — still the owner, re-saving with current epoch";
+			// SavePlayerToRedis 返回 false = 与上次成功落盘的快照相同、无需再写,同样是安全的终点。
+			SavePlayerToRedis(playerEntity);
+			return;
+		}
+	}
+
 	owner_epoch_stats::IncStaleOwnerWriteRejected();
 	// 这条日志是"曾经出现过双主"的直接证据(cross-zone-scene-travel.md §6.3 要求压测期恒 0):
 	// 本节点还拿着旧 epoch 在写,而 scene_manager 已把玩家改派出去。数据没有被污染
 	// (Lua 原子拒绝),但本节点这份内存态从此作废。
 	LOG_ERROR << "HandlePlayerSaveRejected: owner_epoch CAS rejected save for player " << playerId
-			  << " key=" << redisKey
+			  << " key=" << redisKey << " epoch=" << rejectedEpoch
 			  << " — this node has been deposed; dropping local state, no retry, no relocate"
 			  << " (metric=stale_owner_write_rejected)";
 
@@ -1659,9 +1744,8 @@ void PlayerLifecycleSystem::RequestTravelEnterScene(Guid playerId)
 	// 刻意不设 request_id:理由同 DispatchEmergencyRelocate(60s SETNX 去重会吞掉玩家
 	// 短时间内的第二次传送)。幂等由 requestedAtMs 代际 + scene_manager 的 handoff 比对保证。
 
-	// 应答里没有 player_id,靠 metadata 回显定位(见 kTravelPlayerIdMetaKey 说明)。
-	scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, req,
-											  {kTravelPlayerIdMetaKey}, {std::to_string(playerId)});
+	// 应答靠 EnterSceneResponse.player_id 回显对回玩家(见 HandleTravelEnterSceneReply)。
+	scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, req);
 	ArmTravelReplyWatchdog(playerId, travel->requestedAtMs);
 
 	LOG_INFO << "[ZoneTravel] requested EnterScene for player " << playerId
@@ -1693,8 +1777,87 @@ void PlayerLifecycleSystem::ArmTravelReplyWatchdog(Guid playerId, uint64_t reque
 		{
 			return; // 已收到应答,或已是另一次传送
 		}
-		AbortTravelHandoff(playerId, "EnterScene reply timed out");
+		// 超时只说明应答没到,不说明没被放行:先核实,再决定解冻还是销毁。
+		ResolveTravelOutcome(playerId, requestedAtMs, "EnterScene reply timed out");
 	});
+}
+
+void PlayerLifecycleSystem::ResolveTravelOutcome(Guid playerId, uint64_t requestedAtMs, const char *reason)
+{
+	const auto playerEntity = tlsEcs.GetPlayer(playerId);
+	if (!tlsEcs.actorRegistry.valid(playerEntity))
+	{
+		return;
+	}
+	const auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
+	if (travel == nullptr || travel->requestedAtMs != requestedAtMs)
+	{
+		return;
+	}
+	uint64_t cachedEpoch = 0;
+	if (const auto *epochComp = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(playerEntity))
+	{
+		cachedEpoch = epochComp->epoch;
+	}
+
+	auto &redis = tlsRedis.GetZoneRedis();
+	if (!redis || !redis->connected())
+	{
+		// 判不清就不解冻。玩家保持冻结(他可以断线,退出优先),Redis 恢复后下一轮看门狗再判。
+		LOG_ERROR << "[ZoneTravel] cannot verify travel outcome for player " << playerId << " (" << reason
+				  << "): zone redis unavailable; keeping the player frozen and re-arming the watchdog";
+		ArmTravelReplyWatchdog(playerId, requestedAtMs);
+		return;
+	}
+
+	const std::string handoffKey = player_ownership::HandoffRedisKey(playerId);
+	const std::string epochKey = player_ownership::OwnerEpochRedisKey(playerId);
+	const std::string reasonText = reason;
+	// 顺序就是语义:先撤回标记,再读 epoch。两条命令走同一条连接,Redis 按序执行。
+	redis->command([](hiredis::Hiredis *, redisReply *) {}, "DEL %s", handoffKey.c_str());
+	const int ret = redis->command(
+		[playerId, requestedAtMs, cachedEpoch, reasonText](hiredis::Hiredis *, redisReply *reply)
+		{
+			const auto entity = tlsEcs.GetPlayer(playerId);
+			if (!tlsEcs.actorRegistry.valid(entity))
+			{
+				return;
+			}
+			const auto *current = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(entity);
+			if (current == nullptr || current->requestedAtMs != requestedAtMs)
+			{
+				return;
+			}
+			if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
+			{
+				LOG_ERROR << "[ZoneTravel] GET owner_epoch failed while verifying travel outcome for player "
+						  << playerId << "; keeping the player frozen and re-arming the watchdog";
+				ArmTravelReplyWatchdog(playerId, requestedAtMs);
+				return;
+			}
+			// 缺键按 0(scene_manager 从未铸造);值由 INCR 产生,必为十进制整数。
+			uint64_t redisEpoch = 0;
+			if (reply->type == REDIS_REPLY_STRING && reply->str != nullptr)
+			{
+				redisEpoch = std::strtoull(reply->str, nullptr, 10);
+			}
+			if (redisEpoch == cachedEpoch)
+			{
+				AbortTravelHandoff(playerId, reasonText.c_str());
+				return;
+			}
+			LOG_WARN << "[ZoneTravel] travel for player " << playerId << " was granted although the reply was lost/failed ("
+					 << reasonText << "): owner_epoch " << cachedEpoch << " -> " << redisEpoch
+					 << "; destroying source-side entity";
+			DestroyDeposedPlayer(playerId, "travel_granted_without_reply");
+		},
+		"GET %s", epochKey.c_str());
+	if (ret != REDIS_OK)
+	{
+		LOG_ERROR << "[ZoneTravel] redis command dispatch failed while verifying travel outcome for player "
+				  << playerId << "; keeping the player frozen and re-arming the watchdog";
+		ArmTravelReplyWatchdog(playerId, requestedAtMs);
+	}
 }
 
 void PlayerLifecycleSystem::HandleTravelEnterSceneReply(Guid playerId, const ::scene_manager::EnterSceneResponse &resp)
@@ -1706,31 +1869,31 @@ void PlayerLifecycleSystem::HandleTravelEnterSceneReply(Guid playerId, const ::s
 				 << " but entity is gone (exited during travel); ignoring";
 		return;
 	}
-	if (!tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(playerEntity))
+	const auto *travel = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(playerEntity);
+	if (travel == nullptr || travel->requestedAtMs == 0)
 	{
-		// 看门狗先判了超时并解冻,或这是上一次传送的迟到应答。玩家已在本节点继续玩,
-		// 不能拿一条无主的应答去销毁他。若 scene_manager 其实已放行,本节点 epoch 已旧,
-		// 下一次存盘会被 CAS 拒并走废黜路径 —— 结果仍然安全,只是多一条 stale 计数。
-		LOG_WARN << "[ZoneTravel] EnterScene reply for player " << playerId
-				 << " but no travel intent on entity (timed out / stale reply); ignoring"
-				 << " error_code=" << resp.error_code() << " has_redirect=" << resp.has_redirect();
+		// 每一条 EnterScene 应答都会走到这里,绝大多数是普通换图 / 疏散的应答,与传送无关;
+		// 也可能是看门狗已先核实过的迟到应答。都没有事可做。
+		LOG_DEBUG << "[ZoneTravel] EnterScene reply for player " << playerId
+				  << " without an in-flight travel request; ignoring"
+				  << " error_code=" << resp.error_code() << " has_redirect=" << resp.has_redirect();
 		return;
 	}
+	const uint64_t requestedAtMs = travel->requestedAtMs;
 
 	if (resp.error_code() != 0)
 	{
 		LOG_WARN << "[ZoneTravel] EnterScene rejected for player " << playerId
 				 << " code=" << resp.error_code() << " msg=" << resp.error_message();
-		AbortTravelHandoff(playerId, "scene_manager rejected");
+		ResolveTravelOutcome(playerId, requestedAtMs, "scene_manager rejected");
 		return;
 	}
 	if (!resp.has_redirect())
 	{
-		// 放行了却没有票据:协议异常。玩家留在本节点是唯一不丢人的选择;
-		// 若 scene_manager 其实已推进 epoch,下一次存盘的 CAS 会把本节点正确废黜。
+		// 放行了却没有票据:协议异常。是否已推进 epoch 由 ResolveTravelOutcome 查清楚。
 		LOG_ERROR << "[ZoneTravel] EnterScene reply for player " << playerId
-				  << " has neither error nor redirect; treating as failure";
-		AbortTravelHandoff(playerId, "reply without redirect");
+				  << " has neither error nor redirect; verifying outcome";
+		ResolveTravelOutcome(playerId, requestedAtMs, "reply without redirect");
 		return;
 	}
 

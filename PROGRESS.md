@@ -5069,3 +5069,14 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   - 22:59 第四次启动器 6/6 通过,**23:14:59 一区 OPEN**。11 个原生进程(gate / scene / battle / db / data_service / scene_manager / player_locator / login / match / chat / trade)+ 网关 8081 health=UP;guild 本轮被启动器按可选服务跳过(凌晨那轮它在,原因未查)。
 - **robot login-test 两轮**:23:16:41 **21/23**(失败:RapidReconnect `enter game: server error id:2005`、SkillCast `no visible/self entity found`);23:18 复跑 **22/23**(失败只剩 RapidDisconnectReconnect,同样是 2005;SkillCast 通过)。两轮失败项不同且都是玩家锁忙,判定为负载下的偶发,不是回归 —— 同一批二进制在凌晨空载时是 23/23、09-16 重负载时是 15/23。
 - **未做的事**:没有删除或停止 kind 集群及其命名空间(他人验收环境),已向用户报告并等待决定;没有停止用户自己的 5 个雷电模拟器实例。未改任何服务代码,未执行 git add/commit/push。
+
+## 2026-09-18 跨 zone 场景传送阶段 1:归属 + 两道换手门落码(Claude,未 regen、未编译、未测试)
+
+- **范围**:`docs/design/cross-zone-scene-travel.md` 阶段 1(纯服务端)。用户 09-17 明确"改完不用你编译",全程未跑任何构建 / 测试 / regen;Codex 清单在该文档 §9,落码记录与复审修正在 §10。
+- **怎么做的**:主会话先摸清链路(scene_manager → RoutePlayerEvent → gate SessionInfo → PlayerEnterGameNodeRequest → scene 待入场表;存盘走 `MessageAsyncClient::Save` 的 Lua)并加好 proto 字段,再用工作流 `wf_414e8336-2fd` 5 包并行落码 + 5 视角复审(45 条候选)。**核实阶段 117 个子 agent 全部撞会话额度失败**,核实与回修由主会话人工完成:确认 4 簇 P0/P1 + 4 条 P2 并全部修掉(§10.2 R1–R11),其余记为已知限制(§10.3)。
+- **proto(只追加字段号)**:`RoutePlayerEvent.home_zone_id=5/owner_epoch=6`、`PlayerEnterGameNodeRequest.home_zone_id=6/owner_epoch=7`、`DBTask.owner_epoch=8`、`GateTokenPayload.player_id=5/target_zone_id=6`、`PlayerLocation.owner_epoch=5`、`EnterSceneResponse.player_id=4`。
+- **Go**:新包 `go/shared/ownerepoch`;`go/scene_manager`(`owner_epoch.go` / `home_zone.go` 新增,`enterscenelogic.go` / `changesceneutil.go` / `gate_redirect.go` / config / svc / metrics / constants / yaml / 单测);`go/db`(`key_ordered_consumer.go` epoch 守卫改为比「已落库的最大 epoch」+ 单测、metrics)。新错误码 18 `ErrHandoffPending` / 19 `ErrOwnerEpochConflict` / 20 `ErrHomeZoneUnavailable`(14 标为历史码)。新配置 `DataServiceRpc`、`HomeZoneLookupTimeoutMs`、`AllowGateZoneAsHomeZone`(默认 false = 没配 data_service 就拒绝进场景)。
+- **C++**:gate `session_info_comp.h` + `gate_event_handler.cpp`(透传两个值);`redis_client.h`(带 guard 的 Save + rejected 回调,guard 键缺失时补种放行);scene `player_ownership_comp.h`(新)+ `player_lifecycle.{h,cpp}` + `core/system/redis.cpp` + `scene_handler.cpp` + `rpc_replies/scene_manager_response_handler.cpp`(应答按回显的 player_id 对回玩家)+ `scene.vcxproj(.filters)`;`cpp/tests/currency_test` 补 3 个 redis client 用例。
+- **部署**:`tools/scripts/k8s_deploy.ps1` 的 scene-manager ConfigMap 模板补 `DataServiceRpc` + `HomeZoneLookupTimeoutMs`(不补的话 K8s 下所有 EnterScene 回 20)。
+- **最该盯的回归点**:同节点换图 + 周期存盘时 `[OwnerEpoch] stale_owner_write_rejected` 必须恒 0;本地 `robot login-test` 应保持 23/23;dev 旁路下跨节点换图不应回档(旁路无标记放行不铸造 epoch)。
+- **未做**:阶段 2(`ScenePlayer.TravelToZone` + tip 码 + login 识别票据 `target_zone_id` + gate 验签绑定 `player_id` + 客户端调用点)、阶段 3;生产下客户端发起的跨节点换图仍被 18 拒(需要把那条路径改成"先存盘后请求"的释放链,另立任务)。未执行 git add/commit/push(仓库有每小时自动 WIP 提交,改动会被它带进去)。

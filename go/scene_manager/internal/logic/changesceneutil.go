@@ -69,7 +69,7 @@ func UpdatePlayerLocation(ctx context.Context, svcCtx *svc.ServiceContext, playe
 	if err != nil {
 		return err
 	}
-	_, err = placePlayerLocation(svcCtx, playerId, sceneId, nodeId, zoneId, observed, true)
+	_, err = placePlayerLocation(svcCtx, playerId, sceneId, nodeId, zoneId, placementGuard{observedEpoch: observed, mint: true})
 	return err
 }
 
@@ -82,6 +82,17 @@ type placedLocation struct {
 	minted bool
 	// raw 是写进 player:{id}:location 的精确 protobuf 字节。
 	raw string
+}
+
+// placementGuard 是一次落点的并发前提,全部来自本次 EnterScene 开头的同一次观察。
+type placementGuard struct {
+	// observedEpoch:落点 Lua 的 CAS 期望值(键不存在按 0)。
+	observedEpoch uint64
+	// mint:持有者换了才铸造新 epoch(见 placePlayerLocation)。
+	mint bool
+	// requiredMarker:非空 = 本次放行凭的是这份 handoff 标记原文,落点 Lua 里它必须
+	// 原样还在(见 luaMintEpochAndSetLocation)。只对 mint=true 有意义。
+	requiredMarker string
 }
 
 // placePlayerLocation 写入 location,并按 mint 决定是否同时铸造新的归属 epoch;
@@ -107,7 +118,8 @@ type placedLocation struct {
 // nodeId 为空、sceneId 为 0 表示「跨 zone 交接已放行、等待目标 zone 落点」:
 // 此时没有任何节点持有该玩家,只有 zone 与 epoch 有意义(cross-zone-scene-travel.md CZ-4)。
 func placePlayerLocation(svcCtx *svc.ServiceContext, playerId uint64, sceneId uint64, nodeId string, zoneId uint32,
-	observedEpoch uint64, mint bool) (placedLocation, error) {
+	guard placementGuard) (placedLocation, error) {
+	observedEpoch, mint := guard.observedEpoch, guard.mint
 	placedEpoch := observedEpoch
 	script := luaSetLocationIfEpoch
 	if mint {
@@ -129,18 +141,22 @@ func placePlayerLocation(svcCtx *svc.ServiceContext, playerId uint64, sceneId ui
 	raw := string(data)
 
 	result, err := svcCtx.Redis.Eval(script,
-		[]string{ownerepoch.OwnerEpochKey(playerId), getPlayerLocationKey(playerId)},
-		strconv.FormatUint(observedEpoch, 10), raw)
+		[]string{ownerepoch.OwnerEpochKey(playerId), getPlayerLocationKey(playerId), ownerepoch.HandoffKey(playerId)},
+		strconv.FormatUint(observedEpoch, 10), raw, guard.requiredMarker)
 	if err != nil {
 		return placedLocation{}, err
 	}
-	returned, parseErr := strconv.ParseUint(fmt.Sprint(result), 10, 64)
+	signed, parseErr := strconv.ParseInt(fmt.Sprint(result), 10, 64)
 	if parseErr != nil {
 		return placedLocation{}, fmt.Errorf("owner_epoch CAS 返回值非法: %v: %w", result, parseErr)
 	}
-	if returned == 0 {
+	if signed == -1 {
+		return placedLocation{}, errHandoffWithdrawn
+	}
+	if signed <= 0 {
 		return placedLocation{}, errOwnerEpochConflict
 	}
+	returned := uint64(signed)
 	if mint && returned != placedEpoch {
 		// INCR 的结果与我们序列化进 location 的值不一致,只可能是 Lua 与这里的
 		// 约定被改劈叉了。location 里的 epoch 已经是错的,必须当失败处理。

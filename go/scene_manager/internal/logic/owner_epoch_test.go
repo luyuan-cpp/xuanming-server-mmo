@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/segmentio/kafka-go"
@@ -160,8 +161,8 @@ func TestMintEpochLuaRejectsStaleExpectedValueWithoutTouchingKeys(t *testing.T) 
 
 	// 调用方读到的是 2(并发请求已经推到 3):CAS 必须落败且两把键一个字节不动。
 	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation,
-		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID)},
-		"2", "new-location-bytes")
+		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
+		"2", "new-location-bytes", "")
 	require.NoError(t, err)
 	assert.Equal(t, "0", fmt.Sprint(result))
 	assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
@@ -170,8 +171,8 @@ func TestMintEpochLuaRejectsStaleExpectedValueWithoutTouchingKeys(t *testing.T) 
 
 	// 期望值对上:INCR 到 4 并写 location,一次原子完成。
 	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation,
-		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID)},
-		"3", "new-location-bytes")
+		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
+		"3", "new-location-bytes", "")
 	require.NoError(t, err)
 	assert.Equal(t, "4", fmt.Sprint(result))
 	assert.Equal(t, "4", ownerEpochRaw(t, sc, playerID))
@@ -184,25 +185,28 @@ func TestMintEpochLuaTreatsMissingKeyAsZero(t *testing.T) {
 	const playerID = uint64(6104)
 
 	result, err := sc.Redis.Eval(luaMintEpochAndSetLocation,
-		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID)},
-		"0", "loc")
+		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
+		"0", "loc", "")
 	require.NoError(t, err)
 	assert.Equal(t, "1", fmt.Sprint(result), "键不存在与 \"0\" 同义:首次铸造得到 1")
 
 	// 回滚到 "0" 之后再铸造同样得到 1,两条路径汇合。
 	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "0"))
 	result, err = sc.Redis.Eval(luaMintEpochAndSetLocation,
-		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID)},
-		"0", "loc")
+		[]string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)},
+		"0", "loc", "")
 	require.NoError(t, err)
 	assert.Equal(t, "1", fmt.Sprint(result))
 }
 
 func TestRollbackEpochFor(t *testing.T) {
-	assert.Equal(t, uint64(5), rollbackEpochFor(&scene_manager.PlayerLocation{OwnerEpoch: 5}, 6), "优先退回旧 location 记录的 epoch")
-	assert.Equal(t, uint64(5), rollbackEpochFor(&scene_manager.PlayerLocation{OwnerEpoch: 0}, 6), "旧 location 无 epoch 时退回 minted-1")
-	assert.Equal(t, uint64(0), rollbackEpochFor(nil, 1), "首次落点回滚退到 0")
-	assert.Equal(t, uint64(0), rollbackEpochFor(nil, 0))
+	minted := func(epoch uint64) placedLocation { return placedLocation{epoch: epoch, minted: true} }
+	assert.Equal(t, uint64(5), rollbackEpochFor(&scene_manager.PlayerLocation{OwnerEpoch: 5}, minted(6)), "优先退回旧 location 记录的 epoch")
+	assert.Equal(t, uint64(5), rollbackEpochFor(&scene_manager.PlayerLocation{OwnerEpoch: 0}, minted(6)), "旧 location 无 epoch 时退回 minted-1")
+	assert.Equal(t, uint64(0), rollbackEpochFor(nil, minted(1)), "首次落点回滚退到 0")
+	assert.Equal(t, uint64(0), rollbackEpochFor(nil, minted(0)))
+	// 没铸造的落点(同节点换图 / dev 旁路):回滚只动 location,epoch 原样。
+	assert.Equal(t, uint64(7), rollbackEpochFor(&scene_manager.PlayerLocation{OwnerEpoch: 3}, placedLocation{epoch: 7}))
 }
 
 // --- 换手门:标记 ------------------------------------------------------------
@@ -368,7 +372,7 @@ func TestEnterScene_AwaitingPlacementSecondLegIsAllowedWithoutMarker(t *testing.
 	)
 	seedSceneOnNode(mr, 2, targetID, "10", "0")
 	// 第一条腿留下的等待落点位置:zone 2、无节点、epoch 1。没有 handoff 标记。
-	placed, err := placePlayerLocation(sc, playerID, 0, "", 2)
+	placed, err := placePlayerLocation(sc, playerID, 0, "", 2, placementGuard{observedEpoch: 0, mint: true})
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), placed.epoch)
 
@@ -401,7 +405,7 @@ func TestEnterScene_AwaitingPlacementCrossZoneAgainIsAllowedWithoutMarker(t *tes
 	// zone 2 有活节点:等待落点的位置不会被当成「已下线 zone 的陈旧位置」过滤掉,
 	// 走的必须是 awaitingPlacement 放行,而不是陈旧位置放行。
 	mr.ZAdd(nodeLoadKey(2), 0, "10")
-	placed, err := placePlayerLocation(sc, playerID, 0, "", 2)
+	placed, err := placePlayerLocation(sc, playerID, 0, "", 2, placementGuard{observedEpoch: 0, mint: true})
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), placed.epoch)
 
@@ -469,11 +473,11 @@ func TestEnterScene_RouteFailureAfterHandoffRestoresEpochForOldOwner(t *testing.
 func TestRollbackPlayerPlacementSkipsWhenEpochAdvancedConcurrently(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 	const playerID = uint64(6112)
-	placed, err := placePlayerLocation(sc, playerID, 7112, "10", testZoneId)
+	placed, err := placePlayerLocation(sc, playerID, 7112, "10", testZoneId, placementGuard{observedEpoch: 0, mint: true})
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), placed.epoch)
 	// 并发请求已把归属推到 2(location 也换了)。
-	later, err := placePlayerLocation(sc, playerID, 7212, "20", testZoneId)
+	later, err := placePlayerLocation(sc, playerID, 7212, "20", testZoneId, placementGuard{observedEpoch: 1, mint: true})
 	require.NoError(t, err)
 	require.Equal(t, uint64(2), later.epoch)
 
@@ -486,7 +490,9 @@ func TestRollbackPlayerPlacementSkipsWhenEpochAdvancedConcurrently(t *testing.T)
 
 // --- dev 旁路 -----------------------------------------------------------------
 
-func TestEnterScene_DevBypassSkipsMarkerButStillMintsEpoch(t *testing.T) {
+// dev 旁路下无标记的跨节点交接**不铸造**:旧节点 ReleasePlayer 的释放存盘必然晚于
+// 这里的落点,铸了它就会被 C++ 的 CAS 拒掉(每次跨节点换图确定性回档)。
+func TestEnterScene_DevBypassWithoutMarkerDoesNotMintEpoch(t *testing.T) {
 	sc, mr := newTestSvcCtxWithWorldScenes(t)
 	sc.Config.AllowUnsafeCrossNodeHandoff = true
 	captured := capturingKafkaWriter(sc)
@@ -507,10 +513,315 @@ func TestEnterScene_DevBypassSkipsMarkerButStillMintsEpoch(t *testing.T) {
 		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, uint32(0), resp.ErrorCode, "旁路只放宽标记要求")
-	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "旁路不放宽 epoch:照样铸造")
+	assert.Equal(t, uint32(0), resp.ErrorCode, "旁路放宽标记要求")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "无标记的旁路放行不铸造,旧节点手里的 1 仍然合法")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, "20", loc.NodeId)
+	assert.Equal(t, uint64(1), loc.OwnerEpoch)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(1), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+}
+
+// 旁路开着、但源确实写了当前代际的标记:照样走安全路径(铸造)。
+func TestEnterScene_DevBypassWithCurrentMarkerStillMints(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Config.AllowUnsafeCrossNodeHandoff = true
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6114)
+		oldScene = uint64(7114)
+		targetID = uint64(7214)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	writeHandoffMarker(t, sc, playerID, 1)
+	withReachableSceneNode(t, sc, "10", "20")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
 	require.Len(t, *captured, 1)
 	assert.Equal(t, uint64(2), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+}
+
+// --- 持有者没换就不铸造 ---------------------------------------------------------
+
+// 同节点换图:持有者没换。铸了,持有节点要等 Kafka → gate → scene 才知道新值,窗口内
+// 它的周期 / 退出存盘被 C++ CAS 拒掉,合法持有者被当成废黜销毁(踢人 + 回档)。
+func TestEnterScene_SameNodeSceneSwitchDoesNotMintEpoch(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6115)
+		oldScene = uint64(7115)
+		targetID = uint64(7215)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	require.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode, "同节点换图不需要标记")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "持有者没换:旧 epoch 的存盘必须继续合法")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, targetID, loc.SceneId)
+	assert.Equal(t, uint64(1), loc.OwnerEpoch)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(1), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+}
+
+// 不铸造的落点同样受 CAS 约束:观察之后 epoch 被并发推进,location 一个字节都不改。
+func TestSetLocationIfEpochRejectsStaleObservation(t *testing.T) {
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6116)
+	first, err := placePlayerLocation(sc, playerID, 7116, "10", testZoneId, placementGuard{observedEpoch: 0, mint: true})
+	require.NoError(t, err)
+
+	_, err = placePlayerLocation(sc, playerID, 7216, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
+	require.ErrorIs(t, err, errOwnerEpochConflict, "观察值 0 已过期(当前是 1)")
+	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, first.raw, raw)
+
+	moved, err := placePlayerLocation(sc, playerID, 7216, "10", testZoneId, placementGuard{observedEpoch: 1, mint: false})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(1), moved.epoch)
+	assert.False(t, moved.minted)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+}
+
+// 换手门的预检与落点 CAS 必须锚在同一次观察上:预检通过之后 epoch 被并发 EnterScene
+// 推进,本次落点要被拒,而不是读到对方推进后的值再 CAS 成功(两个节点同时被派到)。
+func TestPlacePlayerLocationIsAnchoredToObservedEpoch(t *testing.T) {
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6117)
+	_, err := placePlayerLocation(sc, playerID, 7117, "10", testZoneId, placementGuard{observedEpoch: 0, mint: true})
+	require.NoError(t, err)
+
+	// 请求 A、B 都在 epoch=1 时通过了预检;B 先落点。
+	winner, err := placePlayerLocation(sc, playerID, 7217, "20", testZoneId, placementGuard{observedEpoch: 1, mint: true})
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), winner.epoch)
+
+	_, err = placePlayerLocation(sc, playerID, 7317, "30", testZoneId, placementGuard{observedEpoch: 1, mint: true})
+	require.ErrorIs(t, err, errOwnerEpochConflict, "A 的观察值已过期,不得再铸造 3")
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, winner.raw, raw)
+}
+
+// 凭标记放行的落点:标记必须在铸造的同一段 Lua 里原样还在。源 scene 超时后先 DEL 标记、
+// 再读 epoch 判断自己有没有被放行 —— 这个判断成立的前提就是 DEL 之后不可能再有凭它的铸造。
+func TestMintIsRefusedOnceTheSourceWithdrewItsHandoffMarker(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6124)
+	_, err := placePlayerLocation(sc, playerID, 7124, "10", testZoneId, placementGuard{mint: true})
+	require.NoError(t, err)
+	writeHandoffMarker(t, sc, playerID, 1)
+	verdict, err := checkHandoffCommitted(sc, playerID, 1)
+	require.NoError(t, err)
+	require.True(t, verdict.committed)
+	before, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+
+	// 预检之后、落点之前,源 scene 撤回了标记。
+	mr.Del(ownerepoch.HandoffKey(playerID))
+	_, err = placePlayerLocation(sc, playerID, 7224, "20", testZoneId,
+		placementGuard{observedEpoch: 1, mint: true, requiredMarker: verdict.marker})
+	require.ErrorIs(t, err, errHandoffWithdrawn)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "撤回之后不得再铸造")
+	after, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, before, after)
+
+	// 标记原样还在:正常铸造。
+	writeHandoffMarker(t, sc, playerID, 1)
+	placed, err := placePlayerLocation(sc, playerID, 7224, "20", testZoneId,
+		placementGuard{observedEpoch: 1, mint: true, requiredMarker: verdict.marker})
+	require.NoError(t, err)
+	assert.Equal(t, uint64(2), placed.epoch)
+}
+
+// EnterScene 的每一条返回路径都要回显 player_id(scene 节点的异步应答回调靠它对回玩家)。
+func TestEnterScene_ResponseEchoesPlayerID(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	capturingKafkaWriter(sc)
+	const (
+		playerID = uint64(6125)
+		targetID = uint64(7125)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "0")
+
+	ok, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), ok.ErrorCode)
+	assert.Equal(t, playerID, ok.PlayerId)
+
+	rejected, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "not-a-number", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.NotEqual(t, uint32(0), rejected.ErrorCode)
+	assert.Equal(t, playerID, rejected.PlayerId, "失败应答同样要能对回玩家")
+}
+
+// 不铸造的落点回滚:只退 location,epoch 键不动(键不存在时也不能凭空写出 "0")。
+func TestRollbackUnmintedPlacementLeavesEpochUntouched(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	const playerID = uint64(6118)
+	log := NewEnterSceneLogic(context.Background(), sc).Logger
+
+	placed, err := placePlayerLocation(sc, playerID, 7118, "10", testZoneId, placementGuard{observedEpoch: 0, mint: false})
+	require.NoError(t, err)
+	require.True(t, rollbackPlayerPlacement(sc, log, playerID, placed, "", rollbackEpochFor(nil, placed)))
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)))
+	assert.False(t, mr.Exists(ownerepoch.OwnerEpochKey(playerID)), "从未铸造过的 epoch 键不能被回滚写出来")
+}
+
+// --- 跨 zone 重定向:只送连接 vs 真正离开 ----------------------------------------
+
+// 访客掉线后从别区 gate 登录:目标 zone 就是玩家所在 zone,重定向只送连接,归属不动、
+// 不要求标记(持有节点没在交接,永远写不出标记)。
+func TestEnterScene_CrossZoneRedirectIntoOwnZoneLeavesOwnershipUntouched(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6119)
+		sceneID  = uint64(7119)
+	)
+	seedSceneOnNode(mr, 2, sceneID, "10", "1")
+	mr.ZAdd(nodeLoadKey(2), 0, "10")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, sceneID, "10", 2))
+	before, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, zone uint32, _ uint64) (*scene_manager.RedirectToGateInfo, error) {
+		assert.Equal(t, uint32(2), zone)
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode, "没有 handoff 标记也必须能被送回自己所在的 zone")
+	require.NotNil(t, resp.Redirect)
+	after, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, before, after, "只送连接:location 不动")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "只送连接:不铸造")
+}
+
+func TestAwaitingPlacementExpired(t *testing.T) {
+	now := time.Unix(1_757_000_000, 0)
+	at := func(ageSeconds int64) *scene_manager.PlayerLocation {
+		return &scene_manager.PlayerLocation{ZoneId: 2, OwnerEpoch: 1, UpdateTime: uint64(now.Unix() - ageSeconds)}
+	}
+	assert.False(t, awaitingPlacementExpired(at(0), now))
+	assert.False(t, awaitingPlacementExpired(at(redirectTokenTTLSeconds), now), "恰好到期的票据仍然有效")
+	assert.True(t, awaitingPlacementExpired(at(redirectTokenTTLSeconds+1), now))
+}
+
+// seedAwaitingPlacement 直接摆一条「等待落点」位置(zone 2、无节点、epoch 1),
+// UpdateTime 由调用方决定,用来区分票据有效期内 / 过期两种情形。
+func seedAwaitingPlacement(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Miniredis, playerID uint64, updatedAt time.Time) {
+	t.Helper()
+	// zone 2 有活节点:这条位置不会被当成「已下线 zone 的陈旧位置」过滤掉。
+	mr.ZAdd(nodeLoadKey(2), 0, "10")
+	raw, err := gproto.Marshal(&scene_manager.PlayerLocation{ZoneId: 2, OwnerEpoch: 1, UpdateTime: uint64(updatedAt.Unix())})
+	require.NoError(t, err)
+	require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), string(raw)))
+	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+}
+
+// 票据有效期内:没指定去向的登录被等待落点牵去目标 zone(只送连接,归属不动)。
+func TestEnterScene_FreshAwaitingPlacementRedirectsToTargetZone(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	capturingKafkaWriter(sc)
+	const playerID = uint64(6121)
+	seedAwaitingPlacement(t, sc, mr, playerID, time.Now())
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, zone uint32, _ uint64) (*scene_manager.RedirectToGateInfo, error) {
+		assert.Equal(t, uint32(2), zone)
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	require.NotNil(t, resp.Redirect)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID), "目标 zone 没变:只送连接,不再铸造")
+}
+
+// 票据过期 = 传送失败:同样的登录不再被牵去目标 zone,按 gate zone 走常规落点(回家)。
+// 本用例不摆世界频道,所以常规落点以「无可用节点」收场 —— 要证明的只是它**没有**
+// 再去签目标 zone 的票据。
+func TestEnterScene_ExpiredAwaitingPlacementNoLongerRedirects(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	capturingKafkaWriter(sc)
+	const playerID = uint64(6123)
+	seedAwaitingPlacement(t, sc, mr, playerID, time.Now().Add(-(redirectTokenTTLSeconds+60)*time.Second))
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		t.Error("过期的等待落点不应再触发跨区重定向")
+		return nil, errors.New("unexpected redirect")
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneConfId: 2001,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Nil(t, resp.Redirect)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+}
+
+// --- home_zone:未配置 ---------------------------------------------------------
+
+// 没配 DataServiceRpc 且没声明单 zone:fail-closed。多 zone 下按 gate zone 当归属会让
+// 访客的存盘落错库,而且除一条日志外零报错。
+func TestEnterScene_HomeZoneUnconfiguredIsRejectedUnlessSingleZoneDeclared(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	sc.Config.AllowGateZoneAsHomeZone = false
+
+	const (
+		playerID = uint64(6122)
+		targetID = uint64(7122)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "0")
+	req := &scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	}
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(req)
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrHomeZoneUnavailable, resp.ErrorCode)
+	assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "拒绝时不得留下任何状态")
+	assert.Empty(t, *captured)
+
+	sc.Config.AllowGateZoneAsHomeZone = true
+	resp, err = NewEnterSceneLogic(context.Background(), sc).EnterScene(req)
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, testZoneId, decodeRoutePlayerEvent(t, (*captured)[0]).HomeZoneId)
 }
 
 // --- home_zone --------------------------------------------------------------
@@ -654,28 +965,30 @@ func TestCheckHandoffCommitted(t *testing.T) {
 	sc, _ := newTestSvcCtxWithWorldScenes(t)
 	const playerID = uint64(6120)
 
-	verdict, err := checkHandoffCommitted(sc, playerID)
+	verdict, err := checkHandoffCommitted(sc, playerID, 0)
 	require.NoError(t, err)
 	assert.False(t, verdict.committed, "既无 epoch 也无标记:不放行")
 
-	require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "4"))
-	verdict, err = checkHandoffCommitted(sc, playerID)
+	verdict, err = checkHandoffCommitted(sc, playerID, 4)
 	require.NoError(t, err)
 	assert.False(t, verdict.committed, "无标记:不放行")
-	assert.Equal(t, uint64(4), verdict.epoch)
+	assert.Equal(t, uint64(4), verdict.epoch, "比对用的是调用方观察到的 epoch,不重新读 Redis")
 
 	writeHandoffMarker(t, sc, playerID, 3)
-	verdict, err = checkHandoffCommitted(sc, playerID)
+	verdict, err = checkHandoffCommitted(sc, playerID, 4)
 	require.NoError(t, err)
 	assert.False(t, verdict.committed, "旧一代的标记:不放行")
 
 	writeHandoffMarker(t, sc, playerID, 4)
-	verdict, err = checkHandoffCommitted(sc, playerID)
+	verdict, err = checkHandoffCommitted(sc, playerID, 4)
 	require.NoError(t, err)
 	assert.True(t, verdict.committed, "当前代际的标记:放行")
+	verdict, err = checkHandoffCommitted(sc, playerID, 5)
+	require.NoError(t, err)
+	assert.False(t, verdict.committed, "观察值已被推进到 5,4 的标记不再算数")
 
 	require.NoError(t, sc.Redis.Set(ownerepoch.HandoffKey(playerID), "garbage"))
-	verdict, err = checkHandoffCommitted(sc, playerID)
+	verdict, err = checkHandoffCommitted(sc, playerID, 4)
 	require.NoError(t, err, "标记写坏不是 Redis 故障")
 	assert.False(t, verdict.committed, "标记写坏:不放行")
 }
