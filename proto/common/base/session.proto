@@ -9,4 +9,10 @@ message SessionDetails
   uint64 player_id = 2;
   uint32 gate_node_id = 3;      // Gate node ID (for Kafka routing)
   string gate_instance_id = 4;  // Gate startup UUID (zombie-message protection)
+  // 重定向票据绑定(cross-zone-scene-travel.md CZ-8)。gate 验签通过后从 GateTokenPayload 的
+  // player_id / target_zone_id 原样拷入;0 = 普通 AssignGate 票据(签票时还没登录)/ dev 旁路 /
+  // 旧版 gate。主判定在 login EnterGame:持票者不符即拒;target_zone_id == 本 zone 时不按
+  // home_zone 弹回。gate 只透传,不据此做业务决定。
+  uint64 ticket_player_id = 5;
+  uint32 ticket_target_zone_id = 6;
 }

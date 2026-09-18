@@ -303,6 +303,9 @@
     <ClCompile Include="trade\trade_admin.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="trade\trade_table.grpc.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="trade\trade_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>

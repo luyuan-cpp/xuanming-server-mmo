@@ -238,7 +238,16 @@
         "GuildNameInvalid": 14009,
         "GuildNameTaken": 14010,
         "GuildAnnouncementTooLong": 14011,
-        "GuildHomeZoneUnknown": 14012
+        "GuildHomeZoneUnknown": 14012,
+        "GuildZoneMerging": 14013,
+        "GuildTargetNotMember": 14014,
+        "GuildCannotTargetSelf": 14015,
+        "GuildRankTooLow": 14016,
+        "GuildOfficerLimit": 14017,
+        "GuildApplicationNotFound": 14018,
+        "GuildApplicationLimit": 14019,
+        "GuildApplicationQueueFull": 14020,
+        "GuildBusyRetry": 14021
       }
     },
     "friend_error": {

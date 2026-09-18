@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13monster_table.proto\"\xab\x01\n\x0cMonsterTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0e\n\x06health\x18\x02 \x01(\x04\x12\x10\n\x08strength\x18\x03 \x01(\x04\x12\r\n\x05\x61rmor\x18\x04 \x01(\x04\x12\x12\n\nresistance\x18\x05 \x01(\x04\x12\x12\n\ncritchance\x18\x06 \x01(\x04\x12\r\n\x05speed\x18\x07 \x01(\x04\x12\x12\n\nexp_reward\x18\x08 \x01(\x04\x12\x13\n\x0bgold_reward\x18\t \x01(\x04\"/\n\x10MonsterTableData\x12\x1b\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\r.MonsterTableB>\n\x0e\x63om.game.tableB\x16MonsterTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x13monster_table.proto\"G\n\x0bMonsterdrop\x12\x11\n\tdrop_item\x18\x01 \x01(\r\x12\x12\n\ndrop_count\x18\x02 \x01(\r\x12\x11\n\tdrop_rate\x18\x03 \x01(\r\"\xc7\x01\n\x0cMonsterTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x0e\n\x06health\x18\x02 \x01(\x04\x12\x10\n\x08strength\x18\x03 \x01(\x04\x12\r\n\x05\x61rmor\x18\x04 \x01(\x04\x12\x12\n\nresistance\x18\x05 \x01(\x04\x12\x12\n\ncritchance\x18\x06 \x01(\x04\x12\r\n\x05speed\x18\x07 \x01(\x04\x12\x12\n\nexp_reward\x18\x08 \x01(\x04\x12\x13\n\x0bgold_reward\x18\t \x01(\x04\x12\x1a\n\x04\x64rop\x18\n \x03(\x0b\x32\x0c.Monsterdrop\"/\n\x10MonsterTableData\x12\x1b\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\r.MonsterTableB>\n\x0e\x63om.game.tableB\x16MonsterTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,8 +32,10 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'monster_table_pb2', _global
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\026MonsterTableOuterClassP\001Z\022generated/pb/table'
-  _globals['_MONSTERTABLE']._serialized_start=24
-  _globals['_MONSTERTABLE']._serialized_end=195
-  _globals['_MONSTERTABLEDATA']._serialized_start=197
-  _globals['_MONSTERTABLEDATA']._serialized_end=244
+  _globals['_MONSTERDROP']._serialized_start=23
+  _globals['_MONSTERDROP']._serialized_end=94
+  _globals['_MONSTERTABLE']._serialized_start=97
+  _globals['_MONSTERTABLE']._serialized_end=296
+  _globals['_MONSTERTABLEDATA']._serialized_start=298
+  _globals['_MONSTERTABLEDATA']._serialized_end=345
 # @@protoc_insertion_point(module_scope)

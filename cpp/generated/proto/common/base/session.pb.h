@@ -224,6 +224,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SessionDetails final : public ::goo
     kPlayerIdFieldNumber = 2,
     kSessionIdFieldNumber = 1,
     kGateNodeIdFieldNumber = 3,
+    kTicketPlayerIdFieldNumber = 5,
+    kTicketTargetZoneIdFieldNumber = 6,
   };
   // string gate_instance_id = 4;
   void clear_gate_instance_id() ;
@@ -270,11 +272,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SessionDetails final : public ::goo
   void _internal_set_gate_node_id(::uint32_t value);
 
   public:
+  // uint64 ticket_player_id = 5;
+  void clear_ticket_player_id() ;
+  [[nodiscard]] ::uint64_t ticket_player_id() const;
+  void set_ticket_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_ticket_player_id() const;
+  void _internal_set_ticket_player_id(::uint64_t value);
+
+  public:
+  // uint32 ticket_target_zone_id = 6;
+  void clear_ticket_target_zone_id() ;
+  [[nodiscard]] ::uint32_t ticket_target_zone_id() const;
+  void set_ticket_target_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_ticket_target_zone_id() const;
+  void _internal_set_ticket_target_zone_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:SessionDetails)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 39,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -307,6 +329,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED SessionDetails final : public ::goo
     ::uint64_t player_id_;
     ::uint32_t session_id_;
     ::uint32_t gate_node_id_;
+    ::uint64_t ticket_player_id_;
+    ::uint32_t ticket_target_zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -463,6 +487,54 @@ inline void SessionDetails::set_allocated_gate_instance_id(::std::string* PROTOB
     _impl_.gate_instance_id_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:SessionDetails.gate_instance_id)
+}
+
+// uint64 ticket_player_id = 5;
+inline void SessionDetails::clear_ticket_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ticket_player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t SessionDetails::ticket_player_id() const {
+  // @@protoc_insertion_point(field_get:SessionDetails.ticket_player_id)
+  return _internal_ticket_player_id();
+}
+inline void SessionDetails::set_ticket_player_id(::uint64_t value) {
+  _internal_set_ticket_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:SessionDetails.ticket_player_id)
+}
+inline ::uint64_t SessionDetails::_internal_ticket_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ticket_player_id_;
+}
+inline void SessionDetails::_internal_set_ticket_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ticket_player_id_ = value;
+}
+
+// uint32 ticket_target_zone_id = 6;
+inline void SessionDetails::clear_ticket_target_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ticket_target_zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t SessionDetails::ticket_target_zone_id() const {
+  // @@protoc_insertion_point(field_get:SessionDetails.ticket_target_zone_id)
+  return _internal_ticket_target_zone_id();
+}
+inline void SessionDetails::set_ticket_target_zone_id(::uint32_t value) {
+  _internal_set_ticket_target_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:SessionDetails.ticket_target_zone_id)
+}
+inline ::uint32_t SessionDetails::_internal_ticket_target_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.ticket_target_zone_id_;
+}
+inline void SessionDetails::_internal_set_ticket_target_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.ticket_target_zone_id_ = value;
 }
 
 #ifdef __GNUC__

@@ -183,10 +183,18 @@ namespace friendpb{void SendFriendServiceNotifyOffline(entt::registry& , entt::e
 namespace guildpb{void SendGuildServiceCreateGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetPlayerGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
-namespace guildpb{void SendGuildServiceJoinGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceLeaveGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceDisbandGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceSetAnnouncement(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceSetGuildMemberRole(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceKickGuildMember(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceTransferGuildLeader(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceApplyJoinGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceCancelGuildApplication(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceListMyGuildApplications(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceListGuildApplications(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceReviewGuildApplication(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceNotifyGuildChanged(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceUpdateGuildScore(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetGuildRank(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetGuildRankByGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
@@ -242,7 +250,7 @@ namespace trade{void SendTradeAdminSeedListing(entt::registry& , entt::entity , 
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 216,
+static_assert(kMaxRpcMethodCount == 224,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -624,11 +632,6 @@ void InitMessageInfo()
         std::make_unique<::guildpb::GetPlayerGuildRequest>(),
         std::make_unique<::guildpb::GetPlayerGuildResponse>(),
         nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceGetPlayerGuild};
-    gRpcMethodRegistry[GuildServiceJoinGuildMessageId] = RpcMethodMeta{
-        "GuildService", "JoinGuild",
-        std::make_unique<::guildpb::JoinGuildRequest>(),
-        std::make_unique<::guildpb::JoinGuildResponse>(),
-        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceJoinGuild};
     gRpcMethodRegistry[GuildServiceLeaveGuildMessageId] = RpcMethodMeta{
         "GuildService", "LeaveGuild",
         std::make_unique<::guildpb::LeaveGuildRequest>(),
@@ -644,6 +647,51 @@ void InitMessageInfo()
         std::make_unique<::guildpb::SetAnnouncementRequest>(),
         std::make_unique<::guildpb::SetAnnouncementResponse>(),
         nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceSetAnnouncement};
+    gRpcMethodRegistry[GuildServiceSetGuildMemberRoleMessageId] = RpcMethodMeta{
+        "GuildService", "SetGuildMemberRole",
+        std::make_unique<::guildpb::SetGuildMemberRoleRequest>(),
+        std::make_unique<::guildpb::SetGuildMemberRoleResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceSetGuildMemberRole};
+    gRpcMethodRegistry[GuildServiceKickGuildMemberMessageId] = RpcMethodMeta{
+        "GuildService", "KickGuildMember",
+        std::make_unique<::guildpb::KickGuildMemberRequest>(),
+        std::make_unique<::guildpb::KickGuildMemberResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceKickGuildMember};
+    gRpcMethodRegistry[GuildServiceTransferGuildLeaderMessageId] = RpcMethodMeta{
+        "GuildService", "TransferGuildLeader",
+        std::make_unique<::guildpb::TransferGuildLeaderRequest>(),
+        std::make_unique<::guildpb::TransferGuildLeaderResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceTransferGuildLeader};
+    gRpcMethodRegistry[GuildServiceApplyJoinGuildMessageId] = RpcMethodMeta{
+        "GuildService", "ApplyJoinGuild",
+        std::make_unique<::guildpb::ApplyJoinGuildRequest>(),
+        std::make_unique<::guildpb::ApplyJoinGuildResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceApplyJoinGuild};
+    gRpcMethodRegistry[GuildServiceCancelGuildApplicationMessageId] = RpcMethodMeta{
+        "GuildService", "CancelGuildApplication",
+        std::make_unique<::guildpb::CancelGuildApplicationRequest>(),
+        std::make_unique<::guildpb::CancelGuildApplicationResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceCancelGuildApplication};
+    gRpcMethodRegistry[GuildServiceListMyGuildApplicationsMessageId] = RpcMethodMeta{
+        "GuildService", "ListMyGuildApplications",
+        std::make_unique<::guildpb::ListMyGuildApplicationsRequest>(),
+        std::make_unique<::guildpb::ListMyGuildApplicationsResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceListMyGuildApplications};
+    gRpcMethodRegistry[GuildServiceListGuildApplicationsMessageId] = RpcMethodMeta{
+        "GuildService", "ListGuildApplications",
+        std::make_unique<::guildpb::ListGuildApplicationsRequest>(),
+        std::make_unique<::guildpb::ListGuildApplicationsResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceListGuildApplications};
+    gRpcMethodRegistry[GuildServiceReviewGuildApplicationMessageId] = RpcMethodMeta{
+        "GuildService", "ReviewGuildApplication",
+        std::make_unique<::guildpb::ReviewGuildApplicationRequest>(),
+        std::make_unique<::guildpb::ReviewGuildApplicationResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceReviewGuildApplication};
+    gRpcMethodRegistry[GuildServiceNotifyGuildChangedMessageId] = RpcMethodMeta{
+        "GuildService", "NotifyGuildChanged",
+        std::make_unique<::guildpb::GuildChangedS2C>(),
+        std::make_unique<::Empty>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceNotifyGuildChanged};
     gRpcMethodRegistry[GuildServiceUpdateGuildScoreMessageId] = RpcMethodMeta{
         "GuildService", "UpdateGuildScore",
         std::make_unique<::guildpb::UpdateGuildScoreRequest>(),
@@ -1416,10 +1464,18 @@ bool IsClientMessageId(uint32_t messageId)
 	case GuildServiceCreateGuildMessageId:
 	case GuildServiceGetGuildMessageId:
 	case GuildServiceGetPlayerGuildMessageId:
-	case GuildServiceJoinGuildMessageId:
 	case GuildServiceLeaveGuildMessageId:
 	case GuildServiceDisbandGuildMessageId:
 	case GuildServiceSetAnnouncementMessageId:
+	case GuildServiceSetGuildMemberRoleMessageId:
+	case GuildServiceKickGuildMemberMessageId:
+	case GuildServiceTransferGuildLeaderMessageId:
+	case GuildServiceApplyJoinGuildMessageId:
+	case GuildServiceCancelGuildApplicationMessageId:
+	case GuildServiceListMyGuildApplicationsMessageId:
+	case GuildServiceListGuildApplicationsMessageId:
+	case GuildServiceReviewGuildApplicationMessageId:
+	case GuildServiceNotifyGuildChangedMessageId:
 	case GuildServiceUpdateGuildScoreMessageId:
 	case GuildServiceGetGuildRankMessageId:
 	case GuildServiceGetGuildRankByGuildMessageId:

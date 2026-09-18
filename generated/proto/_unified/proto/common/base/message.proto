@@ -232,6 +232,11 @@ message GateTokenPayload {
   // signed-message path; Gate falls back to adler32-only validation in
   // codec.cpp. The key is rotated on every fresh login (no Redis state).
   bytes hmac_session_key = 4;
+  // 持票者绑定:重定向票据只对该玩家有效,目标 gate/login 拒绝他人持票。0=旧版签发者未填。
+  uint64 player_id = 5;
+  // 跨 zone 传送的目标 zone:目标 zone 的 login 看到 target_zone_id == 本 zone 时不按 home_zone 弹回。
+  // 0=普通登录票据(按 home_zone 规则)。见 cross-zone-scene-travel.md CZ-8。
+  uint32 target_zone_id = 6;
 }
 
 // Client sends this as the FIRST protobuf message after TCP-connecting to Gate.

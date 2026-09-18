@@ -40,7 +40,7 @@ var Segments = []Segment{
 	{Domain: "mount", Group: "mount_error", Base: 11000, Width: 1000, Lo: 11000, Hi: 11000, Count: 1},
 	{Domain: "reward", Group: "reward_error", Base: 12000, Width: 1000, Lo: 12000, Hi: 12000, Count: 1},
 	{Domain: "cross_server", Group: "cross_server_error", Base: 13000, Width: 1000, Lo: 13000, Hi: 13000, Count: 1},
-	{Domain: "guild", Group: "guild_error", Base: 14000, Width: 1000, Lo: 14000, Hi: 14012, Count: 13},
+	{Domain: "guild", Group: "guild_error", Base: 14000, Width: 1000, Lo: 14000, Hi: 14021, Count: 22},
 	{Domain: "friend", Group: "friend_error", Base: 15000, Width: 1000, Lo: 15000, Hi: 15006, Count: 7},
 	{Domain: "match", Group: "match_error", Base: 16000, Width: 1000, Lo: 16000, Hi: 16020, Count: 21},
 	{Domain: "trade", Group: "trade_error", Base: 20000, Width: 1000, Lo: 20000, Hi: 20003, Count: 4},

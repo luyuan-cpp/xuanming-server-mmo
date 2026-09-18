@@ -99,6 +99,12 @@
     <ClInclude Include="service_metadata\common_event_skill_event_event_id.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="service_metadata\common_event_team_event_event_id.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="service_metadata\team_service_metadata.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="service_metadata\contracts_kafka_gate_event_event_id.h">
       <Filter>头文件</Filter>
     </ClInclude>

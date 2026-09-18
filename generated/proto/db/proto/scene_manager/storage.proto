@@ -21,4 +21,7 @@ message PlayerLocation {
   // Zone where the player's current scene resides.
   // Used on reconnect to determine cross-zone redirect need.
   uint32 zone_id = 4;
+  // 写入这条 location 时的归属 epoch(与 sidecar 键 player:{id}:owner_epoch 同一 Lua 原子写入)。
+  // node_id 为空且 owner_epoch != 0 表示「跨 zone 交接已放行、等待目标 zone 落点」,此时没有节点持有该玩家。
+  uint64 owner_epoch = 5;
 }

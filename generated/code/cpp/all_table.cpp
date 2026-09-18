@@ -20,6 +20,8 @@
 #include "dungeon_table.h"
 #include "equipslot_table.h"
 #include "globalvariable_table.h"
+#include "guildlevel_table.h"
+#include "guildrule_table.h"
 #include "item_table.h"
 #include "messagelimiter_table.h"
 #include "mirror_table.h"
@@ -70,6 +72,10 @@ void LoadTables() {
     EquipSlotTableManager::Instance().Load();
 
     GlobalVariableTableManager::Instance().Load();
+
+    GuildLevelTableManager::Instance().Load();
+
+    GuildRuleTableManager::Instance().Load();
 
     ItemTableManager::Instance().Load();
 
@@ -131,6 +137,10 @@ void LoadTables() {
 
     GlobalVariableTableManager::Instance().LoadSuccess();
 
+    GuildLevelTableManager::Instance().LoadSuccess();
+
+    GuildRuleTableManager::Instance().LoadSuccess();
+
     ItemTableManager::Instance().LoadSuccess();
 
     MessageLimiterTableManager::Instance().LoadSuccess();
@@ -164,7 +174,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(29);
+    static muduo::CountDownLatch latch(31);
 
     std::thread ActivityScheduleLoadThread([]() {
         void InitThreadLocalConfig();
@@ -293,6 +303,22 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     GlobalVariableLoadThread.detach();
+
+    std::thread GuildLevelLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        GuildLevelTableManager::Instance().Load();
+        latch.countDown();
+    });
+    GuildLevelLoadThread.detach();
+
+    std::thread GuildRuleLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        GuildRuleTableManager::Instance().Load();
+        latch.countDown();
+    });
+    GuildRuleLoadThread.detach();
 
     std::thread ItemLoadThread([]() {
         void InitThreadLocalConfig();
@@ -432,6 +458,10 @@ void LoadTablesAsync() {
     EquipSlotTableManager::Instance().LoadSuccess();
 
     GlobalVariableTableManager::Instance().LoadSuccess();
+
+    GuildLevelTableManager::Instance().LoadSuccess();
+
+    GuildRuleTableManager::Instance().LoadSuccess();
 
     ItemTableManager::Instance().LoadSuccess();
 

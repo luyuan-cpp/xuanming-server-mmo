@@ -35,4 +35,22 @@ public final class ItemTableComp {
         }
     }
 
+    public record Battle_usable(int value) {
+        public static Battle_usable from(ItemTable row) {
+            return new Battle_usable(row.getBattleUsable());
+        }
+    }
+
+    public record Battle_heal_hp(long value) {
+        public static Battle_heal_hp from(ItemTable row) {
+            return new Battle_heal_hp(row.getBattleHealHp());
+        }
+    }
+
+    public record Battle_heal_mp(long value) {
+        public static Battle_heal_mp from(ItemTable row) {
+            return new Battle_heal_mp(row.getBattleHealMp());
+        }
+    }
+
 }

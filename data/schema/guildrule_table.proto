@@ -1,0 +1,48 @@
+syntax = "proto3";
+
+// GuildRule 表的权威 schema。源表 data/GuildRule.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 帮会服务的单行全局规则(与 PetRule 同套路:只取 id=1)。
+//
+// 契约冻结:1-7 号字段号与含义由 B2 一次建齐,B5(资产通道)、B6(帮会活动)只能从
+// 8 号起追加列(如 B6a 的 activity_join_min_hours = 8),不得改动 1-7 号。
+// 理由:三个批次并行落码,若各自按需建表会出现两份 schema、两份启动校验器,
+// 后落地的批次还会把先落地批次的列覆盖掉,而 xlsx 按列名绑定不会报错。
+//
+// 每列默认值由**读取该列的批次**拍板:2-4 列 B2、5-6 列 B5、7 列及以后 B6。
+// 取值上下界在 guild 服务启动时 fail-closed 校验(validateGuildTables /
+// ValidateEconomyTables / activity.ValidateTables 各管自己那几列),坏表不放行。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message GuildRuleTable {
+  option (cfg_sheet)       = "GuildRule";
+  option (cfg_source_file) = "GuildRule.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 规则行 id(固定 1)
+  uint32 id = 1;
+  // 入帮申请有效期(小时),1-720
+  // 过期的申请在下一次写事务里顺手删掉,不占用下面两个上限;调小会让存量申请立刻失效
+  uint32 application_expire_hours = 2;
+  // 每个玩家同时待审的申请上限,1-10
+  // 在申请人的 guild_player_state 行锁下计数,并发申请被串行化,所以这是硬上限不是估算值
+  uint32 max_pending_applications_per_player = 3;
+  // 每个帮会同时待审的申请上限,1-500
+  // 防止外人灌满审批列表:超过即拒新申请,已入帮成员不受影响
+  uint32 max_pending_applications_per_guild = 4;
+  // 资产操作截止秒数(B5 读取)
+  // 捐献指令超过它还没结算就改发中止,避免玩家货币被扣住却永远拿不到帮贡
+  uint32 asset_op_deadline_seconds = 5;
+  // 资产操作重投基准毫秒(B5 读取)
+  // 后台重投的退避基数(会叠加抖动),不是单次调用的超时时间
+  uint32 asset_op_retry_base_ms = 6;
+  // 中秋团圆在线人数兜底阈值(B6a 读取)
+  // 帮会同时在线人数达到它才锁存团圆进度;活动表可按档期另配更高阈值,这里是下限
+  uint32 reunion_min_online_members = 7;
+}

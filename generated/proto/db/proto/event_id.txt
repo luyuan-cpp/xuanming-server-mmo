@@ -46,3 +46,4 @@
 45=BattleConfirmedEvent
 46=ContractsKafkaBattleResultEvent
 47=ContractsKafkaBattleResultTeam
+48=PlayerTeamRefreshEvent

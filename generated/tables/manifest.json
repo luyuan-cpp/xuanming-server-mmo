@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "version": 16,
-  "content_digest": "fa37aec944e6978f948527c17c7fbc17a5be9292beccdcd548b1dd0caafe97e2",
-  "generated_at": "2026-09-18T03:26:47Z",
+  "version": 17,
+  "content_digest": "9fbafd4ff0e96edf2f2d48b062686a481beab2de4b723f1135a558149e34728d",
+  "generated_at": "2026-09-18T07:52:52Z",
   "source_rev": {
-    "commit": "2a2b793f88f2353c444787a420f81cfdb367a2d7",
+    "commit": "66c546e7099bbb439a70a4d2ac107edd515a486a",
     "data_dirty": true
   },
-  "table_count": 29,
+  "table_count": 31,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -378,25 +378,71 @@
       ]
     },
     {
+      "name": "GuildLevel",
+      "rows": 10,
+      "source": {
+        "file": "GuildLevel.xlsx",
+        "size": 5263,
+        "sha256": "99129c0a3768dc1841eea06886340f9250ec1af33695d539991af4dd9d88487c"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "guildlevel.json",
+          "size": 982,
+          "sha256": "499603f3e7bfdef8cac0ec0c05c37816f0b1ef1be5b227b21b1fa6a5a93df3f2"
+        },
+        {
+          "kind": "binary",
+          "file": "guildlevel.pb",
+          "size": 116,
+          "sha256": "482875085dad8f51772a79fc27995ef2d92dae868e6fa4006e0b2e18388d0bb8"
+        }
+      ]
+    },
+    {
+      "name": "GuildRule",
+      "rows": 1,
+      "source": {
+        "file": "GuildRule.xlsx",
+        "size": 5263,
+        "sha256": "a78d1c46d307612827f299078d55c703fda649e9de9f08b6793ae6c89610d225"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "guildrule.json",
+          "size": 269,
+          "sha256": "437adf401d97b29510ae4c0b34bdd4301c08793e87e11683371b786069d1ed24"
+        },
+        {
+          "kind": "binary",
+          "file": "guildrule.pb",
+          "size": 18,
+          "sha256": "2301b539e3753b79cfdf1429dd2ad8b45a7b72cec8385e528d3caff395c866f3"
+        }
+      ]
+    },
+    {
       "name": "Item",
       "rows": 28,
       "source": {
         "file": "Item.xlsx",
-        "size": 5586,
-        "sha256": "7bf40c4294e0ba51a5e800133d6e132766b8d5b81b84bed8d1a2da9d9919ce73"
+        "size": 5906,
+        "sha256": "08018854efc296863340ab0ce062839d5430a6ae60cea42ce5125668880a8f57"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "item.json",
-          "size": 1859,
-          "sha256": "fda14e237189a7ce5b84c220e7eb81cb44e38b25213831f0c729ab621d91c44a"
+          "size": 3851,
+          "sha256": "d29360fb61c399a41e6fa62e7b4cd898123bf19c986027d4d5086726ea467253"
         },
         {
           "kind": "binary",
           "file": "item.pb",
-          "size": 188,
-          "sha256": "167a56b624e4bc73fcdb79d9bcc4c0c7b3d77ce8d3e2ddcfb07ab515e1a271e6"
+          "size": 197,
+          "sha256": "db4e26fe7e32e7d817e1c41774261557247060499b6462b72a8df4838f69bb45"
         }
       ]
     },
@@ -474,21 +520,21 @@
       "rows": 16,
       "source": {
         "file": "Monster.xlsx",
-        "size": 5799,
-        "sha256": "c138fcecca86e71126f5b0c63659ea89cefdcd1300ab8fd0aa03f25b446eace7"
+        "size": 5925,
+        "sha256": "dd67ec602517812f7245a2a1ff4ee728e181cc3694578d7525f43da79976f141"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "monster.json",
-          "size": 2868,
-          "sha256": "858be27d3502ebcdbea16fb878a22a6499337defcdfef997f67ca36319d05820"
+          "size": 3145,
+          "sha256": "47c8f490338c29017885b632e0d3c118de2127ee580fcde645103a758825451e"
         },
         {
           "kind": "binary",
           "file": "monster.pb",
-          "size": 369,
-          "sha256": "46efe4ee7eab314f674951ea08f96e0a62314944f0d18ea0194e1bc02f8f806e"
+          "size": 396,
+          "sha256": "ea9cd6c871c57f871060cc0722072d6c008e941bd6767a8dadc1e53887c86888"
         }
       ]
     },

@@ -21,11 +21,14 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// scene 玩家实体上的组队成员关系(设计文档 docs/design/team-system.md §B.3、§F.2)。
+// 真值在 SharedRedis team:player:<player_id> 的 hash 字段 tid / epoch,由 team 服务(match 进程)原子写入。
 type TeamId struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TeamId        uint64                 `protobuf:"varint,1,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	TeamId          uint64                 `protobuf:"varint,1,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
+	MembershipEpoch uint64                 `protobuf:"varint,2,opt,name=membership_epoch,json=membershipEpoch,proto3" json:"membership_epoch,omitempty"` // 该玩家成员关系版本:scene 仅当 incoming epoch 更大时才改组件(乱序/重复信号安全)
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *TeamId) Reset() {
@@ -65,6 +68,15 @@ func (x *TeamId) GetTeamId() uint64 {
 	return 0
 }
 
+func (x *TeamId) GetMembershipEpoch() uint64 {
+	if x != nil {
+		return x.MembershipEpoch
+	}
+	return 0
+}
+
+// Redis team:<team_id> 的投影值(scene 读;team 服务在同一条 Lua 里与权威记录一起写)。
+// members 是集合语义,scene 不得依赖顺序(AGENTS §11.6)。
 type TeamInfo struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TeamId        uint64                 `protobuf:"varint,1,opt,name=team_id,json=teamId,proto3" json:"team_id,omitempty"`
@@ -129,9 +141,10 @@ var File_proto_common_component_team_comp_proto protoreflect.FileDescriptor
 
 const file_proto_common_component_team_comp_proto_rawDesc = "" +
 	"\n" +
-	"&proto/common/component/team_comp.proto\"!\n" +
+	"&proto/common/component/team_comp.proto\"L\n" +
 	"\x06TeamId\x12\x17\n" +
-	"\ateam_id\x18\x01 \x01(\x04R\x06teamId\"Z\n" +
+	"\ateam_id\x18\x01 \x01(\x04R\x06teamId\x12)\n" +
+	"\x10membership_epoch\x18\x02 \x01(\x04R\x0fmembershipEpoch\"Z\n" +
 	"\bTeamInfo\x12\x17\n" +
 	"\ateam_id\x18\x01 \x01(\x04R\x06teamId\x12\x1b\n" +
 	"\tleader_id\x18\x02 \x01(\x04R\bleaderId\x12\x18\n" +

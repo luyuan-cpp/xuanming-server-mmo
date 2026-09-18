@@ -69,6 +69,14 @@ extern const ::google::protobuf::internal::ClassDataFull MonsterTableData_class_
 #else
 extern const MonsterTableDataGlobalsTypeInternal MonsterTableData_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class Monsterdrop;
+struct MonsterdropGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern MonsterdropGlobalsTypeInternal Monsterdrop_globals_;
+extern const ::google::protobuf::internal::ClassDataFull Monsterdrop_class_data_;
+#else
+extern const MonsterdropGlobalsTypeInternal Monsterdrop_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 namespace google {
 namespace protobuf {
 }  // namespace protobuf
@@ -78,6 +86,231 @@ namespace protobuf {
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Monsterdrop final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:Monsterdrop) */ {
+ public:
+  inline Monsterdrop() : Monsterdrop(nullptr) {}
+  ~Monsterdrop() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(Monsterdrop* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(Monsterdrop));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr Monsterdrop(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline Monsterdrop(const Monsterdrop& from) : Monsterdrop(nullptr, from) {}
+  inline Monsterdrop(Monsterdrop&& from) noexcept : Monsterdrop(nullptr, ::std::move(from)) {}
+  inline Monsterdrop& operator=(const Monsterdrop& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline Monsterdrop& operator=(Monsterdrop&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const Monsterdrop& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<Monsterdrop>(&Monsterdrop_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 0;
+  friend void swap(Monsterdrop& a, Monsterdrop& b) { a.Swap(&b); }
+  inline void Swap(Monsterdrop* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(Monsterdrop* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] Monsterdrop* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<Monsterdrop>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const Monsterdrop& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const Monsterdrop& from) { Monsterdrop::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(Monsterdrop* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "Monsterdrop"; }
+
+  explicit Monsterdrop(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  Monsterdrop(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Monsterdrop& from);
+  Monsterdrop(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, Monsterdrop&& from) noexcept
+      : Monsterdrop(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDropItemFieldNumber = 1,
+    kDropCountFieldNumber = 2,
+    kDropRateFieldNumber = 3,
+  };
+  // uint32 drop_item = 1;
+  void clear_drop_item() ;
+  [[nodiscard]] ::uint32_t drop_item() const;
+  void set_drop_item(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_drop_item() const;
+  void _internal_set_drop_item(::uint32_t value);
+
+  public:
+  // uint32 drop_count = 2;
+  void clear_drop_count() ;
+  [[nodiscard]] ::uint32_t drop_count() const;
+  void set_drop_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_drop_count() const;
+  void _internal_set_drop_count(::uint32_t value);
+
+  public:
+  // uint32 drop_rate = 3;
+  void clear_drop_rate() ;
+  [[nodiscard]] ::uint32_t drop_rate() const;
+  void set_drop_rate(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_drop_rate() const;
+  void _internal_set_drop_rate(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:Monsterdrop)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const Monsterdrop& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t drop_item_;
+    ::uint32_t drop_count_;
+    ::uint32_t drop_rate_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_monster_5ftable_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::google::protobuf::Message
@@ -136,7 +369,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
   [[nodiscard]] static const MonsterTable& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MonsterTable>(&MonsterTable_globals_);
   }
-  static constexpr int kIndexInFileMessages = 0;
+  static constexpr int kIndexInFileMessages = 1;
   friend void swap(MonsterTable& a, MonsterTable& b) { a.Swap(&b); }
   inline void Swap(MonsterTable* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -228,6 +461,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
 
   // accessors -------------------------------------------------------
   enum : int {
+    kDropFieldNumber = 10,
     kHealthFieldNumber = 2,
     kStrengthFieldNumber = 3,
     kArmorFieldNumber = 4,
@@ -238,6 +472,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
     kGoldRewardFieldNumber = 9,
     kIdFieldNumber = 1,
   };
+  // repeated .Monsterdrop drop = 10;
+  [[nodiscard]] int drop_size()
+      const;
+  private:
+  int _internal_drop_size() const;
+
+  public:
+  void clear_drop() ;
+  [[nodiscard]] const ::Monsterdrop& drop(int index) const;
+  [[nodiscard]] ::Monsterdrop* PROTOBUF_NONNULL mutable_drop(int index);
+  ::Monsterdrop* PROTOBUF_NONNULL add_drop();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::Monsterdrop>&
+  drop() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::Monsterdrop>* PROTOBUF_NONNULL
+  mutable_drop();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::Monsterdrop>& _internal_drop() const;
+  ::google::protobuf::RepeatedPtrField<::Monsterdrop>* PROTOBUF_NONNULL _internal_mutable_drop();
+
+  public:
   // uint64 health = 2;
   void clear_health() ;
   [[nodiscard]] ::uint64_t health() const;
@@ -332,8 +587,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<4, 9,
-                          0, 0,
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          1, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -361,6 +616,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTable final : public ::googl
         const MonsterTable& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::Monsterdrop > drop_;
     ::uint64_t health_;
     ::uint64_t strength_;
     ::uint64_t armor_;
@@ -433,7 +689,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTableData final : public ::g
   [[nodiscard]] static const MonsterTableData& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MonsterTableData>(&MonsterTableData_globals_);
   }
-  static constexpr int kIndexInFileMessages = 1;
+  static constexpr int kIndexInFileMessages = 2;
   friend void swap(MonsterTableData& a, MonsterTableData& b) { a.Swap(&b); }
   inline void Swap(MonsterTableData* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -602,13 +858,89 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MonsterTableData final : public ::g
 #endif  // __GNUC__
 // -------------------------------------------------------------------
 
+// Monsterdrop
+
+// uint32 drop_item = 1;
+inline void Monsterdrop::clear_drop_item() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.drop_item_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t Monsterdrop::drop_item() const {
+  // @@protoc_insertion_point(field_get:Monsterdrop.drop_item)
+  return _internal_drop_item();
+}
+inline void Monsterdrop::set_drop_item(::uint32_t value) {
+  _internal_set_drop_item(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:Monsterdrop.drop_item)
+}
+inline ::uint32_t Monsterdrop::_internal_drop_item() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.drop_item_;
+}
+inline void Monsterdrop::_internal_set_drop_item(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.drop_item_ = value;
+}
+
+// uint32 drop_count = 2;
+inline void Monsterdrop::clear_drop_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.drop_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t Monsterdrop::drop_count() const {
+  // @@protoc_insertion_point(field_get:Monsterdrop.drop_count)
+  return _internal_drop_count();
+}
+inline void Monsterdrop::set_drop_count(::uint32_t value) {
+  _internal_set_drop_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:Monsterdrop.drop_count)
+}
+inline ::uint32_t Monsterdrop::_internal_drop_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.drop_count_;
+}
+inline void Monsterdrop::_internal_set_drop_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.drop_count_ = value;
+}
+
+// uint32 drop_rate = 3;
+inline void Monsterdrop::clear_drop_rate() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.drop_rate_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t Monsterdrop::drop_rate() const {
+  // @@protoc_insertion_point(field_get:Monsterdrop.drop_rate)
+  return _internal_drop_rate();
+}
+inline void Monsterdrop::set_drop_rate(::uint32_t value) {
+  _internal_set_drop_rate(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:Monsterdrop.drop_rate)
+}
+inline ::uint32_t Monsterdrop::_internal_drop_rate() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.drop_rate_;
+}
+inline void Monsterdrop::_internal_set_drop_rate(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.drop_rate_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // MonsterTable
 
 // uint32 id = 1;
 inline void MonsterTable::clear_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::uint32_t MonsterTable::id() const {
   // @@protoc_insertion_point(field_get:MonsterTable.id)
@@ -616,7 +948,7 @@ inline ::uint32_t MonsterTable::id() const {
 }
 inline void MonsterTable::set_id(::uint32_t value) {
   _internal_set_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:MonsterTable.id)
 }
 inline ::uint32_t MonsterTable::_internal_id() const {
@@ -632,7 +964,7 @@ inline void MonsterTable::_internal_set_id(::uint32_t value) {
 inline void MonsterTable::clear_health() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.health_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint64_t MonsterTable::health() const {
   // @@protoc_insertion_point(field_get:MonsterTable.health)
@@ -640,7 +972,7 @@ inline ::uint64_t MonsterTable::health() const {
 }
 inline void MonsterTable::set_health(::uint64_t value) {
   _internal_set_health(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:MonsterTable.health)
 }
 inline ::uint64_t MonsterTable::_internal_health() const {
@@ -656,7 +988,7 @@ inline void MonsterTable::_internal_set_health(::uint64_t value) {
 inline void MonsterTable::clear_strength() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.strength_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint64_t MonsterTable::strength() const {
   // @@protoc_insertion_point(field_get:MonsterTable.strength)
@@ -664,7 +996,7 @@ inline ::uint64_t MonsterTable::strength() const {
 }
 inline void MonsterTable::set_strength(::uint64_t value) {
   _internal_set_strength(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:MonsterTable.strength)
 }
 inline ::uint64_t MonsterTable::_internal_strength() const {
@@ -680,7 +1012,7 @@ inline void MonsterTable::_internal_set_strength(::uint64_t value) {
 inline void MonsterTable::clear_armor() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.armor_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t MonsterTable::armor() const {
   // @@protoc_insertion_point(field_get:MonsterTable.armor)
@@ -688,7 +1020,7 @@ inline ::uint64_t MonsterTable::armor() const {
 }
 inline void MonsterTable::set_armor(::uint64_t value) {
   _internal_set_armor(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:MonsterTable.armor)
 }
 inline ::uint64_t MonsterTable::_internal_armor() const {
@@ -704,7 +1036,7 @@ inline void MonsterTable::_internal_set_armor(::uint64_t value) {
 inline void MonsterTable::clear_resistance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.resistance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t MonsterTable::resistance() const {
   // @@protoc_insertion_point(field_get:MonsterTable.resistance)
@@ -712,7 +1044,7 @@ inline ::uint64_t MonsterTable::resistance() const {
 }
 inline void MonsterTable::set_resistance(::uint64_t value) {
   _internal_set_resistance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:MonsterTable.resistance)
 }
 inline ::uint64_t MonsterTable::_internal_resistance() const {
@@ -728,7 +1060,7 @@ inline void MonsterTable::_internal_set_resistance(::uint64_t value) {
 inline void MonsterTable::clear_critchance() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.critchance_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t MonsterTable::critchance() const {
   // @@protoc_insertion_point(field_get:MonsterTable.critchance)
@@ -736,7 +1068,7 @@ inline ::uint64_t MonsterTable::critchance() const {
 }
 inline void MonsterTable::set_critchance(::uint64_t value) {
   _internal_set_critchance(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:MonsterTable.critchance)
 }
 inline ::uint64_t MonsterTable::_internal_critchance() const {
@@ -752,7 +1084,7 @@ inline void MonsterTable::_internal_set_critchance(::uint64_t value) {
 inline void MonsterTable::clear_speed() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.speed_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t MonsterTable::speed() const {
   // @@protoc_insertion_point(field_get:MonsterTable.speed)
@@ -760,7 +1092,7 @@ inline ::uint64_t MonsterTable::speed() const {
 }
 inline void MonsterTable::set_speed(::uint64_t value) {
   _internal_set_speed(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:MonsterTable.speed)
 }
 inline ::uint64_t MonsterTable::_internal_speed() const {
@@ -776,7 +1108,7 @@ inline void MonsterTable::_internal_set_speed(::uint64_t value) {
 inline void MonsterTable::clear_exp_reward() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.exp_reward_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t MonsterTable::exp_reward() const {
   // @@protoc_insertion_point(field_get:MonsterTable.exp_reward)
@@ -784,7 +1116,7 @@ inline ::uint64_t MonsterTable::exp_reward() const {
 }
 inline void MonsterTable::set_exp_reward(::uint64_t value) {
   _internal_set_exp_reward(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:MonsterTable.exp_reward)
 }
 inline ::uint64_t MonsterTable::_internal_exp_reward() const {
@@ -800,7 +1132,7 @@ inline void MonsterTable::_internal_set_exp_reward(::uint64_t value) {
 inline void MonsterTable::clear_gold_reward() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_reward_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t MonsterTable::gold_reward() const {
   // @@protoc_insertion_point(field_get:MonsterTable.gold_reward)
@@ -808,7 +1140,7 @@ inline ::uint64_t MonsterTable::gold_reward() const {
 }
 inline void MonsterTable::set_gold_reward(::uint64_t value) {
   _internal_set_gold_reward(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:MonsterTable.gold_reward)
 }
 inline ::uint64_t MonsterTable::_internal_gold_reward() const {
@@ -818,6 +1150,61 @@ inline ::uint64_t MonsterTable::_internal_gold_reward() const {
 inline void MonsterTable::_internal_set_gold_reward(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gold_reward_ = value;
+}
+
+// repeated .Monsterdrop drop = 10;
+inline int MonsterTable::_internal_drop_size() const {
+  return _internal_drop().size();
+}
+inline int MonsterTable::drop_size() const {
+  return _internal_drop_size();
+}
+inline void MonsterTable::clear_drop() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.drop_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::Monsterdrop& MonsterTable::drop(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:MonsterTable.drop)
+  return _internal_drop().Get(index);
+}
+inline ::Monsterdrop* PROTOBUF_NONNULL MonsterTable::mutable_drop(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:MonsterTable.drop)
+  return _internal_mutable_drop()->Mutable(index);
+}
+inline ::Monsterdrop* PROTOBUF_NONNULL MonsterTable::add_drop()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::Monsterdrop* _add =
+      _internal_mutable_drop()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:MonsterTable.drop)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::Monsterdrop>& MonsterTable::drop() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:MonsterTable.drop)
+  return _internal_drop();
+}
+inline ::google::protobuf::RepeatedPtrField<::Monsterdrop>* PROTOBUF_NONNULL
+MonsterTable::mutable_drop() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:MonsterTable.drop)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_drop();
+}
+inline const ::google::protobuf::RepeatedPtrField<::Monsterdrop>&
+MonsterTable::_internal_drop() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.drop_;
+}
+inline ::google::protobuf::RepeatedPtrField<::Monsterdrop>* PROTOBUF_NONNULL
+MonsterTable::_internal_mutable_drop() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.drop_;
 }
 
 // -------------------------------------------------------------------

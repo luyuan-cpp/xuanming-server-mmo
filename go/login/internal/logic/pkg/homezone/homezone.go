@@ -230,6 +230,13 @@ func (r *Resolver) RefreshRoleZones(ctx context.Context, players []*pbbase.Accou
 	return out
 }
 
+// TicketPinsZone 判定本连接所持的重定向票据是否指明「就是来 ownZone 的」
+// (cross-zone-scene-travel.md CZ-8)。ticketTargetZone 为 0 是普通 AssignGate 票据,不钉;
+// 不等于 ownZone 的票据过不了 gate 的 target_zone 检查,到不了这里,按普通登录处理。
+func TicketPinsZone(ticketTargetZone, ownZone uint32) bool {
+	return ticketTargetZone != 0 && ticketTargetZone == ownZone
+}
+
 // ResolveEnterZone 决定 EnterScene 请求里的 ZoneId。
 //
 // 返回 (targetZone, redirected):

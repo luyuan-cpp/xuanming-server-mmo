@@ -35,4 +35,22 @@ enum guild_error {
 
   kGuildHomeZoneUnknown = 14012;
 
+  kGuildZoneMerging = 14013;
+
+  kGuildTargetNotMember = 14014;
+
+  kGuildCannotTargetSelf = 14015;
+
+  kGuildRankTooLow = 14016;
+
+  kGuildOfficerLimit = 14017;
+
+  kGuildApplicationNotFound = 14018;
+
+  kGuildApplicationLimit = 14019;
+
+  kGuildApplicationQueueFull = 14020;
+
+  kGuildBusyRetry = 14021;
+
 };

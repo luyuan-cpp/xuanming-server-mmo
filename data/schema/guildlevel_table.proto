@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+// GuildLevel 表的权威 schema。源表 data/GuildLevel.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// id = 帮会等级,从 1 连续无缺口。缺口会让升级停在空洞上且没有任何报错,
+// 所以启动校验把"连续"当硬条件 fail-closed。
+//
+// B2 读 max_members(建帮时写进 guild 行)与 max_officers(任免 / 转让时现算);
+// B5 读 upgrade_cost_funds 扣帮会资金,并按下一级的 max_members 改写 guild.max_members。
+// 契约冻结:1-4 号由 B2 一次建齐,后续批次只能从 5 号起追加列。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message GuildLevelTable {
+  option (cfg_sheet)       = "GuildLevel";
+  option (cfg_source_file) = "GuildLevel.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 帮会等级(从 1 连续)
+  uint32 id = 1;
+  // 该等级成员上限(>=2,<=100)
+  // 上限 100 是帮会推送 MGET 与单帮快照的容量预算前提,改大必须先重做那两处预算
+  uint32 max_members = 2;
+  // 该等级长老上限(< max_members)
+  // 配表下调导致现有长老超额时不强制降级,只拒绝后续任命;转让时原帮主降为成员
+  uint32 max_officers = 3;
+  // 升到下一级所需帮会资金;0 = 满级
+  // 只允许最后一级为 0,校验器按"是不是最后一行"与它互为充要条件,防止中间级被误填 0 变成白送
+  uint64 upgrade_cost_funds = 4;
+}

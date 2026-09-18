@@ -68,6 +68,7 @@ set(SOURCE_FILES
     actor/action_state/system/actor_action_state.cpp
     actor/attribute/system/actor_attribute_calculator.cpp
     actor/attribute/system/actor_state_attribute_sync.cpp
+    battle/system/player_battle.cpp
     combat/buff/system/buff.cpp
     combat/buff/system/buff_impl.cpp
     combat/buff/system/modifier_buff_impl.cpp

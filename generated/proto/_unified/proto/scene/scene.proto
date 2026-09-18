@@ -18,6 +18,8 @@ message PlayerEnterGameNodeRequest
   uint32 session_id = 2;
   uint32 enter_gs_type = 4;    // LOGIN_FIRST / LOGIN_RECONNECT / LOGIN_REPLACE
   uint64 scene_id = 5;         // Target scene instance GUID from SceneManager
+  uint32 home_zone_id = 6;     // 玩家归属 zone,gate 从 RoutePlayerEvent 透传;0=未知(fail-closed 落进程 zone)
+  uint64 owner_epoch = 7;      // 本次路由的归属 epoch,gate 从 RoutePlayerEvent 透传;0=旧版 Go 未铸造(存盘不校验)
 }
 
 message ProcessClientPlayerMessageRequest

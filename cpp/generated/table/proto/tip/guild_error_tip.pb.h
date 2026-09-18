@@ -76,6 +76,15 @@ enum guild_error : int {
   kGuildNameTaken = 14010,
   kGuildAnnouncementTooLong = 14011,
   kGuildHomeZoneUnknown = 14012,
+  kGuildZoneMerging = 14013,
+  kGuildTargetNotMember = 14014,
+  kGuildCannotTargetSelf = 14015,
+  kGuildRankTooLow = 14016,
+  kGuildOfficerLimit = 14017,
+  kGuildApplicationNotFound = 14018,
+  kGuildApplicationLimit = 14019,
+  kGuildApplicationQueueFull = 14020,
+  kGuildBusyRetry = 14021,
   guild_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   guild_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -86,11 +95,11 @@ extern const uint32_t guild_error_internal_data_[];
 inline constexpr guild_error guild_error_MIN =
     static_cast<guild_error>(0);
 inline constexpr guild_error guild_error_MAX =
-    static_cast<guild_error>(14012);
+    static_cast<guild_error>(14021);
 [[nodiscard]] inline bool guild_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, guild_error_internal_data_);
 }
-inline constexpr int guild_error_ARRAYSIZE = 14012 + 1;
+inline constexpr int guild_error_ARRAYSIZE = 14021 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 guild_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(guild_error) {

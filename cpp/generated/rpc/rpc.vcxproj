@@ -32,6 +32,7 @@
     <ClInclude Include="service_metadata\common_event_scene_event_event_id.h" />
     <ClInclude Include="service_metadata\common_event_server_event_event_id.h" />
     <ClInclude Include="service_metadata\common_event_skill_event_event_id.h" />
+    <ClInclude Include="service_metadata\common_event_team_event_event_id.h" />
     <ClInclude Include="service_metadata\contracts_kafka_gate_event_event_id.h" />
     <ClInclude Include="service_metadata\contracts_kafka_player_event_event_id.h" />
     <ClInclude Include="service_metadata\data_service_service_metadata.h" />
@@ -55,6 +56,7 @@
     <ClInclude Include="service_metadata\player_scene_service_metadata.h" />
     <ClInclude Include="service_metadata\player_skill_service_metadata.h" />
     <ClInclude Include="service_metadata\player_state_attribute_sync_service_metadata.h" />
+    <ClInclude Include="service_metadata\team_service_metadata.h" />
     <ClInclude Include="service_metadata\rpc_event_registry.h" />
   </ItemGroup>
   <ItemGroup>

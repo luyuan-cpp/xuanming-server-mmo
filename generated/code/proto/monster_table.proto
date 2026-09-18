@@ -8,6 +8,12 @@ option java_outer_classname = "MonsterTableOuterClass";
 option java_multiple_files = true;
 
 
+message Monsterdrop {
+	uint32 drop_item = 1;
+	uint32 drop_count = 2;
+	uint32 drop_rate = 3;
+}
+
 message MonsterTable {
 	uint32 id = 1;
 	uint64 health = 2;
@@ -18,6 +24,7 @@ message MonsterTable {
 	uint64 speed = 7;
 	uint64 exp_reward = 8;
 	uint64 gold_reward = 9;
+	repeated Monsterdrop drop = 10;
 }
 
 message MonsterTableData {

@@ -3,6 +3,13 @@
   {
    "armor": 36,
    "critchance": 0,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 10,
+     "drop_rate": 10000
+    }
+   ],
    "exp_reward": 20,
    "gold_reward": 10,
    "health": 370,
@@ -14,6 +21,18 @@
   {
    "armor": 48,
    "critchance": 0,
+   "drop": [
+    {
+     "drop_count": 1,
+     "drop_item": 10,
+     "drop_rate": 5000
+    },
+    {
+     "drop_count": 1,
+     "drop_item": 11,
+     "drop_rate": 2000
+    }
+   ],
    "exp_reward": 25,
    "gold_reward": 12,
    "health": 360,

@@ -49,6 +49,8 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	DungeonTable = NewObject<UDungeonTable>(this);
 	EquipSlotTable = NewObject<UEquipSlotTable>(this);
 	GlobalVariableTable = NewObject<UGlobalVariableTable>(this);
+	GuildLevelTable = NewObject<UGuildLevelTable>(this);
+	GuildRuleTable = NewObject<UGuildRuleTable>(this);
 	ItemTable = NewObject<UItemTable>(this);
 	MessageLimiterTable = NewObject<UMessageLimiterTable>(this);
 	MirrorTable = NewObject<UMirrorTable>(this);
@@ -82,6 +84,8 @@ void UConfigSubsystem::Deinitialize()
 	DungeonTable = nullptr;
 	EquipSlotTable = nullptr;
 	GlobalVariableTable = nullptr;
+	GuildLevelTable = nullptr;
+	GuildRuleTable = nullptr;
 	ItemTable = nullptr;
 	MessageLimiterTable = nullptr;
 	MirrorTable = nullptr;
@@ -120,6 +124,8 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UDungeonTable::FileName(),
 		UEquipSlotTable::FileName(),
 		UGlobalVariableTable::FileName(),
+		UGuildLevelTable::FileName(),
+		UGuildRuleTable::FileName(),
 		UItemTable::FileName(),
 		UMessageLimiterTable::FileName(),
 		UMirrorTable::FileName(),
@@ -360,6 +366,34 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!GlobalVariableTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (GuildLevelTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildLevel] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!GuildLevelTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (GuildRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!GuildRuleTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -895,6 +929,46 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!GlobalVariableTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (GuildLevelTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildLevel] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UGuildLevelTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildLevel] 取不到 %s"), UGuildLevelTable::FileName());
+		bAllOk = false;
+	}
+	else if (!GuildLevelTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (GuildRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UGuildRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildRule] 取不到 %s"), UGuildRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!GuildRuleTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

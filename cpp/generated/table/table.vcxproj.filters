@@ -39,6 +39,12 @@
     <ClInclude Include="code\globalvariable_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\guildlevel_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildrule_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\item_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -162,6 +168,12 @@
     <ClInclude Include="proto\globalvariable_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\guildlevel_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\guildrule_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\item_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -241,6 +253,12 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\globalvariable_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildlevel_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildrule_table_comp.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\item_table_comp.h">
@@ -380,6 +398,12 @@
     <ClCompile Include="code\globalvariable_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="code\guildlevel_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\guildrule_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="code\item_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -507,6 +531,12 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\globalvariable_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\guildlevel_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\guildrule_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\item_table.pb.cc">

@@ -3788,6 +3788,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
   enum : int {
     kActorsFieldNumber = 3,
     kPendingActorIdsFieldNumber = 6,
+    kSelfItemsFieldNumber = 7,
     kBattleIdFieldNumber = 1,
     kRoundIndexFieldNumber = 2,
     kOutcomeFieldNumber = 5,
@@ -3834,6 +3835,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
   ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL _internal_mutable_pending_actor_ids();
 
   public:
+  // repeated .BattleItemEntry self_items = 7;
+  [[nodiscard]] int self_items_size()
+      const;
+  private:
+  int _internal_self_items_size() const;
+
+  public:
+  void clear_self_items() ;
+  [[nodiscard]] const ::BattleItemEntry& self_items(int index) const;
+  [[nodiscard]] ::BattleItemEntry* PROTOBUF_NONNULL mutable_self_items(int index);
+  ::BattleItemEntry* PROTOBUF_NONNULL add_self_items();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::BattleItemEntry>&
+  self_items() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::BattleItemEntry>* PROTOBUF_NONNULL
+  mutable_self_items();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::BattleItemEntry>& _internal_self_items() const;
+  ::google::protobuf::RepeatedPtrField<::BattleItemEntry>* PROTOBUF_NONNULL _internal_mutable_self_items();
+
+  public:
   // uint64 battle_id = 1;
   void clear_battle_id() ;
   [[nodiscard]] ::uint64_t battle_id() const;
@@ -3878,8 +3900,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 6,
-                          1, 0,
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          2, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3910,6 +3932,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStateS2C final : public ::goo
     ::google::protobuf::RepeatedPtrField< ::BattleActorState > actors_;
     ::google::protobuf::RepeatedField<::uint64_t> pending_actor_ids_;
     ::google::protobuf::internal::CachedSize _pending_actor_ids_cached_byte_size_;
+    ::google::protobuf::RepeatedPtrField< ::BattleItemEntry > self_items_;
     ::uint64_t battle_id_;
     ::uint32_t round_index_;
     int outcome_;
@@ -4886,7 +4909,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BattleStartS2C final : public ::goo
 inline void BattleStateS2C::clear_battle_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.battle_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t BattleStateS2C::battle_id() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.battle_id)
@@ -4894,7 +4917,7 @@ inline ::uint64_t BattleStateS2C::battle_id() const {
 }
 inline void BattleStateS2C::set_battle_id(::uint64_t value) {
   _internal_set_battle_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.battle_id)
 }
 inline ::uint64_t BattleStateS2C::_internal_battle_id() const {
@@ -4910,7 +4933,7 @@ inline void BattleStateS2C::_internal_set_battle_id(::uint64_t value) {
 inline void BattleStateS2C::clear_round_index() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.round_index_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint32_t BattleStateS2C::round_index() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.round_index)
@@ -4918,7 +4941,7 @@ inline ::uint32_t BattleStateS2C::round_index() const {
 }
 inline void BattleStateS2C::set_round_index(::uint32_t value) {
   _internal_set_round_index(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.round_index)
 }
 inline ::uint32_t BattleStateS2C::_internal_round_index() const {
@@ -4984,7 +5007,7 @@ BattleStateS2C::_internal_mutable_actors() {
 inline void BattleStateS2C::clear_action_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.action_deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t BattleStateS2C::action_deadline_ms() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.action_deadline_ms)
@@ -4992,7 +5015,7 @@ inline ::uint64_t BattleStateS2C::action_deadline_ms() const {
 }
 inline void BattleStateS2C::set_action_deadline_ms(::uint64_t value) {
   _internal_set_action_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.action_deadline_ms)
 }
 inline ::uint64_t BattleStateS2C::_internal_action_deadline_ms() const {
@@ -5008,7 +5031,7 @@ inline void BattleStateS2C::_internal_set_action_deadline_ms(::uint64_t value) {
 inline void BattleStateS2C::clear_outcome() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.outcome_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::eBattleOutcome BattleStateS2C::outcome() const {
   // @@protoc_insertion_point(field_get:BattleStateS2C.outcome)
@@ -5016,7 +5039,7 @@ inline ::eBattleOutcome BattleStateS2C::outcome() const {
 }
 inline void BattleStateS2C::set_outcome(::eBattleOutcome value) {
   _internal_set_outcome(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:BattleStateS2C.outcome)
 }
 inline ::eBattleOutcome BattleStateS2C::_internal_outcome() const {
@@ -5077,6 +5100,56 @@ inline ::google::protobuf::RepeatedField<::uint64_t>* PROTOBUF_NONNULL
 BattleStateS2C::_internal_mutable_pending_actor_ids() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.pending_actor_ids_;
+}
+
+// repeated .BattleItemEntry self_items = 7;
+inline int BattleStateS2C::_internal_self_items_size() const {
+  return _internal_self_items().size();
+}
+inline int BattleStateS2C::self_items_size() const {
+  return _internal_self_items_size();
+}
+inline const ::BattleItemEntry& BattleStateS2C::self_items(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:BattleStateS2C.self_items)
+  return _internal_self_items().Get(index);
+}
+inline ::BattleItemEntry* PROTOBUF_NONNULL BattleStateS2C::mutable_self_items(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:BattleStateS2C.self_items)
+  return _internal_mutable_self_items()->Mutable(index);
+}
+inline ::BattleItemEntry* PROTOBUF_NONNULL BattleStateS2C::add_self_items()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::BattleItemEntry* _add =
+      _internal_mutable_self_items()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:BattleStateS2C.self_items)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattleItemEntry>& BattleStateS2C::self_items() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:BattleStateS2C.self_items)
+  return _internal_self_items();
+}
+inline ::google::protobuf::RepeatedPtrField<::BattleItemEntry>* PROTOBUF_NONNULL
+BattleStateS2C::mutable_self_items() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:BattleStateS2C.self_items)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_self_items();
+}
+inline const ::google::protobuf::RepeatedPtrField<::BattleItemEntry>&
+BattleStateS2C::_internal_self_items() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.self_items_;
+}
+inline ::google::protobuf::RepeatedPtrField<::BattleItemEntry>* PROTOBUF_NONNULL
+BattleStateS2C::_internal_mutable_self_items() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.self_items_;
 }
 
 // -------------------------------------------------------------------

@@ -121,6 +121,7 @@ set(SOURCE_FILES
     trade/jubaozhai.pb.cc
     trade/trade_admin.grpc.pb.cc
     trade/trade_admin.pb.cc
+    trade/trade_table.grpc.pb.cc
     trade/trade_table.pb.cc
     login/login.grpc.pb.cc
     login/login.pb.cc

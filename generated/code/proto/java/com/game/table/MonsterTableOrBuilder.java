@@ -63,4 +63,28 @@ public interface MonsterTableOrBuilder extends
    * @return The goldReward.
    */
   long getGoldReward();
+
+  /**
+   * <code>repeated .Monsterdrop drop = 10;</code>
+   */
+  java.util.List<com.game.table.Monsterdrop> 
+      getDropList();
+  /**
+   * <code>repeated .Monsterdrop drop = 10;</code>
+   */
+  com.game.table.Monsterdrop getDrop(int index);
+  /**
+   * <code>repeated .Monsterdrop drop = 10;</code>
+   */
+  int getDropCount();
+  /**
+   * <code>repeated .Monsterdrop drop = 10;</code>
+   */
+  java.util.List<? extends com.game.table.MonsterdropOrBuilder> 
+      getDropOrBuilderList();
+  /**
+   * <code>repeated .Monsterdrop drop = 10;</code>
+   */
+  com.game.table.MonsterdropOrBuilder getDropOrBuilder(
+      int index);
 }

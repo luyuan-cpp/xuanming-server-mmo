@@ -37,18 +37,30 @@ const MetadataKey = "x-session-detail-bin"
 
 type contextKey struct{}
 
-// ClientMethods 是允许客户端来源调用的方法全集。
-// UpdateGuildScore 刻意不在其中:公会积分只能由服务端结算写入,放给客户端就是任意改榜。
+// ClientMethods 是允许客户端来源调用的方法全集,**逐个显式登记**。
+//
+// 这是一道 fail-closed 的安全边界:新增 RPC 不写进本表就调不到,而不是默认放开。
+// 两类方法刻意不在其中:
+//   - UpdateGuildScore:公会积分只能由服务端结算写入,放给客户端就是任意改榜。
+//   - Notify*(NotifyGuildChanged 等):它们只是给推送分配 message id 的占位 RPC,
+//     下行走 Kafka,**永远不进本表**;客户端发这个 id 只可能是在试探。
 var ClientMethods = map[string]struct{}{
-	pb.GuildService_CreateGuild_FullMethodName:         {},
-	pb.GuildService_GetGuild_FullMethodName:            {},
-	pb.GuildService_GetPlayerGuild_FullMethodName:      {},
-	pb.GuildService_JoinGuild_FullMethodName:           {},
-	pb.GuildService_LeaveGuild_FullMethodName:          {},
-	pb.GuildService_DisbandGuild_FullMethodName:        {},
-	pb.GuildService_SetAnnouncement_FullMethodName:     {},
-	pb.GuildService_GetGuildRank_FullMethodName:        {},
-	pb.GuildService_GetGuildRankByGuild_FullMethodName: {},
+	pb.GuildService_CreateGuild_FullMethodName:             {},
+	pb.GuildService_GetGuild_FullMethodName:                {},
+	pb.GuildService_GetPlayerGuild_FullMethodName:          {},
+	pb.GuildService_LeaveGuild_FullMethodName:              {},
+	pb.GuildService_DisbandGuild_FullMethodName:            {},
+	pb.GuildService_SetAnnouncement_FullMethodName:         {},
+	pb.GuildService_SetGuildMemberRole_FullMethodName:      {},
+	pb.GuildService_KickGuildMember_FullMethodName:         {},
+	pb.GuildService_TransferGuildLeader_FullMethodName:     {},
+	pb.GuildService_ApplyJoinGuild_FullMethodName:          {},
+	pb.GuildService_CancelGuildApplication_FullMethodName:  {},
+	pb.GuildService_ListMyGuildApplications_FullMethodName: {},
+	pb.GuildService_ListGuildApplications_FullMethodName:   {},
+	pb.GuildService_ReviewGuildApplication_FullMethodName:  {},
+	pb.GuildService_GetGuildRank_FullMethodName:            {},
+	pb.GuildService_GetGuildRankByGuild_FullMethodName:     {},
 }
 
 // WithDetails 把已校验的会话放进 ctx。

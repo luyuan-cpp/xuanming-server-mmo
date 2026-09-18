@@ -26,6 +26,9 @@ type ItemTable struct {
 	Id            uint32                 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
 	MaxStackSize  uint32                 `protobuf:"varint,2,opt,name=max_stack_size,json=maxStackSize,proto3" json:"max_stack_size,omitempty"`
 	EquipKind     uint32                 `protobuf:"varint,3,opt,name=equip_kind,json=equipKind,proto3" json:"equip_kind,omitempty"`
+	BattleUsable  uint32                 `protobuf:"varint,4,opt,name=battle_usable,json=battleUsable,proto3" json:"battle_usable,omitempty"`
+	BattleHealHp  uint64                 `protobuf:"varint,5,opt,name=battle_heal_hp,json=battleHealHp,proto3" json:"battle_heal_hp,omitempty"`
+	BattleHealMp  uint64                 `protobuf:"varint,6,opt,name=battle_heal_mp,json=battleHealMp,proto3" json:"battle_heal_mp,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -81,6 +84,27 @@ func (x *ItemTable) GetEquipKind() uint32 {
 	return 0
 }
 
+func (x *ItemTable) GetBattleUsable() uint32 {
+	if x != nil {
+		return x.BattleUsable
+	}
+	return 0
+}
+
+func (x *ItemTable) GetBattleHealHp() uint64 {
+	if x != nil {
+		return x.BattleHealHp
+	}
+	return 0
+}
+
+func (x *ItemTable) GetBattleHealMp() uint64 {
+	if x != nil {
+		return x.BattleHealMp
+	}
+	return 0
+}
+
 type ItemTableData struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Data          []*ItemTable           `protobuf:"bytes,1,rep,name=data,proto3" json:"data,omitempty"`
@@ -129,12 +153,15 @@ var File_item_table_proto protoreflect.FileDescriptor
 
 const file_item_table_proto_rawDesc = "" +
 	"\n" +
-	"\x10item_table.proto\"`\n" +
+	"\x10item_table.proto\"\xd1\x01\n" +
 	"\tItemTable\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\rR\x02id\x12$\n" +
 	"\x0emax_stack_size\x18\x02 \x01(\rR\fmaxStackSize\x12\x1d\n" +
 	"\n" +
-	"equip_kind\x18\x03 \x01(\rR\tequipKind\"/\n" +
+	"equip_kind\x18\x03 \x01(\rR\tequipKind\x12#\n" +
+	"\rbattle_usable\x18\x04 \x01(\rR\fbattleUsable\x12$\n" +
+	"\x0ebattle_heal_hp\x18\x05 \x01(\x04R\fbattleHealHp\x12$\n" +
+	"\x0ebattle_heal_mp\x18\x06 \x01(\x04R\fbattleHealMp\"/\n" +
 	"\rItemTableData\x12\x1e\n" +
 	"\x04data\x18\x01 \x03(\v2\n" +
 	".ItemTableR\x04dataB;\n" +

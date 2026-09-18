@@ -218,11 +218,11 @@ constexpr DBTask::ParseTableT_ DBTask::InternalGenerateParseTable_(const ::_pbi:
     {
       PROTOBUF_FIELD_OFFSET(DBTask, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
+      8,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -232,7 +232,10 @@ constexpr DBTask::ParseTableT_ DBTask::InternalGenerateParseTable_(const ::_pbi:
       ::_pbi::TcParser::GetTable<::taskpb::DBTask>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 owner_epoch = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DBTask, _impl_.owner_epoch_), 6>(),
+       {64, 6, 0,
+        PROTOBUF_FIELD_OFFSET(DBTask, _impl_.owner_epoch_)}},
       // uint64 key = 1;
       {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DBTask, _impl_.key_), 5>(),
        {8, 5, 0,
@@ -258,8 +261,8 @@ constexpr DBTask::ParseTableT_ DBTask::InternalGenerateParseTable_(const ::_pbi:
        {50, 4, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.task_id_)}},
       // int32 retry_count = 7;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DBTask, _impl_.retry_count_), 6>(),
-       {56, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(DBTask, _impl_.retry_count_), 7>(),
+       {56, 7, 0,
         PROTOBUF_FIELD_OFFSET(DBTask, _impl_.retry_count_)}},
     }}, {{
       65535, 65535
@@ -277,11 +280,13 @@ constexpr DBTask::ParseTableT_ DBTask::InternalGenerateParseTable_(const ::_pbi:
       // string task_id = 6;
       {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.task_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
       // int32 retry_count = 7;
-      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.retry_count_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.retry_count_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kInt32)},
+      // uint64 owner_epoch = 8;
+      {PROTOBUF_FIELD_OFFSET(DBTask, _impl_.owner_epoch_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
-      "\15\0\12\2\10\0\7\0"
+      "\15\0\12\2\10\0\7\0\0\0\0\0\0\0\0\0"
       "taskpb.DBTask"
       "where_case"
       "op"
@@ -312,6 +317,7 @@ inline constexpr DBTask::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         key_{::uint64_t{0u}},
+        owner_epoch_{::uint64_t{0u}},
         retry_count_{0} {}
 
 template <typename>
@@ -416,7 +422,7 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_.key_),
         PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_.where_case_),
         PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_.op_),
@@ -424,12 +430,14 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_.body_),
         PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_.task_id_),
         PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_.retry_count_),
+        PROTOBUF_FIELD_OFFSET(::taskpb::DBTask, _impl_.owner_epoch_),
         5,
         0,
         1,
         2,
         3,
         4,
+        7,
         6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::taskpb::TaskResult, _impl_._has_bits_),
@@ -447,7 +455,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::taskpb::DBTask)},
-        {17, sizeof(::taskpb::TaskResult)},
+        {19, sizeof(::taskpb::TaskResult)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -456,19 +464,19 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_proto_2fdb_2fdb_5ftask_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\026proto/db/db_task.proto\022\006taskpb\"{\n\006DBTa"
-    "sk\022\013\n\003key\030\001 \001(\004\022\022\n\nwhere_case\030\002 \001(\t\022\n\n\002o"
-    "p\030\003 \001(\t\022\020\n\010msg_type\030\004 \001(\t\022\014\n\004body\030\005 \001(\014\022"
-    "\017\n\007task_id\030\006 \001(\t\022\023\n\013retry_count\030\007 \001(\005\"M\n"
-    "\nTaskResult\022\017\n\007success\030\001 \001(\010\022\014\n\004data\030\002 \001"
-    "(\014\022\r\n\005error\030\003 \001(\t\022\021\n\ttimestamp\030\004 \001(\003B\004Z\002"
-    "dbb\006proto3"
+    "\n\026proto/db/db_task.proto\022\006taskpb\"\220\001\n\006DBT"
+    "ask\022\013\n\003key\030\001 \001(\004\022\022\n\nwhere_case\030\002 \001(\t\022\n\n\002"
+    "op\030\003 \001(\t\022\020\n\010msg_type\030\004 \001(\t\022\014\n\004body\030\005 \001(\014"
+    "\022\017\n\007task_id\030\006 \001(\t\022\023\n\013retry_count\030\007 \001(\005\022\023"
+    "\n\013owner_epoch\030\010 \001(\004\"M\n\nTaskResult\022\017\n\007suc"
+    "cess\030\001 \001(\010\022\014\n\004data\030\002 \001(\014\022\r\n\005error\030\003 \001(\t\022"
+    "\021\n\ttimestamp\030\004 \001(\003B\004Z\002dbb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fdb_2fdb_5ftask_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fdb_2fdb_5ftask_2eproto = {
     false,
     false,
-    250,
+    272,
     descriptor_table_protodef_proto_2fdb_2fdb_5ftask_2eproto,
     "proto/db/db_task.proto",
     &descriptor_table_proto_2fdb_2fdb_5ftask_2eproto_once,
@@ -618,7 +626,7 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
       _impl_.task_id_.ClearNonDefaultToEmpty();
     }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000060U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000e0U)) {
     ::memset(&_impl_.key_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.retry_count_) -
         reinterpret_cast<char*>(&_impl_.key_)) + sizeof(_impl_.retry_count_));
@@ -704,11 +712,20 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
   }
 
   // int32 retry_count = 7;
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_retry_count() != 0) {
       target =
           ::google::protobuf::internal::WireFormatLite::WriteInt32ToArrayWithField<7>(
               stream, this_._internal_retry_count(), target);
+    }
+  }
+
+  // uint64 owner_epoch = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_owner_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          8, this_._internal_owner_epoch(), target);
     }
   }
 
@@ -737,7 +754,7 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string where_case = 2;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_where_case().empty()) {
@@ -780,8 +797,15 @@ PROTOBUF_NOINLINE void DBTask::Clear() {
             this_._internal_key());
       }
     }
-    // int32 retry_count = 7;
+    // uint64 owner_epoch = 8;
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_owner_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_owner_epoch());
+      }
+    }
+    // int32 retry_count = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_retry_count() != 0) {
         total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(
             this_._internal_retry_count());
@@ -805,7 +829,7 @@ void DBTask::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_where_case().empty()) {
         _this->_internal_set_where_case(from._internal_where_case());
@@ -857,6 +881,11 @@ void DBTask::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_owner_epoch() != 0) {
+        _this->_impl_.owner_epoch_ = from._impl_.owner_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_retry_count() != 0) {
         _this->_impl_.retry_count_ = from._impl_.retry_count_;
       }
