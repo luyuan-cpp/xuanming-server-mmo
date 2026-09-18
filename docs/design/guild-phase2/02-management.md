@@ -2023,6 +2023,37 @@ B2s 与 B2c 之间:客户端在重跑 `gen_proto.ps1 / gen_messageids.ps1` 前�
    - `rg -n "innodb_lock_wait_timeout" go/guild/internal/data/guild_manage_repo.go` ≥1 且 `rg -n "WithLockWaitTimeout" go/guild/internal/svc/servicecontext.go` ≥1。
 7. **robot 编译与原冒烟**(`cd robot`):`go mod vendor`(`git status --short vendor` 只应出现 shared/generated 与 proto/guild 相关变化);`go build ./...`;`go vet ./...`;按顺序重启 client_rpc_router → gate → guild(日志无 `guild config tables invalid`);`go run . -c etc/guild_smoke.yaml` → `GUILD_SMOKE_OK`,退出码 0。
 
+### B2s 生成结果记录(2026-09-18,供 B2c 直接使用)
+
+`git show 969bbec4c -- proto/message_id.txt`(回合制战斗 G1-G9 会话在主工作树跑的那轮完整导表 + proto-gen,
+过程见 `docs/design/turn-battle-gap-closure.md` §8;`go/build.bat` 的 goctl 未跑,但帮会不依赖那层 —— 
+`go/proto/guild/guild_grpc.pb.go` 已含全部新 RPC):
+
+```
+-19=GuildServiceJoinGuild
++19=GuildServiceSetGuildMemberRole
++216=GuildServiceTransferGuildLeader
++217=GuildServiceKickGuildMember
++218=GuildServiceApplyJoinGuild
++219=GuildServiceCancelGuildApplication
++220=GuildServiceNotifyGuildChanged
++221=GuildServiceListGuildApplications
++222=GuildServiceListMyGuildApplications
++223=GuildServiceReviewGuildApplication
+```
+
+**19 号被复用给了 `SetGuildMemberRole`(写操作)**,而 `data/MessageLimiter.xlsx` 里 id=19 那行还是当初为
+查询类 `JoinGuild` 定的 `5, 1, 1000`。按 §28 B2c 第 1 步的规则:19 号被本批方法复用 ⇒ **按写操作类别重定**
+(写 = `5, 1, 1000`,与读的 `10, 1, 1000` 区分)。216–223 八个号在 `generated/tables/messagelimiter.json`
+里一行都没有,按读写类别新增:读 `ListGuildApplications(221)` / `ListMyGuildApplications(222)` = `10, 1, 1000`;
+写 `TransferGuildLeader(216)` / `KickGuildMember(217)` / `ApplyJoinGuild(218)` / `CancelGuildApplication(219)` /
+`ReviewGuildApplication(223)` = `5, 1, 1000`;`NotifyGuildChanged(220)` 是下行推送,**不加行**。
+
+tip 发号结果(同一轮):`kGuildZoneMerging=14013`、`kGuildApplicationNotFound=14018`、
+`kGuildApplicationLimit=14019`、`kGuildApplicationQueueFull=14020`、`kGuildBusyRetry=14021`。
+配表:`generated/tables/guildrule.json` 单行 7 列、`asset_op_deadline_seconds=600`(按 90 清单 D1,
+**不是** §29 第 2 条写的 300);`guildlevel.json` 10 行。
+
 ### B2c(另行授权,B2s 验证通过后)
 
 1. 实现方按 B2s 步骤 1 的记录改 `data/MessageLimiter.xlsx`(列 `id, max_requests, time_window, tip_message`):读 `ListMyGuildApplications`、`ListGuildApplications` 为 `10, 1, 1000`;写 `SetGuildMemberRole`、`KickGuildMember`、`TransferGuildLeader`、`ApplyJoinGuild`、`CancelGuildApplication`、`ReviewGuildApplication` 为 `5, 1, 1000`;原第 19 行:19 号空 → 删行,被本批方法复用 → 按其读写类别改值,**被其它会话的方法复用 → 不动并在 PROGRESS 记录**;`NotifyGuildChanged` 不加行。

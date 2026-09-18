@@ -81,6 +81,29 @@ type Config struct {
 
 	// Market:市场范围、分页与收藏上限。
 	Market MarketConf `json:"Market"`
+
+	// SharedRedis:**共享单库** Redis,只读一类跨运行时契约键 —— player:{id}:location
+	// (scene_manager 写,值是 PlayerLocation protobuf)。资产通道靠它找到玩家当前所在的
+	// scene 节点(go/shared/scenenode.Locator),没有它就发不出 AssetDebit / AssetCredit。
+	//
+	// 字段名**不能**叫 Redis:嵌入的 zrpc.RpcServerConf 已经有一个 Redis 字段
+	// (go-zero 的 RedisKeyConf,给 Auth 用),同名会在 conf.MustLoad 阶段直接报
+	// "conflict key Redis" 而不是被忽略。match 的同一份契约键读取也叫 SharedRedis
+	// (cross-zone-matchmaking D2),这里沿用同一个名字。
+	//
+	// K8s 上必须指向与 C++ scene 相同的那一份共享 Redis(不是 trade 自己的库):
+	// 位置键的写者是 scene / scene_manager,读错实例 = 永远找不到人 = 资产指令永远 NOT_HERE。
+	SharedRedis RedisConf `json:"SharedRedis"`
+}
+
+// RedisConf 是 go-redis 客户端的连接参数。
+//
+// 刻意不用 go-zero 的 redis.RedisConf:那份结构没有 DB 字段(填了会被静默忽略),
+// 而位置键在共享库的 DB 0。形状与 go/guild/internal/config.RedisConf 逐字一致。
+type RedisConf struct {
+	Host     string `json:"Host"`
+	Password string `json:"Password,optional"`
+	DB       int    `json:"DB,optional"`
 }
 
 // MySQLConf 是 mmorpg_trade 的连接参数。
@@ -238,6 +261,14 @@ func (c *Config) Validate() error {
 	if c.Market.DefaultPageSize > c.Market.MaxPageSize {
 		return fmt.Errorf("Market.DefaultPageSize(%d)不能大于 Market.MaxPageSize(%d)",
 			c.Market.DefaultPageSize, c.Market.MaxPageSize)
+	}
+
+	// SharedRedis 必填:缺它 = 资产通道找不到玩家 = 托管 / 交付永远悬挂。玩家资产路径
+	// fail-closed(AGENTS §11.3),宁可在启动期点名缺哪一段,也不要起一个"浏览能用、
+	// 一上架就永远卡住"的 trade。
+	if c.SharedRedis.Host == "" {
+		return errors.New("SharedRedis.Host 不能为空:资产通道按 player:{id}:location 定位玩家所在 scene," +
+			"该键在与 C++ scene 相同的共享 Redis 上")
 	}
 	return nil
 }

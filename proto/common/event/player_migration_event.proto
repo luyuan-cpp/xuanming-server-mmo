@@ -13,6 +13,9 @@ import "proto/common/component/scene_comp.proto";
 // (cpp/nodes/scene/handler/event/player_migration_event_handler.{h,cpp} 及其在
 //  cpp/nodes/scene/CMakeLists.txt、scene.vcxproj、scene.vcxproj.filters 里的清单行)。
 // 未上线,不需要 reserved(AGENTS §4.3)。不要再给它们加新的使用方。
+// (本段与下面的 message 之间留一个空行是有意的:这是整文件的说明,不是 PlayerMigrationEvent 的
+//  文档注释;贴着写会被 protoc 当成该消息的 leading comment 抄进 pb.go,平白多一处生成物 diff。)
+
 message PlayerMigrationEvent {
   uint64 player_id = 1;
   uint64 source_scene_id = 2;

@@ -7,7 +7,9 @@
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/system/currency_system.h"
 #include "modules/transaction_log/anomaly_detector.h"
+#include "player/comp/player_frozen_comp.h" // 冻结用例:IsCrossZoneFrozen 就是 any_of<PlayerFrozenComp>
 #include "proto/common/component/currency_comp.pb.h"
+#include "table/proto/tip/asset_error_tip.pb.h" // kAssetFrozen / kAssetBlocked / kAssetCurrencyInsufficient
 #include "table/proto/tip/common_error_tip.pb.h"
 #include <thread_context/ecs_context.h>
 #include "modules/id_segment/guid_segment_registry.h"
@@ -632,6 +634,95 @@ TEST(CurrencyTest, GetBalanceDefaultZero)
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+
+    DestroyTestPlayer(player);
+}
+
+// ---------------------------------------------------------------------------
+// 资产通道错误码细分(docs/design/guild-phase2/04-asset-channel.md §4.11、§4.14.3)
+//
+// 这几条断言的是**具体取值**,不是 `EXPECT_NE(kSuccess, …)`。上面那些老用例只验
+// "失败了",于是 2026-09 之前"冻结"和"余额不足"和"参数写错了"回同一个
+// kInvalidParameter 也一路绿着 —— 而通用资产通道要靠这个返回值区分
+// RETRY(条件会消失,可重投)与 REJECTED(终局拒绝,记账并退款),混在一起
+// 就是要么重复发放、要么把玩家过图那几百毫秒里的奖励永久丢掉。
+// ---------------------------------------------------------------------------
+
+TEST(CurrencyTest, DeductInsufficientReturnsAssetCode)
+{
+    auto player = CreateTestPlayer();
+
+    CurrencySystem::AddCurrency(player, kCurrencyGold, 10);
+    EXPECT_EQ(kAssetCurrencyInsufficient, CurrencySystem::DeductCurrency(player, kCurrencyGold, 20));
+    EXPECT_EQ(10u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    DestroyTestPlayer(player);
+}
+
+TEST(CurrencyTest, DeductFrozenReturnsAssetFrozen)
+{
+    auto player = CreateTestPlayer();
+
+    CurrencySystem::AddCurrency(player, kCurrencyGold, 100);
+    // IsCrossZoneFrozen 就是 any_of<PlayerFrozenComp>(player_lifecycle.cpp:1999-2006)。
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+
+    EXPECT_EQ(kAssetFrozen, CurrencySystem::DeductCurrency(player, kCurrencyGold, 30));
+    EXPECT_EQ(100u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 解冻之后同一笔扣款必须成立 —— 这条才说明 kAssetFrozen 真的是"暂时"。
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+    EXPECT_EQ(kSuccess, CurrencySystem::DeductCurrency(player, kCurrencyGold, 30));
+    EXPECT_EQ(70u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    DestroyTestPlayer(player);
+}
+
+TEST(CurrencyTest, AddFrozenReturnsAssetFrozen)
+{
+    auto player = CreateTestPlayer();
+
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+    EXPECT_EQ(kAssetFrozen, CurrencySystem::AddCurrency(player, kCurrencyGold, 50));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+    EXPECT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 50));
+    EXPECT_EQ(50u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    DestroyTestPlayer(player);
+}
+
+TEST(CurrencyTest, AddBlockedReturnsAssetBlocked)
+{
+    auto player = CreateTestPlayer();
+
+    ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
+    EXPECT_EQ(kAssetBlocked, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 封禁只挡获取,不挡扣除(既有语义,顺带钉住:它不该回 kAssetBlocked)。
+    CurrencySystem::UnblockCurrency(player, kCurrencyGold);
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+    ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
+    EXPECT_EQ(kSuccess, CurrencySystem::DeductCurrency(player, kCurrencyGold, 40));
+    EXPECT_EQ(60u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    DestroyTestPlayer(player);
+}
+
+TEST(CurrencyTest, ProgrammingErrorsStillReturnInvalidParameter)
+{
+    auto player = CreateTestPlayer();
+
+    // 这条是反向护栏:错误码细分**只**覆盖冻结 / 余额不足 / 封禁三种业务条件。
+    // "数量 <= 0""币种越界"是调用方写错了,仍旧回 kInvalidParameter ——
+    // 把它们也搬进 27000 段,资产通道就会把编程错误当成可重投的业务条件。
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, 0));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, -1));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::DeductCurrency(player, kCurrencyGold, 0));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::DeductCurrency(player, kCurrencyGold, -5));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyMax, 10));
 
     DestroyTestPlayer(player);
 }

@@ -98,3 +98,16 @@ Market:
   MaxPageSize: 20
   MaxPage: 100
   MaxFavoritesPerPlayer: 100
+
+# 共享单库 Redis(与 C++ scene / scene_manager 同一实例),只读一类跨运行时契约键:
+#   player:{id}:location —— scene_manager 写,值是 PlayerLocation protobuf。
+# 通用资产通道(guild-phase2/04-asset-channel.md §S4)用它定位玩家所在 scene 节点,
+# 再直连该节点的 SceneNodeGrpc 调 AssetDebit / AssetCredit / AssetAbortDebit。
+#
+# 段名不能改成 Redis:go-zero 的 zrpc.RpcServerConf 已经有同名字段,加载期会报 conflict key Redis。
+# DB 必须是 **0**(位置键所在库);指到别的实例或别的库 = 永远找不到人 = 托管 / 交付永远悬挂,
+# 所以 config.Validate 拒绝空 Host。
+SharedRedis:
+  Host: 127.0.0.1:6379
+  Password: ""
+  DB: 0

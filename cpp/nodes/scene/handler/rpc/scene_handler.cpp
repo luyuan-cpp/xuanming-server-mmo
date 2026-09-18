@@ -435,8 +435,12 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 
 	// Dispatch to the concrete player service method
 	const MessageUniquePtr playerResponse(service->GetResponsePrototype(method).New());
-	if (scene_gm_guard::IsClientGmMethodName(method->name()) &&
-		scene_gm_guard::RejectGmClientRpc(method->name().c_str()))
+	// 落成 std::string 再用:MethodDescriptor::name() 返回 absl::string_view
+	// (descriptor.h:1354),它既没有 c_str(),muduo 的 LogStream 也没有对应的
+	// operator<<。拷一次的代价只发生在闸门命中之前的一次判定上。
+	const std::string methodName(method->name());
+	if (scene_gm_guard::IsClientGmMethodName(methodName) &&
+		scene_gm_guard::RejectGmClientRpc(methodName.c_str()))
 	{
 		// 客户端 GM 指令统一闸门(guild-phase2.md §S4 4.34)。
 		//
@@ -456,7 +460,7 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 		// 客户端开放,所以不在这里加闸;它们那侧的防护是各 Gm* handler 自己的
 		// scene_gm_guard::RejectGmClientRpc。将来若再有路径转发客户端消息,必须调
 		// 同一个谓词。
-		LOG_WARN << "ProcessClientPlayerMessage: client GM rejected method=" << method->name()
+		LOG_WARN << "ProcessClientPlayerMessage: client GM rejected method=" << methodName
 				 << " player_id=" << it->second << " session=" << sessionId;
 		tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity()).set_id(kFeatureUnavailable);
 	}

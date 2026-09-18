@@ -45,11 +45,13 @@ enum class AssetOpRpc : uint8_t
 
 // 这三个字面量同时是签名 canonical 串的第 3 行(§4.32)与日志里的 rpc 字段,
 // **改名就是改协议**:Go 侧 assetop 必须同字面量,否则全部验签失败。
-constexpr std::string_view kAssetOpRpcNames[] = {"debit", "abort_debit", "credit"};
+// 用 const char* 而不是 string_view:muduo 的 LogStream 没有 string_view 重载
+// (LogStream.h:120/138/144 只有 const char* / string / StringPiece)。
+constexpr const char* kAssetOpRpcNames[] = {"debit", "abort_debit", "credit"};
 static_assert(std::size(kAssetOpRpcNames) == static_cast<size_t>(AssetOpRpc::kCount),
 			  "rpc 名字表与 AssetOpRpc 脱节");
 
-std::string_view RpcName(AssetOpRpc rpc)
+const char* RpcName(AssetOpRpc rpc)
 {
 	return kAssetOpRpcNames[static_cast<size_t>(rpc)];
 }
@@ -189,7 +191,7 @@ bool IsAssetOpDurable(entt::entity player, AssetOpStream stream, uint64_t epoch,
 			// 不敢报 durable,让 Go 继续重查并告警。
 			LOG_ERROR << "[AssetOp] 快照结局与内存结局不一致 stream=" << static_cast<int>(stream)
 					  << " epoch=" << epoch << " seq=" << seq
-					  << " on_disk=" << AssetOpSeqStateName(state)
+					  << " on_disk=" << std::string(AssetOpSeqStateName(state))
 					  << " expect_applied=" << expectApplied;
 			return false;
 		}
@@ -478,6 +480,11 @@ void ApplyCredit(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp, const
 		auto& bags = tlsEcs.actorRegistry.get<PlayerBagsComp>(player);
 		const PlayerItemBlockList emptyBlockList;
 		const auto* blockList = tlsEcs.actorRegistry.try_get<PlayerItemBlockList>(player);
+		// mutated 是 §4.11 给 BagService::AddItems 追加的出参:
+		//   AddItems(entity, bag, blockList, items, txType, correlationId, extra, bool* mutated)
+		// 语义 = "这次调用有没有真的动过包"(ReserveForBatchAdd 淘汰了实例,或任何一条 AddItem
+		// 写出了 guid)。设计稿写的是 7 参签名(那时还没有 extra),落码以工作区现签名为准:
+		// extra 是战斗掉落在用的参数,删掉会打断既有调用点。
 		bool mutated = false;
 		const uint32_t error =
 			BagService::AddItems(player, bags.bags[kInventory],
@@ -662,7 +669,7 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 	case AssetOpSeqState::kJumpTooFar:
 		// 三者都说明 Go 侧守卫失效、帮会库被重置/恢复,或 Redis 回退过。
 		// 不记账、不猜结局,reason 留 0,Go 计 assetop_unknown_total 并转人工(§4.38)。
-		LOG_ERROR << "[AssetOp] seq 不可采信 state=" << AssetOpSeqStateName(state)
+		LOG_ERROR << "[AssetOp] seq 不可采信 state=" << std::string(AssetOpSeqStateName(state))
 				  << " player_id=" << request.player_id() << " rpc=" << RpcName(rpc)
 				  << " stream=" << static_cast<int>(request.stream())
 				  << " req_epoch=" << request.stream_epoch()
@@ -674,7 +681,15 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 		return;
 	case AssetOpSeqState::kApplied:
 	case AssetOpSeqState::kRejected:
-		// ledger 必非空:空账本只会分出 kUnseen / kJumpTooFar / kInvalid。
+		// ledger 理论上必非空(空账本只会分出 kUnseen / kJumpTooFar / kInvalid),
+		// 但"已见结局"是资产正确性的地基,不拿一次解引用去赌分类实现。
+		if (ledger == nullptr)
+		{
+			LOG_ERROR << "[AssetOp] 分类为已见但流不存在 player_id=" << request.player_id()
+					  << " stream=" << static_cast<int>(request.stream()) << " seq=" << request.seq();
+			Answer(response, ASSET_OP_OUTCOME_UNKNOWN, 0);
+			return;
+		}
 		AnswerSeenSeq(player, *ledger, request, state, nowMs, response);
 		return;
 	case AssetOpSeqState::kUnseen:

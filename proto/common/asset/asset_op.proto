@@ -2,9 +2,15 @@ syntax = "proto3";
 option go_package = "common/asset";
 
 import "proto/common/base/tip.proto";
-// 聚宝斋 P2 追加(AssetSnapshot 用):交易需要把"扣出/入账的那一份库存"原样回给调用方。
-import "proto/common/component/player_pet_comp.proto";
-import "proto/common/database/bag_quest_mail_data.proto";
+
+// 本文件**只依赖 common/base**,不得 import common/component 或 common/database。
+// 原因(2026-09-18 审稿 blocker):go_package 决定 Go 包边界,本文件是
+// `common/asset`,而 asset_op_ledger_comp.proto(`common/component`)反过来
+// import 本文件取 AssetOpStream。一旦本文件再 import component/database,
+// 生成的 Go 代码就是 component → asset → component 的包级循环,
+// `go build ./...` 必然 "import cycle not allowed"(protoc 本身是 DAG,不报错,
+// 炸点在 Go 编译)。AssetSnapshot 因此用下面内联的精简形状,不复用
+// ItemEntry / PetInstance。
 
 // 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §S4)。
 //
@@ -44,11 +50,24 @@ message AssetBundle {
   repeated ItemGrant items = 2;
 
   // ---- 聚宝斋 P2 追加(帮会不使用,帮会一律留空)----
+  //
+  // **签名前置(硬前置,未做完不得启用 P2)**:§4.32 的 canonical 串第 10 行
+  // `<bundle>` 目前只有 `"c=" 货币 ";i=" 物品(config_id:count)` 两段,**不覆盖**
+  // 下面这两个字段。而它们是会真改玩家资产的输入(按 guid 扣装备 / 扣宝宝),
+  // scene gRPC 又是 `InsecureServerCredentials()`(node.cpp:623),集群内任意进程
+  // 可连可嗅:攻击者截下一条合法 TRADE_DEBIT,只把 item_uuids 换成玩家的其它
+  // 装备再发出,该 seq 未见过、签名照样通过,scene 会扣掉被换的那件。seq 幂等
+  // 与 300s 时间窗都挡不住这种"同 seq 抢跑改载荷"。
+  // 因此 TRADE_* 流启用前必须先把 canonical 扩成
+  //   `…;i=<config_id:count,…>;u=<item_uuid,…>;p=<pet_id>`(空则 `;u=;p=0`),
+  // 并同批改 C++ `AssetOpCanonical`、Go `assetop.Canonical` 与两边共用的 golden
+  // 字面量(§4.32 末尾那一条)。帮会(GUILD_* 流)一律留空,不受影响。
+  //
   // 按 guid 全或无扣出:列出的每个 item_uuid 都必须在背包里、且属于**不可叠加**
   // 物品(装备一类,stack_size 恒为 1),少一个就整批拒,不做部分扣出。
   // 可叠加物品按 config_id + count 走 items 字段,不进本字段。
   repeated uint64 item_uuids = 3;
-  // 按 guid 扣出/入账一只宝宝;0 = 不涉及宝宝。
+  // 按 guid 扣出/入账一只宝宝;0 = 不涉及宝宝。同样未进签名串,见上。
   uint64 pet_id = 4;
 }
 
@@ -72,14 +91,31 @@ message AssetOpRequest {
 }
 
 // ---- 聚宝斋 P2 追加(帮会不使用)----
+//
+// 快照用的两个精简形状:本文件必须是叶子包(见文件头),不能 import
+// bag_quest_mail_data.proto 的 ItemEntry / player_pet_comp.proto 的 PetInstance。
+// 只取交易展示与对账需要的字段;pos / bag_type / allocated / aptitude 等
+// 持久化细节不进快照,scene 填充时从对应组件里取同名字段即可。
+message AssetItemInstance {
+  uint64 item_uuid = 1;   // 与 ItemEntry.item_uuid 同源(SnowFlake guid)
+  uint32 config_id = 2;   // ItemTable id
+  uint32 stack_size = 3;  // 不可叠加物品恒为 1
+}
+
+message AssetPetInstance {
+  uint64 pet_id = 1;       // 与 PetInstance.pet_id 同源(SnowFlake guid)
+  uint32 pet_table_id = 2; // Pet 表 id
+  string name = 3;         // 玩家自定义名;空 = 用 PetTable.name
+  uint32 level = 4;        // 成交时的等级快照,只为展示
+}
+
 // 这一次指令实际动到的那份库存,交易侧用它做"寄售快照 / 收货确认"的展示与对账。
 // 帮会的 Debit/Credit 不填此字段(scene 只在 TRADE_* 流上填充)。
 message AssetSnapshot {
-  // 本次扣出(Debit)或入账(Credit)的物品条目,含 item_uuid / config_id /
-  // stack_size,形状与 player_database.bag_component 里的一致。
-  repeated ItemEntry items = 1;
+  // 本次扣出(Debit)或入账(Credit)的物品条目。
+  repeated AssetItemInstance items = 1;
   // 本次扣出/入账的宝宝(AssetBundle.pet_id 非 0 时填);未涉及时 pet_id 为 0。
-  PetInstance pet = 2;
+  AssetPetInstance pet = 2;
   // 本次扣出/入账的货币合计(单币种;多币种时取 AssetBundle.currencies 原样)。
   CurrencyAmount currency = 3;
 }

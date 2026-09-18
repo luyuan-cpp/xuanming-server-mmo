@@ -29,8 +29,12 @@
 // 纯运行时标记:不入 PlayerAllData、不序列化、不跨进程,所以是普通 C++ struct 而不是 proto。
 struct PlayerFrozenComp
 {
-    // 冻结开始的墙钟毫秒。仅供排障(看"冻结了多久");超时判定用的是
-    // PlayerTravelHandoffComp.requestedAtMs 的看门狗代际,不是它。
+    // 冻结开始的墙钟毫秒。两个用途:
+    //   * 排障:看"冻结了多久";
+    //   * 存盘阶段看门狗(PlayerLifecycleSystem::ArmTravelSaveWatchdog)的代际 —— 那一段
+    //     PlayerTravelHandoffComp.requestedAtMs 还是 0,分不出是哪一次交接,只能靠它认。
+    // EnterScene 发出之后的应答超时判定用的是 requestedAtMs,不是它。
+    // 挂上之后不得改写:改了等于换代际,在途的存盘阶段看门狗会认不出这次交接、到期不解冻。
     int64_t frozenAtMs{0};
 
     // 交接的目标 zone(同 zone 跨节点换图时等于本 zone)。仅供日志 / 指标。

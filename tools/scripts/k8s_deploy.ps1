@@ -2200,6 +2200,16 @@ Market:
   MaxPageSize: ${tradeMarketMaxPageSize}
   MaxPage: ${tradeMarketMaxPage}
   MaxFavoritesPerPlayer: ${tradeMarketMaxFavorites}
+# 共享单库 Redis:通用资产通道(guild-phase2/04-asset-channel.md §S4)按 player:{id}:location 定位
+# 玩家所在 scene 节点。写者是 C++ scene / scene_manager,所以**必须**是这份共享实例的 DB 0,
+# 不能指向 trade 自己的库,也不能指向 match 的独占集群(那里没有位置键)。
+# 段名不能叫 Redis:zrpc.RpcServerConf 已有同名字段,加载期报 conflict key Redis(键名三处逐字一致:
+# go/trade/etc/trade.yaml、go/trade/internal/config/config.go、本文件)。
+# config.Validate 拒绝空 Host:缺它 trade 起不来,而不是"能浏览但一上架就永远卡住"。
+SharedRedis:
+  Host: "redis.${InfraNamespace}:6379"
+  Password: "${redisPassword}"
+  DB: 0
 "@
 		}
 		default {

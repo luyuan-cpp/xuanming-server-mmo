@@ -432,7 +432,7 @@ uint32_t Bag::ReserveForBatchRemove(const std::vector<Guid> &guids,
 		}
 
 		// ③ 配置表必须查得到。查不到时 max_stack_size 无从判断,只能 fail-closed。
-		const auto [itemRow, itemResult] = ItemTableManager::Instance().FindByIdSilent(item->config_id());
+		const auto *itemRow = ItemTableManager::Instance().FindByIdSilent(item->config_id()).first;
 		if (itemRow == nullptr)
 		{
 			LOG_ERROR << "Bag::ReserveForBatchRemove: guid " << guid << " has config "
