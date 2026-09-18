@@ -93,7 +93,7 @@ public:
 	// reaper:30s 低频定时器,扫描 InBattleComp:PREPARING 按 prepare_deadline_ms 过期只摘组件、
 	// 锁保留到 TTL(prepare_deadline+60s)自然过期给迟到确认留重建余量;FIGHTING 按 deadline_ms
 	// 过期摘组件 + 条件删锁。结构化日志 metric=battle_prepare_expired / battle_freeze_expired。
-	// 不进 20FPS 帧循环;注册/停止时机与 CrossZoneReaper 一致(main.cpp)。
+	// 不进 20FPS 帧循环;在 main.cpp 里随节点启动注册、随节点停止注销。
 	static void StartReaper(muduo::net::EventLoop* loop);
 	static void StopReaper();
 

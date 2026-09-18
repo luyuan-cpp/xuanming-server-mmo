@@ -42,21 +42,28 @@
 //                                 without crashing.
 //   4. BagUnmarshalCreatesComp  — Unmarshal on a fresh player entity uses
 //                                 get_or_emplace to create PlayerBagsComp,
-//                                 so HandlePlayerMigration on destination
-//                                 doesn't have to pre-emplace.
+//                                 so whoever rebuilds the player from a
+//                                 PlayerAllData snapshot (the node taking
+//                                 over after an ownership handoff) doesn't
+//                                 have to pre-emplace.
 //   5. BagUnmarshalDropsBadType — bag_type >= kBagTypeCount in incoming
 //                                 BagAllData is dropped with WARN, not
 //                                 crashed.
 //   6. FrozenCompMarker         — PlayerFrozenComp emplace/remove +
 //                                 IsCrossZoneFrozen() semantics.
 //
+// History: these cases were written for the player_migrate data-moving chain
+// (Kafka PlayerMigrationEvent + ACK + CrossZoneReaper). That chain was
+// decommissioned on 2026-09-18 (cross-zone-scene-travel.md §11.3): players no
+// longer move between zones by shipping PlayerAllData, the target zone loads
+// them from the shared Redis after an owner_epoch handoff. The marshal
+// round-trip and PlayerFrozenComp semantics tested here are still what that
+// handoff relies on, so the cases stay.
+//
 // What this file does NOT cover (intentionally):
-//   - Kafka topic publish/consume — requires real broker.
-//   - Reaper retry/recovery        — requires real timer + Redis.
-//   - ACK round-trip               — requires real Kafka subscription.
-//   - HandleCrossZoneTransfer end-to-end — needs scene-node bootstrap
-//                                          (tlsRedisSystem, world tick, ...).
-//   See cross-zone-failure-test-runbook.md for those.
+//   - The handoff chain end-to-end (StartTravelHandoff → save → handoff mark →
+//     scene_manager.EnterScene → reply / watchdog) — needs scene-node bootstrap
+//     (tlsRedisSystem, world tick, a scene_manager). See robot travel-smoke.
 // ---------------------------------------------------------------------------
 
 namespace
@@ -246,8 +253,8 @@ TEST(CrossZoneBagMarshal, UnmarshalCreatesPlayerBagsComp)
 
     bag_marshal::Unmarshal(player, wire);
     ASSERT_TRUE(tlsEcs.actorRegistry.any_of<PlayerBagsComp>(player))
-        << "Unmarshal must emplace PlayerBagsComp so HandlePlayerMigration "
-        << "doesn't have to pre-emplace it on the destination side";
+        << "Unmarshal must emplace PlayerBagsComp so the node rebuilding the player "
+        << "from a snapshot doesn't have to pre-emplace it";
 
     const auto items = SnapshotPlayerBags(player);
     ASSERT_EQ(items.size(), 1u);

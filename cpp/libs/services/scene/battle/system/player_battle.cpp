@@ -98,7 +98,7 @@ namespace
 	// 2026-09-14 速度单位 ×12(原 10),与引擎常量一起放大
 	constexpr uint64_t kFallbackBattleSpeed = 120;
 
-	// reaper 定时器(与 CrossZoneReaper 相同的单定时器形态)
+	// reaper 定时器(单定时器形态:整个进程只有一个,StartReaper / StopReaper 成对)
 	muduo::net::TimerId gReaperTimerId;
 	bool gReaperActive = false;
 	muduo::net::EventLoop* gReaperLoop = nullptr;
@@ -1799,8 +1799,8 @@ void PlayerBattleSystem::StartReaper(muduo::net::EventLoop* loop)
 		for (const auto& entry : expired)
 		{
 			const uint64_t playerId = GuidForLog(entry.entity);
-			// 结构化 metric 日志:cpp scene 进程当前没有 Prometheus 端点(与
-			// CrossZoneReaper 同款口径),由日志侧提取计数,见 open_issues。
+			// 结构化 metric 日志:cpp scene 进程当前没有 Prometheus 端点,
+			// 由日志侧提取计数,见 open_issues。
 			// 两个 metric 区分:备战期作废(match gather 断链)vs 战斗期作废(battle 节点崩溃)
 			if (entry.preparing)
 			{

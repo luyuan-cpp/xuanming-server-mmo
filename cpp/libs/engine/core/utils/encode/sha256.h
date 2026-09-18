@@ -41,8 +41,7 @@ public:
     static Digest HashBytes(std::string_view data);
 
     // Convenience: SHA-256 hash returned as a 32-byte std::string. Suits
-    // protobuf `bytes` fields (PlayerMigrationEvent.payload_sha256) without
-    // extra copies.
+    // protobuf `bytes` fields without extra copies.
     static std::string HashToBytes(std::string_view data);
 
     // Convenience: hex-encoded (lowercase, 64 chars) digest. Useful when

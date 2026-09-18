@@ -101,6 +101,10 @@ set(SOURCE_FILES
     player/system/player_tip.cpp
     player/system/stress_test_probe.cpp
     player/system/bag_marshal.cpp
+    player/system/mission_marshal.cpp
+    player/system/player_activity_schedule.cpp
+    player/system/player_feature_snapshot.cpp
+    player/system/player_mission.cpp
     spatial/system/aoi.cpp
     spatial/system/grid.cpp
     spatial/system/interest.cpp

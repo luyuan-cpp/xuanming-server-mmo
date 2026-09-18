@@ -90,8 +90,8 @@ std::tuple<uint32_t, uint64_t> BuffSystem::AddOrUpdateBuff(
         return {kThisEntityIsInvalid, UINT64_MAX};
     }
 
-    // 冻结中的目标(跨 zone 迁移在途):buff 列表已经在 HandleCrossZoneTransfer
-    // 打进 PlayerAllData,目的 zone 会照快照重建。源端此时再加 buff,只会造出一条
+    // 冻结中的目标(归属交接在途:跨 zone 传送 / 跨节点换图):buff 列表已经在冻结那一刻的
+    // 存盘里打进 PlayerAllData,接手的节点会照快照重建。源端此时再加 buff,只会造出一条
     // 只有这个将死的源端实体看得见的孤儿。cross-zone-readiness-audit.md §11.4 的
     // 默认策略是 "buff drop"。
     //
