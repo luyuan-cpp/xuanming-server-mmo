@@ -239,7 +239,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (service, level) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"warn|slow|alert|error|fatal|severe\"} |~ `(?i)$search` [$__auto]))",
+          "expr": "sum by (service, level) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"warn|slow|alert|error|fatal\"} |~ `(?i)$search` [$__auto]))",
           "legendFormat": "{{service}} · {{level}}",
           "queryType": "range"
         }
@@ -258,7 +258,7 @@
           {
             "matcher": {
               "id": "byRegexp",
-              "options": ".*(error|fatal|severe).*"
+              "options": ".*(error|fatal).*"
             },
             "properties": [
               {
@@ -320,7 +320,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal|severe\"} |~ `(?i)$search` [$__range]))",
+          "expr": "sum(count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal\"} |~ `(?i)$search` [$__range]))",
           "queryType": "instant",
           "instant": true
         }
@@ -494,7 +494,7 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "topk(8, sum by (service, lang) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal|severe\"} |~ `(?i)$search` [$__range])))",
+          "expr": "topk(8, sum by (service, lang) (count_over_time({job=~\"$job\", service=~\"$service\", zone=~\"$zone\", level=~\"error|fatal\"} |~ `(?i)$search` [$__range])))",
           "legendFormat": "{{service}} ({{lang}})",
           "queryType": "instant",
           "instant": true
@@ -504,7 +504,7 @@
         "defaults": {
           "unit": "short",
           "color": {
-            "mode": "continuous-RdYlGr"
+            "mode": "continuous-GrYlRd"
           },
           "min": 0,
           "noValue": "0"

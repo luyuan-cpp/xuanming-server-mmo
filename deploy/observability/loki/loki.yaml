@@ -20,10 +20,18 @@ common:
       store: inmemory
 
 ingester:
-  # Loki 3.5 只向 ingester 内存查「最近约 max_chunk_age + chunk_idle_period」这一段;
-  # 首次接入时 Alloy 会把几小时前的旧日志一次灌进来,这些老时间戳的块在内存里
-  # 没落盘前查不到。把闲置落盘时间从默认 30m 缩短到 3m,旧日志要晚几分钟才出现(本机实测 7 分钟内);
-  # 实时写入的新日志不受影响,立刻可见。(3.x 已没有 query_ingesters_within 这个键)
+  # 为什么首次接入时旧日志要等几分钟才查得到:
+  # 单机模式(target=all)下,querier 对「now - ingester.query_store_max_look_back_period」以内的时间段
+  # 只查 ingester 内存,更早的只查落盘存储。这个窗口由 Loki 自己按 max_chunk_age + 41m 算出来
+  # (本机 2h41m,见 http://localhost:3100/config),配置文件里写不小于它的正值会直接启动失败。
+  # Alloy 首次会把几小时前的旧日志一次灌进来,它们时间戳老、又还在内存里没落盘,所以两头都查不到;
+  # 把闲置落盘时间从默认 30m 缩到 3m,让这些块尽快进存储(本机实测 7 分钟内全部可查)。
+  # 实时写入的新日志不受影响,立刻可见。
+  #
+  # 注意:querier.query_ingesters_within 这个键在 3.5 仍然存在(顶层 querier 段,默认 3h),
+  # 当初容器反复重启是因为把它错写进了 limits_config,不是因为这个键被删了。
+  # 想让任意时间段都查 ingester,可以在 querier 段调大它,或设
+  # ingester.query_store_max_look_back_period: -1(仅限本地 filesystem 单机,别照搬到集群)。
   chunk_idle_period: 3m
   max_chunk_age: 2h
 

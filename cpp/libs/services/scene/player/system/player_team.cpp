@@ -15,6 +15,8 @@
 
 #include "battle/system/player_battle.h"
 #include "modules/scene/comp/scene_comp.h"
+#include "player/comp/player_frozen_comp.h"
+#include "player/comp/player_ownership_comp.h"
 
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
 #include "proto/common/component/player_comp.pb.h"
@@ -53,6 +55,21 @@ namespace
 	bool IsSamePlayer(entt::entity player, uint64_t playerId)
 	{
 		return playerId != 0 && tlsEcs.actorRegistry.valid(player) && GuidOf(player) == playerId;
+	}
+
+	// 归属正在交接中的实体不得跟随(cross-zone-scene-travel.md CZ-4/CZ-5、player_ownership_comp.h)。
+	// 两种在途都保留着实体与 gate 会话,所以 HasLiveSession 看不出来:
+	//   PlayerFrozenComp        —— player_migrate 老路径已把玩家发往别的 zone,等 ACK / reaper 判定;
+	//   PlayerTravelHandoffComp —— 跨 zone 传送的交接已发起(handoff 标记已写、EnterScene 已发)。
+	// 此刻本节点手里的状态已落盘且不得再写,再替他发一次 EnterScene 会把刚交接出去的玩家按
+	// "同节点换图"重新落回本节点(scene_manager 对同物理节点的落点不过换手门、不铸 epoch,
+	// 见 enterscenelogic.go samePhysicalNode 分支),与在途的交接互相覆盖;应答还会被
+	// scene_manager_response_handler 当成传送应答喂给 HandleTravelEnterSceneReply。
+	// 与仓库里其它业务系统按 PlayerFrozenComp 拦写(buff / skill / afk / 属性同步)同一道闸。
+	bool IsOwnershipInFlight(entt::entity player)
+	{
+		return tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(player) ||
+			   tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(player);
 	}
 
 	// 会话仍然活着才允许请求 SceneManager(照 player_lifecycle.cpp HandlePlayerAsyncSaved 的判法):
@@ -339,6 +356,11 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=in_battle player_id=" << playerId;
 		return;
 	}
+	if (IsOwnershipInFlight(player))
+	{
+		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=ownership_in_flight player_id=" << playerId;
+		return;
+	}
 	if (!HasLiveSession(player, playerId))
 	{
 		LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=session_not_live player_id=" << playerId;
@@ -371,10 +393,15 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=battle_lock player_id=" << playerId;
 				return;
 			}
-			// 回调期间可能刚进入战斗 / 刚断线:重新核对
+			// 回调期间可能刚进入战斗 / 刚断线 / 刚被发起跨 zone 交接:重新核对
 			if (PlayerBattleSystem::IsInBattle(player))
 			{
 				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=in_battle player_id=" << playerId;
+				return;
+			}
+			if (IsOwnershipInFlight(player))
+			{
+				LOG_INFO << "[PlayerTeam] metric=team_follow_skipped reason=ownership_in_flight player_id=" << playerId;
 				return;
 			}
 			if (!HasLiveSession(player, playerId))

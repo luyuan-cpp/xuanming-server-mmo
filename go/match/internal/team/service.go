@@ -441,6 +441,14 @@ func (s *Service) preflightMatch(ctx context.Context, roster []uint64) (map[uint
 		if loc == nil {
 			return nil, ErrMemberNotReady, pid
 		}
+		// node_id 为空 = 跨 zone 交接已放行、目标 zone 还没落点(cross-zone-scene-travel.md CZ-4,
+		// scene_manager placePlayerLocation 只在这一种情况下写空 node_id)。此刻没有任何 scene 节点
+		// 持有该玩家,gather 的 preparePlayer 必定定位不到对端(EndpointOf 查不到空 node)。
+		// 在这里按"没准备好"拒绝,别让整队走完建锁 / 建票再死在 gather 上。
+		if loc.GetNodeId() == "" {
+			log.Infof("[team] 开战预检:成员正在跨 zone 交接(等待落点),按未准备好拒绝 player=%d zone=%d", pid, loc.GetZoneId())
+			return nil, ErrMemberNotReady, pid
+		}
 		blocked, err := s.starter.TicketBlocked(ctx, pid)
 		if err != nil {
 			log.Errorf("[team] 开战预检读票据失败 player=%d: %v", pid, err)
