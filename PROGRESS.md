@@ -5221,3 +5221,14 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
   - 审查报告里"Go 侧 3 处 pb 字段缺失编译必炸"已过期:`OwnerEpoch` / `EnterSceneResponse.PlayerId` / `TicketPlayerId` 现在都在生成物里;真正还缺的只有跨 zone 在途的 `PendingSceneConfId`。
   - 组队系统"robot vendor 缺 team"这条硬断裂也已消失,`robot/vendor/proto/team/*.pb.go` 已被跟踪。
 - **未做**:未编译、未跑任何生成器;帮会 B2s 与跨 zone 阶段 2 的业务代码不在本会话范围(归属见上)。
+
+### 2026-09-18 补充:反向核查(清单列了但磁盘没有)+ 一处误提交披露(Claude)
+
+- **反向核查**:上一条只查了"磁盘有、清单没有";补查"清单列了、磁盘不存在"——这类会让 CMake configure 直接失败,比缺符号更早炸。全仓 11 条:
+  - `cpp/generated/proto/CMakeLists.txt` 与 `proto.vcxproj` → `common/asset/asset_op.pb.cc`、`common/component/asset_op_ledger_comp.pb.cc`
+  - `cpp/generated/table/CMakeLists.txt` 与 `table.vcxproj` → `proto/tip/asset_error_tip.pb.cc`
+  - 以上 5 条都是聚宝斋会话为 asset 域预登记的,proto 源(`proto/common/asset/asset_op.proto` 等)在,**产物要等那轮串行 regen 才会出现**。在此之前 main 在 Linux 上 configure 不过。
+  - `cpp/libs/engine/thread_context/CMakeLists.txt` → `rpc_request_context.cpp`:该文件已不在磁盘(目录里只剩 ecs_context / lua_state / node_context_manager / redis_manager / snow_flake_manager 五组),对应改动在 `bb7b1cfc8`(09-13 用 per-call RpcController 取代 thread_local)。**这条与任何在途工作无关,是真残留**,但按分工该目录没人认领,未改,登记在此。
+  - `cpp/tests/redis_test/redis.vcxproj` → 4 条 `..\..\common\src\...` 老目录结构路径,该测试工程早已失效,未动。
+- **误提交披露**:提交 `2191af22b` 里有 **2 行不是本会话写的** —— `common/asset/asset_op.pb.cc` 与 `common/component/asset_op_ledger_comp.pb.cc`。原因是 `git add cpp/generated/proto/CMakeLists.txt` 时,该文件磁盘副本已被聚宝斋会话加进这两行,被一并提交。逐行核对该提交的 152 行新增,**只有这两行不是本会话的**,内容原样未改写。已向聚宝斋会话完整披露并给出三个处理选项(不做 / 由我提一个只删这两行的提交 / 它自己处理),**未擅自回退**——回退会连它工作区里的同一改动一起抹掉。
+- **教训**:多会话共用一个工作树时,`git add <路径>` 提交的是"此刻磁盘上的内容",不是"我写下的内容"。提交前应当 `git diff --cached` 逐行核对,而不是只核对自己改了哪些文件。本会话后续提交按此执行。
