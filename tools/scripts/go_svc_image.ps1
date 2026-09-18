@@ -22,9 +22,12 @@
         -Registry ghcr.io/luyuancpp -Tag v1
 
     # 发布版本构建(tag = v1.2.3-<12位commit>,镜像与二进制自报 v1.2.3;脏树直接拒绝),
-    # 推送后把 registry digest 记进 JSON
+    # 推送后把 registry digest 记进 JSON。记录文件的位置有两条约束(当前目录 = 仓库根):
+    #  - 不要放进 releases/images/<版本>/:多出的文件不在 sha256sums.txt 里,Test-Sha256Sums 判失败,该版本再也 fetch 不了;
+    #  - 不要放在仓库内:未跟踪文件让工作树变脏,同一批后续带 -Version 的命令会以"不接受脏工作树"拒绝。
     pwsh -File tools/scripts/go_svc_image.ps1 -Command release-all `
-        -Registry ghcr.io/luyuancpp -Version v1.2.3 -DigestsOut <制品目录>/image-digests.json
+        -Registry ghcr.io/luyuancpp -Version v1.2.3 `
+        -DigestsOut (Join-Path (Split-Path $PWD.Path -Parent) 'image-digests-v1.2.3.json')
 
     # 机器可读镜像清单:每行一个完整引用,无其它输出(publish_images.ps1 用)
     pwsh -File tools/scripts/go_svc_image.ps1 -Command list-refs -Registry local -Version v1.2.3
@@ -40,10 +43,8 @@ param(
     [string]$Tag = "",
     # 只处理目录里的这几个服务(逗号分隔,如 match,login)。留空 = 全部。
     # 目录是顺序遍历、一个失败就 throw,以前想单独构建 match 也得先等 db 过。
-    # 现状(2026-09-16):go/db、go/data_service 的 go.mod 是
-    # `replace github.com/luyuancpp/proto2mysql => ../../../../proto2mysql-v0.1.0`,目录名与下方
-    # ExternalReplaceStages / Dockerfile 占位 stage(proto2mysql)对不上,Get-ExternalBuildContexts 直接 throw。
-    # 根因修好之前,不带 -Services 的 build-all 会在第一个服务 db 上失败;构建其它服务要显式 -Services 排除 db、data-service。
+    # (2026-09-17 核对:db / data_service 的 proto2mysql 已改为远程仓名映射,不再依赖宿主目录,
+    #  不带 -Services 的 build-all 覆盖目录里全部服务;按需过滤只为省时间。)
     #
     # 类型是 [string[]] 而不是 [string]:从 PowerShell 里 `& go_svc_image.ps1 -Services a,b`
     # 调用时,逗号表达式先被解析成数组,[string] 参数会直接报
@@ -116,6 +117,16 @@ if ($ReleaseVersion -and $Command -in @("build-all", "release-all")) {
     }
 }
 
+# 快照构建同样不许脏树冒充干净 commit:脏树上 `build-all -Tag <sha12>` 产出的镜像,tag / revision label /
+# BUILD_VERSION / 启动行 commit 全是干净的 <sha12>,与从该 commit 干净构建的镜像无从区分;之后清理工作树再跑
+# `publish_images.ps1 -SkipBuild`(只核对 revision label == HEAD),未提交的代码就被当成 g<sha12> 快照发布出去。
+# 只拦"以当前 commit 结尾"的 tag(<sha12>、<任意前缀>-<sha12>);p1test 这类临时 tag 与 <sha12>-dirty 不受影响,
+# dev_tools.ps1 / publish_images.ps1 -AllowDirty 在脏树上传的正是 <sha12>-dirty。
+if ($Command -in @("build-all", "release-all") -and $script:ReleaseStamp.Ok -and $script:ReleaseStamp.Dirty -and
+    $Tag -cmatch "(^|-)$([regex]::Escape($script:ReleaseStamp.Commit))\z") {
+    throw "脏工作树(git status 非空)不能构建与干净 commit 同名的 tag '$Tag':会被 publish_images.ps1 -SkipBuild 当成 commit $($script:ReleaseStamp.Commit) 的干净产物。不传 -Tag 自动生成 $($script:ReleaseStamp.Commit)-dirty,或先提交 / 清理工作树。"
+}
+
 # 注入到镜像里的版本戳(ldflags + OCI label + /app/BUILD_INFO)
 # BUILD_VERSION:有发布版本号用版本号,否则沿用镜像 tag(快照镜像的"版本"就是 commit)。
 $BuildVersion = if ($ReleaseVersion) { $ReleaseVersion } else { $Tag }
@@ -180,9 +191,11 @@ function Get-ImageFullName {
 # 只处理 Dockerfile 里有对应 stage 的模块(白名单),其它 replace(../proto、../shared)
 # 本来就在 go/ 里,由 COPY 正常带入。
 #
-# 现状(2026-09-16):db / data_service 的 replace 已改成 ../../../../proto2mysql-v0.1.0,目录名不在白名单,
-# 下面会 throw。根因方向是像 go/schemamigrate/go.mod 那样 require 已发布 tag(只做远程仓名映射)并删掉本地
-# replace,随后删掉这份白名单与 Dockerfile 占位 stage —— 而不是再加一个 proto2mysql-v0.1.0 stage 继续依赖宿主目录。
+# 现状(2026-09-17 核对 go.mod):db / data_service / trade / schemamigrate 对 proto2mysql 都是远程仓名映射
+# (`replace github.com/luyuancpp/proto2mysql <版本> => github.com/luyuan-cpp/proto2mysql <版本>`),
+# 下面的正则只认本地路径形式,不会命中,所有服务都返回空列表。白名单与 Dockerfile 占位 stage 暂留作防回归:
+# 再有人加回指向仓库外其它目录名的本地 replace 会被 throw 拦下,并提示优先改回已发布版本。
+# 删除要与 .github/workflows/release.yml 的"仓库外 replace"检查一起做(另立任务)。
 $script:ExternalReplaceStages = @("proto2mysql")
 
 function Get-ExternalBuildContexts {
@@ -245,7 +258,7 @@ function Invoke-BuildAll {
         if (-not [string]::IsNullOrWhiteSpace($env:GOPROXY)) {
             $buildArgs += @("--build-arg", "GOPROXY=$($env:GOPROXY)")
         }
-        # 仓库外 replace 模块(目前只有 db 的 proto2mysql)以命名上下文带入
+        # 仓库外本地 replace 模块以命名上下文带入(2026-09-17 起没有服务需要,正常返回空)
         $buildArgs += @(Get-ExternalBuildContexts -ServiceDir (Join-Path $GoRoot $info.Dir))
         # 策划表:仓库根 generated/tables 不在 go/ 里,固定以命名上下文 tables 带入
         # (Dockerfile.go-svc 的 `FROM scratch AS tables` 占位 stage)。

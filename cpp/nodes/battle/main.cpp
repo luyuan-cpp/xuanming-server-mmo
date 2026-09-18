@@ -24,6 +24,7 @@
 #include "table/code/skillpermission_table.h"
 #include "table/code/dungeon_table.h"
 #include "table/code/monster_table.h"
+#include "table/code/item_table.h"
 
 #include <memory>
 
@@ -125,8 +126,8 @@ namespace
 
     struct BattleNodeHooks
     {
-        // 表加载完成钩子:battle 依赖 Skill/Buff/Cooldown/SkillPermission/Monster/Dungeon
-        // 六张表(引擎经 TableBattleDataProvider 读取)。框架 LoadTablesAsync 全量加载,
+        // 表加载完成钩子:battle 依赖 Skill/Buff/Cooldown/SkillPermission/Monster/Dungeon/Item
+        // 七张表(引擎经 TableBattleDataProvider 读取,2026-09-17 起含 Item:战斗内用药效果读表)。
         // 这里只做就绪校验:空表说明数据目录配置有问题,尽早在日志里暴露。
         struct TableLoadHandler
         {
@@ -138,13 +139,21 @@ namespace
                 const auto permissionRows = SkillPermissionTableManager::Instance().FindAll().data_size();
                 const auto dungeonRows = DungeonTableManager::Instance().FindAll().data_size();
                 const auto monsterRows = MonsterTableManager::Instance().FindAll().data_size();
+                const auto itemRows = ItemTableManager::Instance().FindAll().data_size();
 
                 LOG_INFO << "battle 战斗表加载完成: skill=" << skillRows
                          << " buff=" << buffRows
                          << " cooldown=" << cooldownRows
                          << " skill_permission=" << permissionRows
                          << " dungeon=" << dungeonRows
-                         << " monster=" << monsterRows;
+                         << " monster=" << monsterRows
+                         << " item=" << itemRows;
+
+                // Item 空表只影响"战斗内用药",不影响开局,单独告警不混进致命项
+                if (itemRows == 0)
+                {
+                    LOG_WARN << "battle Item 表为空:战斗内道具一律不可用(ITEM 行动会被拒)";
+                }
 
                 if (skillRows == 0 || buffRows == 0 || dungeonRows == 0 || monsterRows == 0)
                 {

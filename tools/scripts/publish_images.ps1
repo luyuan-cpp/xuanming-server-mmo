@@ -213,7 +213,13 @@ function Get-ImageScriptArgs {
 
 <#
 .SYNOPSIS
-    docker image inspect 取镜像 ID 与 revision label;镜像不存在返回 $null。
+    docker image inspect 取镜像 ID 与 revision / version label;镜像不存在返回 $null。
+
+    version label(org.opencontainers.image.version)与 revision 一起核对:revision 只证明"构建时仓库停在这个
+    提交",证明不了"镜像自报的版本号就是本次发布的版本号"。BUILD_VERSION 走错(例如镜像脚本拿到的是 tag 而不是
+    -Version,或 -Version 传漏了)时,build-info.app_version 仍会写成本脚本收到的 -Version,于是离线包名为
+    v1.2.3、镜像里自报的却是别的版本 —— 正是 A 仓 make_release.ps1:101-111 在发布清单那一层拦的错配,
+    这里提前一层拦住。
 #>
 function Get-DockerImageIdentity {
     param([Parameter(Mandatory = $true)][string]$Ref)
@@ -232,14 +238,20 @@ function Get-DockerImageIdentity {
 
     $img = $parsed[0]
     $revision = ''
+    $version = ''
     $config = $img['Config']
     if ($config -is [System.Collections.IDictionary]) {
         $labels = $config['Labels']
-        if ($labels -is [System.Collections.IDictionary] -and $labels.Contains('org.opencontainers.image.revision')) {
-            $revision = [string]$labels['org.opencontainers.image.revision']
+        if ($labels -is [System.Collections.IDictionary]) {
+            if ($labels.Contains('org.opencontainers.image.revision')) {
+                $revision = [string]$labels['org.opencontainers.image.revision']
+            }
+            if ($labels.Contains('org.opencontainers.image.version')) {
+                $version = [string]$labels['org.opencontainers.image.version']
+            }
         }
     }
-    return @{ Id = [string]$img['Id']; Revision = $revision }
+    return @{ Id = [string]$img['Id']; Revision = $revision; Version = $version }
 }
 
 function Test-TarReaderAvailable {
@@ -444,6 +456,39 @@ if ($null -eq (Get-Command $DockerCommand -ErrorAction SilentlyContinue)) {
     throw "找不到 docker 命令:'$DockerCommand'。导出离线包需要本机 docker(Docker Desktop 或 Linux dockerd)。"
 }
 
+<#
+.SYNOPSIS
+    复查源码版本戳:HEAD 与脏树状态必须与本次发布开始时一致,否则拒绝发布。
+
+.DESCRIPTION
+    对应 A 仓 build_release_binaries.ps1:108-118 与 222-232 的"构建前后各查一次"。
+    开头取一次版本戳不够:十来个镜像逐个构建要几十分钟,期间如果工作树被改、HEAD 被切走
+    (本仓库有并行会话,还有每小时一次的自动提交),后面构建出来的镜像就出自另一个提交,
+    而 build-info.json 里仍写着开始时那个 commit —— 事后按这个 commit 根本复现不出这份产物。
+    第 5 节的 revision label 核对挡不住这种情况:它比的是"镜像 label == 当前 commit",
+    HEAD 变了之后重新构建的镜像照样能通过。
+#>
+function Assert-SourceUnchanged {
+    param(
+        [Parameter(Mandatory = $true)][hashtable]$Baseline,
+        [Parameter(Mandatory = $true)][string]$Stage
+    )
+
+    $now = Get-GitReleaseStamp -RepoRoot $RepoRoot
+    if (-not $now.Ok) {
+        throw "$Stage 复查源码版本戳失败:$($now.Reason)。拒绝发布。"
+    }
+    if ($now.Commit -cne $Baseline.Commit) {
+        throw "$Stage 复查失败:发布期间 HEAD 从 $($Baseline.Commit) 变成了 $($now.Commit)。这批镜像不是全部出自同一个提交,拒绝发布;请在干净且不再变动的工作树上重跑。"
+    }
+    if ([bool]$now.Dirty -ne [bool]$Baseline.Dirty) {
+        throw "$Stage 复查失败:发布期间工作树的脏状态变了(开始 dirty=$([bool]$Baseline.Dirty),现在 dirty=$([bool]$now.Dirty))。产物无法追溯到确定提交,拒绝发布。"
+    }
+    if ($now.Dirty -and $script:ReleaseVersion) {
+        throw "$Stage 复查失败:发布轨不接受脏工作树(git status 非空)。"
+    }
+}
+
 # ─────────────────────────────────────────────────────────────────
 # 4. 构建
 # ─────────────────────────────────────────────────────────────────
@@ -470,6 +515,9 @@ else {
             throw "$family 镜像构建失败($($spec.Script) -Command $($spec.BuildCommand) exit=$($build.ExitCode)),不发布。"
         }
     }
+
+    Write-PublishStep "复查源码版本戳(构建期间 HEAD 与工作树不得变动)"
+    Assert-SourceUnchanged -Baseline $stamp -Stage '构建结束后'
 }
 
 # ─────────────────────────────────────────────────────────────────
@@ -492,9 +540,14 @@ foreach ($family in $families) {
     }
 }
 
-Write-PublishStep "核对本地镜像(必须存在,revision label == $($stamp.Commit))"
+# 镜像自报的版本号:发布轨是 -Version,快照轨是 tag(与 go_svc_image.ps1 / java_svc_image.ps1 /
+# k8s_image.ps1 里 BUILD_VERSION 的取值规则同一口径,接口 C/D)。
+$expectedImageVersion = if ($script:ReleaseVersion) { $script:ReleaseVersion } else { $script:ImageTag }
+
+Write-PublishStep "核对本地镜像(必须存在,revision label == $($stamp.Commit),version label == $expectedImageVersion)"
 $missing = New-Object System.Collections.Generic.List[string]
 $wrongRevision = New-Object System.Collections.Generic.List[string]
+$wrongVersion = New-Object System.Collections.Generic.List[string]
 foreach ($item in $expected) {
     $identity = Get-DockerImageIdentity -Ref $item.Ref
     if ($null -eq $identity) { $missing.Add($item.Ref); continue }
@@ -502,10 +555,14 @@ foreach ($item in $expected) {
         $wrongRevision.Add("$($item.Ref)(revision='$($identity.Revision)')")
         continue
     }
+    if ($identity.Version -cne $expectedImageVersion) {
+        $wrongVersion.Add("$($item.Ref)(version='$($identity.Version)')")
+        continue
+    }
     $item.ImageId = $identity.Id
     $item.Revision = $identity.Revision
 }
-if ($missing.Count -gt 0 -or $wrongRevision.Count -gt 0) {
+if ($missing.Count -gt 0 -or $wrongRevision.Count -gt 0 -or $wrongVersion.Count -gt 0) {
     $lines = New-Object System.Collections.Generic.List[string]
     if ($missing.Count -gt 0) {
         $lines.Add("以下镜像本地不存在($($missing.Count) 个):")
@@ -515,7 +572,11 @@ if ($missing.Count -gt 0 -or $wrongRevision.Count -gt 0) {
         $lines.Add("以下镜像的 org.opencontainers.image.revision 与当前提交 $($stamp.Commit) 不一致($($wrongRevision.Count) 个,旧镜像或别的提交构建的,不能打进本版本):")
         foreach ($w in $wrongRevision) { $lines.Add("  - $w") }
     }
-    $hint = if ($SkipBuild) { '去掉 -SkipBuild 按当前提交重新构建。' } else { '检查镜像脚本是否把 BUILD_COMMIT 写进了 revision label。' }
+    if ($wrongVersion.Count -gt 0) {
+        $lines.Add("以下镜像自报的 org.opencontainers.image.version 与本次发布版本 '$expectedImageVersion' 不一致($($wrongVersion.Count) 个:离线包会名为一个版本、镜像里却是另一个版本):")
+        foreach ($w in $wrongVersion) { $lines.Add("  - $w") }
+    }
+    $hint = if ($SkipBuild) { '去掉 -SkipBuild 按当前提交重新构建。' } else { '检查镜像脚本是否把 BUILD_COMMIT / BUILD_VERSION 写进了 revision / version label。' }
     throw "镜像核对未通过,拒绝发布。`n$($lines -join "`n")`n$hint"
 }
 
@@ -595,6 +656,10 @@ try {
         publisher         = [System.Environment]::UserName
     }
     Write-Utf8NoBomFile -Path (Join-Path $staging 'build-info.json') -Text (($buildInfo | ConvertTo-Json -Depth 5) + "`n")
+
+    # 上线前最后一次复查:逐个 docker save 同样要不少时间,这段时间里仓库照样可能被改动。
+    # 放在 try 内、Complete-AtomicDir 之前 —— 失败时 staging 会被 catch 删掉,不留半截产物。
+    Assert-SourceUnchanged -Baseline $stamp -Stage '上线前'
 
     New-Sha256Sums -Dir $staging | Out-Null
     Complete-AtomicDir -Staging $staging -FinalDir $finalDir

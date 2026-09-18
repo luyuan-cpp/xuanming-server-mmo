@@ -1092,7 +1092,9 @@ PID 文件可能有旧格式整数值(Read-InstanceEntry :371 兼容分支),前�
 
 ### P2-09 战斗掉落/道具消耗落地:items_gained/items_consumed 只记日志,`BagService::AddItem` 零生产调用点
 
-**领域** server-cpp · **工作量** M · **状态** open
+**领域** server-cpp · **工作量** M · **状态** **已落码(2026-09-17),未编译待 Codex 验证** ——
+实现与验证清单见 [turn-battle-gap-closure.md](./turn-battle-gap-closure.md)(G1/G2/G3)。
+下面的证据行号是 09-05 快照,已全部漂移;"背包系统未挂载"的前提也在 09-11 失效(登录链已 unmarshal)。
 
 **背景与证据**
 `cpp/libs/services/scene/battle/system/player_battle.cpp:999-1007` `道具结算暂缓(背包系统未挂载)` 仅 LOG_INFO;`:442-443` 快照道具副本「一期传空」;`turn_battle_engine.cpp:1280` `掉落 items_gained 依赖掉落表,留待后续接入`;grep `BagService::AddItem|.AddItem(` 在 cpp/libs/services + cpp/nodes(排除测试)零命中;Monster/Dungeon 表无掉落列(`data/schema/monster_table.proto` 仅属性+exp/gold)。背包域(bag_test 46+ 用例、准入/淘汰策略)已就绪但没有真实入包链路;`bag-rule-policy-layering.md` §6.1 明确「推进节日包/FIFO 前先接一条真实入包链路」。「未挂载玩家实体」的说法需核实——若 bag_marshal 已在 loader 里 emplace,则只差调用。

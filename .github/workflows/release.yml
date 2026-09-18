@@ -256,6 +256,15 @@ jobs:
           if ($module.Split('/')[-1] -cne 'proto2mysql') {
               $problems.Add("仓库外 replace 模块 $module 不在支持清单里(只支持 proto2mysql,与 tools/scripts/go_svc_image.ps1 的 ExternalReplaceStages 一致):$sources")
           }
+          # go_svc_image.ps1 的 Get-ExternalBuildContexts 比的**不是模块路径,而是 replace 目标的目录名**
+          # (`Split-Path -Leaf $abs`),因为该目录名要当作 Dockerfile.go-svc 里 `FROM scratch AS <名字>`
+          # 占位 stage 的名字传给 --build-context。两者必须一起查:2026-09-16 起 go/db 与 go/data_service
+          # 的 replace 目标是 ../../../../proto2mysql-v0.1.0,模块路径这一关过得去、目录名却不在白名单,
+          # 于是本步骤放行、几十分钟的构建跑到 go 族时才在 go_svc_image.ps1 里抛错。放在这里拒,省掉那段构建。
+          $targetLeaf = Split-Path -Leaf $target
+          if ($targetLeaf -cne 'proto2mysql') {
+              $problems.Add("replace 目标目录名是 '$targetLeaf',不是 'proto2mysql':tools/scripts/go_svc_image.ps1 的 ExternalReplaceStages 与 Dockerfile.go-svc 的占位 stage 都按目录名匹配,go 族构建会被拒。根因修法见 go_svc_image.ps1 注释(改为 require 已发布 tag 并删掉本地 replace,D-14);在那之前 families 不要含 go,或先把 replace 目标改回 proto2mysql。来源:$sources")
+          }
           if ($canonicalRepo.ContainsKey($module)) {
               $repository = [string]$canonicalRepo[$module]
           }

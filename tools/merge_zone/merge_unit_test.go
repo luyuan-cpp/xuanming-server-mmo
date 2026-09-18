@@ -297,6 +297,44 @@ func TestGuildKeyShapesMatchGuildRepo(t *testing.T) {
 	}
 }
 
+// ── 帮会库名 ─────────────────────────────────────────────────
+
+func TestGuildNamesMatchGuildService(t *testing.T) {
+	// merge_zone 是独立 module,不能 import go/guild:库名镜像 go/guild/internal/data.DatabaseName
+	// (guild 服的 config.Validate 强制 DSN 库名等于它),表名镜像 proto/guild/guild_db.proto 的
+	// OptionTableName。漂移 = 改写落到不存在的表上,或更糟:落到另一个库的同名表上。
+	if defaultGuildSchema != "mmorpg_guild" {
+		t.Fatalf("defaultGuildSchema drifted from go/guild data.DatabaseName: %q", defaultGuildSchema)
+	}
+	if guildTable != "guild" || guildMemberTable != "guild_member" {
+		t.Fatalf("guild table names drifted from guild_db.proto: %q / %q", guildTable, guildMemberTable)
+	}
+	// 重名探测比的是唯一键那一列(uk_guild = name_norm),不是展示名。
+	if guildNameNormColumn != "name_norm" {
+		t.Fatalf("guild unique-key column drifted from guild_db.proto: %q", guildNameNormColumn)
+	}
+	if got := guildQualified(defaultGuildSchema, guildTable); got != "mmorpg_guild.guild" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestValidateGuildSchemaName(t *testing.T) {
+	for _, ok := range []string{"mmorpg_guild", "merge_zone_it_guild", "Guild1", strings.Repeat("a", 64)} {
+		if err := validateGuildSchemaName(ok); err != nil {
+			t.Errorf("%q should be accepted: %v", ok, err)
+		}
+	}
+	// 库名直接拼进 SQL:任何带点、引号、空白、分号、连字符的都必须拒绝。
+	for _, bad := range []string{
+		"", "mmorpg_guild.guild", "x;DROP DATABASE y", "a b", "`mmorpg_guild`",
+		"mmorpg-guild", "mmorpg_guild\n", strings.Repeat("a", 65),
+	} {
+		if err := validateGuildSchemaName(bad); err == nil {
+			t.Errorf("%q should be rejected", bad)
+		}
+	}
+}
+
 // ── 审计 INFRA 标记 ──────────────────────────────────────────
 
 func TestInfraAuditIsBlockAndDetectable(t *testing.T) {

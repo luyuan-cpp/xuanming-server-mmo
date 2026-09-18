@@ -183,7 +183,9 @@ void TransactionLogSystem::LogItemCreate(
     uint64_t itemUuid,
     uint32_t configId,
     uint32_t quantity,
-    TransactionType txType)
+    TransactionType txType,
+    uint64_t correlationId,
+    const std::string &extra)
 {
     TransactionLogEntry entry;
     entry.set_tx_id(GenerateTxId());
@@ -193,6 +195,14 @@ void TransactionLogSystem::LogItemCreate(
     entry.set_item_uuid(itemUuid);
     entry.set_item_config_id(configId);
     entry.set_item_quantity(quantity);
+    if (correlationId != 0)
+    {
+        entry.set_correlation_id(correlationId);
+    }
+    if (!extra.empty())
+    {
+        entry.set_extra(extra);
+    }
     SendEntry(entry);
 }
 
@@ -200,7 +210,9 @@ void TransactionLogSystem::LogItemDestroy(
     entt::entity player,
     uint64_t itemUuid,
     uint32_t configId,
-    uint32_t quantity)
+    uint32_t quantity,
+    uint64_t correlationId,
+    const std::string &extra)
 {
     TransactionLogEntry entry;
     entry.set_tx_id(GenerateTxId());
@@ -210,5 +222,13 @@ void TransactionLogSystem::LogItemDestroy(
     entry.set_item_uuid(itemUuid);
     entry.set_item_config_id(configId);
     entry.set_item_quantity(quantity);
+    if (correlationId != 0)
+    {
+        entry.set_correlation_id(correlationId);
+    }
+    if (!extra.empty())
+    {
+        entry.set_extra(extra);
+    }
     SendEntry(entry);
 }

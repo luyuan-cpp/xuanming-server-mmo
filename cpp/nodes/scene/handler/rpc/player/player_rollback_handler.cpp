@@ -6,6 +6,7 @@
 
 #include "core/utils/registry/game_registry.h"
 #include "services/scene/player/system/player_lifecycle.h" // IsCrossZoneFrozen — cross-zone-readiness-audit.md §11.1
+#include "proto/common/component/battle_comp.pb.h"  // InBattleComp:回合制战斗在途拒绝 GM 写操作
 #include "table/proto/tip/common_error_tip.pb.h"
 
 // Convenience: stamp kInvalidParameter into the global TipInfoMessage so
@@ -23,16 +24,29 @@ namespace
 {
     bool RejectIfFrozen(entt::entity player, const char* gmRpcName)
     {
-        if (!PlayerLifecycleSystem::IsCrossZoneFrozen(player))
+        if (PlayerLifecycleSystem::IsCrossZoneFrozen(player))
         {
-            return false;
+            LOG_WARN << gmRpcName << " rejected: player frozen for cross-zone migration. "
+                     << "entity=" << entt::to_integral(player);
+            tlsEcs.globalRegistry
+                .get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity())
+                .set_id(kInvalidParameter);
+            return true;
         }
-        LOG_WARN << gmRpcName << " rejected: player frozen for cross-zone migration. "
-                 << "entity=" << entt::to_integral(player);
-        tlsEcs.globalRegistry
-            .get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity())
-            .set_id(kInvalidParameter);
-        return true;
+        // 回合制战斗在途同样拒绝:GM 回档 / 回收会改背包与属性,而战斗快照已经发出去了。
+        // 此刻扣掉玩家的药,结算按账本扣除时就会"不足按 0",那几瓶药等于白喝;
+        // 回档改属性则会被结算的 HP/MP 终值整体覆盖。
+        // 这些入口今天还是 TODO 桩,闸先立在这里,免得实现 P1-B 时漏掉。
+        if (tlsEcs.actorRegistry.any_of<InBattleComp>(player))
+        {
+            LOG_WARN << gmRpcName << " rejected: player is in a turn battle. "
+                     << "entity=" << entt::to_integral(player);
+            tlsEcs.globalRegistry
+                .get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity())
+                .set_id(kInvalidParameter);
+            return true;
+        }
+        return false;
     }
 }
 ///<<< END WRITING YOUR CODE

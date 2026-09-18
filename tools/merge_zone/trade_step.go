@@ -52,7 +52,6 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"regexp"
 )
 
 const (
@@ -67,13 +66,9 @@ const (
 	tradeMarketZoneColumn = "market_zone"
 )
 
-// tradeSchemaNamePattern:MySQL 未加引号标识符里最保守的子集,长度上限 64 同 MySQL。
-var tradeSchemaNamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
-
-// validateTradeSchemaName 在任何 SQL 之前验库名形状。库名直接拼进语句,
-// 这是这条拼接唯一的注入防线。
+// validateTradeSchemaName 在任何 SQL 之前验库名形状(形状定义见 player_rows.go 的 schemaNamePattern)。
 func validateTradeSchemaName(schema string) error {
-	if !tradeSchemaNamePattern.MatchString(schema) {
+	if !schemaNamePattern.MatchString(schema) {
 		return fmt.Errorf("-trade-schema %q is not a plain identifier ([A-Za-z0-9_], 1-64 chars)", schema)
 	}
 	return nil

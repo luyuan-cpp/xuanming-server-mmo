@@ -49,7 +49,7 @@
 // (BuildAssignment),开局 / 观战接入时先推 BattleAssignedS2C 再推首帧。
 //
 // 配表指纹(cross-zone-matchmaking.md §10):CreateBattle 时把 request/players[i] 携带的
-// 指纹与本节点六张战斗表指纹比对,不一致按 game_config.yaml battle_table_fingerprint_mode
+// 指纹与本节点七张战斗表指纹比对,不一致按 game_config.yaml battle_table_fingerprint_mode
 // (warn|enforce|off,默认 warn)处理。
 class BattleClientEdge;
 
@@ -205,6 +205,18 @@ private:
                       ::eSpectateEndReason spectateReason);
 
     void BroadcastTurnResult(const BattleRoom &room, const ::TurnResultS2C &result);
+
+    // 按收信人裁剪战斗状态(G7)。引擎出的 BuildStateSnapshot 是"全知"版本:
+    // 含全员 skill_cooldown_rounds,直接广播等于把对手每个技能还差几回合明着告诉玩家。
+    // viewerPlayerId = 0 表示观众视角(全员冷却都剔除)。
+    // 只动出站拷贝,不碰引擎状态,确定性与回放不受影响(宪法 §7 不变量 5)。
+    // 注意:buff 保留不裁 —— 客户端名牌要画 buff 图标,且"谁被控了几回合"本就写在
+    // 回合事件流里,裁了只是让自己人也看不见。
+    void RedactStateForViewer(::BattleStateS2C &state, uint64_t viewerPlayerId) const;
+
+    // 填入收信人本人的剩余战斗道具(观众与他人收到的恒为空)。
+    void FillSelfItems(const BattleRoom &room, ::BattleStateS2C &state,
+                       uint64_t viewerPlayerId) const;
 
     // 观战首帧:全量快照 + 房间 timer 回填的行动截止 + 当前观众数。
     void PushSpectateState(const BattleRoom &room, uint64_t observerId,

@@ -64,9 +64,11 @@
 | 库 | 内容 | 谁读 |
 |---|---|---|
 | `zone_<N>_db` | `player_database` 等**按 zone 分的玩家主数据表**(表清单由 `generated/data/mysql_database_table_list.json` 发现) | go/db |
-| 全局库(DSN 里的 schema,默认 `mmorpg`) | `guild` / `guild_member` / `friend` / `friend_request` | go/guild、go/friend |
+| 全局库(DSN 里的 schema,默认 `mmorpg`) | `friend` / `friend_request` | go/friend |
+| `mmorpg_guild`(帮会独占库,`-guild-schema`,默认 `mmorpg_guild`) | `guild` / `guild_member` / `guild_player_state` / `guild_application` | go/guild |
+| `mmorpg_trade`(聚宝斋独占库,`-trade-schema`,默认 `mmorpg_trade`) | `trade_listing` | go/trade |
 
-一个 `-MergeMySqlDsn` 必须**同时**够得着这两类库(工具会写 `zone_<src>_db.x → zone_<dst>_db.x` 的全限定名)。
+一个 `-MergeMySqlDsn` 必须**同时**够得着这几类库(工具按「库名.表名」访问帮会与聚宝斋的表,并写 `zone_<src>_db.x → zone_<dst>_db.x` 的全限定名)。帮会 / 聚宝斋的库名由各自服务的配置校验钉死,`-guild-schema` / `-trade-schema` 只为隔离测试留口子;库或表不在,合服**在任何写之前拒绝**(报错会点名迁移命令与对应的跳过开关),不会静默漏搬。
 
 ### 2.3 Kafka
 

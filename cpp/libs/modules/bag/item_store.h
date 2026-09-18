@@ -110,11 +110,23 @@ public:
     void ApplyStackFill(const std::vector<StackFill> &fillPlan,
                         std::vector<Guid> *writtenGuidsOut);
 
+    // 一条"被抽走"的回执:哪个实例、抽走多少。实例本身仍在(可能 size==0)。
+    // 与 StackFill 是一对:入包记灌进了哪些堆,扣除记抽了哪些堆。
+    struct StackDrain
+    {
+        Guid guid{kInvalidGuid};
+        uint32_t amount{0};
+    };
+
     // 从某个 config 的若干堆叠里抽走 count 个单位。数量可能分散在多堆,
     // 逐堆抽到够为止。被抽光的堆 size 变 0 但**实例保留**(槽位也就跟着留着),
     // 后续并堆可以再填回去 —— 这与 Erase(guid) 的"彻底销毁"是两回事。
-    // 前置条件:调用方已用 HasAll 确认库存足够,这里不再校验。
-    void DrainStacks(uint32_t configId, uint32_t count);
+    //
+    // 库存不足时按实际持有夹紧(本来就是逐堆 min(需求, 库存)),**返回值即实扣量**;
+    // 调用方要"不够就整体失败"的语义,必须自己先 HasAll(Bag::RemoveItems 就是这么做的)。
+    // drainedOut(可为 nullptr)按抽取顺序收集 (guid, 抽走量),size==0 的僵尸堆不进回执。
+    uint32_t DrainStacks(uint32_t configId, uint32_t count,
+                         std::vector<StackDrain> *drainedOut = nullptr);
 
     // 存不存在"同一 config 有 >= 2 个未满堆"。有就说明还能合并出更少的实例。
     [[nodiscard]] bool HasMergeablePartials() const;

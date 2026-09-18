@@ -57,7 +57,7 @@ func tipErr(id uint32, msg string) *base.TipInfoMessage {
 // 客户端来源(带 gate 会话)的请求:身份取会话里的 player_id,zone 取 data_service 的
 // 归属 zone,请求体里的 player_id / zone_id 一律不信。帮会按 zone 隔离 —— 只能在自己的区
 // 建帮,只看得见、加得进自己区的帮,只看自己区的榜;别区的帮会对客户端表现为「不存在」。
-// 帮名仍全局唯一(uk_name):合服时两区的帮会直接合并,不需要改名。
+// 帮名仍全局唯一(uk_guild,按 name_norm):合服时两区的帮会直接合并,不需要改名。
 //
 // 内部调用(无会话:GM、运维工具、其它服务)沿用请求体字段,行为与接入客户端之前一致。
 
@@ -112,6 +112,11 @@ func normalizeGuildName(raw string) (string, bool) {
 			return "", false
 		}
 	}
+	// name_norm 必须可生成且不超长,否则唯一键覆盖不到整个值
+	// (docs/design/guild-phase2/01-storage.md §6.3)。失败沿用 kGuildNameInvalid,不新增 tip。
+	if _, ok := data.GuildNameNorm(name); !ok {
+		return "", false
+	}
 	return name, true
 }
 
@@ -148,7 +153,7 @@ func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest
 		return &pb.CreateGuildResponse{ErrorMessage: tipErr(constants.ErrAlreadyInGuild, "already in a guild")}, nil
 	}
 
-	now := time.Now().UnixMilli()
+	now := uint64(time.Now().UnixMilli())
 	guildID, tip := l.mintGuildID(ctx, who.playerID)
 	if tip != nil {
 		return &pb.CreateGuildResponse{ErrorMessage: tip}, nil
@@ -589,7 +594,8 @@ func (l *GuildLogic) toProtoGuild(ctx context.Context, g *data.GuildData) *pb.Gu
 		LeaderId:     g.LeaderID,
 		Level:        g.Level,
 		Announcement: g.Announcement,
-		CreateTimeMs: g.CreateTimeMs,
+		// guild.proto 仍是 int64(B2 随客户端重生成统一改 uint64);毫秒时间戳远小于 2^63,转换无损。
+		CreateTimeMs: int64(g.CreateTimeMs),
 		MaxMembers:   g.MaxMembers,
 		ZoneId:       g.ZoneID,
 	}
@@ -597,9 +603,10 @@ func (l *GuildLogic) toProtoGuild(ctx context.Context, g *data.GuildData) *pb.Gu
 		info.Members = append(info.Members, &pb.GuildMember{
 			PlayerId:     m.PlayerID,
 			Role:         m.Role,
-			JoinTimeMs:   m.JoinTimeMs,
-			LastActiveMs: m.LastActiveMs,
-			Contribution: m.Contribution,
+			JoinTimeMs:   int64(m.JoinTimeMs),
+			LastActiveMs: int64(m.LastActiveMs),
+			// B2 把 GuildMember.contribution 拆成 total / balance 之前,这里展示累计帮贡。
+			Contribution: m.ContributionTotal,
 			Online:       onlineMap[m.PlayerID],
 		})
 	}

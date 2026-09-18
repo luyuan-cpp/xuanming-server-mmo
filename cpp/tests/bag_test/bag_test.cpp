@@ -3808,6 +3808,80 @@ TEST(BagSegmentNotReadyTest, VectorBatchNeverEvictsWhenSegmentIsUnavailable)
     EXPECT_TRUE(bag.IsLayerConsistent());
 }
 
+// ---------------------------------------------------------------------------
+// 2026-09-17 G3:按实际持有夹紧扣除 + 被扣实例回执
+// (docs/design/turn-battle-gap-closure.md;战斗结算的道具消耗走这条路径)
+// ---------------------------------------------------------------------------
+
+TEST(BagTest, RemoveItemsClampedTakesWhatIsThereAndReportsDrainedInstances)
+{
+    Bag bag;
+    bag.ExpandCapacity(20);
+    const auto maxStack10 = MaxStack(kStack10);
+    // 两堆:一满堆 + 一个零头,跨堆抽取才是真实形状
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, maxStack10)));
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, 3)));
+    ASSERT_EQ(maxStack10 + 3, bag.GetTotalItemCount(kStack10));
+
+    // 请求量大于持有量:不失败,按实际持有扣干净
+    std::vector<DrainedInstance> drained;
+    ItemCountMap toRemove{{kStack10, maxStack10 + 100}};
+    EXPECT_EQ(kSuccess, bag.RemoveItemsClamped(toRemove, &drained));
+    EXPECT_EQ(0u, bag.GetTotalItemCount(kStack10));
+
+    uint32_t drainedTotal = 0;
+    for (const auto& entry : drained)
+    {
+        EXPECT_EQ(kStack10, entry.configId);
+        EXPECT_NE(kInvalidGuid, entry.guid);
+        EXPECT_GT(entry.amount, 0u);  // 僵尸堆不进回执
+        drainedTotal += entry.amount;
+    }
+    EXPECT_EQ(maxStack10 + 3, drainedTotal);  // 回执总量 = 实扣量,调用方据此判断是否夹紧
+    EXPECT_TRUE(bag.IsLayerConsistent());
+}
+
+TEST(BagTest, RemoveItemsStillAllOrNothingAndCanReportDrained)
+{
+    Bag bag;
+    bag.ExpandCapacity(20);
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, 5)));
+
+    // 全或无语义不变:不够就整体失败,一个都不扣
+    std::vector<DrainedInstance> drained;
+    ItemCountMap tooMany{{kStack10, 6}};
+    EXPECT_EQ(kBagInsufficientItems, bag.RemoveItems(tooMany, &drained));
+    EXPECT_EQ(5u, bag.GetTotalItemCount(kStack10));
+    EXPECT_TRUE(drained.empty());
+
+    // 够扣:回执照给
+    ItemCountMap ok{{kStack10, 2}};
+    EXPECT_EQ(kSuccess, bag.RemoveItems(ok, &drained));
+    EXPECT_EQ(3u, bag.GetTotalItemCount(kStack10));
+    ASSERT_EQ(1u, drained.size());
+    EXPECT_EQ(2u, drained[0].amount);
+}
+
+TEST(BagTest, RemoveItemsClampedOnMissingConfigIsNoopNotFailure)
+{
+    Bag bag;
+    bag.ExpandCapacity(20);
+    EXPECT_EQ(kSuccess, bag.AddItem(MakeItem(kStack10, 2)));
+
+    std::vector<DrainedInstance> drained;
+    // 玩家身上压根没有这种物品(战斗中途被别处扣光就是这个形状):按 0 处理
+    ItemCountMap toRemove{{kStack11, 5}};
+    EXPECT_EQ(kSuccess, bag.RemoveItemsClamped(toRemove, &drained));
+    EXPECT_TRUE(drained.empty());
+    EXPECT_EQ(2u, bag.GetTotalItemCount(kStack10));
+
+    // 数量 0 的条目直接跳过,不产生 amount=0 的噪声回执
+    ItemCountMap zero{{kStack10, 0}};
+    EXPECT_EQ(kSuccess, bag.RemoveItemsClamped(zero, &drained));
+    EXPECT_TRUE(drained.empty());
+    EXPECT_EQ(2u, bag.GetTotalItemCount(kStack10));
+}
+
 int main(int argc, char **argv)
 {
     if (!test_config::FindAndLoadTestConfig(argc, argv))

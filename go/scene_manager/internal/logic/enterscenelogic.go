@@ -23,9 +23,11 @@ import (
 )
 
 type EnterSceneLogic struct {
-	ctx               context.Context
-	svcCtx            *svc.ServiceContext
-	assignGateForZone func(context.Context, *svc.ServiceContext, uint32) (*scene_manager.RedirectToGateInfo, error)
+	ctx    context.Context
+	svcCtx *svc.ServiceContext
+	// assignGateForZone(ctx, svcCtx, targetZoneId, playerId):挑目标 zone 的 gate 并签
+	// 绑定持票者的票据。字段化只为单测替换,真实实现是 AssignGateForZone。
+	assignGateForZone func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error)
 	logx.Logger
 }
 
@@ -48,18 +50,6 @@ if redis.call("GET", KEYS[1]) == ARGV[1] then
     return 1
 end
 return 0
-`
-
-const luaRestorePlayerLocationIfValue = `
-if redis.call("GET", KEYS[1]) ~= ARGV[1] then
-    return 0
-end
-if ARGV[2] == "" then
-    redis.call("DEL", KEYS[1])
-else
-    redis.call("SET", KEYS[1], ARGV[2])
-end
-return 1
 `
 
 func NewEnterSceneLogic(ctx context.Context, svcCtx *svc.ServiceContext) *EnterSceneLogic {
@@ -246,8 +236,9 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 合服 / 下线 zone 留下的陈旧 location:旧 zone 里已经没有任何活着的场景
 	// 节点,就不存在「老节点还在存盘」这件事,下面两道交接门禁守护的对象已经
 	// 消失。此时把它当作没有位置记录处理,否则玩家从两条腿(经源区 Gate 走
-	// 重定向、经目标区 Gate 直接落点)都会被 ErrUnsafeCrossNodeHandoff 永久
-	// 挡在门外。判定规则见 playerLocationOwnerGone;拿不准一律沿用原拒绝。
+	// 重定向、经目标区 Gate 直接落点)都会被换手门(ErrHandoffPending:死掉的
+	// 源永远写不出落盘标记)永久挡在门外。判定规则见 playerLocationOwnerGone;
+	// 拿不准一律沿用原拒绝。
 	if currentLoc != nil && l.playerLocationOwnerGone(currentLoc, currentZoneID) {
 		l.Logger.Infof("忽略已下线 zone 的陈旧玩家位置: player=%d stale_zone=%d stale_node=%s stale_scene=%d gate_zone=%d target_zone=%d",
 			in.PlayerId, currentZoneID, currentLoc.GetNodeId(), currentLoc.GetSceneId(), in.GateZoneId, targetZoneId)
@@ -263,6 +254,12 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	if targetZoneId == 0 {
 		targetZoneId = in.GateZoneId
 	}
+	// 「等待落点」= 跨 zone 交接的第一条腿已经放行(location 只剩目标 zone 与
+	// 新 epoch,node_id 为空),目标 zone 还没落点。此刻**没有任何节点持有该玩家**:
+	// 源 scene 在收到重定向应答后已销毁实体,目标节点还没被派到。两道换手门守护
+	// 的对象(可能仍在写的旧持有者)不存在,所以第二条腿的落点、以及再次跨 zone
+	// 重定向都直接放行,只按常规铸造 epoch + CAS 落点。
+	awaitingPlacement := currentLoc != nil && currentLoc.GetNodeId() == "" && currentLoc.GetOwnerEpoch() != 0
 
 	// 2. CROSS-ZONE CHECK —— 必须在解析目标场景**之前**决定。
 	//    Gate 不在目标 zone 时,本进程只负责把玩家送到目标 zone 的 Gate;目标
@@ -272,21 +269,16 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//    玩家登录卡死的路径。这里不做任何预占,所以也没有需要成对释放的人数。
 	crossZoneRedirect := in.GateZoneId != 0 && targetZoneId != 0 && in.GateZoneId != targetZoneId
 	if crossZoneRedirect {
-		// 已有位置记录(且其节点仍可能在写)的跨区重定向会让后续请求落到另一
-		// 节点,而 ReleasePlayer 只保证存盘任务入队、不保证旧节点数据已持久化;
-		// 没有持久化交接屏障之前不能假装重定向成功。陈旧位置已在上面被过滤。
-		if currentLoc != nil && !l.svcCtx.Config.AllowUnsafeCrossNodeHandoff {
-			metrics.ObserveEnterSceneRejected(targetZoneId, "unsafe_handoff")
-			l.Logger.Errorf("拒绝不安全的跨区重定向: player=%d old_scene=%d old_node=%s old_zone=%d gate_zone=%d target_zone=%d",
-				in.PlayerId, currentLoc.GetSceneId(), currentLoc.GetNodeId(), currentZoneID, in.GateZoneId, targetZoneId)
-			return errResp(constants.ErrUnsafeCrossNodeHandoff,
-				"跨节点或已有位置的跨区切换缺少持久化交接屏障，已拒绝且未修改玩家状态"), nil
+		// 已有位置记录 = 某个节点可能仍持有并在写这名玩家。放行的唯一凭据是
+		// 源 scene 已为当前 epoch 写出「已落盘」标记(CZ-4 第二道门);陈旧位置
+		// 已在上面被过滤,等待落点的位置没有持有者,两者都不用过这道门。
+		if currentLoc != nil && !awaitingPlacement {
+			if resp := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, "跨区重定向"); resp != nil {
+				return resp, nil
+			}
 		}
 		crossStart := time.Now()
-		// Redirect 只通知客户端换 Gate，并没有提交新的 PlayerLocation；旧场景
-		// 人数必须保留到后续 EnterScene 真正完成，不能在这里提前扣减。这样
-		// broker 失败也天然没有旧场景人数需要补偿。
-		resp, redirErr := l.handleCrossZoneRedirect(in, targetZoneId)
+		resp, redirErr := l.handleCrossZoneRedirect(in, targetZoneId, currentLoc, currentLocRaw, currentZoneID)
 		metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageCrossZone, time.Since(crossStart))
 		return resp, redirErr
 	}
@@ -313,10 +305,10 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		}
 	}
 
-	// 在任何旧场景扣减、ReleasePlayer、位置写入或 Gate 路由之前关闭不安全的
-	// 交接窗口。当前 ReleasePlayer 只保证存盘任务入队，并不保证旧节点的数据
-	// 已持久化；因此跨节点进入新场景会读到陈旧快照。(已有位置记录的跨区
-	// 重定向在第 2 步已经用同一门禁挡掉,走到这里的都是同 zone 落点。)
+	// 在任何旧场景扣减、ReleasePlayer、位置写入或 Gate 路由之前过换手门:跨节点
+	// 进入新场景时旧节点可能仍在存盘,新节点会读到陈旧快照。放行凭据是源 scene
+	// 为当前 epoch 写出的「已落盘」标记(CZ-4 第二道门,见 requireHandoffCommitted);
+	// 已有位置记录的跨区重定向在第 2 步过的是同一道门,走到这里的都是同 zone 落点。
 	//
 	// NodeId 只在 zone 内唯一，不能只比较字符串。旧 zone 的 node "10" 与目标
 	// zone 的 node "10" 仍是两个进程；若把它当同节点，会跳过 ReleasePlayer 并
@@ -324,24 +316,37 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	//   1. scene_id/node_id 完全相同，且两边 zone 明确相同；
 	//   2. 两边 zone 明确相同，且 node_id 相同的同节点切场景。
 	// zone=0 的旧位置无法证明物理节点身份，按 fail-closed 处理，不回退到
-	// 只比较 node_id 的歧义旧语义。
+	// 只比较 node_id 的歧义旧语义。等待落点的位置(node_id 为空)没有持有者,
+	// 不算跨节点交接。
 	samePlacement := currentLoc != nil && currentLoc.SceneId == sceneId && currentLoc.NodeId == nodeId &&
 		currentZoneID != 0 && targetZoneId != 0 && currentZoneID == targetZoneId
 	samePhysicalNode := currentLoc != nil && currentLoc.NodeId != "" && currentLoc.NodeId == nodeId &&
 		currentZoneID != 0 && targetZoneId != 0 && currentZoneID == targetZoneId
-	crossNodeHandoff := currentLoc != nil && !samePlacement && !samePhysicalNode
-	if !l.svcCtx.Config.AllowUnsafeCrossNodeHandoff && crossNodeHandoff {
-		// 自动选择大世界频道会在 resolveSceneForEnter 内原子预占人数；拒绝
-		// 请求时必须成对释放，不能让失败请求污染调度负载。
-		if reserved {
-			DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+	crossNodeHandoff := currentLoc != nil && !awaitingPlacement && !samePlacement && !samePhysicalNode
+	if crossNodeHandoff {
+		if resp := l.requireHandoffCommitted(in, currentLoc, currentZoneID, targetZoneId, "场景交接"); resp != nil {
+			// 自动选择大世界频道会在 resolveSceneForEnter 内原子预占人数；拒绝
+			// 请求时必须成对释放，不能让失败请求污染调度负载。
+			if reserved {
+				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+			}
+			return resp, nil
 		}
-		metrics.ObserveEnterSceneRejected(targetZoneId, "unsafe_handoff")
-		l.Logger.Errorf("拒绝不安全的场景交接: player=%d old_scene=%d old_node=%s old_zone=%d target_scene=%d target_node=%s target_zone=%d",
-			in.PlayerId, currentLoc.GetSceneId(), currentLoc.GetNodeId(), currentLoc.GetZoneId(),
-			sceneId, nodeId, targetZoneId)
-		return errResp(constants.ErrUnsafeCrossNodeHandoff,
-			"跨节点或已有位置的跨区切换缺少持久化交接屏障，已拒绝且未修改玩家状态"), nil
+	}
+
+	// 3b. 归属 zone:随 RoutePlayerEvent 下发,scene 节点据此选存盘 topic(CZ-3)。
+	//     只有真的要发路由事件时才查;查不到(data_service 不可用)按可重试拒绝,
+	//     不能带着 home_zone_id=0 把人派下去让节点落进程 zone 库。
+	var homeZoneID uint32
+	if in.GateId != "" {
+		hz, hzResp := l.resolveHomeZone(in)
+		if hzResp != nil {
+			if reserved {
+				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+			}
+			return hzResp, nil
+		}
+		homeZoneID = hz
 	}
 
 	// 4. IDEMPOTENCY CHECK: Is player already in the same scene on the same node?
@@ -354,7 +359,14 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 			}
 			l.Logger.Infof("Player %d already in scene %d, sending route to gate (reconnect)", in.PlayerId, sceneId)
 			if in.GateId != "" {
-				if err := l.routePlayerToGate(in, nodeId, sceneId); err != nil {
+				// 同一落点重连**不铸造** epoch:归属没有变,持有节点手里的缓存值
+				// 必须继续等于 Redis 当前值。原样把当前值放进路由事件,节点若据此
+				// 重建实体(实体已被 AFK 清掉的重连)拿到的也是同一代。
+				epoch, epochErr := currentOwnerEpoch(l.svcCtx, in.PlayerId)
+				if epochErr != nil {
+					return errResp(constants.ErrRedis, fmt.Sprintf("读取玩家归属 epoch 失败: %v", epochErr)), nil
+				}
+				if err := l.routePlayerToGate(in, nodeId, sceneId, homeZoneID, epoch); err != nil {
 					l.Logger.Errorf("Failed to route reconnecting player %d to gate: %v", in.PlayerId, err)
 					return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route player to gate failed: %v", err)), nil
 				}
@@ -396,17 +408,18 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// load, cascading into 71k robot-side scene-ready timeouts. AFK cleanup on
 	// the old node remains the final fallback.
 	//
-	// ⚠ 此分支在默认配置下不可达：上面的安全门禁已拒绝跨节点交接。只有
-	// 开发环境显式打开 AllowUnsafeCrossNodeHandoff 才会进入旧流程；此时
-	// release 与新节点 load 之间仍没有持久化屏障，新节点可能读到旧节点尚未
-	// 落盘的 stale 状态。同步等待也堵不住：C++ ReleasePlayer RPC 只保证
+	// 走到这里的跨节点交接要么已经过了「源已落盘」标记门,要么是 dev 旁路
+	// (AllowUnsafeCrossNodeHandoff)。前者源节点已经存盘、只等这条应答销毁实体,
+	// ReleasePlayer 是补一刀的幂等通知;后者 release 与新节点 load 之间仍没有
+	// 持久化屏障,新节点可能读到旧节点尚未落盘的 stale 状态 —— 这正是旁路只许
+	// 开发用的原因。同步等待也堵不住：C++ ReleasePlayer RPC 只保证
 	// HandleExitGameNode **入队**了存盘，不保证已落盘。
 	//
 	// 注意:db 写管道的 kafka key / applied-seq 只约束 db 服务自己消费到的
 	// 分表写入顺序；它既不等待旧 Scene 的 PlayerAllData Redis 写完成，也不会
 	// 重写新 Scene 实际加载的同一份 key，因此**不是**交接屏障或本窗口的兜底。
-	// 若未来要重新开放生产跨节点切换，仍需 per-player 交接 epoch（旧节点
-	// 落盘后写标记，新节点 load 前校验，未就绪则有界退避）的跨管道协议。
+	// 真正的兜底是下面铸造的 owner_epoch:旧节点迟到的写会被 C++ 存盘 Lua 与
+	// db 消费者按 epoch 拒掉。
 	if currentLoc != nil && currentLoc.NodeId != "" && !samePhysicalNode {
 		relStart := time.Now()
 		dispatchReleasePlayer(l.svcCtx, l.Logger, currentZoneID,
@@ -414,16 +427,24 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageReleaseDispatch, time.Since(relStart))
 	}
 
-	// 6. Update Player Location (Source of Truth)
+	// 6. Update Player Location (Source of Truth):铸造新 epoch + CAS 写 location,
+	//    一段 Lua 原子完成。CAS 失败 = 并发 EnterScene 抢先推进了归属,本次不发
+	//    路由(否则两个节点各拿一个 epoch、只有后者合法,前者白 load 一次)。
 	updStart := time.Now()
-	newLocRaw, updateErr := updatePlayerLocationWithRaw(l.svcCtx, in.PlayerId, sceneId, nodeId, targetZoneId)
+	placed, updateErr := placePlayerLocation(l.svcCtx, in.PlayerId, sceneId, nodeId, targetZoneId)
+	metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageUpdateLoc, time.Since(updStart))
 	if updateErr != nil {
-		metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageUpdateLoc, time.Since(updStart))
 		DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
+		if errors.Is(updateErr, errOwnerEpochConflict) {
+			metrics.ObserveEnterSceneRejected(targetZoneId, "epoch_conflict")
+			l.Logger.Errorf("归属 epoch 被并发 EnterScene 抢先推进,本次不发路由: player=%d target_scene=%d target_node=%s",
+				in.PlayerId, sceneId, nodeId)
+			return errResp(constants.ErrOwnerEpochConflict,
+				"concurrent EnterScene advanced the owner epoch; retry"), nil
+		}
 		l.Logger.Errorf("Failed to update player location: %v", updateErr)
 		return errResp(constants.ErrUpdateLocation, "Failed to update location"), nil
 	}
-	metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageUpdateLoc, time.Since(updStart))
 
 	// 6b. Decrement old scene instance count after the new reservation is
 	// committed so concurrent world-channel selection sees the in-flight enter.
@@ -435,9 +456,9 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// point: only after it succeeds may the response be cached as successful.
 	if in.GateId != "" {
 		routeStart := time.Now()
-		if err := l.routePlayerToGate(in, nodeId, sceneId); err != nil {
-			l.Logger.Errorf("Failed to route player %d to gate, rolling back location/counts: %v", in.PlayerId, err)
-			l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, newLocRaw,
+		if err := l.routePlayerToGate(in, nodeId, sceneId, homeZoneID, placed.epoch); err != nil {
+			l.Logger.Errorf("Failed to route player %d to gate, rolling back location/epoch/counts: %v", in.PlayerId, err)
+			l.rollbackEnterSceneAfterRouteFailure(in.PlayerId, currentLoc, currentLocRaw, placed,
 				currentZoneID, targetZoneId, sceneId)
 			metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageRouteGate, time.Since(routeStart))
 			return errResp(constants.ErrKafkaRoute, fmt.Sprintf("route player to gate failed: %v", err)), nil
@@ -447,15 +468,49 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		l.Logger.Infof("No GateID in EnterScene request for player %d", in.PlayerId)
 	}
 
-	l.Logger.Infof("Player %d entered scene %d on node %s (zone %d)", in.PlayerId, sceneId, nodeId, targetZoneId)
+	l.Logger.Infof("Player %d entered scene %d on node %s (zone %d, home_zone %d, owner_epoch %d)",
+		in.PlayerId, sceneId, nodeId, targetZoneId, homeZoneID, placed.epoch)
 	return &scene_manager.EnterSceneResponse{ErrorCode: 0}, nil
+}
+
+// requireHandoffCommitted 是 CZ-4 的第二道换手门:玩家已有位置记录、且本次要把
+// 他换到别的节点 / zone 时,源 scene 必须已经为**当前** owner_epoch 写出落盘标记
+// (player:{id}:handoff),否则拒绝。返回 nil 表示放行。
+//
+// 拒绝是可重试的瞬时状态(与 ErrSceneReentryBarrier 同款):源 scene 的
+// SavePlayerToRedis 落地回调之后才写标记,上游退避重试就会放行;它不改任何状态。
+// site 只进日志,不进指标 label(指标 reason 固定 "handoff_pending")。
+//
+// AllowUnsafeCrossNodeHandoff 是开发旁路:跳过标记要求,但 epoch 照样在后面的
+// 落点里铸造与 CAS —— 旁路只放宽"源已落盘"这一道,不放宽"谁是当前持有者"。
+func (l *EnterSceneLogic) requireHandoffCommitted(in *scene_manager.EnterSceneRequest, currentLoc *scene_manager.PlayerLocation,
+	currentZoneID, targetZoneId uint32, site string) *scene_manager.EnterSceneResponse {
+	if l.svcCtx.Config.AllowUnsafeCrossNodeHandoff {
+		l.Logger.Infof("[Handoff] dev 旁路 AllowUnsafeCrossNodeHandoff=true,跳过落盘标记要求(%s): player=%d old_scene=%d old_node=%s old_zone=%d target_zone=%d",
+			site, in.PlayerId, currentLoc.GetSceneId(), currentLoc.GetNodeId(), currentZoneID, targetZoneId)
+		return nil
+	}
+	verdict, err := checkHandoffCommitted(l.svcCtx, in.PlayerId)
+	if err != nil {
+		l.Logger.Errorf("[Handoff] %s 读交接状态失败,fail-closed 拒绝: player=%d err=%v", site, in.PlayerId, err)
+		return errResp(constants.ErrRedis, fmt.Sprintf("读取玩家交接状态失败，已拒绝: %v", err))
+	}
+	if verdict.committed {
+		return nil
+	}
+	metrics.ObserveEnterSceneRejected(targetZoneId, "handoff_pending")
+	l.Logger.Errorf("[Handoff] %s 拒绝:源 scene 尚未为当前归属代际写出落盘标记(可重试): player=%d owner_epoch=%d handoff=%q old_scene=%d old_node=%s old_zone=%d gate_zone=%d target_zone=%d",
+		site, in.PlayerId, verdict.epoch, verdict.marker, currentLoc.GetSceneId(), currentLoc.GetNodeId(),
+		currentZoneID, in.GateZoneId, targetZoneId)
+	return errResp(constants.ErrHandoffPending,
+		fmt.Sprintf("源场景尚未落盘(owner_epoch=%d 的交接标记未就绪)，请稍后重试；未修改玩家状态", verdict.epoch))
 }
 
 // playerLocationOwnerGone 判定 loc 记录的属主节点是否已经**不可能**再写这名
 // 玩家的数据 —— 只有这时才允许把这条位置记录当作不存在,绕过交接门禁。
 //
 // 三个条件全部成立才算「已消失」,任何一个拿不准都 fail-closed(返回 false,
-// 沿用今天的 ErrUnsafeCrossNodeHandoff 拒绝):
+// 沿用换手门的拒绝):
 //
 //  1. loc 所在 zone 的节点负载集 scene_nodes:zone:{z}:load 为空 —— 整个 zone
 //     没有任何活着的场景节点(合服后源区永久下线就是这个形态)。只看单个
@@ -493,28 +548,59 @@ func (l *EnterSceneLogic) playerLocationOwnerGone(loc *scene_manager.PlayerLocat
 	return true
 }
 
-// handleCrossZoneRedirect assigns a Gate in the target zone and returns redirect info.
-// It also sends a RedirectToGateEvent to the current Gate via Kafka so the Gate can
-// push the redirect to the client immediately.
-func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRequest, targetZoneId uint32) (*scene_manager.EnterSceneResponse, error) {
+// handleCrossZoneRedirect 是跨 zone 交接的第一条腿:挑目标 zone 的 Gate、签绑定
+// 持票者的票据、把归属推进到「等待落点」,再把 RedirectToGateEvent 推给当前 Gate。
+//
+// 顺序刻意是「先签票据(纯读 etcd,无副作用)→ 再提交 location → 最后发 Kafka」:
+// 签不出票据(目标 zone 没有 gate)时一个字节都不改;Kafka 失败时只有 location
+// 与 epoch 需要回滚。
+//
+// location 被**更新**成 {zone=目标, node_id="", scene_id=0, owner_epoch=N} 而不是删除
+// (CZ-5):这样崩溃遗留能被 Offline-Return 规则识别,第二条腿也能凭 node_id 为空
+// 知道「没有持有者」直接落点。源 scene 在收到本应答后销毁实体,所以从这一刻起
+// 玩家不再算在旧场景人数里;旧场景的 ReleasePlayer 不需要(源自己就是发起方)。
+func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRequest, targetZoneId uint32,
+	currentLoc *scene_manager.PlayerLocation, currentLocRaw string, currentZoneID uint32) (*scene_manager.EnterSceneResponse, error) {
 	l.Logger.Infof("Cross-zone detected: player %d gate_zone=%d target_zone=%d, redirecting",
 		in.PlayerId, in.GateZoneId, targetZoneId)
 
-	redirect, err := l.assignGateForZone(l.ctx, l.svcCtx, targetZoneId)
+	redirect, err := l.assignGateForZone(l.ctx, l.svcCtx, targetZoneId, in.PlayerId)
 	if err != nil {
 		l.Logger.Errorf("Cross-zone redirect failed for player %d: %v", in.PlayerId, err)
 		return errResp(constants.ErrNoAvailableNode, "no gate available in target zone"), nil
+	}
+
+	placed, placeErr := placePlayerLocation(l.svcCtx, in.PlayerId, 0, "", targetZoneId)
+	if placeErr != nil {
+		if errors.Is(placeErr, errOwnerEpochConflict) {
+			metrics.ObserveEnterSceneRejected(targetZoneId, "epoch_conflict")
+			l.Logger.Errorf("跨区放行时归属 epoch 被并发 EnterScene 抢先推进,本次不发重定向: player=%d target_zone=%d",
+				in.PlayerId, targetZoneId)
+			return errResp(constants.ErrOwnerEpochConflict,
+				"concurrent EnterScene advanced the owner epoch; retry"), nil
+		}
+		l.Logger.Errorf("跨区放行写入等待落点位置失败: player=%d target_zone=%d err=%v", in.PlayerId, targetZoneId, placeErr)
+		return errResp(constants.ErrUpdateLocation, "Failed to update location"), nil
+	}
+	if currentLoc != nil && currentLoc.SceneId != 0 {
+		DecrInstancePlayerCount(l.svcCtx, currentZoneID, currentLoc.SceneId)
 	}
 
 	// Redirect token 只有 broker ACK 后才能作为成功响应缓存，否则相同
 	// request_id 会永久重放一份客户端从未收到的假成功。
 	if in.GateId != "" {
 		if err := l.sendRedirectToGate(in, redirect); err != nil {
-			l.Logger.Errorf("Failed to push redirect to gate: %v", err)
+			l.Logger.Errorf("Failed to push redirect to gate, rolling back location/epoch: %v", err)
+			if rollbackPlayerPlacement(l.svcCtx, l.Logger, in.PlayerId, placed, currentLocRaw,
+				rollbackEpochFor(currentLoc, placed.epoch)) && currentLoc != nil && currentLoc.SceneId != 0 {
+				IncrInstancePlayerCount(l.svcCtx, currentZoneID, currentLoc.SceneId)
+			}
 			return errResp(constants.ErrKafkaRoute, fmt.Sprintf("redirect to gate failed: %v", err)), nil
 		}
 	}
 
+	l.Logger.Infof("Cross-zone handoff released: player=%d target_zone=%d owner_epoch=%d (awaiting placement)",
+		in.PlayerId, targetZoneId, placed.epoch)
 	return &scene_manager.EnterSceneResponse{
 		ErrorCode: 0,
 		Redirect:  redirect,
@@ -524,15 +610,12 @@ func (l *EnterSceneLogic) handleCrossZoneRedirect(in *scene_manager.EnterSceneRe
 // rollbackEnterSceneAfterRouteFailure restores the state visible before this
 // request. Redis operations are best-effort because the route failure is
 // already the primary error; every rollback failure is logged for repair.
-func (l *EnterSceneLogic) rollbackEnterSceneAfterRouteFailure(playerID uint64, old *scene_manager.PlayerLocation, oldRaw, newRaw string, oldZoneID, newZoneID uint32, newSceneID uint64) {
-	result, err := l.svcCtx.Redis.Eval(luaRestorePlayerLocationIfValue,
-		[]string{getPlayerLocationKey(playerID)}, newRaw, oldRaw)
-	if err != nil {
-		l.Logger.Errorf("route 回滚玩家位置 CAS 失败: player=%d err=%v", playerID, err)
-		return
-	}
-	if fmt.Sprint(result) != "1" {
-		l.Logger.Errorf("route 回滚检测到玩家位置已被并发请求推进，跳过旧状态覆盖与人数回滚: player=%d", playerID)
+//
+// location 与 owner_epoch 一起退回(理由见 luaRollbackPlayerPlacement):路由没发
+// 出去,目标节点不会拿到新 epoch,而旧节点仍持有玩家并缓存着旧 epoch。
+func (l *EnterSceneLogic) rollbackEnterSceneAfterRouteFailure(playerID uint64, old *scene_manager.PlayerLocation, oldRaw string,
+	placed placedLocation, oldZoneID, newZoneID uint32, newSceneID uint64) {
+	if !rollbackPlayerPlacement(l.svcCtx, l.Logger, playerID, placed, oldRaw, rollbackEpochFor(old, placed.epoch)) {
 		return
 	}
 
@@ -716,7 +799,12 @@ func (l *EnterSceneLogic) resolveSceneForEnter(sceneId uint64, sceneConfId uint6
 }
 
 // routePlayerToGate builds a GateCommand and pushes it to the gate's Kafka topic.
-func (l *EnterSceneLogic) routePlayerToGate(in *scene_manager.EnterSceneRequest, nodeId string, sceneId uint64) error {
+//
+// homeZoneID 与 ownerEpoch 必须随事件走,不能让 C++ 节点自己去 Redis / data_service
+// 读:两次改派挨得近时,先派的节点若在后一次推进之后才读,会读到后一次的值并与
+// 后派的节点一样自认为最新 —— 双主。事件里带的值才是「这一次路由决策」的值。
+func (l *EnterSceneLogic) routePlayerToGate(in *scene_manager.EnterSceneRequest, nodeId string, sceneId uint64,
+	homeZoneID uint32, ownerEpoch uint64) error {
 	targetNodeId, err := strconv.ParseUint(nodeId, 10, 32)
 	if err != nil {
 		return fmt.Errorf("invalid scene node id %q: %w", nodeId, err)
@@ -731,6 +819,8 @@ func (l *EnterSceneLogic) routePlayerToGate(in *scene_manager.EnterSceneRequest,
 		TargetNodeId: uint32(targetNodeId),
 		SceneId:      sceneId,
 		PlayerId:     in.PlayerId,
+		HomeZoneId:   homeZoneID,
+		OwnerEpoch:   ownerEpoch,
 	}
 	payload, err := proto.Marshal(event)
 	if err != nil {
@@ -761,7 +851,7 @@ func (l *EnterSceneLogic) routePlayerToGate(in *scene_manager.EnterSceneRequest,
 		return fmt.Errorf("push to Kafka topic %s partition %d: %w", msg.Topic, msg.Partition, err)
 	}
 
-	l.Logger.Infof("Pushed RoutePlayer to Kafka %s/%d for player %d (gate %s) -> node %s",
-		msg.Topic, msg.Partition, in.PlayerId, in.GateId, nodeId)
+	l.Logger.Infof("Pushed RoutePlayer to Kafka %s/%d for player %d (gate %s) -> node %s home_zone=%d owner_epoch=%d",
+		msg.Topic, msg.Partition, in.PlayerId, in.GateId, nodeId, homeZoneID, ownerEpoch)
 	return nil
 }

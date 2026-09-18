@@ -8,8 +8,9 @@
     retention / make_release / release_preflight 全靠它们;这里一旦放水,下游脚本的校验全是摆设。
 
     全部在进程内 dot-source 调用,只读写本测试自建的临时目录,不依赖 docker / 网络 / git 远端。
-    唯一碰到临时目录之外的是"默认制品根"用例:它会在 <仓库父目录>/artifacts 不存在时临时创建,
-    用例结束若该目录仍为空就删掉,原本存在的目录不动。
+    "默认制品根"用例只用 -MustExist 验证 <仓库父目录>/artifacts 的推算,不创建该目录:
+    以非 root 用户在容器里跑时仓库父目录可能是 /,创建会因权限失败;开发机上临时建出空根
+    还会让同时运行的 fetch / retention 把"制品根不存在"报成"制品不存在"。
 
     负向用例一律断言错误文本,不只断"抛了异常"。
 
@@ -108,23 +109,23 @@ try {
         finally { $env:MMORPG_ARTIFACT_ROOT = $savedArtifactRoot }
     }
 
-    Test-Case '制品根:两者都没有时默认 <仓库父目录>/artifacts(按脚本位置推算,不在仓库内)' {
+    Test-Case '制品根:两者都没有时默认 <仓库父目录>/artifacts(按脚本位置推算,不在仓库内;-MustExist 验证,不创建目录)' {
         $expected = Join-Path (Split-Path -Parent $script:RepoRoot) 'artifacts'
-        $existedBefore = [System.IO.Directory]::Exists($expected)
+        $cmp = if ($IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
+        Assert-True -Condition (-not $expected.StartsWith($script:RepoRoot + [System.IO.Path]::DirectorySeparatorChar, $cmp)) -Because '默认制品根不得落在仓库内(GB 级 tar 会被 git add 带走)'
         try {
             $env:MMORPG_ARTIFACT_ROOT = $null
-            $got = Get-ArtifactRoot
-            Assert-True -Condition (Test-SamePath $got $expected) -Because "默认制品根应为 $expected(实际 $got)"
-            $cmp = if ($IsWindows) { [System.StringComparison]::OrdinalIgnoreCase } else { [System.StringComparison]::Ordinal }
-            Assert-True -Condition (-not $got.StartsWith($script:RepoRoot + [System.IO.Path]::DirectorySeparatorChar, $cmp)) -Because '默认制品根不得落在仓库内(GB 级 tar 会被 git add 带走)'
-        }
-        finally {
-            $env:MMORPG_ARTIFACT_ROOT = $savedArtifactRoot
-            # 非递归删除:目录非空(期间有别的发布写进去)时 Directory.Delete 直接失败,绝不误删制品
-            if (-not $existedBefore -and [System.IO.Directory]::Exists($expected)) {
-                try { [System.IO.Directory]::Delete($expected, $false) } catch { }
+            if ([System.IO.Directory]::Exists($expected)) {
+                $got = Get-ArtifactRoot -MustExist
+                Assert-True -Condition (Test-SamePath $got $expected) -Because "默认制品根应为 $expected(实际 $got)"
+            } else {
+                # "不存在时会创建"的语义由 -Override 指向临时目录的用例覆盖,这里只验证推算出的路径
+                $msg = Get-ThrownMessage { Get-ArtifactRoot -MustExist }
+                Assert-Match -Text $msg -Pattern ('制品根不存在:' + [regex]::Escape($expected) + '(') -Because "默认制品根应推算为 $expected,错误文本应原样报出该路径"
+                Assert-True -Condition (-not [System.IO.Directory]::Exists($expected)) -Because '-MustExist 不得创建默认制品根'
             }
         }
+        finally { $env:MMORPG_ARTIFACT_ROOT = $savedArtifactRoot }
     }
 
     Test-Case '两轨分仓:snapshot -> <root>/snapshots,release -> <root>/releases' {
@@ -349,12 +350,49 @@ try {
         Assert-Match -Text $msg1 -Pattern '版本号非法' -Because '指针版本号必须是单个目录名'
         $msg2 = Get-ThrownMessage { Set-LatestPointer -ChannelRoot $root -Kind images -Version 'g0123456789ab' }
         Assert-Match -Text $msg2 -Pattern 'ChannelRoot 必须是' -Because '直接传制品根会写出无法归属轨道的指针'
+        $msg3 = Get-ThrownMessage { Set-LatestPointer -ChannelRoot $snapRoot -Kind images -Version "g0123456789ab`n" }
+        Assert-Match -Text $msg3 -Pattern '版本号非法' -Because '.NET 正则的 $ 会放过末尾换行,指针版本号必须用 \z 收尾'
+        Assert-True -Condition (-not [System.IO.File]::Exists((Join-Path $snapRoot 'images' 'latest.json'))) -Because '版本号非法时不得写出指针'
+    }
+
+    Test-Case 'latest 指针:latest.json 正被读者打开(不共享删除)时有限重试,读者释放后写入成功' {
+        $root = Join-Path $script:TempRoot 'root-latest-busy'
+        $snapRoot = Get-ChannelRoot -Channel snapshot -Override $root
+        Set-LatestPointer -ChannelRoot $snapRoot -Kind images -Version 'g0123456789ab'
+        $path = Join-Path $snapRoot 'images' 'latest.json'
+
+        # 模拟 fetch / retention 用 Get-Content 读指针:只读打开、共享读写、不共享删除。
+        # 300ms 后由计时器线程直接调用 FileStream.Dispose 释放句柄(纯 .NET 委托,不需要 PowerShell runspace)。
+        # Windows 上覆盖 rename 在句柄释放前失败,须靠重试(100/200/400ms,累计 700ms)跨过去;
+        # Linux 上 rename(2) 不受读者影响,首次即成功,本用例只验证结果
+        $reader = [System.IO.FileStream]::new($path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+        $cts = [System.Threading.CancellationTokenSource]::new()
+        $msg = ''
+        try {
+            $release = [System.Delegate]::CreateDelegate([System.Action], $reader, 'Dispose')
+            $null = $cts.Token.Register($release)
+            $cts.CancelAfter(300)
+            $msg = Get-ThrownMessage { Set-LatestPointer -ChannelRoot $snapRoot -Kind images -Version 'g0123456789ab-dirty-20260916-101010' }
+        }
+        finally {
+            # 先停计时器再关句柄:Linux 上写入早已返回,避免计时器线程与这里并发 Dispose
+            $cts.Dispose()
+            $reader.Dispose()
+        }
+
+        Assert-Equal -Expected '' -Actual $msg -Because '读者短暂占用 latest.json 时覆盖写应在重试预算内成功'
+        $obj = Get-Content -LiteralPath $path -Raw | ConvertFrom-Json
+        Assert-Equal -Expected 'g0123456789ab-dirty-20260916-101010' -Actual $obj.version -Because '重试成功后指针必须是新版本'
+        $leftovers = @(Get-ChildItem -LiteralPath (Join-Path $snapRoot 'images') -Force | Where-Object { $_.Name -ne 'latest.json' })
+        Assert-Equal -Expected 0 -Actual $leftovers.Count -Because "重试后不应残留临时文件(实际:$(@($leftovers | ForEach-Object Name) -join ','))"
     }
 
     Test-Case '快照版本目录名:只认 g<sha12> 与 g<sha12>-dirty-yyyyMMdd-HHmmss' {
         Assert-True -Condition (Test-SnapshotVersionName -Version 'g0123456789ab') -Because '干净快照名'
         Assert-True -Condition (Test-SnapshotVersionName -Version 'g0123456789ab-dirty-20260916-101010') -Because '脏树快照名'
-        foreach ($bad in @('', 'g0123456789AB', 'g0123456789a', '0123456789ab', '../g0123456789ab', 'v1.2.3', 'g0123456789ab-dirty')) {
+        # 后两个样本是 .NET 正则陷阱:$ 放过末尾换行;\d 匹配全角数字(U+FF16 '６')
+        $fullWidthDigitName = 'g0123456789ab-dirty-2026091' + [char]0xFF16 + '-101010'
+        foreach ($bad in @('', 'g0123456789AB', 'g0123456789a', '0123456789ab', '../g0123456789ab', 'v1.2.3', 'g0123456789ab-dirty', "g0123456789ab`n", $fullWidthDigitName)) {
             Assert-True -Condition (-not (Test-SnapshotVersionName -Version $bad)) -Because "'$bad' 不应被当成快照版本名"
         }
     }

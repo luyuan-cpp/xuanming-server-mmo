@@ -17,6 +17,7 @@ public:
     const SkillPermissionTable* FindSkillPermission(uint32_t combatStateId) const override;
     const DungeonTable* FindDungeon(uint32_t dungeonTableId) const override;
     const MonsterTable* FindMonster(uint32_t monsterTableId) const override;
+    const ItemTable* FindItem(uint32_t itemTableId) const override;
 
     uint64_t GetCooldownDurationMs(uint32_t cooldownTableId) const override;
     std::vector<uint32_t> GetDungeonMonsterIds(uint32_t dungeonTableId) const override;

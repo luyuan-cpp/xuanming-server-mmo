@@ -31,13 +31,38 @@ Kafka:
 # 超时（秒）。不使用 caller context 取消，避免 WriteMessages 返回后仍继续投递。
 KafkaWriteTimeoutSeconds: 5
 
-# 仅供开发环境临时复现旧交接流程。生产必须保持 false，直到跨 Go/C++/db
-# 的 per-player epoch/落盘屏障落地；否则跨节点进入可能加载到陈旧玩家状态。
+# 开发旁路:true 时跨节点切场景 / 已有位置的跨区重定向不再要求源 scene 先写出
+# 「已落盘」标记(player:{id}:handoff),C++ 侧没接标记的本地联调也能切场景。
+# owner_epoch 的铸造与 CAS 不受它影响,照样执行。
+# 生产必须 false:依赖标记 + epoch 两道换手门(docs/design/cross-zone-scene-travel.md CZ-4),
+# 打开等于允许新节点读到源节点尚未落盘的状态(回档)。
 # 本地 dev 设 true:4 个 scene 节点 + 世界频道按 hash 散列后,切场景大概率
-# 跨节点,持久化交接屏障(cross-server rollback 项目)落地前 fail-closed 会
-# 拒掉一切跨节点切换(robot SceneSwitch/CurrencyCrashWindow 失败根因)。
-# 生产/压测正确性验证时改回 false。
+# 跨节点;robot SceneSwitch/CurrencyCrashWindow 在标记链路接通前依赖它。
+# 压测正确性验证 / 双 zone 传送验收时改回 false。
 AllowUnsafeCrossNodeHandoff: true
+
+# data_service gRPC 客户端(etcd 发现)。EnterScene 用它查玩家归属 zone
+# (GetPlayerHomeZone),结果随 RoutePlayerEvent.home_zone_id 下发,scene 节点据此选
+# 存盘 topic(cross-zone-scene-travel.md CZ-3)。
+# 语义:映射存在 → 用它;映射里没有(首登)→ gate zone;超时/不可用 → 拒绝进场景让
+# 上游重试(归属未知不得静默落进程 zone 库)。整块不写 = 本地单区联调,一律按 gate
+# zone 并打 WARN + 计数(scene_manager_home_zone_lookup_total{outcome="unconfigured"});
+# 多 zone 部署必须配。
+# NonBlock: true —— data_service 没起时 scene_manager 照常起服,查询按不可用拒绝。
+# Breaker: true —— data_service "死了但 etcd 键还在"时快速失败,不让每次进场景都白等满超时。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - 127.0.0.1:2379
+    Key: dataservice.rpc
+  Timeout: 3000
+  NonBlock: true
+  Middlewares:
+    Breaker: true
+
+# EnterScene 里那一次 GetPlayerHomeZone 的预算(毫秒)。串在每次进场景上,超时按
+# 「归属未知」拒绝(可重试),不能太长;与 login 的 EnterLookupTimeout 对齐。
+HomeZoneLookupTimeoutMs: 1500
 
 # Directory containing exported table JSON files (e.g. World.json).
 # World config IDs are loaded from World.json automatically.

@@ -12,6 +12,13 @@ message RoutePlayerEvent {
   uint32 target_node_id = 2;
   uint64 scene_id = 3;        // Scene instance GUID allocated by SceneManager
   uint64 player_id = 4;
+  // 玩家归属 zone(数据落库目的地),由 scene_manager 从 data_service 取后随路由下发;
+  // 0 表示未知,scene 侧 fail-closed 落进程 zone 并计数告警。见 cross-zone-scene-travel.md CZ-3。
+  uint32 home_zone_id = 5;
+  // 本次路由决策铸造的归属 epoch(scene_manager INCR player:{id}:owner_epoch 得到)。
+  // 必须随事件下发,节点不得自行读 Redis:两次改派挨近时后到者才持有最新值。
+  // 见 scene-owner-reentry-barrier.md §3.3。
+  uint64 owner_epoch = 6;
 }
 
 message KickPlayerEvent {

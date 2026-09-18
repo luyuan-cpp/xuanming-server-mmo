@@ -4,13 +4,13 @@ package main
 //
 // 三点与旧实现的差别,每一条都是修一个真 bug:
 //
-//  1. 重名冲突路径删掉了。deploy/mysql-init/guild_friend_tables.sql 里
-//     `UNIQUE KEY uk_name (name)` 是**全局**唯一(不带 zone_id),所以
+//  1. 重名冲突路径删掉了。proto/guild/guild_db.proto 的 OptionUniqueKey="name_norm"
+//     (生成 `uk_guild`)是**全局**唯一(不带 zone_id),所以
 //     「源区有个公会叫 X,目标区也有个叫 X」在库层面根本不可能存在,
 //     旧的 checkNameConflicts JOIN 永远返回空。它的害处不在于慢,而在于
 //     `UPDATE ... AND guild_id NOT IN (...)` 这条**跳过冲突继续写**的分支
-//     给人一种「冲突会被优雅处理」的错觉。真要哪天 uk_name 改成
-//     (zone_id, name),正确做法是**中止**而不是跳过 —— 跳过会把源区公会
+//     给人一种「冲突会被优雅处理」的错觉。真要哪天 uk_guild 改成
+//     (zone_id, name_norm),正确做法是**中止**而不是跳过 —— 跳过会把源区公会
 //     留在一个已经下线的 zone 里,等于把整个公会连同成员一起丢掉。
 //     所以现在:检测到任何同名行 → 直接报错,一个字节都不写。
 //
@@ -33,10 +33,70 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"slices"
 	"strconv"
 
 	"github.com/redis/go-redis/v9"
 )
+
+const (
+	// defaultGuildSchema 镜像 go/guild/internal/data.DatabaseName。guild 服的 config.Validate
+	// 强制 MySQL DSN 的库名等于它,所以生产上只有这一个合法值;-guild-schema 只为集成测试的
+	// 一次性库留口子。merge_zone 是独立 module,不能 import go/guild,字面量由 merge_unit_test.go 守住。
+	defaultGuildSchema = "mmorpg_guild"
+	// guildTable / guildMemberTable 与 proto/guild/guild_db.proto 的 OptionTableName 一致。
+	guildTable       = "guild"
+	guildMemberTable = "guild_member"
+	// guildNameNormColumn 是帮名唯一键所在列(uk_guild)。重名探测比它,不比展示名:
+	// 规范化(NFKC → TrimSpace → 小写)在 go/guild 侧完成,库里存的就是规范化结果。
+	guildNameNormColumn = "name_norm"
+)
+
+// validateGuildSchemaName 在任何 SQL 之前验库名形状(形状定义见 player_rows.go 的 schemaNamePattern)。
+func validateGuildSchemaName(schema string) error {
+	if !schemaNamePattern.MatchString(schema) {
+		return fmt.Errorf("-guild-schema %q is not a plain identifier ([A-Za-z0-9_], 1-64 chars)", schema)
+	}
+	return nil
+}
+
+func guildQualified(schema, table string) string { return schema + "." + table }
+
+// assertGuildTablesReady 证明 schema 下的帮会两张表存在且是本工具认识的形状。
+// 库不在、表不在(guild 从没跑过 -migrate)、列不在(结构不是本工具认识的)都返回错误,
+// 调用方拒绝继续 —— 「查不到」与「没有公会」在这里分不开(-mysql-dsn 指错实例也是同一症状)。
+func assertGuildTablesReady(ctx context.Context, db *sql.DB, schema string) error {
+	if err := validateGuildSchemaName(schema); err != nil {
+		return err
+	}
+	if err := assertSchemaExists(ctx, db, schema); err != nil {
+		return err
+	}
+	if err := assertGuildTableShape(ctx, db, schema, guildTable, "zone_id", "name", guildNameNormColumn); err != nil {
+		return err
+	}
+	return assertGuildTableShape(ctx, db, schema, guildMemberTable, "guild_id")
+}
+
+// assertGuildTableShape:表在(列表非空)且带着本工具要读写的列。列表为空 = 表不存在,
+// 单独报出来 —— 「表没建」和「表建了但结构不对」要给运维不同的下一步动作。
+func assertGuildTableShape(ctx context.Context, db *sql.DB, schema, table string, wantCols ...string) error {
+	cols, err := tableColumns(ctx, db, schema, table)
+	if err != nil {
+		return err
+	}
+	if len(cols) == 0 {
+		return fmt.Errorf("%s does not exist — the guild service has never run its schema migration here",
+			guildQualified(schema, table))
+	}
+	for _, want := range wantCols {
+		if !slices.Contains(cols, want) {
+			return fmt.Errorf("%s has no %s column (columns: %v) — not the guild shape this tool rewrites",
+				guildQualified(schema, table), want, cols)
+		}
+	}
+	return nil
+}
 
 // invalidateGuildVersionedCacheScript 逐字镜像
 // go/guild/internal/data/guild_repo.go::invalidateVersionedCacheScript。
@@ -60,10 +120,12 @@ func guildZoneRankKey(zone uint32) string {
 // collectGuildIDsInZone 取源区公会 id。必须在 UPDATE **之前**调用:
 // 改完 zone_id 之后就再也分不清哪些是搬过来的、哪些是目标区原住民,
 // 而缓存失效与撤销都只能作用于「搬过来的那些」。
-func collectGuildIDsInZone(ctx context.Context, db *sql.DB, zone uint32) ([]uint64, error) {
-	rows, err := db.QueryContext(ctx, "SELECT guild_id FROM guild WHERE zone_id = ? ORDER BY guild_id", zone)
+func collectGuildIDsInZone(ctx context.Context, db *sql.DB, schema string, zone uint32) ([]uint64, error) {
+	table := guildQualified(schema, guildTable)
+	rows, err := db.QueryContext(ctx,
+		"SELECT guild_id FROM "+table+" WHERE zone_id = ? ORDER BY guild_id", zone)
 	if err != nil {
-		return nil, fmt.Errorf("list guilds in zone %d: %w", zone, err)
+		return nil, fmt.Errorf("list %s in zone %d: %w", table, zone, err)
 	}
 	defer rows.Close()
 	var out []uint64
@@ -79,14 +141,18 @@ func collectGuildIDsInZone(ctx context.Context, db *sql.DB, zone uint32) ([]uint
 
 // assertNoGuildNameCollision 在写之前确认没有同名公会跨这两个 zone 存在。
 //
-// 今天它恒为真(uk_name 全局唯一),留着是**契约断言**:如果哪天有人把
-// uk_name 改成 (zone_id, name),这条查询会立刻开始命中,合服会停在这里
+// 今天它恒为真(uk_guild 按 name_norm 全局唯一),留着是**契约断言**:如果哪天有人把
+// uk_guild 改成 (zone_id, name_norm),这条查询会立刻开始命中,合服会停在这里
 // 而不是悄悄漏掉几个公会。这就是「让冲突在任何写之前中止」的落点。
-func assertNoGuildNameCollision(ctx context.Context, db *sql.DB, src, dst uint32) error {
+//
+// 比的是 name_norm 而不是展示名:规范化在 go/guild 侧完成("青云门 " 与 "青云门"、
+// "ABC" 与 "abc" 都是同一个 name_norm),按展示名比会漏掉这些等价名。
+func assertNoGuildNameCollision(ctx context.Context, db *sql.DB, schema string, src, dst uint32) error {
+	table := guildQualified(schema, guildTable)
 	rows, err := db.QueryContext(ctx,
-		`SELECT s.guild_id, d.guild_id, s.name
-		   FROM guild s JOIN guild d ON s.name = d.name AND d.zone_id = ?
-		  WHERE s.zone_id = ?`, dst, src)
+		"SELECT s.guild_id, d.guild_id, s.name"+
+			" FROM "+table+" s JOIN "+table+" d ON s.name_norm = d.name_norm AND d.zone_id = ?"+
+			" WHERE s.zone_id = ?", dst, src)
 	if err != nil {
 		return fmt.Errorf("guild name collision probe: %w", err)
 	}
@@ -106,23 +172,25 @@ func assertNoGuildNameCollision(ctx context.Context, db *sql.DB, src, dst uint32
 	}
 	if collisions > 0 {
 		return fmt.Errorf("%d guild name collision(s) across zone %d and %d. "+
-			"guild.name is globally UNIQUE today, so this should be impossible — the schema changed under us. "+
+			"guild.name_norm is globally UNIQUE today (uk_guild), so this should be impossible — the schema changed under us. "+
 			"Rename or disband the colliding guilds first; refusing to write anything", collisions, src, dst)
 	}
 	return nil
 }
 
 // migrateGuildZone 把 zone_id 从 src 改成 dst。返回受影响行数。
-func migrateGuildZone(ctx context.Context, db *sql.DB, src, dst uint32, dryRun bool) (int64, error) {
+func migrateGuildZone(ctx context.Context, db *sql.DB, schema string, src, dst uint32, dryRun bool) (int64, error) {
+	table := guildQualified(schema, guildTable)
 	if dryRun {
 		var count int64
-		if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild WHERE zone_id = ?", src).Scan(&count); err != nil {
+		if err := db.QueryRowContext(ctx,
+			"SELECT COUNT(*) FROM "+table+" WHERE zone_id = ?", src).Scan(&count); err != nil {
 			return 0, err
 		}
-		log.Printf("[DRY-RUN] Would migrate %d guild rows", count)
+		log.Printf("[DRY-RUN] Would migrate %d %s rows", count, table)
 		return count, nil
 	}
-	res, err := db.ExecContext(ctx, "UPDATE guild SET zone_id = ? WHERE zone_id = ?", dst, src)
+	res, err := db.ExecContext(ctx, "UPDATE "+table+" SET zone_id = ? WHERE zone_id = ?", dst, src)
 	if err != nil {
 		return 0, err
 	}

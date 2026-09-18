@@ -68,6 +68,7 @@
     <ClInclude Include="spatial\system\view.h" />
     <ClInclude Include="world\world.h" />
     <ClInclude Include="player\comp\afk_comp.h" />
+    <ClInclude Include="player\comp\player_ownership_comp.h" />
     <ClInclude Include="player\system\afk.h" />
     <ClInclude Include="spatial\constants\aoi_priority.h" />
   </ItemGroup>

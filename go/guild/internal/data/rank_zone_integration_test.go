@@ -90,7 +90,9 @@ func newRepoOnThrowawayDB(t *testing.T) (*GuildRepo, *sql.DB, *miniredis.Minired
 		}
 		admin.Close()
 	})
-	createGuildTables(t, db)
+	resetCtx, resetCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer resetCancel()
+	resetGuildSchemaViaMigrate(t, resetCtx, db)
 
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
@@ -99,51 +101,15 @@ func newRepoOnThrowawayDB(t *testing.T) (*GuildRepo, *sql.DB, *miniredis.Minired
 	return NewGuildRepo(rdb, db, time.Minute), db, mr
 }
 
-func createGuildTables(t *testing.T, db *sql.DB) {
-	t.Helper()
-	stmts := []string{
-		`CREATE TABLE guild (
-			guild_id BIGINT UNSIGNED NOT NULL,
-			name VARCHAR(64) NOT NULL,
-			leader_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			level INT UNSIGNED NOT NULL DEFAULT 1,
-			announcement TEXT,
-			create_time_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			max_members INT UNSIGNED NOT NULL DEFAULT 50,
-			zone_id INT UNSIGNED NOT NULL DEFAULT 0,
-			score BIGINT NOT NULL DEFAULT 0,
-			PRIMARY KEY (guild_id),
-			UNIQUE KEY uk_name (name)
-		) ENGINE=InnoDB`,
-		`CREATE TABLE guild_member (
-			guild_id BIGINT UNSIGNED NOT NULL,
-			player_id BIGINT UNSIGNED NOT NULL,
-			role TINYINT UNSIGNED NOT NULL DEFAULT 0,
-			join_time_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			last_active_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			contribution BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (guild_id, player_id),
-			UNIQUE KEY uk_player (player_id)
-		) ENGINE=InnoDB`,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	for i, s := range stmts {
-		if _, err := db.ExecContext(ctx, s); err != nil {
-			t.Fatalf("建表第 %d 步失败: %v", i, err)
-		}
-	}
-}
-
 func seedGuild(t *testing.T, db *sql.DB, guildID uint64, name string, zone uint32) {
 	t.Helper()
 	_, err := db.Exec(
-		`INSERT INTO guild (guild_id, name, leader_id, level, announcement, create_time_ms, max_members, zone_id, score)
-		 VALUES (?, ?, ?, 1, '', 1, 50, ?, 0)`, guildID, name, guildID+1, zone)
+		`INSERT INTO guild (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, funds)
+		 VALUES (?, ?, ?, ?, 1, '', 1, 50, ?, 0, 0)`, guildID, name, strings.ToLower(name), guildID+1, zone)
 	require.NoError(t, err)
 	_, err = db.Exec(
-		`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution)
-		 VALUES (?, ?, 3, 1, 1, 0)`, guildID, guildID+1)
+		`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution_total, contribution_balance)
+		 VALUES (?, ?, 3, 1, 1, 0, 0)`, guildID, guildID+1)
 	require.NoError(t, err)
 }
 

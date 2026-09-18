@@ -2,9 +2,12 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/base64"
+	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -12,9 +15,13 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 
+	"guild/internal/config"
+	"guild/internal/data"
+	"guild/internal/logic"
 	"guild/internal/session"
 	base "proto/common/base"
 	pb "proto/guild"
+	"schemamigrate"
 	"shared/killswitch"
 )
 
@@ -62,7 +69,7 @@ func TestKillSwitchWiredIntoUnaryChain(t *testing.T) {
 		blocked: {Deny: true, Reason: "单测:建帮把库打爆了"},
 	})
 
-	chain := buildUnaryInterceptors(ks)
+	chain := buildUnaryInterceptors(ks, time.Second)
 
 	t.Run("命中规则的方法被短路", func(t *testing.T) {
 		handlerCalled := false
@@ -118,7 +125,7 @@ func TestKillSwitchFailOpenWithoutRules(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_CreateGuild_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(ks), info, func(ctx context.Context, req any) (any, error) {
+	h := chainUnary(buildUnaryInterceptors(ks, time.Second), info, func(ctx context.Context, req any) (any, error) {
 		handlerCalled = true
 		return &pb.CreateGuildResponse{}, nil
 	})
@@ -144,7 +151,7 @@ func TestSessionGateWiredIntoUnaryChain(t *testing.T) {
 
 	handlerCalled := false
 	info := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_UpdateGuildScore_FullMethodName}
-	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{})), info,
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), time.Second), info,
 		func(ctx context.Context, req any) (any, error) {
 			handlerCalled = true
 			return &pb.UpdateGuildScoreResponse{}, nil
@@ -156,5 +163,184 @@ func TestSessionGateWiredIntoUnaryChain(t *testing.T) {
 	}
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("期望 PermissionDenied,得到 %v", err)
+	}
+}
+
+// ── 整请求预算 ────────────────────────────────────────────────
+
+// TestRequestBudgetInterceptorSetsDeadline 证明业务预算真的套在 handler 的 ctx 上:
+// 没有它,归属区查询 / 发号 / MySQL 可以一直等到 zrpc 服务端超时,客户端拿到的是
+// DeadlineExceeded 而不是 in-band tip。
+func TestRequestBudgetInterceptorSetsDeadline(t *testing.T) {
+	info := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_GetGuild_FullMethodName}
+	var deadline time.Time
+	var hasDeadline bool
+	h := chainUnary(buildUnaryInterceptors(killswitch.New(killswitch.Config{}), 300*time.Millisecond), info,
+		func(ctx context.Context, req any) (any, error) {
+			deadline, hasDeadline = ctx.Deadline()
+			return &pb.GetGuildResponse{}, nil
+		})
+
+	// 不带会话 metadata:internal/session 规定无会话即内部调用,放行到 handler。
+	if _, err := h(context.Background(), &pb.GetGuildRequest{}); err != nil {
+		t.Fatalf("内部调用不该报错: %v", err)
+	}
+	if !hasDeadline {
+		t.Fatal("handler 的 ctx 没有截止时间:预算拦截器没挂上")
+	}
+	if remaining := time.Until(deadline); remaining <= 200*time.Millisecond || remaining > 300*time.Millisecond {
+		t.Fatalf("剩余预算 %v,期望落在 (200ms, 300ms]", remaining)
+	}
+}
+
+func TestRequestBudgetInterceptorExpires(t *testing.T) {
+	info := &grpc.UnaryServerInfo{FullMethod: pb.GuildService_GetGuild_FullMethodName}
+	var cause error
+	_, err := requestBudgetInterceptor(50*time.Millisecond)(context.Background(), nil, info,
+		func(ctx context.Context, req any) (any, error) {
+			<-ctx.Done()
+			cause = ctx.Err()
+			return nil, nil
+		})
+	if err != nil {
+		t.Fatalf("handler 返回 nil 错误时拦截器不该改写: %v", err)
+	}
+	if !errors.Is(cause, context.DeadlineExceeded) {
+		t.Fatalf("ctx.Err() = %v,期望 DeadlineExceeded", cause)
+	}
+}
+
+// TestHomeZoneBudgetMirrorsLogic:config 不能 import logic,只能镜像常量;两者分叉时预算校验会算错。
+func TestHomeZoneBudgetMirrorsLogic(t *testing.T) {
+	if got := time.Duration(config.HomeZoneLookupBudgetMs) * time.Millisecond; got != logic.DefaultHomeZoneLookupTimeout {
+		t.Fatalf("config.HomeZoneLookupBudgetMs = %v,logic.DefaultHomeZoneLookupTimeout = %v",
+			got, logic.DefaultHomeZoneLookupTimeout)
+	}
+}
+
+// ── 启动期建表策略 ────────────────────────────────────────────
+
+func TestSchemaOptionsTargetsGuildDatabase(t *testing.T) {
+	opts := schemaOptions()
+	if opts.Database != data.DatabaseName {
+		t.Fatalf("Database = %q,期望 %q", opts.Database, data.DatabaseName)
+	}
+	if len(opts.Tables) != len(data.Tables()) {
+		t.Fatalf("Tables 数 = %d,期望与 data.Tables() 一致(%d)", len(opts.Tables), len(data.Tables()))
+	}
+}
+
+type fakeSchemaRunner struct {
+	reports []schemamigrate.Report
+	errs    []error
+	calls   int
+}
+
+func (f *fakeSchemaRunner) run(ctx context.Context, db *sql.DB, opts schemamigrate.Options) (schemamigrate.Report, error) {
+	i := f.calls
+	f.calls++
+	if i >= len(f.reports) {
+		i = len(f.reports) - 1
+	}
+	var err error
+	if f.calls-1 < len(f.errs) {
+		err = f.errs[f.calls-1]
+	} else if len(f.errs) > 0 {
+		err = f.errs[len(f.errs)-1]
+	}
+	return f.reports[i], err
+}
+
+func autoMigrate(v bool) config.Config {
+	c := config.Config{}
+	c.Schema.AutoMigrate = &v
+	return c
+}
+
+func TestEnsureSchemaStrategy(t *testing.T) {
+	old := lockBusyRetryDelay
+	lockBusyRetryDelay = 0
+	t.Cleanup(func() { lockBusyRetryDelay = old })
+
+	clean := schemamigrate.Report{}
+	missingIndex := schemamigrate.Report{Warnings: []string{"缺索引(不会自动建):guild 上没有 proto 声明的索引 idx_guild_1"}}
+	extraColumn := schemamigrate.Report{Warnings: []string{"多余列(不会删除):guild.legacy_col"}}
+	manual := schemamigrate.Report{Manual: []string{"列类型漂移:guild.funds"}}
+	pending := schemamigrate.Report{Statements: []string{"ALTER TABLE guild ADD COLUMN funds bigint unsigned"}}
+
+	cases := []struct {
+		name      string
+		cfg       config.Config
+		up, plan  *fakeSchemaRunner
+		wantErr   string
+		wantCalls int
+	}{
+		{name: "自动建表成功", cfg: autoMigrate(true),
+			up: &fakeSchemaRunner{reports: []schemamigrate.Report{clean}}, wantCalls: 1},
+		{name: "自动建表出错即拒启", cfg: autoMigrate(true),
+			up:      &fakeSchemaRunner{reports: []schemamigrate.Report{clean}, errs: []error{errors.New("boom")}},
+			wantErr: "启动期建表失败", wantCalls: 1},
+		{name: "需人工项即拒启", cfg: autoMigrate(true),
+			up:      &fakeSchemaRunner{reports: []schemamigrate.Report{manual}},
+			wantErr: "需人工处理", wantCalls: 1},
+		{name: "锁忙重试后成功", cfg: autoMigrate(true),
+			up: &fakeSchemaRunner{reports: []schemamigrate.Report{clean},
+				errs: []error{schemamigrate.ErrLockBusy, schemamigrate.ErrLockBusy, nil}}, wantCalls: 3},
+		{name: "锁忙用尽重试", cfg: autoMigrate(true),
+			up: &fakeSchemaRunner{reports: []schemamigrate.Report{clean},
+				errs: []error{schemamigrate.ErrLockBusy}}, wantErr: "启动期建表失败", wantCalls: lockBusyAttempts},
+		{name: "缺索引在 Up 模式也拒启", cfg: autoMigrate(true),
+			up: &fakeSchemaRunner{reports: []schemamigrate.Report{missingIndex}}, wantErr: "缺 1 个", wantCalls: 1},
+		{name: "多余列只是告警", cfg: autoMigrate(true),
+			up: &fakeSchemaRunner{reports: []schemamigrate.Report{extraColumn}}, wantCalls: 1},
+		{name: "只读核对通过", cfg: autoMigrate(false),
+			plan: &fakeSchemaRunner{reports: []schemamigrate.Report{clean}}, wantCalls: 1},
+		{name: "只读核对发现待执行语句", cfg: autoMigrate(false),
+			plan: &fakeSchemaRunner{reports: []schemamigrate.Report{pending}}, wantErr: migrateRemedyCommand, wantCalls: 1},
+		{name: "只读核对缺索引", cfg: autoMigrate(false),
+			plan: &fakeSchemaRunner{reports: []schemamigrate.Report{missingIndex}}, wantErr: "缺 1 个", wantCalls: 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			up, plan := tc.up, tc.plan
+			if up == nil {
+				up = &fakeSchemaRunner{reports: []schemamigrate.Report{clean}}
+			}
+			if plan == nil {
+				plan = &fakeSchemaRunner{reports: []schemamigrate.Report{clean}}
+			}
+			err := ensureSchema(context.Background(), nil, tc.cfg, up.run, plan.run)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("期望通过,得到 %v", err)
+				}
+			} else {
+				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+					t.Fatalf("错误 = %v,期望包含 %q", err, tc.wantErr)
+				}
+			}
+			calls := up.calls
+			if !tc.cfg.ShouldAutoMigrate() {
+				calls = plan.calls
+			}
+			if calls != tc.wantCalls {
+				t.Fatalf("runner 调用 %d 次,期望 %d 次", calls, tc.wantCalls)
+			}
+		})
+	}
+}
+
+func TestReportLinesFormatsAllSections(t *testing.T) {
+	lines := reportLines(schemamigrate.Report{
+		Statements: []string{"CREATE TABLE guild"},
+		Warnings:   []string{"多余列"},
+		Manual:     []string{"缺主键"},
+	})
+	if len(lines) != 3 ||
+		!strings.Contains(lines[0], "statement:") ||
+		!strings.Contains(lines[1], "warning:") ||
+		!strings.Contains(lines[2], "MANUAL:") {
+		t.Fatalf("三段格式不符: %v", lines)
 	}
 }

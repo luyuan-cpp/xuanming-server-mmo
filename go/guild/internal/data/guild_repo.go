@@ -6,17 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	mysqlDriver "github.com/go-sql-driver/mysql"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/zeromicro/go-zero/core/logx"
+	"golang.org/x/text/unicode/norm"
 
 	"guild/internal/constants"
 )
@@ -27,17 +27,14 @@ var (
 	ErrGuildGone = errors.New("guild does not exist")
 	// ErrGuildFull:事务内按权威行数判定已满。
 	ErrGuildFull = errors.New("guild is full")
-	// ErrPlayerAlreadyInGuild:唯一索引 uk_player 拒绝了跨公会重复 membership。
+	// ErrPlayerAlreadyInGuild:唯一索引 uk_guild_member(player_id)拒绝了跨公会重复 membership。
 	ErrPlayerAlreadyInGuild = errors.New("player already belongs to a guild")
-	// ErrGuildNameTaken:唯一索引 uk_name 拒绝了重名(帮名全局唯一,不分 zone)。
+	// ErrGuildNameTaken:唯一索引 uk_guild(name_norm)拒绝了重名(帮名全局唯一,不分 zone)。
 	ErrGuildNameTaken = errors.New("guild name already taken")
 	// ErrGuildZoneMismatch:目标公会不属于入会方要求的 zone(按 zone 隔离的入会)。
 	ErrGuildZoneMismatch = errors.New("guild belongs to another zone")
 	// ErrAnnouncementForbidden:MySQL 权威 membership 不存在或角色不是 officer/leader。
 	ErrAnnouncementForbidden = errors.New("guild announcement update is not authorized")
-	// ErrLegacyRankSnapshotMismatch:迁移时 Redis 旧榜并非 MySQL 公会全集，禁止
-	// 把缺失项的默认 0 分固化为新权威值。
-	ErrLegacyRankSnapshotMismatch = errors.New("legacy guild rank snapshot does not match MySQL guild set")
 )
 
 // GuildData is the persistence-layer representation of a guild (stored in Redis + MySQL).
@@ -47,22 +44,27 @@ type GuildData struct {
 	LeaderID     uint64 `json:"leader_id"`
 	Level        uint32 `json:"level"`
 	Announcement string `json:"announcement"`
-	CreateTimeMs int64  `json:"create_time_ms"`
+	CreateTimeMs uint64 `json:"create_time_ms"`
 	MaxMembers   uint32 `json:"max_members"`
 	ZoneID       uint32 `json:"zone_id"`
 	// Score 是公会排行分的 MySQL 权威副本;Redis ZSET 只是读加速层,
 	// 丢失/分叉后可由 RebuildRanks 从这里全量重建。
-	Score   int64        `json:"score"`
+	Score int64 `json:"score"`
+	// Funds 是帮会资金(捐献累加、升级消耗);B1 恒为 0,B5 起写入。
+	Funds   uint64       `json:"funds"`
 	Members []MemberData `json:"members"`
 }
 
 type MemberData struct {
 	PlayerID     uint64 `json:"player_id"`
 	Role         uint32 `json:"role"`
-	JoinTimeMs   int64  `json:"join_time_ms"`
-	LastActiveMs int64  `json:"last_active_ms"`
-	Contribution uint64 `json:"contribution"`
-	Online       bool   `json:"-"` // 仅内存，不入库
+	JoinTimeMs   uint64 `json:"join_time_ms"`
+	LastActiveMs uint64 `json:"last_active_ms"`
+	// ContributionTotal 累计帮贡(只增,用于展示与排序);ContributionBalance 是可消费余额(帮会商店扣减)。
+	// B1 两列恒为 0,B5 起写入。
+	ContributionTotal   uint64 `json:"contribution_total"`
+	ContributionBalance uint64 `json:"contribution_balance"`
+	Online              bool   `json:"-"` // 仅内存，不入库
 }
 
 // GuildRepo provides cache-aside access to guild data.
@@ -106,10 +108,9 @@ func playerGuildCacheGenerationKey(playerID uint64) string {
 const guildRankKey = "guild_rank" // Redis ZSET: member=guildID, score=rankScore (global)
 
 const (
-	guildRankLockKey       = "guild_rank:maintenance_lock"
-	guildScoreMigrationKey = "guild_score_redis_backfill_v1"
-	guildRankLockTTL       = 5 * time.Minute
-	guildRankLockWait      = 5 * time.Second
+	guildRankLockKey  = "guild_rank:maintenance_lock"
+	guildRankLockTTL  = 5 * time.Minute
+	guildRankLockWait = 5 * time.Second
 )
 
 var invalidateVersionedCacheScript = redis.NewScript(`
@@ -261,6 +262,11 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 		return fmt.Errorf("create guild %d: expected exactly one founding member, got %d", guild.GuildID, len(guild.Members))
 	}
 	leader := guild.Members[0]
+	// 防御性复算:logic 已在 normalizeGuildName 里校验过,这里保证写库的唯一键值一定存在。
+	nameNorm, ok := GuildNameNorm(guild.Name)
+	if !ok {
+		return fmt.Errorf("create guild %d: name fails normalization", guild.GuildID)
+	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -269,9 +275,9 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 	defer tx.Rollback()
 
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO guild (guild_id, name, leader_id, level, announcement, create_time_ms, max_members, zone_id, score)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
-		guild.GuildID, guild.Name, guild.LeaderID, guild.Level,
+		`INSERT INTO guild (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, funds)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+		guild.GuildID, guild.Name, nameNorm, guild.LeaderID, guild.Level,
 		guild.Announcement, guild.CreateTimeMs, guild.MaxMembers, guild.ZoneID); err != nil {
 		if isDuplicateKeyOn(err, guildNameUniqueKey) {
 			return ErrGuildNameTaken
@@ -279,8 +285,8 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 		return fmt.Errorf("insert guild %d: %w", guild.GuildID, err)
 	}
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution)
-		 VALUES (?, ?, ?, ?, ?, 0)`,
+		`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution_total, contribution_balance)
+		 VALUES (?, ?, ?, ?, ?, 0, 0)`,
 		guild.GuildID, leader.PlayerID, leader.Role, leader.JoinTimeMs, leader.LastActiveMs); err != nil {
 		if isDuplicateKey(err) {
 			return ErrPlayerAlreadyInGuild
@@ -341,8 +347,8 @@ func (r *GuildRepo) AddMemberInZone(ctx context.Context, guildID, playerID uint6
 	}
 
 	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution)
-		 VALUES (?, ?, ?, ?, ?, 0)`,
+		`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution_total, contribution_balance)
+		 VALUES (?, ?, ?, ?, ?, 0, 0)`,
 		guildID, playerID, role, now, now); err != nil {
 		if isDuplicateKey(err) {
 			return ErrPlayerAlreadyInGuild
@@ -474,12 +480,12 @@ func (r *GuildRepo) DeleteGuild(ctx context.Context, guildID uint64) (uint32, er
 
 func (r *GuildRepo) loadGuildFromMySQL(ctx context.Context, guildID uint64) (*GuildData, error) {
 	row := r.db.QueryRowContext(ctx,
-		"SELECT guild_id, name, leader_id, level, announcement, create_time_ms, max_members, zone_id, score FROM guild WHERE guild_id = ?",
+		"SELECT guild_id, name, leader_id, level, COALESCE(announcement, ''), create_time_ms, max_members, zone_id, score, funds FROM guild WHERE guild_id = ?",
 		guildID)
 
 	var guild GuildData
 	err := row.Scan(&guild.GuildID, &guild.Name, &guild.LeaderID, &guild.Level,
-		&guild.Announcement, &guild.CreateTimeMs, &guild.MaxMembers, &guild.ZoneID, &guild.Score)
+		&guild.Announcement, &guild.CreateTimeMs, &guild.MaxMembers, &guild.ZoneID, &guild.Score, &guild.Funds)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -489,7 +495,7 @@ func (r *GuildRepo) loadGuildFromMySQL(ctx context.Context, guildID uint64) (*Gu
 
 	// Load members
 	rows, err := r.db.QueryContext(ctx,
-		"SELECT player_id, role, join_time_ms, last_active_ms, contribution FROM guild_member WHERE guild_id = ?",
+		"SELECT player_id, role, join_time_ms, last_active_ms, contribution_total, contribution_balance FROM guild_member WHERE guild_id = ? ORDER BY player_id",
 		guildID)
 	if err != nil {
 		return nil, fmt.Errorf("query guild members %d: %w", guildID, err)
@@ -498,7 +504,7 @@ func (r *GuildRepo) loadGuildFromMySQL(ctx context.Context, guildID uint64) (*Gu
 
 	for rows.Next() {
 		var m MemberData
-		if err := rows.Scan(&m.PlayerID, &m.Role, &m.JoinTimeMs, &m.LastActiveMs, &m.Contribution); err != nil {
+		if err := rows.Scan(&m.PlayerID, &m.Role, &m.JoinTimeMs, &m.LastActiveMs, &m.ContributionTotal, &m.ContributionBalance); err != nil {
 			return nil, fmt.Errorf("scan guild member: %w", err)
 		}
 		guild.Members = append(guild.Members, m)
@@ -593,12 +599,30 @@ func isDuplicateKey(err error) bool {
 	return errors.As(err, &mysqlErr) && mysqlErr.Number == 1062
 }
 
-// guildNameUniqueKey 是 guild 表帮名唯一索引名(deploy/mysql-init/guild_friend_tables.sql)。
-const guildNameUniqueKey = "uk_name"
+// MaxGuildNameNormRunes 是 name_norm 的上限:展示名 ≤ constants.MaxGuildNameRunes(24),
+// NFKC 对少数兼容字符会展开(如 ㍿),留一倍余量;同时远小于 proto2mysql 的 191 索引前缀,
+// 保证唯一键覆盖整个值而不是前缀。
+const MaxGuildNameNormRunes = 48
+
+// GuildNameNorm 返回帮名唯一键 name_norm:NFKC → TrimSpace → 小写。
+// 唯一性只看它,不依赖 MySQL 表的排序规则(设计 docs/design/guild-phase2/01-storage.md §6.3):
+// "青云门" 与 "青云门 "、"ABC" 与 "abc"、"ＡＢＣ" 与 "abc" 都判为重名。
+// 空值或超过 MaxGuildNameNormRunes 时返回 false,调用方按帮名非法处理。
+func GuildNameNorm(display string) (string, bool) {
+	n := strings.ToLower(strings.TrimSpace(norm.NFKC.String(display)))
+	if n == "" || utf8.RuneCountInString(n) > MaxGuildNameNormRunes {
+		return "", false
+	}
+	return n, true
+}
+
+// guildNameUniqueKey 是 guild 表帮名唯一索引名。proto2mysql 按 "uk_"+表名 命名,
+// 由 proto/guild/guild_db.proto 的 OptionUniqueKey="name_norm" 生成;表名改了这里必须同改。
+const guildNameUniqueKey = "uk_guild"
 
 // isDuplicateKeyOn 判断是否撞了指定的唯一索引。1062 只说明"有重复",要区分是哪个索引只能看消息:
-// MySQL 8 / TiDB 形如 "Duplicate entry 'x' for key 'guild.uk_name'",5.7 不带表名前缀。
-// 按**结尾**匹配:帮名本身出现在消息中段,名字里含 "uk_name" 不能让主键冲突被误判成重名。
+// MySQL 8 / TiDB 形如 "Duplicate entry 'x' for key 'guild.uk_guild'",5.7 不带表名前缀。
+// 按**结尾**匹配:帮名本身出现在消息中段,名字里含 "uk_guild" 不能让主键冲突被误判成重名。
 func isDuplicateKeyOn(err error, key string) bool {
 	var mysqlErr *mysqlDriver.MySQLError
 	if !errors.As(err, &mysqlErr) || mysqlErr.Number != 1062 {
@@ -672,154 +696,6 @@ func (r *GuildRepo) UpdateGuildScore(ctx context.Context, guildID uint64, zoneID
 		return fmt.Errorf("update rank cache for guild %d: %w", guildID, err)
 	}
 	return nil
-}
-
-// MigrateLegacyRankScores 在 schema migration 标记仍为 pending 时，把旧版唯一
-// 权威 Redis guild_rank 分数一次性回填到 MySQL。完成标记与更新同事务提交，重跑幂等。
-func (r *GuildRepo) MigrateLegacyRankScores(ctx context.Context) error {
-	var state string
-	if err := r.db.QueryRowContext(ctx,
-		"SELECT state FROM guild_schema_migration WHERE migration_key = ?", guildScoreMigrationKey).Scan(&state); err != nil {
-		return fmt.Errorf("read guild score migration state: %w", err)
-	}
-	if state == "done" {
-		return nil
-	}
-
-	release, err := r.acquireRankLock(ctx)
-	if err != nil {
-		return err
-	}
-	defer release()
-
-	entries, err := r.rdb.ZRangeWithScores(ctx, guildRankKey, 0, -1).Result()
-	if err != nil {
-		return fmt.Errorf("read legacy guild rank for migration: %w", err)
-	}
-	legacyScores := make(map[uint64]int64, len(entries))
-	for _, entry := range entries {
-		guildID, err := strconv.ParseUint(fmt.Sprint(entry.Member), 10, 64)
-		if err != nil {
-			return fmt.Errorf("parse legacy rank guild id %v: %w", entry.Member, err)
-		}
-		if math.Trunc(entry.Score) != entry.Score {
-			return fmt.Errorf("legacy rank score for guild %d is not an integer: %v", guildID, entry.Score)
-		}
-		if _, duplicate := legacyScores[guildID]; duplicate {
-			return fmt.Errorf("%w: duplicate parsed guild_id=%d in Redis members", ErrLegacyRankSnapshotMismatch, guildID)
-		}
-		legacyScores[guildID] = int64(entry.Score)
-	}
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// Redis lock 已串行化多实例，但仍在事务内复查标记，保证重启/重入安全。
-	if err := tx.QueryRowContext(ctx,
-		"SELECT state FROM guild_schema_migration WHERE migration_key = ? FOR UPDATE",
-		guildScoreMigrationKey).Scan(&state); err != nil {
-		return err
-	}
-	if state == "done" {
-		return tx.Commit()
-	}
-
-	// migration pending 时，旧 guild_rank 必须是 MySQL 公会集合的完整快照。
-	// 尤其 MySQL 非空而 ZSET 为空不能被解释成“大家都是 0 分”，否则一次 Redis
-	// 丢数据就会在标 done 后永久固化。FOR UPDATE 在核对/回填期间冻结现有公会行。
-	rows, err := tx.QueryContext(ctx, "SELECT guild_id FROM guild ORDER BY guild_id FOR UPDATE")
-	if err != nil {
-		return fmt.Errorf("lock guild ids for rank migration: %w", err)
-	}
-	mysqlGuildIDs := make([]uint64, 0, len(legacyScores))
-	for rows.Next() {
-		var guildID uint64
-		if err := rows.Scan(&guildID); err != nil {
-			rows.Close()
-			return fmt.Errorf("scan guild id for rank migration: %w", err)
-		}
-		mysqlGuildIDs = append(mysqlGuildIDs, guildID)
-	}
-	if err := rows.Close(); err != nil {
-		return err
-	}
-	if err := rows.Err(); err != nil {
-		return err
-	}
-	redisGuildIDs := make([]uint64, 0, len(legacyScores))
-	for guildID := range legacyScores {
-		redisGuildIDs = append(redisGuildIDs, guildID)
-	}
-	missingInRedis, ghostInRedis := diffGuildIDSets(mysqlGuildIDs, redisGuildIDs)
-	if len(missingInRedis) > 0 || len(ghostInRedis) > 0 {
-		return fmt.Errorf(
-			"%w: mysql_guilds=%d redis_unique_guilds=%d missing_in_redis=%s ghost_in_redis=%s",
-			ErrLegacyRankSnapshotMismatch,
-			len(mysqlGuildIDs),
-			len(redisGuildIDs),
-			summarizeGuildIDs(missingInRedis, 50),
-			summarizeGuildIDs(ghostInRedis, 50),
-		)
-	}
-
-	backfilled := 0
-	for guildID, score := range legacyScores {
-		result, err := tx.ExecContext(ctx,
-			"UPDATE guild SET score = ? WHERE guild_id = ?", score, guildID)
-		if err != nil {
-			return fmt.Errorf("backfill score for guild %d: %w", guildID, err)
-		}
-		affected, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if affected > 0 {
-			backfilled++
-		}
-	}
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE guild_schema_migration SET state='done', completed_at=CURRENT_TIMESTAMP WHERE migration_key=?",
-		guildScoreMigrationKey); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
-		return err
-	}
-	logx.Infof("legacy guild rank migration completed: redis_entries=%d changed_rows=%d", len(entries), backfilled)
-	return nil
-}
-
-func diffGuildIDSets(mysqlGuildIDs, redisGuildIDs []uint64) (missingInRedis, ghostInRedis []uint64) {
-	mysqlSet := make(map[uint64]struct{}, len(mysqlGuildIDs))
-	redisSet := make(map[uint64]struct{}, len(redisGuildIDs))
-	for _, guildID := range mysqlGuildIDs {
-		mysqlSet[guildID] = struct{}{}
-	}
-	for _, guildID := range redisGuildIDs {
-		redisSet[guildID] = struct{}{}
-	}
-	for guildID := range mysqlSet {
-		if _, found := redisSet[guildID]; !found {
-			missingInRedis = append(missingInRedis, guildID)
-		}
-	}
-	for guildID := range redisSet {
-		if _, found := mysqlSet[guildID]; !found {
-			ghostInRedis = append(ghostInRedis, guildID)
-		}
-	}
-	slices.Sort(missingInRedis)
-	slices.Sort(ghostInRedis)
-	return missingInRedis, ghostInRedis
-}
-
-func summarizeGuildIDs(ids []uint64, limit int) string {
-	if len(ids) <= limit {
-		return fmt.Sprint(ids)
-	}
-	return fmt.Sprintf("%v ... (%d total)", ids[:limit], len(ids))
 }
 
 // RebuildRanks 始终从 MySQL 权威快照重建全局榜和所有 zone 榜，而不是只在

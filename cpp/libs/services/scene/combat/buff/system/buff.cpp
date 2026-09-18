@@ -14,6 +14,7 @@
 #include "proto/common/event/skill_event.pb.h"
 #include "core/utils/utility/utility.h"
 #include "player/comp/player_frozen_comp.h" // Frozen exclude — cross-zone-readiness-audit.md §11.2
+#include "proto/common/component/battle_comp.pb.h" // InBattleComp:回合制战斗局中闸
 #include "core/system/id_generator.h"
 #include <thread_context/ecs_context.h>
 
@@ -100,6 +101,16 @@ std::tuple<uint32_t, uint64_t> BuffSystem::AddOrUpdateBuff(
     if (tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(parent))
     {
         LOG_INFO << "[CrossZone] Buff on frozen target dropped. parent="
+                 << entt::to_integral(parent) << " buff_table=" << buffTableId;
+        return {kSuccess, UINT64_MAX};
+    }
+
+    // 回合制战斗在途:实时 buff 不落到玩家身上。局内 buff 是引擎自己的一套
+    // (快照只带走开战那一刻的),此刻在场景里挂的 buff 战斗内看不见、战后还在,
+    // 等于凭空多出一个"战斗期间获得的增益"。
+    if (tlsEcs.actorRegistry.any_of<InBattleComp>(parent))
+    {
+        LOG_INFO << "[TurnBattle] Buff on in-battle target dropped. parent="
                  << entt::to_integral(parent) << " buff_table=" << buffTableId;
         return {kSuccess, UINT64_MAX};
     }

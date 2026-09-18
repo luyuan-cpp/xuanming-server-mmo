@@ -90,6 +90,11 @@ std::shared_ptr<MemoryBattleDataProvider> MakeProvider() {
     dispelSkill.add_skill_type(turnbattle::kSkillTypeBitGeneral);
     dispelSkill.add_effect(kBuffDispel);
 
+    // 战斗药水:回血 100(原先写死在 kDefaultItemHealHp,2026-09-17 起读表)
+    auto& potion = provider->AddItem(kItemPotion);
+    potion.set_battle_usable(1);
+    potion.set_battle_heal_hp(100);
+
     // 毒 buff:12 秒 → 2 回合,6 秒周期 → 每回合 tick,每层 10 点
     auto& poisonBuff = provider->AddBuff(kBuffPoison);
     poisonBuff.set_buff_type(turnbattle::kBuffTypePoison);
@@ -1822,4 +1827,278 @@ TEST(SettlementApplicationCacheTest, CapacityNeverEvictsInflightAndRetentionIsFi
     // 满容量淘汰已完成旧项，不阻止合法新局，也不增长内存。
     EXPECT_EQ(cache.Apply(kPlayerA, 101, now + std::chrono::seconds(11), [] { return true; }), Cache::Result::Applied);
     EXPECT_EQ(cache.Size(), 1u);
+}
+
+// ---------------------------------------------------------------------------
+// 2026-09-17 缺口收口(docs/design/turn-battle-gap-closure.md):
+// 掉落(G1)、道具表驱动/目标/限次/校验回码(G2)、快照 buff 清洗(G5)、
+// 技能类型过滤(G6)、本人剩余道具(G7)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr uint32_t kMonsterWithDrop = 61;   // 必掉 kItemPotion 的测试怪
+constexpr uint32_t kDungeonWithDrop = 62;
+constexpr uint32_t kItemManaPotion = 302;   // 纯回蓝药
+constexpr uint32_t kItemNotBattleUsable = 303;
+constexpr uint32_t kSkillPassiveOnly = 401; // 被动技能:不该能提交
+constexpr uint32_t kBuffStunTable = 250;    // 控制类:不该被快照带进来
+constexpr uint32_t kBuffInstantTable = 251; // 瞬时类:同上
+
+// 在标准表基础上补一只"必掉药"的怪 + 一个只有它的副本
+std::shared_ptr<MemoryBattleDataProvider> MakeDropProvider() {
+    auto provider = MakeProvider();
+    auto& monster = provider->AddMonster(kMonsterWithDrop);
+    monster.set_health(1);          // 一刀秒,保证第一回合就打完
+    monster.set_speed(1);
+    monster.set_exp_reward(7);
+    monster.set_gold_reward(3);
+    auto* drop = monster.add_drop();
+    drop->set_drop_item(kItemPotion);
+    drop->set_drop_count(2);
+    drop->set_drop_rate(10000);     // 万分比:必掉
+    provider->SetDungeonMonsters(kDungeonWithDrop, {kMonsterWithDrop});
+    auto& dungeon = provider->AddDungeon(kDungeonWithDrop);
+    dungeon.set_time_limit(1800);
+    return provider;
+}
+
+}  // namespace
+
+TEST(TurnBattleEngineTest, VictoryRollsMonsterDropsIntoSettlement) {
+    auto provider = MakeDropProvider();
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9301, turnbattle::kMatchModePveSolo, 42);
+    request.set_battle_config_id(kDungeonWithDrop);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 500, 0, 0, 500);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK));
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+
+    const auto settlement = engine.BuildSettlement(kPlayerA);
+    ASSERT_EQ(settlement.items_gained_size(), 1);
+    EXPECT_EQ(settlement.items_gained(0).item_table_id(), kItemPotion);
+    EXPECT_EQ(settlement.items_gained(0).count(), 2u);
+    // 掉落只在终局摇一次:重复读取结算必须完全一致(节点侧 outbox 会重投,读多次)
+    const auto again = engine.BuildSettlement(kPlayerA);
+    ASSERT_EQ(again.items_gained_size(), 1);
+    EXPECT_EQ(again.items_gained(0).count(), 2u);
+}
+
+TEST(TurnBattleEngineTest, DropRateZeroNeverDrops) {
+    auto provider = MakeDropProvider();
+    provider->AddMonster(kMonsterWithDrop).mutable_drop(0)->set_drop_rate(0);
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9302, turnbattle::kMatchModePveSolo, 42);
+    request.set_battle_config_id(kDungeonWithDrop);
+    AddPlayer(request, kPlayerA, 0, 1000, 1000, 500, 0, 0, 500);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ATTACK));
+    engine.ResolveCurrentRound();
+    ASSERT_EQ(engine.Outcome(), BATTLE_OUTCOME_SIDE_A_WIN);
+    EXPECT_EQ(engine.BuildSettlement(kPlayerA).items_gained_size(), 0);
+}
+
+TEST(TurnBattleEngineTest, ItemEffectComesFromItemTableAndManaPotionRestoresMana) {
+    auto provider = MakeProvider();
+    auto& manaPotion = provider->AddItem(kItemManaPotion);
+    manaPotion.set_battle_usable(1);
+    manaPotion.set_battle_heal_mp(30);
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9303, turnbattle::kMatchModePveSolo, 7);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 500);
+    snapshot->mutable_base_attributes()->set_mana(10);
+    snapshot->set_max_mana(100);
+    auto* item = snapshot->add_items();
+    item->set_item_table_id(kItemManaPotion);
+    item->set_count(1);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    EXPECT_TRUE(engine.SubmitAction(
+        kPlayerA, MakeAction(BATTLE_ACTION_ITEM, kPlayerA, 0, kItemManaPotion)));
+    const auto result = engine.ResolveCurrentRound();
+    const auto* itemEvent = FindFirstEvent(result, BATTLE_EVENT_ITEM);
+    ASSERT_NE(itemEvent, nullptr);
+    EXPECT_EQ(itemEvent->value(), 30u);              // 纯回蓝药:value 取回蓝量
+    EXPECT_EQ(itemEvent->target_mana_after(), 40u);  // 10 + 30
+}
+
+TEST(TurnBattleEngineTest, ValidateActionRejectsNonBattleItemAndUnknownItem) {
+    auto provider = MakeProvider();
+    provider->AddItem(kItemNotBattleUsable).set_battle_usable(0);  // 不是战斗消耗品
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9304, turnbattle::kMatchModePveSolo, 7);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 500);
+    auto* item = snapshot->add_items();
+    item->set_item_table_id(kItemNotBattleUsable);
+    item->set_count(5);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 表里没有这个 id
+    EXPECT_EQ(engine.ValidateAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, 0, 0, 9999)),
+              kInvalidTableId);
+    // 表里有但不可战斗使用
+    EXPECT_EQ(
+        engine.ValidateAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, 0, 0, kItemNotBattleUsable)),
+        kInvalidParameter);
+    // 校验不过的行动不落账:单人局因此不会就绪
+    EXPECT_FALSE(
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, 0, 0, kItemNotBattleUsable)));
+}
+
+TEST(TurnBattleEngineTest, ItemCanTargetTeammateButNotEnemy) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9305, turnbattle::kMatchModePveTeam, 7);
+    auto* healer = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 500);
+    AddPlayer(request, kPlayerB, 0, 50, 1000, 0, 100, 0, 10);
+    auto* item = healer->add_items();
+    item->set_item_table_id(kItemPotion);
+    item->set_count(2);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    // 给队友用药:合法
+    EXPECT_EQ(
+        engine.ValidateAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, kPlayerB, 0, kItemPotion)),
+        kSuccess);
+    // 给敌方用药:拒绝
+    const uint64_t monsterId = turnbattle::kMonsterActorIdBase;
+    EXPECT_EQ(
+        engine.ValidateAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, monsterId, 0, kItemPotion)),
+        kSkillInvalidTarget);
+    // 不存在的目标:拒绝
+    EXPECT_EQ(
+        engine.ValidateAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, 123456, 0, kItemPotion)),
+        kSkillInvalidTargetId);
+
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, kPlayerB, 0, kItemPotion));
+    engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_DEFEND));
+    const auto result = engine.ResolveCurrentRound();
+    const auto* itemEvent = FindFirstEvent(result, BATTLE_EVENT_ITEM);
+    ASSERT_NE(itemEvent, nullptr);
+    EXPECT_EQ(itemEvent->source_id(), kPlayerA);
+    EXPECT_EQ(itemEvent->target_id(), kPlayerB);  // 药落在队友身上
+    EXPECT_EQ(itemEvent->value(), 100u);
+    // 消耗记在用药者账上,队友账本为空
+    ASSERT_EQ(engine.BuildSettlement(kPlayerA).items_consumed_size(), 1);
+    EXPECT_EQ(engine.BuildSettlement(kPlayerA).items_consumed(0).count(), 1u);
+    EXPECT_EQ(engine.BuildSettlement(kPlayerB).items_consumed_size(), 0);
+}
+
+TEST(TurnBattleEngineTest, PvpItemUseIsCappedPerBattle) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9306, 3 /* PVP 1V1 */, 7);
+    auto* attacker = AddPlayer(request, kPlayerA, 0, 1000, 5000, 0, 100, 0, 500);
+    AddPlayer(request, kPlayerB, 1, 1000, 5000, 0, 100, 0, 10);
+    auto* item = attacker->add_items();
+    item->set_item_table_id(kItemPotion);
+    item->set_count(turnbattle::kMaxItemUsesPerBattlePvp + 3);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    for (uint32_t used = 0; used < turnbattle::kMaxItemUsesPerBattlePvp; ++used) {
+        ASSERT_EQ(engine.ValidateAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, 0, 0, kItemPotion)),
+                  kSuccess)
+            << "第 " << used << " 次用药应当放行";
+        engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, 0, 0, kItemPotion));
+        engine.SubmitAction(kPlayerB, MakeAction(BATTLE_ACTION_DEFEND));
+        engine.ResolveCurrentRound();
+    }
+    // 副本里还有药,但 PVP 限次拒绝(不限次可以靠海量药水把回合拖满白赢)
+    EXPECT_FALSE(engine.SelfItems(kPlayerA).empty());
+    EXPECT_EQ(engine.ValidateAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, 0, 0, kItemPotion)),
+              kInvalidParameter);
+}
+
+TEST(TurnBattleEngineTest, SelfItemsReflectsRemainingCopyAndDropsExhaustedEntries) {
+    TurnBattleEngine engine(MakeProvider());
+    auto request = MakeRequest(9307, turnbattle::kMatchModePveSolo, 7);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 100, 1000, 0, 100, 0, 500);
+    auto* item = snapshot->add_items();
+    item->set_item_table_id(kItemPotion);
+    item->set_count(1);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto before = engine.SelfItems(kPlayerA);
+    ASSERT_EQ(before.size(), 1u);
+    EXPECT_EQ(before[0].item_table_id(), kItemPotion);
+    EXPECT_EQ(before[0].count(), 1u);
+
+    engine.SubmitAction(kPlayerA, MakeAction(BATTLE_ACTION_ITEM, 0, 0, kItemPotion));
+    engine.ResolveCurrentRound();
+
+    // 用光的条目不再下发(客户端按"没有这一项"处理)
+    EXPECT_TRUE(engine.SelfItems(kPlayerA).empty());
+    // 不在本局的玩家:空表
+    EXPECT_TRUE(engine.SelfItems(kPlayerC).empty());
+}
+
+TEST(TurnBattleEngineTest, SnapshotBuffsDropControlInstantUnknownAndSanitizeCaster) {
+    auto provider = MakeProvider();
+    auto& stunBuff = provider->AddBuff(kBuffStunTable);
+    stunBuff.set_buff_type(turnbattle::kBuffTypeStun);
+    stunBuff.set_duration(12.0);
+    auto& instantBuff = provider->AddBuff(kBuffInstantTable);
+    instantBuff.set_buff_type(turnbattle::kBuffTypePoison);
+    instantBuff.set_duration(0.0);  // 非无限 + duration<=0 = 瞬时
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9308, turnbattle::kMatchModePveSolo, 7);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 500);
+    // 控制类:必须丢掉,否则场景里只剩半秒的眩晕进战斗会变成整整几回合
+    auto* stun = snapshot->add_buffs();
+    stun->set_buff_id(11);
+    stun->set_buff_table_id(kBuffStunTable);
+    stun->set_remain_rounds(2);
+    // 瞬时类:实时侧挂上即到期,不该在战斗里永驻
+    auto* instant = snapshot->add_buffs();
+    instant->set_buff_id(12);
+    instant->set_buff_table_id(kBuffInstantTable);
+    instant->set_remain_rounds(0);
+    // 表里没有的 buff:丢掉
+    auto* unknown = snapshot->add_buffs();
+    unknown->set_buff_id(13);
+    unknown->set_buff_table_id(9999);
+    // 合法 buff,但 caster 是本局不存在的 id(scene 的 entt 实体整数)
+    auto* poison = snapshot->add_buffs();
+    poison->set_buff_id(14);
+    poison->set_buff_table_id(kBuffPoison);
+    poison->set_remain_rounds(2);
+    poison->set_caster_id(777777);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto state = engine.BuildStateSnapshot();
+    const auto* actor = FindStateActor(state, kPlayerA);
+    ASSERT_NE(actor, nullptr);
+    ASSERT_EQ(actor->buffs_size(), 1);
+    EXPECT_EQ(actor->buffs(0).buff_table_id(), kBuffPoison);
+    EXPECT_EQ(actor->buffs(0).caster_id(), 0u);  // 认不出的施法者置 0
+}
+
+TEST(TurnBattleEngineTest, PassiveSkillIsNotCastableAndNotListedOnActor) {
+    auto provider = MakeProvider();
+    provider->AddSkill(kSkillPassiveOnly).add_skill_type(turnbattle::kSkillTypeBitPassive);
+
+    TurnBattleEngine engine(provider);
+    auto request = MakeRequest(9309, turnbattle::kMatchModePveSolo, 7);
+    auto* snapshot = AddPlayer(request, kPlayerA, 0, 1000, 1000, 0, 100, 0, 500);
+    snapshot->add_skill_table_ids(kSkillPassiveOnly);
+    ASSERT_TRUE(engine.Initialize(request));
+
+    const auto state = engine.BuildStateSnapshot();
+    const auto* actor = FindStateActor(state, kPlayerA);
+    ASSERT_NE(actor, nullptr);
+    bool listed = false;
+    for (const auto skillTableId : actor->skill_table_ids()) {
+        listed = listed || skillTableId == kSkillPassiveOnly;
+    }
+    EXPECT_FALSE(listed);
+    // 不在列表里 = 校验链按"未持有"拒绝
+    EXPECT_EQ(
+        engine.ValidateAction(kPlayerA, MakeAction(BATTLE_ACTION_SKILL, kPlayerA, kSkillPassiveOnly)),
+        kInvalidParameter);
 }

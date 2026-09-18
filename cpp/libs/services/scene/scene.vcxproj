@@ -52,6 +52,7 @@
     <ClInclude Include="generated\attribute\attributedelta60framess2c_attribute_sync.h" />
     <ClInclude Include="kafka\system\kafka.h" />
     <ClInclude Include="player\comp\afk_comp.h" />
+    <ClInclude Include="player\comp\player_ownership_comp.h" />
     <ClInclude Include="player\constants\player.h" />
     <ClInclude Include="player\system\afk.h" />
     <ClInclude Include="player\system\player_data_loader.h" />

@@ -1,12 +1,40 @@
 package config
 
 import (
+	"errors"
+	"fmt"
 	"time"
 
+	mysqldriver "github.com/go-sql-driver/mysql"
 	"github.com/zeromicro/go-zero/zrpc"
 
+	"guild/internal/data"
 	"shared/idsegment"
 )
+
+// MaxRpcTimeoutMs:帮会二期契约 §2,Timeout ≤ 路由服 ForwardTimeoutMs(5000)− 1000。
+const MaxRpcTimeoutMs int64 = 4000
+
+// InBandReplyReserve:整请求业务预算相对 Timeout 预留的回包余量(同 go/trade)。
+const InBandReplyReserve = 500 * time.Millisecond
+
+// HomeZoneLookupBudgetMs 镜像 logic.DefaultHomeZoneLookupTimeout(config 不能 import logic);
+// guild_test.go 的 TestHomeZoneBudgetMirrorsLogic 守住两者相等。
+const HomeZoneLookupBudgetMs int64 = 1500
+
+// DataServiceRpc.Timeout 的合法区间:下限防止写 0(go-zero 把 0 当成不设客户端超时),
+// 上限为契约 §2 规定的同步跨服务调用 ≤ 3000ms。
+const (
+	MinDataServiceRpcTimeoutMs int64 = 500
+	MaxDataServiceRpcTimeoutMs int64 = 3000
+)
+
+// SchemaConf 建表策略(port-decisions D-14 §4)。AutoMigrate 为 nil(没写)或 true:启动时跑
+// schemamigrate.Up;false:只跑只读 Plan,不干净就拒绝启动。用 *bool 的理由同 go/trade/internal/config.SchemaConf:
+// 要把"没写"与"显式写 false"区分开。
+type SchemaConf struct {
+	AutoMigrate *bool `json:",optional"`
+}
 
 type Config struct {
 	zrpc.RpcServerConf
@@ -59,6 +87,55 @@ type Config struct {
 	// 注册。留空关闭。默认相对服务工作目录(go/guild/)指向仓库 run/(已 gitignore);
 	// k8s 想要"etcd 不通也能起"就挂一个持久卷进来,写失败只告警不影响正确性。
 	SnowflakeCacheDir string `json:"SnowflakeCacheDir,default=../../run/snowflake"`
+
+	// Schema 决定启动期是建表(Up)还是只核对(Plan)。整段不写 = Up(dev 默认)。
+	Schema SchemaConf `json:",optional"`
+}
+
+// ShouldAutoMigrate 是启动路径跑 Up 还是只跑 Plan 的唯一判据:没写 = Up。
+func (c Config) ShouldAutoMigrate() bool {
+	return c.Schema.AutoMigrate == nil || *c.Schema.AutoMigrate
+}
+
+// RequestBudget 是一次请求内全部 I/O(归属区查询、发号、Redis、MySQL)共用的业务预算,
+// 由 guild.go 的 requestBudgetInterceptor 套到每个 handler 的 ctx 上。Validate 保证它为正,
+// 且放得下一次 data_service 调用加一次归属区查询。
+func (c Config) RequestBudget() time.Duration {
+	return time.Duration(c.Timeout)*time.Millisecond - InBandReplyReserve
+}
+
+// Validate 由 go-zero conf.Load / MustLoad 自动调用(v1.9.2 core/conf/config.go:69,97)。
+// 本方法会遮蔽嵌入的 zrpc.RpcServerConf.Validate,所以第一步必须显式调用它(Auth=true 时校验 Redis)。
+// 错误文案不得包含 DataSource 原文(含口令)。
+func (c *Config) Validate() error {
+	if err := c.RpcServerConf.Validate(); err != nil {
+		return err
+	}
+	if c.Timeout <= 0 || c.Timeout > MaxRpcTimeoutMs {
+		return fmt.Errorf("Timeout(%d ms)必须在 (0, %d] 内:上限 = 路由服 ForwardTimeoutMs(5000)− 1000",
+			c.Timeout, MaxRpcTimeoutMs)
+	}
+	ds := c.DataServiceRpc.Timeout
+	if ds < MinDataServiceRpcTimeoutMs || ds > MaxDataServiceRpcTimeoutMs {
+		return fmt.Errorf("DataServiceRpc.Timeout(%d ms)必须在 [%d, %d] 内:0 = 不设客户端超时,上限见帮会二期契约 §2",
+			ds, MinDataServiceRpcTimeoutMs, MaxDataServiceRpcTimeoutMs)
+	}
+	reserveMs := InBandReplyReserve.Milliseconds()
+	if ds+HomeZoneLookupBudgetMs+reserveMs > c.Timeout {
+		return fmt.Errorf("超时预算不足:DataServiceRpc.Timeout(%d)+ 归属区查询(%d)+ 回包余量(%d)= %d ms > Timeout(%d ms);"+
+			"建帮最坏要串行做归属区查询和同步领号段,超出会变成 DeadlineExceeded 而不是业务 tip",
+			ds, HomeZoneLookupBudgetMs, reserveMs, ds+HomeZoneLookupBudgetMs+reserveMs, c.Timeout)
+	}
+	// ParseDSN 的错误里可能带 DSN 片段(含口令),所以不 %w 包装原错误。
+	dsn, err := mysqldriver.ParseDSN(c.MySQL.DataSource)
+	if err != nil {
+		return errors.New("MySQL.DataSource 无法解析(原文含口令,不打印)")
+	}
+	if dsn.DBName != data.DatabaseName {
+		return fmt.Errorf("MySQL.DataSource 的库名必须是 %q(得到 %q):帮会表只建在独占库(port-decisions D-14)",
+			data.DatabaseName, dsn.DBName)
+	}
+	return nil
 }
 
 type RedisConf struct {

@@ -9,6 +9,8 @@
     规则:
       - 只看 snapshots/images 下名字形如 g<sha12>[-dirty-yyyyMMdd-HHmmss] 的目录;
         .tmp-* (发布中的 staging)、其它名字的目录(人工备份等)、符号链接一律跳过不删
+      - 最后修改早于 24 小时的 .tmp-* 打印 WARN(仍不删):publish 被 Ctrl+C / CI 取消 / 强杀时会留下
+        GB 级半截 staging,脚本分不清它与共享盘上别的机器正在进行的发布,只能提示人工确认
       - 按目录 LastWriteTimeUtc 从新到旧排序(同一时刻按目录名序数兜底,结果可复现),保留最近 -KeepLast 个
       - snapshots/images/latest.json 指向的版本无论多旧都保留:它是 fetch_images.ps1 的默认拉取目标,
         删掉它等于让所有不带 -Version 的目标机拉取失败;latest.json 存在但读不懂时拒绝清理(fail-closed)
@@ -102,8 +104,22 @@ try {
             ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0
         })
 
+    # 疑似遗留的 staging 只提示不删(见文件头):不提示的话排期清理一直报"无需清理"的绿,
+    # 要等磁盘写满、发布失败才被发现。判据只看目录自身修改时间,所以措辞是"疑似"
+    $staleStagingCutoff = [DateTime]::UtcNow.AddHours(-24)
+    $staleStagings = @(Get-ChildItem -LiteralPath $imagesRoot -Directory -Force | Where-Object {
+            $_.Name.StartsWith('.tmp-', [System.StringComparison]::Ordinal) -and
+            ($_.Attributes -band [System.IO.FileAttributes]::ReparsePoint) -eq 0 -and
+            $_.LastWriteTimeUtc -lt $staleStagingCutoff
+        })
+    foreach ($d in $staleStagings) {
+        $mtime = $d.LastWriteTimeUtc.ToString("yyyy-MM-dd'T'HH':'mm':'ss'Z'", [System.Globalization.CultureInfo]::InvariantCulture)
+        Write-Host "[WARN] 疑似被中断发布遗留的 staging(最后修改 $mtime,不自动删除;确认没有发布在进行后手工删除):snapshots/images/$($d.Name)" -ForegroundColor Yellow
+    }
+    $stagingNote = if ($staleStagings.Count -gt 0) { ";另有 $($staleStagings.Count) 个疑似遗留 staging 待人工确认(见上方 WARN)" } else { '' }
+
     if ($toDelete.Count -eq 0 -and $residues.Count -eq 0) {
-        Write-Host "[ OK ] 快照共 $($sorted.Count) 个,保留最近 $KeepLast 个,无需清理(releases/ 永不触碰)。" -ForegroundColor Green
+        Write-Host "[ OK ] 快照共 $($sorted.Count) 个,保留最近 $KeepLast 个,无需清理(releases/ 永不触碰)$stagingNote。" -ForegroundColor Green
         exit 0
     }
 
@@ -154,7 +170,7 @@ try {
     }
     $verb = if ($Force) { '已删除' } else { '待删除(dry-run,未改动任何文件)' }
     $residueNote = if ($residues.Count -gt 0) { "(另有上次未删完的残留 $($residues.Count) 个)" } else { '' }
-    Write-Host "[ OK ] $($toDelete.Count) 个过期快照$verb$residueNote;保留最近 $KeepLast 个;releases/ 未触碰。" -ForegroundColor Green
+    Write-Host "[ OK ] $($toDelete.Count) 个过期快照$verb$residueNote;保留最近 $KeepLast 个;releases/ 未触碰$stagingNote。" -ForegroundColor Green
     exit 0
 }
 catch {

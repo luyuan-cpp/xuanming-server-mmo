@@ -140,34 +140,13 @@ func TestInvalidateCaches_PropagatesRedisFailure(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalidate friend cache")
 }
 
-func TestFriendCapacityMigrationStateRequiresExplicitReady(t *testing.T) {
-	tests := []struct {
-		name  string
-		state string
-		found bool
-		ok    bool
-	}{
-		{name: "ready", state: "ready", found: true, ok: true},
-		{name: "pending", state: "pending", found: true},
-		{name: "missing", found: false},
-		{name: "legacy done is not ready", state: "done", found: true},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			err := friendCapacityMigrationStateError(tt.state, tt.found)
-			if tt.ok {
-				require.NoError(t, err)
-				return
-			}
-			assert.ErrorIs(t, err, ErrFriendCapacityMigrationNotReady)
-		})
-	}
-}
-
-func TestFriendCapacityHalfMigrationFailsClosedAndMissingRowUsesAuthoritativeCount(t *testing.T) {
+// TestFriendCapacityMissingRowUsesAuthoritativeCount:容量行缺失时必须按 friend 表的权威边重算,
+// 不能初始化成 0(0 会把硬上限整个放开)。原先那道 guild_schema_migration 门禁随帮会迁库删除
+// (帮会二期 B1,设计 docs/design/guild-phase2/01-storage.md §9),这条不变量改由本用例单独守。
+func TestFriendCapacityMissingRowUsesAuthoritativeCount(t *testing.T) {
 	dsn := os.Getenv("FRIEND_TEST_MYSQL_DSN")
 	if dsn == "" {
-		t.Skip("FRIEND_TEST_MYSQL_DSN 未设置，跳过容量迁移门禁测试")
+		t.Skip("FRIEND_TEST_MYSQL_DSN 未设置，跳过容量重算测试")
 	}
 
 	db, err := sql.Open("mysql", dsn)
@@ -190,28 +169,13 @@ func TestFriendCapacityHalfMigrationFailsClosedAndMissingRowUsesAuthoritativeCou
 			playerID, friendID)
 		require.NoError(t, err)
 	}
-	_, err = db.ExecContext(ctx,
-		"UPDATE guild_schema_migration SET state='pending', completed_at=NULL WHERE migration_key=?",
-		friendCapacityMigrationKey)
-	require.NoError(t, err)
 
-	err = repo.ensureFriendCapacityRows(ctx, playerID)
-	assert.ErrorIs(t, err, ErrFriendCapacityMigrationNotReady)
-	var rows int
-	require.NoError(t, db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM friend_capacity WHERE player_id=?", playerID).Scan(&rows))
-	assert.Zero(t, rows, "pending 半迁移不得创建伪 0 capacity 行")
-
-	_, err = db.ExecContext(ctx,
-		"UPDATE guild_schema_migration SET state='ready', completed_at=CURRENT_TIMESTAMP WHERE migration_key=?",
-		friendCapacityMigrationKey)
-	require.NoError(t, err)
 	require.NoError(t, repo.ensureFriendCapacityRows(ctx, playerID))
 
 	var capacity int
 	require.NoError(t, db.QueryRowContext(ctx,
 		"SELECT friend_count FROM friend_capacity WHERE player_id=?", playerID).Scan(&capacity))
-	assert.Equal(t, 3, capacity, "ready 后缺行必须从 friend 权威边计数，不能初始化为 0")
+	assert.Equal(t, 3, capacity, "缺行必须从 friend 权威边计数，不能初始化为 0")
 }
 
 func TestVersionedCache_RejectsStaleFillAfterWriteInvalidation(t *testing.T) {
@@ -243,13 +207,6 @@ func resetFriendIntegrationSchema(t *testing.T, ctx context.Context, db *sql.DB)
 		"DROP TABLE IF EXISTS friend_capacity",
 		"DROP TABLE IF EXISTS friend_request",
 		"DROP TABLE IF EXISTS friend",
-		"DROP TABLE IF EXISTS guild_schema_migration",
-		`CREATE TABLE guild_schema_migration (
-            migration_key VARCHAR(96) NOT NULL,
-            state VARCHAR(16) NOT NULL DEFAULT 'pending',
-            completed_at TIMESTAMP NULL DEFAULT NULL,
-            PRIMARY KEY (migration_key)
-        ) ENGINE=InnoDB`,
 		`CREATE TABLE friend (
             player_id BIGINT UNSIGNED NOT NULL,
             friend_player_id BIGINT UNSIGNED NOT NULL,
@@ -269,8 +226,6 @@ func resetFriendIntegrationSchema(t *testing.T, ctx context.Context, db *sql.DB)
             friend_count INT UNSIGNED NOT NULL DEFAULT 0,
             PRIMARY KEY (player_id)
         ) ENGINE=InnoDB`,
-		`INSERT INTO guild_schema_migration (migration_key, state, completed_at)
-         VALUES ('friend_capacity_backfill_v1', 'ready', CURRENT_TIMESTAMP)`,
 	}
 	for i, statement := range statements {
 		if _, err := db.ExecContext(ctx, statement); err != nil {

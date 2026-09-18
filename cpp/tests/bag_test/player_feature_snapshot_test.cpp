@@ -9,6 +9,7 @@
 #include "proto/scene/player_activity.pb.h"
 #include "proto/scene/player_bag.pb.h"
 #include "proto/scene/player_mission.pb.h"
+#include "proto/common/component/battle_comp.pb.h"
 #include "services/scene/player/comp/player_frozen_comp.h"
 #include "services/scene/player/system/player_feature_snapshot.h"
 #include "table/code/condition_table.h"
@@ -116,6 +117,20 @@ TEST_F(PlayerFeatureSnapshotTest, FrozenSortKeepsSourceLayoutUnchanged) {
     EXPECT_EQ(kInvalidParameter, PlayerBagSystem::Sort(player, kInventory, out, changed));
     EXPECT_FALSE(changed);
     EXPECT_EQ(17u, bag.GetItemPosByGuid(993));
+    EXPECT_FALSE(out.has_layout());
+}
+
+TEST_F(PlayerFeatureSnapshotTest, InBattleSortKeepsSourceLayoutUnchanged) {
+    // 局中闸(D48):整理会并堆并退役 item_uuid,而结算扣除的流水正是按 item_uuid 关联的。
+    // 战斗中整理会让"快照那一刻的实例集合"与结算落地时的对不上,所以直接拒。
+    auto& bag = AddBags().bags[kInventory];
+    bag.InsertItemForRestore(994, 1, 1, 17);
+    tlsEcs.actorRegistry.emplace<InBattleComp>(player).set_battle_id(4242);
+    BagInfo out;
+    bool changed = true;
+    EXPECT_EQ(kInvalidParameter, PlayerBagSystem::Sort(player, kInventory, out, changed));
+    EXPECT_FALSE(changed);
+    EXPECT_EQ(17u, bag.GetItemPosByGuid(994));
     EXPECT_FALSE(out.has_layout());
 }
 

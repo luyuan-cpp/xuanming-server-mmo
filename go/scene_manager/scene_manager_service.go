@@ -302,21 +302,24 @@ func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor
 		//    幂等冲突、以及"这次先别改"的可重试拒绝都不算。
 		serverbase.UnaryInterceptor(serverbase.Options{
 			ErrorCodeClassifier: serverbase.FaultCodeSet(
-				constants.ErrNoAvailableNode,   // 整个 zone 没有可用场景节点 —— 容量/调度故障
-				constants.ErrSceneLookupFailed, // 场景映射查不到 —— 服务端状态缺失
-				constants.ErrUpdateLocation,    // 写 PlayerLocation 失败 —— 存储依赖
-				constants.ErrEncodeEvent,       // 服务端自己序列化不出来
-				constants.ErrKafkaRoute,        // 路由命令发不出去 —— 依赖故障
-				constants.ErrRedis,             // Redis 不可用
-				constants.ErrNoNodeForPurpose,  // 该用途没有任何节点 —— 部署/调度故障
+				constants.ErrNoAvailableNode,     // 整个 zone 没有可用场景节点 —— 容量/调度故障
+				constants.ErrSceneLookupFailed,   // 场景映射查不到 —— 服务端状态缺失
+				constants.ErrUpdateLocation,      // 写 PlayerLocation 失败 —— 存储依赖
+				constants.ErrEncodeEvent,         // 服务端自己序列化不出来
+				constants.ErrKafkaRoute,          // 路由命令发不出去 —— 依赖故障
+				constants.ErrRedis,               // Redis 不可用
+				constants.ErrNoNodeForPurpose,    // 该用途没有任何节点 —— 部署/调度故障
+				constants.ErrHomeZoneUnavailable, // data_service 归属查询超时/不可用 —— 依赖故障
 				// 刻意**不算**故障,记在这里免得下个人反复纠结:
 				//   ErrInvalidNodeID / ErrInvalidGateID / ErrInvalidSceneType /
 				//   ErrNoSceneConfId            请求参数问题
 				//   ErrDuplicateScene           幂等冲突,不是故障
 				//   ErrSourceSceneGone          源场景已销毁,业务规则拒绝
-				//   ErrUnsafeCrossNodeHandoff   安全门禁按设计拒绝,拒得越多越说明它在工作
+				//   ErrUnsafeCrossNodeHandoff   历史码,已不再发出
 				//   ErrEnterSceneInProgress / ErrEnterSceneIdempotencyConflict  去重语义
 				//   ErrSceneReentryBarrier      屏障未到的可重试拒绝(见再入屏障)
+				//   ErrHandoffPending           源 scene 尚未落盘的可重试拒绝,拒得越多越说明门在工作
+				//   ErrOwnerEpochConflict       并发 EnterScene 的 CAS 落败,可重试
 			),
 		}),
 	}

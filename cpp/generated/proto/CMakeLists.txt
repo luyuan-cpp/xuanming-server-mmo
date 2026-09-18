@@ -116,6 +116,7 @@ set(SOURCE_FILES
     gate/gate_service.pb.cc
     guild/guild.grpc.pb.cc
     guild/guild.pb.cc
+    guild/guild_db.pb.cc
     trade/jubaozhai.grpc.pb.cc
     trade/jubaozhai.pb.cc
     trade/trade_admin.grpc.pb.cc

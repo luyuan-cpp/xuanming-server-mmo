@@ -91,8 +91,17 @@ inline constexpr double kFleeSpeedFactor = 0.01 / 12.0;
 inline constexpr double kFleeMinChance = 0.05;
 inline constexpr double kFleeMaxChance = 0.95;
 
-// 战斗道具 v1 保守效果:固定回血(ItemTable 未接入回合引擎,见 open_issues)
-inline constexpr uint64_t kDefaultItemHealHp = 100;
+// 战斗道具效果读 ItemTable 的 battle_usable / battle_heal_hp / battle_heal_mp 三列
+// (2026-09-17 加列,取代原先写死的 kDefaultItemHealHp=100)。
+
+// 掉落概率分母:MonsterTable.drop 的 drop_rate 是万分比整数(10000 = 必掉)。
+// 用整数概率而不是浮点,是为了让策划填的值在任何平台上掷出同一结果
+inline constexpr uint32_t kDropRateDenominator = 10000;
+
+// PVP 每人每场道具使用上限。PVE 不限次。
+// 理由:打满 max_rounds 判进攻方负(§5.1),不限次用药的防守方可以靠海量药水拖满回合白赢;
+// 同时 PVP 一期不可逃,进攻方没有止损手段。数值可按战斗节奏调,调了要同步改设计文档
+inline constexpr uint32_t kMaxItemUsesPerBattlePvp = 5;
 
 // 子 buff 递归深度上限(防表配环)
 inline constexpr uint32_t kMaxSubBuffDepth = 8;

@@ -41,6 +41,11 @@ public:
     // 由回合超时的默认普攻兜底(设计文档 §5.1 超时/掉线默认行动)
     bool SubmitAction(uint64_t actorId, const BattleAction& action);
 
+    // 行动合法性查询(零副作用)。节点在 SubmitAction 之前调它,把 tip 码回给提交者,
+    // 不再"一律回 OK"(AGENTS §11.3:玩家资产路径 fail-closed,拒绝要让玩家知道原因)。
+    // 返回 kSuccess 表示本次提交会被引擎接受;其余为 tip 码,与节点 error_message.id 同域。
+    uint32_t ValidateAction(uint64_t actorId, const BattleAction& action) const;
+
     // 自动战斗开关(设计文档 §11 D12):仅存活未逃的玩家单位可设,
     // 写 BattleActorState.is_auto。返回 0 成功,非 0 为 tip 错误码
     // (与节点 error_message.id 同域,节点侧直接透传)。
@@ -67,8 +72,15 @@ public:
     BattleSettlementData BuildSettlement(uint64_t playerId) const;
 
     // 重连补拉的全量状态。action_deadline_ms 引擎不填(引擎无时钟),
-    // 由 battle 节点按房间 timer 回填
+    // 由 battle 节点按房间 timer 回填。
+    // 注意:这是"全知"版本,含全员冷却。下发给客户端前必须由节点按收信人裁剪
+    // (BattleRoomManager::RedactStateForViewer),否则对手/观众能直接读到别人的冷却。
     BattleStateS2C BuildStateSnapshot() const;
+
+    // 某玩家当前剩余的战斗道具副本(item_table_id → 剩余个数),按 item_table_id 升序。
+    // 数量只存在于引擎私有的开局快照副本里(ExecuteItem 原地递减),节点按视角回填
+    // BattleStateS2C.self_items 时用它。玩家不在本局返回空表。
+    std::vector<BattleItemEntry> SelfItems(uint64_t playerId) const;
 
 private:
     friend class TurnBattleEngineDeathTestAccess; // 内存测试注入周期伤害来源，不新增业务控制接口
@@ -94,6 +106,15 @@ private:
     uint32_t CheckState(const BattleActorState& actor) const;
     // 耗蓝校验:SkillTable.cost_resource 中 kSkillCostResourceMana 项之和须 <= 当前法力
     uint32_t CheckSkillCost(const BattleActorState& actor, const SkillTable& skillRow) const;
+    // ITEM 校验:表行存在且 battle_usable、快照副本里还有余量、目标合法(自己或同队存活单位)、
+    // PVP 场次未超每人上限。这是提交期与出手期共用的唯一判据。
+    uint32_t CheckItemUse(const BattleActorState& actor, const BattleAction& action) const;
+    // 回合制可施放的技能类型**黑名单**:拒绝 Passive(被动) / Toggle(开关) /
+    // Channel(持续施法,引擎已删相位概念);skill_type 为空或只含其它位号一律放行
+    // (存量表未必每行都填了 skill_type,白名单会把没填的全判死)。
+    // 表里 skill_type 存的是位号(0..5),不是掩码。
+    // 与 scene 侧 player_battle.cpp 的快照过滤逐条同源:改一处必须同改另一处。
+    bool IsTurnBattleCastableSkill(const SkillTable& skillRow) const;
 
     // ---- 回合结算 ----
 
@@ -116,6 +137,13 @@ private:
                                  const BuffTable& buffRow, TurnResultS2C& result);
     void DecayCooldowns();
     void UpdateOutcome();
+    // 掉落掷点:只在 outcome 刚判定为玩家方获胜时调用一次,写进 settlements[].items_gained。
+    // 放在终局而不是逐怪死亡时,是为了不把随机消费插进战斗中段、平移既有同种子回放基线。
+    // 遍历序固定:settlements(map 升序) × defeatedMonsters(击杀序) × MonsterTable.drop 槽序。
+    void RollDrops();
+    // 快照带入的 buff 清洗(G5):丢掉表缺失/控制类/瞬时类条目,把 caster_id 从
+    // scene 的 entt 整数域改写到局内 actor_id 域(认不出来的一律置 0)。
+    void SanitizeSnapshotBuffs(BattleActorState& actor);
 
     // ---- 伤害/治疗/buff ----
 
@@ -158,6 +186,10 @@ private:
 
     BattleActorState* FindActor(uint64_t actorId);
     const BattleActorState* FindActor(uint64_t actorId) const;
+    // 开局快照副本里某玩家的某个道具条目(剩余数的唯一真相)。同一 item_table_id
+    // 出现多条时取第一条余量 > 0 的;找不到返回 nullptr。
+    BattleItemEntry* FindItemEntry(uint64_t playerId, uint32_t itemTableId);
+    const BattleItemEntry* FindItemEntry(uint64_t playerId, uint32_t itemTableId) const;
     // 按 buff 实例 id 找下标,找不到返回 -1(tick 过程中条目会增删,须按 id 重查)
     int FindBuffIndex(const BattleActorState& actor, uint64_t buffId) const;
     bool IsActorActive(const BattleActorState& actor) const;  // 存活且未逃跑
@@ -190,6 +222,7 @@ private:
     std::vector<BattleActorState> actors;                 // 全部战斗单位,插入序稳定
     std::map<uint64_t, BattleAction> pendingActions;      // actor_id → 本回合行动(有序容器保确定性)
     std::map<uint64_t, BattleSettlementData> settlements; // player_id → 结算累积(道具消耗账本等)
+    std::map<uint64_t, uint32_t> itemUseCounts;           // player_id → 本场已用道具次数(PVP 限次用,有序容器保确定性)
 
     std::mt19937_64 rng;
     uint32_t roundIndex = 1;       // 当前收集中的回合序号,从 1 开始
