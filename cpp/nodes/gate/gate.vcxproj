@@ -38,6 +38,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gate_codec.h" />
+    <ClInclude Include="gate_gm_client_messages.h" />
     <ClInclude Include="gate_security.h" />
     <ClInclude Include="gate_router_mode.h" />
     <ClInclude Include="gate_version.h" />

@@ -358,6 +358,15 @@ function Invoke-Start {
             $prevNodeIpEnv = $env:NODE_IP
             if ($Zone -gt 0) { $env:ZONE_ID = "$Zone" }
             if ($null -ne $advertiseIp) { $env:NODE_IP = $advertiseIp }
+            # P0-a：GM 客户端指令（GmAddCurrency / GmSetPlayerLevel / GmGrantPet 等六条）
+            # 的开关是各节点自己的运行模式，默认（未设置）= prod = 关闭。本机联调与 robot
+            # 的 attribute / pet / currency-crash 冒烟都依赖这些指令，所以这里兜底成 dev。
+            # 只在“没设”时兜底：显式 `$env:GATE_RUN_MODE='prod'` 再拉一次，是收口验收的做法。
+            # 部署链（k8s_deploy.ps1）从不注入这两个变量，生产恒关闭。见 cpp/nodes/gate/SECURITY.md §3。
+            $prevGateRunMode  = $env:GATE_RUN_MODE
+            $prevSceneRunMode = $env:SCENE_RUN_MODE
+            if ([string]::IsNullOrWhiteSpace($env:GATE_RUN_MODE))  { $env:GATE_RUN_MODE = 'dev' }
+            if ([string]::IsNullOrWhiteSpace($env:SCENE_RUN_MODE)) { $env:SCENE_RUN_MODE = 'dev' }
             try {
                 $proc = Start-Process -FilePath $exePath `
                     -WorkingDirectory $BinDir `
@@ -370,6 +379,10 @@ function Invoke-Start {
                 else { $env:ZONE_ID = $prevZoneEnv }
                 if ($null -eq $prevNodeIpEnv) { Remove-Item Env:NODE_IP -ErrorAction SilentlyContinue }
                 else { $env:NODE_IP = $prevNodeIpEnv }
+                if ($null -eq $prevGateRunMode) { Remove-Item Env:GATE_RUN_MODE -ErrorAction SilentlyContinue }
+                else { $env:GATE_RUN_MODE = $prevGateRunMode }
+                if ($null -eq $prevSceneRunMode) { Remove-Item Env:SCENE_RUN_MODE -ErrorAction SilentlyContinue }
+                else { $env:SCENE_RUN_MODE = $prevSceneRunMode }
             }
 
             $pids | Add-Member -NotePropertyName $instanceKey -NotePropertyValue $proc.Id -Force

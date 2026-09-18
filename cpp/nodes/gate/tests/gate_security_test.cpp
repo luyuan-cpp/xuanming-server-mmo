@@ -99,6 +99,41 @@ TEST(GateRunMode, DevAndTestAreRecognizedCaseInsensitivelyAndTrimmed)
 	EXPECT_EQ(gate_security::RunMode::kProd, gate_security::ParseRunMode("PRODUCTION", nullptr));
 }
 
+// ── GM 客户端消息闸(P0-a):默认必须关闭 ───────────────────────────────────
+//
+// GmAddCurrency / GmSetPlayerLevel / GmGrantPet 这一批挂在客户端协议服务上,
+// 任何已登录客户端都能直接发。判据只有运行模式,而运行模式的默认值必须是 prod,
+// 也就是"默认拒绝"。这几条用例锁的是"没设 / 拼错 = 关闭"这件事本身 ——
+// 一旦有人把默认改成放行,这里立刻红。
+//
+// message_id 的那一半在 gate_gm_client_messages.h,它 include 生成的 .pb.h,
+// 进不了这份独立编译的单测;那一侧的回归靠 robot 冒烟(prod 下 GM 步骤被拒)。
+
+TEST(GmClientMessageGate, ProductionRefuses)
+{
+	EXPECT_EQ(gate_security::GmClientMessageVerdict::kRefuse,
+			  gate_security::ClassifyGmClientMessage(gate_security::RunMode::kProd));
+}
+
+TEST(GmClientMessageGate, DevAndTestAllow)
+{
+	EXPECT_EQ(gate_security::GmClientMessageVerdict::kAllow,
+			  gate_security::ClassifyGmClientMessage(gate_security::RunMode::kDev));
+	EXPECT_EQ(gate_security::GmClientMessageVerdict::kAllow,
+			  gate_security::ClassifyGmClientMessage(gate_security::RunMode::kTest));
+}
+
+TEST(GmClientMessageGate, UnsetOrMistypedRunModeRefuses)
+{
+	// 未设置、以及把模式名拼错("develop" / "yes"),都必须落在拒绝这一侧。
+	for (const char *raw : {"", "develop", "yes", "Prod", " PRODUCTION "})
+	{
+		EXPECT_EQ(gate_security::GmClientMessageVerdict::kRefuse,
+				  gate_security::ClassifyGmClientMessage(gate_security::ParseRunMode(raw, nullptr)))
+			<< "raw=" << raw;
+	}
+}
+
 // ── 路由模式开关(GATE_CLIENT_RPC_ROUTER):默认必须落在旧模式 ─────────────
 //
 // client-rpc-router.md D34:未设 / 非 1|true|on 时 gate 行为与改前完全一致。

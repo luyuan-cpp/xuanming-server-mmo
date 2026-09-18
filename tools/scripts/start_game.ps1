@@ -48,6 +48,8 @@ $oldRpcPort = $env:RPC_PORT
 $oldCommandPartitions = $env:KAFKA_COMMAND_TOPIC_PARTITIONS
 $oldCommandGeneration = $env:KAFKA_COMMAND_TOPIC_GENERATION
 $oldGateClientRpcRouter = $env:GATE_CLIENT_RPC_ROUTER
+$oldGateRunMode = $env:GATE_RUN_MODE
+$oldSceneRunMode = $env:SCENE_RUN_MODE
 $ownsMutex = $false
 $transcribing = $false
 $resultCode = 0
@@ -488,6 +490,17 @@ try {
         # 路由模式翻转落在部署层（C++ 默认值不改）：gate 启动时读一次 GATE_CLIENT_RPC_ROUTER 并缓存，
         # 必须在 cpp-node-start 之前设好，经 dev_tools 子进程继承；scene / battle / Go 服务继承到也不读。
         $env:GATE_CLIENT_RPC_ROUTER = $GateRouterMode
+        # P0-a：GM 客户端指令（GmAddCurrency / GmSetPlayerLevel / GmGrantPet 等六条）默认关闭，
+        # 判据是各节点自己的运行模式，默认（未设置）= prod = 拒绝。robot 的 attribute / pet /
+        # currency-crash 三个冒烟都靠这些指令造数据，所以本机启动器显式声明 dev。
+        # 与 GATE_CLIENT_RPC_ROUTER 同样必须在 cpp-node-start 之前设好，由 dev_tools 子进程继承。
+        # 部署链（tools/scripts/k8s_deploy.ps1）从不注入这两个变量 —— 生产恒为 prod，恒关闭。
+        # 详见 cpp/nodes/gate/SECURITY.md §3。
+        # 只在“没设”时兜底，不覆盖调用者显式声明的值 —— 收口验收要能
+        # `$env:GATE_RUN_MODE='prod'` 再起一次，确认 GM 指令确实被拒。
+        if ([string]::IsNullOrWhiteSpace($env:GATE_RUN_MODE))  { $env:GATE_RUN_MODE = 'dev' }
+        if ([string]::IsNullOrWhiteSpace($env:SCENE_RUN_MODE)) { $env:SCENE_RUN_MODE = 'dev' }
+        Write-Host "  GM 指令通道：GATE_RUN_MODE=$($env:GATE_RUN_MODE) / SCENE_RUN_MODE=$($env:SCENE_RUN_MODE)（非 dev/test 即关闭；生产默认 prod）"
         if ($GateRouterMode -eq '1') {
             Write-Host '  gate 路由模式：GATE_CLIENT_RPC_ROUTER=1（经 client_rpc_router 转发，chat 可达）'
         } else {
@@ -543,6 +556,8 @@ try {
     $env:KAFKA_COMMAND_TOPIC_PARTITIONS = $oldCommandPartitions
     $env:KAFKA_COMMAND_TOPIC_GENERATION = $oldCommandGeneration
     $env:GATE_CLIENT_RPC_ROUTER = $oldGateClientRpcRouter
+    $env:GATE_RUN_MODE = $oldGateRunMode
+    $env:SCENE_RUN_MODE = $oldSceneRunMode
     if ($transcribing) { Stop-Transcript | Out-Null }
     if ($ownsMutex) { $mutex.ReleaseMutex() }
     if ($mutex) { $mutex.Dispose() }

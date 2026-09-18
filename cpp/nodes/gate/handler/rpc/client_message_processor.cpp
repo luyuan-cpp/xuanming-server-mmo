@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "gate_codec.h"
+#include "gate_gm_client_messages.h"
 #include "gate_router_mode.h"
 #include "gate_security.h"
 #include "message_limiter/illegal_packet_counter.h"
@@ -902,6 +903,50 @@ void RpcClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpConn
 
 	if (!ValidateClientMessage(session, request, conn))
 		return;
+
+	// GM 客户端消息闸(P0-a,gate_security.h「GM 客户端消息闸」一节)。
+	//
+	// GmAddCurrency(37)/ GmDeductCurrency(49)/ GmBlockCurrency(94)/
+	// GmUnblockCurrency(95)/ GmSetPlayerLevel(175)/ GmGrantPet(187) 挂在标了
+	// OptionIsClientProtocolService 的 player 服务上,因此一直与 GetBag / MoveStart
+	// 走同一条路径进 scene,零鉴权 —— 任何已登录客户端发一个包就能给自己加钱、
+	// 升满级、发宝宝。聚宝斋要用人民币寄售(jubaozhai-market.md §12 P0-a),这条
+	// 口子等于印钞机接到交易所上。
+	//
+	// 放在 ValidateClientMessage **之后**:GM 包同样要先过体积与限流两道闸,
+	// 否则"被拒绝的消息不占限流额度"会让攻击者用 GM 号无成本刷日志和 CPU
+	// (与本函数上面那段"白名单校验必须计入非法包闸门"同一条教训)。
+	//
+	// 判据是 GATE_RUN_MODE:未设置 = prod = 拒绝(部署链从不设它)。本地联调由
+	// tools/scripts/start_game.ps1 显式设 dev。scene 侧另有第二道锁
+	// (SCENE_RUN_MODE,player_gm_guard.h),防的是绕开 gate 直连 scene RPC 端口。
+	//
+	// 拒绝要计非法包:正常客户端根本不知道这些号,连发只可能是在试探。
+	if (gate_gm_client_messages::IsGmClientMessage(request->message_id()) &&
+		!gate_security::GmClientMessagesAllowed())
+	{
+		// 趋势证据走采样 WARN(每 1024 次一条);逐条明细只打 DEBUG ——
+		// 与上面「坏 message_id」那一支同一口径。每条被拒的包都写一行 WARN
+		// 等于把这条闸本身变成日志放大面(拒绝发生在踢线阈值之前)。
+		LogClientSecurityRejectionSampled("gm_client_message_refused_in_prod", sessionId);
+		LOG_DEBUG << "GM client message refused: GATE_RUN_MODE="
+				  << gate_security::RunModeName(gate_security::CurrentRunMode())
+				  << " message_id=" << request->message_id()
+				  << " session_id=" << sessionId
+				  << " player_id=" << session.playerId;
+		// 回 tip 而不是静默丢:本地把 GATE_RUN_MODE 忘了设时,robot 冒烟要能立刻
+		// 看出"是被闸拦了",而不是超时到一半去猜。kFeatureUnavailable 是既有码,
+		// 新增 tip 要改 data/tip/Tip.xlsx(二进制文件,多个并行会话在排队改它)。
+		SendTipToClient(conn, kFeatureUnavailable);
+		if (IllegalPacketCounter::RegisterAndShouldKill(session.illegalPacketCount))
+		{
+			LOG_WARN << "Session illegal-packet threshold exceeded (GM message in prod) — forceClose."
+					 << " count=" << session.illegalPacketCount
+					 << " message_id=" << request->message_id();
+			conn->forceClose();
+		}
+		return;
+	}
 
 	auto &messageInfo = gRpcMethodRegistry[request->message_id()];
 	if (messageInfo.protocol == PROTOCOL_TCP)

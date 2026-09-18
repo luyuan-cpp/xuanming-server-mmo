@@ -263,6 +263,7 @@
     <ClInclude Include="handler\rpc\player\player_movement_handler.h" />
     <ClInclude Include="handler\rpc\scene_admin_handler.h" />
     <ClInclude Include="handler\rpc\player\player_currency_handler.h" />
+    <ClInclude Include="handler\rpc\player\player_gm_guard.h" />
     <ClInclude Include="handler\rpc\player\player_rollback_handler.h" />
     <ClInclude Include="handler\rpc\scene_handler.h" />
     <ClInclude Include="handler\rpc\player\client_player_common_handler.h" />

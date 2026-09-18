@@ -7,6 +7,7 @@
 #include <muduo/base/Logging.h>
 
 #include "player/system/player_pet.h"
+#include "player_gm_guard.h" // P0-a:GM 客户端指令的 scene 侧第二道锁
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
@@ -146,10 +147,14 @@ void ScenePetClientPlayerHandler::GmGrantPet(entt::entity player,const ::GmGrant
 	::GmGrantPetResponse* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	// ⚠ 今天这条 RPC **没有任何鉴权**:客户端直接发就能给自己发宝宝。
-	// 与既有的 GmSetPlayerLevel / GmAddCurrency 同状态 —— gate 侧目前不存在
-	// 「按消息号的 GM 白名单」(gate_security.h 管的是带签名的 GM admin RPC,不覆盖这条)。
-	// 开发期可用,上线前必须与那两条一起统一收口,见 docs/design/player-pet.md §8。
+	// P0-a 已收口:gate 按消息号的 GM 白名单(gate_gm_client_messages.h,187 在表内)
+	// 在非 dev/test 直接拒绝;这里是防绕开 gate 直连 scene 的第二道锁,判据 SCENE_RUN_MODE。
+	// 见 docs/design/player-pet.md §8 与 cpp/nodes/gate/SECURITY.md §3。
+	if (scene_gm_guard::RejectGmClientRpc("GmGrantPet"))
+	{
+		SetTip(kFeatureUnavailable);
+		return;
+	}
 	uint64_t petId = 0;
 	if (const auto err = PetSystem::GrantPet(player, request->pet_table_id(), petId); err != kSuccess)
 	{

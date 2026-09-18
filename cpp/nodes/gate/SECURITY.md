@@ -126,7 +126,58 @@ scene 的节点号即可。
 > 当时漏了 —— 在补上之前,任何能连到 scene RPC 端口的进程都能停掉持有玩家权威
 > 数据的场景节点。
 
-## 3. 启动版本行
+## 3. GM 客户端指令闸 —— `GATE_RUN_MODE` / `SCENE_RUN_MODE`(默认关闭)
+
+有六条 **GM 指令挂在客户端协议服务上**,也就是说它们和 `GetBag`、`MoveStart`
+走的是同一条路径、同一个端口、同一份会话:
+
+| message_id | RPC | 被滥用的后果 |
+| --- | --- | --- |
+| 37 | `SceneCurrencyClientPlayer.GmAddCurrency` | 自己给自己加任意货币 |
+| 49 | `SceneCurrencyClientPlayer.GmDeductCurrency` | 扣任意货币 |
+| 94 / 95 | `SceneCurrencyClientPlayer.GmBlock/UnblockCurrency` | 自己解除货币封禁 |
+| 175 | `SceneAttributeClientPlayer.GmSetPlayerLevel` | 一秒满级(上限 85) |
+| 187 | `ScenePetClientPlayer.GmGrantPet` | 自己发任意宝宝 |
+
+在收口之前,这六条**没有任何鉴权** —— 会话过了令牌校验之后,普通玩家发一个包就能
+执行。聚宝斋要用人民币寄售(`docs/design/jubaozhai-market.md` §12 P0-a),这条口子
+等于把印钞机接到交易所上,是上线阻塞级漏洞。
+
+### 现在的行为
+
+| `GATE_RUN_MODE` | 客户端发 37/49/94/95/175/187 |
+| --- | --- |
+| 不设置(默认)/ `prod` / 拼错的值 | **拒绝**:回 `kFeatureUnavailable` tip,计一次非法包(阈值 `GATE_ILLEGAL_PACKET_THRESHOLD` 默认 50 才踢线),gate 打一条 `GM client message refused` WARN |
+| `dev` / `test` | 放行(本地联调与 robot 冒烟) |
+
+scene 侧有**第二道锁**,判据是它自己的 `SCENE_RUN_MODE`(同样默认 prod = 拒绝),
+拦的是绕开 gate 直连 scene RPC 端口的调用 —— 集群网络里 scene 的端口对其它 Pod
+是通的,gate 的闸对那条路不存在。被拒时 scene 打一条
+`<RpcName> rejected: GM client RPC is disabled outside dev/test` 并回同一个 tip。
+
+实现:清单 `cpp/nodes/gate/gate_gm_client_messages.h`(用生成常量,不写字面量
+消息号)、策略 `gate_security.h` 的 `ClassifyGmClientMessage`、接线
+`handler/rpc/client_message_processor.cpp`、scene 侧
+`cpp/nodes/scene/handler/rpc/player/player_gm_guard.h`。
+
+### 运维须知
+
+- **部署链从不注入这两个变量**(`tools/scripts/k8s_deploy.ps1`),所以线上恒为
+  prod、恒关闭。要关掉它们不需要做任何事;**要打开才需要动手**,而线上没有任何
+  正当理由打开 —— 线上改玩家数据走 `scene_admin` / `data_service` 那条带 HMAC
+  签名与审计日志的运维面(见本文 §2 与 `go/data_service` 的 `x-admin-token`)。
+- 本机启动器(`tools/scripts/cpp_nodes.ps1`、`start_game.ps1`)在这两个变量**没设**
+  时兜底成 `dev`,不覆盖显式值 —— 所以做收口验收时
+  `$env:GATE_RUN_MODE='prod'` 再拉一次即可复现"被拒"。
+- ⚠️ 顺带影响:`GATE_RUN_MODE=dev` 同时打开 §1 的"空 `GateTokenSecret` 放行"降级
+  路径。本机 `bin/etc/base_deploy_config.yaml` 的 `GateTokenSecret` 是非空占位串,
+  所以令牌校验照常做;只有把它显式清空才会真的降级(且会打 `SECURITY WARNING`)。
+- **新增任何 `Gm*` / `Debug*` / `Test*` 客户端 RPC**:正解是**不要**给它所在的
+  service 标 `OptionIsClientProtocolService`(参照 `proto/trade/trade_admin.proto`
+  与 `go/guild/internal/session/session.go` 的 `ClientMethods` 白名单);实在要挂在
+  客户端服务上,必须同时登记进 `gate_gm_client_messages.h`,否则它就是裸奔的。
+
+## 4. 启动版本行
 
 gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogLevel` 影响):
 
@@ -154,7 +205,7 @@ gate 启动会打两条 `[gate_version]` 单行记录(直写 stdout,不受 `LogL
 编译期宏留作构建流水线以后接入的入口 —— 真要接,得改
 `tools/archived/vcxproj2cmake.py`,不能改生成出来的 `CMakeLists.txt`。
 
-## 4. `GateMaxConnections` —— 客户端连接硬上限
+## 5. `GateMaxConnections` —— 客户端连接硬上限
 
 `bin/etc/base_deploy_config.yaml` 的 `GateMaxConnections` 限制单个 gate 同时持有的
 客户端 TCP 会话。闸门在分配 session id / `SessionInfo` 之前执行;超限连接直接关闭,

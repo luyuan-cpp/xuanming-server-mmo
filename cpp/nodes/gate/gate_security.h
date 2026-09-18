@@ -71,6 +71,50 @@ inline RunMode CurrentRunMode()
 	return ResolveRunModeOnce().mode;
 }
 
+// ── GM 客户端消息闸(P0-a)────────────────────────────────────────────────────
+//
+// `GmAddCurrency` / `GmSetPlayerLevel` / `GmGrantPet` 这一批 GM 指令挂在标了
+// `OptionIsClientProtocolService` 的 player 服务上,于是它们的 message_id 被生成进
+// `IsClientMessageId`,与 `GetBag` / `MoveStart` 同一条路径进 scene ——
+// **任何已登录的普通客户端发一个包就能给自己加钱、升满级、发宝宝**。聚宝斋要卖人民币
+// (docs/design/jubaozhai-market.md §12 P0-a),这条口子等于印钞机。
+//
+// 为什么用运行模式而不是 GM 签名:
+//   * 这三条 RPC 的请求体里没有任何可寄生签名的字段(不像 `GmGracefulShutdownRequest`
+//     有 `operator`),加字段要动 proto → 重生成 C++/Go/Java/C# 四侧产物 + 客户端
+//     `gen_proto.ps1`,本仓不执行编译(AGENTS.md §10.1),验证不了;
+//   * 它们本来就只服务"本地联调 + robot 冒烟",没有任何生产用途 —— 生产侧的正解是
+//     **整条关掉**,而不是"让 GM 能用"。真要线上改玩家数据,走的是 scene_admin /
+//     data_service 那条带签名、带审计的运维面,不是客户端协议面。
+//
+// 默认值在安全的那一侧:`GATE_RUN_MODE` 未设置 = prod = 拒绝(部署链从不设这个变量,
+// 见 tools/scripts/k8s_deploy.ps1:670)。本地联调由 tools/scripts/start_game.ps1 显式
+// 设成 dev。判据与空令牌密钥降级完全同一个(`IsNonProdMode`),不引入第二个开关。
+
+enum class GmClientMessageVerdict
+{
+	kAllow,  // 非生产模式:放行(本地联调 / robot 冒烟)
+	kRefuse, // 生产模式:拒绝
+};
+
+inline const char *GmClientMessageVerdictName(GmClientMessageVerdict verdict)
+{
+	return verdict == GmClientMessageVerdict::kAllow ? "allow" : "refuse";
+}
+
+// 纯函数:只看运行模式给结论,不认识 message_id、不打日志。
+// message_id 的那一半在 gate_gm_client_messages.h(要 include 生成头,本头刻意不依赖)。
+inline GmClientMessageVerdict ClassifyGmClientMessage(RunMode mode)
+{
+	return IsNonProdMode(mode) ? GmClientMessageVerdict::kAllow : GmClientMessageVerdict::kRefuse;
+}
+
+// 生产调用点的便利封装:模式读进程内缓存的 GATE_RUN_MODE。
+inline bool GmClientMessagesAllowed()
+{
+	return ClassifyGmClientMessage(CurrentRunMode()) == GmClientMessageVerdict::kAllow;
+}
+
 // ── GM 面鉴权 ───────────────────────────────────────────────────────────────
 //
 // GmGracefulShutdownRequest 只有 operator / reason 两个字段

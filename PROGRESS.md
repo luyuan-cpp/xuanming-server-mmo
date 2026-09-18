@@ -4982,6 +4982,7 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - 2026-09-16/17 评审(team-system-review):核实 13 条，确认 8 条全部已修，驳回 5 条。修了 5 处:整队过期后空视图 epoch=0 被客户端丢弃(S_READ 缺失回 nowMs、起种 nowms+1);多名成员索引错位时 `{-2}` 修复活锁(`RepairRemoveMembers` 级联);开战锁 EVAL 结果未知不补偿(后台 / 同步按 token 清锁);MATCH_FAILED 不带原因 tip;组队推送混进 `match_kafka_push_total`。另补了客户端合并门禁和 `team.proto` 协议号注释两处文档。终检未发现新问题，38 个 Go 文件 `gofmt -l -e` 通过。评审修复(含新增 `go/match/internal/logic/push_test.go`)已随补丁迁入 `-v3` 并暂存。**仍未编译、未测试,待 Codex 验证**。详见设计文档文末「评审记录(2026-09-16,team-system-review)」。
 - 2026-09-17 导表 + proto 生成 + 对齐收口(仍在 `-team3` worktree,未提交):`Tip.xlsx` 追加 13 个 team 错误码(**4018..4030**,`TeamInternal=4030` 是唯一 fault,team 段 `Count` 18→31);proto 生成拿到 **15 个消息号 201..215**(12 请求 + 3 个 `Notify*`:203/213/215)与 **event id 48 `PlayerTeamRefreshEvent`**,`kMaxRpcMethodCount` 216、`kMaxEventCount` 49;`route_table.go` 15 条全是 `TeamNodeService` + `ClientProtocol: true`;`MessageLimiter.xlsx` 追加 12 行(查询类 5/s、写操作 3/s,3 个 `Notify*` 按仓库惯例未进表,走 gate 默认 3/s)。护栏 16 条**全部 pass**,其中两条硬红线有实证:`mmorpg-client` 前后 `git status --porcelain` 均 0 行、主工作区 `third_party` 被修改文件数 0。手写侧只为对齐生成名改了 3 个文件(2 处注释 + `grpc_client.vcxproj.filters` 补 2 条 team 登记),**没有出现生成名对不上的情况**。82 个改动 Go 文件跑 `gofmt -l -e`,只报 2 个生成产物(`segments.go` 末尾缺换行、`message_body_handler.go` map 对齐),把 HEAD 版本导出跑同样被报出 → 生成器既有行为,按 AGENTS §3 未手改;**全部手写 Go 文件 gofmt 干净**。仍未做:`cd robot && go mod vendor`(robot 整包编译的硬前置)、port-feasibility D7 注记。**仍未编译、未测试**——本 worktree `third_party` 子模块目录是空的,C++ 编译前 Codex 需先 `git submodule update --init --recursive`(不能用 junction)。逐项数值、护栏证据与**给 Codex 的验证清单**见 [docs/design/team-system.md](docs/design/team-system.md) 文末「生成记录(2026-09-17)」与「给 Codex 的验证清单(2026-09-17 收口版)」。
 - 2026-09-18 补完 R.4 ② 的尾巴:`Tip.xlsx` 的 18 个**既有** team 码(4000..4017)B 列文案原本全空(客户端按 id 查文案会显示空白),现已补齐 —— 12 个有引用点的给玩家可读文案,6 个无引用点的填「(保留)」;脚本只写 B 列为空的行,没有覆盖任何已有文案。导表用**临时副本** `exporter_config.local.yaml`(`csharp.deploy: []`,跑完即删):仓内默认导表配置会把 C# 表产物部署进 `mmorpg-client`,直接跑就会写客户端仓。核对:`tip_text.json` 的 4000..4030 共 31 条全部非空,客户端仓 `git status --porcelain` 仍为 0 行。见设计文档 §GR.9。
+- 2026-09-18 收口(主工作区 `main`,**已合并并推送到 `origin/main` `66c546e70`**;**未编译、未测试**):组队代码早已在主干,本轮把原本留给 Codex 的、不需要编译的尾巴做完。① **robot vendor**——`cd robot && go mod vendor`(go1.26.5、`GOPROXY=goproxy.cn`、`GOTOOLCHAIN=local`)退出码 0,`robot/vendor` 4 改 2 增(1220→1222 个文件),新增 `vendor/proto/team/{team.pb.go,team_grpc.pb.go}`、`modules.txt` 净增 1 行 `proto/team`、`team_error_tip.pb.go` 的 `kTeam` 符号 76→128 处且 `kTeamInternal=4030` 可见;`go.mod`/`go.sum` 未变,5 个 vendor 产物与源生成物逐字节相同。**勘误**:原清单的"vendor 里 `shared/generated/tip/*` 也要更新"前提有误 —— robot 不 import 该包,`go mod vendor` 不会纳入。② **C++ 工程登记**——给 `cpp/libs/services/scene/CMakeLists.txt` 补 `battle/system/player_battle.cpp`(Windows 侧一直在编,Linux 侧缺 → scene 静态库缺 `PlayerBattleSystem::IsInBattle`,`player_team.cpp:337/:375` 要用);给 `proto.vcxproj{,.filters}` 与 `cpp/generated/proto/CMakeLists.txt` 补 `trade/trade_table.grpc.pb.cc`;给 `rpc.vcxproj{,.filters}` 补 2 条 team `ClInclude`;并在 `cpp/tests/aoi_test/interest_system_mock.cpp` 顶部加注释固化结论——该 mock **不参与编译**(加进工程必 LNK2005),新增的 5 个 `AoiTeammateRefreshTest` 跑的是真实实现。另修正设计文档一处说法:`trade_table.grpc.pb.cc` 里 `namespace trade` 是空的,漏登记**不会**造成链接缺符号。③ **客户端协议管道**(`E:\work\mmorpg-client`,UI 一行没碰)——`tools/gen_proto.ps1` 收录 `proto/team/team.proto` 与 `team_error_tip.proto`,`tools/gen_messageids.ps1` 补 15 条 team 映射(号不写死);生成 `Team.cs`(`namespace Teampb`)/ `TeamErrorTip.cs`,`MessageIds.cs` 86→101 条(201..215 全命中),**"客户端合并门禁"就此解除**;重生成时发现会把别的会话未提交的 `proto/guild/guild.proto` 编进 `Guild.cs`(+5541 行),已用 `git show HEAD:` overlay 重生成还原,`Guild.cs` 最终无改动。客户端仓**未提交**。④ **合并后语义复核**——组队 × 跨 zone 传送阶段 1 交叉核对 8 点,发现并修 2 处(均 fail-closed):C++ 跟随链现按 `PlayerFrozenComp`/`PlayerTravelHandoffComp` 拦截,不再把正在跨 zone 交接的玩家拉回本节点;Go 整队开战预检把"等待落点"(`node_id` 为空)按 `ErrMemberNotReady` 早拒。DV-6 依据已按新闸口语义更新。**全程未编译、未测试**:只跑了 `gofmt -l -e`、`go mod vendor`、protoc/生成脚本与 git 只读命令,没跑 `go build`/`go test`/`go vet`/msbuild/cmake/`dev.bat proto|gen`。**仍必须由人跑的验证**:先 regen(跨 zone 的 `storage.proto owner_epoch`、`EnterSceneResponse.player_id` 未 regen,否则 scene_manager 与 C++ scene 都编不过,失败会被误记成组队引入)→ C++ 串行 `/m:1` 全链 + `build_linux.sh` → `go/match` 与 `tools/merge_zone` 的 `go vet`/`go test` → `cd robot && go build ./...`(vendor 是否补齐的唯一判据)→ `team_smoke` 两种 `AllowCrossZone` 形态 → 回归 `battle_smoke`/`battle_smoke_cross_zone`/`guild_smoke` → 客户端编译体检。**发布顺序硬约束**:客户端组队功能必须等服务端 gate/路由服/match 全量升级后才可开放,否则旧 gate 不认识 201..215 会按非法包 `forceClose` 踢人下线。逐项证据见 [docs/design/team-system.md](docs/design/team-system.md) 文末「收口记录(2026-09-18)」,D7 修订注记见 [docs/design/xuanming-port-feasibility-20260902.md](docs/design/xuanming-port-feasibility-20260902.md) §12。
 
 ## 2026-09-17 聚宝斋 P1 继续修复（双区冒烟通过，客户端重登收尾）
 
@@ -5123,3 +5124,64 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - **⚠ 副作用:这次 regen 顺带把并行帮会会话的 proto 改动落盘到 `proto/message_id.txt`** —— 新增 8 条 Guild 方法(216-223),且 **19 号从 `GuildServiceJoinGuild` 改判给 `GuildServiceSetGuildMemberRole`**(帮会会话删掉了 `rpc JoinGuild`、换成 `ApplyJoinGuild`,19 号空出后被发号器回收再分配)。不是本任务引入,但由本次生成落的盘;`message_id` 是客户端可见契约,帮会会话需知悉 19 号已易主(项目未上线、无老客户端,开发期可接受)。本任务零新增 RPC,`self_items` 只是给既有 message 加字段,不影响任何消息号。
 - **仍未编译**:本轮代码从未被编译器看过,18 个新单测未跑,`battle_smoke` 未跑。风险集中在三处 —— 新写的 C++ 能不能编过、单测是否真绿、掉落与用药的端到端是否跑通。
 - 工作区说明:仓库的每小时自动 WIP 提交已把上述代码与生成产物全部收进 `main`;本条对应的可识别提交只含文档更新。
+
+## 2026-09-18 本地日志台:对抗式复核后的修正与记录更正
+
+- 记录更正:PROGRESS.md 4471 行写"本轮在其上修正,改动未提交",实际那条记录连同它描述的全部日志台改动一起随 d349a8f88 进了 main(该提交 8 个文件)。
+- 数字更正:PROGRESS.md 4477 行与 runbook §7 写"看板 6 个查询",看板实为 7 个带查询的面板(timeseries×2 / stat×3 / bargauge×1 / logs×1);当时经 Grafana API 验的是其中 6 个统计/趋势面板,日志流面板未单独验证。runbook §7 已按此改写。
+- 复核方式:4 个维度独立审查 + 每条发现由独立核实者对抗核实,25 条确认成立、0 条被反驳。按文件逐条修完。
+- 采集规则(deploy/observability/alloy/config.alloy):① etcd 客户端(zap)的 JSON 行改用 ts 字段解析,原先落进 go-zero 那段后时间被 fudge 成上一条日志时间,实测最多偏 23 小时;② go-redis 文本行补时间解析(按本机时区,换机器要改 location);③ librdkafka 的 %N|epoch| 行按 syslog 级别打 level、用自带时间,原先无级别、错误面板统计不到;④ muduo 断言行打 fatal;⑤ 上述两种行头加进多行合并 firstline,原先会被并进前一条 gRPC 行;⑥ gRPC 补年份改为"月日比今天晚算去年",原先跨年会得到未来时间被 Loki 400 拒收且不重试;⑦ sa_token.log 的 Maven/JVM 行头加进 firstline。
+- 看板(game-logs-overview.json):「错误最多的服务」配色原为 continuous-RdYlGr(错误越多越绿),改 continuous-GrYlRd;去掉 go-zero 永不输出的 severe 级别分支(logx.Severe 写进日志的是 fatal)。
+- Loki(loki.yaml):只改注释。原注释说"3.x 已没有 query_ingesters_within",错误——该键在 3.5 仍在顶层 querier 段(默认 3h),当初是写错了段才导致容器反复重启;并改正"ingester 查询窗口 = max_chunk_age + chunk_idle_period"的说法,实际由 query_store_max_look_back_period 决定(本机 2h41m,单机模式下 Loki 自动推导)。
+- 文档:docs/ops/grafana-loki-local-logs.md 重写多处——C++ stdout 是 4096 字节整块缓冲(不是"最新一两条",实测安静节点可 10 小时不落盘)、新增"启动方式 × 能否采到"三语言表(mprocs 下 Go/C++/Java 都采不到)、示例查询修正(zone 过滤会滤掉 Go 服务、RPC 方法名实为 /loginpb.ClientPlayerLogin/Login)、手工起网关需先建 run\logs\java、k8s 下 C++ 不写 stdout。log-management.md 同步标注控制台输出仅 Windows 生效。
+- 验证:先用覆盖全部行型的样本目录做 loki.echo 试跑逐行核对级别与时间,再对真实 run/logs 回归 29622 条、Alloy 零报错;loki.yaml 过 -verify-config;Alloy 已按新配置重启。未编译任何 C++/Go/Java 工程(本轮只动配置与文档)。
+- 未做:C++ stdout 缓冲的根治(需在 console_log.cpp 加 fflush 或 setvbuf(_IONBF),属代码改动,另行评估);k8s 侧 C++ 日志采集方案。
+
+## 2026-09-18 P0-a GM 客户端消息鉴权收口(Claude,按用户"不用编译、直接进 main"指示落码)
+
+- **问题**:6 条 GM 指令挂在标了 `OptionIsClientProtocolService` 的 player 服务上,消息号因此被生成进
+  `IsClientMessageId`(`cpp/generated/rpc/service_metadata/rpc_event_registry.cpp:1447+`),与 `GetBag` /
+  `MoveStart` 同一条路径进 scene,**零鉴权**:37 `GmAddCurrency`、49 `GmDeductCurrency`、
+  94/95 `GmBlock/UnblockCurrency`、175 `GmSetPlayerLevel`、187 `GmGrantPet`。
+  任何已登录客户端发一个包就能给自己加钱 / 满级 / 发宝宝。gate 的 `MessageLimiter` 只限速
+  (默认 3 次/窗口,`message_limiter.cpp`),不做任何鉴权;`gate_security.h` 的 HMAC GM 鉴权此前只用于
+  `Gate/Scene.GmGracefulShutdown`,不覆盖这 6 条。这是聚宝斋人民币寄售的上线阻塞闸
+  ([jubaozhai-market.md](docs/design/jubaozhai-market.md) §12 P0-a),也是 handoff-backlog **P1-12**
+  (原条目只列了 175/37,漏了另外 4 条)。
+- **选的方案:关掉客户端面,而不是给客户端面加鉴权**。理由:这 6 条的请求体里没有任何可寄生签名的
+  字段(不像 `GmGracefulShutdownRequest` 有 `operator`),加字段要动 proto → 重生成 C++/Go/Java/C# 四侧
+  + 客户端 `gen_proto.ps1`;而它们本来就只服务本地联调与 robot 冒烟,线上改玩家数据的正解是
+  `scene_admin` / `data_service` 那条带签名与审计的运维面。
+- **落码**(均未编译):
+  - 新 `cpp/nodes/gate/gate_gm_client_messages.h`:6 个消息号的唯一清单,用**生成常量**不写字面量
+    (消息号会随 regen 漂移);登记进 `gate.vcxproj`。
+  - `cpp/nodes/gate/gate_security.h`:新增纯策略 `ClassifyGmClientMessage(RunMode)` /
+    `GmClientMessagesAllowed()`。策略与清单分两个头,是为了保住 `gate_security.h`「不依赖
+    muduo/protobuf/引擎、可独立 g++ 编单测」的纪律(清单要 include 生成的 `.pb.h`)。
+  - `cpp/nodes/gate/handler/rpc/client_message_processor.cpp`:闸放在 `ValidateClientMessage` **之后**
+    (GM 包同样要先过体积与限流,否则"被拒的消息不占限流额度"变成无成本刷日志),拒绝时回
+    `kFeatureUnavailable` tip + 采样安全日志 + 计一次非法包(阈值 50 才踢线)。
+  - 新 `cpp/nodes/scene/handler/rpc/player/player_gm_guard.h` + 三个 handler
+    (`player_currency_handler.cpp` 4 处、`player_attribute_handler.cpp` 1 处、`player_pet_handler.cpp` 1 处):
+    scene 侧第二道锁,判据 `SCENE_RUN_MODE`,拦的是**绕开 gate 直连 scene RPC 端口**
+    (集群里 scene 端口对其它 Pod 是通的,gate 的闸对那条路不存在)。登记进 `scene.vcxproj`。
+  - `cpp/nodes/gate/tests/gate_security_test.cpp`:3 个用例(prod 拒 / dev+test 放 / 未设与拼错都拒)。
+    这份测试独立 g++ 编译,碰不到消息号那一半,清单侧的回归靠 robot 冒烟。
+- **默认值在安全侧**:`GATE_RUN_MODE` / `SCENE_RUN_MODE` 未设置 = prod = 拒绝。
+  部署链(`tools/scripts/k8s_deploy.ps1`)**从不注入这两个变量**,所以线上恒关闭,不需要任何部署改动;
+  `tools/scripts/cpp_nodes.ps1` 与 `start_game.ps1` 在**没设时**兜底成 dev(不覆盖显式值),
+  所以本机 `attribute-smoke` / `pet-smoke` / `currency-crash-snapshot` 三个依赖 GM 的冒烟不受影响,
+  而收口验收只要 `$env:GATE_RUN_MODE='prod'` 重拉一次即可复现"被拒"。
+- **不受影响的冒烟**:`battle-smoke` / `features-smoke` / `chat-smoke` / `guild-smoke` / `team-smoke` /
+  `trade-smoke` / `login-test` 全不发 GM 消息(逐文件 grep 过);K8s 侧那几条冒烟同样不受影响。
+- **顺带的副作用(已写进 SECURITY.md)**:本机 `GATE_RUN_MODE=dev` 同时打开"空 `GateTokenSecret` 放行"
+  的降级路径。`bin/etc/base_deploy_config.yaml` 的 `GateTokenSecret` 是非空占位串、`GateMaxConnections`
+  是 20000,所以本机行为无变化;只有把密钥显式清空才会真降级(且会打 `SECURITY WARNING`)。
+- **残留**:(1) 这是开关不是鉴权 —— 线上没有"带身份的客户端面 GM";要做得给请求加 `gm_envelope`
+  字段走 `VerifyGmRequestFromEnv`(动 proto,要 regen)。(2) **更干净的做法是根本不把 GM RPC 标
+  `OptionIsClientProtocolService`**(参照 `proto/trade/trade_admin.proto` 与 `go/guild` 的
+  `ClientMethods` 白名单),但那样消息号会重排、robot 也没有直连 scene 的路径,成本远大于本轮;
+  清单头里写了"新增 Gm*/Debug*/Test* 必须同时登记"的维护规矩作为兜底。
+  (3) 这 6 条在**局中(`InBattleComp`)不设防** —— G4/D48 那轮只给 `player_rollback_handler` 加了战斗闸,
+  currency/attribute/pet 这三个 GM handler 没有;dev 下局中 GM 加钱改级仍会与结算口径打架,留给 P2。
+- **未编译、未跑单测、未跑冒烟**(AGENTS §10.1)。验收清单见 jubaozhai-market.md §13 的 P0-a 行。

@@ -579,7 +579,21 @@ proto/DB 新列牵动 proto2mysql 迁移与三份 SQL;连升多级会触发多�
 
 ### P1-12 GmSetPlayerLevel(175)/GmAddCurrency(37)与普通客户端 RPC 同口径可达,上线前并入 gate GM 鉴权
 
-**领域** server-cpp · **工作量** M · **状态** open
+**领域** server-cpp · **工作量** M · **状态** **已落码(2026-09-18,未编译)** —— 见下方「落地结果」
+
+> **落地结果(2026-09-18)**:按下面的步骤 1/2/3/4 做了,并把清单从 2 条扩到**实际全部 6 条**
+> (37 / 49 / 94 / 95 / 175 / 187 —— 原条目只列了 175/37,漏了 `GmDeductCurrency`、
+> `GmBlock/UnblockCurrency`、`GmGrantPet`)。
+> 改动:`cpp/nodes/gate/gate_gm_client_messages.h`(新,清单)、`gate_security.h`
+> (`ClassifyGmClientMessage` 纯策略)、`client_message_processor.cpp`(接线,在
+> `ValidateClientMessage` 之后、计非法包)、
+> `cpp/nodes/scene/handler/rpc/player/player_gm_guard.h`(新,scene 第二道锁,判据
+> `SCENE_RUN_MODE`)+ 三个 handler、`gate_security_test.cpp`(3 个用例)、
+> `tools/scripts/cpp_nodes.ps1` 与 `start_game.ps1`(本机兜底 dev,不覆盖显式值)、
+> `cpp/nodes/gate/SECURITY.md` §3。
+> **偏离原步骤**:步骤 5 的 robot 改动没做 —— 启动器已兜底 dev,冒烟无需改;
+> tip 复用既有 `kFeatureUnavailable`,没有新增 tip 码(不动 `data/tip/Tip.xlsx`)。
+> **未编译、未跑冒烟**(AGENTS §10.1),验收清单见本条「验收标准」。
 
 **背景与证据**
 `cpp/nodes/gate/gate_security.h` 的 GM 签名鉴权(VerifyGmRequestFromEnv,:270-360)全仓只在 `gate_service_handler.cpp:316` GmGracefulShutdown 一处使用;gate 对 `GmSetPlayerLevel|GmAddCurrency` 零命中;消息 175/37(`player_attribute_service_metadata.h:38`、`player_currency_service_metadata.h:6`)经 `client_message_processor.cpp:640-720` 与普通消息同路径转发到 scene;scene 侧 `player_attribute_handler.cpp:151` 注释「上线前经 gate GM 鉴权白名单收口」;docs §8、PROGRESS.md:3715 列为缺口。任何已登录客户端可把自己升到满级(2026-09-10 起上限 85)、加任意货币,是上线阻塞级漏洞;但 robot attribute_smoke 与 battle_smoke 依赖这两条,收口时必须保留 dev 通道。

@@ -189,7 +189,7 @@ message PlayerAttributeComp {
 | `AutoAllocateAttributePoints` | 算推荐分配,**只算不落** |
 | `CreateAttributeScheme` / `SwitchAttributeScheme` / `RenameAttributeScheme` | 方案管理 |
 | `NotifyAttributePanelChanged` | 服务器主动推面板(升级 / GM / 外部加成变化) |
-| `GmSetPlayerLevel` | GM 设等级(开发用,上线前经 gate GM 鉴权收口) |
+| `GmSetPlayerLevel` | GM 设等级(**仅 dev/test 可用**,见 §8 与 `cpp/nodes/gate/SECURITY.md` §3) |
 
 ### 4.1 三条协议纪律
 
@@ -261,8 +261,15 @@ message PlayerAttributeComp {
   `FindAllocRatio` 按真实职业取行,破军全投力量拿 +30%。账号记录里职业本身为 0 的老号不猜测职业,仍走 `class_id=0` 兜底档。
   **尚未实测验证**(随本轮其它改动一起待 Codex 冒烟)。
 - **`bonus_values` / `bonus_points` 无写入方**:等装备、丹药、任务奖励系统。
-- **GM 鉴权**:`GmSetPlayerLevel` 目前与 `GmAddCurrency` 同口径(开发期直连),上线前须并入
-  gate 的 GM 鉴权白名单(`gate_security.h`)。降级路径已有"已分配 > 总量整池清零"的收敛兜底。
+- **GM 鉴权(2026-09-18 已收口,未编译)**:`GmSetPlayerLevel`(175)与另外五条客户端 GM 消息
+  (37 / 49 / 94 / 95 / 187)一起进了 gate 的按消息号白名单
+  (`cpp/nodes/gate/gate_gm_client_messages.h` + `gate_security.h::ClassifyGmClientMessage`),
+  `GATE_RUN_MODE` 非 dev/test 一律拒绝;scene 侧第二道锁在
+  `handler/rpc/player/player_gm_guard.h`(判据 `SCENE_RUN_MODE`),防绕开 gate 直连。
+  默认(未设置)= prod = 关闭,部署链从不注入这两个变量;本机启动器兜底 dev,
+  `attribute-smoke` 不受影响。见 `cpp/nodes/gate/SECURITY.md` §3。
+  **这是"关掉"不是"鉴权"** —— 线上没有设等级的通道,等经验系统接上才有正规升级路径。
+  降级路径已有"已分配 > 总量整池清零"的收敛兜底。
 - **数值平衡(2026-09-14 最终口径)**。用户 09-13 / 09-14 先后拍板:加点改百分比 + 集中投资公式、伤害改比例减伤、
   加 PVP 伤害系数、删相性点 / 仙魔点、速度单位 ×12、防御单位 ×12 / 法力单位 ×4、怪物按新口径重定、"按玩家能接受的范围调整数值"。
   推算口径 = §3.1 加点公式 + §3.2 比例减伤 + 通用自动加点(属性点全投力量)+ 非对应职业档(保守基准:职业已随登录下发,对应职业全投主属性会比推算略强,怪物死得略快),出手序 / 暴击 / 随机目标按引擎语义

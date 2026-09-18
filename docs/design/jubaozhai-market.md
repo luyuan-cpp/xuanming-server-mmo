@@ -9,7 +9,7 @@
 2. 难点不在列表和界面,在"**东西和钱怎么安全换手**"。今天仓库里**没有**托管扣出、幂等发放、角色过户、登录冻结这四样原语(§2),必须先补。
 3. 结算是人民币(J-1)。服务端只做**订单状态机 + 支付渠道接口**;本地和冒烟用 `mock` 渠道跑通,真实渠道、实名/防沉迷、卖家提现后接(P5)。
 4. 首批四类商品都在范围(J-2),但按依赖分期:游戏币/装备道具/宠物共用一套资产通路(P2→P3);角色交易额外依赖"账号数据持久化"(P0-b→P4)。
-5. **两道上线闸,不过不许开真钱交易**:GM 客户端消息无鉴权(能直接刷钱再卖钱);账号数据只在 Redis(角色过户无持久化落点)。
+5. **两道上线闸,不过不许开真钱交易**:~~GM 客户端消息无鉴权(能直接刷钱再卖钱)~~(**P0-a 2026-09-18 已落码未编译**,见 §12 第 1 条);账号数据只在 Redis(角色过户无持久化落点)。
 
 ## 1. 已拍板 / 待拍板
 
@@ -46,7 +46,7 @@
 | 账号 ↔ 角色 | 账号角色列表**只在 Redis `account:{account}`,TTL 12h,找不到 MySQL 写入**;反查键 `player_to_account:{id}` 永不过期且 EnterGame 会据此自愈回写 | `go/login/etc/login.yaml:68`;`entergamelogic.go:144-190` |
 | 登录冻结 / 封禁 | **没有**任何字段或闸;踢人 `KickPlayerEvent` 只有 session_id,提示写死"顶号" | `gate_event_handler.cpp:160` |
 | 角色名 / 等级对 Go 可见 | **无角色名**;等级只在 `level_component` blob,Go 读不到 | `entergamelogic.go:428-433` |
-| GM 客户端消息 | `GmAddCurrency` / `GmGrantPet` / `GmSetPlayerLevel` 作为客户端消息开放、**无鉴权** | `proto/scene/player_currency.proto:65-73`;`player-pet.md:191-194` |
+| GM 客户端消息 | 6 条(37/49/94/95/175/187)作为客户端消息开放;**2026-09-18 起按运行模式关闭**(`GATE_RUN_MODE`/`SCENE_RUN_MODE` 非 dev/test 即拒,默认 prod),proto 未动、消息号仍在 `IsClientMessageId` 里 | `cpp/nodes/gate/gate_gm_client_messages.h`;`cpp/nodes/gate/SECURITY.md` §3;`proto/scene/player_currency.proto:65-73` |
 | 新服务客户端可达 | 只在路由服模式(`GATE_CLIENT_RPC_ROUTER=1`)可达;K8s 路由服 manifest 与 POD_IP 通告已补齐,默认仍为 0,待 K8s 路由模式 battle-smoke 通过后再切换 | `cpp/nodes/gate/main.cpp:206-209`;[zone 契约 §14](microservice-zone-contract-20260914.md) |
 | 新 Go 服务接入口径 | 以 `microservice-zone-contract-20260914.md` 为准(§2 注册 / §3 客户端入口 / §4 数据归属 / §7 部署登记,chat v1 为首个样板) | 该文档 2026-09-14 由并行会话落地 |
 
@@ -287,7 +287,19 @@ message TradeCreditRequest {
 
 ## 12. 安全与合规上线闸
 
-1. **GM 客户端消息鉴权**(P0-a):`GmAddCurrency` / `GmGrantPet` / `GmSetPlayerLevel` 等要么关闭、要么鉴权。不收口 = 刷出资产直接卖人民币。
+1. **GM 客户端消息鉴权**(P0-a):~~`GmAddCurrency` / `GmGrantPet` / `GmSetPlayerLevel` 等要么关闭、要么鉴权。不收口 = 刷出资产直接卖人民币。~~
+   **2026-09-18 已落码(未编译)**:选的是"关掉客户端面",不是"给客户端面加鉴权"。
+   实际暴露的是 **6 条**(37 `GmAddCurrency` / 49 `GmDeductCurrency` / 94 `GmBlockCurrency` /
+   95 `GmUnblockCurrency` / 175 `GmSetPlayerLevel` / 187 `GmGrantPet`);
+   gate 按消息号闸(`cpp/nodes/gate/gate_gm_client_messages.h` 清单 +
+   `gate_security.h::ClassifyGmClientMessage`),scene 再拦一次
+   (`handler/rpc/player/player_gm_guard.h`,防绕开 gate 直连)。
+   判据是运行模式 `GATE_RUN_MODE` / `SCENE_RUN_MODE`,**默认(未设置)= prod = 拒绝**,
+   部署链从不注入这两个变量;本机启动器兜底 dev,robot 冒烟不受影响。
+   细节与运维须知见 `cpp/nodes/gate/SECURITY.md` §3。
+   *残留*:这是开关不是鉴权 —— 线上没有"带身份的 GM 改数据"通道,真要改走
+   `scene_admin` / `data_service` 的签名运维面;若将来确实需要客户端面的 GM,
+   要给这些请求加 `gm_envelope` 字段走 `VerifyGmRequestFromEnv`(动 proto,要 regen)。
 2. **账号数据持久化**(P0-b):角色交易的前置,见 §6.3。
 3. **实名 / 防沉迷 / 未成年人消费限制**:`BuyerEligibility` 接入真实实现。
 4. **经营与支付合规**:人民币虚拟物品交易平台涉及的资质、运营主体与支付签约由业务/法务确认,工程侧不能替代。
@@ -298,7 +310,7 @@ message TradeCreditRequest {
 
 | 期 | 内容 | 依赖 | 验收(由 Codex 执行) |
 |---|---|---|---|
-| **P0-a** | GM 客户端消息鉴权收口 | — | robot 发 `GmAddCurrency` 被拒;GM 通道仍可用 |
+| **P0-a** | GM 客户端消息鉴权收口 —— **2026-09-18 已落码,未编译** | — | `GATE_RUN_MODE=prod` 重拉 gate 后,robot 发 37/175/187 收到 `kFeatureUnavailable` tip 且 scene 无对应业务日志;`GATE_RUN_MODE=dev`(启动器默认)下 `attribute-smoke` / `pet-smoke` / `currency-crash-snapshot` 照常通过;`gate_security_test` 三个新用例绿 |
 | **P0-b** | 账号角色列表持久化(login) | — | 清空 Redis 后角色列表不丢;并发建角/删除不互相覆盖 |
 | **P1** | proto(客户端 4 方法 + 内部 SeedListing + 表结构)+ tip 段 + `go/schemamigrate`(D-14 抽取 + 修缺陷)+ `go/trade`(浏览/详情/收藏/货架/dev 种子)+ `-migrate` 与 K8s Job + 登记 + `tools/merge_zone` 改写步骤 + 客户端服务端分页接线 + robot `trade-smoke` | — | schemamigrate 单测含"后加表被建出";trade 单测含"带会话调 TradeAdmin 被拒";`TestNoHandWrittenTipCodes` 通过;robot `trade-smoke` 在 `zone` 与 `global` 各跑一次输出 `TRADE_SMOKE_OK`;客户端按 U 打开拉到服务端种子商品,收藏重进角色后仍在 |
 | **P2** | C++ 资产原语:账本组件 + 持久化;`TradeDebit/AbortDebit/Credit`;Bag 按 guid 全或无;Currency txType;Pet 移出/预设回填;Item/Pet 表新列 | P1 proto | 单测覆盖:重复 seq 返回同一结局、APPLIED 后响应丢失重试取回快照、Abort 占位、战斗中/跨区冻结返回 RETRY、全或无不部分扣 |
