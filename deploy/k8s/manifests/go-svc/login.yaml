@@ -85,3 +85,20 @@ spec:
         # 见上面 volumeMounts 的注释:每 Pod 一份 emptyDir,随 Pod 生灭。
         - name: snowflake-cache
           emptyDir: {}
+---
+# PDB 直接放在本文件里:k8s_deploy.ps1 只 apply 各服务目录表里登记的主 manifest,
+# 独立的 login-pdb.yaml 从未被脚本应用过(见 scene-manager.yaml 同位置的说明),
+# 节点排空时 K8s 可以同时驱逐两个 login 副本,该 zone 登录入口会出现完整空窗。
+# 内容自 login-pdb.yaml 原样搬入,minAvailable 未改。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: login-pdb
+  labels:
+    app: login
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: login
