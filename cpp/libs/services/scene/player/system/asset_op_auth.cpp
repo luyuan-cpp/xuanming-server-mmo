@@ -111,8 +111,15 @@ std::string DefaultSecretLookup(std::string_view caller)
 // ── canonical 串拼装 ────────────────────────────────────────────────────────
 
 // 逐字节对齐 Go writeBundleCanonical:"c=" 货币按**请求顺序** "<type>:<amount>" 逗号分隔,
-// ";i=" 物品同理;两边都空则是 "c=;i="。
+// ";i=" 物品同理,";u=" 按 guid 扣的物品实例,";p=" 宝宝;全空则是 "c=;i=;u=;p=0"。
 // 宽度一律先提到 uint64 再转十进制,和 Go 的 strconv.FormatUint(uint64(x), 10) 同口径。
+//
+// **u/p 两段是安全边界,不是可选装饰**(2026-09-19 补):scene 的 gRPC 是
+// InsecureServerCredentials(),集群内任意进程可连可嗅。这两个字段会真改玩家资产
+// (按 guid 扣装备 / 扣宝宝),不进签名串的话,攻击者截下一条合法的 TRADE_DEBIT、
+// 只把 item_uuids 换成该玩家的其它装备再发出去,seq 没见过、签名照样通过,
+// scene 扣掉的就是被换的那件。seq 幂等与 300s 时间窗都挡不住这种"同 seq 抢跑改载荷"。
+// 帮会走 GUILD_* 流、这两段恒为空,写进串只是多两段固定字面量,不影响它。
 void AppendBundleCanonical(std::string& out, const ::AssetBundle& bundle)
 {
 	out.append("c=");
@@ -139,6 +146,18 @@ void AppendBundleCanonical(std::string& out, const ::AssetBundle& bundle)
 		out.push_back(':');
 		out.append(std::to_string(static_cast<uint64_t>(item.count())));
 	}
+	out.append(";u=");
+	for (int index = 0; index < bundle.item_uuids_size(); ++index)
+	{
+		if (index > 0)
+		{
+			out.push_back(',');
+		}
+		out.append(std::to_string(bundle.item_uuids(index)));
+	}
+	// 单值,空缺写 0:宝宝 guid 恒非 0,所以 0 与"没带宝宝"不会混淆。
+	out.append(";p=");
+	out.append(std::to_string(bundle.pet_id()));
 }
 
 // ── 时间窗 ──────────────────────────────────────────────────────────────────

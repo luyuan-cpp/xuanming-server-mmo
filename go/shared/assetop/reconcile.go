@@ -58,21 +58,13 @@ var ErrPoisonRow = errors.New("assetop: op payload undecodable")
 // 否则「我的结果被丢弃」在任何地方都看不见(契约见 Store.Reschedule)。
 var ErrLeaseLost = errors.New("assetop: lease taken over by another replica")
 
-// 下面两个值是 Store 实现要照着写 SQL 的契约常量。
+// FreshAttemptLimit 是 ListDue 第一段「新行」的判据:attempts < FreshAttemptLimit。
+// 防饿死的两段读为什么必须这么分,见 Store.ListDue 的契约。
 //
-// 为什么放在包里而不是 LoopConfig 里:用它们的是 Store 的 SQL,不是本循环 —— 循环既不
-// 读也不传。配成「循环持有一份、实现自己再写一份」,两份值迟早分叉,而分叉之后没有任何
-// 报错(DRY,AGENTS §11.2)。
-const (
-	// PoisonDelay 是 payload 解不开的毒行推迟多久再看,Store 在 Claim 的解码失败分支里写。
-	// 取一小时:足够运维看到 assetop_store_errors_total{op="decode"} 再介入,
-	// 又不至于让一行坏数据永远消失。
-	PoisonDelay = time.Hour
-
-	// FreshAttemptLimit 是 ListDue 第一段「新行」的判据:attempts < FreshAttemptLimit。
-	// 防饿死的两段读为什么必须这么分,见 Store.ListDue 的契约。
-	FreshAttemptLimit uint32 = 3
-)
+// 它放在包里而不是 LoopConfig 里,是因为用它的是 Store 的 SQL,循环既不读也不传;
+// 而且它不在运维契约 Y-06 的配置项里,没有「按服务调」这回事。写成常量,实现直接引用,
+// 就不会出现「循环一份、实现另抄一份」的两份真相(DRY,AGENTS §11.2)。
+const FreshAttemptLimit uint32 = 3
 
 // Store 是业务 outbox 表在本包眼里的样子。实现在业务方(帮会 B5 / 聚宝斋 P2)。
 //
@@ -119,10 +111,15 @@ type Store interface {
 	//    WHERE op_id=? AND status=<pending> AND lease_until_ms<?
 	// RowsAffected==0 → (Op{}, false, nil):行已被别的副本领走或已终结,跳过即可。
 	// RowsAffected==1 → 回读整行并解 payload。
-	// 解码失败时 Store 自己把行推迟(next_attempt_ms=now+PoisonDelay、lease_until_ms=0),
-	// 并返回 (Op{}, false, ErrPoisonRow)。推迟时长直接用本包的 PoisonDelay 常量,
-	// **不要**在实现里另抄一份。
-	Claim(ctx context.Context, opID, nowMs, leaseUntilMs, token uint64) (Op, bool, error)
+	// 解码失败时 Store 自己把行推迟并返回 (Op{}, false, ErrPoisonRow):
+	//   UPDATE {op} SET last_outcome=0, next_attempt_ms=<poisonUntilMs>, lease_until_ms=0
+	//    WHERE op_id=? AND lease_token=?
+	//
+	// poisonUntilMs 是**算好的绝对时刻**(循环按自己的时钟算 now+LoopConfig.PoisonDelay),
+	// 和 nowMs / leaseUntilMs 是同一套路:时间全由循环拿主意,Store 只负责把给的数字写下去。
+	// 实现里**不要**另写一个「毒行推迟多久」的常量 —— 那样运维契约 Y-06 的 PoisonDelayMs
+	// 改了也不会生效,而且两份值分叉时没有任何报错(DRY)。
+	Claim(ctx context.Context, opID, nowMs, leaseUntilMs, poisonUntilMs, token uint64) (Op, bool, error)
 
 	// Finalize 在**一个事务**里(建议包 WithTxRetry)按业务锁序加锁 →
 	//   UPDATE {op} SET status=?, durable=1, last_outcome=?, last_reason=?, updated_ms=?
@@ -242,6 +239,13 @@ type LoopConfig struct {
 	MaxBackoff time.Duration
 	// AwaitDurableDelay 「结局有了但没落盘」时的短延迟。
 	AwaitDurableDelay time.Duration
+	// PoisonDelay 是 payload 解不开的毒行推迟多久再看。循环在 Claim 之前按它算出
+	// poison_until_ms 一起传给 Store(见 Store.Claim),所以它是**活的**配置项,
+	// 不是给实现抄的参考值:运维契约 Y-06 的 PoisonDelayMs 改了就会生效。
+	//
+	// 取一小时:足够运维看到 assetop_store_errors_total{op="decode"} 再介入,
+	// 又不至于让一行坏数据永远消失。
+	PoisonDelay time.Duration
 	// LedgerReadMinAttempts 连续几次拿不到位置之后,才去读已落盘账本。
 	// 设这个门槛是为了不给 data_service 增加无谓的读:刚离线的玩家很快会回来。
 	LedgerReadMinAttempts uint32
@@ -260,6 +264,7 @@ func DefaultLoopConfig() LoopConfig {
 		BaseBackoff:           time.Second,
 		MaxBackoff:            60 * time.Second,
 		AwaitDurableDelay:     500 * time.Millisecond,
+		PoisonDelay:           time.Hour,
 		LedgerReadMinAttempts: 3,
 	}
 }
@@ -293,6 +298,11 @@ func (c LoopConfig) validate() error {
 	}
 	if c.AwaitDurableDelay <= 0 {
 		return fmt.Errorf("assetop: AwaitDurableDelay 必须为正(当前 %v)", c.AwaitDurableDelay)
+	}
+	// 毒行延迟为 0 等于「立刻再来一次」:一行解不开的 payload 会被每一轮 Tick 重新领取、
+	// 重新解码失败,白占名额还刷满 decode 计数。配成 0 多半是漏配,不是有意。
+	if c.PoisonDelay <= 0 {
+		return fmt.Errorf("assetop: PoisonDelay 必须为正(当前 %v)", c.PoisonDelay)
 	}
 	return nil
 }
@@ -430,8 +440,10 @@ func (l *Loop) claim(ctx context.Context, opID uint64) (Op, bool) {
 	}
 	nowMs := l.nowMs()
 	leaseUntilMs := nowMs + uint64(l.cfg.Lease/time.Millisecond)
+	// 毒行推到什么时候由这里算:时刻、随机源、超时都归循环管,Store 只写给它的数字。
+	poisonUntilMs := nowMs + uint64(l.cfg.PoisonDelay/time.Millisecond)
 
-	op, claimed, err := l.store.Claim(ctx, opID, nowMs, leaseUntilMs, token)
+	op, claimed, err := l.store.Claim(ctx, opID, nowMs, leaseUntilMs, poisonUntilMs, token)
 	switch {
 	case errors.Is(err, ErrPoisonRow):
 		// 毒行:Store 已经把它推远了。这里只计数 + 报位置,人工去看。

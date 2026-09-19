@@ -102,8 +102,17 @@ func Canonical(rpc RPC, req *assetpb.AssetOpRequest, tsMs uint64) []byte {
 }
 
 // writeBundleCanonical 写 bundle 段:"c=" 货币按**请求顺序** "<type>:<amount>" 逗号分隔,
-// ";i=" 物品同理;两边都空则是 "c=;i="。顺序不排序:scene 按同一份请求重算,
-// 排序只会给两侧各留一个出错的机会。
+// ";i=" 物品同理,";u=" 按 guid 扣的物品实例,";p=" 宝宝;全空则是 "c=;i=;u=;p=0"。
+// 顺序不排序:scene 按同一份请求重算,排序只会给两侧各留一个出错的机会。
+//
+// **u/p 两段是安全边界,不是可选装饰**(2026-09-19 补):scene 的 gRPC 用的是不安全凭据,
+// 集群内任意进程可连可嗅。这两个字段会真改玩家资产(按 guid 扣装备 / 扣宝宝),不进签名串
+// 的话,攻击者截下一条合法的 TRADE_DEBIT、只把 item_uuids 换成该玩家的其它装备再发出去,
+// 这个 seq scene 没见过、签名照样通过,扣掉的就是被换的那件。seq 幂等与 300s 时间窗都挡不住
+// 这种「同 seq 抢跑改载荷」。帮会走 GUILD_* 流、这两段恒为空,只多两段固定字面量。
+//
+// 改这里 = 改协议:C++ AssetOpAuth 的 AppendBundleCanonical 必须同批改,
+// 两边的 golden 用例(auth_test.go 的 TestCanonicalGolden 与 asset_op_auth_test.cpp)也是。
 func writeBundleCanonical(b *strings.Builder, bundle *assetpb.AssetBundle) {
 	b.WriteString("c=")
 	for i, c := range bundle.GetCurrencies() {
@@ -123,6 +132,16 @@ func writeBundleCanonical(b *strings.Builder, bundle *assetpb.AssetBundle) {
 		b.WriteByte(':')
 		b.WriteString(strconv.FormatUint(uint64(it.GetCount()), 10))
 	}
+	b.WriteString(";u=")
+	for i, uuid := range bundle.GetItemUuids() {
+		if i > 0 {
+			b.WriteByte(',')
+		}
+		b.WriteString(strconv.FormatUint(uuid, 10))
+	}
+	// 单值,空缺写 0:宝宝 guid 恒非 0,所以 0 与「没带宝宝」不会混淆。
+	b.WriteString(";p=")
+	b.WriteString(strconv.FormatUint(bundle.GetPetId(), 10))
 }
 
 // Sign 就地把 auth 写进 req:caller、timestamp_ms、signature_hex。

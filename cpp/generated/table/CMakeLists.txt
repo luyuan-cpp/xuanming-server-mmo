@@ -63,6 +63,7 @@ set(SOURCE_FILES
     code/mission_table_fk.cpp
     code/monster_table.cpp
     code/reward_table.cpp
+    code/rolenamerule_table.cpp
     code/skillpermission_table.cpp
     code/skill_table.cpp
     code/testmultikey_table.cpp
@@ -102,6 +103,7 @@ set(SOURCE_FILES
     proto/operator/bag_operator.pb.cc
     proto/operator/scene_operator.pb.cc
     proto/reward_table.pb.cc
+    proto/rolenamerule_table.pb.cc
     proto/skillpermission_table.pb.cc
     proto/skill_table.pb.cc
     proto/testmultikey_table.pb.cc

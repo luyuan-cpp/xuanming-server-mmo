@@ -40,7 +40,7 @@ $script:AssetOpDevSecretEnvNames = @(
     'MMORPG_ASSET_OP_SECRET_TRADE'
 )
 
-# 与 go/shared/assetop.MinSecretLen、C++ kAssetOpMinSecretLen 同值。去首尾空白后不足这么长
+# 与 go/shared/assetop.MinSecretLen、C++ kAssetOpAuthMinSecretBytes 同值。去首尾空白后不足这么长
 # 视同**未配置**,调用方会当场拒绝签名 —— 所以本机兜底值必须显著长于它。
 $script:AssetOpDevSecretMinLength = 32
 
@@ -99,7 +99,9 @@ function New-AssetOpDevSecretValue {
     #>
     $bytes = [byte[]]::new($script:AssetOpDevSecretRandomBytes)
     [System.Security.Cryptography.RandomNumberGenerator]::Fill($bytes)
-    return [System.Convert]::ToHexString($bytes).ToLowerInvariant()
+    # 逐字节转十六进制而不是 [Convert]::ToHexString:后者要 .NET 5,PowerShell 7.0 跑在
+    # .NET Core 3.1 上会当场报"找不到方法",而启动脚本没有理由挑剔 pwsh 的小版本。
+    return (($bytes | ForEach-Object { $_.ToString('x2') }) -join '')
 }
 
 function Read-AssetOpDevSecretStore {

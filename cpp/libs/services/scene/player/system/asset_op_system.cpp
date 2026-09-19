@@ -315,14 +315,19 @@ void RejectAndRecord(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp,
 //
 // **判在信封档、不记账**(见 Decide 第 1c 步),不走第 8 步那种终局 REJECTED:
 // 这两个字段**不在签名 canonical 里**(§4.32 第 10 行只到 `c=…;i=…`,
-// asset_op.proto 的 AssetBundle 注释逐字写明并点名这正是"同 seq 抢跑改载荷"的攻击面),
-// 而 scene gRPC 是 InsecureServerCredentials(node.cpp:623),集群内任何进程可连可嗅。
-// 若记成终局拒绝,攻击者只要在一条**合法签名**的请求上追加 pet_id=1 重发,
-// 该 (纪元, seq) 就被永久钉成 REJECTED(不变量 I2 结局固定),帮会随后重投的真实
-// 捐献再也扣不成。按"信封不受签名保护"同类处理:篡改包被忽略,合法包仍能正常应用。
-// 等 asset_op.proto 注释写的硬前置落地(canonical 扩成 `…;u=…;p=…`、C++
-// AssetOpCanonical 与 Go assetop.Canonical 同批改、两边 golden 更新)之后,
-// 再把它改回 §4.9 第 8 步的记账式 REJECTED。
+/// v1 的 scene **尚未实现**按 guid 扣装备 / 扣宝宝(那是 P3 托管的活),所以带这两个
+// 字段的包一律拒。
+//
+// **2026-09-19 起这是记账式拒绝**(§4.9 第 8 步),不再是信封档的"忽略本次请求"。
+// 当初之所以要放进信封档,是因为这两个字段没进签名串:攻击者能在一条**合法签名**的
+// 请求上追加 pet_id=1 重发,把该 (纪元, seq) 永久钉成 REJECTED(I2 结局固定),
+// 帮会随后重投的真实捐献再也扣不成 —— 那等于"谁都能杀掉任意一条在途 seq"。
+// 现在 canonical 已扩成 `…;u=…;p=…`(asset_op_auth.cpp 的 AppendBundleCanonical 与
+// Go assetop.writeBundleCanonical 同批改,两边 golden 已更新),改任一字段签名即失效,
+// 追加攻击不再存在,于是按规格记成终局 REJECTED 才是对的:Go 那边能当场终结并退回业务,
+// 不必让 outbox 行永远 PENDING 重投。
+//
+// P3 实现按 guid 扣物之后,删掉这个函数与两处调用,改为真正的包内容校验。
 bool HasUnsupportedP2Fields(const ::AssetBundle& bundle)
 {
 	return bundle.item_uuids_size() > 0 || bundle.pet_id() != 0;
@@ -338,6 +343,11 @@ bool IsCurrencyAmountValid(const ::CurrencyAmount& currency)
 
 bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
 {
+	if (HasUnsupportedP2Fields(bundle))
+	{
+		why = "debit v1 不支持按 guid 扣物 / 扣宝宝(item_uuids / pet_id)";
+		return false;
+	}
 	if (bundle.currencies_size() != 1 || bundle.items_size() != 0)
 	{
 		why = "debit v1 只收恰好 1 条货币、0 件物品";
@@ -353,6 +363,11 @@ bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
 
 bool ValidateCreditBundle(const ::AssetBundle& bundle, std::string& why)
 {
+	if (HasUnsupportedP2Fields(bundle))
+	{
+		why = "credit v1 不支持按 guid 发物 / 发宝宝(item_uuids / pet_id)";
+		return false;
+	}
 	if (bundle.currencies_size() + bundle.items_size() < 1)
 	{
 		why = "credit 包为空";
@@ -641,18 +656,6 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 				 << " verdict=" << AssetOpAuthVerdictName(verdict) << " caller=" << request.auth().caller()
 				 << " stream=" << static_cast<int>(request.stream()) << " seq=" << request.seq();
 		Answer(response, ASSET_OP_OUTCOME_UNKNOWN, kAssetAuthFailed);
-		return;
-	}
-
-	// 1c. 未进签名串的 P2 字段(不记账)。它们不受签名保护,记成终局拒绝就等于把
-	// "谁都能追加两个字段" 变成 "谁都能永久杀掉任意一条在途 seq";详见 HasUnsupportedP2Fields。
-	if (HasUnsupportedP2Fields(request.bundle()))
-	{
-		LOG_WARN << "[AssetOp] 收到未支持且未进签名串的 P2 字段,忽略本次请求 rpc=" << RpcName(rpc)
-				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
-				 << " seq=" << request.seq() << " item_uuids=" << request.bundle().item_uuids_size()
-				 << " pet_id=" << request.bundle().pet_id();
-		Answer(response, ASSET_OP_OUTCOME_UNKNOWN, kAssetInvalidBundle);
 		return;
 	}
 

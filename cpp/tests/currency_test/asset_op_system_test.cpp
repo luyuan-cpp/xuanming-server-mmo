@@ -606,38 +606,61 @@ TEST_F(AssetOpSystemTest, DebitBundleInvalidRecorded)
 	EXPECT_EQ(100u, Gold());
 }
 
-// 未进签名串的 P2 字段(item_uuids / pet_id)必须被**忽略**,而不是记成终局拒绝:
-// 记了的话,同网段任意进程在一条合法签名的请求上追加 pet_id 重发,就能把这条 seq
-// 永久钉成 REJECTED,玩家那笔真实捐献再也扣不成。详见 HasUnsupportedP2Fields 的注释。
-TEST_F(AssetOpSystemTest, UnsignedP2FieldsIgnoredNotRecorded)
+// v1 不支持的 P2 字段(item_uuids / pet_id)现在是**记账式终局拒绝**(§4.9 第 8 步)。
+//
+// 2026-09-19 之前这里断言的是相反行为("忽略、不记账"),理由是这两个字段没进签名串,
+// 攻击者能在一条合法签名的请求上追加 pet_id 重发、把该 seq 永久钉成 REJECTED。
+// 现在 canonical 已扩成 `…;u=…;p=…`,改任一字段签名即失效(见
+// AssetOpAuthTest.SignatureCoversGuidAndPetTamper),追加攻击不复存在,
+// 于是按规格记账才是对的 —— Go 能当场终结并退回业务,不必让 outbox 行永远 PENDING。
+TEST_F(AssetOpSystemTest, UnsupportedP2FieldsRejectedAndRecorded)
 {
 	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
 
-	// 攻击者拿到的是一条合法请求:先按真实载荷签名,再追加不进签名串的字段。
+	auto withPet = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 1, 30, TX_GUILD_DONATE);
+	withPet.mutable_bundle()->set_pet_id(1);
+	SignForTest("debit", withPet);
+	::AssetOpResponse petResponse;
+	PlayerAssetOpSystem::Debit(withPet, petResponse);
+
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, petResponse.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), petResponse.reason().id());
+	EXPECT_EQ(100u, Gold()) << "拒绝不改资产";
+	EXPECT_NE(nullptr, Ledger(ASSET_OP_STREAM_GUILD_DEBIT)) << "已记账:结局固定";
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, CallDebit(1, 30).outcome()) << "同一 seq 重查取回同一结局";
+	EXPECT_EQ(100u, Gold());
+
+	// item_uuids 同理,Credit 方向也一样。
+	GiveBags();
+	auto withUuids = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
+	withUuids.mutable_bundle()->add_item_uuids(123456789);
+	const auto uuidResponse = CallCredit(withUuids);
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, uuidResponse.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), uuidResponse.reason().id());
+	EXPECT_NE(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT)) << "已记账";
+}
+
+// 篡改仍然挡得住,只是改由**签名**来挡,而不是靠信封档忽略载荷。
+TEST_F(AssetOpSystemTest, TamperedP2FieldsFailAuthNotRecorded)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+
+	// 攻击者拿到一条合法请求:先按真实载荷签名,再追加字段。
 	auto tampered = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 1, 30, TX_GUILD_DONATE);
 	SignForTest("debit", tampered);
 	tampered.mutable_bundle()->set_pet_id(1);
 	::AssetOpResponse tamperedResponse;
 	PlayerAssetOpSystem::Debit(tampered, tamperedResponse);
 
-	EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, tamperedResponse.outcome()) << "签名仍然通过,但载荷不认";
-	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), tamperedResponse.reason().id());
+	EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, tamperedResponse.outcome()) << "签名已覆盖 pet_id,验签直接失败";
+	EXPECT_EQ(static_cast<uint32_t>(kAssetAuthFailed), tamperedResponse.reason().id());
 	EXPECT_EQ(100u, Gold());
-	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_DEBIT)) << "未记账:结局不得被篡改包钉死";
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_DEBIT)) << "验签失败不记账:篡改包不得钉死结局";
 	EXPECT_EQ(0, g_persistCalls);
 
-	// 真实的那笔仍然扣得成 —— 这正是"不记账"要保住的东西。
+	// 真实的那笔仍然扣得成 —— 这正是"验签失败不记账"要保住的东西。
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
 	EXPECT_EQ(70u, Gold());
-
-	// item_uuids 同理(Credit 方向也一样判在信封档)。
-	GiveBags();
-	auto withUuids = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
-	withUuids.mutable_bundle()->add_item_uuids(123456789);
-	const auto uuidResponse = CallCredit(withUuids);
-	EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, uuidResponse.outcome());
-	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), uuidResponse.reason().id());
-	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT));
 }
 
 TEST_F(AssetOpSystemTest, CreditUnknownItemRejected)

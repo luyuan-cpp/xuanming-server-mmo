@@ -139,7 +139,7 @@ TEST(AssetOpAuthTest, CanonicalGolden)
 {
 	const ::AssetOpRequest request = MakeGoldenRequest();
 	const std::string expected =
-		"mmorpg-asset-op/v1\nguild\ndebit\n42\n1\n1700000000000\n7\n99\n24\nc=1:30;i=\n1700000000123";
+		"mmorpg-asset-op/v1\nguild\ndebit\n42\n1\n1700000000000\n7\n99\n24\nc=1:30;i=;u=;p=0\n1700000000123";
 
 	EXPECT_EQ(expected, AssetOpCanonical("debit", request));
 }
@@ -156,7 +156,7 @@ TEST(AssetOpAuthTest, CanonicalEmptyBundle)
 	auth->set_caller("guild");
 	auth->set_timestamp_ms(5);
 
-	EXPECT_EQ("mmorpg-asset-op/v1\nguild\nabort_debit\n7\n1\n2\n1\n0\n0\nc=;i=\n5",
+	EXPECT_EQ("mmorpg-asset-op/v1\nguild\nabort_debit\n7\n1\n2\n1\n0\n0\nc=;i=;u=;p=0\n5",
 			  AssetOpCanonical("abort_debit", request));
 }
 
@@ -186,21 +186,85 @@ TEST(AssetOpAuthTest, CanonicalKeepsRequestOrder)
 	auth->set_caller("trade");
 	auth->set_timestamp_ms(11);
 
-	EXPECT_EQ("mmorpg-asset-op/v1\ntrade\ncredit\n1\n4\n3\n2\n0\n0\nc=9:5,2:7;i=300:2,100:1\n11",
+	EXPECT_EQ("mmorpg-asset-op/v1\ntrade\ncredit\n1\n4\n3\n2\n0\n0\nc=9:5,2:7;i=300:2,100:1;u=;p=0\n11",
 			  AssetOpCanonical("credit", request));
 }
 
-// 未进签名串的 P2 字段(item_uuids / pet_id)**不得**改变 canonical 串:asset_op.proto 的
-// AssetBundle 注释与 §4.32 都写明了这条现状,asset_op_system.cpp 因此把带这两个字段的请求
-// 整个忽略掉。等 canonical 扩成 `…;u=…;p=…` 时,本用例要连同 golden 一起改。
-TEST(AssetOpAuthTest, CanonicalIgnoresUnsignedP2Fields)
+// 按 guid 扣的物品与宝宝**必须**进 canonical 串(2026-09-19 起;本用例取代了原先断言
+// "这两个字段不改变 canonical" 的 CanonicalIgnoresUnsignedP2Fields)。
+// 与 Go TestCanonicalCoversGuidAndPet 同一组输入。
+TEST(AssetOpAuthTest, CanonicalCoversGuidAndPet)
 {
-	::AssetOpRequest plain = MakeGoldenRequest();
-	::AssetOpRequest withP2 = MakeGoldenRequest();
-	withP2.mutable_bundle()->add_item_uuids(123456789);
-	withP2.mutable_bundle()->set_pet_id(987654321);
+	::AssetOpRequest request;
+	request.set_player_id(7);
+	request.set_stream(ASSET_OP_STREAM_TRADE_DEBIT);
+	request.set_seq(1);
+	request.set_stream_epoch(2);
+	request.set_tx_type(24);
+	auto* bundle = request.mutable_bundle();
+	bundle->add_item_uuids(900000000000000001ULL);
+	bundle->add_item_uuids(900000000000000002ULL);
+	bundle->set_pet_id(700000000000000003ULL);
+	auto* auth = request.mutable_auth();
+	auth->set_caller("trade");
+	auth->set_timestamp_ms(5);
 
-	EXPECT_EQ(AssetOpCanonical("debit", plain), AssetOpCanonical("debit", withP2));
+	EXPECT_EQ("mmorpg-asset-op/v1\ntrade\ndebit\n7\n3\n2\n1\n0\n24\n"
+			  "c=;i=;u=900000000000000001,900000000000000002;p=700000000000000003\n5",
+			  AssetOpCanonical("debit", request));
+}
+
+// 上一条的**意义**所在:改掉 item_uuids / pet_id 之后,原签名必须失效。
+//
+// 这才是 §4.32 真正要挡的攻击:scene 的 gRPC 是 InsecureServerCredentials(),集群内
+// 任意进程可连可嗅;攻击者截下一条合法的 TRADE_DEBIT,只把 item_uuids 换成该玩家的
+// 其它装备再发出去。这个 seq scene 没见过,幂等挡不住;时间戳没动,300s 时间窗也挡不住。
+// 唯一挡得住的就是签名覆盖到这两个字段。
+TEST(AssetOpAuthTest, SignatureCoversGuidAndPetTamper)
+{
+	::AssetOpRequest signed_request;
+	signed_request.set_player_id(7);
+	signed_request.set_stream(ASSET_OP_STREAM_TRADE_DEBIT);
+	signed_request.set_seq(1);
+	signed_request.set_stream_epoch(2);
+	signed_request.set_tx_type(24);
+	signed_request.mutable_bundle()->add_item_uuids(900000000000000001ULL);
+	signed_request.mutable_bundle()->set_pet_id(700000000000000003ULL);
+	signed_request.mutable_auth()->set_caller("trade");
+	SignRequest("debit", signed_request);
+	ASSERT_EQ(AssetOpAuthVerdict::kOk, VerifyGolden(signed_request));
+
+	// 攻击者能做的正是这一步:载荷换掉,签名与时间戳原样带上。
+	{
+		::AssetOpRequest tampered = signed_request;
+		tampered.mutable_bundle()->set_item_uuids(0, 900000000000000099ULL);
+		EXPECT_EQ(AssetOpAuthVerdict::kSignatureMismatch, VerifyGolden(tampered))
+			<< "换掉 item_uuid 后签名仍然通过 —— u 段没有进 canonical 串";
+	}
+	{
+		::AssetOpRequest tampered = signed_request;
+		tampered.mutable_bundle()->add_item_uuids(900000000000000099ULL);
+		EXPECT_EQ(AssetOpAuthVerdict::kSignatureMismatch, VerifyGolden(tampered))
+			<< "多加一个 item_uuid 后签名仍然通过";
+	}
+	{
+		::AssetOpRequest tampered = signed_request;
+		tampered.mutable_bundle()->clear_item_uuids();
+		EXPECT_EQ(AssetOpAuthVerdict::kSignatureMismatch, VerifyGolden(tampered))
+			<< "清空 item_uuids 后签名仍然通过";
+	}
+	{
+		::AssetOpRequest tampered = signed_request;
+		tampered.mutable_bundle()->set_pet_id(700000000000000099ULL);
+		EXPECT_EQ(AssetOpAuthVerdict::kSignatureMismatch, VerifyGolden(tampered))
+			<< "换掉 pet_id 后签名仍然通过 —— p 段没有进 canonical 串";
+	}
+	{
+		::AssetOpRequest tampered = signed_request;
+		tampered.mutable_bundle()->set_pet_id(0);
+		EXPECT_EQ(AssetOpAuthVerdict::kSignatureMismatch, VerifyGolden(tampered))
+			<< "清空 pet_id 后签名仍然通过";
+	}
 }
 
 // ── 正常通过 ────────────────────────────────────────────────────────────────

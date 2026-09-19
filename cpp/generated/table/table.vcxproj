@@ -81,6 +81,8 @@
     <ClInclude Include="code\attributerule_table_comp.h" />
     <ClInclude Include="code\reward_table.h" />
     <ClInclude Include="code\reward_table_comp.h" />
+    <ClInclude Include="code\rolenamerule_table.h" />
+    <ClInclude Include="code\rolenamerule_table_comp.h" />
     <ClInclude Include="code\skillpermission_table.h" />
     <ClInclude Include="code\skillpermission_table_comp.h" />
     <ClInclude Include="code\skill_table.h" />
@@ -122,6 +124,7 @@
     <ClInclude Include="proto\operator\bag_operator.pb.h" />
     <ClInclude Include="proto\operator\scene_operator.pb.h" />
     <ClInclude Include="proto\reward_table.pb.h" />
+    <ClInclude Include="proto\rolenamerule_table.pb.h" />
     <ClInclude Include="proto\skillpermission_table.pb.h" />
     <ClInclude Include="proto\skill_table.pb.h" />
     <ClInclude Include="proto\testmultikey_table.pb.h" />
@@ -179,6 +182,7 @@
     <ClCompile Include="code\petrule_table.cpp" />
     <ClCompile Include="code\attributerule_table.cpp" />
     <ClCompile Include="code\reward_table.cpp" />
+    <ClCompile Include="code\rolenamerule_table.cpp" />
     <ClCompile Include="code\skillpermission_table.cpp" />
     <ClCompile Include="code\skill_table.cpp" />
     <ClCompile Include="code\testmultikey_table.cpp" />
@@ -216,6 +220,7 @@
     <ClCompile Include="proto\operator\bag_operator.pb.cc" />
     <ClCompile Include="proto\operator\scene_operator.pb.cc" />
     <ClCompile Include="proto\reward_table.pb.cc" />
+    <ClCompile Include="proto\rolenamerule_table.pb.cc" />
     <ClCompile Include="proto\skillpermission_table.pb.cc" />
     <ClCompile Include="proto\skill_table.pb.cc" />
     <ClCompile Include="proto\testmultikey_table.pb.cc" />

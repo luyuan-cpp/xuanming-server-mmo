@@ -283,26 +283,23 @@ func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (E
 //     一次注定失败的往返,还在账本里留下一条永远翻不了案的记录。本地判等价且免费。
 //     currency_type 的上界(C++ kCurrencyMax)Go 侧没有事实源,留给 scene 判。
 //
-//  2. `item_uuids` / `pet_id` **一律拒收**,直到签名串扩完为止。这两个字段已经在
-//     proto/common/asset/asset_op.proto 里(字段 3 / 4),但 §4.32 的 canonical 只写
-//     `c=…;i=…`,不覆盖它们;scene 的 asset_op_system.cpp 因此在验签之后、找人之前
-//     对任一非空字段回 `UNKNOWN + kAssetInvalidBundle` 且**不记账**。UNKNOWN 在
-//     assetop/decide.go 里是 ActionAlert —— 按 60s 上限无限重排,永不终结:
-//     行卡死,DeadlineMs 也救不了(Abort 带同一个包,走同一个分支)。更糟的是
-//     AllocateSeq 的 I5 守卫按本纪元未决行数算,16 条卡死之后这个卖家连纯货币上架
-//     都会被 ErrTooManyPending 拒。所以这里 fail-closed。
+//  2. `item_uuids` / `pet_id` **一律拒收**,因为 v1 的 scene 还没实现按 guid 扣装备 /
+//     扣宝宝(那是 P3 托管的活)。这两个字段已经在 proto/common/asset/asset_op.proto 里
+//     (字段 3 / 4),签名也已经覆盖到它们(2026-09-19 起 canonical 扩成
+//     `…;i=…;u=<item_uuid,…>;p=<pet_id>`),所以**不再有安全理由**,只剩"送过去也做不了"。
+//     送过去的后果是 scene 记一条终局 REJECTED 并吃掉一个 seq —— 一次注定失败的往返,
+//     外加账本里一条永远翻不了案的记录。与上面第 1 条同理,本地判等价且免费。
 //
-// 解除条件(同一批四处一起改):go/shared/assetop/auth.go 的 writeBundleCanonical 扩成
-// `…;i=…;u=<item_uuid,…>;p=<pet_id>`、C++ AssetOpCanonical 同步、两边 golden 字面量更新、
-// asset_op_system.cpp 的第 1c 步改回 §4.9 第 8 步的记账式 REJECTED。
+// 解除条件:P3 在 scene 侧实现按 guid 扣物 / 扣宝宝(删掉 asset_op_system.cpp 的
+// HasUnsupportedP2Fields 与它在两个 Validate*Bundle 里的调用),本函数这一条随之删除。
 func validateDebitBundle(b *assetpb.AssetBundle) error {
 	if b == nil {
 		return errors.New("trade: 托管入队缺资产包")
 	}
 	if len(b.GetItemUuids()) > 0 || b.GetPetId() != 0 {
-		return fmt.Errorf("trade: 托管资产包含未进签名串的 item_uuids(%d 个)/ pet_id(%d),"+
-			"canonical 扩成 …;u=…;p=… 之前不受理(asset_op.proto AssetBundle 硬前置):"+
-			"scene 会回 UNKNOWN 且不记账,这一行会永远卡在 outbox 里",
+		return fmt.Errorf("trade: 托管资产包含 item_uuids(%d 个)/ pet_id(%d),"+
+			"scene v1 尚未实现按 guid 扣物 / 扣宝宝(P3),送过去只会换回一条终局 REJECTED "+
+			"并白吃一个 seq",
 			len(b.GetItemUuids()), b.GetPetId())
 	}
 	if len(b.GetItems()) != 0 {

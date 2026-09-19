@@ -253,7 +253,15 @@ std::string ValidateAssetOpLedger(const PlayerAssetOpLedgerComp&);
 **Record(ledger, epoch, seq, kind, reason)**:
 0. **先**对原账本做前置检查 `Classify(&ledger, epoch, seq) ∈ {kUnseen, kAheadOfWindow}`,不满足返回 false 且不改任何状态;满足后,若 `epoch > ledger.stream_epoch` 再 `ResetAssetOpStreamForEpoch(ledger, epoch)`(顺序不能反,否则前置失败时账本已被清空)。
 1. 若 `seq > W + 1024`:`shift = seq − (W + 1024)`。`shift >= 1024` → 两组位全清;否则两组位整体右移 `shift` 位(低位丢弃,16 个字作为 1024 位大整数右移)。`watermark += shift`,删除 `rejections` 与 `partial_seqs` 中 `seq <= 新 watermark` 的条目。
-2. 置 seen 位;kind 为 kApplied / kAppliedPartial 再置 applied 位,kAppliedPartial 另把 seq 升序插入 `partial_seqs`(超过 64 条删最小);kRejected 把 `{seq, reason}` 按升序插入 `rejections`,超过 64 条删最小 seq。
+2. 置 seen 位;kind 为 kApplied / kAppliedPartial 再置 applied 位,kAppliedPartial 另把 seq 升序插入 `partial_seqs`(超过 64 条删最小);kRejected **且 reason != 0** 才把 `{seq, reason}` 按升序插入 `rejections`,超过 64 条删最小 seq。
+
+   > **中止占位(reason == 0)刻意不进 `rejections` 环**(2026-09-19 落码):它没有业务原因可看,进环只会挤掉 64 个名额里的一格真原因。
+   >
+   > **随之而来的一条已知退化,写成明文契约而不是留给下一个人重新发现**:环满 64 条后,被挤掉的那条**业务拒绝**再被重查时 `AssetOpRejectionReason` 回 0,与中止占位的答复逐项相同,于是 Go 的 `FinalStatus`(判据是 `rpc == Abort && reason == 0`)会把它判成 `ABORTED` 而不是 `REJECTED`。
+   >
+   > **为什么接受**:两者的账务处理完全相同 —— 帮会 B5 对 REJECTED 与 ABORTED 都是退次数 / 退帮贡 / 退限购(`05-economy.md:673-675`),聚宝斋同理。损失只有订单文案从"背包已满 / 余额不足"退化成"已中止",是**展示与排障**的损失,不是资产损失。**不要为它加 proto 字段**(`repeated uint64 abort_seqs` 要动账本 proto + C++ 存取 + 跨 zone 快照三处,代价远大于一行文案)。
+   >
+   > 这条边界由 `asset_op_ledger_test.cpp` 的 `LedgerEvictedRejectionReasonDegradesByDesign` 钉死。看到它失败,**不要去修原因环**,先确认是不是有人改了判据。
 3. `max_seq = max(max_seq, seq)`。
 
 **为什么窗口只"跟着最大 seq 滑",不做"连续已见前缀压缩"**:压缩会把仍未决、但 scene 已记账的 seq 挤出窗口,Go 重查时就分不清当初是 APPLIED 还是 REJECTED。只按最大 seq 滑,再加上 Go 端的 I5 守卫,可以证明**同一纪元内**未决 seq 永远在窗内(帮会库重置/恢复会破坏 `max_seq <= next_seq − 1`,所以才需要纪元,见第 8 部分 4.29;跳号上限的证明也在那里):
@@ -550,6 +558,10 @@ if (!IsClientGmAllowed()) {
 | `LedgerSlideExactly1024` | 记 1 后记 2048 → watermark=1024;1 → kBehindWindow;2048 → kApplied |
 | `LedgerSlideBeyondWindowClears` | 记 1 后记 5000 → watermark=3976,位只剩最高位 |
 | `LedgerRejectionsPrunedOnSlide` | 记 2=REJECTED 后记 1030 → rejections 为空 |
+| `LedgerAbortPlaceholderNotInRejectionRing` | 中止占位(reason 0)不占环:63 个占位夹在中间,仍能攒满 64 条真原因且最早一条不被挤掉 |
+| `LedgerEvictedRejectionReasonDegradesByDesign` | 65 条业务拒绝挤掉第 1 条 → 重查 reason 回 0,答复与中止占位逐项相同。**这是刻意接受的退化**(见 4.9 第 2 步),失败时先查判据有没有被改,别去修原因环 |
+| `LedgerJumpCapOverflowGuardBoundary` | 跳号上限的 uint64 溢出边界三取值:`max−jump+1` 任何 seq 都不判跳号;`max−jump` 上限恰为 `kUint64Max`(无 seq 可超,注释写明);`max−jump−1` 才观测得到 kJumpTooFar |
+| `LedgerHigherEpochResetsWatermarkNearOverflow` | watermark 接近上限时:同纪元判 kInvalid;更大纪元记账成功且记账后 watermark == 0(堵住 Classify 不看 watermark 的那条腿) |
 | `LedgerRejectionRingCap` | 连续 70 个 REJECTED → 只剩最大 64 个,升序;最早的原因 → 0 |
 | `LedgerRecordPreconditionFails` | 对已见 seq 再 Record → 返回 false 且状态不变 |
 | `LedgerWatermarkOverflowInvalid` | `watermark = UINT64_MAX − 1000` → kInvalid |
@@ -1223,10 +1235,22 @@ mmorpg-asset-op/v1
 <seq>
 <correlation_id>
 <tx_type>
-<bundle>              // "c=" 货币按请求顺序 "<type>:<amount>" 逗号分隔 ";i=" 物品 "<config_id>:<count>" 逗号分隔;空则 "c=;i="
+<bundle>              // "c=" 货币按请求顺序 "<type>:<amount>" 逗号分隔 ";i=" 物品 "<config_id>:<count>" 逗号分隔
+                      // ";u=" item_uuids 按请求顺序逗号分隔 ";p=" pet_id(单值);全空则 "c=;i=;u=;p=0"
 <timestamp_ms>
 ```
 `signature_hex = lowercase-hex(HMAC-SHA256(secret_of(caller), canonical))`。rpc 进串,防止拿 Abort 的签名去调 Credit;bundle 进串,防止改金额。
+
+> **`;u=` / `;p=` 两段是 2026-09-19 补的,不是可选装饰。** 它们对应 `AssetBundle.item_uuids` / `pet_id`,
+> 会真改玩家资产(按 guid 扣装备 / 扣宝宝)。此前 canonical 不覆盖它们,而 scene 的 gRPC 是
+> `InsecureServerCredentials()`(`node.cpp:623`),集群内任意进程可连可嗅:攻击者截下一条合法的
+> TRADE_DEBIT、只把 `item_uuids` 换成该玩家的其它装备再发出去,这个 seq scene 没见过、签名照样通过,
+> 扣掉的就是被换的那件。**seq 幂等与 300s 时间窗都挡不住这种「同 seq 抢跑改载荷」**。
+> 守卫用例:C++ `AssetOpAuthTest.SignatureCoversGuidAndPetTamper` 与 Go `TestSignatureCoversGuidAndPetTamper`。
+>
+> 连带后果:`asset_op_system.cpp` 原先把「带这两个字段」判在信封档(回 UNKNOWN 且**不记账**),
+> 理由正是「字段不受签名保护,记账就等于谁都能永久杀掉任意一条在途 seq」。签名覆盖之后这条理由消失,
+> 已改回 §4.9 第 8 步的记账式 REJECTED —— v1 仍不支持按 guid 扣物(那是 P3 的活),但拒绝方式变了。
 
 **为什么不要 nonce**:同一 (player, stream, epoch, seq) 重放,要么只读答复,要么就是那唯一一次应用,Go 总以 scene 结局为准。时间窗只用于限制截获包的寿命(应对回档后旧 seq 重新变成"未见"):`|now − timestamp_ms| ≤ 300000`。
 
@@ -1266,7 +1290,7 @@ func (s *Signer) Sign(rpc RPC, req *assetpb.AssetOpRequest, nowMs uint64) // 就
 **测试**:C++ `asset_op_auth_test.cpp`(`TEST(AssetOpAuthTest, …)`):`CanonicalGolden`、`VerifyOk`、`CallerNotAllowed`、`SecretMissing`、`SecretTooShort`、`ClockSkew`、`TamperedBundle`、`TamperedRpc`、`SystemCreditAlwaysRejected`。Go `auth_test.go`:`TestCanonicalGolden`、`TestNewSignerRejectsWeak`、`TestCallerSignsEachAttempt`、`TestCallerNoSigner`。
 
 两边的 golden 用同一输入:player 42、stream 1、epoch 1700000000000、seq 7、corr 99、tx 24、货币 [(1,30)]、无物品、rpc `debit`、caller `guild`、ts 1700000000123。期望 canonical 字面量为:
-`"mmorpg-asset-op/v1\nguild\ndebit\n42\n1\n1700000000000\n7\n99\n24\nc=1:30;i=\n1700000000123"`
+`"mmorpg-asset-op/v1\nguild\ndebit\n42\n1\n1700000000000\n7\n99\n24\nc=1:30;i=;u=;p=0\n1700000000123"`
 
 <!-- s4_asset_part9.md -->
 
@@ -1432,19 +1456,32 @@ op 行插入时写 `stream_epoch = Alloc.Epoch`。`ErrSeqRowCorrupt = errors.New
 替换第 5 部分的 `ClaimDue`:
 ```go
 type Store interface {
-    // 非加锁一致性读,走 (status,next_attempt_ms) 索引,不持锁:
-    //   SELECT op_id FROM {op} WHERE status=<pending> AND next_attempt_ms<=? AND lease_until_ms<? ORDER BY next_attempt_ms LIMIT ?
+    // 非加锁一致性读,走 (status,next_attempt_ms) 索引,不持锁。
+    // **两段查询,不是一条 SQL**(X-03 防饿死,2026-09-19 落码):
+    //   第一段(新行优先):… AND attempts <  FreshAttemptLimit ORDER BY next_attempt_ms ASC, op_id ASC LIMIT ?limit
+    //   第二段(仅当第一段不足 limit 才发):… AND attempts >= FreshAttemptLimit ORDER BY 同上 LIMIT ?(limit-第一段条数)
+    // 两段谓词互斥,但两次独立非锁读之间 attempts 可能从 2 跳到 3,所以仍要按 op_id 去重;
+    // 第一段在前、总数 <= limit。阈值取 assetop 导出的 FreshAttemptLimit,不要各抄一份 3。
+    //
+    // 为什么不能写成一条 SQL:老行的退避被 MaxBackoff 封顶在 60s,于是它们永远"早就到期",
+    // 按 next_attempt_ms 排序必定霸占整批名额,新提交的指令永远排不上号。
+    // **反向代价(已知并接受)**:新行持续满额时老行零名额,靠 assetop_pending_oldest_age_seconds 告警兜底。
     ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error)
     // 单行主键 CAS 领取(autocommit),紧挨着处理前调用:
     //   UPDATE {op} SET lease_until_ms=?, lease_token=? WHERE op_id=? AND status=<pending> AND lease_until_ms<?
     //   RowsAffected==0 → (Op{}, false, nil);==1 → SELECT 全列 WHERE op_id=? 并解 payload。
-    //   解码失败:Store 自行 UPDATE last_outcome=0, next_attempt_ms=now+PoisonDelay, lease_until_ms=0
+    //   解码失败:Store 自行 UPDATE last_outcome=0, next_attempt_ms=poisonUntilMs, lease_until_ms=0
     //            WHERE op_id=? AND lease_token=?,返回 (Op{}, false, ErrPoisonRow)
-    Claim(ctx context.Context, opID, nowMs, leaseUntilMs, token uint64) (Op, bool, error)
+    //   poisonUntilMs 由循环按 LoopConfig.PoisonDelay 算好传进来(2026-09-19 加的第 6 个参数);
+    //   **实现不得再自写毒行延迟常量** —— 那会让 yaml 里的 PoisonDelay 改了不生效,两份值迟早分叉。
+    Claim(ctx context.Context, opID, nowMs, leaseUntilMs, token, poisonUntilMs uint64) (Op, bool, error)
     Finalize(ctx context.Context, op Op, status Status, res Result, nowMs uint64) (bool, error)   // 语义同前,须包在 WithTxRetry 里
-    Reschedule(ctx context.Context, op Op, nextAttemptMs uint64, res Result, nowMs uint64) error  // SET … last_reason=res.Reason …
+    // SET … last_reason=res.Reason …;**RowsAffected==0(租约已被别的副本抢走)必须回 ErrLeaseLost**
+    // (可 %w 包裹)。不回的话"我这次的结果被丢弃了"在指标里永远看不见。
+    Reschedule(ctx context.Context, op Op, nextAttemptMs uint64, res Result, nowMs uint64) error
 }
 var ErrPoisonRow = errors.New("assetop: op payload undecodable")
+var ErrLeaseLost = errors.New("assetop: lease lost before reschedule")
 ```
 为什么两步:原 `UPDATE … WHERE status AND next_attempt_ms ORDER BY LIMIT` 在 MySQL 可重复读下按范围加 next-key 锁,和业务事务里 AllocateSeq 的 `FOR UPDATE` + 插入新 op 行互相等待,可能死锁,被选为牺牲者的是用户请求。改成非加锁读 + 主键 CAS 后,重投循环每次只锁一行。业务事务仍可能与 Reschedule 的单行更新撞锁(二级索引与主键加锁顺序相反),所以业务写路径一律包 `WithTxRetry(attempts=2)`。
 
@@ -1453,7 +1490,19 @@ var ErrPoisonRow = errors.New("assetop: op payload undecodable")
 Interval 2s; Batch 100; Workers 8; Lease 10s; OpBudget 2500ms;
 BaseBackoff 1000ms; MaxBackoff 60s; AwaitDurableDelay 500ms; PoisonDelay 1h; LedgerReadMinAttempts 3
 ```
-`NewLoop` 校验:`1 <= Workers <= 64`、`Batch >= Workers`、`OpBudget + 2s <= Lease`、`BaseBackoff <= MaxBackoff`,否则返回错误。
+`NewLoop` 校验:`1 <= Workers <= 64`、`Batch >= Workers`、`OpBudget + 2s <= Lease`、`BaseBackoff <= MaxBackoff`、
+`PoisonDelay > 0`、**`OpBudget > settleBudget`**,否则返回错误。
+
+> **单行预算被切成两半**(2026-09-19,修的是一条会丢钱的路径)。原先 `ProcessOne` 把整个 `OpBudget`
+> 交给 `applier.Do`,给后面的落库留 0:RPC 跑满预算之后,`Finalize` 必定拿到已过期的 ctx ——
+> **scene 已经扣了钱,outbox 行却更新不了**,重投循环下次再扣一遍(靠 seq 幂等兜住,但行会一直卡着)。
+> 现在投递只拿 `OpBudget - settleBudget`(默认 1800ms),落库另走 `settleBudget`(700ms)且
+> **不继承父 ctx 的取消**(`context.WithoutCancel` + 自带超时):只切比例救不了"父 ctx 在进来之前就被花掉一部分",
+> 只用 `WithoutCancel` 又会让关停无限期挂住。代价是关停时每行最多多等 700ms。
+>
+> 连带口径:1800ms 只保证**快路径**三轮重查全过;慢路径(每轮重查自己还要再发一次 RPC,各自上限
+> `CallTimeout`)约只容得下一轮,之后转 AwaitDurable 500ms 后重排 —— 钱是安全的,但
+> `assetop_requery_total{result="timeout"}` 与 `reschedule_total{reason="await_durable"}` 上线后预期上升。
 
 `Tick`:`ids := ListDue(now, Batch)` → 投进容量 Batch 的通道 → `Workers` 个 goroutine(`shared/safego` 启动)各自 `Claim(id, now, now+Lease, 随机令牌)` 后立即 `ProcessOne`;`Tick` 等全部 worker 结束才返回。租约从"领到这一行"起算,处理耗时 ≤ OpBudget,不会再出现排在批尾的行租约早已过期、被别的副本重复领取的情况。Claim 返回 false 计 `assetop_claim_total{result="lost"}`;`ErrPoisonRow` 计 `assetop_store_errors_total{op="decode"}` + ERROR 日志(op_id),继续下一行。
 

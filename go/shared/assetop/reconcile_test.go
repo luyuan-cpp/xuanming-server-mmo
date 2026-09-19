@@ -45,6 +45,7 @@ type fakeStore struct {
 	finalized   []finalizeCall
 	rescheduled []rescheduleCall
 	claimTokens map[uint64]uint64
+	poisonUntil map[uint64]uint64
 	oldest      map[assetpb.AssetOpStream]uint64
 }
 
@@ -55,6 +56,7 @@ func newFakeStore(ops ...Op) *fakeStore {
 		poison:      map[uint64]bool{},
 		finErr:      map[uint64]error{},
 		claimTokens: map[uint64]uint64{},
+		poisonUntil: map[uint64]uint64{},
 	}
 	for _, op := range ops {
 		s.rows[op.OpID] = op
@@ -76,9 +78,11 @@ func (s *fakeStore) ListDue(_ context.Context, _ uint64, limit int) ([]uint64, e
 	return out, nil
 }
 
-func (s *fakeStore) Claim(_ context.Context, opID, _, _, token uint64) (Op, bool, error) {
+func (s *fakeStore) Claim(_ context.Context, opID, _, _, poisonUntilMs, token uint64) (Op, bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	// 毒行推迟到什么时候是循环算好传进来的,记下来才能断言它真的按配置走。
+	s.poisonUntil[opID] = poisonUntilMs
 	if s.poison[opID] {
 		return Op{}, false, ErrPoisonRow
 	}
@@ -372,6 +376,28 @@ func TestListDueThenClaimLostSkips(t *testing.T) {
 	}
 }
 
+// 毒行推迟到什么时候必须跟着 LoopConfig.PoisonDelay 走。
+//
+// 这条断言是为了让 PoisonDelay 不再是死配置:改 yaml(运维契约 Y-06 的 PoisonDelayMs)
+// 必须真的改变行为,而不是靠 Store 实现里另抄一份常量 —— 两份值分叉时没有任何报错。
+func TestClaimPassesPoisonDeadlineFromConfig(t *testing.T) {
+	store := newFakeStore(testOp(1))
+	store.poison[1] = true
+	applier := &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
+		return Result{}, errors.New("不该被调用")
+	}}
+	loop, _ := newTestLoop(t, store, applier, func(c *LoopConfig) { c.PoisonDelay = 2 * time.Hour })
+
+	loop.Tick(context.Background())
+
+	store.mu.Lock()
+	got := store.poisonUntil[1]
+	store.mu.Unlock()
+	if want := testNowMs + uint64(2*time.Hour/time.Millisecond); got != want {
+		t.Fatalf("毒行应当推到 %d(now + PoisonDelay),实际 %d", want, got)
+	}
+}
+
 // 毒行(payload 解不开)跳过,下一行照常。
 func TestPoisonRowSkipped(t *testing.T) {
 	store := newFakeStore(testOp(1), testOp(2))
@@ -454,6 +480,8 @@ func TestNewLoopRejectsBadConfig(t *testing.T) {
 		{"Batch 小于 Workers", func(c *LoopConfig) { c.Batch = 1; c.Workers = 4 }},
 		{"退避区间反了", func(c *LoopConfig) { c.BaseBackoff = time.Minute; c.MaxBackoff = time.Second }},
 		{"Interval 非正", func(c *LoopConfig) { c.Interval = 0 }},
+		// 毒行延迟为 0 会让解不开的行每一轮都被重领一次,白占名额。
+		{"毒行延迟非正", func(c *LoopConfig) { c.PoisonDelay = 0 }},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

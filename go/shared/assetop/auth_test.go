@@ -19,7 +19,7 @@ import (
 // player 42、stream 1、epoch 1700000000000、seq 7、corr 99、tx 24、货币 [(1,30)]、
 // 无物品、rpc debit、caller guild、ts 1700000000123。
 // 两边任何一侧改了拼串规则,这个字面量就会把它抓出来 —— 否则线上表现是「全部验签失败」。
-const canonicalGolden = "mmorpg-asset-op/v1\nguild\ndebit\n42\n1\n1700000000000\n7\n99\n24\nc=1:30;i=\n1700000000123"
+const canonicalGolden = "mmorpg-asset-op/v1\nguild\ndebit\n42\n1\n1700000000000\n7\n99\n24\nc=1:30;i=;u=;p=0\n1700000000123"
 
 func TestCanonicalGolden(t *testing.T) {
 	req := testRequest()
@@ -41,9 +41,89 @@ func TestCanonicalEmptyBundle(t *testing.T) {
 		Auth:        &assetpb.AssetOpAuth{Caller: "guild"},
 	}
 	got := string(Canonical(RPCAbort, req, 5))
-	want := "mmorpg-asset-op/v1\nguild\nabort_debit\n7\n1\n2\n1\n0\n0\nc=;i=\n5"
+	want := "mmorpg-asset-op/v1\nguild\nabort_debit\n7\n1\n2\n1\n0\n0\nc=;i=;u=;p=0\n5"
 	if got != want {
 		t.Fatalf("空 bundle 的 canonical 串不匹配\n实际: %q\n期望: %q", got, want)
+	}
+}
+
+// 按 guid 扣的物品与宝宝必须进签名串。这两个字段会真改玩家资产,而 scene 的 gRPC
+// 是不安全凭据:不进串就等于「集群内任何进程都能改这条请求扣哪件装备」。
+// 与 C++ AssetOpAuthTest.CanonicalCoversGuidAndPet 同一组输入。
+func TestCanonicalCoversGuidAndPet(t *testing.T) {
+	req := &assetpb.AssetOpRequest{
+		PlayerId:    7,
+		Stream:      assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT,
+		Seq:         1,
+		StreamEpoch: 2,
+		TxType:      24,
+		Bundle: &assetpb.AssetBundle{
+			ItemUuids: []uint64{900000000000000001, 900000000000000002},
+			PetId:     700000000000000003,
+		},
+		Auth: &assetpb.AssetOpAuth{Caller: "trade"},
+	}
+	got := string(Canonical(RPCDebit, req, 5))
+	want := "mmorpg-asset-op/v1\ntrade\ndebit\n7\n3\n2\n1\n0\n24\n" +
+		"c=;i=;u=900000000000000001,900000000000000002;p=700000000000000003\n5"
+	if got != want {
+		t.Fatalf("guid/pet 段的 canonical 串不匹配\n实际: %q\n期望: %q", got, want)
+	}
+}
+
+// 这条才是上面那条的**意义**所在:改掉 item_uuids / pet_id 之后签名必须失效。
+// 不加这条,将来有人把 u/p 两段从拼串里删掉,只有 golden 用例会红,
+// 而 golden 看起来只是「字面量对不上」,很容易被顺手改字面量「修好」。
+func TestSignatureCoversGuidAndPetTamper(t *testing.T) {
+	signer, err := NewSigner("trade", testSecret)
+	if err != nil {
+		t.Fatalf("构造 Signer 失败: %v", err)
+	}
+	base := func() *assetpb.AssetOpRequest {
+		return &assetpb.AssetOpRequest{
+			PlayerId:    7,
+			Stream:      assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT,
+			Seq:         1,
+			StreamEpoch: 2,
+			TxType:      24,
+			Bundle: &assetpb.AssetBundle{
+				ItemUuids: []uint64{900000000000000001},
+				PetId:     700000000000000003,
+			},
+		}
+	}
+
+	signed := base()
+	signer.Sign(RPCDebit, signed, 1700000000123)
+	original := signed.GetAuth().GetSignatureHex()
+	if original == "" {
+		t.Fatal("签名为空")
+	}
+
+	// 攻击者能做的正是这一步:拿到合法请求,只换载荷,签名原样带上。
+	for _, c := range []struct {
+		name  string
+		mutate func(*assetpb.AssetOpRequest)
+	}{
+		{"换掉 item_uuid", func(r *assetpb.AssetOpRequest) { r.Bundle.ItemUuids = []uint64{900000000000000099} }},
+		{"多加一个 item_uuid", func(r *assetpb.AssetOpRequest) {
+			r.Bundle.ItemUuids = append(r.Bundle.ItemUuids, 900000000000000099)
+		}},
+		{"清空 item_uuids", func(r *assetpb.AssetOpRequest) { r.Bundle.ItemUuids = nil }},
+		{"换掉 pet_id", func(r *assetpb.AssetOpRequest) { r.Bundle.PetId = 700000000000000099 }},
+		{"清空 pet_id", func(r *assetpb.AssetOpRequest) { r.Bundle.PetId = 0 }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			tampered := base()
+			c.mutate(tampered)
+			tampered.Auth = &assetpb.AssetOpAuth{Caller: "trade", TimestampMs: 1700000000123}
+
+			mac := hmac.New(sha256.New, []byte(testSecret))
+			mac.Write(Canonical(RPCDebit, tampered, 1700000000123))
+			if hex.EncodeToString(mac.Sum(nil)) == original {
+				t.Fatal("篡改载荷后签名不变 —— u/p 两段没有进 canonical 串")
+			}
+		})
 	}
 }
 

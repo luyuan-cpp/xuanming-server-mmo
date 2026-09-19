@@ -75,6 +75,9 @@
     <ClInclude Include="code\reward_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\rolenamerule_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\skill_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -207,6 +210,9 @@
     <ClInclude Include="proto\reward_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\rolenamerule_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\skill_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -301,6 +307,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\reward_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\rolenamerule_table_comp.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\skill_table_comp.h">
@@ -440,6 +449,9 @@
     <ClCompile Include="code\reward_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="code\rolenamerule_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="code\skill_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -573,6 +585,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\reward_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\rolenamerule_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\skill_table.pb.cc">
