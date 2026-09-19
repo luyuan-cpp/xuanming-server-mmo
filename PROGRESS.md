@@ -5269,3 +5269,8 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - **对抗复审(2 视角,只读)把第一版打回**:第一版只看「不在负载集 + 无 death_at」。两个视角各自独立指出 `world_init.go markNodeDead` 会在一次 CreateScene RPC 超时后把**活节点**摘出负载集且不写 `death_at` → 活节点名下在线玩家会被无存盘接管并回档(P0);另指出既有用例 `TestEnterScene_CrossNodeRejectedWithoutSideEffectsAndRetryStaysRejected` 会由 18 变 0。本会话在复审返回前已独立查到同一处并改为要求注册表证据;复审另外带出并已修:周期巡检「先 Zrem 后 markNodeDeath」反序、leader 缺位时无人写 `death_at`(新增进程本地的消失观察时刻)、接管后大世界频道人数永久虚高(落点成功后归还,已销毁场景不重建键)、metrics 文档注释错位、既有用例前提写明确(源节点 10 显式在负载集)。
 - **改动文件**:`go/scene_manager/internal/logic/{enterscenelogic.go, load_reporter.go, reentry_barrier.go, owner_epoch_test.go, logic_test.go}`、`go/scene_manager/internal/metrics/metrics.go`、`docs/design/cross-zone-scene-travel.md`。gofmt 语法 / 格式通过;**未编译、未跑单测**(8 个新用例 + 1 个既有用例的前提调整)。建议 Codex:`cd go/scene_manager && go test ./internal/logic -run 'DeadOwner|OwnerDead|OwnerMissing|CrossNodeRejected|StaleLocation' -count=1`,再全量。
 - **未改、留给归属方判断**:`world_init.go markNodeDead` 摘活节点且不写 `death_at` 的既有行为(已告知做 K8s 单点加固的会话)。
+
+### 2026-09-19 补充:cpu-shares 还原已执行,上一条"待执行"关闭(Claude)
+
+- Docker 引擎已由「Grafana 单位日志库接入」会话为其 kind 验证启动(本会话未启动它)。引擎可达后随即执行上一条登记的还原:`kafka` / `mysql` / `etcd` / `redis` 还原前逐个读到 `CpuShares=8192`(即本会话 09-17 所设),`docker update --cpu-shares 1024` 四次均 exit 0,读回四个均为 `1024`。写入以"当前值确为 8192"为条件,未覆盖任何非本会话设置的值。上一条(`c59371441`)里"引擎不在""还原未执行"两句自此不再成立。
+- **后果提示**:权重回到默认后,负载重时 `kafka-topics.sh --list` 会回到 09-17 实测的 56 秒量级,`start_game.ps1` 的 60 秒 Kafka 就绪探测可能再次超时。这是机器被 kind 集群等占满时的真实状况,处理手段是释放资源(由用户决定),不应再用调容器权重的方式绕过。
