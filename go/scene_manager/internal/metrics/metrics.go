@@ -248,6 +248,16 @@ var (
 		Help:      "Ownership changes refused because the dead node's re-entry barrier had not elapsed, by site.",
 	}, []string{"zone_id", "site"})
 
+	// enterSceneOwnerDeadTakeoverTotal:玩家位置记录指向的节点已确认死亡且再入屏障已过,
+	// EnterScene 把它当作无持有者直接落点(enterscenelogic.go playerLocationOwnerDead)。
+	// 只按 zone 分;稳态恒 0,节点崩溃后约等于「当时挂在那个节点上、随后回来的玩家数」。
+	// 若没有任何节点死亡它却在涨,说明判死(IsNodeAlive / death_at)出了问题。
+	enterSceneOwnerDeadTakeoverTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "enter_scene_owner_dead_takeover_total",
+		Help:      "EnterScene placements that treated a player's location as ownerless because its scene node was confirmed dead and the re-entry barrier had elapsed.",
+	}, []string{"zone_id"})
+
 	// deadNodeReconcilePending 是「已判死、但收尾动作还被屏障压着」的节点数。
 	// 它应该在一个屏障时长内回到 0;长期不为 0 = 收尾链路卡住了。
 	deadNodeReconcilePending = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -287,6 +297,7 @@ func register() {
 			agonesCounterDrift, worldAutoscaleTotal,
 			kafkaDeliveryTotal,
 			reentryBarrierBlockedTotal, deadNodeReconcilePending,
+			enterSceneOwnerDeadTakeoverTotal,
 			homeZoneLookupTotal,
 		)
 	})
@@ -329,6 +340,12 @@ func ResetLeaderGauges() {
 	register()
 	agonesCounterDrift.Reset()
 	rebalancePending.Reset()
+}
+
+// ObserveEnterSceneOwnerDeadTakeover 记一次「属主节点已死、按无持有者落点」。
+func ObserveEnterSceneOwnerDeadTakeover(zoneID uint32) {
+	register()
+	enterSceneOwnerDeadTakeoverTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10)).Inc()
 }
 
 // ObserveReentryBarrierBlocked 记一次被再入屏障挡下的所有权变更尝试。

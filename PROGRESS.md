@@ -5261,3 +5261,11 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - **当前状态**:该设置持久化在容器 HostConfig 里。09-19 尝试还原时 Docker 引擎不在(无 `dockerDesktopLinuxEngine` 管道、无 Docker Desktop 进程),`docker inspect` 读取失败,保护条件未写入任何值,**还原未执行,8192 仍在,引擎一启动即重新生效**。改动前未记录原值;compose 文件未设 cpu_shares,按 Docker 默认值 1024 还原。
 - **待执行(引擎起来后,任何人都可以做)**:`docker update --cpu-shares 1024 kafka mysql etcd redis`,再用 `docker inspect -f '{{.HostConfig.CpuShares}}' <容器>` 逐个核对。本会话未为此自行启动 Docker Desktop(会连带拉起 kind 集群与 TiDB,属整机负载决定,留给用户)。
 - **连带更正**:上一条里"本地栈仍可进 Unity(8081)"随引擎停止已不成立,需重新拉起。
+
+## 2026-09-19 跨 zone 传送收尾:单节点硬崩后的玩家接管 + regen 后构建清单复核(Claude,未编译、未跑测试)
+
+- **构建清单复核(只读)**:09-18 串行 regen 之后,原定由构建清单会话做的第二轮「磁盘 vs CMake / vcxproj」比对由本会话补做:`cpp/generated/{proto,table,grpc_client,rpc}`、`cpp/libs/services/scene`、`cpp/nodes/{scene,gate}` 共 14 份清单,未登记 0、残留 0(gate 唯一的差异是 `tests/gate_security_test.cpp`,本来就不进节点工程)。Go 侧核过新生成字段的类型与手写代码一致(`SceneConfId` / `PendingSceneConfId` 均为 uint64)。
+- **补上 §10.3 里最伤可用性的一条已知限制**:单个 scene 节点硬崩(同 zone 还有活节点)时它永远写不出 handoff 标记,名下玩家在生产配置下被 18 永久挡住。新规则 `playerLocationOwnerDead`(设计文档 §11.5):节点身份无歧义 + 已从 etcd 注册表消失(且本进程已完成首次全量同步)+ 本副本看到它消失已过屏障 + 不在负载集 + Redis `death_at` 屏障已过 → 按无持有者落点并铸新 epoch;任何一步拿不准 fail-closed。
+- **对抗复审(2 视角,只读)把第一版打回**:第一版只看「不在负载集 + 无 death_at」。两个视角各自独立指出 `world_init.go markNodeDead` 会在一次 CreateScene RPC 超时后把**活节点**摘出负载集且不写 `death_at` → 活节点名下在线玩家会被无存盘接管并回档(P0);另指出既有用例 `TestEnterScene_CrossNodeRejectedWithoutSideEffectsAndRetryStaysRejected` 会由 18 变 0。本会话在复审返回前已独立查到同一处并改为要求注册表证据;复审另外带出并已修:周期巡检「先 Zrem 后 markNodeDeath」反序、leader 缺位时无人写 `death_at`(新增进程本地的消失观察时刻)、接管后大世界频道人数永久虚高(落点成功后归还,已销毁场景不重建键)、metrics 文档注释错位、既有用例前提写明确(源节点 10 显式在负载集)。
+- **改动文件**:`go/scene_manager/internal/logic/{enterscenelogic.go, load_reporter.go, reentry_barrier.go, owner_epoch_test.go, logic_test.go}`、`go/scene_manager/internal/metrics/metrics.go`、`docs/design/cross-zone-scene-travel.md`。gofmt 语法 / 格式通过;**未编译、未跑单测**(8 个新用例 + 1 个既有用例的前提调整)。建议 Codex:`cd go/scene_manager && go test ./internal/logic -run 'DeadOwner|OwnerDead|OwnerMissing|CrossNodeRejected|StaleLocation' -count=1`,再全量。
+- **未改、留给归属方判断**:`world_init.go markNodeDead` 摘活节点且不写 `death_at` 的既有行为(已告知做 K8s 单点加固的会话)。

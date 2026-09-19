@@ -622,6 +622,9 @@ func TestEnterScene_CrossNodeRejectedWithoutSideEffectsAndRetryStaysRejected(t *
 	mr.Set(fmt.Sprintf(InstancePlayerCountKey, targetID), "4")
 	mr.Set(nodePlayerCountKey(testZoneId, "20"), "4")
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "20")
+	// 源节点 10 活着、只是还没写交接标记 —— 把这个前提写明确:不在负载集的节点在别的判定里
+	// 可能被读成「已死」,而本用例守护的是「活着的源 + 无标记 ⇒ 必须拒绝且无副作用」。
+	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
 
 	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, oldSceneID), "10")
 	mr.Set(fmt.Sprintf(InstancePlayerCountKey, oldSceneID), "7")

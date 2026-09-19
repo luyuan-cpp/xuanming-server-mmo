@@ -1149,3 +1149,239 @@ func TestCheckHandoffCommitted(t *testing.T) {
 	require.NoError(t, err, "标记写坏不是 Redis 故障")
 	assert.False(t, verdict.committed, "标记写坏:不放行")
 }
+
+// --- 单节点判死后的接管 ---------------------------------------------------------
+
+// seedPlayerOnDeadNode 摆出「zone 还活着(node 20 在负载集里),但玩家位置记录指向的 node 10
+// 已经不在负载集里」的局面,目标场景在活着的 node 20 上。生产配置(不开 dev 旁路),没有
+// handoff 标记 —— 死掉的节点永远写不出来。
+// markKnownNodesSyncedForTest 模拟「本进程已完成首次 etcd 全量同步」。单测不跑
+// StartLoadReporter,不置这个标志的话 isNodeGoneFromRegistry 恒为 false。
+func markKnownNodesSyncedForTest(t *testing.T) {
+	t.Helper()
+	prev := knownNodesSynced.Load()
+	knownNodesSynced.Store(true)
+	t.Cleanup(func() { knownNodesSynced.Store(prev) })
+}
+
+// registerKnownNodeForTest 往 etcd 注册表的内存镜像里放一个节点(= 它的租约还活着)。
+func registerKnownNodeForTest(t *testing.T, key string, zoneID uint32, nodeID string) {
+	t.Helper()
+	entry := nodeEntry{nodeID: nodeID}
+	entry.reg.ZoneId = zoneID
+	knownNodesMu.Lock()
+	knownNodes[key] = entry
+	knownNodesMu.Unlock()
+}
+
+func seedPlayerOnDeadNode(t *testing.T, sc *svc.ServiceContext, mr *miniredis.Miniredis, playerID, oldScene, targetID uint64) {
+	t.Helper()
+	markKnownNodesSyncedForTest(t)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "20", "4")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+	mr.ZRem(nodeLoadKey(testZoneId), "10")
+	withReachableSceneNode(t, sc, "20")
+}
+
+// 节点已确认死亡、再入屏障已过:没有任何进程可能还在写这名玩家,无标记也必须放行,
+// 否则一次单节点崩溃会把它名下的玩家永久挡在门外(只能等运维手工清 location)。
+// 放行必须铸造新 epoch —— 那是对「其实没死的僵尸节点」的兜底。
+func TestEnterScene_DeadOwnerAfterBarrierIsTakenOverWithoutMarker(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	const (
+		playerID = uint64(6130)
+		oldScene = uint64(7130)
+		targetID = uint64(7230)
+	)
+	seedPlayerOnDeadNode(t, sc, mr, playerID, oldScene, targetID)
+	require.False(t, sc.Config.AllowUnsafeCrossNodeHandoff, "本用例必须跑在生产口径下")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode, "属主已死且屏障已过,不应再要求 handoff 标记")
+
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "接管必须铸造新 epoch,僵尸节点手里的 1 从此作废")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, targetID, loc.SceneId)
+	assert.Equal(t, "20", loc.NodeId)
+	assert.Equal(t, uint64(2), loc.OwnerEpoch)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, uint64(2), decodeRoutePlayerEvent(t, (*captured)[0]).OwnerEpoch)
+
+	// 旧场景还在(大世界频道会沿用同一个 scene_id 迁到活节点,人数原值保留、没有任何重算路径):
+	// 接管成功后必须把这名玩家占的那一个人数还回去,否则那个频道永久虚高。
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	assert.Equal(t, "2", oldCount)
+}
+
+// 旧场景是已被 dead-node reconcile 销毁的副本实例(scene:{id}:node 与计数键都没了):
+// 不得为了"还人数"把计数键重新建出来。
+func TestEnterScene_DeadOwnerTakeoverDoesNotRecreateCountOfDestroyedScene(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	capturingKafkaWriter(sc)
+	const (
+		playerID = uint64(6135)
+		oldScene = uint64(7135)
+		targetID = uint64(7235)
+	)
+	seedPlayerOnDeadNode(t, sc, mr, playerID, oldScene, targetID)
+	mr.Del(fmt.Sprintf(SceneNodeKeyFmt, oldScene))
+	mr.Del(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode)
+	assert.False(t, mr.Exists(fmt.Sprintf(InstancePlayerCountKey, oldScene)))
+}
+
+// leader 缺位时节点丢了租约:没有人写 Redis 的 death_at。本副本亲眼看到它从注册表消失,
+// 屏障就从那一刻起算 —— 老进程 15s 的紧急疏散存盘还没跑完,不得接管。
+func TestPlayerLocationOwnerDeadHonoursLocallyObservedDisappearance(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	markKnownNodesSyncedForTest(t)
+	mr.ZAdd(nodeLoadKey(testZoneId), 0, "20")
+	loc := &scene_manager.PlayerLocation{SceneId: 7136, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1}
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	key := nodeGoneObservedKey(testZoneId, "10")
+	t.Cleanup(func() {
+		nodeGoneObservedMu.Lock()
+		delete(nodeGoneObservedAt, key)
+		nodeGoneObservedMu.Unlock()
+	})
+
+	noteNodeGoneFromRegistry(testZoneId, "10")
+	assert.False(t, logic.playerLocationOwnerDead(loc, testZoneId), "刚看到它消失,Redis 里又没有 death_at:仍在屏障内")
+
+	nodeGoneObservedMu.Lock()
+	nodeGoneObservedAt[key] = time.Now().Add(-2 * sceneReentryBarrier(sc))
+	nodeGoneObservedMu.Unlock()
+	assert.True(t, logic.playerLocationOwnerDead(loc, testZoneId), "本地观察到的消失已过屏障")
+}
+
+// 刚判死:C++ 老进程还在 kDrainBudget 的紧急疏散里存盘。屏障没走完之前位置记录仍代表一个
+// 可能在写的属主 —— 照旧以可重试的 18 暂拒,且不改任何状态。
+func TestEnterScene_DeadOwnerWithinBarrierIsStillRejected(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	const (
+		playerID = uint64(6131)
+		oldScene = uint64(7131)
+		targetID = uint64(7231)
+	)
+	seedPlayerOnDeadNode(t, sc, mr, playerID, oldScene, targetID)
+	markNodeDeath(sc, testZoneId, "10")
+	before, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+
+	req := &scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	}
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(req)
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	after, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, before, after)
+	assert.Empty(t, *captured)
+	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	assert.Equal(t, "4", targetCount, "拒绝时不得留下目标场景预占")
+
+	// 屏障过后(死亡标记消失)同一请求放行。
+	mr.Del(nodeDeathAtKey(testZoneId, "10"))
+	resp, err = NewEnterSceneLogic(context.Background(), sc).EnterScene(req)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+}
+
+// 进程死了但 etcd 租约还没到期(或者节点其实活着、只是被 world_init 的 markNodeDead 因为一次
+// RPC 超时摘出了负载集):注册表里还有它 = 没有死亡的正面证据,不得接管。
+func TestEnterScene_OwnerMissingFromLoadSetButStillRegisteredIsNotTakenOver(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	const (
+		playerID = uint64(6133)
+		oldScene = uint64(7133)
+		targetID = uint64(7233)
+	)
+	seedPlayerOnDeadNode(t, sc, mr, playerID, oldScene, targetID)
+	registerKnownNodeForTest(t, "SceneNodeService.rpc/still-registered-10", testZoneId, "10")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode, "只是不在负载集不算死:照旧走安全交接")
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	assert.Empty(t, *captured)
+}
+
+// 本进程还没完成首次 etcd 全量同步:注册表是空的,「表里没有」不是证据。
+func TestPlayerLocationOwnerDeadRequiresSyncedRegistry(t *testing.T) {
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	mr.ZAdd(nodeLoadKey(testZoneId), 0, "20")
+	prev := knownNodesSynced.Load()
+	knownNodesSynced.Store(false)
+	t.Cleanup(func() { knownNodesSynced.Store(prev) })
+
+	loc := &scene_manager.PlayerLocation{SceneId: 7134, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1}
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	assert.False(t, logic.playerLocationOwnerDead(loc, testZoneId))
+	knownNodesSynced.Store(true)
+	assert.True(t, logic.playerLocationOwnerDead(loc, testZoneId))
+}
+
+// (zone,node) 身份有歧义(node_id 被复用、两代进程并存)时 IsNodeAlive 返回 false,但那不是
+// 「死了」的证据 —— 不能据此接管,必须 fail-closed 沿用换手门的拒绝。
+func TestPlayerLocationOwnerDeadFailsClosedOnAmbiguousIdentity(t *testing.T) {
+	// knownNodes 是包级全局表:别的用例留下的同号节点会让「前提:无歧义」不成立。
+	clearKnownNodesForTest()
+	t.Cleanup(clearKnownNodesForTest)
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	markKnownNodesSyncedForTest(t)
+	mr.ZAdd(nodeLoadKey(testZoneId), 0, "20")
+	loc := &scene_manager.PlayerLocation{SceneId: 7132, NodeId: "10", ZoneId: testZoneId, OwnerEpoch: 1}
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	require.True(t, logic.playerLocationOwnerDead(loc, testZoneId), "前提:无歧义、不在负载集、无 death_at → 判死")
+
+	first := nodeEntry{nodeID: "10"}
+	first.reg.ZoneId = testZoneId
+	first.reg.GrpcEndpoint.IP = "10.0.0.1"
+	second := nodeEntry{nodeID: "10"}
+	second.reg.ZoneId = testZoneId
+	second.reg.GrpcEndpoint.IP = "10.0.0.2"
+	knownNodesMu.Lock()
+	knownNodes["SceneNodeService.rpc/owner-dead-a"] = first
+	knownNodes["SceneNodeService.rpc/owner-dead-b"] = second
+	knownNodesMu.Unlock()
+	assert.False(t, logic.playerLocationOwnerDead(loc, testZoneId), "歧义身份不是死亡证据")
+	clearKnownNodesForTest()
+
+	// 其余 fail-closed 输入。
+	assert.False(t, logic.playerLocationOwnerDead(nil, testZoneId))
+	assert.False(t, logic.playerLocationOwnerDead(&scene_manager.PlayerLocation{NodeId: "30", OwnerEpoch: 1}, 0), "zone 无法确定")
+	assert.False(t, logic.playerLocationOwnerDead(&scene_manager.PlayerLocation{ZoneId: testZoneId, OwnerEpoch: 1}, testZoneId), "等待落点另有规则")
+	assert.False(t, logic.playerLocationOwnerDead(&scene_manager.PlayerLocation{NodeId: "20", ZoneId: testZoneId}, testZoneId), "节点还活着")
+}

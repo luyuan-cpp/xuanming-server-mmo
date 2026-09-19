@@ -287,6 +287,23 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		// 正常落点则由第 6 步的 SET 直接覆盖。
 		currentLoc, currentLocRaw, currentZoneID = nil, "", 0
 	}
+	// takenOverLoc:本次请求若是从一个已死节点手里接管玩家,记下那条旧位置,落点成功后要把
+	// 旧场景的人数还回去。
+	var takenOverLoc *scene_manager.PlayerLocation
+	var takenOverZone uint32
+	// 同一件事的**节点级**版本:zone 还活着,但位置记录指向的那一个节点已经确认死亡、
+	// 且再入屏障已过。死掉的节点永远写不出 handoff 标记,不放行的话它名下的玩家会被
+	// ErrHandoffPending 永久挡在门外,只能等运维手工清 location —— 一次单节点崩溃变成
+	// 一批玩家进不了游戏。判定规则与「为什么这样是安全的」见 playerLocationOwnerDead。
+	if currentLoc != nil && l.playerLocationOwnerDead(currentLoc, currentZoneID) {
+		metrics.ObserveEnterSceneOwnerDeadTakeover(currentZoneID)
+		l.Logger.Infof("位置记录的属主节点已确认死亡且再入屏障已过,按无持有者处理: player=%d dead_zone=%d dead_node=%s dead_scene=%d owner_epoch=%d gate_zone=%d target_zone=%d",
+			in.PlayerId, currentZoneID, currentLoc.GetNodeId(), currentLoc.GetSceneId(), observedEpoch, in.GateZoneId, targetZoneId)
+		// 与上面同理把 raw 清空。旧场景的人数留到本次落点**成功之后**再还(见函数末尾的
+		// releaseTakenOverSceneCount):拒绝 / 回滚路径上不能动它。
+		takenOverLoc, takenOverZone = currentLoc, currentZoneID
+		currentLoc, currentLocRaw, currentZoneID = nil, "", 0
+	}
 	// 「等待落点」= 跨 zone 交接的第一条腿已经放行(location 只剩目标 zone 与
 	// epoch,node_id 为空),目标 zone 还没落点。此刻**没有任何节点持有该玩家**:
 	// 源 scene 在收到重定向应答后已销毁实体,目标节点还没被派到。两道换手门守护
@@ -572,6 +589,8 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		l.Logger.Infof("No GateID in EnterScene request for player %d", in.PlayerId)
 	}
 
+	l.releaseTakenOverSceneCount(takenOverLoc, takenOverZone)
+
 	l.Logger.Infof("Player %d entered scene %d on node %s (zone %d, home_zone %d, owner_epoch %d)",
 		in.PlayerId, sceneId, nodeId, targetZoneId, homeZoneID, placed.epoch)
 	return &scene_manager.EnterSceneResponse{ErrorCode: 0}, nil
@@ -625,6 +644,85 @@ func (l *EnterSceneLogic) requireHandoffCommitted(in *scene_manager.EnterSceneRe
 		currentZoneID, in.GateZoneId, targetZoneId)
 	return errResp(constants.ErrHandoffPending,
 		fmt.Sprintf("源场景尚未落盘(owner_epoch=%d 的交接标记未就绪)，请稍后重试；未修改玩家状态", verdict.epoch)), handoffVerdict{}
+}
+
+// releaseTakenOverSceneCount 在「从已死节点接管玩家」的落点成功之后,把玩家在旧场景里占的那
+// 一个人数还回去。
+//
+// 为什么必须还:dead-node reconcile 只销毁**副本实例**;大世界频道会沿用同一个 scene_id 迁到
+// 活节点上,instance:{id}:player_count 原值保留,全仓没有任何重算路径。不还的话,死节点上
+// 当时有 N 个玩家,这 N 个人陆续回来后那个频道的人数就永久多 N —— 按最小人数选频道时一直
+// 躲着它,autoscale 也永远排不空它。(接管落回同一个频道时,前面的预占已经 +1,这里 -1,净 0。)
+//
+// 为什么先看 scene:{id}:node 还在不在:副本实例已被 reconcile 销毁时计数键也删了,直接
+// Incrby(-1) 会把键重新建出来(钳成 0 后留下一条垃圾)。场景还在才还,DecrInstancePlayerCount
+// 自带 <0 归零钳制。
+func (l *EnterSceneLogic) releaseTakenOverSceneCount(loc *scene_manager.PlayerLocation, zoneID uint32) {
+	if loc == nil || loc.GetSceneId() == 0 {
+		return
+	}
+	if lookupSceneNode(l.svcCtx, loc.GetSceneId()) == "" {
+		return
+	}
+	DecrInstancePlayerCount(l.svcCtx, zoneID, loc.GetSceneId())
+}
+
+// playerLocationOwnerDead 判定 loc 记录的**那一个节点**是否已经确认死亡且再入屏障已过
+// (所在 zone 仍有别的活节点;整 zone 下线走 playerLocationOwnerGone)。
+//
+// 为什么可以据此免掉 handoff 标记(CZ-4 第二道门):那道门守护的是「可能仍在写这名玩家
+// 的旧持有者」。节点死了就没有这个对象;而「看上去死了其实没死」的僵尸由另外两层兜住 ——
+//
+//   - 再入屏障(scene-owner-reentry-barrier.md §3.2):节点从 etcd 消失后 C++ 老进程还有
+//     kDrainBudget(15s)的紧急疏散在存盘,屏障(默认 20s)盖过这段窗口;屏障未到本函数
+//     返回 false,请求照旧被换手门以可重试的 18 暂拒。
+//   - owner_epoch CAS(§3.3):放行后的落点一定铸造新 epoch(此时 currentLoc 已被当作
+//     不存在,走首次落点的 mint=true),僵尸手里的旧 epoch 之后每一次存盘都被 C++ 的
+//     Lua 原子拒绝并自毁,DBTask 由 db 的 applied-epoch 守卫拒绝。屏障靠时间、epoch
+//     不靠时间,两层同时在位才敢放行 —— 这正是阶段 1 落完之后才补这条的原因。
+//
+// 代价(崩溃固有,与本函数无关):死节点没来得及落盘的那段进度丢失,新节点读到的是上一次
+// 周期存盘。
+//
+// 「死亡」要的是**正面证据**,不是「看不到它」:节点必须已经从 etcd 注册表里消失
+// (租约到期 / 主动注销,见 isNodeGoneFromRegistry)。只看 Redis 负载集不够 —— world_init.go
+// 的 markNodeDead 会在一次 CreateScene RPC 超时后就把节点摘出负载集且不写 death_at,
+// 高负载下一个只是慢了的活节点也会被摘;若据此接管,它名下正在玩的玩家下一次换图会被
+// 直接派到别的节点、读到最长一个存盘周期之前的旧档(本该走「18 → 冻结 → 存盘 → 标记」的
+// 安全交接)。进程已死但租约未到期的那几十秒里,请求照旧被 18 暂拒,租约到期后
+// death_at + 屏障走完即放行。
+//
+// 任何一步拿不准都 fail-closed(返回 false,沿用换手门的拒绝):
+//   - zone 无法确定、node_id 为空(等待落点另有规则)→ false;
+//   - 本进程尚未完成首次 etcd 全量同步,或节点仍在注册表里 → false;
+//   - 本副本亲眼看到它消失还不到一个屏障时长 → false(不依赖 leader 写的 death_at,
+//     见 load_reporter.go nodeGoneObservedAt);
+//   - (zone,node) 身份有歧义(node_id 被复用、两代进程并存)→ false。注意 IsNodeAlive 对
+//     歧义身份返回的是 false(它服务的是"别把场景派给它"),这里**不能**把那个 false
+//     读成"死了",必须先单独判歧义;
+//   - IsNodeAlive 在 Redis 抖动时按存活返回 → false;
+//   - death_at 读失败 / 值非法 / 屏障未到 → reentryBarrierBlocks 为真 → false。
+func (l *EnterSceneLogic) playerLocationOwnerDead(loc *scene_manager.PlayerLocation, zoneID uint32) bool {
+	if loc == nil || zoneID == 0 || loc.GetNodeId() == "" {
+		return false
+	}
+	nodeID := loc.GetNodeId()
+	if isKnownNodeIdentityAmbiguous(zoneID, nodeID) {
+		return false
+	}
+	if !isNodeGoneFromRegistry(zoneID, nodeID) {
+		return false
+	}
+	if localGoneBarrierBlocks(l.svcCtx, zoneID, nodeID) {
+		return false
+	}
+	if IsNodeAlive(l.svcCtx, zoneID, nodeID) {
+		return false
+	}
+	if reentryBarrierBlocks(l.svcCtx, zoneID, nodeID, barrierSiteDeadOwnerTakeover) {
+		return false
+	}
+	return true
 }
 
 // playerLocationOwnerGone 判定 loc 记录的属主节点是否已经**不可能**再写这名
