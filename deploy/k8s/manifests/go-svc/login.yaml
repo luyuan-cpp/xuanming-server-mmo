@@ -31,6 +31,17 @@ spec:
         app: login
         tier: go-svc
     spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点:默认调度只是软打散,两个 login 可能同机,
+          # 节点级故障会同时带走两副本,replicas 2 与 PDB 都救不了。写法同 match.yaml。
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: login
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: login
           image: PLACEHOLDER_IMAGE
