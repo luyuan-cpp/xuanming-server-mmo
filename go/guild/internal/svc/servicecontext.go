@@ -135,7 +135,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 //
 // 与上面两个客户端刻意不同:**Ping 失败不 panic**。那两个是 guild 的命脉(缓存 /
 // 在场查询),连不上就没有可用形态;这一个只喂一次 EXISTS,而且运行期读失败已经
-// fail-closed(见 logic.checkMergeFence:查不到就拒绝建帮)。为一个可选加固的
+// fail-closed(见 logic.mergeFenceTip:查不到就拒绝建帮)。为一个可选加固的
 // 瞬时不可达而拒启,等于把"合服期多一道锁"换成"平时多一个启动失败点"。
 func newMergeMarkerRedis(c config.Config) *redis.Client {
 	if !c.MergeMarkerRedis.Enabled() {

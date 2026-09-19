@@ -95,7 +95,7 @@
 - `AssetOpRequest {uint64 player_id; AssetOpStream stream; uint64 seq; uint64 correlation_id; uint32 tx_type; AssetBundle bundle;}`;`AssetOpResponse {AssetOpOutcome outcome; TipInfoMessage reason; bool durable;}`。`durable=true` 表示账本结局与资产变化已一起写入 player blob(Redis)。Go 只有在 `APPLIED && durable` 时才落对侧账;`APPLIED && !durable` 保持 PENDING,稍后以同 seq 重投查询。
 - scene 组件 `PlayerAssetOpLedgerComp`(proto `proto/common/component/asset_op_ledger_comp.proto`),存 `player_database` 下一个空闲字段号(当前 15,落码前再核)。
 - `TransactionType` 追加 `TX_GUILD_DONATE`、`TX_GUILD_SHOP`、`TX_GUILD_ACTIVITY_REWARD`(追加不复用)。
-- GM 货币指令(`GmAddCurrency`/`GmDeductCurrency`):scene 侧仅当环境变量 `MMORPG_ALLOW_CLIENT_GM=1` 时受理,默认拒绝;本地启动脚本与 robot 冒烟显式开启。
+- GM 货币指令(`GmAddCurrency`/`GmDeductCurrency` 等 6 条客户端 GM 消息):**默认拒绝**,仅运行模式为 dev/test 时受理。判据是 `GATE_RUN_MODE` / `SCENE_RUN_MODE`,**未设置 = prod = 拒绝**,部署链从不注入;本机启动器兜底 dev,robot 冒烟因此照常。gate 按消息号闸 + scene `player_gm_guard.h` 二道锁,见 `cpp/nodes/gate/SECURITY.md` §3。(2026-09-18 P0-a 落码形状;早先写的 `MMORPG_ALLOW_CLIENT_GM` 环境变量**不存在**。)
 
 ### 3.4 名字
 

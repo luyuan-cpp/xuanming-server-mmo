@@ -53,40 +53,95 @@ func (e errCommitThen) Error() string { return e.inner.Error() }
 
 func (e errCommitThen) Unwrap() error { return e.inner }
 
-// maxTxAttempts:InnoDB 判定死锁(1213)时该事务已被整体回滚,重跑是安全的 ——
-// 前提是事务函数内没有非数据库副作用(本文件所有 fn 都满足:推送与缓存失效都在提交之后)。
+// maxTxAttempts:InnoDB 判定死锁(1213)或 TiDB 判定写冲突(9007)时该事务已被整体回滚,
+// 重跑是安全的 —— 前提是事务函数内没有非数据库副作用(本文件所有 fn 都满足:
+// 推送与缓存失效都在提交之后)。
 //
 // 锁等待超时(1205)刻意不重试:锁等待本身已被 innodb_lock_wait_timeout=1 封顶,
 // 再等一轮只会白白吃掉同步预算,最后仍然是同一个结论。
 const maxTxAttempts = 3
+
+// txBudget:单次事务尝试的子预算(90-consistency part2 §2 第 8 条)。
+//
+// 为什么要比请求预算再短一截:请求预算(4000 − 500 = 3500ms)是"整个 RPC 最多跑多久",
+// 而事务持有的是**帮会行锁**——同一个帮会的所有写都排在它后面。一次帮会写事务只有几条
+// 主键 / 索引语句,正常在个位数毫秒内完成;跑满 1.5s 说明库出了状况,这时候尽早放锁
+// 让后面的人得到"稍后重试",比让整个帮会卡满 3.5s 要好。
+const txBudget = 1500 * time.Millisecond
 
 // inTx:帮会写事务的**唯一**入口(90-consistency part2 §2 第 1 条)。
 // 经济(B5)与活动(B6)的 repo 持有 *GuildRepo 并复用它,不各写一份重试助手。
 //
 // 隔离级别固定 READ COMMITTED(D7):RR 的间隙锁在 TiDB 上不存在,靠它串行化申请上限
 // 会在迁库后静默失效;上限改由 guild_player_state 的行锁守(X-10)。
-func (r *GuildRepo) inTx(ctx context.Context, op string, fn func(tx *sql.Tx) error) error {
-	return retryOnDeadlock(ctx, op, func() error { return r.runTxOnce(ctx, fn) })
+// fn 的第一个参数是**事务子预算的 ctx**,不是请求 ctx。调用点一律把形参也命名为 ctx
+// (刻意遮蔽外层同名变量),这样闭包里每一条语句都自动挂在子预算上 —— 漏挂一条,
+// 那条语句就会一直等到请求预算耗尽,子预算等于白设。
+// 提交之后的副作用(推送、缓存失效)都在闭包**之外**,用的仍是请求 ctx,不受遮蔽影响。
+func (r *GuildRepo) inTx(ctx context.Context, op string, fn func(ctx context.Context, tx *sql.Tx) error) error {
+	return retryOnDeadlock(ctx, op, func() error { return r.runTxOnce(ctx, op, fn) })
 }
 
-func (r *GuildRepo) runTxOnce(ctx context.Context, fn func(tx *sql.Tx) error) error {
+func (r *GuildRepo) runTxOnce(ctx context.Context, op string, fn func(ctx context.Context, tx *sql.Tx) error) error {
+	// 每次尝试各给一份完整子预算:重试是新的一轮加锁,沿用上一轮剩下的时间会让
+	// 第 3 次尝试几乎必然超时,把"本可成功的重试"变成失败。总时长仍由请求 ctx 封顶。
+	txCtx, cancel := context.WithTimeout(ctx, txBudget)
+	defer cancel()
+
+	err := r.runTxBody(txCtx, fn)
+	if err == nil {
+		return nil
+	}
+	// 子预算到期而请求还活着 = 库慢或锁排队,是"稍后重试"而不是"失败";
+	// 请求本身被取消(客户端断开 / 上游超时)则原样返回,不许伪装成写冲突。
+	if ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
+		guildTxBudgetExceededTotal.Inc(op)
+		logx.Errorf("[guild] %s: transaction exceeded its %v budget: %v", op, txBudget, err)
+		return ErrWriteConflict
+	}
+	return err
+}
+
+func (r *GuildRepo) runTxBody(ctx context.Context, fn func(ctx context.Context, tx *sql.Tx) error) error {
 	tx, err := r.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelReadCommitted})
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
 
-	if err := fn(tx); err != nil {
+	if err := fn(ctx, tx); err != nil {
 		var commitThen errCommitThen
 		if errors.As(err, &commitThen) {
-			if commitErr := tx.Commit(); commitErr != nil {
+			if commitErr := commitTx(tx); commitErr != nil {
 				return commitErr
 			}
 			return commitThen.inner
 		}
 		return err
 	}
-	return tx.Commit()
+	return commitTx(tx)
+}
+
+// commitTx:COMMIT 失败时**结果不明**——网络在发出 COMMIT 之后断开,事务可能已经在库里生效。
+// 这种情况不能当作"失败"原样抛给客户端(客户端会以为没生效而重做,可能重复发生效果),
+// 也不能当作成功。按 90-consistency part2 §2 第 4 条:打 ERROR 让人看见,对外归一到
+// ErrWriteConflict —— 客户端收到的是"稍后重试",重试时会先读当前状态,幂等分支会兜住已生效的那一半。
+func commitTx(tx *sql.Tx) error { return classifyCommitErr(tx.Commit()) }
+
+// classifyCommitErr 单独拆出来是为了能不连库直接测:提交阶段的分类是**语义**判断,
+// 不该为了验证它去起一个数据库。
+//
+// ErrTxDone / ctx 取消 / ctx 超时这三类的结论是**明确**的(事务没提交,或调用方自己走了),
+// 原样返回;其余(连接被重置、驱动报未知错误)结果不明,归一到 ErrWriteConflict。
+func classifyCommitErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	if errors.Is(err, sql.ErrTxDone) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return err
+	}
+	logx.Errorf("[guild] commit outcome unknown: %v", err)
+	return ErrWriteConflict
 }
 
 // retryOnDeadlock 与数据库解耦:run 是"跑一次事务"的闭包,单测用假错误直接驱动它。
@@ -100,7 +155,7 @@ func retryOnDeadlock(ctx context.Context, op string, run func() error) error {
 		case isLockWaitTimeout(err):
 			guildTxLockWaitTimeoutTotal.Inc(op)
 			return ErrWriteConflict
-		case !isDeadlock(err):
+		case !isRetryableTxError(err):
 			return err
 		}
 		guildTxDeadlockTotal.Inc(op)
@@ -121,7 +176,26 @@ func retryOnDeadlock(ctx context.Context, op string, run func() error) error {
 	}
 }
 
-func isDeadlock(err error) bool { return mysqlErrNumber(err) == 1213 }
+// errRetryTx:调用方主动要求重跑本次事务的哨兵(90-consistency part2 §2 第 3 条,B6 结算用)。
+// 与 1213/9007 同等对待:整体回滚后重来一次。business 分支只在"重跑一定能拿到新状态"时用它。
+var errRetryTx = errors.New("guild: retry transaction")
+
+// isRetryableTxError:哪些错误意味着"事务已整体回滚,重跑是安全的"。
+//
+//   - 1213 = InnoDB 死锁(本地 MySQL)
+//   - 9007 = TiDB 写冲突(乐观事务提交期检测到冲突,语义与死锁等价)。迁 TiDB 后
+//     这是最常见的一类,漏了它写冲突就会以内部错误抛给客户端(违反 D6:统一回 GuildBusyRetry)。
+func isRetryableTxError(err error) bool {
+	if errors.Is(err, errRetryTx) {
+		return true
+	}
+	switch mysqlErrNumber(err) {
+	case 1213, 9007:
+		return true
+	default:
+		return false
+	}
+}
 
 func isLockWaitTimeout(err error) bool { return mysqlErrNumber(err) == 1205 }
 
@@ -178,7 +252,15 @@ var (
 		Namespace: guildMetricNamespace,
 		Subsystem: "tx",
 		Name:      "deadlock_total",
-		Help:      "帮会写事务遇到 InnoDB 死锁(1213)并整体重跑的次数。稳态应接近 0;持续上升说明有事务违反了锁序。",
+		Help:      "帮会写事务遇到死锁(MySQL 1213)或写冲突(TiDB 9007)并整体重跑的次数。稳态应接近 0;持续上升说明有事务违反了锁序。",
+		Labels:    []string{"op"},
+	})
+
+	guildTxBudgetExceededTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+		Namespace: guildMetricNamespace,
+		Subsystem: "tx",
+		Name:      "budget_exceeded_total",
+		Help:      "帮会写事务跑满子预算(1500ms)被中止、对外回 GuildBusyRetry 的次数。稳态应为 0;非 0 说明库慢或帮会行锁排队。",
 		Labels:    []string{"op"},
 	})
 
@@ -213,6 +295,7 @@ const (
 	opDisband       = "disband"
 	opAnnouncement  = "announcement"
 	opVerifyMapping = "verify_mapping"
+	opScore         = "score"
 
 	// 下面四个由 B5 / B6 使用(90-consistency Y-04 要求 B2s 一次把集合定全,
 	// 后续批次只调用、不再改本文件)。
@@ -740,7 +823,7 @@ func (r *GuildRepo) SetMemberRole(ctx context.Context, guildID, actorID, targetI
 	}
 
 	var out MemberWriteResult
-	err := r.inTx(ctx, opSetRole, func(tx *sql.Tx) error {
+	err := r.inTx(ctx, opSetRole, func(ctx context.Context, tx *sql.Tx) error {
 		var res MemberWriteResult // 每次尝试从零开始(§6.2 结果变量约定)
 
 		guild, err := lockGuildRow(ctx, tx, guildID)
@@ -818,7 +901,7 @@ func (r *GuildRepo) KickMember(ctx context.Context, guildID, actorID, targetID u
 	}
 
 	var out MemberWriteResult
-	err := r.inTx(ctx, opKick, func(tx *sql.Tx) error {
+	err := r.inTx(ctx, opKick, func(ctx context.Context, tx *sql.Tx) error {
 		var res MemberWriteResult
 
 		if _, err := lockGuildRow(ctx, tx, guildID); err != nil {
@@ -874,7 +957,7 @@ func (r *GuildRepo) TransferLeader(ctx context.Context, guildID, actorID, target
 	}
 
 	var out MemberWriteResult
-	err := r.inTx(ctx, opTransfer, func(tx *sql.Tx) error {
+	err := r.inTx(ctx, opTransfer, func(ctx context.Context, tx *sql.Tx) error {
 		var res MemberWriteResult
 
 		guild, err := lockGuildRow(ctx, tx, guildID)
@@ -953,7 +1036,7 @@ func (r *GuildRepo) TransferLeader(ctx context.Context, guildID, actorID, target
 // 幂等:重放得到 ErrNotGuildMember,logic 复核映射为 0 后按成功处理。
 func (r *GuildRepo) LeaveGuild(ctx context.Context, guildID, playerID uint64) (MemberWriteResult, error) {
 	var out MemberWriteResult
-	err := r.inTx(ctx, opLeave, func(tx *sql.Tx) error {
+	err := r.inTx(ctx, opLeave, func(ctx context.Context, tx *sql.Tx) error {
 		var res MemberWriteResult
 
 		guild, err := lockGuildRow(ctx, tx, guildID)
@@ -1017,7 +1100,7 @@ func (r *GuildRepo) ApplyToGuild(ctx context.Context, guildID, playerID uint64, 
 	}
 
 	var out ApplyResult
-	err := r.inTx(ctx, opApply, func(tx *sql.Tx) error {
+	err := r.inTx(ctx, opApply, func(ctx context.Context, tx *sql.Tx) error {
 		var res ApplyResult
 
 		guild, err := lockGuildRow(ctx, tx, guildID)
@@ -1060,9 +1143,12 @@ func (r *GuildRepo) ApplyToGuild(ctx context.Context, guildID, playerID uint64, 
 		if existing {
 			// 刷新排在满员与两个上限判定**之前**:这一行本来就已经计入所有计数,
 			// 契约也规定"同帮重复申请 = 刷新并成功",满员帮只拒绝**新**申请人。
-			if err := execExactlyOneRow(ctx, tx, fmt.Sprintf("refresh application of player %d to guild %d", playerID, guildID),
-				sqlRefreshApplication, now, now+rules.TTLMs, guildID, playerID); err != nil {
-				return err
+			// 这条 UPDATE 是**幂等**的:玩家双击时两次申请可能落在同一毫秒,
+			// apply_ms / expire_ms 与库里现值逐字相同 ⇒ RowsAffected = 0。
+			// 那仍然是"刷新成功"(行就在那儿,值就是要写的值),所以这里不能断言恰好一行 ——
+			// 断言会把一次正常双击变成内部错误。行的存在性已由上面 FOR UPDATE 的 existing 证明。
+			if _, err := tx.ExecContext(ctx, sqlRefreshApplication, now, now+rules.TTLMs, guildID, playerID); err != nil {
+				return fmt.Errorf("refresh application of player %d to guild %d: %w", playerID, guildID, err)
 			}
 			res.Inserted = false
 			out = res
@@ -1285,7 +1371,7 @@ func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, app
 	}
 
 	var out ReviewResult
-	err := r.inTx(ctx, opReview, func(tx *sql.Tx) error {
+	err := r.inTx(ctx, opReview, func(ctx context.Context, tx *sql.Tx) error {
 		var res ReviewResult
 
 		guild, err := lockGuildRow(ctx, tx, guildID)
@@ -1407,7 +1493,7 @@ func (r *GuildRepo) ReviewApplication(ctx context.Context, guildID, actorID, app
 // 扩展点:B5(捐献提前截止)、B6(活动进度 / 历练战报)按 90-consistency X-14 的步骤插在删申请之后、删成员之前。
 func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID uint64) (DisbandResult, error) {
 	var out DisbandResult
-	err := r.inTx(ctx, opDisband, func(tx *sql.Tx) error {
+	err := r.inTx(ctx, opDisband, func(ctx context.Context, tx *sql.Tx) error {
 		var res DisbandResult
 
 		guild, err := lockGuildRow(ctx, tx, guildID)
@@ -1435,9 +1521,22 @@ func (r *GuildRepo) DisbandGuild(ctx context.Context, guildID, actorID uint64) (
 		if _, err := tx.ExecContext(ctx, sqlDeleteGuildMembers, guildID); err != nil {
 			return fmt.Errorf("delete members of guild %d: %w", guildID, err)
 		}
-		if err := execExactlyOneRow(ctx, tx, fmt.Sprintf("delete guild %d", guildID),
-			`DELETE FROM guild WHERE guild_id = ?`, guildID); err != nil {
-			return err
+		// 0 行 = 这一瞬间帮会已经被别的事务解散了(我们持有的行锁本该挡住,
+		// 但库层面真发生时要给出**业务**答复而不是内部错误):回 ErrGuildGone,
+		// logic 层会映射成 kGuildNotFound。>1 行则是 WHERE 写错,属于必须暴露的内部错误。
+		result, err := tx.ExecContext(ctx, `DELETE FROM guild WHERE guild_id = ?`, guildID)
+		if err != nil {
+			return fmt.Errorf("delete guild %d: %w", guildID, err)
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("delete guild %d: read rows affected: %w", guildID, err)
+		}
+		switch {
+		case affected == 0:
+			return ErrGuildGone
+		case affected > 1:
+			return fmt.Errorf("delete guild %d: deleted %d rows", guildID, affected)
 		}
 
 		out = res
@@ -1481,7 +1580,7 @@ func lockAllMembers(ctx context.Context, tx *sql.Tx, guildID uint64) ([]uint64, 
 // 入参 text 的长度由 logic 按 constants.MaxAnnouncementBytes 校验,repo 不重复裁剪。
 func (r *GuildRepo) UpdateAnnouncement(ctx context.Context, guildID, playerID uint64, text string) (*GuildData, error) {
 	var out *GuildData
-	err := r.inTx(ctx, opAnnouncement, func(tx *sql.Tx) error {
+	err := r.inTx(ctx, opAnnouncement, func(ctx context.Context, tx *sql.Tx) error {
 		var snapshot *GuildData
 
 		if _, err := lockGuildRow(ctx, tx, guildID); err != nil {

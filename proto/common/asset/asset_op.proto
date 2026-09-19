@@ -92,6 +92,15 @@ message AssetOpRequest {
 
 // ---- 聚宝斋 P2 追加(帮会不使用)----
 //
+// **当前状态:纯预留,v1 既不填也不读。**(2026-09-19 跨包审稿 minor)
+// 下面三个 message 与 AssetOpResponse.snapshot 至今**零写者、零读者**:scene 侧
+// 没有任何 mutable_snapshot(...) 调用,Go 侧 assetop / trade 也没有 GetSnapshot(...)。
+// 留着是为了把字段号先钉死(§4.3.1「扩展一律追加」),不是"对账快照已经可用"。
+// 解锁条件与 AssetBundle.item_uuids / pet_id 同一批:canonical 串先扩出 `;u=;p=`
+// (§4.32),再同批落 scene 的填充与 trade 的读取。**在那之前谁都不要按"响应里已经
+// 有库存快照"去接线** —— 读到的一定是空 message,而空 message 与"本次没动任何
+// 库存"在 proto3 上不可区分,静默走错分支。
+//
 // 快照用的两个精简形状:本文件必须是叶子包(见文件头),不能 import
 // bag_quest_mail_data.proto 的 ItemEntry / player_pet_comp.proto 的 PetInstance。
 // 只取交易展示与对账需要的字段;pos / bag_type / allocated / aptitude 等
@@ -109,8 +118,9 @@ message AssetPetInstance {
   uint32 level = 4;        // 成交时的等级快照,只为展示
 }
 
-// 这一次指令实际动到的那份库存,交易侧用它做"寄售快照 / 收货确认"的展示与对账。
-// 帮会的 Debit/Credit 不填此字段(scene 只在 TRADE_* 流上填充)。
+// 【P2 预留,v1 不填不读】这一次指令实际动到的那份库存。将来交易侧用它做
+// "寄售快照 / 收货确认"的展示与对账;帮会的 Debit/Credit 永远不填此字段
+// (填充只会发生在 TRADE_* 流上)。解锁条件见上面那段。
 message AssetSnapshot {
   // 本次扣出(Debit)或入账(Credit)的物品条目。
   repeated AssetItemInstance items = 1;
@@ -126,5 +136,7 @@ message AssetOpResponse {
   bool durable = 3;           // 该 seq 的结局已在"最后一次成功写入 Redis 的玩家数据"里
   bool partial = 4;           // APPLIED 但只发放了一部分(reason=kAssetPartialApplied);Go 不做对侧入账,转人工补偿
   // ---- 聚宝斋 P2 追加字段从 5 起(帮会不使用)----
-  AssetSnapshot snapshot = 5; // 交易库存快照;只在 TRADE_* 流上填充,其余流留空
+  // 【P2 预留,v1 不填不读】交易库存快照。当前 scene 不填、Go 不读,解锁条件见
+  // AssetSnapshot 上方那段。占号在先,避免 P2 动手时再抢 5。
+  AssetSnapshot snapshot = 5;
 }

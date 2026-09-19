@@ -51,7 +51,12 @@ Schema:
 
 Node:
   ZoneId: 1
-  LeaseTTL: 500
+  # LeaseTTL(秒):与 chat / client_rpc_router / data_service / login / match / player_locator /
+  # scene_manager 对齐成 60。原值 500 来自 2025-09 的 5575b505f,没留取值理由。
+  # 它决定的是**非优雅死亡**后 etcd key 的滞留时长:500 意味着崩溃的实例在服务发现里挂 8 分多钟,
+  # 期间路由服仍会把客户端请求投给它。丢租约后 node.go:246 的 watchKeepAlive 会走 reRegister 重新注册,
+  # 所以缩短 TTL 不会让活着的实例掉出注册表。
+  LeaseTTL: 60
 
 Registry:
   Etcd:

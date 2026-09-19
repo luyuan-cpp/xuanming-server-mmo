@@ -117,6 +117,11 @@ $LogDir    = Join-Path $RunDir   "logs\cpp_nodes"
 # Legacy fallback for pid file written under bin/ before the run/ split.
 $LegacyPidFile = Join-Path $RepoRoot "bin\cpp_nodes.pid.json"
 
+# 资产通道(docs/design/guild-phase2/04-asset-channel.md §4.32)的本机开发密钥来源。
+# scene 用 MMORPG_ASSET_OP_SECRET_<CALLER> 验签,guild / trade 用同名变量签名,值必须一致,
+# 否则每一次资产 RPC 都回 27008(AssetAuthFailed)。密钥值不写进仓库,见该文件的说明。
+. (Join-Path $ScriptDir "lib\assetop_dev_secret.ps1")
+
 # ── Node catalogue ───────────────────────────────────────────────
 $NodeCatalogue = [ordered]@{
     gate   = @{ Exe = "gate.exe";   Desc = "Gate Node (client TCP bridge + Kafka routing)" }
@@ -367,6 +372,16 @@ function Invoke-Start {
             $prevSceneRunMode = $env:SCENE_RUN_MODE
             if ([string]::IsNullOrWhiteSpace($env:GATE_RUN_MODE))  { $env:GATE_RUN_MODE = 'dev' }
             if ([string]::IsNullOrWhiteSpace($env:SCENE_RUN_MODE)) { $env:SCENE_RUN_MODE = 'dev' }
+            # 资产通道签名密钥（规格 §4.32 / §4.41 第 30 项）。scene 读
+            # MMORPG_ASSET_OP_SECRET_GUILD / _TRADE 验签，两把都缺时帮会 / 聚宝斋的每一次资产
+            # RPC 都被判 27008(AssetAuthFailed)——本机冒烟会整片变红且无线索。
+            # 与上面两个运行模式同一条纪律：**只在没设时兜底**，值只在本机生成一次并复用
+            # （run/secrets/assetop-dev.env，已被 .gitignore 覆盖），绝不落仓库；finally 里还原。
+            # 这是**仅限本机 dev 的约定**：预发 / 生产的密钥必须由部署侧注入
+            # （k8s_deploy.ps1 的 Resolve-InjectedSecret -MinLength 32，§4.43 第 29 项），
+            # 部署链从不调用这里。
+            $prevAssetOpSecrets = Backup-AssetOpDevSecrets
+            Initialize-AssetOpDevSecrets -RepoRoot $RepoRoot | Out-Null
             try {
                 $proc = Start-Process -FilePath $exePath `
                     -WorkingDirectory $BinDir `
@@ -383,6 +398,7 @@ function Invoke-Start {
                 else { $env:GATE_RUN_MODE = $prevGateRunMode }
                 if ($null -eq $prevSceneRunMode) { Remove-Item Env:SCENE_RUN_MODE -ErrorAction SilentlyContinue }
                 else { $env:SCENE_RUN_MODE = $prevSceneRunMode }
+                Restore-AssetOpDevSecrets $prevAssetOpSecrets
             }
 
             $pids | Add-Member -NotePropertyName $instanceKey -NotePropertyValue $proc.Id -Force

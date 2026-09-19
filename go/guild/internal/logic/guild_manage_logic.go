@@ -272,6 +272,8 @@ func (l *GuildLogic) verifyMapping(ctx context.Context, playerID, cached uint64)
 // 契约:业务拒绝回 tip + nil error;只有故障(配表、双存储矛盾、未知错误)才回 error。
 // `ErrRankTooLow` 在 DisbandGuild 上要回 kGuildNotLeader,那一处在调用点先行拦截,不在这里分叉 ——
 // 否则这个函数就得知道自己被哪个 RPC 调用,那是把上下文倒着传。
+// guildID 的契约:**操作者当前所在的帮会 id**(自愈拿它当"缓存里的值"与 MySQL 比对),
+// 不是请求里的目标帮会 id。操作者按语义不在目标帮里时(申请 / 撤回申请)传 0。
 func (l *GuildLogic) mapWriteErr(ctx context.Context, actor, guildID uint64, err error) (*base.TipInfoMessage, error) {
 	switch {
 	case err == nil:
@@ -479,7 +481,10 @@ func (l *GuildLogic) ApplyJoinGuild(ctx context.Context, req *pb.ApplyJoinGuildR
 		return nil, status.Errorf(codes.Internal, "GuildRule row %d missing", guildRuleRowID)
 	}
 	res, err := l.repo.ApplyToGuild(ctx, guildID, actor, zoneID, nowMs(), rules)
-	if tip, err := l.mapWriteErr(ctx, actor, guildID, err); err != nil || tip != nil {
+	// 第三个参数是"操作者**所在**帮会"而不是请求里的目标帮会:申请人按定义不在目标帮里,
+	// 把目标帮 id 传进去会让自愈拿一个必然不相等的值去比,每次失败都白翻一次映射缓存。
+	// 申请路径上我们相信他"不在任何帮",传 0;真要是已入帮,自愈正好把这条纠正过来。
+	if tip, err := l.mapWriteErr(ctx, actor, 0, err); err != nil || tip != nil {
 		return &pb.ApplyJoinGuildResponse{ErrorMessage: tip}, err
 	}
 	// 只有**新建行**才推:刷新有效期对审批人来说什么都没变,推过去只会让申请列表闪一下。
@@ -507,7 +512,8 @@ func (l *GuildLogic) CancelGuildApplication(ctx context.Context, req *pb.CancelG
 	}
 
 	err = l.repo.CancelApplication(ctx, guildID, actor, nowMs())
-	if tip, err := l.mapWriteErr(ctx, actor, guildID, err); err != nil || tip != nil {
+	// 同 ApplyJoinGuild:撤回申请的人不在目标帮里,自愈的比对基准是 0(见上面的注释)。
+	if tip, err := l.mapWriteErr(ctx, actor, 0, err); err != nil || tip != nil {
 		return &pb.CancelGuildApplicationResponse{ErrorMessage: tip}, err
 	}
 	return &pb.CancelGuildApplicationResponse{}, nil

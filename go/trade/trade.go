@@ -458,13 +458,19 @@ func logReport(stage string, r schemamigrate.Report) {
 	}
 }
 
-// assetChannelLabel 是横幅里的资产通道状态。密钥没注入时 trade 照常服务只读功能,
-// 但托管 / 交付整条路不可用 —— 这一行是运维在启动日志里唯一能一眼看到这件事的地方。
+// assetChannelLabel 是横幅里的资产通道状态:启用 / 关闭各一行,**不打印密钥**,
+// 只打印它该来自哪个环境变量名。这一行是运维在启动日志里唯一能一眼看到这件事的地方。
+//
+// 只有两种形态到得了这里:AssetOp.Enabled=false(默认,通道根本没装配),
+// 或通道已装配且可签名。Enabled=true 而密钥缺失 / 过短时 svc.NewServiceContext 已经拒启
+// (fail-closed),进程走不到横幅 —— 所以这里不再有"开着但不可用"的第三种说法。
 func assetChannelLabel(svcCtx *svc.ServiceContext) string {
 	if svcCtx.Assets.Enabled() {
-		return "enabled (caller=" + svc.AssetOpCaller + ", scene 节点镜像 + outbox 重投循环已起)"
+		return "启用 (caller=" + svc.AssetOpCaller + ",密钥来自环境变量 " + svc.AssetOpSecretEnv +
+			";scene 节点镜像 + outbox 重投循环已起)"
 	}
-	return "DISABLED — 未注入 " + svc.AssetOpSecretEnv + "(≥32 字节);上架托管与交付会被拒绝,浏览 / 详情 / 收藏不受影响"
+	return "关闭 (AssetOp.Enabled=false;不拨共享 Redis、不建 scene 节点镜像、不起重投循环;" +
+		"浏览 / 详情 / 收藏照常,上架托管与交付一律被拒)"
 }
 
 // schemaModeLabel 是横幅里的建表策略描述。

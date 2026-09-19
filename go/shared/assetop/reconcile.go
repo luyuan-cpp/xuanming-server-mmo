@@ -33,11 +33,46 @@ const (
 	leaseHeadroom = 2 * time.Second
 	// maxWorkers 是并发上限的上限,见 LoopConfig.Workers 的注释。
 	maxWorkers = 64
+	// settleBudget 是「结论已经定了、必须写回 outbox」那一步的独立预算。它从 OpBudget
+	// 里切走(投递只拿得到 OpBudget-settleBudget),所以单行处理总时长仍 <= OpBudget,
+	// leaseHeadroom 的推导不受影响。
+	//
+	// 为什么非切不可:同步路径的父 ctx 预算恰好就是 OpBudget(帮会同步捐献 2500ms)。
+	// 投递一旦跑满预算,落库这一步拿到的必然是已经过期的 ctx —— 此时 scene 那边钱已经
+	// 扣了,outbox 行却更新不了,下一轮重投又扣一遍。Finalize 的 CAS 只能保证对侧账不做
+	// 第二遍,保不了 scene 不被再投一次。钱的路径按 AGENTS §11.3 取 fail-closed:
+	// 宁可少给投递一点时间,也不能让「终局已定」这件事落不了盘。
+	//
+	// 700ms 的来历:caller 的 DefaultCallTimeout(800ms)+ DefaultRequery 合计(700ms)
+	// = 1500ms;默认 OpBudget 2500ms 切走 700ms 之后还剩 1800ms,投递的完整路径仍装得下,
+	// 另有 300ms 余量。调小 OpBudget 的调用方要自己核这笔账(validate 只保证它 > 本值)。
+	settleBudget = 700 * time.Millisecond
 )
 
 // ErrPoisonRow 表示这一行的 payload 解不开(毒行)。
 // Store 负责把它推迟到很久以后,循环跳过它继续下一行 —— 一行坏数据不该让整批停摆。
 var ErrPoisonRow = errors.New("assetop: op payload undecodable")
+
+// ErrLeaseLost 表示 Reschedule 的 CAS 落空(RowsAffected==0):租约在处理期间被另一个
+// 副本接管,本次算出来的结果一个字也没写回去。它不是存储故障,循环不重试;但它必须有名字,
+// 否则「我的结果被丢弃」在任何地方都看不见(契约见 Store.Reschedule)。
+var ErrLeaseLost = errors.New("assetop: lease taken over by another replica")
+
+// 下面两个值是 Store 实现要照着写 SQL 的契约常量。
+//
+// 为什么放在包里而不是 LoopConfig 里:用它们的是 Store 的 SQL,不是本循环 —— 循环既不
+// 读也不传。配成「循环持有一份、实现自己再写一份」,两份值迟早分叉,而分叉之后没有任何
+// 报错(DRY,AGENTS §11.2)。
+const (
+	// PoisonDelay 是 payload 解不开的毒行推迟多久再看,Store 在 Claim 的解码失败分支里写。
+	// 取一小时:足够运维看到 assetop_store_errors_total{op="decode"} 再介入,
+	// 又不至于让一行坏数据永远消失。
+	PoisonDelay = time.Hour
+
+	// FreshAttemptLimit 是 ListDue 第一段「新行」的判据:attempts < FreshAttemptLimit。
+	// 防饿死的两段读为什么必须这么分,见 Store.ListDue 的契约。
+	FreshAttemptLimit uint32 = 3
+)
 
 // Store 是业务 outbox 表在本包眼里的样子。实现在业务方(帮会 B5 / 聚宝斋 P2)。
 //
@@ -46,10 +81,37 @@ var ErrPoisonRow = errors.New("assetop: op payload undecodable")
 // 插入新行互相等待;被选为死锁牺牲者的往往是**用户请求**。改成「非加锁读一批 id + 主键 CAS
 // 逐行领取」之后,重投循环任何时刻只锁一行。
 type Store interface {
-	// ListDue 非加锁一致性读,走 (status, next_attempt_ms) 索引,只回主键:
-	//   SELECT op_id FROM {op}
-	//    WHERE status=<pending> AND next_attempt_ms<=? AND lease_until_ms<?
-	//    ORDER BY next_attempt_ms LIMIT ?
+	// ListDue 非加锁一致性读,走 (status, next_attempt_ms) 索引,只回主键。
+	// 它是**两段**读,不是一条 SQL(规格 X-03「新行防饿死」):
+	//
+	//   第一段 —— 新行,优先占名额:
+	//     SELECT op_id FROM {op}
+	//      WHERE status=<pending> AND next_attempt_ms<=? AND lease_until_ms<?
+	//            AND attempts < FreshAttemptLimit
+	//      ORDER BY next_attempt_ms LIMIT ?        -- LIMIT = limit
+	//
+	//   第二段 —— 老行,只补第一段没用完的缺口(第一段已取满就**不发**这条 SQL):
+	//     SELECT op_id FROM {op}
+	//      WHERE status=<pending> AND next_attempt_ms<=? AND lease_until_ms<?
+	//            AND attempts >= FreshAttemptLimit
+	//      ORDER BY next_attempt_ms LIMIT ?        -- LIMIT = limit - 第一段条数
+	//
+	// 两段都不加锁(理由见本接口开头),按 op_id 去重后合并返回,总条数 <= limit。
+	// 返回顺序不承诺:Tick 会把这批 id 打散给 worker,谁先谁后由调度决定。
+	//
+	// 为什么不能只写一条 SQL:单条 `ORDER BY next_attempt_ms LIMIT ?` 按到期时刻排序,
+	// 而长期失败的老行退避到顶也只有 MaxBackoff(60s),它们永远「早就到期」,永远排在最前。
+	// 积压一旦超过 Batch,每一轮名额就全被同一批老行吃光,刚提交的新指令一次也轮不上 ——
+	// 玩家看到的是捐献半天没动静,而 assetop_* 指标上「一直在处理」,几乎不可能联想到根因。
+	// 分两段是给新行留一条独立通道:老行只能拿走新行没用完的名额。
+	//
+	// 为什么要去重:两段的 attempts 条件互斥,正常不重叠;但它们是两次独立的非锁读,中间
+	// 可能有别的副本 Reschedule 把 attempts 从 2 推到 3,同一行就会两段都出现。重复 id
+	// 不会导致重复投递(第二次 Claim 必然 RowsAffected==0),但会白占一个名额。
+	//
+	// **待确认**:第二段的精确判据(attempts >= FreshAttemptLimit、已到重试时刻、按
+	// next_attempt_ms 最老优先、补齐到 limit)主会话正在与帮会会话对齐口径,实现前先确认;
+	// 「第一段新行优先、老行只补缺口」这条防饿死结构与去重要求不在待确认之列。
 	ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error)
 
 	// Claim 单行主键 CAS 领取(autocommit),紧挨着处理前调用:
@@ -58,7 +120,8 @@ type Store interface {
 	// RowsAffected==0 → (Op{}, false, nil):行已被别的副本领走或已终结,跳过即可。
 	// RowsAffected==1 → 回读整行并解 payload。
 	// 解码失败时 Store 自己把行推迟(next_attempt_ms=now+PoisonDelay、lease_until_ms=0),
-	// 并返回 (Op{}, false, ErrPoisonRow)。
+	// 并返回 (Op{}, false, ErrPoisonRow)。推迟时长直接用本包的 PoisonDelay 常量,
+	// **不要**在实现里另抄一份。
 	Claim(ctx context.Context, opID, nowMs, leaseUntilMs, token uint64) (Op, bool, error)
 
 	// Finalize 在**一个事务**里(建议包 WithTxRetry)按业务锁序加锁 →
@@ -74,6 +137,14 @@ type Store interface {
 	//                   durable=?, last_outcome=?, last_reason=?, updated_ms=?
 	//    WHERE op_id=? AND status=<pending> AND lease_token=?
 	// 带回领取令牌是为了:租约已经被别人抢走时,自己这次的结果不该再写回去。
+	//
+	// RowsAffected==1 → nil。
+	// RowsAffected==0 → **必须**返回 ErrLeaseLost(可以 fmt.Errorf("%w: op_id=%d", …) 包一层,
+	// 循环用 errors.Is 判)。0 行意味着租约在处理期间被另一个副本接管,本次的
+	// next_attempt_ms / last_outcome / attempts 一个字都没落地。返回 nil 等于把
+	// 「我的结果被丢弃」伪装成成功 —— AGENTS §11.3 不许静默降级;而租约被抢走通常意味着
+	// Lease 配小了或某一行处理超时,是要查的。循环收到它记
+	// assetop_reschedule_lost_total{stream},不记 store_errors,也不当作处理失败。
 	//
 	// last_reason 照传进来的 res.Reason 写即可,**不要**自行"改回最新原因":
 	// 一旦它是 ReasonPartialApplied(27007),本包就不会再往里传别的值
@@ -111,9 +182,31 @@ type ManualResolution struct {
 	Reason string
 }
 
+// validate 是人工终结的入参校验,放在结构上而不是某一个调用者里:管理 RPC 和
+// assetopfix CLI 都要在写库之前做同一套检查,分两份写迟早只改一边。
+//
+// 长度上限跟列宽一致 —— 超长会被 MySQL 静默截断,而截掉的正是事后追责要看的那几个字。
+func (r ManualResolution) validate() error {
+	switch r.Final {
+	case StatusApplied, StatusRejected, StatusAborted, StatusAppliedPartial:
+	default:
+		return fmt.Errorf("assetop: 人工终结状态非法(%s)", r.Final)
+	}
+	if r.Operator == "" || utf8.RuneCountInString(r.Operator) > 64 {
+		return errors.New("assetop: 人工终结必须带操作人,且不超过 64 字")
+	}
+	if utf8.RuneCountInString(r.Reason) > 191 {
+		return errors.New("assetop: 人工终结理由不得超过 191 字")
+	}
+	return nil
+}
+
 // ManualResolver 是业务方提供的人工终结通道(规格 §4.38)。
 // 单事务:业务锁序加锁 → 改 status / resolved_by / resolve_reason,
 // RowsAffected==1 才做对侧账(Applied 入账;Rejected / Aborted 退款;AppliedPartial 不动)。
+//
+// 入参(终局状态是否合法、操作人与理由的长度)由本包的 ResolveManually 在调用前校验,
+// 实现不必也不该再写一遍;nowMs 由调用方的时钟给,实现不要自己取时间。
 type ManualResolver interface {
 	ResolveManually(ctx context.Context, r ManualResolution, nowMs uint64) (bool, error)
 }
@@ -139,7 +232,9 @@ type LoopConfig struct {
 	Workers int
 	// Lease 领取租约时长。必须 >= OpBudget + leaseHeadroom。
 	Lease time.Duration
-	// OpBudget 单行的处理时间预算(含 RPC 与 durable 重查)。
+	// OpBudget 单行的处理时间预算,**含落库**:投递(RPC + durable 重查)拿到的是
+	// OpBudget-settleBudget,余下的 settleBudget 专留给「终局已定之后写回 outbox」,
+	// 理由见 settleBudget。所以必须 > settleBudget,否则投递没有时间可用。
 	OpBudget time.Duration
 	// BaseBackoff 退避基数;帮会取 GuildRule.asset_op_retry_base_ms。
 	BaseBackoff time.Duration
@@ -147,8 +242,6 @@ type LoopConfig struct {
 	MaxBackoff time.Duration
 	// AwaitDurableDelay 「结局有了但没落盘」时的短延迟。
 	AwaitDurableDelay time.Duration
-	// PoisonDelay 只作为给 Store 的约定值:毒行推迟多久再看。本包不直接用它。
-	PoisonDelay time.Duration
 	// LedgerReadMinAttempts 连续几次拿不到位置之后,才去读已落盘账本。
 	// 设这个门槛是为了不给 data_service 增加无谓的读:刚离线的玩家很快会回来。
 	LedgerReadMinAttempts uint32
@@ -167,7 +260,6 @@ func DefaultLoopConfig() LoopConfig {
 		BaseBackoff:           time.Second,
 		MaxBackoff:            60 * time.Second,
 		AwaitDurableDelay:     500 * time.Millisecond,
-		PoisonDelay:           time.Hour,
 		LedgerReadMinAttempts: 3,
 	}
 }
@@ -184,6 +276,11 @@ func (c LoopConfig) validate() error {
 	}
 	if c.OpBudget <= 0 {
 		return fmt.Errorf("assetop: OpBudget 必须为正(当前 %v)", c.OpBudget)
+	}
+	// 预算要同时装下投递和落库。只够落库(甚至更少)的预算意味着投递的 ctx 一诞生就过期,
+	// 循环会空转重试而不报错 —— 这种配置必须在启动时就拒掉。
+	if c.OpBudget <= settleBudget {
+		return fmt.Errorf("assetop: OpBudget(%v)必须大于落库预留 %v", c.OpBudget, settleBudget)
 	}
 	// 租约必须覆盖「处理耗时 + 余量」,否则一行还在处理中就被另一个副本领走,
 	// 同一个 seq 会被两个副本同时投递 —— scene 侧虽然只读答复不会重办,
@@ -218,7 +315,8 @@ type Loop struct {
 	// Ledger 可选:能读已落盘账本时,长期离线且已记账的行可以提前终结(规格 §4.37)。
 	// 在 Run / ProcessOne 之前设置。
 	Ledger LedgerReader
-	// Manual 可选:人工终结通道(规格 §4.38)。
+	// Manual 可选:人工终结通道(规格 §4.38)。只服务于「进程里已经有 Loop」的调用方;
+	// 不连 scene 的工具(assetopfix)直接用包级 ResolveManually,不要为它造一个假 Loop。
 	Manual ManualResolver
 	// Rand 可选:退避抖动的随机源,单测注入确定值。为 nil 时取中值,不抖动。
 	Rand func() float64
@@ -356,7 +454,8 @@ func (l *Loop) claim(ctx context.Context, opID uint64) (Op, bool) {
 // ProcessOne 处理一行:决定方向 → 投一次 → 按 Decide 分支落地。
 //
 // 业务写 RPC 在提交自己的事务之后可以**同步**调用它,让玩家当场看到结果;
-// 那条路径的 ctx 预算是 2500ms(= OpBudget),CallTimeout 800ms + 重查 700ms 仍在内。
+// 那条路径的 ctx 预算是 2500ms(= OpBudget):投递分到 1800ms(CallTimeout 800ms +
+// 重查 700ms 仍在内),落库另有 settleBudget 的 700ms,且不受父 ctx 过期/取消影响。
 func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error) {
 	nowMs := l.nowMs()
 
@@ -369,13 +468,16 @@ func (l *Loop) ProcessOne(ctx context.Context, op Op) (Processed, error) {
 		return l.reschedule(ctx, op, l.alertNextMs(nowMs), Result{}, nowMs, "alert")
 	}
 
-	callCtx, cancel := context.WithTimeout(ctx, l.cfg.OpBudget)
+	// 投递只拿 OpBudget 的一部分,剩下的 settleBudget 是留给落库的,不能让 RPC 吃掉。
+	applyCtx, cancel := context.WithTimeout(ctx, l.cfg.OpBudget-settleBudget)
 	defer cancel()
-	res, err := l.applier.Do(callCtx, rpc, op.Request())
+	res, err := l.applier.Do(applyCtx, rpc, op.Request())
 
 	// 没发出去(玩家不在线)且已经试过几次:去读已落盘账本,已见的结局可以直接终结。
+	// 它走 applyCtx 而不是父 ctx:读账本同样是「定结论」的一步,不该去啃落库的预留;
+	// 而且 res.Local 意味着 Do 没发出任何网络请求,投递预算几乎没动过,够它读一次。
 	if err == nil && res.Local {
-		res = l.tryPersistedLedger(ctx, op, res)
+		res = l.tryPersistedLedger(applyCtx, op, res)
 	}
 
 	switch Decide(res, err) {
@@ -413,6 +515,20 @@ func (l *Loop) alertNextMs(nowMs uint64) uint64 {
 	return nowMs + uint64(l.cfg.MaxBackoff/time.Millisecond)
 }
 
+// settleContext 给「结论已定、必须写回 outbox」的那一步一段**不继承取消**的预算。
+//
+// 为什么要和父 ctx 脱钩:同步路径的父 ctx 预算就是 OpBudget,投递跑满之后它已经过期;
+// 此时 scene 那边钱已经动了,再拿一个死 ctx 去写库必然失败 —— 终局只留在内存里,行还是
+// PENDING,下一轮重投等于再投一次(Finalize 的 CAS 只保证不做第二遍对侧账,保不了
+// scene 不被再投一次)。所以落库这一步宁可多花 settleBudget 也要写下去。
+//
+// 代价是关停时每一行最多多等 settleBudget,所以 WithoutCancel 之后必须自带超时:
+// 少了这个超时,一个卡住的库就能把 Tick 和整个服务的关停永远钉在那里。
+// WithoutCancel 只丢弃取消与截止,ctx 上的值(日志/追踪关联)仍然带着。
+func settleContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), settleBudget)
+}
+
 // finalize 终结一行。状态算不出来时**不写库**:那说明 Decide 与 FinalStatus 之间有 bug,
 // 按坏行告警比按 Pending 写进 status 列安全得多。
 func (l *Loop) finalize(ctx context.Context, op Op, rpc RPC, res Result, nowMs uint64) (Processed, error) {
@@ -424,7 +540,9 @@ func (l *Loop) finalize(ctx context.Context, op Op, rpc RPC, res Result, nowMs u
 		return l.reschedule(ctx, op, l.alertNextMs(nowMs), res, nowMs, "alert")
 	}
 
-	finalized, err := l.store.Finalize(ctx, op, status, res, nowMs)
+	settle, cancel := settleContext(ctx)
+	defer cancel()
+	finalized, err := l.store.Finalize(settle, op, status, res, nowMs)
 	if err != nil {
 		l.metrics.incStoreError("finalize")
 		return Processed{Result: res}, fmt.Errorf("assetop: 终结失败 op_id=%d: %w", op.OpID, err)
@@ -445,8 +563,22 @@ func (l *Loop) finalize(ctx context.Context, op Op, rpc RPC, res Result, nowMs u
 // 写库前过一道 carryPartialReason:last_reason 对 27007 必须是粘性的。
 // 返回给调用方的仍是**本次真实答复**(同步路径要按它告诉玩家发生了什么),
 // 被改的只有落到 outbox 行上的那一份。
+//
+// 它和 finalize 一样走 settleContext:重排本身不丢钱(行还在,租约到期后会被重领),
+// 但父 ctx 一过期就连 attempts 都推不动,那一行会在原地被反复领取反复投递 —— 同一个
+// seq 多投一次的代价由 scene 的只读答复兜着,不该靠它兜。
 func (l *Loop) reschedule(ctx context.Context, op Op, nextAttemptMs uint64, res Result, nowMs uint64, reason string) (Processed, error) {
-	if err := l.store.Reschedule(ctx, op, nextAttemptMs, carryPartialReason(op, res), nowMs); err != nil {
+	settle, cancel := settleContext(ctx)
+	defer cancel()
+	if err := l.store.Reschedule(settle, op, nextAttemptMs, carryPartialReason(op, res), nowMs); err != nil {
+		if errors.Is(err, ErrLeaseLost) {
+			// 租约被别的副本接管:本次结果没写进去,但那一行已经有人管,既不是故障也无需重试。
+			// 只有计数看得见它,所以一定要计(AGENTS §11.3 不许静默降级)。
+			l.metrics.incRescheduleLost(op.Stream)
+			logx.Infof("[AssetOp] 租约已被接管,本次重排落空 op_id=%d stream=%d seq=%d: %v",
+				op.OpID, op.Stream, op.Seq, err)
+			return Processed{Result: res}, nil
+		}
 		l.metrics.incStoreError("reschedule")
 		return Processed{Result: res}, fmt.Errorf("assetop: 重排失败 op_id=%d: %w", op.OpID, err)
 	}
@@ -537,38 +669,49 @@ func (l *Loop) refreshPendingAge(ctx context.Context) {
 	}
 }
 
-// ResolveManually 走人工终结通道。它不查证据、不猜结论:调用方(管理 RPC)已经按
-// scene 流水 correlation_id 判定过,这里只负责落库 + 留痕 + 计数。
+// ResolveManually 走人工终结通道。它不查证据、不猜结论:调用方(管理 RPC / assetopfix
+// CLI)已经按 scene 流水 correlation_id 判定过,这里只负责校验 + 落库 + 留痕 + 计数。
+//
+// 为什么是包级函数而不是 Loop 的方法:D4 拍板的 assetopfix CLI 只连库,不连 scene,
+// 给不出 Applier,也没有循环节律可言。挂在 Loop 上就等于逼它先造一个假 Applier 和一份
+// 能过 validate 的假 LoopConfig,才能改一行数据 —— 那两样东西一旦被造出来,下一个人
+// 很容易拿它去真的跑循环。人工终结真正需要的只有 ManualResolver 和一个时钟。
+//
+// resolver 为 nil 时报错而不是当无事发生:调用方以为自己终结了一行、实际什么也没做,
+// 是钱路径上最坏的一种「成功」。
+//
+// m 可为 nil(不接指标,CLI 就是这样);now 为 nil 时取 time.Now。
 //
 // 人工终结会让 next_seq 与 scene 的 max_seq 拉开距离,累计超过 511 之后新 seq 会被
 // 判 kJumpTooFar —— 那是 fail-closed 的预期行为,按运维手册抬纪元即可。
-func (l *Loop) ResolveManually(ctx context.Context, r ManualResolution) (bool, error) {
-	if l.Manual == nil {
+func ResolveManually(ctx context.Context, resolver ManualResolver, r ManualResolution, m *Metrics, now func() time.Time) (bool, error) {
+	if resolver == nil {
 		return false, errors.New("assetop: 未配置人工终结通道")
 	}
-	switch r.Final {
-	case StatusApplied, StatusRejected, StatusAborted, StatusAppliedPartial:
-	default:
-		return false, fmt.Errorf("assetop: 人工终结状态非法(%s)", r.Final)
+	if err := r.validate(); err != nil {
+		return false, err
 	}
-	if r.Operator == "" || utf8.RuneCountInString(r.Operator) > 64 {
-		return false, errors.New("assetop: 人工终结必须带操作人,且不超过 64 字")
-	}
-	if utf8.RuneCountInString(r.Reason) > 191 {
-		return false, errors.New("assetop: 人工终结理由不得超过 191 字")
+	if now == nil {
+		now = time.Now
 	}
 
-	resolved, err := l.Manual.ResolveManually(ctx, r, l.nowMs())
+	resolved, err := resolver.ResolveManually(ctx, r, uint64(now().UnixMilli()))
 	if err != nil {
-		l.metrics.incStoreError("manual_resolve")
+		m.incStoreError("manual_resolve")
 		return false, fmt.Errorf("assetop: 人工终结失败 op_id=%d: %w", r.OpID, err)
 	}
 	if resolved {
-		l.metrics.incManualResolve(r.Final)
+		m.incManualResolve(r.Final)
 		logx.Infof("[AssetOp] manual op_id=%d final=%s operator=%s reason=%s",
 			r.OpID, r.Final, r.Operator, r.Reason)
 	}
 	return resolved, nil
+}
+
+// ResolveManually 是包级同名函数的薄委托:服务进程里 Loop 已经拿着人工通道、指标和时钟,
+// 管理 RPC 不必再传一遍。行为与包级函数完全一致。
+func (l *Loop) ResolveManually(ctx context.Context, r ManualResolution) (bool, error) {
+	return ResolveManually(ctx, l.Manual, r, l.metrics, l.now)
 }
 
 // newLeaseToken 生成一次领取的令牌。

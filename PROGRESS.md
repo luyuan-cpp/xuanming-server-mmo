@@ -5201,7 +5201,7 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 
 - 用户要求"全部做完、不用等 Codex、不用编译"。P1 已于 09-17 验收通过(见同日两条),P2 开工。
 - **范围裁定**:不按 `jubaozhai-market.md` §6.4 新增 `TradeDebit/TradeCredit/TradeAbortDebit`,改为**落帮会二期 B4a/B4b 的通用资产通道**(`docs/design/guild-phase2/04-asset-channel.md`,09-17 定稿未落码),聚宝斋占用其预留的 `ASSET_OP_STREAM_TRADE_DEBIT=3` / `TRADE_CREDIT=4` 两条流。理由:两边同账本、同 RPC、同 Currency 签名改造、同抢 `player_database` 15 号字段,自建=两套并行账本(AGENTS §11.5 第 3 条)。
-- **并行会话请注意**:本批落 `proto/common/asset/asset_op.proto`、`proto/common/component/asset_op_ledger_comp.proto`、`player_database.asset_op_ledger = 15`、`SceneNodeGrpc.AssetDebit/AssetAbortDebit/AssetCredit`、Tip `asset_error base=27000`、`go/shared/{scenenode,assetop}`,以及 Currency/Bag/TransactionLog 的 txType+correlation 改造。帮会二期若要同时落 B4a,请先与本批对齐,勿重复新建。
+- **并行会话请注意**:本批落 `proto/common/asset/asset_op.proto`、`proto/common/component/asset_op_ledger_comp.proto`、`player_database.asset_op_ledger = 16`(按 90-consistency.md G-03,15 留给 B3a-1 的 profile_component)、`SceneNodeGrpc.AssetDebit/AssetAbortDebit/AssetCredit`、Tip `asset_error base=27000`、`go/shared/{scenenode,assetop}`,以及 Currency/Bag/TransactionLog 的 txType+correlation 改造。帮会二期若要同时落 B4a,请先与本批对齐,勿重复新建。
 - 基线注意:工作区当前含跨 zone 阶段 2 在途中间态(`player_lifecycle.h` 声明了 `RequestZoneTravel`/`StartTravelHandoff` 但 .cpp 无定义),**本批不碰这些文件**;资产闸门显式查 `any_of<PlayerFrozenComp, PlayerTravelHandoffComp>`,不复用 `IsCrossZoneFrozen`。
 
 ## 2026-09-18 C++ 构建清单补登记 + 四摊待办的分工核定(Claude,未编译)

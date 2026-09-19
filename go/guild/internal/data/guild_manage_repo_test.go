@@ -301,25 +301,58 @@ func TestDemotedLeaderRole(t *testing.T) {
 
 // ── §21.3 错误分类与事务重试 ─────────────────────────────────
 
-// TestMySQLErrClassifiers:1213(死锁)可重试、1205(锁等待超时)不可重试,
-// 两者语义不同,分类错了要么白重试要么把可恢复的写报成失败。
+// TestMySQLErrClassifiers:1213(MySQL 死锁)与 9007(TiDB 写冲突)可重试、
+// 1205(锁等待超时)不可重试,三者语义不同,分类错了要么白重试要么把可恢复的写报成失败。
+// 9007 尤其重要:迁到 TiDB 之后它是最常见的一类,漏判会让写冲突以内部错误抛给客户端(违反 D6)。
 // 分类必须穿透 %w 包装 —— 本仓所有 SQL 错误都带上下文包过一层。
 func TestMySQLErrClassifiers(t *testing.T) {
 	deadlock := &mysqlDriver.MySQLError{Number: 1213, Message: "Deadlock found"}
+	tidbWriteConflict := &mysqlDriver.MySQLError{Number: 9007, Message: "Write conflict"}
 	lockWait := &mysqlDriver.MySQLError{Number: 1205, Message: "Lock wait timeout exceeded"}
 	duplicate := &mysqlDriver.MySQLError{Number: 1062, Message: "Duplicate entry"}
 
-	assert.True(t, isDeadlock(deadlock))
+	assert.True(t, isRetryableTxError(deadlock))
 	assert.False(t, isLockWaitTimeout(deadlock))
-	assert.True(t, isDeadlock(fmt.Errorf("insert member: %w", deadlock)), "必须穿透 %%w 包装")
+	assert.True(t, isRetryableTxError(fmt.Errorf("insert member: %w", deadlock)), "必须穿透 %%w 包装")
+
+	assert.True(t, isRetryableTxError(tidbWriteConflict), "TiDB 9007 必须与死锁同等对待")
+	assert.True(t, isRetryableTxError(fmt.Errorf("settle trial: %w", tidbWriteConflict)))
+	assert.False(t, isLockWaitTimeout(tidbWriteConflict))
+
+	// errRetryTx:调用方主动要求重跑(B6 结算用),同样走重试而不是原样抛出。
+	assert.True(t, isRetryableTxError(errRetryTx))
+	assert.True(t, isRetryableTxError(fmt.Errorf("recount progress: %w", errRetryTx)))
 
 	assert.True(t, isLockWaitTimeout(lockWait))
-	assert.False(t, isDeadlock(lockWait))
+	assert.False(t, isRetryableTxError(lockWait), "锁等待已被 innodb_lock_wait_timeout=1 封顶,重试只是白等")
 	assert.True(t, isLockWaitTimeout(fmt.Errorf("lock guild 7: %w", lockWait)))
 
 	for _, err := range []error{duplicate, errors.New("boom"), nil} {
-		assert.False(t, isDeadlock(err), "%v", err)
+		assert.False(t, isRetryableTxError(err), "%v", err)
 		assert.False(t, isLockWaitTimeout(err), "%v", err)
+	}
+}
+
+// TestCommitTxNormalizesUnknownOutcome:COMMIT 失败时结果不明(可能已经生效),
+// 必须归一到 ErrWriteConflict 让客户端重试,而不是把驱动错误原样抛出去;
+// 但 ctx 取消 / 事务已结束这种**结论明确**的错误要原样返回,不能伪装成写冲突。
+func TestCommitTxNormalizesUnknownOutcome(t *testing.T) {
+	assert.NoError(t, classifyCommitErr(nil))
+
+	// 结果不明:COMMIT 可能已经在库里生效了,只是回执没收到。
+	for _, err := range []error{
+		errors.New("connection reset by peer"),
+		fmt.Errorf("write tcp: %w", errors.New("broken pipe")),
+		&mysqlDriver.MySQLError{Number: 1180, Message: "Got error during COMMIT"},
+	} {
+		assert.ErrorIs(t, classifyCommitErr(err), ErrWriteConflict, "%v 必须变成'稍后重试'", err)
+	}
+
+	// 结论明确:原样返回,不许伪装成写冲突(否则客户端会去重试一个根本没提交的事务)。
+	for _, err := range []error{sql.ErrTxDone, context.Canceled, context.DeadlineExceeded,
+		fmt.Errorf("commit: %w", context.DeadlineExceeded)} {
+		assert.ErrorIs(t, classifyCommitErr(err), err, "%v 应原样返回", err)
+		assert.NotErrorIs(t, classifyCommitErr(err), ErrWriteConflict)
 	}
 }
 
@@ -853,6 +886,29 @@ func TestApply_RefreshSameGuild(t *testing.T) {
 		guildID, applicant).Scan(&secondExpire))
 	assert.Greater(t, secondExpire, firstExpire)
 	assert.Equal(t, 1, playerApplicationCount(t, ctx, db, applicant), "刷新不能插第二行")
+}
+
+// TestApply_RefreshSameMillisecond:玩家双击时两次申请落在同一毫秒,刷新写进去的
+// apply_ms / expire_ms 与库里现值逐字相同,MySQL 的 RowsAffected = 0。
+// 这仍然是"刷新成功"——曾经这里用"恰好一行"的硬断言,会把一次正常双击变成内部错误。
+func TestApply_RefreshSameMillisecond(t *testing.T) {
+	ctx, db, repo := openGuildIntegrationRepo(t)
+	const (
+		guildID   uint64 = 7211
+		leader    uint64 = 8211
+		applicant uint64 = 8212
+	)
+	seedManagedGuild(t, ctx, db, guildID, 2, 1, 50, leader, nil)
+
+	res, err := repo.ApplyToGuild(ctx, guildID, applicant, 0, testNowMs, testRules)
+	require.NoError(t, err)
+	require.True(t, res.Inserted)
+
+	// 同一个 now:UPDATE 的每一列都写成与现值相同的值。
+	res, err = repo.ApplyToGuild(ctx, guildID, applicant, 0, testNowMs, testRules)
+	require.NoError(t, err, "同毫秒重复申请必须成功(刷新即成功)")
+	assert.False(t, res.Inserted)
+	assert.Equal(t, 1, playerApplicationCount(t, ctx, db, applicant), "不能插第二行")
 }
 
 // TestApply_RefreshWhileGuildFull:满员只拒绝**新**申请人;

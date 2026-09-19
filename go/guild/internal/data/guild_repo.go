@@ -305,7 +305,7 @@ func (r *GuildRepo) CreateGuild(ctx context.Context, guild *GuildData) error {
 		return err
 	}
 
-	err := r.inTx(ctx, opCreate, func(tx *sql.Tx) error {
+	err := r.inTx(ctx, opCreate, func(ctx context.Context, tx *sql.Tx) error {
 		if _, err := tx.ExecContext(ctx,
 			`INSERT INTO guild (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, funds)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
@@ -526,34 +526,36 @@ func (r *GuildRepo) UpdateGuildScore(ctx context.Context, guildID uint64, zoneID
 	}
 	defer release()
 
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
+	// 走 inTx 而不是自己 BeginTx:这样才继承 READ COMMITTED(D7)、死锁 / 写冲突重试、
+	// 子预算与"COMMIT 结果不明归一到 ErrWriteConflict"。自己开事务会拿到默认隔离级(RR),
+	// 并且在 innodb_lock_wait_timeout=1 下把裸 1205 抛给调用方。
 	var authoritativeZoneID uint32
-	if err := tx.QueryRowContext(ctx,
-		"SELECT zone_id FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&authoritativeZoneID); err != nil {
-		if err == sql.ErrNoRows {
-			return ErrGuildGone
+	if err := r.inTx(ctx, opScore, func(ctx context.Context, tx *sql.Tx) error {
+		var zone uint32
+		if err := tx.QueryRowContext(ctx,
+			"SELECT zone_id FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&zone); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrGuildGone
+			}
+			return fmt.Errorf("lock guild %d for score update: %w", guildID, err)
 		}
-		return fmt.Errorf("lock guild %d for score update: %w", guildID, err)
+		result, err := tx.ExecContext(ctx,
+			"UPDATE guild SET score = ? WHERE guild_id = ?", score, guildID)
+		if err != nil {
+			return fmt.Errorf("persist score of guild %d: %w", guildID, err)
+		}
+		if _, err := result.RowsAffected(); err != nil {
+			return fmt.Errorf("read score update result for guild %d: %w", guildID, err)
+		}
+		// 重试契约:结果只在**成功返回前**赋给外层变量,否则重跑会把上一轮的残留带出去。
+		authoritativeZoneID = zone
+		return nil
+	}); err != nil {
+		return err
 	}
 	if zoneID != 0 && zoneID != authoritativeZoneID {
 		logx.Errorf("UpdateGuildScore: caller zone %d ignored; guild %d belongs to zone %d",
 			zoneID, guildID, authoritativeZoneID)
-	}
-	result, err := tx.ExecContext(ctx,
-		"UPDATE guild SET score = ? WHERE guild_id = ?", score, guildID)
-	if err != nil {
-		return fmt.Errorf("persist score of guild %d: %w", guildID, err)
-	}
-	if _, err := result.RowsAffected(); err != nil {
-		return fmt.Errorf("read score update result for guild %d: %w", guildID, err)
-	}
-	if err := tx.Commit(); err != nil {
-		return err
 	}
 	if err := r.invalidateGuildCache(ctx, guildID); err != nil {
 		return err
@@ -704,25 +706,22 @@ func (r *GuildRepo) RemoveGuildFromRank(ctx context.Context, guildID uint64, zon
 	return err
 }
 
-// authoritativeZoneID 在一把行锁下读公会当前的 zone_id;行不存在返回 ErrGuildGone。
-// 与 UpdateGuildScore 里那段是同一条判据:MySQL 是归属的唯一真源,
-// guild:v2:{id} 缓存(TTL 30 分钟)在合服之后会有整整一个 TTL 指向旧 zone。
+// authoritativeZoneID 读公会当前的 zone_id;行不存在返回 ErrGuildGone。
+// MySQL 是归属的唯一真源:guild:v2:{id} 缓存(TTL 30 分钟)在合服之后会有整整一个 TTL 指向旧 zone。
+//
+// 这里是**非锁定读**:调用方只是拿这个值做归属判断,读完就用,加 FOR UPDATE 既不能
+// 阻止它下一毫秒被合服改掉(那是另一个事务的事),又会在 innodb_lock_wait_timeout=1 下
+// 把一次只读查询变成可能抛 1205 的写路径,还平白开了一个事务。
 func (r *GuildRepo) authoritativeZoneID(ctx context.Context, guildID uint64) (uint32, error) {
-	tx, err := r.db.BeginTx(ctx, nil)
-	if err != nil {
-		return 0, err
-	}
-	defer tx.Rollback()
-
 	var zoneID uint32
-	if err := tx.QueryRowContext(ctx,
-		"SELECT zone_id FROM guild WHERE guild_id = ? FOR UPDATE", guildID).Scan(&zoneID); err != nil {
-		if err == sql.ErrNoRows {
+	if err := r.db.QueryRowContext(ctx,
+		"SELECT zone_id FROM guild WHERE guild_id = ?", guildID).Scan(&zoneID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
 			return 0, ErrGuildGone
 		}
 		return 0, err
 	}
-	return zoneID, tx.Commit()
+	return zoneID, nil
 }
 
 // allZoneRankKeys 列出当前存在的所有分区榜键(guild_rank:zone:*)。

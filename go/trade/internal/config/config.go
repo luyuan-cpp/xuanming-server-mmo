@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -42,6 +43,15 @@ const (
 	ScopeZone   = "zone"
 	ScopeGlobal = "global"
 )
+
+// AssetOpSecretEnvPrefix 是资产通道签名密钥环境变量的固定前缀(§4.32:
+// `MMORPG_ASSET_OP_SECRET_<CALLER>`,每个调用方一把)。本包只认前缀与形状,
+// 完整变量名(trade 那一把)是装配层的事实源 svc.AssetOpSecretEnv,由它断言两者一致。
+const AssetOpSecretEnvPrefix = "MMORPG_ASSET_OP_SECRET_"
+
+// assetOpSecretEnvPattern 约束 AssetOp.SecretEnv 只能是"一个环境变量名",
+// 顺带挡住"把密钥值贴进 SecretEnv"这一类手滑:真密钥含小写 / 连字符,过不了这个形状。
+var assetOpSecretEnvPattern = regexp.MustCompile(`^` + regexp.QuoteMeta(AssetOpSecretEnvPrefix) + `[A-Z0-9_]+$`)
 
 // Config 是 trade 服务的全部配置。
 //
@@ -93,7 +103,55 @@ type Config struct {
 	//
 	// K8s 上必须指向与 C++ scene 相同的那一份共享 Redis(不是 trade 自己的库):
 	// 位置键的写者是 scene / scene_manager,读错实例 = 永远找不到人 = 资产指令永远 NOT_HERE。
+	//
+	// 只有 AssetOp.Enabled=true 时才会真的去拨它(装配层判);关着时这一段不被使用,
+	// 但仍要求填写:留着它才能一眼看出"打开开关要连哪份 Redis",也避免放松一条既有守卫。
 	SharedRedis RedisConf `json:"SharedRedis"`
+
+	// AssetOp:通用资产通道的开关与密钥来源。**整段可缺失,缺失即关闭**(见 AssetOpConf)。
+	AssetOp AssetOpConf `json:"AssetOp,optional"`
+}
+
+// AssetOpConf 是通用资产通道(guild-phase2/04-asset-channel.md §S4)的开关与密钥来源。
+//
+// **默认关闭,而且"整段缺失 = 关闭"**:go-zero 不会下钻一个整段 optional 且未出现的嵌套结构,
+// 所以没写 AssetOp 段时 Enabled 就是 false(这正是 SchemaConf.AutoMigrate 用 *bool 绕开的那个坑,
+// 在这里反过来成了我们要的默认值)。这是**代码级的默认拒绝**:一份配置被抄到预发 / 生产环境时,
+// 少抄或没抄这一段的结果是"通道关着",而不是"通道悄悄开着"。文档约定拦不住抄配置,这个默认值能。
+//
+// 本段**不含密钥值**:密钥只从 SecretEnv 指定的环境变量读(§4.32),由部署侧注入,
+// 绝不写进 yaml / ConfigMap / 仓库。
+//
+// **本批只落开关与密钥来源,没有落循环参数。** 规格 90-consistency.md 的 Y-06 要求 AssetOpConf
+// 另带 8 个重投循环字段(ReconcileIntervalMs 2000 / ReconcileBatch 100 / Workers 8 / LeaseMs 10000 /
+// OpBudgetMs 2500 / MaxBackoffMs 60000 / PoisonDelayMs 3600000 / LedgerReadMinAttempts 3,
+// Validate 与 NewLoop 同约束)。它们的**唯一消费者**是 internal/reconcile 建 assetop.LoopConfig 的那处,
+// 不在本工作包的归属文件里。先加字段、等别人接线,会得到一份"改了没任何反应"的配置 ——
+// 那比没有配置更危险:运维以为调小了 Workers,实际还是 8,且全程零报错。
+// 接线时连同 assetop.DefaultLoopConfig() 一起落,并同步 etc/trade.yaml 与 k8s ConfigMap 三处。
+// 在那之前,这些值由 internal/reconcile 的常量固定(规格 §4.37),与 scene 侧 1024 的 seq 窗口
+// 是同一条正确性证明。
+type AssetOpConf struct {
+	// Enabled 打开资产通道:拨共享 Redis、建 scene 节点镜像、起 outbox 重投循环。
+	//
+	// false(默认)时装配层**根本不建**这些依赖 —— 不是"建好了但不用"。后者总会在某处漏判,
+	// 而"没装配"这一种关法只有一个判点。此时浏览 / 详情 / 收藏照常,上架托管与交付一律以
+	// 错误返回(reconcile.ErrSignerMissing),不会写进 outbox 之后永远投不出去。
+	Enabled bool `json:",optional"`
+
+	// SecretEnv 是签名密钥所在的**环境变量名**,不是密钥值。
+	//
+	// 写进配置只为让运维在 ConfigMap 上一眼看到该注入哪个变量;装配层会断言它等于代码里读的
+	// svc.AssetOpSecretEnv,指到别处即拒启 —— 否则配置说一套、代码读一套,表现是"明明注入了
+	// 密钥,scene 还是一律回 27008(AssetAuthFailed)"。Enabled=false 时不校验(整段可缺失)。
+	SecretEnv string `json:",optional"`
+
+	// Secret 是**保留键,永远必须留空**。
+	//
+	// 它存在的唯一目的:有人把密钥值贴进 yaml / ConfigMap 时**当场拒启**,而不是被 go-zero
+	// 当未知键静默忽略 —— 静默忽略的代价是密钥从此留在仓库与 etcd 里,且没人知道它没生效。
+	// 值不进日志、不进错误文本(AGENTS §11.3)。
+	Secret string `json:",optional"`
 }
 
 // RedisConf 是 go-redis 客户端的连接参数。
@@ -194,7 +252,10 @@ func (c *Config) ListenHostPort() (string, uint32, error) {
 //   - DataServiceRpc 没有目标:home_zone 查不到,浏览 / 详情 / 种子全部失败;
 //   - IdSegment 未启用或开了 snowflake 回退:trade 没有 snowflake,listing_id 无号可发;
 //   - Market.Scope 不在 {zone, global}:玩家可见范围不确定;
-//   - 页长 / 页数 / 收藏上限 ≤ 0,或默认页长大于上限。
+//   - 页长 / 页数 / 收藏上限 ≤ 0,或默认页长大于上限;
+//   - AssetOp.Secret 非空:密钥写进了配置文件(泄漏),无论开关如何都拒;
+//   - AssetOp.Enabled=true 但 SecretEnv 不是合法环境变量名:密钥来源说不清,scene 会一律回 27008。
+//     "开着却签不出名"由装配层再拦一道(svc.NewServiceContext 读不到密钥即拒启)。
 func (c *Config) Validate() error {
 	if c.ZoneId == 0 {
 		return errors.New("ZoneId 必须非 0(K8s 全局服务用 ConfigMap 注入的 CurrentZoneId)")
@@ -269,6 +330,19 @@ func (c *Config) Validate() error {
 	if c.SharedRedis.Host == "" {
 		return errors.New("SharedRedis.Host 不能为空:资产通道按 player:{id}:location 定位玩家所在 scene," +
 			"该键在与 C++ scene 相同的共享 Redis 上")
+	}
+
+	// 资产通道开关(§S4)。整段缺失 = 关闭,是刻意的默认拒绝,见 AssetOpConf。
+	//
+	// Secret 无论开关如何都必须为空:配置文件里的密钥是泄漏,不是配置。
+	// 错误文本只说"必须留空",不回显任何片段。
+	if c.AssetOp.Secret != "" {
+		return fmt.Errorf("AssetOp.Secret 必须留空:签名密钥只从环境变量 %s<CALLER> 读(§4.32),"+
+			"绝不写进 yaml / ConfigMap / 仓库。删掉这一行,改由部署侧注入该环境变量", AssetOpSecretEnvPrefix)
+	}
+	if c.AssetOp.Enabled && !assetOpSecretEnvPattern.MatchString(c.AssetOp.SecretEnv) {
+		return fmt.Errorf("AssetOp.Enabled=true 时 AssetOp.SecretEnv 必须是形如 %sTRADE 的环境变量名(得到 %q):"+
+			"它是密钥的来源声明,不是密钥值", AssetOpSecretEnvPrefix, c.AssetOp.SecretEnv)
 	}
 	return nil
 }

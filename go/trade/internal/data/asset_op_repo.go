@@ -16,6 +16,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+// 编译前置(写下本文件时未满足):本文件用到 TradeAssetOpRecord 的 resolved_by(22)/
+// resolve_reason(23)。这两个字段只在 proto/trade/trade_table.proto 里,生成物还停在
+// 字段 21 —— 直接 go build 会报 `rec.ResolvedBy undefined`,那不是代码写错,是**没跑
+// 生成**。先跑仓库既有的 proto 生成(dev.bat proto),再 build/vet/test。
+// 生成会改到:go/proto/trade/trade_table.pb.go、cpp/generated/proto/trade/trade_table.pb.{h,cc}、
+// generated/proto/{_unified,db,login}/proto/trade/trade_table.proto;robot/vendor/proto/trade/
+// trade_table.pb.go 是 `replace proto => ../go/proto` 的 vendor 副本,按仓库惯例一并同步。
+
 // 表名。唯一事实源仍是 proto/trade/trade_table.proto 的 OptionTableName;这里是手写 SQL
 // 需要的字面量,两边必须一致。改表名要同改这两处(schemamigrate 会按 proto 的名字建表,
 // 改漏一边的表现是"表建出来了但所有查询报 table doesn't exist",启动期查不出来)。

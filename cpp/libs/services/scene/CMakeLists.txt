@@ -27,10 +27,23 @@ include_directories(
     ../../../../third_party/entt/single_include
     ../../../../third_party/fmt/include
     ../../../../third_party/grpc/third_party/
+    # ── OpenSSL 头路径(asset_op_auth.cpp 用)────────────────────────────────
+    # asset_op_auth.cpp 走 engine/core/security/token_security.h,那是 header-only,
+    # 直接 #include <openssl/crypto.h> / <evp.h> / <hmac.h>。scene 库此前从不碰 OpenSSL,
+    # 所以这两条是新加的,漏了就是 C1083/fatal error: openssl/crypto.h: No such file。
+    #
+    # **顺序敏感,boringssl 必须排在 openssl 之前**:third_party/openssl/include/openssl
+    # 里 crypto.h 只有未 configure 的 crypto.h.in(evp.h / hmac.h 倒是真文件),能凑齐
+    # 三个头的只有 boringssl。反过来排会变成 evp/hmac 取 OpenSSL 3.x、crypto 取
+    # BoringSSL 的混搭 ABI,编译期未必报错,运行期是未定义行为。与 gate 同序
+    # (cpp/nodes/gate/CMakeLists.txt:27/30)。
+    ../../../../third_party/grpc/third_party/boringssl-with-bazel/include/
     ../../../../third_party/hexagons_grids/
     ../../../../third_party/librdkafka/src-cpp/
     ../../../../third_party/lua/src/
     ../../../../third_party/muduo-linux/
+    # 与上面 boringssl 配对,见那里的顺序说明(必须排在 boringssl 之后)。
+    ../../../../third_party/openssl/include/
     ../../../../third_party/recastnavigation/
     ../../../../third_party/redis/
     ../../../../third_party/redis/deps/

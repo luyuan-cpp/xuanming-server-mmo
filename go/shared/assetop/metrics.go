@@ -20,19 +20,20 @@ import (
 // 允许为 nil:所有方法都做了 nil 判断,这样「不接指标」的调用方(单测、工具)
 // 不必造一个假的注册表。
 type Metrics struct {
-	rpcTotal           *prometheus.CounterVec
-	rpcSeconds         *prometheus.HistogramVec
-	requeryTotal       *prometheus.CounterVec
-	finalizeTotal      *prometheus.CounterVec
-	rescheduleTotal    *prometheus.CounterVec
-	unknownTotal       *prometheus.CounterVec
-	outcomeFlipTotal   *prometheus.CounterVec
-	partialTotal       *prometheus.CounterVec
-	claimTotal         *prometheus.CounterVec
-	ledgerReadTotal    *prometheus.CounterVec
-	manualResolveTotal *prometheus.CounterVec
-	storeErrorsTotal   *prometheus.CounterVec
-	pendingOldestAge   *prometheus.GaugeVec
+	rpcTotal            *prometheus.CounterVec
+	rpcSeconds          *prometheus.HistogramVec
+	requeryTotal        *prometheus.CounterVec
+	finalizeTotal       *prometheus.CounterVec
+	rescheduleTotal     *prometheus.CounterVec
+	rescheduleLostTotal *prometheus.CounterVec
+	unknownTotal        *prometheus.CounterVec
+	outcomeFlipTotal    *prometheus.CounterVec
+	partialTotal        *prometheus.CounterVec
+	claimTotal          *prometheus.CounterVec
+	ledgerReadTotal     *prometheus.CounterVec
+	manualResolveTotal  *prometheus.CounterVec
+	storeErrorsTotal    *prometheus.CounterVec
+	pendingOldestAge    *prometheus.GaugeVec
 }
 
 // NewMetrics 在 reg 上注册本包的全部指标。
@@ -67,6 +68,13 @@ func NewMetrics(reg prometheus.Registerer, service string) *Metrics {
 			Help:        "重排次数:await_durable / retry / alert",
 			ConstLabels: labels,
 		}, []string{"stream", "reason"}),
+		// 与 reschedule_total 分开而不是给它加一个 reason:那边数的是「排好了下一次」,
+		// 这边数的是「这次白跑了」,混在一起会让积压排查把两件事当成同一件。
+		rescheduleLostTotal: f.NewCounterVec(prometheus.CounterOpts{
+			Name:        "assetop_reschedule_lost_total",
+			Help:        "重排落空次数:租约已被别的副本接管,本次投递算出的结果被丢弃",
+			ConstLabels: labels,
+		}, []string{"stream"}),
 		unknownTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name:        "assetop_unknown_total",
 			Help:        "scene 回 UNKNOWN 的次数(配置不一致 / 纪元过期 / 跳号 / 验签失败),必须告警",
@@ -185,6 +193,13 @@ func (m *Metrics) incReschedule(stream assetpb.AssetOpStream, reason string) {
 		return
 	}
 	m.rescheduleTotal.WithLabelValues(StreamLabel(stream), reason).Inc()
+}
+
+func (m *Metrics) incRescheduleLost(stream assetpb.AssetOpStream) {
+	if m == nil {
+		return
+	}
+	m.rescheduleLostTotal.WithLabelValues(StreamLabel(stream)).Inc()
 }
 
 func (m *Metrics) incUnknown(stream assetpb.AssetOpStream) {

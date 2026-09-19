@@ -94,7 +94,7 @@ var (
 	// (根本没写节点号,不是发现层的问题)。调用方应当得到「稍后重试」,而不是把
 	// 它当成故障告警,也绝不能据此认为操作失败。
 	//
-	// 对照 match 的同一处判断:go/match/internal/team/service.go:444 把它折成
+	// 对照 match 的同一处判断:go/match/internal/team/service.go:448 把它折成
 	// 「成员未准备好」拒绝开战 —— 同样是重试语义,只是那边的调用方是玩家。
 	ErrAwaitingPlacement = errors.New("scenenode: player awaiting cross-zone placement")
 )

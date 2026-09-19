@@ -2468,6 +2468,19 @@ SharedRedis:
   Host: "redis.${InfraNamespace}:6379"
   Password: "${redisPassword}"
   DB: 0
+# 通用资产通道开关(guild-phase2/04-asset-channel.md §S4)。键名与 go/trade/etc/trade.yaml、
+# go/trade/internal/config/config.go 三处逐字一致。
+# **所有档位固定 false**,不镜像服务 yaml —— 与 Mode / Schema.AutoMigrate 那条"dev 档取 yaml"
+# 的纪律刻意不同,理由是上线前置还没做完(§4.43 第 29 项:两把资产密钥尚未经
+# Resolve-InjectedSecret -MinLength 32 注入;scene gRPC 端口也还没有 NetworkPolicy 只放行
+# scene_manager / match / guild / trade)。已知风险 K1(单写者只在 30s 重连租约内成立)同样
+# 建议把"任何共享环境打开资产操作"列为 B4c 的硬前置。
+# 打开之前要同时做三件事:注入密钥、补 NetworkPolicy、把这一行改成 true —— 缺一件就别改。
+# 密钥值绝不写进 ConfigMap:trade 只从下面这个**环境变量名**读,值由部署侧注入;
+# Enabled=true 而密钥缺失 / 不足 32 字节时 trade 直接拒启(fail-closed),不会静默降级。
+AssetOp:
+  Enabled: false
+  SecretEnv: MMORPG_ASSET_OP_SECRET_TRADE
 "@
 		}
 		default {

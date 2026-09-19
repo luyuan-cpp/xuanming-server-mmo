@@ -21,8 +21,36 @@ add_definitions(-DABSL_PROPAGATE_CXX_STD=TRUE)
 include_directories(
     ../../../third_party/
     ../../../third_party/boost/
+    # ── OpenSSL 头路径(本节点这批首次需要)────────────────────────────────────
+    # scene 节点有两条路会吃到 <openssl/crypto.h> / <evp.h> / <hmac.h>:
+    #   1) handler/rpc/player/player_gm_guard.h → ../../../../gate/gate_security.h,
+    #      被 player_{attribute,currency,pet,rollback}_handler.cpp 与 scene_handler.cpp
+    #      包含(scene_admin_handler.cpp 早就直接包 gate_security.h);
+    #   2) handler/grpc/scene_node_service.cpp → services/scene/player/system/asset_op_system.h
+    #      → asset_op_auth.h → engine/core/security/token_security.h(header-only,直接包 OpenSSL)。
+    # 本节点此前从不显式给 OpenSSL 头路径,靠的是 libssl-dev 装在 /usr/include 的系统头
+    # (deploy/k8s/Dockerfile.cpp:44)。而下面 link_directories 把 /usr/local/lib 排在
+    # /usr/lib/x86_64-linux-gnu 前面,`-lssl -lcrypto` 取到的是 gRPC 装过去的 BoringSSL
+    # 静态库(Dockerfile.cpp:122-130 以默认 gRPC_SSL_PROVIDER=module 编译并 install)。
+    # 头取系统 OpenSSL 3.x、库取 BoringSSL = 同一进程里两份 EVP_MD/HMAC_CTX 布局。补上这
+    # 两条,让头也走 BoringSSL,与 gate 一致。
+    #
+    # ⚠️ 这只在直接跑 tools/scripts/build_linux.sh 的宿主机构建上生效:Dockerfile 镜像里
+    # .dockerignore 排掉了 third_party/grpc 与 third_party/openssl,builder 阶段也不 COPY
+    # 它们,所以镜像内这两条路径不存在(不存在的 -I 被编译器静默忽略),镜像构建仍是系统头
+    # + BoringSSL 库。那是 gate / battle 今天就有的同一个问题,不在本次改动范围内,已在交付
+    # 说明里单列。
+    #
+    # **顺序敏感:boringssl 必须排在 openssl 之前。**third_party/openssl/include/openssl/
+    # 里 crypto.h 只有未 configure 的 crypto.h.in(evp.h / hmac.h 倒是真文件),三个头能凑齐
+    # 的只有 boringssl。顺序反过来会变成 evp/hmac 取 OpenSSL 3.x、crypto 取 BoringSSL 的
+    # 混搭 ABI —— 编译期未必报错,运行期是未定义行为。同序写法见
+    # cpp/nodes/gate/CMakeLists.txt 与 cpp/libs/services/scene/CMakeLists.txt。
+    ../../../third_party/grpc/third_party/boringssl-with-bazel/include/
     ../../../third_party/librdkafka/src-cpp/
     ../../../third_party/muduo-linux/
+    # 与上面 boringssl 配对,见那里的顺序说明(必须排在 boringssl 之后)。
+    ../../../third_party/openssl/include/
     ../../../third_party/redis/
     ../../../third_party/redis/deps/
     ../../../third_party/spdlog/include/

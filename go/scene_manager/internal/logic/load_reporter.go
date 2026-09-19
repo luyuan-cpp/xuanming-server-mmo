@@ -173,10 +173,12 @@ func localGoneBarrierBlocks(svcCtx *svc.ServiceContext, zoneID uint32, nodeID st
 
 // isNodeGoneFromRegistry 报告 (zone,node) 是否已经确认**不在 etcd 注册表里**。
 //
-// 这是比「不在 Redis 负载集里」强得多的死亡证据:负载集会被 world_init.go 的
-// markNodeDead 在一次 CreateScene RPC 超时(5s)后就摘掉 —— 高负载下一个只是慢了的
-// 活节点也会被摘,而且那条路径不写 death_at。etcd 注册则只在租约到期或进程主动注销时
-// 消失,那时 removeNodeFromRedis / 周期巡检会先写 death_at 再摘负载集,再入屏障才有意义。
+// 这是比「不在 Redis 负载集里」强得多的死亡证据:负载集成员资格由 leader 周期刷新,
+// 缺席可能只是「这一刻没看到它」(刷新间隔、leader 缺位、别的路径短暂改写),而且那些路径
+// 未必写 death_at —— 而「没有 death_at」在 CanReclaimDeadNode 里的语义是放行。
+// etcd 注册则只在租约到期或进程主动注销时消失,那时 removeNodeFromRedis / 周期巡检会先写
+// death_at 再摘负载集,再入屏障才有意义。
+// 用例:world_init 的改派前提也复用本函数(ba2337b0d),口径一致。
 //
 // knownNodes 每个副本都在维护(watch 的 PUT / DELETE 先改内存表,之后才判 leader),
 // 所以非 leader 副本上同样可用。尚未完成首次全量同步时返回 false(拿不到证据)。

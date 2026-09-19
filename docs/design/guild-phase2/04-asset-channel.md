@@ -48,7 +48,7 @@
 - **I5 未决在窗**:Go 分配新 seq 前检查该 (player, stream) 未决行数 <16 且 `next_seq − 最小未决 seq < 512`,否则拒绝发起(帮会回 `GuildAssetPending`)。
 - **I6 流独占**:每条流只有一个服务分配 seq(GUILD_* 归 guild,TRADE_* 归 trade,SYSTEM_CREDIT 归将来的邮件/GM 发物服务)。
 - **I7 只在线应用**:scene 不在线就 NOT_HERE;Go 不写离线玩家 blob。
-- **I8 GM 默认拒绝**:客户端发来的**全部** `Gm*` 方法仅当环境变量 `MMORPG_ALLOW_CLIENT_GM=1` 时受理,在 `ProcessClientPlayerMessage` 统一拦截(第 9 部分 4.34)。
+- **I8 GM 默认拒绝**:客户端发来的**全部** `Gm*` 消息默认拒绝,仅在运行模式为 dev/test 时受理。判据是 `GATE_RUN_MODE` / `SCENE_RUN_MODE`(**未设置 = prod = 拒绝**),gate 按消息号闸、scene 再拦一次防直连。落码形状见 `cpp/nodes/gate/SECURITY.md` §3;本文件第 3 部分 4.12 与第 9 部分 4.34 的原设计(`client_gm_gate.h` + `MMORPG_ALLOW_CLIENT_GM`)**已被实际实现取代**,只作留痕。
 - **I9 资产 RPC 须签名**:`AssetOpRequest.auth` 用调用方独有密钥做 HMAC;每条流只认对应调用方;验签失败回 UNKNOWN、不记账(第 8 部分 4.32)。
 - **I10 纪元单调**:同一 (player, stream) 的纪元只增不减;请求纪元小于账本纪元回 UNKNOWN;同纪元内 `seq > max_seq + 1024` 回 UNKNOWN(第 8 部分 4.29)。
 
@@ -165,10 +165,13 @@ import 区加 `import "proto/common/component/asset_op_ledger_comp.proto";`;`pla
 
 ```proto
   // 通用资产通道账本(每流 seq 窗口);必须与 currency / bag_component 同记录同 DBTask。
-  PlayerAssetOpLedgerComp asset_op_ledger = 15;
+  PlayerAssetOpLedgerComp asset_op_ledger = 16;
 ```
 
-落码前 Codex 只截取 `player_database` 消息体查空闲字段号(命令见第 11 部分 4.42;不要对整个文件 `rg "= 15;"`,会匹配到其它 message);若 B3a 已占 15,本字段用 16。加列后必须跑 go/db 迁移(4.42 第 1b 步)。
+**字段号已定为 16,本节原文的"= 15"作废**(裁决见 90-consistency.md G-03:按 91 的批次顺序
+B3a-1 `profile_component` 取 15、B4a-1 `asset_op_ledger` 取 16)。2026-09-18 落码时已按 16 写入,
+proto 里也记了归属与作废说明,后续不要再按"查下一个空闲号"重新推导 —— 15 虽然此刻还空着
+(B3a-1 未落码),但它是留给 `profile_component` 的。加列后必须跑 go/db 迁移(4.42 第 1b 步)。
 
 ### 4.3.5 改动 `proto/common/rollback/transaction_log.proto`
 
@@ -481,6 +484,13 @@ static uint32_t AddItems(entt::entity playerEntity, Bag& bag, const PlayerItemBl
 
 ## 4.12 GM 货币指令闸门
 
+> **2026-09-18 实际落码形状与本节不同,以代码为准**(P0-a 一并做掉了)。**不存在** `client_gm_gate.h`,也**没有** `MMORPG_ALLOW_CLIENT_GM` 这个环境变量。实际是两道锁:
+> gate 按**消息号**闸(`cpp/nodes/gate/gate_gm_client_messages.h` 的 `kGmClientMessageIds` 清单 + `gate_security.h::ClassifyGmClientMessage`,接在 `client_message_processor.cpp:925`),
+> scene 再拦一次防绕开 gate 直连(`cpp/nodes/scene/handler/rpc/player/player_gm_guard.h`)。
+> 判据是运行模式 `GATE_RUN_MODE` / `SCENE_RUN_MODE`,**未设置 = prod = 拒绝**,部署链从不注入这两个变量;
+> 本机启动器兜底 dev,robot 冒烟不受影响。细节见 `cpp/nodes/gate/SECURITY.md` §3。
+> 下面的原文保留作设计留痕,**不要照它落码**——照落会多出一个与现有闸门互不知情的第二开关。
+
 > **第二轮评审后作废其中"逐 handler 加闸"的做法**:改为在 `ProcessClientPlayerMessage` 分发入口统一拦截全部客户端 `Gm*`(第 9 部分 4.34,批次 B4a-2)。下面保留的只有 `client_gm_gate.h` 的两个函数与启动脚本约定;`player_currency_handler.cpp` 不再写闸门代码,只改 TX_GM_*。
 
 新头文件 `cpp/libs/services/scene/player/system/client_gm_gate.h`(header-only,无需工程登记):
@@ -508,7 +518,7 @@ if (!IsClientGmAllowed()) {
 - `GmBlockCurrency`、`GmUnblockCurrency`、`GmGrantPet` 不在契约范围内,列入契约偏差。
 
 **启动脚本**:
-- `tools/scripts/cpp_nodes.ps1` 在 :354-372 已有逐进程覆盖 `ZONE_ID/NODE_IP` 的块。照同样的"保存旧值 → 设置 → Start-Process → 恢复"模式,**仅对 scene 进程**设 `$env:MMORPG_ALLOW_CLIENT_GM = "1"`。脚本新增开关 `[switch]$NoClientGm`,默认开,传开关则不设。
+- ~~`tools/scripts/cpp_nodes.ps1` … 设 `$env:MMORPG_ALLOW_CLIENT_GM = "1"`,新增 `[switch]$NoClientGm`~~ —— **作废,不要做**:GM 放行已由 `SCENE_RUN_MODE` 兜底 dev 决定,再加一个开关就是第二个互不知情的闸。该脚本**仍要改**的是注入两把资产通道开发密钥,写法见第 11 部分 4.41。
 - `tools/scripts/dev_mprocs_proc.ps1` 若直接拉起 scene,也设同一变量。
 - `tools/scripts/currency_crash_window.ps1`:若在 :180 附近直接 Start-Process scene,而不是经过 cpp_nodes.ps1,也在那里设。
 - K8s 清单**一律不设**,默认拒绝。
@@ -598,7 +608,7 @@ if (!IsClientGmAllowed()) {
 | 6 | `data/tip/Tip.xlsx` | 加组头 + 7 行 |
 | 7–8 | `cpp/libs/services/scene/player/system/asset_op_ledger.h/.cpp` | 新增 |
 | 9–10 | `cpp/libs/services/scene/player/system/player_asset_op.h/.cpp` | 新增 |
-| 11 | `cpp/libs/services/scene/player/system/client_gm_gate.h` | 新增 |
+| 11 | ~~`cpp/libs/services/scene/player/system/client_gm_gate.h`~~ | **作废,不要新增**:闸门已由 P0-a 落在 `cpp/nodes/gate/gate_gm_client_messages.h` + `cpp/nodes/scene/handler/rpc/player/player_gm_guard.h` |
 | 12 | `cpp/libs/services/scene/CMakeLists.txt` | 登记 7、9(源文件显式列表,照 :91 `player_lifecycle.cpp` 行) |
 | 13 | `cpp/libs/services/scene/scene.vcxproj` | 登记 7–11(.filters 可选,不计) |
 | 14 | `cpp/libs/services/scene/player/system/player_database_loader.cpp` | 改 |
@@ -994,7 +1004,7 @@ B4a 的 proto 生成必须先完成,`go/proto/common/asset` 要已存在。
 
 > **已作废**:本节原用 `robot_9219`(帮会冒烟段)在 GUILD_* 流上以 Unix 秒作 seq,会把该账号账本下沿永久推到约 1.79e9,B5 之后 guild 从 seq 1 发起的操作全部 UNKNOWN,且测试抢占了 guild 独占的流。改为专用账号 `robot_9501` + 每次运行新纪元,步骤以第 11 部分 4.40 为准。下文仅留作对照。
 
-1. **起全栈**:按"xuanming 本地开机 runbook"启动;scene 经 `cpp_nodes.ps1` 默认带 `MMORPG_ALLOW_CLIENT_GM=1`。启动前 `redis-cli GET player:<id>:location` 应为空。
+1. **起全栈**:按"xuanming 本地开机 runbook"启动;scene 经 `cpp_nodes.ps1` 启动时运行模式兜底 dev,GM 客户端消息因此放行(**不是**靠 `MMORPG_ALLOW_CLIENT_GM`,那个变量不存在;见 `cpp/nodes/gate/SECURITY.md` §3)。启动前 `redis-cli GET player:<id>:location` 应为空。
 2. **准备玩家**:robot 账号 `robot_9219`(契约 §6 的帮会冒烟段)登录进场并**保持在线**(Codex 选用能保持在线的 robot 模式,记录实际命令),经 GmAddCurrency 加金币 1000。记下 player_id 与余额 B0。
 3. **跑冒烟**:
    ```
@@ -1089,10 +1099,11 @@ const (
 
 **E3 启动脚本(关闭原偏差 #9)**。
 - `tools/scripts/dev_mprocs_proc.ps1:152` 直接拉起 scene:`"cpp-scene" { Invoke-CppNode -Exe "scene.exe" }`。`Invoke-CppNode` 用 `& $exePath` 前台运行后 `exit`(:94-114),不需要恢复旧值。精确改为:
-  `"cpp-scene" { $env:MMORPG_ALLOW_CLIENT_GM = "1"; Invoke-CppNode -Exe "scene.exe" }`
+  `"cpp-scene" { Invoke-CppNode -Exe "scene.exe" }` —— **GM 开关那半句作废**:运行模式已由启动器兜底 dev,
+  这个分支只需注入两把资产通道开发密钥(`MMORPG_ASSET_OP_SECRET_GUILD` / `_TRADE`)。
 - `tools/scripts/currency_crash_window.ps1:213-214` 经 `cpp_nodes.ps1 -Command start -Nodes scene` 启动,自动继承默认开启,**不改**。
 - 其它出现 `scene.exe` 的脚本:`stress_round19.ps1` 只有注释;`k8s_image.ps1` 只打包,默认拒绝。B4a 清单第 30 项确定为 `dev_mprocs_proc.ps1`,总数仍为 30。
-- `cpp_nodes.ps1` 的写法:在 :356-359 的 `$prevZoneEnv` 旁加 `$prevGmEnv = $env:MMORPG_ALLOW_CLIENT_GM`,仅当 `$name -eq 'scene'`(:316 `foreach ($name in $names)`)且 `-not $NoClientGm` 时设 `"1"`;`[switch]$NoClientGm` 加进 :58 的 `param(...)`;finally 里照 ZONE_ID 的写法恢复。
+- `cpp_nodes.ps1` 的写法:**GM 开关部分作废**(闸门判据已是 `SCENE_RUN_MODE`,启动器兜底 dev,不需要额外开关)。仍要做的是**注入两把资产通道开发密钥**:在逐进程环境覆盖块(`$prevZoneEnv` 那一段)里,仅对 scene 进程、且当前未设置时,给 `MMORPG_ASSET_OP_SECRET_GUILD` / `MMORPG_ASSET_OP_SECRET_TRADE` 设开发默认值;finally 按 `$null -eq $prev` 分支恢复(直接赋空串会把变量留成空值,和"未设置"不是一回事)。值必须与 `go/shared/assetop/scene_smoke_test.go` 里的 smoke 开发密钥同值,否则本机冒烟全判 `kAssetAuthFailed`。
 - **第二轮追加**:同一 scene 分支里,`MMORPG_ASSET_OP_SECRET_GUILD`、`MMORPG_ASSET_OP_SECRET_TRADE` 若调用前未设,则设为开发值 `change-me-dev-asset-op-guild-secret-000000` / `change-me-dev-asset-op-trade-secret-000000`,同样保存旧值、finally 恢复(第 8 部分 4.32)。`dev_mprocs_proc.ps1` 的 `"cpp-scene"` 分支同理注入,该文件改动移入 B4a-2;B4a-1 第 30 项只剩 `cpp_nodes.ps1`。
 
 **E4 proto 新目录(原偏差 #16 降级)**。`proto_gen.yaml` 的 `proto_directories` 没列 `common/rollback/`、`common/options/`,但二者都已生成(`cpp/generated/proto/CMakeLists.txt:92-94`),说明生成器按目录递归遍历(`prototools/descriptor.go:87` WalkDir)。`proto/common/asset/` 预期会被扫到,B4a 验证第 1 步保留作确认,回退方案不变。
@@ -1286,6 +1297,15 @@ func (s *Signer) Sign(rpc RPC, req *assetpb.AssetOpRequest, nowMs uint64) // 就
 - Go `decide_test`:FinalStatus 对 partial 与 `LastReason==PartialReason` 均得 AppliedPartial;`reconcile_test` `PartialNotBookedCounterSide`。
 
 ## 4.34 客户端 GM 指令统一闸门(替换第 3 部分 4.12 的逐 handler 闸门)
+
+> **2026-09-18 实际落码形状与本节不同,以代码为准**(P0-a 一并做掉了)。**不存在** `client_gm_gate.h`,也**没有** `MMORPG_ALLOW_CLIENT_GM` 这个环境变量。实际是两道锁:
+> gate 按**消息号**闸(`cpp/nodes/gate/gate_gm_client_messages.h` 的 `kGmClientMessageIds` 清单 + `gate_security.h::ClassifyGmClientMessage`,接在 `client_message_processor.cpp:925`),
+> scene 再拦一次防绕开 gate 直连(`cpp/nodes/scene/handler/rpc/player/player_gm_guard.h`)。
+> 判据是运行模式 `GATE_RUN_MODE` / `SCENE_RUN_MODE`,**未设置 = prod = 拒绝**,部署链从不注入这两个变量;
+> 本机启动器兜底 dev,robot 冒烟不受影响。细节见 `cpp/nodes/gate/SECURITY.md` §3。
+> 下面的原文保留作设计留痕,**不要照它落码**——照落会多出一个与现有闸门互不知情的第二开关。
+
+> 本节仍然有效的只有**清点结论**(客户端可调的 `Gm*` 共 18 个、客户端消息只有一个入口)与"将来若有路径转发客户端消息必须调用同一函数"这条约束。
 
 **已核实**:scene 客户端可调的 `Gm*` 共 18 个——`GmAddCurrency`、`GmDeductCurrency`、`GmBlockCurrency`、`GmUnblockCurrency`(`player_currency_handler.cpp:14,34,64,93`)、`GmGrantPet`(`player_pet_handler.cpp:145`)、`GmSetPlayerLevel`(`player_attribute_handler.cpp:147`)、`player_rollback_handler.cpp:40-167` 的 12 个(GmAttachDebt/GmWaiveDebt/GmAdjustDebt/GmFreezeDebt/GmQueryDebt/GmCreateSnapshot/GmListSnapshots/GmPreviewRollback/GmExecuteRollback/GmQueryTransactionLog/GmTraceItem/GmClawbackItem,均挂在 SceneRollbackClientPlayerHandler 下,多数仍是 TODO 桩)。被 GM 封币的玩家可以自己调 `GmUnblockCurrency` 解封;回档类桩一旦实现就是客户端自助回档。客户端消息只有一个入口:gate 发 `SceneProcessClientPlayerMessageMessageId`(`client_message_processor.cpp:699-711`)→ `SceneHandler::ProcessClientPlayerMessage`(`scene_handler.cpp:307`),在 :418 `CallMethod`。`InvokePlayerService`(:441)与 `SendMessageToPlayer`(:202)是节点路由,不对客户端开放,不加闸;将来若有路径转发客户端消息,必须调用同一函数。
 
@@ -1496,7 +1516,7 @@ type ManualResolver interface {
 
 **每次运行一个新纪元**:`epoch := uint64(time.Now().UnixMilli())`,seq 从 1 起。上一次运行的纪元更小,scene 按 4.29 规则重置该流,不会有窗口永久滑走的问题。
 
-1. **起全栈**:按"xuanming 本地开机 runbook";scene 经 `cpp_nodes.ps1` 默认带 `MMORPG_ALLOW_CLIENT_GM=1` 与两把开发密钥。
+1. **起全栈**:按"xuanming 本地开机 runbook";scene 经 `cpp_nodes.ps1` 启动时运行模式兜底 dev(GM 客户端消息放行),并注入两把资产通道开发密钥。
 2. **准备玩家**:`robot_9501` 登录进场并保持在线(Codex 选能保持在线的 robot 模式,记录实际命令);GmAddCurrency 加金币 1000;记下 player_id 与余额 B0。
 3. **跑冒烟**:
    ```
@@ -1542,7 +1562,7 @@ type ManualResolver interface {
 | 28–29 | `cpp/tests/currency_test/currency_test.cpp`、`currency_test.vcxproj` |
 | 30 | `tools/scripts/cpp_nodes.ps1`(scene 注入 GM 开关与两把开发密钥,`-NoClientGm`) |
 
-**B4a-2 客户端 GM 统一闸门(手改 6)**:`client_gm_gate.h`(新)、`cpp/nodes/scene/handler/rpc/scene_handler.cpp`(守护段)、`player_currency_handler.cpp`(TX_GM_*)、`cpp/tests/currency_test/client_gm_gate_test.cpp`(新)、`currency_test.vcxproj`、`tools/scripts/dev_mprocs_proc.ps1`(`"cpp-scene"` 分支注入 GM 开关与两把开发密钥)。
+**B4a-2(手改 3)**:GM 闸门部分**整体作废**——P0-a 已经落地,形状是 gate 按消息号闸 + scene `player_gm_guard.h`,不要再做 `client_gm_gate.h` / `client_gm_gate_test.cpp` / `scene_handler.cpp` 守护段这三项。本批**仍要做**的只剩:`player_currency_handler.cpp`(GM 流水 tx 改 `TX_GM_GRANT / TX_GM_DEDUCT`)、`tools/scripts/cpp_nodes.ps1` 与 `tools/scripts/dev_mprocs_proc.ps1`(`"cpp-scene"` 分支注入两把资产通道开发密钥)。
 
 **B4a-client(客户端仓,手改 2)**:`Assets/Scripts/Game/Pet/PetClient.cs`、`Assets/Scripts/Game/Attribute/AttributeClient.cs` 的 `DescribeTip` switch 各加 27000–27008 九行,文案与 Tip.xlsx 一致(照 `PetClient.cs:80-82` 注释的镜像约定)。已核实:宠物、加点扣币前先 `CanAfford`,余额不足回的是 `kPetGoldNotEnough / kAttributeGoldNotEnough`(`player_pet.cpp:582-583,675-676`,`player_attribute.cpp:658-659,750-751`),27000 走不到;但冻结(27003)与 GM 路径会出现新码,原先会显示"tip=N"。
 

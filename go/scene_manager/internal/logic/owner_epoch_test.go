@@ -1311,8 +1311,8 @@ func TestEnterScene_DeadOwnerWithinBarrierIsStillRejected(t *testing.T) {
 	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
 }
 
-// 进程死了但 etcd 租约还没到期(或者节点其实活着、只是被 world_init 的 markNodeDead 因为一次
-// RPC 超时摘出了负载集):注册表里还有它 = 没有死亡的正面证据,不得接管。
+// 进程死了但 etcd 租约还没到期(或者节点其实活着、只是这一刻不在负载集里:leader 刷新间隔、
+// leader 缺位等):注册表里还有它 = 没有死亡的正面证据,不得接管。
 func TestEnterScene_OwnerMissingFromLoadSetButStillRegisteredIsNotTakenOver(t *testing.T) {
 	clearKnownNodesForTest()
 	t.Cleanup(clearKnownNodesForTest)

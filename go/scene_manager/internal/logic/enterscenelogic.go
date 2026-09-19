@@ -685,12 +685,14 @@ func (l *EnterSceneLogic) releaseTakenOverSceneCount(loc *scene_manager.PlayerLo
 // 周期存盘。
 //
 // 「死亡」要的是**正面证据**,不是「看不到它」:节点必须已经从 etcd 注册表里消失
-// (租约到期 / 主动注销,见 isNodeGoneFromRegistry)。只看 Redis 负载集不够 —— world_init.go
-// 的 markNodeDead 会在一次 CreateScene RPC 超时后就把节点摘出负载集且不写 death_at,
-// 高负载下一个只是慢了的活节点也会被摘;若据此接管,它名下正在玩的玩家下一次换图会被
-// 直接派到别的节点、读到最长一个存盘周期之前的旧档(本该走「18 → 冻结 → 存盘 → 标记」的
-// 安全交接)。进程已死但租约未到期的那几十秒里,请求照旧被 18 暂拒,租约到期后
-// death_at + 屏障走完即放行。
+// (租约到期 / 主动注销,见 isNodeGoneFromRegistry)。只看 Redis 负载集不够 —— 负载集的
+// 成员资格由 leader 周期刷新,还会被别的路径短暂改写,缺席只说明「这一刻没看到它」。
+// 若据此接管,一个只是暂时缺席的活节点名下正在玩的玩家,下一次换图会被直接派到别的节点、
+// 读到最长一个存盘周期之前的旧档(本该走「18 → 冻结 → 存盘 → 标记」的安全交接)。
+// (2026-09-19:world_init 曾经在一次 CreateScene RPC 超时后就摘负载集且不写 death_at,
+// 那条路径已改成不碰负载集、并同样以 isNodeGoneFromRegistry 为改派前提,见 ba2337b0d。
+// 本判定不依赖那次修复:负载集缺席在任何原因下都不单独构成死亡证据。)
+// 进程已死但租约未到期的那几十秒里,请求照旧被 18 暂拒,租约到期后 death_at + 屏障走完即放行。
 //
 // 任何一步拿不准都 fail-closed(返回 false,沿用换手门的拒绝):
 //   - zone 无法确定、node_id 为空(等待落点另有规则)→ false;

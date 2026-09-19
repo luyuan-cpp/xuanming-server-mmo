@@ -97,6 +97,19 @@ void RemoveFirst(List& list, int count) {
     }
 }
 
+// 只收**真·业务拒绝**(reasonTipId != 0);中止占位不进来,理由见调用点。
+//
+// **明文契约:环溢出后原因退化成 0,这是已知且被接受的损失,不是待修缺陷。**
+// 环只有 64 格,挤满后被挤掉的 seq 再被重查时 AssetOpRejectionReason 回 0,scene 答
+// REJECTED + reason 0;Go 的 FinalStatus(go/shared/assetop/decide.go)对
+// 「RPCAbort + reason == 0」判 StatusAborted,于是一条余额不足会以 ABORTED 终结。
+// 可以接受的依据是**账务两者完全相同**:B5 对 REJECTED 与 ABORTED 都是退次数、退帮贡、
+// 退限购(docs/design/guild-phase2/05-economy.md 的「REJECTED / ABORTED」处置表),
+// 唯一损失是订单文案从「余额不足 / 背包已满」退成「已中止」。
+// 代价换算:要消掉这一行文案损失,得在 AssetOpResponse 上加一个「是否中止占位」的字段
+// —— 改协议、改存档、改两侧代码,换一行展示文字,不值,所以**不加**。
+// 结局判定(APPLIED / REJECTED)只看位图,任何时候都不受本环影响。
+// 用例:asset_op_ledger_test.cpp 的 LedgerEvictedRejectionReasonDegradesByDesign。
 void InsertRejection(AssetOpStreamLedger& ledger, uint64_t seq, uint32_t reasonTipId) {
     auto* list = ledger.mutable_rejections();
     int pos = list->size();
@@ -142,6 +155,9 @@ void PruneBelowWatermark(AssetOpStreamLedger& ledger, uint64_t watermark) {
 }
 
 // seq 是否超出同纪元跳号上限。max_seq 接近 uint64 上限时上限不可表示,此时任何 seq 都不算超。
+// 这条"不可表示就不算跳号"是 Go↔C++ 的契约,Go 侧同判据在 go/shared/assetop/classify.go:116;
+// 两边必须站同一侧,否则同一份账本会出现"一边回 UNKNOWN、一边照常记账"的撕裂。
+// 单测:LedgerJumpCapNearUint64Max(C++)/ TestClassifySeqTable 的 nearOverflow 用例(Go)。
 bool ExceedsJumpCap(uint64_t maxSeq, uint64_t seq) {
     if (maxSeq > kUint64Max - kAssetOpMaxSeqJump) return false;
     return seq > maxSeq + kAssetOpMaxSeqJump;
@@ -326,7 +342,11 @@ bool RecordAssetOpOutcome(AssetOpStreamLedger& ledger, uint64_t epoch, uint64_t 
         SetBit(ledger, BitGroup::kApplied, index);
     }
     if (kind == AssetOpRecordKind::kAppliedPartial) InsertPartialSeq(ledger, seq);
-    if (kind == AssetOpRecordKind::kRejected) InsertRejection(ledger, seq, reasonTipId);
+    // 中止占位(reasonTipId == 0)**不占**原因环的名额:它压根没有业务原因可展示,查它
+    // 无论进不进环都回 0;占一格只会把真·业务拒绝更早挤出去,而被挤掉是有代价的
+    // (原因退化 → Go 判 ABORTED,见 InsertRejection 上的契约)。中止占位在位图上照常
+    // 置 seen、不置 applied,所以 Classify 仍答 kRejected,「此后这条 seq 永远拒绝」不变。
+    if (kind == AssetOpRecordKind::kRejected && reasonTipId != 0) InsertRejection(ledger, seq, reasonTipId);
     if (seq > ledger.max_seq()) ledger.set_max_seq(seq);
     return true;
 }

@@ -857,7 +857,7 @@ const sqlCountOfficers = `SELECT COUNT(*) FROM guild_member WHERE guild_id = ? A
 
 ### 8.1 数据规则
 
-- `guild_application(guild_id, player_id, apply_ms, expire_ms)`(B1 已建;主键 `(guild_id, player_id)`,普通索引 `idx_guild_application_1(player_id)`、`idx_guild_application_2(expire_ms)`)。只存待审;通过、拒绝、撤回、过期、解散都删行。
+- `guild_application(guild_id, player_id, apply_ms, expire_ms)`(B1 已建;主键 `(guild_id, player_id)`,普通索引 `idx_guild_application_0(player_id)`、`idx_guild_application_1(expire_ms)`)。只存待审;通过、拒绝、撤回、过期、解散都删行。
 - **“有效申请”判据 I1**:`expire_ms > now` 且申请人**没有** `guild_member` 行。所有计数与列表都在 SQL 里按 I1 过滤;物理删除只在写路径顺手做(惰性清理)。
 - **成员行出现即清申请(I2)**:任何让玩家获得 `guild_member` 行的事务,必须在同一事务里 `DELETE FROM guild_application WHERE player_id = ?`。B2 的入口只有两个:审批通过(§8.5 第 5d 步)与建帮(§8.8)。否则建帮者日后解散 / 转让退帮时,72h 内的旧申请会按 I1 “复活”。B5/B6 若新增入帮入口,同样照做(AGENTS §11.4 逐项对齐)。
 - **成员行消失即清申请(I3)**:任何删除 `guild_member` 行的事务(退帮 §7.4、踢人 §7.2、解散 §8.6)在同一事务里删除被删成员的全部申请。成员期间这些申请按 I1 本来就无效,删掉语义不变;它兜住 I2 覆盖不到的竞态残留(Apply 第 2 步非锁定读与他帮审批 / 建帮并发时插入的行,第 4b 部分),保证离帮后不会有旧申请“复活”。锁序 guild → guild_member → guild_application 合规。
@@ -993,7 +993,7 @@ B5/B6 以 guild_id 为键的新表由对应批次加进第 3 步之后。
 | 同帮重复申请且该帮已满员 | 第 5 步命中 existing → 第 6 步刷新,不走第 7 步 | 成功(契约“刷新并成功”);新申请人才会得到 `ErrGuildFull` |
 | 两个帮会并发通过同一申请人 P | T1 持 (G1,P) 申请行,INSERT 成员 P;T2 持 (G2,P),INSERT 成员 P 等 T1 的唯一键锁;T1 第 5d 步删 P 的全部申请,等 T2 持有的 (G2,P) → 死锁,回滚一方 | 若 T2 被回滚并重跑:(G2,P) 已被 T1 删除 → `ErrApplicationNotFound`。若 T1 被回滚:T2 通过,T1 重跑同理。**P 恰好进一个帮**。这是正常玩法可触发的场景,所以重试 3 次 + 退避,耗尽也只回业务 tip `kGuildBusyRetry`,客户端不隔离 |
 | 申请与他帮通过并发 | Apply 第 2 步不加锁,可能在对方提交前读到“未入帮”并插入 (G1,P) | 留下一条 I1 判为无效的行:不计数、不列出;G1 审批通过时 INSERT 撞 1062 → 删行回 NotFound;P 再申请时第 2 步拒绝。P 日后退帮 / 被踢 / 帮会解散时,I3 在同一事务里删掉该行,不会复活 |
-| 申请与建帮并发(同一玩家 P) | Create 不锁已有 guild 行;Create 第 3 步 DELETE P 的申请与 Apply 第 5 步 FOR UPDATE / 第 9 步 INSERT 在 `idx_guild_application_1(player_id)` 上互等 → 可能死锁 | 回滚一方后重跑:Create 先提交 → Apply 第 2 步读到成员行 → `ErrPlayerAlreadyInGuild`;Apply 先提交 → Create 删掉该申请。若 Apply 的第 2 步快照早于 Create 提交、第 5 步等锁晚于 Create 提交,会留下一条按 I1 无效的物理行,P 离开 G2 时由 I3 删除 |
+| 申请与建帮并发(同一玩家 P) | Create 不锁已有 guild 行;Create 第 3 步 DELETE P 的申请与 Apply 第 5 步 FOR UPDATE / 第 9 步 INSERT 在 `idx_guild_application_0(player_id)` 上互等 → 可能死锁 | 回滚一方后重跑:Create 先提交 → Apply 第 2 步读到成员行 → `ErrPlayerAlreadyInGuild`;Apply 先提交 → Create 删掉该申请。若 Apply 的第 2 步快照早于 Create 提交、第 5 步等锁晚于 Create 提交,会留下一条按 I1 无效的物理行,P 离开 G2 时由 I3 删除 |
 | 申请与目标帮解散并发 | 两者都先锁同一 guild 行,串行 | 解散在先 → `ErrGuildGone`;申请在先 → 解散第 3 步删掉该申请 |
 | 审批与申请人撤回并发 | 同一 (G,P) 行上串行 | 撤回在先 → 审批 NotFound;审批在先 → 撤回 NotFound |
 | 审批时帮会 zone 与申请人归属 zone 不一致 | zone 在 guild 行锁下读 | 删申请行,`ErrApplicationNotFound`;不产生跨区成员 |
@@ -1940,7 +1940,7 @@ B2 手改文件共 39 个(robot 文件两批各改一次,分别计数),超过契
 
 B2s 与 B2c 之间:客户端在重跑 `gen_proto.ps1 / gen_messageids.ps1` 前仍能编译,但旧客户端的“加入帮会”按钮会失败(路由表已无 `JoinGuild`);新方法无 MessageLimiter 专属行。两者都只影响本地开发,B2c 修复,不要求两批连在一次授权内。
 
-## 26. B2s 手改文件(30)
+## 26. B2s 手改文件(32)
 
 | # | 文件 | 类型 | 备注 |
 |---|---|---|---|
@@ -1974,6 +1974,9 @@ B2s 与 B2c 之间:客户端在重跑 `gen_proto.ps1 / gen_messageids.ps1` 前�
 | 28 | go/guild/internal/logic/guild_manage_logic_test.go | 新 | §21.4 |
 | 29 | go/guild/internal/logic/client_zone_test.go | 改 | JoinGuild 块与注释 |
 | 30 | go/guild/internal/logic/merge_fence_test.go | 改 | |
+
+| 31 | go/guild/go.mod | 改 | 落码时补:`replace` 有而 `require` 没有的 proto2mysql(经 `replace schemamigrate => ../schemamigrate` 进入模块图),以及 4 条 gorm 系传递依赖 |
+| 32 | go/guild/go.sum | 改 | 同上,外加 B1 漏补的 `go-sql-driver/mysql v1.9.3` 哈希(go.mod 已要求 v1.9.3,go.sum 里只有 v1.9.0)。哈希逐行取自 `go/schemamigrate/go.sum`,未跑 `go mod tidy` |
 
 `guild_repo_test.go` 不在清单:`UpdateAnnouncementAuthorized` 签名不变。若 Codex 发现其中有断言“提交后失效失败要返回错误”的用例,报告后在 B2c 或后续批次改,不在 B2s 里超额修改。`fakeHomeZones` 定义在 `client_zone_test.go:30`(已核对),保持不变;按玩家的并发安全替身 `perPlayerZones` 新建在 #28。
 

@@ -29,8 +29,12 @@ constexpr int kAssetOpWindowWords = 16;
 static_assert(kAssetOpWindowWords * 64 == static_cast<int>(kAssetOpWindowBits),
               "窗口位数必须正好由 16 个 fixed64 覆盖");
 
-// 拒绝原因环的条数上限。它只用于展示:被挤掉的条目让原因退化成 0(Go 按"通用拒绝"映射),
-// 不影响"某 seq 是 APPLIED 还是 REJECTED"这个正确性判定。
+// 拒绝原因环的条数上限。它只用于展示:被挤掉的条目让原因退化成 0,不影响"某 seq 是
+// APPLIED 还是 REJECTED"这个正确性判定(那只看位图)。
+// 退化的**展示**后果不是零:reason 0 与中止占位不可区分,Go 的 FinalStatus 会把这条
+// 业务拒绝判成 StatusAborted。账务两者相同,损失只有订单文案 —— 完整契约与代价换算写在
+// asset_op_ledger.cpp 的 InsertRejection 上,改动前先读那段。
+// 环只收非 0 原因:中止占位不占名额,所以真实业务里挤满 64 格比看上去更难。
 constexpr int kAssetOpMaxRejections = 64;
 
 // 部分发放名单的条数上限(§4.33)。它**不是**纯展示:被挤掉之后,对同一 seq 的重查会答
@@ -102,7 +106,8 @@ void ResetAssetOpStreamForEpoch(AssetOpStreamLedger& ledger, uint64_t epoch);
 // 记一次结局。前置:ClassifyAssetOpSeq(&ledger, epoch, seq) ∈ {kUnseen, kAheadOfWindow},
 // 且 kind != kCount。前置不满足时返回 false 且**不改动任何状态**(调用方 LOG_ERROR)。
 // 通过前置后:epoch 更大则先整条流重置;必要时窗口上滑并清掉滑出窗口的原因/部分发放条目;
-// 再置位、写名单、抬 max_seq。reasonTipId 只对 kRejected 有意义(0 = 中止占位)。
+// 再置位、写名单、抬 max_seq。reasonTipId 只对 kRejected 有意义(0 = 中止占位):
+// 0 不进拒绝原因环(占位没有原因可展示,查它照样回 0),非 0 才占环里的一格。
 bool RecordAssetOpOutcome(AssetOpStreamLedger& ledger, uint64_t epoch, uint64_t seq,
                           AssetOpRecordKind kind, uint32_t reasonTipId);
 

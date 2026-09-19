@@ -111,3 +111,30 @@ SharedRedis:
   Host: 127.0.0.1:6379
   Password: ""
   DB: 0
+
+# ---- 通用资产通道开关(guild-phase2/04-asset-channel.md §S4)----
+# **默认关闭,整段缺失也是关闭**(go-zero 不给缺席的 optional 嵌套段回填 default)。
+# 这是代码级的默认拒绝:一份配置被抄到预发 / 生产时,少抄这一段的结果是"通道关着",
+# 不是"通道悄悄开着"。本地默认也保持 false —— 抄走这份文件同样带不走一个打开的开关。
+#
+# 关闭时:不拨上面的 SharedRedis、不建 scene 节点镜像、不起 outbox 重投循环;
+#         浏览 / 详情 / 收藏照常,上架托管与交付一律以错误返回。
+# 打开时:Enabled 改 true,并确保本进程环境里有 SecretEnv 指定的那把密钥 ——
+#         缺失或去空白后不足 32 字节 → **trade 拒绝启动**(fail-closed,不降级)。
+#
+# 密钥**只从环境变量读**,绝不写进本文件 / ConfigMap / 仓库(§4.32):
+#   本机 dev:先跑 tools/scripts/start_game.ps1(或 cpp_nodes.ps1 -Command start),
+#            它会生成并注入 MMORPG_ASSET_OP_SECRET_GUILD / _TRADE,值落在 gitignore 的
+#            run/secrets/assetop-dev.env,首次生成后复用,scene 与 Go 服务共用同一把;
+#   预发 / 生产:必须由部署侧注入(≥32 字节,且不得与其它密钥相同,§4.43 第 29 项)。
+# `Secret` 是保留键:写了任何值都会被 config.Validate 当场拒启,免得密钥被静默忽略后
+# 留在仓库和 ConfigMap 里。
+#
+# 超时与并发上限**不在这里**:单次资产 RPC 800ms、循环 interval 2s / batch 100 / workers 8 /
+# 租约 10s / 单条预算 2500ms 由 internal/reconcile 的常量固定(规格 §4.37)。它们与 scene 侧
+# 1024 的 seq 窗口是同一条正确性证明,不是可调业务数值;抄成配置项只会多出一份会漂移的真相。
+#
+# 键名与 internal/config/config.go 的 json tag、k8s_deploy.ps1 的 trade ConfigMap 三处逐字一致。
+AssetOp:
+  Enabled: false
+  SecretEnv: MMORPG_ASSET_OP_SECRET_TRADE

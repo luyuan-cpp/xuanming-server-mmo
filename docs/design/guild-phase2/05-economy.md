@@ -1166,7 +1166,7 @@ private void MaybeAutoRequest()
 
 **账号**:A=`robot_9214`(帮主)、B=`robot_9215`(成员)。契约 §6 的段是 9211–9219:B2 用 9211–9213,S6 用 9216–9219,B5 取剩下的 9214–9215。两个账号都须**首次在 zone_a 建角**(同 B2 §冒烟头注释),登录列表加进 `sc.ZoneA`。
 
-**前置**:按"本地开机 runbook"起全栈;scene 经 `cpp_nodes.ps1` 默认带 `MMORPG_ALLOW_CLIENT_GM=1`(S4 E3);B2 的申请/审批冒烟已通过。
+**前置**:按"本地开机 runbook"起全栈;scene 经 `cpp_nodes.ps1` 启动时运行模式兜底 dev,GM 客户端消息放行(**不是**靠 `MMORPG_ALLOW_CLIENT_GM`,该变量不存在;见 `cpp/nodes/gate/SECURITY.md` §3);B2 的申请/审批冒烟已通过。
 
 **改动**:新文件 `robot/guild_economy_smoke.go`;`robot/config/config.go` 的 `GuildSmokeConfig` 加 `Economy bool yaml:"economy"`、`EconomyLeader string yaml:"economy_leader"`(默认 `robot_9214`)、`EconomyMember string yaml:"economy_member"`(默认 `robot_9215`);`robot/etc/guild_smoke.yaml` 加 `economy: true`;`guild_smoke_scenario.go` 的 `guildSmokeIsGuildMessage` 加 5 个新消息号,`RunGuildSmoke` 末尾加 `if sc.Economy { runGuildEconomySmoke(cfg, stats) }`。GM 助手 `econGmAdd`/`econGmDeduct(bot, currencyType uint32, amount int64)` 照 `gmAddGold`(`currency_crash_window_scenario.go:77-97`)分别发 `GmAddCurrencyRequest`/`GmDeductCurrencyRequest`;查背包照 `features_smoke_scenario.go:451`。原因码比较用 `table.AssetError_kAssetCurrencyInsufficient`,不写 27000。
 

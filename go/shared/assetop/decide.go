@@ -79,6 +79,17 @@ func Decide(res Result, err error) Action {
 // 两处细节值得记住:
 //   - Abort 打在未见过的 seq 上时 scene 回 REJECTED 且 reason==0,这叫"中止占位",
 //     业务侧要**退还**先前预扣的东西;真正的业务拒绝(余额不足等)带非 0 reason。
+//     **边界(明文契约,已知且被接受)**:reason==0 并不等价于"一定是中止占位"。
+//     scene 账本的拒绝原因环只有 64 格(asset_op_ledger.h kAssetOpMaxRejections),
+//     被挤出环的 seq 重查时 AssetOpRejectionReason 回 0,于是一条**真·业务拒绝**在
+//     Abort 重投后会落进下面的 StatusAborted 分支。
+//     可以接受的依据是账务两者**完全相同**:B5 对 REJECTED 与 ABORTED 都是退次数、
+//     退帮贡、退限购(docs/design/guild-phase2/05-economy.md 的处置表),
+//     唯一损失是订单文案从"余额不足 / 背包已满"退成"已中止"。
+//     所以这不是待修缺陷,**不要**为它加 proto 字段:改协议 + 改存档 + 改两侧代码,
+//     只换回一行展示文字。C++ 侧的同一段契约写在 asset_op_ledger.cpp 的 InsertRejection,
+//     两边任何一侧要改,必须同时改另一侧。
+//     退化已被收窄过一次:中止占位(reason 0)不再占环里的名额,真·业务拒绝因此更难被挤掉。
 //   - 部分发放有两个来源:本次答复的 partial,以及行上记着的上次答复 reason。
 //     它们不是两份同样的证据:只读答复只在 seq 还留在账本 partial_seqs 环里时才带
 //     partial(§4.9 第 4 步),环满 64 条或 watermark 右移过该 seq 就没了;之后

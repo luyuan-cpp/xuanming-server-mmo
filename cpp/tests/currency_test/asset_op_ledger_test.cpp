@@ -239,9 +239,77 @@ TEST(AssetOpLedgerTest, LedgerRejectionRingCap) {
         EXPECT_LT(ledger.rejections(i - 1).seq(), ledger.rejections(i).seq()) << "i=" << i;
     }
     // 被挤掉的只是展示用的原因,结局本身仍然固定。
+    // 注意"只是展示"不等于"没有后果":跨语言那一侧的后果由下面
+    // LedgerEvictedRejectionReasonDegradesByDesign 单独钉。
     EXPECT_EQ(AssetOpRejectionReason(ledger, 1), 0u);
     EXPECT_EQ(Classify(ledger, 1), AssetOpSeqState::kRejected);
     EXPECT_EQ(AssetOpRejectionReason(ledger, 7), kRejectReason + 7);
+}
+
+// 中止占位(reason 0)不占原因环的名额。
+// 占位没有业务原因可展示,进不进环查出来都是 0;占一格却会把真·业务拒绝更早挤出去,
+// 而挤出去是**有**代价的(见下一条用例)。所以这一格不给它。
+TEST(AssetOpLedgerTest, LedgerAbortPlaceholderNotInRejectionRing) {
+    PlayerAssetOpLedgerComp comp;
+    auto& ledger = MutableAssetOpStream(comp, kStream);
+    ASSERT_NO_FATAL_FAILURE(RecordOrFail(ledger, 1, AssetOpRecordKind::kRejected, 0));  // 中止占位
+    ASSERT_NO_FATAL_FAILURE(RecordOrFail(ledger, 2, AssetOpRecordKind::kRejected, kRejectReason));
+
+    ASSERT_EQ(ledger.rejections_size(), 1);
+    EXPECT_EQ(ledger.rejections(0).seq(), 2u);
+    // 不进环**不影响**占位的效力:这条 seq 此后永远是拒绝,晚到的扣款再也应用不了(I2)。
+    EXPECT_EQ(Classify(ledger, 1), AssetOpSeqState::kRejected);
+    EXPECT_EQ(AssetOpRejectionReason(ledger, 1), 0u);
+    EXPECT_EQ(AssetOpRejectionReason(ledger, 2), kRejectReason);
+    EXPECT_TRUE(ValidateAssetOpLedger(comp).empty()) << ValidateAssetOpLedger(comp);
+
+    // 63 个中止占位夹在中间,也挤不掉任何一条业务拒绝:环里正好攒满 64 条真原因,
+    // 最早的 seq 2 仍在。若占位也进环,这里会变成 127 条抢 64 格,seq 2 早被挤掉。
+    for (uint64_t seq = 3; seq <= 128; ++seq) {
+        const bool abortPlaceholder = (seq % 2 == 1);
+        ASSERT_NO_FATAL_FAILURE(RecordOrFail(ledger, seq, AssetOpRecordKind::kRejected,
+                                             abortPlaceholder ? 0 : kRejectReason + static_cast<uint32_t>(seq)));
+    }
+    ASSERT_EQ(ledger.rejections_size(), kAssetOpMaxRejections);
+    EXPECT_EQ(ledger.rejections(0).seq(), 2u);
+    EXPECT_EQ(ledger.rejections(kAssetOpMaxRejections - 1).seq(), 128u);
+    EXPECT_EQ(AssetOpRejectionReason(ledger, 2), kRejectReason);
+    EXPECT_EQ(AssetOpRejectionReason(ledger, 128), kRejectReason + 128);
+    EXPECT_EQ(AssetOpRejectionReason(ledger, 127), 0u);  // 占位
+    EXPECT_EQ(Classify(ledger, 127), AssetOpSeqState::kRejected);
+    EXPECT_TRUE(ValidateAssetOpLedger(comp).empty()) << ValidateAssetOpLedger(comp);
+}
+
+// **这条用例钉的是一个刻意接受的退化,不是 bug,看到它失败不要"修"原因环。**
+//
+// 原因环挤满后重查被挤掉的那条业务拒绝,AssetOpRejectionReason 回 0,scene 答
+// REJECTED + reason 0 —— 与中止占位逐字不可区分。Go 的 FinalStatus
+// (go/shared/assetop/decide.go)对「RPCAbort + reason==0」判 StatusAborted,
+// 于是一条余额不足会以 ABORTED 终结。
+// 之所以接受:账务两者完全相同(B5 对 REJECTED / ABORTED 都是退次数、退帮贡、退限购,
+// docs/design/guild-phase2/05-economy.md 的处置表),唯一损失是订单文案。
+// 为这一行文案加 proto 字段要改协议 + 存档 + 两侧代码,不值 —— 完整代价换算写在
+// asset_op_ledger.cpp 的 InsertRejection 与 decide.go 的 FinalStatus 上,两边成对。
+TEST(AssetOpLedgerTest, LedgerEvictedRejectionReasonDegradesByDesign) {
+    PlayerAssetOpLedgerComp comp;
+    auto& ledger = MutableAssetOpStream(comp, kStream);
+    // 65 条真·业务拒绝:正好把最早的 seq 1 挤出环。
+    for (uint64_t seq = 1; seq <= static_cast<uint64_t>(kAssetOpMaxRejections) + 1; ++seq) {
+        ASSERT_NO_FATAL_FAILURE(
+            RecordOrFail(ledger, seq, AssetOpRecordKind::kRejected, kRejectReason + static_cast<uint32_t>(seq)));
+    }
+    ASSERT_EQ(ledger.rejections_size(), kAssetOpMaxRejections);
+    ASSERT_EQ(ledger.rejections(0).seq(), 2u);
+
+    // 结局这一半**不退化**:仍然是拒绝,永远不会翻成应用。退的只有原因。
+    EXPECT_EQ(Classify(ledger, 1), AssetOpSeqState::kRejected);
+    EXPECT_EQ(AssetOpRejectionReason(ledger, 1), 0u);
+
+    // 与中止占位不可区分,正是这一点让 Go 把它判成 ABORTED:两个 seq 答复完全一致。
+    ASSERT_NO_FATAL_FAILURE(RecordOrFail(ledger, 200, AssetOpRecordKind::kRejected, 0));  // 中止占位
+    EXPECT_EQ(Classify(ledger, 200), Classify(ledger, 1));
+    EXPECT_EQ(AssetOpRejectionReason(ledger, 200), AssetOpRejectionReason(ledger, 1));
+    EXPECT_TRUE(ValidateAssetOpLedger(comp).empty()) << ValidateAssetOpLedger(comp);
 }
 
 TEST(AssetOpLedgerTest, LedgerRejectionInsertedOutOfOrderStaysSorted) {
@@ -334,10 +402,97 @@ TEST(AssetOpLedgerTest, LedgerWatermarkOverflowInvalid) {
     raw->set_watermark(kUint64Max - 1000);
     raw->set_max_seq(kUint64Max - 1000);
 
+    // 注意:这里 watermark 和 max_seq 一起抬高,先被 watermark 守卫判 kInvalid,
+    // 走不到 ExceedsJumpCap 的溢出分支;那条分支由 LedgerJumpCapNearUint64Max 单独压。
     EXPECT_EQ(Classify(*raw, kUint64Max - 999), AssetOpSeqState::kInvalid);
     EXPECT_EQ(Classify(*raw, 1), AssetOpSeqState::kInvalid);
     EXPECT_FALSE(RecordAssetOpOutcome(*raw, kEpoch, kUint64Max - 999, AssetOpRecordKind::kApplied, 0));
     EXPECT_FALSE(ValidateAssetOpLedger(comp).empty());
+}
+
+// 与 go/shared/assetop/classify_test.go 的用例 "max_seq 接近溢出时上限不可表示,不算跳号"
+// (classify_test.go:70 的 nearOverflow)成对:max_seq + 1024 不可表示时,C++ ExceedsJumpCap
+// 与 Go ClassifySeq 必须站同一侧(都不判跳号)。两边结论相反的话,同一份账本会出现
+// "Go 判 JumpTooFar 回 UNKNOWN、scene 判 AheadOfWindow 照常记账"的撕裂,资产操作永久卡住。
+TEST(AssetOpLedgerTest, LedgerJumpCapNearUint64Max) {
+    PlayerAssetOpLedgerComp comp;
+    auto* raw = AddRawStream(comp, kStream, kEpoch);
+    raw->set_watermark(0);
+    raw->set_max_seq(kUint64Max - 1);
+
+    // 这本账本按 ValidateAssetOpLedger 的判据是**合法**的(watermark 没接近溢出、
+    // max_seq >= watermark),不会在加载时被 fail-closed,所以溢出分支确实可达。
+    // 真实流里到不了这个状态(max_seq <= watermark + 1024),只可能来自改库或存档损坏。
+    ASSERT_TRUE(ValidateAssetOpLedger(comp).empty()) << ValidateAssetOpLedger(comp);
+
+    // 上限 max_seq + 1024 不可表示 → 一律不判跳号,退回按窗口分类。
+    EXPECT_EQ(Classify(*raw, 2000), AssetOpSeqState::kAheadOfWindow);
+    EXPECT_EQ(Classify(*raw, kUint64Max), AssetOpSeqState::kAheadOfWindow);
+    // 窗口内的 seq 仍按位图答,不受 max_seq 影响(这里顺带压到第 1023 位)。
+    EXPECT_EQ(Classify(*raw, kAssetOpWindowBits), AssetOpSeqState::kUnseen);
+
+    // 守卫边界:max_seq 正好是 kUint64Max - 1024 时上限可表示(恰为 kUint64Max),
+    // 走的是非溢出分支,任何 seq 都不超上限 —— 若加法绕回会错判成 kJumpTooFar。
+    raw->set_max_seq(kUint64Max - kAssetOpMaxSeqJump);
+    EXPECT_EQ(Classify(*raw, kUint64Max), AssetOpSeqState::kAheadOfWindow);
+    EXPECT_EQ(Classify(*raw, 2000), AssetOpSeqState::kAheadOfWindow);
+}
+
+// 上一条用例从 Go↔C++ 对齐的角度压 ExceedsJumpCap;这一条只压守卫那一行自己的边界,
+// 把 max_seq 三个相邻取值排成一张表。为什么值得单列:那行守卫写错了也不会有人发现 ——
+// 少了它,max_seq + 1024 会静默绕回成一个很小的数,于是一个**巨大的** seq 反而被判成
+// "没超跳号上限"而被受理;账本随后按它滑窗,结局张冠李戴且全程零报错。
+//
+// 读表时注意一个反直觉点:max_seq == kUint64Max - 1024 时上限恰为 kUint64Max,
+// **没有任何 uint64 能超过它**,所以想在"上限仍可表示"这一侧断言 kJumpTooFar,
+// 必须再往下挪一格取 kUint64Max - 1025(上限 = kUint64Max - 1)。
+TEST(AssetOpLedgerTest, LedgerJumpCapOverflowGuardBoundary) {
+    PlayerAssetOpLedgerComp comp;
+    auto* raw = AddRawStream(comp, kStream, kEpoch);
+    raw->set_watermark(0);
+
+    // ① 刚好踏进不可表示区间的第一个 max_seq:守卫生效,任何 seq 都不判跳号。
+    raw->set_max_seq(kUint64Max - kAssetOpMaxSeqJump + 1);
+    ASSERT_TRUE(ValidateAssetOpLedger(comp).empty()) << ValidateAssetOpLedger(comp);  // 这本账本加载得进来
+    EXPECT_EQ(Classify(*raw, kUint64Max), AssetOpSeqState::kAheadOfWindow);
+    EXPECT_EQ(Classify(*raw, kUint64Max - kAssetOpMaxSeqJump), AssetOpSeqState::kAheadOfWindow);
+    EXPECT_EQ(Classify(*raw, kAssetOpWindowBits), AssetOpSeqState::kUnseen);  // 窗口内仍按位图答
+
+    // ② 区间另一侧的最后一个 max_seq:上限恰为 kUint64Max,同样无 seq 可超(见上文说明)。
+    raw->set_max_seq(kUint64Max - kAssetOpMaxSeqJump);
+    EXPECT_EQ(Classify(*raw, kUint64Max), AssetOpSeqState::kAheadOfWindow);
+
+    // ③ 再往下一格:上限 = kUint64Max - 1,这才是能真正观测到 kJumpTooFar 的位置。
+    //    等于上限不算超,超一个才算 —— 加法若绕回,这两行会一起翻。
+    raw->set_max_seq(kUint64Max - kAssetOpMaxSeqJump - 1);
+    EXPECT_EQ(Classify(*raw, kUint64Max), AssetOpSeqState::kJumpTooFar);
+    EXPECT_EQ(Classify(*raw, kUint64Max - 1), AssetOpSeqState::kAheadOfWindow);
+}
+
+// 钉 asset_op_ledger.cpp 里"Classify 已排除 watermark 接近溢出的账本,下面的
+// watermark + 1024 不会绕回"这句被断言成立、却没人守着的前提。它有**两条腿**:
+//   - 同纪元:Classify 的 watermark 守卫判 kInvalid,记账被前置挡住(LedgerWatermarkOverflowInvalid);
+//   - 纪元更大:Classify **不看** watermark(直接按空账本答 kUnseen),前提改由记账内部的
+//     整条流重置兜住 —— 重置把 watermark 归 0,之后那句加法才安全。这条腿就是本用例。
+// 任一条腿断了,那句加法都会静默绕回:巨大的 seq 被算成"在窗口内",位下标成垃圾值,
+// 结局落到别的 seq 的位上,且没有任何报错。
+TEST(AssetOpLedgerTest, LedgerHigherEpochResetsWatermarkNearOverflow) {
+    PlayerAssetOpLedgerComp comp;
+    auto* raw = AddRawStream(comp, kStream, kEpoch);
+    raw->set_watermark(kUint64Max - 1000);  // 已接近溢出:同纪元下 Classify 判 kInvalid
+    raw->set_max_seq(kUint64Max - 1000);
+    ASSERT_EQ(Classify(*raw, 1), AssetOpSeqState::kInvalid);
+
+    // 纪元更大:绕过 watermark 守卫,按空账本判 kUnseen,于是前置通过、真的会去记账。
+    ASSERT_EQ(Classify(*raw, kAssetOpWindowBits, 200), AssetOpSeqState::kUnseen);
+    ASSERT_TRUE(RecordAssetOpOutcome(*raw, 200, kAssetOpWindowBits, AssetOpRecordKind::kApplied, 0));
+
+    // 记账前先整条流重置,所以那句加法看到的是 watermark = 0,不是 kUint64Max - 1000。
+    EXPECT_EQ(raw->watermark(), 0u);
+    EXPECT_EQ(raw->max_seq(), kAssetOpWindowBits);
+    EXPECT_EQ(raw->stream_epoch(), 200u);
+    EXPECT_EQ(Classify(*raw, kAssetOpWindowBits, 200), AssetOpSeqState::kApplied);
+    EXPECT_TRUE(ValidateAssetOpLedger(comp).empty()) << ValidateAssetOpLedger(comp);
 }
 
 TEST(AssetOpLedgerTest, LedgerStreamsSortedUnique) {

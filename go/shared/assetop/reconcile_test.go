@@ -447,6 +447,8 @@ func TestNewLoopRejectsBadConfig(t *testing.T) {
 		mutate func(*LoopConfig)
 	}{
 		{"预算超过租约", func(c *LoopConfig) { c.OpBudget = 9 * time.Second }},
+		// 预算连落库预留都装不下:投递的 ctx 一诞生就过期,循环会空转而不报错。
+		{"预算装不下落库", func(c *LoopConfig) { c.OpBudget = settleBudget }},
 		{"Workers 为 0", func(c *LoopConfig) { c.Workers = 0 }},
 		{"Workers 超上限", func(c *LoopConfig) { c.Workers = maxWorkers + 1 }},
 		{"Batch 小于 Workers", func(c *LoopConfig) { c.Batch = 1; c.Workers = 4 }},
