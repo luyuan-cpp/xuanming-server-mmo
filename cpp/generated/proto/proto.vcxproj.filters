@@ -686,6 +686,51 @@
     <ClInclude Include="scene\player_movement.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="battle\battle_data.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\battle_data.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\battle_node.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\battle_node.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\player_battle.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="battle\player_battle.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="client_rpc_router\client_rpc_router.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="client_rpc_router\client_rpc_router.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\component\battle_comp.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\database\bag_quest_mail_data.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="common\event\battle_event.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="contracts\kafka\match_event.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="match\match_service.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="match\match_service.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="trade\trade_table.grpc.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="scene\player_bag.pb.cc" />

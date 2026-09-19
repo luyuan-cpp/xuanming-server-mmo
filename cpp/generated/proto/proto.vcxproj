@@ -420,5 +420,20 @@
     <ClInclude Include="scene\player_mission.pb.h" />
     <ClCompile Include="scene\player_activity.pb.cc" />
     <ClInclude Include="scene\player_activity.pb.h" />
+    <ClInclude Include="battle\battle_data.pb.h" />
+    <ClInclude Include="battle\battle_data.grpc.pb.h" />
+    <ClInclude Include="battle\battle_node.pb.h" />
+    <ClInclude Include="battle\battle_node.grpc.pb.h" />
+    <ClInclude Include="battle\player_battle.pb.h" />
+    <ClInclude Include="battle\player_battle.grpc.pb.h" />
+    <ClInclude Include="client_rpc_router\client_rpc_router.pb.h" />
+    <ClInclude Include="client_rpc_router\client_rpc_router.grpc.pb.h" />
+    <ClInclude Include="common\component\battle_comp.pb.h" />
+    <ClInclude Include="common\database\bag_quest_mail_data.pb.h" />
+    <ClInclude Include="common\event\battle_event.pb.h" />
+    <ClInclude Include="contracts\kafka\match_event.pb.h" />
+    <ClInclude Include="match\match_service.pb.h" />
+    <ClInclude Include="match\match_service.grpc.pb.h" />
+    <ClInclude Include="trade\trade_table.grpc.pb.h" />
   </ItemGroup>
 </Project>
