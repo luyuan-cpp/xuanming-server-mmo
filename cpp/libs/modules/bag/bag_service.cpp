@@ -1,5 +1,7 @@
 #include "bag_service.h"
 
+#include <cstddef> // std::size_t — RemoveItemsByGuid 半截批次的计数
+
 #include "engine/core/error_handling/error_handling.h"
 #include "engine/core/macros/return_define.h"
 #include "table/proto/tip/asset_error_tip.pb.h" // kAssetFrozen / kAssetInvalidBundle — 按 guid 扣出的错误码
@@ -381,8 +383,16 @@ uint32_t BagService::RemoveItemsByGuid(
 	const std::vector<Guid> &guids,
 	TransactionType txType,
 	uint64_t correlationId,
-	std::vector<DestroyedInstance> *removedOut)
+	std::vector<DestroyedInstance> *removedOut,
+	bool *mutated)
 {
+	// 与 AddItems 同一纪律:先一律置 false,调用方据此区分"一件没碰"(RETRY /
+	// REJECTED,不记资产变更)与"已经销毁了几件"(必须记 APPLIED + partial)。
+	if (mutated != nullptr)
+	{
+		*mutated = false;
+	}
+
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
 	// 理由同 RemoveItem:迁移在途时源端把实例销毁,目标端拿到的快照里那件东西还在,
 	// 等于凭空多出来一件;而交易库那侧已经按"扣出成功"入了托管快照 —— 一件装备
@@ -411,6 +421,7 @@ uint32_t BagService::RemoveItemsByGuid(
 	// 销毁一件就记一件,而不是全部销毁完再统一记:万一中途真的失败了(预检已经
 	// 排除了所有数据可触发的原因,只剩编程错误),已经消失的那几件仍然留得下
 	// item_uuid —— 那正是最需要能查的情形。
+	std::size_t removedCount = 0;
 	for (const auto &item : removable)
 	{
 		const uint32_t result = bag.RemoveItem(item.guid);
@@ -418,11 +429,25 @@ uint32_t BagService::RemoveItemsByGuid(
 		{
 			// 预检刚刚确认过每个 guid 都在包里且互不重复,走到这里只可能是两层
 			// 状态不自洽的编程错误。此刻批次已经半截,没有回滚手段,必须吼出来。
+			//
+			// **返回的既不是 kAssetFrozen 也不是 kAssetInvalidBundle**,而 mutated 已经
+			// 在前几轮置 true(第一件就失败时仍为 false = 确实一件没碰)。调用方必须
+			// 靠 mutated 而不是返回值来判断要不要记账:把半截批次当成"一件不扣"去
+			// RETRY,玩家那几件装备就永久消失且账本上不留痕(04-asset-channel.md §4.33)。
 			LOG_ERROR << "BagService::RemoveItemsByGuid: RemoveItem failed for guid " << item.guid
 					  << " (config " << item.configId << ") right after ReserveForBatchRemove "
 					  << "succeeded (programming error); the batch is now partially removed. "
-					  << "player=" << bag.PlayerGuid() << " correlation_id=" << correlationId;
+					  << "player=" << bag.PlayerGuid() << " correlation_id=" << correlationId
+					  << " removed_before_failure=" << removedCount;
 			return result;
+		}
+
+		// 实例已经没了 —— 从这一刻起这次调用就不再是"零改动"。置位必须在落流水
+		// 之前,流水投递失败不会让实例复活。
+		++removedCount;
+		if (mutated != nullptr)
+		{
+			*mutated = true;
 		}
 
 		TransactionLogSystem::LogItemDestroy(

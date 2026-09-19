@@ -29,9 +29,18 @@ constexpr int kAssetOpWindowWords = 16;
 static_assert(kAssetOpWindowWords * 64 == static_cast<int>(kAssetOpWindowBits),
               "窗口位数必须正好由 16 个 fixed64 覆盖");
 
-// 拒绝原因环与部分发放名单的条数上限。两者只用于展示与审计:被挤掉的条目会让原因退化成
-// 0(Go 按"通用拒绝"映射),不影响"某 seq 是 APPLIED 还是 REJECTED"这个正确性判定。
+// 拒绝原因环的条数上限。它只用于展示:被挤掉的条目让原因退化成 0(Go 按"通用拒绝"映射),
+// 不影响"某 seq 是 APPLIED 还是 REJECTED"这个正确性判定。
 constexpr int kAssetOpMaxRejections = 64;
+
+// 部分发放名单的条数上限(§4.33)。它**不是**纯展示:被挤掉之后,对同一 seq 的重查会答
+// APPLIED 且 partial = false,只看这一次答复的话,Go 会把它当成干净成功去做对侧入账。
+// 之所以仍可接受(§4.33 明说"即使 64 条环被挤掉"):
+//   1) 人工补偿的依据是记账当时那条 ERROR 日志([AssetOp] partial …),不依赖本名单;
+//   2) 首次答复一定带 partial = true,Go 把它粘在行上的 last_reason 里,
+//      `go/shared/assetop/decide.go:92` 判 `res.Partial || op.LastReason == ReasonPartialApplied`,
+//      所以"曾见 partial"不会因为这里被挤掉而丢失。
+// 真正要丢,得是"首次答复没送到 Go" 且 "同纪元同窗口内又攒了 64 条以上部分发放"同时成立。
 constexpr int kAssetOpMaxPartialSeqs = 64;
 
 // 同纪元内允许的跳号上限:seq <= max_seq + 1024。超过一律 fail-closed(调用方回 UNKNOWN、

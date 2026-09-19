@@ -10,8 +10,10 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <filesystem>
 #include <string>
 #include <string_view>
+#include <system_error>
 
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/currency/comp/player_currency_comp.h"
@@ -32,6 +34,11 @@
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
+// 配表目录与格式。声明照 cpp/generated/table/code/item_table.cpp:7-8 的写法前置,
+// 不为这两个函数去拉 engine/config 的整份头。
+std::string GetConfigDir();
+bool UseProtoBinaryTables();
+
 namespace
 {
 // 夹具密钥:32 字节固定串(§4.32 要求 >= 32 字节,短于此视同未配)。只在测试进程内存在。
@@ -46,13 +53,33 @@ int64_t FakeNowMs()
 	return g_fakeNowMs;
 }
 
-// 假存盘:只计数,**不**更新快照(快照要由用例显式 CompleteFakeSave 模拟落盘回调)。
+// 模拟一次落盘回调到达:把当前账本原样拷进"最后一次成功写入 Redis 的玩家数据"。
+void CaptureLedgerSnapshot(entt::entity player)
+{
+	PlayerAllData persisted;
+	persisted.mutable_player_database_data()->mutable_asset_op_ledger()->CopyFrom(
+		tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player));
+	tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player).Replace(persisted);
+}
+
+// 假存盘:只计数,回报"确实压了一次写",**不**更新快照
+// (快照要由用例显式 CompleteFakeSave 模拟落盘回调)。
 int g_persistCalls = 0;
-bool g_persistWrote = true;
 bool FakePersist(entt::entity /*player*/)
 {
 	++g_persistCalls;
-	return g_persistWrote;
+	return true;
+}
+
+// 另一种假存盘:模拟"脏比较判定与上次落盘逐字段相等,本次不写"——盘上**已经**是这份,
+// 所以先把快照追平再返回 false。专门用来覆盖 PersistAndProbeDurable 的 !wrote 分支:
+// 不写盘也必须回 durable=true,且不该打那条兜底 ERROR。
+int g_persistSkippedCalls = 0;
+bool FakePersistSkippedButOnDisk(entt::entity player)
+{
+	++g_persistSkippedCalls;
+	CaptureLedgerSnapshot(player);
+	return false;
 }
 
 // 假密钥查表:任何 caller 都用同一把夹具密钥;"流 ↔ caller" 白名单由 asset_op_auth 判。
@@ -78,10 +105,23 @@ uint32_t FakeAddCurrency(entt::entity player, CurrencyType type, int64_t amount,
 
 // Item 表随 currency_test 部署与否不确定(该工程原本不碰配表)。没有就跳过物品用例,
 // 而不是让它们以"表为空"的假象通过。
+//
+// **必须先判文件存在再 Load()**:`ItemTableManager::Load` 无条件走 `File2String`,
+// 而 `file2string.cpp:19` 在打不开文件时是 `LOG_FATAL` —— muduo 的 FATAL 直接
+// `abort()`(`Logging.cc:205`),会把整个 currency_test 进程连同 CurrencyTest* /
+// ClientGmGateTest* 一起打死,try/catch 也接不住。currency_test 的 main 不像
+// bag_test 那样调 `test_config::FindAndLoadTestConfig`,`GetConfigDir()` 因此是空串,
+// 路径退化成 CWD 下的 item.json,而产物目录是 build/cpp/tests/ —— 默认就是"打不开"。
 bool ItemTableAvailable()
 {
 	static const bool available = []
 	{
+		const std::string path = GetConfigDir() + (UseProtoBinaryTables() ? "item.pb" : "item.json");
+		std::error_code ec;
+		if (!std::filesystem::exists(path, ec))
+		{
+			return false; // 配表没随本工程部署:跳过物品用例,不是崩
+		}
 		ItemTableManager::Instance().Load();
 		return ItemTableManager::Instance().FindByIdSilent(10).first != nullptr;
 	}();
@@ -95,7 +135,7 @@ protected:
 	{
 		g_fakeNowMs = 1700000000000;
 		g_persistCalls = 0;
-		g_persistWrote = true;
+		g_persistSkippedCalls = 0;
 		g_addCurrencyCalls = 0;
 		g_addCurrencyFailAfter = -1;
 		g_addCurrencyFailCode = kAssetBlocked;
@@ -151,13 +191,7 @@ protected:
 	}
 
 	// 模拟一次落盘回调到达:把当前账本原样拷进"最后一次成功写入 Redis 的玩家数据"。
-	void CompleteFakeSave()
-	{
-		PlayerAllData persisted;
-		persisted.mutable_player_database_data()->mutable_asset_op_ledger()->CopyFrom(
-			tlsEcs.actorRegistry.get<PlayerAssetOpLedgerComp>(player_));
-		tlsEcs.actorRegistry.get_or_emplace<PlayerLastPersistedSnapshotComp>(player_).Replace(persisted);
-	}
+	void CompleteFakeSave() { CaptureLedgerSnapshot(player_); }
 
 	const AssetOpStreamLedger* Ledger(AssetOpStream stream) const
 	{
@@ -554,6 +588,56 @@ TEST_F(AssetOpSystemTest, DebitBundleInvalidRecorded)
 	// 已记账:换成合法包重投同 seq,仍然是拒绝。
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, CallDebit(1, 30).outcome());
 	EXPECT_EQ(100u, Gold());
+
+	// 2 条货币同样违反 Debit v1 的"恰好 1 条货币、0 件物品"(§4.14.2 点名的第二个子例);
+	// 换 seq 2,免得撞上已记账的 seq 1。
+	auto twoCurrencies = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 2, 30, TX_GUILD_DONATE);
+	auto* extra = twoCurrencies.mutable_bundle()->add_currencies();
+	extra->set_currency_type(kCurrencyDiamond);
+	extra->set_amount(5);
+	SignForTest("debit", twoCurrencies);
+	::AssetOpResponse twoResponse;
+	PlayerAssetOpSystem::Debit(twoCurrencies, twoResponse);
+
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, twoResponse.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), twoResponse.reason().id());
+	EXPECT_EQ(100u, Gold());
+	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, CallDebit(2, 30).outcome()) << "已记账";
+	EXPECT_EQ(100u, Gold());
+}
+
+// 未进签名串的 P2 字段(item_uuids / pet_id)必须被**忽略**,而不是记成终局拒绝:
+// 记了的话,同网段任意进程在一条合法签名的请求上追加 pet_id 重发,就能把这条 seq
+// 永久钉成 REJECTED,玩家那笔真实捐献再也扣不成。详见 HasUnsupportedP2Fields 的注释。
+TEST_F(AssetOpSystemTest, UnsignedP2FieldsIgnoredNotRecorded)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+
+	// 攻击者拿到的是一条合法请求:先按真实载荷签名,再追加不进签名串的字段。
+	auto tampered = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_DEBIT, 1, 30, TX_GUILD_DONATE);
+	SignForTest("debit", tampered);
+	tampered.mutable_bundle()->set_pet_id(1);
+	::AssetOpResponse tamperedResponse;
+	PlayerAssetOpSystem::Debit(tampered, tamperedResponse);
+
+	EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, tamperedResponse.outcome()) << "签名仍然通过,但载荷不认";
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), tamperedResponse.reason().id());
+	EXPECT_EQ(100u, Gold());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_DEBIT)) << "未记账:结局不得被篡改包钉死";
+	EXPECT_EQ(0, g_persistCalls);
+
+	// 真实的那笔仍然扣得成 —— 这正是"不记账"要保住的东西。
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
+	EXPECT_EQ(70u, Gold());
+
+	// item_uuids 同理(Credit 方向也一样判在信封档)。
+	GiveBags();
+	auto withUuids = MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP);
+	withUuids.mutable_bundle()->add_item_uuids(123456789);
+	const auto uuidResponse = CallCredit(withUuids);
+	EXPECT_EQ(ASSET_OP_OUTCOME_UNKNOWN, uuidResponse.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetInvalidBundle), uuidResponse.reason().id());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT));
 }
 
 TEST_F(AssetOpSystemTest, CreditUnknownItemRejected)
@@ -698,20 +782,40 @@ TEST_F(AssetOpSystemTest, ResaveThrottle)
 	EXPECT_EQ(2, g_persistCalls) << "过了限频窗口才允许再请求一次存盘";
 }
 
-TEST_F(AssetOpSystemTest, SkippedSaveMeansDurable)
+// 快照已含该结局时,重查直接从快照答 durable,**不**再请求存盘。
+TEST_F(AssetOpSystemTest, AlreadyDurableSkipsPersist)
 {
 	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
 	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
 	CompleteFakeSave();
 
-	// 脏比较判定"与上次落盘逐字段相等"→ SavePlayerToRedis 返回 false。
-	// 那不是"没落盘",而是"盘上已经是这份",durable 必须为真。
-	g_persistWrote = false;
-	g_fakeNowMs += kAssetOpResaveMinIntervalMs;
+	g_fakeNowMs += kAssetOpResaveMinIntervalMs; // 限频窗口已过,仍不该触发存盘
+	const int before = g_persistCalls;
 
 	const auto response = CallDebit(1, 30);
 	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, response.outcome());
 	EXPECT_TRUE(response.durable());
+	EXPECT_EQ(before, g_persistCalls) << "已 durable 就不该再请求存盘";
+}
+
+// 脏比较判定"与上次落盘逐字段相等"→ SavePlayerToRedis 返回 false。
+// 那不是"没落盘",而是"盘上已经是这份",durable 必须为真(§4.6)。
+// 用 FakePersistSkippedButOnDisk 才能真正走到这条分支:快照若已含结局,
+// PersistAndProbeDurable 根本不会被调用。
+TEST_F(AssetOpSystemTest, SkippedSaveMeansDurable)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome());
+	ASSERT_FALSE(CallDebit(1, 30).durable()) << "落盘回调还没到";
+
+	// 换成"不写盘,但盘上已经是这份"的假存盘,并放开限频窗口。
+	PlayerAssetOpSystem::SetPersistFnForTest(&FakePersistSkippedButOnDisk);
+	g_fakeNowMs += kAssetOpResaveMinIntervalMs;
+
+	const auto response = CallDebit(1, 30);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, response.outcome());
+	EXPECT_TRUE(response.durable()) << "不写盘 ≠ 没落盘";
+	EXPECT_EQ(1, g_persistSkippedCalls) << "确实走到了 PersistAndProbeDurable";
 }
 
 TEST_F(AssetOpSystemTest, AbortDurableAfterSave)

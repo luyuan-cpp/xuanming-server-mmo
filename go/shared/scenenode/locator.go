@@ -17,17 +17,22 @@ const SceneNodeRpcPrefix = "SceneNodeService.rpc/"
 
 // locationKeyFormat 是玩家位置键的格式串。
 //
-// **这不是仓内第 6 份字面量,而是 Go 侧 shared 的收口点**:同一串跨运行时契约
-// 目前另有 5 份实现,改格式必须 6 处同改(改错的表现是静默定位不到人):
+// **这不是仓内第 7 份字面量,而是 Go 侧 shared 的收口点**:同一串跨运行时契约
+// 目前另有 6 份实现,改格式必须 7 处同改(改错的表现是静默定位不到人):
 //
-//	go/match/internal/playercontract/playercontract.go        LocationKey
+//	go/login/internal/logic/clientplayerlogin/player_class_backfill.go:57
+//	                                                          backfillPlayerClassScript 的 KEYS[4]
+//	go/match/internal/playercontract/playercontract.go:50     LocationKey
 //	go/scene_manager/internal/logic/changesceneutil.go:18-20  getPlayerLocationKey(写者)
 //	tools/merge_zone/scene_hot_state.go:51                    playerLocationKeyFmt
-//	cpp/libs/services/scene/player/system/player_team.cpp:39  kPlayerLocationKeyFmt
+//	cpp/libs/services/scene/player/system/player_team.cpp:40  kPlayerLocationKeyFmt
 //	cpp/nodes/battle/logic/battle_room_manager.cpp:1680       内联 GET
 //
-// 两个 Go 服务(match / scene_manager)本可以改成引用本包,但它们不在本批的文件
-// 归属里;后续批次把它们转调过来之后,Go 侧就只剩本处 + C++ 两份。
+// login 那处不是顺带引用:它把这个键当作 Lua CAS 脚本的第 4 个 KEY,用来判断
+// 「角色是否仍在场」,格式改错会把在场角色当成离线档回写存档。
+//
+// 三个 Go 服务(login / match / scene_manager)本可以改成引用本包,但它们不在本批
+// 的文件归属里;后续批次把它们转调过来之后,Go 侧就只剩本处 + C++ 两份。
 // 同族键 player:{id}:owner_epoch / player:{id}:handoff 的契约在 shared/ownerepoch。
 const locationKeyFormat = "player:%d:location"
 
@@ -75,6 +80,11 @@ var (
 	// ErrNodeUnknown:位置记录里的节点在镜像里找不到,或同身份多条注册被拒选,
 	// 或镜像还没完成首次全量同步。共同点是「不知道该发给谁」。
 	ErrNodeUnknown = errors.New("scenenode: scene node not registered or ambiguous")
+	// ErrNodeAmbiguous:同一 (zone, node) 身份在镜像里有多条注册,任何一条都不能
+	// 被安全选中。**包着 ErrNodeUnknown**,所以 errors.Is(err, ErrNodeUnknown) 与
+	// IsNoHolder 的语义都不变,调用方不必跟着改;单独立一个哨兵只为把指标与日志
+	// 分开 —— 这一档是部署/租约事故(两个进程抢同一个身份),不是普通的节点掉线。
+	ErrNodeAmbiguous = fmt.Errorf("%w: 节点身份歧义", ErrNodeUnknown)
 	// ErrAwaitingPlacement:跨 zone 交接已放行、目标 zone 还没落点
 	// (node_id 为空且 owner_epoch != 0,见 proto/scene_manager/storage.proto:24-26
 	// 与 scene_manager enterscenelogic.go 的 awaitingPlacement)。
@@ -177,13 +187,20 @@ func (l *Locator) Resolve(ctx context.Context, playerID uint64) (Target, error) 
 	if !l.Watcher.Synced() {
 		// 镜像还没建起来,查什么都是"未注册"。明确说出真实原因,别让运维把
 		// 启动窗口里的正常现象当成节点掉线。
-		l.Metrics.ObserveResolve(ResolveNodeUnknown)
+		l.Metrics.ObserveResolve(ResolveMirrorUnsynced)
 		return Target{}, fmt.Errorf("%w: 节点镜像尚未完成首次全量同步", ErrNodeUnknown)
 	}
 
 	endpoint, err := l.Watcher.EndpointOf(loc.GetZoneId(), loc.GetNodeId())
 	if err != nil {
-		l.Metrics.ObserveResolve(ResolveNodeUnknown)
+		// 歧义(脑裂)与"查无此节点"(掉线)分开计数:两者的运维处置不同。
+		// 错误仍按 §4.18 第 3 步的原样式包 ErrNodeUnknown,所以调用方侧
+		// errors.Is / IsNoHolder 的行为一个字都没变。
+		if errors.Is(err, ErrNodeAmbiguous) {
+			l.Metrics.ObserveResolve(ResolveNodeAmbiguous)
+		} else {
+			l.Metrics.ObserveResolve(ResolveNodeUnknown)
+		}
 		return Target{}, fmt.Errorf("%w: %v", ErrNodeUnknown, err)
 	}
 

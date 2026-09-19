@@ -277,6 +277,8 @@ TEST(AssetOpLedgerTest, LedgerPartialRecorded) {
     EXPECT_EQ(ledger.partial_seqs(0), 1u);
 }
 
+// §4.33 点名的 `LedgerPartialSeqsCapAndValidate` 按关注点拆成两个用例:环上限 + 滑窗剪枝在
+// 这里,Validate 判据在下面的 `LedgerValidatePartialSeqs`,断言合起来与规格等价。
 TEST(AssetOpLedgerTest, LedgerPartialRingCapAndPrune) {
     PlayerAssetOpLedgerComp comp;
     auto& ledger = MutableAssetOpStream(comp, kStream);
@@ -286,6 +288,8 @@ TEST(AssetOpLedgerTest, LedgerPartialRingCapAndPrune) {
     ASSERT_EQ(ledger.partial_seqs_size(), kAssetOpMaxPartialSeqs);
     EXPECT_EQ(ledger.partial_seqs(0), 7u);
     EXPECT_EQ(ledger.partial_seqs(kAssetOpMaxPartialSeqs - 1), 70u);
+    // 被挤掉的 seq 1 重查会答 partial = false。这是 §4.33 规定的行为,不是本层的漏判:
+    // 兜底在首次答复 + Go 行上粘着的 last_reason(见 asset_op_ledger.h kAssetOpMaxPartialSeqs)。
     EXPECT_FALSE(IsAssetOpPartial(ledger, 1));
     EXPECT_TRUE(IsAssetOpPartial(ledger, 7));
 
@@ -471,6 +475,20 @@ TEST(AssetOpLedgerTest, LedgerValidateStreamOrderAndRange) {
     PlayerAssetOpLedgerComp zero;
     AddRawStream(zero, ASSET_OP_STREAM_UNSPECIFIED, kEpoch);
     EXPECT_FALSE(ValidateAssetOpLedger(zero).empty());
+
+    // proto3 开放枚举:不认识的值会原样留在字段里,必须判损坏。判据走 AssetOpStream_IsValid,
+    // 所以将来 proto 追加合法流时这条仍只拦"真的不在枚举里"的值,不会误伤新流。
+    PlayerAssetOpLedgerComp unknown;
+    AddRawStream(unknown, static_cast<AssetOpStream>(99), kEpoch);
+    EXPECT_FALSE(ValidateAssetOpLedger(unknown).empty());
+
+    // 枚举当前的最大合法流本身必须通过(写死上界的写法会在这里退化成"新流一律损坏")。
+    PlayerAssetOpLedgerComp maxStream;
+    {
+        auto& ledger = MutableAssetOpStream(maxStream, static_cast<AssetOpStream>(AssetOpStream_MAX));
+        ASSERT_NO_FATAL_FAILURE(RecordOrFail(ledger, 1, AssetOpRecordKind::kApplied));
+    }
+    EXPECT_TRUE(ValidateAssetOpLedger(maxStream).empty()) << ValidateAssetOpLedger(maxStream);
 }
 
 TEST(AssetOpLedgerTest, LedgerValidateRejectionOutOfWindow) {
@@ -506,6 +524,7 @@ TEST(AssetOpLedgerTest, LedgerValidateRejectionsNotSorted) {
     EXPECT_FALSE(ValidateAssetOpLedger(comp).empty());
 }
 
+// §4.33 `LedgerPartialSeqsCapAndValidate` 的后半(见 `LedgerPartialRingCapAndPrune` 的说明)。
 TEST(AssetOpLedgerTest, LedgerValidatePartialSeqs) {
     PlayerAssetOpLedgerComp notApplied = BuildValidComp();
     notApplied.mutable_streams(0)->set_partial_seqs(0, 5);  // seq 5 是 REJECTED

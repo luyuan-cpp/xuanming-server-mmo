@@ -74,6 +74,11 @@ type Store interface {
 	//                   durable=?, last_outcome=?, last_reason=?, updated_ms=?
 	//    WHERE op_id=? AND status=<pending> AND lease_token=?
 	// 带回领取令牌是为了:租约已经被别人抢走时,自己这次的结果不该再写回去。
+	//
+	// last_reason 照传进来的 res.Reason 写即可,**不要**自行"改回最新原因":
+	// 一旦它是 ReasonPartialApplied(27007),本包就不会再往里传别的值
+	// (见 carryPartialReason),那个码是部分发放在 partial_seqs 环被挤掉之后的
+	// 唯一证据,业务方各写各的会把它抹掉。
 	Reschedule(ctx context.Context, op Op, nextAttemptMs uint64, res Result, nowMs uint64) error
 }
 
@@ -436,13 +441,39 @@ func (l *Loop) finalize(ctx context.Context, op Op, rpc RPC, res Result, nowMs u
 }
 
 // reschedule 推进下一次投递时刻。
+//
+// 写库前过一道 carryPartialReason:last_reason 对 27007 必须是粘性的。
+// 返回给调用方的仍是**本次真实答复**(同步路径要按它告诉玩家发生了什么),
+// 被改的只有落到 outbox 行上的那一份。
 func (l *Loop) reschedule(ctx context.Context, op Op, nextAttemptMs uint64, res Result, nowMs uint64, reason string) (Processed, error) {
-	if err := l.store.Reschedule(ctx, op, nextAttemptMs, res, nowMs); err != nil {
+	if err := l.store.Reschedule(ctx, op, nextAttemptMs, carryPartialReason(op, res), nowMs); err != nil {
 		l.metrics.incStoreError("reschedule")
 		return Processed{Result: res}, fmt.Errorf("assetop: 重排失败 op_id=%d: %w", op.OpID, err)
 	}
 	l.metrics.incReschedule(op.Stream, reason)
 	return Processed{Result: res}, nil
+}
+
+// carryPartialReason 让 outbox 行上的 last_reason 对「曾见部分发放」保持粘性。
+//
+// 规格 §4.33 把 op.LastReason 当成 partial_seqs 环被挤掉之后**唯一**的部分发放证据,
+// 但它给的机制(Reschedule 写 res.Reason)粘不住:传输失败(caller.go 返回 Result{})、
+// 本地 NOT_HERE、坏流号重排(ProcessOne 传 Result{})带的 Reason 都是 0,玩家下线一次
+// 或过一次图就能把 27007 抹平;之后 scene 若恰好不再回 partial,FinalStatus 两个分支
+// 都取不到证据,这一行会被当成 StatusApplied 终结并做**全额**对侧账。
+//
+// 代价是这一行之后不再记录更新的拒绝/重试原因(背包满之类)。那只是展示信息,日志与
+// assetop_rpc_total 里都还在;而抹掉 27007 造成的半额入账不可逆 —— 按 AGENTS §11.3,
+// 玩家资产路径取 fail-closed 的那一侧。
+//
+// 只作用于 Reschedule:Finalize 那一侧的 FinalStatus 直接读 op.LastReason,状态列不会
+// 因为 res.Reason 是 0 而判错,没必要再去动那条路径上的 reason(动了反而会把
+// 「Abort 且 reason==0 → StatusAborted」这条判定带偏)。
+func carryPartialReason(op Op, res Result) Result {
+	if op.LastReason == ReasonPartialApplied && res.Reason != ReasonPartialApplied {
+		res.Reason = ReasonPartialApplied
+	}
+	return res
 }
 
 // tryPersistedLedger 在玩家长期不在线时,从已落盘账本里把结局读回来。

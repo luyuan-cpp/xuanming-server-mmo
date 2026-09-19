@@ -304,19 +304,35 @@ dev.bat obs
 
 ---
 
-## 6. 生产 / k8s
+## 6. k8s:C++ 日志不经 stdout,由 sidecar 直接读文件
 
-本文只覆盖本机文件采集。搬到 k8s 前要按语言分开看:
+**背景:C++ 节点在 Linux 下不往 stdout 写业务日志。** `Node::AsyncOutput` 里调用控制台输出的那一句包在 `#ifdef WIN32` 内,
+容器里 muduo 的业务日志(包括 `LOG_FATAL` 的崩溃原因)只写 `/app/bin/logs/cpp_nodes/<节点>.*.log`。
+所以"读容器 stdout"的常规做法对 C++ 只能拿到 gate 的 `[gate_version]` 启动行和 gRPC / librdkafka 的 stderr,业务日志一条都采不到。
 
-- **Go 和 Java 走容器 stdout/stderr**,用 Alloy DaemonSet 的 `loki.source.kubernetes`(或 `discovery.kubernetes` + `loki.source.file` 读 `/var/log/pods`)即可,
-  `loki.process` 里这两种语言的解析段可以原样搬过去,标签改从 pod label 取。
-- **C++ 节点在 Linux 下不写 stdout。** `Node::AsyncOutput` 里调用控制台输出的那一句包在 `#ifdef WIN32` 内,
-  Linux/容器里 muduo 的业务日志(包括 `LOG_FATAL` 的崩溃原因)只写 `/app/bin/logs/cpp_nodes/*.log`,
-  而 `k8s_deploy.ps1` 把这个目录挂成 `emptyDir`,目前没有任何 sidecar 或 DaemonSet 读它。
-  照上面的做法采集,C++ 只能拿到 gate 的 `[gate_version]` 启动行和 gRPC/abseil 的 stderr,业务日志一条都采不到。
-  两条出路,代价都要先想清楚:一是加 sidecar 或把目录换成 hostPath/共享卷让 DaemonSet 读(emptyDir 随 Pod 销毁即丢,
-  sidecar 还得处理 muduo 的滚动文件名);二是改代码让 Linux 也输出到控制台(要走代码修改和编译流程)。
-- Loki 也要从单机文件存储换成对象存储加多副本。`docs/ops/log-management.md` 的「Production (K8s)」一节是总方针。
+**做法(2026-09-19 已落地):** 每个 C++ Pod 里跟一个 Alloy sidecar,和业务容器共享同一个 `node-logs` 卷(sidecar 侧只读),
+直接读那些 muduo 文件送进 Loki,全程不经过 stdout。
+
+- 生成与注入都在 `tools/scripts/k8s_deploy.ps1`:`New-CppLogSidecarConfigMapYaml` 生成解析规则(ConfigMap `cpp-log-sidecar`),
+  `New-CppLogSidecarContainerYaml` / `New-CppLogSidecarVolumeYaml` 注入容器与卷。gate / scene 的 Deployment、
+  Agones Fleet、以及跑在 infra namespace 的 battle 都会带上它。
+- 默认开启。`-NoCppLogSidecar` 关掉(关掉后生成的清单与加这功能之前完全一致);
+  `-LokiPushUrl` 指向已有的 Loki,留空则用 `deploy/k8s/manifests/infra/loki.yaml`
+  在 infra namespace 起的那套单副本 Loki(只有"留空且没关 sidecar"时才会部署它)。
+- **Agones 注意:** GameServer 的 Pod 有多个容器时必须用 `spec.template.spec.container` 指名哪个是游戏容器,
+  脚本在启用 sidecar 时会自动写这一行;少了它 Fleet 会被 Agones 拒掉。
+- 标签:`job=cpp_nodes` `lang=cpp` `service`(取自 muduo 文件名)`level` `zone`,外加 k8s 独有的 `namespace` / `pod`,
+  `pid` 放结构化元数据。和本机观测台(§3)对得上,同一个 Grafana 里可以混查。
+
+**这套方案没覆盖的部分,别误以为都进去了:**
+
+- 容器 stdout/stderr 上的东西 —— gate 的 `[gate_version]` 启动行、gRPC / abseil 和 librdkafka 的 stderr ——
+  sidecar 读不到(它只读共享卷里的文件)。要这些就另外上一个读 `/var/log/pods` 的 DaemonSet,
+  Go 和 Java 的 pod 日志也走那条路(它们确实走 stdout,本文 §2.1 / §2.3 的解析段可以原样搬,标签改从 pod label 取)。
+- `node-logs` 是 `emptyDir`,随 Pod 销毁即丢。Pod 被驱逐 / 重建时,还没被 sidecar 读走的尾部日志找不回来。
+  muduo 按 8MB 滚动且文件名带时间与 pid,长跑的 Pod 会在 emptyDir 里堆文件,必要时给它加 `sizeLimit` 或定期清理。
+- 单副本 + 文件存储的 Loki 只够 dev / 小规模 staging。生产要换对象存储加多副本,
+  `docs/ops/log-management.md` 的「Production (K8s)」一节是总方针。
 
 相关设计:`docs/design/distributed-tracing.md`(日志行里带上 `trace_id` 后,可以在 Grafana 里从日志跳到链路)、
 `docs/design/error-reporting.md`。

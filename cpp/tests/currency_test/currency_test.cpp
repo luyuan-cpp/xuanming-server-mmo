@@ -664,7 +664,8 @@ TEST(CurrencyTest, DeductFrozenReturnsAssetFrozen)
     auto player = CreateTestPlayer();
 
     CurrencySystem::AddCurrency(player, kCurrencyGold, 100);
-    // IsCrossZoneFrozen 就是 any_of<PlayerFrozenComp>(player_lifecycle.cpp:1999-2006)。
+    // PlayerLifecycleSystem::IsCrossZoneFrozen 就是 valid() + any_of<PlayerFrozenComp>
+    // (player_lifecycle.cpp,函数名定位;那个文件正被跨 zone 会话改着,行号写下来就过期)。
     tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 
     EXPECT_EQ(kAssetFrozen, CurrencySystem::DeductCurrency(player, kCurrencyGold, 30));
@@ -723,6 +724,20 @@ TEST(CurrencyTest, ProgrammingErrorsStillReturnInvalidParameter)
     EXPECT_EQ(kInvalidParameter, CurrencySystem::DeductCurrency(player, kCurrencyGold, 0));
     EXPECT_EQ(kInvalidParameter, CurrencySystem::DeductCurrency(player, kCurrencyGold, -5));
     EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyMax, 10));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::DeductCurrency(player, kCurrencyMax, 10));
+
+    // **判定顺序**:冻结 × 越界币种这个组合必须仍旧回 kInvalidParameter。
+    // 纯参数校验排在冻结之后的话,这里会拿到 RETRY 类的 kAssetFrozen,资产通道就会
+    // 对一个"解冻之后照样失败"的请求一直重投到超时 —— 那是一条只在两个条件同时
+    // 成立时才现形的缝,所以单独钉住。
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyMax, 10));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::DeductCurrency(player, kCurrencyMax, 10));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, 0));
+    // 同一个冻结玩家、合法币种合法数量 —— 这时才该是 kAssetFrozen,证明上面三条
+    // 不是"冻结判定被整个删掉了"。
+    EXPECT_EQ(kAssetFrozen, CurrencySystem::AddCurrency(player, kCurrencyGold, 10));
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
 
     DestroyTestPlayer(player);
 }

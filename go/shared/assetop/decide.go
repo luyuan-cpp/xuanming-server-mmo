@@ -79,9 +79,12 @@ func Decide(res Result, err error) Action {
 // 两处细节值得记住:
 //   - Abort 打在未见过的 seq 上时 scene 回 REJECTED 且 reason==0,这叫"中止占位",
 //     业务侧要**退还**先前预扣的东西;真正的业务拒绝(余额不足等)带非 0 reason。
-//   - 部分发放有两个来源:本次答复的 partial,以及行上记着的上次答复 reason
-//     (重投拿到的只读答复不再带 partial 标记)。漏看后者会把只发了一半的操作
-//     当成全额成功入账。
+//   - 部分发放有两个来源:本次答复的 partial,以及行上记着的上次答复 reason。
+//     它们不是两份同样的证据:只读答复只在 seq 还留在账本 partial_seqs 环里时才带
+//     partial(§4.9 第 4 步),环满 64 条或 watermark 右移过该 seq 就没了;之后
+//     op.LastReason 是**唯一**线索(§4.33),它的粘性由 reconcile.go 的
+//     carryPartialReason 维持。漏判的后果是把只发了一半的操作当成全额成功入账,
+//     而那笔差额没有任何线索可追。
 //
 // 只应在 Decide 返回 ActionFinalize 后调用;其它情况返回 StatusPending,
 // 调用方必须当成 bug 处理而不是照着写库(reconcile.go 就是这么做的)。

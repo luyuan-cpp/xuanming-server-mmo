@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
@@ -11,6 +12,7 @@ import (
 	"github.com/zeromicro/go-zero/core/logx"
 
 	"guild/internal/config"
+	"guild/internal/data"
 	guildkafka "guild/internal/kafka"
 	dspb "proto/data_service"
 	"shared/generated/table"
@@ -66,7 +68,21 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic(fmt.Errorf("failed to connect player locator Redis: %w", err))
 	}
 
-	db, err := sql.Open("mysql", c.MySQL.DataSource)
+	// 帮会写事务的锁等待封顶(设计 docs/design/guild-phase2/02-management.md §6.2a):
+	// InnoDB 默认 innodb_lock_wait_timeout=50,而 RPC 的 ctx 到期后 go-sql-driver 只是关掉连接 ——
+	// 服务端等锁的线程不跟着退出,会继续占着本事务已拿到的 guild 行锁,于是该帮会后续所有写
+	// 连锁超时,最长 50 秒。帮会写事务都是几条主键 / 索引语句,等锁超过 1 秒即视为异常长事务。
+	//
+	// 钉在代码里而不是 yaml:K8s ConfigMap 与本地 yaml 各改一遍,等于给"某个环境忘了改"留后门,
+	// 而这是正确性约束、不是部署偏好。解析失败一律拒启,且错误里不含 DSN 原文(它带口令)。
+	// -migrate 走 guild.go 里另一条不经过 ServiceContext 的路径,刻意不加该参数:
+	// DDL 等的是元数据锁(lock_wait_timeout),与行锁另有语义。
+	dsn, err := data.WithLockWaitTimeout(c.MySQL.DataSource)
+	if err != nil {
+		panic(fmt.Errorf("failed to build MySQL DSN: %w", err))
+	}
+
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		panic(fmt.Errorf("failed to connect MySQL: %w", err))
 	}
@@ -86,6 +102,13 @@ func NewServiceContext(c config.Config) *ServiceContext {
 			// 其它 topic 仍走 Hash 按 Key(player_id/gate_id)选分区,保证同一实体的
 			// 推送有序(项目不变量:kafka key = 业务实体 ID)。LeastBytes 忽略 Key。
 			Balancer: &kafkacmd.CommandPartitionBalancer{Fallback: &kafkago.Hash{}},
+			// 帮会变更推送是"至多一次的提示拉取"(internal/logic/push.go 文件头纪律 2):
+			// MaxAttempts=1 **不重试** —— 重试既可能让同一玩家的两条提示乱序,又会把
+			// logic.guildPushBudget(3s)整段吃光,而漏掉的人下次打开帮会界面拉一次就对齐了。
+			// WriteTimeout 与那个预算同值;BatchTimeout 若留默认 1s,每条推送都要白等一秒才成批发出。
+			BatchTimeout: 10 * time.Millisecond,
+			MaxAttempts:  1,
+			WriteTimeout: 3 * time.Second,
 			// kafka-go 的 RequiredAcks 零值是 RequireNone(fire-and-forget):
 			// 写进 socket 即返回 nil,broker 端 leader 切换/落盘前崩溃全部不可见,
 			// 于是 gate_push 依赖 WriteMessages 返回值的 fail-closed 语义形同虚设。

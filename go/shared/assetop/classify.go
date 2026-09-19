@@ -108,8 +108,12 @@ func ClassifySeq(l *componentpb.AssetOpStreamLedger, epoch, seq uint64) SeqState
 	if seq <= watermark {
 		return SeqBehindWindow
 	}
-	maxSeq := l.GetMaxSeq()
-	if maxSeq > math.MaxUint64-MaxSeqJump || seq > maxSeq+MaxSeqJump {
+	// 跳号上限,与 C++ ExceedsJumpCap(asset_op_ledger.cpp)逐字同义:max_seq 接近
+	// uint64 上限时 max_seq+1024 不可表示,此时**任何** seq 都不算超,继续往下走
+	// 窗口与位判定。这不是"放宽",而是两边必须站同一侧 —— 站反了,同一份账本
+	// (max_seq > 2^64-1024 只可能来自数据损坏或人工改库)在 Go 眼里永远 UNKNOWN、
+	// 行卡死终结不了,在 scene 眼里却照常给 APPLIED/REJECTED,而这种分叉线上是静默的。
+	if maxSeq := l.GetMaxSeq(); maxSeq <= math.MaxUint64-MaxSeqJump && seq > maxSeq+MaxSeqJump {
 		return SeqJumpTooFar
 	}
 	if seq > watermark+WindowBits {

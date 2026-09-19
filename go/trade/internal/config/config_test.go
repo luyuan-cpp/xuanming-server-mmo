@@ -3,7 +3,6 @@ package config
 import (
 	"os"
 	"regexp"
-	"strings"
 	"testing"
 	"time"
 
@@ -66,6 +65,14 @@ func TestEtcYamlContractValues(t *testing.T) {
 	if !c.ShouldAutoMigrate() {
 		t.Error("本地 dev 应启动期自动建表(Schema.AutoMigrate: true)")
 	}
+	// 位置键 player:{id}:location 在共享 Redis 的 DB 0(写者是 C++ scene / scene_manager)。
+	// 段名写错会被 go-zero 当未知键忽略 → Host 空 → Validate 拒绝起服,这里先在测试里点名。
+	if c.SharedRedis.Host == "" {
+		t.Error("SharedRedis.Host 为空:段名写错(必须逐字是 SharedRedis)或整段漏写")
+	}
+	if c.SharedRedis.DB != 0 {
+		t.Errorf("SharedRedis.DB = %d, want 0(位置键所在库)", c.SharedRedis.DB)
+	}
 }
 
 // TestEtcYamlZoneRewriteAnchors 钉住 go_services.ps1 -Zone 改写依赖的 yaml 形状(契约 §7):
@@ -92,8 +99,13 @@ func TestEtcYamlZoneRewriteAnchors(t *testing.T) {
 	if zoneLines[0][1] != "" {
 		t.Error("唯一的 ZoneId 必须是顶层键(-Zone 只改写第一处 ZoneId)")
 	}
-	if strings.Contains(text, "\nRedis:") {
-		t.Error("trade P1 不应声明共享 Redis 段(P1-10)")
+	// 顶层不许出现名为 Redis 的段:zrpc.RpcServerConf 已经有同名字段,conf.MustLoad 会直接报
+	// "conflict key Redis" 起不来。共享 Redis 一律写成 SharedRedis(与 config.Config 同名)。
+	if regexp.MustCompile(`(?m)^Redis:`).MatchString(text) {
+		t.Error("顶层不能有 `Redis:` 段:与 zrpc.RpcServerConf 的同名字段冲突,加载期报 conflict key Redis")
+	}
+	if !regexp.MustCompile(`(?m)^SharedRedis:`).MatchString(text) {
+		t.Error("缺少顶层 `SharedRedis:` 段:资产通道按 player:{id}:location 定位玩家所在 scene")
 	}
 }
 
@@ -110,6 +122,8 @@ func validConfig() Config {
 		Market: MarketConf{
 			Scope: ScopeZone, DefaultPageSize: 20, MaxPageSize: 20, MaxPage: 100, MaxFavoritesPerPlayer: 100,
 		},
+		// 共享 Redis 必填:资产通道靠 player:{id}:location 找玩家所在 scene。
+		SharedRedis: RedisConf{Host: "127.0.0.1:6379"},
 	}
 	c.ListenOn = "127.0.0.1:50800"
 	c.Timeout = 4000
@@ -152,6 +166,7 @@ func TestValidate(t *testing.T) {
 		{"MaxPage=0", func(c *Config) { c.Market.MaxPage = 0 }},
 		{"MaxFavoritesPerPlayer=0", func(c *Config) { c.Market.MaxFavoritesPerPlayer = 0 }},
 		{"DefaultPageSize>MaxPageSize", func(c *Config) { c.Market.DefaultPageSize = 21 }},
+		{"SharedRedis.Host 为空", func(c *Config) { c.SharedRedis.Host = "" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

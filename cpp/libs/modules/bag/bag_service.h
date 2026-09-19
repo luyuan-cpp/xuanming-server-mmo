@@ -142,15 +142,29 @@ public:
 	// txType 进流水(托管扣出传 TX_AUCTION_SELL),correlationId 传 listing_id。
 	// removedOut(可为 nullptr)按入参顺序给出销毁前抓拍的 (guid, config, size)。
 	//
-	// 返回:跨 zone 冻结期返回 kAssetFrozen(RETRY 类,一件不扣);预检不过返回
-	// kAssetInvalidBundle(REJECTED 类,一件不扣);其余 kSuccess。
+	// mutated(可为 nullptr)与 AddItems 的同名出参同一用途、同一纪律:**这次失败,
+	// 包到底动过没有**。函数开头一律先置 false。预检拒与冻结拒都是一件不扣
+	// (mutated 保持 false,调用方按 RETRY / REJECTED 记账,不记资产变更);
+	// commit 段中途失败则已有实例被销毁并落了流水,置 true —— 调用方**必须**按
+	// APPLIED + partial 记账转人工补偿,不许当成零改动重投(04-asset-channel.md
+	// §4.33:已改动却不记账 = 重复发放或永久少发)。
+	//
+	// 返回:
+	//   * 跨 zone 冻结期            -> kAssetFrozen(RETRY 类,一件不扣,mutated=false)
+	//   * 预检不过                  -> kAssetInvalidBundle(REJECTED 类,一件不扣,mutated=false)
+	//   * commit 段中途失败         -> Bag 层原始错误码(kBagDeleteItemFindGuid 等),
+	//                                 **批次已半截且无回滚**,mutated=true;预检已排除
+	//                                 全部数据可触发的原因,走到这里即两层状态不自洽的
+	//                                 编程错误,函数会打 ERROR。不要把它当"一件不扣"。
+	//   * 其余                      -> kSuccess
 	static uint32_t RemoveItemsByGuid(
 		entt::entity playerEntity,
 		Bag &bag,
 		const std::vector<Guid> &guids,
 		TransactionType txType = TX_AUCTION_SELL,
 		uint64_t correlationId = 0,
-		std::vector<DestroyedInstance> *removedOut = nullptr);
+		std::vector<DestroyedInstance> *removedOut = nullptr,
+		bool *mutated = nullptr);
 
 	// Orchestrated MergeAndCompact (背包整理):
 	//   frozen check → Bag::MergeAndCompact → transaction log per retired instance

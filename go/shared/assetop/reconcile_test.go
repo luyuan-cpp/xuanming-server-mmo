@@ -564,6 +564,61 @@ func TestPartialNotBookedCounterSide(t *testing.T) {
 	}
 }
 
+// 曾见部分发放之后,Reason 为 0 的重排(本地 NOT_HERE / 传输失败 / 坏流号)
+// 不得把行上的 27007 抹掉:partial_seqs 环被挤掉后它是唯一证据(规格 §4.33)。
+func TestReschedulePreservesPartialReason(t *testing.T) {
+	op := testOp(1)
+	op.Stream = assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT
+	op.LastReason = ReasonPartialApplied
+	store := newFakeStore(op)
+	applier := &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
+		// 玩家过图 / 离线:本地合成的 NOT_HERE,Reason 为 0。
+		return Result{Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE, Local: true}, nil
+	}}
+	loop, _ := newTestLoop(t, store, applier, nil)
+
+	processed, err := loop.ProcessOne(context.Background(), op)
+	if err != nil {
+		t.Fatalf("ProcessOne 出错: %v", err)
+	}
+	_, rescheduled := store.snapshot()
+	if len(rescheduled) != 1 {
+		t.Fatalf("应当重排一次,实际 %+v", rescheduled)
+	}
+	if rescheduled[0].Res.Reason != ReasonPartialApplied {
+		t.Fatalf("写回行上的 last_reason 应当仍是 %d,实际 %d", ReasonPartialApplied, rescheduled[0].Res.Reason)
+	}
+	// 返回给同步路径的仍是本次真实答复,不许被粘性改写。
+	if processed.Result.Reason != 0 {
+		t.Fatalf("返回值应当保留本次答复的 reason=0,实际 %d", processed.Result.Reason)
+	}
+}
+
+// partial_seqs 环被挤掉之后 scene 只会回一个普通的 APPLIED(不带 partial、reason 为 0);
+// 行上的 27007 必须仍然把它判成部分发放,否则半额发放会被按全额入对侧账。
+func TestLastReasonStillMarksPartialAfterRingEviction(t *testing.T) {
+	op := testOp(1)
+	op.Stream = assetpb.AssetOpStream_ASSET_OP_STREAM_GUILD_CREDIT
+	op.LastReason = ReasonPartialApplied
+	store := newFakeStore(op)
+	applier := &fakeApplier{fn: func(RPC, *assetpb.AssetOpRequest) (Result, error) {
+		return resultApplied(true), nil
+	}}
+	loop, _ := newTestLoop(t, store, applier, nil)
+
+	processed, err := loop.ProcessOne(context.Background(), op)
+	if err != nil {
+		t.Fatalf("ProcessOne 出错: %v", err)
+	}
+	if processed.Status != StatusAppliedPartial {
+		t.Fatalf("行上有 27007 时必须落 AppliedPartial,实际 %s", processed.Status)
+	}
+	finalized, _ := store.snapshot()
+	if len(finalized) != 1 || finalized[0].Status != StatusAppliedPartial {
+		t.Fatalf("Store 收到的状态不对: %+v", finalized)
+	}
+}
+
 // ListDue 出错只计数,不 panic 也不静默。
 func TestTickListErrorCounted(t *testing.T) {
 	store := newFakeStore(testOp(1))

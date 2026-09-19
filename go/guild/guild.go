@@ -77,6 +77,17 @@ func main() {
 	svcCtx := svc.NewServiceContext(config.AppConfig)
 	defer svcCtx.Stop()
 
+	// 帮会规则表 / 等级表自洽校验(设计 docs/design/guild-phase2/02-management.md §3.3):
+	// 缺行或数值越界一律拒启,**不降级成警告**。
+	//
+	// 理由:成员上限、长老上限、申请上限全部是"用时现查配表",查不到时这些判据会静默取到 0,
+	// 表现成"谁都进不去 / 长老名额无限",而不是一条报错 —— 带着错配表活着比崩掉危险得多。
+	// 位置:NewServiceContext 刚 LoadTables,所以校验只能在它之后;又放在建表与节点注册之前,
+	// 配置不对的实例连 etcd 都不该注册进去,免得流量先被路由过来再出问题。
+	if err := logic.ValidateGuildTables(); err != nil {
+		logx.Must(fmt.Errorf("guild config tables invalid: %w", err))
+	}
+
 	// 表结构不对的实例不能对外服务,也不能注册进 etcd:建表 / 核对放在节点注册之前。
 	if err := ensureSchema(context.Background(), svcCtx.DB, config.AppConfig, schemamigrate.Up, schemamigrate.Plan); err != nil {
 		logx.Must(err)
@@ -191,7 +202,17 @@ func main() {
 	} else {
 		logx.Error("Guild: DataServiceRpc 未配置,无法判定玩家归属 zone,所有客户端帮会请求将被拒绝")
 	}
-	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence, homeZones)
+	// 推送出口与"申请推送冷却"在这里一次装配(设计 §13.7 / §10.1)。
+	//
+	// NewGuildNotifier 自己判 nil:没配 Kafka(Brokers 为空 → KafkaWriter 为 nil)时它退回
+	// NoopNotifier,所以这里不必再包一层 if。这跟上面 mergeFence 的写法不同不是疏忽 ——
+	// 那边要躲的是"具体类型的 nil 指针装进接口后 != nil"这个坑,而这里拿到的已经是接口值。
+	//
+	// TryMarkApplyPush 是 Redis SetNX 冷却键,挡的是"申请 → 撤回 → 申请"对审批人的刷屏;
+	// 不注入 = 总是放行,只有单测才会走那条默认。
+	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence, homeZones,
+		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerLocatorRedisClient)),
+		logic.WithApplyPushGate(repo.TryMarkApplyPush))
 
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {

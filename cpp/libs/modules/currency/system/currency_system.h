@@ -43,6 +43,11 @@ public:
     //   冻结      -> kAssetFrozen              (RETRY 类:条件会消失,调用方可重投)
     //   封禁      -> kAssetBlocked             (REJECTED 类:终局拒绝)
     //   amount<=0 / 类型越界 / 缺组件 -> kInvalidParameter(编程错误,不变)
+    //
+    // **判定顺序是契约的一部分**:amount<=0 与类型越界这两条零副作用的纯参数校验
+    // 排在冻结 / 封禁之前。冻结中的玩家传一个越界币种,得到的仍是 kInvalidParameter
+    // 而不是 kAssetFrozen —— 否则资产通道会把编程错误当成"等一会儿会好"的暂时
+    // 条件,对一个永远不可能成功的请求无限重投。
     static uint32_t AddCurrency(entt::entity player, CurrencyType type, int64_t amount,
                                 TransactionType txType = TX_CURRENCY_ADD,
                                 uint64_t correlationId = 0);
@@ -53,6 +58,7 @@ public:
     //
     // 返回值口径(§4.10):冻结 -> kAssetFrozen;余额不足 -> kAssetCurrencyInsufficient;
     // amount<=0 / 类型越界 / 缺组件 -> kInvalidParameter(不变)。
+    // 判定顺序同 AddCurrency:纯参数校验先跑,冻结 / 余额不足在其后。
     static uint32_t DeductCurrency(entt::entity player, CurrencyType type, int64_t amount,
                                    TransactionType txType = TX_CURRENCY_DEDUCT,
                                    uint64_t correlationId = 0);

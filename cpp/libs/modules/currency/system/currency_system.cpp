@@ -22,6 +22,21 @@
 // Internal helper
 // ---------------------------------------------------------------------------
 
+namespace
+{
+
+// 币种是否在枚举范围内。**纯判定,零副作用、不碰 ECS**,所以允许排在业务条件
+// (冻结 / 封禁)之前 —— 而且必须排在前面:越界币种是调用方写错了,永远不可能
+// 成功;若让冻结先命中,资产通道会拿到 RETRY 类的 kAssetFrozen,对一个注定失败的
+// 请求无限重投(04-asset-channel.md §4.10 的 RETRY / REJECTED 分类)。
+// 这与背包侧"纯预检必须全部跑在 ReserveOrEvict 之前"是同一条纪律。
+bool IsKnownCurrencyType(CurrencyType type)
+{
+    return static_cast<uint32_t>(type) < static_cast<uint32_t>(kCurrencyMax);
+}
+
+} // namespace
+
 void CurrencySystem::EnsureCurrencySlots(CurrencyComp &currency)
 {
     auto *values = currency.mutable_values();
@@ -33,7 +48,7 @@ void CurrencySystem::EnsureCurrencySlots(CurrencyComp &currency)
 
 uint64_t *CurrencySystem::ResolveCurrencyField(entt::entity player, CurrencyType type)
 {
-    if (static_cast<uint32_t>(type) >= static_cast<uint32_t>(kCurrencyMax))
+    if (!IsKnownCurrencyType(type))
     {
         LOG_ERROR << "CurrencySystem: unknown CurrencyType=" << static_cast<uint32_t>(type)
                   << entt::to_integral(player);
@@ -65,6 +80,16 @@ uint32_t CurrencySystem::AddCurrency(entt::entity player, CurrencyType type, int
     {
         LOG_ERROR << "CurrencySystem::AddCurrency: amount must be > 0, got "
                   << amount << " for CurrencyType=" << static_cast<uint32_t>(type)
+                  << " entity=" << entt::to_integral(player);
+        return PrintStackAndReturnError(kInvalidParameter);
+    }
+
+    // 币种越界与 amount<=0 同类,都是编程错误,必须在冻结 / 封禁这些**会自己消失或
+    // 需要记账**的业务条件之前判掉(理由见 IsKnownCurrencyType 注释)。
+    if (!IsKnownCurrencyType(type))
+    {
+        LOG_ERROR << "CurrencySystem::AddCurrency: unknown CurrencyType="
+                  << static_cast<uint32_t>(type)
                   << " entity=" << entt::to_integral(player);
         return PrintStackAndReturnError(kInvalidParameter);
     }
@@ -183,6 +208,16 @@ uint32_t CurrencySystem::DeductCurrency(entt::entity player, CurrencyType type, 
     {
         LOG_ERROR << "CurrencySystem::DeductCurrency: amount must be > 0, got "
                   << amount << " for CurrencyType=" << static_cast<uint32_t>(type)
+                  << " entity=" << entt::to_integral(player);
+        return PrintStackAndReturnError(kInvalidParameter);
+    }
+
+    // 同 AddCurrency:纯参数校验先跑,免得冻结中的玩家传一个越界币种时拿到 RETRY 类的
+    // kAssetFrozen —— 那是一个解冻之后照样失败的请求,却会被资产通道一直重投到超时。
+    if (!IsKnownCurrencyType(type))
+    {
+        LOG_ERROR << "CurrencySystem::DeductCurrency: unknown CurrencyType="
+                  << static_cast<uint32_t>(type)
                   << " entity=" << entt::to_integral(player);
         return PrintStackAndReturnError(kInvalidParameter);
     }

@@ -307,19 +307,55 @@ func TestCallerDetectsOutcomeFlip(t *testing.T) {
 	}
 }
 
-// ⑥ 玩家不在线:本地合成 NOT_HERE,一次 RPC 都不发。
-func TestCallerNotOnlineIsLocalNotHere(t *testing.T) {
+// ⑥ 没人持有这个玩家:本地合成 NOT_HERE,一次 RPC 都不发,且**不是**错误。
+//
+// 三个哨兵一起测,是因为它们的正确处置完全一样,而漏掉任何一个的表现都很隐蔽:
+// 比如把 ErrAwaitingPlacement(跨 zone 交接放行、目标 zone 还没落点)当成故障上抛,
+// 帮会同步路径就会在玩家过图的那一两秒里回"操作失败",而其实只该稍后重试。
+func TestCallerNoHolderIsLocalNotHere(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+	}{
+		{"不在线", scenenode.ErrNotOnline},
+		{"节点未注册", scenenode.ErrNodeUnknown},
+		{"跨 zone 等待落点", scenenode.ErrAwaitingPlacement},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			scene, _ := startFakeScene(t, func(_ RPC, _ *assetpb.AssetOpRequest, _ int) (*assetpb.AssetOpResponse, error) {
+				return applied(true), nil
+			})
+			// 包一层再传,顺带验证判定走的是 errors.Is 而不是相等比较。
+			caller := newTestCaller(t, &fakeResolver{err: fmt.Errorf("查位置: %w", tc.err)}, nil)
+
+			res, err := caller.Do(context.Background(), RPCDebit, testRequest())
+			if err != nil {
+				t.Fatalf("没人持有不是错误,实际: %v", err)
+			}
+			if !res.Local || res.Outcome != assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE {
+				t.Fatalf("应当是本地合成的 NOT_HERE,实际 %+v", res)
+			}
+			if res.Durable {
+				t.Fatal("本地合成的结局绝不能标成已落盘 —— 那会让调用方直接终结")
+			}
+			if got := scene.callCount(); got != 0 {
+				t.Fatalf("不该发出任何 RPC,实际 %d 次", got)
+			}
+		})
+	}
+}
+
+// 定位出的**故障**(Redis 挂了、位置键写坏了)必须原样上抛,不能被折成 NOT_HERE:
+// 折了之后资产操作会安静地一直退避,没人知道数据面出了事。
+func TestCallerResolveFailurePropagates(t *testing.T) {
 	scene, _ := startFakeScene(t, func(_ RPC, _ *assetpb.AssetOpRequest, _ int) (*assetpb.AssetOpResponse, error) {
 		return applied(true), nil
 	})
-	caller := newTestCaller(t, &fakeResolver{err: fmt.Errorf("查位置: %w", scenenode.ErrNotOnline)}, nil)
+	caller := newTestCaller(t, &fakeResolver{err: errors.New("读玩家位置失败: 连接被拒绝")}, nil)
 
-	res, err := caller.Do(context.Background(), RPCDebit, testRequest())
-	if err != nil {
-		t.Fatalf("不在线不是错误,实际: %v", err)
-	}
-	if !res.Local || res.Outcome != assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE {
-		t.Fatalf("应当是本地合成的 NOT_HERE,实际 %+v", res)
+	if _, err := caller.Do(context.Background(), RPCDebit, testRequest()); err == nil {
+		t.Fatal("定位故障必须返回错误")
 	}
 	if got := scene.callCount(); got != 0 {
 		t.Fatalf("不该发出任何 RPC,实际 %d 次", got)

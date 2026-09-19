@@ -1,6 +1,7 @@
 package assetop
 
 import (
+	"math"
 	"testing"
 
 	assetpb "proto/common/asset"
@@ -64,6 +65,10 @@ func TestClassifySeqTable(t *testing.T) {
 	corrupt := newStreamLedger(testStream, 100, 0, 5)
 	corrupt.SeenBits = corrupt.SeenBits[:8] // 位图长度不对 = 账本损坏
 
+	// max_seq 接近 uint64 上限(只可能来自数据损坏或人工改库):max_seq+1024 不可表示,
+	// C++ ExceedsJumpCap 此时返回 false,Go 必须站同一侧,否则同一份账本两边结论相反。
+	nearOverflow := newStreamLedger(testStream, 100, 0, math.MaxUint64-1)
+
 	cases := []struct {
 		name   string
 		ledger *componentpb.AssetOpStreamLedger
@@ -82,6 +87,7 @@ func TestClassifySeqTable(t *testing.T) {
 		{"窗口内未见", withHistory, 100, 3, SeqUnseen},
 		{"同纪元跳号上限内", withHistory, 100, 1034, SeqAheadOfWindow},
 		{"同纪元跳号超上限", withHistory, 100, 1035, SeqJumpTooFar},
+		{"max_seq 接近溢出时上限不可表示,不算跳号", nearOverflow, 100, 2000, SeqAheadOfWindow},
 		{"落后窗口下沿", slid, 100, 100, SeqBehindWindow},
 		{"窗口下沿之上", slid, 100, 101, SeqUnseen},
 		{"位图长度不对", corrupt, 100, 1, SeqInvalid},

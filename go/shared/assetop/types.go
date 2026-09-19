@@ -142,8 +142,19 @@ const (
 	ReasonBlocked              = uint32(table.AssetError_kAssetBlocked)
 	ReasonPlayerNotHere        = uint32(table.AssetError_kAssetPlayerNotHere)
 	// ReasonPartialApplied 既会出现在本次答复里(Result.Partial),也可能是**上一次**
-	// 答复留在行上的 last_reason:scene 只在首次应用时回 partial,重投拿到的是只读答复,
-	// 那次答复不再带 partial 标记。FinalStatus 因此要同时看两处,见 decide.go。
+	// 答复留在行上的 last_reason。这两处不是同一份证据的两份拷贝,而是**接力**:
+	//
+	//   - scene 的只读答复只在 seq 仍留在账本的 partial_seqs 环里时才带 partial
+	//     (规格 §4.9 第 4 步经 IsAssetOpPartial 查环)。那个环上限 64 条、超了删最小,
+	//     watermark 右移时还会裁掉 seq <= 新 watermark 的条目(§4.4 Record 第 1、2 步)
+	//     —— 所以它**会**丢,丢了之后重查只能得到一个普通的 APPLIED。
+	//   - 环丢了之后,行上的 last_reason 是「这一笔曾经只发了一半」的唯一证据(§4.33)。
+	//     漏掉它就是把半额发放当成全额成功入对侧账,那笔差额没有任何线索可追。
+	//
+	// 因此这个码在行上必须是**粘性**的。规格原话是「Reschedule 把 last_reason 写成
+	// res.Reason,于是『曾见 partial』是粘性的」,但只靠这一句粘不住:传输失败、本地
+	// NOT_HERE、坏流号重排带的都是 Result{}(Reason=0),一次就能抹掉。粘性由本包在
+	// 写库前补齐,见 reconcile.go 的 carryPartialReason。FinalStatus 同时看两处,见 decide.go。
 	ReasonPartialApplied = uint32(table.AssetError_kAssetPartialApplied)
 	ReasonAuthFailed     = uint32(table.AssetError_kAssetAuthFailed)
 )

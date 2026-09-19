@@ -47,18 +47,34 @@ Guid AddAndGetGuid(Bag &bag, uint32_t configId)
 }
 
 // 前置条件:测试用的两个 config 必须真的是不可叠加的,否则下面每条用例验的都不是本意。
+//
+// **先断言行指针非空再解引用。** FindById 查不到时返回 {nullptr, kInvalidTableId}
+// (cpp/generated/table/code/item_table.cpp),把 `->max_stack_size()` 写进 ASSERT_EQ
+// 的实参里等于先解引用后断言 —— 夹具一漂,整个 bag_test.exe 会在这里空指针崩溃,
+// 连带同进程其余用例全部拿不到结果,而不是这一条变红。
+//
+// 辅助函数里的 ASSERT_* 只从**本函数**返回,所以调用点必须用
+// ASSERT_NO_FATAL_FAILURE 包住,否则前置条件不成立时用例照样往下跑。
 void RequireNonStackableFixtureData()
 {
-	ASSERT_EQ(1u, ItemTableManager::Instance().FindById(kNonStackA).first->max_stack_size());
-	ASSERT_EQ(1u, ItemTableManager::Instance().FindById(kNonStackB).first->max_stack_size());
-	ASSERT_GT(ItemTableManager::Instance().FindById(kStackable).first->max_stack_size(), 1u);
+	const auto *rowA = ItemTableManager::Instance().FindById(kNonStackA).first;
+	ASSERT_NE(nullptr, rowA) << "夹具缺 config " << kNonStackA << ",由 bag_test.cpp 的 main() 装配";
+	ASSERT_EQ(1u, rowA->max_stack_size());
+
+	const auto *rowB = ItemTableManager::Instance().FindById(kNonStackB).first;
+	ASSERT_NE(nullptr, rowB) << "夹具缺 config " << kNonStackB << ",由 bag_test.cpp 的 main() 装配";
+	ASSERT_EQ(1u, rowB->max_stack_size());
+
+	const auto *rowStackable = ItemTableManager::Instance().FindById(kStackable).first;
+	ASSERT_NE(nullptr, rowStackable) << "夹具缺 config " << kStackable << ",由 bag_test.cpp 的 main() 装配";
+	ASSERT_GT(rowStackable->max_stack_size(), 1u);
 }
 
 } // namespace
 
 TEST(BagRemoveByGuidTest, RemovesEveryRequestedInstanceAndFreesItsSlot)
 {
-	RequireNonStackableFixtureData();
+	ASSERT_NO_FATAL_FAILURE(RequireNonStackableFixtureData());
 
 	Bag bag;
 	const Guid a = AddAndGetGuid(bag, kNonStackA);
@@ -66,8 +82,11 @@ TEST(BagRemoveByGuidTest, RemovesEveryRequestedInstanceAndFreesItsSlot)
 	ASSERT_EQ(2u, bag.OccupiedGridCount());
 
 	std::vector<DestroyedInstance> removed;
+	// mutated 先置成"错的那一个",这样"函数根本没写它"会红在下面而不是蒙混过关。
+	bool mutated = false;
 	EXPECT_EQ(kSuccess, BagService::RemoveItemsByGuid(entt::null, bag, {a, b},
-													 TX_AUCTION_SELL, 4242, &removed));
+													 TX_AUCTION_SELL, 4242, &removed, &mutated));
+	EXPECT_TRUE(mutated) << "成功扣出必须报告包动过了";
 
 	// **实例真的没了**,不是 size 变 0 的僵尸堆 —— 这是与 Drain 那条路的分水岭:
 	// 留着空壳,玩家 blob 与交易库快照会同 guid 双存在,过户回来就是复制。
@@ -88,26 +107,31 @@ TEST(BagRemoveByGuidTest, RemovesEveryRequestedInstanceAndFreesItsSlot)
 
 TEST(BagRemoveByGuidTest, MissingGuidRejectsWholeBatchWithoutRemovingAnything)
 {
-	RequireNonStackableFixtureData();
+	ASSERT_NO_FATAL_FAILURE(RequireNonStackableFixtureData());
 
 	Bag bag;
 	const Guid a = AddAndGetGuid(bag, kNonStackA);
 	const Guid absent = a + 1000000; // 一定不在这个包里
 
 	std::vector<DestroyedInstance> removed;
+	bool mutated = true;
 	EXPECT_EQ(kAssetInvalidBundle,
-			  BagService::RemoveItemsByGuid(entt::null, bag, {a, absent}, TX_AUCTION_SELL, 1, &removed));
+			  BagService::RemoveItemsByGuid(entt::null, bag, {a, absent}, TX_AUCTION_SELL, 1, &removed,
+											&mutated));
 
 	// 全或无:第一件在包里,但整批被拒,它必须原封不动。
 	EXPECT_NE(nullptr, bag.GetItemCompByGuid(a));
 	EXPECT_EQ(1u, bag.OccupiedGridCount());
 	EXPECT_TRUE(removed.empty()) << "整批被拒时不得留下半截回执";
+	// 预检拒 = 一件没碰。调用方据此回 REJECTED 且**不记资产变更**;这里若误报
+	// true,交易侧会凭空给一笔不存在的托管记账。
+	EXPECT_FALSE(mutated) << "预检拒必须报告一件没碰";
 	EXPECT_TRUE(bag.IsLayerConsistent());
 }
 
 TEST(BagRemoveByGuidTest, DuplicateGuidRejectsWholeBatch)
 {
-	RequireNonStackableFixtureData();
+	ASSERT_NO_FATAL_FAILURE(RequireNonStackableFixtureData());
 
 	Bag bag;
 	const Guid a = AddAndGetGuid(bag, kNonStackA);
@@ -122,7 +146,7 @@ TEST(BagRemoveByGuidTest, DuplicateGuidRejectsWholeBatch)
 
 TEST(BagRemoveByGuidTest, StackableItemRejected)
 {
-	RequireNonStackableFixtureData();
+	ASSERT_NO_FATAL_FAILURE(RequireNonStackableFixtureData());
 
 	Bag bag;
 	std::vector<Guid> written;
@@ -140,12 +164,15 @@ TEST(BagRemoveByGuidTest, StackableItemRejected)
 TEST(BagRemoveByGuidTest, EmptyRequestRejected)
 {
 	Bag bag;
-	EXPECT_EQ(kAssetInvalidBundle, BagService::RemoveItemsByGuid(entt::null, bag, {}));
+	bool mutated = true;
+	EXPECT_EQ(kAssetInvalidBundle,
+			  BagService::RemoveItemsByGuid(entt::null, bag, {}, TX_AUCTION_SELL, 0, nullptr, &mutated));
+	EXPECT_FALSE(mutated);
 }
 
 TEST(BagRemoveByGuidTest, ReserveIsSideEffectFree)
 {
-	RequireNonStackableFixtureData();
+	ASSERT_NO_FATAL_FAILURE(RequireNonStackableFixtureData());
 
 	Bag bag;
 	const Guid a = AddAndGetGuid(bag, kNonStackA);
@@ -165,7 +192,7 @@ TEST(BagRemoveByGuidTest, ReserveIsSideEffectFree)
 
 TEST(BagRemoveByGuidTest, FrozenPlayerKeepsEverythingAndReportsRetryClassCode)
 {
-	RequireNonStackableFixtureData();
+	ASSERT_NO_FATAL_FAILURE(RequireNonStackableFixtureData());
 
 	const auto player = tlsEcs.actorRegistry.create();
 	Bag bag;
@@ -174,9 +201,13 @@ TEST(BagRemoveByGuidTest, FrozenPlayerKeepsEverythingAndReportsRetryClassCode)
 	tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
 	// kAssetFrozen 是 RETRY 类:交接在途是会自己结束的条件,调用方应当重投,
 	// 而不是把这次寄售终局拒掉。
-	EXPECT_EQ(kAssetFrozen, BagService::RemoveItemsByGuid(player, bag, {a}));
+	bool mutated = true;
+	EXPECT_EQ(kAssetFrozen,
+			  BagService::RemoveItemsByGuid(player, bag, {a}, TX_AUCTION_SELL, 0, nullptr, &mutated));
 	EXPECT_NE(nullptr, bag.GetItemCompByGuid(a));
 	EXPECT_EQ(1u, bag.OccupiedGridCount());
+	// RETRY 前提是"这次一件没碰",否则重投就是第二次扣。
+	EXPECT_FALSE(mutated) << "冻结拒必须报告一件没碰,否则重投会重复扣物";
 
 	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
 	EXPECT_EQ(kSuccess, BagService::RemoveItemsByGuid(player, bag, {a}));

@@ -1,5 +1,5 @@
 // Package svc 是 trade 服务的依赖装配:etcd 客户端、mmorpg_trade 连接池、data_service 客户端、
-// listing_id 号段客户端,以及本服务的低基数 Prometheus 计数器。
+// listing_id 号段客户端、通用资产通道(assetchannel.go),以及本服务的低基数 Prometheus 计数器。
 package svc
 
 import (
@@ -57,6 +57,13 @@ type ServiceContext struct {
 	// 号段失败 = 本次上架失败(in-band kServiceUnavailable),绝不自造 id。
 	ListingIDSegment *idsegment.Client
 
+	// Assets 是通用资产通道(guild-phase2/04-asset-channel.md §S4)在 trade 侧的装配:
+	// 共享 Redis 位置键 → scene 节点镜像 → AssetDebit / AssetCredit,外加 outbox 与重投循环。
+	// **Assets.Pipeline 可能为 nil**(密钥未注入):调用托管 / 交付前应判 Assets.Enabled(),
+	// 好给玩家一个明确的"功能未开放";漏判也不会 panic —— reconcile 的方法都带空接收者守卫,
+	// 返回 reconcile.ErrSignerMissing。
+	Assets *AssetChannel
+
 	stopOnce sync.Once
 }
 
@@ -86,13 +93,26 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	logx.Infof("[trade] listing_id minting: segment biz_tag=%s initial_step=%d step_bounds=[%d, %d] (no snowflake fallback)",
 		ListingIDBizTag, c.IdSegment.StepOrDefault(), c.IdSegment.MinStepOrDefault(), c.IdSegment.MaxStepOrDefault())
 
+	// 资产通道。共享 Redis 连不上即启动致命(理由见 newAssetChannel);密钥缺失只降级并告警。
+	assets, err := newAssetChannel(c, db, dsClient)
+	if err != nil {
+		panic(fmt.Errorf("trade: 资产通道装配失败: %w", err))
+	}
+
 	return &ServiceContext{
 		Config:            c,
 		Etcd:              etcdCli,
 		DB:                db,
 		DataServiceClient: dsClient,
 		ListingIDSegment:  seg,
+		Assets:            assets,
 	}
+}
+
+// StartAssetChannel 起 scene 节点镜像与资产重投循环。ctx 取消即两者退出。
+// 放在起 gRPC 之前调用:循环只依赖 MySQL 与 etcd,早一点开始把积压的 outbox 投出去。
+func (sc *ServiceContext) StartAssetChannel(ctx context.Context) {
+	sc.Assets.Start(ctx, sc.Etcd)
 }
 
 // BuildDSN 拼 mmorpg_trade 的 DSN,与 go/data_service/internal/store/mysql.go buildDSN 同口径:
@@ -170,6 +190,8 @@ func (sc *ServiceContext) WarmListingIDSegment() {
 // 调用方须保证 noderegistry.Close() 与 killswitch 的 ctx 取消都**先于**它(二者共用 etcd 连接)。
 func (sc *ServiceContext) Stop() {
 	sc.stopOnce.Do(func() {
+		// 资产通道先停:循环里在途的投递要在关 DB / etcd 之前收手。
+		sc.Assets.Close()
 		if sc.ListingIDSegment != nil {
 			sc.ListingIDSegment.Close()
 		}

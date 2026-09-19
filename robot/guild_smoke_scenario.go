@@ -3,14 +3,14 @@ package main
 // guild-smoke 场景:三个机器人经 gate → client_rpc_router 对 go/guild 做「按 zone 隔离」的端到端冒烟
 // (docs/design/guild-zone-client-access.md §6):
 //
-//	0. 预备:三人各自 GetPlayerGuild,还在帮会里就解散(帮主)或退出(成员)—— 同账号可反复跑;
+//	0. 预备:三人各自撤回遗留的待审申请,再 GetPlayerGuild,还在帮会里就解散(帮主)或退出(成员)—— 同账号可反复跑;
 //	1. A 建帮,请求体 zone_id 故意填错 → 受理,且帮会 zone_id == zone_a(zone 由服务端按归属映射决定);
 //	2. A 再建一个 → kGuildAlreadyInGuild;
 //	3. B(同区)查该帮在本区榜上的名次 → 上榜;
 //	4. C(zone_b,cross_zone=true 时):GetGuild → 不存在;查名次(请求体伪造 zone_a)→ 未上榜;
-//	   本区榜里没有它;加入 → 不存在;用同一个帮名建帮 → kGuildNameTaken(帮名全局唯一);
+//	   本区榜里没有它;申请入帮 → 不存在;用同一个帮名建帮 → kGuildNameTaken(帮名全局唯一);
 //	5. B 未入帮时改公告 → kGuildNoPermission;
-//	6. B 加入 → 受理,GetPlayerGuild 看到自己是成员;
+//	6. B 申请入帮 → 受理,B 与 A 各自列得到这条申请;A 审批通过 → 响应快照里 B 在册,B 的 GetPlayerGuild 看到自己是成员;
 //	7. A 改公告 → B 读到;700 字节公告 → kGuildAnnouncementTooLong(guild 侧拒绝,整包仍 < gate 1KB);
 //	8. 身份伪造:B 发 LeaveGuild 但请求体 player_id 填 A → 服务端按会话身份让 B 退出,A 仍是帮主;
 //	9. 内部方法:A 发 UpdateGuildScore → 收到 kServiceUnavailable 信封拒绝,随后查榜成功且积分仍是 0;
@@ -65,6 +65,9 @@ const guildSmokeSceneReadyTimeout = 15 * time.Second
 
 // 相邻请求的最小间隔。公会消息号在 MessageLimiter 表里是 5~10 次 / 秒,UpdateGuildScore 不在表里吃默认 3 次 / 窗口;
 // 冒烟不追求速度,300ms 远离两档上限。
+// 申请制的 8 个新消息号要到 B2c 才进 MessageLimiter 表,在那之前同样吃默认档(3 次 / 秒,按消息号各算一份)。
+// 本场景对同一个新消息号最多连发 3 次(撤回遗留申请,GuildRule 每人 ≤3 个待审),跨度 600ms 恰好压在默认档上限上;
+// 再加一次就会被 gate 限流,所以别在 B2s 阶段往同号上加请求。
 const guildSmokeRequestSpacing = 300 * time.Millisecond
 
 // 超长公告:> guild MaxAnnouncementBytes(600),又让整个 ClientRequest < gate 的 1KB,拒绝才来自 guild 而不是 gate。
@@ -192,8 +195,14 @@ func RunGuildSmoke(cfg *config.Config) {
 	zap.L().Info("[guild-smoke] robots in scene",
 		zap.Uint64("a", a.gc.PlayerId), zap.Uint64("b", b.gc.PlayerId), zap.Bool("cross_zone", sc.CrossZone))
 
-	// ---- 步骤 0:回到"不在任何帮会" ----
+	// ---- 步骤 0:回到"不在任何帮会、也没有待审申请" ----
+	// 先撤申请再退帮:上一轮中途失败会留下待审申请,它占着"每人最多 3 个待审"的名额,
+	// 下一轮第 6 步的申请就会被拒。在帮会里的玩家列不出自己的申请(服务端直接回空表),
+	// 不过"在册"与"有待审申请"本就互斥,顺序不影响清理效果。
 	for _, bot := range bots {
+		if err := bot.cancelAllApplications(); err != nil {
+			fail("prepare", "account=%s: %v", bot.account, err)
+		}
 		if err := bot.leaveAnyGuild(); err != nil {
 			fail("prepare", "account=%s: %v", bot.account, err)
 		}
@@ -260,9 +269,9 @@ func RunGuildSmoke(cfg *config.Config) {
 				fail("other-zone-rank-page", "zone %d 的玩家在榜单里看到了 zone %d 的帮会 %d", sc.ZoneB, sc.ZoneA, guildID)
 			}
 		}
-		if err := c.expect(game.GuildServiceJoinGuildMessageId,
-			&guildpb.JoinGuildRequest{GuildId: guildID}, &guildpb.JoinGuildResponse{}, tipGuildNotFound); err != nil {
-			fail("other-zone-join", "%v", err)
+		if err := c.expect(game.GuildServiceApplyJoinGuildMessageId,
+			&guildpb.ApplyJoinGuildRequest{GuildId: guildID}, &guildpb.ApplyJoinGuildResponse{}, tipGuildNotFound); err != nil {
+			fail("other-zone-apply", "%v", err)
 		}
 		if err := c.expect(game.GuildServiceCreateGuildMessageId,
 			&guildpb.CreateGuildRequest{Name: guildName}, &guildpb.CreateGuildResponse{}, tipGuildNameTaken); err != nil {
@@ -277,10 +286,36 @@ func RunGuildSmoke(cfg *config.Config) {
 		fail("announcement-outsider", "%v", err)
 	}
 
-	// ---- 步骤 6:B 加入 ----
-	if err := b.expect(game.GuildServiceJoinGuildMessageId,
-		&guildpb.JoinGuildRequest{GuildId: guildID}, &guildpb.JoinGuildResponse{}, 0); err != nil {
-		fail("join", "%v", err)
+	// ---- 步骤 6:B 申请入帮,A 审批通过 ----
+	// 入帮从"自己点一下就进"改成申请 + 审批两段(B2),所以这一步要同时验:
+	// 申请落库(两侧列表各看得到一条)、审批受理、审批响应的快照里 B 已在册、B 自己查到的也是在册。
+	if err := b.expect(game.GuildServiceApplyJoinGuildMessageId,
+		&guildpb.ApplyJoinGuildRequest{GuildId: guildID}, &guildpb.ApplyJoinGuildResponse{}, 0); err != nil {
+		fail("apply", "%v", err)
+	}
+	myApplications := &guildpb.ListMyGuildApplicationsResponse{}
+	if err := b.expect(game.GuildServiceListMyGuildApplicationsMessageId,
+		&guildpb.ListMyGuildApplicationsRequest{}, myApplications, 0); err != nil {
+		fail("apply-list-mine", "%v", err)
+	}
+	if !guildSmokeHasApplication(myApplications.GetApplications(), guildID) {
+		fail("apply-list-mine", "B 的待审申请里没有帮会 %d(共 %d 条)", guildID, len(myApplications.GetApplications()))
+	}
+	applicants := &guildpb.ListGuildApplicationsResponse{}
+	if err := a.expect(game.GuildServiceListGuildApplicationsMessageId,
+		&guildpb.ListGuildApplicationsRequest{}, applicants, 0); err != nil {
+		fail("apply-list-applicants", "%v", err)
+	}
+	if !guildSmokeHasApplicant(applicants.GetApplicants(), b.gc.PlayerId) {
+		fail("apply-list-applicants", "A 的待审名单里没有 B=%d(共 %d 条)", b.gc.PlayerId, len(applicants.GetApplicants()))
+	}
+	reviewed := &guildpb.ReviewGuildApplicationResponse{}
+	if err := a.expect(game.GuildServiceReviewGuildApplicationMessageId,
+		&guildpb.ReviewGuildApplicationRequest{ApplicantPlayerId: b.gc.PlayerId, Approve: true}, reviewed, 0); err != nil {
+		fail("review", "%v", err)
+	}
+	if role, ok := guildSmokeRoleOf(reviewed.GetGuild(), b.gc.PlayerId); !ok || role != guildSmokeRoleMember {
+		fail("review", "审批响应的快照里 B=%d role=%d(在册=%v),期望已是普通成员", b.gc.PlayerId, role, ok)
 	}
 	bGuild, err := b.myGuild()
 	if err != nil {
@@ -289,7 +324,7 @@ func RunGuildSmoke(cfg *config.Config) {
 	if role, ok := guildSmokeRoleOf(bGuild, b.gc.PlayerId); bGuild.GetGuildId() != guildID || !ok || role != guildSmokeRoleMember {
 		fail("join-verify", "B 的帮会=%d role=%d(在册=%v),期望在帮会 %d 且为成员", bGuild.GetGuildId(), role, ok, guildID)
 	}
-	zap.L().Info("[guild-smoke] step 6: B joined", zap.Int("members", len(bGuild.GetMembers())))
+	zap.L().Info("[guild-smoke] step 6: B applied and was approved", zap.Int("members", len(bGuild.GetMembers())))
 
 	// ---- 步骤 7:公告 ----
 	announcement := "烟测公告 " + guildSmokeNonce()
@@ -431,6 +466,12 @@ func guildSmokeLogin(cfg *config.Config, account string, stats *metrics.Stats) (
 // onMessage:公会消息号的回包(含信封拒绝)由本场景认领;gate 的 SendTipToClient 记下来供快速失败;其余交给通用分发。
 func (b *guildSmokeBot) onMessage(client *pkg.GameClient, msg *base.MessageContent) {
 	b.stats.MsgRecv()
+	// NotifyGuildChanged 是服务端主动下行,不是任何请求的回包:放进 replies 会被下一次同号等待
+	// 误当成结果,交给通用分发又只会得到一条"未知消息号"。B2s 只要求原冒烟跑通,推送的收集与
+	// 断言属于 B2c,这里直接丢弃。
+	if msg.GetMessageId() == game.GuildServiceNotifyGuildChangedMessageId {
+		return
+	}
 	if guildSmokeIsGuildMessage(msg.GetMessageId()) {
 		b.mu.Lock()
 		if _, seen := b.replies[msg.GetMessageId()]; !seen {
@@ -535,6 +576,25 @@ func (b *guildSmokeBot) myGuild() (*guildpb.GuildInfo, error) {
 	return resp.GetGuild(), nil
 }
 
+// cancelAllApplications 撤回本人全部待审申请,把机器人带回「没有任何待审申请」。
+// 只撤刚刚列出来的那几条,所以每条都必须受理(tip=0):撤不掉说明列表与服务端状态对不上,
+// 这时直接失败,而不是把错误吞掉继续跑 —— 后面第 6 步再被「待审数已满」拒绝会更难定位。
+func (b *guildSmokeBot) cancelAllApplications() error {
+	resp := &guildpb.ListMyGuildApplicationsResponse{}
+	if err := b.expect(game.GuildServiceListMyGuildApplicationsMessageId,
+		&guildpb.ListMyGuildApplicationsRequest{}, resp, 0); err != nil {
+		return err
+	}
+	for _, application := range resp.GetApplications() {
+		if err := b.expect(game.GuildServiceCancelGuildApplicationMessageId,
+			&guildpb.CancelGuildApplicationRequest{GuildId: application.GetGuildId()},
+			&guildpb.CancelGuildApplicationResponse{}, 0); err != nil {
+			return fmt.Errorf("撤回遗留申请(帮会 %d): %w", application.GetGuildId(), err)
+		}
+	}
+	return nil
+}
+
 // leaveAnyGuild 把机器人带回「不在任何帮会」:上一轮失败可能留下帮会或成员关系。
 func (b *guildSmokeBot) leaveAnyGuild() error {
 	for attempt := 0; attempt < 3; attempt++ {
@@ -564,19 +624,50 @@ func (b *guildSmokeBot) leaveAnyGuild() error {
 // 纯函数
 // ---------------------------------------------------------------------------
 
+// guildSmokeIsGuildMessage 列的是"请求 / 回包"成对的消息号。
+// 管理段的三个号(SetGuildMemberRole / KickGuildMember / TransferGuildLeader)本场景还没用到,
+// 一并列全:少一个就会让 B2c 的回包掉进通用分发,查起来很费劲。
+// NotifyGuildChanged 不在这里 —— 它只有下行,由 onMessage 单独丢弃。
 func guildSmokeIsGuildMessage(messageId uint32) bool {
 	switch messageId {
 	case game.GuildServiceCreateGuildMessageId,
 		game.GuildServiceGetGuildMessageId,
 		game.GuildServiceGetPlayerGuildMessageId,
-		game.GuildServiceJoinGuildMessageId,
 		game.GuildServiceLeaveGuildMessageId,
 		game.GuildServiceDisbandGuildMessageId,
 		game.GuildServiceSetAnnouncementMessageId,
+		game.GuildServiceSetGuildMemberRoleMessageId,
+		game.GuildServiceKickGuildMemberMessageId,
+		game.GuildServiceTransferGuildLeaderMessageId,
+		game.GuildServiceApplyJoinGuildMessageId,
+		game.GuildServiceCancelGuildApplicationMessageId,
+		game.GuildServiceListMyGuildApplicationsMessageId,
+		game.GuildServiceListGuildApplicationsMessageId,
+		game.GuildServiceReviewGuildApplicationMessageId,
 		game.GuildServiceUpdateGuildScoreMessageId,
 		game.GuildServiceGetGuildRankMessageId,
 		game.GuildServiceGetGuildRankByGuildMessageId:
 		return true
+	}
+	return false
+}
+
+// guildSmokeHasApplication 判断申请人视角的列表里有没有指向该帮会的一条。
+func guildSmokeHasApplication(applications []*guildpb.GuildApplicationView, guildID uint64) bool {
+	for _, application := range applications {
+		if application.GetGuildId() == guildID {
+			return true
+		}
+	}
+	return false
+}
+
+// guildSmokeHasApplicant 判断审批人视角的待审名单里有没有这个玩家。
+func guildSmokeHasApplicant(applicants []*guildpb.GuildApplicantView, playerID uint64) bool {
+	for _, applicant := range applicants {
+		if applicant.GetPlayerId() == playerID {
+			return true
+		}
 	}
 	return false
 }

@@ -17,9 +17,12 @@ static_assert(std::size(kAssetOpSeqStateNames) == static_cast<size_t>(AssetOpSeq
 // 账本里两组位图的选择子。用枚举而不是 bool 参数,避免调用点出现看不懂的 true/false。
 enum class BitGroup : uint8_t { kSeen, kApplied };
 
-// stream 合法范围 [1, 5];0 是 UNSPECIFIED,不得落进存档。
+// 合法流 = proto 当前枚举里除 UNSPECIFIED 之外的任意一个;0 不得落进存档。
+// 判据跟着生成的 AssetOpStream_IsValid 走,不写死 [1, 5]:枚举是会长的(§4.1 的 5 条已是
+// 第二轮追加的结果)。写死上界的话,追加第 6 条流既不会编译报错也没有任何提示,持有新流账本
+// 的玩家一加载就被判损坏 → 挂 PlayerAssetOpLedgerInvalidComp → 资产通道对他永久 fail-closed。
 bool IsAssetOpStreamValid(AssetOpStream stream) {
-    return stream >= ASSET_OP_STREAM_GUILD_DEBIT && stream <= ASSET_OP_STREAM_SYSTEM_CREDIT;
+    return stream != ASSET_OP_STREAM_UNSPECIFIED && AssetOpStream_IsValid(static_cast<int>(stream));
 }
 
 // 越界一律当 0 读;真正的长度不合法由 ValidateAssetOpLedger 在加载时 fail-closed。
@@ -122,6 +125,8 @@ void InsertPartialSeq(AssetOpStreamLedger& ledger, uint64_t seq) {
     }
     list->Add(seq);
     for (int i = list->size() - 1; i > pos; --i) list->SwapElements(i, i - 1);
+    // 超过上限丢最小的一条(§4.33 规定的行为)。与 rejections 不同,丢掉之后重查会答
+    // partial = false;为什么仍可接受见 asset_op_ledger.h 里 kAssetOpMaxPartialSeqs 的注释。
     if (list->size() > kAssetOpMaxPartialSeqs) RemoveFirst(*list, list->size() - kAssetOpMaxPartialSeqs);
 }
 
@@ -149,7 +154,7 @@ std::string StreamPrefix(const AssetOpStreamLedger& ledger, int index) {
 // 单条流的自洽校验;返回空串 = 通过。
 std::string ValidateStreamLedger(const AssetOpStreamLedger& ledger, int index) {
     const std::string prefix = StreamPrefix(ledger, index);
-    if (!IsAssetOpStreamValid(ledger.stream())) return prefix + "流号不在 [1,5]";
+    if (!IsAssetOpStreamValid(ledger.stream())) return prefix + "不是合法 AssetOpStream";
     if (ledger.stream_epoch() == 0) return prefix + "stream_epoch = 0";
     if (ledger.seen_bits_size() != kAssetOpWindowWords) {
         return prefix + "seen_bits 数量=" + std::to_string(ledger.seen_bits_size()) + " 应为 16";

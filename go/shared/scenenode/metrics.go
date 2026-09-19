@@ -14,8 +14,16 @@ const (
 	// ResolveAwaitingPlacement:跨 zone 交接已放行、还没落点 —— 没人持有,重试。
 	// 与 not_online 分开:它是传送在途的正常中间态,不该混进"离线率"。
 	ResolveAwaitingPlacement = "awaiting_placement"
-	// ResolveNodeUnknown:节点未注册 / 歧义 / 镜像未同步。
+	// ResolveNodeUnknown:位置记录指向的节点在镜像里查无此节点 —— 节点掉线 /
+	// 刚重启还没注册,或位置记录已陈旧。这一档抬高才是"节点掉线"告警的依据。
 	ResolveNodeUnknown = "node_unknown"
+	// ResolveMirrorUnsynced:镜像还没完成首次全量同步。进程刚起来的几百毫秒里
+	// 必然出现,是正常现象;混进 node_unknown 会让每次重启都像一次节点掉线。
+	ResolveMirrorUnsynced = "mirror_unsynced"
+	// ResolveNodeAmbiguous:同身份多条注册被拒选(脑裂)。与 node_unknown 分开:
+	// 前者是"节点没了",这一档是"两个进程抢同一个身份",处置完全不同 ——
+	// 必须去查租约与部署链。同时 Watcher.EntryOf 会打 ERROR 日志。
+	ResolveNodeAmbiguous = "node_ambiguous"
 	// ResolveError:Redis 故障、反序列化失败、拨号失败 —— 需要告警的那一档。
 	ResolveError = "error"
 )
@@ -45,7 +53,7 @@ func NewMetrics(reg prometheus.Registerer, service string) *Metrics {
 		}, []string{"service", "kind"}),
 		resolve: factory.NewCounterVec(prometheus.CounterOpts{
 			Name: "scenenode_resolve_total",
-			Help: "玩家 → scene 节点定位次数,按结果分:found / not_online / awaiting_placement / node_unknown / error。",
+			Help: "玩家 → scene 节点定位次数,按结果分:found / not_online / awaiting_placement / node_unknown / mirror_unsynced / node_ambiguous / error。",
 		}, []string{"service", "result"}),
 	}
 }

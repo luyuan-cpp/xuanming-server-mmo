@@ -89,6 +89,10 @@ public:
 	// 保留 pet_id / 资质 / 已分配点 / created_at / 当前 HP MP —— 刻意**不复用 GrantPet**:
 	// 它会重掷资质、按新主人等级重定级、回满血蓝、盖新 created_at,那样"买到的"就不是"卖出的"。
 	// pet_id 撞号拒绝(同一玩家名下已有该 id)。
+	//
+	// 快照来自交易库(托管期间不在 scene 的玩家存档里),所以这是唯一一个输入不受
+	// scene 自己把关的宠物写入口。只夹两样:level 夹回 PetTable.level_cap(缺配则不夹),
+	// 以及按夹后等级现算的 HP/MP 上限。资质刻意不夹,理由见 .cpp。
 	static uint32_t RestorePetFromSnapshot(entt::entity player, const PetInstance& snapshot);
 
 	// —— 战斗接缝(scene/battle/system/player_battle.cpp 调用)——

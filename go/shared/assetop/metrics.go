@@ -99,7 +99,7 @@ func NewMetrics(reg prometheus.Registerer, service string) *Metrics {
 		}, []string{"status"}),
 		storeErrorsTotal: f.NewCounterVec(prometheus.CounterOpts{
 			Name:        "assetop_store_errors_total",
-			Help:        "业务存储出错次数:list / claim / finalize / reschedule / decode / ledger_read",
+			Help:        "业务存储出错次数:list / claim / decode / finalize / reschedule / ledger_read / pending_age / manual_resolve",
 			ConstLabels: labels,
 		}, []string{"op"}),
 		pendingOldestAge: f.NewGaugeVec(prometheus.GaugeOpts{

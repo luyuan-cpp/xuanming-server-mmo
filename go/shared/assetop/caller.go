@@ -95,8 +95,12 @@ func (c *Caller) Do(ctx context.Context, rpc RPC, req *assetpb.AssetOpRequest) (
 
 	target, err := c.Resolver.Resolve(ctx, req.GetPlayerId())
 	if err != nil {
-		if errors.Is(err, scenenode.ErrNotOnline) || errors.Is(err, scenenode.ErrNodeUnknown) {
-			// 不在线 / 节点还没注册:本地合成 NOT_HERE。不记账、不终结,交给重投循环退避。
+		// IsNoHolder 覆盖「现在没有节点持有这个玩家」的全族:不在线、节点未注册/歧义,
+		// 以及跨 zone 交接已放行但目标 zone 还没落点(ErrAwaitingPlacement)。
+		// 第三种是传送在途的正常中间态,**必须**和前两种同样处理 —— 把它当故障返回,
+		// 帮会同步路径就会在玩家过图的那一两秒里给出"操作失败",而其实只该稍后重试。
+		if scenenode.IsNoHolder(err) {
+			// 没人持有:本地合成 NOT_HERE。不记账、不终结,交给重投循环退避。
 			c.Metrics.incRPCNoLocation(req.GetStream(), rpc)
 			return Result{
 				Outcome: assetpb.AssetOpOutcome_ASSET_OP_OUTCOME_NOT_HERE,

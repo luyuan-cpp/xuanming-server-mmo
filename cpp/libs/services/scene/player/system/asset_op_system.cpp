@@ -191,7 +191,7 @@ bool IsAssetOpDurable(entt::entity player, AssetOpStream stream, uint64_t epoch,
 			// 不敢报 durable,让 Go 继续重查并告警。
 			LOG_ERROR << "[AssetOp] 快照结局与内存结局不一致 stream=" << static_cast<int>(stream)
 					  << " epoch=" << epoch << " seq=" << seq
-					  << " on_disk=" << std::string(AssetOpSeqStateName(state))
+					  << " on_disk=" << AssetOpSeqStateName(state)
 					  << " expect_applied=" << expectApplied;
 			return false;
 		}
@@ -269,9 +269,23 @@ void AnswerSeenSeq(entt::entity player, const AssetOpStreamLedger& ledger, const
 
 // 前置:刚刚 Classify 出 kUnseen / kAheadOfWindow,且此后没有任何人动过账本。
 // 返回 false = 前置被破坏(账本未改动,调用方按 UNKNOWN 处理并告警)。
+//
+// **先用只读指针复核前置,再 MutableAssetOpStream 建流**:反过来的话,前置不成立时
+// 账本里会留下一条 stream_epoch = 0 的空流(asset_op_ledger.cpp:227-246 建流时写 0,
+// 真实纪元靠 RecordAssetOpOutcome 内部的纪元重置补;而它前置失败时 :296-303 直接
+// return false,什么也不写)。那条空流一旦随存盘落地,下次加载 ValidateAssetOpLedger
+// 就因 "stream_epoch = 0" 判整本账本损坏,该玩家的资产通道被永久 fail-closed ——
+// 一次瞬时 bug 放大成持久锁死。建流的这条调用约定写在 asset_op_ledger.h:66-68。
 bool RecordOutcome(PlayerAssetOpLedgerComp& ledgerComp, const ::AssetOpRequest& request,
 				   AssetOpRecordKind kind, uint32_t reasonTipId)
 {
+	const auto* existing = FindAssetOpStream(ledgerComp, request.stream());
+	const auto state = ClassifyAssetOpSeq(existing, request.stream_epoch(), request.seq());
+	if (state != AssetOpSeqState::kUnseen && state != AssetOpSeqState::kAheadOfWindow)
+	{
+		return false;
+	}
+
 	auto& ledger = MutableAssetOpStream(ledgerComp, request.stream());
 	return RecordAssetOpOutcome(ledger, request.stream_epoch(), request.seq(), kind, reasonTipId);
 }
@@ -293,6 +307,27 @@ void RejectAndRecord(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp,
 	response.set_durable(PersistAndProbeDurable(player, request, /*expectApplied=*/false, nowMs));
 }
 
+// ── 未进签名串的 P2 字段(§4.9 第 1c 步:不记账)────────────────────────────
+
+// 聚宝斋 P2 的 guid 扣物 / 宝宝字段(AssetBundle.item_uuids / pet_id)本批**不支持**:
+// 没实现就必须显式拒绝,不能默默忽略(AGENTS §11.3 不得静默降级)。P2 实现这两条时
+// 在本函数与 ApplyDebit / ApplyCredit 里成对放开。
+//
+// **判在信封档、不记账**(见 Decide 第 1c 步),不走第 8 步那种终局 REJECTED:
+// 这两个字段**不在签名 canonical 里**(§4.32 第 10 行只到 `c=…;i=…`,
+// asset_op.proto 的 AssetBundle 注释逐字写明并点名这正是"同 seq 抢跑改载荷"的攻击面),
+// 而 scene gRPC 是 InsecureServerCredentials(node.cpp:623),集群内任何进程可连可嗅。
+// 若记成终局拒绝,攻击者只要在一条**合法签名**的请求上追加 pet_id=1 重发,
+// 该 (纪元, seq) 就被永久钉成 REJECTED(不变量 I2 结局固定),帮会随后重投的真实
+// 捐献再也扣不成。按"信封不受签名保护"同类处理:篡改包被忽略,合法包仍能正常应用。
+// 等 asset_op.proto 注释写的硬前置落地(canonical 扩成 `…;u=…;p=…`、C++
+// AssetOpCanonical 与 Go assetop.Canonical 同批改、两边 golden 更新)之后,
+// 再把它改回 §4.9 第 8 步的记账式 REJECTED。
+bool HasUnsupportedP2Fields(const ::AssetBundle& bundle)
+{
+	return bundle.item_uuids_size() > 0 || bundle.pet_id() != 0;
+}
+
 // ── 包内容校验(§4.9 第 8 步:确定性失败,要记账)──────────────────────────
 
 bool IsCurrencyAmountValid(const ::CurrencyAmount& currency)
@@ -301,21 +336,8 @@ bool IsCurrencyAmountValid(const ::CurrencyAmount& currency)
 		   currency.amount() <= static_cast<uint64_t>(std::numeric_limits<int64_t>::max());
 }
 
-// 聚宝斋 P2 的 guid 扣物 / 宝宝字段(AssetBundle.item_uuids / pet_id)本批**不支持**:
-// 没实现就必须显式拒绝,不能默默忽略(AGENTS §11.3 不得静默降级)。P2 实现这两条时
-// 在本函数与 ApplyDebit / ApplyCredit 里成对放开。
-bool HasUnsupportedP2Fields(const ::AssetBundle& bundle)
-{
-	return bundle.item_uuids_size() > 0 || bundle.pet_id() != 0;
-}
-
 bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
 {
-	if (HasUnsupportedP2Fields(bundle))
-	{
-		why = "debit 不支持 item_uuids / pet_id(聚宝斋 P2)";
-		return false;
-	}
 	if (bundle.currencies_size() != 1 || bundle.items_size() != 0)
 	{
 		why = "debit v1 只收恰好 1 条货币、0 件物品";
@@ -331,11 +353,6 @@ bool ValidateDebitBundle(const ::AssetBundle& bundle, std::string& why)
 
 bool ValidateCreditBundle(const ::AssetBundle& bundle, std::string& why)
 {
-	if (HasUnsupportedP2Fields(bundle))
-	{
-		why = "credit 不支持 item_uuids / pet_id(聚宝斋 P2)";
-		return false;
-	}
 	if (bundle.currencies_size() + bundle.items_size() < 1)
 	{
 		why = "credit 包为空";
@@ -627,6 +644,18 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 		return;
 	}
 
+	// 1c. 未进签名串的 P2 字段(不记账)。它们不受签名保护,记成终局拒绝就等于把
+	// "谁都能追加两个字段" 变成 "谁都能永久杀掉任意一条在途 seq";详见 HasUnsupportedP2Fields。
+	if (HasUnsupportedP2Fields(request.bundle()))
+	{
+		LOG_WARN << "[AssetOp] 收到未支持且未进签名串的 P2 字段,忽略本次请求 rpc=" << RpcName(rpc)
+				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
+				 << " seq=" << request.seq() << " item_uuids=" << request.bundle().item_uuids_size()
+				 << " pet_id=" << request.bundle().pet_id();
+		Answer(response, ASSET_OP_OUTCOME_UNKNOWN, kAssetInvalidBundle);
+		return;
+	}
+
 	// 2. 找人(不记账)
 	const auto playerIt = tlsEcs.playerList.find(request.player_id());
 	if (playerIt == tlsEcs.playerList.end() || !tlsEcs.actorRegistry.valid(playerIt->second))
@@ -669,7 +698,7 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 	case AssetOpSeqState::kJumpTooFar:
 		// 三者都说明 Go 侧守卫失效、帮会库被重置/恢复,或 Redis 回退过。
 		// 不记账、不猜结局,reason 留 0,Go 计 assetop_unknown_total 并转人工(§4.38)。
-		LOG_ERROR << "[AssetOp] seq 不可采信 state=" << std::string(AssetOpSeqStateName(state))
+		LOG_ERROR << "[AssetOp] seq 不可采信 state=" << AssetOpSeqStateName(state)
 				  << " player_id=" << request.player_id() << " rpc=" << RpcName(rpc)
 				  << " stream=" << static_cast<int>(request.stream())
 				  << " req_epoch=" << request.stream_epoch()

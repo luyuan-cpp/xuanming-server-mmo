@@ -178,11 +178,51 @@ func TestResolveWatcherNotSynced(t *testing.T) {
 	raw := mustMarshalLoc(t, &smpb.PlayerLocation{NodeId: "7", ZoneId: 1, OwnerEpoch: 3})
 	w := NewWatcher("scene", SceneNodeRpcPrefix, nil, nil)
 	w.Upsert(rpcKey(1, 7), NodeEntry{NodeId: 7, ZoneId: 1, Endpoint: "10.0.0.1:9201"})
-	l := &Locator{Reader: &fakeReader{raw: raw}, Watcher: w, Metrics: newTestMetrics(),
+	m := newTestMetrics()
+	l := &Locator{Reader: &fakeReader{raw: raw}, Watcher: w, Metrics: m,
 		Dial: func(string) (smpb.SceneNodeGrpcClient, error) { return fakeSceneClient{}, nil }}
 
 	if _, err := l.Resolve(context.Background(), 42); !errors.Is(err, ErrNodeUnknown) {
 		t.Fatalf("未同步的镜像必须拒绝定位: %v", err)
+	}
+	// 启动窗口里镜像没建起来是正常现象,不能计进"节点掉线"那一档,
+	// 否则每次重启都会把 node_unknown 抬高一次。
+	if got := resolveCount(m, ResolveMirrorUnsynced); got != 1 {
+		t.Fatalf("mirror_unsynced = %v, want 1", got)
+	}
+	if got := resolveCount(m, ResolveNodeUnknown); got != 0 {
+		t.Fatalf("不该记 node_unknown,实得 %v", got)
+	}
+}
+
+// 脑裂(同身份多条注册)与节点掉线在指标上必须分开:前者查租约与部署链,
+// 后者查节点进程。两者对调用方都仍是 ErrNodeUnknown 族的"稍后重试"。
+func TestResolveAmbiguousNodeCountsSeparately(t *testing.T) {
+	raw := mustMarshalLoc(t, &smpb.PlayerLocation{NodeId: "7", ZoneId: 1, OwnerEpoch: 3})
+	// 同一 (zone=1, node=7) 身份挂在两个 etcd key 上、指向不同 endpoint:
+	// 典型成因是旧租约没过期新节点已注册,或两条部署链同时在跑。
+	staleKey := rpcKey(1, 7) + "-stale"
+	w := NewWatcher("scene", SceneNodeRpcPrefix, nil, nil)
+	w.Upsert(rpcKey(1, 7), NodeEntry{NodeId: 7, ZoneId: 1, NodeUuid: "uuid-a", Endpoint: "10.0.0.1:9201"})
+	w.Upsert(staleKey, NodeEntry{NodeId: 7, ZoneId: 1, NodeUuid: "uuid-b", Endpoint: "10.0.0.2:9201"})
+	w.synced.Store(true)
+
+	m := newTestMetrics()
+	l := &Locator{Reader: &fakeReader{raw: raw}, Watcher: w, Metrics: m,
+		Dial: func(string) (smpb.SceneNodeGrpcClient, error) {
+			t.Fatal("歧义时绝不能拨号")
+			return nil, nil
+		}}
+
+	_, err := l.Resolve(context.Background(), 42)
+	if !errors.Is(err, ErrNodeUnknown) || !IsNoHolder(err) {
+		t.Fatalf("歧义必须仍属 ErrNodeUnknown / IsNoHolder 族: %v", err)
+	}
+	if got := resolveCount(m, ResolveNodeAmbiguous); got != 1 {
+		t.Fatalf("node_ambiguous = %v, want 1", got)
+	}
+	if got := resolveCount(m, ResolveNodeUnknown); got != 0 {
+		t.Fatalf("不该同时记 node_unknown,实得 %v", got)
 	}
 }
 

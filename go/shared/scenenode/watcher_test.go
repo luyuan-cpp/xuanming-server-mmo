@@ -1,6 +1,7 @@
 package scenenode
 
 import (
+	"errors"
 	"fmt"
 	"testing"
 )
@@ -72,8 +73,30 @@ func TestEndpointOfAmbiguousRejected(t *testing.T) {
 	w.Upsert(rpcKey(1, 7), a)
 	w.Upsert("SceneNodeService.rpc/zone/1/node_type/3/node_id/7-stale", b)
 
-	if _, err := w.EndpointOf(1, "7"); err == nil {
+	_, err := w.EndpointOf(1, "7")
+	if err == nil {
 		t.Fatal("同身份多条注册必须拒选")
+	}
+	// 歧义要能与"节点未注册"分开(指标与告警口径不同)……
+	if !errors.Is(err, ErrNodeAmbiguous) {
+		t.Fatalf("err = %v, want ErrNodeAmbiguous", err)
+	}
+	// ……但必须仍落在 ErrNodeUnknown 族里,否则 assetop Caller 的 IsNoHolder
+	// 会把脑裂当成真故障返回,业务侧看到的是"操作失败"而不是重试。
+	if !errors.Is(err, ErrNodeUnknown) || !IsNoHolder(err) {
+		t.Fatalf("歧义必须仍属 ErrNodeUnknown / IsNoHolder 族: %v", err)
+	}
+}
+
+// 查无此节点(掉线)不得被当成歧义:两者的运维处置不同。
+func TestEndpointOfMissingIsNotAmbiguous(t *testing.T) {
+	w := NewWatcher("scene", SceneNodeRpcPrefix, nil, nil)
+	_, err := w.EndpointOf(1, "7")
+	if err == nil {
+		t.Fatal("空镜像里查任何节点都必须报错")
+	}
+	if errors.Is(err, ErrNodeAmbiguous) {
+		t.Fatalf("节点未注册不是歧义: %v", err)
 	}
 }
 

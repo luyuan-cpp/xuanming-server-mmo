@@ -27,7 +27,8 @@ const (
 // assetOpColumns 是 outbox 行的全列,顺序即 scanAssetOp / InsertOp 的参数顺序。
 const assetOpColumns = "`op_id`, `player_id`, `stream`, `stream_epoch`, `seq`, `kind`, `status`, `durable`, " +
 	"`attempts`, `next_attempt_ms`, `deadline_ms`, `lease_until_ms`, `lease_token`, `tx_type`, " +
-	"`ref_kind`, `ref_id`, `payload`, `last_outcome`, `last_reason`, `created_ms`, `updated_ms`"
+	"`ref_kind`, `ref_id`, `payload`, `last_outcome`, `last_reason`, `created_ms`, `updated_ms`, " +
+	"`resolved_by`, `resolve_reason`"
 
 // PendingStatus 是 outbox 的"待办"状态数值,给 assetop 的 seq 分配与重投循环用。
 // 取 proto 枚举而不是写 0 / 1:§4.43 #23 明确 assetop.Status 不绑库值,库值由业务表自己定。
@@ -46,7 +47,10 @@ type AssetOpRepo struct {
 	tables    assetop.SeqTables
 }
 
-var _ assetop.Store = (*AssetOpRepo)(nil)
+var (
+	_ assetop.Store          = (*AssetOpRepo)(nil)
+	_ assetop.ManualResolver = (*AssetOpRepo)(nil)
+)
 
 // NewAssetOpRepo。opTimeout 是每次调用的上限(constants.StoreOpTimeout),必须 > 0。
 // 表名经 assetop.NewSeqTables 校验(正则 ^[a-z][a-z0-9_]{0,62}$),防止拼接注入。
@@ -84,12 +88,14 @@ func (r *AssetOpRepo) EnsureSeqRow(ctx context.Context, playerID uint64, stream 
 func (r *AssetOpRepo) InsertOp(ctx context.Context, tx *sql.Tx, rec *tradepb.TradeAssetOpRecord) error {
 	_, err := tx.ExecContext(ctx,
 		"INSERT INTO "+AssetOpTableName+" ("+assetOpColumns+") VALUES "+
-			"(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+			"(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		rec.GetOpId(), rec.GetPlayerId(), rec.GetStream(), rec.GetStreamEpoch(), rec.GetSeq(),
 		int32(rec.GetKind()), int32(rec.GetStatus()), rec.GetDurable(),
 		rec.GetAttempts(), rec.GetNextAttemptMs(), rec.GetDeadlineMs(), rec.GetLeaseUntilMs(), rec.GetLeaseToken(),
 		rec.GetTxType(), int32(rec.GetRefKind()), rec.GetRefId(), rec.GetPayload(),
 		rec.GetLastOutcome(), rec.GetLastReason(), rec.GetCreatedMs(), rec.GetUpdatedMs(),
+		// 新行一律是空留痕:人工终结只由 ResolveManually 写,插入路径绝不预置操作人。
+		rec.GetResolvedBy(), rec.GetResolveReason(),
 	)
 	if err != nil {
 		return fmt.Errorf("insert %s %d: %w", AssetOpTableName, rec.GetOpId(), err)
@@ -168,12 +174,16 @@ func (r *AssetOpRepo) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, toke
 		}
 	}
 	return assetop.Op{
-		OpID:          rec.GetOpId(),
-		PlayerID:      rec.GetPlayerId(),
-		Stream:        assetpb.AssetOpStream(rec.GetStream()),
-		Seq:           rec.GetSeq(),
-		StreamEpoch:   rec.GetStreamEpoch(),
-		CorrelationID: rec.GetRefId(),
+		OpID:        rec.GetOpId(),
+		PlayerID:    rec.GetPlayerId(),
+		Stream:      assetpb.AssetOpStream(rec.GetStream()),
+		Seq:         rec.GetSeq(),
+		StreamEpoch: rec.GetStreamEpoch(),
+		// correlation_id 取 op_id,**不是** ref_id:§4.38 的人工终结以 scene 流水
+		// correlation_id 定位唯一一行 outbox。取 ref_id 的话,同一件商品的托管与回退
+		// 两条 op 会在 transaction_log 里落成同一个 correlation_id,取证就失效了。
+		// 这里必须与 reconcile 首次投递时填的值一致,否则重投会换一个 correlation。
+		CorrelationID: rec.GetOpId(),
 		TxType:        rec.GetTxType(),
 		Bundle:        bundle,
 		Attempts:      rec.GetAttempts(),
@@ -237,6 +247,53 @@ func (r *AssetOpRepo) Finalize(ctx context.Context, op assetop.Op, status asseto
 	return finalized, nil
 }
 
+// ResolveManually 是 §4.38 的人工终结通道:把一行卡死的 outbox 按人工判定直接落成终局,
+// 并留下操作人与依据。它**不查证据、不猜结论** —— 调用方(管理入口)已经按 scene 流水的
+// correlation_id = op_id 判定过,本方法只负责落库 + 留痕 + 与自动路径同一把 CAS。
+//
+// 与 Finalize 完全同形:同一个事务、同一条 `status = PENDING` 的 CAS、RowsAffected == 1
+// 才算本次终结并做对侧账。两条路径共用这个条件,人工与循环同时下手也只会有一个赢家。
+//
+// durable 刻意**不**置 1:这一行的终局来自人工判定,不是 scene 确认的落盘结局,
+// 把它标成 durable 会让事后对账分不清"scene 真的答过"和"人写上去的"。
+func (r *AssetOpRepo) ResolveManually(ctx context.Context, m assetop.ManualResolution, nowMs uint64) (bool, error) {
+	// 状态合法性、操作人与理由的长度由 assetop.Loop.ResolveManually 在进来之前校验;
+	// 这里只兜住"映射不出库值"这一种:落成 UNSPECIFIED 会让客服查不到结局。
+	final := StatusToRecord(m.Final)
+	if final == tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_UNSPECIFIED ||
+		final == tradepb.TradeAssetOpStatus_TRADE_ASSET_OP_STATUS_PENDING {
+		return false, fmt.Errorf("manual resolve %s %d: 终结状态非法 (%s)", AssetOpTableName, m.OpID, m.Final)
+	}
+	ctx, cancel := r.bounded(ctx)
+	defer cancel()
+	resolved := false
+	err := assetop.WithTxRetry(ctx, r.db, txRetryAttempts, IsRetryableTxError, func(tx *sql.Tx) error {
+		resolved = false
+		result, err := tx.ExecContext(ctx,
+			"UPDATE "+AssetOpTableName+" SET `status` = ?, `resolved_by` = ?, `resolve_reason` = ?, `updated_ms` = ?"+
+				" WHERE `op_id` = ? AND `status` = ?",
+			int32(final), m.Operator, m.Reason, nowMs, m.OpID, PendingStatus())
+		if err != nil {
+			return fmt.Errorf("manual resolve %s %d: %w", AssetOpTableName, m.OpID, err)
+		}
+		affected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("manual resolve %s %d rows affected: %w", AssetOpTableName, m.OpID, err)
+		}
+		if affected != 1 {
+			return nil // 行不存在或已被终结:不是错误,也不做对侧账
+		}
+		resolved = true
+		// P3 对侧账在这里,与 Finalize 的 TODO 处**同一份**逻辑(抽成一个内部函数,
+		// 两条路径都调它);人工与自动走两份对侧账就会出现只有一边改了商品状态。
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	return resolved, nil
+}
+
 // Reschedule 退回待办并推迟下一次投递。带 lease_token 做 CAS:租约已被别人接管时本次更新落空,
 // 不会把别的副本刚排好的时间覆盖掉。
 func (r *AssetOpRepo) Reschedule(ctx context.Context, op assetop.Op, nextAttemptMs uint64, res assetop.Result, nowMs uint64) error {
@@ -296,6 +353,7 @@ func scanAssetOp(row rowScanner) (*tradepb.TradeAssetOpRecord, error) {
 		&rec.Attempts, &rec.NextAttemptMs, &rec.DeadlineMs, &rec.LeaseUntilMs, &rec.LeaseToken,
 		&rec.TxType, &refKind, &rec.RefId, &rec.Payload,
 		&rec.LastOutcome, &rec.LastReason, &rec.CreatedMs, &rec.UpdatedMs,
+		&rec.ResolvedBy, &rec.ResolveReason,
 	); err != nil {
 		return nil, err
 	}

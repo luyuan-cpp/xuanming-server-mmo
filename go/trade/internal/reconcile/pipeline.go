@@ -15,6 +15,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"trade/internal/data"
@@ -43,8 +44,10 @@ const (
 	loopAwaitDurableDelay = 500 * time.Millisecond
 	loopLedgerMinAttempts = 3
 
-	// callTimeout / requery 与 guild 同值:一次 800ms + 重查 100/200/400ms 仍在 OpBudget 内。
-	callTimeout = 800 * time.Millisecond
+	// CallTimeout 是**单次**资产 RPC 的上限,装配层(internal/svc)建 assetop.Caller 时用它。
+	// 与 guild 同值:一次 800ms + 重查 100/200/400ms 仍在 OpBudget(2500ms)内。
+	// 放在本包而不是 svc:它与下面这组循环参数是同一条预算,改一个要连着看另一个。
+	CallTimeout = 800 * time.Millisecond
 
 	// commitDeliveryDelay:新行的 next_attempt_ms / lease_until_ms 相对提交时刻的偏移。
 	// 提交后业务线程会**立刻**自己投一次;让重投循环在这段时间内看不到这一行,两边就不会
@@ -52,18 +55,29 @@ const (
 	commitDeliveryDelay = loopLease
 )
 
+// TradeStreams 返回 trade 独占的两条资产流(不变量 I6:每条流只有一个服务分配 seq)。
+// 每次返回新切片,调用方改了也影响不到别人。
+func TradeStreams() []assetpb.AssetOpStream {
+	return []assetpb.AssetOpStream{
+		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_DEBIT,
+		assetpb.AssetOpStream_ASSET_OP_STREAM_TRADE_CREDIT,
+	}
+}
+
 // EscrowRequest 是一次"上架托管"(把资产从卖家身上扣出)的入参。
 //
-// Bundle 的形状按 proto/common/asset/asset_op.proto:
-//   - 游戏币:currencies 恰一条;
-//   - 装备道具:item_uuids(全或无,≤8);
-//   - 宠物:pet_id(出战中会被 scene 拒);
+// Bundle 在 v1 **只支持游戏币:currencies 恰一条、items 为空**(§4.9 第 8 步的 Debit 约束)。
+//
+// `AssetBundle.item_uuids`(按 guid 扣装备)与 `pet_id`(扣宝宝)虽然已经在 proto 里,
+// 但**还没进签名串** —— §4.32 的 canonical 第 10 行只写 `c=…;i=…`。两边都没做完之前
+// 本包一律拒收带这两个字段的包,理由见 validateDebitBundle。
 //
 // 角色交易(CHARACTER_LOCK)不走这条路,见聚宝斋设计 §6.3。
 type EscrowRequest struct {
 	// SellerPlayerID 资产的主人。
 	SellerPlayerID uint64
-	// ListingID 商品 id,同时作请求的 correlation_id 进 scene 的 transaction_log(开放项 J-A3)。
+	// ListingID 商品 id,只作业务外键进 outbox 的 ref_id。
+	// 请求的 correlation_id 取 op_id(§4.38 的人工终结以它定位唯一一行)。
 	ListingID uint64
 	// Bundle 要扣出的那一份资产。
 	Bundle *assetpb.AssetBundle
@@ -115,14 +129,21 @@ type Pipeline struct {
 
 // ErrSignerMissing:没有配 MMORPG_ASSET_OP_SECRET_TRADE(或密钥太短)。
 // 资产路径一律 fail-closed,不做 dev 放行(§4.32),所以整条管线直接不构造。
+//
+// 它同时是**空管线**的错误:svc 在密钥缺失时把 Pipeline 留成 nil,业务侧拿着这个 nil
+// 调进来时返回它,而不是 panic —— 降级形态必须以错误的形式被看见。
 var ErrSignerMissing = errors.New("trade: 资产通道未配置调用方密钥,管线不启动")
 
-// New 构造管线。Caller 为 nil(密钥缺失时 svc 不会构造它)即返回 ErrSignerMissing。
+// New 构造管线。Caller 为 nil(密钥缺失时 svc 不会构造它)或它没带 Signer,都返回 ErrSignerMissing。
+//
+// 为什么连"Caller 非 nil 但 Signer 为 nil"也要拒:assetop.Caller.Do 在那种情况下每次都回
+// ErrNoSigner,decide.go 把它判成 ActionRetry,于是每一行都按退避无限重投、永不终结。
+// 结果是一条"收得下托管、写得进 outbox、就是投不出去"的管线,比当场拒绝难查得多。
 func New(d Deps) (*Pipeline, error) {
 	if d.Ops == nil {
 		return nil, errors.New("trade: 资产管线缺 outbox 存储")
 	}
-	if d.Caller == nil {
+	if d.Caller == nil || d.Caller.Signer == nil {
 		return nil, ErrSignerMissing
 	}
 	if d.OpIDs == nil {
@@ -143,15 +164,28 @@ func New(d Deps) (*Pipeline, error) {
 		AwaitDurableDelay:     loopAwaitDurableDelay,
 		PoisonDelay:           data.PoisonDelay,
 		LedgerReadMinAttempts: loopLedgerMinAttempts,
+		// 只报 trade 独占的两条流(不变量 I6):循环每 30s 按它们刷
+		// assetop_pending_oldest_age_seconds。漏写 = 积压告警永远没有序列。
+		Streams: TradeStreams(),
 	}, d.Ops, d.Caller, d.Metrics, now)
 	if err != nil {
 		return nil, fmt.Errorf("trade: 资产重投循环参数非法: %w", err)
 	}
+	// 人工终结通道(§4.38):UNKNOWN 每 60s 重排、玩家长期离线的行不会自己走到终局。
+	// 不挂它的话 Loop.ResolveManually 只会回"未配置人工终结通道",卡死的行无路可走。
+	// Manual 是 Loop 的可选字段(不在 LoopConfig 里),必须在 Run / ProcessOne 之前挂上。
+	loop.Manual = d.Ops
 	return &Pipeline{ops: d.Ops, loop: loop, ids: d.OpIDs, now: now, metrics: d.Metrics}, nil
 }
 
 // Start 起后台重投循环。ctx 取消即退出;调用方负责在停机收尾里取消它。
+//
+// 空接收者直接返回:密钥缺失时 svc 把 Pipeline 留成 nil,启动路径照常调到这里。
 func (p *Pipeline) Start(ctx context.Context) {
+	if p == nil {
+		logx.Error("[trade] 资产通道未启用(密钥缺失),不起重投循环")
+		return
+	}
 	safego.Go("trade.assetop.loop", func() { p.loop.Run(ctx) })
 	logx.Infof("[trade] 资产重投循环已启动: interval=%v batch=%d workers=%d lease=%v",
 		loopInterval, loopBatch, loopWorkers, loopLease)
@@ -168,11 +202,16 @@ func (p *Pipeline) Start(ctx context.Context) {
 //
 // 第 4 步失败不回滚第 3 步:行已在 outbox,循环会接着投。只有 1–3 步失败才算本次上架失败。
 func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (EscrowResult, error) {
+	// 空接收者 = 降级形态(密钥缺失,svc 没建管线)。以错误返回而不是 panic:
+	// 调用方本来就要处理"托管失败",多一种 panic 只会让整个请求线程炸掉。
+	if p == nil {
+		return EscrowResult{}, ErrSignerMissing
+	}
 	if req.SellerPlayerID == 0 || req.ListingID == 0 {
 		return EscrowResult{}, errors.New("trade: 托管入队缺 seller_player_id / listing_id")
 	}
-	if req.Bundle == nil {
-		return EscrowResult{}, errors.New("trade: 托管入队缺资产包")
+	if err := validateDebitBundle(req.Bundle); err != nil {
+		return EscrowResult{}, err
 	}
 	payload, err := proto.Marshal(req.Bundle)
 	if err != nil {
@@ -206,12 +245,16 @@ func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (E
 	}
 
 	op := assetop.Op{
-		OpID:          opID,
-		PlayerID:      req.SellerPlayerID,
-		Stream:        stream,
-		Seq:           alloc.Seq,
-		StreamEpoch:   alloc.Epoch,
-		CorrelationID: req.ListingID,
+		OpID:        opID,
+		PlayerID:    req.SellerPlayerID,
+		Stream:      stream,
+		Seq:         alloc.Seq,
+		StreamEpoch: alloc.Epoch,
+		// correlation_id 取 op_id,不是 listing_id:§4.38 的人工终结以 scene 流水的
+		// correlation_id 定位唯一一行 outbox。取 listing_id 的话,同一件商品的托管与
+		// 回退两条 op 会落成同一个 correlation_id,取证失效。ref_id 仍是 listing_id。
+		// 必须与 data.AssetOpRepo.Claim 里的取法一致(重投换 correlation 同样不可取证)。
+		CorrelationID: opID,
 		TxType:        uint32(rollbackpb.TransactionType_TX_AUCTION_SELL),
 		Bundle:        req.Bundle,
 		DeadlineMs:    req.DeadlineMs,
@@ -229,6 +272,64 @@ func (p *Pipeline) EnqueueEscrowDebit(ctx context.Context, req EscrowRequest) (E
 	out.Status = processed.Status
 	out.Result = processed.Result
 	return out, nil
+}
+
+// validateDebitBundle 在**碰号段和数据库之前**把确定性非法的托管包挡回去。
+//
+// 两件不同的事,合在一处做:
+//
+//  1. §4.9 第 8 步的 Debit(v1) 形状:恰好 1 条货币、0 件物品、amount ∈ [1, INT64_MAX]。
+//     这类包送到 scene 会被记成**终局 REJECTED**(§4.10 该行"记账=是")并吃掉一个 seq ——
+//     一次注定失败的往返,还在账本里留下一条永远翻不了案的记录。本地判等价且免费。
+//     currency_type 的上界(C++ kCurrencyMax)Go 侧没有事实源,留给 scene 判。
+//
+//  2. `item_uuids` / `pet_id` **一律拒收**,直到签名串扩完为止。这两个字段已经在
+//     proto/common/asset/asset_op.proto 里(字段 3 / 4),但 §4.32 的 canonical 只写
+//     `c=…;i=…`,不覆盖它们;scene 的 asset_op_system.cpp 因此在验签之后、找人之前
+//     对任一非空字段回 `UNKNOWN + kAssetInvalidBundle` 且**不记账**。UNKNOWN 在
+//     assetop/decide.go 里是 ActionAlert —— 按 60s 上限无限重排,永不终结:
+//     行卡死,DeadlineMs 也救不了(Abort 带同一个包,走同一个分支)。更糟的是
+//     AllocateSeq 的 I5 守卫按本纪元未决行数算,16 条卡死之后这个卖家连纯货币上架
+//     都会被 ErrTooManyPending 拒。所以这里 fail-closed。
+//
+// 解除条件(同一批四处一起改):go/shared/assetop/auth.go 的 writeBundleCanonical 扩成
+// `…;i=…;u=<item_uuid,…>;p=<pet_id>`、C++ AssetOpCanonical 同步、两边 golden 字面量更新、
+// asset_op_system.cpp 的第 1c 步改回 §4.9 第 8 步的记账式 REJECTED。
+func validateDebitBundle(b *assetpb.AssetBundle) error {
+	if b == nil {
+		return errors.New("trade: 托管入队缺资产包")
+	}
+	if len(b.GetItemUuids()) > 0 || b.GetPetId() != 0 {
+		return fmt.Errorf("trade: 托管资产包含未进签名串的 item_uuids(%d 个)/ pet_id(%d),"+
+			"canonical 扩成 …;u=…;p=… 之前不受理(asset_op.proto AssetBundle 硬前置):"+
+			"scene 会回 UNKNOWN 且不记账,这一行会永远卡在 outbox 里",
+			len(b.GetItemUuids()), b.GetPetId())
+	}
+	if len(b.GetItems()) != 0 {
+		return fmt.Errorf("trade: 托管资产包带了 %d 件可叠加物品,Debit v1 只收货币(§4.9 第 8 步)", len(b.GetItems()))
+	}
+	if len(b.GetCurrencies()) != 1 {
+		return fmt.Errorf("trade: 托管资产包有 %d 条货币,Debit v1 恰收 1 条(§4.9 第 8 步)", len(b.GetCurrencies()))
+	}
+	amount := b.GetCurrencies()[0].GetAmount()
+	if amount < 1 || amount > math.MaxInt64 {
+		return fmt.Errorf("trade: 托管金额 %d 越界,须在 [1, %d](§4.9 第 8 步)", amount, int64(math.MaxInt64))
+	}
+	return nil
+}
+
+// ResolveManually 把一行卡死的 outbox 按人工判定落成终局(§4.38)。
+//
+// 调用方(管理入口)必须**先**按 scene 流水 `correlation_id = op_id` 判定过真实结局:
+// 本方法不查证据、不猜结论。状态合法性与 operator / reason 的长度由 assetop 校验。
+//
+// 返回 false 表示这一行已经不在 PENDING(被循环抢先终结,或已被人工终结过),
+// 不是错误,调用方不得重复入账。
+func (p *Pipeline) ResolveManually(ctx context.Context, m assetop.ManualResolution) (bool, error) {
+	if p == nil {
+		return false, ErrSignerMissing
+	}
+	return p.loop.ResolveManually(ctx, m)
 }
 
 // newEscrowRecord 拼一行待办 outbox。
@@ -266,7 +367,13 @@ func (p *Pipeline) newEscrowRecord(req EscrowRequest, opID uint64, alloc assetop
 // op_id 来自号段、全局唯一,足够把本次提交与后续任何一次循环领取区分开。
 func (p *Pipeline) leaseTokenOf(opID uint64) uint64 {
 	// 高位打散,避免与循环里的随机令牌落在同一段数值区间时肉眼难分。
-	return opID ^ 0x7472_6164_6500_0000
+	token := opID ^ 0x7472_6164_6500_0000
+	if token == 0 {
+		// 0 与"没有租约"同形:Reschedule 的 CAS 会匹配上所有未被领取的行。
+		// 只在 op_id 恰好等于那个掩码时发生,但代价只有一次比较。
+		return 1
+	}
+	return token
 }
 
 func (p *Pipeline) nowMs() uint64 {
@@ -277,15 +384,5 @@ func (p *Pipeline) nowMs() uint64 {
 	return uint64(ms)
 }
 
-// RandomToken 生成一个非零随机令牌(重投循环领取用)。放在本包是因为它只服务于资产管线。
-func RandomToken() (uint64, error) {
-	var buf [8]byte
-	if _, err := rand.Read(buf[:]); err != nil {
-		return 0, fmt.Errorf("trade: 生成租约令牌失败: %w", err)
-	}
-	token := binary.BigEndian.Uint64(buf[:])
-	if token == 0 {
-		token = 1 // 0 与"没有租约"同形,不能当令牌
-	}
-	return token, nil
-}
+// 重投循环领取用的随机令牌由 shared/assetop 自己生成(Loop.claim → newLeaseToken),
+// 本包不再提供第二份实现:两处各生成一份令牌只会让"这一行现在归谁"多一种说法。

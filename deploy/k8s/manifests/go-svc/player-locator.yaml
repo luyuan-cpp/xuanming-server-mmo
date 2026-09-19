@@ -21,7 +21,13 @@ metadata:
     app: player-locator
     tier: go-svc
 spec:
-  replicas: 1
+  # 2 副本:player_locator 的全部状态在 Redis,进程内不留会话。两条后台链路都已按多实例写好 ——
+  # LeaseMonitor 用一段 Lua 原子领取过期租约(领取即移入 processing + 每 claim 一个 token,
+  # 带 token 的提交成功后才发踢人/LeaveScene,持有者死亡则 claim 超时被收回重试);
+  # SessionReconciler 的去抖表在进程内各记各的,转换走与 SetDisconnecting 相同的整字节 CAS,
+  # 后动手的副本读到的已是 DISCONNECTING,直接跳过。代价只有共享 Redis 每 60s 多一轮 SCAN。
+  # 单副本时它是登录链路的真单点:它不可用期间所有 EnterGame 失败,login 自己也因阻塞式拨号起不来。
+  replicas: 2
   selector:
     matchLabels:
       app: player-locator
@@ -31,6 +37,16 @@ spec:
         app: player-locator
         tier: go-svc
     spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点,否则单节点故障等于全池不可用
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: player-locator
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: player-locator
           image: PLACEHOLDER_IMAGE
@@ -72,3 +88,18 @@ spec:
         - name: svc-config
           configMap:
             name: go-svc-player-locator-config
+---
+# PDB 直接放在本文件里:k8s_deploy.ps1 只 apply 各服务目录表里登记的主 manifest,
+# 独立的 *-pdb.yaml 不会被脚本应用 —— 别拆出去。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: player-locator-pdb
+  labels:
+    app: player-locator
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: player-locator

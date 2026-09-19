@@ -27,6 +27,9 @@ package main
 //      proto/common/database/mysql_database_table.proto 的
 //      OptionPrimaryKey = "player_id"),但**不硬编码**:以后 proto 加表,
 //      导表器更新 JSON,这里自动跟上。
+//   1b. **写任何一张表之前**,先把全部表的两库列集合比一遍(alignedPlayerColumns)。
+//      不能放进逐表循环:每张表一个事务、跨表没有原子性,半迁移状态下会先写完
+//      一张表才在下一张表上炸,留下半合服的目标库(见 copyPlayerRows 的注释)。
 //   2. 逐表:先查目标库有没有同 player_id 的行 —— 有就是 **ID 安全事件**
 //      (两个 zone 发出了同一个 player_id,或这批人已经合过一次),立刻中止,
 //      不写任何东西。
@@ -223,9 +226,30 @@ func copyPlayerRows(
 		return rep, nil
 	}
 
+	// 列对齐检查必须在**任何一张表开始写之前**全部做完,不能放进下面的循环里。
+	//
+	// 为什么(2026-09-19 审稿 major):copyOneTable 是**每表一个事务**,跨表没有原子性;
+	// 表名按字母序,player_centre_database 排在 player_database 前面。若只在循环里
+	// 逐表检查,"一个 zone 已加 player_database.asset_op_ledger、另一个还没"这种典型
+	// 半迁移状态会先把 player_centre_database 整表 COMMIT 进目标库,轮到 player_database
+	// 才抛 SCHEMA MISMATCH —— 留下一个半合服的目标库。而这一步没被标进清单,运维跑齐
+	// 迁移后重跑,循环第一张表就撞上下面的 dstPre>0「ID SAFETY」拒写,清单又说这步没做完,
+	// 于是谁也进不去,只能在维护窗口里手工清库。
+	//
+	// 全部先检查则最坏情况是"一行没写就停下",正是 alignedPlayerColumns 注释里写的初衷。
+	alignedCols := make(map[string][]string, len(tables))
+	for _, t := range tables {
+		cols, err := alignedPlayerColumns(ctx, db, srcSchema, dstSchema, t)
+		if err != nil {
+			return rep, err
+		}
+		alignedCols[t] = cols
+	}
+
 	for _, t := range tables {
 		srcQ := srcSchema + "." + t
 		dstQ := dstSchema + "." + t
+		cols := alignedCols[t]
 
 		srcN, err := countRowsForIDs(ctx, db, srcQ, ids)
 		if err != nil {
@@ -247,14 +271,6 @@ func copyPlayerRows(
 					"Either this merge already ran (resume with the manifest instead of a fresh run) "+
 					"or the two zones issued colliding player_ids. Refusing to write",
 				dstQ, dstPre, len(ids), t)
-		}
-
-		// 列对齐检查放在 dry-run **之前**:两个 zone 库的 proto2mysql 迁移没跑齐
-		// (典型:一个库已加 player_database.asset_op_ledger,另一个还没)必须在
-		// 维护窗口开始前就暴露出来,而不是等真写的时候才炸。
-		cols, err := alignedPlayerColumns(ctx, db, srcSchema, dstSchema, t)
-		if err != nil {
-			return rep, err
 		}
 
 		if dryRun {
@@ -405,7 +421,13 @@ func deletePlayerRows(
 	// 「逐字节相同」怎么判:不能用 CHECKSUM(表级)、也不能整行 JSON 化
 	// (player_database 的列是 MEDIUMBLOB,JSON 化会炸内存)。按**列**比:
 	// 取列名,拼一串 NULL-safe 的 `d.col <=> s.col AND ...` 交给 MySQL 算。
-	cols, cerr := tableColumns(ctx, db, dstSchema, table)
+	//
+	// 列清单与 copy 路径共用 alignedPlayerColumns,不再只取目标库的列
+	// (2026-09-19 审稿 minor):下面的条件两侧分别落在 d(目标库)和 s(源库),
+	// 只按目标库取列时,目标库独有的列会让 MySQL 回 `Unknown column 's.xxx'`,
+	// 包装后只剩「compare A vs B: ...」,看不出该做什么。共用之后两条路径给出
+	// 同一句 SCHEMA MISMATCH + 「先在两个库跑齐 go/db migrate」的指引。
+	cols, cerr := alignedPlayerColumns(ctx, db, srcSchema, dstSchema, table)
 	if cerr != nil {
 		return 0, nil, cerr
 	}

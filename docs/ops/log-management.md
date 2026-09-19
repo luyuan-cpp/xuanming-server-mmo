@@ -81,8 +81,10 @@ Container runtime handles log rotation automatically:
 - K8s deployments: logs go to stdout, collected by Fluentd into Elasticsearch. No application-level rotation needed.
 - Docker Compose (local infra): use Docker's built-in log rotation via `deploy/docker-compose.yml` logging config.
 - C++ nodes:muduo 日志经 `Node::AsyncOutput` 写 `bin/logs/cpp_nodes/` 滚动文件;**写控制台那一路只在 Windows 生效**
-  (`#ifdef WIN32`),Linux / k8s 容器里 muduo 的业务日志**不进 stdout**,只在 `/app/bin/logs/cpp_nodes/*.log`(当前挂成 emptyDir,
-  没有 sidecar 采集),k8s 侧要采 C++ 需另想办法,见 [grafana-loki-local-logs.md](grafana-loki-local-logs.md) §6。
+  (`#ifdef WIN32`),Linux / k8s 容器里 muduo 的业务日志**不进 stdout**,只在 `/app/bin/logs/cpp_nodes/*.log`。
+  k8s 侧因此**不走 stdout**:`k8s_deploy.ps1` 默认给每个 C++ Pod 加一个 Alloy sidecar,与业务容器共享 `node-logs` 卷只读读这些文件,
+  直接送 infra namespace 里的 Loki(`manifests/infra/loki.yaml`);容器 stdout 上剩下的 gRPC / librdkafka stderr 仍需另配 DaemonSet。
+  细节见 [grafana-loki-local-logs.md](grafana-loki-local-logs.md) §6。
   本地(Windows)由 `cpp_nodes.ps1` 把控制台 stdout/stderr 分别重定向到 `run/logs/cpp_nodes/<实例>.stdout.log / .stderr.log`;
   stdout 是 4096 字节整块缓冲,最新的几十条日志会滞后,排查以 `bin/logs/cpp_nodes/` 下的 muduo 文件为准。
   stderr 里是 gRPC/abseil 和 librdkafka 自己的日志。

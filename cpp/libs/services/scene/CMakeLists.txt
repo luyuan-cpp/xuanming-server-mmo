@@ -86,7 +86,11 @@ set(SOURCE_FILES
     generated/attribute/attributedelta5framess2c_attribute_sync.cpp
     generated/attribute/attributedelta60framess2c_attribute_sync.cpp
     player/system/afk.cpp
-    # 通用资产通道(guild-phase2/04-asset-channel.md §S4):纯函数账本 + RPC 处理系统。
+    # 通用资产通道(guild-phase2/04-asset-channel.md §S4):验签 + 纯函数账本 + RPC 处理系统。
+    # asset_op_auth.cpp 是 §4.32 要求的独立编译单元(AssetOpCanonical / VerifyAssetOpAuth /
+    # AssetOpAuthVerdictName),asset_op_system.h 无条件 include 它的头 —— 不登记会在
+    # scene 静态库里缺定义,scene 节点工程与 currency_test 链接期报 unresolved external。
+    player/system/asset_op_auth.cpp
     player/system/asset_op_ledger.cpp
     player/system/asset_op_system.cpp
     player/system/player_database_loader.cpp

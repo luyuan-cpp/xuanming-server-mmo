@@ -822,9 +822,27 @@ uint32_t PetSystem::RestorePetFromSnapshot(entt::entity player, const PetInstanc
 	// 注意这只挡住了还原这一刻:下次 InitializeOnLoad / 主人升级触发的 RecalculateAll 仍会
 	// 按现有口径清池(跨等级交易的产品口径待定,交付说明记为 J-O2)。
 	//
-	// 唯一的防御性处理:按快照自身的等级与资质现算上限,夹一次当前 HP/MP。
-	// 快照在托管期间存在交易库里,被篡改或写坏时不能让它凭空抬高血上限。
+	// 防御性处理,顺序不能反:**先**把 level 夹回种类上限,**再**算上限夹当前 HP/MP。
+	//
+	// 反过来(直接拿快照现算)那一夹是恒等式:ComputeDerived 把 pet.level() 喂给
+	// petrules::ComputeDerived,level=999 的快照算出的也是 999 级的 maxHealth,
+	// std::min 恒成立,等于什么都没挡住。快照在托管期间存在交易库里(不在 scene 的
+	// 玩家存档里),写坏或被改时它是唯一的输入,这里是仓库里唯一不设界的宠物写入口 ——
+	// GrantPet 走 EffectiveLevel(主人等级, level_cap),RecalculateOne 每次重算也走它。
+	//
+	// level_cap 缺配(0)时不夹,与 petrules::EffectiveLevel 同口径。
+	// 合法快照不受影响:卖家侧的 level 本来就 = EffectiveLevel(…) <= level_cap,夹一次是恒等。
+	//
+	// **资质没有夹**:GrantPet 是"出生即定终身",策划事后改窄 [aptitude_min, aptitude_max]
+	// 之后,夹一次就等于交易本身悄悄改了这只宝宝的资质,和没交易过的同类宝宝分叉。
+	// 宁可不动。也就是说这道防线只覆盖 level,不覆盖资质 —— 交付说明里记为开放项。
 	if (const auto* row = PetRow(pet->pet_table_id()); row != nullptr) {
+		if (row->level_cap() > 0 && pet->level() > row->level_cap()) {
+			LOG_ERROR << "[PlayerPet] 还原快照等级超出种类上限,夹回: player_id=" << GuidForLog(player)
+					  << " pet_id=" << pet->pet_id() << " pet_table_id=" << pet->pet_table_id()
+					  << " snapshot_level=" << pet->level() << " level_cap=" << row->level_cap();
+			pet->set_level(row->level_cap());
+		}
 		if (const auto* pool = PetPool(); pool != nullptr) {
 			const auto derived = ComputeDerived(*pet, *row, pool->id());
 			pet->set_health(std::min(pet->health(), derived.maxHealth));

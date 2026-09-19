@@ -54,6 +54,7 @@
     <ClInclude Include="player\comp\player_ownership_comp.h" />
     <ClInclude Include="player\constants\player.h" />
     <ClInclude Include="player\system\afk.h" />
+    <ClInclude Include="player\system\asset_op_auth.h" />
     <ClInclude Include="player\system\asset_op_ledger.h" />
     <ClInclude Include="player\system\asset_op_system.h" />
     <ClInclude Include="player\system\player_data_loader.h" />
@@ -111,6 +112,7 @@
     <ClCompile Include="generated\attribute\attributedelta5framess2c_attribute_sync.cpp" />
     <ClCompile Include="generated\attribute\attributedelta60framess2c_attribute_sync.cpp" />
     <ClCompile Include="player\system\afk.cpp" />
+    <ClCompile Include="player\system\asset_op_auth.cpp" />
     <ClCompile Include="player\system\asset_op_ledger.cpp" />
     <ClCompile Include="player\system\asset_op_system.cpp" />
     <ClCompile Include="player\system\player_database_loader.cpp" />

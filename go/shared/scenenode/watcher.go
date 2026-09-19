@@ -280,7 +280,8 @@ func (w *Watcher) reportCount(count int) {
 // 同一身份出现两条注册说明租约/部署链分叉,任何一条都不能被安全选中
 // (与 match EntryOf、scene_manager resolveFromKnownNodes 的歧义拒绝语义一致):
 // 猜错节点就是把资产操作发给不持有该玩家的进程,轻则白丢一次调用,重则两个
-// 节点各自认为自己是持有者。宁可报错让调用方重试。
+// 节点各自认为自己是持有者。宁可报错让调用方重试。歧义返回的错误包
+// ErrNodeAmbiguous(它本身又包 ErrNodeUnknown,调用方语义不变),并打 ERROR 日志。
 //
 // 本函数不替调用方判空:拿到空 NodeUuid 时需要实例身份的调用方必须不发
 // (fail-closed)。资产通道走 gRPC 直连,只用 Endpoint。
@@ -295,12 +296,20 @@ func (w *Watcher) EntryOf(zoneId uint32, nodeId string) (NodeEntry, error) {
 		}
 		matches++
 		if matches > 1 && found.Endpoint != entry.Endpoint {
-			return NodeEntry{}, fmt.Errorf("节点身份歧义 zone=%d node=%s: 多个 endpoint 注册", zoneId, nodeId)
+			// 打 ERROR 而不是只回错误:同身份两个 endpoint 是部署/租约事故,而整条
+			// 资产链路对本错误只会静默退避(assetop Caller 经 IsNoHolder 折成本地
+			// NOT_HERE 且 err=nil,reconcile 走 ActionRetry 分支不打日志),日志是
+			// 唯一能让人看见脑裂的信号。频率由调用方的指数退避约束。
+			logx.Errorf("[scenenode] 节点身份歧义 zone=%d node=%s: endpoint %s 与 %s 同时注册,拒绝选中",
+				zoneId, nodeId, found.Endpoint, entry.Endpoint)
+			return NodeEntry{}, fmt.Errorf("%w zone=%d node=%s: 多个 endpoint 注册", ErrNodeAmbiguous, zoneId, nodeId)
 		}
 		found = entry
 	}
 	if matches > 1 {
-		return NodeEntry{}, fmt.Errorf("节点身份歧义 zone=%d node=%s: %d 条注册", zoneId, nodeId, matches)
+		logx.Errorf("[scenenode] 节点身份歧义 zone=%d node=%s: %d 条注册指向同一 endpoint %s,拒绝选中",
+			zoneId, nodeId, matches, found.Endpoint)
+		return NodeEntry{}, fmt.Errorf("%w zone=%d node=%s: %d 条注册", ErrNodeAmbiguous, zoneId, nodeId, matches)
 	}
 	if matches == 0 {
 		return NodeEntry{}, fmt.Errorf("节点未注册 zone=%d node=%s", zoneId, nodeId)

@@ -3107,6 +3107,43 @@ TEST_F(PetTradeAssetTest, RestoreClampsTamperedCurrentHealth)
         << "托管期快照写坏时不能凭空抬高血上限";
 }
 
+TEST_F(PetTradeAssetTest, RestoreClampsTamperedLevelToTheSpeciesCap)
+{
+    // 被改大的 level 不能靠"按快照自己算上限再夹"挡住:上限会跟着一起变大,那一夹是恒等式。
+    // 所以还原必须先把 level 夹回 PetTable.level_cap,再算 HP/MP 上限。
+    const auto *row = PetTableManager::Instance().FindByIdSilent(petTableId).first;
+    ASSERT_NE(nullptr, row);
+    if (row->level_cap() == 0)
+        GTEST_SKIP() << "该 PetTable 行没配 level_cap,本用例无从验证(缺配时按约定不夹)";
+
+    PushPet(900001, 20);
+    PetInstance snapshot;
+    ASSERT_EQ(kSuccess, PetSystem::RemovePetForTrade(player, 900001, snapshot));
+    snapshot.set_level(row->level_cap() + 900);
+    snapshot.set_health(std::numeric_limits<uint64_t>::max());
+    snapshot.set_mana(std::numeric_limits<uint64_t>::max());
+
+    ASSERT_EQ(kSuccess, PetSystem::RestorePetFromSnapshot(player, snapshot));
+    ASSERT_EQ(1, Comp().pets_size());
+    const auto &restored = Comp().pets(0);
+    EXPECT_EQ(row->level_cap(), restored.level()) << "超出种类上限的等级必须被夹回";
+    const uint64_t tamperedHealth = restored.health();
+    const uint64_t tamperedMana = restored.mana();
+    EXPECT_LT(tamperedHealth, std::numeric_limits<uint64_t>::max()) << "当前血必须被夹";
+
+    // 对照组:同一只宝宝,快照等级恰好等于上限。血上限必须按**夹后**等级算,
+    // 所以两次还原得到的当前血必须**相等**;不相等就说明夹血时用的还是被篡改的等级。
+    Comp().mutable_pets()->Clear();
+    PetInstance control = snapshot;
+    control.set_level(row->level_cap());
+    ASSERT_EQ(kSuccess, PetSystem::RestorePetFromSnapshot(player, control));
+    ASSERT_EQ(1, Comp().pets_size());
+    EXPECT_EQ(tamperedHealth, Comp().pets(0).health())
+        << "篡改等级抬高了血上限:夹 HP 用的是快照自带的等级,而不是夹回上限后的等级";
+    EXPECT_EQ(tamperedMana, Comp().pets(0).mana())
+        << "篡改等级抬高了蓝上限:同上";
+}
+
 TEST_F(PetTradeAssetTest, RestoreRefusesDuplicatePetId)
 {
     PushPet(900001, 20);
