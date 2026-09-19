@@ -8,6 +8,19 @@
 Centre 本质上做了 6 件事，每件都可以分散到现有的、已经是多实例的组件上。
 目标：无任何单实例组件，每一层都是多实例或集群化。
 
+> **现状核对(2026-09-19,逐条对照 `deploy/k8s/manifests/` 与部署脚本,完整记录见 PROGRESS.md 同日条目)**
+>
+> 本文是 2026-03-15 的迁移**方案**。下文各表里的"单点?否"写的是方案当时的设想,其中几条与仓库里实际的部署清单**不符**,
+> 不要据此认为"目标已达成"。原表格保留不改(历史方案),以本节为准:
+>
+> | 文中说法 | 实际情况 |
+> |---|---|
+> | player_locator 已多实例 | 直到 2026-09-19 清单里一直是 `replicas: 1`(登录链路的真单点)。当日核实代码多实例安全后改为 2 副本 + 反亲和 + PDB(`go-svc/player-locator.yaml`)。**现在成立。** |
+> | Login 已多实例 | 成立:`replicas: 2`。但此前 PDB 是从未被部署脚本 apply 的独立文件、etcd 注册租约长达 500s(崩溃实例滞留 8 分钟,gate 随机挑 login 时约一半请求失败),2026-09-19 已分别改为内嵌 PDB 与 60s。 |
+> | Kafka RF≥3,不是单点 | **不成立。** `infra/kafka.yaml` 是**刻意**的单 broker,仓库里所有 topic 都是 replication-factor 1(该文件头部注释写明了原因)。3 broker / RF=3 的目标形态只存在于 `docs/ops/kafka-cluster-production-runbook.md`。另:Kafka 不只是异步链路 —— login 的 EnterGame 要同步等 BindSession 经 `gate-cmd` 发送成功,Kafka 不可用时没有人能进游戏。 |
+> | Redis 本来就是分布式的,不是单点 | **不成立。** 承载会话、位置、登录锁、玩家锁、scene_manager 选主锁、场景路由的共享 Redis 是**单实例**(`infra/redis.yaml`,`replicas: 1`),所有客户端都按单机模式(`Type: node`)连接。只有 match 私有的 `infra/redis-match-cluster.yaml` 是 3 主 3 从的 Redis Cluster。 |
+> | 目标:无任何单实例组件 | **未达成。** 清单里仍是单实例的还有:MySQL(`replicas: 1` + Recreate,无主从)、每 zone 的 `db`(代码有单实例假设)、`data-service`(`replicas: 1` + Recreate,清单注释写明是刻意的)、battle 池(默认 1 副本);`guild` 没有 K8s 清单。真正做成多实例的:etcd(3 副本 + PDB)、match 的 Redis Cluster、scene_manager(2 副本 + Redis 锁选主,但选主锁放在上面那个单实例 Redis 上)、login、player_locator、Java 网关、chat / match / trade / client-rpc-router。 |
+
 ---
 
 ## Centre 当前职责 → 去中心化迁移方案
