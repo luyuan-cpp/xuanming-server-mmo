@@ -14,6 +14,11 @@
     永远不会被提交。删掉那个文件就会重新生成新值 —— 此时 scene 与 guild / trade 必须一起重启,
     否则一半进程还拿着旧值,表现同样是 27008。
 
+    生成的值是 64 个十六进制字符,刻意不含空白:Go 侧 assetop.NewSigner 会 TrimSpace,
+    C++ 侧 DefaultSecretLookup 直接用 getenv 的原串**不 trim**。带首尾空白的值两边看到的
+    字节数不同,签名必然对不上,表现又是 27008。调用者自己设的值不在这里改动,
+    要自带密钥就别带换行。
+
     **仅限本机 dev 的约定**。预发 / 生产的两把密钥必须由部署侧注入
     (k8s_deploy.ps1 的 Resolve-InjectedSecret -MinLength 32,规格 §4.43 第 29 项),
     部署链从不调用本文件的任何函数。

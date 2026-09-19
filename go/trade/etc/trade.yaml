@@ -130,9 +130,11 @@ SharedRedis:
 # `Secret` 是保留键:写了任何值都会被 config.Validate 当场拒启,免得密钥被静默忽略后
 # 留在仓库和 ConfigMap 里。
 #
-# 超时与并发上限**不在这里**:单次资产 RPC 800ms、循环 interval 2s / batch 100 / workers 8 /
-# 租约 10s / 单条预算 2500ms 由 internal/reconcile 的常量固定(规格 §4.37)。它们与 scene 侧
-# 1024 的 seq 窗口是同一条正确性证明,不是可调业务数值;抄成配置项只会多出一份会漂移的真相。
+# **本批只有开关与密钥来源两个键。** 规格 90-consistency.md 的 Y-06 还要求 8 个重投循环字段
+# (ReconcileIntervalMs / ReconcileBatch / Workers / LeaseMs / OpBudgetMs / MaxBackoffMs /
+# PoisonDelayMs / LedgerReadMinAttempts),它们的消费者是 internal/reconcile 建 assetop.LoopConfig
+# 的那处,本批没有改那个文件,所以也不在这里写 —— 写了也不会生效,而"改了没反应的配置"
+# 比没有配置更难查。接线时一并补齐这三处。当前值由 internal/reconcile 的常量固定(§4.37)。
 #
 # 键名与 internal/config/config.go 的 json tag、k8s_deploy.ps1 的 trade ConfigMap 三处逐字一致。
 AssetOp:
