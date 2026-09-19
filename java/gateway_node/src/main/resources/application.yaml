@@ -110,6 +110,25 @@ management:
     web:
       exposure:
         include: health,info
+  # K8s 探针分组。/actuator/health 是**复合**健康:classpath 上有 JPA 与 Redis,它会把 db、redis
+  # 两个指示器一起算进去。三个探针都打它的话,所有副本共享的 MySQL 或 Redis 一挂,每个网关副本
+  # 同时 NotReady 并被 liveness 反复杀 —— replicas 2 对最常见的故障形态完全失效,还叠加重启风暴。
+  # 所以单独开两个分组,都**不含外部依赖**:
+  #   liveness  只回答「进程本身还活着吗」,外部系统的死活与是否该重启本进程无关;
+  #   readiness 只回答「应用完成启动、可以接流量了吗」。共享依赖放进来 = 一挂全体下线、Service 后面
+  #             一个端点都不剩;留在外面则 MySQL 故障时 assign-gate 自己回 5xx,恢复后立即可用。
+  #             Redis 更不该进来:网关只拿它做限流(gate.rate-limit 默认关,且 fail-open)。
+  # /actuator/health 保持原样不动:本机 start_game.ps1 与人工排障仍靠它看 db / redis 的真实状态。
+  # probes.enabled 显式写 true:Spring 只在检测到 K8s 环境时才自动开,写死后本机也能 curl 到这两个端点。
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState
 
 # 日志:控制台按 logstash 风格输出一行一条 JSON(@timestamp / level / logger_name /
 # thread_name / message / stack_trace),与 Go 侧 go-zero 的 JSON 一致,由
