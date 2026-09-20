@@ -8,6 +8,10 @@
 
 namespace {
 // 重建前 purge 旧实例之后,等它把 purge 回执吐完的上限(毫秒)。
+// 取 200 而不是更大的值:purge() 是阻塞式的,它返回时被清掉的消息已经全部变成待取的回执,flush 只需把
+// 回调派发完(限流后每条是微秒级),200ms 绰绰有余;而这段等待发生在调用 send() 的线程上 —— 对 scene
+// 就是 loop 线程,它停多久,该节点全部玩家的 tick / AOI / RPC 应答就停多久。到点还没派发完的回执不再等,
+// 用 outq_len() 一次性计入 DeliveryFailed(见 rebuildAfterFatal),账不丢。
 //
 // **这个上限只管 flush 这一步,不是整次重建的停顿上界。** 重建发生在调用 send() 的线程上
 // (游戏主循环 / EventLoop),另外两步都没有超时:
@@ -20,7 +24,7 @@ namespace {
 // 同一个卡住的线程,最坏停顿不会变短,反而可能让在途消息来不及出失败回执、漏计 DeliveryFailed。
 // 真要让停顿有界,得把旧实例交给后台线程去销毁(已核实 rd_kafka_destroy 不回调 dr_cb),
 // 并处理进程退出时该线程仍在运行的情况 —— 需要能编译、能实测时再做。
-constexpr int kPurgeDrainTimeoutMs = 1000;
+constexpr int kPurgeDrainTimeoutMs = 200;
 } // namespace
 
 void KafkaProducer::setBrokers(const std::string& brokers) {
@@ -208,6 +212,13 @@ bool KafkaProducer::rebuildAfterFatal(const char* trigger) {
 		producer_->purge(RdKafka::Producer::PURGE_QUEUE | RdKafka::Producer::PURGE_INFLIGHT);
 		producer_->flush(kPurgeDrainTimeoutMs);
 		rebuilding_ = false;
+		// flush 到点仍未派发完的回执:这些消息同样丢了,只是没机会逐条经过 dr_cb。一次性补记,
+		// 让 DeliveryFailed 仍然等于「确定没送到的条数」。
+		if (const int abandoned = producer_->outq_len(); abandoned > 0) {
+			kafka_producer_stats::AddDeliveryFailed(static_cast<std::uint64_t>(abandoned));
+			LOG_ERROR << "[Kafka] " << abandoned << " messages were still queued in the fatal producer instance when the "
+				<< kPurgeDrainTimeoutMs << "ms drain budget ran out; counted as delivery failures without per-message logs.";
+		}
 		// purge 吐出来的失败回执绝大多数会被限流压掉;紧跟着重建日志把条数报出来,
 		// 不要让「这次重建丢了多少条」等到十几秒后的下一次 send() 才出现。
 		if (const std::uint64_t suppressed = failureLogThrottle_.TakeSuppressed(); suppressed > 0) {

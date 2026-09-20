@@ -42,6 +42,8 @@ namespace kafka_producer_stats {
 	}
 
 	inline void IncDeliveryFailed() { DeliveryFailed().fetch_add(1, std::memory_order_relaxed); }
+	// 重建时没来得及逐条派发回执的消息:一次性计入,保证 DeliveryFailed 仍然等于「确定没送到的条数」。
+	inline void AddDeliveryFailed(std::uint64_t count) { DeliveryFailed().fetch_add(count, std::memory_order_relaxed); }
 	inline void IncProduceRejected() { ProduceRejected().fetch_add(1, std::memory_order_relaxed); }
 	inline void IncFatalRebuilds() { FatalRebuilds().fetch_add(1, std::memory_order_relaxed); }
 
@@ -102,6 +104,14 @@ public:
 		return instance;
 	}
 
+	// 阻塞契约(调用方多在 loop / EventLoop 线程上,例如 scene 的存盘在 Redis 异步回调里):
+	//  - 正常路径不阻塞:produce() 只是入本地队列,随后 poll(0) 非阻塞地派发回执;队列满时也只 poll(0) 重试一次。
+	//  - **例外**:幂等生产者进入 fatal 后的重建在本线程上同步完成(purge → 有界 flush → 销毁旧实例 → 新建)。
+	//    典型耗时几十毫秒,flush 这一步有上限(见 kafka_producer.cpp 的 kPurgeDrainTimeoutMs);两次重建至少间隔 5s,
+	//    所以同一次业务操作里连续多次 send() 最多触发一次。fatal 只来自不可恢复的序列错误,**broker 不可用 /
+	//    超时不会触发**(那条路径是消息在队列里等到 message.timeout.ms 后以失败回执收场,不重建、不阻塞)。
+	//  - 已知债:销毁旧实例要 join librdkafka 线程,broker 线程若正卡在 DNS 解析里则没有上界(需要 fatal 与 DNS
+	//    故障同时出现)。彻底有界的做法是把旧实例交给后台线程销毁,前置条件是能编译并实测,见 PROGRESS。
 	RdKafka::ErrorCode send(const std::string& topic, const std::string& message, const std::string& key = "", int32_t partition = RdKafka::Topic::PARTITION_UA);
 
 	void poll();
