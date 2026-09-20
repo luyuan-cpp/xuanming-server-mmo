@@ -5318,6 +5318,25 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - **字段号争议结案**:`asset_op_ledger` 保持 **16**。帮会会话先前口头裁决"15 归你"是错的,且"已记进设计文档"并未落盘 —— 磁盘上效力最高的 90-consistency G-03 写的就是 profile=15 / ledger=16。它已回信确认作废。顺带清掉 04 §4.3.4 里那句被作废的"= 15"。
 - **本会话自己的事故**:用 heredoc + Python 改文件时 `\n` 被压成真换行,把 C++ 与 Go 两个新用例的字符串字面量写成跨行、两个文件同时编不过。是审查 agent 逐字节 `cat -A` 抓出来的。已修,并记进记忆。**结论**:含反斜杠转义的代码改动一律用 Edit 工具,不要用脚本拼转义序列。
 - **仍未做**:① scene 侧按 guid 扣物 / 扣宝宝(P3);② `AssetSnapshot` / `AssetOpResponse.snapshot` 至今**零写者零读者**,只是占号,proto 与聚宝斋 §6.4 两处都写了"别按响应里已有快照去接线";③ B4c 对账闸门未落地,`AssetOp.Enabled` 默认 false 就是给它与上面那条兜底,**共享 / 预发环境不得开启资产操作**(已写进聚宝斋 §12 上线闸);④ `proto/trade/trade_table.proto` 的 22/23 号字段还没 regen,`go/trade` 在 regen 前编不过 —— 已与跨 zone 会话约定由它那趟串行 regen 带上。
+
+## 2026-09-19 C++ Kafka 生产端:幂等投递 + fatal 重建 + 失败不再静默(Claude,未编译、未联调)
+
+- **起因**:09-17 单点审计发现所有 C++ 节点共用的 `KafkaProducer` 只配了 bootstrap.servers / dr_cb / enable.sparse.connections。两个缺陷:① 未开幂等、max.in.flight 取默认大值,librdkafka 内部重试可让同一分区内消息乱序,而 AGENTS §7.3 靠"同一业务实体 key 有序"保证旧存档不盖新存档(存档 DBTask 的 key = player_id);② produce() 同步失败与 dr_cb 最终投递失败都只有一行不带 key 的日志,broker 不可用超过 message.timeout.ms(默认 5 分钟)后存档任务被静默丢弃。本会话先挂了任务卡,用户随后要求"按最标准的修复"直接改,任务卡已撤。
+- **改动**(`96c2de715` 实现、`c31e642ec` 单测与工程登记、`66494dd19` 审查回修;头文件部分被 21:54 的自动保存 `0c4c4f10a` 先扫进 main)。公开接口未变,8 处调用点无需改动:
+  - `enable.idempotence=true`(acks / max.in.flight / retries 交给库自行调整,不显式设置);设置失败不致命,退回旧行为并 ERROR。
+  - fatal 后重建:识别点是 `produce()` 返回 `ERR__FATAL`;重建 = purge → 有界 flush(1s)→ 销毁 → 同配置新建 → 当前消息在新实例上重试一次;最小重建间隔 5s。刻意不注册 event_cb(设了它会一并注册来自 librdkafka 内部线程的 log_cb,而 `Instance()` 是 thread_local、现方案全部状态只在本线程读写)。
+  - 队列满:`poll(0)` 腾位置后原样重试一次,不阻塞(调用方是游戏主循环)。
+  - 失败不再静默:`kafka_producer_stats`(DeliveryFailed / ProduceRejected / FatalRebuilds,写法同 owner_epoch_stats)+ 带 topic / partition / key / 字节数 / 错误码的 ERROR;按 10s 窗口限流(前 20 条逐条),被压掉的条数有三个出口:下一窗口首条失败、`send()` 尾部取走过期尾窗、重建与析构收尾。
+  - 纯决策逻辑抽到 header-only 的 `kafka_producer_policy.h`(只依赖 `RdKafka::ErrorCode` 枚举、时间点由调用方传入),19 个单测在 `cpp/tests/kafka_command_test/kafka_producer_policy_test.cpp`,不连 broker。
+- **有意不做**:不在投递回执里自动重发旧载荷 —— 对"后写覆盖前写"的存档消息,把过期载荷补发到更新的载荷之后比丢掉更糟;补救靠调用方重发**当前**状态(在线玩家的周期存盘)。
+- **对抗审查**(7 个 agent,四维度 + 逐条核实):编译正确性 18 项、librdkafka 语义 15 项核对无问题;确认属实 2 条均已回修 —— 限流尾窗在"之后不再失败"时永不补报(我写了收尾接口却没接线);注释承诺的"1s 上限不会卡住主循环"不成立(上限只管 flush,purge 与销毁旧实例要等库线程,DNS 卡死 + fatal 双故障时无上界;行为未改,注释改成实情并写明为何不加 PURGE_NON_BLOCKING)。审查还纠正了一个认知:librdkafka 2.14 的投递回执不会带 `ERR__FATAL`,dr_cb 里那个分支只是对未来版本的防御,相关注释已改。
+- **残余风险**:① broker 不可用超过 5 分钟期间**下线**的玩家,最后一次存档只在 Redis、MySQL 停在旧值,直到该玩家下次登录后再存盘;真正丢档需要 Redis 同时丢数据(共享 Redis 改 PVC 另行进行)。② 重建停顿在"fatal + DNS 故障"双故障下无上界(见上)。③ 全部代码**从未编译**。
+- **给 Codex / 编译者的验证步骤**(顺序执行):
+  1. C++ 串行编译:`msbuild game.sln /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64`(并发会报假的 C1041 / LNK1104)。重点看 `infra`、`kafka_command_test` 两个工程;新头文件经 `"messaging/kafka/kafka_producer_policy.h"` 被 `kafka_producer.h` 包含,所有包含方的 include 路径已逐个核过含 `libs/engine/infra/`。
+  2. 单测:运行 `kafka_command_test.exe`,期望新增套件 `ClassifyProduceResult`(4)/ `DeliveryErrorClassification`(2)/ `RebuildGate`(4)/ `FailureLogThrottle`(9)共 19 个用例全过,原有用例不受影响(`main()` 找不到 base_deploy_config.yaml 只告警不退出)。
+  3. 联调:经 WMI 跑 `tools/scripts/start_game.ps1` 拉起一区,`robot login-test` 应保持 22–23/23;启动日志里不应出现 `failed to set enable.idempotence`。
+  4. **必须做的专项**:栈起来后 `docker restart kafka`(本机 Kafka 数据不持久,重启即清空日志,是幂等生产者最容易出状况的环境),等 broker 恢复后再跑一轮 login-test,确认 C++ 节点仍能收发;期间若出现 `Producer instance entered a fatal state` 属预期内的重建路径,关注其后是否有 `Producer rebuilt after fatal error` 且后续存盘正常。建议在 `rebuildAfterFatal` 首尾临时打 steady_clock 差值,实测一次重建耗时。
+  5. 失败时保留:`bin/logs/cpp_nodes/` 下三个节点的完整日志、`kafka_command_test` 的 XML/控制台输出。
 ## 2026-09-18 friend 移植 F1 批:协议改名可达化 + 表以 proto 为源 + 服务骨架(Claude,未编译)
 
 - 背景:用户 09-16「继续移植剩下的服务,按最标准的做」。A 仓 friend 的完整移植约 60 个改动文件,超过 AGENTS §10.2 的 30 文件门禁,拆成三批;本条是 **F1**。工作区是独立 worktree `E:\work\xuanming-server-mmo-port`(分支 `feature/port-remaining`,基于 main `2a2b793f8`),避开并行会话(组队 / 帮会二期 / 发布流水线)正在改的文件。排批与端口去重记录在会话 scratchpad,要点已抄进本条。
