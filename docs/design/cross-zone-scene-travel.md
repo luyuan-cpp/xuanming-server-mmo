@@ -87,6 +87,17 @@
 - mail 提醒在目标 zone 不可用(CZ-10),mail 服务落地后消除;
 - 访客的组队沿用 team D.3 默认只许同区;帮会 / 榜单按 home_zone;
 - 不做 TiDB Phase 2 的全局表收敛,本设计与之兼容:Phase 2 落地后 CZ-2 的 topic 路由自然消失。
+- **传送窗口内,全局服务推给该玩家的 S2C 会丢,且不补发**(2026-09-19 与 friend 移植会话对齐)。
+  窗口是「源 scene 销毁实体 → 目标 zone 落点完成」之间,最坏约 60s(存盘与等应答两道看门狗各
+  `kTravelReplyBudgetSec`=30s,串行)。成因不是本设计的疏漏,而是两个既有契约叠在一起:
+  目标 zone 的 login 做严格重登时会重写共享库里的 `player:session:{id}`;而全局服务(friend 等)
+  的推送走 `kafkautil.PushToPlayer` → `gate-cmd_g<N>`,读的就是这个键,**at-most-once**,
+  投递到旧 gate 后被 `target_instance_id` 过滤掉就没了,没有重投也没有补推。
+  兜底**不能**写成「收到推送就去拉」—— 在这个窗口里推送根本到不了。正确口径是
+  **客户端在每次落地(登录后、跨 zone 传送落地后、打开对应面板时)各主动拉一次权威状态**,
+  例如 friend 的 `GetPendingRequests` / `GetFriendList`。
+  现状:目前只有 robot 的 friend-smoke 实现了「拉取验证」,Unity 客户端侧的 handler 尚未编写。
+  参见 `docs/design/friend-port-20260918.md` 的推送决策与「已知缺口」、`go/friend/internal/logic/push.go`。
 
 ## 8. 需要用户确认的默认值(不确认即按此执行)
 
