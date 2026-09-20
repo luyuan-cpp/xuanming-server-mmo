@@ -494,7 +494,7 @@ $JavaSvcCatalogue = @{
 	gateway = @{ ConfigMap = "java-svc-gateway-config"; Manifest = "gateway.yaml"; HttpPort = 8081; GrpcPort = 0;    ImageName = "mmorpg-gateway" }
 }
 
-# 注意:OpsProfile 的副本数下限只作用于 legacy 单池参数 $SceneReplicas。
+# 注意:OpsProfile 的副本数下限只作用于 legacy 单池参数 $SceneReplicas 与全局的 $BattleReplicas。
 # 拆分池(scene_world / scene_instance)一律以调用方 / zones 配置写的值为准,
 # 不做静默抬高 —— 拆分模式下副本比例是运维显式决策(world ≈ 1.2x instance),
 # 被脚本改写会让"实际部署 != 配置文件"。
@@ -505,12 +505,20 @@ function Apply-OpsProfileDefaults {
 			if ($CentreReplicas -lt 1) { $script:CentreReplicas = 1 }
 			if ($GateReplicas -lt 2) { $script:GateReplicas = 2 }
 			if ($SceneReplicas -lt 4) { $script:SceneReplicas = 4 }
+			# battle 是**不分 zone 的全局池**,只部署一份:1 副本时它挂掉 = 全服回合制战斗全停
+			# (在打的战斗全部作废,且玩家身上的 battle:lock 要等 InBattleComp.deadline_ms 到期才由
+			# scene reaper 解冻)。gate / scene 有下限而它没有,是这份门禁一直漏掉的一项。
+			if ($BattleReplicas -lt 2) { $script:BattleReplicas = 2 }
 		}
 		"bare-metal" {
 			$script:GateServiceType = "NodePort"
 			if ($CentreReplicas -lt 1) { $script:CentreReplicas = 1 }
 			if ($GateReplicas -lt 2) { $script:GateReplicas = 2 }
 			if ($SceneReplicas -lt 4) { $script:SceneReplicas = 4 }
+			# battle 是**不分 zone 的全局池**,只部署一份:1 副本时它挂掉 = 全服回合制战斗全停
+			# (在打的战斗全部作废,且玩家身上的 battle:lock 要等 InBattleComp.deadline_ms 到期才由
+			# scene reaper 解冻)。gate / scene 有下限而它没有,是这份门禁一直漏掉的一项。
+			if ($BattleReplicas -lt 2) { $script:BattleReplicas = 2 }
 		}
 		default {
 		}
