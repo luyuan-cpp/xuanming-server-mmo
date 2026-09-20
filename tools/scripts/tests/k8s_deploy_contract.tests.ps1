@@ -46,6 +46,15 @@ if ($devRun.ExitCode -ne 0) {
 }
 $devOut = $devRun.Output
 
+# Agones 渲染路径复用同一次 DryRun(Fleet 与 Deployment 是两套模板,sidecar / 日志保留
+# 这类断言必须两边都过 —— 只改一边正是本仓踩过的坑)。
+$agonesRun = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SceneOrchestrator', 'agones', '-SkipGoSvc', '-SkipJavaSvc'))
+if ($agonesRun.ExitCode -ne 0) {
+    Write-Host $agonesRun.Output
+    throw "Agones DryRun 基线自己就失败了(exit=$($agonesRun.ExitCode)),后续断言无意义"
+}
+$agonesOut = $agonesRun.Output
+
 # ─────────────────────────────────────────────────────────────────
 # 0. 采集链路自检
 # ─────────────────────────────────────────────────────────────────
@@ -386,7 +395,7 @@ Test-Case 'infra-up 默认部署一个 battle 并等待 rollout；zone-up 不重
 }
 Test-Case 'battle 部署保留 POD_IP 和独立 TCP/gRPC 端口，exec 传递退出信号' {
     $block = Select-ManifestByName -Output $battleInfraRun.Output -Name 'battle'
-    Assert-Match -Text $block -Pattern 'args: \["mkdir -p /app/bin/logs/cpp_nodes && exec ./battle"\]' -Because 'shell 必须 exec，退出信号直接到 battle 主进程'
+    Assert-Match -Text $block -Pattern 'args: \["mkdir -p /app/bin/logs/cpp_nodes && .*&& exec \./battle"\]' -Because 'shell 必须 exec，退出信号直接到 battle 主进程'
     Assert-Match -Text $block -Pattern 'fieldPath: status.podIP' -Because '发现必须通告实际 Pod IP'
     Assert-Match -Text $block -Pattern 'name: RPC_PORT\s+value: "20000"' -Because 'TCP 端口必须在非 gate 合法区间'
     Assert-Match -Text $block -Pattern 'name: NODE_PORT\s+value: "20000"' -Because '两种端口环境别名必须一致'
@@ -450,15 +459,66 @@ Test-Case 'Kafka 控制器必须经发布未就绪地址的 headless 自举，�
 Test-Case '普通 gate/scene Deployment 必须先创建被 emptyDir 遮蔽的日志父目录' {
     foreach ($name in @('gate','scene')) {
         $block = Select-ManifestByName -Output $devOut -Name $name
-        Assert-Match -Text $block -Pattern ('args: \["mkdir -p /app/bin/logs/cpp_nodes && \./' + $name + '"\]') -Because 'Node 构造器在初始化前就打开 logs/cpp_nodes/<role>，父目录必须已经存在'
+        Assert-Match -Text $block -Pattern ('args: \["mkdir -p /app/bin/logs/cpp_nodes && .*&& \./' + $name + '"\]') -Because 'Node 构造器在初始化前就打开 logs/cpp_nodes/<role>，父目录必须已经存在'
     }
 }
 Test-Case 'Agones Scene Fleet 同样必须在进程启动前建立日志父目录' {
-    $run = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-SceneOrchestrator','agones','-SkipGoSvc','-SkipJavaSvc'))
-    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because 'Agones 真正渲染路径必须成功'
-    $fleet = Select-ManifestByName -Output $run.Output -Name 'scene'
+    $fleet = Select-ManifestByName -Output $agonesOut -Name 'scene'
     Assert-Match -Text $fleet -Pattern 'kind: Fleet' -Because '必须检查真正的 Fleet 而非普通 Deployment'
-    Assert-Match -Text $fleet -Pattern 'args: \["mkdir -p /app/bin/logs/cpp_nodes && \./scene"\]' -Because 'Fleet 的 emptyDir 与 Deployment 同样遮蔽镜像目录'
+    Assert-Match -Text $fleet -Pattern 'args: \["mkdir -p /app/bin/logs/cpp_nodes && .*&& \./scene"\]' -Because 'Fleet 的 emptyDir 与 Deployment 同样遮蔽镜像目录'
+}
+
+# ─────────────────────────────────────────────────────────────────
+# C++ 日志 sidecar(见 docs/ops/grafana-loki-local-logs.md §6)
+# ─────────────────────────────────────────────────────────────────
+
+Test-Case '日志保留:业务容器必须自带清理循环,且 node-logs 有 sizeLimit 兜底' {
+    foreach ($name in @('gate','scene')) {
+        $block = Select-ManifestByName -Output $devOut -Name $name
+        # muduo 每 8MiB 滚一个新文件且从不删旧文件;没有这两道闸,长跑节点会把节点盘写满,
+        # 而本机 kind 的 evictionHard 全是 0%,盘满的表现是 MySQL/Kafka/etcd 一起 ENOSPC。
+        Assert-Match -Text $block -Pattern 'ls -1t /app/bin/logs/cpp_nodes/\*\.log .*tail -n \+9 .*rm -f' -Because '业务容器里必须有"只留最近若干个日志文件"的清理循环'
+        Assert-Match -Text $block -Pattern 'name: node-logs\s+emptyDir: \{ sizeLimit: \S+ \}' -Because 'emptyDir 不封顶 = 一个 Pod 能把整个节点盘写满'
+    }
+}
+
+Test-Case 'sidecar 必须是 initContainers 里的原生 sidecar(restartPolicy: Always)' {
+    # 普通容器形态下:Agones 给 GameServer Pod 写死 restartPolicy: Never,sidecar OOM 后永不重启
+    # 且 Agones 只看游戏容器不会报错;Pod 终止时它又与业务容器同时收 SIGTERM,drain 期日志整段丢。
+    foreach ($pair in @(@{ Out = $devOut; Name = 'gate' }, @{ Out = $agonesOut; Name = 'scene' })) {
+        $block = Select-ManifestByName -Output $pair.Out -Name $pair.Name
+        Assert-Match -Text $block -Pattern '(?s)initContainers:\s+- name: log-sidecar.*?restartPolicy: Always' -Because 'sidecar 必须放 initContainers 并显式声明 restartPolicy: Always'
+        # 只能有一份:普通容器带 restartPolicy 要 API server 开了 ContainerRestartRules 门控才收,
+        # 1.28~1.33 会报 containers[N].restartPolicy: Forbidden,整份清单 apply 不上去。
+        Assert-Equal -Expected 1 -Actual ([regex]::Matches($block, '- name: log-sidecar').Count) -Because 'sidecar 容器片段只应出现在 initContainers 一处'
+        Assert-Match -Text $block -Pattern 'runAsNonRoot: true' -Because '观测容器没有理由把 root 塞回业务 Pod'
+        Assert-Match -Text $block -Pattern 'mmorpg\.io/cpp-log-sidecar-config-hash: [0-9a-f]{12}' -Because '配置只改 ConfigMap 不会让 Alloy 重读,必须靠 pod 模板注解触发滚动'
+    }
+}
+
+Test-Case 'k8s label value 契约:生成的标签值不能是裸 - (YAML 非法 + label 校验器拒)' {
+    # 真实事故:battle 路径曾用 "-" 当 zone 占位,渲染出 `mmorpg.io/zone: -`,
+    # YAML 把行尾裸 - 当块序列项,infra-up / all-up 在这里整体中断。
+    # 注意 kubectl apply --dry-run=client 查不出 label value 非法(它只按 schema 校验),
+    # 所以这条必须在生成期断。
+    foreach ($out in @($devOut, $agonesOut, $battleInfraRun.Output)) {
+        Assert-NotMatch -Text $out -Pattern '(?m)^\s+[A-Za-z0-9][-A-Za-z0-9_./]*:\s+-\s*$' -Because '标签/字段值为裸 - 既是非法 YAML 也是非法 label value'
+    }
+}
+
+Test-Case 'battle 是全局池:它的 sidecar ConfigMap 不能带 zone 标签,zone 的必须带且加引号' {
+    $zoneCm = Select-ManifestByName -Output $devOut -Name 'cpp-log-sidecar'
+    Assert-Match -Text $zoneCm -Pattern 'mmorpg\.io/zone: "contract-test"' -Because 'zone 标签值要加引号,否则将来纯数字 zone 名会被 kubectl 当数字拒掉'
+    $battleCm = Select-ManifestByName -Output $battleInfraRun.Output -Name 'cpp-log-sidecar'
+    Assert-NotMatch -Text $battleCm -Pattern 'mmorpg\.io/zone' -Because 'battle 不属于任何 zone;写个占位值会被 {mmorpg.io/zone=<真 zone>} 的选择器误选'
+}
+
+Test-Case '-NoCppLogSidecar 必须产出与加这个功能之前一致的清单' {
+    $run = Invoke-DeployDryRun -Arguments ($BaseArgs + @('-NoCppLogSidecar','-SkipGoSvc','-SkipJavaSvc'))
+    Assert-Equal -Expected 0 -Actual $run.ExitCode -Because '关掉 sidecar 的路径必须照样能生成'
+    Assert-NotMatch -Text $run.Output -Pattern 'log-sidecar' -Because '关掉后不能残留任何 sidecar 容器/卷'
+    Assert-NotMatch -Text $run.Output -Pattern 'initContainers' -Because '关掉后不能留下空的 initContainers 键(空列表 = null,API server 拒)'
+    Assert-NotMatch -Text $run.Output -Pattern 'cpp-log-sidecar-config-hash' -Because '关掉后 pod 模板不该带 sidecar 配置注解'
 }
 
 Test-Case 'Java gateway 冷启动必须有独立 startupProbe 预算并保留就绪与存活探针' {

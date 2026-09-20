@@ -34,6 +34,13 @@ spec:
       storage: 10Gi
   # storageClassName 有意不写死 —— 交给集群默认 StorageClass(kind 上是 standard)。
 ---
+# 改完这份配置要手动重启 Loki:Loki 只在进程启动时读一次主配置
+# (周期性热加载的只有 runtime_config,本文件没配它),而这份 ConfigMap 变了
+# 不会改动下面 Deployment 的 pod 模板 —— infra-up 的 kubectl apply 对 Deployment 是 no-op,
+# 于是"改完、脚本没报错、其实还在用旧配置"。改完执行:
+#   kubectl -n mmorpg-infra rollout restart deploy/loki
+# (C++ 日志 sidecar 那份 ConfigMap 不吃这个亏:k8s_deploy.ps1 会把它的内容哈希
+#  打进 pod 模板注解,内容一变就自动滚动。)
 apiVersion: v1
 kind: ConfigMap
 metadata:

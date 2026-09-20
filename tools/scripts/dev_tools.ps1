@@ -59,6 +59,15 @@
     [int]$AgonesBufferRooms = 5,
     [int]$AgonesMinReplicas = 1,
     [int]$AgonesMaxReplicas = 0,
+    # C++ 日志 sidecar(k8s-infra-up / k8s-zone-up / k8s-all-up / k8s-image-*),透传给 k8s_deploy.ps1。
+    # infra-up 也算一条:battle 是全局池,它那份 sidecar 由 infra-up 路径创建(Apply-BattlePool),
+    # 漏写会让人以为 infra-up 上关不掉。
+    # 两个字符串一律默认留空 = 不覆盖 k8s_deploy.ps1 的默认值:sidecar 镜像钉死版本
+    # (v1.19.2 有读取位置回归)只允许存在于 k8s_deploy.ps1 一处,抄第二份迟早漂移,
+    # 到时候"文档说钉在 v1.10.0、实际部署的是别的版本"很难查。
+    [switch]$NoCppLogSidecar,
+    [string]$CppLogSidecarImage = "",
+    [string]$LokiPushUrl = "",
     [ValidateSet("ClusterIP", "NodePort", "LoadBalancer")]
     [string]$GateServiceType = "NodePort",
     [int]$GateServicePort = 18000,
@@ -513,6 +522,18 @@ function Invoke-K8sDeploy {
         $args.AgonesAutoscale = $true
     }
 
+    # 同上:switch 只在被指定时传,字符串非空才传。透传空的 CppLogSidecarImage
+    # 会让生成的清单出现空 image:,Pod 直接建不起来。
+    if ($NoCppLogSidecar) {
+        $args.NoCppLogSidecar = $true
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CppLogSidecarImage)) {
+        $args.CppLogSidecarImage = $CppLogSidecarImage
+    }
+    if (-not [string]::IsNullOrWhiteSpace($LokiPushUrl)) {
+        $args.LokiPushUrl = $LokiPushUrl
+    }
+
     if ($DryRun) {
         $args.DryRun = $true
     }
@@ -666,6 +687,16 @@ function Invoke-K8sImage {
     }
     if ($SkipInfra) {
         $args.SkipInfra = $true
+    }
+    # k8s_image.ps1 最终也会调 k8s_deploy.ps1,同一套口径透传(见 Invoke-K8sDeploy 处注释)。
+    if ($NoCppLogSidecar) {
+        $args.NoCppLogSidecar = $true
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CppLogSidecarImage)) {
+        $args.CppLogSidecarImage = $CppLogSidecarImage
+    }
+    if (-not [string]::IsNullOrWhiteSpace($LokiPushUrl)) {
+        $args.LokiPushUrl = $LokiPushUrl
     }
     if ($WaitReady) {
         $args.WaitReady = $true

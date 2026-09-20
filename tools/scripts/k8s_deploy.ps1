@@ -188,6 +188,21 @@ $script:CppLogSidecarPushUrl = if ([string]::IsNullOrWhiteSpace($LokiPushUrl)) {
 $script:CppLogVolumeName = "node-logs"
 $script:CppLogSidecarConfigMapName = "cpp-log-sidecar"
 
+# node-logs 的容量闸。muduo 每 8MiB 滚一个新文件,并且**从不删旧文件**
+# (third_party/muduo-linux/muduo/base/LogFile.cc 全文没有清理逻辑),而 node-logs 是 emptyDir,
+# 不封顶的话一个长跑的 scene 就能把节点盘写满。本机 kind 的 evictionHard 全是 0%,
+# DiskPressure 永远不会置位 —— 盘满的表现不是"驱逐谁",而是 MySQL / Kafka / etcd / Loki
+# 一起 ENOSPC 写失败,存档有损坏风险且不会自愈。所以设两道闸:
+#   ① 业务容器里一个极小的清理循环,只留最近 8 个文件(≈64MiB),每 5 分钟扫一次;
+#   ② emptyDir.sizeLimit 作为远端兜底(kubelet 的 emptyDirLimitEviction 独立于 DiskPressure,
+#      只驱逐越界的那个 Pod)。正常情况下 ① 让用量停在几十 MiB,碰不到 ②。
+# 日志已经进 Loki(retention 7 天),本地文件只用于"exec 进去看最近一段",不需要长期留存。
+# 清理循环里不出现 $ 和双引号:这段要经 PowerShell 双引号 here-string 与 YAML 流式标量两层。
+$script:CppLogVolumeSizeLimit = "2Gi"
+$script:CppLogPrunerCommand = "(while true; do ls -1t /app/bin/logs/cpp_nodes/*.log 2>/dev/null | tail -n +9 | xargs -r rm -f; sleep 300; done &) && "
+# 提示只在一次运行里打一遍(all-up 会依次进 battle 池和每个 zone)。
+$script:CppLogSidecarNoticeShown = $false
+
 . (Join-Path $ScriptDir "lib\release_common.ps1")
 
 # ─────────────────────────────────────────────────────────────────
@@ -858,19 +873,30 @@ function New-NodeDeploymentYaml {
 		[Parameter(Mandatory = $true)][string]$ConfigMapName,
 		# -1 = 不写 SCENE_NODE_TYPE(gate 等非 scene 角色)。
 		[int]$SceneNodeType = -1,
-		# 只用于日志 sidecar 的 zone 标签;调用方没有 zone 上下文时留空,标签写 "-"。
-		[string]$CurrentZoneName = ""
+		# 只用于日志 sidecar 的 zone 标签;调用方没有 zone 上下文时留空,写 "global"
+		# (battle 这类全局池)。不要用 "-":它同时要进 k8s label,而 label 值必须字母数字开头结尾。
+		[string]$CurrentZoneName = "",
+		# 优雅退出预算。默认值就是 k8s 的默认 30s;scene 走 deployment 编排时要和 Fleet 路径
+		# (New-SceneFleetYaml 用 $SceneTerminationGracePeriodSeconds)取同一个数,否则同一个
+		# scene 进程换个编排方式 drain 预算就从 60s 掉到 30s —— drain 期写的存档/踢人日志正是
+		# 最该留下的那批,而原生 sidecar 要等业务容器退完才停,预算不够就一起被砍。
+		[int]$TerminationGracePeriodSeconds = 30
 	)
 
 	# C++ 日志 sidecar(见参数 -NoCppLogSidecar):与业务容器共享 node-logs 卷,只读读 muduo 写的文件。
 	# Deployment 模板用制表符缩进,Invoke-KubectlWithInputFile 把每个制表符换成 4 空格,
-	# 所以容器和卷的列表项换算后落在第 8 列,这里的片段直接按 8 空格拼。
-	$sidecarContainerBlock = ""
+	# 所以 `containers:`(1 制表符 + 2 空格)换算后落第 6 列、列表项落第 8 列。
+	# 这里的片段直接按字面空格拼(6 / 8),不能再用制表符,否则会被再乘 4。
+	$sidecarInitBlock = ""
 	$sidecarVolumeBlock = ""
+	$sidecarAnnotationBlock = ""
 	if ($script:CppLogSidecarEnabled) {
-		$zoneLabelForSidecar = if ([string]::IsNullOrWhiteSpace($CurrentZoneName)) { "-" } else { $CurrentZoneName }
-		$sidecarContainerBlock = "`n" + (New-CppLogSidecarContainerYaml -ItemIndent "        " -CurrentZoneName $zoneLabelForSidecar)
+		$zoneLabelForSidecar = if ([string]::IsNullOrWhiteSpace($CurrentZoneName)) { "global" } else { $CurrentZoneName }
+		# 放 initContainers + restartPolicy: Always(原生 sidecar),理由见 New-CppLogSidecarContainerYaml。
+		# initContainers 与 containers 共用同一个 spec.volumes,所以卷片段不动。
+		$sidecarInitBlock = "`n      initContainers:`n" + (New-CppLogSidecarContainerYaml -ItemIndent "        " -CurrentZoneName $zoneLabelForSidecar -AsNativeSidecar)
 		$sidecarVolumeBlock = "`n" + (New-CppLogSidecarVolumeYaml -ItemIndent "        ")
+		$sidecarAnnotationBlock = "`n      annotations:`n        mmorpg.io/cpp-log-sidecar-config-hash: $(Get-CppLogSidecarConfigHash)"
 	}
 
 	# 用数组逐行拼,最后 join 换行。
@@ -935,17 +961,18 @@ spec:
 	matchLabels:
 	  app: $NodeName
   template:
-	metadata:
+	metadata:$sidecarAnnotationBlock
 	  labels:
 		app: $NodeName
 	spec:
+	  terminationGracePeriodSeconds: $TerminationGracePeriodSeconds$sidecarInitBlock
 	  containers:
 		- name: $NodeName
 		  image: $NodeImage
 		  imagePullPolicy: $ImagePullPolicy
 		  workingDir: /app/bin
 		  command: ["/bin/sh", "-lc"]
-		  args: ["mkdir -p /app/bin/logs/cpp_nodes && $StartCommand"]
+		  args: ["mkdir -p /app/bin/logs/cpp_nodes && $CppLogPrunerCommand$StartCommand"]
 		  env:
 			- name: POD_IP
 			  valueFrom:
@@ -967,15 +994,15 @@ $grpcEnvBlock
 		  ports:
 			- containerPort: $RpcPort
 			  name: rpc
-$battlePortAndProbes$sidecarContainerBlock
+$battlePortAndProbes
 	  volumes:
 		- name: node-config
 		  configMap:
 			name: $ConfigMapName
 		- name: node-logs
-		  emptyDir: {}
+		  emptyDir: { sizeLimit: $CppLogVolumeSizeLimit }
 		- name: snowflake-cache
-		  emptyDir: {}$sidecarVolumeBlock
+		  emptyDir: { sizeLimit: 64Mi }$sidecarVolumeBlock
 "@
 }
 
@@ -991,12 +1018,7 @@ Linux 下 node.cpp 的 Node::AsyncOutput 只在 #ifdef WIN32 里调 LogToConsole
 标签口径与本机观测台一致(docs/ops/grafana-loki-local-logs.md §3):job / lang / service / level,
 另加 k8s 独有的 namespace / pod / zone,方便和 Go / Java 的 pod 日志在同一个 Grafana 里对齐。
 #>
-function New-CppLogSidecarConfigMapYaml {
-	param(
-		[Parameter(Mandatory = $true)][string]$ConfigName,
-		[Parameter(Mandatory = $true)][string]$CurrentZoneName
-	)
-
+function Get-CppLogSidecarConfigAlloy {
 	# 单引号 here-string:里面的 $ 和反引号全部按字面量处理,正则不用转义。
 	$config = @'
 // 本文件由 tools/scripts/k8s_deploy.ps1 的 New-CppLogSidecarConfigMapYaml 生成,不要直接改集群里的副本。
@@ -1019,9 +1041,13 @@ loki.write "out" {
 }
 
 // muduo 自己滚动写的文件:<节点>.<时间>.<主机>.<pid>.log,主机名在容器里就是 Pod 名。
+// ignore_older_than:muduo 滚动后不删旧文件,不甩掉它们的话每个滚过的文件都常驻一个 tailer
+// (goroutine + fd + 缓冲),长跑的 scene 上只增不减。阈值只要大于"节点最长可能不写一行日志的时间"
+// 即可,不要往小调:文件掉出 target 列表会连读取位置一起丢,它再被追加时整份(最多 8MiB)重推一遍。
 local.file_match "cpp" {
-  path_targets = [{ __path__ = "/app/bin/logs/cpp_nodes/*.log" }]
-  sync_period  = "5s"
+  path_targets      = [{ __path__ = "/app/bin/logs/cpp_nodes/*.log" }]
+  sync_period       = "5s"
+  ignore_older_than = "168h"
 }
 
 loki.source.file "cpp" {
@@ -1039,10 +1065,15 @@ loki.process "cpp" {
 
   // Build Info 这类多行消息只有第一行带时间戳,其余并回同一条。
   // 线程号右对齐占 5 列,不足 5 位前面补空格,所以是 " +" 而不是单个空格。
-  // 崩溃断言行没有时间戳,必须单独算作新的一条,否则它会被并进上一条日志、
-  // 跟着那条的时间和级别走,下面那段按 fatal 记的规则永远匹配不到(实测过)。
+  // "Dropped log messages at ..." 是 muduo 后端写不过来时自己插进**日志文件**的告警
+  // (AsyncLogging.cc threadFunc:fputs 到 stderr 的同时也 output.append 进 LogFile),
+  // 它没有行头,不单列一个分支就会被并进上一条、跟着那条的时间和级别走 —— 压测时
+  // "日志被丢了多少"这唯一的自证信号会被降级成 info 藏在别人的正文里。
+  // (Windows 上那条 "Assertion failed: " 是 MSVC _wassert 写到控制台 stderr 的,
+  //  Linux 容器里不存在:release 带 -DNDEBUG 编掉了 assert,glibc 的断言文本也走 stderr
+  //  而不是 muduo 文件。所以这里不再有它的分支,见 docs/ops/grafana-loki-local-logs.md §6。)
   stage.multiline {
-    firstline     = `^(\d{8} \d{2}:\d{2}:\d{2}\.\d{6} +\d+ [A-Z]+ |Assertion failed: )`
+    firstline     = `^(\d{8} \d{2}:\d{2}:\d{2}\.\d{6} +\d+ [A-Z]+ |Dropped log messages at )`
     max_wait_time = "2s"
     max_lines     = 64
   }
@@ -1065,7 +1096,8 @@ loki.process "cpp" {
     }
   }
 
-  // 标准 muduo 行:解析时间与级别。容器里时区取 zoneinfo/Asia/Hong_Kong(+8),与本机一致。
+  // 标准 muduo 行:解析时间与级别。行里的时间由 node.cpp:1163 的
+  // TimeZone::loadZoneFile("zoneinfo/Asia/Hong_Kong") 出,所以这里按同一个时区解析。
   // muduo 只输出 TRACE/DEBUG/INFO/WARN/ERROR/FATAL 六种;LOG_SYSERR 实际按 ERROR 输出。
   stage.match {
     selector = `{job="cpp_nodes"} |~ "^\\d{8} \\d{2}:\\d{2}:\\d{2}\\.\\d{6} +\\d+ (TRACE|DEBUG|INFO|WARN|ERROR|FATAL) "`
@@ -1076,7 +1108,7 @@ loki.process "cpp" {
     stage.timestamp {
       source            = "ts"
       format            = "20060102 15:04:05.000000"
-      location          = "Asia/Shanghai"
+      location          = "Asia/Hong_Kong"
       action_on_failure = "fudge"
     }
     stage.template {
@@ -1091,20 +1123,72 @@ loki.process "cpp" {
     }
   }
 
-  // 崩溃断言:muduo 的 Assertion failed 没有时间戳,按 fatal 记,别混在无级别的行里。
+  // 日志被丢弃的告警行:没有行头也没有级别,按 warn 记,压测时才能用
+  // level=~"warn|error|fatal" 一眼看出"这段时间日志被丢了"。
+  // 行里那个时间是 Timestamp::toFormattedString(),走 gmtime_r 出的是 UTC,
+  // 与正文 muduo 行的 +8 不同轴,所以故意不接 stage.timestamp,用采集时间。
   stage.match {
-    selector = `{job="cpp_nodes"} |~ "^Assertion failed: "`
+    selector = `{job="cpp_nodes"} |~ "^Dropped log messages at "`
 
     stage.static_labels {
-      values = { level = "fatal" }
+      values = { level = "warn" }
     }
+  }
+
+  // filename 里带滚动时间戳和 pid(LogFile.cc 每次滚动都用当前时间+主机名+pid 拼新名),
+  // 留成流标签等于把上面刻意挪进结构化元数据的 pid 又从旁边放回去:每滚 8MiB 就新开一条流。
+  // 转存结构化元数据仍可回查是哪一次滚动,但不再参与流切分。必须放在上面的
+  // stage.regex { source = "filename" } 之后,否则 service 标签解析不出来。
+  stage.structured_metadata {
+    values = { filename = "" }
+  }
+  stage.label_drop {
+    values = ["filename"]
   }
 }
 '@
 
-	$config = $config.Replace('__LOKI_PUSH_URL__', $script:CppLogSidecarPushUrl)
+	return $config.Replace('__LOKI_PUSH_URL__', $script:CppLogSidecarPushUrl)
+}
+
+<#
+.SYNOPSIS
+取 sidecar Alloy 配置正文的短哈希,给 Pod 模板注解用。
+
+.DESCRIPTION
+ConfigMap 变了不会让任何进程重读:Alloy 只在 SIGHUP / /-/reload 时重载,
+而只改 ConfigMap 时 Deployment / Fleet 的 pod 模板逐字节没变,kubectl apply 是 no-op。
+把正文哈希打进 pod 模板注解,配置一变模板就变,apply 自然滚动重建。
+代价要知道:改 sidecar 配置 = 滚动重启 C++ 节点(Agones 侧是 Fleet RollingUpdate 换 GameServer),
+所以改 -LokiPushUrl / 解析规则要挑时机,见 docs/ops/grafana-loki-local-logs.md §6。
+镜像 tag 不进哈希:它本来就在容器片段的 image: 行里,改了模板自然会变。
+#>
+function Get-CppLogSidecarConfigHash {
+	$sha256 = [System.Security.Cryptography.SHA256]::Create()
+	try {
+		$bytes = $sha256.ComputeHash([System.Text.Encoding]::UTF8.GetBytes((Get-CppLogSidecarConfigAlloy)))
+	} finally {
+		$sha256.Dispose()
+	}
+	return ((($bytes | ForEach-Object { $_.ToString('x2') }) -join '').Substring(0, 12))
+}
+
+function New-CppLogSidecarConfigMapYaml {
+	param(
+		[Parameter(Mandatory = $true)][string]$ConfigName,
+		# zone 名;battle 这类不属于任何 zone 的池传空串 = 不写 mmorpg.io/zone 标签。
+		# 不要拿 "-" 当占位:k8s 的 label value 必须以字母数字开头结尾,"-" 会被 API server 拒掉
+		# (而且 kubectl apply --dry-run=client 不查 label value,本地全绿、打到集群才报错)。
+		[Parameter(Mandatory = $true)][AllowEmptyString()][string]$CurrentZoneName
+	)
+
+	$config = Get-CppLogSidecarConfigAlloy
 	# 塞进 YAML 块标量,统一缩进 4 空格;空行不补空格,避免块标量里出现尾随空白。
 	$indented = (($config -split "`r?`n") | ForEach-Object { if ([string]::IsNullOrEmpty($_)) { "" } else { "    $_" } }) -join "`n"
+
+	# 值加引号:将来出现纯数字 zone 名(例如 2026)时,不加引号会被解析成数字,
+	# kubectl 直接拒:cannot unmarshal number into ObjectMeta.labels of type string。
+	$zoneLabelLine = if ([string]::IsNullOrWhiteSpace($CurrentZoneName)) { "" } else { "`n    mmorpg.io/zone: `"$CurrentZoneName`"" }
 
 	return @"
 apiVersion: v1
@@ -1112,8 +1196,7 @@ kind: ConfigMap
 metadata:
   name: $ConfigName
   labels:
-    app: cpp-log-sidecar
-    mmorpg.io/zone: $CurrentZoneName
+    app: cpp-log-sidecar$zoneLabelLine
 data:
   config.alloy: |
 $indented
@@ -1131,20 +1214,61 @@ Deployment 模板用制表符缩进(Invoke-KubectlWithInputFile 会把制表符�
 function New-CppLogSidecarContainerYaml {
 	param(
 		[Parameter(Mandatory = $true)][string]$ItemIndent,
-		[Parameter(Mandatory = $true)][string]$CurrentZoneName
+		[Parameter(Mandatory = $true)][string]$CurrentZoneName,
+		# 片段要拼进 initContainers 时传这个。restartPolicy 只对 initContainers 无条件合法;
+		# 普通容器要 API server 开了 ContainerRestartRules 门控才收(本机 kind v1.37 实测能收,
+		# 但 1.28~1.33 会报 containers[N].restartPolicy: Forbidden,整份清单 apply 不上去),
+		# 所以这一行只在放进 initContainers 时输出。
+		[switch]$AsNativeSidecar
 	)
 
 	$keyIndent = $ItemIndent + "  "
 	$lines = @(
 		"${ItemIndent}- name: log-sidecar",
 		"${keyIndent}image: $CppLogSidecarImage",
-		"${keyIndent}imagePullPolicy: IfNotPresent",
+		"${keyIndent}imagePullPolicy: IfNotPresent"
+	)
+	if ($AsNativeSidecar) {
+		# k8s 原生 sidecar(1.29 默认开、1.33 GA,本仓 kind 是 1.37):
+		#   ① 它的重启策略独立于 Pod —— Agones 给 GameServer Pod 写死 restartPolicy: Never,
+		#      普通容器形态下 sidecar 一旦 OOM 就永远停着,而 Agones 的健康检查只看游戏容器,
+		#      不会把 GameServer 置 Unhealthy,日志会在这个 Pod 的余生里静默断流;
+		#   ② Pod 终止时 kubelet 会等业务容器完全退出后再停 sidecar,scene 那 60 秒 drain
+		#      里写的存档/踢人/关服日志才追得完(普通容器是同时收 SIGTERM,这段全丢)。
+		# 明知的代价:initContainers 里的容器不 Started,业务容器就不启动 —— sidecar 镜像拉不到时
+		# Pod 卡在 Init:ErrImagePull,而不是"业务在跑、只是 Pod 没 Ready"。两种形态其实都是故障
+		# (普通容器形态下 Pod 同样不 Ready、gate-entry 没有后端),原生 sidecar 至少报得更直白。
+		# 逃生口:把镜像预载进 kind(见 deploy/k8s/README.md),或 -NoCppLogSidecar。
+		$lines += "${keyIndent}restartPolicy: Always"
+	}
+	$lines += @(
 		"${keyIndent}args:",
 		"${keyIndent}  - run",
-		"${keyIndent}  - --server.http.listen-addr=127.0.0.1:12345",
+		# 绑 0.0.0.0 而不是 127.0.0.1:Pod 外才够得着 /metrics 和 /-/reload。
+		# 实测这两个指标是"sidecar 还在读、还推得出去吗"的唯一信号(名字没有 alloy_ 前缀):
+		#   loki_source_file_files_active_total —— 当前在 tail 的文件数
+		#   loki_write_sent_entries_total       —— 推走的条数
+		"${keyIndent}  - --server.http.listen-addr=0.0.0.0:12345",
 		"${keyIndent}  - --storage.path=/var/lib/alloy",
 		"${keyIndent}  - /etc/alloy/config.alloy",
-		"${keyIndent}env:",
+		"${keyIndent}ports:",
+		"${keyIndent}  - containerPort: 12345",
+		"${keyIndent}    name: alloy-http",
+		# 镜像默认 uid 0;C++ 业务镜像是 USER 10001:10001,没理由让观测容器把 root 塞回来。
+		# 三条读写路径都不需要 root:日志文件 0644、positions 落在 0777 的 emptyDir、
+		# configMap 卷 0644。Alloy 只往 --storage.path 写,根文件系统可以只读。
+		"${keyIndent}securityContext:",
+		"${keyIndent}  runAsUser: 10001",
+		"${keyIndent}  runAsGroup: 10001",
+		"${keyIndent}  runAsNonRoot: true",
+		"${keyIndent}  allowPrivilegeEscalation: false",
+		"${keyIndent}  readOnlyRootFilesystem: true",
+		"${keyIndent}  capabilities:",
+		"${keyIndent}    drop:",
+		"${keyIndent}      - ALL",
+		"${keyIndent}env:"
+	)
+	$lines += @(
 		"${keyIndent}  - name: POD_NAME",
 		"${keyIndent}    valueFrom:",
 		"${keyIndent}      fieldRef:",
@@ -1183,9 +1307,52 @@ function New-CppLogSidecarVolumeYaml {
 		"${keyIndent}configMap:",
 		"${keyIndent}  name: $script:CppLogSidecarConfigMapName",
 		"${ItemIndent}- name: cpp-log-sidecar-state",
-		"${keyIndent}emptyDir: {}"
+		# 只放 positions.yml 和 alloy_seed.json,几 KB;给个上限免得它成为下一个无界卷。
+		"${keyIndent}emptyDir: { sizeLimit: 64Mi }"
 	)
 	return ($lines -join "`n")
+}
+
+<#
+.SYNOPSIS
+启用日志 sidecar 时,在 apply 之前提醒两件会静默失败的事。
+
+.DESCRIPTION
+① 镜像:sidecar 是本轮新引入的 Docker Hub 依赖,而 kind 节点不共享宿主的镜像缓存。
+   拉不到镜像 = Pod 永远 NotReady = gate-entry 没有后端、整个 zone 连不进来,
+   可业务进程本身是好的 —— 只看 rollout 超时基本想不到是观测容器拖的。
+② 目标 Loki:它只随 infra-up 部署(见 Apply-Infra 的 $infraManifests)。
+   zone-up-only / all-up -SkipInfra / 存量集群升级这几种走法会得到"sidecar 装上了但推无可推"
+   的半配置状态:Alloy 的推送失败只写在它自己的 stdout 里,脚本不失败、部署报成功,
+   表现为"一条 C++ 日志都查不到"。
+只读探测,查不到只警告不阻断:集群权限或网络抖动不该让部署失败。
+#>
+function Write-CppLogSidecarNotice {
+	param([Parameter(Mandatory = $true)][string]$Namespace)
+
+	if ($script:CppLogSidecarNoticeShown) { return }
+	$script:CppLogSidecarNoticeShown = $true
+
+	Write-Host "C++ log sidecar: enabled (namespace=$Namespace image=$CppLogSidecarImage push=$script:CppLogSidecarPushUrl)"
+	# 说清真实症状:sidecar 是原生 sidecar(initContainers),拉不到镜像时业务容器**一次都不会启动**,
+	# Pod 卡在 Init:ErrImagePull / Init:ImagePullBackOff,报错在 describe 的 Init Containers 一节。
+	Write-Host "  kind 集群需先把 $CppLogSidecarImage 载入节点:拉不到镜像时 gate/scene/battle 会卡在 Init:ErrImagePull,业务容器根本不启动(预载命令见 deploy/k8s/README.md)。不想要就加 -NoCppLogSidecar。"
+
+	if ($DryRun) { return }
+	# 只有用集群内默认 Loki 时才探测得了;-LokiPushUrl 指向外部时这里无从判断。
+	if (-not [string]::IsNullOrWhiteSpace($LokiPushUrl)) { return }
+
+	$probeArgs = @()
+	$probeArgs += Build-KubectlBaseArgs
+	$probeArgs += @("-n", $InfraNamespace, "get", "svc", "loki", "--ignore-not-found", "-o", "name")
+	$found = & kubectl @probeArgs 2>$null
+	if ($LASTEXITCODE -ne 0) {
+		Write-Warning "没能确认 $InfraNamespace 里是否有 Loki Service(kubectl get svc loki 执行失败),C++ 日志可能推不出去。"
+		return
+	}
+	if ([string]::IsNullOrWhiteSpace(($found -join ''))) {
+		Write-Warning "sidecar 会把 C++ 日志推向 $script:CppLogSidecarPushUrl,但 $InfraNamespace 里没有 loki Service。先跑一次 -Command infra-up(别带 -SkipInfra),或用 -LokiPushUrl 指向已有的 Loki,或 -NoCppLogSidecar 关掉 —— 否则部署会成功,日志一条也查不到。"
+	}
 }
 
 # 把镜像引用里的 tag 抽出来当 build 标签用。K8s label value 只允许
@@ -1242,15 +1409,22 @@ function New-SceneFleetYaml {
 
 	$buildLabel = Get-ImageBuildLabel -Image $NodeImage
 
-	# C++ 日志 sidecar(见参数 -NoCppLogSidecar)。Fleet 模板用空格缩进,Pod 里容器与卷的列表项在第 12 列。
-	# 另外:Agones 的 GameServerSpec 在 Pod 有多个容器时**必须**用 container 指名哪个是游戏容器,
-	# 少写这一行 Fleet 会被 Agones 拒掉,GameServer 全起不来。
-	$sidecarContainerBlock = ""
+	# C++ 日志 sidecar(见参数 -NoCppLogSidecar)。Fleet 模板用空格缩进:pod spec 的
+	# initContainers / containers / volumes 这几个键在第 10 列,列表项在第 12 列。
+	# sidecar 放 initContainers + restartPolicy: Always(原生 sidecar),原因见
+	# New-CppLogSidecarContainerYaml —— Agones 给 GameServer Pod 写死 restartPolicy: Never,
+	# 普通容器形态下它 OOM 一次就永不重启,而 Agones 的健康检查只看游戏容器,不会报这个故障。
+	# container: 那一行现在是冗余的(移进 initContainers 后 containers 只剩 1 个,Agones 的
+	# applyContainerDefaults 会自己认),但显式写出仍然合法,而且将来再加第二个普通容器时
+	# 不写这行 Fleet 会被 Agones 拒掉 —— 所以保留,别顺手删。
+	$sidecarInitBlock = ""
 	$sidecarVolumeBlock = ""
+	$sidecarAnnotationBlock = ""
 	$gameServerContainerLine = ""
 	if ($script:CppLogSidecarEnabled) {
-		$sidecarContainerBlock = "`n" + (New-CppLogSidecarContainerYaml -ItemIndent "            " -CurrentZoneName $ZoneLabel)
+		$sidecarInitBlock = "`n          initContainers:`n" + (New-CppLogSidecarContainerYaml -ItemIndent "            " -CurrentZoneName $ZoneLabel -AsNativeSidecar)
 		$sidecarVolumeBlock = "`n" + (New-CppLogSidecarVolumeYaml -ItemIndent "            ")
+		$sidecarAnnotationBlock = "`n          annotations:`n            mmorpg.io/cpp-log-sidecar-config-hash: $(Get-CppLogSidecarConfigHash)"
 		$gameServerContainerLine = "      container: $FleetName`n"
 	}
 
@@ -1315,7 +1489,7 @@ $gameServerContainerLine      ports:
         periodSeconds: $AgonesHealthPeriodSeconds
         failureThreshold: $AgonesHealthFailureThreshold$countersBlock
       template:
-        metadata:
+        metadata:$sidecarAnnotationBlock
           labels:
             app: $FleetName
             mmorpg.io/role: $RoleLabel
@@ -1323,14 +1497,14 @@ $gameServerContainerLine      ports:
             mmorpg.io/zone-id: "$ZoneIdLabel"
             mmorpg.io/build: $buildLabel
         spec:
-          terminationGracePeriodSeconds: $SceneTerminationGracePeriodSeconds
+          terminationGracePeriodSeconds: $SceneTerminationGracePeriodSeconds$sidecarInitBlock
           containers:
             - name: $FleetName
               image: $NodeImage
               imagePullPolicy: $ImagePullPolicy
               workingDir: /app/bin
               command: ["/bin/sh", "-lc"]
-              args: ["mkdir -p /app/bin/logs/cpp_nodes && $StartCommand"]
+              args: ["mkdir -p /app/bin/logs/cpp_nodes && $CppLogPrunerCommand$StartCommand"]
               env:
                 - name: POD_IP
                   valueFrom:
@@ -1358,15 +1532,15 @@ $gameServerContainerLine      ports:
                   mountPath: $SnowflakeCacheDir
               ports:
                 - containerPort: $RpcPort
-                  name: rpc$sidecarContainerBlock
+                  name: rpc
           volumes:
             - name: node-config
               configMap:
                 name: $ConfigMapName
             - name: node-logs
-              emptyDir: {}
+              emptyDir: { sizeLimit: $CppLogVolumeSizeLimit }
             - name: snowflake-cache
-              emptyDir: {}$sidecarVolumeBlock
+              emptyDir: { sizeLimit: 64Mi }$sidecarVolumeBlock
 "@
 }
 
@@ -3441,6 +3615,7 @@ function Apply-Zone {
 
 	# 日志 sidecar 的配置必须先于 gate / scene 落地,否则 Pod 因引用不存在的 ConfigMap 卡在 ContainerCreating。
 	if ($script:CppLogSidecarEnabled) {
+		Write-CppLogSidecarNotice -Namespace $namespace
 		$sidecarConfigYaml = New-CppLogSidecarConfigMapYaml -ConfigName $script:CppLogSidecarConfigMapName -CurrentZoneName $CurrentZoneName
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $sidecarConfigYaml
 	}
@@ -3469,7 +3644,8 @@ function Apply-Zone {
 				-StartCommand "./scene" `
 				-ConfigMapName $configMapName `
 				-SceneNodeType $scenePool.SceneNodeType `
-				-CurrentZoneName $CurrentZoneName
+				-CurrentZoneName $CurrentZoneName `
+				-TerminationGracePeriodSeconds $SceneTerminationGracePeriodSeconds
 		}
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $sceneYaml
 
@@ -3738,9 +3914,11 @@ function Apply-BattlePool {
 	# 集群外客户端需要另外完成逐实例入口映射；这里不虚构一个可公网访问的地址。
 	Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $ConfigMapYaml
 	# battle 是全局池,跑在 infra namespace,所以日志 sidecar 的 ConfigMap 也要在这里建一份
-	# (zone namespace 里的那份对它不可见);zone 标签留空,由生成函数写成 "-"。
+	# (zone namespace 里的那份对它不可见)。它不属于任何 zone:传空串 = 不写 mmorpg.io/zone 标签,
+	# 这样 {mmorpg.io/zone=<某个真 zone>} 的选择器不会把它误选进去。
 	if ($script:CppLogSidecarEnabled) {
-		$battleSidecarConfigYaml = New-CppLogSidecarConfigMapYaml -ConfigName $script:CppLogSidecarConfigMapName -CurrentZoneName "-"
+		Write-CppLogSidecarNotice -Namespace $InfraNamespace
+		$battleSidecarConfigYaml = New-CppLogSidecarConfigMapYaml -ConfigName $script:CppLogSidecarConfigMapName -CurrentZoneName ""
 		Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $battleSidecarConfigYaml
 	}
 	$battleYaml = New-NodeDeploymentYaml -NodeName 'battle' -Replicas $BattleReplicas `

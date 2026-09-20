@@ -589,7 +589,7 @@ func (x *TradePlayerOpSeqRecord) GetUpdatedMs() uint64 {
 // 出来的旧行撞键,整个流从此写不进去。
 type TradeAssetOpRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	OpId          uint64                 `protobuf:"varint,1,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"`                      // id_segment 号段,biz_tag = trade_asset_op;同时作 correlation 兜底
+	OpId          uint64                 `protobuf:"varint,1,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"`                      // id_segment 号段,biz_tag = trade_asset_op;**同时就是**请求的 correlation_id
 	PlayerId      uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`          // 资产的主人:托管扣的是卖家,交付发的是买家
 	Stream        uint32                 `protobuf:"varint,3,opt,name=stream,proto3" json:"stream,omitempty"`                              // AssetOpStream 数值,同 TradePlayerOpSeqRecord.stream
 	StreamEpoch   uint64                 `protobuf:"varint,4,opt,name=stream_epoch,json=streamEpoch,proto3" json:"stream_epoch,omitempty"` // 分配 seq 时 seq 行上的 epoch,原样进请求
@@ -604,12 +604,20 @@ type TradeAssetOpRecord struct {
 	LeaseToken    uint64                 `protobuf:"varint,13,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`
 	TxType        uint32                 `protobuf:"varint,14,opt,name=tx_type,json=txType,proto3" json:"tx_type,omitempty"` // TransactionType 数值,进 scene 的 transaction_log
 	RefKind       TradeAssetOpRefKind    `protobuf:"varint,15,opt,name=ref_kind,json=refKind,proto3,enum=trade.TradeAssetOpRefKind" json:"ref_kind,omitempty"`
-	RefId         uint64                 `protobuf:"varint,16,opt,name=ref_id,json=refId,proto3" json:"ref_id,omitempty"`                   // listing_id 或 order_id;同时作请求的 correlation_id(开放项 J-A3)
+	RefId         uint64                 `protobuf:"varint,16,opt,name=ref_id,json=refId,proto3" json:"ref_id,omitempty"`                   // listing_id 或 order_id,只作业务外键;correlation_id 取 op_id(§4.38)
 	Payload       []byte                 `protobuf:"bytes,17,opt,name=payload,proto3" json:"payload,omitempty"`                             // 序列化的 AssetBundle(proto/common/asset/asset_op.proto)
 	LastOutcome   uint32                 `protobuf:"varint,18,opt,name=last_outcome,json=lastOutcome,proto3" json:"last_outcome,omitempty"` // 最近一次 AssetOpOutcome 数值,只用于排障
 	LastReason    uint32                 `protobuf:"varint,19,opt,name=last_reason,json=lastReason,proto3" json:"last_reason,omitempty"`    // 最近一次 asset_error 段 tip 码,0 = 无
 	CreatedMs     uint64                 `protobuf:"varint,20,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
 	UpdatedMs     uint64                 `protobuf:"varint,21,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	// 人工终结留痕(§4.38)。UNKNOWN 每 60s 重排、玩家长期离线的行不会自己走到终局,
+	// 只能由管理入口按 scene 流水(correlation_id = op_id)判定后落库;不留痕就等于
+	// 谁都能把一行资产指令改成"已发放"而查不到是谁改的。
+	// 本批只提供存储与 assetop.ManualResolver 实现,管理 RPC 与鉴权见交付说明。
+	// string 列按 D-14 §2 建成 MEDIUMTEXT,长度由 assetop.Loop.ResolveManually 校验
+	// (operator ≤64 字、reason ≤191 字)。
+	ResolvedBy    string `protobuf:"bytes,22,opt,name=resolved_by,json=resolvedBy,proto3" json:"resolved_by,omitempty"`          // 操作人;空 = 这一行不是人工终结的
+	ResolveReason string `protobuf:"bytes,23,opt,name=resolve_reason,json=resolveReason,proto3" json:"resolve_reason,omitempty"` // 人工判定依据
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -791,6 +799,20 @@ func (x *TradeAssetOpRecord) GetUpdatedMs() uint64 {
 	return 0
 }
 
+func (x *TradeAssetOpRecord) GetResolvedBy() string {
+	if x != nil {
+		return x.ResolvedBy
+	}
+	return ""
+}
+
+func (x *TradeAssetOpRecord) GetResolveReason() string {
+	if x != nil {
+		return x.ResolveReason
+	}
+	return ""
+}
+
 var File_proto_trade_trade_table_proto protoreflect.FileDescriptor
 
 const file_proto_trade_trade_table_proto_rawDesc = "" +
@@ -835,7 +857,7 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\bnext_seq\x18\x03 \x01(\x04R\anextSeq\x12\x14\n" +
 	"\x05epoch\x18\x04 \x01(\x04R\x05epoch\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x05 \x01(\x04R\tupdatedMs:<\x8a\x92\xf4\x01\x13trade_player_op_seq\x92\x92\xf4\x01\x10player_id,stream\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xe5\x06\n" +
+	"updated_ms\x18\x05 \x01(\x04R\tupdatedMs:<\x8a\x92\xf4\x01\x13trade_player_op_seq\x92\x92\xf4\x01\x10player_id,stream\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xad\a\n" +
 	"\x12TradeAssetOpRecord\x12\x13\n" +
 	"\x05op_id\x18\x01 \x01(\x04R\x04opId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x16\n" +
@@ -863,7 +885,10 @@ const file_proto_trade_trade_table_proto_rawDesc = "" +
 	"\n" +
 	"created_ms\x18\x14 \x01(\x04R\tcreatedMs\x12\x1d\n" +
 	"\n" +
-	"updated_ms\x18\x15 \x01(\x04R\tupdatedMs:\xa6\x01\x8a\x92\xf4\x01\x0etrade_asset_op\x92\x92\xf4\x01\x05op_idڒ\xf4\x01Ostatus,next_attempt_ms;player_id,stream,stream_epoch,status,seq;ref_kind,ref_id\xe2\x92\xf4\x01!player_id,stream,stream_epoch,seq\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xfb\x01\n" +
+	"updated_ms\x18\x15 \x01(\x04R\tupdatedMs\x12\x1f\n" +
+	"\vresolved_by\x18\x16 \x01(\tR\n" +
+	"resolvedBy\x12%\n" +
+	"\x0eresolve_reason\x18\x17 \x01(\tR\rresolveReason:\xa6\x01\x8a\x92\xf4\x01\x0etrade_asset_op\x92\x92\xf4\x01\x05op_idڒ\xf4\x01Ostatus,next_attempt_ms;player_id,stream,stream_epoch,status,seq;ref_kind,ref_id\xe2\x92\xf4\x01!player_id,stream,stream_epoch,seq\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xfb\x01\n" +
 	"\rListingStatus\x12\x1e\n" +
 	"\x1aLISTING_STATUS_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18LISTING_STATUS_ESCROWING\x10\x01\x12\x19\n" +
