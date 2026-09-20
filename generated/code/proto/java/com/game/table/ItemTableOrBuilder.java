@@ -27,4 +27,22 @@ public interface ItemTableOrBuilder extends
    * @return The equipKind.
    */
   int getEquipKind();
+
+  /**
+   * <code>uint32 battle_usable = 4;</code>
+   * @return The battleUsable.
+   */
+  int getBattleUsable();
+
+  /**
+   * <code>uint64 battle_heal_hp = 5;</code>
+   * @return The battleHealHp.
+   */
+  long getBattleHealHp();
+
+  /**
+   * <code>uint64 battle_heal_mp = 6;</code>
+   * @return The battleHealMp.
+   */
+  long getBattleHealMp();
 }

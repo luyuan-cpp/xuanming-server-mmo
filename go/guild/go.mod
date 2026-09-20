@@ -1,10 +1,11 @@
 module guild
 
-go 1.24.5
+// go 1.26.5:schemamigrate(proto2mysql)要求 1.26.5(port-decisions D-14 理由 3)
+go 1.26.5
 
 require (
 	github.com/alicebob/miniredis/v2 v2.35.0
-	github.com/go-sql-driver/mysql v1.9.0
+	github.com/go-sql-driver/mysql v1.9.3
 	github.com/google/uuid v1.6.0
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/segmentio/kafka-go v0.4.47
@@ -12,7 +13,9 @@ require (
 	github.com/zeromicro/go-zero v1.9.2
 	go.etcd.io/etcd/client/v3 v3.6.5
 	google.golang.org/grpc v1.79.3
+	golang.org/x/text v0.32.0
 	google.golang.org/protobuf v1.36.11
+	schemamigrate v0.0.0
 	shared v0.0.0
 )
 
@@ -61,9 +64,12 @@ require (
 	github.com/grafana/pyroscope-go v1.2.7 // indirect
 	github.com/grafana/pyroscope-go/godeltaprof v0.1.9 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.26.3 // indirect
+	github.com/jinzhu/inflection v1.0.0 // indirect
+	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/klauspost/compress v1.17.11 // indirect
+	github.com/luyuancpp/proto2mysql v0.1.1 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
@@ -99,13 +105,13 @@ require (
 	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sys v0.39.0 // indirect
 	golang.org/x/term v0.38.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
 	golang.org/x/time v0.10.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
+	gorm.io/gorm v1.30.0 // indirect
 	k8s.io/api v0.29.3 // indirect
 	k8s.io/apimachinery v0.29.4 // indirect
 	k8s.io/client-go v0.29.3 // indirect
@@ -121,3 +127,10 @@ require (
 replace proto => ../proto
 
 replace shared => ../shared
+
+replace schemamigrate => ../schemamigrate
+
+// 与 go/schemamigrate/go.mod 的 proto2mysql replace 逐字一致:replace 只在主模块生效,
+// go/guild 作为主模块继承不到 schemamigrate 的 replace(docs/design/guild-phase2/01-storage.md §7.1)。
+// schemamigrate 改为 require 正式 tag(≥ v0.1.2)并删掉 replace 后,这里同步删除。
+replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1

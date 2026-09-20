@@ -21,7 +21,13 @@ Node:
                        # causing login_session:{sid} to expire mid-flow and
                        # surface as kLoginEnterGameGuid on EnterGame.
   MaxLoginDevices: 3 # Max concurrent login devices per account
-  LeaseTTL: 500 # Lease TTL (seconds)
+  # etcd 节点注册租约(秒)。gate 从注册表里**随机**挑一个 login 实例,实例只在 etcd key 被删时才
+  # 从 gate 的表里摘掉;进程非优雅死亡(OOMKill / 节点宕机)时 key 要等租约到期才消失。
+  # 原值 500:replicas 2 时一个副本崩溃,约一半登录请求会打到死实例,持续 8 分多钟。
+  # 60 与 chat / match / scene_manager / trade / data_service 的现行值一致(续租间隔 = TTL/3 = 20s)。
+  # 不会因 etcd 短暂抖动而永久掉线:租约丢失后 NodeRegistry.reRegister 无限重试(带退避)、
+  # 用事务 CAS 重新挂 key 并重启续租;优雅下线走 Close() 主动删 key,不受此值影响。
+  LeaseTTL: 60
   QueueShardCount: 50 # Queue shard count
   # Login duration limit (max online time per session)
   MaxLoginDuration: 5m # Max login duration (forced logout on timeout)

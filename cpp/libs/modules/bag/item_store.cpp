@@ -227,8 +227,10 @@ void ItemStore::ApplyStackFill(const std::vector<StackFill> &fillPlan,
     }
 }
 
-void ItemStore::DrainStacks(uint32_t configId, uint32_t count)
+uint32_t ItemStore::DrainStacks(uint32_t configId, uint32_t count,
+                                std::vector<StackDrain> *drainedOut)
 {
+    const uint32_t requested = count;
     for (const auto &[entity, item] : registry_.view<ItemComp>().each())  // 遍历所有堆叠
     {
         if (count == 0)
@@ -240,9 +242,18 @@ void ItemStore::DrainStacks(uint32_t configId, uint32_t count)
             continue;  // 不是目标物品,跳过
         }
         const uint32_t take = count < item.size() ? count : item.size();  // 需求与库存取小
+        if (take == 0)
+        {
+            continue;  // size==0 的僵尸堆:抽不出东西,也不该进回执
+        }
         item.set_size(item.size() - take);                                // 抽走(抽光则 size=0)
         count -= take;                                                    // 更新还需抽取的数量
+        if (drainedOut != nullptr)
+        {
+            drainedOut->push_back(StackDrain{static_cast<Guid>(item.item_id()), take});
+        }
     }
+    return requested - count;  // 实扣量:库存不足时 < requested
 }
 
 bool ItemStore::HasMergeablePartials() const

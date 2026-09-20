@@ -22,5 +22,10 @@ func Tables() []proto.Message {
 	return []proto.Message{
 		&tradepb.TradeListingRecord{},
 		&tradepb.TradeFavoriteRecord{},
+		// 通用资产通道(guild-phase2/04-asset-channel.md §S4)在 trade 侧的两张表。
+		// schemamigrate 会把"基线之后才加进清单"的表用 CREATE TABLE IF NOT EXISTS 补出来
+		// (它相对 go/db 修掉的正是这个缺口),所以已经建过库的环境不需要手工 DDL。
+		&tradepb.TradePlayerOpSeqRecord{},
+		&tradepb.TradeAssetOpRecord{},
 	}
 }

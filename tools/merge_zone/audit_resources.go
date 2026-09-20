@@ -81,7 +81,7 @@ type ResourceAudit struct {
 // Cluster**,不再是这张「一人一格」表能表达的形状;审计也不需要它 —— friend 的在线判定
 // 与本工具一样读 shared 的 player:session。
 type auditConfig struct {
-	db        *sql.DB       // game MySQL — guild / zone_{N}_db,以及库名限定的 mmorpg_friend
+	db        *sql.DB       // game MySQL — zone_{N}_db;帮会表在 guildSchema、好友在 friendSchema、聚宝斋在 tradeSchema
 	mappingDB *redis.Client // DB 0(go-zero RedisConf 无 DB 字段)
 	rankRDB   *redis.Client // DB 2
 	sharedRDB *redis.Client // DB 0
@@ -110,6 +110,9 @@ type auditConfig struct {
 	// 跳过时 verify:trade_listing 标 warn「NOT VERIFIED」,不伪装成通过。
 	tradeSchema string
 	skipTrade   bool
+	// guildSchema:帮会独占库名(-guild-schema,默认 mmorpg_guild)。帮会表不在
+	// -mysql-dsn 的默认库里(D-14 §8),所有帮会 SQL 都要按「库名.表名」限定。
+	guildSchema string
 	// friendSchema:好友独占库名(-friend-schema,默认 mmorpg_friend,port-decisions D-14)。
 	// 与 tradeSchema 同一口径:经同一个 -mysql-dsn 以「库名.表名」访问,flag 只为集成测试
 	// 的一次性库留口子(否则集成测试只能去动真实的 mmorpg_friend)。
@@ -150,6 +153,7 @@ type auditEntryParams struct {
 	topicGeneration    uint32
 	tradeSchema        string
 	skipTrade          bool
+	guildSchema        string
 	friendSchema       string
 }
 
@@ -238,6 +242,7 @@ func runAuditEntry(p auditEntryParams) {
 		topicGeneration:    p.topicGeneration,
 		tradeSchema:        p.tradeSchema,
 		skipTrade:          p.skipTrade,
+		guildSchema:        p.guildSchema,
 		friendSchema:       p.friendSchema,
 	}
 
@@ -553,22 +558,26 @@ func auditGuildMembers(ctx context.Context, cfg auditConfig) ResourceAudit {
 	if cfg.db == nil {
 		return infraAudit(r.Name, "no MySQL handle")
 	}
-	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild_member").Scan(&r.SourceCount); err != nil {
+	if err := validateGuildSchemaName(cfg.guildSchema); err != nil {
+		return infraAudit(r.Name, "%v", err)
+	}
+	memberTable := guildQualified(cfg.guildSchema, guildMemberTable)
+	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+memberTable).Scan(&r.SourceCount); err != nil {
 		r.Severity = "info"
-		r.Notes = "guild_member table not present"
+		r.Notes = memberTable + " table not present"
 		return r
 	}
 	r.TargetCount = r.SourceCount
 	// Orphan check: members pointing at non-existent guilds.
 	var orphans int64
 	_ = cfg.db.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM guild_member m
-		 LEFT JOIN guild g ON m.guild_id = g.guild_id
-		  WHERE g.guild_id IS NULL`).Scan(&orphans)
+		"SELECT COUNT(*) FROM "+memberTable+" m"+
+			" LEFT JOIN "+guildQualified(cfg.guildSchema, guildTable)+" g ON m.guild_id = g.guild_id"+
+			" WHERE g.guild_id IS NULL").Scan(&orphans)
 	r.ConflictCount = orphans
 	if orphans > 0 {
 		r.Severity = "warn"
-		r.Notes = fmt.Sprintf("%d guild_member rows reference non-existent guilds (pre-existing data quality issue, not merge-caused)", orphans)
+		r.Notes = fmt.Sprintf("%d %s rows reference non-existent guilds (pre-existing data quality issue, not merge-caused)", orphans, memberTable)
 	} else {
 		r.Severity = "info"
 		r.Notes = "rows survive merge automatically (guild_id stable). 0 orphans."

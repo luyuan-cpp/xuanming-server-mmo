@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"scene_manager/internal/constants"
@@ -93,6 +94,12 @@ type nodeEntry struct {
 var (
 	knownNodesMu sync.RWMutex
 	knownNodes   = make(map[string]nodeEntry)
+	// knownNodesSynced:本进程是否已经至少完成过一次 etcd 全量同步。
+	// 在那之前 knownNodes 是空表,「表里没有这个节点」不是任何事情的证据 ——
+	// 要拿「节点已从 etcd 注销」当死亡证据的判定(playerLocationOwnerDead)必须先看它。
+	// 只置真、不复位:watch 中断后的重同步期间表里留着的是旧条目,旧条目只会让节点
+	// 「看起来还在」,方向是 fail-closed。
+	knownNodesSynced atomic.Bool
 )
 
 // knownNodeIdentityMatchCount 返回当前 watch 快照中同一 (zone,node) 身份的
@@ -113,6 +120,73 @@ func knownNodeIdentityMatchCount(zoneID uint32, nodeID string) int {
 
 func isKnownNodeIdentityAmbiguous(zoneID uint32, nodeID string) bool {
 	return knownNodeIdentityMatchCount(zoneID, nodeID) > 1
+}
+
+// nodeGoneObservedAt 记录**本副本**亲眼看到某个 (zone,node) 从 etcd 注册表消失的时刻
+// (watch DELETE,或重同步时新旧快照的差集)。
+//
+// 为什么 Redis 里已经有 death_at 还要再记一份进程本地的:death_at 只有 leader 写。
+// leader 缺位的窗口里节点丢了租约,没有人写 death_at,而「没有 death_at」在
+// CanReclaimDeadNode 里的语义是放行 —— 跟随者若据此接管玩家,正好撞上老进程 15s 的
+// 紧急疏散存盘(markNodeDeath 的 Setex 失败、PUT 分支提前 clearNodeDeath 也是同一类缺口)。
+// 本地这一份不依赖任何人写 Redis:只要本副本看到了它消失,屏障就从那一刻起算。
+// 本副本没看到(进程在那之后才启动)时没有记录,退回只看 Redis 的 death_at。
+var (
+	nodeGoneObservedMu sync.Mutex
+	nodeGoneObservedAt = make(map[string]time.Time)
+)
+
+func nodeGoneObservedKey(zoneID uint32, nodeID string) string {
+	return strconv.FormatUint(uint64(zoneID), 10) + "/" + nodeID
+}
+
+// noteNodeGoneFromRegistry 在本副本观察到节点从注册表消失时调用(每个副本都调,不走 leader 闸门)。
+// 同一身份重复观察保留**较早**的时刻不合适 —— 节点可能重新注册后再次死亡,屏障必须从最近
+// 一次消失起算,所以直接覆盖。顺手清掉早已过期的旧记录,表不会无限增长。
+func noteNodeGoneFromRegistry(zoneID uint32, nodeID string) {
+	if nodeID == "" {
+		return
+	}
+	now := time.Now()
+	nodeGoneObservedMu.Lock()
+	defer nodeGoneObservedMu.Unlock()
+	for key, at := range nodeGoneObservedAt {
+		if now.Sub(at) > constants.NodeDeathMarkTTL {
+			delete(nodeGoneObservedAt, key)
+		}
+	}
+	nodeGoneObservedAt[nodeGoneObservedKey(zoneID, nodeID)] = now
+}
+
+// localGoneBarrierBlocks:本副本看到该节点消失还不到一个再入屏障时长。没有本地记录返回 false
+// (由 Redis 的 death_at 判定)。墙钟回拨导致的负时长按「刚消失」处理,方向是 fail-closed。
+func localGoneBarrierBlocks(svcCtx *svc.ServiceContext, zoneID uint32, nodeID string) bool {
+	nodeGoneObservedMu.Lock()
+	at, ok := nodeGoneObservedAt[nodeGoneObservedKey(zoneID, nodeID)]
+	nodeGoneObservedMu.Unlock()
+	if !ok {
+		return false
+	}
+	elapsed := time.Since(at)
+	return elapsed < 0 || elapsed < sceneReentryBarrier(svcCtx)
+}
+
+// isNodeGoneFromRegistry 报告 (zone,node) 是否已经确认**不在 etcd 注册表里**。
+//
+// 这是比「不在 Redis 负载集里」强得多的死亡证据:负载集成员资格由 leader 周期刷新,
+// 缺席可能只是「这一刻没看到它」(刷新间隔、leader 缺位、别的路径短暂改写),而且那些路径
+// 未必写 death_at —— 而「没有 death_at」在 CanReclaimDeadNode 里的语义是放行。
+// etcd 注册则只在租约到期或进程主动注销时消失,那时 removeNodeFromRedis / 周期巡检会先写
+// death_at 再摘负载集,再入屏障才有意义。
+// 用例:world_init 的改派前提也复用本函数(ba2337b0d),口径一致。
+//
+// knownNodes 每个副本都在维护(watch 的 PUT / DELETE 先改内存表,之后才判 leader),
+// 所以非 leader 副本上同样可用。尚未完成首次全量同步时返回 false(拿不到证据)。
+func isNodeGoneFromRegistry(zoneID uint32, nodeID string) bool {
+	if !knownNodesSynced.Load() {
+		return false
+	}
+	return knownNodeIdentityMatchCount(zoneID, nodeID) == 0
 }
 
 // parseNodeEntry parses a raw etcd value into a nodeEntry. Also validates
@@ -492,6 +566,7 @@ func StartLoadReporter(ctx context.Context, svcCtx *svc.ServiceContext) {
 				continue
 			}
 		}
+		knownNodesSynced.Store(true)
 
 		watchAndRefresh(ctx, svcCtx, rev)
 
@@ -545,6 +620,8 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 		if _, still := next[key]; !still {
 			RemoveNodeConn(prev.reg.ZoneId, prev.nodeID)
 			metrics.ForgetNode(prev.nodeID, prev.reg.ZoneId, prev.reg.SceneNodeType)
+			// watch 重建窗口里漏掉的 DELETE:本副本是在**此刻**才知道它没了。
+			noteNodeGoneFromRegistry(prev.reg.ZoneId, prev.nodeID)
 		}
 	}
 
@@ -606,6 +683,11 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 					return resp.Header.Revision, nil
 				}
 				if _, ok := seen[p.Key]; !ok {
+					// 顺序与 removeNodeFromRedis 保持一致:**先**写 death_at(下面那段注释说明了
+					// 为什么必须记),**再**摘负载集。反过来的话,两步之间并发的 EnterScene 会
+					// 看到「不在负载集」+「没有 death_at ⇒ 屏障已过」,在老节点 emergency drain
+					// 还没跑完时就改派(理由详见 removeNodeFromRedis 的注释)。
+					markNodeDeath(svcCtx, zoneId, p.Key)
 					svcCtx.Redis.Zrem(loadKey, p.Key)
 					svcCtx.Redis.Del(nodeSceneNodeTypeKey(zoneId, p.Key))
 					RemoveNodeConn(zoneId, p.Key)
@@ -615,7 +697,7 @@ func fullSync(ctx context.Context, svcCtx *svc.ServiceContext) (int64, error) {
 					// 当成「没死过」直接放行改派,而它们很可能是几秒前刚断的、
 					// C++ 侧还在 drain。我们不知道真实死亡时刻,只能用「首次
 					// 观察到」这个偏晚的时刻 —— 方向是安全的(屏障结束点跟着偏晚)。
-					markNodeDeath(svcCtx, zoneId, p.Key)
+					// (markNodeDeath 已在本分支开头、摘负载集之前调用。)
 					// 孤儿实例场景与计数残留也只有这条路径能补收(这也是新任
 					// 领导者补齐跟随期间漏掉的 DELETE 事件的唯一路径)。与 watch
 					// DELETE 同构:入队等再入屏障走完,由 drainPendingDeadNodeReconciles
@@ -819,6 +901,8 @@ func handleWatchEvent(ctx context.Context, svcCtx *svc.ServiceContext, ev *clien
 		if !existed {
 			return
 		}
+		// 每个副本都记(在 leader 闸门之前):见 nodeGoneObservedAt 的注释。
+		noteNodeGoneFromRegistry(entry.reg.ZoneId, entry.nodeID)
 
 		rebuildActiveZones()
 

@@ -172,8 +172,13 @@ func runTrade(c config.Config) (runErr error) {
 		return nil
 	}
 
-	// 启动时领第一段 listing_id:只为尽早暴露"BootstrapTags 漏登记 / data_service 不通",失败只告警。
+	// 启动时领第一段 listing_id / op_id:只为尽早暴露"BootstrapTags 漏登记 / data_service 不通",失败只告警。
 	svcCtx.WarmListingIDSegment()
+	svcCtx.Assets.WarmAssetOpIDSegment()
+
+	// 资产通道:scene 节点镜像 + outbox 重投循环。先于 gRPC 起,把上一轮留下的未决指令尽早投出去;
+	// ctx 取消(收到退出信号)即两者退出,连接在 svcCtx.Stop() 里关。
+	svcCtx.StartAssetChannel(ctx)
 
 	// Prometheus /metrics(MetricsListenAddr 为空则不开)。
 	svc.StartMetrics(c.MetricsListenAddr)
@@ -270,6 +275,7 @@ func runTrade(c config.Config) (runErr error) {
 	fmt.Printf("  schema:        %s\n", schemaModeLabel(c))
 	fmt.Printf("  market_scope:  %s\n", c.Market.Scope)
 	fmt.Printf("  seed_enabled:  %v (TradeAdmin.SeedListing 只在 Mode=dev|test 可用)\n", config.IsRelaxedMode(c.Mode))
+	fmt.Printf("  asset_channel: %s\n", assetChannelLabel(svcCtx))
 	if c.MetricsListenAddr != "" {
 		fmt.Printf("  metrics:       %s\n", c.MetricsListenAddr)
 	}
@@ -450,6 +456,21 @@ func logReport(stage string, r schemamigrate.Report) {
 	for _, m := range r.Manual {
 		logx.Errorf("[trade] %s MANUAL: %s", stage, m)
 	}
+}
+
+// assetChannelLabel 是横幅里的资产通道状态:启用 / 关闭各一行,**不打印密钥**,
+// 只打印它该来自哪个环境变量名。这一行是运维在启动日志里唯一能一眼看到这件事的地方。
+//
+// 只有两种形态到得了这里:AssetOp.Enabled=false(默认,通道根本没装配),
+// 或通道已装配且可签名。Enabled=true 而密钥缺失 / 过短时 svc.NewServiceContext 已经拒启
+// (fail-closed),进程走不到横幅 —— 所以这里不再有"开着但不可用"的第三种说法。
+func assetChannelLabel(svcCtx *svc.ServiceContext) string {
+	if svcCtx.Assets.Enabled() {
+		return "启用 (caller=" + svc.AssetOpCaller + ",密钥来自环境变量 " + svc.AssetOpSecretEnv +
+			";scene 节点镜像 + outbox 重投循环已起)"
+	}
+	return "关闭 (AssetOp.Enabled=false;不拨共享 Redis、不建 scene 节点镜像、不起重投循环;" +
+		"浏览 / 详情 / 收藏照常,上架托管与交付一律被拒)"
 }
 
 // schemaModeLabel 是横幅里的建表策略描述。

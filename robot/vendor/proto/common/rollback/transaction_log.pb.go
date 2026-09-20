@@ -41,30 +41,33 @@ const (
 type TransactionType int32
 
 const (
-	TransactionType_TX_UNKNOWN             TransactionType = 0
-	TransactionType_TX_TRADE               TransactionType = 1 // Player-to-player trade
-	TransactionType_TX_MAIL_ATTACHMENT     TransactionType = 2 // Mail with items/currency
-	TransactionType_TX_AUCTION_SELL        TransactionType = 3 // Auction house listing sold
-	TransactionType_TX_AUCTION_BUY         TransactionType = 4 // Auction house purchase
-	TransactionType_TX_GUILD_BANK_DEPOSIT  TransactionType = 5
-	TransactionType_TX_GUILD_BANK_WITHDRAW TransactionType = 6
-	TransactionType_TX_QUEST_REWARD        TransactionType = 7  // Quest/mission reward grant
-	TransactionType_TX_SYSTEM_GRANT        TransactionType = 8  // Server-side grant (event, compensation)
-	TransactionType_TX_GM_GRANT            TransactionType = 9  // GM tool grant
-	TransactionType_TX_GM_DEDUCT           TransactionType = 10 // GM tool deduction
-	TransactionType_TX_SHOP_BUY            TransactionType = 11 // NPC shop purchase (currency → item)
-	TransactionType_TX_SHOP_SELL           TransactionType = 12 // NPC shop sell (item → currency)
-	TransactionType_TX_ITEM_DESTROY        TransactionType = 13 // Item destroyed / consumed
-	TransactionType_TX_CURRENCY_ADD        TransactionType = 14 // Generic currency gain
-	TransactionType_TX_CURRENCY_DEDUCT     TransactionType = 15 // Generic currency spend
-	TransactionType_TX_ROLLBACK_RESTORE    TransactionType = 16 // Item/currency restored via rollback
-	TransactionType_TX_CLAWBACK            TransactionType = 17 // Precision clawback (Bug exploit recovery)
-	TransactionType_TX_DEFERRED_CLAWBACK   TransactionType = 18 // Deferred clawback (补缴) auto-deduction
-	TransactionType_TX_BATCH_RECALL        TransactionType = 19 // Batch recall (批量回收) by GM
-	TransactionType_TX_ITEM_AWARD          TransactionType = 20 // Loot drop / chest open / package open / boss reward.
-	TransactionType_TX_QUEST_COMPLETE      TransactionType = 21 // Player completed an objective / turned in a quest.
-	TransactionType_TX_LEVEL_UP            TransactionType = 22 // Level boundary crossed. Cheap to log, cheap to replay
-	TransactionType_TX_BUFF_GAIN           TransactionType = 23 // Long-duration buff gained (>30 min remaining at log time)
+	TransactionType_TX_UNKNOWN               TransactionType = 0
+	TransactionType_TX_TRADE                 TransactionType = 1 // Player-to-player trade
+	TransactionType_TX_MAIL_ATTACHMENT       TransactionType = 2 // Mail with items/currency
+	TransactionType_TX_AUCTION_SELL          TransactionType = 3 // Auction house listing sold
+	TransactionType_TX_AUCTION_BUY           TransactionType = 4 // Auction house purchase
+	TransactionType_TX_GUILD_BANK_DEPOSIT    TransactionType = 5
+	TransactionType_TX_GUILD_BANK_WITHDRAW   TransactionType = 6
+	TransactionType_TX_QUEST_REWARD          TransactionType = 7  // Quest/mission reward grant
+	TransactionType_TX_SYSTEM_GRANT          TransactionType = 8  // Server-side grant (event, compensation)
+	TransactionType_TX_GM_GRANT              TransactionType = 9  // GM tool grant
+	TransactionType_TX_GM_DEDUCT             TransactionType = 10 // GM tool deduction
+	TransactionType_TX_SHOP_BUY              TransactionType = 11 // NPC shop purchase (currency → item)
+	TransactionType_TX_SHOP_SELL             TransactionType = 12 // NPC shop sell (item → currency)
+	TransactionType_TX_ITEM_DESTROY          TransactionType = 13 // Item destroyed / consumed
+	TransactionType_TX_CURRENCY_ADD          TransactionType = 14 // Generic currency gain
+	TransactionType_TX_CURRENCY_DEDUCT       TransactionType = 15 // Generic currency spend
+	TransactionType_TX_ROLLBACK_RESTORE      TransactionType = 16 // Item/currency restored via rollback
+	TransactionType_TX_CLAWBACK              TransactionType = 17 // Precision clawback (Bug exploit recovery)
+	TransactionType_TX_DEFERRED_CLAWBACK     TransactionType = 18 // Deferred clawback (补缴) auto-deduction
+	TransactionType_TX_BATCH_RECALL          TransactionType = 19 // Batch recall (批量回收) by GM
+	TransactionType_TX_ITEM_AWARD            TransactionType = 20 // Loot drop / chest open / package open / boss reward.
+	TransactionType_TX_QUEST_COMPLETE        TransactionType = 21 // Player completed an objective / turned in a quest.
+	TransactionType_TX_LEVEL_UP              TransactionType = 22 // Level boundary crossed. Cheap to log, cheap to replay
+	TransactionType_TX_BUFF_GAIN             TransactionType = 23 // Long-duration buff gained (>30 min remaining at log time)
+	TransactionType_TX_GUILD_DONATE          TransactionType = 24 // 帮会捐献扣货币(ASSET_OP_STREAM_GUILD_DEBIT)
+	TransactionType_TX_GUILD_SHOP            TransactionType = 25 // 帮会商店发物(ASSET_OP_STREAM_GUILD_CREDIT)
+	TransactionType_TX_GUILD_ACTIVITY_REWARD TransactionType = 26 // 帮会活动发奖(ASSET_OP_STREAM_GUILD_CREDIT)
 )
 
 // Enum value maps for TransactionType.
@@ -94,32 +97,38 @@ var (
 		21: "TX_QUEST_COMPLETE",
 		22: "TX_LEVEL_UP",
 		23: "TX_BUFF_GAIN",
+		24: "TX_GUILD_DONATE",
+		25: "TX_GUILD_SHOP",
+		26: "TX_GUILD_ACTIVITY_REWARD",
 	}
 	TransactionType_value = map[string]int32{
-		"TX_UNKNOWN":             0,
-		"TX_TRADE":               1,
-		"TX_MAIL_ATTACHMENT":     2,
-		"TX_AUCTION_SELL":        3,
-		"TX_AUCTION_BUY":         4,
-		"TX_GUILD_BANK_DEPOSIT":  5,
-		"TX_GUILD_BANK_WITHDRAW": 6,
-		"TX_QUEST_REWARD":        7,
-		"TX_SYSTEM_GRANT":        8,
-		"TX_GM_GRANT":            9,
-		"TX_GM_DEDUCT":           10,
-		"TX_SHOP_BUY":            11,
-		"TX_SHOP_SELL":           12,
-		"TX_ITEM_DESTROY":        13,
-		"TX_CURRENCY_ADD":        14,
-		"TX_CURRENCY_DEDUCT":     15,
-		"TX_ROLLBACK_RESTORE":    16,
-		"TX_CLAWBACK":            17,
-		"TX_DEFERRED_CLAWBACK":   18,
-		"TX_BATCH_RECALL":        19,
-		"TX_ITEM_AWARD":          20,
-		"TX_QUEST_COMPLETE":      21,
-		"TX_LEVEL_UP":            22,
-		"TX_BUFF_GAIN":           23,
+		"TX_UNKNOWN":               0,
+		"TX_TRADE":                 1,
+		"TX_MAIL_ATTACHMENT":       2,
+		"TX_AUCTION_SELL":          3,
+		"TX_AUCTION_BUY":           4,
+		"TX_GUILD_BANK_DEPOSIT":    5,
+		"TX_GUILD_BANK_WITHDRAW":   6,
+		"TX_QUEST_REWARD":          7,
+		"TX_SYSTEM_GRANT":          8,
+		"TX_GM_GRANT":              9,
+		"TX_GM_DEDUCT":             10,
+		"TX_SHOP_BUY":              11,
+		"TX_SHOP_SELL":             12,
+		"TX_ITEM_DESTROY":          13,
+		"TX_CURRENCY_ADD":          14,
+		"TX_CURRENCY_DEDUCT":       15,
+		"TX_ROLLBACK_RESTORE":      16,
+		"TX_CLAWBACK":              17,
+		"TX_DEFERRED_CLAWBACK":     18,
+		"TX_BATCH_RECALL":          19,
+		"TX_ITEM_AWARD":            20,
+		"TX_QUEST_COMPLETE":        21,
+		"TX_LEVEL_UP":              22,
+		"TX_BUFF_GAIN":             23,
+		"TX_GUILD_DONATE":          24,
+		"TX_GUILD_SHOP":            25,
+		"TX_GUILD_ACTIVITY_REWARD": 26,
 	}
 )
 
@@ -387,7 +396,7 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\x05extra\x18\x0e \x01(\tR\x05extra\x12\x17\n" +
 	"\azone_id\x18\x0f \x01(\rR\x06zoneId\"E\n" +
 	"\x13TransactionLogBatch\x12.\n" +
-	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xff\x03\n" +
+	"\aentries\x18\x01 \x03(\v2\x14.TransactionLogEntryR\aentries*\xc5\x04\n" +
 	"\x0fTransactionType\x12\x0e\n" +
 	"\n" +
 	"TX_UNKNOWN\x10\x00\x12\f\n" +
@@ -414,7 +423,10 @@ const file_proto_common_rollback_transaction_log_proto_rawDesc = "" +
 	"\rTX_ITEM_AWARD\x10\x14\x12\x15\n" +
 	"\x11TX_QUEST_COMPLETE\x10\x15\x12\x0f\n" +
 	"\vTX_LEVEL_UP\x10\x16\x12\x10\n" +
-	"\fTX_BUFF_GAIN\x10\x17B\x17Z\x15proto/common/rollbackb\x06proto3"
+	"\fTX_BUFF_GAIN\x10\x17\x12\x13\n" +
+	"\x0fTX_GUILD_DONATE\x10\x18\x12\x11\n" +
+	"\rTX_GUILD_SHOP\x10\x19\x12\x1c\n" +
+	"\x18TX_GUILD_ACTIVITY_REWARD\x10\x1aB\x17Z\x15proto/common/rollbackb\x06proto3"
 
 var (
 	file_proto_common_rollback_transaction_log_proto_rawDescOnce sync.Once

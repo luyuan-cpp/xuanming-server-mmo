@@ -1517,6 +1517,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GateTokenPayload final : public ::g
     kGateNodeIdFieldNumber = 1,
     kZoneIdFieldNumber = 2,
     kExpireTimestampFieldNumber = 3,
+    kPlayerIdFieldNumber = 5,
+    kTargetZoneIdFieldNumber = 6,
   };
   // bytes hmac_session_key = 4;
   void clear_hmac_session_key() ;
@@ -1563,11 +1565,31 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GateTokenPayload final : public ::g
   void _internal_set_expire_timestamp(::int64_t value);
 
   public:
+  // uint64 player_id = 5;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
+  // uint32 target_zone_id = 6;
+  void clear_target_zone_id() ;
+  [[nodiscard]] ::uint32_t target_zone_id() const;
+  void set_target_zone_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_target_zone_id() const;
+  void _internal_set_target_zone_id(::uint32_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:GateTokenPayload)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1600,6 +1622,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GateTokenPayload final : public ::g
     ::uint32_t gate_node_id_;
     ::uint32_t zone_id_;
     ::int64_t expire_timestamp_;
+    ::uint64_t player_id_;
+    ::uint32_t target_zone_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -11446,6 +11470,54 @@ inline void GateTokenPayload::set_allocated_hmac_session_key(::std::string* PROT
     _impl_.hmac_session_key_.Set("", GetArena());
   }
   // @@protoc_insertion_point(field_set_allocated:GateTokenPayload.hmac_session_key)
+}
+
+// uint64 player_id = 5;
+inline void GateTokenPayload::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t GateTokenPayload::player_id() const {
+  // @@protoc_insertion_point(field_get:GateTokenPayload.player_id)
+  return _internal_player_id();
+}
+inline void GateTokenPayload::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:GateTokenPayload.player_id)
+}
+inline ::uint64_t GateTokenPayload::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void GateTokenPayload::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
+}
+
+// uint32 target_zone_id = 6;
+inline void GateTokenPayload::clear_target_zone_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_zone_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t GateTokenPayload::target_zone_id() const {
+  // @@protoc_insertion_point(field_get:GateTokenPayload.target_zone_id)
+  return _internal_target_zone_id();
+}
+inline void GateTokenPayload::set_target_zone_id(::uint32_t value) {
+  _internal_set_target_zone_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:GateTokenPayload.target_zone_id)
+}
+inline ::uint32_t GateTokenPayload::_internal_target_zone_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.target_zone_id_;
+}
+inline void GateTokenPayload::_internal_set_target_zone_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.target_zone_id_ = value;
 }
 
 // -------------------------------------------------------------------

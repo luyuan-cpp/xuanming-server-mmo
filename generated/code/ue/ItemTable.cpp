@@ -110,6 +110,9 @@ static void ItemTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObject, 
 	ItemTableCheckNarrowedField(RowObject, TEXT("id"), TEXT("id"), RowIndex, 2147483647.0, TEXT("uint32"));
 	ItemTableCheckNarrowedField(RowObject, TEXT("max_stack_size"), TEXT("max_stack_size"), RowIndex, 2147483647.0, TEXT("uint32"));
 	ItemTableCheckNarrowedField(RowObject, TEXT("equip_kind"), TEXT("equip_kind"), RowIndex, 2147483647.0, TEXT("uint32"));
+	ItemTableCheckNarrowedField(RowObject, TEXT("battle_usable"), TEXT("battle_usable"), RowIndex, 2147483647.0, TEXT("uint32"));
+	ItemTableCheckNarrowedField(RowObject, TEXT("battle_heal_hp"), TEXT("battle_heal_hp"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	ItemTableCheckNarrowedField(RowObject, TEXT("battle_heal_mp"), TEXT("battle_heal_mp"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 }
 
 bool UItemTable::LoadFromJson(const FString& JsonText, FString& OutError)

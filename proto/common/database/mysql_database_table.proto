@@ -3,6 +3,7 @@ option go_package = "common/database";
 
 import "proto/db/proto_option.proto";
 import "proto/common/base/user_accounts.proto";
+import "proto/common/component/asset_op_ledger_comp.proto";
 import "proto/common/component/player_attribute_comp.proto";
 import "proto/common/component/player_pet_comp.proto";
 import "proto/common/component/player_scene_comp.proto";
@@ -128,6 +129,24 @@ message player_database
   // 背包资产与任务领取权同属一条玩家数据库记录，随同一 DBTask 保存。
   BagAllData bag_component = 13;
   QuestAllData mission_component = 14;
+  // 角色名副本,见 player_comp.proto PlayerProfileComp。
+  // 真源是 data_service 全局库的 player_name 表(全服唯一);这里只是随 player_database
+  // 走的只读副本 —— login 首次入场补齐,scene 只读、只原样存回。副本允许"缺失"
+  // (entergame self-heal 恢复出的空记录、早于首次入场的回档快照),读侧一律回源
+  // BatchGetPlayerName,不要把空名当成"这个角色没有名字"。
+  //
+  // 【加列纪律】player_database 新字段一律取"落码当时的下一个空闲号",并声明在 message 末尾:
+  // 新库 CREATE TABLE 按声明顺序建列,老库 cmd/migrate 只会 ADD COLUMN 追加到末尾,
+  // 两者列序必须一致(tools/merge_zone 按列名拷贝依赖这个)。
+  // 字段号归属由 docs/design/guild-phase2/90-consistency.md G-03 裁决:
+  // 按 91-batches-and-codex.md 的批次顺序 B3a-1 取 15、B4a-1 取 16,
+  // S4 4.3.4 原文的"= 15"已作废。15 与 16 的声明顺序必须与字段号一致、中间不留空洞:
+  // 两列都是 MEDIUMBLOB,列序错位会让 `INSERT … SELECT *` 静默串档。
+  PlayerProfileComp profile_component = 15;
+  // 通用资产通道账本(每流 seq 窗口),docs/design/guild-phase2/04-asset-channel.md §4.3.4。
+  // 必须与 currency / bag_component 同记录同 DBTask:账本与资产一起落盘、一起丢,
+  // 否则会出现"资产落了账本没落"的中间态,同一笔指令被重复应用(不变量 I3)。
+  PlayerAssetOpLedgerComp asset_op_ledger = 16;
 }
 
 message player_database_1

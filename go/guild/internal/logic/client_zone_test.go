@@ -25,7 +25,7 @@ import (
 )
 
 // 客户端来源请求的身份与 zone 隔离。需要 MySQL 的入会 zone 校验在
-// data/guild_repo_zone_test.go(AddMemberInZone,GUILD_TEST_MYSQL_DSN 门控)。
+// data/guild_repo_zone_test.go(ApplyToGuild / ReviewApplication,GUILD_TEST_MYSQL_DSN 门控)。
 
 type fakeHomeZones struct {
 	zone       uint32
@@ -50,9 +50,12 @@ func TestCreateGuild_ClientIdentityAndZoneComeFromServer(t *testing.T) {
 	fence := &fakeFence{merging: true}
 	l := NewGuildLogic(nil, nil, nil, fence, homeZones)
 
-	_, err := l.CreateGuild(clientCtx(42), &pb.CreateGuildRequest{PlayerId: 999, Name: "青云门", ZoneId: 7})
+	resp, err := l.CreateGuild(clientCtx(42), &pb.CreateGuildRequest{PlayerId: 999, Name: "青云门", ZoneId: 7})
 
-	require.Error(t, err)
+	// 闸门命中回的是 tip 不是 gRPC 错误(§11.1):正在合服是可预期的运维窗口,
+	// 回 error 会被 serverbase 记成服务端故障,客户端还会进重连隔离。
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrZoneMerging, resp.GetErrorMessage().GetId())
 	assert.Equal(t, uint64(42), homeZones.lastPlayer, "身份必须取会话,不能取请求体里伪造的 999")
 	assert.Equal(t, uint32(2), fence.lastZone, "zone 必须取归属 zone,不能取客户端选的 7")
 }
@@ -62,9 +65,10 @@ func TestInternalCreateGuildKeepsRequestZone(t *testing.T) {
 	fence := &fakeFence{merging: true}
 	l := NewGuildLogic(nil, nil, nil, fence, homeZones)
 
-	_, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{PlayerId: 1001, Name: "内部建帮", ZoneId: 7})
+	resp, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{PlayerId: 1001, Name: "内部建帮", ZoneId: 7})
 
-	require.Error(t, err)
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrZoneMerging, resp.GetErrorMessage().GetId())
 	assert.Equal(t, uint32(7), fence.lastZone)
 	assert.Zero(t, homeZones.calls, "内部调用不查归属 zone")
 }
@@ -79,9 +83,11 @@ func TestClientRequestWithoutHomeZoneMappingIsRefused(t *testing.T) {
 	assert.Equal(t, constants.ErrHomeZoneUnknown, create.GetErrorMessage().GetId())
 	assert.Zero(t, fence.calls)
 
-	join, err := l.JoinGuild(ctx, &pb.JoinGuildRequest{GuildId: 1})
+	// 入帮改申请制:原先那个直接入帮的 RPC 已删。提交申请同样要先知道玩家属于哪个区 ——
+	// 帮会按 zone 隔离,归属未知就没法判断他能不能申请这个帮。
+	apply, err := l.ApplyJoinGuild(ctx, &pb.ApplyJoinGuildRequest{GuildId: 1})
 	require.NoError(t, err)
-	assert.Equal(t, constants.ErrHomeZoneUnknown, join.GetErrorMessage().GetId())
+	assert.Equal(t, constants.ErrHomeZoneUnknown, apply.GetErrorMessage().GetId())
 
 	get, err := l.GetGuild(ctx, &pb.GetGuildRequest{GuildId: 1})
 	require.NoError(t, err)

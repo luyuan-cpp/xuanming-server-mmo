@@ -233,31 +233,45 @@ func (w *NodeWatcher) reportCount(count int) {
 	}
 }
 
-// EndpointOf 按 (zone_id, node_id) 找节点 gRPC 地址。
-// 同一身份出现两条注册说明租约/部署链分叉,任何 endpoint 都不能被安全选中
+// EntryOf 按 (zone_id, node_id) 找节点的完整登记(Endpoint + NodeUuid 等)。
+// nodeId 是 PlayerLocation.node_id 的十进制字符串形态。
+// 同一身份出现两条注册说明租约/部署链分叉,任何一条都不能被安全选中
 // (与 scene_manager resolveFromKnownNodes 的歧义拒绝语义一致)。
-func (w *NodeWatcher) EndpointOf(zoneId uint32, nodeId string) (string, error) {
+//
+// 用途:给 scene 节点发 Kafka 命令要填 target_instance_id(AGENTS.md §7 #2 防僵尸),
+// 取的就是这里的 NodeUuid。本函数不替调用方判空:拿到空 NodeUuid 时调用方必须不发
+// (fail-closed,team-system.md §F.3)。
+func (w *NodeWatcher) EntryOf(zoneId uint32, nodeId string) (NodeEntry, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
-	var endpoint string
+	var found NodeEntry
 	matches := 0
 	for _, entry := range w.nodes {
 		if entry.ZoneId != zoneId || strconv.FormatUint(uint64(entry.NodeId), 10) != nodeId {
 			continue
 		}
 		matches++
-		if endpoint != "" && endpoint != entry.Endpoint {
-			return "", fmt.Errorf("节点身份歧义 zone=%d node=%s: 多个 endpoint 注册", zoneId, nodeId)
+		if matches > 1 && found.Endpoint != entry.Endpoint {
+			return NodeEntry{}, fmt.Errorf("节点身份歧义 zone=%d node=%s: 多个 endpoint 注册", zoneId, nodeId)
 		}
-		endpoint = entry.Endpoint
+		found = entry
 	}
 	if matches > 1 {
-		return "", fmt.Errorf("节点身份歧义 zone=%d node=%s: %d 条注册", zoneId, nodeId, matches)
+		return NodeEntry{}, fmt.Errorf("节点身份歧义 zone=%d node=%s: %d 条注册", zoneId, nodeId, matches)
 	}
 	if matches == 0 {
-		return "", fmt.Errorf("节点未注册 zone=%d node=%s", zoneId, nodeId)
+		return NodeEntry{}, fmt.Errorf("节点未注册 zone=%d node=%s", zoneId, nodeId)
 	}
-	return endpoint, nil
+	return found, nil
+}
+
+// EndpointOf 按 (zone_id, node_id) 找节点 gRPC 地址;查找与歧义拒绝语义见 EntryOf。
+func (w *NodeWatcher) EndpointOf(zoneId uint32, nodeId string) (string, error) {
+	entry, err := w.EntryOf(zoneId, nodeId)
+	if err != nil {
+		return "", err
+	}
+	return entry.Endpoint, nil
 }
 
 // EndpointOfNode 按 node_id 找节点 gRPC 地址(battle 节点是全局池不分 zone,

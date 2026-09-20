@@ -13,10 +13,31 @@ type Config struct {
 		Brokers []string
 	}
 
-	// AllowUnsafeCrossNodeHandoff 仅用于开发环境临时复现旧流程。
-	// 默认 false：跨节点切场景，以及已有位置记录时的跨区重定向，必须
-	// 在具备持久化交接屏障前拒绝，避免新节点加载到旧节点尚未落盘的状态。
+	// AllowUnsafeCrossNodeHandoff 是**开发旁路**:true 时跨节点切场景 / 已有位置的
+	// 跨区重定向不再要求源 scene 先写出「已落盘」标记(player:{id}:handoff),
+	// 本地单机联调里 C++ 侧没接标记也能切场景。owner_epoch 的铸造与 CAS **不受
+	// 它影响**,照样执行 —— 旁路只放宽"源已落盘"这一道门,不放宽"谁是当前持有者"。
+	// 默认 false:生产依赖标记 + epoch 两道门(cross-zone-scene-travel.md CZ-4),
+	// 打开等于允许新节点读到源节点尚未落盘的状态(回档)。
 	AllowUnsafeCrossNodeHandoff bool `json:",default=false"`
+
+	// DataServiceRpc 是 data_service 的 gRPC 客户端(etcd 发现,Key=dataservice.rpc)。
+	// scene_manager 只用它查玩家归属 zone(GetPlayerHomeZone),结果随 RoutePlayerEvent
+	// 下发给 scene 节点决定存盘落库目的地(cross-zone-scene-travel.md CZ-3)。
+	// 标 optional 只为让进程能起来:没配时 EnterScene 默认**拒绝**(fail-closed),因为
+	// 多 zone 下「按 gate zone 当归属」会让访客的存盘落错库而且没有任何报错。
+	// 单 zone 联调确实不想起 data_service 时,显式打开 AllowGateZoneAsHomeZone。
+	DataServiceRpc zrpc.RpcClientConf `json:",optional"`
+
+	// AllowGateZoneAsHomeZone:没配 DataServiceRpc 时,是否把 gate zone 当玩家归属 zone。
+	// 只有单 zone 部署才成立(gate zone 恒等于 home zone)。默认 false;多 zone 部署
+	// 打开它 = 访客数据写进目标 zone 的库。配了 DataServiceRpc 时本开关不起作用。
+	AllowGateZoneAsHomeZone bool `json:",default=false"`
+
+	// HomeZoneLookupTimeoutMs 是 EnterScene 里那一次 GetPlayerHomeZone 的预算(毫秒)。
+	// 它串在每一次进场景上,超时按「归属未知」拒绝并让上游重试(不会退回进程 zone),
+	// 所以不能给太长;默认 1500ms 与 login 的 EnterLookupTimeout 对齐。<=0 用默认值。
+	HomeZoneLookupTimeoutMs int64 `json:",default=1500"`
 
 	// ZoneId: zone identifier for this SceneManager instance.
 	// Used for C++ convention etcd registration so Scene nodes can discover this service.

@@ -579,7 +579,21 @@ proto/DB 新列牵动 proto2mysql 迁移与三份 SQL;连升多级会触发多�
 
 ### P1-12 GmSetPlayerLevel(175)/GmAddCurrency(37)与普通客户端 RPC 同口径可达,上线前并入 gate GM 鉴权
 
-**领域** server-cpp · **工作量** M · **状态** open
+**领域** server-cpp · **工作量** M · **状态** **已落码(2026-09-18,未编译)** —— 见下方「落地结果」
+
+> **落地结果(2026-09-18)**:按下面的步骤 1/2/3/4 做了,并把清单从 2 条扩到**实际全部 6 条**
+> (37 / 49 / 94 / 95 / 175 / 187 —— 原条目只列了 175/37,漏了 `GmDeductCurrency`、
+> `GmBlock/UnblockCurrency`、`GmGrantPet`)。
+> 改动:`cpp/nodes/gate/gate_gm_client_messages.h`(新,清单)、`gate_security.h`
+> (`ClassifyGmClientMessage` 纯策略)、`client_message_processor.cpp`(接线,在
+> `ValidateClientMessage` 之后、计非法包)、
+> `cpp/nodes/scene/handler/rpc/player/player_gm_guard.h`(新,scene 第二道锁,判据
+> `SCENE_RUN_MODE`)+ 三个 handler、`gate_security_test.cpp`(3 个用例)、
+> `tools/scripts/cpp_nodes.ps1` 与 `start_game.ps1`(本机兜底 dev,不覆盖显式值)、
+> `cpp/nodes/gate/SECURITY.md` §3。
+> **偏离原步骤**:步骤 5 的 robot 改动没做 —— 启动器已兜底 dev,冒烟无需改;
+> tip 复用既有 `kFeatureUnavailable`,没有新增 tip 码(不动 `data/tip/Tip.xlsx`)。
+> **未编译、未跑冒烟**(AGENTS §10.1),验收清单见本条「验收标准」。
 
 **背景与证据**
 `cpp/nodes/gate/gate_security.h` 的 GM 签名鉴权(VerifyGmRequestFromEnv,:270-360)全仓只在 `gate_service_handler.cpp:316` GmGracefulShutdown 一处使用;gate 对 `GmSetPlayerLevel|GmAddCurrency` 零命中;消息 175/37(`player_attribute_service_metadata.h:38`、`player_currency_service_metadata.h:6`)经 `client_message_processor.cpp:640-720` 与普通消息同路径转发到 scene;scene 侧 `player_attribute_handler.cpp:151` 注释「上线前经 gate GM 鉴权白名单收口」;docs §8、PROGRESS.md:3715 列为缺口。任何已登录客户端可把自己升到满级(2026-09-10 起上限 85)、加任意货币,是上线阻塞级漏洞;但 robot attribute_smoke 与 battle_smoke 依赖这两条,收口时必须保留 dev 通道。
@@ -1092,7 +1106,9 @@ PID 文件可能有旧格式整数值(Read-InstanceEntry :371 兼容分支),前�
 
 ### P2-09 战斗掉落/道具消耗落地:items_gained/items_consumed 只记日志,`BagService::AddItem` 零生产调用点
 
-**领域** server-cpp · **工作量** M · **状态** open
+**领域** server-cpp · **工作量** M · **状态** **已落码(2026-09-17),未编译待 Codex 验证** ——
+实现与验证清单见 [turn-battle-gap-closure.md](./turn-battle-gap-closure.md)(G1/G2/G3)。
+下面的证据行号是 09-05 快照,已全部漂移;"背包系统未挂载"的前提也在 09-11 失效(登录链已 unmarshal)。
 
 **背景与证据**
 `cpp/libs/services/scene/battle/system/player_battle.cpp:999-1007` `道具结算暂缓(背包系统未挂载)` 仅 LOG_INFO;`:442-443` 快照道具副本「一期传空」;`turn_battle_engine.cpp:1280` `掉落 items_gained 依赖掉落表,留待后续接入`;grep `BagService::AddItem|.AddItem(` 在 cpp/libs/services + cpp/nodes(排除测试)零命中;Monster/Dungeon 表无掉落列(`data/schema/monster_table.proto` 仅属性+exp/gold)。背包域(bag_test 46+ 用例、准入/淘汰策略)已就绪但没有真实入包链路;`bag-rule-policy-layering.md` §6.1 明确「推进节日包/FIFO 前先接一条真实入包链路」。「未挂载玩家实体」的说法需核实——若 bag_marshal 已在 loader 里 emplace,则只差调用。

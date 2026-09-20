@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -27,6 +26,11 @@ type IDMinter interface {
 	Mint(ctx context.Context) (uint64, error)
 }
 
+// ApplyPushGate 决定一条**新建**的入帮申请要不要推给审批人:返回 true 才发 APPLICATION_RECEIVED。
+// 生产实现是 repo.TryMarkApplyPush(Redis SetNX 冷却,同一 (帮, 申请人) 60 秒至多一次),
+// 挡的是"申请 → 撤回 → 申请"这种刷屏;不传 = 总是放行(单测)。
+type ApplyPushGate func(ctx context.Context, guildID, playerID uint64) bool
+
 type GuildLogic struct {
 	repo           *data.GuildRepo
 	ids            IDMinter
@@ -37,6 +41,38 @@ type GuildLogic struct {
 	// homeZones 为 nil = 没配 DataServiceRpc:内部调用照常,客户端来源的请求一律拒绝
 	// (没有归属 zone 的真源就不能猜玩家属于哪个区)。
 	homeZones HomeZoneLookup
+	// notifier 是帮会变更推送的唯一出口,默认 NoopNotifier{}(未配 Kafka 或单测)。
+	// 它只在 MySQL 提交之后被调用,失败绝不影响 RPC 结果(push.go 文件头纪律)。
+	notifier GuildNotifier
+	// applyPushGate 见 ApplyPushGate;默认"总是放行"。
+	applyPushGate ApplyPushGate
+}
+
+// Option 是 NewGuildLogic 的可选项。
+//
+// 用可选项而不是加参数:NewGuildLogic 已经有 16 处调用点(全在测试里),
+// 每加一个依赖就改 16 处纯粹是噪音,而且下一批还要再加(B3b 的 PlayerNameResolver、
+// B5 的经济依赖)。可选项让"新依赖"对存量调用点完全透明。
+type Option func(*GuildLogic)
+
+// WithNotifier 注入推送实现;不传 = NoopNotifier(单测与未配 Kafka 的环境)。
+// 传 nil 被忽略而不是覆盖成 nil:notifier 在提交之后被调用,那里不该出现 nil 解引用。
+func WithNotifier(n GuildNotifier) Option {
+	return func(l *GuildLogic) {
+		if n != nil {
+			l.notifier = n
+		}
+	}
+}
+
+// WithApplyPushGate 注入"申请推送冷却"判定;不传 = 总是放行。
+// 生产由 guild.go 传 repo.TryMarkApplyPush。
+func WithApplyPushGate(g ApplyPushGate) Option {
+	return func(l *GuildLogic) {
+		if g != nil {
+			l.applyPushGate = g
+		}
+	}
 }
 
 // NewGuildLogic。mergeFence / homeZones 可为 nil,语义见字段注释。
@@ -44,8 +80,17 @@ type GuildLogic struct {
 // 注意 nil 接口的坑:传 (*RedisMergeFence)(nil) 进来**不等于** nil 接口,
 // 所以 guild.go 必须显式判空再决定传不传 —— 见那边的接线。
 func NewGuildLogic(repo *data.GuildRepo, ids IDMinter, onlineResolver *OnlineStatusResolver,
-	mergeFence MergeFence, homeZones HomeZoneLookup) *GuildLogic {
-	return &GuildLogic{repo: repo, ids: ids, onlineResolver: onlineResolver, mergeFence: mergeFence, homeZones: homeZones}
+	mergeFence MergeFence, homeZones HomeZoneLookup, opts ...Option) *GuildLogic {
+	l := &GuildLogic{
+		repo: repo, ids: ids, onlineResolver: onlineResolver,
+		mergeFence: mergeFence, homeZones: homeZones,
+		notifier:      NoopNotifier{},
+		applyPushGate: func(context.Context, uint64, uint64) bool { return true },
+	}
+	for _, opt := range opts {
+		opt(l)
+	}
+	return l
 }
 
 func tipErr(id uint32, msg string) *base.TipInfoMessage {
@@ -57,9 +102,10 @@ func tipErr(id uint32, msg string) *base.TipInfoMessage {
 // 客户端来源(带 gate 会话)的请求:身份取会话里的 player_id,zone 取 data_service 的
 // 归属 zone,请求体里的 player_id / zone_id 一律不信。帮会按 zone 隔离 —— 只能在自己的区
 // 建帮,只看得见、加得进自己区的帮,只看自己区的榜;别区的帮会对客户端表现为「不存在」。
-// 帮名仍全局唯一(uk_name):合服时两区的帮会直接合并,不需要改名。
+// 帮名仍全局唯一(uk_guild,按 name_norm):合服时两区的帮会直接合并,不需要改名。
 //
 // 内部调用(无会话:GM、运维工具、其它服务)沿用请求体字段,行为与接入客户端之前一致。
+// B2 新增的管理 / 申请 RPC **不开**内部调用口(协议里没有 player_id 字段),见 clientWrite。
 
 type caller struct {
 	playerID   uint64
@@ -112,6 +158,11 @@ func normalizeGuildName(raw string) (string, bool) {
 			return "", false
 		}
 	}
+	// name_norm 必须可生成且不超长,否则唯一键覆盖不到整个值
+	// (docs/design/guild-phase2/01-storage.md §6.3)。失败沿用 kGuildNameInvalid,不新增 tip。
+	if _, ok := data.GuildNameNorm(name); !ok {
+		return "", false
+	}
 	return name, true
 }
 
@@ -135,20 +186,35 @@ func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest
 
 	// 合服闸门在铸号与任何写之前:目标 zone 正在合服时连号都不铸。
 	// 放在铸号之后会白白烧掉一个 guild_id(号段只进不退),放在建库之后就已经晚了。
-	if err := l.checkMergeFence(ctx, zoneID); err != nil {
-		return nil, err
+	if tip := l.mergeFenceTip(ctx, zoneID); tip != nil {
+		return &pb.CreateGuildResponse{ErrorMessage: tip}, nil
 	}
 
-	// Check if player already in a guild
+	// 成员上限读 GuildLevel 第 1 级(默认 30)。读表放在闸门之后、铸号之前:
+	// 配表缺行时既不越过闸门,也不白烧一个 guild_id。
+	maxMembers, ok := initialMaxMembers()
+	if !ok {
+		logx.Errorf("[guild] GuildLevel row %d missing, cannot decide the member cap of a new guild", constants.DefaultInitLevel)
+		return nil, status.Errorf(codes.Internal, "GuildLevel row %d missing", constants.DefaultInitLevel)
+	}
+
+	// 缓存预检只是省一次事务,不是判据:缓存说他已入帮时先用 MySQL 复核一次,
+	// 免得一个陈旧映射把玩家永久挡在建帮之外。真正的判定在 CreateGuild 事务的唯一索引上。
 	existingGuildID, err := l.repo.GetPlayerGuildID(ctx, who.playerID)
 	if err != nil {
 		return nil, fmt.Errorf("check existing guild: %w", err)
 	}
 	if existingGuildID > 0 {
-		return &pb.CreateGuildResponse{ErrorMessage: tipErr(constants.ErrAlreadyInGuild, "already in a guild")}, nil
+		verified, err := l.repo.VerifyPlayerGuildID(ctx, who.playerID, existingGuildID)
+		if err != nil {
+			return nil, fmt.Errorf("verify existing guild of player %d: %w", who.playerID, err)
+		}
+		if verified > 0 {
+			return &pb.CreateGuildResponse{ErrorMessage: tipErr(constants.ErrAlreadyInGuild, "already in a guild")}, nil
+		}
 	}
 
-	now := time.Now().UnixMilli()
+	now := nowMs()
 	guildID, tip := l.mintGuildID(ctx, who.playerID)
 	if tip != nil {
 		return &pb.CreateGuildResponse{ErrorMessage: tip}, nil
@@ -160,7 +226,7 @@ func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest
 		LeaderID:     who.playerID,
 		Level:        constants.DefaultInitLevel,
 		CreateTimeMs: now,
-		MaxMembers:   constants.DefaultMaxMembers,
+		MaxMembers:   maxMembers,
 		ZoneID:       zoneID,
 		Members: []data.MemberData{
 			{
@@ -178,9 +244,15 @@ func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest
 	// 重名只能由唯一索引裁决(预查询挡不住并发建同名),代价是这次铸出的 guild_id 作废。
 	switch err := l.repo.CreateGuild(ctx, guild); {
 	case errors.Is(err, data.ErrPlayerAlreadyInGuild):
+		// 事务说他已入帮而缓存说没有:以 MySQL 为准,顺手把那个陈旧的 0 映射纠正回来。
+		l.verifyMapping(ctx, who.playerID, 0)
 		return &pb.CreateGuildResponse{ErrorMessage: tipErr(constants.ErrAlreadyInGuild, "already in a guild")}, nil
 	case errors.Is(err, data.ErrGuildNameTaken):
 		return &pb.CreateGuildResponse{ErrorMessage: tipErr(constants.ErrGuildNameTaken, "guild name taken")}, nil
+	case errors.Is(err, data.ErrWriteConflict):
+		// 写冲突是业务 tip 不是故障:玩家原地重试一次就能成功,回 gRPC 错误会让客户端进重连隔离。
+		logx.Infof("[guild] create guild write conflict (player %d): %v", who.playerID, err)
+		return &pb.CreateGuildResponse{ErrorMessage: tipErr(constants.ErrBusyRetry, "guild write conflict")}, nil
 	case err != nil:
 		return nil, fmt.Errorf("create guild: %w", err)
 	}
@@ -190,40 +262,35 @@ func (l *GuildLogic) CreateGuild(ctx context.Context, req *pb.CreateGuildRequest
 		logx.Errorf("init guild rank score: %v", err)
 	}
 
-	return &pb.CreateGuildResponse{Guild: l.toProtoGuild(ctx, guild)}, nil
+	// 建帮不推送:此刻帮里只有建帮者自己,而他手上这个响应就是最新状态。
+	return &pb.CreateGuildResponse{Guild: l.guildInfoFor(ctx, guild, viewerOf(who))}, nil
 }
 
-// ErrZoneMerging 表示目标 zone 正处在合服维护窗口,建帮被闸门拒绝。
-// 用 errors.Is 可判;跨 gRPC 时是 codes.FailedPrecondition。
-var ErrZoneMerging = errors.New("zone merge in progress")
-
-// checkMergeFence 返回非 nil 表示本次建帮被合服闸门拒绝。
+// mergeFenceTip 返回非 nil 表示本次写被合服闸门拒绝(取代原先回 gRPC FailedPrecondition 的 checkMergeFence)。
 //
 // 三条分支各有理由:
-//   - fence 为 nil(没配 MergeMarkerRedis)→ 放行。闸门是可选加固,不能因为没配
-//     就把建帮功能整体关掉;guild.go 启动时已经打过"闸门未生效"的 Info。
+//   - fence 为 nil(没配 MergeMarkerRedis)或 zoneID 为 0(内部调用)→ 放行。闸门是可选加固,
+//     不能因为没配就把帮会功能整体关掉;guild.go 启动时已经打过"闸门未生效"的 Info。
 //   - 查询报错 → **拒绝**(fail closed)。查不到闸门状态不等于没有闸门,
-//     而合服窗口里建出来的公会会永远留在一个已下线的 zone —— 那是数据事故,
+//     而合服窗口里写出来的帮会数据会落在一个正在搬迁的 zone 上 —— 那是数据事故,
 //     拒绝只是一次可重试的失败。
 //   - 键存在 → 拒绝。
 //
-// 为什么返回 error 而不是 TipInfoMessage:见 constants 包末尾那段 —— tip 码只能
-// 由配表发号,本次没有新码可用,借别的段会撞上 TestNoHandWrittenTipCodes 的护栏。
-// FailedPrecondition 至少让调用方能把"暂时不能建"与"服务挂了"分开。
-func (l *GuildLogic) checkMergeFence(ctx context.Context, zoneID uint32) error {
+// 为什么回 tip 而不是 gRPC 错误:gRPC 错误会被 serverbase 记成服务端故障,客户端也会
+// 进入重连隔离;而"这个区正在合服,等几分钟"是可预期的运维窗口,玩家该看到一句人话。
+// 码由配表发号(kGuildZoneMerging),不是手写数字。
+func (l *GuildLogic) mergeFenceTip(ctx context.Context, zoneID uint32) *base.TipInfoMessage {
 	if l.mergeFence == nil || zoneID == 0 {
 		return nil
 	}
 	merging, err := l.mergeFence.MergeInProgress(ctx, zoneID)
 	if err != nil {
-		logx.Errorf("CreateGuild: merge fence unreadable for zone %d, refusing (fail closed): %v", zoneID, err)
-		return status.Errorf(codes.FailedPrecondition,
-			"%v: zone %d merge fence unreadable, guild creation is paused", ErrZoneMerging, zoneID)
+		logx.Errorf("[guild] merge fence unreadable for zone %d, refusing (fail closed): %v", zoneID, err)
+		return tipErr(constants.ErrZoneMerging, "merge fence unreadable")
 	}
 	if merging {
-		logx.Infof("CreateGuild: refused, zone %d is merging (%s present)", zoneID, MergeFenceKey(zoneID))
-		return status.Errorf(codes.FailedPrecondition,
-			"%v: zone %d is merging, guild creation is paused", ErrZoneMerging, zoneID)
+		logx.Infof("[guild] refused: zone %d is merging (%s present)", zoneID, MergeFenceKey(zoneID))
+		return tipErr(constants.ErrZoneMerging, "zone merging")
 	}
 	return nil
 }
@@ -249,8 +316,9 @@ func (l *GuildLogic) mintGuildID(ctx context.Context, playerID uint64) (uint64, 
 }
 
 func (l *GuildLogic) GetGuild(ctx context.Context, req *pb.GetGuildRequest) (*pb.GetGuildResponse, error) {
+	who := callerOf(ctx, 0)
 	visibleZone := uint32(0)
-	if who := callerOf(ctx, 0); who.fromClient {
+	if who.fromClient {
 		zoneID, tip, err := l.clientZone(ctx, who.playerID)
 		if err != nil {
 			return nil, err
@@ -269,12 +337,27 @@ func (l *GuildLogic) GetGuild(ctx context.Context, req *pb.GetGuildRequest) (*pb
 	if guild == nil || !visibleIn(guild, visibleZone) {
 		return &pb.GetGuildResponse{ErrorMessage: tipErr(constants.ErrGuildNotFound, "guild not found")}, nil
 	}
-	return &pb.GetGuildResponse{Guild: l.toProtoGuild(ctx, guild)}, nil
+	return &pb.GetGuildResponse{Guild: l.guildInfoFor(ctx, guild, viewerOf(who))}, nil
 }
 
 // GetPlayerGuild 不按 zone 过滤:玩家自己的帮会永远看得见(合服会把帮会与归属映射一起搬走)。
+//
+// 客户端来源改走 ResolvePlayerGuild:它在"缓存说没入帮"和"快照里没有本人"两种情况下
+// 用 MySQL 复核一次。不复核的话,一次失败的缓存失效会让刚入帮的玩家在 30 分钟里
+// 看到一个空帮会界面,而且没有任何自愈路径。内部调用保持原缓存路径,不给高频内部读加 MySQL 负载。
 func (l *GuildLogic) GetPlayerGuild(ctx context.Context, req *pb.GetPlayerGuildRequest) (*pb.GetPlayerGuildResponse, error) {
 	who := callerOf(ctx, req.PlayerId)
+	if who.fromClient {
+		guild, err := l.repo.ResolvePlayerGuild(ctx, who.playerID)
+		if err != nil {
+			return nil, err
+		}
+		if guild == nil {
+			return &pb.GetPlayerGuildResponse{ErrorMessage: tipErr(constants.ErrNotInGuild, "not in any guild")}, nil
+		}
+		return &pb.GetPlayerGuildResponse{Guild: l.guildInfoFor(ctx, guild, who.playerID)}, nil
+	}
+
 	guildID, err := l.repo.GetPlayerGuildID(ctx, who.playerID)
 	if err != nil {
 		return nil, err
@@ -305,117 +388,100 @@ func (l *GuildLogic) GetPlayerGuild(ctx context.Context, req *pb.GetPlayerGuildR
 			return &pb.GetPlayerGuildResponse{ErrorMessage: tipErr(constants.ErrGuildNotFound, "guild not found")}, nil
 		}
 	}
-	return &pb.GetPlayerGuildResponse{Guild: l.toProtoGuild(ctx, guild)}, nil
+	return &pb.GetPlayerGuildResponse{Guild: l.guildInfoFor(ctx, guild, 0)}, nil
 }
 
-func (l *GuildLogic) JoinGuild(ctx context.Context, req *pb.JoinGuildRequest) (*pb.JoinGuildResponse, error) {
+// LeaveGuild:主动退帮。帮主不能退(先转让或解散),判定在事务内按权威 role + leader_id 做,
+// 不再看缓存里的 LeaderID —— 那个值在降权 / 转让之后会说谎整整一个 TTL。
+func (l *GuildLogic) LeaveGuild(ctx context.Context, req *pb.LeaveGuildRequest) (*pb.LeaveGuildResponse, error) {
 	who := callerOf(ctx, req.PlayerId)
-	requiredZone := uint32(0)
 	if who.fromClient {
 		zoneID, tip, err := l.clientZone(ctx, who.playerID)
 		if err != nil {
 			return nil, err
 		}
 		if tip != nil {
-			return &pb.JoinGuildResponse{ErrorMessage: tip}, nil
+			return &pb.LeaveGuildResponse{ErrorMessage: tip}, nil
 		}
-		requiredZone = zoneID
-	}
-
-	existingGuildID, err := l.repo.GetPlayerGuildID(ctx, who.playerID)
-	if err != nil {
-		return nil, err
-	}
-	if existingGuildID > 0 {
-		return &pb.JoinGuildResponse{ErrorMessage: tipErr(constants.ErrAlreadyInGuild, "already in a guild")}, nil
-	}
-
-	// 存在性、zone 归属、满员判定、成员插入都在 AddMemberInZone 的事务里按权威行完成。
-	// 这里不预读缓存判满 / 判 zone:两个并发入会都会读到同一份旧成员列表并双双通过,
-	// 合服刚搬走的公会在缓存里也可能还是旧 zone;事务内 FOR UPDATE 才是唯一可靠的判定点。
-	switch err := l.repo.AddMemberInZone(ctx, req.GuildId, who.playerID, constants.RoleMember, requiredZone); {
-	case errors.Is(err, data.ErrGuildGone), errors.Is(err, data.ErrGuildZoneMismatch):
-		return &pb.JoinGuildResponse{ErrorMessage: tipErr(constants.ErrGuildNotFound, "guild not found")}, nil
-	case errors.Is(err, data.ErrGuildFull):
-		return &pb.JoinGuildResponse{ErrorMessage: tipErr(constants.ErrGuildFull, "guild is full")}, nil
-	case errors.Is(err, data.ErrPlayerAlreadyInGuild):
-		return &pb.JoinGuildResponse{ErrorMessage: tipErr(constants.ErrAlreadyInGuild, "already in a guild")}, nil
-	case err != nil:
-		return nil, err
-	}
-	return &pb.JoinGuildResponse{}, nil
-}
-
-func (l *GuildLogic) LeaveGuild(ctx context.Context, req *pb.LeaveGuildRequest) (*pb.LeaveGuildResponse, error) {
-	who := callerOf(ctx, req.PlayerId)
-	guildID, err := l.repo.GetPlayerGuildID(ctx, who.playerID)
-	if err != nil {
-		return nil, err
-	}
-	if guildID == 0 {
-		return &pb.LeaveGuildResponse{ErrorMessage: tipErr(constants.ErrNotInGuild, "not in any guild")}, nil
-	}
-
-	guild, err := l.repo.GetGuild(ctx, guildID)
-	if err != nil {
-		return nil, err
-	}
-	if guild == nil {
-		// 这里只失效旧 Redis 映射并从 MySQL 重读，绝不能无 guild_id 条件删除
-		// membership：玩家可能已加入新公会，只是缓存仍指向已解散的旧公会。
-		refreshedGuildID, err := l.repo.RefreshPlayerGuildID(ctx, who.playerID)
-		if err != nil {
-			return nil, fmt.Errorf("refresh dangling guild mapping: %w", err)
+		if tip := l.mergeFenceTip(ctx, zoneID); tip != nil {
+			return &pb.LeaveGuildResponse{ErrorMessage: tip}, nil
 		}
-		if refreshedGuildID == 0 {
+	}
+
+	guildID, tip, err := l.operatorGuild(ctx, who.playerID)
+	if err != nil || tip != nil {
+		return &pb.LeaveGuildResponse{ErrorMessage: tip}, err
+	}
+	res, err := l.repo.LeaveGuild(ctx, guildID, who.playerID)
+	if errors.Is(err, data.ErrNotGuildMember) || errors.Is(err, data.ErrGuildGone) {
+		// 缓存指的帮会里没有他:以 MySQL 复核。真的不在任何帮 = 这次退帮本来就无事可做(幂等成功);
+		// 在别的帮 = 缓存过期,让客户端刷新后重来,**绝不**按旧 guild_id 去删别的帮的成员行。
+		current, verifyErr := l.repo.VerifyPlayerGuildID(ctx, who.playerID, guildID)
+		if verifyErr != nil {
+			return nil, fmt.Errorf("verify guild mapping of player %d: %w", who.playerID, verifyErr)
+		}
+		if current == 0 {
 			return &pb.LeaveGuildResponse{}, nil
 		}
 		logx.Errorf("player %d guild mapping changed from stale %d to authoritative %d; retrying is required",
-			who.playerID, guildID, refreshedGuildID)
+			who.playerID, guildID, current)
 		return &pb.LeaveGuildResponse{ErrorMessage: tipErr(constants.ErrAlreadyInGuild, "guild membership changed, retry")}, nil
 	}
-	if guild.LeaderID == who.playerID {
-		return &pb.LeaveGuildResponse{ErrorMessage: tipErr(constants.ErrLeaderCantLeave, "leader cannot leave, disband instead")}, nil
+	if tip, err := l.mapWriteErr(ctx, who.playerID, guildID, err); err != nil || tip != nil {
+		return &pb.LeaveGuildResponse{ErrorMessage: tip}, err
 	}
-
-	// 只删成员行 + 失效缓存;失败必须报错,不能吞掉后仍返回成功。
-	if err := l.repo.RemoveMember(ctx, guildID, who.playerID); err != nil {
-		return nil, err
-	}
+	// 快照已不含退帮者,所以"剩余全体"就是收件人;他自己拿的是这次响应,不必再推。
+	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_MEMBER_LEFT, guildID, who.playerID, who.playerID, membersExcept(res.Guild))
 	return &pb.LeaveGuildResponse{}, nil
 }
 
+// DisbandGuild:解散帮会。授权改读 MySQL(事务内 FOR UPDATE 的 leader_id),
+// 原实现按缓存 LeaderID 判帮主 —— 转让之后那个值在一个 TTL 内还是旧帮主,等于把解散权多发一份。
 func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildRequest) (*pb.DisbandGuildResponse, error) {
 	who := callerOf(ctx, req.PlayerId)
-	guildID, err := l.repo.GetPlayerGuildID(ctx, who.playerID)
-	if err != nil {
-		return nil, err
-	}
-	if guildID == 0 {
-		return &pb.DisbandGuildResponse{ErrorMessage: tipErr(constants.ErrNotInGuild, "not in any guild")}, nil
+	if who.fromClient {
+		zoneID, tip, err := l.clientZone(ctx, who.playerID)
+		if err != nil {
+			return nil, err
+		}
+		if tip != nil {
+			return &pb.DisbandGuildResponse{ErrorMessage: tip}, nil
+		}
+		if tip := l.mergeFenceTip(ctx, zoneID); tip != nil {
+			return &pb.DisbandGuildResponse{ErrorMessage: tip}, nil
+		}
 	}
 
-	guild, err := l.repo.GetGuild(ctx, guildID)
-	if err != nil {
-		return nil, err
+	guildID, tip, err := l.operatorGuild(ctx, who.playerID)
+	if err != nil || tip != nil {
+		return &pb.DisbandGuildResponse{ErrorMessage: tip}, err
 	}
-	if guild == nil || guild.LeaderID != who.playerID {
+	res, err := l.repo.DisbandGuild(ctx, guildID, who.playerID)
+	// 解散是唯一一处 ErrRankTooLow 不回 kGuildRankTooLow 的地方:解散只有帮主能做,
+	// 沿用既有的"只有会长可以执行该操作"文案比"职位不足"更贴合玩家看到的按钮。
+	if errors.Is(err, data.ErrRankTooLow) {
 		return &pb.DisbandGuildResponse{ErrorMessage: tipErr(constants.ErrNotLeader, "not guild leader")}, nil
 	}
+	if tip, err := l.mapWriteErr(ctx, who.playerID, guildID, err); err != nil || tip != nil {
+		return &pb.DisbandGuildResponse{ErrorMessage: tip}, err
+	}
 
-	// DeleteGuild 从 MySQL 权威表读取该 guild 的实际成员，并在同一事务内按
-	// guild_id 删除；不会依据可能陈旧的缓存 Members 去误删已转入别会的玩家。
-	// 它同时返回删除事务里 FOR UPDATE 读到的 zone_id —— 清榜只能用这一个值。
-	authoritativeZone, err := l.repo.DeleteGuild(ctx, guildID)
-	if err != nil {
-		return nil, err
+	// 清榜**只能**用事务内读到的 zone。缓存里的 ZoneID 在合服之后会整整一个 TTL 指向源区,
+	// 按它 ZREM 会去删一个空 ZSET,把条目永久留在目标区榜上(榜上出现查不到名字的幽灵帮会)。
+	// 失败可容忍:RebuildRanks 会自愈。
+	if err := l.repo.RemoveGuildFromRank(ctx, guildID, res.ZoneID); err != nil {
+		logx.Errorf("remove guild %d (zone %d) from rank: %v", guildID, res.ZoneID, err)
 	}
-	// 从排行榜移除。**绝不用 guild.ZoneID**:那是 guild:v2:{id} 缓存里的值,TTL 30 分钟;
-	// 合服刚把公会搬到目标 zone 时它还是源 zone,按它 ZREM 会去删一个空 ZSET,
-	// 把条目永久留在目标 zone 的榜上(榜里出现一个查不到名字的幽灵公会)。
-	if err := l.repo.RemoveGuildFromRank(ctx, guildID, authoritativeZone); err != nil {
-		logx.Errorf("remove guild %d (zone %d) from rank: %v", guildID, authoritativeZone, err)
+
+	recipients := make([]uint64, 0, len(res.MemberIDs))
+	for _, id := range res.MemberIDs {
+		if id != who.playerID {
+			recipients = append(recipients, id)
+		}
 	}
+	// target 取 0:解散没有"被作用的那个人"。只提交过申请的玩家不通知(他们的申请行已被删,
+	// 下次打开申请列表自然就没了)。
+	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_DISBANDED, guildID, who.playerID, 0, recipients)
 	return &pb.DisbandGuildResponse{}, nil
 }
 
@@ -424,17 +490,35 @@ func (l *GuildLogic) SetAnnouncement(ctx context.Context, req *pb.SetAnnouncemen
 	if len(req.Announcement) > constants.MaxAnnouncementBytes {
 		return &pb.SetAnnouncementResponse{ErrorMessage: tipErr(constants.ErrAnnouncementTooLong, "announcement too long")}, nil
 	}
+	if who.fromClient {
+		zoneID, tip, err := l.clientZone(ctx, who.playerID)
+		if err != nil {
+			return nil, err
+		}
+		if tip != nil {
+			return &pb.SetAnnouncementResponse{ErrorMessage: tip}, nil
+		}
+		if tip := l.mergeFenceTip(ctx, zoneID); tip != nil {
+			return &pb.SetAnnouncementResponse{ErrorMessage: tip}, nil
+		}
+	}
+
 	// 权限必须在 MySQL 更新事务内按权威 membership.role 复核；Redis GuildData
 	// 可能仍缓存着操作者降权/退会前的 officer 身份，只能做展示，不能授权。
 	// 公会 id 来自请求体也无妨:事务要求操作者是该公会的 officer/leader,改不了别人的帮。
-	if err := l.repo.UpdateAnnouncementAuthorized(ctx, req.GuildId, who.playerID, req.Announcement); errors.Is(err, data.ErrGuildGone) {
-		return &pb.SetAnnouncementResponse{ErrorMessage: tipErr(constants.ErrGuildNotFound, "guild not found")}, nil
-	} else if errors.Is(err, data.ErrAnnouncementForbidden) {
+	snapshot, err := l.repo.UpdateAnnouncement(ctx, req.GuildId, who.playerID, req.Announcement)
+	if errors.Is(err, data.ErrAnnouncementForbidden) {
 		return &pb.SetAnnouncementResponse{ErrorMessage: tipErr(constants.ErrNoPermission, "no permission")}, nil
-	} else if err != nil {
-		return nil, err
 	}
-	return &pb.SetAnnouncementResponse{}, nil
+	if tip, err := l.mapWriteErr(ctx, who.playerID, req.GuildId, err); err != nil || tip != nil {
+		return &pb.SetAnnouncementResponse{ErrorMessage: tip}, err
+	}
+
+	// 响应带的是事务内快照,不再提交后回读缓存:回读会在失效失败时返回旧公告,
+	// 玩家会以为自己没改成功而反复重试。
+	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_ANNOUNCEMENT_CHANGED, req.GuildId, who.playerID, 0,
+		membersExcept(snapshot, who.playerID))
+	return &pb.SetAnnouncementResponse{Guild: l.guildInfoFor(ctx, snapshot, viewerOf(who))}, nil
 }
 
 // ── 排行榜 ─────────────────────────────────────────────────────
@@ -449,16 +533,25 @@ func (l *GuildLogic) UpdateGuildScore(ctx context.Context, req *pb.UpdateGuildSc
 		return &pb.UpdateGuildScoreResponse{ErrorMessage: tipErr(constants.ErrGuildNotFound, "guild not found")}, nil
 	}
 	// 分区榜恒用公会自己的 zone_id,**不接受请求方覆盖**:
-	// DisbandGuild 清榜时只按 guild.ZoneID 调 RemoveGuildFromRank,若这里允许
+	// DisbandGuild 清榜时只按事务内读到的 zone 调 RemoveGuildFromRank,若这里允许
 	// req.ZoneId 把分数写进别的 zone 的 ZSET,解散后那个条目将永久残留
 	// (榜单上出现查不到名字的幽灵公会)。
 	if req.ZoneId > 0 && req.ZoneId != guild.ZoneID {
 		logx.Errorf("UpdateGuildScore: requested zone %d ignored, guild %d belongs to zone %d",
 			req.ZoneId, req.GuildId, guild.ZoneID)
 	}
-	if err := l.repo.UpdateGuildScore(ctx, req.GuildId, guild.ZoneID, req.Score); errors.Is(err, data.ErrGuildGone) {
+	// UpdateGuildScore 自 B2s 起走统一事务入口 inTx,于是多了一条 ErrWriteConflict 的返回:
+	// 死锁重试耗尽、锁等待超时、子预算到期、提交结果不明四条路径都归一到它。
+	// **写冲突必须回业务 tip**,不能包成 gRPC 错误 —— 本服务的纪律是 gRPC 错误会让客户端进入
+	// 重连隔离,而两个人同时改同一个帮会是正常玩法,原地重试一次就能成功。
+	switch err := l.repo.UpdateGuildScore(ctx, req.GuildId, guild.ZoneID, req.Score); {
+	case err == nil:
+	case errors.Is(err, data.ErrGuildGone):
 		return &pb.UpdateGuildScoreResponse{ErrorMessage: tipErr(constants.ErrGuildNotFound, "guild not found")}, nil
-	} else if err != nil {
+	case errors.Is(err, data.ErrWriteConflict):
+		logx.Infof("[guild] guild %d score write conflict, asking the caller to retry: %v", req.GuildId, err)
+		return &pb.UpdateGuildScoreResponse{ErrorMessage: tipErr(constants.ErrBusyRetry, "guild write conflict")}, nil
+	default:
 		return nil, fmt.Errorf("update guild score: %w", err)
 	}
 	return &pb.UpdateGuildScoreResponse{}, nil
@@ -573,6 +666,10 @@ func (l *GuildLogic) enrichRankEntries(ctx context.Context, entries []data.RankE
 
 // ── Proto conversion ───────────────────────────────────────────
 
+// toProtoGuild 把权威快照转成客户端结构。
+//
+// 与请求者无关的字段全在这里填;只给长老 / 帮主看的待审数在 guildInfoFor 里补(§12.4)。
+// name / leader_name 本批恒空:名字由 B3b 的 data_service 名字注册表填。
 func (l *GuildLogic) toProtoGuild(ctx context.Context, g *data.GuildData) *pb.GuildInfo {
 	if g == nil {
 		return nil
@@ -592,16 +689,32 @@ func (l *GuildLogic) toProtoGuild(ctx context.Context, g *data.GuildData) *pb.Gu
 		CreateTimeMs: g.CreateTimeMs,
 		MaxMembers:   g.MaxMembers,
 		ZoneId:       g.ZoneID,
+		Funds:        g.Funds,
 	}
+	officerCount := uint32(0)
 	for _, m := range g.Members {
+		if m.Role == constants.RoleOfficer {
+			officerCount++
+		}
 		info.Members = append(info.Members, &pb.GuildMember{
-			PlayerId:     m.PlayerID,
-			Role:         m.Role,
-			JoinTimeMs:   m.JoinTimeMs,
-			LastActiveMs: m.LastActiveMs,
-			Contribution: m.Contribution,
-			Online:       onlineMap[m.PlayerID],
+			PlayerId:            m.PlayerID,
+			Role:                m.Role,
+			JoinTimeMs:          m.JoinTimeMs,
+			LastActiveMs:        m.LastActiveMs,
+			ContributionTotal:   m.ContributionTotal,
+			ContributionBalance: m.ContributionBalance,
+			Online:              onlineMap[m.PlayerID],
 		})
+	}
+	info.OfficerCount = officerCount
+
+	// 长老上限与升级花费是**展示**字段:查不到就留 0 并记 ERROR,不让整次读失败。
+	// 真正的任免上限另走 officerCapFromTable,那条路缺行时是 fail-closed 的。
+	if maxOfficers, upgradeCost, ok := levelDisplay(g.Level); ok {
+		info.MaxOfficers = maxOfficers
+		info.UpgradeCostFunds = upgradeCost
+	} else {
+		logx.Errorf("[guild] GuildLevel row %d missing while rendering guild %d", g.Level, g.GuildID)
 	}
 	return info
 }

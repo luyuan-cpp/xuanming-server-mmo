@@ -237,15 +237,21 @@ func verifyGuildZoneDrained(ctx context.Context, cfg auditConfig) ResourceAudit 
 	if cfg.db == nil {
 		return infraAudit(r.Name, "no MySQL handle")
 	}
-	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild WHERE zone_id = ?", cfg.src).Scan(&r.SourceCount); err != nil {
-		return infraAudit(r.Name, "count guild zone_id=%d: %v", cfg.src, err)
+	if err := validateGuildSchemaName(cfg.guildSchema); err != nil {
+		return infraAudit(r.Name, "%v", err)
 	}
-	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild WHERE zone_id = ?", cfg.dst).Scan(&r.TargetCount); err != nil {
-		return infraAudit(r.Name, "count guild zone_id=%d: %v", cfg.dst, err)
+	guildTableName := guildQualified(cfg.guildSchema, guildTable)
+	if err := cfg.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM "+guildTableName+" WHERE zone_id = ?", cfg.src).Scan(&r.SourceCount); err != nil {
+		return infraAudit(r.Name, "count %s zone_id=%d: %v", guildTableName, cfg.src, err)
+	}
+	if err := cfg.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM "+guildTableName+" WHERE zone_id = ?", cfg.dst).Scan(&r.TargetCount); err != nil {
+		return infraAudit(r.Name, "count %s zone_id=%d: %v", guildTableName, cfg.dst, err)
 	}
 	if r.SourceCount != 0 {
 		r.Severity = "block"
-		r.Notes = fmt.Sprintf("%d guild rows still carry zone_id=%d", r.SourceCount, cfg.src)
+		r.Notes = fmt.Sprintf("%d %s rows still carry zone_id=%d", r.SourceCount, guildTableName, cfg.src)
 		return r
 	}
 	r.Severity = "info"
@@ -284,9 +290,14 @@ func verifyGuildRankZSets(ctx context.Context, cfg auditConfig) ResourceAudit {
 		r.Notes = fmt.Sprintf("%s removed; %s has %d members (no MySQL handle to cross-check against guild rows)", srcKey, dstKey, dstCard)
 		return r
 	}
+	if err := validateGuildSchemaName(cfg.guildSchema); err != nil {
+		return infraAudit(r.Name, "%v", err)
+	}
 	var guildRows int64
-	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild WHERE zone_id = ?", cfg.dst).Scan(&guildRows); err != nil {
-		return infraAudit(r.Name, "count guild zone_id=%d: %v", cfg.dst, err)
+	if err := cfg.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM "+guildQualified(cfg.guildSchema, guildTable)+" WHERE zone_id = ?",
+		cfg.dst).Scan(&guildRows); err != nil {
+		return infraAudit(r.Name, "count %s zone_id=%d: %v", guildQualified(cfg.guildSchema, guildTable), cfg.dst, err)
 	}
 	r.ConflictCount = dstCard - guildRows
 	if dstCard != guildRows {

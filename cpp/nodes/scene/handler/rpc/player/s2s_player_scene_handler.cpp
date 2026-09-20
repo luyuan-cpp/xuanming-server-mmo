@@ -4,6 +4,7 @@
 ///<<< BEGIN WRITING YOUR CODE
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_scene.h"
+#include "player/system/player_team.h"
 #include "proto/scene/player_scene.pb.h"
 #include "modules/scene/comp/scene_comp.h"
 #include "rpc/service_metadata/player_scene_service_metadata.h"
@@ -21,6 +22,8 @@ void SceneScenePlayerHandler::EnterScene(entt::entity player,const ::GsEnterScen
 	if (tlsEcs.actorRegistry.valid(player))
 	{
 		PlayerSceneSystem::HandleEnterScene(player, entt::to_entity(request->scene_id()));
+		// 组队刷新与同节点跟随放在 HandleEnterScene 之后(其幂等早退会漏刷新,team-system.md §F.2)
+		PlayerTeamSystem::OnEnteredScene(player);
 	}
 	else
 	{

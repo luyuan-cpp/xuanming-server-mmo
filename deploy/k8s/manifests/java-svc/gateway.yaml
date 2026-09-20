@@ -31,6 +31,17 @@ spec:
         app: gateway
         tier: java-svc
     spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点,否则单节点故障会同时带走整个登录入口。写法同 match.yaml;
+          # 用 preferred 而不是 required,单节点的 dev 集群仍能调度。
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: gateway
+                topologyKey: kubernetes.io/hostname
       containers:
         - name: gateway
           image: PLACEHOLDER_IMAGE
@@ -51,22 +62,26 @@ spec:
               readOnly: true
           # Spring/JPA 冷启动在资源受限时可能超过 liveness 的失败预算。
           # startupProbe 成功前暂停 readiness/liveness，避免启动尚未完成就反复被杀。
+          # 探针打 actuator 的分组端点,不打复合的 /actuator/health:后者含 db 与 redis 两个指示器,
+          # 所有副本共享的 MySQL 或 Redis 一挂,两个副本会同时 NotReady 并被 liveness 反复杀。
+          # 两个分组在 application.yaml 的 management.endpoint.health.group 里声明,都不含外部依赖。
+          # startup 与 readiness 同口径(应用完成启动即可接流量);Redis 不可用不该挡住网关启动。
           startupProbe:
             httpGet:
-              path: /actuator/health
+              path: /actuator/health/readiness
               port: 8081
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 60
           readinessProbe:
             httpGet:
-              path: /actuator/health
+              path: /actuator/health/readiness
               port: 8081
             initialDelaySeconds: 15
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /actuator/health
+              path: /actuator/health/liveness
               port: 8081
             initialDelaySeconds: 30
             periodSeconds: 20
@@ -81,3 +96,20 @@ spec:
         - name: svc-config
           configMap:
             name: java-svc-gateway-config
+---
+# PDB 直接放在本文件里:k8s_deploy.ps1 只 apply 目录表里登记的主 manifest,独立的 *-pdb.yaml 不会被
+# 脚本应用 —— 别拆出去。本段自 go-svc/gateway-pdb.yaml 原样搬入(那份放在从不被部署的 Go 网关清单旁边,
+# 从未生效过);selector app=gateway 与本文件 Deployment 的 Pod 模板标签一致。tier 标签改为 java-svc,
+# 与本文件其余对象一致(labels 不参与 PDB 的选择)。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: gateway-pdb
+  labels:
+    app: gateway
+    tier: java-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: gateway

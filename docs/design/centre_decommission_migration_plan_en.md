@@ -8,6 +8,20 @@
 Centre essentially does 6 things, each of which can be distributed to existing, already multi-instance components.
 Goal: no single-instance component at any level — every layer is multi-instance or clustered.
 
+> **Reality check (2026-09-19, verified line by line against `deploy/k8s/manifests/` and the deploy script; full record in the same-day PROGRESS.md entry)**
+>
+> This document is the migration **plan** dated 2026-03-15. The "Single point? No" rows below record what the plan assumed at the time;
+> several of them do **not** match the manifests actually in the repository. Do not read them as "goal achieved". The original tables are
+> kept unchanged (historical plan); this section takes precedence:
+>
+> | Claim in this document | Actual state |
+> |---|---|
+> | player_locator is already multi-instance | Until 2026-09-19 the manifest said `replicas: 1` (a true single point on the login path). After verifying in code that it is multi-instance safe, it was changed that day to 2 replicas + anti-affinity + PDB (`go-svc/player-locator.yaml`). **True now.** |
+> | Login is already multi-instance | True: `replicas: 2`. However its PDB used to be a standalone file the deploy script never applied, and its etcd registration lease was 500s (a crashed instance lingered for 8 minutes while gate picks a login instance at random, so about half of login requests failed). Both were fixed on 2026-09-19 (embedded PDB, 60s lease). |
+> | Kafka RF≥3, not a single point | **False.** `infra/kafka.yaml` is a **deliberately** single broker and every topic in the repository has replication-factor 1 (the header comment of that file explains why). The 3-broker / RF=3 target exists only in `docs/ops/kafka-cluster-production-runbook.md`. Also, Kafka is not only an asynchronous path: login's EnterGame waits synchronously for BindSession to be sent via `gate-cmd`, so nobody can enter the game while Kafka is down. |
+> | Redis is distributed by nature, not a single point | **False.** The shared Redis holding sessions, locations, login locks, player locks, the scene_manager leader lock and scene routing is a **single instance** (`infra/redis.yaml`, `replicas: 1`), and every client connects in standalone mode (`Type: node`). Only match's private `infra/redis-match-cluster.yaml` is a real Redis Cluster (3 masters, 3 replicas). |
+> | Goal: no single-instance component | **Not achieved.** Still single-instance in the manifests: MySQL (`replicas: 1` + Recreate, no replication), the per-zone `db` service (the code assumes a single instance), `data-service` (`replicas: 1` + Recreate, deliberate per the manifest comment), the battle pool (1 replica by default); `guild` has no K8s manifest at all. Actually multi-instance: etcd (3 replicas + PDB), match's Redis Cluster, scene_manager (2 replicas with Redis-lock leader election — though the lock lives in the single-instance Redis above), login, player_locator, the Java gateway, chat / match / trade / client-rpc-router. |
+
 ---
 
 ## Centre Current Responsibilities → Decentralisation Migration Plan

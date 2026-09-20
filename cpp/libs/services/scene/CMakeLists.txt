@@ -27,10 +27,24 @@ include_directories(
     ../../../../third_party/entt/single_include
     ../../../../third_party/fmt/include
     ../../../../third_party/grpc/third_party/
+    # ── OpenSSL 头路径(asset_op_auth.cpp 用)────────────────────────────────
+    # asset_op_auth.cpp 走 engine/core/security/token_security.h,那是 header-only,
+    # 直接 #include <openssl/crypto.h> / <evp.h> / <hmac.h>。scene 库此前从不碰 OpenSSL,
+    # 所以这两条是新加的,漏了就是 C1083/fatal error: openssl/crypto.h: No such file。
+    #
+    # **顺序敏感,boringssl 必须排在 openssl 之前**:third_party/openssl/include/openssl
+    # 里 crypto.h 只有未 configure 的 crypto.h.in(evp.h / hmac.h 倒是真文件),能凑齐
+    # 三个头的只有 boringssl。反过来排,crypto.h 会先落到那棵**未 configure 的源码树**上,
+    # 通常直接 fatal error 停在编译期(不是静默混搭);真正的运行期未定义行为来自"头和库
+    # 各走一边"—— 链接侧 -lssl/-lcrypto 取的是 gRPC 装过去的 BoringSSL。与 gate 同序
+    # (cpp/nodes/gate/CMakeLists.txt:27/30)。
+    ../../../../third_party/grpc/third_party/boringssl-with-bazel/include/
     ../../../../third_party/hexagons_grids/
     ../../../../third_party/librdkafka/src-cpp/
     ../../../../third_party/lua/src/
     ../../../../third_party/muduo-linux/
+    # 与上面 boringssl 配对,见那里的顺序说明(必须排在 boringssl 之后)。
+    ../../../../third_party/openssl/include/
     ../../../../third_party/recastnavigation/
     ../../../../third_party/redis/
     ../../../../third_party/redis/deps/
@@ -68,6 +82,7 @@ set(SOURCE_FILES
     actor/action_state/system/actor_action_state.cpp
     actor/attribute/system/actor_attribute_calculator.cpp
     actor/attribute/system/actor_state_attribute_sync.cpp
+    battle/system/player_battle.cpp
     combat/buff/system/buff.cpp
     combat/buff/system/buff_impl.cpp
     combat/buff/system/modifier_buff_impl.cpp
@@ -84,19 +99,30 @@ set(SOURCE_FILES
     generated/attribute/attributedelta30framess2c_attribute_sync.cpp
     generated/attribute/attributedelta5framess2c_attribute_sync.cpp
     generated/attribute/attributedelta60framess2c_attribute_sync.cpp
-    kafka/system/kafka.cpp
     player/system/afk.cpp
+    # 通用资产通道(guild-phase2/04-asset-channel.md §S4):验签 + 纯函数账本 + RPC 处理系统。
+    # asset_op_auth.cpp 是 §4.32 要求的独立编译单元(AssetOpCanonical / VerifyAssetOpAuth /
+    # AssetOpAuthVerdictName),asset_op_system.h 无条件 include 它的头 —— 不登记会在
+    # scene 静态库里缺定义,scene 节点工程与 currency_test 链接期报 unresolved external。
+    player/system/asset_op_auth.cpp
+    player/system/asset_op_ledger.cpp
+    player/system/asset_op_system.cpp
     player/system/player_database_loader.cpp
     player/system/player_database_1_loader.cpp
     player/system/player_lifecycle.cpp
     player/system/player_scene.cpp
+    player/system/player_team.cpp
+    player/system/player_team_aoi.cpp
     player/system/player_skill.cpp
     player/system/player_attribute.cpp
     player/system/player_pet.cpp
     player/system/player_tip.cpp
     player/system/stress_test_probe.cpp
     player/system/bag_marshal.cpp
-    player/system/cross_zone_reaper.cpp
+    player/system/mission_marshal.cpp
+    player/system/player_activity_schedule.cpp
+    player/system/player_feature_snapshot.cpp
+    player/system/player_mission.cpp
     spatial/system/aoi.cpp
     spatial/system/grid.cpp
     spatial/system/interest.cpp

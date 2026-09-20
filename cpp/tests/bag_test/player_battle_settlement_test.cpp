@@ -4,10 +4,14 @@
 #include <vector>
 
 #include "modules/condition/condition_type.h"
+#include "modules/bag/bag_system.h"
+#include "modules/bag/comp/player_bags_comp.h"
+#include "modules/bag/item_system.h"
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/constants/currency.h"
 #include "modules/currency/system/currency_system.h"
 #include "proto/battle/battle_data.pb.h"
+#include "table/code/item_table.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"
@@ -149,3 +153,110 @@ TEST_F(PlayerBattleSettlementTest, WrongPlayerCannotApplyOrPoisonValidRetry) {
     EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
 }
 } // namespace
+
+// ---------------------------------------------------------------------------
+// 2026-09-17 G1/G3:结算道具落地(docs/design/turn-battle-gap-closure.md)
+// 覆盖:消耗按实际持有夹紧、掉落真入包、道具失败不得连累金币入账。
+// 物品 id 用真实 Item 表里的可叠加物(10 / 11);bag_test 的 main 已 Load 过 ItemTable
+// 并装好 item 号段基线。
+// ---------------------------------------------------------------------------
+
+namespace {
+
+constexpr uint32_t kSettlementStackItem = 10;   // 可叠加
+constexpr uint32_t kSettlementDropItem = 11;    // 可叠加
+
+class PlayerBattleSettlementItemTest : public PlayerBattleSettlementTest {
+protected:
+    void SetUp() override {
+        PlayerBattleSettlementTest::SetUp();
+        ItemTableManager::Instance().Load();
+        auto& bags = tlsEcs.actorRegistry.emplace<PlayerBagsComp>(player);
+        for (auto& bag : bags.bags) bag.SetPlayerGuid(Guid{playerId});
+        bags.bags[kInventory].ExpandCapacity(20);
+    }
+    Bag& Inventory() {
+        return tlsEcs.actorRegistry.get<PlayerBagsComp>(player).bags[kInventory];
+    }
+    void GiveItem(uint32_t configId, uint32_t count) {
+        InitItemParam param;
+        param.itemPBComp.set_config_id(configId);
+        param.itemPBComp.set_size(count);
+        ASSERT_EQ(kSuccess, Inventory().AddItem(param));
+    }
+    void SetConsumed(uint32_t configId, uint64_t count) {
+        auto* entry = settlement.add_items_consumed();
+        entry->set_item_table_id(configId);
+        entry->set_count(count);
+    }
+    void SetGained(uint32_t configId, uint64_t count) {
+        auto* entry = settlement.add_items_gained();
+        entry->set_item_table_id(configId);
+        entry->set_count(count);
+    }
+};
+
+TEST_F(PlayerBattleSettlementItemTest, ConsumedIsDeductedAndGainedIsAddedToInventory) {
+    GiveItem(kSettlementStackItem, 5);
+    SetConsumed(kSettlementStackItem, 2);
+    SetGained(kSettlementDropItem, 3);
+
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+
+    EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementStackItem), 3u);
+    EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementDropItem), 3u);
+    // 金币照常入账:道具与金币在同一次应用里
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+}
+
+TEST_F(PlayerBattleSettlementItemTest, ConsumedIsClampedWhenPlayerNoLongerHoldsEnough) {
+    // 战斗中途玩家的药被别处扣走了(今天已被局中闸挡住,这里验的是防守姿态):
+    // 契约是"按实际持有校验扣除,不足按 0",绝不能整笔结算失败。
+    GiveItem(kSettlementStackItem, 1);
+    SetConsumed(kSettlementStackItem, 4);
+
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+
+    EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementStackItem), 0u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+}
+
+TEST_F(PlayerBattleSettlementItemTest, ConsumedForItemPlayerDoesNotHaveDoesNotFailSettlement) {
+    SetConsumed(kSettlementStackItem, 2);
+    SetGained(kSettlementDropItem, 1);
+
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+
+    EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementStackItem), 0u);
+    EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementDropItem), 1u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+}
+
+TEST_F(PlayerBattleSettlementItemTest, ConsumedNonBattleItemIsRejectedNotDestroyed) {
+    // 反向校验:快照只会把 battle_usable 的物品放进副本,账本里出现别的 id 只可能是
+    // 陈旧的 battle 节点或伪造结算。放行等于让战斗服点名销毁玩家的任意物品。
+    constexpr uint32_t kNonBattleItem = 1;  // Item 表里 battle_usable = 0
+    GiveItem(kNonBattleItem, 3);
+    SetConsumed(kNonBattleItem, 3);
+
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+
+    EXPECT_EQ(Inventory().GetTotalItemCount(kNonBattleItem), 3u);  // 一件都没被扣
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+}
+
+TEST_F(PlayerBattleSettlementItemTest, RepeatedApplyDoesNotDoubleConsumeOrDoubleDrop) {
+    GiveItem(kSettlementStackItem, 5);
+    SetConsumed(kSettlementStackItem, 2);
+    SetGained(kSettlementDropItem, 3);
+
+    ASSERT_TRUE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+    // 同 (player, battle_id) 的重投由应用缓存挡掉:道具不能再扣一次、也不能再发一次
+    EXPECT_FALSE(PlayerBattleSettlementTestAccess::Apply(player, settlement));
+
+    EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementStackItem), 3u);
+    EXPECT_EQ(Inventory().GetTotalItemCount(kSettlementDropItem), 3u);
+    EXPECT_EQ(CurrencySystem::GetBalance(player, kCurrencyGold), 12u);
+}
+
+}  // namespace

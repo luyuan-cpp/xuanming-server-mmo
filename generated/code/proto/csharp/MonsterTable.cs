@@ -22,18 +22,21 @@ public static partial class MonsterTableReflection {
   static MonsterTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChNtb25zdGVyX3RhYmxlLnByb3RvIqsBCgxNb25zdGVyVGFibGUSCgoCaWQY",
-          "ASABKA0SDgoGaGVhbHRoGAIgASgEEhAKCHN0cmVuZ3RoGAMgASgEEg0KBWFy",
-          "bW9yGAQgASgEEhIKCnJlc2lzdGFuY2UYBSABKAQSEgoKY3JpdGNoYW5jZRgG",
-          "IAEoBBINCgVzcGVlZBgHIAEoBBISCgpleHBfcmV3YXJkGAggASgEEhMKC2dv",
-          "bGRfcmV3YXJkGAkgASgEIi8KEE1vbnN0ZXJUYWJsZURhdGESGwoEZGF0YRgB",
-          "IAMoCzINLk1vbnN0ZXJUYWJsZUI+Cg5jb20uZ2FtZS50YWJsZUIWTW9uc3Rl",
-          "clRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3Rv",
-          "Mw=="));
+          "ChNtb25zdGVyX3RhYmxlLnByb3RvIkcKC01vbnN0ZXJkcm9wEhEKCWRyb3Bf",
+          "aXRlbRgBIAEoDRISCgpkcm9wX2NvdW50GAIgASgNEhEKCWRyb3BfcmF0ZRgD",
+          "IAEoDSLHAQoMTW9uc3RlclRhYmxlEgoKAmlkGAEgASgNEg4KBmhlYWx0aBgC",
+          "IAEoBBIQCghzdHJlbmd0aBgDIAEoBBINCgVhcm1vchgEIAEoBBISCgpyZXNp",
+          "c3RhbmNlGAUgASgEEhIKCmNyaXRjaGFuY2UYBiABKAQSDQoFc3BlZWQYByAB",
+          "KAQSEgoKZXhwX3Jld2FyZBgIIAEoBBITCgtnb2xkX3Jld2FyZBgJIAEoBBIa",
+          "CgRkcm9wGAogAygLMgwuTW9uc3RlcmRyb3AiLwoQTW9uc3RlclRhYmxlRGF0",
+          "YRIbCgRkYXRhGAEgAygLMg0uTW9uc3RlclRhYmxlQj4KDmNvbS5nYW1lLnRh",
+          "YmxlQhZNb25zdGVyVGFibGVPdXRlckNsYXNzUAFaEmdlbmVyYXRlZC9wYi90",
+          "YWJsZWIGcHJvdG8z"));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTable), global::MonsterTable.Parser, new[]{ "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::Monsterdrop), global::Monsterdrop.Parser, new[]{ "DropItem", "DropCount", "DropRate" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTable), global::MonsterTable.Parser, new[]{ "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward", "Drop" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::MonsterTableData), global::MonsterTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -41,6 +44,278 @@ public static partial class MonsterTableReflection {
 
 }
 #region Messages
+[global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+public sealed partial class Monsterdrop : pb::IMessage<Monsterdrop>
+#if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    , pb::IBufferMessage
+#endif
+{
+  private static readonly pb::MessageParser<Monsterdrop> _parser = new pb::MessageParser<Monsterdrop>(() => new Monsterdrop());
+  private pb::UnknownFieldSet _unknownFields;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public static pb::MessageParser<Monsterdrop> Parser { get { return _parser; } }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public static pbr::MessageDescriptor Descriptor {
+    get { return global::MonsterTableReflection.Descriptor.MessageTypes[0]; }
+  }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  pbr::MessageDescriptor pb::IMessage.Descriptor {
+    get { return Descriptor; }
+  }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public Monsterdrop() {
+    OnConstruction();
+  }
+
+  partial void OnConstruction();
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public Monsterdrop(Monsterdrop other) : this() {
+    dropItem_ = other.dropItem_;
+    dropCount_ = other.dropCount_;
+    dropRate_ = other.dropRate_;
+    _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+  }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public Monsterdrop Clone() {
+    return new Monsterdrop(this);
+  }
+
+  /// <summary>Field number for the "drop_item" field.</summary>
+  public const int DropItemFieldNumber = 1;
+  private uint dropItem_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint DropItem {
+    get { return dropItem_; }
+    set {
+      dropItem_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "drop_count" field.</summary>
+  public const int DropCountFieldNumber = 2;
+  private uint dropCount_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint DropCount {
+    get { return dropCount_; }
+    set {
+      dropCount_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "drop_rate" field.</summary>
+  public const int DropRateFieldNumber = 3;
+  private uint dropRate_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint DropRate {
+    get { return dropRate_; }
+    set {
+      dropRate_ = value;
+    }
+  }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public override bool Equals(object other) {
+    return Equals(other as Monsterdrop);
+  }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public bool Equals(Monsterdrop other) {
+    if (ReferenceEquals(other, null)) {
+      return false;
+    }
+    if (ReferenceEquals(other, this)) {
+      return true;
+    }
+    if (DropItem != other.DropItem) return false;
+    if (DropCount != other.DropCount) return false;
+    if (DropRate != other.DropRate) return false;
+    return Equals(_unknownFields, other._unknownFields);
+  }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public override int GetHashCode() {
+    int hash = 1;
+    if (DropItem != 0) hash ^= DropItem.GetHashCode();
+    if (DropCount != 0) hash ^= DropCount.GetHashCode();
+    if (DropRate != 0) hash ^= DropRate.GetHashCode();
+    if (_unknownFields != null) {
+      hash ^= _unknownFields.GetHashCode();
+    }
+    return hash;
+  }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public override string ToString() {
+    return pb::JsonFormatter.ToDiagnosticString(this);
+  }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public void WriteTo(pb::CodedOutputStream output) {
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    output.WriteRawMessage(this);
+  #else
+    if (DropItem != 0) {
+      output.WriteRawTag(8);
+      output.WriteUInt32(DropItem);
+    }
+    if (DropCount != 0) {
+      output.WriteRawTag(16);
+      output.WriteUInt32(DropCount);
+    }
+    if (DropRate != 0) {
+      output.WriteRawTag(24);
+      output.WriteUInt32(DropRate);
+    }
+    if (_unknownFields != null) {
+      _unknownFields.WriteTo(output);
+    }
+  #endif
+  }
+
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+    if (DropItem != 0) {
+      output.WriteRawTag(8);
+      output.WriteUInt32(DropItem);
+    }
+    if (DropCount != 0) {
+      output.WriteRawTag(16);
+      output.WriteUInt32(DropCount);
+    }
+    if (DropRate != 0) {
+      output.WriteRawTag(24);
+      output.WriteUInt32(DropRate);
+    }
+    if (_unknownFields != null) {
+      _unknownFields.WriteTo(ref output);
+    }
+  }
+  #endif
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public int CalculateSize() {
+    int size = 0;
+    if (DropItem != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(DropItem);
+    }
+    if (DropCount != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(DropCount);
+    }
+    if (DropRate != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(DropRate);
+    }
+    if (_unknownFields != null) {
+      size += _unknownFields.CalculateSize();
+    }
+    return size;
+  }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public void MergeFrom(Monsterdrop other) {
+    if (other == null) {
+      return;
+    }
+    if (other.DropItem != 0) {
+      DropItem = other.DropItem;
+    }
+    if (other.DropCount != 0) {
+      DropCount = other.DropCount;
+    }
+    if (other.DropRate != 0) {
+      DropRate = other.DropRate;
+    }
+    _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+  }
+
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public void MergeFrom(pb::CodedInputStream input) {
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    input.ReadRawMessage(this);
+  #else
+    uint tag;
+    while ((tag = input.ReadTag()) != 0) {
+    if ((tag & 7) == 4) {
+      // Abort on any end group tag.
+      return;
+    }
+    switch(tag) {
+        default:
+          _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+          break;
+        case 8: {
+          DropItem = input.ReadUInt32();
+          break;
+        }
+        case 16: {
+          DropCount = input.ReadUInt32();
+          break;
+        }
+        case 24: {
+          DropRate = input.ReadUInt32();
+          break;
+        }
+      }
+    }
+  #endif
+  }
+
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+    uint tag;
+    while ((tag = input.ReadTag()) != 0) {
+    if ((tag & 7) == 4) {
+      // Abort on any end group tag.
+      return;
+    }
+    switch(tag) {
+        default:
+          _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+          break;
+        case 8: {
+          DropItem = input.ReadUInt32();
+          break;
+        }
+        case 16: {
+          DropCount = input.ReadUInt32();
+          break;
+        }
+        case 24: {
+          DropRate = input.ReadUInt32();
+          break;
+        }
+      }
+    }
+  }
+  #endif
+
+}
+
 [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
 public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
 #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
@@ -56,7 +331,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public static pbr::MessageDescriptor Descriptor {
-    get { return global::MonsterTableReflection.Descriptor.MessageTypes[0]; }
+    get { return global::MonsterTableReflection.Descriptor.MessageTypes[1]; }
   }
 
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
@@ -85,6 +360,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     speed_ = other.speed_;
     expReward_ = other.expReward_;
     goldReward_ = other.goldReward_;
+    drop_ = other.drop_.Clone();
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -202,6 +478,17 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     }
   }
 
+  /// <summary>Field number for the "drop" field.</summary>
+  public const int DropFieldNumber = 10;
+  private static readonly pb::FieldCodec<global::Monsterdrop> _repeated_drop_codec
+      = pb::FieldCodec.ForMessage(82, global::Monsterdrop.Parser);
+  private readonly pbc::RepeatedField<global::Monsterdrop> drop_ = new pbc::RepeatedField<global::Monsterdrop>();
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public pbc::RepeatedField<global::Monsterdrop> Drop {
+    get { return drop_; }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -226,6 +513,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     if (Speed != other.Speed) return false;
     if (ExpReward != other.ExpReward) return false;
     if (GoldReward != other.GoldReward) return false;
+    if(!drop_.Equals(other.drop_)) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -242,6 +530,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     if (Speed != 0UL) hash ^= Speed.GetHashCode();
     if (ExpReward != 0UL) hash ^= ExpReward.GetHashCode();
     if (GoldReward != 0UL) hash ^= GoldReward.GetHashCode();
+    hash ^= drop_.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -296,6 +585,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
       output.WriteRawTag(72);
       output.WriteUInt64(GoldReward);
     }
+    drop_.WriteTo(output, _repeated_drop_codec);
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -342,6 +632,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
       output.WriteRawTag(72);
       output.WriteUInt64(GoldReward);
     }
+    drop_.WriteTo(ref output, _repeated_drop_codec);
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -379,6 +670,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     if (GoldReward != 0UL) {
       size += 1 + pb::CodedOutputStream.ComputeUInt64Size(GoldReward);
     }
+    size += drop_.CalculateSize(_repeated_drop_codec);
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
     }
@@ -418,6 +710,7 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
     if (other.GoldReward != 0UL) {
       GoldReward = other.GoldReward;
     }
+    drop_.Add(other.drop_);
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
 
@@ -471,6 +764,10 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
         }
         case 72: {
           GoldReward = input.ReadUInt64();
+          break;
+        }
+        case 82: {
+          drop_.AddEntriesFrom(input, _repeated_drop_codec);
           break;
         }
       }
@@ -528,6 +825,10 @@ public sealed partial class MonsterTable : pb::IMessage<MonsterTable>
           GoldReward = input.ReadUInt64();
           break;
         }
+        case 82: {
+          drop_.AddEntriesFrom(ref input, _repeated_drop_codec);
+          break;
+        }
       }
     }
   }
@@ -550,7 +851,7 @@ public sealed partial class MonsterTableData : pb::IMessage<MonsterTableData>
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public static pbr::MessageDescriptor Descriptor {
-    get { return global::MonsterTableReflection.Descriptor.MessageTypes[1]; }
+    get { return global::MonsterTableReflection.Descriptor.MessageTypes[2]; }
   }
 
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]

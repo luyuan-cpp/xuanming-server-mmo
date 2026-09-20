@@ -11,11 +11,10 @@
 #     --build-context tables=generated/tables \
 #     -t mmorpg-login:<tag>  go/
 #
-#   db / data_service 依赖仓库外的 proto2mysql(见下方 proto2mysql stage 说明)。
-#   **现状(2026-09-16)这两个镜像构建不了**:它们的 go.mod 已改成 replace ../../../../proto2mysql-v0.1.0,
-#   与本文件的占位 stage 名、COPY 目标 /proto2mysql 都对不上,go_svc_image.ps1 会直接拒绝;
-#   根因修复(改 require 已发布 tag、删本地 replace)另立任务。
-#   平时走 tools/scripts/go_svc_image.ps1,它会自动解析 go.mod 的 replace 并追加 --build-context,
+#   现状(2026-09-17 核对 go.mod):没有任何服务依赖仓库外目录。db / data_service / trade / schemamigrate
+#   对 proto2mysql 都是 `replace github.com/luyuancpp/proto2mysql <版本> => github.com/luyuan-cpp/proto2mysql <版本>`
+#   (远程仓名映射,版本与校验和由 go.sum 锁定),在下方依赖层 go mod download 时拉取,go_svc_image.ps1 目录里的全部镜像都走同一条路径。
+#   平时走 tools/scripts/go_svc_image.ps1,它会自动解析 go.mod 的本地 replace 并追加 --build-context(当前无),
 #   并注入 BUILD_VERSION / BUILD_COMMIT / BUILD_TIME 与 --label org.opencontainers.image.revision。
 #
 # 基础镜像钉 digest(tag@sha256):tag 在 registry 上会被重推(补丁、换底层 alpine),只钉 tag 时
@@ -23,14 +22,23 @@
 # digest 为 2026-09-16 用 `docker buildx imagetools inspect <image:tag>` 查到的 index digest
 # (多架构清单列表的摘要,输出里第一段 "Digest:" 行)。更新方法:改 tag → 重新 inspect 取该行 →
 # 同时改 FROM 行(builder 还要改下方 GOVERSION 断言)→ 走 go_svc_image.ps1 构建一遍验证。
-# 不用 `# syntax=` / `RUN --mount`:内网 / 国内机器构建时不去 Docker Hub 额外拉 dockerfile frontend。
+# 不用 `# syntax=`:它会让内网 / 国内机器构建时去 Docker Hub 额外拉 dockerfile frontend。
+# 也不用 `RUN --mount=type=cache`,但原因不同:BuildKit 内置 frontend 本身就支持它、不需要拉取
+# (本文件用了 --build-context,本来就要求 BuildKit)。不用是为了与发布标准
+# docs/design/release-packaging-standard-20260914.md §2.6 保持一致。代价:下方 go build 层前面
+# 声明了每次都变的 BUILD_TIME,这一层每次必重跑,每个服务都要从零编译 go-zero / grpc 等依赖。
+# 要提速就先修订 §2.6,再给 go build 加 `--mount=type=cache,target=/root/.cache/go-build`。
+# 不要挂 /go/pkg/mod:缓存挂载会遮住依赖层里已下载好的模块,go build 会重新联网下载。
 # ────────────────────────────────────────────────────────────────
 
-# ── 仓库外 replace 模块(可选)──────────────────────────────────────
+# ── 仓库外 replace 模块(可选,当前无服务使用)──────────────────────────
 # go/db/go.mod 当初把 proto2mysql replace 到仓库外(`../../../proto2mysql`),以 go/
 # 为 build context 带不进镜像,db 镜像在任何环境都构建不了(2026-09-03 kind 实跑)。
-# (2026-09-16 起 go.mod 改成 `../../../../proto2mysql-v0.1.0`,本 stage 已对不上,见文件头"现状";
-#  根因修好后本 stage 与下方 COPY --from=proto2mysql 应一并删除。)
+# 现在 db / data_service 已改为远程仓名映射(见文件头"现状"),本 stage 与下方 COPY --from=proto2mysql
+# 只会生成一个空的 /proto2mysql 目录,等于无用代码。暂时保留:以后若再加回指向仓库外的本地 replace,
+# 目标目录名是 proto2mysql 时下面的机制照旧可用;是其它名字时,go_svc_image.ps1 的 ExternalReplaceStages
+# 白名单会直接报错,并提示优先改回已发布版本。要删掉这段,得和该白名单、
+# .github/workflows/release.yml 的"仓库外 replace"检查一起删(另立任务)。
 #
 # 解法:BuildKit 的命名上下文可以**按名字覆盖同名 stage**。这里先声明一个空的
 # scratch stage 占位;tools/scripts/go_svc_image.ps1 在宿主上解析到该 replace
@@ -83,8 +91,8 @@ WORKDIR /src
 # ── 依赖层:先只放 go.mod / go.sum,单独 go mod download ──────────────
 # 本层 cache key 只取决于依赖声明,业务代码改动不会让它失效;BUILD_* 版本戳也刻意没在这之前声明
 # (ARG 一旦声明,其后每个 RUN 都隐式带着它参与缓存计算,每次都变的 BUILD_TIME 会击穿依赖缓存)。
-# go mod download 需要 replace 目标的 go.mod 已在位(proto / shared / schemamigrate 在 go/ 内,
-# proto2mysql 走命名上下文),源码此时不需要。
+# go mod download 需要本地 replace 目标的 go.mod 已在位(proto / shared / schemamigrate 在 go/ 内;
+# proto2mysql 是远程仓名映射,由本层直接下载),源码此时不需要。
 COPY proto/go.mod proto/go.sum /src/proto/
 COPY shared/go.mod shared/go.sum /src/shared/
 # 建表模块 go/schemamigrate(port-decisions D-14):建表服务(trade 等)经 go.mod
@@ -97,7 +105,7 @@ COPY ${SERVICE}/go.mod ${SERVICE}/go.sum /src/${SERVICE}/
 # 仓库外 replace 模块落到 /proto2mysql:当初 go.mod 里的相对路径 `../../../proto2mysql`
 # 从 /src/<service>/ 出发向上越过根目录后仍归一化为 /proto2mysql,与宿主上
 # go/<service>/../../../proto2mysql 的相对深度一致,所以 replace 行不用改。
-# 现在的 `../../../../proto2mysql-v0.1.0` 在镜像里归一化为 /proto2mysql-v0.1.0,与这里不一致(见文件头"现状")。
+# 当前没有服务使用本地 replace,这里只拷一个空 scratch(见上方占位 stage 说明)。
 COPY --from=proto2mysql / /proto2mysql/
 
 WORKDIR /src/${SERVICE}

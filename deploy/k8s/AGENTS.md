@@ -22,6 +22,7 @@ deploy/k8s/
 | C++ 节点镜像 | `Dockerfile.cpp` / `Dockerfile.runtime` | 两条现役路径,分工见下方「C++ 节点镜像:两条路径」;都不是根 `Dockerfile` |
 | 发布打包 | `tools/scripts/publish_images.ps1` 等 | 见下方「发布打包」 |
 | Infra manifests | `manifests/infra/` | Shared infra (etcd/redis/kafka/mysql) deployed to `mmorpg-infra` namespace. etcd is a 3-replica StatefulSet + PVC + PDB; redis/kafka/mysql are still single-replica Deployments |
+| C++ 日志采集 | `manifests/infra/loki.yaml` + `k8s_deploy.ps1` 的 `New-CppLogSidecar*` | Linux 下 muduo **不写 stdout**,所以每个 C++ Pod 带一个 Alloy sidecar,共享 `node-logs` 卷只读读 `/app/bin/logs/cpp_nodes/*.log` 送 Loki。默认开;`-NoCppLogSidecar` 关,`-LokiPushUrl` 指向外部 Loki。Agones Fleet 因此必须写 `spec.template.spec.container`。详见 `docs/ops/grafana-loki-local-logs.md` §6 |
 | Script entrypoint | `tools/scripts/dev_tools.ps1` | `k8s-*` commands drive this subtree |
 
 ## CONVENTIONS

@@ -19,7 +19,10 @@ Kafka:
 
 Node:
   ZoneId: 1
-  LeaseTTL: 500
+  # etcd 节点注册租约(秒)。原值 500:进程崩溃后注册信息与 node_id 槽位要滞留 8 分多钟才释放。
+  # 60 与 chat / match / scene_manager / trade / data_service 的现行值一致。租约丢失后
+  # internal/node 的 reRegister 会重新注册并重启续租,不会因 etcd 短暂抖动永久掉线。
+  LeaseTTL: 60
 
 Registry:
   Etcd:

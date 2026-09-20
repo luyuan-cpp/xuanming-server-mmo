@@ -21,8 +21,41 @@ add_definitions(-DABSL_PROPAGATE_CXX_STD=TRUE)
 include_directories(
     ../../../third_party/
     ../../../third_party/boost/
+    # ── OpenSSL 头路径(本节点这批首次需要)────────────────────────────────────
+    # 本节点吃到 <openssl/crypto.h> / <evp.h> / <hmac.h> 的只有**一条**路:
+    #   handler/rpc/player/player_gm_guard.h → ../../../../gate/gate_security.h,
+    #   被 player_{attribute,currency,pet,rollback}_handler.cpp 与 scene_handler.cpp
+    #   包含(scene_admin_handler.cpp 早就直接包 gate_security.h)。
+    #
+    # 注意**不是**经由资产通道进来的:scene_node_service.cpp 确实包到 asset_op_system.h
+    # → asset_op_auth.h,但 asset_op_auth.h 只包 proto 与标准库;OpenSSL 依赖止于
+    # asset_op_auth.**cpp**,那个 TU 编在 scene 静态库里(见 libs/services/scene/CMakeLists.txt),
+    # 不在本节点。写清楚是因为:将来若去掉 player_gm_guard 那条链,这两条路径就该一起删,
+    # 别被"资产通道还撑着"误导而留下。
+    # 本节点此前从不显式给 OpenSSL 头路径,靠的是 libssl-dev 装在 /usr/include 的系统头
+    # (deploy/k8s/Dockerfile.cpp:44)。而下面 link_directories 把 /usr/local/lib 排在
+    # /usr/lib/x86_64-linux-gnu 前面,`-lssl -lcrypto` 取到的是 gRPC 装过去的 BoringSSL
+    # 静态库(Dockerfile.cpp:122-130 以默认 gRPC_SSL_PROVIDER=module 编译并 install)。
+    # 头取系统 OpenSSL 3.x、库取 BoringSSL = 同一进程里两份 EVP_MD/HMAC_CTX 布局。补上这
+    # 两条,让头也走 BoringSSL,与 gate 一致。
+    #
+    # ⚠️ 这只在直接跑 tools/scripts/build_linux.sh 的宿主机构建上生效:Dockerfile 镜像里
+    # .dockerignore 排掉了 third_party/grpc 与 third_party/openssl,builder 阶段也不 COPY
+    # 它们,所以镜像内这两条路径不存在(不存在的 -I 被编译器静默忽略),镜像构建仍是系统头
+    # + BoringSSL 库。那是 gate / battle 今天就有的同一个问题,不在本次改动范围内,已在交付
+    # 说明里单列。
+    #
+    # **顺序敏感:boringssl 必须排在 openssl 之前。**third_party/openssl/include/openssl/
+    # 里 crypto.h 只有未 configure 的 crypto.h.in(evp.h / hmac.h 倒是真文件),三个头能凑齐
+    # 的只有 boringssl。顺序反过来,crypto.h 会先在那棵**未 configure 的源码树**里找不到可用
+    # 版本 —— 通常直接 fatal error 停在编译期,而不是静默混搭。真正危险的是"头和库各走一边"
+    # (见上一段:库侧 -lssl/-lcrypto 取的是 BoringSSL),那才是运行期未定义行为。同序写法见
+    # cpp/nodes/gate/CMakeLists.txt 与 cpp/libs/services/scene/CMakeLists.txt。
+    ../../../third_party/grpc/third_party/boringssl-with-bazel/include/
     ../../../third_party/librdkafka/src-cpp/
     ../../../third_party/muduo-linux/
+    # 与上面 boringssl 配对,见那里的顺序说明(必须排在 boringssl 之后)。
+    ../../../third_party/openssl/include/
     ../../../third_party/redis/
     ../../../third_party/redis/deps/
     ../../../third_party/spdlog/include/
@@ -64,6 +97,7 @@ set(SOURCE_FILES
     handler/event/scene_event_handler.cpp
     handler/event/server_event_handler.cpp
     handler/event/skill_event_handler.cpp
+    handler/event/team_event_handler.cpp
     handler/rpc/scene_admin_handler.cpp
     handler/rpc/player/player_currency_handler.cpp
     handler/rpc/player/player_attribute_handler.cpp
@@ -88,6 +122,14 @@ set(SOURCE_FILES
     rpc_replies/player/player_rpc_response_handler.cpp
     rpc_replies/player/player_state_attribute_sync_response_handler.cpp
     rpc_replies/register_response_handler.cpp
+    # 2026-09-18 补登记:这 7 个在 scene.vcxproj 里都有,只有 Linux CMake 清单漏了。
+    handler/event/battle_event_handler.cpp
+    handler/grpc/scene_node_service.cpp
+    handler/rpc/player/player_activity_handler.cpp
+    handler/rpc/player/player_bag_handler.cpp
+    handler/rpc/player/player_mission_handler.cpp
+    handler/rpc/player/player_movement_handler.cpp
+    id_segment_bootstrap.cpp
 )
 
 find_package(absl CONFIG REQUIRED)

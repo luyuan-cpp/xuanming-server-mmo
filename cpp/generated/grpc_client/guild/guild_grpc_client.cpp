@@ -191,65 +191,6 @@ void SendGuildServiceGetPlayerGuild(entt::registry& registry, entt::entity nodeE
     SendGuildServiceGetPlayerGuild(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
-#pragma region GuildServiceJoinGuild
-boost::object_pool<AsyncGuildServiceJoinGuildGrpcClient> GuildServiceJoinGuildPool;
-using AsyncGuildServiceJoinGuildHandlerFunctionType =
-    std::function<void(const ClientContext&, const ::guildpb::JoinGuildResponse&)>;
-AsyncGuildServiceJoinGuildHandlerFunctionType AsyncGuildServiceJoinGuildHandler;
-
-void AsyncCompleteGrpcGuildServiceJoinGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
-    auto call(
-        static_cast<AsyncGuildServiceJoinGuildGrpcClient*>(got_tag));
-    if (call->status.ok()) {
-        if (AsyncGuildServiceJoinGuildHandler) {
-            AsyncGuildServiceJoinGuildHandler(call->context, call->reply);
-        }
-    } else {
-        LOG_ERROR << call->status.error_message();
-    }
-
-	GuildServiceJoinGuildPool.destroy(call);
-}
-
-void SendGuildServiceJoinGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::JoinGuildRequest& request) {
-
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(GuildServiceJoinGuildPool.construct());
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncJoinGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceJoinGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
-
-}
-
-void SendGuildServiceJoinGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::JoinGuildRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
-
-    auto call(GuildServiceJoinGuildPool.construct());
-    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-
-    const size_t count = std::min(metaKeys.size(), metaValues.size());
-    for (size_t i = 0; i < count; ++i) {
-        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
-    }
-
-    call->response_reader = registry
-        .get<GuildServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncJoinGuild(&call->context, request,
-                                           &cq);
-    call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(GuildServiceJoinGuildMessageId, (void*)call));
-    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
-
-}
-
-void SendGuildServiceJoinGuild(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
-    const ::guildpb::JoinGuildRequest& derived = static_cast<const ::guildpb::JoinGuildRequest&>(message);
-    SendGuildServiceJoinGuild(registry, nodeEntity, derived, metaKeys, metaValues);
-}
-#pragma endregion
 #pragma region GuildServiceLeaveGuild
 boost::object_pool<AsyncGuildServiceLeaveGuildGrpcClient> GuildServiceLeaveGuildPool;
 using AsyncGuildServiceLeaveGuildHandlerFunctionType =
@@ -425,6 +366,537 @@ void SendGuildServiceSetAnnouncement(entt::registry& registry, entt::entity node
 void SendGuildServiceSetAnnouncement(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
     const ::guildpb::SetAnnouncementRequest& derived = static_cast<const ::guildpb::SetAnnouncementRequest&>(message);
     SendGuildServiceSetAnnouncement(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceSetGuildMemberRole
+boost::object_pool<AsyncGuildServiceSetGuildMemberRoleGrpcClient> GuildServiceSetGuildMemberRolePool;
+using AsyncGuildServiceSetGuildMemberRoleHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::SetGuildMemberRoleResponse&)>;
+AsyncGuildServiceSetGuildMemberRoleHandlerFunctionType AsyncGuildServiceSetGuildMemberRoleHandler;
+
+void AsyncCompleteGrpcGuildServiceSetGuildMemberRole(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceSetGuildMemberRoleGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceSetGuildMemberRoleHandler) {
+            AsyncGuildServiceSetGuildMemberRoleHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	GuildServiceSetGuildMemberRolePool.destroy(call);
+}
+
+void SendGuildServiceSetGuildMemberRole(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::SetGuildMemberRoleRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(GuildServiceSetGuildMemberRolePool.construct());
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncSetGuildMemberRole(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceSetGuildMemberRoleMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceSetGuildMemberRole(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::SetGuildMemberRoleRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceSetGuildMemberRolePool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncSetGuildMemberRole(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceSetGuildMemberRoleMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceSetGuildMemberRole(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::SetGuildMemberRoleRequest& derived = static_cast<const ::guildpb::SetGuildMemberRoleRequest&>(message);
+    SendGuildServiceSetGuildMemberRole(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceKickGuildMember
+boost::object_pool<AsyncGuildServiceKickGuildMemberGrpcClient> GuildServiceKickGuildMemberPool;
+using AsyncGuildServiceKickGuildMemberHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::KickGuildMemberResponse&)>;
+AsyncGuildServiceKickGuildMemberHandlerFunctionType AsyncGuildServiceKickGuildMemberHandler;
+
+void AsyncCompleteGrpcGuildServiceKickGuildMember(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceKickGuildMemberGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceKickGuildMemberHandler) {
+            AsyncGuildServiceKickGuildMemberHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	GuildServiceKickGuildMemberPool.destroy(call);
+}
+
+void SendGuildServiceKickGuildMember(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::KickGuildMemberRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(GuildServiceKickGuildMemberPool.construct());
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncKickGuildMember(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceKickGuildMemberMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceKickGuildMember(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::KickGuildMemberRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceKickGuildMemberPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncKickGuildMember(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceKickGuildMemberMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceKickGuildMember(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::KickGuildMemberRequest& derived = static_cast<const ::guildpb::KickGuildMemberRequest&>(message);
+    SendGuildServiceKickGuildMember(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceTransferGuildLeader
+boost::object_pool<AsyncGuildServiceTransferGuildLeaderGrpcClient> GuildServiceTransferGuildLeaderPool;
+using AsyncGuildServiceTransferGuildLeaderHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::TransferGuildLeaderResponse&)>;
+AsyncGuildServiceTransferGuildLeaderHandlerFunctionType AsyncGuildServiceTransferGuildLeaderHandler;
+
+void AsyncCompleteGrpcGuildServiceTransferGuildLeader(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceTransferGuildLeaderGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceTransferGuildLeaderHandler) {
+            AsyncGuildServiceTransferGuildLeaderHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	GuildServiceTransferGuildLeaderPool.destroy(call);
+}
+
+void SendGuildServiceTransferGuildLeader(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::TransferGuildLeaderRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(GuildServiceTransferGuildLeaderPool.construct());
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncTransferGuildLeader(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceTransferGuildLeaderMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceTransferGuildLeader(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::TransferGuildLeaderRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceTransferGuildLeaderPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncTransferGuildLeader(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceTransferGuildLeaderMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceTransferGuildLeader(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::TransferGuildLeaderRequest& derived = static_cast<const ::guildpb::TransferGuildLeaderRequest&>(message);
+    SendGuildServiceTransferGuildLeader(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceApplyJoinGuild
+boost::object_pool<AsyncGuildServiceApplyJoinGuildGrpcClient> GuildServiceApplyJoinGuildPool;
+using AsyncGuildServiceApplyJoinGuildHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::ApplyJoinGuildResponse&)>;
+AsyncGuildServiceApplyJoinGuildHandlerFunctionType AsyncGuildServiceApplyJoinGuildHandler;
+
+void AsyncCompleteGrpcGuildServiceApplyJoinGuild(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceApplyJoinGuildGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceApplyJoinGuildHandler) {
+            AsyncGuildServiceApplyJoinGuildHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	GuildServiceApplyJoinGuildPool.destroy(call);
+}
+
+void SendGuildServiceApplyJoinGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ApplyJoinGuildRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(GuildServiceApplyJoinGuildPool.construct());
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncApplyJoinGuild(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceApplyJoinGuildMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceApplyJoinGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ApplyJoinGuildRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceApplyJoinGuildPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncApplyJoinGuild(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceApplyJoinGuildMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceApplyJoinGuild(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::ApplyJoinGuildRequest& derived = static_cast<const ::guildpb::ApplyJoinGuildRequest&>(message);
+    SendGuildServiceApplyJoinGuild(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceCancelGuildApplication
+boost::object_pool<AsyncGuildServiceCancelGuildApplicationGrpcClient> GuildServiceCancelGuildApplicationPool;
+using AsyncGuildServiceCancelGuildApplicationHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::CancelGuildApplicationResponse&)>;
+AsyncGuildServiceCancelGuildApplicationHandlerFunctionType AsyncGuildServiceCancelGuildApplicationHandler;
+
+void AsyncCompleteGrpcGuildServiceCancelGuildApplication(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceCancelGuildApplicationGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceCancelGuildApplicationHandler) {
+            AsyncGuildServiceCancelGuildApplicationHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	GuildServiceCancelGuildApplicationPool.destroy(call);
+}
+
+void SendGuildServiceCancelGuildApplication(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::CancelGuildApplicationRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(GuildServiceCancelGuildApplicationPool.construct());
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncCancelGuildApplication(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceCancelGuildApplicationMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceCancelGuildApplication(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::CancelGuildApplicationRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceCancelGuildApplicationPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncCancelGuildApplication(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceCancelGuildApplicationMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceCancelGuildApplication(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::CancelGuildApplicationRequest& derived = static_cast<const ::guildpb::CancelGuildApplicationRequest&>(message);
+    SendGuildServiceCancelGuildApplication(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceListMyGuildApplications
+boost::object_pool<AsyncGuildServiceListMyGuildApplicationsGrpcClient> GuildServiceListMyGuildApplicationsPool;
+using AsyncGuildServiceListMyGuildApplicationsHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::ListMyGuildApplicationsResponse&)>;
+AsyncGuildServiceListMyGuildApplicationsHandlerFunctionType AsyncGuildServiceListMyGuildApplicationsHandler;
+
+void AsyncCompleteGrpcGuildServiceListMyGuildApplications(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceListMyGuildApplicationsGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceListMyGuildApplicationsHandler) {
+            AsyncGuildServiceListMyGuildApplicationsHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	GuildServiceListMyGuildApplicationsPool.destroy(call);
+}
+
+void SendGuildServiceListMyGuildApplications(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ListMyGuildApplicationsRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(GuildServiceListMyGuildApplicationsPool.construct());
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncListMyGuildApplications(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceListMyGuildApplicationsMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceListMyGuildApplications(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ListMyGuildApplicationsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceListMyGuildApplicationsPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncListMyGuildApplications(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceListMyGuildApplicationsMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceListMyGuildApplications(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::ListMyGuildApplicationsRequest& derived = static_cast<const ::guildpb::ListMyGuildApplicationsRequest&>(message);
+    SendGuildServiceListMyGuildApplications(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceListGuildApplications
+boost::object_pool<AsyncGuildServiceListGuildApplicationsGrpcClient> GuildServiceListGuildApplicationsPool;
+using AsyncGuildServiceListGuildApplicationsHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::ListGuildApplicationsResponse&)>;
+AsyncGuildServiceListGuildApplicationsHandlerFunctionType AsyncGuildServiceListGuildApplicationsHandler;
+
+void AsyncCompleteGrpcGuildServiceListGuildApplications(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceListGuildApplicationsGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceListGuildApplicationsHandler) {
+            AsyncGuildServiceListGuildApplicationsHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	GuildServiceListGuildApplicationsPool.destroy(call);
+}
+
+void SendGuildServiceListGuildApplications(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ListGuildApplicationsRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(GuildServiceListGuildApplicationsPool.construct());
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncListGuildApplications(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceListGuildApplicationsMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceListGuildApplications(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ListGuildApplicationsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceListGuildApplicationsPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncListGuildApplications(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceListGuildApplicationsMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceListGuildApplications(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::ListGuildApplicationsRequest& derived = static_cast<const ::guildpb::ListGuildApplicationsRequest&>(message);
+    SendGuildServiceListGuildApplications(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceReviewGuildApplication
+boost::object_pool<AsyncGuildServiceReviewGuildApplicationGrpcClient> GuildServiceReviewGuildApplicationPool;
+using AsyncGuildServiceReviewGuildApplicationHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::ReviewGuildApplicationResponse&)>;
+AsyncGuildServiceReviewGuildApplicationHandlerFunctionType AsyncGuildServiceReviewGuildApplicationHandler;
+
+void AsyncCompleteGrpcGuildServiceReviewGuildApplication(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceReviewGuildApplicationGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceReviewGuildApplicationHandler) {
+            AsyncGuildServiceReviewGuildApplicationHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	GuildServiceReviewGuildApplicationPool.destroy(call);
+}
+
+void SendGuildServiceReviewGuildApplication(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ReviewGuildApplicationRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(GuildServiceReviewGuildApplicationPool.construct());
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncReviewGuildApplication(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceReviewGuildApplicationMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceReviewGuildApplication(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::ReviewGuildApplicationRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceReviewGuildApplicationPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncReviewGuildApplication(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceReviewGuildApplicationMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceReviewGuildApplication(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::ReviewGuildApplicationRequest& derived = static_cast<const ::guildpb::ReviewGuildApplicationRequest&>(message);
+    SendGuildServiceReviewGuildApplication(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region GuildServiceNotifyGuildChanged
+boost::object_pool<AsyncGuildServiceNotifyGuildChangedGrpcClient> GuildServiceNotifyGuildChangedPool;
+using AsyncGuildServiceNotifyGuildChangedHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::Empty&)>;
+AsyncGuildServiceNotifyGuildChangedHandlerFunctionType AsyncGuildServiceNotifyGuildChangedHandler;
+
+void AsyncCompleteGrpcGuildServiceNotifyGuildChanged(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncGuildServiceNotifyGuildChangedGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncGuildServiceNotifyGuildChangedHandler) {
+            AsyncGuildServiceNotifyGuildChangedHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	GuildServiceNotifyGuildChangedPool.destroy(call);
+}
+
+void SendGuildServiceNotifyGuildChanged(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GuildChangedS2C& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(GuildServiceNotifyGuildChangedPool.construct());
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncNotifyGuildChanged(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceNotifyGuildChangedMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceNotifyGuildChanged(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GuildChangedS2C& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(GuildServiceNotifyGuildChangedPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<GuildServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncNotifyGuildChanged(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(GuildServiceNotifyGuildChangedMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendGuildServiceNotifyGuildChanged(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::guildpb::GuildChangedS2C& derived = static_cast<const ::guildpb::GuildChangedS2C&>(message);
+    SendGuildServiceNotifyGuildChanged(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
 #pragma region GuildServiceUpdateGuildScore
@@ -619,10 +1091,6 @@ void HandleGuildCompletedQueueMessage(entt::registry& registry, entt::entity nod
             AsyncCompleteGrpcGuildServiceGetPlayerGuild(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
-        case GuildServiceJoinGuildMessageId:
-            AsyncCompleteGrpcGuildServiceJoinGuild(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
-			tagPool.destroy(grpcTag);
-            break;
         case GuildServiceLeaveGuildMessageId:
             AsyncCompleteGrpcGuildServiceLeaveGuild(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
@@ -633,6 +1101,42 @@ void HandleGuildCompletedQueueMessage(entt::registry& registry, entt::entity nod
             break;
         case GuildServiceSetAnnouncementMessageId:
             AsyncCompleteGrpcGuildServiceSetAnnouncement(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceSetGuildMemberRoleMessageId:
+            AsyncCompleteGrpcGuildServiceSetGuildMemberRole(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceKickGuildMemberMessageId:
+            AsyncCompleteGrpcGuildServiceKickGuildMember(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceTransferGuildLeaderMessageId:
+            AsyncCompleteGrpcGuildServiceTransferGuildLeader(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceApplyJoinGuildMessageId:
+            AsyncCompleteGrpcGuildServiceApplyJoinGuild(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceCancelGuildApplicationMessageId:
+            AsyncCompleteGrpcGuildServiceCancelGuildApplication(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceListMyGuildApplicationsMessageId:
+            AsyncCompleteGrpcGuildServiceListMyGuildApplications(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceListGuildApplicationsMessageId:
+            AsyncCompleteGrpcGuildServiceListGuildApplications(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceReviewGuildApplicationMessageId:
+            AsyncCompleteGrpcGuildServiceReviewGuildApplication(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case GuildServiceNotifyGuildChangedMessageId:
+            AsyncCompleteGrpcGuildServiceNotifyGuildChanged(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
         case GuildServiceUpdateGuildScoreMessageId:
@@ -657,10 +1161,18 @@ void SetGuildHandler(const std::function<void(const ClientContext&, const ::goog
     AsyncGuildServiceCreateGuildHandler = handler;
     AsyncGuildServiceGetGuildHandler = handler;
     AsyncGuildServiceGetPlayerGuildHandler = handler;
-    AsyncGuildServiceJoinGuildHandler = handler;
     AsyncGuildServiceLeaveGuildHandler = handler;
     AsyncGuildServiceDisbandGuildHandler = handler;
     AsyncGuildServiceSetAnnouncementHandler = handler;
+    AsyncGuildServiceSetGuildMemberRoleHandler = handler;
+    AsyncGuildServiceKickGuildMemberHandler = handler;
+    AsyncGuildServiceTransferGuildLeaderHandler = handler;
+    AsyncGuildServiceApplyJoinGuildHandler = handler;
+    AsyncGuildServiceCancelGuildApplicationHandler = handler;
+    AsyncGuildServiceListMyGuildApplicationsHandler = handler;
+    AsyncGuildServiceListGuildApplicationsHandler = handler;
+    AsyncGuildServiceReviewGuildApplicationHandler = handler;
+    AsyncGuildServiceNotifyGuildChangedHandler = handler;
     AsyncGuildServiceUpdateGuildScoreHandler = handler;
     AsyncGuildServiceGetGuildRankHandler = handler;
     AsyncGuildServiceGetGuildRankByGuildHandler = handler;
@@ -677,9 +1189,6 @@ void SetGuildIfEmptyHandler(const std::function<void(const ClientContext&, const
     if (!AsyncGuildServiceGetPlayerGuildHandler) {
         AsyncGuildServiceGetPlayerGuildHandler = handler;
     }
-    if (!AsyncGuildServiceJoinGuildHandler) {
-        AsyncGuildServiceJoinGuildHandler = handler;
-    }
     if (!AsyncGuildServiceLeaveGuildHandler) {
         AsyncGuildServiceLeaveGuildHandler = handler;
     }
@@ -688,6 +1197,33 @@ void SetGuildIfEmptyHandler(const std::function<void(const ClientContext&, const
     }
     if (!AsyncGuildServiceSetAnnouncementHandler) {
         AsyncGuildServiceSetAnnouncementHandler = handler;
+    }
+    if (!AsyncGuildServiceSetGuildMemberRoleHandler) {
+        AsyncGuildServiceSetGuildMemberRoleHandler = handler;
+    }
+    if (!AsyncGuildServiceKickGuildMemberHandler) {
+        AsyncGuildServiceKickGuildMemberHandler = handler;
+    }
+    if (!AsyncGuildServiceTransferGuildLeaderHandler) {
+        AsyncGuildServiceTransferGuildLeaderHandler = handler;
+    }
+    if (!AsyncGuildServiceApplyJoinGuildHandler) {
+        AsyncGuildServiceApplyJoinGuildHandler = handler;
+    }
+    if (!AsyncGuildServiceCancelGuildApplicationHandler) {
+        AsyncGuildServiceCancelGuildApplicationHandler = handler;
+    }
+    if (!AsyncGuildServiceListMyGuildApplicationsHandler) {
+        AsyncGuildServiceListMyGuildApplicationsHandler = handler;
+    }
+    if (!AsyncGuildServiceListGuildApplicationsHandler) {
+        AsyncGuildServiceListGuildApplicationsHandler = handler;
+    }
+    if (!AsyncGuildServiceReviewGuildApplicationHandler) {
+        AsyncGuildServiceReviewGuildApplicationHandler = handler;
+    }
+    if (!AsyncGuildServiceNotifyGuildChangedHandler) {
+        AsyncGuildServiceNotifyGuildChangedHandler = handler;
     }
     if (!AsyncGuildServiceUpdateGuildScoreHandler) {
         AsyncGuildServiceUpdateGuildScoreHandler = handler;

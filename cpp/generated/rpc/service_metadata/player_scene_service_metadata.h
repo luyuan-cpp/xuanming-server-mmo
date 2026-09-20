@@ -34,3 +34,7 @@ constexpr uint32_t SceneSceneClientPlayerNotifyActorListCreateIndex = 6;
 constexpr uint32_t SceneSceneClientPlayerNotifyActorListDestroyMessageId = 64;
 constexpr uint32_t SceneSceneClientPlayerNotifyActorListDestroyIndex = 7;
 #define SceneSceneClientPlayerNotifyActorListDestroyMethod  ::SceneSceneClientPlayer_Stub::descriptor()->method(7)
+
+constexpr uint32_t SceneSceneClientPlayerTravelToZoneMessageId = 226;
+constexpr uint32_t SceneSceneClientPlayerTravelToZoneIndex = 8;
+#define SceneSceneClientPlayerTravelToZoneMethod  ::SceneSceneClientPlayer_Stub::descriptor()->method(8)

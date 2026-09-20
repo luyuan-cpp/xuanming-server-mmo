@@ -90,7 +90,9 @@ func newRepoOnThrowawayDB(t *testing.T) (*GuildRepo, *sql.DB, *miniredis.Minired
 		}
 		admin.Close()
 	})
-	createGuildTables(t, db)
+	resetCtx, resetCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer resetCancel()
+	resetGuildSchemaViaMigrate(t, resetCtx, db)
 
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
@@ -99,51 +101,15 @@ func newRepoOnThrowawayDB(t *testing.T) (*GuildRepo, *sql.DB, *miniredis.Minired
 	return NewGuildRepo(rdb, db, time.Minute), db, mr
 }
 
-func createGuildTables(t *testing.T, db *sql.DB) {
-	t.Helper()
-	stmts := []string{
-		`CREATE TABLE guild (
-			guild_id BIGINT UNSIGNED NOT NULL,
-			name VARCHAR(64) NOT NULL,
-			leader_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			level INT UNSIGNED NOT NULL DEFAULT 1,
-			announcement TEXT,
-			create_time_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			max_members INT UNSIGNED NOT NULL DEFAULT 50,
-			zone_id INT UNSIGNED NOT NULL DEFAULT 0,
-			score BIGINT NOT NULL DEFAULT 0,
-			PRIMARY KEY (guild_id),
-			UNIQUE KEY uk_name (name)
-		) ENGINE=InnoDB`,
-		`CREATE TABLE guild_member (
-			guild_id BIGINT UNSIGNED NOT NULL,
-			player_id BIGINT UNSIGNED NOT NULL,
-			role TINYINT UNSIGNED NOT NULL DEFAULT 0,
-			join_time_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			last_active_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			contribution BIGINT UNSIGNED NOT NULL DEFAULT 0,
-			PRIMARY KEY (guild_id, player_id),
-			UNIQUE KEY uk_player (player_id)
-		) ENGINE=InnoDB`,
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	for i, s := range stmts {
-		if _, err := db.ExecContext(ctx, s); err != nil {
-			t.Fatalf("建表第 %d 步失败: %v", i, err)
-		}
-	}
-}
-
 func seedGuild(t *testing.T, db *sql.DB, guildID uint64, name string, zone uint32) {
 	t.Helper()
 	_, err := db.Exec(
-		`INSERT INTO guild (guild_id, name, leader_id, level, announcement, create_time_ms, max_members, zone_id, score)
-		 VALUES (?, ?, ?, 1, '', 1, 50, ?, 0)`, guildID, name, guildID+1, zone)
+		`INSERT INTO guild (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, funds)
+		 VALUES (?, ?, ?, ?, 1, '', 1, 50, ?, 0, 0)`, guildID, name, strings.ToLower(name), guildID+1, zone)
 	require.NoError(t, err)
 	_, err = db.Exec(
-		`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution)
-		 VALUES (?, ?, 3, 1, 1, 0)`, guildID, guildID+1)
+		`INSERT INTO guild_member (guild_id, player_id, role, join_time_ms, last_active_ms, contribution_total, contribution_balance)
+		 VALUES (?, ?, 3, 1, 1, 0, 0)`, guildID, guildID+1)
 	require.NoError(t, err)
 }
 
@@ -176,14 +142,15 @@ func TestRemoveGuildFromRank_UsesAuthoritativeZoneNotCallerHint(t *testing.T) {
 }
 
 // TestDisbandPath_RemovesFromAuthoritativeZoneAfterRowIsGone 覆盖真实解散顺序:
-// 先 DeleteGuild(行没了),再清榜。此时 MySQL 已经读不到 zone,唯一可信的来源
-// 就是 DeleteGuild 从删除事务里带出来的那个值。
+// 先 DisbandGuild(行没了),再清榜。此时 MySQL 已经读不到 zone,唯一可信的来源
+// 就是 DisbandResult.ZoneID —— 解散事务里 FOR UPDATE 读到的那个值。
 func TestDisbandPath_RemovesFromAuthoritativeZoneAfterRowIsGone(t *testing.T) {
 	repo, db, _ := newRepoOnThrowawayDB(t)
 	ctx := context.Background()
 
 	const (
 		guildID    uint64 = 5002
+		leaderID   uint64 = guildID + 1 // seedGuild 把 leader_id 与那行 role=3 都写成 guildID+1
 		staleZone  uint32 = 11
 		actualZone uint32 = 21
 	)
@@ -192,10 +159,13 @@ func TestDisbandPath_RemovesFromAuthoritativeZoneAfterRowIsGone(t *testing.T) {
 	require.NoError(t, repo.rdb.ZAdd(ctx, zoneRankKey(staleZone),
 		redis.Z{Score: 500, Member: guildID}).Err())
 
-	zoneFromDelete, err := repo.DeleteGuild(ctx, guildID)
+	// DisbandGuild 自己按 MySQL 的 leader_id 授权,所以必须传真帮主;
+	// 传别人会拿到 ErrRankTooLow,而不是删掉帮会。
+	res, err := repo.DisbandGuild(ctx, guildID, leaderID)
 	require.NoError(t, err)
+	zoneFromDelete := res.ZoneID
 	assert.Equal(t, actualZone, zoneFromDelete,
-		"DeleteGuild 必须返回删除事务里 FOR UPDATE 读到的权威 zone —— 清榜只有它可信")
+		"DisbandGuild 必须返回删除事务里 FOR UPDATE 读到的权威 zone —— 清榜只有它可信")
 
 	require.NoError(t, repo.RemoveGuildFromRank(ctx, guildID, zoneFromDelete))
 	assertNotRanked(t, ctx, repo, guildRankKey, guildID)

@@ -22,15 +22,17 @@ public static partial class ItemTableReflection {
   static ItemTableReflection() {
     byte[] descriptorData = global::System.Convert.FromBase64String(
         string.Concat(
-          "ChBpdGVtX3RhYmxlLnByb3RvIkMKCUl0ZW1UYWJsZRIKCgJpZBgBIAEoDRIW",
-          "Cg5tYXhfc3RhY2tfc2l6ZRgCIAEoDRISCgplcXVpcF9raW5kGAMgASgNIikK",
-          "DUl0ZW1UYWJsZURhdGESGAoEZGF0YRgBIAMoCzIKLkl0ZW1UYWJsZUI7Cg5j",
-          "b20uZ2FtZS50YWJsZUITSXRlbVRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0",
-          "ZWQvcGIvdGFibGViBnByb3RvMw=="));
+          "ChBpdGVtX3RhYmxlLnByb3RvIooBCglJdGVtVGFibGUSCgoCaWQYASABKA0S",
+          "FgoObWF4X3N0YWNrX3NpemUYAiABKA0SEgoKZXF1aXBfa2luZBgDIAEoDRIV",
+          "Cg1iYXR0bGVfdXNhYmxlGAQgASgNEhYKDmJhdHRsZV9oZWFsX2hwGAUgASgE",
+          "EhYKDmJhdHRsZV9oZWFsX21wGAYgASgEIikKDUl0ZW1UYWJsZURhdGESGAoE",
+          "ZGF0YRgBIAMoCzIKLkl0ZW1UYWJsZUI7Cg5jb20uZ2FtZS50YWJsZUITSXRl",
+          "bVRhYmxlT3V0ZXJDbGFzc1ABWhJnZW5lcmF0ZWQvcGIvdGFibGViBnByb3Rv",
+          "Mw=="));
     descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
         new pbr::FileDescriptor[] { },
         new pbr::GeneratedClrTypeInfo(null, null, new pbr::GeneratedClrTypeInfo[] {
-          new pbr::GeneratedClrTypeInfo(typeof(global::ItemTable), global::ItemTable.Parser, new[]{ "Id", "MaxStackSize", "EquipKind" }, null, null, null, null),
+          new pbr::GeneratedClrTypeInfo(typeof(global::ItemTable), global::ItemTable.Parser, new[]{ "Id", "MaxStackSize", "EquipKind", "BattleUsable", "BattleHealHp", "BattleHealMp" }, null, null, null, null),
           new pbr::GeneratedClrTypeInfo(typeof(global::ItemTableData), global::ItemTableData.Parser, new[]{ "Data" }, null, null, null, null)
         }));
   }
@@ -76,6 +78,9 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     id_ = other.id_;
     maxStackSize_ = other.maxStackSize_;
     equipKind_ = other.equipKind_;
+    battleUsable_ = other.battleUsable_;
+    battleHealHp_ = other.battleHealHp_;
+    battleHealMp_ = other.battleHealMp_;
     _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
   }
 
@@ -121,6 +126,42 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     }
   }
 
+  /// <summary>Field number for the "battle_usable" field.</summary>
+  public const int BattleUsableFieldNumber = 4;
+  private uint battleUsable_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public uint BattleUsable {
+    get { return battleUsable_; }
+    set {
+      battleUsable_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "battle_heal_hp" field.</summary>
+  public const int BattleHealHpFieldNumber = 5;
+  private ulong battleHealHp_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong BattleHealHp {
+    get { return battleHealHp_; }
+    set {
+      battleHealHp_ = value;
+    }
+  }
+
+  /// <summary>Field number for the "battle_heal_mp" field.</summary>
+  public const int BattleHealMpFieldNumber = 6;
+  private ulong battleHealMp_;
+  [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+  [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+  public ulong BattleHealMp {
+    get { return battleHealMp_; }
+    set {
+      battleHealMp_ = value;
+    }
+  }
+
   [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
   [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
   public override bool Equals(object other) {
@@ -139,6 +180,9 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     if (Id != other.Id) return false;
     if (MaxStackSize != other.MaxStackSize) return false;
     if (EquipKind != other.EquipKind) return false;
+    if (BattleUsable != other.BattleUsable) return false;
+    if (BattleHealHp != other.BattleHealHp) return false;
+    if (BattleHealMp != other.BattleHealMp) return false;
     return Equals(_unknownFields, other._unknownFields);
   }
 
@@ -149,6 +193,9 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     if (Id != 0) hash ^= Id.GetHashCode();
     if (MaxStackSize != 0) hash ^= MaxStackSize.GetHashCode();
     if (EquipKind != 0) hash ^= EquipKind.GetHashCode();
+    if (BattleUsable != 0) hash ^= BattleUsable.GetHashCode();
+    if (BattleHealHp != 0UL) hash ^= BattleHealHp.GetHashCode();
+    if (BattleHealMp != 0UL) hash ^= BattleHealMp.GetHashCode();
     if (_unknownFields != null) {
       hash ^= _unknownFields.GetHashCode();
     }
@@ -179,6 +226,18 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
       output.WriteRawTag(24);
       output.WriteUInt32(EquipKind);
     }
+    if (BattleUsable != 0) {
+      output.WriteRawTag(32);
+      output.WriteUInt32(BattleUsable);
+    }
+    if (BattleHealHp != 0UL) {
+      output.WriteRawTag(40);
+      output.WriteUInt64(BattleHealHp);
+    }
+    if (BattleHealMp != 0UL) {
+      output.WriteRawTag(48);
+      output.WriteUInt64(BattleHealMp);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(output);
     }
@@ -201,6 +260,18 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
       output.WriteRawTag(24);
       output.WriteUInt32(EquipKind);
     }
+    if (BattleUsable != 0) {
+      output.WriteRawTag(32);
+      output.WriteUInt32(BattleUsable);
+    }
+    if (BattleHealHp != 0UL) {
+      output.WriteRawTag(40);
+      output.WriteUInt64(BattleHealHp);
+    }
+    if (BattleHealMp != 0UL) {
+      output.WriteRawTag(48);
+      output.WriteUInt64(BattleHealMp);
+    }
     if (_unknownFields != null) {
       _unknownFields.WriteTo(ref output);
     }
@@ -219,6 +290,15 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     }
     if (EquipKind != 0) {
       size += 1 + pb::CodedOutputStream.ComputeUInt32Size(EquipKind);
+    }
+    if (BattleUsable != 0) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt32Size(BattleUsable);
+    }
+    if (BattleHealHp != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(BattleHealHp);
+    }
+    if (BattleHealMp != 0UL) {
+      size += 1 + pb::CodedOutputStream.ComputeUInt64Size(BattleHealMp);
     }
     if (_unknownFields != null) {
       size += _unknownFields.CalculateSize();
@@ -240,6 +320,15 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
     }
     if (other.EquipKind != 0) {
       EquipKind = other.EquipKind;
+    }
+    if (other.BattleUsable != 0) {
+      BattleUsable = other.BattleUsable;
+    }
+    if (other.BattleHealHp != 0UL) {
+      BattleHealHp = other.BattleHealHp;
+    }
+    if (other.BattleHealMp != 0UL) {
+      BattleHealMp = other.BattleHealMp;
     }
     _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
   }
@@ -272,6 +361,18 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
           EquipKind = input.ReadUInt32();
           break;
         }
+        case 32: {
+          BattleUsable = input.ReadUInt32();
+          break;
+        }
+        case 40: {
+          BattleHealHp = input.ReadUInt64();
+          break;
+        }
+        case 48: {
+          BattleHealMp = input.ReadUInt64();
+          break;
+        }
       }
     }
   #endif
@@ -301,6 +402,18 @@ public sealed partial class ItemTable : pb::IMessage<ItemTable>
         }
         case 24: {
           EquipKind = input.ReadUInt32();
+          break;
+        }
+        case 32: {
+          BattleUsable = input.ReadUInt32();
+          break;
+        }
+        case 40: {
+          BattleHealHp = input.ReadUInt64();
+          break;
+        }
+        case 48: {
+          BattleHealMp = input.ReadUInt64();
           break;
         }
       }

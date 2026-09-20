@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/zeromicro/go-zero/core/conf"
@@ -27,6 +31,7 @@ import (
 	"guild/internal/svc"
 	base "proto/common/base"
 	pb "proto/guild"
+	"schemamigrate"
 	"shared/buildinfo"
 	"shared/grpcstats"
 	"shared/killswitch"
@@ -38,6 +43,19 @@ import (
 var configFile = flag.String("f", "etc/guild.yaml", "config file path")
 
 var showVersion = flag.Bool("version", false, "打印版本信息并退出")
+
+// migrateOnly:`guild -f <yaml> -migrate` 只对 mmorpg_guild 跑一次 schemamigrate.Up 后退出
+// (退出码 0 成功 / 1 错误 / 3 锁忙 / 4 需人工),不连 Redis / etcd / data_service,供将来的
+// guild-migrate Job 使用(port-decisions D-14 §4,形状照 go/trade)。
+var migrateOnly = flag.Bool("migrate", false, "run schemamigrate.Up on mmorpg_guild and exit (0 ok / 1 error / 3 lock busy / 4 manual)")
+
+const migrateRemedyCommand = "guild -f etc/guild.yaml -migrate"
+
+// 启动期等迁移锁:本地 go_services 允许 guild 多开,首次建表时实例间会互等 GET_LOCK。
+// 没有编排器替我们重拉,所以在进程内重试。测试里把 lockBusyRetryDelay 置 0。
+const lockBusyAttempts = 3
+
+var lockBusyRetryDelay = 2 * time.Second
 
 const nodeType = uint32(base.ENodeType_GuildNodeService)
 
@@ -51,8 +69,29 @@ func main() {
 	}
 	conf.MustLoad(*configFile, &config.AppConfig)
 
+	// -migrate:只建表然后退出,不碰 Redis / etcd / Kafka。
+	if *migrateOnly {
+		os.Exit(runMigration(config.AppConfig))
+	}
+
 	svcCtx := svc.NewServiceContext(config.AppConfig)
 	defer svcCtx.Stop()
+
+	// 帮会规则表 / 等级表自洽校验(设计 docs/design/guild-phase2/02-management.md §3.3):
+	// 缺行或数值越界一律拒启,**不降级成警告**。
+	//
+	// 理由:成员上限、长老上限、申请上限全部是"用时现查配表",查不到时这些判据会静默取到 0,
+	// 表现成"谁都进不去 / 长老名额无限",而不是一条报错 —— 带着错配表活着比崩掉危险得多。
+	// 位置:NewServiceContext 刚 LoadTables,所以校验只能在它之后;又放在建表与节点注册之前,
+	// 配置不对的实例连 etcd 都不该注册进去,免得流量先被路由过来再出问题。
+	if err := logic.ValidateGuildTables(); err != nil {
+		logx.Must(fmt.Errorf("guild config tables invalid: %w", err))
+	}
+
+	// 表结构不对的实例不能对外服务,也不能注册进 etcd:建表 / 核对放在节点注册之前。
+	if err := ensureSchema(context.Background(), svcCtx.DB, config.AppConfig, schemamigrate.Up, schemamigrate.Plan); err != nil {
+		logx.Must(err)
+	}
 
 	// Register node with etcd
 	host, port, err := splitHostPort(config.AppConfig.ListenOn)
@@ -134,12 +173,7 @@ func main() {
 	// Initialize data repo with singleflight + cache-aside
 	repo := data.NewGuildRepo(svcCtx.RedisClient, svcCtx.DB, config.AppConfig.Cache.DefaultTTL)
 
-	// 先执行一次性的 Redis -> MySQL 存量分数回填，再从 MySQL 权威快照完整重建
-	// 全局/分区榜。迁移或重建失败必须阻止服务启动，否则新写会把尚未回填的
-	// 历史分数覆盖掉，或继续向不完整榜单提供结果。
-	if err := repo.MigrateLegacyRankScores(context.Background()); err != nil {
-		panic(fmt.Errorf("migrate legacy guild rank scores: %w", err))
-	}
+	// 每次启动从 MySQL 权威快照重建全局 / 分区榜;失败拒绝启动,避免对外提供不完整榜单。
 	if err := repo.RebuildRanks(context.Background()); err != nil {
 		panic(fmt.Errorf("rebuild guild ranks from MySQL: %w", err))
 	}
@@ -168,7 +202,17 @@ func main() {
 	} else {
 		logx.Error("Guild: DataServiceRpc 未配置,无法判定玩家归属 zone,所有客户端帮会请求将被拒绝")
 	}
-	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence, homeZones)
+	// 推送出口与"申请推送冷却"在这里一次装配(设计 §13.7 / §10.1)。
+	//
+	// NewGuildNotifier 自己判 nil:没配 Kafka(Brokers 为空 → KafkaWriter 为 nil)时它退回
+	// NoopNotifier,所以这里不必再包一层 if。这跟上面 mergeFence 的写法不同不是疏忽 ——
+	// 那边要躲的是"具体类型的 nil 指针装进接口后 != nil"这个坑,而这里拿到的已经是接口值。
+	//
+	// TryMarkApplyPush 是 Redis SetNX 冷却键,挡的是"申请 → 撤回 → 申请"对审批人的刷屏;
+	// 不注入 = 总是放行,只有单测才会走那条默认。
+	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence, homeZones,
+		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerLocatorRedisClient)),
+		logic.WithApplyPushGate(repo.TryMarkApplyPush))
 
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {
@@ -177,7 +221,7 @@ func main() {
 			reflection.Register(grpcServer)
 		}
 	})
-	s.AddUnaryInterceptors(buildUnaryInterceptors(ks)...)
+	s.AddUnaryInterceptors(buildUnaryInterceptors(ks, config.AppConfig.RequestBudget())...)
 	defer s.Stop()
 
 	// Lost() 关闭 = 本进程**确认**不再是这个槽的持有者(slots key 被挂到了别的 uuid 上:
@@ -220,7 +264,7 @@ func main() {
 // main() 没法在单测里跑起来,而"哪次重构顺手把 killswitch 那行删了"是最容易发生、
 // 又最难被发现的回归:开关删掉之后一切照常工作,只有真出事那天才发现止血阀是假的。
 // 见 guild_test.go。
-func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor {
+func buildUnaryInterceptors(ks *killswitch.Switch, budget time.Duration) []grpc.UnaryServerInterceptor {
 	return []grpc.UnaryServerInterceptor{
 		// ① 流量统计放最外层:被热关停短路掉的请求也必须被统计到。
 		//    否则"关停生效后这个方法的 QPS 归零"会被误读成客户端不再调用了。
@@ -249,6 +293,179 @@ func buildUnaryInterceptors(ks *killswitch.Switch) []grpc.UnaryServerInterceptor
 		serverbase.UnaryInterceptor(serverbase.Options{
 			TipClassifier: constants.TipClassifier(),
 		}),
+
+		// ⑤ 整请求业务预算(Timeout − 500ms):让归属区查询、发号、Redis / MySQL 这些 I/O
+		//    在 zrpc 服务端超时之前失败,客户端拿到的是 in-band tip 而不是 DeadlineExceeded。
+		//    放最内层:前四层都是本地判断,不该占业务预算。
+		requestBudgetInterceptor(budget),
+	}
+}
+
+// requestBudgetInterceptor 给 handler 的 ctx 套上整请求业务预算(与 go/trade 的 RequestBudget 同义)。
+func requestBudgetInterceptor(budget time.Duration) grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		ctx, cancel := context.WithTimeout(ctx, budget)
+		defer cancel()
+		return handler(ctx, req)
+	}
+}
+
+// schemaRunner 是 schemamigrate.Up / schemamigrate.Plan 的函数形状;抽出来让启动期建表策略可单测。
+type schemaRunner func(ctx context.Context, db *sql.DB, opts schemamigrate.Options) (schemamigrate.Report, error)
+
+// schemaOptions 是启动路径与 -migrate 共用的迁移选项:库名断言用代码常量(Validate 已保证配置与之相等),
+// 表清单只来自 data.Tables();锁等待 / 语句超时取 schemamigrate 默认值。
+func schemaOptions() schemamigrate.Options {
+	return schemamigrate.Options{
+		Database: data.DatabaseName,
+		Tables:   data.Tables(),
+		Logf:     logx.Infof,
+	}
+}
+
+// runWithLockRetry 在 GET_LOCK 被别的实例占住时重试。本地 go_services 允许 guild 多开,
+// 首次建表时两个实例会互等;没有编排器替我们重拉,所以在进程内重试。
+// -migrate 入口刻意不用它:退出码 3 交给 K8s Job 的 backoff。
+func runWithLockRetry(ctx context.Context, runner schemaRunner, db *sql.DB, opts schemamigrate.Options) (schemamigrate.Report, error) {
+	var report schemamigrate.Report
+	var err error
+	for attempt := 1; attempt <= lockBusyAttempts; attempt++ {
+		report, err = runner(ctx, db, opts)
+		if !errors.Is(err, schemamigrate.ErrLockBusy) || attempt == lockBusyAttempts {
+			return report, err
+		}
+		logx.Infof("[guild] 迁移锁忙,%v 后重试(%d/%d)", lockBusyRetryDelay, attempt, lockBusyAttempts)
+		select {
+		case <-time.After(lockBusyRetryDelay):
+		case <-ctx.Done():
+			return report, ctx.Err()
+		}
+	}
+	return report, err
+}
+
+// ensureSchema 是启动期建表策略(port-decisions D-14 第 4 条):
+//   - Schema.AutoMigrate 没写或 true:跑 Up;err 非 nil 或出现需人工项 → 返回错误(调用方拒绝启动)。
+//   - false:只跑只读 Plan;有待执行语句或需人工项 → 返回错误,并带上补救命令。
+//
+// 两种模式都额外把"缺普通索引"从 schemamigrate 的 Warning 升级成阻断:它不会自动补建,
+// 放过去等于带着缺索引的表对外服务(设计 §6.4)。
+func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan schemaRunner) error {
+	opts := schemaOptions()
+	if c.ShouldAutoMigrate() {
+		report, err := runWithLockRetry(ctx, up, db, opts)
+		logReport("schemamigrate.Up", report)
+		if err != nil {
+			return fmt.Errorf("[guild] 启动期建表失败(库 %s),拒绝启动: %w", data.DatabaseName, err)
+		}
+		if len(report.Manual) > 0 {
+			return fmt.Errorf("[guild] 启动期建表发现 %d 项需人工处理(库 %s),拒绝启动: %s",
+				len(report.Manual), data.DatabaseName, strings.Join(report.Manual, "; "))
+		}
+		return missingIndexError(report)
+	}
+
+	report, err := runWithLockRetry(ctx, plan, db, opts)
+	logReport("schemamigrate.Plan", report)
+	if err != nil {
+		return fmt.Errorf("[guild] Schema.AutoMigrate=false,启动期检查表结构失败(库 %s),拒绝启动;确认库可达后执行 %s: %w",
+			data.DatabaseName, migrateRemedyCommand, err)
+	}
+	if !report.Clean() {
+		return fmt.Errorf("[guild] Schema.AutoMigrate=false 且库 %s 与 proto/guild/guild_db.proto 不一致"+
+			"(待执行 %d 条、需人工 %d 项),拒绝启动;先执行 %s",
+			data.DatabaseName, len(report.Statements), len(report.Manual), migrateRemedyCommand)
+	}
+	return missingIndexError(report)
+}
+
+// missingIndexWarnings 挑出"缺索引"告警。前缀取自 go/schemamigrate/plan.go 的文案;
+// guild_test.go 的真库用例负责守住两边一致(文案漂移时会红)。
+func missingIndexWarnings(r schemamigrate.Report) []string {
+	var missing []string
+	for _, w := range r.Warnings {
+		if strings.HasPrefix(w, "缺索引") {
+			missing = append(missing, w)
+		}
+	}
+	return missing
+}
+
+func missingIndexError(r schemamigrate.Report) error {
+	missing := missingIndexWarnings(r)
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("[guild] 库 %s 缺 %d 个 proto 声明的普通索引,拒绝启动"+
+		"(schemamigrate 不自动补建;开发期按 docs/design/guild-phase2/01-storage.md §6.4 删库重建): %s",
+		data.DatabaseName, len(missing), strings.Join(missing, "; "))
+}
+
+// runMigration 是 -migrate 的实现:只连 MySQL,不起 gRPC、不连 etcd / data_service。
+// 输出走 stdout / stderr,退出码按 schemamigrate.ExitCode(D-14),部署脚本与 K8s Job 直接读。
+// 只打印库名,不打印 DSN(含口令)。
+func runMigration(c config.Config) int {
+	fmt.Printf("guild schema migration: database=%s\n", data.DatabaseName)
+	db, err := sql.Open("mysql", c.MySQL.DataSource)
+	if err == nil {
+		var pingCtx context.Context
+		var cancel context.CancelFunc
+		pingCtx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
+		err = db.PingContext(pingCtx)
+		cancel()
+	}
+	if err != nil {
+		code := schemamigrate.ExitCode(schemamigrate.Report{}, err)
+		fmt.Fprintf(os.Stderr, "schema migration FAILED (exit %d): %v\n", code, err)
+		return code
+	}
+	defer func() { _ = db.Close() }()
+
+	report, err := schemamigrate.Up(context.Background(), db, schemaOptions())
+	printReport(os.Stdout, report)
+	code := schemamigrate.ExitCode(report, err)
+	if code == 0 {
+		if missErr := missingIndexError(report); missErr != nil {
+			fmt.Fprintf(os.Stderr, "schema migration needs manual action (exit %d): %v\n", schemamigrate.ExitManual, missErr)
+			return schemamigrate.ExitManual
+		}
+	}
+	switch {
+	case err != nil:
+		fmt.Fprintf(os.Stderr, "schema migration FAILED (exit %d): %v\n", code, err)
+	case code != 0:
+		fmt.Fprintf(os.Stderr, "schema migration needs manual action (exit %d): %d item(s) listed above\n", code, len(report.Manual))
+	default:
+		fmt.Printf("schema migration OK: %s synced from proto/guild/guild_db.proto (%d statement(s) executed)\n",
+			data.DatabaseName, len(report.Statements))
+	}
+	return code
+}
+
+// reportLines 把迁移报告展开成可读行(Statements / Warnings / Manual 各一段)。
+func reportLines(r schemamigrate.Report) []string {
+	var lines []string
+	for _, s := range r.Statements {
+		lines = append(lines, "  statement: "+s)
+	}
+	for _, w := range r.Warnings {
+		lines = append(lines, "  warning:   "+w)
+	}
+	for _, m := range r.Manual {
+		lines = append(lines, "  MANUAL:    "+m)
+	}
+	return lines
+}
+
+func printReport(w io.Writer, r schemamigrate.Report) {
+	for _, line := range reportLines(r) {
+		fmt.Fprintln(w, line)
+	}
+}
+
+func logReport(stage string, r schemamigrate.Report) {
+	for _, line := range reportLines(r) {
+		logx.Infof("[guild] %s%s", stage, line)
 	}
 }
 

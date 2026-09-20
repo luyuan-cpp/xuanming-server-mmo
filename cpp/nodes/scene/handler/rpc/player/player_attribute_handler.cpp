@@ -7,6 +7,7 @@
 #include <muduo/base/Logging.h>
 
 #include "player/system/player_attribute.h"
+#include "player_gm_guard.h" // P0-a:GM 客户端指令的 scene 侧第二道锁
 #include "table/proto/tip/common_error_tip.pb.h"
 #include "thread_context/ecs_context.h"
 
@@ -148,7 +149,13 @@ void SceneAttributeClientPlayerHandler::GmSetPlayerLevel(entt::entity player,con
 	::GmSetPlayerLevelResponse* response)
 {
 ///<<< BEGIN WRITING YOUR CODE
-	// 与 GmAddCurrency 同口径:开发期 GM 直连;上线前经 gate GM 鉴权白名单(gate_security.h)收口
+	// P0-a:GM 指令只在 dev/test 开放。第一道锁在 gate(message_id 175 的白名单),
+	// 这里是防绕开 gate 直连 scene RPC 端口的第二道锁,判据 SCENE_RUN_MODE。
+	if (scene_gm_guard::RejectGmClientRpc("GmSetPlayerLevel"))
+	{
+		SetTip(kFeatureUnavailable);
+		return;
+	}
 	if (const auto err = PlayerAttributeSystem::GmSetLevel(player, request->level()); err != kSuccess)
 	{
 		SetTip(err);

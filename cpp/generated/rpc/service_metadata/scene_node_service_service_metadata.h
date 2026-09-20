@@ -22,3 +22,15 @@ constexpr uint32_t SceneNodeGrpcPrepareBattleIndex = 3;
 constexpr uint32_t SceneNodeGrpcCancelBattlePrepareMessageId = 145;
 constexpr uint32_t SceneNodeGrpcCancelBattlePrepareIndex = 4;
 #define SceneNodeGrpcCancelBattlePrepareMethod  ::SceneNodeGrpc_Stub::descriptor()->method(4)
+
+constexpr uint32_t SceneNodeGrpcAssetDebitMessageId = 224;
+constexpr uint32_t SceneNodeGrpcAssetDebitIndex = 5;
+#define SceneNodeGrpcAssetDebitMethod  ::SceneNodeGrpc_Stub::descriptor()->method(5)
+
+constexpr uint32_t SceneNodeGrpcAssetAbortDebitMessageId = 227;
+constexpr uint32_t SceneNodeGrpcAssetAbortDebitIndex = 6;
+#define SceneNodeGrpcAssetAbortDebitMethod  ::SceneNodeGrpc_Stub::descriptor()->method(6)
+
+constexpr uint32_t SceneNodeGrpcAssetCreditMessageId = 225;
+constexpr uint32_t SceneNodeGrpcAssetCreditIndex = 7;
+#define SceneNodeGrpcAssetCreditMethod  ::SceneNodeGrpc_Stub::descriptor()->method(7)

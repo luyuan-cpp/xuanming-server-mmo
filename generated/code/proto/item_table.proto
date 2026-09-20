@@ -12,6 +12,9 @@ message ItemTable {
 	uint32 id = 1;
 	uint32 max_stack_size = 2;
 	uint32 equip_kind = 3;
+	uint32 battle_usable = 4;
+	uint64 battle_heal_hp = 5;
+	uint64 battle_heal_mp = 6;
 }
 
 message ItemTableData {

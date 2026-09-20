@@ -12,6 +12,38 @@ const (
 	RoleLeader  uint32 = 3
 )
 
+// 职位高低的档位:连续、可直接比大小,专供权限判断使用。
+//
+// 持久化的 role 编码(D-4:0 成员 / 1 长老 / 3 帮主)**不连续**,2 是刻意跳过的空号。
+// 所以权限一律比 Rank,不比 role 原值:`role >= RoleOfficer` 会把 2(存量脏数据,
+// 或将来插入的新职位)一起放进来,等于凭空发权限。
+const (
+	RankNone    = 0
+	RankMember  = 1
+	RankOfficer = 2
+	RankLeader  = 3
+)
+
+// Rank 把 role 编码映射到上面的档位。未知编码返回 RankNone,于是所有
+// `Rank(x) >= RankOfficer` 形式的判断自动拒绝 —— 安全路径 fail-closed,
+// default 分支是这条保证的落点,不要改成"透传原值"。
+func Rank(role uint32) int {
+	switch role {
+	case RoleMember:
+		return RankMember
+	case RoleOfficer:
+		return RankOfficer
+	case RoleLeader:
+		return RankLeader
+	default:
+		return RankNone
+	}
+}
+
+// AssignableRole:SetGuildMemberRole 只能设 0(成员)/ 1(长老)。
+// 帮主只能经 TransferGuildLeader 产生 —— 否则任免接口就成了"自己给自己升帮主"的后门。
+func AssignableRole(role uint32) bool { return role == RoleMember || role == RoleOfficer }
+
 // 公会的 tip 码现在由配表统一发号,不再手写。
 //
 // # 这里为什么变了
@@ -41,32 +73,55 @@ const (
 	ErrIDGenUnavailable = uint32(table.GuildError_kGuildIdGenUnavailable)
 	// ErrGuildNameInvalid:帮名为空、超过 MaxGuildNameRunes、不是合法 UTF-8 或含控制字符。
 	ErrGuildNameInvalid = uint32(table.GuildError_kGuildNameInvalid)
-	// ErrGuildNameTaken:uk_name 全局唯一索引拒绝(帮名跨 zone 唯一,合服不必改名)。
+	// ErrGuildNameTaken:uk_guild(name_norm)全局唯一索引拒绝(帮名跨 zone 唯一,合服不必改名)。
 	ErrGuildNameTaken = uint32(table.GuildError_kGuildNameTaken)
 	// ErrAnnouncementTooLong:公告超过 MaxAnnouncementBytes。
 	ErrAnnouncementTooLong = uint32(table.GuildError_kGuildAnnouncementTooLong)
 	// ErrHomeZoneUnknown:data_service 里没有该玩家的归属 zone 映射,无法判定他属于哪个区的帮会。
 	// 是数据状态不是故障:存量玩家需要运维跑 tools/merge_zone -backfill-home-zone 补映射。
 	ErrHomeZoneUnknown = uint32(table.GuildError_kGuildHomeZoneUnknown)
+	// ErrZoneMerging:归属 zone 正在合服维护(merge:in_progress:{zone} 存在,或这个键读不到)。
+	// 读失败也回它:闸门判不了就当成"正在合服"拒绝,而不是放行(fail-closed)。
+	// 取代了原来的 gRPC FailedPrecondition —— 那条路径客户端只能显示通用错误。
+	ErrZoneMerging = uint32(table.GuildError_kGuildZoneMerging)
+	// ErrTargetNotMember:操作目标不是本帮成员(可能刚退帮、被别人踢了,或客户端拿的是过期快照)。
+	ErrTargetNotMember = uint32(table.GuildError_kGuildTargetNotMember)
+	// ErrCannotTargetSelf:任免 / 踢人 / 转让 / 审批都不允许把自己当目标。
+	ErrCannotTargetSelf = uint32(table.GuildError_kGuildCannotTargetSelf)
+	// ErrRankTooLow:MySQL 权威 role 的 Rank 不够(见 Rank)。缓存里的 role 不作数:
+	// 授权一律在事务里锁行复核,否则缓存陈旧就等于越权。
+	ErrRankTooLow = uint32(table.GuildError_kGuildRankTooLow)
+	// ErrOfficerLimit:长老数已达 GuildLevel[guild.level].max_officers。
+	// 配表下调上限导致现有长老超额时不强制降级,只拒绝后续任命。
+	ErrOfficerLimit = uint32(table.GuildError_kGuildOfficerLimit)
+	// ErrApplicationNotFound:申请不存在、已过期(GuildRule.application_expire_hours)、
+	// 已被别人处理,或申请人已入他帮 / 归属 zone 与帮会不一致。
+	// 后两种情况刻意不单独发码:对审批者来说都是"这条申请已经不能批了",分得更细只会泄露申请人状态。
+	ErrApplicationNotFound = uint32(table.GuildError_kGuildApplicationNotFound)
+	// ErrApplicationLimit:本人待审申请数已达 GuildRule.max_pending_applications_per_player。
+	ErrApplicationLimit = uint32(table.GuildError_kGuildApplicationLimit)
+	// ErrApplicationQueueFull:目标帮会待审申请数已达 GuildRule.max_pending_applications_per_guild。
+	ErrApplicationQueueFull = uint32(table.GuildError_kGuildApplicationQueueFull)
+	// ErrBusyRetry:写事务连续死锁 3 次,或锁等待超时(MySQL 1205,DSN 里钉了
+	// innodb_lock_wait_timeout=1)。是业务 tip 不是 gRPC 错误 —— 回 gRPC 错误会让客户端
+	// 进入重连隔离,而这里玩家原地重试一次就能成功。
+	ErrBusyRetry = uint32(table.GuildError_kGuildBusyRetry)
 )
-
-// 合服闸门(logic.checkMergeFence)刻意**没有**在这里加码。
-//
-// 它拒绝时走 gRPC status(FailedPrecondition),不是 TipInfoMessage。理由是本文件
-// 顶上那条规矩:tip 码只能由 data/tip/Tip.xlsx 的 //guild_error 组发号,
-// 而 Tip.xlsx 与生成产物不在本次改动的范围内;借用别的段(common 的
-// kFeatureUnavailable 之类)会当场撞上 TestNoHandWrittenTipCodes 的护栏 ——
-// 那条护栏正是为了防止"随手挪一个别处的码"这种做法,不能为了省事把它绕开。
-//
-// 后果是玩家侧看到的是一条通用错误而不是定制文案。要补文案:往 Tip.xlsx 的
-// //guild_error 组加一行(例如 kGuildZoneMerging),重跑导表器,在上面的 const 块
-// 加一行引用,然后把 checkMergeFence 的返回改回 tipErr —— 调用点只有一处。
 
 // Default limits.
+//
+// 成员上限不在这里 —— 改由 GuildLevel 配表按等级给(建帮取第 1 级的 max_members)。
+// 原先的 DefaultMaxMembers=50 是硬编码,策划改不了,2026-09 随帮会二期 B2 删除。
 const (
-	DefaultMaxMembers uint32 = 50
-	DefaultInitLevel  uint32 = 1
+	DefaultInitLevel uint32 = 1
 )
+
+// MaxGuildMembersCap:GuildLevel.max_members 的**校验**上限,不是运行期人数上限。
+//
+// 它是推送与 GuildInfo 快照的预算前提:一次 BroadcastToPlayers 的收件人、一份成员快照的
+// 包体大小都按这个数估过(gate 单包 1KB 的约束见 MaxAnnouncementBytes)。
+// 配表把 max_members 填得更大时,启动校验 fail-closed 拒绝启动;真要改大,先重做上述预算。
+const MaxGuildMembersCap = 100
 
 // 客户端输入上限。服务端必须自己校验:客户端的限制随时可以被绕过。
 const (

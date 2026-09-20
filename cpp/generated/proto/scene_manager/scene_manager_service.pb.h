@@ -1915,6 +1915,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneResponse final : public :
   enum : int {
     kErrorMessageFieldNumber = 2,
     kRedirectFieldNumber = 3,
+    kPlayerIdFieldNumber = 4,
     kErrorCodeFieldNumber = 1,
   };
   // string error_message = 2;
@@ -1948,6 +1949,16 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneResponse final : public :
   ::scene_manager::RedirectToGateInfo* PROTOBUF_NONNULL _internal_mutable_redirect();
 
   public:
+  // uint64 player_id = 4;
+  void clear_player_id() ;
+  [[nodiscard]] ::uint64_t player_id() const;
+  void set_player_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_player_id() const;
+  void _internal_set_player_id(::uint64_t value);
+
+  public:
   // uint32 error_code = 1;
   void clear_error_code() ;
   [[nodiscard]] ::uint32_t error_code() const;
@@ -1962,7 +1973,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneResponse final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<2, 4,
                           1, 54,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -1993,6 +2004,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED EnterSceneResponse final : public :
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr error_message_;
     ::scene_manager::RedirectToGateInfo* PROTOBUF_NULLABLE redirect_;
+    ::uint64_t player_id_;
     ::uint32_t error_code_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -2882,7 +2894,7 @@ inline void EnterSceneRequest::_internal_set_gate_zone_id(::uint32_t value) {
 inline void EnterSceneResponse::clear_error_code() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.error_code_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint32_t EnterSceneResponse::error_code() const {
   // @@protoc_insertion_point(field_get:scene_manager.EnterSceneResponse.error_code)
@@ -2890,7 +2902,7 @@ inline ::uint32_t EnterSceneResponse::error_code() const {
 }
 inline void EnterSceneResponse::set_error_code(::uint32_t value) {
   _internal_set_error_code(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:scene_manager.EnterSceneResponse.error_code)
 }
 inline ::uint32_t EnterSceneResponse::_internal_error_code() const {
@@ -3062,6 +3074,30 @@ inline void EnterSceneResponse::set_allocated_redirect(::scene_manager::Redirect
 
   _impl_.redirect_ = reinterpret_cast<::scene_manager::RedirectToGateInfo*>(value);
   // @@protoc_insertion_point(field_set_allocated:scene_manager.EnterSceneResponse.redirect)
+}
+
+// uint64 player_id = 4;
+inline void EnterSceneResponse::clear_player_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t EnterSceneResponse::player_id() const {
+  // @@protoc_insertion_point(field_get:scene_manager.EnterSceneResponse.player_id)
+  return _internal_player_id();
+}
+inline void EnterSceneResponse::set_player_id(::uint64_t value) {
+  _internal_set_player_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:scene_manager.EnterSceneResponse.player_id)
+}
+inline ::uint64_t EnterSceneResponse::_internal_player_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.player_id_;
+}
+inline void EnterSceneResponse::_internal_set_player_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.player_id_ = value;
 }
 
 // -------------------------------------------------------------------

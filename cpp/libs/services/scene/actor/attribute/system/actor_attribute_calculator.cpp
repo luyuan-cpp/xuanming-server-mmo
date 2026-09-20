@@ -98,7 +98,8 @@ void ActorAttributeCalculatorSystem::MarkAttributeForUpdate(const entt::entity a
 void ActorAttributeCalculatorSystem::Update()
 {
     // PlayerFrozenComp exclude: a frozen player's attributes were
-    // marshalled into PlayerAllData at HandleCrossZoneTransfer time.
+    // marshalled into PlayerAllData when the ownership handoff froze them
+    // (PlayerLifecycleSystem::StartTravelHandoff).
     // Recomputing them on the source side now is wasted work — and
     // worse, the values would diverge from what the destination zone
     // reconstructs from the snapshot. Skip frozen entities until the

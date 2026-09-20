@@ -39,6 +39,12 @@
     <ClInclude Include="code\globalvariable_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\guildlevel_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildrule_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\item_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -67,6 +73,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\reward_table.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\rolenamerule_table.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\skill_table.h">
@@ -112,6 +121,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\tip\guild_error_tip.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\tip\asset_error_tip.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\tip\login_error_tip.pb.h">
@@ -162,6 +174,12 @@
     <ClInclude Include="proto\globalvariable_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="proto\guildlevel_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\guildrule_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="proto\item_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -190,6 +208,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\reward_table.pb.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="proto\rolenamerule_table.pb.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="proto\skill_table.pb.h">
@@ -243,6 +264,12 @@
     <ClInclude Include="code\globalvariable_table_comp.h">
       <Filter>头文件</Filter>
     </ClInclude>
+    <ClInclude Include="code\guildlevel_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\guildrule_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
     <ClInclude Include="code\item_table_comp.h">
       <Filter>头文件</Filter>
     </ClInclude>
@@ -280,6 +307,9 @@
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\reward_table_comp.h">
+      <Filter>头文件</Filter>
+    </ClInclude>
+    <ClInclude Include="code\rolenamerule_table_comp.h">
       <Filter>头文件</Filter>
     </ClInclude>
     <ClInclude Include="code\skill_table_comp.h">
@@ -380,6 +410,12 @@
     <ClCompile Include="code\globalvariable_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="code\guildlevel_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\guildrule_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="code\item_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -411,6 +447,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\reward_table.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="code\rolenamerule_table.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="code\skill_table.cpp">
@@ -461,6 +500,9 @@
     <ClCompile Include="proto\tip\guild_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="proto\tip\asset_error_tip.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="proto\tip\login_error_tip.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -509,6 +551,12 @@
     <ClCompile Include="proto\globalvariable_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="proto\guildlevel_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\guildrule_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
     <ClCompile Include="proto\item_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
@@ -537,6 +585,9 @@
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\reward_table.pb.cc">
+      <Filter>源文件</Filter>
+    </ClCompile>
+    <ClCompile Include="proto\rolenamerule_table.pb.cc">
       <Filter>源文件</Filter>
     </ClCompile>
     <ClCompile Include="proto\skill_table.pb.cc">

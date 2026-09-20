@@ -135,8 +135,12 @@ type BattleStateS2C struct {
 	ActionDeadlineMs uint64                 `protobuf:"varint,4,opt,name=action_deadline_ms,json=actionDeadlineMs,proto3" json:"action_deadline_ms,omitempty"` // 本回合行动提交截止(Unix 毫秒)
 	Outcome          EBattleOutcome         `protobuf:"varint,5,opt,name=outcome,proto3,enum=EBattleOutcome" json:"outcome,omitempty"`
 	PendingActorIds  []uint64               `protobuf:"varint,6,rep,packed,name=pending_actor_ids,json=pendingActorIds,proto3" json:"pending_actor_ids,omitempty"` // 尚未提交行动的单位
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// 收信人本人的剩余战斗道具(item_table_id → 剩余个数,按 id 升序)。
+	// 只在发给本人的那一份里填,观众与其他参战者收到的恒为空 —— 道具余量是私有信息。
+	// 有了它,客户端重连补拉后不再对"已经用掉几个"一无所知(原先只能靠累计回合事件推算)。
+	SelfItems     []*BattleItemEntry `protobuf:"bytes,7,rep,name=self_items,json=selfItems,proto3" json:"self_items,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *BattleStateS2C) Reset() {
@@ -207,6 +211,13 @@ func (x *BattleStateS2C) GetOutcome() EBattleOutcome {
 func (x *BattleStateS2C) GetPendingActorIds() []uint64 {
 	if x != nil {
 		return x.PendingActorIds
+	}
+	return nil
+}
+
+func (x *BattleStateS2C) GetSelfItems() []*BattleItemEntry {
+	if x != nil {
+		return x.SelfItems
 	}
 	return nil
 }
@@ -1287,7 +1298,7 @@ var File_proto_battle_player_battle_proto protoreflect.FileDescriptor
 
 const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\n" +
-	" proto/battle/player_battle.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1eproto/battle/battle_data.proto\"\xfe\x01\n" +
+	" proto/battle/player_battle.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1eproto/battle/battle_data.proto\"\xaf\x02\n" +
 	"\x0eBattleStateS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12\x1f\n" +
 	"\vround_index\x18\x02 \x01(\rR\n" +
@@ -1295,7 +1306,9 @@ const file_proto_battle_player_battle_proto_rawDesc = "" +
 	"\x06actors\x18\x03 \x03(\v2\x11.BattleActorStateR\x06actors\x12,\n" +
 	"\x12action_deadline_ms\x18\x04 \x01(\x04R\x10actionDeadlineMs\x12)\n" +
 	"\aoutcome\x18\x05 \x01(\x0e2\x0f.eBattleOutcomeR\aoutcome\x12*\n" +
-	"\x11pending_actor_ids\x18\x06 \x03(\x04R\x0fpendingActorIds\"T\n" +
+	"\x11pending_actor_ids\x18\x06 \x03(\x04R\x0fpendingActorIds\x12/\n" +
+	"\n" +
+	"self_items\x18\a \x03(\v2\x10.BattleItemEntryR\tselfItems\"T\n" +
 	"\x0eBattleStartS2C\x12\x1b\n" +
 	"\tbattle_id\x18\x01 \x01(\x04R\bbattleId\x12%\n" +
 	"\x05state\x18\x02 \x01(\v2\x0f.BattleStateS2CR\x05state\"\xc1\x01\n" +
@@ -1430,60 +1443,62 @@ var file_proto_battle_player_battle_proto_goTypes = []any{
 	(*RequestBattleTicketResponse)(nil), // 21: RequestBattleTicketResponse
 	(*BattleActorState)(nil),            // 22: BattleActorState
 	(EBattleOutcome)(0),                 // 23: eBattleOutcome
-	(*BattleEventItem)(nil),             // 24: BattleEventItem
-	(*BattleSettlementData)(nil),        // 25: BattleSettlementData
-	(*BattleAction)(nil),                // 26: BattleAction
-	(*base.TipInfoMessage)(nil),         // 27: TipInfoMessage
-	(*base.Empty)(nil),                  // 28: Empty
+	(*BattleItemEntry)(nil),             // 24: BattleItemEntry
+	(*BattleEventItem)(nil),             // 25: BattleEventItem
+	(*BattleSettlementData)(nil),        // 26: BattleSettlementData
+	(*BattleAction)(nil),                // 27: BattleAction
+	(*base.TipInfoMessage)(nil),         // 28: TipInfoMessage
+	(*base.Empty)(nil),                  // 29: Empty
 }
 var file_proto_battle_player_battle_proto_depIdxs = []int32{
 	22, // 0: BattleStateS2C.actors:type_name -> BattleActorState
 	23, // 1: BattleStateS2C.outcome:type_name -> eBattleOutcome
-	2,  // 2: BattleStartS2C.state:type_name -> BattleStateS2C
-	24, // 3: TurnResultS2C.events:type_name -> BattleEventItem
-	2,  // 4: TurnResultS2C.state:type_name -> BattleStateS2C
-	23, // 5: BattleEndS2C.outcome:type_name -> eBattleOutcome
-	25, // 6: BattleEndS2C.settlement:type_name -> BattleSettlementData
-	2,  // 7: SpectateStateS2C.state:type_name -> BattleStateS2C
-	23, // 8: SpectateEndS2C.outcome:type_name -> eBattleOutcome
-	0,  // 9: SpectateEndS2C.reason:type_name -> eSpectateEndReason
-	26, // 10: SubmitBattleActionRequest.action:type_name -> BattleAction
-	27, // 11: SubmitBattleActionResponse.error_message:type_name -> TipInfoMessage
-	27, // 12: StopWatchBattleResponse.error_message:type_name -> TipInfoMessage
-	27, // 13: SetAutoBattleResponse.error_message:type_name -> TipInfoMessage
-	1,  // 14: BattleTicketPayload.role:type_name -> eBattleTicketRole
-	1,  // 15: BattleAssignedS2C.role:type_name -> eBattleTicketRole
-	27, // 16: RequestBattleTicketResponse.error_message:type_name -> TipInfoMessage
-	19, // 17: RequestBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
-	9,  // 18: BattleClientPlayer.SubmitBattleAction:input_type -> SubmitBattleActionRequest
-	11, // 19: BattleClientPlayer.GetBattleState:input_type -> GetBattleStateRequest
-	3,  // 20: BattleClientPlayer.NotifyBattleStart:input_type -> BattleStartS2C
-	4,  // 21: BattleClientPlayer.NotifyTurnResult:input_type -> TurnResultS2C
-	5,  // 22: BattleClientPlayer.NotifyBattleEnd:input_type -> BattleEndS2C
-	6,  // 23: BattleClientPlayer.NotifyBattleReconnect:input_type -> BattleReconnectS2C
-	12, // 24: BattleClientPlayer.StopWatchBattle:input_type -> StopWatchBattleRequest
-	14, // 25: BattleClientPlayer.SetAutoBattle:input_type -> SetAutoBattleRequest
-	7,  // 26: BattleClientPlayer.NotifySpectateState:input_type -> SpectateStateS2C
-	4,  // 27: BattleClientPlayer.NotifySpectateTurnResult:input_type -> TurnResultS2C
-	8,  // 28: BattleClientPlayer.NotifySpectateEnd:input_type -> SpectateEndS2C
-	19, // 29: BattleClientPlayer.NotifyBattleAssigned:input_type -> BattleAssignedS2C
-	10, // 30: BattleClientPlayer.SubmitBattleAction:output_type -> SubmitBattleActionResponse
-	2,  // 31: BattleClientPlayer.GetBattleState:output_type -> BattleStateS2C
-	28, // 32: BattleClientPlayer.NotifyBattleStart:output_type -> Empty
-	28, // 33: BattleClientPlayer.NotifyTurnResult:output_type -> Empty
-	28, // 34: BattleClientPlayer.NotifyBattleEnd:output_type -> Empty
-	28, // 35: BattleClientPlayer.NotifyBattleReconnect:output_type -> Empty
-	13, // 36: BattleClientPlayer.StopWatchBattle:output_type -> StopWatchBattleResponse
-	15, // 37: BattleClientPlayer.SetAutoBattle:output_type -> SetAutoBattleResponse
-	28, // 38: BattleClientPlayer.NotifySpectateState:output_type -> Empty
-	28, // 39: BattleClientPlayer.NotifySpectateTurnResult:output_type -> Empty
-	28, // 40: BattleClientPlayer.NotifySpectateEnd:output_type -> Empty
-	28, // 41: BattleClientPlayer.NotifyBattleAssigned:output_type -> Empty
-	30, // [30:42] is the sub-list for method output_type
-	18, // [18:30] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	24, // 2: BattleStateS2C.self_items:type_name -> BattleItemEntry
+	2,  // 3: BattleStartS2C.state:type_name -> BattleStateS2C
+	25, // 4: TurnResultS2C.events:type_name -> BattleEventItem
+	2,  // 5: TurnResultS2C.state:type_name -> BattleStateS2C
+	23, // 6: BattleEndS2C.outcome:type_name -> eBattleOutcome
+	26, // 7: BattleEndS2C.settlement:type_name -> BattleSettlementData
+	2,  // 8: SpectateStateS2C.state:type_name -> BattleStateS2C
+	23, // 9: SpectateEndS2C.outcome:type_name -> eBattleOutcome
+	0,  // 10: SpectateEndS2C.reason:type_name -> eSpectateEndReason
+	27, // 11: SubmitBattleActionRequest.action:type_name -> BattleAction
+	28, // 12: SubmitBattleActionResponse.error_message:type_name -> TipInfoMessage
+	28, // 13: StopWatchBattleResponse.error_message:type_name -> TipInfoMessage
+	28, // 14: SetAutoBattleResponse.error_message:type_name -> TipInfoMessage
+	1,  // 15: BattleTicketPayload.role:type_name -> eBattleTicketRole
+	1,  // 16: BattleAssignedS2C.role:type_name -> eBattleTicketRole
+	28, // 17: RequestBattleTicketResponse.error_message:type_name -> TipInfoMessage
+	19, // 18: RequestBattleTicketResponse.assignment:type_name -> BattleAssignedS2C
+	9,  // 19: BattleClientPlayer.SubmitBattleAction:input_type -> SubmitBattleActionRequest
+	11, // 20: BattleClientPlayer.GetBattleState:input_type -> GetBattleStateRequest
+	3,  // 21: BattleClientPlayer.NotifyBattleStart:input_type -> BattleStartS2C
+	4,  // 22: BattleClientPlayer.NotifyTurnResult:input_type -> TurnResultS2C
+	5,  // 23: BattleClientPlayer.NotifyBattleEnd:input_type -> BattleEndS2C
+	6,  // 24: BattleClientPlayer.NotifyBattleReconnect:input_type -> BattleReconnectS2C
+	12, // 25: BattleClientPlayer.StopWatchBattle:input_type -> StopWatchBattleRequest
+	14, // 26: BattleClientPlayer.SetAutoBattle:input_type -> SetAutoBattleRequest
+	7,  // 27: BattleClientPlayer.NotifySpectateState:input_type -> SpectateStateS2C
+	4,  // 28: BattleClientPlayer.NotifySpectateTurnResult:input_type -> TurnResultS2C
+	8,  // 29: BattleClientPlayer.NotifySpectateEnd:input_type -> SpectateEndS2C
+	19, // 30: BattleClientPlayer.NotifyBattleAssigned:input_type -> BattleAssignedS2C
+	10, // 31: BattleClientPlayer.SubmitBattleAction:output_type -> SubmitBattleActionResponse
+	2,  // 32: BattleClientPlayer.GetBattleState:output_type -> BattleStateS2C
+	29, // 33: BattleClientPlayer.NotifyBattleStart:output_type -> Empty
+	29, // 34: BattleClientPlayer.NotifyTurnResult:output_type -> Empty
+	29, // 35: BattleClientPlayer.NotifyBattleEnd:output_type -> Empty
+	29, // 36: BattleClientPlayer.NotifyBattleReconnect:output_type -> Empty
+	13, // 37: BattleClientPlayer.StopWatchBattle:output_type -> StopWatchBattleResponse
+	15, // 38: BattleClientPlayer.SetAutoBattle:output_type -> SetAutoBattleResponse
+	29, // 39: BattleClientPlayer.NotifySpectateState:output_type -> Empty
+	29, // 40: BattleClientPlayer.NotifySpectateTurnResult:output_type -> Empty
+	29, // 41: BattleClientPlayer.NotifySpectateEnd:output_type -> Empty
+	29, // 42: BattleClientPlayer.NotifyBattleAssigned:output_type -> Empty
+	31, // [31:43] is the sub-list for method output_type
+	19, // [19:31] is the sub-list for method input_type
+	19, // [19:19] is the sub-list for extension type_name
+	19, // [19:19] is the sub-list for extension extendee
+	0,  // [0:19] is the sub-list for field type_name
 }
 
 func init() { file_proto_battle_player_battle_proto_init() }

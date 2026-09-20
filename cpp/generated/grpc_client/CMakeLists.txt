@@ -49,6 +49,11 @@ set(SOURCE_FILES
     login/login_grpc_client.cpp
     scene_manager/scene_manager_service_grpc_client.cpp
     scene_manager/scene_node_service_grpc_client.cpp
+    team/team_grpc_client.cpp
+    # 2026-09-18 补登记:磁盘上已有但从未进清单,Linux 构建会缺符号。
+    battle/battle_node_grpc_client.cpp
+    battle/player_battle_grpc_client.cpp
+    match/match_service_grpc_client.cpp
 )
 
 add_library(grpc_client STATIC ${SOURCE_FILES})

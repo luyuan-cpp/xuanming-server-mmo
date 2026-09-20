@@ -36,6 +36,7 @@ set(SOURCE_FILES
     chat/chat.grpc.pb.cc
     client_rpc_router/client_rpc_router.pb.cc
     client_rpc_router/client_rpc_router.grpc.pb.cc
+    common/asset/asset_op.pb.cc
     common/base/common.pb.cc
     common/base/config.pb.cc
     common/base/empty.pb.cc
@@ -50,6 +51,7 @@ set(SOURCE_FILES
     common/component/actor_attribute_state_comp.pb.cc
     common/component/actor_combat_state_comp.pb.cc
     common/component/actor_comp.pb.cc
+    common/component/asset_op_ledger_comp.pb.cc
     common/component/buff_comp.pb.cc
     common/component/base_comp.pb.cc
     common/component/currency_comp.pb.cc
@@ -89,6 +91,7 @@ set(SOURCE_FILES
     common/event/scene_event.pb.cc
     common/event/server_event.pb.cc
     common/event/skill_event.pb.cc
+    common/event/team_event.pb.cc
     common/options/attribute_sync_option.pb.cc
     common/rollback/player_snapshot.pb.cc
     common/rollback/transaction_log.pb.cc
@@ -115,10 +118,12 @@ set(SOURCE_FILES
     gate/gate_service.pb.cc
     guild/guild.grpc.pb.cc
     guild/guild.pb.cc
+    guild/guild_db.pb.cc
     trade/jubaozhai.grpc.pb.cc
     trade/jubaozhai.pb.cc
     trade/trade_admin.grpc.pb.cc
     trade/trade_admin.pb.cc
+    trade/trade_table.grpc.pb.cc
     trade/trade_table.pb.cc
     login/login.grpc.pb.cc
     login/login.pb.cc
@@ -140,6 +145,27 @@ set(SOURCE_FILES
     scene_manager/scene_node_service.pb.cc
     scene_manager/storage.grpc.pb.cc
     scene_manager/storage.pb.cc
+    team/team.pb.cc
+    team/team.grpc.pb.cc
+    # 2026-09-18 补登记:以下产物已在磁盘上但从未进过本清单,Linux 构建会缺符号。
+    battle/battle_data.pb.cc
+    battle/battle_data.grpc.pb.cc
+    battle/battle_node.pb.cc
+    battle/battle_node.grpc.pb.cc
+    battle/player_battle.pb.cc
+    battle/player_battle.grpc.pb.cc
+    common/component/battle_comp.pb.cc
+    common/component/player_attribute_comp.pb.cc
+    common/component/player_pet_comp.pb.cc
+    common/event/battle_event.pb.cc
+    contracts/kafka/match_event.pb.cc
+    match/match_service.pb.cc
+    match/match_service.grpc.pb.cc
+    scene/player_activity.pb.cc
+    scene/player_attribute.pb.cc
+    scene/player_bag.pb.cc
+    scene/player_mission.pb.cc
+    scene/player_pet.pb.cc
 )
 
 add_library(proto STATIC ${SOURCE_FILES})

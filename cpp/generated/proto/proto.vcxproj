@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -29,10 +29,15 @@
     <ClCompile Include="match\match_service.grpc.pb.cc" />
     <ClCompile Include="client_rpc_router\client_rpc_router.pb.cc" />
     <ClCompile Include="client_rpc_router\client_rpc_router.grpc.pb.cc" />
+    <ClCompile Include="common\asset\asset_op.pb.cc" />
+    <ClCompile Include="common\component\asset_op_ledger_comp.pb.cc" />
     <ClCompile Include="common\component\battle_comp.pb.cc" />
     <ClCompile Include="common\event\battle_event.pb.cc" />
+    <ClCompile Include="common\event\team_event.pb.cc" />
     <ClCompile Include="chat\chat.pb.cc" />
     <ClCompile Include="chat\chat.grpc.pb.cc" />
+    <ClCompile Include="team\team.pb.cc" />
+    <ClCompile Include="team\team.grpc.pb.cc" />
     <ClCompile Include="common\base\common.pb.cc" />
     <ClCompile Include="common\base\config.pb.cc" />
     <ClCompile Include="common\base\empty.pb.cc" />
@@ -115,10 +120,12 @@
     <ClCompile Include="gate\gate_service.pb.cc" />
     <ClCompile Include="guild\guild.grpc.pb.cc" />
     <ClCompile Include="guild\guild.pb.cc" />
+    <ClCompile Include="guild\guild_db.pb.cc" />
     <ClCompile Include="trade\jubaozhai.grpc.pb.cc" />
     <ClCompile Include="trade\jubaozhai.pb.cc" />
     <ClCompile Include="trade\trade_admin.grpc.pb.cc" />
     <ClCompile Include="trade\trade_admin.pb.cc" />
+    <ClCompile Include="trade\trade_table.grpc.pb.cc" />
     <ClCompile Include="trade\trade_table.pb.cc" />
     <ClCompile Include="login\login.grpc.pb.cc" />
     <ClCompile Include="login\login.pb.cc" />
@@ -146,6 +153,8 @@
   <ItemGroup>
     <ClInclude Include="chat\chat.pb.h" />
     <ClInclude Include="chat\chat.grpc.pb.h" />
+    <ClInclude Include="team\team.pb.h" />
+    <ClInclude Include="team\team.grpc.pb.h" />
     <ClInclude Include="common\base\common.pb.h" />
     <ClInclude Include="common\base\config.pb.h" />
     <ClInclude Include="common\base\empty.pb.h" />
@@ -159,7 +168,9 @@
     <ClInclude Include="common\base\user_accounts.pb.h" />
     <ClInclude Include="common\component\actor_attribute_state_comp.pb.h" />
     <ClInclude Include="common\component\actor_combat_state_comp.pb.h" />
+    <ClInclude Include="common\asset\asset_op.pb.h" />
     <ClInclude Include="common\component\actor_comp.pb.h" />
+    <ClInclude Include="common\component\asset_op_ledger_comp.pb.h" />
     <ClInclude Include="common\component\buff_comp.pb.h" />
     <ClInclude Include="common\component\base_comp.pb.h" />
     <ClInclude Include="common\component\currency_comp.pb.h" />
@@ -200,6 +211,7 @@
     <ClInclude Include="common\event\scene_event.pb.h" />
     <ClInclude Include="common\event\server_event.pb.h" />
     <ClInclude Include="common\event\skill_event.pb.h" />
+    <ClInclude Include="common\event\team_event.pb.h" />
     <ClInclude Include="common\options\attribute_sync_option.pb.h" />
     <ClInclude Include="common\rollback\player_snapshot.pb.h" />
     <ClInclude Include="common\rollback\transaction_log.pb.h" />
@@ -226,6 +238,7 @@
     <ClInclude Include="gate\gate_service.pb.h" />
     <ClInclude Include="guild\guild.grpc.pb.h" />
     <ClInclude Include="guild\guild.pb.h" />
+    <ClInclude Include="guild\guild_db.pb.h" />
     <ClInclude Include="trade\jubaozhai.grpc.pb.h" />
     <ClInclude Include="trade\jubaozhai.pb.h" />
     <ClInclude Include="trade\trade_admin.grpc.pb.h" />
@@ -407,5 +420,20 @@
     <ClInclude Include="scene\player_mission.pb.h" />
     <ClCompile Include="scene\player_activity.pb.cc" />
     <ClInclude Include="scene\player_activity.pb.h" />
+    <ClInclude Include="battle\battle_data.pb.h" />
+    <ClInclude Include="battle\battle_data.grpc.pb.h" />
+    <ClInclude Include="battle\battle_node.pb.h" />
+    <ClInclude Include="battle\battle_node.grpc.pb.h" />
+    <ClInclude Include="battle\player_battle.pb.h" />
+    <ClInclude Include="battle\player_battle.grpc.pb.h" />
+    <ClInclude Include="client_rpc_router\client_rpc_router.pb.h" />
+    <ClInclude Include="client_rpc_router\client_rpc_router.grpc.pb.h" />
+    <ClInclude Include="common\component\battle_comp.pb.h" />
+    <ClInclude Include="common\database\bag_quest_mail_data.pb.h" />
+    <ClInclude Include="common\event\battle_event.pb.h" />
+    <ClInclude Include="contracts\kafka\match_event.pb.h" />
+    <ClInclude Include="match\match_service.pb.h" />
+    <ClInclude Include="match\match_service.grpc.pb.h" />
+    <ClInclude Include="trade\trade_table.grpc.pb.h" />
   </ItemGroup>
 </Project>

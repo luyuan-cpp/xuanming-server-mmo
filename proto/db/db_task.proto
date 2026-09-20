@@ -15,6 +15,9 @@ message DBTask {
   bytes body = 5;                // Serialized business data (e.g. UserInfo bytes)
   string task_id = 6;            // Unique task ID for storing result in Redis (producer queries by this ID)
   int32 retry_count = 7;         // Retry count (default 0, +1 per retry, for max-retry control)
+  // 生产者(scene)持有的玩家归属 epoch。db 落库前与 player:{key}:owner_epoch 比对,小于当前值即被废黜节点的迟到写,
+  // 拒绝并计数 stale_owner_write_rejected;0 表示旧版生产者未填(兼容窗口内放行)。见 scene-owner-reentry-barrier.md §6.3。
+  uint64 owner_epoch = 8;
 }
 
 // TaskResult: DB task execution result struct

@@ -30,6 +30,8 @@ type PlayerEnterGameNodeRequest struct {
 	SessionId     uint32                 `protobuf:"varint,2,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	EnterGsType   uint32                 `protobuf:"varint,4,opt,name=enter_gs_type,json=enterGsType,proto3" json:"enter_gs_type,omitempty"` // LOGIN_FIRST / LOGIN_RECONNECT / LOGIN_REPLACE
 	SceneId       uint64                 `protobuf:"varint,5,opt,name=scene_id,json=sceneId,proto3" json:"scene_id,omitempty"`               // Target scene instance GUID from SceneManager
+	HomeZoneId    uint32                 `protobuf:"varint,6,opt,name=home_zone_id,json=homeZoneId,proto3" json:"home_zone_id,omitempty"`    // 玩家归属 zone,gate 从 RoutePlayerEvent 透传;0=未知(fail-closed 落进程 zone)
+	OwnerEpoch    uint64                 `protobuf:"varint,7,opt,name=owner_epoch,json=ownerEpoch,proto3" json:"owner_epoch,omitempty"`      // 本次路由的归属 epoch,gate 从 RoutePlayerEvent 透传;0=旧版 Go 未铸造(存盘不校验)
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -88,6 +90,20 @@ func (x *PlayerEnterGameNodeRequest) GetEnterGsType() uint32 {
 func (x *PlayerEnterGameNodeRequest) GetSceneId() uint64 {
 	if x != nil {
 		return x.SceneId
+	}
+	return 0
+}
+
+func (x *PlayerEnterGameNodeRequest) GetHomeZoneId() uint32 {
+	if x != nil {
+		return x.HomeZoneId
+	}
+	return 0
+}
+
+func (x *PlayerEnterGameNodeRequest) GetOwnerEpoch() uint64 {
+	if x != nil {
+		return x.OwnerEpoch
 	}
 	return 0
 }
@@ -713,13 +729,17 @@ var File_proto_scene_scene_proto protoreflect.FileDescriptor
 
 const file_proto_scene_scene_proto_rawDesc = "" +
 	"\n" +
-	"\x17proto/scene/scene.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1eproto/common/base/common.proto\x1a\x1fproto/common/base/message.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1cproto/scene/scene_info.proto\x1a\x1eproto/battle/battle_data.proto\"\x97\x01\n" +
+	"\x17proto/scene/scene.proto\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1eproto/common/base/common.proto\x1a\x1fproto/common/base/message.proto\x1a\x1bproto/common/base/tip.proto\x1a\x1cproto/scene/scene_info.proto\x1a\x1eproto/battle/battle_data.proto\"\xda\x01\n" +
 	"\x1aPlayerEnterGameNodeRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x02 \x01(\rR\tsessionId\x12\"\n" +
 	"\renter_gs_type\x18\x04 \x01(\rR\venterGsType\x12\x19\n" +
-	"\bscene_id\x18\x05 \x01(\x04R\asceneId\"\x99\x01\n" +
+	"\bscene_id\x18\x05 \x01(\x04R\asceneId\x12 \n" +
+	"\fhome_zone_id\x18\x06 \x01(\rR\n" +
+	"homeZoneId\x12\x1f\n" +
+	"\vowner_epoch\x18\a \x01(\x04R\n" +
+	"ownerEpoch\"\x99\x01\n" +
 	"!ProcessClientPlayerMessageRequest\x128\n" +
 	"\x0fmessage_content\x18\x01 \x01(\v2\x0f.MessageContentR\x0emessageContent\x12\x1d\n" +
 	"\n" +

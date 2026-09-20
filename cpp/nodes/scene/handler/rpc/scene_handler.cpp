@@ -8,6 +8,7 @@
 #include "node/system/node/node.h"
 #include "player/system/player_lifecycle.h"
 #include "player/system/player_scene.h"
+#include "player/player_gm_guard.h" // 客户端 GM 指令统一闸门(guild-phase2 §S4 4.34)
 #include "battle/system/player_battle.h"
 #include "rpc/player_service_interface.h"
 #include "network/rpc_session.h"
@@ -151,15 +152,34 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	auto playerIt = tlsEcs.playerList.find(request->player_id());
 
 	// Carry session/login/scene context through the async load pipeline.
-	PlayerGameNodeEntryInfoComp enterInfo;
-	enterInfo.set_session_id(request->session_id());
-	enterInfo.set_enter_gs_type(request->enter_gs_type());
-	enterInfo.set_scene_id(request->scene_id());
+	PlayerEnterContext ctx;
+	ctx.enterInfo.set_session_id(request->session_id());
+	ctx.enterInfo.set_enter_gs_type(request->enter_gs_type());
+	ctx.enterInfo.set_scene_id(request->scene_id());
+	// 归属字段(gate 从 RoutePlayerEvent 透传):home_zone 决定落库 topic,owner_epoch 是存盘 CAS 的
+	// 期望值。必须跟着"这一次路由决策"走,节点不得自己读 Redis(cross-zone-scene-travel.md CZ-3、
+	// reentry-barrier §3.3)。0 = 上游未填,EnterScene 里不覆盖已有值。
+	ctx.homeZoneId = request->home_zone_id();
+	ctx.ownerEpoch = request->owner_epoch();
 
-	// 2. If player is already online, enter scene directly
+	// 1.5 本节点上的旧实体若正处于"归属交接已发起",且这次路由带来的 owner_epoch 比它缓存的新:
+	//     那次交接其实已被放行(EnterScene 应答丢了,30s 看门狗还没到期),玩家在别的节点 / zone
+	//     玩过之后又被派回本节点。旧实体的内存态停在交接那一刻,复用它 = 回档。
+	//     按"被废黜"销毁(不存盘),然后落到第 3 步从盘上重新加载。
+	//     epoch 相等(同 zone 重发后落回本节点)或为 0(上游未填)时返回 false,照旧复用实体。
+	if (playerIt != tlsEcs.playerList.end() &&
+		PlayerLifecycleSystem::DiscardStaleHandoffEntity(playerIt->second, ctx.ownerEpoch))
+	{
+		// 销毁会改 playerList,迭代器已失效,不得再用。
+		playerIt = tlsEcs.playerList.end();
+	}
+
+	// 2. If player is already online, enter scene directly.
+	//    重连 / 顶号复用实体:EnterScene 用 ctx 里的非 0 epoch 更新 PlayerOwnerEpochComp
+	//    (Go 给重连发的是当前值),否则实体会一直拿首登那次的 epoch 存盘。
 	if (playerIt != tlsEcs.playerList.end())
 	{
-		PlayerLifecycleSystem::EnterScene(playerIt->second, enterInfo);
+		PlayerLifecycleSystem::EnterScene(playerIt->second, ctx);
 		return;
 	}
 
@@ -188,12 +208,12 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 	auto& pendingMap = PlayerLifecycleSystem::GetPendingEnterMap();
 	auto pendingIt = pendingMap.find(request->player_id());
 	if (pendingIt != pendingMap.end()
-		&& pendingIt->second.session_id() != 0
-		&& pendingIt->second.session_id() != request->session_id())
+		&& pendingIt->second.enterInfo.session_id() != 0
+		&& pendingIt->second.enterInfo.session_id() != request->session_id())
 	{
-		SessionMap().erase(pendingIt->second.session_id());
+		SessionMap().erase(pendingIt->second.enterInfo.session_id());
 	}
-	pendingMap[request->player_id()] = enterInfo;
+	pendingMap[request->player_id()] = ctx;
 
 	tlsRedisSystem.GetPlayerDataRedis()->AsyncLoad(request->player_id());
 	///<<< END WRITING YOUR CODE
@@ -415,7 +435,60 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 
 	// Dispatch to the concrete player service method
 	const MessageUniquePtr playerResponse(service->GetResponsePrototype(method).New());
-	serviceIt->second->CallMethod(method, player, playerRequest.get(), playerResponse.get());
+	// 落成 std::string 再用:MethodDescriptor::name() 返回 absl::string_view
+	// (descriptor.h:1354),它既没有 c_str(),muduo 的 LogStream 也没有对应的
+	// operator<<。拷一次的代价只发生在闸门命中之前的一次判定上。
+	const std::string methodName(method->name());
+	if (scene_gm_guard::IsClientGmMethodName(methodName) &&
+		scene_gm_guard::RejectGmClientRpc(methodName.c_str()))
+	{
+		// 客户端 GM 指令统一闸门(guild-phase2.md §S4 4.34)。
+		//
+		// 这里是客户端消息进 scene 的**唯一**入口:gate 发
+		// SceneProcessClientPlayerMessageMessageId(client_message_processor.cpp:699-711)
+		// 只走到这个函数。逐 handler 加闸必漏 —— P0-a 就漏掉了
+		// SceneRollbackClientPlayer 的十二条(GmExecuteRollback / GmClawbackItem 等):
+		// 它们的 service 没标 OptionIsClientProtocolService,gate 的清单挡得住,
+		// 但本函数不看这个 option,直连 scene RPC 端口照样能把 message_id 102-117
+		// 打进来,而那几条今天还是空桩,一旦实现就是客户端自助回档。
+		//
+		// 判据与 P0-a 同一套(SCENE_RUN_MODE,默认 prod = 拒绝,见
+		// cpp/nodes/gate/SECURITY.md §3),不另起一个环境变量 —— 同一件事两个开关
+		// 只会让运维在拒绝时不知道该看哪个。
+		//
+		// InvokePlayerService(下面那个)与 SendMessageToPlayer 是**节点路由**,不对
+		// 客户端开放,所以不在这里加闸;它们那侧的防护是各 Gm* handler 自己的
+		// scene_gm_guard::RejectGmClientRpc。将来若再有路径转发客户端消息,必须调
+		// 同一个谓词。
+		LOG_WARN << "ProcessClientPlayerMessage: client GM rejected method=" << methodName
+				 << " player_id=" << it->second << " session=" << sessionId;
+
+		// 把拒绝码搬进应答并清零全局 tip —— 这两件事平时由各 handler 生成的 CallMethod 里的
+		// TRANSFER_ERROR_MESSAGE(engine/core/macros/return_define.h)做,而本分支**不走**
+		// CallMethod,必须自己做。漏掉任一半都有确定性后果:
+		//   * 不搬:下面照常把一个空 playerResponse 序列化回 gate,客户端拿到「成功但 error_message
+		//     为空」,拒绝完全不可见(与 player_scene_handler.cpp 文件头 SetTip 注释里修掉的同一类);
+		//   * 不清:这条 tip 留在**进程级**全局上,同一 scene 节点上下一条走 CallMethod 且带非 Empty
+		//     应答的客户端请求(任意玩家、任意功能)会把它 move 进自己的应答 —— 一次本来成功的
+		//     操作被报成「功能暂不可用」,跨请求跨玩家污染。
+		// playerResponse 是泛型 Message*,没有 mutable_error_message(),所以按字段名反射写入
+		// (与生成层同一个 "error_message" 字段名契约);应答里没有这个字段(返回 Empty 的推送类
+		// 方法)时只清零、不搬运。
+		auto &gmRejectTip = tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity());
+		gmRejectTip.set_id(kFeatureUnavailable);
+		if (const auto *tipField = playerResponse->GetDescriptor()->FindFieldByName("error_message");
+			tipField != nullptr &&
+			tipField->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE &&
+			tipField->message_type() == TipInfoMessage::descriptor())
+		{
+			playerResponse->GetReflection()->MutableMessage(playerResponse.get(), tipField)->CopyFrom(gmRejectTip);
+		}
+		gmRejectTip.Clear();
+	}
+	else
+	{
+		serviceIt->second->CallMethod(method, player, playerRequest.get(), playerResponse.get());
+	}
 
 	// Populate synchronous response (if caller expects one)
 	if (response != nullptr && Empty::GetDescriptor() != playerResponse->GetDescriptor())
@@ -591,17 +664,13 @@ void SceneHandler::RoutePlayerStringMsg(::google::protobuf::RpcController* contr
 		const auto localPlayer = tlsEcs.GetPlayer(playerId);
 		if (localPlayer != entt::null && request->node_list_size() == 0)
 		{
-			// Cross-zone Frozen gate (cross-zone-readiness-audit.md §11.3).
-			// If the player is mid-cross-zone-migration the source-side
-			// entity is alive only to wait for the destination's ACK; any
-			// client message dispatched to it would mutate state that's
-			// about to be DestroyPlayer'd. Drop the message and let the
-			// client retry once the migration completes (the gate session
-			// is preserved across Frozen, so client stays connected).
+			// 归属交接冻结闸(跨 zone 传送 / 同 zone 跨节点换图,见 PlayerFrozenComp)。
+			// 冻结中的实体只是在等 scene_manager 的放行结果:盘上那份才是要交给目标节点的真值,
+			// 这时再把消息派给它,改出来的状态要么随实体销毁而丢失、要么与盘上分叉。
+			// 丢弃消息,交接出结果后客户端自行重试(gate 会话在冻结期间保留,连接不断)。
 			//
-			// IMPORTANT messages are logged as ERROR so ops can see if the
-			// destination zone is taking too long to ACK and clients are
-			// piling up retries — that's a reaper / ACK failure signal.
+			// IMPORTANT 消息打 ERROR:如果交接迟迟不出结果(scene_manager 不可达、应答看门狗在
+			// 反复重挂),客户端的重试会堆在这里,这是需要运维介入的信号。
 			if (PlayerLifecycleSystem::IsCrossZoneFrozen(localPlayer))
 			{
 				if (importantRoute)

@@ -47,7 +47,7 @@ const (
 	// 调用方传进来的是 main 的永不取消 ctx,黑洞节点(进程死了、etcd 租约
 	// 还没过期)会让无时限 RPC 挂 ~20s(gRPC minConnectTimeout),几个僵尸
 	// 节点就能把持锁时长顶过 60s TTL,互斥悄悄失效。CreateScene 按
-	// scene_id 幂等,超时安全;DeadlineExceeded 同时会触发 markNodeDead。
+	// scene_id 幂等,超时安全;DeadlineExceeded 只把节点记为「本轮不可达」(markNodeUnreachable),不据此判死。
 	worldInitCreateRPCTimeout = 5 * time.Second
 )
 
@@ -155,8 +155,11 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 	logx.Infof("[World] Zone %d: ensuring %d world scenes across %d world-hosting nodes",
 		zoneId, len(confIds), len(nodes))
 
-	// Track nodes proven dead during this batch to avoid repeated failures.
-	deadNodes := make(map[string]struct{})
+	// 本轮里 RPC 不可达(拒连 / 超时)的节点:后续场景不再对它白等一次超时 ——
+	// 本段在 zone 锁内,黑洞节点每个场景等 5s 会把持锁时长顶过 TTL。
+	// **不可达 ≠ 已死**:高负载下一个只是慢了的活节点同样会超时,所以这张表只用来
+	// 「本轮跳过」,改写场景归属还要另看 etcd 注册表(见下面两处 isNodeGoneFromRegistry)。
+	unreachableNodes := make(map[string]struct{})
 	liveNodes := make([]string, len(nodes))
 	copy(liveNodes, nodes)
 
@@ -251,8 +254,17 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 				continue
 			}
 
-			// Reassign if the target node is known dead.
-			if _, dead := deadNodes[targetNode]; dead {
+			// 目标节点本轮已知不可达:不再对它发 RPC。
+			if _, unreachable := unreachableNodes[targetNode]; unreachable {
+				// 仍在 etcd 注册表里 = 拿不到它已死的证据(可能只是慢,也可能注册表尚未完成
+				// 首次同步)。此时改写归属并在别的节点上建同一个 scene_id,会让同一个世界频道
+				// 在两个节点上各有一份活副本:老节点上的玩家与新进来的玩家互相不可见,
+				// 路由与 PlayerLocation 也对不上。归属不动,本轮跳过;节点若真死了,etcd 注销
+				// 路径会先写 death_at 再摘负载集,之后的 rebalance / 下一轮 init 再按屏障改派。
+				if !isNodeGoneFromRegistry(zoneId, targetNode) {
+					logx.Infof("[World] Scene %d stays on node %s: unreachable this round but still registered in etcd", sceneId, targetNode)
+					continue
+				}
 				if len(liveNodes) == 0 {
 					logx.Errorf("[World] No live nodes remaining, skipping scene %d", sceneId)
 					continue
@@ -282,11 +294,12 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 			rpcCancel()
 			if rpcErr != nil {
 				logx.Errorf("[World] Failed to call CreateScene for conf %d scene %d: %v", confId, sceneId, rpcErr)
-				// Mark node as dead so we don't keep retrying it for remaining scenes.
+				// 记为本轮不可达,剩下的场景不再对它白等。
 				if isNodeUnreachableError(rpcErr) {
-					markNodeDead(svcCtx, zoneId, targetNode, deadNodes, &liveNodes)
-					// Reassign this scene to a live node and retry once.
-					if len(liveNodes) > 0 {
+					markNodeUnreachable(zoneId, targetNode, unreachableNodes, &liveNodes)
+					// 只有节点已确认从 etcd 注册表消失,才把这个场景改派到活节点并重试一次;
+					// 仅仅超时/拒连不是死亡证据(理由同上面 RPC 之前的那段)。
+					if isNodeGoneFromRegistry(zoneId, targetNode) && len(liveNodes) > 0 {
 						newNode := assignNodeByHash(confId*1000+uint64(ensured), liveNodes)
 						logx.Infof("[World] Retrying scene %d on live node %s after dead node %s", sceneId, newNode, targetNode)
 						// 屏障未到就连重试都不做:归属没改,发 CreateScene 只会
@@ -310,8 +323,8 @@ func initWorldScenesForZone(ctx context.Context, svcCtx *svc.ServiceContext, zon
 		}
 	}
 
-	logx.Infof("[World] Zone %d done: created=%d channels, ensured=%d RPCs, dead_nodes=%d",
-		zoneId, created, ensured, len(deadNodes))
+	logx.Infof("[World] Zone %d done: created=%d channels, ensured=%d RPCs, unreachable_nodes=%d",
+		zoneId, created, ensured, len(unreachableNodes))
 }
 
 // GetBestWorldChannel returns the (sceneId, nodeId) of the least-loaded channel
@@ -602,15 +615,22 @@ func isNodeUnreachableError(err error) bool {
 		strings.Contains(s, "context deadline exceeded")
 }
 
-// markNodeDead removes a zombie node from Redis load set and connection cache,
-// and updates the local liveNodes slice.
-func markNodeDead(svcCtx *svc.ServiceContext, zoneId uint32, nodeId string, deadNodes map[string]struct{}, liveNodes *[]string) {
-	if _, already := deadNodes[nodeId]; already {
+// markNodeUnreachable 把节点记入本轮的不可达集合,并从本轮的候选列表里拿掉,
+// 让后续场景不再对它白等一次 RPC 超时;同时丢掉它的 gRPC 连接缓存(端点可能已陈旧,
+// 下次用到时重新解析重拨,代价可忽略)。
+//
+// **刻意不碰 Redis 负载集。** IsNodeAlive 把「不在负载集」当作断言节点已死的唯一证据,
+// 而再入屏障对没有 death_at 的节点一律放行;旧实现(markNodeDead)在一次 5s 超时后就
+// ZREM,于是一个只是慢了的活节点会在负载上报把它加回来之前(最长一个 LoadReportInterval)
+// 被 rebalance / 孤儿清理当成死节点,名下场景被改派或销毁。节点真死时,负载集由 etcd
+// 注销路径(removeNodeFromRedis / 周期巡检)负责摘除,那条路径会先写 death_at。
+func markNodeUnreachable(zoneId uint32, nodeId string, unreachableNodes map[string]struct{}, liveNodes *[]string) {
+	if _, already := unreachableNodes[nodeId]; already {
 		return
 	}
-	deadNodes[nodeId] = struct{}{}
+	unreachableNodes[nodeId] = struct{}{}
 
-	// Remove from the local live list.
+	// 从本轮候选列表里拿掉:后面给新频道挑节点时不再选它。
 	filtered := (*liveNodes)[:0]
 	for _, n := range *liveNodes {
 		if n != nodeId {
@@ -619,12 +639,7 @@ func markNodeDead(svcCtx *svc.ServiceContext, zoneId uint32, nodeId string, dead
 	}
 	*liveNodes = filtered
 
-	// Remove from Redis load set so future calls don't pick this node.
-	loadKey := nodeLoadKey(zoneId)
-	svcCtx.Redis.Zrem(loadKey, nodeId)
-
-	// Remove cached gRPC connection (stale endpoint).
 	RemoveNodeConn(zoneId, nodeId)
 
-	logx.Infof("[World] Marked node %s as dead (zone %d), removed from load set", nodeId, zoneId)
+	logx.Infof("[World] Node %s unreachable this round (zone %d); load set and scene ownership left untouched", nodeId, zoneId)
 }

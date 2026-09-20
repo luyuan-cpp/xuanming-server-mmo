@@ -57,6 +57,13 @@ $oldRpcPort = $env:RPC_PORT
 $oldCommandPartitions = $env:KAFKA_COMMAND_TOPIC_PARTITIONS
 $oldCommandGeneration = $env:KAFKA_COMMAND_TOPIC_GENERATION
 $oldGateClientRpcRouter = $env:GATE_CLIENT_RPC_ROUTER
+$oldGateRunMode = $env:GATE_RUN_MODE
+$oldSceneRunMode = $env:SCENE_RUN_MODE
+# 资产通道（docs/design/guild-phase2/04-asset-channel.md §4.32）的本机开发密钥来源。
+# scene 验签、guild / trade 签名用的是同名环境变量，值必须一致，否则每次资产 RPC 都回 27008。
+# 值不写进仓库：由该库在 run/secrets/assetop-dev.env（已被 .gitignore 覆盖）生成一次并复用。
+. (Join-Path $PSScriptRoot 'lib/assetop_dev_secret.ps1')
+$oldAssetOpSecrets = Backup-AssetOpDevSecrets
 $ownsMutex = $false
 $transcribing = $false
 $resultCode = 0
@@ -451,6 +458,32 @@ try {
                 Write-Host '  补建后重新运行本启动脚本即可。'
             }
         }
+        if ('guild' -notin $skippedServices) {
+            # 帮会 guild 的独占库预检（帮会二期 B1：帮会表已迁入 mmorpg_guild，由 go/schemamigrate 建表）。
+            # 探测方式与上面 trade 相同：以 appuser 身份查 information_schema.SCHEMATA，一次覆盖“库存在”和“已授权”。
+            $guildDbProblem = ''
+            try {
+                $guildDbProbe = Invoke-Docker @('exec','mysql','sh','-c','mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ''mmorpg_guild''"')
+                if ($guildDbProbe.Code -ne 0) {
+                    $guildDbProblem = "查询失败（docker exec 退出码 $($guildDbProbe.Code)）"
+                } elseif ($guildDbProbe.Out.Trim() -cne 'mmorpg_guild') {
+                    $guildDbProblem = '库不存在，或 appuser 对它没有权限'
+                }
+            } catch {
+                $guildDbProblem = "查询异常：$($_.Exception.Message)"
+            }
+            if ($guildDbProblem) {
+                $skippedServices += 'guild'
+                $guildDbFixCommand = @'
+  docker --context desktop-linux exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_guild DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_guild.* TO appuser@''%''; FLUSH PRIVILEGES;"'
+'@
+                Write-Warning "帮会库 mmorpg_guild 未就绪（$guildDbProblem），本次跳过 guild（帮会请求会回「服务不可用」），其余服务照常启动。"
+                Write-Host '  已有数据的 MySQL 卷不会重跑 deploy/mysql-init，需要用 root 补建库并授权一次（在 PowerShell 7 中执行下面这行）：' -ForegroundColor Yellow
+                Write-Host $guildDbFixCommand -ForegroundColor Yellow
+                Write-Host '  补建后重新运行本启动脚本即可。'
+            }
+        }
+
         if ('friend' -notin $skippedServices) {
             # 好友 friend 的库预检，与上面 trade 那段同一套做法与同一条取舍依据（见脚本顶部 $optionalServices 处）。
             # 同样以 appuser 身份查 information_schema.SCHEMATA：它只列出该账号有权限的库，一次查询同时覆盖
@@ -499,6 +532,25 @@ try {
         # 路由模式翻转落在部署层（C++ 默认值不改）：gate 启动时读一次 GATE_CLIENT_RPC_ROUTER 并缓存，
         # 必须在 cpp-node-start 之前设好，经 dev_tools 子进程继承；scene / battle / Go 服务继承到也不读。
         $env:GATE_CLIENT_RPC_ROUTER = $GateRouterMode
+        # P0-a：GM 客户端指令（GmAddCurrency / GmSetPlayerLevel / GmGrantPet 等六条）默认关闭，
+        # 判据是各节点自己的运行模式，默认（未设置）= prod = 拒绝。robot 的 attribute / pet /
+        # currency-crash 三个冒烟都靠这些指令造数据，所以本机启动器显式声明 dev。
+        # 与 GATE_CLIENT_RPC_ROUTER 同样必须在 cpp-node-start 之前设好，由 dev_tools 子进程继承。
+        # 部署链（tools/scripts/k8s_deploy.ps1）从不注入这两个变量 —— 生产恒为 prod，恒关闭。
+        # 详见 cpp/nodes/gate/SECURITY.md §3。
+        # 只在“没设”时兜底，不覆盖调用者显式声明的值 —— 收口验收要能
+        # `$env:GATE_RUN_MODE='prod'` 再起一次，确认 GM 指令确实被拒。
+        if ([string]::IsNullOrWhiteSpace($env:GATE_RUN_MODE))  { $env:GATE_RUN_MODE = 'dev' }
+        if ([string]::IsNullOrWhiteSpace($env:SCENE_RUN_MODE)) { $env:SCENE_RUN_MODE = 'dev' }
+        # 资产通道签名密钥（规格 §4.32 / §4.41 第 30 项）：scene 在第 4 步启动、guild 在第 5 步启动，
+        # 两边都从这里继承同一把值，否则帮会 / 聚宝斋的每一次资产 RPC 都被判 27008(AssetAuthFailed)。
+        # 必须设在 cpp-node-start 之前，由 dev_tools / go_services 子进程继承。
+        # 与上面两个运行模式同一条纪律：只在没设时兜底、不回显值、finally 里还原。
+        # **仅限本机 dev 的约定**：预发 / 生产的密钥必须由部署侧注入（k8s_deploy.ps1 的
+        # Resolve-InjectedSecret -MinLength 32，§4.43 第 29 项），部署链从不调用这里。
+        # trade 侧另有开关：go/trade/etc/trade.yaml 的 AssetOp.Enabled 默认 false，注入了密钥也不会自动开。
+        Initialize-AssetOpDevSecrets -RepoRoot $serverRoot | Out-Null
+        Write-Host "  GM 指令通道：GATE_RUN_MODE=$($env:GATE_RUN_MODE) / SCENE_RUN_MODE=$($env:SCENE_RUN_MODE)（非 dev/test 即关闭；生产默认 prod）"
         if ($GateRouterMode -eq '1') {
             Write-Host '  gate 路由模式：GATE_CLIENT_RPC_ROUTER=1（经 client_rpc_router 转发，chat 可达）'
         } else {
@@ -557,6 +609,9 @@ try {
     $env:KAFKA_COMMAND_TOPIC_PARTITIONS = $oldCommandPartitions
     $env:KAFKA_COMMAND_TOPIC_GENERATION = $oldCommandGeneration
     $env:GATE_CLIENT_RPC_ROUTER = $oldGateClientRpcRouter
+    $env:GATE_RUN_MODE = $oldGateRunMode
+    $env:SCENE_RUN_MODE = $oldSceneRunMode
+    Restore-AssetOpDevSecrets $oldAssetOpSecrets
     if ($transcribing) { Stop-Transcript | Out-Null }
     if ($ownsMutex) { $mutex.ReleaseMutex() }
     if ($mutex) { $mutex.Dispose() }

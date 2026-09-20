@@ -43,6 +43,19 @@ param(
 	# 跳过发布预检。只给契约测试和"明知配置未就绪的演练"用,
 	# staging/prod 真发布加这个开关等于把门禁拆了。
 	[switch]$SkipPreflight,
+	# C++ 节点日志采集:Linux 下 muduo **不往 stdout 写业务日志**
+	# (cpp/.../node.cpp 的 Node::AsyncOutput 里调用 LogToConsole 那一句包在 #ifdef WIN32 内),
+	# 业务日志只落 /app/bin/logs/cpp_nodes/<节点>.*.log。所以"读容器 stdout"的常规采集方案
+	# 对 C++ 只能拿到 gate 的启动行和 gRPC/librdkafka 的 stderr,业务日志一条都采不到。
+	# 默认给每个 C++ Pod 挂一个 Alloy sidecar,与业务容器共享同一个 node-logs 卷(只读)直接读文件送 Loki。
+	# 关掉它就回到"C++ 业务日志无人采集"的状态,只给"集群里没有 Loki 也不打算部署"的场景用。
+	[switch]$NoCppLogSidecar,
+	# sidecar 镜像钉死版本:v1.19.2 的 loki.source.file 有读取位置回归(重启后几乎整文件重读),
+	# 详见 docs/ops/grafana-loki-local-logs.md §1。升级前先跑该文 §5.3 的读取位置自检。
+	[string]$CppLogSidecarImage = "grafana/alloy:v1.10.0",
+	# 留空 = 写 infra namespace 里的 Loki(deploy/k8s/manifests/infra/loki.yaml)。
+	# 指向集群外 / 已有的 Loki 时写完整 push 地址,例如 http://loki.observability:3100/loki/api/v1/push。
+	[string]$LokiPushUrl = "",
 	[ValidateSet("custom", "managed-cloud", "bare-metal")]
 	[string]$OpsProfile = "custom",
 	[ValidateSet("dev", "prod-like", "prod")]
@@ -163,6 +176,17 @@ $K8sRoot = Join-Path $RepoRoot "deploy\k8s"
 $InfraManifestsDir = Join-Path $K8sRoot "manifests\infra"
 $GoSvcManifestsDir = Join-Path $K8sRoot "manifests\go-svc"
 $JavaSvcManifestsDir = Join-Path $K8sRoot "manifests\java-svc"
+
+# C++ 日志 sidecar(见参数 -NoCppLogSidecar)。留空时写 infra namespace 里的 Loki Service。
+$script:CppLogSidecarEnabled = -not $NoCppLogSidecar
+$script:CppLogSidecarPushUrl = if ([string]::IsNullOrWhiteSpace($LokiPushUrl)) {
+	"http://loki.${InfraNamespace}:3100/loki/api/v1/push"
+} else {
+	$LokiPushUrl
+}
+# 与业务容器共享的日志卷名;sidecar 只读挂载同一个卷。
+$script:CppLogVolumeName = "node-logs"
+$script:CppLogSidecarConfigMapName = "cpp-log-sidecar"
 
 . (Join-Path $ScriptDir "lib\release_common.ps1")
 
@@ -833,8 +857,21 @@ function New-NodeDeploymentYaml {
 		[Parameter(Mandatory = $true)][string]$StartCommand,
 		[Parameter(Mandatory = $true)][string]$ConfigMapName,
 		# -1 = 不写 SCENE_NODE_TYPE(gate 等非 scene 角色)。
-		[int]$SceneNodeType = -1
+		[int]$SceneNodeType = -1,
+		# 只用于日志 sidecar 的 zone 标签;调用方没有 zone 上下文时留空,标签写 "-"。
+		[string]$CurrentZoneName = ""
 	)
+
+	# C++ 日志 sidecar(见参数 -NoCppLogSidecar):与业务容器共享 node-logs 卷,只读读 muduo 写的文件。
+	# Deployment 模板用制表符缩进,Invoke-KubectlWithInputFile 把每个制表符换成 4 空格,
+	# 所以容器和卷的列表项换算后落在第 8 列,这里的片段直接按 8 空格拼。
+	$sidecarContainerBlock = ""
+	$sidecarVolumeBlock = ""
+	if ($script:CppLogSidecarEnabled) {
+		$zoneLabelForSidecar = if ([string]::IsNullOrWhiteSpace($CurrentZoneName)) { "-" } else { $CurrentZoneName }
+		$sidecarContainerBlock = "`n" + (New-CppLogSidecarContainerYaml -ItemIndent "        " -CurrentZoneName $zoneLabelForSidecar)
+		$sidecarVolumeBlock = "`n" + (New-CppLogSidecarVolumeYaml -ItemIndent "        ")
+	}
 
 	# 用数组逐行拼,最后 join 换行。
 	# 旧写法是 `$block += @"..."@` 连续追加两个 here-string —— here-string 内容不含
@@ -930,7 +967,7 @@ $grpcEnvBlock
 		  ports:
 			- containerPort: $RpcPort
 			  name: rpc
-$battlePortAndProbes
+$battlePortAndProbes$sidecarContainerBlock
 	  volumes:
 		- name: node-config
 		  configMap:
@@ -938,8 +975,217 @@ $battlePortAndProbes
 		- name: node-logs
 		  emptyDir: {}
 		- name: snowflake-cache
-		  emptyDir: {}
+		  emptyDir: {}$sidecarVolumeBlock
 "@
+}
+
+<#
+.SYNOPSIS
+生成 C++ 日志 sidecar 的 Alloy 配置 ConfigMap。
+
+.DESCRIPTION
+读的是业务容器写在共享卷 /app/bin/logs/cpp_nodes/*.log 里的 muduo 日志,**不读容器 stdout**:
+Linux 下 node.cpp 的 Node::AsyncOutput 只在 #ifdef WIN32 里调 LogToConsole,容器 stdout 上
+只有 gate 的 [gate_version] 启动行和 gRPC / librdkafka 的 stderr,业务日志一行都没有。
+
+标签口径与本机观测台一致(docs/ops/grafana-loki-local-logs.md §3):job / lang / service / level,
+另加 k8s 独有的 namespace / pod / zone,方便和 Go / Java 的 pod 日志在同一个 Grafana 里对齐。
+#>
+function New-CppLogSidecarConfigMapYaml {
+	param(
+		[Parameter(Mandatory = $true)][string]$ConfigName,
+		[Parameter(Mandatory = $true)][string]$CurrentZoneName
+	)
+
+	# 单引号 here-string:里面的 $ 和反引号全部按字面量处理,正则不用转义。
+	$config = @'
+// 本文件由 tools/scripts/k8s_deploy.ps1 的 New-CppLogSidecarConfigMapYaml 生成,不要直接改集群里的副本。
+// 作用:读同一个 Pod 里业务容器写下的 muduo 日志文件,直接送 Loki(全程不经过 stdout)。
+logging {
+  level  = "warn"
+  format = "logfmt"
+}
+
+loki.write "out" {
+  endpoint {
+    url = "__LOKI_PUSH_URL__"
+  }
+  external_labels = {
+    env       = "k8s",
+    namespace = sys.env("POD_NAMESPACE"),
+    pod       = sys.env("POD_NAME"),
+    zone      = sys.env("ZONE_NAME"),
+  }
+}
+
+// muduo 自己滚动写的文件:<节点>.<时间>.<主机>.<pid>.log,主机名在容器里就是 Pod 名。
+local.file_match "cpp" {
+  path_targets = [{ __path__ = "/app/bin/logs/cpp_nodes/*.log" }]
+  sync_period  = "5s"
+}
+
+loki.source.file "cpp" {
+  targets    = local.file_match.cpp.targets
+  forward_to = [loki.process.cpp.receiver]
+
+  file_watch {
+    min_poll_frequency = "500ms"
+    max_poll_frequency = "2s"
+  }
+}
+
+loki.process "cpp" {
+  forward_to = [loki.write.out.receiver]
+
+  // Build Info 这类多行消息只有第一行带时间戳,其余并回同一条。
+  // 线程号右对齐占 5 列,不足 5 位前面补空格,所以是 " +" 而不是单个空格。
+  // 崩溃断言行没有时间戳,必须单独算作新的一条,否则它会被并进上一条日志、
+  // 跟着那条的时间和级别走,下面那段按 fatal 记的规则永远匹配不到(实测过)。
+  stage.multiline {
+    firstline     = `^(\d{8} \d{2}:\d{2}:\d{2}\.\d{6} +\d+ [A-Z]+ |Assertion failed: )`
+    max_wait_time = "2s"
+    max_lines     = 64
+  }
+
+  // 文件名 -> service / pid。muduo 文件里没有实例名,pid 用来区分同一节点的多次重启。
+  stage.regex {
+    source     = "filename"
+    expression = `/(?P<service>[a-z_]+)\.\d{8}-\d{6}\.[^/]+\.(?P<pid>\d+)\.log$`
+  }
+  stage.labels {
+    values = { service = "" }
+  }
+  stage.structured_metadata {
+    values = { pid = "" }
+  }
+  stage.static_labels {
+    values = {
+      job  = "cpp_nodes",
+      lang = "cpp",
+    }
+  }
+
+  // 标准 muduo 行:解析时间与级别。容器里时区取 zoneinfo/Asia/Hong_Kong(+8),与本机一致。
+  // muduo 只输出 TRACE/DEBUG/INFO/WARN/ERROR/FATAL 六种;LOG_SYSERR 实际按 ERROR 输出。
+  stage.match {
+    selector = `{job="cpp_nodes"} |~ "^\\d{8} \\d{2}:\\d{2}:\\d{2}\\.\\d{6} +\\d+ (TRACE|DEBUG|INFO|WARN|ERROR|FATAL) "`
+
+    stage.regex {
+      expression = `^(?P<ts>\d{8} \d{2}:\d{2}:\d{2}\.\d{6}) +(?P<tid>\d+) (?P<level>[A-Z]+) `
+    }
+    stage.timestamp {
+      source            = "ts"
+      format            = "20060102 15:04:05.000000"
+      location          = "Asia/Shanghai"
+      action_on_failure = "fudge"
+    }
+    stage.template {
+      source   = "level"
+      template = `{{ ToLower .Value }}`
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+    stage.structured_metadata {
+      values = { tid = "" }
+    }
+  }
+
+  // 崩溃断言:muduo 的 Assertion failed 没有时间戳,按 fatal 记,别混在无级别的行里。
+  stage.match {
+    selector = `{job="cpp_nodes"} |~ "^Assertion failed: "`
+
+    stage.static_labels {
+      values = { level = "fatal" }
+    }
+  }
+}
+'@
+
+	$config = $config.Replace('__LOKI_PUSH_URL__', $script:CppLogSidecarPushUrl)
+	# 塞进 YAML 块标量,统一缩进 4 空格;空行不补空格,避免块标量里出现尾随空白。
+	$indented = (($config -split "`r?`n") | ForEach-Object { if ([string]::IsNullOrEmpty($_)) { "" } else { "    $_" } }) -join "`n"
+
+	return @"
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: $ConfigName
+  labels:
+    app: cpp-log-sidecar
+    mmorpg.io/zone: $CurrentZoneName
+data:
+  config.alloy: |
+$indented
+"@
+}
+
+<#
+.SYNOPSIS
+生成 C++ 日志 sidecar 的容器片段与它额外需要的两个卷。
+
+.DESCRIPTION
+Deployment 模板用制表符缩进(Invoke-KubectlWithInputFile 会把制表符换成 4 空格),Fleet 模板用空格,
+两边的列位置不同,所以由调用方传入列表项的缩进字符串,这里只用空格拼,拼出来的列与两种模板都能对齐。
+#>
+function New-CppLogSidecarContainerYaml {
+	param(
+		[Parameter(Mandatory = $true)][string]$ItemIndent,
+		[Parameter(Mandatory = $true)][string]$CurrentZoneName
+	)
+
+	$keyIndent = $ItemIndent + "  "
+	$lines = @(
+		"${ItemIndent}- name: log-sidecar",
+		"${keyIndent}image: $CppLogSidecarImage",
+		"${keyIndent}imagePullPolicy: IfNotPresent",
+		"${keyIndent}args:",
+		"${keyIndent}  - run",
+		"${keyIndent}  - --server.http.listen-addr=127.0.0.1:12345",
+		"${keyIndent}  - --storage.path=/var/lib/alloy",
+		"${keyIndent}  - /etc/alloy/config.alloy",
+		"${keyIndent}env:",
+		"${keyIndent}  - name: POD_NAME",
+		"${keyIndent}    valueFrom:",
+		"${keyIndent}      fieldRef:",
+		"${keyIndent}        fieldPath: metadata.name",
+		"${keyIndent}  - name: POD_NAMESPACE",
+		"${keyIndent}    valueFrom:",
+		"${keyIndent}      fieldRef:",
+		"${keyIndent}        fieldPath: metadata.namespace",
+		"${keyIndent}  - name: ZONE_NAME",
+		"${keyIndent}    value: `"$CurrentZoneName`"",
+		"${keyIndent}volumeMounts:",
+		"${keyIndent}  - name: $script:CppLogVolumeName",
+		"${keyIndent}    mountPath: /app/bin/logs",
+		"${keyIndent}    readOnly: true",
+		"${keyIndent}  - name: cpp-log-sidecar-config",
+		"${keyIndent}    mountPath: /etc/alloy",
+		"${keyIndent}    readOnly: true",
+		"${keyIndent}  - name: cpp-log-sidecar-state",
+		"${keyIndent}    mountPath: /var/lib/alloy",
+		"${keyIndent}resources:",
+		"${keyIndent}  requests:",
+		"${keyIndent}    cpu: 20m",
+		"${keyIndent}    memory: 64Mi",
+		"${keyIndent}  limits:",
+		"${keyIndent}    memory: 256Mi"
+	)
+	return ($lines -join "`n")
+}
+
+function New-CppLogSidecarVolumeYaml {
+	param([Parameter(Mandatory = $true)][string]$ItemIndent)
+
+	$keyIndent = $ItemIndent + "  "
+	$lines = @(
+		"${ItemIndent}- name: cpp-log-sidecar-config",
+		"${keyIndent}configMap:",
+		"${keyIndent}  name: $script:CppLogSidecarConfigMapName",
+		"${ItemIndent}- name: cpp-log-sidecar-state",
+		"${keyIndent}emptyDir: {}"
+	)
+	return ($lines -join "`n")
 }
 
 # 把镜像引用里的 tag 抽出来当 build 标签用。K8s label value 只允许
@@ -996,6 +1242,18 @@ function New-SceneFleetYaml {
 
 	$buildLabel = Get-ImageBuildLabel -Image $NodeImage
 
+	# C++ 日志 sidecar(见参数 -NoCppLogSidecar)。Fleet 模板用空格缩进,Pod 里容器与卷的列表项在第 12 列。
+	# 另外:Agones 的 GameServerSpec 在 Pod 有多个容器时**必须**用 container 指名哪个是游戏容器,
+	# 少写这一行 Fleet 会被 Agones 拒掉,GameServer 全起不来。
+	$sidecarContainerBlock = ""
+	$sidecarVolumeBlock = ""
+	$gameServerContainerLine = ""
+	if ($script:CppLogSidecarEnabled) {
+		$sidecarContainerBlock = "`n" + (New-CppLogSidecarContainerYaml -ItemIndent "            " -CurrentZoneName $ZoneLabel)
+		$sidecarVolumeBlock = "`n" + (New-CppLogSidecarVolumeYaml -ItemIndent "            ")
+		$gameServerContainerLine = "      container: $FleetName`n"
+	}
+
 	$countersBlock = ""
 	if ($AgonesHighDensity) {
 		if ($AgonesRoomCapacity -le 0) {
@@ -1046,7 +1304,7 @@ spec:
         mmorpg.io/zone-id: "$ZoneIdLabel"
         mmorpg.io/build: $buildLabel
     spec:
-      ports:
+$gameServerContainerLine      ports:
         - name: rpc
           portPolicy: None
           containerPort: $RpcPort
@@ -1100,7 +1358,7 @@ spec:
                   mountPath: $SnowflakeCacheDir
               ports:
                 - containerPort: $RpcPort
-                  name: rpc
+                  name: rpc$sidecarContainerBlock
           volumes:
             - name: node-config
               configMap:
@@ -1108,7 +1366,7 @@ spec:
             - name: node-logs
               emptyDir: {}
             - name: snowflake-cache
-              emptyDir: {}
+              emptyDir: {}$sidecarVolumeBlock
 "@
 }
 
@@ -1466,7 +1724,15 @@ function New-GoSvcConfigMapYaml {
 	$matchChallengeTTL          = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'ChallengeTTLSeconds'
 	$matchTicketTTL             = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'TicketTTLSeconds'
 	$matchReadyTicketTTL        = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'ReadyTicketTTLSeconds'
-	$matchPveTeamSizeConfig1    = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'PveTeamSizeByConfigId.1'
+	# PveTeamSizeByConfigId 是 map(键 = battle_config_id)。以前按标量只读键 "1",yaml 新增的 config id
+	# 在 K8s 上会静默缺失,PVE_TEAM 入队与组队整队开战一律按"未开放"拒绝,本地冒烟又发现不了。
+	# 改为整段逐字搬运(Get-AuthoritativeYamlBlock),ConfigMap 与服务 yaml 不会漂移(team-system.md §I.1 批 1 #28)。
+	$matchPveTeamSizeBlock      = Get-AuthoritativeYamlBlock -RelativePath $matchYaml -Key 'PveTeamSizeByConfigId'
+	# 组队(team-system.md §D.1):跨区开关与 data_service 客户端的超时 / NonBlock 从服务 yaml 取。
+	# NonBlock 必须为 true(data-service 没起不能拖垮 match 起服),Go 侧也会强制;这里照抄 yaml 便于一眼核对。
+	$matchTeamAllowCrossZone     = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'Team.AllowCrossZone'
+	$matchDataServiceRpcTimeout  = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'DataServiceRpc.Timeout'
+	$matchDataServiceRpcNonBlock = Get-AuthoritativeScalar -RelativePath $matchYaml -KeyPath 'DataServiceRpc.NonBlock'
 	# MatchedTicketTTLSeconds 是本轮新增项(cross-zone-matchmaking.md D5,Go 侧缺省 30)。
 	# 和上面不同,它允许缺席:yaml 里没有就整行不写,交给 Go 的 default 标签,
 	# 这样 go/match 与部署脚本可以分开落地,不会让 infra-up 卡在别人的提交上。
@@ -2030,6 +2296,21 @@ MetricsListenAddr: ":9150"
 # 跨 zone 重定向签发 gate 令牌要用,缺了 gate_redirect.go 直接返回
 # "GateTokenSecret not configured"。以前这份 ConfigMap 压根没有这一项。
 GateTokenSecret: "${gateTokenSecret}"
+# DataService gRPC 客户端:EnterScene 用它查玩家归属 zone(GetPlayerHomeZone),随 RoutePlayerEvent
+# 下发给 scene 决定存盘落哪个 zone 的库(cross-zone-scene-travel.md CZ-3)。K8s 是多 zone 形态,
+# 缺这一块 scene_manager 会 fail-closed 拒绝所有进场景(AllowGateZoneAsHomeZone 默认 false);
+# 而把开关打开则会让访客的存盘写进目标 zone 的库 —— 两种都不对,所以这里必须配。
+# data-service 是全局池(不分 zone),Key 不带 zone 后缀,与 login 的同名块一致。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - "etcd.${InfraNamespace}:2379"
+    Key: dataservice.rpc
+  Timeout: 3000
+  NonBlock: true
+  Middlewares:
+    Breaker: false
+HomeZoneLookupTimeoutMs: 1500
 "@
 		}
 		"match" {
@@ -2073,8 +2354,23 @@ ChallengeTTLSeconds: ${matchChallengeTTL}
 TicketTTLSeconds: ${matchTicketTTL}
 ReadyTicketTTLSeconds: ${matchReadyTicketTTL}
 ${matchMatchedTicketTTLLine}
-PveTeamSizeByConfigId:
-  "1": ${matchPveTeamSizeConfig1}
+# PveTeamSizeByConfigId 整块逐字搬自 go/match/etc/match_service.yaml:新增 config id 只改服务 yaml。
+# 组队整队开战也按它判副本人数上限,未配置的 id 回 TeamDungeonNotOpen。
+${matchPveTeamSizeBlock}
+# 组队(docs/design/team-system.md §D.1)。AllowCrossZone 切换要重启所有 match 实例(J-13a)。
+Team:
+  AllowCrossZone: ${matchTeamAllowCrossZone}
+# data_service 客户端:team 用 BatchGetPlayerHomeZone 查玩家 home zone,调用失败 fail-closed。
+# Etcd 指向集群 etcd,Key 与 data-service 自身注册一致(同 login 模板)。
+DataServiceRpc:
+  Etcd:
+    Hosts:
+      - "etcd.${InfraNamespace}:2379"
+    Key: dataservice.rpc
+  Timeout: ${matchDataServiceRpcTimeout}
+  NonBlock: ${matchDataServiceRpcNonBlock}
+  Middlewares:
+    Breaker: false
 # 与 match.yaml 里的 metrics 容器端口一致
 MetricsListenAddr: ":9170"
 "@
@@ -2238,6 +2534,29 @@ Market:
   MaxPageSize: ${tradeMarketMaxPageSize}
   MaxPage: ${tradeMarketMaxPage}
   MaxFavoritesPerPlayer: ${tradeMarketMaxFavorites}
+# 共享单库 Redis:通用资产通道(guild-phase2/04-asset-channel.md §S4)按 player:{id}:location 定位
+# 玩家所在 scene 节点。写者是 C++ scene / scene_manager,所以**必须**是这份共享实例的 DB 0,
+# 不能指向 trade 自己的库,也不能指向 match 的独占集群(那里没有位置键)。
+# 段名不能叫 Redis:zrpc.RpcServerConf 已有同名字段,加载期报 conflict key Redis(键名三处逐字一致:
+# go/trade/etc/trade.yaml、go/trade/internal/config/config.go、本文件)。
+# config.Validate 拒绝空 Host:缺它 trade 起不来,而不是"能浏览但一上架就永远卡住"。
+SharedRedis:
+  Host: "redis.${InfraNamespace}:6379"
+  Password: "${redisPassword}"
+  DB: 0
+# 通用资产通道开关(guild-phase2/04-asset-channel.md §S4)。键名与 go/trade/etc/trade.yaml、
+# go/trade/internal/config/config.go 三处逐字一致。
+# **所有档位固定 false**,不镜像服务 yaml —— 与 Mode / Schema.AutoMigrate 那条"dev 档取 yaml"
+# 的纪律刻意不同,理由是上线前置还没做完(§4.43 第 29 项:两把资产密钥尚未经
+# Resolve-InjectedSecret -MinLength 32 注入;scene gRPC 端口也还没有 NetworkPolicy 只放行
+# scene_manager / match / guild / trade)。已知风险 K1(单写者只在 30s 重连租约内成立)同样
+# 建议把"任何共享环境打开资产操作"列为 B4c 的硬前置。
+# 打开之前要同时做三件事:注入密钥、补 NetworkPolicy、把这一行改成 true —— 缺一件就别改。
+# 密钥值绝不写进 ConfigMap:trade 只从下面这个**环境变量名**读,值由部署侧注入;
+# Enabled=true 而密钥缺失 / 不足 32 字节时 trade 直接拒启(fail-closed),不会静默降级。
+AssetOp:
+  Enabled: false
+  SecretEnv: MMORPG_ASSET_OP_SECRET_TRADE
 "@
 		}
 		"friend" {
@@ -3120,7 +3439,13 @@ function Apply-Zone {
 	$configMapYaml = New-NodeConfigMapYaml -CurrentZoneId $CurrentZoneId -CurrentClusterId $CurrentClusterId -ConfigName $configMapName
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $configMapYaml
 
-	$gateYaml = New-NodeDeploymentYaml -NodeName "gate" -Replicas $CurrentGateReplicas -RpcPort 18000 -StartCommand "./gate" -ConfigMapName $configMapName
+	# 日志 sidecar 的配置必须先于 gate / scene 落地,否则 Pod 因引用不存在的 ConfigMap 卡在 ContainerCreating。
+	if ($script:CppLogSidecarEnabled) {
+		$sidecarConfigYaml = New-CppLogSidecarConfigMapYaml -ConfigName $script:CppLogSidecarConfigMapName -CurrentZoneName $CurrentZoneName
+		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $sidecarConfigYaml
+	}
+
+	$gateYaml = New-NodeDeploymentYaml -NodeName "gate" -Replicas $CurrentGateReplicas -RpcPort 18000 -StartCommand "./gate" -ConfigMapName $configMapName -CurrentZoneName $CurrentZoneName
 	Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $gateYaml
 
 	foreach ($scenePool in $scenePlan) {
@@ -3143,7 +3468,8 @@ function Apply-Zone {
 				-RpcPort 20000 `
 				-StartCommand "./scene" `
 				-ConfigMapName $configMapName `
-				-SceneNodeType $scenePool.SceneNodeType
+				-SceneNodeType $scenePool.SceneNodeType `
+				-CurrentZoneName $CurrentZoneName
 		}
 		Invoke-KubectlWithInputFile -Args @("apply", "-n", $namespace) -InputContent $sceneYaml
 
@@ -3411,6 +3737,12 @@ function Apply-BattlePool {
 	# 客户端必须连房间所在实例的 POD_IP:20000，不能由一个 Service 随机分流。
 	# 集群外客户端需要另外完成逐实例入口映射；这里不虚构一个可公网访问的地址。
 	Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $ConfigMapYaml
+	# battle 是全局池,跑在 infra namespace,所以日志 sidecar 的 ConfigMap 也要在这里建一份
+	# (zone namespace 里的那份对它不可见);zone 标签留空,由生成函数写成 "-"。
+	if ($script:CppLogSidecarEnabled) {
+		$battleSidecarConfigYaml = New-CppLogSidecarConfigMapYaml -ConfigName $script:CppLogSidecarConfigMapName -CurrentZoneName "-"
+		Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $battleSidecarConfigYaml
+	}
 	$battleYaml = New-NodeDeploymentYaml -NodeName 'battle' -Replicas $BattleReplicas `
 		-RpcPort 20000 -StartCommand 'exec ./battle' -ConfigMapName 'battle-node-config'
 	Invoke-KubectlWithInputFile -Args @('apply', '-n', $InfraNamespace) -InputContent $battleYaml
@@ -3433,7 +3765,14 @@ function Apply-Infra {
 	# redis-match-cluster.yaml:match 私有的 Redis Cluster(StatefulSet + 建群 Job)。
 	# 里面的 Job 幂等(已建群就跳过);但 Job 的 template 一旦落地就不可变,改了
 	# 建群脚本要先 `kubectl -n <infra> delete job redis-match-cluster-init` 再 apply。
-	foreach ($manifest in @("etcd.yaml", "redis.yaml", "redis-match-cluster.yaml", "kafka.yaml", "mysql.yaml")) {
+	# Loki 只在"要用集群内 Loki 当 C++ 日志 sidecar 的写入目标"时才部署:
+	# 关了 sidecar(-NoCppLogSidecar)或指定了外部 Loki(-LokiPushUrl)时不占集群资源。
+	$infraManifests = @("etcd.yaml", "redis.yaml", "redis-match-cluster.yaml", "kafka.yaml", "mysql.yaml")
+	if ($script:CppLogSidecarEnabled -and [string]::IsNullOrWhiteSpace($LokiPushUrl)) {
+		$infraManifests += "loki.yaml"
+	}
+
+	foreach ($manifest in $infraManifests) {
 		$path = Join-Path $InfraManifestsDir $manifest
 		if (-not (Test-Path $path)) {
 			Write-Warning "Infra manifest not found: $path — skipping"

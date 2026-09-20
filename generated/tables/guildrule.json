@@ -1,0 +1,13 @@
+{
+ "data": [
+  {
+   "application_expire_hours": 72,
+   "asset_op_deadline_seconds": 600,
+   "asset_op_retry_base_ms": 1000,
+   "id": 1,
+   "max_pending_applications_per_guild": 50,
+   "max_pending_applications_per_player": 3,
+   "reunion_min_online_members": 3
+  }
+ ]
+}

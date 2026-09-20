@@ -58,6 +58,7 @@ func runUnmerge(o options) {
 		len(m.PlayerIDs), len(m.GuildIDs), len(m.RankMembers), m.Tables)
 	log.Printf("    scope: %d trade listings (schema=%s; restored only where market_zone is still %d)",
 		len(m.TradeListingIDs), o.tradeSchema, dst)
+	log.Printf("    scope: guild schema=%s (restored only where zone_id is still %d)", o.guildSchema, dst)
 	log.Printf("    NOTHING outside this list is touched — target-zone natives are safe by construction.")
 
 	db := mustOpenMySQL(ctx, o.mysqlDSN)
@@ -74,6 +75,13 @@ func runUnmerge(o options) {
 	if len(m.TradeListingIDs) > 0 {
 		if err := assertTradeListingReady(ctx, db, o.tradeSchema); err != nil {
 			log.Fatalf("preflight: manifest lists %d trade listings to restore, but %v", len(m.TradeListingIDs), err)
+		}
+	}
+
+	// 帮会前置:同理,清单里有公会 id = 当初真的搬过,独占库与两张表必须在(先证明,再写)。
+	if len(m.GuildIDs) > 0 {
+		if err := assertGuildTablesReady(ctx, db, o.guildSchema); err != nil {
+			log.Fatalf("preflight: manifest lists %d guilds to restore, but %v", len(m.GuildIDs), err)
 		}
 	}
 
@@ -138,7 +146,8 @@ func runUnmerge(o options) {
 			restored := 0
 			for _, batch := range chunkUint64(m.GuildIDs, playerRowsBatchSize) {
 				res, err := db.ExecContext(ctx,
-					fmt.Sprintf("UPDATE guild SET zone_id = ? WHERE zone_id = ? AND guild_id IN (%s)", inListLiteral(batch)),
+					fmt.Sprintf("UPDATE %s SET zone_id = ? WHERE zone_id = ? AND guild_id IN (%s)",
+						guildQualified(o.guildSchema, guildTable), inListLiteral(batch)),
 					src, dst)
 				if err != nil {
 					log.Fatalf("restore guild zone_id: %v", err)

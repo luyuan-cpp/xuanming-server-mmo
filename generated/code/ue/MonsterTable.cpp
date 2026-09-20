@@ -116,6 +116,24 @@ static void MonsterTableCheckNarrowedRow(const TSharedPtr<FJsonObject>& RowObjec
 	MonsterTableCheckNarrowedField(RowObject, TEXT("speed"), TEXT("speed"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	MonsterTableCheckNarrowedField(RowObject, TEXT("exp_reward"), TEXT("exp_reward"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
 	MonsterTableCheckNarrowedField(RowObject, TEXT("gold_reward"), TEXT("gold_reward"), RowIndex, 9223372036854775807.0, TEXT("uint64"));
+	// 子消息 drop[]:每个元素是一个对象,逐个元素查它的收窄列。
+	if (const TSharedPtr<FJsonValue>* DropField = RowObject->Values.Find(TEXT("drop")))
+	{
+		if (DropField->IsValid() && (*DropField)->Type == EJson::Array)
+		{
+			for (const TSharedPtr<FJsonValue>& Element : (*DropField)->AsArray())
+			{
+				if (!Element.IsValid() || Element->Type != EJson::Object)
+				{
+					continue;
+				}
+				const TSharedPtr<FJsonObject>& ElementObject = Element->AsObject();
+				MonsterTableCheckNarrowedField(ElementObject, TEXT("drop_item"), TEXT("drop[].drop_item"), RowIndex, 2147483647.0, TEXT("uint32"));
+				MonsterTableCheckNarrowedField(ElementObject, TEXT("drop_count"), TEXT("drop[].drop_count"), RowIndex, 2147483647.0, TEXT("uint32"));
+				MonsterTableCheckNarrowedField(ElementObject, TEXT("drop_rate"), TEXT("drop[].drop_rate"), RowIndex, 2147483647.0, TEXT("uint32"));
+			}
+		}
+	}
 }
 
 bool UMonsterTable::LoadFromJson(const FString& JsonText, FString& OutError)

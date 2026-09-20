@@ -1,7 +1,10 @@
 # Guild Service Configuration
 Name: guild.rpc
 ListenOn: 127.0.0.1:50300
-Timeout: 10000
+# zrpc 服务端整体超时(毫秒):≤ 路由服 ForwardTimeoutMs(5000)− 1000 = 4000
+# (docs/design/guild-phase2/00-contract.md §2)。另须 ≥ DataServiceRpc.Timeout + 1500(归属区查询)
+# + 500(回包余量);config.Validate 强制。
+Timeout: 4000
 
 # 刻意不写 go-zero 的 Etcd.Key(port-decisions D-13):guild 是全局服务,客户端经 gate → client_rpc_router
 # 按 GuildNodeService.rpc/ 前缀的 NodeInfo 找到它(internal/node),没有任何 Go 服务按 go-zero key 发现 guild;
@@ -34,12 +37,26 @@ MergeMarkerRedis:
   Pass: ""
   DB: 0
 
+# ---- 独占库 mmorpg_guild(D-14 §1/§5,§8 已修订)----
+# 库由 deploy/mysql-init/00_init_zone_dbs.sql 预建(存量卷需 root 手工执行那两行);表由 go/schemamigrate
+# 按 proto/guild/guild_db.proto 建。DSN 库名必须是 mmorpg_guild(config.Validate 断言)。
+# 账号用 appuser(与 go/trade/etc/trade.yaml 同账号,只对独占库有 ALL 权限)。
 MySQL:
-  DataSource: "root:Mmorpg#2026db@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local"
+  DataSource: "appuser:apppass123@tcp(127.0.0.1:3306)/mmorpg_guild?charset=utf8mb4&parseTime=true&loc=Local"
+
+# 建表策略(D-14 §4):不写或 true = 启动时 schemamigrate.Up(GET_LOCK 串行,锁忙重试 3 次);
+# false = 只跑只读 Plan,不干净就拒绝启动,并提示 `guild -f etc/guild.yaml -migrate`。K8s 非 dev 档固定 false。
+Schema:
+  AutoMigrate: true
 
 Node:
   ZoneId: 1
-  LeaseTTL: 500
+  # LeaseTTL(秒):与 chat / client_rpc_router / data_service / login / match / player_locator /
+  # scene_manager 对齐成 60。原值 500 来自 2025-09 的 5575b505f,没留取值理由。
+  # 它决定的是**非优雅死亡**后 etcd key 的滞留时长:500 意味着崩溃的实例在服务发现里挂 8 分多钟,
+  # 期间路由服仍会把客户端请求投给它。丢租约后 node.go:246 的 watchKeepAlive 会走 reRegister 重新注册,
+  # 所以缩短 TTL 不会让活着的实例掉出注册表。
+  LeaseTTL: 60
 
 Registry:
   Etcd:
@@ -65,7 +82,8 @@ DataServiceRpc:
     Hosts:
       - 127.0.0.1:2379
     Key: dataservice.rpc
-  Timeout: 3000
+  # 单次 data_service 调用上限(归属区查询 / 领号段)。与 Timeout 的预算关系见上;Validate 强制 [500, 3000]。
+  Timeout: 2000
   NonBlock: true
   Middlewares:
     Breaker: false

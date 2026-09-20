@@ -1,0 +1,147 @@
+syntax = "proto3";
+option go_package = "common/asset";
+
+import "proto/common/base/tip.proto";
+
+// 本文件**只依赖 common/base**,不得 import common/component 或 common/database。
+// 原因(2026-09-18 审稿 blocker):go_package 决定 Go 包边界,本文件是
+// `common/asset`,而 asset_op_ledger_comp.proto(`common/component`)反过来
+// import 本文件取 AssetOpStream。一旦本文件再 import component/database,
+// 生成的 Go 代码就是 component → asset → component 的包级循环,
+// `go build ./...` 必然 "import cycle not allowed"(protoc 本身是 DAG,不报错,
+// 炸点在 Go 编译)。AssetSnapshot 因此用下面内联的精简形状,不复用
+// ItemEntry / PetInstance。
+
+// 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §S4)。
+//
+// 一句话:Go 服务先在自己库里写一行"待办资产指令"并拿到该 (玩家, 流) 的递增 seq,
+// 再按 player:{id}:location 找到玩家所在 scene,调 SceneNodeGrpc.AssetDebit /
+// AssetCredit / AssetAbortDebit;scene 在 loop 线程同一次处理里做
+// "查账本 → 闸门 → 改资产 → 记账本 → 触发存盘",账本与资产同在 player_database
+// 一条记录里,一起落盘、一起丢(不变量 I3)。
+//
+// 枚举值带前缀:本文件无 package,C++ 枚举值落在全局作用域,裸 UNKNOWN/APPLIED
+// 会与他处冲突。
+
+// 流:每条流只有一个服务分配 seq(不变量 I6 流独占)。
+enum AssetOpStream {
+  ASSET_OP_STREAM_UNSPECIFIED = 0;
+  ASSET_OP_STREAM_GUILD_DEBIT = 1;    // guild 独占
+  ASSET_OP_STREAM_GUILD_CREDIT = 2;   // guild 独占
+  ASSET_OP_STREAM_TRADE_DEBIT = 3;    // trade 独占(聚宝斋 P2)
+  ASSET_OP_STREAM_TRADE_CREDIT = 4;   // trade 独占(聚宝斋 P2)
+  ASSET_OP_STREAM_SYSTEM_CREDIT = 5;  // 预留:邮件/GM 发物(D1)
+}
+
+enum AssetOpOutcome {
+  ASSET_OP_OUTCOME_UNKNOWN = 0;   // 请求畸形 / 验签失败 / 纪元过期 / 跳号过远 / seq 已滑出窗口:Go 告警,不终结
+  ASSET_OP_OUTCOME_APPLIED = 1;   // 可能带 partial=true(部分发放)
+  ASSET_OP_OUTCOME_REJECTED = 2;
+  ASSET_OP_OUTCOME_RETRY = 3;     // 暂时条件(冻结/战斗/背包满/退出中),未记账
+  ASSET_OP_OUTCOME_NOT_HERE = 4;  // 玩家不在本节点,未记账
+}
+
+message CurrencyAmount { uint32 currency_type = 1; uint64 amount = 2; }
+message ItemGrant      { uint32 config_id = 1;     uint32 count = 2; }
+
+// 资产包。已有字段号不改,扩展一律追加。
+message AssetBundle {
+  repeated CurrencyAmount currencies = 1;
+  repeated ItemGrant items = 2;
+
+  // ---- 聚宝斋 P2 追加(帮会不使用,帮会一律留空)----
+  //
+  // **签名已覆盖这两个字段**(2026-09-19 补齐,原先的硬前置已解除)。
+  //
+  // 背景值得留着:它们会真改玩家资产(按 guid 扣装备 / 扣宝宝),而 scene 的 gRPC 是
+  // `InsecureServerCredentials()`(node.cpp:623),集群内任意进程可连可嗅。早先 §4.32 的
+  // canonical 串只有 `"c=" 货币 ";i=" 物品(config_id:count)` 两段,**不覆盖**下面这两个
+  // 字段,于是攻击者可以截下一条合法 TRADE_DEBIT、只把 item_uuids 换成玩家的其它装备再发出,
+  // 该 seq 未见过、签名照样通过,scene 就会扣掉被换的那件 —— seq 幂等与 300s 时间窗
+  // 都挡不住这种"同 seq 抢跑改载荷"。
+  //
+  // 现在 canonical 是 `…;i=<config_id:count,…>;u=<item_uuid,…>;p=<pet_id>`(空则 `;u=;p=0`),
+  // C++ `AssetOpCanonical`、Go `assetop.Canonical` 与两边 golden 已同批改完;改这两个字段的
+  // **任何一位**都会让签名失效,守卫用例见 `AssetOpAuthTest.SignatureCoversGuidAndPetTamper`
+  // 与 Go `TestSignatureCoversGuidAndPetTamper`。帮会走 GUILD_* 流、这两段恒为空,不受影响。
+  //
+  // **仍未解除的是另一件事**:v1 的 scene 还没实现按 guid 扣物 / 扣宝宝(P3 托管的活),
+  // 所以带这两个字段的包目前一律记成终局 REJECTED(`kAssetInvalidBundle`)。
+  //
+  // 按 guid 全或无扣出:列出的每个 item_uuid 都必须在背包里、且属于**不可叠加**
+  // 物品(装备一类,stack_size 恒为 1),少一个就整批拒,不做部分扣出。
+  // 可叠加物品按 config_id + count 走 items 字段,不进本字段。
+  repeated uint64 item_uuids = 3;
+  // 按 guid 扣出/入账一只宝宝;0 = 不涉及宝宝。同样已进签名串(`;p=` 段),见上。
+  uint64 pet_id = 4;
+}
+
+// 调用方签名(§4.32,不变量 I9)。放在消息体里:生成的 gRPC 包装读不到 metadata
+// (grpc_handler_gen.go:125 把 context 参数注释掉了)。
+message AssetOpAuth {
+  string caller = 1;          // "guild" / "trade";按流白名单
+  uint64 timestamp_ms = 2;    // 签名时刻;与 scene 时钟偏差须 <= 300000
+  string signature_hex = 3;   // lowercase-hex(HMAC-SHA256(调用方密钥, canonical))
+}
+
+message AssetOpRequest {
+  uint64 player_id = 1;
+  AssetOpStream stream = 2;
+  uint64 seq = 3;             // 从 1 开始;0 非法
+  uint64 correlation_id = 4;  // 进 transaction_log.correlation_id(帮会 = op_id)
+  uint32 tx_type = 5;         // TransactionType 数值;按流白名单校验
+  AssetBundle bundle = 6;     // AssetAbortDebit 不使用,但仍进签名串
+  uint64 stream_epoch = 7;    // 流纪元(建 seq 行时的毫秒);0 非法
+  AssetOpAuth auth = 8;
+}
+
+// ---- 聚宝斋 P2 追加(帮会不使用)----
+//
+// **当前状态:纯预留,v1 既不填也不读。**(2026-09-19 跨包审稿 minor)
+// 下面三个 message 与 AssetOpResponse.snapshot 至今**零写者、零读者**:scene 侧
+// 没有任何 mutable_snapshot(...) 调用,Go 侧 assetop / trade 也没有 GetSnapshot(...)。
+// 留着是为了把字段号先钉死(§4.3.1「扩展一律追加」),不是"对账快照已经可用"。
+// 解锁条件:canonical 的 `;u=;p=` 两段已于 2026-09-19 补齐,剩下的是 scene 的填充与
+// trade 的读取(随 P3 托管一起落)。**在那之前谁都不要按"响应里已经
+// 有库存快照"去接线** —— 读到的一定是空 message,而空 message 与"本次没动任何
+// 库存"在 proto3 上不可区分,静默走错分支。
+//
+// 快照用的两个精简形状:本文件必须是叶子包(见文件头),不能 import
+// bag_quest_mail_data.proto 的 ItemEntry / player_pet_comp.proto 的 PetInstance。
+// 只取交易展示与对账需要的字段;pos / bag_type / allocated / aptitude 等
+// 持久化细节不进快照,scene 填充时从对应组件里取同名字段即可。
+message AssetItemInstance {
+  uint64 item_uuid = 1;   // 与 ItemEntry.item_uuid 同源(SnowFlake guid)
+  uint32 config_id = 2;   // ItemTable id
+  uint32 stack_size = 3;  // 不可叠加物品恒为 1
+}
+
+message AssetPetInstance {
+  uint64 pet_id = 1;       // 与 PetInstance.pet_id 同源(SnowFlake guid)
+  uint32 pet_table_id = 2; // Pet 表 id
+  string name = 3;         // 玩家自定义名;空 = 用 PetTable.name
+  uint32 level = 4;        // 成交时的等级快照,只为展示
+}
+
+// 【P2 预留,v1 不填不读】这一次指令实际动到的那份库存。将来交易侧用它做
+// "寄售快照 / 收货确认"的展示与对账;帮会的 Debit/Credit 永远不填此字段
+// (填充只会发生在 TRADE_* 流上)。解锁条件见上面那段。
+message AssetSnapshot {
+  // 本次扣出(Debit)或入账(Credit)的物品条目。
+  repeated AssetItemInstance items = 1;
+  // 本次扣出/入账的宝宝(AssetBundle.pet_id 非 0 时填);未涉及时 pet_id 为 0。
+  AssetPetInstance pet = 2;
+  // 本次扣出/入账的货币合计(单币种;多币种时取 AssetBundle.currencies 原样)。
+  CurrencyAmount currency = 3;
+}
+
+message AssetOpResponse {
+  AssetOpOutcome outcome = 1;
+  TipInfoMessage reason = 2;  // asset_error 段码;无原因时 id=0
+  bool durable = 3;           // 该 seq 的结局已在"最后一次成功写入 Redis 的玩家数据"里
+  bool partial = 4;           // APPLIED 但只发放了一部分(reason=kAssetPartialApplied);Go 不做对侧入账,转人工补偿
+  // ---- 聚宝斋 P2 追加字段从 5 起(帮会不使用)----
+  // 【P2 预留,v1 不填不读】交易库存快照。当前 scene 不填、Go 不读,解锁条件见
+  // AssetSnapshot 上方那段。占号在先,避免 P2 动手时再抢 5。
+  AssetSnapshot snapshot = 5;
+}

@@ -13,6 +13,8 @@ replace schemamigrate => ../schemamigrate
 require (
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/prometheus/client_golang v1.23.2
+	// 共享单库 Redis 的客户端:资产通道只读 player:{id}:location(go/shared/scenenode)。
+	github.com/redis/go-redis/v9 v9.17.3
 	github.com/stretchr/testify v1.11.1
 	github.com/zeromicro/go-zero v1.10.0
 	go.etcd.io/etcd/client/v3 v3.5.15
@@ -66,7 +68,6 @@ require (
 	github.com/prometheus/client_model v0.6.2 // indirect
 	github.com/prometheus/common v0.66.1 // indirect
 	github.com/prometheus/procfs v0.16.1 // indirect
-	github.com/redis/go-redis/v9 v9.17.3 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.15 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.15 // indirect

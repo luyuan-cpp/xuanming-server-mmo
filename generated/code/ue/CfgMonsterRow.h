@@ -40,6 +40,23 @@
 
 #include "CfgMonsterRow.generated.h"
 
+/// Monster.drop 的子消息行。
+USTRUCT(BlueprintType)
+struct FCfgMonsterDrop
+{
+	GENERATED_BODY()
+
+	/** 击杀掉落。每槽 (物品 id, 数量, 万分比概率) 三列,整槽要么三格全填要么全空(半空槽会被导表器并进上一槽) */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int32 drop_item = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int32 drop_count = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	int32 drop_rate = 0;
+};
+
 /// Monster 的一行。字段名与 monster.json 的键逐字符一致(snake_case),
 /// 见文件头「字段名口径」。
 ///
@@ -82,4 +99,7 @@ struct FCfgMonsterRow : public FTableRowBase
 
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
 	int64 gold_reward = 0;
+
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Monster")
+	TArray<FCfgMonsterDrop> drop;
 };

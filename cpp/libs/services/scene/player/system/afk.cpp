@@ -22,12 +22,13 @@ void AfkSystem::Update(double delta)
     //    Movement, AOI, and attribute sync systems use exclude<AfkComp>,
     //    so AFK players skip expensive per-tick processing automatically.
     //
-    //    PlayerFrozenComp exclude: cross-zone-migrating players are NOT
-    //    idle in the AFK sense — they're held write-disabled waiting for
-    //    the destination ACK. Without this exclude a slow ACK (>30s) would
-    //    flag them AFK, then the AFK-cleanup path could destroy them
-    //    before HandlePlayerMigrationAck runs, defeating Frozen's whole
-    //    purpose. cross-zone-readiness-audit.md §11.2.
+    //    PlayerFrozenComp exclude: players in an ownership handoff (zone
+    //    travel / cross-node scene switch) are NOT idle in the AFK sense —
+    //    they're held write-disabled until scene_manager's EnterScene reply
+    //    (or the travel watchdog) decides whether this node keeps them.
+    //    Without this exclude a slow handoff (>30s) would flag them AFK and
+    //    the AFK-cleanup path could destroy them mid-handoff, defeating
+    //    Frozen's whole purpose. cross-zone-scene-travel.md §11.2.
     auto activeView = registry.view<Player, LastActiveFrameComp>(
         entt::exclude<AfkComp, PlayerFrozenComp>);
     for (auto &&[entity, player, lastActive] : activeView.each())

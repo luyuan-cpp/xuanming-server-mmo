@@ -53,11 +53,15 @@ var Faults = []Fault{
 	{Code: 3018, Group: "scene_error", Name: "ChangeScenePlayerQueueComponentGsNull"},
 	{Code: 3019, Group: "scene_error", Name: "ChangeScenePlayerQueueComponentEmpty"},
 	{Code: 3023, Group: "scene_error", Name: "EnterSceneFailed"},
+	{Code: 4030, Group: "team_error", Name: "TeamInternal"},
 	{Code: 5003, Group: "mission_error", Name: "PlayerMissionComponentNotFound"},
 	{Code: 6002, Group: "bag_error", Name: "BagAddItemHasNotBaseComponent"},
 	{Code: 9000, Group: "entity_error", Name: "EntityTransformNotFound"},
 	{Code: 14008, Group: "guild_error", Name: "GuildIdGenUnavailable"},
 	{Code: 26016, Group: "pet_error", Name: "PetIdGenerateFailed"},
+	{Code: 27004, Group: "asset_error", Name: "AssetInvalidBundle"},
+	{Code: 27007, Group: "asset_error", Name: "AssetPartialApplied"},
+	{Code: 27008, Group: "asset_error", Name: "AssetAuthFailed"},
 }
 
 // faultSet 由 Faults 派生,不单独生成一份字面量:

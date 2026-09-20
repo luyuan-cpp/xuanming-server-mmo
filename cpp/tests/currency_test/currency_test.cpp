@@ -7,7 +7,9 @@
 #include "modules/currency/comp/player_currency_comp.h"
 #include "modules/currency/system/currency_system.h"
 #include "modules/transaction_log/anomaly_detector.h"
+#include "player/comp/player_frozen_comp.h" // 冻结用例:IsCrossZoneFrozen 就是 any_of<PlayerFrozenComp>
 #include "proto/common/component/currency_comp.pb.h"
+#include "table/proto/tip/asset_error_tip.pb.h" // kAssetFrozen / kAssetBlocked / kAssetCurrencyInsufficient
 #include "table/proto/tip/common_error_tip.pb.h"
 #include <thread_context/ecs_context.h>
 #include "modules/id_segment/guid_segment_registry.h"
@@ -31,6 +33,25 @@ struct MessageAsyncClientTestPeer
     static void Deliver(Client& client, redisReply* reply, const ElementPtr& element)
     {
         client.OnLoaded(nullptr, reply, element);
+    }
+
+    // 模拟一条带 guard 的存盘已经发出、正在等回包(不连 Redis,直接登记进 saving_queue_)。
+    static ElementPtr TrackGuardedSave(Client& client, const MessageKey& key,
+                                       const std::string& guardKey, const std::string& guardExpected)
+    {
+        auto element = std::make_shared<Element>();
+        element->message_key = key;
+        element->redis_key = client.full_name() + ":" + std::to_string(key);
+        element->message_value = std::make_shared<MessageValue>();
+        element->guard_key = guardKey;
+        element->guard_expected = guardExpected;
+        client.saving_queue_[element->redis_key] = element;
+        return element;
+    }
+
+    static void DeliverSaved(Client& client, redisReply* reply, const ElementPtr& element)
+    {
+        client.OnSaved(nullptr, reply, element);
     }
 };
 
@@ -390,6 +411,130 @@ TEST(CurrencyTest, RedisLoadOversizePayloadFailsClosed)
 }
 
 // ---------------------------------------------------------------------------
+// MessageAsyncClient 带归属校验的存盘(reentry-barrier §6.2 方案 a)
+// ---------------------------------------------------------------------------
+
+// guard 不等 → Lua 返回 0:是终态"这份期望值已作废",不是故障。必须只回 rejected 回调,
+// 不回成功、不回失败、不重试,且同 key 排队中**期望值相同**的更新值也一并丢弃。
+TEST(CurrencyTest, RedisGuardedSaveRejectedIsTerminalAndDropsPending)
+{
+    using Client = MessageAsyncClient<Guid, CurrencyComp>;
+    using Peer = MessageAsyncClientTestPeer<Guid, CurrencyComp>;
+
+    Client::HiredisPtr hiredis;
+    Client client(hiredis);
+    int savedCount = 0;
+    int failedCount = 0;
+    int rejectedCount = 0;
+    Guid rejectedKey = 0;
+    std::string rejectedRedisKey;
+    std::string rejectedGuard;
+    client.SetSaveCallback([&](Guid, CurrencyComp&) { ++savedCount; });
+    client.SetSaveFailedCallback([&](Guid, const std::string&, int) { ++failedCount; });
+    client.SetSaveRejectedCallback([&](Guid key, const std::string& redisKey, const std::string& guardExpected) {
+        ++rejectedCount;
+        rejectedKey = key;
+        rejectedRedisKey = redisKey;
+        rejectedGuard = guardExpected;
+        // 回调时队列必须已经清干净:调用方会在回调里销毁实体,之后不能再有任何
+        // 针对该 key 的写入冒出来。
+        EXPECT_EQ(0u, client.in_flight_save_count());
+        EXPECT_EQ(0u, client.pending_save_count());
+    });
+
+    constexpr Guid kPlayerId = 10003;
+    const std::string guardKey = "player:10003:owner_epoch";
+    const auto inFlight = Peer::TrackGuardedSave(client, kPlayerId, guardKey, "7");
+    // 同 key 的后续存盘在前一条回包前到达,按既有规则排进 pending(不碰 hiredis)。
+    client.Save(std::make_shared<CurrencyComp>(), kPlayerId, guardKey, "7");
+    ASSERT_EQ(1u, client.in_flight_save_count());
+    ASSERT_EQ(1u, client.pending_save_count());
+
+    redisReply reply{};
+    reply.type = REDIS_REPLY_INTEGER;
+    reply.integer = 0;
+    Peer::DeliverSaved(client, &reply, inFlight);
+
+    EXPECT_EQ(0, savedCount);
+    EXPECT_EQ(0, failedCount);
+    EXPECT_EQ(1, rejectedCount);
+    EXPECT_EQ(kPlayerId, rejectedKey);
+    EXPECT_EQ(inFlight->redis_key, rejectedRedisKey);
+    // 调用方要拿"被拒的那一份期望值"与实体当前缓存的 epoch 比,才能区分
+    // "自己被废黜"与"只是一笔旧代际的在途写"。
+    EXPECT_EQ("7", rejectedGuard);
+    EXPECT_EQ(0u, client.in_flight_save_count());
+    EXPECT_EQ(0u, client.pending_save_count());
+}
+
+// 在途存盘(guard=7)被拒时,排队中的值已经带着更新的归属(guard=8):调用方在这笔写
+// 在途期间拿到了新 epoch,仍是合法持有者。那份更新的快照必须照常发出,不能被当成
+// "同一份已作废的归属"丢掉;此时也不回 rejected(那笔旧写已被它取代)。
+TEST(CurrencyTest, RedisGuardedSaveRejectedKeepsPendingValueWithNewerGuard)
+{
+    using Client = MessageAsyncClient<Guid, CurrencyComp>;
+    using Peer = MessageAsyncClientTestPeer<Guid, CurrencyComp>;
+
+    Client::HiredisPtr hiredis;
+    Client client(hiredis);
+    int savedCount = 0;
+    int rejectedCount = 0;
+    client.SetSaveCallback([&](Guid, CurrencyComp&) { ++savedCount; });
+    client.SetSaveRejectedCallback([&](Guid, const std::string&, const std::string&) { ++rejectedCount; });
+
+    constexpr Guid kPlayerId = 10005;
+    const std::string guardKey = "player:10005:owner_epoch";
+    const auto inFlight = Peer::TrackGuardedSave(client, kPlayerId, guardKey, "7");
+    client.Save(std::make_shared<CurrencyComp>(), kPlayerId, guardKey, "8");
+    ASSERT_EQ(1u, client.in_flight_save_count());
+    ASSERT_EQ(1u, client.pending_save_count());
+
+    redisReply reply{};
+    reply.type = REDIS_REPLY_INTEGER;
+    reply.integer = 0;
+    Peer::DeliverSaved(client, &reply, inFlight);
+
+    EXPECT_EQ(0, savedCount);
+    EXPECT_EQ(0, rejectedCount) << "a stale in-flight write superseded by a newer-guard value is not a deposal";
+    EXPECT_EQ(0u, client.in_flight_save_count());
+    // 本用例没有真实 hiredis 连接,IssueSave 会把它放回 pending 等重连;关键是它**还在**。
+    EXPECT_EQ(1u, client.pending_save_count());
+}
+
+// guard 相等 → Lua 返回 1:与无 guard 的存盘完全一样走成功回调。
+TEST(CurrencyTest, RedisGuardedSaveAcceptedCompletesNormally)
+{
+    using Client = MessageAsyncClient<Guid, CurrencyComp>;
+    using Peer = MessageAsyncClientTestPeer<Guid, CurrencyComp>;
+
+    Client::HiredisPtr hiredis;
+    Client client(hiredis);
+    int savedCount = 0;
+    int rejectedCount = 0;
+    Guid savedKey = 0;
+    client.SetSaveCallback([&](Guid key, CurrencyComp&) {
+        ++savedCount;
+        savedKey = key;
+    });
+    client.SetSaveRejectedCallback([&](Guid, const std::string&, const std::string&) { ++rejectedCount; });
+
+    constexpr Guid kPlayerId = 10004;
+    const auto inFlight = Peer::TrackGuardedSave(client, kPlayerId, "player:10004:owner_epoch", "7");
+    ASSERT_EQ(1u, client.in_flight_save_count());
+
+    redisReply reply{};
+    reply.type = REDIS_REPLY_INTEGER;
+    reply.integer = 1;
+    Peer::DeliverSaved(client, &reply, inFlight);
+
+    EXPECT_EQ(1, savedCount);
+    EXPECT_EQ(kPlayerId, savedKey);
+    EXPECT_EQ(0, rejectedCount);
+    EXPECT_EQ(0u, client.in_flight_save_count());
+    EXPECT_EQ(0u, client.pending_save_count());
+}
+
+// ---------------------------------------------------------------------------
 // BlockCurrency (GM禁止获取)
 // ---------------------------------------------------------------------------
 
@@ -489,6 +634,110 @@ TEST(CurrencyTest, GetBalanceDefaultZero)
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyDiamond));
     EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyBindDiamond));
+
+    DestroyTestPlayer(player);
+}
+
+// ---------------------------------------------------------------------------
+// 资产通道错误码细分(docs/design/guild-phase2/04-asset-channel.md §4.11、§4.14.3)
+//
+// 这几条断言的是**具体取值**,不是 `EXPECT_NE(kSuccess, …)`。上面那些老用例只验
+// "失败了",于是 2026-09 之前"冻结"和"余额不足"和"参数写错了"回同一个
+// kInvalidParameter 也一路绿着 —— 而通用资产通道要靠这个返回值区分
+// RETRY(条件会消失,可重投)与 REJECTED(终局拒绝,记账并退款),混在一起
+// 就是要么重复发放、要么把玩家过图那几百毫秒里的奖励永久丢掉。
+// ---------------------------------------------------------------------------
+
+TEST(CurrencyTest, DeductInsufficientReturnsAssetCode)
+{
+    auto player = CreateTestPlayer();
+
+    CurrencySystem::AddCurrency(player, kCurrencyGold, 10);
+    EXPECT_EQ(kAssetCurrencyInsufficient, CurrencySystem::DeductCurrency(player, kCurrencyGold, 20));
+    EXPECT_EQ(10u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    DestroyTestPlayer(player);
+}
+
+TEST(CurrencyTest, DeductFrozenReturnsAssetFrozen)
+{
+    auto player = CreateTestPlayer();
+
+    CurrencySystem::AddCurrency(player, kCurrencyGold, 100);
+    // PlayerLifecycleSystem::IsCrossZoneFrozen 就是 valid() + any_of<PlayerFrozenComp>
+    // (player_lifecycle.cpp,函数名定位;那个文件正被跨 zone 会话改着,行号写下来就过期)。
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+
+    EXPECT_EQ(kAssetFrozen, CurrencySystem::DeductCurrency(player, kCurrencyGold, 30));
+    EXPECT_EQ(100u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 解冻之后同一笔扣款必须成立 —— 这条才说明 kAssetFrozen 真的是"暂时"。
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+    EXPECT_EQ(kSuccess, CurrencySystem::DeductCurrency(player, kCurrencyGold, 30));
+    EXPECT_EQ(70u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    DestroyTestPlayer(player);
+}
+
+TEST(CurrencyTest, AddFrozenReturnsAssetFrozen)
+{
+    auto player = CreateTestPlayer();
+
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+    EXPECT_EQ(kAssetFrozen, CurrencySystem::AddCurrency(player, kCurrencyGold, 50));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
+    EXPECT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 50));
+    EXPECT_EQ(50u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    DestroyTestPlayer(player);
+}
+
+TEST(CurrencyTest, AddBlockedReturnsAssetBlocked)
+{
+    auto player = CreateTestPlayer();
+
+    ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
+    EXPECT_EQ(kAssetBlocked, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+    EXPECT_EQ(0u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    // 封禁只挡获取,不挡扣除(既有语义,顺带钉住:它不该回 kAssetBlocked)。
+    CurrencySystem::UnblockCurrency(player, kCurrencyGold);
+    ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player, kCurrencyGold, 100));
+    ASSERT_EQ(kSuccess, CurrencySystem::BlockCurrency(player, kCurrencyGold));
+    EXPECT_EQ(kSuccess, CurrencySystem::DeductCurrency(player, kCurrencyGold, 40));
+    EXPECT_EQ(60u, CurrencySystem::GetBalance(player, kCurrencyGold));
+
+    DestroyTestPlayer(player);
+}
+
+TEST(CurrencyTest, ProgrammingErrorsStillReturnInvalidParameter)
+{
+    auto player = CreateTestPlayer();
+
+    // 这条是反向护栏:错误码细分**只**覆盖冻结 / 余额不足 / 封禁三种业务条件。
+    // "数量 <= 0""币种越界"是调用方写错了,仍旧回 kInvalidParameter ——
+    // 把它们也搬进 27000 段,资产通道就会把编程错误当成可重投的业务条件。
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, 0));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, -1));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::DeductCurrency(player, kCurrencyGold, 0));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::DeductCurrency(player, kCurrencyGold, -5));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyMax, 10));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::DeductCurrency(player, kCurrencyMax, 10));
+
+    // **判定顺序**:冻结 × 越界币种这个组合必须仍旧回 kInvalidParameter。
+    // 纯参数校验排在冻结之后的话,这里会拿到 RETRY 类的 kAssetFrozen,资产通道就会
+    // 对一个"解冻之后照样失败"的请求一直重投到超时 —— 那是一条只在两个条件同时
+    // 成立时才现形的缝,所以单独钉住。
+    tlsEcs.actorRegistry.emplace<PlayerFrozenComp>(player);
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyMax, 10));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::DeductCurrency(player, kCurrencyMax, 10));
+    EXPECT_EQ(kInvalidParameter, CurrencySystem::AddCurrency(player, kCurrencyGold, 0));
+    // 同一个冻结玩家、合法币种合法数量 —— 这时才该是 kAssetFrozen,证明上面三条
+    // 不是"冻结判定被整个删掉了"。
+    EXPECT_EQ(kAssetFrozen, CurrencySystem::AddCurrency(player, kCurrencyGold, 10));
+    tlsEcs.actorRegistry.remove<PlayerFrozenComp>(player);
 
     DestroyTestPlayer(player);
 }

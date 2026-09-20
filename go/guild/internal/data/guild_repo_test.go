@@ -4,7 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"os"
-	"slices"
+	"regexp"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,31 +16,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"guild/internal/constants"
+	"schemamigrate"
 )
-
-func TestDiffGuildIDSets_ReportsMissingAndGhostIDs(t *testing.T) {
-	missing, ghosts := diffGuildIDSets(
-		[]uint64{11, 22, 33, 44},
-		[]uint64{11, 33, 55},
-	)
-	if !slices.Equal(missing, []uint64{22, 44}) || !slices.Equal(ghosts, []uint64{55}) {
-		t.Fatalf("unexpected diff: missing=%v ghosts=%v", missing, ghosts)
-	}
-}
-
-func TestDiffGuildIDSets_EmptyLegacySnapshotFailsForNonEmptyMySQL(t *testing.T) {
-	missing, ghosts := diffGuildIDSets([]uint64{7, 8}, nil)
-	if !slices.Equal(missing, []uint64{7, 8}) || len(ghosts) != 0 {
-		t.Fatalf("unexpected diff: missing=%v ghosts=%v", missing, ghosts)
-	}
-}
-
-func TestDiffGuildIDSets_MatchingSetsIgnoreOrder(t *testing.T) {
-	missing, ghosts := diffGuildIDSets([]uint64{3, 1, 2}, []uint64{2, 3, 1})
-	if len(missing) != 0 || len(ghosts) != 0 {
-		t.Fatalf("matching sets produced diff: missing=%v ghosts=%v", missing, ghosts)
-	}
-}
 
 func TestCanSetAnnouncementOnlyAcceptsKnownPrivilegedRoles(t *testing.T) {
 	tests := []struct {
@@ -69,7 +47,7 @@ func TestUpdateAnnouncementAuthorizedRejectsStalePrivilegedCache(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	require.NoError(t, db.PingContext(ctx))
-	resetGuildAnnouncementIntegrationSchema(t, ctx, db)
+	resetGuildSchemaViaMigrate(t, ctx, db)
 
 	mr := miniredis.RunT(t)
 	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
@@ -82,13 +60,13 @@ func TestUpdateAnnouncementAuthorizedRejectsStalePrivilegedCache(t *testing.T) {
 	)
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO guild
-		 (guild_id, name, leader_id, level, announcement, create_time_ms, max_members, zone_id, score)
-		 VALUES (?, 'auth-test', 9001, 1, 'before', 1, 50, 1, 0)`, guildID)
+		 (guild_id, name, name_norm, leader_id, level, announcement, create_time_ms, max_members, zone_id, score, funds)
+		 VALUES (?, 'auth-test', 'auth-test', 9001, 1, 'before', 1, 50, 1, 0, 0)`, guildID)
 	require.NoError(t, err)
 	_, err = db.ExecContext(ctx,
 		`INSERT INTO guild_member
-		 (guild_id, player_id, role, join_time_ms, last_active_ms, contribution)
-		 VALUES (?, ?, ?, 1, 1, 0)`, guildID, playerID, constants.RoleOfficer)
+		 (guild_id, player_id, role, join_time_ms, last_active_ms, contribution_total, contribution_balance)
+		 VALUES (?, ?, ?, 1, 1, 0, 0)`, guildID, playerID, constants.RoleOfficer)
 	require.NoError(t, err)
 
 	// 先填入含 officer 的 Redis 快照，再绕过 repo 直接在权威库降权，模拟缓存陈旧。
@@ -140,38 +118,66 @@ func TestUpdateAnnouncementAuthorizedRejectsStalePrivilegedCache(t *testing.T) {
 	assert.Equal(t, "published", announcement)
 }
 
-func resetGuildAnnouncementIntegrationSchema(t *testing.T, ctx context.Context, db *sql.DB) {
+// guildTestDropTables:本服务全部表 + schemamigrate 台账。新增表时同步追加(TestDropListCoversTables 守数量)。
+var guildTestDropTables = []string{"guild_application", "guild_member", "guild_player_state", "guild", "schema_migrations"}
+
+// guildTestDBNamePattern:测试只许碰这两类一次性库。appuser 对 testdb / zone_N_db / mmorpg_trade 也有 ALL 权限,
+// 黑名单挡不住 DSN 指错,所以用白名单。
+var guildTestDBNamePattern = regexp.MustCompile(`^(guild_test|guild_it_\d+_\d+)$`)
+
+// resetGuildSchemaViaMigrate:DROP 全部表后经 schemamigrate.Up 重建 —— 与生产同一条建表路径,
+// 表结构只来自 proto/guild/guild_db.proto,测试里不再手写 DDL。
+func resetGuildSchemaViaMigrate(t *testing.T, ctx context.Context, db *sql.DB) {
 	t.Helper()
-	statements := []string{
-		"DROP TABLE IF EXISTS guild_member",
-		"DROP TABLE IF EXISTS guild",
-		`CREATE TABLE guild (
-            guild_id BIGINT UNSIGNED NOT NULL,
-            name VARCHAR(64) NOT NULL,
-            leader_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
-            level INT UNSIGNED NOT NULL DEFAULT 1,
-            announcement TEXT,
-            create_time_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
-            max_members INT UNSIGNED NOT NULL DEFAULT 50,
-            zone_id INT UNSIGNED NOT NULL DEFAULT 0,
-            score BIGINT NOT NULL DEFAULT 0,
-            PRIMARY KEY (guild_id),
-            UNIQUE KEY uk_name (name)
-        ) ENGINE=InnoDB`,
-		`CREATE TABLE guild_member (
-            guild_id BIGINT UNSIGNED NOT NULL,
-            player_id BIGINT UNSIGNED NOT NULL,
-            role TINYINT UNSIGNED NOT NULL DEFAULT 0,
-            join_time_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
-            last_active_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
-            contribution BIGINT UNSIGNED NOT NULL DEFAULT 0,
-            PRIMARY KEY (guild_id, player_id),
-            UNIQUE KEY uk_player (player_id)
-        ) ENGINE=InnoDB`,
+	var dbName string
+	require.NoError(t, db.QueryRowContext(ctx, "SELECT DATABASE()").Scan(&dbName))
+	if !guildTestDBNamePattern.MatchString(dbName) {
+		t.Fatalf("测试 DSN 指向库 %q:只允许 guild_test 或 guild_it_<pid>_<n>"+
+			"(防止误删 data_service / trade / go/db 的表与台账)", dbName)
 	}
-	for i, statement := range statements {
-		if _, err := db.ExecContext(ctx, statement); err != nil {
-			t.Fatalf("reset guild integration schema step %d failed: %v", i, err)
-		}
+	for _, table := range guildTestDropTables {
+		_, err := db.ExecContext(ctx, "DROP TABLE IF EXISTS `"+table+"`")
+		require.NoError(t, err, table)
 	}
+	report, err := schemamigrate.Up(ctx, db, schemamigrate.Options{Database: dbName, Tables: Tables(), Logf: t.Logf})
+	require.NoError(t, err)
+	require.Empty(t, report.Manual, "新建库不应出现需人工项")
+}
+
+// TestDropListCoversTables:新增表却忘了加进清理清单时,后续用例会在残留表上跑,必须红。
+func TestDropListCoversTables(t *testing.T) {
+	assert.Equal(t, len(Tables())+1, len(guildTestDropTables), "guildTestDropTables = 全部表 + schema_migrations")
+}
+
+func TestGuildTestDBNamePattern(t *testing.T) {
+	for _, ok := range []string{"guild_test", "guild_it_123_4"} {
+		assert.True(t, guildTestDBNamePattern.MatchString(ok), ok)
+	}
+	for _, bad := range []string{"mmorpg_guild", "mmorpg", "testdb", "zone_1_db", "mmorpg_trade", "guild_test2", ""} {
+		assert.False(t, guildTestDBNamePattern.MatchString(bad), bad)
+	}
+}
+
+// TestGuildNameNorm 钉住帮名唯一键的规范化公式(NFKC → TrimSpace → 小写)。
+func TestGuildNameNorm(t *testing.T) {
+	cases := map[string]string{
+		"青云门":       "青云门",
+		"  ABC ":    "abc",
+		"ＡＢＣ":       "abc",
+		"Ab　": "ab",
+	}
+	for in, want := range cases {
+		got, ok := GuildNameNorm(in)
+		assert.True(t, ok, in)
+		assert.Equal(t, want, got, in)
+	}
+	for _, bad := range []string{"", "   "} {
+		_, ok := GuildNameNorm(bad)
+		assert.False(t, ok, bad)
+	}
+	_, ok := GuildNameNorm(strings.Repeat("帮", constants.MaxGuildNameRunes))
+	assert.True(t, ok, "24 个汉字必须允许")
+	// ㍿ 经 NFKC 展开成 4 个字符,13 个即 52 rune,超过 MaxGuildNameNormRunes(48)。
+	_, ok = GuildNameNorm(strings.Repeat("㍿", 13))
+	assert.False(t, ok, "NFKC 展开后超长必须拒绝")
 }

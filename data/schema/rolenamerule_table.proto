@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+// RoleNameRule 表的权威 schema。源表 data/RoleNameRule.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 角色名的单行全局规则(与 PetRule 同套路:只取 id=1)。
+//
+// 为什么进表:guild-phase2/README §2「所有数值进配表,上线前由策划改表,不改代码」。
+// 字数上下界与空名兜底生成规则是策划口径,login(建角)与 data_service(名字登记表)
+// 读同一行,避免两端各写一个常量后悄悄分叉——分叉的后果是一端放行、另一端拒收,
+// 玩家看到的是「建角成功但进不去」。
+//
+// 什么不进表:字符集白名单、NFKC 归一化、敏感词表、结构上限 32 字
+// (playername.StructuralMaxRunes)都在代码里。它们是安全边界不是数值旋钮,
+// 表被改坏时不能把边界一起改坏;越界值由服务启动时的 fail-closed 校验拦下。
+//
+// 风险:min_chars / max_chars 只约束**新名字**(建角 / 改名那一刻校验),
+// 已落库的名字不会回溯校验,所以调紧规则不能用来清理存量名。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message RoleNameRuleTable {
+  option (cfg_sheet)       = "RoleNameRule";
+  option (cfg_source_file) = "RoleNameRule.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 规则行 id(固定 1)
+  uint32 id = 1;
+  // 角色名最少字数(Unicode 码点,去首尾空白后)
+  // 按码点数不按字节数:一个汉字 = 1 字;0 会让空串合法,启动校验拒之
+  uint32 min_chars = 2;
+  // 角色名最多字数(≤ 32)
+  // 上界 32 是代码里的结构上限 playername.StructuralMaxRunes,表里再大也会被启动校验拒
+  uint32 max_chars = 3;
+  // 空名时服务端生成名的前缀
+  // 只有机器人 / 无 UI 路径会走到(正式客户端建角必填),前缀本身也要满足字数与字符集规则
+  string generated_prefix = 4;
+  // 生成名随机后缀位数([a-z0-9])
+  // 前缀字数 + 本值必须落在 [min_chars, max_chars] 内;位数越小越容易撞名
+  uint32 generated_suffix_len = 5;
+  // 生成名撞名时最多尝试次数
+  // 每次尝试都要打一次名字登记表,调大会放大建角延迟;尝试用尽按失败返回,不降级成重名
+  uint32 max_generate_attempts = 6;
+  // 说明
+  string desc = 7;
+}

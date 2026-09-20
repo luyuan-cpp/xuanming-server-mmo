@@ -1580,8 +1580,13 @@ type GateTokenPayload struct {
 	// signed-message path; Gate falls back to adler32-only validation in
 	// codec.cpp. The key is rotated on every fresh login (no Redis state).
 	HmacSessionKey []byte `protobuf:"bytes,4,opt,name=hmac_session_key,json=hmacSessionKey,proto3" json:"hmac_session_key,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// 持票者绑定:重定向票据只对该玩家有效,目标 gate/login 拒绝他人持票。0=旧版签发者未填。
+	PlayerId uint64 `protobuf:"varint,5,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// 跨 zone 传送的目标 zone:目标 zone 的 login 看到 target_zone_id == 本 zone 时不按 home_zone 弹回。
+	// 0=普通登录票据(按 home_zone 规则)。见 cross-zone-scene-travel.md CZ-8。
+	TargetZoneId  uint32 `protobuf:"varint,6,opt,name=target_zone_id,json=targetZoneId,proto3" json:"target_zone_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GateTokenPayload) Reset() {
@@ -1640,6 +1645,20 @@ func (x *GateTokenPayload) GetHmacSessionKey() []byte {
 		return x.HmacSessionKey
 	}
 	return nil
+}
+
+func (x *GateTokenPayload) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GateTokenPayload) GetTargetZoneId() uint32 {
+	if x != nil {
+		return x.TargetZoneId
+	}
+	return 0
 }
 
 // Client sends this as the FIRST protobuf message after TCP-connecting to Gate.
@@ -1862,13 +1881,15 @@ const file_proto_common_base_message_proto_rawDesc = "" +
 	"\tself_node\x18\x03 \x01(\v2\t.NodeInfoR\bselfNode\"u\n" +
 	"\x15NodeHandshakeResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12&\n" +
-	"\tpeer_node\x18\x02 \x01(\v2\t.NodeInfoR\bpeerNode\"\xa2\x01\n" +
+	"\tpeer_node\x18\x02 \x01(\v2\t.NodeInfoR\bpeerNode\"\xe5\x01\n" +
 	"\x10GateTokenPayload\x12 \n" +
 	"\fgate_node_id\x18\x01 \x01(\rR\n" +
 	"gateNodeId\x12\x17\n" +
 	"\azone_id\x18\x02 \x01(\rR\x06zoneId\x12)\n" +
 	"\x10expire_timestamp\x18\x03 \x01(\x03R\x0fexpireTimestamp\x12(\n" +
-	"\x10hmac_session_key\x18\x04 \x01(\fR\x0ehmacSessionKey\"R\n" +
+	"\x10hmac_session_key\x18\x04 \x01(\fR\x0ehmacSessionKey\x12\x1b\n" +
+	"\tplayer_id\x18\x05 \x01(\x04R\bplayerId\x12$\n" +
+	"\x0etarget_zone_id\x18\x06 \x01(\rR\ftargetZoneId\"R\n" +
 	"\x18ClientTokenVerifyRequest\x12\x18\n" +
 	"\apayload\x18\x01 \x01(\fR\apayload\x12\x1c\n" +
 	"\tsignature\x18\x02 \x01(\fR\tsignature\"K\n" +

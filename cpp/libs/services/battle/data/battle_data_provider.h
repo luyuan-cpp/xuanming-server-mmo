@@ -7,6 +7,7 @@
 #include "table/proto/skillpermission_table.pb.h"
 #include "table/proto/dungeon_table.pb.h"
 #include "table/proto/monster_table.pb.h"
+#include "table/proto/item_table.pb.h"
 
 // 回合制战斗引擎的表数据供给接口(设计文档 §5.1)。
 //
@@ -27,6 +28,9 @@ public:
     virtual const SkillPermissionTable* FindSkillPermission(uint32_t combatStateId) const = 0;
     virtual const DungeonTable* FindDungeon(uint32_t dungeonTableId) const = 0;
     virtual const MonsterTable* FindMonster(uint32_t monsterTableId) const = 0;
+    // 物品行:引擎只读 battle_usable / battle_heal_hp / battle_heal_mp 三列,
+    // 用于 ITEM 行动的合法性与效果。查不到 = 配置缺失,ITEM 一律拒绝。
+    virtual const ItemTable* FindItem(uint32_t itemTableId) const = 0;
 
     // 冷却时长(毫秒;CooldownTable.duration 与实时战斗同口径),查不到返回 0
     virtual uint64_t GetCooldownDurationMs(uint32_t cooldownTableId) const = 0;

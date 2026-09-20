@@ -13,8 +13,6 @@
 #include "network/node_message_utils.h"
 #include "network/network_utils.h"
 #include "engine/thread_context/node_context_manager.h"
-#include "proto/common/component/team_comp.pb.h"
-#include "proto/scene_manager/storage.pb.h"
 #include "proto/scene_manager/scene_manager_service.pb.h"
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
 #include "network/node_utils.h"
@@ -37,150 +35,11 @@ uint64_t GuidForLog(entt::entity player)
 	return g ? *g : 0;
 }
 
-// Validate a hiredis reply and parse its payload into a protobuf message.
-// Returns false (silently) when the reply is nil/missing or the player is
-// gone; logs and returns false on an oversized or corrupt payload.
-template <typename T>
-bool ParsePlayerRedisReply(entt::entity player, void* replyVoid, const char* payloadName, T& out)
-{
-	auto* reply = static_cast<redisReply*>(replyVoid);
-	if (reply == nullptr || reply->type == REDIS_REPLY_NIL)
-	{
-		return false;
-	}
-	if (!tlsEcs.actorRegistry.valid(player))
-	{
-		return false;
-	}
-	if (reply->len > static_cast<size_t>(std::numeric_limits<int>::max()))
-	{
-		LOG_ERROR << payloadName << " payload too large for protobuf parser, len=" << reply->len;
-		return false;
-	}
-	if (!out.ParseFromArray(reply->str, static_cast<int>(reply->len)))
-	{
-		LOG_ERROR << "Failed to parse " << payloadName << " from Redis for player " << GuidForLog(player);
-		return false;
-	}
-	return true;
-}
-
 }  // namespace
 
-// Callback wrapper for Hiredis
-void PlayerSceneSystem::OnGetTeamInfo(entt::entity player, void* replyVoid)
-{
-	TeamInfo teamInfo;
-	if (!ParsePlayerRedisReply(player, replyVoid, "TeamInfo", teamInfo))
-	{
-		return;
-	}
-
-	uint64_t leaderId = teamInfo.leader_id();
-	uint64_t myId = tlsEcs.actorRegistry.get<Guid>(player);
-
-	if (leaderId == 0 || leaderId == myId)
-	{
-		return; // Not a follower or invalid team
-	}
-
-	// Fetch leader location
-	auto cb = [player](hiredis::Hiredis* c, redisReply* r) {
-		OnGetLeaderLocation(player, r);
-	};
-	auto &zoneRedis = tlsRedis.GetZoneRedis();
-	if (!zoneRedis || !zoneRedis->connected())
-	{
-		LOG_WARN << "Skip leader-location lookup: Redis not connected (leaderId=" << leaderId << ")";
-		return;
-	}
-	zoneRedis->command(cb, "GET player:%llu:location", leaderId);
-}
-
-void PlayerSceneSystem::OnGetLeaderLocation(entt::entity player, void* replyVoid)
-{
-	storage::PlayerLocation loc;
-	if (!ParsePlayerRedisReply(player, replyVoid, "PlayerLocation", loc))
-	{
-		return;
-	}
-
-	// Compare scenes
-	const auto sceneEntity = tlsEcs.actorRegistry.try_get<SceneEntityComp>(player);
-	if (!sceneEntity) {
-		return;
-	}
-
-	// SceneEntityComp::sceneEntity 是 sceneRegistry 的句柄,不是 actorRegistry 的。
-	// 全仓 SceneInfoComp 只在 sceneRegistry 上 emplace(scene_node_service.cpp /
-	// scene_handler.cpp,都紧跟 sceneRegistry.create()),本文件 167/261 行以及
-	// s2s_player_scene_handler.cpp 也都是从 sceneRegistry 读。这里查 actorRegistry
-	// 恒为 nullptr,于是队伍跟随链在这一行就永远早退 —— 队员从来不会被拉去队长的场景。
-	const auto sceneInfo = tlsEcs.sceneRegistry.try_get<SceneInfoComp>(sceneEntity->sceneEntity);
-	if (!sceneInfo) {
-		return;
-	}
-
-	uint64_t currentSceneId = sceneInfo->scene_id();
-	uint64_t leaderSceneId = loc.scene_id();
-
-	if (leaderSceneId != 0 && leaderSceneId != currentSceneId)
-	{
-		// 回合制战斗冻结拦截:战斗在途不跟随队长切场景(设计文档 §5.3 冻结清单)
-		if (PlayerBattleSystem::IsInBattle(player))
-		{
-			LOG_INFO << "[PlayerBattle] 队伍跟随切场景跳过: 玩家战斗在途, player_id=" << GuidForLog(player);
-			return;
-		}
-
-		const auto* playerSessionPB = tlsEcs.actorRegistry.try_get<PlayerSessionSnapshotComp>(player);
-		if (!playerSessionPB)
-		{
-			LOG_ERROR << "PlayerSessionSnapshotComp missing for follower " << GuidForLog(player);
-			return;
-		}
-
-		// Resolve gate info
-		NodeId gateNodeId = GetGateNodeId(playerSessionPB->gate_session_id());
-
-		// 同 player_lifecycle.cpp:同样不能拿 node_id 当 entt 实体句柄
-		// (network_utils.h:27-30 的禁令)。走 ResolveLocalZoneGateEntity,
-		// 否则 gateInstanceId 会是空串,而 scene_manager 侧要靠它做 gate 防僵尸过滤。
-		std::string gateInstanceId;
-		auto& gateRegistry = tlsNodeContextManager.GetRegistry(eNodeType::GateNodeService);
-		if (const auto gateEntityOpt = ResolveLocalZoneGateEntity(playerSessionPB->gate_session_id()))
-		{
-			if (const auto* gateNodeInfo = gateRegistry.try_get<NodeInfo>(*gateEntityOpt))
-			{
-				gateInstanceId = gateNodeInfo->node_uuid();
-			}
-		}
-
-		// Find a SceneManager gRPC node
-		auto smEntity = GetSceneManagerEntity(playerSessionPB->player_id());
-		if (smEntity == entt::null)
-		{
-			LOG_WARN << "No SceneManager node available, cannot follow leader to scene " << leaderSceneId;
-			return;
-		}
-
-		auto &smRegistry = tlsNodeContextManager.GetRegistry(eNodeType::SceneManagerNodeService);
-
-		::scene_manager::EnterSceneRequest req;
-		req.set_player_id(playerSessionPB->player_id());
-		req.set_scene_id(leaderSceneId);
-		req.set_session_id(playerSessionPB->gate_session_id());
-		req.set_gate_id(std::to_string(gateNodeId));
-		req.set_gate_instance_id(gateInstanceId);
-		req.set_gate_zone_id(GetZoneId());
-		req.set_zone_id(GetZoneId());
-
-		scene_manager::SendSceneManagerEnterScene(smRegistry, smEntity, req);
-
-		LOG_INFO << "Player " << playerSessionPB->player_id()
-				 << " (Follower) requesting SceneManager to switch to Leader's scene " << leaderSceneId;
-	}
-}
+// 组队跟随(原第 5 步 OnGetTeamInfo / OnGetLeaderLocation)已迁到 PlayerTeamSystem
+// (player_team.{h,cpp},team-system.md §F.2):调用点改为 HandleEnterScene 之后,
+// 因为本函数开头的"已在目标场景"幂等早退会让同场景重连漏掉刷新。
 
 void PlayerSceneSystem::HandleEnterScene(entt::entity player, entt::entity scene)
 {
@@ -261,22 +120,6 @@ void PlayerSceneSystem::HandleEnterScene(entt::entity player, entt::entity scene
 
 	LOG_INFO << "HandleEnterScene: player " << GuidForLog(player)
 			 << " entered scene_id=" << sceneInfo->scene_id();
-
-	// 5. Team Follow Logic: if player is in a team, check leader location.
-	const auto teamIdComp = tlsEcs.actorRegistry.try_get<TeamId>(player);
-	if (teamIdComp && teamIdComp->team_id() != 0)
-	{
-		auto cb = [player](hiredis::Hiredis* c, redisReply* r) {
-			OnGetTeamInfo(player, r);
-		};
-		auto &zoneRedis = tlsRedis.GetZoneRedis();
-		if (!zoneRedis || !zoneRedis->connected())
-		{
-			LOG_WARN << "Skip team-info lookup: Redis not connected (team_id=" << teamIdComp->team_id() << ")";
-			return;
-		}
-		zoneRedis->command(cb, "GET team:%llu", teamIdComp->team_id());
-	}
 }
 
 bool PlayerSceneSystem::RequestEnterMirrorScene(entt::entity player, uint32_t mirrorConfigId)

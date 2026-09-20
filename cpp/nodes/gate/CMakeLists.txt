@@ -74,6 +74,8 @@ set(SOURCE_FILES
     rpc_replies/register_handler.cpp
     rpc_replies/register_response_handler.cpp
     rpc_replies/route_message_response_handler.cpp
+    # 2026-09-18 补登记:gate.vcxproj 有、Linux CMake 清单漏了。
+    handler/event/match_event_handler.cpp
 )
 
 find_package(absl CONFIG REQUIRED)

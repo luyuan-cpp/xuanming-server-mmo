@@ -3,6 +3,7 @@ option go_package = "login/proto/common/database";
 
 import "proto/db/proto_option.proto";
 import "proto/common/base/user_accounts.proto";
+import "proto/common/component/asset_op_ledger_comp.proto";
 import "proto/common/component/player_attribute_comp.proto";
 import "proto/common/component/player_pet_comp.proto";
 import "proto/common/component/player_scene_comp.proto";
@@ -128,6 +129,17 @@ message player_database
   // 背包资产与任务领取权同属一条玩家数据库记录，随同一 DBTask 保存。
   BagAllData bag_component = 13;
   QuestAllData mission_component = 14;
+  // 15 预留给 B3a-1 的 PlayerProfileComp profile_component(尚未落码)。
+  // 字段号归属由 docs/design/guild-phase2/90-consistency.md G-03 裁决:
+  // 按 91-batches-and-codex.md 的批次顺序 B3a-1 取 15、B4a-1 取 16,
+  // S4 4.3.4 原文的"= 15"已作废。若主会话按 91 §1 末尾的"B3/B4 整体对调"
+  // 执行,则两者互换,但必须同批改掉 90-consistency.md G-03 与 91 的表格,
+  // 不能只在交付说明里口头交代。
+  //
+  // 通用资产通道账本(每流 seq 窗口),docs/design/guild-phase2/04-asset-channel.md §4.3.4。
+  // 必须与 currency / bag_component 同记录同 DBTask:账本与资产一起落盘、一起丢,
+  // 否则会出现"资产落了账本没落"的中间态,同一笔指令被重复应用(不变量 I3)。
+  PlayerAssetOpLedgerComp asset_op_ledger = 16;
 }
 
 message player_database_1

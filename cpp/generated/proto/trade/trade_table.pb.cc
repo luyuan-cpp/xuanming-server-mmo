@@ -33,10 +33,186 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto, /* tracker*/ nullptr,},
         // ::trade::TradeFavoriteRecord
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto, /* tracker*/ nullptr,},
+        // ::trade::TradePlayerOpSeqRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto, /* tracker*/ nullptr,},
+        // ::trade::TradeAssetOpRecord
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto, /* tracker*/ nullptr,},
 };
 }  // namespace
 #endif
 namespace trade {
+class TradePlayerOpSeqRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<TradePlayerOpSeqRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_._has_bits_);
+};
+
+constexpr TradePlayerOpSeqRecord::ParseTableT_ TradePlayerOpSeqRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      5, 56,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967264,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      5,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::TradePlayerOpSeqRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 player_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradePlayerOpSeqRecord, _impl_.player_id_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.player_id_)}},
+      // uint32 stream = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TradePlayerOpSeqRecord, _impl_.stream_), 4>(),
+       {16, 4, 0,
+        PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.stream_)}},
+      // uint64 next_seq = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradePlayerOpSeqRecord, _impl_.next_seq_), 1>(),
+       {24, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.next_seq_)}},
+      // uint64 epoch = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradePlayerOpSeqRecord, _impl_.epoch_), 2>(),
+       {32, 2, 0,
+        PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.epoch_)}},
+      // uint64 updated_ms = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradePlayerOpSeqRecord, _impl_.updated_ms_), 3>(),
+       {40, 3, 0,
+        PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.updated_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 player_id = 1;
+      {PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 stream = 2;
+      {PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.stream_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 next_seq = 3;
+      {PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.next_seq_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 epoch = 4;
+      {PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.epoch_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 updated_ms = 5;
+      {PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.updated_ms_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr TradePlayerOpSeqRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        player_id_{::uint64_t{0u}},
+        next_seq_{::uint64_t{0u}},
+        epoch_{::uint64_t{0u}},
+        updated_ms_{::uint64_t{0u}},
+        stream_{0u} {}
+
+template <typename>
+constexpr TradePlayerOpSeqRecord::TradePlayerOpSeqRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL TradePlayerOpSeqRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) TradePlayerOpSeqRecord(arena);
+}
+constexpr auto TradePlayerOpSeqRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(TradePlayerOpSeqRecord), alignof(TradePlayerOpSeqRecord));
+}
+constexpr auto TradePlayerOpSeqRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &TradePlayerOpSeqRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<TradePlayerOpSeqRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &TradePlayerOpSeqRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<TradePlayerOpSeqRecord>(), &TradePlayerOpSeqRecord::ByteSizeLong,
+              &TradePlayerOpSeqRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[2],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct TradePlayerOpSeqRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr TradePlayerOpSeqRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 TradePlayerOpSeqRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(TradePlayerOpSeqRecord::InternalGenerateClassData_(
+            _default, &TradePlayerOpSeqRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<TradePlayerOpSeqRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~TradePlayerOpSeqRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) TradePlayerOpSeqRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<TradePlayerOpSeqRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TradePlayerOpSeqRecordGlobalsTypeInternal TradePlayerOpSeqRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* TradePlayerOpSeqRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return TradePlayerOpSeqRecord_globals_.GetClassData();
+#else
+  return TradePlayerOpSeqRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 class TradeListingRecord::_Internal {
  public:
   using HasBits = decltype(::std::declval<TradeListingRecord>()._impl_._has_bits_);
@@ -490,9 +666,303 @@ const ::_pbi::ClassData* TradeFavoriteRecord_get_class_data() {
 }
 }  // namespace
 #endif  // PROTOBUF_CUSTOM_VTABLE
+class TradeAssetOpRecord::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<TradeAssetOpRecord>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_._has_bits_);
+};
+
+constexpr TradeAssetOpRecord::ParseTableT_ TradeAssetOpRecord::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_._has_bits_),
+      0, // no _extensions_
+      21, 248,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4292870144,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      21,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::trade::TradeAssetOpRecord>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      {::_pbi::TcParser::MiniParse, {}},
+      // uint64 op_id = 1;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeAssetOpRecord, _impl_.op_id_), 1>(),
+       {8, 1, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.op_id_)}},
+      // uint64 player_id = 2;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeAssetOpRecord, _impl_.player_id_), 2>(),
+       {16, 2, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.player_id_)}},
+      // uint32 stream = 3;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TradeAssetOpRecord, _impl_.stream_), 4>(),
+       {24, 4, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.stream_)}},
+      // uint64 stream_epoch = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeAssetOpRecord, _impl_.stream_epoch_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.stream_epoch_)}},
+      // uint64 seq = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeAssetOpRecord, _impl_.seq_), 6>(),
+       {40, 6, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.seq_)}},
+      // .trade.TradeAssetOpKind kind = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TradeAssetOpRecord, _impl_.kind_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.kind_)}},
+      // .trade.TradeAssetOpStatus status = 7;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TradeAssetOpRecord, _impl_.status_), 7>(),
+       {56, 7, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.status_)}},
+      // bool durable = 8;
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(TradeAssetOpRecord, _impl_.durable_), 8>(),
+       {64, 8, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.durable_)}},
+      // uint32 attempts = 9;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TradeAssetOpRecord, _impl_.attempts_), 11>(),
+       {72, 11, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.attempts_)}},
+      // uint64 next_attempt_ms = 10;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeAssetOpRecord, _impl_.next_attempt_ms_), 9>(),
+       {80, 9, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.next_attempt_ms_)}},
+      // uint64 deadline_ms = 11;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeAssetOpRecord, _impl_.deadline_ms_), 10>(),
+       {88, 10, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.deadline_ms_)}},
+      // uint64 lease_until_ms = 12;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeAssetOpRecord, _impl_.lease_until_ms_), 13>(),
+       {96, 13, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.lease_until_ms_)}},
+      // uint64 lease_token = 13;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(TradeAssetOpRecord, _impl_.lease_token_), 14>(),
+       {104, 14, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.lease_token_)}},
+      // uint32 tx_type = 14;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TradeAssetOpRecord, _impl_.tx_type_), 12>(),
+       {112, 12, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.tx_type_)}},
+      // .trade.TradeAssetOpRefKind ref_kind = 15;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(TradeAssetOpRecord, _impl_.ref_kind_), 16>(),
+       {120, 16, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.ref_kind_)}},
+      // uint64 ref_id = 16;
+      {::_pbi::TcParser::FastV64S2,
+       {384, 15, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.ref_id_)}},
+      // bytes payload = 17;
+      {::_pbi::TcParser::FastBS2,
+       {394, 0, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.payload_)}},
+      // uint32 last_outcome = 18;
+      {::_pbi::TcParser::FastV32S2,
+       {400, 17, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.last_outcome_)}},
+      // uint32 last_reason = 19;
+      {::_pbi::TcParser::FastV32S2,
+       {408, 20, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.last_reason_)}},
+      // uint64 created_ms = 20;
+      {::_pbi::TcParser::FastV64S2,
+       {416, 18, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.created_ms_)}},
+      // uint64 updated_ms = 21;
+      {::_pbi::TcParser::FastV64S2,
+       {424, 19, 0,
+        PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.updated_ms_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 op_id = 1;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.op_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 player_id = 2;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.player_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 stream = 3;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.stream_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 stream_epoch = 4;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.stream_epoch_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 seq = 5;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.seq_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // .trade.TradeAssetOpKind kind = 6;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.kind_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // .trade.TradeAssetOpStatus status = 7;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.status_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // bool durable = 8;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.durable_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      // uint32 attempts = 9;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.attempts_), _Internal::kHasBitsOffset + 11, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 next_attempt_ms = 10;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.next_attempt_ms_), _Internal::kHasBitsOffset + 9, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 deadline_ms = 11;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.deadline_ms_), _Internal::kHasBitsOffset + 10, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 lease_until_ms = 12;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.lease_until_ms_), _Internal::kHasBitsOffset + 13, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 lease_token = 13;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.lease_token_), _Internal::kHasBitsOffset + 14, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint32 tx_type = 14;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.tx_type_), _Internal::kHasBitsOffset + 12, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // .trade.TradeAssetOpRefKind ref_kind = 15;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.ref_kind_), _Internal::kHasBitsOffset + 16, 0, (0 | ::_fl::kFcOptional | ::_fl::kOpenEnum)},
+      // uint64 ref_id = 16;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.ref_id_), _Internal::kHasBitsOffset + 15, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // bytes payload = 17;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.payload_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kBytes | ::_fl::kRepAString)},
+      // uint32 last_outcome = 18;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.last_outcome_), _Internal::kHasBitsOffset + 17, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 last_reason = 19;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.last_reason_), _Internal::kHasBitsOffset + 20, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 created_ms = 20;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.created_ms_), _Internal::kHasBitsOffset + 18, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 updated_ms = 21;
+      {PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.updated_ms_), _Internal::kHasBitsOffset + 19, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr TradeAssetOpRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        payload_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
+        op_id_{::uint64_t{0u}},
+        player_id_{::uint64_t{0u}},
+        stream_epoch_{::uint64_t{0u}},
+        stream_{0u},
+        kind_{static_cast< ::trade::TradeAssetOpKind >(0)},
+        seq_{::uint64_t{0u}},
+        status_{static_cast< ::trade::TradeAssetOpStatus >(0)},
+        durable_{false},
+        next_attempt_ms_{::uint64_t{0u}},
+        deadline_ms_{::uint64_t{0u}},
+        attempts_{0u},
+        tx_type_{0u},
+        lease_until_ms_{::uint64_t{0u}},
+        lease_token_{::uint64_t{0u}},
+        ref_id_{::uint64_t{0u}},
+        ref_kind_{static_cast< ::trade::TradeAssetOpRefKind >(0)},
+        last_outcome_{0u},
+        created_ms_{::uint64_t{0u}},
+        updated_ms_{::uint64_t{0u}},
+        last_reason_{0u} {}
+
+template <typename>
+constexpr TradeAssetOpRecord::TradeAssetOpRecord(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL TradeAssetOpRecord::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) TradeAssetOpRecord(arena);
+}
+constexpr auto TradeAssetOpRecord::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(TradeAssetOpRecord), alignof(TradeAssetOpRecord));
+}
+constexpr auto TradeAssetOpRecord::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &TradeAssetOpRecord::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<TradeAssetOpRecord>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &TradeAssetOpRecord::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<TradeAssetOpRecord>(), &TradeAssetOpRecord::ByteSizeLong,
+              &TradeAssetOpRecord::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[3],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct TradeAssetOpRecordGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr TradeAssetOpRecordGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 TradeAssetOpRecord_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(TradeAssetOpRecord::InternalGenerateClassData_(
+            _default, &TradeAssetOpRecord_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<TradeAssetOpRecord>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~TradeAssetOpRecordGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) TradeAssetOpRecord _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<TradeAssetOpRecord>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(TradeAssetOpRecordGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST TradeAssetOpRecordGlobalsTypeInternal TradeAssetOpRecord_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* TradeAssetOpRecord_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return TradeAssetOpRecord_globals_.GetClassData();
+#else
+  return TradeAssetOpRecord_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
 }  // namespace trade
 static const ::_pb::EnumDescriptor* PROTOBUF_NONNULL
-    file_level_enum_descriptors_proto_2ftrade_2ftrade_5ftable_2eproto[1];
+    file_level_enum_descriptors_proto_2ftrade_2ftrade_5ftable_2eproto[4];
 static constexpr const ::_pb::ServiceDescriptor* PROTOBUF_NONNULL* PROTOBUF_NULLABLE
     file_level_service_descriptors_proto_2ftrade_2ftrade_5ftable_2eproto = nullptr;
 const ::uint32_t
@@ -548,17 +1018,79 @@ const ::uint32_t
         0,
         1,
         2,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::TradePlayerOpSeqRecord, _impl_._has_bits_),
+        8, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::TradePlayerOpSeqRecord, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradePlayerOpSeqRecord, _impl_.stream_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradePlayerOpSeqRecord, _impl_.next_seq_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradePlayerOpSeqRecord, _impl_.epoch_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradePlayerOpSeqRecord, _impl_.updated_ms_),
+        0,
+        4,
+        1,
+        2,
+        3,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_._has_bits_),
+        24, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.op_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.player_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.stream_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.stream_epoch_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.seq_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.kind_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.status_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.durable_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.attempts_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.next_attempt_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.deadline_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.lease_until_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.lease_token_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.tx_type_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.ref_kind_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.ref_id_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.payload_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.last_outcome_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.last_reason_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.created_ms_),
+        PROTOBUF_FIELD_OFFSET(::trade::TradeAssetOpRecord, _impl_.updated_ms_),
+        1,
+        2,
+        4,
+        3,
+        6,
+        5,
+        7,
+        8,
+        11,
+        9,
+        10,
+        13,
+        14,
+        12,
+        16,
+        15,
+        0,
+        17,
+        20,
+        18,
+        19,
 };
 
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::trade::TradeListingRecord)},
         {41, sizeof(::trade::TradeFavoriteRecord)},
+        {50, sizeof(::trade::TradePlayerOpSeqRecord)},
+        {63, sizeof(::trade::TradeAssetOpRecord)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
         &::trade::TradeListingRecord_globals_,
         &::trade::TradeFavoriteRecord_globals_,
+        &::trade::TradePlayerOpSeqRecord_globals_,
+        &::trade::TradeAssetOpRecord_globals_,
 };
 const char descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
@@ -583,14 +1115,49 @@ const char descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto[] ABS
     "\"\234\001\n\023TradeFavoriteRecord\022\021\n\tplayer_id\030\001 "
     "\001(\004\022\022\n\nlisting_id\030\002 \001(\004\022\022\n\ncreated_ms\030\003 "
     "\001(\004:J\212\222\364\001\016trade_favorite\222\222\364\001\024player_id,l"
-    "isting_id\332\222\364\001\nlisting_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004*"
-    "\373\001\n\rListingStatus\022\036\n\032LISTING_STATUS_UNSP"
-    "ECIFIED\020\000\022\034\n\030LISTING_STATUS_ESCROWING\020\001\022"
-    "\031\n\025LISTING_STATUS_LISTED\020\002\022\031\n\025LISTING_ST"
-    "ATUS_LOCKED\020\003\022\027\n\023LISTING_STATUS_SOLD\020\004\022\034"
-    "\n\030LISTING_STATUS_RETURNING\020\005\022\033\n\027LISTING_"
-    "STATUS_RETURNED\020\006\022\"\n\036LISTING_STATUS_ESCR"
-    "OW_REJECTED\020\007B\007Z\005tradeb\006proto3"
+    "isting_id\332\222\364\001\nlisting_id\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\""
+    "\256\001\n\026TradePlayerOpSeqRecord\022\021\n\tplayer_id\030"
+    "\001 \001(\004\022\016\n\006stream\030\002 \001(\r\022\020\n\010next_seq\030\003 \001(\004\022"
+    "\r\n\005epoch\030\004 \001(\004\022\022\n\nupdated_ms\030\005 \001(\004:<\212\222\364\001"
+    "\023trade_player_op_seq\222\222\364\001\020player_id,strea"
+    "m\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004\"\225\005\n\022TradeAssetOpRecord\022"
+    "\r\n\005op_id\030\001 \001(\004\022\021\n\tplayer_id\030\002 \001(\004\022\016\n\006str"
+    "eam\030\003 \001(\r\022\024\n\014stream_epoch\030\004 \001(\004\022\013\n\003seq\030\005"
+    " \001(\004\022%\n\004kind\030\006 \001(\0162\027.trade.TradeAssetOpK"
+    "ind\022)\n\006status\030\007 \001(\0162\031.trade.TradeAssetOp"
+    "Status\022\017\n\007durable\030\010 \001(\010\022\020\n\010attempts\030\t \001("
+    "\r\022\027\n\017next_attempt_ms\030\n \001(\004\022\023\n\013deadline_m"
+    "s\030\013 \001(\004\022\026\n\016lease_until_ms\030\014 \001(\004\022\023\n\013lease"
+    "_token\030\r \001(\004\022\017\n\007tx_type\030\016 \001(\r\022,\n\010ref_kin"
+    "d\030\017 \001(\0162\032.trade.TradeAssetOpRefKind\022\016\n\006r"
+    "ef_id\030\020 \001(\004\022\017\n\007payload\030\021 \001(\014\022\024\n\014last_out"
+    "come\030\022 \001(\r\022\023\n\013last_reason\030\023 \001(\r\022\022\n\ncreat"
+    "ed_ms\030\024 \001(\004\022\022\n\nupdated_ms\030\025 \001(\004:\246\001\212\222\364\001\016t"
+    "rade_asset_op\222\222\364\001\005op_id\332\222\364\001Ostatus,next_"
+    "attempt_ms;player_id,stream,stream_epoch"
+    ",status,seq;ref_kind,ref_id\342\222\364\001!player_i"
+    "d,stream,stream_epoch,seq\250\223\364\001\001\260\223\364\001\004\270\223\364\001\004"
+    "*\373\001\n\rListingStatus\022\036\n\032LISTING_STATUS_UNS"
+    "PECIFIED\020\000\022\034\n\030LISTING_STATUS_ESCROWING\020\001"
+    "\022\031\n\025LISTING_STATUS_LISTED\020\002\022\031\n\025LISTING_S"
+    "TATUS_LOCKED\020\003\022\027\n\023LISTING_STATUS_SOLD\020\004\022"
+    "\034\n\030LISTING_STATUS_RETURNING\020\005\022\033\n\027LISTING"
+    "_STATUS_RETURNED\020\006\022\"\n\036LISTING_STATUS_ESC"
+    "ROW_REJECTED\020\007*\254\001\n\020TradeAssetOpKind\022#\n\037T"
+    "RADE_ASSET_OP_KIND_UNSPECIFIED\020\000\022$\n TRAD"
+    "E_ASSET_OP_KIND_ESCROW_DEBIT\020\001\022&\n\"TRADE_"
+    "ASSET_OP_KIND_DELIVER_CREDIT\020\002\022%\n!TRADE_"
+    "ASSET_OP_KIND_RETURN_CREDIT\020\003*\363\001\n\022TradeA"
+    "ssetOpStatus\022%\n!TRADE_ASSET_OP_STATUS_UN"
+    "SPECIFIED\020\000\022!\n\035TRADE_ASSET_OP_STATUS_PEN"
+    "DING\020\001\022!\n\035TRADE_ASSET_OP_STATUS_APPLIED\020"
+    "\002\022\"\n\036TRADE_ASSET_OP_STATUS_REJECTED\020\003\022!\n"
+    "\035TRADE_ASSET_OP_STATUS_ABORTED\020\004\022)\n%TRAD"
+    "E_ASSET_OP_STATUS_APPLIED_PARTIAL\020\005*\206\001\n\023"
+    "TradeAssetOpRefKind\022\'\n#TRADE_ASSET_OP_RE"
+    "F_KIND_UNSPECIFIED\020\000\022#\n\037TRADE_ASSET_OP_R"
+    "EF_KIND_LISTING\020\001\022!\n\035TRADE_ASSET_OP_REF_"
+    "KIND_ORDER\020\002B\007Z\005tradeb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_deps[2] = {
@@ -601,13 +1168,13 @@ static ::absl::once_flag descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto = {
     false,
     false,
-    1150,
+    2549,
     descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto,
     "proto/trade/trade_table.proto",
     &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_once,
     descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_deps,
     2,
-    2,
+    4,
     schemas,
     file_message_globals,
     TableStruct_proto_2ftrade_2ftrade_5ftable_2eproto::offsets,
@@ -622,6 +1189,27 @@ ListingStatus_descriptor() {
 }
 PROTOBUF_CONSTINIT const uint32_t ListingStatus_internal_data_[] = {
     524288u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TradeAssetOpKind_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto);
+  return file_level_enum_descriptors_proto_2ftrade_2ftrade_5ftable_2eproto[1];
+}
+PROTOBUF_CONSTINIT const uint32_t TradeAssetOpKind_internal_data_[] = {
+    262144u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TradeAssetOpStatus_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto);
+  return file_level_enum_descriptors_proto_2ftrade_2ftrade_5ftable_2eproto[2];
+}
+PROTOBUF_CONSTINIT const uint32_t TradeAssetOpStatus_internal_data_[] = {
+    393216u, 0u, };
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+TradeAssetOpRefKind_descriptor() {
+  ::google::protobuf::internal::AssignDescriptors(&descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto);
+  return file_level_enum_descriptors_proto_2ftrade_2ftrade_5ftable_2eproto[3];
+}
+PROTOBUF_CONSTINIT const uint32_t TradeAssetOpRefKind_internal_data_[] = {
+    196608u, 0u, };
 // ===================================================================
 
 TradeListingRecord::TradeListingRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
@@ -1556,6 +2144,973 @@ void TradeFavoriteRecord::InternalSwap(TradeFavoriteRecord* PROTOBUF_RESTRICT PR
 }
 
 ::google::protobuf::Metadata TradeFavoriteRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+TradePlayerOpSeqRecord::TradePlayerOpSeqRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TradePlayerOpSeqRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.TradePlayerOpSeqRecord)
+}
+TradePlayerOpSeqRecord::TradePlayerOpSeqRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const TradePlayerOpSeqRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TradePlayerOpSeqRecord_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE TradePlayerOpSeqRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0} {}
+
+inline void TradePlayerOpSeqRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           0,
+           offsetof(Impl_, stream_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::stream_));
+}
+TradePlayerOpSeqRecord::~TradePlayerOpSeqRecord() {
+  // @@protoc_insertion_point(destructor:trade.TradePlayerOpSeqRecord)
+  SharedDtor(*this);
+}
+inline void TradePlayerOpSeqRecord::SharedDtor(MessageLite& self) {
+  TradePlayerOpSeqRecord& this_ = static_cast<TradePlayerOpSeqRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull TradePlayerOpSeqRecord_class_data_ =
+        TradePlayerOpSeqRecord::InternalGenerateClassData_(TradePlayerOpSeqRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TradePlayerOpSeqRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TradePlayerOpSeqRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(TradePlayerOpSeqRecord_class_data_.tc_table);
+  return TradePlayerOpSeqRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TradePlayerOpSeqRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TradePlayerOpSeqRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&TradePlayerOpSeqRecord_globals_));
+  return TradePlayerOpSeqRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const TradePlayerOpSeqRecord::ParseTableT_
+    TradePlayerOpSeqRecord::_table_ =
+        TradePlayerOpSeqRecord::InternalGenerateParseTable_(TradePlayerOpSeqRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void TradePlayerOpSeqRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.TradePlayerOpSeqRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.stream_) -
+        reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.stream_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL TradePlayerOpSeqRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const TradePlayerOpSeqRecord& this_ = static_cast<const TradePlayerOpSeqRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL TradePlayerOpSeqRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const TradePlayerOpSeqRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.TradePlayerOpSeqRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 player_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_player_id(), target);
+    }
+  }
+
+  // uint32 stream = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_stream() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          2, this_._internal_stream(), target);
+    }
+  }
+
+  // uint64 next_seq = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_next_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          3, this_._internal_next_seq(), target);
+    }
+  }
+
+  // uint64 epoch = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_epoch(), target);
+    }
+  }
+
+  // uint64 updated_ms = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_updated_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_updated_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.TradePlayerOpSeqRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t TradePlayerOpSeqRecord::ByteSizeLong(const MessageLite& base) {
+  const TradePlayerOpSeqRecord& this_ = static_cast<const TradePlayerOpSeqRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t TradePlayerOpSeqRecord::ByteSizeLong() const {
+  const TradePlayerOpSeqRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.TradePlayerOpSeqRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint64 next_seq = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_next_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_seq());
+      }
+    }
+    // uint64 epoch = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_epoch());
+      }
+    }
+    // uint64 updated_ms = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_updated_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_updated_ms());
+      }
+    }
+    // uint32 stream = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_stream() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_stream());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void TradePlayerOpSeqRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<TradePlayerOpSeqRecord*>(&to_msg);
+  auto& from = static_cast<const TradePlayerOpSeqRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.TradePlayerOpSeqRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_next_seq() != 0) {
+        _this->_impl_.next_seq_ = from._impl_.next_seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_epoch() != 0) {
+        _this->_impl_.epoch_ = from._impl_.epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_updated_ms() != 0) {
+        _this->_impl_.updated_ms_ = from._impl_.updated_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_stream() != 0) {
+        _this->_impl_.stream_ = from._impl_.stream_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void TradePlayerOpSeqRecord::CopyFrom(const TradePlayerOpSeqRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.TradePlayerOpSeqRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void TradePlayerOpSeqRecord::InternalSwap(TradePlayerOpSeqRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.stream_)
+      + sizeof(TradePlayerOpSeqRecord::_impl_.stream_)
+      - PROTOBUF_FIELD_OFFSET(TradePlayerOpSeqRecord, _impl_.player_id_)>(
+          reinterpret_cast<char*>(&_impl_.player_id_),
+          reinterpret_cast<char*>(&other->_impl_.player_id_));
+}
+
+::google::protobuf::Metadata TradePlayerOpSeqRecord::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+TradeAssetOpRecord::TradeAssetOpRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TradeAssetOpRecord_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:trade.TradeAssetOpRecord)
+}
+PROTOBUF_NDEBUG_INLINE TradeAssetOpRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::trade::TradeAssetOpRecord& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        payload_(arena, from.payload_) {}
+
+TradeAssetOpRecord::TradeAssetOpRecord(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const TradeAssetOpRecord& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, TradeAssetOpRecord_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  TradeAssetOpRecord* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, op_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, op_id_),
+           offsetof(Impl_, last_reason_) -
+               offsetof(Impl_, op_id_) +
+               sizeof(Impl_::last_reason_));
+
+  // @@protoc_insertion_point(copy_constructor:trade.TradeAssetOpRecord)
+}
+PROTOBUF_NDEBUG_INLINE TradeAssetOpRecord::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        payload_(arena) {}
+
+inline void TradeAssetOpRecord::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  ::memset(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, op_id_),
+           0,
+           offsetof(Impl_, last_reason_) -
+               offsetof(Impl_, op_id_) +
+               sizeof(Impl_::last_reason_));
+}
+TradeAssetOpRecord::~TradeAssetOpRecord() {
+  // @@protoc_insertion_point(destructor:trade.TradeAssetOpRecord)
+  SharedDtor(*this);
+}
+inline void TradeAssetOpRecord::SharedDtor(MessageLite& self) {
+  TradeAssetOpRecord& this_ = static_cast<TradeAssetOpRecord&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.payload_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull TradeAssetOpRecord_class_data_ =
+        TradeAssetOpRecord::InternalGenerateClassData_(TradeAssetOpRecord_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TradeAssetOpRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TradeAssetOpRecord_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(TradeAssetOpRecord_class_data_.tc_table);
+  return TradeAssetOpRecord_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+TradeAssetOpRecord::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&TradeAssetOpRecord_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&TradeAssetOpRecord_globals_));
+  return TradeAssetOpRecord_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const TradeAssetOpRecord::ParseTableT_
+    TradeAssetOpRecord::_table_ =
+        TradeAssetOpRecord::InternalGenerateParseTable_(TradeAssetOpRecord_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void TradeAssetOpRecord::Clear() {
+// @@protoc_insertion_point(message_clear_start:trade.TradeAssetOpRecord)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.payload_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x000000feU)) {
+    ::memset(&_impl_.op_id_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.status_) -
+        reinterpret_cast<char*>(&_impl_.op_id_)) + sizeof(_impl_.status_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    ::memset(&_impl_.durable_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.ref_id_) -
+        reinterpret_cast<char*>(&_impl_.durable_)) + sizeof(_impl_.ref_id_));
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+    ::memset(&_impl_.ref_kind_, 0, static_cast<::size_t>(
+        reinterpret_cast<char*>(&_impl_.last_reason_) -
+        reinterpret_cast<char*>(&_impl_.ref_kind_)) + sizeof(_impl_.last_reason_));
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL TradeAssetOpRecord::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const TradeAssetOpRecord& this_ = static_cast<const TradeAssetOpRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL TradeAssetOpRecord::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const TradeAssetOpRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:trade.TradeAssetOpRecord)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 op_id = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (this_._internal_op_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_op_id(), target);
+    }
+  }
+
+  // uint64 player_id = 2;
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (this_._internal_player_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          2, this_._internal_player_id(), target);
+    }
+  }
+
+  // uint32 stream = 3;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_stream() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          3, this_._internal_stream(), target);
+    }
+  }
+
+  // uint64 stream_epoch = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_stream_epoch() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          4, this_._internal_stream_epoch(), target);
+    }
+  }
+
+  // uint64 seq = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (this_._internal_seq() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_seq(), target);
+    }
+  }
+
+  // .trade.TradeAssetOpKind kind = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          6, this_._internal_kind(), target);
+    }
+  }
+
+  // .trade.TradeAssetOpStatus status = 7;
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (this_._internal_status() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          7, this_._internal_status(), target);
+    }
+  }
+
+  // bool durable = 8;
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (this_._internal_durable() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteBoolToArray(
+          8, this_._internal_durable(), target);
+    }
+  }
+
+  // uint32 attempts = 9;
+  if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+    if (this_._internal_attempts() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          9, this_._internal_attempts(), target);
+    }
+  }
+
+  // uint64 next_attempt_ms = 10;
+  if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+    if (this_._internal_next_attempt_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          10, this_._internal_next_attempt_ms(), target);
+    }
+  }
+
+  // uint64 deadline_ms = 11;
+  if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+    if (this_._internal_deadline_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          11, this_._internal_deadline_ms(), target);
+    }
+  }
+
+  // uint64 lease_until_ms = 12;
+  if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+    if (this_._internal_lease_until_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          12, this_._internal_lease_until_ms(), target);
+    }
+  }
+
+  // uint64 lease_token = 13;
+  if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+    if (this_._internal_lease_token() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          13, this_._internal_lease_token(), target);
+    }
+  }
+
+  // uint32 tx_type = 14;
+  if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+    if (this_._internal_tx_type() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          14, this_._internal_tx_type(), target);
+    }
+  }
+
+  // .trade.TradeAssetOpRefKind ref_kind = 15;
+  if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+    if (this_._internal_ref_kind() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteEnumToArray(
+          15, this_._internal_ref_kind(), target);
+    }
+  }
+
+  // uint64 ref_id = 16;
+  if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+    if (this_._internal_ref_id() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          16, this_._internal_ref_id(), target);
+    }
+  }
+
+  // bytes payload = 17;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_payload().empty()) {
+      const ::std::string& _s = this_._internal_payload();
+      target = stream->WriteBytesMaybeAliased(17, _s, target);
+    }
+  }
+
+  // uint32 last_outcome = 18;
+  if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+    if (this_._internal_last_outcome() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          18, this_._internal_last_outcome(), target);
+    }
+  }
+
+  // uint32 last_reason = 19;
+  if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+    if (this_._internal_last_reason() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          19, this_._internal_last_reason(), target);
+    }
+  }
+
+  // uint64 created_ms = 20;
+  if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+    if (this_._internal_created_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          20, this_._internal_created_ms(), target);
+    }
+  }
+
+  // uint64 updated_ms = 21;
+  if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+    if (this_._internal_updated_ms() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          21, this_._internal_updated_ms(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:trade.TradeAssetOpRecord)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t TradeAssetOpRecord::ByteSizeLong(const MessageLite& base) {
+  const TradeAssetOpRecord& this_ = static_cast<const TradeAssetOpRecord&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t TradeAssetOpRecord::ByteSizeLong() const {
+  const TradeAssetOpRecord& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:trade.TradeAssetOpRecord)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+  ::_pbi::Prefetch5LinesFrom7Lines(&this_);
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    // bytes payload = 17;
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_payload().empty()) {
+        total_size += 2 + ::google::protobuf::internal::WireFormatLite::BytesSize(
+                                        this_._internal_payload());
+      }
+    }
+    // uint64 op_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (this_._internal_op_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_op_id());
+      }
+    }
+    // uint64 player_id = 2;
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (this_._internal_player_id() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_player_id());
+      }
+    }
+    // uint64 stream_epoch = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_stream_epoch() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_stream_epoch());
+      }
+    }
+    // uint32 stream = 3;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_stream() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_stream());
+      }
+    }
+    // .trade.TradeAssetOpKind kind = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_kind() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_kind());
+      }
+    }
+    // uint64 seq = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (this_._internal_seq() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_seq());
+      }
+    }
+    // .trade.TradeAssetOpStatus status = 7;
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (this_._internal_status() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_status());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    // bool durable = 8;
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (this_._internal_durable() != 0) {
+        total_size += 2;
+      }
+    }
+    // uint64 next_attempt_ms = 10;
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (this_._internal_next_attempt_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_next_attempt_ms());
+      }
+    }
+    // uint64 deadline_ms = 11;
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (this_._internal_deadline_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_deadline_ms());
+      }
+    }
+    // uint32 attempts = 9;
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (this_._internal_attempts() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_attempts());
+      }
+    }
+    // uint32 tx_type = 14;
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (this_._internal_tx_type() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_tx_type());
+      }
+    }
+    // uint64 lease_until_ms = 12;
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (this_._internal_lease_until_ms() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_lease_until_ms());
+      }
+    }
+    // uint64 lease_token = 13;
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (this_._internal_lease_token() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_lease_token());
+      }
+    }
+    // uint64 ref_id = 16;
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (this_._internal_ref_id() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_ref_id());
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+    // .trade.TradeAssetOpRefKind ref_kind = 15;
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (this_._internal_ref_kind() != 0) {
+        total_size += 1 +
+                      ::_pbi::WireFormatLite::EnumSize(this_._internal_ref_kind());
+      }
+    }
+    // uint32 last_outcome = 18;
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (this_._internal_last_outcome() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_last_outcome());
+      }
+    }
+    // uint64 created_ms = 20;
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (this_._internal_created_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_created_ms());
+      }
+    }
+    // uint64 updated_ms = 21;
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (this_._internal_updated_ms() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt64Size(
+                                        this_._internal_updated_ms());
+      }
+    }
+    // uint32 last_reason = 19;
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (this_._internal_last_reason() != 0) {
+        total_size += 2 + ::_pbi::WireFormatLite::UInt32Size(
+                                        this_._internal_last_reason());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void TradeAssetOpRecord::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<TradeAssetOpRecord*>(&to_msg);
+  auto& from = static_cast<const TradeAssetOpRecord&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:trade.TradeAssetOpRecord)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_payload().empty()) {
+        _this->_internal_set_payload(from._internal_payload());
+      } else {
+        if (_this->_impl_.payload_.IsDefault()) {
+          _this->_internal_set_payload("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+      if (from._internal_op_id() != 0) {
+        _this->_impl_.op_id_ = from._impl_.op_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+      if (from._internal_player_id() != 0) {
+        _this->_impl_.player_id_ = from._impl_.player_id_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_stream_epoch() != 0) {
+        _this->_impl_.stream_epoch_ = from._impl_.stream_epoch_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_stream() != 0) {
+        _this->_impl_.stream_ = from._impl_.stream_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_kind() != 0) {
+        _this->_impl_.kind_ = from._impl_.kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      if (from._internal_seq() != 0) {
+        _this->_impl_.seq_ = from._impl_.seq_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      if (from._internal_status() != 0) {
+        _this->_impl_.status_ = from._impl_.status_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000ff00U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+      if (from._internal_durable() != 0) {
+        _this->_impl_.durable_ = from._impl_.durable_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000200U)) {
+      if (from._internal_next_attempt_ms() != 0) {
+        _this->_impl_.next_attempt_ms_ = from._impl_.next_attempt_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000400U)) {
+      if (from._internal_deadline_ms() != 0) {
+        _this->_impl_.deadline_ms_ = from._impl_.deadline_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000800U)) {
+      if (from._internal_attempts() != 0) {
+        _this->_impl_.attempts_ = from._impl_.attempts_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00001000U)) {
+      if (from._internal_tx_type() != 0) {
+        _this->_impl_.tx_type_ = from._impl_.tx_type_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00002000U)) {
+      if (from._internal_lease_until_ms() != 0) {
+        _this->_impl_.lease_until_ms_ = from._impl_.lease_until_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00004000U)) {
+      if (from._internal_lease_token() != 0) {
+        _this->_impl_.lease_token_ = from._impl_.lease_token_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00008000U)) {
+      if (from._internal_ref_id() != 0) {
+        _this->_impl_.ref_id_ = from._impl_.ref_id_;
+      }
+    }
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x001f0000U)) {
+    if (CheckHasBit(cached_has_bits, 0x00010000U)) {
+      if (from._internal_ref_kind() != 0) {
+        _this->_impl_.ref_kind_ = from._impl_.ref_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00020000U)) {
+      if (from._internal_last_outcome() != 0) {
+        _this->_impl_.last_outcome_ = from._impl_.last_outcome_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00040000U)) {
+      if (from._internal_created_ms() != 0) {
+        _this->_impl_.created_ms_ = from._impl_.created_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00080000U)) {
+      if (from._internal_updated_ms() != 0) {
+        _this->_impl_.updated_ms_ = from._impl_.updated_ms_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00100000U)) {
+      if (from._internal_last_reason() != 0) {
+        _this->_impl_.last_reason_ = from._impl_.last_reason_;
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void TradeAssetOpRecord::CopyFrom(const TradeAssetOpRecord& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:trade.TradeAssetOpRecord)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void TradeAssetOpRecord::InternalSwap(TradeAssetOpRecord* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.payload_, &other->_impl_.payload_, arena);
+  ::google::protobuf::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.last_reason_)
+      + sizeof(TradeAssetOpRecord::_impl_.last_reason_)
+      - PROTOBUF_FIELD_OFFSET(TradeAssetOpRecord, _impl_.op_id_)>(
+          reinterpret_cast<char*>(&_impl_.op_id_),
+          reinterpret_cast<char*>(&other->_impl_.op_id_));
+}
+
+::google::protobuf::Metadata TradeAssetOpRecord::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // @@protoc_insertion_point(namespace_scope)

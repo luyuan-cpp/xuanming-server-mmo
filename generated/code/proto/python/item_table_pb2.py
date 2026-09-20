@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10item_table.proto\"C\n\tItemTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x16\n\x0emax_stack_size\x18\x02 \x01(\r\x12\x12\n\nequip_kind\x18\x03 \x01(\r\")\n\rItemTableData\x12\x18\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\n.ItemTableB;\n\x0e\x63om.game.tableB\x13ItemTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x10item_table.proto\"\x8a\x01\n\tItemTable\x12\n\n\x02id\x18\x01 \x01(\r\x12\x16\n\x0emax_stack_size\x18\x02 \x01(\r\x12\x12\n\nequip_kind\x18\x03 \x01(\r\x12\x15\n\rbattle_usable\x18\x04 \x01(\r\x12\x16\n\x0e\x62\x61ttle_heal_hp\x18\x05 \x01(\x04\x12\x16\n\x0e\x62\x61ttle_heal_mp\x18\x06 \x01(\x04\")\n\rItemTableData\x12\x18\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32\n.ItemTableB;\n\x0e\x63om.game.tableB\x13ItemTableOuterClassP\x01Z\x12generated/pb/tableb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,8 +32,8 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'item_table_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n\016com.game.tableB\023ItemTableOuterClassP\001Z\022generated/pb/table'
-  _globals['_ITEMTABLE']._serialized_start=20
-  _globals['_ITEMTABLE']._serialized_end=87
-  _globals['_ITEMTABLEDATA']._serialized_start=89
-  _globals['_ITEMTABLEDATA']._serialized_end=130
+  _globals['_ITEMTABLE']._serialized_start=21
+  _globals['_ITEMTABLE']._serialized_end=159
+  _globals['_ITEMTABLEDATA']._serialized_start=161
+  _globals['_ITEMTABLEDATA']._serialized_end=202
 # @@protoc_insertion_point(module_scope)

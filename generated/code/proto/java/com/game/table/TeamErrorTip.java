@@ -107,6 +107,58 @@ public final class TeamErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kTeamPlayerNotFound = 4017;</code>
      */
     kTeamPlayerNotFound(4017),
+    /**
+     * <code>kTeamNotLeader = 4018;</code>
+     */
+    kTeamNotLeader(4018),
+    /**
+     * <code>kTeamHomeZoneUnknown = 4019;</code>
+     */
+    kTeamHomeZoneUnknown(4019),
+    /**
+     * <code>kTeamCrossZoneDenied = 4020;</code>
+     */
+    kTeamCrossZoneDenied(4020),
+    /**
+     * <code>kTeamInviteNotFound = 4021;</code>
+     */
+    kTeamInviteNotFound(4021),
+    /**
+     * <code>kTeamInviteLimit = 4022;</code>
+     */
+    kTeamInviteLimit(4022),
+    /**
+     * <code>kTeamInMatch = 4023;</code>
+     */
+    kTeamInMatch(4023),
+    /**
+     * <code>kTeamMemberOffline = 4024;</code>
+     */
+    kTeamMemberOffline(4024),
+    /**
+     * <code>kTeamMemberInBattle = 4025;</code>
+     */
+    kTeamMemberInBattle(4025),
+    /**
+     * <code>kTeamMemberNotReady = 4026;</code>
+     */
+    kTeamMemberNotReady(4026),
+    /**
+     * <code>kTeamDungeonNotOpen = 4027;</code>
+     */
+    kTeamDungeonNotOpen(4027),
+    /**
+     * <code>kTeamSizeExceeded = 4028;</code>
+     */
+    kTeamSizeExceeded(4028),
+    /**
+     * <code>kTeamStateChanged = 4029;</code>
+     */
+    kTeamStateChanged(4029),
+    /**
+     * <code>kTeamInternal = 4030;</code>
+     */
+    kTeamInternal(4030),
     UNRECOGNIZED(-1),
     ;
 
@@ -195,6 +247,58 @@ public final class TeamErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kTeamPlayerNotFound = 4017;</code>
      */
     public static final int kTeamPlayerNotFound_VALUE = 4017;
+    /**
+     * <code>kTeamNotLeader = 4018;</code>
+     */
+    public static final int kTeamNotLeader_VALUE = 4018;
+    /**
+     * <code>kTeamHomeZoneUnknown = 4019;</code>
+     */
+    public static final int kTeamHomeZoneUnknown_VALUE = 4019;
+    /**
+     * <code>kTeamCrossZoneDenied = 4020;</code>
+     */
+    public static final int kTeamCrossZoneDenied_VALUE = 4020;
+    /**
+     * <code>kTeamInviteNotFound = 4021;</code>
+     */
+    public static final int kTeamInviteNotFound_VALUE = 4021;
+    /**
+     * <code>kTeamInviteLimit = 4022;</code>
+     */
+    public static final int kTeamInviteLimit_VALUE = 4022;
+    /**
+     * <code>kTeamInMatch = 4023;</code>
+     */
+    public static final int kTeamInMatch_VALUE = 4023;
+    /**
+     * <code>kTeamMemberOffline = 4024;</code>
+     */
+    public static final int kTeamMemberOffline_VALUE = 4024;
+    /**
+     * <code>kTeamMemberInBattle = 4025;</code>
+     */
+    public static final int kTeamMemberInBattle_VALUE = 4025;
+    /**
+     * <code>kTeamMemberNotReady = 4026;</code>
+     */
+    public static final int kTeamMemberNotReady_VALUE = 4026;
+    /**
+     * <code>kTeamDungeonNotOpen = 4027;</code>
+     */
+    public static final int kTeamDungeonNotOpen_VALUE = 4027;
+    /**
+     * <code>kTeamSizeExceeded = 4028;</code>
+     */
+    public static final int kTeamSizeExceeded_VALUE = 4028;
+    /**
+     * <code>kTeamStateChanged = 4029;</code>
+     */
+    public static final int kTeamStateChanged_VALUE = 4029;
+    /**
+     * <code>kTeamInternal = 4030;</code>
+     */
+    public static final int kTeamInternal_VALUE = 4030;
 
 
     public final int getNumber() {
@@ -240,6 +344,19 @@ public final class TeamErrorTip extends com.google.protobuf.GeneratedFile {
         case 4015: return kTeamMemberListFull;
         case 4016: return kTeamCreateTeamMaxMemberSize;
         case 4017: return kTeamPlayerNotFound;
+        case 4018: return kTeamNotLeader;
+        case 4019: return kTeamHomeZoneUnknown;
+        case 4020: return kTeamCrossZoneDenied;
+        case 4021: return kTeamInviteNotFound;
+        case 4022: return kTeamInviteLimit;
+        case 4023: return kTeamInMatch;
+        case 4024: return kTeamMemberOffline;
+        case 4025: return kTeamMemberInBattle;
+        case 4026: return kTeamMemberNotReady;
+        case 4027: return kTeamDungeonNotOpen;
+        case 4028: return kTeamSizeExceeded;
+        case 4029: return kTeamStateChanged;
+        case 4030: return kTeamInternal;
         default: return null;
       }
     }
@@ -305,7 +422,7 @@ public final class TeamErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\024team_error_tip.proto*\351\003\n\nteam_error\022\021\n" +
+      "\n\024team_error_tip.proto*\243\006\n\nteam_error\022\021\n" +
       "\rkTeam_errorOK\020\000\022\031\n\024kTeamNotInApplicants" +
       "\020\240\037\022\022\n\rkTeamPlayerId\020\241\037\022\025\n\020kTeamMembersF" +
       "ull\020\242\037\022\026\n\021kTeamMemberInTeam\020\243\037\022\031\n\024kTeamM" +
@@ -317,8 +434,16 @@ public final class TeamErrorTip extends com.google.protobuf.GeneratedFile {
       "mListMaxSize\020\254\037\022\026\n\021kTeamHasNotTeamId\020\255\037\022" +
       "\032\n\025kTeamDismissNotLeader\020\256\037\022\030\n\023kTeamMemb" +
       "erListFull\020\257\037\022!\n\034kTeamCreateTeamMaxMembe" +
-      "rSize\020\260\037\022\030\n\023kTeamPlayerNotFound\020\261\037B$\n\016co" +
-      "m.game.tableZ\022generated/pb/tableb\006proto3"
+      "rSize\020\260\037\022\030\n\023kTeamPlayerNotFound\020\261\037\022\023\n\016kT" +
+      "eamNotLeader\020\262\037\022\031\n\024kTeamHomeZoneUnknown\020" +
+      "\263\037\022\031\n\024kTeamCrossZoneDenied\020\264\037\022\030\n\023kTeamIn" +
+      "viteNotFound\020\265\037\022\025\n\020kTeamInviteLimit\020\266\037\022\021" +
+      "\n\014kTeamInMatch\020\267\037\022\027\n\022kTeamMemberOffline\020" +
+      "\270\037\022\030\n\023kTeamMemberInBattle\020\271\037\022\030\n\023kTeamMem" +
+      "berNotReady\020\272\037\022\030\n\023kTeamDungeonNotOpen\020\273\037" +
+      "\022\026\n\021kTeamSizeExceeded\020\274\037\022\026\n\021kTeamStateCh" +
+      "anged\020\275\037\022\022\n\rkTeamInternal\020\276\037B$\n\016com.game" +
+      ".tableZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

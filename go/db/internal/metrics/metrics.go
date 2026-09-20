@@ -73,6 +73,24 @@ var (
 		Help:      "Blob size gate hits. level: warn (>= WarnRatio of limit) | reject (over limit). column=__row__ means the per-row total.",
 	}, []string{"table", "column", "level"})
 
+	// ownerEpochGuardTotal 是落库前归属 epoch 守卫的全量分类计数(每条 write 任务记一次)。
+	// 它回答的是「兼容窗口还剩多少旧版生产者(legacy_zero)」「Redis 是不是被清过(ahead /
+	// missing_key)」这类部署期问题;真正的健康红线是下面的 staleOwnerWriteRejectedTotal。
+	ownerEpochGuardTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "owner_epoch_guard_total",
+		Help:      "Owner-epoch guard verdicts on write tasks. outcome: match | legacy_zero | missing_key | ahead | stale | read_error.",
+	}, []string{"outcome"})
+
+	// staleOwnerWriteRejectedTotal 是 cross-zone-scene-travel.md §6 不变量 3 点名的健康信号:
+	// 被废黜节点的迟到 DBTask 被拒的次数,压测期应恒为 0。单独建一个无 label 的 counter,
+	// 是为了让 Codex 验证清单与告警规则能按固定名字直接引用,不依赖 label 匹配。
+	staleOwnerWriteRejectedTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "stale_owner_write_rejected_total",
+		Help:      "Write tasks dropped because their owner_epoch is older than player:{id}:owner_epoch in Redis. Must stay 0 under stress.",
+	})
+
 	registerOnce sync.Once
 )
 
@@ -88,8 +106,33 @@ var blobBuckets = []float64{
 
 func register() {
 	registerOnce.Do(func() {
-		prometheus.MustRegister(taskStageSeconds, taskResultTotal, blobBytes, blobRowBytes, blobGuardTotal)
+		prometheus.MustRegister(taskStageSeconds, taskResultTotal, blobBytes, blobRowBytes, blobGuardTotal,
+			ownerEpochGuardTotal, staleOwnerWriteRejectedTotal)
 	})
+}
+
+// 归属 epoch 守卫的 outcome label 取值。与 internal/kafka 的守卫判定一一对应;
+// 集合有界(6 个),不含 player_id 等高基数维度(AGENTS.md §9)。
+const (
+	OwnerEpochMatch      = "match"       // 任务 epoch == 已落库的最大 epoch:同一持有者的后续写,放行
+	OwnerEpochLegacyZero = "legacy_zero" // 任务 epoch == 0:旧版生产者,兼容窗口内放行不比对
+	OwnerEpochFirst      = "first"       // 该 key 还没有带 epoch 的写落过库,放行
+	OwnerEpochAdvance    = "advance"     // 任务 epoch > 已落库的最大 epoch:归属变更后新主的第一笔写,放行
+	OwnerEpochStale      = "stale"       // 任务 epoch < 已落库的最大 epoch:新主落库之后才到的老 epoch 写,拒绝
+	OwnerEpochReadError  = "read_error"  // Redis 读失败:按可重试错误处理,不放行也不丢
+)
+
+// CountOwnerEpochGuard 记一次守卫判定。outcome 用上面的 OwnerEpoch* 常量。
+func CountOwnerEpochGuard(outcome string) {
+	register()
+	ownerEpochGuardTotal.WithLabelValues(outcome).Inc()
+}
+
+// CountStaleOwnerWriteRejected 记一次「老 epoch 写被拒」。与 CountOwnerEpochGuard(OwnerEpochStale)
+// 同时调用是有意的:前者是固定名字的健康红线,后者是全量分类。
+func CountStaleOwnerWriteRejected() {
+	register()
+	staleOwnerWriteRejectedTotal.Inc()
 }
 
 // BlobObserver 把 dbguard 的量测结果接到 prometheus 上。

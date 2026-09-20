@@ -108,6 +108,7 @@ type options struct {
 	clearHotState bool
 	skipTrade     bool
 	tradeSchema   string
+	guildSchema   string
 	friendSchema  string
 
 	allowEmptySource   bool
@@ -139,7 +140,8 @@ func main() {
 	dstZone := flag.Uint("target-zone", 0, "Target zone ID to merge INTO (required)")
 	flag.StringVar(&o.mysqlDSN, "mysql-dsn",
 		"root:@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local",
-		"MySQL DSN. Must reach BOTH the global tables (guild/friend) and the per-zone databases zone_<N>_db")
+		"MySQL DSN. Must reach the account tables, the per-zone databases zone_<N>_db, "+
+			"and the service-owned databases -guild-schema / -trade-schema / -friend-schema on the same instance")
 
 	flag.StringVar(&o.redisAddr, "redis-addr", "127.0.0.1:6379", "Default Redis address (used when a specific -*-redis-addr is empty)")
 	flag.StringVar(&o.redisPwd, "redis-password", "", "Default Redis password")
@@ -182,6 +184,8 @@ func main() {
 			"Without it a missing trade schema/table refuses the merge; with it -verify-merged reports the trade row as NOT VERIFIED")
 	flag.StringVar(&o.tradeSchema, "trade-schema", defaultTradeSchema,
 		"trade database reached through -mysql-dsn (go/trade forces MySQL.DBName=mmorpg_trade; override only for isolated tests)")
+	flag.StringVar(&o.guildSchema, "guild-schema", defaultGuildSchema,
+		"guild database reached through -mysql-dsn (go/guild forces the DSN database to be mmorpg_guild; override only for isolated tests)")
 	flag.StringVar(&o.friendSchema, "friend-schema", defaultFriendSchema,
 		"friend database reached through -mysql-dsn (go/friend forces MySQL.DBName=mmorpg_friend; override only for isolated tests)")
 	flag.BoolVar(&o.skipMapping, "skip-player-mapping", false, "Skip the player:zone remapping")
@@ -266,6 +270,9 @@ func main() {
 	if err := validateTradeSchemaName(o.tradeSchema); err != nil {
 		fail("%v", err)
 	}
+	if err := validateGuildSchemaName(o.guildSchema); err != nil {
+		fail("%v", err)
+	}
 	if err := validateFriendSchemaName(o.friendSchema); err != nil {
 		fail("%v", err)
 	}
@@ -303,6 +310,7 @@ func main() {
 			topicGeneration:    uint32(o.kafkaTopicGen),
 			tradeSchema:        o.tradeSchema,
 			skipTrade:          o.skipTrade,
+			guildSchema:        o.guildSchema,
 			friendSchema:       o.friendSchema,
 		})
 		return

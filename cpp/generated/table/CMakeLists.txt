@@ -39,6 +39,8 @@ include_directories(
 )
 
 set(SOURCE_FILES
+    code/activityschedule_table.cpp
+    code/activityschedule_table_fk.cpp
     code/actoractioncombatstate_table.cpp
     code/actoractionstate_table.cpp
     code/all_table.cpp
@@ -51,6 +53,8 @@ set(SOURCE_FILES
     code/equipslot_table.cpp
     code/dungeon_table_fk.cpp
     code/globalvariable_table.cpp
+    code/guildlevel_table.cpp
+    code/guildrule_table.cpp
     code/item_table.cpp
     code/messagelimiter_table.cpp
     code/mirror_table.cpp
@@ -59,6 +63,7 @@ set(SOURCE_FILES
     code/mission_table_fk.cpp
     code/monster_table.cpp
     code/reward_table.cpp
+    code/rolenamerule_table.cpp
     code/skillpermission_table.cpp
     code/skill_table.cpp
     code/testmultikey_table.cpp
@@ -76,6 +81,7 @@ set(SOURCE_FILES
     code/attributerule_table.cpp
     code/pet_table.cpp
     code/petrule_table.cpp
+    proto/activityschedule_table.pb.cc
     proto/actoractioncombatstate_table.pb.cc
     proto/actoractionstate_table.pb.cc
     proto/basescene_table.pb.cc
@@ -86,6 +92,8 @@ set(SOURCE_FILES
     proto/dungeon_table.pb.cc
     proto/equipslot_table.pb.cc
     proto/globalvariable_table.pb.cc
+    proto/guildlevel_table.pb.cc
+    proto/guildrule_table.pb.cc
     proto/item_table.pb.cc
     proto/messagelimiter_table.pb.cc
     proto/mirror_table.pb.cc
@@ -95,11 +103,13 @@ set(SOURCE_FILES
     proto/operator/bag_operator.pb.cc
     proto/operator/scene_operator.pb.cc
     proto/reward_table.pb.cc
+    proto/rolenamerule_table.pb.cc
     proto/skillpermission_table.pb.cc
     proto/skill_table.pb.cc
     proto/testmultikey_table.pb.cc
     proto/test_table.pb.cc
     proto/tip/actor_action_error_tip.pb.cc
+    proto/tip/asset_error_tip.pb.cc
     proto/tip/bag_error_tip.pb.cc
     proto/tip/buff_error_tip.pb.cc
     proto/tip/common_error_tip.pb.cc

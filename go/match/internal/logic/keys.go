@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"match/internal/playercontract"
 )
 
 // Redis key 契约(设计文档 cross-zone-matchmaking.md §4;修订 turn-based-battle-server.md §5.4 / §6)。
@@ -31,11 +33,21 @@ import (
 // MatchRedis 缺省回落到共享库时,共享库若配了 allkeys-lfu 之类的淘汰策略,评分
 // 可能被淘汰回落到默认 1500 —— 生产必须配独立 MatchRedis(设计文档 §4.2 / §11)。
 //
-// ---- SharedRedis:既有共享库,match 只读 ----
+// ---- SharedRedis:既有共享库,match 原有代码只读 ----
 //
 //	player:{id}:location                  scene_manager 写  JoinQueue 取 zone;gather 定位 scene 节点
 //	player:session:{id}                   player_locator 写 挑战推送 / 观战路由取 gate
 //	battle:lock:{player_id}               C++ scene 写      咨询性"是否在战斗中"(权威在 InBattleComp)
+//
+// 这三类契约 key 的拼法、读取与推送收口在 match/internal/playercontract
+// (team-system.md §A.2),本包文件末尾的同名函数只是一行转调。
+//
+// **D2 例外(cross-zone-matchmaking.md D2,2026-09-15)**:同进程的 team 模块
+// (match/internal/team)写 SharedRedis 的 team:rec:* / team:<id> / team:player:* /
+// team:invite:* 四类 key。理由:C++ scene 只能用 hiredis 读 SharedRedis 上的 team:<id>
+// 投影,而权威记录、投影、玩家索引、邀请反查必须在同一条 Lua 里原子提交,四类 key
+// 只能同库(team-system.md §C.1 / §C.2)。写入范围只限这四类前缀;本包(logic)
+// 对 SharedRedis 仍只读,不写任何 team:* key。
 
 // matchQueueHashTag 队列相关 key 的 hash tag,三类 key 必须共用。
 const matchQueueHashTag = "{mq}"
@@ -128,21 +140,22 @@ func challengeTargetKey(playerId uint64) string {
 	return fmt.Sprintf("challenge:target:%d", playerId)
 }
 
-// ---- 以下是契约 key:只能经 svcCtx.SharedRedis 读,match 不写 ----
+// ---- 以下是契约 key:只能经 svcCtx.SharedRedis 读,logic 不写 ----
+// 拼法的唯一真相在 playercontract,这里保留 logic 内部名字做一行转调。
 
 // battleLockKey 由 C++ scene 写;match 只做咨询性 Exists。
 func battleLockKey(playerId uint64) string {
-	return fmt.Sprintf("battle:lock:%d", playerId)
+	return playercontract.BattleLockKey(playerId)
 }
 
 // getPlayerLocationKey 是 scene_manager 维护的玩家位置权威键
 // (共享契约记录见设计文档 §5.4;写者:go/scene_manager changesceneutil.go)。
 func getPlayerLocationKey(playerId uint64) string {
-	return fmt.Sprintf("player:%d:location", playerId)
+	return playercontract.LocationKey(playerId)
 }
 
 // playerSessionKey 是 player_locator 维护的会话键(PlayerSession proto),
 // 挑战推送按它定位目标玩家的 gate(照 guild online_status_resolver 的读法)。
 func playerSessionKey(playerId uint64) string {
-	return fmt.Sprintf("player:session:%d", playerId)
+	return playercontract.SessionKey(playerId)
 }

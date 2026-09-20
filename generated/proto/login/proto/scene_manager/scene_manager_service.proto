@@ -97,6 +97,9 @@ message EnterSceneResponse {
   // Non-empty when cross-zone redirect is needed instead of direct routing.
   // Client should disconnect from current Gate and reconnect to the target Gate.
   RedirectToGateInfo redirect = 3;
+  // 原样回显请求里的 player_id。scene 节点的 EnterScene 是异步 gRPC,应答回调里没有
+  // 请求上下文;传送 / 疏散这类"发起方还要根据结果收尾"的调用靠它把应答对回玩家。
+  uint64 player_id = 4;
 }
 
 // Redirect info returned when player needs to switch to a different zone's Gate.

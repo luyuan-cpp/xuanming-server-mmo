@@ -65,4 +65,16 @@ struct FCfgItemRow : public FTableRowBase
 	/** 装备部位:0=不是装备。>0=该部位编号。部位的含义(手镯/头/胸…)以及每个部位有几个槽,全部由数据定义 —— 槽位表 EquipSlot 决定哪个槽接受哪个部位,代码里不写死 */
 	UPROPERTY(BlueprintReadOnly, Category = "Config|Item")
 	int32 equip_kind = 0;
+
+	/** 回合制战斗内可用:0=不可用,1=可用。只有它非 0 的物品才会进 BattlePlayerSnapshot.items 消耗副本,引擎也按它拒绝 ITEM 行动 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Item")
+	int32 battle_usable = 0;
+
+	/** 战斗内使用回复的生命值(0=不回血)。按当前属性单位(血量千级)填 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Item")
+	int64 battle_heal_hp = 0;
+
+	/** 战斗内使用回复的法力值(0=不回蓝)。按当前属性单位(法力 ×4)填 */
+	UPROPERTY(BlueprintReadOnly, Category = "Config|Item")
+	int64 battle_heal_mp = 0;
 };

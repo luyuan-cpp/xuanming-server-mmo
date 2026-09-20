@@ -164,7 +164,7 @@ Battle ──result──▶ 结算服
 | Matchmaker + Allocator(凑单 → 选 battle 节点 → gather) | `go/match`(队列 / 挑战 / 观战匹配 / 评分),gather 管线 §3.1,补偿矩阵 §3.2 | Matchmaker ✅ / Allocator ✅(合一) |
 | 入场快照 / 出场结果 DTO | `BattlePlayerSnapshot`(scene PrepareBattle 出)/ `BattleSettlementData` + `BattleSettlementEvent`(Kafka 回 scene)+ `BattleResultEvent`(回 match 评分) | 契约② ✅ |
 | 幂等结算 | scene 按 `InBattleComp.battle_id` 匹配才应用,重复投递丢弃;离线 pending 7 天 | 契约③ ✅(result 落地 = Kafka at-least-once + scene 幂等) |
-| 局中闸 | `InBattleComp` 冻结清单(排队 / 交易 / 改属性道具 / 切场景) | 存储红线 2 ✅ |
+| 局中闸 | `InBattleComp` 冻结清单(排队 / 交易 / 改属性道具 / 切场景 / 跨 zone / 宠物) | 存储红线 2 ⚠️ **部分**(2026-09-17 更正):背包写、实时技能、移动、GM 回滚原本全无闸,已在 [turn-battle-gap-closure.md](./turn-battle-gap-closure.md) D48 补上(未编译);"交易"至今无代码,因为交易系统本身不存在 |
 | 路由表 | match 侧 `spectate:*` / 票据;battle 落点由 gather 决定并写进快照路由 | 存储红线 3 ✅(Redis) |
 | **客户端直连 + 票据入场** | `turn-based-battle-server.md` §18(2026-09-05 落码):battle 自签 HMAC 票据、自身 TCP 端口开客户端面、S2C 直连优先 Kafka 回落 | 契约① / 第五节直连 ✅(待编译 + 冒烟) |
 | 跨 zone 匹配 + 水平扩展 | `cross-zone-matchmaking.md`;battle / match 全局池 | — |

@@ -1,0 +1,64 @@
+{
+ "data": [
+  {
+   "id": 1,
+   "max_members": 30,
+   "max_officers": 2,
+   "upgrade_cost_funds": 20000
+  },
+  {
+   "id": 2,
+   "max_members": 35,
+   "max_officers": 2,
+   "upgrade_cost_funds": 50000
+  },
+  {
+   "id": 3,
+   "max_members": 40,
+   "max_officers": 3,
+   "upgrade_cost_funds": 100000
+  },
+  {
+   "id": 4,
+   "max_members": 45,
+   "max_officers": 3,
+   "upgrade_cost_funds": 180000
+  },
+  {
+   "id": 5,
+   "max_members": 50,
+   "max_officers": 4,
+   "upgrade_cost_funds": 300000
+  },
+  {
+   "id": 6,
+   "max_members": 60,
+   "max_officers": 4,
+   "upgrade_cost_funds": 460000
+  },
+  {
+   "id": 7,
+   "max_members": 70,
+   "max_officers": 5,
+   "upgrade_cost_funds": 680000
+  },
+  {
+   "id": 8,
+   "max_members": 80,
+   "max_officers": 5,
+   "upgrade_cost_funds": 960000
+  },
+  {
+   "id": 9,
+   "max_members": 90,
+   "max_officers": 6,
+   "upgrade_cost_funds": 1300000
+  },
+  {
+   "id": 10,
+   "max_members": 100,
+   "max_officers": 6,
+   "upgrade_cost_funds": 0
+  }
+ ]
+}

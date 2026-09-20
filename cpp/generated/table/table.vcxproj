@@ -44,6 +44,10 @@
     <ClInclude Include="code\dungeon_table_fk.h" />
     <ClInclude Include="code\globalvariable_table.h" />
     <ClInclude Include="code\globalvariable_table_comp.h" />
+    <ClInclude Include="code\guildlevel_table.h" />
+    <ClInclude Include="code\guildlevel_table_comp.h" />
+    <ClInclude Include="code\guildrule_table.h" />
+    <ClInclude Include="code\guildrule_table_comp.h" />
     <ClInclude Include="code\equipslot_table.h" />
     <ClInclude Include="code\item_table.h" />
     <ClInclude Include="code\equipslot_table_comp.h" />
@@ -77,6 +81,8 @@
     <ClInclude Include="code\attributerule_table_comp.h" />
     <ClInclude Include="code\reward_table.h" />
     <ClInclude Include="code\reward_table_comp.h" />
+    <ClInclude Include="code\rolenamerule_table.h" />
+    <ClInclude Include="code\rolenamerule_table_comp.h" />
     <ClInclude Include="code\skillpermission_table.h" />
     <ClInclude Include="code\skillpermission_table_comp.h" />
     <ClInclude Include="code\skill_table.h" />
@@ -99,6 +105,8 @@
     <ClInclude Include="proto\cooldown_table.pb.h" />
     <ClInclude Include="proto\dungeon_table.pb.h" />
     <ClInclude Include="proto\globalvariable_table.pb.h" />
+    <ClInclude Include="proto\guildlevel_table.pb.h" />
+    <ClInclude Include="proto\guildrule_table.pb.h" />
     <ClInclude Include="proto\equipslot_table.pb.h" />
     <ClInclude Include="proto\item_table.pb.h" />
     <ClInclude Include="proto\messagelimiter_table.pb.h" />
@@ -116,11 +124,13 @@
     <ClInclude Include="proto\operator\bag_operator.pb.h" />
     <ClInclude Include="proto\operator\scene_operator.pb.h" />
     <ClInclude Include="proto\reward_table.pb.h" />
+    <ClInclude Include="proto\rolenamerule_table.pb.h" />
     <ClInclude Include="proto\skillpermission_table.pb.h" />
     <ClInclude Include="proto\skill_table.pb.h" />
     <ClInclude Include="proto\testmultikey_table.pb.h" />
     <ClInclude Include="proto\test_table.pb.h" />
     <ClInclude Include="proto\tip\actor_action_error_tip.pb.h" />
+    <ClInclude Include="proto\tip\asset_error_tip.pb.h" />
     <ClInclude Include="proto\tip\bag_error_tip.pb.h" />
     <ClInclude Include="proto\tip\buff_error_tip.pb.h" />
     <ClInclude Include="proto\tip\attribute_error_tip.pb.h" />
@@ -153,6 +163,8 @@
     <ClCompile Include="code\dungeon_table.cpp" />
     <ClCompile Include="code\dungeon_table_fk.cpp" />
     <ClCompile Include="code\globalvariable_table.cpp" />
+    <ClCompile Include="code\guildlevel_table.cpp" />
+    <ClCompile Include="code\guildrule_table.cpp" />
     <ClCompile Include="code\equipslot_table.cpp" />
     <ClCompile Include="code\item_table.cpp" />
     <ClCompile Include="code\messagelimiter_table.cpp" />
@@ -170,6 +182,7 @@
     <ClCompile Include="code\petrule_table.cpp" />
     <ClCompile Include="code\attributerule_table.cpp" />
     <ClCompile Include="code\reward_table.cpp" />
+    <ClCompile Include="code\rolenamerule_table.cpp" />
     <ClCompile Include="code\skillpermission_table.cpp" />
     <ClCompile Include="code\skill_table.cpp" />
     <ClCompile Include="code\testmultikey_table.cpp" />
@@ -188,6 +201,8 @@
     <ClCompile Include="proto\cooldown_table.pb.cc" />
     <ClCompile Include="proto\dungeon_table.pb.cc" />
     <ClCompile Include="proto\globalvariable_table.pb.cc" />
+    <ClCompile Include="proto\guildlevel_table.pb.cc" />
+    <ClCompile Include="proto\guildrule_table.pb.cc" />
     <ClCompile Include="proto\equipslot_table.pb.cc" />
     <ClCompile Include="proto\item_table.pb.cc" />
     <ClCompile Include="proto\messagelimiter_table.pb.cc" />
@@ -205,11 +220,13 @@
     <ClCompile Include="proto\operator\bag_operator.pb.cc" />
     <ClCompile Include="proto\operator\scene_operator.pb.cc" />
     <ClCompile Include="proto\reward_table.pb.cc" />
+    <ClCompile Include="proto\rolenamerule_table.pb.cc" />
     <ClCompile Include="proto\skillpermission_table.pb.cc" />
     <ClCompile Include="proto\skill_table.pb.cc" />
     <ClCompile Include="proto\testmultikey_table.pb.cc" />
     <ClCompile Include="proto\test_table.pb.cc" />
     <ClCompile Include="proto\tip\actor_action_error_tip.pb.cc" />
+    <ClCompile Include="proto\tip\asset_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\bag_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\buff_error_tip.pb.cc" />
     <ClCompile Include="proto\tip\attribute_error_tip.pb.cc" />

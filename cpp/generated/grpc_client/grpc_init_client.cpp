@@ -103,6 +103,13 @@ namespace scene_node {
     void HandleSceneNodeServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
 }
 
+namespace teampb {
+    void SetTeamHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void SetTeamIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
+    void InitTeamGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity);
+    void HandleTeamCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);
+}
+
 namespace trade {
     void SetJubaozhaiHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
     void SetJubaozhaiIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
@@ -143,6 +150,8 @@ void SetIfEmptyHandler(const std::function<void(const ClientContext&, const ::go
 
     scene_node::SetSceneNodeServiceIfEmptyHandler(handler);
 
+    teampb::SetTeamIfEmptyHandler(handler);
+
     trade::SetJubaozhaiIfEmptyHandler(handler);
 
     trade::SetTradeAdminIfEmptyHandler(handler);
@@ -174,6 +183,8 @@ void SetHandler(const std::function<void(const ClientContext&, const ::google::p
     scene_manager::SetSceneManagerServiceHandler(handler);
 
     scene_node::SetSceneNodeServiceHandler(handler);
+
+    teampb::SetTeamHandler(handler);
 
     trade::SetJubaozhaiHandler(handler);
 
@@ -224,7 +235,7 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 friendpb::HandleFriendCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::GuildNodeService == nodeType &&
-                (messageId == 8u || messageId == 15u || messageId == 19u || messageId == 27u || messageId == 29u || messageId == 35u || messageId == 38u || messageId == 39u || messageId == 52u || messageId == 60u)) {
+                (messageId == 8u || messageId == 15u || messageId == 19u || messageId == 27u || messageId == 29u || messageId == 35u || messageId == 38u || messageId == 39u || messageId == 52u || messageId == 60u || messageId == 216u || messageId == 217u || messageId == 218u || messageId == 219u || messageId == 220u || messageId == 221u || messageId == 222u || messageId == 223u)) {
                 guildpb::HandleGuildCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::LoginNodeService == nodeType &&
@@ -240,8 +251,12 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 scene_manager::HandleSceneManagerServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::SceneManagerNodeService == nodeType &&
-                (messageId == 122u || messageId == 123u || messageId == 128u || messageId == 142u || messageId == 145u)) {
+                (messageId == 122u || messageId == 123u || messageId == 128u || messageId == 142u || messageId == 145u || messageId == 224u || messageId == 225u || messageId == 227u)) {
                 scene_node::HandleSceneNodeServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
+            }
+            else if (common::base::eNodeType::TeamNodeService == nodeType &&
+                (messageId == 201u || messageId == 202u || messageId == 203u || messageId == 204u || messageId == 205u || messageId == 206u || messageId == 207u || messageId == 208u || messageId == 209u || messageId == 210u || messageId == 211u || messageId == 212u || messageId == 213u || messageId == 214u || messageId == 215u)) {
+                teampb::HandleTeamCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::TradeNodeService == nodeType &&
                 (messageId == 196u || messageId == 197u || messageId == 198u || messageId == 200u)) {
@@ -293,6 +308,9 @@ void InitGrpcNode(const std::shared_ptr< ::grpc::ChannelInterface>& channel, ent
     }
     if (common::base::eNodeType::SceneManagerNodeService == nodeType) {
         scene_node::InitSceneNodeServiceGrpcNode(channel, registry, nodeEntity);
+    }
+    if (common::base::eNodeType::TeamNodeService == nodeType) {
+        teampb::InitTeamGrpcNode(channel, registry, nodeEntity);
     }
     if (common::base::eNodeType::TradeNodeService == nodeType) {
         trade::InitJubaozhaiGrpcNode(channel, registry, nodeEntity);

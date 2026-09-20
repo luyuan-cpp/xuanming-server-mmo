@@ -45,11 +45,13 @@ public final class ItemTableOuterClass extends com.google.protobuf.GeneratedFile
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\020item_table.proto\"C\n\tItemTable\022\n\n\002id\030\001 " +
-      "\001(\r\022\026\n\016max_stack_size\030\002 \001(\r\022\022\n\nequip_kin" +
-      "d\030\003 \001(\r\")\n\rItemTableData\022\030\n\004data\030\001 \003(\0132\n" +
-      ".ItemTableB;\n\016com.game.tableB\023ItemTableO" +
-      "uterClassP\001Z\022generated/pb/tableb\006proto3"
+      "\n\020item_table.proto\"\212\001\n\tItemTable\022\n\n\002id\030\001" +
+      " \001(\r\022\026\n\016max_stack_size\030\002 \001(\r\022\022\n\nequip_ki" +
+      "nd\030\003 \001(\r\022\025\n\rbattle_usable\030\004 \001(\r\022\026\n\016battl" +
+      "e_heal_hp\030\005 \001(\004\022\026\n\016battle_heal_mp\030\006 \001(\004\"" +
+      ")\n\rItemTableData\022\030\n\004data\030\001 \003(\0132\n.ItemTab" +
+      "leB;\n\016com.game.tableB\023ItemTableOuterClas" +
+      "sP\001Z\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -60,7 +62,7 @@ public final class ItemTableOuterClass extends com.google.protobuf.GeneratedFile
     internal_static_ItemTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_ItemTable_descriptor,
-        new java.lang.String[] { "Id", "MaxStackSize", "EquipKind", });
+        new java.lang.String[] { "Id", "MaxStackSize", "EquipKind", "BattleUsable", "BattleHealHp", "BattleHealMp", });
     internal_static_ItemTableData_descriptor =
       getDescriptor().getMessageType(1);
     internal_static_ItemTableData_fieldAccessorTable = new

@@ -1,6 +1,9 @@
 # 组队系统设计(team-in-match)
 
 > **状态**:设计稿，还没有实现。本仓库没有据此改过任何代码，也没有编译或测试过。每一批开工前都要用户授权(AGENTS §10.2)，编译和测试由 Codex 执行(AGENTS §10.1)。
+> **2026-09-15 更新**:批 0–4 的手写部分已在隔离 worktree `feature/team-system` 落码(未生成、未编译、未合并回主工作区),实况、偏离与待办见文末「实现记录(2026-09-15,worktree feature/team-system,未编译)」;正文与该节冲突处以该节为准。
+> **2026-09-17 更新**:改动已移到 worktree `E:\work\xuanming-server-mmo-team2`(分支 `feature/team-system-v2`,基于 `4069f33b0`),并按文末「评审记录(2026-09-16,team-system-review)」修了 8 条确认缺陷;仍未生成、未编译。
+> **2026-09-18 更新**:组队代码**已合并并推送到 `origin/main`(`66c546e70`)**,文首「状态:设计稿，还没有实现」一行已过期,以本行与文末各记录节为准。同日的收口轮补完了 `robot go mod vendor`、C++ 工程登记、客户端协议管道与合并后语义复核,见文末「收口记录(2026-09-18,主工作区 `main`,未编译未测试)」。**仍然未编译、未测试** —— R.4 ⑦ 的 5 步验证一条都没跑。
 >
 > **决策依据**:
 > - 用户已拍板的需求:全服服务，数据按 zone_id 区分，默认 `AllowCrossZone=false`，功能全做:组队、整队排战斗、场景跟随;本次不改客户端。
@@ -56,7 +59,7 @@
 | **DV-3** | D7 整队"进 `match:queue`" | v1 整队开战**不进队列**，复用 PVE_SOLO 的"即时开战":成员票据直接写成 matched 态，然后调 gather,失败时全员删票。matcher、pickGroup、队列元素格式都不改。补位装箱放 v2(§E.6) | 队列元素按十进制 player_id 解析(`go/match/internal/logic/matcher.go:405`),解析失败 `playerId==0` 就当场删除(`matcher.go:438-441`),滚动升级窗口里旧实例会删掉队伍元素。PVE_SOLO 先例:`joinqueuelogic.go:169-187`。`requeueOnFail=false` 时全员 `deleteTicketIfOwned`(`gather.go:123-126`) |
 | **DV-4** | D7 `JoinQueueRequest` 加 `team_id` | 不加。整队入口改为 `ClientPlayerTeam.StartTeamMatch` | 旧实例收到组队字段只打一行日志，照单人入队(`joinqueuelogic.go:57-61`)。路由服从 MatchNodeService 实例池随机选(`go/client_rpc_router/internal/logic/forwardlogic.go:198-200`),升级窗口内请求会被旧实例静默吞掉。TeamNodeService 只有新二进制才会注册，天然避开旧实例 |
 | **DV-5** | D7"独立 message_id 数值段" | 放弃"数值段"的说法 | 发号器(`tools/proto_generator/protogen/internal/generator/cpp/service_register_info.go`)的真实行为(2026-09-15 读码核实，修正摸底里"最大号+1"的说法):① `MaxMessageId` = **本次解析到的方法总数**(`:69`);② 旧号只按"本次解析到的方法名"保留(`:173-185`),新方法从 `[0, MaxMessageId)` 的空闲号里取，取号顺序来自 Go map 迭代，**同批新方法之间的号序是随机的**(`:188-201`);③ `WriteMessageIdFile` 只写本次解析到的方法(`:148-166`),**没解析到的域的旧号会从 `message_id.txt` 里消失，空出来的号会被别的新方法拿走**。HEAD 是 196 行(最大号 195),工作区 trade 已生成到 200(未提交) |
-| **DV-6** | 生产环境的场景跟随范围 | **只在同 zone、同 scene 节点内跟随**。跨节点、跨 zone 一律跳过，只记指标 | scene_manager 在 `AllowUnsafeCrossNodeHandoff=false` 时拒绝跨节点交接(`go/scene_manager/internal/logic/enterscenelogic.go:333-345`),该配置默认 false(`go/scene_manager/internal/config/config.go:19`),只有本地 yaml 设成 true(`go/scene_manager/etc/scene_manager_service.yaml:40`) |
+| **DV-6** | 生产环境的场景跟随范围 | **只在同 zone、同 scene 节点内跟随**。跨节点、跨 zone 一律跳过，只记指标 | scene_manager 在 `AllowUnsafeCrossNodeHandoff=false` 时拒绝跨节点交接(`go/scene_manager/internal/logic/enterscenelogic.go:333-345`),该配置默认 false(`go/scene_manager/internal/config/config.go:19`),只有本地 yaml 设成 true(`go/scene_manager/etc/scene_manager_service.yaml:40`)。**2026-09-18 补(合并后复核)**:跨 zone 传送阶段 1(`1f2bdd01c`)把这道闸改成了**有条件**放行 —— 源 scene 为当前 `owner_epoch` 写出 `player:{id}:handoff` 落盘标记即可跨节点交接(`enterscenelogic.go` 的 `crossNodeHandoff` → `requireHandoffCommitted`)。跟随请求永远不写这种标记,仍会被 `ErrHandoffPending` 挡回,DV-6 的结论不变;但**兜底不再是无条件拒绝**,第一道闸只剩 C++ `CheckFollowLeader` 里的同 zone / 同节点守卫,改那两条守卫时不能再指望 scene_manager 兜住 |
 | **DV-7** | 队伍"版本号" | 客户端视图按 `(membership_epoch, version)` 排序。`version` 是记录每次提交严格 +1;`membership_epoch` 按玩家维度计，只在该玩家的 team_id 变化时递增，并且在同一条 Lua 里用 Redis 自身时钟起种 | 客户端 `TeamUiState.Complete` 目前无条件覆盖快照(`E:\work\mmorpg-client\Assets\Scripts\Game\Team\TeamUiState.cs:129-138`),推送又是至多一次投递(`go/match/internal/logic/push.go:48-50`),会乱序 |
 
 **v1 不做(YAGNI，全部列入 §J)**:陌生人补位、招募列表、准备确认、暂离/归队、跟随走位、离线成员自动移出、跨节点跟随、昵称、战斗站位槽位、队伍落 MySQL、撤回申请、`request_id` 幂等存储(改用天然幂等语义，见 §D.6)。
@@ -164,7 +167,9 @@ flowchart LR
 
 - 包名用 `teampb`,和 chat 的 `chatpb`、guild 的 `guildpb` 保持一致，也避开客户端已有的 `MmorpgClient.Game.Team` 命名空间(`TeamUiState.cs:5`)。
 - 生成器映射节点类型的顺序是:先试 `ClientPlayerTeamNodeService`(不存在)→ 再试 `TeampbNodeService`(不存在)→ 最后按目录名 `team` 得到 `TeamNodeService`(`tools/proto_generator/protogen/internal/model.go:167-183`)。第 3 步的 `path.Base` 会去掉结尾斜杠，chat(包 `chatpb`、目录 `chat/`)已经据此得到 `ENodeType_ChatNodeService`(`go/client_rpc_router/generated/pb/game/route_table.go:39`),所以 team 必定得到 `TeamNodeService`。
-- 文件级显式写 `option cc_generic_services = false;`(照 `proto/chat/chat.proto:9`、`proto/trade/jubaozhai.proto:9`)。TCP 还是 gRPC 由这个选项决定(`internal/generator/cpp/service_register_info.go:332`,未设置时为 false,见 `internal/model.go:77-85`),显式写出是为了防止以后有人误加 true 把它变成 TCP 服务。
+- 文件级显式写 `option cc_generic_services = false;`(照 `proto/chat/chat.proto:9`、`proto/trade/jubaozhai.proto:9`)。它和 `proto_gen.yaml` 的 `domain_meta.team.rpc.type: grpc` 分工不同，两项都必须保持:
+  - **gate 侧协议号不看这个选项**。`internal/generator/cpp/service_register_info.go:331` 的两个分支都用 `GetProtocol`(`:216`)→ `internal/utils/proto.go:42` `HasGrpcService` 取协议号，判断的是 `domain_meta[team].rpc.type == "grpc"`;gate 按这个协议号分流 TCP / gRPC(`cpp/nodes/gate/handler/rpc/client_message_processor.cpp:900-915`)。`rpc.type` 还决定 C++ gRPC 桩(`internal/generator/cpp/gen.go:39`)和 `go/*/generated/pb/game/message_id.go`(`internal/message_id.go:195`)是否生成。把 `rpc.type` 改成 `rpc` 才会让 gate 走 TCP 分支。
+  - `cc_generic_services=false`(未设置时同为 false,见 `internal/model.go:77-85`)决定两件事：注册表生成 gRPC sender(`SendXxx`)而不是 muduo `XxxImpl` handler(`service_register_info.go:331`);路由服路由表收录这个服务(`internal/route_table.go:57`)。误加 true 不会把 team 变成 TCP 服务，只会让注册形状、路由表和协议号对不上。显式写出是为了防止误加 true。
 - service 名必须带 `ClientPlayer`,Unity/robot 生成器才会收录(`internal/generator/unity/unity_client_handler.go:185`、`internal/generator/go/robot_case.go:138`)。
 - 消息名避开客户端的 `TeamSnapshot` / `TeamRole`,统一叫 `TeamView` / `TeamMemberView`。
 - 请求体不带 player_id,身份一律从 session 取，缺 session 就拒绝。
@@ -416,8 +421,11 @@ message JoinQueueRequest {
 
 - 照 `domain_meta.match` 块的写法在 `domain_meta` 下加 `team:`:`source: "{{proto_dir}}team/"`,`rpc.type: grpc`;go 输出 proto/handler/grpc;cpp 输出 proto 和 grpc。(工作区里 trade 会话在 `:420-432` 插入了 `trade:` 块，其后的行号都后移了 14 行，所以这里不写行号。)
 - `"team/"` 已经在 `path_lists`(`:184`)和 `proto_dirs`(`:226`)里，不用加。
-- **漏加 `domain_meta.team` 的后果**:生成器只遍历 `domain_meta[].source` 收集 .proto(`internal/prototools/descriptor.go:73-115`),team.proto 根本不会被解析，没有消息号，也没有路由表条目。客户端发来的包在 gate 被 `IsClientMessageId` 拒掉并计入非法包，超过 `GATE_ILLEGAL_PACKET_THRESHOLD` 直接断开连接(`cpp/nodes/gate/handler/rpc/client_message_processor.cpp:880-893`),现象是"未知 message_id / 被踢下线"。它**不会**"走 TCP":TCP 还是 gRPC 只由文件级 `cc_generic_services` 决定(§B.1)。
+- **漏加 `domain_meta.team` 的后果**:生成器只遍历 `domain_meta[].source` 收集 .proto(`internal/prototools/descriptor.go:73-115`),team.proto 根本不会被解析，没有消息号，也没有路由表条目。客户端发来的包在 gate 被 `IsClientMessageId` 拒掉并计入非法包，超过 `GATE_ILLEGAL_PACKET_THRESHOLD` 直接断开连接(`cpp/nodes/gate/handler/rpc/client_message_processor.cpp:880-893`),现象是"未知 message_id / 被踢下线"。它**不会**"走 TCP":没被解析的 proto 根本没有消息号，包在进入任何 TCP / gRPC 分支之前就被 gate 当非法包拒掉。(gate 侧协议号本身由 `domain_meta.<域>.rpc.type` 决定，不由 `cc_generic_services` 决定，见 §B.1。)
 - `enable_unity_client: true`(`:243`)会改写 `../mmorpg-client/Assets/Scripts/Net/Generated/`(`:29-31`)。**Codex 必须用关闭这个开关的配置副本来生成**(§I.6)。
+  - Unity 生成器没有按域的开关(`internal/generator/unity/unity_client_handler.go` 收录所有名字带 `ClientPlayer` 且标了 `OptionIsClientProtocolService` 的服务，并整体重写 `HandlerRegistry.cs`)。team 块进了默认 yaml 之后，**任何**使用默认配置的 proto 生成都会往客户端仓写 15 个 `ClientPlayerTeam*Handler.cs` 并重写 `HandlerRegistry.cs`。这包括 `dev.bat proto`,也包括 `dev.bat gen`:`gen` = `export` + `proto`,后者固定用默认的 `proto_gen.yaml`(`dev.bat` 的 `:gen` / `:proto` 段)。客户端 `tools/gen_proto.ps1` 收录 team.proto(§H.1)之前，这些 handler 引用的 `Teampb.*` 不存在，客户端报 CS0246 编不过。
+  - 因此：只改 `Tip.xlsx` / `MessageLimiter.xlsx` 时只跑 `dev.bat export`(proto 生成器不读 MessageLimiter);proto 生成一律 `dev_tools.ps1 -Command proto-gen-run -ConfigPath <enable_unity_client: false 的副本>`;合并回主工作区的门禁见 R.4 ⑧ 末尾。
+  - **不要**为了规避而把 team 块移出默认 yaml(DV-5:没解析到的域会丢号——team 的 15 个号会从 `message_id.txt` 消失，空出的号被别的新方法拿走);也不要在默认 yaml 里关掉 `enable_unity_client`(其他域的客户端 handler 会失去同步)。
 - 副作用:每个 grpc 域**必定**生成 `go/<目录名>/generated/pb/game/`。`internal/message_id.go:190-206` 按 `filepath.Base(meta.Source)` 拼目录,`:99-107` 用 `MkdirAll` 建目录，现有 chat/match/guild 等 9 个目录都是这样来的。所以一定会多出 `go/team/generated/pb/game/`,本设计接受它，并在文档注明"不是独立服务"(J-15)。
 - **编辑冲突**:trade 会话也在改这个文件(未提交)。先后顺序按 §I.2 批 0 前置条件协调。
 
@@ -462,8 +470,13 @@ message JoinQueueRequest {
 - **`ver`**:队伍记录每次提交严格 +1,首次提交从 1 开始。触碰续期(S_TOUCH)不改 ver。
 - **`epoch`**:玩家维度，只在该玩家的 `tid` 变化时递增。取值规则:
   - key 存在时，新 epoch = 旧 epoch + 1;
-  - key 缺失时(24h 过期或被淘汰)用 Redis 自身时钟 `TIME` 起种，新 epoch = 当前毫秒数。Redis 7.2 默认 effects replication,脚本里可以调 `TIME`;本地是 `redis:latest`,K8s 是 `redis:7.2`(`deploy/docker-compose.yml:218`、`deploy/k8s/manifests/infra/redis.yaml:29`)。
+  - key 缺失时(24h 过期或被淘汰)用 Redis 自身时钟 `TIME` 起种，新 epoch = 当前毫秒数 **+ 1**(S_COMMIT 的 `setIdx` 与 S_HEAL_ORPHAN 同口径)。Redis 7.2 默认 effects replication,脚本里可以调 `TIME`;本地是 `redis:latest`,K8s 是 `redis:7.2`(`deploy/docker-compose.yml:218`、`deploy/k8s/manifests/infra/redis.yaml:29`)。
   - SharedRedis 是单实例，时钟只有一个，不存在多个 Go 实例之间的时钟偏差问题。
+  - **索引缺失时读路径回报的 epoch**(2026-09-16 评审修订):S_READ 读到 key 不存在(24h 整队空闲过期、被淘汰、从未组过队)时，回报的 epoch 取 Redis 当前毫秒数 `nowMs`,**只读不写**;空视图的 `membership_epoch` 就用它。
+    - 它大于 key 消失前发出的任何 epoch:旧 epoch = 起种毫秒数 + tid 变更次数，变更次数远小于起种以来经过的毫秒数(整队过期时至少 24h)。所以客户端按 §H.3 会接受这份空视图。原来回 `"0"`,客户端一律丢弃，界面卡在已不存在的队伍上。
+    - 它严格小于之后(含同一毫秒)的任何起种值:起种 = `nowMs + 1`,Redis 串行执行脚本，起种时刻不早于这次读。所以不会出现"epoch 相等、team_id 不同"而触发 §H.3 的冲突判定反复重拉。
+    - S_READ_MEMBERS 仍回 `"0"`:它只给 `tid == 本队` 的成员推送，这些成员的 key 必然存在。
+    - 残余假设：key 在起种后极短时间内(毫秒数小于期间的 tid 变更次数)被淘汰。SharedRedis 要求不淘汰(J-13),不单独处理。
 - **客户端排序键** `(membership_epoch, version)`:
   - epoch 解决跨队乱序。例如"加入 B 队"的推送先到,"被 A 队踢出"的推送后到，后者 epoch 更小，会被丢弃。
   - version 解决同队内乱序。
@@ -527,7 +540,7 @@ local function setIdx(key, v)
   local old = redis.call("HGET", key, "tid")
   local e = tonumber(redis.call("HGET", key, "epoch") or "0")
   if old ~= v then
-    if e == 0 then e = nowms else e = e + 1 end
+    if e == 0 then e = nowms + 1 else e = e + 1 end   -- +1:严格大于同一毫秒内 S_READ 对缺失索引回报的 nowMs(§C.4)
     redis.call("HSET", key, "tid", v, "epoch", string.format("%.0f", e))
   end
   redis.call("EXPIRE", key, ttl)
@@ -566,12 +579,13 @@ return out
 ```lua
 -- KEYS[1]=team:player:<pid>  KEYS[2]=team:rec:<t>
 -- 返回 {tidNow, epoch, ver, pb, recTTL, nowMs}(nowMs 用字符串返回,避免 Lua 数字转换)
-local tidNow = redis.call("HGET", KEYS[1], "tid") or ""
-local epoch = redis.call("HGET", KEYS[1], "epoch") or "0"
-local r = redis.call("HMGET", KEYS[2], "ver", "pb")
+-- 索引缺失:tidNow = "",epoch = nowMs(只读不写,口径见 §C.4)
 local t = redis.call("TIME")
-local nowms = tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)
-return {tidNow, epoch, r[1] or "", r[2] or "", redis.call("TTL", KEYS[2]), string.format("%.0f", nowms)}
+local nowStr = string.format("%.0f", tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000))
+local tidNow = redis.call("HGET", KEYS[1], "tid") or ""
+local epoch = redis.call("HGET", KEYS[1], "epoch") or nowStr
+local r = redis.call("HMGET", KEYS[2], "ver", "pb")
+return {tidNow, epoch, r[1] or "", r[2] or "", redis.call("TTL", KEYS[2]), nowStr}
 ```
 
 t 的来源分三种模式(由 Go 侧 `store` 决定，调用方不拼装):
@@ -618,7 +632,7 @@ return 0
 
 **S_TOUCH(续期，不改 ver)**:`KEYS=[K1,K2,成员 K3...]`,`ARGV=[expectedVer, ttl]`。ver 一致才对所有 key 执行 EXPIRE。GetMyTeam 发现记录 TTL < 12h 时调用。
 
-**S_HEAL_ORPHAN(孤儿索引)**:`KEYS=[team:player:<pid>, team:rec:<tid>]`,`ARGV=[tid, ttl]`。条件是记录不存在且索引 tid 等于 ARGV tid,满足时把 tid 置 0、epoch+1,返回 1;否则返回 0。
+**S_HEAL_ORPHAN(孤儿索引)**:`KEYS=[team:player:<pid>, team:rec:<tid>]`,`ARGV=[tid, ttl]`。条件是记录不存在且索引 tid 等于 ARGV tid,满足时把 tid 置 0、epoch+1(epoch 缺失时按 `TIME` 毫秒数 + 1 起种，与 S_COMMIT 同口径),返回 1;否则返回 0。
 
 **Go 侧 `store.Mutate(ctx, bind, op)` 循环**(建队走 `expectedVer="new"`;StartTeamMatch 的加锁与 EndMatch **不走**这个重算循环，见 §E.1):
 1. 按 `bind` 执行 S_READ(模式见上)。
@@ -635,6 +649,7 @@ return 0
      - `{0}`:回到第 1 步(重新做绑定校验，所以重试不会换队、也不会在已删除的记录上重建),最多 3 次;全部失败回 `kTeamStateChanged`。
      - `{-1,i}`:第 i 个新成员已经在别的队，回 `kTeamMemberInTeam`,parameters[0] 填该成员 pid。
      - `{-2,i}`:保留成员的索引指向别的队伍，说明索引曾被淘汰、玩家又加入了别的队。Go 生成一次"把该成员从本队移除"的修复提交(推送原因 `HEALED`,通知该成员的 scene),然后重算原操作。
+       - **多人错位要级联**(2026-09-16 评审修订):Lua 只回报第一个错位下标。修复提交自身再返回 `{-2,j}` 时，把修复决策的 `Kept[j-1]` 并入待移出集合，按 `RepairRemoveMembers` 基于**同一份原记录**、在**同一个 expectedVer** 上重新生成修复再提交(被拒的修复没有写入,ver 不变);`Left` 始终相对原记录计算，推送与 scene 信号不漏人。每轮至少多移出一人,Capacity 轮内必然收敛。只修第一个就回原操作会重读到同一 ver、同一个第一错位者，活锁到 `TeamStateChanged`。Mutate、开战锁钉版本提交、EndMatch 共用这一实现(`store.repairIndexMismatch`)。
      - `{-3,i}`:第 i 个被邀请人待处理邀请已满，回 `kTeamInviteLimit`。
 4. 提交成功后异步推送、通知 scene(§G.3),并记录指标。
 
@@ -642,11 +657,11 @@ return 0
 
 | 丢失的 key | 表现 | 自愈 |
 |---|---|---|
-| `team:player:<pid>`(在队) | Go 与 scene 口径一致：该玩家"没有队伍"(scene 的 HMGET 得到两个 NIL 元素，按 tid=0 移除组件，§F.2) | 本队下一次提交时，在 Lua 里用 `setIdx` 重建;玩家期间如果建了或加入了别的队，本队提交会返回 `{-2}`,由 Go 移除该成员 |
+| `team:player:<pid>`(在队) | Go 与 scene 口径一致：该玩家"没有队伍"(scene 的 HMGET 得到两个 NIL 元素，按 tid=0 移除组件，§F.2) | 本队下一次提交时，在 Lua 里用 `setIdx` 重建;玩家期间如果建了或加入了别的队，本队提交会返回 `{-2}`,由 Go 移除该成员。同一队多名成员错位时，修复按 `RepairRemoveMembers` 在同一 expectedVer 上级联移出全部错位者(Mutate、开战锁钉版本提交、EndMatch 同口径，见 §C.5 Mutate 第 3 步) |
 | `team:rec:<tid>` | 索引指向不存在的记录 | GetMyTeam 或任何读路径遇到时调 S_HEAL_ORPHAN,视图回到 team_id=0,并通知该玩家的 scene 刷新(§F.3) |
 | `team:<tid>`(投影) | scene 读到 nil | scene 回查 `EXISTS team:rec:<tid>`:记录在 → 视为"未知"，不清组件，也不跟随，team 下一次提交或触碰时重写投影;记录不在 → 按 tid=0 处理(§F.2) |
 | `team:invite:<pid>` | ListMyInvites 少了条目 | 被邀请人丢失的只是列表，邀请正文仍在记录里;队长重发邀请即可恢复 |
-| 队伍 24h 空闲整体过期(K1/K2/K3 同批到期) | Go 视为无队;没有任何提交，因此不发 scene 事件 | 在线实体的 TeamId 残留到它下一次进场刷新(HMGET 全 NIL → 移除组件)。残留期间只影响 AOI 淘汰优先级;投影已不在，不会触发跟随。接受 |
+| 队伍 24h 空闲整体过期(K1/K2/K3 同批到期) | Go 视为无队;没有任何提交，因此不发 scene 事件。客户端侧：GetMyTeam 与未绑定回包(LeaveTeam / DisbandTeam 等)的空视图 epoch 取 S_READ 回报的 `nowMs`,大于客户端手里的旧 epoch,按 §H.3 会被接受，界面不会卡在旧队伍(§C.4) | 在线实体的 TeamId 残留到它下一次进场刷新(HMGET 全 NIL → 移除组件)。残留期间只影响 AOI 淘汰优先级;投影已不在，不会触发跟随。接受 |
 
 部署要求:SharedRedis 必须保持"不淘汰"(K8s 现状满足),见 J-13。
 
@@ -833,6 +848,13 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
          预检期间任何名单变化(LeaveTeam、队外被邀请人自己 RespondInvite 接受)都会让 ver+1
        - {0} → 整轮重来;{-2} → 按 Mutate 规则修复后整轮重来;{1} → 推全员 MATCH_STARTED(match_state=STARTING)
        - 锁有效期间 rules 拒绝一切改名单操作,所以 match_lock_roster 在锁期间恒等于 members
+       - **结果未知的补偿**(2026-09-16 评审修订):报错和"未提交"都可能已落锁。EVAL 可能已执行只是回复丢失;
+         go-redis 对断连 / 读超时会重发同一条 EVAL,第一次已落锁时第二次回 {0}。
+         · 提交报错 → 回 TeamInternal,后台按 token 执行 EndMatch(false)。只有清锁提交成功才推送(外加修复提交);
+           锁没写入时读到 token 不符即停止,不写也不推,不会凭空推一条从没开始过的 MATCH_FAILED。
+         · 返回未提交(Retry)→ 整轮重来之前先用请求 ctx 执行一轮 ReleaseMatchLockOnce:token 不符 / 记录不存在 /
+           锁已过期 → 只读不写(常见情形:预检期间真有别的提交);锁在 → 钉版本清锁并推 MATCH_FAILED,下一轮不会被
+           自己的锁挡成 TeamInMatch;同步确认不了(故障、冲突或修复)→ 转后台补偿。
     7. 逐人 createTicketIfAbsent(queue.go:246-263):state=matched,mode=PVE_TEAM,config,
        zone_id=location.zone_id,team_id=tid,TTL=matchedTicketTTLFor(n)。
        **名单只用锁内的 match_lock_roster**;每人的 ticket id 事先生成并记下。
@@ -840,12 +862,14 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
        都可能已在服务端写入,结果未知),逐个按本次 ticket id deleteTicketIfOwned(queue.go:499-508,CAS,
        返回 false 的成员持有的是别人的票,不在集合里)
        → EndMatch(token, false, TeamMemberNotReady(pid)) → 回 TeamMemberNotReady
+       推给全员(含发起人)的 MATCH_FAILED 快照带 tip = TeamMemberNotReady,parameters[0] = 出问题的成员
+       (实现为 CommitResult.PushTip,只随推送下发,不落存储;没有清锁提交走兜底推送时同样带上)
        补偿动作(删票、EndMatch)一律用 context.Background() 加自身超时,不继承 RPC ctx
     8. safego.Go("match.gather.pve_team", func() {
           ok := runTeamGatherFn(svcCtx, configId, lockRoster, tickets)
           // 默认实现 RunTeamGather:照 RunChallengeGather(gather.go:90-93)新增导出函数,
           // 内部 runGather(svcCtx, PVE_TEAM, configId, lockRoster, requeueOnFail=false, withTickets=true, tickets),返回 bool
-          store.EndMatch(tid, token, ok)
+          store.EndMatch(tid, token, ok)   // gather 失败拿不到具体原因:MATCH_FAILED 快照的 tip 留空
        })
     9. 回 TeamResponse{team(match_state=STARTING)}
 ```
@@ -870,6 +894,7 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
 
 | 窗口 | 残留 | 自愈 |
 |---|---|---|
+| 第 6 步开战锁 EVAL 结果未知(回复超时 / 断连;go-redis 重发同一条 EVAL) | 可能已落锁，也可能没有 | 报错 → 后台按 token EndMatch(false);未提交 → 重来前按 token 同步确认一轮，确认不了转后台(§E.1 第 6 步)。可接受窗口缩小为：补偿前**进程崩溃**(锁 83s 过期);以及迟到的 EVAL 恰好在补偿读之后才执行的极窄时序(同上) |
 | 第 6 步提交后、第 7 步建票前崩溃 | 开战锁 | 锁 83s 后过期，视为无锁 |
 | 第 7 步建了一部分票后崩溃 | 部分 matched 票 + 锁 | 票 48s 后 TTL 过期，锁 83s 过期。在此之前队员单人 JoinQueue 会回 AlreadyQueued,因为 matched 态不自愈(`joinqueuelogic.go:238-239`) |
 | 第 7 步某人建票返回 err(超时、断连、集群重试) | 该成员可能已有 matched 票(结果未知) | 回滚集合包含它，按本次 ticket id CAS 删;删票本身也失败时，票靠 TTL(5 人 48s)过期，期间该成员单排回 AlreadyQueued |
@@ -943,7 +968,7 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
      - 元素是 STRING → 解析十进制 tid、epoch,`ApplyMembership(player, tid, epoch, false)`。
      之后调 `then(player, tid)`。
 - `ApplyMembership(player, tid, epoch, keyMissing)`
-  - `keyMissing` 时无条件按 tid=0 处理(旧 epoch 已无从比较;key 重建时 epoch 用 Redis TIME 起种，必然大于旧值，所以不会回退)。
+  - `keyMissing` 时无条件按 tid=0 处理(旧 epoch 已无从比较;key 重建时 epoch 用 Redis TIME 毫秒数 + 1 起种，必然大于旧值，所以不会回退)。
   - 已有组件且 `epoch <= comp.membership_epoch` 时忽略。
   - 否则：记下 oldTid;`tid≠0` 就 emplace_or_replace `TeamId`,`tid=0` 就 remove。这条路径由事件驱动，不在 per-tick 路径上，符合 AGENTS §7 #5。
   - oldTid≠tid 时执行 `RefreshTeammateAoi(player, oldTid, tid)`(§F.4)。
@@ -1225,7 +1250,7 @@ ClientPlayerTeam.StartTeamMatch(battle_config_id, expected_team_id)
 
 | 批 | 前置 | 完成标准(由 Codex 执行) |
 |---|---|---|
-| 0 | ① 用户拍板 §J;② **先完成 J-28 ④**(恢复 Agones 块),否则批 0 regen 后的问题会被误认为组队引入;③ **与 trade 会话协调生成顺序(J-30)**:执行 `git status data/tip/Tip.xlsx tools/proto_generator/protogen/etc/proto_gen.yaml proto/trade proto/message_id.txt proto/event_id.txt cpp/generated/grpc_client generated/code/proto/tip go/client_rpc_router/generated cpp/libs/services/scene/scene.vcxproj docs/design/xuanming-port-feasibility-20260902.md`,确认没有他人未提交改动。**必须等 trade 先导表、生成并提交再开工**。原因:trade 已在工作区生成(message_id 196..200 未提交);生成器只写本次解析到的方法(见 DV-5),若用"HEAD 版 proto_gen.yaml + team 块"之类不含 trade 块的配置生成，会把 trade 的 5 条号从 `message_id.txt`、路由表、各 `message_id.go` 里抹掉，还可能把 196..200 发给 team,与 trade 已生成的 go/robot 代码撞号。**禁止**用缺 trade 块的配置生成，也不许移动他人的 `proto/trade/`。Tip.xlsx 是二进制，无法合并，只能串行编辑 | 导表通过;proto 生成通过，客户端仓 `git status` 为空;`proto/message_id.txt` 新增行中 `ClientPlayerTeam*` **恰好 15 条**,其余新增行都属于事先登记过的域(不写死起始号);路由表里 15 个 `ClientPlayerTeam*` 条目都是 `NodeType: base.ENodeType_TeamNodeService`、`ClientProtocol: true`;`grep -n AcquireCreatePermitBlocking cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 命中;proto/rpc/grpc_client/table/gate/scene 编译通过 |
+| 0 | ① 用户拍板 §J;② **先完成 J-28 ④**(恢复 Agones 块),否则批 0 regen 后的问题会被误认为组队引入;③ **与 trade 会话协调生成顺序(J-30)**:执行 `git status data/tip/Tip.xlsx tools/proto_generator/protogen/etc/proto_gen.yaml proto/trade proto/message_id.txt proto/event_id.txt cpp/generated/grpc_client generated/code/proto/tip go/client_rpc_router/generated cpp/libs/services/scene/scene.vcxproj docs/design/xuanming-port-feasibility-20260902.md`,确认没有他人未提交改动。**必须等 trade 先导表、生成并提交再开工**。原因:trade 已在工作区生成(message_id 196..200 未提交);生成器只写本次解析到的方法(见 DV-5),若用"HEAD 版 proto_gen.yaml + team 块"之类不含 trade 块的配置生成，会把 trade 的 5 条号从 `message_id.txt`、路由表、各 `message_id.go` 里抹掉，还可能把 196..200 发给 team,与 trade 已生成的 go/robot 代码撞号。**禁止**用缺 trade 块的配置生成，也不许移动他人的 `proto/trade/`。Tip.xlsx 是二进制，无法合并，只能串行编辑 | 导表通过;proto 生成通过，客户端仓 `Assets/Scripts/Net/Generated` 的 `git status` 在生成前后不变(口径见 §I.6 第 2 步);`proto/message_id.txt` 新增行中 `ClientPlayerTeam*` **恰好 15 条**,其余新增行都属于事先登记过的域(不写死起始号);路由表里 15 个 `ClientPlayerTeam*` 条目都是 `NodeType: base.ENodeType_TeamNodeService`、`ClientProtocol: true`;`grep -n AcquireCreatePermitBlocking cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 命中;proto/rpc/grpc_client/table/gate/scene 编译通过 |
 | 1 | 批 0 | `go/match` 的 go vet 和 go test 全绿;本地启动后 etcd 出现 `TeamNodeService.rpc/zone/<z>/node_type/10/...`;客户端调用 GetMyTeam 返回 `team_id=0`;停掉 data_service 后 match 仍能正常启动，CreateTeam 回 `TeamInternal`;`battle_smoke` 的观战回归通过(match `Timeout` 未改，证明 WatchBattle 不受影响) |
 | 2 | 批 1 | go test 全绿;`battle_smoke` 回归通过 |
 | 3 | 批 1(事件生产者);`player_battle.cpp`、`scene.vcxproj{,.filters}` 的他人改动已提交或已协调 | scene 编译通过;`aoi_test` 全绿 |
@@ -1245,7 +1270,7 @@ team 的 key 全在单实例上，票据也只用单 key 脚本，所以"minired
 | 4 | rules_test.go | 申请和邀请的 FIFO 淘汰、重复刷新、过期清理 | 集合内容 |
 | 5 | rules_test.go | §D.6 重试安全表逐行验证 | 第二次调用的返回值 |
 | 6 | store_test.go | S_COMMIT:版本冲突返回 `{0}`;`{-1,i}`、`{-2,i}` 分支 | 拒绝分支前后 `mr.Dump()` 完全一致，没有任何写入 |
-| 7 | store_test.go | epoch:存在时 +1;key 缺失时按 TIME 起种;离队后 tid 置 0 且 epoch 保留;13 位数字不丢精度 | 数值 |
+| 7 | store_test.go | epoch:存在时 +1;key 缺失时按 TIME 毫秒数 + 1 起种;离队后 tid 置 0 且 epoch 保留;13 位数字不丢精度;索引缺失时读路径回报 nowMs、同一毫秒内起种严格更大、整队过期后空视图被接受(`TestEpochSemantics`、`TestMissingIndexEpochIsMonotonic`) | 数值 |
 | 8 | store_test.go | 投影字节能被 `TeamInfo` 反序列化(钉住 scene 契约);解散后 K1、K2 被删 | pb |
 | 9 | store_test.go | 自愈:删掉成员索引后下次提交重建;索引指向他队返回 `{-2}` 并由 Go 修复;孤儿索引 S_HEAL_ORPHAN | 状态 |
 | 10 | store_test.go | S_TOUCH 不改 ver;`mr.FastForward` 过期(照 `ticket_cas_test.go`) | TTL |
@@ -1269,6 +1294,12 @@ team 的 key 全在单实例上，票据也只用单 key 脚本，所以"minired
 | 28 | team_battle_test.go | 第 5 步与第 6 步之间插入 LeaveTeam 或被邀请人 RespondInvite(accept)(测试缝 `afterPreflightHook`) | 本轮加锁 `{0}` → 整轮重来;不给已离队者建票;新加入者也经过预检;锁内 `match_lock_roster == members` |
 | 29 | team_battle_test.go | 第 k 人 `createTicketIfAbsent` 返回 err 但票已写入(桩);请求 ctx 已取消 | 回滚删掉该票(CAS 按 ticket id);补偿用独立 ctx 仍成功;锁被清除 |
 | 30 | team_battle_test.go | EndMatch 期间用申请/邀请制造连续 5 次以上 ver 冲突;另测 token 不匹配、锁已过期 | 前者最终清锁并推 ENDED/FAILED;后两者停止且不写 |
+| 31 | store_test.go | `TestMissingIndexEpochIsMonotonic`(2026-09-16 评审补):同毫秒先读后起种;整队 `FastForward` 25h 后 ReadFree 与 NotBound 回包;过期后同毫秒重新建队;epoch 缺失的孤儿索引自愈 | 空视图 epoch 被 §H.3 接受;起种 = nowMs+1 严格更大;读路径不写;`TestConcurrentInvariantsFuzz` 终态补"索引从未写入"分支 |
+| 32 | service_test.go | `TestExpiredTeamEmptyViewIsAcceptedByClient`:整队过期后 GetMyTeam / LeaveTeam / DisbandTeam 的回包 | 三条回包的空视图都被客户端接受;不写任何 `team:` key、不推送、不发 scene 信号 |
+| 33 | store_test.go、rules_test.go | `TestSelfHealing` 两个双错位子测试(Mutate 一次移出两人后原操作照常提交;CommitMatchLock 修复后重来加锁、EndMatch 修复后立即重读并清锁);`TestRepairRemoveMember` 补多人移出 / 全员移出即解散 / id 全不在记录 | 修复提交 `Left` 含两名错位者、`Kept` 只剩队长;修复后不退避;EndMatch 结局 `Released`、锁已清 |
+| 34 | team_battle_test.go | `TestStartTeamMatchSettlesUnconfirmedLock`(测试缝 `beforeCommitEvalHook`):报错但已落锁;报错且未写入;EVAL 重发第二次回 {0} | 前者清锁推 MATCH_FAILED、ver+2、可立即重试;中者 `mr.Dump()` 不变、无推送、无退避;后者整轮重来、ver+4、先 FAILED 后 ENDED |
+| 35 | team_battle_test.go | 建票失败 / gather 结果的 MATCH_FAILED、MATCH_ENDED 快照 tip | 建票失败 `tip.id == TeamMemberNotReady`、`parameters == ["104"]`;gather 结果 tip 为 nil |
+| 36 | logic/push_test.go、playercontract_test.go | `TestPushToPlayerRecordsKafkaPushMetric`、`TestPushToPlayerDoesNotRecordKafkaPushMetric` | `match_kafka_push_total` 只由 logic 包装记(离线 / 会话损坏各 +1 error);playercontract 不记 |
 
 ### I.4 C++ gtest(`cpp/tests/aoi_test`)
 
@@ -1318,10 +1349,13 @@ RefreshMembership 和 CheckFollowLeader 的回调链依赖 hiredis 异步回调�
 **1. 导表(批 0)**
 ```
 cd E:\work\xuanming-server-mmo
-dev.bat gen
+dev.bat export
 py tools/data_table_exporter/tools/verify_schema_parity.py
 cd tools/data_table_exporter && py -m pytest -q
 ```
+- 只导表。**不要**用 `dev.bat gen`:它 = `export` + 默认配置的 proto 生成，会改写客户端仓(§B.5)。proto 生成只在第 2 步用副本做。
+- 导表的 csharp deploy 会往 `mmorpg-client/Assets/Scripts/Table/Generated` 写产物(`tools/data_table_exporter/exporter_config.yaml` 的 csharp `deploy`,既有行为)。它不在第 2 步 `Net/Generated` 核对范围内，交付时如实列出改了哪些文件。
+
 通过标准:
 - `go/shared/generated/tip/segments.go` 中 team 段 Count=31、Hi≈4030;
 - `generated/code/proto/tip/team_error_tip.proto` 出现新枚举;
@@ -1329,16 +1363,17 @@ cd tools/data_table_exporter && py -m pytest -q
 
 **2. proto 生成(批 0,禁止改客户端仓)**
 - 先按 §I.2 批 0 前置③与 trade 会话确认生成顺序。
-- 配置副本：trade 提交之后，复制工作区的 `tools/proto_generator/protogen/etc/proto_gen.yaml`(必须含 `domain_meta.trade` 以及仓库里其他所有已有域),加 team 块，把 `enable_unity_client` 改成 `false`,副本放 scratch。**不许**以 `git show HEAD:...` 作底或删掉任何域块(DV-5:没解析到的域会丢号)。
+- 配置副本：trade 提交之后，复制工作区的 `tools/proto_generator/protogen/etc/proto_gen.yaml`(必须含 `domain_meta.trade` 以及仓库里其他所有已有域),加 team 块(本分支已把 team 块写进默认 yaml,合并后的底本里已经有，不要重复添加),把 `enable_unity_client` 改成 `false`,副本放 scratch。**不许**以 `git show HEAD:...` 作底或删掉任何域块(DV-5:没解析到的域会丢号)。
+- 生成前先记下 `git -C E:\work\mmorpg-client status --porcelain -- Assets/Scripts/Net/Generated` 的输出(客户端仓可能有他人未提交改动，所以不要求整个仓 status 为空)。
 - 执行 `pwsh tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath <副本绝对路径>`(参数定义见 `dev_tools.ps1:6`、`:280-284`)。
 - 核对:
-  - `git -C E:\work\mmorpg-client status` 必须为空;
+  - `git -C E:\work\mmorpg-client status --porcelain -- Assets/Scripts/Net/Generated` 与生成前记下的输出完全相同(`Table/Generated` 受第 1 步导表影响，不纳入判定);
   - `proto/message_id.txt` 新增行中 `ClientPlayerTeam*` 恰好 15 条(12 个请求 + 3 个 `Notify*`),其余新增行都属于事先登记过的域;**没有任何旧行消失或改号**(`git diff proto/message_id.txt` 只有 `+` 行);15 个号之间的先后顺序是随机的，客户端和代码只引用常量名;`proto/event_id.txt` 新增 `PlayerTeamRefreshEvent`;
   - `route_table.go` 条目如 §I.2 所述;
   - `rpc_event_registry.h` 里 `kMaxRpcMethodCount == 最大号 + 1`;
   - **Agones 块正向断言**:`grep -n AcquireCreatePermitBlocking cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 必须命中，不命中即判失败。只看 `git diff` 查不出问题：该块已在 commit `6c4021ae5`(2026-09-02)被删掉，HEAD 里没有任何调用点(见 J-28 ④);
   - `go/team/generated/pb/game/` 与 `cpp/generated/grpc_client/team/team_grpc_client.{h,cpp}` 已生成(两者必定生成，见 §B.5、§I.1 批 0 第 11 项),后者已登记进 grpc_client 工程。
-- 然后把 15 个消息号的额度填进 `data/MessageLimiter.xlsx`,再执行一次 `dev.bat gen`。
+- 然后把 15 个消息号的额度填进 `data/MessageLimiter.xlsx`,再执行一次 `dev.bat export`(MessageLimiter 只需导表，proto 生成器不读它;**不要**用 `dev.bat gen`,理由同第 1 步)。之后如需重跑 proto 生成，仍用同一份副本执行 `proto-gen-run -ConfigPath <副本>`。
 
 **3. C++(批 0、批 3)**
 - 按顺序对下列工程执行 `msbuild <工程> /m:1 /p:Configuration=Release /p:Platform=x64`(rpc 与 gate 的工程路径待 Codex 按 sln 核实):
@@ -1440,7 +1475,7 @@ cd robot && go mod vendor && go build ./...
 | C-9 | minor | 建票报错(结果未知)的成员不回滚;补偿继承 RPC ctx 会失败 | **采纳** | `queue.go:246-263` 出错时是否已写入未知;`joinqueuelogic.go:238-239` matched 态不自愈 | §E.1 第 7 步回滚集合含"返回 err 的成员"、按本次 ticket id CAS 删，补偿用独立 ctx;§E.3 新行;§A.3 第 7 条;§I.3 #29 |
 | I-1 | major | team 不 import logic,却要用 logic 未导出的契约 key/读取/推送函数 | **采纳** | `logic/keys.go:134-150`、`location.go:17`、`push.go:26/42/51`、`queue.go:206` 全部小写未导出 | §A.2 新增叶子包 `go/match/internal/playercontract`(不叫 sharedkeys,因为除 key 外还有读取和推送封装)与依赖图;§F.3;§I.1 批 1 #16–21 |
 | I-2 | major | 文首说 Tip.xlsx 无改动不实;trade 会话正改批 0 生成源 | **采纳** | openpyxl 只读:工作区第 208 行 `//trade_error base=20000`、第 214 行 `attribute_error`,team 段 96–114 未变;`git diff proto_gen.yaml` +14 行 trade 块。**本轮复核发现 trade 已完成生成**(message_id 196..200 未提交) | 文首工作区注意;§I.2 批 0 前置③;§B.5 编辑冲突;DV-5、D7 行、§H 删掉具体号;§I.1 批 4 ⚠;J-30 |
-| I-3 | minor | 漏 domain_meta 的后果写成"走 TCP",实为没消息号、gate 踢人 | **采纳** | `prototools/descriptor.go:73-115` 只遍历 DomainMeta source;`cpp/service_register_info.go:331` 由 `CcGenericServices()` 决定;`model.go:77-85` 未设为 false;gate `client_message_processor.cpp:883-893` forceClose | §B.5 后果改写;§B.1 显式 `option cc_generic_services = false;`;§I.6 第 2 步核对 15 条 |
+| I-3 | minor | 漏 domain_meta 的后果写成"走 TCP",实为没消息号、gate 踢人 | **采纳** | `prototools/descriptor.go:73-115` 只遍历 DomainMeta source;`cpp/service_register_info.go:331` 由 `CcGenericServices()` 决定生成 handler 还是 sender(2026-09-17 更正:gate 侧协议号不由它决定，而由 `domain_meta.<域>.rpc.type` 决定，见 §B.1);`model.go:77-85` 未设为 false;gate `client_message_processor.cpp:883-893` forceClose | §B.5 后果改写;§B.1 显式 `option cc_generic_services = false;`;§I.6 第 2 步核对 15 条 |
 | I-4 | minor | grpc_client 登记写成"如果生成了",实际必定生成 | **采纳** | guild 只配 go outputs,仍有 `grpc_client.vcxproj:31/:48`、`CMakeLists.txt:46`、`grpc_init_client.cpp:283 guildpb::InitGuildGrpcNode`;trade 同样只配 go outputs,也生成了 `cpp/generated/grpc_client/trade/` | §I.1 批 0 #11、#12 改必做;§B.1 节点类型定论;"仍待核实"清单删去已定论项 |
 | I-5 | minor | match 新增 data_service 客户端未要求 NonBlock,会成为启动硬依赖 | **采纳** | `go/guild/etc/guild.yaml` `DataServiceRpc.NonBlock: true`;`match_service.go:44` `svc.NewServiceContext` 早于注册和 Start | §D.1 `DataServiceRpc` 行;§I.1 批 1 #23、#28;§I.2 批 1 完成标准;§I.3 #27 |
 | I-6 | minor | Timeout 5000→4000 会截断既有 WatchBattle 同步链 | **采纳**(方案与评审两选项不同) | `match_service.go:102` 同一 zrpc server;`spectate.go:34-35` add/remove 各 3s | §A.3 第 7 条改为**保持 5000**,team 方法入口自设 3500ms 预算;J-14 列三选项推荐 a;§I.2 批 1 加 battle_smoke 观战回归。未选"路由服提到 6000":波及所有经路由服的服务;未选"WatchBattle 裁剪超时":超出组队范围 |
@@ -1462,3 +1497,723 @@ cd robot && go mod vendor && go build ./...
 **本轮自查追加(不在 27 条内)**:
 1. **发号器行为与 DV-5 原描述不符**。读 `service_register_info.go:69/:148-166/:170-213` 得知：没解析到的域会从 `message_id.txt` 丢号，新方法从空闲号里随机取。因此 I.2 原先的退路"HEAD 版 proto_gen.yaml 副本"会抹掉 trade 已生成的 196..200 并造成撞号。已修订 DV-5、D7 行、§I.2 批 0 前置③(必须等 trade 提交)、§I.6 第 2 步(禁止缺域配置，核对无旧行消失)、J-30(排除 b)。
 2. §D.5 CreateTeam 行残留 `expectedVer=0`,已改 `"new"`;J-23 文件数"约 76"与 §I.1 合计 84 不一致，已改;§C.5 Mutate 第 1 步记录缺失时补 LeaveTeam 回成功，与 §D.6 口径一致。
+
+---
+
+## 实现记录(2026-09-15,worktree feature/team-system,未编译)
+
+> **位置与状态**(2026-09-17 更新):worktree `E:\work\xuanming-server-mmo-team3`,分支 `feature/team-system-v3`,**基于 `2a2b793f8`**(= 当时主工作区 `main` 的 HEAD,R.4 ⑧ 的"合到主工作区当前 HEAD"已经做完,合并冲突 2 处:`PROGRESS.md`、`go/match/match_service.go` 的 `showVersion` 与组队注册常量并存,均已手工解决)。**已导表、已生成、已按生成名对齐;仍未提交、未合并回主工作区、未编译、未测试**(AGENTS §10.1)——生成与导表的实际结果见文末「生成记录(2026-09-17)」。
+>
+> **本 worktree 的特殊约束**:`third_party/` 各子模块目录是**空的**(不能 junction:子模块 `.git` 文件指向相对路径会让本 worktree 的 git 整体报错,已实测)。因此 C++ 编译前必须先补齐 third_party(见文末「给 Codex 的验证清单」第 0 步);proto 生成时 `proto_gen.yaml` 的 `grpc_dir` / `protobuf_dir` 要在配置副本里改成主工作区绝对路径。
+>
+> 迁移链:首版 `E:\work\xuanming-server-mmo-team`(分支 `feature/team-system`,基于 `8487d5e1f`)→ `-team2`(分支 `feature/team-system-v2`,基于 `4069f33b0`)→ `-team3`(当前)。下文"本 worktree 基点 `8487d5e1f`"「主工作区 HEAD 是 `4069f33b0`」等核对记录保留作历史;R.4 ⑧ 的冲突热点在 v2/v3 迁移时已逐条合好。
+>
+> **已做的静态检查**(不能代替编译):
+> - 全部 37 个新增/修改的 Go 文件跑过 `gofmt -l -e`,无语法错误、无格式差异;
+> - `k8s_deploy.ps1` 用 PowerShell AST 解析(0 错误);yaml 用 PyYAML、vcxproj 用 `[xml]` 解析;
+> - 收尾阶段人工逐文件交叉核对(相当于人肉编译):import 路径与包名、类型/函数/方法签名、接口实现完整性、未使用变量与导入、Lua KEYS/ARGV 与 Go 调用、配置字段与 yaml 键、测试辅助函数是否存在、C++ include 与声明/定义、vcxproj/CMake 登记与文件名、Go 投影格式与 C++ 解析、event 名、robot 与服务端协议字段。核出 1 处跨模块不一致并已修(见 R.3 "收尾"),其余一致。
+>
+> **主工作区已前进**(2026-09-16 只读核对):主工作区 HEAD 是 `4069f33b0`,比本 worktree 的基点多 7 个提交。其中 trade 已导表、生成并提交(`proto/message_id.txt` +5、`Tip.xlsx`/`MessageLimiter.xlsx` 已改、`proto/trade/*` 已入库),J-30 的前置条件看起来已满足;`scene_node_service.cpp` 已恢复 `AcquireCreatePermitBlocking`(`:180`),J-28 ④ 看起来已完成。**regen 之前必须先把本分支合到主工作区当前 HEAD 之上**(合并热点见 R.4 ⑧),不许在 `8487d5e1f` 基点上生成。
+
+### R.1 已落码文件清单(按批)
+
+**批 0 · 契约与工程登记(14 个)**
+
+| 路径 | 新/改 | 摘要 |
+|---|---|---|
+| `proto/team/team.proto` | 新 | §B.1 全量:`ClientPlayerTeam`(12 个请求 + 3 个 Notify*)、26 个 message、3 个 enum |
+| `proto/common/event/team_event.proto` | 新 | `PlayerTeamRefreshEvent{player_id}` |
+| `proto/common/component/team_comp.proto` | 改 | `TeamId.membership_epoch = 2` |
+| `proto/match/match_service.proto` | 改 | `party_member_ids` 标 `[deprecated = true]` |
+| `tools/proto_generator/protogen/etc/proto_gen.yaml` | 改 | `domain_meta` 末尾加 team 块 |
+| `cpp/generated/proto/{proto.vcxproj, proto.vcxproj.filters, CMakeLists.txt}` | 改 | 登记 `team/team.{pb,grpc.pb}.*`、`common/event/team_event.pb.*` |
+| `cpp/generated/grpc_client/{grpc_client.vcxproj, CMakeLists.txt}` | 改 | 登记 `team/team_grpc_client.{cpp,h}` |
+| `cpp/nodes/scene/{scene.vcxproj, scene.vcxproj.filters, CMakeLists.txt}` | 改 | 登记 `handler/event/team_event_handler.{cpp,h}` |
+| `docs/design/cross-zone-matchmaking.md` | 改 | D2 的 team 例外;§4.2 指针;§10.0 禁止集群化清单加 S_COMMIT/S_TOUCH/S_HEAL_ORPHAN/S_READ_MEMBERS |
+
+未做(被其他会话占用或必须在生成后做):`data/tip/Tip.xlsx`、`data/MessageLimiter.xlsx`、`docs/design/xuanming-port-feasibility-20260902.md` 的 D7 修订注记。见 R.4。
+
+**批 1 · 名册核心 + match 基建(30 个)**
+
+| 路径 | 新/改 |
+|---|---|
+| `go/match/internal/team/{errors.go, keys.go, scripts.go, rules.go, store.go, homezone.go, presence.go, view.go, notify.go, service.go, server.go}` | 新 |
+| `go/match/internal/team/{rules_test.go, store_test.go, service_test.go, errors_test.go}` | 新 |
+| `go/match/internal/playercontract/{playercontract.go, playercontract_test.go}` | 新 |
+| `go/match/internal/logic/{keys.go, location.go, push.go, queue.go}` | 改(转调 playercontract) |
+| `go/match/internal/{config/config.go, svc/servicecontext.go, discovery/node_watcher.go, metrics/metrics.go}` | 改 |
+| `go/match/etc/match_service.yaml` | 改(`"1": 5`、`Team`、`DataServiceRpc`) |
+| `go/match/match_service.go` | 改(§A.3 装配,收尾阶段完成) |
+| `go/match/match_service_test.go` | 新(收尾阶段:NodeInfo 契约、advertisedHost) |
+| `tools/scripts/k8s_deploy.ps1` | 改 |
+| `deploy/k8s/manifests/go-svc/match.yaml` | 改(POD_IP) |
+
+**批 2 · 不补位整队开战(8 项;其中 `team/{service,rules,store}.go` 与批 1 是同一批文件,`match_service.go`、`logic/queue.go` 的改动已算在批 1,净增 5 个文件)**
+
+| 路径 | 新/改 |
+|---|---|
+| `go/match/internal/logic/{team_battle.go, team_battle_test.go}` | 新 |
+| `go/match/internal/logic/{gather.go, joinqueuelogic.go}` | 改 |
+| `go/match/internal/team/{service.go, rules.go, store.go}` | 改 |
+| `go/match/internal/team/team_battle_test.go` | 新(清单外,见 R.3) |
+
+**批 3 · scene 同节点跟随与 AOI(22 个,含删除 4 个)**
+
+| 路径 | 新/改/删 |
+|---|---|
+| `cpp/libs/services/scene/player/system/{player_team.h, player_team.cpp, player_team_aoi.cpp}` | 新(`player_team_aoi.cpp` 在清单外,见 R.3) |
+| `cpp/nodes/scene/handler/event/team_event_handler.{h,cpp}` | 新(预置生成物,业务只写在守护段) |
+| `cpp/libs/services/scene/player/system/{player_scene.h, player_scene.cpp, player_lifecycle.cpp}` | 改 |
+| `cpp/nodes/scene/handler/rpc/player/s2s_player_scene_handler.cpp` | 改(守护段) |
+| `cpp/libs/services/scene/battle/system/player_battle.cpp` | 改(`RemoveInBattleComp`) |
+| `cpp/libs/services/scene/spatial/system/interest.{h,cpp}` | 改(`DowngradePriority`) |
+| `cpp/tests/aoi_test/{aoi_system_test.cpp, interest_system_mock.cpp}` | 改 |
+| `cpp/libs/services/scene/{scene.vcxproj, scene.vcxproj.filters, CMakeLists.txt}` | 改 |
+| `cpp/tests/team_test/{team.sln, team.vcxproj, team.vcxproj.filters, teamlist_test.cpp}` | 删(J-17,普通删除,未 `git rm`) |
+| `tools/scripts/run_cpp_tests.ps1` | 改 |
+
+**批 4 · 冒烟与收尾(8 个)**
+
+| 路径 | 新/改 |
+|---|---|
+| `robot/{team_smoke_scenario.go, etc/team_smoke.yaml}` | 新 |
+| `robot/{main.go, config/config.go}` | 改 |
+| `tools/merge_zone/{preflight.go, integration_test.go}` | 改(P7) |
+| `docs/design/team-system.md`(本节)、`PROGRESS.md` | 改 |
+
+合计手写 79 个文件(批 0/1/2/3/4 = 14/30/5/22/8,含删除 4 个)。生成物一个都没有落盘。
+
+### R.2 生成前置引用清单(regen 之前编不过的符号,已去重)
+
+代码已经按生成器的命名规则提前引用下列符号。生成后如果**名字对不上,改引用方,不许手改生成物**。
+
+| # | 符号 | 预期来自 | 引用方 |
+|---|---|---|---|
+| 1 | Go `teampb "proto/team"`(包名 `team`):26 个 message、3 个 enum(`TeamMatchState_TEAM_MATCH_STATE_*`、`TeamChangeReason_TEAM_CHANGE_REASON_*`、`TeamEventType_TEAM_EVENT_TYPE_*`)、`ClientPlayerTeamServer` / `UnimplementedClientPlayerTeamServer` / `RegisterClientPlayerTeamServer` | `go/proto/team/team.pb.go`、`team_grpc.pb.go` | `go/match/internal/team/*`、`go/match/match_service.go`、`robot/team_smoke_scenario.go` |
+| 2 | Go `event.PlayerTeamRefreshEvent`;C++ `::PlayerTeamRefreshEvent` | `go/proto/common/event/team_event.pb.go`;`cpp/generated/proto/common/event/team_event.pb.{h,cc}` | `team/notify.go`、`service_test.go`;`player_team.cpp`、`team_event_handler.{h,cpp}` |
+| 3 | C++ `::TeamId::membership_epoch()` / `set_membership_epoch()` | `cpp/generated/proto/common/component/team_comp.pb.h` | `player_team.cpp` |
+| 4 | `game.PlayerTeamRefreshEventEventId`(Go);C++ 同名常量 + `DispatchProtoEvent` 的对应 case | `proto/event_id.txt` → `go/match/generated/pb/game/event_id.go`;`cpp/generated/rpc/service_metadata/{common_event_team_event_event_id.h, rpc_event_registry.*}` | `team/notify.go`、`service_test.go`;scene Kafka 命令路由 |
+| 5 | `game.ClientPlayerTeam{CreateTeam,GetMyTeam,ApplyJoinTeam,HandleApplication,InviteToTeam,RespondInvite,ListMyInvites,LeaveTeam,KickMember,TransferLeader,DisbandTeam,StartTeamMatch,NotifyTeamSnapshot,NotifyTeamInvite,NotifyTeamEvent}MessageId`(15 个,数值由发号器定) | `proto/message_id.txt` → `go/match/generated/pb/game/message_id.go`、`robot/generated/pb/game/message_id.go`、`go/client_rpc_router/generated/pb/game/{message_id,route_table}.go`、`cpp/generated/rpc/service_metadata/team_service_metadata.h`(另会多出 `go/team/generated/`,J-15) | `team/{notify,service}.go`、测试;`robot/team_smoke_scenario.go`;MessageLimiter 额度 |
+| 6 | `table.TeamError_kTeam{NotLeader,HomeZoneUnknown,CrossZoneDenied,InviteNotFound,InviteLimit,InMatch,MemberOffline,MemberInBattle,MemberNotReady,DungeonNotOpen,SizeExceeded,StateChanged,Internal}`;`tip.Segments` 的 team 段 Hi/Count;`tip.Faults` 含 TeamInternal | `Tip.xlsx` 加 13 行 → `go/shared/generated/pb/table/team_error_tip.pb.go`、`go/shared/generated/tip/{segments,faults}.go`(robot 还要 `go mod vendor`) | `team/errors.go`、`errors_test.go`、`server.go`(`serverbase.TipVerdict`);`robot/team_smoke_scenario.go` |
+| 7 | C++ `cpp/generated/proto/team/team.{pb,grpc.pb}.{h,cc}` | proto 生成 | 已登记进 proto 工程(文件不存在前 proto 工程编不过) |
+| 8 | C++ `cpp/generated/grpc_client/team/team_grpc_client.{h,cpp}`(`teampb::InitTeamGrpcNode` 等)+ `grpc_init_client.cpp` 改写 | protogen grpc_client | 已登记进 grpc_client 工程;gate / scene 链接 |
+| 9 | `event_handler.cpp` 里 `TeamEventHandler::Register()/UnRegister()` 的调用与 `#include "team_event_handler.h"` | protogen 按 `proto/common/event/` 重新生成 | regen 前事件处理器不会被注册;`team_event_handler.{h,cpp}` 已按模板预置,regen 时保留守护段 |
+| 10 | `robot/logic/handler/client_player_team_*.go`(15 个)与 `message_body_handler.go` 分发条目;`robot/vendor/proto/team` | protogen robot 生成 + `go mod vendor` | robot 整包编译 |
+
+已在收尾阶段落地、不再是前置引用的:`logic.NewTeamBattleStarter` 注入 `team.NewService`、`advertisedHost` 读 POD_IP(都在 `match_service.go`)。
+
+### R.3 偏离清单(相对本文正文)
+
+**契约(批 0)**
+- team 块放在 `domain_meta` 末尾,与 trade 块不在同一段文本;`team.proto` 用多行排版(字段号、类型与 §B.1 逐条一致)。
+- `cross-zone-matchmaking.md` 另改了 §4.2 一行,否则与 D2 例外自相矛盾;§10.0 除 S_COMMIT 外还登记了 S_TOUCH / S_HEAL_ORPHAN / S_READ_MEMBERS。
+
+**存储与规则(批 1 核心)**
+- S_COMMIT 对 L(移出成员):索引 tid 等于本队**或索引缺失**时置 `"0"`;成功返回改为 `{1, newVer, tidAfter_i, epoch_i, ...}` 成对返回。`CommitResult.Indexes` 带 `(TeamId, Epoch)`,服务层只给 `TeamId` 与视图一致的人推送。否则会把别队的 epoch 配上 team_id=0 的空视图(违反 §C.4)。
+- S_COMMIT 写新邀请前先 `ZREMRANGEBYSCORE -inf now` 清掉该被邀请人的过期反查项。
+- S_TOUCH 的 ARGV 多了 `projPb`、`tid`:投影缺失时重写;成员索引只在仍指向本队时续期。
+- TransferLeader 判定顺序:转给自己(4007)放在"目标已是队长"之前,否则 4007 永远走不到;另补 `target=0 → 4001`。
+- FIFO 淘汰不会淘汰本次刚追加的那一条(同一毫秒并列时)。
+- 规则层额外的防御:zone=0 → HomeZoneUnknown;Create 遇到已有记录 → Internal;LeaveTeam 在"索引指向本队但记录里没有我"时提交 `L=[caller]` 修复索引并回成功。
+- 解散时同时清空申请;`RevokedInvitees` 只含未过期邀请的被邀请人。TeamEventType 注释里的"满员导致邀请失效"**未实现**(满员接受邀请回 4002)。
+- 惰性转让在开战锁有效期间照常执行(§D.7 未排除)。
+
+**服务层(批 1)**
+- `MutateResult` 加 `Conflicts` 字段,服务层据此记 `team_commit_retry_total`。
+- **快照推送不发给 RPC 调用者本人**(§D.5 多处写"全员(含新人)"、§E.1 写"全员 MATCH_STARTED")。调用者的回包就是同一次提交构建的视图;回包丢失时靠 GetMyTeam 自愈(J-26 口径)。建队仍不推。
+- 规则拒绝或 Unchanged 的回包视图,直接复用 Mutate 最后一轮 S_READ(调用者 tid 为 0 或正好指向被读的队伍时);其余情况走 ReadFree。
+- GetMyTeam 在两次读之间索引变了(NotBound / RecordMissing)回成功 + 当前视图,不回 4013。
+- 测试缝:`beforeInvitePruneHook` 紧挨 PruneInvite 之前(§I.3 #23 写的是 S_INVITE_LIST 之后);另加 `asyncFn`(测试里同步执行)。
+- ListMyInvites 读任一条邀请记录失败 → 整个 RPC 回 Internal;RespondInvite 的 team_id=0 直接回 4013 不读 Redis。
+- notify_online 推送前先按展示缓存筛掉离线成员;展示用的 MGET 失败只把对应字段置缺省值。
+- `errors_test.go` 多一条 `TestInternalIsTheOnlyFault`。
+
+**整队开战(批 2)**
+- **编排位置改到 team 包**:§A.2 / §E.1 原定 `logic/team_battle.go` 编排第 1–9 步和 EndMatch(`logic → team`)。实际 logic 不能 import team(team 依赖 proto/team 生成物,import 会让 logic 在 regen 前连带编不过),所以编排在 `team/service.go StartTeamMatch` + `store.go CommitMatchLock/EndMatch` + `rules.go LockMatch/ReleaseMatchLock`;`logic.TeamBattleStarter` 只实现 5 个方法的票据域端口 `team.BattleStarter`(签名只用内建类型)。依赖方向:`team → BattleStarter 接口 ← logic`,`match_service.go` 注入时编译期保证接口一致。
+- 清单外新增 `team/team_battle_test.go`(需要 team 包内未导出的测试缝)。`team.Capacity == kMaxBattleTeamSize` 改为两边测试各自钉住字面量 5。
+- 预检的会话 / 战斗锁 / 位置在 team 里经 playercontract 读,只有票据自愈经端口调 `logic.healOrphanTicket`;读会话 / 读位置出错回 Internal(设计未写)。
+- 建票失败时 EndMatch **异步**执行(设计写的是先 EndMatch 再回包;EndMatch 最长 90s,同步会击穿 3500ms 预算)。回包视图可能仍是 STARTING,随后到达的 MATCH_FAILED 版本更高。
+- EndMatch 未提交时的兜底推送对象 = S_READ_MEMBERS 读到的 `tid==本队` 的成员(不是字面 lockRoster),保证 epoch 同源。
+- EndMatch 每轮一个 2s 独立 ctx;Redis 故障与版本冲突一样退避重试,直到 90s。
+- `RepairRemoveMember` 移除成员时同步从 `match_lock_roster` 去掉他,保持锁期间 roster == members。
+- `TicketBlocked` / `healOrphanTicket` 沿用 JoinQueue 的无 ctx Redis 调用,只在入口查 ctx(偏离 §A.3 第 7 条"一律 Ctx 版本");建票与回滚用 `EvalCtx`。
+- 只有整队票写 `team_id` 字段;单人票字段集不变。`TeamSizeFor` 复用 `matcher.requiredPlayers`。
+- **MATCH_ENDED 的语义**是"gather 开局成功、开战锁释放",在 CreateBattle 成功后立即推送,不是战斗结算完毕。
+
+**match 基建与装配(批 1)**
+- `logic.pushToPlayer` 的 5s 预算现在同时覆盖读会话、序列化和 Kafka 写(原来只覆盖 Kafka 写);其余转调传 `context.Background()`,与 go-zero 无 ctx 版本等价。
+- `playercontract` 多导出 `ParseSession`(presence 用 MGET 批量解析,避免抄第二份)。
+- `svc.NewDataServiceClient` 遇到 `NonBlock=false` 强制改成 true 并记 Error;抽成导出函数便于单测。
+- `k8s_deploy.ps1` 用已有的 `Get-AuthoritativeYamlBlock` 整块搬运 `PveTeamSizeByConfigId`(`Get-AuthoritativeScalar` 只能读标量)。
+- `config.Team` 故意不标 optional(整段缺席时 go-zero 才会递归填 default)。
+- 指标用 Subsystem `team`,实际名字就是 `team_rpc_total` 等。
+- `discovery.EndpointOf` 改为委托新增的 `EntryOf`,错误文案逐字保留。
+- `match_service.go`:
+  - 用的是 **HEAD 里已跟踪的 `shared/noderegistry`**(`8487d5e1f` 已含 `go/shared/noderegistry/registry.go`,不是从主工作区抄的未跟踪文件);TeamNodeService 用 `RegisterAfterListening` + `ReallocateNewID`,MatchNodeService 仍用 `internal/noderegistry.Register`,两者都用 `advertisedHost`(POD_IP 优先)。
+  - 拦截器链顺序**不变**(sessionInterceptor → grpcstats),作用于同一 server 上的两个 service;没有加 serverbase 拦截器,team 在 `server.go` 自己记 `team_rpc_total`。
+  - 退出顺序:`regs.Close()`(两份注册)→ 等 gRPC 排空(≤5s)→ 停后台循环 → `svcCtx.Stop()` → `s.Stop()`。`logx.Close` 放最后,前面的错误日志不丢;chat 是先 `s.Stop()` 再 `svcCtx.Stop()`。
+  - 注册失败:`registerNodes` 已 Close 成功的那一份 → `svcCtx.Stop()` → `s.Stop()` → `os.Exit(1)`(设计只写了 Close → Stop → logx.Close;多出的 `svcCtx.Stop()` 用来释放 snowflake worker 租约、刷 Kafka)。
+  - snowflake 失租:Fence → `regs.Close()` → `svcCtx.Stop()` → `logx.Close()` → `os.Exit(1)`。失租监听仍在注册完成之后才启动(与改造前同序);注册期间若失租,监听一启动就会立即触发。
+  - 新增 `match_service_test.go`(清单外):钉住 TeamNodeService 的 NodeInfo protojson 字段,以及 advertisedHost 的三个分支。
+
+**scene(批 3)**
+- `team_event_handler.{h,cpp}` 是按 `event_handler.{h,cpp}.tmpl` 逐行预置的"生成物":批 0 已登记进工程,文件不存在的话 scene 工程编不过。业务代码只写在两个守护段里。
+- 多拆出 `player_team_aoi.cpp`,纯函数在头文件内联:`aoi_test.vcxproj` 链接 scene.lib 但不链接 battle.lib,同一个 .obj 会连带拉进 `PlayerBattleSystem` 报 LNK2019。
+- `RefreshTeammateAoi` 签名改为 `(player)`。
+- `ClearBattleFreeze`、重复结算分支、`ApplyPendingSettlement` 三处改成**先发条件删锁、再摘组件**:摘组件会同步触发跟随链,跟随链读 `battle:lock` fail-closed,删锁命令先进 hiredis 管道,才不依赖回调跳数。
+- 投影缺失 + `EXISTS team:rec = 0` 时,只有组件 tid 仍等于本次查询的 tid 才清除;MGET 回调里再核一次 IsInBattle 与活会话。
+- `team_follow_skipped` 等指标在 scene 里是结构化日志(scene 没有 Prometheus 端点)。
+- `player_battle.cpp` 行号以 `8487d5e1f` 为准,共改 5 处摘组件点,HEAD 里已没有直接 `remove<InBattleComp>` 的地方。
+
+**robot 与合服(批 4)**
+- 不复用 `gameobject.Player` 的 WaitBattleStart/WaitBattleEnd,也不开战斗直连:那两组信号是 `sync.Once` 一次性广播,同一会话多场战斗会读到旧信号。战斗消息全程经 gate 中继。
+- S2 只断言成员集合与 join_seq,version 只记日志;S6 / X2 的换图目标从候选列表 `follow_scene_config_ids` 里挑;新增 `cross_zone` 开关;S7/S8/X2 对"上一场结算未落地"的过渡态有界重试(20s)。
+- J-6 原文"会影响 battle_smoke 的陌生人凑单人数"**不成立**:battle_smoke 用 PVE_SOLO,cross_zone 用 1V1,全仓 robot 没有 PVE_TEAM 调用方;`rating_match_test.go:222` 自己注入 `{"1": 3}`。`"1"` 已按拍板改为 5。
+- merge_zone 没有 miniredis 依赖,P7 只能放在 `merge_integration` build tag 的集成测试里,默认 `go test` 不覆盖。
+
+**收尾阶段交叉核对的修正**
+- **robot S7 / X2 等发起人收 MATCH_STARTED 会必然超时**:服务端不给 RPC 调用者推快照(见上"服务层"),而 `teamSmokeTeamBattle` 原来对全体 fighters(含队长)等 `MATCH_STARTED`。已改为队长以回包 `match_state=STARTING` 为准、只等其他队员的推送(`robot/team_smoke_scenario.go`、`robot/etc/team_smoke.yaml` 文件头同步)。MATCH_ENDED / MATCH_FAILED 仍推给全员(含队长)。
+- `team/keys.go` 头注释登记两处镜像(C++ `player_team.cpp` 的 `kTeam*KeyFmt`、`tools/merge_zone/preflight.go` 的 P7 key 函数)。
+
+**2026-09-16 评审修复(team-system-review,正文已同步修订)**
+- **S_READ 缺失索引的 epoch 口径**:索引缺失时回报 Redis `nowMs`(原 `"0"`),只读不写;S_COMMIT `setIdx` 与 S_HEAL_ORPHAN 在 epoch 缺失时起种改为 `nowms + 1`(原 `nowms`);S_READ_MEMBERS 保持 `"0"`。`Snapshot.PlayerEpoch` 注释同步。见 §C.4、§C.5、§F.2。
+- **`RepairRemoveMembers` 级联修复**:`rules.go` 新增一次移出多人的修复决策(`RepairRemoveMember` 改为单元素包装;`Left` 相对原记录;锁内名单同步去掉这些人;`Actor` = 第一个实际移出者);`store.go` 新增 `repairIndexMismatch` 供 Mutate 与 `commitPinned` 共用，修复提交自身 `{-2,j}` 时并入 `fix.Kept[j-1]`、同一 expectedVer 重来，下标越界或 Capacity 轮不收敛返回 error。删掉 Mutate 里"下一轮会再触发修复"的分支。见 §C.5 Mutate 第 3 步、§C.6。
+- **StartTeamMatch 开战锁未知结果补偿**:提交报错 → `releaseLockInBackground`(后台 `EndMatch(false)`,只有清锁提交成功才推送);返回 Retry → `settleUnconfirmedLock` 用请求 ctx 执行一轮新增的 `Store.ReleaseMatchLockOnce`,确认不了转后台。`endMatchRound` 的 ctx 改由调用方传入,`EndMatch` 每轮自建 2s ctx(行为等价)。新测试缝 `beforeCommitEvalHook`(`store.go`,生产恒为 nil),用来确定性制造"脚本已执行但回复丢失"与"同一条 EVAL 执行两次"。见 §E.1 第 6 步、§E.3。
+- **MATCH_FAILED 带原因 tip**:`CommitResult.PushTip`(只随推送下发，存储层不填不读);`finishMatch` / `pushMatchView` 增加 tip 参数。建票失败传 `TeamMemberNotReady(failed)`,gather 结果传 nil。见 §E.1 第 7、8 步。
+- **推送指标口径**:`playercontract.PushToPlayer` 不再记 `match_kafka_push_total`(包不再 import metrics);`logic.pushToPlayer` 包装恢复记 ok / error(不在线也算 error,与抽包前一致);team 只记 `team_push_total`(离线记 offline)。`metrics.KafkaPushValue` 只供单测读回。
+- **生成器门禁与注释**:`proto_gen.yaml` team 块注释加"客户端门禁";`team.proto` 头注释改正为"gate 协议号由 `domain_meta.team.rpc.type` 决定,`cc_generic_services=false` 决定注册形状与路由表"。见 §B.1、§B.5、§I.6、R.4。
+- 新增测试见 §I.3 #31–#36;新文件 `go/match/internal/logic/push_test.go`(未跟踪，合并时要 `git add`)。
+
+**正文勘误(以此为准)**
+- §I.5 S6 "robot 用哪个换图消息待核实"已定论:`SceneSceneClientPlayer.EnterScene(EnterSceneC2SRequest.scene_info.scene_config_id)`,链路 scene `player_scene_handler.cpp` → SceneManager.EnterScene → gate `gate_scene_route::ApplyRoute`(`cd918f4f8`)→ EnterSceneS2C,与 `login_test_scenarios.go testSceneSwitch` 相同。
+- "仍待核实"清单里的"`Get-AuthoritativeScalar` 能否整段读 yaml map"已了结:不能,改用 `Get-AuthoritativeYamlBlock`。
+- §I.1 批 1 #28 的行号以 `8487d5e1f` 为准:读值段 `:1384-1402`,match 模板 `:1838-1883`。
+- §I.1 批 3 文件清单加 `player_team_aoi.cpp`;§E.5 的测试文件清单加 `team/team_battle_test.go`。
+- 仍待核实:`PlayerAllData` blob 体积(J-11);rpc 与 gate 的 vcxproj 路径(§I.6 第 3 步)。
+
+### R.4 待 regen / 导表 / 合并时才能做的事项
+
+> **2026-09-17 状态**:① ② ③ ⑧ **已完成**,④ **已完成(有一处偏离,见该节)**,⑤ **部分完成**(C++ 侧已确认,`go mod vendor` 未跑),⑥ ⑦ **未完成**。逐条实测数据见文末「生成记录(2026-09-17)」。下文各节保留原计划文字,只在标题后加状态标记。
+>
+> **2026-09-18 状态(收口轮)**:① ② ③ ④ ⑤ ⑥ ⑧ **已完成**,⑦ **仍未执行(一条都没跑)**。本轮补完的是 ⑤ 的 `go mod vendor` 与 ⑥ 的 D7 注记,逐条结果见各节的 2026-09-18 标记与文末「收口记录(2026-09-18)」。**本轮全程未编译、未测试。**
+
+**① 前置(按顺序)——已完成**
+1. 先满足 ⑧ 末尾的「客户端合并门禁」,再把本分支合到主工作区当前 HEAD 之上(热点见 ⑧),重跑一遍 `gofmt -l -e` 与本节 R.2 的名字核对。
+2. 确认主工作区 `git status` 里没有他人未提交的生成源改动(`Tip.xlsx`、`MessageLimiter.xlsx`、`proto_gen.yaml`、`proto/message_id.txt`、`proto/event_id.txt`、`tools/proto_generator/**`)。2026-09-16 只读核对:前 5 项干净,trade 已提交;但 `tools/proto_generator/protogen/internal/code_parser.go` 有未提交修改(见 ⑧ 表后)。
+3. 正向确认 `grep -n AcquireCreatePermitBlocking cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 命中(J-28 ④)。
+
+**② `data/tip/Tip.xlsx`(`//team_error` 组,base=4000)——已完成**(实际号段 4018..4030,见生成记录 §GR.1;18 个既有码的 B 列文案 2026-09-18 补完,见 §GR.9)
+- 12 个复用码补 B 列文案(见 §D.4 "复用已有码"表);4000 / 4009 / 4010 / 4012 / 4015 / 4016 填"(保留)"。**2026-09-18 已补**:`tip_text.json` 的 4000..4030 共 31 条全部非空。
+- 在第 114 行之后新增 13 行(A 列不带 `k` 前缀):
+
+| A 列 | B 列文案 | fault |
+|---|---|---|
+| TeamNotLeader | 只有队长可以执行此操作 | |
+| TeamHomeZoneUnknown | 角色区服信息异常，请重新登录 | |
+| TeamCrossZoneDenied | 不能与其他区服的玩家组队 | |
+| TeamInviteNotFound | 邀请已失效 | |
+| TeamInviteLimit | 对方待处理的邀请过多，请稍后再试 | |
+| TeamInMatch | 队伍正在进入战斗，请稍候 | |
+| TeamMemberOffline | 有队员不在线 | |
+| TeamMemberInBattle | 有队员正在战斗中 | |
+| TeamMemberNotReady | 有队员暂时无法开战 | |
+| TeamDungeonNotOpen | 该副本未开放组队 | |
+| TeamSizeExceeded | 队伍人数超过该副本上限 | |
+| TeamStateChanged | 队伍状态已变化，请重试 | |
+| TeamInternal | 服务器繁忙，请稍后再试 | **1** |
+
+- 导表后核对:`segments.go` team 段 Count=31;`faults.go` 含 TeamInternal;`team_error_tip.pb.go` 出现 13 个新枚举,名字与 R.2 #6 一致。
+
+**③ proto 生成——已完成**(实际号段 201..215、event 48,见生成记录 §GR.2 / §GR.3)
+- 配置副本:以合并后主工作区的 `proto_gen.yaml`(含 trade 及所有已有域)为底,`enable_unity_client: false`,放 scratch;生成前先记下 `git -C E:\work\mmorpg-client status --porcelain -- Assets/Scripts/Net/Generated` 的输出;再执行 `pwsh tools/scripts/dev_tools.ps1 -Command proto-gen-run -ConfigPath <副本>`。
+- 核对:`git -C E:\work\mmorpg-client status --porcelain -- Assets/Scripts/Net/Generated` 与生成前记下的输出完全相同(客户端仓可能有他人未提交改动;导表写 `Table/Generated` 属预期，不纳入判定，口径同 §I.6 第 2 步);`proto/message_id.txt` 只有 `+` 行,`ClientPlayerTeam*` 恰好 15 条,旧行没有消失或改号;`event_id.txt` 新增 `PlayerTeamRefreshEvent`;`route_table.go` 15 条都是 `NodeType: base.ENodeType_TeamNodeService`、`ClientProtocol: true`;R.2 #7–#10 的文件都已生成,且文件名与工程登记一致(不一致就改登记)。
+
+**④ `data/MessageLimiter.xlsx`**(拿到 15 个号之后)**——已完成,但有一处偏离:3 个 `Notify*` 号最终没进表**(理由见下方"实际落表"),共落 12 行
+- 查询类每秒 5 次:`ClientPlayerTeamGetMyTeam`、`ClientPlayerTeamListMyInvites`。
+- 写操作每秒 3 次:CreateTeam、ApplyJoinTeam、HandleApplication、InviteToTeam、RespondInvite、LeaveTeam、KickMember、TransferLeader、DisbandTeam、StartTeamMatch。
+- `Notify*` 3 个是下行推送,客户端不应发送。建议也按每秒 3 次配,防止客户端误调刷量。
+- 填完再跑一次 `dev.bat export`(**不是** `dev.bat gen`:`gen` 会带上默认配置的 proto 生成、改写客户端仓，见 §B.5;proto 生成器不读 MessageLimiter),并重启 gate。之后如需重跑 proto 生成，仍用 ③ 的副本。
+
+**实际落表(2026-09-17)**:12 行,`generated/tables/messagelimiter.json` 由 34 行变 46 行。
+- `(max_requests, time_window, tip_message)` = `(5, 1, 1000)`:205 `ListMyInvites`、207 `GetMyTeam`;
+- `(3, 1, 1000)`:201 `InviteToTeam`、202 `KickMember`、204 `RespondInvite`、206 `ApplyJoinTeam`、208 `HandleApplication`、209 `DisbandTeam`、210 `LeaveTeam`、211 `StartTeamMatch`、212 `TransferLeader`、214 `CreateTeam`。
+- **偏离**:203 / 213 / 215 三个 `Notify*` 号**没有**按本节"建议也按每秒 3 次配"落表。依据是全表现有 34 行与 `message_id.txt` 里 30 个 `Notify*` 号的交集为空(170、184 等一个都没配),即"下行推送不进限流表"是仓库既有惯例,单给 team 开口子会与其余域不一致。**后果**:客户端若误发这三个号,gate 走默认档(每 messageId 各自 3 次 / 1 秒),与建议值恰好相同,因此与设计意图无实质差异。若评审坚持显式落表,补 3 行再跑一次 `dev.bat export` 即可,不影响任何代码。
+
+**⑤ 生成之后的代码侧——已完成(2026-09-18 补完 `go mod vendor`)**
+- ✅ **已完成(2026-09-18)**:`cd robot && go mod vendor`(`GOPROXY=https://goproxy.cn,direct`、`GOTOOLCHAIN=local`、go1.26.5 工具链),退出码 0、零输出、无网络报错。`robot/go.mod` 与 `robot/go.sum` **未变**,改动严格限制在 `robot/vendor` 内:4 改 2 增,vendor 文件总数 1220 → 1222。
+  - 新增 `vendor/proto/team/team.pb.go`、`vendor/proto/team/team_grpc.pb.go`;`vendor/modules.txt` 的 `# proto v0.0.0 => ../go/proto` 段净增 **1 行** `proto/team`(排在 `proto/scene` 与 `proto/trade` 之间),该文件本轮唯一改动就是这一行。
+  - `vendor/shared/generated/pb/table/team_error_tip.pb.go` 已刷新:`kTeam` 符号出现次数 **76 → 128**,32 个枚举名与源文件完全一致;`TeamError_kTeamNotLeader = 4018`、`kTeamCrossZoneDenied = 4020`、**`kTeamInternal = 4030`** 均可见(本项原定的通过标准就是 `kTeamInternal=4030` 可见,此前停在 `kTeamPlayerNotFound = 4017`)。
+  - 另有 2 个文件被顺带刷新,经 diff 确认都属组队特性自身:`vendor/proto/common/component/team_comp.pb.go`(新增 `TeamId.membership_epoch = 2`,§B.3 / §F.2)、`vendor/proto/match/match_service.pb.go`(只多一行 DV-4 注释)。**无第三方域被混入**。
+  - 5 个 vendor 生成物与 `go/proto`、`go/shared` 下的同名源生成物**逐字节相同**(`diff -q` 无差异),AGENTS §3「生成物不手改」成立。
+  - **原清单里"`vendor/shared/generated/tip/{segments.go,faults.go}` 也已更新"这一条前提有误,做不到也不该做**:robot 全仓(排除 vendor)只 import `shared/generated/pb/table` 与 `shared/generated/table`,**不** import `shared/generated/tip`;`go mod vendor` 按 import 图裁剪,因此 `vendor/shared/generated/tip/` 目录不存在也不会出现,`modules.txt` 的 shared 段同样只列那两个包。tip 的内容正确性由源仓保证:`go/shared/generated/tip/segments.go:33` 的 team 段是 `Lo:4000, Hi:4030, Count:31`,`faults.go:56` 有 `{Code: 4030, Group: "team_error", Name: "TeamInternal"}`。
+  - ⚠ **仍未验证**:本轮**没有**跑 ⑦ 第 4 步的 `cd robot && go build ./...`。vendor 是否真的补齐,只有那条命令能判定,不能据本条声称 robot 编得过。
+  - **原状(2026-09-17 记录,现已解决,保留作历史)**:`robot/vendor/proto/` 下只有 battle / chat / common / db / guild / login / match / scene / trade,**没有 team**;`vendor/modules.txt` 的 `# proto v0.0.0 => ../go/proto` 段里 `proto/team` 命中 0 次;`robot/vendor/shared/generated/pb/table/team_error_tip.pb.go` 仍停在 `TeamError_kTeamPlayerNotFound = 4017`。**这是 robot 整包编译的硬前置**:不跑 vendor,`team_smoke_scenario.go` 对 `proto/team` 与 `kTeam{HomeZoneUnknown,CrossZoneDenied,InMatch,MemberInBattle,MemberNotReady}` 的引用一律编不过。
+- ✅ **已确认**:`message_body_handler.go` 已有 15 条 `ClientPlayerTeam*` 分发(由生成器写入);`cpp/nodes/scene/handler/event/event_handler.cpp:35` 有 `TeamEventHandler::Register()`、`:54` 有 `TeamEventHandler::UnRegister()`(生成器本次 +3 行);`team_event_handler.cpp` 守护段内的业务代码逐字节原样保留(运行前后整文件 MD5 相同)。
+
+**⑥ 文档——已完成(2026-09-18)**
+- `docs/design/xuanming-port-feasibility-20260902.md` 的 D7 修订注记(DV-1/3/4/5、验收条款),J-24。2026-09-17 复核:该文件里 `DV-1` / `DV-5` 均无命中,注记仍未写。
+- **2026-09-18 已补**:该文件文首追加一行「2026-09-18 修订提示(D7 team ↔ match)」,文末追加 `## 12. D7(team ↔ match)落地修订注记(2026-09-18)`。§12 写清三件事:① **落点**——team 实际落在 `go/match/internal/team`(同进程、同镜像、协议独立,`ENodeType_TeamNodeService` + `RegisterAfterListening` 第二次注册,新增进程 / 端口 / 镜像 / manifest 数为 0);② **逐条修订**——按 DV-1..DV-7 对照 D7 原文(`:167` 验收条款、`:233`、`:250`、`:400`),把"独立 message_id 段"(DV-5)、"一条 Lua 覆盖 team + 票据 + 队列"(DV-1/DV-3)、"`JoinQueueRequest` 加 `team_id`"(DV-4)、"14 个 RPC"与"`aoi.cpp:27-28` 触发跟随"这几条逐条改正,并补上 D7 原文未覆盖的 DV-2 / DV-6 / DV-7;③ **状态**——显式写明"**已实现、已合并进 `main`(`66c546e70`)、未编译、未测试**",并列出仍欠的账(未编译未测试、发布顺序硬约束、客户端 UI 为零)。只追加,未改该文件其余任何段落。
+
+**⑦ Codex 验证顺序——仍未执行(2026-09-18 复核:5 步一条都没跑)**(命令细节见各批 handoff、§I.6 与文末「给 Codex 的验证清单(2026-09-17 收口版)」)
+1. regen 之前就能跑的:`cd go/match && go vet ./internal/playercontract/... ./internal/logic/... ./internal/svc/... ./internal/config/... ./internal/discovery/... ./internal/metrics/... && go test` 同一组包 `-count=1`(不依赖 team 生成物);`cd tools/merge_zone && go vet ./... && go test ./... -count=1`。
+2. 导表 + 生成之后:`cd go/match && go vet ./... && go test ./... -count=1`(team 包、`match_service_test.go` 都在内;`TestConcurrentInvariantsFuzz` 可能要几十秒到两分钟,带 `-race` 要加 `-timeout`)。
+3. C++ 串行 `/m:1`:proto → table → rpc → grpc_client → libs/services/scene → nodes/scene → gate → aoi_test → bag_test → cross_zone_test;`run_cpp_tests.ps1 -Filter aoi_test`。重点看 `party_member_ids` 标 deprecated 后是否在开了 TreatWarningAsError 的工程里触发 C4996,以及 bag_test 是否因 `player_battle.obj → player_team.obj` 报 LNK2019(缺 grpc_client.lib)。
+4. `cd robot && go build ./...`;`cd tools/merge_zone && go test -tags merge_integration ./... -count=1`。
+5. 端到端:本地起服后 etcd 应出现 `TeamNodeService.rpc/zone/<z>/node_type/10/node_id/<n>` 与 `MatchNodeService.rpc/...`;停掉 data_service 后 match 仍能启动、CreateTeam 回 TeamInternal;`robot.exe -c etc/team_smoke.yaml` 两种 AllowCrossZone 形态都输出 `TEAM_SMOKE_OK`;回归 battle_smoke、battle_smoke_cross_zone、guild_smoke。
+
+**2026-09-18 补充(收口轮复核)**:
+- 上面 5 步**一条都没跑**。截至本轮,组队从头到尾**没有任何编译、单测、冒烟或联机验证**。
+- 第 3 / 第 4 步之前多一道**前置**:跨 zone 传送阶段 1(`1f2bdd01c`)给 `proto/scene_manager/storage.proto` 加的 `PlayerLocation.owner_epoch` 与 `EnterSceneResponse.player_id` **尚未 regen**(`go/proto/scene_manager/storage.pb.go` 无 `OwnerEpoch`、`cpp/generated/proto/scene_manager/storage.pb.h` 里 `owner_epoch` 零命中),`go/scene_manager` 与 C++ scene 在 regen 之前都编不过。**必须先 regen 再跑本清单**,否则会把跨 zone 的编译失败误记成组队引入。
+- 第 3 步的 Linux 侧对应命令(`build_linux.sh`)同样必要:2026-09-18 给 `cpp/libs/services/scene/CMakeLists.txt` 补了 `battle/system/player_battle.cpp`(Windows 侧 `scene.vcxproj:116` 一直有,CMake 缺 → Linux 下 scene 静态库缺 `PlayerBattleSystem::IsInBattle`,而 `player_team.cpp:337/:375` 要用它),这条补丁**只做了静态核对,未编译验证**。
+- 第 5 步的两种 `AllowCrossZone` 形态、battle / guild 回归,都还没人跑。
+
+**⑧ 合并回主工作区的冲突热点——已完成**(下表是 2026-09-16 对 `4069f33b0` 的核对,保留作历史。2026-09-17 已把本分支迁到 `-team3` / `feature/team-system-v3`,基于主工作区当时的 HEAD `2a2b793f8`,迁移时实际冲突只有 2 处:`PROGRESS.md`、`go/match/match_service.go` 的 `showVersion` 与组队注册常量并存,均已手工解决。下表其余行的处理方式在 v2→v3 迁移中已逐条落实)
+
+| 文件 | 主工作区那边的改动 | 本分支的改动 | 处理 |
+|---|---|---|---|
+| `tools/scripts/k8s_deploy.ps1` | 已提交 +367 行,另有**未提交**修改 | match 读值段换成 `$matchPveTeamSizeBlock` 等 4 个变量;match 模板整块渲染并加 Team / DataServiceRpc 段 | 等对方提交后手工合;合完 grep 确认没有 `$matchPveTeamSizeConfig1` 残留,重跑 AST 解析和 `tools/scripts/tests/k8s_deploy_contract.tests.ps1` |
+| `robot/main.go` | 同一位置插入了 `trade-smoke` 分派 | 同一位置插入 `team-smoke` 分派 | 两段都保留 |
+| `robot/config/config.go` | 加了 `TradeSmokeConfig`、mode 白名单加 `trade-smoke` | 加 `TeamSmokeConfig`、白名单加 `team-smoke` | 两边都保留,白名单与报错文案合成一行 |
+| `cpp/libs/services/scene/battle/system/player_battle.cpp` | 删了 `#include "player/system/attribute_unit_migration.h"` 和两处法力单位换算 | 在那行 include 之后加 `#include "player/system/player_team.h"`;另有 5 处摘组件点 | include 冲突:保留 player_team.h、去掉 attribute_unit_migration.h;其余不同段 |
+| `cpp/libs/services/scene/scene.vcxproj{,.filters}` | 删了 `attribute_unit_migration.h` 的 ClInclude | 加 player_team.h / .cpp / _aoi.cpp | 不同行,一般可自动合 |
+| `cpp/generated/proto/{proto.vcxproj,.filters,CMakeLists.txt}`、`cpp/generated/grpc_client/{grpc_client.vcxproj,CMakeLists.txt}` | trade 生成物登记 | team 生成物登记 | 相邻行,手工保留两边 |
+| `tools/proto_generator/protogen/etc/proto_gen.yaml` | 加了 trade 块(`guild` 与 `friend` 之间,主工作区 `:424`) | team 块在文件末尾(`match` 块之后) | 不同段 |
+| `tools/merge_zone/integration_test.go` | +366 行 | P7 两个用例 | 视 diff 手工合 |
+| `PROGRESS.md` | +275 行 | 末尾追加一条 | 两边都保留(只追加) |
+| `docs/design/team-system.md` | 主工作区 HEAD 已入库,内容与本分支改动前逐字节相同 | 文首状态行 + 本节 | 直接用本分支版本 |
+| `cpp/tests/team_test/*` | — | 删除 | 合并时用 `git rm` 登记 |
+
+其余本分支改过的文件,主工作区自 `8487d5e1f` 以来都没有改动:`go/match/**` 只有生成物 `generated/pb/game/message_id.go`(trade +5)变了;`go/shared/noderegistry` 没变;`cpp/libs/services/scene/player/system/` 下变的是 `attribute_unit_migration.h`(删除)、`player_attribute.cpp`、`player_database_loader.cpp`,都不是本分支的文件;`cpp/nodes/scene/handler/` 下变的只有 `grpc/scene_node_service.{cpp,h}`(Agones 许可恢复,另有未提交修改)。
+
+另注意:主工作区有**未提交**的生成器源码修改(`tools/proto_generator/protogen/internal/code_parser.go`、`code_parser_test.go`)。regen 前要确认它已提交,或者确认它不影响本次生成,否则生成结果里可能混入他人半成品的行为变化。
+
+**客户端合并门禁**:team 块在默认 `proto_gen.yaml` 里(必须在，见 §B.5 / DV-5)。本分支合入主工作区后，任何会话用默认配置跑 `dev.bat proto` 或 `dev.bat gen`,都会往 `mmorpg-client/Assets/Scripts/Net/Generated/Handlers` 写 15 个 `ClientPlayerTeam*Handler.cs` 并重写 `HandlerRegistry.cs`。客户端没有 `Teampb.*` 类型时会 CS0246 编不过。二选一:
+- 合入前先让客户端侧落地 §H.1:`tools/gen_proto.ps1` 的 `$files` 加上 `proto/team/team.proto` 与 `generated/code/proto/tip/team_error_tip.proto`,并生成对应 C#;
+- 做不到就在合并说明和 PROGRESS.md 条目里显式写明：客户端收录 team.proto 之前，任何人不得用默认配置跑 `dev.bat proto` / `dev.bat gen`,proto 生成一律用 `enable_unity_client: false` 的副本。`proto_gen.yaml` 的 team 块注释里已经写了同样的警告。
+
+### R.5 未解决问题
+
+1. **全部未编译**。R.2 的生成物名字靠读生成器模板和同类生成物推断,生成后可能要改引用方;C++ 没有任何语法检查工具可用。
+2. **跨节点 / 登录时序的跟随正确性只能靠端到端验证**:队长换图时 `player:<id>:location` 是否已被 scene_manager 写成新场景,决定队员的 MGET 读到的是新 scene_id 还是旧的;`HasLiveSession` 新守卫是否会误伤正常在线队员。都要等 team_smoke S6 实测。
+3. **StartTeamMatch 的预检不是全 ctx 化**:`TicketBlocked` 的票据读取与自愈用无 ctx 的 MatchRedis 调用,Redis 卡顿时可能超出 3500ms 预算。改它会触及 JoinQueue 共用路径,本次没动。预检逐成员串行,5 人约 20 次 Redis 往返,未压测。
+4. **EndMatch 与进程退出**:match 退出(包括 snowflake 失租强退)时不等后台 EndMatch,开战锁只能靠自然过期(5 人 83s);90s 截止或持续故障时同样如此。这期间队伍显示 STARTING、回 TeamInMatch。
+5. **会话批量读失败时的错误码有误导性**:SessionLoader 整批失败时全员是 SessionUnknown,TransferLeader 回 TeamMemberOffline,实际是 Redis 故障。修正要在规则层区分 Unknown(核心层范围)。
+6. **展示信息的 SharedRedis 负载**:每次提交会批量 MGET 三组 key(会话、战斗锁、PlayerAllData blob);blob 体积(J-11)与 K8s 上是否同实例都未核实,不同实例时 level/class 恒为 0(不影响正确性)。GetMyTeam 每次都跑一轮 Refresh Mutate。
+7. **本地多 zone 的 data_service 配对**:`go_services.ps1` 把 `DataServiceRpc.Etcd.Key` 派生为 `dataservice.rpc.z<N>`,某个 zone 只起 match 不起 data_service 时,路由到该实例的组队请求一律 TeamInternal。
+8. **robot 冒烟的时序假设**:S8 依赖 BattleStart 到达时 `battle:lock` 已写入、B 的单人对局在 A 请求到达前没有超时自动结束;X2 的"C 不跟随"是 8s 负向窗口。
+9. **J-6 与表不一致仍在**:yaml `"1": 5` 与 `dungeon.json` 对齐了,其余 config id 仍无配置(K8s 同步搬运),Go 查表另立项(P2-05)。
+10. `party_member_ids` 标 deprecated 后,客户端 C# 生成代码重新生成时会带 `[Obsolete]`;Go 侧 `joinqueuelogic.go:58` 仍读它,staticcheck 会报 SA1019(go vet 不报)。
+
+---
+
+## 评审记录(2026-09-16,team-system-review)
+
+> 对象:worktree `E:\work\xuanming-server-mmo-team2`(分支 `feature/team-system-v2`,基于 `4069f33b0`)的暂存改动(79 个手写文件)。流程是多维度查找 → 逐条对照代码独立核实(确认 / 驳回)→ 按区修复 → 跨区遗留收口与编译器式终检。全程只读 / 只写本 worktree;没有执行 go build / test / vet、msbuild、cmake、proto 生成或导表(AGENTS §10.1)。**修复同样未编译、未测试，待 Codex 验证。**
+
+### 查找维度与核实结果
+
+进入核实的候选发现共 13 条：**确认 8 条，驳回 5 条**。
+
+| 维度 | 条数 | 确认 | 驳回 |
+|---|---|---|---|
+| Go 组队存储 / Lua / 规则 / 服务(`go/match/internal/team`) | 7 | 5 | 2 |
+| match 其余(`logic` / `playercontract` / `metrics`) | 1 | 1 | 0 |
+| proto / 生成器配置 / 设计文档 | 2 | 2 | 0 |
+| C++ scene 跟随链 | 1 | 0 | 1 |
+| 工程登记与仓库卫生(`.gitignore`、`cpp/generated/proto/CMakeLists.txt`) | 2 | 0 | 2 |
+
+### 确认发现与处置(全部已修，无跳过)
+
+| # | 发现 | 触发与后果 | 处置 |
+|---|---|---|---|
+| 1 | 索引 key 缺失时 S_READ 回 epoch `"0"`,空视图被客户端按 §H.3 丢弃 | 整队 24h 空闲过期后，GetMyTeam、LeaveTeam、DisbandTeam 等回包的空视图 epoch=0,小于客户端手里的旧 epoch,界面永远卡在已不存在的队伍上 | **已修**(与 #3 合并):S_READ 先取 TIME,缺失时回 `nowMs`,只读不写。见 §C.4、R.3 |
+| 2 | 同一队 ≥2 名成员索引错位时 `{-2}` 修复活锁 | Lua 只回报第一个错位下标，修复提交自身又 `{-2}`;Mutate 重读得到同一 ver、同一个第一错位者，直到回 `TeamStateChanged`。队伍所有写操作与开战、EndMatch 都卡死 | **已修**:`RepairRemoveMembers` + `store.repairIndexMismatch`,在同一 expectedVer 上级联移出，没有用链式单人修复(那样 `Left` 会漏人)。见 §C.5、§C.6 |
+| 3 | 起种值等于同毫秒读路径回报值 | #1 的修法若起种仍为 `nowms`,同一毫秒"先读空视图、再建队"会得到 epoch 相等、team_id 不同的两份视图，触发 §H.3 冲突判定，客户端反复重拉 | **已修**:S_COMMIT `setIdx` 与 S_HEAL_ORPHAN 起种改为 `nowms + 1` |
+| 4 | 开战锁提交结果未知时不补偿 | EVAL 已执行但回复超时 / 断连，或 go-redis 重发同一条 EVAL(第二次回 `{0}`):锁白挂到自然过期(5 人 83s),期间全队名单操作回 `TeamInMatch`;重发情形下本次请求还会被自己的锁挡掉 | **已修**:报错 → 后台按 token `EndMatch(false)`;Retry → 同步 `ReleaseMatchLockOnce` 一轮，确认不了转后台。新测试缝 `beforeCommitEvalHook`。见 §E.1 第 6 步、§E.3 |
+| 5 | 建票失败推给队员的 MATCH_FAILED 不带原因 tip | 队员只看到"开战失败"，不知道是谁、为什么;与 §E.1 第 7 步 `EndMatch(token,false,TeamMemberNotReady(pid))` 不一致 | **已修**:`CommitResult.PushTip`,建票失败带 `TeamMemberNotReady` + 出问题的成员，gather 结果不带 |
+| 6 | 组队推送被计入 `match_kafka_push_total`,离线队友被记为 error | `playercontract.PushToPlayer` 内部记挑战链路指标，team 直接调用它：组队推送混进挑战链路指标，队员离线还被记为 error,挑战推送的 ok / error 比例失真 | **已修**:playercontract 不再记指标;`logic.pushToPlayer` 包装按抽包前口径记;team 只记 `team_push_total` |
+| 7 | 默认配置跑 `dev.bat proto` / `dev.bat gen` 会往客户端仓写 `ClientPlayerTeam*` C# 桩，客户端 CS0246 | team 块已在默认 `proto_gen.yaml`,Unity 生成器没有按域开关，客户端 `gen_proto.ps1` 还没收录 team.proto | **已修(文档 / 注释门禁)**:`proto_gen.yaml` team 块注释、§B.5、§I.6、R.4 ①/③/④/⑧、PROGRESS.md 加"客户端合并门禁";只改表时改用 `dev.bat export`;客户端核对口径收窄到 `Assets/Scripts/Net/Generated`。team 块与 `enable_unity_client` 按 DV-5 保持不动 |
+| 8 | `team.proto` 注释误写"TCP 还是 gRPC 只由 `cc_generic_services` 决定" | 误导后人以为改 `rpc.type` 无害、改 `cc_generic_services` 会变 TCP;实际 gate 协议号由 `domain_meta.team.rpc.type` 决定 | **已修**:`team.proto` 头注释、§B.1、§B.5、评审处理记录 I-3 行更正 |
+
+### 驳回的发现(摘要)
+
+- **被邀请人上限可被突破到 11**(`scripts.go` 刷新判定不看过期):驳回。所有写 `team:invite:<pid>` 的路径都先 `ZREMRANGEBYSCORE -inf now`,按归纳，任一时刻有效项 ≤ 10,发现假设的初始状态不可达。
+- **KickMember / HandleApplication 目标 id 为 0 不回 4001**:驳回。§D.5 逐 RPC 契约没有这一步;player_id 不会为 0,不写不推，无错误行为。
+- **备战作废路径补跟随被 `battle:lock` fail-closed 挡掉**:驳回。锁保留 60s 是为迟到确认重建冻结，此时跳过跟随正是 §F.2 要求;"下次进场再补"是设计既定兜底。
+- **没有忽略 `go/team/generated/`**:驳回。`go/battle/generated` 已有入库先例，J-15 已接受;不属于任何 module,无错误行为。
+- **trade `*.grpc.pb.*` 缺失、`grpc_cpp_plugin` 缺失只记 Warn**:驳回。trade 缺口是基点遗留，不是本分支引入;team 的漏生成由 R.4 ③ 的文件核对兜住。作为提醒保留在下方未决事项。
+
+### 编译器式终检(2026-09-17)
+
+- 范围：上述修复触及的 17 个代码文件(15 个 Go,含未跟踪的 `logic/push_test.go`;`team.proto`;`proto_gen.yaml`)及其直接调用方(`finishMatch`、`pushMatchView`、`EndMatch`、`endMatchRound`、`commitPinned`、`RepairRemoveMember(s)`、`logic.pushToPlayer`、`playercontract.PushToPlayer`、`team.pushFn`)。
+- 逐项核对：import 与使用(`store.go` 新增 `base`、`logic/push.go` 新增 `metrics`、playercontract 去掉 `metrics` 后无残留引用、测试新增 `time` / `errors`);签名变更的全部调用点(含 `TestEndMatchStopsWithoutWriting`);`ruleCtx` 去掉 `op` 后 `removeMember` / `markOp` / `finish` 不读 `op`;测试辅助(`newSplitSvcCtx`、`corruptProto`、`newTestSvcCtx`、`playerSessionKey`、`counterVecValue`、`clientAccepts`、`setRedisMs`、`findApplication`、`battleHarness` 字段)都存在;测试包名一致，无 import 环(metrics 不 import playercontract);Lua 的 KEYS / ARGV 个数与 Go 解析长度未变(S_READ 仍 6 元素);既有用例在新增确认读之后期望不变:`TestStartTeamMatchConcurrentOnlyOneLocks`、`TestStartTeamMatchRestartsRoundWhenRosterChanges` 的 Retry 轮确认读到的是别人的 token 或无锁，只读即返回，不写、不推、不排后台任务;唯一设置 `afterMatchReadHook` 的 `TestEndMatchRetriesThroughConflicts` 加锁一次成功，不走确认读。
+- 全部 38 个改动的 Go 文件 `gofmt -l -e` 无输出。
+- 终检**没有发现新的编译级或语义问题**，本轮未再改代码，只补了文档。
+
+### 仍未决事项
+
+1. **全部未编译、未测试**(含本轮修复)。验证重点见 R.4 ⑦ 与下方。
+2. **客户端合并门禁**(mmorpg-client 仓，本仓库不能改):由客户端侧按 §H.1 把 `proto/team/team.proto` 与 `generated/code/proto/tip/team_error_tip.proto` 加进 `tools/gen_proto.ps1` 的 `$files` 并生成 C#;做到之前任何人不得用默认 `proto_gen.yaml` 跑 `dev.bat proto` / `dev.bat gen`。
+3. **主工作区已前进**:`main` 在 `2a2b793f8`(比基点 `4069f33b0` 多 4 个提交),与本分支重叠 `player_battle.cpp`、`go/match/match_service.go`、`tools/scripts/k8s_deploy.ps1`、`PROGRESS.md`。regen 前先合并。
+4. **暂存状态**:评审修复在工作区未暂存;`go/match/internal/logic/push_test.go` 未跟踪。合并 / 提交时要一起 `git add`,否则会丢测试。
+5. **开战锁补偿的残余窗口**:补偿前进程崩溃(锁靠 83s 过期);迟到的 EVAL 恰好在补偿读之后才被 Redis 执行(连接已判坏但请求已在服务端缓冲)。都靠锁自然过期，不再加代码。
+6. **EVAL 重发已落锁时的客户端观感**:会先收到一条 MATCH_FAILED(tip 为空)、随后 MATCH_STARTED 与 MATCH_ENDED。按 `(epoch, version)` 排序最终状态正确，但 UI 若对 MATCH_FAILED 弹失败提示会闪一下。交给客户端契约(§H)决定是否只在本地处于 STARTING 时提示。
+7. **生成前置**:本机 `grpc_cpp_plugin` 不在 PATH 时 protogen 只记 Warn,不生成 `*.grpc.pb.*`(基点里 trade 已缺)。regen 前先确认插件可用，否则 proto 工程编不过时不要误判为组队问题。
+8. R.5 的 1–10 仍然有效。
+
+---
+
+## 生成记录(2026-09-17,worktree feature/team-system-v3,仍未编译)
+
+> **范围**:R.4 的 ①②③④⑧ 与 ⑤ 的 C++ 半边。全程只写 `E:\work\xuanming-server-mmo-team3`,没有执行 `go build` / `go test` / `go vet` / `msbuild` / `cmake` / `dev.bat proto` / `dev.bat gen`(AGENTS §10.1),因此**下面所有结论都是静态核对与生成器自身的退出码,不等于编译通过**。
+
+### GR.1 Tip 错误码:13 个新码的实际数值
+
+`data/tip/Tip.xlsx` 的 `//team_error` 组(`base=4000 width=1000`)在 `kTeamPlayerNotFound = 4017` 之后**连续追加 13 行**,号段 **4018..4030**,全部落在 4000..4999 段内:
+
+| 枚举名(生成物里带 `k` 前缀) | 码 | fault |
+|---|---|---|
+| `kTeamNotLeader` | 4018 | |
+| `kTeamHomeZoneUnknown` | 4019 | |
+| `kTeamCrossZoneDenied` | 4020 | |
+| `kTeamInviteNotFound` | 4021 | |
+| `kTeamInviteLimit` | 4022 | |
+| `kTeamInMatch` | 4023 | |
+| `kTeamMemberOffline` | 4024 | |
+| `kTeamMemberInBattle` | 4025 | |
+| `kTeamMemberNotReady` | 4026 | |
+| `kTeamDungeonNotOpen` | 4027 | |
+| `kTeamSizeExceeded` | 4028 | |
+| `kTeamStateChanged` | 4029 | |
+| `kTeamInternal` | 4030 | **1** |
+
+- `go/shared/generated/tip/segments.go:33` = `{Domain: "team", Group: "team_error", Base: 4000, Width: 1000, Lo: 4000, Hi: 4030, Count: 31}`(改动前 `Hi: 4017, Count: 18`;18 + 13 = 31)。
+- `go/shared/generated/tip/faults.go:56` = `{Code: 4030, Group: "team_error", Name: "TeamInternal"}`,该文件本次 diff 为 **+1 / −0**,team 组只有这一条故障码。
+- `go/match/internal/team/errors.go` 里 25 个 `table.TeamError_k*` 引用,逐一在 `go/shared/generated/pb/table/team_error_tip.pb.go` 中按 `<名字> TeamError = <数>` 正则匹配,**缺失列表为空**。
+- Tip.xlsx 只在 team 段末尾追加:组头行仍是 96,下一组头 `mission_error` 由 115 变 128,`max_row` 248 → 261(+13);把新表去掉第 115–127 行后与改动前逐行三列值完全相等。13 行 B 列文案全部非空,C 列只有 `TeamInternal` 填 1。
+
+### GR.2 15 个消息号:常量名与数值
+
+`proto/message_id.txt` 由 201 行变 216 行,**只有 `+` 行、没有 `-` 行**(`git diff --numstat` = `15  0`)。号与常量名的对应关系由生成器分配,顺序随机,代码与客户端只引用常量名:
+
+| 号 | 常量名 | 类型 |
+|---|---|---|
+| 201 | `ClientPlayerTeamInviteToTeam` | 请求 |
+| 202 | `ClientPlayerTeamKickMember` | 请求 |
+| 203 | `ClientPlayerTeamNotifyTeamEvent` | **下行推送** |
+| 204 | `ClientPlayerTeamRespondInvite` | 请求 |
+| 205 | `ClientPlayerTeamListMyInvites` | 请求 |
+| 206 | `ClientPlayerTeamApplyJoinTeam` | 请求 |
+| 207 | `ClientPlayerTeamGetMyTeam` | 请求 |
+| 208 | `ClientPlayerTeamHandleApplication` | 请求 |
+| 209 | `ClientPlayerTeamDisbandTeam` | 请求 |
+| 210 | `ClientPlayerTeamLeaveTeam` | 请求 |
+| 211 | `ClientPlayerTeamStartTeamMatch` | 请求 |
+| 212 | `ClientPlayerTeamTransferLeader` | 请求 |
+| 213 | `ClientPlayerTeamNotifyTeamSnapshot` | **下行推送** |
+| 214 | `ClientPlayerTeamCreateTeam` | 请求 |
+| 215 | `ClientPlayerTeamNotifyTeamInvite` | **下行推送** |
+
+合计 12 个请求 + 3 个 `Notify*`,与 §H 的客户端契约一致。除这 15 行外 `message_id.txt` 无任何新增,号与名两侧都无重复。
+
+### GR.3 Event id
+
+`proto/event_id.txt` 新增唯一一行 `48=PlayerTeamRefreshEvent`(`git diff --numstat` = `1  0`)。各服务 `generated/pb/game/event_id.go` 同步出现 `const PlayerTeamRefreshEventEventId = 48`(例:`go/match/generated/pb/game/event_id.go:51`)。
+
+`PlayerTeamRefreshEvent` 在全局命名空间(`team_event.proto` 无 `package`),由 `rpc_event_registry.cpp` 的 `DispatchProtoEvent` 解包后进程内分发到 `TeamEventHandler`。
+
+### GR.4 生成护栏核对(逐条 pass / fail)
+
+§I.6 第 2 步与 R.4 ③ 列的护栏,加上本轮额外加的红线,逐条结果:
+
+| # | 护栏 | 结果 | 证据 |
+|---|---|---|---|
+| 1 | **客户端仓 `mmorpg-client` 零改动**(硬红线) | **pass** | 导表与生成各跑一轮,前后 `git -C E:\work\mmorpg-client status --porcelain` 均为 **0 行 / 0 字节**;HEAD 仍 `5d2486e9d`;`Assets/Scripts/Net/Generated/HandlerRegistry.cs` 最后写入时间仍是 2026-09-15 12:05:32;生成器日志中 `mmorpg-client` 出现 **0 次**,`unityGen.UnityClientHandlerGenerator` 耗时 0s(`enable_unity_client: false` 生效)。导表侧另做了只读 md5 预检:`generated/code/csharp` + `generated/code/proto/csharp` 共 68 个文件与客户端仓对应文件「0 个缺失、0 个内容不同」,而 `core/file_utils.py:60` 的 `md5_copy_file` 只在内容不同时才 `shutil.copyfile`,故一次写入都没发生 |
+| 2 | **主工作区 `E:\work\xuanming-server-mmo` 未被写入** | **pass** | 配置副本 `output_root=E:/work/xuanming-server-mmo-team3/`;日志中出现主工作区路径 30 次,全部是 protoc 的 `--proto_path=.../protobuf/src/`(只读 include);按运行时间窗扫主工作区 `third_party/grpc` 全树,被修改文件数 = **0**;主工作区不存在 `go\proto\team` 与 `cpp\generated\proto\team`,其 `proto\message_id.txt` 最后写入时间仍是 2026-09-15 12:05:32 |
+| 3 | `message_id.txt` 只有 `+` 行,没有旧号消失或改号 | **pass** | `git diff --numstat` 与 `git diff HEAD --numstat` 均为 `15  0`;`git diff -U0` 过滤 `^-[^-]` 无输出 |
+| 4 | 新增行里 `ClientPlayerTeam*` 恰好 15 条,无其他域新增 | **pass** | 15 个 `+` 行全部形如 `2xx=ClientPlayerTeam*`,明细见 §GR.2 |
+| 5 | `event_id.txt` 新增 `PlayerTeamRefreshEvent` | **pass** | 见 §GR.3 |
+| 6 | `route_table.go` 15 条都是 `TeamNodeService` + `ClientProtocol: true` | **pass** | `go/client_rpc_router/generated/pb/game/route_table.go:51-65` 共 15 行,每行都含 `NodeType: base.ENodeType_TeamNodeService` 与 `ClientProtocol: true`,`FullMethod` = `/teampb.ClientPlayerTeam/<Method>`;该文件 numstat = `15  0`,旧路由条目一条没动 |
+| 7 | `kMaxRpcMethodCount == 最大号 + 1` | **pass** | `cpp/generated/rpc/service_metadata/rpc_event_registry.h:28` = `216`,`message_id.txt` 最大号 215 → 216 = 215 + 1;`rpc_event_registry.cpp:245` 的 `static_assert(kMaxRpcMethodCount == 216)` 同步更新。顺带 `kMaxEventCount` 48 → **49**,event 最大号 48 → 49 = 48 + 1 |
+| 8 | **Agones 块正向断言**(J-28 ④) | **pass** | `grep -n AcquireCreatePermitBlocking cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 命中 `:180`;且该文件运行前后 MD5 均为 `BF031B9560CD98E83E038533643912FA`,整文件未被生成器改写 |
+| 9 | **守护段内业务代码原样保留** | **pass** | `cpp/nodes/scene/handler/event/team_event_handler.cpp` 运行前后 MD5 均为 `5830080B3A038735505D59C8CB2B2568`(逐字节相同);守护段内仍是 `#include "player/system/player_team.h"` 与 `PlayerTeamSystem::OnRefreshEvent(event);` 及中文注释。生成器只改了同目录的注册文件 `event_handler.cpp`(+3 行) |
+| 10 | **配置副本含全部域**(DV-5:未解析的域不会丢号) | **pass** | PyYAML 解析:原配置与副本 `domain_meta` 均 **18 个域**且集合完全相同(battle, chat, client_rpc_router, common, contracts, data_service, db, etcd, friend, gate, guild, login, match, scene, scene_manager, slg, team, trade);team 与 trade 两块逐字段相等;raw 文本 diff 恰好 **3 减 3 加**(只改了 `grpc_dir` / `protobuf_dir` / `enable_unity_client`),其余 top-level 键结构全等 |
+| 11 | 生成物齐全,gRPC 桩不缺 | **pass** | 见 §GR.5。`grpc_cpp_plugin` 本轮在 PATH 里,R.5 #7 的风险没有发生 |
+| 12 | 生成器正常结束,无 error / fatal | **pass** | `EXITCODE=0`;616 行日志中 `"level":"error"` / `fatal` / `panic` 均 0 条;末尾有 `Total execution time elapsed:70.8335774` 与 `Generation complete` |
+| 13 | 导表器正常结束 | **pass** | 日志末尾 `core.orchestrator: Deploy: 10 OK, 0 failed` 与 `===== Data Table Exporter: DONE =====`;按 §2.4 契约,任一编译 / 部署失败都会非 0 退出且不打印 DONE。27 条 WARNING 全是既有问题(GlobalVariable 5 列 owner 空、79 个 tip 码缺中文文案),与 team 无关 |
+| 14 | 没有改动 / 删除其他域的既有号 | **pass** | `message_id.txt` / `event_id.txt` / `route_table.go` / 所有 `message_id.go` / `event_id.go` 的 numstat 删除列全为 0。有删除行的文件只有两类:① tip 导表产物(`team_error_tip.*`、`segments.go`、`tip_enum_ids.json` 等),② 本特性自己已暂存的源 proto 带出来的重生成——`match_service.pb.{cc,h}` 全部差异仅为 `party_member_ids` 加 `[deprecated = true]`(字段号 4 保留未复用),`team_comp.pb.*` 为新增 `membership_epoch`。基线 95 个 status 条目运行后 0 个消失 |
+| 15 | 团队仓无任务范围外的改动、无临时文件残留 | **pass** | 配置副本与所有脚本都在 scratchpad,仓内无残留;`tools/generated/temp` 被 `tools/.gitignore:6` 忽略 |
+| 16 | 手写 Go 文件 gofmt 干净 | **pass** | 见 §GR.8 |
+
+**16 条全 pass,没有 fail 项。** 唯一的偏离是 R.4 ④ 记的 `Notify*` 三个号未落 MessageLimiter 表(那是设计建议,不是护栏)。
+
+### GR.5 生成物清单
+
+**新增(未跟踪,36 个文件)**
+
+- Go:`go/proto/team/team.pb.go`(73 271 B)、`go/proto/team/team_grpc.pb.go`(29 232 B)、`go/proto/common/event/team_event.pb.go`;`go/team/generated/pb/game/{message_id.go, event_id.go}`。
+- C++ proto:`cpp/generated/proto/team/team.pb.{cc,h}`(493 072 B / 401 533 B)、`cpp/generated/proto/team/team.grpc.pb.{cc,h}`(48 533 B / 163 889 B)、`cpp/generated/proto/common/event/team_event.pb.{cc,h}`。
+- C++ gRPC client:`cpp/generated/grpc_client/team/team_grpc_client.{cpp,h}`(52 107 B / 19 069 B)。
+- C++ service metadata:`cpp/generated/rpc/service_metadata/{team_service_metadata.h, common_event_team_event_event_id.h}`。
+- 中间 proto:`generated/proto/{_unified,db,login}/proto/team/team.proto`,以及同三处的 `proto/common/event/team_event.proto`。
+- robot:`robot/logic/handler/client_player_team_*.go` **恰好 15 个**。
+
+**修改**
+
+- 各服务 `generated/pb/game/message_id.go` 各含 15 个 `ClientPlayerTeam` 常量:`go/{battle, client_rpc_router, data_service, friend, guild, login, match, scene_manager}` 与 `robot`;对应 `event_id.go` 各加 `PlayerTeamRefreshEventEventId = 48`。
+- `go/client_rpc_router/generated/pb/game/route_table.go`(+15)。
+- `cpp/generated/rpc/service_metadata/rpc_event_registry.{h,cpp}`(两个上限常量 + `static_assert`)。
+- `cpp/generated/grpc_client/grpc_init_client.cpp`(+18,team 客户端初始化)。
+- `cpp/nodes/scene/handler/event/event_handler.cpp`(+3,注册 / 注销 `TeamEventHandler`)。
+- `robot/logic/handler/message_body_handler.go`(+15 条分发)。
+- tip 产物:`generated/code/proto/tip/team_error_tip.proto`、`generated/code/proto/{cpp,java,python}/...`、`cpp/generated/table/proto/tip/team_error_tip.pb.{cc,h}`、`go/shared/generated/pb/table/team_error_tip.pb.go`、`go/shared/generated/tip/{segments.go, faults.go}`、`java/config_node/.../TeamErrorTip.java`、`generated/tables/tip_text.json`、`tools/data_table_exporter/state/**`。
+- 表产物:`generated/tables/{messagelimiter.json, messagelimiter.pb, manifest.json}`。
+
+`cpp/generated/table/` 下的 `team_error_tip.pb.{cc,h}` 是**修改**而非新增,且早已登记进 `cpp/generated/table/CMakeLists.txt:119`、`table.vcxproj:141/:230`、`table.vcxproj.filters:141/:488`,无需补登记。
+
+### GR.6 MessageLimiter 额度
+
+`data/MessageLimiter.xlsx` 追加 **12 行**,`generated/tables/messagelimiter.json` 由 34 行变 46 行,`.pb` 用 `messagelimiter_table_pb2` 解码同为 46 行,两者一致。
+
+| `(max_requests, time_window, tip_message)` | 消息号 |
+|---|---|
+| `(5, 1, 1000)` | 205 `ListMyInvites`、207 `GetMyTeam` |
+| `(3, 1, 1000)` | 201 `InviteToTeam`、202 `KickMember`、204 `RespondInvite`、206 `ApplyJoinTeam`、208 `HandleApplication`、209 `DisbandTeam`、210 `LeaveTeam`、211 `StartTeamMatch`、212 `TransferLeader`、214 `CreateTeam` |
+
+**3 个 `Notify*`(203 / 213 / 215)没有进表**,理由与后果见 R.4 ④ 的「实际落表」小节。只加数据行不动 schema,因此没有任何 cpp / go / java 表代码或 C# 产物被改。
+
+### GR.7 本轮为对齐生成名改过的手写文件
+
+共 **3 个**,全部是注释或工程登记,没有改任何逻辑:
+
+1. `cpp/generated/grpc_client/grpc_client.vcxproj.filters` —— 补 2 条 team 登记(`<ClCompile Include="team\team_grpc_client.cpp" />`、`<ClInclude Include="team\team_grpc_client.h" />`)。`CMakeLists.txt` 与 `grpc_client.vcxproj` 里 team 本来就有,只差 filters。
+2. `cpp/libs/services/scene/player/system/player_team.cpp:26-27` —— 把「以下生成产物当前尚未生成,批 0 proto 重生成后出现」的占位注释,改成描述实际结果的注释(`PlayerTeamRefreshEvent` 全局命名空间、`event_id=48`、分发路径)。
+3. `go/match/internal/team/errors.go:40` —— 把「新增码(Tip.xlsx //team_error 组待加)」改成「本期新增码(已在 Tip.xlsx //team_error 组发号,4018..4030)」。
+
+**没有出现「生成名与手写侧对不上」的情况**:R.2 列的全部前置符号名,生成物里逐字一致,因此不需要按 AGENTS §3 改手写侧引用。
+
+`robot/team_smoke_scenario.go` 在本轮期间也被改了一行注释(账号段说明拆分 + 补 trade-smoke 段),但**不是本轮产出**——文件 mtime 比本轮唯一一次编辑晚 15 秒,是并行会话写的,按 AGENTS §10.2 未回滚、未触碰。
+
+### GR.8 gofmt
+
+本轮改过的 **82 个 Go 文件**跑 `gofmt -l -e`,报出 2 个:
+
+- `go/shared/generated/tip/segments.go` —— `gofmt -d` 显示唯一差异是「文件末尾缺换行」;
+- `robot/logic/handler/message_body_handler.go` —— `messageHandlers` map 对齐与 import 分组(要重排 `base "proto/common/base"` 并重新对齐约 100 行 map 条目)。
+
+两个都是**生成产物**,且把 `HEAD` 版本导出后跑同样命令**同样被报出**,即改动前就如此,属生成器既有行为。按 AGENTS §3(生成物不手改)**未修**。**全部手写 Go 文件均通过 gofmt。**
+
+若要根治,应改生成器模板(`tools/proto_generator/**` 与导表器的 tip 模板),属独立任务。同目录的 `robot/{data_stress.go, http_login.go, login.go, metrics/stats.go}` 也是基线 gofmt-dirty,本轮未改动它们。
+
+### GR.9 补记(2026-09-18):18 个既有 team 码补文案
+
+生成工作流把 R.4 ② 的「12 个复用码文案 + 6 个保留码」列为未完成(授权只覆盖追加 13 行),本轮补完:
+
+- **改动**:`data/tip/Tip.xlsx` 的 `//team_error` 段第 97–114 行(4000..4017)B 列,原本全空,现全部填上。脚本只在「段内 + B 列为空」时写入,`skipped(已有文案)` 为空 ⇒ 没有覆盖任何已有文案;13 个新码(4018..4030)不在改动范围。
+- **文案口径**:12 个被 `go/match/internal/team/errors.go` 引用的码给玩家可读文案(例:4001 玩家 ID 无效、4002 队伍人数已满、4005 不能把自己踢出队伍、4007 只有队长可以踢人、4013 你还没有队伍、4017 找不到该玩家);6 个全仓无引用点的填「(保留)」(4000 / 4009 / 4010 / 4012 / 4015 / 4016)。
+- **导表**:用**临时配置副本** `tools/data_table_exporter/exporter_config.local.yaml`(把 `csharp.deploy` 改成 `[]`)跑 `py -3 tools/data_table_exporter/run.py`,退出码 0、`Deploy: 10 OK, 0 failed`;跑完即删该副本。**原因**:仓内默认 `exporter_config.yaml` 的 `csharp.deploy` 指向 `mmorpg-client/Assets/Scripts/Table/Generated`,直接用它跑会写客户端仓。
+- **核对**:`generated/tables/tip_text.json` 的 4000..4030 共 31 条全部非空;`git -C E:\work\mmorpg-client status --porcelain` 为空(客户端仓 0 改动);worktree 改动计数仍是 167。
+- **未变**:MessageLimiter 与 proto 生成本轮都没再跑(只改文案不影响号段)。
+
+---
+
+## 给 Codex 的验证清单(2026-09-17 收口版)
+
+> 取代 §I.6 里「在主工作区跑」的假设:本特性现在活在**隔离 worktree** 里,环境前置与原来不同。**全程未编译、未测试**,以下每一步都是首次执行。
+
+### 第 0 步:环境与 worktree 前置(必读,不做后面全废)
+
+1. **工作目录是 `E:\work\xuanming-server-mmo-team3`,不是主工作区 `E:\work\xuanming-server-mmo`。** 分支 `feature/team-system-v3`,基于 `2a2b793f8`。主工作区有 7 个并行会话在用且每小时自动提交,**不要在那里编译本特性**。
+2. **本 worktree 的 `third_party/` 各子模块目录是空的**,C++ 编译前必须补齐:
+
+   ```
+   git -C E:\work\xuanming-server-mmo-team3 submodule update --init --recursive
+   ```
+
+   (或由 Codex 自行决定如何补齐 third_party。注意**不能用 junction 指向主工作区**:子模块的 `.git` 文件写的是相对路径,junction 会让本 worktree 的 git 整体报错,已实测。)补齐之前 `cmake` / `msbuild` 必然找不到 grpc / protobuf 头。
+3. 按记忆 `xuanming-build-toolchain` 执行 `buildenv.ps1`(`E:\work\tools` 从 09-07 起已清空,路径以记忆为准);docker infra 已启动。
+4. **导表与 proto 生成本轮已做完,不要重跑**(重跑会再次分配号或触碰客户端仓)。如确需重跑,必须用 `enable_unity_client: false`、且 `grpc_dir` / `protobuf_dir` 指向主工作区绝对路径的配置副本(本 worktree 的 `third_party` 是空的)。
+
+### 第 1 步:robot vendor(本轮没跑,Go 编译的硬前置)
+
+```
+cd E:\work\xuanming-server-mmo-team3\robot
+go mod vendor
+```
+
+通过标准:`vendor/proto/team/` 出现;`vendor/modules.txt` 的 `# proto v0.0.0 => ../go/proto` 段里出现 `proto/team`;`vendor/shared/generated/pb/table/team_error_tip.pb.go` 里 `kTeamInternal = 4030` 可见(现在还停在 `kTeamPlayerNotFound = 4017`)。
+
+不跑这一步,`robot/team_smoke_scenario.go` 对 `proto/team` 与 `kTeam{HomeZoneUnknown, CrossZoneDenied, InMatch, MemberInBattle, MemberNotReady}` 的引用**一定编不过**。
+
+### 第 2 步:Go
+
+```
+# 2.1 先跑不依赖 team 生成物的包,快速暴露基础问题
+cd E:\work\xuanming-server-mmo-team3\go\match
+go vet ./internal/playercontract/... ./internal/logic/... ./internal/metrics/...
+go test ./internal/playercontract/... ./internal/logic/... ./internal/metrics/... -count=1
+
+# 2.2 全量(team 包、match_service_test.go 都在内)
+go vet ./...
+go test ./... -count=1
+
+# 2.3 fuzz 用例带竞态检测单独跑(耗时,必须给 timeout)
+go test ./internal/team/... -race -run TestConcurrentInvariantsFuzz -count=1 -timeout 10m
+
+# 2.4 其余模块
+cd E:\work\xuanming-server-mmo-team3\go\client_rpc_router && go test ./... -count=1
+cd E:\work\xuanming-server-mmo-team3\tools\merge_zone && go vet ./... && go test ./... -count=1
+cd E:\work\xuanming-server-mmo-team3\tools\merge_zone && go test -tags merge_integration ./... -count=1
+cd E:\work\xuanming-server-mmo-team3\robot && go build ./...
+```
+
+预期风险点:`TestConcurrentInvariantsFuzz` 可能要几十秒到两分钟,带 `-race` 更久;`joinqueuelogic.go:58` 仍读已 deprecate 的 `party_member_ids`,`staticcheck` 会报 SA1019(`go vet` 不报,不是错误)。
+
+### 第 3 步:C++(串行 `/m:1`,并发会报假的 C1041 / LNK1104)
+
+按下列顺序执行 `msbuild <工程> /m:1 /p:Configuration=Release /p:Platform=x64`(rpc 与 gate 的工程路径请按 sln 核实):
+
+1. `cpp/generated/proto/proto.vcxproj`
+2. `cpp/generated/table/table.vcxproj`
+3. rpc 工程
+4. `cpp/generated/grpc_client/grpc_client.vcxproj`
+5. `cpp/libs/services/scene/scene.vcxproj`
+6. `cpp/nodes/scene/scene.vcxproj`
+7. gate 工程
+8. `cpp/tests/aoi_test/aoi_test.vcxproj`
+9. bag_test 工程
+
+然后:`pwsh tools/scripts/run_cpp_tests.ps1 -Filter aoi_test`。
+
+重点观察:
+
+- `party_member_ids` 标 deprecated 后,开了 `TreatWarningAsError` 的工程是否触发 **C4996**;
+- bag_test 是否因 `player_battle.obj → player_team.obj` 报 **LNK2019**(缺 `grpc_client.lib`);
+- **Linux / CMake 侧另有一个已知缺口**:`cpp/libs/services/scene/CMakeLists.txt` 的 `SOURCE_FILES` 里没有 `battle/system/player_battle.cpp`(而 `scene.vcxproj:115` 有),`player_team.cpp` 依赖 `PlayerBattleSystem::IsInBattle`,所以 CMake 侧 scene 静态库会缺符号。**Windows MSBuild 不受影响**,只在跑 `build_linux.sh` 时才会炸。
+
+### 第 4 步:端到端
+
+```
+pwsh tools\scripts\start_game.ps1                       # 默认路由模式
+cd robot && .\robot.exe -c etc\team_smoke.yaml          # 形态一:expect_cross_zone_allowed: false
+```
+
+- 双 zone:`pwsh tools\scripts\dev_tools.ps1 -Command dev-start-zones`(父 shell 先设 `GATE_CLIENT_RPC_ROUTER=1`)。
+- **形态二**:把 match yaml 改成 `Team.AllowCrossZone: true`,**重启所有 match 实例**,以 `expect_cross_zone_allowed: true` 再跑一次。两种形态都要跑。
+- 通过标准:两种形态都输出 `TEAM_SMOKE_OK`;etcd 里应出现 `TeamNodeService.rpc/zone/<z>/node_type/10/node_id/<n>` 与 `MatchNodeService.rpc/...`;停掉 data_service 后 match 仍能启动、CreateTeam 回 `TeamInternal`(4030)。
+- **回归**:`etc\battle_smoke.yaml`、`etc\battle_smoke_cross_zone.yaml`、`etc\guild_smoke.yaml` 三个都要跑,确认组队没有破坏既有链路。
+
+### 第 5 步:失败时保留哪些日志
+
+- match 日志里含 `[team]`、`[gather]` 的行;
+- scene 日志里含 `PlayerTeam`、`Follow` 的行;
+- robot 的 `TEAM_SMOKE_FAIL` 行,以及它前后各 20 行上下文;
+- `/metrics` 中 `team_*`、`match_*` 的快照;
+- 路由服中含 `ClientPlayerTeam` 的日志;
+- C++ 编译失败时:完整 msbuild 输出里**前 3 个** error(`C` 开头或 `LNK` 开头)及其所在文件行,不要只贴最后一条;
+- Go 测试失败时:把 `-run` 缩小到失败用例后带 `-v` 重跑一次,附完整输出;
+- 导表 / 生成若需重跑并失败:保留生成器日志末尾 50 行与 `EXITCODE`。
+
+### 第 6 步:本清单不覆盖、需要另行决策的既有缺口
+
+这些都**不是本特性引入的**,本轮按 AGENTS §10.2(不夹带任务外改动)未动,列出供决策:
+
+1. `cpp/generated/rpc/rpc.vcxproj{,.filters}` 少登记 14 个 `service_metadata` 头,其中 2 个是本批新生成的(`common_event_team_event_event_id.h`、`team_service_metadata.h`),另 12 个是既有缺口。全是 `ClInclude`,**不参与编译**,只影响解决方案资源管理器显示。建议单独立项一次补齐 14 条,而不是只补 team 的 2 条。
+2. `cpp/generated/proto/proto.vcxproj` 少登记 16 个非 team 文件、`.filters` 少登记 40 个。其中 **`trade\trade_table.grpc.pb.cc` 是唯一一个会影响编译的 `.cc` 缺口**,其余都是 `.h`。team 相关无任何缺口。
+3. `cpp/generated/grpc_client/grpc_client.vcxproj.filters` 仍缺 battle / client_rpc_router / match 的 8 条(`vcxproj` 里都有)。只影响 IDE 显示。
+4. **`cpp/tests/aoi_test/aoi_test.vcxproj` 的 ItemGroup 里只有 `aoi_system_test.cpp`**,同目录的 `interest_system_mock.cpp` 与 `mock_view.cpp` **没有登记、不会被编译**(`git show HEAD` 版本同样如此,是既有状态)。但本批改动包含 `interest_system_mock.cpp`(§F.4 要求 mock 同步实现 `DowngradePriority`)。**结论:那份 mock 的改动目前是死代码**,aoi_test 实际链接的是 `scene.lib` 里的真实 `interest.cpp`。**不能简单加进 vcxproj** —— mock 与 `interest.obj` 会双重定义 `InterestSystem::*` 导致 LNK2005。需要测试负责人决定:保持现状(把 mock 当历史遗留),还是改造链接方式。
+5. `cpp/generated/rpc/service_metadata/team_service_metadata.h` 的 15 个 `#define ClientPlayerTeam*Method ::ClientPlayerTeam_Stub::descriptor()->method(N)` 引用了 `::ClientPlayerTeam_Stub`,但 `team.proto` 有 `package teampb` 且 `option cc_generic_services = false`,`team.pb.h` 里根本没有这个符号(grep 零命中)。`chat_service_metadata.h` 与 `chat.proto` 是完全相同的组合,说明是**生成器既有行为**;因为是宏、目前无人展开,不会编译报错。将来 C++ 侧要用这些 Method 宏,必须先修生成器模板。
+6. `robot/logic/handler/message_body_handler.go` 与 `go/shared/generated/tip/segments.go` 不满足 gofmt(见 §GR.8),是生成器既有行为,未手改。
+7. `cpp/libs/services/scene/battle/system/player_battle.cpp:58-59` 仍有「以下生成产物当前尚未生成」的过期注释,但 `:60-67` 的 battle 生成物早已存在。属 battle / 属性加点会话的遗留,未动。
+8. `go/match/internal/logic/team_battle.go:21`、`team_battle_test.go:40`、`go/match/internal/team/service.go:42` 的注释里还留着「regen 前编不过」的措辞。regen 已做完,现在读起来是过去式;但这些话在解释 team 与 logic 之间为什么走接口而不是直接 import 的**分层理由**(依然有效),改写有丢失设计依据的风险,未动。纯注释,零风险,评审要统一措辞可随时改。
+9. **并行写入**:本轮期间 `go/match/internal/team/errors.go` 与 `robot/team_smoke_scenario.go` 的 git 状态从 `A ` 变成 `AM`,其中 `team_smoke_scenario.go` 的改动不是本工作流写的。若确认有第三方会话在写 `E:\work\xuanming-server-mmo-team3`,打补丁前要先确认,否则补丁会含非本任务改动。
+
+---
+
+## 合并后语义复核(2026-09-18,组队 × 跨 zone 传送阶段 1)
+
+组队(`7af8342ad`)与跨 zone 传送阶段 1(`1f2bdd01c`)改了同一批"场景进出"文件,git 只保证文本合得上。
+本节记录逐条语义核对结论。**本轮没有任何编译与测试**,结论全部来自读码。
+
+### 核对结论
+
+| # | 核对点 | 结论 |
+|---|---|---|
+| 1 | `player_lifecycle.cpp` 里 `PlayerTeamSystem::OnEnteredScene` 与归属/换手门的先后 | **顺序正确**。归属写在第 0.5 步(`:407-434`,`PlayerHomeZoneComp` / `PlayerOwnerEpochComp` 取 max),`OnEnteredScene` 在第 3.5 步(`:506`),跟随链拿到的永远是本次路由的 epoch。目标场景取不到时第 2 步 fail-closed 直接 return(`:490-496`),不会在"没进场景"的状态下触发跟随 |
+| 2 | 跟随会不会把"刚交接出去"的玩家又拉回来 | **原实现有洞,已修**(见下)。`CheckFollowLeader` 只看 `IsInBattle` / `HasLiveSession` / `battle:lock`,而 `PlayerFrozenComp`(player_migrate 在途)与 `PlayerTravelHandoffComp`(传送交接已发起)都刻意保留实体与 gate 会话,三道守卫全都看不出来 |
+| 3 | `player_scene.cpp` 删掉的旧第 5 步 | **无重复、无抵消**。`1f2bdd01c` 与其前的 WIP 提交都没碰 `player_scene.{h,cpp}`(`git log -- ` 该文件的上一条改动是 `cd918f4f8`,早于合并基)。`OnGetTeamInfo` / `OnGetLeaderLocation` 全仓零残留引用 |
+| 4 | `player_battle.cpp` 的 `RemoveInBattleComp` 统一入口 | **已覆盖全部路径,无遗漏**。全仓 `remove<InBattleComp>` 只剩 `RemoveInBattleComp` 内部一处,5 个调用点(登录重建撤销 `:319`、`ClearBattleFreeze` `:392`、重复结算 `:1427`、离线挂起结算 `:1608`、备战到期 reaper `:1818`)全部走它;本轮 main 在同一函数里的改动(条件删锁、按 battle_id 条件摘)与组队改动是**叠加**关系,顺序刻意是"先发条件删锁、再摘组件",跟随链读 `battle:lock` 才不会读到删锁前的状态 |
+| 5 | `PlayerTeamRefreshEvent` 与"等待落点"位置 | **fail-closed,正确**。跨 zone 放行后 `player:{id}:location` 会变成 `{zone=目标, node_id="", scene_id=0}`(`changesceneutil.go` `placePlayerLocation` 的唯一空 node 来源),`refreshScene` 走 `SceneNodes.EntryOf(zone, "")` 必然查不到节点,按 AGENTS §7 #2 不发信号,不会误投到 node 0 |
+| 6 | DV-6 的前提 | **仍成立,但依据换了**,见 §决策表 DV-6 的 2026-09-18 补注 |
+| 7 | 组队的 zone 规则 vs 访客 | **不冲突**。组队按 `home_zone`(`team/homezone.go` 查 data_service),跟随按 `location.zone_id`;访客(人在目标 zone、home 仍是原 zone)队伍不散,但跟随会按 `reason=cross_zone` 跳过 —— 与 CZ-6"组队按 team D.3"、DV-6 一致 |
+| 8 | `scene_manager_service.proto` 本轮新增字段 | **无号段冲突**。跨 zone 只加了 `EnterSceneResponse.player_id = 4`(该 message 原有 1-3),组队一个字段都没碰这个文件;组队的新号全在 `proto/team/team.proto`、`team_comp.proto`、`team_event.proto`、`message_id.txt`、`event_id.txt`。复核当时工作区里还有另一会话未提交的 `storage.proto` `PlayerLocation.pending_scene_conf_id = 6`,同样与组队无交集(C++ 侧 `player_team.cpp` 只读该 message 的 zone / node / scene 字段,加字段向后兼容) |
+
+### 本轮所做的修改(手写代码,未编译)
+
+1. `cpp/libs/services/scene/player/system/player_team.cpp` —— 新增匿名命名空间辅助 `IsOwnershipInFlight(player)`(`PlayerFrozenComp` 或 `PlayerTravelHandoffComp` 任一存在即真),在 `CheckFollowLeader` 的**入口**与 **MGET 回调内**各加一道守卫,跳过时记 `metric=team_follow_skipped reason=ownership_in_flight`。
+   理由:交接发起后本节点状态已落盘且**不得再写**(`SavePlayerToRedis` 会直接跳过),此时再替他发一次 `EnterScene`,scene_manager 会按"同物理节点落点"处理 —— 不过换手门、不铸 epoch、直接改写 `location`(`enterscenelogic.go` 的 `samePhysicalNode` 分支),与在途交接互相覆盖;应答还会被 `scene_manager_response_handler.cpp` 当成传送应答喂给 `HandleTravelEnterSceneReply`。
+   这与仓库既有约定一致:`buff.cpp` / `skill.cpp` / `afk.cpp` / 属性同步都按 `PlayerFrozenComp` 拦写,组队是唯一漏掉的新业务路径。
+   刻意**不**拦 `RefreshMembership`:`TeamId` 是纯运行时组件(不入 `PlayerAllData`),交接失败解冻后还要接着用;拦掉只会让解冻后的成员关系变陈旧。
+2. `go/match/internal/team/service.go` —— `preflightMatch` 在 `loc == nil` 之后补一条:`loc.GetNodeId() == ""`(等待落点)按 `ErrMemberNotReady` 拒绝。
+   理由:该状态下没有任何 scene 节点持有玩家,`gather.go` 的 `preparePlayer` 必然在 `EndpointOf(zone, "")` 上失败;早拒能省掉一轮"建开战锁 → 建票 → gather 失败 → 补偿删锁"。
+
+### 未修、需要决策的
+
+- **EnterScene 应答没有相关性标识**:`scene_manager_response_handler.cpp` 只能靠 `resp.player_id()` 把应答对回玩家,于是同一玩家在传送在途期间收到的**任何**一条 EnterScene 应答(跟随、紧急疏散、镜像副本建好后的自动进场)都会被 `HandleTravelEnterSceneReply` 当成传送应答。方向是安全的(会走 `ResolveTravelOutcome` 核实 epoch,最坏是白撤回一次交接、玩家留在源节点),但会造成"传送莫名失败"。上面的守卫已消除组队这一侧的同期来源,残留窗口是"跟随请求先发、传送后起、应答后到"。彻底修需要在 `EnterSceneRequest/Response` 上加一个回显的 correlation id(proto 改动 + regen),属产品/接口决策,未动。
+- **生成物滞后**:`proto/scene_manager/storage.proto` 的 `PlayerLocation.owner_epoch`、`EnterSceneResponse.player_id` 都还没 regen(`go/proto/scene_manager/storage.pb.go` 无 `OwnerEpoch`,`cpp/generated/proto/scene_manager/storage.pb.h` 无 `owner_epoch`)。这是 `1f2bdd01c` 自己写明的"未 regen"状态,不是合并引入的;但 scene_manager 与 scene 在 regen 之前都编不过,组队的验证清单要排在 regen 之后。
+
+---
+
+## 收口记录(2026-09-18,主工作区 `main`,未编译未测试)
+
+> **对象**:主工作区 `E:\work\xuanming-server-mmo`,分支 `main`。**组队的合并点 `66c546e70` 已经是 `origin/main`**,组队代码(`proto/team`、`go/match/internal/team`、`internal/playercontract`、`cpp/.../player_team.cpp`、`robot/team_smoke_scenario.go`、本文档)早已在主干 —— 本轮不存在"合并到 main"这个动作,做的是把原本留给 Codex 的、**不需要编译**的尾巴收掉。⚠ 收口期间有并行会话的"每小时自动保存"提交把**本地** `main` 推到了 `66c546e70` 之后(这些提交**尚未推送**,且把本轮 A / B 两项的文件连同别的会话的在制品一起卷了进去);本轮自己**没有**执行任何 `git commit` / `git push`。
+> **本轮全程未编译、未测试。** 只执行了:`gofmt -l -e`、`go mod vendor`(依赖同步)、`protoc` 与客户端两个 PowerShell 生成脚本(代码生成)、`git` 只读命令、XML / YAML 解析校验。**没有**跑 `go build` / `go test` / `go vet` / `msbuild` / `cmake` / `dev.bat proto` / `dev.bat gen`,也**没有**提交或推送。
+> **并发提醒**:收口期间主工作区与客户端仓都有其他会话在并发写入(帮会二期、跨 zone 传送阶段 2、导表器、Qdao 立绘)。本轮四项只动自己负责的文件,一律未回滚、未整理别人的改动;统一提交时**不要**用 `git add -A`,按路径精确暂存。
+
+### A. robot vendor 同步(R.4 ⑤)
+
+在 `robot/` 下用 go1.26.5 工具链跑 `go mod vendor`(`GOPROXY=https://goproxy.cn,direct`、`GOTOOLCHAIN=local`),退出码 0、零输出。改动严格限制在 `robot/vendor` 内:**4 改 2 增**,vendor 文件总数 1220 → 1222,`robot/go.mod` 与 `robot/go.sum` 未变。新增 `vendor/proto/team/{team.pb.go,team_grpc.pb.go}`;`vendor/modules.txt` 净增 1 行 `proto/team`;`vendor/shared/generated/pb/table/team_error_tip.pb.go` 刷新后 `kTeam` 符号 76 → 128 处、32 个枚举名与源文件一致、**`TeamError_kTeamInternal = 4030` 可见**(R.4 ⑤ 原定的通过标准)。另外两个被顺带刷新的文件(`team_comp.pb.go` 的 `membership_epoch`、`match_service.pb.go` 的 DV-4 注释)经 diff 确认都属组队自身,无第三方域混入。5 个 vendor 生成物与 `go/proto` / `go/shared` 下的源生成物逐字节相同。**一处清单勘误**:R.4 ⑤ 原写的"`vendor/shared/generated/tip/{segments.go,faults.go}` 也已更新"是前提有误 —— robot 不 import `shared/generated/tip`,`go mod vendor` 按 import 图裁剪,该目录不存在也不会出现;tip 的内容正确性由源仓保证(`segments.go:33` team 段 `Count=31`、`faults.go:56` 有 `TeamInternal`)。**vendor 是否真的补齐,只有 `cd robot && go build ./...` 能判定,本轮没跑。**
+
+### B. C++ 工程登记补齐
+
+四件事,全部只补登记、不改业务代码:
+
+1. **补 Linux CMake 的真实缺口**:`cpp/libs/services/scene/CMakeLists.txt` 的 `SOURCE_FILES` 加入 `battle/system/player_battle.cpp`。依据:`scene.vcxproj:116` 一直有这条 `ClCompile` 且无 `ExcludedFromBuild`,而改动前 CMakeLists 里 `player_battle` 零命中;`player_team.cpp:16` include 了 `battle/system/player_battle.h`,`:337` / `:375` 调用 `PlayerBattleSystem::IsInBattle`,该符号唯一定义在 `battle/system/player_battle.cpp:593` —— CMake 不编它,Linux 下 scene 静态库就缺符号。**补完只做了静态核对,没有跑 `build_linux.sh`。** 补完后 `scene.vcxproj` ↔ CMakeLists 的差集只剩 4 个**非本批**的既有缺口(`player_feature_snapshot.cpp`、`player_mission.cpp`、`mission_marshal.cpp`、`player_activity_schedule.cpp`),按任务边界只报告未补。
+2. **补 proto 工程的 `.cc` 缺口**:`cpp/generated/proto/trade/trade_table.grpc.pb.cc` 磁盘上存在(903 字节)却未登记,已补进 `proto.vcxproj`、`proto.vcxproj.filters` 与 `cpp/generated/proto/CMakeLists.txt`。**对本文档 §「给 Codex 的验证清单」第 6 步第 2 条的一处修正**:该条称这是"唯一一个会影响编译的 `.cc` 缺口",实测不成立 —— `trade_table.proto` 没有 service,生成出来的 `namespace trade` 是空的,编译产物不含符号,漏登记不会造成链接缺符号。仍补上了,理由改为"保持生成树与工程文件一致"。
+3. **补 rpc 的两条 team `ClInclude`**:`cpp/generated/rpc/rpc.vcxproj{,.filters}` 各加 `service_metadata\common_event_team_event_event_id.h` 与 `service_metadata\team_service_metadata.h`(保持块内字母序)。补后 `vcxproj` 与 `.filters` 的 `ClInclude` 各 39 条、无重复;剩余 **12 个既有缺口**按任务边界未动(与本文档「第 6 步」第 1 条记的"14 个,其中 2 个是本批新生成"完全对上)。这些都只影响 IDE 显示,不参与编译。
+4. **固化 aoi_test mock 的结论**(只加注释,不改工程文件):`aoi_test.vcxproj` 只编译 `aoi_system_test.cpp` 一个 `.cpp`,同目录的 `interest_system_mock.cpp`、`mock_view.cpp` **不参与编译**,而工程 `AdditionalDependencies` 链接 `scene.lib`。mock 里定义的 8 个 `InterestSystem` 成员与 `spatial/system/interest.cpp` 的 8 个同名同签名,把 mock 加进工程必然 **LNK2005**。**结论**:§F.4 要求同步实现 `DowngradePriority` 的那份 mock 目前是**死代码**;`aoi_system_test.cpp:747-900` 新增的 5 个 `AoiTeammateRefreshTest` 用例跑的是 `interest.cpp` + `player_team_aoi.cpp` 的**真实实现**,覆盖有效。已把这段写进 `interest_system_mock.cpp` 顶部注释。
+
+所有改过的 XML 都用 `[xml]` 解析验证合法、XPath 复核无重复条目,并字节级复核 BOM 与行尾未变。**一处既有问题未动**:`proto.vcxproj` 有一条失效登记 `proto\guild\guild_db.pb.cc`,磁盘上无此文件(Windows 上编 proto 工程会 C1083),既有问题、与组队无关,修它需要决策(跑生成 or 删登记)。
+
+### C. 客户端协议管道(解除"客户端合并门禁")
+
+只动协议管道,**UI 一行没碰**。`E:\work\mmorpg-client`:
+
+- `tools/gen_proto.ps1` 的 `$files` 收录 `proto/team/team.proto` 与 `generated/code/proto/tip/team_error_tip.proto`;`tools/gen_messageids.ps1` 的 `$whitelist` 按 §H.1 补 15 条 team 映射(**数值不写死**,由 `proto/message_id.txt` 现场读)。
+- 跑两个脚本,生成 `Assets/Scripts/Proto/Generated/Team.cs`(`namespace Teampb`,26 个 message + 3 个 enum)与 `TeamErrorTip.cs`;`Assets/Scripts/Net/MessageIds.cs` 从 86 条变 101 条,15 条 team 常量全部命中、无 missing 警告、无撞名。实测号段:`InviteToTeam=201, KickMember=202, NotifyTeamEvent=203, RespondInvite=204, ListMyInvites=205, ApplyJoinTeam=206, GetMyTeam=207, HandleApplication=208, DisbandTeam=209, LeaveTeam=210, StartTeamMatch=211, TransferLeader=212, NotifyTeamSnapshot=213, CreateTeam=214, NotifyTeamInvite=215`。
+- **门禁确实解除**:核对服务端 Unity 生成器的 `protoPackageToCSharpNamespace`(`tools/proto_generator/protogen/internal/generator/unity/unity_client_handler.go`),它按 protoc 默认规则把 `package teampb` 映射成 `Teampb`,与本次产物一致。注意此刻 `Net/Generated/Handlers` 里**还没有** team handler(本轮没跑服务端 proto 生成,也不该跑),它们会在下次有人用默认配置跑生成时出现。
+- **踩到并处理掉一个坑**:重生成会把主工作区里**别的会话未提交**的 `proto/guild/guild.proto`(帮会二期,+158/-18)编进客户端 `Guild.cs`(第一次跑出来 +5541 行)。已用 `git show HEAD:proto/guild/guild.proto` 建 overlay 重生成,证明客户端原 `Guild.cs` 与**已提交**的 `guild.proto` 逐字节一致,并把干净产物写回 —— `Guild.cs` 最终无改动。
+- `MatchService.cs` 的改动是组队引入的 `party_member_ids` 弃用(加 `[Obsolete]`,已确认客户端零处引用 `PartyMemberIds`,不会 CS0612);`Message.cs`、`PlayerBattle.cs` 的改动来自**已提交**的服务端 proto,是客户端此前欠的重生成,非本轮引入。`Team.cs.meta` / `TeamErrorTip.cs.meta` 是按仓库既有格式**手写**的(两行:`fileFormatVersion: 2` + guid),不是 Unity 生成;要让 Unity 自己发 guid,删掉重开工程即可。
+- 客户端仓当前在分支 `codex/guild-team-roster-v12`,工作区有 150+ 个别的会话的 Qdao 立绘改动,**未提交**。提交请按路径精确 add:`tools/gen_proto.ps1`、`tools/gen_messageids.ps1`、`Assets/Scripts/Net/MessageIds.cs`、`Assets/Scripts/Proto/Generated/{Team.cs,Team.cs.meta,TeamErrorTip.cs,TeamErrorTip.cs.meta,MatchService.cs,Message.cs,PlayerBattle.cs}`。
+
+### D. 合并后语义复核与两处修复
+
+组队(`7af8342ad`)与跨 zone 传送阶段 1(`1f2bdd01c`)改了同一批场景进出文件,逐条核对 8 个交叉点,结论与修复见上一节「合并后语义复核(2026-09-18,组队 × 跨 zone 传送阶段 1)」。摘要:发现并修了 2 处,都是 fail-closed 方向、不改任何正常路径 —— ① C++ `player_team.cpp` 的跟随链原本没有按 `PlayerFrozenComp` / `PlayerTravelHandoffComp` 拦截,会把正在跨 zone 交接的玩家重新落回本节点;② Go `go/match/internal/team/service.go` 的整队开战预检把跨 zone"等待落点"(`location.node_id` 为空)当成已在场景,会走完建锁建票后死在 gather,现已按 `ErrMemberNotReady` 早拒。DV-6 的依据也按跨 zone 阶段 1 之后的真实闸口语义更新了。**两处修改都是静态核对后的手写代码,未编译、未测试。**
+
+### 仍然必须由人跑的验证(按顺序;本轮一条都没跑)
+
+0. **前置 regen**:`proto/scene_manager/storage.proto` 的 `PlayerLocation.owner_epoch`(及并行会话在加的 `pending_scene_conf_id`)、`EnterSceneResponse.player_id` 还没 regen,`go/scene_manager` 与 C++ scene 在 regen 之前都编不过。**不先 regen,下面所有编译失败都会被误记成组队引入。**
+1. **C++ 串行 `/m:1`**:`proto → table → rpc → grpc_client → libs/services/scene → nodes/scene → gate → aoi_test → bag_test → cross_zone_test`,再 `run_cpp_tests.ps1 -Filter aoi_test`。重点看:`party_member_ids` 标 deprecated 后在开了 TreatWarningAsError 的工程里是否触发 **C4996**;bag_test 是否因 `player_battle.obj → player_team.obj` 报 **LNK2019**(缺 `grpc_client.lib`);本轮 D 项给 `player_team.cpp` 新增的 include(`player/comp/player_frozen_comp.h`、`player/comp/player_ownership_comp.h`)是否真能编过。
+2. **Linux 侧 `build_linux.sh`**:验证 B.1 补的 `battle/system/player_battle.cpp` 是否真的解掉了 `PlayerBattleSystem::IsInBattle` 的缺符号。
+3. **Go 测试**:`cd go/match && go vet ./... && go test ./... -count=1`(team 包与 `match_service_test.go` 都在内;`TestConcurrentInvariantsFuzz` 可能几十秒到两分钟,带 `-race` 要加 `-timeout`);`cd tools/merge_zone && go vet ./... && go test ./... -count=1`,以及 `-tags merge_integration` 那一轮。
+4. **robot 整包**:`cd robot && go build ./...` —— 这是 A 项 vendor 同步是否真的补齐的**唯一判据**。
+5. **robot team-smoke 两种跨区形态**:`robot.exe -c etc/team_smoke.yaml`,`AllowCrossZone` 两种取值都要输出 `TEAM_SMOKE_OK`;同时核对 etcd 里出现 `TeamNodeService.rpc/zone/<z>/node_type/10/node_id/<n>` 与 `MatchNodeService.rpc/...`,以及"停掉 data_service 后 match 仍能启动、`CreateTeam` 回 `TeamInternal`"。
+6. **回归**:`battle_smoke`、`battle_smoke_cross_zone`、`guild_smoke`。组队改了 `player_battle.cpp` 的摘组件路径与 `match` 的装配,battle / guild 必须回归。
+7. **客户端编译体检**:Unity(或离线 Roslyn csc 路子)确认 `Team.cs` / `TeamErrorTip.cs` / `MessageIds.cs` 编得过;并注意**发布顺序硬约束** —— 客户端组队功能必须等服务端 gate / 路由服 / match 全量升级后才能开放,否则旧 gate 不认识 201..215 会按非法包 `forceClose`,玩家被踢下线。
+
+### 本轮未做、需要决策的
+
+- **EnterScene 应答没有相关性标识**(D 项已记入上一节"未修、需要决策的"):彻底修需要在 `EnterSceneRequest/Response` 加一个原样回显的 correlation id(proto 改动 + regen + 三处调用点),属接口决策。
+- **单人排队路径有与组队同形的缺口**:`JoinQueue` / `gather` 对"等待落点"(`location.node_id` 为空)也没有早拒,只会在 `gather.go:289` 的 `EndpointOf(zone, "")` 上失败。与组队无关,建议单独立项。
+- **既有工程登记缺口**(B 项只报告未补):`proto.vcxproj` 的失效登记 `proto\guild\guild_db.pb.cc`;`cpp/generated/proto/CMakeLists.txt` 相对 `proto.vcxproj` 仍缺 18 个 `.cc`;`cpp/libs/services/scene/CMakeLists.txt` 仍缺 4 个 Windows 侧在编的 `.cpp`;`rpc.vcxproj{,.filters}` 仍有 12 个 `ClInclude` 缺口;`scene.vcxproj.filters` 没有 `battle\system\player_battle.cpp` 条目(纯 IDE 显示)。
+- **客户端 UI 整块**(§H.2–§H.5):Team 传输适配器、单飞守卫、按 `(membership_epoch, version)` 应用快照(DV-7)、`TeamUiState.Complete` 的覆盖语义修正、`RequestTimeoutSeconds` 提到 ≥15s、错误码文案 —— 全部未做。

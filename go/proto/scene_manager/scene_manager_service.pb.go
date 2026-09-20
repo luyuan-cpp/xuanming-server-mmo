@@ -434,7 +434,10 @@ type EnterSceneResponse struct {
 	ErrorMessage string                 `protobuf:"bytes,2,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	// Non-empty when cross-zone redirect is needed instead of direct routing.
 	// Client should disconnect from current Gate and reconnect to the target Gate.
-	Redirect      *RedirectToGateInfo `protobuf:"bytes,3,opt,name=redirect,proto3" json:"redirect,omitempty"`
+	Redirect *RedirectToGateInfo `protobuf:"bytes,3,opt,name=redirect,proto3" json:"redirect,omitempty"`
+	// 原样回显请求里的 player_id。scene 节点的 EnterScene 是异步 gRPC,应答回调里没有
+	// 请求上下文;传送 / 疏散这类"发起方还要根据结果收尾"的调用靠它把应答对回玩家。
+	PlayerId      uint64 `protobuf:"varint,4,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -488,6 +491,13 @@ func (x *EnterSceneResponse) GetRedirect() *RedirectToGateInfo {
 		return x.Redirect
 	}
 	return nil
+}
+
+func (x *EnterSceneResponse) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
 }
 
 // Redirect info returned when player needs to switch to a different zone's Gate.
@@ -674,12 +684,13 @@ const file_proto_scene_manager_scene_manager_service_proto_rawDesc = "" +
 	"\azone_id\x18\a \x01(\rR\x06zoneId\x12\"\n" +
 	"\rscene_conf_id\x18\b \x01(\x04R\vsceneConfId\x12 \n" +
 	"\fgate_zone_id\x18\t \x01(\rR\n" +
-	"gateZoneId\"\x97\x01\n" +
+	"gateZoneId\"\xb4\x01\n" +
 	"\x12EnterSceneResponse\x12\x1d\n" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12#\n" +
 	"\rerror_message\x18\x02 \x01(\tR\ferrorMessage\x12=\n" +
-	"\bredirect\x18\x03 \x01(\v2!.scene_manager.RedirectToGateInfoR\bredirect\"\xd9\x01\n" +
+	"\bredirect\x18\x03 \x01(\v2!.scene_manager.RedirectToGateInfoR\bredirect\x12\x1b\n" +
+	"\tplayer_id\x18\x04 \x01(\x04R\bplayerId\"\xd9\x01\n" +
 	"\x12RedirectToGateInfo\x12$\n" +
 	"\x0etarget_gate_ip\x18\x01 \x01(\tR\ftargetGateIp\x12(\n" +
 	"\x10target_gate_port\x18\x02 \x01(\rR\x0etargetGatePort\x12#\n" +

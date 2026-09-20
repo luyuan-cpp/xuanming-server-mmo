@@ -1,0 +1,23 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "GuildRuleTableOuterClass";
+option java_multiple_files = true;
+
+
+message GuildRuleTable {
+	uint32 id = 1;
+	uint32 application_expire_hours = 2;
+	uint32 max_pending_applications_per_player = 3;
+	uint32 max_pending_applications_per_guild = 4;
+	uint32 asset_op_deadline_seconds = 5;
+	uint32 asset_op_retry_base_ms = 6;
+	uint32 reunion_min_online_members = 7;
+}
+
+message GuildRuleTableData {
+	repeated GuildRuleTable data = 1;
+}

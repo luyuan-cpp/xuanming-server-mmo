@@ -1,0 +1,31 @@
+syntax = "proto3";
+option go_package = "proto/common/component";
+
+import "proto/common/asset/asset_op.proto";
+
+// 通用资产通道的每玩家账本(docs/design/guild-phase2/04-asset-channel.md §4.3.2)。
+//
+// 落在 player_database.asset_op_ledger,与 currency / bag_component 同记录、
+// 同一次 Marshal、同一次 Redis SET 写出 —— 不存在"资产落了账本没落"的中间态(I3)。
+
+message AssetOpRejection {
+  uint64 seq = 1;
+  uint32 reason_tip_id = 2;   // 0 = 中止占位
+}
+
+// 单条流的账本。窗口覆盖 (watermark, watermark + 1024]。
+// 位 i(i∈[0,1024))对应 seq = watermark + 1 + i;第 i/64 个字、第 i%64 位。
+message AssetOpStreamLedger {
+  AssetOpStream stream = 1;
+  uint64 watermark = 2;               // 窗口下沿;<= watermark 的 seq 结局不可知
+  repeated fixed64 seen_bits = 3;     // 恰好 16 个
+  repeated fixed64 applied_bits = 4;  // 恰好 16 个;applied ⊆ seen
+  repeated AssetOpRejection rejections = 5;  // 按 seq 升序,<= 64 条,只收窗口内的 REJECTED
+  uint64 max_seq = 6;                 // 本纪元见过的最大 seq;跳号上限 seq <= max_seq + 1024
+  uint64 stream_epoch = 7;            // 本账本所属纪元;请求纪元更大时整条流重置(§4.29)
+  repeated uint64 partial_seqs = 8;   // 升序,<= 64 条,只收窗口内"部分发放"的 APPLIED seq
+}
+
+message PlayerAssetOpLedgerComp {
+  repeated AssetOpStreamLedger streams = 1;  // 按 stream 升序,每流至多一条;首次记账时创建
+}

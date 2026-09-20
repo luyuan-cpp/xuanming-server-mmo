@@ -10,9 +10,10 @@
 #include "table/proto/skillpermission_table.pb.h"
 #include "table/proto/dungeon_table.pb.h"
 #include "table/proto/monster_table.pb.h"
+#include "table/proto/item_table.pb.h"
 
 // 战斗配表指纹单测(cross-zone-matchmaking.md §10):
-// 直接构造六张表的 proto 对象喂 ComputeFrom,不依赖表管理器/Excel 数据。
+// 直接构造七张表的 proto 对象喂 ComputeFrom,不依赖表管理器/Excel 数据。
 // 覆盖:同一份表两次计算相同;改任一张表的任一字段则不同;长度/字符集契约。
 
 namespace {
@@ -26,9 +27,11 @@ struct TableSet {
     SkillPermissionTableData permission;
     DungeonTableData dungeon;
     MonsterTableData monster;
+    ItemTableData item;
 
     std::string Fingerprint() const {
-        return BattleTableFingerprint::ComputeFrom(skill, buff, cooldown, permission, dungeon, monster);
+        return BattleTableFingerprint::ComputeFrom(skill, buff, cooldown, permission, dungeon,
+                                                   monster, item);
     }
 };
 
@@ -66,6 +69,17 @@ TableSet MakeTables() {
 
     auto* monster = tables.monster.add_data();
     monster->set_id(1001);
+    // 掉落槽:STRUCT_LIST,确定性序列化要覆盖到子消息
+    auto* drop = monster->add_drop();
+    drop->set_drop_item(10);
+    drop->set_drop_count(1);
+    drop->set_drop_rate(10000);
+
+    // Item 表 2026-09-17 进指纹:用药效果读表后,两端表版本不同会让同一 id 效果不同
+    auto* item = tables.item.add_data();
+    item->set_id(10);
+    item->set_battle_usable(1);
+    item->set_battle_heal_hp(300);
 
     return tables;
 }
@@ -102,6 +116,16 @@ TEST(BattleTableFingerprintTest, AnyFieldChangeInAnyTableChangesFingerprint) {
         auto tables = MakeTables();
         tables.skill.mutable_data(0)->set_cooldown_id(10);
         EXPECT_NE(tables.Fingerprint(), base) << "skill 字段变化未反映到指纹";
+    }
+    {
+        auto tables = MakeTables();
+        tables.item.mutable_data(0)->set_battle_heal_hp(301);
+        EXPECT_NE(tables.Fingerprint(), base) << "item 字段变化未反映到指纹";
+    }
+    {
+        auto tables = MakeTables();
+        tables.monster.mutable_data(0)->mutable_drop(0)->set_drop_rate(5000);
+        EXPECT_NE(tables.Fingerprint(), base) << "monster 掉落槽变化未反映到指纹";
     }
     {
         auto tables = MakeTables();

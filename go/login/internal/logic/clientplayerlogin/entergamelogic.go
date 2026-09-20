@@ -44,6 +44,9 @@ type enterGameSessionState struct {
 	classID        uint32
 	playerLockKey  string
 	playerLockToken string
+	// ticketTargetZoneID 是本连接所持重定向票据的目标 zone(gate 验签后经 SessionDetails 透传);
+	// 0 = 普通 AssignGate 票据。等于本 zone 时进场景不按 home_zone 弹回(CZ-8)。
+	ticketTargetZoneID uint32
 }
 
 func NewEnterGameLogic(ctx context.Context, svcCtx *svc.ServiceContext) *EnterGameLogic {
@@ -63,6 +66,17 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	if !sessionFound || sessionDetails.SessionId <= 0 {
 		logx.Error("SessionId not found or empty in context during login")
 		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginSessionIdNotFound)}
+		return resp, nil
+	}
+
+	// 1b. 重定向票据的持票者绑定(cross-zone-scene-travel.md CZ-8 / §6 不变量 4)。
+	//     跨 zone 传送的票据由 scene_manager 签给**某一个**玩家;这里是 player_id 已知、且尚未
+	//     加锁 / 写任何会话状态的最早时刻,在此拒绝不留残留。0 = 普通 AssignGate 票据(签票时
+	//     还没登录)/ dev 旁路 / 旧版 gate,一律放行。
+	if holder := sessionDetails.GetTicketPlayerId(); holder != 0 && holder != in.PlayerId {
+		logx.Errorf("EnterGame rejected: 重定向票据持票者不符 ticket_player=%d request_player=%d session=%d",
+			holder, in.PlayerId, sessionDetails.SessionId)
+		resp.ErrorMessage = &login_proto_common.TipInfoMessage{Id: uint32(table.LoginError_kLoginEnterGameGuid)}
 		return resp, nil
 	}
 
@@ -445,6 +459,8 @@ func buildEnterGameSessionState(in *login_proto.EnterGameRequest, sessionDetails
 		gateInstanceID: sessionDetails.GetGateInstanceId(),
 		account:        account,
 		requestID:      in.GetRequestId(),
+
+		ticketTargetZoneID: sessionDetails.GetTicketTargetZoneId(),
 	}
 }
 
@@ -514,7 +530,14 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	// 映射不可用 / 为 0 / 开关关闭 → 维持本 zone,不阻断进游戏。
 	ownZone := config.AppConfig.Node.ZoneId
 	targetZone, redirected := ownZone, false
-	if config.AppConfig.HomeZone.RedirectOnEnterEnabled && homeZoneOverrideAllowed(decision, existing) {
+	if homezone.TicketPinsZone(state.ticketTargetZoneID, ownZone) {
+		// CZ-8:票据指明就是来本 zone 的(跨 zone 传送的第二条腿)。不查 home_zone、不弹回 ——
+		// 否则打开 RedirectOnEnter 的目标 zone 会把访客再送回家,与客户端 RedirectFlow 的
+		// 3 跳熔断互撞。existing.SceneID 若有也属于源 zone,清零让 scene_manager 在本 zone
+		// 落点(它会读「等待落点」里记的目标地图;resolveScene 对跨 zone 的 scene 会直接拒)。
+		sceneID = 0
+		logx.Infof("[travel] EnterGame player=%d 持重定向票据落地 zone=%d,跳过 home_zone 弹回", state.playerID, ownZone)
+	} else if config.AppConfig.HomeZone.RedirectOnEnterEnabled && homeZoneOverrideAllowed(decision, existing) {
 		targetZone, redirected = homezone.ResolveEnterZone(ctx, l.svcCtx.HomeZone, state.playerID, ownZone)
 	}
 	if redirected {

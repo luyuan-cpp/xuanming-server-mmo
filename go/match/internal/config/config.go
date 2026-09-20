@@ -88,8 +88,11 @@ type Config struct {
 
 	// PveTeamSizeByConfigId:PVE 组队各 battle_config_id(DungeonTable id)
 	// 的凑满人数。一期临时配置 —— 人数权威来源是 DungeonTable.max_team_size,
-	// Go 侧尚无表管理器,待接导表数据后改为查表。
+	// Go 侧尚无表管理器,待接导表数据后改为查表(backlog P2-05)。
 	// yaml map 键是字符串(与 scene_manager 的 WorldChannelCountByConfId 同 workaround)。
+	// 组队整队开战(ClientPlayerTeam.StartTeamMatch)也用它判副本人数上限,未配置
+	// 即"该副本未开放组队"(team-system.md §E.1 / J-6)。K8s ConfigMap 整段逐字搬运
+	// 服务 yaml 里的这一块(k8s_deploy.ps1 Get-AuthoritativeYamlBlock),新增 id 只改 yaml。
 	PveTeamSizeByConfigId map[string]uint32 `json:",optional"`
 
 	// MetricsListenAddr:Prometheus /metrics 监听地址,留空关闭。
@@ -141,6 +144,31 @@ type Config struct {
 	// DungeonTable.time_limit 换算,配了 time_limit 的配置上限不是 30)。
 	// yaml map 键是字符串(与 PveTeamSizeByConfigId 同 workaround);0 视为未配置。
 	RatingDrawRoundCapByConfigId map[string]uint32 `json:",optional"`
+
+	// ---- 组队(docs/design/team-system.md §D.1)----
+
+	// Team:组队模块配置。不标 optional:整段缺席时 go-zero 按空块递归填各字段的
+	// default(字段全带 default,不会报"未设置");标了 optional 反而不会填 default。
+	Team TeamConf
+
+	// DataServiceRpc:data_service 的 gRPC 客户端(etcd 发现,Key=dataservice.rpc),
+	// team 用 BatchGetPlayerHomeZone 查玩家 home zone(§D.3)。结构照 guild config。
+	// **必须 NonBlock**:客户端在 svc.NewServiceContext 里构造,早于节点注册与 s.Start();
+	// 阻塞建连会让"data_service 没起 / etcd 里没有 dataservice.rpc"拖垮排队 / 切磋 / 观战。
+	// svc.NewDataServiceClient 对 NonBlock=false 记错误日志并强制改为 true。
+	// optional:没配任何目标时不建客户端,team 需要 home zone 的请求一律 fail-closed。
+	DataServiceRpc zrpc.RpcClientConf `json:",optional"`
+}
+
+// TeamConf 组队配置(team-system.md §D.1 / §D.3)。
+type TeamConf struct {
+	// AllowCrossZone:是否允许不同 home zone 的玩家同队。默认 false:申请、审批(同意)、
+	// 邀请、接受邀请四个入口比对对方 home zone 与队伍 zone,不一致回 kTeamCrossZoneDenied;
+	// 审批 / 接受时用申请 / 邀请记录里存的 zone 再核一次,所以中途改成 false 也能拦住。
+	// 从 true 改回 false 只拦新增,已有跨区成员保留。靠 yaml + 滚动重启切换,混跑窗口里
+	// 各实例判定可能不一致(J-13a),用 team_cross_zone_allowed gauge 观察。
+	// 直接构造 Config 的测试取零值 false,与缺省一致。
+	AllowCrossZone bool `json:",default=false"`
 }
 
 // RatingDrawRoundCapFor 返回 battle_config_id 对应的"回合打满按平局"阈值:

@@ -48,11 +48,11 @@ constexpr ItemTable::ParseTableT_ ItemTable::InternalGenerateParseTable_(const :
     {
       PROTOBUF_FIELD_OFFSET(ItemTable, _impl_._has_bits_),
       0, // no _extensions_
-      3, 24,  // max_field_number, fast_idx_mask
+      6, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967288,  // skipmap
+      4294967232,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      3,  // num_field_entries
+      6,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -75,6 +75,19 @@ constexpr ItemTable::ParseTableT_ ItemTable::InternalGenerateParseTable_(const :
       {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemTable, _impl_.equip_kind_), 2>(),
        {24, 2, 0,
         PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.equip_kind_)}},
+      // uint32 battle_usable = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ItemTable, _impl_.battle_usable_), 3>(),
+       {32, 3, 0,
+        PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.battle_usable_)}},
+      // uint64 battle_heal_hp = 5;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ItemTable, _impl_.battle_heal_hp_), 4>(),
+       {40, 4, 0,
+        PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.battle_heal_hp_)}},
+      // uint64 battle_heal_mp = 6;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(ItemTable, _impl_.battle_heal_mp_), 5>(),
+       {48, 5, 0,
+        PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.battle_heal_mp_)}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -84,6 +97,12 @@ constexpr ItemTable::ParseTableT_ ItemTable::InternalGenerateParseTable_(const :
       {PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.max_stack_size_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 equip_kind = 3;
       {PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.equip_kind_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint32 battle_usable = 4;
+      {PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.battle_usable_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // uint64 battle_heal_hp = 5;
+      {PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.battle_heal_hp_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      // uint64 battle_heal_mp = 6;
+      {PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.battle_heal_mp_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
     }},
     // no aux_entries
     {{
@@ -98,7 +117,10 @@ inline constexpr ItemTable::Impl_::Impl_(
       : _cached_size_{0},
         id_{0u},
         max_stack_size_{0u},
-        equip_kind_{0u} {}
+        equip_kind_{0u},
+        battle_usable_{0u},
+        battle_heal_hp_{::uint64_t{0u}},
+        battle_heal_mp_{::uint64_t{0u}} {}
 
 template <typename>
 constexpr ItemTable::ItemTable(::_pbi::ConstantInitialized,
@@ -352,13 +374,19 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_._has_bits_),
-        6, // hasbit index offset
+        9, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_.id_),
         PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_.max_stack_size_),
         PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_.equip_kind_),
+        PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_.battle_usable_),
+        PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_.battle_heal_hp_),
+        PROTOBUF_FIELD_OFFSET(::ItemTable, _impl_.battle_heal_mp_),
         0,
         1,
         2,
+        3,
+        4,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::ItemTableData, _impl_._has_bits_),
         4, // hasbit index offset
@@ -369,7 +397,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::ItemTable)},
-        {9, sizeof(::ItemTableData)},
+        {15, sizeof(::ItemTableData)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -378,17 +406,19 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 };
 const char descriptor_table_protodef_item_5ftable_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\020item_table.proto\"C\n\tItemTable\022\n\n\002id\030\001 "
-    "\001(\r\022\026\n\016max_stack_size\030\002 \001(\r\022\022\n\nequip_kin"
-    "d\030\003 \001(\r\")\n\rItemTableData\022\030\n\004data\030\001 \003(\0132\n"
-    ".ItemTableB;\n\016com.game.tableB\023ItemTableO"
-    "uterClassP\001Z\022generated/pb/tableb\006proto3"
+    "\n\020item_table.proto\"\212\001\n\tItemTable\022\n\n\002id\030\001"
+    " \001(\r\022\026\n\016max_stack_size\030\002 \001(\r\022\022\n\nequip_ki"
+    "nd\030\003 \001(\r\022\025\n\rbattle_usable\030\004 \001(\r\022\026\n\016battl"
+    "e_heal_hp\030\005 \001(\004\022\026\n\016battle_heal_mp\030\006 \001(\004\""
+    ")\n\rItemTableData\022\030\n\004data\030\001 \003(\0132\n.ItemTab"
+    "leB;\n\016com.game.tableB\023ItemTableOuterClas"
+    "sP\001Z\022generated/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_item_5ftable_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_item_5ftable_2eproto = {
     false,
     false,
-    199,
+    271,
     descriptor_table_protodef_item_5ftable_2eproto,
     "item_table.proto",
     &descriptor_table_item_5ftable_2eproto_once,
@@ -433,9 +463,9 @@ inline void ItemTable::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, id_),
            0,
-           offsetof(Impl_, equip_kind_) -
+           offsetof(Impl_, battle_heal_mp_) -
                offsetof(Impl_, id_) +
-               sizeof(Impl_::equip_kind_));
+               sizeof(Impl_::battle_heal_mp_));
 }
 ItemTable::~ItemTable() {
   // @@protoc_insertion_point(destructor:ItemTable)
@@ -485,10 +515,10 @@ PROTOBUF_NOINLINE void ItemTable::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     ::memset(&_impl_.id_, 0, static_cast<::size_t>(
-        reinterpret_cast<char*>(&_impl_.equip_kind_) -
-        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.equip_kind_));
+        reinterpret_cast<char*>(&_impl_.battle_heal_mp_) -
+        reinterpret_cast<char*>(&_impl_.id_)) + sizeof(_impl_.battle_heal_mp_));
   }
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
@@ -540,6 +570,33 @@ PROTOBUF_NOINLINE void ItemTable::Clear() {
     }
   }
 
+  // uint32 battle_usable = 4;
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (this_._internal_battle_usable() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
+          4, this_._internal_battle_usable(), target);
+    }
+  }
+
+  // uint64 battle_heal_hp = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    if (this_._internal_battle_heal_hp() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          5, this_._internal_battle_heal_hp(), target);
+    }
+  }
+
+  // uint64 battle_heal_mp = 6;
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    if (this_._internal_battle_heal_mp() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          6, this_._internal_battle_heal_mp(), target);
+    }
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -565,7 +622,7 @@ PROTOBUF_NOINLINE void ItemTable::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     // uint32 id = 1;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (this_._internal_id() != 0) {
@@ -587,6 +644,27 @@ PROTOBUF_NOINLINE void ItemTable::Clear() {
             this_._internal_equip_kind());
       }
     }
+    // uint32 battle_usable = 4;
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (this_._internal_battle_usable() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
+            this_._internal_battle_usable());
+      }
+    }
+    // uint64 battle_heal_hp = 5;
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (this_._internal_battle_heal_hp() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_heal_hp());
+      }
+    }
+    // uint64 battle_heal_mp = 6;
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (this_._internal_battle_heal_mp() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_battle_heal_mp());
+      }
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -605,7 +683,7 @@ void ItemTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x00000007U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (from._internal_id() != 0) {
         _this->_impl_.id_ = from._impl_.id_;
@@ -619,6 +697,21 @@ void ItemTable::MergeImpl(::google::protobuf::MessageLite& to_msg,
     if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_equip_kind() != 0) {
         _this->_impl_.equip_kind_ = from._impl_.equip_kind_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+      if (from._internal_battle_usable() != 0) {
+        _this->_impl_.battle_usable_ = from._impl_.battle_usable_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      if (from._internal_battle_heal_hp() != 0) {
+        _this->_impl_.battle_heal_hp_ = from._impl_.battle_heal_hp_;
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      if (from._internal_battle_heal_mp() != 0) {
+        _this->_impl_.battle_heal_mp_ = from._impl_.battle_heal_mp_;
       }
     }
   }
@@ -640,8 +733,8 @@ void ItemTable::InternalSwap(ItemTable* PROTOBUF_RESTRICT PROTOBUF_NONNULL other
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.equip_kind_)
-      + sizeof(ItemTable::_impl_.equip_kind_)
+      PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.battle_heal_mp_)
+      + sizeof(ItemTable::_impl_.battle_heal_mp_)
       - PROTOBUF_FIELD_OFFSET(ItemTable, _impl_.id_)>(
           reinterpret_cast<char*>(&_impl_.id_),
           reinterpret_cast<char*>(&other->_impl_.id_));

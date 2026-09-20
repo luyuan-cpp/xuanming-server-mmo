@@ -66,6 +66,16 @@ enum TransactionType
                             // that the player would notice missing post-crash. Short
                             // buffs are NOT logged — too high-frequency, low value.
                             // extra(json) carries buff_id + duration_remaining_ms.
+
+  // ── 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §4.3.5)───────
+  //
+  // 帮会经 SceneNodeGrpc.AssetDebit / AssetCredit 改玩家资产时带上的 tx_type。
+  // correlation_id 填帮会侧的 op_id,回档对账靠它把 scene 流水与
+  // guild_asset_op 的行对上(§4.31 第 5 步)。只追加,不复用旧编号。
+
+  TX_GUILD_DONATE = 24;           // 帮会捐献扣货币(ASSET_OP_STREAM_GUILD_DEBIT)
+  TX_GUILD_SHOP = 25;             // 帮会商店发物(ASSET_OP_STREAM_GUILD_CREDIT)
+  TX_GUILD_ACTIVITY_REWARD = 26;  // 帮会活动发奖(ASSET_OP_STREAM_GUILD_CREDIT)
 }
 
 // A single transaction log entry.  Written to Kafka → Go DB → MySQL.

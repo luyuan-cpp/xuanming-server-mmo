@@ -62,7 +62,6 @@ set(SOURCE_FILES
     lua_state.cpp
     node_context_manager.cpp
     redis_manager.cpp
-    rpc_request_context.cpp
     snow_flake_manager.cpp
     trace_context_tls.cpp
 )

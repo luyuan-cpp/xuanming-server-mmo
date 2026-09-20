@@ -25,11 +25,18 @@ const (
 // In-process events decoded from Gate Kafka transport payloads.
 // These are intentionally modeled like node event protos so handlers can stay split by file/domain.
 type RoutePlayerEvent struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	SessionId     uint32                 `protobuf:"varint,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
-	TargetNodeId  uint32                 `protobuf:"varint,2,opt,name=target_node_id,json=targetNodeId,proto3" json:"target_node_id,omitempty"`
-	SceneId       uint64                 `protobuf:"varint,3,opt,name=scene_id,json=sceneId,proto3" json:"scene_id,omitempty"` // Scene instance GUID allocated by SceneManager
-	PlayerId      uint64                 `protobuf:"varint,4,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	SessionId    uint32                 `protobuf:"varint,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	TargetNodeId uint32                 `protobuf:"varint,2,opt,name=target_node_id,json=targetNodeId,proto3" json:"target_node_id,omitempty"`
+	SceneId      uint64                 `protobuf:"varint,3,opt,name=scene_id,json=sceneId,proto3" json:"scene_id,omitempty"` // Scene instance GUID allocated by SceneManager
+	PlayerId     uint64                 `protobuf:"varint,4,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// 玩家归属 zone(数据落库目的地),由 scene_manager 从 data_service 取后随路由下发;
+	// 0 表示未知,scene 侧 fail-closed 落进程 zone 并计数告警。见 cross-zone-scene-travel.md CZ-3。
+	HomeZoneId uint32 `protobuf:"varint,5,opt,name=home_zone_id,json=homeZoneId,proto3" json:"home_zone_id,omitempty"`
+	// 本次路由决策铸造的归属 epoch(scene_manager INCR player:{id}:owner_epoch 得到)。
+	// 必须随事件下发,节点不得自行读 Redis:两次改派挨近时后到者才持有最新值。
+	// 见 scene-owner-reentry-barrier.md §3.3。
+	OwnerEpoch    uint64 `protobuf:"varint,6,opt,name=owner_epoch,json=ownerEpoch,proto3" json:"owner_epoch,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -88,6 +95,20 @@ func (x *RoutePlayerEvent) GetSceneId() uint64 {
 func (x *RoutePlayerEvent) GetPlayerId() uint64 {
 	if x != nil {
 		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *RoutePlayerEvent) GetHomeZoneId() uint32 {
+	if x != nil {
+		return x.HomeZoneId
+	}
+	return 0
+}
+
+func (x *RoutePlayerEvent) GetOwnerEpoch() uint64 {
+	if x != nil {
+		return x.OwnerEpoch
 	}
 	return 0
 }
@@ -817,13 +838,17 @@ var File_proto_contracts_kafka_gate_event_proto protoreflect.FileDescriptor
 
 const file_proto_contracts_kafka_gate_event_proto_rawDesc = "" +
 	"\n" +
-	"&proto/contracts/kafka/gate_event.proto\x12\x0fcontracts.kafka\x1a\x1fproto/common/base/message.proto\"\x8f\x01\n" +
+	"&proto/contracts/kafka/gate_event.proto\x12\x0fcontracts.kafka\x1a\x1fproto/common/base/message.proto\"\xd2\x01\n" +
 	"\x10RoutePlayerEvent\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\x12$\n" +
 	"\x0etarget_node_id\x18\x02 \x01(\rR\ftargetNodeId\x12\x19\n" +
 	"\bscene_id\x18\x03 \x01(\x04R\asceneId\x12\x1b\n" +
-	"\tplayer_id\x18\x04 \x01(\x04R\bplayerId\"0\n" +
+	"\tplayer_id\x18\x04 \x01(\x04R\bplayerId\x12 \n" +
+	"\fhome_zone_id\x18\x05 \x01(\rR\n" +
+	"homeZoneId\x12\x1f\n" +
+	"\vowner_epoch\x18\x06 \x01(\x04R\n" +
+	"ownerEpoch\"0\n" +
 	"\x0fKickPlayerEvent\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\rR\tsessionId\"\x98\x01\n" +

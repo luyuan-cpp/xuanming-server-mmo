@@ -13,9 +13,11 @@ require (
 	go.etcd.io/etcd/client/v3 v3.5.15
 	google.golang.org/grpc v1.79.3
 	google.golang.org/protobuf v1.36.11
+	proto v0.0.0-00010101000000-000000000000
 )
 
 require (
+	filippo.io/edwards25519 v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -27,6 +29,7 @@ require (
 	github.com/eapache/go-xerial-snappy v0.0.0-20230731223053-c322873962e3 // indirect
 	github.com/eapache/queue v1.1.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
+	github.com/go-sql-driver/mysql v1.9.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -79,3 +82,13 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 )
+
+// proto 是本仓 go/proto 生成树的本地模块。shared/scenenode 要用
+// PlayerLocation 与 SceneNodeGrpcClient(04-asset-channel.md §4.17),
+// 这是 shared 第一次依赖服务协议。
+//
+// 版本写伪版本而不是 v0.0.0:go/data_service/go.mod 要求的正是这个伪版本,
+// 其余服务要求 v0.0.0。伪版本在语义上低于 v0.0.0,shared 取最低值就不会把任何
+// 下游选中的版本往上抬;写 v0.0.0 会让 data_service 在默认 -mod=readonly 下报
+// "updates to go.mod needed"。仓库没有 go/go.work,各模块自带 replace。
+replace proto => ../proto

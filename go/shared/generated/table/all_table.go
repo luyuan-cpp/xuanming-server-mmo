@@ -60,6 +60,12 @@ func LoadTables(configDir string, useBinary bool) {
     if err := GlobalVariableTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load GlobalVariable table: %v", err)
     }
+    if err := GuildLevelTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load GuildLevel table: %v", err)
+    }
+    if err := GuildRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load GuildRule table: %v", err)
+    }
     if err := ItemTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load Item table: %v", err)
     }
@@ -109,7 +115,7 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(29)
+    wg.Add(31)
     go func() {
         defer wg.Done()
         if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -204,6 +210,18 @@ func LoadTablesAsync(configDir string, useBinary bool) {
         defer wg.Done()
         if err := GlobalVariableTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load GlobalVariable table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := GuildLevelTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load GuildLevel table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := GuildRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load GuildRule table: %v", err)
         }
     }()
     go func() {
@@ -364,6 +382,14 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newGlobalVariable.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload GlobalVariable failed: %w", err)
     }
+    newGuildLevel := NewGuildLevelTableManager()
+    if err := newGuildLevel.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload GuildLevel failed: %w", err)
+    }
+    newGuildRule := NewGuildRuleTableManager()
+    if err := newGuildRule.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload GuildRule failed: %w", err)
+    }
     newItem := NewItemTableManager()
     if err := newItem.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload Item failed: %w", err)
@@ -434,6 +460,8 @@ func ReloadTables(configDir string, useBinary bool) error {
     DungeonTableManagerInstance = newDungeon
     EquipSlotTableManagerInstance = newEquipSlot
     GlobalVariableTableManagerInstance = newGlobalVariable
+    GuildLevelTableManagerInstance = newGuildLevel
+    GuildRuleTableManagerInstance = newGuildRule
     ItemTableManagerInstance = newItem
     MessageLimiterTableManagerInstance = newMessageLimiter
     MirrorTableManagerInstance = newMirror

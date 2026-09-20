@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	asset "proto/common/asset"
 	base "proto/common/base"
 	scene "proto/scene"
 )
@@ -26,6 +27,9 @@ const (
 	SceneNodeGrpc_ReleasePlayer_FullMethodName       = "/scene_node.SceneNodeGrpc/ReleasePlayer"
 	SceneNodeGrpc_PrepareBattle_FullMethodName       = "/scene_node.SceneNodeGrpc/PrepareBattle"
 	SceneNodeGrpc_CancelBattlePrepare_FullMethodName = "/scene_node.SceneNodeGrpc/CancelBattlePrepare"
+	SceneNodeGrpc_AssetDebit_FullMethodName          = "/scene_node.SceneNodeGrpc/AssetDebit"
+	SceneNodeGrpc_AssetAbortDebit_FullMethodName     = "/scene_node.SceneNodeGrpc/AssetAbortDebit"
+	SceneNodeGrpc_AssetCredit_FullMethodName         = "/scene_node.SceneNodeGrpc/AssetCredit"
 )
 
 // SceneNodeGrpcClient is the client API for SceneNodeGrpc service.
@@ -51,6 +55,12 @@ type SceneNodeGrpcClient interface {
 	PrepareBattle(ctx context.Context, in *scene.PrepareBattleRequest, opts ...grpc.CallOption) (*scene.PrepareBattleResponse, error)
 	// gather 失败的逐人回滚:battle_id 匹配才解冻,迟到/重复取消幂等忽略。
 	CancelBattlePrepare(ctx context.Context, in *scene.CancelBattlePrepareRequest, opts ...grpc.CallOption) (*base.Empty, error)
+	// ---- 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §S4)----
+	// 结局写在 response.outcome;gRPC status 恒为 OK。同 seq 重复调用只读答复。
+	AssetDebit(ctx context.Context, in *asset.AssetOpRequest, opts ...grpc.CallOption) (*asset.AssetOpResponse, error)
+	// 未见过的 seq 记 REJECTED 占位(reason=0);见过则回原结局。允许用于任何流。
+	AssetAbortDebit(ctx context.Context, in *asset.AssetOpRequest, opts ...grpc.CallOption) (*asset.AssetOpResponse, error)
+	AssetCredit(ctx context.Context, in *asset.AssetOpRequest, opts ...grpc.CallOption) (*asset.AssetOpResponse, error)
 }
 
 type sceneNodeGrpcClient struct {
@@ -111,6 +121,36 @@ func (c *sceneNodeGrpcClient) CancelBattlePrepare(ctx context.Context, in *scene
 	return out, nil
 }
 
+func (c *sceneNodeGrpcClient) AssetDebit(ctx context.Context, in *asset.AssetOpRequest, opts ...grpc.CallOption) (*asset.AssetOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(asset.AssetOpResponse)
+	err := c.cc.Invoke(ctx, SceneNodeGrpc_AssetDebit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneNodeGrpcClient) AssetAbortDebit(ctx context.Context, in *asset.AssetOpRequest, opts ...grpc.CallOption) (*asset.AssetOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(asset.AssetOpResponse)
+	err := c.cc.Invoke(ctx, SceneNodeGrpc_AssetAbortDebit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *sceneNodeGrpcClient) AssetCredit(ctx context.Context, in *asset.AssetOpRequest, opts ...grpc.CallOption) (*asset.AssetOpResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(asset.AssetOpResponse)
+	err := c.cc.Invoke(ctx, SceneNodeGrpc_AssetCredit_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SceneNodeGrpcServer is the server API for SceneNodeGrpc service.
 // All implementations must embed UnimplementedSceneNodeGrpcServer
 // for forward compatibility.
@@ -134,6 +174,12 @@ type SceneNodeGrpcServer interface {
 	PrepareBattle(context.Context, *scene.PrepareBattleRequest) (*scene.PrepareBattleResponse, error)
 	// gather 失败的逐人回滚:battle_id 匹配才解冻,迟到/重复取消幂等忽略。
 	CancelBattlePrepare(context.Context, *scene.CancelBattlePrepareRequest) (*base.Empty, error)
+	// ---- 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §S4)----
+	// 结局写在 response.outcome;gRPC status 恒为 OK。同 seq 重复调用只读答复。
+	AssetDebit(context.Context, *asset.AssetOpRequest) (*asset.AssetOpResponse, error)
+	// 未见过的 seq 记 REJECTED 占位(reason=0);见过则回原结局。允许用于任何流。
+	AssetAbortDebit(context.Context, *asset.AssetOpRequest) (*asset.AssetOpResponse, error)
+	AssetCredit(context.Context, *asset.AssetOpRequest) (*asset.AssetOpResponse, error)
 	mustEmbedUnimplementedSceneNodeGrpcServer()
 }
 
@@ -158,6 +204,15 @@ func (UnimplementedSceneNodeGrpcServer) PrepareBattle(context.Context, *scene.Pr
 }
 func (UnimplementedSceneNodeGrpcServer) CancelBattlePrepare(context.Context, *scene.CancelBattlePrepareRequest) (*base.Empty, error) {
 	return nil, status.Error(codes.Unimplemented, "method CancelBattlePrepare not implemented")
+}
+func (UnimplementedSceneNodeGrpcServer) AssetDebit(context.Context, *asset.AssetOpRequest) (*asset.AssetOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AssetDebit not implemented")
+}
+func (UnimplementedSceneNodeGrpcServer) AssetAbortDebit(context.Context, *asset.AssetOpRequest) (*asset.AssetOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AssetAbortDebit not implemented")
+}
+func (UnimplementedSceneNodeGrpcServer) AssetCredit(context.Context, *asset.AssetOpRequest) (*asset.AssetOpResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method AssetCredit not implemented")
 }
 func (UnimplementedSceneNodeGrpcServer) mustEmbedUnimplementedSceneNodeGrpcServer() {}
 func (UnimplementedSceneNodeGrpcServer) testEmbeddedByValue()                       {}
@@ -270,6 +325,60 @@ func _SceneNodeGrpc_CancelBattlePrepare_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SceneNodeGrpc_AssetDebit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(asset.AssetOpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneNodeGrpcServer).AssetDebit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneNodeGrpc_AssetDebit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneNodeGrpcServer).AssetDebit(ctx, req.(*asset.AssetOpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneNodeGrpc_AssetAbortDebit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(asset.AssetOpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneNodeGrpcServer).AssetAbortDebit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneNodeGrpc_AssetAbortDebit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneNodeGrpcServer).AssetAbortDebit(ctx, req.(*asset.AssetOpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _SceneNodeGrpc_AssetCredit_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(asset.AssetOpRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SceneNodeGrpcServer).AssetCredit(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: SceneNodeGrpc_AssetCredit_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SceneNodeGrpcServer).AssetCredit(ctx, req.(*asset.AssetOpRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SceneNodeGrpc_ServiceDesc is the grpc.ServiceDesc for SceneNodeGrpc service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -296,6 +405,18 @@ var SceneNodeGrpc_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "CancelBattlePrepare",
 			Handler:    _SceneNodeGrpc_CancelBattlePrepare_Handler,
+		},
+		{
+			MethodName: "AssetDebit",
+			Handler:    _SceneNodeGrpc_AssetDebit_Handler,
+		},
+		{
+			MethodName: "AssetAbortDebit",
+			Handler:    _SceneNodeGrpc_AssetAbortDebit_Handler,
+		},
+		{
+			MethodName: "AssetCredit",
+			Handler:    _SceneNodeGrpc_AssetCredit_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

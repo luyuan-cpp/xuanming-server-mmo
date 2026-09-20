@@ -103,6 +103,11 @@ type worker struct {
 	retryDeadQueueKey  string
 	wg                 *sync.WaitGroup
 
+	// appliedEpochs 记录每个 key 已成功落库的最大归属 epoch,是落库前 epoch 守卫的
+	// 数据源(见 guardOwnerEpoch)。生产由 buildWorker 装成 redisAppliedEpochStore;测试
+	// 注入 map 实现。nil 时守卫对带 epoch 的任务 fail-closed 成可重试错误,而不是放行。
+	appliedEpochs appliedEpochStore
+
 	// subShardCount is the number of intra-partition parallel goroutines
 	// that share the work for this partition. With subShardCount=1 the
 	// worker is the legacy single-goroutine behaviour. With N>1, the
@@ -473,6 +478,193 @@ func markAppliedSeq(ctx context.Context, rc redis.Cmdable, topic string, dbTask 
 	return rc.Set(ctx, appliedSeqKey(topic, dbTask.Key, dbTask.MsgType), encodeAppliedCursor(cursor), 0).Err()
 }
 
+// ───────────────────────── 归属 epoch 守卫(reentry-barrier §6.3)─────────────────────────
+//
+// 为什么 applied-seq 挡不住这类写:seq 是 Kafka offset,只表达「同一分区内谁先到」。
+// 被废黜的老节点(etcd 分区期的僵尸、屏障估算失手的疏散源)照样能在新主之后
+// 产出更大的 offset,seq 守卫会把它当成更新的版本放行,MySQL 回档。
+// epoch 与时间无关:归属每变一次 scene_manager INCR 一次,老节点手里的值永远追不上。
+// Redis 侧 PlayerAllData 由 C++ Lua CAS 拦;这里拦的是 Kafka→MySQL 这条通道,
+// 只关 Redis 的门不关这扇窗等于没关(§6.3 原话)。
+//
+// 比对对象是「该 (topic,key,msgType) **已成功落库**的最大 epoch」,不是 Redis 里
+// scene_manager 铸造的当前值。两者的区别正好是要不要误伤合法写:
+//
+//	源节点以 epoch=E 存盘 → 同时发 DBTask(E) → Redis 落地 → 写交接标记 →
+//	scene_manager 放行并 INCR 到 E+1,整段只有几十毫秒;而 DBTask(E) 经 Kafka 到这里
+//	常常晚几百毫秒到数秒。拿「当前值 E+1」去比,这笔**传送前的最终态**每次都会被当成
+//	僵尸写丢掉 —— MySQL 少一版,stale 计数在没有任何双主的情况下持续上涨,「压测期
+//	恒 0」的红线(cross-zone-scene-travel.md §6 不变量 3)失去判别力。
+//
+// 要拦的是「新主**已经落库**之后,老 epoch 的写才到」—— 只有这种才会回档。所以:
+// task.epoch < 已落库的最大 epoch → 拒;>= → 放行并在落库成功后推进。新主落库之前到达
+// 的老主最后一笔按 offset 顺序正常落库,之后新主的写再盖上去,与 Redis 侧的最终状态一致。
+
+// appliedEpochKey 记录某个 (topic, key, msgType) 已成功落库的最大归属 epoch。
+// 与 appliedSeqKey 分开存而不是往 cursor 里加一段:cursor 的值格式是滚动升级契约,
+// 旧版 db 读到不认识的格式会把任务判成 orderingIncomparable 送去隔离。
+func appliedEpochKey(topic string, key uint64, msgType string) string {
+	return fmt.Sprintf("consumer:applied_epoch:%s:%d:%s", topic, key, msgType)
+}
+
+// luaMarkAppliedEpoch 只升不降地记录已落库的 epoch。同一 key 的写在单个 worker 内
+// 串行,但重试队列可以让更老的任务晚于更新的任务成功,所以必须取 max 而不是直接 SET。
+// epoch 是从 1 起的小计数器,远小于 2^53,Lua 的 double 比较是精确的。
+const luaMarkAppliedEpoch = `
+local cur = tonumber(redis.call("GET", KEYS[1]) or "0")
+if tonumber(ARGV[1]) > cur then
+    redis.call("SET", KEYS[1], ARGV[1])
+end
+return 1
+`
+
+// appliedEpochStore 读写「已落库的最大归属 epoch」。抽成接口只为测试替身能覆盖
+// 「读失败」分支 —— miniredis 一关连 applied-seq 的 GET 也会先失败,隔离不出这一支。
+type appliedEpochStore interface {
+	// ReadAppliedEpoch 返回 (epoch, found, err)。found=false 表示还没有任何带 epoch 的
+	// 写落过库(不是错误);err 非 nil 表示读失败或值不是十进制整数,一律按可重试处理。
+	ReadAppliedEpoch(ctx context.Context, topic string, key uint64, msgType string) (uint64, bool, error)
+	// MarkAppliedEpoch 在业务写成功之后调用,只升不降。
+	MarkAppliedEpoch(ctx context.Context, topic string, key uint64, msgType string, epoch uint64) error
+}
+
+// redisAppliedEpochStore 是生产实现,与 applied cursor 用同一个 Redis。
+// 不设过期(与 markAppliedSeq 同理):跟业务缓存的 TTL 走,守卫过期后迟到的重试就能
+// 复活并盖掉新主的整份快照。
+type redisAppliedEpochStore struct {
+	rc redis.Cmdable
+}
+
+func (r redisAppliedEpochStore) ReadAppliedEpoch(ctx context.Context, topic string, key uint64, msgType string) (uint64, bool, error) {
+	raw, err := r.rc.Get(ctx, appliedEpochKey(topic, key, msgType)).Result()
+	if errors.Is(err, redis.Nil) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("read applied owner epoch: %w", err)
+	}
+	epoch, err := strconv.ParseUint(raw, 10, 64)
+	if err != nil {
+		// 该键只由 luaMarkAppliedEpoch 写,出现非整数只可能是人手改坏。当错误(→ 重试 →
+		// 死信)而不是当缺键放行:放行会让一个被改坏的键静默关掉整条防线。
+		return 0, false, fmt.Errorf("applied owner epoch %q for key %d is not a decimal integer: %w", raw, key, err)
+	}
+	return epoch, true, nil
+}
+
+func (r redisAppliedEpochStore) MarkAppliedEpoch(ctx context.Context, topic string, key uint64, msgType string, epoch uint64) error {
+	return r.rc.Eval(ctx, luaMarkAppliedEpoch, []string{appliedEpochKey(topic, key, msgType)},
+		strconv.FormatUint(epoch, 10)).Err()
+}
+
+// ownerEpochVerdict 是一次守卫判定。outcome 直接就是 metrics 的 label 取值。
+type ownerEpochVerdict struct {
+	outcome      string
+	appliedEpoch uint64 // 已落库的最大 epoch;没有记录 / 未读时为 0
+	reject       bool
+}
+
+// checkOwnerEpoch 只做比对,不碰 metrics / 日志 / ACK,让判定规则能被单独单测。
+//
+// 规则(任务侧 taskEpoch 对已落库的最大 epoch applied):
+//
+//	taskEpoch == 0        → legacy_zero,放行,不读 Redis(旧版生产者兼容窗口)
+//	还没有 applied 记录   → first,放行(该 key 第一笔带 epoch 的写)
+//	taskEpoch <  applied  → stale,拒绝(新主已落库之后才到的老 epoch 写)
+//	taskEpoch == applied  → match,放行(同一持有者的后续写,绝大多数流量)
+//	taskEpoch >  applied  → advance,放行(归属变更后新主的第一笔写)
+//	读失败                → err,由调用方按可重试处理
+func checkOwnerEpoch(ctx context.Context, store appliedEpochStore, topic string, dbTask *db_proto.DBTask) (ownerEpochVerdict, error) {
+	if dbTask.OwnerEpoch == 0 {
+		return ownerEpochVerdict{outcome: metrics.OwnerEpochLegacyZero}, nil
+	}
+	if store == nil {
+		// 装配缺失是编程错误。fail-closed 成可重试错误而不是放行:放行会让漏装配
+		// 变成一条永远不响的假防线。
+		return ownerEpochVerdict{}, errors.New("applied owner epoch store not configured")
+	}
+	applied, found, err := store.ReadAppliedEpoch(ctx, topic, dbTask.Key, dbTask.MsgType)
+	if err != nil {
+		return ownerEpochVerdict{}, err
+	}
+	if !found {
+		return ownerEpochVerdict{outcome: metrics.OwnerEpochFirst}, nil
+	}
+	switch {
+	case dbTask.OwnerEpoch < applied:
+		return ownerEpochVerdict{outcome: metrics.OwnerEpochStale, appliedEpoch: applied, reject: true}, nil
+	case dbTask.OwnerEpoch > applied:
+		return ownerEpochVerdict{outcome: metrics.OwnerEpochAdvance, appliedEpoch: applied}, nil
+	default:
+		return ownerEpochVerdict{outcome: metrics.OwnerEpochMatch, appliedEpoch: applied}, nil
+	}
+}
+
+// ownerEpochsDiverge 判定两条写是否来自不同的归属期。0 是「未知」,与任何值都不算分歧,
+// 与 checkOwnerEpoch 对 0 的兼容口径一致。
+func ownerEpochsDiverge(a, b uint64) bool {
+	return a != 0 && b != 0 && a != b
+}
+
+// guardOwnerEpoch 在 handleTask 里跑守卫,返回 false 表示任务已被终态处理(丢弃或转重试),
+// 调用方直接 return。只对 write 任务调用;read 不改数据,不需要归属。
+//
+// 位置约束:必须在 applied-seq 判定**之后**、执行 SQL **之前**。放在 seq 之后是因为
+// seq 已经过滤掉了纯粹的重复投递,这里只剩「按 offset 看是新的、按归属看是老的」这一种。
+func (w *worker) guardOwnerEpoch(task *workerTask, dbTask *db_proto.DBTask) bool {
+	verdict, err := checkOwnerEpoch(w.ctx, w.appliedEpochs, w.topic, dbTask)
+	if err != nil {
+		// 与 ordering guard unavailable 同一条路:Kafka 源 → 持久化进重试队列后 ACK,
+		// 重试源 → 收据原子搬回 ready;retryMaxTimes 之后进死信队列由人处理。
+		// 绝不静默放行(那是把 Redis 抖动变成串档),也绝不原地丢(那是丢盘)。
+		metrics.CountOwnerEpochGuard(metrics.OwnerEpochReadError)
+		w.deferFailedTask(task, dbTask, fmt.Errorf("owner epoch guard unavailable: %w", err))
+		return false
+	}
+	metrics.CountOwnerEpochGuard(verdict.outcome)
+
+	switch verdict.outcome {
+	case metrics.OwnerEpochStale:
+		metrics.CountStaleOwnerWriteRejected()
+		logx.Errorf("STALE-OWNER-WRITE rejected: key=%d taskID=%s msgType=%s taskEpoch=%d appliedEpoch=%d workerPartition=%d originPartition=%d seq=%d fromRetry=%v",
+			dbTask.Key, dbTask.TaskId, dbTask.MsgType, dbTask.OwnerEpoch, verdict.appliedEpoch,
+			w.partition, task.originPartition, task.seq, task.fromRetry)
+		// 丢弃 = 终态,口径与 orderingStale 完全一致:不落库、不重试、不推进 applied cursor。
+		// 不推进的理由:cursor 只挡「更小的 seq」,同 key 后续更高 seq 的任务不会被卡住;
+		// 这条任务的重复投递再来时会再撞一次只升不降的 applied epoch,结论不变。推进反而把
+		// 「已落库」写假 —— cursor 的定义是最后一次**成功应用**的位置。
+		if task.fromRetry {
+			if ackErr := ackRetryReceipt(w.ctx, w.redisClient, w.retryProcessingKey, task.retryReceipt); ackErr != nil {
+				logx.Errorf("ack stale-owner retry receipt failed; it remains recoverable: taskID=%s err=%v", dbTask.TaskId, ackErr)
+			}
+		}
+		ackKafkaTask(task)
+		return false
+	case metrics.OwnerEpochAdvance:
+		// 归属变更后新主的第一笔写:正常事件,留一条 INFO 方便对账交接时间线。
+		logx.Infof("owner-epoch advance: key=%d taskID=%s msgType=%s taskEpoch=%d appliedEpoch=%d",
+			dbTask.Key, dbTask.TaskId, dbTask.MsgType, dbTask.OwnerEpoch, verdict.appliedEpoch)
+	case metrics.OwnerEpochLegacyZero:
+		// 兼容窗口内每条旧版写都会走到这里,只计数不刷日志;窗口该收口时看 counter 归零即可。
+		logx.Debugf("owner-epoch guard skipped for legacy producer: key=%d taskID=%s msgType=%s",
+			dbTask.Key, dbTask.TaskId, dbTask.MsgType)
+	}
+	return true
+}
+
+// markAppliedOwnerEpoch 在业务写与 applied cursor 都已持久化之后推进已落库的 epoch。
+// 失败不回滚业务写、也不让任务重试:代价只是守卫暂时少看到一格(之后同一持有者的
+// 任何一次成功写都会补上),而重试一笔已经落库的写没有任何收益。
+func (w *worker) markAppliedOwnerEpoch(dbTask *db_proto.DBTask) {
+	if dbTask.Op != "write" || dbTask.OwnerEpoch == 0 || w.appliedEpochs == nil {
+		return
+	}
+	if err := w.appliedEpochs.MarkAppliedEpoch(w.ctx, w.topic, dbTask.Key, dbTask.MsgType, dbTask.OwnerEpoch); err != nil {
+		logx.Errorf("persist applied owner epoch failed (guard lags by one step until the next write): key=%d taskID=%s msgType=%s epoch=%d err=%v",
+			dbTask.Key, dbTask.TaskId, dbTask.MsgType, dbTask.OwnerEpoch, err)
+	}
+}
+
 // retryPayloadMagic identifies the new retry-queue payload format that
 // carries an explicit seq prefix. The byte 0x01 is unambiguous because raw
 // proto3-marshaled DBTask bytes always start with a field tag (≥ 0x08).
@@ -700,6 +892,7 @@ func (c *KeyOrderedKafkaConsumer) buildWorker(partition int32) *worker {
 		retryProcessingKey: c.retryProcessingKey,
 		retryDeadQueueKey:  c.retryDeadQueueKey,
 		wg:                 c.wg,
+		appliedEpochs:      redisAppliedEpochStore{rc: c.redisClient},
 		subShardCount:      c.subShardCount,
 		subShardChans:      shardChans,
 	}
@@ -1156,6 +1349,17 @@ func (w *worker) processTaskBatch(batch []*workerTask, isOfflineExpand bool) {
 				liveBestWrite[ck] = byPartition
 			}
 			if bestIndex, exists := byPartition[pt.wt.originPartition]; exists {
+				if ownerEpochsDiverge(pt.dbTask.OwnerEpoch, parsed[bestIndex].dbTask.OwnerEpoch) {
+					// 归属期不同的写不能按 offset 互相替代:被废黜节点的迟到写可以
+					// 有更大的 offset,按 offset 合并会把新主的写标成 superseded 并
+					// ACK 掉,随后老写又被 guardOwnerEpoch 丢弃 —— 新主这一版就从
+					// MySQL 消失了。把 epoch 变化当成与 read 同级的段边界:两边各自
+					// 的最新写都保留,都走 handleTask 的归属守卫,由它决定谁落库、
+					// 谁被计数拒绝。代价只是这一批少合并一次,而这种批次本身就是
+					// 归属变更的异常窗口。
+					byPartition[pt.wt.originPartition] = i
+					continue
+				}
 				best := parsed[bestIndex].wt
 				if pt.wt.seq <= best.seq {
 					// Equal versions are duplicate deliveries; retain the later
@@ -1291,6 +1495,12 @@ func (w *worker) handleTask(task *workerTask, isOfflineExpand bool) {
 		return
 	}
 
+	// 归属 epoch 守卫:seq 只证明「同分区内更晚到」,不证明「来自当前归属节点」。
+	// 只对 write 生效;read 不改数据。判定与终态处理都在 guardOwnerEpoch 里。
+	if dbTask.Op == "write" && !w.guardOwnerEpoch(task, dbTask) {
+		return
+	}
+
 	startTime := time.Now()
 	processCtx := w.ctx
 	if task.claimCtx != nil {
@@ -1321,6 +1531,7 @@ func (w *worker) handleTask(task *workerTask, isOfflineExpand bool) {
 			w.deferFailedTask(task, dbTask, fmt.Errorf("persist applied cursor: %w", markErr))
 			return
 		}
+		w.markAppliedOwnerEpoch(dbTask)
 	}
 
 	if task.fromRetry {

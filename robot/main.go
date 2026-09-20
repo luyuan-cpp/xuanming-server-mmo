@@ -179,6 +179,23 @@ func main() {
 		return
 	}
 
+	// Team-smoke 模式:四个机器人做「组队系统」端到端冒烟
+	// (建队 / 申请 / 审批 / 邀请 / 踢人 / 转让 → 同节点跟随 → 整队开战 → 战斗中开战被拒 → 跨区两形态 → 解散)。
+	// 见 team_smoke_scenario.go 与 docs/design/team-system.md §I.5;前置条件写在 etc/team_smoke.yaml 文件头。
+	if cfg.Mode == "team-smoke" {
+		RunTeamSmoke(cfg)
+		return
+	}
+
+	// Travel-smoke 模式:单机器人做「跨 zone 场景传送」往返端到端冒烟
+	// (登 home_zone → 非法目标被拒 → TravelToZone{visit_zone} → 跟随 msg 124 严格重登 → 访客区断言 → TravelToZone{home_zone} → 回家不回档)。
+	// 本模式会用「按 player_id 选角、绝不自动建角」的严格重登覆盖上面注册的通用重登(本模式独占进程,覆盖是安全的)。
+	// 见 travel_smoke_scenario.go 与 docs/design/cross-zone-scene-travel.md;前置条件写在 etc/travel_smoke.yaml 文件头。
+	if cfg.Mode == "travel-smoke" {
+		RunTravelSmoke(cfg)
+		return
+	}
+
 	// Friend-smoke 模式:三个机器人做「全局好友 go/friend」端到端冒烟
 	// (A/C 与 B 分登两个 zone → 加好友 + 跨区推送 → 权威拉取 + 重发被拒 → 同意 + 反向推送 + 在线状态
 	//  → 黑名单双向拦截 → 推荐截断与过滤 → S2C 方法对客户端不可调 → 清理)。

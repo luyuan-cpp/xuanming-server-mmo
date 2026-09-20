@@ -44,6 +44,15 @@ service DataService {
   // C++ scene 没有 MySQL 客户端,永久 ID(item guid 等)的号段经这里从 id_segment 表领取。
   // 见 docs/design/node-id-overhaul-plan-20260908.md §6。
   rpc AllocateIdSegment(AllocateIdSegmentRequest) returns (AllocateIdSegmentResponse) {}
+
+  // ── Player name registry(角色名全服唯一)──────────────────────
+  // 真源是全局库 player_name 表(rollback_database_table.proto);zone 库
+  // player_database.profile_component 与 AccountSimplePlayer.name 都只是副本。
+  // 唯一性只有"全服一张表"才成立,所以登记必须过 data_service,不能各 zone 自己判重。
+  // 设计见 docs/design/guild-phase2/03-names.md §3.1。
+  rpc ReservePlayerName(ReservePlayerNameRequest) returns (ReservePlayerNameResponse) {}
+  rpc ReleasePlayerName(ReleasePlayerNameRequest) returns (google.protobuf.Empty) {}
+  rpc BatchGetPlayerName(BatchGetPlayerNameRequest) returns (BatchGetPlayerNameResponse) {}
 }
 
 // ── Load / Save ────────────────────────────────────────────────
@@ -385,4 +394,49 @@ message AllocateIdSegmentResponse {
   uint32 error_code = 1;
   uint64 lo = 2;        // inclusive
   uint64 hi = 3;        // exclusive
+}
+
+// ── Player name registry ───────────────────────────────────────
+//
+// 三个 RPC 的共同前提:名字全服唯一,写入点只有建角(login),v1 不支持改名。
+// 登记侧 fail-closed(登记不成功就不建角),读取侧 fail-open(拿不到名字照常放行)。
+
+message ReservePlayerNameRequest {
+  uint64 player_id = 1;
+  // 调用方(login)已按 RoleNameRule 归一化并校验过;服务端再校验一遍,
+  // 因为"规则包版本不一致"时必须以服务端为准,否则会写进唯一键一个不合规的名字。
+  string name = 2;
+}
+
+// result 走自己的小常量轴(go/shared/playername),不是 tip 码、也不是 error_code:
+//   0 = 成功(含"同 player_id 同名"的幂等重试)
+//   1 = 已被别人占用
+//   2 = 不合规(长度 / 字符集 / 敏感词)
+// 常量定义在 go/shared/playername,data_service 与 login 共用,proto 里不写数字。
+message ReservePlayerNameResponse {
+  uint32 result = 1;
+  // 仅 result=1 时填占用者 player_id。只给 login 判"是不是我自己丢了响应后的重试",
+  // **不得下发客户端**:把占用者 id 透出去等于给了一条按名字查人的旁路。
+  uint64 owner_player_id = 2;
+}
+
+// 条件删除:player_id 与 name 归一化后的 name_norm 都匹配才删 —— 只带 player_id 会
+// 在"建角失败补偿"与"后来重登记了别的名字"撞车时删错行。
+// 不带 x-admin-token:只删 created_ms 落在 PlayerName.ReleaseWindow 内的行(login 建角补偿);
+// 带合法 x-admin-token:不限登记时间(运维按日志清孤儿)。
+message ReleasePlayerNameRequest {
+  uint64 player_id = 1;
+  string name = 2;
+}
+
+// 一次最多 500 个 id;超了返回 InvalidArgument,不做截断 —— 静默截断会让调用方
+// 把"没返回"当成"没登记",给玩家显示空名。
+message BatchGetPlayerNameRequest {
+  repeated uint64 player_ids = 1;
+}
+
+// 缺席的 id(未登记 / 已释放)不出现在 map 里,不是错误(与 BatchGetPlayerHomeZone 同口径)。
+// 但 SQL 失败时不回部分结果:半份结果无法与"这些 id 确实没名字"区分。
+message BatchGetPlayerNameResponse {
+  map<uint64, string> names = 1;
 }

@@ -43,6 +43,19 @@ const (
 	TeamError_kTeamMemberListFull          TeamError = 4015
 	TeamError_kTeamCreateTeamMaxMemberSize TeamError = 4016
 	TeamError_kTeamPlayerNotFound          TeamError = 4017
+	TeamError_kTeamNotLeader               TeamError = 4018
+	TeamError_kTeamHomeZoneUnknown         TeamError = 4019
+	TeamError_kTeamCrossZoneDenied         TeamError = 4020
+	TeamError_kTeamInviteNotFound          TeamError = 4021
+	TeamError_kTeamInviteLimit             TeamError = 4022
+	TeamError_kTeamInMatch                 TeamError = 4023
+	TeamError_kTeamMemberOffline           TeamError = 4024
+	TeamError_kTeamMemberInBattle          TeamError = 4025
+	TeamError_kTeamMemberNotReady          TeamError = 4026
+	TeamError_kTeamDungeonNotOpen          TeamError = 4027
+	TeamError_kTeamSizeExceeded            TeamError = 4028
+	TeamError_kTeamStateChanged            TeamError = 4029
+	TeamError_kTeamInternal                TeamError = 4030
 )
 
 // Enum value maps for TeamError.
@@ -67,6 +80,19 @@ var (
 		4015: "kTeamMemberListFull",
 		4016: "kTeamCreateTeamMaxMemberSize",
 		4017: "kTeamPlayerNotFound",
+		4018: "kTeamNotLeader",
+		4019: "kTeamHomeZoneUnknown",
+		4020: "kTeamCrossZoneDenied",
+		4021: "kTeamInviteNotFound",
+		4022: "kTeamInviteLimit",
+		4023: "kTeamInMatch",
+		4024: "kTeamMemberOffline",
+		4025: "kTeamMemberInBattle",
+		4026: "kTeamMemberNotReady",
+		4027: "kTeamDungeonNotOpen",
+		4028: "kTeamSizeExceeded",
+		4029: "kTeamStateChanged",
+		4030: "kTeamInternal",
 	}
 	TeamError_value = map[string]int32{
 		"kTeam_errorOK":                0,
@@ -88,6 +114,19 @@ var (
 		"kTeamMemberListFull":          4015,
 		"kTeamCreateTeamMaxMemberSize": 4016,
 		"kTeamPlayerNotFound":          4017,
+		"kTeamNotLeader":               4018,
+		"kTeamHomeZoneUnknown":         4019,
+		"kTeamCrossZoneDenied":         4020,
+		"kTeamInviteNotFound":          4021,
+		"kTeamInviteLimit":             4022,
+		"kTeamInMatch":                 4023,
+		"kTeamMemberOffline":           4024,
+		"kTeamMemberInBattle":          4025,
+		"kTeamMemberNotReady":          4026,
+		"kTeamDungeonNotOpen":          4027,
+		"kTeamSizeExceeded":            4028,
+		"kTeamStateChanged":            4029,
+		"kTeamInternal":                4030,
 	}
 )
 
@@ -122,7 +161,7 @@ var File_team_error_tip_proto protoreflect.FileDescriptor
 
 const file_team_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x14team_error_tip.proto*\xe9\x03\n" +
+	"\x14team_error_tip.proto*\xa3\x06\n" +
 	"\n" +
 	"team_error\x12\x11\n" +
 	"\rkTeam_errorOK\x10\x00\x12\x19\n" +
@@ -143,7 +182,20 @@ const file_team_error_tip_proto_rawDesc = "" +
 	"\x15kTeamDismissNotLeader\x10\xae\x1f\x12\x18\n" +
 	"\x13kTeamMemberListFull\x10\xaf\x1f\x12!\n" +
 	"\x1ckTeamCreateTeamMaxMemberSize\x10\xb0\x1f\x12\x18\n" +
-	"\x13kTeamPlayerNotFound\x10\xb1\x1fB$\n" +
+	"\x13kTeamPlayerNotFound\x10\xb1\x1f\x12\x13\n" +
+	"\x0ekTeamNotLeader\x10\xb2\x1f\x12\x19\n" +
+	"\x14kTeamHomeZoneUnknown\x10\xb3\x1f\x12\x19\n" +
+	"\x14kTeamCrossZoneDenied\x10\xb4\x1f\x12\x18\n" +
+	"\x13kTeamInviteNotFound\x10\xb5\x1f\x12\x15\n" +
+	"\x10kTeamInviteLimit\x10\xb6\x1f\x12\x11\n" +
+	"\fkTeamInMatch\x10\xb7\x1f\x12\x17\n" +
+	"\x12kTeamMemberOffline\x10\xb8\x1f\x12\x18\n" +
+	"\x13kTeamMemberInBattle\x10\xb9\x1f\x12\x18\n" +
+	"\x13kTeamMemberNotReady\x10\xba\x1f\x12\x18\n" +
+	"\x13kTeamDungeonNotOpen\x10\xbb\x1f\x12\x16\n" +
+	"\x11kTeamSizeExceeded\x10\xbc\x1f\x12\x16\n" +
+	"\x11kTeamStateChanged\x10\xbd\x1f\x12\x12\n" +
+	"\rkTeamInternal\x10\xbe\x1fB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

@@ -1,0 +1,254 @@
+syntax = "proto3";
+package teampb;
+
+import "proto/db/proto_option.proto";
+import "proto/common/base/empty.proto";
+import "proto/common/base/tip.proto";
+
+option go_package = "proto/team";
+// gRPC(非 muduo TCP)。两个开关分工不同,都必须保持:
+// - gate 侧协议号(PROTOCOL_GRPC/TCP)不看本选项,由 proto_gen.yaml 的 domain_meta.team.rpc.type=grpc 决定
+//   (protogen GetProtocol → utils.HasGrpcService);rpc.type 同时决定 C++ gRPC 桩与 go/*/generated 的 team 消息号常量是否生成。
+// - 本选项 false 决定注册表生成 gRPC sender 而不是 muduo XxxImpl handler,以及 client_rpc_router 路由表收录本服务
+//   (protogen internal/route_table.go)。误改 true 不会变成 TCP 服务,只会让注册形状与路由表跟协议号对不上。
+// 照 proto/chat/chat.proto。设计文档 §B.1。
+option cc_generic_services = false;
+option (OptionFileDefaultNode) = NODE_TEAM;
+
+// 组队系统客户端协议(设计文档 docs/design/team-system.md §B.1)。
+// 链路:gate(路由服模式) → client_rpc_router → TeamNodeService(与 match 同进程,internal/team)。
+// 节点类型由生成器按目录名 team/ 映射到 ENodeType_TeamNodeService(proto/common/base/node.proto)。
+// service 名必须带 ClientPlayer,Unity / robot 生成器才会收录。
+// 身份一律取自 session metadata,请求体不带 player_id;缺 session 回 kTeamPlayerId(fail-closed)。
+// 推送写成返回 Empty 的 rpc 以获得消息号(照 proto/match/match_service.proto 的 NotifyChallenge*),
+// 服务端实现为空操作,客户端调用不产生任何副作用。
+service ClientPlayerTeam {
+  option (OptionIsClientProtocolService) = true;
+
+  rpc CreateTeam(CreateTeamRequest) returns (TeamResponse) {}
+  rpc GetMyTeam(GetMyTeamRequest) returns (TeamResponse) {}
+  rpc ApplyJoinTeam(ApplyJoinTeamRequest) returns (TeamResponse) {}
+  rpc HandleApplication(HandleApplicationRequest) returns (TeamResponse) {}
+  rpc InviteToTeam(InviteToTeamRequest) returns (TeamResponse) {}
+  rpc RespondInvite(RespondInviteRequest) returns (TeamResponse) {}
+  rpc ListMyInvites(ListMyInvitesRequest) returns (ListMyInvitesResponse) {}
+  rpc LeaveTeam(LeaveTeamRequest) returns (TeamResponse) {}
+  rpc KickMember(KickMemberRequest) returns (TeamResponse) {}
+  rpc TransferLeader(TransferLeaderRequest) returns (TeamResponse) {}
+  rpc DisbandTeam(DisbandTeamRequest) returns (TeamResponse) {}
+  rpc StartTeamMatch(StartTeamMatchRequest) returns (TeamResponse) {}
+
+  // ---- S2C 推送占位(服务端空操作) ----
+  rpc NotifyTeamSnapshot(TeamSnapshotS2C) returns (Empty) {}
+  rpc NotifyTeamInvite(TeamInviteS2C) returns (Empty) {}
+  rpc NotifyTeamEvent(TeamEventS2C) returns (Empty) {}
+}
+
+// ---------------- 请求 ----------------
+
+message CreateTeamRequest {}
+
+message GetMyTeamRequest {
+  bool notify_online = 1;  // 进游戏后第一次拉取填 true:服务端把当前视图推给其他在线队员(在线态刷新)
+}
+
+// expected_team_id = 客户端当前 TeamSnapshot.TeamId。服务端只在"调用者当前所在队伍 == expected_team_id"时操作,
+// 重试也绑定这个队伍、绝不换队;为 0 或不一致时不写任何东西,回 kTeamHasNotTeamId 并带调用者当前视图
+// (LeaveTeam 例外:回成功,见设计文档 §D.6)。作用:超时后迟到执行的旧请求不能误伤调用者后来加入的新队伍。
+
+message ApplyJoinTeamRequest {
+  uint64 target_player_id = 1;  // 申请加入"该玩家所在的队伍"
+}
+
+message HandleApplicationRequest {
+  uint64 applicant_id = 1;
+  bool approve = 2;
+  uint64 expected_team_id = 3;
+}
+
+message InviteToTeamRequest {
+  uint64 target_player_id = 1;
+  uint64 expected_team_id = 2;
+}
+
+message RespondInviteRequest {
+  uint64 team_id = 1;  // team_id 本身已绑定队伍
+  bool accept = 2;
+}
+
+message ListMyInvitesRequest {}
+
+message LeaveTeamRequest {
+  uint64 expected_team_id = 1;
+}
+
+message KickMemberRequest {
+  uint64 target_player_id = 1;
+  uint64 expected_team_id = 2;
+}
+
+message TransferLeaderRequest {
+  uint64 target_player_id = 1;
+  uint64 expected_team_id = 2;
+}
+
+message DisbandTeamRequest {
+  uint64 expected_team_id = 1;
+}
+
+message StartTeamMatchRequest {
+  uint32 battle_config_id = 1;  // DungeonTable id;模式固定 PVE_TEAM
+  uint64 expected_team_id = 2;
+}
+
+// ---------------- 回包 / 显示层视图(AGENTS §11.6:在线态只出现在这里) ----------------
+
+message TeamResponse {
+  TipInfoMessage error_message = 1;  // id=0 成功;非 0 时 team 仍可能携带调用者当前视图(取自同一次 S_READ,照常按 §H.3 应用)
+  TeamView team = 2;                 // 调用者视角;无队伍时 team_id=0
+}
+
+message ListMyInvitesResponse {
+  TipInfoMessage error_message = 1;
+  repeated TeamIncomingInviteView invites = 2;
+  uint64 server_time_ms = 3;  // 倒计时基准(SharedRedis TIME)
+}
+
+enum TeamMatchState {
+  TEAM_MATCH_STATE_IDLE = 0;
+  TEAM_MATCH_STATE_STARTING = 1;  // 开战锁有效:gather 在途,名单冻结
+}
+
+message TeamMemberView {
+  uint64 player_id = 1;
+  string name = 2;       // 仓库暂无昵称,恒为 ""(§G.2)
+  uint32 level = 3;      // 尽力而为,0 = 未知
+  uint32 class_id = 4;   // 尽力而为,0 = 未知
+  uint32 gender = 5;     // v1 恒 0(性别只在账号 blob);客户端头像因此不可推导,见 §H.4
+  bool is_leader = 6;
+  bool is_online = 7;    // 读时由 player:session 算,仅 SESSION_STATE_ONLINE 为 true
+  bool in_battle = 8;    // 读时由 battle:lock 算(咨询性)
+  uint32 zone_id = 9;    // 玩家 home zone
+  uint32 join_seq = 10;  // 显式顺序(§11.6);members 已按它升序,但客户端不得依赖下标
+}
+
+message TeamApplicationView {
+  TeamMemberView player = 1;
+  uint64 applied_at_ms = 2;
+  uint64 expire_at_ms = 3;
+}
+
+// 队长看到的"已发出邀请"
+message TeamOutgoingInviteView {
+  TeamMemberView invitee = 1;
+  uint64 expire_at_ms = 2;
+}
+
+// 被邀请人看到的"收到的邀请"
+message TeamIncomingInviteView {
+  uint64 team_id = 1;
+  TeamMemberView inviter = 2;
+  uint64 leader_id = 3;
+  uint32 member_count = 4;
+  uint32 zone_id = 5;
+  uint64 expire_at_ms = 6;
+}
+
+message TeamView {
+  uint64 team_id = 1;           // 0 = 无队伍
+  uint64 leader_id = 2;
+  uint32 capacity = 3;          // 恒 5
+  uint32 zone_id = 4;           // 建队者 home zone
+  uint64 version = 5;           // 队伍记录版本,每次提交严格 +1;无队伍时 0
+  uint64 membership_epoch = 6;  // 接收者本人的成员关系版本(§C.4);排序键 (membership_epoch, version)
+  TeamMatchState match_state = 7;
+  repeated TeamMemberView members = 8;
+  repeated TeamApplicationView applications = 9;         // 只下发给队长
+  repeated TeamOutgoingInviteView pending_invites = 10;  // 只下发给队长
+  uint32 application_count = 11;                         // 所有成员可见
+  uint64 server_time_ms = 12;                            // 倒计时基准(SharedRedis TIME,§C.4),避免客户端时钟偏差
+}
+
+enum TeamChangeReason {
+  TEAM_CHANGE_REASON_UNSPECIFIED = 0;
+  TEAM_CHANGE_REASON_CREATED = 1;
+  TEAM_CHANGE_REASON_MEMBER_JOINED = 2;
+  TEAM_CHANGE_REASON_MEMBER_LEFT = 3;
+  TEAM_CHANGE_REASON_MEMBER_KICKED = 4;              // 被踢者收到 team_id=0 的视图
+  TEAM_CHANGE_REASON_LEADER_TRANSFERRED = 5;
+  TEAM_CHANGE_REASON_LEADER_OFFLINE_TRANSFERRED = 6;
+  TEAM_CHANGE_REASON_DISBANDED = 7;                  // 全员收到 team_id=0 的视图
+  TEAM_CHANGE_REASON_APPLICATION_CHANGED = 8;        // 申请增减(队长)
+  TEAM_CHANGE_REASON_INVITE_CHANGED = 9;             // 邀请增减/被拒(队长)
+  TEAM_CHANGE_REASON_MEMBER_ONLINE = 10;             // 在线态刷新,version 不变
+  TEAM_CHANGE_REASON_MATCH_STARTED = 11;
+  TEAM_CHANGE_REASON_MATCH_ENDED = 12;               // 开战成功;客户端随后收到既有 BattleStartS2C
+  TEAM_CHANGE_REASON_MATCH_FAILED = 13;              // tip 字段带原因
+  TEAM_CHANGE_REASON_HEALED = 14;                    // 服务端自愈(索引/记录矛盾修复)
+}
+
+message TeamSnapshotS2C {
+  TeamView team = 1;
+  TeamChangeReason reason = 2;
+  uint64 actor_id = 3;       // 触发者(加入者/离队者/被踢者/新队长…),0 = 系统
+  TipInfoMessage tip = 4;    // 可选:MATCH_FAILED 的原因码(parameters[0] 可能是出问题的 player_id)
+}
+
+message TeamInviteS2C {
+  TeamIncomingInviteView invite = 1;
+  uint64 server_time_ms = 2;
+}
+
+enum TeamEventType {
+  TEAM_EVENT_TYPE_UNSPECIFIED = 0;
+  TEAM_EVENT_TYPE_APPLICATION_REJECTED = 1;  // 发给被拒申请人(他不在队里,收不到视图)
+  TEAM_EVENT_TYPE_INVITE_REVOKED = 2;        // 发给被邀请人:队伍解散/满员导致邀请失效
+}
+
+// 轻量提示:只给"没有视图可推"的接收者,不带状态,客户端只弹 toast。
+message TeamEventS2C {
+  TeamEventType type = 1;
+  uint64 team_id = 2;
+  uint64 actor_id = 3;
+}
+
+// ---------------- 存储记录(SharedRedis team:rec:<tid> 的 pb 字段,不下发客户端) ----------------
+// 实例层:只描述"队伍是谁、成员是谁";不含在线态、站位、槽位(AGENTS §11.6)。
+// 版本号存 team:rec 的 hash 字段 ver,不在 pb 里重复。
+// 所有时间字段都是 SharedRedis TIME 口径的毫秒(§C.4 唯一时钟源),不用各实例 Go 墙钟。
+
+message TeamRecord {
+  uint64 team_id = 1;
+  uint64 leader_id = 2;
+  uint32 zone_id = 3;
+  uint64 created_at_ms = 4;
+  repeated TeamMemberRecord members = 5;           // 集合语义,顺序看 join_seq
+  repeated TeamApplicationRecord applications = 6;
+  repeated TeamInviteRecord invites = 7;
+  uint32 next_join_seq = 8;
+  string match_lock_token = 9;                     // 非空 = 开战锁持有者(uuid)
+  uint64 match_lock_expire_at_ms = 10;             // 过期视为无锁
+  repeated uint64 match_lock_roster = 11;          // 集合语义:加锁时的开战名单;锁有效期间必等于 members 的 player_id 集合
+}
+
+message TeamMemberRecord {
+  uint64 player_id = 1;
+  uint32 zone_id = 2;
+  uint64 joined_at_ms = 3;
+  uint32 join_seq = 4;
+}
+
+message TeamApplicationRecord {
+  uint64 player_id = 1;
+  uint32 zone_id = 2;
+  uint64 applied_at_ms = 3;
+  uint64 expire_at_ms = 4;
+}
+
+message TeamInviteRecord {
+  uint64 invitee_id = 1;
+  uint64 inviter_id = 2;
+  uint32 zone_id = 3;
+  uint64 invited_at_ms = 4;
+  uint64 expire_at_ms = 5;
+}

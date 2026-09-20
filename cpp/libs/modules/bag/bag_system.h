@@ -92,6 +92,18 @@ struct DestroyedInstance
     uint32_t size{0};
 };
 
+// 一条"被扣数量"的回执:从哪个实例、哪个 config、扣了多少。
+// 与 DestroyedInstance 的区别是**实例没有消失**(可能只是 size 变 0),
+// 所以不能复用那个结构(它的 size 语义是"销毁前的整堆数量")。
+// 存在的理由同样是 transaction_log:消耗也要按 item_uuid 落流水,否则
+// "这瓶药是谁的哪一堆扣的"事后查不到,反刷追溯链断在战斗这一步。
+struct DrainedInstance
+{
+    Guid guid{kInvalidGuid};
+    uint32_t configId{0};
+    uint32_t amount{0};
+};
+
 // 整理到什么程度。
 //
 // 这个枚举存在的理由是**两个意图会打架**:
@@ -289,7 +301,41 @@ public:
                       std::vector<DestroyedInstance> *evictedOut = nullptr);
     uint32_t AddItems(const std::vector<InitItemParam> &itemsToAdd,
                       std::vector<DestroyedInstance> *evictedOut = nullptr);
-    uint32_t RemoveItems(const ItemCountMap &itemsToRemove);
+    // 全或无:任何一种不够就整体失败(kBagInsufficientItems),绝不做部分删除。
+    // drainedOut(可为 nullptr)按抽取顺序收集被扣的 (guid, config, 数量)。
+    uint32_t RemoveItems(const ItemCountMap &itemsToRemove,
+                         std::vector<DrainedInstance> *drainedOut = nullptr);
+
+    // ── 按 guid 的全或无扣出:reserve 段(聚宝斋 P2 托管)────────────────
+    //
+    // **纯预检、零副作用**,与 ReserveForBatchAdd 是同一套"规划 -> 预留 -> 提交"
+    // 纪律的另一半:它返回 kSuccess 之后,编排层逐个 RemoveItem 不会再失败。
+    //
+    // **与 RemoveItemsClamped 语义相反,不要复用它。** 那条路是"按 config 夹紧、
+    // 恒成功"(战斗结算消耗,契约就是不足按 0 处理);这条路是"按 guid 全或无",
+    // 少一件就整批拒 —— 托管的是玩家挂出去卖的**那一件具体装备**,夹紧等于凭空少卖。
+    //
+    // 只接受 `max_stack_size == 1` 的不可叠加实例,这是硬约束不是保守:可叠加物品
+    // 的预设 guid 在 AddStackableItem 里会被并堆重铸,发回来的 guid 根本不保证还
+    // 指向同一堆,"按 guid 还回去"在那一侧就不成立了。
+    //
+    // removableOut(可为 nullptr)按入参顺序给出**销毁前抓拍**的 (guid, config, size),
+    // 编排层拿它落流水 —— 与 ReserveForBatchAdd 的 evictedOut 同一个形状、同一个理由。
+    //
+    // 返回 kSuccess,或 kAssetInvalidBundle(REJECTED 类,终局拒绝):空列表、
+    // 同一 guid 报两次、guid 不在本包、config 查不到表、可叠加物品、实例 size != 1。
+    // 这些都是"重试也不会变好"的情形,所以不给 RETRY 类码。
+    uint32_t ReserveForBatchRemove(const std::vector<Guid> &guids,
+                                   std::vector<DestroyedInstance> *removableOut = nullptr);
+
+    // 按实际持有夹紧:每个 config 扣 min(请求, 持有),永不因"不够"而失败,
+    // 恒返回 kSuccess。战斗结算的道具消耗用它 —— 契约是"按实际持有校验扣除,
+    // 不足按 0 处理并记日志,防刷"(设计文档 §5.3),全或无会在玩家中途丢了药时
+    // 把整笔消耗都放过去,反而更宽松。
+    // drainedOut 必填:调用方要靠它落流水,并据此判断是否发生了夹紧(实扣 < 请求)。
+    uint32_t RemoveItemsClamped(const ItemCountMap &itemsToRemove,
+                                std::vector<DrainedInstance> *drainedOut);
+
     uint32_t RemoveItemByPos(const RemoveItemByPosParam &param);
 
     // 「满没满」是**布局层**的问题。拆分前它写作 items.size() >= capacity,
@@ -421,6 +467,12 @@ private:
     // 所以它只能长在桥层。拆分前这是 Bag::DestroyItem,一个函数里既 destroy
     // 实体、又线扫 posToGuid 找槽位 —— 那正是两层焊死的样子。
     void DestroyItem(Guid guid);
+
+    // 扣一个 config 的数量并把回执补上 configId(实例层只知道 guid 与数量)。
+    // RemoveItems 与 RemoveItemsClamped 共用,避免两条路径对"僵尸堆 / 0 数量"
+    // 的处理日后悄悄分叉。
+    void DrainOneConfig(uint32_t configId, uint32_t count,
+                        std::vector<DrainedInstance> *drainedOut);
 
     // 一件该 config 的实例在布局里占的形状。
     // **今天恒为 1x1**:配置表还没有宽高列,扁平布局也用不上。真要做格子背包时

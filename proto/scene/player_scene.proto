@@ -70,6 +70,23 @@ message ActorListDestroyS2C
 	repeated uint64 entity = 1;
 }
 
+// 跨 zone 场景传送(docs/design/cross-zone-scene-travel.md CZ-7)。
+// 应答无错 = 已受理:scene 已冻结玩家并开始存盘,**不代表已到达**。
+//   到达   = 之后收到 msg 124 RedirectToGate,客户端按 RedirectFlow 连到目标 zone;
+//   未成   = 之后收到 SendTipToClient(kZoneTravel* tip),scene 已解冻,玩家留在原地。
+// 加在 SceneSceneClientPlayer 而不是 ScenePlayer:后者是 gate→scene 的内部服务,没有
+// OptionIsClientProtocolService,客户端包会在 gate 被当成非法包。
+message TravelToZoneRequest
+{
+	uint32 target_zone_id = 1;
+	uint32 scene_config_id = 2; // 目标地图;0 = 由目标 zone 的 scene_manager 按世界频道表挑默认大世界
+}
+
+message TravelToZoneResponse
+{
+	TipInfoMessage error_message = 1; // 同步拒绝码(CZ-6 校验不过);生成的 handler 头会调 mutable_error_message()
+}
+
 service SceneSceneClientPlayer
 {
   option (OptionIsPlayerService) = true;
@@ -83,4 +100,6 @@ service SceneSceneClientPlayer
   rpc NotifyActorDestroy (ActorDestroyS2C) returns (Empty);
   rpc NotifyActorListCreate (ActorListCreateS2C) returns (Empty);
   rpc NotifyActorListDestroy (ActorListDestroyS2C) returns (Empty);
+  // 只能追加在末尾:CallMethod 按 method index 分发,插到中间会让后面所有方法移位。
+  rpc TravelToZone (TravelToZoneRequest) returns (TravelToZoneResponse);
 }

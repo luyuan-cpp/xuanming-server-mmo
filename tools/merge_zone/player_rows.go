@@ -27,10 +27,16 @@ package main
 //      proto/common/database/mysql_database_table.proto 的
 //      OptionPrimaryKey = "player_id"),但**不硬编码**:以后 proto 加表,
 //      导表器更新 JSON,这里自动跟上。
+//   1b. **写任何一张表之前**,先把全部表的两库列集合比一遍(alignedPlayerColumns)。
+//      不能放进逐表循环:每张表一个事务、跨表没有原子性,半迁移状态下会先写完
+//      一张表才在下一张表上炸,留下半合服的目标库(见 copyPlayerRows 的注释)。
 //   2. 逐表:先查目标库有没有同 player_id 的行 —— 有就是 **ID 安全事件**
 //      (两个 zone 发出了同一个 player_id,或这批人已经合过一次),立刻中止,
 //      不写任何东西。
-//   3. 逐表事务:分批 `INSERT INTO dst.t SELECT * FROM src.t WHERE player_id IN (...)`。
+//   3. 逐表事务:分批
+//      `INSERT INTO dst.t (col...) SELECT col... FROM src.t WHERE player_id IN (...)`。
+//      列清单来自两库 information_schema 的**交集校验**(alignedPlayerColumns):
+//      按列名对位,不按列序 —— 理由见那个函数的注释。
 //      **不用** INSERT IGNORE / ON DUPLICATE KEY UPDATE:重复键必须炸,
 //      静默跳过等于把两个玩家的数据合成一个。
 //   4. 核对行数:dst 里这批 id 的行数必须等于 src 里的行数。
@@ -52,6 +58,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -163,6 +170,11 @@ func discoverPlayerTables(ctx context.Context, db *sql.DB, schema string, candid
 	return out, nil
 }
 
+// schemaNamePattern:MySQL 未加引号标识符里最保守的子集,长度上限 64 同 MySQL。
+// 库名不是绑定参数,只能直接拼进语句,所以形状校验是这条拼接唯一的注入防线;
+// -trade-schema / -guild-schema 共用它。
+var schemaNamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
+
 // assertSchemaExists 是目标区存在性的硬证据:zone_{N}_db 建过没有。
 // 合服前 zone-up 过的 zone 一定有这个库(go/db 的 AutoCreateDatabase 或
 // deploy/mysql-init/00_init_zone_dbs.sql 建的)。库不存在 = 目标 zone 根本
@@ -214,9 +226,30 @@ func copyPlayerRows(
 		return rep, nil
 	}
 
+	// 列对齐检查必须在**任何一张表开始写之前**全部做完,不能放进下面的循环里。
+	//
+	// 为什么(2026-09-19 审稿 major):copyOneTable 是**每表一个事务**,跨表没有原子性;
+	// 表名按字母序,player_centre_database 排在 player_database 前面。若只在循环里
+	// 逐表检查,"一个 zone 已加 player_database.asset_op_ledger、另一个还没"这种典型
+	// 半迁移状态会先把 player_centre_database 整表 COMMIT 进目标库,轮到 player_database
+	// 才抛 SCHEMA MISMATCH —— 留下一个半合服的目标库。而这一步没被标进清单,运维跑齐
+	// 迁移后重跑,循环第一张表就撞上下面的 dstPre>0「ID SAFETY」拒写,清单又说这步没做完,
+	// 于是谁也进不去,只能在维护窗口里手工清库。
+	//
+	// 全部先检查则最坏情况是"一行没写就停下",正是 alignedPlayerColumns 注释里写的初衷。
+	alignedCols := make(map[string][]string, len(tables))
+	for _, t := range tables {
+		cols, err := alignedPlayerColumns(ctx, db, srcSchema, dstSchema, t)
+		if err != nil {
+			return rep, err
+		}
+		alignedCols[t] = cols
+	}
+
 	for _, t := range tables {
 		srcQ := srcSchema + "." + t
 		dstQ := dstSchema + "." + t
+		cols := alignedCols[t]
 
 		srcN, err := countRowsForIDs(ctx, db, srcQ, ids)
 		if err != nil {
@@ -241,8 +274,8 @@ func copyPlayerRows(
 		}
 
 		if dryRun {
-			log.Printf("[DRY-RUN] %s: would copy %d rows for %d ids (%d ids have no row)",
-				t, srcN, len(ids), rep.MissingRows[t])
+			log.Printf("[DRY-RUN] %s: would copy %d rows for %d ids (%d ids have no row), %d columns aligned by name",
+				t, srcN, len(ids), rep.MissingRows[t], len(cols))
 			continue
 		}
 		if srcN == 0 {
@@ -250,7 +283,7 @@ func copyPlayerRows(
 			continue
 		}
 
-		copied, err := copyOneTable(ctx, db, srcQ, dstQ, ids)
+		copied, err := copyOneTable(ctx, db, srcQ, dstQ, cols, ids)
 		if err != nil {
 			return rep, err
 		}
@@ -271,9 +304,73 @@ func copyPlayerRows(
 	return rep, nil
 }
 
+// alignedPlayerColumns 返回逐列拷贝要用的列清单(源库的 ORDINAL_POSITION 顺序),
+// 并在两库列集合不一致时 fail-closed。
+//
+// 为什么不再用 `INSERT ... SELECT *`(2026-09-18 改,
+// docs/design/guild-phase2/04-asset-channel.md §4.42):
+//
+//	`SELECT *` 是按**列序**对位的。两个 zone 库虽然由同一套 proto2mysql 迁移建表,
+//	但迁移是**逐库分别跑**的 —— 只要两边跑迁移的时刻或顺序不同(常态:先升级一个
+//	zone 再升级另一个;或 B3a 的 player_profile 与 B4a 的 asset_op_ledger 在两个库
+//	里先后不同),同一批新列就会落在不同的 ORDINAL_POSITION 上。
+//	列数相同、列序不同时 MySQL **不报错**:它把源库 A 列的字节写进目标库 B 列。
+//	两列都是 MEDIUMBLOB 时连类型检查都拦不住,结果是玩家的资产账本 blob 被写进
+//	背包列 —— 静默的数据损坏,而且合服后才发现已经无从回滚。
+//
+//	按列名拷贝没有这个面。列集合不一致时下面显式报错,比驱动原文
+//	"column count doesn't match value count" 更能说明该做什么。
+func alignedPlayerColumns(ctx context.Context, db *sql.DB, srcSchema, dstSchema, table string) ([]string, error) {
+	srcCols, err := tableColumns(ctx, db, srcSchema, table)
+	if err != nil {
+		return nil, err
+	}
+	dstCols, err := tableColumns(ctx, db, dstSchema, table)
+	if err != nil {
+		return nil, err
+	}
+	onlyInSrc := columnsNotIn(srcCols, dstCols)
+	onlyInDst := columnsNotIn(dstCols, srcCols)
+	if len(onlyInSrc) > 0 || len(onlyInDst) > 0 {
+		return nil, fmt.Errorf(
+			"SCHEMA MISMATCH: %s.%s and %s.%s do not have the same columns "+
+				"(only in source: %v; only in target: %v). "+
+				"Run the proto2mysql migration (go/db: `go run ./cmd/migrate -f <db.yaml> -command up`) "+
+				"on BOTH zone databases up to the same revision, then re-run the merge",
+			srcSchema, table, dstSchema, table, onlyInSrc, onlyInDst)
+	}
+	return srcCols, nil
+}
+
+// columnsNotIn 返回 a 里有、b 里没有的列名(保持 a 的顺序)。
+func columnsNotIn(a, b []string) []string {
+	have := make(map[string]struct{}, len(b))
+	for _, c := range b {
+		have[c] = struct{}{}
+	}
+	var out []string
+	for _, c := range a {
+		if _, ok := have[c]; !ok {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 // copyOneTable 在**一个事务**里分批搬完一张表。整表要么全进要么全不进 ——
 // 半张表的玩家数据比没有更难排查(有的组件在新库、有的在旧库)。
-func copyOneTable(ctx context.Context, db *sql.DB, srcQ, dstQ string, ids []uint64) (int, error) {
+//
+// cols 由 alignedPlayerColumns 产出:已确认两库列集合相同,可以按列名对位。
+func copyOneTable(ctx context.Context, db *sql.DB, srcQ, dstQ string, cols []string, ids []uint64) (int, error) {
+	if len(cols) == 0 {
+		return 0, fmt.Errorf("refusing to copy %s → %s with an empty column list", srcQ, dstQ)
+	}
+	quoted := make([]string, 0, len(cols))
+	for _, c := range cols {
+		quoted = append(quoted, "`"+c+"`")
+	}
+	colList := strings.Join(quoted, ",")
+
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return 0, fmt.Errorf("begin tx for %s: %w", dstQ, err)
@@ -282,11 +379,10 @@ func copyOneTable(ctx context.Context, db *sql.DB, srcQ, dstQ string, ids []uint
 
 	copied := 0
 	for _, batch := range chunkUint64(ids, playerRowsBatchSize) {
-		// SELECT * 而不是列清单:两个 zone 库由同一套 proto2mysql 迁移建表,
-		// 列顺序必然一致;写死列清单反而会在加列时静默漏字段。
-		// 列不一致会直接报错(column count doesn't match),这正是我们要的。
-		q := fmt.Sprintf("INSERT INTO %s SELECT * FROM %s WHERE %s IN (%s)",
-			dstQ, srcQ, playerIDColumn, inListLiteral(batch))
+		// 列名两侧都写出来:目标列清单固定了写入位置,源列清单固定了读取顺序,
+		// 两库列序如何都不影响结果(见 alignedPlayerColumns)。
+		q := fmt.Sprintf("INSERT INTO %s (%s) SELECT %s FROM %s WHERE %s IN (%s)",
+			dstQ, colList, colList, srcQ, playerIDColumn, inListLiteral(batch))
 		res, err := tx.ExecContext(ctx, q)
 		if err != nil {
 			var me *mysql.MySQLError
@@ -325,7 +421,13 @@ func deletePlayerRows(
 	// 「逐字节相同」怎么判:不能用 CHECKSUM(表级)、也不能整行 JSON 化
 	// (player_database 的列是 MEDIUMBLOB,JSON 化会炸内存)。按**列**比:
 	// 取列名,拼一串 NULL-safe 的 `d.col <=> s.col AND ...` 交给 MySQL 算。
-	cols, cerr := tableColumns(ctx, db, dstSchema, table)
+	//
+	// 列清单与 copy 路径共用 alignedPlayerColumns,不再只取目标库的列
+	// (2026-09-19 审稿 minor):下面的条件两侧分别落在 d(目标库)和 s(源库),
+	// 只按目标库取列时,目标库独有的列会让 MySQL 回 `Unknown column 's.xxx'`,
+	// 包装后只剩「compare A vs B: ...」,看不出该做什么。共用之后两条路径给出
+	// 同一句 SCHEMA MISMATCH + 「先在两个库跑齐 go/db migrate」的指引。
+	cols, cerr := alignedPlayerColumns(ctx, db, srcSchema, dstSchema, table)
 	if cerr != nil {
 		return 0, nil, cerr
 	}

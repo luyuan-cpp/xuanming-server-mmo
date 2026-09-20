@@ -3,6 +3,7 @@ package session
 import (
 	"context"
 	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -96,11 +97,24 @@ func TestBrokenSessionMetadataFailsClosed(t *testing.T) {
 
 // TestClientMethodsCoverEveryRPCExceptScoreWrites 让新增 RPC 必须显式表态:
 // 忘了登记会在这里红,而不是悄悄变成"客户端调不到"或"客户端能调到内部方法"。
+// 名单里的每一项都要么进 ClientMethods,要么进 internalOnly——没有第三种状态。
 func TestClientMethodsCoverEveryRPCExceptScoreWrites(t *testing.T) {
-	internalOnly := map[string]bool{"UpdateGuildScore": true}
+	internalOnly := map[string]bool{"UpdateGuildScore": true, "NotifyGuildChanged": true}
 	for _, method := range pb.GuildService_ServiceDesc.Methods {
 		fullMethod := "/" + pb.GuildService_ServiceDesc.ServiceName + "/" + method.MethodName
 		_, allowed := ClientMethods[fullMethod]
 		assert.Equal(t, !internalOnly[method.MethodName], allowed, "%s 的客户端准入与预期不符", fullMethod)
+	}
+}
+
+// TestNotifyPlaceholdersAreNeverClientCallable 比上面那条更强:上面靠一张手写的
+// internalOnly 名单,而 Notify* 是一整类——推送占位 RPC 只为分配 message id 存在,
+// 将来新增的每一个都不得对客户端开放。这里按前缀机械断言,不依赖有人记得改名单。
+func TestNotifyPlaceholdersAreNeverClientCallable(t *testing.T) {
+	for _, method := range pb.GuildService_ServiceDesc.Methods {
+		if strings.HasPrefix(method.MethodName, "Notify") {
+			_, allowed := ClientMethods["/"+pb.GuildService_ServiceDesc.ServiceName+"/"+method.MethodName]
+			assert.False(t, allowed, "%s 是推送占位,不得进客户端白名单", method.MethodName)
+		}
 	}
 }

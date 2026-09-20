@@ -47,7 +47,7 @@ func counterValue(t *testing.T, name string, labels map[string]string) float64 {
 // TestInbandInterceptorClassifiesGuildRejection 是「错误码撞车」修复的端到端护栏:
 // 它跑的是**生产里真正挂上去的那条链**——
 // serverbase.UnaryInterceptor(Options{TipClassifier: constants.TipClassifier()})
-// 包住一个返回真实 pb.JoinGuildResponse 的 handler。
+// 包住一个返回真实 pb.ApplyJoinGuildResponse 的 handler。
 //
 // 修复前 ErrGuildFull = 4,而拦截器没有(也无法有)公会自己的定性函数,
 // 只能走 serverbase.TipVerdict —— tip 数轴上的 4 是 common 段的
@@ -59,7 +59,7 @@ func counterValue(t *testing.T, name string, labels map[string]string) float64 {
 // 哪个码算故障同样来自 Tip.xlsx 的 fault 列(生成到 tip.Faults),
 // constants.TipClassifier() 不再附加任何本地判定。
 func TestInbandInterceptorClassifiesGuildRejection(t *testing.T) {
-	const method = "GuildService/JoinGuild"
+	const method = "GuildService/ApplyJoinGuild"
 	faultLabels := map[string]string{"method": method, "source": "tip_info"}
 	rejectLabels := map[string]string{"method": method, "source": "tip_info"}
 	unknownLabels := map[string]string{"method": method, "source": "tip_info"}
@@ -71,24 +71,24 @@ func TestInbandInterceptorClassifiesGuildRejection(t *testing.T) {
 	itc := serverbase.UnaryInterceptor(serverbase.Options{
 		TipClassifier: constants.TipClassifier(),
 	})
-	info := &grpc.UnaryServerInfo{FullMethod: "/guild.GuildService/JoinGuild"}
+	info := &grpc.UnaryServerInfo{FullMethod: "/guild.GuildService/ApplyJoinGuild"}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return &pb.JoinGuildResponse{
+		return &pb.ApplyJoinGuildResponse{
 			ErrorMessage: &base.TipInfoMessage{Id: constants.ErrGuildFull, Parameters: []string{"guild is full"}},
 		}, nil
 	}
 
-	resp, err := itc(context.Background(), &pb.JoinGuildRequest{}, info, handler)
+	resp, err := itc(context.Background(), &pb.ApplyJoinGuildRequest{}, info, handler)
 	if err != nil {
 		t.Fatalf("拦截器不该改变 handler 的 error 返回: %v", err)
 	}
 	// 观测层绝不能改动响应内容。
-	joinResp, ok := resp.(*pb.JoinGuildResponse)
+	applyResp, ok := resp.(*pb.ApplyJoinGuildResponse)
 	if !ok {
 		t.Fatalf("响应类型被拦截器改写: %T", resp)
 	}
-	if joinResp.GetErrorMessage().GetId() != constants.ErrGuildFull {
-		t.Fatalf("响应里的 tip id 被改写: %d", joinResp.GetErrorMessage().GetId())
+	if applyResp.GetErrorMessage().GetId() != constants.ErrGuildFull {
+		t.Fatalf("响应里的 tip id 被改写: %d", applyResp.GetErrorMessage().GetId())
 	}
 
 	if got := counterValue(t, "rpc_inband_reject_total", rejectLabels); got != beforeReject+1 {

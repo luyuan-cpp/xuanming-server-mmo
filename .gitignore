@@ -295,3 +295,20 @@ tools/docs/protogen/
 deploy/offline-images/
 /artifacts/
 *.tar
+
+# Linux C++ 构建产物与运行时 staging 不入库(同上,§2.1;以及 §2.9 的干净树门禁):
+# publish_images.ps1 的 release 轨、build_linux.sh 的版本戳、release.yml 的"工作树必须干净"
+# 都用 git status(含未跟踪文件)判脏。下面这些是 tools/scripts/build_linux.sh 与
+# k8s_stage_runtime.ps1 每次构建都重新产出的东西 —— 不忽略的话,**凡是在 Linux 上编译过的机器,
+# C++ 发布轨必然被自己的构建产物判成脏树而拒绝发布**,而 Dockerfile.runtime 又要求这份 staging 在位,
+# 于是"能构建"与"能发布"互斥。三份审查独立报了这一条。
+# bin/ 下另有已跟踪的脚本与配置,所以只按名字忽略三个可执行文件(与 build_linux.sh 的 BINARIES 一致)。
+/bin/gate
+/bin/scene
+/bin/battle
+/bin/symbols/
+# cmake 构建目录:build_linux.sh 对每个工程用 <工程>/.build(third_party 与 cpp/** 下都有)
+**/.build/
+# k8s_stage_runtime.ps1 填的 Linux 运行时 staging(Dockerfile.runtime 的 COPY 源;
+# deploy/k8s/runtime/README.md 不在 linux/ 下,仍然跟踪)
+/deploy/k8s/runtime/linux/

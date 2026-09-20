@@ -137,11 +137,16 @@ type ChangeSceneInfoComp struct {
 	IgnoreFull      bool                   `protobuf:"varint,8,opt,name=ignore_full,json=ignoreFull,proto3" json:"ignore_full,omitempty"` // Ignore capacity full
 	Processing      bool                   `protobuf:"varint,9,opt,name=processing,proto3" json:"processing,omitempty"`
 	State           uint32                 `protobuf:"varint,10,opt,name=state,proto3" json:"state,omitempty"`
-	FromZoneId      uint32                 `protobuf:"varint,11,opt,name=from_zone_id,json=fromZoneId,proto3" json:"from_zone_id,omitempty"`
-	ToZoneId        uint32                 `protobuf:"varint,12,opt,name=to_zone_id,json=toZoneId,proto3" json:"to_zone_id,omitempty"`
-	IsCrossZone     bool                   `protobuf:"varint,13,opt,name=is_cross_zone,json=isCrossZone,proto3" json:"is_cross_zone,omitempty"` // Whether cross-zone
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// DEPRECATED(docs/design/cross-zone-scene-travel.md CZ-1):11 / 12 / 13 三个字段待删。
+	// 它们只服务已下线的"跨 zone 搬数据"链,唯一的读者(scene 的 HandleCrossZoneTransfer)已删除,
+	// 全仓从来没有写者。跨 zone 传送的目标现在由运行时组件 PlayerTravelHandoffComp 携带,不经 proto。
+	// 本轮只打标记不删字段:删字段必须同一轮 regen。未上线,下次 regen 时直接删、不写 reserved。
+	// 不要再给它们加新的使用方。
+	FromZoneId    uint32 `protobuf:"varint,11,opt,name=from_zone_id,json=fromZoneId,proto3" json:"from_zone_id,omitempty"`
+	ToZoneId      uint32 `protobuf:"varint,12,opt,name=to_zone_id,json=toZoneId,proto3" json:"to_zone_id,omitempty"`
+	IsCrossZone   bool   `protobuf:"varint,13,opt,name=is_cross_zone,json=isCrossZone,proto3" json:"is_cross_zone,omitempty"` // Whether cross-zone
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ChangeSceneInfoComp) Reset() {

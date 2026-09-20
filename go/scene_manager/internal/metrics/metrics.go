@@ -107,8 +107,21 @@ var (
 	enterSceneRejectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_rejected_total",
-		Help:      "EnterScene rejections by reason (scene_gone|unsafe_handoff).",
+		Help:      "EnterScene rejections by reason (scene_gone|unsafe_handoff|handoff_pending|epoch_conflict|home_zone_unavailable).",
 	}, []string{"zone_id", "reason"})
+
+	// homeZoneLookupTotal 统计 EnterScene 里每一次归属 zone 查询的结果:
+	//   mapped        data_service 给出了归属 zone
+	//   unmapped      映射里没有这名玩家(首登,按 gate zone 处理)
+	//   unconfigured  本进程没配 DataServiceRpc(按 gate zone 处理;多 zone 部署
+	//                 里持续非 0 = 漏配,访客存盘会落错库)
+	//   error         超时 / 不可用,请求被拒绝让上游重试
+	// 稳态下 unmapped 应只在建号高峰出现,error 应恒 0。
+	homeZoneLookupTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "home_zone_lookup_total",
+		Help:      "EnterScene home-zone lookups by outcome (mapped|unmapped|unconfigured|error).",
+	}, []string{"zone_id", "outcome"})
 
 	// sceneOrphansReconciledTotal tracks scenes destroyed by the
 	// node-death reconciliation loop. A spike here correlates with a
@@ -235,6 +248,16 @@ var (
 		Help:      "Ownership changes refused because the dead node's re-entry barrier had not elapsed, by site.",
 	}, []string{"zone_id", "site"})
 
+	// enterSceneOwnerDeadTakeoverTotal:玩家位置记录指向的节点已确认死亡且再入屏障已过,
+	// EnterScene 把它当作无持有者直接落点(enterscenelogic.go playerLocationOwnerDead)。
+	// 只按 zone 分;稳态恒 0,节点崩溃后约等于「当时挂在那个节点上、随后回来的玩家数」。
+	// 若没有任何节点死亡它却在涨,说明判死(IsNodeAlive / death_at)出了问题。
+	enterSceneOwnerDeadTakeoverTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "enter_scene_owner_dead_takeover_total",
+		Help:      "EnterScene placements that treated a player's location as ownerless because its scene node was confirmed dead and the re-entry barrier had elapsed.",
+	}, []string{"zone_id"})
+
 	// deadNodeReconcilePending 是「已判死、但收尾动作还被屏障压着」的节点数。
 	// 它应该在一个屏障时长内回到 0;长期不为 0 = 收尾链路卡住了。
 	deadNodeReconcilePending = prometheus.NewGaugeVec(prometheus.GaugeOpts{
@@ -274,8 +297,28 @@ func register() {
 			agonesCounterDrift, worldAutoscaleTotal,
 			kafkaDeliveryTotal,
 			reentryBarrierBlockedTotal, deadNodeReconcilePending,
+			enterSceneOwnerDeadTakeoverTotal,
+			homeZoneLookupTotal,
 		)
 	})
+}
+
+// 归属 zone 查询结果标签取值,见 homeZoneLookupTotal 的注释。
+const (
+	HomeZoneLookupMapped       = "mapped"
+	HomeZoneLookupUnmapped     = "unmapped"
+	HomeZoneLookupUnconfigured = "unconfigured"
+	HomeZoneLookupError        = "error"
+)
+
+// ObserveHomeZoneLookup 记一次 EnterScene 里的归属 zone 查询结果。
+// zoneID 是请求的 gate zone(查询发生时目标 zone 已解析,但归属查询的语义是
+// "这名玩家从哪个 zone 进来的",用 gate zone 更贴合排障时的提问)。
+func ObserveHomeZoneLookup(zoneID uint32, outcome string) {
+	register()
+	homeZoneLookupTotal.WithLabelValues(
+		strconv.FormatUint(uint64(zoneID), 10), outcome,
+	).Inc()
 }
 
 // SetLeader 发布本副本的领导权状态。选主接线见 scene_manager_service.go,
@@ -297,6 +340,12 @@ func ResetLeaderGauges() {
 	register()
 	agonesCounterDrift.Reset()
 	rebalancePending.Reset()
+}
+
+// ObserveEnterSceneOwnerDeadTakeover 记一次「属主节点已死、按无持有者落点」。
+func ObserveEnterSceneOwnerDeadTakeover(zoneID uint32) {
+	register()
+	enterSceneOwnerDeadTakeoverTotal.WithLabelValues(strconv.FormatUint(uint64(zoneID), 10)).Inc()
 }
 
 // ObserveReentryBarrierBlocked 记一次被再入屏障挡下的所有权变更尝试。

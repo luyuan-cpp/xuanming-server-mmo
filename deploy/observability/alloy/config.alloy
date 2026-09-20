@@ -92,9 +92,11 @@ loki.process "go_services" {
     }
   }
 
-  // 只有 JSON 行才解析时间戳 / 级别;panic 之类的纯文本行原样保留
+  // go-zero 自己的 JSON 行:时间在 "@timestamp"。选择器必须带 "@timestamp",
+  // 否则内嵌 etcd 客户端(zap)的行也会进来,它没有这个字段,stage.timestamp 会失败并被
+  // fudge 成"同一流上一条成功解析的时间 +1ns"(实测最多偏了 23 小时)。
   stage.match {
-    selector = `{job="go_services"} |~ "^\\{" |~ "\"level\":\"[A-Za-z]+\""`
+    selector = `{job="go_services"} |~ "^\\{" |~ "\"level\":\"[A-Za-z]+\"" |~ "\"@timestamp\""`
 
     stage.json {
       expressions = {
@@ -117,6 +119,52 @@ loki.process "go_services" {
     }
     stage.structured_metadata {
       values = { caller = "" }
+    }
+  }
+
+  // 内嵌 etcd 客户端(zap)的 JSON 行:时间在 "ts",偏移是 Z0700(进程跑在 UTC 时是字面 "Z",
+  // 否则是 -0400 这种不带冒号的写法),所以不能用 RFC3339Nano。
+  stage.match {
+    selector = `{job="go_services"} |~ "^\\{" |~ "\"level\":\"[A-Za-z]+\"" !~ "\"@timestamp\""`
+
+    stage.json {
+      expressions = {
+        ts     = "ts",
+        level  = "level",
+        caller = "caller",
+      }
+    }
+    stage.timestamp {
+      source            = "ts"
+      format            = "2006-01-02T15:04:05.999999999Z0700"
+      action_on_failure = "fudge"
+    }
+    stage.template {
+      source   = "level"
+      template = `{{ ToLower .Value }}`
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+    stage.structured_metadata {
+      values = { caller = "" }
+    }
+  }
+
+  // go-redis 自己写的纯文本行:"redis: 2026/09/15 22:58:28 pool.go:617: ..."。
+  // 它按服务所在机器的本地时间打点,不带时区;换机器换时区时改下面的 location。
+  // 不解析的话,这些行会用 Alloy 的读取时刻,补读时会整批挪到补读那一刻。
+  stage.match {
+    selector = `{job="go_services"} |~ "^redis: [0-9]{4}/[0-9]{2}/[0-9]{2} "`
+
+    stage.regex {
+      expression = `^redis: (?P<redis_ts>\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2}) `
+    }
+    stage.timestamp {
+      source            = "redis_ts"
+      format            = "2006/01/02 15:04:05"
+      location          = "America/New_York"
+      action_on_failure = "fudge"
     }
   }
 }
@@ -163,8 +211,11 @@ loki.process "cpp_nodes" {
   // 多行合并:以 muduo 时间戳开头(或 gRPC/abseil 的 E0913 这种行头)的行才是新的一条,
   // 其余并入上一条。注意 muduo 的线程号右对齐占 5 列:线程号不足 5 位时前面补空格,
   // 例如 "20260913 14:51:55.370638  5584 INFO",所以时间和线程号之间用 " +" 而不是单个空格。
+  // 四种行头各自成条:muduo、gRPC/abseil、librdkafka(%3|epoch|FAC|...)、muduo 崩溃断言。
+  // 少写后两种时,librdkafka 的 ERROR 行和 Assertion failed 行会被并进前一条 gRPC 行里,
+  // 跟着它的时间和级别走,错误面板统计不到。
   stage.multiline {
-    firstline     = `^(\d{8} \d{2}:\d{2}:\d{2}\.\d{6} +\d+ [A-Z]+ |[EWIF]\d{4} \d{2}:\d{2}:\d{2}\.\d{6} +\d+ )`
+    firstline     = `^(\d{8} \d{2}:\d{2}:\d{2}\.\d{6} +\d+ [A-Z]+ |[EWIF]\d{4} \d{2}:\d{2}:\d{2}\.\d{6} +\d+ |%[0-7]\|\d+\.\d+\||Assertion failed: )`
     max_wait_time = "2s"
     max_lines     = 64
   }
@@ -232,9 +283,12 @@ loki.process "cpp_nodes" {
     stage.regex {
       expression = `^(?P<glog_level>[EWIF])(?P<glog_md>\d{4}) (?P<glog_time>\d{2}:\d{2}:\d{2}\.\d{6}) +(?P<tid>\d+) `
     }
+    // 补年份:行里的月日比今天晚,说明只能是去年的行(跨年那几秒、跨年后补读、
+    // 或 run/logs 里留着去年的旧文件)。直接用当年会得到未来时间,Loki 以 400 拒收,
+    // 而 loki.write 对 4xx 不重试,这批日志会被直接丢掉。
     stage.template {
       source   = "glog_ts"
-      template = `{{ now | date "2006" }}{{ .glog_md }} {{ .glog_time }}`
+      template = `{{ if gt .glog_md (now | date "0102") }}{{ sub (now | date "2006" | atoi) 1 }}{{ else }}{{ now | date "2006" }}{{ end }}{{ .glog_md }} {{ .glog_time }}`
     }
     stage.timestamp {
       source            = "glog_ts"
@@ -251,6 +305,41 @@ loki.process "cpp_nodes" {
     }
     stage.structured_metadata {
       values = { tid = "" }
+    }
+  }
+
+  // librdkafka 自己写到 stderr 的行,例如:
+  //   %3|1789614115.711|ERROR|rdkafka#consumer-1| [thrd:...]: ... Connect to ipv6#[::1]:9092 failed
+  // 开头的 %N 是 syslog 级别:0-3 = error,4 = warn,5-6 = info,7 = debug;紧跟的是 epoch 秒。
+  // Kafka 连不上时这里会刷一大批 ERROR,不打 level 的话错误面板一条都统计不到。
+  stage.match {
+    selector = `{job="cpp_nodes"} |~ "^%[0-7]\\|[0-9]+\\.[0-9]+\\|"`
+
+    stage.regex {
+      expression = `^%(?P<rdk_sev>[0-7])\|(?P<rdk_epoch_sec>\d+)\.\d+\|`
+    }
+    stage.timestamp {
+      source            = "rdk_epoch_sec"
+      format            = "Unix"
+      action_on_failure = "fudge"
+    }
+    stage.template {
+      source   = "level"
+      template = `{{ if le .rdk_sev "3" }}error{{ else if eq .rdk_sev "4" }}warn{{ else if eq .rdk_sev "7" }}debug{{ else }}info{{ end }}`
+    }
+    stage.labels {
+      values = { level = "" }
+    }
+  }
+
+  // muduo 断言失败(节点崩溃时才有),例如:
+  //   Assertion failed: ch != channels_.end(), file ...\WindowsPollPoller.cc, line 68
+  // 这行没有时间戳,时间只能取 Alloy 的读取时刻;级别按 fatal 记,免得崩溃原因混在无级别的行里。
+  stage.match {
+    selector = `{job="cpp_nodes"} |~ "^Assertion failed: "`
+
+    stage.static_labels {
+      values = { level = "fatal" }
     }
   }
 }
@@ -294,8 +383,11 @@ loki.process "java" {
     replace    = ""
   }
 
+  // 除了 JSON 行和 Spring Boot 文本行,这里还要认 Maven / JVM 自己的行头:
+  // sa_token.log 是 dev.bat 用 >> 追加写的,补读时整段读入,不认这些行头的话,
+  // 下一次启动的 Maven 输出会被并进上一次运行的最后一条日志,继承它的级别和日期。
   stage.multiline {
-    firstline     = `^(\{|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})`
+    firstline     = `^(\{|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}|WARNING: |\[(INFO|WARNING|ERROR)\] |Hibernate: |Download(ing|ed) from [^:]+: )`
     max_wait_time = "2s"
     max_lines     = 256
   }

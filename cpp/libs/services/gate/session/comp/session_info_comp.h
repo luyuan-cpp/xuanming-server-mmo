@@ -58,6 +58,23 @@ struct SessionInfo
 	uint32_t sessionVersion{UINT32_MAX};
 	uint32_t pendingEnterGsType{0}; // Pending login type to forward to Scene once scene node is assigned
 	uint64_t sceneId{0};            // Scene instance GUID from SceneManager (RoutePlayerEvent)
+
+	// 跨 zone 归属与所有权 epoch(cross-zone-scene-travel.md CZ-3 / CZ-4,scene-owner-reentry-barrier.md §3.3)。
+	// 两项都来自 RoutePlayerEvent,由 scene_manager 在每次路由决策时下发;gate 不生产、不校验,只透传进
+	// PlayerEnterGameNodeRequest。之所以要存进会话而不是在 RoutePlayer 里用完即弃:向 scene 的转发有两个入口
+	// (RoutePlayerEventHandler / BindSessionEventHandler),BindSession 晚到时的补发读不到路由事件,只能从会话取。
+	// 同一会话再次收到 RoutePlayerEvent 时整体覆盖:每次改派都铸新 epoch,旧值留着只会让补发带上已被废黜的 epoch。
+	// 会话销毁即随之消失,不需要额外清理路径。
+	uint32_t homeZoneId{0}; // 玩家归属 zone;0 = 未知(旧版 scene_manager 未填),scene 侧 fail-closed 落进程 zone 并计数
+	uint64_t ownerEpoch{0}; // 本次路由的归属 epoch;0 = 旧版未铸造(兼容窗口),scene 侧存盘跳过 CAS 并计数
+
+	// 重定向票据的持票者与目标 zone(cross-zone-scene-travel.md CZ-8)。DispatchTokenVerify 验签通过后
+	// 写入,会话存续期内不变;gate 只把它们透传进 SessionDetails,主判定在 login EnterGame
+	// (那是 player_id 已知、且尚未写任何会话状态的最早时刻;gate 自己要到 BindSession 才知道
+	// player_id,那时 login 已经落了 ONLINE 会话,在 gate 拒只会留下残留)。
+	// 默认值用 0 而不是 kInvalidGuid:与 proto 的"0 = 未填 / 普通票据"同形,login 对 0 一律放行。
+	Guid ticketPlayerId{0};
+	uint32_t ticketTargetZoneId{0};
 	bool verified{false};			// True after client passes Gate connection token verification
 	// True once Gate actually dispatches ClientPlayerLogin.Login to Login.
 	// Disconnect uses this to clean Login's session-id state without turning

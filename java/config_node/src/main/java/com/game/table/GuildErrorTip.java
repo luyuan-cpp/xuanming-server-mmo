@@ -87,6 +87,42 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildHomeZoneUnknown = 14012;</code>
      */
     kGuildHomeZoneUnknown(14012),
+    /**
+     * <code>kGuildZoneMerging = 14013;</code>
+     */
+    kGuildZoneMerging(14013),
+    /**
+     * <code>kGuildTargetNotMember = 14014;</code>
+     */
+    kGuildTargetNotMember(14014),
+    /**
+     * <code>kGuildCannotTargetSelf = 14015;</code>
+     */
+    kGuildCannotTargetSelf(14015),
+    /**
+     * <code>kGuildRankTooLow = 14016;</code>
+     */
+    kGuildRankTooLow(14016),
+    /**
+     * <code>kGuildOfficerLimit = 14017;</code>
+     */
+    kGuildOfficerLimit(14017),
+    /**
+     * <code>kGuildApplicationNotFound = 14018;</code>
+     */
+    kGuildApplicationNotFound(14018),
+    /**
+     * <code>kGuildApplicationLimit = 14019;</code>
+     */
+    kGuildApplicationLimit(14019),
+    /**
+     * <code>kGuildApplicationQueueFull = 14020;</code>
+     */
+    kGuildApplicationQueueFull(14020),
+    /**
+     * <code>kGuildBusyRetry = 14021;</code>
+     */
+    kGuildBusyRetry(14021),
     UNRECOGNIZED(-1),
     ;
 
@@ -155,6 +191,42 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildHomeZoneUnknown = 14012;</code>
      */
     public static final int kGuildHomeZoneUnknown_VALUE = 14012;
+    /**
+     * <code>kGuildZoneMerging = 14013;</code>
+     */
+    public static final int kGuildZoneMerging_VALUE = 14013;
+    /**
+     * <code>kGuildTargetNotMember = 14014;</code>
+     */
+    public static final int kGuildTargetNotMember_VALUE = 14014;
+    /**
+     * <code>kGuildCannotTargetSelf = 14015;</code>
+     */
+    public static final int kGuildCannotTargetSelf_VALUE = 14015;
+    /**
+     * <code>kGuildRankTooLow = 14016;</code>
+     */
+    public static final int kGuildRankTooLow_VALUE = 14016;
+    /**
+     * <code>kGuildOfficerLimit = 14017;</code>
+     */
+    public static final int kGuildOfficerLimit_VALUE = 14017;
+    /**
+     * <code>kGuildApplicationNotFound = 14018;</code>
+     */
+    public static final int kGuildApplicationNotFound_VALUE = 14018;
+    /**
+     * <code>kGuildApplicationLimit = 14019;</code>
+     */
+    public static final int kGuildApplicationLimit_VALUE = 14019;
+    /**
+     * <code>kGuildApplicationQueueFull = 14020;</code>
+     */
+    public static final int kGuildApplicationQueueFull_VALUE = 14020;
+    /**
+     * <code>kGuildBusyRetry = 14021;</code>
+     */
+    public static final int kGuildBusyRetry_VALUE = 14021;
 
 
     public final int getNumber() {
@@ -195,6 +267,15 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
         case 14010: return kGuildNameTaken;
         case 14011: return kGuildAnnouncementTooLong;
         case 14012: return kGuildHomeZoneUnknown;
+        case 14013: return kGuildZoneMerging;
+        case 14014: return kGuildTargetNotMember;
+        case 14015: return kGuildCannotTargetSelf;
+        case 14016: return kGuildRankTooLow;
+        case 14017: return kGuildOfficerLimit;
+        case 14018: return kGuildApplicationNotFound;
+        case 14019: return kGuildApplicationLimit;
+        case 14020: return kGuildApplicationQueueFull;
+        case 14021: return kGuildBusyRetry;
         default: return null;
       }
     }
@@ -260,7 +341,7 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025guild_error_tip.proto*\341\002\n\013guild_error\022" +
+      "\n\025guild_error_tip.proto*\326\004\n\013guild_error\022" +
       "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu" +
       "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot" +
       "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea" +
@@ -269,8 +350,14 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       "d\020\267m\022\033\n\026kGuildIdGenUnavailable\020\270m\022\026\n\021kGu" +
       "ildNameInvalid\020\271m\022\024\n\017kGuildNameTaken\020\272m\022" +
       "\036\n\031kGuildAnnouncementTooLong\020\273m\022\032\n\025kGuil" +
-      "dHomeZoneUnknown\020\274mB$\n\016com.game.tableZ\022g" +
-      "enerated/pb/tableb\006proto3"
+      "dHomeZoneUnknown\020\274m\022\026\n\021kGuildZoneMerging" +
+      "\020\275m\022\032\n\025kGuildTargetNotMember\020\276m\022\033\n\026kGuil" +
+      "dCannotTargetSelf\020\277m\022\025\n\020kGuildRankTooLow" +
+      "\020\300m\022\027\n\022kGuildOfficerLimit\020\301m\022\036\n\031kGuildAp" +
+      "plicationNotFound\020\302m\022\033\n\026kGuildApplicatio" +
+      "nLimit\020\303m\022\037\n\032kGuildApplicationQueueFull\020" +
+      "\304m\022\024\n\017kGuildBusyRetry\020\305mB$\n\016com.game.tab" +
+      "leZ\022generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

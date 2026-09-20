@@ -22,6 +22,7 @@ import (
 	"scene_manager/internal/constants"
 	"scene_manager/internal/svc"
 	"shared/kafkacmd"
+	"shared/ownerepoch"
 	"shared/snowflake"
 )
 
@@ -61,6 +62,10 @@ func newTestSvcCtx(t *testing.T, nodeID string) (*svc.ServiceContext, *miniredis
 
 	c := config.Config{}
 	c.NodeID = nodeID
+
+	// 单测的 svcCtx 不接 data_service:显式声明单 zone 语义(gate zone 即归属 zone),
+	// 否则 resolveHomeZone 按 fail-closed 拒绝所有带 GateId 的 EnterScene。
+	c.AllowGateZoneAsHomeZone = true
 
 	return &svc.ServiceContext{
 		Config:     c,
@@ -423,6 +428,10 @@ func newTestSvcCtxWithWorldScenes(t *testing.T) (*svc.ServiceContext, *miniredis
 	// 节点。默认装上,个别要验证 RPC 失败的用例再自己覆盖 createShouldFail。
 	installDefaultFakeSceneNode(t)
 
+	// 单测的 svcCtx 不接 data_service:显式声明单 zone 语义(gate zone 即归属 zone),
+	// 否则 resolveHomeZone 按 fail-closed 拒绝所有带 GateId 的 EnterScene。
+	c.AllowGateZoneAsHomeZone = true
+
 	return &svc.ServiceContext{
 		Config:     c,
 		Redis:      rds,
@@ -613,6 +622,9 @@ func TestEnterScene_CrossNodeRejectedWithoutSideEffectsAndRetryStaysRejected(t *
 	mr.Set(fmt.Sprintf(InstancePlayerCountKey, targetID), "4")
 	mr.Set(nodePlayerCountKey(testZoneId, "20"), "4")
 	mr.ZAdd(nodeLoadKey(testZoneId), 0, "20")
+	// 源节点 10 活着、只是还没写交接标记 —— 把这个前提写明确:不在负载集的节点在别的判定里
+	// 可能被读成「已死」,而本用例守护的是「活着的源 + 无标记 ⇒ 必须拒绝且无副作用」。
+	mr.ZAdd(nodeLoadKey(testZoneId), 0, "10")
 
 	mr.Set(fmt.Sprintf(SceneNodeKeyFmt, oldSceneID), "10")
 	mr.Set(fmt.Sprintf(InstancePlayerCountKey, oldSceneID), "7")
@@ -628,7 +640,8 @@ func TestEnterScene_CrossNodeRejectedWithoutSideEffectsAndRetryStaysRejected(t *
 	for attempt := 1; attempt <= 2; attempt++ {
 		resp, err := NewEnterSceneLogic(ctx, sc).EnterScene(request)
 		require.NoError(t, err)
-		assert.Equal(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode, "attempt %d", attempt)
+		// 源节点 10 没有为当前 epoch 写出落盘标记 → 换手门拒绝(可重试),重试仍拒。
+		assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode, "attempt %d", attempt)
 
 		targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
 		nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "20"))
@@ -677,7 +690,7 @@ func TestEnterScene_ExistingLocationCrossZoneRejectedWhileOldNodeAliveThenRedire
 
 	logic := NewEnterSceneLogic(ctx, sc)
 	assignCalls := 0
-	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32) (*scene_manager.RedirectToGateInfo, error) {
+	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, _ uint32, _ uint64) (*scene_manager.RedirectToGateInfo, error) {
 		assignCalls++
 		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
 	}
@@ -688,7 +701,8 @@ func TestEnterScene_ExistingLocationCrossZoneRejectedWhileOldNodeAliveThenRedire
 
 	resp, err := logic.EnterScene(request)
 	require.NoError(t, err)
-	assert.Equal(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode)
+	// 源节点活着且没写落盘标记:换手门拒绝(可重试)。
+	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode)
 	assert.Equal(t, 0, assignCalls, "拒绝时不得分配目标区 Gate")
 
 	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
@@ -715,10 +729,15 @@ func TestEnterScene_ExistingLocationCrossZoneRejectedWhileOldNodeAliveThenRedire
 	assert.Equal(t, 1, writer.count(), "重定向必须推送 RedirectToGateEvent 给当前 Gate")
 	targetCount, _ = sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
 	assert.Equal(t, "3", targetCount, "重定向不预占目标场景人数")
+	oldCount, _ = sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	assert.Equal(t, "5", oldCount, "陈旧位置已被当作不存在,死 zone 的旧场景计数不去碰")
+	// 陈旧位置按「没有位置记录」处理:第一条腿只送连接,不写 location、不铸造 ——
+	// 归属由第二条腿在目标 zone 落点时决定(那时陈旧位置同样会被过滤掉)。
 	loc, locErr = GetPlayerLocation(ctx, sc, playerID)
 	require.NoError(t, locErr)
-	require.NotNil(t, loc, "重定向不提交新位置;陈旧位置留给第二条腿覆盖")
-	assert.Equal(t, oldScene, loc.SceneId)
+	require.NotNil(t, loc)
+	assert.Equal(t, oldScene, loc.SceneId, "只送连接的重定向不改 location")
+	assert.Equal(t, uint32(1), loc.ZoneId)
 }
 
 func TestEnterScene_ZoneScopedNodeIDCollisionStillRejectedWhileOldNodeAlive(t *testing.T) {
@@ -749,7 +768,7 @@ func TestEnterScene_ZoneScopedNodeIDCollisionStillRejectedWhileOldNodeAlive(t *t
 		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode)
+	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode)
 	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
 	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
 	assert.Equal(t, "3", targetCount)
@@ -840,7 +859,7 @@ func TestEnterScene_StaleLocationCheckFailsClosedOnRedisError(t *testing.T) {
 		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode, "Redis 错误时必须 fail-closed 沿用拒绝")
+	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode, "Redis 错误时必须 fail-closed 沿用换手门拒绝")
 
 	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
 	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(2, "10"))
@@ -875,7 +894,7 @@ func TestEnterScene_StaleLocationCheckWaitsForReentryBarrier(t *testing.T) {
 		GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
 	})
 	require.NoError(t, err)
-	assert.Equal(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode, "再入屏障未到时不得把陈旧位置当不存在")
+	assert.Equal(t, constants.ErrHandoffPending, resp.ErrorCode, "再入屏障未到时不得把陈旧位置当不存在")
 	assert.Equal(t, 0, writer.count())
 
 	// 屏障过后(死亡标记消失)同一请求放行。
@@ -903,8 +922,9 @@ func TestEnterScene_RedirectWithoutTargetWorldChannelStillEmitsRedirectEvent(t *
 	// 目标 zone 2 没有任何频道 / 节点:合服后目标区仍在过渡窗口。修复前这里
 	// 会先解析场景失败返回 ErrNoAvailableNode,重定向永远到不了。
 	logic := NewEnterSceneLogic(ctx, sc)
-	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, zone uint32) (*scene_manager.RedirectToGateInfo, error) {
+	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, zone uint32, pid uint64) (*scene_manager.RedirectToGateInfo, error) {
 		assert.Equal(t, uint32(2), zone)
+		assert.Equal(t, playerID, pid, "票据必须绑定持票者")
 		return &scene_manager.RedirectToGateInfo{
 			TargetGateIp: "10.2.0.9", TargetGatePort: 7002,
 			TokenPayload: []byte{9, 9}, TokenSignature: []byte("sig"), TokenDeadline: 42,
@@ -936,9 +956,15 @@ func TestEnterScene_RedirectWithoutTargetWorldChannelStillEmitsRedirectEvent(t *
 	assert.Equal(t, "10.2.0.9", event.TargetGateIp)
 	assert.Equal(t, []byte("sig"), event.TokenSignature)
 
+	// 没有位置记录 = 没有持有者:第一条腿只送连接,归属(location + epoch)留给第二条腿
+	// 在目标 zone 落点时一次铸造。这里提前写「等待落点」只会在客户端没跟票据走时
+	// 留下一条把人牵去目标 zone 的记录。
 	loc, locErr := GetPlayerLocation(ctx, sc, playerID)
 	require.NoError(t, locErr)
-	assert.Nil(t, loc, "重定向不提交位置")
+	assert.Nil(t, loc, "首次落点的重定向不写 location")
+	epochRaw, epochErr := sc.Redis.Get(ownerepoch.OwnerEpochKey(playerID))
+	require.NoError(t, epochErr)
+	assert.Equal(t, "", epochRaw, "也不铸造 epoch")
 }
 
 func TestEnterScene_SameNodeSwitchStillSucceeds(t *testing.T) {
@@ -1222,7 +1248,7 @@ func TestEnterScene_RedirectKafkaFailureIsNotCached(t *testing.T) {
 	mr.ZAdd(nodeLoadKey(2), 0, "20")
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
-	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32) (*scene_manager.RedirectToGateInfo, error) {
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
 		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
 	}
 	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
@@ -1238,6 +1264,14 @@ func TestEnterScene_RedirectKafkaFailureIsNotCached(t *testing.T) {
 	exists, existsErr := sc.Redis.Exists(fmt.Sprintf("enter_scene:dedup:%d:redirect-broker-failure", playerID))
 	require.NoError(t, existsErr)
 	assert.False(t, exists, "broker 未 ACK 时不得缓存 redirect 成功")
+	// 没有位置记录的重定向本来就只送连接:broker 没 ACK 时同样不得留下任何归属状态。
+	// (带位置记录、真正离开 zone 的回滚见 owner_epoch_test.go。)
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	assert.Nil(t, loc, "重定向未送达时不得留下等待落点位置")
+	epochRaw, epochErr := sc.Redis.Get(ownerepoch.OwnerEpochKey(playerID))
+	require.NoError(t, epochErr)
+	assert.Equal(t, "", epochRaw, "从未铸造过的 epoch 键不应出现")
 }
 
 func TestEnterScene_DirectSuccessReplaysFullCachedResponse(t *testing.T) {
@@ -1291,7 +1325,7 @@ func TestEnterScene_RedirectSuccessReplaysRedirectPayload(t *testing.T) {
 
 	logic := NewEnterSceneLogic(ctx, sc)
 	assignCalls := 0
-	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32) (*scene_manager.RedirectToGateInfo, error) {
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
 		assignCalls++
 		return &scene_manager.RedirectToGateInfo{
 			TargetGateIp: "10.2.0.8", TargetGatePort: 7001,
@@ -1404,7 +1438,7 @@ func TestEnterScene_FirstLandingCrossZoneReachesRedirectPath(t *testing.T) {
 	})
 	require.NoError(t, err)
 	assert.Equal(t, constants.ErrNoAvailableNode, resp.ErrorCode)
-	assert.NotEqual(t, constants.ErrUnsafeCrossNodeHandoff, resp.ErrorCode)
+	assert.NotEqual(t, constants.ErrHandoffPending, resp.ErrorCode)
 	targetCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
 	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(2, "20"))
 	assert.Equal(t, "2", targetCount)

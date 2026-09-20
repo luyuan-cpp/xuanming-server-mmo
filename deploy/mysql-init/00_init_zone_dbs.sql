@@ -36,16 +36,28 @@ GRANT ALL PRIVILEGES ON `testdb`.* TO 'appuser'@'%';
 CREATE DATABASE IF NOT EXISTS mmorpg_trade DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 GRANT ALL PRIVILEGES ON `mmorpg_trade`.* TO 'appuser'@'%';
 
+-- mmorpg_guild:帮会 guild 服务独占库(go/guild/etc/guild.yaml MySQL.DataSource 的库名;
+-- go/guild/internal/config.Validate 断言 DSN 库名等于它)。按 port-decisions D-14(§8 已修订:
+-- 帮会表一并迁入),这里只建库 + 授权;表以 proto/guild/guild_db.proto 为源,由 go/schemamigrate
+-- 建(guild 启动期 Schema.AutoMigrate,或 `guild -f etc/guild.yaml -migrate`),不要往 mysql-init 加帮会表。
+-- appuser 没有全局 CREATE 权限,库必须在 guild 启动前就存在。
+-- 已初始化过的本地数据卷不会重跑 initdb:用 root 手工执行下面两句(再 FLUSH PRIVILEGES),或重建数据卷;
+-- tools/scripts/start_game.ps1 在 MySQL 就绪后预检本库,不就绪时跳过 guild 并打印补建命令。
+-- K8s:mysql-init-sql ConfigMap 原样带入本文件,新 PVC 首次 initdb 建库;已有 PVC 手工补建(见 deploy/k8s/README.md)。
+CREATE DATABASE IF NOT EXISTS mmorpg_guild DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON `mmorpg_guild`.* TO 'appuser'@'%';
+
 -- mmorpg_friend:好友 friend 服务独占库(go/friend/etc/friend.yaml 的 MySQL.DBName)。
 -- 与上面 mmorpg_trade 同一套规矩(port-decisions D-14):**这里只建库 + 授权**;表以
 -- proto/friend/friend_table.proto 为源,由 go/schemamigrate 建(friend 启动期 Schema.AutoMigrate,
 -- 或 `friend -f etc/friend.yaml -migrate`),不要往 mysql-init 里加业务表。
 -- appuser 没有全局 CREATE 权限,库必须在 friend 启动前就存在。
--- ⚠ 2026-09-18 起 friend / friend_request / friend_capacity 三张表**不再**由
---   deploy/mysql-init/guild_friend_tables.sql 建进**共享库 mmorpg**(= initdb 的 MYSQL_DATABASE;该文件没有
---   USE 语句,所以它落的**不是 zone 库**;存量卷上残留的陈旧表要去 mmorpg 里找)。那三段 CREATE TABLE 与
---   friend_capacity_backfill_v1 回填门禁已随 D-10 修订一并删除。两处都建表会让 schemamigrate
---   把 initdb 建出来的旧结构判成类型漂移(退出码 4,需人工),所以别把它们加回去。
+-- ⚠ 2026-09-19 起 deploy/mysql-init/guild_friend_tables.sql **整个文件已删除**:帮会表迁进 mmorpg_guild
+--   (帮会二期 B1)、好友表迁进 mmorpg_friend(本条),两边各搬走一半之后它已无内容。
+--   那个文件过去把 friend / friend_request / friend_capacity 建进**共享库 mmorpg**(= initdb 的
+--   MYSQL_DATABASE;它没有 USE 语句,所以落的**不是 zone 库** —— 存量卷上残留的陈旧表要去 mmorpg 里找,
+--   不在 zone_N_db)。两处都建表会让 schemamigrate 把 initdb 建出来的旧结构判成类型漂移
+--   (退出码 4,需人工),所以别把建表加回 mysql-init。
 -- 注意:与上面 testdb / mmorpg_trade 相同,已初始化过的本地 MySQL 数据卷不会重跑 initdb,
 -- 存量卷需要用 root 手工执行下面两句(再 FLUSH PRIVILEGES),或重建数据卷。
 -- 本机一键启动(tools/scripts/start_game.ps1)在 MySQL 就绪后预检本库,库不在或 appuser 无权时

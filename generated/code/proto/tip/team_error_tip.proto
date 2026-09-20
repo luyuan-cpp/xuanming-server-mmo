@@ -45,4 +45,30 @@ enum team_error {
 
   kTeamPlayerNotFound = 4017;
 
+  kTeamNotLeader = 4018;
+
+  kTeamHomeZoneUnknown = 4019;
+
+  kTeamCrossZoneDenied = 4020;
+
+  kTeamInviteNotFound = 4021;
+
+  kTeamInviteLimit = 4022;
+
+  kTeamInMatch = 4023;
+
+  kTeamMemberOffline = 4024;
+
+  kTeamMemberInBattle = 4025;
+
+  kTeamMemberNotReady = 4026;
+
+  kTeamDungeonNotOpen = 4027;
+
+  kTeamSizeExceeded = 4028;
+
+  kTeamStateChanged = 4029;
+
+  kTeamInternal = 4030;
+
 };

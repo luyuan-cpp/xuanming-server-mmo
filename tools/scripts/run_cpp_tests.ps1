@@ -37,7 +37,7 @@ $testOutDir = Join-Path $repoRoot 'build\cpp\tests'
 
 # 能编能跑的工程。不在表里的是「被测代码已被删除」的死工程,修不了配置就能救活,
 # 需要连测试源码一起重写或直接删,别贸然加进来(当前:scene_test = SceneSystem/
-# SceneNodeStateSystem/SceneNodeSelectorSystem 全没了;team_test = team_system.h 没了;
+# SceneNodeStateSystem/SceneNodeSelectorSystem 全没了;
 # consistent_hash_node_test = ConsistentHashNode 没了;redis_test / mrediscli_test =
 # 引用 common/src/pb/pbc 那棵已删的 proto 树)。
 $projects = [ordered]@{

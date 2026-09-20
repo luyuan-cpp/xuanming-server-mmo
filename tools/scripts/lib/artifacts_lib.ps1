@@ -56,10 +56,14 @@ function Resolve-ArtifactFullPath {
 .DESCRIPTION
     fetch 的 -Version 与 retention 的删除对象都只认这个形状 —— 前者防 "../" 穿越出制品根,
     后者防手工放进 snapshots/images 的备份目录被当成过期快照删掉。
+
+    与 release_common.ps1 的 Test-ReleaseVersion 同样堵 .NET 正则两个陷阱:结尾用 \z 而不是 $
+    ($ 会放过末尾换行),数字用 [0-9] 而不是 \d(\d 会匹配全角数字等非 ASCII 数字)。
+    [regex]::IsMatch 默认区分大小写,大写 hex 不算合法。
 #>
 function Test-SnapshotVersionName {
     param([Parameter(Mandatory = $true)][AllowEmptyString()][string]$Version)
-    return ($Version -cmatch '^g[0-9a-f]{12}(-dirty-\d{8}-\d{6})?$')
+    return [regex]::IsMatch($Version, '^g[0-9a-f]{12}(-dirty-[0-9]{8}-[0-9]{6})?\z')
 }
 
 <#
@@ -344,7 +348,8 @@ function Set-LatestPointer {
         [Parameter(Mandatory = $true)][string]$Version
     )
 
-    if ($Version -cnotmatch '^[0-9A-Za-z][0-9A-Za-z._-]*$' -or $Version.Contains('..')) {
+    # \z 而不是 $:$ 会放过末尾换行,指针里写进 "g<sha>\n" 后读者拼出的目录永远不存在
+    if (-not [regex]::IsMatch($Version, '^[0-9A-Za-z][0-9A-Za-z._-]*\z') -or $Version.Contains('..')) {
         throw "latest 指针版本号非法(必须是单个目录名,不得含路径分隔符或 ..):'$Version'"
     }
     $channelFull = Resolve-ArtifactFullPath -Path $ChannelRoot
@@ -373,7 +378,34 @@ function Set-LatestPointer {
     $json = ($payload | ConvertTo-Json -Depth 3) + "`n"
     try {
         [System.IO.File]::WriteAllText($tmp, $json, [System.Text.UTF8Encoding]::new($false))
-        [System.IO.File]::Move($tmp, $dest, $true)
+
+        # 覆盖式 rename 只对"目标正被别人打开"这一种瞬时失败做有限重试(100/200/400/800ms,累计 1.5s):
+        # Windows 本地盘与 SMB 上覆盖要求 latest.json 的所有打开句柄都带 FILE_SHARE_DELETE,而 fetch / retention
+        # 读它(Get-Content)时不带。不重试时,读写撞上会让 publish 在版本目录已上线之后失败,同一 commit 重跑
+        # 又被不可变规则拒绝,只能人工改指针。同一个 tmp 覆盖同一个 dest 是幂等的;Linux rename(2) 原子覆盖,不进重试。
+        # 文件 / 目录不存在属于非瞬时错误,不重试
+        $delaysMs = @(100, 200, 400, 800)
+        $attempt = 0
+        while ($true) {
+            try {
+                [System.IO.File]::Move($tmp, $dest, $true)
+                break
+            }
+            catch {
+                $ex = $_.Exception
+                while ($ex -is [System.Management.Automation.MethodInvocationException] -and $null -ne $ex.InnerException) {
+                    $ex = $ex.InnerException
+                }
+                $busy = ($ex -is [System.IO.IOException] -or $ex -is [System.UnauthorizedAccessException]) -and
+                    $ex -isnot [System.IO.FileNotFoundException] -and $ex -isnot [System.IO.DirectoryNotFoundException]
+                if (-not $busy) { throw }
+                if ($attempt -ge $delaysMs.Count) {
+                    throw "latest 指针覆盖失败(已重试 $($delaysMs.Count) 次,latest.json 可能正被其它进程打开):$dest($($ex.Message))。若版本目录已上线、只是指针没更新,可手工把该文件的 version 改为 '$Version'"
+                }
+                Start-Sleep -Milliseconds $delaysMs[$attempt]
+                $attempt++
+            }
+        }
     }
     finally {
         if ([System.IO.File]::Exists($tmp)) { Remove-Item -LiteralPath $tmp -Force -ErrorAction SilentlyContinue }

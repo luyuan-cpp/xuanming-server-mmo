@@ -1,7 +1,9 @@
 # 服务端发布打包标准(对标 luyuan-go/xuanming-server)
 
 **Created:** 2026-09-14
-**状态:** 草案。调研已完成(A 仓全量只读 + B 仓现状盘点,关键结论主会话逐条复核源码);**未落码**,分批方案待用户拍板(§5)。
+**状态:** P1–P4 已落码(2026-09-16/17),**未编译、未运行、未按 §6 验证**——按 AGENTS §10.1 由 Codex 执行。
+§5 的四个待拍板项用户未逐项回答,**按推荐项默认执行**(GitHub Actions / 四批全做 / 不做 SBOM 签名扫描 / 不引入 GoReleaser·MinIO·Harbor·Argo CD)。
+实施状态、评审结论与遗留缺口见 §7。
 **关联:** [docs/ops/release-checklist.md](../ops/release-checklist.md)、`tools/scripts/lib/release_common.ps1`、`tools/scripts/release_preflight.ps1`、[xuanming-port-decisions-20260910.md](./xuanming-port-decisions-20260910.md) D-14(迁移 Job)
 
 > 术语:**A 仓** = GitHub `luyuan-go/xuanming-server`(Pandora,Go/Kratos,go.work 多模块,UE 客户端在 SVN);
@@ -216,4 +218,39 @@ dev 流水线浅克隆不拉 tag,所以 release 不复用 dev job(`A:docs/design
 - **P3**:全部镜像 `docker build` 成功;`docker inspect --format '{{.Config.User}}'` 为 `10001`;C++ 节点容器启动后能写日志。
 - **P4**:在 fork 或 `workflow_dispatch` 干跑 release.yml,产物页可下载 manifest 与 sha256sums。
 
-**当前状态:本文档之外未改任何代码,未编译,未运行。**
+---
+
+## 7. 实施状态(2026-09-17)
+
+### 7.1 已落码
+
+| 批次 | 落点 |
+|---|---|
+| P1 Go | `go/shared/buildinfo`(+单测);11 个服务 main 启动首行 `service starting …` 与 `-version`;`Dockerfile.go-svc`(ldflags 指向 buildinfo、`-trimpath`、`GOTOOLCHAIN=local`、Go 版本断言、依赖层与版本 ARG 分层、基础镜像钉 digest、非 root 10001、OCI label);`go_svc_image.ps1`(`-Version` / `list-refs` / `-DigestsOut` / revision label / 跨平台路径);`go_services.ps1` 本地构建注入 ldflags + `-trimpath` |
+| P1 C++/Java | `Dockerfile.runtime` / `Dockerfile.cpp` 版本 ENV + label + 非 root + digest;`build_linux.sh` 的 `MMORPG_STAMP_BUILD=1` 编译期注入(默认关,避免开发机每次提交全量重编);`build_info.h` 环境变量回落;`k8s_image.ps1` / `java_svc_image.ps1` 按接口 C;`pom.xml` build-info |
+| P2 制品 | `lib/artifacts_lib.ps1`(两轨、不可变、原子 staging、sha256sums、latest 指针、配置表摘要);`publish_images.ps1`(逐镜像 `docker save` + 归档自证 + revision/version label 核对 + 构建前后复查版本戳);`make_release.ps1`;`fetch_images.ps1` / `import_images.ps1` / `artifacts_retention.ps1`;`CHANGELOG.md`;`.gitignore` |
+| P3 镜像加固 | robot / sandbox-mock 镜像;`.dockerignore` 修掉排除 COPY 源(robot/、runtime/linux)的问题;`deploy/k8s/AGENTS.md` 与 `README.md` 的 C++ 镜像路径矛盾 |
+| P4 门禁 | `release_common.ps1` 新增 `Test-ReleaseVersion` / `Get-ReleaseImageTag` / `Get-PushedImageDigest` / `Write-ImageDigestRecord`;`release_preflight.ps1` 制品检查;`.github/workflows/release.yml`;`deploy-config-tests.yml` 触发路径;本文档与 `docs/ops/release-checklist.md` |
+| 契约测试 | `artifacts_lib` / `artifacts_fetch_import_retention` / `publish_images` / `make_release` / `release_common_version`,均走 `test_harness.ps1`,自动进 `deploy-config-tests` 与 release.yml 门禁 |
+
+流程:7 个工作包并行实现(文件所有权互斥)→ 每包 3 视角评审(静态正确性 / 标准符合度 / 回归与安全)→ 修复者逐条核实后修。
+评审共 60+ 条发现,**修复者对 artifact-core、misc 两包跑完;go、cppjava、gate、artifact-release 四包的修复与跨包集成审查、完整性审查因额度中断未跑**,主会话据评审结论手工补了下列高优先项。
+
+### 7.2 主会话手工修复(2026-09-17)
+
+- `.gitignore`:忽略 `/bin/{gate,scene,battle}`、`/bin/symbols/`、`**/.build/`、`/deploy/k8s/runtime/linux/`。**三份评审独立报的阻断项**:这些是 `build_linux.sh` 与 `k8s_stage_runtime.ps1` 的产物,不忽略则凡在 Linux 上编译过的机器工作树必脏,而 C++ 发布轨拒绝脏树 —— "能构建"与"能发布"互斥。
+- `release.yml`:`ext` 步骤补按**目录名**比对 `ExternalReplaceStages`。原来只比模块路径最后一段,而 `go_svc_image.ps1` 比的是 replace 目标目录名;`../../../../proto2mysql-v0.1.0` 能过前者、过不了后者,结果是流水线放行、几十分钟构建后才失败。
+- `publish_images.ps1`:① 新增 `Assert-SourceUnchanged`,构建结束后与上线前各复查一次 HEAD/脏树(A §2.9,原来只在开头取一次);② 镜像核对增加 `org.opencontainers.image.version` 与本次发布版本一致(原来只核对 revision,挡不住"包名 v1.2.3、镜像自报另一版本")。
+- `docs/ops/release-checklist.md`:digest 记录文件从仓库根改到仓库外 —— 它不被忽略,留在仓库里会让下一次发布因脏树被拒(两份 deploy/k8s 文档已由 misc 包改对)。
+
+### 7.3 遗留缺口(未修,按优先级)
+
+1. **db / data_service 镜像构建不了**(阻断 P1 验收与 go 族发布):`go/db`、`go/data_service` 的 `go.mod` 把 proto2mysql replace 到仓库外 `../../../../proto2mysql-v0.1.0`,目录名与 Dockerfile 占位 stage、`ExternalReplaceStages` 都对不上。根因修法:仿 `go/schemamigrate/go.mod` 改为 require 已发布 tag 并删掉本地 replace(D-14),随后删掉白名单与占位 stage。属另一会话的 proto2mysql 版本治理任务。
+2. **C++ 镜像的 revision label 证明不了二进制出自该提交**:`Dockerfile.runtime` 打包的是 `deploy/k8s/runtime/linux` 里预编译的二进制,label 与 ENV 写的却是打包时的仓库 commit。修法:`build_linux.sh`(`MMORPG_STAMP_BUILD=1`)把 `STAMP_SHA` 写进 `bin/BUILD_STAMP`,`k8s_image.ps1` 在带 `-Version` 构建时核对 staging 里的戳与当前 commit 一致,不一致 fail-closed。
+3. **release.yml 没有单元测试门禁**:只跑了 `tools/scripts/tests` 契约测试,缺 A 仓 `Jenkinsfile.release` 那段 `go build + go test`(可复用 `go-modules-ci.yml` 的发现口径)与 Java `mvn test`。
+4. **`release_preflight.ps1` 缺"digest 已记录"检查**(§4 P4 明列):现在只查 manifest 文件存在且是合法 JSON,`images.digests` 为空也 PASS。
+5. `k8s_image.ps1` / `java_svc_image.ps1` 的"带版本号即拒绝脏树"对 `list-refs`、`push` 这类不构建的命令也生效,与 `go_svc_image.ps1` 只在构建命令上拒绝的口径不一致。
+6. 跨包接口一致性审查与对照本文档的完整性审查**未执行**(额度中断),§7.1 的"已落码"未经这两道交叉核对。
+7. `build_linux.sh` 的 `LIB_PROJECTS` 含 `cpp/libs/services/battle`,但该目录没有 `CMakeLists.txt`(只有 vcxproj,从未生成提交)。
+
+**当前状态:代码与文档已落盘,未编译、未运行、未按 §6 验证。**

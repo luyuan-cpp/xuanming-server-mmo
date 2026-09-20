@@ -1,5 +1,5 @@
 // Package svc 是 trade 服务的依赖装配:etcd 客户端、mmorpg_trade 连接池、data_service 客户端、
-// listing_id 号段客户端,以及本服务的低基数 Prometheus 计数器。
+// listing_id 号段客户端、通用资产通道(assetchannel.go),以及本服务的低基数 Prometheus 计数器。
 package svc
 
 import (
@@ -15,6 +15,7 @@ import (
 
 	dspb "proto/data_service"
 
+	"shared/assetop"
 	"shared/idsegment"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -57,6 +58,14 @@ type ServiceContext struct {
 	// 号段失败 = 本次上架失败(in-band kServiceUnavailable),绝不自造 id。
 	ListingIDSegment *idsegment.Client
 
+	// Assets 是通用资产通道(guild-phase2/04-asset-channel.md §S4)在 trade 侧的装配:
+	// 共享 Redis 位置键 → scene 节点镜像 → AssetDebit / AssetCredit,外加 outbox 与重投循环。
+	//
+	// **整个字段可能为 nil**:AssetOp.Enabled=false(默认)时通道根本不装配。调用托管 / 交付前
+	// 应判 Assets.Enabled(),好给玩家一个明确的"功能未开放";漏判也不会 panic —— AssetChannel
+	// 的方法都带空接收者守卫,reconcile 同理,业务侧拿到的是 reconcile.ErrSignerMissing。
+	Assets *AssetChannel
+
 	stopOnce sync.Once
 }
 
@@ -86,13 +95,54 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	logx.Infof("[trade] listing_id minting: segment biz_tag=%s initial_step=%d step_bounds=[%d, %d] (no snowflake fallback)",
 		ListingIDBizTag, c.IdSegment.StepOrDefault(), c.IdSegment.MinStepOrDefault(), c.IdSegment.MaxStepOrDefault())
 
+	// 资产通道(guild-phase2/04-asset-channel.md §S4)。**默认关闭**:配置里没有
+	// AssetOp.Enabled=true 就一件依赖都不建 —— 不拨共享 Redis、不建 scene 节点镜像、
+	// 不起 outbox 重投循环。开关判在这里而不是通道内部,是因为"关"应当等于**没有装配**;
+	// "装好了但不用"那种关法总会在某处漏判,而这里只有一个判点。
+	var assets *AssetChannel
+	if c.AssetOp.Enabled {
+		// 密钥来源必须与代码实际读的是同一个变量。config.Validate 只能校验形状,这条等值
+		// 只有装配层知道:不一致的表现是"配置说注入了、代码读的是别的",scene 一律回 27008。
+		if c.AssetOp.SecretEnv != AssetOpSecretEnv {
+			panic(fmt.Errorf("trade: AssetOp.SecretEnv=%q 与本服务实际读取的 %s 不一致:"+
+				"yaml / config.go / ConfigMap 三处必须逐字一致", c.AssetOp.SecretEnv, AssetOpSecretEnv))
+		}
+		// Enabled=true 但密钥缺失 / 去空白后不足 32 字节 → **拒启**,不降级。
+		// 玩家资产路径 fail-closed(AGENTS §11.3):一个"开着却签不出名"的 trade 会把每一次
+		// 托管都写进 outbox 再永远投不出去,商品永久卡在 ESCROWING,比起不来难查得多。
+		// NewAssetOpSigner 的错误文本不含密钥值,可以原样进启动日志。
+		if _, err := NewAssetOpSigner(); err != nil {
+			panic(fmt.Errorf("trade: AssetOp.Enabled=true 但签名密钥不可用: %w"+
+				" —— 本机用 tools/scripts/start_game.ps1 注入开发值(仅限本机 dev),"+
+				"预发 / 生产由部署侧注入;不打算开通道就把 AssetOp.Enabled 改回 false", err))
+		}
+		// 共享 Redis 连不上即启动致命(理由见 newAssetChannel)。
+		assets, err = newAssetChannel(c, db, dsClient)
+		if err != nil {
+			panic(fmt.Errorf("trade: 资产通道装配失败: %w", err))
+		}
+	} else {
+		logx.Infof("[trade] 资产通道已关闭(AssetOp.Enabled=false,默认值):不拨共享 Redis、"+
+			"不建 scene 节点镜像、不起 outbox 重投循环。浏览 / 详情 / 收藏不受影响,"+
+			"上架托管与交付一律以错误返回。要打开:配置 AssetOp.Enabled=true 且由部署侧注入 %s(≥%d 字节)",
+			AssetOpSecretEnv, assetop.MinSecretLen)
+	}
+
 	return &ServiceContext{
 		Config:            c,
 		Etcd:              etcdCli,
 		DB:                db,
 		DataServiceClient: dsClient,
 		ListingIDSegment:  seg,
+		Assets:            assets,
 	}
+}
+
+// StartAssetChannel 起 scene 节点镜像与资产重投循环。ctx 取消即两者退出。
+// 放在起 gRPC 之前调用:循环只依赖 MySQL 与 etcd,早一点开始把积压的 outbox 投出去。
+// AssetOp.Enabled=false 时 Assets 为 nil,这里是空操作(不起任何后台 goroutine)。
+func (sc *ServiceContext) StartAssetChannel(ctx context.Context) {
+	sc.Assets.Start(ctx, sc.Etcd)
 }
 
 // BuildDSN 拼 mmorpg_trade 的 DSN,与 go/data_service/internal/store/mysql.go buildDSN 同口径:
@@ -170,6 +220,8 @@ func (sc *ServiceContext) WarmListingIDSegment() {
 // 调用方须保证 noderegistry.Close() 与 killswitch 的 ctx 取消都**先于**它(二者共用 etcd 连接)。
 func (sc *ServiceContext) Stop() {
 	sc.stopOnce.Do(func() {
+		// 资产通道先停:循环里在途的投递要在关 DB / etcd 之前收手。
+		sc.Assets.Close()
 		if sc.ListingIDSegment != nil {
 			sc.ListingIDSegment.Close()
 		}

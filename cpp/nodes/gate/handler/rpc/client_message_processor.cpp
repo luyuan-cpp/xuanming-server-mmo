@@ -10,6 +10,7 @@
 #include <string_view>
 
 #include "gate_codec.h"
+#include "gate_gm_client_messages.h"
 #include "gate_router_mode.h"
 #include "gate_security.h"
 #include "message_limiter/illegal_packet_counter.h"
@@ -110,15 +111,24 @@ static inline uint64_t GetEffectiveNodeId(
 
 // SessionDetails 是 gate 递给 Go 服务的会话身份(gRPC metadata x-session-detail-bin,
 // Go 侧 SessionInterceptor 据此识别玩家,并在响应头回写供 gate 找回会话)。
-// 路由模式的请求转发与断线通知都用这一份;playerId 传 0 表示"尚未绑定玩家"
+// 直连模式、路由模式的请求转发与断线通知都用这一份;playerId 传 0 表示"尚未绑定玩家"
 // (proto3 隐式存在:0 与不设置在线上是同一形状)。
-static SessionDetails BuildSessionDetails(const SessionId sessionId, const Guid playerId)
+// session 非空时带上重定向票据的绑定信息(CZ-8)。两种转发模式**必须**走同一个构造点:
+// 曾经直连模式是内联手写的一份,只改其中一个 = 一种模式下 login 永远读到 0、访客被弹回家,
+// 而生产恰恰是路由模式。断线通知不需要票据字段,传 nullptr。
+static SessionDetails BuildSessionDetails(const SessionId sessionId, const Guid playerId,
+										  const SessionInfo *session = nullptr)
 {
 	SessionDetails sessionDetails;
 	sessionDetails.set_session_id(sessionId);
 	sessionDetails.set_player_id(playerId);
 	sessionDetails.set_gate_node_id(gNode->GetNodeId());
 	sessionDetails.set_gate_instance_id(gNode->GetNodeInfo().node_uuid());
+	if (session != nullptr)
+	{
+		sessionDetails.set_ticket_player_id(session->ticketPlayerId);
+		sessionDetails.set_ticket_target_zone_id(session->ticketTargetZoneId);
+	}
 	return sessionDetails;
 }
 
@@ -724,17 +734,14 @@ void HandleGrpcNodeMessage(SessionId sessionId, const RpcClientMessagePtr &reque
 		return;
 	}
 
-	SessionDetails sessionDetails;
-	sessionDetails.set_session_id(sessionId);
 	const auto sessionIt = tlsSessionManager.sessions().find(sessionId);
 	if (sessionIt == tlsSessionManager.sessions().end())
 	{
 		LOG_ERROR << "Session not found for session id: " << sessionId;
 		return;
 	}
-	sessionDetails.set_player_id(sessionIt->second.playerId);
-	sessionDetails.set_gate_node_id(gNode->GetNodeId());
-	sessionDetails.set_gate_instance_id(gNode->GetNodeInfo().node_uuid());
+	const SessionDetails sessionDetails =
+		BuildSessionDetails(sessionId, sessionIt->second.playerId, &sessionIt->second);
 
 	// Stress diagnostic 2026-05-24: scene_manager observed gate_id="0" in
 	// EnterScene requests during 3-zone × 15000 round 2, even though cpp
@@ -821,7 +828,7 @@ static void HandleRouterForward(SessionId sessionId, const RpcClientMessagePtr &
 		return;
 	}
 
-	if (!SendViaRouter(*request, BuildSessionDetails(sessionId, sessionIt->second.playerId)))
+	if (!SendViaRouter(*request, BuildSessionDetails(sessionId, sessionIt->second.playerId, &sessionIt->second)))
 	{
 		RpcClientSessionHandler::SendTipToClient(conn, kServiceUnavailable);
 		return;
@@ -896,6 +903,50 @@ void RpcClientSessionHandler::DispatchClientRpcMessage(const muduo::net::TcpConn
 
 	if (!ValidateClientMessage(session, request, conn))
 		return;
+
+	// GM 客户端消息闸(P0-a,gate_security.h「GM 客户端消息闸」一节)。
+	//
+	// GmAddCurrency(37)/ GmDeductCurrency(49)/ GmBlockCurrency(94)/
+	// GmUnblockCurrency(95)/ GmSetPlayerLevel(175)/ GmGrantPet(187) 挂在标了
+	// OptionIsClientProtocolService 的 player 服务上,因此一直与 GetBag / MoveStart
+	// 走同一条路径进 scene,零鉴权 —— 任何已登录客户端发一个包就能给自己加钱、
+	// 升满级、发宝宝。聚宝斋要用人民币寄售(jubaozhai-market.md §12 P0-a),这条
+	// 口子等于印钞机接到交易所上。
+	//
+	// 放在 ValidateClientMessage **之后**:GM 包同样要先过体积与限流两道闸,
+	// 否则"被拒绝的消息不占限流额度"会让攻击者用 GM 号无成本刷日志和 CPU
+	// (与本函数上面那段"白名单校验必须计入非法包闸门"同一条教训)。
+	//
+	// 判据是 GATE_RUN_MODE:未设置 = prod = 拒绝(部署链从不设它)。本地联调由
+	// tools/scripts/start_game.ps1 显式设 dev。scene 侧另有第二道锁
+	// (SCENE_RUN_MODE,player_gm_guard.h),防的是绕开 gate 直连 scene RPC 端口。
+	//
+	// 拒绝要计非法包:正常客户端根本不知道这些号,连发只可能是在试探。
+	if (gate_gm_client_messages::IsGmClientMessage(request->message_id()) &&
+		!gate_security::GmClientMessagesAllowed())
+	{
+		// 趋势证据走采样 WARN(每 1024 次一条);逐条明细只打 DEBUG ——
+		// 与上面「坏 message_id」那一支同一口径。每条被拒的包都写一行 WARN
+		// 等于把这条闸本身变成日志放大面(拒绝发生在踢线阈值之前)。
+		LogClientSecurityRejectionSampled("gm_client_message_refused_in_prod", sessionId);
+		LOG_DEBUG << "GM client message refused: GATE_RUN_MODE="
+				  << gate_security::RunModeName(gate_security::CurrentRunMode())
+				  << " message_id=" << request->message_id()
+				  << " session_id=" << sessionId
+				  << " player_id=" << session.playerId;
+		// 回 tip 而不是静默丢:本地把 GATE_RUN_MODE 忘了设时,robot 冒烟要能立刻
+		// 看出"是被闸拦了",而不是超时到一半去猜。kFeatureUnavailable 是既有码,
+		// 新增 tip 要改 data/tip/Tip.xlsx(二进制文件,多个并行会话在排队改它)。
+		SendTipToClient(conn, kFeatureUnavailable);
+		if (IllegalPacketCounter::RegisterAndShouldKill(session.illegalPacketCount))
+		{
+			LOG_WARN << "Session illegal-packet threshold exceeded (GM message in prod) — forceClose."
+					 << " count=" << session.illegalPacketCount
+					 << " message_id=" << request->message_id();
+			conn->forceClose();
+		}
+		return;
+	}
 
 	auto &messageInfo = gRpcMethodRegistry[request->message_id()];
 	if (messageInfo.protocol == PROTOCOL_TCP)
@@ -1005,6 +1056,15 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 		return;
 	}
 
+	// gate_node_id 只在 zone 内唯一:给 zone B gate#3 的重定向票据,在 zone A 的 gate#3 上同样能过
+	// 上面那道检查。重定向票据带 target_zone_id,在这里把"不是发给本 zone 的"挡掉;
+	// 0 = 普通 AssignGate 票据(不带目标 zone),照旧放行。
+	if (payload.target_zone_id() != 0 && payload.target_zone_id() != gNode->GetNodeInfo().zone_id())
+	{
+		rejectAndClose("token_target_zone_mismatch", "token not for this zone");
+		return;
+	}
+
 	// Check expiry
 	auto now = static_cast<int64_t>(std::time(nullptr));
 	if (payload.expire_timestamp() <= now)
@@ -1030,6 +1090,10 @@ void RpcClientSessionHandler::DispatchTokenVerify(const muduo::net::TcpConnectio
 	// zero.
 	session.hmacSessionKey.assign(payload.hmac_session_key());
 	IllegalPacketCounter::Reset(session.illegalPacketCount);
+
+	// 重定向票据的绑定信息(CZ-8):只存不判,随 SessionDetails 交给 login EnterGame 校验。
+	session.ticketPlayerId = payload.player_id();
+	session.ticketTargetZoneId = payload.target_zone_id();
 
 	session.verified = true;
 	sendReply(true, "");

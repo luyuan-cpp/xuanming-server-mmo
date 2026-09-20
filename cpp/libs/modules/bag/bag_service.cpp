@@ -1,7 +1,10 @@
 #include "bag_service.h"
 
+#include <cstddef> // std::size_t — RemoveItemsByGuid 半截批次的计数
+
 #include "engine/core/error_handling/error_handling.h"
 #include "engine/core/macros/return_define.h"
+#include "table/proto/tip/asset_error_tip.pb.h" // kAssetFrozen / kAssetInvalidBundle — 按 guid 扣出的错误码
 #include "table/proto/tip/common_error_tip.pb.h"
 
 #include "modules/gain_block/gain_block_service.h"
@@ -137,8 +140,18 @@ uint32_t BagService::AddItems(
 	Bag &bag,
 	const PlayerItemBlockList &blockList,
 	const ItemCountMap &itemsToAdd,
-	TransactionType txType)
+	TransactionType txType,
+	uint64_t correlationId,
+	const std::string &extra,
+	bool *mutated)
 {
+	// 先置 false:下面每条 return 路径都可能在任意一步退出,只有开头统一清零才能
+	// 保证"没写过 true 就是真的没动过"。
+	if (mutated != nullptr)
+	{
+		*mutated = false;
+	}
+
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
 	// See AddItem above for rationale. Reject the whole batch early.
 	// See docs/design/cross-zone-readiness-audit.md §11.1.
@@ -174,6 +187,11 @@ uint32_t BagService::AddItems(
 	const uint32_t reserved = bag.ReserveForBatchAdd(itemsToAdd, &evicted);
 	// 腾位可能已经发生(哪怕后面整批失败),销毁必须留痕。
 	LogEvictedInstances(playerEntity, evicted);
+	// 淘汰即"包动过了" —— 那些实例是真的没了,后面整批失败也不会复活。
+	if (mutated != nullptr && !evicted.empty())
+	{
+		*mutated = true;
+	}
 	RETURN_ON_ERROR(reserved);
 
 	// ── Apply per config: Bag::AddItem → transaction log + anomaly ───────
@@ -188,6 +206,11 @@ uint32_t BagService::AddItems(
 		std::vector<DestroyedInstance> lateEvicted;
 		auto result = bag.AddItem(param, &writtenGuids, &lateEvicted);
 		LogEvictedInstances(playerEntity, lateEvicted);
+		// 写出了 guid = 这一项真的落进包里了;迟到的淘汰同样是改动。
+		if (mutated != nullptr && (!writtenGuids.empty() || !lateEvicted.empty()))
+		{
+			*mutated = true;
+		}
 		if (result != kSuccess)
 		{
 			return result;
@@ -195,7 +218,7 @@ uint32_t BagService::AddItems(
 
 		TransactionLogSystem::LogItemCreate(
 			playerEntity, PrimaryWrittenGuid(writtenGuids),
-			configId, count, txType);
+			configId, count, txType, correlationId, extra);
 
 		AnomalyDetector::RecordItemGain(playerEntity, configId, count);
 	}
@@ -315,6 +338,128 @@ uint32_t BagService::RemoveItem(
 	}
 
 	return result;
+}
+
+uint32_t BagService::RemoveItemsClamped(
+	entt::entity playerEntity,
+	Bag &bag,
+	const ItemCountMap &itemsToRemove,
+	std::vector<DrainedInstance> *drainedOut,
+	uint64_t correlationId,
+	const std::string &extra)
+{
+	// 冻结期一件都不扣:理由同 RemoveItem —— 迁移在途时源端扣数,目标端拿到的
+	// 快照里那笔数量还在,等于凭空多出来。调用方必须把这个返回值当"没扣成",
+	// 而不是"扣了 0 个"。
+	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	{
+		LOG_WARN << "BagService::RemoveItemsClamped rejected: player frozen for cross-zone "
+				 << "migration. player=" << bag.PlayerGuid()
+				 << " configs=" << itemsToRemove.size();
+		return PrintStackAndReturnError(kInvalidParameter);
+	}
+
+	std::vector<DrainedInstance> drained;
+	const auto result = bag.RemoveItemsClamped(itemsToRemove, &drained);
+
+	// 逐条落流水:一条回执一个 item_uuid。这里不能像入包那样只记第一个 guid ——
+	// 一笔消耗可能横跨好几堆,少记一条就是少一条追溯线索。
+	for (const auto &entry : drained)
+	{
+		TransactionLogSystem::LogItemDestroy(
+			playerEntity, entry.guid, entry.configId, entry.amount, correlationId, extra);
+	}
+
+	if (drainedOut != nullptr)
+	{
+		drainedOut->insert(drainedOut->end(), drained.begin(), drained.end());
+	}
+	return result;
+}
+
+uint32_t BagService::RemoveItemsByGuid(
+	entt::entity playerEntity,
+	Bag &bag,
+	const std::vector<Guid> &guids,
+	TransactionType txType,
+	uint64_t correlationId,
+	std::vector<DestroyedInstance> *removedOut,
+	bool *mutated)
+{
+	// 与 AddItems 同一纪律:先一律置 false,调用方据此区分"一件没碰"(RETRY /
+	// REJECTED,不记资产变更)与"已经销毁了几件"(必须记 APPLIED + partial)。
+	if (mutated != nullptr)
+	{
+		*mutated = false;
+	}
+
+	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
+	// 理由同 RemoveItem:迁移在途时源端把实例销毁,目标端拿到的快照里那件东西还在,
+	// 等于凭空多出来一件;而交易库那侧已经按"扣出成功"入了托管快照 —— 一件装备
+	// 两处都在,过户回来就是复制。
+	//
+	// 这里回 kAssetFrozen 而不是兄弟函数用的 kInvalidParameter:冻结是**会自己消失**
+	// 的条件,调用方(资产通道)据此回 RETRY 重投;回 kInvalidParameter 会被当成
+	// 终局拒绝,玩家过图的那几百毫秒里发起的寄售就被永久拒掉了。本函数是新增的,
+	// 没有既有调用点会因这个取值变化而受影响。
+	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
+	{
+		LOG_WARN << "BagService::RemoveItemsByGuid rejected: player frozen for cross-zone "
+				 << "migration. player=" << bag.PlayerGuid() << " guids=" << guids.size();
+		return PrintStackAndReturnError(kAssetFrozen);
+	}
+
+	// ⚠ 这里**刻意不判 InBattleComp**(D48 红线)。"局中挡一切背包写"的闸只许放在
+	// 资产 RPC 入口层;下沉到 BagService,战斗结算自己的扣物就会被自己拦住,结算
+	// 永久卡死。局中不许寄售这条业务规则由调用方(交易会话的资产 RPC 入口)负责。
+
+	// ── reserve:纯预检,零副作用。过了这一关,下面的销毁不会再失败 ─────────
+	std::vector<DestroyedInstance> removable;
+	RETURN_ON_ERROR(bag.ReserveForBatchRemove(guids, &removable));
+
+	// ── commit:逐个销毁实例 + 当场落流水 ────────────────────────────────
+	// 销毁一件就记一件,而不是全部销毁完再统一记:万一中途真的失败了(预检已经
+	// 排除了所有数据可触发的原因,只剩编程错误),已经消失的那几件仍然留得下
+	// item_uuid —— 那正是最需要能查的情形。
+	std::size_t removedCount = 0;
+	for (const auto &item : removable)
+	{
+		const uint32_t result = bag.RemoveItem(item.guid);
+		if (result != kSuccess)
+		{
+			// 预检刚刚确认过每个 guid 都在包里且互不重复,走到这里只可能是两层
+			// 状态不自洽的编程错误。此刻批次已经半截,没有回滚手段,必须吼出来。
+			//
+			// **返回的既不是 kAssetFrozen 也不是 kAssetInvalidBundle**,而 mutated 已经
+			// 在前几轮置 true(第一件就失败时仍为 false = 确实一件没碰)。调用方必须
+			// 靠 mutated 而不是返回值来判断要不要记账:把半截批次当成"一件不扣"去
+			// RETRY,玩家那几件装备就永久消失且账本上不留痕(04-asset-channel.md §4.33)。
+			LOG_ERROR << "BagService::RemoveItemsByGuid: RemoveItem failed for guid " << item.guid
+					  << " (config " << item.configId << ") right after ReserveForBatchRemove "
+					  << "succeeded (programming error); the batch is now partially removed. "
+					  << "player=" << bag.PlayerGuid() << " correlation_id=" << correlationId
+					  << " removed_before_failure=" << removedCount;
+			return result;
+		}
+
+		// 实例已经没了 —— 从这一刻起这次调用就不再是"零改动"。置位必须在落流水
+		// 之前,流水投递失败不会让实例复活。
+		++removedCount;
+		if (mutated != nullptr)
+		{
+			*mutated = true;
+		}
+
+		TransactionLogSystem::LogItemDestroy(
+			playerEntity, item.guid, item.configId, item.size, correlationId, {}, txType);
+
+		if (removedOut != nullptr)
+		{
+			removedOut->push_back(item);
+		}
+	}
+
+	return kSuccess;
 }
 
 uint32_t BagService::MergeAndCompact(

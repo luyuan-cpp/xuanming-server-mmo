@@ -1,7 +1,8 @@
 // Package metrics 暴露 match 服务的 Prometheus 指标:排队入口、matcher 凑单、
-// gather 开局管线与挑战(切磋)链路的低基数计数,以及节点发现缓存的规模。
+// gather 开局管线与挑战(切磋)链路的低基数计数,节点发现缓存的规模,
+// 以及同进程组队模块(team_* 前缀,docs/design/team-system.md §G.3)的计数。
 // 端口约定见 CLAUDE.md §6:9101=login / 9150=scene_manager / 9160=db / 9170=match。
-// 注意:player_id / battle_id 一律只进日志,不进指标 label(高基数会爆)。
+// 注意:player_id / battle_id / team_id 一律只进日志,不进指标 label(高基数会爆)。
 package metrics
 
 import (
@@ -16,6 +17,10 @@ import (
 )
 
 const subsystem = "match"
+
+// teamSubsystem 让组队指标名以 team_ 开头(team_rpc_total 等):team 是同进程里
+// 协议独立的模块(独立 service / 节点类型),看板按 team_* 前缀聚合。
+const teamSubsystem = "team"
 
 var (
 	joinQueueTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
@@ -137,6 +142,61 @@ var (
 		Name:      "rating_round_cap_draw_total",
 		Help:      "Rated battles whose win/loss outcome was settled as a draw because total_rounds hit the round cap, by mode.",
 	}, []string{"mode"})
+
+	// ---- 组队(team-system.md §G.3)----
+	// label 只允许固定枚举:method = ClientPlayerTeam 的 RPC 名,outcome / op / kind =
+	// 调用方代码里写死的短字符串。**禁止**传 player_id / team_id / 错误文本(高基数)。
+
+	// teamRPCTotal ClientPlayerTeam 每个请求的终态。
+	teamRPCTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: teamSubsystem,
+		Name:      "rpc_total",
+		Help:      "ClientPlayerTeam requests by method (fixed RPC name) and outcome (fixed enum set by the team module).",
+	}, []string{"method", "outcome"})
+
+	// teamCommitRetryTotal S_COMMIT 版本冲突后的重试次数(按操作);持续升高说明同队并发写多。
+	teamCommitRetryTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: teamSubsystem,
+		Name:      "commit_retry_total",
+		Help:      "Team record commit retries after a version conflict, by op.",
+	}, []string{"op"})
+
+	// teamHealTotal 单 key 丢失 / 记录与索引矛盾时的自愈次数(按自愈类型,§C.6)。
+	teamHealTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: teamSubsystem,
+		Name:      "heal_total",
+		Help:      "Team storage self-heal actions (missing index rebuilt, orphan index cleared, ...), by kind.",
+	}, []string{"kind"})
+
+	// teamPushTotal 组队 S2C 推送结果(kind = snapshot|invite|event 之类的固定值)。
+	teamPushTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: teamSubsystem,
+		Name:      "push_total",
+		Help:      "Team S2C pushes via gate Kafka by kind and outcome.",
+	}, []string{"kind", "outcome"})
+
+	// teamSceneRefreshTotal 发给 scene 的 PlayerTeamRefreshEvent 结果;包括因节点 uuid 为空
+	// 而 fail-closed 不发的情况(§F.3)。
+	teamSceneRefreshTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: teamSubsystem,
+		Name:      "scene_refresh_total",
+		Help:      "PlayerTeamRefreshEvent deliveries to scene nodes by outcome (including fail-closed skips).",
+	}, []string{"outcome"})
+
+	// teamMatchTotal 整队开战(StartTeamMatch)的终态。
+	teamMatchTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: teamSubsystem,
+		Name:      "match_total",
+		Help:      "StartTeamMatch runs by outcome.",
+	}, []string{"outcome"})
+
+	// teamCrossZoneAllowed 本实例生效的 Team.AllowCrossZone(1=允许,0=禁止)。多实例取值
+	// 不一致即开关切换的混跑窗口(J-13a)。
+	teamCrossZoneAllowed = prometheus.NewGauge(prometheus.GaugeOpts{
+		Subsystem: teamSubsystem,
+		Name:      "cross_zone_allowed",
+		Help:      "Effective Team.AllowCrossZone on this instance (1 allowed, 0 denied); instances disagreeing means a rolling switch is in progress.",
+	})
 )
 
 var registerOnce sync.Once
@@ -160,6 +220,13 @@ func register() {
 			waitSeconds,
 			starvedAnchorWait,
 			ratingRoundCapDraw,
+			teamRPCTotal,
+			teamCommitRetryTotal,
+			teamHealTotal,
+			teamPushTotal,
+			teamSceneRefreshTotal,
+			teamMatchTotal,
+			teamCrossZoneAllowed,
 		)
 	})
 }
@@ -253,9 +320,15 @@ func SetDiscoveredNodes(kind string, count int) {
 	discoveredNodes.WithLabelValues(kind).Set(float64(count))
 }
 
-// ObserveKafkaPush 记录一次 gate Kafka 推送结果。
+// ObserveKafkaPush 记录一次挑战链路(logic.pushToPlayer)的 gate Kafka 推送结果。
+// 组队推送不走这里,记 team_push_total。
 func ObserveKafkaPush(outcome string) {
 	kafkaPushTotal.WithLabelValues(outcome).Inc()
+}
+
+// KafkaPushValue 读回 match_kafka_push_total 某个 outcome 的计数,只给单测断言用。
+func KafkaPushValue(outcome string) float64 {
+	return counterVecValue(kafkaPushTotal, outcome)
 }
 
 // ObserveWatchBattle 记录一次 WatchBattle 请求结果。
@@ -266,6 +339,94 @@ func ObserveWatchBattle(outcome string) {
 // ObserveRequestBattleTicket 记录一次 RequestBattleTicket(丢票补签)请求结果。
 func ObserveRequestBattleTicket(outcome string) {
 	requestBattleTicketTotal.WithLabelValues(outcome).Inc()
+}
+
+// ---- 组队(team-system.md §G.3)----
+
+// ObserveTeamRPC 记录一次 ClientPlayerTeam 请求的终态(method = RPC 名)。
+func ObserveTeamRPC(method string, outcome string) {
+	teamRPCTotal.WithLabelValues(method, outcome).Inc()
+}
+
+// ObserveTeamCommitRetry 记录一次提交冲突后的重试(op = 操作名)。
+func ObserveTeamCommitRetry(op string) {
+	teamCommitRetryTotal.WithLabelValues(op).Inc()
+}
+
+// ObserveTeamHeal 记录一次存储自愈(kind = 自愈类型)。
+func ObserveTeamHeal(kind string) {
+	teamHealTotal.WithLabelValues(kind).Inc()
+}
+
+// ObserveTeamPush 记录一次组队 S2C 推送结果。
+func ObserveTeamPush(kind string, outcome string) {
+	teamPushTotal.WithLabelValues(kind, outcome).Inc()
+}
+
+// ObserveTeamSceneRefresh 记录一次 scene 刷新信号的结果(含 fail-closed 不发)。
+func ObserveTeamSceneRefresh(outcome string) {
+	teamSceneRefreshTotal.WithLabelValues(outcome).Inc()
+}
+
+// ObserveTeamMatch 记录一次整队开战的终态。
+func ObserveTeamMatch(outcome string) {
+	teamMatchTotal.WithLabelValues(outcome).Inc()
+}
+
+// SetTeamCrossZoneAllowed 上报本实例生效的 Team.AllowCrossZone。
+func SetTeamCrossZoneAllowed(allowed bool) {
+	if allowed {
+		teamCrossZoneAllowed.Set(1)
+		return
+	}
+	teamCrossZoneAllowed.Set(0)
+}
+
+// TeamRPCValue 等读回函数只给单测断言用;计数器本身不导出,业务代码只能走 Observe*。
+
+func TeamRPCValue(method string, outcome string) float64 {
+	return counterVecValue(teamRPCTotal, method, outcome)
+}
+
+func TeamCommitRetryValue(op string) float64 {
+	return counterVecValue(teamCommitRetryTotal, op)
+}
+
+func TeamHealValue(kind string) float64 {
+	return counterVecValue(teamHealTotal, kind)
+}
+
+func TeamPushValue(kind string, outcome string) float64 {
+	return counterVecValue(teamPushTotal, kind, outcome)
+}
+
+func TeamSceneRefreshValue(outcome string) float64 {
+	return counterVecValue(teamSceneRefreshTotal, outcome)
+}
+
+func TeamMatchValue(outcome string) float64 {
+	return counterVecValue(teamMatchTotal, outcome)
+}
+
+func TeamCrossZoneAllowedValue() float64 {
+	var m dto.Metric
+	if err := teamCrossZoneAllowed.Write(&m); err != nil {
+		return 0
+	}
+	return m.GetGauge().GetValue()
+}
+
+// counterVecValue 读回某组 label 的计数;label 个数不对或读失败返回 0。
+func counterVecValue(vec *prometheus.CounterVec, labels ...string) float64 {
+	counter, err := vec.GetMetricWithLabelValues(labels...)
+	if err != nil {
+		return 0
+	}
+	var m dto.Metric
+	if err := counter.Write(&m); err != nil {
+		return 0
+	}
+	return m.GetCounter().GetValue()
 }
 
 // Start 启动 Prometheus /metrics 端点;addr 为空则关闭(与 scene_manager 同模式)。

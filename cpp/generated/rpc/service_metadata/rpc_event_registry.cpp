@@ -32,6 +32,7 @@
 #include "proto/scene/scene_admin.pb.h"
 #include "proto/scene_manager/scene_manager_service.pb.h"
 #include "proto/scene_manager/scene_node_service.pb.h"
+#include "proto/team/team.pb.h"
 #include "proto/trade/jubaozhai.pb.h"
 #include "proto/trade/trade_admin.pb.h"
 
@@ -64,6 +65,7 @@
 #include "rpc/service_metadata/scene_admin_service_metadata.h"
 #include "rpc/service_metadata/scene_manager_service_service_metadata.h"
 #include "rpc/service_metadata/scene_node_service_service_metadata.h"
+#include "rpc/service_metadata/team_service_metadata.h"
 #include "rpc/service_metadata/jubaozhai_service_metadata.h"
 #include "rpc/service_metadata/trade_admin_service_metadata.h"
 
@@ -82,6 +84,7 @@
 #include "proto/common/event/player_event.pb.h"
 #include "proto/common/event/server_event.pb.h"
 #include "proto/common/event/player_migration_event.pb.h"
+#include "proto/common/event/team_event.pb.h"
 #include "proto/common/event/skill_event.pb.h"
 #include "common_event_mission_event_event_id.h"
 #include "common_event_scene_event_event_id.h"
@@ -98,6 +101,7 @@
 #include "common_event_player_event_event_id.h"
 #include "common_event_server_event_event_id.h"
 #include "common_event_player_migration_event_event_id.h"
+#include "common_event_team_event_event_id.h"
 #include "common_event_skill_event_event_id.h"
 
 class GateImpl final : public Gate {};
@@ -179,10 +183,18 @@ namespace friendpb{void SendFriendServiceNotifyOffline(entt::registry& , entt::e
 namespace guildpb{void SendGuildServiceCreateGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetPlayerGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
-namespace guildpb{void SendGuildServiceJoinGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceLeaveGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceDisbandGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceSetAnnouncement(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceSetGuildMemberRole(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceKickGuildMember(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceTransferGuildLeader(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceApplyJoinGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceCancelGuildApplication(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceListMyGuildApplications(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceListGuildApplications(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceReviewGuildApplication(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceNotifyGuildChanged(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceUpdateGuildScore(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetGuildRank(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetGuildRankByGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
@@ -214,6 +226,24 @@ namespace scene_node{void SendSceneNodeGrpcDestroyScene(entt::registry& , entt::
 namespace scene_node{void SendSceneNodeGrpcReleasePlayer(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace scene_node{void SendSceneNodeGrpcPrepareBattle(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace scene_node{void SendSceneNodeGrpcCancelBattlePrepare(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace scene_node{void SendSceneNodeGrpcAssetDebit(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace scene_node{void SendSceneNodeGrpcAssetAbortDebit(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace scene_node{void SendSceneNodeGrpcAssetCredit(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamCreateTeam(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamGetMyTeam(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamApplyJoinTeam(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamHandleApplication(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamInviteToTeam(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamRespondInvite(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamListMyInvites(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamLeaveTeam(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamKickMember(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamTransferLeader(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamDisbandTeam(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamStartTeamMatch(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamNotifyTeamSnapshot(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamNotifyTeamInvite(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace teampb{void SendClientPlayerTeamNotifyTeamEvent(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace trade{void SendClientPlayerJubaozhaiBrowseListings(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace trade{void SendClientPlayerJubaozhaiGetListingDetail(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace trade{void SendClientPlayerJubaozhaiSetFavorite(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
@@ -223,7 +253,7 @@ namespace trade{void SendTradeAdminSeedListing(entt::registry& , entt::entity , 
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 201,
+static_assert(kMaxRpcMethodCount == 228,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -605,11 +635,6 @@ void InitMessageInfo()
         std::make_unique<::guildpb::GetPlayerGuildRequest>(),
         std::make_unique<::guildpb::GetPlayerGuildResponse>(),
         nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceGetPlayerGuild};
-    gRpcMethodRegistry[GuildServiceJoinGuildMessageId] = RpcMethodMeta{
-        "GuildService", "JoinGuild",
-        std::make_unique<::guildpb::JoinGuildRequest>(),
-        std::make_unique<::guildpb::JoinGuildResponse>(),
-        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceJoinGuild};
     gRpcMethodRegistry[GuildServiceLeaveGuildMessageId] = RpcMethodMeta{
         "GuildService", "LeaveGuild",
         std::make_unique<::guildpb::LeaveGuildRequest>(),
@@ -625,6 +650,51 @@ void InitMessageInfo()
         std::make_unique<::guildpb::SetAnnouncementRequest>(),
         std::make_unique<::guildpb::SetAnnouncementResponse>(),
         nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceSetAnnouncement};
+    gRpcMethodRegistry[GuildServiceSetGuildMemberRoleMessageId] = RpcMethodMeta{
+        "GuildService", "SetGuildMemberRole",
+        std::make_unique<::guildpb::SetGuildMemberRoleRequest>(),
+        std::make_unique<::guildpb::SetGuildMemberRoleResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceSetGuildMemberRole};
+    gRpcMethodRegistry[GuildServiceKickGuildMemberMessageId] = RpcMethodMeta{
+        "GuildService", "KickGuildMember",
+        std::make_unique<::guildpb::KickGuildMemberRequest>(),
+        std::make_unique<::guildpb::KickGuildMemberResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceKickGuildMember};
+    gRpcMethodRegistry[GuildServiceTransferGuildLeaderMessageId] = RpcMethodMeta{
+        "GuildService", "TransferGuildLeader",
+        std::make_unique<::guildpb::TransferGuildLeaderRequest>(),
+        std::make_unique<::guildpb::TransferGuildLeaderResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceTransferGuildLeader};
+    gRpcMethodRegistry[GuildServiceApplyJoinGuildMessageId] = RpcMethodMeta{
+        "GuildService", "ApplyJoinGuild",
+        std::make_unique<::guildpb::ApplyJoinGuildRequest>(),
+        std::make_unique<::guildpb::ApplyJoinGuildResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceApplyJoinGuild};
+    gRpcMethodRegistry[GuildServiceCancelGuildApplicationMessageId] = RpcMethodMeta{
+        "GuildService", "CancelGuildApplication",
+        std::make_unique<::guildpb::CancelGuildApplicationRequest>(),
+        std::make_unique<::guildpb::CancelGuildApplicationResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceCancelGuildApplication};
+    gRpcMethodRegistry[GuildServiceListMyGuildApplicationsMessageId] = RpcMethodMeta{
+        "GuildService", "ListMyGuildApplications",
+        std::make_unique<::guildpb::ListMyGuildApplicationsRequest>(),
+        std::make_unique<::guildpb::ListMyGuildApplicationsResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceListMyGuildApplications};
+    gRpcMethodRegistry[GuildServiceListGuildApplicationsMessageId] = RpcMethodMeta{
+        "GuildService", "ListGuildApplications",
+        std::make_unique<::guildpb::ListGuildApplicationsRequest>(),
+        std::make_unique<::guildpb::ListGuildApplicationsResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceListGuildApplications};
+    gRpcMethodRegistry[GuildServiceReviewGuildApplicationMessageId] = RpcMethodMeta{
+        "GuildService", "ReviewGuildApplication",
+        std::make_unique<::guildpb::ReviewGuildApplicationRequest>(),
+        std::make_unique<::guildpb::ReviewGuildApplicationResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceReviewGuildApplication};
+    gRpcMethodRegistry[GuildServiceNotifyGuildChangedMessageId] = RpcMethodMeta{
+        "GuildService", "NotifyGuildChanged",
+        std::make_unique<::guildpb::GuildChangedS2C>(),
+        std::make_unique<::Empty>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceNotifyGuildChanged};
     gRpcMethodRegistry[GuildServiceUpdateGuildScoreMessageId] = RpcMethodMeta{
         "GuildService", "UpdateGuildScore",
         std::make_unique<::guildpb::UpdateGuildScoreRequest>(),
@@ -1075,6 +1145,11 @@ void InitMessageInfo()
         std::make_unique<::ActorListDestroyS2C>(),
         std::make_unique<::Empty>(),
         std::make_unique<SceneSceneClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
+    gRpcMethodRegistry[SceneSceneClientPlayerTravelToZoneMessageId] = RpcMethodMeta{
+        "SceneSceneClientPlayer", "TravelToZone",
+        std::make_unique<::TravelToZoneRequest>(),
+        std::make_unique<::TravelToZoneResponse>(),
+        std::make_unique<SceneSceneClientPlayerImpl>(), 0, common::base::eNodeType::SceneNodeService};
 
     // --- SceneSkillClientPlayer ---
     gRpcMethodRegistry[SceneSkillClientPlayerReleaseSkillMessageId] = RpcMethodMeta{
@@ -1269,6 +1344,98 @@ void InitMessageInfo()
         std::make_unique<::CancelBattlePrepareRequest>(),
         std::make_unique<::Empty>(),
         nullptr, 1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcCancelBattlePrepare};
+    gRpcMethodRegistry[SceneNodeGrpcAssetDebitMessageId] = RpcMethodMeta{
+        "SceneNodeGrpc", "AssetDebit",
+        std::make_unique<::AssetOpRequest>(),
+        std::make_unique<::AssetOpResponse>(),
+        nullptr, 1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcAssetDebit};
+    gRpcMethodRegistry[SceneNodeGrpcAssetAbortDebitMessageId] = RpcMethodMeta{
+        "SceneNodeGrpc", "AssetAbortDebit",
+        std::make_unique<::AssetOpRequest>(),
+        std::make_unique<::AssetOpResponse>(),
+        nullptr, 1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcAssetAbortDebit};
+    gRpcMethodRegistry[SceneNodeGrpcAssetCreditMessageId] = RpcMethodMeta{
+        "SceneNodeGrpc", "AssetCredit",
+        std::make_unique<::AssetOpRequest>(),
+        std::make_unique<::AssetOpResponse>(),
+        nullptr, 1, common::base::eNodeType::SceneManagerNodeService, scene_node::SendSceneNodeGrpcAssetCredit};
+
+    // --- ClientPlayerTeam ---
+    gRpcMethodRegistry[ClientPlayerTeamCreateTeamMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "CreateTeam",
+        std::make_unique<::teampb::CreateTeamRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamCreateTeam};
+    gRpcMethodRegistry[ClientPlayerTeamGetMyTeamMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "GetMyTeam",
+        std::make_unique<::teampb::GetMyTeamRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamGetMyTeam};
+    gRpcMethodRegistry[ClientPlayerTeamApplyJoinTeamMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "ApplyJoinTeam",
+        std::make_unique<::teampb::ApplyJoinTeamRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamApplyJoinTeam};
+    gRpcMethodRegistry[ClientPlayerTeamHandleApplicationMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "HandleApplication",
+        std::make_unique<::teampb::HandleApplicationRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamHandleApplication};
+    gRpcMethodRegistry[ClientPlayerTeamInviteToTeamMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "InviteToTeam",
+        std::make_unique<::teampb::InviteToTeamRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamInviteToTeam};
+    gRpcMethodRegistry[ClientPlayerTeamRespondInviteMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "RespondInvite",
+        std::make_unique<::teampb::RespondInviteRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamRespondInvite};
+    gRpcMethodRegistry[ClientPlayerTeamListMyInvitesMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "ListMyInvites",
+        std::make_unique<::teampb::ListMyInvitesRequest>(),
+        std::make_unique<::teampb::ListMyInvitesResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamListMyInvites};
+    gRpcMethodRegistry[ClientPlayerTeamLeaveTeamMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "LeaveTeam",
+        std::make_unique<::teampb::LeaveTeamRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamLeaveTeam};
+    gRpcMethodRegistry[ClientPlayerTeamKickMemberMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "KickMember",
+        std::make_unique<::teampb::KickMemberRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamKickMember};
+    gRpcMethodRegistry[ClientPlayerTeamTransferLeaderMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "TransferLeader",
+        std::make_unique<::teampb::TransferLeaderRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamTransferLeader};
+    gRpcMethodRegistry[ClientPlayerTeamDisbandTeamMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "DisbandTeam",
+        std::make_unique<::teampb::DisbandTeamRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamDisbandTeam};
+    gRpcMethodRegistry[ClientPlayerTeamStartTeamMatchMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "StartTeamMatch",
+        std::make_unique<::teampb::StartTeamMatchRequest>(),
+        std::make_unique<::teampb::TeamResponse>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamStartTeamMatch};
+    gRpcMethodRegistry[ClientPlayerTeamNotifyTeamSnapshotMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "NotifyTeamSnapshot",
+        std::make_unique<::teampb::TeamSnapshotS2C>(),
+        std::make_unique<::Empty>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamNotifyTeamSnapshot};
+    gRpcMethodRegistry[ClientPlayerTeamNotifyTeamInviteMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "NotifyTeamInvite",
+        std::make_unique<::teampb::TeamInviteS2C>(),
+        std::make_unique<::Empty>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamNotifyTeamInvite};
+    gRpcMethodRegistry[ClientPlayerTeamNotifyTeamEventMessageId] = RpcMethodMeta{
+        "ClientPlayerTeam", "NotifyTeamEvent",
+        std::make_unique<::teampb::TeamEventS2C>(),
+        std::make_unique<::Empty>(),
+        nullptr, 1, common::base::eNodeType::TeamNodeService, teampb::SendClientPlayerTeamNotifyTeamEvent};
 
     // --- ClientPlayerJubaozhai ---
     gRpcMethodRegistry[ClientPlayerJubaozhaiBrowseListingsMessageId] = RpcMethodMeta{
@@ -1320,10 +1487,18 @@ bool IsClientMessageId(uint32_t messageId)
 	case GuildServiceCreateGuildMessageId:
 	case GuildServiceGetGuildMessageId:
 	case GuildServiceGetPlayerGuildMessageId:
-	case GuildServiceJoinGuildMessageId:
 	case GuildServiceLeaveGuildMessageId:
 	case GuildServiceDisbandGuildMessageId:
 	case GuildServiceSetAnnouncementMessageId:
+	case GuildServiceSetGuildMemberRoleMessageId:
+	case GuildServiceKickGuildMemberMessageId:
+	case GuildServiceTransferGuildLeaderMessageId:
+	case GuildServiceApplyJoinGuildMessageId:
+	case GuildServiceCancelGuildApplicationMessageId:
+	case GuildServiceListMyGuildApplicationsMessageId:
+	case GuildServiceListGuildApplicationsMessageId:
+	case GuildServiceReviewGuildApplicationMessageId:
+	case GuildServiceNotifyGuildChangedMessageId:
 	case GuildServiceUpdateGuildScoreMessageId:
 	case GuildServiceGetGuildRankMessageId:
 	case GuildServiceGetGuildRankByGuildMessageId:
@@ -1391,10 +1566,26 @@ bool IsClientMessageId(uint32_t messageId)
 	case SceneSceneClientPlayerNotifyActorDestroyMessageId:
 	case SceneSceneClientPlayerNotifyActorListCreateMessageId:
 	case SceneSceneClientPlayerNotifyActorListDestroyMessageId:
+	case SceneSceneClientPlayerTravelToZoneMessageId:
 	case SceneSkillClientPlayerReleaseSkillMessageId:
 	case SceneSkillClientPlayerNotifySkillUsedMessageId:
 	case SceneSkillClientPlayerNotifySkillInterruptedMessageId:
 	case SceneSkillClientPlayerListSkillsMessageId:
+	case ClientPlayerTeamCreateTeamMessageId:
+	case ClientPlayerTeamGetMyTeamMessageId:
+	case ClientPlayerTeamApplyJoinTeamMessageId:
+	case ClientPlayerTeamHandleApplicationMessageId:
+	case ClientPlayerTeamInviteToTeamMessageId:
+	case ClientPlayerTeamRespondInviteMessageId:
+	case ClientPlayerTeamListMyInvitesMessageId:
+	case ClientPlayerTeamLeaveTeamMessageId:
+	case ClientPlayerTeamKickMemberMessageId:
+	case ClientPlayerTeamTransferLeaderMessageId:
+	case ClientPlayerTeamDisbandTeamMessageId:
+	case ClientPlayerTeamStartTeamMatchMessageId:
+	case ClientPlayerTeamNotifyTeamSnapshotMessageId:
+	case ClientPlayerTeamNotifyTeamInviteMessageId:
+	case ClientPlayerTeamNotifyTeamEventMessageId:
 	case ClientPlayerJubaozhaiBrowseListingsMessageId:
 	case ClientPlayerJubaozhaiGetListingDetailMessageId:
 	case ClientPlayerJubaozhaiSetFavoriteMessageId:
@@ -1759,6 +1950,14 @@ bool DispatchProtoEvent(uint32_t eventId, const std::string& payload)
 	}
 	case PlayerMigrationEventEventId: {
 		PlayerMigrationEvent event;
+		if (!event.ParseFromString(payload)) {
+			return false;
+		}
+		tlsEcs.dispatcher.trigger(event);
+		return true;
+	}
+	case PlayerTeamRefreshEventEventId: {
+		PlayerTeamRefreshEvent event;
 		if (!event.ParseFromString(payload)) {
 			return false;
 		}

@@ -28,6 +28,7 @@ private static final long serialVersionUID = 0L;
     super(builder);
   }
   private MonsterTable() {
+    drop_ = java.util.Collections.emptyList();
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -147,6 +148,47 @@ private static final long serialVersionUID = 0L;
     return goldReward_;
   }
 
+  public static final int DROP_FIELD_NUMBER = 10;
+  @SuppressWarnings("serial")
+  private java.util.List<com.game.table.Monsterdrop> drop_;
+  /**
+   * <code>repeated .Monsterdrop drop = 10;</code>
+   */
+  @java.lang.Override
+  public java.util.List<com.game.table.Monsterdrop> getDropList() {
+    return drop_;
+  }
+  /**
+   * <code>repeated .Monsterdrop drop = 10;</code>
+   */
+  @java.lang.Override
+  public java.util.List<? extends com.game.table.MonsterdropOrBuilder> 
+      getDropOrBuilderList() {
+    return drop_;
+  }
+  /**
+   * <code>repeated .Monsterdrop drop = 10;</code>
+   */
+  @java.lang.Override
+  public int getDropCount() {
+    return drop_.size();
+  }
+  /**
+   * <code>repeated .Monsterdrop drop = 10;</code>
+   */
+  @java.lang.Override
+  public com.game.table.Monsterdrop getDrop(int index) {
+    return drop_.get(index);
+  }
+  /**
+   * <code>repeated .Monsterdrop drop = 10;</code>
+   */
+  @java.lang.Override
+  public com.game.table.MonsterdropOrBuilder getDropOrBuilder(
+      int index) {
+    return drop_.get(index);
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -188,6 +230,9 @@ private static final long serialVersionUID = 0L;
     if (goldReward_ != 0L) {
       output.writeUInt64(9, goldReward_);
     }
+    for (int i = 0; i < drop_.size(); i++) {
+      output.writeMessage(10, drop_.get(i));
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -228,6 +273,15 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeUInt64Size(9, goldReward_);
     }
+
+        {
+          final int count = drop_.size();
+          for (int i = 0; i < count; i++) {
+            size += com.google.protobuf.CodedOutputStream
+              .computeMessageSizeNoTag(drop_.get(i));
+          }
+          size += 1 * count;
+        }
     return size;
   }
   @java.lang.Override
@@ -270,6 +324,8 @@ private static final long serialVersionUID = 0L;
         != other.getExpReward()) return false;
     if (getGoldReward()
         != other.getGoldReward()) return false;
+    if (!getDropList()
+        .equals(other.getDropList())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -307,6 +363,10 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + GOLD_REWARD_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
         getGoldReward());
+    if (getDropCount() > 0) {
+      hash = (37 * hash) + DROP_FIELD_NUMBER;
+      hash = (53 * hash) + getDropList().hashCode();
+    }
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -447,6 +507,13 @@ private static final long serialVersionUID = 0L;
       speed_ = 0L;
       expReward_ = 0L;
       goldReward_ = 0L;
+      if (dropBuilder_ == null) {
+        drop_ = java.util.Collections.emptyList();
+      } else {
+        drop_ = null;
+        dropBuilder_.clear();
+      }
+      bitField0_ = (bitField0_ & ~0x00000200);
       return this;
     }
 
@@ -473,9 +540,22 @@ private static final long serialVersionUID = 0L;
     @java.lang.Override
     public com.game.table.MonsterTable buildPartial() {
       com.game.table.MonsterTable result = new com.game.table.MonsterTable(this);
+      buildPartialRepeatedFields(result);
       if (bitField0_ != 0) { buildPartial0(result); }
       onBuilt();
       return result;
+    }
+
+    private void buildPartialRepeatedFields(com.game.table.MonsterTable result) {
+      if (dropBuilder_ == null) {
+        if (((bitField0_ & 0x00000200) != 0)) {
+          drop_ = java.util.Collections.unmodifiableList(drop_);
+          bitField0_ = (bitField0_ & ~0x00000200);
+        }
+        result.drop_ = drop_;
+      } else {
+        result.drop_ = dropBuilder_.build();
+      }
     }
 
     private void buildPartial0(com.game.table.MonsterTable result) {
@@ -548,6 +628,32 @@ private static final long serialVersionUID = 0L;
       if (other.getGoldReward() != 0L) {
         setGoldReward(other.getGoldReward());
       }
+      if (dropBuilder_ == null) {
+        if (!other.drop_.isEmpty()) {
+          if (drop_.isEmpty()) {
+            drop_ = other.drop_;
+            bitField0_ = (bitField0_ & ~0x00000200);
+          } else {
+            ensureDropIsMutable();
+            drop_.addAll(other.drop_);
+          }
+          onChanged();
+        }
+      } else {
+        if (!other.drop_.isEmpty()) {
+          if (dropBuilder_.isEmpty()) {
+            dropBuilder_.dispose();
+            dropBuilder_ = null;
+            drop_ = other.drop_;
+            bitField0_ = (bitField0_ & ~0x00000200);
+            dropBuilder_ = 
+              com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
+                 internalGetDropFieldBuilder() : null;
+          } else {
+            dropBuilder_.addAllMessages(other.drop_);
+          }
+        }
+      }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
       return this;
@@ -619,6 +725,19 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000100;
               break;
             } // case 72
+            case 82: {
+              com.game.table.Monsterdrop m =
+                  input.readMessage(
+                      com.game.table.Monsterdrop.parser(),
+                      extensionRegistry);
+              if (dropBuilder_ == null) {
+                ensureDropIsMutable();
+                drop_.add(m);
+              } else {
+                dropBuilder_.addMessage(m);
+              }
+              break;
+            } // case 82
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -922,6 +1041,246 @@ private static final long serialVersionUID = 0L;
       goldReward_ = 0L;
       onChanged();
       return this;
+    }
+
+    private java.util.List<com.game.table.Monsterdrop> drop_ =
+      java.util.Collections.emptyList();
+    private void ensureDropIsMutable() {
+      if (!((bitField0_ & 0x00000200) != 0)) {
+        drop_ = new java.util.ArrayList<com.game.table.Monsterdrop>(drop_);
+        bitField0_ |= 0x00000200;
+       }
+    }
+
+    private com.google.protobuf.RepeatedFieldBuilder<
+        com.game.table.Monsterdrop, com.game.table.Monsterdrop.Builder, com.game.table.MonsterdropOrBuilder> dropBuilder_;
+
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public java.util.List<com.game.table.Monsterdrop> getDropList() {
+      if (dropBuilder_ == null) {
+        return java.util.Collections.unmodifiableList(drop_);
+      } else {
+        return dropBuilder_.getMessageList();
+      }
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public int getDropCount() {
+      if (dropBuilder_ == null) {
+        return drop_.size();
+      } else {
+        return dropBuilder_.getCount();
+      }
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public com.game.table.Monsterdrop getDrop(int index) {
+      if (dropBuilder_ == null) {
+        return drop_.get(index);
+      } else {
+        return dropBuilder_.getMessage(index);
+      }
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public Builder setDrop(
+        int index, com.game.table.Monsterdrop value) {
+      if (dropBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureDropIsMutable();
+        drop_.set(index, value);
+        onChanged();
+      } else {
+        dropBuilder_.setMessage(index, value);
+      }
+      return this;
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public Builder setDrop(
+        int index, com.game.table.Monsterdrop.Builder builderForValue) {
+      if (dropBuilder_ == null) {
+        ensureDropIsMutable();
+        drop_.set(index, builderForValue.build());
+        onChanged();
+      } else {
+        dropBuilder_.setMessage(index, builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public Builder addDrop(com.game.table.Monsterdrop value) {
+      if (dropBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureDropIsMutable();
+        drop_.add(value);
+        onChanged();
+      } else {
+        dropBuilder_.addMessage(value);
+      }
+      return this;
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public Builder addDrop(
+        int index, com.game.table.Monsterdrop value) {
+      if (dropBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureDropIsMutable();
+        drop_.add(index, value);
+        onChanged();
+      } else {
+        dropBuilder_.addMessage(index, value);
+      }
+      return this;
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public Builder addDrop(
+        com.game.table.Monsterdrop.Builder builderForValue) {
+      if (dropBuilder_ == null) {
+        ensureDropIsMutable();
+        drop_.add(builderForValue.build());
+        onChanged();
+      } else {
+        dropBuilder_.addMessage(builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public Builder addDrop(
+        int index, com.game.table.Monsterdrop.Builder builderForValue) {
+      if (dropBuilder_ == null) {
+        ensureDropIsMutable();
+        drop_.add(index, builderForValue.build());
+        onChanged();
+      } else {
+        dropBuilder_.addMessage(index, builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public Builder addAllDrop(
+        java.lang.Iterable<? extends com.game.table.Monsterdrop> values) {
+      if (dropBuilder_ == null) {
+        ensureDropIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, drop_);
+        onChanged();
+      } else {
+        dropBuilder_.addAllMessages(values);
+      }
+      return this;
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public Builder clearDrop() {
+      if (dropBuilder_ == null) {
+        drop_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000200);
+        onChanged();
+      } else {
+        dropBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public Builder removeDrop(int index) {
+      if (dropBuilder_ == null) {
+        ensureDropIsMutable();
+        drop_.remove(index);
+        onChanged();
+      } else {
+        dropBuilder_.remove(index);
+      }
+      return this;
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public com.game.table.Monsterdrop.Builder getDropBuilder(
+        int index) {
+      return internalGetDropFieldBuilder().getBuilder(index);
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public com.game.table.MonsterdropOrBuilder getDropOrBuilder(
+        int index) {
+      if (dropBuilder_ == null) {
+        return drop_.get(index);  } else {
+        return dropBuilder_.getMessageOrBuilder(index);
+      }
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public java.util.List<? extends com.game.table.MonsterdropOrBuilder> 
+         getDropOrBuilderList() {
+      if (dropBuilder_ != null) {
+        return dropBuilder_.getMessageOrBuilderList();
+      } else {
+        return java.util.Collections.unmodifiableList(drop_);
+      }
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public com.game.table.Monsterdrop.Builder addDropBuilder() {
+      return internalGetDropFieldBuilder().addBuilder(
+          com.game.table.Monsterdrop.getDefaultInstance());
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public com.game.table.Monsterdrop.Builder addDropBuilder(
+        int index) {
+      return internalGetDropFieldBuilder().addBuilder(
+          index, com.game.table.Monsterdrop.getDefaultInstance());
+    }
+    /**
+     * <code>repeated .Monsterdrop drop = 10;</code>
+     */
+    public java.util.List<com.game.table.Monsterdrop.Builder> 
+         getDropBuilderList() {
+      return internalGetDropFieldBuilder().getBuilderList();
+    }
+    private com.google.protobuf.RepeatedFieldBuilder<
+        com.game.table.Monsterdrop, com.game.table.Monsterdrop.Builder, com.game.table.MonsterdropOrBuilder> 
+        internalGetDropFieldBuilder() {
+      if (dropBuilder_ == null) {
+        dropBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
+            com.game.table.Monsterdrop, com.game.table.Monsterdrop.Builder, com.game.table.MonsterdropOrBuilder>(
+                drop_,
+                ((bitField0_ & 0x00000200) != 0),
+                getParentForChildren(),
+                isClean());
+        drop_ = null;
+      }
+      return dropBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:MonsterTable)

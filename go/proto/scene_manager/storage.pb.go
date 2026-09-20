@@ -107,9 +107,16 @@ type PlayerLocation struct {
 	UpdateTime uint64                 `protobuf:"varint,3,opt,name=update_time,json=updateTime,proto3" json:"update_time,omitempty"`
 	// Zone where the player's current scene resides.
 	// Used on reconnect to determine cross-zone redirect need.
-	ZoneId        uint32 `protobuf:"varint,4,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	ZoneId uint32 `protobuf:"varint,4,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`
+	// 写入这条 location 时的归属 epoch(与 sidecar 键 player:{id}:owner_epoch 同一 Lua 原子写入)。
+	// node_id 为空且 owner_epoch != 0 表示「跨 zone 交接已放行、等待目标 zone 落点」,此时没有节点持有该玩家。
+	OwnerEpoch uint64 `protobuf:"varint,5,opt,name=owner_epoch,json=ownerEpoch,proto3" json:"owner_epoch,omitempty"`
+	// 只在「等待落点」里有意义:跨 zone 传送时玩家指定的目标地图(EnterSceneRequest.scene_conf_id)。
+	// 第一条腿放行时写入,第二条腿(目标 zone 的 login 发来的 EnterScene 不带地图)由 scene_manager
+	// 自己读出来选频道。不经票据 / login / 客户端转手,目标地图不会被持票者改写。0 = 默认大世界。
+	PendingSceneConfId uint64 `protobuf:"varint,6,opt,name=pending_scene_conf_id,json=pendingSceneConfId,proto3" json:"pending_scene_conf_id,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *PlayerLocation) Reset() {
@@ -170,6 +177,20 @@ func (x *PlayerLocation) GetZoneId() uint32 {
 	return 0
 }
 
+func (x *PlayerLocation) GetOwnerEpoch() uint64 {
+	if x != nil {
+		return x.OwnerEpoch
+	}
+	return 0
+}
+
+func (x *PlayerLocation) GetPendingSceneConfId() uint64 {
+	if x != nil {
+		return x.PendingSceneConfId
+	}
+	return 0
+}
+
 var File_proto_scene_manager_storage_proto protoreflect.FileDescriptor
 
 const file_proto_scene_manager_storage_proto_rawDesc = "" +
@@ -182,13 +203,16 @@ const file_proto_scene_manager_storage_proto_rawDesc = "" +
 	"\vcreate_time\x18\x04 \x01(\x03R\n" +
 	"createTime\x12\x1d\n" +
 	"\n" +
-	"scene_type\x18\x05 \x01(\rR\tsceneType\"~\n" +
+	"scene_type\x18\x05 \x01(\rR\tsceneType\"\xd2\x01\n" +
 	"\x0ePlayerLocation\x12\x19\n" +
 	"\bscene_id\x18\x01 \x01(\x04R\asceneId\x12\x17\n" +
 	"\anode_id\x18\x02 \x01(\tR\x06nodeId\x12\x1f\n" +
 	"\vupdate_time\x18\x03 \x01(\x04R\n" +
 	"updateTime\x12\x17\n" +
-	"\azone_id\x18\x04 \x01(\rR\x06zoneIdB\x15Z\x13proto/scene_managerb\x06proto3"
+	"\azone_id\x18\x04 \x01(\rR\x06zoneId\x12\x1f\n" +
+	"\vowner_epoch\x18\x05 \x01(\x04R\n" +
+	"ownerEpoch\x121\n" +
+	"\x15pending_scene_conf_id\x18\x06 \x01(\x04R\x12pendingSceneConfIdB\x15Z\x13proto/scene_managerb\x06proto3"
 
 var (
 	file_proto_scene_manager_storage_proto_rawDescOnce sync.Once

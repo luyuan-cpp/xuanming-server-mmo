@@ -407,6 +407,75 @@ func TestFollowRedirect_ReloginFailurePropagates(t *testing.T) {
 	}
 }
 
+// 重登录握手期间如果又暂存了一条 msg 124(目标 zone 的 login 把人弹走 / 二次改派,且它赶在
+// EnterGameResponse 之前到达),补投会在**同一个 goroutine**里重入 FollowRedirect。补投若还握着
+// redirectMu 就是自锁:RecvLoop 永久卡死,上层只看得到超时。
+// 用带超时的外壳跑,把"自锁"变成一条失败,而不是挂住整个 go test。
+func TestFollowRedirect_ReentrantRedirectDuringReplay(t *testing.T) {
+	old := newFakeGate(t, true, "")
+	oldIP, oldPort := old.addr()
+	first := newFakeGate(t, true, "")
+	firstIP, firstPort := first.addr()
+	second := newFakeGate(t, true, "")
+	secondIP, secondPort := second.addr()
+
+	gc, err := NewGameClient(oldIP, oldPort)
+	if err != nil {
+		t.Fatalf("new client: %v", err)
+	}
+	defer gc.Close()
+	gc.Account = "robot_1"
+
+	// 只用来标记"这是一条重定向通知",数值与真实消息号无关(pkg 层不认识消息号)。
+	const redirectNotifyId = 124
+
+	// 分发函数扮演 msg 124 的 handler:补投出来的重定向通知要再跟随一次。
+	var nestedErr error
+	nestedCalls := 0
+	gc.setDispatch(func(c *GameClient, msg *base.MessageContent) {
+		if msg.GetMessageId() != redirectNotifyId {
+			return
+		}
+		nestedCalls++
+		nestedErr = FollowRedirect(c, RedirectTarget{IP: secondIP, Port: secondPort})
+	})
+
+	reloginRuns := 0
+	calls := withRelogin(t, func(c *GameClient) error {
+		reloginRuns++
+		// 只在第一次重登录时暂存一条重定向通知;嵌套那次不再暂存,否则会一路弹到熔断。
+		if reloginRuns == 1 {
+			c.DeferMessage(&base.MessageContent{MessageId: redirectNotifyId})
+		}
+		return nil
+	})
+
+	done := make(chan error, 1)
+	go func() { done <- FollowRedirect(gc, RedirectTarget{IP: firstIP, Port: firstPort}) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("FollowRedirect: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("FollowRedirect did not return: replaying a deferred redirect re-entered it while redirectMu was still held")
+	}
+
+	if nestedCalls != 1 {
+		t.Fatalf("deferred redirect was dispatched %d time(s), want exactly 1", nestedCalls)
+	}
+	if nestedErr != nil {
+		t.Fatalf("nested FollowRedirect: %v", nestedErr)
+	}
+	assertStillOn(t, gc, secondIP, secondPort)
+	if gc.RedirectHops() != 2 {
+		t.Fatalf("hops = %d, want 2 (outer + nested)", gc.RedirectHops())
+	}
+	if *calls != 2 {
+		t.Fatalf("relogin ran %d time(s), want 2 (once per hop)", *calls)
+	}
+}
+
 func assertStillOn(t *testing.T, gc *GameClient, ip string, port int) {
 	t.Helper()
 	gotIP, gotPort := gc.GateAddr()

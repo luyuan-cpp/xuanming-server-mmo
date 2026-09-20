@@ -48,6 +48,8 @@ const (
 	// barrierSiteStaleLocation:EnterScene 把已下线 zone 的陈旧 player location
 	// 当作不存在之前的判定点(见 enterscenelogic.go playerLocationOwnerGone)。
 	barrierSiteStaleLocation = "stale_location"
+	// 单节点判死后的玩家接管(enterscenelogic.go playerLocationOwnerDead)。
+	barrierSiteDeadOwnerTakeover = "dead_owner_takeover"
 )
 
 // ErrReentryBarrierPending 表示老属主节点刚判死,但再入屏障还没走完。

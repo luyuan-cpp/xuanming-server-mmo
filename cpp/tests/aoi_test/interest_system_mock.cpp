@@ -1,3 +1,12 @@
+// 本文件当前不参与 aoi_test 编译,保留以备将来改造链接方式。
+//
+// aoi_test.vcxproj 只编 aoi_system_test.cpp,并链接 scene.lib;本文件里这 8 个
+// InterestSystem 成员函数与 scene.lib 中 spatial/system/interest.cpp 的定义完全同名,
+// 一旦把本文件加进工程就会 LNK2005 重复定义。因此 aoi_system_test.cpp 里的用例
+// (含 team-system.md §F.4 的队友 AOI 优先级用例)跑的是 interest.cpp 的真实实现,
+// 不是这里的 mock。要真正启用本 mock,需要先让 aoi_test 不再整体链接 scene.lib
+// (例如把 InterestSystem 拆到独立的小 lib,或给测试单独编译所需的 .cpp)。
+
 #include "spatial/system/interest.h"
 #include "spatial/comp/scene_node_scene_comp.h"
 #include <modules/scene/comp/scene_comp.h>
@@ -101,4 +110,16 @@ void InterestSystem::UpgradePriority(entt::entity watcher, entt::entity target, 
     const auto& policy = MockGetPolicy(watcher);
     if (policy.GetWeight(priority) > policy.GetWeight(it->second.priority))
         it->second.priority = priority;
+}
+
+// 与生产实现同语义:条目标签恰好等于 from 才改成 to(team-system.md §F.4)。
+void InterestSystem::DowngradePriority(entt::entity watcher, entt::entity target, AoiPriority from, AoiPriority to)
+{
+    if (watcher == entt::null || target == entt::null) return;
+    auto* comp = tlsEcs.actorRegistry.try_get<AoiListComp>(watcher);
+    if (comp == nullptr) return;
+    auto it = comp->entries.find(target);
+    if (it == comp->entries.end()) return;
+    if (it->second.priority != from) return;
+    it->second.priority = to;
 }

@@ -9,6 +9,8 @@
 
 > **2026-09-14 修订提示**:§8 的 D4(:202、:230、:245、:291、:397)与 D12「禁直接 require proto2mysql」(:253,连同 :25 的 builder 描述)已由 [xuanming-port-decisions-20260910.md](xuanming-port-decisions-20260910.md) D-14 推翻或修订。与本文冲突处以决策文档为准。
 
+> **2026-09-18 修订提示(D7 team ↔ match)**:D7 已按「方案 2 同进程、分协议」落码并合并进 `main`(`66c546e70`),但落地形态与 §8(:233、:250)、§9.3(:167)的 D7 原文有多处偏离(独立 message_id 段、原子事务范围、`JoinQueueRequest` 加 `team_id`、验收条款的"14 个 RPC"与跟随触发点)。逐条修订见文末 **§12 D7(team ↔ match)落地修订注记(2026-09-18)**;与 D7 原文冲突处以 §12 与 [team-system.md](team-system.md) §0 为准。**状态:已实现、未编译、未测试。**
+
 ## 0. 结论先行
 
 | 问题 | 答案 |
@@ -425,3 +427,41 @@ cd /d/luyuan/mmorpg && git status --porcelain go/ && git log -1 --format='%h %ci
 - 中间结果文件（scratchpad）：`adrs_main3.json` / `adrs_supp.json` / `keystone3.json` / `manifests3.json` / `report3.json` / `critic2.json` / `plan2.json`
 - 拆分后的中间结果：scratchpad `components.json`（30 组件）、`detail_checks.json`（17 组件对抗验证）、`spof_full.json`（单点 + 3 验证者）、`surveys_full.json`（8 维度）、`pkg_config.json`
 - 相关既有文档：`docs/design/scene-owner-reentry-barrier.md`、`docs/design/bag-instance-layout-split.md`、`docs/design/player-async-save-loss-windows.md`、`docs/notes/todo_zh.md #286`
+
+---
+
+## 12. D7(team ↔ match)落地修订注记(2026-09-18)
+
+> 本节是 [team-system.md](team-system.md) R.4 ⑥ / J-24 的交付物,由组队收口工作流**追加**,不改本文其余任何段落。
+> 权威设计以 [team-system.md](team-system.md) 为准,尤其 §0「结论先行:偏离已有决策的 7 处」(DV-1..DV-7)与「与 D-2 / D7 的关系」。与本文 §8(:233、:250)、§9.3(:167)、§10(:400)的 D7 原文冲突处,**以本节和 team-system.md 为准**;原文一律保留作历史,未改动。
+
+### 12.1 落点与状态
+
+- **落点与 D7 翻案后的「方案 2 同进程、分协议」一致**:team 进 `go/match` 内的 `internal/team`(同进程、同镜像),协议独立(`proto/team/team.proto`、`package teampb`、节点类型 `ENodeType_TeamNodeService`);在同一个 zrpc server 上注册 `ClientPlayerTeam`,并经 `go/shared/noderegistry.RegisterAfterListening` 做**第二次**节点注册,两份注册都按 `POD_IP` 通告,先起 gRPC 再注册、注销先于停服。
+- **新增进程 / 端口 / 镜像 / manifest 数:0**,D-2「team 随 match 进程、`Global = $true`、`node_util.cpp` 两个 switch 不改」完全保留;路由服 `ZoneScopedNodeTypes` 不加 Team,TeamNodeService 走全局随机选实例。
+- **状态:已实现、已导表、已生成、已合并进 `main`(`66c546e70`),但未编译、未测试。** 组队代码(`proto/team`、`go/match/internal/team`、`go/match/internal/playercontract`、`cpp/libs/services/scene/player/system/player_team.cpp`、`robot/team_smoke_scenario.go`)均已在主干。**目前没有任何"能编过 / 已验证"的依据**,必须跑的验证见 team-system.md R.4 ⑦ 与文末「收口记录(2026-09-18)」。
+- 人日一栏(:250 的 **45**)未做回算,**不要**拿本次落地当估算校准依据。
+
+### 12.2 D7 原文逐条修订(DV-1..DV-7)
+
+| D7 原文(出处) | 落地结果 | 依据 / 后果 |
+|---|---|---|
+| "team 进 `go/match` 内 `internal/team`,协议独立(`proto/team/team.proto` + `NODE_TEAM` + 第二次 `noderegistry.Register`)"(:233、:250) | **保留,已实现**。`NODE_TEAM` 的实名是 `ENodeType_TeamNodeService`;第二次注册改用 `shared/noderegistry.RegisterAfterListening` | team-system.md §A.3、「与 D-2 / D7 的关系」表 |
+| "**独立 message_id 段**"(:233、:250) | **修订(DV-5)**:"数值段"做不到,只能做到"**独立 service、独立消息号**"。实际拿到 **15 个号 201..215**(12 个请求 + 3 个 `Notify*`:203 / 213 / 215)、event id **48**(`PlayerTeamRefreshEvent`);号由发号器从空闲号里挑,**同批新方法之间号序随机** | 发号器 `tools/proto_generator/protogen/internal/generator/cpp/service_register_info.go:69`(`MaxMessageId` = 本次解析到的方法总数)、`:148-166`(只写本次解析到的方法,**没解析到的域的旧号会从 `message_id.txt` 消失并被别的新方法拿走**)、`:170-213`(空闲号 + Go map 迭代顺序)。**运维硬约束**:proto 生成一律用含全部域的配置,**禁止**用 `git show HEAD:` 之类缺域配置 |
+| "`BeginTeamMatch` 不作 RPC"(:233、:250) | **保留,已实现**:由进程内的 `logic.TeamBattleStarter` 端口实现,不跨进程 | team-system.md §A.3 |
+| "改为覆盖 `team:{id}` + 每成员 `match:ticket` + `match:queue` 的**原子事务**"(:233、:250) | **修订(DV-1 + DV-3)**:物理上做不到,拆成**两个原子域**。① 队伍域:`team:rec:*` / `team:<id>` / `team:player:*` / `team:invite:*` 全部放 **SharedRedis**(单实例),一条 Lua 同时改权威记录、scene 投影、玩家索引与邀请反查索引;② 票据域:开战锁 + 逐人 `createTicketIfAbsent`,失败时 CAS 删票补偿。**v1 整队开战不进队列**,复用 PVE_SOLO 的"即时开战"(票据直接写 matched 态再 gather) | 票据 key `match:ticket:%d` **不带** hash tag、队列 key 带 `{mq}`(`go/match/internal/logic/keys.go:13-17,24-27,119-121`),MatchRedis 是 `Type: cluster`(`go/match/etc/match_service.yaml:23-25`)→ 跨 slot 的 Lua 必报 CROSSSLOT;C++ scene 用 hiredis `GetZoneRedis()` 读 `team:<id>`,**没有集群客户端**,所以队伍 key 只能放 SharedRedis。队列侧还有滚动升级风险:队列元素按十进制 player_id 解析,解析失败当场删除(`matcher.go:405`、`:438-441`) |
+| (关联)cross-zone-matchmaking.md D2"match 对 SharedRedis **只读**"(:89) | **加例外(DV-2)**:只允许 match 进程内的 team 模块写上述**四类** `team:*` key;match 原有代码仍然只读 | `go/match/internal/logic/keys.go:34-38`、`internal/svc/servicecontext.go:37-44`、`etc/match_service.yaml:9-15` |
+| "`JoinQueueRequest` 加 `team_id`"(:233、:250) | **修订(DV-4)**:**不加**。整队开战的唯一入口是 `ClientPlayerTeam.StartTeamMatch` | 路由服从 MatchNodeService 实例池随机选(`go/client_rpc_router/internal/logic/forwardlogic.go:198-200`),滚动升级窗口里旧实例收到组队字段只打一行日志、照单人入队(`joinqueuelogic.go:57-61`),请求会被静默吞掉;TeamNodeService 只有新二进制才注册,天然避开旧实例 |
+| "`party_member_ids` 标 deprecated"(:233、:250) | **保留,已实现**。两个已知副作用:① 客户端 C# 重新生成后该字段带 `[Obsolete]`(2026-09-18 已核:客户端零处引用 `PartyMemberIds`,不会 CS0612);② Go 侧 `joinqueuelogic.go:58` 仍读它,`staticcheck` 会报 SA1019(`go vet` 不报) | team-system.md R.5 #10 |
+| 验收条款"team:**14 个 RPC** 经 gate 可达"(:167) | **修订**:v1 是 **12 个请求 RPC + 3 个下行推送**(合计 15 个消息号)。验收口径改成"12 个请求经 gate 可达;3 个 `Notify*` 只下行,客户端不得主动发" | `proto/message_id.txt` 里 `ClientPlayerTeam*` 恰好 15 条;`route_table.go` 这 15 条全是 `NodeType: base.ENodeType_TeamNodeService` + `ClientProtocol: true` |
+| 验收条款"`JoinQueue` 带 `team_id` 整队成局不可拆票"(:167) | **修订(DV-3 / DV-4)**:改成"`StartTeamMatch` 一次性为全员建 matched 票并 gather;任一人失败则**全员删票**并回错误码",全程不经队列 | `gather.go:123-126`(`requeueOnFail=false` 时全员 `deleteTicketIfOwned`);PVE_SOLO 即时开战先例 `joinqueuelogic.go:169-187` |
+| 验收条款"scene 读到 `team:<id>` 后 `aoi.cpp:27-28` 队伍跟随触发"(:167) | **修订(位置说错了)**:`aoi.cpp:24-37` 是**队友 AOI 优先级**,不是跟随;真正的跟随在 scene 的 `PlayerTeamSystem`(`cpp/libs/services/scene/player/system/player_team.cpp`),`player_scene.cpp` 里原来那段旧第 5 步(`OnGetTeamInfo` / `OnGetLeaderLocation`)已删除且全仓零残留引用 | team-system.md §F、「合并后语义复核(2026-09-18)」核对点 3 |
+| (D7 原文未覆盖,本设计新增)**生产环境的跟随范围** | **DV-6**:只在**同 zone、同 scene 节点**内跟随,跨节点 / 跨 zone 一律跳过并只记指标 | **2026-09-18 补注**:跨 zone 传送阶段 1(`1f2bdd01c`)把 scene_manager 那道兜底闸从"`AllowUnsafeCrossNodeHandoff=false` 即无条件拒绝跨节点"改成了**有条件放行**(源 scene 为当前 `owner_epoch` 写出落盘 handoff 标记即可)。跟随请求永不写该标记,结论不变;但第一道闸现在只剩 C++ `CheckFollowLeader` 的同 zone / 同节点守卫,改那两条守卫时不能再指望 scene_manager 兜住 |
+| (D7 原文未覆盖,本设计新增)**队伍"版本号"** | **DV-7**:客户端视图按 `(membership_epoch, version)` 排序。`version` 每次提交严格 +1;`membership_epoch` 按玩家维度计,只在该玩家 `team_id` 变化时递增,并在同一条 Lua 里用 Redis 自身时钟起种 | 推送是至多一次投递(`go/match/internal/logic/push.go:48-50`),会乱序;客户端 `TeamUiState.Complete` 目前**无条件覆盖**快照 —— 客户端这条**尚未修**,见 12.3 |
+
+### 12.3 落地后仍欠的账(与 D7 相关,按严重度)
+
+1. **全部未编译、未测试**(含 2026-09-18 收口轮)。必须跑的清单见 team-system.md R.4 ⑦ 与文末「收口记录(2026-09-18)」。另有一道**前置**:跨 zone 传送阶段 1 的 `proto/scene_manager/storage.proto`(`PlayerLocation.owner_epoch`)与 `EnterSceneResponse.player_id` 尚未 regen,`go/scene_manager` 与 C++ scene 在 regen 之前都编不过 —— 组队的验证必须排在 regen 之后,否则会把跨 zone 的编译失败误记成组队引入。
+2. **发布顺序是硬约束**:客户端组队功能必须等服务端 gate / 路由服 / match **全量**升级之后才能对玩家开放。否则旧 gate 不认识 201..215,会按非法包 `forceClose`,现象是玩家被踢下线。
+3. **客户端 UI 为零**。2026-09-18 只把协议管道接上(`mmorpg-client/tools/gen_proto.ps1` 收录 `proto/team/team.proto` 与 `generated/code/proto/tip/team_error_tip.proto`,生成 `Teampb.*` 与 15 条 `MessageIds`),`Assets/Scripts/Game/Team` 下的传输适配器、单飞守卫、按 `(membership_epoch, version)` 应用快照(DV-7)、错误码文案等**都还没做**。
+4. **D7 的估算与验收原文未改**(:167 的"14 个 RPC"、:250 的 45 人日等保留作历史),读到时以本节 12.2 为准。

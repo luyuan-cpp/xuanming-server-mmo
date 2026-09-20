@@ -81,6 +81,39 @@ private static final long serialVersionUID = 0L;
     return equipKind_;
   }
 
+  public static final int BATTLE_USABLE_FIELD_NUMBER = 4;
+  private int battleUsable_ = 0;
+  /**
+   * <code>uint32 battle_usable = 4;</code>
+   * @return The battleUsable.
+   */
+  @java.lang.Override
+  public int getBattleUsable() {
+    return battleUsable_;
+  }
+
+  public static final int BATTLE_HEAL_HP_FIELD_NUMBER = 5;
+  private long battleHealHp_ = 0L;
+  /**
+   * <code>uint64 battle_heal_hp = 5;</code>
+   * @return The battleHealHp.
+   */
+  @java.lang.Override
+  public long getBattleHealHp() {
+    return battleHealHp_;
+  }
+
+  public static final int BATTLE_HEAL_MP_FIELD_NUMBER = 6;
+  private long battleHealMp_ = 0L;
+  /**
+   * <code>uint64 battle_heal_mp = 6;</code>
+   * @return The battleHealMp.
+   */
+  @java.lang.Override
+  public long getBattleHealMp() {
+    return battleHealMp_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -104,6 +137,15 @@ private static final long serialVersionUID = 0L;
     if (equipKind_ != 0) {
       output.writeUInt32(3, equipKind_);
     }
+    if (battleUsable_ != 0) {
+      output.writeUInt32(4, battleUsable_);
+    }
+    if (battleHealHp_ != 0L) {
+      output.writeUInt64(5, battleHealHp_);
+    }
+    if (battleHealMp_ != 0L) {
+      output.writeUInt64(6, battleHealMp_);
+    }
     getUnknownFields().writeTo(output);
   }
   private int computeSerializedSize_0() {
@@ -119,6 +161,18 @@ private static final long serialVersionUID = 0L;
     if (equipKind_ != 0) {
       size += com.google.protobuf.CodedOutputStream
         .computeUInt32Size(3, equipKind_);
+    }
+    if (battleUsable_ != 0) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt32Size(4, battleUsable_);
+    }
+    if (battleHealHp_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(5, battleHealHp_);
+    }
+    if (battleHealMp_ != 0L) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeUInt64Size(6, battleHealMp_);
     }
     return size;
   }
@@ -150,6 +204,12 @@ private static final long serialVersionUID = 0L;
         != other.getMaxStackSize()) return false;
     if (getEquipKind()
         != other.getEquipKind()) return false;
+    if (getBattleUsable()
+        != other.getBattleUsable()) return false;
+    if (getBattleHealHp()
+        != other.getBattleHealHp()) return false;
+    if (getBattleHealMp()
+        != other.getBattleHealMp()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -167,6 +227,14 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getMaxStackSize();
     hash = (37 * hash) + EQUIP_KIND_FIELD_NUMBER;
     hash = (53 * hash) + getEquipKind();
+    hash = (37 * hash) + BATTLE_USABLE_FIELD_NUMBER;
+    hash = (53 * hash) + getBattleUsable();
+    hash = (37 * hash) + BATTLE_HEAL_HP_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getBattleHealHp());
+    hash = (37 * hash) + BATTLE_HEAL_MP_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashLong(
+        getBattleHealMp());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -301,6 +369,9 @@ private static final long serialVersionUID = 0L;
       id_ = 0;
       maxStackSize_ = 0;
       equipKind_ = 0;
+      battleUsable_ = 0;
+      battleHealHp_ = 0L;
+      battleHealMp_ = 0L;
       return this;
     }
 
@@ -343,6 +414,15 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000004) != 0)) {
         result.equipKind_ = equipKind_;
       }
+      if (((from_bitField0_ & 0x00000008) != 0)) {
+        result.battleUsable_ = battleUsable_;
+      }
+      if (((from_bitField0_ & 0x00000010) != 0)) {
+        result.battleHealHp_ = battleHealHp_;
+      }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.battleHealMp_ = battleHealMp_;
+      }
     }
 
     @java.lang.Override
@@ -365,6 +445,15 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getEquipKind() != 0) {
         setEquipKind(other.getEquipKind());
+      }
+      if (other.getBattleUsable() != 0) {
+        setBattleUsable(other.getBattleUsable());
+      }
+      if (other.getBattleHealHp() != 0L) {
+        setBattleHealHp(other.getBattleHealHp());
+      }
+      if (other.getBattleHealMp() != 0L) {
+        setBattleHealMp(other.getBattleHealMp());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -407,6 +496,21 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000004;
               break;
             } // case 24
+            case 32: {
+              battleUsable_ = input.readUInt32();
+              bitField0_ |= 0x00000008;
+              break;
+            } // case 32
+            case 40: {
+              battleHealHp_ = input.readUInt64();
+              bitField0_ |= 0x00000010;
+              break;
+            } // case 40
+            case 48: {
+              battleHealMp_ = input.readUInt64();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 48
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -516,6 +620,102 @@ private static final long serialVersionUID = 0L;
     public Builder clearEquipKind() {
       bitField0_ = (bitField0_ & ~0x00000004);
       equipKind_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private int battleUsable_ ;
+    /**
+     * <code>uint32 battle_usable = 4;</code>
+     * @return The battleUsable.
+     */
+    @java.lang.Override
+    public int getBattleUsable() {
+      return battleUsable_;
+    }
+    /**
+     * <code>uint32 battle_usable = 4;</code>
+     * @param value The battleUsable to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBattleUsable(int value) {
+
+      battleUsable_ = value;
+      bitField0_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint32 battle_usable = 4;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBattleUsable() {
+      bitField0_ = (bitField0_ & ~0x00000008);
+      battleUsable_ = 0;
+      onChanged();
+      return this;
+    }
+
+    private long battleHealHp_ ;
+    /**
+     * <code>uint64 battle_heal_hp = 5;</code>
+     * @return The battleHealHp.
+     */
+    @java.lang.Override
+    public long getBattleHealHp() {
+      return battleHealHp_;
+    }
+    /**
+     * <code>uint64 battle_heal_hp = 5;</code>
+     * @param value The battleHealHp to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBattleHealHp(long value) {
+
+      battleHealHp_ = value;
+      bitField0_ |= 0x00000010;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 battle_heal_hp = 5;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBattleHealHp() {
+      bitField0_ = (bitField0_ & ~0x00000010);
+      battleHealHp_ = 0L;
+      onChanged();
+      return this;
+    }
+
+    private long battleHealMp_ ;
+    /**
+     * <code>uint64 battle_heal_mp = 6;</code>
+     * @return The battleHealMp.
+     */
+    @java.lang.Override
+    public long getBattleHealMp() {
+      return battleHealMp_;
+    }
+    /**
+     * <code>uint64 battle_heal_mp = 6;</code>
+     * @param value The battleHealMp to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBattleHealMp(long value) {
+
+      battleHealMp_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>uint64 battle_heal_mp = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBattleHealMp() {
+      bitField0_ = (bitField0_ & ~0x00000020);
+      battleHealMp_ = 0L;
       onChanged();
       return this;
     }

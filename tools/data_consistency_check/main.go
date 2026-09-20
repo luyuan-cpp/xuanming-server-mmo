@@ -37,6 +37,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -60,6 +61,11 @@ type CheckResult struct {
 	SampleNotes string // 1-line, optional concrete examples ("guild_id=123 zone=999")
 }
 
+// guildSchemaNamePattern guards the one string we concatenate into SQL.
+// A database name is not a bind parameter, so shape-checking it here is the
+// only defence; mirrors tools/merge_zone's validateGuildSchemaName.
+var guildSchemaNamePattern = regexp.MustCompile(`^[A-Za-z0-9_]{1,64}$`)
+
 // runConfig is what each checker needs. We pass it by value because
 // every field is a handle / int — no ownership concerns.
 type runConfig struct {
@@ -76,10 +82,17 @@ type runConfig struct {
 	// 本文件 2026-05-23 的教训就是「优雅降级」把没跑的检查读成了干净通过。
 	friendDB   *sql.DB
 	knownZones map[uint32]struct{} // zones we expect to be live
+	// guildSchema: the guild service's own database (-guild-schema). Guild
+	// tables moved out of the default DSN database into mmorpg_guild, so
+	// every guild query has to be schema-qualified.
+	guildSchema string
 }
 
 func main() {
-	mysqlDSN := flag.String("mysql-dsn", "root:@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local", "MySQL DSN")
+	mysqlDSN := flag.String("mysql-dsn", "root:@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local",
+		"MySQL DSN (its default database holds the user/account tables; guild lives in -guild-schema on the same instance, friend in -friend-mysql-dsn)")
+	guildSchema := flag.String("guild-schema", "mmorpg_guild",
+		"Guild database on the same MySQL instance (go/guild forces its DSN database to be mmorpg_guild; override only for isolated tests)")
 	// friend 自 2026-09-18 起住独占库 mmorpg_friend(D-14),不在 -mysql-dsn 那个库里。
 	// 缺省值只换库名、其余与 -mysql-dsn 的缺省逐字一致;置空 = 显式声明「本环境没有 friend」,
 	// 此时 friend 那条检查报 warn「NOT CHECKED」,不会伪装成通过。
@@ -97,6 +110,10 @@ func main() {
 	timeout := flag.Duration("timeout", 5*time.Minute, "Overall timeout for the scan")
 
 	flag.Parse()
+
+	if !guildSchemaNamePattern.MatchString(*guildSchema) {
+		log.Fatalf("-guild-schema %q is not a plain identifier ([A-Za-z0-9_], 1-64 chars)", *guildSchema)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
 	defer cancel()
@@ -165,7 +182,7 @@ func main() {
 	}
 	log.Printf("Live zones: %v", sortedKeys(knownZones))
 
-	cfg := runConfig{db: db, mappingDB: rdb, friendDB: friendDB, knownZones: knownZones}
+	cfg := runConfig{db: db, mappingDB: rdb, friendDB: friendDB, knownZones: knownZones, guildSchema: *guildSchema}
 
 	// ── run checks ───────────────────────────────────────────────
 	//
@@ -259,15 +276,16 @@ func sortedKeys(m map[uint32]struct{}) []uint32 {
 // That guild's members will lose access to it. Block-severity.
 func checkGuildZoneFK(ctx context.Context, cfg runConfig) CheckResult {
 	r := CheckResult{Name: "guild.zone_id"}
+	guildTable := cfg.guildSchema + ".guild"
 	var total int64
-	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild").Scan(&total); err != nil {
+	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+guildTable).Scan(&total); err != nil {
 		r.Severity = "info"
-		r.SampleNotes = "guild table not present"
+		r.SampleNotes = guildTable + " not present"
 		return r
 	}
 	r.TotalCount = total
 
-	rows, err := cfg.db.QueryContext(ctx, "SELECT DISTINCT zone_id FROM guild")
+	rows, err := cfg.db.QueryContext(ctx, "SELECT DISTINCT zone_id FROM "+guildTable)
 	if err != nil {
 		r.Severity = "warn"
 		r.SampleNotes = fmt.Sprintf("query failed: %v", err)
@@ -293,7 +311,7 @@ func checkGuildZoneFK(ctx context.Context, cfg runConfig) CheckResult {
 	// Count rows per dead zone to give the exact bad count.
 	for _, z := range dead {
 		var n int64
-		_ = cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM guild WHERE zone_id = ?", z).Scan(&n)
+		_ = cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+guildTable+" WHERE zone_id = ?", z).Scan(&n)
 		r.BadCount += n
 	}
 	r.Severity = "block"

@@ -45,6 +45,8 @@
 #include "DungeonTable.h"
 #include "EquipSlotTable.h"
 #include "GlobalVariableTable.h"
+#include "GuildLevelTable.h"
+#include "GuildRuleTable.h"
 #include "ItemTable.h"
 #include "MessageLimiterTable.h"
 #include "MirrorTable.h"
@@ -96,7 +98,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 29;
+	static constexpr int32 TableCount = 31;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -196,6 +198,12 @@ public:
 	UGlobalVariableTable* GetGlobalVariableTable() const { return GlobalVariableTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UGuildLevelTable* GetGuildLevelTable() const { return GuildLevelTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UGuildRuleTable* GetGuildRuleTable() const { return GuildRuleTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UItemTable* GetItemTable() const { return ItemTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
@@ -267,6 +275,10 @@ private:
 	TObjectPtr<UEquipSlotTable> EquipSlotTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UGlobalVariableTable> GlobalVariableTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UGuildLevelTable> GuildLevelTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UGuildRuleTable> GuildRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UItemTable> ItemTable;
 	UPROPERTY(Transient)

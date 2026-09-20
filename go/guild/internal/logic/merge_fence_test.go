@@ -9,9 +9,8 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 
+	"guild/internal/constants"
 	pb "proto/guild"
 )
 
@@ -41,48 +40,49 @@ func TestCreateGuild_RefusedWhileZoneIsMerging(t *testing.T) {
 	resp, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{
 		PlayerId: 1001, Name: "merging-zone-guild", ZoneId: 7,
 	})
-	require.Error(t, err)
-	assert.Nil(t, resp)
-	assert.ErrorContains(t, err, ErrZoneMerging.Error())
-	st, ok := status.FromError(err)
-	require.True(t, ok)
-	assert.Equal(t, codes.FailedPrecondition, st.Code())
+	// 拒绝改回 tip(§11.1):"这个区正在合服,等几分钟"是可预期的运维窗口,
+	// 回 gRPC 错误会被 serverbase 记成服务端故障,客户端还会进重连隔离。
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrZoneMerging, resp.GetErrorMessage().GetId())
+	assert.Nil(t, resp.GetGuild(), "被拒绝的建帮不能回一个公会")
 	assert.Equal(t, uint32(7), fence.lastZone, "查的必须是请求里的 zone")
 }
 
 // TestCreateGuild_FenceUnreadableFailsClosed:查不到闸门状态 ≠ 没有闸门。
+// 与"确实在合服"回同一个码(玩家看到的都是"稍后再试"),两者靠诊断参数区分。
 func TestCreateGuild_FenceUnreadableFailsClosed(t *testing.T) {
 	fence := &fakeFence{err: errors.New("dial tcp: connection refused")}
 	l := NewGuildLogic(nil, nil, nil, fence, nil)
 
-	_, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{
+	resp, err := l.CreateGuild(context.Background(), &pb.CreateGuildRequest{
 		PlayerId: 1002, Name: "unreadable-fence", ZoneId: 7,
 	})
-	require.Error(t, err)
-	st, _ := status.FromError(err)
-	assert.Equal(t, codes.FailedPrecondition, st.Code())
-	assert.ErrorContains(t, err, "unreadable")
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrZoneMerging, resp.GetErrorMessage().GetId())
+	assert.Equal(t, []string{"merge fence unreadable"}, resp.GetErrorMessage().GetParameters(),
+		"读不到闸门与真的在合服必须能在日志里分开")
 }
 
-// TestCheckMergeFence_SkippedWhenNotConfigured:没配 MergeMarkerRedis 时闸门整体跳过,
+// TestMergeFenceTip_SkippedWhenNotConfigured:没配 MergeMarkerRedis 时闸门整体跳过,
 // 建帮照常 —— 否则所有还没配这段的环境会因为一个可选加固而建不了公会。
-func TestCheckMergeFence_SkippedWhenNotConfigured(t *testing.T) {
+func TestMergeFenceTip_SkippedWhenNotConfigured(t *testing.T) {
 	l := NewGuildLogic(nil, nil, nil, nil, nil)
-	require.NoError(t, l.checkMergeFence(context.Background(), 7))
+	assert.Nil(t, l.mergeFenceTip(context.Background(), 7))
 }
 
-// TestCheckMergeFence_ZoneZeroIsNotChecked:zone 0 没有对应的标记键,查它没有意义。
-func TestCheckMergeFence_ZoneZeroIsNotChecked(t *testing.T) {
+// TestMergeFenceTip_ZoneZeroIsNotChecked:zone 0 没有对应的标记键(内部调用不带 zone),
+// 查它没有意义。
+func TestMergeFenceTip_ZoneZeroIsNotChecked(t *testing.T) {
 	fence := &fakeFence{merging: true}
 	l := NewGuildLogic(nil, nil, nil, fence, nil)
-	require.NoError(t, l.checkMergeFence(context.Background(), 0))
+	assert.Nil(t, l.mergeFenceTip(context.Background(), 0))
 	assert.Zero(t, fence.calls, "zone=0 不该产生一次 Redis 往返")
 }
 
-func TestCheckMergeFence_PassesWhenMarkerAbsent(t *testing.T) {
+func TestMergeFenceTip_PassesWhenMarkerAbsent(t *testing.T) {
 	fence := &fakeFence{merging: false}
 	l := NewGuildLogic(nil, nil, nil, fence, nil)
-	require.NoError(t, l.checkMergeFence(context.Background(), 7))
+	assert.Nil(t, l.mergeFenceTip(context.Background(), 7))
 	assert.Equal(t, 1, fence.calls)
 }
 

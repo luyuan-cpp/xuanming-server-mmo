@@ -145,13 +145,17 @@ func (QueueState) EnumDescriptor() ([]byte, []int) {
 }
 
 type JoinQueueRequest struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId       uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`                            // Initiating player
-	Mode           MatchMode              `protobuf:"varint,2,opt,name=mode,proto3,enum=match.MatchMode" json:"mode,omitempty"`                               // Desired match mode (5v5, 3v3, 1v1)
-	MapConfigId    uint32                 `protobuf:"varint,3,opt,name=map_config_id,json=mapConfigId,proto3" json:"map_config_id,omitempty"`                 // Map template config ID (maps to scene_config_id)
-	PartyMemberIds []uint64               `protobuf:"varint,4,rep,packed,name=party_member_ids,json=partyMemberIds,proto3" json:"party_member_ids,omitempty"` // Pre-made party (includes player_id)
-	ZoneId         uint32                 `protobuf:"varint,5,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                                  // Player's current zone
-	BattleConfigId uint32                 `protobuf:"varint,6,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"`        // 回合制战斗配置(DungeonTable id:怪物组/人数/回合上限)
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId    uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`            // Initiating player
+	Mode        MatchMode              `protobuf:"varint,2,opt,name=mode,proto3,enum=match.MatchMode" json:"mode,omitempty"`               // Desired match mode (5v5, 3v3, 1v1)
+	MapConfigId uint32                 `protobuf:"varint,3,opt,name=map_config_id,json=mapConfigId,proto3" json:"map_config_id,omitempty"` // Map template config ID (maps to scene_config_id)
+	// 从未生效(joinqueuelogic.go 只打一行日志后照单人入队);整队开战的唯一入口是
+	// ClientPlayerTeam.StartTeamMatch(docs/design/team-system.md DV-4)。字段号 4 保留不复用(AGENTS §4)。
+	//
+	// Deprecated: Marked as deprecated in proto/match/match_service.proto.
+	PartyMemberIds []uint64 `protobuf:"varint,4,rep,packed,name=party_member_ids,json=partyMemberIds,proto3" json:"party_member_ids,omitempty"`
+	ZoneId         uint32   `protobuf:"varint,5,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`                           // Player's current zone
+	BattleConfigId uint32   `protobuf:"varint,6,opt,name=battle_config_id,json=battleConfigId,proto3" json:"battle_config_id,omitempty"` // 回合制战斗配置(DungeonTable id:怪物组/人数/回合上限)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -207,6 +211,7 @@ func (x *JoinQueueRequest) GetMapConfigId() uint32 {
 	return 0
 }
 
+// Deprecated: Marked as deprecated in proto/match/match_service.proto.
 func (x *JoinQueueRequest) GetPartyMemberIds() []uint64 {
 	if x != nil {
 		return x.PartyMemberIds
@@ -1270,12 +1275,12 @@ var File_proto_match_match_service_proto protoreflect.FileDescriptor
 
 const file_proto_match_match_service_proto_rawDesc = "" +
 	"\n" +
-	"\x1fproto/match/match_service.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\x1a proto/battle/player_battle.proto\"\xe6\x01\n" +
+	"\x1fproto/match/match_service.proto\x12\x05match\x1a\x1bproto/db/proto_option.proto\x1a\x1dproto/common/base/empty.proto\x1a\x1bproto/common/base/tip.proto\x1a proto/battle/player_battle.proto\"\xea\x01\n" +
 	"\x10JoinQueueRequest\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12$\n" +
 	"\x04mode\x18\x02 \x01(\x0e2\x10.match.MatchModeR\x04mode\x12\"\n" +
-	"\rmap_config_id\x18\x03 \x01(\rR\vmapConfigId\x12(\n" +
-	"\x10party_member_ids\x18\x04 \x03(\x04R\x0epartyMemberIds\x12\x17\n" +
+	"\rmap_config_id\x18\x03 \x01(\rR\vmapConfigId\x12,\n" +
+	"\x10party_member_ids\x18\x04 \x03(\x04B\x02\x18\x01R\x0epartyMemberIds\x12\x17\n" +
 	"\azone_id\x18\x05 \x01(\rR\x06zoneId\x12(\n" +
 	"\x10battle_config_id\x18\x06 \x01(\rR\x0ebattleConfigId\"\x8b\x01\n" +
 	"\x11JoinQueueResponse\x12\x1d\n" +

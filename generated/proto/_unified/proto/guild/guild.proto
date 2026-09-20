@@ -5,16 +5,23 @@ option go_package = "proto/guild";
 
 import "proto/db/proto_option.proto";
 import "proto/common/base/tip.proto";
+import "proto/common/base/empty.proto";
 
 // ── Guild basic data ─────────────────────────────────────────────
 
 message GuildMember {
-  uint64 player_id     = 1;
-  uint32 role          = 2;  // 0=member, 1=officer, 2=vice_leader, 3=leader
-  int64  join_time_ms  = 3;
-  int64  last_active_ms = 4;
-  uint64 contribution  = 5;
-  bool   online        = 6;  // 是否在线（仅内存，不入库）
+  uint64 player_id            = 1;
+  uint32 role                 = 2;  // 0=成员 1=长老 3=帮主(2 不启用);权限比较一律走 go/guild constants.Rank
+  uint64 join_time_ms         = 3;
+  uint64 last_active_ms       = 4;
+  // 5 号原为 contribution,2026-09 拆成 total / balance 两个字段。
+  // 开发期本可直接复用 5 号,但 reserved 更安全:它让"后续批次误用 5 号"在
+  // protoc 阶段就报错,而不是等旧客户端按新语义解出一个看似合法的数字。
+  reserved 5;
+  bool   online               = 6;  // 是否在线(读 player:session,不入库)
+  string name                 = 7;  // 展示名(不入库;B3b 起由 data_service BatchGetPlayerName 填,B2 恒空)
+  uint64 contribution_total   = 8;  // 累计帮贡,只增(B5 起写入)
+  uint64 contribution_balance = 9;  // 可消费帮贡(B5 起写入)
 }
 
 message GuildInfo {
@@ -23,10 +30,18 @@ message GuildInfo {
   uint64 leader_id      = 3;
   uint32 level          = 4;
   string announcement   = 5;
-  int64  create_time_ms = 6;
+  uint64 create_time_ms = 6;
   uint32 max_members    = 7;
-  repeated GuildMember members = 8;
+  repeated GuildMember members = 8;  // 按 player_id 升序(B1 起 ORDER BY player_id)
   uint32 zone_id        = 9;  // Zone this guild belongs to
+  uint64 funds                      = 10;  // 帮会资金(B5 起写入)
+  uint32 max_officers               = 11;  // GuildLevel[level].max_officers
+  uint32 officer_count              = 12;  // members 中 role=1 的人数
+  uint64 upgrade_cost_funds         = 13;  // GuildLevel[level].upgrade_cost_funds;0 = 满级
+  string leader_name                = 14;  // 展示用(B3b 填,B2 恒空)
+  // pending_application_count 只对本帮长老 / 帮主非 0:待审数量是管理侧信息,
+  // 对普通成员与外人一律回 0,不把帮会内部状态泄给任意查询者。
+  uint32 pending_application_count  = 15;
 }
 
 // ── Request/Response ────────────────────────────────────────────────
@@ -60,15 +75,6 @@ message GetPlayerGuildResponse {
   GuildInfo guild = 2;
 }
 
-message JoinGuildRequest {
-  uint64 player_id = 1;
-  uint64 guild_id  = 2;
-}
-
-message JoinGuildResponse {
-  TipInfoMessage error_message = 1;
-}
-
 message LeaveGuildRequest {
   uint64 player_id = 1;
 }
@@ -93,6 +99,124 @@ message SetAnnouncementRequest {
 
 message SetAnnouncementResponse {
   TipInfoMessage error_message = 1;
+  GuildInfo guild = 2;  // 成功时为提交前事务内读到的权威快照(含新公告)
+}
+
+// ── 成员管理(B2)────────────────────────────────────────────────
+// 以下请求都不带 player_id:操作者一律取 gate 会话,无会话的内部调用直接拒绝
+// (go/guild/internal/logic)。把操作者放进请求体等于让客户端自报身份。
+
+message SetGuildMemberRoleRequest {
+  uint64 target_player_id = 1;
+  uint32 role             = 2;  // 只允许 0(成员)/ 1(长老)
+}
+message SetGuildMemberRoleResponse {
+  TipInfoMessage error_message = 1;
+  GuildInfo guild = 2;  // 成功时为提交后的权威快照
+}
+
+message KickGuildMemberRequest {
+  uint64 target_player_id = 1;
+}
+message KickGuildMemberResponse {
+  TipInfoMessage error_message = 1;
+  GuildInfo guild = 2;
+}
+
+message TransferGuildLeaderRequest {
+  uint64 target_player_id = 1;
+}
+message TransferGuildLeaderResponse {
+  TipInfoMessage error_message = 1;
+  GuildInfo guild = 2;
+}
+
+// ── 入帮申请(B2)────────────────────────────────────────────────
+
+message ApplyJoinGuildRequest {
+  uint64 guild_id = 1;
+}
+message ApplyJoinGuildResponse {
+  TipInfoMessage error_message = 1;  // 同帮重复申请 = 刷新有效期并成功
+}
+
+message CancelGuildApplicationRequest {
+  uint64 guild_id = 1;
+}
+message CancelGuildApplicationResponse {
+  TipInfoMessage error_message = 1;
+}
+
+// 申请人视角的一条待审申请。
+message GuildApplicationView {
+  uint64 guild_id     = 1;
+  string guild_name   = 2;
+  uint32 level        = 3;
+  uint32 member_count = 4;
+  uint32 max_members  = 5;
+  uint64 leader_id    = 6;
+  string leader_name  = 7;  // B3b 填,B2 恒空
+  uint64 apply_ms     = 8;  // 最近一次申请 / 刷新时刻(服务端时钟,Unix 毫秒)
+  uint64 expire_ms    = 9;  // 过期时刻(服务端时钟);客户端只用于展示
+}
+
+message ListMyGuildApplicationsRequest {}
+message ListMyGuildApplicationsResponse {
+  TipInfoMessage error_message = 1;
+  repeated GuildApplicationView applications = 2;  // 按 apply_ms 降序、guild_id 升序
+}
+
+// 审批人视角的一位申请人。
+message GuildApplicantView {
+  uint64 player_id = 1;
+  string name      = 2;  // B3b 填,B2 恒空
+  bool   online    = 3;  // 读 player:session,不入库
+  uint64 apply_ms  = 4;
+  uint64 expire_ms = 5;
+}
+
+message ListGuildApplicationsRequest {}
+message ListGuildApplicationsResponse {
+  TipInfoMessage error_message = 1;
+  // 按 apply_ms 升序、player_id 升序,至多 GuildRule.max_pending_applications_per_guild 条
+  repeated GuildApplicantView applicants = 2;
+}
+
+message ReviewGuildApplicationRequest {
+  uint64 applicant_player_id = 1;
+  bool   approve             = 2;
+}
+message ReviewGuildApplicationResponse {
+  TipInfoMessage error_message = 1;
+  GuildInfo guild = 2;  // 成功(通过或拒绝)时为审批人所在帮会的权威快照
+}
+
+// ── 推送(B2)────────────────────────────────────────────────────
+// 至多一次;客户端收到只触发拉取(GetPlayerGuild 等),拉取结果才是真相。
+// 枚举值名在 proto3 里是**包级**符号,本文件与 guild_db.proto 同在 package guildpb,
+// 不带前缀会在包内撞名,所以每个值都带 GUILD_CHANGE_KIND_ 前缀。
+enum GuildChangeKind {
+  GUILD_CHANGE_KIND_UNSPECIFIED          = 0;
+  GUILD_CHANGE_KIND_MEMBER_JOINED        = 1;
+  GUILD_CHANGE_KIND_MEMBER_LEFT          = 2;
+  GUILD_CHANGE_KIND_MEMBER_KICKED        = 3;
+  GUILD_CHANGE_KIND_ROLE_CHANGED         = 4;
+  GUILD_CHANGE_KIND_LEADER_TRANSFERRED   = 5;
+  GUILD_CHANGE_KIND_DISBANDED            = 6;
+  GUILD_CHANGE_KIND_APPLICATION_RECEIVED = 7;
+  GUILD_CHANGE_KIND_APPLICATION_REJECTED = 8;
+  GUILD_CHANGE_KIND_FUNDS_CHANGED        = 9;   // B5
+  GUILD_CHANGE_KIND_LEVEL_UP             = 10;  // B5
+  GUILD_CHANGE_KIND_ANNOUNCEMENT_CHANGED = 11;
+  GUILD_CHANGE_KIND_ACTIVITY_CHANGED     = 12;  // B6
+  GUILD_CHANGE_KIND_DELIVERY_DONE        = 13;  // B5
+}
+
+message GuildChangedS2C {
+  GuildChangeKind kind    = 1;
+  uint64 guild_id         = 2;
+  uint64 actor_player_id  = 3;  // 发起者;系统触发为 0
+  uint64 target_player_id = 4;  // 被操作者;无则 0
 }
 
 // ── Ranking ───────────────────────────────────────────────────
@@ -106,6 +230,7 @@ message GuildRankEntry {
   uint32 member_count   = 5;
   int64  score          = 6;  // Ranking score
   uint32 rank           = 7;  // Rank (1-based)
+  string leader_name    = 8;  // 展示用(B3b 填,B2 恒空)
 }
 
 message UpdateGuildScoreRequest {
@@ -154,10 +279,25 @@ service GuildService {
   rpc CreateGuild (CreateGuildRequest) returns (CreateGuildResponse);
   rpc GetGuild (GetGuildRequest) returns (GetGuildResponse);
   rpc GetPlayerGuild (GetPlayerGuildRequest) returns (GetPlayerGuildResponse);
-  rpc JoinGuild (JoinGuildRequest) returns (JoinGuildResponse);
   rpc LeaveGuild (LeaveGuildRequest) returns (LeaveGuildResponse);
   rpc DisbandGuild (DisbandGuildRequest) returns (DisbandGuildResponse);
   rpc SetAnnouncement (SetAnnouncementRequest) returns (SetAnnouncementResponse);
+
+  // 成员管理(B2)
+  rpc SetGuildMemberRole (SetGuildMemberRoleRequest) returns (SetGuildMemberRoleResponse);
+  rpc KickGuildMember (KickGuildMemberRequest) returns (KickGuildMemberResponse);
+  rpc TransferGuildLeader (TransferGuildLeaderRequest) returns (TransferGuildLeaderResponse);
+
+  // 入帮申请(B2;取代直接入帮 JoinGuild)
+  rpc ApplyJoinGuild (ApplyJoinGuildRequest) returns (ApplyJoinGuildResponse);
+  rpc CancelGuildApplication (CancelGuildApplicationRequest) returns (CancelGuildApplicationResponse);
+  rpc ListMyGuildApplications (ListMyGuildApplicationsRequest) returns (ListMyGuildApplicationsResponse);
+  rpc ListGuildApplications (ListGuildApplicationsRequest) returns (ListGuildApplicationsResponse);
+  rpc ReviewGuildApplication (ReviewGuildApplicationRequest) returns (ReviewGuildApplicationResponse);
+
+  // 推送占位(B2):只为分配 message id;服务端实现恒返回 Empty。
+  // **不进** go/guild session.ClientMethods —— 客户端发这个 id 会被 PermissionDenied。
+  rpc NotifyGuildChanged (GuildChangedS2C) returns (Empty);
 
   // Ranking
   rpc UpdateGuildScore (UpdateGuildScoreRequest) returns (UpdateGuildScoreResponse);

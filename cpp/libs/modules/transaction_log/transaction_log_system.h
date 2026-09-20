@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "entt/src/entt/entity/entity.hpp"
 #include "modules/currency/constants/currency.h"
 #include "proto/common/rollback/transaction_log.pb.h"
@@ -30,13 +32,17 @@ class TransactionLogSystem
 public:
     // ── Currency operations ──────────────────────────────────────────────
 
+    // correlationId 把这笔货币变动和产生它的那次业务操作对上(帮会 op_id、
+    // 聚宝斋 listing_id / order_id)。0 = 无关联,与旧行为一致。
+    // 没有它,通用资产通道出问题时只能按 (玩家, 时间, 金额) 猜是哪一次捐献。
     static void LogCurrencyAdd(
         entt::entity player,
         CurrencyType type,
         uint64_t amount,
         uint64_t balanceBefore,
         uint64_t balanceAfter,
-        TransactionType txType = TX_CURRENCY_ADD);
+        TransactionType txType = TX_CURRENCY_ADD,
+        uint64_t correlationId = 0);
 
     static void LogCurrencyDeduct(
         entt::entity player,
@@ -44,7 +50,8 @@ public:
         uint64_t amount,
         uint64_t balanceBefore,
         uint64_t balanceAfter,
-        TransactionType txType = TX_CURRENCY_DEDUCT);
+        TransactionType txType = TX_CURRENCY_DEDUCT,
+        uint64_t correlationId = 0);
 
     // Deferred clawback deduction event.
     static void LogClawbackDeduction(
@@ -66,19 +73,34 @@ public:
         uint64_t correlationId = 0);
 
     // Log an item being created (quest reward, GM grant, etc.).
+    // correlationId / extra 可选:战斗掉落传 battle_id 与来源 JSON,
+    // TX_ITEM_AWARD 的 proto 注释要求 extra 带来源(monster_id / drop_table),
+    // 否则回滚重放无法判断这笔奖励是否仍然有效。
     static void LogItemCreate(
         entt::entity player,
         uint64_t itemUuid,
         uint32_t configId,
         uint32_t quantity,
-        TransactionType txType);
+        TransactionType txType,
+        uint64_t correlationId = 0,
+        const std::string &extra = {});
 
     // Log an item being destroyed / consumed.
+    // correlationId / extra 同上:战斗内消耗的药水靠它关联回具体哪一场战斗。
+    //
+    // txType **排在最后**(而不是像 LogItemCreate 那样排在 correlationId 之前):
+    // 既有调用点都按 (…, correlationId, extra) 的位置传参,插在中间会让它们静默
+    // 错位 —— 那正是"加一个默认参数"最容易埋的雷。默认值 TX_ITEM_DESTROY 保持旧行为;
+    // 聚宝斋按 guid 托管扣出传 TX_AUCTION_SELL:实例确实从玩家 blob 上消失了,
+    // 但原因不是"消耗掉了",流水里必须分得开(docs/design/jubaozhai-market.md §6.2)。
     static void LogItemDestroy(
         entt::entity player,
         uint64_t itemUuid,
         uint32_t configId,
-        uint32_t quantity);
+        uint32_t quantity,
+        uint64_t correlationId = 0,
+        const std::string &extra = {},
+        TransactionType txType = TX_ITEM_DESTROY);
 
     // ── Generic / low-level ──────────────────────────────────────────────
 

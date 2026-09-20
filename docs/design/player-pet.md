@@ -102,7 +102,7 @@ AutoAllocate)现在都过 `IsPlayerPool()`,拿到宝宝池一律按"池不存在
 | `AutoAllocatePetPoints` | 算推荐分配,**只算不落** |
 | `RenamePet` | 改名,按 `PetRule.rename_cost_gold` 扣金币 |
 | `NotifyPetListChanged` | 服务器主动推列表(主人升级 / 结算回写) |
-| `GmGrantPet` | GM 发宝宝(核心线唯一获取入口;上线走 GM 鉴权白名单) |
+| `GmGrantPet` | GM 发宝宝(核心线唯一获取入口;**仅 dev/test 可用**,见 §8 第 1 条与 `cpp/nodes/gate/SECURITY.md` §3) |
 
 **写口径与角色一致**:每个写操作成功后回全量列表,客户端整体覆盖,不做增量合并。
 所有写操作在**跨 zone 冻结(`PlayerFrozenComp`)与战斗在途(`InBattleComp`)期间一律拒绝** ——
@@ -189,10 +189,14 @@ UI 连点第 4 个包就 `kRateLimitExceeded(1008)`,现象是"请求无响应"�
 
 1. **获取渠道只有 GM**(`GmGrantPet`):战斗中捕捉、宠物店购买未做。
    `PetSystem::GrantPet` 就是为这两条路准备的公共入口,接的时候不需要改内部逻辑。
-   **`GmGrantPet` 今天没有任何鉴权**,任何客户端都能自助发宝宝 —— 这不是本系统独有的口子,
-   既有的 `GmSetPlayerLevel` / `GmAddCurrency` 同样敞着,gate 侧目前不存在「按消息号的 GM 白名单」
-   (`gate_security.h` 管的是带签名的 GM admin RPC,不覆盖客户端 GM 消息)。
-   上线前必须三条一起收口,单独堵宝宝这条没有意义。
+   ~~**`GmGrantPet` 今天没有任何鉴权**,任何客户端都能自助发宝宝~~
+   **2026-09-18 已收口(未编译)**:gate 侧有了「按消息号的 GM 白名单」
+   (`cpp/nodes/gate/gate_gm_client_messages.h`),六条客户端 GM 消息(含 187 `GmGrantPet`)
+   在 `GATE_RUN_MODE` 非 dev/test 时一律拒绝;scene 侧另有第二道锁
+   (`player_gm_guard.h`,判据 `SCENE_RUN_MODE`)。默认(未设置)= prod = 关闭,
+   部署链从不注入这两个变量。见 `cpp/nodes/gate/SECURITY.md` §3。
+   **注意这是"关掉",不是"给 GM 发宝宝做了鉴权"** —— 线上没有发宝宝的通道,
+   等捕捉 / 宠物店接上才有正规获取渠道。
 2. **宝宝不可指挥**:见 §5。
 3. **宝宝没有服务器权威位置**:召唤只是一个状态位 + 下发给客户端,场景里不生 AOI 实体,
    跟随表现由各自客户端推算。别的玩家看到的宝宝位置因此不是权威的。

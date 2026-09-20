@@ -243,3 +243,22 @@ func TestNewTimeouts(t *testing.T) {
 		t.Fatalf("explicit = %s/%s/%s", r.RoleListTimeout, r.EnterTimeout, r.RegisterTimeout)
 	}
 }
+
+func TestTicketPinsZone(t *testing.T) {
+	cases := []struct {
+		name        string
+		ticket, own uint32
+		want        bool
+	}{
+		{name: "普通票据不钉 zone", ticket: 0, own: 2, want: false},
+		{name: "票据目标就是本 zone", ticket: 2, own: 2, want: true},
+		{name: "票据目标是别的 zone(gate 已拦,这里按普通登录)", ticket: 3, own: 2, want: false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := TicketPinsZone(tc.ticket, tc.own); got != tc.want {
+				t.Fatalf("TicketPinsZone(%d, %d) = %v, want %v", tc.ticket, tc.own, got, tc.want)
+			}
+		})
+	}
+}

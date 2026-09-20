@@ -1,0 +1,15 @@
+syntax = "proto3";
+option go_package = "proto/common/event";
+
+// 组队事件(设计文档 docs/design/team-system.md §B.2、§F.2/§F.3)。
+// 经 SceneCommand{DispatchEvent} 进 scene 节点进程内分发(scene 侧生成 handler/event/team_event_handler)。
+// Kafka 投递要求:topic = scene-cmd_g<N>,partition = scene_node_id % P,key = player_id(保序,AGENTS §7 #3);
+// SceneCommand{DispatchEvent, player_id, target_scene_id = scene_node_id,
+//              target_instance_id = 目标 scene 节点 uuid(防僵尸,AGENTS §7 #2), event_id}。
+
+// team(match 进程)→ scene:某玩家的组队成员关系可能变了,请自己重读 SharedRedis
+// (HMGET team:player:<id> tid epoch → GET team:<tid>)。
+// 载荷只是"去刷新一下"的信号,不携带权威数据:乱序、重复、丢失都安全(下次进场会再拉,§F.2)。
+message PlayerTeamRefreshEvent {
+  uint64 player_id = 1;
+}

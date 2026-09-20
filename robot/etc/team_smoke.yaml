@@ -1,0 +1,60 @@
+# team-smoke 配置:四个机器人对组队系统(go/match 进程内 internal/team)做端到端冒烟
+# (docs/design/team-system.md §I.5)
+#
+# 流程:S0 四人各自离队 / 解散 → S1 A 建队、B 申请、A 同意(B 收 MEMBER_JOINED,version 递增)
+#       → S2 A 重放"同意"(成员不重复、join_seq 不变)→ S3 A 邀请 D、D 列表可见、D 拒绝(A 收 INVITE_CHANGED)、
+#       A 再邀请、D 接受 → S4 A 踢 D(D 收空视图且 membership_epoch 变大)、A 转让给 B、B 转回 A
+#       → S5 D 申请、A 拒绝(D 收 APPLICATION_REJECTED)→ S6 A 换到同节点另一张地图、B 10s 内被拉到同一场景
+#       → S7 A 整队开战(A 回包 STARTING、B 收 MATCH_STARTED,A/B 同一 battle_id 的 BattleStart,自动战斗到终局,都收 MATCH_ENDED)
+#       → S8 B 单人 PVE 战斗中时 A 开战被拒 TeamMemberInBattle(parameters[0]=B)
+#       → X1 / X2 跨区(见下方 expect_cross_zone_allowed)→ S9 A 解散(仍在队的成员收 DISBANDED)。
+#
+# 前置(缺一条就会失败,原因写进 TEAM_SMOKE_FAIL 的 reason):
+#   1. gate 以 GATE_CLIENT_RPC_ROUTER=1 启动(路由服模式);组队的客户端入口只承诺路由服模式。
+#      start_game.ps1 默认已开(-GateRouterMode '1');cross_zone=true 时两个 zone 的 gate 都要开
+#      (dev_tools.ps1 dev-start-zones 需父 shell 先设该变量)。
+#   2. 组队批 0~3 已落地并换上新二进制:proto 已重新生成(gate 白名单 / 路由表里有 15 条 ClientPlayerTeam*),
+#      client_rpc_router、gate、data_service、match(含 team)、scene(同节点跟随)都已重启。
+#   3. Tip 与 MessageLimiter 表已导出(含 team 新码与 15 个 team 消息号的额度),gate 已重启;
+#      否则 team 消息号吃默认 3 次 / 窗口限速,可能被信封拒绝。
+#   4. zone_a 只有 1 个 scene 节点,或 A、B 恰好分到同一 scene 节点(设计 DV-6:v1 只做同节点跟随);
+#      follow_scene_config_ids 里的地图在该节点上都有主世界场景。
+#   5. match 的 PveTeamSizeByConfigId 配了 battle_config_id(本地 "1": 5);队伍 2~3 人,不超过该值即可开战(J-5)。
+#   6. robot_9301 / 9302 / 9303 首次在 zone_a 建角、robot_9304 首次在 zone_b 建角(home zone 在建角时登记);
+#      在别的区登录过的账号,S1"队伍 zone == zone_a"与 X2"C 的 zone_id == zone_b"断言会失败。
+#   7. 两种 AllowCrossZone 形态各跑一次(都要求 cross_zone: true 与双 zone 环境):
+#      - match yaml `Team: { AllowCrossZone: false }`(缺省)→ 本文件 expect_cross_zone_allowed: false
+#        (X1:C 申请 A 的队伍、A 邀请 C 都回 TeamCrossZoneDenied);
+#      - 改成 `AllowCrossZone: true` 并重启**所有** match 实例 → expect_cross_zone_allowed: true
+#        (X2:C 入队且视图 zone_id=zone_b、A 换图时 C 不跟随、B 离队后 A+C 跨 zone 整队开战)。
+#   8. 从 robot/ 目录运行(table_dir 是相对路径)。
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/team_smoke.yaml
+# 退出码 0 = 全部断言通过(日志有 TEAM_SMOKE_OK team_id=… 一行);退出码 1 = 任一步失败(TEAM_SMOKE_FAIL step=… reason=…)。
+# 可重复运行:S0 先把四个账号带出任何队伍;若上一轮死在开战途中,开战锁最长约 83s 后自然过期,等一会儿再跑。
+# 战斗消息全程经 gate 中继(本场景不开战斗直连,原因见 team_smoke_scenario.go 文件头)。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 本模式不用此字段选区(A/B/D 登 team_smoke.zone_a,C 登 zone_b)
+robot_count: 4 # 语义占位:本模式固定 A/B/C/D 四个机器人
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号 robot_9301/9302/9303/9304
+password: "123456"
+skill_ids: [] # 战斗走服务端回合引擎 + 自动战斗,无需配置技能
+table_dir: "../generated/tables"
+action_interval: 3 # 本模式不跑场景 AI 循环,保留默认
+report_interval: 5
+
+mode: "team-smoke"
+
+team_smoke:
+  cross_zone: true # false = 只跑同区步骤(不登录 C,跳过 X1/X2),单 zone 环境用
+  expect_cross_zone_allowed: false # 必须与 match 的 Team.AllowCrossZone 一致;true 仅在 cross_zone=true 时允许
+  zone_a: 1 # A(队长)、B、D 登录的 zone
+  zone_b: 2 # C 登录的 zone;cross_zone=true 时必须与 zone_a 不同
+  battle_config_id: 1 # S7/S8/X2 开战用的 DungeonTable id,必须在 match 的 PveTeamSizeByConfigId 里
+  # 换图候选(BaseScene id):S6 取第一个与 A、B 当前地图都不同的,X2 取第一个与 A 当前地图不同的。
+  # 至少 3 个互不相同的值,保证无论两人停在哪张图都选得出来。
+  follow_scene_config_ids: [2, 3, 1]
+
+auth_type: "password"

@@ -1,0 +1,70 @@
+# travel-smoke 配置:单机器人对「跨 zone 场景传送」做往返端到端冒烟
+# (docs/design/cross-zone-scene-travel.md §4 数据流 / §5 阶段 3;场景实现见 robot/travel_smoke_scenario.go)
+#
+# 流程:T1 登 home_zone,记下 player_id / gate 地址(登录途中就被 msg 124 送走 = 上一轮残留,直接失败)
+#          → 读金币 → 在 home 区 GmAddCurrency +11 并读回 = 金币出发值。出发值必须非 0 且刚刚才变过:
+#            新建角金币是 0,访客区读不到档时建出的空实体也是 0,0 == 0 抓不到"空实体回写覆盖原档";余额不变时读到旧档也能相等
+#       → T2 负向:TravelToZone{target_zone_id=0} 必须被同步拒绝(回包 tip != 0)且不发生重定向、金币不变
+#          T2b:TravelToZone{visit_zone, 不存在的 scene_config_id} 同样必须同步被拒(scene 冻结前按 World 表校验目标地图)
+#       → T3 去程:TravelToZone{visit_zone} → 跟随 msg 124(探测 / 先连新后关旧 / 票据原样验签 / 严格重登)
+#          → 等排在 124 之后的 NotifyEnterScene;断言 player_id 不变、票据 zone == visit_zone、gate 地址变了
+#       → T4 访客区:金币 == 出发值 → GmAddCurrency +7 生效并可读回 → 移动探针(尽力而为)
+#          → 停留 dwell_seconds → 没被踢、没被二次重定向、金币仍是 +7
+#       → T5 回程:TravelToZone{home_zone},同 T3 的断言(票据 zone == home_zone)
+#       → T6 回家:金币 == 出发值 + 7(不回档);全程恰好 2 条 msg 124。
+#
+# 前置(缺一条就会失败,原因写进 TRAVEL_SMOKE_FAIL 的 reason):
+#   1. 双 zone 都在跑(dev_tools.ps1 dev-start-zones -Zones 1,2),并且两个 zone 的 login / scene / scene_manager / db
+#      指向**同一个 Redis**(CZ-2 契约:账号 blob、PlayerAllData、player:{id}:owner_epoch / handoff / location 都在里面)。
+#      Redis 不共享时,访客区 login 的角色列表里没有这个角色,严格重登会以"拒绝自动建角"失败 —— 这是部署问题,robot 修不了。
+#   2. 阶段 1 + 阶段 2 的 proto 已重新生成,gate / scene / login / scene_manager / db 都换上了新二进制;
+#      robot/vendor/proto 已从 go/proto 逐字节同步(至少 scene/player_scene*.pb.go;要启用票据 player_id / target_zone_id
+#      断言还需 common/base/message.pb.go,见 travel_smoke_wire.go 的 TODO)。gate 与 scene 必须同一轮重编:
+#      rpc_event_registry 两边共用,只换 scene 的话 gate 不认 TravelToZone 的消息号,请求会被当非法包。
+#   3. Tip 表已导出(含 scene_error 段的 4 个 kZoneTravel* 码)。本冒烟不引用任何 tip 常量,但没导出时 scene 编不过。
+#   4. scene_manager 的 GateTokenSecret 非空(为空时 AssignGateForZone 直接报错,签不出重定向票据)。
+#      要验证生产口径,请把 scene_manager 的 AllowUnsafeCrossNodeHandoff 设为 false 再跑:
+#      此时放行完全依赖「源端存盘落地 → handoff 标记 → owner_epoch」两道门,而不是 dev 旁路。
+#   5. robot_9601 **首次在 home_zone 建角**(home zone 在建角时登记,之后不随登录区变化);
+#      在别的区登录建过角的账号,"回家不回档"的前提不成立。前缀必须是 robot_ 才会命中 login 侧 DevPasswordAuth。
+#   6. scene_config_id 非 0 时,这张图必须两个 zone 都有主世界场景(去程与回程共用这一个值)。
+#   7. 从 robot/ 目录运行(table_dir 是相对路径)。
+#   8. **两个** zone 的 gate / scene 都放行 GM 客户端指令(GATE_RUN_MODE=dev、SCENE_RUN_MODE=dev;本地启动脚本缺省就是 dev)。
+#      金币断言靠 GmAddCurrency:home 区出发前加一笔、访客区再加一笔。gate 的 GM 闸拒绝时不回包(只推一条 tip),表现是等回包超时。
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/travel_smoke.yaml
+# 退出码 0 = 全部断言通过(日志有 TRAVEL_SMOKE_OK player_id=… 一行);退出码 1 = 任一步失败(TRAVEL_SMOKE_FAIL step=… reason=…)。
+# 跑一轮约 1 分钟(其中 35s 是停留)。可重复运行:每轮给该账号净加 18 金币(home 区出发前 +11、访客区 +7),
+#   下一轮在新的余额上再加 11 作为出发值。TRAVEL_SMOKE_OK 里的 gold_home 是出发值(已含 +11),gold_back = gold_home + 7。
+#
+# 重跑注意:上一轮如果死在搬迁途中(旧连接已关、重登失败),LeaveGame / Disconnect 发不到任何 login,
+#   会留下 login 断线租约(30s)与 scene_manager 的「等待落点」(随票据 300s 过期)。
+#   等 30~60s 再跑;若 T1 报 login-redirected,说明位置记录还指着访客区,等满 300s 或清掉 player:{id}:location。
+# 失败排查:TRAVEL_SMOKE_FAIL 的 reason 会写明走到了哪一步;跟随 msg 124 本身失败的细节在同一份日志里
+#   搜 `follow gate redirect failed`(pkg.FollowRedirect 失败只打日志)或 `redirect ignored`。
+# 副作用:移动探针上报一个地图外的坐标来触发纠偏。场景没有导航网格时服务器 fail-open 会原样接受并存盘,
+#   只影响 robot_9601 这个冒烟专用账号。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 本模式不用此字段选区(按 travel_smoke.home_zone 登录),保留骨架
+robot_count: 1 # 语义占位:本模式固定 1 个机器人
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号 robot_9601
+password: "123456"
+skill_ids: [] # 本模式不放技能
+table_dir: "../generated/tables"
+action_interval: 3 # 本模式不跑场景 AI 循环,保留默认
+report_interval: 5
+
+mode: "travel-smoke"
+
+travel_smoke:
+  home_zone: 1 # 出发并最终回到的 zone;必须是 robot_9601 首次建角的 zone
+  visit_zone: 2 # 去做客的 zone;必须与 home_zone 不同
+  scene_config_id: 0 # 目标地图(BaseScene id),去程回程共用;0 = 由目标 zone 的 scene_manager 挑默认大世界,此时不断言落地地图
+  dwell_seconds: 35 # 访客区停留秒数;缺省 35 > home 区 login 断线租约 30s。0 = 不停留(只验链路)
+  require_move_ack: false # true = 访客区收不到 MoveAck 即失败;场景没有导航网格时 fail-open 不回 ack,所以缺省 false
+
+# 认证:password 模式(robot_ 前缀账号走 DevPasswordAuth)。
+# 不要开 use_http_login:/api/login 会带顶层 zone_id(= home zone)去登录;本模式的严格重登也不走那条路。
+auth_type: "password"

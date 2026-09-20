@@ -27,6 +27,11 @@ public final class MonsterTableOuterClass extends com.google.protobuf.GeneratedF
         (com.google.protobuf.ExtensionRegistryLite) registry);
   }
   static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_Monsterdrop_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_Monsterdrop_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
     internal_static_MonsterTable_descriptor;
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -45,27 +50,36 @@ public final class MonsterTableOuterClass extends com.google.protobuf.GeneratedF
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\023monster_table.proto\"\253\001\n\014MonsterTable\022\n" +
-      "\n\002id\030\001 \001(\r\022\016\n\006health\030\002 \001(\004\022\020\n\010strength\030\003" +
-      " \001(\004\022\r\n\005armor\030\004 \001(\004\022\022\n\nresistance\030\005 \001(\004\022" +
-      "\022\n\ncritchance\030\006 \001(\004\022\r\n\005speed\030\007 \001(\004\022\022\n\nex" +
-      "p_reward\030\010 \001(\004\022\023\n\013gold_reward\030\t \001(\004\"/\n\020M" +
-      "onsterTableData\022\033\n\004data\030\001 \003(\0132\r.MonsterT" +
-      "ableB>\n\016com.game.tableB\026MonsterTableOute" +
-      "rClassP\001Z\022generated/pb/tableb\006proto3"
+      "\n\023monster_table.proto\"G\n\013Monsterdrop\022\021\n\t" +
+      "drop_item\030\001 \001(\r\022\022\n\ndrop_count\030\002 \001(\r\022\021\n\td" +
+      "rop_rate\030\003 \001(\r\"\307\001\n\014MonsterTable\022\n\n\002id\030\001 " +
+      "\001(\r\022\016\n\006health\030\002 \001(\004\022\020\n\010strength\030\003 \001(\004\022\r\n" +
+      "\005armor\030\004 \001(\004\022\022\n\nresistance\030\005 \001(\004\022\022\n\ncrit" +
+      "chance\030\006 \001(\004\022\r\n\005speed\030\007 \001(\004\022\022\n\nexp_rewar" +
+      "d\030\010 \001(\004\022\023\n\013gold_reward\030\t \001(\004\022\032\n\004drop\030\n \003" +
+      "(\0132\014.Monsterdrop\"/\n\020MonsterTableData\022\033\n\004" +
+      "data\030\001 \003(\0132\r.MonsterTableB>\n\016com.game.ta" +
+      "bleB\026MonsterTableOuterClassP\001Z\022generated" +
+      "/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
         new com.google.protobuf.Descriptors.FileDescriptor[] {
         });
-    internal_static_MonsterTable_descriptor =
+    internal_static_Monsterdrop_descriptor =
       getDescriptor().getMessageType(0);
+    internal_static_Monsterdrop_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_Monsterdrop_descriptor,
+        new java.lang.String[] { "DropItem", "DropCount", "DropRate", });
+    internal_static_MonsterTable_descriptor =
+      getDescriptor().getMessageType(1);
     internal_static_MonsterTable_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_MonsterTable_descriptor,
-        new java.lang.String[] { "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward", });
+        new java.lang.String[] { "Id", "Health", "Strength", "Armor", "Resistance", "Critchance", "Speed", "ExpReward", "GoldReward", "Drop", });
     internal_static_MonsterTableData_descriptor =
-      getDescriptor().getMessageType(1);
+      getDescriptor().getMessageType(2);
     internal_static_MonsterTableData_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_MonsterTableData_descriptor,

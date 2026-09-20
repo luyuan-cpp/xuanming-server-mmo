@@ -231,6 +231,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTable final : public ::google::
     kIdFieldNumber = 1,
     kMaxStackSizeFieldNumber = 2,
     kEquipKindFieldNumber = 3,
+    kBattleUsableFieldNumber = 4,
+    kBattleHealHpFieldNumber = 5,
+    kBattleHealMpFieldNumber = 6,
   };
   // uint32 id = 1;
   void clear_id() ;
@@ -262,11 +265,41 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTable final : public ::google::
   void _internal_set_equip_kind(::uint32_t value);
 
   public:
+  // uint32 battle_usable = 4;
+  void clear_battle_usable() ;
+  [[nodiscard]] ::uint32_t battle_usable() const;
+  void set_battle_usable(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_battle_usable() const;
+  void _internal_set_battle_usable(::uint32_t value);
+
+  public:
+  // uint64 battle_heal_hp = 5;
+  void clear_battle_heal_hp() ;
+  [[nodiscard]] ::uint64_t battle_heal_hp() const;
+  void set_battle_heal_hp(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_heal_hp() const;
+  void _internal_set_battle_heal_hp(::uint64_t value);
+
+  public:
+  // uint64 battle_heal_mp = 6;
+  void clear_battle_heal_mp() ;
+  [[nodiscard]] ::uint64_t battle_heal_mp() const;
+  void set_battle_heal_mp(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_battle_heal_mp() const;
+  void _internal_set_battle_heal_mp(::uint64_t value);
+
+  public:
   // @@protoc_insertion_point(class_scope:ItemTable)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 3,
+      ::google::protobuf::internal::TcParseTable<3, 6,
                           0, 0,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
@@ -298,6 +331,9 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ItemTable final : public ::google::
     ::uint32_t id_;
     ::uint32_t max_stack_size_;
     ::uint32_t equip_kind_;
+    ::uint32_t battle_usable_;
+    ::uint64_t battle_heal_hp_;
+    ::uint64_t battle_heal_mp_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -602,6 +638,78 @@ inline ::uint32_t ItemTable::_internal_equip_kind() const {
 inline void ItemTable::_internal_set_equip_kind(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.equip_kind_ = value;
+}
+
+// uint32 battle_usable = 4;
+inline void ItemTable::clear_battle_usable() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_usable_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t ItemTable::battle_usable() const {
+  // @@protoc_insertion_point(field_get:ItemTable.battle_usable)
+  return _internal_battle_usable();
+}
+inline void ItemTable::set_battle_usable(::uint32_t value) {
+  _internal_set_battle_usable(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:ItemTable.battle_usable)
+}
+inline ::uint32_t ItemTable::_internal_battle_usable() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_usable_;
+}
+inline void ItemTable::_internal_set_battle_usable(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_usable_ = value;
+}
+
+// uint64 battle_heal_hp = 5;
+inline void ItemTable::clear_battle_heal_hp() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_heal_hp_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t ItemTable::battle_heal_hp() const {
+  // @@protoc_insertion_point(field_get:ItemTable.battle_heal_hp)
+  return _internal_battle_heal_hp();
+}
+inline void ItemTable::set_battle_heal_hp(::uint64_t value) {
+  _internal_set_battle_heal_hp(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:ItemTable.battle_heal_hp)
+}
+inline ::uint64_t ItemTable::_internal_battle_heal_hp() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_heal_hp_;
+}
+inline void ItemTable::_internal_set_battle_heal_hp(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_heal_hp_ = value;
+}
+
+// uint64 battle_heal_mp = 6;
+inline void ItemTable::clear_battle_heal_mp() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_heal_mp_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t ItemTable::battle_heal_mp() const {
+  // @@protoc_insertion_point(field_get:ItemTable.battle_heal_mp)
+  return _internal_battle_heal_mp();
+}
+inline void ItemTable::set_battle_heal_mp(::uint64_t value) {
+  _internal_set_battle_heal_mp(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:ItemTable.battle_heal_mp)
+}
+inline ::uint64_t ItemTable::_internal_battle_heal_mp() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.battle_heal_mp_;
+}
+inline void ItemTable::_internal_set_battle_heal_mp(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.battle_heal_mp_ = value;
 }
 
 // -------------------------------------------------------------------

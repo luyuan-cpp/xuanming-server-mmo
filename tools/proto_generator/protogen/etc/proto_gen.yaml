@@ -494,3 +494,26 @@ domain_meta:
       cpp:
         proto: "cpp/generated/match/proto"
         grpc: "cpp/generated/match/grpc"
+
+  # 组队(docs/design/team-system.md §B.5):ClientPlayerTeam 由 go/match 进程内的 internal/team 实现,
+  # 经 gate(路由服模式)→ client_rpc_router → TeamNodeService 可达;不是独立进程(port-decisions D-2)。
+  # 形状照 match:Go 出 proto/handler/grpc;cpp 出 proto 与 grpc(gate 白名单 / 路由元数据 / grpc_client)。
+  # 漏掉本块 = team.proto 根本不被解析:没有消息号、没有路由表条目,客户端包在 gate 被当非法包踢线。
+  # 副作用:生成器按 source 目录名必定建 go/team/generated/pb/game/(J-15 接受,不代表有独立 team 服务)。
+  # 客户端门禁:mmorpg-client 的 tools/gen_proto.ps1 收录 proto/team/team.proto 之前(设计 §H.1),
+  # 不得用本默认配置跑 proto 生成(dev.bat proto / dev.bat gen):enable_unity_client 没有按域开关,
+  # 会往客户端写 15 个 ClientPlayerTeam*Handler.cs 并重写 HandlerRegistry.cs,引用的 Teampb.* 不存在 → 客户端 CS0246。
+  # 期间一律用 enable_unity_client: false 的副本跑 proto-gen-run(设计 §B.5 / §I.6 / R.4)。
+  # 不要为规避而删掉本块(DV-5:未解析的域会丢号),也不要在本文件关掉 enable_unity_client(其他域的客户端 handler 会失去同步)。
+  team:
+    source: "{{proto_dir}}team/"
+    rpc:
+      type: grpc
+    outputs:
+      go:
+        proto: "go/generated/team/proto"
+        handler: "go/generated/team/handler"
+        grpc: "go/generated/team/grpc"
+      cpp:
+        proto: "cpp/generated/team/proto"
+        grpc: "cpp/generated/team/grpc"

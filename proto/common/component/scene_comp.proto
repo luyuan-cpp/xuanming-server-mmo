@@ -33,6 +33,11 @@ message ChangeSceneInfoComp
   bool ignore_full = 8;// Ignore capacity full
   bool processing = 9;
   uint32 state = 10;
+  // DEPRECATED(docs/design/cross-zone-scene-travel.md CZ-1):11 / 12 / 13 三个字段待删。
+  // 它们只服务已下线的"跨 zone 搬数据"链,唯一的读者(scene 的 HandleCrossZoneTransfer)已删除,
+  // 全仓从来没有写者。跨 zone 传送的目标现在由运行时组件 PlayerTravelHandoffComp 携带,不经 proto。
+  // 本轮只打标记不删字段:删字段必须同一轮 regen。未上线,下次 regen 时直接删、不写 reserved。
+  // 不要再给它们加新的使用方。
   uint32 from_zone_id = 11;
   uint32 to_zone_id = 12;
   bool is_cross_zone = 13; // Whether cross-zone

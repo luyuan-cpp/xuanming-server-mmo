@@ -1,0 +1,86 @@
+syntax = "proto3";
+package guildpb;
+
+option go_package = "proto/guild";
+
+import "proto/db/proto_option.proto";
+
+// 帮会独占库 mmorpg_guild 的表结构,唯一事实源(port-decisions D-14,§8 已修订)。
+// - 建表 / 加列只经 go/schemamigrate(go/guild 的 -migrate 与启动期 Schema.AutoMigrate);业务 SQL 手写。
+// - D-14 §2:主键只用整数 / 枚举列;string 列建成 MEDIUMTEXT,进索引只按 191 前缀;每表至多一个唯一键。
+// - 改表纪律见 docs/design/guild-phase2/01-storage.md §6.4:新表 / 新字段只追加;OptionIndex 组只能追加到末尾,
+//   不得调序;已有唯一键或索引组的列一旦改动,开发期必须删库重建。
+// - 与 guild.proto 同包:message 一律带 Record 后缀,枚举值一律带枚举名前缀。
+// - 本文件不进客户端 tools/gen_proto.ps1 清单,不定义 service。
+// - 加锁顺序:guild → guild_player_state → guild_member → guild_application → guild_player_op_seq
+//   → guild_asset_op → guild_daily_counter → guild_activity_progress → guild_trial_battle(同上文档 §2.1)。
+// - 后续表由 B5 / B6a / B6b 在本文件追加 message,并在 go/guild/internal/data/tables.go 追加。
+
+message GuildRecord {
+  option(OptionTableName) = "guild";
+  option(OptionPrimaryKey) = "guild_id";
+  option(OptionUniqueKey) = "name_norm";      // 生成 uk_guild;帮名全服唯一,判重只看规范化值
+  option(OptionIndex) = "zone_id;leader_id";  // idx_guild_0 = 合服 / 分区榜重建;idx_guild_1 = 按会长查
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;        // data_service 号段 biz_tag=guild
+  string name = 2;            // 展示名:TrimSpace 后原样保存,不建索引;≤ MaxGuildNameRunes=24
+  uint64 leader_id = 3;       // 与 guild_member.role=3 同事务维护
+  uint32 level = 4;           // 建帮写 1;B5 升级改写
+  string announcement = 5;    // ≤ MaxAnnouncementBytes=600
+  uint64 create_time_ms = 6;
+  uint32 max_members = 7;     // 建帮写入;B5 起按 GuildLevel.max_members 改写
+  uint32 zone_id = 8;         // 帮会归属 zone;merge_zone 步骤 3 改写
+  int64 score = 9;            // 排行分权威副本;Redis ZSET 由 RebuildRanks 重建
+  uint64 funds = 10;          // 帮会资金;B1 恒为 0,B5 起写入
+  string name_norm = 11;      // data.GuildNameNorm(name):NFKC → TrimSpace → 小写;≤ 48 rune(远小于 191 前缀)
+  // 追加区:从 12 起。
+}
+
+message GuildPlayerStateRecord {
+  option(OptionTableName) = "guild_player_state";
+  option(OptionPrimaryKey) = "player_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;       // 每玩家一行,只作串行化锁行(§2.1 规则 3);INSERT IGNORE 于事务外建行
+  uint64 updated_ms = 2;      // 最近一次加锁写入的时刻,仅诊断用
+  // 追加区:从 3 起。刻意不存"待审申请数":帮会侧批量删过期申请、解散删申请都不锁申请人行,计数会漂;
+  // 上限判定一律在持有本行锁后对 guild_application 做加锁计数(§2.1 规则 4)。
+}
+
+message GuildMemberRecord {
+  option(OptionTableName) = "guild_member";
+  option(OptionPrimaryKey) = "guild_id,player_id";
+  option(OptionUniqueKey) = "player_id";      // 生成 uk_guild_member;一人至多一个帮
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint64 player_id = 2;
+  uint32 role = 3;                   // 0 成员 / 1 长老 / 3 帮主(D-4;权限比较走 constants.Rank)
+  uint64 join_time_ms = 4;
+  uint64 last_active_ms = 5;         // 目前只在入帮时写入
+  uint64 contribution_total = 6;     // 累计帮贡,只增;B5 起写入
+  uint64 contribution_balance = 7;   // 可消费帮贡;商店扣减;B5 起写入
+  // 追加区:从 8 起。
+}
+
+message GuildApplicationRecord {
+  option(OptionTableName) = "guild_application";
+  option(OptionPrimaryKey) = "guild_id,player_id";
+  option(OptionIndex) = "player_id;expire_ms";  // idx_guild_application_0 = 本人申请;idx_guild_application_1 = 过期清理
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 guild_id = 1;
+  uint64 player_id = 2;        // 申请人
+  uint64 apply_ms = 3;         // 最近一次申请(重复申请会刷新)的时刻
+  uint64 expire_ms = 4;        // apply_ms + GuildRule.application_expire_hours × 3600000
+  // 追加区:从 5 起(B2)。只存待审;通过、拒绝、撤销、过期都删行。
+}
