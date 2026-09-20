@@ -42,6 +42,25 @@ type IdSegmentStore interface {
 	Allocate(ctx context.Context, bizTag string, step uint32) (lo, hi uint64, err error)
 }
 
+// PlayerNameStore 是玩家名字注册表的持久层(docs/design/guild-phase2/03-names.md §3.6a)。
+//
+// 之所以在这里再声明一次接口(而不是直接用 *store.PlayerNameStore):logic 的单测要能
+// 注入一个假 store 验证"非法名字不碰库""缓存写失败仍返回成功"这类编排行为,而那些行为
+// 与真 MySQL 无关。*store.PlayerNameStore 逐字满足本接口,装配处不需要任何适配。
+//
+// 【契约要点,换实现时必须一并满足】
+//   - Reserve 的 name 是展示名、norm 是判重键,两者必须来自同一次 playername.Normalize;
+//     返回 ReserveInserted / ReserveAlreadyOwned 时数据**已提交**,调用方可以安全写缓存。
+//   - Release 只吃 norm;minCreatedMs=0 表示不限登记时间(仅限已过 admin 鉴权的路径)。
+//   - BatchGet 返回**展示名**,缺席的 id 不出现在 map 里(不是错误),超过
+//     store.PlayerNameBatchLimit 个 id 必须报错而不是截断。
+type PlayerNameStore interface {
+	Close() error
+	Reserve(ctx context.Context, playerID uint64, name, norm string, nowMs uint64) (store.ReserveOutcome, uint64, error)
+	Release(ctx context.Context, playerID uint64, norm string, minCreatedMs uint64) (store.ReleaseOutcome, error)
+	BatchGet(ctx context.Context, playerIDs []uint64) (map[uint64]string, error)
+}
+
 // ErrRollbackTargetOnline 由 RollbackFence 实现在目标仍在线、正在登录，或旧
 // epoch 写入尚未排空时返回。logic 层据此向调用方返回 ErrCodePlayerOnline。
 var ErrRollbackTargetOnline = errors.New("rollback target is online or has active writes")
@@ -63,6 +82,7 @@ type ServiceContext struct {
 	SnapshotStore    SnapshotStore
 	TxLogStore       TransactionLogStore
 	IdSegmentStore   IdSegmentStore
+	PlayerNameStore  PlayerNameStore // nil = 名字注册表不可用,Reserve/Release/BatchGet 全部 fail-closed
 	RollbackFence    RollbackFence
 	LoginAdminClient loginpb.LoginAdminClient // nil when not configured
 }
@@ -85,6 +105,13 @@ func MySQLConfigOf(c config.Config) store.MySQLConfig {
 }
 
 func NewServiceContext(c config.Config) *ServiceContext {
+	// PlayerName 段的零值**全是危险值**(CacheTTL=0 会让每次缓存回填都失败,
+	// ReleaseWindow=0 会让建角失败后的条件释放什么都删不掉),而 go-zero 不下钻一个
+	// 未出现的 optional 结构、填不了 default 标签。所以默认值在这里一次性补齐:
+	// ServiceContext.Config 是 logic 层唯一的配置来源,规范化放在这里,读取点就不必
+	// 各自兜底(那种兜底迟早有人漏掉,而漏掉的症状是缓存静默失效,没人会注意到)。
+	c.PlayerName = c.PlayerName.Normalize()
+
 	mysqlCfg := MySQLConfigOf(c)
 
 	// 表结构只有 proto 一个真源,建表/补列集中在 store.MigrateSchema(见 store/schema.go)。
@@ -111,6 +138,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		snapshotStore       SnapshotStore
 		transactionLogStore TransactionLogStore
 		idSegmentStore      IdSegmentStore
+		playerNameStore     PlayerNameStore
 	)
 	if schemaReady {
 		if ss, err := store.NewSnapshotStore(mysqlCfg); err != nil {
@@ -130,6 +158,28 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		} else if seg != nil {
 			idSegmentStore = seg
 		}
+
+		// 名字注册表用**独立连接池**:建角路径上每次都有一条同步 INSERT,与快照/号段
+		// 共用 SnapshotMySQL 那几条连接时,一次 GM 批量回滚就能把全服建角卡住。
+		// 只覆盖池大小,库/账号仍是同一个全局库 —— player_name 与 id_segment 同库。
+		//
+		// 配置非法时**不装配**(nil),而不是纠正成默认值:那三个时间窗里有一个是安全
+		// 边界(ReleaseWindow),被悄悄放宽了谁都不知道;nil 的症状是建角当场全线拒绝,
+		// 启动日志里写清楚是哪个键 —— 这正是 fail-closed 该有的样子。
+		if err := c.PlayerName.Validate(); err != nil {
+			logx.Errorf("[ServiceContext] player name store init failed (CreatePlayer disabled): invalid PlayerName config: %v", err)
+		} else {
+			nameCfg := mysqlCfg
+			nameCfg.MaxOpenConn = c.PlayerName.MaxOpenConn
+			nameCfg.MaxIdleConn = c.PlayerName.MaxIdleConn
+			if names, err := store.NewPlayerNameStore(nameCfg); err != nil {
+				logx.Errorf("[ServiceContext] player name store init failed (CreatePlayer disabled): %v", err)
+			} else if names != nil {
+				playerNameStore = names
+				logx.Infof("[ServiceContext] player name registry ready: release_window=%v cache_ttl=%v negative_cache_ttl=%v",
+					c.PlayerName.ReleaseWindow, c.PlayerName.CacheTTL, c.PlayerName.NegativeCacheTTL)
+			}
+		}
 	}
 
 	// Optional: login admin gRPC client for orphan account cleanup during rollback
@@ -146,6 +196,7 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		SnapshotStore:    snapshotStore,
 		TxLogStore:       transactionLogStore,
 		IdSegmentStore:   idSegmentStore,
+		PlayerNameStore:  playerNameStore,
 		LoginAdminClient: loginClient,
 	}
 }
@@ -166,5 +217,8 @@ func (s *ServiceContext) Close() {
 	}
 	if s.IdSegmentStore != nil {
 		_ = s.IdSegmentStore.Close()
+	}
+	if s.PlayerNameStore != nil {
+		_ = s.PlayerNameStore.Close()
 	}
 }

@@ -70,6 +70,26 @@ SnapshotMySQL:
   MaxOpenConn: 5
   MaxIdleConn: 2
 
+# 玩家名字注册表(全服唯一,docs/design/guild-phase2/03-names.md §3)。
+# 表 player_name 就在上面这个全局库里(SnapshotMySQL),这一段只配**运行参数**;
+# 玩法数值(2–12 字、生成名前缀)在配表 RoleNameRule 里,由 login 把关,不在这里。
+#
+# 整段可以不写:每个键的零值都当"没配",由代码填下面这些默认值
+# (internal/config/config.go 的 PlayerNameConfig.Normalize,装配在 NewServiceContext)。
+# 这里显式写出来是为了压测时好调,以及让"线上到底用了多少"一眼可见。
+# 写了但写错(负数 / MaxIdleConn > MaxOpenConn / ReleaseWindow 超过 24h)= 名字 store
+# 不装配,建角全线拒绝(fail-closed),启动日志里有一条 ERROR 说明是哪个键。
+PlayerName:
+  MaxOpenConn: 20      # 独立连接池:建角每次一条同步 INSERT,不与快照/号段抢那 5 条连接
+  MaxIdleConn: 5
+  # 不带 x-admin-token 的 ReleasePlayerName 只能删这么新的登记。这是**安全边界**:
+  # 该 RPC 在内网无鉴权可达,窗口只需覆盖 login 建角失败后的补偿(立即一次 + 约 10s 后
+  # 一次),10 分钟已极宽裕;调大等于把"能被匿名释放的在役角色"范围一起调大。
+  # 运维清孤儿走 admin token 那条路(不限登记时间),不要为此改这个值。
+  ReleaseWindow: 10m
+  CacheTTL: 24h        # player:name:{id} 正缓存;v1 不支持改名,名字内容不会变
+  NegativeCacheTTL: 60s # "库里确实没这个 id 的名字"的负缓存,挡住老角色每次开面板都回源
+
 # Login admin gRPC client (for orphan account cleanup during rollback)
 LoginAdminRpc:
   Etcd:
@@ -89,7 +109,9 @@ LoginAdminRpc:
 # (见 internal/routing/router.go 的合服闸门契约),两道闸都过才执行。
 # AdminToken: ""
 
-# 全局库四张表(transaction_log / player_snapshot / rollback_audit_log / id_segment)的建表策略。
+# 全局库五张表(transaction_log / player_snapshot / rollback_audit_log / id_segment / player_name)的建表策略。
+# 其中 id_segment 与 player_name 走 schema.go 里手写的 bootstrap DDL(proto2mysql 把 string 渲染成
+# MEDIUMTEXT,而 player_name 的唯一键必须建在 VARCHAR 上),迁移对这两张只做列漂移校验。
 # AutoMigrate=true:启动时按 proto(rollback_database_table.proto)用 proto2mysql 建表/补列。
 # 生产必须**显式**设 false(多副本并发 ALTER 会互相 MDL 阻塞),改在部署阶段跑一次:
 #   data_service -f etc/data_service.yaml -migrate
