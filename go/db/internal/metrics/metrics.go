@@ -74,12 +74,17 @@ var (
 	}, []string{"table", "column", "level"})
 
 	// ownerEpochGuardTotal 是落库前归属 epoch 守卫的全量分类计数(每条 write 任务记一次)。
-	// 它回答的是「兼容窗口还剩多少旧版生产者(legacy_zero)」「Redis 是不是被清过(ahead /
-	// missing_key)」这类部署期问题;真正的健康红线是下面的 staleOwnerWriteRejectedTotal。
+	// 它回答的是「兼容窗口还剩多少旧版生产者(legacy_zero,收口时应归零)」「该 key 第一次带
+	// epoch 落库(first)」「归属换主后的第一笔写(advance,应与传送 / 交接次数对得上)」这类
+	// 部署期问题;真正的健康红线是下面的 staleOwnerWriteRejectedTotal。
+	//
+	// outcome 的取值**必须**与下面 OwnerEpoch* 常量一一对应 —— 改常量必须同改这里的 Help,
+	// 否则按 Help 配出来的告警 / 看板表达式会匹配不到任何序列,而空表达式在 Prometheus 里
+	// 不报错、只静默不告警,和「一切正常」长得一模一样。
 	ownerEpochGuardTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "owner_epoch_guard_total",
-		Help:      "Owner-epoch guard verdicts on write tasks. outcome: match | legacy_zero | missing_key | ahead | stale | read_error.",
+		Help:      "Owner-epoch guard verdicts on write tasks. outcome: match | legacy_zero | first | advance | stale | read_error.",
 	}, []string{"outcome"})
 
 	// staleOwnerWriteRejectedTotal 是 cross-zone-scene-travel.md §6 不变量 3 点名的健康信号:
@@ -88,7 +93,7 @@ var (
 	staleOwnerWriteRejectedTotal = prometheus.NewCounter(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "stale_owner_write_rejected_total",
-		Help:      "Write tasks dropped because their owner_epoch is older than player:{id}:owner_epoch in Redis. Must stay 0 under stress.",
+		Help:      "Write tasks dropped because their owner_epoch is older than the max epoch already applied for this (topic,key,msg_type) — Redis key consumer:applied_epoch:* (reentry-barrier 6.3 / cross-zone-scene-travel R3). Must stay 0 under stress.",
 	})
 
 	registerOnce sync.Once

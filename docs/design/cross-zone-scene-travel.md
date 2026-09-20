@@ -209,7 +209,7 @@ Claude 未运行任何构建 / 测试 / regen(AGENTS §10.1)。按顺序执行,�
 | 条件 | 为什么 |
 |---|---|
 | (zone,node) 身份无歧义 | node_id 会被复用,两代进程并存时不下结论 |
-| 本进程已完成首次 etcd 全量同步,且节点**已从注册表(`knownNodes`)消失** | 死亡要正面证据。只看 Redis 负载集不够:`world_init.go markNodeDead` 会在一次 CreateScene RPC 超时(5s)后就把节点摘出负载集且不写 `death_at`——高负载下一个只是慢了的活节点也会被摘;若据此接管,它名下正在玩的玩家下一次换图会被直接派走、读到最长一个存盘周期前的旧档(对抗复审的 P0,两个视角各自独立命中) |
+| 本进程已完成首次 etcd 全量同步,且节点**已从注册表(`knownNodes`)消失** | 死亡要正面证据。只看 Redis 负载集不够:成员资格由负载上报周期刷新,缺席只说明「这一刻没看到它」,而写入负载集的路径未必写 `death_at`——「没有 `death_at`」的语义恰恰是放行。若据此接管,一个只是暂时缺席的活节点名下正在玩的玩家,下一次换图会被直接派走、读到最长一个存盘周期前的旧档(对抗复审的 P0,两个视角各自独立命中) |
 | 本副本亲眼看到它消失已超过一个屏障时长(`nodeGoneObservedAt`,进程本地) | `death_at` 只有 leader 写;leader 缺位时节点丢租约就没人写,而「没有 death_at」的语义是放行 |
 | 不在负载集 | 在负载集 = 活着 |
 | Redis 的 `death_at` 屏障已过(读失败 / 值非法 → 不放行) | 盖过 C++ 老进程 15s 的紧急疏散存盘窗口 |
@@ -221,7 +221,7 @@ Claude 未运行任何构建 / 测试 / regen(AGENTS §10.1)。按顺序执行,�
 - `load_reporter.go` 周期巡检把「先摘负载集、后写 death_at」改成与 `removeNodeFromRedis` 同序(先写后摘)——反序窗口里并发的 EnterScene 会看到「已死 + 无 death_at ⇒ 屏障已过」。
 - 接管落点**成功之后**把玩家在旧场景占的人数还回去(`releaseTakenOverSceneCount`):dead-node reconcile 只销毁副本实例,大世界频道沿用同一个 scene_id 迁走、人数原值保留、全仓没有重算路径,不还就永久虚高。旧场景已被销毁(`scene:{id}:node` 不在)时不动,避免把计数键重新建出来。
 - 指标 `scene_manager_enter_scene_owner_dead_takeover_total{zone_id}`:稳态恒 0;没有节点死亡它却在涨 = 判死出了问题。
-- 未改:`world_init.go markNodeDead` 本身(摘活节点、不写 death_at)仍是既有行为,它对「场景改派」的影响不在本设计范围;本规则已不依赖负载集单独下结论。
+- 相关但独立:`world_init.go` 旧的 `markNodeDead` 会在一次 CreateScene RPC 超时(5s)后就 ZREM 负载集且不写 `death_at`,已被 `markNodeUnreachable` 取代(`ba2337b0d`):只在本轮候选里拿掉该节点、丢掉连接缓存,**不碰负载集也不碰场景归属**。本规则不依赖那次修复——负载集缺席在任何原因下都不单独构成死亡证据,写在这里只是为了避免再按旧行为推理。
 
 单测 8 个(`owner_epoch_test.go` 末尾):屏障已过接管并铸造、屏障内仍拒、仍在注册表不接管、未完成首次同步不接管、身份歧义 fail-closed、本地观察到的消失受屏障约束、接管后归还旧场景人数、不为已销毁场景重建计数键。**均未运行。**
 

@@ -133,10 +133,10 @@ type travelSmokeHop struct {
 	// 票据 GateTokenPayload.zone_id:签发方(scene_manager AssignGateForZone)填的是目标 gate 所在的 zone。
 	// 0 = notify 没带票据或票据里没有 zone,无法证明落区。
 	tokenZone uint32
-	// CZ-8 的两个绑定字段;bindingAvailable=false 时未取到(见 travel_smoke_wire.go 的 TODO)。
+	// CZ-8 的两个绑定字段(票据持有者与本跳目标 zone)。notify 没带票据时它们保持 0,
+	// 但那种情况 verifyArrival 会先被 tokenZone == 0 挡下,轮不到这两条断言。
 	ticketPlayer     uint64
 	ticketTargetZone uint32
-	bindingAvailable bool
 	// 124 之后第一条 NotifyEnterScene 的场景。
 	sceneId       uint64
 	sceneConfigId uint32
@@ -369,10 +369,10 @@ func RunTravelSmoke(cfg *config.Config) {
 		fail("hop-count", "全程收到 %d 条 msg 124,期望恰好 2 条", n)
 	}
 
-	ticketBinding := "skipped"
-	if outHop.bindingAvailable && backHop.bindingAvailable {
-		ticketBinding = "checked"
-	}
+	// 去程 / 回程两跳都跑完了 verifyArrival,CZ-8 的两条票据断言必然已经执行过(它没有
+	// "取不到就跳过"的分支了),所以这里恒为 checked —— 留着这个词只是为了结果行格式不变,
+	// 外部解析 TRAVEL_SMOKE_OK 的脚本不用改。
+	ticketBinding := "checked"
 	zap.L().Info(fmt.Sprintf("TRAVEL_SMOKE_OK player_id=%d home_zone=%d visit_zone=%d home_gate=%s visit_gate=%s back_gate=%s "+
 		"gold_home=%d gold_back=%d move_ack=%t ticket_binding=%s reject_tip=%d reject_map_tip=%d",
 		bot.homePlayer, sc.HomeZone, sc.VisitZone, homeGate, visitGate, backGate,
@@ -815,7 +815,7 @@ func travelSmokeDecodeRedirect(body []byte) (*travelSmokeHop, error) {
 		return nil, fmt.Errorf("decode GateTokenPayload(msg 124 目标 %s): %w", hop.targetAddr, err)
 	}
 	hop.tokenZone = payload.GetZoneId()
-	hop.ticketPlayer, hop.ticketTargetZone, hop.bindingAvailable = travelSmokeTicketBinding(&payload)
+	hop.ticketPlayer, hop.ticketTargetZone = travelSmokeTicketBinding(&payload)
 	return hop, nil
 }
 
@@ -834,15 +834,13 @@ func (b *travelSmokeBot) verifyArrival(hop *travelSmokeHop, wantZone, wantSceneC
 	if hop.tokenZone != wantZone {
 		return "zone", fmt.Errorf("票据 zone=%d,期望 %d(目标 %s):被送到了别的 zone", hop.tokenZone, wantZone, hop.targetAddr)
 	}
-	// TODO(regen): 下面两条要等 GateTokenPayload.GetPlayerId() / GetTargetZoneId() 可用,
-	// 开关在 travel_smoke_wire.go 的 travelSmokeTicketBinding;在那之前 bindingAvailable 恒为 false。
-	if hop.bindingAvailable {
-		if hop.ticketPlayer != b.homePlayer {
-			return "ticket", fmt.Errorf("票据 player_id=%d,期望持票者 %d(CZ-8:票据必须绑定本人)", hop.ticketPlayer, b.homePlayer)
-		}
-		if hop.ticketTargetZone != wantZone {
-			return "ticket", fmt.Errorf("票据 target_zone_id=%d,期望 %d(CZ-8:目标 zone 的 login 靠它决定不弹回)", hop.ticketTargetZone, wantZone)
-		}
+	// CZ-8 的两条:票据必须绑定到本人、且指明本跳的目标 zone。这两条无条件执行 ——
+	// 曾经它们挂在一个"取不到字段就跳过"的开关后面,开关长期为 false,整场冒烟照样报 OK。
+	if hop.ticketPlayer != b.homePlayer {
+		return "ticket", fmt.Errorf("票据 player_id=%d,期望持票者 %d(CZ-8:票据必须绑定本人)", hop.ticketPlayer, b.homePlayer)
+	}
+	if hop.ticketTargetZone != wantZone {
+		return "ticket", fmt.Errorf("票据 target_zone_id=%d,期望 %d(CZ-8:目标 zone 的 login 靠它决定不弹回)", hop.ticketTargetZone, wantZone)
 	}
 	gate := b.gateAddr()
 	if gate == prevGate {
