@@ -7,8 +7,19 @@
 #include <utility>
 
 namespace {
-// 重建前 purge 旧实例之后,等它把 purge 回执吐完的上限(毫秒)。purge 只是把内存里的队列清掉,
-// 正常是瞬时的;给上限是为了 broker 彻底失联时也不会把游戏主循环卡在这里。
+// 重建前 purge 旧实例之后,等它把 purge 回执吐完的上限(毫秒)。
+//
+// **这个上限只管 flush 这一步,不是整次重建的停顿上界。** 重建发生在调用 send() 的线程上
+// (游戏主循环 / EventLoop),另外两步都没有超时:
+//   - purge() 要等每个 broker 线程应答(third_party/librdkafka/src/rdkafka.c 的 rd_kafka_purge,
+//     RD_POLL_INFINITE);
+//   - 销毁旧实例(rd_kafka_destroy)要 join 库的主线程与全部 broker 线程。
+// broker 只是连不上(TCP 不通)时这两步都是毫秒级;唯一的长停顿是某个 broker 线程正卡在 DNS 解析
+// (getaddrinfo)里,那时要等解析器自己超时(十几秒量级)。它需要「fatal」与「DNS 故障」同时出现,
+// 概率很低,目前接受。刻意不加 PURGE_NON_BLOCKING:它只让 purge 这一步不等,随后的销毁仍要 join
+// 同一个卡住的线程,最坏停顿不会变短,反而可能让在途消息来不及出失败回执、漏计 DeliveryFailed。
+// 真要让停顿有界,得把旧实例交给后台线程去销毁(已核实 rd_kafka_destroy 不回调 dr_cb),
+// 并处理进程退出时该线程仍在运行的情况 —— 需要能编译、能实测时再做。
 constexpr int kPurgeDrainTimeoutMs = 1000;
 } // namespace
 
@@ -81,6 +92,10 @@ KafkaProducer::~KafkaProducer() {
 	// broker 不可用时不允许进程析构无限挂起;正常停机的
 	// KafkaManager 也复用同一条有界 flush 路径。
 	flush(std::chrono::seconds(5));
+	// 收尾:本线程再也不会有 send() 来驱动补报了。析构里的 flush() 本来就会打日志,这里再打一行是安全的。
+	if (const std::uint64_t suppressed = failureLogThrottle_.TakeSuppressed(); suppressed > 0) {
+		logSuppressedSummary(suppressed);
+	}
 }
 
 RdKafka::ErrorCode KafkaProducer::produceOnce(const std::string& topic, const std::string& message,
@@ -153,6 +168,17 @@ RdKafka::ErrorCode KafkaProducer::send(const std::string& topic, const std::stri
 
 	poll(); // Ensure delivery callbacks are dispatched
 
+	// 限流压掉的条数,在「窗口过期、之后不再失败」时靠这里补报:本线程没有独立的生产端轮询,
+	// send() 是唯一的驱动点,回执也只在上面这次 poll() 里派发。放在 poll() 之后,
+	// 让本次派发的回执先计完数。先用 PendingSuppressed() 预检,无失败时不必每条消息取一次时钟。
+	if (failureLogThrottle_.PendingSuppressed() > 0) {
+		const std::uint64_t suppressed =
+			failureLogThrottle_.TakeExpiredSuppressed(std::chrono::steady_clock::now());
+		if (suppressed > 0) {
+			logSuppressedSummary(suppressed);
+		}
+	}
+
 	return resp;
 }
 
@@ -182,6 +208,11 @@ bool KafkaProducer::rebuildAfterFatal(const char* trigger) {
 		producer_->purge(RdKafka::Producer::PURGE_QUEUE | RdKafka::Producer::PURGE_INFLIGHT);
 		producer_->flush(kPurgeDrainTimeoutMs);
 		rebuilding_ = false;
+		// purge 吐出来的失败回执绝大多数会被限流压掉;紧跟着重建日志把条数报出来,
+		// 不要让「这次重建丢了多少条」等到十几秒后的下一次 send() 才出现。
+		if (const std::uint64_t suppressed = failureLogThrottle_.TakeSuppressed(); suppressed > 0) {
+			logSuppressedSummary(suppressed);
+		}
 		producer_.reset();
 	}
 	fatalPending_ = false;
@@ -200,16 +231,20 @@ bool KafkaProducer::rebuildAfterFatal(const char* trigger) {
 void KafkaProducer::logFailure(const std::string& line) {
 	const auto decision = failureLogThrottle_.OnFailure(std::chrono::steady_clock::now());
 	if (decision.suppressedBeforeThis > 0) {
-		const auto totals = kafka_producer_stats::Read();
-		LOG_ERROR << "[Kafka] " << decision.suppressedBeforeThis
-			<< " producer failure log lines were suppressed in the previous window; process totals:"
-			<< " delivery_failed=" << totals.deliveryFailed
-			<< " produce_rejected=" << totals.produceRejected
-			<< " fatal_rebuilds=" << totals.fatalRebuilds;
+		logSuppressedSummary(decision.suppressedBeforeThis);
 	}
 	if (decision.logThisOne) {
 		LOG_ERROR << line;
 	}
+}
+
+void KafkaProducer::logSuppressedSummary(std::uint64_t suppressed) {
+	const auto totals = kafka_producer_stats::Read();
+	LOG_ERROR << "[Kafka] " << suppressed
+		<< " producer failure log lines were suppressed by the log throttle; process totals:"
+		<< " delivery_failed=" << totals.deliveryFailed
+		<< " produce_rejected=" << totals.produceRejected
+		<< " fatal_rebuilds=" << totals.fatalRebuilds;
 }
 
 void KafkaProducer::dr_cb(RdKafka::Message& message) {
@@ -227,6 +262,8 @@ void KafkaProducer::dr_cb(RdKafka::Message& message) {
 	// 不在这里重发旧载荷,理由见 kafka_producer.h 顶部「投递语义」。
 	kafka_producer_stats::IncDeliveryFailed();
 
+	// 对未来版本的防御:librdkafka 2.14 不会给投递回执填 ERR__FATAL(fatal 时库自己 purge 队列,
+	// 排队中的消息以 ERR__PURGE_QUEUE 收场),实际的识别点是 send() 里 produce() 的返回码。
 	// 回执是在 poll() / flush() 的调用栈里回调的,此刻不能销毁实例:只置位,下一次 send() 处理。
 	if (kafka_producer_policy::IsFatalDeliveryError(err) && !rebuilding_) {
 		fatalPending_ = true;
@@ -239,7 +276,8 @@ void KafkaProducer::dr_cb(RdKafka::Message& message) {
 		+ " key=" + (key != nullptr ? *key : std::string())
 		+ " bytes=" + std::to_string(message.len())
 		+ " err=" + RdKafka::err2str(err) + " (" + message.errstr() + ")"
-		+ (kafka_producer_policy::IsPurgeDeliveryError(err) ? " [purged during producer rebuild]" : ""));
+		+ (kafka_producer_policy::IsPurgeDeliveryError(err)
+			? " [purged: the producer instance went fatal or is being rebuilt]" : ""));
 }
 
 void KafkaProducer::poll() {

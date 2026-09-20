@@ -185,3 +185,77 @@ TEST(FailureLogThrottle, ZeroBurstSuppressesEverythingButStillCounts)
     EXPECT_FALSE(throttle.OnFailure(At(std::chrono::milliseconds(1))).logThisOne);
     EXPECT_EQ(2u, throttle.PendingSuppressed());
 }
+
+TEST(FailureLogThrottle, TakeExpiredSuppressedReturnsNothingWhileTheWindowIsStillOpen)
+{
+    FailureLogThrottle throttle(1, std::chrono::seconds(10));
+    throttle.OnFailure(At(std::chrono::milliseconds(0)));
+    throttle.OnFailure(At(std::chrono::milliseconds(1)));
+    throttle.OnFailure(At(std::chrono::milliseconds(2)));
+    ASSERT_EQ(2u, throttle.PendingSuppressed());
+
+    // 窗口没过期:什么都不取,也不改变状态。
+    EXPECT_EQ(0u, throttle.TakeExpiredSuppressed(At(std::chrono::milliseconds(9999))));
+    EXPECT_EQ(2u, throttle.PendingSuppressed());
+}
+
+TEST(FailureLogThrottle, TakeExpiredSuppressedReportsTheTailWindowWhenNoFurtherFailureArrives)
+{
+    // 回归:故障恢复后不再有失败。旧实现里被压掉的条数只随「下一条失败」补报,
+    // 于是最后一个窗口(以及单窗口突发)里除前 burst 条之外的丢失永远不进日志。
+    FailureLogThrottle throttle(1, std::chrono::seconds(10));
+    for (int i = 0; i < 6; ++i)
+    {
+        throttle.OnFailure(At(std::chrono::milliseconds(i)));
+    }
+    ASSERT_EQ(5u, throttle.PendingSuppressed());
+
+    EXPECT_EQ(5u, throttle.TakeExpiredSuppressed(At(std::chrono::seconds(10))));
+    EXPECT_EQ(0u, throttle.PendingSuppressed());
+    // 只报一次。
+    EXPECT_EQ(0u, throttle.TakeExpiredSuppressed(At(std::chrono::seconds(30))));
+}
+
+TEST(FailureLogThrottle, NextFailureAfterATakeStartsAFreshWindowWithoutReportingAgain)
+{
+    FailureLogThrottle throttle(1, std::chrono::seconds(10));
+    throttle.OnFailure(At(std::chrono::milliseconds(0)));
+    throttle.OnFailure(At(std::chrono::milliseconds(1)));
+    ASSERT_EQ(1u, throttle.TakeExpiredSuppressed(At(std::chrono::seconds(10))));
+
+    // 已经补报过的条数不能再随下一条失败报第二遍;这一条属于新窗口,要逐条记录。
+    const auto next = throttle.OnFailure(At(std::chrono::seconds(11)));
+    EXPECT_TRUE(next.logThisOne);
+    EXPECT_EQ(0u, next.suppressedBeforeThis);
+}
+
+TEST(FailureLogThrottle, TakeExpiredSuppressedIsANoOpWhenNothingWasSuppressed)
+{
+    FailureLogThrottle throttle(5, std::chrono::seconds(10));
+    EXPECT_EQ(0u, throttle.TakeExpiredSuppressed(At(std::chrono::seconds(100)))); // 从未有过失败
+    throttle.OnFailure(At(std::chrono::milliseconds(0)));
+    EXPECT_EQ(0u, throttle.TakeExpiredSuppressed(At(std::chrono::seconds(100)))); // 有失败但没压掉任何一条
+
+    // 没压掉东西时不能把窗口关掉:否则窗口内的后续失败会被当成新窗口,burst 规则被绕开。
+    FailureLogThrottle tight(1, std::chrono::seconds(10));
+    tight.OnFailure(At(std::chrono::milliseconds(0)));
+    ASSERT_EQ(0u, tight.TakeExpiredSuppressed(At(std::chrono::milliseconds(5))));
+    EXPECT_FALSE(tight.OnFailure(At(std::chrono::milliseconds(6))).logThisOne);
+}
+
+TEST(FailureLogThrottle, TakeSuppressedDrainsUnconditionallyAndKeepsTheWindow)
+{
+    FailureLogThrottle throttle(1, std::chrono::seconds(10));
+    throttle.OnFailure(At(std::chrono::milliseconds(0)));
+    throttle.OnFailure(At(std::chrono::milliseconds(1)));
+    throttle.OnFailure(At(std::chrono::milliseconds(2)));
+
+    // 窗口还开着也照取(重建 / 析构收尾用),取完清零。
+    EXPECT_EQ(2u, throttle.TakeSuppressed());
+    EXPECT_EQ(0u, throttle.TakeSuppressed());
+
+    // 窗口没有被重置:同一窗口内的后续失败仍然被压,并重新开始计数。
+    const auto later = throttle.OnFailure(At(std::chrono::milliseconds(3)));
+    EXPECT_FALSE(later.logThisOne);
+    EXPECT_EQ(1u, throttle.PendingSuppressed());
+}
