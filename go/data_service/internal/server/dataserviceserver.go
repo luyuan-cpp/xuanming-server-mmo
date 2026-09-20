@@ -9,6 +9,7 @@ import (
 	"data_service/internal/constants"
 	"data_service/internal/logic"
 	"data_service/internal/routing"
+	"data_service/internal/store"
 	"data_service/internal/svc"
 	"proto/data_service"
 
@@ -533,4 +534,126 @@ func (s *DataServiceServer) AllocateIdSegment(ctx context.Context, req *data_ser
 		Lo:        resp.Lo,
 		Hi:        resp.Hi,
 	}, nil
+}
+
+// ── Player name registry(全服唯一名字,设计 docs/design/guild-phase2/03-names.md §3.1)──
+//
+// 三个 handler 都是**薄的**:编排在 logic,判重在 store 的唯一键,规则在 shared/playername。
+// 这一层只做两件 logic 不该管的事 —— 读 gRPC metadata 判定是不是运维调用,
+// 以及把 logic 的错误哨兵翻成 gRPC status + error_code。
+//
+// 【可达面】这三个 RPC **只在服务间调用**(login 建角、guild 查成员名),不进客户端
+// 可达面:不改 MessageLimiter、不改 gate 路由、不进 session.ClientMethods(§3.18)。
+// 也正因为没有网关那层过滤,Release 的时间窗是唯一挡住"内网任一进程都能释放在役角色
+// 名字"的东西(见 config.PlayerNameConfig.ReleaseWindow)。
+
+// ReservePlayerName 登记名字。响应里的 result 是**业务结果不是错误**:
+// 名字不合规(2)与被别人占用(1)都返回 OK + result,因为它们是 login 要拿去翻成
+// tip 文案的正常分支;只有"库不可用""这个 id 已有别名"这类真故障才走 gRPC error。
+//
+// owner_player_id 只在 result=1 时填,且**只给 login 判重试**(§3.1):login 拿它对照
+// "占用者是不是本账号刚建的那个号"。login 绝不能把它下发客户端 —— 那等于开放一个
+// 按名字查 player_id 的接口。
+func (s *DataServiceServer) ReservePlayerName(ctx context.Context, req *data_service.ReservePlayerNameRequest) (*data_service.ReservePlayerNameResponse, error) {
+	result, owner, err := logic.ReservePlayerName(ctx, s.svcCtx, req.GetPlayerId(), req.GetName())
+	if err != nil {
+		return nil, playerNameStatus(ctx, "ReservePlayerName", req.GetPlayerId(), err)
+	}
+	return &data_service.ReservePlayerNameResponse{Result: result, OwnerPlayerId: owner}, nil
+}
+
+// ReleasePlayerName 条件释放:player_id 与归一化后的 name 都对上才删。
+//
+// 两条调用路径,靠 metadata 里有没有 x-admin-token 区分:
+//   - login 的建角补偿(没有 token):只能删 PlayerName.ReleaseWindow 之内的登记。
+//     窗外 → FailedPrecondition + ErrCodeAdminAuthRequired,提示去走运维路径。
+//   - 运维清孤儿(带 token):不限登记时间。
+//
+// 【为什么"带了键就必须验过"而不是"验不过就降级成非 admin"】降级会把一次**鉴权失败**
+// 变成一次静默的普通释放:调用方以为自己在用运维权限清一条老记录,实际删掉的可能是
+// 窗口内刚建的号,而日志里没有任何"token 不对"的痕迹。带错 token 是配置事故,必须报错。
+func (s *DataServiceServer) ReleasePlayerName(ctx context.Context, req *data_service.ReleasePlayerNameRequest) (*emptypb.Empty, error) {
+	const rpcName = "ReleasePlayerName"
+
+	admin := false
+	if hasAdminTokenMetadata(ctx) {
+		if err := s.authorizeAdmin(ctx, rpcName); err != nil {
+			return nil, err
+		}
+		admin = true
+		// 运维路径每次都留痕:这是唯一能删掉任意年龄登记的入口。
+		logx.Infof("[admin] %s authorized: player_id=%d %s", rpcName, req.GetPlayerId(), callerIdentity(ctx))
+	}
+
+	if err := logic.ReleasePlayerName(ctx, s.svcCtx, req.GetPlayerId(), req.GetName(), admin); err != nil {
+		return nil, playerNameStatus(ctx, rpcName, req.GetPlayerId(), err)
+	}
+	return &emptypb.Empty{}, nil
+}
+
+// BatchGetPlayerName 批量查展示名。口径与 BatchGetPlayerHomeZone 一致:
+// **缺席的 id 直接不出现在 map 里,不是错误**(早于本功能建的角色、已释放的名字都属于
+// 这一类,调用方按空名展示)。但"没查成"必须是错误:半份结果会被上游当成"这些人确实
+// 没名字"缓存并展示出去,而那是错的。
+func (s *DataServiceServer) BatchGetPlayerName(ctx context.Context, req *data_service.BatchGetPlayerNameRequest) (*data_service.BatchGetPlayerNameResponse, error) {
+	names, err := logic.BatchGetPlayerName(ctx, s.svcCtx, req.GetPlayerIds())
+	if err != nil {
+		// playerID 传 0:这是批量接口,日志里放单个 id 没有意义(id 清单可能有几百个,
+		// 而 Prometheus label 更不允许放)。
+		return nil, playerNameStatus(ctx, "BatchGetPlayerName", 0, err)
+	}
+	return &data_service.BatchGetPlayerNameResponse{Names: names}, nil
+}
+
+// hasAdminTokenMetadata 只判"这次调用**声称**自己是运维调用",不做任何校验。
+// 校验一律交给 authorizeAdmin(常数时间比较 + 未配置即停用)。
+//
+// 键存在但值为空串也算"声称"(md.Get 返回 [""],长度 1):否则一个把 token 配成空串的
+// 脚本会悄悄走进非 admin 路径,得到一个"成功但其实什么都没删"的响应。
+func hasAdminTokenMetadata(ctx context.Context) bool {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return false
+	}
+	return len(md.Get(adminTokenMetadataKey)) > 0
+}
+
+// playerNameStatus 把 logic / store 的错误哨兵翻成 gRPC status,映射表见 §3.1。
+//
+// 码与 codes 的对应必须**穷举**:default 分支一律当成"库炸了"(Unavailable +
+// ErrCodePlayerNameDBError)。方向是宁可把一个新错误误报成故障,也不能把它漏成
+// InvalidArgument —— 后者会让 login 把一次基础设施故障当成"玩家名字有问题",
+// 给玩家弹一个永远改不对的提示。
+func playerNameStatus(ctx context.Context, rpcName string, playerID uint64, err error) error {
+	switch {
+	case errors.Is(err, store.ErrPlayerNameInvalidArgument), errors.Is(err, store.ErrPlayerNameBatchTooLarge):
+		// 调用方参数错(player_id=0、名字归一化后为空、一次查超过 PlayerNameBatchLimit 个)。
+		// 不记日志:这条路径是调用方 bug,错误已经回给它了,记了只会在被刷时淹掉真故障。
+		return status.Errorf(codes.InvalidArgument, "error_code=%d: %v", constants.ErrCodeInvalidRequest, err)
+
+	case errors.Is(err, logic.ErrPlayerNameConflict):
+		// 这个 player_id 名下已经有**另一个**名字 = 发号器把一个在役角色的 id 又发了一次。
+		// 这是 ID 安全事件,不是普通业务失败,必须有人看:留 ERROR 并带上调用方身份。
+		logx.Errorf("[player-name] %s conflict: player_id=%d already holds a different name (id reuse — check id_segment watermark) %s: %v",
+			rpcName, playerID, callerIdentity(ctx), err)
+		return status.Errorf(codes.FailedPrecondition, "error_code=%d: %v", constants.ErrCodePlayerNameConflict, err)
+
+	case errors.Is(err, logic.ErrPlayerNameReleaseOutsideWindow):
+		// 设计写的是 WARN;go-zero 的 logx 没有 WARN 级别(只有 debug/info/error/severe),
+		// 这里取 ERROR:被拒的释放要么是有人拿错了接口,要么是运维忘了带 token,
+		// 两种都需要有人回头看一眼,淹在 Info 里等于没有。
+		logx.Errorf("[player-name] %s refused: player_id=%d registered outside PlayerName.ReleaseWindow and no valid %s was presented "+
+			"(use the admin path to clean up orphans) %s",
+			rpcName, playerID, adminTokenMetadataKey, callerIdentity(ctx))
+		return status.Errorf(codes.FailedPrecondition, "error_code=%d: %v", constants.ErrCodeAdminAuthRequired, err)
+
+	case errors.Is(err, logic.ErrPlayerNameStoreUnavailable):
+		// store 没装配起来(建表失败 / 连不上全局库 / PlayerName 配置非法)。
+		// 启动期已经有一条带原因的 ERROR,这里不再重复刷屏,只把码翻出去。
+		return status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodePlayerNameDBError, err)
+
+	default:
+		logx.Errorf("[player-name] %s failed: player_id=%d %s: %v", rpcName, playerID, callerIdentity(ctx), err)
+		return status.Errorf(codes.Unavailable, "error_code=%d: %v", constants.ErrCodePlayerNameDBError, err)
+	}
 }

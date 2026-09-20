@@ -232,3 +232,118 @@ type SnapshotMySQLConfig struct {
 	MaxOpenConn int    `json:",default=5"`
 	MaxIdleConn int    `json:",default=2"`
 }
+
+// ── 玩家名字注册表(docs/design/guild-phase2/03-names.md §3.6a)──────────────
+
+// PlayerNameConfig 是名字注册表的运行参数:连接池 + 三个时间窗。
+//
+// 【为什么不用 `json:",default=..."` 标签】go-zero 的 mapping **不下钻**一个"整段
+// optional 且未出现"的嵌套结构,里面的 default 一个都不会回填(同 SchemaConfig.AutoMigrate
+// 与 IdSegmentConfig 注释里的坑)。而本段的零值全部是**危险值**,不是安全值:
+// CacheTTL=0 会让每次回填都被 SetPlayerNames 当成"不写无过期键"而报错,
+// ReleaseWindow=0 会让建角失败后的条件释放什么都删不掉(留孤儿)。
+// 所以默认值由 Normalize() 在代码里填,零值 = "没配",与"显式配了 0"不作区分:
+// 这三个时间窗都没有"配成 0"的合法语义,不需要那一层区分。
+//
+// 数值本身**不是玩法数值**(玩法侧的 2–12 字在配表 RoleNameRule 里,由 login 把关),
+// 而是运维旋钮:压测时调连接池、事故时调缓存时长,所以留在 yaml 而不是配表。
+type PlayerNameConfig struct {
+	// MaxOpenConn / MaxIdleConn 是名字 store **独立**连接池的大小。
+	// 独立的理由:建角路径上每次都有一条同步 INSERT,与快照/号段共用 SnapshotMySQL
+	// 那 5 条连接时,一次 GM 批量回滚就能把建角卡住。
+	MaxOpenConn int `json:",optional"`
+	MaxIdleConn int `json:",optional"`
+
+	// ReleaseWindow 是**不带 x-admin-token** 的 ReleasePlayerName 能触碰的最大登记年龄:
+	// 只有 created_ms >= now-ReleaseWindow 的行才允许删。
+	//
+	// 这道窗是安全边界,不是性能旋钮:这个 RPC 在集群内网无鉴权可达,没有窗口的话,
+	// 任何能拨到 data_service 的进程都能把一个在役角色的名字释放掉,而名字一释放就可能
+	// 立刻被别人占走,不可回滚。窗口只需覆盖 login 建角失败后的补偿(立即一次 + 约 10s
+	// 后一次),10 分钟已经极其宽裕。运维清孤儿走 admin token 那条路,不限时间。
+	ReleaseWindow time.Duration `json:",optional"`
+
+	// CacheTTL 是 player:name:{id} 正缓存的存活时间。v1 不支持改名,名字**内容**不会变,
+	// 所以可以给很长;上限的意义只在"名字被释放且 DEL 缓存失败"时封顶脏值。
+	CacheTTL time.Duration `json:",optional"`
+
+	// NegativeCacheTTL 是"库里确实没有这个 id 的名字"这一事实的缓存时间。
+	// 它挡的是帮会成员列表里那些早于本功能建的老角色 —— 没有负缓存,每次开帮会面板
+	// 都会把它们全部回源查库一遍。给得短是因为它会被"刚建好的角色"打脸:虽然 Reserve
+	// 成功后会用 SET 覆盖掉负缓存,但覆盖发生在 data_service 这一侧,别的路径建的号
+	// (回档恢复)只能等它过期。
+	NegativeCacheTTL time.Duration `json:",optional"`
+}
+
+// 默认值集中在这里,yaml 与文档照抄这一份(设计 §3.6a)。
+const (
+	DefaultPlayerNameMaxOpenConn      = 20
+	DefaultPlayerNameMaxIdleConn      = 5
+	DefaultPlayerNameReleaseWindow    = 10 * time.Minute
+	DefaultPlayerNameCacheTTL         = 24 * time.Hour
+	DefaultPlayerNameNegativeCacheTTL = 60 * time.Second
+
+	// MaxPlayerNameReleaseWindow 是 ReleaseWindow 的硬上限。超过它一律拒绝装配
+	// (见 Validate),而不是"配多大算多大":这个窗口越大,无鉴权释放能够到的在役
+	// 角色就越多。24 小时已经远超任何一次建角补偿的时间尺度,写得比它还大只可能是
+	// 把它当成了缓存时长之类的东西填错了地方。
+	MaxPlayerNameReleaseWindow = 24 * time.Hour
+)
+
+// Normalize 返回一份把"没配"(零值)换成默认值的副本。
+//
+// 刻意返回值而不是原地改:调用方(svc.NewServiceContext)拿到的 Config 是值拷贝,
+// 显式赋值一次比藏在指针方法里的副作用好追。负数不在这里纠正 —— 那是配错了,
+// 该由 Validate 拒掉,而不是被悄悄改成默认值(见 Validate 的理由)。
+func (p PlayerNameConfig) Normalize() PlayerNameConfig {
+	if p.MaxOpenConn == 0 {
+		p.MaxOpenConn = DefaultPlayerNameMaxOpenConn
+	}
+	if p.MaxIdleConn == 0 {
+		p.MaxIdleConn = DefaultPlayerNameMaxIdleConn
+	}
+	if p.ReleaseWindow == 0 {
+		p.ReleaseWindow = DefaultPlayerNameReleaseWindow
+	}
+	if p.CacheTTL == 0 {
+		p.CacheTTL = DefaultPlayerNameCacheTTL
+	}
+	if p.NegativeCacheTTL == 0 {
+		p.NegativeCacheTTL = DefaultPlayerNameNegativeCacheTTL
+	}
+	return p
+}
+
+// Validate 检查(通常是 Normalize 之后的)取值是否可用。
+//
+// 【为什么配错要拒绝而不是纠正】纠正意味着运维看到的 yaml 与进程实际行为不一致,
+// 而这几个键里有一个是安全边界(ReleaseWindow)。拒绝的代价是名字 store 不装配 →
+// 建角被拒(fail-closed,症状明显、当场能看出来);纠正的代价是一个悄悄放宽了的
+// 释放窗口在事故发生前谁都不知道。
+func (p PlayerNameConfig) Validate() error {
+	if p.MaxOpenConn <= 0 {
+		return fmt.Errorf("PlayerName.MaxOpenConn must be positive, got %d", p.MaxOpenConn)
+	}
+	if p.MaxIdleConn < 0 {
+		return fmt.Errorf("PlayerName.MaxIdleConn must not be negative, got %d", p.MaxIdleConn)
+	}
+	if p.MaxIdleConn > p.MaxOpenConn {
+		// database/sql 会**静默**把 idle 压到 open,配置与实际行为从此对不上。
+		return fmt.Errorf("PlayerName.MaxIdleConn (%d) must not exceed MaxOpenConn (%d): database/sql silently clamps it",
+			p.MaxIdleConn, p.MaxOpenConn)
+	}
+	if p.ReleaseWindow <= 0 {
+		return fmt.Errorf("PlayerName.ReleaseWindow must be positive, got %v", p.ReleaseWindow)
+	}
+	if p.ReleaseWindow > MaxPlayerNameReleaseWindow {
+		return fmt.Errorf("PlayerName.ReleaseWindow %v exceeds the hard cap %v: an unauthenticated release must not reach names older than a create-player compensation",
+			p.ReleaseWindow, MaxPlayerNameReleaseWindow)
+	}
+	if p.CacheTTL <= 0 {
+		return fmt.Errorf("PlayerName.CacheTTL must be positive, got %v", p.CacheTTL)
+	}
+	if p.NegativeCacheTTL <= 0 {
+		return fmt.Errorf("PlayerName.NegativeCacheTTL must be positive, got %v", p.NegativeCacheTTL)
+	}
+	return nil
+}

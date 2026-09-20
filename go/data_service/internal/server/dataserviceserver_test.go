@@ -2,14 +2,20 @@ package server
 
 import (
 	"context"
+	"errors"
 	"net"
+	"strings"
 	"testing"
+	"time"
 
 	"data_service/internal/config"
 	"data_service/internal/constants"
 	"data_service/internal/routing"
+	"data_service/internal/store"
 	"data_service/internal/svc"
 	"proto/data_service"
+
+	"shared/playername"
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/stretchr/testify/assert"
@@ -316,4 +322,389 @@ func itoa(v uint32) string {
 		v /= 10
 	}
 	return string(buf[i:])
+}
+
+// ── 玩家名字注册表:§3.1 的 gRPC 映射表 ─────────────────────────
+//
+// 这一组测的**只有 server 这一层**:参数怎么翻成 status/error_code、metadata 里的
+// x-admin-token 怎么决定 admin 与否。名字规则、判重、缓存分别由 shared/playername、
+// store 的集成测试与 logic 单测覆盖,这里用假 store 把它们挡在外面。
+
+// fakePlayerNameStore 按 svc.PlayerNameStore 注入。它记下**入参**,因为这一层最容易
+// 悄悄错的地方就是"传给 store 的 minCreatedMs 是不是 0"—— 那个 0 等于不限时间,
+// 而它本该只出现在过了 authorizeAdmin 的调用上。
+type fakePlayerNameStore struct {
+	reserveOutcome store.ReserveOutcome
+	reserveOwner   uint64
+	reserveErr     error
+	reserveCalls   int
+	lastName       string // Reserve 收到的展示名
+	lastNorm       string // Reserve 收到的判重键
+
+	releaseOutcome   store.ReleaseOutcome
+	releaseErr       error
+	releaseCalls     int
+	lastMinCreatedMs uint64
+
+	names        map[uint64]string
+	batchErr     error
+	batchCalls   int
+	lastBatchIds []uint64
+}
+
+// 接口一变,编译期先炸,不用等到运行时。
+var _ svc.PlayerNameStore = (*fakePlayerNameStore)(nil)
+
+func (f *fakePlayerNameStore) Close() error { return nil }
+
+func (f *fakePlayerNameStore) Reserve(_ context.Context, _ uint64, name, norm string, _ uint64) (store.ReserveOutcome, uint64, error) {
+	f.reserveCalls++
+	f.lastName, f.lastNorm = name, norm
+	if f.reserveErr != nil {
+		return 0, 0, f.reserveErr
+	}
+	return f.reserveOutcome, f.reserveOwner, nil
+}
+
+func (f *fakePlayerNameStore) Release(_ context.Context, _ uint64, _ string, minCreatedMs uint64) (store.ReleaseOutcome, error) {
+	f.releaseCalls++
+	f.lastMinCreatedMs = minCreatedMs
+	if f.releaseErr != nil {
+		return 0, f.releaseErr
+	}
+	return f.releaseOutcome, nil
+}
+
+func (f *fakePlayerNameStore) BatchGet(_ context.Context, ids []uint64) (map[uint64]string, error) {
+	f.batchCalls++
+	f.lastBatchIds = append([]uint64(nil), ids...)
+	if f.batchErr != nil {
+		return nil, f.batchErr
+	}
+	out := map[uint64]string{}
+	for _, id := range ids {
+		if name, ok := f.names[id]; ok {
+			out[id] = name
+		}
+	}
+	return out, nil
+}
+
+// newPlayerNameTestServer 装 Router(指向 miniredis)+ 假 store,配置走**规范化后的默认值**
+// —— 与线上一致的 10m / 24h / 60s,这样窗口断言用的是真正的默认窗口。
+func newPlayerNameTestServer(t *testing.T, tweak func(*config.Config)) (*DataServiceServer, *fakePlayerNameStore) {
+	t.Helper()
+	mr := miniredis.RunT(t)
+	c := config.Config{
+		MappingRedis:     redis.RedisConf{Host: mr.Addr(), Type: "node"},
+		DevRedis:         config.DevRedisConfig{Host: mr.Addr()},
+		PlayerLockTTLSec: 3,
+		PlayerName:       config.PlayerNameConfig{}.Normalize(),
+	}
+	if tweak != nil {
+		tweak(&c)
+	}
+	r := routing.NewRouter(c)
+	t.Cleanup(r.Close)
+
+	fake := &fakePlayerNameStore{
+		reserveOutcome: store.ReserveInserted,
+		releaseOutcome: store.ReleaseDeleted,
+		names:          map[uint64]string{},
+	}
+	return NewDataServiceServer(&svc.ServiceContext{Config: c, Router: r, PlayerNameStore: fake}), fake
+}
+
+// ── Reserve ────────────────────────────────────────────────────
+
+// player_id=0 是纵深防御的第一道:这种行一旦插进去就永远没有主人、也没人会释放,
+// 却照样占着一个名字。
+func TestReservePlayerName_ZeroPlayerIdIsInvalidArgument(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+
+	resp, err := s.ReservePlayerName(context.Background(), &data_service.ReservePlayerNameRequest{
+		PlayerId: 0, Name: "云中君",
+	})
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodeInvalidRequest))
+	assert.Equal(t, 0, fake.reserveCalls, "参数就不合法,不许碰库")
+}
+
+// 名字不合规是**业务结果**不是错误:login 要拿 result=2 去翻 tip 文案。
+// 而且它必须在碰库之前判完 —— 纯计算,库挂着也能给确定答案。
+func TestReservePlayerName_InvalidNameIsResultNotError(t *testing.T) {
+	cases := []struct {
+		name string
+		raw  string
+	}{
+		{"空白名", "   "},
+		{"含非法字符", "云中君!"},
+		{"敏感词", "官方客服"},
+		// 结构上限由代码给(playername.StructuralMaxRunes=32),不是配表里的 2–12:
+		// 玩法长度归 login 把关,data_service 只保证"存得下"。
+		{"超过结构上限", strings.Repeat("云", playername.StructuralMaxRunes+1)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			s, fake := newPlayerNameTestServer(t, nil)
+			resp, err := s.ReservePlayerName(context.Background(), &data_service.ReservePlayerNameRequest{
+				PlayerId: 1001, Name: tc.raw,
+			})
+			require.NoError(t, err)
+			assert.Equal(t, playername.ReserveInvalid, resp.GetResult())
+			assert.Equal(t, uint64(0), resp.GetOwnerPlayerId())
+			assert.Equal(t, 0, fake.reserveCalls, "不合规的名字不许碰库")
+		})
+	}
+}
+
+// store 没装配起来时,不合规的名字仍然要回 result=2 —— 顺序反过来的话,
+// "名字打错字"会在故障期变成"服务不可用",玩家改一百遍也建不出号。
+func TestReservePlayerName_InvalidNameAnsweredEvenWithoutStore(t *testing.T) {
+	s, _ := newPlayerNameTestServer(t, nil)
+	s.svcCtx.PlayerNameStore = nil
+
+	resp, err := s.ReservePlayerName(context.Background(), &data_service.ReservePlayerNameRequest{
+		PlayerId: 1002, Name: "   ",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, playername.ReserveInvalid, resp.GetResult())
+}
+
+// 成功路径:展示名保留大小写,判重键是小写 —— 两者必须来自同一次归一化。
+func TestReservePlayerName_OkPassesDisplayAndNormToStore(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+
+	resp, err := s.ReservePlayerName(context.Background(), &data_service.ReservePlayerNameRequest{
+		PlayerId: 1003, Name: "YunZhong",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, playername.ReserveOK, resp.GetResult())
+	assert.Equal(t, uint64(0), resp.GetOwnerPlayerId(), "只有被别人占用时才填 owner")
+	assert.Equal(t, 1, fake.reserveCalls)
+	assert.Equal(t, "YunZhong", fake.lastName)
+	assert.Equal(t, "yunzhong", fake.lastNorm)
+}
+
+// 同 id 同名重试是幂等成功(result=0),不是失败:login 丢了响应会原样重发一次。
+func TestReservePlayerName_AlreadyOwnedIsSuccess(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+	fake.reserveOutcome = store.ReserveAlreadyOwned
+
+	resp, err := s.ReservePlayerName(context.Background(), &data_service.ReservePlayerNameRequest{
+		PlayerId: 1004, Name: "云中君",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, playername.ReserveOK, resp.GetResult())
+}
+
+// 被别人占用:OK + result=1 + owner。owner 只给 login 判"是不是自己上一次建角的号",
+// 不下发客户端(否则等于开了个按名字查 player_id 的接口)。
+func TestReservePlayerName_TakenCarriesOwner(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+	fake.reserveOutcome = store.ReserveTaken
+	fake.reserveOwner = 987654321
+
+	resp, err := s.ReservePlayerName(context.Background(), &data_service.ReservePlayerNameRequest{
+		PlayerId: 1005, Name: "云中君",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, playername.ReserveTaken, resp.GetResult())
+	assert.Equal(t, uint64(987654321), resp.GetOwnerPlayerId())
+}
+
+// 同 id 已有别名 = ID 复用事故,必须是错误而不是某个 result:
+// 让它伪装成业务分支,login 就会去"换个名字重试",把事故掩盖掉。
+func TestReservePlayerName_ConflictIsFailedPrecondition(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+	fake.reserveOutcome = store.ReserveConflict
+
+	resp, err := s.ReservePlayerName(context.Background(), &data_service.ReservePlayerNameRequest{
+		PlayerId: 1006, Name: "云中君",
+	})
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.FailedPrecondition, st.Code())
+	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodePlayerNameConflict))
+}
+
+func TestReservePlayerName_StoreUnavailableIsUnavailable(t *testing.T) {
+	s, _ := newPlayerNameTestServer(t, nil)
+	s.svcCtx.PlayerNameStore = nil
+
+	_, err := s.ReservePlayerName(context.Background(), &data_service.ReservePlayerNameRequest{
+		PlayerId: 1007, Name: "云中君",
+	})
+	require.Error(t, err)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.Unavailable, st.Code())
+	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodePlayerNameDBError))
+}
+
+func TestReservePlayerName_SqlErrorIsUnavailable(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+	fake.reserveErr = errors.New("dial tcp 127.0.0.1:3306: connect: connection refused")
+
+	_, err := s.ReservePlayerName(context.Background(), &data_service.ReservePlayerNameRequest{
+		PlayerId: 1008, Name: "云中君",
+	})
+	require.Error(t, err)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.Unavailable, st.Code())
+	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodePlayerNameDBError))
+}
+
+// ── Release ────────────────────────────────────────────────────
+
+// 没带 token 的释放必须受窗口约束:传给 store 的 minCreatedMs 不能是 0
+// (0 = 不限登记时间 = 任何内网进程都能释放在役角色的名字)。
+func TestReleasePlayerName_WithoutTokenPassesWindowFloor(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+
+	before := time.Now()
+	_, err := s.ReleasePlayerName(context.Background(), &data_service.ReleasePlayerNameRequest{
+		PlayerId: 2001, Name: "云中君",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, fake.releaseCalls)
+	assert.NotZero(t, fake.lastMinCreatedMs, "无 token 的释放绝不能传 0(那是不限时间)")
+
+	want := before.Add(-config.DefaultPlayerNameReleaseWindow).UnixMilli()
+	diff := int64(fake.lastMinCreatedMs) - want
+	assert.LessOrEqual(t, diff, int64(5000), "窗口下界应约等于 now-ReleaseWindow,实得偏差 %d ms", diff)
+	assert.GreaterOrEqual(t, diff, int64(-5000), "窗口下界应约等于 now-ReleaseWindow,实得偏差 %d ms", diff)
+}
+
+// 带对 token = 运维清孤儿:不限登记时间(minCreatedMs=0)。
+func TestReleasePlayerName_AdminTokenLiftsWindow(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, func(c *config.Config) { c.AdminToken = testAdminToken })
+
+	_, err := s.ReleasePlayerName(adminCtx(testAdminToken), &data_service.ReleasePlayerNameRequest{
+		PlayerId: 2002, Name: "云中君",
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, fake.releaseCalls)
+	assert.Equal(t, uint64(0), fake.lastMinCreatedMs, "过了 authorizeAdmin 才允许不限时间")
+}
+
+// 带了 x-admin-token 却校验不过 → 原样返回 authorizeAdmin 的错误,**绝不**降级成
+// 普通释放:降级会把一次鉴权失败变成一次静默的窗口内删除,日志里毫无痕迹。
+func TestReleasePlayerName_BadTokenIsRefusedNotDowngraded(t *testing.T) {
+	t.Run("token 不对", func(t *testing.T) {
+		s, fake := newPlayerNameTestServer(t, func(c *config.Config) { c.AdminToken = testAdminToken })
+		_, err := s.ReleasePlayerName(adminCtx("wrong-token"), &data_service.ReleasePlayerNameRequest{
+			PlayerId: 2003, Name: "云中君",
+		})
+		require.Error(t, err)
+		st, _ := status.FromError(err)
+		assert.Equal(t, codes.PermissionDenied, st.Code())
+		assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodeAdminAuthRequired))
+		assert.NotContains(t, st.Message(), testAdminToken, "错误消息不能回显正确 token")
+		assert.Equal(t, 0, fake.releaseCalls, "鉴权失败必须零变更")
+	})
+
+	t.Run("服务端没配 AdminToken 即停用", func(t *testing.T) {
+		s, fake := newPlayerNameTestServer(t, nil) // AdminToken 留空
+		_, err := s.ReleasePlayerName(adminCtx("anything"), &data_service.ReleasePlayerNameRequest{
+			PlayerId: 2004, Name: "云中君",
+		})
+		require.Error(t, err)
+		st, _ := status.FromError(err)
+		assert.Equal(t, codes.PermissionDenied, st.Code())
+		assert.Equal(t, 0, fake.releaseCalls)
+	})
+}
+
+// 行不存在 = 幂等成功:login 的补偿会发两次(立即 + 约 10s 后),第二次必然打空。
+func TestReleasePlayerName_AbsentIsIdempotentSuccess(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+	fake.releaseOutcome = store.ReleaseAbsent
+
+	_, err := s.ReleasePlayerName(context.Background(), &data_service.ReleasePlayerNameRequest{
+		PlayerId: 2005, Name: "云中君",
+	})
+	require.NoError(t, err)
+}
+
+// 行在但早于窗口且没 token → FailedPrecondition + 复用 ErrCodeAdminAuthRequired
+// (语义就是"这一步需要运维凭据")。
+func TestReleasePlayerName_OutsideWindowIsFailedPrecondition(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+	fake.releaseOutcome = store.ReleaseOutsideWindow
+
+	_, err := s.ReleasePlayerName(context.Background(), &data_service.ReleasePlayerNameRequest{
+		PlayerId: 2006, Name: "云中君",
+	})
+	require.Error(t, err)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.FailedPrecondition, st.Code())
+	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodeAdminAuthRequired))
+}
+
+func TestReleasePlayerName_InvalidNameIsInvalidArgument(t *testing.T) {
+	for _, raw := range []string{"", "   ", "名字!"} {
+		s, fake := newPlayerNameTestServer(t, nil)
+		_, err := s.ReleasePlayerName(context.Background(), &data_service.ReleasePlayerNameRequest{
+			PlayerId: 2007, Name: raw,
+		})
+		require.Error(t, err, "raw=%q", raw)
+		st, _ := status.FromError(err)
+		assert.Equal(t, codes.InvalidArgument, st.Code(), "raw=%q", raw)
+		assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodeInvalidRequest))
+		assert.Equal(t, 0, fake.releaseCalls, "归一化后为空/非法的名字不该进库")
+	}
+}
+
+// ── BatchGet ───────────────────────────────────────────────────
+
+// 缺席的 id 直接不出现,不是错误:早于本功能建的角色、已释放的名字都属于这一类。
+func TestBatchGetPlayerName_OmitsAbsentIds(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+	fake.names[3001] = "云中君"
+
+	resp, err := s.BatchGetPlayerName(context.Background(), &data_service.BatchGetPlayerNameRequest{
+		PlayerIds: []uint64{3001, 3002},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "云中君", resp.GetNames()[3001])
+	_, present := resp.GetNames()[3002]
+	assert.False(t, present, "缺席的 id 不出现,不能整批失败")
+}
+
+// 超过 store.PlayerNameBatchLimit 个 id 必须被拒,而不是截断:截断会让调用方
+// 拿到一份"部分人没名字"的结果却毫不知情。断言里不写字面量 500。
+func TestBatchGetPlayerName_RejectsOversizeBatch(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+
+	ids := make([]uint64, 0, store.PlayerNameBatchLimit+1)
+	for i := 0; i < store.PlayerNameBatchLimit+1; i++ {
+		ids = append(ids, uint64(i+1))
+	}
+
+	_, err := s.BatchGetPlayerName(context.Background(), &data_service.BatchGetPlayerNameRequest{PlayerIds: ids})
+	require.Error(t, err)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.InvalidArgument, st.Code())
+	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodeInvalidRequest))
+	assert.Equal(t, 0, fake.batchCalls, "超限请求不该打到库上")
+}
+
+// SQL 失败不回半份结果:半份会被上游当成"这些人确实没名字"缓存并展示出去。
+func TestBatchGetPlayerName_SqlErrorReturnsNoPartialResult(t *testing.T) {
+	s, fake := newPlayerNameTestServer(t, nil)
+	fake.names[3003] = "云中君"
+	fake.batchErr = errors.New("invalid connection")
+
+	resp, err := s.BatchGetPlayerName(context.Background(), &data_service.BatchGetPlayerNameRequest{
+		PlayerIds: []uint64{3003, 3004},
+	})
+	require.Error(t, err)
+	assert.Nil(t, resp)
+	st, _ := status.FromError(err)
+	assert.Equal(t, codes.Unavailable, st.Code())
+	assert.Contains(t, st.Message(), errCodeTag(constants.ErrCodePlayerNameDBError))
 }
