@@ -66,7 +66,11 @@ namespace kafka_producer_stats {
 // 线程模型:Instance() 是 thread_local,每个线程一个生产者。send() / poll() / flush() 与投递回执
 // (dr_cb 只在本线程调 poll / flush 时被回调)都发生在同一个线程上,成员无需加锁。
 // 刻意**不注册 event_cb**:librdkafka 的日志事件会从它的内部线程直接回调 event_cb,
-// 那会把跨线程问题引进来;fatal 状态改从两个都在本线程上的点识别(produce() 的返回码、回执的错误码)。
+// 那会把跨线程问题引进来(已对照 vendored 源码核实:src-cpp/HandleImpl.cpp 在设了 event_cb 时
+// 会一并注册 log_cb,而日志回调来自内部线程)。fatal 状态从 produce() 的返回码识别 —— 所有 fatal
+// 都会写入句柄的 fatal 状态,此后 produce() 一律返回 ERR__FATAL,这一个点就足够。
+// 回执里对 ERR__FATAL 的判断只是对未来版本的防御:librdkafka 2.14 不会给投递回执填这个错误码,
+// fatal 时库自己会 purge 队列,排队中的消息以 ERR__PURGE_QUEUE 收场。
 //
 // 投递语义(2026-09 起):
 //  - enable.idempotence=true。librdkafka 内部重试时同一分区内**保序、不重复**。仓库不变量
@@ -118,14 +122,16 @@ private:
 	// 返回 true = 新实例可用;false = 处于重建冷却期,或重建失败(留给下次 send() 惰性重试)。
 	bool rebuildAfterFatal(const char* trigger);
 	void logFailure(const std::string& line);
+	// 补报「有 n 条失败日志被限流压掉」,并带上进程级累计数。
+	void logSuppressedSummary(std::uint64_t suppressed);
 
 	std::unique_ptr<RdKafka::Producer> producer_;
 	std::unique_ptr<RdKafka::Conf> conf_;
 	std::string pendingBrokers_;
 	// 当前实例所用的 brokers,重建时沿用。
 	std::string brokers_;
-	// 投递回执报告了 fatal。回执是在 poll() 的调用栈里回调的,不能就地销毁实例,
-	// 只置位,由下一次 send() 在发送之前处理。
+	// 投递回执报告了 fatal(librdkafka 2.14 下不会发生,见类注释;为未来版本保留)。
+	// 回执是在 poll() 的调用栈里回调的,不能就地销毁实例,只置位,由下一次 send() 在发送之前处理。
 	bool fatalPending_ = false;
 	// 正在 purge 旧实例:此时涌出来的失败回执不代表新的 fatal。
 	bool rebuilding_ = false;

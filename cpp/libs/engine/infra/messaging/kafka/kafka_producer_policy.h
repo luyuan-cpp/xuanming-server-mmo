@@ -82,8 +82,13 @@ private:
 
 // 失败日志限流。broker 长时间不可用时,队列里成千上万条消息会在 message.timeout.ms 到期的
 // 同一刻一起失败;逐条打 ERROR 会把日志盘打满,也会把真正要看的那几行淹掉。
-// 规则:每个窗口内前 burst 条逐条记录,其余只计数;下一个窗口的第一条失败到来时,
-// 把上个窗口被压掉的条数一并报出来。准确的总数永远以 kafka_producer_stats 的计数器为准。
+// 规则:每个窗口内前 burst 条逐条记录,其余只计数;被压掉的条数有三个出口,缺一不可:
+//   1) 下一个窗口的第一条失败到来时,随 OnFailure 的返回值补报;
+//   2) 窗口已过期、但之后**不再有失败**(这恰恰是故障恢复后的正常情形):由调用方在自己的
+//      驱动点上调 TakeExpiredSuppressed 取走补报。少了这一条,一次突发里除前 burst 条之外的
+//      全部丢失都不会出现在日志里;
+//   3) 实例重建 / 析构:TakeSuppressed 无条件取走收尾。
+// 准确的总数永远以 kafka_producer_stats 的计数器为准。
 class FailureLogThrottle {
 public:
 	using Clock = std::chrono::steady_clock;
@@ -113,8 +118,28 @@ public:
 		return decision;
 	}
 
-	// 还没来得及补报的条数(进程退出 / 重建时用来收尾)。
+	// 还没补报的条数。只读,给调用方做廉价预检(为 0 就不必取时钟),不改变任何状态。
 	std::uint64_t PendingSuppressed() const { return suppressed_; }
+
+	// 窗口已过期且有压掉的条数 → 取走并清零,同时关窗(下一条失败开新窗口,不会重复补报);
+	// 否则返回 0 且不改变任何状态。
+	std::uint64_t TakeExpiredSuppressed(Clock::time_point now) {
+		if (!windowOpen_ || suppressed_ == 0 || now - windowStart_ < window_) {
+			return 0;
+		}
+		const std::uint64_t taken = suppressed_;
+		suppressed_ = 0;
+		windowOpen_ = false;
+		return taken;
+	}
+
+	// 无条件取走压掉的条数并清零(实例重建 / 析构时收尾)。窗口本身不动:
+	// 同一窗口内后续的失败照旧按 burst 规则处理。
+	std::uint64_t TakeSuppressed() {
+		const std::uint64_t taken = suppressed_;
+		suppressed_ = 0;
+		return taken;
+	}
 
 private:
 	std::uint32_t burst_;
