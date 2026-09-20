@@ -272,18 +272,22 @@ func (l *GuildLogic) verifyMapping(ctx context.Context, playerID, cached uint64)
 // 契约:业务拒绝回 tip + nil error;只有故障(配表、双存储矛盾、未知错误)才回 error。
 // `ErrRankTooLow` 在 DisbandGuild 上要回 kGuildNotLeader,那一处在调用点先行拦截,不在这里分叉 ——
 // 否则这个函数就得知道自己被哪个 RPC 调用,那是把上下文倒着传。
-// guildID 的契约:**操作者当前所在的帮会 id**(自愈拿它当"缓存里的值"与 MySQL 比对),
-// 不是请求里的目标帮会 id。操作者按语义不在目标帮里时(申请 / 撤回申请)传 0。
-func (l *GuildLogic) mapWriteErr(ctx context.Context, actor, guildID uint64, err error) (*base.TipInfoMessage, error) {
+// 两个 guild 参数刻意分开,因为它们回答的是两个不同的问题:
+//   - logGuildID:**这次操作打的是哪个帮**,只进日志。申请 / 撤回申请时它是目标帮 id,
+//     那恰恰是排障最需要的值(热门帮的行锁争用都集中在它身上),不能丢。
+//   - cachedGuildID:**我们以为操作者属于哪个帮**,只喂给映射自愈去和 MySQL 比对。
+//     申请 / 撤回申请的人按语义不在目标帮里,所以传 0;传目标帮 id 会让 actual(0) 与它永远不等,
+//     每次拒绝都白翻一次映射缓存的代数。
+func (l *GuildLogic) mapWriteErr(ctx context.Context, actor, logGuildID, cachedGuildID uint64, err error) (*base.TipInfoMessage, error) {
 	switch {
 	case err == nil:
 		return nil, nil
 	case errors.Is(err, data.ErrGuildGone), errors.Is(err, data.ErrGuildZoneMismatch):
 		// 别区的帮会与不存在的帮会同一答复,不向客户端透露"它在别的区"。
-		l.verifyMapping(ctx, actor, guildID)
+		l.verifyMapping(ctx, actor, cachedGuildID)
 		return tipErr(constants.ErrGuildNotFound, "guild not found"), nil
 	case errors.Is(err, data.ErrNotGuildMember):
-		l.verifyMapping(ctx, actor, guildID)
+		l.verifyMapping(ctx, actor, cachedGuildID)
 		return tipErr(constants.ErrNotInGuild, "not a member of the guild"), nil
 	case errors.Is(err, data.ErrTargetNotMember):
 		return tipErr(constants.ErrTargetNotMember, "target is not a member"), nil
@@ -308,11 +312,11 @@ func (l *GuildLogic) mapWriteErr(ctx context.Context, actor, guildID uint64, err
 	case errors.Is(err, data.ErrWriteConflict):
 		// 记 Info 不记 Error:两个人同时改同一个帮会是正常玩法,客户端原地重试一次就能成功。
 		// 这里**不能**回 gRPC 错误 —— 那会让客户端进入重连隔离(见文件头纪律 3)。
-		logx.Infof("[guild] guild %d write conflict (player %d), asking the client to retry: %v", guildID, actor, err)
+		logx.Infof("[guild] guild %d write conflict (player %d), asking the client to retry: %v", logGuildID, actor, err)
 		return tipErr(constants.ErrBusyRetry, "guild write conflict"), nil
 	case errors.Is(err, data.ErrLeaderMismatch), errors.Is(err, data.ErrGuildLevelConfigMissing):
 		// 双存储互相矛盾 / 配表缺行:这不是玩家能修的,必须以故障形式暴露出来让人看见。
-		logx.Errorf("[guild] guild %d data or config inconsistent (player %d): %v", guildID, actor, err)
+		logx.Errorf("[guild] guild %d data or config inconsistent (player %d): %v", logGuildID, actor, err)
 		return nil, status.Error(codes.Internal, "guild data or configuration is inconsistent")
 	default:
 		return nil, err
@@ -381,7 +385,7 @@ func (l *GuildLogic) SetGuildMemberRole(ctx context.Context, req *pb.SetGuildMem
 		return &pb.SetGuildMemberRoleResponse{ErrorMessage: tip}, err
 	}
 	res, err := l.repo.SetMemberRole(ctx, guildID, actor, target, req.GetRole(), officerCapFromTable)
-	if tip, err := l.mapWriteErr(ctx, actor, guildID, err); err != nil || tip != nil {
+	if tip, err := l.mapWriteErr(ctx, actor, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.SetGuildMemberRoleResponse{ErrorMessage: tip}, err
 	}
 	// Changed=false = 任免成同一职位,库里一个字节都没变;此时推送只会让全帮白拉一次。
@@ -410,7 +414,7 @@ func (l *GuildLogic) KickGuildMember(ctx context.Context, req *pb.KickGuildMembe
 		return &pb.KickGuildMemberResponse{ErrorMessage: tip}, err
 	}
 	res, err := l.repo.KickMember(ctx, guildID, actor, target)
-	if tip, err := l.mapWriteErr(ctx, actor, guildID, err); err != nil || tip != nil {
+	if tip, err := l.mapWriteErr(ctx, actor, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.KickGuildMemberResponse{ErrorMessage: tip}, err
 	}
 	// 被踢者已经不在快照里,但他必须收到这条推送 —— 否则他的界面会一直停在
@@ -439,7 +443,7 @@ func (l *GuildLogic) TransferGuildLeader(ctx context.Context, req *pb.TransferGu
 		return &pb.TransferGuildLeaderResponse{ErrorMessage: tip}, err
 	}
 	res, err := l.repo.TransferLeader(ctx, guildID, actor, target, officerCapFromTable)
-	if tip, err := l.mapWriteErr(ctx, actor, guildID, err); err != nil || tip != nil {
+	if tip, err := l.mapWriteErr(ctx, actor, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.TransferGuildLeaderResponse{ErrorMessage: tip}, err
 	}
 	l.notify(pb.GuildChangeKind_GUILD_CHANGE_KIND_LEADER_TRANSFERRED, guildID, actor, target, membersExcept(res.Guild, actor))
@@ -484,7 +488,7 @@ func (l *GuildLogic) ApplyJoinGuild(ctx context.Context, req *pb.ApplyJoinGuildR
 	// 第三个参数是"操作者**所在**帮会"而不是请求里的目标帮会:申请人按定义不在目标帮里,
 	// 把目标帮 id 传进去会让自愈拿一个必然不相等的值去比,每次失败都白翻一次映射缓存。
 	// 申请路径上我们相信他"不在任何帮",传 0;真要是已入帮,自愈正好把这条纠正过来。
-	if tip, err := l.mapWriteErr(ctx, actor, 0, err); err != nil || tip != nil {
+	if tip, err := l.mapWriteErr(ctx, actor, guildID, 0, err); err != nil || tip != nil {
 		return &pb.ApplyJoinGuildResponse{ErrorMessage: tip}, err
 	}
 	// 只有**新建行**才推:刷新有效期对审批人来说什么都没变,推过去只会让申请列表闪一下。
@@ -513,7 +517,7 @@ func (l *GuildLogic) CancelGuildApplication(ctx context.Context, req *pb.CancelG
 
 	err = l.repo.CancelApplication(ctx, guildID, actor, nowMs())
 	// 同 ApplyJoinGuild:撤回申请的人不在目标帮里,自愈的比对基准是 0(见上面的注释)。
-	if tip, err := l.mapWriteErr(ctx, actor, 0, err); err != nil || tip != nil {
+	if tip, err := l.mapWriteErr(ctx, actor, guildID, 0, err); err != nil || tip != nil {
 		return &pb.CancelGuildApplicationResponse{ErrorMessage: tip}, err
 	}
 	return &pb.CancelGuildApplicationResponse{}, nil
@@ -706,7 +710,7 @@ func (l *GuildLogic) ReviewGuildApplication(ctx context.Context, req *pb.ReviewG
 		return &pb.ReviewGuildApplicationResponse{ErrorMessage: tip}, err
 	}
 	res, err := l.repo.ReviewApplication(ctx, guildID, actor, applicant, req.GetApprove(), applicantZone, nowMs())
-	if tip, err := l.mapWriteErr(ctx, actor, guildID, err); err != nil || tip != nil {
+	if tip, err := l.mapWriteErr(ctx, actor, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.ReviewGuildApplicationResponse{ErrorMessage: tip}, err
 	}
 	if res.Approved {

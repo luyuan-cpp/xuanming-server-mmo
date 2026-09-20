@@ -540,9 +540,18 @@ func (l *GuildLogic) UpdateGuildScore(ctx context.Context, req *pb.UpdateGuildSc
 		logx.Errorf("UpdateGuildScore: requested zone %d ignored, guild %d belongs to zone %d",
 			req.ZoneId, req.GuildId, guild.ZoneID)
 	}
-	if err := l.repo.UpdateGuildScore(ctx, req.GuildId, guild.ZoneID, req.Score); errors.Is(err, data.ErrGuildGone) {
+	// UpdateGuildScore 自 B2s 起走统一事务入口 inTx,于是多了一条 ErrWriteConflict 的返回:
+	// 死锁重试耗尽、锁等待超时、子预算到期、提交结果不明四条路径都归一到它。
+	// **写冲突必须回业务 tip**,不能包成 gRPC 错误 —— 本服务的纪律是 gRPC 错误会让客户端进入
+	// 重连隔离,而两个人同时改同一个帮会是正常玩法,原地重试一次就能成功。
+	switch err := l.repo.UpdateGuildScore(ctx, req.GuildId, guild.ZoneID, req.Score); {
+	case err == nil:
+	case errors.Is(err, data.ErrGuildGone):
 		return &pb.UpdateGuildScoreResponse{ErrorMessage: tipErr(constants.ErrGuildNotFound, "guild not found")}, nil
-	} else if err != nil {
+	case errors.Is(err, data.ErrWriteConflict):
+		logx.Infof("[guild] guild %d score write conflict, asking the caller to retry: %v", req.GuildId, err)
+		return &pb.UpdateGuildScoreResponse{ErrorMessage: tipErr(constants.ErrBusyRetry, "guild write conflict")}, nil
+	default:
 		return nil, fmt.Errorf("update guild score: %w", err)
 	}
 	return &pb.UpdateGuildScoreResponse{}, nil

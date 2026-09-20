@@ -34,8 +34,9 @@ include_directories(
     #
     # **顺序敏感,boringssl 必须排在 openssl 之前**:third_party/openssl/include/openssl
     # 里 crypto.h 只有未 configure 的 crypto.h.in(evp.h / hmac.h 倒是真文件),能凑齐
-    # 三个头的只有 boringssl。反过来排会变成 evp/hmac 取 OpenSSL 3.x、crypto 取
-    # BoringSSL 的混搭 ABI,编译期未必报错,运行期是未定义行为。与 gate 同序
+    # 三个头的只有 boringssl。反过来排,crypto.h 会先落到那棵**未 configure 的源码树**上,
+    # 通常直接 fatal error 停在编译期(不是静默混搭);真正的运行期未定义行为来自"头和库
+    # 各走一边"—— 链接侧 -lssl/-lcrypto 取的是 gRPC 装过去的 BoringSSL。与 gate 同序
     # (cpp/nodes/gate/CMakeLists.txt:27/30)。
     ../../../../third_party/grpc/third_party/boringssl-with-bazel/include/
     ../../../../third_party/hexagons_grids/

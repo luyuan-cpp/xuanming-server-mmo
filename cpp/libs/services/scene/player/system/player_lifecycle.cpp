@@ -1783,11 +1783,30 @@ void PlayerLifecycleSystem::BeginTravelHandoff(Guid playerId)
 	const int ret = redis->command(
 		[playerId, nowMs](hiredis::Hiredis *, redisReply *reply)
 		{
-			if (reply == nullptr || reply->type == REDIS_REPLY_ERROR)
+			if (reply != nullptr && reply->type == REDIS_REPLY_ERROR)
 			{
+				// 服务端明确报错 = SET 确定没生效,盘上没有标记,就地解冻是安全的。
 				LOG_ERROR << "[ZoneTravel] SET handoff mark failed for player " << playerId
-						  << (reply != nullptr && reply->str != nullptr ? std::string(" err=") + reply->str : "");
+						  << (reply->str != nullptr ? std::string(" err=") + reply->str : "");
 				AbortTravelHandoff(playerId, "handoff mark write failed");
+				return;
+			}
+			if (reply == nullptr)
+			{
+				// 结果**未知**,不是「确定没写」:hiredis 在连接断开时会用空 reply 回调所有挂起
+				// 命令(muduo_windows/.../Hiredis.cc),而这条 SET 可能已经被 Redis 执行了。
+				// 此时绝不能就地 AbortTravelHandoff —— 它的「撤回自己写的标记」那一步被
+				// `redis && redis->connected()` 守卫着,连接刚断必然跳过,于是标记带着当前 epoch
+				// 残活到 TTL(300s)。这 300s 内玩家任何一次跨节点 / 跨 zone EnterScene,
+				// scene_manager 都会判「标记 epoch == 当前 owner_epoch ⇒ 源已落盘」直接放行,
+				// 跳过「先存盘再交接」那道门,目标节点读到最多一个周期存盘之前的状态 —— 玩家回档,
+				// 而且 owner_epoch CAS 也不会响(epoch 没变过),全程零报错。
+				// 交给 ResolveTravelOutcome:Redis 不可用时保持冻结 + 计数 + 重挂应答看门狗;
+				// 连接恢复后它先 DEL 标记再 GET owner_epoch —— 正好把可能已落地的标记撤回,
+				// 再按 epoch 变没变决定解冻还是销毁。代际用 nowMs(与 travel->requestedAtMs 一致)。
+				LOG_ERROR << "[ZoneTravel] SET handoff mark result unknown for player " << playerId
+						  << " (connection dropped before reply); keeping the player frozen until it is verified";
+				ResolveTravelOutcome(playerId, nowMs, "handoff mark write result unknown");
 				return;
 			}
 			// 回调期间实体可能已被退出流程销毁或换了一代,RequestTravelEnterScene 自己按 id 回查。

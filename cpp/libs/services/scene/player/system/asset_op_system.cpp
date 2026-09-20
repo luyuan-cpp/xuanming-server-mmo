@@ -307,16 +307,12 @@ void RejectAndRecord(entt::entity player, PlayerAssetOpLedgerComp& ledgerComp,
 	response.set_durable(PersistAndProbeDurable(player, request, /*expectApplied=*/false, nowMs));
 }
 
-// ── 未进签名串的 P2 字段(§4.9 第 1c 步:不记账)────────────────────────────
+// ── 尚未支持的 P2 字段(§4.9 第 8 步:确定性失败,要记账)────────────────────
 
-// 聚宝斋 P2 的 guid 扣物 / 宝宝字段(AssetBundle.item_uuids / pet_id)本批**不支持**:
-// 没实现就必须显式拒绝,不能默默忽略(AGENTS §11.3 不得静默降级)。P2 实现这两条时
+// 聚宝斋 P2 的 guid 扣物 / 宝宝字段(AssetBundle.item_uuids / pet_id):v1 的 scene
+// **尚未实现**按 guid 扣装备 / 扣宝宝(那是 P3 托管的活),所以带这两个字段的包一律拒。
+// 没实现就必须显式拒绝,不能默默忽略(AGENTS §11.3 不得静默降级)。P3 实现这两条时
 // 在本函数与 ApplyDebit / ApplyCredit 里成对放开。
-//
-// **判在信封档、不记账**(见 Decide 第 1c 步),不走第 8 步那种终局 REJECTED:
-// 这两个字段**不在签名 canonical 里**(§4.32 第 10 行只到 `c=…;i=…`,
-/// v1 的 scene **尚未实现**按 guid 扣装备 / 扣宝宝(那是 P3 托管的活),所以带这两个
-// 字段的包一律拒。
 //
 // **2026-09-19 起这是记账式拒绝**(§4.9 第 8 步),不再是信封档的"忽略本次请求"。
 // 当初之所以要放进信封档,是因为这两个字段没进签名串:攻击者能在一条**合法签名**的

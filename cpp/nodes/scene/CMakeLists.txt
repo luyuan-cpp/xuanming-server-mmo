@@ -22,12 +22,16 @@ include_directories(
     ../../../third_party/
     ../../../third_party/boost/
     # ── OpenSSL 头路径(本节点这批首次需要)────────────────────────────────────
-    # scene 节点有两条路会吃到 <openssl/crypto.h> / <evp.h> / <hmac.h>:
-    #   1) handler/rpc/player/player_gm_guard.h → ../../../../gate/gate_security.h,
-    #      被 player_{attribute,currency,pet,rollback}_handler.cpp 与 scene_handler.cpp
-    #      包含(scene_admin_handler.cpp 早就直接包 gate_security.h);
-    #   2) handler/grpc/scene_node_service.cpp → services/scene/player/system/asset_op_system.h
-    #      → asset_op_auth.h → engine/core/security/token_security.h(header-only,直接包 OpenSSL)。
+    # 本节点吃到 <openssl/crypto.h> / <evp.h> / <hmac.h> 的只有**一条**路:
+    #   handler/rpc/player/player_gm_guard.h → ../../../../gate/gate_security.h,
+    #   被 player_{attribute,currency,pet,rollback}_handler.cpp 与 scene_handler.cpp
+    #   包含(scene_admin_handler.cpp 早就直接包 gate_security.h)。
+    #
+    # 注意**不是**经由资产通道进来的:scene_node_service.cpp 确实包到 asset_op_system.h
+    # → asset_op_auth.h,但 asset_op_auth.h 只包 proto 与标准库;OpenSSL 依赖止于
+    # asset_op_auth.**cpp**,那个 TU 编在 scene 静态库里(见 libs/services/scene/CMakeLists.txt),
+    # 不在本节点。写清楚是因为:将来若去掉 player_gm_guard 那条链,这两条路径就该一起删,
+    # 别被"资产通道还撑着"误导而留下。
     # 本节点此前从不显式给 OpenSSL 头路径,靠的是 libssl-dev 装在 /usr/include 的系统头
     # (deploy/k8s/Dockerfile.cpp:44)。而下面 link_directories 把 /usr/local/lib 排在
     # /usr/lib/x86_64-linux-gnu 前面,`-lssl -lcrypto` 取到的是 gRPC 装过去的 BoringSSL
@@ -43,8 +47,9 @@ include_directories(
     #
     # **顺序敏感:boringssl 必须排在 openssl 之前。**third_party/openssl/include/openssl/
     # 里 crypto.h 只有未 configure 的 crypto.h.in(evp.h / hmac.h 倒是真文件),三个头能凑齐
-    # 的只有 boringssl。顺序反过来会变成 evp/hmac 取 OpenSSL 3.x、crypto 取 BoringSSL 的
-    # 混搭 ABI —— 编译期未必报错,运行期是未定义行为。同序写法见
+    # 的只有 boringssl。顺序反过来,crypto.h 会先在那棵**未 configure 的源码树**里找不到可用
+    # 版本 —— 通常直接 fatal error 停在编译期,而不是静默混搭。真正危险的是"头和库各走一边"
+    # (见上一段:库侧 -lssl/-lcrypto 取的是 BoringSSL),那才是运行期未定义行为。同序写法见
     # cpp/nodes/gate/CMakeLists.txt 与 cpp/libs/services/scene/CMakeLists.txt。
     ../../../third_party/grpc/third_party/boringssl-with-bazel/include/
     ../../../third_party/librdkafka/src-cpp/

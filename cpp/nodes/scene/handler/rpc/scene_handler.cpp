@@ -462,7 +462,28 @@ void SceneHandler::ProcessClientPlayerMessage(::google::protobuf::RpcController*
 		// 同一个谓词。
 		LOG_WARN << "ProcessClientPlayerMessage: client GM rejected method=" << methodName
 				 << " player_id=" << it->second << " session=" << sessionId;
-		tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity()).set_id(kFeatureUnavailable);
+
+		// 把拒绝码搬进应答并清零全局 tip —— 这两件事平时由各 handler 生成的 CallMethod 里的
+		// TRANSFER_ERROR_MESSAGE(engine/core/macros/return_define.h)做,而本分支**不走**
+		// CallMethod,必须自己做。漏掉任一半都有确定性后果:
+		//   * 不搬:下面照常把一个空 playerResponse 序列化回 gate,客户端拿到「成功但 error_message
+		//     为空」,拒绝完全不可见(与 player_scene_handler.cpp 文件头 SetTip 注释里修掉的同一类);
+		//   * 不清:这条 tip 留在**进程级**全局上,同一 scene 节点上下一条走 CallMethod 且带非 Empty
+		//     应答的客户端请求(任意玩家、任意功能)会把它 move 进自己的应答 —— 一次本来成功的
+		//     操作被报成「功能暂不可用」,跨请求跨玩家污染。
+		// playerResponse 是泛型 Message*,没有 mutable_error_message(),所以按字段名反射写入
+		// (与生成层同一个 "error_message" 字段名契约);应答里没有这个字段(返回 Empty 的推送类
+		// 方法)时只清零、不搬运。
+		auto &gmRejectTip = tlsEcs.globalRegistry.get_or_emplace<TipInfoMessage>(tlsEcs.GlobalEntity());
+		gmRejectTip.set_id(kFeatureUnavailable);
+		if (const auto *tipField = playerResponse->GetDescriptor()->FindFieldByName("error_message");
+			tipField != nullptr &&
+			tipField->cpp_type() == google::protobuf::FieldDescriptor::CPPTYPE_MESSAGE &&
+			tipField->message_type() == TipInfoMessage::descriptor())
+		{
+			playerResponse->GetReflection()->MutableMessage(playerResponse.get(), tipField)->CopyFrom(gmRejectTip);
+		}
+		gmRejectTip.Clear();
 	}
 	else
 	{

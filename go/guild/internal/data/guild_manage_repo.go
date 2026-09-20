@@ -67,7 +67,26 @@ const maxTxAttempts = 3
 // 而事务持有的是**帮会行锁**——同一个帮会的所有写都排在它后面。一次帮会写事务只有几条
 // 主键 / 索引语句,正常在个位数毫秒内完成;跑满 1.5s 说明库出了状况,这时候尽早放锁
 // 让后面的人得到"稍后重试",比让整个帮会卡满 3.5s 要好。
+//
+// **超预算不会被内部重试**:它归一成 ErrWriteConflict,而 ErrWriteConflict 不是可重试错误,
+// retryOnDeadlock 见到就返回,由客户端自己重试(收到的是 GuildBusyRetry tip)。
+// "每次尝试各给一份完整子预算"那条理由只对**死锁重跑**成立,别把两件事混起来。
 const txBudget = 1500 * time.Millisecond
+
+// txBudgetDisband:解散是全文件最重的事务 —— 锁 guild → 逐行锁全部成员(上限 100,
+// 见 90-consistency X-16)→ 删本帮申请 + 删成员们在别帮的申请(I3)→ 删成员 → 删帮会。
+// 给它 1500ms 在慢库上会变成"每次都在 1.5s 处被砍、客户端永远重试不成功"的外部活锁,
+// 所以单独放宽。仍然远小于请求预算,放锁的初衷不变。
+// 上线前应当用真库量一次满员帮解散的 p99 再定这两个数。
+const txBudgetDisband = 2500 * time.Millisecond
+
+// txBudgetFor:按 op 取子预算。**固定映射**,新增批次要改就在这里改,不许在调用点传数字。
+func txBudgetFor(op string) time.Duration {
+	if op == opDisband {
+		return txBudgetDisband
+	}
+	return txBudget
+}
 
 // inTx:帮会写事务的**唯一**入口(90-consistency part2 §2 第 1 条)。
 // 经济(B5)与活动(B6)的 repo 持有 *GuildRepo 并复用它,不各写一份重试助手。
@@ -85,7 +104,8 @@ func (r *GuildRepo) inTx(ctx context.Context, op string, fn func(ctx context.Con
 func (r *GuildRepo) runTxOnce(ctx context.Context, op string, fn func(ctx context.Context, tx *sql.Tx) error) error {
 	// 每次尝试各给一份完整子预算:重试是新的一轮加锁,沿用上一轮剩下的时间会让
 	// 第 3 次尝试几乎必然超时,把"本可成功的重试"变成失败。总时长仍由请求 ctx 封顶。
-	txCtx, cancel := context.WithTimeout(ctx, txBudget)
+	budget := txBudgetFor(op)
+	txCtx, cancel := context.WithTimeout(ctx, budget)
 	defer cancel()
 
 	err := r.runTxBody(txCtx, fn)
@@ -94,12 +114,28 @@ func (r *GuildRepo) runTxOnce(ctx context.Context, op string, fn func(ctx contex
 	}
 	// 子预算到期而请求还活着 = 库慢或锁排队,是"稍后重试"而不是"失败";
 	// 请求本身被取消(客户端断开 / 上游超时)则原样返回,不许伪装成写冲突。
-	if ctx.Err() == nil && errors.Is(err, context.DeadlineExceeded) {
+	//
+	// 判据用 **txCtx 到期 + 父 ctx 的 deadline 还没到**,不用 `ctx.Err() == nil`:
+	// 后者是在 runTxBody 返回**之后**才读的,父 ctx 若恰好在这两步之间到期(剩余时间落在
+	// [budget, budget+ε]),一次本该回 tip 的超预算就会被误判成父取消、以 gRPC 错误抛出去,
+	// 把客户端推进重连隔离。比时间戳没有这个窗口。
+	if errors.Is(txCtx.Err(), context.DeadlineExceeded) && !parentDeadlineReached(ctx) {
 		guildTxBudgetExceededTotal.Inc(op)
-		logx.Errorf("[guild] %s: transaction exceeded its %v budget: %v", op, txBudget, err)
+		logx.Errorf("[guild] %s: transaction exceeded its %v budget: %v", op, budget, err)
 		return ErrWriteConflict
 	}
 	return err
+}
+
+// parentDeadlineReached:父 ctx 是否**因为自己的 deadline** 而结束。
+// 没有 deadline(内部调用)恒为 false;被显式取消(客户端断开)也算已结束 —— 那种情况
+// 本来就该把 ctx 错误原样返回,不能当成超预算。
+func parentDeadlineReached(ctx context.Context) bool {
+	if ctx.Err() != nil {
+		return true
+	}
+	deadline, ok := ctx.Deadline()
+	return ok && !deadline.After(time.Now())
 }
 
 func (r *GuildRepo) runTxBody(ctx context.Context, fn func(ctx context.Context, tx *sql.Tx) error) error {
@@ -131,17 +167,28 @@ func commitTx(tx *sql.Tx) error { return classifyCommitErr(tx.Commit()) }
 // classifyCommitErr 单独拆出来是为了能不连库直接测:提交阶段的分类是**语义**判断,
 // 不该为了验证它去起一个数据库。
 //
-// ErrTxDone / ctx 取消 / ctx 超时这三类的结论是**明确**的(事务没提交,或调用方自己走了),
-// 原样返回;其余(连接被重置、驱动报未知错误)结果不明,归一到 ErrWriteConflict。
+// 三类原样返回,只有"结果不明"才归一:
+//  1. **可重试**的提交期错误(1213 / TiDB 9007 / errRetryTx)与锁等待(1205)——
+//     交给 retryOnDeadlock 去分类、计数、重跑。这条最容易写错:**TiDB 的写冲突 9007 正是由
+//     COMMIT 语句报出来的**,在这里归一成 ErrWriteConflict,等于把 9007 的重试在它唯一出现的
+//     位置又关掉一次(ErrWriteConflict 不是可重试错误,retryOnDeadlock 见到它会立刻返回)。
+//  2. ErrTxDone / ctx 取消 / ctx 超时:结论明确(事务没提交,或调用方自己走了)。
+//  3. 其余(连接被重置、驱动报未知错误):**结果不明**,COMMIT 可能已经在库里生效了,只是回执没收到。
+//     打 ERROR 让人看见,对外归一到 ErrWriteConflict —— 客户端收到"稍后重试",重试时先读当前状态,
+//     幂等分支会兜住已生效的那一半。归一时用 %w 把 ErrWriteConflict 包进去、原因用 %v 留在文本里,
+//     方便排障时知道到底是什么驱动错误。
 func classifyCommitErr(err error) error {
 	if err == nil {
 		return nil
+	}
+	if isRetryableTxError(err) || isLockWaitTimeout(err) {
+		return err
 	}
 	if errors.Is(err, sql.ErrTxDone) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return err
 	}
 	logx.Errorf("[guild] commit outcome unknown: %v", err)
-	return ErrWriteConflict
+	return fmt.Errorf("commit outcome unknown (%v): %w", err, ErrWriteConflict)
 }
 
 // retryOnDeadlock 与数据库解耦:run 是"跑一次事务"的闭包,单测用假错误直接驱动它。
@@ -260,7 +307,7 @@ var (
 		Namespace: guildMetricNamespace,
 		Subsystem: "tx",
 		Name:      "budget_exceeded_total",
-		Help:      "帮会写事务跑满子预算(1500ms)被中止、对外回 GuildBusyRetry 的次数。稳态应为 0;非 0 说明库慢或帮会行锁排队。",
+		Help:      "帮会写事务跑满子预算(默认 1500ms、disband 2500ms)被中止的次数。**不做内部重试**,对外回 GuildBusyRetry 由客户端重试。稳态应为 0;非 0 说明库慢或帮会行锁排队。",
 		Labels:    []string{"op"},
 	})
 

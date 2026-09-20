@@ -657,8 +657,9 @@ func (r *GuildRepo) RebuildRanks(ctx context.Context) error {
 //
 // zoneID 是**提示**不是权威:
 //
-//  1. 公会行还在(降级 / 手工清榜)→ 用 FOR UPDATE 重读 MySQL 的 zone_id,
-//     与 UpdateGuildScore 同一口径,调用方传进来的值只用来记一条不一致日志。
+//  1. 公会行还在(降级 / 手工清榜)→ **非锁定**重读一次 MySQL 的 zone_id 当提示
+//     (读路径不需要行锁,理由见 authoritativeZoneID;写路径 UpdateGuildScore 仍用 FOR UPDATE),
+//     调用方传进来的值只用来记一条不一致日志。
 //  2. 公会行已删(DisbandGuild 的正常路径)→ 用调用方传进来的值,它必须是
 //     DisbandResult.ZoneID(解散事务内 FOR UPDATE 读到的),不能是 guild:v2:{id} 缓存。
 //

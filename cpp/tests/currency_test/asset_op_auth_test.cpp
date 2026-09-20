@@ -231,6 +231,11 @@ TEST(AssetOpAuthTest, SignatureCoversGuidAndPetTamper)
 	signed_request.mutable_bundle()->add_item_uuids(900000000000000001ULL);
 	signed_request.mutable_bundle()->set_pet_id(700000000000000003ULL);
 	signed_request.mutable_auth()->set_caller("trade");
+	// 时间戳必须在签名**之前**填好:它是 canonical 第 11 行,签完再改就等于自己篡改自己。
+	// 取 kFrozenNowMs 是为了与 VerifyGolden 默认的 nowMs 同值,时间窗判定才不会抢戏
+	// —— 否则 ts 默认 0、偏差 1.7e12 毫秒,这条用例会红在 kClockSkew 上,
+	// 后面五条「篡改必须签名失效」的断言一条也跑不到。
+	signed_request.mutable_auth()->set_timestamp_ms(static_cast<uint64_t>(kFrozenNowMs));
 	SignRequest("debit", signed_request);
 	ASSERT_EQ(AssetOpAuthVerdict::kOk, VerifyGolden(signed_request));
 
