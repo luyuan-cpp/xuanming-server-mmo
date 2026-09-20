@@ -464,10 +464,13 @@ const defaultFriendSchema = "mmorpg_friend"
 // validateFriendSchemaName 在任何 SQL 之前验库名形状。库名直接拼进语句(标识符不能用
 // 占位符),这是这条拼接唯一的注入防线。
 //
-// 刻意复用 trade_step.go 的 tradeSchemaNamePattern 而不是再抄一份正则:两个 flag 防的
-// 是同一件事(「是不是一个朴素标识符」),抄两份迟早会漂移成两套口径。
+// 刻意复用 player_rows.go 的公共 schemaNamePattern 而不是再抄一份正则:三个 flag
+// (-guild-schema / -trade-schema / -friend-schema)防的是同一件事(「是不是一个朴素
+// 标识符」),抄三份迟早会漂移成三套注入防线。
+// (本函数原先引用的是 trade_step.go 的 tradeSchemaNamePattern;帮会二期 B1b 把那份
+//  正则提到了 player_rows.go 并改名为 schemaNamePattern,合并后旧名已不存在。)
 func validateFriendSchemaName(schema string) error {
-	if !tradeSchemaNamePattern.MatchString(schema) {
+	if !schemaNamePattern.MatchString(schema) {
 		return fmt.Errorf("-friend-schema %q is not a plain identifier ([A-Za-z0-9_], 1-64 chars)", schema)
 	}
 	return nil
