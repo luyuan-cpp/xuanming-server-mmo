@@ -1118,6 +1118,12 @@ const (
 - `cpp_nodes.ps1` 的写法:**GM 开关部分作废**(闸门判据已是 `SCENE_RUN_MODE`,启动器兜底 dev,不需要额外开关)。仍要做的是**注入两把资产通道开发密钥**:在逐进程环境覆盖块(`$prevZoneEnv` 那一段)里,仅对 scene 进程、且当前未设置时,给 `MMORPG_ASSET_OP_SECRET_GUILD` / `MMORPG_ASSET_OP_SECRET_TRADE` 设开发默认值;finally 按 `$null -eq $prev` 分支恢复(直接赋空串会把变量留成空值,和"未设置"不是一回事)。值必须与 `go/shared/assetop/scene_smoke_test.go` 里的 smoke 开发密钥同值,否则本机冒烟全判 `kAssetAuthFailed`。
 - **第二轮追加**:同一 scene 分支里,`MMORPG_ASSET_OP_SECRET_GUILD`、`MMORPG_ASSET_OP_SECRET_TRADE` 若调用前未设,则设为开发值 `change-me-dev-asset-op-guild-secret-000000` / `change-me-dev-asset-op-trade-secret-000000`,同样保存旧值、finally 恢复(第 8 部分 4.32)。`dev_mprocs_proc.ps1` 的 `"cpp-scene"` 分支同理注入,该文件改动移入 B4a-2;B4a-1 第 30 项只剩 `cpp_nodes.ps1`。
 
+> **2026-09-19 作废这条「固定开发值」约定**:本机两把密钥改为由 `tools/scripts/lib/assetop_dev_secret.ps1` **随机生成一次**、落在 `run/secrets/assetop-dev.env`(在 .gitignore 里),再由 `cpp_nodes.ps1`(仅 scene 分支)与 `start_game.ps1` 注入。
+> 理由:写死在仓库里的开发密钥一定会被人抄进预发环境 —— 它看起来就是「配置」。随机值抄不走。
+> 连带:`go/shared/assetop/scene_smoke_test.go` **去掉了写死的兜底值**,只从环境变量读,读不到就 `t.Skip`。
+> 兜底值留着比没有更坏:生成值改随机之后它与 scene 实际拿到的值必然不同,于是每一次资产 RPC 都回 27008,而密钥值不许进日志,排障看到的只是「全红且毫无线索」。
+
+
 **E4 proto 新目录(原偏差 #16 降级)**。`proto_gen.yaml` 的 `proto_directories` 没列 `common/rollback/`、`common/options/`,但二者都已生成(`cpp/generated/proto/CMakeLists.txt:92-94`),说明生成器按目录递归遍历(`prototools/descriptor.go:87` WalkDir)。`proto/common/asset/` 预期会被扫到,B4a 验证第 1 步保留作确认,回退方案不变。
 
 **E5 聚宝斋文档定位更新**。§6.4 现位于 :163;§6.1 各条行号与第 6 部分一致。§6 之外的旧名**只有** :303 的 P2 分期行(第 6 部分第 9 条说的"J-5 行、§2 状态表、§12"经 grep 不存在)。该行精确替换:
@@ -1284,6 +1290,12 @@ func (s *Signer) Sign(rpc RPC, req *assetpb.AssetOpRequest, nowMs uint64) // 就
 `Caller` 增字段 `Signer *Signer`,为 nil 时 `Do` 直接返回 `ErrNoSigner`;每次调用(含重查)都以**当前时间**重签克隆出的请求。
 
 **本地脚本**:`cpp_nodes.ps1` 对 scene 进程,在变量未设时注入开发值 `change-me-dev-asset-op-guild-secret-000000` 与 `change-me-dev-asset-op-trade-secret-000000`(与 `k8s_deploy.ps1:281` 的 DevFallback 同一约定);`dev_mprocs_proc.ps1` 同(B4a-2)。guild 读取与 `go_services.ps1` 注入属于 B5。K8s:`k8s_deploy.ps1` 以 `Resolve-InjectedSecret -MinLength 32` 注入,上线项。
+
+> **2026-09-19 作废这条「固定开发值」约定**:本机两把密钥改为由 `tools/scripts/lib/assetop_dev_secret.ps1` **随机生成一次**、落在 `run/secrets/assetop-dev.env`(在 .gitignore 里),再由 `cpp_nodes.ps1`(仅 scene 分支)与 `start_game.ps1` 注入。
+> 理由:写死在仓库里的开发密钥一定会被人抄进预发环境 —— 它看起来就是「配置」。随机值抄不走。
+> 连带:`go/shared/assetop/scene_smoke_test.go` **去掉了写死的兜底值**,只从环境变量读,读不到就 `t.Skip`。
+> 兜底值留着比没有更坏:生成值改随机之后它与 scene 实际拿到的值必然不同,于是每一次资产 RPC 都回 27008,而密钥值不许进日志,排障看到的只是「全红且毫无线索」。
+
 
 **网络面**:仓库内没有任何 `kind: NetworkPolicy` 清单(已 grep)。上线项:scene gRPC 端口只放行 scene_manager、match、guild、trade。签名是主防线,NetworkPolicy 是纵深防御。
 
@@ -1474,7 +1486,7 @@ type Store interface {
     //            WHERE op_id=? AND lease_token=?,返回 (Op{}, false, ErrPoisonRow)
     //   poisonUntilMs 由循环按 LoopConfig.PoisonDelay 算好传进来(2026-09-19 加的第 6 个参数);
     //   **实现不得再自写毒行延迟常量** —— 那会让 yaml 里的 PoisonDelay 改了不生效,两份值迟早分叉。
-    Claim(ctx context.Context, opID, nowMs, leaseUntilMs, token, poisonUntilMs uint64) (Op, bool, error)
+    Claim(ctx context.Context, opID, nowMs, leaseUntilMs, poisonUntilMs, token uint64) (Op, bool, error)
     Finalize(ctx context.Context, op Op, status Status, res Result, nowMs uint64) (bool, error)   // 语义同前,须包在 WithTxRetry 里
     // SET … last_reason=res.Reason …;**RowsAffected==0(租约已被别的副本抢走)必须回 ErrLeaseLost**
     // (可 %w 包裹)。不回的话"我这次的结果被丢弃了"在指标里永远看不见。

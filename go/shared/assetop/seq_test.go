@@ -262,8 +262,55 @@ func TestTxBackoffShape(t *testing.T) {
 	}
 }
 
+// TestWithTxRetryRealBackoffIsCancelable 验**生产那条路径**的退避可取消。
+//
+// 其余用例都注入假的 sleep(为了能断言"退避了几次、每次多久"而不真的睡),于是真正跑在
+// 生产上的那一份(sleepCtx)零覆盖。它一旦退化成 time.Sleep,表现是关停时每次重试都要
+// 睡满退避时长 —— 本地几乎看不出来,线上滚动更新才会变成"pod 迟迟不退出"。
+//
+// 这里不断言墙钟相等(那会在慢 CI 上抖),只断言"远小于退避时长就返回了"。
+func TestWithTxRetryRealBackoffIsCancelable(t *testing.T) {
+	db, rec := newFakeTxDB(t)
+
+	cfg := DefaultTxRetryConfig()
+	cfg.Attempts = 3
+	cfg.BaseBackoff = 5 * time.Second // 真睡满就必然超过下面的容差
+	cfg.MaxBackoff = 10 * time.Second
+	cfg.IsRetryable = func(error) bool { return true }
+	cfg.sleep = nil // 关键:走生产用的 sleepCtx,不是注入的假 sleep
+
+	ctx, cancel := context.WithCancel(context.Background())
+	busy := errors.New("死锁,可重试")
+
+	// 在业务函数里取消,而不是另起 goroutine 定时取消:后者要赌"取消发生在第一次尝试之后",
+	// 赌输了 lastErr 还是 nil,断言会莫名其妙地翻。这样写没有任何墙钟依赖。
+	start := time.Now()
+	err := WithTxRetryConfig(ctx, db, cfg, func(*sql.Tx) error {
+		cancel()
+		return busy
+	})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("ctx 被取消且业务一直失败,应当返回错误")
+	}
+	if !errors.Is(err, busy) {
+		t.Errorf("错误里应保留业务错误,实际: %v", err)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("错误里应带上 ctx 取消的原因,实际: %v", err)
+	}
+	if elapsed >= cfg.BaseBackoff {
+		t.Errorf("退避睡满了 %v —— sleepCtx 没有响应取消", elapsed)
+	}
+	if got := rec.count(); got != 1 {
+		t.Errorf("取消后不应再开新事务,实际开了 %d 次", got)
+	}
+}
+
 // TestWithTxRetryRejectsBadConfig:参数不合法时一个事务都不许开(fail-closed)。
-// 尤其是退避区间:BaseBackoff 小于 1ms 会被毫秒取整抹成 0,等于悄悄退回"没有退避"。
+// 尤其是退避区间:BaseBackoff 小于 2ms 时 ±20% 抖动的下界会被毫秒取整抹成 0,
+// 等于悄悄退回"一半的重试没有退避"。
 func TestWithTxRetryRejectsBadConfig(t *testing.T) {
 	noop := func(*sql.Tx) error { return nil }
 
@@ -285,6 +332,9 @@ func TestWithTxRetryRejectsBadConfig(t *testing.T) {
 		}{
 			{"base 为零", func(c *TxRetryConfig) { c.BaseBackoff = 0 }},
 			{"base 亚毫秒", func(c *TxRetryConfig) { c.BaseBackoff = 100 * time.Microsecond }},
+			// 1ms 曾经是允许的下限,但 ±20% 抖动的下界 0.8ms 按毫秒取整就是 0,
+			// 约一半的重试实际不退避。这条钉住"下限是 2ms"这个选择,免得有人顺手调回 1ms。
+			{"base 恰好 1ms(抖动下界会被抹成 0)", func(c *TxRetryConfig) { c.BaseBackoff = time.Millisecond }},
 			{"max 小于 base", func(c *TxRetryConfig) { c.MaxBackoff = time.Millisecond }},
 		}
 		for _, c := range cases {

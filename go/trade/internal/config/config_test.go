@@ -269,15 +269,32 @@ func TestAssetOpEnabledAcceptsSecretEnv(t *testing.T) {
 // 错误会被原样打进启动日志,回显等于把密钥从配置文件搬进日志(AGENTS §11.3)。
 func TestValidateNeverEchoesAssetOpSecret(t *testing.T) {
 	const pasted = "pasted-secret-must-not-appear-in-any-error-text"
-	c := validConfig()
-	c.AssetOp = AssetOpConf{Secret: pasted}
-	err := c.Validate()
-	if err == nil {
-		t.Fatal("AssetOp.Secret 非空必须被拒")
-	}
-	if strings.Contains(err.Error(), pasted) {
-		t.Error("错误文本里出现了密钥值")
-	}
+
+	t.Run("贴进 Secret", func(t *testing.T) {
+		c := validConfig()
+		c.AssetOp = AssetOpConf{Secret: pasted}
+		err := c.Validate()
+		if err == nil {
+			t.Fatal("AssetOp.Secret 非空必须被拒")
+		}
+		if strings.Contains(err.Error(), pasted) {
+			t.Error("错误文本里出现了密钥值")
+		}
+	})
+
+	// SecretEnv 只该填**环境变量名**,而"手滑把密钥值贴进来"正是这条分支最常见的触发原因。
+	// 所以它和 Secret 一样不许回显 —— 只钉 Secret 那半边,等于给密钥留了另一条进日志的路。
+	t.Run("贴进 SecretEnv", func(t *testing.T) {
+		c := validConfig()
+		c.AssetOp = AssetOpConf{Enabled: true, SecretEnv: pasted}
+		err := c.Validate()
+		if err == nil {
+			t.Fatal("SecretEnv 形状不符必须被拒")
+		}
+		if strings.Contains(err.Error(), pasted) {
+			t.Error("错误文本里出现了被误贴进 SecretEnv 的密钥值")
+		}
+	})
 }
 
 // TestRequestBudget 钉住整请求业务预算:严格小于服务端 Timeout(给 in-band 回包留余量),

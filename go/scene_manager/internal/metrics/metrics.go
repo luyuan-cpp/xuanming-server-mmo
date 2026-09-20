@@ -107,7 +107,10 @@ var (
 	enterSceneRejectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_rejected_total",
-		Help:      "EnterScene rejections by reason (scene_gone|unsafe_handoff|handoff_pending|epoch_conflict|home_zone_unavailable).",
+		// reason 取值必须与 enterscenelogic.go / home_zone.go 里实际传入的字面量一致;
+		// 旧的 scene_gone / unsafe_handoff / handoff_pending 已无调用点(换手门拒绝细分成了
+		// no_marker / stale_marker / withdrawn 三种),按旧名配的告警会恒为空而不报错。
+		Help:      "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|travel_map_unavailable|pending_map_fallback).",
 	}, []string{"zone_id", "reason"})
 
 	// homeZoneLookupTotal 统计 EnterScene 里每一次归属 zone 查询的结果:

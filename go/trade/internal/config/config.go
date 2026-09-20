@@ -341,8 +341,13 @@ func (c *Config) Validate() error {
 			"绝不写进 yaml / ConfigMap / 仓库。删掉这一行,改由部署侧注入该环境变量", AssetOpSecretEnvPrefix)
 	}
 	if c.AssetOp.Enabled && !assetOpSecretEnvPattern.MatchString(c.AssetOp.SecretEnv) {
-		return fmt.Errorf("AssetOp.Enabled=true 时 AssetOp.SecretEnv 必须是形如 %sTRADE 的环境变量名(得到 %q):"+
-			"它是密钥的来源声明,不是密钥值", AssetOpSecretEnvPrefix, c.AssetOp.SecretEnv)
+		// **不回显这个值**。这条分支最常见的触发原因恰恰是"手滑把密钥值贴进了 SecretEnv",
+		// 回显就等于把密钥抄进启动日志 —— 上面 Secret 那条特地不回显,这里回显就自相矛盾了
+		// (AGENTS §11.3:真实密钥不得进日志 / 指标 / 错误响应)。只说长度与形状不符,
+		// 足够定位手滑,又不泄漏内容。
+		return fmt.Errorf("AssetOp.Enabled=true 时 AssetOp.SecretEnv 必须是形如 %sTRADE 的环境变量名"+
+			"(得到一个长度 %d 的值,形状不符;此处刻意不回显内容,因为它可能就是被误贴进来的密钥):"+
+			"它是密钥的来源声明,不是密钥值", AssetOpSecretEnvPrefix, len(c.AssetOp.SecretEnv))
 	}
 	return nil
 }

@@ -296,7 +296,9 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// ErrHandoffPending 永久挡在门外,只能等运维手工清 location —— 一次单节点崩溃变成
 	// 一批玩家进不了游戏。判定规则与「为什么这样是安全的」见 playerLocationOwnerDead。
 	if currentLoc != nil && l.playerLocationOwnerDead(currentLoc, currentZoneID) {
-		metrics.ObserveEnterSceneOwnerDeadTakeover(currentZoneID)
+		// 计数不在这里记:这之后还有若干**可重试**的拒绝(home_zone 不可用、epoch 冲突、
+		// 目标 zone 无可用节点),上游退避重试时同一名玩家会把它刷成实际接管数的好几倍,
+		// 而这条指标的判据正是「和当时在线数对得上」。落点确认成功后再记,见函数末尾。
 		l.Logger.Infof("位置记录的属主节点已确认死亡且再入屏障已过,按无持有者处理: player=%d dead_zone=%d dead_node=%s dead_scene=%d owner_epoch=%d gate_zone=%d target_zone=%d",
 			in.PlayerId, currentZoneID, currentLoc.GetNodeId(), currentLoc.GetSceneId(), observedEpoch, in.GateZoneId, targetZoneId)
 		// 与上面同理把 raw 清空。旧场景的人数留到本次落点**成功之后**再还(见函数末尾的
@@ -589,6 +591,11 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		l.Logger.Infof("No GateID in EnterScene request for player %d", in.PlayerId)
 	}
 
+	// 走到这里 = 落点已提交、路由已发出,takenOverLoc 非空即一次**真实**接管(而不是一次
+	// 之后又被可重试错误拒掉的尝试)。计数与归还旧场景人数都放在这一刻。
+	if takenOverLoc != nil {
+		metrics.ObserveEnterSceneOwnerDeadTakeover(takenOverZone)
+	}
 	l.releaseTakenOverSceneCount(takenOverLoc, takenOverZone)
 
 	l.Logger.Infof("Player %d entered scene %d on node %s (zone %d, home_zone %d, owner_epoch %d)",

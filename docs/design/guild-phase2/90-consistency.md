@@ -280,7 +280,7 @@ S6 `ActivityDeps` 删 `Notifier`(用 `l.notify`),`OpIDs` 类型改 `data.OpIDMin
 | `start_game.ps1` 预检 `mmorpg_guild` | B1 | 已认领 |
 | `cpp_nodes.ps1` 给 scene 注入 `MMORPG_ALLOW_CLIENT_GM=1` 与两把开发资产密钥,`-NoClientGm` | B4a-1 | 已认领 |
 | `dev_mprocs_proc.ps1` 同上 | B4a-2 | 已认领 |
-| **`go_services.ps1` 给 guild 注入 `MMORPG_ASSET_OP_SECRET_GUILD` 开发值**(未设时 `change-me-dev-asset-op-guild-secret-000000`,与 scene 一致) | **B5b(S4 指派,S5 漏列)** | 新增 1 个文件 |
+| **`go_services.ps1` 给 guild 注入 `MMORPG_ASSET_OP_SECRET_GUILD` 开发值**(未设时取 `run/secrets/assetop-dev.env` 里由 `lib/assetop_dev_secret.ps1` 生成的随机值,与 scene 同一把;**原文写死的 `change-me-dev-…` 固定值已于 2026-09-19 作废**) | **B5b(S4 指派,S5 漏列)** | 新增 1 个文件 |
 | data_service `BootstrapTags` 加 `guild_asset_op`(yaml、config、id_segment_store、k8s_deploy.ps1) | B5a | 已认领 |
 | `login.yaml` `AccountLockTTL: 20` | B3a-2 | 已认领 |
 | Kafka `match-results` 消费组 `guild-trial`(yaml 不加引号) | B6b-srv2 | 已认领 |

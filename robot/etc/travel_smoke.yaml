@@ -18,8 +18,8 @@
 #      指向**同一个 Redis**(CZ-2 契约:账号 blob、PlayerAllData、player:{id}:owner_epoch / handoff / location 都在里面)。
 #      Redis 不共享时,访客区 login 的角色列表里没有这个角色,严格重登会以"拒绝自动建角"失败 —— 这是部署问题,robot 修不了。
 #   2. 阶段 1 + 阶段 2 的 proto 已重新生成,gate / scene / login / scene_manager / db 都换上了新二进制;
-#      robot/vendor/proto 已从 go/proto 逐字节同步(至少 scene/player_scene*.pb.go;要启用票据 player_id / target_zone_id
-#      断言还需 common/base/message.pb.go,见 travel_smoke_wire.go 的 TODO)。gate 与 scene 必须同一轮重编:
+#      robot/vendor/proto 已从 go/proto 逐字节同步(scene/player_scene*.pb.go 与 common/base/message.pb.go;
+#      后者带着票据的 player_id / target_zone_id,CZ-8 那两条断言靠它)。gate 与 scene 必须同一轮重编:
 #      rpc_event_registry 两边共用,只换 scene 的话 gate 不认 TravelToZone 的消息号,请求会被当非法包。
 #   3. Tip 表已导出(含 scene_error 段的 4 个 kZoneTravel* 码)。本冒烟不引用任何 tip 常量,但没导出时 scene 编不过。
 #   4. scene_manager 的 GateTokenSecret 非空(为空时 AssignGateForZone 直接报错,签不出重定向票据)。

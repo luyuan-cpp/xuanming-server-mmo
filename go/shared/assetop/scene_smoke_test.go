@@ -56,18 +56,24 @@ const (
 	// smokeJumpSeq 用于步骤 ⑨:远大于 max_seq + 1024(此刻 max_seq=3),必判跳号过远。
 	smokeJumpSeq = 5000
 
-	// smokeBudget 与重投循环的单行预算 LoopConfig.OpBudget 同值:
-	// 冒烟要验的正是"生产路径那 2.5s 够不够拿到 durable 结局"。
-	smokeBudget = 2500 * time.Millisecond
 	// smokeSyncTimeout 是等 etcd 节点镜像首次全量同步的上限。
 	smokeSyncTimeout = 10 * time.Second
 )
 
-// 三把密钥。开发值与 tools/scripts/cpp_nodes.ps1 注入 scene 的值一字不差(规格 §4.32);
-// 它们是**公开的本地开发值**,不是任何环境的真密钥,所以可以写进仓库。
+// smokeBudget 必须与**投递路径**在生产里实际拿到的预算同值,而那不是整个 OpBudget:
+// ProcessOne 从 OpBudget 里切走 settleBudget 留给落库(否则 RPC 跑满后 Finalize 必定
+// 拿到已过期的 ctx —— scene 已经扣了钱、outbox 行却更新不了)。
+//
+// 写死 2500ms 会给出**假绿**:一个真实 scene 若 2.0s 才给出 durable,冒烟通过、
+// 生产却已经在 1.8s 放弃转 AwaitDurable。所以这里按同一个算式推,不抄数字 ——
+// 将来谁调 OpBudget 或 settleBudget,冒烟自动跟着走。
+// (因为带函数调用,只能是 var 不能是 const。)
+var smokeBudget = DefaultLoopConfig().OpBudget - settleBudget
+
+// 真正的两把开发密钥**不写在这里**:它们由 tools/scripts/lib/assetop_dev_secret.ps1
+// 随机生成一次、落在 run/secrets/assetop-dev.env(在 .gitignore 里),由启动脚本注入
+// scene 与 Go 服务。本测试只从环境变量读(见 smokeSecret),读不到就跳过。
 const (
-	smokeDevGuildSecret = "change-me-dev-asset-op-guild-secret-000000"
-	smokeDevTradeSecret = "change-me-dev-asset-op-trade-secret-000000"
 	// smokeWrongSecret 长度合法但值不对,用来验"签名不符"这一档确实被拒(步骤 ⑩)。
 	// 若它与真密钥相同,步骤 ⑩ 会假绿,所以这里刻意取一个不可能被注入的前缀。
 	smokeWrongSecret = "wrong-dev-asset-op-guild-secret-0000000000"
@@ -224,9 +230,9 @@ func newSmokeRig(ctx context.Context, t *testing.T) *smokeRig {
 		playerID: playerID,
 		// 每次运行一个新纪元(规格 §4.40):上一轮的纪元更小,scene 首次记账时会重置该流。
 		epoch:    uint64(time.Now().UnixMilli()),
-		guild:    smokeCaller(t, locator, "guild", smokeEnv("MMORPG_ASSET_OP_SECRET_GUILD", smokeDevGuildSecret)),
+		guild:    smokeCaller(t, locator, "guild", smokeSecret(t, "MMORPG_ASSET_OP_SECRET_GUILD")),
 		wrongKey: smokeCaller(t, locator, "guild", smokeWrongSecret),
-		trade:    smokeCaller(t, locator, "trade", smokeEnv("MMORPG_ASSET_OP_SECRET_TRADE", smokeDevTradeSecret)),
+		trade:    smokeCaller(t, locator, "trade", smokeSecret(t, "MMORPG_ASSET_OP_SECRET_TRADE")),
 	}
 	return rig
 }
@@ -357,12 +363,30 @@ func smokePlayerID(t *testing.T) uint64 {
 	return id
 }
 
-// smokeEnv 读环境变量,未设则用默认值。密钥的默认值是本地开发值,与 scene 脚本一致;
-// 若 scene 那边注入了别的密钥而这边没设,步骤 ① 就会以 27008 失败 —— 这是预期的
-// fail-closed,不要在这里加"猜密钥"的逻辑。
+// smokeEnv 读环境变量,未设则用默认值。**只用于基础设施地址**(etcd / Redis):
+// 猜错地址是连不上、当场报错,代价有限。密钥不许走这条路,见下面的 smokeSecret。
 func smokeEnv(key, fallback string) string {
 	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
 		return v
 	}
 	return fallback
+}
+
+// smokeSecret 取一把调用方密钥。**没有写死的兜底值**:本机开发值由
+// tools/scripts/lib/assetop_dev_secret.ps1 随机生成一次、落在 run/secrets/assetop-dev.env,
+// 由 cpp_nodes.ps1 / start_game.ps1 注入 scene 与 Go 服务。
+//
+// 以前这里有一对写死的 "change-me-dev-…" 兜底。它比没有兜底更坏:生成值改成随机之后,
+// 兜底值与 scene 实际拿到的值**必然**不同,于是每一次资产 RPC 都回 27008,而密钥值不许
+// 进日志,排障时看到的只是"全红且毫无线索"—— 正是本条契约要防的那种失败。
+// 宁可跳过,也不要拿一把注定错的密钥去跑出一片红。
+func smokeSecret(t *testing.T, key string) string {
+	t.Helper()
+	v := strings.TrimSpace(os.Getenv(key))
+	if v == "" {
+		t.Skipf("未设 %s,跳过端到端冒烟。本机先跑一次 tools/scripts/start_game.ps1 或 cpp_nodes.ps1"+
+			"(它们会生成并注入 run/secrets/assetop-dev.env),再在同一个会话里跑本测试;"+
+			"scene 与本进程必须拿到同一把值,否则一律 27008", key)
+	}
+	return v
 }

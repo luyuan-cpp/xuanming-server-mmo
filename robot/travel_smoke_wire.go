@@ -47,18 +47,16 @@ func travelToZoneRejectTip(body []byte) (uint32, error) {
 }
 
 // travelSmokeTicketBinding 取重定向票据里 CZ-8 的两个绑定字段:持票者 player_id 与 target_zone_id。
-// available=false 表示本次构建取不到(见下方 TODO),调用方据此跳过这两条断言并在结果行里写明 skipped。
+// 调用方拿去断言「票据是本人的、指向的正是本跳目标 zone」。
 //
-// TODO(regen): GateTokenPayload 的字段 5(player_id)/ 6(target_zone_id)是阶段 1 加的,它们的 getter
-// base.GateTokenPayload.GetPlayerId() / GetTargetZoneId() 要等 regen 并把 go/proto/common/base/message.pb.go
-// 同步进 robot/vendor/proto/common/base/ 之后才存在(摸底时两边都是 0 处命中)。届时把函数体换成:
+// 字段 5(player_id)/ 6(target_zone_id)是阶段 1 加进 GateTokenPayload 的,getter 随 2026-09-18
+// 那轮 regen 落进 go/proto/common/base/message.pb.go 并已逐字节同步到 robot/vendor/proto/common/base/,
+// 所以这里直接取真值 —— 在那之前这个函数返回 (0, 0, false),CZ-8 的两条断言被整体跳过。
 //
-//	return payload.GetPlayerId(), payload.GetTargetZoneId(), true
-//
-// travel_smoke_scenario.go 的 verifyArrival 已经按 available=true 写好两条更强的断言
-// (票据 player_id == 出发时的 player_id、票据 target_zone_id == 本跳目标 zone),不用再改。
+// 不做「取到的值是不是 0」的判断:proto3 的标量字段没有存在性,0 和没填长得一样。真正的判据在
+// verifyArrival —— 期望值是非 0 的 player_id 与目标 zone,服务端没填时断言自然会报出来,
+// 而不是在这里被悄悄咽掉。
 // 放在本文件而不是场景文件里,是为了让"依赖 regen 的符号"始终只有这一处。
-func travelSmokeTicketBinding(payload *base.GateTokenPayload) (playerId uint64, targetZoneId uint32, available bool) {
-	_ = payload
-	return 0, 0, false
+func travelSmokeTicketBinding(payload *base.GateTokenPayload) (playerId uint64, targetZoneId uint32) {
+	return payload.GetPlayerId(), payload.GetTargetZoneId()
 }

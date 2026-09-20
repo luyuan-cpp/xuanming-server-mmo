@@ -43,9 +43,16 @@ const (
 	// 第二遍,保不了 scene 不被再投一次。钱的路径按 AGENTS §11.3 取 fail-closed:
 	// 宁可少给投递一点时间,也不能让「终局已定」这件事落不了盘。
 	//
-	// 700ms 的来历:caller 的 DefaultCallTimeout(800ms)+ DefaultRequery 合计(700ms)
-	// = 1500ms;默认 OpBudget 2500ms 切走 700ms 之后还剩 1800ms,投递的完整路径仍装得下,
-	// 另有 300ms 余量。调小 OpBudget 的调用方要自己核这笔账(validate 只保证它 > 本值)。
+	// 700ms 的来历:够 Finalize / Reschedule 那一条 CAS(含 WithTxRetry 的两次尝试)落盘。
+	//
+	// **剩下的 1800ms 装不下最坏情况的投递,这是清醒的取舍,不是算漏了。** 完整路径不是
+	// 「800ms + 三次 sleep 100/200/400」那 1500ms —— 每一轮重查除了 sleep,自己还要再发一次
+	// RPC(各自上限 CallTimeout 800ms)。最坏是 800 +(100+800)+(200+800)+(400+800)= 3900ms。
+	// 所以 1800ms 的实际含义是:**快路径三轮重查全过,慢路径约只容得下一轮**,之后 requery
+	// 提前返回非 durable 结果,Decide 走 AwaitDurable、500ms 后重排。钱是安全的(结局没丢,
+	// 只是这一轮没拿到 durable 确认),代价是上线后
+	// assetop_requery_total{result="timeout"} 与 reschedule_total{reason="await_durable"}
+	// 会比切预算之前高。调小 OpBudget 的调用方要自己核这笔账(validate 只保证它 > 本值)。
 	settleBudget = 700 * time.Millisecond
 )
 
@@ -101,9 +108,14 @@ type Store interface {
 	// 可能有别的副本 Reschedule 把 attempts 从 2 推到 3,同一行就会两段都出现。重复 id
 	// 不会导致重复投递(第二次 Claim 必然 RowsAffected==0),但会白占一个名额。
 	//
-	// **待确认**:第二段的精确判据(attempts >= FreshAttemptLimit、已到重试时刻、按
-	// next_attempt_ms 最老优先、补齐到 limit)主会话正在与帮会会话对齐口径,实现前先确认;
-	// 「第一段新行优先、老行只补缺口」这条防饿死结构与去重要求不在待确认之列。
+	// 判据出处:90-consistency.md 的 X-03 裁决(「先按 attempts < 3 取一批、不足再取老行」)。
+	// 两段的排序都带 op_id 做次级键,让同毫秒到期的行在各副本上顺序一致,少抢同一行。
+	//
+	// **反向代价,已知并接受**:名额是新行绝对优先,老行没有保底。新行持续满额时,
+	// 那批「钱已经在 scene 侧动过」的重试行可以很久排不上号 —— 典型形状是 scene 故障恢复期:
+	// 故障期间的行都攒到 attempts>=3 成了老行,而恢复后新提交的指令首投失败仍算新行。
+	// 这条按 X-03 接受,靠 assetop_pending_oldest_age_seconds 告警兜底;真要改成保底
+	// (例如第一段只占 3/4 名额),得先改 X-03,不能只改实现。
 	ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error)
 
 	// Claim 单行主键 CAS 领取(autocommit),紧挨着处理前调用:

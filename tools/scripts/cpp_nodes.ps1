@@ -380,9 +380,17 @@ function Invoke-Start {
             # 这是**仅限本机 dev 的约定**：预发 / 生产的密钥必须由部署侧注入
             # （k8s_deploy.ps1 的 Resolve-InjectedSecret -MinLength 32，§4.43 第 29 项），
             # 部署链从不调用这里。
-            $prevAssetOpSecrets = Backup-AssetOpDevSecrets
-            Initialize-AssetOpDevSecrets -RepoRoot $RepoRoot | Out-Null
+            # **只对 scene 注入**：验签发生在 scene，gate / battle 不读这两个变量。
+            # 按最小权限给（AGENTS §11.3）：多注入一个进程就多一处密钥可能被打印、被 dump 的地方。
+            $prevAssetOpSecrets = $null
+            $injectAssetOpSecrets = ($name -eq 'scene')
             try {
+                if ($injectAssetOpSecrets) {
+                    # Backup 必须在 try **之内**：Initialize 抛错时环境变量可能已经被改了一半，
+                    # 放在 try 外面就进不了下面的 finally，那一半改动会留在父 shell 里。
+                    $prevAssetOpSecrets = Backup-AssetOpDevSecrets
+                    Initialize-AssetOpDevSecrets -RepoRoot $RepoRoot | Out-Null
+                }
                 $proc = Start-Process -FilePath $exePath `
                     -WorkingDirectory $BinDir `
                     -RedirectStandardOutput $logOut `
@@ -398,7 +406,8 @@ function Invoke-Start {
                 else { $env:GATE_RUN_MODE = $prevGateRunMode }
                 if ($null -eq $prevSceneRunMode) { Remove-Item Env:SCENE_RUN_MODE -ErrorAction SilentlyContinue }
                 else { $env:SCENE_RUN_MODE = $prevSceneRunMode }
-                Restore-AssetOpDevSecrets $prevAssetOpSecrets
+                # 没注入过就没什么可还原的（$prevAssetOpSecrets 仍是 $null）。
+                if ($injectAssetOpSecrets) { Restore-AssetOpDevSecrets $prevAssetOpSecrets }
             }
 
             $pids | Add-Member -NotePropertyName $instanceKey -NotePropertyValue $proc.Id -Force

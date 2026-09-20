@@ -44,8 +44,17 @@ const (
 	loopAwaitDurableDelay = 500 * time.Millisecond
 	loopLedgerMinAttempts = 3
 
+	// 毒行(payload 解不开)的推迟时长。**唯一事实源就是这里**:循环据它算出绝对时刻,
+	// 经 Store.Claim 的 poisonUntilMs 传给 data 层,data 层不许再写一份常量。
+	loopPoisonDelay = time.Hour
+
 	// CallTimeout 是**单次**资产 RPC 的上限,装配层(internal/svc)建 assetop.Caller 时用它。
-	// 与 guild 同值:一次 800ms + 重查 100/200/400ms 仍在 OpBudget(2500ms)内。
+	// 与 guild 同值。
+	//
+	// 注意**投递拿不到整个 OpBudget**:assetop 从 OpBudget 里切走 settleBudget 留给落库
+	// (否则 RPC 跑满预算后 Finalize 必定拿到已过期的 ctx —— scene 已经扣了钱、outbox 行
+	// 却更新不了)。所以投递侧实际是 1800ms:够快路径跑完"一次 800ms + 重查 100/200/400ms",
+	// 慢路径(每轮重查自己还要再发一次 RPC)约只容得下一轮,之后转 AwaitDurable 重排。
 	// 放在本包而不是 svc:它与下面这组循环参数是同一条预算,改一个要连着看另一个。
 	CallTimeout = 800 * time.Millisecond
 
@@ -162,7 +171,7 @@ func New(d Deps) (*Pipeline, error) {
 		BaseBackoff:           loopBaseBackoff,
 		MaxBackoff:            loopMaxBackoff,
 		AwaitDurableDelay:     loopAwaitDurableDelay,
-		PoisonDelay:           data.PoisonDelay,
+		PoisonDelay:           loopPoisonDelay,
 		LedgerReadMinAttempts: loopLedgerMinAttempts,
 		// 只报 trade 独占的两条流(不变量 I6):循环每 30s 按它们刷
 		// assetop_pending_oldest_age_seconds。漏写 = 积压告警永远没有序列。
