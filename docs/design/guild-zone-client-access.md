@@ -61,10 +61,18 @@ logic:  callerOf(ctx) 取会话 player_id → clientZone() 查 data_service 归�
 
 ## 5. 不做 / 已知缺口
 
-- **成员名字**:项目尚无昵称(`proto/login/login.proto` 注释),成员列表继续显示编号。
-- 审批入会、踢人、职位任免、转让帮主;捐献 / 活动 / 商店(客户端页面保持「暂未开放」)。
-- 成员变动推送:客户端靠刷新重读。
-- 合服闸门仍返回 `FailedPrecondition`(客户端看到通用失败),要定制文案需再加 `kGuildZoneMerging`。
+> **2026-09-19 更新**:本节写于一期(2026-09-14)。帮会二期 B2s/B2c 已经把下面四条做掉了,
+> 保留原文是为了不改写历史,但**不要再照它判断现状**;二期的实现见
+> [docs/design/guild-phase2/02-management.md](guild-phase2/02-management.md)。
+
+- ~~审批入会、踢人、职位任免、转让帮主~~ → **B2s/B2c 已落码**(申请制 `ApplyJoinGuild` /
+  `CancelGuildApplication` / 两种列表 / `ReviewGuildApplication`,管理三件 `SetGuildMemberRole` /
+  `KickGuildMember` / `TransferGuildLeader`)。捐献 / 活动 / 商店仍未开放(B5 / B6)。
+- ~~成员变动推送:客户端靠刷新重读~~ → **B2s 已落 `NotifyGuildChanged`**(下行推送,13 种变更类型)。
+- ~~合服闸门仍返回 `FailedPrecondition`~~ → **B2s 已改回 tip `kGuildZoneMerging`**;
+  本服务的纪律是写冲突与闸门一律回业务 tip,不回 gRPC 错误(gRPC 错误会把客户端推进重连隔离)。
+- **成员名字**:协议字段 `GuildMember.name` 已由 B2s 加好,但**服务端要到 B3b 才填值**;
+  在那之前成员列表仍显示编号 +「道友 · id」兜底。名字注册表本身是 B3a-1。
 - **存量玩家没有归属映射**会被 `kGuildHomeZoneUnknown` 拒绝:上线前按 zone 跑 `tools/merge_zone -backfill-home-zone -zone N`。
 - K8s:`go_svc_image.ps1` / `k8s_deploy.ps1` / manifest 未登记 guild(G9)。
 

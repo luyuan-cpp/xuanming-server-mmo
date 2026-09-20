@@ -23,7 +23,7 @@ import (
 )
 
 // TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent 验证设计 §2.0c 步骤 3 的落地:
-// 四张表全部由 proto 驱动建出(id_segment 走唯一的 bootstrap 例外),列齐,
+// 五张表全部由 proto 驱动建出(id_segment 与 player_name 走 bootstrapTables 的两个例外),列齐,
 // 且第二次迁移对已建好的表零变更(生产 -migrate 会在每次部署重复跑)。
 func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 	db := storetest.NewEmptyDB(t)
@@ -50,6 +50,12 @@ func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 			"orphans_cleaned",
 		},
 		store.IdSegmentTableName: {"biz_tag", "max_id", "step", "version"},
+		// player_name 与 id_segment 一样走 bootstrapTables 的手写 DDL,这里只断言"proto 声明的列都在"
+		// —— 正是 migrateSchemaOn 对预建表做的漂移检查的对象。VARCHAR / utf8mb4_bin /
+		// UNIQUE(name_norm) 这些形状断言在 player_name_store_integration_test.go。
+		store.PlayerNameTableName: {
+			"player_id", "name", "name_norm", "created_ms",
+		},
 	}
 	for table, cols := range wantColumns {
 		have := db.Columns(t, table)

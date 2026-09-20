@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/zeromicro/go-zero/core/stores/redis"
 	"github.com/zeromicro/go-zero/zrpc"
@@ -40,7 +41,7 @@ type Config struct {
 	// See go/data_service/internal/metrics/metrics.go for the metric list.
 	MetricsListenAddr string `json:",optional"`
 
-	// Schema 控制全局库(SnapshotMySQL)四张表的建表/补列路径,见 internal/store/schema.go。
+	// Schema 控制全局库(SnapshotMySQL)五张表的建表/补列路径,见 internal/store/schema.go。
 	// 整段可缺失,缺失语义见 SchemaConfig.AutoMigrate 与 ShouldAutoMigrate。
 	Schema SchemaConfig `json:",optional"`
 
@@ -52,6 +53,11 @@ type Config struct {
 	// IdSegment 控制号段表 id_segment 的**行**生命周期(表结构归 Schema 管),
 	// 见 internal/store/id_segment_store.go 与设计 §7.5 第 7 条。整段可缺失,缺失 = 生产安全值。
 	IdSegment IdSegmentConfig `json:",optional"`
+
+	// PlayerName 是玩家名字注册表(全服唯一)的运行参数,见 internal/store/player_name_store.go
+	// 与 internal/logic/player_name_logic.go。整段可缺失:每个键的零值都当"没配",
+	// 由 PlayerNameConfig.Normalize() 填上文档化的默认值(装配在 svc.NewServiceContext)。
+	PlayerName PlayerNameConfig `json:",optional"`
 
 	// ZoneId 只用于 C++ 约定的 etcd 注册路径
 	// (DataServiceNodeService.rpc/zone/<ZoneId>/node_type/26/node_id/<N>,见 internal/noderegistry)。
@@ -113,8 +119,11 @@ func (c IdSegmentConfig) EffectiveBootstrapTags() []string {
 
 // SchemaConfig 建表策略。
 type SchemaConfig struct {
-	// AutoMigrate 缺省(nil)= true:启动时用 proto2mysql 按 proto 定义对四张表逐张
-	// CreateOrUpdateTable(建表 / 补列 / 补主键),并预建 id_segment。
+	// AutoMigrate 缺省(nil)= true:启动时用 proto2mysql 按 proto 定义对五张表逐张
+	// CreateOrUpdateTable(建表 / 补列 / 补主键),并预建 id_segment 的号段行。
+	// 其中 id_segment 与 player_name 两张走 schema.go 的手写 bootstrap DDL
+	// (proto2mysql 把 string 渲染成 MEDIUMTEXT,TEXT 列上建不了唯一键),
+	// 迁移对它们只做列漂移校验。
 	//
 	// 生产必须显式设 false:多副本同时启动会对同一张表并发 ALTER,MDL 阻塞会让所有
 	// GM 回滚/流水查询停摆;改为部署阶段显式跑一次 `data_service -f <yaml> -migrate`

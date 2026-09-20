@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	dbpb "proto/common/database"
@@ -20,12 +21,21 @@ import (
 //
 // 本包**不再**手写任何 CREATE TABLE。历史上 snapshot_store / transaction_log_store
 // 各自手写 DDL,已经与 proto 漂移过三次(rollback_audit_log 多一列、transaction_log
-// 列名不同、player_snapshot 在 zone 库与全局库各有一份)。唯一例外见 idSegmentBootstrapDDL。
+// 列名不同、player_snapshot 在 zone 库与全局库各有一份)。例外只有 bootstrapTables 清单里
+// 的两张表(id_segment、player_name),各自的理由写在对应的 DDL 常量注释里。
 
 // IdSegmentTableName 号段表名(与 proto OptionTableName 一致)。
 const IdSegmentTableName = "id_segment"
 
-// idSegmentBootstrapDDL 是本包**唯一**一段手写 DDL。
+// PlayerNameTableName 玩家名字注册表名(与 proto OptionTableName 一致)。
+//
+// 这张表是"名字全服唯一"的唯一真源(设计 docs/design/guild-phase2/03-names.md §3.0):
+// zone 库 player_database.profile_component 与账号里的 AccountSimplePlayer.name 都只是
+// 只读副本,可能缺失,读侧一律回源 BatchGetPlayerName。所以它只能放全局库一处 ——
+// 每个 zone 一份就退化成"区内唯一",跨区必然重名。
+const PlayerNameTableName = "player_name"
+
+// idSegmentBootstrapDDL 是本包两段手写 DDL 之一(另一段是 playerNameBootstrapDDL)。
 //
 // 原因:proto2mysql v0.1.0 把 proto string 一律渲染成 MEDIUMTEXT,而 TEXT 列不能做
 // 无前缀主键(MySQL 错误 1170);id_segment 的主键 biz_tag 恰是 string。于是按设计
@@ -50,13 +60,66 @@ const idSegmentBootstrapDDL = "CREATE TABLE IF NOT EXISTS `id_segment` (\n" +
 	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci" +
 	" /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */ COMMENT='id_segment';"
 
-// TableMessages 返回全局库四张表的 proto 原型,顺序即迁移顺序。
+// playerNameBootstrapDDL 是第二段手写 DDL,成因与 id_segment 同源,但后果更硬。
+//
+// proto2mysql 把 proto string 一律渲染成 MEDIUMTEXT,而 player_name 的唯一键恰好建在
+// string 列 name_norm 上 —— TEXT 列上建无前缀 UNIQUE KEY 会被 MySQL 以 1170 拒掉。
+// "名字全服唯一"这条不变量**只能**由库上的唯一键兜住:应用层"先查后插"在并发下必漏
+// (两个建角请求同时查到"没人占",然后各插一行),所以这张表必须预建成 VARCHAR + UNIQUE,
+// 不能交给 CreateOrUpdateTable。
+//
+// COLLATE=utf8mb4_bin 是刻意的:NFKC 归一与大小写折叠全部在 Go 侧完成(go/shared/playername
+// 的 Normalize),结果落进 name_norm 列,库只做逐字节比较。若改成 utf8mb4_unicode_ci,库会把
+// 一批 Go 认为不同的字符判等,于是出现"库说撞名、Go 说不撞"的死结:玩家换成一个在规则包看来
+// 毫不相干的名字仍被 1062 拒绝,而服务端给不出任何能解释给玩家听的理由。
+//
+// 列宽:name VARCHAR(64)、name_norm VARCHAR(191)。MySQL 的 VARCHAR(N) 按**字符**计而非字节,
+// 两者都远超规则包的结构上限 playername.StructuralMaxRunes(32 个码点)。191 是 utf8mb4 时代
+// 767 字节索引上限留下的安全长度,唯一键直接覆盖整列,不需要写前缀索引。
+//
+// 与 id_segment 同理:预建之后**不能**再对本表跑 CreateOrUpdateTable(proto2mysql 会把
+// VARCHAR 判成与 MEDIUMTEXT 不兼容而 MODIFY COLUMN,重新撞 1170),所以 migrateSchemaOn
+// 对它只做"proto 每个字段都有同名列"的漂移检查。列注释 pb:N 与 proto2mysql 生成列同格式,
+// 日后的迁移工具仍能按字段号识别列。
+//
+// 改了 rollback_database_table.proto 里的 message player_name,就必须同步改这里,
+// 否则启动期的 assertColumnsPresent 会直接拒绝迁移(这正是它存在的意义)。
+const playerNameBootstrapDDL = "CREATE TABLE IF NOT EXISTS `player_name` (\n" +
+	"  `player_id` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:1',\n" +
+	"  `name` VARCHAR(64) NOT NULL DEFAULT '' COMMENT 'pb:2',\n" +
+	"  `name_norm` VARCHAR(191) NOT NULL COMMENT 'pb:3',\n" +
+	"  `created_ms` bigint unsigned NOT NULL DEFAULT 0 COMMENT 'pb:4',\n" +
+	"  PRIMARY KEY (`player_id`) /*T![clustered_index] NONCLUSTERED */,\n" +
+	"  UNIQUE KEY `uk_player_name` (`name_norm`)\n" +
+	") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin" +
+	" /*T! SHARD_ROW_ID_BITS=4 PRE_SPLIT_REGIONS=4 */ COMMENT='player_name';"
+
+// bootstrapTables 是走手写 DDL 预建、**不**交给 proto2mysql 同步的表:表名 → 建表语句。
+//
+// 迁移时先逐条执行(全部 CREATE TABLE IF NOT EXISTS,幂等),之后的同步循环遇到清单内的表
+// 只做列漂移检查。再加一张这类表 = 在这里加一行,不要回到 migrateSchemaOn 里加 if 分支;
+// 清单化是为了让"哪些表不由 proto 驱动建"这件事只有一处答案。
+var bootstrapTables = map[string]string{
+	IdSegmentTableName:  idSegmentBootstrapDDL,
+	PlayerNameTableName: playerNameBootstrapDDL,
+}
+
+// isBootstrapTable 判断一张表是否由 bootstrapTables 预建。
+// 迁移路径与 DDL 契约测试共用这一个判据,免得两处各抄一份表名清单再各自漂移。
+func isBootstrapTable(tableName string) bool {
+	_, ok := bootstrapTables[tableName]
+	return ok
+}
+
+// TableMessages 返回全局库五张表的 proto 原型,顺序即迁移顺序。
+// 末尾两张(id_segment、player_name)在 bootstrapTables 里,同步循环只对它们做列漂移检查。
 func TableMessages() []proto.Message {
 	return []proto.Message{
 		&dbpb.TransactionLog{},
 		&dbpb.PlayerSnapshot{},
 		&dbpb.RollbackAuditLog{},
 		&dbpb.IdSegment{},
+		&dbpb.PlayerName{},
 	}
 }
 
@@ -126,8 +189,8 @@ func MigrateSchema(ctx context.Context, cfg MySQLConfig, opts MigrateOptions) er
 	return migrateSchemaOn(ctx, db, cfg.DBName, opts)
 }
 
-// migrateSchemaOn 注册四张表 → 表名守卫 → 预建 id_segment → 其余三张 CreateOrUpdateTable
-// → 预建 id_segment 行(BootstrapTags)→ player / guild 水位地板校验。
+// migrateSchemaOn 注册五张表 → 表名守卫 → 预建 bootstrapTables(id_segment、player_name)
+// → 其余三张 CreateOrUpdateTable → 预建 id_segment 行(BootstrapTags)→ player / guild 水位地板校验。
 func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts MigrateOptions) error {
 	model := proto2mysql.NewDB().WithContext(ctx)
 	if err := model.OpenDB(db, dbName); err != nil {
@@ -142,14 +205,22 @@ func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts Migrat
 		}
 	}
 
-	// 手写 DDL 的唯一例外,必须在 CreateOrUpdateTable 之前(见常量注释)。
-	if _, err := db.ExecContext(ctx, idSegmentBootstrapDDL); err != nil {
-		return fmt.Errorf("bootstrap table %s: %w", IdSegmentTableName, err)
+	// 手写 DDL 的两个例外,必须在 CreateOrUpdateTable 之前(见各自常量注释)。
+	// 按表名排序只为让日志与失败顺序稳定;两条建表语句互不依赖。
+	bootstrapNames := make([]string, 0, len(bootstrapTables))
+	for name := range bootstrapTables {
+		bootstrapNames = append(bootstrapNames, name)
+	}
+	sort.Strings(bootstrapNames)
+	for _, name := range bootstrapNames {
+		if _, err := db.ExecContext(ctx, bootstrapTables[name]); err != nil {
+			return fmt.Errorf("bootstrap table %s: %w", name, err)
+		}
 	}
 
 	for _, t := range tables {
 		name, _ := proto2mysql.TableNameFromDescriptor(t.ProtoReflect().Descriptor())
-		if name == IdSegmentTableName {
+		if isBootstrapTable(name) {
 			if err := assertColumnsPresent(ctx, db, dbName, t, name); err != nil {
 				return err
 			}
@@ -393,7 +464,7 @@ func assertColumnsPresent(ctx context.Context, db *sql.DB, dbName string, table 
 		}
 	}
 	if len(missing) > 0 {
-		return fmt.Errorf("table %s lacks proto-declared columns %v; it is pre-created by idSegmentBootstrapDDL, update that DDL", tableName, missing)
+		return fmt.Errorf("table %s lacks proto-declared columns %v; it is pre-created by bootstrap DDL (schema.go bootstrapTables), update that DDL", tableName, missing)
 	}
 	return nil
 }
