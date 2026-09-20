@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -38,10 +39,16 @@ type fakeHomeZoneClient struct {
 	zone  uint32
 	err   error
 	calls int
+	// onCall 非 nil 时在每次查询里先跑一遍。归属查询夹在「解析场景」与「预占人数」之间,
+	// 用例借它在这个窗口里改 Redis(destroy-while-entering)。
+	onCall func()
 }
 
 func (f *fakeHomeZoneClient) GetPlayerHomeZone(_ context.Context, _ *dspb.GetPlayerHomeZoneRequest, _ ...grpc.CallOption) (*dspb.GetPlayerHomeZoneResponse, error) {
 	f.calls++
+	if f.onCall != nil {
+		f.onCall()
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -1035,6 +1042,295 @@ func TestEnterScene_HomeZoneUnmappedFallsBackToGateZone(t *testing.T) {
 			assert.Equal(t, testZoneId, decodeRoutePlayerEvent(t, (*captured)[0]).HomeZoneId)
 		})
 	}
+}
+
+// 「未映射 = 按 gate zone」对已有**同 zone** 位置记录的存量号同样保留:未回填的老玩家一直就是
+// 这么存盘的,不能因为缺映射突然换不了图。只有跨 zone 传送的两条腿才拒(见下面两个用例)。
+func TestEnterScene_HomeZoneUnmappedSameZoneSceneSwitchStillFallsBackToGateZone(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	sc.HomeZone = &fakeHomeZoneClient{err: status.Error(codes.NotFound, "error_code=2: no home zone mapping for player 6140")}
+
+	const (
+		playerID = uint64(6140)
+		oldScene = uint64(7140)
+		targetID = uint64(7240)
+	)
+	seedSceneOnNode(mr, testZoneId, oldScene, "10", "3")
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", testZoneId))
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode, "同 zone 换图不是传送,未映射的存量号照常放行")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, targetID, loc.SceneId)
+	require.Len(t, *captured, 1)
+	assert.Equal(t, testZoneId, decodeRoutePlayerEvent(t, (*captured)[0]).HomeZoneId)
+}
+
+// 跨 zone 传送第一条腿(GO-1 主修复):玩家要离开现在所在的 zone,却没有 player:zone 映射(或
+// 映射为 0 / 查询失败)→ 在过换手门、铸 epoch、写等待落点之前拒绝,一个字节都不改。放行的话
+// 第二条腿会按目标 zone 的 gate zone 当归属,访客存盘静默写进目标 zone 的库。
+// 标记已就绪、gate 也签得出票据:能挡住这次放行的只有归属前置检查。
+func TestEnterScene_TravelFirstLegRejectsUnmappedHomeZoneWithoutSideEffects(t *testing.T) {
+	cases := []struct {
+		name     string
+		homeZone *fakeHomeZoneClient
+		playerID uint64
+		oldScene uint64
+	}{
+		{name: "not_found", homeZone: &fakeHomeZoneClient{err: status.Error(codes.NotFound, "error_code=2: no home zone mapping for player 6141")}, playerID: 6141, oldScene: 7141},
+		{name: "legacy_unknown", homeZone: &fakeHomeZoneClient{err: status.Error(codes.Unknown, "no home zone mapping for player 6142")}, playerID: 6142, oldScene: 7142},
+		{name: "mapped_to_zero", homeZone: &fakeHomeZoneClient{zone: 0}, playerID: 6143, oldScene: 7143},
+		{name: "lookup_failed", homeZone: &fakeHomeZoneClient{err: status.Error(codes.Unavailable, "error_code=8: mapping redis down")}, playerID: 6144, oldScene: 7144},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc, mr := newTestSvcCtxWithWorldScenes(t)
+			captured := capturingKafkaWriter(sc)
+			sc.HomeZone = tc.homeZone
+
+			seedSceneOnNode(mr, 1, tc.oldScene, "10", "3")
+			require.NoError(t, UpdatePlayerLocation(context.Background(), sc, tc.playerID, tc.oldScene, "10", 1))
+			writeHandoffMarker(t, sc, tc.playerID, 1)
+			oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
+			markerRaw, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
+
+			logic := NewEnterSceneLogic(context.Background(), sc)
+			logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+				t.Error("归属前置检查不过就不该去签目标 zone 的票据")
+				return nil, errors.New("unexpected redirect")
+			}
+			resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+				PlayerId: tc.playerID, ZoneId: 2,
+				GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test", RequestId: "travel-unmapped",
+			})
+			require.NoError(t, err)
+			assert.Equal(t, constants.ErrHomeZoneUnavailable, resp.ErrorCode)
+			assert.Nil(t, resp.Redirect)
+			assert.Equal(t, 1, tc.homeZone.calls)
+
+			// 源 scene 仍持有玩家并将据此解冻:它缓存的 epoch(1)、location、标记、旧场景人数都必须原样。
+			assert.Equal(t, "1", ownerEpochRaw(t, sc, tc.playerID), "被拒的传送不得铸造 epoch")
+			raw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
+			assert.Equal(t, oldRaw, raw, "被拒的传送不得留下等待落点")
+			markerAfter, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
+			assert.Equal(t, markerRaw, markerAfter)
+			oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, tc.oldScene))
+			assert.Equal(t, "3", oldCount)
+			assert.Empty(t, *captured, "被拒的传送不得发出 RedirectToGateEvent")
+			exists, existsErr := sc.Redis.Exists(fmt.Sprintf("enter_scene:dedup:%d:travel-unmapped", tc.playerID))
+			require.NoError(t, existsErr)
+			assert.False(t, exists, "拒绝必须释放 request_id 占位")
+		})
+	}
+}
+
+// 前置检查只要「有映射」,不挑映射值:有映射的玩家照常放行到等待落点。
+func TestEnterScene_TravelFirstLegWithMappedHomeZoneStillReleases(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	fake := &fakeHomeZoneClient{zone: 1}
+	sc.HomeZone = fake
+
+	const (
+		playerID = uint64(6145)
+		oldScene = uint64(7145)
+	)
+	seedSceneOnNode(mr, 1, oldScene, "10", "3")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	writeHandoffMarker(t, sc, playerID, 1)
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, ZoneId: 2,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	require.NotNil(t, resp.Redirect)
+	assert.Equal(t, 1, fake.calls)
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, uint32(2), loc.ZoneId)
+	assert.Equal(t, "", loc.NodeId)
+	require.Len(t, *captured, 1)
+}
+
+// 只送连接的重定向(没有位置记录的首登,login 的 RedirectOnEnter)不动归属,不该被归属前置
+// 检查误伤:未映射的新号照样拿到重定向,而且根本不查。
+func TestEnterScene_RedirectOnlyFirstLandingDoesNotQueryHomeZone(t *testing.T) {
+	sc, _ := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	fake := &fakeHomeZoneClient{err: status.Error(codes.NotFound, "error_code=2: no home zone mapping for player 6146")}
+	sc.HomeZone = fake
+
+	const playerID = uint64(6146)
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, ZoneId: 2,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, uint32(0), resp.ErrorCode)
+	require.NotNil(t, resp.Redirect)
+	assert.Equal(t, 0, fake.calls)
+	assert.Equal(t, "", ownerEpochRaw(t, sc, playerID), "只送连接:不铸造")
+	require.Len(t, *captured, 1)
+}
+
+// 跨 zone 传送第二条腿(GO-1 纵深防御):正在消费「等待落点」的落点,gate zone 是目标 zone,
+// 不能拿来当归属。未映射 → 拒绝,不回落;等待落点、epoch、目标场景人数原样,不发路由。
+func TestEnterScene_TravelSecondLegRejectsUnmappedHomeZone(t *testing.T) {
+	cases := []struct {
+		name     string
+		homeZone *fakeHomeZoneClient
+		playerID uint64
+		targetID uint64
+	}{
+		{name: "not_found", homeZone: &fakeHomeZoneClient{err: status.Error(codes.NotFound, "error_code=2: no home zone mapping for player 6147")}, playerID: 6147, targetID: 7147},
+		{name: "mapped_to_zero", homeZone: &fakeHomeZoneClient{zone: 0}, playerID: 6148, targetID: 7148},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc, mr := newTestSvcCtxWithWorldScenes(t)
+			captured := capturingKafkaWriter(sc)
+			sc.HomeZone = tc.homeZone
+
+			seedSceneOnNode(mr, 2, tc.targetID, "10", "4")
+			mr.Set(nodePlayerCountKey(2, "10"), "4")
+			// 第一条腿留下的等待落点:zone 2、无节点、epoch 1。
+			placed, err := placePlayerLocation(sc, tc.playerID, 0, "", 2, placementGuard{observedEpoch: 0, mint: true})
+			require.NoError(t, err)
+			require.Equal(t, uint64(1), placed.epoch)
+			awaitingRaw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
+
+			resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+				PlayerId: tc.playerID, SceneId: tc.targetID, ZoneId: 2,
+				GateZoneId: 2, GateId: "1", GateInstanceId: "gate-uuid-test",
+			})
+			require.NoError(t, err)
+			assert.Equal(t, constants.ErrHomeZoneUnavailable, resp.ErrorCode, "第二条腿的 gate zone 是目标 zone,不得当归属")
+			assert.Empty(t, *captured)
+			assert.Equal(t, "1", ownerEpochRaw(t, sc, tc.playerID))
+			raw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
+			assert.Equal(t, awaitingRaw, raw, "等待落点原样留着,映射补上后重试即可落地")
+			count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, tc.targetID))
+			nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(2, "10"))
+			assert.Equal(t, "4", count)
+			assert.Equal(t, "4", nodeCount)
+		})
+	}
+}
+
+// 过期的等待落点 + 未映射:票据过期后玩家从自己原来的 gate zone 登录(CZ-9「回家」),不再被牵去
+// 目标 zone,但这仍是在消费等待落点 —— gate zone 证明不了归属,同样拒绝,状态原样。
+// 把 3b 的条件收窄成「未过期才拒」的话,这里会回落 gate zone 并成功落点。
+func TestEnterScene_ExpiredAwaitingPlacementStillRejectsUnmappedHomeZone(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+	fake := &fakeHomeZoneClient{err: status.Error(codes.NotFound, "error_code=2: no home zone mapping for player 6149")}
+	sc.HomeZone = fake
+
+	const (
+		playerID = uint64(6149)
+		targetID = uint64(7149)
+	)
+	// 等待落点在 zone 2(有活节点,不会被当成陈旧位置过滤掉),已过票据有效期。
+	seedAwaitingPlacement(t, sc, mr, playerID, time.Now().Add(-(redirectTokenTTLSeconds+60)*time.Second))
+	awaitingRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	mr.Set(nodePlayerCountKey(testZoneId, "10"), "4")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrHomeZoneUnavailable, resp.ErrorCode, "过期的等待落点仍是跨 zone 传送的残留,gate zone 不得当归属")
+	assert.Nil(t, resp.Redirect)
+	assert.Equal(t, 1, fake.calls)
+	assert.Empty(t, *captured)
+	assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+	raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+	assert.Equal(t, awaitingRaw, raw)
+	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	assert.Equal(t, "4", count)
+	assert.Equal(t, "4", nodeCount)
+}
+
+// enterSceneRejectedCount 从默认注册表读 scene_manager_enter_scene_rejected_total 的一个取值
+// (metrics 包不导出计数器)。还没发射过的 label 组合读作 0;用例只比较前后差值。
+func enterSceneRejectedCount(t *testing.T, zoneID uint32, reason string) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	zone := fmt.Sprintf("%d", zoneID)
+	for _, family := range families {
+		if family.GetName() != "scene_manager_enter_scene_rejected_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			labels := map[string]string{}
+			for _, pair := range metric.GetLabel() {
+				labels[pair.GetName()] = pair.GetValue()
+			}
+			if labels["zone_id"] == zone && labels["reason"] == reason {
+				return metric.GetCounter().GetValue()
+			}
+		}
+	}
+	return 0
+}
+
+// destroy-while-entering:请求指定的场景在解析之后、预占人数之前被回收 → ErrNoAvailableNode,
+// 记 enter_scene_rejected_total{reason="scene_gone"}(告警 SceneManagerEnterSceneSceneGone 钉在
+// 它上面;这个发射点丢过一次,告警恒空了几个月而零报错),不写位置、不铸 epoch、不重建人数键。
+// 归属查询正好夹在两步之间,借假实现的 onCall 在那个窗口里删掉 scene→node 映射。
+func TestEnterScene_SceneDestroyedWhileEnteringIsCountedAsSceneGone(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6150)
+		targetID = uint64(7150)
+	)
+	seedSceneOnNode(mr, testZoneId, targetID, "10", "4")
+	mr.Set(nodePlayerCountKey(testZoneId, "10"), "4")
+	sc.HomeZone = &fakeHomeZoneClient{zone: testZoneId, onCall: func() {
+		mr.Del(fmt.Sprintf(SceneNodeKeyFmt, targetID))
+	}}
+	before := enterSceneRejectedCount(t, testZoneId, "scene_gone")
+
+	resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, SceneId: targetID, ZoneId: testZoneId,
+		GateZoneId: testZoneId, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrNoAvailableNode, resp.ErrorCode)
+	assert.Equal(t, before+1, enterSceneRejectedCount(t, testZoneId, "scene_gone"))
+	assert.Empty(t, *captured)
+	loc, locErr := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NoError(t, locErr)
+	assert.Nil(t, loc)
+	assert.Equal(t, "", ownerEpochRaw(t, sc, playerID))
+	count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, targetID))
+	nodeCount, _ := sc.Redis.Get(nodePlayerCountKey(testZoneId, "10"))
+	assert.Equal(t, "4", count, "场景已不存在:不得再 INCR 出人数")
+	assert.Equal(t, "4", nodeCount)
 }
 
 func TestEnterScene_HomeZoneUnavailableIsRejectedWithoutSideEffects(t *testing.T) {

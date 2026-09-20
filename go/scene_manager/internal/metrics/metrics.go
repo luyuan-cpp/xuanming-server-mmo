@@ -99,23 +99,34 @@ var (
 		Help:      "Instance/mirror destroys by kind (instance|mirror) and reason (idle|explicit|cascade|node_death|source_migrated).",
 	}, []string{"zone_id", "kind", "reason"})
 
-	// enterSceneRejectedTotal is incremented when EnterScene bails out
-	// because the scene disappeared mid-request. A nonzero steady rate
-	// indicates destroy-while-entering pressure — likely a sign
-	// instance idle timeouts are too aggressive or that a reconciliation
-	// pass is destroying scenes the client is still trying to enter.
+	// enterSceneRejectedTotal 统计 EnterScene 在「归属交接 / 归属查询 / 跨 zone 传送目标地图 /
+	// 进入途中场景被回收」这几类判定点上的拒绝,reason 取值见下面的 Help,各自的含义与基线见
+	// internal/logic/enterscenelogic.go 文件头的 rejectReason* 常量说明(home_zone_* 两种在
+	// internal/logic/home_zone.go)。
+	//
+	// 它**不是**"所有被拒的 EnterScene":场景解析失败(resolveSceneForEnter 出错)、再入屏障
+	// 未到、Redis 读写失败、Kafka 路由失败等快速失败路径只回错误码,不记这条指标。
+	// scene_gone = destroy-while-entering(AtomicIncrPlayerCountIfSceneExists 返回 <0,场景在解析
+	// 之后、预占之前被回收;只有请求指定 scene_id 的进入走这条预占路径)。这个发射点曾在 a0152a5b8
+	// 被删、d41219ca7 加回分支时漏带,2026-09-20 补回。
+	//
+	// 读数注意:handoff_pending_no_marker 在生产配置(AllowUnsafeCrossNodeHandoff=false)下是
+	// 跨节点换图的常规第一跳,恒非 0,不能拿来告警;告警口径见 deploy/k8s/scene-manager-alerts.yaml。
+	// zone_id 对 home_zone_unavailable / home_zone_unmapped_travel 是 gate zone(home_zone.go),
+	// 对其余 reason 是目标 zone。
 	enterSceneRejectedTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
 		Subsystem: subsystem,
 		Name:      "enter_scene_rejected_total",
 		// reason 取值必须与 enterscenelogic.go / home_zone.go 里实际传入的字面量一致;
-		// 旧的 scene_gone / unsafe_handoff / handoff_pending 已无调用点(换手门拒绝细分成了
+		// 旧的 unsafe_handoff / handoff_pending 已无调用点(换手门拒绝细分成了
 		// no_marker / stale_marker / withdrawn 三种),按旧名配的告警会恒为空而不报错。
-		Help:      "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|travel_map_unavailable|pending_map_fallback).",
+		Help: "EnterScene rejections by reason (handoff_pending_no_marker|handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict|home_zone_unavailable|home_zone_unmapped_travel|travel_map_unavailable|pending_map_fallback|scene_gone).",
 	}, []string{"zone_id", "reason"})
 
 	// homeZoneLookupTotal 统计 EnterScene 里每一次归属 zone 查询的结果:
 	//   mapped        data_service 给出了归属 zone
-	//   unmapped      映射里没有这名玩家(首登,按 gate zone 处理)
+	//   unmapped      映射里没有这名玩家(首次落点 / 同 zone 换图按 gate zone 处理;跨 zone 传送的
+	//                 两条腿拒绝,另记 enter_scene_rejected_total{reason="home_zone_unmapped_travel"})
 	//   unconfigured  本进程没配 DataServiceRpc(按 gate zone 处理;多 zone 部署
 	//                 里持续非 0 = 漏配,访客存盘会落错库)
 	//   error         超时 / 不可用,请求被拒绝让上游重试
@@ -240,7 +251,9 @@ var (
 
 	// reentryBarrierBlockedTotal 统计因「老属主节点刚判死、再入屏障未到」而被
 	// 拒绝的改派/销毁/清理次数。site 是**代码里写死的常量点位名**
-	// (resolve_scene|rebalance|reassign|world_channel_lazy|orphan_cleanup),
+	// (resolve_scene|rebalance|reassign|world_channel_lazy|orphan_cleanup|
+	// dead_node_cleanup|stale_location|dead_owner_takeover,定义在
+	// internal/logic/reentry_barrier.go 的 barrierSite* 常量),
 	// 绝不能拼进 scene_id / node_id 之类运行期值。
 	//
 	// 稳态应该恒 0;非 0 只在节点刚死后的一个屏障窗口内出现,持续非 0 说明
@@ -432,7 +445,8 @@ func ObserveEnterSceneStage(zoneID uint32, stage string, d time.Duration) {
 
 // ObserveMirrorColocate records one mirror placement outcome. outcome is
 // "hit" or "fallback". reason is only meaningful on fallbacks
-// ("no_mapping" | "node_dead" | "overloaded" | "no_source"); pass "ok"
+// ("no_mapping" | "zone_mismatch" | "node_dead" | "overloaded", 即
+// createscenelogic.go resolveMirrorSourceNode 的返回值); pass "ok"
 // for hit rows so the label set stays well-formed.
 func ObserveMirrorColocate(zoneID uint32, outcome, reason string) {
 	register()
@@ -453,9 +467,14 @@ func ObserveInstanceDestroyed(zoneID uint32, kind, reason string) {
 	).Inc()
 }
 
-// ObserveEnterSceneRejected records one EnterScene request that was
-// rejected. Currently only the destroy-while-entering path emits this
-// (reason="scene_gone"); other fast-fail paths bubble their own errors.
+// ObserveEnterSceneRejected 记一次 EnterScene 拒绝。reason 必须是固定字面量(低基数),
+// 现有取值与 enterSceneRejectedTotal 的 Help 一致:handoff_pending_no_marker /
+// handoff_pending_stale_marker / handoff_pending_withdrawn / epoch_conflict /
+// home_zone_unavailable / home_zone_unmapped_travel / travel_map_unavailable /
+// pending_map_fallback / scene_gone
+// (发射点:internal/logic/enterscenelogic.go、home_zone.go)。
+// 其它快速失败路径(场景解析失败、再入屏障未到、Kafka 路由失败等)只回各自的错误码,不记本指标。
+// 新增 reason 时同步改 Help 与 deploy/k8s/scene-manager-alerts.yaml 的分组说明。
 func ObserveEnterSceneRejected(zoneID uint32, reason string) {
 	register()
 	enterSceneRejectedTotal.WithLabelValues(

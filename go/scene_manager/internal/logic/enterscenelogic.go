@@ -37,7 +37,8 @@ const (
 	enterSceneDedupePendingPrefix = "pending:"
 )
 
-// enter_scene_rejected_total 的 reason 取值(本文件发出的、与归属交接 / 跨 zone 传送有关的几种)。
+// enter_scene_rejected_total 的 reason 取值(本文件发出的:归属交接 / 跨 zone 传送,外加 scene_gone;
+// 归属查询的两种 home_zone_* 在 home_zone.go)。
 // 全部是固定字符串,低基数;玩家 id、标记原文只进日志。
 //
 // 换手门的 18 拆成三种,前缀统一为 handoff_pending:看总量用 reason=~"handoff_pending.*",
@@ -62,6 +63,9 @@ const (
 	// 第二条腿:第一条腿记下的目标地图解析失败,已回落默认大世界(人照常落地,不是拒绝整个请求;
 	// 记在这条指标上是因为"玩家指定的那张图"确实被拒了,而且它不该有稳定速率)。
 	rejectReasonPendingMapFallback = "pending_map_fallback"
+	// destroy-while-entering:场景解析出来之后、预占人数之前被销毁(AtomicIncrPlayerCountIfSceneExists
+	// 返回 <0)。请求指定 scene_id 的进入才走这条预占路径;稳态应≈0,持续非 0 = 副本回收与进入在抢。
+	rejectReasonSceneGone = "scene_gone"
 )
 
 const luaDeleteEnterSceneDedupeIfValue = `
@@ -356,6 +360,22 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 				return resp, nil
 			}
 		}
+		// 同样在不可回头点之前:要动归属的放行先确认玩家**有** player:zone 映射。第二条腿的 gate zone
+		// 是目标 zone,「未映射 = 首登,按 gate zone」在那里等于把访客的存盘写进目标 zone 的库(§6
+		// 不变量 2),而且零报错;到第二条腿才拒,玩家已被源 scene 销毁、落不了地。在这里拒,源 scene
+		// 收到错误应答后 epoch 未变 → 解冻并回 tip(player_lifecycle.cpp ResolveTravelOutcome),玩家
+		// 不受损。放在换手门之前:它是纯只读的前置条件,与标记就没就绪无关,没理由让一个注定过不去的
+		// 请求先拿一次 18。查到的值本身用不上(第二条腿自己再查),这里只要「有映射」。
+		// 未映射 / 映射为 0 / 查询失败都回 ErrHomeZoneUnavailable;只读,一个字节都不改。
+		// 只送连接的重定向(!leavingZone,含 login 首登的 RedirectOnEnter)不动归属,不查。
+		// 有意**不看** in.GateId(与 3b「没有 GateId 就不查」不同):3b 查的是要写进路由事件的值,没有
+		// GateId 就没有消费者;这里查的是放行的前提 —— 等待落点无论有没有 GateId 都会写
+		// (handleCrossZoneRedirect 只是不推 Redirect 事件),第二条腿的归属由它决定。
+		if leavingZone {
+			if _, hzResp := l.resolveHomeZone(in, homeZoneUnmappedRejectsTravel); hzResp != nil {
+				return hzResp, nil
+			}
+		}
 		// 目标地图随等待落点一起记下:第二条腿是目标 zone 的 login 发来的 EnterScene,不带地图。
 		guard := placementGuard{observedEpoch: observedEpoch, mint: true, pendingSceneConfID: in.SceneConfId}
 		if leavingZone && !awaitingPlacement {
@@ -458,9 +478,21 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 	// 3b. 归属 zone:随 RoutePlayerEvent 下发,scene 节点据此选存盘 topic(CZ-3)。
 	//     只有真的要发路由事件时才查;查不到(data_service 不可用)按可重试拒绝,
 	//     不能带着 home_zone_id=0 把人派下去让节点落进程 zone 库。
+	//     「未映射 = 首登,按 gate zone」只对 gate zone 就是玩家所在 zone 的落点成立:没有任何位置
+	//     记录的首次落点,或已有同 zone 位置记录的换图 / 重连(未回填的存量号一直这么存盘)。
+	//     正在消费「等待落点」= 跨 zone 传送的第二条腿,gate zone 是目标 zone,未映射必须拒绝
+	//     (纵深防御:第一条腿已经前置拒过,走到这里是两条腿之间映射丢了,或旧版本留下的记录)。
+	//     过期的等待落点只要还被采用就同样拒:玩家此刻从哪个 zone 的 gate 进来都证明不了那就是他的
+	//     归属。「被采用」= 没在上面被 playerLocationOwnerGone 过滤掉;等待落点所在 zone 已无任何
+	//     存活节点时 currentLoc 已是 nil,这里按首次落点回落 gate zone(该旁路只对未映射且已有
+	//     等待落点的玩家可达,即旧版本遗留 / 映射丢失)。
 	var homeZoneID uint32
 	if in.GateId != "" {
-		hz, hzResp := l.resolveHomeZone(in)
+		unmappedPolicy := homeZoneUnmappedFallsBackToGateZone
+		if awaitingPlacement {
+			unmappedPolicy = homeZoneUnmappedRejectsTravel
+		}
+		hz, hzResp := l.resolveHomeZone(in, unmappedPolicy)
 		if hzResp != nil {
 			if reserved {
 				DecrInstancePlayerCount(l.svcCtx, targetZoneId, sceneId)
@@ -501,6 +533,7 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		}
 		if count < 0 {
 			metrics.ObserveEnterSceneStage(targetZoneId, metrics.EnterSceneStageReserve, time.Since(reserveStart))
+			metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonSceneGone)
 			return errResp(constants.ErrNoAvailableNode, fmt.Sprintf("scene %d disappeared during enter", sceneId)), nil
 		}
 		// AtomicIncrPlayerCountIfSceneExists only bumps the per-scene

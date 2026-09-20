@@ -32,19 +32,27 @@ Kafka:
 KafkaWriteTimeoutSeconds: 5
 
 # 开发旁路:true 时跨节点切场景 / 已有位置的跨区重定向不再要求源 scene 先写出
-# 「已落盘」标记(player:{id}:handoff),C++ 侧没接标记的本地联调也能切场景。
-# owner_epoch 的铸造与 CAS 不受它影响,照样执行。
+# 「已落盘」标记(player:{id}:handoff)。
+# 旁路放行(无标记)时**不铸造**新 owner_epoch,只做「epoch 没被并发推进才写 location」的 CAS
+# (cross-zone-scene-travel.md §10.2 R6;理由见 enterscenelogic.go requireHandoffCommitted)。
 # 生产必须 false:依赖标记 + epoch 两道换手门(docs/design/cross-zone-scene-travel.md CZ-4),
 # 打开等于允许新节点读到源节点尚未落盘的状态(回档)。
-# 本地 dev 设 true:4 个 scene 节点 + 世界频道按 hash 散列后,切场景大概率
-# 跨节点;robot SceneSwitch/CurrencyCrashWindow 在标记链路接通前依赖它。
-# 压测正确性验证 / 双 zone 传送验收时改回 false。
+# 本地 dev 仍设 true:4 个 scene 节点 + 世界频道按 hash 散列后,切场景大概率跨节点。
+# 标记链路在 C++ 侧已经接通(player_lifecycle.cpp:收到 18 → StartTravelHandoff 冻结 + 存盘
+# → BeginTravelHandoff 写标记 → 重发,cross-zone-scene-travel.md §11.2),robot
+# SceneSwitch/CurrencyCrashWindow 原则上不再依赖本旁路;但那条链路**尚未编译、未跑过任何测试**,
+# 在同 zone 双 scene 节点 + false 的换图验收(同文档 §11 验证清单)通过之前,这里先不改取值。
+# 注意旁路开着时同 zone 跨节点换图**拿不到 18**,C++ 的标记链路根本不会被触发(它是被拒之后
+# 才交接的);只有跨 zone 传送先写标记再请求,scene_manager「先看标记、后看旁路」,仍走安全路径。
+# 所以 true 下的 robot 全绿不能证明标记链路可用。
+# 压测正确性验证 / 双 zone 传送验收 / cross-zone-failure-test-runbook 必须改回 false。
 AllowUnsafeCrossNodeHandoff: true
 
 # data_service gRPC 客户端(etcd 发现)。EnterScene 用它查玩家归属 zone
 # (GetPlayerHomeZone),结果随 RoutePlayerEvent.home_zone_id 下发,scene 节点据此选
 # 存盘 topic(cross-zone-scene-travel.md CZ-3)。
-# 语义:映射存在 → 用它;映射里没有(首登)→ gate zone;超时/不可用 → 拒绝进场景让
+# 语义:映射存在 → 用它;映射里没有 → 首次落点 / 同 zone 换图按 gate zone,跨 zone 传送的
+# 两条腿一律拒绝(gate zone 不能代表归属,需先回填映射);超时/不可用 → 拒绝进场景让
 # 上游重试(归属未知不得静默落进程 zone 库)。整块不写 = 本地单区联调,一律按 gate
 # zone 并打 WARN + 计数(scene_manager_home_zone_lookup_total{outcome="unconfigured"});
 # 多 zone 部署必须配。

@@ -15,8 +15,11 @@ type Config struct {
 
 	// AllowUnsafeCrossNodeHandoff 是**开发旁路**:true 时跨节点切场景 / 已有位置的
 	// 跨区重定向不再要求源 scene 先写出「已落盘」标记(player:{id}:handoff),
-	// 本地单机联调里 C++ 侧没接标记也能切场景。owner_epoch 的铸造与 CAS **不受
-	// 它影响**,照样执行 —— 旁路只放宽"源已落盘"这一道门,不放宽"谁是当前持有者"。
+	// 让本地联调在 C++ 侧标记链路(收到 18 → 冻结 → 存盘 → 写标记 → 重发,已落码、
+	// 尚未编译验证,cross-zone-scene-travel.md §11.2)验证通过之前也能切场景。
+	// 旁路放行(无标记)时**不铸造**新 owner_epoch,只做「epoch 没被并发推进才写 location」
+	// 的 CAS(同文档 §10.2 R6,理由见 logic/enterscenelogic.go requireHandoffCommitted);
+	// 先看标记、后看旁路:源确实写了标记时照样走安全路径并铸造。
 	// 默认 false:生产依赖标记 + epoch 两道门(cross-zone-scene-travel.md CZ-4),
 	// 打开等于允许新节点读到源节点尚未落盘的状态(回档)。
 	AllowUnsafeCrossNodeHandoff bool `json:",default=false"`
@@ -31,7 +34,9 @@ type Config struct {
 
 	// AllowGateZoneAsHomeZone:没配 DataServiceRpc 时,是否把 gate zone 当玩家归属 zone。
 	// 只有单 zone 部署才成立(gate zone 恒等于 home zone)。默认 false;多 zone 部署
-	// 打开它 = 访客数据写进目标 zone 的库。配了 DataServiceRpc 时本开关不起作用。
+	// 打开它 = 访客数据写进目标 zone 的库:跨 zone 传送第二条腿的 gate zone 是目标 zone,
+	// 旁路会把访客记成目标 zone 归属,「未映射的传送一律拒绝」那道检查也被它整个绕过
+	// (logic/home_zone.go)。**只许单 zone 本地联调用**。配了 DataServiceRpc 时本开关不起作用。
 	AllowGateZoneAsHomeZone bool `json:",default=false"`
 
 	// HomeZoneLookupTimeoutMs 是 EnterScene 里那一次 GetPlayerHomeZone 的预算(毫秒)。

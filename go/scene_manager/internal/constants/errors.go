@@ -55,6 +55,8 @@ const (
 	// ErrHomeZoneUnavailable: data_service 的 GetPlayerHomeZone 超时 / 不可用,
 	// 查不到玩家的归属 zone。归属 zone 决定存盘落哪个库,未知时**不得**静默落进程
 	// zone 库(cross-zone-scene-travel.md §6 不变量 2),所以拒绝并让上游重试。
-	// 「映射里确实没有这个玩家」不走这个码(那是首登,按 gate zone 处理)。
+	// 「映射里确实没有这个玩家」在首次落点 / 同 zone 换图上不走这个码(按 gate zone 处理);
+	// 在跨 zone 传送的两条腿上走这个码 —— gate zone 不能代表归属(logic/home_zone.go
+	// 的 homeZoneUnmappedPolicy)。那种拒绝重试不会好,要先回填映射。
 	ErrHomeZoneUnavailable uint32 = 20
 )

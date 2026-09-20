@@ -29,16 +29,33 @@ spec:
       interval: 30s
       rules:
         # --- Pool health ---------------------------------------------------
+        # 这两条原先写的是 `sum by (zone_id) (scene_manager_nodes_by_role{role="..."}) == 0`,
+        # 恒为空向量、永远不会响:nodes_by_role **从不发布 0 值**。SetNodesByRole 先 Reset()
+        # 再只写 counts 里出现过的 (zone, role)(go/scene_manager/internal/metrics/metrics.go
+        # SetNodesByRole),而 counts 只由 `++` 产生(internal/logic/load_reporter.go
+        # refreshLoadScores)——某个 role 的池子空了 = 该序列直接消失,不是变成 0。
+        # 现写法:"这个 zone 还有存活的 scene 节点,却没有一个能承载该用途的"。左侧给出仍有节点
+        # 的 zone,unless 去掉已有对应承载节点的 zone。
+        #   - role 取值与 constants.IsInstanceHostingType / IsWorldHostingType 对齐
+        #     (instance|instance_cross、main_world|main_world_cross):节点选择按 MatchesPurpose
+        #     过滤,只有 cross 型节点的 zone 同样能服务,不该误报。
+        #   - `> 0` 让表达式在将来 Go 侧改为发布 0 值后依然成立。
+        #   - 阈值 / for / severity 沿用原值。
+        # 已知盲区:zone 内**所有** scene 节点都消失时,该 zone 在本指标里一条序列都不剩,两条
+        # 告警都无从按 zone 触发。要覆盖它得让 Go 侧为已知 zone 发布 0 值(行为改动,本次未做)。
         - alert: SceneManagerInstancePoolEmpty
           expr: |
-            sum by (zone_id) (scene_manager_nodes_by_role{role="instance"}) == 0
+            count by (zone_id) (scene_manager_nodes_by_role > 0)
+            unless on (zone_id)
+            count by (zone_id) (scene_manager_nodes_by_role{role=~"instance|instance_cross"} > 0)
           for: 2m
           labels:
             severity: critical
           annotations:
             summary: "Zone {{ $labels.zone_id }} has zero instance-hosting scene nodes"
             description: |
-              No eSceneNodeType=1 (kSceneNode) pods are Ready in zone {{ $labels.zone_id }}.
+              No instance-hosting pods (eSceneNodeType=1 kSceneNode / 3 kSceneSceneCrossNode)
+              are Ready in zone {{ $labels.zone_id }}, while other scene nodes are still alive there.
               With StrictNodeTypeSeparation=true, CreateScene for dungeons/battlegrounds
               will return ErrNoNodeForPurpose until at least one instance pod appears.
               Scale up scene-instance-z{{ $labels.zone_id }} or check pod Ready state.
@@ -46,15 +63,18 @@ spec:
 
         - alert: SceneManagerWorldPoolEmpty
           expr: |
-            sum by (zone_id) (scene_manager_nodes_by_role{role="main_world"}) == 0
+            count by (zone_id) (scene_manager_nodes_by_role > 0)
+            unless on (zone_id)
+            count by (zone_id) (scene_manager_nodes_by_role{role=~"main_world|main_world_cross"} > 0)
           for: 2m
           labels:
             severity: critical
           annotations:
             summary: "Zone {{ $labels.zone_id }} has zero world-hosting scene nodes"
             description: |
-              No eSceneNodeType=0 pods in zone {{ $labels.zone_id }}. Persistent world
-              channels cannot be served; EnterScene will reject new players. Scale up
+              No world-hosting pods (eSceneNodeType=0 kMainSceneNode / 2 kMainSceneCrossNode)
+              in zone {{ $labels.zone_id }}, while other scene nodes are still alive there. Persistent
+              world channels cannot be served; EnterScene will reject new players. Scale up
               scene-world-z{{ $labels.zone_id }} immediately.
             runbook_url: docs/ops/scene-node-role-split.md
 
@@ -151,28 +171,187 @@ spec:
             description: |
               Mirrors are mostly NOT being co-located with their source scene's
               node. Inspect rate(scene_manager_mirror_colocate_total{outcome="fallback"}[10m])
-              by `reason` label to see why (no_mapping | node_dead | overloaded | no_source).
+              by `reason` label to see why (no_mapping | zone_mismatch | node_dead | overloaded).
               Tune MirrorSourceNodeLoadCap upward if the dominant reason is "overloaded".
 
-        - alert: SceneManagerEnterSceneRejectedSpike
-          # destroy-while-entering: the scene the player tried to enter
-          # was wiped by the lifecycle pass between resolveScene and the
-          # atomic INCR. A nonzero rate is normal noise; a sustained
-          # nonzero rate hints at idle timeouts being too aggressive or
-          # a reconciliation pass running away.
+        # --- EnterScene 拒绝(scene_manager_enter_scene_rejected_total)--------
+        # 这里原先只有一条 SceneManagerEnterSceneRejectedSpike,表达式钉在 reason="scene_gone" 上。
+        # 它有过一段恒为空向量、永远不会响的时期(Prometheus 对恒空表达式不报错):
+        #   - "scene_gone" 的唯一发射点在提交 a0152a5b8(2026-05-02)随 destroy-while-entering
+        #     分支一起被删。这条分支在提交 d41219ca7(2026-05-30)加了回来(go/scene_manager/internal/logic/enterscenelogic.go
+        #     里 AtomicIncrPlayerCountIfSceneExists 返回 <0 → ErrNoAvailableNode
+        #     "scene %d disappeared during enter"),但当时**没有**带回 enter_scene_rejected_total,
+        #     只记了 enter_scene_stage_seconds{stage="reserve"} 的耗时。
+        #   - 2026-09-20 已在该分支补回 ObserveEnterSceneRejected(zone, "scene_gone")(常量
+        #     rejectReasonSceneGone),对应告警是本组最后的 SceneManagerEnterSceneSceneGone,
+        #     阈值 / for / severity 沿用原告警。
+        #
+        # 现在真实发射的 reason 共 9 个(metrics.go 的 Help;发射点在 enterscenelogic.go / home_zone.go):
+        #   handoff_pending_no_marker     **不告警**。生产配置(AllowUnsafeCrossNodeHandoff=false)下,
+        #                                 客户端每一次跨节点换图的第一跳都注定拿到它:源 scene 收到 18 才
+        #                                 冻结 → 存盘 → 写 handoff 标记 → 重发(docs/design/
+        #                                 cross-zone-scene-travel.md §11.2)。它的速率只反映换图有多频繁。
+        #   handoff_pending_stale_marker  有标记,但不是当前归属代际(或写坏了)。异常来源:源 scene 重发后
+        #                                 仍过不了门 = 它缓存的 epoch 已被废黜。常规来源:跨 zone 放行 /
+        #                                 疏散改派不删标记,旧标记在 EX 300 内被下一次跨节点换图的第一跳
+        #                                 读到 —— 基线不是 0,但远低于 no_marker。
+        #   handoff_pending_withdrawn     预检通过,落点 Lua 里再比时标记已被源 scene 撤回(应答看门狗
+        #                                 到期 / 玩家中途退出)。持续出现 = EnterScene 慢过了源端看门狗。
+        #   epoch_conflict                观察到的 owner_epoch 在落点 CAS 前被并发 EnterScene 推进,本次
+        #                                 不发路由。偶发 = 顶号 / 重复提交;持续 = 上游重试风暴或去重失效。
+        #   home_zone_unavailable         归属 zone 查不到:data_service 超时 / 不可用,或本进程没配
+        #                                 DataServiceRpc 且 AllowGateZoneAsHomeZone=false。带 GateId 的
+        #                                 EnterScene(登录、换图)**全部**被拒,属依赖不可用。
+        #                                 注意它的 zone_id 是 gate zone(home_zone.go),其余 reason 是目标 zone。
+        #   home_zone_unmapped_travel     跨 zone 传送遇到没有 player:zone 映射的玩家(未回填
+        #                                 的存量号 / 映射 Redis 丢失):gate zone 不能代表归属,拒绝(错误码同
+        #                                 上,20)。zone_id 同样是 gate zone:第一条腿上是源 zone(玩家留在
+        #                                 原地收 tip),第二条腿上是目标 zone(玩家落不了地,应≈0)。它不是
+        #                                 依赖故障,重试不会好,要跑 merge_zone -backfill-home-zone 补映射。
+        #                                 由玩家操作直接触发(每点一次传送一次拒绝 + 一条 ERROR 日志),
+        #                                 见 SceneManagerHomeZoneUnmappedTravel;回填完成的部署里应恒 0。
+        #   scene_gone                    destroy-while-entering:请求指定的 scene_id 在解析之后、预占人数
+        #                                 之前被回收。偶发是正常噪声,持续非 0 见 SceneManagerEnterSceneSceneGone。
+        #   travel_map_unavailable       跨 zone 传送第一条腿:目标 zone 没有这张图的任何世界频道,未改
+        #                                 任何状态,玩家留在原地收 tip。scene_conf_id 是客户端可控字段。
+        #   pending_map_fallback          跨 zone 传送第二条腿:第一条腿记下的目标地图解析失败,已回落默认
+        #                                 大世界(人照常落地)。不该有稳定速率。
+        #
+        # 按语义拆成五组:归属交接异常(warning)/ 归属查询依赖不可用(critical + warning 两档)/
+        # 跨 zone 传送的玩家缺归属映射(warning)/ 跨 zone 传送目标地图不可用(warning)/
+        # 进入途中场景被回收(warning,原告警恢复)。阈值沿用本文件既有口径:原告警的 0.05 req/s、10m、
+        # warning;"理应极少发生"的事件沿用 SceneManagerMirrorSourceMissing 的 0.01 req/s;比例型沿用
+        # SceneManagerRebalanceFailureRate 的 `分子 / (分母 > 0) > 0.5` 写法。
+        # 这些取值所在的代码从未被编译、未跑过压测,阈值**没有实测基线**,首轮双 zone 压测后应回头校准。
+        - alert: SceneManagerEnterSceneHandoffAnomaly
+          # 按 reason 各自判阈值(sum by 里带 reason),避免 stale_marker 的常规基线吃掉另外两种的
+          # 余量,告警上也能直接看到是哪一种。
+          # for: 15m 而不是 10m:一次性事件(单个节点疏散 / 一批跨 zone 放行)留下的旧标记最多活
+          # 300s,再叠加 rate 的 5m 窗口,对本表达式的影响不超过约 10 分钟;15m 才能把它与持续性
+          # 异常分开。
+          expr: |
+            sum by (zone_id, reason) (rate(scene_manager_enter_scene_rejected_total{reason=~"handoff_pending_stale_marker|handoff_pending_withdrawn|epoch_conflict"}[5m])) > 0.05
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "EnterScene 归属交接异常 {{ $labels.reason }} >0.05 req/s(zone {{ $labels.zone_id }})"
+            description: |
+              reason={{ $labels.reason }} 持续超过 0.05 req/s。
+              handoff_pending_stale_marker:源 scene 重发 EnterScene 后仍被 18 拒,说明它缓存的
+              owner_epoch 已不是 Redis 当前值(已被废黜)。对照 scene 节点 30s 一行的 [TravelHandoff]
+              汇总里的 aborted,以及 [OwnerEpoch] stale_owner_write_rejected 是否非 0。若同期在做节点
+              疏散 / 滚动升级,先确认是不是旧标记(EX 300)的尾巴。
+              handoff_pending_withdrawn:预检通过后标记被源 scene 撤回。对照 [TravelHandoff] 汇总里的
+              reply_watchdog_fired(源端应答预算 30s 到期)与 exit_wins(玩家中途退出);前者在涨就查
+              EnterScene 分阶段时延(scene_manager_enter_scene_stage_seconds)。
+              epoch_conflict:同一玩家的并发 EnterScene 互相抢先。查上游(login / scene)是否在重试
+              风暴,或 request_id 去重是否失效。
+              三种拒绝都不改玩家的 location / owner_epoch(预占的场景人数已成对释放),玩家侧表现为
+              本次换图 / 传送 / 进场景失败,可重试。
+            runbook_url: docs/design/cross-zone-scene-travel.md
+
+        - alert: SceneManagerHomeZoneLookupUnavailable
+          # 依赖不可用类:超过一半的归属 zone 查询以拒绝告终。分母是同一 zone_id(gate zone)口径的
+          # home_zone_lookup_total —— 每一次 home_zone_unavailable 拒绝之前都恰好记过一次
+          # ObserveHomeZoneLookup(unconfigured 或 error,见 home_zone.go),比值必在 [0,1]。
+          # critical:影响面与 SceneManagerWorldPoolEmpty 相同(新玩家进不了场景);比它多等 3 分钟
+          # (for: 5m)是为了盖过 data_service 滚动重启的瞬时抖动。
+          expr: |
+            (
+              sum by (zone_id) (rate(scene_manager_enter_scene_rejected_total{reason="home_zone_unavailable"}[5m]))
+              /
+              (sum by (zone_id) (rate(scene_manager_home_zone_lookup_total[5m])) > 0)
+            ) > 0.5
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "gate zone {{ $labels.zone_id }} 过半 EnterScene 因查不到归属 zone 被拒"
+            description: |
+              scene_manager 在发路由前要向 data_service 查玩家归属 zone(决定存盘落哪个库),查不到就
+              fail-closed 拒绝,玩家进不了场景。按 outcome 看 scene_manager_home_zone_lookup_total:
+              error = data_service 超时 / 不可用(查 data_service 存活与 HomeZoneLookupTimeoutMs);
+              unconfigured = 本进程没配 DataServiceRpc 且 AllowGateZoneAsHomeZone=false(多 zone
+              部署漏配;进程收到第一条请求时打过一条 [home-zone] ERROR,此后不再重复)。
+            runbook_url: docs/design/cross-zone-scene-travel.md
+
+        - alert: SceneManagerHomeZoneLookupRejecting
+          # 同一依赖的低档:没到过半,但持续有玩家因此进不了场景。阈值 / for / severity 沿用原告警。
+          expr: |
+            sum by (zone_id) (rate(scene_manager_enter_scene_rejected_total{reason="home_zone_unavailable"}[5m])) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "gate zone {{ $labels.zone_id }} 持续有 EnterScene 因查不到归属 zone 被拒(>0.05 req/s)"
+            description: |
+              data_service 的 GetPlayerHomeZone 间歇性超时 / 失败。稳态下
+              scene_manager_home_zone_lookup_total{outcome="error"} 应恒 0。查 data_service 负载与
+              HomeZoneLookupTimeoutMs(默认 1500ms)。
+            runbook_url: docs/design/cross-zone-scene-travel.md
+
+        - alert: SceneManagerHomeZoneUnmappedTravel
+          # 不是依赖故障(所以不并进上面两条 home_zone_unavailable 告警):data_service 答得上来,
+          # 答案是「这个玩家没有映射」。重试不会好,只有运维回填映射才会停;不配告警的话唯一的信号
+          # 是 scene_manager 的 ERROR 日志量。"理应为 0"的事件,阈值沿用
+          # SceneManagerMirrorSourceMissing 的 0.01 req/s / 10m / warning ——
+          # 单个玩家点几次传送够不着,持续够得着 = 有一批未回填的存量号在用传送。没有实测基线。
+          expr: |
+            sum by (zone_id) (rate(scene_manager_enter_scene_rejected_total{reason="home_zone_unmapped_travel"}[5m])) > 0.01
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "gate zone {{ $labels.zone_id }} 持续有跨 zone 传送因玩家缺 player:zone 映射被拒(>0.01 req/s)"
+            description: |
+              跨 zone 传送的两条腿上 gate zone 不能代表归属,玩家没有 player:zone 映射就 fail-closed
+              拒绝(错误码 20,未改玩家状态)。zone_id 是 gate zone:第一条腿上是源 zone,玩家留在
+              原地收 tip;第二条腿上是目标 zone,玩家已离开源 scene、落不了地,优先处理(指标与
+              日志都不区分两条腿,要看该玩家的 player:{id}:location 是否为无 node_id 的等待落点)。
+              处置:跑 tools/merge_zone 的 -backfill-home-zone 回填映射;若此前已回填过,查 data_service
+              的映射 Redis 是否丢过数据。scene_manager 日志搜 "[home-zone] 跨 zone 传送被拒" 可看到
+              具体 player(每次拒绝一条 ERROR,由玩家操作直接触发)。
+            runbook_url: docs/design/cross-zone-scene-travel.md
+
+        - alert: SceneManagerZoneTravelMapUnavailable
+          # 跨 zone 传送的目标地图落不进去。两种 reason 都"理应极少发生",阈值沿用
+          # SceneManagerMirrorSourceMissing 的 0.01 req/s / 10m / warning;0.05 对传送这种低频
+          # 操作太高,目标地图整张不可用也未必够得着。
+          expr: |
+            sum by (zone_id, reason) (rate(scene_manager_enter_scene_rejected_total{reason=~"travel_map_unavailable|pending_map_fallback"}[5m])) > 0.01
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "跨 zone 传送目标地图不可用 {{ $labels.reason }}(目标 zone {{ $labels.zone_id }})"
+            description: |
+              travel_map_unavailable:目标 zone 的 world_channels:zone:{z}:{conf} 为空,第一条腿直接
+              拒绝,玩家留在原地。要么目标 zone 没开这张图 / 世界频道初始化没跑完,要么客户端在发
+              目标 zone 不存在的 scene_conf_id(该字段客户端可控,单个异常客户端持续重试也能触发)。
+              pending_map_fallback:第一条腿放行了,第二条腿却解析不出记下的地图,玩家被回落到默认
+              大世界。查两条腿之间目标 zone 的世界频道是否被回收、world 节点是否全挂或满员。
+              scene_manager 日志搜 "[Travel]" 可看到具体 scene_conf_id。
+            runbook_url: docs/design/cross-zone-scene-travel.md
+
+        - alert: SceneManagerEnterSceneSceneGone
+          # destroy-while-entering(原 SceneManagerEnterSceneRejectedSpike,发射点 2026-09-20 补回):
+          # 请求指定的场景在 resolveScene 与原子 INCR 之间被生命周期回收。偶发非 0 是正常噪声;
+          # 持续非 0 说明空闲回收过于激进,或 reconcile 在失控地清场景。
+          # 阈值 / for / severity 原样沿用被替换前的告警。
           expr: |
             sum by (zone_id) (rate(scene_manager_enter_scene_rejected_total{reason="scene_gone"}[5m])) > 0.05
           for: 10m
           labels:
             severity: warning
           annotations:
-            summary: "EnterScene rejecting >0.05 req/s in zone {{ $labels.zone_id }} (scene_gone)"
+            summary: "EnterScene 持续因场景在进入途中被回收而拒绝 >0.05 req/s(zone {{ $labels.zone_id }})"
             description: |
-              The scene was destroyed mid-entry. This is the destroy-while-entering
-              race; the atomic CAS returns -1 to the client. Confirm
-              InstanceIdleTimeoutSeconds / MirrorIdleTimeoutSeconds aren't shorter
-              than the average client retry budget. Check if reconcileDeadNodeScenes
-              fired recently (correlate with scene_orphans_reconciled_total).
+              场景在进入途中被销毁(destroy-while-entering):AtomicIncrPlayerCountIfSceneExists
+              返回 -1,客户端收到 ErrNoAvailableNode "scene N disappeared during enter",未改玩家状态。
+              确认 InstanceIdleTimeoutSeconds / MirrorIdleTimeoutSeconds 没有短于客户端的平均重试
+              预算;对照 scene_manager_scene_orphans_reconciled_total 与
+              scene_manager_instance_destroyed_total 看 reconcileDeadNodeScenes 近期是否触发过。
 
         - alert: SceneManagerSceneOrphanReconcileSpike
           # A burst of orphan reconciles past 50/min in one zone is most
