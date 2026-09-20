@@ -22,6 +22,7 @@
 #include "player/comp/player_frozen_comp.h"
 #include "player/comp/player_ownership_comp.h"
 #include "player/system/dirty_save_stats.h"
+#include "player/system/handoff_mark_withdraw.h"
 #include "player/system/player_data_loader.h"
 #include "engine/core/type_define/type_define.h"
 #include "table/proto/tip/cross_server_error_tip.pb.h"
@@ -53,6 +54,7 @@
 #include "grpc_client/scene_manager/scene_manager_service_grpc_client.h"
 #include "muduo/net/EventLoop.h"
 #include <algorithm>
+#include <chrono>
 #include <vector>
 
 thread_local PendingEnterMap tlsPendingEnterMap;
@@ -214,8 +216,141 @@ namespace
 					 << " reply_watchdog_fired=" << stats.replyWatchdogFired
 					 << " verify_rearmed=" << stats.verifyRearmed
 					 << " frozen_ms_total=" << stats.frozenMsTotal
-					 << " frozen_ms_max=" << stats.frozenMsMax;
+					 << " frozen_ms_max=" << stats.frozenMsMax
+					 << " withdraw_deferred=" << stats.withdrawDeferred
+					 << " withdraw_expired=" << stats.withdrawExpired;
 		});
+	}
+
+	// handoff 标记的待撤回表(契约见 handoff_mark_withdraw.h)。只在 scene 逻辑线程上读写:
+	// 登记(WithdrawHandoffMark)、Redis 回调销账、RedisSystem 的重连回调与 1s 定时器重试,
+	// 都跑在同一个 EventLoop 上,不需要锁。
+	thread_local handoff_mark_withdraw::Queue tlsHandoffWithdrawQueue;
+
+	// 发一次条件撤回。条目此刻必须已在 tlsHandoffWithdrawQueue 里:本函数只负责"发",销账只在拿到
+	// 整数应答的回调里做,其余任何情形(没连上 / 命令没发出去 / 空应答 / ERROR 应答)条目都原样留在
+	// 表里等下一轮重试。
+	//
+	// 不能只判 connected():hiredis 在连接断开时用空 reply 逐个回调挂起命令,那段时间 REDIS_CONNECTED
+	// 标志还没清、connected() 仍为真,而 redisvAsyncCommand 已因 DISCONNECTING / FREEING 返回 ERR ——
+	// 退出流程恰恰可能就跑在那样一个回调里。所以 command() 的返回值必须一并检查。
+	//
+	// withdraw_deferred 是趋势类计数,不是"未撤回的条数":同一条目可能先发送失败、重试后应答又失败,
+	// 各计一次。回调只按值捕获 id、标记原文与"是否首发",不绑对象、不持连接(AGENTS §11.7)。
+	//
+	// 日志分级:Redis 不通时每个条目每 5s 重试一次、直到 305s 截止,逐次打 ERROR 会把故障期日志淹掉
+	// (最坏 kMaxPending × 61 条)。ERROR 只留给首发失败(此刻起该玩家被拦)与放弃 / 淘汰(此刻起只剩
+	// TTL 兜底);后续重试的失败降为 DEBUG,趋势看 withdraw_deferred,每轮重试另有一条 WARN 汇总。
+	// 脚本串作为一个 %s 参数传入是安全的:hiredis 的格式化只按**格式串**里的空格切参数,%s 代入的
+	// 内容整体算一个参数(redis_client.h 的存盘 Lua 也是同一写法);key / 标记原文只含数字与冒号。
+	void SendHandoffWithdraw(const handoff_mark_withdraw::Entry &entry, const char *site)
+	{
+		const Guid playerId = entry.playerId;
+		const bool firstAttempt = entry.attempts <= 1; // CollectDue 取走时已加一:1 = 首发
+		const char *deferredReason = nullptr;
+		auto &redis = tlsRedis.GetZoneRedis();
+		if (!redis || !redis->connected())
+		{
+			deferredReason = "redis_unavailable";
+		}
+		else
+		{
+			const std::string key = player_ownership::HandoffRedisKey(playerId);
+			const int ret = redis->command(
+				[playerId, firstAttempt, markValue = entry.markValue](hiredis::Hiredis *, redisReply *reply)
+				{
+					if (reply != nullptr && reply->type == REDIS_REPLY_INTEGER)
+					{
+						// 条件删除确实在 Redis 上执行过了:1 = 删掉了自己写的那一份;0 = 标记已不是这一份
+						// (没写成 / 已过期 / 已被同一玩家的新标记覆盖),两种都说明旧标记不在了,可以销账。
+						tlsHandoffWithdrawQueue.Confirm(playerId, markValue);
+						if (reply->integer == 1)
+						{
+							LOG_INFO << "[ZoneTravel][WithdrawMark] withdrawn player=" << playerId
+									 << " mark=" << markValue;
+						}
+						else
+						{
+							LOG_DEBUG << "[ZoneTravel][WithdrawMark] nothing to withdraw player=" << playerId
+									  << " mark=" << markValue << " (mark absent or replaced)";
+						}
+						return;
+					}
+					// 空应答 = 连接在应答前断了,结果未知;ERROR 应答 = Redis 明确没执行(脚本被拒 / 只读副本 /
+					// 正在加载数据集)。都不销账,等下一轮重试。
+					const char *reason = reply == nullptr ? "reply_lost" : "reply_error";
+					const std::string err =
+						reply != nullptr && reply->str != nullptr ? std::string(" err=") + reply->str : std::string();
+					if (firstAttempt)
+					{
+						LOG_ERROR << "[ZoneTravel][WithdrawMark] deferred player=" << playerId << " mark=" << markValue
+								  << " reason=" << reason << err;
+					}
+					else
+					{
+						LOG_DEBUG << "[ZoneTravel][WithdrawMark] retry deferred player=" << playerId
+								  << " mark=" << markValue << " reason=" << reason << err;
+					}
+					travel_handoff_stats::Inc(travel_handoff_stats::Get().withdrawDeferred);
+				},
+				"EVAL %s 1 %s %s", handoff_mark_withdraw::kLuaDelIfEqual, key.c_str(), entry.markValue.c_str());
+			if (ret != REDIS_OK)
+			{
+				deferredReason = "dispatch_failed"; // 命令没发出去,回调不会来
+			}
+		}
+		if (deferredReason == nullptr)
+		{
+			return;
+		}
+		if (firstAttempt)
+		{
+			LOG_ERROR << "[ZoneTravel][WithdrawMark] deferred player=" << playerId << " mark=" << entry.markValue
+					  << " site=" << site << " reason=" << deferredReason
+					  << " pending=" << tlsHandoffWithdrawQueue.size()
+					  << "; scene change stays refused for this player until the withdrawal is confirmed";
+		}
+		else
+		{
+			LOG_DEBUG << "[ZoneTravel][WithdrawMark] retry deferred player=" << playerId
+					  << " mark=" << entry.markValue << " site=" << site << " reason=" << deferredReason
+					  << " attempts=" << entry.attempts;
+		}
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().withdrawDeferred);
+	}
+
+	// 丢弃过了截止时刻的条目,并把到期该重试的逐条发出去。force = true 忽略重试间隔(重连时用)。
+	// 放弃是安全的:截止时刻 = 登记时刻 + 标记 TTL + 余量,而登记不早于写标记,此刻 Redis 侧的标记
+	// 必然已经过期;但它说明 Redis 连续 300s 以上不可用,必须留下 ERROR 与计数。
+	void FlushDueHandoffWithdrawals(bool force, const char *site)
+	{
+		if (tlsHandoffWithdrawQueue.size() == 0)
+		{
+			return;
+		}
+		std::size_t expired = 0;
+		const auto due = tlsHandoffWithdrawQueue.CollectDue(handoff_mark_withdraw::Clock::now(), force, expired);
+		if (expired > 0)
+		{
+			LOG_ERROR << "[ZoneTravel][WithdrawMark] gave up on " << expired
+					  << " mark(s): deadline (mark TTL) passed without a confirmed withdrawal";
+			travel_handoff_stats::Get().withdrawExpired.fetch_add(expired, std::memory_order_relaxed);
+		}
+		std::size_t retried = 0;
+		for (const auto &entry : due)
+		{
+			if (entry.attempts > 1)
+			{
+				++retried;
+			}
+			SendHandoffWithdraw(entry, site);
+		}
+		if (retried > 0)
+		{
+			// 逐条的重试失败只打 DEBUG(见 SendHandoffWithdraw),这里每轮汇总一条,让故障期仍看得见积压。
+			LOG_WARN << "[ZoneTravel][WithdrawMark] retried " << retried << " unconfirmed withdrawal(s) site=" << site
+					 << " pending=" << tlsHandoffWithdrawQueue.size();
+		}
 	}
 } // namespace
 
@@ -844,9 +979,12 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 	if (tlsEcs.actorRegistry.valid(playerEntity) &&
 		tlsEcs.actorRegistry.any_of<PlayerTravelHandoffComp>(playerEntity))
 	{
-		// 先抄后摘:handoff 标记写没写过只有组件知道(requestedAtMs != 0 = BeginTravelHandoff 已发 SET)。
-		const bool handoffMarkWritten =
-			tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(playerEntity).requestedAtMs != 0;
+		// 先抄后摘:handoff 标记写没写过、原文是什么只有组件知道(markEpoch != 0 = BeginTravelHandoff
+		// 的 SET 已发出,原文 = "{markEpoch}:{requestedAtMs}")。
+		const auto &travelIntent = tlsEcs.actorRegistry.get<PlayerTravelHandoffComp>(playerEntity);
+		const uint64_t handoffMarkEpoch = travelIntent.markEpoch;
+		const uint64_t handoffRequestedAtMs = travelIntent.requestedAtMs;
+		const bool handoffMarkWritten = handoffMarkEpoch != 0 && handoffRequestedAtMs != 0;
 		LOG_INFO << "FinishExitAfterPersist: player " << playerId
 				 << " exited during ownership handoff; dropping handoff intent (exit wins)"
 				 << " handoff_mark_written=" << handoffMarkWritten;
@@ -854,24 +992,22 @@ void PlayerLifecycleSystem::FinishExitAfterPersist(Guid playerId)
 		tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(playerEntity);
 		tlsEcs.actorRegistry.remove<PlayerFrozenComp>(playerEntity);
 
-		// 标记已写就必须撤回(与 AbortTravelHandoff 同一条 best-effort DEL)。scene_manager 这次若没有
+		// 标记已写就必须撤回(与 AbortTravelHandoff 同走 WithdrawHandoffMark)。scene_manager 这次若没有
 		// 推进 epoch(请求没发出去 / 回了非放行错误 / 重挑频道挑回本节点不铸造 / 路由失败回滚),标记
 		// "{E}:{ms}" 在 300s TTL 内仍等于当前 owner_epoch。玩家在 player_locator 30s 租约内重连回本节点
 		// (同落点不铸造,epoch 仍是 E)继续产生新状态,此后任一次跨节点 EnterScene 都会凭这份旧标记
 		// 免存盘过换手门:目标节点读到旧档(回档),本节点的释放存盘被 CAS 拒(假的双主告警)。
 		// 撤回的最坏后果:scene_manager 恰好卡在预检与铸造 Lua 之间 → Lua 回"标记已撤回"(18)、
-		// 未改任何状态,而玩家本来就在退出;它若已经铸造完,这次 DEL 无害。
-		// 必须排在下面的 DispatchEmergencyRelocate 之前:两条命令走同一条连接按序执行,先 DEL 后 SET,
-		// 疏散改派自己写的新标记不会被这次撤回误删。Redis 不通就只能靠 TTL 兜底。
+		// 未改任何状态,而玩家本来就在退出;它若已经铸造完,这次撤回无害。
+		// 撤回是按标记原文的条件删除,不再依赖"排在 DispatchEmergencyRelocate 之前":疏散改派自己写的
+		// 新标记 ms 取自墙钟、正常情况下与旧标记不同,迟到 / 重发的撤回删不到它(同一毫秒 / 墙钟回拨的
+		// 同值碰撞不排除,后果只是改派被 18 拒回、玩家重登,不回档)。Redis 不通或应答丢失时不再只靠 TTL
+		// 兜底:条目留在待撤回表里重试,期间该玩家重连回本节点也发不出 EnterScene(IsSceneChangeBusy)。
 		// HandlePlayerAsyncSaved 里同名的"退出优先"分支不需要这一步:交接发起之后 SavePlayerToRedis
 		// 直接跳过、不会再有落地回调,走到那条分支时 requestedAtMs 必为 0(标记还没写)。
 		if (handoffMarkWritten)
 		{
-			if (auto &redis = tlsRedis.GetZoneRedis(); redis && redis->connected())
-			{
-				const std::string key = player_ownership::HandoffRedisKey(playerId);
-				redis->command([](hiredis::Hiredis *, redisReply *) {}, "DEL %s", key.c_str());
-			}
+			WithdrawHandoffMark(playerId, handoffMarkEpoch, handoffRequestedAtMs, "exit wins");
 		}
 	}
 
@@ -1660,6 +1796,19 @@ bool PlayerLifecycleSystem::IsSceneChangeBusy(entt::entity player)
 	{
 		return true;
 	}
+	// 该玩家上一次作废的交接留下的 handoff 标记还没确认撤回(Redis 不通 / 应答丢失,见
+	// handoff_mark_withdraw.h):标记可能带着当前 owner_epoch 还活着,此时发出的跨节点 EnterScene 会
+	// 凭它免存盘过换手门 → 回档。fail-closed:确认撤回(或标记 TTL 到期)之前一律不替他发。
+	// 表按 player_id 记,玩家退出后重连回本节点换了实体也照样拦得住。不是 per-tick 路径,平时表为空。
+	if (const auto *guid = tlsEcs.actorRegistry.try_get<Guid>(player);
+		guid != nullptr && tlsHandoffWithdrawQueue.HasPlayer(*guid))
+	{
+		// INFO 而非 WARN:Redis 不通的最长 305s 里客户端连点 / 队伍跟随会反复走到这里,而调用方各自
+		// 还有一条拒绝日志;故障本身已由 WithdrawMark 的首发 ERROR 与每轮 WARN 汇总报出。
+		LOG_INFO << "[ZoneTravel][WithdrawMark] scene change refused for player " << *guid
+				 << ": withdrawal of a stale handoff mark not yet confirmed";
+		return true;
+	}
 	const auto *pending = tlsEcs.actorRegistry.try_get<PlayerSceneChangeInFlightComp>(player);
 	if (pending == nullptr)
 	{
@@ -1788,6 +1937,17 @@ void PlayerLifecycleSystem::BeginTravelHandoff(Guid playerId)
 				// 服务端明确报错 = SET 确定没生效,盘上没有标记,就地解冻是安全的。
 				LOG_ERROR << "[ZoneTravel] SET handoff mark failed for player " << playerId
 						  << (reply->str != nullptr ? std::string(" err=") + reply->str : "");
+				// 标记确定不存在,就不该让 Abort 去登记撤回:SET 被拒的典型原因(READONLY / LOADING)下
+				// 撤回的 EVAL 同样会被拒、销不了账,玩家会被一个不存在的标记挡在换图之外直到截止时刻。
+				// 只清"还是这一次交接"的组件(代际 = requestedAtMs),别动后来新起的那一次。
+				if (const auto failedEntity = tlsEcs.GetPlayer(playerId); tlsEcs.actorRegistry.valid(failedEntity))
+				{
+					if (auto *failed = tlsEcs.actorRegistry.try_get<PlayerTravelHandoffComp>(failedEntity);
+						failed != nullptr && failed->requestedAtMs == nowMs)
+					{
+						failed->markEpoch = 0;
+					}
+				}
 				AbortTravelHandoff(playerId, "handoff mark write failed");
 				return;
 			}
@@ -1795,12 +1955,13 @@ void PlayerLifecycleSystem::BeginTravelHandoff(Guid playerId)
 			{
 				// 结果**未知**,不是「确定没写」:hiredis 在连接断开时会用空 reply 回调所有挂起
 				// 命令(muduo_windows/.../Hiredis.cc),而这条 SET 可能已经被 Redis 执行了。
-				// 此时绝不能就地 AbortTravelHandoff —— 它的「撤回自己写的标记」那一步被
-				// `redis && redis->connected()` 守卫着,连接刚断必然跳过,于是标记带着当前 epoch
-				// 残活到 TTL(300s)。这 300s 内玩家任何一次跨节点 / 跨 zone EnterScene,
-				// scene_manager 都会判「标记 epoch == 当前 owner_epoch ⇒ 源已落盘」直接放行,
-				// 跳过「先存盘再交接」那道门,目标节点读到最多一个周期存盘之前的状态 —— 玩家回档,
-				// 而且 owner_epoch CAS 也不会响(epoch 没变过),全程零报错。
+				// 此时不就地 AbortTravelHandoff:连接刚断,它的撤回(WithdrawHandoffMark)当场发不出去,
+				// 只能挂进待撤回表等重连,玩家却已经解冻;保持冻结到核实完更稳妥。
+				// (历史背景,现已不成立:WithdrawHandoffMark 落地之前,Abort 的撤回会被 connected() 守卫
+				// 静默跳过,标记带着当前 epoch 残活到 TTL(300s);那 300s 内玩家任何一次跨节点 / 跨 zone
+				// EnterScene 都会被 scene_manager 判成「标记 epoch == 当前 owner_epoch ⇒ 源已落盘」直接放行,
+				// 目标节点读到旧档 —— 玩家回档,且 epoch 没变过、CAS 不响,全程零报错。现在残留标记由
+				// 待撤回表 + IsSceneChangeBusy 兜住,见 handoff_mark_withdraw.h。)
 				// 交给 ResolveTravelOutcome:Redis 不可用时保持冻结 + 计数 + 重挂应答看门狗;
 				// 连接恢复后它先 DEL 标记再 GET owner_epoch —— 正好把可能已落地的标记撤回,
 				// 再按 epoch 变没变决定解冻还是销毁。代际用 nowMs(与 travel->requestedAtMs 一致)。
@@ -1825,8 +1986,13 @@ void PlayerLifecycleSystem::BeginTravelHandoff(Guid playerId)
 		"SET %s %s EX %d", key.c_str(), value.c_str(), player_ownership::kHandoffMarkTtlSec);
 	if (ret != REDIS_OK)
 	{
+		// 命令没进 hiredis 的输出缓冲,标记确定没写:markEpoch 保持 0,Abort 不需要撤回。
 		AbortTravelHandoff(playerId, "redis command dispatch failed");
+		return;
 	}
+	// SET 已发出:记下写标记用的 epoch,交接作废时靠 "{markEpoch}:{requestedAtMs}" 还原标记原文做条件撤回。
+	// 回调是异步的,不会在 command() 返回之前跑;command() 到这里之间也没有动过 registry,travel 指针仍有效。
+	travel->markEpoch = ownerEpoch;
 }
 
 void PlayerLifecycleSystem::RequestTravelEnterScene(Guid playerId)
@@ -2130,6 +2296,35 @@ void PlayerLifecycleSystem::HandleTravelEnterSceneReply(Guid playerId, const ::s
 	DestroyDeposedPlayer(playerId, "travel_redirect", /*routine=*/true);
 }
 
+void PlayerLifecycleSystem::WithdrawHandoffMark(Guid playerId, uint64_t markEpoch, uint64_t requestedAtMs,
+												   const char *site)
+{
+	// 先登记、后发命令:哪怕命令当场发不出去,IsSceneChangeBusy 这道闸也已经立起来了。
+	const auto now = handoff_mark_withdraw::Clock::now();
+	std::optional<handoff_mark_withdraw::Entry> evicted;
+	tlsHandoffWithdrawQueue.Add(playerId, player_ownership::HandoffRedisValue(markEpoch, requestedAtMs), now,
+								std::chrono::seconds(player_ownership::kHandoffMarkTtlSec) +
+									handoff_mark_withdraw::kDeadlineMargin,
+								evicted);
+	if (evicted.has_value())
+	{
+		// 表满只可能出现在 Redis 长时间不通、且期间有 kMaxPending 个交接作废。被淘汰的那一条此后只剩
+		// TTL 兜底(对该玩家是 fail-open),与放弃同等对待:记 ERROR、计入 withdraw_expired。
+		// 日志带上被淘汰的玩家与标记原文,事后才查得出是谁处在回档窗口里;player_id 只进日志、不做指标 label。
+		LOG_ERROR << "[ZoneTravel][WithdrawMark] pending table full (" << handoff_mark_withdraw::kMaxPending
+				  << "); evicted player=" << evicted->playerId << " mark=" << evicted->markValue
+				  << " (entry closest to its deadline), that mark now only expires by TTL";
+		travel_handoff_stats::Inc(travel_handoff_stats::Get().withdrawExpired);
+	}
+	// 新条目登记时 nextAttemptAt = now,这里立刻把它(连同其它到期条目)发出去。
+	FlushDueHandoffWithdrawals(/*force=*/false, site);
+}
+
+void PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(bool reconnected)
+{
+	FlushDueHandoffWithdrawals(/*force=*/reconnected, reconnected ? "reconnect" : "retry");
+}
+
 void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason, bool notifyFailure)
 {
 	const auto playerEntity = tlsEcs.GetPlayer(playerId);
@@ -2142,8 +2337,11 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
 	{
 		return; // 已经没有交接意图(应答与看门狗只有一个能赢),幂等
 	}
-	// 先抄后摘:失败 tip 按"这是哪一种交接"选,摘掉组件就无从知道了。
+	// 先抄后摘:失败 tip 按"这是哪一种交接"选、标记原文靠 markEpoch + requestedAtMs 还原,
+	// 摘掉组件就无从知道了。
 	const bool crossZone = (travel->targetZoneId != GetZoneId());
+	const uint64_t handoffMarkEpoch = travel->markEpoch;
+	const uint64_t handoffRequestedAtMs = travel->requestedAtMs;
 	tlsEcs.actorRegistry.remove<PlayerTravelHandoffComp>(playerEntity);
 
 	if (notifyFailure)
@@ -2164,14 +2362,15 @@ void PlayerLifecycleSystem::AbortTravelHandoff(Guid playerId, const char *reason
 	// 解冻:StartTravelHandoff 用 PlayerFrozenComp 冻结输入,交接没发生就还给玩家。
 	tlsEcs.actorRegistry.remove<PlayerFrozenComp>(playerEntity);
 
-	// best-effort 删 handoff 标记:标记的语义是"这一刻的状态已落盘、可以交接",玩家解冻后
-	// 会继续产生新状态,留着它会让之后某次(比如断线重登)的跨节点 EnterScene 误以为
-	// 盘上是最新的。删不掉也有 TTL 兜底(与 scene_manager 只比对不删的契约不冲突:
-	// 这是源端撤回自己写的标记)。
-	if (auto &redis = tlsRedis.GetZoneRedis(); redis && redis->connected())
+	// 撤回 handoff 标记:标记的语义是"这一刻的状态已落盘、可以交接",玩家解冻后会继续产生新状态,
+	// 留着它会让之后某次跨节点 EnterScene 误以为盘上是最新的(回档)。与 scene_manager 只比对不删的
+	// 契约不冲突:这是源端撤回自己写的标记。撤回没确认之前 IsSceneChangeBusy 对该玩家返回 true ——
+	// 解冻照常,只是暂时不替他发 EnterScene,不再是"删不掉就靠 TTL 兜底"。
+	// markEpoch == 0 = 写标记的 SET 从没发出去过(存盘看门狗 / epoch 未知 / Redis 未连接 / 命令没发出去),
+	// 盘上没有这份标记,不登记,免得一个根本不存在的标记把玩家挡在换图之外。
+	if (handoffMarkEpoch != 0 && handoffRequestedAtMs != 0)
 	{
-		const std::string key = player_ownership::HandoffRedisKey(playerId);
-		redis->command([](hiredis::Hiredis *, redisReply *) {}, "DEL %s", key.c_str());
+		WithdrawHandoffMark(playerId, handoffMarkEpoch, handoffRequestedAtMs, "abort");
 	}
 
 	if (!notifyFailure)

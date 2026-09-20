@@ -104,6 +104,10 @@ namespace owner_epoch_stats
 //                          持续增长 = 有玩家一直冻着出不来
 //   frozen_ms_total        走到终态(granted / resolved_in_place / aborted)的交接累计冻结毫秒数;
 //   frozen_ms_max          平均冻结时长 = frozen_ms_total / 三个终态之和,max 是单次最大值
+//   withdraw_deferred      作废交接后撤回 handoff 标记没能当场确认(Redis 不通 / 命令没发出去 / 应答丢失或报错),
+//                          条目留在待撤回表里重试。趋势类计数:同一条目每失败一次计一次。持续增长 = Redis 不稳
+//   withdraw_expired       到截止时刻(标记 TTL + 余量)仍未确认撤回而放弃,或待撤回表满被淘汰。应恒为 0,
+//                          非 0 = 有标记只靠 TTL 过期,期间存在回档窗口,要排查(见 handoff_mark_withdraw.h)
 //
 // started 减去各终态 = 仍在途的 + 交接期间被存盘 CAS 拒而销毁的(后者已计入
 // owner_epoch_stats::StaleOwnerWriteRejected)。
@@ -123,6 +127,8 @@ namespace travel_handoff_stats
 		std::atomic<uint64_t> verifyRearmed{0};
 		std::atomic<uint64_t> frozenMsTotal{0};
 		std::atomic<uint64_t> frozenMsMax{0};
+		std::atomic<uint64_t> withdrawDeferred{0};
+		std::atomic<uint64_t> withdrawExpired{0};
 	};
 
 	inline Counters& Get()
@@ -159,6 +165,8 @@ namespace travel_handoff_stats
 		uint64_t verifyRearmed{0};
 		uint64_t frozenMsTotal{0};
 		uint64_t frozenMsMax{0};
+		uint64_t withdrawDeferred{0};
+		uint64_t withdrawExpired{0};
 
 		bool operator==(const Snapshot&) const = default;
 	};
@@ -179,6 +187,8 @@ namespace travel_handoff_stats
 		snapshot.verifyRearmed = counters.verifyRearmed.load(std::memory_order_relaxed);
 		snapshot.frozenMsTotal = counters.frozenMsTotal.load(std::memory_order_relaxed);
 		snapshot.frozenMsMax = counters.frozenMsMax.load(std::memory_order_relaxed);
+		snapshot.withdrawDeferred = counters.withdrawDeferred.load(std::memory_order_relaxed);
+		snapshot.withdrawExpired = counters.withdrawExpired.load(std::memory_order_relaxed);
 		return snapshot;
 	}
 } // namespace travel_handoff_stats
@@ -279,7 +289,15 @@ public:
 
 	// 普通 EnterScene(客户端换图 / 镜像自动进场 / 队伍跟随)的发送侧闸:交接在途,或上一条
 	// EnterScene 的应答还没回来(短 TTL 内)时为真,调用方不得再发。理由见 PlayerSceneChangeInFlightComp。
+	// 该玩家有一份作废交接留下的 handoff 标记还没确认撤回时同样为真(按 player_id 判,见
+	// handoff_mark_withdraw.h):标记可能还带着当前 owner_epoch,这时发跨节点 EnterScene 会免存盘过门。
 	static bool IsSceneChangeBusy(entt::entity player);
+
+	// 重试还没确认的 handoff 标记撤回,并丢弃过了截止时刻的条目。由 RedisSystem 驱动:
+	//   reconnected = true  → Redis 重连回调里调,忽略重试间隔、全部立刻重发;
+	//   reconnected = false → 1s 周期定时器里调,只发到了重试间隔的。
+	// 表为空时零开销。没有初始化 RedisSystem 的宿主(单测)只登记、不重试。
+	static void RetryPendingHandoffWithdrawals(bool reconnected);
 
 	// 发出普通 EnterScene **之前**调用,记下这次要去哪。应答只回显 player_id,18 到达时靠它起交接。
 	// 凡是替在线玩家发普通 EnterScene 的调用点都必须成对调用 IsSceneChangeBusy + 本函数:漏掉的那
@@ -404,8 +422,15 @@ private:
 	// routine = 这是交接成功的正常收尾,收尾日志打 INFO;否则打 WARN(异常信号,要留证据)。
 	static void DestroyDeposedPlayer(Guid playerId, const char *reasonTag, bool routine = false);
 
-	// 交接未成 **且已确认没有被放行**:摘 PlayerTravelHandoffComp + PlayerFrozenComp、best-effort 删
-	// handoff 标记、按情形回 tip。只有两种调用方:EnterScene 请求发出之前的失败分支(此时不可能被放行),
+	// 撤回本节点写下的 handoff 标记 "{markEpoch}:{requestedAtMs}"(交接作废的两处:"退出优先"与
+	// AbortTravelHandoff)。先登记进待撤回表,再发按标记原文比对的条件删除;只有拿到 Redis 的整数应答
+	// 才销账。Redis 不通 / 命令没发出去 / 应答丢失或报错:LOG_ERROR + withdraw_deferred,条目留表,由
+	// RetryPendingHandoffWithdrawals 重试到标记 TTL 为止;期间 IsSceneChangeBusy 对该玩家返回 true。
+	// site 只进日志,标明是哪个撤回点。
+	static void WithdrawHandoffMark(Guid playerId, uint64_t markEpoch, uint64_t requestedAtMs, const char *site);
+
+	// 交接未成 **且已确认没有被放行**:摘 PlayerTravelHandoffComp + PlayerFrozenComp、撤回 handoff
+	// 标记(WithdrawHandoffMark)、按情形回 tip。只有两种调用方:EnterScene 请求发出之前的失败分支(此时不可能被放行),
 	// 以及 ResolveTravelOutcome 核实过的分支。已无交接意图时幂等 no-op。
 	//   notifyFailure = true  → 回失败 tip 让客户端收起遮罩:跨 zone 传送未成 kZoneTravelTargetBusy,
 	//                           同 zone 换图未成 kEnterSceneFailed(按组件里的 targetZoneId 自己分);

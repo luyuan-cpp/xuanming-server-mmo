@@ -30,6 +30,14 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
     tlsRedis.SetReconnectCallback([this]()
                                   {
         LOG_INFO << "Redis reconnected, retrying pending player loads";
+        // 先补发没确认的 handoff 标记撤回,再重发玩家加载。撤回与玩家加载走同一条连接
+        // (playerRedis 持有的就是 tlsRedis.GetZoneRedis() 这个 HiredisPtr 的引用),Redis 按序执行:
+        // 撤回只要被执行,就一定排在随后重发的加载之前。但这只是顺序上的尽力 —— 撤回可能被 Redis
+        // 以 ERROR 拒掉(只读副本 / 正在加载数据集)而加载照样成功,所以正确性**不**靠这条顺序,
+        // 靠的是 PlayerLifecycleSystem::IsSceneChangeBusy:撤回没确认之前**本节点**不替该玩家发 EnterScene。
+        // (这道闸管不到不经本节点的跨节点落点,例如玩家断线后重登落到别的节点;那条路在撤回确认前
+        // 仍只有标记 TTL 兜底,见 handoff_mark_withdraw.h 的契约说明。)
+        PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(/*reconnected=*/true);
         if (playerRedis)
         {
             playerRedis->OnReconnected();
@@ -44,7 +52,10 @@ void RedisSystem::Initialize(muduo::net::EventLoop* loop)
         if (playerRedis)
         {
             playerRedis->RetryDuePending();
-        } });
+        }
+        // 没确认的 handoff 标记撤回也搭这个 1s 节拍重试(表为空时直接返回;条目自带 5s 重试间隔
+        // 与"标记 TTL + 余量"的截止时刻,见 handoff_mark_withdraw.h)。静态函数,不引入新的绑定。
+        PlayerLifecycleSystem::RetryPendingHandoffWithdrawals(/*reconnected=*/false); });
     retryTimerActive_ = true;
 
     // Periodically log a snapshot of internal queue sizes so operators can spot

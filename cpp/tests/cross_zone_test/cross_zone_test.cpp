@@ -9,28 +9,23 @@
 #include "thread_context/ecs_context.h"
 
 // ---------------------------------------------------------------------------
-// cross_zone_test — unit tests for the cross-zone repair triad's
-// non-K8s-requiring invariants. K8s-required tests (Kafka broker fail,
-// destination node crash, source restart, duplicate delivery) are
-// documented in docs/ops/cross-zone-failure-test-runbook.md and have to
-// run against a real two-zone cluster.
+// cross_zone_test — single-process unit tests for the pieces the ownership
+// handoff (cross-zone travel / same-zone cross-node scene change,
+// docs/design/cross-zone-scene-travel.md) relies on: bag marshal round-trip,
+// PlayerFrozenComp semantics, and the handoff-mark withdrawal queue.
+// (The "cross-zone repair triad" this file was originally written for — the
+// player_migrate data-moving chain — is gone, see History below.)
+// Multi-node failure drills live in docs/ops/cross-zone-failure-test-runbook.md
+// and need a real two-zone cluster.
 //
-// ⚠️ STATUS (2026-05-19): the binary compiles + links cleanly, but
-// launching it currently exits with no stdout — a global static-init
-// chain in one of the linked libs (probably table.lib's ItemTable or
-// thread_context.lib's tlsEcs reset) crashes before main() runs.
-// bag_test sidesteps this with test_config_helper.h. The right fix is
-// either:
-//   (a) include test_config_helper.h and call LoadAllTables() / init
-//       tlsEcs in main() — adds spurious dependencies for tests that
-//       don't actually need ItemTable; or
-//   (b) prune AdditionalDependencies in cross_zone_test.vcxproj to drop
-//       table.lib / config.lib so the static init never runs.
-// Either approach is ~0.5 session of work and isn't blocking the K8s
-// SOP validation, so the test source + vcxproj ship now as the skeleton.
-// When init helper lands, every TEST(...) below should pass without
-// further changes — they only exercise the pure-function Marshal /
-// Unmarshal / IsCrossZoneFrozen paths.
+// STATUS: the 2026-05-19 note that used to sit here ("binary exits with no
+// stdout before main()") is obsolete. Commit 01e23eb05 (2026-09-05) fixed the
+// vcxproj (hiredisd.lib / absl lib dir / battle.lib), registered the project in
+// game.sln with Build.0, added it to tools/scripts/run_cpp_tests.ps1 (which
+// also syncs the zlibd / rdkafka DLLs — a missing DLL makes a test exe exit
+// silently with 0xC0000135, the likely cause of the old symptom) and recorded
+// the project green. It has NOT been re-run since the
+// cross-zone travel code (phase 1/2/3) landed — that is pending Codex.
 //
 // What this file covers (all single-process, gtest-runnable):
 //   1. BagMarshalRoundTrip      — Marshal → Unmarshal preserves all items
@@ -51,6 +46,13 @@
 //                                 crashed.
 //   6. FrozenCompMarker         — PlayerFrozenComp emplace/remove +
 //                                 IsCrossZoneFrozen() semantics.
+//   7. HandoffMarkWithdrawQueue — the pending-withdrawal table for handoff
+//                                 marks (handoff_mark_withdraw.h): dedup,
+//                                 retry pacing, deadline expiry, exact-value
+//                                 confirm, capacity eviction, and that the Lua
+//                                 stays a *conditional* delete. Pure container,
+//                                 time is injected; the Redis glue around it
+//                                 (WithdrawHandoffMark) is not covered here.
 //
 // History: these cases were written for the player_migrate data-moving chain
 // (Kafka PlayerMigrationEvent + ACK + CrossZoneReaper). That chain was
@@ -325,6 +327,151 @@ TEST(CrossZoneFrozen, InvalidEntityIsNotFrozen)
     EXPECT_FALSE(PlayerLifecycleSystem::IsCrossZoneFrozen(entt::null))
         << "entt::null must return false, not crash. Defensive contract "
         << "matches the implementation in player_lifecycle.cpp.";
+}
+
+// ============================================================================
+// 7. HandoffMarkWithdrawQueue —— handoff 标记待撤回表(纯容器,时间由用例注入)
+// ============================================================================
+#include <chrono>
+#include <optional>
+#include <string>
+
+#include "player/system/handoff_mark_withdraw.h"
+
+namespace
+{
+    namespace hmw = handoff_mark_withdraw;
+
+    constexpr uint64_t kWithdrawPlayerA = 100000000000001ull;
+    constexpr uint64_t kWithdrawPlayerB = 100000000000002ull;
+    constexpr std::chrono::seconds kWithdrawTtl{305};
+
+    // 任意固定起点:用例只关心相对时间,不读真实时钟。
+    hmw::Clock::time_point WithdrawT0()
+    {
+        return hmw::Clock::time_point{} + std::chrono::hours(1);
+    }
+} // namespace
+
+TEST(HandoffMarkWithdrawQueue, AddThenHasPlayer)
+{
+    hmw::Queue queue;
+    std::optional<hmw::Entry> evicted = hmw::Entry{}; // 预置非空:Add 没淘汰时必须把它清掉
+    EXPECT_TRUE(queue.Add(kWithdrawPlayerA, "7:100", WithdrawT0(), kWithdrawTtl, evicted));
+    EXPECT_FALSE(evicted.has_value());
+    EXPECT_EQ(queue.size(), 1u);
+    EXPECT_TRUE(queue.HasPlayer(kWithdrawPlayerA));
+    EXPECT_FALSE(queue.HasPlayer(kWithdrawPlayerB)) << "闸口按 player_id 判,不能误伤别的玩家";
+}
+
+TEST(HandoffMarkWithdrawQueue, DuplicateAddKeepsOriginalDeadline)
+{
+    hmw::Queue queue;
+    std::optional<hmw::Entry> evicted;
+    ASSERT_TRUE(queue.Add(kWithdrawPlayerA, "7:100", WithdrawT0(), kWithdrawTtl, evicted));
+    EXPECT_FALSE(queue.Add(kWithdrawPlayerA, "7:100", WithdrawT0() + std::chrono::seconds(100), kWithdrawTtl, evicted))
+        << "同一份标记重复登记不算新条目";
+    EXPECT_EQ(queue.size(), 1u);
+
+    // 原 deadline = T0 + 305s。重复登记若把它推到了 T0 + 405s,这里就不会过期。
+    std::size_t expired = 0;
+    const auto due = queue.CollectDue(WithdrawT0() + kWithdrawTtl, /*force=*/false, expired);
+    EXPECT_EQ(expired, 1u) << "截止时刻跟的是第一次登记,不得被重复登记延长";
+    EXPECT_TRUE(due.empty());
+    EXPECT_EQ(queue.size(), 0u);
+}
+
+TEST(HandoffMarkWithdrawQueue, CollectDueRespectsNextAttempt)
+{
+    hmw::Queue queue;
+    std::optional<hmw::Entry> evicted;
+    ASSERT_TRUE(queue.Add(kWithdrawPlayerA, "7:100", WithdrawT0(), kWithdrawTtl, evicted));
+
+    std::size_t expired = 0;
+    auto due = queue.CollectDue(WithdrawT0(), /*force=*/false, expired);
+    ASSERT_EQ(due.size(), 1u) << "新登记的条目立刻到期,第一次撤回由它发出";
+    EXPECT_EQ(due[0].playerId, kWithdrawPlayerA);
+    EXPECT_EQ(due[0].markValue, "7:100");
+    EXPECT_EQ(due[0].attempts, 1u) << "首发 = 1:调用方只在首发失败时打 ERROR";
+    EXPECT_EQ(expired, 0u);
+
+    due = queue.CollectDue(WithdrawT0() + hmw::kRetryInterval - std::chrono::seconds(1), /*force=*/false, expired);
+    EXPECT_TRUE(due.empty()) << "重试间隔之内不重发";
+
+    due = queue.CollectDue(WithdrawT0() + hmw::kRetryInterval - std::chrono::seconds(1), /*force=*/true, expired);
+    ASSERT_EQ(due.size(), 1u) << "重连时 force 忽略重试间隔";
+    EXPECT_EQ(due[0].attempts, 2u) << "间隔内被跳过的那一轮不计次,真正取走才加一";
+
+    EXPECT_EQ(queue.size(), 1u) << "CollectDue 只取副本,销账只能靠 Confirm";
+    EXPECT_TRUE(queue.HasPlayer(kWithdrawPlayerA));
+}
+
+TEST(HandoffMarkWithdrawQueue, CollectDueDropsExpiredAndCounts)
+{
+    hmw::Queue queue;
+    std::optional<hmw::Entry> evicted;
+    ASSERT_TRUE(queue.Add(kWithdrawPlayerA, "7:100", WithdrawT0(), kWithdrawTtl, evicted));
+
+    std::size_t expired = 0;
+    const auto due = queue.CollectDue(WithdrawT0() + kWithdrawTtl + std::chrono::seconds(1), /*force=*/true, expired);
+    EXPECT_EQ(expired, 1u);
+    EXPECT_TRUE(due.empty()) << "过了截止时刻的条目不再重发(force 也不行)";
+    EXPECT_EQ(queue.size(), 0u);
+    EXPECT_FALSE(queue.HasPlayer(kWithdrawPlayerA)) << "放弃之后闸口必须放开,否则玩家永远换不了图";
+}
+
+TEST(HandoffMarkWithdrawQueue, ConfirmRemovesOnlyExactValue)
+{
+    hmw::Queue queue;
+    std::optional<hmw::Entry> evicted;
+    ASSERT_TRUE(queue.Add(kWithdrawPlayerA, "7:100", WithdrawT0(), kWithdrawTtl, evicted));
+    ASSERT_TRUE(queue.Add(kWithdrawPlayerA, "7:200", WithdrawT0(), kWithdrawTtl, evicted));
+
+    EXPECT_FALSE(queue.Confirm(kWithdrawPlayerA, "7:300")) << "不在表里的标记销不了账";
+    EXPECT_FALSE(queue.Confirm(kWithdrawPlayerB, "7:100")) << "别的玩家的同值标记也不行";
+    EXPECT_TRUE(queue.Confirm(kWithdrawPlayerA, "7:100"));
+    EXPECT_EQ(queue.size(), 1u);
+    EXPECT_TRUE(queue.HasPlayer(kWithdrawPlayerA)) << "\"7:200\" 还没确认,闸口不能放开";
+    EXPECT_FALSE(queue.Confirm(kWithdrawPlayerA, "7:100")) << "重复应答的第二次销账是 no-op";
+
+    EXPECT_TRUE(queue.Confirm(kWithdrawPlayerA, "7:200"));
+    EXPECT_FALSE(queue.HasPlayer(kWithdrawPlayerA));
+}
+
+TEST(HandoffMarkWithdrawQueue, CapacityEvictsEarliestDeadline)
+{
+    hmw::Queue queue;
+    std::optional<hmw::Entry> evicted;
+    // 第 i 条在 T0 + i 秒登记,deadline 严格递增:player 1 的最早。
+    for (std::size_t i = 0; i < hmw::kMaxPending; ++i)
+    {
+        ASSERT_TRUE(queue.Add(static_cast<uint64_t>(i + 1), "7:100",
+                              WithdrawT0() + std::chrono::seconds(static_cast<long long>(i)), kWithdrawTtl, evicted));
+        ASSERT_FALSE(evicted.has_value());
+    }
+    ASSERT_EQ(queue.size(), hmw::kMaxPending);
+
+    const uint64_t overflowPlayer = static_cast<uint64_t>(hmw::kMaxPending) + 1;
+    EXPECT_TRUE(queue.Add(overflowPlayer, "7:100",
+                          WithdrawT0() + std::chrono::seconds(static_cast<long long>(hmw::kMaxPending)), kWithdrawTtl,
+                          evicted));
+    ASSERT_TRUE(evicted.has_value()) << "表满必须让调用方知道(要记 ERROR + withdraw_expired)";
+    EXPECT_EQ(evicted->playerId, 1u) << "被淘汰的条目要带出来:日志得能定位到是哪个玩家";
+    EXPECT_EQ(evicted->markValue, "7:100");
+    EXPECT_EQ(queue.size(), hmw::kMaxPending);
+    EXPECT_FALSE(queue.HasPlayer(1)) << "被淘汰的是 deadline 最早的那一条";
+    EXPECT_TRUE(queue.HasPlayer(2));
+    EXPECT_TRUE(queue.HasPlayer(overflowPlayer));
+}
+
+TEST(HandoffMarkWithdrawQueue, LuaIsConditionalDelete)
+{
+    // 撤回会被延迟重发,期间同一玩家可能已经写了新标记;退回无条件 DEL 会误删新标记。
+    const std::string lua = hmw::kLuaDelIfEqual;
+    EXPECT_NE(lua.find("GET"), std::string::npos);
+    EXPECT_NE(lua.find("== ARGV[1]"), std::string::npos);
+    EXPECT_NE(lua.find("DEL"), std::string::npos);
+    EXPECT_LT(lua.find("GET"), lua.find("DEL")) << "先比对、后删除";
 }
 
 // ============================================================================

@@ -57,6 +57,7 @@
     <ClInclude Include="player\system\asset_op_auth.h" />
     <ClInclude Include="player\system\asset_op_ledger.h" />
     <ClInclude Include="player\system\asset_op_system.h" />
+    <ClInclude Include="player\system\handoff_mark_withdraw.h" />
     <ClInclude Include="player\system\player_data_loader.h" />
     <ClInclude Include="player\system\player_lifecycle.h" />
     <ClInclude Include="player\system\player_scene.h" />

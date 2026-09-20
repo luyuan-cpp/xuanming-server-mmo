@@ -98,12 +98,17 @@ struct PlayerOwnerEpochComp
 //               scene_manager 随时可能放行并 INCR epoch,再写只会被 CAS 拒、徒增
 //               stale_owner_write_rejected 噪声。也是 EnterScene 应答超时看门狗的代际:
 //               看门狗到期时 requestedAtMs 若已变化,说明是另一次交接,不动。
+// markEpoch     BeginTravelHandoff 写 handoff 标记时用的 owner_epoch;0 = 写标记的 SET 没发出去过。
+//               与 requestedAtMs 一起还原标记原文 "{markEpoch}:{requestedAtMs}",交接作废时按原文
+//               条件撤回(PlayerLifecycleSystem::WithdrawHandoffMark)。不能到撤回时再去读
+//               PlayerOwnerEpochComp:重连 / 顶号路径会把它取 max 更新,读到的未必是写标记那一刻的值。
 struct PlayerTravelHandoffComp
 {
 	uint32_t targetZoneId{0};
 	uint64_t sceneId{0};
 	uint32_t sceneConfigId{0};
 	uint64_t requestedAtMs{0};
+	uint64_t markEpoch{0};
 };
 
 // 本节点替在线玩家发出、应答还没回来的**普通** EnterScene(客户端换图 / 镜像创建后的自动进场 /

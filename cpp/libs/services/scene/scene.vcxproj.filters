@@ -34,6 +34,7 @@
     <ClInclude Include="generated\attribute\attributedelta30framess2c_attribute_sync.h" />
     <ClInclude Include="generated\attribute\attributedelta60framess2c_attribute_sync.h" />
     <ClInclude Include="player\constants\player.h" />
+    <ClInclude Include="player\system\handoff_mark_withdraw.h" />
     <ClInclude Include="player\system\player_data_loader.h" />
     <ClInclude Include="player\system\player_lifecycle.h" />
     <ClInclude Include="player\system\player_scene.h" />
