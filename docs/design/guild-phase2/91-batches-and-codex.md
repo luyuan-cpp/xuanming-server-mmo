@@ -14,7 +14,7 @@
 | 3 | B2s | 管理与申请服务端、推送、GuildRule/GuildLevel、C++ 表登记(顺带补 ActivitySchedule)、robot 编译级;含 X-10 状态锁行、D7 RC、D10 uint64、Y-03/Y-04 | 30 | = | B1 |
 | 4 | B2c | 客户端管理与申请、MessageLimiter 8 行、robot 管理段 M1–M10 | 9 | = | B2s |
 | 5 | B3a-1 | 名字注册表(data_service)、RoleNameRule、login/user_accounts proto、`profile_component = 15`、login tip | 29 | = | — (与 B2 无代码依赖,但共用 Tip.xlsx / 表工程文件,排在 B2c 之后) |
-| 6 | B3a-2 | login 建角与补齐、scene/Java 解析、merge_zone 按列名拷贝、stress 段 | 23 | = | B3a-1 |
+| 6 | B3a-2 | login 建角与补齐、scene/Java 解析、merge_zone 按列名拷贝、stress 段 | 24 | +1(`go/login/login.go`:起服预置孤儿计数器,2026-09-20 落码) | B3a-1 |
 | 7 | B3b | guild 批量取名(`WithPlayerNames`)、建角界面、成员显示名 | 20 | +1(Y-07 `guild_manage_logic.go`) | B2c、B3a-2 |
 | 8 | B4a-1 | 资产通道 C++ 本体、`asset_op_ledger = 16`、asset tip 9 行、签名校验 | 30 | = | — |
 | 9 | B4a-2 | 客户端 GM 统一闸门 | 6 | = | B4a-1 |

@@ -56,7 +56,25 @@ SnowflakeCacheDir: ../../run/snowflake
 
 # Distributed lock config
 Locker:
-  AccountLockTTL: 10 # 10 seconds
+  # AccountLockTTL 要盖住 CreatePlayer 持锁后的耗时,否则锁在建角中途过期、同账号的第二个
+  # 建角请求就能并发读到同一份账号 blob。持锁后串行跑的几步:
+  #   - 三次跨进程 gRPC,各有 ctx 截止时间管得住的硬预算:发号 3s(idsegment FetchTimeout)
+  #     + 名字登记 3s(建角侧总预算)+ player:zone 登记 3s(HomeZone.RegisterTimeout)= 9s;
+  #   - 三次 Redis:读 blob、围栏写 blob、写未确认时的回读。常态是毫秒级;Redis 变慢但每次
+  #     回包都还在 3s 以内时,三步合计 < 9s。
+  # 原值 10 是名字登记加入之前定的,已经盖不住;20 盖住「gRPC 三步全部拖满 + Redis 慢但还在回包」。
+  # **20 不是硬上界**,不要把它读成「有余量的保证」:
+  #   - Redis 那个 3s 是 go-redis 默认的**单次** socket 读超时。svc/servicecontext.go 构造客户端时
+  #     并没有把上面 Node.RedisClient 的 Read/WriteTimeout 传进去,数值相同只是巧合;
+  #   - 客户端没开 ContextTimeoutEnabled,ctx 截止时间不约束 socket 读写;MaxRetries 走默认值 3,
+  #     读超时的命令会被原样重发 —— Redis 卡住时读 blob、写 blob 各自最长约 4×3s + 退避 ≈ 12.5s。
+  #     回读那一步代码里套的 1s ctx 预算只能掐掉重发,单次等待仍可到 3s。
+  # 超出 TTL 之后的正确性完全靠围栏 + 回读,不靠这个数:账号 blob 由 Lua 围栏脚本写入
+  # (createplayerlogic.go 的 writeAccountBlobScript),锁已易主就拒写;脚本回 -1 或报错时先回读
+  # blob 再决定要不要释放名字(被 go-redis 重发掉的那一次可能已经写成功)。后果最多是这次
+  # 建角失败,不会覆盖别人的写入,也不会放出重名。
+  # tools/scripts/k8s_deploy.ps1 从本文件读这个值,自动跟随;deploy/login-stack.linux 那份是 30。
+  AccountLockTTL: 20 # 秒;不是硬上界,见上
   # PlayerLockTTL is the base TTL of the player lock. The EnterGame chain runs
   # a heartbeat goroutine that renews the lock at TTL/3 intervals, so this
   # only needs to survive a short Redis blip plus one heartbeat miss. If the
@@ -128,7 +146,9 @@ SceneManagerRpc:
 
 # DataService gRPC client (discovered via etcd)。login 用它:领 PlayerId 号段
 # (AllocateIdSegment)、建角登记归属 zone(RegisterPlayerZone)、登录 / 进游戏查归属
-# zone(GetPlayerHomeZone / BatchGetPlayerHomeZone,见 HomeZone 块)。
+# zone(GetPlayerHomeZone / BatchGetPlayerHomeZone,见 HomeZone 块)、建角登记 / 补偿释放
+# 角色名(ReservePlayerName / ReleasePlayerName,全服唯一,登记失败建角整体失败)、
+# 角色列表与进游戏缺名时回源(BatchGetPlayerName,失败只是名字显示为空)。
 # NonBlock: true —— 号段与归属查询都是弱依赖(设计稿 §6.5):data_service 没起时 login
 # 照常起服,领段失败按 IdSegment.FallbackToSnowflake 决定回退还是拒绝建角。
 # Middlewares.Breaker: true —— 归属查询串在**每次登录**的角色列表上。最难受的不是
@@ -176,6 +196,8 @@ IdSegment:
 #   robot/logic/handler/scene_client_player_common_redirect_to_gate.go。
 #   打开后也只对「首次登录且没有在场 scene」生效,重连 / 顶号永远回原 scene。
 # RoleListLookupTimeout:Login 角色列表那一次批量查询的预算(串在每次登录上,要短)。
+#   角色列表缺名回源 BatchGetPlayerName 也用这个值:两次查询串行、各自计时,
+#   缺名账号(B3a 之前建的老角色)最坏 2×,全部有名的账号仍只有一跳。
 # EnterLookupTimeout:EnterGame 那一次单查的预算(异步链路,可宽)。
 # RegisterTimeout:CreatePlayer 登记 player:zone 的预算(写失败建角整体失败,给宽)。
 HomeZone:

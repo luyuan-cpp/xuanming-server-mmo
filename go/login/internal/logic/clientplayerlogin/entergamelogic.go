@@ -11,6 +11,7 @@ import (
 	"login/internal/logic/pkg/homezone"
 	"login/internal/logic/pkg/locker"
 	"login/internal/logic/pkg/loginsession"
+	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/sessionmanager"
 	"login/internal/svc"
 	login_proto_common "proto/common/base"
@@ -47,6 +48,9 @@ type enterGameSessionState struct {
 	// ticketTargetZoneID 是本连接所持重定向票据的目标 zone(gate 验签后经 SessionDetails 透传);
 	// 0 = 普通 AssignGate 票据。等于本 zone 时进场景不按 home_zone 弹回(CZ-8)。
 	ticketTargetZoneID uint32
+	// playerName 是要补进 PlayerProfileComp 的角色名副本,由 resolveEnterName 在入场前定好;
+	// "" = 账号记录与名字注册表里都拿不到(旧角色 / 注册表不可用),本次入场不补名字。
+	playerName string
 }
 
 func NewEnterGameLogic(ctx context.Context, svcCtx *svc.ServiceContext) *EnterGameLogic {
@@ -152,6 +156,9 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 			found = true
 			// 职业只能来自已验证归属的账号角色记录，不能由入场请求自由指定。
 			flowState.classID = p.GetClassId()
+			// 名字与职业同源。账号记录有名字就直接用(不多一次 RPC);只有缺名的记录
+			// (早于名字功能的旧角色、此前 self-heal 恢复出的空记录)才回源注册表。
+			flowState.playerName = resolveEnterName(ctx, p.GetName(), l.svcCtx.PlayerNames, in.PlayerId)
 			break
 		}
 	}
@@ -186,13 +193,18 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 		// consistent state so subsequent flows see the player.
 		logx.Infof("EnterGame self-heal: restoring playerId=%d into account_data for account=%s",
 			in.PlayerId, account)
+		// 恢复出的记录原本只有 id,名字副本会就此永久丢失:角色列表显示空白,
+		// 首次入场也补不进 PlayerProfileComp。所以这里回源注册表一次,把名字一并写回;
+		// 查不到 / 查询失败就照旧只恢复 id(展示数据 fail-open,不阻断入场)。
+		name := resolveEnterName(ctx, "", l.svcCtx.PlayerNames, in.PlayerId)
+		flowState.playerName = name
 		if userAccount.SimplePlayers == nil {
 			userAccount.SimplePlayers = &login_proto_common.AccountSimplePlayerList{
 				Players: make([]*login_proto_common.AccountSimplePlayer, 0, 1),
 			}
 		}
 		userAccount.SimplePlayers.Players = append(userAccount.SimplePlayers.Players,
-			&login_proto_common.AccountSimplePlayer{PlayerId: in.PlayerId})
+			&login_proto_common.AccountSimplePlayer{PlayerId: in.PlayerId, Name: name})
 		if patched, mErr := proto.Marshal(userAccount); mErr == nil {
 			if sErr := l.svcCtx.RedisClient.Set(ctx, accountKey, patched,
 				config.AppConfig.Account.CacheExpire).Err(); sErr != nil {
@@ -219,6 +231,9 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	//    in SubmitPreload so the gRPC handler thread never touches the
 	//    SyncProducer mutex. The pool task exits as soon as Kafka send
 	//    returns — no waiting on results.
+	// flowState 在这里按值拷进闭包:classID / playerName 这类入场前定好的字段必须在此之前赋完,
+	// 之后再改 flowState 进不到 applyLoadedPlayerSession → backfillPlayerIdentity,而且不报任何错
+	// (回归用例:TestEnterGame_PlayerNameReachesIdentityBackfill)。
 	enterCtx := flowState // value-copied state for the closure
 	playerID := in.PlayerId
 	sessionID := sessionDetails.SessionId
@@ -270,7 +285,7 @@ func (l *EnterGameLogic) EnterGame(in *login_proto.EnterGameRequest) (*login_pro
 	onPreloadComplete := func(err error) {
 		defer chainCancel()
 		defer releaseLock()
-		// 会话落盘和职业补齐期间继续续租；退出时先停心跳，再释放锁。
+		// 会话落盘和职业 / 名字补齐期间继续续租；退出时先停心跳，再释放锁。
 		defer stopHeartbeat()
 
 		// preloadSeconds: from chain start to the moment the dispatcher
@@ -464,6 +479,33 @@ func buildEnterGameSessionState(in *login_proto.EnterGameRequest, sessionDetails
 	}
 }
 
+// resolveEnterName 决定本次入场要补进 PlayerProfileComp 的角色名(见 backfillPlayerIdentity)。
+//
+// accountName 来自已验证归属的账号角色记录:非空直接用,正常角色因此不多一次 RPC。
+// 为空才回源名字注册表(data_service BatchGetPlayerName)一次,预算 DefaultLookupTimeout。
+// 名字是展示数据,读侧 fail-open:查询失败(含注册表未配置的 ErrUnavailable)只记 Info
+// 并返回 "",入场照常进行;本次不补名字,下一次无会话入场会再试。
+//
+// names 为 nil 接口时直接返回 "";l.svcCtx.PlayerNames 是 *playernamereg.Client,nil 指针
+// 装进接口后**不等于** nil 接口,那种情况由 Client.Lookup 的 nil 接收者分支返回
+// ErrUnavailable 兜住,走下面的错误分支。
+func resolveEnterName(ctx context.Context, accountName string, names roleNameLookup, id uint64) string {
+	if accountName != "" {
+		return accountName
+	}
+	if names == nil {
+		return ""
+	}
+	lookupCtx, cancel := context.WithTimeout(ctx, playernamereg.DefaultLookupTimeout)
+	defer cancel()
+	found, err := names.Lookup(lookupCtx, []uint64{id})
+	if err != nil {
+		logx.WithContext(ctx).Infof("[role-name] EnterGame 本次不补名字: player=%d 回源名字注册表失败: %v", id, err)
+		return ""
+	}
+	return found[id]
+}
+
 // homeZoneOverrideAllowed 决定这次 EnterGame 能不能把 ZoneId 换成归属 zone。
 //
 // 只有「首次登录且 player_locator 里没有在场 scene」才允许。理由:重连(ShortReconnect)
@@ -488,7 +530,7 @@ func (l *EnterGameLogic) applyLoadedPlayerSession(ctx context.Context, state ent
 	}
 
 	decision := sessionmanager.DecideEnterGame(existing, state.account)
-	if err := l.backfillPlayerClass(ctx, existing, state); err != nil {
+	if err := l.backfillPlayerIdentity(ctx, existing, state); err != nil {
 		return decision, err
 	}
 

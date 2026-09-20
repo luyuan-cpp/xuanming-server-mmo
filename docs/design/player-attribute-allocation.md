@@ -256,7 +256,7 @@ message PlayerAttributeComp {
 ## 8. 已知缺口
 
 - **经验系统未接**:等级只能靠 `GmSetPlayerLevel` 改;战斗引擎已产出 `exp_gain`,落地待经验系统。
-- **`class_id` 下发 scene 已打通(2026-09-13,commit f5983bd86)**:login 入场前 `backfillPlayerClass`(`player_class_backfill.go`)
+- **`class_id` 下发 scene 已打通(2026-09-13,commit f5983bd86)**:login 入场前 `backfillPlayerIdentity`(`player_class_backfill.go`;2026-09-20 B3a-2 起同一次 CAS 也补名字,原名 `backfillPlayerClass`)
   把账号角色记录里的职业补进 `PlayerAllData.uint32_pb_component.class`,scene 加载后 `ResolveClassRow` / `AutoAllocate` /
   `FindAllocRatio` 按真实职业取行,破军全投力量拿 +30%。账号记录里职业本身为 0 的老号不猜测职业,仍走 `class_id=0` 兜底档。
   **尚未实测验证**(随本轮其它改动一起待 Codex 冒烟)。

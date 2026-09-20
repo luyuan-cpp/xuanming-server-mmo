@@ -196,11 +196,17 @@ func main() {
 	}
 	// 帮会按 zone 隔离:客户端请求的 zone 取 data_service 的玩家归属映射(logic/home_zone.go)。
 	// 没配 DataServiceRpc 时保持 nil 接口:内部调用照常,客户端请求一律按服务不可用拒绝。
+	//
+	// 成员 / 帮主展示名走同一个 data_service 客户端(logic/player_name_resolver.go,B3b)。
+	// 同样保持 nil 接口:没配 DataServiceRpc 时名字一律留空、不 panic。两者语义不同 ——
+	// 归属区查不到要拒绝请求(fail-closed),名字取不到只是少显示几个字(fail-open)。
 	var homeZones logic.HomeZoneLookup
+	var playerNames logic.PlayerNameResolver
 	if svcCtx.DataServiceClient != nil {
 		homeZones = logic.NewDataServiceHomeZone(svcCtx.DataServiceClient, logic.DefaultHomeZoneLookupTimeout)
+		playerNames = logic.NewDataServicePlayerNames(svcCtx.DataServiceClient, logic.DefaultPlayerNameLookupTimeout)
 	} else {
-		logx.Error("Guild: DataServiceRpc 未配置,无法判定玩家归属 zone,所有客户端帮会请求将被拒绝")
+		logx.Error("Guild: DataServiceRpc 未配置,无法判定玩家归属 zone,所有客户端帮会请求将被拒绝;成员与帮主名字一律为空")
 	}
 	// 推送出口与"申请推送冷却"在这里一次装配(设计 §13.7 / §10.1)。
 	//
@@ -210,9 +216,12 @@ func main() {
 	//
 	// TryMarkApplyPush 是 Redis SetNX 冷却键,挡的是"申请 → 撤回 → 申请"对审批人的刷屏;
 	// 不注入 = 总是放行,只有单测才会走那条默认。
+	//
+	// WithPlayerNames 收到 nil 接口时什么都不做(90-consistency.md Y-02:依赖只经函数式 Option 一次装配)。
 	guildLogic := logic.NewGuildLogic(repo, guildIDs, onlineResolver, mergeFence, homeZones,
 		logic.WithNotifier(logic.NewGuildNotifier(svcCtx.KafkaWriter, svcCtx.GateCommandBuilder, svcCtx.PlayerLocatorRedisClient)),
-		logic.WithApplyPushGate(repo.TryMarkApplyPush))
+		logic.WithApplyPushGate(repo.TryMarkApplyPush),
+		logic.WithPlayerNames(playerNames))
 
 	// Start gRPC server
 	s := zrpc.MustNewServer(config.AppConfig.RpcServerConf, func(grpcServer *grpc.Server) {

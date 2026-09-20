@@ -127,6 +127,9 @@ type HomeZoneConf struct {
 	// RoleListLookupTimeout 是 Login 角色列表那一次 BatchGetPlayerHomeZone 的预算;
 	// 0 = homezone.DefaultRoleListLookupTimeout(500ms)。登录链路上串行的一跳,
 	// 超时按失败处理(保留建角 zone),宁可偶尔给旧 zone 也不拖慢所有登录。
+	// 同一个值也用于角色列表缺名回源 BatchGetPlayerName(loginlogic.go fillMissingRoleNames):
+	// 两次查询串行、各自计时(不是共享一份预算)。全部有名的账号仍只有一跳;
+	// 缺名账号(B3a 之前建的老角色)最坏 2×该值,调大时按双倍估算登录延迟。
 	RoleListLookupTimeout time.Duration `json:"RoleListLookupTimeout,optional"`
 	// EnterLookupTimeout 是 EnterGame 那一次 GetPlayerHomeZone 的预算;
 	// 0 = homezone.DefaultEnterLookupTimeout(1.5s)。EnterGame 链路本身是异步的

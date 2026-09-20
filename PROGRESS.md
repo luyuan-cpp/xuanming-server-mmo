@@ -5457,3 +5457,19 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
 - **客户端摸底**(用户授权只读 `../mmorpg-client/`,未授权修改):Unity 的生成桩从未被接线(`HandlerRegistry.Register` 全仓零调用,接上反而会静默盖掉手写的 `RedirectToGate` 处理器),friend 的推送接线要手写;客户端没有红点系统 / 全局 tip 表 / UIManager / 登录后首拉的先例;三个拉取时机里"登录后"与"跨区落地"挂同一个钩子 `GameClient.OnSceneEntered`。
 - **接手前需要用户拍板的三件事**:① 机器 B 装 Python 3.12 + openpyxl;② `Tip.xlsx` 里 `FriendBlocked` 的文案「对方已将你拉黑」与 `constants.go` "不泄露拉黑方向"的设计意图矛盾,改哪一边;③ proto-gen 这批带不带客户端(带 = 同批把 team / jubaozhai / friend 三个 proto 补进客户端 `gen_proto.ps1`,需要客户端修改授权;不带 = 用 `enable_unity_client: false` 的配置副本跑)。另需与帮会二期 B3a 那条线确认 data_service 三个 rpc、`RoleNameRule` 新表与三个 login tip 码可以随这次 regen / 导表一起发号。
 - **未验证**:全部。friend 三批代码仍然从未编译、从未运行;本条只让交接文档与现行代码对齐。
+
+## 2026-09-20 帮会二期 B3a-2 + B3b 服务端:建角带名字全链 + 帮会成员显示名(Claude,未编译未导表)
+
+帮会二期会话(机器 A)周额度耗尽,本条由机器 B(`D:\luyuan\wuxingqitan\mmorpg`)上的会话接手续做。**全部未编译、未跑测试、未跑导表器与 proto-gen**;交接入口与 14 步 Codex 验证序列在 `docs/design/guild-phase2/92-handoff.md` §8。
+
+- **B3a-2(手改 24,设计 23 + `go/login/login.go`)**:login 建角改为 mint → `ReservePlayerName` → 登记 home zone → **Lua 围栏写账号 blob**(KEYS 带建角锁,锁丢了不写);空名由服务端按 `RoleNameRule` 生成;首次入场 `backfillPlayerIdentity`(原 `backfillPlayerClass`)同一次 CAS 补职业与名字;角色列表缺名回源 `BatchGetPlayerName`;scene 加载 / 存回 `PlayerProfileComp`,战斗快照取名;Java 网关解析 `AccountSimplePlayer.name = 5`;`tools/merge_zone` 抽出纯函数 `buildCopyColumns`(列集合不等 fail-closed);`stress_summarize.ps1` 新增 "CreatePlayer stages" 段;robot 建角后打印名字。
+- **B3b 服务端(手改 7)**:guild 经 `logic.WithPlayerNames`(90 清单 Y-02)批量取名,成员 / 帮主 / 榜单 / 两个申请视图(Y-07)各一次批量查询,fail-open;robot `member-names` 步骤。**B3b 客户端 12 个文件未做**。
+- **做法**:B3a-2 四个互不相交的文件域并行实现 → 每域对抗评审 → 回修 → 第二轮评审 → 跨域互扫;两轮共 13 条发现(2 major / 11 minor)逐条核实后处理。B3b 三段式,1 条 minor。
+- **评审挡下的两条真问题**:
+  - **围栏脚本回 -1 不等于"blob 确定没写"**。设计原文在 -1 分支直接释放名字;但 login 的 Redis 客户端没设 `MaxRetries`(go-redis 默认 3),读超时的 EVALSHA 会被原样重发——第 1 次已写成功、回包超时,重发到达时锁过期才得到 -1。照原文做的结果是**角色已带名落盘、名字却被释放、别人可再占同名**,零报错。现在 -1 与脚本报错共用三态回读:含 → 成功;不含 → 释放;读不出 → 保留登记 + 记孤儿。设计 `03-names.md §3.11` 已补修正。
+  - **`name_orphan` 列健康压测下恒为 n/a**,而验收口径是 orphan=0,分不清"没发生"与"指标没接上"(无 label 的 CounterVec 首次 Inc 前不输出序列)。login 起服在 `zrpc.MustNewServer` **之后**预置为 0(`PrimeCreatePlayerMetrics`;更早写会被 go-zero 的 `prometheus.Enabled()` 开关丢弃),脚本保留兜底。同一处也修掉了 `increase(...) > 0` 告警漏掉**第一次**孤儿的问题。
+- **本会话裁定的设计未定项**:`ReservePlayerName` 回了 login 不认识的 result 码 → 拒绝建角并**补偿释放一次**(条件删除 + 已放弃的新 id,不会误伤;不释放则可能留下无日志无计数的静默孤儿)。不同意就回退 `tryReserveName` 的 default 分支。
+- **两个阻塞(需用户处理)**:① 客户端远端 `luhailong-cpp/mmorpg-client` 的 main 仍在 `d2b165a`,**B2c / B4a-client 不在该远端任何分支上**(机器 A 领先约 542MB、上行慢、整包推送被挂断)——落地之前不在本机旧基线上写任何客户端批次;② **本机没有 Python**,导表器与 B5a / B6a-srv 的 xlsx 改动做不了。
+- **留下的欠账**(详见 92-handoff §8.1):login 的 Redis 客户端是裸默认值,`login.yaml` 里三个 Redis 超时是**死配置**、`AccountLockTTL: 20` 不是硬上界(另立任务评估,影响面是整个 login);`team-system.md §G.2` 与 `server-merge-gap-fixes.md:23` 仍写"没有昵称"(前者当时有他人在途改动,未动);self-heal 恢复的角色记录仍丢 class/gender/zone;guild `OnlineStatusResolver` 无独立超时(B3b 之前就存在,已单独挂任务)。
+- **gofmt 存量基线**:`clientplayerlogin/` 下 4 个文件、`tools/merge_zone/audit_resources.go`、`robot/login.go` 在 HEAD 就未格式化,验证时以"不超出基线"为通过标准,不要顺手整文件格式化。
+- **未验证**:全部。在 Codex 按 §8.3 跑出结果之前,不得声称编译通过或测试通过。

@@ -185,6 +185,102 @@ func observeStage(h metric.HistogramVec, labels ...string) func() {
 	}
 }
 
+// ── CreatePlayer(建角)指标 ─────────────────────────────────────────────
+//
+// 与上面 EnterGame 那批同一套库(go-zero core/metric)、同一个 /metrics 端点。
+// 已核实会被采集:core/metric 的每次更新都先过 prometheus.Enabled() 这个全局开关,
+// 而 login 走 zrpc.MustNewServer → ServiceConf.SetUp → prometheus.StartAgent,
+// login.yaml 配了 Prometheus.Host 就会把开关打开(data_service 当初踩坑是因为它
+// 从不走这条启动路径)。代价是单测里开关默认是关的,要读数必须先
+// prometheus.Enable(),见 createplayer_name_test.go 的 createPlayerCounterValue。
+//
+// 全称 `login_create_player_*`(不沿用上面的 `entergame` 命名空间:这是另一条链)。
+// **任何 label 都不许放 player_id / account / 名字**(高基数);定位具体玩家靠日志。
+const (
+	createPlayerMetricNamespace = "login"
+	createPlayerMetricSubsystem = "create_player"
+)
+
+// 建角各阶段的耗时桶。上限只到 5s:mint / name / register 三个 gRPC 阶段各有 ctx 截止时间
+// 管得住的 3s 预算(name 在登记结果未知时还要加一次 ≤1s 的立即补偿释放),到不了 5s 以上。
+// account_write 是例外:login 的 Redis 客户端没开 ContextTimeoutEnabled、MaxRetries 走默认值 3,
+// 3s 只是**单次** socket 读超时 —— Redis 卡住时一条 EVALSHA 会被重发到约 12.5s,之后的回读
+// 单次还能再等约 3s(它那 1s 的 ctx 预算只掐掉重发)。这些观测都落进 +Inf 桶,看个数就够了:
+// account_write 的 +Inf 桶有数,本身就是「建角锁 TTL 可能已被击穿、正确性在靠围栏兜」的信号。
+var createPlayerStageBuckets = []float64{
+	0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5,
+}
+
+// createPlayerStageSeconds 的 stage 取值。建角持着账号锁串行跑这四步,锁 TTL 是按它们的
+// 耗时之和估的(login.yaml Locker.AccountLockTTL;不是硬上界,理由见那边的注释),
+// 哪一步拖长了要能直接看出来。
+const (
+	createStageMint         = "mint"          // 发号(号段 / snowflake)
+	createStageName         = "name"          // 名字登记(含同名重试、生成名换名重试)
+	createStageRegister     = "register"      // player:zone 归属登记
+	createStageAccountWrite = "account_write" // 围栏写账号 blob(含写未确认后的回读)
+)
+
+// createPlayerNameReleaseTotal 的 label 取值。
+const (
+	nameReleasePhaseImmediate = "immediate" // 建角失败当场发的那一次补偿释放
+	nameReleasePhaseDelayed   = "delayed"   // 登记结果未知时,延迟再发的第二次
+	nameReleaseResultOK       = "ok"
+	nameReleaseResultError    = "error"
+)
+
+var (
+	createPlayerStageSeconds = metric.NewHistogramVec(&metric.HistogramVecOpts{
+		Namespace: createPlayerMetricNamespace,
+		Subsystem: createPlayerMetricSubsystem,
+		Name:      "stage_seconds",
+		Help: "CreatePlayer per-stage latency while holding the account lock. " +
+			"Stage: mint | name | register | account_write.",
+		Labels:  []string{"stage"},
+		Buckets: createPlayerStageBuckets,
+	})
+
+	// 每一次补偿释放 RPC 记一条。稳态应为 0:它只在「名字已登记、后续步骤失败」时才发。
+	createPlayerNameReleaseTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+		Namespace: createPlayerMetricNamespace,
+		Subsystem: createPlayerMetricSubsystem,
+		Name:      "name_release_total",
+		Help: "Compensating ReleasePlayerName calls issued by CreatePlayer. " +
+			"Phase: immediate | delayed. Result: ok | error.",
+		Labels: []string{"phase", "result"},
+	})
+
+	// 孤儿 = 名字留在登记表里、却没有对应角色。每 +1 都对应一条带 player_id 与名字的
+	// ERROR 日志(`[player-name] orphan reservation ...`),运维据此带 x-admin-token 手工释放。
+	// 计数口径(设计 §3.11):登记结果未知的那条路径只在**延迟**那次释放失败时 +1
+	// (立即那次失败还有第二次兜底);其余路径在立即那次失败时 +1;写账号 blob 未确认
+	// (脚本回 -1 / 报错)且回读也失败、主动保留登记时 +1。
+	createPlayerNameOrphanTotal = metric.NewCounterVec(&metric.CounterVecOpts{
+		Namespace: createPlayerMetricNamespace,
+		Subsystem: createPlayerMetricSubsystem,
+		Name:      "name_orphan_total",
+		Help: "Name reservations possibly left without a character (needs manual " +
+			"ReleasePlayerName with admin token; see the matching ERROR log).",
+		Labels: []string{},
+	})
+)
+
+// PrimeCreatePlayerMetrics 把孤儿计数器预置成 0,让这条序列从起服起就存在。
+//
+// 为什么需要:无 label 的 CounterVec 在第一次 Inc 之前根本不输出序列(是 absent,不是 0)。
+// 孤儿稳态恒为 0,于是 `increase(login_create_player_name_orphan_total[..]) > 0` 这种告警
+// 恰好漏掉**第一次**孤儿 —— 序列从无到 1,窗口里只有一个样本,increase 算不出增量。
+//
+// 调用时机有讲究:go-zero core/metric 的每次写入都要过 prometheus.Enabled() 全局开关,
+// 开关由 zrpc.MustNewServer → ServiceConf.SetUp → prometheus.StartAgent 打开。
+// 所以必须在 MustNewServer **之后**调(login.go startServer);放进 init() 或包变量初始化里
+// 会被开关直接丢弃,等于没写。Prometheus.Host 留空的环境里本函数是空操作,与其它指标同口径。
+//
+// 只预置孤儿这一条:name_release_total 带 label、且不用于"出现即告警",不值得为它预铺四条序列。
+func PrimeCreatePlayerMetrics() {
+	createPlayerNameOrphanTotal.Add(0)
+}
+
 // decisionLabel converts a sessionmanager.EnterGameDecision into a stable
 // string for the persist-stage histogram label. Kept as a small helper
 // so the entergamelogic.go call site stays readable.

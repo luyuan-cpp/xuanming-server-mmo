@@ -18,6 +18,10 @@
       [dataloader per-stage avg at each prom-snapshot point]
           when | cache_check{hit} | sub_cache_check | kafka_send | callback_wait{ok} | callback_wait{fail}
 
+      [CreatePlayer stages:每个快照点的建角分阶段均值 + 名字孤儿计数;缺指标打印 n/a,
+       name_orphan 在「有 stage 序列但无孤儿序列」时打印 0(规则见该段注释)]
+          when | mint | name | register | account_write | name_orphan
+
       [optional: Kafka consumer lag (final)]
           partition | current | log_end | lag
 
@@ -114,6 +118,24 @@ function Get-Metric {
     param([hashtable]$M, [string]$Key)
     if ($M.ContainsKey($Key)) { return [double]$M[$Key] }
     return 0.0
+}
+
+# 按正则把一组序列求和(跨全部 label 组合)。一条都没匹配到返回 $null ——
+# 调用方据此区分「指标不存在」(打印 n/a)与「存在但为 0」。Get-Metric 把两者
+# 都折成 0,对后加的指标不够用:旧版本服务的快照里没有这些序列,显示成 0 会被
+# 读成「测过了,是 0」。
+function Get-MetricSumOrNull {
+    param([hashtable]$M, [string]$Pattern)
+    $sum = 0.0
+    $found = $false
+    foreach ($k in $M.Keys) {
+        if ($k -match $Pattern) {
+            $sum += [double]$M[$k]
+            $found = $true
+        }
+    }
+    if ($found) { return $sum }
+    return $null
 }
 
 # ----- 1. robot stats ---------------------------------------------------
@@ -277,6 +299,56 @@ if ($snapshots.Count -eq 0) {
         $name = $snap.BaseName
         $line = "  {0,-30} {1,-12} {2,-10} {3,-11} {4,-11} {5,-12} {6}" -f `
             $name, $cacheAvg, $subAvg, $dispatcherAvg, $kafkaAvg, $cbOkAvg, $cbFailAvg
+        Write-Host $line
+    }
+
+    # 建角分阶段耗时(帮会二期 B3a-2,docs/design/guild-phase2/03-names.md §3.11 / §3.20)。
+    # 指标在 login(:9101)上,所以与上面两段共用 login 快照。stage 的四个取值由
+    # 设计 §3.11 钉死,落码在 go/login/internal/logic/clientplayerlogin/metrics.go
+    # —— 那边改名这里必须跟着改,否则整列静默变成 n/a:
+    #   mint = 发 player_id,name = 名字占用(ReservePlayerName,含重试),
+    #   register = RegisterPlayerZone,account_write = 围栏写账号 blob。
+    # 验收口径(§3.20)看 name 段均值与 name_orphan(建角失败后名字仍被占住的次数,应为 0)。
+    # 各 stage 列缺指标一律打印 n/a,不折成 0:B3a-2 之前的 login 没有这些序列;histogram 的
+    # 某个 stage 在第一次观测前也不会出现 —— 两种都不是「测到 0」。
+    #
+    # name_orphan 列:正常情况下直接读序列。login 起服时由 PrimeCreatePlayerMetrics
+    # (metrics.go;login.go startServer 在 zrpc.MustNewServer 之后调用)把该计数器预置成 0,
+    # 所以新版 login 且采集已开的快照里这条序列恒存在,健康压测读到的就是 0。
+    #
+    # 下面的 $stageSeen 分支只是兜底,覆盖「预置被移除 / 调用时机被挪到 MustNewServer 之前
+    # 而被 prometheus.Enabled() 开关丢弃」的情形:无 label 的 CounterVec 在第一次写入前
+    # 连 HELP/TYPE 都不输出,那时照抄上面的规则会让验收口径「orphan=0」永远读成 n/a。
+    # 规则:序列缺失、但同一快照里存在任一 login_create_player_stage_seconds_count 序列
+    # → 打印 0;两者都缺 → 打印 n/a。依据(都在 login 的 metrics.go / createplayerlogic.go):
+    #   1. 直方图与该计数器在同一个 var 块注册、同受 prometheus.Enabled() 开关控制,
+    #      直方图有序列即证明「新版 login + 采集已开」;
+    #   2. 每条孤儿路径都在 mint 段观测之后才可达,不存在「出过孤儿却没有直方图序列」。
+    # 该例外已记入设计 03-names.md §3.18 的 B3a-2 工具清单(stress_summarize.ps1 那一条)。
+    Write-Host ""
+    Write-Host "=== CreatePlayer stages (login_create_player_stage_seconds) ============" -ForegroundColor Yellow
+    Write-Host ""
+    "  snapshot                       mint       name       register   account_write  name_orphan" | Write-Host
+    "  --------                       ----       ----       --------   -------------  -----------" | Write-Host
+
+    $createStages = @('mint','name','register','account_write')
+    foreach ($snap in $snapshots) {
+        $m = Read-PromSnapshot $snap.FullName
+        $cells = @()
+        foreach ($st in $createStages) {
+            $sumV = Get-MetricSumOrNull $m "^login_create_player_stage_seconds_sum\{.*stage=`"$st`""
+            $cntV = Get-MetricSumOrNull $m "^login_create_player_stage_seconds_count\{.*stage=`"$st`""
+            $cell = if ($null -eq $sumV -or $null -eq $cntV) { "n/a" } else { Format-Avg $sumV $cntV }
+            $cells += $cell
+        }
+
+        $orphanV = Get-MetricSumOrNull $m '^login_create_player_name_orphan_total(\{|$)'
+        $stageSeen = $null -ne (Get-MetricSumOrNull $m '^login_create_player_stage_seconds_count\{')
+        $orphanCell = if ($null -ne $orphanV) { "{0:N0}" -f $orphanV } elseif ($stageSeen) { "0" } else { "n/a" }
+
+        $name = $snap.BaseName
+        $line = "  {0,-30} {1,-10} {2,-10} {3,-10} {4,-14} {5}" -f `
+            $name, $cells[0], $cells[1], $cells[2], $cells[3], $orphanCell
         Write-Host $line
     }
 }

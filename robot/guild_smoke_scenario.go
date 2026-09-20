@@ -12,6 +12,7 @@ package main
 //	   本区榜里没有它;申请入帮 → 不存在;用同一个帮名建帮 → kGuildNameTaken(帮名全局唯一);
 //	5. B 未入帮时改公告 → kGuildNoPermission;
 //	6. B 申请入帮 → 受理,B 与 A 各自列得到这条申请;A 审批通过 → 响应快照里 B 在册,B 的 GetPlayerGuild 看到自己是成员;
+//	   member-names:这份快照里每个成员的 name 与帮会的 leader_name 都非空(名字来自 data_service 名字注册表);
 //	7. A 改公告 → B 读到;700 字节公告 → kGuildAnnouncementTooLong(guild 侧拒绝,整包仍 < gate 1KB);
 //	8. 身份伪造:B 发 LeaveGuild 但请求体 player_id 填 A → 服务端按会话身份让 B 退出,A 仍是帮主;
 //	9. 内部方法:A 发 UpdateGuildScore → 收到 kServiceUnavailable 信封拒绝,随后查榜成功且积分仍是 0;
@@ -391,6 +392,26 @@ func RunGuildSmoke(cfg *config.Config) {
 	if role, ok := guildSmokeRoleOf(bGuild, b.gc.PlayerId); bGuild.GetGuildId() != guildID || !ok || role != guildSmokeRoleMember {
 		fail("join-verify", "B 的帮会=%d role=%d(在册=%v),期望在帮会 %d 且为成员", bGuild.GetGuildId(), role, ok, guildID)
 	}
+	// member-names(B3b,设计 docs/design/guild-phase2/03-names.md §3.21):成员名与帮主名由 guild 向
+	// data_service 批量取,是展示字段、服务端 fail-open —— 取不到时 RPC 照样成功、名字留空,
+	// 所以只有在这里断言"非空"才看得见取名链路断了。冒烟账号理应都是 B3a 之后建的角色、人人有名;
+	// 读到空名先按文案清账号重跑,仍然为空再查 guild 日志的 "player name lookup failed"
+	// 与指标 guild_player_name_lookup_failed_total(guild → data_service 不通)。
+	// 清理范围按 90-consistency.md Y-09 含 9211–9219(帮会各批冒烟登记的账号段):旧角色要清就一次清全。
+	memberNames := make([]string, 0, len(bGuild.GetMembers()))
+	for _, member := range bGuild.GetMembers() {
+		if member.GetName() == "" {
+			fail("member-names", "role %d has no name: legacy role created before B3a — DEL account:robot_9201/9202/9203 and account:robot_9211–9219 then rerun",
+				member.GetPlayerId())
+		}
+		memberNames = append(memberNames, fmt.Sprintf("%d=%s", member.GetPlayerId(), member.GetName()))
+	}
+	if bGuild.GetLeaderName() == "" {
+		fail("member-names", "leader role %d has no leader_name: legacy role created before B3a — DEL account:robot_9201/9202/9203 and account:robot_9211–9219 then rerun",
+			bGuild.GetLeaderId())
+	}
+	zap.L().Info("[guild-smoke] member-names: every member and the leader carry a display name",
+		zap.Strings("members", memberNames), zap.String("leader_name", bGuild.GetLeaderName()))
 	zap.L().Info("[guild-smoke] step 6: B applied and was approved", zap.Int("members", len(bGuild.GetMembers())))
 
 	// ---- 步骤 7:公告 ----

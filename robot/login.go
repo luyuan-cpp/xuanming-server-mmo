@@ -67,6 +67,7 @@ func loginAndEnter(gc *pkg.GameClient, password string, stats *metrics.Stats) er
 			stats.LoginFail()
 			return fmt.Errorf("create player: server error %v", cr.ErrorMessage)
 		}
+		logCreatedPlayerName(gc.Account, cr.Players)
 		lr.Players = cr.Players
 	}
 	if len(lr.Players) == 0 {
@@ -92,6 +93,26 @@ func loginAndEnter(gc *pkg.GameClient, password string, stats *metrics.Stats) er
 
 	gc.PlayerId = er.PlayerId
 	return nil
+}
+
+// logCreatedPlayerName 在建角成功后打印新角色的名字(docs/design/guild-phase2/03-names.md §3.17)。
+//
+// 机器人始终发空的 CreatePlayerRequest{},名字由服务端生成(「前缀 + 随机后缀」)。
+// 这里**只打 Debug、不断言**:名字为空不是机器人该判的失败 —— 名字注册表不可用时
+// 服务端会直接拒绝建角(fail-closed),根本走不到这里;压测与冒烟的通过标准也不因名字而变。
+// 留这条日志只为冒烟排障时能把 player_id 与 data_service 的 player_name 行对上。
+//
+// CreatePlayerResponse.players 是账号下的**全部**角色,新建的那个追加在末尾。
+func logCreatedPlayerName(account string, players []*login.AccountSimplePlayerWrapper) {
+	if len(players) == 0 {
+		return
+	}
+	created := players[len(players)-1].GetPlayer()
+	zap.L().Debug("player created",
+		zap.String("account", account),
+		zap.Uint64("player_id", created.GetPlayerId()),
+		zap.String("name", created.GetName()),
+	)
 }
 
 // sendAndRecv sends a request and blocks until the matching response arrives,
@@ -360,6 +381,7 @@ func loginAndEnterSaToken(gc *pkg.GameClient, saTokenAddr string, stats *metrics
 			stats.LoginFail()
 			return fmt.Errorf("create player: server error %v", cr.ErrorMessage)
 		}
+		logCreatedPlayerName(gc.Account, cr.Players)
 		lr.Players = cr.Players
 	}
 	if len(lr.Players) == 0 {
@@ -423,6 +445,7 @@ func loginAndEnterAccessToken(gc *pkg.GameClient, accessToken string, stats *met
 			stats.LoginFail()
 			return fmt.Errorf("create player: server error %v", cr.ErrorMessage)
 		}
+		logCreatedPlayerName(gc.Account, cr.Players)
 		lr.Players = cr.Players
 	}
 	if len(lr.Players) == 0 {

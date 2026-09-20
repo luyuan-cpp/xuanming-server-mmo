@@ -299,15 +299,14 @@ func runAuditEntry(p auditEntryParams) {
 //	ops into thinking the audit ran cleanly. Removed those auditors;
 //	only checks that exercise schema we *actually have* survived.
 //
-//	The Player-name conflict check survives in a different shape: it
-//	prints an explicit "not implemented" line so the operator knows
-//	to fall back to the manual procedure in
-//	docs/ops/merge-zone-runbook.md §4.4. The block-vs-info severity
-//	makes this visible at the bottom of every audit run rather than
-//	hiding under "info: schema doesn't expose zone_id".
+//	The Player-name conflict check survives in a different shape: a
+//	single info row stating the naming rule that applies to a merge.
+//	2026-09(帮会二期 B3a)起角色名由 data_service 全局库 player_name
+//	保证全服唯一,这一行写的是「合服无冲突、不改名」,详见
+//	auditPlayerNameConflicts 的注释与 docs/ops/merge-zone-runbook.md §7.1。
 func runAuditMode(ctx context.Context, cfg auditConfig) []ResourceAudit {
 	auditors := []func(context.Context, auditConfig) ResourceAudit{
-		auditPlayerNameConflicts, // explicit "not applicable" notice — see below
+		auditPlayerNameConflicts, // 名字全服唯一(data_service player_name),合服无冲突 —— 只出一条 info 说明行
 		auditFriend,              // mmorpg_friend.friend:keyed by player_id;survives merge automatically
 		auditFriendRequest,       // mmorpg_friend.friend_request:same
 		auditGuildMembers,        // global guild_member table; surfaces volume + zone-cross hints
@@ -390,11 +389,12 @@ func printAuditReport(results []ResourceAudit) (blockCount, warnCount int) {
 // optional table (e.g. chat_history not deployed yet) should not break
 // the merge gate.
 
-// auditPlayerNameConflicts — explicit "not applicable" notice (was a
-// silent-failing P0-G check until 2026-05-23, then a "not implemented"
-// notice. The 2026-05-23-pm reality check went one layer deeper).
+// auditPlayerNameConflicts —— 角色名口径的说明行:名字全服唯一,合服无冲突(2026-09 起,
+// 见本注释末尾)。此前它依次是:静默失败的 P0-G 检查(到 2026-05-23)→「未实现」提示 →
+// 「不适用」提示。
 //
-// History (kept as a cautionary comment for future engineers):
+// History (kept as a cautionary comment for future engineers; describes the
+// codebase as of 2026-05-23, BEFORE role names existed):
 //
 //	The earliest shape ran SQL against `player.name` / `player.zone_id`.
 //	Both columns are entirely fictional in this codebase — the real
@@ -428,19 +428,31 @@ func printAuditReport(results []ResourceAudit) (blockCount, warnCount int) {
 //	so operators don't blindly follow a manual procedure for a
 //	problem they don't have.
 //
-// What this auditor does today:
+// 2026-09 帮会二期 B3a(docs/design/guild-phase2/03-names.md §3.16)—— 上面那段
+// 「项目没有昵称」的结论自此作废,保留只为说明这一行的来历:
 //
-//	Returns an info-severity row that says "not applicable — no
-//	nickname surface in this codebase". Severity is intentionally
-//	info, not block: blocking would force ops to skip a real audit
-//	gate to merge, which is counterproductive when the gate guards
-//	nothing.
+//	角色名已经存在,但它的唯一性**不按 zone**:真源是 data_service 全局库的
+//	player_name 表(uk_player_name 全服唯一),login 建角时先 ReservePlayerName
+//	占名再建角。两个 zone 里不可能各有一个「剑圣」,合服也就没有重名可撞。
+//	注册表在全局库,合服不搬不改。两份名字副本各走各的路:
+//	player_database.profile_component 里的那份在 zone 库,随玩家行由 copyPlayerRows
+//	带走;账号 blob(login 共享 Redis 的 account:<acct>)按账号存放、不分 zone,
+//	本工具不读不写,其中的 AccountSimplePlayer.name 原样保留。
+//
+// 这个 auditor 现在做什么:
+//
+//	返回一条 info 行,写明「名字全服唯一,合服无冲突、不改名」。不查库:
+//	唯一性由 data_service 的唯一键在写入时保证,不是合服期能靠扫描发现的问题;
+//	这里查一遍只会制造第二份「名字是否唯一」的判据。级别刻意是 info 而不是
+//	block —— 一条守不住任何东西的 block 只会逼运维学会跳过门禁。
+//	force_rename 管线(force_rename_required + player_force_rename:{id})
+//	保持未启用、原样保留,不在本批改动范围内。
 func auditPlayerNameConflicts(ctx context.Context, cfg auditConfig) ResourceAudit {
 	return ResourceAudit{
-		Name:        "player.name (n/a)",
-		UniqueScope: "n/a",
+		Name:        "player.name (global)",
+		UniqueScope: "global",
 		Severity:    "info",
-		Notes:       "NOT APPLICABLE — project has no player nickname field today (CreatePlayer is empty; user.display_name is unused). force_rename plumbing is pre-wired for future enable. See merge-zone-runbook.md §4.4.",
+		Notes:       "名字在 data_service 全局库 player_name 全服唯一,合服无冲突、不改名;force_rename 管线保持未启用。",
 	}
 }
 

@@ -7,6 +7,7 @@
 #include "modules/bag/comp/player_bags_comp.h"
 #include "modules/mission/comp/mission_comp.h"
 #include "proto/common/component/actor_comp.pb.h"
+#include "proto/common/component/player_comp.pb.h"  // PlayerProfileComp
 #include "proto/common/event/mission_event.pb.h"
 #include "services/scene/player/system/player_data_loader.h"
 #include "table/code/attributedimension_table.h"
@@ -275,6 +276,60 @@ TEST_F(PlayerFeaturePersistenceTest, NewDatabaseAndLegacyTopLevelSourcesAreChose
     EXPECT_TRUE(main->IsClaimable(12));
     EXPECT_EQ(5u, main->GetMissionList().missions().at(7).progress(0));
     ExpectNoMissionEvents();
+}
+
+// 角色名副本(player_database.profile_component):真源是 data_service 全局库 player_name,
+// 由 login 首次入场补进这条记录;scene 只读、只原样存回,所以用例里的名字一律直接写在记录上,
+// 不经任何 scene 侧写路径。
+TEST_F(PlayerFeaturePersistenceTest, ProfileNameRoundTripsThroughDatabaseRecord)
+{
+    const std::string kName = "云中君";
+    PlayerAllData cold;
+    PlayerAllDataMessageFieldsMarshal(StockedPlayer(), cold);
+    cold.mutable_player_database_data()->mutable_profile_component()->set_name(kName);
+
+    const auto restored = NewPlayer();
+    PlayerAllDataMessageFieldsUnMarshal(restored, cold);
+    const auto* profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(restored);
+    ASSERT_NE(nullptr, profile);
+    EXPECT_EQ(kName, profile->name());
+
+    PlayerAllData saved;
+    PlayerAllDataMessageFieldsMarshal(restored, saved);
+    const auto& database = saved.player_database_data();
+    ASSERT_TRUE(database.has_profile_component());
+    EXPECT_EQ(kName, database.profile_component().name());
+
+    // 落库走的是 player_database 的序列化字节,名字必须撑得过一次编解码。
+    std::string bytes;
+    ASSERT_TRUE(database.SerializeToString(&bytes));
+    player_database reparsed;
+    ASSERT_TRUE(reparsed.ParseFromString(bytes));
+    ASSERT_TRUE(reparsed.has_profile_component());
+    EXPECT_EQ(kName, reparsed.profile_component().name());
+}
+
+TEST_F(PlayerFeaturePersistenceTest, MissingProfileComponentLoadsEmptyName)
+{
+    // 早于名字功能的存量记录 / self-heal 恢复出的空记录都没有字段 15。
+    PlayerAllData legacy;
+    PlayerAllDataMessageFieldsMarshal(StockedPlayer(), legacy);
+    legacy.mutable_player_database_data()->clear_profile_component();
+    PlayerAllData parsed;
+    ASSERT_TRUE(parsed.ParseFromString(legacy.SerializeAsString()));
+    ASSERT_FALSE(parsed.player_database_data().has_profile_component());
+
+    const auto restored = NewPlayer();
+    PlayerAllDataMessageFieldsUnMarshal(restored, parsed);
+    // 组件必须存在(战斗快照与存盘都按"有组件、名字为空"处理),而不是缺组件。
+    const auto* profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(restored);
+    ASSERT_NE(nullptr, profile);
+    EXPECT_TRUE(profile->name().empty());
+
+    // 空名存回不崩,且不会凭空长出名字 —— 补齐是 login 的事,scene 不写。
+    PlayerAllData resaved;
+    PlayerAllDataMessageFieldsMarshal(restored, resaved);
+    EXPECT_TRUE(resaved.player_database_data().profile_component().name().empty());
 }
 
 } // namespace

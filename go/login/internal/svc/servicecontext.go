@@ -18,6 +18,7 @@ import (
 	"login/internal/logic/pkg/homezone"
 	"login/internal/logic/pkg/loginqueue"
 	"login/internal/logic/pkg/node"
+	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/token"
 	login_proto "proto/common/base"
 	dspb "proto/data_service"
@@ -34,8 +35,8 @@ type ServiceContext struct {
 	// SnowFlake 是 PlayerId 发号器。包了一层 fence 闸(见 player_id_gen.go):
 	// 失去 worker id 所有权后必须一个号都发不出去,不能靠"停服"兜底。
 	SnowFlake *PlayerIDGen
-	// DataServiceClient 是 data_service 的 gRPC 客户端:PlayerId 号段和 HomeZone
-	// 映射查询共用。IdSegment.Enabled=false 且 DataServiceRpc 没配目标时为 nil。
+	// DataServiceClient 是 data_service 的 gRPC 客户端:PlayerId 号段、HomeZone
+	// 映射查询、角色名登记(PlayerNames)共用。IdSegment.Enabled=false 且 DataServiceRpc 没配目标时为 nil。
 	DataServiceClient dspb.DataServiceClient
 	// PlayerIDSegment 是 PlayerId 号段客户端(shared/idsegment,biz_tag="player");
 	// IdSegment.Enabled=false 时为 nil。
@@ -46,7 +47,12 @@ type ServiceContext struct {
 	// HomeZone 查 data_service 的 player:zone 映射(合服后的真归属)。Login 用它
 	// 修正角色列表的 zone_id,EnterGame 用它决定 EnterScene.ZoneId。永不为 nil;
 	// 没配 DataServiceRpc 时内部 Client 为 nil,所有查询按「不可用→保留存量」处理。
-	HomeZone            *homezone.Resolver
+	HomeZone *homezone.Resolver
+	// PlayerNames 是 data_service 角色名登记表(全服唯一)的客户端,与 HomeZone 复用同一条
+	// DataServiceClient 连接。永不为 nil;没配 DataServiceRpc 时内部客户端为 nil,所有方法
+	// 返回 playernamereg.ErrUnavailable —— CreatePlayer 据此拒绝建角(登记是唯一性的提交点,
+	// fail-closed),角色列表 / EnterGame 的名字回源则按「查不到」放行(展示数据,fail-open)。
+	PlayerNames         *playernamereg.Client
 	NodeInfo            login_proto.NodeInfo
 	KafkaClient         *kafka.KeyOrderedKafkaProducer
 	ExpandMonitor       *kafka.ExpandMonitor
@@ -192,7 +198,29 @@ func NewServiceContext() *ServiceContext {
 	sc.initLoginQueue()
 	sc.initPlayerIDMinter()
 	sc.initHomeZoneResolver() // 依赖 initPlayerIDMinter 可能已拨好的 DataServiceClient
+	sc.initPlayerNames()      // 依赖 initHomeZoneResolver 兜底拨好的 DataServiceClient
 	return sc
+}
+
+// initPlayerNames 给 CreatePlayer / Login / EnterGame 装上角色名登记表的客户端。
+//
+// 必须在 initHomeZoneResolver 之后调用:号段关着(IdSegment.Enabled=false)时是它兜底拨的
+// DataServiceClient,这里只复用同一条连接、不再拨号。DataServiceClient 为 nil 的后果
+// (建角整体被拒)已由 initHomeZoneResolver 按 ERROR 报过,这里不重复刷。
+//
+// 顺带在启动期把 RoleNameRule 配表自检一次:规则行缺失 / 不合法时,每一次建角都会被
+// fail-closed 拒绝(见 createplayerlogic.go 6a'),运维必须在起服日志里就看到,而不是等
+// 玩家来报「建不了角」。只报 ERROR 不 panic,与 home zone 接线缺失同一档:登录、进游戏
+// 不依赖这张表,不该因为它把整个 login 拉下来。
+func (s *ServiceContext) initPlayerNames() {
+	s.PlayerNames = playernamereg.New(s.DataServiceClient)
+	rules, spec, attempts, err := playernamereg.Rules()
+	if err != nil {
+		logx.Errorf("[player-name] RoleNameRule config invalid: CreatePlayer will be REJECTED until the table is fixed: %v", err)
+		return
+	}
+	logx.Infof("[player-name] registry client ready: name_len=[%d,%d] generated_prefix=%q suffix_len=%d max_generate_attempts=%d",
+		rules.MinRunes, rules.MaxRunes, spec.Prefix, spec.SuffixLen, attempts)
 }
 
 // GateTokenSigningSecret 返回签发 gate 连接票据用的主密钥。

@@ -157,6 +157,42 @@ Run `-backfill-home-zone -zone <S> -apply` first, then re-run this merge
 
 `-MergeAllowEmptySource` 只在「真的要合一个零玩家的空区」时才加,**不要用它绕过这条守卫**。
 
+### 4.4 角色名口径与 `profile_component` 列前置检查(帮会二期 B3a)
+
+> 本节编号沿用代码里早已存在的「runbook §4.4」引用(`proto/common/component/player_comp.proto`、
+> `tools/merge_zone/audit_resources.go`、`go/login/.../entergamelogic.go`),所以 §4 下没有 4.1–4.3。
+> 设计出处:`docs/design/guild-phase2/03-names.md` §3.15a / §3.16。
+
+**名字口径:全服唯一,合服不改名。**
+
+- 角色名的真源是 data_service **全局库**的 `player_name` 表(`uk_player_name` 唯一键,login 建角时先 `ReservePlayerName` 占名再建角)。唯一性**不按 zone**,两个 zone 里不可能各有一个同名角色,所以合服**没有重名可撞**,也**不存在改名步骤**。
+- 注册表在全局库,合服**不搬、不改、不释放**。名字的两份副本走的是两条不同的路,排障时别找错地方:
+  - `player_database.profile_component` 里的副本在 **zone 库**,随玩家行由步骤 1(`player_rows` 的 `copyPlayerRows`)带到目标库。
+  - 账号 blob 里的 `AccountSimplePlayer.name` **不在 zone 库**:它在 login 共享 Redis 的 `account:<acct>` 键里,按账号存放、不分 zone。合服工具**不读也不写**这个键(步骤 1 只搬带 `player_id` 列的表,缓存失效也只删 `<消息名>:<player_id>` 形状的键),其中的名字原样保留。
+- 审计里对应的那一行是 `player.name (global)`,级别 info(§7.1)。它不查库:唯一性由写入时的唯一键保证,不是合服期能靠扫描发现的问题。
+- `force_rename` 全链路(`force_rename_required` 字段 + `player_force_rename:{pid}` 键)**保持未启用**,合服工具不写它,原样保留。
+- 名字孤儿(建角失败后名字仍被占住,login 指标 `login_create_player_name_orphan_total` + ERROR 日志 `[player-name] orphan reservation`)与合服无关:由运维按日志里的 player_id + 名字,带 `x-admin-token` 调 data_service 的 `ReleasePlayerName` 释放,**不要**挂在合服、回档或摘角色的流程上——释放不可逆。
+
+**前置检查:源、目标两个 zone 库都必须已有 `profile_component` 列。**
+
+go/db 的启动期 DDL 默认关闭(`go/db/etc/db.yaml` 的 `AutoMigrateSchema: false`),新列只会由 `cmd/migrate` 加上,而迁移是**逐 zone 库分别跑**的。T-7 就查,不要留到窗口里:
+
+```powershell
+# 每个 zone 库各查一次,期望恰好 1 行
+#   SHOW COLUMNS FROM zone_<SRC>_db.player_database LIKE 'profile_component';
+#   SHOW COLUMNS FROM zone_<DST>_db.player_database LIKE 'profile_component';
+
+# 缺列就在 go/db 目录里对那个 zone 的配置跑迁移:先 plan 再 up
+cd go/db
+go run ./cmd/migrate -f <该 zone 的 db.yaml> -command plan   # 只允许出现 ALTER TABLE ... ADD COLUMN;出现其它语句先停下核对
+go run ./cmd/migrate -f <该 zone 的 db.yaml> -command up
+# 库名白名单拒绝时按 cmd/migrate/main.go 的注释设置 DB_ALLOWED_DATABASES
+```
+
+顺序是 migrate → 重启 go/db → 重启 scene。同一条检查也适用于之后每一个加在 `player_database` 上的新列(如资产通道的 `asset_op_ledger`)。
+
+**工具自己的兜底**:步骤 1 **按列名**拷贝(`INSERT INTO dst (列…) SELECT 列… FROM src`),不再依赖两库列序一致——列序不同照常拷贝,不会串列。两库**列名集合**不一致时,工具在**任何一张表开始写之前**以 `SCHEMA MISMATCH ... only_in_src=[...] only_in_dst=[...]` 中止,一行都不写;照报错跑齐两边的迁移后用原命令重跑即可。dry-run 同样会做这条检查,所以 §7.2 的彩排就能把它暴露出来。
+
 ---
 
 ## 5. 工具实际执行的步骤顺序
@@ -175,7 +211,7 @@ Run `-backfill-home-zone -zone <S> -apply` first, then re-run this merge
 | P6 | preflight | 源区玩家没有 `player:session:{id}` | 是 |
 | F | fence | 给 src 与 dst 各打 `merge:in_progress:{zone}`(§3) | 是 |
 | M | manifest | **在任何写之前**落盘清单(玩家 id / 公会 id / ZSET 成员+分数 / 表名) | 是 |
-| 1 | player_rows | `zone_src_db.<表> → zone_dst_db.<表>` 逐表拷贝 **+ 共享 DB 0 上的玩家缓存失效** | 是 |
+| 1 | player_rows | `zone_src_db.<表> → zone_dst_db.<表>` 逐表**按列名**拷贝 **+ 共享 DB 0 上的玩家缓存失效**。两库列名集合不一致 ⇒ 任何一张表开始写之前以 `SCHEMA MISMATCH` 中止(§4.4) | 是 |
 | 2 | player_blobs | 跨 data Redis 拷 `player:{id}:*`(仅 `-MergeMigratePlayerBlobs`)。拷到的玩家数 ≠ 清单数 ⇒ **中止** | 是 |
 | 3 | guild_mysql | `guild.zone_id` 改写 + `guild:v2` 缓存失效(INCR generation + DEL) | 是 |
 | 3b | trade_mysql | 聚宝斋 `mmorpg_trade.trade_listing.market_zone` 由 src 改写为 dst,**只改清单里的 listing_id**,每 1000 条一批;`seller_zone_at_listing` 不改。实写后复查源区计数,仍 > 0 ⇒ **中止且不标完成**(清单落盘后又有商品进源区)。**中止时围栏仍挂在本次 run_id 上**,续跑步骤照工具打印的指引:停上架入口 → 确认没有存活的 merge_zone 进程 → `GET` 核对 run_id → `DEL` 两把围栏 → 立即用原命令重跑(重跑会把新商品并入清单续搬);不 DEL 直接重跑会被围栏拒绝。库 / 表 / 列缺失在前置检查即拒绝,只有显式 `-MergeSkipTradeMySql` 才跳过 | 是 |
@@ -219,6 +255,7 @@ kubectl exec -n mmorpg-infra deploy/mysql -- \
 ### 6.3 回填 + 排期登记
 
 - **跑 §4 的回填**(两个 zone)。这一步放在 T-7 而不是窗口里,因为它可能扫出一批「有行没映射」的存量玩家,需要时间核对。
+- **做 §4.4 的列前置检查**(两个 zone 库都有 `profile_component`)。缺列要跑 go/db 迁移并重启 go/db、scene,同样不该留到窗口里。
 - 把窗口写进 `docs/ops/release-checklist.md`,确认不撞 release / hotfix,ops 主备与主程都在线。
 
 ---
@@ -252,7 +289,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit `
 | `kafka_db_task_queues` | `kafka:retry/processing/dead:queue:db_task_zone_{src}` 三个都空 | block |
 | `friend` / `friend_request` | 全局表(无 zone_id 列),按 player_id 索引,合服后自然存活;只看量级。**住独占库 `mmorpg_friend`**(D-14),库 / 表查不到算 INFRA(exit 2),不降级成 info | info |
 | `guild_member` | 全局表(无 zone_id 列),按 player_id 索引,合服后自然存活;只看量级 | info |
-| `player.name (n/a)` | 项目当前没有玩家昵称字段,重名冲突不存在(详见 §12) | info |
+| `player.name (global)` | 角色名在 data_service 全局库 `player_name` 全服唯一,合服无冲突、不改名;不查库,只出说明行(详见 §4.4) | info |
 
 > `online_presence` 是修好的那一条:旧实现在 **mapping Redis** 上查 `friend:online:{pid}`,恒查不到 ⇒ 恒「全部离线 ✅」;pipeline 错误还被吞掉。**一个从设计上就不可能返回 block 的 block 级门禁,比没有门禁更危险**——现在扫描失败一律 block(INFRA)。
 > 2026-09-18 又去掉了 `friend:online` 这个证据面本身:它在全仓**从来没有写者**,所以当年即便查对了 DB 也一样恒 0。现在只看 `player:session`(player_locator 在登录 / 断线时维护,是「这个玩家还连着」的权威来源),门禁强度不降反升。
@@ -546,7 +583,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge `
 | **`dev_tools.ps1` 不转发 `-kafka-group` / `-kafka-topic-generation`** | `TopicGeneration ≠ 1` 的环境里 P3 门禁查错 topic | 绕过 ps1,在 `tools/merge_zone/` 里直接 `go run . -kafka-topic-generation <n> ...` |
 | **真实集群合服演练从未跑过** | 全部结论来自代码审查 + 单测 / 集成测试 | 首次生产合服前先在 staging 跑一次完整 §8 + §10 |
 | **guild 的 `MergeMarkerRedis` 可缺失** | 整段没配 = 建帮闸门不生效,窗口内仍能在源 zone 建帮,那个公会不会被搬走 | 合服前确认 `go/guild/etc/guild.yaml` 的 `MergeMarkerRedis.Host` 指向 mapping Redis 且 `DB: 0` |
-| **玩家昵称冲突检测未实现** | 项目当前**没有玩家昵称字段**(`CreatePlayerRequest` 是空 message,`AccountSimplePlayer` 只有 `player_id`,`user.display_name` 零读写),所以重名问题**不存在** | `force_rename` 全链路(proto 字段 + Redis flag + login 消费 + `stampPostMergeFlags` 的参数 seam)是 future-proof 预留,不是死代码。哪天加了昵称再实现检测 |
+| **合服不做昵称冲突检测(刻意如此)** | 帮会二期 B3a 起角色名存在,但由 data_service 全局库 `player_name` 保证**全服唯一**(§4.4),跨 zone 重名在写入时就被拒绝,合服期**无冲突可查** | `force_rename` 全链路(proto 字段 + Redis flag + login 消费 + `stampPostMergeFlags` 的参数 seam)保持未启用、原样保留。哪天名字改成按 zone 唯一,才需要在这里补检测并启用它 |
 | **`mail` / `auction` / `chat_history` / `guild_application` 表不存在** | audit 不扫它们(也无须扫) | 对应服务上线后再补 auditor |
 | **合服公告 UI 靠客户端** | 服务端已把 `player_merge_notice:{pid}` 写进 login Redis(DB 0),login 首登时消费并下发 | 客户端接上即可生效 |
 | **player blob 跨集群拷贝是逐玩家流式** | 大 zone(>10w)分钟级 | source/target 同 Redis 后端时工具自动跳过这一步 |
@@ -609,6 +646,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge `
 
 ## 修订历史
 
+- **2026-09-20(帮会二期 B3a-2)**: 新增 **§4.4 角色名口径与 `profile_component` 列前置检查**(名字全服唯一、合服不改名;两个 zone 库先跑齐 go/db 迁移)。§5 步骤 1 写明按列名拷贝与 `SCHEMA MISMATCH` 中止;§6.3 加列检查;§7.1 审计行 `player.name (n/a)` 改为 `player.name (global)`;§12 昵称一行按现状重写。
 - **2026-09-08 v2**: 按实现逐条重写,使手册可**逐字执行**。相对 v1.1 的实质变化:
   - **删掉不存在的东西**:`tools/scripts/merge_zone.ps1`(从未存在,dev_tools.ps1 直接 `go run`,且必须在 `tools/merge_zone/` 目录内跑——它是独立 go module)、网关 `POST /admin/maintenance`(真接口是 `POST /admin/zones/{zoneId}/maintenance` + `X-Admin-Key`,一次一个 zone)、per-zone 的 `mysql-backup` CronJob(只在 `mmorpg-infra` 有一份)、topic `db_task_topic`(真名 `db_task_zone_{zone}[_g{gen}]`)、`mmorpg.player` 表(真表是 `zone_<N>_db.player_database`)。
   - **纠正「source namespace 保留 7 天」**:`k8s-zone-down` 直接 `kubectl delete namespace`,namespace 在 Step 2 就没了;回滚不依赖它。

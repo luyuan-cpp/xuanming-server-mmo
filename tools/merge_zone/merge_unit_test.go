@@ -4,6 +4,7 @@ package main
 // merge_integration)里对着真实的 127.0.0.1 实例跑。
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -161,6 +162,103 @@ func TestSortedUint64_SortsAndDedups(t *testing.T) {
 	}
 	if sortedUint64(nil) != nil {
 		t.Fatal("nil should stay nil")
+	}
+}
+
+// ── 玩家行拷贝的列对齐(03-names.md §3.16 / §3.19)──────────────
+
+func TestBuildCopyColumns_SameSetDifferentOrderUsesTargetOrder(t *testing.T) {
+	// 两个 zone 库分别跑迁移,同一批新列落在不同的 ORDINAL_POSITION 上是常态:
+	// 这不是错误,按列名对位照常拷贝,返回目标库的列序。
+	src := []string{"player_id", "asset_op_ledger", "profile_component", "bag"}
+	dst := []string{"player_id", "bag", "profile_component", "asset_op_ledger"}
+	got, err := buildCopyColumns(src, dst)
+	if err != nil {
+		t.Fatalf("same column set in a different order must not be an error: %v", err)
+	}
+	if !reflect.DeepEqual(got, dst) {
+		t.Fatalf("got %v want target order %v", got, dst)
+	}
+	// 返回值是副本:调用方改它不能反过来改到入参。
+	got[0] = "mutated"
+	if dst[0] != "player_id" {
+		t.Fatal("buildCopyColumns returned the caller's dst slice instead of a copy")
+	}
+}
+
+func TestBuildCopyColumns_ExtraColumnOnEitherSideIsAnError(t *testing.T) {
+	base := []string{"player_id", "bag"}
+	cases := []struct {
+		name      string
+		src, dst  []string
+		wantInErr []string
+	}{
+		{
+			name:      "源库多一列(目标库没跑迁移)",
+			src:       []string{"player_id", "bag", "profile_component"},
+			dst:       base,
+			wantInErr: []string{"only_in_src=[profile_component]", "only_in_dst=[]"},
+		},
+		{
+			name:      "目标库多一列(源库没跑迁移)",
+			src:       base,
+			dst:       []string{"player_id", "asset_op_ledger", "bag"},
+			wantInErr: []string{"only_in_src=[]", "only_in_dst=[asset_op_ledger]"},
+		},
+		{
+			name:      "两边各多一列(列数相同,SELECT * 时代会静默串列)",
+			src:       []string{"player_id", "bag", "profile_component"},
+			dst:       []string{"player_id", "bag", "asset_op_ledger"},
+			wantInErr: []string{"only_in_src=[profile_component]", "only_in_dst=[asset_op_ledger]"},
+		},
+	}
+	for _, c := range cases {
+		cols, err := buildCopyColumns(c.src, c.dst)
+		if err == nil {
+			t.Errorf("%s: expected an error, got columns %v", c.name, cols)
+			continue
+		}
+		if cols != nil {
+			t.Errorf("%s: a mismatch must not return a usable column list, got %v", c.name, cols)
+		}
+		for _, want := range c.wantInErr {
+			if !strings.Contains(err.Error(), want) {
+				t.Errorf("%s: error %q does not name %q", c.name, err, want)
+			}
+		}
+	}
+}
+
+func TestBuildCopyColumns_RejectsBackquoteInColumnName(t *testing.T) {
+	// 列名会被反引号包裹后直接拼进 SQL;含反引号的名字能从引号里逃出去。
+	// 两边集合相同也必须拒绝 —— 这条检查不能被「集合相等」短路。
+	evil := "bag` FROM x; --"
+	for _, c := range []struct{ src, dst []string }{
+		{[]string{"player_id", evil}, []string{"player_id", evil}},
+		{[]string{"player_id", evil}, []string{"player_id"}},
+		{[]string{"player_id"}, []string{"player_id", evil}},
+	} {
+		if cols, err := buildCopyColumns(c.src, c.dst); err == nil {
+			t.Errorf("src=%v dst=%v: backquote must be rejected, got %v", c.src, c.dst, cols)
+		}
+	}
+}
+
+func TestAuditPlayerNameConflicts_IsGlobalInfoRow(t *testing.T) {
+	// 名字全服唯一(data_service player_name),合服没有重名可撞:这一行只能是 info。
+	// 它若变成 block,每次合服审计都会 exit 1,运维只能学会跳过门禁。
+	r := auditPlayerNameConflicts(context.Background(), auditConfig{})
+	if r.Name != "player.name (global)" || r.UniqueScope != "global" {
+		t.Errorf("name/scope = %q/%q, want player.name (global)/global", r.Name, r.UniqueScope)
+	}
+	if r.Severity != "info" {
+		t.Errorf("severity = %q, want info", r.Severity)
+	}
+	if r.ConflictCount != 0 {
+		t.Errorf("conflicts = %d, want 0 (global uniqueness leaves nothing to collide)", r.ConflictCount)
+	}
+	if isInfraAudit(r) {
+		t.Error("the naming note must not be misread as an INFRA finding")
 	}
 }
 

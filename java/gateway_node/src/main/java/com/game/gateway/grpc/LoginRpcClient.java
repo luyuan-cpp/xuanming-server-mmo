@@ -443,7 +443,7 @@ public class LoginRpcClient {
     /**
      * proto/login/login.proto LoginResponse:
      *   TipInfoMessage error_message = 1;                    (group/message — skipped, parsed lazily)
-     *   repeated AccountSimplePlayerWrapper players = 2;     (解析 wrapper.player.player_id;proto 目前无 name/level)
+     *   repeated AccountSimplePlayerWrapper players = 2;     (解析 wrapper.player 的 player_id=1 与 name=5;level 不在 proto 里)
      *   string access_token = 3;
      *   string refresh_token = 4;
      *   int64  access_token_expire = 5;
@@ -582,8 +582,11 @@ public class LoginRpcClient {
      * Hand-rolled parser that only reads fields we care about. Unknown fields
      * are skipped using {@link CodedInputStream#skipField}, so additive proto
      * upgrades remain wire-compatible.
+     *
+     * <p>包级可见只为让 {@code LoginRpcClientParseTest} 直接喂手编字节;
+     * 生产代码的唯一调用方仍是 {@code LoginResponseMarshaller}。
      */
-    private static LoginResponseProto parseLoginResponse(byte[] bytes) throws IOException {
+    static LoginResponseProto parseLoginResponse(byte[] bytes) throws IOException {
         LoginResponseProto resp = new LoginResponseProto();
         CodedInputStream in = CodedInputStream.newInstance(bytes);
         while (!in.isAtEnd()) {
@@ -609,12 +612,15 @@ public class LoginRpcClient {
                 }
                 case 2 -> {
                     // repeated AccountSimplePlayerWrapper players:
-                    //   wrapper.player = 1 (message) -> AccountSimplePlayer.player_id = 1 (varint)
-                    // proto 里 AccountSimplePlayer 目前只有 player_id 一个字段,
-                    // PlayerInfo 的 name/level 等昵称体系落地后再补。
+                    //   wrapper.player = 1 (message) -> AccountSimplePlayer
+                    //     player_id = 1 (varint)
+                    //     name      = 5 (string,角色名副本;真源是 data_service 全局库 player_name)
+                    // class_id / gender / zone_id(2/3/4)网关用不到,走 skipField。
+                    // 老版本 login 不发字段 5,此时 name 保持 null,客户端按空名处理。
                     int len = in.readRawVarint32();
                     int oldLimit = in.pushLimit(len);
                     long playerId = 0;
+                    String name = null;
                     while (!in.isAtEnd()) {
                         int subTag = in.readTag();
                         int subField = subTag >>> 3;
@@ -624,8 +630,12 @@ public class LoginRpcClient {
                             int innerLimit = in.pushLimit(innerLen);
                             while (!in.isAtEnd()) {
                                 int pTag = in.readTag();
-                                if ((pTag >>> 3) == 1 && (pTag & 0x7) == 0) {
+                                int pField = pTag >>> 3;
+                                int pWire = pTag & 0x7;
+                                if (pField == 1 && pWire == 0) {
                                     playerId = in.readUInt64();
+                                } else if (pField == 5 && pWire == 2) {
+                                    name = in.readStringRequireUtf8();
                                 } else {
                                     in.skipField(pTag);
                                 }
@@ -638,6 +648,7 @@ public class LoginRpcClient {
                     in.popLimit(oldLimit);
                     LoginResponse.PlayerInfo p = new LoginResponse.PlayerInfo();
                     p.setPlayerId(playerId);
+                    p.setName(name);
                     resp.players.add(p);
                 }
                 case 3 -> resp.accessToken = in.readString();

@@ -1,6 +1,7 @@
 
 #include "thread_context/ecs_context.h"
 #include "proto/common/database/mysql_database_table.pb.h"
+#include "proto/common/component/player_comp.pb.h"  // PlayerProfileComp(角色名只读副本)
 #include "modules/currency/comp/player_currency_comp.h"
 #include "player_skill.h"
 #include "player_attribute.h"
@@ -98,6 +99,9 @@ void PlayerDatabaseMessageFieldsUnmarshal(entt::entity player, const player_data
 	}
 	tlsEcs.actorRegistry.emplace<PlayerAttributeComp>(player, message.attribute_component());
 	tlsEcs.actorRegistry.emplace<PlayerPetComp>(player, message.pet_component());
+	// 角色名副本:真源是 data_service 全局库 player_name,由 login 首次入场补齐进这条记录。
+	// scene 只读、只原样存回,任何路径都不写 name。字段缺失时得到空名组件(战斗快照留空名,照常结算)。
+	tlsEcs.actorRegistry.emplace<PlayerProfileComp>(player, message.profile_component());
     // 同一 player_database 行恢复背包资产与任务领取权；不重触发游戏事件。
     bag_marshal::Unmarshal(player, message.bag_component());
     mission_marshal::Unmarshal(player, message.mission_component());
@@ -135,6 +139,8 @@ void PlayerDatabaseMessageFieldsMarshal(entt::entity player, player_database& me
 	message.mutable_level_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<LevelComp>(player));
 	message.mutable_attribute_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<PlayerAttributeComp>(player));
 	message.mutable_pet_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<PlayerPetComp>(player));
+	// 名字副本原样存回(scene 不改它)。存盘路径非逐帧,沿用本函数的 get_or_emplace 写法。
+	message.mutable_profile_component()->CopyFrom(tlsEcs.actorRegistry.get_or_emplace<PlayerProfileComp>(player));
     bag_marshal::Marshal(player, *message.mutable_bag_component());
     mission_marshal::Marshal(player, *message.mutable_mission_component());
 	// 资产通道账本与 currency / bag_component 同记录同 DBTask(不变量 I3)。

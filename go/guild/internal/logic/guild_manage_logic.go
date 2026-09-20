@@ -558,7 +558,22 @@ func (l *GuildLogic) ListMyGuildApplications(ctx context.Context, _ *pb.ListMyGu
 	if err != nil {
 		return nil, err
 	}
+	views, err := l.myApplicationViews(ctx, rows, zoneID)
+	if err != nil {
+		return nil, err
+	}
+	return &pb.ListMyGuildApplicationsResponse{Applications: views}, nil
+}
+
+// myApplicationViews 把申请人视角的申请行装配成视图,并**一次**批量补上各帮的帮主名(B3b,
+// 90-consistency.md Y-07)。
+//
+// 从 ListMyGuildApplications 里拆出来只为可测:那个 RPC 的前半段(ListMyApplications)要 MySQL,
+// 而装配这一段只读帮会缓存与名字 resolver,单测用 miniredis + 假 resolver 就能覆盖。
+// zoneID 是请求者的归属区,过滤口径与 visibleIn 一致。
+func (l *GuildLogic) myApplicationViews(ctx context.Context, rows []data.ApplicationRow, zoneID uint32) ([]*pb.GuildApplicationView, error) {
 	views := make([]*pb.GuildApplicationView, 0, len(rows))
+	leaderIDs := make([]uint64, 0, len(rows))
 	for _, row := range rows {
 		guild, err := l.repo.GetGuild(ctx, row.GuildID)
 		if err != nil {
@@ -577,12 +592,19 @@ func (l *GuildLogic) ListMyGuildApplications(ctx context.Context, _ *pb.ListMyGu
 			MemberCount: uint32(len(guild.Members)),
 			MaxMembers:  guild.MaxMembers,
 			LeaderId:    guild.LeaderID,
-			// LeaderName 本批恒空,B3b 起由 data_service 的名字注册表填。
+			// LeaderName 在循环之后一次批量回填。
 			ApplyMs:  row.ApplyMs,
 			ExpireMs: row.ExpireMs,
 		})
+		leaderIDs = append(leaderIDs, guild.LeaderID)
 	}
-	return &pb.ListMyGuildApplicationsResponse{Applications: views}, nil
+	// 帮主名是展示字段:取不到就留空(resolveNames fail-open),不让列表失败。
+	// 这与上面 GetGuild 失败即整体失败不矛盾 —— 少一行会误导玩家,少一个名字不会。
+	names := l.resolveNames(ctx, leaderIDs)
+	for _, view := range views {
+		view.LeaderName = names[view.LeaderId]
+	}
+	return views, nil
 }
 
 // ListGuildApplications:审批人视角的待审列表。要长老及以上。
@@ -624,23 +646,33 @@ func (l *GuildLogic) ListGuildApplications(ctx context.Context, _ *pb.ListGuildA
 	if err != nil {
 		return nil, err
 	}
+	return &pb.ListGuildApplicationsResponse{Applicants: l.applicantViews(ctx, rows)}, nil
+}
+
+// applicantViews 把审批人视角的申请行装配成视图:在线状态一次 MGET、名字**一次**批量查询(B3b,
+// 90-consistency.md Y-07),两者共用同一份 id 列表。
+//
+// 拆出来的理由同 myApplicationViews:ListGuildApplications 的前半段(MemberRole / ListApplicants)
+// 要 MySQL,装配这一段不碰库。在线状态与名字都是展示字段,读不到就按离线 / 空名显示。
+func (l *GuildLogic) applicantViews(ctx context.Context, rows []data.ApplicantRow) []*pb.GuildApplicantView {
 	ids := make([]uint64, 0, len(rows))
 	for _, row := range rows {
 		ids = append(ids, row.PlayerID)
 	}
 	onlineMap := l.onlineResolver.BatchResolve(ctx, ids)
+	names := l.resolveNames(ctx, ids)
 
 	views := make([]*pb.GuildApplicantView, 0, len(rows))
 	for _, row := range rows {
 		views = append(views, &pb.GuildApplicantView{
 			PlayerId: row.PlayerID,
-			// Name 本批恒空(B3b 填);在线状态是展示字段,读不到就按离线显示。
+			Name:     names[row.PlayerID],
 			Online:   onlineMap[row.PlayerID],
 			ApplyMs:  row.ApplyMs,
 			ExpireMs: row.ExpireMs,
 		})
 	}
-	return &pb.ListGuildApplicationsResponse{Applicants: views}, nil
+	return views
 }
 
 // ReviewGuildApplication:通过 / 拒绝一条入帮申请。

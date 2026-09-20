@@ -11,6 +11,7 @@ import (
 	"login/internal/logic/pkg/homezone"
 	"login/internal/logic/pkg/locker"
 	"login/internal/logic/pkg/loginsession"
+	"login/internal/logic/pkg/playernamereg"
 	"login/internal/logic/pkg/token"
 	"login/internal/svc"
 	login_proto_common "proto/common/base"
@@ -224,9 +225,18 @@ func (l *LoginLogic) Login(in *login_proto.LoginRequest) (*login_proto.LoginResp
 // 不改 blob,所以直接返回它会把玩家引向已下线的源 zone。这里刻意**不把刷新后的
 // zone 回写 blob**:映射是唯一真源,回写等于制造第二份真相,再次合服 / 回滚时两
 // 份必然打架。映射查不到 / RPC 失败 / 开关关闭 → 原样返回建角 zone,登录不受影响。
+//
+// 缺名的角色(self-heal 恢复出的空记录、早于名字功能的旧角色)随后由
+// fillMissingRoleNames 回源名字注册表补上,同样只补在返回的那一份上、不回写 blob。
+//
+// 两次查询**串行**且共用 HomeZone.RoleListLookupTimeout 这一个配置值(各自独立计时,
+// 不是共享一份预算):全部有名的账号仍只有 zone 那一跳;有缺名角色的账号最坏等 2× 该值。
+// 调大这个配置时按双倍估算缺名账号的登录延迟。
 func (l *LoginLogic) roleListWithCurrentHomeZone(userAccount *login_proto_data_base.UserAccounts) []*login_proto.AccountSimplePlayerWrapper {
 	players := userAccount.GetSimplePlayers().GetPlayers()
-	return buildRoleList(l.ctx, l.svcCtx.HomeZone, config.AppConfig.HomeZone.RefreshRoleListDisabled, players)
+	roles := buildRoleList(l.ctx, l.svcCtx.HomeZone, config.AppConfig.HomeZone.RefreshRoleListDisabled, players)
+	fillMissingRoleNames(l.ctx, l.svcCtx.PlayerNames, roles, config.AppConfig.HomeZone.RoleListLookupTimeout)
+	return roles
 }
 
 // buildRoleList 是 roleListWithCurrentHomeZone 去掉 ServiceContext 依赖的纯函数版,
@@ -244,6 +254,66 @@ func buildRoleList(ctx context.Context, resolver *homezone.Resolver, disabled bo
 		out = append(out, &login_proto.AccountSimplePlayerWrapper{Player: v})
 	}
 	return out
+}
+
+// roleNameLookup 是读侧回源名字注册表(data_service BatchGetPlayerName)所需的最小接口,
+// *playernamereg.Client 实现它;角色列表与 EnterGame(resolveEnterName)共用,单测用假实现替换。
+// 返回的 map 只含注册表里存在的 id。
+type roleNameLookup interface {
+	Lookup(ctx context.Context, ids []uint64) (map[uint64]string, error)
+}
+
+// fillMissingRoleNames 给角色列表里 Name 为空的角色回源补名,原地改 roles 的元素。
+//
+// 账号 blob 里的名字副本可能缺失(EnterGame self-heal 恢复出的空记录、早于名字功能的
+// 旧角色),直接下发就是一行空白。全部有名时不发 RPC —— 这是绝大多数登录;有缺名的才
+// 一次 Lookup 查完,预算 timeout(<=0 用 playernamereg.DefaultLookupTimeout)。
+//
+// 名字是展示数据,读侧 fail-open:Lookup 报错 / 超时 / 注册表未配置 → 只记 Info,列表原样
+// 返回,登录不受影响。命中的角色先 proto.Clone 再写 Name:buildRoleList 在 resolver 为 nil
+// 或开关关闭时透传的是账号对象本身的指针,原地写会把回源结果带进之后任何一次
+// Marshal(userAccount);与 zone 刷新同一条纪律 —— 注册表是唯一真源,不回写 blob。
+//
+// names 为 nil 接口时直接返回;*playernamereg.Client 的 nil 指针装进接口后**不等于**
+// nil 接口,那种情况由 Client.Lookup 的 nil 接收者分支返回 ErrUnavailable,走错误分支。
+func fillMissingRoleNames(ctx context.Context, names roleNameLookup,
+	roles []*login_proto.AccountSimplePlayerWrapper, timeout time.Duration) {
+	ids := make([]uint64, 0, len(roles))
+	for _, w := range roles {
+		if p := w.GetPlayer(); p != nil && p.GetName() == "" {
+			ids = append(ids, p.GetPlayerId())
+		}
+	}
+	if len(ids) == 0 || names == nil {
+		return
+	}
+
+	if timeout <= 0 {
+		timeout = playernamereg.DefaultLookupTimeout
+	}
+	lookupCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	found, err := names.Lookup(lookupCtx, ids)
+	if err != nil {
+		// 每个请求最多一条:这里不会循环打日志。
+		logx.WithContext(ctx).Infof("[role-name] 角色列表有 %d 个角色缺名且本次未补上: 回源名字注册表失败: %v",
+			len(ids), err)
+		return
+	}
+
+	for _, w := range roles {
+		p := w.GetPlayer()
+		if p == nil || p.GetName() != "" {
+			continue
+		}
+		name := found[p.GetPlayerId()]
+		if name == "" {
+			continue
+		}
+		named := proto.Clone(p).(*login_proto_common.AccountSimplePlayer)
+		named.Name = name
+		w.Player = named
+	}
 }
 
 func GetOrInitUserAccount(ctx context.Context, rdb *redis.Client, account string, ttl time.Duration) (*login_proto_data_base.UserAccounts, error) {

@@ -304,8 +304,9 @@ func copyPlayerRows(
 	return rep, nil
 }
 
-// alignedPlayerColumns 返回逐列拷贝要用的列清单(源库的 ORDINAL_POSITION 顺序),
-// 并在两库列集合不一致时 fail-closed。
+// alignedPlayerColumns 返回逐列拷贝要用的列清单(目标库的 ORDINAL_POSITION 顺序),
+// 并在两库列集合不一致时 fail-closed。它只负责取列(I/O),判定在纯函数
+// buildCopyColumns 里,单测不需要 MySQL。
 //
 // 为什么不再用 `INSERT ... SELECT *`(2026-09-18 改,
 // docs/design/guild-phase2/04-asset-channel.md §4.42):
@@ -329,17 +330,42 @@ func alignedPlayerColumns(ctx context.Context, db *sql.DB, srcSchema, dstSchema,
 	if err != nil {
 		return nil, err
 	}
-	onlyInSrc := columnsNotIn(srcCols, dstCols)
-	onlyInDst := columnsNotIn(dstCols, srcCols)
-	if len(onlyInSrc) > 0 || len(onlyInDst) > 0 {
+	cols, err := buildCopyColumns(srcCols, dstCols)
+	if err != nil {
 		return nil, fmt.Errorf(
-			"SCHEMA MISMATCH: %s.%s and %s.%s do not have the same columns "+
-				"(only in source: %v; only in target: %v). "+
-				"Run the proto2mysql migration (go/db: `go run ./cmd/migrate -f <db.yaml> -command up`) "+
+			"SCHEMA MISMATCH: %s.%s and %s.%s cannot be copied column by column: %w. "+
+				"If the column sets differ, run the proto2mysql migration "+
+				"(go/db: `go run ./cmd/migrate -f <db.yaml> -command up`) "+
 				"on BOTH zone databases up to the same revision, then re-run the merge",
-			srcSchema, table, dstSchema, table, onlyInSrc, onlyInDst)
+			srcSchema, table, dstSchema, table, err)
 	}
-	return srcCols, nil
+	return cols, nil
+}
+
+// buildCopyColumns 由两库同一张表的列名清单算出逐列拷贝用的列清单
+// (docs/design/guild-phase2/03-names.md §3.16)。纯函数,不碰数据库。
+//
+//   - 列名集合不相等 → 报错并点名 only_in_src / only_in_dst,合服中止(fail-closed)。
+//     典型成因:profile_component / asset_op_ledger 这类新列只在一个 zone 库跑了迁移。
+//   - 集合相等 → 按**目标库**列序返回。INSERT 与 SELECT 两侧写的是同一份列名,
+//     取哪边的顺序功能上等价;取目标库的,拼出来的语句与目标表定义逐列对得上,排障好读。
+//   - 列名含反引号 → 报错。列名来自 information_schema 而不是用户输入,但它会被
+//     反引号包裹后直接拼进 SQL;MySQL 允许标识符里出现反引号,这样的名字能从引号里
+//     逃出去。proto2mysql 不会建出这种列,所以不做转义,直接拒绝。
+func buildCopyColumns(src, dst []string) ([]string, error) {
+	for _, cols := range [][]string{src, dst} {
+		for _, c := range cols {
+			if strings.Contains(c, "`") {
+				return nil, fmt.Errorf("column name %q contains a backquote; refusing to splice it into SQL", c)
+			}
+		}
+	}
+	onlyInSrc := columnsNotIn(src, dst)
+	onlyInDst := columnsNotIn(dst, src)
+	if len(onlyInSrc) > 0 || len(onlyInDst) > 0 {
+		return nil, fmt.Errorf("column set mismatch: only_in_src=%v only_in_dst=%v", onlyInSrc, onlyInDst)
+	}
+	return append([]string(nil), dst...), nil
 }
 
 // columnsNotIn 返回 a 里有、b 里没有的列名(保持 a 的顺序)。
@@ -360,7 +386,8 @@ func columnsNotIn(a, b []string) []string {
 // copyOneTable 在**一个事务**里分批搬完一张表。整表要么全进要么全不进 ——
 // 半张表的玩家数据比没有更难排查(有的组件在新库、有的在旧库)。
 //
-// cols 由 alignedPlayerColumns 产出:已确认两库列集合相同,可以按列名对位。
+// cols 由 alignedPlayerColumns 产出:已确认两库列集合相同、列名不含反引号,
+// 可以按列名对位并直接用反引号包裹。
 func copyOneTable(ctx context.Context, db *sql.DB, srcQ, dstQ string, cols []string, ids []uint64) (int, error) {
 	if len(cols) == 0 {
 		return 0, fmt.Errorf("refusing to copy %s → %s with an empty column list", srcQ, dstQ)

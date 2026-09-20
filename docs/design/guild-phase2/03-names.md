@@ -429,9 +429,9 @@ login 回 `kRoleNameInvalid` 时 `TipInfoMessage.parameters = [min_chars, max_ch
 | 6 / 6a | 角色数上限、职业 / 性别(:101-126) | 原样 |
 | **6a'** | `rules, spec, attempts, err := loadNameRules()`(包变量,默认 `playernamereg.Rules`,测试替换);err → ERROR + `kLoginDataSerializeFailed`。`display, _, v := playername.Normalize(in.Name, rules)`:Invalid → `kRoleNameInvalid`(parameters=[min,max]);Sensitive → `kRoleNameSensitive`;Empty → `requested=""`;OK → `requested=display`。无副作用 | 见左 |
 | 6b | `mintPlayerID`(:131) | 原样 |
-| **6c** | `name, owner, tip := l.reservePlayerName(account, newPlayerId, requested, spec, attempts)` | 见下 |
+| **6c** | `name, owner, tip := l.reservePlayerName(account, newPlayerId, requested, rules, spec, attempts)`(落码多一个 `rules`:data_service 复检回 `result=2` 时要回 `kRoleNameInvalid`,该 tip 必须带 `[min,max]`) | 见下 |
 | **6c'** | tip=`kRoleNameTaken` 且 owner≠0 且 owner 在 `userAccount.SimplePlayers` 中、其 ClassId/Gender 与本次 classId/gender 相同 → 视为"上次建角响应丢失后的重试":Info `[player-name] create retry matched existing player_id=%d (burned id=%d)`,**不建新角色**,按第 8 步返回当前全量列表、无 tip | — |
-| **6d** | `registerHomeZone`(:145);失败 → `l.releaseName(newPlayerId, name, false)` 后返回原 tip | 原样 |
+| **6d** | `registerHomeZone`(:145);失败 → `l.releaseName(account, newPlayerId, name, false)` 后返回原 tip | 原样 |
 | 6e | `newPlayer` 增 `Name: name` | — |
 | **7** | Marshal 失败 → releaseName → `kLoginDataSerializeFailed`。写入改 `writeAccountBlobScript`(下)| 见下 |
 | 7b / 8 | 反向映射、返回列表(:171-183,不变) | — |
@@ -448,11 +448,11 @@ login 回 `kRoleNameInvalid` 时 `TipInfoMessage.parameters = [min_chars, max_ch
   - 其它错误(超时 / Unavailable 等,结果未知)→ 剩余预算 ≥1s 则**同名重试一次**(同 id 同名幂等:在途 INSERT 若已提交,重试等锁后得 AlreadyOwned=0;若连接被杀、语句回滚,重试直接插入)。重试 0 → 返回;重试 1 → Taken(先前那次必未插入);仍是未知错误 → `l.releaseName(id, requested, true)`,`kLoginDataSerializeFailed`。
 - `requested == ""`:最多 `attempts` 次 `playername.Generate(rand.Reader, spec)`;`1` → 换名再试;`0` → 返回;`2` → ERROR + `kLoginDataSerializeFailed`;未知错误按上面"同名重试一次 → releaseName(uncertain=true)"处理并结束;用尽 → `kLoginDataSerializeFailed`。
 
-### releaseName(id, name, uncertain)
+### releaseName(account, id, name, uncertain)(落码首参多 `account`:孤儿日志要带账号)
 
 - 立即:`ctx := context.WithoutCancel(l.ctx)` + `DefaultReleaseTimeout`,`PlayerNames.Release(ctx, id, name)`。
 - `uncertain=true` 时再 `afterFunc(delayedNameReleaseAfter, …)` 发第二次(包变量默认 `time.AfterFunc` 与 `playernamereg.DelayedReleaseAfter`=10s,测试替换;回调内 `defer recover()` 记 ERROR)。第二次覆盖"Release 先于在途 INSERT 提交"的竞态;minted id 已放弃,晚删安全;两次都在 data_service 10 分钟窗口内。
-- 指标(clientplayerlogin/metrics.go,无 player_id label):`login_create_player_name_release_total{phase="immediate|delayed",result="ok|error"}`;`login_create_player_name_orphan_total`——uncertain 时仅延迟那次失败才 +1,非 uncertain 时立即那次失败 +1;ERROR 日志 `[player-name] orphan reservation player_id=%d name=%q account=%s: %v`(运维据此带 token 释放)。
+- 指标(clientplayerlogin/metrics.go,无 player_id label):`login_create_player_name_release_total{phase="immediate|delayed",result="ok|error"}`;`login_create_player_name_orphan_total`——uncertain 时仅延迟那次失败才 +1,非 uncertain 时立即那次失败 +1,写账号 blob 未确认且回读也失败、主动保留登记时 +1;**起服时预置为 0**(`metrics.go PrimeCreatePlayerMetrics`,由 `login.go startServer` 在 `zrpc.MustNewServer` **之后**调用——go-zero 指标的全局开关由它内部的 `prometheus.StartAgent` 打开,更早写会被丢弃。不预置的话序列在首个孤儿之前不存在,`increase(...) > 0` 的告警恰好漏掉第一次);ERROR 日志 `[player-name] orphan reservation player_id=%d name=%q account=%s: %v`(运维据此带 token 释放)。
 - 阶段耗时 `login_create_player_stage_seconds{stage="mint|name|register|account_write"}`,桶 `[0.005,0.01,0.025,0.05,0.1,0.25,0.5,1,2.5,5]`。
 
 ### 第 7 步:围栏写账号 blob
@@ -475,12 +475,26 @@ return 1
 | 结果 | 处理 |
 |---|---|
 | 1 | 成功,进 7b |
-| -1(锁已丢,blob 确定未写) | releaseName(uncertain=false),`kLoginInProgress` |
+| -1(锁已丢;**只代表最后一次执行没写**,见下方 2026-09-20 修正) | 先回读(与"脚本报错"共用三态回读 `readBackAccountBlob`):含 newPlayerId → 当成功进 7b;不含 / key 不存在 → releaseName(uncertain=false)+`kLoginInProgress`;回读或解析失败 → **保留登记** + orphan +1 + `kLoginInProgress` |
 | 脚本报错(结果未知) | 用 `WithoutCancel`+1s `GET accountDataKey` 回读:含 newPlayerId → 当成功进 7b;不含 → releaseName(uncertain=false)+`kLoginRedisSetFailed`;GET 也失败 → **保留登记**(宁可孤儿不可重名),ERROR 孤儿日志 + orphan +1,`kLoginRedisSetFailed` |
 
 `Lock.Key/Value` 已导出(pkg/locker/player_locker.go TryLock 内赋值)。回读"不含"之后原 EVAL 才在 Redis 执行的残余风险需要该命令在服务端滞留超过 3s 读超时 + 一次往返,接受并注明。
 
-**锁 TTL**:持锁后最坏 = 读 blob 3s(login.yaml:35-36 Read/WriteTimeout)+ 发号 3s(idsegment FetchTimeout)+ 名字 3s + 映射 3s(HomeZone.RegisterTimeout)+ 写 blob 3s + 回读 1s = 16s。`go/login/etc/login.yaml` `Locker.AccountLockTTL: 10` → **20**(k8s_deploy.ps1:1356 从该文件读,自动跟随;deploy/login-stack.linux/login.yaml 已是 30)。超时仍由脚本围栏兜住,不会写出超上限或丢角色的 blob。
+> **2026-09-20 落码修正(B3a-2 对抗评审,原文有洞)**:原表把 -1 写成"blob 确定未写"并直接释放名字。这个"确定"只对**第一次**执行成立:
+> login 的 Redis 客户端(`svc/servicecontext.go`)没设 `MaxRetries`,go-redis v9.16 默认 3 —— EVALSHA 读回包超时会被**原样重发**
+> (`redis.go process()` 循环 + `shouldRetry` 对 timeout 返回 true,`Script.Run` 走的就是这条路径)。时序:第 1 次执行时锁仍有效、SET 已落地,
+> 但回包超时;重发到达时锁已过期 → -1。login 只看得到最后这个 -1,照原文释放名字,结果是**角色已带名落盘、登记表里的名字却被删,别人可再占同名**,
+> 全程零报错 —— 正是"宁可孤儿不可重名"要防的事。所以 -1 与"脚本报错"一样先回读。-1 路径**没有**"回读判不含之后原 EVAL 才执行"的残余风险:
+> 锁令牌每次 TryLock 是新 UUID,丢了不会回来,滞留在途的重发执行到时也只会得 -1、不写。
+> 回归用例:`TestCreatePlayerName_LockLostButEarlierAttemptLanded`、`TestCreatePlayerName_LockLostAndReadBackUnparsableKeepsReservation`。
+>
+> 同一轮还更正了下面"锁 TTL"一段的算式:3s 是 go-redis **默认的单次 socket 读超时**,不是 `login.yaml` 接线进去的值
+> (`Node.RedisClient` 的 Dial/Read/WriteTimeout 目前是**死配置**,客户端构造时根本没传);客户端也没开 `ContextTimeoutEnabled`,
+> ctx 截止时间不约束 socket 读写,所以"回读 1s"只掐掉重发、封不住单次等待;单条 Redis 命令含重发最长约 4×3s+退避≈12.5s。
+> **20s 不是硬上界**,只覆盖"gRPC 拖满 + Redis 慢但还在回包"的常态;超时之后的正确性完全靠围栏脚本 + 回读。
+> 是否给 login 的 Redis 客户端显式设 `MaxRetries` / `ContextTimeoutEnabled` 并把 yaml 三个超时真正接线,影响面是整个 login,另行评估(见 92-handoff §8)。
+
+**锁 TTL**(算式已被上面的修正覆盖,保留原文供对照):持锁后最坏 = 读 blob 3s(login.yaml:35-36 Read/WriteTimeout)+ 发号 3s(idsegment FetchTimeout)+ 名字 3s + 映射 3s(HomeZone.RegisterTimeout)+ 写 blob 3s + 回读 1s = 16s。`go/login/etc/login.yaml` `Locker.AccountLockTTL: 10` → **20**(k8s_deploy.ps1:1356 从该文件读,自动跟随;deploy/login-stack.linux/login.yaml 已是 30)。超时仍由脚本围栏兜住,不会写出超上限或丢角色的 blob。
 
 ## 3.12 login:首次入场写 `PlayerProfileComp`、角色列表回源
 
@@ -490,7 +504,7 @@ return 1
    - 找到路径(:140 旁):`flowState.playerName = resolveEnterName(ctx, p.GetName(), l.svcCtx.PlayerNames, in.PlayerId)`(与 classID 同源:已验证归属的账号记录)。
    - self-heal 路径(:176-178):先 `name := resolveEnterName(ctx, "", l.svcCtx.PlayerNames, in.PlayerId)`,恢复记录写 `&AccountSimplePlayer{PlayerId: in.PlayerId, Name: name}`,`flowState.playerName = name`。
    有名字的正常角色不多一次 RPC;只有缺名记录才回源。
-2. `player_class_backfill.go` 改名 `backfillPlayerIdentity`(调用点 :475):
+2. `player_class_backfill.go` 里的函数 `backfillPlayerClass` 改名 `backfillPlayerIdentity`(文件名不改;调用点 :475;脚本变量 `backfillPlayerClassScript` 有意沿用原名,`go/shared/scenenode/locator.go` 等注释按此名引用 KEYS[4]):
    - 提前返回 `existing != nil || (state.classID == 0 && state.playerName == "")`。
    - 读 blob、解析、校验 player_id 不变。
    - `needClass := player.GetUint32PbComponent().GetClass() == 0 && state.classID != 0`;`needName := player.GetProfileComponent().GetName() == "" && state.playerName != ""`;都不需要 → return nil(替换原 :41-43)。
@@ -622,11 +636,11 @@ go run ./cmd/migrate -f ..\..\run\etc\go_services\z2_db.yaml -command up
 - data_service(14,相对 `go/data_service/`):`internal/constants/error_codes.go`、`internal/config/config.go`、`internal/config/config_test.go`、`etc/data_service.yaml`、`internal/store/schema.go`、`internal/store/player_name_store.go`(新)、`internal/store/player_name_store_integration_test.go`(新)、`internal/store/schema_integration_test.go`、`internal/routing/player_name_cache.go`(新)、`internal/logic/player_name_logic.go`(新)、`internal/logic/player_name_logic_test.go`(新)、`internal/svc/servicecontext.go`、`internal/server/dataserviceserver.go`、`internal/server/dataserviceserver_test.go`
 - 不计:`data_service.go:41`、`internal/store/storetest/mysql.go:143`(注释)、`data/AGENTS.md`(表清单文档)
 
-**B3a-2(23)**
-- login(13,相对 `go/login/`):`etc/login.yaml`、`internal/svc/servicecontext.go`、`internal/logic/pkg/playernamereg/playernamereg.go`(新)、`internal/logic/pkg/playernamereg/playernamereg_test.go`(新)、`internal/logic/clientplayerlogin/createplayerlogic.go`、`createplayer_name_test.go`(新)、`createplayer_homezone_test.go`、`entergamelogic.go`、`player_class_backfill.go`、`player_identity_backfill_test.go`(新)、`metrics.go`、`loginlogic.go`、`rolelist_names_test.go`(新)
+**B3a-2(24;2026-09-20 落码 +1:`login.go`)**
+- login(14,相对 `go/login/`):`login.go`(`startServer` 在 `MustNewServer` 之后预置孤儿计数器为 0,见 §3.11 指标条目)、`etc/login.yaml`、`internal/svc/servicecontext.go`、`internal/logic/pkg/playernamereg/playernamereg.go`(新)、`internal/logic/pkg/playernamereg/playernamereg_test.go`(新)、`internal/logic/clientplayerlogin/createplayerlogic.go`、`createplayer_name_test.go`(新)、`createplayer_homezone_test.go`、`entergamelogic.go`、`player_class_backfill.go`、`player_identity_backfill_test.go`(新)、`metrics.go`、`loginlogic.go`、`rolelist_names_test.go`(新)
 - C++(3):`cpp/libs/services/scene/player/system/player_database_loader.cpp`、`cpp/libs/services/scene/battle/system/player_battle.cpp`、`cpp/tests/bag_test/player_feature_persistence_test.cpp`
 - Java(2):`LoginRpcClient.java`、`LoginRpcClientParseTest.java`(新)
-- 工具(4):`tools/merge_zone/audit_resources.go`、`tools/merge_zone/player_rows.go`、`tools/merge_zone/merge_unit_test.go`、`tools/scripts/stress_summarize.ps1`(新增 "CreatePlayer stages" 段:按快照打印 `login_create_player_stage_seconds_sum/count{stage}` 均值与 `login_create_player_name_orphan_total`,缺指标打印 n/a)
+- 工具(4):`tools/merge_zone/audit_resources.go`、`tools/merge_zone/player_rows.go`、`tools/merge_zone/merge_unit_test.go`、`tools/scripts/stress_summarize.ps1`(新增 "CreatePlayer stages" 段:按快照打印 `login_create_player_stage_seconds_sum/count{stage}` 均值与 `login_create_player_name_orphan_total`,缺指标打印 n/a;**例外(2026-09-20 落码)**:快照里有 stage 序列而没有孤儿序列时 `name_orphan` 打印 **0** 而不是 n/a —— 这是**兜底**:login 起服已把该计数器预置为 0(`PrimeCreatePlayerMetrics`),新版 login 的快照里序列恒存在、健康压测直接读到 0;只有预置被移除、或调用被挪到 `MustNewServer` 之前而被开关丢弃时才走到这条,保证 §3.20 的验收口径 orphan=0 仍读得出来,不与"指标没接上"混为一谈)
 - robot(1):`robot/login.go`
 
 B3a 不新增客户端可达消息,**不改** MessageLimiter.xlsx、gate 路由、`session.ClientMethods`;DataService 三个 RPC 只在服务间调用。
@@ -638,7 +652,7 @@ B3a 不新增客户端可达消息,**不改** MessageLimiter.xlsx、gate 路由�
 - `player_name_logic_test.go`(fake store + miniredis Router):非法名不碰 store;Inserted 写缓存;缓存 SET 失败仍 0;Taken → `(1, owner)`;Conflict / store nil 返回对应错误;Release:admin=false 传 `minCreatedMs=now-10m`、admin=true 传 0、OutsideWindow → `ErrPlayerNameReleaseOutsideWindow`、Deleted 后缓存键被删;BatchGet:全中不调 store、部分未命中回源回填、库里没有的 id 写负缓存且第二次调用不再查库、负缓存 SETNX 不覆盖已有真名、Reserve 的 SET 覆盖负缓存、store 报错返回错误、去重去 0、501 个被拒。
 - `config_test.go`:`PlayerName` 全缺省时 Normalize 得 20 / 5 / 10m / 24h / 60s。
 - `dataserviceserver_test.go`:3.1 映射表驱动(照 `newHomeZoneTestServer`),含 taken 回 `owner_player_id`、Release 带错 token 返回 authorizeAdmin 错误、无 token 窗外 `FailedPrecondition` + `error_code=23`。
-- `playernamereg_test.go`:nil `*Client` 三个方法都回 `ErrUnavailable`;纯函数 `rulesFromRow(row)`:nil 行、min=0、max=33、attempts=0 / 11、前缀含 `_` 均报错;`Rules()` 在 `gametable.LoadTables("../../../../../../generated/tables", false)` 后得 `{2,12}`、`{"道友",6}`、5。
+- `playernamereg_test.go`:nil `*Client` 三个方法都回 `ErrUnavailable`;纯函数 `rulesFromRow(row)`:nil 行、min=0、max=33、attempts=0 / 11、前缀含 `_` 均报错;`Rules()` 在 **只 Load `RoleNameRule` 单表**(`gametable.RoleNameRuleTableManagerInstance.Load("../../../../../../generated/tables", false)`;不用 `LoadTables`——它缺任一张表文件就 `log.Fatalf`,整个测试进程退出、看不到失败断言)后得 `{2,12}`、`{"道友",6}`、5。
 - `createplayer_name_test.go`(fake DataServiceClient 计数 Reserve/Release/RegisterPlayerZone;包变量 `loadNameRules` 固定为 {2,12}/{道友,6}/5;`afterFunc` 替换为同步执行):
   1. `"云"` 在发号前被拒(minter 计数 0),tip=`kRoleNameInvalid`、parameters=`["2","12"]`;2. `"官方小助手"` → `kRoleNameSensitive`;
   3. Taken 且 owner 不在账号 → `kRoleNameTaken`,Register 0、Release 0;
@@ -654,6 +668,11 @@ B3a 不新增客户端可达消息,**不改** MessageLimiter.xlsx、gate 路由�
 - `rolelist_names_test.go`:全有名不发 RPC;两个缺名一次 Lookup 带 2 个 id、回填在克隆上、原账号对象不变;Lookup 报错 / 超时 / nil `*Client` 原样返回不 panic。
 - `merge_unit_test.go`:`buildCopyColumns` 同集合异序 → dst 顺序;src 多列、dst 多列 → 报错含列名。
 
+**2026-09-20 落码时后补的用例(两轮对抗评审逼出来的,都是"删掉那行生产代码、原有测试仍全绿"的缺口)**
+- `createplayer_name_test.go`:`TestCreatePlayerName_LockLostButEarlierAttemptLanded`、`TestCreatePlayerName_LockLostAndReadBackUnparsableKeepsReservation`(-1 先回读,见 §3.11 修正)、`TestReservePlayerName_BudgetBelowOneReserveRPC`(预算不足 1s 不重试 / 生成名循环不再发)、`TestHasBudget`、`TestCreatePlayerName_EmptyNameUnknownOutcomeStopsGenerating`(空名路径遇未知错误同名重试一次后结束,不换名接着试)、`TestCreatePlayerName_UnknownReserveResultFailsClosed`(不认识的 result 码:拒绝建角 + **补偿释放一次**、无延迟第二次——读不懂就不知道是否已登记;条件删除 + 已放弃的新 id,删了不会误伤)。
+- `player_identity_backfill_test.go`:`TestBackfillPlayerIdentity_NameOnlyKeepsStoredClass`(回档场景:只补名字,不得用账号 classID 覆盖存档里已有的职业)、`TestEnterGame_PlayerNameReachesIdentityBackfill`(从 `EnterGame` 入口打通:`flowState.playerName` 必须在 `enterCtx := flowState` 值拷贝**之前**赋完,否则静默失效)。
+- `rolelist_names_test.go`:`TestRoleListWithCurrentHomeZone_FillsNamesFromRegistry`(接线用例;原 Nil 用例在接线被删时照样通过)。
+
 **Go 集成**(`-tags=integration`,真 MySQL)`player_name_store_integration_test.go`:
 - `TestPlayerName_BootstrapDDLIsVarcharUniqueBin`:`name_norm` 为 `varchar(191)`、`utf8mb4_bin`,`uk_player_name` NON_UNIQUE=0;二次迁移 ShowCreateTable 不变。
 - `TestPlayerName_ReserveIdempotentAndTaken`:A 占 `ab12` → Inserted;A 重试 → AlreadyOwned;B 占 → Taken 且 owner=A;A 占 `cd34` → Conflict。
@@ -664,6 +683,10 @@ B3a 不新增客户端可达消息,**不改** MessageLimiter.xlsx、gate 路由�
 C++:3.15 两个用例。Java:3.14。
 
 ## 3.20 B3a Codex 验证(按序串行)
+
+> **2026-09-20**:B3a-2 的现行验证序列在 [`92-handoff.md`](./92-handoff.md) §8.3(14 步,含 B3a-1 补验证、§3.15a 加列、gofmt 存量基线与失败归因)。
+> 下面的原始块保留供对照,三处已过时:路径 `E:\work\xuanming-server-mmo` 是另一台机器(本机 `D:\luyuan\wuxingqitan\mmorpg`);
+> 端到端的 `DEL account:*` 清单要按 90 清单 Y-09 追加 `robot_9211`–`robot_9219` 与 `robot_9501`;vet / test 要带上 `go/login` 根包(`login.go` 已入清单)。
 
 ```powershell
 # ── B3a-1 ──
@@ -718,6 +741,11 @@ func NewDataServicePlayerNames(client dspb.DataServiceClient, timeout time.Durat
 `BatchResolve`:nil 接收者或 nil client → 空 map;去重、去 0;超过 500 只查前 500 并 ERROR;`context.WithTimeout(ctx, timeout)`;错误 → `logx.Errorf("[guild] player name lookup failed (n=%d): %v")` + `guild_player_name_lookup_failed_total.Inc()` → 空 map。预算:guild zrpc ≤4000ms,GetGuild = 仓储 + 在线 MGET + 名字 ≤800ms。data_service 侧有 60s 负缓存(3.5),无名成员不会让每次拉取都打库。
 
 ### 装配
+> **2026-09-20 落码修正**:下面的 `SetPlayerNameResolver` 写法已被 `90-consistency.md` Y-02 覆盖。实际落码是函数式 Option
+> `logic.WithPlayerNames(names)`(收到 nil 接口时不做任何事),在 `guild.go` 的 `NewGuildLogic(...)` 处与 `WithNotifier` /
+> `WithApplyPushGate` 一次装配;测试同样用 `WithPlayerNames(fake)` 注入。§3.25 偏差 14 同此。
+> Y-07 的两个申请视图抽成了私有方法 `applicantViews` / `myApplicationViews`(两个 RPC 的前半段要 MySQL,logic 包单测只有 miniredis 夹具,不抽出来没法测),RPC 行为不变。
+
 - `GuildLogic` 增字段 `playerNames PlayerNameResolver`。**不改 `NewGuildLogic` 参数表**(guild_logic.go:46 现 5 参,测试 18 处调用),加装配方法:
   ```go
   // SetPlayerNameResolver 只在启动装配时调用一次(guild.go),之后只读;nil = 名字一律为空。

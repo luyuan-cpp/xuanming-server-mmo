@@ -46,6 +46,9 @@ type GuildLogic struct {
 	notifier GuildNotifier
 	// applyPushGate 见 ApplyPushGate;默认"总是放行"。
 	applyPushGate ApplyPushGate
+	// playerNames 批量取成员 / 帮主的展示名(player_name_resolver.go)。
+	// nil = 没配 DataServiceRpc 或单测:名字一律留空,不 panic。只经 resolveNames 访问。
+	playerNames PlayerNameResolver
 }
 
 // Option 是 NewGuildLogic 的可选项。
@@ -71,6 +74,20 @@ func WithApplyPushGate(g ApplyPushGate) Option {
 	return func(l *GuildLogic) {
 		if g != nil {
 			l.applyPushGate = g
+		}
+	}
+}
+
+// WithPlayerNames 注入展示名解析器;不传或传 nil = 名字一律留空(90-consistency.md Y-02:
+// 依赖注入只保留函数式 Option,03-names.md 正文里的 SetPlayerNameResolver 不再使用)。
+// 生产由 guild.go 在配了 DataServiceRpc 时传 NewDataServicePlayerNames。
+//
+// 这里的判空只挡得住 nil **接口**;装着 nil 指针的接口由 DataServicePlayerNames.BatchResolve
+// 自己的 nil 接收者分支兜住。
+func WithPlayerNames(r PlayerNameResolver) Option {
+	return func(l *GuildLogic) {
+		if r != nil {
+			l.playerNames = r
 		}
 	}
 }
@@ -636,14 +653,20 @@ func (l *GuildLogic) GetGuildRankByGuild(ctx context.Context, req *pb.GetGuildRa
 		pbEntry.LeaderId = guild.LeaderID
 		pbEntry.Level = guild.Level
 		pbEntry.MemberCount = uint32(len(guild.Members))
+		// 帮主名是展示字段:取不到就留空(resolveNames fail-open),不让查名次失败。
+		pbEntry.LeaderName = l.resolveNames(ctx, []uint64{guild.LeaderID})[guild.LeaderID]
 	}
 
 	return &pb.GetGuildRankByGuildResponse{Entry: pbEntry}, nil
 }
 
 // enrichRankEntries fills in guild name/level/member_count from cache for a page of rank entries.
+//
+// 帮主名整页**只取一次**:循环里只收集 leader_id,循环后一次批量查询再回填。
+// 逐条查会把一页 50 条的榜单放大成 50 次 data_service 往返。
 func (l *GuildLogic) enrichRankEntries(ctx context.Context, entries []data.RankEntry) ([]*pb.GuildRankEntry, error) {
 	result := make([]*pb.GuildRankEntry, 0, len(entries))
+	leaderIDs := make([]uint64, 0, len(entries))
 	for _, e := range entries {
 		pbEntry := &pb.GuildRankEntry{
 			GuildId: e.GuildID,
@@ -658,8 +681,14 @@ func (l *GuildLogic) enrichRankEntries(ctx context.Context, entries []data.RankE
 			pbEntry.LeaderId = guild.LeaderID
 			pbEntry.Level = guild.Level
 			pbEntry.MemberCount = uint32(len(guild.Members))
+			leaderIDs = append(leaderIDs, guild.LeaderID)
 		}
 		result = append(result, pbEntry)
+	}
+	// 读不到帮会的条目 LeaderId 为 0:它没进 leaderIDs,resolver 也按契约丢 0,names[0] 是空串,无需特判。
+	names := l.resolveNames(ctx, leaderIDs)
+	for _, pbEntry := range result {
+		pbEntry.LeaderName = names[pbEntry.LeaderId]
 	}
 	return result, nil
 }
@@ -669,21 +698,40 @@ func (l *GuildLogic) enrichRankEntries(ctx context.Context, entries []data.RankE
 // toProtoGuild 把权威快照转成客户端结构。
 //
 // 与请求者无关的字段全在这里填;只给长老 / 帮主看的待审数在 guildInfoFor 里补(§12.4)。
-// name / leader_name 本批恒空:名字由 B3b 的 data_service 名字注册表填。
+//
+// 成员 name / leader_name 来自 data_service 的名字注册表(B3b,player_name_resolver.go):
+// 展示字段、不入库,取不到就留空,绝不让整次读失败。成员 id 与帮主 id **合并成一次**批量查询 ——
+// 帮主正常情况下就在成员里(resolver 自己去重),单独追加是为了在"leader_id 与成员表矛盾"的
+// 坏数据下也能显示帮主名。
+//
+// 与在线状态的 MGET 顺序执行(先在线、后取名):正常路径上并行只省几十毫秒,却要多起一个协程并处理
+// 它的收尾。两步的时间上界**不对称**,排障时别想当然:
+//   - 取名有自己的上限 DefaultPlayerNameLookupTimeout(800ms),且走 gRPC、受 ctx 约束,
+//     实际最多等 min(800ms, 整请求剩余预算);
+//   - 在线 MGET **没有**独立超时:OnlineStatusResolver 直接拿请求 ctx 调 MGet,而 locator Redis 客户端
+//     (svc/servicecontext.go)没开 ContextTimeoutEnabled —— go-redis v9 此时的套接字读**不看** ctx 截止时间,
+//     每次尝试只受默认 3s ReadTimeout 约束,ctx 只在取连接与重试退避处生效。
+//
+// 所以 locator Redis 卡住时,是在线这一步先把整请求预算(3500ms)吃掉,轮到取名时 ctx 多半已经到期。
+// DataServicePlayerNames.BatchResolve 为此在发 RPC 之前先判 ctx:已结束就直接回空 map、不计
+// guild_player_name_lookup_failed_total,免得把 locator Redis 的故障记到 data_service 头上。
 func (l *GuildLogic) toProtoGuild(ctx context.Context, g *data.GuildData) *pb.GuildInfo {
 	if g == nil {
 		return nil
 	}
-	memberIDs := make([]uint64, 0, len(g.Members))
+	// 容量多留 1:下面取名时追加帮主 id 不触发重新分配。
+	memberIDs := make([]uint64, 0, len(g.Members)+1)
 	for _, m := range g.Members {
 		memberIDs = append(memberIDs, m.PlayerID)
 	}
 	onlineMap := l.onlineResolver.BatchResolve(ctx, memberIDs)
+	names := l.resolveNames(ctx, append(memberIDs, g.LeaderID))
 
 	info := &pb.GuildInfo{
 		GuildId:      g.GuildID,
 		Name:         g.Name,
 		LeaderId:     g.LeaderID,
+		LeaderName:   names[g.LeaderID],
 		Level:        g.Level,
 		Announcement: g.Announcement,
 		CreateTimeMs: g.CreateTimeMs,
@@ -698,6 +746,7 @@ func (l *GuildLogic) toProtoGuild(ctx context.Context, g *data.GuildData) *pb.Gu
 		}
 		info.Members = append(info.Members, &pb.GuildMember{
 			PlayerId:            m.PlayerID,
+			Name:                names[m.PlayerID],
 			Role:                m.Role,
 			JoinTimeMs:          m.JoinTimeMs,
 			LastActiveMs:        m.LastActiveMs,

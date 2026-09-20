@@ -57,6 +57,7 @@
 #include "proto/common/base/common.pb.h"
 #include "proto/common/component/actor_attribute_state_comp.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
+#include "proto/common/component/player_comp.pb.h"  // PlayerProfileComp(快照里的角色名)
 #include "proto/common/component/player_login_comp.pb.h"
 #include "proto/common/component/player_network_comp.pb.h"
 #include "proto/common/component/player_skill_comp.pb.h"
@@ -619,8 +620,10 @@ bool PlayerBattleSystem::BuildBattleSnapshot(entt::entity player, ::BattlePlayer
 	}
 
 	snapshot.set_player_id(playerId);
-	// 昵称:scene 玩家实体当前没有昵称组件(display_name 只在 user 表),一期留空,见 open_issues
-	snapshot.set_player_name("");
+	// 名字副本来自 PlayerProfileComp(真源 data_service player_name;login 首次入场补齐,scene 只读)。
+	// 缺组件或副本尚未补齐时留空,battle 侧照常结算 —— 名字是展示数据,不拦开战。
+	const auto* profile = tlsEcs.actorRegistry.try_get<PlayerProfileComp>(player);
+	snapshot.set_player_name(profile != nullptr ? profile->name() : std::string());
 
 	const auto* levelComp = tlsEcs.actorRegistry.try_get<LevelComp>(player);
 	snapshot.set_level(levelComp != nullptr && levelComp->level() > 0 ? levelComp->level() : 1);
