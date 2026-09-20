@@ -149,13 +149,14 @@ func newAssetChannel(c config.Config, db *sql.DB, ds dspb.DataServiceClient) (*A
 
 	signer, err := NewAssetOpSigner()
 	if err != nil {
-		// 降级而不是拒启动:P1 的只读功能与资产无关,不该被一把没注入的密钥连坐。
-		// 但凡走到托管 / 交付都会拿到 reconcile.ErrSignerMissing —— Pipeline 留成 nil,
-		// 而 reconcile 的方法都带空接收者守卫,业务侧拿到的是错误而不是 panic。
-		// 不存在"悄悄不签名发出去"。
-		logx.Errorf("[trade] 资产通道未启用:%v —— 上架托管与交付将被拒绝(浏览 / 详情 / 收藏不受影响)。"+
-			"本地由 tools/scripts/go_services.ps1 注入开发值,K8s 由 k8s_deploy.ps1 的 Resolve-InjectedSecret -MinLength 32 注入", err)
-		return ch, nil
+		// **不可达的防御性兜底**:调用方(NewServiceContext)在 AssetOp.Enabled=true 分支里
+		// 已经先跑过一次 NewAssetOpSigner,失败即 panic 拒启 —— 资产路径 fail-closed,
+		// 不降级(AGENTS §11.3)。走到这里只可能是两次调用之间环境变量被改掉,
+		// 或者将来有人绕开 NewServiceContext 直接调本函数。
+		//
+		// 所以这里也**返回错误**,由上层统一拒启,不再自己降级:留一条"悄悄降级"的路,
+		// 就等于给 fail-closed 开了个后门,而它的表现是商品永久卡在 ESCROWING。
+		return nil, fmt.Errorf("trade: 资产通道签名器不可用(NewServiceContext 本应已拦下): %w", err)
 	}
 
 	ch.Caller = &assetop.Caller{
@@ -193,7 +194,11 @@ func (a *AssetChannel) Start(ctx context.Context, etcd *clientv3.Client) {
 		a.stopLoops = cancel
 		safego.Go("trade.scenenode.watcher", func() { a.Watcher.Run(loopCtx, etcd) })
 		if a.Pipeline == nil {
-			logx.Info("[trade] 资产通道未启用(密钥缺失):只起 scene 节点镜像,不起重投循环")
+			// 装配层已保证:AssetOp.Enabled=true 走到这里 Pipeline 必非 nil(密钥不可用会在
+			// NewServiceContext 就拒启),Enabled=false 则整个 AssetChannel 是 nil、上面就返回了。
+			// 留这条分支只为"将来有人绕开装配层直接构造"时不静默起半个循环。
+			logx.Error("[trade] 资产通道装配不完整(Pipeline 为空):只起 scene 节点镜像,不起重投循环 —— " +
+				"这不该发生,说明有人绕开了 NewServiceContext 的开关与密钥校验")
 			return
 		}
 		a.Pipeline.Start(loopCtx)

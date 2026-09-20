@@ -178,6 +178,10 @@ func AllocateSeq(ctx context.Context, tx *sql.Tx, t SeqTables, playerID uint64, 
 const (
 	defaultTxAttempts    = 3
 	defaultTxBaseBackoff = 10 * time.Millisecond
+
+	// minTxBaseBackoff 是 BaseBackoff 的下限。取 2ms 而不是 1ms 的理由见 validate():
+	// ±20% 抖动的下界要在毫秒取整后仍然 >= 1ms,否则"退避"对一半的重试是空话。
+	minTxBaseBackoff = 2 * time.Millisecond
 	defaultTxMaxBackoff  = 200 * time.Millisecond
 )
 
@@ -191,7 +195,7 @@ type TxRetryConfig struct {
 	// **不是**本包的推荐值;推荐值见 DefaultTxRetryConfig 的注释。
 	Isolation sql.IsolationLevel
 	// BaseBackoff / MaxBackoff 是退避区间,形状与 NextAttemptMs 一致(指数 + ±20% 抖动)。
-	// BaseBackoff 不得小于 1ms:退避按毫秒取整,更小的值等于没有退避。
+	// BaseBackoff 不得小于 minTxBaseBackoff(2ms):退避按毫秒取整,再小的话抖动下界会被抹成 0。
 	BaseBackoff time.Duration
 	MaxBackoff  time.Duration
 	// Rand 是抖动随机源,为 nil 时取中值(不抖动)。生产不要留 nil,见 DefaultTxRetryConfig。
@@ -223,6 +227,16 @@ type TxRetryConfig struct {
 // 换 RC 不会削弱本包的守卫:同一 (player, stream) 的分配都先在 seq 行上拿 FOR UPDATE
 // (全局锁序第一步)而彼此串行,未决行数 / 跨度的判定因此不依赖间隙锁;重复 seq 由唯一键
 // (player_id, stream, stream_epoch, seq) 兜住;Finalize / Reschedule 是主键 CAS,与隔离级无关。
+//
+// **审稿异议与结论(2026-09-19,记下来免得被反复提起)**:有意见认为 D7 的作用域只有帮会,
+// 而 go/guild 目前一行 WithTxRetry 都没有,真正受这个默认值影响的只有 go/trade —— 一条
+// 没被规格要求 RC、也没人单独验证过的路径,所以默认值应退回 sql.LevelDefault、把 RC 留到
+// 帮会落码时显式传。
+// **不采纳**,因为上面四条里只有第 1 条是帮会专属:第 3 条(线上是 TiDB,本来就没有间隙锁)
+// 与第 4 条(会丢钱的路径不接受"语义由 DSN 决定")对 trade 同样成立,而退回 LevelDefault
+// 恰恰是把语义交还给运维配置 —— 那正是第 4 条要消灭的东西。
+// 要留意的是代价那一条:RC 对 MySQL 的 binlog_format=ROW 有要求,新接入方若跑在别的
+// MySQL 配置上,失败是启动即报 1665(响亮),不是静默走错语义。
 func DefaultTxRetryConfig() TxRetryConfig {
 	return TxRetryConfig{
 		Attempts:    defaultTxAttempts,
@@ -237,8 +251,12 @@ func (c TxRetryConfig) validate() error {
 	if c.Attempts < 1 {
 		return fmt.Errorf("assetop: WithTxRetry 的 attempts 必须 >= 1(当前 %d)", c.Attempts)
 	}
-	if c.BaseBackoff < time.Millisecond {
-		return fmt.Errorf("assetop: BaseBackoff 必须 >= 1ms(当前 %v):退避按毫秒取整,更小的值等于不退避", c.BaseBackoff)
+	// 阈值是 2ms 不是 1ms:抖动是 ±20%,base=1ms 时下界 0.8ms 按毫秒取整就是 0,
+	// 约一半的重试实际等 0 —— 那道"必须 >= 1ms"的守卫兑现不了它自己承诺的东西。
+	// 2ms 时下界 1.6ms 仍取整到 1ms,每一次重试都真的退避。
+	if c.BaseBackoff < minTxBaseBackoff {
+		return fmt.Errorf("assetop: BaseBackoff 必须 >= %v(当前 %v):退避按毫秒取整,"+
+			"再小的话 ±20%% 抖动的下界会被抹成 0,等于部分重试根本不退避", minTxBaseBackoff, c.BaseBackoff)
 	}
 	if c.MaxBackoff < c.BaseBackoff {
 		return fmt.Errorf("assetop: 退避区间非法(base=%v max=%v)", c.BaseBackoff, c.MaxBackoff)
@@ -285,7 +303,7 @@ func WithTxRetryConfig(ctx context.Context, db *sql.DB, cfg TxRetryConfig, fn fu
 	opts := &sql.TxOptions{Isolation: cfg.Isolation}
 	sleep := cfg.sleep
 	if sleep == nil {
-		sleep = waitOrCanceled
+		sleep = sleepCtx
 	}
 
 	var lastErr error
@@ -322,22 +340,10 @@ func txBackoff(attempt uint32, base, max time.Duration, rnd func() float64) time
 	return time.Duration(NextAttemptMs(0, attempt, base, max, rnd)) * time.Millisecond
 }
 
-// waitOrCanceled 等 d,期间 ctx 被取消就立刻返回 ctx 的错误。
-// 不用 time.Sleep:在一个已经没有预算的 ctx 上睡满,等于把「早点告诉调用方稍后重试」
-// 拖成「超时失败」(AGENTS §11.3:重试必须支持取消)。
-func waitOrCanceled(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
-		return ctx.Err()
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
-}
+// 可取消的等待用同包 caller.go 的 sleepCtx,不在这里再写一份:
+// 两份逐字符相同的实现正是 txBackoff 自己反对的「同一个包里两份同样的语义」(DRY)。
+// 语义见 sleepCtx 的注释:不用 time.Sleep,在一个已经没有预算的 ctx 上睡满,
+// 等于把「早点告诉调用方稍后重试」拖成「超时失败」(AGENTS §11.3:重试必须支持取消)。
 
 // runTx 跑一次事务,保证无论哪条路径都不会漏掉 Rollback。
 // 回滚失败不吞:它和业务错误一起返回,免得连接被留在事务里还没人知道。

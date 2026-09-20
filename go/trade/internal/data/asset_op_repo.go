@@ -118,19 +118,62 @@ func (r *AssetOpRepo) InsertOp(ctx context.Context, tx *sql.Tx, rec *tradepb.Tra
 // ListDue 非加锁一致性读,只取主键,走 (status, next_attempt_ms) 索引。
 // 不用范围 UPDATE 领取:那会在 RR 下加 next-key 锁,与业务事务里 AllocateSeq 的
 // FOR UPDATE + 插入新 op 行互相等待,被判死锁牺牲的是玩家的请求(§4.37)。
+//
+// **两段查询,不是一条 SQL**(X-03 防饿死,契约见 assetop.Store.ListDue):
+// 第一段只取新行(attempts < FreshAttemptLimit)并占满 limit;只有它不够时才发第二段取老行,
+// 且第二段只补缺口。写成一条 SQL 会饿死新行:老行的退避被 MaxBackoff 封顶在 60s,于是它们
+// 永远"早就到期",按 next_attempt_ms 排序必定霸占整批名额,新提交的托管指令永远排不上号。
+//
+// 两段谓词互斥,但这是**两次独立的非锁读**,期间某行的 attempts 可能刚好从 2 跳到 3 而被两段
+// 都取到,所以仍要按 op_id 去重。第一段的 id 排在前面,让 Claim 先抢新行。
 func (r *AssetOpRepo) ListDue(ctx context.Context, nowMs uint64, limit int) ([]uint64, error) {
 	if limit <= 0 {
 		return nil, nil
 	}
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
+
+	fresh, err := r.listDueSegment(ctx, nowMs, limit, true)
+	if err != nil {
+		return nil, err
+	}
+	if len(fresh) >= limit {
+		return fresh, nil
+	}
+
+	aged, err := r.listDueSegment(ctx, nowMs, limit-len(fresh), false)
+	if err != nil {
+		return nil, err
+	}
+	seen := make(map[uint64]struct{}, len(fresh))
+	for _, id := range fresh {
+		seen[id] = struct{}{}
+	}
+	for _, id := range aged {
+		if _, dup := seen[id]; dup {
+			continue
+		}
+		fresh = append(fresh, id)
+	}
+	return fresh, nil
+}
+
+// listDueSegment 跑 ListDue 的其中一段。freshOnly=true 取 attempts < FreshAttemptLimit 的新行,
+// false 取 >= 的老行;两段共用同样的到期条件与排序。
+// 排序带 op_id 是为了确定性:同毫秒到期的行在多个副本上顺序一致,减少抢同一行的概率。
+func (r *AssetOpRepo) listDueSegment(ctx context.Context, nowMs uint64, limit int, freshOnly bool) ([]uint64, error) {
+	cmp := ">="
+	if freshOnly {
+		cmp = "<"
+	}
 	rows, err := r.db.QueryContext(ctx,
 		"SELECT `op_id` FROM "+AssetOpTableName+
 			" WHERE `status` = ? AND `next_attempt_ms` <= ? AND `lease_until_ms` < ?"+
-			" ORDER BY `next_attempt_ms` LIMIT ?",
-		PendingStatus(), nowMs, nowMs, limit)
+			" AND `attempts` "+cmp+" ?"+
+			" ORDER BY `next_attempt_ms` ASC, `op_id` ASC LIMIT ?",
+		PendingStatus(), nowMs, nowMs, assetop.FreshAttemptLimit, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list due %s: %w", AssetOpTableName, err)
+		return nil, fmt.Errorf("list due %s (fresh=%v): %w", AssetOpTableName, freshOnly, err)
 	}
 	defer func() { _ = rows.Close() }()
 	var ids []uint64
@@ -181,7 +224,7 @@ func (r *AssetOpRepo) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, pois
 	bundle := &assetpb.AssetBundle{}
 	if len(rec.GetPayload()) > 0 {
 		if err := proto.Unmarshal(rec.GetPayload(), bundle); err != nil {
-			r.markPoison(ctx, opID, token, nowMs)
+			r.markPoison(ctx, opID, token, nowMs, poisonUntilMs)
 			return assetop.Op{}, false, fmt.Errorf("%w: op_id=%d: %v", assetop.ErrPoisonRow, opID, err)
 		}
 	}
@@ -205,15 +248,15 @@ func (r *AssetOpRepo) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, pois
 	}, true, nil
 }
 
-// markPoison 把解不开 payload 的行推迟 PoisonDelay,并记下"最近一次结局未知"。
+// markPoison 把解不开 payload 的行推迟到 poisonUntilMs,并记下"最近一次结局未知"。
 // 用本次领取的 lease_token 做 CAS,避免推迟别的副本刚领走的同一行。
 // 失败只记在返回给调用方的错误里之外的日志层:这里没有 logger,推迟失败的后果是
 // 下一轮再撞一次同一行(仍然跳过),不会丢数据,所以吞掉写错误但不吞解码错误。
-func (r *AssetOpRepo) markPoison(ctx context.Context, opID, token, nowMs uint64) {
+func (r *AssetOpRepo) markPoison(ctx context.Context, opID, token, nowMs, poisonUntilMs uint64) {
 	_, _ = r.db.ExecContext(ctx,
 		"UPDATE "+AssetOpTableName+" SET `last_outcome` = 0, `next_attempt_ms` = ?, `lease_until_ms` = 0, `updated_ms` = ?"+
 			" WHERE `op_id` = ? AND `lease_token` = ?",
-		nowMs+uint64(PoisonDelay/time.Millisecond), nowMs, opID, token)
+		poisonUntilMs, nowMs, opID, token)
 }
 
 // Finalize 把行终结成 status,并在同一事务里做对侧账。RowsAffected == 1 才算本次终结
@@ -308,16 +351,28 @@ func (r *AssetOpRepo) ResolveManually(ctx context.Context, m assetop.ManualResol
 
 // Reschedule 退回待办并推迟下一次投递。带 lease_token 做 CAS:租约已被别人接管时本次更新落空,
 // 不会把别的副本刚排好的时间覆盖掉。
+//
+// 落空(RowsAffected == 0)必须回 assetop.ErrLeaseLost,这是契约的一部分。以前这里写的是
+// `_, err :=`,把 RowsAffected 丢掉、一律回 nil —— 于是"我这一轮的结果被另一个副本丢弃了"
+// 在指标里完全看不见:循环把它当成功,`assetop_reschedule_lost_total` 恒为 0,租约打架
+// 只能靠人肉比对日志时间戳才发现。
 func (r *AssetOpRepo) Reschedule(ctx context.Context, op assetop.Op, nextAttemptMs uint64, res assetop.Result, nowMs uint64) error {
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
-	_, err := r.db.ExecContext(ctx,
+	execRes, err := r.db.ExecContext(ctx,
 		"UPDATE "+AssetOpTableName+" SET `attempts` = `attempts` + 1, `next_attempt_ms` = ?, `lease_until_ms` = 0,"+
 			" `durable` = ?, `last_outcome` = ?, `last_reason` = ?, `updated_ms` = ?"+
 			" WHERE `op_id` = ? AND `status` = ? AND `lease_token` = ?",
 		nextAttemptMs, res.Durable, uint32(res.Outcome), res.Reason, nowMs, op.OpID, PendingStatus(), op.LeaseToken)
 	if err != nil {
 		return fmt.Errorf("reschedule %s %d: %w", AssetOpTableName, op.OpID, err)
+	}
+	affected, err := execRes.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("reschedule %s %d rows affected: %w", AssetOpTableName, op.OpID, err)
+	}
+	if affected == 0 {
+		return fmt.Errorf("%w: op_id=%d", assetop.ErrLeaseLost, op.OpID)
 	}
 	return nil
 }
@@ -398,8 +453,9 @@ func StatusToRecord(s assetop.Status) tradepb.TradeAssetOpStatus {
 // txRetryAttempts 是业务写路径撞死锁 / 写冲突时的整体重试次数(§4.37:attempts=2)。
 const txRetryAttempts = 2
 
-// PoisonDelay 是 payload 解不开的毒行的推迟时长,与 assetop.LoopConfig.PoisonDelay 同值。
-const PoisonDelay = time.Hour
+// 毒行推迟时长**刻意不在这里**:它是 assetop.LoopConfig.PoisonDelay(由 trade.yaml 的
+// PoisonDelayMs 喂进来),循环算好绝对时刻经 Claim 的 poisonUntilMs 传进来。
+// 这里再写一份 const 就是第二份真相 —— 改 yaml 不生效,且不会有任何报错。
 
 // IsRetryableTxError 报告事务错误是否值得整体重试。shared/assetop 不引 MySQL 驱动,
 // 分类由调用方注入(§4.37);取值与 guild 一致:

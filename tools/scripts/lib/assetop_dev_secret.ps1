@@ -14,10 +14,12 @@
     永远不会被提交。删掉那个文件就会重新生成新值 —— 此时 scene 与 guild / trade 必须一起重启,
     否则一半进程还拿着旧值,表现同样是 27008。
 
-    生成的值是 64 个十六进制字符,刻意不含空白:Go 侧 assetop.NewSigner 会 TrimSpace,
-    C++ 侧 DefaultSecretLookup 直接用 getenv 的原串**不 trim**。带首尾空白的值两边看到的
-    字节数不同,签名必然对不上,表现又是 27008。调用者自己设的值不在这里改动,
-    要自带密钥就别带换行。
+    生成的值是 64 个十六进制字符,刻意不含空白。两边其实都会去空白(Go 侧
+    assetop.NewSigner 用 strings.TrimSpace;C++ 侧在 VerifyAssetOpAuth 里对查表结果做
+    token_security::TrimAscii 之后才算 HMAC),所以带空白的值**通常**也能对上 —— 但
+    "通常"不是契约:Go 按 Unicode 空白 trim、C++ 按 ASCII,遇到 NBSP 一类字符两边结论
+    就会分家,而分家的表现是 27008 且日志里没有任何线索(密钥值不许进日志)。
+    不含空白 = 不给这个口径差异留机会。调用者自己设的值不在这里改动,要自带密钥就别带换行。
 
     **仅限本机 dev 的约定**。预发 / 生产的两把密钥必须由部署侧注入
     (k8s_deploy.ps1 的 Resolve-InjectedSecret -MinLength 32,规格 §4.43 第 29 项),
@@ -203,6 +205,22 @@ function Initialize-AssetOpDevSecrets {
 
         $stored = Read-AssetOpDevSecretStore -Path $path
         $generated = $false
+
+        # 调用者已经显式设好的那几把,先并进 $stored —— 否则文件与"进程实际在用的值"会分家:
+        # 只预设了两把里的一把时,另一把仍会被生成并写进文件,而预设的那把不会,
+        # 于是文件里躺着一个谁都没在用的值,下一次起服又把它注入给别的进程。
+        # 静默的半边不一致 = 27008 且日志无线索,正是本文件要消灭的那种失败。
+        foreach ($name in $script:AssetOpDevSecretEnvNames) {
+            $current = [Environment]::GetEnvironmentVariable($name)
+            if ($null -ne $current -and $current.Trim().Length -ge $script:AssetOpDevSecretMinLength) {
+                $trimmed = $current.Trim()
+                if (-not $stored.ContainsKey($name) -or $stored[$name] -ne $trimmed) {
+                    $stored[$name] = $trimmed
+                    $generated = $true
+                }
+            }
+        }
+
         foreach ($name in $script:AssetOpDevSecretEnvNames) {
             if (-not $stored.ContainsKey($name)) {
                 $stored[$name] = New-AssetOpDevSecretValue

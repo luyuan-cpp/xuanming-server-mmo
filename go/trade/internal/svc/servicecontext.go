@@ -104,8 +104,11 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		// 密钥来源必须与代码实际读的是同一个变量。config.Validate 只能校验形状,这条等值
 		// 只有装配层知道:不一致的表现是"配置说注入了、代码读的是别的",scene 一律回 27008。
 		if c.AssetOp.SecretEnv != AssetOpSecretEnv {
-			panic(fmt.Errorf("trade: AssetOp.SecretEnv=%q 与本服务实际读取的 %s 不一致:"+
-				"yaml / config.go / ConfigMap 三处必须逐字一致", c.AssetOp.SecretEnv, AssetOpSecretEnv))
+			// **不回显配置里那个值**:这条不一致最常见的成因就是有人把密钥本身贴进了 SecretEnv,
+			// 回显等于把它抄进启动日志(AGENTS §11.3)。只报本服务期望的变量名,足够定位。
+			panic(fmt.Errorf("trade: AssetOp.SecretEnv 与本服务实际读取的 %s 不一致"+
+				"(得到一个长度 %d 的值,此处刻意不回显内容):yaml / config.go / ConfigMap 三处必须逐字一致",
+				AssetOpSecretEnv, len(c.AssetOp.SecretEnv)))
 		}
 		// Enabled=true 但密钥缺失 / 去空白后不足 32 字节 → **拒启**,不降级。
 		// 玩家资产路径 fail-closed(AGENTS §11.3):一个"开着却签不出名"的 trade 会把每一次
