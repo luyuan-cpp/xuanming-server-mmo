@@ -4,6 +4,7 @@
 #include "node/system/node/node_entry.h"
 #include "agones/agones_scene_lifecycle.h"
 #include "handler/rpc/scene_handler.h"
+#include "rpc_replies/scene_manager_response_handler.h"
 #include "handler/grpc/scene_node_service.h"
 #include "core/config/config.h"
 #include "world/world.h"
@@ -81,6 +82,22 @@ int main(int argc, char *argv[])
         node.RegisterGrpcService(&context->grpcService);
 
         node::entry::detail::InstallSignalHandlers(loop);
+
+        // SceneManager 的 gRPC 应答处理器必须由这里装。
+        //
+        // 别的应答处理器走 Node::RegisterHandlers() → InitReply(),但那个 InitReply 在
+        // rpc_replies/register_response_handler.cpp 里,是 proto 生成器的产物
+        // (WriteRepliedRegisterFile,筛选谓词 IsSceneNodeReceivedProtocolResponseHandler),
+        // 而该谓词只收 cc_generic_services(muduo TCP RPC)的服务;scene_manager 在
+        // tools/proto_generator/protogen/etc/proto_gen.yaml 里是 rpc.type: grpc,
+        // **生成器永远不会把 InitSceneManagerReply 写进去**。手写加进那个文件也没用:
+        // 下一次 regen 必然抹掉(2026-04-16 的 f1b110bcc 就是这么把它弄丢的,
+        // 自那以后 AsyncSceneManagerEnterScene/CreateSceneHandler 一直为空,
+        // 生成客户端的 if(handler) 静默跳过每一条应答)。
+        // 形状与 ConfigureGuidSegmentClients 里的 InitDataServiceReply() 一致:
+        // 手写引导代码自己装自己的 gRPC 应答处理器。
+        // 只是给两个全局 std::function 赋值,没有前置依赖,放在发出任何请求之前即可。
+        InitSceneManagerReply();
 
         tlsRedisSystem.Initialize(&loop);
         World::InitializeSystemBeforeConnect();

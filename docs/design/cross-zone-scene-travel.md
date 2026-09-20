@@ -251,6 +251,7 @@ Claude 未运行任何构建 / 测试 / regen(AGENTS §10.1)。按顺序执行,�
 | B. 未映射玩家跨 zone 传送会把访客存盘写进目标 zone 的库(审计 GO-1,违反 §6 不变量 2) | `resolveHomeZone` 把"未映射 / 映射为 0"一律当首登、回落 `GateZoneId`;第二条腿的 gate zone 就是目标 zone,第一条腿完全不查归属。全程只有一条 INFO | 第一条腿(`leavingZone` 为真)在过门、铸 epoch、写等待落点**之前**先查归属,未映射 / 查询失败 → 20,源 scene 据此解冻回 tip;第二条腿(`awaitingPlacement`)未映射同样回 20(纵深防御)。"未映射 = 首登"只保留给无位置记录的首次落点与同 zone 已有位置的换图。新 reason `home_zone_unmapped_travel` + 告警 `SceneManagerHomeZoneUnmappedTravel`。单测 7 组 |
 | C. gate 对"同 scene_id、不同节点"的路由不转发进场(审计 CPP-1) | `ApplyRoute` 只按 `pendingEnterGsType` 与 scene_id 是否变化决定转发;world rebalance 迁频道沿用原 scene_id,规划与执行之间的竞态下玩家会落到"会话指向新节点、新旧节点上都没有实体",只能重登 | `RebindSceneNode` 把"比较旧指向 + 覆盖新指向"收进一个函数并返回 `SceneNodeChange`;节点变了也以 `enterType=0` 转发。旧指向无效(节点被摘除过)一律算换了节点。单测 `SceneRouteEntry` 共 16 个 |
 | D. 告警与指标 | `SceneManagerEnterSceneRejectedSpike` 钉在无人发射的 `reason="scene_gone"`,恒空且 Prometheus 不报错;**另查出两条 critical 的 `*PoolEmpty` 同样恒空**(`nodes_by_role` 这个 gauge 从不发布 0 值,`== 0` 永远匹配不到,两条 pager 从未响过) | 按真实发射的 reason 拆成 5 条告警;`PoolEmpty` 改成 `count … unless on (zone_id) count …`;恢复 destroy-while-entering 分支的 `scene_gone` 发射点并配回原告警;`metrics.go` 的 Help / 注释与发射点对齐。现共 17 条规则,**未经 promtool 校验** |
+| F. **scene 从不装 SceneManager 的 gRPC 应答处理器**(端到端闭环核查发现的 P0,详见 §12.5.1) | `InitSceneManagerReply()` 无任何调用点,`AsyncSceneManagerEnterScene/CreateSceneHandler` 恒为空,生成客户端静默跳过每一条应答。后果:同 zone 跨节点换图彻底失效(18 到不了 handler,玩家卡住零提示)、副本 / 镜像场景进入完全失效、跨 zone 传送源实体要冻满 30s、失败 tip 迟到 30s。**与本轮新代码无关,2026-04-16 的一次 regen 丢的** | 在 `cpp/nodes/scene/main.cpp` 装(生成物不能改,且生成器永远不会写它——谓词只收 `cc_generic_services`,scene_manager 是 grpc)。形状照 `id_segment_bootstrap.cpp` 的 `InitDataServiceReply()` |
 | E. 文档 | `docs/ops/cross-zone-failure-test-runbook.md` 写着"每个版本上线前必跑",四个场景却全在测已删除的 reaper 链;`enter-scene-zone-routing.md` 教运维合服时手工清 location | runbook 重写为 v2(面向现行链路的 A–F 场景,观测点逐个 grep 核对,文件头声明"静态编写、未实跑");路由文档逐句核对改写,新增"合服后残留 location"小节;约 20 份旧设计文档与 12 个代码文件里把已删行为当现状的文字加了状态标注 / 改成实情(只动注释) |
 
 ### 12.2 新增的上线前置
@@ -285,4 +286,40 @@ C++ MSBuild 必须串行 `/m:1 /nr:false`;这批代码从未编译,失败时先�
 3. `cpp/tests/routing_identity_test/routing_identity_test.vcxproj` → 运行 `--gtest_filter=SceneRouteEntry.*`(16 个)→ 全量 → `cpp/nodes/gate/gate.vcxproj` 0 error。重点看 `scene_route_helper.h` 新增的 `#include "proto/common/base/node.pb.h"` 在两个工程下能否解析。
 4. `promtool check rules`(先取出 `deploy/k8s/scene-manager-alerts.yaml` 的 `spec.groups`):17 条,无语法错误。本机没有 promtool 就如实记录。
 5. 故障注入(本地 dev):交接冻结态下 `redis-cli CLIENT KILL TYPE normal` 再断开客户端 → 期望先一条 `[ZoneTravel][WithdrawMark] deferred`、重连后 `withdrawn`,`[TravelHandoff]` 行 `withdraw_expired=0`,`GET player:{id}:handoff` 为 nil。其余场景按 runbook v2。
-6. 失败时保留:首个 error 及前后 20 行 / 失败用例的完整 `-v` 输出;C1041 / LNK1104 先排除并发构建;不连续重试、不注释断言。
+6. **§12.5.1 的 P0 修复必须实跑验证**(它激活了约 150 行从未执行过的代码):同 zone 起 2 个 scene 节点 + `AllowUnsafeCrossNodeHandoff=false` 跑一次跨节点换图,scene 日志应出现 `SceneManager.EnterScene deferred (handoff pending)` 并随后起交接重发(此前这条日志**从不出现**);再跑一次进副本 / 镜像场景,确认 `CreateScene` 应答后玩家真的被自动带进去。两者在修复前都是"请求发出、无任何后续"。
+7. 失败时保留:首个 error 及前后 20 行 / 失败用例的完整 `-v` 输出;C1041 / LNK1104 先排除并发构建;不连续重试、不注释断言。
+
+### 12.5 端到端闭环核查(2026-09-20):发现链路从一开始就断在 scene 的应答装配上
+
+用户问"整个流程闭环没有"。把链路拆成 8 段(客户端发包 → gate 白名单/路由 → scene 受理 → 写标记发请求 → SM 第一条腿 → 重定向出站 → gate(B) 验票 + login 识别访客 → 第二条腿 + 路由 + 目标节点加载 → 回家 → 失败分支收口),每段一名只读 agent 沿"上一段的出口 = 下一段的入口"走通,报出的每条断点再派一名反驳者。结论:**不闭环**,而且断点不在新写的那些环节上。
+
+#### 12.5.1 P0(已修):scene 节点从不装 SceneManager 的 gRPC 应答处理器
+
+- **事实**:`InitSceneManagerReply()`(`cpp/nodes/scene/rpc_replies/scene_manager_response_handler.cpp:15`)是全仓唯一给 `AsyncSceneManagerEnterSceneHandler`(:17)与 `AsyncSceneManagerCreateSceneHandler`(:62)赋值的地方,**它没有任何调用点**。scene 的 `InitReply()`(`rpc_replies/register_response_handler.cpp`)只调 `InitGateReply()`;scene 也从不调生成客户端的兜底装配入口(`SetIfEmptyHandler` 全仓唯一调用方是 `cpp/nodes/gate/main.cpp:280`)。于是两个全局 `std::function` 恒为空,生成客户端的 `if (AsyncSceneManagerEnterSceneHandler)`(`cpp/generated/grpc_client/scene_manager/scene_manager_service_grpc_client.cpp:144-147`)**静默跳过每一条应答**——不报错、不计数、不打日志。该 .cpp 确实编进了 scene 节点(`CMakeLists.txt:117`、`scene.vcxproj:236`),所以不是"文件没进构建"这类更轻的解释。
+- **怎么丢的**:`42bcbf05e`(2026-04-16)里这行调用还在;同日的 `f1b110bcc`("clear code")把它删了,之后再没加回来。根因不是手滑:`register_response_handler.cpp` 是 proto 生成器的产物(`WriteRepliedRegisterFile`,`tools/proto_generator/protogen/internal/generator/cpp/gen.go:362`),筛选谓词 `IsSceneNodeReceivedProtocolResponseHandler` 只收 `cc_generic_services`(muduo TCP RPC)的服务,而 scene_manager 在 `proto_gen.yaml` 里是 `rpc.type: grpc` —— **生成器永远不会把它写进去,手写加进那个文件下一次 regen 必然再被抹掉**。
+- **后果**(这条一直是坏的,与本轮新代码无关):
+  - **同 zone 跨节点换图彻底失效**:scene_manager 的 18(`ErrHandoffPending`)到不了 `HandleTravelEnterSceneReply`,交接不会起、请求不会重发,`PlayerSceneChangeInFlightComp` 5s 后静默过期,玩家原地卡住且零提示。§11.2 整条被动式链路是死码。
+  - **副本 / 镜像场景进入完全失效**:`RequestEnterMirrorScene`(`player_scene.cpp:199`)发完 `CreateScene` 后**完全依赖这个应答**来自动进场,全仓没有第二条路。
+  - **跨 zone 传送**:重定向靠 Kafka 仍能送达客户端,但源实体要冻满 30s 应答看门狗才被销毁,期间是不可交互的冻结体;计数全部落在 `grantedWithoutReply` 而非 `granted`,§11.2 的预期日志序列不会出现。
+  - **第一条腿被拒时**(目标图没开 / 归属未映射回 20 / 无可用 gate / epoch 冲突),tip 不再随应答立刻回,玩家要冻满 30s 才由看门狗解冻并弹"目标区繁忙"。
+- **修法**:在 `cpp/nodes/scene/main.cpp` 装,**不碰生成物**(AGENTS §3)。形状照 `ConfigureGuidSegmentClients` 里的 `InitDataServiceReply()`(`id_segment_bootstrap.cpp:244`)——手写引导代码自己装自己的 gRPC 应答处理器。只是给两个全局 `std::function` 赋值,无前置依赖,放在发出任何请求之前即可。注释里写清"为什么不能放进生成的 `InitReply()`",避免下一个人又搬回去。
+- **风险**:这一修同时**激活了约 150 行从未执行过的代码**(两个应答处理器的全部分支),首次编译与联调会第一次真正走到它们。
+
+#### 12.5.2 传送后半程失败时服务端对客户端零通知(4 条,均未修)
+
+四条审计发现指向同一个根:**第一条腿失败有出口(源 scene 解冻 + tip,§10.2 R5),第二条腿及其之后没有对等机制**,而那时源实体已经销毁。
+
+| # | 触发点 | 说明 |
+|---|---|---|
+| S5-B1 / S8-1 | `entergamelogic.go:310-321` | login 的 `EnterGame` gRPC 在提交预加载后就同步回成功,真正的 `SceneManager.EnterScene` 在异步链里;被拒时唯一处置是 `logx.Errorf` + `return`,刻意跳过 `cleanupLoginSessionState`("把登录会话留给客户端重试")。login 全仓没有任何 `PushToPlayer` / `SendTipToClient`,唯一的客户端通知原语 `KickSessionOnGate` 只服务 `ReplaceLogin`;`kEnterSceneFailed`(3023)的发射点全在 scene 节点,而此刻没有 scene 参与,该 tip 通道不可达。gate 侧也没有"已绑会话但迟迟没进场"的看门狗。**玩家表现**:连上 gate(B)、`EnterGame` 回成功,然后永远停在进入中,无 tip 无断线。可拒码含 1 / 7 / 8 / 17 / 18 / 19 / 20。其中 **20(归属未映射)在等待落点有效期内每次重试都会复现**,只能等 300s 票据过期回落 Offline-Return,或运维先跑回填。 |
+| S7-1 | `enterscenelogic.go:358` | 第一条腿的"目标地图在不在目标 zone 开着"只读预检被 `in.SceneConfId != 0` 挡住。而 `scene_config_id = 0` 是协议明文支持的形态(`player_scene.proto:81`:0 = 由目标 zone 挑默认大世界),**也正是"回家"的典型形态**。传 0 时第一条腿只校验目标 zone 有没有 gate,不校验有没有任何世界频道;放行后源实体立刻销毁,第二条腿解析场景失败只回 `ErrNoAvailableNode`,再落进上面那条无通知路径。§4 写的"目标 zone 无可用 gate / 频道 → 回可重试错误 → 源 scene 解冻并回 tip"对 conf=0 不成立。 |
+| S3L1-1 | `enterscenelogic.go:909-917` | 第一条腿 Kafka 推重定向失败后只有一层补偿:`rollbackPlayerPlacement` 回滚 location 与 epoch。该函数在 **Redis Eval 出错**时只记 Errorf 返回 false,epoch 停在 N+1 且无人重试;而应答里区分不出"已回滚 / 没回滚",源 scene 把 epoch 变化读成"已被放行",`DestroyDeposedPlayer` 不存盘销毁实体且全程不发任何客户端消息。双重故障才触发(Kafka 写失败 + Redis 回滚失败),但没有第二层出口。另一支(exact-value CAS 不过)销毁源实体本属正确,不算缺陷。 |
+
+- **共同修法方向**(需要拍板,且 `go/login/**` 当前有别的会话在改,本轮未动):① 给 login 一条面向客户端的失败通道——最小做法是复用已有的 `KickSessionOnGate` 把会话踢掉,让客户端明确回到登录流程,而不是无声等待;② 或在 gate 侧加"已绑会话但 N 秒内没收到 RoutePlayerEvent 就踢"的看门狗(同时也能兜住 §12.3 的 CPP-2);③ S7-1 单独可低成本收敛:第一条腿在 `SceneConfId == 0` 时也做一次"目标 zone 有没有任何世界频道"的只读预检。
+- 这组与 §12.3 的 CPP-2 / CPP-3 相邻但不同:CPP-2 是 `RoutePlayerEvent` 在 gate 丢失,CPP-3 是疏散改派 fire-and-forget,这里是 **EnterScene 被显式拒绝**且拒绝方是 login 异步链。
+
+#### 12.5.3 判定为闭环、未发现断点的环节
+
+以下每一跳都核对过接收方、字段透传与失败出口,证据链见工作流记录:协议契约与消息号 226 在 `message_id.txt` / C++ 生成物 / 10 个 Go 服务 / robot 之间一致且无重号;gate 的客户端白名单(`IsClientMessageId`)含 226,限速表缺省放行,按 `OptionFileDefaultNode = NODE_SCENE` 路由到 scene,应答经 `OnSceneProcessClientPlayerMessageReply` 原样回客户端;scene 侧 CZ-6 六条校验**每条拒绝都有 tip**(四个 `kZoneTravel*` 码 3024–3027 已发号、按枚举名引用);`StartTravelHandoff` 的两条存盘路径(写盘在途挂 30s 看门狗 / 脏数据快路径同步直调)都有接续,`BeginTravelHandoff` 与 `RequestTravelEnterScene` 的五条同步失败分支全部收口到 `AbortTravelHandoff`;第一条腿的换手门、归属前置检查、铸 epoch、签票据、写等待落点、Kafka 事件(含 `target_instance_id`)齐备;gate(A) 推 msg 124、gate(B) 验票绑定 `player_id` / `target_zone_id`、票据字段进 `SessionDetails`、第二条腿消费等待落点、`RoutePlayerEvent` 字段透传到 scene(B)、目标节点从共享 Redis 读档并按 `home_zone` 选 DBTask topic —— 均通。
+
+被反驳者推翻、不作为缺陷记录的两条:① "只送连接的重定向也会让源 scene 无条件销毁实体"(票据语义两端其实一致);② "第二条腿读不到档时会把访客当新号建成空实体并覆盖原档"(读档失败有 fail-closed 保护)。另有一条 P2 时序问题(受理后同步失败时,失败 tip 会早于"已受理"应答到达,与 `player_scene.proto:74-76` 写的次序契约相反)被判 refuted,但它依赖客户端是否按"先收应答再开遮罩"实现,**归入客户端核对项**。
