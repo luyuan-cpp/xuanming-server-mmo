@@ -39,7 +39,7 @@ import (
 
 var configFile = flag.String("f", "etc/data_service.yaml", "the config file")
 
-// migrateOnly 是生产用的显式建表入口:`data_service -f <yaml> -migrate` 对全局库四张表
+// migrateOnly 是生产用的显式建表入口:`data_service -f <yaml> -migrate` 对全局库五张表
 // 跑一次 store.MigrateSchema(与 Schema.AutoMigrate=true 的启动路径是同一段代码),
 // 跑完即退出,不起 gRPC、不连 Redis。生产把 AutoMigrate 设 false,部署阶段单进程跑这个。
 var migrateOnly = flag.Bool("migrate", false, "run the global-DB schema migration (proto2mysql) and exit")

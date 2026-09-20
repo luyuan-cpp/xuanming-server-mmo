@@ -60,6 +60,8 @@ const (
 
 	// playerNameReleaseAttempts Release 的尝试上限。DELETE 本身幂等,重试安全;
 	// 多争取一次成功能直接少一条孤儿(失败的释放就是孤儿,见上面的崩溃窗口)。
+	// 会重来的有两种可预期情况:MySQL 1213/1205(锁冲突,isRetryableMySQL),
+	// 以及"没删到、但行在且落在窗口内"(在途 INSERT 在 DELETE 之后才提交,见 Release)。
 	playerNameReleaseAttempts = 3
 
 	// mysqlErrDupEntry 1062 ER_DUP_ENTRY:撞主键或唯一键。
@@ -277,19 +279,34 @@ func (s *PlayerNameStore) Release(ctx context.Context, playerID uint64, norm str
 			return ReleaseDeleted, nil
 		}
 
-		// 没删到。不限时间时"没删到"只能是行不存在;限时间时还要分清
-		// "行不存在"与"行在、只是太老" —— 后者必须让调用方拿到拒绝,而不是误以为释放成功。
+		// 没删到。不限时间时"没删到"只能是行不存在(DELETE 的时间条件恒真)。
 		if minCreatedMs == 0 {
 			return ReleaseAbsent, nil
 		}
-		exists, err := s.hasRow(ctx, playerID, norm)
+
+		// 限时间时"没删到"有三种成因,必须按 created_ms 分开 —— 只探"行在不在"会把第三种
+		// 误判成第二种,给调用方一个 FailedPrecondition 加一条指向错误方向的 ERROR。
+		createdMs, exists, err := s.createdMsOf(ctx, playerID, norm)
 		if err != nil {
 			return 0, err
 		}
-		if exists {
+		switch {
+		case !exists:
+			// 1. 行不存在(从没登记过,或已被删):幂等成功。
+			return ReleaseAbsent, nil
+		case createdMs < minCreatedMs:
+			// 2. 行在,登记时刻早于窗口下界:这正是窗口要拦的"删别人在役角色的名字",拒绝。
 			return ReleaseOutsideWindow, nil
+		default:
+			// 3. 行在且落在窗口内,却没被刚才那条 DELETE 删到 —— 只能是这行在 DELETE 执行
+			//    **之后**才提交(在途 INSERT 与本次 Release 交叉)。而这恰恰是 login 两次补偿
+			//    释放要覆盖的竞态(见文件头「崩溃窗口」):此刻不重删就会留下一条孤儿行。
+			//    循环上限 playerNameReleaseAttempts 兜住"对端一直在重插"的极端情况,
+			//    用尽后按错误返回(见循环外的 exhausted),不无限转。
+			logx.Infof("[PlayerNameStore] player_id=%d release retry %d/%d: row committed after the delete "+
+				"(created_ms=%d >= min_created_ms=%d), deleting again",
+				playerID, attempt, playerNameReleaseAttempts, createdMs, minCreatedMs)
 		}
-		return ReleaseAbsent, nil
 	}
 	return 0, fmt.Errorf("player_name release: player_id=%d name_norm=%q exhausted %d attempts",
 		playerID, norm, playerNameReleaseAttempts)
@@ -372,19 +389,21 @@ func (s *PlayerNameStore) ownerOfNorm(ctx context.Context, norm string) (owner u
 	return owner, true, nil
 }
 
-// hasRow 判断 (playerID, name_norm) 这一行在不在(不看 created_ms)。
-// 只给 Release 区分"行不存在"与"行太老"用。
-func (s *PlayerNameStore) hasRow(ctx context.Context, playerID uint64, norm string) (bool, error) {
-	var one int
-	err := s.db.QueryRowContext(ctx,
-		`SELECT 1 FROM player_name WHERE player_id = ? AND name_norm = ?`, playerID, norm).Scan(&one)
+// createdMsOf 读 (playerID, name_norm) 这一行的登记时刻。found=false 表示没有行。
+//
+// 只给 Release 在"DELETE 一行没删到"之后定位成因用。刻意读 created_ms 而不是 `SELECT 1`:
+// 少了这一列就分不清"行太老"(该拒绝)与"行是 DELETE 之后才提交的"(该重删),
+// 而后者是 login 补偿路径的常规竞态,不是异常。
+func (s *PlayerNameStore) createdMsOf(ctx context.Context, playerID uint64, norm string) (createdMs uint64, found bool, err error) {
+	err = s.db.QueryRowContext(ctx,
+		`SELECT created_ms FROM player_name WHERE player_id = ? AND name_norm = ?`, playerID, norm).Scan(&createdMs)
 	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
+		return 0, false, nil
 	}
 	if err != nil {
-		return false, fmt.Errorf("player_name probe player_id=%d name_norm=%q: %w", playerID, norm, err)
+		return 0, false, fmt.Errorf("player_name probe player_id=%d name_norm=%q: %w", playerID, norm, err)
 	}
-	return true, nil
+	return createdMs, true, nil
 }
 
 // isDuplicateEntryMySQL 判断是不是 1062(撞主键或唯一键)。

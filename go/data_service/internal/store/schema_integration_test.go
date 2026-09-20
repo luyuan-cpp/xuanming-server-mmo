@@ -107,7 +107,7 @@ func TestMigrateSchema_CreatesGlobalTablesAndIsIdempotent(t *testing.T) {
 		db.Name).Scan(&txPK))
 	assert.Equal(t, "tx_id", txPK)
 
-	// 幂等:第二次迁移不报错,且四张表的 DDL 一字不变。
+	// 幂等:第二次迁移不报错,且五张表的 DDL 一字不变。
 	before := map[string]string{}
 	for table := range wantColumns {
 		before[table] = db.ShowCreateTable(t, table)

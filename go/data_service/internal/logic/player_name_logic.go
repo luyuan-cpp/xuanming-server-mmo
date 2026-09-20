@@ -4,15 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
+	"data_service/internal/metrics"
 	"data_service/internal/store"
 	"data_service/internal/svc"
 
 	"shared/playername"
 
 	"github.com/zeromicro/go-zero/core/logx"
-	"github.com/zeromicro/go-zero/core/metric"
 )
 
 // ── 玩家名字注册表 logic(设计 docs/design/guild-phase2/03-names.md §3.6)────────
@@ -48,43 +49,21 @@ var (
 
 // ── 指标 ───────────────────────────────────────────────────────
 //
-// 用 go-zero 的 metric 包(它内部 prom.MustRegister 到默认 registry,而 data_service
-// 的 /metrics 用的正是 promhttp.Handler() 默认 gatherer,所以不需要额外注册)。
+// 三个指标(设计 §3.6 的 data_service_player_name_*)定义在 internal/metrics,
+// 本文件只给出 label 取值并调 Observe* 帮助函数。
 //
-// Namespace/Subsystem 留空、名字一次写全:设计 §3.6 直接给出了 `data_service_` 开头的
-// 完整指标名,拆成 Namespace="data_service" 虽然等价,但改 Namespace 常量时会连带改掉
-// 一批别的指标名,不如让这三个名字自己独立。
+// 【为什么不在这里用 go-zero 的 core/metric】那个包的 Inc/ObserveFloat 内部都先问
+// prometheus.Enabled(),而这个开关只有 metric agent(yaml 的 Prometheus 段 →
+// StartAgent)才会打开;data_service 没有那一段,也不该加——加了会再起一个 /metrics
+// 端口,与 MetricsListenAddr 上已有的那套并存。用 core/metric 写在这里的后果是
+// 三个指标永远是 0,而且不报任何错(这正是 2026-09-19 核验查出来的缺陷)。
 //
-// 【低基数纪律】label 只有 op(3 个取值)、result(6 个取值)。**绝不放 player_id 或
-// 名字**:那是无上界的维度,会把 Prometheus 的时间序列打爆(AGENTS.md §9)。
-var (
-	playerNameOpsTotal = metric.NewCounterVec(&metric.CounterVecOpts{
-		Name: "data_service_player_name_ops_total",
-		Help: "玩家名字注册表操作结果。op: reserve|release|batch_get;" +
-			"result: ok|taken|invalid|conflict|outside_window|error。",
-		Labels: []string{"op", "result"},
-	})
-
-	playerNameOpSeconds = metric.NewHistogramVec(&metric.HistogramVecOpts{
-		Name: "data_service_player_name_op_seconds",
-		Help: "玩家名字注册表单次操作耗时(秒),含缓存与 SQL。建角是同步路径," +
-			"reserve 的 p99 直接进 CreatePlayer 的耗时预算。",
-		Labels: []string{"op"},
-		// 桶按"一次本地 SQL"的量级铺:1ms 是理想值,25ms 以内算健康,
-		// 超过 250ms 说明全局库开始排队(建角会肉眼可见地卡)。
-		Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1},
-	})
-
-	playerNameCacheTotal = metric.NewCounterVec(&metric.CounterVecOpts{
-		Name: "data_service_player_name_cache_total",
-		Help: "BatchGetPlayerName 的缓存命中情况,按 id 计数。" +
-			"result: hit(有名字)|negative_hit(缓存记着库里没有)|miss(要回源)。",
-		Labels: []string{"result"},
-	})
-)
+// 【低基数纪律】label 只有 op(3 个取值)、result(7 个取值)。**绝不放 player_id 或
+// 名字**:那是无上界的维度,会把 Prometheus 的时间序列打爆(AGENTS.md §9);
+// 需要 player_id 的排障信息一律走日志。
 
 // op / result 的取值写成常量:label 值必须是有界集合,散在各处的字面量早晚会被拼错
-// 成第 7 个取值(拼错不会报错,只会悄悄多出一条时间序列)。
+// 成又一个取值(拼错不会报错,只会悄悄多出一条时间序列)。
 const (
 	playerNameOpReserve  = "reserve"
 	playerNameOpRelease  = "release"
@@ -92,7 +71,12 @@ const (
 )
 
 const (
-	playerNameResultOK            = "ok"
+	playerNameResultOK = "ok"
+
+	// playerNameResultAlreadyOwned 只出现在 reserve:同 player_id 同名的幂等重试。
+	// 它在 RPC 上与 ok 无法区分(都回 ReserveOK),但监控上必须分开 —— already_owned
+	// 的速率抬头 = 上游在大量重试 CreatePlayer,而那是孤儿行开始堆积的唯一前兆。
+	playerNameResultAlreadyOwned  = "already_owned"
 	playerNameResultTaken         = "taken"
 	playerNameResultInvalid       = "invalid"
 	playerNameResultConflict      = "conflict"
@@ -114,8 +98,7 @@ const (
 func observePlayerNameOp(op string, result *string) func() {
 	start := time.Now()
 	return func() {
-		playerNameOpSeconds.ObserveFloat(time.Since(start).Seconds(), op)
-		playerNameOpsTotal.Inc(op, *result)
+		metrics.ObservePlayerNameOp(op, *result, time.Since(start))
 	}
 }
 
@@ -167,14 +150,34 @@ func ReservePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID
 	}
 
 	switch outcome {
-	case store.ReserveInserted, store.ReserveAlreadyOwned:
+	case store.ReserveInserted:
 		metricResult = playerNameResultOK
 		// 走到这里数据**已经提交**(store 的单条 INSERT 自己就是提交点),
-		// 所以现在写缓存是安全的:不会缓存一个还可能回滚的名字。
+		// 所以现在写缓存是安全的:不会缓存一个还可能回滚的名字。而且这一行是本次
+		// 刚写进去的,库里的 name 就是这个 display,缓存与唯一真源必然一致。
 		//
 		// 缓存写失败绝不改变返回值:缓存是加速不是真相,让它把一次已经成功的建角
 		// 翻成失败,才是真正的故障放大。只留 ERROR 日志 + 指标。
 		cachePlayerNameBestEffort(ctx, svcCtx, playerID, display)
+		return playername.ReserveOK, 0, nil
+
+	case store.ReserveAlreadyOwned:
+		// 幂等重试:RPC 上仍然是成功,但指标记成 already_owned(见常量处的理由)。
+		// player_id 只进日志不进 label —— 它是无上界维度(AGENTS.md §9)。
+		metricResult = playerNameResultAlreadyOwned
+		logx.Infof("[player-name] reserve is an idempotent retry (store outcome=%s): player_id=%d already holds "+
+			"this name; a rising rate here means callers keep retrying CreatePlayer, which is how orphan rows pile up",
+			outcome, playerID)
+
+		// **刻意不写缓存**:库里那一行的 name 是**上一次**登记时写下的展示名,而
+		// display 是**本次**请求归一化出来的。判重键 norm 只比小写,所以"同 norm
+		// 不同大小写"(YunZhongJun vs yunzhongjun)两次请求都会走到这里,此时
+		// display != 库里的 name。把本次的 display 写进正缓存,缓存就和唯一真源分叉了,
+		// 而且窗口是 CacheTTL(24h)而不是一次竞态 —— 展示面会 24 小时显示一个
+		// 库里根本不存在的大小写形态。
+		//
+		// 真名交给下一次 BatchGet 回源回填(那条路径读的就是库里的 name)。代价只是
+		// 这个 id 的第一次读要打一次 SQL,而这条分支本来就只在重试时才出现。
 		return playername.ReserveOK, 0, nil
 
 	case store.ReserveTaken:
@@ -205,6 +208,27 @@ func cachePlayerNameBestEffort(ctx context.Context, svcCtx *svc.ServiceContext, 
 	}
 }
 
+// playerNameAdminRules 是 admin(运维)释放路径用的归一化规则:**只**把长度这一道闸
+// 放到最宽,字符集、NFKC、敏感词仍然走规则包本身那一份实现。
+//
+// 【为什么要分档】放行敏感词的那条理由("规则包可换版,否则孤儿行永远清不掉")对长度
+// 规则一字不差地成立:把 StructuralMaxRunes 从 32 调到 16,昨天合法登记的那一批名字
+// 今天全部判 Invalid,运维唯一的补偿入口就被一次纯规则改动锁死了。释放只需要 norm
+// 这一个判重键,名字多长对删除语义没有任何影响,而 admin 已经过了 server 层的
+// authorizeAdmin —— 这里不该再用玩法/结构口径二次设限。
+//
+// 【为什么上限取 int 上限而不是列宽】DELETE 按 (player_id, name_norm) 精确匹配,
+// 且 player_id 是主键(一个玩家至多一行),所以一个过长的 key 最坏只是删不到任何行
+// (零变更),再设一道上限只是重复库的约束。开销也没有变化:Normalize 无论如何都会
+// 先对 raw 跑 NFKC,长度闸在那之后,放宽它不会多算一分钱。
+//
+// 【它覆盖不到什么】字符集收窄或 NFKC 换版时,规则包再也算不出当年那一行的 name_norm,
+// 本文件也就无能为力(Normalize 对 Invalid 一律回空 norm,而在这里重写一遍
+// NFKC→TrimSpace→ToLower 等于给"什么算同一个名字"造第二个真源,正是 shared/playername
+// 存在的意义所在)。那一档要么由规则包导出"只归一化不校验"的取键函数,要么由 store
+// 增加按 player_id 释放的入口,都不在本文件的改动范围内。
+var playerNameAdminRules = playername.Rules{MinRunes: 1, MaxRunes: math.MaxInt}
+
 // ReleasePlayerName 条件释放 playerID 名下的 raw 这个名字。
 //
 // admin=true 表示 server 层已经过了 authorizeAdmin,本次不限登记时间(运维按日志
@@ -221,7 +245,13 @@ func ReleasePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID
 		return fmt.Errorf("%w (release player_id=0)", store.ErrPlayerNameInvalidArgument)
 	}
 
-	_, norm, verdict := playername.Normalize(raw, playername.StructuralRules)
+	// 规则**按调用方分档**:admin 是运维唯一的补偿入口,对它放宽长度这道闸(见
+	// playerNameAdminRules 的推导);非 admin(login 的建角补偿)仍走结构规则。
+	rules := playername.StructuralRules
+	if admin {
+		rules = playerNameAdminRules
+	}
+	_, norm, verdict := playername.Normalize(raw, rules)
 	switch verdict {
 	case playername.VerdictOK:
 		// 正常路径。
@@ -233,12 +263,25 @@ func ReleasePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID
 		logx.Infof("[player-name] releasing a name that the current word list flags as sensitive "+
 			"(reserve would reject it today): player_id=%d admin=%v", playerID, admin)
 	default:
-		// VerdictEmpty / VerdictInvalid:归一化后为空或非法,norm 是空串,
-		// 传给 store 只会撞 ErrPlayerNameInvalidArgument。在这里就拒,
-		// 对应 §3.1 映射表的 "Release 的 name 归一化后为空或非法 → InvalidArgument"。
+		// VerdictEmpty / VerdictInvalid:Normalize 对这两个判定**一律返回空 norm**
+		// (规则包的显式契约:不给调用方一个"没过校验却看着能用"的串)。没有判重键
+		// 就没有 DELETE 的 WHERE 条件,传给 store 只会撞 ErrPlayerNameInvalidArgument,
+		// 所以这里就拒 —— 对应 §3.1 映射表的
+		// "Release 的 name 归一化后为空或非法 → InvalidArgument"。
 		metricResult = playerNameResultInvalid
-		return fmt.Errorf("%w (release player_id=%d verdict=%s)",
-			store.ErrPlayerNameInvalidArgument, playerID, verdict)
+		if admin && verdict == playername.VerdictInvalid {
+			// admin 被**字符集**挡住是运维补偿被锁死,不是一次普通的参数错误:打 ERROR
+			// 让它进告警面(VerdictEmpty 只是把名字发空了,那确实是普通参数错误,不在此列)。
+			// 走到这里说明名字连放宽长度之后都过不了字符集,而字符集 / NFKC 一旦换版,
+			// 规则包就再也算不出当年那一行的 name_norm。能覆盖这一档的修法不在本文件:
+			// 要么 shared/playername 导出一个"只归一化、不校验"的取键函数,要么 store
+			// 增加一条按 player_id 释放的入口。在那之前,这类孤儿行只能由 DBA 手工清。
+			logx.Errorf("[player-name] admin release refused: player_id=%d name is rejected by the current "+
+				"charset rules even with the length gate relaxed; the rule pack can no longer reproduce the "+
+				"stored name_norm, so this orphan row needs a manual cleanup by player_id", playerID)
+		}
+		return fmt.Errorf("%w (release player_id=%d verdict=%s admin=%v)",
+			store.ErrPlayerNameInvalidArgument, playerID, verdict, admin)
 	}
 
 	if svcCtx == nil || svcCtx.PlayerNameStore == nil {
@@ -255,9 +298,19 @@ func ReleasePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID
 	switch outcome {
 	case store.ReleaseDeleted:
 		metricResult = playerNameResultOK
-		// **先删库再删缓存**,顺序不能反:反过来的话,两步之间的一次读会把库里那个
-		// 即将消失的名字重新缓存起来,DEL 就白做了。
-		// DEL 失败不算业务失败(库已经是真相),脏值由 CacheTTL 封顶。
+		// **先删库再删缓存**,顺序不能反:反过来的话,DEL 与 DELETE 之间的任何一次读都
+		// 会把库里那个还在的名字重新缓存起来,DEL 必然白做。
+		//
+		// 【这个顺序挡不住什么】一个在 DELETE **之前**就已经从库里读到名字、在 DEL
+		// **之后**才写回缓存的 BatchGet:它的回填用的是覆盖式 SET,DEL 已经执行完也拦
+		// 不住,名字会带着 CacheTTL(24h)重新躺回缓存。这不是"顺序反了",而是
+		// "读-改-写"之间本来就没有互斥;真要堵死需要缓存侧有比较-交换或墓碑(那要改
+		// routing 的写入语义,不在本文件)。
+		// 接受它的理由:能走到 Release 的只有两种情况 —— login 的建角补偿(角色根本没
+		// 建成)与运维清孤儿(角色不存在),这两种下"一个不存在的 player_id 在缓存里还
+		// 留着名字"没有可见后果,而且 CacheTTL 封顶。
+		//
+		// DEL 失败同理不算业务失败(库已经是真相)。
 		if svcCtx.Router != nil {
 			if cacheErr := svcCtx.Router.DelPlayerName(ctx, playerID); cacheErr != nil {
 				logx.Errorf("[player-name] cache del failed for player_id=%d after MySQL delete committed "+
@@ -269,7 +322,13 @@ func ReleasePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID
 
 	case store.ReleaseAbsent:
 		// 幂等成功:行本来就不在,或已经被上一次补偿删掉了。
+		//
+		// 仍然记一条 Info:Deleted 与 Absent 在 RPC 上无法区分(都返回 nil),而
+		// "补偿真的删掉了一行"和"补偿全打空"在排障时是两件事 —— 前者说明建角确实失败过,
+		// 后者是 login 第二次补偿的正常样子。outcome 用 store 的 String()(有界三值)。
 		metricResult = playerNameResultOK
+		logx.Infof("[player-name] release was a no-op: player_id=%d admin=%v outcome=%s "+
+			"(no such row; expected for login's second compensation call)", playerID, admin, outcome)
 		return nil
 
 	case store.ReleaseOutsideWindow:
@@ -289,7 +348,10 @@ func ReleasePlayerName(ctx context.Context, svcCtx *svc.ServiceContext, playerID
 // releaseWindowFloorMs 算这次释放允许触碰的最早登记时刻(Unix 毫秒,含)。
 //
 //   - admin=true → 0,不限时间(调用方已过 authorizeAdmin);
-//   - 否则 → now - ReleaseWindow。
+//   - 否则 → now - ReleaseWindow,并且**永不返回 0**(下界会下溢时钳到 1,见函数体)。
+//
+// 返回值 0 在 store 的契约里是带内哨兵"不限登记时间",所以它是一个权限值,
+// 不是一个时间值:非 admin 分支无论遇到什么异常都不许产出它。
 //
 // 【配置漏填时往哪边倒】ReleaseWindow 非正值(config.Normalize() 本该填上默认 10m)
 // **绝不能**退化成 0:0 等于"不限时间",任何能发 RPC 的内部调用方都能删掉在役角色的
@@ -308,9 +370,24 @@ func releaseWindowFloorMs(svcCtx *svc.ServiceContext, admin bool, now time.Time)
 	nowMs := now.UnixMilli()
 	windowMs := window.Milliseconds()
 	if nowMs <= windowMs {
-		// 只可能出现在把时钟调到 1970 附近、或窗口被配成几十年的机器上。
-		// 这里必须显式取 0:无符号减法会把负差回绕成天文数字,下界反而跑到未来去。
-		return 0
+		// 只可能出现在把时钟调到 1970 附近、或窗口被配成几十年的机器上:now - window
+		// 落到了 1970 之前。直接做 uint64(nowMs-windowMs) 会把负差回绕成天文数字,
+		// 下界反而跑到未来去,于是**什么都删不掉**,所以必须显式处理。
+		//
+		// 【为什么钳到 1 而不是 0】0 在 store 的契约里不是"很早",而是那个带内哨兵
+		// "不限登记时间",只有过了 authorizeAdmin 的运维路径才许传。让一次时钟异常把
+		// 非 admin 调用方悄悄提权成 admin,是这里最不该发生的事:权限边界不能由时钟决定。
+		// 1 是"下界尽可能早"的**普通**表达,数学上与 0 等效(任何真实登记都晚于
+		// 1970-01-01T00:00:00.001Z),同时把 0 的专属语义留给 admin。
+		//
+		// 【为什么不顺手 fail-closed 成 now】窗口被配成几十年是有意为之的配置,按 now
+		// 钳会静默作废它;而时钟错到 1970 的机器上,created_ms 用的是同一个时钟,
+		// 整条建角路径本来就已经不可信,在这里单独拦一道也救不回来。所以这里只保住
+		// "0 只属于 admin"这条边界,窗口宽度异常交给下面这条 ERROR 日志去暴露。
+		logx.Errorf("[player-name] release window floor underflowed: now=%d ms, window=%v; "+
+			"clock or PlayerName.ReleaseWindow is wrong. Falling back to floor=1 (earliest possible, "+
+			"but NOT 0 — 0 means 'no time limit' and is reserved for admin)", nowMs, window)
+		return 1
 	}
 	return uint64(nowMs - windowMs)
 }
@@ -370,21 +447,28 @@ func BatchGetPlayerName(ctx context.Context, svcCtx *svc.ServiceContext, ids []u
 		}
 	}
 
+	// 三个计数先在循环里累加,出循环一次报:按 id 逐个 Inc 等于每个 id 做一次
+	// label 查找,而这个循环最长跑 PlayerNameBatchLimit(500)次。
+	var cacheHits, cacheNegativeHits, cacheMisses int
 	missing := make([]uint64, 0, len(unique))
 	for _, id := range unique {
 		if name, ok := hits[id]; ok {
 			result[id] = name
-			playerNameCacheTotal.Inc(playerNameCacheHit)
+			cacheHits++
 			continue
 		}
 		if absent[id] {
 			// 负缓存命中:库里确实没有,本轮不回源,也不放进结果。
-			playerNameCacheTotal.Inc(playerNameCacheNegativeHit)
+			cacheNegativeHits++
 			continue
 		}
-		playerNameCacheTotal.Inc(playerNameCacheMiss)
+		cacheMisses++
 		missing = append(missing, id)
 	}
+	// 必须在这里报:下面有一个"全部命中就直接返回"的提前出口。
+	metrics.ObservePlayerNameCache(playerNameCacheHit, cacheHits)
+	metrics.ObservePlayerNameCache(playerNameCacheNegativeHit, cacheNegativeHits)
+	metrics.ObservePlayerNameCache(playerNameCacheMiss, cacheMisses)
 
 	if len(missing) == 0 {
 		metricResult = playerNameResultOK
@@ -418,6 +502,13 @@ func BatchGetPlayerName(ctx context.Context, svcCtx *svc.ServiceContext, ids []u
 
 	if svcCtx.Router != nil {
 		if len(found) > 0 {
+			// 【已知的窄窗口】这一步写的是**读库那一刻**的名字。如果在"读库之后、写缓存
+			// 之前"有一次 Release 提交并 DEL 了缓存,这里的覆盖式 SET 会把那个已经不存在
+			// 的名字重新写回去,带着 CacheTTL(24h);Release 的"先删库再删缓存"消除的是
+			// 反向时序,消除不了这一个(见 ReleasePlayerName 的 ReleaseDeleted 分支)。
+			// 不在这里用更短的 TTL 去收窄:那会让帮会成员列表这条真正的热读路径长期多打
+			// SQL,拿确定的成本换一个只在"建角失败补偿/运维清孤儿"时才可能出现、且对象
+			// 是不存在的角色的展示面脏值,不划算。
 			if cacheErr := svcCtx.Router.SetPlayerNames(ctx, found, svcCtx.Config.PlayerName.CacheTTL); cacheErr != nil {
 				logx.Errorf("[player-name] cache refill failed for %d names: %v", len(found), cacheErr)
 			}

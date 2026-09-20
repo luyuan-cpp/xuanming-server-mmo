@@ -111,6 +111,27 @@ func isBootstrapTable(tableName string) bool {
 	return ok
 }
 
+// bootstrapUniqueColumns 是 bootstrap 表上"必须存在单列唯一键"的列:表名 → 列名清单。
+//
+// 为什么需要这张表:bootstrap 路径是 `CREATE TABLE IF NOT EXISTS`,表已存在就整条语句跳过;
+// 迁移对 bootstrap 表又只跑 assertColumnsPresent(只比**列名**)。两者叠加的结果是,一张
+// 形状不对的既有 player_name(手工建的、从别处导入的、被 `ALTER TABLE ... DROP INDEX` 改过的)
+// 能一路静默通过启动检查 —— 而 player_name 的唯一键**就是**"名字全服唯一"这条不变量的全部
+// 实现(store 层刻意不做"先查后插",见 player_name_store.go 文件头)。索引没了 = 不变量整条
+// 失效,且并发建角重名时零报错,只有玩家互相看到同名才会被发现。
+//
+// 判据是"**恰好只有这一列、且不带前缀长度**的唯一索引",不是"这一列排在某条唯一索引的第一位":
+// UNIQUE KEY (name_norm, player_id) 的 name_norm 也在 SEQ_IN_INDEX=1,但它只保证
+// **组合**唯一 —— 每个 player_id 都能再占一次同一个名字,不变量照样是破的。
+// PRIMARY KEY 同样满足(NON_UNIQUE=0),单列主键建在 name_norm 上一样能兜住唯一性,故一并接受。
+//
+// id_segment 刻意没进这张表:它的唯一性由主键 biz_tag 承担,而主键缺失会让**写入**直接出错
+// (不是静默),不存在 player_name 这种"坏了也没人知道"的形态;给它加一条只会让一批存量 dev 库
+// 在启动期 fail-closed,代价大于收益。真要加时在这里加一行即可。
+var bootstrapUniqueColumns = map[string][]string{
+	PlayerNameTableName: {"name_norm"},
+}
+
 // TableMessages 返回全局库五张表的 proto 原型,顺序即迁移顺序。
 // 末尾两张(id_segment、player_name)在 bootstrapTables 里,同步循环只对它们做列漂移检查。
 func TableMessages() []proto.Message {
@@ -190,7 +211,8 @@ func MigrateSchema(ctx context.Context, cfg MySQLConfig, opts MigrateOptions) er
 }
 
 // migrateSchemaOn 注册五张表 → 表名守卫 → 预建 bootstrapTables(id_segment、player_name)
-// → 其余三张 CreateOrUpdateTable → 预建 id_segment 行(BootstrapTags)→ player / guild 水位地板校验。
+// → bootstrap 表只做形状守卫(列齐 + 单列唯一键还在)、其余三张 CreateOrUpdateTable
+// → 预建 id_segment 行(BootstrapTags)→ player / guild 水位地板校验。
 func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts MigrateOptions) error {
 	model := proto2mysql.NewDB().WithContext(ctx)
 	if err := model.OpenDB(db, dbName); err != nil {
@@ -224,7 +246,12 @@ func migrateSchemaOn(ctx context.Context, db *sql.DB, dbName string, opts Migrat
 			if err := assertColumnsPresent(ctx, db, dbName, t, name); err != nil {
 				return err
 			}
-			logx.Infof("[schema] table %s pre-created by bootstrap DDL; columns verified against proto", name)
+			// 与 assertColumnsPresent 同级的第二道形状守卫:列名对不代表键还在(见
+			// bootstrapUniqueColumns 的注释)。两条都 fail-closed,拒绝带着坏形状启动。
+			if err := assertUniqueColumns(ctx, db, dbName, name); err != nil {
+				return err
+			}
+			logx.Infof("[schema] table %s pre-created by bootstrap DDL; columns and unique keys verified", name)
 			continue
 		}
 		if err := warnIfLegacyTable(ctx, db, dbName, t, name); err != nil {
@@ -467,4 +494,82 @@ func assertColumnsPresent(ctx context.Context, db *sql.DB, dbName string, table 
 		return fmt.Errorf("table %s lacks proto-declared columns %v; it is pre-created by bootstrap DDL (schema.go bootstrapTables), update that DDL", tableName, missing)
 	}
 	return nil
+}
+
+// assertUniqueColumns 形状检查:bootstrapUniqueColumns 里登记的每一列,在线上表都得有一条
+// **恰好只含这一列**的唯一索引(UNIQUE KEY 或单列 PRIMARY KEY)。
+// 与 assertColumnsPresent 一样只用于不走 CreateOrUpdateTable 的预建表,且同样 fail-closed:
+// 这条键是业务不变量的唯一实现,缺了必须拒绝启动,而不是打一条警告接着跑(见 AGENTS.md §11.3
+// "玩家资产和数据完整性路径默认 fail-closed")。
+//
+// 这里刻意不复用 loadIndexColumns:那个函数服务于 ensureIndexes 的"前缀覆盖"判据,不关心
+// 唯一性;把 NON_UNIQUE 塞进它的返回值会让两个用途不同的判据挤在一个签名里。多一条
+// INFORMATION_SCHEMA 查询只在迁移期跑一次,不值得为它把接口搅浑。
+func assertUniqueColumns(ctx context.Context, db *sql.DB, dbName, tableName string) error {
+	cols := bootstrapUniqueColumns[tableName]
+	if len(cols) == 0 {
+		return nil
+	}
+
+	// NON_UNIQUE=0 的索引含 PRIMARY;按索引名聚列,列序由 SEQ_IN_INDEX 保证。
+	// SUB_PART 非 NULL = 这一列用了前缀长度,必须连列数一起读回来判(见 uniqueIndexColumns)。
+	rows, err := db.QueryContext(ctx,
+		`SELECT INDEX_NAME, COLUMN_NAME, SUB_PART FROM INFORMATION_SCHEMA.STATISTICS
+		  WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND NON_UNIQUE = 0
+		  ORDER BY INDEX_NAME, SEQ_IN_INDEX`, dbName, tableName)
+	if err != nil {
+		return fmt.Errorf("list unique indexes of %s: %w", tableName, err)
+	}
+	defer rows.Close()
+
+	uniqueIndexes := map[string]uniqueIndexColumns{}
+	for rows.Next() {
+		var idx, col string
+		var subPart sql.NullInt64
+		if err := rows.Scan(&idx, &col, &subPart); err != nil {
+			return fmt.Errorf("scan unique indexes of %s: %w", tableName, err)
+		}
+		e := uniqueIndexes[idx]
+		e.cols = append(e.cols, col)
+		e.prefixed = e.prefixed || subPart.Valid
+		uniqueIndexes[idx] = e
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate unique indexes of %s: %w", tableName, err)
+	}
+
+	for _, want := range cols {
+		if singleColumnUniqueIndex(uniqueIndexes, want) {
+			continue
+		}
+		return fmt.Errorf("table %s has no single-column full-length UNIQUE index on %q "+
+			"(a composite unique key does not count: it only makes the tuple unique; "+
+			"a prefix index `%s(N)` does not count either: it would reject names that merely share a prefix); "+
+			"the table is pre-created by bootstrap DDL (schema.go bootstrapTables) and this key is the only "+
+			"enforcement of the invariant it guards, refusing to start on a table that cannot enforce it",
+			tableName, want, want)
+	}
+	return nil
+}
+
+// uniqueIndexColumns 一条唯一索引的列清单。
+// prefixed 记录其中**任何**一列带了前缀长度(SUB_PART);带前缀的索引不能当"整列唯一"用。
+type uniqueIndexColumns struct {
+	cols     []string
+	prefixed bool
+}
+
+// singleColumnUniqueIndex 判断 uniqueIndexes 里是否有一条**只含 col 这一列、且不带前缀长度**
+// 的索引(列名大小写不敏感:MySQL 列名如此)。
+//
+// prefixed 必须连着整条索引一起判,不能在查询里 `AND SUB_PART IS NULL` 过滤掉带前缀的行 ——
+// 那会把 UNIQUE KEY (name_norm, other(10)) 削成只剩一列,反而把一条**组合**唯一键误判成
+// 单列唯一键,正好放过这个守卫要拦的形状。
+func singleColumnUniqueIndex(uniqueIndexes map[string]uniqueIndexColumns, col string) bool {
+	for _, idx := range uniqueIndexes {
+		if !idx.prefixed && len(idx.cols) == 1 && strings.EqualFold(idx.cols[0], col) {
+			return true
+		}
+	}
+	return false
 }

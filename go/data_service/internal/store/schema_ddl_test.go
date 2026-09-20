@@ -8,7 +8,13 @@ import (
 )
 
 // 直接用本服务的真实描述符生成 DDL,防止代理缓存或依赖回退静默丢掉 TiDB 选项。
-// id_segment 仍走现有手写 bootstrap;这里只验证它能通过迁移前的表名守卫。
+// bootstrapTables 里的表(id_segment、player_name)走手写 DDL,proto2mysql 生成的建表语句
+// 对它们不作数;这里只验证它们能通过迁移前的表名守卫。
+//
+// 豁免判据必须用同包的 isBootstrapTable,不能写成 `name == IdSegmentTableName`:
+// 后者在 player_name 进 TableMessages 的那一刻就把本测试打成 Fatal(primaryKeys 里查不到),
+// 而真正该被这条断言拦住的是"新增**自动迁移**表忘了补主键与 TiDB 契约"。
+// 表名清单只有 schema.go 一处答案,测试跟着它走,以后再加 bootstrap 表不用回来改这里。
 func TestGlobalTableDDLContract(t *testing.T) {
 	primaryKeys := map[string]string{
 		"transaction_log":    "tx_id",
@@ -26,7 +32,7 @@ func TestGlobalTableDDLContract(t *testing.T) {
 			if err := assertTableNameLocked(model, table); err != nil {
 				t.Fatal(err)
 			}
-			if name == IdSegmentTableName {
+			if isBootstrapTable(name) {
 				return
 			}
 			key, ok := primaryKeys[name]

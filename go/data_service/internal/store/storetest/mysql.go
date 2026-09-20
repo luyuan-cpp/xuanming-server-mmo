@@ -140,7 +140,7 @@ func NewEmptyDB(t *testing.T) *DB {
 	}
 }
 
-// NewMigratedDB 建库并跑一遍 store.MigrateSchema(四张表就位)。
+// NewMigratedDB 建库并跑一遍 store.MigrateSchema(五张表就位)。
 //
 // 刻意**不**预建任何 id_segment 行(MigrateOptions 为零值):多数用例要的是"表在、行空"
 // 的起点,好断言首次使用 / 拒绝路径对表零写入。需要 bootstrap 行的用例自己再调一次

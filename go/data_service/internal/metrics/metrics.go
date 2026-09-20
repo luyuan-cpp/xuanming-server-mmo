@@ -111,6 +111,40 @@ var (
 		Help:      "AllocateIdSegment outcomes by biz_tag (ok|invalid|exhausted|unknown_tag|db_error).",
 	}, []string{"biz_tag", "outcome"})
 
+	// ── 玩家名字注册表(设计 docs/design/guild-phase2/03-names.md §3.6)────
+	//
+	// 指标名在设计里写死成 data_service_player_name_*;Subsystem="data_service" 加
+	// 下面的 Name 拼出来正是那三个名字,不需要也不应该再写一遍前缀。
+	//
+	// 【为什么不放在 logic 里用 go-zero 的 core/metric】go-zero 的 metric.Inc /
+	// ObserveFloat 内部都先问 prometheus.Enabled(),那个开关只有 metric agent
+	// (yaml 里的 Prometheus 段 → StartAgent)才会打开。data_service 没有那一段,
+	// 也不该加——加了会再起一个 /metrics 端口,与 MetricsListenAddr 上已有的这套并存。
+	// 用 core/metric 在本服务里的实际效果是:指标永远是 0,而且不报任何错。
+	playerNameOpsTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "player_name_ops_total",
+		Help: "Player name registry outcomes by op (reserve|release|batch_get) and result " +
+			"(ok|already_owned|taken|invalid|conflict|outside_window|error). already_owned is the " +
+			"idempotent reserve retry: a rising rate means callers are retrying CreatePlayer.",
+	}, []string{"op", "result"})
+
+	// 桶按"一次本地 SQL"的量级铺:1ms 是理想值,25ms 以内算健康,超过 250ms 说明
+	// 全局库开始排队(建角是同步路径,reserve 的 p99 直接进 CreatePlayer 的耗时预算)。
+	playerNameOpSeconds = prometheus.NewHistogramVec(prometheus.HistogramOpts{
+		Subsystem: subsystem,
+		Name:      "player_name_op_seconds",
+		Help:      "Player name registry op latency in seconds, cache + SQL included.",
+		Buckets:   []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1},
+	}, []string{"op"})
+
+	playerNameCacheTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "player_name_cache_total",
+		Help: "BatchGetPlayerName cache lookups counted per id: hit (name cached) | " +
+			"negative_hit (cache remembers the row is absent) | miss (falls through to MySQL).",
+	}, []string{"result"})
+
 	registerOnce sync.Once
 )
 
@@ -124,6 +158,7 @@ func register() {
 			rollbackTotal, rollbackPlayersAffectedTotal, rollbackOrphansCleanedTotal,
 			kafkaConsumerUp, kafkaConsumerMessagesTotal,
 			idSegmentAllocateTotal,
+			playerNameOpsTotal, playerNameOpSeconds, playerNameCacheTotal,
 		)
 	})
 }
@@ -152,6 +187,33 @@ func ObserveKafkaConsumerMessages(consumer, outcome string, n int) {
 func ObserveIdSegmentAllocate(bizTag, outcome string) {
 	register()
 	idSegmentAllocateTotal.WithLabelValues(bizTag, outcome).Inc()
+}
+
+// ObservePlayerNameOp 记一次玩家名字注册表操作:结果计数 + 耗时。
+//
+// op 是 "reserve" | "release" | "batch_get";result 取 Help 里那组有界取值。
+// 两个 label 的取值集合由调用方(logic 的 playerNameOp* / playerNameResult* 常量)
+// 封闭,本函数不做校验——它在每次操作的 defer 里跑,不是校验的地方。
+//
+// dur 由调用方从函数入口处的 time.Now() 算出,这样每一条出口(含提前 return 的
+// 失败分支)都被计进直方图。**不要**把 player_id 加成 label(AGENTS.md §9:
+// 高基数会把时间序列打爆),需要它的排障信息进日志。
+func ObservePlayerNameOp(op, result string, dur time.Duration) {
+	register()
+	playerNameOpsTotal.WithLabelValues(op, result).Inc()
+	playerNameOpSeconds.WithLabelValues(op).Observe(dur.Seconds())
+}
+
+// ObservePlayerNameCache 按 id 累计一次 BatchGet 的缓存命中情况。
+// result 是 "hit" | "negative_hit" | "miss";n 是本批里落在该结果上的 id 个数
+// (调用方先在循环里累加、退出循环后一次报,省掉逐 id 的 label 查找)。
+// n <= 0 直接返回,让调用方三种结果都能无条件调用。
+func ObservePlayerNameCache(result string, n int) {
+	if n <= 0 {
+		return
+	}
+	register()
+	playerNameCacheTotal.WithLabelValues(result).Add(float64(n))
 }
 
 // ── Observe helpers ─────────────────────────────────────────────────

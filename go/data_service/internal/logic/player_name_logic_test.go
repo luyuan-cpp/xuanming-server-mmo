@@ -15,6 +15,7 @@ import (
 	"shared/playername"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zeromicro/go-zero/core/stores/redis"
@@ -148,6 +149,39 @@ func newPlayerNameTestCtx(t *testing.T) (*svc.ServiceContext, *miniredis.Minired
 	return &svc.ServiceContext{Config: c, Router: r, PlayerNameStore: fake}, mr, fake
 }
 
+// playerNameOpsCount 从默认 registry 里 gather 一次,读出 ops_total 上某个
+// (op, result) 组合的当前计数;没有这条时间序列时返回 0。
+//
+// **为什么要真的 gather**:2026-09-19 的核验查出这三个指标当时一次也没落过地
+// (用了 go-zero 的 core/metric,它内部 prometheus.Enabled() 永远是 false,而且
+// 不报任何错)。只断言"代码走到了哪个分支"看不出这种缺陷,必须去问 registry。
+// 计数是进程级累加的,所以用例一律比较**增量**,不比较绝对值。
+func playerNameOpsCount(t *testing.T, op, result string) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, mf := range families {
+		if mf.GetName() != "data_service_player_name_ops_total" {
+			continue
+		}
+		for _, m := range mf.GetMetric() {
+			var gotOp, gotResult string
+			for _, lp := range m.GetLabel() {
+				switch lp.GetName() {
+				case "op":
+					gotOp = lp.GetValue()
+				case "result":
+					gotResult = lp.GetValue()
+				}
+			}
+			if gotOp == op && gotResult == result {
+				return m.GetCounter().GetValue()
+			}
+		}
+	}
+	return 0
+}
+
 // ── Reserve ────────────────────────────────────────────────────
 
 // 不合规的名字必须在**碰库之前**被拒:那是纯计算,库挂着也能给确定答案。
@@ -176,33 +210,85 @@ func TestReservePlayerName_InvalidNameNeverTouchesStore(t *testing.T) {
 	}
 }
 
-// 登记成功后名字必须落进缓存;同时钉住 display/norm 的分工:
+// 新登记成功后名字必须落进缓存;同时钉住 display/norm 的分工:
 // 库里存的展示名保留大小写,判重键是小写。
 func TestReservePlayerName_InsertedWritesCache(t *testing.T) {
-	for _, outcome := range []store.ReserveOutcome{store.ReserveInserted, store.ReserveAlreadyOwned} {
-		t.Run(outcome.String(), func(t *testing.T) {
-			svcCtx, mr, fake := newPlayerNameTestCtx(t)
-			fake.reserveOutcome = outcome
-			before := uint64(time.Now().UnixMilli())
+	svcCtx, mr, fake := newPlayerNameTestCtx(t)
+	fake.reserveOutcome = store.ReserveInserted
+	before := uint64(time.Now().UnixMilli())
 
-			result, owner, err := ReservePlayerName(context.Background(), svcCtx, 2001, "AbC云中君")
-			require.NoError(t, err)
-			assert.Equal(t, playername.ReserveOK, result, "幂等重试(AlreadyOwned)在 RPC 上也是成功")
-			assert.Zero(t, owner)
+	result, owner, err := ReservePlayerName(context.Background(), svcCtx, 2001, "AbC云中君")
+	require.NoError(t, err)
+	assert.Equal(t, playername.ReserveOK, result)
+	assert.Zero(t, owner)
 
-			require.Len(t, fake.reserveCalls, 1)
-			call := fake.reserveCalls[0]
-			assert.Equal(t, uint64(2001), call.playerID)
-			assert.Equal(t, "AbC云中君", call.name, "展示名保留大小写")
-			assert.Equal(t, "abc云中君", call.norm, "判重键是小写")
-			assert.GreaterOrEqual(t, call.nowMs, before, "登记时刻由 logic 显式给出,不能是 0")
+	require.Len(t, fake.reserveCalls, 1)
+	call := fake.reserveCalls[0]
+	assert.Equal(t, uint64(2001), call.playerID)
+	assert.Equal(t, "AbC云中君", call.name, "展示名保留大小写")
+	assert.Equal(t, "abc云中君", call.norm, "判重键是小写")
+	assert.GreaterOrEqual(t, call.nowMs, before, "登记时刻由 logic 显式给出,不能是 0")
 
-			got, err := mr.Get(routing.PlayerNameKey(2001))
-			require.NoError(t, err)
-			assert.Equal(t, "AbC云中君", got, "缓存里放的是展示名")
-			assert.InDelta(t, playerNameTestCacheTTL.Seconds(), mr.TTL(routing.PlayerNameKey(2001)).Seconds(), 1)
-		})
-	}
+	got, err := mr.Get(routing.PlayerNameKey(2001))
+	require.NoError(t, err)
+	assert.Equal(t, "AbC云中君", got, "缓存里放的是展示名")
+	assert.InDelta(t, playerNameTestCacheTTL.Seconds(), mr.TTL(routing.PlayerNameKey(2001)).Seconds(), 1)
+}
+
+// 幂等重试(AlreadyOwned):RPC 上仍然是成功,但**不许写缓存**。
+//
+// 理由:库里那一行的 name 是上一次登记时写下的展示名,而这次请求的 display 是这次
+// 算出来的。norm 只比小写,所以"同 norm 不同大小写"会走到这条分支,此时两者不等 ——
+// 写下去就是让缓存和唯一真源分叉,而且一叉就是 CacheTTL(24h)。
+func TestReservePlayerName_AlreadyOwnedDoesNotWriteCache(t *testing.T) {
+	svcCtx, mr, fake := newPlayerNameTestCtx(t)
+	fake.reserveOutcome = store.ReserveAlreadyOwned
+
+	result, owner, err := ReservePlayerName(context.Background(), svcCtx, 2011, "AbC云中君")
+	require.NoError(t, err)
+	assert.Equal(t, playername.ReserveOK, result, "幂等重试在 RPC 上也是成功")
+	assert.Zero(t, owner)
+
+	require.Len(t, fake.reserveCalls, 1, "库仍然照常被调用(判重只能由库做)")
+	assert.Equal(t, "abc云中君", fake.reserveCalls[0].norm)
+	assert.False(t, mr.Exists(routing.PlayerNameKey(2011)),
+		"这一次的 display 可能与库里那一行的 name 大小写不同,不许把它当真名缓存")
+}
+
+// 同 norm 不同大小写的重试,绝不能把缓存里那个**库里真有的**展示名改掉。
+// 这是上一条用例的正向证明:缓存里已经有真名时,重试之后它必须原样不动。
+func TestReservePlayerName_AlreadyOwnedKeepsCachedDisplayName(t *testing.T) {
+	svcCtx, mr, fake := newPlayerNameTestCtx(t)
+	fake.reserveOutcome = store.ReserveAlreadyOwned
+	// 缓存里是上一次登记(也是库里)的展示名。
+	require.NoError(t, mr.Set(routing.PlayerNameKey(2012), "AbC云中君"))
+
+	// 这一次用全小写重试:norm 相同(abc云中君),display 不同。
+	_, _, err := ReservePlayerName(context.Background(), svcCtx, 2012, "abc云中君")
+	require.NoError(t, err)
+
+	got, err := mr.Get(routing.PlayerNameKey(2012))
+	require.NoError(t, err)
+	assert.Equal(t, "AbC云中君", got, "缓存里必须还是库里那个展示名,不能被本次请求的写法盖掉")
+}
+
+// 幂等重试在**指标**上必须与首次登记分开:already_owned 的速率抬头是上游在大量
+// 重试 CreatePlayer 的唯一前兆,混进 ok 里就看不见了。
+// 这条用例同时守住"指标真的落地"这件事(见 playerNameOpsCount 的注释)。
+func TestReservePlayerName_AlreadyOwnedRecordsItsOwnResultLabel(t *testing.T) {
+	svcCtx, _, fake := newPlayerNameTestCtx(t)
+	fake.reserveOutcome = store.ReserveAlreadyOwned
+
+	beforeOK := playerNameOpsCount(t, playerNameOpReserve, playerNameResultOK)
+	beforeRetry := playerNameOpsCount(t, playerNameOpReserve, playerNameResultAlreadyOwned)
+
+	_, _, err := ReservePlayerName(context.Background(), svcCtx, 2013, "云中君")
+	require.NoError(t, err)
+
+	assert.Equal(t, beforeRetry+1, playerNameOpsCount(t, playerNameOpReserve, playerNameResultAlreadyOwned),
+		"幂等重试要记成 already_owned")
+	assert.Equal(t, beforeOK, playerNameOpsCount(t, playerNameOpReserve, playerNameResultOK),
+		"不能和首次登记混记成 ok")
 }
 
 // 缓存是加速不是真相:写缓存失败绝不能把一次已经提交的建角翻成失败。
@@ -321,6 +407,27 @@ func TestReleasePlayerName_WindowFloor(t *testing.T) {
 		assert.NotZero(t, floor, "0 = 不限时间,正是这里最不该出现的值")
 		assert.InDelta(t, float64(before.UnixMilli()), float64(floor), 5000, "下界应当就是'此刻'")
 	})
+
+	t.Run("下界下溢时钳到 1,不许退化成 0", func(t *testing.T) {
+		// now - window 落到 1970 之前(把时钟调回 1970 附近,或窗口被配成几十年)。
+		// 直接测 releaseWindowFloorMs:它把 now 显式收成参数,就是为了让这种
+		// 时钟场景可以确定地复现,而不是依赖真实墙钟(AGENTS.md §11.4)。
+		//
+		// 0 在 store 的契约里是带内哨兵"不限登记时间"= 运维权限。一次时钟异常把
+		// 非 admin 调用方悄悄提成 admin,是这条路径上最不该发生的事。
+		svcCtx, _, _ := newPlayerNameTestCtx(t)
+
+		floor := releaseWindowFloorMs(svcCtx, false, time.UnixMilli(1))
+		assert.EqualValues(t, 1, floor, "下溢时取最小的**普通**下界 1,而不是哨兵 0")
+
+		// 边界:now 恰好等于窗口宽度,差为 0,同样不许落到哨兵上。
+		floor = releaseWindowFloorMs(svcCtx, false, time.UnixMilli(playerNameTestReleaseWindow.Milliseconds()))
+		assert.EqualValues(t, 1, floor)
+
+		// 再往后 1ms 就回到正常公式,此时差为 1,与钳位值恰好接上。
+		floor = releaseWindowFloorMs(svcCtx, false, time.UnixMilli(playerNameTestReleaseWindow.Milliseconds()+1))
+		assert.EqualValues(t, 1, floor)
+	})
 }
 
 // 删库成功之后才删缓存(顺序反了会被两步之间的一次读重新缓存回来)。
@@ -380,6 +487,39 @@ func TestReleasePlayerName_NameValidation(t *testing.T) {
 		require.NoError(t, ReleasePlayerName(context.Background(), svcCtx, 3008, "官方客服", true))
 		require.Len(t, fake.releaseCalls, 1)
 		assert.Equal(t, "官方客服", fake.releaseCalls[0].norm)
+	})
+
+	t.Run("admin 可以释放超出当前结构上限的旧名", func(t *testing.T) {
+		// 与"敏感词仍可释放"同一条理由:规则包可换版。把 StructuralMaxRunes 从 32
+		// 调到 16,昨天合法登记的名字今天全判 Invalid —— 运维唯一的补偿入口不能被
+		// 一次纯规则改动锁死。admin 路径只放宽**长度**,判重键照旧由规则包算。
+		svcCtx, _, fake := newPlayerNameTestCtx(t)
+		long := strings.Repeat("云", playername.StructuralMaxRunes+1)
+
+		require.NoError(t, ReleasePlayerName(context.Background(), svcCtx, 3010, long, true))
+		require.Len(t, fake.releaseCalls, 1)
+		assert.Equal(t, long, fake.releaseCalls[0].norm, "判重键原样传给 store")
+		assert.Zero(t, fake.releaseCalls[0].minCreatedMs, "admin 仍然不限登记时间")
+
+		// 同一个名字在非 admin 路径上必须照旧被拒(上面第一条用例已经覆盖,这里
+		// 并排再断一次,是为了把"放宽只发生在 admin 这一档"钉在同一个用例里)。
+		svcCtx2, _, fake2 := newPlayerNameTestCtx(t)
+		assert.ErrorIs(t, ReleasePlayerName(context.Background(), svcCtx2, 3010, long, false),
+			store.ErrPlayerNameInvalidArgument)
+		assert.Empty(t, fake2.releaseCalls)
+	})
+
+	t.Run("字符集不合法时 admin 也拒(已知边界)", func(t *testing.T) {
+		// 放宽的只有长度。字符集收窄 / NFKC 换版之后,Normalize 一律回空 norm,
+		// 规则包再也算不出当年那一行的 name_norm,本层没有判重键可用 ——
+		// 在这里重写一遍归一化公式会给"什么算同一个名字"造第二个真源,代价更大。
+		// 这一档要靠 shared/playername 导出"只归一化不校验"的取键函数,或 store
+		// 增加按 player_id 释放的入口;在那之前只能由 DBA 手工清。
+		svcCtx, _, fake := newPlayerNameTestCtx(t)
+
+		assert.ErrorIs(t, ReleasePlayerName(context.Background(), svcCtx, 3011, "云中君!", true),
+			store.ErrPlayerNameInvalidArgument)
+		assert.Empty(t, fake.releaseCalls, "没有判重键就没有 DELETE 的 WHERE 条件,不许打到库上")
 	})
 
 	t.Run("player_id=0 被拒", func(t *testing.T) {

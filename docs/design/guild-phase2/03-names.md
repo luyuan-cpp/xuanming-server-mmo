@@ -207,7 +207,13 @@ func BatchGetPlayerName(ctx, svcCtx, ids []uint64) (map[uint64]string, error)
 - Release:Normalize 非 OK/Empty → `InvalidArgument`。`minCreatedMs = admin ? 0 : nowMs - ReleaseWindow.Milliseconds()`(nowMs < 窗口时取 0)。**先删库再 DEL 缓存**;`Deleted` → DEL(失败只日志)并 Info `[player-name] released player_id=%d admin=%v`;`OutsideWindow` → `ErrPlayerNameReleaseOutsideWindow`。
 - BatchGet:去重去 0 → `MGetPlayerNames`(Redis 报错视为全未命中);未命中的 id 查库,store nil 或 SQL 错 → 返回错误;查到的 `SetPlayerNames` 回填,查不到的 `SetPlayerNamesAbsent`(均 best-effort);`absent` 命中的 id 不出现在结果里。
 - server 层(`internal/server/dataserviceserver.go` 三个薄 handler):Release 若 `metadata.FromIncomingContext` 里有 `x-admin-token` 键 → 先 `authorizeAdmin`,通过则 `admin=true`;没有该键 → `admin=false`。
-- 指标(无 player_id label,go-zero `metric.NewCounterVec/NewHistogramVec`,namespace 留空):
+- 指标(无 player_id label)。**2026-09-19 落码修正**:原文写 go-zero `metric.NewCounterVec/NewHistogramVec`,
+  但 go-zero 的 `core/metric` 记录时要过 `prometheus.Enabled()` 这道全局开关,而 data_service **从不开它**
+  (它自己的 /metrics 是 `internal/metrics` 里的裸 prometheus + `promhttp.Handler()`)——照原文写三个指标
+  一个样本都不会产生。实际落地:三个 vec 放 `internal/metrics/metrics.go`(裸 `prometheus.NewCounterVec` /
+  `NewHistogramVec` + 进 `register()` 的 MustRegister 清单),logic 调 `metrics.ObservePlayerNameOp` /
+  `ObservePlayerNameCache`。**不要**给 data_service 的 yaml 加 `Prometheus:` 段:那会另起一个 go-zero 的
+  /metrics 端口,与既有 `MetricsListenAddr` 两套并存。指标 FQ 名与下面一致:
   - `data_service_player_name_ops_total{op="reserve|release|batch_get",result="ok|taken|invalid|conflict|outside_window|error"}`
   - `data_service_player_name_op_seconds{op}`,桶 `[0.001,0.005,0.01,0.025,0.05,0.1,0.25,0.5,1]`
   - `data_service_player_name_cache_total{result="hit|negative_hit|miss"}`
