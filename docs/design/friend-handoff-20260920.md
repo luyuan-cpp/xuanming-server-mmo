@@ -1,7 +1,7 @@
 # friend 服务移植 —— 交接文档(2026-09-20)
 
 > **读者**:接手这批代码的工程师(零上下文)。本文写完就是为了让你直接开工。
-> **本文所有结论都来自读 `E:/work/xuanming-server-mmo` 分支 `main` 的源码**(核实快照:2026-09-19,当时 HEAD `a5ca66851`)。
+> **本文所有结论都来自读 `E:/work/xuanming-server-mmo` 分支 `main` 的源码**(首轮核实快照:2026-09-19,当时 HEAD `a5ca66851`;**复核于 2026-09-20**,其间 `main` 已前进到 `5524daf0c` → `4a04d0819`,但 `git log a5ca66851..HEAD -- go/friend proto/friend` **零提交** —— friend 这批代码本身没被别的会话动过)。
 > **行号一律只作辅助坐标,几乎肯定已漂移** —— 本仓同时有多个会话在提交。
 > 定位请一律用 `grep -n "<符号名>" <文件>`,**不要按行号跳**。
 
@@ -42,8 +42,8 @@ friend 服务从 A 仓(Pandora)`services/social/friend` 移植而来,因超过 `
 
 解决的是"这个服务在 B 仓的体系里要长什么样"。三件事:
 
-1. **协议改名 `FriendService` → `ClientPlayerFriend`,并标 `option (OptionIsClientProtocolService) = true`。** 这不是洁癖:Unity / robot 的下行 handler 生成器只认服务名含 `ClientPlayer` / `GamePlayer` 的服务(判据在 `tools/proto_generator/protogen/internal/generator/unity/unity_client_handler.go` 的 `isRelevantService` 与 `.../generator/go/robot_case.go` 的同名函数,两处逐字相同),**本期新增的 S2C 推送没有 handler 就等于没接**。同时删掉 `NotifyOnline` / `NotifyOffline`(全仓非生成代码零调用方,`friend:online` 这把键从来没有写者),六个请求体删 `player_id` 改 `reserved`(D-9:身份只从会话取)。
-2. **新建 `proto/friend/friend_table.proto`,作为四张表的唯一事实源**(`friend` / `friend_request` / `friend_capacity` / `friend_block`),列名与旧 `deploy/mysql-init/guild_friend_tables.sql` 逐字对齐,整数主键、零 UNIQUE KEY(D-14 §2 约束)。
+1. **协议改名 `FriendService` → `ClientPlayerFriend`,并标 `option (OptionIsClientProtocolService) = true`。** 这不是洁癖:Unity / robot 的下行 handler 生成器只认服务名含 `ClientPlayer` / `GamePlayer` 的服务(判据在 `tools/proto_generator/protogen/internal/generator/unity/unity_client_handler.go` 的 `isRelevantService` 与 `.../generator/go/robot_case.go` 的同名函数,两处**判据**逐字相同 —— `strings.Contains(svc, "GamePlayer") || strings.Contains(svc, "ClientPlayer")`;函数体不完全一样,robot 那份多一段 debug 日志),**本期新增的 S2C 推送没有 handler 就等于没接**。同时删掉 `NotifyOnline` / `NotifyOffline`(全仓非生成代码零调用方,`friend:online` 这把键从来没有写者),六个请求体删 `player_id` 改 `reserved`(D-9:身份只从会话取)。
+2. **新建 `proto/friend/friend_table.proto`,作为四张表的唯一事实源**(`friend` / `friend_request` / `friend_capacity` / `friend_block`),列名与当时的 `deploy/mysql-init/guild_friend_tables.sql` 逐字对齐(⚠ **该文件现在已不在 main 上** —— 帮会二期 B1 与本批各搬走一半后,它在 `cda218956` 那次合并里被整个删掉;要看原文用 `git show f06090b19:deploy/mysql-init/guild_friend_tables.sql`),整数主键、零 UNIQUE KEY(D-14 §2 约束)。
 3. **骨架按 `go/trade/trade.go` 逐段移植**:`go/friend/friend.go` 的 `-migrate` / `-allow-modify` 两个 flag 与 D-14 退出码、`ensureSchema` 的 Up/Plan 两态、`lifecycle` 24s 硬截止、先起服再注册、`advertisedHost` 按 POD_IP 回落;删私有 node 包改用 `shared/noderegistry`(`NodeInfo` 的 `Endpoint` 与 `GrpcEndpoint` **双填** —— 只填前者路由服拨不通,guild 踩过);新增 `internal/session`(10 个 C2S 方法白名单,`NotifyFriendEvent` 刻意不收)、`internal/lifecycle`、`internal/metrics`、`internal/data/tables.go`。配置 `go/friend/etc/friend.yaml` 按契约锚点重写(`Timeout` 4000、`Etcd.Key` 显式空串、`LeaseTTL` 60、顶层 `MetricsListenAddr: ":9180"`、结构化 MySQL 字段且 `DBName: mmorpg_friend`)。
 
 F1 还**推翻了一条书面决策**:`friend_capacity_backfill_v1` 就绪门禁**退役**(记在 `docs/design/xuanming-port-decisions-20260910.md` 的「D-10 修订(2026-09-18)」)。理由是它查的 `guild_schema_migration` 按 D-14 留在旧库 `mmorpg`,而 friend 的 `config.Validate` 断言只连 `mmorpg_friend` —— 这条查询在任何合法配置下都不可能命中。**退役的只有这道闸,D-10 的实质不变量原样保留**(见 §5.6)。
@@ -56,7 +56,7 @@ F1 还**推翻了一条书面决策**:`friend_capacity_backfill_v1` 就绪门禁
 
 能力面:`AddFriend` 改成八步权威事务(守卫 → 双向拉黑 → 双向好友边 → 申请行 → 出站/入站 pending → 双方好友数 → upsert);`AcceptFriend` 补拉黑复核与反向 pending 收敛;`RemoveFriend` 先判是不是好友再建容量行;新增 `Block` / `Unblock` / `ListBlocks`、推荐(FOF → 随机兜底,pivot 先取 `MIN/MAX(player_id)` 再随机,绝不全表扫)、每分钟频率配额(Redis 故障 **fail-open**,是有意的可用性取舍)、终态申请清理 sweep(默认 `report_only` 只统计)、S2C 推送(提交后、事务外、失败不影响 RPC 结果)、在线状态改读共享库的 `player:session:{id}`。缓存键换成带 hash tag 的 v3(两条 Lua 各只动同 slot 的两个键)。隔离级别固定 **READ COMMITTED**(`beginWriteTx`)。
 
-过程教训值得留下:五路并行写码后,存储层与逻辑层对同一组 API 做了五处互不相容的假设,整个 logic 包编译不过;根因是本批的冻结规格只冻了事务形状、没冻 Go 签名。修复后加的三行编译期接缝断言(`var _ FriendStore = (*data.FriendRepo)(nil)` 等)**是唯一能让这类漂移在编译期暴露的东西,不要删**。
+过程教训值得留下:五路并行写码后,存储层与逻辑层对同一组 API 做了五处互不相容的假设,整个 logic 包编译不过;根因是本批的冻结规格只冻了事务形状、没冻 Go 签名。修复后加的三行编译期接缝断言(`go/friend/internal/logic/friend_logic.go` 的 `var (...)` 块,`grep -n 'FriendStore  = (\*data.FriendRepo)(nil)'` 能定位)**是唯一能让这类漂移在编译期暴露的东西,不要删**。
 
 落点:`go/friend/internal/data/`(`friend_repo.go` / `block_repo.go` / `recommend_repo.go` / `sweep_repo.go` / `session_reader.go`)、`go/friend/internal/logic/`(`friend_logic.go` / `recommend.go` / `rate_quota.go` / `sweep.go` / `push.go`)。
 
@@ -64,9 +64,9 @@ F1 还**推翻了一条书面决策**:`friend_capacity_backfill_v1` 就绪门禁
 
 解决的是"这个服务能被启动器拉起、客户端经路由服可达、有端到端冒烟"。F1/F2 只是让代码存在,F3 才让它进得了系统。
 
-- **五处登记**(端口 50400 / 指标 `:9180` 逐字一致):`tools/scripts/go_services.ps1`(Tier 1、可多开)、`tools/scripts/go_svc_image.ps1`(镜像 `mmorpg-friend`)、`tools/scripts/k8s_deploy.ps1`(`$GoSvcCatalogue` 条目 `Global=$true` + `MigrateJob`;ConfigMap 的 20 个契约值全部用 `Get-AuthoritativeScalar` 从 `etc/friend.yaml` 读)、`deploy/k8s/manifests/go-svc/friend.yaml` 与 `friend-migrate.yaml`、`tools/scripts/start_game.ps1`(列为**可选服务**,缺 exe 或库不就绪只告警跳过)。
+- **五处登记**(端口 50400 / 指标 `:9180` 逐字一致):`tools/scripts/go_services.ps1`(Tier 1、可多开)、`tools/scripts/go_svc_image.ps1`(镜像 `mmorpg-friend`)、`tools/scripts/k8s_deploy.ps1`(`$GoSvcCatalogue` 条目 `Global=$true` + `MigrateJob`;ConfigMap 的 22 个契约值全部用 `Get-AuthoritativeScalar` 从 `etc/friend.yaml` 读(核实:`k8s_deploy.ps1` 里 `$friend* = Get-AuthoritativeScalar` 共 22 行))、`deploy/k8s/manifests/go-svc/friend.yaml` 与 `friend-migrate.yaml`、`tools/scripts/start_game.ps1`(列为**可选服务**,缺 exe 或库不就绪只告警跳过)。
 - **`Etcd.Key` 与 `Redis.Key` 在 ConfigMap 里都显式写空串**(D-13)—— 省略整行会让 go-zero 的 `conf.MustLoad` 直接 Fatal、Pod CrashLoop,chat 在 kind 上实测踩过。
-- **迁库**:`deploy/mysql-init/00_init_zone_dbs.sql` 加 `mmorpg_friend` 建库与授权(D-14 第 5 条:这里是建库的唯一登记处);`guild_friend_tables.sql` 删掉 friend 三张表与 `friend_capacity` 回填段。
+- **迁库**:`deploy/mysql-init/00_init_zone_dbs.sql` 加 `mmorpg_friend` 建库与授权(D-14 第 5 条:这里是建库的唯一登记处);friend 的三张表与 `friend_capacity` 回填段从 `guild_friend_tables.sql` 里删掉(⚠ 后续那个文件已被**整个删除**,现在 `deploy/mysql-init/` 下只剩 `00_init_zone_dbs.sql` 与 `gateway_tables.sql`;删除理由写在 `00_init_zone_dbs.sql` 第 55–60 行)。
 - **运维工具改连**:`tools/merge_zone` 的在线审计不再扫 `friend:online`,改看 `player:session:{id}`;friend 表审计改用库名限定 `mmorpg_friend.friend`(配 `validateFriendSchemaName` 防注入);`data_consistency_check` 另开 `friendDB` 连接,连不上报 "NOT CHECKED" 而不是伪装通过。
 - **robot `friend-smoke`**:`robot/etc/friend_smoke.yaml` + `robot/friend_smoke_scenario.go`,七步跨区冒烟(见 §2 第 9 步)。
 - **sweep 接线**:`logic.StartSweep` 在 F2 落地时无调用方,本批接上(`metrics.Start` 之后一行,用 `signal.NotifyContext` 的 ctx)。默认 `report_only`,接上之后不删任何数据。
@@ -193,7 +193,7 @@ grep -c 'friendpb.FriendService'      go/client_rpc_router/generated/pb/game/rou
 - **客户端 `gen_proto.ps1` 尚未收录 friend**。`E:\work\mmorpg-client\tools\gen_proto.ps1` 的 `$files` 列表里没有 `proto/friend/friend.proto`,也没有 `generated/code/proto/tip/friend_error_tip.proto`;而 `proto_gen.yaml` 的 `generators.enable_unity_client: true` 是**全局开关、没有按域细分**。用默认配置跑会往客户端写 11 个 `ClientPlayerFriend*Handler.cs`,而它们引用的 `Friendpb.*` 类型不存在 → **客户端 CS0246**。
   **处置**:同一批次里往 `gen_proto.ps1` 的 `$files` 补这两行并跑一次客户端 `gen_proto.ps1`。若这批不打算动客户端,改用 `enable_unity_client: false` 的**配置副本**跑 `proto-gen-run -ConfigPath <副本>` —— **不要**直接改默认 `proto_gen.yaml` 的这个开关(其他域会失去同步),**也不要**删 friend 块(未解析的域会丢号)。
 - **C++ 侧会被一起重算**。`cpp/generated/rpc/service_metadata/friend_service_metadata.h` 现在写的是 `FriendServiceAddFriendMessageId = 11` 等,被 `rpc_event_registry.cpp` include;`cpp/generated/proto/friend/*.pb.{h,cc}` 与 `cpp/generated/grpc_client/friend/friend_grpc_client.cpp` 也是生成物、已登记进 `proto.vcxproj` / `grpc_client.vcxproj`。**regen 之后 C++ 必须重编**(串行 `msbuild /m:1 /nr:false`,顺序 proto → rpc → 各节点库 → 节点),否则 gate 的消息号表还是旧的。并核 `rpc_event_registry.h` 的 `kMaxRpcMethodCount` **等于 `proto/message_id.txt` 最大 id + 1**(当前 228 / 227,对得上);对不上就是生成器半途退出,重跑一次即可。
-- **regen 会吃掉 `cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 里守护段外的 Agones 块**。该文件现在仍有 `agones::SceneLifecycle::Instance().AcquireCreatePermitBlocking();`,regen 后用 `git diff` 确认它还在,被删了就恢复。
+- **regen 会吃掉 `cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 里守护段外的 Agones 块**。该文件现在仍有 `auto createPermit = agones::SceneLifecycle::Instance().AcquireCreatePermitBlocking();`(核实:第 245 行),regen 后用 `git diff` 确认它还在,被删了就恢复。
 - **robot vendor**。`robot/vendor/proto/` 下只有 battle/chat/common/db/guild/login/match/scene/team/trade,**没有 friend**,`modules.txt` 里也搜不到。robot 默认 `-mod=vendor`,regen 之后必须 `cd robot && go mod tidy && go mod vendor`。另外 robot 的 handler stub 是"文件存在即跳过",坏 stub 重跑生成器不会自愈 —— 要先删再生成。
 
 **失败时保留**:生成器完整日志 + `git diff --stat`(`proto/ generated/ go/proto go/*/generated cpp/generated robot/generated robot/logic/handler`)+ 客户端仓的 `git status`。
@@ -206,7 +206,7 @@ grep -c 'friendpb.FriendService'      go/client_rpc_router/generated/pb/game/rou
 
 **不填的后果**:吃 gate 默认档 **3 次 / 1 秒 / 每消息号**(`cpp/libs/engine/core/message_limiter/message_limiter.h` 的 `defaultMaxRequests{3}` / `defaultTimeWindow{1}`,`MessageLimiter::CanSend` 只在 `FindByIdSilent` 命中时才覆盖),好友列表刷新、"换一批"推荐都会被打到并回 `kRateLimitExceeded`。
 
-**要做的事**:从 `robot/generated/pb/game/message_id.go`(或 `proto/message_id.txt`)取 11 个 `ClientPlayerFriend*` 的真实号,按下表往第 6 行起追加 10 行(列顺序 `id, max_requests, time_window, tip_message`):
+**要做的事**:从 `robot/generated/pb/game/message_id.go`(或 `proto/message_id.txt`)取 11 个 `ClientPlayerFriend*` 的真实号,按下表追加 10 行到现有数据块末尾(数据块从第 6 行开始,**当前最后一行是第 58 行**,所以新行落在第 59–68 行;列顺序 `id, max_requests, time_window, tip_message`):
 
 | 方法 | max_requests | time_window | tip_message |
 |---|---|---|---|
@@ -217,7 +217,9 @@ grep -c 'friendpb.FriendService'      go/client_rpc_router/generated/pb/game/rou
 
 ⚠ 这组档位数值是**建议值,没有代码或仓内文档背书**(既有行的 `time_window` 都是 1、`tip_message` 都是 1000,这两列照抄即可)。填完**再跑一次第 2 步的导表器**。
 
-**通过标准**:`generated/tables/MessageLimiter.json` 里能查到这 10 个新 id 且数值与上表一致;`generated/tables/manifest.json` 里 `MessageLimiter` 的 `rows` 从 53 变 63、`version` +1;`robot/etc/friend_smoke.yaml` 的 `request_interval_ms`(当前 `1100`)**不用动**(它按默认档 3 次/秒 设的保守值,配档后只会更宽松)。
+**通过标准**:`generated/tables/messagelimiter.json`(文件名**全小写**)的 `data` 数组里能查到这 10 个新 id 且数值与上表一致;`generated/tables/manifest.json` 里 `MessageLimiter` 的 `rows` 变成 **63**、顶层 `version` +1。
+⚠ **不要拿 53 去对 manifest**:xlsx 现在是 53 行,但 manifest 里记的还是上一次导表的 **46**(`generated_at` 2026-09-18,顶层 `version: 17`)—— 说明这张表已经有 7 行(不是 friend 的)改完没导过。所以导表器跑完的正确期望是 46 → 63,中间那 7 行会一起进去;
+另外 `robot/etc/friend_smoke.yaml` 的 `request_interval_ms`(当前 `1100`)**不用动**(它按默认档 3 次/秒 设的保守值,配档后只会更宽松)。
 
 ### 第 5 步 —— `go/friend` 编译与单测
 
@@ -325,7 +327,8 @@ cd E:\work\xuanming-server-mmo\go\friend
 
 **通过标准**:
 
-- 日志里有一行**恰为** `  FRIEND SERVICE STARTED SUCCESSFULLY`(**行首两个空格**)。这个字面量是 `tools/scripts/go_services.ps1` 的就绪判据,改字就等于让启动器永远等不到 friend 就绪。
+- 日志里有一行 `  FRIEND SERVICE STARTED SUCCESSFULLY`(`go/friend/friend.go:279`,行首两个空格是横幅排版)。
+  ⚠ **就绪判据是子串 `STARTED SUCCESSFULLY`,不是整行**:`tools/scripts/go_services.ps1:495` 是 `$content -match "STARTED SUCCESSFULLY"`(全量读日志文件,不逐行比)。所以两个前导空格与 `FRIEND` 这个词都不影响启动器;真正不能动的是 `STARTED SUCCESSFULLY` 这八个字符 —— 改掉它启动器就永远等不到 friend 就绪(`friend.go` 那行上方的注释写的是同一件事)。
 - 横幅里 `mysql:` 那行**不含密码**(走 `svc.MySQLTarget`,格式 `<host>/<db> (user=<user>)`;含密码的 `BuildDSN` 只交给 `sql.Open`)。
 - 其余可核项:`friend_redis:` 显示 `shared-fallback host=127.0.0.1:6379 type=node`;`sweep:` 显示 `mode=report_only`;`schema:` 显示 `auto-migrate (schemamigrate.Up at startup)`。
 - `curl http://127.0.0.1:9180/metrics` 能看到四个 friend 指标的预建 0 值序列:`friend_push_total` / `friend_rate_quota_total` / `friend_online_lookup_total` / `friend_sweep_pending_rows`。
@@ -398,7 +401,7 @@ go build -o robot.exe .
 
 - 退出码 **0**,日志里有一行 `FRIEND_SMOKE_OK player_a=… player_b=… player_c=… gate_a=… gate_b=…`(格式串在 `robot/friend_smoke_scenario.go` 的 `RunFriendSmoke` 收尾处)。任一步失败 → `FRIEND_SMOKE_FAIL step=… reason=…`,退出码 1。
 - 逐步要看到:`cross_zone=true` 时 **A 与 B 的 gate 地址必须不同**;跨区推送两次(`REQUEST_RECEIVED` / `REQUEST_ACCEPTED`)都在 10s 内到达;重复 `AddFriend` 回 `FriendRequestAlreadySent`;黑名单**两个方向**(A→C 与 C→A)都回 `FriendBlocked`;推荐结果 ≤ 20 且不含自己 / 已是好友的 B / 已拉黑的 C;
-- **D-9 反向断言**:客户端发 `NotifyFriendEvent` 的消息号必须**拿不到业务回包**,信封 tip = `kServiceUnavailable`(friend 回 `PermissionDenied`,路由服把一切 gRPC 错误翻成该码,见 `go/client_rpc_router/internal/logic/forwardlogic.go`),**并且要在同一运行窗口的 friend 日志里看到「拒绝客户端调用内部方法」** —— 信封不保留原始 gRPC code,只靠机器人收到失败**不能**证明拒绝原因。
+- **D-9 反向断言**:客户端发 `NotifyFriendEvent` 的消息号必须**拿不到业务回包**,信封 tip = `kServiceUnavailable`(friend 回 `PermissionDenied`,路由服把一切 gRPC 错误翻成该码,见 `go/client_rpc_router/internal/logic/forwardlogic.go`),**并且要在同一运行窗口的 friend 日志里看到 `[friend] 拒绝客户端调用非客户端方法`**(逐字核自 `go/friend/internal/session/session.go:102`;早期交接口述写成「拒绝客户端调用内部方法」,按那句话去 grep 会一无所获) —— 信封不保留原始 gRPC code,只靠机器人收到失败**不能**证明拒绝原因。
 - **可重复运行**:第 0 步会幂等地把三人关系清回"互不相识、互不拉黑"。唯一连跑限制是 `Friend.RequestQuotaPerMinute`(默认 10 次/分钟):一轮里 A 要发 3~4 次申请,**同一分钟内连跑三轮以上会撞 `kRateLimitExceeded`**。
 
 **⚠ 如实记下的能力边界(别把绿当成证据)**:"推荐结果不含已拉黑的 C"这条断言在三账号数据集下**结构性不可能失败** —— 两条召回路径的候选都来自 `friend` 表,而 C 在该表零行,所以无论 `friend_block` 的双向排除是否失效它都进不了候选集。`friend_block` 排除与 `RecommendMaxLimit` 截断只能靠单测或人工造数据覆盖(见 §3 第 6 条)。
@@ -426,14 +429,16 @@ go build -o robot.exe .
 
 ### 1.【P2】`friend_capacity` 表没有任何回收路径
 
-**位置**:`(*FriendRepo).ensureFriendCapacityRows`(`go/friend/internal/data/friend_repo.go`,`INSERT IGNORE INTO friend_capacity ...` 在**事务外、自动提交**);仍然无条件调它的写路径是 `(*FriendRepo).AddFriendRequest`;sweep 的三条 SQL(`SweepTerminalRequests` / `deleteTerminalRequestsBefore`,`go/friend/internal/data/sweep_repo.go`)**全部只写 `FROM friend_request`**,`friend_capacity` 一个字没出现;频率配额的三个 fail-open 分支在 `(*FriendLogic).allowFriendRequest`(`go/friend/internal/logic/rate_quota.go`)。已登记处:`docs/design/friend-port-20260918.md` §6 第 12 条、`PROGRESS.md` F2 批条目。
+**位置**:`(*FriendRepo).ensureFriendCapacityRows`(`go/friend/internal/data/friend_repo.go`,`INSERT IGNORE INTO friend_capacity ...` 在**事务外、自动提交**);仍然无条件调它的写路径**有两条**:`(*FriendRepo).AddFriendRequest`(`friend_repo.go:287`)与 `(*FriendRepo).AcceptFriend`(`friend_repo.go:449`);sweep 的三条 SQL(`SweepTerminalRequests` / `deleteTerminalRequestsBefore`,`go/friend/internal/data/sweep_repo.go`)**全部只写 `FROM friend_request`**,`friend_capacity` 一个字没出现;频率配额的三个 fail-open 分支在 `(*FriendLogic).allowFriendRequest`(`go/friend/internal/logic/rate_quota.go`)。已登记处:`docs/design/friend-port-20260918.md` §6 第 12 条、`PROGRESS.md` F2 批条目。
 
 **为什么是问题**:`AddFriendRequest` 为了拿容量守卫,会对**任意** `to_player_id` 建行 —— friend 服务没有玩家名册,无法验证 target 是否真实存在(代码注释自己就这么写)。`friend_capacity` 没有 TTL、不在 sweep 范围内、没有任何删除语句,于是该表随"被发起过好友申请的 id 个数"**单调增长**,且增长可由客户端驱动。唯一的闸是每分钟频率配额,而配额在 Redis 故障时**按设计 fail-open 放行**(理由写在 `rate_quota.go` 文件头,是有意的可用性取舍,不是缺陷)—— 即"Redis 挂掉的窗口内,这张表的增长完全不受限"。
 
 **⚠ 已缓解的部分(别重复做,这一条更正了早期的描述)**:
 - `Block`(`go/friend/internal/data/block_repo.go`)**已不再无条件 ensure**:已加事务外快速失败探针,名额满就直接 `ErrBlockListFull`、不 ensure;`config.Validate` 拒收 `Friend.MaxBlocks == 0`(`internal/config/config.go`),所以该探针恒生效。残留向量只剩代码注释自己点名的 **Block → Unblock 反复换目标**(`Unblock` 只删 `friend_block`,不碰 `friend_capacity`)。
 - `RemoveFriend` 已被 F2-15 改成"先 `friendEdgeExists` 普通读判是不是好友,再 ensure"。
-- **仍然无条件 ensure 的只剩 `AddFriendRequest`。** 核心结论(无回收路径、P2)不变。
+- **仍然无条件 ensure 的是 `AddFriendRequest` 与 `AcceptFriend` 两条**(早期说法写的是"只剩 AddFriendRequest",漏了后者)。
+  ⚠ `AcceptFriend` 这条**更松**:`from_player_id` 来自请求体、进事务复核申请行之前就先 ensure 了双方的容量行(`friend_repo.go:449` 在 `beginWriteTx` 之前),而 `AcceptFriend` **不吃**每分钟频率配额(`allowFriendRequest` 全仓只有 `friend_logic.go:272` 一个调用方,在 `AddFriend` 路径上)。也就是说客户端用互不相同的假 `from_player_id` 连调 `AcceptFriend`,每次都能凭空造出一行 `friend_capacity`,连 fail-open 的那道配额都不经过。
+  核心结论(无回收路径、P2)不变,但**修回收路径时两条都要算进增长面**;顺带可以考虑给 `AcceptFriend` 也加一道"先普通读判申请行在不在,再 ensure"的快速失败(形状照 `RemoveFriend` 的 `friendEdgeExists`,`friend_repo.go:613`)。
 
 **建议修法**。A 仓有先例可参考(浅克隆只读副本,见 §6 的失效提醒):`.../scratchpad/xuanming-server/services/social/friend/internal/data/friend_repo.go` 的 `DeletePairGuardsBefore`,接在 `internal/biz/sweep.go`。
 ⚠ **不能直接照搬**:A 仓删的是**专用**的 `friend_pair_guards` 表(带 `created_at`、纯守卫载体,按年龄删没有语义损失);本仓的 `friend_capacity` **本身就是好友数的权威计数行**(D-10),且 `FriendCapacityRecord`(`proto/friend/friend_table.proto`)只有 `player_id` / `friend_count` 两列,**没有任何时间戳列**。两条路选一条:
@@ -503,7 +508,7 @@ go build -o robot.exe .
 
 **6c. `logic/sweep.go` 的 ticker 侧**。职责分界写在文件头(本文件只管节拍 + 抖动 + `safego` panic 边界 + 单轮预算 + 指标与日志;模式判定与保险在 SQL 侧)。`sweep_repo_test.go` 已把 SQL 侧钉得很死,**ticker 侧零覆盖**:未知 mode 的错误日志分支、单轮预算 `sweepRoundBudget`、`ctx` 取消即退出、`SetSweepPendingRows` 被喂进去的 mode 值(与第 4 条联动)。用假 `SweepStore`(接口定义在 `sweep.go`)+ 注入的 ctx 即可,不需要库。
 
-**改动面**:新增 2–3 个测试文件;`go.mod` 可能要加 miniredis(**注意** `go.mod` 顶部的纪律注释:`go mod tidy` 之后 `github.com/redis/go-redis/v9` 只应出现在 indirect 块,别顺手接受 tidy 把它提上去)。
+**改动面**:新增 2–3 个测试文件;**miniredis 不用再加** —— `go/friend/go.mod` 的 require 块里已经有 `github.com/alicebob/miniredis/v2 v2.35.0`(`friend_repo_mysql_test.go` / `friend_logic_test.go` 已在用)。(**注意** `go.mod` 顶部的纪律注释:`go mod tidy` 之后 `github.com/redis/go-redis/v9` 只应出现在 indirect 块,别顺手接受 tidy 把它提上去)。
 
 ### 7.【P3】`data.FriendEntry.LastActiveMs` 是无写入方的死字段,且与邻近注释自相矛盾
 
@@ -653,7 +658,7 @@ A 仓浅克隆(只读):`C:/Users/luyua/AppData/Local/Temp/claude/E--work/e33631a
 
 friend 这批从落码到合完,`main` 上另一批会话一直在推进:`f06090b19` 之后到 `origin/main` 之间,有 **1 次 37 冲突的大合并(`cda218956`,788 文件)+ 6 次后续追平合并**(`d924b2377` / `1eb35babb` / `a5e598179` / `88a262f2f` / `52f99780e` / `5c574bc0b`)。(早期口述说"main 前进了 5 轮",实际按合并提交数是这个形状。)
 
-这些会话共用**同一个工作树、同一个 git index**。别人 `git add` 过但还没 commit 的文件,就躺在你即将提交的索引里。更糟的是还有一个**每小时 `git add -A` 的自动保存会话**:`git log --oneline` 全量里有 **20 个** `WIP:每小时保存全部进度`,最近 30 个提交里就占 6 个。它在 `add` 与 `commit` 之间的窗口会卷走任何人暂存的东西。三个已核实的实例:
+这些会话共用**同一个工作树、同一个 git index**。别人 `git add` 过但还没 commit 的文件,就躺在你即将提交的索引里。更糟的是还有一个**每小时 `git add -A` 的自动保存会话**:`git log --oneline` 全量里有 **21 个** `WIP:每小时保存全部进度`(2026-09-20 复核时的数;一天前是 20 个,它每小时还在长),最近 30 个提交里占 5 个。它在 `add` 与 `commit` 之间的窗口会卷走任何人暂存的东西。三个已核实的实例:
 
 - `105c5560b`(WIP 03:50)混进了 `data/tip/Tip.xlsx`(14231→14425 字节)、`data/RoleNameRule.xlsx`、`go/shared/playername/` 等**别人正在做的帮会二期 B3a** 内容;
 - `969bbec4c`(WIP 09-18 03:56)混进了 `go/friend/` 的文件;
@@ -665,7 +670,7 @@ friend 这批从落码到合完,`main` 上另一批会话一直在推进:`f06090
 2. **提交一律路径限定**:`git commit -F <msgfile> -- go/friend/ proto/friend/ ...`。**永远不要 `git add -A` / `git commit -a`。**
 3. **提交前 `git diff --cached` 逐行看**,不是只核对文件名。同一个文件里可能既有你的行、也有别人的行(尤其 `k8s_deploy.ps1`、`go_services.ps1`、`PROGRESS.md` 这几个"人人都改"的文件)。
 4. 对方会话 idle 很久**不要假设它死了** —— 可能是撞额度,会 resume,并接着用它记忆里的那份索引状态。
-5. 接手时先 `git fetch && git log --oneline origin/main..main`:核实当时本机 `main` ahead 4(`ab5e7f96d` / `33ba69e20` / `2df78d4a5` / `a5ca66851`,都是别人的 Kafka / Redis / battle 改动)。**别顺手 `git push` 把别人没准备好的东西推上去。**
+5. 接手时先 `git fetch && git log --oneline origin/main..main`:**这个数每天都在变,别把本文的数字当现状**:2026-09-19 核实时 ahead 4(`ab5e7f96d` / `33ba69e20` / `2df78d4a5` / `a5ca66851`,都是别人的 Kafka / Redis / battle 改动);2026-09-20 复核时那 4 个已被推上 `origin/main`,本机改为 ahead 1(一个新的自动保存 WIP)。**别顺手 `git push` 把别人没准备好的东西推上去。**
 
 ### 5.2 3-way 合并干净 ≠ 能编译(本次最隐蔽的一个坑)
 
@@ -739,7 +744,7 @@ xlsx 的改动刻意留到**合并窗口**做、不在分支上做(二进制不�
 
 **为什么不能绕**:真正会造成**静默回退**的,是从**别的 worktree** 用 `git update-ref` / `git branch -f` 去挪 `main` 的引用 —— 那样 `main` 的**工作树和索引仍停在旧提交**,引用却跳到了新的;紧接着每小时的自动保存会话一跑 `git add -A && git commit`,就把你刚合进去的改动**原样回退掉,而且一个错都不报**,在 `git log` 里它看起来就是一个普通 WIP 提交。
 
-**正确姿势**(本次实际用的,可从 reflog 核实):① 在**自己的分支 / worktree** 里反向 `git merge main`,在那里解冲突(那 6 个追平合并的由来);② `main` 这边**只做 `--ff-only`**(`git reflog show main` 里对应的是 `5c574bc0b main@{4}: merge feature/port-remaining: Fast-forward` —— 干净快进,没有第二个父节点,不可能吞掉别人的提交)。
+**正确姿势**(本次实际用的,可从 reflog 核实):① 在**自己的分支 / worktree** 里反向 `git merge main`,在那里解冲突(那 6 个追平合并的由来);② `main` 这边**只做 `--ff-only`**(`git reflog show main` 里对应的是 `5c574bc0b … merge feature/port-remaining: Fast-forward`(reflog 下标随新提交往后挪 —— 09-19 是 `main@{4}`,09-20 复核时已是 `main@{8}`,**按提交号找,不要按下标找**) —— 干净快进,没有第二个父节点,不可能吞掉别人的提交)。
 
 现状:`git worktree list` 只有一个工作树(`E:/work/xuanming-server-mmo`,`main`),本地只有 `main` 一个分支(`feature/port-remaining` 合并后已删)。**新开工作时请自己再拉一条分支/worktree,不要直接在 `main` 上攒改动。**
 
