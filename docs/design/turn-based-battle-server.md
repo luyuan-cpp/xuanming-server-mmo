@@ -19,7 +19,7 @@
 
 | # | 决策 | 理由 |
 |---|------|------|
-| D1 | **人不动、数据动**:开战不做玩家跨节点交接,战斗服只接收"战斗快照"(属性/技能/buff/道具副本),打完回传一条结算事件 | 规避 `AllowUnsafeCrossNodeHandoff=false` 的持久化屏障缺失;保持 single-writer 不变量(cross_server_architecture_principle.md 规则 #8):场景服全程是玩家权威数据唯一 writer,战斗服只拥有可丢弃的派生副本 |
+| D1 | **人不动、数据动**:开战不做玩家跨节点交接,战斗服只接收"战斗快照"(属性/技能/buff/道具副本),打完回传一条结算事件 | 规避 `AllowUnsafeCrossNodeHandoff=false` 的持久化屏障缺失;保持 single-writer 不变量(cross_server_architecture_principle.md 规则 #8):场景服全程是玩家权威数据唯一 writer,战斗服只拥有可丢弃的派生副本。*(2026-09-20 标注:「持久化屏障缺失」是决策当时的事实;该屏障已由 cross-zone-scene-travel.md CZ-4 的换手门(`owner_epoch` + `player:{id}:handoff` 落盘标记)补上,代码已进 main、尚未编译 / 测试。D1 结论不因此改变:single-writer 这半条理由仍成立,开战也不值得为一次交接付出冻结 + 存盘 + 重新落点的代价)* |
 | D2 | **新增独立节点类型 `BattleNodeService = 28`**(gRPC 协议,不进 `IsZoneScopedNodeType` → 全局池) | 回合制战斗是逻辑房间不是空间场景,不需要 AOI/Movement/20FPS tick;全局池让跨 zone 匹配/观战免客户端换 gate;etcd 三阶段注册/Kafka topic(`battle-{id}`)由框架自动派生 |
 | D3 | **所有战斗统一由 match 服务编排开局**,两个入口:①队列匹配(系统凑单);②场景发起 PK(点名成局,challenge 应战后成局)。两入口汇入同一条 gather 管线;`battle_id`/`challenge_id` 由 match 服务用 shared/snowflake(17-bit worker 布局)生产 | 用户产品决策:匹配遇怪 + 场景可点名切磋;单一编排者让 gather/补偿逻辑只存在一份;SnowFlake 节点隔离不变量:battle_id 只能由 match 节点生产 |
 | D4 | **结算串行化**:`InBattleComp` 摘除条件 = 场景服已应用结算;摘除前不得再排队/开战 | 残血带出战斗要求下一场快照必须反映上一场结果;每玩家最多一单在途,幂等去重退化为"每人记最近一个 battle_id" |

@@ -1,6 +1,8 @@
 # MMO Cross-Server Architecture Design (Complete Reference)
 
 > **修订(2026-08-15)**: "each region has an independent Redis/storage"的存储前提被 [global-data-layer-tidb-decision.md](./global-data-layer-tidb-decision.md) 修订为"TiDB 全局数据层 + home_zone 逻辑归属";跨区改为 redirect 重连 + 全局层直读,不再做跨区数据搬运。
+>
+> **Status note (2026-09-20)**: §7, the Layer 1 / Layer 4 text in §8, and the "Outstanding" list in §13 describe the Kafka self-orchestrated `player_migrate` transfer chain. **That chain was deleted in phase 3 of cross-zone scene travel (2026-09-18)** — `HandleCrossZoneTransfer` / `HandlePlayerMigration` / `HandlePlayerMigrationAck`, the `player_migrate` / `player_migrate_ack` subscriptions, `CrossZoneReaper` and the Redis `player_migration:{playerId}` state no longer exist. Those passages are kept as history only; each carries its own note below. The authoritative description of the current cross-zone path is [cross-zone-scene-travel.md](./cross-zone-scene-travel.md) (§3 decisions CZ-1…CZ-10, §4 data flow, §11 what was landed). That code is merged but has **not been compiled or tested yet**.
 
 ## 1. Background & Goals
 
@@ -119,6 +121,8 @@ Recommended storage:
 ## 7. Cross-Server Scene Transition Sequence (Critical Consistency Constraint)
 
 > **2026-05-16 修订**: 早期版本描述「SceneManager 严格 ACK 编排」,**实际实现是 Kafka 自治**。本节按代码事实重写。完整审计与修复方案见 [`cross-zone-readiness-audit.md`](cross-zone-readiness-audit.md)。
+>
+> **Superseded (2026-09-20)**: §7.1–§7.3 below are **historical**. The Kafka self-orchestrated transfer was removed in phase 3 (cross-zone-scene-travel.md §11.3), and the premise of §7.2 has been reversed: `scene_manager.EnterScene` is now the single arbiter of every ownership change. Current sequence (cross-zone-scene-travel.md §4 / §11.2): client `SceneSceneClientPlayer.TravelToZone` → source scene freezes input (`PlayerFrozenComp` + `PlayerTravelHandoffComp`) → `SavePlayerToRedis` lands → source writes `player:{id}:handoff = "{owner_epoch}:{ms}"` (EX 300) → `scene_manager.EnterScene`, which grants the handoff only if the marker belongs to the current `owner_epoch` (otherwise the retryable `ErrHandoffPending` = 18, no state changed) and mints a new epoch → redirect (msg 124) → client reconnects to the target zone, whose scene **loads the player from storage**. No player data travels over Kafka, there is no destination ACK and no reaper. The gaps listed in §7.3 were never patched — the whole path was replaced; current known limitations are in cross-zone-scene-travel.md §7 / §10.3.
 
 Core invariant: at any given moment, only one Scene may write a player's data (Single Writer).
 
@@ -173,6 +177,10 @@ The "Kafka self-orchestrated" pattern itself is correct. These gaps are **patch-
 ## 8. Consistency Defense Layers
 
 > **2026-05-16 修订**: Layer 1 描述按实际实现修订(从 SceneManager 编排改为 Kafka 自治 + Frozen 状态)。其余层级保持。
+>
+> **Superseded (2026-09-20)**: the Layer 1 and Layer 4 text below describes the deleted `player_migrate` chain and is kept as history; Layer 2 / Layer 3 are unchanged. Current form, per cross-zone-scene-travel.md CZ-4 / §10.2 / §11.2:
+> - **Layer 1 (now)**: the source scene freezes the player (`PlayerFrozenComp` is implemented and is only ever attached together with `PlayerTravelHandoffComp` by `PlayerLifecycleSystem::StartTravelHandoff`), saves, and only after the save has landed writes the `player:{id}:handoff` marker. `scene_manager.EnterScene` grants the handoff and mints a new `owner_epoch` only when the marker matches the current epoch. Late writes from the previous owner are rejected by the C++ guarded-save Lua CAS and by the `applied_epoch` guard in `go/db`. There is no migration message and Kafka partition ordering plays no part in ownership.
+> - **Layer 4 (now)**: there is no `player_migration:{playerId}` key and no reaper. A handoff that does not complete is settled on the source scene itself: a save that never lands is aborted by the save watchdog (`AbortTravelHandoff`, unfreeze); once EnterScene has been sent, an error reply or the reply watchdog goes through `ResolveTravelOutcome`, which re-reads `owner_epoch` — changed → the handoff was in fact granted, the local entity is destroyed without persisting; unchanged → the player is unfrozen and gets a tip. A hard-crashed owner node is handled by the dead-owner takeover rule in cross-zone-scene-travel.md §11.5.
 
 Layer 1 (primary defense — actual form):
 
@@ -269,6 +277,8 @@ Node-type strategies:
 - ~~Establish cross-server scene-switch observability~~ — metrics framework done at `go/data_service/internal/metrics/metrics.go`. Helper functions `ObserveCrossSceneTransition` / `ObserveCrossSceneTransitionOutcome` defined; **call sites in scene_manager pending** (P3).
 
 ### Outstanding 🔴
+
+> **Void as of 2026-09-20 — do not start work from this list.** All three items below target the `player_migrate` transfer chain that was deleted in phase 3 (cross-zone-scene-travel.md §11.3); implementing them would rebuild what was removed. Bag / mission data is now part of the normal save path (`player_database_loader.cpp`), `PlayerFrozenComp` exists and is driven by the ownership handoff, and the ACK topic / Redis migration state / reaper have no successor. The same applies to the shutdown remark under the list ("marshals only the 7 components"). Current open items and known limitations for cross-zone play are tracked in cross-zone-scene-travel.md §7 / §9 / §10.3 / §11.4 — first among them: the phase 1–3 code has not been compiled or tested yet. The list is kept as history.
 
 The following items block production-grade cross-zone deployment. All three are described in detail in [`cross-zone-readiness-audit.md`](cross-zone-readiness-audit.md):
 

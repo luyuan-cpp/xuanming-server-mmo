@@ -151,7 +151,8 @@ void Answer(::AssetOpResponse& response, ::AssetOpOutcome outcome, uint32_t tipI
 // **刻意不复用 PlayerLifecycleSystem::IsCrossZoneFrozen**:它只看 PlayerFrozenComp,
 // 漏掉"归属交接已挂但存盘还没落地"的窗口。而 SavePlayerToRedis 在
 // `PlayerTravelHandoffComp.requestedAtMs != 0` 时直接跳过写盘并返回 false
-// (player_lifecycle.cpp:1050-1058)—— 与"脏比较相等、盘上已是最新"共用同一个返回值。
+// (player_lifecycle.cpp 的 SavePlayerToRedis 开头,日志 "skip: zone travel handoff already
+// requested" 那一支;不写行号,该文件改动频繁)—— 与"脏比较相等、盘上已是最新"共用同一个返回值。
 // 若在交接在途时记账,这个 false 会被误当成"结局已在盘上",把没落地的结局报成 durable,
 // Go 随即终结,而这份内存态马上会随实体销毁一起丢。所以交接一挂上就必须在**记账之前**
 // 回 RETRY。UnregisterPlayer(退出存盘在途)同理:退出优先,不接受新改动。

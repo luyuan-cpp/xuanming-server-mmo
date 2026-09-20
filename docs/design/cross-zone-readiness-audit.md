@@ -1,5 +1,11 @@
 # 跨 Zone 就绪审计(Cross-Zone Readiness Audit)
 
+> **⚠️ 状态说明(2026-09-20):本文 §1–§10 已被 [cross-zone-scene-travel.md](./cross-zone-scene-travel.md) 取代,正文仅作历史保留,不得据此推理现状。**
+> - 本文描述并试图修补的「Kafka 自治 + 三件套」搬数据链——`player_migrate` / `player_migrate_ack` 两个 topic、`HandleCrossZoneTransfer` / `HandlePlayerMigration` / `HandlePlayerMigrationAck`、`CrossZoneReaper`、Redis `player_migration:{id}`、`kafka/system/kafka.{h,cpp}`——已在跨 zone 传送**阶段 3(2026-09-18)整条删除**,清单见 cross-zone-scene-travel.md §11.3。文中引用的函数与行号均已不存在。
+> - 现行跨 zone 路径 = **重定向 + 目标 zone 从盘上直接加载**(CZ-1),数据不经 Kafka 搬运;换手由 `scene_manager.EnterScene` 的两道门裁决(`owner_epoch` CAS + 源 scene 写的 `player:{id}:handoff` 落盘标记,CZ-4)。数据流见该文 §4,源端释放链见 §11.2,已知限制见 §7 / §10.3。「7 组件 / bag、quest 丢失」的判定也已过时:bag / mission 已进普通存盘链。
+> - **仍然有效的只有两处**:§3.3(mail 走独立 Go 服务,即 CZ-10)与 §11(`PlayerFrozenComp` 业务接入分类——这道拦写闸被传送链原样复用)。§11 里的「迁移中 / reaper」字样按该节开头的说明换读。
+> - 阶段 1/2/3 的代码已进 main 但**尚未编译、未跑测试**,现状同样不得当作"已验证"引用。
+
 > **状态**: v1 — 2026-05-16
 > **背景**: 用户明确「玩家肯定要跨 zone 玩」是核心设计。本文件审计当前实现距离这个设计目标的真实差距,并给出可执行修复方案。
 > **审计深度**: 直接读 C++ player_lifecycle / scene / proto 持久化代码,所有结论都基于代码事实。
@@ -20,6 +26,8 @@
 ---
 
 ## 1. 当前跨 zone 链路(代码事实)
+
+> **历史记录(2026-09-20 标注)**:本节是 2026-05-16 当时的链路。该链已在阶段 3 整条删除(cross-zone-scene-travel.md §11.3),§1.2 引用的 `kafka.cpp` / `player_lifecycle.cpp` 行号均已不存在;现行数据流见 cross-zone-scene-travel.md §4。
 
 ### 1.1 完整时序
 
@@ -357,6 +365,8 @@ zone 500 收到第 2 次 player_migrate
 
 ## 10. 步骤 2 实施过程的新发现(2026-05-16 v2)
 
+> **历史记录(2026-09-20 标注)**:本节所列函数与 topic 订阅已在阶段 3 全部删除(cross-zone-scene-travel.md §11.3;`player_migration_event.proto` 只剩打了 DEPRECATED、待下轮 regen 清掉的空壳)。§10.5 的「✅ 已落 / ❌ 必须」是 2026-05-16 的快照,不代表现状,不要照它去补订阅。唯一留下来的是 `PlayerFrozenComp`:现在只由 `PlayerLifecycleSystem::StartTravelHandoff` 与 `PlayerTravelHandoffComp` 成对挂上,摘除时机见 `player_frozen_comp.h` 头注释。
+
 实施步骤 2(PlayerFrozenComp + 延后 DestroyPlayer)时,深查 Kafka 订阅链路发现 **`player_migrate` topic 当前根本没有 consumer**。
 
 ### 10.1 证据
@@ -440,6 +450,11 @@ node.RegisterKafkaMessageHandler(
 ---
 
 ## 11. 业务系统 Frozen 接入分类指南(任务 #29)
+
+> **本节仍然有效,但语境已变(2026-09-20 标注)**:分类判据与拦写闸(`IsCrossZoneFrozen` / `any_of<PlayerFrozenComp>`)被传送链原样复用,多处代码注释仍引用本节编号。阅读时请换读三处——
+> - 「跨 zone 迁移中 / 转移中」= **归属交接在途**:跨 zone 传送,以及同 zone 跨节点换图(被 scene_manager 以 18 `ErrHandoffPending` 暂拒之后的「冻结 → 存盘 → 写 handoff 标记 → 重发」,cross-zone-scene-travel.md §11.2)。
+> - 「等 ACK 后 DestroyPlayer」= scene_manager **放行**后由 `DestroyDeposedPlayer` 不存盘销毁;已没有 Kafka 迁移包,也没有目的端 ACK,目标节点从盘上加载。
+> - 「reaper 兜底 / reaper 解冻」(§11.4 的 GM 强制下线行、§11.6 的失败场景项)= 已没有 reaper。交接未成(EnterScene 错误应答,或存盘 / 应答看门狗到期)由 `AbortTravelHandoff` 解冻——EnterScene 发出之后的「未成」先经 `ResolveTravelOutcome` 按 `owner_epoch` 核实,epoch 已变说明其实已放行,改为销毁而不是解冻;交接途中退出(含 GM 强制下线)走普通退出的「退出优先」分支:`FinishExitAfterPersist` 摘掉 `PlayerTravelHandoffComp` + `PlayerFrozenComp` 并撤回已写的 handoff 标记,漏摘的 Frozen 记 ERROR 后解冻继续退出,绝不悬挂。
 
 > **2026-05-16 v3 新增**: 步骤 2 落地 PlayerFrozenComp 后,需要让所有业务系统在写入 / tick 玩家数据前检查 `PlayerLifecycleSystem::IsCrossZoneFrozen(player)`,否则 Single Writer 在业务层不严格成立。这一节是给下次会话用的**分类决策表**,避免「每文件加一行」式粗暴改动。
 

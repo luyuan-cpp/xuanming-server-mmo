@@ -76,9 +76,11 @@ uint32_t BagService::AddItem(
 	auto configId = param.itemPBComp.config_id();
 
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
-	// Bag is part of the player's marshaled state; once a transfer is in
-	// flight any item add on the source side never reaches the destination
-	// and will be lost when DestroyPlayer fires on ACK. Reject early — also
+	// 冻结 = 归属交接在途(PlayerLifecycleSystem::StartTravelHandoff:跨 zone 传送,或同 zone
+	// 跨节点换图);PlayerFrozenComp 只与 PlayerTravelHandoffComp 成对出现,已没有 Kafka
+	// 迁移包 / ACK / reaper。背包随冻结那一次存盘落盘,目标节点从盘上加载;此后源端再加的
+	// 物品不会再被存盘(handoff 标记写出后 SavePlayerToRedis 直接跳过),放行后随
+	// DestroyDeposedPlayer 不存盘销毁。Reject early — also
 	// avoids polluting transaction_log with TX_SYSTEM_GRANT entries for items
 	// that effectively don't exist.
 	// See docs/design/cross-zone-readiness-audit.md §11.1.
@@ -306,10 +308,9 @@ uint32_t BagService::RemoveItem(
 	Guid guid)
 {
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
-	// See AddItem above for rationale. Removing an item from the source-
-	// side bag while a transfer is in flight would leave the destination
-	// with a duplicate (the marshaled PlayerAllData still contains the item)
-	// — worse than rejecting the remove.
+	// See AddItem above for rationale. 归属交接在途时从源端背包删物品,目标节点从盘上
+	// 加载到的仍是冻结那一次存盘(里面还有这件物品)—— 等于多出一件,
+	// 比拒绝这次删除更糟。
 	// See docs/design/cross-zone-readiness-audit.md §11.1.
 	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
 	{
@@ -348,7 +349,7 @@ uint32_t BagService::RemoveItemsClamped(
 	uint64_t correlationId,
 	const std::string &extra)
 {
-	// 冻结期一件都不扣:理由同 RemoveItem —— 迁移在途时源端扣数,目标端拿到的
+	// 冻结期一件都不扣:理由同 RemoveItem —— 归属交接在途时源端扣数,目标节点从盘上加载到的
 	// 快照里那笔数量还在,等于凭空多出来。调用方必须把这个返回值当"没扣成",
 	// 而不是"扣了 0 个"。
 	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
@@ -394,7 +395,7 @@ uint32_t BagService::RemoveItemsByGuid(
 	}
 
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
-	// 理由同 RemoveItem:迁移在途时源端把实例销毁,目标端拿到的快照里那件东西还在,
+	// 理由同 RemoveItem:归属交接在途时源端把实例销毁,目标节点从盘上加载到的快照里那件东西还在,
 	// 等于凭空多出来一件;而交易库那侧已经按"扣出成功"入了托管快照 —— 一件装备
 	// 两处都在,过户回来就是复制。
 	//
@@ -474,9 +475,9 @@ uint32_t BagService::MergeAndCompact(
 	}
 
 	// ── Cross-zone Frozen check (Single Writer guarantee) ────────────────
-	// 整理会销毁实例、重排槽位,两样都是会被 marshal 带走的状态。传输在途时动它
-	// 等于在源端造出一份与已发出快照不一致的布局,ACK 后 DestroyPlayer 一到,
-	// 这次整理就白做了(更糟的是流水已经写了)。理由同 AddItem。
+	// 整理会销毁实例、重排槽位,两样都是要随存盘落盘的状态。归属交接在途时动它
+	// 等于在源端造出一份与盘上快照(冻结那一次存盘)不一致的布局,放行后源端实体由
+	// DestroyDeposedPlayer 不存盘销毁,这次整理就白做了(更糟的是流水已经写了)。理由同 AddItem。
 	// See docs/design/cross-zone-readiness-audit.md §11.1.
 	if (PlayerLifecycleSystem::IsCrossZoneFrozen(playerEntity))
 	{

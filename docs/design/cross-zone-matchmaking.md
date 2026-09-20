@@ -30,6 +30,8 @@
 
 `docs/design/cross-zone-readiness-audit.md` 判定"玩家跨 zone 当前不可生产"(实体只 marshal 7 组件、bag/quest/mail 丢失、Kafka migrate 无 ACK)。**那是玩家实体跨 zone 搬家的问题**。回合制战斗的模型是:
 
+> *(2026-09-20 标注)* 上面引用的是 2026-05 的判定:那份审计已被 [cross-zone-scene-travel.md](cross-zone-scene-travel.md) 取代,Kafka migrate 搬数据链已在阶段 3 整条删除,bag / mission 也已进普通存盘链。论据过期,但本节论点(快照战斗不经过玩家换 zone 的链路)不受影响。
+
 - 玩家留在原 zone 的 scene 节点,`PrepareBattle` 只冻结 + 抽快照(`cpp/libs/services/scene/battle/system/player_battle.cpp`);
 - 快照进全局 battle 节点(`cpp/nodes/battle/`),战斗零持久化;
 - 结算以事件回流原 scene(`battle_room_manager.cpp:135` → `scene-{scene_node_id}`),由原 scene 的 `ApplySettlement` 应用。
@@ -292,6 +294,14 @@ MULTI、MGET(§10.0)。所以 SharedRedis **必须保持单实例(或主从哨�
 门、`player:zone:{id}` home zone 无生产写入方、存盘按进程 zone 而非 home zone 路由、同 zone 多 scene 的
 player_migrate 目标判据(`scene_info.guid` uint32)、SceneManager 部署粒度 zone/职责全局的错位。这些都在
 "玩家搬家"链路上,快照战斗不经过它们。
+
+> **状态说明(2026-09-20)**:上面这段列的是审计当时的既有问题,其中多项已被 [cross-zone-scene-travel.md](cross-zone-scene-travel.md) 阶段 1–3 改变(代码已进 main,尚未编译 / 测试),原文保留为历史:
+> - `ErrUnsafeCrossNodeHandoff` 门 → 已被**换手门**取代:源 scene 为当前 `owner_epoch` 写出 `player:{id}:handoff` 落盘标记即放行,否则回可重试的 18(`ErrHandoffPending`);14 是历史码,不再发出(CZ-4)。
+> - 存盘按进程 zone 路由 → 已改为 `GetDbTaskTopic(home_zone)`(CZ-2 / CZ-3)。
+> - `player_migrate` 目标判据 → 随搬数据链在阶段 3 整条删除而消失(§11.3)。
+> - `player:zone:{id}` 无生产写入方 → login 建角现在会调 `RegisterPlayerZone` 写入(`go/login/internal/logic/pkg/homezone`);该处归 login 会话维护,细节以其代码为准。
+> - 「SceneManager 部署粒度错位」一项本次未重新核实。
+> 本段的论点不变:这些都在"玩家换 zone"链路上,快照战斗不经过它们。
 
 - 同 zone 优先 / 延迟加权匹配(用户明确不要);
 - 客户端展示对手大区(需 `BattleActorState` 加 zone + C# regen);

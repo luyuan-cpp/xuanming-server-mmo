@@ -44,8 +44,10 @@ uint64_t GenerateUniqueSkillId(const SkillContextCompMap& casterSkillContexts, c
 	return newSkillId;
 }
 
-// Reject casts from a player mid cross-zone migration: the source-side cast
-// would never reach the destination. cross-zone-readiness-audit.md §11.3.
+// 归属交接在途(PlayerFrozenComp:跨 zone 传送 / 同 zone 跨节点换图)的玩家不得施法:
+// 冻结那一次存盘之后源端内存态不得再变,这次施法的结果到不了目标节点(它从盘上加载)。
+// 函数名里的 Migration 是历史叫法,player_migrate 搬数据链已删。
+// cross-zone-readiness-audit.md §11.3(该文只有 §11 仍有效)。
 bool IsCasterFrozenForMigration(entt::entity casterEntity, uint64_t skillId, const char* where) {
 	if (!tlsEcs.actorRegistry.any_of<PlayerFrozenComp>(casterEntity)) {
 		return false;

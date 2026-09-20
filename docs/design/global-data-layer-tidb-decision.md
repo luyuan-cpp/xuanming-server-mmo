@@ -4,6 +4,12 @@
 > **范围**: 玩家数据层从"每 zone 独立 MySQL 库(`zone_{N}_db`)"演进为"单一 TiDB 集群上的全局数据层(按 `player_id` 组织)";裁决 proto2mysql 升级路径、TiDB 建表方言、跨区/合服语义变化。
 > **关联文档**: [db_zone_isolation.md](./db_zone_isolation.md)(被本文修订)、[cross_server_architecture_principle.md](./cross_server_architecture_principle.md)(存储前提被修订)、[server_merge_design.md](./server_merge_design.md)、[data_service_role_and_scope.md](./data_service_role_and_scope.md)、[zone_data_rollback.md](./zone_data_rollback.md)、[db-task-kafka-partition-contract.md](./db-task-kafka-partition-contract.md)、[cross-zone-readiness-audit.md](./cross-zone-readiness-audit.md)
 
+> **⚠️ 状态说明(2026-09-20):本文关于 `player_migrate` / `CrossZoneReaper` / `ErrUnsafeCrossNodeHandoff` 的表述是 2026-08-15 的现状,已被 [cross-zone-scene-travel.md](./cross-zone-scene-travel.md) 的落码改变;TiDB / proto2mysql / 分阶段的决策本身不受影响。** 受影响的是:结论 4 Phase 2 的「冻结/单写栅栏语义保留」、§1 表「跨区游玩」行的现状列、D2 的后两条。
+> - `player_migrate` 搬数据链与 `CrossZoneReaper` **没有「保留职责」,而是在跨 zone 传送阶段 3(2026-09-18)整条删除**(该文 §11.3)。留下来的只有 `PlayerFrozenComp` 这个冻结标记和业务拦写闸。
+> - **单写栅栏**现在由 per-player `owner_epoch` + `player:{id}:handoff` 落盘标记承担(该文 CZ-4 / §6 不变量 1):源 scene 冻结 → 存盘落地 → 写标记,`scene_manager.EnterScene` 校验标记属于当前 epoch 才放行并铸造新 epoch。D2 要求的顺序不变量「源存盘落地 → 释放 → 目标加载」不变,只是执行者换了。
+> - `ErrUnsafeCrossNodeHandoff`(14)已是历史码、不再发出;同类拒绝改为可重试的 `ErrHandoffPending`(18)。带状态跨区不必等 Phase 2:存盘已按 home_zone 选 topic(CZ-2,即本文 Phase 2「DBTask 按 home_zone 选 topic」的先行一步),目标 zone 从共享 Redis 直接加载。
+> - 上述代码已进 main 但**尚未编译、未跑测试**。
+
 ---
 
 ## 结论(先读这节)
@@ -60,6 +66,8 @@
 - 建号三不变量(合服的地基,现状已满足,**不许回退**): ① player_id 全局唯一(Snowflake + etcd worker id + guard 水位,绝非按区自增);② 名字唯一性作用域在建号时定死(现状全局唯一,保持);③ 业务表以 home_zone 字段区分归属,不以"在哪个库"区分(Phase 2 落地)。
 
 ### D2: 跨区 = 客户端重连,不做数据搬运
+
+> *(2026-09-20 标注)* 本节后两条里的 `ErrUnsafeCrossNodeHandoff` 与「`player_migrate` / `CrossZoneReaper` 保留单写栅栏职责」已不成立,见文首状态说明;D2 的决策与顺序不变量仍然有效,落地形态以 cross-zone-scene-travel.md CZ-1 / CZ-4 为准。
 
 - 复用既有 redirect 机制(`handleCrossZoneRedirect` → `AssignGateForZone` 签 5 分钟 HMAC token → Kafka 推 `RedirectToGateEvent` → 客户端断开重连目标区 gate)。
 - Phase 2 解除 `ErrUnsafeCrossNodeHandoff` 的前提是: 目标区 scene 从**全局数据层**加载完整玩家数据(和本区登录同一条加载链),而不是靠 `player_migrate` 把 PlayerAllData 打包过去。7 组件 KNOWN GAP 因此整体消失——不需要"把 bag/quest/mail 补进迁移协议"这条路了。

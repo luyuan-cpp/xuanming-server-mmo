@@ -41,11 +41,11 @@ void MovementSystem::Update(const double delta)
 	// 输入方向 —— 绝不要把标量直接灌进 Velocity,那会让实体沿 (1,1,1)
 	// 匀速漂移(2026-08 修过的 P1)。
 	//
-	// PlayerFrozenComp exclude: players mid-cross-zone-migration must not
-	// keep advancing position on the source side — the destination already
-	// has the marshaled Transform and any further movement here would be
-	// discarded on ACK + DestroyPlayer. See cross-zone-readiness-audit.md
-	// §11.2 (passive-tick exclusion catalogue).
+	// PlayerFrozenComp exclude:归属交接在途(PlayerLifecycleSystem::StartTravelHandoff:
+	// 跨 zone 传送 / 同 zone 跨节点换图)的玩家不得在源端继续积分位移 —— 目标节点稍后从盘上
+	// 加载的 Transform 就是冻结那一次存盘里的值,此后的位移不会再落盘,放行后随
+	// DestroyDeposedPlayer 丢弃(已没有 Kafka 迁移包与 ACK)。被动 tick 排除目录见
+	// cross-zone-readiness-audit.md §11.2(该文只有 §11 仍有效)。
 	// InBattleComp:回合制战斗在途不积分位移(进战时的残留速度会让玩家在战斗中
 	// 一路飘走,战后位置与客户端画面对不上)
 	auto view = tlsEcs.actorRegistry.view<Transform, Velocity>(

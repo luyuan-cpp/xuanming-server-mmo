@@ -65,6 +65,11 @@ battle 仍然是**有状态、房间钉定**的游戏服务器:一局只活在�
 
 **现状(核实过,别重查):**
 
+> **状态说明(2026-09-20):下面最后两条(跨节点交接 / `player_migrate`)是 2026-09-06 的现状,已过期,原文保留为历史;其余各条不受影响。**
+> - 跨节点 / 跨 zone 交接的存盘屏障已于 2026-09-18 落码(代码已进 main,**尚未编译、未跑测试**):无条件 fail-closed 的闸换成了**换手门**——per-player `owner_epoch` + 源 scene 存盘落地后写的 `player:{id}:handoff` 标记,`scene_manager.EnterScene` 校验通过才放行并铸造新 epoch,否则回可重试的 18(`ErrHandoffPending`);`AllowUnsafeCrossNodeHandoff` 降为只跳过标记门的 dev 旁路。这也就是下文「单写者安全」要的那件事的落地形态。
+> - C++ `player_migrate` 搬数据协议已在跨 zone 传送阶段 3 **整条删除**,不是「存在但不完整」;跨 zone = 重定向 + 目标 zone 从盘上加载,bag / mission 已在普通存盘链里。
+> - 现状以 [cross-zone-scene-travel.md](./cross-zone-scene-travel.md) CZ-1 / CZ-4、§11.2、§11.3 为准。
+
 - scene 是玩家权威数据的唯一 writer([cross_server_architecture_principle_zh.md](./cross_server_architecture_principle_zh.md) 规则 #8、D1),直连 Redis 异步 Save(hiredis),另发 Kafka DBTask 由 Go db 服务写 MySQL——**所以「不连库」在主世界不成立**;
 - 持久化 = 每玩家默认 300s 的分摊周期存盘(`SCENE_PLAYER_SAVE_INTERVAL_SECONDS` 可调)+ 退出/停机 drain;`dirty` 只用于 proto-compare 跳过未变更的写,**不触发即时存盘**;
 - 硬 kill(SIGKILL/OOM)回档到上次成功周期存盘,最多丢一个周期;**已持久化快照不被污染**(`PlayerLastPersistedSnapshotComp` 只在成功后更新);优雅停机走有界 drain;
@@ -86,6 +91,8 @@ battle 仍然是**有状态、房间钉定**的游戏服务器:一局只活在�
 |---|---|---|---|
 | `SceneTypeInstance` 副本(现有) | WoW 式副本服:玩家仍是节点内 entt 实体,writer 随人走,周期存盘 | 可恢复(同主世界) | 0 人 300s 回收;镜像 30s | 
 | battle 房间(D1「人不动、数据动」) | scene 保持 writer,房间只持派生快照,吐一条结算事件 | 权威留在 scene | 可丢 |
+
+> **状态说明(2026-09-20)**:下一段「生产里可达的副本只剩同物理节点、独立 `scene-instance` Fleet 对已有位置玩家不可达」是换手门落码之前的结论,保留为历史。按 cross-zone-scene-travel.md §11.2,生产配置(`AllowUnsafeCrossNodeHandoff=false`)下已有位置的玩家跨节点换图不再被无条件拒绝:首个 EnterScene 被 18 暂拒 → 源 scene 冻结、存盘、写 handoff 标记 → 重发 → 放行,代价是多一次注定被拒的往返和一次存盘。因此独立 `scene-instance` Fleet **在设计上可达**;但这条链从未编译、从未实测,验证之前不要把「可达」当事实引用。关于镜像共置、以及 instance 路径不是 battle 式「可丢」的判定不受影响。
 
 **现有 instance 路径的生产事实:**已有位置的玩家做跨节点交接被 `AllowUnsafeCrossNodeHandoff=false` 拒绝,所以生产里可达的副本只剩「同物理节点」——与主世界同进程、同 kill 域;独立的 `scene-instance` Fleet 对已有位置玩家不可达,只对首次落点或 dev 开关开放。**镜像应从「副本」里剔出单独说**:它刻意与源场景共置在 `scene-world` 节点上复用驻留数据,不进 instance 池、不触发跨节点交接,玩家态命运与主世界完全相同。
 

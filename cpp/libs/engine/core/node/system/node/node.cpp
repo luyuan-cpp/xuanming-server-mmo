@@ -991,7 +991,8 @@ void Node::ShutdownInLoop()
 	LOG_DEBUG << "Node shutting down...";
 
 	// 先封住 Kafka 入站并 join 后台 poller,避免 drain 期间继续向 loop 投递
-	// command / migration。producer 保持可用,供玩家存盘继续发送 DBTask。
+	// command(player_migrate 搬数据链已删,入站不再有 migration 消息)。
+	// producer 保持可用,供玩家存盘继续发送 DBTask。
 	kafkaManager.StopConsumers();
 
 	if (beforeShutdownFn_)

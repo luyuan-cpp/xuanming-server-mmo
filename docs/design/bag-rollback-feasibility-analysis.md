@@ -1,5 +1,10 @@
 # Bag 回档可行性分析(per-service rollback)
 
+> **⚠️ 状态说明(2026-09-20):本文与它指向的 `cross-zone-readiness-audit.md §3 三件套` 都已是历史方案,正文保留为历史,不得据此排期。**
+> - 「三件套」要修补的 Kafka 搬数据链(`player_migrate` / `player_migrate_ack` / `CrossZoneReaper`)已在跨 zone 传送阶段 3(2026-09-18)整条删除;跨 zone 不再经 `PlayerAllData` 传输数据,而是重定向 + 目标 zone 从盘上直接加载。现状以 [`cross-zone-scene-travel.md`](cross-zone-scene-travel.md) CZ-1 / §11.3 为准。
+> - 「bag 持久化是跨 zone 硬阻塞」的前提已不成立:bag 已接进普通存盘链(`player_database_loader.cpp` 的 `bag_marshal::Marshal / Unmarshal`)。
+> - 下文「步骤 1 → 步骤 2(Frozen)→ 步骤 3(ACK + reaper)→ 步骤 4 → 才能做 #11」的阻塞链随之作废:步骤 3 已无对应物,#11 不再被它阻塞。v1 的 §1–§7 调研只作为当时代码事实的记录。
+
 > **状态**: v2 — 2026-05-16(被 cross-zone-readiness-audit.md 取代为权威方案)
 > **历史定位**: v1 把 bag 持久化定义为「回档前置」。v2 摸跨 zone 链路后发现这是「跨 zone 能否玩」的硬阻塞,工作量和优先级都被低估。
 > **当前定位**: **本文档保留为对 bag 持久化方案的子专题分析**,但**实施方案以 [`cross-zone-readiness-audit.md §3 三件套`](cross-zone-readiness-audit.md) 为准**。

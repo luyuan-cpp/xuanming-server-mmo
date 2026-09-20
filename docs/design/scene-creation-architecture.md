@@ -180,6 +180,18 @@ as a best-effort hint:
   existing player's cross-node/cross-zone handoff is rejected by default with
   `ErrUnsafeCrossNodeHandoff` until a per-player persistence epoch is available.
   `AllowUnsafeCrossNodeHandoff` is a development-only compatibility switch.
+  > **Superseded (2026-09-20)**: the sentence above is the rev 4 (2026-08-03)
+  > state. The per-player epoch now exists (`owner_epoch`, landed 2026-09-18,
+  > not yet compiled or tested) and the unconditional gate was replaced by the
+  > handoff gate: an existing player's cross-node/cross-zone handoff is granted
+  > when the source scene has written `player:{id}:handoff` for the current
+  > `owner_epoch` (freeze → save → mark); otherwise EnterScene returns the
+  > retryable `ErrHandoffPending` (18) without changing any state.
+  > `ErrUnsafeCrossNodeHandoff` (14) is a retired code that is no longer
+  > emitted. `AllowUnsafeCrossNodeHandoff` is now a dev-only bypass of the
+  > marker gate that does **not** mint a new epoch. Authoritative description:
+  > [cross-zone-scene-travel.md](./cross-zone-scene-travel.md) CZ-4, §10.2
+  > (R1/R4/R6) and §11.2.
 - A Gate route is committed only after the synchronous Kafka writer receives a
   `RequireOne` broker ACK. On terminal write failure, location is restored with
   an exact-value Lua compare-and-set and this request's counters are compensated;
@@ -445,7 +457,7 @@ Added counters alongside the existing gauges in
 |--------|--------|-----------|
 | `scene_manager_mirror_colocate_total` | `zone_id`, `outcome` (hit\|fallback), `reason` (ok\|no_mapping\|zone_mismatch\|node_dead\|overloaded) | `pickInstanceNode` |
 | `scene_manager_instance_destroyed_total` | `zone_id`, `kind` (instance\|mirror), `reason` (idle\|explicit\|cascade\|node_death\|source_migrated) | `destroyInstance*`, `DestroyScene`, `migrateWorldChannel` |
-| `scene_manager_enter_scene_rejected_total` | `zone_id`, `reason` (scene_gone) | `EnterScene` on CAS reject |
+| `scene_manager_enter_scene_rejected_total` | `zone_id`, `reason` (not a fixed list here — the authoritative set of values is the metric's `Help` string in `go/scene_manager/internal/metrics/metrics.go`) | `EnterScene` reject paths (`enterscenelogic.go` / `home_zone.go`) |
 | `scene_manager_scene_orphans_reconciled_total` | `zone_id` | `reconcileDeadNodeScenes` |
 | `scene_manager_mirror_source_missing_total` | `zone_id` | `createInstance` source-clone refusal |
 | `scene_manager_mirror_dedup_total` | `zone_id`, `outcome` (hit\|miss\|stale) | `createInstance` when `MirrorDedupBySource=true` |
@@ -465,9 +477,14 @@ Dashboards should chart:
   — spikes align with rebalancer activity and confirm the cascade path
   is draining the old node.
 
-Alert on sustained `enter_scene_rejected_total{reason="scene_gone"}` > 0
-(sign of an aggressive idle timeout or a misbehaving reconciliation
-pass) and on nonzero `mirror_source_missing_total` (a C++ caller
+Alerting on `enter_scene_rejected_total` is defined per `reason` in
+`deploy/k8s/scene-manager-alerts.yaml` — that file is the source of truth for
+which reasons page and at what rate, and the valid `reason` values are the
+ones listed in the metric's `Help` string in
+`go/scene_manager/internal/metrics/metrics.go`. Do not copy a reason list into
+this document or hand-write a selector from memory: a selector on a reason
+that has no call site evaluates to an empty vector and never fires, without
+any error. Also alert on nonzero `mirror_source_missing_total` (a C++ caller
 requested a source-clone mirror — currently refused server-side; each
 event indicates a client-side contract bug).
 
@@ -733,7 +750,7 @@ MirrorSourceNodeLoadCap: 0          # Soft cap on co-located mirrors per source 
 MirrorDedupBySource: false          # When true, CreateScene with source_scene_id reuses an existing mirror instead of allocating a fresh one. OFF by default — typical mirrors are per-player phasing where independent copies are intentional. Turn ON for "shared instance" semantics (raid lockouts, world bosses).
 
 # Player ownership / Gate route safety
-AllowUnsafeCrossNodeHandoff: false  # production invariant until handoff epoch exists
+AllowUnsafeCrossNodeHandoff: false  # dev-only bypass of the handoff-marker gate (no epoch minted); production must stay false — cross-zone-scene-travel.md CZ-4
 KafkaWriteTimeoutSeconds: 5         # one synchronous RequireOne produce attempt, writer-side timeout
 
 # Node role routing

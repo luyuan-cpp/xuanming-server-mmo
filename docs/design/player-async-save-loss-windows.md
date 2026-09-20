@@ -95,6 +95,12 @@ if (element->retry_count >= kMaxSaveRetries)   // 6 次
 
 ### 4.3 【以 fail-closed 封住，能力仍未实现】跨节点切场景没有存盘屏障
 
+> **状态说明（2026-09-20）**：本小节标题与正文描述的是 2026-08-03 ~ 2026-09-18 之间的状态，保留为历史。文末所说「真正恢复能力仍需要」的 per-player 交接 epoch 已于 2026-09-18 落码（代码已进 main，**尚未编译、未跑测试**），无条件拒绝的闸已被**换手门**取代：
+> - 旧节点（源 scene）冻结输入 → `SavePlayerToRedis` 落地 → 写 `player:{id}:handoff = "{owner_epoch}:{ms}"`（EX 300）；`scene_manager.EnterScene` 校验该标记属于当前 `owner_epoch` 才放行并铸造新 epoch，否则回可重试的 18（`ErrHandoffPending`），不改任何状态。校验方是 scene_manager 而不是新节点。
+> - 旧节点迟到的存盘由 C++ 存盘 Lua CAS 与 go/db 的 applied_epoch 守卫拒绝，补上了下文「新节点从旧快照派生出的保存覆盖旧节点较新状态」这个窗口。
+> - `AllowUnsafeCrossNodeHandoff` 降为只跳过标记门的 dev 旁路（旁路放行不铸造 epoch），生产仍为 `false`；旧的 14（`ErrUnsafeCrossNodeHandoff`）不再发出。
+> - 现状以 [cross-zone-scene-travel.md](./cross-zone-scene-travel.md) CZ-4、§10.2、§11.2 为准。下文关于 `ReleasePlayer` 只保证入队、Kafka ACK / offset 不是持久化屏障的分析仍然成立，正是换手门存在的理由。
+
 旧流程中的 `scene_manager::dispatchReleasePlayer` 是 detached goroutine，新节点从 Redis 加载与旧节点存盘之间没有屏障。同步等待也堵不住：C++ 的 `ReleasePlayer` RPC 只保证 `HandleExitGameNode` **入队**了存盘，不保证已落盘。
 
 2026-08-03 起生产默认 `AllowUnsafeCrossNodeHandoff=false`：已有位置的跨节点/跨 zone 请求在 ReleasePlayer、location 更新和成功 Gate 路由之前拒绝，目标场景预留会回滚。首次落点和同物理节点切场景不受影响。开发环境可显式打开旧流程，但不能据此声明跨节点能力可生产。

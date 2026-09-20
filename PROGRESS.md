@@ -5473,3 +5473,19 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
 - **留下的欠账**(详见 92-handoff §8.1):login 的 Redis 客户端是裸默认值,`login.yaml` 里三个 Redis 超时是**死配置**、`AccountLockTTL: 20` 不是硬上界(另立任务评估,影响面是整个 login);`team-system.md §G.2` 与 `server-merge-gap-fixes.md:23` 仍写"没有昵称"(前者当时有他人在途改动,未动);self-heal 恢复的角色记录仍丢 class/gender/zone;guild `OnlineStatusResolver` 无独立超时(B3b 之前就存在,已单独挂任务)。
 - **gofmt 存量基线**:`clientplayerlogin/` 下 4 个文件、`tools/merge_zone/audit_resources.go`、`robot/login.go` 在 HEAD 就未格式化,验证时以"不超出基线"为通过标准,不要顺手整文件格式化。
 - **未验证**:全部。在 Codex 按 §8.3 跑出结果之前,不得声称编译通过或测试通过。
+
+## 2026-09-20 跨 zone 场景传送交接收尾:4 个 P1 处理完 + 审计存活项落码 3 条(Claude,机器 B,**未编译、未跑测试**)
+
+- **来由**:上一会话(机器 A,作者 luyuan)终审后撞周额度,交接文件 `HANDOFF-crosszone-20260919.md` 只作为聊天附件发出、没进仓库。本会话在机器 B 上按聊天记录里的条目**重新在代码上逐条复核**后接手。交接说明现在在 `docs/design/handoff-crosszone-20260920.md`,设计与落码记录在 `docs/design/cross-zone-scene-travel.md` §12。
+- **客户端推送没有成功**:`git ls-remote` 核实远端 `mmorpg-client` 的 `main` 仍是 09-14 的 `d2b165a`,也没有任何分支含上一会话说的分段推中间提交;约 542 MB 提交只在机器 A 上,机器 B 代劳不了。做法与四个坑写在交接说明 §2.1。
+- **做法**:两个工作流。①只读:3 个直接落改(告警 / runbook / 路由文档)+ 2 份 C++ 修复设计 + 过期文字清扫(43 条)+ Go / C++ 两路审计,每条发现派一名反驳者(9 条里 8 条存活,5 条被下调严重度,1 条被推翻)。②落码:3 个文件集互不相交的包各自"实现 → 编译级静读 + 语义与不变量两名只读复审 → 回修",外加文字修订包。复审零 blocker;gate 包一条 major(节点被摘除后的会话会把改派误判成"未变化")已回修。第二个工作流中途撞会话额度,断点续跑补完;第一轮复审里因此没人处理的 3 条 minor 由主会话手工补上。
+- **落码(详见设计文档 §12.1)**:
+  - handoff 标记撤回不再只靠 TTL:`handoff_mark_withdraw.h`(新,纯头文件)+ `player_lifecycle.{h,cpp}` + `player_ownership_comp.h` + `core/system/redis.cpp` + `scene.vcxproj(.filters)`;单测 7 个进 `cross_zone_test`。
+  - GO-1 未映射玩家跨 zone 传送写错库:`go/scene_manager/internal/logic/{home_zone.go, enterscenelogic.go, owner_epoch_test.go}`(第一条腿前置拒绝 + 第二条腿 fail-closed,7 组用例);`errors.go` / `config.go` 只同步注释。
+  - CPP-1 gate 同 scene_id 换节点不转发:`scene_route_helper.h`(`RebindSceneNode` + `SceneNodeChange`)+ `gate_event_handler.cpp`;`routing_identity_test` 的 `SceneRouteEntry` 共 16 个。
+  - 告警:`scene-manager-alerts.yaml` 现 17 条。除上一会话报的 `scene_gone` 恒空外,**另查出两条 critical 的 `*PoolEmpty` 同样恒空**(gauge 从不发布 0 值);`scene_gone` 发射点当年在 `a0152a5b8` 被误删,已恢复。**未经 promtool 校验**(机器 B 没有)。
+  - 文档:失效 runbook 重写为 v2.1;`enter-scene-zone-routing.md` 逐句核对改写;约 20 份旧设计文档 + 12 个代码文件的过期文字加状态标注 / 改成实情(代码文件只动注释)。
+- **对上一会话说法的更正**:"交接冻结没有服务端上限"大部分不成立(两道 30s 看门狗,最坏约 60s;真正无上限的只有 zone Redis 不可用 / 半开的三段);P1-2 的触发面比原描述窄,但另有一个不用重登就能命中的在线变体;设计文档 §10.2 的 R7 声称已解决的场景从 login 实际走不到。
+- **新增上线前置**:对存量号开放跨 zone 传送前必须先跑 `tools/merge_zone -backfill-home-zone`。
+- **没修、写成已知限制的**(§12.3):GO-2 回滚让 epoch 回退并毒化 db 守卫、GO-3 同 node_id 重注册后接管永不触发、GO-5 R7 / R8 从 login 不可达、CPP-2 gate 丢路由无补发、CPP-3 疏散改派 fire-and-forget、冻结硬上限(设计已有,卡在"客户端收到踢线消息后是否一定回登录")、若干 P3。前三条要改 proto 或动 `go/login`(别的会话在改)。
+- **验证**:全部未执行,命令与通过标准在设计文档 §12.4。机器 B 上只跑过 `gofmt -l`(本批改过的 Go 文件无输出)。在有运行结果之前,不得声称编译通过或测试通过。

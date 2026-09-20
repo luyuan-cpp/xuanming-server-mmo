@@ -103,8 +103,10 @@ void ActorAttributeCalculatorSystem::Update()
     // Recomputing them on the source side now is wasted work — and
     // worse, the values would diverge from what the destination zone
     // reconstructs from the snapshot. Skip frozen entities until the
-    // ACK / reaper-declared-failure clears the marker.
-    // cross-zone-readiness-audit.md §11.2.
+    // handoff resolves: granted → the entity goes away with
+    // DestroyDeposedPlayer; not granted → AbortTravelHandoff removes the
+    // marker. There is no ACK and no reaper any more.
+    // cross-zone-readiness-audit.md §11.2 (only §11 of that doc is current).
     for (auto&& [entity, dirtyFlags] : tlsEcs.actorRegistry.view<AttributeDirtyFlagsComp>(
             entt::exclude<PlayerFrozenComp>).each())
     {

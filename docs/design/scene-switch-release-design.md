@@ -1,5 +1,11 @@
 # SceneManager跨节点切场景释放玩家方案选型
 
+> **⚠️ 状态说明(2026-09-20):下文「当前安全策略」与「适用范围」里的「跨节点 / 跨 zone 交接生产默认 fail-closed、handoff epoch 协议完成前不可用于生产」已被取代,正文保留为历史。**
+> - 文末所说的发布门禁——per-player handoff epoch——已于 2026-09-18 落码(代码已进 main,**尚未编译、未跑测试**),这道无条件拒绝的闸换成了**换手门**:`scene_manager.EnterScene` 对已有位置的跨节点 / 跨 zone 请求,要求源 scene 已为当前 `owner_epoch` 写出 `player:{id}:handoff` 落盘标记;有则放行并铸造新 epoch,没有则回可重试的 18(`ErrHandoffPending`),不改任何状态。旧的 14(`ErrUnsafeCrossNodeHandoff`)是历史码,不再发出。
+> - 生产配置(`AllowUnsafeCrossNodeHandoff=false`)下客户端发起的跨节点换图因此**可达**:首个 EnterScene 被 18 暂拒 → 源 scene 冻结 → 存盘落地 → 写标记 → 重发同一个 EnterScene → 放行。与下文设想不同的一点:校验标记与 epoch 的是 scene_manager(唯一闸口),不是目标 node;旧持有者迟到的存盘由 C++ 存盘 Lua CAS 与 go/db 的 applied_epoch 守卫拒绝。
+> - `AllowUnsafeCrossNodeHandoff` 的含义也变了:只是跳过「源已落盘」这道标记门的 dev 旁路,且旁路放行时**不铸造** epoch;生产仍必须为 `false`。
+> - 现状以 [cross-zone-scene-travel.md](./cross-zone-scene-travel.md) 为准:CZ-4(两道换手门)、§10.2 R1 / R4 / R5 / R6(落码修正)、§11.2(生产配置下的跨节点换图与预期日志序列)。「方案对比」一节对 ①② 的否定理由仍然成立。
+
 ## 方案对比
 
 ### ① SceneManager 主动 RPC 通知旧 node（旧实现，生产默认禁用）

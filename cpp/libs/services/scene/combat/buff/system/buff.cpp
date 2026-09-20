@@ -564,12 +564,12 @@ void ProcessBuffs(const entt::entity target, BuffListComp& buffListComp, const d
 }
 
 void BuffSystem::Update(const double delta) {
-    // PlayerFrozenComp exclude: buff timers must NOT keep counting down on
-    // the source side while the player is mid-cross-zone-migration. The
-    // marshaled PlayerAllData carries the buff list with its current
-    // remaining time; if we kept ticking here a 30s buff could expire on
-    // the source mid-flight and the destination would resurrect it as if
-    // fresh.  cross-zone-readiness-audit.md §11.2.
+    // PlayerFrozenComp exclude:归属交接在途(PlayerLifecycleSystem::StartTravelHandoff:
+    // 跨 zone 传送 / 同 zone 跨节点换图)的玩家,源端不再推进 buff 计时。交接的前提是
+    // "冻结那一次存盘之后本端内存态不再变":放行后实体由 DestroyDeposedPlayer 不存盘销毁,
+    // 这里继续 tick 只是白做;未成则 AbortTravelHandoff 解冻,从冻结时的剩余时间接着走。
+    // 已没有 Kafka 迁移包 / ACK / reaper。被动 tick 排除目录见
+    // cross-zone-readiness-audit.md §11.2(该文只有 §11 仍有效)。
     for (auto&& [target, buffListComp] : tlsEcs.actorRegistry.view<BuffListComp>(
             entt::exclude<PlayerFrozenComp>).each()) {
         ProcessBuffs(target, buffListComp, delta);

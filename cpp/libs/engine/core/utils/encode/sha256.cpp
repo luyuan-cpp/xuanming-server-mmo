@@ -8,8 +8,10 @@
 //
 // This file is intentionally small and obvious. Don't optimize without
 // benchmarks: the K-table + round function is cache-warm during a single
-// HashBytes() call, and migration payloads are typically <16KB so the
-// hash cost is dominated by the Kafka send anyway.
+// HashBytes() call, and the only current input (the battle table
+// fingerprint buffer, hashed at table load / refresh and then cached) is
+// off any per-tick path.
+// (Originally written for cross-zone migration payloads; that chain is gone.)
 
 namespace
 {

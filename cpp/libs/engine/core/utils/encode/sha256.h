@@ -7,18 +7,16 @@
 // Sha256 — minimal, dependency-free SHA-256 implementation.
 //
 // Why this lives here:
-//   The project does not link OpenSSL into cpp/nodes/scene (verified
-//   2026-05-23 via `grep openssl scene.vcxproj` → no match). Cross-zone
-//   migration's payload-dedup check (cross-zone-readiness-audit.md §7
-//   失败 D) needs a stable, fast hash of the migration payload bytes
-//   so the destination can distinguish exact-duplicate Kafka redelivery
-//   from a reaper retry that carries a mutated payload.
+//   现在唯一的调用方是战斗配表指纹(services/battle/data/battle_table_fingerprint.cpp:
+//   scene / battle 两端对同一批配表字节算指纹比对),需要的只是一个稳定、无依赖、一次算完的
+//   SHA-256。
 //
-//   Pulling OpenSSL into the scene node just for one hash call would
-//   add a multi-MB dependency to the runtime image and complicate the
-//   K8s payload pipeline. A self-contained ~150-line implementation
-//   here is the right size — single-call use, no streaming required,
-//   all heavy work amortizes against the Kafka send.
+//   历史:它最初(2026-05-23)是为跨 zone 搬数据链的 payload 去重而写 —— 让目的端区分
+//   "Kafka 原样重投"与"reaper 带着变了的 payload 重发"。那条链(player_migrate / ACK /
+//   CrossZoneReaper)已按 docs/design/cross-zone-scene-travel.md CZ-1 整条删除,该用途不复
+//   存在。当时"scene 节点不链接 OpenSSL,为一次哈希引入它不划算"的前提也只代表当时:
+//   scene.vcxproj / CMakeLists 现在已有 OpenSSL(token_security.h 的 HMAC 用它)。
+//   保留这份 ~150 行的自包含实现,是因为指纹契约已经建立在它上面,不是因为没得选。
 //
 // Implementation note:
 //   Standard FIPS 180-4 SHA-256, public-domain reference structure.

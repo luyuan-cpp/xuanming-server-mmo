@@ -167,8 +167,18 @@ Set `MetricsListenAddr: ":9150"` in `scene_manager_service.yaml` to expose
 | `scene_manager_nodes_by_role{zone_id,role}` | Live-node count per role — use for alerting when a role pool empties |
 
 Recommended alerts:
-- `sum by (zone_id) (scene_manager_nodes_by_role{role="instance"}) == 0`
-  while strict mode is on — paging alert.
+- Instance (or world) pool empty while strict mode is on — paging alert. Use
+  the rules that ship in `deploy/k8s/scene-manager-alerts.yaml`
+  (`SceneManagerInstancePoolEmpty` / `SceneManagerWorldPoolEmpty`), which are
+  written as `count by (zone_id) (scene_manager_nodes_by_role > 0) unless on
+  (zone_id) count by (zone_id) (scene_manager_nodes_by_role{role=~"..."} > 0)`.
+  Do **not** write `sum by (zone_id) (scene_manager_nodes_by_role{role="instance"}) == 0`:
+  this gauge never publishes a 0 value (`SetNodesByRole` resets the vector and
+  only sets `(zone, role)` pairs that currently have nodes), so an emptied
+  pool makes the series disappear instead of dropping to 0 and the `== 0`
+  form is a permanently empty vector that never fires. Known blind spot,
+  documented in the alerts file: when **every** scene node of a zone is gone,
+  no series is left for that zone and neither rule can fire per zone.
 - `node:zone:{zoneId}:{nodeId}:player_count` stays ≥ 90% of expected cap for > 5 min on
   any world pod → consider bumping `WorldChannelCountByConfId`.
 - ZSET score dispersion on `scene_nodes:zone:{zoneId}:load` < 10% →

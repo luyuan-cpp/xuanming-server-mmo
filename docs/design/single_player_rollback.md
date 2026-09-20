@@ -5,6 +5,8 @@
 
 ## ⚠️ 实施现状(Reality Check, 2026-05-23)
 
+> **状态说明(2026-09-20)**:下表「bag 持久化(跨 zone 安全)」一行及其指针已过期,原文保留为历史。bag 的 Marshal / Unmarshal 已接进普通存盘链(`cpp/libs/services/scene/player/system/player_database_loader.cpp` 的 `bag_marshal::Marshal / Unmarshal`,同处还有 `mission_marshal`);它指向的 `cross-zone-readiness-audit.md §3.2 件 1`「三件套」方案已作废——那条 Kafka 搬数据链(`player_migrate` / ACK / reaper)已在跨 zone 传送阶段 3 整条删除,跨 zone 不再搬数据,目标 zone 直接从盘上加载。跨 zone 现状以 [`cross-zone-scene-travel.md`](./cross-zone-scene-travel.md) CZ-1 / §11.3 为准。本标注只更正这一行,表中其它行未在本次重新核实。
+
 > 这份文档讨论了完整的回档设计,**包括许多尚未在本仓库实现的子系统**。
 > 阅读时请把**已实现**和**规划中**分开看,避免照着文档以为有的功能其实并不存在。
 >

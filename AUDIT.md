@@ -7,6 +7,12 @@
 
 ---
 
+> **⚠️ 状态说明(2026-09-20):本文件是 2026-05-15/16 的审计快照,其中跨服 / 跨 zone 部分(下面 v3「三件套」与 v2「重大修正」两节)已整体过期,仅作历史保留。**
+> - 「三件套」要修补的那条 Kafka 搬数据链——`player_migrate` / `player_migrate_ack`、`HandleCrossZoneTransfer` / `HandlePlayerMigration(Ack)`、`cross_zone_reaper.{h,cpp}`、Redis `player_migration:{id}`——已在跨 zone 传送**阶段 3(2026-09-18)整条删除**(`docs/design/cross-zone-scene-travel.md` §11.3)。下文「ACK 链路接通 / reaper 30s 后重发 / 启动时 ScanAndRecover」描述的代码已不存在;#30 / #31(reaper 失败兜底 tip、reaper outcomes 指标)随之作废。
+> - 件 1 的前提也已过时:bag / mission 已接进普通存盘链(`player_database_loader.cpp` 的 `bag_marshal` / `mission_marshal`),跨 zone 不再搬数据,目标 zone 直接从盘上加载;mail 按决策走独立 Go 服务。
+> - 件 2 留下来的只有 `PlayerFrozenComp` 与业务拦写闸(`IsCrossZoneFrozen`),现在只与 `PlayerTravelHandoffComp`(归属交接)成对出现,挂 / 摘时机见 `player_frozen_comp.h` 头注释。
+> - 现行权威文档是 **`docs/design/cross-zone-scene-travel.md`**(决策 §3、数据流 §4、落码记录 §10 / §11),不再是下文所称的 `cross-zone-readiness-audit.md`。下文的完成度百分比不得再引用;「下次会话第一件事必须跑 msbuild」也不再适用——按 AGENTS.md §10.1,构建与测试由 Codex 执行,且阶段 1/2/3 代码至今**未编译、未测试**。
+
 ## ⚠️ 2026-05-16 v3 三件套代码落地
 
 v2 给出「跨 zone 不可生产」的诊断 + 修复方案(Kafka 自治 + 三件套)。**v3 三件套代码层面全部落地并 push 到 GitHub**(分支 `worktree-rollback-cross-merge`,累计 11 commits)。
@@ -87,7 +93,7 @@ PR 模板:`https://github.com/luyuancpp/mmorpg/pull/new/worktree-rollback-cross-
 
 ### v2 完整审计 + 修复方案
 
-详见 **[`cross-zone-readiness-audit.md`](docs/design/cross-zone-readiness-audit.md)** —— 这是新的权威决策文档。
+详见 **[`cross-zone-readiness-audit.md`](docs/design/cross-zone-readiness-audit.md)** —— 这是新的权威决策文档。*(2026-09-20 标注:这是 2026-05 当时的说法;该文 §1–§10 已被 `docs/design/cross-zone-scene-travel.md` 取代,见本文件顶部状态说明。)*
 
 修复方案(Kafka 自治 + 三件套):
 1. PlayerAllData 加 `BagAllData / QuestAllData / MailAllData` 子 message + Marshal
