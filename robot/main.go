@@ -179,6 +179,15 @@ func main() {
 		return
 	}
 
+	// Friend-smoke 模式:三个机器人做「全局好友 go/friend」端到端冒烟
+	// (A/C 与 B 分登两个 zone → 加好友 + 跨区推送 → 权威拉取 + 重发被拒 → 同意 + 反向推送 + 在线状态
+	//  → 黑名单双向拦截 → 推荐截断与过滤 → S2C 方法对客户端不可调 → 清理)。
+	// 见 friend_smoke_scenario.go 与 docs/design/friend-port-20260918.md;前置条件写在 etc/friend_smoke.yaml 文件头。
+	if cfg.Mode == "friend-smoke" {
+		RunFriendSmoke(cfg)
+		return
+	}
+
 	stopReport := make(chan struct{})
 	reportInterval := time.Duration(cfg.ReportInterval) * time.Second
 	if reportInterval <= 0 {

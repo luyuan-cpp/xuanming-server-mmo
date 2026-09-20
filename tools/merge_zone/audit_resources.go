@@ -72,25 +72,26 @@ type ResourceAudit struct {
 //	                (go/data_service/etc/data_service.yaml MappingRedis)
 //	guild    DB 2   guild_rank:zone:{z} / guild:v2:{id} / guild_rank:maintenance_lock
 //	                (go/guild/etc/guild.yaml RedisClient)
-//	friend   DB 3   friend:online:{pid}
-//	                (go/friend/etc/friend.yaml RedisClient)
 //	shared   DB 0   player:session:{pid} / kafka:{retry,dead}:queue:* /
 //	                PlayerAllData:{pid} / {MsgType}:{pid} / player_merge_notice:{pid}
 //	                (go/login, go/db, go/player_locator, scene_manager 都是 DB 0)
+//
+// friend 的 DB 3 一行已删(2026-09-18,friend 移植 F3):那一格里唯一的键 friend:online:{pid}
+// 已退役(全仓无写者,读者在 F2 删),移植后的 go/friend 私有缓存住 FriendRedis 且**可以是
+// Cluster**,不再是这张「一人一格」表能表达的形状;审计也不需要它 —— friend 的在线判定
+// 与本工具一样读 shared 的 player:session。
 type auditConfig struct {
-	db        *sql.DB       // game MySQL — guild / friend / zone_{N}_db
+	db        *sql.DB       // game MySQL — guild / zone_{N}_db,以及库名限定的 mmorpg_friend
 	mappingDB *redis.Client // DB 0(go-zero RedisConf 无 DB 字段)
 	rankRDB   *redis.Client // DB 2
-	friendRDB *redis.Client // DB 3
 	sharedRDB *redis.Client // DB 0
 	sceneRDB  *redis.Client // scene_manager Redis (DB 0 by default)
 	// dataRDB: per-zone player data Redis(standalone 或 cluster)。可选:
 	// 只有配了 -source-data-redis 才有,用来查 player:{id}:__lock。
 	dataRDB redis.UniversalClient
 
-	// 下面两个只用于把 DB 号打进 Notes —— 审计输出必须自己说清「我查的是哪个库」,
+	// 只用于把 DB 号打进 Notes —— 审计输出必须自己说清「我查的是哪个库」,
 	// 否则「0 在线」这种结论没法复核。
-	friendDBIndex int
 	sharedDBIndex int
 
 	src     uint32        // source zone (merging FROM)
@@ -109,6 +110,10 @@ type auditConfig struct {
 	// 跳过时 verify:trade_listing 标 warn「NOT VERIFIED」,不伪装成通过。
 	tradeSchema string
 	skipTrade   bool
+	// friendSchema:好友独占库名(-friend-schema,默认 mmorpg_friend,port-decisions D-14)。
+	// 与 tradeSchema 同一口径:经同一个 -mysql-dsn 以「库名.表名」访问,flag 只为集成测试
+	// 的一次性库留口子(否则集成测试只能去动真实的 mmorpg_friend)。
+	friendSchema string
 }
 
 // auditEntryParams is the pure-data input for runAuditEntry. main.go owns
@@ -126,10 +131,6 @@ type auditEntryParams struct {
 	rankAddr string
 	rankPwd  string
 	rankDB   int
-
-	friendAddr string
-	friendPwd  string
-	friendDB   int
 
 	sharedAddr string
 	sharedPwd  string
@@ -149,6 +150,7 @@ type auditEntryParams struct {
 	topicGeneration    uint32
 	tradeSchema        string
 	skipTrade          bool
+	friendSchema       string
 }
 
 // firstNonEmpty returns a if non-empty, else b. Avoids a one-line helper
@@ -200,10 +202,9 @@ func runAuditEntry(p auditEntryParams) {
 	}
 	mapRdb := dial("mapping", p.mappingAddr, p.mappingPwd, p.mappingDB)
 	rankRdb := dial("guild", p.rankAddr, p.rankPwd, p.rankDB)
-	friendRdb := dial("friend", p.friendAddr, p.friendPwd, p.friendDB)
 	sharedRdb := dial("shared(DB0)", p.sharedAddr, p.sharedPwd, p.sharedDB)
 	sceneRdb := dial("scene_manager", p.sceneAddr, p.scenePwd, p.sceneDB)
-	for _, c := range []*redis.Client{mapRdb, rankRdb, friendRdb, sharedRdb, sceneRdb} {
+	for _, c := range []*redis.Client{mapRdb, rankRdb, sharedRdb, sceneRdb} {
 		if c != nil {
 			defer c.Close()
 		}
@@ -224,11 +225,9 @@ func runAuditEntry(p auditEntryParams) {
 		db:                 db,
 		mappingDB:          mapRdb,
 		rankRDB:            rankRdb,
-		friendRDB:          friendRdb,
 		sharedRDB:          sharedRdb,
 		sceneRDB:           sceneRdb,
 		dataRDB:            dataRdb,
-		friendDBIndex:      p.friendDB,
 		sharedDBIndex:      p.sharedDB,
 		src:                p.src,
 		dst:                p.dst,
@@ -239,6 +238,7 @@ func runAuditEntry(p auditEntryParams) {
 		topicGeneration:    p.topicGeneration,
 		tradeSchema:        p.tradeSchema,
 		skipTrade:          p.skipTrade,
+		friendSchema:       p.friendSchema,
 	}
 
 	mode := "pre-merge"
@@ -303,8 +303,8 @@ func runAuditEntry(p auditEntryParams) {
 func runAuditMode(ctx context.Context, cfg auditConfig) []ResourceAudit {
 	auditors := []func(context.Context, auditConfig) ResourceAudit{
 		auditPlayerNameConflicts, // explicit "not applicable" notice — see below
-		auditFriend,              // global table keyed by player_id; survives merge automatically
-		auditFriendRequest,       // same
+		auditFriend,              // mmorpg_friend.friend:keyed by player_id;survives merge automatically
+		auditFriendRequest,       // mmorpg_friend.friend_request:same
 		auditGuildMembers,        // global guild_member table; surfaces volume + zone-cross hints
 	}
 	if cfg.verify {
@@ -322,7 +322,7 @@ func runAuditMode(ctx context.Context, cfg auditConfig) []ResourceAudit {
 		// 合服前门禁:每一条都能真的拦住 -apply。
 		auditors = append(auditors,
 			auditSourceZoneNodes, // scene_nodes:zone:{src}:load 必须空
-			auditOnlinePresence,  // friend:online(DB 3) + player:session(DB 0)
+			auditOnlinePresence,  // player:session(DB 0);friend:online 已退役,见 audit_checks.go
 			auditPlayerLocks,     // lock:player:*(mapping DB) + player:{id}:__lock(data)
 			auditKafkaQueues,     // kafka:retry/processing/dead(DB 0)
 		)
@@ -439,10 +439,46 @@ func auditPlayerNameConflicts(ctx context.Context, cfg auditConfig) ResourceAudi
 	}
 }
 
+// ── friend(独占库 mmorpg_friend)────────────────────────────────────────
+//
+// 2026-09-18(friend 移植 F3):friend 的表从共享库 `mmorpg` 搬到独占库
+// `mmorpg_friend`(port-decisions D-14),建表由 go/schemamigrate 按
+// proto/friend/friend_table.proto 做,不再由 deploy/mysql-init/guild_friend_tables.sql 建。
+//
+// 本次**只改连接目标,不加任何迁移逻辑**:已核对 friend / friend_request 的行里
+// 没有 zone_id / home_zone 之类的分区列,合服后按 player_id 自动存活 —— 这一点
+// 与搬库之前完全一样,搬库只换了这两张表住在哪个 schema 里。
+
+// defaultFriendSchema 镜像 go/friend/internal/data.DatabaseName。friend 服的 config.Validate
+// 强制 MySQL.DBName 等于它,所以生产上只有这一个合法值;-friend-schema 只为集成测试的
+// 一次性库留口子。merge_zone 是独立 module,不能 import go/friend,字面量靠评审守住。
+const defaultFriendSchema = "mmorpg_friend"
+
+// validateFriendSchemaName 在任何 SQL 之前验库名形状。库名直接拼进语句(标识符不能用
+// 占位符),这是这条拼接唯一的注入防线。
+//
+// 刻意复用 trade_step.go 的 tradeSchemaNamePattern 而不是再抄一份正则:两个 flag 防的
+// 是同一件事(「是不是一个朴素标识符」),抄两份迟早会漂移成两套口径。
+func validateFriendSchemaName(schema string) error {
+	if !tradeSchemaNamePattern.MatchString(schema) {
+		return fmt.Errorf("-friend-schema %q is not a plain identifier ([A-Za-z0-9_], 1-64 chars)", schema)
+	}
+	return nil
+}
+
+// friendTableQualified 把库名拼到表名前。schema 为空时回落到默认库:审计是只读的,
+// 与其因为调用方漏传而查一个空库名(SQL 语法错 → INFRA → exit 2),不如查生产上唯一合法的那个。
+func friendTableQualified(schema, table string) string {
+	if schema == "" {
+		schema = defaultFriendSchema
+	}
+	return schema + "." + table
+}
+
 // auditFriend — verify friend table won't break under merge.
 //
 // `friend(player_id, friend_player_id)` is keyed by player_id alone (no
-// zone_id column — see deploy/mysql-init/guild_friend_tables.sql). Because
+// zone_id column — see proto/friend/friend_table.proto). Because
 // player_id is globally unique (mmo_cross_server_architecture.md §"player_id
 // never encodes zone"), friend rows survive merge automatically.
 //
@@ -459,12 +495,20 @@ func auditFriend(ctx context.Context, cfg auditConfig) ResourceAudit {
 	if cfg.db == nil {
 		return infraAudit(r.Name, "no MySQL handle")
 	}
-	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM friend").Scan(&r.SourceCount); err != nil {
-		return infraAudit(r.Name, "count failed: %v", err)
+	if err := validateFriendSchemaName(firstNonEmpty(cfg.friendSchema, defaultFriendSchema)); err != nil {
+		return infraAudit(r.Name, "%v", err)
+	}
+	table := friendTableQualified(cfg.friendSchema, "friend")
+	// 库 / 表不在一律 INFRA(exit 2),不降级成「info: 没有这张表」:friend 已经是常驻服务,
+	// 「查不到」与「没有好友关系」在这里分不开(-mysql-dsn 指错实例也是同一个症状),
+	// 而本文件 2026-05-23 的教训正是「优雅降级」把审计读成了干净通过。
+	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&r.SourceCount); err != nil {
+		return infraAudit(r.Name, "count %s failed: %v (friend 已迁到独占库 mmorpg_friend;"+
+			"库没建见 deploy/mysql-init/00_init_zone_dbs.sql,表没建跑 friend -f etc/friend.yaml -migrate)", table, err)
 	}
 	r.TargetCount = r.SourceCount // same global table; we don't subdivide
 	r.Severity = "info"
-	r.Notes = "global table keyed by player_id only — survives merge automatically. No action."
+	r.Notes = table + ": global table keyed by player_id only — survives merge automatically. No action."
 	return r
 }
 
@@ -480,13 +524,19 @@ func auditFriendRequest(ctx context.Context, cfg auditConfig) ResourceAudit {
 	if cfg.db == nil {
 		return infraAudit(r.Name, "no MySQL handle")
 	}
+	if err := validateFriendSchemaName(firstNonEmpty(cfg.friendSchema, defaultFriendSchema)); err != nil {
+		return infraAudit(r.Name, "%v", err)
+	}
+	table := friendTableQualified(cfg.friendSchema, "friend_request")
+	// status = 1 是 FRIEND_REQUEST_PENDING(proto/friend/friend.proto FriendRequestStatus),
+	// 数字与枚举的对应关系没变,搬库只换了 schema。
 	if err := cfg.db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM friend_request WHERE status = 1").Scan(&r.SourceCount); err != nil {
-		return infraAudit(r.Name, "count failed: %v", err)
+		"SELECT COUNT(*) FROM "+table+" WHERE status = 1").Scan(&r.SourceCount); err != nil {
+		return infraAudit(r.Name, "count %s failed: %v (friend 已迁到独占库 mmorpg_friend)", table, err)
 	}
 	r.TargetCount = r.SourceCount
 	r.Severity = "info"
-	r.Notes = "pending requests survive merge as-is. Cross-zone requests become local automatically."
+	r.Notes = table + ": pending requests survive merge as-is. Cross-zone requests become local automatically."
 	return r
 }
 

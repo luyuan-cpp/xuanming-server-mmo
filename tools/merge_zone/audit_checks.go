@@ -14,6 +14,12 @@ package main
 //     修法:分开 friend Redis(DB 3)与共享 DB 0 两个句柄;扫描失败一律
 //     Severity=block;句柄缺失让整个审计以 exit 2 结束(见 auditFatal)。
 //
+//     2026-09-18 后记(friend 移植 F3):`friend:online:{pid}` 这把键本身已经退役,
+//     上面这段只剩史料价值。真相比「查错库」还要糟一层 —— 它在全仓**从来没有写者**
+//     (F1 移植期 grep 确认),所以哪怕当年查对了 DB 3 也一样恒 0。在线状态统一
+//     改读契约键 `player:session:{pid}`(go/friend 的读者在 F2 删掉)。本文件因此
+//     只留 player:session 一个证据面,friend Redis 句柄与 `-friend-redis-*` 参数一并删除。
+//
 //  B. 合服**后**的验证(-verify-merged)。此前 -verify-merged 只是把标题里的
 //     "pre-merge" 换成 "POST-MERGE VERIFICATION",一条断言都没有。这里把
 //     runbook §5 Step 5 的那张表逐条实现成 block 级 auditor。
@@ -45,12 +51,21 @@ func isInfraAudit(r ResourceAudit) bool {
 
 // ── A. 合服前门禁 ─────────────────────────────────────────────
 
-// auditOnlinePresence 查源区玩家还在不在线。两个证据面:
-//   - friend:online:{pid}  —— go/friend 写,60s TTL,**DB 3**
+// auditOnlinePresence 查源区玩家还在不在线。证据面只有一个:
 //   - player:session:{pid} —— player_locator 写,**DB 0**
 //
-// 任一非零 = zone-down 没做完 / 还有进程在 ACK,block。
+// 非零 = zone-down 没做完 / 还有进程在 ACK,block。
 // 扫描失败也是 block(而且是 INFRA 级):查不到就不能说「没人在线」。
+//
+// # 为什么 friend:online 不在这里了(2026-09-18,friend 移植 F3)
+//
+// `friend:online:{pid}` 全仓没有写者、go/friend 的读者也在 F2 删了,在线状态统一读
+// 契约键 player:session。继续查它只会得到两种结果,两种都有害:
+//   - 句柄配齐时恒 0 —— 一个永远不可能 block 的 block 级门禁,正是本文件开头列的那种假门禁;
+//   - 句柄缺失时返回 INFRA、整个审计 exit 2 —— 拦住合服的理由却是一把已经没人写的键。
+//
+// 证据面从两个减到一个**不降低门禁强度**:player:session 由 player_locator 在登录 /
+// 断线时维护,是「这个玩家还连着」的权威来源;friend:online 当年即便写了也只是它的派生物。
 func auditOnlinePresence(ctx context.Context, cfg auditConfig) ResourceAudit {
 	r := ResourceAudit{Name: "online_presence", UniqueScope: "per_zone"}
 	if cfg.mappingDB == nil {
@@ -62,14 +77,6 @@ func auditOnlinePresence(ctx context.Context, cfg auditConfig) ResourceAudit {
 	}
 	r.SourceCount = int64(len(pids))
 
-	if cfg.friendRDB == nil {
-		return infraAudit(r.Name, "no friend Redis handle (-friend-redis-addr/-friend-redis-db) — "+
-			"friend:online:{pid} lives in the friend service DB (go/friend/etc: DB 3), not the mapping DB")
-	}
-	friendOnline, err := countExistingKeys(ctx, cfg.friendRDB, pids, "friend:online:")
-	if err != nil {
-		return infraAudit(r.Name, "friend:online scan failed: %v", err)
-	}
 	if cfg.sharedRDB == nil {
 		return infraAudit(r.Name, "no shared (DB 0) Redis handle — cannot check player:session:{pid}")
 	}
@@ -78,18 +85,16 @@ func auditOnlinePresence(ctx context.Context, cfg auditConfig) ResourceAudit {
 		return infraAudit(r.Name, "player:session scan failed: %v", err)
 	}
 
-	r.TargetCount = int64(friendOnline + sessions)
+	r.TargetCount = int64(sessions)
 	r.ConflictCount = int64(sessions)
-	if friendOnline > 0 || sessions > 0 {
+	if sessions > 0 {
 		r.Severity = "block"
-		r.Notes = fmt.Sprintf("%d players still have friend:online (DB %d), %d still have player:session (DB %d). "+
-			"Wait for the 60s friend TTL or investigate — zone-down is incomplete.",
-			friendOnline, cfg.friendDBIndex, sessions, cfg.sharedDBIndex)
+		r.Notes = fmt.Sprintf("%d players still have player:session (DB %d). "+
+			"Investigate — zone-down is incomplete.", sessions, cfg.sharedDBIndex)
 		return r
 	}
 	r.Severity = "info"
-	r.Notes = fmt.Sprintf("0 friend:online (DB %d) and 0 player:session (DB %d) for %d source players",
-		cfg.friendDBIndex, cfg.sharedDBIndex, len(pids))
+	r.Notes = fmt.Sprintf("0 player:session (DB %d) for %d source players", cfg.sharedDBIndex, len(pids))
 	return r
 }
 

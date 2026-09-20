@@ -123,7 +123,7 @@
     # Port offset between zones (forwarded to go_services.ps1).
     [int]$ZonePortShift = 1000,
     # ── merge-zone / merge-zone-audit ─────────────────────────────
-    # 合服跨了四个 Redis DB。DB 号猜错不会报错,只会**静默无效**。所以每个 DB
+    # 合服跨了三个 Redis DB。DB 号猜错不会报错,只会**静默无效**。所以每个 DB
     # 都是独立参数,默认值取自各服务 yaml。
     #   mapping DB 0   player:zone / lock:player / merge:in_progress
     #                  **一定是 0**:data_service 用 go-zero 的 MustNewRedis,
@@ -132,8 +132,10 @@
     #                  传 -MergeMappingRedisDB 15 = fence 与 remap 一起指向
     #                  data_service 从不碰的库 = 审计恒绿、合服报成功却零改动。
     #   guild   DB 2   guild_rank:zone / guild:v2 / guild_rank:maintenance_lock
-    #   friend  DB 3   friend:online
     #   login   DB 0   player_merge_notice / player:session / kafka:retry|dead
+    # friend 的 DB 3 已退役(friend 移植:F2 删读者、F3 删参数):friend:online 从来没有写者,读者也已删除,
+    # 好友在线状态改为读共享库的契约 key player:session:{id}(login 段那一行)。
+    # 所以这里不再有 friend 的 Redis 参数;好友数据在独占库 mmorpg_friend,归 merge_zone 的 MySQL 审计管。
     [int]$MergeSourceZone = 0,
     [int]$MergeTargetZone = 0,
     [string]$MergeMySqlDsn = "root:@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local",
@@ -146,8 +148,6 @@
     [string]$MergeMappingRedisPassword = "",
     [string]$MergeNoticeRedisAddr = "",
     [int]$MergeNoticeRedisDB = 0,
-    [string]$MergeFriendRedisAddr = "",
-    [int]$MergeFriendRedisDB = 3,
     [string]$MergeSceneRedisAddr = "",
     [int]$MergeSceneRedisDB = 0,
     # 多 Redis 集群部署才需要的 player:{id}:* blob 拷贝。
@@ -788,7 +788,6 @@ function Get-MergeZoneArgs {
         "-mapping-redis-addr", $mapAddr,
         "-mapping-redis-db", $mapDB,
         "-notice-redis-db", $MergeNoticeRedisDB,
-        "-friend-redis-db", $MergeFriendRedisDB,
         "-scene-redis-db", $MergeSceneRedisDB
     )
 
@@ -804,7 +803,6 @@ function Get-MergeZoneArgs {
     if ($MergeRedisPassword -ne "")      { $a += @("-redis-password", $MergeRedisPassword) }
     if ($mapPwd -ne "")                  { $a += @("-mapping-redis-password", $mapPwd) }
     if ($MergeNoticeRedisAddr -ne "")    { $a += @("-notice-redis-addr", $MergeNoticeRedisAddr) }
-    if ($MergeFriendRedisAddr -ne "")    { $a += @("-friend-redis-addr", $MergeFriendRedisAddr) }
     if ($MergeSceneRedisAddr -ne "")     { $a += @("-scene-redis-addr", $MergeSceneRedisAddr) }
     # 建表清单:go run 在 tools/merge_zone 里跑,相对路径会指错地方,一律转绝对。
     $tableList = if ($MergeTableListJson -ne "") { $MergeTableListJson }
@@ -817,7 +815,7 @@ function Get-MergeZoneArgs {
     # trade 跳过开关放在公共参数里:merge-zone / merge-zone-unmerge / merge-zone-audit 必须同一口径,
     # 否则合服跳过了 3b、审计却仍去查 trade 库(恒报 INFRA),或反过来。
     if ($MergeSkipTradeMySql)            { $a += "-skip-trade-mysql" }
-    Write-Host "merge_zone: mapping=$mapAddr db=$mapDB | guild=$MergeRedisAddr db=$MergeRedisDB | login db=$MergeNoticeRedisDB | friend db=$MergeFriendRedisDB" -ForegroundColor DarkGray
+    Write-Host "merge_zone: mapping=$mapAddr db=$mapDB | guild=$MergeRedisAddr db=$MergeRedisDB | login db=$MergeNoticeRedisDB" -ForegroundColor DarkGray
     return $a
 }
 

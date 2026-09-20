@@ -65,11 +65,26 @@ type CheckResult struct {
 type runConfig struct {
 	db        *sql.DB
 	mappingDB *redis.Client
+	// friendDB 是好友独占库 mmorpg_friend 的第二个连接(port-decisions D-14,2026-09-18)。
+	//
+	// 为什么不共用 db:-mysql-dsn 指的是 `mmorpg`(公会 / 账号那套),friend 已经搬走。
+	// 可以用「库名.表名」跨库查,但那样就默认了两个库一定在同一个 MySQL 实例上 ——
+	// TiDB 迁移期这不成立。单独一个 DSN 让运维能把它指到别处,也能在 friend 还没部署的
+	// 环境里显式不配。
+	//
+	// nil = 没连上或没配。checkFriendOrphans 据此报 warn「NOT CHECKED」而不是跳过:
+	// 本文件 2026-05-23 的教训就是「优雅降级」把没跑的检查读成了干净通过。
+	friendDB   *sql.DB
 	knownZones map[uint32]struct{} // zones we expect to be live
 }
 
 func main() {
 	mysqlDSN := flag.String("mysql-dsn", "root:@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local", "MySQL DSN")
+	// friend 自 2026-09-18 起住独占库 mmorpg_friend(D-14),不在 -mysql-dsn 那个库里。
+	// 缺省值只换库名、其余与 -mysql-dsn 的缺省逐字一致;置空 = 显式声明「本环境没有 friend」,
+	// 此时 friend 那条检查报 warn「NOT CHECKED」,不会伪装成通过。
+	friendDSN := flag.String("friend-mysql-dsn", "root:@tcp(127.0.0.1:3306)/mmorpg_friend?charset=utf8mb4&parseTime=true&loc=Local",
+		"MySQL DSN for the friend-only database (go/friend forces MySQL.DBName=mmorpg_friend). Empty = skip the friend check and report it as NOT CHECKED")
 	redisAddr := flag.String("redis-addr", "127.0.0.1:6379", "Mapping redis address (player:zone:* keys)")
 	redisPwd := flag.String("redis-password", "", "Mapping redis password")
 	redisDB := flag.Int("redis-db", 0, "Mapping redis DB number")
@@ -94,6 +109,24 @@ func main() {
 	defer db.Close()
 	if err := db.PingContext(ctx); err != nil {
 		log.Fatalf("mysql ping: %v", err)
+	}
+
+	// friend 库的连接:连不上**不** Fatal。它只喂一条检查,为它放弃另外三条不划算;
+	// 检查本身会把「没查成」如实报成 warn。这与主库的 log.Fatalf 口径不同是刻意的 ——
+	// 主库挂了四条检查全跑不了,那才是真的没结果。
+	var friendDB *sql.DB
+	if *friendDSN != "" {
+		fdb, err := sql.Open("mysql", *friendDSN)
+		if err != nil {
+			log.Printf("ERROR: friend mysql open: %v — the friend check will report NOT CHECKED", err)
+		} else {
+			defer fdb.Close()
+			if err := fdb.PingContext(ctx); err != nil {
+				log.Printf("ERROR: friend mysql ping: %v — the friend check will report NOT CHECKED", err)
+			} else {
+				friendDB = fdb
+			}
+		}
 	}
 
 	rdb := redis.NewClient(&redis.Options{Addr: *redisAddr, Password: *redisPwd, DB: *redisDB})
@@ -132,7 +165,7 @@ func main() {
 	}
 	log.Printf("Live zones: %v", sortedKeys(knownZones))
 
-	cfg := runConfig{db: db, mappingDB: rdb, knownZones: knownZones}
+	cfg := runConfig{db: db, mappingDB: rdb, friendDB: friendDB, knownZones: knownZones}
 
 	// ── run checks ───────────────────────────────────────────────
 	//
@@ -368,18 +401,30 @@ func checkPlayerHomeZoneVsAccount(ctx context.Context, cfg runConfig) CheckResul
 // checkFriendOrphans — friend.friend_player_id should be in mapping.
 // Orphan friends are visible to players as "friend not found" errors.
 // Sampled scan only — full join would be expensive on hot tables.
+//
+// 库:mmorpg_friend(独占库,D-14),走 cfg.friendDB 这个**第二个连接**,
+// 不是 cfg.db —— 后者指的是 -mysql-dsn 那个 `mmorpg` 库,friend 的表已经不在里面了。
+//
+// 句柄缺失 / 表不在一律报 warn「NOT CHECKED」而不是 info:
+// 「没查」和「查了是干净的」必须在报告里长得不一样,否则一次配错 DSN 就变成一次假通过。
 func checkFriendOrphans(ctx context.Context, cfg runConfig) CheckResult {
 	r := CheckResult{Name: "friend.friend_player_id"}
-	if err := cfg.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM friend").Scan(&r.TotalCount); err != nil {
-		r.Severity = "info"
-		r.SampleNotes = "friend table not present"
+	if cfg.friendDB == nil {
+		r.Severity = "warn"
+		r.SampleNotes = "NOT CHECKED: no mmorpg_friend handle (-friend-mysql-dsn empty or unreachable)"
+		return r
+	}
+	if err := cfg.friendDB.QueryRowContext(ctx, "SELECT COUNT(*) FROM friend").Scan(&r.TotalCount); err != nil {
+		r.Severity = "warn"
+		r.SampleNotes = fmt.Sprintf("NOT CHECKED: friend table unreadable in mmorpg_friend: %v "+
+			"(表由 go/schemamigrate 建:friend -f etc/friend.yaml -migrate)", err)
 		return r
 	}
 	// Sample 1000 random rows — full scan can lock-thrash large tables.
 	// Statistical bound: if 1000-row sample has 0 orphans, p95 says
 	// real orphan rate is < 0.3%, which is below the noise floor of
 	// "old friends since deleted accounts."
-	rows, err := cfg.db.QueryContext(ctx,
+	rows, err := cfg.friendDB.QueryContext(ctx,
 		"SELECT player_id, friend_player_id FROM friend ORDER BY RAND() LIMIT 1000")
 	if err != nil {
 		r.Severity = "warn"

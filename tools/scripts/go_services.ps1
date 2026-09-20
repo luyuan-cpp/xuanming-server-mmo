@@ -163,6 +163,19 @@ $ServiceCatalogue = [ordered]@{
     # 保留区 51573-51872,由 Resolve-BindablePort 自动上挪(同 chat)。trade.yaml 形状满足本脚本 -Zone 改写:
     # 顶层单行 ListenOn / MetricsListenAddr、顶层 ZoneId 写在所有嵌套段之前、DataServiceRpc.Etcd.Key: dataservice.rpc 会被加 .z<N>。
     trade             = @{ Dir = "trade"; Entry = "trade.go"; Port = 50800; Desc = "Trade (聚宝斋,按 market_zone 隔离,路由服可达)"; ConfigFlag = "-f"; ConfigFile = "etc/trade.yaml"; AllowMultiInstance = $true; Tier = 1 }
+    # 好友 friend(docs/design/friend-port-20260918.md):全局一份(FriendNodeService),好友关系天然跨 zone,
+    # 业务代码禁止读 ZoneId 做分支;与 chat / guild / trade 一样**只承诺路由服模式可达**(GATE_CLIENT_RPC_ROUTER=1)。
+    # 本目录**没有 Global 这个字段**(chat / guild / trade 同样不写,port-decisions D-2):"全服一份"是 K8s 侧的
+    # 部署形态,由 k8s_deploy.ps1 $GoSvcCatalogue 的 Global = $true 表达(只在 infra namespace 部署一份、zone-up 跳过);
+    # 本地双 zone 仍按既有规则每 zone 起一份进程。所以 friend 在那边标 Global、在这里不标,两处不矛盾。
+    # Tier 1:只依赖基础设施(MySQL 独占库 mmorpg_friend + 共享 Redis + etcd + Kafka),不拨任何 Go 服务
+    # (不领号段、不连 data_service —— 好友关系的主键就是两个 player_id)。
+    # 多开安全:写路径全是 MySQL 事务,后台 sweep 是幂等的批量 DELETE,不引入 leader。
+    # 端口 50400 / metrics 9180 与 go/friend/etc/friend.yaml 的 ListenOn / MetricsListenAddr、k8s_deploy.ps1 的
+    # $GoSvcCatalogue 与 ConfigMap、manifests/go-svc/friend.yaml 五处逐字一致(契约 §7);-Zone 2 位移后 51400 / 10180,
+    # 均不在已观测的 Windows 保留区间内。friend.yaml 形状满足本脚本 -Zone 改写:顶层单行 ListenOn / MetricsListenAddr、
+    # 顶层 ZoneId 写在所有嵌套段之前;它自己的 Etcd.Key 是空串(D-13),不会被 .z<N> 后缀规则碰到。
+    friend            = @{ Dir = "friend"; Entry = "friend.go"; Port = 50400; Desc = "Friend (全局好友,路由服可达)"; ConfigFlag = "-f"; ConfigFile = "etc/friend.yaml"; AllowMultiInstance = $true;  Tier = 1 }
 }
 
 # Derived per-instance config files live here so the source tree stays clean.
@@ -354,7 +367,7 @@ function Resolve-InstanceConfig {
     }
 
     # Rewrite first ZoneId entry (handles both top-level 'ZoneId: N' and the
-    # nested 'Node:\n  ZoneId: N' shape used by login/guild/friend/player_locator).
+    # nested 'Node:\n  ZoneId: N' shape used by login/guild/player_locator).
     if ($Zone -gt 0) {
         $zoneRegex = [regex]::new('(?m)^(?<lead>\s*)ZoneId:\s*\d+\s*$')
         if ($zoneRegex.IsMatch($content)) {

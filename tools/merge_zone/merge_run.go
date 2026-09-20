@@ -37,10 +37,11 @@ func runMerge(o options) {
 	log.Printf("    manifest=%s timeout=%s", manifestPath, o.timeout)
 	log.Printf("    skip: guild=%v rank=%v mapping=%v player_rows=%v | blobs=%v(skip=%v) hot_state=%v",
 		o.skipGuild, o.skipRank, o.skipMapping, o.skipRows, o.migrateBlobs, o.skipBlobs, o.clearHotState)
-	log.Printf("    redis: mapping=%s/db%d guild=%s/db%d login=%s/db%d friend=%s/db%d scene=%s/db%d",
+	log.Printf("    redis: mapping=%s/db%d guild=%s/db%d login=%s/db%d scene=%s/db%d",
 		o.mappingAddr, o.mappingDB, o.redisAddr, o.redisDB, o.noticeAddr, o.noticeDB,
-		o.friendAddr, o.friendDB, o.sceneAddr, o.sceneDB)
+		o.sceneAddr, o.sceneDB)
 	log.Printf("    trade: schema=%s skip=%v", o.tradeSchema, o.skipTrade)
+	log.Printf("    friend: schema=%s (审计只读;合服不改写 friend 的行)", o.friendSchema)
 
 	// ── 句柄 ────────────────────────────────────────────────
 	db := mustOpenMySQL(ctx, o.mysqlDSN)

@@ -45,13 +45,21 @@
 
 合服跨了 4 个 Redis 逻辑库 + 2 类 MySQL 库 + 1 个 Kafka topic。**库号猜错不报错,只静默无效**——这是合服最危险的失败形态。
 
+> ⚠️ **2026-09-18(friend 移植 F3)起,friend 的 Redis 逻辑库(原 DB 3)与 `-MergeFriendRedisAddr` /
+> `-MergeFriendRedisDB` 参数已删除。** 那一格里唯一的键 `friend:online:{pid}` 在全仓没有写者
+> (读者也已删),在线门禁改为只看共享库的 `player:session:{pid}`。**旧脚本继续传这两个参数会让
+> merge_zone 以「flag provided but not defined」直接退出**——这是刻意的,静默忽略会让人
+> 以为自己配的库真的被查过。
+> 同一批改动里 friend 的 MySQL 表迁到独占库 `mmorpg_friend`(D-14),审计经 merge_zone 的
+> `-friend-schema`(默认 `mmorpg_friend`)以「库名.表名」只读访问,走的还是同一个 `-mysql-dsn`。
+> 与 `-trade-schema` 一样,`dev_tools.ps1` 不转发它:生产上只有默认值合法,改它只为隔离的集成测试。
+
 ### 2.1 Redis
 
 | 逻辑库 | DB | 键 | 配置来源 | dev_tools.ps1 参数 |
 |---|---|---|---|---|
 | **mapping** | **0** | `player:zone:{id}` / `lock:player:{id}` / `merge:in_progress:{zone}` | `go/data_service/etc/data_service.yaml` → `MappingRedis` | `-MergeMappingRedisAddr` / `-MergeMappingRedisDB`(默认 `-1` = 自动) |
 | **guild** | 2 | `guild_rank:zone:{z}` / `guild:v2:{id}` / `guild:v2:cache_generation:{id}` / `guild_rank:maintenance_lock` | `go/guild/etc/guild.yaml` → `RedisClient.DB` | `-MergeRedisAddr` / `-MergeRedisDB` |
-| **friend** | 3 | `friend:online:{pid}` | `go/friend/etc/friend.yaml` → `RedisClient.DB` | `-MergeFriendRedisAddr` / `-MergeFriendRedisDB` |
 | **login / shared** | 0 | `player_merge_notice:{pid}` / `player_force_rename:{pid}` / `player:session:{pid}` / `kafka:{retry,processing,dead}:queue:*` / `PlayerAllData:{pid}` / `{MsgType}:{pid}` | `go/login/etc/login.yaml` → `Node.RedisClient.DB`;`go/db` / `go/player_locator` 同为 0 | `-MergeNoticeRedisAddr` / `-MergeNoticeRedisDB` |
 | **scene_manager** | 0 | `scene_nodes:zone:{z}:load` / `player:{id}:location` / `scene:*:zone` / `world_channels:*` / `node:zone:{z}:*` | `scene_manager_service.yaml` → `Redis` | `-MergeSceneRedisAddr` / `-MergeSceneRedisDB` |
 | **player data** | 独立 | `player:{id}:*` | data_service 按 region 分的 Redis Cluster | `-MergeSourceDataRedis` / `-MergeTargetDataRedis`(仅多集群部署) |
@@ -237,13 +245,15 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-audit `
 | 名称 | 判据 | 级别 |
 |---|---|---|
 | `source_scene_nodes` | `scene_nodes:zone:{src}:load` 必须空 | block |
-| `online_presence` | `friend:online:{pid}`(**DB 3**)+ `player:session:{pid}`(**DB 0**)都必须为 0 | block |
+| `online_presence` | `player:session:{pid}`(**DB 0**)必须为 0 | block |
 | `player_locks` | `lock:player:{id}`(mapping DB)+ `player:{id}:__lock`(data Redis,给了 `-MergeSourceDataRedis` 才查) | block |
 | `kafka_db_task_queues` | `kafka:retry/processing/dead:queue:db_task_zone_{src}` 三个都空 | block |
-| `friend` / `friend_request` / `guild_member` | 全局表(无 zone_id 列),按 player_id 索引,合服后自然存活;只看量级 | info |
+| `friend` / `friend_request` | 全局表(无 zone_id 列),按 player_id 索引,合服后自然存活;只看量级。**住独占库 `mmorpg_friend`**(D-14),库 / 表查不到算 INFRA(exit 2),不降级成 info | info |
+| `guild_member` | 全局表(无 zone_id 列),按 player_id 索引,合服后自然存活;只看量级 | info |
 | `player.name (n/a)` | 项目当前没有玩家昵称字段,重名冲突不存在(详见 §12) | info |
 
-> `online_presence` 是修好的那一条:旧实现在 **mapping Redis** 上查 `friend:online:{pid}`,而这把键由 go/friend 写在 **DB 3** ⇒ 恒查不到 ⇒ 恒「全部离线 ✅」;pipeline 错误还被吞掉。**一个从设计上就不可能返回 block 的 block 级门禁,比没有门禁更危险**——现在扫描失败一律 block(INFRA)。
+> `online_presence` 是修好的那一条:旧实现在 **mapping Redis** 上查 `friend:online:{pid}`,恒查不到 ⇒ 恒「全部离线 ✅」;pipeline 错误还被吞掉。**一个从设计上就不可能返回 block 的 block 级门禁,比没有门禁更危险**——现在扫描失败一律 block(INFRA)。
+> 2026-09-18 又去掉了 `friend:online` 这个证据面本身:它在全仓**从来没有写者**,所以当年即便查对了 DB 也一样恒 0。现在只看 `player:session`(player_locator 在登录 / 断线时维护,是「这个玩家还连着」的权威来源),门禁强度不降反升。
 
 ### 7.2 dry-run 合服
 
@@ -567,7 +577,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command merge-zone-unmerge `
   -MergeMappingRedisAddr / -MergeMappingRedisPassword
   -MergeMappingRedisDB <n>              默认 -1 = 从 data_service.yaml 现读,兜底 0
   -MergeNoticeRedisAddr / -MergeNoticeRedisDB                    login/shared,默认 0
-  -MergeFriendRedisAddr / -MergeFriendRedisDB                    默认 3
+  (-MergeFriendRedisAddr / -MergeFriendRedisDB 已于 2026-09-18 删除,见 §2.1 的提示框)
   -MergeSceneRedisAddr  / -MergeSceneRedisDB                     默认 0
   -MergeTableListJson <path>            默认 generated/data/mysql_database_table_list.json
   -MergeSourceDataRedis / -MergeTargetDataRedis / -MergeDataRedisPassword

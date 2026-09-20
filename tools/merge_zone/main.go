@@ -9,8 +9,6 @@ package main
 //	                go-zero RedisConf 没有 DB 字段 ⇒ 恒 DB 0)
 //	guild    DB 2   guild_rank:zone:{z} / guild:v2:{id} / guild_rank:maintenance_lock
 //	                go/guild/etc/guild.yaml → RedisClient.DB
-//	friend   DB 3   friend:online:{pid}
-//	                go/friend/etc/friend.yaml → RedisClient.DB
 //	shared   DB 0   player:session:{pid} / kafka:{retry,processing,dead}:queue:* /
 //	                PlayerAllData:{pid} / {MsgType}:{pid} / player_merge_notice:{pid}
 //	                go/login / go/db / go/player_locator / scene_manager 都是 DB 0
@@ -56,8 +54,9 @@ const (
 	// fence 失效、remap 报告成功却一个 key 都没改 —— 正是合服最危险的静默失败。
 	defaultMappingRedisDB = 0
 	defaultGuildRedisDB   = 2 // guild.yaml RedisClient.DB
-	defaultFriendRedisDB  = 3 // friend.yaml RedisClient.DB
-	defaultSharedRedisDB  = 0 // login / db / player_locator / scene_manager
+	// friend 的 DB 3 已删(2026-09-18,friend 移植 F3):它唯一服务的键 friend:online:{pid}
+	// 全仓没有写者、读者也已删除,审计改用 shared 的 player:session 判在线。
+	defaultSharedRedisDB = 0 // login / db / player_locator / scene_manager
 	// go/db/etc/db.yaml → Kafka.GroupID
 	defaultKafkaGroup = "db_rpc_consumer_group"
 	// 导表器产物;仓库根的相对路径(dev_tools.ps1 在仓库根跑 go run)。
@@ -86,10 +85,6 @@ type options struct {
 	noticePwd  string
 	noticeDB   int
 
-	friendAddr string
-	friendPwd  string
-	friendDB   int
-
 	sceneAddr string
 	scenePwd  string
 	sceneDB   int
@@ -113,6 +108,7 @@ type options struct {
 	clearHotState bool
 	skipTrade     bool
 	tradeSchema   string
+	friendSchema  string
 
 	allowEmptySource   bool
 	expectedSrcPlayers int64
@@ -160,9 +156,11 @@ func main() {
 	flag.IntVar(&o.noticeDB, "notice-redis-db", defaultSharedRedisDB,
 		"LOGIN Redis DB (login.yaml Node.RedisClient.DB — 0). This handle also covers player:session:* and the go/db kafka retry/dead queues")
 
-	flag.StringVar(&o.friendAddr, "friend-redis-addr", "", "FRIEND Redis address for friend:online:{pid}. Default: -redis-addr")
-	flag.StringVar(&o.friendPwd, "friend-redis-password", "", "FRIEND Redis password. Default: -redis-password")
-	flag.IntVar(&o.friendDB, "friend-redis-db", defaultFriendRedisDB, "FRIEND Redis DB (friend.yaml RedisClient.DB — 3)")
+	// -friend-redis-addr / -friend-redis-password / -friend-redis-db 已删(2026-09-18,
+	// friend 移植 F3)。它们只为 friend:online:{pid} 存在,而那把键全仓没有写者、读者也已删除;
+	// 在线门禁改看 player:session(走 -notice-redis-* 那个共享 DB 0 句柄)。
+	// ⚠ 还在用旧参数的运维脚本会因「flag provided but not defined」直接退出 —— 这是刻意的:
+	// 静默忽略一个已删参数,会让人以为自己配的 friend 库真的被查过。
 
 	flag.StringVar(&o.sceneAddr, "scene-redis-addr", "", "scene_manager Redis address (scene_nodes / player:{id}:location / world_channels). Default: -redis-addr")
 	flag.StringVar(&o.scenePwd, "scene-redis-password", "", "scene_manager Redis password. Default: -redis-password")
@@ -184,6 +182,8 @@ func main() {
 			"Without it a missing trade schema/table refuses the merge; with it -verify-merged reports the trade row as NOT VERIFIED")
 	flag.StringVar(&o.tradeSchema, "trade-schema", defaultTradeSchema,
 		"trade database reached through -mysql-dsn (go/trade forces MySQL.DBName=mmorpg_trade; override only for isolated tests)")
+	flag.StringVar(&o.friendSchema, "friend-schema", defaultFriendSchema,
+		"friend database reached through -mysql-dsn (go/friend forces MySQL.DBName=mmorpg_friend; override only for isolated tests)")
 	flag.BoolVar(&o.skipMapping, "skip-player-mapping", false, "Skip the player:zone remapping")
 	flag.BoolVar(&o.skipRows, "skip-player-rows", false,
 		"Skip copying player rows from zone_<src>_db to zone_<dst>_db. ONLY valid once player main data is global (TiDB Phase 2); requires -i-know-global-player-table")
@@ -227,8 +227,6 @@ func main() {
 	o.mappingPwd = firstNonEmpty(o.mappingPwd, o.redisPwd)
 	o.noticeAddr = firstNonEmpty(o.noticeAddr, o.redisAddr)
 	o.noticePwd = firstNonEmpty(o.noticePwd, o.redisPwd)
-	o.friendAddr = firstNonEmpty(o.friendAddr, o.redisAddr)
-	o.friendPwd = firstNonEmpty(o.friendPwd, o.redisPwd)
 	o.sceneAddr = firstNonEmpty(o.sceneAddr, o.redisAddr)
 	o.scenePwd = firstNonEmpty(o.scenePwd, o.redisPwd)
 	o.dataPwd = firstNonEmpty(o.dataPwd, o.redisPwd)
@@ -268,6 +266,9 @@ func main() {
 	if err := validateTradeSchemaName(o.tradeSchema); err != nil {
 		fail("%v", err)
 	}
+	if err := validateFriendSchemaName(o.friendSchema); err != nil {
+		fail("%v", err)
+	}
 
 	switch o.mode {
 	case "audit":
@@ -287,9 +288,6 @@ func main() {
 			rankAddr:           o.redisAddr,
 			rankPwd:            o.redisPwd,
 			rankDB:             o.redisDB,
-			friendAddr:         o.friendAddr,
-			friendPwd:          o.friendPwd,
-			friendDB:           o.friendDB,
 			sharedAddr:         o.noticeAddr,
 			sharedPwd:          o.noticePwd,
 			sharedDB:           o.noticeDB,
@@ -305,6 +303,7 @@ func main() {
 			topicGeneration:    uint32(o.kafkaTopicGen),
 			tradeSchema:        o.tradeSchema,
 			skipTrade:          o.skipTrade,
+			friendSchema:       o.friendSchema,
 		})
 		return
 

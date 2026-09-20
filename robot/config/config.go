@@ -52,6 +52,9 @@ type Config struct {
 	// TradeSmoke 是 "trade-smoke" 模式的子开关(见 TradeSmokeConfig / trade_smoke_scenario.go)。
 	TradeSmoke TradeSmokeConfig `yaml:"trade_smoke"`
 
+	// FriendSmoke 是 "friend-smoke" 模式的子开关(见 FriendSmokeConfig / friend_smoke_scenario.go)。
+	FriendSmoke FriendSmokeConfig `yaml:"friend_smoke"`
+
 	// CurrencyCrash configures the "currency-crash-snapshot" mode used by
 	// docs/notes/currency-crash-window-verification.md. Driven by an external
 	// PowerShell script that runs the robot twice per case (pre/post kill) so
@@ -263,6 +266,51 @@ func (c *TradeSmokeConfig) validate() error {
 	return nil
 }
 
+// FriendSmokeConfig 配置 "friend-smoke" 模式(docs/design/friend-port-20260918.md)。
+//
+// 发起方 A 与拉黑方 C 登 zone_a;cross_zone=true 时接收方 B 登 zone_b(否则也登 zone_a)。
+// 全部请求都经 gate → client_rpc_router:friend 只承诺路由服模式可达(D-12),没有 gate 直连白名单。
+type FriendSmokeConfig struct {
+	CrossZone bool `yaml:"cross_zone"`
+
+	// ZoneA 必须非 0:0 会被 server-list 自动选区顶掉,三个机器人可能落进同一个 zone,
+	// 跨区推送与跨区读会话的断言就都不成立了。
+	ZoneA uint32 `yaml:"zone_a"`
+	// ZoneB 仅 cross_zone=true 时使用,必须非 0 且与 ZoneA 不同。
+	ZoneB uint32 `yaml:"zone_b"`
+
+	// RequestIntervalMs 是同一机器人相邻两个经 gate 的请求的最小间隔,缺省 1100:
+	// 好友消息号要等 proto-gen 定号之后才能进 MessageLimiter 表,在那之前吃 gate 默认档
+	// 3 次 / 窗口(推导见 chat_smoke_scenario.go)。
+	RequestIntervalMs int `yaml:"request_interval_ms"`
+
+	// PushTimeoutMs 是等一条 NotifyFriendEvent 的预算,缺省 10000:
+	// 推送比同步 RPC 多一跳 Kafka(friend → gate-cmd_g<N> → gate),所以给得更宽。
+	PushTimeoutMs int `yaml:"push_timeout_ms"`
+}
+
+func (c *FriendSmokeConfig) validate() error {
+	if c.ZoneA == 0 {
+		return fmt.Errorf("zone_a must be set (non-zero)")
+	}
+	if c.RequestIntervalMs <= 0 {
+		return fmt.Errorf("request_interval_ms must be > 0 (got %d)", c.RequestIntervalMs)
+	}
+	if c.PushTimeoutMs <= 0 {
+		return fmt.Errorf("push_timeout_ms must be > 0 (got %d)", c.PushTimeoutMs)
+	}
+	if !c.CrossZone {
+		return nil
+	}
+	if c.ZoneB == 0 {
+		return fmt.Errorf("zone_b must be set (non-zero) when cross_zone is true")
+	}
+	if c.ZoneA == c.ZoneB {
+		return fmt.Errorf("zone_a and zone_b must differ when cross_zone is true (got %d)", c.ZoneA)
+	}
+	return nil
+}
+
 type LLMConfig struct {
 	Enabled  bool   `yaml:"enabled"`
 	Endpoint string `yaml:"endpoint"` // e.g. "http://localhost:11434/v1/chat/completions"
@@ -285,6 +333,8 @@ func Load(path string) (*Config, error) {
 		BattleSmoke:    BattleSmokeConfig{Mode: "1v1"},
 		// trade-smoke 缺省:trade 本地 gRPC 端口 50800;间隔 1100ms 适配 gate 默认限流档。
 		TradeSmoke: TradeSmokeConfig{AdminAddr: "127.0.0.1:50800", RequestIntervalMs: 1100},
+		// friend-smoke 缺省:间隔 1100ms 适配 gate 默认限流档;推送多一跳 Kafka,给 10s。
+		FriendSmoke: FriendSmokeConfig{RequestIntervalMs: 1100, PushTimeoutMs: 10000},
 	}
 	if err := yaml.Unmarshal(data, cfg); err != nil {
 		return nil, err
@@ -325,10 +375,10 @@ func (c *Config) validate() error {
 		return fmt.Errorf("account_fmt must be set")
 	}
 	switch c.Mode {
-	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke", "trade-smoke":
+	case "", "stress", "login-test", "data-stress", "currency-crash-snapshot", "battle-smoke", "attribute-smoke", "pet-smoke", "chat-smoke", "guild-smoke", "trade-smoke", "friend-smoke":
 		// valid
 	default:
-		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, guild-smoke, or trade-smoke)", c.Mode)
+		return fmt.Errorf("unknown mode %q (expected stress, login-test, data-stress, currency-crash-snapshot, battle-smoke, attribute-smoke, pet-smoke, chat-smoke, guild-smoke, trade-smoke, or friend-smoke)", c.Mode)
 	}
 	if c.AuthType == "satoken" && c.SaTokenAddr == "" {
 		return fmt.Errorf("satoken_addr must be set when auth_type is satoken")
@@ -351,6 +401,11 @@ func (c *Config) validate() error {
 	if c.Mode == "trade-smoke" {
 		if err := c.TradeSmoke.validate(); err != nil {
 			return fmt.Errorf("trade_smoke: %w", err)
+		}
+	}
+	if c.Mode == "friend-smoke" {
+		if err := c.FriendSmoke.validate(); err != nil {
+			return fmt.Errorf("friend_smoke: %w", err)
 		}
 	}
 	return nil

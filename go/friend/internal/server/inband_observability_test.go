@@ -9,7 +9,8 @@ import (
 
 	"friend/internal/constants"
 	base "proto/common/base"
-	pb "proto/friend"
+	friendpb "proto/friend"
+	"shared/grpcstats"
 	"shared/serverbase"
 )
 
@@ -46,7 +47,7 @@ func counterValue(t *testing.T, name string, labels map[string]string) float64 {
 // TestInbandInterceptorClassifiesFriendRejection 是「错误码撞车」修复的端到端护栏:
 // 它跑的是**生产里真正挂上去的那条链**——
 // serverbase.UnaryInterceptor(Options{TipClassifier: constants.TipClassifier()})
-// 包住一个返回真实 pb.AddFriendResponse 的 handler。
+// 包住一个返回真实 friendpb.AddFriendResponse 的 handler。
 //
 // 修复前 ErrFriendListFull = 3,而拦截器没有(也无法有)好友自己的定性函数,
 // 只能走 serverbase.TipVerdict —— tip 数轴上的 3 是 common 段的
@@ -57,8 +58,17 @@ func counterValue(t *testing.T, name string, labels map[string]string) float64 {
 // 修复后 ErrFriendListFull 由 Tip.xlsx 发到 friend 段,全局段表判成
 // biz_reject:fault 计数不动,reject 计数 +1。
 func TestInbandInterceptorClassifiesFriendRejection(t *testing.T) {
-	const method = "FriendService/AddFriend"
-	labels := map[string]string{"method": method, "source": "tip_info"}
+	// 方法名取生成常量,不再手写字符串。原先写的是 "/friend.FriendService/AddFriend" ——
+	// proto package 其实是 friendpb(服务也已改名 ClientPlayerFriend),那个字符串从一开始
+	// 就与真实 FullMethod 不符;它没让用例红,只是因为下面的 method 标签是照着同一个
+	// 错字符串手算的短名。两处一起错 = 测试在测自己编的世界。
+	//
+	// method 标签必须用被测链路**自己的**派生函数算:serverbase 的标签
+	// = grpcstats.ShortMethod(info.FullMethod)。手写一份短名的话,哪天服务名、包名或
+	// ShortMethod 的规则变了,前后两次 counterValue 都会读到"序列不存在"的 0,
+	// 差值恰好是 0 —— 断言会报一个与真因无关的失败(或者被人改成 >= 之后永远绿)。
+	const fullMethod = friendpb.ClientPlayerFriend_AddFriend_FullMethodName
+	labels := map[string]string{"method": grpcstats.ShortMethod(fullMethod), "source": "tip_info"}
 
 	beforeFault := counterValue(t, "rpc_inband_fault_total", labels)
 	beforeReject := counterValue(t, "rpc_inband_reject_total", labels)
@@ -67,9 +77,9 @@ func TestInbandInterceptorClassifiesFriendRejection(t *testing.T) {
 	itc := serverbase.UnaryInterceptor(serverbase.Options{
 		TipClassifier: constants.TipClassifier(),
 	})
-	info := &grpc.UnaryServerInfo{FullMethod: "/friend.FriendService/AddFriend"}
+	info := &grpc.UnaryServerInfo{FullMethod: fullMethod}
 	handler := func(ctx context.Context, req any) (any, error) {
-		return &pb.AddFriendResponse{
+		return &friendpb.AddFriendResponse{
 			ErrorMessage: &base.TipInfoMessage{
 				Id:         constants.ErrFriendListFull,
 				Parameters: []string{"friend list full"},
@@ -77,12 +87,12 @@ func TestInbandInterceptorClassifiesFriendRejection(t *testing.T) {
 		}, nil
 	}
 
-	resp, err := itc(context.Background(), &pb.AddFriendRequest{}, info, handler)
+	resp, err := itc(context.Background(), &friendpb.AddFriendRequest{}, info, handler)
 	if err != nil {
 		t.Fatalf("拦截器不该改变 handler 的 error 返回: %v", err)
 	}
 	// 观测层绝不能改动响应内容。
-	addResp, ok := resp.(*pb.AddFriendResponse)
+	addResp, ok := resp.(*friendpb.AddFriendResponse)
 	if !ok {
 		t.Fatalf("响应类型被拦截器改写: %T", resp)
 	}
@@ -101,20 +111,24 @@ func TestInbandInterceptorClassifiesFriendRejection(t *testing.T) {
 	}
 }
 
-// TestInbandInterceptorRecordsTransportError 覆盖另一侧:好友域的真故障
-// (Redis / MySQL 挂了)在 friend_logic 里是 `return nil, err`,走 gRPC status。
+// TestInbandInterceptorRecordsTransportError 覆盖另一侧:handler 真的返回了 error 时,
 // 拦截器必须把它原样透传,并记成 status=transport_error 而不是当成一次成功。
+//
+// 它守的契约("不吞错、不凭空造响应")与 F2-1 的 in-band 化无关:存储故障改成
+// `return resp, nil` + constants.ErrStorage 之后,handler 返回非 nil error 的来路仍然存在 ——
+// NotifyFriendEvent 的 Unimplemented、go-zero 拦截器链里更外层的失败,
+// 以及将来任何一处漏改回 `return nil, err` 的代码。所以这条用例不随 in-band 化退役。
 func TestInbandInterceptorRecordsTransportError(t *testing.T) {
 	itc := serverbase.UnaryInterceptor(serverbase.Options{
 		TipClassifier: constants.TipClassifier(),
 	})
-	info := &grpc.UnaryServerInfo{FullMethod: "/friend.FriendService/AddFriend"}
+	info := &grpc.UnaryServerInfo{FullMethod: friendpb.ClientPlayerFriend_AddFriend_FullMethodName}
 	wantErr := context.DeadlineExceeded
 	handler := func(ctx context.Context, req any) (any, error) {
 		return nil, wantErr
 	}
 
-	resp, err := itc(context.Background(), &pb.AddFriendRequest{}, info, handler)
+	resp, err := itc(context.Background(), &friendpb.AddFriendRequest{}, info, handler)
 	if err != wantErr {
 		t.Fatalf("拦截器吞掉或改写了 handler 的 error: %v", err)
 	}

@@ -500,3 +500,61 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 - **proto2mysql 版本**:data_service(`9ad991c`)和 go/db(本地分支 `f3b308f`)要对齐到同一个不可变 tag。主键修复需要进 tag,由人执行。
 - **guild 没有 K8s ConfigMap 和 manifest**(`deploy/k8s/README.md:357`),mail 经 guild gRPC 这条路在 K8s 上暂不可达。
 - **TiDB 上 `mmorpg_<svc>` 由谁建、授权给谁**:随 TiDB 决策 §6 第 4 项一并定。
+
+---
+
+> 以下一条为 2026-09-18 追加,随 friend 移植 F1 批落盘。它**修订 D-10 的一个子项**,
+> D-10 原文与其余条目一字不改;该子项上冲突时以本段为准(AGENTS.md §5「没写文档 = 没说过」)。
+> 相关代码**未编译、未运行**,行为以 Codex 验证结果为准。
+
+## D-10 修订(2026-09-18)`friend_capacity` 回填就绪门禁:**退役;保留容量锁行与「缺行按权威边数、绝不猜 0」**
+
+(来源:friend 移植 F1 批冻结规格 §6.1,主会话裁定。D-10 原文见本文 :177-:189,被修订的是 :184 表格行里的 "migration ready gate" 一项。)
+
+**结论**
+
+- D-10 为 friend 列出的「必须保留」项里,`friend_capacity_backfill_v1` 这道 durable readiness gate **在 friend 移植中退役**,不随服务搬到 `mmorpg_friend`。
+  代码上删除的是:`FriendRepo.RequireFriendCapacityReady` / `requireFriendCapacityReady` / `friendCapacityMigrationStateError` / `migrationStateQuerier` / `friendCapacityMigrationKey` / `ErrFriendCapacityMigrationNotReady`,
+  以及它的三个调用点(`ensureFriendCapacityRows` 开头、`AcceptFriend` 与 `RemoveFriend` 事务内的 `FOR SHARE` 复查)和 `friend.go` 启动期那次拒启探测。
+- D-10 表格行里 friend 的**另外两项照旧保留**:`friend_capacity` 显式计数锁行、versioned cache generation。
+- **仍然有效的 D-10 实质不变量(一个都没动)**:
+  1. `friend_capacity` 的显式计数行是好友数硬上限;所有写 friend 边的路径都在同一把容量锁里,按 `RowsAffected` 增减 `friend_count`。
+  2. **缺容量行时按 `friend` 表的权威边数建行,绝不猜 0**(`ensureFriendCapacityRows` 里的 `SELECT COUNT(*) FROM friend`)。
+  3. 锁序纪律照 B 侧**现有**形态,本次一字未改:事务外先补齐容量行(自动提交的 `INSERT IGNORE`,避免同一接收者行上的 insert-intention 死锁)→ 事务内先按主键 `FOR UPDATE` 锁定校验申请行 → 再按 `player_id` 升序 `FOR UPDATE` 锁双方容量行 → 最后写入。
+     ⚠ 注意申请行锁**排在容量锁之前**,不是反过来:提前把 `status` 从 1 推进到 2 会让并发事务在 `idx_to_player` 前缀上删/插而触发 1213(理由写在 `friend_repo.go` 的 `AcceptFriend` 里)。这不构成 ABBA —— 申请行锁按 `(from_player_id, to_player_id)` 主键天然切分,不参与容量锁的升序环;`RemoveFriend` 与 `AddFriendRequest` 都不会在持有申请行锁的同时去等容量锁。
+     被退役的门禁原本是事务内的**第一条**语句(`FOR SHARE` 同一行全局台账),删掉它只是砍掉链条最前面的一环,申请行锁与容量锁的相对顺序不变。
+  4. versioned cache generation + Lua CAS,写路径提交后失效缓存。
+- 与之配套:`friend_repo_mysql_test.go` 删掉只测被删函数的 `TestFriendCapacityMigrationStateRequiresExplicitReady`,
+  并把原先「半迁移 fail-closed + 缺行用权威计数」的双职责用例收成 `TestMissingCapacityRowUsesAuthoritativeFriendCount`,继续钉住第 2 条不变量。
+
+**理由**(按权重)
+
+1. **它读的是别的库的表,违反 D-14 第 6 条(不跨库访问)。** 门禁执行 `SELECT state FROM guild_schema_migration ...`,而这张表按 D-14 第 8 条(本文 :384)「存量不动」留在旧共享库 `mmorpg`;friend 的 `config.Validate` 又断言 `MySQL.DBName == data.DatabaseName`(`mmorpg_friend`)。所以这条查询在任何合法配置下都不可能命中 —— 门禁是可证明的死代码。
+2. **「表不存在就放行」不是没有代价的保险。** 那是第一轮裁决选的处置(MySQL 1146 放行),代价是:`ensureFriendCapacityRows` 每次写调一次、`AcceptFriend` / `RemoveFriend` 的事务内还各带一次 `FOR SHARE` 再调一次。结果是 MySQL 持续记 1146 错误、每次写多一个注定失败的往返,而门禁什么也没挡住。
+3. **它挡的风险在新库里结构性不存在。** 门禁针对的是「在 `mmorpg` 里给历史 friend 边原地回填 `friend_capacity`,DDL 隐式提交导致半迁移」这一个具体场景。`mmorpg_friend` 由 `go/schemamigrate` 从基线一次建全,库里没有任何历史边,不存在需要回填的存量,也就没有「半份 0」可暴露。
+4. **AGENTS.md §11.2(KISS / YAGNI)与 §11.3(不得静默降级)。** 一个名字叫「就绪闸」、实际永远放行的机制比没有它更坏:下一个人会以为写路径有这层保护。删代码优于加特例。
+
+**证据**
+
+| 事实 | file:line |
+|---|---|
+| D-10 原文把 friend 的 ready gate 列为「必须保留」 | `docs/design/xuanming-port-decisions-20260910.md:184` |
+| D-14 第 8 条:`guild_schema_migration` 门表留在 `mmorpg` 不动 | 同上 `:384` |
+| D-14 第 6 条:跨服务只经对方 gRPC,不跨库 | 同上 `:375` |
+| friend 独占库库名常量 | `go/friend/internal/data/tables.go:22` |
+| `config.Validate` 断言配置库名等于该常量 | `go/friend/internal/config/config.go:296` |
+| 保留项:缺行从 friend 权威边数算初值 | `go/friend/internal/data/friend_repo.go:405` |
+| 保留项:双方容量行按 `player_id` 升序 `FOR UPDATE` | 同上 `:192`(AcceptFriend)、`:308`(RemoveFriend) |
+| 保留项:按 `RowsAffected` 增减 `friend_count` | 同上 `:258` |
+| 保留项:versioned cache generation + Lua CAS | 同上 `:78`(invalidate 脚本)、`:501`(读路径) |
+| 门禁退役的推翻依据(F1 §6.1 四条理由) | friend 移植 F1 批冻结规格(未跟踪文件,内容已逐条抄进本段「理由」) |
+
+**代价与残留**
+
+- **旧共享库 `mmorpg` 里的 friend 三张表(`friend` / `friend_request` / `friend_capacity`)成为孤儿**:新服务只读写 `mmorpg_friend`,旧表不再有任何写者。清理(以及 `deploy/mysql-init/guild_friend_tables.sql` 里那段 friend 建表与回填脚本的处置)属 friend F3 批,本批不做。孤儿表留着不影响正确性,只占空间并会误导排障的人。
+- **`guild_schema_migration` 表本身属 guild,不动**:`go/guild/internal/data/guild_repo.go` 仍在用它做公会积分迁移的门禁,D-14 第 8 条对它的「照旧」口径不变。本次退役只影响 `friend_capacity_backfill_v1` 这一个 key 的**读侧**;该 key 的行由 `deploy/mysql-init/guild_friend_tables.sql` 写入,删不删同属 F3 批。
+- **不再有「历史容量未回填」的机械防线**:结论成立的前提是「`mmorpg_friend` 永远由 `schemamigrate` 从基线建、库里没有历史边」。若将来真要把 `mmorpg` 的存量 friend 边导进新库,**必须先重新设计一次带 durable 标记的回填门禁**,不能直接跑导入 —— 届时靠的是这条记录,而不是代码里的残留。
+- **D-10 原文的行号引用已失效**:本文 `:184` 里引的 `internal/data/friend_repo.go:222-230`、`:59`、`:518` 是 B 侧旧形态的行号,经移植与本次删除后已全部对不上(现行位置见上面的证据表)。按「不改原文」的口径未回头修正,属已知残留 —— 读 D-10 时以本段证据表的行号为准。
+- **文档面残留**:`docs/design/friend-persistence-architecture.md:58-59`、`:79` 与 `docs/design/guild_friend_service_notes*.md:34`、`:38` 仍按 B 侧旧形态描述这道门禁。它们是 B 侧现状文档,本批不改;读到那几段时以本条为准。
+
+**验证状态**:未编译、未运行测试(AGENTS.md §10.1),待 Codex 验证。

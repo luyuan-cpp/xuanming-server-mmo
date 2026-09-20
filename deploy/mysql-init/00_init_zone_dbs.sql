@@ -36,4 +36,24 @@ GRANT ALL PRIVILEGES ON `testdb`.* TO 'appuser'@'%';
 CREATE DATABASE IF NOT EXISTS mmorpg_trade DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 GRANT ALL PRIVILEGES ON `mmorpg_trade`.* TO 'appuser'@'%';
 
+-- mmorpg_friend:好友 friend 服务独占库(go/friend/etc/friend.yaml 的 MySQL.DBName)。
+-- 与上面 mmorpg_trade 同一套规矩(port-decisions D-14):**这里只建库 + 授权**;表以
+-- proto/friend/friend_table.proto 为源,由 go/schemamigrate 建(friend 启动期 Schema.AutoMigrate,
+-- 或 `friend -f etc/friend.yaml -migrate`),不要往 mysql-init 里加业务表。
+-- appuser 没有全局 CREATE 权限,库必须在 friend 启动前就存在。
+-- ⚠ 2026-09-18 起 friend / friend_request / friend_capacity 三张表**不再**由
+--   deploy/mysql-init/guild_friend_tables.sql 建进**共享库 mmorpg**(= initdb 的 MYSQL_DATABASE;该文件没有
+--   USE 语句,所以它落的**不是 zone 库**;存量卷上残留的陈旧表要去 mmorpg 里找)。那三段 CREATE TABLE 与
+--   friend_capacity_backfill_v1 回填门禁已随 D-10 修订一并删除。两处都建表会让 schemamigrate
+--   把 initdb 建出来的旧结构判成类型漂移(退出码 4,需人工),所以别把它们加回去。
+-- 注意:与上面 testdb / mmorpg_trade 相同,已初始化过的本地 MySQL 数据卷不会重跑 initdb,
+-- 存量卷需要用 root 手工执行下面两句(再 FLUSH PRIVILEGES),或重建数据卷。
+-- 本机一键启动(tools/scripts/start_game.ps1)在 MySQL 就绪后预检本库,库不在或 appuser 无权时
+-- 跳过 friend 并打印补建命令,不拖垮整个启动。
+-- K8s:k8s_deploy.ps1 的 mysql-init-sql ConfigMap 会原样带入本文件,新 PVC 首次 initdb 时同样建库;
+-- 已有数据的 PVC 不会重跑,手工补建步骤见 deploy/k8s/README.md
+-- (D-14 第 5 条:只登记这一处,不要在 k8s_deploy.ps1 另生成)。
+CREATE DATABASE IF NOT EXISTS mmorpg_friend DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+GRANT ALL PRIVILEGES ON `mmorpg_friend`.* TO 'appuser'@'%';
+
 FLUSH PRIVILEGES;

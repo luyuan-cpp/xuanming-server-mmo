@@ -1,0 +1,73 @@
+# friend-smoke 配置:三个机器人对全局好友服务 go/friend 做端到端冒烟
+# (docs/design/friend-port-20260918.md;移植冻结规格 F3 §5)
+#
+# 流程:A/C 登 zone_a、B 登 zone_b(断言 A 与 B 的 gate 地址不同)→ 幂等预清理
+#       → A 加 B 为好友,B 10s 内收到 NotifyFriendEvent{REQUEST_RECEIVED}(验跨区推送三步)
+#       → B 拉到权威待处理列表,A 重发被 FriendRequestAlreadySent 拦
+#       → B 同意,A 收到 REQUEST_ACCEPTED 推送,双方好友列表互见且 A 看到的 B 是在线的
+#         (is_online / last_active_ms 来自共享库的 player:session:{id},验跨区读)
+#       → C 拉黑 A:A→C 与 C→A 两个方向都回 FriendBlocked
+#       → A 取推荐:条数被钳到 ≤20,且不含自己 / 已是好友的 B / 已拉黑的 C
+#       → A 经 gate 发 NotifyFriendEvent 的消息号:必须拿不到业务回包(D-9 反向断言)
+#       → 清理(A 删好友、C 解除拉黑)。
+#
+# 前置(缺一条就会失败,原因会写进 FRIEND_SMOKE_FAIL 的 reason):
+#   1. 两个 zone 的 gate 都以环境变量 GATE_CLIENT_RPC_ROUTER=1 启动(路由服模式)。
+#      friend 只承诺路由服模式可达(port-decisions D-12),不开 gate 直连白名单;
+#      直连模式下 gate 到不了 friend,冒烟会报 kServiceUnavailable。
+#      start_game.ps1 默认已开(-GateRouterMode);已在跑的 gate 不会换模式,要重启。
+#   2. zone_config 里有 zone 2 那一行(assign-gate 才能把 B 分到 zone 2 的 gate)。
+#   3. client_rpc_router 与 friend 已起(friend 全服一份即可,两个 zone 的路由服都能发现它):
+#      - 库 mmorpg_friend 已建(deploy/mysql-init/00_init_zone_dbs.sql;存量卷要手工补建),
+#        表已迁移(dev 档 Schema.AutoMigrate 启动即建;或手工 `friend -f etc/friend.yaml -migrate`);
+#      - friend 的 SharedRedis 必须指向写 player:session:{id} 的那个共享库(契约 §4),
+#        指错库不会报错,只会让好友列表里所有人恒为离线;
+#      - 推送要能落地:两个 zone 的 gate 都在消费 gate-cmd_g<N>,且 friend 的
+#        KAFKA_COMMAND_TOPIC_PARTITIONS / KAFKA_COMMAND_TOPIC_GENERATION 与 match 逐字一致
+#        —— 分区数 / 代号对不上时推送**静默丢失**(go/shared/kafkacmd/command_topic.go)。
+#   4. proto 已按 friend 移植重生成(路由表里 /friendpb.ClientPlayerFriend/* 为客户端协议;
+#      gate 白名单含这 11 个消息号),gate 与 client_rpc_router 已换上新二进制。
+#      发布顺序:friend 新二进制与迁移先上 → client_rpc_router → gate。
+#   5. Tip 表已导出 friend_error 的三个新码(FriendBlocked / FriendBlockListFull /
+#      FriendTargetInboxFull),robot 编译依赖这些生成枚举。
+#   6. robot 已 `go mod tidy && go mod vendor` 并以 -mod=vendor 重编
+#      —— 当前 robot/vendor/proto/ 下还没有 friend 这个包。
+#   7. robot_9701 / 9703 首次在 zone_a 建角、robot_9702 首次在 zone_b 建角
+#      (归属区在建角时登记,之后不随登录区变化)。B 若其实是 zone_a 的角色,
+#      第 1 / 3 步的推送断言会通过,但证明不了任何跨区结论。
+#      不用 95xx:robot_9501 已被帮会二期的资产通道冒烟占用
+#      (docs/design/guild-phase2/04-asset-channel.md,且该文建议把整个 95xx 段划给它);
+#      9601 是 travel_smoke。97xx 在两个仓里都未使用。
+#   8. 从 robot/ 目录运行(table_dir 是相对路径)。
+#
+# 用法(robot/ 目录下):
+#   .\robot.exe -c etc/friend_smoke.yaml
+# 退出码 0 = 全部断言通过(日志有 FRIEND_SMOKE_OK player_a=… gate_a=… 一行);
+# 退出码 1 = 任一步失败(日志有 FRIEND_SMOKE_FAIL step=… reason=…)。
+#
+# 可重复运行:第 0 步会幂等地把三人关系清回"互不相识、互不拉黑"(不断言结果码)。
+# 唯一的连跑限制是好友申请配额 Friend.RequestQuotaPerMinute(默认 10 次/分钟):
+# 一轮里 A 要发 3~4 次申请,同一分钟内连跑三轮以上会撞 kRateLimitExceeded —— 等一分钟再跑。
+
+gateway_addr: "http://127.0.0.1:8081" # Gateway HTTP endpoint(/api/assign-gate)
+zone_id: 1 # 本模式不用此字段选区(A/C 登 friend_smoke.zone_a,B 登 zone_b)
+robot_count: 3 # 语义占位:本模式固定 A/B/C 三个机器人
+account_fmt: "robot_%04d" # 保留骨架字段;本模式用固定账号 robot_9701/9702/9703
+password: "123456"
+skill_ids: [] # 本模式不放技能
+table_dir: "../generated/tables"
+action_interval: 3 # 本模式不跑场景 AI 循环,保留默认
+report_interval: 5
+
+mode: "friend-smoke"
+
+# 子开关(见 config.FriendSmokeConfig / friend_smoke_scenario.go)
+friend_smoke:
+  cross_zone: true # false = B 也登 zone_a,跳过 gate 不同的断言(同区弱验收,证明不了跨区推送)
+  zone_a: 1 # 发起方 A 与拉黑方 C 登录的 zone
+  zone_b: 2 # 接收方 B 登录的 zone;cross_zone=true 时必须与 zone_a 不同
+  request_interval_ms: 1100 # 同一机器人相邻请求最小间隔;gate 默认限流档 3 次 / 窗口(窗口按秒粒度,实际 1~2s)
+  push_timeout_ms: 10000 # 等一条 NotifyFriendEvent 的预算;推送多走一跳 Kafka,给得比 RPC 宽
+
+# 认证:password 模式(robot_ 前缀账号走 DevPasswordAuth)
+auth_type: "password"

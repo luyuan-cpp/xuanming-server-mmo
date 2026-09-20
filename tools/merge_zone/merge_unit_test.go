@@ -348,7 +348,8 @@ func TestRequireWriteIntent(t *testing.T) {
 // ── 默认 DB 号(item 3 的回归护栏)──────────────────────────
 
 func TestRedisDBDefaultsMatchServiceYAML(t *testing.T) {
-	// 这四个常量若漂移,合服会安静地扫错库。数值来源见 main.go 顶部注释。
+	// 这三个常量若漂移,合服会安静地扫错库。数值来源见 main.go 顶部注释。
+	// (friend 的 DB 3 一条已随 friend:online 退役删除,2026-09-18 friend 移植 F3。)
 	cases := []struct {
 		name string
 		got  int
@@ -357,7 +358,6 @@ func TestRedisDBDefaultsMatchServiceYAML(t *testing.T) {
 		// go-zero RedisConf 没有 DB 字段 → mapping Redis 恒为 DB 0(见 main.go 注释)。
 		{"mapping (data_service MappingRedis, go-zero 无 DB 字段)", defaultMappingRedisDB, 0},
 		{"guild (guild.yaml RedisClient.DB)", defaultGuildRedisDB, 2},
-		{"friend (friend.yaml RedisClient.DB)", defaultFriendRedisDB, 3},
 		{"shared/login (login.yaml Node.RedisClient.DB)", defaultSharedRedisDB, 0},
 	}
 	for _, c := range cases {

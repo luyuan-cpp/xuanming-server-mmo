@@ -1,61 +1,166 @@
-# Friend Service Configuration
+# friend 好友服务配置(契约 microservice-zone-contract-20260914 §2/§3/§4/§5/§7;移植决策 D-9/D-11/D-13/D-14)
+# 全局服务:全服一份、多副本、进程无状态;客户端只经 gate → 路由服到达(路由模式,D-12)。
+# 本文件的键名与 internal/config/config.go、k8s_deploy.ps1 的 friend ConfigMap 三处必须逐字一致 ——
+# 键名写错 go-zero 当未知键静默忽略,现象是"线上跑的还是默认值",没有任何报错。
 Name: friend.rpc
 ListenOn: 127.0.0.1:50400
-Timeout: 10000
 
+# zrpc 服务端整体超时(毫秒)。必须 ≤ 路由服 ForwardTimeoutMs(5000)− 1000(契约 §3),
+# config.Validate 拒绝 <1000 与 >4000。原值 10000 违反契约:路由服会先超时,把 friend 的慢响应
+# 判成信封级 kServiceUnavailable,而 friend 这边好友边已经落库 —— 客户端重试就是重复关系。
+# 逻辑层整请求 I/O 预算 = Timeout − 500ms(config.InBandReplyReserve):依赖变慢时先在预算内
+# in-band 回 kServiceUnavailable,不让 go-zero 的超时拦截器抢先回 DeadlineExceeded。
+Timeout: 4000
+
+# go-zero 的 Mode 默认是 pro。本地显式写 dev,让 logx 走人类可读格式、并放开只在 dev/test
+# 可用的调试入口(config.IsRelaxedMode)。K8s 非 dev 档由 ConfigMap 固定为 pro。
+Mode: dev
+
+# etcd 注册路径 <Prefix>/zone/<z>/... 用的 zone id;必填非 0(config.Validate 拒 0)。
+# friend 是全局服务,zone **只影响注册路径**,业务代码禁止读它做分支(契约 §0):
+# 好友关系天然跨 zone,任何按 zone 过滤的分支都会把跨区好友判成"不存在"。
+# ⚠ 顶层唯一一处 ZoneId,且必须写在任何嵌套段之前:go_services.ps1 -Zone 只改写文件里第一处
+#   ZoneId,嵌套段里将来若出现同名键会把改写吃掉。行尾也不能加注释(改写正则要求 `ZoneId: <数字>$`)。
+ZoneId: 1
+
+# etcd 节点注册租约 TTL(秒)= 崩溃场景的切换窗口:路由服 PickRandom 不看连接状态,
+# 进程崩掉后最多这么久还会被选中(契约 §2)。原值 500 意味着挂掉后 8 分钟仍在被路由。
+LeaseTTL: 60
+
+# Prometheus /metrics 监听地址。端口分工(契约 §7):9101 login / 9150 scene_manager / 9160 db /
+# 9170 match / 9180 friend / 9190 player_locator / 9200 路由服 / 9210 chat / 9220 guild / 9230 trade。
+# 置空关闭。必须是顶层单行:-Zone 的端口位移正则只认这个形状
+#   (原来的嵌套 `Prometheus: {Host, Port, Path}` 段不被位移,双 zone / 多副本会撞端口,已删)。
+# 指标:friend_push_total{reason,outcome} / friend_rate_quota_total{outcome} /
+#   friend_online_lookup_total{outcome} / friend_sweep_pending_rows{mode},
+#   以及 shared/serverbase 的 rpc_inband_*、shared/killswitch 的 killswitch_blocked_total、
+#   shared/safego 的 safego_panic_total{point}(压测期应恒 0)。
+MetricsListenAddr: ":9180"
+
+# RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
+# 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行(fail-open)。
+# 只有多套环境共用一个 etcd 集群、需要各自独立的止血阀时才需要改它。
+# 关停某个方法:etcdctl put /mmorpg/killswitch/friendpb.ClientPlayerFriend/AddFriend '{"deny":true,"reason":"..."}'
+# 关停整个客户端服务:etcdctl put /mmorpg/killswitch/friendpb.ClientPlayerFriend/'*' true
+# 恢复:etcdctl del 对应的 key。
+KillSwitchPrefix: ""
+
+# etcd:只给 shared/noderegistry 注册 FriendNodeService.rpc/... 与 shared/killswitch 用。
+# Key 必须显式写空串(契约 D-13):
+#   - 不能整行省略 —— go-zero v1.10.0 的 discov.EtcdConf.Key 不是 optional,Etcd 段存在而缺 Key
+#     会让 conf.MustLoad 直接 Fatal,在 K8s 上就是 Pod CrashLoop;
+#   - 填了 Key 会让 go-zero 额外注册一个 friend.rpc 服务发现 key,并被 go_services.ps1 -Zone
+#     按 .z<N> 切分 —— 全局服务被切成每 zone 一套负载均衡集,与"全服一份"直接冲突。
+# config.Validate 拒绝非空 Key。
 Etcd:
   Hosts:
     - 127.0.0.1:2379
-  Key: friend.rpc
+  Key: ""
 
-# Global Redis (not per-zone — friends are cross-zone)
-RedisClient:
+# ---- 双存储(契约 §4)----
+# Redis:既有共享库。两个用途:
+#   1) FriendRedis 未配置时私有 key 的回落目标;
+#   2) 跨运行时契约 key player:session:{id}(判好友在不在线)的**唯一**句柄 ——
+#      写者含 C++ scene / login,hiredis 没有集群客户端,所以共享库不许集群化。
+# 这是 zrpc.RpcServerConf 自带的 Redis(RedisKeyConf)段:Key 仅在 Auth=true 时使用,
+# 但字段不是 optional,Redis 段存在时必须显式写(空串即可),否则加载报 "Redis.Key" is not set。
+# 不写 DB(契约 §4):契约 key 由多个运行时共写,DB 号必须全仓一致 = 默认 0。
+Redis:
   Host: 127.0.0.1:6379
-  Password: ""
-  DB: 3
+  Type: node
+  Key: ""
 
+# FriendRedis:friend 私有 key(好友列表缓存 / 申请配额 / 限流)的存储。
+# 全部单 key 操作,Redis Cluster 安全;Host 逗号分隔种子地址,Type 必须是 cluster。
+# 整段留空 / 注释掉 = 回落到上面的共享库,启动时打 WARN 并在横幅打印 shared-fallback 落点。
+# 本地默认就走这个单库形态(不另起集群,省一套 compose profile)。
+# ⚠ staging/prod 必须指向独立实例且 maxmemory-policy=noeviction:共享库是 allkeys-lfu,
+#   好友列表缓存被淘汰只是多打一次 MySQL,但**配额 / 限流 key 被淘汰等于限流静默失效**。
+# FriendRedis:
+#   Host: 127.0.0.1:7000,127.0.0.1:7001,127.0.0.1:7002,127.0.0.1:7003,127.0.0.1:7004,127.0.0.1:7005
+#   Type: cluster
+
+# ---- 独占库 mmorpg_friend(D-14 第 1、5 条)----
+# 库由 deploy/mysql-init 预建(存量卷需手工执行建库语句);表由 go/schemamigrate 按
+# proto/friend/friend_table.proto 建 —— 本服务不写任何 DDL。
+# DBName 必须等于代码常量 data.DatabaseName = mmorpg_friend(config.Validate 断言):
+# 写成别的库名不会报错,只会把 friend 的四张表建进别人的库里。
+# 本地凭据与 go/trade/etc/trade.yaml、go/data_service 的 SnapshotMySQL 同账号;K8s 由 ConfigMap 注入。
+# ⚠ 原配置是一整串 DataSource(含 root 密码)。改成结构化字段:K8s 的用户名与密码分开注入,
+#   DSN 由 svc.BuildDSN 统一拼(带 sql_mode=STRICT_TRANS_TABLES —— 非严格模式下超长写入静默截断)。
 MySQL:
-  DataSource: "root:Mmorpg#2026db@tcp(127.0.0.1:3306)/mmorpg?charset=utf8mb4&parseTime=true&loc=Local"
+  Host: 127.0.0.1:3306
+  User: appuser
+  Password: apppass123
+  DBName: mmorpg_friend
+  MaxOpenConn: 20
+  MaxIdleConn: 5
 
-Node:
-  ZoneId: 1
-  LeaseTTL: 500
+# 建表策略(D-14 第 4 条):
+#   AutoMigrate 不写或 true:启动时跑 schemamigrate.Up(有 GET_LOCK,多副本并发安全);
+#     出错或出现需人工项(类型漂移 / 缺主键)即拒绝启动。
+#   false:启动时只跑一次只读 plan,有待执行语句或需人工项就拒绝启动,并打印补救命令
+#     friend -f etc/friend.yaml -migrate
+# K8s 非 dev 档由 ConfigMap 固定 false,表由 friend-migrate Job 建。
+Schema:
+  AutoMigrate: true
 
-Registry:
-  Etcd:
-    Hosts:
-      - 127.0.0.1:2379
-    DialTimeout: 5s
-
-Cache:
-  DefaultTTL: 30m
-  MaxFriends: 200
-  MaxPendingRequests: 50
-
+# Kafka:S2C 推送(kafkautil.PushToPlayer → gate-cmd_g<N>)的 broker 地址,at-most-once(契约 §5)。
+# Brokers 留空是合法配置:svc 会让 KafkaWriter 保持 nil,推送路径降级为"不推"(好友申请照样落库,
+# 只是对端要下次拉列表才看到)—— 所以 config.Validate 不拒绝空 Brokers。
 Kafka:
   Brokers:
     - "localhost:9092"
 
-# RPC 级热关停(shared/killswitch)规则在 etcd 里的前缀。
-# 留空 = 用默认前缀 /mmorpg/killswitch/,且前缀下没有 key 时全部放行。
-# 关停某个方法:etcdctl put /mmorpg/killswitch/friendpb.FriendService/AddFriend '{"deny":true,"reason":"..."}'
-# 关停整个服务:etcdctl put /mmorpg/killswitch/friendpb.FriendService/'*' true
-# 恢复:etcdctl del 对应的 key。
-KillSwitchPrefix: ""
+# ---- 好友业务阈值 ----
+# 这些数字是**硬上限与限流**,不是调优旋钮:写大了单个玩家的好友 / 黑名单表无界增长
+# (一次列表读要回几万行),写小了玩家加不上好友。改动必须同步 k8s ConfigMap。
+# 每一项为 0 都会被 config.Validate 拒绝(为 0 时的静默故障见 config.go 各字段注释)。
+Friend:
+  # 单玩家好友数硬上限(friend_capacity.friend_count 的封顶值)。
+  MaxFriends: 200
+  # 出站 pending 申请上限:挡"一个人给全服发好友申请"。
+  MaxPendingRequests: 50
+  # 入站 pending 申请上限。与出站分开两个值:入站量不由本人控制,共用一个上限会让
+  # 被骚扰者先被自己的收件箱打满,反而挡住正常好友的申请。
+  MaxIncomingRequests: 200
+  # 黑名单条数上限:拉黑表进 ListBlocks 的全量返回,必须有封顶。
+  MaxBlocks: 200
+  # RecommendFriends 请求 limit=0 时返回多少候选。
+  RecommendDefaultLimit: 10
+  # RecommendFriends 的 limit 上限(超出钳到它)。config.Validate 另有硬天花板 20:
+  # 单次推荐要算二度关系,这是压测确认能装进 RequestBudget(Timeout−500ms)的最大值。
+  RecommendMaxLimit: 20
+  # 请求里 exclude_player_ids 的条数上限:客户端可控数组必须封顶,
+  # 否则一次请求能塞十万个 id 让服务端做十万次集合运算。
+  RecommendMaxExclude: 64
+  # 单玩家每分钟最多发起几次好友申请。与 MaxPendingRequests 互补:后者限"同时挂着多少",
+  # 前者限"多快发"—— 只有后者时,刷子可以"发一条、立刻撤一条"绕过去。
+  RequestQuotaPerMinute: 10
+  # 列表类读(好友 / 申请 / 黑名单)SQL 上的 LIMIT 硬上限。即使容量表被写坏、真实行数超上限,
+  # 单次读也不会拖垮 MySQL 与网关包体。
+  ListReadHardLimit: 1000
+  # friend 私有 Redis 缓存(好友列表等)的过期时间。必须为正:TTL≤0 在 Redis 里等于"永不过期",
+  # 缓存与 MySQL 一旦不一致就再也不会自愈(删了的好友一直留在列表里)。
+  CacheTTL: 30m
+  # friend_request 表过期行的后台清理(F2 批实现循环,本批只定配置契约)。
+  # ⚠ 四个键必须全写:Sweep 段在 config 里标了 optional,而 go-zero **不下钻整段缺失的
+  #   optional 嵌套结构**,default 标签不会回填 —— 漏写整段会让 Mode 变空串并被 Validate 拒。
+  Sweep:
+    # report_only 只出指标 friend_sweep_pending_rows{mode} 不删数据;delete 真删。
+    # 新环境先跑观察模式确认"待清理行数"符合预期,再改 delete —— 清的是权威数据。
+    Mode: report_only
+    # 两轮 sweep 之间的间隔。
+    Interval: 5m
+    # 已处理(rejected / accepted)的申请行保留天数。保留期的意义是让玩家还能看到
+    # "最近谁拒了我";删太早等于这段历史凭空消失。
+    RetentionDays: 7
+    # 单轮一次 DELETE 的行数上限。分批是为了不让一条长事务长时间持锁 friend_request
+    # (它同时在好友申请的写路径上)。
+    BatchLimit: 1000
 
-# Prometheus 抓取端点,由 go-zero core/service 自带的 agent 暴露(不要另起 promhttp)。
-# 端口分工:login 9101 / scene_manager 9150 / db 9160 / guild 9170 / friend 9180 /
-# player_locator 9190。dev 下绑 127.0.0.1,避免指标泄到本机以外;
-# staging/prod 改绑 0.0.0.0 让 Prometheus / Grafana 抓得到。
-# 留空 Host 即彻底关闭 /metrics(go-zero 的 StartAgent 直接 return)。
-#
-# 除 go-zero 自带的 rpc_server_* 外,本服务还暴露 shared/serverbase 的一组指标:
-#   rpc_inband_fault_total{method,source,code}  - 响应体业务码判定为服务端故障
-#   rpc_inband_reject_total{method,source}      - 正常业务拒绝(好友列表满、重复申请……)
-#   rpc_inband_unknown_code_total{method,source}- 码表漂移信号,正常应恒 0
-#   rpc_duration_seconds{method,status}         - 把 in-band 定性算进去的耗时/成功率
-# 以及 shared/safego 的 safego_panic_total{point}(压测期应恒 0)。
-Prometheus:
-  Host: 127.0.0.1
-  Port: 9180
-  Path: /metrics
+# 刻意**不写** Middlewares.StatConf.IgnoreContentMethods。
+# go-zero 的 Stat 拦截器默认按 INFO 打每个请求的整包 JSON,chat 必须屏蔽 SendChat 是因为
+# 那个请求体就是聊天正文(含私聊)。friend 的请求体只有 target_player_id / limit / exclude 这类
+# 数字 id,没有隐私正文,全量打日志反而是排障资产(能看出刷子的请求序列)。
+# 写在这里是为了让评审知道"这是判断结果,不是漏了"。

@@ -413,6 +413,16 @@ $GoSvcCatalogue = @{
 	# 表由 MigrateJob 登记的 trade-migrate Job 建 —— Apply-OneGoSvc 在 ConfigMap 之后、Deployment 之前 delete + apply 它
 	# (Apply-GoSvcMigrateJob)。MigrateJob 是可选字段,只有建表服务才写。
 	trade           = @{ ConfigMap = "go-svc-trade-config";           Manifest = "trade.yaml";           Port = 50800; ConfigFlag = "-f";              ConfigFile = "trade.yaml";                    ImageName = "mmorpg-trade"; Global = $true; MigrateJob = "trade-migrate.yaml" }
+	# 好友 friend(docs/design/friend-port-20260918.md):好友关系天然跨 zone(表里一行的两个 player_id 可能分属不同区),
+	# 所以是全局池(Global),与 chat / trade 同放 infra namespace 一份。客户端只经 gate → client-rpc-router 可达;
+	# -GateRouterMode 默认 "0" 下「部署得起来但玩家不可达」,与 chat / trade 同一已知缺口。
+	# 注意本目录的 Global 与 go_services.ps1 $ServiceCatalogue 的字段集**语义不同**:这里的 Global 决定
+	# 「infra namespace 部署一份、zone-up 跳过」(Get-GlobalGoSvcNames → Apply-GlobalGoSvcManifests);
+	# 那边没有 Global 字段这一说,本地双 zone 仍每 zone 起一份进程。所以 friend 在这里标 Global、在那边不标,不矛盾。
+	# 端口 50400 / metrics 9180 与 go/friend/etc/friend.yaml、go_services.ps1 一致;ImageName 与 go_svc_image.ps1 的 friend 条目一致。
+	# 独占库 mmorpg_friend(port-decisions D-14):库由 infra-up 的 mysql-init-sql(deploy/mysql-init/00_init_zone_dbs.sql)预建;
+	# 表由 MigrateJob 登记的 friend-migrate Job 建(Apply-OneGoSvc 在 ConfigMap 之后、Deployment 之前跑它)。
+	friend          = @{ ConfigMap = "go-svc-friend-config";          Manifest = "friend.yaml";          Port = 50400; ConfigFlag = "-f";              ConfigFile = "friend.yaml";                   ImageName = "mmorpg-friend"; Global = $true; MigrateJob = "friend-migrate.yaml" }
 }
 
 # 目录里非全局(= 随 zone 部署)的服务名。两处 zone 循环共用,避免各写一遍过滤条件。
@@ -1577,6 +1587,72 @@ function New-GoSvcConfigMapYaml {
 		}
 	}
 
+	# 好友 friend 的契约值:键名与 go/friend/etc/friend.yaml、go/friend/internal/config 逐字一致,值只从服务 yaml 取
+	# (go/friend/internal/config/config.go 头注释把"三处逐字一致"写成了硬约束 —— 键名写错 go-zero 当未知键静默忽略,
+	#  现象是"线上跑的还是默认值",没有任何报错)。
+	# 与 chat / trade 同理**只在生成 friend 自己的 ConfigMap 时求值**:friend.yaml 缺键时不能把 zone-up 里
+	# db / login 等服务的 ConfigMap 一起拖挂;生成 friend 时照样 fail-closed(Get-AuthoritativeScalar 查不到即 throw)。
+	$friendYaml                    = 'go/friend/etc/friend.yaml'
+	$friendName                    = ''
+	$friendTimeout                 = ''
+	$friendLeaseTTL                = ''
+	$friendMysqlDBName             = ''
+	$friendMysqlMaxOpenConn        = ''
+	$friendMysqlMaxIdleConn        = ''
+	$friendMaxFriends              = ''
+	$friendMaxPendingRequests      = ''
+	$friendMaxIncomingRequests     = ''
+	$friendMaxBlocks               = ''
+	$friendRecommendDefaultLimit   = ''
+	$friendRecommendMaxLimit       = ''
+	$friendRecommendMaxExclude     = ''
+	$friendRequestQuotaPerMinute   = ''
+	$friendListReadHardLimit       = ''
+	$friendCacheTTL                = ''
+	$friendSweepMode               = ''
+	$friendSweepInterval           = ''
+	$friendSweepRetentionDays      = ''
+	$friendSweepBatchLimit         = ''
+	# 非 dev 档的固定值(见下面 if 块里的注释)。
+	$friendMode                    = 'pro'
+	$friendAutoMigrate             = 'false'
+	if ($SvcName -eq 'friend') {
+		$friendName                  = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Name'
+		$friendTimeout               = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Timeout'
+		$friendLeaseTTL              = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'LeaseTTL'
+		# 库名同样取服务 yaml:D-14 规定本地与 K8s 同名(mmorpg_friend),go/friend 的 config.Validate 还会断言它等于
+		# 代码常量 data.DatabaseName;库本身由 mysql-init-sql 预建,这里不另写一份库名常数。
+		$friendMysqlDBName           = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'MySQL.DBName'
+		$friendMysqlMaxOpenConn      = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'MySQL.MaxOpenConn'
+		$friendMysqlMaxIdleConn      = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'MySQL.MaxIdleConn'
+		# 好友业务阈值:全是**硬上限与限流**而不是调优旋钮,每一项为 0 都会被 config.Validate 拒。
+		# 一条都不能漏写:go-zero 对"非 optional 但整段缺失"的 Friend 段会按空 map 下钻并回填一整套 default,
+		# 不报错也不全变 0 —— 漏写等于线上悄悄换了一套阈值。
+		$friendMaxFriends            = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.MaxFriends'
+		$friendMaxPendingRequests    = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.MaxPendingRequests'
+		$friendMaxIncomingRequests   = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.MaxIncomingRequests'
+		$friendMaxBlocks             = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.MaxBlocks'
+		$friendRecommendDefaultLimit = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.RecommendDefaultLimit'
+		$friendRecommendMaxLimit     = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.RecommendMaxLimit'
+		$friendRecommendMaxExclude   = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.RecommendMaxExclude'
+		$friendRequestQuotaPerMinute = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.RequestQuotaPerMinute'
+		$friendListReadHardLimit     = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.ListReadHardLimit'
+		$friendCacheTTL              = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.CacheTTL'
+		# Sweep 四个键必须全写:整段标了 optional,而 go-zero **不下钻整段缺失的 optional 嵌套结构**、
+		# default 标签不回填 —— 漏写会让 Mode 变空串并被 Validate 拒(配置错误而不是静默降级,但照样 CrashLoop)。
+		$friendSweepMode             = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.Sweep.Mode'
+		$friendSweepInterval         = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.Sweep.Interval'
+		$friendSweepRetentionDays    = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.Sweep.RetentionDays'
+		$friendSweepBatchLimit       = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Friend.Sweep.BatchLimit'
+		# 与 trade / data-service / login 同一条纪律:dev 档镜像服务 yaml 的值;staging/prod 固定
+		# Mode: pro(dev/test 才放行的调试入口关死,不能带着造数能力上线)与 AutoMigrate: false
+		# (表只由 friend-migrate Job 建,启动路径只跑一次只读 plan,不净即拒启并打印补救命令)。
+		if ($ReleaseProfile -eq 'dev') {
+			$friendMode        = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Mode'
+			$friendAutoMigrate = Get-AuthoritativeScalar -RelativePath $friendYaml -KeyPath 'Schema.AutoMigrate'
+		}
+	}
+
 	$mysqlUser = $script:MysqlUser
 	$mysqlPassword = $script:MysqlPassword
 	$redisPassword = $script:RedisPassword
@@ -2164,6 +2240,101 @@ Market:
   MaxFavoritesPerPlayer: ${tradeMarketMaxFavorites}
 "@
 		}
+		"friend" {
+@"
+Name: ${friendName}
+ListenOn: 0.0.0.0:50400
+# zrpc 服务端超时(毫秒),必须 <= 路由服 ForwardTimeoutMs - 1000(契约 §3)。反过来路由服先超时,会把 friend 的
+# 正常慢响应判成信封级 kServiceUnavailable,而 friend 这边好友边已经落库 —— 客户端重试就是重复关系。
+Timeout: ${friendTimeout}
+# go-zero Mode:dev/test 才放开的调试入口(config.IsRelaxedMode,含 gRPC reflection)。
+# dev 档 = go/friend/etc/friend.yaml 的值;staging/prod 固定 pro(见生成器注释)。显式写出,不赌 go-zero 缺省值。
+Mode: ${friendMode}
+# Etcd 段 **Key 显式留空**(port-decisions D-13,与 chat / trade 同理):friend 按 C++ 约定注册
+# FriendNodeService.rpc/zone/<z>/...(go/shared/noderegistry),路由服按这个前缀发现它;没有任何 Go 调用方
+# 经 go-zero 发现键找 friend,填了 Key 只会多一条无人消费的注册(friend 的 config.Validate 直接拒非空 Key)。
+# ⚠ 不能整行省略 Key:go-zero v1.10.0 的 discov.EtcdConf.Key 不是 optional,Etcd 段存在而缺 Key 时
+#   conf.MustLoad 直接 Fatal("Etcd.Key" is not set),Pod 会 CrashLoop —— chat 在 kind 上实测踩过这个阻塞项。
+Etcd:
+  Hosts:
+    - "etcd.${InfraNamespace}:2379"
+  Key: ""
+# 共享 Redis(既有单库;写者含 C++ scene / login,hiredis 没有集群客户端 ⇒ 这个库不许集群化)。两个用途:
+#   1) FriendRedis 未配置时 friend 私有 key 的回落目标;
+#   2) 跨运行时契约 key player:session:{id}(判好友在不在线)的**唯一**句柄。
+# 这是 zrpc.RpcServerConf 自带的 Redis(RedisKeyConf)段:Key 仅在 Auth=true 时使用,但字段不是 optional,
+# Redis 段存在时必须**显式写空串**,否则加载期报 "Redis.Key" is not set,同样 CrashLoop(与上面 Etcd.Key 同一个坑)。
+# 不写 DB(契约 §4):契约 key 由多个运行时共写,DB 号必须全仓一致 = 默认 0。
+# ⚠ 本段**刻意不写 Pass**:deploy/k8s/manifests/infra/redis.yaml 当前没有 requirepass
+#   (args 只有 redis-server --appendonly yes),与 chat / match 的同形段一致 —— 这是省略不是遗漏。
+#   向一个没设密码的 Redis 发 AUTH 会被直接拒("ERR Client sent AUTH, but no password is set"),
+#   只给 friend 补 Pass 反而会让 friend 成为唯一起不来的服务。
+#   哪天给共享 Redis 开了 requirepass,必须**同批**给 chat / match / friend 三处都补 Pass ——
+#   只补一处会让另外两个起不来。
+Redis:
+  Host: redis.${InfraNamespace}:6379
+  Type: node
+  Key: ""
+# FriendRedis(friend 私有 key:好友列表缓存 / 申请配额 / 限流)在 K8s 上**刻意整段不配**,回落到上面的共享库。
+# F2 的缓存键已带 hash tag、全是单 key 操作,Redis Cluster 安全,所以将来换独立实例不需要改代码;
+# ⚠ 但 staging/prod 若要配独立实例,必须 maxmemory-policy=noeviction:好友列表缓存被淘汰只是多打一次 MySQL,
+#   **配额 / 限流 key 被淘汰等于限流静默失效**。共享库现在是 allkeys-lfu,这条风险已经存在,写在这里不是假装没有。
+# 全局池:ZoneId 只影响 etcd 注册路径,路由服对 FriendNodeService 不做 zone 过滤(ZoneScopedNodeTypes 默认仅 Login),
+# 任何 zone 的玩家都被路由到这里的实例;业务代码**禁止**读它做分支 —— 好友关系天然跨 zone,按 zone 过滤会把
+# 跨区好友判成"不存在"。取命令行 -ZoneId(Apply-GlobalGoSvcManifests),与 chat / trade 同口径;Go 侧 Validate 拒 0。
+ZoneId: ${CurrentZoneId}
+# 租约 TTL(秒)= 崩溃后路由服仍可能把请求打到死实例的最长窗口(PickRandom 不看连接状态)。
+LeaseTTL: ${friendLeaseTTL}
+# 与 manifests/go-svc/friend.yaml 的 metrics 容器端口 / prometheus.io/port 注解一致(9180 = friend,契约 §7)
+MetricsListenAddr: ":9180"
+# 留空 = shared/killswitch 的 DefaultPrefix(/mmorpg/killswitch/),与其它服务共用同一棵规则树。
+KillSwitchPrefix: ""
+# 独占库(port-decisions D-14):库 ${friendMysqlDBName} 由 infra-up 的 mysql-init-sql(原样带入 deploy/mysql-init/00_init_zone_dbs.sql)
+# 预建并 GRANT 给 appuser;账号沿用 db / data-service 同一组注入值(MMORPG_MYSQL_USER / MMORPG_MYSQL_PASSWORD,dev 回落 root),
+# 换成别的账号要自己补 GRANT。MaxOpenConn × Deployment 副本数(2)要算进 MySQL 的 max_connections。
+MySQL:
+  Host: "mysql.${InfraNamespace}:3306"
+  User: "${mysqlUser}"
+  Password: "${mysqlPassword}"
+  DBName: "${friendMysqlDBName}"
+  MaxOpenConn: ${friendMysqlMaxOpenConn}
+  MaxIdleConn: ${friendMysqlMaxIdleConn}
+# 建表策略(D-14 第 4 条,见生成器注释):dev = 服务 yaml 的值(启动期 schemamigrate.Up,GET_LOCK 保护多副本);
+# staging/prod = false:表只由 friend-migrate Job 建,启动路径只跑只读 plan,不净即拒启并打印补救命令。
+Schema:
+  AutoMigrate: ${friendAutoMigrate}
+# S2C 推送(kafkautil.PushToPlayer → gate-cmd_g<N>)的 broker 地址。推送是 at-most-once(契约 §5),
+# 只作"去拉"的触发:丢了对端下次拉列表照样看到,所以 Brokers 为空也是合法配置(降级为不推)。
+Kafka:
+  Brokers:
+    - "kafka.${InfraNamespace}:9092"
+# 好友业务阈值,全部取自服务 yaml,不在这里另写一份常数。它们是**硬上限与限流**不是调优旋钮:
+# 写大了单个玩家的好友 / 黑名单表无界增长(一次列表读要回几万行),写小了玩家加不上好友。
+# 一项都不能漏:go-zero 对"整段 Friend 缺失"会按空 map 下钻并回填一整套 default,不报错也不全变 0。
+Friend:
+  MaxFriends: ${friendMaxFriends}
+  MaxPendingRequests: ${friendMaxPendingRequests}
+  MaxIncomingRequests: ${friendMaxIncomingRequests}
+  MaxBlocks: ${friendMaxBlocks}
+  RecommendDefaultLimit: ${friendRecommendDefaultLimit}
+  RecommendMaxLimit: ${friendRecommendMaxLimit}
+  RecommendMaxExclude: ${friendRecommendMaxExclude}
+  RequestQuotaPerMinute: ${friendRequestQuotaPerMinute}
+  ListReadHardLimit: ${friendListReadHardLimit}
+  CacheTTL: ${friendCacheTTL}
+  # 终态申请行的后台清理。默认 report_only:只出指标 friend_sweep_pending_rows{mode} 并打 WARN,**不删任何数据**;
+  # 清的是权威数据,新环境先观察"待清理行数"合理再改 delete。四个键必须全写:Sweep 段标了 optional,
+  # go-zero 不下钻整段缺失的 optional 嵌套结构、default 不回填,漏写会让 Mode 变空串并被 Validate 拒。
+  Sweep:
+    Mode: ${friendSweepMode}
+    Interval: ${friendSweepInterval}
+    RetentionDays: ${friendSweepRetentionDays}
+    BatchLimit: ${friendSweepBatchLimit}
+# 刻意**不写** Middlewares.StatConf.IgnoreContentMethods(与 go/friend/etc/friend.yaml 同一判断,不是漏了):
+# chat 必须屏蔽 SendChat 是因为那个请求体就是聊天正文(含私聊);friend 的请求体只有 target_player_id / limit /
+# exclude 这类数字 id,没有隐私正文,全量打日志反而是排障资产(能看出刷子的请求序列)。
+"@
+		}
 		default {
 			throw "Unknown Go service: $SvcName"
 		}
@@ -2537,8 +2708,8 @@ function Apply-OneGoSvc {
 	Write-Host "  [applied] $SvcName -> $svcImage (port $($info.Port) pullPolicy=$svcPullPolicy)"
 }
 
-# 全局池 Go 服务(目录里 Global = $true,目前是 match / chat / client-rpc-router / trade):部署到 $InfraNamespace 一次。
-# trade 带 MigrateJob:它的 trade-migrate Job 在 Apply-OneGoSvc 里先于 Deployment 跑
+# 全局池 Go 服务(目录里 Global = $true,目前是 match / chat / client-rpc-router / trade / friend):部署到 $InfraNamespace 一次。
+# trade / friend 各带一个 MigrateJob(共两个 Job):trade-migrate / friend-migrate 在 Apply-OneGoSvc 里先于各自的 Deployment 跑
 # (staging/prod 恒等 Complete,dev 仅 -WaitReady 下等;D-14 第 4 条)。
 # 由 Apply-Infra 调用,所以 infra-up / all-up 都会带上;zone-up 不碰它。
 function Apply-GlobalGoSvcManifests {
@@ -3078,10 +3249,10 @@ function Get-InfraZoneIds {
 	仓库里 00_init_zone_dbs.sql 顺带建的 testdb 只服务本地 compose 的
 	go/data_service/etc/data_service.yaml,在 K8s 上是一个没人用的空库,无害。
 
-	新全局服务的独占库(port-decisions D-14 第 5 条,目前是聚宝斋 trade 的 mmorpg_trade)**只登记在
+	新全局服务的独占库(port-decisions D-14 第 5 条,目前是聚宝斋 trade 的 mmorpg_trade 与好友 friend 的 mmorpg_friend)**只登记在
 	00_init_zone_dbs.sql**,由上面的循环原样带进本 ConfigMap;这里**不要**再生成第二份建库 sql。
 	02_k8s_global_db.sql 是因为本地(testdb)与 K8s(mmorpg_global)库名不同才单独生成的,不是范式。
-	表不在 initdb 里建:trade 的表由 manifests/go-svc/trade-migrate.yaml 这个 Job 建(Apply-GoSvcMigrateJob)。
+	表不在 initdb 里建:trade 的表由 manifests/go-svc/trade-migrate.yaml、friend 的表由 manifests/go-svc/friend-migrate.yaml 这两个 Job 建(Apply-GoSvcMigrateJob)。
 
 	注意 initdb 只在数据目录为空的首次启动执行,PVC 已有数据时改 sql 不会重跑
 	(见 mysql.yaml 里 mysql-init 卷的注释)。
@@ -3368,8 +3539,8 @@ function Show-InfraStatus {
 	# `kubectl drain` 会挂在 etcd / kafka 上(kafka 的 PDB 是 minAvailable: 1,不允许自愿驱逐)。
 	# job:kafka-topic-init(审计 + 控制面命令 topic 预建)的 COMPLETIONS 0/1 = 分区契约没建成,
 	# scene 起来前必须先看它。
-	# job 一栏同样列出建表 Job trade-migrate(D-14):失败须核对 status.conditions(Failed/FailureTarget),
-	# 看 `kubectl -n <infra> logs job/trade-migrate`;删除前须确认该 Job UID 所属 Pod 均终态,ACTIVE=0 本身不代表安全。
+	# job 一栏同样列出建表 Job trade-migrate / friend-migrate(D-14):失败须核对 status.conditions(Failed/FailureTarget),
+	# 看 `kubectl -n <infra> logs job/trade-migrate`(或 `job/friend-migrate`);删除前须确认该 Job UID 所属 Pod 均终态,ACTIVE=0 本身不代表安全。
 	Invoke-Kubectl -Args @("get", "deploy,sts,po,pvc,pdb,job,svc,cm", "-n", $InfraNamespace) -AllowFailure
 }
 

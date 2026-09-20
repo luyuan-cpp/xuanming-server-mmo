@@ -148,6 +148,11 @@ $Catalogue = [ordered]@{
     # `COPY schemamigrate/` 带入,不走 ExternalReplaceStages;schemamigrate 依赖的 proto2mysql 用已发布 tag(仅远程仓名映射,不使用本地目录 replace)。
     # 同一镜像既跑 trade Deployment,也跑 trade-migrate Job(args 加 -migrate,D-14)。
     trade           = @{ Dir = "trade";           Entry = "trade.go";               ImageName = "mmorpg-trade" }
+    # 好友 friend:与 k8s_deploy.ps1 $GoSvcCatalogue 的 friend 条目配对(ImageName 必须一致)。只经路由服可达,与路由服成对发布。
+    # go/friend/go.mod 的 `replace schemamigrate => ../schemamigrate` 与 trade 同形态,在 go/ 之内,由
+    # Dockerfile.go-svc 通用的 `COPY schemamigrate/` 带入,**不需要改 Dockerfile**,也不走 ExternalReplaceStages。
+    # 同一镜像既跑 friend Deployment,也跑 friend-migrate Job(args 加 -migrate,D-14)。
+    friend          = @{ Dir = "friend";          Entry = "friend.go";              ImageName = "mmorpg-friend" }
 }
 
 # 先把每个元素再按逗号拆一次,兼容 "a,b"(单字符串)和 a,b(数组)两种传法。

@@ -16,9 +16,13 @@ package main
 //     `FROM guild` 落在一次性库上。
 //   - MySQL(聚宝斋):一次性库 merge_zone_it_trade,经 -trade-schema 指过去。真实的
 //     mmorpg_trade 一个字节不碰 —— 这正是 -trade-schema 这个 flag 存在的唯一理由。
-//   - Redis:用 DB 9/10/11/12(mapping/guild/shared/friend),**且只在它们本来
+//   - MySQL(好友):一次性库 merge_zone_it_friend,经 -friend-schema 指过去,理由同上
+//     (friend 2026-09-18 迁到独占库 mmorpg_friend,port-decisions D-14)。
+//   - Redis:用 DB 9/10/11(mapping/guild/shared),**且只在它们本来
 //     就是空的时候跑**。非空就 skip 而不是 flush —— 谁也不知道那里面是谁的数据。
-//     生产默认的 15/2/0/3 由 merge_unit_test.go 的常量测试守住,这里不碰。
+//     生产默认的 15/2/0 由 merge_unit_test.go 的常量测试守住,这里不碰。
+//     (原先还有一个 DB 12 给 friend:online 用;那把键与 -friend-redis-* 参数已随
+//     friend 移植 F3 一起退役。)
 
 import (
 	"context"
@@ -46,10 +50,10 @@ const (
 
 	itGuildDB   = "merge_zone_it_db"
 	itTradeDB   = "merge_zone_it_trade"
+	itFriendDB  = "merge_zone_it_friend"
 	itMappingRD = 9
 	itGuildRD   = 10
 	itSharedRD  = 11
-	itFriendRD  = 12
 	itSceneRD   = itSharedRD // scene_manager 生产上也是 DB 0,与 shared 同库
 )
 
@@ -70,7 +74,7 @@ func TestMain(m *testing.M) {
 		fmt.Fprintf(os.Stderr, "SKIP: mysql unreachable: %v\n", err)
 		os.Exit(0)
 	}
-	for _, addr := range []int{itMappingRD, itGuildRD, itSharedRD, itFriendRD} {
+	for _, addr := range []int{itMappingRD, itGuildRD, itSharedRD} {
 		c := redis.NewClient(&redis.Options{Addr: itRedisAddr, DB: addr})
 		n, err := c.DBSize(ctx).Result()
 		_ = c.Close()
@@ -110,11 +114,11 @@ func TestMain(m *testing.M) {
 }
 
 func itDropAll(db *sql.DB) {
-	for _, s := range []string{zoneDBName(itSrcZone), zoneDBName(itDstZone), itGuildDB, itTradeDB} {
+	for _, s := range []string{zoneDBName(itSrcZone), zoneDBName(itDstZone), itGuildDB, itTradeDB, itFriendDB} {
 		_, _ = db.Exec("DROP DATABASE IF EXISTS " + s)
 	}
 	ctx := context.Background()
-	for _, dbi := range []int{itMappingRD, itGuildRD, itSharedRD, itFriendRD} {
+	for _, dbi := range []int{itMappingRD, itGuildRD, itSharedRD} {
 		c := redis.NewClient(&redis.Options{Addr: itRedisAddr, DB: dbi})
 		_ = c.FlushDB(ctx).Err() // 只清我们自己确认过是空的那几个库
 		_ = c.Close()
@@ -130,17 +134,22 @@ func itCreateAll(db *sql.DB) error {
 		"CREATE DATABASE " + zoneDBName(itSrcZone),
 		"CREATE DATABASE " + zoneDBName(itDstZone),
 		"CREATE DATABASE " + itTradeDB,
+		"CREATE DATABASE " + itFriendDB,
 		// 镜像 deploy/mysql-init/guild_friend_tables.sql(name 全局 UNIQUE)。
 		`CREATE TABLE ` + itGuildDB + `.guild (
 			guild_id BIGINT UNSIGNED NOT NULL, name VARCHAR(64) NOT NULL,
 			zone_id INT UNSIGNED NOT NULL DEFAULT 0, score BIGINT NOT NULL DEFAULT 0,
 			PRIMARY KEY (guild_id), UNIQUE KEY uk_name (name), KEY idx_zone (zone_id))`,
-		`CREATE TABLE ` + itGuildDB + `.friend (
+		// friend / friend_request 住独占库 mmorpg_friend(port-decisions D-14),这里用一次性库
+		// 顶替。只建审计读到的列:完整形状由 go/schemamigrate 按 proto/friend/friend_table.proto
+		// 生成,这里不复刻第二份表结构(与 trade_listing 同口径)。
+		// 列名按 proto 的字段名:申请表的对端列是 to_player_id(不是旧 mysql-init 里的 target_id)。
+		`CREATE TABLE ` + itFriendDB + `.friend (
 			player_id BIGINT UNSIGNED NOT NULL, friend_player_id BIGINT UNSIGNED NOT NULL,
 			PRIMARY KEY (player_id, friend_player_id))`,
-		`CREATE TABLE ` + itGuildDB + `.friend_request (
-			player_id BIGINT UNSIGNED NOT NULL, target_id BIGINT UNSIGNED NOT NULL,
-			status TINYINT NOT NULL DEFAULT 1, PRIMARY KEY (player_id, target_id))`,
+		`CREATE TABLE ` + itFriendDB + `.friend_request (
+			from_player_id BIGINT UNSIGNED NOT NULL, to_player_id BIGINT UNSIGNED NOT NULL,
+			status TINYINT NOT NULL DEFAULT 1, PRIMARY KEY (from_player_id, to_player_id))`,
 		`CREATE TABLE ` + itGuildDB + `.guild_member (
 			guild_id BIGINT UNSIGNED NOT NULL, player_id BIGINT UNSIGNED NOT NULL,
 			PRIMARY KEY (guild_id, player_id))`,
@@ -211,15 +220,20 @@ func itReset(t *testing.T) {
 			}
 		}
 	}
-	for _, tbl := range []string{"guild", "friend", "friend_request", "guild_member"} {
+	for _, tbl := range []string{"guild", "guild_member"} {
 		if _, err := db.Exec("DELETE FROM " + itGuildDB + "." + tbl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tbl := range []string{"friend", "friend_request"} {
+		if _, err := db.Exec("DELETE FROM " + itFriendDB + "." + tbl); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if _, err := db.Exec("DELETE FROM " + itTradeDB + ".trade_listing"); err != nil {
 		t.Fatal(err)
 	}
-	for _, dbi := range []int{itMappingRD, itGuildRD, itSharedRD, itFriendRD} {
+	for _, dbi := range []int{itMappingRD, itGuildRD, itSharedRD} {
 		if err := itRedis(t, dbi).FlushDB(ctx).Err(); err != nil {
 			t.Fatal(err)
 		}
@@ -1005,11 +1019,11 @@ func itRun(t *testing.T, args ...string) (string, int) {
 		"-redis-db", strconv.Itoa(itGuildRD),
 		"-mapping-redis-db", strconv.Itoa(itMappingRD),
 		"-notice-redis-db", strconv.Itoa(itSharedRD),
-		"-friend-redis-db", strconv.Itoa(itFriendRD),
 		"-scene-redis-db", strconv.Itoa(itSceneRD),
 		"-table-list-json", itTableListFile(t),
 		"-assume-kafka-drained",
 		"-trade-schema", itTradeDB,
+		"-friend-schema", itFriendDB,
 	}
 	cmd := exec.Command(itBinary, append(base, args...)...)
 	out, err := cmd.CombinedOutput()
@@ -1425,8 +1439,10 @@ func TestIT_Audit_OnlineGateActuallyBlocks(t *testing.T) {
 	itReset(t)
 	ctx := context.Background()
 	itSeedPlayers(t, []uint64{9971}, true)
-	// friend:online 住在 FRIEND DB —— 旧实现在 mapping DB 上查,永远查不到。
-	itRedis(t, itFriendRD).Set(ctx, "friend:online:9971", "1", time.Minute)
+	// player:session 住在 SHARED DB(生产上是 DB 0,由 player_locator 写)。
+	// 2026-09-18 起它是在线门禁的唯一证据面:friend:online 那把键全仓没有写者,已随
+	// friend 移植 F3 从门禁里删掉(见 audit_checks.go)。
+	itRedis(t, itSharedRD).Set(ctx, "player:session:9971", "1", time.Minute)
 
 	out, code := itRun(t, "-mode", "audit", "-source-zone", "901", "-target-zone", "902")
 	if code != 1 {

@@ -1,0 +1,164 @@
+# friend:全局好友(好友关系 / 申请 / 黑名单 / 推荐 + 跨区在线状态与 S2C 推送;docs/design/friend-port-20260918.md)。
+#
+# **全局池,只部署到 mmorpg-infra namespace 一次,不进任何 zone namespace。**
+# 好友关系天然跨 zone(friend / friend_request / friend_block 三张表里没有 zone 列),
+# 服务代码禁止按 zone 分支(契约 §0);客户端经 gate → client-rpc-router 到达,
+# 路由服对 FriendNodeService 不做 zone 过滤。go/friend/etc/friend.yaml 里的 ZoneId 只影响
+# etcd 注册路径,不是业务分区键。
+# k8s_deploy.ps1 的 $GoSvcCatalogue 里该条目标了 Global = $true,zone-up 会跳过它,
+# infra-up / all-up 在基础设施阶段部署。ConfigMap go-svc-friend-config 由脚本生成。
+#
+# 库与表(port-decisions D-14):
+#   - 独占库 mmorpg_friend 由 mysql-init-sql ConfigMap 带入的 deploy/mysql-init/00_init_zone_dbs.sql 预建 + GRANT appuser
+#     (建库只登记那一处;initdb 只对空 PVC 生效,存量 PVC 手工补,见 deploy/k8s/README.md「好友 friend」)。
+#   - 表由同目录 friend-migrate.yaml 这个 Job(同一镜像 + 同一 ConfigMap,`-migrate`)按 proto/friend/friend_table.proto 建。
+#     k8s_deploy.ps1 在本 Deployment **之前**先 delete 再 apply 它(上一次的 Job 还在途则先等它结束,绝不删在途 Job)。
+#     staging/prod **恒等** Job Complete 才 apply 本文件,Failed / 超时即中断发布(D-14 第 4 条,不受 -WaitReady 控制);
+#     dev 档只在 -WaitReady 下等。
+#   - staging/prod 的 ConfigMap 固定 Schema.AutoMigrate=false:启动路径只跑一次只读 plan,有待执行语句或需人工项就拒绝启动
+#     (fail-closed,日志打印补救命令),所以 Job 没跑成功时这里会 CrashLoop —— 这是预期,先看 `kubectl logs job/friend-migrate`。
+#
+# ⚠ 已知前提:friend 只承诺路由服模式可达(D-12)。gate 的 GATE_CLIENT_RPC_ROUTER 在 K8s 上默认 "0"(k8s_deploy.ps1 -GateRouterMode),
+# 所以默认部署下这份 Deployment 起得来、探针绿,但玩家够不着;以 -GateRouterMode 1 部署之后才算真正可用。
+# 与 chat / trade 是同一个存量缺口,不是 friend 引入的。
+#
+# ⚠ Kafka 命令 topic 的分区契约(gate-cmd_g<N>,friend 的 S2C 推送经它到目标 zone 的 gate):
+#   **本文件刻意不写 KAFKA_COMMAND_TOPIC_PARTITIONS / KAFKA_COMMAND_TOPIC_GENERATION**,
+#   与 match.yaml / trade.yaml / chat.yaml / login.yaml 逐字一致 —— 全仓没有任何 go-svc manifest 注入这两个变量,
+#   go/shared/kafkacmd 因此在 K8s 上一律回落到编译期默认值(partitions=256 / generation=1)。
+#   在这里单独写一份值会把"部署级常量"复制成第二份真相,下次换代号必漏改(kafkacmd 注释里的四处同拍纪律)。
+#   ⚠ 但这意味着一个**存量的全仓缺口**:bin/etc/base_deploy_config.yaml 当前是 CommandTopicGeneration: 2,
+#   kafka-topic-init 预建的是 gate-cmd_g2、C++ gate 消费的也是 g2,而 Go 侧默认仍是 g1 ——
+#   K8s 上 Go 服务(login / scene_manager / player_locator / guild / friend)发出的 gate 命令会落到 gate-cmd_g1,
+#   没有消费者,静默丢失。本地 start_game.ps1 会注入这两个变量所以本机与 robot 冒烟不受影响。
+#   正确的修法是让 k8s_deploy.ps1 从 base_deploy_config.yaml 统一注入到所有 go-svc Deployment(一处真相),
+#   不是在 friend 这里补一行。详见交付说明与 docs/design/friend-port-20260918.md 的「已知缺口」。
+#
+# 连接数:ConfigMap 的 MySQL.MaxOpenConn × replicas(外加 migrate Job 的连接)要算进 MySQL 的 max_connections。
+apiVersion: v1
+kind: Service
+metadata:
+  name: friend
+  labels:
+    app: friend
+    tier: go-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: friend
+  ports:
+    - name: grpc
+      port: 50400
+      targetPort: 50400
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: friend
+  labels:
+    app: friend
+    tier: go-svc
+spec:
+  # 多实例安全:好友写路径全部收在单条 MySQL 事务里(容量守卫行锁最先,统一锁序,解 AddFriend↔AcceptFriend 的 ABBA 环),
+  # 配额 / 限流是 Redis 单 key 的 INCR+EXPIRE,缓存是带 hash tag 的单 key —— 实例之间不需要协调;
+  # node_id 由 etcd CAS 分配(go/shared/noderegistry),路由服随机挑。
+  # 启动期迁移(仅 dev 档 AutoMigrate=true)由 go/schemamigrate 的 GET_LOCK 串行化,两副本同时起不会并发 DDL。
+  # ⚠ friend_request 的过期清理 sweep 在**每个副本**里都跑(见 friend.go 的启动横幅 sweep 行):
+  #   它是幂等的分批 DELETE,两个副本同时清只是各删一批,不会写坏数据;默认 Mode=report_only 不删任何行。
+  # replicas>=2 是「容错不降级」的最低冗余。崩溃切换窗口 = ConfigMap 的 LeaseTTL(路由服 PickRandom 不看连接状态)。
+  replicas: 2
+  selector:
+    matchLabels:
+      app: friend
+  template:
+    metadata:
+      labels:
+        app: friend
+        tier: go-svc
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9180"
+        prometheus.io/path: "/metrics"
+    spec:
+      affinity:
+        podAntiAffinity:
+          # 两个副本尽量不落同一节点,否则单节点故障等于全池不可用
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: friend
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: friend
+          image: PLACEHOLDER_IMAGE
+          imagePullPolicy: PLACEHOLDER_PULL_POLICY
+          env:
+            - name: GOLANG_PROTOBUF_REGISTRATION_CONFLICT
+              value: warn
+            # C++ 约定注册(FriendNodeService.rpc)写进 NodeInfo 的对外 IP(friend.go 的 advertisedHost 优先读它):
+            # ListenOn 是 0.0.0.0,不能原样写;不注入时退回第一块非 loopback 网卡,
+            # 多网卡 / sidecar / 部分 CNI 下可能选错,路由服拨不通。
+            # 与 chat.yaml / trade.yaml / data-service.yaml / login.yaml 同一写法。
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          args: ["-f", "/app/etc/friend.yaml"]
+          ports:
+            - containerPort: 50400
+              name: grpc
+            # 与 ConfigMap 的 MetricsListenAddr ":9180" 及上面 prometheus.io/port 注解一致(9180 = friend)
+            - containerPort: 9180
+              name: metrics
+          readinessProbe:
+            grpc:
+              port: 50400
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            grpc:
+              port: 50400
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          lifecycle:
+            preStop:
+              # 先留 5s 让 Service 摘掉 endpoint;etcd 注册(noderegistry.Close)由进程收到 SIGTERM 后
+              # 在 grpc Stop 之前删除,路由服 watch 到删除后不再挑这个实例。
+              # 5s + friend.go 的 24s 硬截止 = 29s,必须 < 下面的 terminationGracePeriodSeconds(30),
+              # 否则 kubelet 会在进程自己收尾完成之前 SIGKILL,etcd 注册只能等 LeaseTTL 过期。
+              exec:
+                command: ["sh", "-c", "sleep 5"]
+          volumeMounts:
+            - name: svc-config
+              mountPath: /app/etc
+              readOnly: true
+            # 不挂 snowflake-cache:friend 不发号(好友关系的主键是两个 player_id,申请与黑名单同理),
+            # 不接 snowflakealloc,没有启动期槽位草稿要缓存。
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      terminationGracePeriodSeconds: 30
+      volumes:
+        - name: svc-config
+          configMap:
+            name: go-svc-friend-config
+---
+# PDB 与主 manifest 同文件:k8s_deploy.ps1 只 apply 目录条目里的主 manifest。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: friend-pdb
+  labels:
+    app: friend
+    tier: go-svc
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: friend

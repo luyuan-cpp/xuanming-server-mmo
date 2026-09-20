@@ -40,6 +40,15 @@ $optionalServices = @('chat','guild')
 # 与 chat / guild 一样只承诺路由服模式可达。单独追加，不改上面两行数组。
 $services += 'trade'
 $optionalServices += 'trade'
+# 好友 friend（docs/design/friend-port-20260918.md）：与 trade 同形态的新服务，同样按可选处理，两种情况跳过它：
+#   1. 缺 exe（第 1 步，与 chat / guild / trade 同一逻辑）；
+#   2. MySQL 独占库 mmorpg_friend 未就绪（第 2 步 MySQL 健康后预检：库不存在或 appuser 无权限）。
+# 取舍依据与 trade 逐字相同（AGENTS §11.3）：已初始化过的本机 MySQL 数据卷不会重跑 deploy/mysql-init，必然没有这个新库；
+# friend 连不上库会在启动期直接退出，Start-LocalGoServices 随即抛错，整个一键启动会停在网关之前 ——
+# 为好友功能拖垮登录 / 匹配不可接受。fail-closed 仍在 friend 进程自身（库不在即拒启），这里只是不让它连坐。
+# 与 chat / guild / trade 一样只承诺路由服模式可达（D-12）。单独追加，不改上面两行数组。
+$services += 'friend'
+$optionalServices += 'friend'
 $skippedServices = @()
 $gatewayUrl = 'http://127.0.0.1:8081'
 $oldPath = $env:PATH
@@ -442,6 +451,33 @@ try {
                 Write-Host '  补建后重新运行本启动脚本即可。'
             }
         }
+        if ('friend' -notin $skippedServices) {
+            # 好友 friend 的库预检，与上面 trade 那段同一套做法与同一条取舍依据（见脚本顶部 $optionalServices 处）。
+            # 同样以 appuser 身份查 information_schema.SCHEMATA：它只列出该账号有权限的库，一次查询同时覆盖
+            # 「库存在」和「已授权」；密码只在容器内由 sh 展开，不出现在本机命令行和启动日志里。
+            $friendDbProblem = ''
+            try {
+                $friendDbProbe = Invoke-Docker @('exec','mysql','sh','-c','mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -N -B -e "SELECT SCHEMA_NAME FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = ''mmorpg_friend''"')
+                if ($friendDbProbe.Code -ne 0) {
+                    $friendDbProblem = "查询失败（docker exec 退出码 $($friendDbProbe.Code)）"
+                } elseif ($friendDbProbe.Out.Trim() -cne 'mmorpg_friend') {
+                    $friendDbProblem = '库不存在，或 appuser 对它没有权限'
+                }
+            } catch {
+                $friendDbProblem = "查询异常：$($_.Exception.Message)"
+            }
+            if ($friendDbProblem) {
+                $skippedServices += 'friend'
+                # 补建命令：PowerShell 7 里整行粘贴执行；root 密码取自容器环境变量，不回显。
+                $friendDbFixCommand = @'
+  docker --context desktop-linux exec mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_friend DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_friend.* TO appuser@''%''; FLUSH PRIVILEGES;"'
+'@
+                Write-Warning "好友库 mmorpg_friend 未就绪（$friendDbProblem），本次跳过 friend（好友请求会回「服务不可用」），其余服务照常启动。"
+                Write-Host '  已有数据的 MySQL 卷不会重跑 deploy/mysql-init，需要用 root 补建库并授权一次（在 PowerShell 7 中执行下面这行）：' -ForegroundColor Yellow
+                Write-Host $friendDbFixCommand -ForegroundColor Yellow
+                Write-Host '  补建后重新运行本启动脚本即可。'
+            }
+        }
         Write-Step '3/6 启动存档服务'
         # login、scene_manager、player_locator、match 由 dev_tools 的子进程继承同一契约。
         $env:KAFKA_COMMAND_TOPIC_PARTITIONS = [string]$kafkaContract.Partitions
@@ -486,6 +522,9 @@ try {
         Start-LocalGoServices @(@('client_rpc_router','scene_manager','player_locator','login','match','chat','guild') | Where-Object { $_ -notin $skippedServices })
         # 聚宝斋 trade 单独一批：被跳过（缺 exe，或第 2 步预检发现 mmorpg_trade 未就绪）时不调用，避免把空列表传给 -GoServices（空 = 全部服务）。
         if ('trade' -notin $skippedServices) { Start-LocalGoServices @('trade') }
+        # 好友 friend 单独一批，理由与 trade 同：被跳过（缺 exe，或上面预检发现 mmorpg_friend 未就绪）时不调用，
+        # 避免把空列表传给 -GoServices（空 = 全部服务）。friend 不拨任何 Go 服务，起在这里即可。
+        if ('friend' -notin $skippedServices) { Start-LocalGoServices @('friend') }
         $gatewayProcess = Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'java.exe' -and $_.CommandLine -and $_.CommandLine.Contains($jar.FullName) } | Select-Object -First 1
         if (-not $gatewayProcess) {
             if (Test-Tcp 8081) { throw '8081 端口被其他程序占用，未启动重复网关。' }

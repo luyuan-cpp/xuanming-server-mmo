@@ -15,7 +15,7 @@ This directory contains Kubernetes-only deployment assets for opening game zones
 ## Directory Layout
 
 - `manifests/infra/`: infra resources applied per namespace (`etcd`, `redis`, `kafka`, `mysql`). `etcd` is a 3-replica StatefulSet with one PVC per member (see "etcd:3 副本 StatefulSet" below) and `kafka` is a **single-broker** StatefulSet with one PVC (see "Kafka:StatefulSet + PVC" below); `redis` / `mysql` are still single-replica Deployments.
-- `manifests/go-svc/`: Go micro-service K8s manifests (`db`, `data-service`, `login`, `player-locator`, `scene-manager`, `match`, `trade` + its `trade-migrate` schema Job). `guild` has no manifest / ConfigMap yet (see "snowflake 缓存目录 / PlayerId 号段 / data_service 全局库" below). trade 见下面「聚宝斋 trade」。
+- `manifests/go-svc/`: Go micro-service K8s manifests (`db`, `data-service`, `login`, `player-locator`, `scene-manager`, `match`, `trade` + its `trade-migrate` schema Job, `friend` + its `friend-migrate` schema Job). `guild` has no manifest / ConfigMap yet (see "snowflake 缓存目录 / PlayerId 号段 / data_service 全局库" below). trade 见下面「聚宝斋 trade」,friend 见下面「好友 friend」。
 - `Dockerfile.go-svc`: multi-stage Dockerfile for building Go service images.
 - `zones.sample.json`: sample multi-zone definition file (JSON).
 - `zones.sample.yaml`: sample multi-zone definition file (YAML).
@@ -420,7 +420,9 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
      `item` = 各 zone 库玩家 blob 里 bag 的最大 guid;`txlog` / `snapshot` = Kafka `transaction_log_topic_g<N>` / `player_snapshot_topic_g<N>` 里的最大 tx_id / snapshot_id
      (`transaction_log` / `player_snapshot` 表与 `id_segment` 同库,恢复后同库 `MAX()` 不是独立证据);
      `trade_listing` = `SELECT MAX(listing_id) FROM mmorpg_trade.trade_listing`(独占库,不在全局库里,`-migrate` 不会替你查)。
-     登记 / 核对 / 恢复这些库时,聚宝斋独占库 `mmorpg_trade` 与 `mmorpg_global` 要分开处理,别只恢复其中一个。
+     登记 / 核对 / 恢复这些库时,聚宝斋独占库 `mmorpg_trade`、好友独占库 `mmorpg_friend` 与 `mmorpg_global` 要分开处理,别只恢复其中一个
+     (`mmorpg_friend` 不产号、没有 `id_segment` 水位问题,但它与各 zone 库的 `player_database` 有引用关系:
+     只恢复好友库会留下指向已不存在玩家的好友边 —— 那是 `tools/data_consistency_check` 的 `checkFriendOrphans` 要查的东西)。
   3. `SELECT biz_tag, max_id FROM id_segment`,凡 `max_id` ≤ 对应最大号的:`UPDATE id_segment SET max_id = <最大号> + 1 + 余量 WHERE biz_tag = '<tag>'`(余量 ≥ 一个 step)。
   4. 然后才跑 `-migrate` / 起 data-service。`-migrate` 自带的地板校验(`raiseIdSegmentFloor`)只在**同一个库**里查得到 `player_database` / `guild` 时才抬水位 ——
      K8s 上 player 表在各 zone 库、全局库里没有,它只会打 Info,不代表安全;`item` / `txlog` / `snapshot` 根本没有自动校验。
@@ -490,6 +492,52 @@ trade 是全局池服务(`$GoSvcCatalogue.trade`,`Global = $true`):`infra-up` / 
 - **连接数**:`MySQL.MaxOpenConn` × 2 个副本(外加 Job 的连接)要算进 MySQL 的 `max_connections`。
 - **上线前未做(P3)**:`mmorpg_trade` 的 audit auditor / data_consistency_check、TiDB BR 按库恢复清单;
   `trade_listing.market_zone` 带 home_zone 语义,合服改写步骤在 `tools/merge_zone`。
+
+## 好友 friend:独占库 `mmorpg_friend` + `friend-migrate` Job(2026-09-18,port-decisions D-14 / docs/design/friend-port-20260918.md)
+
+friend 与 trade 同形:全局池服务(`$GoSvcCatalogue.friend`,`Global = $true`),`infra-up` / `all-up` 在基础设施阶段部署到 `mmorpg-infra` 一份,`zone-up` 跳过。
+下面只写与 trade 不同的地方,共性(Job 门禁 / 等待预算 / 不删在途 Job / 退出码 / 重跑迁移)一律照上面「聚宝斋 trade」那节,不重复一遍。
+
+- **可达性**:只承诺路由服模式(D-12)。客户端经 gate → `client-rpc-router` → friend;K8s 默认 `-GateRouterMode "0"`,
+  此时 Deployment 起得来、探针绿,但玩家够不着(与 chat / trade 同一已知缺口)。内部方法(`NotifyFriendEvent` 等下行)
+  客户端直呼一律回 gRPC `PermissionDenied`,由路由服翻成信封级 `kServiceUnavailable`(D-9)。
+- **工作负载**:`manifests/go-svc/friend.yaml` = Service `friend`(50400)+ Deployment(`replicas: 2`、podAntiAffinity、grpc 探针、
+  `preStop sleep 5`、Downward API `POD_IP`、metrics 9180)+ 同文件 PDB `friend-pdb`。ConfigMap `go-svc-friend-config` 由脚本生成。
+  **不挂 snowflake 卷**:friend 不发号,好友 / 申请 / 黑名单的主键都是 player_id 组合键。
+- **端口五处登记必须逐字一致**:`go_services.ps1` 的 `Port = 50400`、`go/friend/etc/friend.yaml` 的 `ListenOn`、
+  `k8s_deploy.ps1` 的 `$GoSvcCatalogue.friend.Port`、生成的 ConfigMap 里的 `ListenOn`、本 manifest 的 Service / `containerPort` / 探针。
+- **建库**:`mmorpg_friend` 只登记在 `deploy/mysql-init/00_init_zone_dbs.sql`,`infra-up` 的 `mysql-init-sql` ConfigMap 原样带入。
+  initdb 只在 mysql PVC 为空时执行:**存量 PVC 要手工执行**
+  (`kubectl exec -n mmorpg-infra deploy/mysql -- sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "CREATE DATABASE IF NOT EXISTS mmorpg_friend DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON mmorpg_friend.* TO '"'"'appuser'"'"'@'"'"'%'"'"'; FLUSH PRIVILEGES;"'`),
+  否则 `friend-migrate` 以退出码 1 失败(日志点名库名),发布在 friend Deployment 之前中断。本地 compose 的存量卷同理。
+- **建表**:`manifests/go-svc/friend-migrate.yaml`,`args: ["-f", "/app/etc/friend.yaml", "-migrate"]`,
+  按 `proto/friend/friend_table.proto` 建 `friend` / `friend_request` / `friend_block` / `friend_capacity` 四张表。
+  目录条目用 `MigrateJob = "friend-migrate.yaml"` 登记。`WAIT_MYSQL_TIMEOUT_SECONDS=150` 与 `trade-migrate.yaml` 取同一个值,
+  同样与 `$GoSvcMigrateJobMinWaitSeconds`(300)联动,改其一必须核对另一个。
+- **⚠ 旧建表路径已退役**:`deploy/mysql-init/guild_friend_tables.sql` 过去在 initdb 里把 friend 三张表建进**共享库 `mmorpg`**(= `MYSQL_DATABASE`;该文件没有 `USE` 语句,initdb 按 `--database=$MYSQL_DATABASE` 落库,**不是 `zone_N_db`**),
+  还带一段 `friend_capacity` 回填与 `friend_capacity_backfill_v1` 门禁。2026-09-18 两段一起删除(D-10 修订)。
+  **不要把它们加回去**:两处都建表 → schemamigrate 把 initdb 建出来的旧结构判成类型漂移(退出码 4,需人工),friend 起不来。
+  **存量卷上那三张陈旧表现在仍躺在 `mmorpg` 库里**:删 sql 不会删掉已经建出来的表。清理时去 `mmorpg` 找,不要去 `zone_N_db` 找 —— 那里从来没有过 friend 表。
+  `guild_schema_migration` 表保留,guild 的积分迁移门禁还在用。
+- **Redis**:`FriendRedis`(好友列表缓存 / 申请配额 / 限流)在 K8s 上**不配**,回落共享库。
+  缓存键已带 hash tag、Cluster 安全;但 staging/prod 若要给它配独立实例,该实例必须 `maxmemory-policy=noeviction` ——
+  共享库是 `allkeys-lfu`,缓存被淘汰只是多打一次 MySQL,**配额 / 限流 key 被淘汰等于限流静默失效**。
+  跨运行时契约 key `player:session:{id}`(判好友在不在线)永远走共享库,共享库不许集群化(C++ 侧 hiredis 没有集群客户端)。
+- **TiDB BR 按库恢复清单**:`mmorpg_friend` 与 `mmorpg_trade` 一样是独占库,`--all-databases` 的备份 CronJob
+  (`manifests/infra/mysql-backup-cronjob.yaml`)天然覆盖它,**备份侧不用改**;要改的是**恢复侧的清单** ——
+  按库恢复时必须把 `mmorpg_friend` 一起列上,否则恢复完 friend 是空库,玩家的好友关系凭空消失且没有任何报错。
+  恢复顺序上它没有 `id_segment` 那种水位约束,但见上面「恢复全局库」一条的孤儿边提醒。
+- **连接数**:`MySQL.MaxOpenConn`(20)× 2 个副本(外加 Job 的连接)要算进 MySQL 的 `max_connections`。
+- **⚠ Kafka 命令 topic 代号不一致(存量全仓缺口,不是 friend 引入的)**:friend 的 S2C 推送经 `gate-cmd_g<N>` 到目标 zone 的 gate。
+  `bin/etc/base_deploy_config.yaml` 当前是 `CommandTopicGeneration: 2`,`kafka-topic-init` 预建 `gate-cmd_g2`、C++ gate 也消费 g2;
+  而 **没有任何 go-svc manifest 注入 `KAFKA_COMMAND_TOPIC_PARTITIONS` / `KAFKA_COMMAND_TOPIC_GENERATION`**,
+  `go/shared/kafkacmd` 因此在 K8s 上回落到编译期默认 256 / **1**,Go 侧(login / scene-manager / player-locator / guild / friend)
+  发出的 gate 命令落到 `gate-cmd_g1`,无人消费、静默丢失。本地 `start_game.ps1` 会注入这两个变量,所以本机与 robot 冒烟看不到这个问题。
+  修法是让 `k8s_deploy.ps1` 从 `base_deploy_config.yaml` 统一注入到所有 go-svc Deployment(一处真相),
+  **不要**在单个 manifest 里补一行写死的值 —— 那会把部署级常量复制成第二份真相,下次换代号必漏改。
+- **上线前未做(P3)**:`mmorpg_friend` 的 audit auditor;`-GateRouterMode` 默认仍是 `"0"`(与 chat / trade 同一缺口);
+  `dev_tools.ps1` 的 `k8s-*` 包装不透传 `-GateRouterMode`。合服:friend 三张表里没有 `zone_id` / `home_zone` 列,
+  合服后行自动存活,`tools/merge_zone` 只需把审计连到 `mmorpg_friend`,不需要改写数据。
 
 ## Kafka 审计 topic 预建(kafka-topic-init,2026-09-08,node-id-overhaul-plan §2.0c)
 
@@ -649,6 +697,7 @@ kubectl exec -n mmorpg-infra etcd-0 -- etcdctl get --prefix --keys-only LoginNod
 # 3. MySQL 初始化 SQL 生效:zone_config 在 mmorpg 库,zone_1_db / zone_2_db / zone_101_db / zone_102_db 已建;
 #    mmorpg_global(data-service 全局库,02_k8s_global_db.sql)已建且 appuser 有权(2026-09-08 起,存量 PVC 需手工补,见上节)
 #    mmorpg_trade(聚宝斋 trade 独占库,00_init_zone_dbs.sql 原样带入)已建且 appuser 有权(2026-09-14 起,存量 PVC 需手工补,见「聚宝斋 trade」)
+#    mmorpg_friend(好友 friend 独占库,同一个 00_init_zone_dbs.sql)已建且 appuser 有权(2026-09-18 起,存量 PVC 需手工补,见「好友 friend」)
 kubectl exec -n mmorpg-infra deploy/mysql -- sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SELECT * FROM mmorpg.zone_config"'
 # 4. Java 网关 zone 目录
 kubectl port-forward -n mmorpg-zone-yesterday svc/gateway 18081:8081

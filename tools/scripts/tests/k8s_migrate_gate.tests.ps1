@@ -78,6 +78,12 @@ function Reset-MigrateFixture {
         ConfigMap = 'go-svc-trade-config'; Manifest = 'trade.yaml'; MigrateJob = 'trade-migrate.yaml'
         ConfigFile = 'trade.yaml'; ImageName = 'mmorpg-trade'; Port = 50800; Global = $true
     } }
+    # friend 与 trade 一样是带 MigrateJob 的建表服务（port-decisions D-14），门禁走同一条链路。
+    # 单独一条赋值而不是并进上面的字面量：两边都只做追加时，3-way 合并的冲突面最小。
+    $script:GoSvcCatalogue['friend'] = @{
+        ConfigMap = 'go-svc-friend-config'; Manifest = 'friend.yaml'; MigrateJob = 'friend-migrate.yaml'
+        ConfigFile = 'friend.yaml'; ImageName = 'mmorpg-friend'; Port = 50400; Global = $true
+    }
 
     Set-Item Function:script:Get-GoSvcMigrateJobWaitSeconds { return $script:BudgetSeconds }
     Set-Item Function:script:New-GoSvcConfigMapYaml {
@@ -158,6 +164,19 @@ Test-Case '成功 Job 才放行 Deployment，且 ConfigMap 与 Job 的顺序正�
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'Job 要读取先前创建的 ConfigMap'
     Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because '迁移必须先于服务部署'
     Assert-True -Condition ($events -contains 'query:Job') -Because '成功必须来自 Job 查询，不能直接放行'
+}
+
+# friend（好友，D-14 独占库 mmorpg_friend）是第二个带 MigrateJob 的建表服务。用真 manifest 名跑一遍，
+# 顺带钉住 friend.yaml / friend-migrate.yaml 确实在 deploy/k8s/manifests/go-svc/ 下，且占位符全部可替换
+# （Apply-GoSvcMigrateJob 对残留占位 fail-closed）——缺文件时 Apply-OneGoSvc 会整条跳过，下面三条断言随即失败。
+Test-Case 'friend 的迁移门禁与 trade 同链路：ConfigMap → Job → Deployment' {
+    Reset-MigrateFixture
+    $script:JobAbsentBeforeApply = $true
+    Apply-OneGoSvc -SvcName friend -Namespace audit-infra -CurrentZoneId 0 -CurrentClusterId 0
+    $events = @($script:Events)
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:ConfigMap') -lt [Array]::IndexOf($events, 'apply:Job')) -Because 'friend-migrate Job 要读取先前创建的 ConfigMap'
+    Assert-True -Condition ([Array]::IndexOf($events, 'apply:Job') -lt [Array]::IndexOf($events, 'apply:Deployment')) -Because 'staging/prod 的 Schema.AutoMigrate=false，表没建出来 friend 会拒启，迁移必须先于 Deployment'
+    Assert-True -Condition ($events -contains 'query:Job') -Because '成功必须来自 Job 查询，不能因为是新服务就直接放行'
 }
 
 foreach ($condition in @('Complete', 'Failed', 'FailureTarget')) {
