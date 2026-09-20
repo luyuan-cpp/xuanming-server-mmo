@@ -125,7 +125,12 @@ void GateEventHandler::RoutePlayerEventHandler(const contracts::kafka::RoutePlay
         return;
     }
 
-    it->second.SetEntityId(SceneNodeService, entt::to_integral(*targetNodeEntity));
+    // 改写节点指向的同时得出"有没有换节点"(先比较后覆盖,收在 scene_route_helper.h 的 RebindSceneNode 里)。
+    // 同 scene_id 换节点真实存在(world rebalance 迁频道沿用原 scene_id),漏转发的后果是玩家在新旧
+    // 节点上都没有实体。旧指向已因节点摘除被置无效的会话同样算换了节点;首登不受影响,
+    // 入场仍由 pendingEnterGsType 驱动。
+    const auto targetNodeEntityId = entt::to_integral(*targetNodeEntity);
+    const auto sceneNodeChange = gate_scene_route::RebindSceneNode(it->second, targetNodeEntityId);
 
     // Use player_id from the event if session doesn't have it yet (BindSession may not have arrived).
     if (event.player_id() != 0 && it->second.playerId == kInvalidGuid)
@@ -141,15 +146,19 @@ void GateEventHandler::RoutePlayerEventHandler(const contracts::kafka::RoutePlay
 
     LOG_DEBUG << "RoutePlayer: assigned scene node, session_id=" << sessionId
               << " scene_node_id=" << targetNodeId
-              << " scene_entity=" << entt::to_integral(*targetNodeEntity)
+              << " scene_entity=" << targetNodeEntityId
+              << " scene_node_changed=" << (sceneNodeChange == gate_scene_route::SceneNodeChange::kChanged)
               << " scene_id=" << event.scene_id()
               << " home_zone_id=" << event.home_zone_id()
               << " owner_epoch=" << event.owner_epoch();
 
     // 登录后仍须把目标场景通知 scene;只修改 gate 路由会让角色停留旧地图。
-    gate_scene_route::ApplyRoute(it->second, event.scene_id(), [&](const uint32_t enterType)
+    // 换了节点而 scene_id 没变时同样必须通知:新节点上还没有这名玩家的实体。
+    // 已知局限(另案,不在本次改动内):节点指向在上面已提交,转发若失败,同一事件重投时
+    // 会被判成"节点未变化",同 scene_id 换节点这一支不会再补发。
+    gate_scene_route::ApplyRoute(it->second, event.scene_id(), sceneNodeChange, [&](const uint32_t enterType)
     {
-        return ForwardPlayerToScene(sessionId, enterType, entt::to_integral(*targetNodeEntity),
+        return ForwardPlayerToScene(sessionId, enterType, targetNodeEntityId,
                                     it->second, event.scene_id());
     });
 ///<<< END WRITING YOUR CODE

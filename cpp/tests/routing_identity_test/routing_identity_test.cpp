@@ -400,30 +400,166 @@ TEST(SettlementOutbox, PendingRecordKeysAreDistinctAndPlayerScoped)
 }
 
 // 覆盖真实入场所需的会话状态和转发副作用,不依赖网络或全局节点注册。
+using gate_scene_route::SceneNodeChange;
+
 TEST(SceneRouteEntry, LoginThenTravelForwardsWithoutRepeatingLogin)
 {
     SessionInfo session;
     session.pendingEnterGsType = 1;
     std::vector<uint32_t> forwarded;
     auto send = [&](uint32_t type) { forwarded.push_back(type); return true; };
-    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1001, send));
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1001, SceneNodeChange::kUnchanged, send));
     EXPECT_EQ(0u, session.pendingEnterGsType);
     for (const uint64_t scene : {2001u, 3001u, 4001u, 1001u})
     {
-        ASSERT_TRUE(gate_scene_route::ApplyRoute(session, scene, send));
+        ASSERT_TRUE(gate_scene_route::ApplyRoute(session, scene, SceneNodeChange::kUnchanged, send));
         EXPECT_EQ(scene, session.sceneId);
     }
     EXPECT_EQ((std::vector<uint32_t>{1, 0, 0, 0, 0}), forwarded);
 }
 
+// 同 scene、同节点才是重复事件;节点变了的情形见 SameSceneOnAnotherNodeStillNeedsEntry。
 TEST(SceneRouteEntry, DuplicateRouteDoesNotEnterAgain)
 {
     SessionInfo session;
     session.sceneId = 2001;
     int sends = 0;
-    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 2001, [&](uint32_t) { ++sends; return true; }));
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 2001, SceneNodeChange::kUnchanged,
+                                             [&](uint32_t) { ++sends; return true; }));
     EXPECT_EQ(0, sends);
     EXPECT_EQ(2001u, session.sceneId);
+}
+
+// world rebalance 迁频道沿用原 scene_id(world_rebalance.go migrateWorldChannel):旧节点排空后玩家被
+// 改派回"同一个 scene_id、另一个节点"。只看 scene_id 会把它当重复事件吞掉,新节点上永远没有该玩家的实体。
+TEST(SceneRouteEntry, SameSceneOnAnotherNodeStillNeedsEntry)
+{
+    SessionInfo session;
+    session.sceneId = 2001;
+    std::vector<uint32_t> forwarded;
+    auto send = [&](uint32_t type) { forwarded.push_back(type); return true; };
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 2001, SceneNodeChange::kChanged, send));
+    EXPECT_EQ((std::vector<uint32_t>{0}), forwarded);
+    EXPECT_EQ(2001u, session.sceneId);
+    EXPECT_EQ(0u, session.pendingEnterGsType);
+    // 同一条路由再到一次时节点指向已是新节点,回到重复事件语义。
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 2001, SceneNodeChange::kUnchanged, send));
+    EXPECT_EQ((std::vector<uint32_t>{0}), forwarded);
+}
+
+// 登录类型优先于"节点变了"推出的 LOGIN_NONE:顶号 / 重连落到另一节点的同一场景时,
+// scene 必须拿到真实登录类型才会置登录态、触发登录后置逻辑。
+TEST(SceneRouteEntry, NodeChangeWithPendingLoginForwardsPendingType)
+{
+    SessionInfo session;
+    session.sceneId = 2001;
+    session.pendingEnterGsType = 3;
+    std::vector<uint32_t> forwarded;
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 2001, SceneNodeChange::kChanged,
+                                             [&](uint32_t type) { forwarded.push_back(type); return true; }));
+    EXPECT_EQ((std::vector<uint32_t>{3}), forwarded);
+    EXPECT_EQ(0u, session.pendingEnterGsType);
+    EXPECT_EQ(2001u, session.sceneId);
+}
+
+// 同 scene_id 换节点(无登录类型)的转发失败要如实返回 false,调用方带着 kChanged 再来一次时仍会补发。
+// 这里只验证 ApplyRoute 自身不消费状态;真实调用方 RoutePlayerEventHandler 重投时拿到的是 kUnchanged,
+// 恢复不了,见下一条 NodeChangeForwardFailureIsNotRecoveredByRedelivery。
+TEST(SceneRouteEntry, NodeChangeForwardFailureCanRetry)
+{
+    SessionInfo session;
+    session.sceneId = 2001;
+    std::vector<uint32_t> attempted;
+    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 2001, SceneNodeChange::kChanged,
+                                              [&](uint32_t type) { attempted.push_back(type); return false; }));
+    EXPECT_EQ((std::vector<uint32_t>{0}), attempted);
+    EXPECT_EQ(0u, session.pendingEnterGsType);
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 2001, SceneNodeChange::kChanged,
+                                             [&](uint32_t type) { attempted.push_back(type); return true; }));
+    EXPECT_EQ((std::vector<uint32_t>{0, 0}), attempted);
+    EXPECT_EQ(2001u, session.sceneId);
+}
+
+// 把已知局限钉成显式断言(gate_event_handler.cpp RoutePlayerEventHandler 的调用顺序:先 RebindSceneNode
+// 后 ApplyRoute)。节点指向在转发之前就已提交,转发失败后同一事件重投时判成 kUnchanged,同 scene_id
+// 换节点这一支不会再补发。这不是期望行为,是现状:日后修掉这条局限时本用例会红,届时改成断言"重投会补发"。
+TEST(SceneRouteEntry, NodeChangeForwardFailureIsNotRecoveredByRedelivery)
+{
+    SessionInfo session;
+    session.sceneId = 2001;
+    session.SetEntityId(eNodeType::SceneNodeService, 7);
+    std::vector<uint32_t> attempted;
+    const auto first = gate_scene_route::RebindSceneNode(session, 9);
+    ASSERT_EQ(SceneNodeChange::kChanged, first);
+    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 2001, first,
+                                              [&](uint32_t type) { attempted.push_back(type); return false; }));
+    EXPECT_EQ((std::vector<uint32_t>{0}), attempted);
+    // 同一事件重投:指向已是 9,判成未变化,不再转发。
+    const auto redelivered = gate_scene_route::RebindSceneNode(session, 9);
+    EXPECT_EQ(SceneNodeChange::kUnchanged, redelivered);
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 2001, redelivered,
+                                             [&](uint32_t type) { attempted.push_back(type); return true; }));
+    EXPECT_EQ((std::vector<uint32_t>{0}), attempted);
+}
+
+// 路由先于 BindSession 到达时 sceneId 已提交但尚未入场;此时再来一条"同 scene_id、换了节点"的路由,
+// 会先以 0 转发一次,登录类型随后照常补发(scene 侧对这个顺序安全,见 scene_route_helper.h)。
+TEST(SceneRouteEntry, NodeChangeAfterRouteButBeforeLoginForwardsNoneThenLogin)
+{
+    SessionInfo session;
+    std::vector<uint32_t> forwarded;
+    auto send = [&](uint32_t type) { forwarded.push_back(type); return true; };
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1001, SceneNodeChange::kChanged, send));
+    EXPECT_TRUE(forwarded.empty());
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1001, SceneNodeChange::kChanged, send));
+    EXPECT_EQ((std::vector<uint32_t>{0}), forwarded);
+    session.pendingEnterGsType = 2;
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1001, SceneNodeChange::kUnchanged, send));
+    EXPECT_EQ((std::vector<uint32_t>{0, 2}), forwarded);
+    EXPECT_EQ(0u, session.pendingEnterGsType);
+}
+
+// RebindSceneNode:先比较后覆盖。把比较挪到覆盖之后,结果会恒为 kUnchanged,下面几条会红。
+TEST(SceneRouteEntry, RebindSceneNodeReportsChangeAgainstPreviousBinding)
+{
+    SessionInfo session;
+    // 从未绑定:旧指向无效,算换了节点(首登是否转发由 ApplyRoute 的 sceneId != 0 把关)。
+    EXPECT_EQ(SceneNodeChange::kChanged, gate_scene_route::RebindSceneNode(session, 7));
+    EXPECT_EQ(7u, session.GetEntityId(eNodeType::SceneNodeService));
+    // 同实体:重复路由。
+    EXPECT_EQ(SceneNodeChange::kUnchanged, gate_scene_route::RebindSceneNode(session, 7));
+    // 不同实体:换了节点,指向被改写。
+    EXPECT_EQ(SceneNodeChange::kChanged, gate_scene_route::RebindSceneNode(session, 9));
+    EXPECT_EQ(9u, session.GetEntityId(eNodeType::SceneNodeService));
+    EXPECT_EQ(SceneNodeChange::kUnchanged, gate_scene_route::RebindSceneNode(session, 9));
+}
+
+// scene 节点被摘除时 gate 会把会话指向置为 kInvalidEntityId(OnNodeRemoveEventHandler)。
+// 之后无论改派到新节点,还是同一进程重启后恰好复用了同一个实体号,都必须算换了节点、重新进场。
+TEST(SceneRouteEntry, RebindSceneNodeAfterNodeRemovalCountsAsChanged)
+{
+    SessionInfo session;
+    session.sceneId = 2001;
+    session.SetEntityId(eNodeType::SceneNodeService, 7);
+    session.SetEntityId(eNodeType::SceneNodeService, SessionInfo::kInvalidEntityId);
+    const auto change = gate_scene_route::RebindSceneNode(session, 7);
+    EXPECT_EQ(SceneNodeChange::kChanged, change);
+    EXPECT_TRUE(session.HasEntityId(eNodeType::SceneNodeService));
+    std::vector<uint32_t> forwarded;
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 2001, change,
+                                             [&](uint32_t type) { forwarded.push_back(type); return true; }));
+    EXPECT_EQ((std::vector<uint32_t>{0}), forwarded);
+}
+
+// 别的节点类型的指向不参与判定,也不被改写。
+TEST(SceneRouteEntry, RebindSceneNodeIgnoresOtherNodeTypes)
+{
+    SessionInfo session;
+    session.SetEntityId(eNodeType::BattleNodeService, 7);
+    session.SetEntityId(eNodeType::SceneNodeService, 7);
+    EXPECT_EQ(SceneNodeChange::kUnchanged, gate_scene_route::RebindSceneNode(session, 7));
+    EXPECT_EQ(SceneNodeChange::kChanged, gate_scene_route::RebindSceneNode(session, 8));
+    EXPECT_EQ(7u, session.GetEntityId(eNodeType::BattleNodeService));
 }
 
 TEST(SceneRouteEntry, RouteBeforeLoginBindingWaitsForLogin)
@@ -431,13 +567,24 @@ TEST(SceneRouteEntry, RouteBeforeLoginBindingWaitsForLogin)
     SessionInfo session;
     std::vector<uint32_t> forwarded;
     auto send = [&](uint32_t type) { forwarded.push_back(type); return true; };
-    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 1001, send));
-    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 1001, send));
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 1001, SceneNodeChange::kUnchanged, send));
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 1001, SceneNodeChange::kUnchanged, send));
     EXPECT_TRUE(forwarded.empty());
     session.pendingEnterGsType = 2;
-    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1001, send));
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1001, SceneNodeChange::kUnchanged, send));
     EXPECT_EQ((std::vector<uint32_t>{2}), forwarded);
     EXPECT_EQ(0u, session.pendingEnterGsType);
+}
+
+// 会话还没进过任何场景(sceneId 为 0)时,节点变化不单独触发入场:仍等登录类型到达。
+TEST(SceneRouteEntry, NodeChangeBeforeFirstEntryWaitsForLogin)
+{
+    SessionInfo session;
+    int sends = 0;
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 1001, SceneNodeChange::kChanged,
+                                             [&](uint32_t) { ++sends; return true; }));
+    EXPECT_EQ(0, sends);
+    EXPECT_EQ(1001u, session.sceneId);
 }
 
 TEST(SceneRouteEntry, AnotherInstanceOfSameMapStillNeedsEntry)
@@ -445,7 +592,8 @@ TEST(SceneRouteEntry, AnotherInstanceOfSameMapStillNeedsEntry)
     SessionInfo session;
     session.sceneId = 1001;
     std::vector<uint32_t> forwarded;
-    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1002, [&](uint32_t type) { forwarded.push_back(type); return true; }));
+    ASSERT_TRUE(gate_scene_route::ApplyRoute(session, 1002, SceneNodeChange::kUnchanged,
+                                             [&](uint32_t type) { forwarded.push_back(type); return true; }));
     EXPECT_EQ((std::vector<uint32_t>{0}), forwarded);
 }
 
@@ -454,7 +602,8 @@ TEST(SceneRouteEntry, MissingDestinationDoesNotConsumeLoginOrClearRoute)
     SessionInfo session;
     session.sceneId = 1001;
     session.pendingEnterGsType = 1;
-    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 0, [](uint32_t) { ADD_FAILURE(); return true; }));
+    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 0, SceneNodeChange::kChanged,
+                                              [](uint32_t) { ADD_FAILURE(); return true; }));
     EXPECT_EQ(1u, session.pendingEnterGsType);
     EXPECT_EQ(1001u, session.sceneId);
 }
@@ -463,10 +612,12 @@ TEST(SceneRouteEntry, MissingRpcClientCanRetrySameTravelEvent)
 {
     SessionInfo session;
     session.sceneId = 1001;
-    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 2001, [](uint32_t) { return false; }));
+    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 2001, SceneNodeChange::kUnchanged,
+                                              [](uint32_t) { return false; }));
     EXPECT_EQ(1001u, session.sceneId);
     int sends = 0;
-    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 2001, [&](uint32_t type) { EXPECT_EQ(0u, type); ++sends; return true; }));
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 2001, SceneNodeChange::kUnchanged,
+                                             [&](uint32_t type) { EXPECT_EQ(0u, type); ++sends; return true; }));
     EXPECT_EQ(1, sends);
     EXPECT_EQ(2001u, session.sceneId);
 }
@@ -475,10 +626,12 @@ TEST(SceneRouteEntry, MissingRpcClientDoesNotConsumePendingLogin)
 {
     SessionInfo session;
     session.pendingEnterGsType = 1;
-    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 1001, [](uint32_t) { return false; }));
+    EXPECT_FALSE(gate_scene_route::ApplyRoute(session, 1001, SceneNodeChange::kUnchanged,
+                                              [](uint32_t) { return false; }));
     EXPECT_EQ(0u, session.sceneId);
     EXPECT_EQ(1u, session.pendingEnterGsType);
-    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 1001, [](uint32_t type) { EXPECT_EQ(1u, type); return true; }));
+    EXPECT_TRUE(gate_scene_route::ApplyRoute(session, 1001, SceneNodeChange::kUnchanged,
+                                             [](uint32_t type) { EXPECT_EQ(1u, type); return true; }));
     EXPECT_EQ(0u, session.pendingEnterGsType);
 }
 
