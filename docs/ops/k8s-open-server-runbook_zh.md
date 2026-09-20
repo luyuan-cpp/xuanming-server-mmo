@@ -180,6 +180,46 @@ kubectl logs <pod-name> -n mmorpg-zone-yesterday --tail=200
 kubectl get svc -n mmorpg-zone-yesterday
 ```
 
+C++ 节点的业务日志**不在 stdout 上**。对 C++ Pod 跑 `kubectl logs`，除了 gRPC / abseil /
+librdkafka 自己打的 stderr，就只剩 gate 的 `[gate_version] ...` 启动行 —— 而这行是 **gate 专有**的：
+scene / battle 连启动行都没有，它们的 stdout 上只有上述 stderr。业务日志被 muduo 写进共享卷
+`node-logs` 上的 `/app/bin/logs/cpp_nodes/` 文件里。要看它们有两条路：
+
+1. 查 Loki。Alloy sidecar 把这些文件送进了 infra namespace 里的 Loki，
+   port-forward 方式与标签约定见 [grafana-loki-local-logs.md](grafana-loki-local-logs.md) §6。
+2. 直接进 Pod 看文件：
+
+```powershell
+# zone 内的节点（gate 与 scene 各池）在 zone namespace 里
+kubectl exec <pod-name> -n mmorpg-zone-yesterday -c <节点容器> -- ls /app/bin/logs/cpp_nodes
+# battle 是全局池，部署在 infra namespace，不在任何 zone namespace 里
+kubectl exec <pod-name> -n mmorpg-infra -c battle -- ls /app/bin/logs/cpp_nodes
+```
+
+`<节点容器>` 只在**单 scene 池**的档位下等于节点名（`gate` / `scene`）；scene 角色拆分档下池名是
+`scene-world` / `scene-instance`，**容器名取的就是池名**，`-c scene` 会报 `container not found`。
+拿不准先查一下：`kubectl get pod <pod-name> -n <namespace> -o jsonpath='{.spec.containers[*].name}'`。
+battle 部署在 infra namespace（默认 `mmorpg-infra`），它不属于任何 zone，所以 Loki 里它的
+`zone` 标签值是 `global`，不是某个区服名。
+
+文件**只保留最近 8 个滚动分片**，更早的已被容器内的清理循环删掉 ——
+muduo 每 8MiB 滚一个新文件且从不删旧文件。比这 8 个更早的日志只能去 Loki 查。
+
+另外，每个 C++ Pod 现在多一个名为 `log-sidecar` 的**原生 sidecar**（写在 `initContainers` 里，带 `restartPolicy: Always`），
+它计入 Pod Ready，所以 `kubectl get pod` 看到的容器数比以前多一个（gate 的 Pod 是 `2/2`）。
+**它拉不到镜像时业务容器根本不会启动**：Pod 的 STATUS 是 `Init:ErrImagePull` 或
+`Init:ImagePullBackOff`（按这两个字符串搜才搜得到），`kubectl describe pod` 的报错在
+**Init Containers** 一节，gate / scene / battle 进程一次都没跑起来。kind 需要先把
+`grafana/alloy:v1.10.0` 载入节点。想排除 sidecar 干扰就带 `-NoCppLogSidecar` 重新部署 ——
+关掉后消失的只有 sidecar 容器、它的两个卷（`cpp-log-sidecar-config` / `cpp-log-sidecar-state`）
+和 pod 模板上的 `mmorpg.io/cpp-log-sidecar-config-hash` 注解（scene 的 Agones Fleet 上还会少一行 `container: <池名>`）；
+业务容器里的日志清理循环、`node-logs` 的 `sizeLimit: 2Gi`、`snowflake-cache` 的 64Mi 都是**无条件**渲染的，
+关掉 sidecar 不会把它们变回去。
+
+> 现状（2026-09-19）：上面这套形态**已落码，并在本机 kind 集群的临时 namespace 里端到端跑通过**
+> （假 C++ 节点写 muduo 格式行 + 真 Loki），但**从未在真实 zone / infra namespace 上 apply 过**。
+> 验证范围与仍未验证项见 [grafana-loki-local-logs.md](grafana-loki-local-logs.md) §7。
+
 如果 `WaitReady` 失败：
 
 1. 检查镜像拉取错误和仓库凭据。

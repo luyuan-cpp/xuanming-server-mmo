@@ -1362,6 +1362,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeAssetOpRecord final : public :
   // accessors -------------------------------------------------------
   enum : int {
     kPayloadFieldNumber = 17,
+    kResolvedByFieldNumber = 22,
+    kResolveReasonFieldNumber = 23,
     kOpIdFieldNumber = 1,
     kPlayerIdFieldNumber = 2,
     kStreamEpochFieldNumber = 4,
@@ -1396,6 +1398,36 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeAssetOpRecord final : public :
   const ::std::string& _internal_payload() const;
   PROTOBUF_ALWAYS_INLINE void _internal_set_payload(const ::std::string& value);
   ::std::string* PROTOBUF_NONNULL _internal_mutable_payload();
+
+  public:
+  // string resolved_by = 22;
+  void clear_resolved_by() ;
+  [[nodiscard]] const ::std::string& resolved_by() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_resolved_by(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_resolved_by();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_resolved_by();
+  void set_allocated_resolved_by(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_resolved_by() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_resolved_by(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_resolved_by();
+
+  public:
+  // string resolve_reason = 23;
+  void clear_resolve_reason() ;
+  [[nodiscard]] const ::std::string& resolve_reason() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_resolve_reason(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_resolve_reason();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_resolve_reason();
+  void set_allocated_resolve_reason(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_resolve_reason() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_resolve_reason(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_resolve_reason();
 
   public:
   // uint64 op_id = 1;
@@ -1602,8 +1634,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeAssetOpRecord final : public :
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<5, 21,
-                          0, 0,
+      ::google::protobuf::internal::TcParseTable<5, 23,
+                          0, 74,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -1632,6 +1664,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TradeAssetOpRecord final : public :
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::google::protobuf::internal::ArenaStringPtr payload_;
+    ::google::protobuf::internal::ArenaStringPtr resolved_by_;
+    ::google::protobuf::internal::ArenaStringPtr resolve_reason_;
     ::uint64_t op_id_;
     ::uint64_t player_id_;
     ::uint64_t stream_epoch_;
@@ -2538,7 +2572,7 @@ inline void TradePlayerOpSeqRecord::_internal_set_updated_ms(::uint64_t value) {
 inline void TradeAssetOpRecord::clear_op_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.op_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
 }
 inline ::uint64_t TradeAssetOpRecord::op_id() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.op_id)
@@ -2546,7 +2580,7 @@ inline ::uint64_t TradeAssetOpRecord::op_id() const {
 }
 inline void TradeAssetOpRecord::set_op_id(::uint64_t value) {
   _internal_set_op_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.op_id)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_op_id() const {
@@ -2562,7 +2596,7 @@ inline void TradeAssetOpRecord::_internal_set_op_id(::uint64_t value) {
 inline void TradeAssetOpRecord::clear_player_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.player_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
 inline ::uint64_t TradeAssetOpRecord::player_id() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.player_id)
@@ -2570,7 +2604,7 @@ inline ::uint64_t TradeAssetOpRecord::player_id() const {
 }
 inline void TradeAssetOpRecord::set_player_id(::uint64_t value) {
   _internal_set_player_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.player_id)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_player_id() const {
@@ -2586,7 +2620,7 @@ inline void TradeAssetOpRecord::_internal_set_player_id(::uint64_t value) {
 inline void TradeAssetOpRecord::clear_stream() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.stream_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint32_t TradeAssetOpRecord::stream() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.stream)
@@ -2594,7 +2628,7 @@ inline ::uint32_t TradeAssetOpRecord::stream() const {
 }
 inline void TradeAssetOpRecord::set_stream(::uint32_t value) {
   _internal_set_stream(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.stream)
 }
 inline ::uint32_t TradeAssetOpRecord::_internal_stream() const {
@@ -2610,7 +2644,7 @@ inline void TradeAssetOpRecord::_internal_set_stream(::uint32_t value) {
 inline void TradeAssetOpRecord::clear_stream_epoch() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.stream_epoch_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
 }
 inline ::uint64_t TradeAssetOpRecord::stream_epoch() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.stream_epoch)
@@ -2618,7 +2652,7 @@ inline ::uint64_t TradeAssetOpRecord::stream_epoch() const {
 }
 inline void TradeAssetOpRecord::set_stream_epoch(::uint64_t value) {
   _internal_set_stream_epoch(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.stream_epoch)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_stream_epoch() const {
@@ -2634,7 +2668,7 @@ inline void TradeAssetOpRecord::_internal_set_stream_epoch(::uint64_t value) {
 inline void TradeAssetOpRecord::clear_seq() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.seq_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint64_t TradeAssetOpRecord::seq() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.seq)
@@ -2642,7 +2676,7 @@ inline ::uint64_t TradeAssetOpRecord::seq() const {
 }
 inline void TradeAssetOpRecord::set_seq(::uint64_t value) {
   _internal_set_seq(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.seq)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_seq() const {
@@ -2658,7 +2692,7 @@ inline void TradeAssetOpRecord::_internal_set_seq(::uint64_t value) {
 inline void TradeAssetOpRecord::clear_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.kind_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::trade::TradeAssetOpKind TradeAssetOpRecord::kind() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.kind)
@@ -2666,7 +2700,7 @@ inline ::trade::TradeAssetOpKind TradeAssetOpRecord::kind() const {
 }
 inline void TradeAssetOpRecord::set_kind(::trade::TradeAssetOpKind value) {
   _internal_set_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.kind)
 }
 inline ::trade::TradeAssetOpKind TradeAssetOpRecord::_internal_kind() const {
@@ -2682,7 +2716,7 @@ inline void TradeAssetOpRecord::_internal_set_kind(::trade::TradeAssetOpKind val
 inline void TradeAssetOpRecord::clear_status() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.status_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
 }
 inline ::trade::TradeAssetOpStatus TradeAssetOpRecord::status() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.status)
@@ -2690,7 +2724,7 @@ inline ::trade::TradeAssetOpStatus TradeAssetOpRecord::status() const {
 }
 inline void TradeAssetOpRecord::set_status(::trade::TradeAssetOpStatus value) {
   _internal_set_status(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.status)
 }
 inline ::trade::TradeAssetOpStatus TradeAssetOpRecord::_internal_status() const {
@@ -2706,7 +2740,7 @@ inline void TradeAssetOpRecord::_internal_set_status(::trade::TradeAssetOpStatus
 inline void TradeAssetOpRecord::clear_durable() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.durable_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
 }
 inline bool TradeAssetOpRecord::durable() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.durable)
@@ -2714,7 +2748,7 @@ inline bool TradeAssetOpRecord::durable() const {
 }
 inline void TradeAssetOpRecord::set_durable(bool value) {
   _internal_set_durable(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.durable)
 }
 inline bool TradeAssetOpRecord::_internal_durable() const {
@@ -2730,7 +2764,7 @@ inline void TradeAssetOpRecord::_internal_set_durable(bool value) {
 inline void TradeAssetOpRecord::clear_attempts() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.attempts_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
 }
 inline ::uint32_t TradeAssetOpRecord::attempts() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.attempts)
@@ -2738,7 +2772,7 @@ inline ::uint32_t TradeAssetOpRecord::attempts() const {
 }
 inline void TradeAssetOpRecord::set_attempts(::uint32_t value) {
   _internal_set_attempts(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.attempts)
 }
 inline ::uint32_t TradeAssetOpRecord::_internal_attempts() const {
@@ -2754,7 +2788,7 @@ inline void TradeAssetOpRecord::_internal_set_attempts(::uint32_t value) {
 inline void TradeAssetOpRecord::clear_next_attempt_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.next_attempt_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
 }
 inline ::uint64_t TradeAssetOpRecord::next_attempt_ms() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.next_attempt_ms)
@@ -2762,7 +2796,7 @@ inline ::uint64_t TradeAssetOpRecord::next_attempt_ms() const {
 }
 inline void TradeAssetOpRecord::set_next_attempt_ms(::uint64_t value) {
   _internal_set_next_attempt_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.next_attempt_ms)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_next_attempt_ms() const {
@@ -2778,7 +2812,7 @@ inline void TradeAssetOpRecord::_internal_set_next_attempt_ms(::uint64_t value) 
 inline void TradeAssetOpRecord::clear_deadline_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.deadline_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
 }
 inline ::uint64_t TradeAssetOpRecord::deadline_ms() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.deadline_ms)
@@ -2786,7 +2820,7 @@ inline ::uint64_t TradeAssetOpRecord::deadline_ms() const {
 }
 inline void TradeAssetOpRecord::set_deadline_ms(::uint64_t value) {
   _internal_set_deadline_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.deadline_ms)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_deadline_ms() const {
@@ -2802,7 +2836,7 @@ inline void TradeAssetOpRecord::_internal_set_deadline_ms(::uint64_t value) {
 inline void TradeAssetOpRecord::clear_lease_until_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.lease_until_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00002000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
 }
 inline ::uint64_t TradeAssetOpRecord::lease_until_ms() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.lease_until_ms)
@@ -2810,7 +2844,7 @@ inline ::uint64_t TradeAssetOpRecord::lease_until_ms() const {
 }
 inline void TradeAssetOpRecord::set_lease_until_ms(::uint64_t value) {
   _internal_set_lease_until_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00002000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.lease_until_ms)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_lease_until_ms() const {
@@ -2826,7 +2860,7 @@ inline void TradeAssetOpRecord::_internal_set_lease_until_ms(::uint64_t value) {
 inline void TradeAssetOpRecord::clear_lease_token() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.lease_token_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
 }
 inline ::uint64_t TradeAssetOpRecord::lease_token() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.lease_token)
@@ -2834,7 +2868,7 @@ inline ::uint64_t TradeAssetOpRecord::lease_token() const {
 }
 inline void TradeAssetOpRecord::set_lease_token(::uint64_t value) {
   _internal_set_lease_token(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.lease_token)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_lease_token() const {
@@ -2850,7 +2884,7 @@ inline void TradeAssetOpRecord::_internal_set_lease_token(::uint64_t value) {
 inline void TradeAssetOpRecord::clear_tx_type() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.tx_type_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00001000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00004000U);
 }
 inline ::uint32_t TradeAssetOpRecord::tx_type() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.tx_type)
@@ -2858,7 +2892,7 @@ inline ::uint32_t TradeAssetOpRecord::tx_type() const {
 }
 inline void TradeAssetOpRecord::set_tx_type(::uint32_t value) {
   _internal_set_tx_type(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00001000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00004000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.tx_type)
 }
 inline ::uint32_t TradeAssetOpRecord::_internal_tx_type() const {
@@ -2874,7 +2908,7 @@ inline void TradeAssetOpRecord::_internal_set_tx_type(::uint32_t value) {
 inline void TradeAssetOpRecord::clear_ref_kind() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ref_kind_ = 0;
-  ClearHasBit(_impl_._has_bits_[0], 0x00010000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
 }
 inline ::trade::TradeAssetOpRefKind TradeAssetOpRecord::ref_kind() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.ref_kind)
@@ -2882,7 +2916,7 @@ inline ::trade::TradeAssetOpRefKind TradeAssetOpRecord::ref_kind() const {
 }
 inline void TradeAssetOpRecord::set_ref_kind(::trade::TradeAssetOpRefKind value) {
   _internal_set_ref_kind(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00010000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.ref_kind)
 }
 inline ::trade::TradeAssetOpRefKind TradeAssetOpRecord::_internal_ref_kind() const {
@@ -2898,7 +2932,7 @@ inline void TradeAssetOpRecord::_internal_set_ref_kind(::trade::TradeAssetOpRefK
 inline void TradeAssetOpRecord::clear_ref_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.ref_id_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00008000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
 }
 inline ::uint64_t TradeAssetOpRecord::ref_id() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.ref_id)
@@ -2906,7 +2940,7 @@ inline ::uint64_t TradeAssetOpRecord::ref_id() const {
 }
 inline void TradeAssetOpRecord::set_ref_id(::uint64_t value) {
   _internal_set_ref_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00008000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.ref_id)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_ref_id() const {
@@ -2986,7 +3020,7 @@ inline void TradeAssetOpRecord::set_allocated_payload(::std::string* PROTOBUF_NU
 inline void TradeAssetOpRecord::clear_last_outcome() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_outcome_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00020000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
 }
 inline ::uint32_t TradeAssetOpRecord::last_outcome() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.last_outcome)
@@ -2994,7 +3028,7 @@ inline ::uint32_t TradeAssetOpRecord::last_outcome() const {
 }
 inline void TradeAssetOpRecord::set_last_outcome(::uint32_t value) {
   _internal_set_last_outcome(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00020000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.last_outcome)
 }
 inline ::uint32_t TradeAssetOpRecord::_internal_last_outcome() const {
@@ -3010,7 +3044,7 @@ inline void TradeAssetOpRecord::_internal_set_last_outcome(::uint32_t value) {
 inline void TradeAssetOpRecord::clear_last_reason() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.last_reason_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00400000U);
 }
 inline ::uint32_t TradeAssetOpRecord::last_reason() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.last_reason)
@@ -3018,7 +3052,7 @@ inline ::uint32_t TradeAssetOpRecord::last_reason() const {
 }
 inline void TradeAssetOpRecord::set_last_reason(::uint32_t value) {
   _internal_set_last_reason(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00400000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.last_reason)
 }
 inline ::uint32_t TradeAssetOpRecord::_internal_last_reason() const {
@@ -3034,7 +3068,7 @@ inline void TradeAssetOpRecord::_internal_set_last_reason(::uint32_t value) {
 inline void TradeAssetOpRecord::clear_created_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.created_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00040000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00100000U);
 }
 inline ::uint64_t TradeAssetOpRecord::created_ms() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.created_ms)
@@ -3042,7 +3076,7 @@ inline ::uint64_t TradeAssetOpRecord::created_ms() const {
 }
 inline void TradeAssetOpRecord::set_created_ms(::uint64_t value) {
   _internal_set_created_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00040000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00100000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.created_ms)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_created_ms() const {
@@ -3058,7 +3092,7 @@ inline void TradeAssetOpRecord::_internal_set_created_ms(::uint64_t value) {
 inline void TradeAssetOpRecord::clear_updated_ms() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_ms_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00080000U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00200000U);
 }
 inline ::uint64_t TradeAssetOpRecord::updated_ms() const {
   // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.updated_ms)
@@ -3066,7 +3100,7 @@ inline ::uint64_t TradeAssetOpRecord::updated_ms() const {
 }
 inline void TradeAssetOpRecord::set_updated_ms(::uint64_t value) {
   _internal_set_updated_ms(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00080000U);
+  SetHasBit(_impl_._has_bits_[0], 0x00200000U);
   // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.updated_ms)
 }
 inline ::uint64_t TradeAssetOpRecord::_internal_updated_ms() const {
@@ -3076,6 +3110,134 @@ inline ::uint64_t TradeAssetOpRecord::_internal_updated_ms() const {
 inline void TradeAssetOpRecord::_internal_set_updated_ms(::uint64_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.updated_ms_ = value;
+}
+
+// string resolved_by = 22;
+inline void TradeAssetOpRecord::clear_resolved_by() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resolved_by_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& TradeAssetOpRecord::resolved_by() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.resolved_by)
+  return _internal_resolved_by();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TradeAssetOpRecord::set_resolved_by(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.resolved_by_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.resolved_by)
+}
+inline ::std::string* PROTOBUF_NONNULL TradeAssetOpRecord::mutable_resolved_by()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_resolved_by();
+  // @@protoc_insertion_point(field_mutable:trade.TradeAssetOpRecord.resolved_by)
+  return _s;
+}
+inline const ::std::string& TradeAssetOpRecord::_internal_resolved_by() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.resolved_by_.Get();
+}
+inline void TradeAssetOpRecord::_internal_set_resolved_by(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resolved_by_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TradeAssetOpRecord::_internal_mutable_resolved_by() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.resolved_by_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TradeAssetOpRecord::release_resolved_by() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.TradeAssetOpRecord.resolved_by)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.resolved_by_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.resolved_by_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TradeAssetOpRecord::set_allocated_resolved_by(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.resolved_by_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.resolved_by_.IsDefault()) {
+    _impl_.resolved_by_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.TradeAssetOpRecord.resolved_by)
+}
+
+// string resolve_reason = 23;
+inline void TradeAssetOpRecord::clear_resolve_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resolve_reason_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::std::string& TradeAssetOpRecord::resolve_reason() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:trade.TradeAssetOpRecord.resolve_reason)
+  return _internal_resolve_reason();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void TradeAssetOpRecord::set_resolve_reason(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  _impl_.resolve_reason_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:trade.TradeAssetOpRecord.resolve_reason)
+}
+inline ::std::string* PROTOBUF_NONNULL TradeAssetOpRecord::mutable_resolve_reason()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::std::string* _s = _internal_mutable_resolve_reason();
+  // @@protoc_insertion_point(field_mutable:trade.TradeAssetOpRecord.resolve_reason)
+  return _s;
+}
+inline const ::std::string& TradeAssetOpRecord::_internal_resolve_reason() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.resolve_reason_.Get();
+}
+inline void TradeAssetOpRecord::_internal_set_resolve_reason(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.resolve_reason_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL TradeAssetOpRecord::_internal_mutable_resolve_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.resolve_reason_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE TradeAssetOpRecord::release_resolve_reason() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:trade.TradeAssetOpRecord.resolve_reason)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000004U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  auto* released = _impl_.resolve_reason_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.resolve_reason_.Set("", GetArena());
+  }
+  return released;
+}
+inline void TradeAssetOpRecord::set_allocated_resolve_reason(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  _impl_.resolve_reason_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.resolve_reason_.IsDefault()) {
+    _impl_.resolve_reason_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:trade.TradeAssetOpRecord.resolve_reason)
 }
 
 #ifdef __GNUC__

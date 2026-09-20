@@ -14,7 +14,7 @@ This directory contains Kubernetes-only deployment assets for opening game zones
 
 ## Directory Layout
 
-- `manifests/infra/`: infra resources applied per namespace (`etcd`, `redis`, `kafka`, `mysql`). `etcd` is a 3-replica StatefulSet with one PVC per member (see "etcd:3 副本 StatefulSet" below) and `kafka` is a **single-broker** StatefulSet with one PVC (see "Kafka:StatefulSet + PVC" below); `redis` / `mysql` are still single-replica Deployments.
+- `manifests/infra/`: infra resources applied per namespace (`etcd`, `redis`, `redis-match-cluster`, `kafka`, `mysql`, `loki`). `etcd` is a 3-replica StatefulSet with one PVC per member (see "etcd:3 副本 StatefulSet" below) and `kafka` is a **single-broker** StatefulSet with one PVC (see "Kafka:StatefulSet + PVC" below); `redis` / `mysql` are still single-replica Deployments. `redis-match-cluster` 是 match 私有的 Redis Cluster(StatefulSet + 一次性建群 Job,Job template 落地后不可变,改建群脚本要先删 Job 再 apply)。`loki` 是 C++ 日志 sidecar 的写入目标(Deployment + `loki-data-pvc` 10Gi,retention 7 天),**只在 sidecar 开着且没给 `-LokiPushUrl` 时才随 `infra-up` apply** —— 关了 sidecar 或指向外部 Loki 时它不占集群资源(见 Optional Flags 的 `-NoCppLogSidecar`)。
 - `manifests/go-svc/`: Go micro-service K8s manifests (`db`, `data-service`, `login`, `player-locator`, `scene-manager`, `match`, `trade` + its `trade-migrate` schema Job). `guild` has no manifest / ConfigMap yet (see "snowflake 缓存目录 / PlayerId 号段 / data_service 全局库" below). trade 见下面「聚宝斋 trade」。
 - `Dockerfile.go-svc`: multi-stage Dockerfile for building Go service images.
 - `zones.sample.json`: sample multi-zone definition file (JSON).
@@ -259,6 +259,11 @@ pwsh -File tools/scripts/artifacts_retention.ps1 -KeepLast 10
 - Do not treat `LoadBalancer` as the universal default. If the cluster does not have a mature, production-grade LB implementation, `NodePort` plus an external L4 balancer is usually the more stable choice.
 - Internal-only services should stay inside the cluster and do not need external exposure.
 - Stability baseline per zone: `centre=1`, `gate=2`, `scene=4`.
+- 日志采集的常驻开销(默认开着 sidecar 时要算进容量):
+  - 每个 C++ Pod 多一个 sidecar 容器,`requests` `20m` / `64Mi`、`limits` `256Mi`。按上面那条基线,一个 zone 是 `gate=2` + `scene=4` 共 6 份,再加不分 zone 的 battle 池。
+    - "6 份"只对**默认编排 + legacy 单 scene 池**成立(`-SceneOrchestrator deployment` + `-SceneReplicas`)。`-SceneOrchestrator agones` 下 scene 那部分按 **Fleet 当前副本数**算(开了 `-AgonesAutoscale` 还会随房间容量上下浮动,不是一个固定数);scene 角色拆分档(`-SceneWorldReplicas` / `-SceneInstanceReplicas`,见 `docs/ops/scene-node-role-split.md`)会把 scene 拆成 `scene-world` + `scene-instance` 两个池,份数按两池之和算。
+  - infra 侧多一个 Loki,`requests` `100m` / `256Mi`、`limits` `1Gi`,外挂 `10Gi` PVC。
+  - 资源紧张时两条路:`-NoCppLogSidecar` 整个关掉(代价是 C++ 业务日志无人采集),或 `-LokiPushUrl` 指向集群外已有的 Loki(此时 `infra-up` 不再部署集群内 Loki,只剩 sidecar 那份开销)。
 - You can encode this choice directly with `-OpsProfile managed-cloud` or `-OpsProfile bare-metal`.
 
 ### Open One Zone
@@ -319,11 +324,14 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   - `POD_IP` from Kubernetes Downward API.
   - `RPC_PORT`/`NODE_PORT` env vars (fixed per role: gate `18000`, scene `20000`). The value must fall inside the engine's per-role TCP range — gate `10000-19999`, everything else `20000-35535` — since the gRPC port is derived as TCP+30000. A node now refuses to start (retrying, nothing published to etcd) if the requested port is taken, rather than silently picking a different one.
   - `GRPC_SERVER_MAX_POLLERS` 用于限制 gRPC server poller 数（默认 `8`，与 C++ 进程默认值一致）。传 `-GrpcServerMaxPollers 0` 时，Deployment 与 Fleet 都不写该环境变量，交给进程默认值。
+- **C++ 业务日志不在容器 stdout**:Linux 下 muduo 的 `LogToConsole` 那一句包在 `#ifdef WIN32` 里,业务日志只落 `/app/bin/logs/cpp_nodes/<节点>.*.log`。`kubectl logs` 对 gate / scene / battle 只看得到启动行和 gRPC / librdkafka 写在 stderr 上的东西 —— 查不到业务日志不是没打,是采集口不同。默认的 Alloy sidecar 正是为此读文件送 Loki(见 Optional Flags 的 `-NoCppLogSidecar`)。
+  - 这个目录**不会无限长**:muduo 每 8MiB 滚一个新文件且从不删旧文件,所以业务容器的启动命令里带了一个每 5 分钟跑一次的清理循环,按时间只留最近 8 个 `.log`(≈64MiB);`node-logs` 这个 emptyDir 另有 `sizeLimit: 2Gi` 作远端兜底。`kubectl exec` 进去只看得到最近这几个文件,更早的要去 Loki 查。
+  - **采不到的东西**:容器 stdout 上的 gRPC / librdkafka stderr,以及崩溃现场文本(glibc 断言、`terminate called`、abort 栈)——它们只在 `kubectl logs` 里,Pod 一重建就没了。Loki 里的 `level="fatal"` 只覆盖代码里显式 `LOG_FATAL` 的分支。
 - A `gate-entry` Service is created per zone namespace for external TCP access.
 
 ## Optional Flags
 
-- `-SkipInfra`: deploy only node workloads (skip `etcd`/`redis`/`kafka`).
+- `-SkipInfra`: deploy only node workloads。跳过的是**整个基础设施阶段**(`Apply-Infra`),不只是最早那三个:`etcd` / `redis` / `redis-match-cluster` / `kafka` / `mysql`,加上**条件部署**的 `loki`(只在日志 sidecar 开着且没给 `-LokiPushUrl` 时才会 apply),以及 `kafka-topic-init` Job、不分 zone 的 battle 池和全局池服务(`match` / `trade`)。只对 `all-up` / `all-down` 有意义(`zone-up` 本来就不碰 infra)。**代价**:跳过 infra = 集群内 Loki 不会被部署,而 C++ Pod 上的日志 sidecar 照装不误 —— 于是 sidecar 有配置却没有推送目标,见下面 `-LokiPushUrl` 后面那条"半配置状态"。
 - `-ClusterId`: deployment-level cluster number, `0..31`, default `0`. Becomes the `cluster` segment of every snowflake id minted in this cluster, so `infra-up` and every `zone-up` / `all-up` against the same cluster must pass the same value (the script reads one parameter for both paths; `zones.json` deliberately has no per-zone override). Leave it at `0` unless you are standing up a second, independent cluster that must never collide with the first. Only `tools/scripts/k8s_deploy.ps1` accepts it today; `dev_tools.ps1`'s `k8s-*` wrappers do not forward it yet.
 - `-DryRun`: print kubectl commands without applying.
 - `-WaitReady`: wait for `centre` / `gate` / `scene` deployments to roll out. On `infra-up` / `all-up` it also waits for the `etcd` StatefulSet to reach quorum before the global `match` service is applied, and then for the `kafka-topic-init` Job to complete, so the audit topics exist with their contracted partition counts before any zone is applied (see "Kafka 审计 topic 预建" below). `infra-kafka-topics -WaitReady` waits for the same Job. For the global `trade` service on the `dev` profile it also waits for `deploy/mysql` and then for the `trade-migrate` Job to reach Complete before the `trade` Deployment is applied; a Failed Job (or a timeout) aborts the release. On `staging` / `prod` that migrate-Job gate always runs, with or without `-WaitReady` (port-decisions D-14 item 4; see "聚宝斋 trade" below).
@@ -340,12 +348,18 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
 - `-GoSvcRegistry`: Docker registry for Go micro-services (e.g. `ghcr.io/luyuancpp`). If not set, Go services are skipped.
 - `-GoSvcTag`: Image tag for Go service images (default: `latest`).
 - `-SkipGoSvc`: explicitly skip Go service deployment even if `-GoSvcRegistry` is set.
+- `-NoCppLogSidecar`: turn the C++ log sidecar off. 默认是**开着**的:每个 C++ Pod(`gate` / `scene` / `battle`,普通 Deployment 与 Agones Fleet 两条路径一样)以 k8s 原生 sidecar 形态多带一个 Alloy 容器 —— 放在 `initContainers` 里并带 `restartPolicy: Always`,只读共享业务容器的 `node-logs` 卷,直接读 `/app/bin/logs/cpp_nodes/*.log` 推 Loki,全程不经过 stdout(为什么必须读文件见 Runtime Behavior 里 C++ 日志那一条)。选原生 sidecar 而不是普通容器,是因为 Agones 给 GameServer Pod 写死 `restartPolicy: Never`(普通容器形态下 sidecar 一 OOM 就永远停着,而 Agones 的健康检查只看游戏容器、不会把 GameServer 置 Unhealthy,日志会在这个 Pod 的余生里静默断流),以及 Pod 终止时 kubelet 会等业务容器退完再停原生 sidecar(scene 那 60 秒 drain 里写的存档 / 踢人日志才追得完)。关掉它就回到"C++ 业务日志无人采集",只给"集群里没有 Loki 也不打算部署"的场景用。
+- `-CppLogSidecarImage`: sidecar 镜像,默认 `grafana/alloy:v1.10.0`。**版本钉死是有原因的**:`v1.19.2` 的 `loki.source.file` 有读取位置回归(重启后几乎整文件重读),升级前先跑 `docs/ops/grafana-loki-local-logs.md` §5.3 的读取位置自检。
+- `-LokiPushUrl`: sidecar 的推送地址。留空(默认)= 写 infra namespace 里的 Loki,即 `http://loki.<InfraNamespace>:3100/loki/api/v1/push`(`manifests/infra/loki.yaml`,也只有这种情况 `infra-up` 才部署它);指向集群外 / 已有的 Loki 时写完整 push 地址,例如 `http://loki.observability:3100/loki/api/v1/push`。**改它要挑时机**:Alloy 的配置正文哈希以 `mmorpg.io/cpp-log-sidecar-config-hash` 注解打进 pod 模板(只改 ConfigMap 不会让跑着的 Alloy 重读配置,而模板不变时 `kubectl apply` 是 no-op),所以改推送地址或改解析规则 = 下次 `zone-up` 滚动重启该 zone 的 C++ 节点,Agones 侧是 Fleet RollingUpdate 换 GameServer。**别漏了 battle**:battle 是不分 zone 的全局池,由 `Apply-Infra` → `Apply-BattlePool` 部署在 infra namespace(连它那份 sidecar ConfigMap 也建在 infra namespace),`zone-up` 根本不碰它 —— 它要等下一次 `infra-up` / `all-up` 才跟着滚。
+- 上面三个参数 `dev_tools.ps1` 与 `k8s_image.ps1` 都已透传(与 `-ClusterId` 不同,不必绕开包装脚本直接调 `k8s_deploy.ps1`)。两个字符串参数在包装脚本里默认留空 = **不覆盖**,不会把空的 `image:` 渲染进清单;镜像默认版本这个事实源只存在于 `tools/scripts/k8s_deploy.ps1` 一处。
+- **"sidecar 装上了但推无可推"这个半配置状态要知道**:集群内 Loki 只随 `infra-up` 部署,所以只跑 `zone-up`、跑 `all-up -SkipInfra`、或在存量集群上直接升级这三种走法,都会得到"每个 C++ Pod 里 sidecar 跑得好好的、推送目标压根不存在"的组合。脚本对此**只做只读探测、不阻断**:用默认 Loki(没给 `-LokiPushUrl`)时跑一次 `kubectl -n <InfraNamespace> get svc loki --ignore-not-found`,查不到就 `Write-Warning` 提示去跑 `infra-up` / 给 `-LokiPushUrl` / 用 `-NoCppLogSidecar`,然后照常 apply;`-DryRun` 下整段跳过,`-LokiPushUrl` 指向集群外 Loki 时无从判断也不探。表现是**部署全绿、一条 C++ 日志都查不到**(Alloy 的推送失败只写在它自己的 stdout 里,脚本不会失败)。处置见 `docs/ops/grafana-loki-local-logs.md` §6。
 
 ## Important Notes
 
 - The default node image is a placeholder. Replace `-NodeImage` with your real image.
 - The script assumes Linux containers and `/app/bin` runtime layout.
 - Deleting a zone currently deletes the entire namespace (`k8s-zone-down`).
+- `infra-down` / `all-down` 删的是整个 infra namespace,**`loki-data-pvc`(10Gi)连同里面已采集的全部 C++ 日志一起删**(与 etcd / kafka / mysql 的 PVC 同一性质)。排障还要用的日志先导出,或者用 `-LokiPushUrl` 把 sidecar 指向集群外的 Loki —— 那种情况下集群内根本不部署 Loki,删 namespace 也不碰日志。
 - Do not use `LoadBalancer` in production unless the cluster provides a real, mature LB implementation. Otherwise use `NodePort` plus an external L4 balancer.
 
 ## etcd:3 副本 StatefulSet + PVC(2026-09-08,node-id-overhaul-plan §7 Phase 0.5)
@@ -566,12 +580,27 @@ topic 就被自动建成 1 分区,EnsureTopics 从此永远报 `partition contra
 (etcd / redis / redis-match-cluster / kafka / mysql + 全局 match)时踩到的坑,都是
 kind 本地环境特有,不影响真集群:
 
+> **本节混着两个日期的东西,别当成同一次实跑看。** 上面那份 A 档清单是 2026-09-03 实跑时的形态,**里面没有 loki**;
+> `loki` 与 C++ 日志 sidecar 是 **2026-09-19 这一轮**才加进来的(`loki` 还是条件部署:sidecar 开着且没给 `-LokiPushUrl` 时才随 `infra-up` apply)。
+> 下面凡是标了"2026-09-19 新增"的命令与条目,都不是 2026-09-03 那次观察到的,而是按本轮代码补的;
+> 日志 sidecar 的端到端形态与实测结论见 `docs/ops/grafana-loki-local-logs.md` §7。
+
 ```powershell
 . E:\work\tools\buildenv.ps1                       # GOPROXY / go 工具链
 go install sigs.k8s.io/kind@latest                 # 装到 $(go env GOPATH)\bin
 kind create cluster --name mmorpg                  # kubectl context 自动切到 kind-mmorpg
 pwsh -File tools/scripts/go_svc_image.ps1 -Command build-all -Registry local -Services match
 kind load docker-image local/mmorpg-match:<tag> --name mmorpg
+# 2026-09-19 新增(本轮才有,2026-09-03 那次实跑没有这一段):观测栈的两个 Docker Hub 镜像 ——
+# infra-up 会条件部署 Loki,battle 池的 C++ Pod 还带一个 Alloy sidecar,两个都要预载进 kind。
+# docker save 不会替你去拉:宿主本地没有这个镜像时它直接报 "No such image",所以每条 save 前先 pull。
+# Hub 上的多平台镜像必须走 save --platform + image-archive,理由见下面第二条。
+docker pull grafana/loki:3.5.8
+docker save --platform linux/amd64 -o loki.tar grafana/loki:3.5.8
+kind load image-archive loki.tar --name mmorpg
+docker pull grafana/alloy:v1.10.0
+docker save --platform linux/amd64 -o alloy.tar grafana/alloy:v1.10.0
+kind load image-archive alloy.tar --name mmorpg
 pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -GoSvcRegistry local -ZoneId 101
 ```
 
@@ -583,6 +612,15 @@ pwsh -File tools/scripts/k8s_deploy.ps1 -Command infra-up -GoSvcRegistry local -
   的 index 引用了本地没有的其他平台清单)。改用
   `docker save --platform linux/amd64 -o x.tar <image>` + `kind load image-archive x.tar`。
   本地 `docker build` 出来的单平台镜像(Go 服务)不受影响。
+- **(2026-09-19 新增)漏预载 `grafana/alloy:v1.10.0` 的症状与"业务坏了"一模一样**:sidecar 是 **k8s 原生 sidecar**
+  —— 写在 `initContainers` 里、带 `restartPolicy: Always`,所以**它拉不到镜像时业务容器一次都不会启动**:
+  Pod 卡在 `Init:ErrImagePull` / `Init:ImagePullBackOff`,`kubectl describe pod` 的报错在 **Init Containers** 一节
+  (不在 Containers 一节,按老习惯只扫 Containers 会看漏);gate Pod 起不来 → `gate-entry` Service 没有后端 →
+  **整个 zone 连不进来**,但这**不是业务代码的问题**。只看 `rollout` 超时基本想不到是观测容器拖的。
+  临时不想要就加 `-NoCppLogSidecar`,正经做法是按上面那段 pull + save + `kind load` 把镜像预载进 kind。
+  (明知这个代价仍选原生 sidecar 的理由见 Optional Flags 的 `-NoCppLogSidecar`:普通容器形态在 Agones 那条路上
+  会让日志在 Pod 余生里**静默**断流,而拉不到镜像本来也会让 Pod 不 Ready —— 两种都是故障,原生 sidecar 至少报得直白。)
+  漏预载 `grafana/loki:3.5.8` 则是另一种表现:部署一路成功,只是一条 C++ 日志都查不到。
 - `kind load` 之后老 Pod 仍卡在原来的拉取请求上时,直接 `kubectl delete pod`
   让控制器重建,新 Pod 走 `IfNotPresent` 立刻起来。
 - `mysql-backup-pvc` 是 ReadWriteMany,kind 自带的 local-path 不支持,会一直 Pending;
@@ -602,6 +640,12 @@ pwsh -File tools/scripts/go_svc_image.ps1 -Command build-all -Registry local -Ta
 pwsh -File tools/scripts/java_svc_image.ps1 -Command build -Registry local -Tag <tag>
 # C++ 节点本档不构建:用任意小镜像占位,gate/scene Pod 会 CrashLoop/RunContainerError,属预期
 docker tag busybox:1.36 local/mmorpg-node:<tag>
+# 2026-09-19 新增(本轮才有,2026-09-03 那次实跑的 zone-up 还没有 sidecar;端到端形态见
+# docs/ops/grafana-loki-local-logs.md §7):gate/scene Pod 默认带 Alloy sidecar,这个镜像也要预载
+#(Loki 在 A 档已载入)。同样先 pull:宿主没有该镜像时 docker save 直接报 "No such image",它不会去拉。
+docker pull grafana/alloy:v1.10.0
+docker save --platform linux/amd64 -o alloy.tar grafana/alloy:v1.10.0
+kind load image-archive alloy.tar --name mmorpg
 # 逐个 docker save --platform linux/amd64 + kind load image-archive(见上节)
 pwsh -File tools/scripts/k8s_deploy.ps1 -Command zone-up -ZoneName yesterday -ZoneId 1 `
     -GoSvcRegistry local -JavaSvcRegistry local -NodeImage local/mmorpg-node:<tag> `

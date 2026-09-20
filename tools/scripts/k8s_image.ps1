@@ -49,7 +49,13 @@ param(
     [string]$Version = "",
     # push-image / release-zone / release-all 推送后把 "ref -> repo@sha256:..." 合并写进这个 JSON。
     # tag 只是别名,部署/回滚要按 digest 定位;推完回读不到 digest 视为发布失败。
-    [string]$DigestsOut = ""
+    [string]$DigestsOut = "",
+    # C++ 日志 sidecar 开关,透传给 k8s_deploy.ps1(见 docs/ops/grafana-loki-local-logs.md §6)。
+    # 两个字符串默认留空 = 用 k8s_deploy.ps1 自己的默认值,非空才透传;
+    # 尤其 CppLogSidecarImage 透传空串会让生成的清单出现空 image:,Pod 建不起来。
+    [switch]$NoCppLogSidecar,
+    [string]$CppLogSidecarImage = "",
+    [string]$LokiPushUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -339,6 +345,16 @@ function Invoke-K8sDeploy {
     }
     if ($SkipInfra) {
         $args.SkipInfra = $true
+    }
+    # switch 只在被指定时传下去,字符串非空才传:无条件传 $false / 空串会覆盖下游默认值。
+    if ($NoCppLogSidecar) {
+        $args.NoCppLogSidecar = $true
+    }
+    if (-not [string]::IsNullOrWhiteSpace($CppLogSidecarImage)) {
+        $args.CppLogSidecarImage = $CppLogSidecarImage
+    }
+    if (-not [string]::IsNullOrWhiteSpace($LokiPushUrl)) {
+        $args.LokiPushUrl = $LokiPushUrl
     }
     if ($WaitReady) {
         $args.WaitReady = $true
