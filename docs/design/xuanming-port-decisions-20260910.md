@@ -566,7 +566,8 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
 **代价与残留**
 
 - **旧共享库 `mmorpg` 里的 friend 三张表(`friend` / `friend_request` / `friend_capacity`)成为孤儿**:新服务只读写 `mmorpg_friend`,旧表不再有任何写者。清理(以及 `deploy/mysql-init/guild_friend_tables.sql` 里那段 friend 建表与回填脚本的处置)属 friend F3 批,本批不做。孤儿表留着不影响正确性,只占空间并会误导排障的人。
-- **`guild_schema_migration` 表本身属 guild,不动**:`go/guild/internal/data/guild_repo.go` 仍在用它做公会积分迁移的门禁,D-14 第 8 条对它的「照旧」口径不变。本次退役只影响 `friend_capacity_backfill_v1` 这一个 key 的**读侧**;该 key 的行由 `deploy/mysql-init/guild_friend_tables.sql` 写入,删不删同属 F3 批。
+- **~~`guild_schema_migration` 表本身属 guild,不动~~ —— 2026-09-19 合并时作废**:写这条时 friend 分支基于的 main 上那张表还在,而合并回 main 才发现**帮会二期的 B1 迁库已经把它连同 `guild_friend_tables.sql` 里的帮会表一起删了**(见本文 D-14 §8 修订的第三个圆点:「`guild_schema_migration` 门表、`MigrateLegacyRankScores`、friend 的 `friend_capacity_backfill_v1` 门一并删除」)。也就是说帮会那边**独立地**得出了与本条相同的结论,只是理由不同(他们是因为迁库带走了门禁表,本条是因为跨库读违反 D-14 §6 且新库无历史边)。
+  合并的实际结果:`deploy/mysql-init/guild_friend_tables.sql` **整个文件已删除** —— 两边各搬走一半之后它已无内容。本条退役门禁的四条理由不受影响:理由 1(跨库读)描述的是写这条时的事实,今天连被读的表都不存在了,结论只会更强。
 - **不再有「历史容量未回填」的机械防线**:结论成立的前提是「`mmorpg_friend` 永远由 `schemamigrate` 从基线建、库里没有历史边」。若将来真要把 `mmorpg` 的存量 friend 边导进新库,**必须先重新设计一次带 durable 标记的回填门禁**,不能直接跑导入 —— 届时靠的是这条记录,而不是代码里的残留。
 - **D-10 原文的行号引用已失效**:本文 `:184` 里引的 `internal/data/friend_repo.go:222-230`、`:59`、`:518` 是 B 侧旧形态的行号,经移植与本次删除后已全部对不上(现行位置见上面的证据表)。按「不改原文」的口径未回头修正,属已知残留 —— 读 D-10 时以本段证据表的行号为准。
 - **文档面残留**:`docs/design/friend-persistence-architecture.md:58-59`、`:79` 与 `docs/design/guild_friend_service_notes*.md:34`、`:38` 仍按 B 侧旧形态描述这道门禁。它们是 B 侧现状文档,本批不改;读到那几段时以本条为准。
