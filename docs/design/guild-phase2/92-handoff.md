@@ -431,3 +431,88 @@
 - 任何一步未执行,都要明确写「未验证」。
 - Claude 侧在拿到这些结果之前,不得声称编译通过或测试通过。
 ```
+
+---
+
+## 9. 下一期工作单:B5a(2026-09-20 写,给接手的会话)
+
+> 本节是**可直接照着开工**的工作单。与 §3 的总表冲突时以本节为准(本节更新)。
+> 当前 `main` = `94f1ea2f4`(B3a-2 + B3b 服务端已合入并推送)。
+
+### 9.1 本期做什么
+
+**主任务:B5a —— 帮会经济的协议、配表、游戏日与号段登记。** 它是 B5b(经济服务)/ B5c(客户端)的硬前置,自己不含业务逻辑。
+
+**并行可做:B5d 的详细设计**(不是落码)。`91` 把"先补详细设计"列为 B5d 的硬前置,而 S4 4.38/4.39 只给了接口。它是纯设计、不碰配表也不碰客户端,随时可写。要点已在 §9.6。
+
+**不要碰**:B3b 客户端、B5c、B6a-cli、B6b-cli —— 客户端仓缺 B2c 基线,见 §8.0。
+
+### 9.2 效力顺序(冲突时按这个,**比正文重要**)
+
+1. `README.md` §2/§3 —— 用户拍板。
+2. **`05-economy.md` 顶部的两个覆盖块**(「决策覆盖 D2」与「B4b 落地后的接口终稿」)—— 它们**明文作废了本节正文的一批写法**,不先读会照着废稿写。
+3. `90-consistency.md` —— 尤其 **part2 §1**(资产三表的完整 proto,正文里根本没有)、X-01/X-02/X-04/X-13/X-15、G-03、G-04、Y-12。
+4. `05-economy.md` 正文。
+5. 仓库 `AGENTS.md`。
+
+### 9.3 落码前先核这几条(我已替你查过,是现状)
+
+- **`proto/guild/guild_db.proto` 现在只有 4 个 message**(`guild` / `guild_player_state` / `guild_member` / `guild_application`),**资产三表一行都没有**。按 X-01,`guild_asset_op` / `guild_player_op_seq` / `guild_daily_counter` 的完整定义由 B5a 照 **`90-consistency.md` part2 §1** 原样写入 —— 不要去 S1 或 §5.6 找"增量列",那两处都不全。
+- **`go/guild/internal/data/tables.go` 的 `Tables()` 现在返回 4 张表**,新表要按 part2 §1 末尾给的**锁序**追加:guild → guild_player_state → guild_member → guild_application → guild_player_op_seq → guild_asset_op → guild_daily_counter。顺序即锁序,不能随便排。
+- B1 的测试已按 X-09 改成由 `Tables()` 派生,所以加表**不会**打挂 `len(Tables)==4` 那类断言;但新表形状的断言要自己在集成测试里补。
+- `go/shared/assetop`、`go/shared/scenenode` 已由聚宝斋会话落码(`795ea9f6a`),**签名以磁盘上的 `go/shared/assetop/reconcile.go` 为准**,别照正文抄。
+
+### 9.4 文件数与清单(正文的 21 是旧数)
+
+`05-economy.md §5.41` 写 21,至少要减两项:
+
+- **减 `data/GuildLevel.xlsx`** —— X-04 / D1:GuildLevel 全表取 B2 的 10 级,B5a 不改它。
+- **减 `proto/common/rollback/transaction_log.proto`** —— D2 删退款分支,不新增 `TX_GUILD_DONATE_REFUND`。
+
+→ **19**。另外 D2 还明写「`kAssetOpStreamRules` 的 GUILD_CREDIT 一行**不改**,B4a 的 scene 白名单与 `static_assert` 均不动」,所以清单第 14/15 项(`player_asset_op.cpp`、`asset_op_system_test.cpp`)**要按 D2 复核是否还需要改**;如果确实不用改,文件数再减。开工时自己核一遍并在交付说明里写清最终数。
+
+### 9.5 按"要不要 Python"把 B5a 切成两半
+
+用户已拍板:**Python 由用户自己装,导表器 / proto-gen / 编译 / 测试也由用户自己跑**;Claude 只写代码与配表内容。本机目前 `py -3` 报 `No Installed Pythons Found`,所以:
+
+**A. 现在就能做(不需要 Python,15 个左右)**
+
+- `proto/guild/guild_db.proto` —— 资产三表 + 三个枚举(照 part2 §1)。**索引名 `idx_<表>_<n>` 从 0 起**(X-02),第三组是 `idx_guild_asset_op_2` 不是 `_3`;`GuildAssetOpStatus` 要有 `APPLIED_PARTIAL = 5`(X-15);**不加** `GUILD_ASSET_OP_KIND_DONATE_REFUND`(D2)。
+- `proto/guild/guild.proto` —— 经济 RPC 与视图消息(§5.5);`GuildAssetOrderStatus` 同样要 `APPLIED_PARTIAL = 5`。
+- `data/schema/guilddonate_table.proto`、`data/schema/guildshop_table.proto`(新)—— 配表的 schema 是 **.proto 文本文件**,不是 xlsx,现在就能写(`data/AGENTS.md` 有完整规矩)。
+- `go/shared/gameday/gameday.go` + `_test.go`(新)—— 游戏日:UTC+8 每天 05:00 重置(U1)。B5 是首个使用者。
+- `go/guild/internal/data/tables.go` —— 追加三张表(§9.3 的锁序)。**§5.41 漏列了它**,X-09 点名要加。
+- `cpp/generated/table/CMakeLists.txt` / `table.vcxproj` / `.filters` —— 登记两张新表的 `.cpp/.pb.cc/.h`。
+- `go/data_service` 的 `config.go` / `id_segment_store.go` / `etc/data_service.yaml` + `tools/scripts/k8s_deploy.ps1` —— `BootstrapTags` 加 `guild_asset_op` 号段(G-04)。**这四个文件必须与 B5b 同次或更早部署**,否则 guild 取不到号段,经济写 RPC 全挂。注意 Y-14:data_service 这几个文件多批共改,错误码一律"落码时末码 +1",不写死数字。
+
+**B. 等用户装完 Python 才能做(4 个 xlsx)**
+
+- `data/GuildDonate.xlsx`(新,3 档)、`data/GuildShop.xlsx`(新,11 件)—— 默认数值见 `README.md` §4。
+- `data/tip/Tip.xlsx` —— `//guild_error` 组尾追加 10 个码(§5.12 / Y-05 的 B5a 一行)。
+- `data/MessageLimiter.xlsx` —— 5 行(G-01 的 B5a 一行),**按 proto-gen 实际发出的号填,所以必须在 proto-gen 之后**。
+
+> ⚠ **改 xlsx 只能 openpyxl `load → 改/insert_rows → save`,禁止整表写回**:这几个表同时有多个会话在写,二进制不能 3-way 合并,整写等于删掉别人的行。friend 会话近期会改 `Tip.xlsx` 的 B211 单元格(`FriendBlocked` 文案),别和它同时写。
+
+### 9.6 B5d 详细设计要写什么(并行任务,无阻塞)
+
+目标:**回档 fail-closed**。现状是 `rollback_logic.go` 把已终结的 guild 行留着不回滚,于是回档会**复制**帮会资金与帮贡(D3 / S4 C10)。
+
+已给定的接口(S4 4.38/4.39,`04-asset-channel.md:1534-1566`):
+
+- guild 新增内部 RPC `ListAppliedAssetOpsSince{zone_id, player_ids, since_ms, after_op_id, limit}` → `{ops, next_after_op_id}`,`GuildAssetOpBrief{op_id, player_id, guild_id, stream, kind, status, funds_delta, contribution_delta, updated_ms}`,limit ≤500。
+- data_service 新增内部 RPC `GetPlayerAssetOpLedger{player_id}` → `{found, ledger}`,读 zone Redis 的玩家 blob,只读;它实现 `go/shared/assetop/reconcile.go:173` 已有的 `LedgerReader` 接口(B4b 已落,**先读磁盘上的签名**)。
+- 放置规则见 **G-10**:新文件 `proto/guild/guild_internal.proto`,不标客户端协议选项(照 `trade_admin.proto`);guild 的会话拦截器对带会话 metadata 的 `GuildInternal.*` 回 `PermissionDenied`;`GetPlayerAssetOpLedger` 放 `DataService`。两者占消息号,**不进 MessageLimiter、不进客户端白名单**。
+- 查询写法见 **part2 §3 最后一行**:`ListAppliedAssetOpsSince` 不要用 S4 原文的 `updated_ms > since_ms`(无索引),改 `status IN (?APPLIED,?APPLIED_PARTIAL) AND next_attempt_ms > ?since` 走 `idx_guild_asset_op_0`,再按 `guild_id` 关联 `guild.zone_id`;**`since_ms` 早于 `now − TerminalRetentionDays` 时无法证明,默认拒绝回档**。
+
+设计要补的是接口之外的东西:**data_service 调 guild 的鉴权与拒绝语义**(91 §2 把它列为"B5d 前"要用户确认的事)、guild 不可达时的行为(Y-13:**调用失败也拒绝**)、`accept_guild_divergence` 显式放行时逐行记什么日志、分页与 500 上限怎么和 `RollbackZone` 的批量玩家清单配合、以及告警 `accept_guild_divergence` 的口径。**不采纳**"自动生成反向 Debit"(评审 #9:玩家可能离线或余额不足,补偿本身又会卡住)。
+
+### 9.7 协作与提交(踩过坑)
+
+- 本仓多个 Claude 会话**共用同一个 `main` 工作树**,现在工作区里还有跨 zone 传送会话的在途改动(`go/scene_manager/**`、`cpp/player_lifecycle`、`asset_op_system`、`cross_zone_test`、`deploy/k8s/scene-manager-*`)。动手前 `ListAgents` + `SendMessage` 报一次文件范围。
+- 提交一律 `git commit -- <显式路径>` 或逐个 `git add <路径>`,**不要 `git add -A`**;提交前 `git diff --cached` 逐行看,只核对文件名不够(PROGRESS.md 被卷过行)。
+- 要开分支的话**不要在主工作树 `checkout -b`**(会把别的会话的 HEAD 一起带走);用 `git worktree add` 另开目录,逐路径复制后提交。B3a-2 就是这么合的。
+- friend 会话近期会跑一次带客户端的全量 proto-gen,会**重写 `../mmorpg-client/Assets/Scripts/Net/Generated/` 并新增 31 个 handler 桩**。如果那时你正好在动客户端,先协调。
+
+### 9.8 交付时必须写清
+
+按 `AGENTS.md §10.1`:Claude 不跑构建 / 测试 / 导表 / proto-gen,交付说明必须如实写「**未编译,待用户验证**」,并给出用户可直接执行的命令序列(工作目录、命令、前置清理、期望产物、通过标准、失败时保留什么)。B5a 的验证序列骨架在 `05-economy.md §5.42`,但**路径要换成本机 `D:\luyuan\wuxingqitan\mmorpg`**,且第 6 步的 `SHOW CREATE TABLE` 断言按 X-02 改成 `idx_guild_asset_op_2`。
