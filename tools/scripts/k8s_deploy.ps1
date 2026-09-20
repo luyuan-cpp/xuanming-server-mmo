@@ -2217,6 +2217,7 @@ Etcd:
 MappingRedis:
   Host: redis.${InfraNamespace}:6379
   Type: node
+  Pass: "${redisPassword}"
   DB: 15
 Regions:
   - Id: 1
@@ -2224,9 +2225,11 @@ Regions:
     Redis:
       Addrs:
         - redis.${InfraNamespace}:6379
+      Password: "${redisPassword}"
 DevRedis:
   Host: redis.${InfraNamespace}:6379
   Type: node
+  Password: "${redisPassword}"
   DB: 0
 PlayerLockTTLSec: 3
 # C++ 约定的 etcd 注册(DataServiceNodeService.rpc/zone/<ZoneId>/node_type/26/node_id/<N> + 同前缀的
@@ -2448,6 +2451,7 @@ Etcd:
 Redis:
   Host: redis.${InfraNamespace}:6379
   Type: node
+  Pass: "${redisPassword}"
   Key: scenemanagerservice
 Kafka:
   Brokers:
@@ -2503,6 +2507,7 @@ Etcd:
 Redis:
   Host: redis.${InfraNamespace}:6379
   Type: node
+  Pass: "${redisPassword}"
   Key: matchservice
 MatchRedis:
   Host: ${matchRedisClusterHosts}
@@ -2579,6 +2584,7 @@ Etcd:
 Redis:
   Host: redis.${InfraNamespace}:6379
   Type: node
+  Pass: "${redisPassword}"
   Key: chatservice
 # 注意:ChatRedis 复用 match 的 redis-match-cluster(同一个六节点集群),不是 chat 的独立实例。
 #   该集群 maxmemory 512mb + maxmemory-policy volatile-lru(manifests/infra/redis-match-cluster.yaml):
@@ -2767,6 +2773,7 @@ Etcd:
 Redis:
   Host: redis.${InfraNamespace}:6379
   Type: node
+  Pass: "${redisPassword}"
   Key: ""
 # FriendRedis(friend 私有 key:好友列表缓存 / 申请配额 / 限流)在 K8s 上**刻意整段不配**,回落到上面的共享库。
 # F2 的缓存键已带 hash tag、全是单 key 操作,Redis Cluster 安全,所以将来换独立实例不需要改代码;
@@ -3985,6 +3992,40 @@ function Apply-Infra {
 			Invoke-Kubectl -Args @("delete", "deployment", "kafka", "-n", $InfraNamespace, "--ignore-not-found")
 		}
 
+		if ($manifest -eq "redis.yaml") {
+			# 密码走**可选** Secret:dev 档 MMORPG_REDIS_PASSWORD 回落为空串 → 删掉 Secret → redis.yaml 里
+			# secretKeyRef 的 optional:true 让容器以无密码启动(与改造前行为一致);release 档强制 ≥12 位
+			# (Resolve-InjectedSecret 的 -MinLength 12)→ 建 Secret → 服务端 --requirepass。
+			# 这一步必须在 apply redis.yaml **之前**:Pod 起来时 Secret 不存在的话,optional 引用会解析成空,
+			# 于是服务端无密码而客户端配置带密码,登录链路全线 NOAUTH。
+			if ([string]::IsNullOrEmpty($script:RedisPassword)) {
+				Invoke-Kubectl -Args @("delete", "secret", "redis-auth", "-n", $InfraNamespace, "--ignore-not-found")
+			}
+			else {
+				# 用 stringData 而不是 data:值由 API server 做 base64,脚本里不必自己编码,
+				# 也避免把编码后的密文写进日志。走 Invoke-KubectlWithInputFile 与本函数其余 apply 同一条路径
+				# (DryRun 下会打印将要提交的 YAML —— 注意它会连密码一起打印,与 mysql-init 走的是同一套约定)。
+				$redisAuthSecretYaml = @"
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redis-auth
+type: Opaque
+stringData:
+  password: "$($script:RedisPassword)"
+"@
+				Invoke-KubectlWithInputFile -Args @("apply", "-n", $InfraNamespace) -InputContent $redisAuthSecretYaml
+			}
+
+			# redis 从单副本 Deployment(emptyDir)改成 StatefulSet + PVC,与 etcd / kafka 同形的 kind 变更:
+			# 两者 kind 不同、名字相同,`kubectl apply` 只会新建 StatefulSet 而不回收旧 Deployment,而 Service
+			# `redis` 的 selector(app=redis)会同时命中新旧 Pod —— 客户端在「旧 emptyDir 实例」和「新 PVC 实例」
+			# 之间随机落点,会话 / 锁 / 选主锁两边各一套,等于脑裂。所以先删旧 Deployment 再 apply。
+			# 旧 emptyDir 里的数据**不迁移**(它本来也活不过一次 Pod 重建)。切换 = 一次 Redis 重启:
+			# 在线玩家的会话与位置记录清空,需要重新登录。**这是一次有停机窗口的变更。**
+			Invoke-Kubectl -Args @("delete", "deployment", "redis", "-n", $InfraNamespace, "--ignore-not-found")
+		}
+
 		if ($manifest -eq "mysql.yaml") {
 			# initdb 脚本的 ConfigMap 必须先于 mysql Deployment 落地,否则 Pod 因
 			# volume 引用的 ConfigMap 不存在卡在 ContainerCreating。
@@ -4030,6 +4071,9 @@ function Apply-Infra {
 		# Job 自己会等 broker 可达,但等到的超时长得像"契约错误";先在这里失败,
 		# 报的是 PVC Pending / 镜像拉不动这类真正的原因。
 		Wait-ForStatefulSetReady -Namespace $InfraNamespace -StatefulSetName "kafka"
+		# redis 现在也是 StatefulSet(见上面的 kind 变更)。它在**同步登录路径**上(login 拿不到锁即拒绝
+		# EnterGame),没起来就让后面的 zone 部署继续,只会把失败推迟到玩家进不去游戏时才暴露。
+		Wait-ForStatefulSetReady -Namespace $InfraNamespace -StatefulSetName "redis"
 		# 审计 topic 必须在 scene 产出第一条消息之前按契约建好。-WaitReady 下等 Job Complete,
 		# all-up 里随后的 zone 就一定晚于它;不带 -WaitReady 时 zone-up 之前要自己核对
 		# `kubectl -n <infra> get job kafka-topic-init` 已 Complete(README「Kafka 审计 topic 预建」)。

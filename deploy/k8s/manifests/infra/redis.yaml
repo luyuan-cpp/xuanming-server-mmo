@@ -1,3 +1,23 @@
+# 共享 Redis:player:session / player:location / 登录锁 / 玩家锁 / scene_manager 选主锁 /
+# 场景路由(scene:{id}:node)/ battle:lock / 战斗结算待销账记录都在这一个实例里,而且它在
+# **同步登录路径**上(login 拿不到锁即拒绝 EnterGame)。
+#
+# 为什么是 StatefulSet + PVC,而不是原来的 Deployment + emptyDir:
+#   1. emptyDir 随 Pod 生灭。原清单开着 --appendonly yes,但 AOF 落在 emptyDir 上,Pod 一重建
+#      上面列的数据全部清零 —— 不是"短暂不可用",是数据蒸发(战斗结算的耐久副本也在其中)。
+#   2. 原清单没有 strategy 也没有任何探针:Deployment 默认 RollingUpdate(replicas=1 时 maxSurge 取 1),
+#      无探针 = 新 Pod 一启动就 Ready 并进入 Service。于是任何一次改配置都会出现**两个 Redis 同时挂在
+#      Service redis 后面**的窗口,scene_manager 的两个副本可以各自在不同实例上 SETNX 成功 = 双 leader。
+#      StatefulSet 同一序号的 Pod 不会并存,这个窗口从结构上消失。
+#
+# 仍然是**单实例**:这一步解决的是"重启即丢数据"与"滚动时双实例",不是高可用。Redis 挂掉期间登录
+# 链路仍然整体不可用,恢复靠 K8s 重建 Pod + 重放 AOF。真正的 HA(Sentinel / Cluster)要同时改所有
+# 客户端的连接方式(现在全部是 Type: node 单机模式),是另一件事。
+#
+# 切换注意(k8s_deploy.ps1 的 Apply-Infra 里有配套分支):kind 从 Deployment 变成 StatefulSet、名字
+# 相同,kubectl apply 只会新建 StatefulSet 而不回收旧 Deployment,所以脚本会先删旧 Deployment。
+# 旧 emptyDir 里的数据不迁移(本来也活不过一次 Pod 重建),切换 = 一次 Redis 重启:在线玩家的会话与
+# 位置记录清空,需要重新登录。**这是一次有停机窗口的变更。**
 apiVersion: v1
 kind: Service
 metadata:
@@ -10,11 +30,43 @@ spec:
       port: 6379
       targetPort: 6379
 ---
+# StatefulSet 要求的 governing service。客户端不用它,一律走上面的 ClusterIP Service redis。
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-headless
+spec:
+  clusterIP: None
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: 6379
+---
+# 与 kafka.yaml 的 PDB 同一含义:单实例没有冗余可言,minAvailable 1 的作用是**不允许自愿驱逐** ——
+# kubectl drain 会在这里挂住,逼出一次人工决策(这台节点上的 Redis 一停,全服登录入口跟着停),
+# 而不是让一次例行排空悄悄重启它。确实要搬走时显式 kubectl delete pod redis-0。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-pdb
+  labels:
+    app: redis
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: redis
+---
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: redis
+  labels:
+    app: redis
 spec:
+  serviceName: redis-headless
   replicas: 1
   selector:
     matchLabels:
@@ -24,19 +76,80 @@ spec:
       labels:
         app: redis
     spec:
+      # SIGTERM 后 redis-server 要把 AOF 缓冲刷盘再退出,给足时间。
+      terminationGracePeriodSeconds: 30
       containers:
         - name: redis
           image: redis:7.2
-          args:
-            - redis-server
-            - --appendonly
-            - "yes"
+          # 密码来自**可选**的 Secret redis-auth:dev 档不注入密码(k8s_deploy.ps1 的 MMORPG_REDIS_PASSWORD
+          # 回落值是空串,客户端配置里的 Password 也是空),Secret 不存在则无密码启动;release 档脚本在
+          # apply 本文件之前创建该 Secret。原清单没有 requirepass,而 release 档的客户端配置一律带密码,
+          # 两边不自洽 —— 客户端对一个没设密码的 Redis 发 AUTH 会直接报错,整个 release 档连不上。
+          # 用 sh 包一层是因为官方镜像不支持用环境变量设密码;"$REDIS_PASSWORD" 在双引号内展开,
+          # 密码里的任何字符都不会被 shell 再解释。exec 让 redis-server 成为 1 号进程,SIGTERM 直达。
+          command:
+            - sh
+            - -c
+            - |
+              if [ -n "$REDIS_PASSWORD" ]; then
+                exec redis-server --appendonly yes --requirepass "$REDIS_PASSWORD"
+              fi
+              exec redis-server --appendonly yes
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: redis-auth
+                  key: password
+                  optional: true
           ports:
             - containerPort: 6379
               name: redis
+          # 探针判据与密码无关:PING 得到 PONG(无密码)或 NOAUTH(设了密码、未认证)都说明服务端已经
+          # 起来并且**加载完 AOF**;加载期间的回复是 LOADING,按未就绪处理。readiness 不能用 tcpSocket:
+          # 加载 AOF 期间端口已经可连,客户端会拿到一串 LOADING 错误。
+          # startupProbe 给 AOF 重放留 5 分钟(60 × 5s);liveness 只看端口,避免把"慢"当成"死"反复重启。
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'r=$(redis-cli -h 127.0.0.1 -p 6379 ping 2>&1); case "$r" in PONG|NOAUTH*) exit 0 ;; *) exit 1 ;; esac'
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 60
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - 'r=$(redis-cli -h 127.0.0.1 -p 6379 ping 2>&1); case "$r" in PONG|NOAUTH*) exit 0 ;; *) exit 1 ;; esac'
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            tcpSocket:
+              port: 6379
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          # 只写 requests 不写 limits:原清单什么都没写 = BestEffort,节点资源紧张时第一个被驱逐。
+          # 写了 requests 就是 Burstable。limits 与 --maxmemory 刻意不设:玩家数据缓存也在这个实例里,
+          # 数据集大小随在线人数变化,没有容量数据就拍一个上限,等于自己引入"写满即拒写 / OOMKill 重启循环"
+          # 这种新故障。上限要和压测数据一起定(noeviction 必须保持:这里存的是锁与会话,不能被淘汰)。
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
           volumeMounts:
             - name: redis-data
               mountPath: /data
-      volumes:
-        - name: redis-data
-          emptyDir: {}
+  # 不写 storageClassName = 用集群默认 StorageClass(与 etcd.yaml / kafka.yaml 一致)。
+  volumeClaimTemplates:
+    - metadata:
+        name: redis-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 8Gi
