@@ -10,6 +10,34 @@
 >
 > 其余(U1 与本节无关,货币三项改名照做)不变。
 
+> ## B4b 落地后的接口终稿(2026-09-19,效力高于本节 §5.15–§5.19 正文)
+>
+> `go/shared/assetop` 已由聚宝斋会话按 S4 第二轮 + 90 清单 X-03/Y-06 落码并提交(`795ea9f6a`,未编译)。
+> **B5b 的 `GuildAssetStore` 按下面三条实现,正文里与之冲突的写法作废**;签名以磁盘上的
+> `go/shared/assetop/reconcile.go` 为准,落码前先读一遍。
+>
+> 1. **`ListDue` 是两段非锁读**(X-03 防饿死,契约注释在 `reconcile.go`):
+>    第一段 `attempts < assetop.FreshAttemptLimit`(**用导出常量,不许写 3**)取满 limit;
+>    第二段只补缺口、第一段取满就**不发**第二条 SQL;两段都 `ORDER BY next_attempt_ms ASC, op_id ASC`;
+>    按 `op_id` 去重,第一段的 id 排前面。`go/trade` 已有同形实现,可直接照抄。
+>    **反向代价**(对方补充,一并接受):新行满额时老行拿不到名额(scene 故障恢复期正是这个形状),
+>    靠 `assetop_pending_oldest_age_seconds` 告警兜底;要改成"给老行保底"必须先改 X-03。
+> 2. **`Claim` 是六参**:`(ctx, opID, nowMs, leaseUntilMs, poisonUntilMs, token)`。
+>    毒行延迟由循环算好**绝对时刻**传进来,`PoisonDelay` 不再是死配置 ——
+>    **Store 实现不许再自写一份 1h 常量**(那正是两份值分叉的来源)。
+> 3. **`Reschedule` 在 `RowsAffected == 0` 时必须回 `assetop.ErrLeaseLost`**(可 `%w` 包一层)。
+>    不回的话,"我这一轮的结果被另一个副本丢弃了"在指标里恒为 0,是看不见的静默失败。
+>
+> 另外三条与 B5 直接相关:
+>
+> - **隔离级不用显式传**:`assetop.WithTxRetry` 的默认就是 READ COMMITTED(对方保留了这个默认,
+>   理由记在 `DefaultTxRetryConfig` 注释里:会丢钱的路径不接受"语义由 DSN 决定")。与 D7 一致。
+> - **签名串 canonical 扩了 `;u=;p=` 两段**(空则 `;u=;p=0`)。帮会走 GUILD_* 流,这两段恒为空,
+>   **行为不受影响**;但两边 golden 字面量都改了,若日后在帮会侧写签名用例,别抄旧 golden。
+> - **本机开发密钥改成随机生成**,落 `run/secrets/assetop-dev.env`。B5b 给 guild 注入
+>   `MMORPG_ASSET_OP_SECRET_GUILD` 时**必须从该文件取**,90 清单 G-04 里原来写死的
+>   `change-me-dev-asset-op-guild-secret-000000` 已作废 —— 写死值会被人抄进预发环境。
+
 # S5 捐献、帮会升级与帮会商店(B5a-d)
 > 本节由 9 个分部合并而成(原分部名保留在小标题里),另附对抗评审处理记录。
 

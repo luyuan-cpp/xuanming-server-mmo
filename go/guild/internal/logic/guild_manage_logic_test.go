@@ -382,7 +382,7 @@ func TestReviewApproveChecksApplicantZoneBeforeRepo(t *testing.T) {
 func TestWriteConflictMapsToBusyTip(t *testing.T) {
 	l := NewGuildLogic(nil, nil, nil, nil, nil)
 
-	tip, err := l.mapWriteErr(context.Background(), 42, 1, data.ErrWriteConflict)
+	tip, err := l.mapWriteErr(context.Background(), 42, 1, 1, data.ErrWriteConflict)
 
 	require.NoError(t, err)
 	require.NotNil(t, tip)
@@ -420,7 +420,7 @@ func TestMapWriteErrMapping(t *testing.T) {
 	}
 	for _, tc := range tips {
 		t.Run(tc.name, func(t *testing.T) {
-			tip, err := l.mapWriteErr(ctx, 42, 1, tc.err)
+			tip, err := l.mapWriteErr(ctx, 42, 1, 1, tc.err)
 
 			require.NoError(t, err, "业务拒绝必须回 tip + nil error")
 			require.NotNil(t, tip)
@@ -438,7 +438,7 @@ func TestMapWriteErrMapping(t *testing.T) {
 	}
 	for _, tc := range faults {
 		t.Run(tc.name, func(t *testing.T) {
-			tip, mapped := l.mapWriteErr(ctx, 42, 1, tc.err)
+			tip, mapped := l.mapWriteErr(ctx, 42, 1, 1, tc.err)
 
 			assert.Nil(t, tip)
 			assert.Equal(t, codes.Internal, status.Code(mapped))
@@ -446,14 +446,14 @@ func TestMapWriteErrMapping(t *testing.T) {
 	}
 
 	t.Run("入参为 nil 时不产生 tip", func(t *testing.T) {
-		tip, err := l.mapWriteErr(ctx, 42, 1, nil)
+		tip, err := l.mapWriteErr(ctx, 42, 1, 1, nil)
 		assert.Nil(t, tip)
 		assert.NoError(t, err)
 	})
 
 	t.Run("未知错误原样返回", func(t *testing.T) {
 		boom := errors.New("some unexpected failure")
-		tip, err := l.mapWriteErr(ctx, 42, 1, boom)
+		tip, err := l.mapWriteErr(ctx, 42, 1, 1, boom)
 
 		assert.Nil(t, tip, "认不出的错误不能被翻成任何业务码")
 		assert.ErrorIs(t, err, boom)

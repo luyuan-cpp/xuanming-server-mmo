@@ -427,7 +427,7 @@ func (l *GuildLogic) LeaveGuild(ctx context.Context, req *pb.LeaveGuildRequest) 
 			who.playerID, guildID, current)
 		return &pb.LeaveGuildResponse{ErrorMessage: tipErr(constants.ErrAlreadyInGuild, "guild membership changed, retry")}, nil
 	}
-	if tip, err := l.mapWriteErr(ctx, who.playerID, guildID, err); err != nil || tip != nil {
+	if tip, err := l.mapWriteErr(ctx, who.playerID, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.LeaveGuildResponse{ErrorMessage: tip}, err
 	}
 	// 快照已不含退帮者,所以"剩余全体"就是收件人;他自己拿的是这次响应,不必再推。
@@ -462,7 +462,7 @@ func (l *GuildLogic) DisbandGuild(ctx context.Context, req *pb.DisbandGuildReque
 	if errors.Is(err, data.ErrRankTooLow) {
 		return &pb.DisbandGuildResponse{ErrorMessage: tipErr(constants.ErrNotLeader, "not guild leader")}, nil
 	}
-	if tip, err := l.mapWriteErr(ctx, who.playerID, guildID, err); err != nil || tip != nil {
+	if tip, err := l.mapWriteErr(ctx, who.playerID, guildID, guildID, err); err != nil || tip != nil {
 		return &pb.DisbandGuildResponse{ErrorMessage: tip}, err
 	}
 
@@ -510,7 +510,7 @@ func (l *GuildLogic) SetAnnouncement(ctx context.Context, req *pb.SetAnnouncemen
 	if errors.Is(err, data.ErrAnnouncementForbidden) {
 		return &pb.SetAnnouncementResponse{ErrorMessage: tipErr(constants.ErrNoPermission, "no permission")}, nil
 	}
-	if tip, err := l.mapWriteErr(ctx, who.playerID, req.GuildId, err); err != nil || tip != nil {
+	if tip, err := l.mapWriteErr(ctx, who.playerID, req.GuildId, req.GuildId, err); err != nil || tip != nil {
 		return &pb.SetAnnouncementResponse{ErrorMessage: tip}, err
 	}
 

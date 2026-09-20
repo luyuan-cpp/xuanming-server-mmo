@@ -448,7 +448,9 @@ func auditPlayerNameConflicts(ctx context.Context, cfg auditConfig) ResourceAudi
 //
 // 2026-09-18(friend 移植 F3):friend 的表从共享库 `mmorpg` 搬到独占库
 // `mmorpg_friend`(port-decisions D-14),建表由 go/schemamigrate 按
-// proto/friend/friend_table.proto 做,不再由 deploy/mysql-init/guild_friend_tables.sql 建。
+// proto/friend/friend_table.proto 做。原先建这三张表的 deploy/mysql-init/guild_friend_tables.sql
+// 已于 2026-09-19 **整个文件删除**:帮会二期把公会表迁进 mmorpg_guild、本次把好友表迁进
+// mmorpg_friend,两边各搬走一半后它已无内容(建库改在 deploy/mysql-init/00_init_zone_dbs.sql)。
 //
 // 本次**只改连接目标,不加任何迁移逻辑**:已核对 friend / friend_request 的行里
 // 没有 zone_id / home_zone 之类的分区列,合服后按 player_id 自动存活 —— 这一点

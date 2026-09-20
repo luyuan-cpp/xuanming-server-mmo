@@ -87,4 +87,28 @@ const (
 	// 有人拿着 admin token 手工调了这个接口,要么工具的步骤被跳过了 —— 两种情况下
 	// 源 zone 都还在线接受新映射,改写会与在线写入交错,产生一批指向源 zone 的漏网玩家。
 	ErrCodeMergeFenceMissing uint32 = 24
+
+	// ── 玩家名字注册表(docs/design/guild-phase2/03-names.md §3.1)────────────
+
+	// ErrCodePlayerNameDBError:player_name 表读写失败,或名字 store 根本没装配起来
+	// (建表失败 / 连不上全局库 / PlayerName 段配置非法)。
+	//
+	// 与 ErrCodeSnapshotDBError、ErrCodeIdSegmentDBError 分开:三者同库,但告警必须
+	// 一眼分清坏的是哪条路 —— 名字挂了的症状是**建角全线拒绝**(名字登记是 CreatePlayer
+	// 的同步前置),而回滚库挂了只影响 GM 工具。混成一个码,值班只能挨个试。
+	//
+	// 方向是 fail-closed:读不到名字可以降级成空名展示,但**登记**结果不确定时绝不能
+	// 放行 —— 两个角色拿到同一个名字之后没有任何事后修复手段(v1 不支持改名)。
+	ErrCodePlayerNameDBError uint32 = 25
+
+	// ErrCodePlayerNameConflict:这个 player_id 名下已经登记了**另一个**名字。
+	//
+	// v1 没有改名功能,所以它只可能来自 player_id 复用(号段行被重置 / 全局库从旧备份
+	// 恢复,见 ErrCodeIdSegmentUnknownTag)——也就是说请求里的这个 id 在库里已经属于
+	// 另一个在役角色。绝不能"顺手把旧的删了再插新的":那会抹掉一个活人的名字,且不可
+	// 回滚。返回本码 + ERROR 日志,交给人去查发号水位。
+	//
+	// 与 ErrCodePlayerNameDBError 分开:那个是"库坏了,重试可能好";这个是数据已经
+	// 互相矛盾,重试一万次都是同一个答案。
+	ErrCodePlayerNameConflict uint32 = 26
 )
