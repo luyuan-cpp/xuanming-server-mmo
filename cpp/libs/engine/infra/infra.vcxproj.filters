@@ -10,6 +10,7 @@
     <ClInclude Include="messaging\kafka\kafka_consumer.h" />
     <ClInclude Include="messaging\kafka\kafka_manager.h" />
     <ClInclude Include="messaging\kafka\kafka_producer.h" />
+    <ClInclude Include="messaging\kafka\kafka_producer_policy.h" />
     <ClInclude Include="storage\redis_client\redis_client.h" />
   </ItemGroup>
   <ItemGroup>
