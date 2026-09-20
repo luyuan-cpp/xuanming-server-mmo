@@ -150,9 +150,13 @@ func (r *AssetOpRepo) ListDue(ctx context.Context, nowMs uint64, limit int) ([]u
 // Claim 单行主键 CAS 领取(autocommit),紧挨着处理前调用,租约从"领到这一行"起算。
 // RowsAffected == 0 表示这一行已被别的副本领走(或已终结),返回 (Op{}, false, nil)。
 //
-// payload 解不开的毒行不能卡住整个循环:把它推迟 PoisonDelay 并回 assetop.ErrPoisonRow,
+// payload 解不开的毒行不能卡住整个循环:把它推迟到 poisonUntilMs 并回 assetop.ErrPoisonRow,
 // 循环记 decode 计数后继续下一行(§4.37)。
-func (r *AssetOpRepo) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, token uint64) (assetop.Op, bool, error) {
+//
+// poisonUntilMs 由 assetop 的重投循环按 LoopConfig.PoisonDelay 算好传进来。**这里不许再自写
+// 一份毒行延迟常量**:写了的话 yaml 里改 PoisonDelay 不生效,两份值迟早分叉,而分叉的表现是
+// "配置改了没用",没有任何报错。
+func (r *AssetOpRepo) Claim(ctx context.Context, opID, nowMs, leaseUntilMs, poisonUntilMs, token uint64) (assetop.Op, bool, error) {
 	ctx, cancel := r.bounded(ctx)
 	defer cancel()
 	res, err := r.db.ExecContext(ctx,
