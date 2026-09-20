@@ -5446,3 +5446,14 @@ gate 主线程栈自下而上:`Node::StartRpcServer` → `RegisterKafkaHandlers`
 - 把「`mysql-backup-cronjob.yaml` 不在 `Apply-Infra` 的 apply 列表」当成缺陷 —— **错的**,它是 `docs/ops/mysql-backup-pitr-runbook.md` §2.1/§2.2 明写的运维手工步骤,且依赖的 RWX PVC 在 kind 上绑不上。**教训:审计说「X 从不被 apply」时,先 grep docs/ops 看是不是手工 SOP。**
 - 09-17 晚为让启动器通过 Kafka 就绪探测,擅自 `docker update --cpu-shares 8192` 调高了四个共享容器的 CPU 权重(越权,已还原为 1024)。**共享基础设施的资源配额不是"为了把栈拉起来"就能动的。**
 - 一次 `git add <路径>` 把另一会话在同文件中的两行在途改动一并提交(`2191af22b`)。**多会话共用工作树时,提交前必须 `git diff --cached` 逐行看新增行是不是自己写的**,只核对文件名不够。
+
+## 2026-09-20 friend 移植交接:交接文档续完(换机复核 + 客户端只读摸底)(Claude,未编译)
+
+friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到复核阶段时额度用尽;本条由另一台机器(机器 B,`D:\luyuan\wuxingqitan\mmorpg`)上的会话续完。**只改文档,没有动任何代码、配表或生成物;没有跑任何构建 / 测试 / 导表 / proto-gen。**
+
+- **交接入口**:`docs/design/friend-handoff-20260920.md`(服务端:现状 / 九步验证 / 9 条收尾项 / 后续服务 / 坑 / 存疑项)+ `docs/design/friend-client-spec-20260920.md`(Unity 客户端任务规格,新增)。
+- **复核**:7 路并行把交接文档的 606 条可核对论断逐条对着 `d9e471b80` 核对,报出 52 条差异,另经一道"默认文档是对的"的反驳式复验,**确认 50 条、驳回 2 条**,确认项已就地改进正文(清单见交接文档 §8)。其中会让接手人做错事的:悬空引用是五类不是三类(`friend_table.pb.go` 从未生成过);改名**不会**让全仓消息号洗牌(已有方法原号保留);**data_service 的 3 个新 rpc(B3a)会和 friend 一起抢号**,regen 后 `kMaxRpcMethodCount` 期望 234;客户端 `gen_proto.ps1` 缺的不止 friend 还有 team / jubaozhai,默认配置会给客户端新增 31 个桩;manifest 期望是 53→63 而不是 46→63;`-migrate` 后库里是 5 张表(含 `schema_migrations`);缓存补 `"0"` 分支**不能**用冒烟验证;`friend_capacity` 无条件建行的路径**只有 `AddFriendRequest` 一条**(机器 A 复核时把 `AcceptFriend` 也算进去是改错了,已改回);team 不进 catalogue / k8s 是 D-2 的设计而不是尾巴;rank 的 51000 已被 login staging 档占用。
+- **换机差异**(交接文档 §0):机器 B 有 Go 1.26.5 / protoc 35.1 / 两个 protoc 插件,**没有 Python**(导表器跑不了)、Docker 守护进程没起;`bin\go_services\friend.exe` 是一份 08-02 的移植前旧构建(会让 `start_game.ps1` 的"缺 exe 跳过"失效);`proto-gen.exe` 是 09-09 的,早于 `cecb52995`,不先 `proto-gen-build` 会吞掉 `scene_node_service.cpp` 的 Agones 块。
+- **客户端摸底**(用户授权只读 `../mmorpg-client/`,未授权修改):Unity 的生成桩从未被接线(`HandlerRegistry.Register` 全仓零调用,接上反而会静默盖掉手写的 `RedirectToGate` 处理器),friend 的推送接线要手写;客户端没有红点系统 / 全局 tip 表 / UIManager / 登录后首拉的先例;三个拉取时机里"登录后"与"跨区落地"挂同一个钩子 `GameClient.OnSceneEntered`。
+- **接手前需要用户拍板的三件事**:① 机器 B 装 Python 3.12 + openpyxl;② `Tip.xlsx` 里 `FriendBlocked` 的文案「对方已将你拉黑」与 `constants.go` "不泄露拉黑方向"的设计意图矛盾,改哪一边;③ proto-gen 这批带不带客户端(带 = 同批把 team / jubaozhai / friend 三个 proto 补进客户端 `gen_proto.ps1`,需要客户端修改授权;不带 = 用 `enable_unity_client: false` 的配置副本跑)。另需与帮会二期 B3a 那条线确认 data_service 三个 rpc、`RoleNameRule` 新表与三个 login tip 码可以随这次 regen / 导表一起发号。
+- **未验证**:全部。friend 三批代码仍然从未编译、从未运行;本条只让交接文档与现行代码对齐。
