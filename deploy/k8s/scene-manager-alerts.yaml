@@ -353,6 +353,35 @@ spec:
               预算;对照 scene_manager_scene_orphans_reconciled_total 与
               scene_manager_instance_destroyed_total 看 reconcileDeadNodeScenes 近期是否触发过。
 
+        # --- EnterScene 落点回滚(scene_manager_enter_scene_rollback_total)---------
+        # 推路由 / 重定向(Kafka)失败之后,scene_manager 要把本次落点(location + owner_epoch)
+        # 精确值退回去(internal/logic/owner_epoch.go rollbackPlayerPlacement)。outcome:
+        #   rolled_back / already_rolled_back  正常收尾(后者 = go-redis 重发时首发已生效),不告警;
+        #   superseded                         被并发请求推进,偶发属正常并发,不告警;
+        #   redis_error                        go-redis 重试耗尽仍出错,**不告警就没有别的信号**:
+        #                                      Redis 里可能留着本次落点(epoch 已推进),而 Kafka 同时也坏了。
+        # "理应为 0"且单次就有玩家受影响的事件:任一次即告警(> 0),不设 for。该指标只按 outcome 分,
+        # 不带 zone_id;哪个 zone 要看是哪个 scene_manager 实例报的。代码从未编译、未实测,无基线。
+        - alert: SceneManagerEnterSceneRollbackRedisError
+          expr: |
+            sum(increase(scene_manager_enter_scene_rollback_total{outcome="redis_error"}[10m])) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "EnterScene 推路由 / 重定向失败后,回滚落点时 Redis 也出错(10 分钟内 {{ $value }} 次)"
+            description: |
+              Kafka 推送与 Redis 回滚在同一次 EnterScene 里先后失败(双重故障),或 Redis 在回滚那一刻
+              抖动。玩家的 player:{id}:location / owner_epoch 可能停在本次落点上,没有退回:
+              跨 zone 第一条腿:location 停在目标 zone 的等待落点(node_id 为空)。源 scene 收到失败应答
+              (ErrKafkaRoute=7)后立即裁决为"已被放行"(应答也丢失时由看门狗约 30s 后裁决),给客户端发失败
+              tip 与踢线 34、销毁实体;玩家重登即可落地,数据以冻结时的存盘为准,不丢。
+              scene 日志搜 "[ZoneTravel][ClientReset]" 对照。
+              同 zone 路由失败:location 指向一个从未收到路由的节点,源实体被销毁而 gate 会话仍绑在源
+              节点上,玩家挂在哑连接上,要等客户端自己断线重登(已知限制);重登若被 18 挡住,等断线租约到期。
+              处置:先查 Redis(连接数、慢日志、主从切换)与 Kafka broker 是否同时异常;scene_manager 日志
+              搜 "[RouteRollback] outcome=redis_error" 拿到 player 与 epoch,必要时按 location 人工核对。
+            runbook_url: docs/ops/cross-zone-failure-test-runbook.md
+
         - alert: SceneManagerSceneOrphanReconcileSpike
           # A burst of orphan reconciles past 50/min in one zone is most
           # likely a scene-node pod crash. One spike is informational;

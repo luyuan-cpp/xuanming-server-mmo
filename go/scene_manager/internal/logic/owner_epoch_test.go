@@ -1801,3 +1801,319 @@ func TestPlayerLocationOwnerDeadFailsClosedOnAmbiguousIdentity(t *testing.T) {
 	assert.False(t, logic.playerLocationOwnerDead(&scene_manager.PlayerLocation{ZoneId: testZoneId, OwnerEpoch: 1}, testZoneId), "等待落点另有规则")
 	assert.False(t, logic.playerLocationOwnerDead(&scene_manager.PlayerLocation{NodeId: "20", ZoneId: testZoneId}, testZoneId), "节点还活着")
 }
+
+// --- go-redis 重放 EVAL / 回滚三态(S3L1-1 第二层出口) -----------------------------
+
+// enterSceneRollbackCount 从默认注册表读 scene_manager_enter_scene_rollback_total 的一个取值,
+// 写法同 enterSceneRejectedCount。还没发射过的 outcome 读作 0;用例只比较前后差值。
+func enterSceneRollbackCount(t *testing.T, outcome string) float64 {
+	t.Helper()
+	families, err := prometheus.DefaultGatherer.Gather()
+	require.NoError(t, err)
+	for _, family := range families {
+		if family.GetName() != "scene_manager_enter_scene_rollback_total" {
+			continue
+		}
+		for _, metric := range family.GetMetric() {
+			for _, pair := range metric.GetLabel() {
+				if pair.GetName() == "outcome" && pair.GetValue() == outcome {
+					return metric.GetCounter().GetValue()
+				}
+			}
+		}
+	}
+	return 0
+}
+
+// go-redis 会把同一条回滚 EVAL 原样重发:首发已经回滚、应答丢了时,重发必须认出「已回滚」并
+// 返回 true(调用方据此照还人数),而不是被记成「并发推进」。只对铸造过的落点成立。
+func TestRollbackPlayerPlacementReportsAlreadyRolledBackOnReExecution(t *testing.T) {
+	log := NewEnterSceneLogic(context.Background(), &svc.ServiceContext{}).Logger
+
+	t.Run("minted_over_existing_location", func(t *testing.T) {
+		sc, _ := newTestSvcCtxWithWorldScenes(t)
+		const playerID = uint64(6190)
+		require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, 7190, "10", 1))
+		oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		oldLoc, err := GetPlayerLocation(context.Background(), sc, playerID)
+		require.NoError(t, err)
+		require.NotNil(t, oldLoc)
+		// 跨 zone 第一条腿:铸出 2,location 写成 zone 2 的等待落点。
+		placed, err := placePlayerLocation(sc, playerID, 0, "", 2, placementGuard{observedEpoch: 1, mint: true})
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), placed.epoch)
+		restore := rollbackEpochFor(oldLoc, placed)
+		require.Equal(t, uint64(1), restore)
+
+		rolledBefore := enterSceneRollbackCount(t, rollbackOutcomeRolledBack)
+		alreadyBefore := enterSceneRollbackCount(t, rollbackOutcomeAlreadyRolledBack)
+		assert.True(t, rollbackPlayerPlacement(sc, log, playerID, placed, oldRaw, restore), "首发:本次回滚成功")
+		assert.Equal(t, rolledBefore+1, enterSceneRollbackCount(t, rollbackOutcomeRolledBack))
+		assert.True(t, rollbackPlayerPlacement(sc, log, playerID, placed, oldRaw, restore), "重发:认出已回滚,照样返回 true")
+		assert.Equal(t, alreadyBefore+1, enterSceneRollbackCount(t, rollbackOutcomeAlreadyRolledBack))
+
+		assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		assert.Equal(t, oldRaw, raw)
+	})
+
+	t.Run("first_landing_without_old_location", func(t *testing.T) {
+		sc, mr := newTestSvcCtxWithWorldScenes(t)
+		const playerID = uint64(6191)
+		placed, err := placePlayerLocation(sc, playerID, 7191, "10", testZoneId, placementGuard{observedEpoch: 0, mint: true})
+		require.NoError(t, err)
+		require.Equal(t, uint64(1), placed.epoch)
+		restore := rollbackEpochFor(nil, placed)
+		require.Equal(t, uint64(0), restore)
+
+		alreadyBefore := enterSceneRollbackCount(t, rollbackOutcomeAlreadyRolledBack)
+		assert.True(t, rollbackPlayerPlacement(sc, log, playerID, placed, "", restore))
+		assert.False(t, mr.Exists(getPlayerLocationKey(playerID)), "本次之前没有 location:回滚 = DEL")
+		assert.True(t, rollbackPlayerPlacement(sc, log, playerID, placed, "", restore), "键不存在 + epoch 已回 0 = 已回滚")
+		assert.Equal(t, alreadyBefore+1, enterSceneRollbackCount(t, rollbackOutcomeAlreadyRolledBack))
+		assert.Equal(t, "0", ownerEpochRaw(t, sc, playerID))
+	})
+
+	t.Run("non_minted_rollback_never_reports_already", func(t *testing.T) {
+		sc, _ := newTestSvcCtxWithWorldScenes(t)
+		const playerID = uint64(6192)
+		require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, 7192, "10", testZoneId))
+		oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		oldLoc, err := GetPlayerLocation(context.Background(), sc, playerID)
+		require.NoError(t, err)
+		// 同物理节点换图:不铸造,epoch 仍是 1。
+		placed, err := placePlayerLocation(sc, playerID, 7292, "10", testZoneId, placementGuard{observedEpoch: 1, mint: false})
+		require.NoError(t, err)
+		require.False(t, placed.minted)
+		restore := rollbackEpochFor(oldLoc, placed)
+		require.Equal(t, uint64(1), restore)
+
+		alreadyBefore := enterSceneRollbackCount(t, rollbackOutcomeAlreadyRolledBack)
+		supersededBefore := enterSceneRollbackCount(t, rollbackOutcomeSuperseded)
+		assert.True(t, rollbackPlayerPlacement(sc, log, playerID, placed, oldRaw, restore))
+		// 状态看起来「已回滚」,但非铸造回滚证明不了是本请求所为(同秒同值的别的落点也能写出
+		// 一模一样的字节),不得返回 2、不得让调用方再还一次人数。
+		assert.False(t, rollbackPlayerPlacement(sc, log, playerID, placed, oldRaw, restore))
+		assert.Equal(t, alreadyBefore, enterSceneRollbackCount(t, rollbackOutcomeAlreadyRolledBack))
+		assert.Equal(t, supersededBefore+1, enterSceneRollbackCount(t, rollbackOutcomeSuperseded))
+		assert.Equal(t, "1", ownerEpochRaw(t, sc, playerID))
+		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		assert.Equal(t, oldRaw, raw)
+	})
+}
+
+// go-redis 会把同一条铸造 EVAL 原样重发:首发已生效时,凭标记放行的请求要被认成「已生效」并
+// 返回同一个新 epoch(epoch 只前进一格);不带标记的铸造维持冲突(0)。直接对同一组
+// KEYS / ARGV 连续 Eval 两次,就是 go-redis 重发的样子。
+func TestMintEpochLuaRecognizesReplayOfItsOwnWrite(t *testing.T) {
+	keys := func(playerID uint64) []string {
+		return []string{ownerepoch.OwnerEpochKey(playerID), getPlayerLocationKey(playerID), ownerepoch.HandoffKey(playerID)}
+	}
+
+	t.Run("with_marker_replay_is_recognized", func(t *testing.T) {
+		sc, _ := newTestSvcCtxWithWorldScenes(t)
+		const playerID = uint64(6193)
+		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+		writeHandoffMarker(t, sc, playerID, 1)
+		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+
+		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		require.NoError(t, err)
+		assert.Equal(t, "2", fmt.Sprint(result))
+		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		require.NoError(t, err)
+		assert.Equal(t, "-2", fmt.Sprint(result), "重发:认出是本请求自己的写入,返回取负的同一个新 epoch")
+		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "epoch 只前进一格")
+		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		assert.Equal(t, "awaiting-bytes", raw)
+	})
+
+	t.Run("replay_after_marker_withdrawn_is_conflict", func(t *testing.T) {
+		sc, mr := newTestSvcCtxWithWorldScenes(t)
+		const playerID = uint64(6194)
+		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+		writeHandoffMarker(t, sc, playerID, 1)
+		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+
+		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		require.NoError(t, err)
+		require.Equal(t, "2", fmt.Sprint(result))
+		// 源 scene 已 DEL 标记(它随后读 epoch 自行裁决),重发不再认。
+		mr.Del(ownerepoch.HandoffKey(playerID))
+		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		require.NoError(t, err)
+		assert.Equal(t, "0", fmt.Sprint(result))
+		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	})
+
+	t.Run("replay_after_location_changed_is_conflict", func(t *testing.T) {
+		sc, _ := newTestSvcCtxWithWorldScenes(t)
+		const playerID = uint64(6195)
+		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+		writeHandoffMarker(t, sc, playerID, 1)
+		marker, _ := sc.Redis.Get(ownerepoch.HandoffKey(playerID))
+
+		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		require.NoError(t, err)
+		require.Equal(t, "2", fmt.Sprint(result))
+		require.NoError(t, sc.Redis.Set(getPlayerLocationKey(playerID), "someone-else-bytes"))
+		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "awaiting-bytes", marker)
+		require.NoError(t, err)
+		assert.Equal(t, "0", fmt.Sprint(result), "location 不是本请求写的那份:不是本请求生效")
+		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		assert.Equal(t, "someone-else-bytes", raw)
+	})
+
+	t.Run("without_marker_replay_stays_conflict", func(t *testing.T) {
+		sc, _ := newTestSvcCtxWithWorldScenes(t)
+		const playerID = uint64(6196)
+		require.NoError(t, sc.Redis.Set(ownerepoch.OwnerEpochKey(playerID), "1"))
+
+		result, err := sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "loc-bytes", "")
+		require.NoError(t, err)
+		require.Equal(t, "2", fmt.Sprint(result))
+		result, err = sc.Redis.Eval(luaMintEpochAndSetLocation, keys(playerID), "1", "loc-bytes", "")
+		require.NoError(t, err)
+		assert.Equal(t, "0", fmt.Sprint(result), "不凭标记的铸造区分不开「我已生效」与「别人写了同样的值」,维持冲突")
+		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	})
+}
+
+// decodeMintReply:只有 ≤ -2 是重放识别命中(还原成正的 epoch);-1(标记已撤回)、0(冲突)、
+// 正常新 epoch 原样透传。placePlayerLocation 每次都重新取 UpdateTime,没法经它确定地复现重放,
+// 所以脚本侧由上面的直接 Eval 用例覆盖,Go 侧的拆解在这里单测。
+func TestDecodeMintReply(t *testing.T) {
+	cases := []struct {
+		in       int64
+		epoch    int64
+		replayed bool
+	}{
+		{in: -2, epoch: 2, replayed: true},
+		{in: -17, epoch: 17, replayed: true},
+		{in: -1, epoch: -1, replayed: false},
+		{in: 0, epoch: 0, replayed: false},
+		{in: 5, epoch: 5, replayed: false},
+	}
+	for _, c := range cases {
+		epoch, replayed := decodeMintReply(c.in)
+		assert.Equal(t, c.epoch, epoch, "in=%d", c.in)
+		assert.Equal(t, c.replayed, replayed, "in=%d", c.in)
+	}
+}
+
+// S3L1-1 的服务端半边:跨 zone 第一条腿推重定向失败,回滚时 Redis 也出错。回 7,不发重定向;
+// location 停在等待落点、epoch 停在已铸出的值(由源 scene 读 epoch 裁决为「已被放行」并重置
+// 客户端);redis_error 计一次;旧场景人数不还(回滚没确认生效)。
+func TestEnterScene_CrossZoneRedirectKafkaAndRollbackFailureLeavesAwaitingPlacement(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	sc.Kafka = &countingKafkaWriter{
+		err: errors.New("broker unavailable"),
+		// 写 Kafka 的那一刻起 Redis 全挂:紧随其后的回滚 EVAL 拿到错误(ERR 前缀,go-redis 不重试)。
+		onWrite: func([]kafka.Message) { mr.SetError("ERR injected") },
+	}
+	sc.Config.KafkaWriteTimeoutSeconds = 1
+
+	const (
+		playerID = uint64(6197)
+		oldScene = uint64(7197)
+	)
+	seedSceneOnNode(mr, 1, oldScene, "10", "3")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	writeHandoffMarker(t, sc, playerID, 1)
+	seedDefaultWorldChannel(t, mr, 2)
+
+	redisErrBefore := enterSceneRollbackCount(t, rollbackOutcomeRedisError)
+	rolledBefore := enterSceneRollbackCount(t, rollbackOutcomeRolledBack)
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, ZoneId: 2,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	mr.SetError("")
+	require.NoError(t, err)
+	assert.Equal(t, constants.ErrKafkaRoute, resp.ErrorCode)
+	assert.Nil(t, resp.Redirect)
+
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID), "回滚没落地:epoch 停在第一条腿铸出的值")
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, uint32(2), loc.ZoneId)
+	assert.Equal(t, "", loc.NodeId, "location 停在目标 zone 的等待落点")
+	assert.Equal(t, uint64(2), loc.OwnerEpoch)
+	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
+	assert.Equal(t, "2", oldCount, "回滚没确认生效,旧场景人数不还")
+	assert.Equal(t, redisErrBefore+1, enterSceneRollbackCount(t, rollbackOutcomeRedisError))
+	assert.Equal(t, rolledBefore, enterSceneRollbackCount(t, rollbackOutcomeRolledBack))
+}
+
+// 上一条用例留下的终态上,玩家被源 scene 踢回选服后从源 zone 重登:等待落点没有持有者,不过
+// 换手门、不需要标记,照常铸造下一代落地。归属走真实查询分支(注入 HomeZone,不走
+// AllowGateZoneAsHomeZone 的 dev 回落),未映射时按传送残留拒绝且一个字节不改。
+func TestEnterScene_LoginAtSourceZoneOverUnrolledAwaitingPlacement(t *testing.T) {
+	const (
+		playerID = uint64(6198)
+		sceneID  = uint64(7198)
+	)
+	setup := func(t *testing.T, homeZone *fakeHomeZoneClient) (*svc.ServiceContext, *[]kafka.Message) {
+		t.Helper()
+		sc, mr := newTestSvcCtxWithWorldScenes(t)
+		captured := capturingKafkaWriter(sc)
+		sc.HomeZone = homeZone
+		seedSceneOnNode(mr, 1, sceneID, "10", "0")
+		// zone 2 有活节点:等待落点不会被当成「已下线 zone 的陈旧位置」过滤掉。
+		mr.ZAdd(nodeLoadKey(2), 0, "20")
+		mr.Set(ownerepoch.OwnerEpochKey(playerID), "1")
+		// 第一条腿铸出 2、写下 zone 2 的等待落点,回滚没落地。标记已被源 scene DEL。
+		placed, err := placePlayerLocation(sc, playerID, 0, "", 2, placementGuard{observedEpoch: 1, mint: true})
+		require.NoError(t, err)
+		require.Equal(t, uint64(2), placed.epoch)
+		return sc, captured
+	}
+	request := func() *scene_manager.EnterSceneRequest {
+		return &scene_manager.EnterSceneRequest{
+			PlayerId: playerID, SceneId: sceneID, ZoneId: 1,
+			GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+		}
+	}
+
+	t.Run("mapped_lands", func(t *testing.T) {
+		fake := &fakeHomeZoneClient{zone: 1}
+		sc, captured := setup(t, fake)
+
+		resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(request())
+		require.NoError(t, err)
+		assert.Equal(t, uint32(0), resp.ErrorCode)
+		assert.Equal(t, 1, fake.calls, "消费等待落点必须真的查归属")
+		assert.Equal(t, "3", ownerEpochRaw(t, sc, playerID))
+		loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+		require.NotNil(t, loc)
+		assert.Equal(t, uint32(1), loc.ZoneId)
+		assert.Equal(t, sceneID, loc.SceneId)
+		assert.Equal(t, "10", loc.NodeId)
+		assert.Equal(t, uint64(3), loc.OwnerEpoch)
+		require.Len(t, *captured, 1)
+		event := decodeRoutePlayerEvent(t, (*captured)[0])
+		assert.Equal(t, uint64(3), event.OwnerEpoch)
+		assert.Equal(t, uint32(1), event.HomeZoneId)
+	})
+
+	t.Run("unmapped_rejected_without_side_effects", func(t *testing.T) {
+		fake := &fakeHomeZoneClient{err: status.Error(codes.NotFound, "error_code=2: no home zone mapping for player 6198")}
+		sc, captured := setup(t, fake)
+		awaitingRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+
+		resp, err := NewEnterSceneLogic(context.Background(), sc).EnterScene(request())
+		require.NoError(t, err)
+		assert.Equal(t, constants.ErrHomeZoneUnavailable, resp.ErrorCode)
+		assert.Equal(t, 1, fake.calls)
+		assert.Empty(t, *captured)
+		assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+		raw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
+		assert.Equal(t, awaitingRaw, raw)
+		count, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, sceneID))
+		assert.Equal(t, "0", count)
+	})
+}

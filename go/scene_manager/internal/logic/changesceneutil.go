@@ -7,11 +7,13 @@ import (
 	"time"
 
 	smpb "proto/scene_manager"
+	"scene_manager/internal/metrics"
 	"scene_manager/internal/svc"
 	"shared/kafkacmd"
 	"shared/ownerepoch"
 
 	kafkago "github.com/segmentio/kafka-go"
+	"github.com/zeromicro/go-zero/core/logx"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -156,6 +158,10 @@ func placePlayerLocation(svcCtx *svc.ServiceContext, playerId uint64, sceneId ui
 	if parseErr != nil {
 		return placedLocation{}, fmt.Errorf("owner_epoch CAS 返回值非法: %v: %w", result, parseErr)
 	}
+	replayed := false
+	if mint {
+		signed, replayed = decodeMintReply(signed)
+	}
 	if signed == -1 {
 		return placedLocation{}, errHandoffWithdrawn
 	}
@@ -168,7 +174,23 @@ func placePlayerLocation(svcCtx *svc.ServiceContext, playerId uint64, sceneId ui
 		// 约定被改劈叉了。location 里的 epoch 已经是错的,必须当失败处理。
 		return placedLocation{}, fmt.Errorf("owner_epoch 铸造结果 %d 与预期 %d 不一致", returned, placedEpoch)
 	}
+	if replayed {
+		// 铸造 EVAL 首发已生效、应答丢了,go-redis 原样重发被脚本认成「本请求已生效」。
+		// 以前这里回 19、既不发重定向也不回滚;应恒近 0,持续出现说明 zone Redis 读超时频繁。
+		metrics.ObserveEnterSceneMintReplayRecognized()
+		logx.Infof("[MintReplay] player=%d epoch=%d zone=%d: owner_epoch mint EVAL was replayed by the redis client; recognised as this request's own write",
+			playerId, placedEpoch, zoneId)
+	}
 	return placedLocation{epoch: placedEpoch, minted: mint, raw: raw}, nil
+}
+
+// decodeMintReply 把 luaMintEpochAndSetLocation 的返回值拆成 (epoch 或状态码, 是否重放识别命中)。
+// 只对铸造脚本调用:重放识别命中时脚本返回 -新epoch(≤ -2),其余返回值(-1 / 0 / 新 epoch)原样透传。
+func decodeMintReply(signed int64) (int64, bool) {
+	if signed < -1 {
+		return -signed, true
+	}
+	return signed, false
 }
 
 // DeletePlayerLocation removes the player's location from Redis.

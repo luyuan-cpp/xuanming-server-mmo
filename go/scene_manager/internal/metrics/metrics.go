@@ -249,6 +249,32 @@ var (
 		Help:      "Terminal async Kafka message delivery outcomes (acked|failed).",
 	}, []string{"outcome"})
 
+	// enterSceneRollbackTotal 统计 EnterScene 推路由 / 重定向失败之后,把本次落点(location +
+	// owner_epoch)精确值回滚的结果(internal/logic/owner_epoch.go rollbackPlayerPlacement):
+	//   rolled_back          本次回滚成功
+	//   already_rolled_back  go-redis 重发 EVAL 时首发其实已回滚(只对铸造过的落点识别)
+	//   superseded           位置或 epoch 已被并发请求推进,什么都没改(偶发 = 顶号等并发)
+	//   redis_error          go-redis 重试耗尽仍出错:Redis 里可能留着本次落点。跨 zone 第一条腿上
+	//                        源 scene 会重置客户端(tip + 踢线 34);同 zone 路由失败上玩家会挂在哑连接上
+	// 分母是「推路由 / 重定向失败」的次数,本身就该很少;redis_error 应恒 0,告警见
+	// deploy/k8s/scene-manager-alerts.yaml SceneManagerEnterSceneRollbackRedisError。
+	// 只按 outcome 分,不带 zone_id / player_id。
+	enterSceneRollbackTotal = prometheus.NewCounterVec(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "enter_scene_rollback_total",
+		Help:      "EnterScene placement rollbacks after a failed gate route/redirect push, by outcome (rolled_back|already_rolled_back|superseded|redis_error).",
+	}, []string{"outcome"})
+
+	// enterSceneMintReplayRecognizedTotal 统计铸造 owner_epoch 的 EVAL 被 go-redis 原样重发
+	// (首发已生效、应答丢了)而被脚本认成「本请求已生效」的次数(只对凭 handoff 标记放行的铸造做识别,
+	// 见 internal/logic/owner_epoch.go luaMintEpochAndSetLocation)。以前这种情况回 19,状态已推进
+	// 却既不发重定向 / 路由也不回滚。应恒近 0;持续增长说明 zone Redis 读超时频繁。不带任何 label。
+	enterSceneMintReplayRecognizedTotal = prometheus.NewCounter(prometheus.CounterOpts{
+		Subsystem: subsystem,
+		Name:      "enter_scene_mint_replay_recognized_total",
+		Help:      "owner_epoch mint EVALs replayed by the redis client after the first execution already applied, recognised as the request's own write (handoff-marker mints only).",
+	})
+
 	// reentryBarrierBlockedTotal 统计因「老属主节点刚判死、再入屏障未到」而被
 	// 拒绝的改派/销毁/清理次数。site 是**代码里写死的常量点位名**
 	// (resolve_scene|rebalance|reassign|world_channel_lazy|orphan_cleanup|
@@ -311,7 +337,7 @@ func register() {
 			agonesAllocationTotal, agonesAllocationLatency,
 			agonesCounterRollbackTotal, agonesMappingFailureTotal,
 			agonesCounterDrift, worldAutoscaleTotal,
-			kafkaDeliveryTotal,
+			kafkaDeliveryTotal, enterSceneRollbackTotal, enterSceneMintReplayRecognizedTotal,
 			reentryBarrierBlockedTotal, deadNodeReconcilePending,
 			enterSceneOwnerDeadTakeoverTotal,
 			homeZoneLookupTotal,
@@ -387,6 +413,19 @@ func ObserveKafkaDelivery(outcome string, count int) {
 	}
 	register()
 	kafkaDeliveryTotal.WithLabelValues(outcome).Add(float64(count))
+}
+
+// ObserveEnterSceneRollback 记一次落点回滚结果。outcome 取值见 enterSceneRollbackTotal 的注释
+// (常量在 internal/logic/owner_epoch.go 的 rollbackOutcome*)。
+func ObserveEnterSceneRollback(outcome string) {
+	register()
+	enterSceneRollbackTotal.WithLabelValues(outcome).Inc()
+}
+
+// ObserveEnterSceneMintReplayRecognized 记一次铸造 EVAL 的重放识别命中,见 enterSceneMintReplayRecognizedTotal。
+func ObserveEnterSceneMintReplayRecognized() {
+	register()
+	enterSceneMintReplayRecognizedTotal.Inc()
 }
 
 // ObserveWorldAutoscale 记一次大世界频道扩缩容动作。
