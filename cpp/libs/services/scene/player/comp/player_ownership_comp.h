@@ -36,6 +36,13 @@ namespace player_ownership
 		return "player:" + std::to_string(playerId) + ":handoff";
 	}
 
+	// 与 go/scene_manager/internal/logic/changesceneutil.go getPlayerLocationKey 同一口径。
+	// 值的解析只走 player_ownership::ParsePlayerLocationElement(player_lifecycle.h),不要各抄一份。
+	inline std::string LocationRedisKey(uint64_t playerId)
+	{
+		return "player:" + std::to_string(playerId) + ":location";
+	}
+
 	// 交接标记的值格式 "{epoch}:{saved_at_ms}"。scene_manager 只解析冒号前的 epoch 与当前
 	// owner_epoch 比对;saved_at_ms 仅供排障(看"落盘到放行"隔了多久)。
 	inline std::string HandoffRedisValue(uint64_t epoch, uint64_t savedAtMs)
@@ -102,6 +109,12 @@ struct PlayerOwnerEpochComp
 //               与 requestedAtMs 一起还原标记原文 "{markEpoch}:{requestedAtMs}",交接作废时按原文
 //               条件撤回(PlayerLifecycleSystem::WithdrawHandoffMark)。不能到撤回时再去读
 //               PlayerOwnerEpochComp:重连 / 顶号路径会把它取 max 更新,读到的未必是写标记那一刻的值。
+// hasRecordedEvidence / recordedEvidence
+//               本次交接已拿到的、比"看门狗到期"更具体的裁决证据(travel_outcome::Evidence 的底层值,
+//               见 player_lifecycle.h;这里存底层值是为了不让组件头依赖系统头)。由
+//               PlayerLifecycleSystem::ResolveTravelOutcome 在入口记下:应答 / 路由落点带来的证据若因 Redis
+//               不可用没能当场裁决,首次挂的 kNoReply 看门狗(不取消)会先到期,裁决时必须用这里的证据,
+//               否则同 zone 成功会补假失败 tip、跨 zone 协议异常会被当成"没收到应答"踢线。纯内存,随组件销毁。
 struct PlayerTravelHandoffComp
 {
 	uint32_t targetZoneId{0};
@@ -109,6 +122,8 @@ struct PlayerTravelHandoffComp
 	uint32_t sceneConfigId{0};
 	uint64_t requestedAtMs{0};
 	uint64_t markEpoch{0};
+	bool hasRecordedEvidence{false};
+	uint8_t recordedEvidence{0};
 };
 
 // 本节点替在线玩家发出、应答还没回来的**普通** EnterScene(客户端换图 / 镜像创建后的自动进场 /

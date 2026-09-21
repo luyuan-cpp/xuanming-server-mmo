@@ -37,7 +37,8 @@ namespace
 	constexpr char kTeamIndexKeyFmt[] = "team:player:%llu";
 	constexpr char kTeamProjectionKeyFmt[] = "team:%llu";
 	constexpr char kTeamRecordKeyFmt[] = "team:rec:%llu";
-	constexpr char kPlayerLocationKeyFmt[] = "player:%llu:location";
+	// player:{id}:location 的键名与解析是共享的:player_ownership::LocationRedisKey /
+	// player_ownership::ParsePlayerLocationElement(player_ownership_comp.h / player_lifecycle.h)。
 	constexpr char kBattleLockKeyFmt[] = "battle:lock:%llu";
 
 	bool RedisReady()
@@ -102,20 +103,6 @@ namespace
 		const auto& sessions = SessionMap();
 		const auto it = sessions.find(snapshot->gate_session_id());
 		return it != sessions.end() && it->second == playerId;
-	}
-
-	// 解析 MGET 数组里的 PlayerLocation 元素。NIL / 非字符串 / 解析失败都返回 false。
-	bool ParseLocationElement(const redisReply* element, storage::PlayerLocation& out)
-	{
-		if (element == nullptr || element->type != REDIS_REPLY_STRING)
-		{
-			return false;
-		}
-		if (element->len > static_cast<size_t>(std::numeric_limits<int>::max()))
-		{
-			return false;
-		}
-		return out.ParseFromArray(element->str, static_cast<int>(element->len));
 	}
 
 	uint64_t CurrentSceneId(entt::entity player)
@@ -391,6 +378,7 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 
 	// 一跳读两个 key:队长位置 + 自己的战斗锁。登录时 InBattleComp 由 PlayerBattleSystem 异步重建,
 	// 不依赖两条回调链的跳数先后,直接读锁 fail-closed(§F.2)。
+	const std::string leaderLocationKey = player_ownership::LocationRedisKey(leaderId);
 	tlsRedis.GetZoneRedis()->command(
 		[player, playerId, leaderId](hiredis::Hiredis*, redisReply* reply) {
 			if (!IsSamePlayer(player, playerId))
@@ -433,7 +421,7 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 			}
 
 			storage::PlayerLocation leaderLocation;
-			if (!ParseLocationElement(reply->element[0], leaderLocation))
+			if (!player_ownership::ParsePlayerLocationElement(reply->element[0], leaderLocation))
 			{
 				return; // 队长不在任何场景(或位置缺失/损坏):不跟随
 			}
@@ -508,5 +496,5 @@ void PlayerTeamSystem::CheckFollowLeader(entt::entity player, uint64_t leaderId)
 			LOG_INFO << "[PlayerTeam] 请求跟随队长切场景: player_id=" << playerId << " leader_id=" << leaderId
 					 << " leader_scene_id=" << leaderSceneId;
 		},
-		(std::string("MGET ") + kPlayerLocationKeyFmt + " " + kBattleLockKeyFmt).c_str(), leaderId, playerId);
+		(std::string("MGET %s ") + kBattleLockKeyFmt).c_str(), leaderLocationKey.c_str(), playerId);
 }

@@ -53,6 +53,12 @@
 //                                 stays a *conditional* delete. Pure container,
 //                                 time is injected; the Redis glue around it
 //                                 (WithdrawHandoffMark) is not covered here.
+//   8. TravelOutcomeReset       — travel_outcome (player_lifecycle.h): when a
+//                                 granted-without-reply handoff must tip + kick
+//                                 the client (cross-zone + failed/no-reply only)
+//                                 and the "location is this handoff's awaiting
+//                                 placement" predicate. Pure functions; the MGET
+//                                 glue in ResolveTravelOutcome is not covered.
 //
 // History: these cases were written for the player_migrate data-moving chain
 // (Kafka PlayerMigrationEvent + ACK + CrossZoneReaper). That chain was
@@ -472,6 +478,120 @@ TEST(HandoffMarkWithdrawQueue, LuaIsConditionalDelete)
     EXPECT_NE(lua.find("== ARGV[1]"), std::string::npos);
     EXPECT_NE(lua.find("DEL"), std::string::npos);
     EXPECT_LT(lua.find("GET"), lua.find("DEL")) << "先比对、后删除";
+}
+
+// ============================================================================
+// TravelOutcomeReset — 交接已被放行却没收到放行应答时,要不要在销毁实体之前给客户端
+// 发失败 tip + 踢线 34(player_lifecycle.h travel_outcome)。纯函数,不需要 Redis / 场景宿主;
+// 运行期那道"实体没在退出"的条件和 MGET 胶水不在这里覆盖,要靠真实环境故障注入验证
+// (docs/design/cross-zone-scene-travel.md §12)。
+// ============================================================================
+namespace
+{
+namespace to = travel_outcome;
+
+constexpr to::Evidence kAllEvidence[] = {
+    to::Evidence::kSucceeded,
+    to::Evidence::kFailed,
+    to::Evidence::kNoReply,
+    to::Evidence::kMarkWriteUnknown,
+    to::Evidence::kAnomalous,
+};
+static_assert(std::size(kAllEvidence) == to::kEvidenceCount, "新增证据种类时补进这张表,并补判据用例");
+
+constexpr uint32_t kTargetZone = 2;
+constexpr uint64_t kGrantedEpoch = 8;
+} // namespace
+
+TEST(TravelOutcomeReset, CrossZoneFailedOrNoReplyResetsClient)
+{
+    EXPECT_TRUE(to::ShouldResetClientOnGrant(/*crossZone=*/true, to::Evidence::kFailed))
+        << "显式失败应答但 epoch 已变:客户端没拿到重定向,不踢就挂在哑连接上";
+    EXPECT_TRUE(to::ShouldResetClientOnGrant(/*crossZone=*/true, to::Evidence::kNoReply))
+        << "看门狗到期(含 zrpc 超时)是 S3L1-1 的主触发形态";
+}
+
+TEST(TravelOutcomeReset, CrossZoneOtherEvidenceDoesNotReset)
+{
+    EXPECT_FALSE(to::ShouldResetClientOnGrant(/*crossZone=*/true, to::Evidence::kSucceeded));
+    EXPECT_FALSE(to::ShouldResetClientOnGrant(/*crossZone=*/true, to::Evidence::kMarkWriteUnknown))
+        << "EnterScene 根本没发出去,epoch 的推进不是本次交接造成的";
+    EXPECT_FALSE(to::ShouldResetClientOnGrant(/*crossZone=*/true, to::Evidence::kAnomalous))
+        << "协议异常应答说明不了客户端没拿到结果";
+}
+
+TEST(TravelOutcomeReset, SameZoneNeverResets)
+{
+    // 同 zone 放行靠 RoutePlayerEvent 改绑同一个会话,"没收到应答"时路由往往已经到了,踢线会断掉合法会话。
+    for (const auto evidence : kAllEvidence)
+    {
+        EXPECT_FALSE(to::ShouldResetClientOnGrant(/*crossZone=*/false, evidence))
+            << "evidence=" << to::EvidenceName(evidence);
+    }
+}
+
+TEST(TravelOutcomeReset, EvidenceNamesCoverEveryValue)
+{
+    for (const auto evidence : kAllEvidence)
+    {
+        EXPECT_STRNE(to::EvidenceName(evidence), "?");
+    }
+    EXPECT_STREQ(to::EvidenceName(to::Evidence::kCount), "?") << "越界不能读出数组外";
+}
+
+TEST(TravelOutcomeReset, AwaitingPlacementOfThisHandoff)
+{
+    EXPECT_TRUE(to::IsAwaitingPlacementOfHandoff(/*locationNodeEmpty=*/true, kTargetZone, kGrantedEpoch,
+                                                 kTargetZone, kGrantedEpoch))
+        << "第一条腿写下的等待落点:无节点、目标 zone、location 里的 epoch 就是当前 owner_epoch";
+}
+
+TEST(TravelOutcomeReset, NotAwaitingPlacementOfThisHandoff)
+{
+    EXPECT_FALSE(to::IsAwaitingPlacementOfHandoff(/*locationNodeEmpty=*/false, kTargetZone, kGrantedEpoch,
+                                                  kTargetZone, kGrantedEpoch))
+        << "已落到某个节点上(第二条腿已落地,或同会话被别的请求改绑):不踢";
+    EXPECT_FALSE(to::IsAwaitingPlacementOfHandoff(/*locationNodeEmpty=*/true, /*locationZoneId=*/1, kGrantedEpoch,
+                                                  kTargetZone, kGrantedEpoch))
+        << "等待落点在别的 zone:不是本次交接写的";
+    EXPECT_FALSE(to::IsAwaitingPlacementOfHandoff(/*locationNodeEmpty=*/true, kTargetZone, kGrantedEpoch - 1,
+                                                  kTargetZone, kGrantedEpoch))
+        << "location 的 epoch 与同一时刻读到的 owner_epoch 不一致:epoch 是被别的请求推进的";
+    EXPECT_FALSE(to::IsAwaitingPlacementOfHandoff(/*locationNodeEmpty=*/true, kTargetZone, /*locationOwnerEpoch=*/0,
+                                                  kTargetZone, /*redisOwnerEpoch=*/0))
+        << "epoch 为 0(从未铸造)不可能是放行后的等待落点,fail-closed";
+    EXPECT_FALSE(to::IsAwaitingPlacementOfHandoff(/*locationNodeEmpty=*/true, /*locationZoneId=*/0, kGrantedEpoch,
+                                                  /*targetZoneId=*/0, kGrantedEpoch))
+        << "目标 zone 为 0 是非法交接,不据此踢线";
+}
+
+TEST(TravelOutcomeReset, RecordedEvidenceOverridesWatchdogNoReply)
+{
+    // 应答已到、因 Redis 不可用没能裁决,首次挂的 kNoReply 看门狗(不取消)先到期:
+    // 裁决必须用组件上记下的应答证据,不能被盖成超时。
+    for (const auto recorded : kAllEvidence)
+    {
+        EXPECT_EQ(to::EffectiveEvidence(/*hasRecorded=*/true, static_cast<uint8_t>(recorded), to::Evidence::kNoReply),
+                  recorded)
+            << "recorded=" << to::EvidenceName(recorded);
+    }
+    // 同 zone 成功被盖成 kNoReply 会补假失败 tip;跨 zone 协议异常被盖成 kNoReply 会被踢线。
+    EXPECT_FALSE(to::ShouldResetClientOnGrant(
+        /*crossZone=*/true,
+        to::EffectiveEvidence(true, static_cast<uint8_t>(to::Evidence::kAnomalous), to::Evidence::kNoReply)));
+}
+
+TEST(TravelOutcomeReset, NoRecordedEvidenceKeepsIncoming)
+{
+    for (const auto incoming : kAllEvidence)
+    {
+        EXPECT_EQ(to::EffectiveEvidence(/*hasRecorded=*/false, /*recorded=*/0, incoming), incoming)
+            << "incoming=" << to::EvidenceName(incoming);
+    }
+    EXPECT_EQ(to::EffectiveEvidence(/*hasRecorded=*/true, static_cast<uint8_t>(to::kEvidenceCount),
+                                    to::Evidence::kNoReply),
+              to::Evidence::kNoReply)
+        << "记下的底层值越界视同没记,不得转换成非法枚举";
 }
 
 // ============================================================================

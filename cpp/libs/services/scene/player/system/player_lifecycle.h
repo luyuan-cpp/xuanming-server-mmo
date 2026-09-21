@@ -2,6 +2,7 @@
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
+#include <iterator>
 #include <string>
 #include <unordered_map>
 #include "engine/core/type_define/type_define.h"
@@ -10,6 +11,18 @@
 #include "proto/common/component/player_async_comp.pb.h"
 
 namespace scene_manager { class EnterSceneResponse; }
+namespace storage { class PlayerLocation; }
+
+// player:{id}:location 的解析(键名见 player_ownership_comp.h 的 LocationRedisKey)。全 C++ 只此一份,
+// 读 location 的地方(ResolveTravelOutcome、队伍跟随)一律调它,不许再各抄一份。
+// 放在这里而不是 player_ownership_comp.h:那个头被 player_frozen_comp.h 带进二十来个业务系统,
+// 不该让它们都去包含 hiredis 与 storage.pb.h;本头本来就包含 redis_client.h(redisReply 已完整)。
+namespace player_ownership
+{
+	// 解析一条 Redis 应答元素(GET 的应答,或 MGET 数组里的一项)里的 PlayerLocation 二进制。
+	// NIL(键不存在)/ 非字符串 / 超长 / 解析失败都返回 false;返回 false 时 out 的内容不可用。
+	bool ParsePlayerLocationElement(const redisReply *element, storage::PlayerLocation &out);
+} // namespace player_ownership
 
 // 一次 EnterScene 路由决策带给本节点的完整上下文:proto 入场信息 + 归属字段。
 //
@@ -108,6 +121,13 @@ namespace owner_epoch_stats
 //                          条目留在待撤回表里重试。趋势类计数:同一条目每失败一次计一次。持续增长 = Redis 不稳
 //   withdraw_expired       到截止时刻(标记 TTL + 余量)仍未确认撤回而放弃,或待撤回表满被淘汰。应恒为 0,
 //                          非 0 = 有标记只靠 TTL 过期,期间存在回档窗口,要排查(见 handoff_mark_withdraw.h)
+//   granted_client_reset   granted_without_reply 中,源端在销毁实体之前给客户端发了失败 tip + 踢线 34、
+//                          让它断线回选服重登的次数(跨 zone 传送、放行却没收到放行应答、且 location
+//                          确认是本次交接的等待落点,判据见 travel_outcome::ShouldResetClientOnGrant 与
+//                          ResolveTravelOutcome)。重定向其实已送达时,客户端会先断开旧连接、实体先被
+//                          "退出优先"销毁,走不到这里,所以它基本等于真正被踢回选服的人数。
+//                          例外:gate-cmd 消费滞后超过 30s 时,一次"迟到但成功"的传送也会被踢回选服
+//                          (踢线走 scene→gate TCP 直达,先于 Kafka 上的 124 到达)。应接近 0
 //
 // started 减去各终态 = 仍在途的 + 交接期间被存盘 CAS 拒而销毁的(后者已计入
 // owner_epoch_stats::StaleOwnerWriteRejected)。
@@ -129,6 +149,7 @@ namespace travel_handoff_stats
 		std::atomic<uint64_t> frozenMsMax{0};
 		std::atomic<uint64_t> withdrawDeferred{0};
 		std::atomic<uint64_t> withdrawExpired{0};
+		std::atomic<uint64_t> grantedClientReset{0};
 	};
 
 	inline Counters& Get()
@@ -167,6 +188,7 @@ namespace travel_handoff_stats
 		uint64_t frozenMsMax{0};
 		uint64_t withdrawDeferred{0};
 		uint64_t withdrawExpired{0};
+		uint64_t grantedClientReset{0};
 
 		bool operator==(const Snapshot&) const = default;
 	};
@@ -189,9 +211,91 @@ namespace travel_handoff_stats
 		snapshot.frozenMsMax = counters.frozenMsMax.load(std::memory_order_relaxed);
 		snapshot.withdrawDeferred = counters.withdrawDeferred.load(std::memory_order_relaxed);
 		snapshot.withdrawExpired = counters.withdrawExpired.load(std::memory_order_relaxed);
+		snapshot.grantedClientReset = counters.grantedClientReset.load(std::memory_order_relaxed);
 		return snapshot;
 	}
 } // namespace travel_handoff_stats
+
+// 交接去留裁决(PlayerLifecycleSystem::ResolveTravelOutcome)手里的"证据":这次裁决是凭什么进来的。
+// 替代原来的 bool replyWasSuccess —— 一个布尔分不清"显式失败""没收到应答""EnterScene 根本没发出去"
+// "协议异常",而它们在"epoch 已变"时该不该让客户端断线重登答案不同(见 ShouldResetClientOnGrant)。
+// 不许在"没能当场裁决"之后翻成 kNoReply:否则 kSucceeded(同 zone)会补一条假的失败 tip,
+// kAnomalous / kMarkWriteUnknown 会被当成"没收到应答"踢线。两道保证缺一不可:
+//   1. ResolveTravelOutcome 入口把非 kNoReply 的证据记到交接组件上,之后任何一次裁决(包括首次挂的、
+//      从不取消的 kNoReply 看门狗先到期)都用 EffectiveEvidence 取记下的那条;
+//   2. 看门狗重挂时原样透传当前证据(没有首次看门狗的 kMarkWriteUnknown 靠这一条)。
+//
+// 底层类型 uint8_t 数的是证据种类数(现 5 种)。纯内存使用,不进协议、不落库。kCount 固定为最后一项。
+namespace travel_outcome
+{
+	enum class Evidence : uint8_t
+	{
+		kSucceeded,        // 同 zone 放行的成功应答(无 redirect),或进场路由已把交接中的玩家就地放进本节点的新场景
+		kFailed,           // scene_manager 的显式失败应答(任何非 0 error_code)
+		kNoReply,          // 应答看门狗到期(scene_manager 不可达 / zrpc 服务端超时,生成的 gRPC 客户端不回调)
+		kMarkWriteUnknown, // 写 handoff 标记的 SET 结果未知(连接断开,空 reply):EnterScene 根本没发出去
+		kAnomalous,        // 跨 zone 却"成功且无 redirect":协议异常(典型是 scene_manager 版本错配)
+
+		kCount
+	};
+
+	constexpr std::size_t kEvidenceCount = static_cast<std::size_t>(Evidence::kCount);
+
+	// 只给日志用的名字,与枚举一一对应。数组长度由初始化项推导,漏加 / 多加一行都会被 static_assert 拦下。
+	inline constexpr const char *kEvidenceNames[] = {
+		"succeeded",
+		"failed",
+		"no_reply",
+		"mark_write_unknown",
+		"anomalous",
+	};
+	static_assert(std::size(kEvidenceNames) == kEvidenceCount, "kEvidenceNames 必须与 Evidence 一一对应");
+
+	constexpr const char *EvidenceName(Evidence evidence)
+	{
+		const auto index = static_cast<std::size_t>(evidence);
+		return index < kEvidenceCount ? kEvidenceNames[index] : "?";
+	}
+
+	// 裁决时实际采用的证据。交接组件上记下的证据(应答 / 路由落点带来的,见
+	// PlayerTravelHandoffComp.recordedEvidence)优先于调用方这次带进来的证据:首次挂的 kNoReply 看门狗
+	// 从不取消,它会在"应答已到、但 Redis 不可用没能裁决"之后先到期,不能让它把真实证据盖成超时。
+	// 记下的底层值越界(不该发生)视同没记,退回调用方证据。参数拆开传,单测不必构造组件。
+	constexpr Evidence EffectiveEvidence(bool hasRecorded, uint8_t recorded, Evidence incoming)
+	{
+		return hasRecorded && recorded < kEvidenceCount ? static_cast<Evidence>(recorded) : incoming;
+	}
+
+	// 交接已被放行(owner_epoch 已变)、源端却没拿到放行应答时,要不要在销毁实体之前让客户端断线重登
+	// (失败 tip + 踢线 34)。纯判据,只看"交接种类 + 证据";运行期还有三道条件由 ResolveTravelOutcome
+	// 叠加(实体没在退出、location 是本次交接的等待落点,见 IsAwaitingPlacementOfHandoff)。
+	//
+	// 只对跨 zone 生效:第一条腿只推 RedirectToGateEvent、从不改绑 gate 上的会话;重定向真送达了,
+	// 客户端会立即摘掉旧连接的处理器并在连上新 gate 后关掉旧连接,旧连接一断 gate 就给本节点发 ExitGame,
+	// 实体先被"退出优先"销毁,根本走不到这里。所以此时会话仍绑在本节点、客户端拿不到任何结果,
+	// 不踢它就挂在一条"连着但没有实体"的哑连接上。
+	// 同 zone 排除:放行靠 RoutePlayerEvent 把**同一个会话**改绑到目标节点,客户端不断线,本节点收不到
+	// ExitGame;而"没收到应答"常常是应答丢了、路由已经到了 —— 此时踢线会断掉一条合法会话。
+	// kSucceeded / kAnomalous / kMarkWriteUnknown 排除:前两者不说明客户端没拿到结果;kMarkWriteUnknown 时
+	// EnterScene 根本没发出去,epoch 的任何推进都不是本次交接造成的。
+	constexpr bool ShouldResetClientOnGrant(bool crossZone, Evidence evidence)
+	{
+		return crossZone && (evidence == Evidence::kFailed || evidence == Evidence::kNoReply);
+	}
+
+	// 放行后读到的 location 是不是**本次交接自己第一条腿**写下的等待落点:没有节点持有(node_id 为空)、
+	// zone 是本次交接的目标 zone、location 里记的 epoch 与同一次原子读到的 owner_epoch 相同且非 0。
+	// 不满足就说明 epoch 是被别的请求推进的(例如同一会话上一条迟到的同 zone 换图凭这份标记把会话改绑到
+	// 了本 zone 的别的节点,或另一设备顶号),这时踢线会误伤一条合法会话,只销毁、不踢。
+	// 参数用拆开的字段而不是 storage::PlayerLocation,单测不必链 proto。
+	constexpr bool IsAwaitingPlacementOfHandoff(bool locationNodeEmpty, uint32_t locationZoneId,
+												uint64_t locationOwnerEpoch, uint32_t targetZoneId,
+												uint64_t redisOwnerEpoch)
+	{
+		return locationNodeEmpty && targetZoneId != 0 && locationZoneId == targetZoneId && redisOwnerEpoch != 0 &&
+			   locationOwnerEpoch == redisOwnerEpoch;
+	}
+} // namespace travel_outcome
 
 class PlayerLifecycleSystem
 {
@@ -271,8 +375,12 @@ public:
 
 	// 客户端 RPC SceneSceneClientPlayer.TravelToZone 的系统层入口(CZ-7),handler 只委托到这里。
 	// 校验 CZ-6(战斗 / 备战在途、组队在途不可传送)与参数,通过后调 StartTravelHandoff。
-	// 返回 kTravelAccepted = 已受理(玩家已冻结、存盘已发起),**不代表已到达**:到达 = 客户端随后
-	// 收到 RedirectToGate;未成 = 随后收到 SendTipToClient 且已解冻。非 0 = 拒绝的 tip id,未改任何状态。
+	// 返回 kTravelAccepted = 已受理(玩家已冻结、存盘已发起),**不代表已到达**。受理之后客户端只会看到三种结局之一:
+	//   * 到达:随后收到 RedirectToGate;
+	//   * 未成、原地恢复:随后收到 SendTipToClient,且已解冻(owner_epoch 没动,玩家仍在本节点);
+	//   * 未成、无法原地恢复(owner_epoch 已被推进、玩家已不在本节点,又没收到放行应答):SendTipToClient
+	//     之后紧跟踢线 KickPlayer(34),实体销毁而不是解冻,客户端断线回选服重登(见 ResolveTravelOutcome)。
+	// 非 0 = 拒绝的 tip id,未改任何状态。
 	// 目标 zone 是否真的存在由 scene_manager 判(C++ 侧没有 zone 表):不存在时走"受理后未成"。
 	// sceneConfigId:0 = 由目标 zone 挑默认大世界;非 0 必须是 World 表登记的世界图,否则同步拒绝
 	// (kEnterSceneSceneNotFound)。这张图在目标 zone 开没开只有 scene_manager 知道:没开时同样走
@@ -341,13 +449,16 @@ public:
 	// 第二段 —— 交接在途:
 	//   * requestedAtMs == 0            → 存盘还没落地,这是交接之前那条请求的迟到应答,忽略;
 	//   * error_code != 0               → 不能直接解冻:失败应答不证明 scene_manager 没铸造过 epoch
-	//                                     (例如路由发送失败后的回滚本身也可能失败)。走
-	//                                     ResolveTravelOutcome 核实后再决定解冻还是销毁;
+	//                                     (例如路由发送失败后的回滚本身也可能失败)。以证据 kFailed 走
+	//                                     ResolveTravelOutcome 核实后再决定解冻还是销毁;跨 zone 且确认已被
+	//                                     放行时,销毁之前先回失败 tip 并紧跟踢线 34(客户端没拿到重定向,
+	//                                     不踢就挂在哑连接上);
 	//   * 带 redirect                   → 跨 zone 放行,scene_manager 已推进 epoch,本节点不再持有该玩家:
 	//                                     与退出同款销毁(摘场景 / 摘会话 / 销毁实体),**不再存盘**;
 	//   * 无错无 redirect、目标是本 zone → 同 zone 放行的正常形态。是交给了别的节点还是重发后落回了
-	//                                     本节点,应答本身分不出来,走 ResolveTravelOutcome 按 epoch 判;
-	//   * 无错无 redirect、目标是别的 zone → 协议异常,LOG_ERROR 后同样走 ResolveTravelOutcome。
+	//                                     本节点,应答本身分不出来,以 kSucceeded 走 ResolveTravelOutcome 按 epoch 判;
+	//   * 无错无 redirect、目标是别的 zone → 协议异常,LOG_ERROR 后以 kAnomalous 走 ResolveTravelOutcome
+	//                                     (已被放行时只销毁、不踢线)。
 	// 实体已不存在(玩家在途中断线,退出优先)或已无交接标记(看门狗先到)时为幂等 no-op。
 	static void HandleTravelEnterSceneReply(Guid playerId, const ::scene_manager::EnterSceneResponse& resp);
 
@@ -420,6 +531,9 @@ private:
 	// 入口:存盘被 epoch CAS 拒(HandlePlayerSaveRejected)、交接被放行(EnterScene 应答 Redirect /
 	// ResolveTravelOutcome 判出 epoch 已变)、进场路由撞上过期的交接实体(DiscardStaleHandoffEntity)。
 	// routine = 这是交接成功的正常收尾,收尾日志打 INFO;否则打 WARN(异常信号,要留证据)。
+	// 本函数自己**不给客户端发任何消息**,而且它会摘会话(RemovePlayerSession),之后再也发不出去。
+	// 需要让客户端断线重登的调用方(ResolveTravelOutcome 的"跨 zone 已放行却没收到放行应答"分支)
+	// 必须在调用本函数**之前**发失败 tip + 踢线 34,实体随后销毁而不是解冻。
 	static void DestroyDeposedPlayer(Guid playerId, const char *reasonTag, bool routine = false);
 
 	// 撤回本节点写下的 handoff 标记 "{markEpoch}:{requestedAtMs}"(交接作废的两处:"退出优先"与
@@ -441,21 +555,33 @@ private:
 	// EnterScene 请求已经发出之后,凡是"应答本身不足以判定去留"的情形都走这里,先判清楚有没有被放行:
 	//   1. DEL player:{id}:handoff —— scene_manager 的铸造 Lua 要求标记原样还在,DEL 之后
 	//      不可能再有凭这份标记的放行;
-	//   2. GET player:{id}:owner_epoch —— 与缓存值相等 = 归属没动 → AbortTravelHandoff(解冻);
+	//   2. MGET player:{id}:owner_epoch player:{id}:location(单条命令,两个值是同一时刻的)——
+	//      owner_epoch 与缓存值相等 = 归属没动 → AbortTravelHandoff(解冻);
 	//      不相等 = 已被放行 → DestroyDeposedPlayer,玩家已在去目标节点 / zone 的路上。
-	// 两条命令在同一条 Redis 连接上顺序发出,判定没有竞态窗口。Redis 不可用时保持冻结并重新
-	// 挂看门狗:解冻一个可能已被放行的玩家 = 同一名玩家在两处同时活着。
+	//      location 只用来决定已放行时要不要踢线(见下)。
+	// 两条命令在同一条 Redis 连接上顺序发出,判定没有竞态窗口。Redis 不可用 / 应答异常时保持冻结并
+	// 重新挂看门狗(证据原样透传):解冻一个可能已被放行的玩家 = 同一名玩家在两处同时活着。
 	// requestedAtMs 是交接代际,回调到达时不符即 no-op。
-	//   replyWasSuccess = false:应答超时 / 失败应答。归属没动 = 交接未成,回失败 tip。
-	//   replyWasSuccess = true :同 zone 放行的成功应答(无 redirect),或进场路由已经把交接中的玩家
-	//                            就地放进了新场景(EnterScene 3.2 步,不等应答 —— 应答可能丢)。
-	//                            归属没动 = 重发后落回了本节点(同物理节点不铸造 epoch),静默解冻;
-	//                            归属已动 = 正常放行。
-	//                            这条路也必须经过第 1 步的 DEL:否则标记会带着没变的 epoch 再活 300s,
-	//                            玩家解冻后继续产生新状态,下一次跨节点 EnterScene 会凭这份旧标记被
-	//                            直接放行,新节点读到的是旧档。
+	//
+	// evidence(不给默认值,调用方必须说清凭什么进来)。入口处非 kNoReply 的证据记到交接组件上;实际裁决
+	// 用 travel_outcome::EffectiveEvidence(组件上记下的优先),MGET 回调里按回调那一刻的组件再取一次 ——
+	// 应答在看门狗那次核实已发出、尚未回来时到达,同样以应答证据为准:
+	//   kSucceeded:同 zone 放行的成功应答(无 redirect),或进场路由已经把交接中的玩家就地放进了新场景
+	//               (EnterScene 3.2 步,不等应答 —— 应答可能丢)。归属没动 = 重发后落回了本节点
+	//               (同物理节点不铸造 epoch),静默解冻;归属已动 = 正常放行。
+	//               这条路也必须经过第 1 步的 DEL:否则标记会带着没变的 epoch 再活 300s,玩家解冻后继续
+	//               产生新状态,下一次跨节点 EnterScene 会凭这份旧标记被直接放行,新节点读到的是旧档。
+	//   其它:归属没动 = 交接未成,解冻并回失败 tip;归属已动 = 放行了却没收到放行应答,计
+	//               granted_without_reply 后销毁。此时若同时满足下面全部条件,**销毁之前**先回失败 tip
+	//               (kZoneTravelTargetBusy)并紧跟踢线 34,让客户端断线回选服重登 —— 受理后未成且无法在
+	//               原地恢复,实体销毁而不是解冻:
+	//                 a) travel_outcome::ShouldResetClientOnGrant(跨 zone,且证据是 kFailed / kNoReply);
+	//                 b) 实体上没有 UnregisterPlayer(玩家已在退出,会话由退出流程收尾;纵深防御,
+	//                    不依赖退出流程"交接中立即销毁"的具体实现);
+	//                 c) location 能解析,且是本次交接的等待落点(travel_outcome::IsAwaitingPlacementOfHandoff)。
+	//               任一不满足只销毁,并 LOG_WARN 说明为何不踢。
 	static void ResolveTravelOutcome(Guid playerId, uint64_t requestedAtMs, const char *reason,
-									 bool replyWasSuccess = false);
+									 travel_outcome::Evidence evidence);
 
 	// 疏散 / 排空的改派请求本体(EnterScene(zone=本 zone, scene_id=0))。票据按值传入:
 	// 调用时本地实体多半已经销毁。
@@ -466,8 +592,13 @@ private:
 	static void RequestTravelEnterScene(Guid playerId);
 
 	// EnterScene 应答看门狗:一次性定时器,到期时若同一代(requestedAtMs 相同)的交接仍在途,
-	// 按超时走 ResolveTravelOutcome。只捕获 playerId + 代际,回调里按 id 回查实体(§11.7 精神)。
-	static void ArmTravelReplyWatchdog(Guid playerId, uint64_t requestedAtMs);
+	// 带着挂载时给的证据与原因走 ResolveTravelOutcome。RequestTravelEnterScene 首次挂载传 kNoReply;
+	// ResolveTravelOutcome 因 Redis 不可用重挂时传**当前**证据,不在重挂时翻成超时。
+	// 首次挂的看门狗不取消、总是先于重挂的到期:它带进去的 kNoReply 会被交接组件上记下的应答证据覆盖
+	// (travel_outcome::EffectiveEvidence),所以重挂那个随后多半是代际不符的 no-op,这是预期行为。
+	// 只按值捕获 playerId + 代际 + 证据 + 原因文本,回调里按 id 回查实体(§11.7)。
+	static void ArmTravelReplyWatchdog(Guid playerId, uint64_t requestedAtMs, travel_outcome::Evidence evidence,
+									   std::string reason);
 
 	// 存盘阶段看门狗:覆盖"已冻结、存盘在途、交接还没发起(requestedAtMs == 0)"这一段 ——
 	// 应答看门狗要到 EnterScene 发出才挂,Redis 长时间不可用时这一段没有别的兜底。
