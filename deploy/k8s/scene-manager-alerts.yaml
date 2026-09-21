@@ -242,6 +242,10 @@ spec:
               owner_epoch 已不是 Redis 当前值(已被废黜)。对照 scene 节点 30s 一行的 [TravelHandoff]
               汇总里的 aborted,以及 [OwnerEpoch] stale_owner_write_rejected 是否非 0。若同期在做节点
               疏散 / 滚动升级,先确认是不是旧标记(EX 300)的尾巴。
+              断线释放标记(A1′,干净退出后写 "E:ms")上线后,本 reason 还会混入"上一任的释放标记还在、
+              而新铸的落点没载入就被重试"的登录重试,不一定是源 scene 被废黜:先对照 scene 30s 一行的
+              [ExitRelease] 汇总(written / inherit_*)与 CPP-2 的症状再下结论,压测复盘时两类分开统计
+              (cross-zone-scene-travel.md §12.6.4 M12)。
               handoff_pending_withdrawn:预检通过后标记被源 scene 撤回。对照 [TravelHandoff] 汇总里的
               reply_watchdog_fired(源端应答预算 30s 到期)与 exit_wins(玩家中途退出);前者在涨就查
               EnterScene 分阶段时延(scene_manager_enter_scene_stage_seconds)。

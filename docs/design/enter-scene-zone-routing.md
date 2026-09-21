@@ -82,6 +82,18 @@ Player belongs to zone A and previously had a location in zone C:
   lease monitor after a disconnect lease expires, calls `LeaveScene`, which
   deletes `player:{id}:location` and keeps `player:{id}:owner_epoch`); the next
   login is a first landing and can enter zone A normally.
+- A clean **disconnect** (not a logout) keeps the zone C location for the
+  disconnect lease (30s; AFK passes extend it). A login inside that window is
+  `ShortReconnect` (another live device: `ReplaceLogin`), and since 2026-09-21
+  login sends `ZoneId=0, SceneId=0` for both (GO-5,
+  `cross-zone-scene-travel.md` §12.7): scene_manager follows the location, so
+  the player goes back to zone C — through a cross-zone redirect when they
+  logged in from zone A's entry. The session record is in the shared Redis
+  (`cross-zone-matchmaking.md` D12), so Login(A) does see zone C's
+  disconnecting session. Once the exit save has converged, the zone C Scene
+  writes a release marker (A1′, `"E:ms"`, EX 300), so a reconnect placed on a
+  different node passes the handoff gate instead of waiting out the lease; the
+  node that loads the player clears it again under an owner_epoch check (A2′).
 - If a crash left the zone C location behind, Login(A)'s explicit `ZoneId=A`
   resolves the desired target and the outcome depends on the recorded owner:
   - owner confirmed dead (node deregistered from etcd, or all of zone C down)
@@ -90,15 +102,20 @@ Player belongs to zone A and previously had a location in zone C:
     (crash-inherent);
   - owner alive or not provably dead → retryable `ErrHandoffPending` (18),
     nothing modified. It does **not** silently return the player home. It
-    clears once the source Scene writes the marker (it only does that for
-    moves it initiates itself: scene change, zone travel, evacuation / drain),
+    clears once the source Scene writes the marker (for moves it initiates
+    itself: scene change, zone travel, evacuation / drain; and, since
+    2026-09-21, after a clean disconnect's exit save converges — A1′),
     `LeaveScene` removes the record, or the node is confirmed dead;
   - awaiting-placement record (zone travel granted, second leg never landed) →
-    no holder, so any zone may place the player; after the 300s ticket TTL the
-    record no longer pulls the player toward the travel target.
-- A reconnect / replace login that still carries a zone C `SceneId` together
-  with `ZoneId=A` is rejected by `resolveScene` ("scene belongs to zone C",
-  `ErrNoAvailableNode`) before the handoff check is reached.
+    no holder, so any zone may place the player. A `ZoneId=0` reconnect is
+    **not** pulled toward the travel target (the former pull, R8, was replaced
+    by GO-5 so that a failing second leg cannot bounce the player back and
+    forth); the record only decides whether a landing in the travel target
+    zone reuses the recorded map, until the 300s ticket TTL.
+- Since GO-5 login sends `SceneId=0` for reconnect / replace, so a zone C
+  `SceneId` no longer reaches scene_manager from login. Any other caller that
+  sends a zone C `SceneId` with `ZoneId=A` is still rejected by `resolveScene`
+  ("scene belongs to zone C", `ErrNoAvailableNode`) before the handoff check.
 
 ## Merge-Server (合服)
 `zone_id` is a **runtime routing identifier**, not a permanent identity:
@@ -119,7 +136,7 @@ Three notions of "zone" coexist and only one is authoritative:
 Rules (implemented in `go/login/internal/logic/pkg/homezone`, wired via `ServiceContext.HomeZone`):
 
 1. **Role list zone = current home_zone resolved at login.** `Login` resolves every role's `player_id` with one `BatchGetPlayerHomeZone` (bounded, `HomeZone.RoleListLookupTimeout`, default 500ms) and overwrites `zone_id` in the *response copy* when the mapping has a non-zero zone. Ids absent from the mapping or a failed RPC keep the stored creation-time value; login never fails because of it. The refreshed zone is **not** written back into the account blob — the mapping stays the only truth, and a second copy would fight it on the next merge/rollback.
-2. **EnterGame routes by home_zone via the existing cross-zone redirect — opt-in.** Only when `HomeZone.RedirectOnEnterEnabled=true` and the request is a first login with no in-scene session in player_locator (`homeZoneOverrideAllowed`; reconnect / replace login keep `ZoneId = own zone`), `EnterGame` resolves `GetPlayerHomeZone(player_id)` before `SceneManager.EnterScene` (bounded, `HomeZone.EnterLookupTimeout`, default 1.5s). If it is non-zero and differs from `Node.ZoneId`, the request carries `ZoneId = home_zone`, `GateZoneId = login's zone`, `SceneId = 0`, so `enterscenelogic.go`'s `crossZoneRedirect` fires and the gate pushes `RedirectToGateEvent`. Lookup failure / zero → `ZoneId = own zone`, logged (ERROR for a transport failure, INFO for "unmapped"), never blocking. A connection that holds a redirect ticket whose `target_zone_id` is this zone (second leg of a zone travel, `cross-zone-scene-travel.md` CZ-8) skips the lookup and is never bounced home. `SceneId` is still sent as 0; scene_manager now decides the redirect before scene resolution, so an old-zone `SceneId` can no longer block the first leg.
+2. **EnterGame routes by home_zone via the existing cross-zone redirect — opt-in.** Only when `HomeZone.RedirectOnEnterEnabled=true` and the request is a first login with no in-scene session in player_locator (`homeZoneOverrideAllowed`; reconnect / replace login send `ZoneId = 0` since 2026-09-21 and let scene_manager follow the player's own location — GO-5, `cross-zone-scene-travel.md` §12.7; priority in `resolveEnterSceneRoute`: pinning redirect ticket > reconnect / replace > this rule > own zone), `EnterGame` resolves `GetPlayerHomeZone(player_id)` before `SceneManager.EnterScene` (bounded, `HomeZone.EnterLookupTimeout`, default 1.5s). If it is non-zero and differs from `Node.ZoneId`, the request carries `ZoneId = home_zone`, `GateZoneId = login's zone`, `SceneId = 0`, so `enterscenelogic.go`'s `crossZoneRedirect` fires and the gate pushes `RedirectToGateEvent`. Lookup failure / zero → `ZoneId = own zone`, logged (ERROR for a transport failure, INFO for "unmapped"), never blocking. A connection that holds a redirect ticket whose `target_zone_id` is this zone (second leg of a zone travel, `cross-zone-scene-travel.md` CZ-8) skips the lookup and is never bounced home. `SceneId` is still sent as 0; scene_manager now decides the redirect before scene resolution, so an old-zone `SceneId` can no longer block the first leg.
 3. **Account blob `zone_id` is a creation-time hint only.** Nothing should route on it; merge tooling does not need to touch the account system.
 
 Switches in `go/login/etc/login.yaml`: `HomeZone.RefreshRoleListDisabled` (reverse-named; an absent block means enabled, same rationale as `KillSwitch`) and `HomeZone.RedirectOnEnterEnabled` (forward-named; absent / default means **disabled** — enabling it requires a client that follows msg 124 `RedirectToGate`, see `go/login/internal/config/config.go` `HomeZoneConf`). The role-list refresh is therefore the primary post-merge correction; the EnterGame redirect is the opt-in second line.

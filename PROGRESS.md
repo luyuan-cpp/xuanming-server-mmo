@@ -5605,3 +5605,15 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
   - **修复后**:`go/friend` 全部包 **314 PASS(含子用例)/ 0 FAIL / 0 SKIP**;8 个并发锁序场景连跑 5 轮 **40/40 PASS**,场景 (g) 以外零 1213。日志存档在仓外 `D:\luyuan\wuxingqitan\friend-*.log`。
 - **提交状态(写入本条时)**:死锁修复的 6 个文件(`go/friend/internal/data/{friend_repo,block_repo,sweep_repo}.go`、`friend_repo_mysql_test.go`、`friend_guard_lock_order_mysql_test.go`、`go/friend/internal/logic/sweep.go`)与两份文档**尚未提交**。本条可能先于代码进库(多会话共用 PROGRESS.md,谁先提交谁带上别人的条目)—— 判断修复是否已在库里,以 `git log -- go/friend/internal/data/friend_repo.go` 里有没有"锁定读改主键点查"的提交为准,别以本条为准。
 - **第 7–9 步**:7a 已重编 `friend.exe`(清掉 08-02 旧构建陷阱)、`-allow-modify` 不带 `-migrate` 以 1 退出 ✅;第 8 步由单测 `TestVersionedCache_FillsWhenGenerationKeyNeverWritten` 覆盖 ✅;建库迁移、常驻启动与两区 `friend-smoke` **未跑**(Docker Desktop 被关闭,需用户手动打开)。C++ 已由用户编译(结果未经本会话核对)。
+
+## 2026-09-21 跨 zone 传送:Z1 僵尸修复 + 断线释放标记 A′ + GO-5 重连落点 + epoch==0 同节点铸造落码(Claude,机器 B)
+
+- **验证现状**:全部**未编译、未测试**。Codex 此前那次 `game.sln` 编译早于本批。C++(scene 库 / scene 节点 / `cross_zone_test` / engine 的 `etcd_service`)、Go(`go/scene_manager`、`go/login`)、客户端(Unity)都待验证;验证清单在 `docs/design/cross-zone-scene-travel.md` §12.6.10 末尾(13 步 + 11b),顺序不能乱:**先用修复前的二进制复现 Z1**。
+- **主体已随自动保存 `9cef7b2ec` 进库并已在 origin**(那是代提交的 WIP,混着外观 / 帮会 / 好友改动);本条对应的是其后标"跨 zone 传送"的回修与收尾提交。
+- **Z1**(§12.6):真写盘的正常断线退出不销毁实体(僵尸)。修法:退出意图组件 `PlayerExitIntentComp` 与 `UnregisterPlayer` 成对挂摘,防御分支只把"会话号变了且映射到本玩家"判为被取代;落地内容 == 当前内存(剔压测探针)才销毁,否则重存(上限 5 轮,超限 fail-closed 保留);退出中实体只放行 ExitGame,战斗结算视同离线暂存、不销账;活僵尸 / 退出中实体遇到 epoch 跳 ≥2 的路由丢弃重载。`save outran reconnect lease` 原文保留(帮会值班 LogQL 依赖),改为每次退出只打一条。
+- **A′**:A1′ 干净退出收敛后按 owner_epoch 条件写 `"E:ms"` 释放标记(开关 `SCENE_EXIT_RELEASE_MARK`,默认开;回滚先关开关、等 ≥300s 再换二进制);A2′ 载入前原子"核 owner_epoch 再删 ≤N",核不过拒建;不带 owner_epoch 的旧版路由也清,闸门三态 + 有上限重发(单调时钟)。M3 身份探针收紧为新增只读查询 `EtcdService::IsIdentityConfirmedFresh`(engine 文件只加不改)。
+- **GO-5**(§12.7,用户授权):login 在 ShortReconnect / ReplaceLogin 时发 `ZoneId=0`,scene_manager 只跟随落在具体节点上的 location —— 断线租约(30s)内回原处,窗口外或主动登出回家;"等待落点"不牵引(§10.2 R8 被取代)。
+- **epoch==0 同节点铸造**(§12.6.9,帮会 B4c 依赖):只在 owner_epoch 键与 location 记的 epoch 都为 0 时铸造;键丢失而 location 记着 N 时按 N 补种、不铸造。
+- **客户端**(`mmorpg-client`):登录期重定向先于 EnterGame 应答到达时沿用本次请求的角色,不再回选角(`GameClient.ResolveRedirectPlayerId`,未编译)。
+- **新增部署前提**:各 zone 的 player_locator 必须连同一个 Redis(`cross-zone-matchmaking.md` D12;否则访客从归属区重登一律回家);login 与 scene_manager 两侧同批上线(只上 login 会被旧版 scene_manager 牵引"等待落点")。§12.2 的 zrpc `Timeout` ≥ 8000、老号先跑 `merge_zone -backfill-home-zone` 仍有效。
+- **下一步**:Codex 按 §12.6.10 清单执行(含 runbook v2.4 场景 Z / R 与 11b 的 M3 探针);失败保留首个错误前后 20–30 行,不连续重试、不改断言。

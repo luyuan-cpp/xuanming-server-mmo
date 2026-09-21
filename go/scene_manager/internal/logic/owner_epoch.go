@@ -34,6 +34,12 @@ import (
 // 退出存盘都会被 C++ 的 CAS 拒掉,继而把**合法持有者**当成被废黜、不存盘销毁
 // 实体(踢人 + 回档)。Go 这边写 location 也走同一把 epoch 的 CAS,两条通道不
 // 各写各的。
+//
+// 唯一例外(2026-09-21,cross-zone-scene-travel.md §12.6.9):同物理节点、owner_epoch 键读到 0
+// **且** location 记的 epoch 也是 0(存量玩家,从未铸造过)时也铸造。上面「窗口内存盘被拒」的前提是
+// 持有节点缓存着非 0 值;缓存为 0 时 C++ 走不带 guard 的旧 Save,新值拒不了它。不铸的话这类玩家
+// 一直停在 0,帮会 B4c 的资产 RPC 对 epoch==0 一律回 RETRY。键读到 0 而 location 记着 N≠0(键被
+// 单独淘汰)时不铸造,先按 N 补种(SET NX)。推导与残余见 enterscenelogic.go 的 sameNodeZeroMint。
 // ---------------------------------------------------------------------------
 
 // luaMintEpochAndSetLocation:「当前 epoch == ARGV[1] 才 INCR 并写 location」。
