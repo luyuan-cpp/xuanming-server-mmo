@@ -42,6 +42,9 @@ static const char* DataService_method_names[] = {
   "/data_service.DataService/QueryTransactionLog",
   "/data_service.DataService/CreateEventSnapshot",
   "/data_service.DataService/AllocateIdSegment",
+  "/data_service.DataService/ReservePlayerName",
+  "/data_service.DataService/ReleasePlayerName",
+  "/data_service.DataService/BatchGetPlayerName",
 };
 
 std::unique_ptr< DataService::Stub> DataService::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -70,6 +73,9 @@ DataService::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channe
   , rpcmethod_QueryTransactionLog_(DataService_method_names[16], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_CreateEventSnapshot_(DataService_method_names[17], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_AllocateIdSegment_(DataService_method_names[18], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_ReservePlayerName_(DataService_method_names[19], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_ReleasePlayerName_(DataService_method_names[20], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_BatchGetPlayerName_(DataService_method_names[21], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status DataService::Stub::LoadPlayerData(::grpc::ClientContext* context, const ::data_service::LoadPlayerDataRequest& request, ::data_service::LoadPlayerDataResponse* response) {
@@ -509,6 +515,75 @@ void DataService::Stub::async::AllocateIdSegment(::grpc::ClientContext* context,
   return result;
 }
 
+::grpc::Status DataService::Stub::ReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::data_service::ReservePlayerNameResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::data_service::ReservePlayerNameRequest, ::data_service::ReservePlayerNameResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_ReservePlayerName_, context, request, response);
+}
+
+void DataService::Stub::async::ReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest* request, ::data_service::ReservePlayerNameResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::data_service::ReservePlayerNameRequest, ::data_service::ReservePlayerNameResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ReservePlayerName_, context, request, response, std::move(f));
+}
+
+void DataService::Stub::async::ReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest* request, ::data_service::ReservePlayerNameResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ReservePlayerName_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::data_service::ReservePlayerNameResponse>* DataService::Stub::PrepareAsyncReservePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::data_service::ReservePlayerNameResponse, ::data_service::ReservePlayerNameRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_ReservePlayerName_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::data_service::ReservePlayerNameResponse>* DataService::Stub::AsyncReservePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncReservePlayerNameRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status DataService::Stub::ReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::google::protobuf::Empty* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::data_service::ReleasePlayerNameRequest, ::google::protobuf::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_ReleasePlayerName_, context, request, response);
+}
+
+void DataService::Stub::async::ReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::data_service::ReleasePlayerNameRequest, ::google::protobuf::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ReleasePlayerName_, context, request, response, std::move(f));
+}
+
+void DataService::Stub::async::ReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ReleasePlayerName_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::google::protobuf::Empty>* DataService::Stub::PrepareAsyncReleasePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::google::protobuf::Empty, ::data_service::ReleasePlayerNameRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_ReleasePlayerName_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::google::protobuf::Empty>* DataService::Stub::AsyncReleasePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncReleasePlayerNameRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status DataService::Stub::BatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::data_service::BatchGetPlayerNameResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::data_service::BatchGetPlayerNameRequest, ::data_service::BatchGetPlayerNameResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_BatchGetPlayerName_, context, request, response);
+}
+
+void DataService::Stub::async::BatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest* request, ::data_service::BatchGetPlayerNameResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::data_service::BatchGetPlayerNameRequest, ::data_service::BatchGetPlayerNameResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_BatchGetPlayerName_, context, request, response, std::move(f));
+}
+
+void DataService::Stub::async::BatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest* request, ::data_service::BatchGetPlayerNameResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_BatchGetPlayerName_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::data_service::BatchGetPlayerNameResponse>* DataService::Stub::PrepareAsyncBatchGetPlayerNameRaw(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::data_service::BatchGetPlayerNameResponse, ::data_service::BatchGetPlayerNameRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_BatchGetPlayerName_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::data_service::BatchGetPlayerNameResponse>* DataService::Stub::AsyncBatchGetPlayerNameRaw(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncBatchGetPlayerNameRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 DataService::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       DataService_method_names[0],
@@ -700,6 +775,36 @@ DataService::Service::Service() {
              ::data_service::AllocateIdSegmentResponse* resp) {
                return service->AllocateIdSegment(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      DataService_method_names[19],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< DataService::Service, ::data_service::ReservePlayerNameRequest, ::data_service::ReservePlayerNameResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](DataService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::data_service::ReservePlayerNameRequest* req,
+             ::data_service::ReservePlayerNameResponse* resp) {
+               return service->ReservePlayerName(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      DataService_method_names[20],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< DataService::Service, ::data_service::ReleasePlayerNameRequest, ::google::protobuf::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](DataService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::data_service::ReleasePlayerNameRequest* req,
+             ::google::protobuf::Empty* resp) {
+               return service->ReleasePlayerName(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      DataService_method_names[21],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< DataService::Service, ::data_service::BatchGetPlayerNameRequest, ::data_service::BatchGetPlayerNameResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](DataService::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::data_service::BatchGetPlayerNameRequest* req,
+             ::data_service::BatchGetPlayerNameResponse* resp) {
+               return service->BatchGetPlayerName(ctx, req, resp);
+             }, this)));
 }
 
 DataService::Service::~Service() {
@@ -832,6 +937,27 @@ DataService::Service::~Service() {
 }
 
 ::grpc::Status DataService::Service::AllocateIdSegment(::grpc::ServerContext* context, const ::data_service::AllocateIdSegmentRequest* request, ::data_service::AllocateIdSegmentResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status DataService::Service::ReservePlayerName(::grpc::ServerContext* context, const ::data_service::ReservePlayerNameRequest* request, ::data_service::ReservePlayerNameResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status DataService::Service::ReleasePlayerName(::grpc::ServerContext* context, const ::data_service::ReleasePlayerNameRequest* request, ::google::protobuf::Empty* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status DataService::Service::BatchGetPlayerName(::grpc::ServerContext* context, const ::data_service::BatchGetPlayerNameRequest* request, ::data_service::BatchGetPlayerNameResponse* response) {
   (void) context;
   (void) request;
   (void) response;

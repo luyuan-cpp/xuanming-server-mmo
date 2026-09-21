@@ -123,6 +123,46 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildBusyRetry = 14021;</code>
      */
     kGuildBusyRetry(14021),
+    /**
+     * <code>kGuildFundsInsufficient = 14022;</code>
+     */
+    kGuildFundsInsufficient(14022),
+    /**
+     * <code>kGuildMaxLevel = 14023;</code>
+     */
+    kGuildMaxLevel(14023),
+    /**
+     * <code>kGuildDonateLimit = 14024;</code>
+     */
+    kGuildDonateLimit(14024),
+    /**
+     * <code>kGuildCurrencyInsufficient = 14025;</code>
+     */
+    kGuildCurrencyInsufficient(14025),
+    /**
+     * <code>kGuildAssetPending = 14026;</code>
+     */
+    kGuildAssetPending(14026),
+    /**
+     * <code>kGuildAssetRejected = 14027;</code>
+     */
+    kGuildAssetRejected(14027),
+    /**
+     * <code>kGuildShopGoodsNotFound = 14028;</code>
+     */
+    kGuildShopGoodsNotFound(14028),
+    /**
+     * <code>kGuildShopLevelTooLow = 14029;</code>
+     */
+    kGuildShopLevelTooLow(14029),
+    /**
+     * <code>kGuildShopLimit = 14030;</code>
+     */
+    kGuildShopLimit(14030),
+    /**
+     * <code>kGuildContributionInsufficient = 14031;</code>
+     */
+    kGuildContributionInsufficient(14031),
     UNRECOGNIZED(-1),
     ;
 
@@ -227,6 +267,46 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kGuildBusyRetry = 14021;</code>
      */
     public static final int kGuildBusyRetry_VALUE = 14021;
+    /**
+     * <code>kGuildFundsInsufficient = 14022;</code>
+     */
+    public static final int kGuildFundsInsufficient_VALUE = 14022;
+    /**
+     * <code>kGuildMaxLevel = 14023;</code>
+     */
+    public static final int kGuildMaxLevel_VALUE = 14023;
+    /**
+     * <code>kGuildDonateLimit = 14024;</code>
+     */
+    public static final int kGuildDonateLimit_VALUE = 14024;
+    /**
+     * <code>kGuildCurrencyInsufficient = 14025;</code>
+     */
+    public static final int kGuildCurrencyInsufficient_VALUE = 14025;
+    /**
+     * <code>kGuildAssetPending = 14026;</code>
+     */
+    public static final int kGuildAssetPending_VALUE = 14026;
+    /**
+     * <code>kGuildAssetRejected = 14027;</code>
+     */
+    public static final int kGuildAssetRejected_VALUE = 14027;
+    /**
+     * <code>kGuildShopGoodsNotFound = 14028;</code>
+     */
+    public static final int kGuildShopGoodsNotFound_VALUE = 14028;
+    /**
+     * <code>kGuildShopLevelTooLow = 14029;</code>
+     */
+    public static final int kGuildShopLevelTooLow_VALUE = 14029;
+    /**
+     * <code>kGuildShopLimit = 14030;</code>
+     */
+    public static final int kGuildShopLimit_VALUE = 14030;
+    /**
+     * <code>kGuildContributionInsufficient = 14031;</code>
+     */
+    public static final int kGuildContributionInsufficient_VALUE = 14031;
 
 
     public final int getNumber() {
@@ -276,6 +356,16 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
         case 14019: return kGuildApplicationLimit;
         case 14020: return kGuildApplicationQueueFull;
         case 14021: return kGuildBusyRetry;
+        case 14022: return kGuildFundsInsufficient;
+        case 14023: return kGuildMaxLevel;
+        case 14024: return kGuildDonateLimit;
+        case 14025: return kGuildCurrencyInsufficient;
+        case 14026: return kGuildAssetPending;
+        case 14027: return kGuildAssetRejected;
+        case 14028: return kGuildShopGoodsNotFound;
+        case 14029: return kGuildShopLevelTooLow;
+        case 14030: return kGuildShopLimit;
+        case 14031: return kGuildContributionInsufficient;
         default: return null;
       }
     }
@@ -341,7 +431,7 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025guild_error_tip.proto*\326\004\n\013guild_error\022" +
+      "\n\025guild_error_tip.proto*\352\006\n\013guild_error\022" +
       "\022\n\016kGuild_errorOK\020\000\022\031\n\024kGuildAlreadyInGu" +
       "ild\020\260m\022\023\n\016kGuildNotFound\020\261m\022\025\n\020kGuildNot" +
       "InGuild\020\262m\022\017\n\nkGuildFull\020\263m\022\032\n\025kGuildLea" +
@@ -356,8 +446,15 @@ public final class GuildErrorTip extends com.google.protobuf.GeneratedFile {
       "\020\300m\022\027\n\022kGuildOfficerLimit\020\301m\022\036\n\031kGuildAp" +
       "plicationNotFound\020\302m\022\033\n\026kGuildApplicatio" +
       "nLimit\020\303m\022\037\n\032kGuildApplicationQueueFull\020" +
-      "\304m\022\024\n\017kGuildBusyRetry\020\305mB$\n\016com.game.tab" +
-      "leZ\022generated/pb/tableb\006proto3"
+      "\304m\022\024\n\017kGuildBusyRetry\020\305m\022\034\n\027kGuildFundsI" +
+      "nsufficient\020\306m\022\023\n\016kGuildMaxLevel\020\307m\022\026\n\021k" +
+      "GuildDonateLimit\020\310m\022\037\n\032kGuildCurrencyIns" +
+      "ufficient\020\311m\022\027\n\022kGuildAssetPending\020\312m\022\030\n" +
+      "\023kGuildAssetRejected\020\313m\022\034\n\027kGuildShopGoo" +
+      "dsNotFound\020\314m\022\032\n\025kGuildShopLevelTooLow\020\315" +
+      "m\022\024\n\017kGuildShopLimit\020\316m\022#\n\036kGuildContrib" +
+      "utionInsufficient\020\317mB$\n\016com.game.tableZ\022" +
+      "generated/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

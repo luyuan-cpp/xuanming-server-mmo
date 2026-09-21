@@ -26,20 +26,24 @@ import (
 // 加一个新码 = 往 Tip.xlsx 的 //friend_error 组里加一行(名字 + 中文),
 // 重跑导表器,然后在下面加一行引用。不要再手写数字。
 //
-// ⚠ F2 批的已知前置(规格 §1.2):下面最后三个码(ErrBlocked / ErrBlockListFull /
-// ErrTargetInboxFull)引用的枚举常量**现在还不存在** —— 它们对应的 Tip.xlsx 行要等本分支
-// 合回 main 时与 regen 在同一个串行窗口里添加(xlsx 是二进制、无法 3-way 合并,而主工作区
-// 有并行会话在改同一个文件)。在导表器跑之前 go/friend 编译不过,这是本仓既有流程
-// (guild 的 4 个新码同样如此),不是缺陷。要补的三行(A=名字,B=中文文案,fault 列**留空**,
+// # 最后三个码(ErrBlocked / ErrBlockListFull / ErrTargetInboxFull)
+//
+// 它们在 Tip.xlsx 的行**已经写入**(提交 7b48b0a98,//friend_error 段;fault 列留空,
 // 因为三者都是业务拒绝而非服务端故障):
 //
-//	FriendBlocked          对方已将你拉黑 / 你已将对方拉黑
+//	FriendBlocked          无法添加该玩家为好友
 //	FriendBlockListFull    黑名单已满
 //	FriendTargetInboxFull  对方的好友申请已满
 //
+// 剩下的只有一步:跑导表器,把这三行生成成枚举。导表器跑过之前生成物里没有这三个枚举、
+// go/friend 编译不过,这是本仓既有流程(guild 的新码同样如此),不是缺陷。
+//
 // 名字按本段既有 7 行的规律推导:xlsx 里写 `FriendXxx`,导表器加 `k` 前缀生成
 // `FriendError_kFriendXxx`;"对方的……"用 `FriendTarget` 开头(见 FriendTargetListFull)。
-// **合并后必须核对生成的枚举名与这里逐字一致**,不一致就改这里、别改 xlsx 去将就代码。
+// **导表器跑过之后必须核对生成的枚举名与这里逐字一致**,不一致就改这里、别改 xlsx 去将就代码。
+//
+// FriendBlocked 的文案刻意是**中性**的、不区分方向(不写"对方已将你拉黑"),
+// 理由见下面 ErrBlocked 的注释 —— 码不区分方向而文案区分,等于从文案把状态泄露回去。
 const (
 	ErrCannotAddSelf        = uint32(table.FriendError_kFriendCannotAddSelf)
 	ErrAlreadyFriends       = uint32(table.FriendError_kFriendAlreadyFriends)

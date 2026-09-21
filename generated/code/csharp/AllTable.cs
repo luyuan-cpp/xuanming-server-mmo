@@ -22,7 +22,7 @@ namespace MmorpgClient.Table
     public static class AllTable
     {
         /// <summary>Number of generated tables.</summary>
-        public const int TableCount = 31;
+        public const int TableCount = 34;
 
         private static Action s_loadSuccessCallback;
 
@@ -54,8 +54,10 @@ namespace MmorpgClient.Table
                 DungeonTableManager.FileName(useBinary),
                 EquipSlotTableManager.FileName(useBinary),
                 GlobalVariableTableManager.FileName(useBinary),
+                GuildDonateTableManager.FileName(useBinary),
                 GuildLevelTableManager.FileName(useBinary),
                 GuildRuleTableManager.FileName(useBinary),
+                GuildShopTableManager.FileName(useBinary),
                 ItemTableManager.FileName(useBinary),
                 MessageLimiterTableManager.FileName(useBinary),
                 MirrorTableManager.FileName(useBinary),
@@ -64,6 +66,7 @@ namespace MmorpgClient.Table
                 PetTableManager.FileName(useBinary),
                 PetRuleTableManager.FileName(useBinary),
                 RewardTableManager.FileName(useBinary),
+                RoleNameRuleTableManager.FileName(useBinary),
                 SkillTableManager.FileName(useBinary),
                 SkillPermissionTableManager.FileName(useBinary),
                 TestTableManager.FileName(useBinary),
@@ -92,8 +95,10 @@ namespace MmorpgClient.Table
             DungeonTableManager.Instance.Load(configDir, useBinary);
             EquipSlotTableManager.Instance.Load(configDir, useBinary);
             GlobalVariableTableManager.Instance.Load(configDir, useBinary);
+            GuildDonateTableManager.Instance.Load(configDir, useBinary);
             GuildLevelTableManager.Instance.Load(configDir, useBinary);
             GuildRuleTableManager.Instance.Load(configDir, useBinary);
+            GuildShopTableManager.Instance.Load(configDir, useBinary);
             ItemTableManager.Instance.Load(configDir, useBinary);
             MessageLimiterTableManager.Instance.Load(configDir, useBinary);
             MirrorTableManager.Instance.Load(configDir, useBinary);
@@ -102,6 +107,7 @@ namespace MmorpgClient.Table
             PetTableManager.Instance.Load(configDir, useBinary);
             PetRuleTableManager.Instance.Load(configDir, useBinary);
             RewardTableManager.Instance.Load(configDir, useBinary);
+            RoleNameRuleTableManager.Instance.Load(configDir, useBinary);
             SkillTableManager.Instance.Load(configDir, useBinary);
             SkillPermissionTableManager.Instance.Load(configDir, useBinary);
             TestTableManager.Instance.Load(configDir, useBinary);
@@ -163,10 +169,14 @@ namespace MmorpgClient.Table
                 EquipSlotTableManager.Instance.LoadFromBytes, EquipSlotTableManager.Instance.LoadFromJson);
             LoadOne(GlobalVariableTableManager.FileName(useBinary), byteProvider, useBinary,
                 GlobalVariableTableManager.Instance.LoadFromBytes, GlobalVariableTableManager.Instance.LoadFromJson);
+            LoadOne(GuildDonateTableManager.FileName(useBinary), byteProvider, useBinary,
+                GuildDonateTableManager.Instance.LoadFromBytes, GuildDonateTableManager.Instance.LoadFromJson);
             LoadOne(GuildLevelTableManager.FileName(useBinary), byteProvider, useBinary,
                 GuildLevelTableManager.Instance.LoadFromBytes, GuildLevelTableManager.Instance.LoadFromJson);
             LoadOne(GuildRuleTableManager.FileName(useBinary), byteProvider, useBinary,
                 GuildRuleTableManager.Instance.LoadFromBytes, GuildRuleTableManager.Instance.LoadFromJson);
+            LoadOne(GuildShopTableManager.FileName(useBinary), byteProvider, useBinary,
+                GuildShopTableManager.Instance.LoadFromBytes, GuildShopTableManager.Instance.LoadFromJson);
             LoadOne(ItemTableManager.FileName(useBinary), byteProvider, useBinary,
                 ItemTableManager.Instance.LoadFromBytes, ItemTableManager.Instance.LoadFromJson);
             LoadOne(MessageLimiterTableManager.FileName(useBinary), byteProvider, useBinary,
@@ -183,6 +193,8 @@ namespace MmorpgClient.Table
                 PetRuleTableManager.Instance.LoadFromBytes, PetRuleTableManager.Instance.LoadFromJson);
             LoadOne(RewardTableManager.FileName(useBinary), byteProvider, useBinary,
                 RewardTableManager.Instance.LoadFromBytes, RewardTableManager.Instance.LoadFromJson);
+            LoadOne(RoleNameRuleTableManager.FileName(useBinary), byteProvider, useBinary,
+                RoleNameRuleTableManager.Instance.LoadFromBytes, RoleNameRuleTableManager.Instance.LoadFromJson);
             LoadOne(SkillTableManager.FileName(useBinary), byteProvider, useBinary,
                 SkillTableManager.Instance.LoadFromBytes, SkillTableManager.Instance.LoadFromJson);
             LoadOne(SkillPermissionTableManager.FileName(useBinary), byteProvider, useBinary,

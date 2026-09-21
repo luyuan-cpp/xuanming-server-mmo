@@ -194,9 +194,15 @@ type FriendConf struct {
 // ⚠ 整段标 optional 只为让"没写 Sweep 段"落到 Validate 给出可读错误。go-zero 不下钻一个
 // 整段 optional 且未出现的嵌套结构,default 标签**不会**回填(同 SchemaConf.AutoMigrate 的坑),
 // 所以 etc/friend.yaml 与 K8s ConfigMap 都必须显式写全这四个键。
+//
+// **同一份参数也用于 friend_capacity 零好友行的回收**(为什么要回收见 logic/sweep.go 文件头):
+// Mode 决定那一段删不删,RetentionDays 是容量行建出后至少保留多久,BatchLimit 是单轮回收行数上限。
+// 刻意不为它新增配置键(KISS):两段是同一个后台任务、同一个"先观察再真删"的开关,分成两套键
+// 只会出现"一段 delete、一段忘了改"的半开状态;而且 K8s ConfigMap 的 22 个契约值也不用跟着改。
 type SweepConf struct {
 	// Mode:report_only 只出指标不删数据;delete 真删。默认 report_only ——
 	// 清理的是权威数据,新环境先跑观察模式确认"待清理行数"符合预期,再改 delete。
+	// 对 friend_capacity 零好友行的回收同样生效(指标 friend_sweep_idle_capacity_rows)。
 	Mode string `json:",default=report_only,options=report_only|delete"`
 
 	// Interval:两轮 sweep 之间的间隔。
@@ -204,10 +210,14 @@ type SweepConf struct {
 
 	// RetentionDays:已处理(rejected / accepted)的申请行保留天数。
 	// 保留期存在的意义是让玩家还能看到"最近谁拒了我";删太早等于这段历史凭空消失。
+	// 同一个值也是 friend_capacity 零好友行的保留天数(按 created_ms 算):留够这么久再回收,
+	// 是为了不去删一条刚建出来、正要被写事务拿去当守卫的行。
 	RetentionDays int `json:",default=7"`
 
 	// BatchLimit:单轮 sweep 一次 DELETE 的行数上限。分批是为了不让一条长事务
 	// 长时间持锁 friend_request(它同时在好友申请写路径上)。
+	// 同一个值也是单轮回收 friend_capacity 零好友行的行数上限(那一段是逐行按主键删,
+	// 不是一条批量 DELETE,理由见 data/sweep_repo.go)。
 	BatchLimit int `json:",default=1000"`
 }
 

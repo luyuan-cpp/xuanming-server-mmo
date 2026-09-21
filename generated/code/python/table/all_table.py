@@ -25,7 +25,7 @@ sys.path 说明
 为什么加载是「先全读、后全换」
 ==============================
 每个管理器把「读盘建索引」（``build_snapshot``）和「换上去」（``apply_snapshot``）
-拆成了两步。这里先把 31 张表全部读完，一张都没换；
+拆成了两步。这里先把 34 张表全部读完，一张都没换；
 中途任何一张读失败，异常直接抛出去，**一张表都不会被换掉** ——
 进程继续跑在上一批完整的配置上，而不是半新半旧。
 """
@@ -53,8 +53,10 @@ from .cooldown_table import CooldownTableManager
 from .dungeon_table import DungeonTableManager
 from .equipslot_table import EquipSlotTableManager
 from .globalvariable_table import GlobalVariableTableManager
+from .guilddonate_table import GuildDonateTableManager
 from .guildlevel_table import GuildLevelTableManager
 from .guildrule_table import GuildRuleTableManager
+from .guildshop_table import GuildShopTableManager
 from .item_table import ItemTableManager
 from .messagelimiter_table import MessageLimiterTableManager
 from .mirror_table import MirrorTableManager
@@ -63,6 +65,7 @@ from .monster_table import MonsterTableManager
 from .pet_table import PetTableManager
 from .petrule_table import PetRuleTableManager
 from .reward_table import RewardTableManager
+from .rolenamerule_table import RoleNameRuleTableManager
 from .skill_table import SkillTableManager
 from .skillpermission_table import SkillPermissionTableManager
 from .test_table import TestTableManager
@@ -96,8 +99,10 @@ MANAGERS: dict[str, TableManager] = {
     "Dungeon": DungeonTableManager.instance(),
     "EquipSlot": EquipSlotTableManager.instance(),
     "GlobalVariable": GlobalVariableTableManager.instance(),
+    "GuildDonate": GuildDonateTableManager.instance(),
     "GuildLevel": GuildLevelTableManager.instance(),
     "GuildRule": GuildRuleTableManager.instance(),
+    "GuildShop": GuildShopTableManager.instance(),
     "Item": ItemTableManager.instance(),
     "MessageLimiter": MessageLimiterTableManager.instance(),
     "Mirror": MirrorTableManager.instance(),
@@ -106,6 +111,7 @@ MANAGERS: dict[str, TableManager] = {
     "Pet": PetTableManager.instance(),
     "PetRule": PetRuleTableManager.instance(),
     "Reward": RewardTableManager.instance(),
+    "RoleNameRule": RoleNameRuleTableManager.instance(),
     "Skill": SkillTableManager.instance(),
     "SkillPermission": SkillPermissionTableManager.instance(),
     "Test": TestTableManager.instance(),
@@ -130,7 +136,7 @@ def _apply(staged: list[tuple[TableManager, Any]]) -> None:
 
 
 def load_tables(config_dir: str | Path, use_binary: bool = False) -> None:
-    """串行加载全部 31 张表。
+    """串行加载全部 34 张表。
 
     :param use_binary: True 读 ``*.pb``（proto 二进制），False 读 ``*.json``。
         口径与 Go/Java 的 ``useBinary`` 一致。

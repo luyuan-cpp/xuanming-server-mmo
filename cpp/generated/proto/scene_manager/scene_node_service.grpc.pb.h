@@ -84,6 +84,30 @@ class SceneNodeGrpc final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> PrepareAsyncCancelBattlePrepare(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(PrepareAsyncCancelBattlePrepareRaw(context, request, cq));
     }
+    // ---- 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §S4)----
+    // 结局写在 response.outcome;gRPC status 恒为 OK。同 seq 重复调用只读答复。
+    virtual ::grpc::Status AssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::AssetOpResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>> AsyncAssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>>(AsyncAssetDebitRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>> PrepareAsyncAssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>>(PrepareAsyncAssetDebitRaw(context, request, cq));
+    }
+    // 未见过的 seq 记 REJECTED 占位(reason=0);见过则回原结局。允许用于任何流。
+    virtual ::grpc::Status AssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::AssetOpResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>> AsyncAssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>>(AsyncAssetAbortDebitRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>> PrepareAsyncAssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>>(PrepareAsyncAssetAbortDebitRaw(context, request, cq));
+    }
+    virtual ::grpc::Status AssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::AssetOpResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>> AsyncAssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>>(AsyncAssetCreditRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>> PrepareAsyncAssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>>(PrepareAsyncAssetCreditRaw(context, request, cq));
+    }
     class async_interface {
      public:
       virtual ~async_interface() {}
@@ -107,6 +131,15 @@ class SceneNodeGrpc final {
       // gather 失败的逐人回滚:battle_id 匹配才解冻,迟到/重复取消幂等忽略。
       virtual void CancelBattlePrepare(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest* request, ::Empty* response, std::function<void(::grpc::Status)>) = 0;
       virtual void CancelBattlePrepare(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // ---- 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §S4)----
+      // 结局写在 response.outcome;gRPC status 恒为 OK。同 seq 重复调用只读答复。
+      virtual void AssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void AssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 未见过的 seq 记 REJECTED 占位(reason=0);见过则回原结局。允许用于任何流。
+      virtual void AssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void AssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void AssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void AssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -122,6 +155,12 @@ class SceneNodeGrpc final {
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::PrepareBattleResponse>* PrepareAsyncPrepareBattleRaw(::grpc::ClientContext* context, const ::PrepareBattleRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* AsyncCancelBattlePrepareRaw(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* PrepareAsyncCancelBattlePrepareRaw(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>* AsyncAssetDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>* PrepareAsyncAssetDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>* AsyncAssetAbortDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>* PrepareAsyncAssetAbortDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>* AsyncAssetCreditRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::AssetOpResponse>* PrepareAsyncAssetCreditRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -161,6 +200,27 @@ class SceneNodeGrpc final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> PrepareAsyncCancelBattlePrepare(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(PrepareAsyncCancelBattlePrepareRaw(context, request, cq));
     }
+    ::grpc::Status AssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::AssetOpResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>> AsyncAssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>>(AsyncAssetDebitRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>> PrepareAsyncAssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>>(PrepareAsyncAssetDebitRaw(context, request, cq));
+    }
+    ::grpc::Status AssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::AssetOpResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>> AsyncAssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>>(AsyncAssetAbortDebitRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>> PrepareAsyncAssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>>(PrepareAsyncAssetAbortDebitRaw(context, request, cq));
+    }
+    ::grpc::Status AssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::AssetOpResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>> AsyncAssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>>(AsyncAssetCreditRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>> PrepareAsyncAssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>>(PrepareAsyncAssetCreditRaw(context, request, cq));
+    }
     class async final :
       public StubInterface::async_interface {
      public:
@@ -174,6 +234,12 @@ class SceneNodeGrpc final {
       void PrepareBattle(::grpc::ClientContext* context, const ::PrepareBattleRequest* request, ::PrepareBattleResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void CancelBattlePrepare(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest* request, ::Empty* response, std::function<void(::grpc::Status)>) override;
       void CancelBattlePrepare(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void AssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, std::function<void(::grpc::Status)>) override;
+      void AssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void AssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, std::function<void(::grpc::Status)>) override;
+      void AssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void AssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, std::function<void(::grpc::Status)>) override;
+      void AssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -195,11 +261,20 @@ class SceneNodeGrpc final {
     ::grpc::ClientAsyncResponseReader< ::PrepareBattleResponse>* PrepareAsyncPrepareBattleRaw(::grpc::ClientContext* context, const ::PrepareBattleRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::Empty>* AsyncCancelBattlePrepareRaw(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::Empty>* PrepareAsyncCancelBattlePrepareRaw(::grpc::ClientContext* context, const ::CancelBattlePrepareRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* AsyncAssetDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* PrepareAsyncAssetDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* AsyncAssetAbortDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* PrepareAsyncAssetAbortDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* AsyncAssetCreditRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* PrepareAsyncAssetCreditRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_CreateScene_;
     const ::grpc::internal::RpcMethod rpcmethod_DestroyScene_;
     const ::grpc::internal::RpcMethod rpcmethod_ReleasePlayer_;
     const ::grpc::internal::RpcMethod rpcmethod_PrepareBattle_;
     const ::grpc::internal::RpcMethod rpcmethod_CancelBattlePrepare_;
+    const ::grpc::internal::RpcMethod rpcmethod_AssetDebit_;
+    const ::grpc::internal::RpcMethod rpcmethod_AssetAbortDebit_;
+    const ::grpc::internal::RpcMethod rpcmethod_AssetCredit_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -222,6 +297,12 @@ class SceneNodeGrpc final {
     virtual ::grpc::Status PrepareBattle(::grpc::ServerContext* context, const ::PrepareBattleRequest* request, ::PrepareBattleResponse* response);
     // gather 失败的逐人回滚:battle_id 匹配才解冻,迟到/重复取消幂等忽略。
     virtual ::grpc::Status CancelBattlePrepare(::grpc::ServerContext* context, const ::CancelBattlePrepareRequest* request, ::Empty* response);
+    // ---- 通用资产通道(docs/design/guild-phase2/04-asset-channel.md §S4)----
+    // 结局写在 response.outcome;gRPC status 恒为 OK。同 seq 重复调用只读答复。
+    virtual ::grpc::Status AssetDebit(::grpc::ServerContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response);
+    // 未见过的 seq 记 REJECTED 占位(reason=0);见过则回原结局。允许用于任何流。
+    virtual ::grpc::Status AssetAbortDebit(::grpc::ServerContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response);
+    virtual ::grpc::Status AssetCredit(::grpc::ServerContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_CreateScene : public BaseClass {
@@ -323,7 +404,67 @@ class SceneNodeGrpc final {
       ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_CreateScene<WithAsyncMethod_DestroyScene<WithAsyncMethod_ReleasePlayer<WithAsyncMethod_PrepareBattle<WithAsyncMethod_CancelBattlePrepare<Service > > > > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_AssetDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_AssetDebit() {
+      ::grpc::Service::MarkMethodAsync(5);
+    }
+    ~WithAsyncMethod_AssetDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestAssetDebit(::grpc::ServerContext* context, ::AssetOpRequest* request, ::grpc::ServerAsyncResponseWriter< ::AssetOpResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(5, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_AssetAbortDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_AssetAbortDebit() {
+      ::grpc::Service::MarkMethodAsync(6);
+    }
+    ~WithAsyncMethod_AssetAbortDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetAbortDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestAssetAbortDebit(::grpc::ServerContext* context, ::AssetOpRequest* request, ::grpc::ServerAsyncResponseWriter< ::AssetOpResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(6, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_AssetCredit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_AssetCredit() {
+      ::grpc::Service::MarkMethodAsync(7);
+    }
+    ~WithAsyncMethod_AssetCredit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetCredit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestAssetCredit(::grpc::ServerContext* context, ::AssetOpRequest* request, ::grpc::ServerAsyncResponseWriter< ::AssetOpResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_CreateScene<WithAsyncMethod_DestroyScene<WithAsyncMethod_ReleasePlayer<WithAsyncMethod_PrepareBattle<WithAsyncMethod_CancelBattlePrepare<WithAsyncMethod_AssetDebit<WithAsyncMethod_AssetAbortDebit<WithAsyncMethod_AssetCredit<Service > > > > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_CreateScene : public BaseClass {
    private:
@@ -459,7 +600,88 @@ class SceneNodeGrpc final {
     virtual ::grpc::ServerUnaryReactor* CancelBattlePrepare(
       ::grpc::CallbackServerContext* /*context*/, const ::CancelBattlePrepareRequest* /*request*/, ::Empty* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_CreateScene<WithCallbackMethod_DestroyScene<WithCallbackMethod_ReleasePlayer<WithCallbackMethod_PrepareBattle<WithCallbackMethod_CancelBattlePrepare<Service > > > > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_AssetDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_AssetDebit() {
+      ::grpc::Service::MarkMethodCallback(5,
+          new ::grpc::internal::CallbackUnaryHandler< ::AssetOpRequest, ::AssetOpResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response) { return this->AssetDebit(context, request, response); }));}
+    void SetMessageAllocatorFor_AssetDebit(
+        ::grpc::MessageAllocator< ::AssetOpRequest, ::AssetOpResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(5);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::AssetOpRequest, ::AssetOpResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_AssetDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* AssetDebit(
+      ::grpc::CallbackServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_AssetAbortDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_AssetAbortDebit() {
+      ::grpc::Service::MarkMethodCallback(6,
+          new ::grpc::internal::CallbackUnaryHandler< ::AssetOpRequest, ::AssetOpResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response) { return this->AssetAbortDebit(context, request, response); }));}
+    void SetMessageAllocatorFor_AssetAbortDebit(
+        ::grpc::MessageAllocator< ::AssetOpRequest, ::AssetOpResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(6);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::AssetOpRequest, ::AssetOpResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_AssetAbortDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetAbortDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* AssetAbortDebit(
+      ::grpc::CallbackServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_AssetCredit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_AssetCredit() {
+      ::grpc::Service::MarkMethodCallback(7,
+          new ::grpc::internal::CallbackUnaryHandler< ::AssetOpRequest, ::AssetOpResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response) { return this->AssetCredit(context, request, response); }));}
+    void SetMessageAllocatorFor_AssetCredit(
+        ::grpc::MessageAllocator< ::AssetOpRequest, ::AssetOpResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(7);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::AssetOpRequest, ::AssetOpResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_AssetCredit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetCredit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* AssetCredit(
+      ::grpc::CallbackServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_CreateScene<WithCallbackMethod_DestroyScene<WithCallbackMethod_ReleasePlayer<WithCallbackMethod_PrepareBattle<WithCallbackMethod_CancelBattlePrepare<WithCallbackMethod_AssetDebit<WithCallbackMethod_AssetAbortDebit<WithCallbackMethod_AssetCredit<Service > > > > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_CreateScene : public BaseClass {
@@ -542,6 +764,57 @@ class SceneNodeGrpc final {
     }
     // disable synchronous version of this method
     ::grpc::Status CancelBattlePrepare(::grpc::ServerContext* /*context*/, const ::CancelBattlePrepareRequest* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_AssetDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_AssetDebit() {
+      ::grpc::Service::MarkMethodGeneric(5);
+    }
+    ~WithGenericMethod_AssetDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_AssetAbortDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_AssetAbortDebit() {
+      ::grpc::Service::MarkMethodGeneric(6);
+    }
+    ~WithGenericMethod_AssetAbortDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetAbortDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_AssetCredit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_AssetCredit() {
+      ::grpc::Service::MarkMethodGeneric(7);
+    }
+    ~WithGenericMethod_AssetCredit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetCredit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -644,6 +917,66 @@ class SceneNodeGrpc final {
     }
     void RequestCancelBattlePrepare(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_AssetDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_AssetDebit() {
+      ::grpc::Service::MarkMethodRaw(5);
+    }
+    ~WithRawMethod_AssetDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestAssetDebit(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(5, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_AssetAbortDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_AssetAbortDebit() {
+      ::grpc::Service::MarkMethodRaw(6);
+    }
+    ~WithRawMethod_AssetAbortDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetAbortDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestAssetAbortDebit(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(6, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_AssetCredit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_AssetCredit() {
+      ::grpc::Service::MarkMethodRaw(7);
+    }
+    ~WithRawMethod_AssetCredit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetCredit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestAssetCredit(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -754,6 +1087,72 @@ class SceneNodeGrpc final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* CancelBattlePrepare(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_AssetDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_AssetDebit() {
+      ::grpc::Service::MarkMethodRawCallback(5,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->AssetDebit(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_AssetDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* AssetDebit(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_AssetAbortDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_AssetAbortDebit() {
+      ::grpc::Service::MarkMethodRawCallback(6,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->AssetAbortDebit(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_AssetAbortDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetAbortDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* AssetAbortDebit(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_AssetCredit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_AssetCredit() {
+      ::grpc::Service::MarkMethodRawCallback(7,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->AssetCredit(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_AssetCredit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status AssetCredit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* AssetCredit(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -891,9 +1290,90 @@ class SceneNodeGrpc final {
     // replace default version of method with streamed unary
     virtual ::grpc::Status StreamedCancelBattlePrepare(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::CancelBattlePrepareRequest,::Empty>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_CreateScene<WithStreamedUnaryMethod_DestroyScene<WithStreamedUnaryMethod_ReleasePlayer<WithStreamedUnaryMethod_PrepareBattle<WithStreamedUnaryMethod_CancelBattlePrepare<Service > > > > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_AssetDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_AssetDebit() {
+      ::grpc::Service::MarkMethodStreamed(5,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::AssetOpRequest, ::AssetOpResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::AssetOpRequest, ::AssetOpResponse>* streamer) {
+                       return this->StreamedAssetDebit(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_AssetDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status AssetDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedAssetDebit(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::AssetOpRequest,::AssetOpResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_AssetAbortDebit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_AssetAbortDebit() {
+      ::grpc::Service::MarkMethodStreamed(6,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::AssetOpRequest, ::AssetOpResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::AssetOpRequest, ::AssetOpResponse>* streamer) {
+                       return this->StreamedAssetAbortDebit(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_AssetAbortDebit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status AssetAbortDebit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedAssetAbortDebit(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::AssetOpRequest,::AssetOpResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_AssetCredit : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_AssetCredit() {
+      ::grpc::Service::MarkMethodStreamed(7,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::AssetOpRequest, ::AssetOpResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::AssetOpRequest, ::AssetOpResponse>* streamer) {
+                       return this->StreamedAssetCredit(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_AssetCredit() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status AssetCredit(::grpc::ServerContext* /*context*/, const ::AssetOpRequest* /*request*/, ::AssetOpResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedAssetCredit(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::AssetOpRequest,::AssetOpResponse>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_CreateScene<WithStreamedUnaryMethod_DestroyScene<WithStreamedUnaryMethod_ReleasePlayer<WithStreamedUnaryMethod_PrepareBattle<WithStreamedUnaryMethod_CancelBattlePrepare<WithStreamedUnaryMethod_AssetDebit<WithStreamedUnaryMethod_AssetAbortDebit<WithStreamedUnaryMethod_AssetCredit<Service > > > > > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_CreateScene<WithStreamedUnaryMethod_DestroyScene<WithStreamedUnaryMethod_ReleasePlayer<WithStreamedUnaryMethod_PrepareBattle<WithStreamedUnaryMethod_CancelBattlePrepare<Service > > > > > StreamedService;
+  typedef WithStreamedUnaryMethod_CreateScene<WithStreamedUnaryMethod_DestroyScene<WithStreamedUnaryMethod_ReleasePlayer<WithStreamedUnaryMethod_PrepareBattle<WithStreamedUnaryMethod_CancelBattlePrepare<WithStreamedUnaryMethod_AssetDebit<WithStreamedUnaryMethod_AssetAbortDebit<WithStreamedUnaryMethod_AssetCredit<Service > > > > > > > > StreamedService;
 };
 
 }  // namespace scene_node

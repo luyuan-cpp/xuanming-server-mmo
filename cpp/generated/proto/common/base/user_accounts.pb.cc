@@ -48,11 +48,11 @@ constexpr AccountSimplePlayer::ParseTableT_ AccountSimplePlayer::InternalGenerat
     {
       PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
+      5,  // num_field_entries
       0,  // num_aux_entries
       offsetof(ParseTableT_, field_names),  // no aux_entries
       class_data,
@@ -62,36 +62,48 @@ constexpr AccountSimplePlayer::ParseTableT_ AccountSimplePlayer::InternalGenerat
       ::_pbi::TcParser::GetTable<::AccountSimplePlayer>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // uint32 zone_id = 4;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AccountSimplePlayer, _impl_.zone_id_), 3>(),
-       {32, 3, 0,
-        PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.zone_id_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // uint64 player_id = 1;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AccountSimplePlayer, _impl_.player_id_), 0>(),
-       {8, 0, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AccountSimplePlayer, _impl_.player_id_), 1>(),
+       {8, 1, 0,
         PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.player_id_)}},
       // uint32 class_id = 2;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AccountSimplePlayer, _impl_.class_id_), 1>(),
-       {16, 1, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AccountSimplePlayer, _impl_.class_id_), 2>(),
+       {16, 2, 0,
         PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.class_id_)}},
       // uint32 gender = 3;
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AccountSimplePlayer, _impl_.gender_), 2>(),
-       {24, 2, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AccountSimplePlayer, _impl_.gender_), 3>(),
+       {24, 3, 0,
         PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.gender_)}},
+      // uint32 zone_id = 4;
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(AccountSimplePlayer, _impl_.zone_id_), 4>(),
+       {32, 4, 0,
+        PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.zone_id_)}},
+      // string name = 5;
+      {::_pbi::TcParser::FastUS1,
+       {42, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.name_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
       // uint64 player_id = 1;
-      {PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.player_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.player_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // uint32 class_id = 2;
-      {PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.class_id_), _Internal::kHasBitsOffset + 1, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.class_id_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 gender = 3;
-      {PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.gender_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.gender_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // uint32 zone_id = 4;
-      {PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.zone_id_), _Internal::kHasBitsOffset + 3, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.zone_id_), _Internal::kHasBitsOffset + 4, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      // string name = 5;
+      {PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
     }},
     // no aux_entries
     {{
+      "\23\0\0\0\0\4\0\0"
+      "AccountSimplePlayer"
+      "name"
     }},
   };
 }
@@ -101,6 +113,9 @@ inline constexpr AccountSimplePlayer::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     ::_pbi::ConstantInitialized) noexcept
       : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()),
         player_id_{::uint64_t{0u}},
         class_id_{0u},
         gender_{0u},
@@ -122,7 +137,7 @@ inline void* PROTOBUF_NONNULL AccountSimplePlayer::PlacementNew_(
   return ::new (mem) AccountSimplePlayer(arena);
 }
 constexpr auto AccountSimplePlayer::InternalNewImpl_() {
-  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(AccountSimplePlayer), alignof(AccountSimplePlayer));
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AccountSimplePlayer), alignof(AccountSimplePlayer));
 }
 constexpr auto AccountSimplePlayer::InternalGenerateClassData_(
     const MessageLite& prototype,
@@ -358,15 +373,17 @@ const ::uint32_t
         protodesc_cold) = {
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AccountSimplePlayer, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::AccountSimplePlayer, _impl_.player_id_),
         PROTOBUF_FIELD_OFFSET(::AccountSimplePlayer, _impl_.class_id_),
         PROTOBUF_FIELD_OFFSET(::AccountSimplePlayer, _impl_.gender_),
         PROTOBUF_FIELD_OFFSET(::AccountSimplePlayer, _impl_.zone_id_),
-        0,
+        PROTOBUF_FIELD_OFFSET(::AccountSimplePlayer, _impl_.name_),
         1,
         2,
         3,
+        4,
+        0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::AccountSimplePlayerList, _impl_._has_bits_),
         4, // hasbit index offset
@@ -377,7 +394,7 @@ const ::uint32_t
 static const ::_pbi::MigrationSchema
     schemas[] ABSL_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
         {0, sizeof(::AccountSimplePlayer)},
-        {11, sizeof(::AccountSimplePlayerList)},
+        {13, sizeof(::AccountSimplePlayerList)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -387,17 +404,17 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
 const char descriptor_table_protodef_proto_2fcommon_2fbase_2fuser_5faccounts_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
     "\n%proto/common/base/user_accounts.proto\""
-    "[\n\023AccountSimplePlayer\022\021\n\tplayer_id\030\001 \001("
+    "i\n\023AccountSimplePlayer\022\021\n\tplayer_id\030\001 \001("
     "\004\022\020\n\010class_id\030\002 \001(\r\022\016\n\006gender\030\003 \001(\r\022\017\n\007z"
-    "one_id\030\004 \001(\r\"@\n\027AccountSimplePlayerList\022"
-    "%\n\007players\030\001 \003(\0132\024.AccountSimplePlayerB\r"
-    "Z\013common/baseb\006proto3"
+    "one_id\030\004 \001(\r\022\014\n\004name\030\005 \001(\t\"@\n\027AccountSim"
+    "plePlayerList\022%\n\007players\030\001 \003(\0132\024.Account"
+    "SimplePlayerB\rZ\013common/baseb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fbase_2fuser_5faccounts_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fbase_2fuser_5faccounts_2eproto = {
     false,
     false,
-    221,
+    235,
     descriptor_table_protodef_proto_2fcommon_2fbase_2fuser_5faccounts_2eproto,
     "proto/common/base/user_accounts.proto",
     &descriptor_table_proto_2fcommon_2fbase_2fuser_5faccounts_2eproto_once,
@@ -421,21 +438,43 @@ AccountSimplePlayer::AccountSimplePlayer(::google::protobuf::Arena* PROTOBUF_NUL
   SharedCtor(arena);
   // @@protoc_insertion_point(arena_constructor:AccountSimplePlayer)
 }
+PROTOBUF_NDEBUG_INLINE AccountSimplePlayer::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::AccountSimplePlayer& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
 AccountSimplePlayer::AccountSimplePlayer(
-    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AccountSimplePlayer& from)
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const AccountSimplePlayer& from)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
-    : ::google::protobuf::Message(arena, AccountSimplePlayer_get_class_data()),
+    : ::google::protobuf::Message(arena, AccountSimplePlayer_get_class_data()) {
+
 #else   // PROTOBUF_CUSTOM_VTABLE
-    : ::google::protobuf::Message(arena),
+    : ::google::protobuf::Message(arena) {
 #endif  // PROTOBUF_CUSTOM_VTABLE
-      _impl_(from._impl_) {
+  AccountSimplePlayer* const _this = this;
+  (void)_this;
   _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
       from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+  ::memcpy(reinterpret_cast<char*>(&_impl_) +
+               offsetof(Impl_, player_id_),
+           reinterpret_cast<const char*>(&from._impl_) +
+               offsetof(Impl_, player_id_),
+           offsetof(Impl_, zone_id_) -
+               offsetof(Impl_, player_id_) +
+               sizeof(Impl_::zone_id_));
+
+  // @@protoc_insertion_point(copy_constructor:AccountSimplePlayer)
 }
 PROTOBUF_NDEBUG_INLINE AccountSimplePlayer::Impl_::Impl_(
     [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
     [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
-      : _cached_size_{0} {}
+      : _cached_size_{0},
+        name_(arena) {}
 
 inline void AccountSimplePlayer::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
   new (&_impl_) Impl_(internal_visibility(), arena);
@@ -457,6 +496,7 @@ inline void AccountSimplePlayer::SharedDtor(MessageLite& self) {
   }
   this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
   ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
   this_._impl_.~Impl_();
 }
 
@@ -494,7 +534,10 @@ PROTOBUF_NOINLINE void AccountSimplePlayer::Clear() {
   (void) cached_has_bits;
 
   cached_has_bits = _impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.name_.ClearNonDefaultToEmpty();
+  }
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001eU)) {
     ::memset(&_impl_.player_id_, 0, static_cast<::size_t>(
         reinterpret_cast<char*>(&_impl_.zone_id_) -
         reinterpret_cast<char*>(&_impl_.player_id_)) + sizeof(_impl_.zone_id_));
@@ -523,7 +566,7 @@ PROTOBUF_NOINLINE void AccountSimplePlayer::Clear() {
 
   cached_has_bits = this_._impl_._has_bits_[0];
   // uint64 player_id = 1;
-  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
     if (this_._internal_player_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
@@ -532,7 +575,7 @@ PROTOBUF_NOINLINE void AccountSimplePlayer::Clear() {
   }
 
   // uint32 class_id = 2;
-  if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
     if (this_._internal_class_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -541,7 +584,7 @@ PROTOBUF_NOINLINE void AccountSimplePlayer::Clear() {
   }
 
   // uint32 gender = 3;
-  if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
     if (this_._internal_gender() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
@@ -550,11 +593,21 @@ PROTOBUF_NOINLINE void AccountSimplePlayer::Clear() {
   }
 
   // uint32 zone_id = 4;
-  if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     if (this_._internal_zone_id() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
           4, this_._internal_zone_id(), target);
+    }
+  }
+
+  // string name = 5;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "AccountSimplePlayer.name");
+      target = stream->WriteStringMaybeAliased(5, _s, target);
     }
   }
 
@@ -583,30 +636,37 @@ PROTOBUF_NOINLINE void AccountSimplePlayer::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
-    // uint64 player_id = 1;
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+    // string name = 5;
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+    // uint64 player_id = 1;
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (this_._internal_player_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
             this_._internal_player_id());
       }
     }
     // uint32 class_id = 2;
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (this_._internal_class_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_class_id());
       }
     }
     // uint32 gender = 3;
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (this_._internal_gender() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_gender());
       }
     }
     // uint32 zone_id = 4;
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (this_._internal_zone_id() != 0) {
         total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
             this_._internal_zone_id());
@@ -630,23 +690,32 @@ void AccountSimplePlayer::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!from._internal_name().empty()) {
+        _this->_internal_set_name(from._internal_name());
+      } else {
+        if (_this->_impl_.name_.IsDefault()) {
+          _this->_internal_set_name("");
+        }
+      }
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
       if (from._internal_player_id() != 0) {
         _this->_impl_.player_id_ = from._impl_.player_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000002U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
       if (from._internal_class_id() != 0) {
         _this->_impl_.class_id_ = from._impl_.class_id_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000004U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       if (from._internal_gender() != 0) {
         _this->_impl_.gender_ = from._impl_.gender_;
       }
     }
-    if (CheckHasBit(cached_has_bits, 0x00000008U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
       if (from._internal_zone_id() != 0) {
         _this->_impl_.zone_id_ = from._impl_.zone_id_;
       }
@@ -667,8 +736,11 @@ void AccountSimplePlayer::CopyFrom(const AccountSimplePlayer& from) {
 
 void AccountSimplePlayer::InternalSwap(AccountSimplePlayer* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
   using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
   _internal_metadata_.InternalSwap(&other->_internal_metadata_);
   swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
   ::google::protobuf::internal::memswap<
       PROTOBUF_FIELD_OFFSET(AccountSimplePlayer, _impl_.zone_id_)
       + sizeof(AccountSimplePlayer::_impl_.zone_id_)

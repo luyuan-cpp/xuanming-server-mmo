@@ -372,9 +372,15 @@ func (x *TestResponse) GetTestint() []int32 {
 }
 
 type CreatePlayerRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ClassId       uint32                 `protobuf:"varint,1,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"` // 职业(Class 配表 id);0 = 兼容旧客户端,取配表第一个职业
-	Gender        uint32                 `protobuf:"varint,2,opt,name=gender,proto3" json:"gender,omitempty"`                  // 1=男 2=女;0 = 兼容旧客户端,默认 1
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	ClassId uint32                 `protobuf:"varint,1,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"` // 职业(Class 配表 id);0 = 兼容旧客户端,取配表第一个职业
+	Gender  uint32                 `protobuf:"varint,2,opt,name=gender,proto3" json:"gender,omitempty"`                  // 1=男 2=女;0 = 兼容旧客户端,默认 1
+	// 角色名。正式客户端建角界面必填(长度 / 字符集按 RoleNameRule 配表,当前 2–12 字);
+	// 空串 = 服务端生成「前缀 + 随机后缀」,只服务机器人与无 UI 的调试路径。
+	// 名字全服唯一,真源是 data_service 的 player_name 表:login 先 ReservePlayerName
+	// 成功再建角(fail-closed),建角失败走 ReleasePlayerName 补偿。
+	// 见 docs/design/guild-phase2/03-names.md §3.9 / §3.11。
+	Name          string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -421,6 +427,13 @@ func (x *CreatePlayerRequest) GetGender() uint32 {
 		return x.Gender
 	}
 	return 0
+}
+
+func (x *CreatePlayerRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
 }
 
 type CreatePlayerResponse struct {
@@ -549,16 +562,15 @@ type EnterGameResponse struct {
 	//     player's name collided with an existing name in the merge
 	//     target zone.
 	//
-	//     2026-05-23 reality note: this project has no player nickname
-	//     field today (CreatePlayer is empty; user.display_name is unused;
-	//     no rename RPC exists). The flag is pre-wired so that when a
-	//     nickname surface lands, the merge tool can already stamp it
-	//     and login can already deliver it without re-doing protocol.
-	//     The eventual rename RPC will be responsible for DELeting the
-	//     `player_force_rename:{player_id}` Redis key on a successful
-	//     rename — login does NOT clear it on EnterGame because the
-	//     client could otherwise dismiss the rename UI and lose the
-	//     gate (see go/login/.../entergamelogic.go::consumePostMergeFlags).
+	//     2026-09 现状更新:角色名已经落地(CreatePlayerRequest.name),
+	//     真源是 data_service 全局库的 player_name 表,名字**全服唯一**
+	//     (docs/design/guild-phase2/03-names.md)。正因为是全服唯一,合服时
+	//     不可能再出现"两个区重名"——force_rename 这条管线因此保持未启用:
+	//     merge 工具仍可盖标记、login 仍原样下发,但正常运营不会置位。
+	//     将来若真的做改名 RPC,由它在改名成功后 DEL
+	//     `player_force_rename:{player_id}` Redis key —— login 不在 EnterGame 清,
+	//     否则客户端把改名 UI 关掉就绕过了这道闸
+	//     (见 go/login/.../entergamelogic.go::consumePostMergeFlags)。
 	//
 	// Wire compat: pre-this-field clients ignore both — they still enter
 	// the game; they just don't see the notice / rename UI. That's fine
@@ -1367,10 +1379,11 @@ const file_proto_login_login_proto_rawDesc = "" +
 	"\n" +
 	"teststring\x18\x03 \x03(\tR\n" +
 	"teststring\x12\x18\n" +
-	"\atestint\x18\x04 \x03(\x05R\atestint\"H\n" +
+	"\atestint\x18\x04 \x03(\x05R\atestint\"\\\n" +
 	"\x13CreatePlayerRequest\x12\x19\n" +
 	"\bclass_id\x18\x01 \x01(\rR\aclassId\x12\x16\n" +
-	"\x06gender\x18\x02 \x01(\rR\x06gender\"\x8b\x01\n" +
+	"\x06gender\x18\x02 \x01(\rR\x06gender\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\"\x8b\x01\n" +
 	"\x14CreatePlayerResponse\x124\n" +
 	"\rerror_message\x18\x01 \x01(\v2\x0f.TipInfoMessageR\ferrorMessage\x12=\n" +
 	"\aplayers\x18\x02 \x03(\v2#.loginpb.AccountSimplePlayerWrapperR\aplayers\"N\n" +

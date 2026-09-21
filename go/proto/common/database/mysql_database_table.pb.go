@@ -477,13 +477,20 @@ type PlayerDatabase struct {
 	// 背包资产与任务领取权同属一条玩家数据库记录，随同一 DBTask 保存。
 	BagComponent     *BagAllData   `protobuf:"bytes,13,opt,name=bag_component,json=bagComponent,proto3" json:"bag_component,omitempty"`
 	MissionComponent *QuestAllData `protobuf:"bytes,14,opt,name=mission_component,json=missionComponent,proto3" json:"mission_component,omitempty"`
-	// 15 预留给 B3a-1 的 PlayerProfileComp profile_component(尚未落码)。
+	// 角色名副本,见 player_comp.proto PlayerProfileComp。
+	// 真源是 data_service 全局库的 player_name 表(全服唯一);这里只是随 player_database
+	// 走的只读副本 —— login 首次入场补齐,scene 只读、只原样存回。副本允许"缺失"
+	// (entergame self-heal 恢复出的空记录、早于首次入场的回档快照),读侧一律回源
+	// BatchGetPlayerName,不要把空名当成"这个角色没有名字"。
+	//
+	// 【加列纪律】player_database 新字段一律取"落码当时的下一个空闲号",并声明在 message 末尾:
+	// 新库 CREATE TABLE 按声明顺序建列,老库 cmd/migrate 只会 ADD COLUMN 追加到末尾,
+	// 两者列序必须一致(tools/merge_zone 按列名拷贝依赖这个)。
 	// 字段号归属由 docs/design/guild-phase2/90-consistency.md G-03 裁决:
 	// 按 91-batches-and-codex.md 的批次顺序 B3a-1 取 15、B4a-1 取 16,
-	// S4 4.3.4 原文的"= 15"已作废。若主会话按 91 §1 末尾的"B3/B4 整体对调"
-	// 执行,则两者互换,但必须同批改掉 90-consistency.md G-03 与 91 的表格,
-	// 不能只在交付说明里口头交代。
-	//
+	// S4 4.3.4 原文的"= 15"已作废。15 与 16 的声明顺序必须与字段号一致、中间不留空洞:
+	// 两列都是 MEDIUMBLOB,列序错位会让 `INSERT … SELECT *` 静默串档。
+	ProfileComponent *component.PlayerProfileComp `protobuf:"bytes,15,opt,name=profile_component,json=profileComponent,proto3" json:"profile_component,omitempty"`
 	// 通用资产通道账本(每流 seq 窗口),docs/design/guild-phase2/04-asset-channel.md §4.3.4。
 	// 必须与 currency / bag_component 同记录同 DBTask:账本与资产一起落盘、一起丢,
 	// 否则会出现"资产落了账本没落"的中间态,同一笔指令被重复应用(不变量 I3)。
@@ -620,6 +627,13 @@ func (x *PlayerDatabase) GetMissionComponent() *QuestAllData {
 	return nil
 }
 
+func (x *PlayerDatabase) GetProfileComponent() *component.PlayerProfileComp {
+	if x != nil {
+		return x.ProfileComponent
+	}
+	return nil
+}
+
 func (x *PlayerDatabase) GetAssetOpLedger() *component.PlayerAssetOpLedgerComp {
 	if x != nil {
 		return x.AssetOpLedger
@@ -725,7 +739,7 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x16player_centre_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x126\n" +
 	"\n" +
-	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb8\a\n" +
+	"scene_info\x18\x02 \x01(\v2\x17.PlayerSceneContextCompR\tsceneInfo:F\x8a\x92\xf4\x01\x16player_centre_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xf9\a\n" +
 	"\x0fplayer_database\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12(\n" +
 	"\ttransform\x18\x02 \x01(\v2\n" +
@@ -745,7 +759,8 @@ const file_proto_common_database_mysql_database_table_proto_rawDesc = "" +
 	"\x13attribute_component\x18\v \x01(\v2\x14.PlayerAttributeCompR\x12attributeComponent\x123\n" +
 	"\rpet_component\x18\f \x01(\v2\x0e.PlayerPetCompR\fpetComponent\x120\n" +
 	"\rbag_component\x18\r \x01(\v2\v.BagAllDataR\fbagComponent\x12:\n" +
-	"\x11mission_component\x18\x0e \x01(\v2\r.QuestAllDataR\x10missionComponent\x12@\n" +
+	"\x11mission_component\x18\x0e \x01(\v2\r.QuestAllDataR\x10missionComponent\x12?\n" +
+	"\x11profile_component\x18\x0f \x01(\v2\x12.PlayerProfileCompR\x10profileComponent\x12@\n" +
 	"\x0fasset_op_ledger\x18\x10 \x01(\v2\x18.PlayerAssetOpLedgerCompR\rassetOpLedger:D\x8a\x92\xf4\x01\x0fplayer_database\x92\x92\xf4\x01\tplayer_id\xb2\x92\xf4\x01\tplayer_id\xe8\x92\xf4\x01\x01\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xbc\x01\n" +
 	"\x11player_database_1\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12B\n" +
@@ -789,7 +804,8 @@ var file_proto_common_database_mysql_database_table_proto_goTypes = []any{
 	(*component.PlayerPetComp)(nil),           // 21: PlayerPetComp
 	(*BagAllData)(nil),                        // 22: BagAllData
 	(*QuestAllData)(nil),                      // 23: QuestAllData
-	(*component.PlayerAssetOpLedgerComp)(nil), // 24: PlayerAssetOpLedgerComp
+	(*component.PlayerProfileComp)(nil),       // 24: PlayerProfileComp
+	(*component.PlayerAssetOpLedgerComp)(nil), // 25: PlayerAssetOpLedgerComp
 }
 var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	9,  // 0: user_accounts.simple_players:type_name -> AccountSimplePlayerList
@@ -807,13 +823,14 @@ var file_proto_common_database_mysql_database_table_proto_depIdxs = []int32{
 	21, // 12: player_database.pet_component:type_name -> PlayerPetComp
 	22, // 13: player_database.bag_component:type_name -> BagAllData
 	23, // 14: player_database.mission_component:type_name -> QuestAllData
-	24, // 15: player_database.asset_op_ledger:type_name -> PlayerAssetOpLedgerComp
-	18, // 16: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
-	17, // [17:17] is the sub-list for method output_type
-	17, // [17:17] is the sub-list for method input_type
-	17, // [17:17] is the sub-list for extension type_name
-	17, // [17:17] is the sub-list for extension extendee
-	0,  // [0:17] is the sub-list for field type_name
+	24, // 15: player_database.profile_component:type_name -> PlayerProfileComp
+	25, // 16: player_database.asset_op_ledger:type_name -> PlayerAssetOpLedgerComp
+	18, // 17: player_database_1.stress_test_probe:type_name -> PlayerStressTestProbe
+	18, // [18:18] is the sub-list for method output_type
+	18, // [18:18] is the sub-list for method input_type
+	18, // [18:18] is the sub-list for extension type_name
+	18, // [18:18] is the sub-list for extension extendee
+	0,  // [0:18] is the sub-list for field type_name
 }
 
 func init() { file_proto_common_database_mysql_database_table_proto_init() }

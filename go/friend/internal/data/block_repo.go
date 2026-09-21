@@ -34,16 +34,19 @@ type BlockEntry struct {
 //
 // 事务形状(逐字照 F2 §3.4,锁序见 friend_repo.go 顶部说明):
 //
-//	事务外 ① 快速失败:名额已满直接拒,**不** ensure 容量行(见下方理由)
-//	事务外 ensure 双方容量行
-//	BeginTx(RC)
-//	  ① 容量守卫(升序锁 me 与 target 两行)—— 与 AddFriend / AcceptFriend 互斥的唯一依据
-//	  ② 已拉黑?(锁定读)→ 幂等提交,不占新名额
-//	  ③ 名额(锁定读 COUNT)≥ maxBlocks → ErrBlockListFull
-//	  ④ INSERT IGNORE friend_block
-//	  ⑤ 删双向好友边 + 按 RowsAffected 减 friend_count
-//	  ⑥ 两个方向的 pending 置 rejected 并写 updated_ms
-//	Commit → 失效双方的好友缓存与申请缓存
+//	事务外 ① 快速失败:名额已满直接拒,**不** ensure 容量行(见下方理由;不进 runGuardedWrite 的重试)
+//	runGuardedWrite(守卫缺行时整段至多重跑两次,见 friend_repo.go 顶部锁序说明 (5)):
+//	  事务外 ensure 双方容量行
+//	  BeginTx(RC)
+//	    ① 容量守卫(升序锁 me 与 target 两行)—— 与 AddFriend / AcceptFriend 互斥的唯一依据
+//	    body:
+//	      ② 已拉黑?(锁定读)→ 幂等提交,不占新名额
+//	      ③ 名额(锁定读 COUNT)≥ maxBlocks → ErrBlockListFull
+//	      ④ INSERT IGNORE friend_block
+//	      ⑤ 删双向好友边 + 按 RowsAffected 减 friend_count
+//	      ⑥ 两个方向的 pending 置 rejected 并写 updated_ms
+//	  Commit
+//	提交后 → 失效双方的好友缓存与申请缓存
 //
 // **不推送**:被拉黑的人不该收到"你被拉黑了"的通知(照 A 仓的原则),
 // 拉黑者自己也不需要推送(他的 RPC 回包就是结果)。
@@ -57,14 +60,16 @@ func (r *FriendRepo) Block(ctx context.Context, playerID, targetPlayerID uint64,
 	// 事务外快速失败:名额已满时直接拒,**不** ensure 容量行。
 	//
 	// 与 AcceptFriend 的 pending 预检、RemoveFriend 的 F2-15 前置判定同一个目的:
-	// ensure 会给任意 target 凭空造出两行 friend_capacity,而那张表没有 TTL、不在 sweep 范围里、
-	// 也没有任何回收路径。Block 是本域唯一没有 §3.6 频率配额的写路径,不挡这一下,
-	// 客户端就能用互不相同的随机 target 无界撑大 friend_capacity(F2-15 的同类缺陷)。
+	// ensure 会给任意 target 凭空造出两行 friend_capacity。零好友的容量行现在由 sweep 的
+	// SweepIdleCapacityRows 在保留期后回收(sweep_repo.go),但这道前置判定仍然保留:
+	// 它挡的是回收周期**之内**的增长速度 —— Block 是本域唯一没有 §3.6 频率配额的写路径,不挡这一下,
+	// 客户端就能用互不相同的随机 target 在一个保留期内任意撑大 friend_capacity(F2-15 的同类缺陷)。
 	// 这一探是**普通读**:此刻还没有容量守卫,按顶部锁序 (2) 不允许做锁定读;
 	// 权威判定仍是下面 ③ 守卫内的那条 FOR UPDATE COUNT,漏判一两条只是多进一次事务。
 	//
 	// ⚠ 它只封住"稳态名额"这一维:**Block + Unblock 反复换目标仍可绕过**
-	// (每次 Unblock 之后名额又空出来,而 capacity 行已经建了)。那一维只能靠 gate 按消息号
+	// (每次 Unblock 之后名额又空出来,而 capacity 行已经建了,要等保留期过了才被回收)。
+	// 那一维的增长速度只能靠 gate 按消息号
 	// 限流(data/MessageLimiter.xlsx),本批按 §1.2 不改 xlsx —— 已在交付说明里登记:
 	// 合并回 main 跑 regen 时,Block 要和三个新 tip 码一起进 MessageLimiter。
 	if maxBlocks > 0 {
@@ -85,92 +90,84 @@ func (r *FriendRepo) Block(ctx context.Context, playerID, targetPlayerID uint64,
 	}
 
 	// 容量行必须在事务外补齐(顶部锁序说明 (1)),哪怕 Block 只在 ⑤ 里可能改 friend_count:
-	// 守卫需要行存在才能锁住它。
-	if err := r.ensureFriendCapacityRows(ctx, playerID, targetPlayerID); err != nil {
-		return err
-	}
-
-	tx, err := r.beginWriteTx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// 一个事务只取一次时刻:拉黑时间与被取消申请的 updated_ms 表达的是同一件事发生的时间,
-	// 分两次 time.Now() 会让它们相差几毫秒,排查时序时反而要先怀疑是不是两次操作。
-	nowMs := time.Now().UnixMilli()
-
-	// ① 容量守卫。锁**双方**而不是只锁 me:⑤ 要减 target 的 friend_count,
+	// 守卫需要行存在才能锁住它。ensure、BeginTx、① 与 Commit 都在 runGuardedWrite 里;
+	// 上面的名额探针在它之外,不随回收竞态的重试重跑。
+	//
+	// ① 容量守卫(runGuardedWrite 取;Block 不用 friend_count 的值,所以闭包不收 counts)。
+	// 锁**双方**而不是只锁 me:⑤ 要减 target 的 friend_count,
 	// 而且只有锁住 target 才能与"以 target 为发起方的 AddFriend / AcceptFriend"互斥 ——
 	// 只锁 me 的话,并发的 AcceptFriend(target 视角)仍能在本事务删边之后把边插回来,
 	// 结果是"既是好友又在黑名单里"。
-	if _, err := lockCapacityRows(ctx, tx, playerID, targetPlayerID); err != nil {
-		return err
-	}
+	err := r.runGuardedWrite(ctx, playerID, targetPlayerID, func(ctx context.Context, tx *sql.Tx, _ map[uint64]uint32) error {
+		// 一个事务只取一次时刻:拉黑时间与被取消申请的 updated_ms 表达的是同一件事发生的时间,
+		// 分两次 time.Now() 会让它们相差几毫秒,排查时序时反而要先怀疑是不是两次操作。
+		// 取在闭包里:时刻属于真正拿到守卫的那一遍尝试,而不是可能已因回收竞态作废的前一遍。
+		nowMs := time.Now().UnixMilli()
 
-	// ② 幂等命中:已经拉黑过就直接提交(而不是 Rollback)。
-	// 提交一个没有写入的事务与回滚在库层面等价,但语义上表达的是"本次调用成功"——
-	// 而且下面的缓存失效仍然照做:客户端重复点"拉黑"时至少能拿到一份最新列表。
-	// ⚠ 命中时**不**走 ③ 的名额校验:重复拉黑不占新名额,否则名单满了之后
-	// 连"再拉黑一次同一个人"都会被拒,玩家会以为拉黑失效了。
-	alreadyBlocked, err := blockExistsForUpdate(ctx, tx, playerID, targetPlayerID)
-	if err != nil {
-		return err
-	}
-	if !alreadyBlocked {
-		// ③ 名额校验:守卫锁内的**锁定读** COUNT 才是权威。
+		// ② 幂等命中:已经拉黑过就直接提交(而不是 Rollback)。
+		// 提交一个没有写入的事务与回滚在库层面等价,但语义上表达的是"本次调用成功"——
+		// 而且下面的缓存失效仍然照做:客户端重复点"拉黑"时至少能拿到一份最新列表。
+		// ⚠ 命中时**不**走 ③ 的名额校验:重复拉黑不占新名额,否则名单满了之后
+		// 连"再拉黑一次同一个人"都会被拒,玩家会以为拉黑失效了。
+		alreadyBlocked, err := blockExistsForUpdate(ctx, tx, playerID, targetPlayerID)
+		if err != nil {
+			return err
+		}
+		if !alreadyBlocked {
+			// ③ 名额校验:守卫锁内的**锁定读** COUNT 才是权威。
+			//
+			// 这条 COUNT 保留 FOR UPDATE(与 AddFriendRequest 的两条 pending COUNT 不同,
+			// 那两条刻意用普通读,理由见那里):它的加锁集合恒是"player_id = 操作者自己"的行,
+			// 而任何会往这个集合里插行的事务(只有 Block 本身)都必须先持有**同一个** me 的
+			// 容量守卫行,所以锁集不会跨玩家交叉,不存在 AddFriend 那种 ABBA。
+			if maxBlocks > 0 {
+				var blocked uint32
+				if err := tx.QueryRowContext(ctx,
+					"SELECT COUNT(*) FROM friend_block WHERE player_id=? FOR UPDATE",
+					playerID).Scan(&blocked); err != nil {
+					return fmt.Errorf("count blocks %d: %w", playerID, err)
+				}
+				// >= 而不是 >:本次要新增一条,等于上限时再加就超了。
+				if blocked >= maxBlocks {
+					return ErrBlockListFull
+				}
+			}
+
+			// ④ 写黑名单。INSERT IGNORE 而不是 INSERT:② 与这里之间没有任何窗口
+			//(同一事务、同一把守卫),但 IGNORE 让这条语句本身幂等,重试整个事务也安全。
+			if _, err := tx.ExecContext(ctx,
+				"INSERT IGNORE INTO friend_block (player_id, blocked_player_id, since_ms) VALUES (?, ?, ?)",
+				playerID, targetPlayerID, nowMs); err != nil {
+				return fmt.Errorf("insert block %d->%d: %w", playerID, targetPlayerID, err)
+			}
+		}
+
+		// ⑤ 删双向好友边,**并按 RowsAffected 给对应的 friend_count 减 1**。
 		//
-		// 这条 COUNT 保留 FOR UPDATE(与 AddFriendRequest 的两条 pending COUNT 不同,
-		// 那两条刻意用普通读,理由见那里):它的加锁集合恒是"player_id = 操作者自己"的行,
-		// 而任何会往这个集合里插行的事务(只有 Block 本身)都必须先持有**同一个** me 的
-		// 容量守卫行,所以锁集不会跨玩家交叉,不存在 AddFriend 那种 ABBA。
-		if maxBlocks > 0 {
-			var blocked uint32
-			if err := tx.QueryRowContext(ctx,
-				"SELECT COUNT(*) FROM friend_block WHERE player_id=? FOR UPDATE",
-				playerID).Scan(&blocked); err != nil {
-				return fmt.Errorf("count blocks %d: %w", playerID, err)
-			}
-			// >= 而不是 >:本次要新增一条,等于上限时再加就超了。
-			if blocked >= maxBlocks {
-				return ErrBlockListFull
-			}
+		// ⚠ 这一步与 RemoveFriend 共用 deleteFriendEdges(那里有完整说明):漏减计数就是
+		// 计数向上漂移,玩家永远加不满好友,而且**没有任何报错** —— 表现只是"明明只有 3 个好友
+		// 却说列表满了"。block_repo_mysql_test.go 里有一条用例专门钉死这件事,别删它。
+		//
+		// 即使 ② 判定"早就拉黑过"也照样执行:拉黑与删边是两条独立的写,
+		// 历史上可能出现"拉黑成功但删边没成功"(旧版本、人工改库),重复调用应当把它收敛干净。
+		if err := deleteFriendEdges(ctx, tx, playerID, targetPlayerID, nowMs); err != nil {
+			return err
 		}
 
-		// ④ 写黑名单。INSERT IGNORE 而不是 INSERT:② 与这里之间没有任何窗口
-		//(同一事务、同一把守卫),但 IGNORE 让这条语句本身幂等,重试整个事务也安全。
+		// ⑥ 取消两人之间**两个方向**的 pending 申请(单条语句覆盖两行,天然原子)。
+		// 置 rejected 而不是删行:玩家的申请列表要能解释"我发的申请怎么没了";
+		// 行本身由 sweep 在保留期后回收。updated_ms 必须一起写(F2-14),
+		// 否则这些行在 sweep 眼里永远停在 0。
 		if _, err := tx.ExecContext(ctx,
-			"INSERT IGNORE INTO friend_block (player_id, blocked_player_id, since_ms) VALUES (?, ?, ?)",
-			playerID, targetPlayerID, nowMs); err != nil {
-			return fmt.Errorf("insert block %d->%d: %w", playerID, targetPlayerID, err)
-		}
-	}
-
-	// ⑤ 删双向好友边,**并按 RowsAffected 给对应的 friend_count 减 1**。
-	//
-	// ⚠ 这一步与 RemoveFriend 共用 deleteFriendEdges(那里有完整说明):漏减计数就是
-	// 计数向上漂移,玩家永远加不满好友,而且**没有任何报错** —— 表现只是"明明只有 3 个好友
-	// 却说列表满了"。block_repo_mysql_test.go 里有一条用例专门钉死这件事,别删它。
-	//
-	// 即使 ② 判定"早就拉黑过"也照样执行:拉黑与删边是两条独立的写,
-	// 历史上可能出现"拉黑成功但删边没成功"(旧版本、人工改库),重复调用应当把它收敛干净。
-	if err := deleteFriendEdges(ctx, tx, playerID, targetPlayerID); err != nil {
-		return err
-	}
-
-	// ⑥ 取消两人之间**两个方向**的 pending 申请(单条语句覆盖两行,天然原子)。
-	// 置 rejected 而不是删行:玩家的申请列表要能解释"我发的申请怎么没了";
-	// 行本身由 sweep 在保留期后回收。updated_ms 必须一起写(F2-14),
-	// 否则这些行在 sweep 眼里永远停在 0。
-	if _, err := tx.ExecContext(ctx,
-		`UPDATE friend_request SET status=?, updated_ms=?
+			`UPDATE friend_request SET status=?, updated_ms=?
 		 WHERE status=? AND ((from_player_id=? AND to_player_id=?) OR (from_player_id=? AND to_player_id=?))`,
-		requestStatusRejected, nowMs, requestStatusPending,
-		playerID, targetPlayerID, targetPlayerID, playerID); err != nil {
-		return fmt.Errorf("cancel pending requests %d-%d: %w", playerID, targetPlayerID, err)
-	}
-
-	if err := tx.Commit(); err != nil {
+			requestStatusRejected, nowMs, requestStatusPending,
+			playerID, targetPlayerID, targetPlayerID, playerID); err != nil {
+			return fmt.Errorf("cancel pending requests %d-%d: %w", playerID, targetPlayerID, err)
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 

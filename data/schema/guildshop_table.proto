@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+// GuildShop 表的权威 schema。源表 data/GuildShop.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 导表报"这些权威 schema 没有对应的源表:GuildShop"= 源表还没生成(schema 与 xlsx 必须成对):
+// 先跑 python tools/scripts/guild_b5a_xlsx_patch.py new-tables。
+//
+// 帮会商店商品:一行 = 一件可兑换商品,花费可用帮贡(guild_member.contribution_balance)。
+// 只由 go/guild 读取(C++ 节点照例全量加载)。
+//
+// "单次最多买几份"不是配表列:go/guild 按物品堆叠上限算出(MaxBuyCount),随视图下发。
+// 启动校验(go/guild ValidateEconomyTables,fail-closed)见各列注释里的取值范围。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message GuildShopTable {
+  option (cfg_sheet)       = "GuildShop";
+  option (cfg_source_file) = "GuildShop.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 商品 id
+  uint32 id = 1;
+  // 展示名(Item 表没有名字列,商店以本列为准)
+  string name = 2;
+  // 分类:1 修行补给 / 2 帮会珍藏 / 3 节庆好礼;每个分类至少 1 行
+  uint32 category = 3;
+  // 发放的物品。FK -> Item.id
+  uint32 item_id = 4 [(cfg_fk) = "Item"];
+  // 每份物品数量(1..物品 max_stack_size;堆叠上限为 1 的物品必须填 1)
+  uint32 item_count = 5;
+  // 每份消耗帮贡(1..1000000000)
+  // 上限保证"单价 × 单次最多份数"不溢出
+  uint64 cost_contribution = 6;
+  // 需要的帮会等级(1..GuildLevel 最高级)
+  uint32 required_guild_level = 7;
+  // 限购周期:0 不限 / 1 每游戏日 / 2 每周(周一 05:00 切周)
+  uint32 limit_period = 8;
+  // 周期内限购份数:limit_period=0 时必须为 0,否则 >=1
+  uint32 limit_count = 9;
+}

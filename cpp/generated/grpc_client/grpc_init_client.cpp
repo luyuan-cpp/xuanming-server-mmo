@@ -223,7 +223,7 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 client_rpc_router::HandleClientRpcRouterCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::DataServiceNodeService == nodeType &&
-                (messageId == 86u || messageId == 87u || messageId == 88u || messageId == 89u || messageId == 90u || messageId == 91u || messageId == 92u || messageId == 93u || messageId == 96u || messageId == 97u || messageId == 98u || messageId == 99u || messageId == 100u || messageId == 101u || messageId == 105u || messageId == 108u || messageId == 114u || messageId == 129u || messageId == 180u)) {
+                (messageId == 86u || messageId == 87u || messageId == 88u || messageId == 89u || messageId == 90u || messageId == 91u || messageId == 92u || messageId == 93u || messageId == 96u || messageId == 97u || messageId == 98u || messageId == 99u || messageId == 100u || messageId == 101u || messageId == 105u || messageId == 108u || messageId == 114u || messageId == 129u || messageId == 180u || messageId == 229u || messageId == 231u || messageId == 237u)) {
                 data_service::HandleDataServiceCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::EtcdNodeService == nodeType &&
@@ -231,11 +231,11 @@ void HandleCompletedQueueMessage(entt::registry& registry){
                 etcdserverpb::HandleEtcdCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::FriendNodeService == nodeType &&
-                (messageId == 2u || messageId == 7u || messageId == 11u || messageId == 12u || messageId == 53u || messageId == 76u || messageId == 119u || messageId == 120u)) {
+                (messageId == 2u || messageId == 7u || messageId == 11u || messageId == 12u || messageId == 119u || messageId == 230u || messageId == 232u || messageId == 234u || messageId == 235u || messageId == 236u || messageId == 238u)) {
                 friendpb::HandleFriendCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::GuildNodeService == nodeType &&
-                (messageId == 8u || messageId == 15u || messageId == 19u || messageId == 27u || messageId == 29u || messageId == 35u || messageId == 38u || messageId == 39u || messageId == 52u || messageId == 60u || messageId == 216u || messageId == 217u || messageId == 218u || messageId == 219u || messageId == 220u || messageId == 221u || messageId == 222u || messageId == 223u)) {
+                (messageId == 8u || messageId == 15u || messageId == 19u || messageId == 27u || messageId == 29u || messageId == 35u || messageId == 38u || messageId == 39u || messageId == 52u || messageId == 53u || messageId == 60u || messageId == 76u || messageId == 120u || messageId == 216u || messageId == 217u || messageId == 218u || messageId == 219u || messageId == 220u || messageId == 221u || messageId == 222u || messageId == 223u || messageId == 228u || messageId == 233u)) {
                 guildpb::HandleGuildCompletedQueueMessage(registry, e, completeQueueComp, grpcTag);
             }
             else if (common::base::eNodeType::LoginNodeService == nodeType &&

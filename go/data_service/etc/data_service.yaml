@@ -133,12 +133,14 @@ Schema:
 #     version=0,幂等、绝不降低已有行。没配 = 代码默认清单(config/store 两处 DefaultIdSegmentBootstrapTags)。
 #     新增永久身份 = 在这里、两处代码默认清单与 k8s_deploy.ps1 data-service ConfigMap 同时加 tag。
 #     trade_listing:聚宝斋 listing_id(go/trade),消费表在独占库 mmorpg_trade,不做水位地板校验。
+#     guild_asset_op:帮会资产指令 op_id(go/guild 捐献 / 商店 / 活动发奖),消费表在独占库 mmorpg_guild,同上。
+#       缺这一行时 guild 取不到号,经济类写 RPC 全部失败 —— 必须先于(或同次)guild 经济服务部署。
 # 迁移还会把 player / guild 行的 max_id 抬到 MAX(消费表主键)+1(只在同库能查到该表时;
 # item / txlog / snapshot 的号在 blob / Kafka 里查不到)。恢复全局库前必须按运维手册核对
 # max_id ≥ 消费表最大号,这是 ID 安全事件,不是普通的库恢复。
 IdSegment:
   AllowAutoSeed: true      # dev only;生产必须 false
-  BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing]
+  BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing, guild_asset_op]
 
 # C++ scene 产出的交易流水 / 玩家快照落库消费者。Brokers 留空 = 不消费(本地无 Kafka 合法)。
 # Kafka 不可达不影响 Load/Save,只记日志并每 30s 后台重试。

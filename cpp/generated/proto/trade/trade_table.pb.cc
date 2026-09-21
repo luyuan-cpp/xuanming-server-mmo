@@ -1182,7 +1182,7 @@ const char descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto[] ABS
     "*\206\001\n\023TradeAssetOpRefKind\022\'\n#TRADE_ASSET_"
     "OP_REF_KIND_UNSPECIFIED\020\000\022#\n\037TRADE_ASSET"
     "_OP_REF_KIND_LISTING\020\001\022!\n\035TRADE_ASSET_OP"
-    "_REF_KIND_ORDER\020\002B\rZ\013proto/tradeb\006proto3"
+    "_REF_KIND_ORDER\020\002B\007Z\005tradeb\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_deps[2] = {
@@ -1193,7 +1193,7 @@ static ::absl::once_flag descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto = {
     false,
     false,
-    2600,
+    2594,
     descriptor_table_protodef_proto_2ftrade_2ftrade_5ftable_2eproto,
     "proto/trade/trade_table.proto",
     &descriptor_table_proto_2ftrade_2ftrade_5ftable_2eproto_once,

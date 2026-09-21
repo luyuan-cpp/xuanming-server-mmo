@@ -22,6 +22,170 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+// 与 assetop.Status 语义一一映射;数值由本枚举定(1 基:0 留给"漏写状态列的行",它不会被当成未决行领走)。
+// guild.proto 的 GuildAssetOrderStatus 是它的客户端镜像,数值逐项相同,新增状态两边同加。
+type GuildAssetOpStatus int32
+
+const (
+	GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_UNSPECIFIED     GuildAssetOpStatus = 0
+	GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING         GuildAssetOpStatus = 1
+	GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED         GuildAssetOpStatus = 2
+	GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_REJECTED        GuildAssetOpStatus = 3
+	GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_ABORTED         GuildAssetOpStatus = 4
+	GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_APPLIED_PARTIAL GuildAssetOpStatus = 5 // 只终结:不做对侧账、不自动清理,转人工补偿(X-15)
+)
+
+// Enum value maps for GuildAssetOpStatus.
+var (
+	GuildAssetOpStatus_name = map[int32]string{
+		0: "GUILD_ASSET_OP_STATUS_UNSPECIFIED",
+		1: "GUILD_ASSET_OP_STATUS_PENDING",
+		2: "GUILD_ASSET_OP_STATUS_APPLIED",
+		3: "GUILD_ASSET_OP_STATUS_REJECTED",
+		4: "GUILD_ASSET_OP_STATUS_ABORTED",
+		5: "GUILD_ASSET_OP_STATUS_APPLIED_PARTIAL",
+	}
+	GuildAssetOpStatus_value = map[string]int32{
+		"GUILD_ASSET_OP_STATUS_UNSPECIFIED":     0,
+		"GUILD_ASSET_OP_STATUS_PENDING":         1,
+		"GUILD_ASSET_OP_STATUS_APPLIED":         2,
+		"GUILD_ASSET_OP_STATUS_REJECTED":        3,
+		"GUILD_ASSET_OP_STATUS_ABORTED":         4,
+		"GUILD_ASSET_OP_STATUS_APPLIED_PARTIAL": 5,
+	}
+)
+
+func (x GuildAssetOpStatus) Enum() *GuildAssetOpStatus {
+	p := new(GuildAssetOpStatus)
+	*p = x
+	return p
+}
+
+func (x GuildAssetOpStatus) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildAssetOpStatus) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_guild_guild_db_proto_enumTypes[0].Descriptor()
+}
+
+func (GuildAssetOpStatus) Type() protoreflect.EnumType {
+	return &file_proto_guild_guild_db_proto_enumTypes[0]
+}
+
+func (x GuildAssetOpStatus) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildAssetOpStatus.Descriptor instead.
+func (GuildAssetOpStatus) EnumDescriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{0}
+}
+
+type GuildAssetOpKind int32
+
+const (
+	GuildAssetOpKind_GUILD_ASSET_OP_KIND_UNSPECIFIED     GuildAssetOpKind = 0
+	GuildAssetOpKind_GUILD_ASSET_OP_KIND_DONATE          GuildAssetOpKind = 1 // 捐献:GUILD_DEBIT 流扣货币
+	GuildAssetOpKind_GUILD_ASSET_OP_KIND_SHOP            GuildAssetOpKind = 2 // 商店:GUILD_CREDIT 流发物品
+	GuildAssetOpKind_GUILD_ASSET_OP_KIND_ACTIVITY_REWARD GuildAssetOpKind = 3 // 活动发奖(B6):GUILD_CREDIT 流
+)
+
+// Enum value maps for GuildAssetOpKind.
+var (
+	GuildAssetOpKind_name = map[int32]string{
+		0: "GUILD_ASSET_OP_KIND_UNSPECIFIED",
+		1: "GUILD_ASSET_OP_KIND_DONATE",
+		2: "GUILD_ASSET_OP_KIND_SHOP",
+		3: "GUILD_ASSET_OP_KIND_ACTIVITY_REWARD",
+	}
+	GuildAssetOpKind_value = map[string]int32{
+		"GUILD_ASSET_OP_KIND_UNSPECIFIED":     0,
+		"GUILD_ASSET_OP_KIND_DONATE":          1,
+		"GUILD_ASSET_OP_KIND_SHOP":            2,
+		"GUILD_ASSET_OP_KIND_ACTIVITY_REWARD": 3,
+	}
+)
+
+func (x GuildAssetOpKind) Enum() *GuildAssetOpKind {
+	p := new(GuildAssetOpKind)
+	*p = x
+	return p
+}
+
+func (x GuildAssetOpKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildAssetOpKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_guild_guild_db_proto_enumTypes[1].Descriptor()
+}
+
+func (GuildAssetOpKind) Type() protoreflect.EnumType {
+	return &file_proto_guild_guild_db_proto_enumTypes[1]
+}
+
+func (x GuildAssetOpKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildAssetOpKind.Descriptor instead.
+func (GuildAssetOpKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{1}
+}
+
+type GuildDailyCounterKind int32
+
+const (
+	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_UNSPECIFIED GuildDailyCounterKind = 0
+	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_DONATE      GuildDailyCounterKind = 1
+	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_SHOP        GuildDailyCounterKind = 2
+	GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_ACTIVITY    GuildDailyCounterKind = 3 // B6
+)
+
+// Enum value maps for GuildDailyCounterKind.
+var (
+	GuildDailyCounterKind_name = map[int32]string{
+		0: "GUILD_DAILY_COUNTER_KIND_UNSPECIFIED",
+		1: "GUILD_DAILY_COUNTER_KIND_DONATE",
+		2: "GUILD_DAILY_COUNTER_KIND_SHOP",
+		3: "GUILD_DAILY_COUNTER_KIND_ACTIVITY",
+	}
+	GuildDailyCounterKind_value = map[string]int32{
+		"GUILD_DAILY_COUNTER_KIND_UNSPECIFIED": 0,
+		"GUILD_DAILY_COUNTER_KIND_DONATE":      1,
+		"GUILD_DAILY_COUNTER_KIND_SHOP":        2,
+		"GUILD_DAILY_COUNTER_KIND_ACTIVITY":    3,
+	}
+)
+
+func (x GuildDailyCounterKind) Enum() *GuildDailyCounterKind {
+	p := new(GuildDailyCounterKind)
+	*p = x
+	return p
+}
+
+func (x GuildDailyCounterKind) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (GuildDailyCounterKind) Descriptor() protoreflect.EnumDescriptor {
+	return file_proto_guild_guild_db_proto_enumTypes[2].Descriptor()
+}
+
+func (GuildDailyCounterKind) Type() protoreflect.EnumType {
+	return &file_proto_guild_guild_db_proto_enumTypes[2]
+}
+
+func (x GuildDailyCounterKind) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use GuildDailyCounterKind.Descriptor instead.
+func (GuildDailyCounterKind) EnumDescriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{2}
+}
+
 type GuildRecord struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	GuildId       uint64                 `protobuf:"varint,1,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"`    // data_service 号段 biz_tag=guild
@@ -358,6 +522,426 @@ func (x *GuildApplicationRecord) GetExpireMs() uint64 {
 	return 0
 }
 
+type GuildPlayerOpSeqRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Stream        uint32                 `protobuf:"varint,2,opt,name=stream,proto3" json:"stream,omitempty"` // AssetOpStream 数值(本文件不 import asset_op.proto,避免库表定义依赖通道协议)
+	NextSeq       uint64                 `protobuf:"varint,3,opt,name=next_seq,json=nextSeq,proto3" json:"next_seq,omitempty"`
+	UpdatedMs     uint64                 `protobuf:"varint,4,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	Epoch         uint64                 `protobuf:"varint,5,opt,name=epoch,proto3" json:"epoch,omitempty"` // 建行毫秒,>0;库恢复手册显式抬高(04-asset-channel.md §4.31)
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildPlayerOpSeqRecord) Reset() {
+	*x = GuildPlayerOpSeqRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildPlayerOpSeqRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildPlayerOpSeqRecord) ProtoMessage() {}
+
+func (x *GuildPlayerOpSeqRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildPlayerOpSeqRecord.ProtoReflect.Descriptor instead.
+func (*GuildPlayerOpSeqRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *GuildPlayerOpSeqRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildPlayerOpSeqRecord) GetStream() uint32 {
+	if x != nil {
+		return x.Stream
+	}
+	return 0
+}
+
+func (x *GuildPlayerOpSeqRecord) GetNextSeq() uint64 {
+	if x != nil {
+		return x.NextSeq
+	}
+	return 0
+}
+
+func (x *GuildPlayerOpSeqRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+func (x *GuildPlayerOpSeqRecord) GetEpoch() uint64 {
+	if x != nil {
+		return x.Epoch
+	}
+	return 0
+}
+
+type GuildAssetOpRecord struct {
+	state             protoimpl.MessageState `protogen:"open.v1"`
+	OpId              uint64                 `protobuf:"varint,1,opt,name=op_id,json=opId,proto3" json:"op_id,omitempty"` // data_service 号段 biz_tag=guild_asset_op;同时作资产通道的 correlation_id
+	PlayerId          uint64                 `protobuf:"varint,2,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Stream            uint32                 `protobuf:"varint,3,opt,name=stream,proto3" json:"stream,omitempty"` // AssetOpStream 数值
+	Seq               uint64                 `protobuf:"varint,4,opt,name=seq,proto3" json:"seq,omitempty"`
+	GuildId           uint64                 `protobuf:"varint,5,opt,name=guild_id,json=guildId,proto3" json:"guild_id,omitempty"` // 发起时绑定的帮会;结算一律记给它,不看结算时玩家在哪个帮(D2)
+	Kind              GuildAssetOpKind       `protobuf:"varint,6,opt,name=kind,proto3,enum=guildpb.GuildAssetOpKind" json:"kind,omitempty"`
+	Status            GuildAssetOpStatus     `protobuf:"varint,7,opt,name=status,proto3,enum=guildpb.GuildAssetOpStatus" json:"status,omitempty"`
+	Durable           uint32                 `protobuf:"varint,8,opt,name=durable,proto3" json:"durable,omitempty"` // 0/1:scene 是否已确认落盘
+	Attempts          uint32                 `protobuf:"varint,9,opt,name=attempts,proto3" json:"attempts,omitempty"`
+	NextAttemptMs     uint64                 `protobuf:"varint,10,opt,name=next_attempt_ms,json=nextAttemptMs,proto3" json:"next_attempt_ms,omitempty"`           // 未决:下次重投时刻;终态:终结时刻(清理与回档检查按它判龄)
+	DeadlineMs        uint64                 `protobuf:"varint,11,opt,name=deadline_ms,json=deadlineMs,proto3" json:"deadline_ms,omitempty"`                      // 只有 DONATE 非 0;到期改发中止。商店 / 活动发奖恒 0,永不中止
+	Payload           []byte                 `protobuf:"bytes,12,opt,name=payload,proto3" json:"payload,omitempty"`                                               // AssetBundle 序列化字节
+	RefId             uint32                 `protobuf:"varint,13,opt,name=ref_id,json=refId,proto3" json:"ref_id,omitempty"`                                     // donate_id / goods_id / activity_id
+	RefCount          uint32                 `protobuf:"varint,14,opt,name=ref_count,json=refCount,proto3" json:"ref_count,omitempty"`                            // 捐献恒 1;商店为份数
+	PeriodKey         uint32                 `protobuf:"varint,15,opt,name=period_key,json=periodKey,proto3" json:"period_key,omitempty"`                         // 占用的计数行周期键(gameday.DayKey / WeekKey);0 = 未占计数行,退回时跳过
+	ContributionDelta uint64                 `protobuf:"varint,16,opt,name=contribution_delta,json=contributionDelta,proto3" json:"contribution_delta,omitempty"` // 捐献:应得帮贡;商店:已扣帮贡(永久拒绝时退回)
+	FundsDelta        uint64                 `protobuf:"varint,17,opt,name=funds_delta,json=fundsDelta,proto3" json:"funds_delta,omitempty"`                      // 捐献:应记帮会资金
+	ReasonTipId       uint32                 `protobuf:"varint,18,opt,name=reason_tip_id,json=reasonTipId,proto3" json:"reason_tip_id,omitempty"`                 // 终态原因,只在终结时写一次(APPLIED / ABORTED 写 0)
+	CreatedMs         uint64                 `protobuf:"varint,19,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	UpdatedMs         uint64                 `protobuf:"varint,20,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"`
+	LeaseUntilMs      uint64                 `protobuf:"varint,21,opt,name=lease_until_ms,json=leaseUntilMs,proto3" json:"lease_until_ms,omitempty"` // 领取租约截止;0 = 未被领取
+	LeaseToken        uint64                 `protobuf:"varint,22,opt,name=lease_token,json=leaseToken,proto3" json:"lease_token,omitempty"`         // 领取令牌;Reschedule 须匹配,不匹配 = 租约已被别的副本接走
+	TxType            uint32                 `protobuf:"varint,23,opt,name=tx_type,json=txType,proto3" json:"tx_type,omitempty"`                     // TransactionType 数值,重投时原样带上
+	LastOutcome       uint32                 `protobuf:"varint,24,opt,name=last_outcome,json=lastOutcome,proto3" json:"last_outcome,omitempty"`      // 最近一次 AssetOpOutcome(诊断)
+	LastReason        uint32                 `protobuf:"varint,25,opt,name=last_reason,json=lastReason,proto3" json:"last_reason,omitempty"`         // 最近一次 scene 回的 reason:每次 Reschedule / Finalize 覆盖;PENDING 视图展示它;兼作部分发放粘性标记
+	StreamEpoch       uint64                 `protobuf:"varint,26,opt,name=stream_epoch,json=streamEpoch,proto3" json:"stream_epoch,omitempty"`      // = 分号时 guild_player_op_seq.epoch
+	ResolvedBy        string                 `protobuf:"bytes,27,opt,name=resolved_by,json=resolvedBy,proto3" json:"resolved_by,omitempty"`          // 人工终结(assetopfix)写:操作人,代码侧限 ≤64
+	ResolveReason     string                 `protobuf:"bytes,28,opt,name=resolve_reason,json=resolveReason,proto3" json:"resolve_reason,omitempty"` // 人工终结原因,代码侧限 ≤191
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *GuildAssetOpRecord) Reset() {
+	*x = GuildAssetOpRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[5]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildAssetOpRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildAssetOpRecord) ProtoMessage() {}
+
+func (x *GuildAssetOpRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[5]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildAssetOpRecord.ProtoReflect.Descriptor instead.
+func (*GuildAssetOpRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{5}
+}
+
+func (x *GuildAssetOpRecord) GetOpId() uint64 {
+	if x != nil {
+		return x.OpId
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetStream() uint32 {
+	if x != nil {
+		return x.Stream
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetSeq() uint64 {
+	if x != nil {
+		return x.Seq
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetGuildId() uint64 {
+	if x != nil {
+		return x.GuildId
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetKind() GuildAssetOpKind {
+	if x != nil {
+		return x.Kind
+	}
+	return GuildAssetOpKind_GUILD_ASSET_OP_KIND_UNSPECIFIED
+}
+
+func (x *GuildAssetOpRecord) GetStatus() GuildAssetOpStatus {
+	if x != nil {
+		return x.Status
+	}
+	return GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_UNSPECIFIED
+}
+
+func (x *GuildAssetOpRecord) GetDurable() uint32 {
+	if x != nil {
+		return x.Durable
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetAttempts() uint32 {
+	if x != nil {
+		return x.Attempts
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetNextAttemptMs() uint64 {
+	if x != nil {
+		return x.NextAttemptMs
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetDeadlineMs() uint64 {
+	if x != nil {
+		return x.DeadlineMs
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+func (x *GuildAssetOpRecord) GetRefId() uint32 {
+	if x != nil {
+		return x.RefId
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetRefCount() uint32 {
+	if x != nil {
+		return x.RefCount
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetPeriodKey() uint32 {
+	if x != nil {
+		return x.PeriodKey
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetContributionDelta() uint64 {
+	if x != nil {
+		return x.ContributionDelta
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetFundsDelta() uint64 {
+	if x != nil {
+		return x.FundsDelta
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetReasonTipId() uint32 {
+	if x != nil {
+		return x.ReasonTipId
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetLeaseUntilMs() uint64 {
+	if x != nil {
+		return x.LeaseUntilMs
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetLeaseToken() uint64 {
+	if x != nil {
+		return x.LeaseToken
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetTxType() uint32 {
+	if x != nil {
+		return x.TxType
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetLastOutcome() uint32 {
+	if x != nil {
+		return x.LastOutcome
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetLastReason() uint32 {
+	if x != nil {
+		return x.LastReason
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetStreamEpoch() uint64 {
+	if x != nil {
+		return x.StreamEpoch
+	}
+	return 0
+}
+
+func (x *GuildAssetOpRecord) GetResolvedBy() string {
+	if x != nil {
+		return x.ResolvedBy
+	}
+	return ""
+}
+
+func (x *GuildAssetOpRecord) GetResolveReason() string {
+	if x != nil {
+		return x.ResolveReason
+	}
+	return ""
+}
+
+type GuildDailyCounterRecord struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	CounterKind   GuildDailyCounterKind  `protobuf:"varint,2,opt,name=counter_kind,json=counterKind,proto3,enum=guildpb.GuildDailyCounterKind" json:"counter_kind,omitempty"`
+	RefId         uint32                 `protobuf:"varint,3,opt,name=ref_id,json=refId,proto3" json:"ref_id,omitempty"`             // donate_id / goods_id / activity_id
+	PeriodKey     uint32                 `protobuf:"varint,4,opt,name=period_key,json=periodKey,proto3" json:"period_key,omitempty"` // gameday.DayKey(8 位)或 WeekKey(6 位);两个数值域不相交
+	UsedCount     uint32                 `protobuf:"varint,5,opt,name=used_count,json=usedCount,proto3" json:"used_count,omitempty"` // 含结算中的占用;REJECTED / ABORTED 时退回
+	UpdatedMs     uint64                 `protobuf:"varint,6,opt,name=updated_ms,json=updatedMs,proto3" json:"updated_ms,omitempty"` // 追加区:从 7 起。计数一律用带上限的 upsert 改写,不得"锁不存在的行再插入"(X-13)。
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GuildDailyCounterRecord) Reset() {
+	*x = GuildDailyCounterRecord{}
+	mi := &file_proto_guild_guild_db_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GuildDailyCounterRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GuildDailyCounterRecord) ProtoMessage() {}
+
+func (x *GuildDailyCounterRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_guild_guild_db_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GuildDailyCounterRecord.ProtoReflect.Descriptor instead.
+func (*GuildDailyCounterRecord) Descriptor() ([]byte, []int) {
+	return file_proto_guild_guild_db_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *GuildDailyCounterRecord) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *GuildDailyCounterRecord) GetCounterKind() GuildDailyCounterKind {
+	if x != nil {
+		return x.CounterKind
+	}
+	return GuildDailyCounterKind_GUILD_DAILY_COUNTER_KIND_UNSPECIFIED
+}
+
+func (x *GuildDailyCounterRecord) GetRefId() uint32 {
+	if x != nil {
+		return x.RefId
+	}
+	return 0
+}
+
+func (x *GuildDailyCounterRecord) GetPeriodKey() uint32 {
+	if x != nil {
+		return x.PeriodKey
+	}
+	return 0
+}
+
+func (x *GuildDailyCounterRecord) GetUsedCount() uint32 {
+	if x != nil {
+		return x.UsedCount
+	}
+	return 0
+}
+
+func (x *GuildDailyCounterRecord) GetUpdatedMs() uint64 {
+	if x != nil {
+		return x.UpdatedMs
+	}
+	return 0
+}
+
 var File_proto_guild_guild_db_proto protoreflect.FileDescriptor
 
 const file_proto_guild_guild_db_proto_rawDesc = "" +
@@ -394,7 +978,80 @@ const file_proto_guild_guild_db_proto_rawDesc = "" +
 	"\bguild_id\x18\x01 \x01(\x04R\aguildId\x12\x1b\n" +
 	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bapply_ms\x18\x03 \x01(\x04R\aapplyMs\x12\x1b\n" +
-	"\texpire_ms\x18\x04 \x01(\x04R\bexpireMs:T\x8a\x92\xf4\x01\x11guild_application\x92\x92\xf4\x01\x12guild_id,player_idڒ\xf4\x01\x13player_id;expire_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04B\rZ\vproto/guildb\x06proto3"
+	"\texpire_ms\x18\x04 \x01(\x04R\bexpireMs:T\x8a\x92\xf4\x01\x11guild_application\x92\x92\xf4\x01\x12guild_id,player_idڒ\xf4\x01\x13player_id;expire_ms\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xdb\x01\n" +
+	"\x16GuildPlayerOpSeqRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x16\n" +
+	"\x06stream\x18\x02 \x01(\rR\x06stream\x12\x19\n" +
+	"\bnext_seq\x18\x03 \x01(\x04R\anextSeq\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x04 \x01(\x04R\tupdatedMs\x12\x14\n" +
+	"\x05epoch\x18\x05 \x01(\x04R\x05epoch:<\x8a\x92\xf4\x01\x13guild_player_op_seq\x92\x92\xf4\x01\x10player_id,stream\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xc4\b\n" +
+	"\x12GuildAssetOpRecord\x12\x13\n" +
+	"\x05op_id\x18\x01 \x01(\x04R\x04opId\x12\x1b\n" +
+	"\tplayer_id\x18\x02 \x01(\x04R\bplayerId\x12\x16\n" +
+	"\x06stream\x18\x03 \x01(\rR\x06stream\x12\x10\n" +
+	"\x03seq\x18\x04 \x01(\x04R\x03seq\x12\x19\n" +
+	"\bguild_id\x18\x05 \x01(\x04R\aguildId\x12-\n" +
+	"\x04kind\x18\x06 \x01(\x0e2\x19.guildpb.GuildAssetOpKindR\x04kind\x123\n" +
+	"\x06status\x18\a \x01(\x0e2\x1b.guildpb.GuildAssetOpStatusR\x06status\x12\x18\n" +
+	"\adurable\x18\b \x01(\rR\adurable\x12\x1a\n" +
+	"\battempts\x18\t \x01(\rR\battempts\x12&\n" +
+	"\x0fnext_attempt_ms\x18\n" +
+	" \x01(\x04R\rnextAttemptMs\x12\x1f\n" +
+	"\vdeadline_ms\x18\v \x01(\x04R\n" +
+	"deadlineMs\x12\x18\n" +
+	"\apayload\x18\f \x01(\fR\apayload\x12\x15\n" +
+	"\x06ref_id\x18\r \x01(\rR\x05refId\x12\x1b\n" +
+	"\tref_count\x18\x0e \x01(\rR\brefCount\x12\x1d\n" +
+	"\n" +
+	"period_key\x18\x0f \x01(\rR\tperiodKey\x12-\n" +
+	"\x12contribution_delta\x18\x10 \x01(\x04R\x11contributionDelta\x12\x1f\n" +
+	"\vfunds_delta\x18\x11 \x01(\x04R\n" +
+	"fundsDelta\x12\"\n" +
+	"\rreason_tip_id\x18\x12 \x01(\rR\vreasonTipId\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\x13 \x01(\x04R\tcreatedMs\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x14 \x01(\x04R\tupdatedMs\x12$\n" +
+	"\x0elease_until_ms\x18\x15 \x01(\x04R\fleaseUntilMs\x12\x1f\n" +
+	"\vlease_token\x18\x16 \x01(\x04R\n" +
+	"leaseToken\x12\x17\n" +
+	"\atx_type\x18\x17 \x01(\rR\x06txType\x12!\n" +
+	"\flast_outcome\x18\x18 \x01(\rR\vlastOutcome\x12\x1f\n" +
+	"\vlast_reason\x18\x19 \x01(\rR\n" +
+	"lastReason\x12!\n" +
+	"\fstream_epoch\x18\x1a \x01(\x04R\vstreamEpoch\x12\x1f\n" +
+	"\vresolved_by\x18\x1b \x01(\tR\n" +
+	"resolvedBy\x12%\n" +
+	"\x0eresolve_reason\x18\x1c \x01(\tR\rresolveReason:\xa5\x01\x8a\x92\xf4\x01\x0eguild_asset_op\x92\x92\xf4\x01\x05op_idڒ\xf4\x01Nstatus,next_attempt_ms;guild_id,op_id;player_id,stream,stream_epoch,status,seq\xe2\x92\xf4\x01!player_id,stream,stream_epoch,seq\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xd2\x02\n" +
+	"\x17GuildDailyCounterRecord\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12A\n" +
+	"\fcounter_kind\x18\x02 \x01(\x0e2\x1e.guildpb.GuildDailyCounterKindR\vcounterKind\x12\x15\n" +
+	"\x06ref_id\x18\x03 \x01(\rR\x05refId\x12\x1d\n" +
+	"\n" +
+	"period_key\x18\x04 \x01(\rR\tperiodKey\x12\x1d\n" +
+	"\n" +
+	"used_count\x18\x05 \x01(\rR\tusedCount\x12\x1d\n" +
+	"\n" +
+	"updated_ms\x18\x06 \x01(\x04R\tupdatedMs:c\x8a\x92\xf4\x01\x13guild_daily_counter\x92\x92\xf4\x01(player_id,counter_kind,ref_id,period_keyڒ\xf4\x01\n" +
+	"period_key\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04*\xf3\x01\n" +
+	"\x12GuildAssetOpStatus\x12%\n" +
+	"!GUILD_ASSET_OP_STATUS_UNSPECIFIED\x10\x00\x12!\n" +
+	"\x1dGUILD_ASSET_OP_STATUS_PENDING\x10\x01\x12!\n" +
+	"\x1dGUILD_ASSET_OP_STATUS_APPLIED\x10\x02\x12\"\n" +
+	"\x1eGUILD_ASSET_OP_STATUS_REJECTED\x10\x03\x12!\n" +
+	"\x1dGUILD_ASSET_OP_STATUS_ABORTED\x10\x04\x12)\n" +
+	"%GUILD_ASSET_OP_STATUS_APPLIED_PARTIAL\x10\x05*\x9e\x01\n" +
+	"\x10GuildAssetOpKind\x12#\n" +
+	"\x1fGUILD_ASSET_OP_KIND_UNSPECIFIED\x10\x00\x12\x1e\n" +
+	"\x1aGUILD_ASSET_OP_KIND_DONATE\x10\x01\x12\x1c\n" +
+	"\x18GUILD_ASSET_OP_KIND_SHOP\x10\x02\x12'\n" +
+	"#GUILD_ASSET_OP_KIND_ACTIVITY_REWARD\x10\x03*\xb0\x01\n" +
+	"\x15GuildDailyCounterKind\x12(\n" +
+	"$GUILD_DAILY_COUNTER_KIND_UNSPECIFIED\x10\x00\x12#\n" +
+	"\x1fGUILD_DAILY_COUNTER_KIND_DONATE\x10\x01\x12!\n" +
+	"\x1dGUILD_DAILY_COUNTER_KIND_SHOP\x10\x02\x12%\n" +
+	"!GUILD_DAILY_COUNTER_KIND_ACTIVITY\x10\x03B\rZ\vproto/guildb\x06proto3"
 
 var (
 	file_proto_guild_guild_db_proto_rawDescOnce sync.Once
@@ -408,19 +1065,29 @@ func file_proto_guild_guild_db_proto_rawDescGZIP() []byte {
 	return file_proto_guild_guild_db_proto_rawDescData
 }
 
-var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
+var file_proto_guild_guild_db_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
+var file_proto_guild_guild_db_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_guild_guild_db_proto_goTypes = []any{
-	(*GuildRecord)(nil),            // 0: guildpb.GuildRecord
-	(*GuildPlayerStateRecord)(nil), // 1: guildpb.GuildPlayerStateRecord
-	(*GuildMemberRecord)(nil),      // 2: guildpb.GuildMemberRecord
-	(*GuildApplicationRecord)(nil), // 3: guildpb.GuildApplicationRecord
+	(GuildAssetOpStatus)(0),         // 0: guildpb.GuildAssetOpStatus
+	(GuildAssetOpKind)(0),           // 1: guildpb.GuildAssetOpKind
+	(GuildDailyCounterKind)(0),      // 2: guildpb.GuildDailyCounterKind
+	(*GuildRecord)(nil),             // 3: guildpb.GuildRecord
+	(*GuildPlayerStateRecord)(nil),  // 4: guildpb.GuildPlayerStateRecord
+	(*GuildMemberRecord)(nil),       // 5: guildpb.GuildMemberRecord
+	(*GuildApplicationRecord)(nil),  // 6: guildpb.GuildApplicationRecord
+	(*GuildPlayerOpSeqRecord)(nil),  // 7: guildpb.GuildPlayerOpSeqRecord
+	(*GuildAssetOpRecord)(nil),      // 8: guildpb.GuildAssetOpRecord
+	(*GuildDailyCounterRecord)(nil), // 9: guildpb.GuildDailyCounterRecord
 }
 var file_proto_guild_guild_db_proto_depIdxs = []int32{
-	0, // [0:0] is the sub-list for method output_type
-	0, // [0:0] is the sub-list for method input_type
-	0, // [0:0] is the sub-list for extension type_name
-	0, // [0:0] is the sub-list for extension extendee
-	0, // [0:0] is the sub-list for field type_name
+	1, // 0: guildpb.GuildAssetOpRecord.kind:type_name -> guildpb.GuildAssetOpKind
+	0, // 1: guildpb.GuildAssetOpRecord.status:type_name -> guildpb.GuildAssetOpStatus
+	2, // 2: guildpb.GuildDailyCounterRecord.counter_kind:type_name -> guildpb.GuildDailyCounterKind
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	3, // [3:3] is the sub-list for extension extendee
+	0, // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_proto_guild_guild_db_proto_init() }
@@ -433,13 +1100,14 @@ func file_proto_guild_guild_db_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_guild_guild_db_proto_rawDesc), len(file_proto_guild_guild_db_proto_rawDesc)),
-			NumEnums:      0,
-			NumMessages:   4,
+			NumEnums:      3,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
 		GoTypes:           file_proto_guild_guild_db_proto_goTypes,
 		DependencyIndexes: file_proto_guild_guild_db_proto_depIdxs,
+		EnumInfos:         file_proto_guild_guild_db_proto_enumTypes,
 		MessageInfos:      file_proto_guild_guild_db_proto_msgTypes,
 	}.Build()
 	File_proto_guild_guild_db_proto = out.File

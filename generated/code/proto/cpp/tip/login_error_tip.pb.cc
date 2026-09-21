@@ -35,7 +35,7 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_login_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\025login_error_tip.proto*\277\007\n\013login_error\022"
+    "\n\025login_error_tip.proto*\204\010\n\013login_error\022"
     "\022\n\016kLogin_errorOK\020\000\022\032\n\025kLoginAccountNotF"
     "ound\020\320\017\022\034\n\027kLoginAccountPlayerFull\020\321\017\022$\n"
     "\037kLoginCreatePlayerUnLoadAccount\020\322\017\022.\n)k"
@@ -59,14 +59,16 @@ const char descriptor_table_protodef_login_5ferror_5ftip_2eproto[] ABSL_ATTRIBUT
     "\352\017\022\037\n\032kLoginAccountDataLoadFaile\020\353\017\022\032\n\025k"
     "LoginSessionNotFound\020\354\017\022 \n\033kLoginAccount"
     "DataLoadFailed\020\355\017\022\032\n\025kLoginFsmInvalidEve"
-    "nt\020\356\017\022\022\n\rkLoginTimeout\020\357\017B$\n\016com.game.ta"
-    "bleZ\022generated/pb/tableb\006proto3"
+    "nt\020\356\017\022\022\n\rkLoginTimeout\020\357\017\022\025\n\020kRoleNameIn"
+    "valid\020\360\017\022\023\n\016kRoleNameTaken\020\361\017\022\027\n\022kRoleNa"
+    "meSensitive\020\362\017B$\n\016com.game.tableZ\022genera"
+    "ted/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_login_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_login_5ferror_5ftip_2eproto = {
     false,
     false,
-    1031,
+    1100,
     descriptor_table_protodef_login_5ferror_5ftip_2eproto,
     "login_error_tip.proto",
     &descriptor_table_login_5ferror_5ftip_2eproto_once,
@@ -85,7 +87,7 @@ login_error_descriptor() {
   return file_level_enum_descriptors_login_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t login_error_internal_data_[] = {
-    65536u, 2097152u, 2016u, 2008u, 2024u, 2004u, 2012u, 2020u, 2028u, 2002u, 2006u, 2010u, 2014u, 2018u, 2022u, 2026u, 2030u, 2001u, 2003u, 2005u, 2007u, 2009u, 2011u, 2013u, 2015u, 2017u, 2019u, 2021u, 2023u, 2025u, 2027u, 2029u, 2031u, 2000u, };
+    65536u, 2293760u, 2019u, 2011u, 2027u, 2007u, 2015u, 2023u, 2031u, 2003u, 2009u, 2013u, 2017u, 2021u, 2025u, 2029u, 2033u, 2001u, 2005u, 2008u, 2010u, 2012u, 2014u, 2016u, 2018u, 2020u, 2022u, 2024u, 2026u, 2028u, 2030u, 2032u, 2034u, 2000u, 2002u, 2004u, 2006u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

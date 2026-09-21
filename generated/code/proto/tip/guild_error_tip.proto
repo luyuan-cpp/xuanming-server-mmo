@@ -53,4 +53,24 @@ enum guild_error {
 
   kGuildBusyRetry = 14021;
 
+  kGuildFundsInsufficient = 14022;
+
+  kGuildMaxLevel = 14023;
+
+  kGuildDonateLimit = 14024;
+
+  kGuildCurrencyInsufficient = 14025;
+
+  kGuildAssetPending = 14026;
+
+  kGuildAssetRejected = 14027;
+
+  kGuildShopGoodsNotFound = 14028;
+
+  kGuildShopLevelTooLow = 14029;
+
+  kGuildShopLimit = 14030;
+
+  kGuildContributionInsufficient = 14031;
+
 };

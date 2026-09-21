@@ -161,6 +161,9 @@ namespace data_service{void SendDataServiceBatchRecallItems(entt::registry& , en
 namespace data_service{void SendDataServiceQueryTransactionLog(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace data_service{void SendDataServiceCreateEventSnapshot(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace data_service{void SendDataServiceAllocateIdSegment(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace data_service{void SendDataServiceReservePlayerName(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace data_service{void SendDataServiceReleasePlayerName(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace data_service{void SendDataServiceBatchGetPlayerName(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace etcdserverpb{void SendKVRange(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace etcdserverpb{void SendKVPut(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace etcdserverpb{void SendKVDeleteRange(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
@@ -172,14 +175,17 @@ namespace etcdserverpb{void SendLeaseLeaseRevoke(entt::registry& , entt::entity 
 namespace etcdserverpb{void SendLeaseLeaseKeepAlive(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace etcdserverpb{void SendLeaseLeaseTimeToLive(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace etcdserverpb{void SendLeaseLeaseLeases(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
-namespace friendpb{void SendFriendServiceAddFriend(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
-namespace friendpb{void SendFriendServiceAcceptFriend(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
-namespace friendpb{void SendFriendServiceRejectFriend(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
-namespace friendpb{void SendFriendServiceRemoveFriend(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
-namespace friendpb{void SendFriendServiceGetFriendList(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
-namespace friendpb{void SendFriendServiceGetPendingRequests(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
-namespace friendpb{void SendFriendServiceNotifyOnline(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
-namespace friendpb{void SendFriendServiceNotifyOffline(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendAddFriend(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendAcceptFriend(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendRejectFriend(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendRemoveFriend(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendGetFriendList(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendGetPendingRequests(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendBlock(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendUnblock(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendListBlocks(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendRecommendFriends(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace friendpb{void SendClientPlayerFriendNotifyFriendEvent(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceCreateGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetPlayerGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
@@ -198,6 +204,11 @@ namespace guildpb{void SendGuildServiceNotifyGuildChanged(entt::registry& , entt
 namespace guildpb{void SendGuildServiceUpdateGuildScore(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetGuildRank(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace guildpb{void SendGuildServiceGetGuildRankByGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceGetGuildDonateOptions(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceDonateToGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceUpgradeGuild(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceGetGuildShop(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
+namespace guildpb{void SendGuildServiceBuyGuildShopGoods(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace loginpb{void SendClientPlayerLoginLogin(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace loginpb{void SendClientPlayerLoginCreatePlayer(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
 namespace loginpb{void SendClientPlayerLoginEnterGame(entt::registry& , entt::entity , const google::protobuf::Message& , const std::vector<std::string>& , const std::vector<std::string>& );}
@@ -253,7 +264,7 @@ namespace trade{void SendTradeAdminSeedListing(entt::registry& , entt::entity , 
 // 容量以 rpc_event_registry.h 的 kMaxRpcMethodCount 为准;static_assert 把
 // "半途 regen 导致头文件容量落后于本轮 message id 数"的事故(2026-09-01,
 // InitMessageInfo 越界写导致节点启动断言)变成编译错误而不是运行期崩溃。
-static_assert(kMaxRpcMethodCount == 228,
+static_assert(kMaxRpcMethodCount == 239,
     "kMaxRpcMethodCount out of sync with this generation run - rerun the full proto generator");
 std::array<RpcMethodMeta, kMaxRpcMethodCount> gRpcMethodRegistry;
 
@@ -463,6 +474,21 @@ void InitMessageInfo()
         std::make_unique<::data_service::AllocateIdSegmentRequest>(),
         std::make_unique<::data_service::AllocateIdSegmentResponse>(),
         nullptr, 1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceAllocateIdSegment};
+    gRpcMethodRegistry[DataServiceReservePlayerNameMessageId] = RpcMethodMeta{
+        "DataService", "ReservePlayerName",
+        std::make_unique<::data_service::ReservePlayerNameRequest>(),
+        std::make_unique<::data_service::ReservePlayerNameResponse>(),
+        nullptr, 1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceReservePlayerName};
+    gRpcMethodRegistry[DataServiceReleasePlayerNameMessageId] = RpcMethodMeta{
+        "DataService", "ReleasePlayerName",
+        std::make_unique<::data_service::ReleasePlayerNameRequest>(),
+        std::make_unique<::google::protobuf::Empty>(),
+        nullptr, 1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceReleasePlayerName};
+    gRpcMethodRegistry[DataServiceBatchGetPlayerNameMessageId] = RpcMethodMeta{
+        "DataService", "BatchGetPlayerName",
+        std::make_unique<::data_service::BatchGetPlayerNameRequest>(),
+        std::make_unique<::data_service::BatchGetPlayerNameResponse>(),
+        nullptr, 1, common::base::eNodeType::DataServiceNodeService, data_service::SendDataServiceBatchGetPlayerName};
 
     // --- KV ---
     gRpcMethodRegistry[KVRangeMessageId] = RpcMethodMeta{
@@ -525,47 +551,62 @@ void InitMessageInfo()
         std::make_unique<::etcdserverpb::LeaseLeasesResponse>(),
         nullptr, 0, common::base::eNodeType::EtcdNodeService, etcdserverpb::SendLeaseLeaseLeases};
 
-    // --- FriendService ---
-    gRpcMethodRegistry[FriendServiceAddFriendMessageId] = RpcMethodMeta{
-        "FriendService", "AddFriend",
+    // --- ClientPlayerFriend ---
+    gRpcMethodRegistry[ClientPlayerFriendAddFriendMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "AddFriend",
         std::make_unique<::friendpb::AddFriendRequest>(),
         std::make_unique<::friendpb::AddFriendResponse>(),
-        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendFriendServiceAddFriend};
-    gRpcMethodRegistry[FriendServiceAcceptFriendMessageId] = RpcMethodMeta{
-        "FriendService", "AcceptFriend",
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendAddFriend};
+    gRpcMethodRegistry[ClientPlayerFriendAcceptFriendMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "AcceptFriend",
         std::make_unique<::friendpb::AcceptFriendRequest>(),
         std::make_unique<::friendpb::AcceptFriendResponse>(),
-        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendFriendServiceAcceptFriend};
-    gRpcMethodRegistry[FriendServiceRejectFriendMessageId] = RpcMethodMeta{
-        "FriendService", "RejectFriend",
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendAcceptFriend};
+    gRpcMethodRegistry[ClientPlayerFriendRejectFriendMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "RejectFriend",
         std::make_unique<::friendpb::RejectFriendRequest>(),
         std::make_unique<::friendpb::RejectFriendResponse>(),
-        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendFriendServiceRejectFriend};
-    gRpcMethodRegistry[FriendServiceRemoveFriendMessageId] = RpcMethodMeta{
-        "FriendService", "RemoveFriend",
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendRejectFriend};
+    gRpcMethodRegistry[ClientPlayerFriendRemoveFriendMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "RemoveFriend",
         std::make_unique<::friendpb::RemoveFriendRequest>(),
         std::make_unique<::friendpb::RemoveFriendResponse>(),
-        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendFriendServiceRemoveFriend};
-    gRpcMethodRegistry[FriendServiceGetFriendListMessageId] = RpcMethodMeta{
-        "FriendService", "GetFriendList",
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendRemoveFriend};
+    gRpcMethodRegistry[ClientPlayerFriendGetFriendListMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "GetFriendList",
         std::make_unique<::friendpb::GetFriendListRequest>(),
         std::make_unique<::friendpb::GetFriendListResponse>(),
-        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendFriendServiceGetFriendList};
-    gRpcMethodRegistry[FriendServiceGetPendingRequestsMessageId] = RpcMethodMeta{
-        "FriendService", "GetPendingRequests",
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendGetFriendList};
+    gRpcMethodRegistry[ClientPlayerFriendGetPendingRequestsMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "GetPendingRequests",
         std::make_unique<::friendpb::GetPendingRequestsRequest>(),
         std::make_unique<::friendpb::GetPendingRequestsResponse>(),
-        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendFriendServiceGetPendingRequests};
-    gRpcMethodRegistry[FriendServiceNotifyOnlineMessageId] = RpcMethodMeta{
-        "FriendService", "NotifyOnline",
-        std::make_unique<::friendpb::NotifyOnlineRequest>(),
-        std::make_unique<::friendpb::NotifyOnlineResponse>(),
-        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendFriendServiceNotifyOnline};
-    gRpcMethodRegistry[FriendServiceNotifyOfflineMessageId] = RpcMethodMeta{
-        "FriendService", "NotifyOffline",
-        std::make_unique<::friendpb::NotifyOfflineRequest>(),
-        std::make_unique<::friendpb::NotifyOfflineResponse>(),
-        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendFriendServiceNotifyOffline};
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendGetPendingRequests};
+    gRpcMethodRegistry[ClientPlayerFriendBlockMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "Block",
+        std::make_unique<::friendpb::BlockRequest>(),
+        std::make_unique<::friendpb::BlockResponse>(),
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendBlock};
+    gRpcMethodRegistry[ClientPlayerFriendUnblockMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "Unblock",
+        std::make_unique<::friendpb::UnblockRequest>(),
+        std::make_unique<::friendpb::UnblockResponse>(),
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendUnblock};
+    gRpcMethodRegistry[ClientPlayerFriendListBlocksMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "ListBlocks",
+        std::make_unique<::friendpb::ListBlocksRequest>(),
+        std::make_unique<::friendpb::ListBlocksResponse>(),
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendListBlocks};
+    gRpcMethodRegistry[ClientPlayerFriendRecommendFriendsMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "RecommendFriends",
+        std::make_unique<::friendpb::RecommendFriendsRequest>(),
+        std::make_unique<::friendpb::RecommendFriendsResponse>(),
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendRecommendFriends};
+    gRpcMethodRegistry[ClientPlayerFriendNotifyFriendEventMessageId] = RpcMethodMeta{
+        "ClientPlayerFriend", "NotifyFriendEvent",
+        std::make_unique<::friendpb::FriendEventS2C>(),
+        std::make_unique<::Empty>(),
+        nullptr, 1, common::base::eNodeType::FriendNodeService, friendpb::SendClientPlayerFriendNotifyFriendEvent};
 
     // --- Gate ---
     gRpcMethodRegistry[GatePlayerEnterGameNodeMessageId] = RpcMethodMeta{
@@ -710,6 +751,31 @@ void InitMessageInfo()
         std::make_unique<::guildpb::GetGuildRankByGuildRequest>(),
         std::make_unique<::guildpb::GetGuildRankByGuildResponse>(),
         nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceGetGuildRankByGuild};
+    gRpcMethodRegistry[GuildServiceGetGuildDonateOptionsMessageId] = RpcMethodMeta{
+        "GuildService", "GetGuildDonateOptions",
+        std::make_unique<::guildpb::GetGuildDonateOptionsRequest>(),
+        std::make_unique<::guildpb::GetGuildDonateOptionsResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceGetGuildDonateOptions};
+    gRpcMethodRegistry[GuildServiceDonateToGuildMessageId] = RpcMethodMeta{
+        "GuildService", "DonateToGuild",
+        std::make_unique<::guildpb::DonateToGuildRequest>(),
+        std::make_unique<::guildpb::DonateToGuildResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceDonateToGuild};
+    gRpcMethodRegistry[GuildServiceUpgradeGuildMessageId] = RpcMethodMeta{
+        "GuildService", "UpgradeGuild",
+        std::make_unique<::guildpb::UpgradeGuildRequest>(),
+        std::make_unique<::guildpb::UpgradeGuildResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceUpgradeGuild};
+    gRpcMethodRegistry[GuildServiceGetGuildShopMessageId] = RpcMethodMeta{
+        "GuildService", "GetGuildShop",
+        std::make_unique<::guildpb::GetGuildShopRequest>(),
+        std::make_unique<::guildpb::GetGuildShopResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceGetGuildShop};
+    gRpcMethodRegistry[GuildServiceBuyGuildShopGoodsMessageId] = RpcMethodMeta{
+        "GuildService", "BuyGuildShopGoods",
+        std::make_unique<::guildpb::BuyGuildShopGoodsRequest>(),
+        std::make_unique<::guildpb::BuyGuildShopGoodsResponse>(),
+        nullptr, 1, common::base::eNodeType::GuildNodeService, guildpb::SendGuildServiceBuyGuildShopGoods};
 
     // --- ClientPlayerLogin ---
     gRpcMethodRegistry[ClientPlayerLoginLoginMessageId] = RpcMethodMeta{
@@ -1484,6 +1550,17 @@ bool IsClientMessageId(uint32_t messageId)
 	case BattleClientPlayerNotifyBattleAssignedMessageId:
 	case ClientPlayerChatSendChatMessageId:
 	case ClientPlayerChatPullChatHistoryMessageId:
+	case ClientPlayerFriendAddFriendMessageId:
+	case ClientPlayerFriendAcceptFriendMessageId:
+	case ClientPlayerFriendRejectFriendMessageId:
+	case ClientPlayerFriendRemoveFriendMessageId:
+	case ClientPlayerFriendGetFriendListMessageId:
+	case ClientPlayerFriendGetPendingRequestsMessageId:
+	case ClientPlayerFriendBlockMessageId:
+	case ClientPlayerFriendUnblockMessageId:
+	case ClientPlayerFriendListBlocksMessageId:
+	case ClientPlayerFriendRecommendFriendsMessageId:
+	case ClientPlayerFriendNotifyFriendEventMessageId:
 	case GuildServiceCreateGuildMessageId:
 	case GuildServiceGetGuildMessageId:
 	case GuildServiceGetPlayerGuildMessageId:
@@ -1502,6 +1579,11 @@ bool IsClientMessageId(uint32_t messageId)
 	case GuildServiceUpdateGuildScoreMessageId:
 	case GuildServiceGetGuildRankMessageId:
 	case GuildServiceGetGuildRankByGuildMessageId:
+	case GuildServiceGetGuildDonateOptionsMessageId:
+	case GuildServiceDonateToGuildMessageId:
+	case GuildServiceUpgradeGuildMessageId:
+	case GuildServiceGetGuildShopMessageId:
+	case GuildServiceBuyGuildShopGoodsMessageId:
 	case ClientPlayerLoginLoginMessageId:
 	case ClientPlayerLoginCreatePlayerMessageId:
 	case ClientPlayerLoginEnterGameMessageId:

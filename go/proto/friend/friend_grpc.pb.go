@@ -11,6 +11,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	base "proto/common/base"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -19,367 +20,503 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	FriendService_AddFriend_FullMethodName          = "/friendpb.FriendService/AddFriend"
-	FriendService_AcceptFriend_FullMethodName       = "/friendpb.FriendService/AcceptFriend"
-	FriendService_RejectFriend_FullMethodName       = "/friendpb.FriendService/RejectFriend"
-	FriendService_RemoveFriend_FullMethodName       = "/friendpb.FriendService/RemoveFriend"
-	FriendService_GetFriendList_FullMethodName      = "/friendpb.FriendService/GetFriendList"
-	FriendService_GetPendingRequests_FullMethodName = "/friendpb.FriendService/GetPendingRequests"
-	FriendService_NotifyOnline_FullMethodName       = "/friendpb.FriendService/NotifyOnline"
-	FriendService_NotifyOffline_FullMethodName      = "/friendpb.FriendService/NotifyOffline"
+	ClientPlayerFriend_AddFriend_FullMethodName          = "/friendpb.ClientPlayerFriend/AddFriend"
+	ClientPlayerFriend_AcceptFriend_FullMethodName       = "/friendpb.ClientPlayerFriend/AcceptFriend"
+	ClientPlayerFriend_RejectFriend_FullMethodName       = "/friendpb.ClientPlayerFriend/RejectFriend"
+	ClientPlayerFriend_RemoveFriend_FullMethodName       = "/friendpb.ClientPlayerFriend/RemoveFriend"
+	ClientPlayerFriend_GetFriendList_FullMethodName      = "/friendpb.ClientPlayerFriend/GetFriendList"
+	ClientPlayerFriend_GetPendingRequests_FullMethodName = "/friendpb.ClientPlayerFriend/GetPendingRequests"
+	ClientPlayerFriend_Block_FullMethodName              = "/friendpb.ClientPlayerFriend/Block"
+	ClientPlayerFriend_Unblock_FullMethodName            = "/friendpb.ClientPlayerFriend/Unblock"
+	ClientPlayerFriend_ListBlocks_FullMethodName         = "/friendpb.ClientPlayerFriend/ListBlocks"
+	ClientPlayerFriend_RecommendFriends_FullMethodName   = "/friendpb.ClientPlayerFriend/RecommendFriends"
+	ClientPlayerFriend_NotifyFriendEvent_FullMethodName  = "/friendpb.ClientPlayerFriend/NotifyFriendEvent"
 )
 
-// FriendServiceClient is the client API for FriendService service.
+// ClientPlayerFriendClient is the client API for ClientPlayerFriend service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-type FriendServiceClient interface {
+//
+// ── 服务声明 ─────────────────────────────────────────────────────────
+//
+// 服务名从 FriendService 改成 ClientPlayerFriend:见上面 S2C 段的注释 ——
+// 生成器靠服务名里的 ClientPlayer 前缀决定是否给客户端出推送 handler,
+// 改名是本期新增 S2C 推送的前提,不是为了好看。
+// NotifyOnline / NotifyOffline 两个 rpc 与它们的四个 message 已删除:全仓非生成
+// 代码里零调用方(已 Grep 确认),在线状态改读契约 key player:session:{id}。
+type ClientPlayerFriendClient interface {
 	AddFriend(ctx context.Context, in *AddFriendRequest, opts ...grpc.CallOption) (*AddFriendResponse, error)
 	AcceptFriend(ctx context.Context, in *AcceptFriendRequest, opts ...grpc.CallOption) (*AcceptFriendResponse, error)
 	RejectFriend(ctx context.Context, in *RejectFriendRequest, opts ...grpc.CallOption) (*RejectFriendResponse, error)
 	RemoveFriend(ctx context.Context, in *RemoveFriendRequest, opts ...grpc.CallOption) (*RemoveFriendResponse, error)
 	GetFriendList(ctx context.Context, in *GetFriendListRequest, opts ...grpc.CallOption) (*GetFriendListResponse, error)
 	GetPendingRequests(ctx context.Context, in *GetPendingRequestsRequest, opts ...grpc.CallOption) (*GetPendingRequestsResponse, error)
-	NotifyOnline(ctx context.Context, in *NotifyOnlineRequest, opts ...grpc.CallOption) (*NotifyOnlineResponse, error)
-	NotifyOffline(ctx context.Context, in *NotifyOfflineRequest, opts ...grpc.CallOption) (*NotifyOfflineResponse, error)
+	Block(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (*BlockResponse, error)
+	Unblock(ctx context.Context, in *UnblockRequest, opts ...grpc.CallOption) (*UnblockResponse, error)
+	ListBlocks(ctx context.Context, in *ListBlocksRequest, opts ...grpc.CallOption) (*ListBlocksResponse, error)
+	RecommendFriends(ctx context.Context, in *RecommendFriendsRequest, opts ...grpc.CallOption) (*RecommendFriendsResponse, error)
+	// 推送方向是服务端 → 客户端。它与上面 10 个 C2S 方法同处一个 service,
+	// 所以服务端**必须**在会话拦截器的方法白名单里排除它:否则客户端可以直接
+	// 调这个方法伪造一条好友事件。服务端也不实现它(继承 Unimplemented)。
+	NotifyFriendEvent(ctx context.Context, in *FriendEventS2C, opts ...grpc.CallOption) (*base.Empty, error)
 }
 
-type friendServiceClient struct {
+type clientPlayerFriendClient struct {
 	cc grpc.ClientConnInterface
 }
 
-func NewFriendServiceClient(cc grpc.ClientConnInterface) FriendServiceClient {
-	return &friendServiceClient{cc}
+func NewClientPlayerFriendClient(cc grpc.ClientConnInterface) ClientPlayerFriendClient {
+	return &clientPlayerFriendClient{cc}
 }
 
-func (c *friendServiceClient) AddFriend(ctx context.Context, in *AddFriendRequest, opts ...grpc.CallOption) (*AddFriendResponse, error) {
+func (c *clientPlayerFriendClient) AddFriend(ctx context.Context, in *AddFriendRequest, opts ...grpc.CallOption) (*AddFriendResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AddFriendResponse)
-	err := c.cc.Invoke(ctx, FriendService_AddFriend_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_AddFriend_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *friendServiceClient) AcceptFriend(ctx context.Context, in *AcceptFriendRequest, opts ...grpc.CallOption) (*AcceptFriendResponse, error) {
+func (c *clientPlayerFriendClient) AcceptFriend(ctx context.Context, in *AcceptFriendRequest, opts ...grpc.CallOption) (*AcceptFriendResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(AcceptFriendResponse)
-	err := c.cc.Invoke(ctx, FriendService_AcceptFriend_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_AcceptFriend_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *friendServiceClient) RejectFriend(ctx context.Context, in *RejectFriendRequest, opts ...grpc.CallOption) (*RejectFriendResponse, error) {
+func (c *clientPlayerFriendClient) RejectFriend(ctx context.Context, in *RejectFriendRequest, opts ...grpc.CallOption) (*RejectFriendResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RejectFriendResponse)
-	err := c.cc.Invoke(ctx, FriendService_RejectFriend_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_RejectFriend_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *friendServiceClient) RemoveFriend(ctx context.Context, in *RemoveFriendRequest, opts ...grpc.CallOption) (*RemoveFriendResponse, error) {
+func (c *clientPlayerFriendClient) RemoveFriend(ctx context.Context, in *RemoveFriendRequest, opts ...grpc.CallOption) (*RemoveFriendResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(RemoveFriendResponse)
-	err := c.cc.Invoke(ctx, FriendService_RemoveFriend_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_RemoveFriend_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *friendServiceClient) GetFriendList(ctx context.Context, in *GetFriendListRequest, opts ...grpc.CallOption) (*GetFriendListResponse, error) {
+func (c *clientPlayerFriendClient) GetFriendList(ctx context.Context, in *GetFriendListRequest, opts ...grpc.CallOption) (*GetFriendListResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetFriendListResponse)
-	err := c.cc.Invoke(ctx, FriendService_GetFriendList_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_GetFriendList_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *friendServiceClient) GetPendingRequests(ctx context.Context, in *GetPendingRequestsRequest, opts ...grpc.CallOption) (*GetPendingRequestsResponse, error) {
+func (c *clientPlayerFriendClient) GetPendingRequests(ctx context.Context, in *GetPendingRequestsRequest, opts ...grpc.CallOption) (*GetPendingRequestsResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(GetPendingRequestsResponse)
-	err := c.cc.Invoke(ctx, FriendService_GetPendingRequests_FullMethodName, in, out, cOpts...)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_GetPendingRequests_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *friendServiceClient) NotifyOnline(ctx context.Context, in *NotifyOnlineRequest, opts ...grpc.CallOption) (*NotifyOnlineResponse, error) {
+func (c *clientPlayerFriendClient) Block(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (*BlockResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(NotifyOnlineResponse)
-	err := c.cc.Invoke(ctx, FriendService_NotifyOnline_FullMethodName, in, out, cOpts...)
+	out := new(BlockResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_Block_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *friendServiceClient) NotifyOffline(ctx context.Context, in *NotifyOfflineRequest, opts ...grpc.CallOption) (*NotifyOfflineResponse, error) {
+func (c *clientPlayerFriendClient) Unblock(ctx context.Context, in *UnblockRequest, opts ...grpc.CallOption) (*UnblockResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(NotifyOfflineResponse)
-	err := c.cc.Invoke(ctx, FriendService_NotifyOffline_FullMethodName, in, out, cOpts...)
+	out := new(UnblockResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_Unblock_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-// FriendServiceServer is the server API for FriendService service.
-// All implementations must embed UnimplementedFriendServiceServer
+func (c *clientPlayerFriendClient) ListBlocks(ctx context.Context, in *ListBlocksRequest, opts ...grpc.CallOption) (*ListBlocksResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListBlocksResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_ListBlocks_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerFriendClient) RecommendFriends(ctx context.Context, in *RecommendFriendsRequest, opts ...grpc.CallOption) (*RecommendFriendsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RecommendFriendsResponse)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_RecommendFriends_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *clientPlayerFriendClient) NotifyFriendEvent(ctx context.Context, in *FriendEventS2C, opts ...grpc.CallOption) (*base.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(base.Empty)
+	err := c.cc.Invoke(ctx, ClientPlayerFriend_NotifyFriendEvent_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ClientPlayerFriendServer is the server API for ClientPlayerFriend service.
+// All implementations must embed UnimplementedClientPlayerFriendServer
 // for forward compatibility.
-type FriendServiceServer interface {
+//
+// ── 服务声明 ─────────────────────────────────────────────────────────
+//
+// 服务名从 FriendService 改成 ClientPlayerFriend:见上面 S2C 段的注释 ——
+// 生成器靠服务名里的 ClientPlayer 前缀决定是否给客户端出推送 handler,
+// 改名是本期新增 S2C 推送的前提,不是为了好看。
+// NotifyOnline / NotifyOffline 两个 rpc 与它们的四个 message 已删除:全仓非生成
+// 代码里零调用方(已 Grep 确认),在线状态改读契约 key player:session:{id}。
+type ClientPlayerFriendServer interface {
 	AddFriend(context.Context, *AddFriendRequest) (*AddFriendResponse, error)
 	AcceptFriend(context.Context, *AcceptFriendRequest) (*AcceptFriendResponse, error)
 	RejectFriend(context.Context, *RejectFriendRequest) (*RejectFriendResponse, error)
 	RemoveFriend(context.Context, *RemoveFriendRequest) (*RemoveFriendResponse, error)
 	GetFriendList(context.Context, *GetFriendListRequest) (*GetFriendListResponse, error)
 	GetPendingRequests(context.Context, *GetPendingRequestsRequest) (*GetPendingRequestsResponse, error)
-	NotifyOnline(context.Context, *NotifyOnlineRequest) (*NotifyOnlineResponse, error)
-	NotifyOffline(context.Context, *NotifyOfflineRequest) (*NotifyOfflineResponse, error)
-	mustEmbedUnimplementedFriendServiceServer()
+	Block(context.Context, *BlockRequest) (*BlockResponse, error)
+	Unblock(context.Context, *UnblockRequest) (*UnblockResponse, error)
+	ListBlocks(context.Context, *ListBlocksRequest) (*ListBlocksResponse, error)
+	RecommendFriends(context.Context, *RecommendFriendsRequest) (*RecommendFriendsResponse, error)
+	// 推送方向是服务端 → 客户端。它与上面 10 个 C2S 方法同处一个 service,
+	// 所以服务端**必须**在会话拦截器的方法白名单里排除它:否则客户端可以直接
+	// 调这个方法伪造一条好友事件。服务端也不实现它(继承 Unimplemented)。
+	NotifyFriendEvent(context.Context, *FriendEventS2C) (*base.Empty, error)
+	mustEmbedUnimplementedClientPlayerFriendServer()
 }
 
-// UnimplementedFriendServiceServer must be embedded to have
+// UnimplementedClientPlayerFriendServer must be embedded to have
 // forward compatible implementations.
 //
 // NOTE: this should be embedded by value instead of pointer to avoid a nil
 // pointer dereference when methods are called.
-type UnimplementedFriendServiceServer struct{}
+type UnimplementedClientPlayerFriendServer struct{}
 
-func (UnimplementedFriendServiceServer) AddFriend(context.Context, *AddFriendRequest) (*AddFriendResponse, error) {
+func (UnimplementedClientPlayerFriendServer) AddFriend(context.Context, *AddFriendRequest) (*AddFriendResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AddFriend not implemented")
 }
-func (UnimplementedFriendServiceServer) AcceptFriend(context.Context, *AcceptFriendRequest) (*AcceptFriendResponse, error) {
+func (UnimplementedClientPlayerFriendServer) AcceptFriend(context.Context, *AcceptFriendRequest) (*AcceptFriendResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AcceptFriend not implemented")
 }
-func (UnimplementedFriendServiceServer) RejectFriend(context.Context, *RejectFriendRequest) (*RejectFriendResponse, error) {
+func (UnimplementedClientPlayerFriendServer) RejectFriend(context.Context, *RejectFriendRequest) (*RejectFriendResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RejectFriend not implemented")
 }
-func (UnimplementedFriendServiceServer) RemoveFriend(context.Context, *RemoveFriendRequest) (*RemoveFriendResponse, error) {
+func (UnimplementedClientPlayerFriendServer) RemoveFriend(context.Context, *RemoveFriendRequest) (*RemoveFriendResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveFriend not implemented")
 }
-func (UnimplementedFriendServiceServer) GetFriendList(context.Context, *GetFriendListRequest) (*GetFriendListResponse, error) {
+func (UnimplementedClientPlayerFriendServer) GetFriendList(context.Context, *GetFriendListRequest) (*GetFriendListResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetFriendList not implemented")
 }
-func (UnimplementedFriendServiceServer) GetPendingRequests(context.Context, *GetPendingRequestsRequest) (*GetPendingRequestsResponse, error) {
+func (UnimplementedClientPlayerFriendServer) GetPendingRequests(context.Context, *GetPendingRequestsRequest) (*GetPendingRequestsResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetPendingRequests not implemented")
 }
-func (UnimplementedFriendServiceServer) NotifyOnline(context.Context, *NotifyOnlineRequest) (*NotifyOnlineResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method NotifyOnline not implemented")
+func (UnimplementedClientPlayerFriendServer) Block(context.Context, *BlockRequest) (*BlockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Block not implemented")
 }
-func (UnimplementedFriendServiceServer) NotifyOffline(context.Context, *NotifyOfflineRequest) (*NotifyOfflineResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method NotifyOffline not implemented")
+func (UnimplementedClientPlayerFriendServer) Unblock(context.Context, *UnblockRequest) (*UnblockResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Unblock not implemented")
 }
-func (UnimplementedFriendServiceServer) mustEmbedUnimplementedFriendServiceServer() {}
-func (UnimplementedFriendServiceServer) testEmbeddedByValue()                       {}
+func (UnimplementedClientPlayerFriendServer) ListBlocks(context.Context, *ListBlocksRequest) (*ListBlocksResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListBlocks not implemented")
+}
+func (UnimplementedClientPlayerFriendServer) RecommendFriends(context.Context, *RecommendFriendsRequest) (*RecommendFriendsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RecommendFriends not implemented")
+}
+func (UnimplementedClientPlayerFriendServer) NotifyFriendEvent(context.Context, *FriendEventS2C) (*base.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method NotifyFriendEvent not implemented")
+}
+func (UnimplementedClientPlayerFriendServer) mustEmbedUnimplementedClientPlayerFriendServer() {}
+func (UnimplementedClientPlayerFriendServer) testEmbeddedByValue()                            {}
 
-// UnsafeFriendServiceServer may be embedded to opt out of forward compatibility for this service.
-// Use of this interface is not recommended, as added methods to FriendServiceServer will
+// UnsafeClientPlayerFriendServer may be embedded to opt out of forward compatibility for this service.
+// Use of this interface is not recommended, as added methods to ClientPlayerFriendServer will
 // result in compilation errors.
-type UnsafeFriendServiceServer interface {
-	mustEmbedUnimplementedFriendServiceServer()
+type UnsafeClientPlayerFriendServer interface {
+	mustEmbedUnimplementedClientPlayerFriendServer()
 }
 
-func RegisterFriendServiceServer(s grpc.ServiceRegistrar, srv FriendServiceServer) {
-	// If the following call panics, it indicates UnimplementedFriendServiceServer was
+func RegisterClientPlayerFriendServer(s grpc.ServiceRegistrar, srv ClientPlayerFriendServer) {
+	// If the following call panics, it indicates UnimplementedClientPlayerFriendServer was
 	// embedded by pointer and is nil.  This will cause panics if an
 	// unimplemented method is ever invoked, so we test this at initialization
 	// time to prevent it from happening at runtime later due to I/O.
 	if t, ok := srv.(interface{ testEmbeddedByValue() }); ok {
 		t.testEmbeddedByValue()
 	}
-	s.RegisterService(&FriendService_ServiceDesc, srv)
+	s.RegisterService(&ClientPlayerFriend_ServiceDesc, srv)
 }
 
-func _FriendService_AddFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ClientPlayerFriend_AddFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AddFriendRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FriendServiceServer).AddFriend(ctx, in)
+		return srv.(ClientPlayerFriendServer).AddFriend(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FriendService_AddFriend_FullMethodName,
+		FullMethod: ClientPlayerFriend_AddFriend_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FriendServiceServer).AddFriend(ctx, req.(*AddFriendRequest))
+		return srv.(ClientPlayerFriendServer).AddFriend(ctx, req.(*AddFriendRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _FriendService_AcceptFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ClientPlayerFriend_AcceptFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(AcceptFriendRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FriendServiceServer).AcceptFriend(ctx, in)
+		return srv.(ClientPlayerFriendServer).AcceptFriend(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FriendService_AcceptFriend_FullMethodName,
+		FullMethod: ClientPlayerFriend_AcceptFriend_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FriendServiceServer).AcceptFriend(ctx, req.(*AcceptFriendRequest))
+		return srv.(ClientPlayerFriendServer).AcceptFriend(ctx, req.(*AcceptFriendRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _FriendService_RejectFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ClientPlayerFriend_RejectFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RejectFriendRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FriendServiceServer).RejectFriend(ctx, in)
+		return srv.(ClientPlayerFriendServer).RejectFriend(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FriendService_RejectFriend_FullMethodName,
+		FullMethod: ClientPlayerFriend_RejectFriend_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FriendServiceServer).RejectFriend(ctx, req.(*RejectFriendRequest))
+		return srv.(ClientPlayerFriendServer).RejectFriend(ctx, req.(*RejectFriendRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _FriendService_RemoveFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ClientPlayerFriend_RemoveFriend_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RemoveFriendRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FriendServiceServer).RemoveFriend(ctx, in)
+		return srv.(ClientPlayerFriendServer).RemoveFriend(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FriendService_RemoveFriend_FullMethodName,
+		FullMethod: ClientPlayerFriend_RemoveFriend_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FriendServiceServer).RemoveFriend(ctx, req.(*RemoveFriendRequest))
+		return srv.(ClientPlayerFriendServer).RemoveFriend(ctx, req.(*RemoveFriendRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _FriendService_GetFriendList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ClientPlayerFriend_GetFriendList_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetFriendListRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FriendServiceServer).GetFriendList(ctx, in)
+		return srv.(ClientPlayerFriendServer).GetFriendList(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FriendService_GetFriendList_FullMethodName,
+		FullMethod: ClientPlayerFriend_GetFriendList_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FriendServiceServer).GetFriendList(ctx, req.(*GetFriendListRequest))
+		return srv.(ClientPlayerFriendServer).GetFriendList(ctx, req.(*GetFriendListRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _FriendService_GetPendingRequests_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+func _ClientPlayerFriend_GetPendingRequests_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetPendingRequestsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FriendServiceServer).GetPendingRequests(ctx, in)
+		return srv.(ClientPlayerFriendServer).GetPendingRequests(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FriendService_GetPendingRequests_FullMethodName,
+		FullMethod: ClientPlayerFriend_GetPendingRequests_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FriendServiceServer).GetPendingRequests(ctx, req.(*GetPendingRequestsRequest))
+		return srv.(ClientPlayerFriendServer).GetPendingRequests(ctx, req.(*GetPendingRequestsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _FriendService_NotifyOnline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NotifyOnlineRequest)
+func _ClientPlayerFriend_Block_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BlockRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FriendServiceServer).NotifyOnline(ctx, in)
+		return srv.(ClientPlayerFriendServer).Block(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FriendService_NotifyOnline_FullMethodName,
+		FullMethod: ClientPlayerFriend_Block_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FriendServiceServer).NotifyOnline(ctx, req.(*NotifyOnlineRequest))
+		return srv.(ClientPlayerFriendServer).Block(ctx, req.(*BlockRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _FriendService_NotifyOffline_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(NotifyOfflineRequest)
+func _ClientPlayerFriend_Unblock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnblockRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(FriendServiceServer).NotifyOffline(ctx, in)
+		return srv.(ClientPlayerFriendServer).Unblock(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: FriendService_NotifyOffline_FullMethodName,
+		FullMethod: ClientPlayerFriend_Unblock_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(FriendServiceServer).NotifyOffline(ctx, req.(*NotifyOfflineRequest))
+		return srv.(ClientPlayerFriendServer).Unblock(ctx, req.(*UnblockRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-// FriendService_ServiceDesc is the grpc.ServiceDesc for FriendService service.
+func _ClientPlayerFriend_ListBlocks_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListBlocksRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerFriendServer).ListBlocks(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerFriend_ListBlocks_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerFriendServer).ListBlocks(ctx, req.(*ListBlocksRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerFriend_RecommendFriends_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RecommendFriendsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerFriendServer).RecommendFriends(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerFriend_RecommendFriends_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerFriendServer).RecommendFriends(ctx, req.(*RecommendFriendsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ClientPlayerFriend_NotifyFriendEvent_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FriendEventS2C)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ClientPlayerFriendServer).NotifyFriendEvent(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ClientPlayerFriend_NotifyFriendEvent_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ClientPlayerFriendServer).NotifyFriendEvent(ctx, req.(*FriendEventS2C))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+// ClientPlayerFriend_ServiceDesc is the grpc.ServiceDesc for ClientPlayerFriend service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
-var FriendService_ServiceDesc = grpc.ServiceDesc{
-	ServiceName: "friendpb.FriendService",
-	HandlerType: (*FriendServiceServer)(nil),
+var ClientPlayerFriend_ServiceDesc = grpc.ServiceDesc{
+	ServiceName: "friendpb.ClientPlayerFriend",
+	HandlerType: (*ClientPlayerFriendServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
 			MethodName: "AddFriend",
-			Handler:    _FriendService_AddFriend_Handler,
+			Handler:    _ClientPlayerFriend_AddFriend_Handler,
 		},
 		{
 			MethodName: "AcceptFriend",
-			Handler:    _FriendService_AcceptFriend_Handler,
+			Handler:    _ClientPlayerFriend_AcceptFriend_Handler,
 		},
 		{
 			MethodName: "RejectFriend",
-			Handler:    _FriendService_RejectFriend_Handler,
+			Handler:    _ClientPlayerFriend_RejectFriend_Handler,
 		},
 		{
 			MethodName: "RemoveFriend",
-			Handler:    _FriendService_RemoveFriend_Handler,
+			Handler:    _ClientPlayerFriend_RemoveFriend_Handler,
 		},
 		{
 			MethodName: "GetFriendList",
-			Handler:    _FriendService_GetFriendList_Handler,
+			Handler:    _ClientPlayerFriend_GetFriendList_Handler,
 		},
 		{
 			MethodName: "GetPendingRequests",
-			Handler:    _FriendService_GetPendingRequests_Handler,
+			Handler:    _ClientPlayerFriend_GetPendingRequests_Handler,
 		},
 		{
-			MethodName: "NotifyOnline",
-			Handler:    _FriendService_NotifyOnline_Handler,
+			MethodName: "Block",
+			Handler:    _ClientPlayerFriend_Block_Handler,
 		},
 		{
-			MethodName: "NotifyOffline",
-			Handler:    _FriendService_NotifyOffline_Handler,
+			MethodName: "Unblock",
+			Handler:    _ClientPlayerFriend_Unblock_Handler,
+		},
+		{
+			MethodName: "ListBlocks",
+			Handler:    _ClientPlayerFriend_ListBlocks_Handler,
+		},
+		{
+			MethodName: "RecommendFriends",
+			Handler:    _ClientPlayerFriend_RecommendFriends_Handler,
+		},
+		{
+			MethodName: "NotifyFriendEvent",
+			Handler:    _ClientPlayerFriend_NotifyFriendEvent_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

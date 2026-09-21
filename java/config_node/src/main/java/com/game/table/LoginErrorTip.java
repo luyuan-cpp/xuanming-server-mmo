@@ -163,6 +163,18 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kLoginTimeout = 2031;</code>
      */
     kLoginTimeout(2031),
+    /**
+     * <code>kRoleNameInvalid = 2032;</code>
+     */
+    kRoleNameInvalid(2032),
+    /**
+     * <code>kRoleNameTaken = 2033;</code>
+     */
+    kRoleNameTaken(2033),
+    /**
+     * <code>kRoleNameSensitive = 2034;</code>
+     */
+    kRoleNameSensitive(2034),
     UNRECOGNIZED(-1),
     ;
 
@@ -307,6 +319,18 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kLoginTimeout = 2031;</code>
      */
     public static final int kLoginTimeout_VALUE = 2031;
+    /**
+     * <code>kRoleNameInvalid = 2032;</code>
+     */
+    public static final int kRoleNameInvalid_VALUE = 2032;
+    /**
+     * <code>kRoleNameTaken = 2033;</code>
+     */
+    public static final int kRoleNameTaken_VALUE = 2033;
+    /**
+     * <code>kRoleNameSensitive = 2034;</code>
+     */
+    public static final int kRoleNameSensitive_VALUE = 2034;
 
 
     public final int getNumber() {
@@ -366,6 +390,9 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
         case 2029: return kLoginAccountDataLoadFailed;
         case 2030: return kLoginFsmInvalidEvent;
         case 2031: return kLoginTimeout;
+        case 2032: return kRoleNameInvalid;
+        case 2033: return kRoleNameTaken;
+        case 2034: return kRoleNameSensitive;
         default: return null;
       }
     }
@@ -431,7 +458,7 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\025login_error_tip.proto*\277\007\n\013login_error\022" +
+      "\n\025login_error_tip.proto*\204\010\n\013login_error\022" +
       "\022\n\016kLogin_errorOK\020\000\022\032\n\025kLoginAccountNotF" +
       "ound\020\320\017\022\034\n\027kLoginAccountPlayerFull\020\321\017\022$\n" +
       "\037kLoginCreatePlayerUnLoadAccount\020\322\017\022.\n)k" +
@@ -455,8 +482,10 @@ public final class LoginErrorTip extends com.google.protobuf.GeneratedFile {
       "\352\017\022\037\n\032kLoginAccountDataLoadFaile\020\353\017\022\032\n\025k" +
       "LoginSessionNotFound\020\354\017\022 \n\033kLoginAccount" +
       "DataLoadFailed\020\355\017\022\032\n\025kLoginFsmInvalidEve" +
-      "nt\020\356\017\022\022\n\rkLoginTimeout\020\357\017B$\n\016com.game.ta" +
-      "bleZ\022generated/pb/tableb\006proto3"
+      "nt\020\356\017\022\022\n\rkLoginTimeout\020\357\017\022\025\n\020kRoleNameIn" +
+      "valid\020\360\017\022\023\n\016kRoleNameTaken\020\361\017\022\027\n\022kRoleNa" +
+      "meSensitive\020\362\017B$\n\016com.game.tableZ\022genera" +
+      "ted/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

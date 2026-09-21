@@ -84,3 +84,114 @@ message GuildApplicationRecord {
   uint64 expire_ms = 4;        // apply_ms + GuildRule.application_expire_hours × 3600000
   // 追加区:从 5 起(B2)。只存待审;通过、拒绝、撤销、过期都删行。
 }
+
+// ── 资产三表(B5a)────────────────────────────────────────────────
+// 完整定义出自 docs/design/guild-phase2/90-consistency.md 第 2 部分 §1(X-01:各节正文都只给了增量)。
+// guild 经通用资产通道(go/shared/assetop)向 scene 发"扣货币 / 发物品"指令:
+// guild_player_op_seq 发每个 (玩家, 流) 的序号,guild_asset_op 是指令账本(outbox),
+// guild_daily_counter 记每日 / 每周用量。三张表的列名被 go/shared/assetop 的 SQL 直接引用,改名前先查那边。
+//
+// 业务 SQL 一律绑定下面三个枚举的生成常量,不写数字字面量(`status = 1` 这类写法评审直接拒)。
+
+// 与 assetop.Status 语义一一映射;数值由本枚举定(1 基:0 留给"漏写状态列的行",它不会被当成未决行领走)。
+// guild.proto 的 GuildAssetOrderStatus 是它的客户端镜像,数值逐项相同,新增状态两边同加。
+enum GuildAssetOpStatus {
+  GUILD_ASSET_OP_STATUS_UNSPECIFIED = 0;
+  GUILD_ASSET_OP_STATUS_PENDING = 1;
+  GUILD_ASSET_OP_STATUS_APPLIED = 2;
+  GUILD_ASSET_OP_STATUS_REJECTED = 3;
+  GUILD_ASSET_OP_STATUS_ABORTED = 4;
+  GUILD_ASSET_OP_STATUS_APPLIED_PARTIAL = 5;  // 只终结:不做对侧账、不自动清理,转人工补偿(X-15)
+}
+
+enum GuildAssetOpKind {
+  GUILD_ASSET_OP_KIND_UNSPECIFIED = 0;
+  GUILD_ASSET_OP_KIND_DONATE = 1;           // 捐献:GUILD_DEBIT 流扣货币
+  GUILD_ASSET_OP_KIND_SHOP = 2;             // 商店:GUILD_CREDIT 流发物品
+  GUILD_ASSET_OP_KIND_ACTIVITY_REWARD = 3;  // 活动发奖(B6):GUILD_CREDIT 流
+  // 没有"捐献退款":用户决策 D2(README §3)——离帮 / 被踢 / 解散后已扣款的捐献照记给帮会、不退款。
+  // 90 清单原文里的 DONATE_REFUND = 4 随之作废,4 号未占用。
+}
+
+enum GuildDailyCounterKind {
+  GUILD_DAILY_COUNTER_KIND_UNSPECIFIED = 0;
+  GUILD_DAILY_COUNTER_KIND_DONATE = 1;
+  GUILD_DAILY_COUNTER_KIND_SHOP = 2;
+  GUILD_DAILY_COUNTER_KIND_ACTIVITY = 3;    // B6
+}
+
+message GuildPlayerOpSeqRecord {              // 锁序位置 5
+  option(OptionTableName) = "guild_player_op_seq";
+  option(OptionPrimaryKey) = "player_id,stream";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint32 stream = 2;           // AssetOpStream 数值(本文件不 import asset_op.proto,避免库表定义依赖通道协议)
+  uint64 next_seq = 3;
+  uint64 updated_ms = 4;
+  uint64 epoch = 5;            // 建行毫秒,>0;库恢复手册显式抬高(04-asset-channel.md §4.31)
+  // 追加区:从 6 起。行由 assetop.EnsureSeqRow 在事务外 INSERT IGNORE 建,事务内只加锁读改。
+}
+
+message GuildAssetOpRecord {                  // 锁序位置 6
+  option(OptionTableName) = "guild_asset_op";
+  option(OptionPrimaryKey) = "op_id";
+  option(OptionUniqueKey) = "player_id,stream,stream_epoch,seq";  // 生成 uk_guild_asset_op;同一序号只可能有一条指令
+  // idx_guild_asset_op_0 = 到期领取 / 终态清理 / 回档前检查(B5d);
+  // idx_guild_asset_op_1 = 按帮查;
+  // idx_guild_asset_op_2 = AllocateSeq 对未决行加锁读、离帮提前截止、本人待结算列表(只扫未决行)。
+  // 索引名从 0 起编号,组只能追加到末尾、不得调序(见文件头改表纪律)。
+  option(OptionIndex) = "status,next_attempt_ms;guild_id,op_id;player_id,stream,stream_epoch,status,seq";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 op_id = 1;              // data_service 号段 biz_tag=guild_asset_op;同时作资产通道的 correlation_id
+  uint64 player_id = 2;
+  uint32 stream = 3;             // AssetOpStream 数值
+  uint64 seq = 4;
+  uint64 guild_id = 5;           // 发起时绑定的帮会;结算一律记给它,不看结算时玩家在哪个帮(D2)
+  GuildAssetOpKind kind = 6;
+  GuildAssetOpStatus status = 7;
+  uint32 durable = 8;            // 0/1:scene 是否已确认落盘
+  uint32 attempts = 9;
+  uint64 next_attempt_ms = 10;   // 未决:下次重投时刻;终态:终结时刻(清理与回档检查按它判龄)
+  uint64 deadline_ms = 11;       // 只有 DONATE 非 0;到期改发中止。商店 / 活动发奖恒 0,永不中止
+  bytes payload = 12;            // AssetBundle 序列化字节
+  uint32 ref_id = 13;            // donate_id / goods_id / activity_id
+  uint32 ref_count = 14;         // 捐献恒 1;商店为份数
+  uint32 period_key = 15;        // 占用的计数行周期键(gameday.DayKey / WeekKey);0 = 未占计数行,退回时跳过
+  uint64 contribution_delta = 16;  // 捐献:应得帮贡;商店:已扣帮贡(永久拒绝时退回)
+  uint64 funds_delta = 17;       // 捐献:应记帮会资金
+  uint32 reason_tip_id = 18;     // 终态原因,只在终结时写一次(APPLIED / ABORTED 写 0)
+  uint64 created_ms = 19;
+  uint64 updated_ms = 20;
+  uint64 lease_until_ms = 21;    // 领取租约截止;0 = 未被领取
+  uint64 lease_token = 22;       // 领取令牌;Reschedule 须匹配,不匹配 = 租约已被别的副本接走
+  uint32 tx_type = 23;           // TransactionType 数值,重投时原样带上
+  uint32 last_outcome = 24;      // 最近一次 AssetOpOutcome(诊断)
+  uint32 last_reason = 25;       // 最近一次 scene 回的 reason:每次 Reschedule / Finalize 覆盖;PENDING 视图展示它;兼作部分发放粘性标记
+  uint64 stream_epoch = 26;      // = 分号时 guild_player_op_seq.epoch
+  string resolved_by = 27;       // 人工终结(assetopfix)写:操作人,代码侧限 ≤64
+  string resolve_reason = 28;    // 人工终结原因,代码侧限 ≤191
+  // 追加区:从 29 起。
+}
+
+message GuildDailyCounterRecord {             // 锁序位置 7
+  option(OptionTableName) = "guild_daily_counter";
+  option(OptionPrimaryKey) = "player_id,counter_kind,ref_id,period_key";
+  option(OptionIndex) = "period_key";  // idx_guild_daily_counter_0:过期清理按周期键范围删,否则全表扫
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  GuildDailyCounterKind counter_kind = 2;
+  uint32 ref_id = 3;           // donate_id / goods_id / activity_id
+  uint32 period_key = 4;       // gameday.DayKey(8 位)或 WeekKey(6 位);两个数值域不相交
+  uint32 used_count = 5;       // 含结算中的占用;REJECTED / ABORTED 时退回
+  uint64 updated_ms = 6;
+  // 追加区:从 7 起。计数一律用带上限的 upsert 改写,不得"锁不存在的行再插入"(X-13)。
+}

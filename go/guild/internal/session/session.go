@@ -61,6 +61,12 @@ var ClientMethods = map[string]struct{}{
 	pb.GuildService_ReviewGuildApplication_FullMethodName:  {},
 	pb.GuildService_GetGuildRank_FullMethodName:            {},
 	pb.GuildService_GetGuildRankByGuild_FullMethodName:     {},
+	// 帮会经济(B5a 登记协议与准入;实现在 B5b,此前回 Unimplemented)。
+	pb.GuildService_GetGuildDonateOptions_FullMethodName: {},
+	pb.GuildService_DonateToGuild_FullMethodName:         {},
+	pb.GuildService_UpgradeGuild_FullMethodName:          {},
+	pb.GuildService_GetGuildShop_FullMethodName:          {},
+	pb.GuildService_BuyGuildShopGoods_FullMethodName:     {},
 }
 
 // WithDetails 把已校验的会话放进 ctx。

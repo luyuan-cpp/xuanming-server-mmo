@@ -355,6 +355,101 @@ void SendGuildServiceGetGuildRankByGuild(entt::registry& registry, entt::entity 
 void SendGuildServiceGetGuildRankByGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildRankByGuildRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 void SendGuildServiceGetGuildRankByGuild(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
+#pragma region GuildServiceGetGuildDonateOptions
+
+struct AsyncGuildServiceGetGuildDonateOptionsGrpcClient {
+    uint32_t messageId{ GuildServiceGetGuildDonateOptionsMessageId };
+    ClientContext context;
+    Status status;
+    ::guildpb::GetGuildDonateOptionsResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::guildpb::GetGuildDonateOptionsResponse>> response_reader;
+};
+
+class ::guildpb::GetGuildDonateOptionsRequest;
+using AsyncGuildServiceGetGuildDonateOptionsHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::GetGuildDonateOptionsResponse&)>;
+extern AsyncGuildServiceGetGuildDonateOptionsHandlerFunctionType AsyncGuildServiceGetGuildDonateOptionsHandler;
+
+void SendGuildServiceGetGuildDonateOptions(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildDonateOptionsRequest& request);
+void SendGuildServiceGetGuildDonateOptions(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildDonateOptionsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendGuildServiceGetGuildDonateOptions(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region GuildServiceDonateToGuild
+
+struct AsyncGuildServiceDonateToGuildGrpcClient {
+    uint32_t messageId{ GuildServiceDonateToGuildMessageId };
+    ClientContext context;
+    Status status;
+    ::guildpb::DonateToGuildResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::guildpb::DonateToGuildResponse>> response_reader;
+};
+
+class ::guildpb::DonateToGuildRequest;
+using AsyncGuildServiceDonateToGuildHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::DonateToGuildResponse&)>;
+extern AsyncGuildServiceDonateToGuildHandlerFunctionType AsyncGuildServiceDonateToGuildHandler;
+
+void SendGuildServiceDonateToGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::DonateToGuildRequest& request);
+void SendGuildServiceDonateToGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::DonateToGuildRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendGuildServiceDonateToGuild(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region GuildServiceUpgradeGuild
+
+struct AsyncGuildServiceUpgradeGuildGrpcClient {
+    uint32_t messageId{ GuildServiceUpgradeGuildMessageId };
+    ClientContext context;
+    Status status;
+    ::guildpb::UpgradeGuildResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::guildpb::UpgradeGuildResponse>> response_reader;
+};
+
+class ::guildpb::UpgradeGuildRequest;
+using AsyncGuildServiceUpgradeGuildHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::UpgradeGuildResponse&)>;
+extern AsyncGuildServiceUpgradeGuildHandlerFunctionType AsyncGuildServiceUpgradeGuildHandler;
+
+void SendGuildServiceUpgradeGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::UpgradeGuildRequest& request);
+void SendGuildServiceUpgradeGuild(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::UpgradeGuildRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendGuildServiceUpgradeGuild(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region GuildServiceGetGuildShop
+
+struct AsyncGuildServiceGetGuildShopGrpcClient {
+    uint32_t messageId{ GuildServiceGetGuildShopMessageId };
+    ClientContext context;
+    Status status;
+    ::guildpb::GetGuildShopResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::guildpb::GetGuildShopResponse>> response_reader;
+};
+
+class ::guildpb::GetGuildShopRequest;
+using AsyncGuildServiceGetGuildShopHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::GetGuildShopResponse&)>;
+extern AsyncGuildServiceGetGuildShopHandlerFunctionType AsyncGuildServiceGetGuildShopHandler;
+
+void SendGuildServiceGetGuildShop(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildShopRequest& request);
+void SendGuildServiceGetGuildShop(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::GetGuildShopRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendGuildServiceGetGuildShop(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region GuildServiceBuyGuildShopGoods
+
+struct AsyncGuildServiceBuyGuildShopGoodsGrpcClient {
+    uint32_t messageId{ GuildServiceBuyGuildShopGoodsMessageId };
+    ClientContext context;
+    Status status;
+    ::guildpb::BuyGuildShopGoodsResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::guildpb::BuyGuildShopGoodsResponse>> response_reader;
+};
+
+class ::guildpb::BuyGuildShopGoodsRequest;
+using AsyncGuildServiceBuyGuildShopGoodsHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::guildpb::BuyGuildShopGoodsResponse&)>;
+extern AsyncGuildServiceBuyGuildShopGoodsHandlerFunctionType AsyncGuildServiceBuyGuildShopGoodsHandler;
+
+void SendGuildServiceBuyGuildShopGoods(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::BuyGuildShopGoodsRequest& request);
+void SendGuildServiceBuyGuildShopGoods(entt::registry& registry, entt::entity nodeEntity, const ::guildpb::BuyGuildShopGoodsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendGuildServiceBuyGuildShopGoods(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
 void SetGuildHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void SetGuildIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void HandleGuildCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);

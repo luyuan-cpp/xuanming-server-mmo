@@ -28,7 +28,7 @@ type Segment struct {
 // Segments 按 Base 升序,段两两不重叠(由导表器生成期自检保证)。
 var Segments = []Segment{
 	{Domain: "common", Group: "common_error", Base: 1000, Width: 1000, Lo: 1000, Hi: 1018, Count: 19},
-	{Domain: "login", Group: "login_error", Base: 2000, Width: 1000, Lo: 2000, Hi: 2031, Count: 32},
+	{Domain: "login", Group: "login_error", Base: 2000, Width: 1000, Lo: 2000, Hi: 2034, Count: 35},
 	{Domain: "scene", Group: "scene_error", Base: 3000, Width: 1000, Lo: 3000, Hi: 3027, Count: 28},
 	{Domain: "team", Group: "team_error", Base: 4000, Width: 1000, Lo: 4000, Hi: 4030, Count: 31},
 	{Domain: "mission", Group: "mission_error", Base: 5000, Width: 1000, Lo: 5000, Hi: 5006, Count: 7},
@@ -40,8 +40,8 @@ var Segments = []Segment{
 	{Domain: "mount", Group: "mount_error", Base: 11000, Width: 1000, Lo: 11000, Hi: 11000, Count: 1},
 	{Domain: "reward", Group: "reward_error", Base: 12000, Width: 1000, Lo: 12000, Hi: 12000, Count: 1},
 	{Domain: "cross_server", Group: "cross_server_error", Base: 13000, Width: 1000, Lo: 13000, Hi: 13000, Count: 1},
-	{Domain: "guild", Group: "guild_error", Base: 14000, Width: 1000, Lo: 14000, Hi: 14021, Count: 22},
-	{Domain: "friend", Group: "friend_error", Base: 15000, Width: 1000, Lo: 15000, Hi: 15006, Count: 7},
+	{Domain: "guild", Group: "guild_error", Base: 14000, Width: 1000, Lo: 14000, Hi: 14031, Count: 32},
+	{Domain: "friend", Group: "friend_error", Base: 15000, Width: 1000, Lo: 15000, Hi: 15009, Count: 10},
 	{Domain: "match", Group: "match_error", Base: 16000, Width: 1000, Lo: 16000, Hi: 16020, Count: 21},
 	{Domain: "trade", Group: "trade_error", Base: 20000, Width: 1000, Lo: 20000, Hi: 20003, Count: 4},
 	{Domain: "attribute", Group: "attribute_error", Base: 25000, Width: 1000, Lo: 25000, Hi: 25014, Count: 15},

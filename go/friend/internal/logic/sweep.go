@@ -1,5 +1,5 @@
-// sweep.go —— friend_request 终态行的周期清理(规格 §3.8 的 **ticker 侧**;SQL 侧在
-// internal/data/sweep_repo.go)。
+// sweep.go —— friend_request 终态行与 friend_capacity 零好友行的周期清理
+// (规格 §3.8 的 **ticker 侧**;SQL 侧在 internal/data/sweep_repo.go)。
 //
 // # 为什么需要它
 //
@@ -7,6 +7,26 @@
 // 终态行没有任何业务语义(好友关系的权威在 friend 表),但会随社交图的"对数"单调累积;
 // 超过保留期删掉后再次发起申请 = 一条全新的 pending INSERT,行为等价。
 // **pending 永不清** —— 那是玩家还没处理的东西,清掉就是替玩家做决定。
+//
+// # 也回收 friend_capacity 的零好友行
+//
+// 为什么需要:AddFriendRequest 为了拿容量守卫,会为**任意** to_player_id 建一行 friend_capacity ——
+// friend 没有玩家名册,验证不了 target 是否真实存在;Block → Unblock 反复换目标同理(Unblock 只删
+// friend_block,不碰容量行)。这张表没有 TTL,于是随"被发起过申请 / 被拉黑过的 id 个数"单调增长,
+// 且增长可由客户端驱动;唯一的闸是每分钟频率配额,而配额在 Redis 故障时按设计 fail-open
+// (见 rate_quota.go 文件头)。详见 docs/design/friend-handoff-20260920.md §3 第 1 条。
+//
+// 为什么删了无害:只回收零好友(friend_count = 0)、且距建行或最近一次减计数已超过保留期的行
+// (created_ms 记的是"本行被(重新)建出、或最近一次 friend_count 减少的时刻",不只是建行时刻 ——
+// 减计数为什么也要刷新它,见 data/friend_repo.go 的 deleteFriendEdges);之后该玩家再进任何写路径,
+// ensureFriendCapacityRows 会按 friend 表的权威边数重新建行,**绝不猜 0**(handoff §5.6 不变量 (b)),
+// 硬上限不会因此放宽。回收与写路径的竞态(ensure 之后、取守卫之前行被删)由 data 层的
+// runGuardedWrite 重新 ensure 并有上限地重试吸收(至多重试两次,共 capacityGuardMaxAttempts 遍;
+// 为什么恰好够见 data/friend_repo.go 顶部锁序说明 (5)),不会把正常请求打成 fault。
+// 与终态申请行的差别:created_ms = 0 的存量行**可以**直接回收,所以这一段没有
+// "updated_ms 恒为 0 就拒删"那道保险。
+//
+// 两段共用同一份 Friend.Sweep 参数(Mode / RetentionDays / BatchLimit),不新增配置键。
 //
 // # 多副本:各跑各的,不引入 leader
 //
@@ -56,12 +76,14 @@ const sweepPoint = "friend.request_sweep"
 
 // sweepRoundBudget 是单轮清理的上限。一轮跑不完就等下一轮:
 // 没有上限时一条慢 DELETE 会把连接占到下一轮 ticker 触发,两轮叠在一起压库。
-// 真实的一轮只有一两条带 LIMIT 的语句,30s 是宽松的兜底而不是预期耗时。
+// 真实的一轮是终态申请的一两条带 LIMIT 的语句,加上容量行回收的一条候选读与至多 BatchLimit 条
+// 按主键的单行 DELETE(逐行自动提交,理由见 data/sweep_repo.go);30s 是两段**共用**的宽松兜底,
+// 不是预期耗时。预算到期时没删完的行留给下一轮,不丢任何东西。
 const sweepRoundBudget = 30 * time.Second
 
 // SweepStore 是清理需要的 SQL 能力(实现在 data/sweep_repo.go)。
 //
-// 一个方法同时吃 mode:模式决定"只 COUNT"还是"COUNT 后真删",而"能不能删"的判据
+// 每个方法都同时吃 mode:模式决定"只 COUNT"还是"COUNT 后真删",而"能不能删"的判据
 // (updated_ms 是否已被写入方填上)只有 SQL 侧看得见,拆成多次调用会让判定与动作之间
 // 出现窗口,也会把同一个决定分给两层做。
 //
@@ -74,6 +96,8 @@ const sweepRoundBudget = 30 * time.Second
 //   - nowMs 由调用方给(单测要固定时钟),data 层不自己取 time.Now。
 type SweepStore interface {
 	SweepTerminalRequests(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64) (pending int64, deleted int64, err error)
+	// SweepIdleCapacityRows:回收零好友且超过保留期的 friend_capacity 行,契约同上(无 updated_ms 保险)。
+	SweepIdleCapacityRows(ctx context.Context, mode string, retentionDays, batchLimit int, nowMs int64) (idle int64, deleted int64, err error)
 }
 
 // StartSweep 起后台清理循环,立即返回;ctx 结束时循环自行退出。
@@ -83,7 +107,7 @@ type SweepStore interface {
 func StartSweep(ctx context.Context, deps *Deps) {
 	cfg := deps.SvcCtx.Config.Friend.Sweep
 	if deps.Sweeps == nil {
-		logx.Errorf("[friend] sweep 未装配 SweepStore,清理不启动(终态好友申请不会被回收)")
+		logx.Errorf("[friend] sweep 未装配 SweepStore,清理不启动(终态好友申请与零好友容量行都不会被回收)")
 		return
 	}
 	// Interval <= 0 在生产不可能出现(config.Validate 拒收),这里不启动而不是用 0 间隔 ——
@@ -93,7 +117,7 @@ func StartSweep(ctx context.Context, deps *Deps) {
 		return
 	}
 
-	logx.Infof("[friend] sweep 启动 mode=%s interval=%v retention_days=%d batch=%d",
+	logx.Infof("[friend] sweep 启动 mode=%s interval=%v retention_days=%d batch=%d(清理对象:friend_request 终态行 + friend_capacity 零好友行,共用这一份参数)",
 		cfg.Mode, cfg.Interval, cfg.RetentionDays, cfg.BatchLimit)
 
 	safego.Go(sweepPoint+".start", func() {
@@ -112,14 +136,43 @@ func StartSweep(ctx context.Context, deps *Deps) {
 	})
 }
 
-// runSweepRound 跑一轮清理。
+// runSweepRound 跑一轮清理:先终态好友申请,再零好友容量行,两段共用同一个单轮预算。
 //
 // 失败只打日志:清理是后台任务,一轮失败等下一轮,不影响任何在线请求。
+//
+// **两段互不影响**:前一段失败(含超时)也照样跑后一段,所以两段都不向这里返回 error ——
+// 两张表的回收没有先后依赖,让 friend_request 上的一条慢语句连带停掉 friend_capacity 的回收,
+// 等于把后者的增长闸门挂在前者的健康上。预算被前一段耗尽时,后一段会立刻因 ctx 到期失败并
+// 打一条失败日志,这是刻意接受的噪声:它如实说明"这一轮容量行没回收",比静默跳过好排查。
 func (d *Deps) runSweepRound(ctx context.Context) {
 	cfg := d.SvcCtx.Config.Friend.Sweep
 	ctx, cancel := context.WithTimeout(ctx, sweepRoundTimeout(cfg.Interval))
 	defer cancel()
 
+	// 配置里拼错了模式。config.Validate 本该拒掉(它按 options 标签校验),
+	// 走到这里说明校验被绕过或配置在运行期被改过 —— 必须报出来,
+	// 因为 SQL 侧对未知模式的处理是"一行不删",表现和 report_only 一样,
+	// 静默下去就会以为清理在跑。
+	// 在这里统一打**一次**,而不是两段各打一遍:同一个配置错误一轮两条一模一样的日志,
+	// 只会让人以为是两个问题。两段照常调用 SQL 侧(它对未知模式只数不删),行为与引入第二段之前一致。
+	if !isKnownSweepMode(cfg.Mode) {
+		logx.WithContext(ctx).Errorf("[friend] sweep 模式 %q 不是 %q / %q,本轮未清理任何行",
+			cfg.Mode, config.SweepModeReportOnly, config.SweepModeDelete)
+	}
+
+	d.sweepTerminalRequests(ctx, cfg)
+	d.sweepIdleCapacityRows(ctx, cfg)
+}
+
+// isKnownSweepMode 报告 mode 是不是两个合法取值之一。
+// Gauge 的 mode label 必须是 metrics 包声明的有限枚举(metrics.go 顶部),所以"刷不刷 Gauge"
+// 与"报不报未知模式"是同一个判据,收在这一处,别在两段里各写一份。
+func isKnownSweepMode(mode string) bool {
+	return mode == config.SweepModeReportOnly || mode == config.SweepModeDelete
+}
+
+// sweepTerminalRequests 是一轮里的第一段:friend_request 的终态行。
+func (d *Deps) sweepTerminalRequests(ctx context.Context, cfg config.SweepConf) {
 	pending, deleted, err := d.Sweeps.SweepTerminalRequests(
 		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli())
 	if err != nil {
@@ -131,8 +184,8 @@ func (d *Deps) runSweepRound(ctx context.Context) {
 	// 只在 >0 时刷会让"没有积压"和"循环死了"在看板上长得一样。
 	// ⚠ pending 受 BatchLimit 封顶,等于 BatchLimit 只说明"积压 ≥ 一批",不是精确积压。
 	// ⚠ 未知模式**不刷** Gauge —— label 必须是 metrics 包声明的有限枚举(metrics.go 顶部),
-	// 拿配置里拼错的串当 label 会造出一条没人认识的序列;拼错这件事由 default 分支的错误日志表达。
-	// 所以 Set 放在两个合法 case 的第一行,而不是 switch 之前。
+	// 拿配置里拼错的串当 label 会造出一条没人认识的序列;拼错这件事由 runSweepRound 的错误日志表达。
+	// 所以 Set 放在两个合法 case 的第一行,而不是 switch 之前;switch 刻意没有 default。
 	switch cfg.Mode {
 	case config.SweepModeDelete:
 		metrics.SetSweepPendingRows(cfg.Mode, float64(pending))
@@ -157,13 +210,41 @@ func (d *Deps) runSweepRound(ctx context.Context) {
 			logx.WithContext(ctx).Errorf("[friend] WARN sweep(report_only)发现 %d 行终态好友申请已过保留期(retention_days=%d,统计上限 %d);切 delete 前先确认这个数字合理",
 				pending, cfg.RetentionDays, cfg.BatchLimit)
 		}
-	default:
-		// 配置里拼错了模式。config.Validate 本该拒掉(它按 options 标签校验),
-		// 走到这里说明校验被绕过或配置在运行期被改过 —— 必须报出来,
-		// 因为 SQL 侧对未知模式的处理是"一行不删",表现和 report_only 一样,
-		// 静默下去就会以为清理在跑。
-		logx.WithContext(ctx).Errorf("[friend] sweep 模式 %q 不是 %q / %q,本轮未清理任何行",
-			cfg.Mode, config.SweepModeReportOnly, config.SweepModeDelete)
+	}
+}
+
+// sweepIdleCapacityRows 是一轮里的第二段:friend_capacity 的零好友行(为什么要回收见文件头)。
+//
+// 与第一段的差别只有一处:delete 模式下"看到了却一行没删"**不告警**。这张表没有
+// "updated_ms 恒为 0 就拒删"那道保险,零删除只可能是提交点复核生效了 —— 候选读与逐行 DELETE
+// 之间该玩家刚加上好友(friend_count 不再是 0),或另一个副本抢先删了这一批。两种都是预期内的
+// 竞态而不是缺陷,为它打 WARN 只会制造常亮的噪音。
+func (d *Deps) sweepIdleCapacityRows(ctx context.Context, cfg config.SweepConf) {
+	idle, deleted, err := d.Sweeps.SweepIdleCapacityRows(
+		ctx, cfg.Mode, cfg.RetentionDays, cfg.BatchLimit, d.now().UnixMilli())
+	if err != nil {
+		// data 层出错时仍返回已删行数(逐行独立提交),这里必须带进日志,否则已删的行无处可查。
+		// Gauge 在失败分支**不刷**:候选读失败时 idle = 0,刷了会把"失败"伪装成"无积压"。
+		logx.WithContext(ctx).Errorf("[friend] sweep 回收零好友容量行失败 mode=%s(中止前看到 %d 行、已删 %d 行): %v",
+			cfg.Mode, idle, deleted, err)
+		return
+	}
+
+	// Gauge 的刷新纪律与第一段逐条相同:合法模式每轮都刷(含 0),未知模式不刷,所以没有 default。
+	// ⚠ idle 同样受 BatchLimit 封顶。
+	switch cfg.Mode {
+	case config.SweepModeDelete:
+		metrics.SetSweepIdleCapacityRows(cfg.Mode, float64(idle))
+		if deleted > 0 {
+			logx.WithContext(ctx).Infof("[friend] sweep 回收 %d 行零好友容量行(本轮看到 %d 行,retention_days=%d,batch=%d)",
+				deleted, idle, cfg.RetentionDays, cfg.BatchLimit)
+		}
+	case config.SweepModeReportOnly:
+		metrics.SetSweepIdleCapacityRows(cfg.Mode, float64(idle))
+		if idle > 0 {
+			logx.WithContext(ctx).Errorf("[friend] WARN sweep(report_only)发现 %d 行零好友容量行已过保留期(retention_days=%d,统计上限 %d);这个数字持续上涨说明有人在对大量不同目标发申请 / 反复拉黑换目标",
+				idle, cfg.RetentionDays, cfg.BatchLimit)
+		}
 	}
 }
 

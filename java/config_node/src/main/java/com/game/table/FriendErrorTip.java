@@ -63,6 +63,18 @@ public final class FriendErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kFriendTooManyPending = 15006;</code>
      */
     kFriendTooManyPending(15006),
+    /**
+     * <code>kFriendBlocked = 15007;</code>
+     */
+    kFriendBlocked(15007),
+    /**
+     * <code>kFriendBlockListFull = 15008;</code>
+     */
+    kFriendBlockListFull(15008),
+    /**
+     * <code>kFriendTargetInboxFull = 15009;</code>
+     */
+    kFriendTargetInboxFull(15009),
     UNRECOGNIZED(-1),
     ;
 
@@ -107,6 +119,18 @@ public final class FriendErrorTip extends com.google.protobuf.GeneratedFile {
      * <code>kFriendTooManyPending = 15006;</code>
      */
     public static final int kFriendTooManyPending_VALUE = 15006;
+    /**
+     * <code>kFriendBlocked = 15007;</code>
+     */
+    public static final int kFriendBlocked_VALUE = 15007;
+    /**
+     * <code>kFriendBlockListFull = 15008;</code>
+     */
+    public static final int kFriendBlockListFull_VALUE = 15008;
+    /**
+     * <code>kFriendTargetInboxFull = 15009;</code>
+     */
+    public static final int kFriendTargetInboxFull_VALUE = 15009;
 
 
     public final int getNumber() {
@@ -141,6 +165,9 @@ public final class FriendErrorTip extends com.google.protobuf.GeneratedFile {
         case 15004: return kFriendTargetListFull;
         case 15005: return kFriendNoPendingRequest;
         case 15006: return kFriendTooManyPending;
+        case 15007: return kFriendBlocked;
+        case 15008: return kFriendBlockListFull;
+        case 15009: return kFriendTargetInboxFull;
         default: return null;
       }
     }
@@ -206,14 +233,16 @@ public final class FriendErrorTip extends com.google.protobuf.GeneratedFile {
       descriptor;
   static {
     java.lang.String[] descriptorData = {
-      "\n\026friend_error_tip.proto*\346\001\n\014friend_erro" +
+      "\n\026friend_error_tip.proto*\263\002\n\014friend_erro" +
       "r\022\023\n\017kFriend_errorOK\020\000\022\031\n\024kFriendCannotA" +
       "ddSelf\020\230u\022\032\n\025kFriendAlreadyFriends\020\231u\022\024\n" +
       "\017kFriendListFull\020\232u\022\036\n\031kFriendRequestAlr" +
       "eadySent\020\233u\022\032\n\025kFriendTargetListFull\020\234u\022" +
       "\034\n\027kFriendNoPendingRequest\020\235u\022\032\n\025kFriend" +
-      "TooManyPending\020\236uB$\n\016com.game.tableZ\022gen" +
-      "erated/pb/tableb\006proto3"
+      "TooManyPending\020\236u\022\023\n\016kFriendBlocked\020\237u\022\031" +
+      "\n\024kFriendBlockListFull\020\240u\022\033\n\026kFriendTarg" +
+      "etInboxFull\020\241uB$\n\016com.game.tableZ\022genera" +
+      "ted/pb/tableb\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,

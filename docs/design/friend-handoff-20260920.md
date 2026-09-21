@@ -6,6 +6,8 @@
 > 定位请一律用 `grep -n "<符号名>" <文件>`,**不要按行号跳**。
 >
 > **2026-09-20 续写**:上面那台机器(下称**机器 A**)的会话写到复核阶段时额度用尽。另一台机器(**机器 B**,仓库 `D:\luyuan\wuxingqitan\mmorpg`,HEAD `d9e471b80`)上的会话续完了本文:对 §1–§7 逐章重新复核(7 路并行核对 606 条可核对论断,报出的 52 条差异另经一道"默认文档是对的"的反驳式复验,**确认 50 条、驳回 2 条**,确认项已就地改进正文,清单见 §8),补了 §0(换机说明)与 §4.3(客户端细节,已获只读授权)。**两台机器的路径和工具链都不一样,正文里的盘符与 `buildenv.ps1` 不要照抄 —— 先读 §0。**
+>
+> **2026-09-20 收尾批(机器 B,接手会话)**:三个拍板已定(Python 由用户自己装、编译 / 导表 / proto-gen 由用户自己跑;`FriendBlocked` 改中性文案;proto-gen **带客户端**),§3 的 9 条收尾项里 8 条已落码(第 2 条 `EXPLAIN` 是运行期核对,仍未做),`friend_capacity` 加了 `created_ms` 列并有了回收路径。**现状、用户要执行的命令序列、以及 §2 / §3 / §5.6 里因此过期的期望值,统一见文末 §9;正文与 §9 冲突处以 §9 为准。** 仍然全部未编译、未运行。
 
 ---
 
@@ -59,13 +61,15 @@
 | `go` / `gofmt` | ✅ | `C:\Program Files\Go\bin`,`go1.26.5 windows/amd64`,已在 PATH。满足 §2 第 1 步的 ≥ 1.26.5 下限 |
 | `protoc` | ✅ 但**不在 PATH** | `third_party\grpc\install_vs2026_dbg\bin\protoc.exe`,`libprotoc 35.1`(`install_vs2026\bin\` 下还有一份 release 的)。服务端 protogen(`descriptor.go` 的 `protocPath := "protoc"`)与客户端 `tools\gen_proto.ps1`(`$Protoc = "protoc"`)**都靠 PATH 找它**。`dev.bat` 的 `:prepare_protoc` 会自己前置 PATH;**裸跑 `dev_tools.ps1 -Command proto-gen-run` 或客户端 `gen_proto.ps1` 时要自己加**(后者也可传 `-Protoc <绝对路径>`) |
 | `protoc-gen-go` / `protoc-gen-go-grpc` | ✅ | `C:\Users\Administrator\go\bin`,`v1.36.10` / `1.6.0`,**已在 PATH**(机器 A 上不在) |
-| **Python 3 + openpyxl** | ❌ **没有** | `python` / `python3` 只是 WindowsApps 的商店占位桩;`py -0p` 报 `No Installed Pythons Found`。**导表器(§2 第 2 步)在机器 B 上现在跑不了** |
+| **Python 3** | ✅ 在(**本行已于 2026-09-20 晚订正**)| `py -3 -V` = **Python 3.14.7**,`py -3 -m pip -V` = pip 26.2.1(`C:\Users\Administrator\AppData\Local\Python\pythoncore-3.14-64`)。⚠ **别用 `python` / `python3` 探测**:那两个名字命中的是 WindowsApps 的商店占位桩,一律走 `py -3` |
+| **导表器的 4 个依赖** | ✅ **已装**(2026-09-20 21:57 起;当晚早些时候一个都没有) | 现为 `openpyxl 3.1.5` / `Jinja2 3.1.6` / `PyYAML 6.0.3` / `protobuf 7.36.2`。清单在 `tools/data_table_exporter/requirements.txt`(`protobuf>=7.35.1,<8` 是 checked-in protoc 35.1 的 gencode 要求,**跨 major runtime 会拒绝加载**)。`dev.bat export` 每次开跑前都会自己 `pip install -q -r` 这份清单,所以走 `dev.bat` 时无需手装;**只装 openpyxl 不够**这条只对"绕开 dev.bat 直接调 run.py"有意义 |
 | Docker | ⚠ 装了,**守护进程没起** | `docker version` 连不上 `dockerDesktopLinuxEngine`。§2 第 6–9 步之前要先起 Docker Desktop |
 | Visual Studio | ✅ | Visual Studio Enterprise 2026(regen 之后 C++ 重编用) |
 | `GOPROXY` | ⚠ 默认值 | `https://proxy.golang.org,direct`。机器 A 上官方 proxy TLS 超时、改用 goproxy.cn;**机器 B 上通不通未实测**,`go mod tidy` 卡住就 `go env -w GOPROXY=https://goproxy.cn,https://mirrors.aliyun.com/goproxy/,direct` |
 | Windows TCP 保留区 | ⚠ 与文档里的历史值不同 | `netsh int ipv4 show excludedportrange protocol=tcp` 实测含 **51840–51939**(`go_services.ps1` 注释里记的 51573–51872 是别的机器上的历史观测值;保留区**每次开机随机**)。落进保留区不致命:`go_services.ps1` 的 `Resolve-BindablePort` 会自动上挪并走派生 yaml,对等方经 etcd 发现实际端口 |
 
-**由此,机器 B 上 §2 第 1 步改为**:装 **Python 3.12 + `pip install openpyxl`**(`dev.bat export` 会自己装 Python 依赖,但前提是有 Python 本体);Go 不用装,`buildenv.ps1` 不用重建。装工具属于 `AGENTS.md §10.2` 的"停下来等授权"事项,**先问用户**。
+**由此,机器 B 上 §2 第 1 步改为**:只补导表器依赖(上表那一条 `py -3 -m pip install -r ...`);Python 本体与 Go 都不用装,`buildenv.ps1` 不用重建。装依赖属于 `AGENTS.md §10.2` 的"修改环境"事项,由用户执行。
+⚠ **"本机没有 Python"是 2026-09-20 早些时候的误判**,当时 `py -0p` 报了 `No Installed Pythons Found`;晚些时候 `py -0` / `py -3 -V` 实测都正常。正文其它地方(§2 第 1 步、§4.5 第 0 步)若还写着"机器 B 缺 Python / 装 Python 3.12",一律以本节为准。
 
 > **顺序约束不变**:第 2 步(导表器,要 Python)没过,不要跑第 5 步之后的任何一步 —— friend 的三个新 tip 码出不来,`go/friend` 照样编译不过。proto-gen(第 3 步,要 Go)本身不依赖导表器产物;Python 装好之前可以先做第 3 步的前置核对、与 B3a 那条线对齐 data_service 三个 rpc 的发号(§2 第 3 步)、以及客户端 `gen_proto.ps1` 的登记方案(§4.3),但**别把两步的产物拆到两次提交里发布**。
 
@@ -258,7 +262,7 @@ grep -c 'friendpb.FriendService'      go/client_rpc_router/generated/pb/game/rou
   **处置二选一(需要用户拍板:这批要不要把 Team / 聚宝斋的桩一起带进客户端)**:
   (a) **这批连客户端一起动**:往 `gen_proto.ps1` 的 `$files` 补 `proto/friend/friend.proto`、`proto/team/team.proto`、`proto/trade/jubaozhai.proto` 三行(注意现在的末项 `"proto/scene/player_currency.proto"` 后面要补逗号;三个 proto 的 import 只有 `proto_option` / `empty` / `tip`,都已在清单里),`.\dev.bat proto` 之后在客户端仓跑 `pwsh -File tools/gen_proto.ps1 -ProtoRoot <服务端仓根>` 与 `pwsh -File tools/gen_messageids.ps1 -ProtoRoot <服务端仓根>`。**`-ProtoRoot` 必须显式传**:两个脚本的默认值是 `$PSScriptRoot/../../..`(按"客户端是 `<服务端>/client/unity` 子模块"的旧布局写的),两仓同级布局下会解析到两个仓共同父目录的再上一级(机器 B 上是 `D:\luyuan`),目录存在所以不报参数错,要到 protoc 找不到 proto 才失败。`player_scene.proto` 已在清单里,重跑即补上 `TravelToZoneResponse`。`friend_error_tip.proto` **不是必需项**:清单里没有任何域的 `*_error_tip.proto`,handler 模板只引用响应类型。客户端侧的验证与提交细节见 §4.3。
   (b) **这批不动客户端**:**不要跑 `.\dev.bat proto`**。先 `dev_tools.ps1 -Command proto-gen-build`,再用 `enable_unity_client: false` 的**配置副本**跑 `dev_tools.ps1 -Command proto-gen-run -UseBinary -ConfigPath <副本>`(不经 `dev.bat` 就没有 `:prepare_protoc`,要自己保证该 shell PATH 上的 protoc 是 libprotoc 35.1)。**不要**直接改默认 `proto_gen.yaml` 的这个开关(其他域会失去同步),**也不要**删 friend 块(未解析的域会丢号)。走 (b) 时通过标准 ③ 里 Unity 那 11 个 handler 不会出现,属于预期。
-- **陷阱二:C++ 侧会被一起重算**。`cpp/generated/rpc/service_metadata/friend_service_metadata.h` 现在写的是 `FriendServiceAddFriendMessageId = 11` 等,被 `rpc_event_registry.cpp` include;`cpp/generated/proto/friend/*.pb.{h,cc}` 与 `cpp/generated/grpc_client/friend/friend_grpc_client.cpp` 也是生成物、已登记进 `proto.vcxproj` / `grpc_client.vcxproj`。**regen 之后 C++ 必须重编**(串行 `msbuild /m:1 /nr:false`,顺序 proto → rpc → 各节点库 → 节点),否则 gate 的消息号表还是旧的。并核 `rpc_event_registry.h` 的 `kMaxRpcMethodCount` **等于 `proto/message_id.txt` 最大 id + 1**(regen 前是 228 / 227,对得上;`.cpp` 里还有一条 `static_assert`);按上面"抢号的不只 friend"的算法,regen 后的期望是 **`kMaxRpcMethodCount = 234`、最大 id 233**。对不上就是生成器半途退出,重跑一次即可。
+- **陷阱二:C++ 侧会被一起重算**。`cpp/generated/rpc/service_metadata/friend_service_metadata.h` 现在写的是 `FriendServiceAddFriendMessageId = 11` 等,被 `rpc_event_registry.cpp` include;`cpp/generated/proto/friend/*.pb.{h,cc}` 与 `cpp/generated/grpc_client/friend/friend_grpc_client.cpp` 也是生成物、已登记进 `proto.vcxproj` / `grpc_client.vcxproj`。**regen 之后 C++ 必须重编**(串行 `msbuild /m:1 /nr:false`,顺序 proto → rpc → 各节点库 → 节点),否则 gate 的消息号表还是旧的。并核 `rpc_event_registry.h` 的 `kMaxRpcMethodCount` **等于 `proto/message_id.txt` 最大 id + 1**(regen 前是 228 / 227,对得上;`.cpp` 里还有一条 `static_assert`);按上面"抢号的不只 friend"的算法,regen 后的期望是 **`kMaxRpcMethodCount = 234`、最大 id 233**。⚠ **234 已不是定数**:帮会二期 B5a 会话(2026-09-20)在 `proto/guild/guild.proto` 的 `GuildService` 末尾新增了 5 个 rpc,它若先于这次全量 proto-gen 落到 main,期望值就是 239。**不变判据只有一条:`kMaxRpcMethodCount` = `proto/message_id.txt` 最大 id + 1**;数字对不上先 `git log -- proto/` 看是不是又多了 rpc。确实是生成器半途退出的话,重跑一次即可。
 - **陷阱三:`cpp/nodes/scene/handler/grpc/scene_node_service.cpp` 的 Agones 块 —— 已进守护段,但陈旧生成器仍会吞。** `auto createPermit = agones::SceneLifecycle::Instance().AcquireCreatePermitBlocking();` 那块现在位于 `CreateScene` 包装函数的 `BEGIN/END WRITING YOUR CODE` 守护段**之内**(本文早期版本写"守护段外",那是 09-15 之前的状态),生成器自 `cecb52995`(09-16 22:11)起会按包装函数签名回读并原样写回这段「投递前」守护段,所以用当前源码编出的生成器不会再吞它。**但 `cecb52995` 之前编的 `proto-gen.exe` / `pbgen.exe` 不认这个守护段**(模板是 `.go` 里的字符串常量,编在二进制里)—— 机器 B 上那两个 exe 是 09-09 的,正属于这种情况(§0.3)。这是「必须先 `proto-gen-build`」的又一条硬理由。regen 后仍用 `git diff` 确认该块还在,作为兜底检查;被删了就恢复。
 - **陷阱四:robot vendor**。`robot/vendor/proto/` 下只有 battle/chat/common/db/guild/login/match/scene/team/trade,**没有 friend**,`modules.txt` 里也搜不到。robot 默认 `-mod=vendor`,regen 之后必须 `cd robot && go mod tidy && go mod vendor`。另外 robot 的 handler stub 是"文件存在即跳过",坏 stub 重跑生成器不会自愈 —— 要先删再生成。
 
@@ -381,6 +385,8 @@ cd E:\work\xuanming-server-mmo\go\friend
   -- 期望:NON_UNIQUE=0 的索引名只有 PRIMARY
   ```
 - `friend_request` 有 `updated_ms` 列与两条索引 `(to_player_id,status)`、`(status,updated_ms)`;
+- **(收尾批新增)**`friend_capacity` 有 `created_ms` 列(`bigint unsigned NOT NULL DEFAULT 0`)与一条**普通**索引 `(friend_count, created_ms)`(`NON_UNIQUE=1`;索引名预期 `idx_friend_capacity_0`,**以实际产物为准**),且 `-migrate` 的输出里**不得出现** `缺索引(不会自动建)` 这条 warning。
+  ⚠ `go/schemamigrate` 对**已存在的表**只会 `ADD COLUMN`、**不会补建索引**(只出 warning、退出码仍是 0)—— 缺了这条索引,容量行回收的候选读每轮都是全表扫(`report_only` 下也一样)。全新空库走 `CREATE TABLE`,索引随表建出,不受影响;friend 库从未上线,理论上不存在"旧 schema 的存量表",真遇到就删库重建,或手工 `ALTER TABLE friend_capacity ADD INDEX idx_friend_capacity_0 (friend_count, created_ms);`。收尾批起 friend 与 guild 同口径:**缺索引会让常驻启动拒启、让 `-migrate` 以 4 退出**(`go/friend/friend.go` 的 `missingIndexError`),所以这里撞上时你会看到非 0 退出码而不是一条容易漏看的 warning;
 - **再跑一次 `-migrate` 应执行 0 条语句**(幂等);
 - `friend.exe -allow-modify`(**不带** `-migrate`)必须**非 0** 退出(`friend.go` 的 `validateMigrationFlags`,走 `schemamigrate.ExitFailed`)。
 
@@ -397,7 +403,7 @@ cd E:\work\xuanming-server-mmo\go\friend
   ⚠ **就绪判据是子串 `STARTED SUCCESSFULLY`,不是整行**:`tools/scripts/go_services.ps1:495` 是 `$content -match "STARTED SUCCESSFULLY"`(全量读日志文件,不逐行比)。所以两个前导空格与 `FRIEND` 这个词都不影响启动器;真正不能动的是 `STARTED SUCCESSFULLY` 这两个词(中间一个空格,共 20 个字符)—— 改掉它启动器就永远等不到 friend 就绪(`friend.go` 那行上方的注释写的是同一件事)。
 - 横幅里 `mysql:` 那行**不含密码**(走 `svc.MySQLTarget`,格式 `<host>/<db> (user=<user>)`;含密码的 `BuildDSN` 只交给 `sql.Open`)。
 - 其余可核项:`friend_redis:` 显示 `shared-fallback host=127.0.0.1:6379 type=node`;`sweep:` 显示 `mode=report_only`;`schema:` 显示 `auto-migrate (schemamigrate.Up at startup)`。
-- `curl http://127.0.0.1:9180/metrics` 能看到四个 friend 指标的预建 0 值序列:`friend_push_total` / `friend_rate_quota_total` / `friend_online_lookup_total` / `friend_sweep_pending_rows`。
+- `curl http://127.0.0.1:9180/metrics` 能看到**五个** friend 指标的预建 0 值序列:`friend_push_total` / `friend_rate_quota_total` / `friend_online_lookup_total` / `friend_sweep_pending_rows` / `friend_sweep_idle_capacity_rows`(最后一个是收尾批新增的:上一轮 sweep 看到的"零好友且超过保留期"的容量行数)。
 - `etcdctl get --prefix FriendNodeService.rpc/zone/` 的值(protojson 的 NodeInfo)里 `endpoint` 与 `grpcEndpoint` **都**填了(只填前者路由服拨不通,guild 踩过;`friend_test.go` 的 `TestNodeInfoValueMatchesRegistryContract` 钉住这点)。前缀要带到 `/zone/`:`noderegistry` 在 `FriendNodeService.rpc/` 下写的是**双 key**(`go/shared/noderegistry/registry.go` 的 `RpcPath` / `AllocationKey`)—— `…/zone/<z>/node_type/27/node_id/<n>` 的值才是 NodeInfo;另一条 `…/allocated/node_type/27/node_id/<n>` 是全局占位 key,值是裸的 node UUID,里面没有 endpoint 属正常,不要拿它对这条标准。
 - Ctrl+C 后日志顺序是**先注销、再排空**,总时长 < 24s(`lifecycle.HardTimeout`)。
 
@@ -492,17 +498,19 @@ go build -o robot.exe .
 > 全部条目都在 main(`f06090b19` / `cda218956` / `7b48b0a98` / `57af3fd09` 之后)逐条 `sed -n` 核实过,核实日期 2026-09-19;2026-09-20 在机器 B 上对着 `d9e471b80` 又逐条复核了一遍(92 条论断,更正 10 处,其中第 1 条的 `AcceptFriend` 结论被**改回**、新登记第 9 条)。
 > ⚠ 大前提:**整批代码从未编译、从未测试**。下面所有"修法建议"都排在 §2 的第 2、3、5 步之后 —— 在那三步过掉之前动这里的任何一条,你分不清报错是你改出来的还是本来就有的。
 
-| # | 严重度 | 条目 | 改动面 |
-|---|---|---|---|
-| 1 | **P2** | `friend_capacity` 无回收路径 | 3–5 文件(含 proto) |
-| 2 | **P2** | 三条锁序假设未经 `EXPLAIN` 核对 | 0(纯核对)或 1–2 |
-| 3 | P3 | pending 计数的并发不变量只靠注释守着,无测试 | 1 文件 |
-| 4 | P3 | `metrics` 里第三份 sweep 模式字面量对齐不到 | 1–2 文件 |
-| 5 | P3 | 三个零调用方的导出方法(`AreFriends` 尤其危险) | 1–2 文件 |
-| 6 | P3 | 三处缺测试(session_reader / recommend_repo / sweep ticker) | 新增 2–3 个测试文件 |
-| 7 | P3 | `data.FriendEntry.LastActiveMs` 是死字段 | 2 文件 |
-| 8 | P3 | `friend_table.proto` 的 `updated_ms` 注释已过期;连带两条 `updated_ms` 断言是假绿 | 1 文件(+ 连带 regen)+ 2 个测试文件 |
-| 9 | P3 | `logic/friend_logic.go` 包头「F2 之后仍然开着的口子(F3)」已过期(sweep 早已接线) | 1–2 文件(纯注释) |
+> **2026-09-20 收尾批状态**:下表第 1、3–9 条**已落码(未编译、未运行)**,做法与偏离见 §9.2 / §9.3;第 2 条(`EXPLAIN`)是运行期核对,**仍未做**,而且现在要核的是**四**条 SQL(多了容量行回收的候选读)。各小节正文保留为当时的推导,**其中"现状"类的陈述已不成立**(例如"`friend_capacity` 只有两列、没有时间戳列""sweep 的三条 SQL 全部只写 `FROM friend_request`""三个零调用方方法""`LastActiveMs` 字段"),读的时候以 §9 与现行代码为准。
+
+| # | 严重度 | 条目 | 改动面 | 收尾批 |
+|---|---|---|---|---|
+| 1 | **P2** | `friend_capacity` 无回收路径 | 3–5 文件(含 proto) | ✅ 已落码:路线一(加 `created_ms` 列)+ 缺行有上限重试,同批处理了 fail-closed 契约 |
+| 2 | **P2** | 三条锁序假设未经 `EXPLAIN` 核对 | 0(纯核对)或 1–2 | ❌ 未做(运行期);现为四条 |
+| 3 | P3 | pending 计数的并发不变量只靠注释守着,无测试 | 1 文件 | ✅ 注释更正 + 交叉 pending 并发用例 |
+| 4 | P3 | `metrics` 里第三份 sweep 模式字面量对齐不到 | 1–2 文件 | ✅ 常量导出 + 三份对齐断言 |
+| 5 | P3 | 三个零调用方的导出方法(`AreFriends` 尤其危险) | 1–2 文件 | ✅ 三个全删 |
+| 6 | P3 | 三处缺测试(session_reader / recommend_repo / sweep ticker) | 新增 2–3 个测试文件 | ✅ 三个新测试文件 |
+| 7 | P3 | `data.FriendEntry.LastActiveMs` 是死字段 | 2 文件 | ✅ 已删 |
+| 8 | P3 | `friend_table.proto` 的 `updated_ms` 注释已过期;连带两条 `updated_ms` 断言是假绿 | 1 文件(+ 连带 regen)+ 2 个测试文件 | ✅ 注释重写 + 两处先归零再断言 |
+| 9 | P3 | `logic/friend_logic.go` 包头「F2 之后仍然开着的口子(F3)」已过期(sweep 早已接线) | 1–2 文件(纯注释) | ✅ |
 
 ### 1.【P2】`friend_capacity` 表没有任何回收路径
 
@@ -861,7 +869,7 @@ xlsx 的改动刻意留到**合并窗口**做、不在分支上做(二进制不�
 隔离级别固定 **READ COMMITTED**(`beginWriteTx`):RR 的间隙锁会让"同一玩家并发拉黑 16 个不同目标"这类只碰不同行的事务互相挡,**且只在 MySQL 上炸,TiDB 没有间隙锁恒绿**。"判定读在守卫之后用当前读"在 RC 下**不是可选优化,是正确性要求**。
 
 **(b) 缺容量行时,按 `friend` 表的权威边数建行,绝不猜 0。**
-实现在 `ensureFriendCapacityRows`:先 `SELECT COUNT(*) FROM friend WHERE player_id = ?` 得到权威值,再 `INSERT IGNORE INTO friend_capacity (player_id, friend_count) VALUES (?, ?)`。**为什么不能写 0**:将来若有任何路径先写了 `friend` 边再补容量行,猜 0 会让这个玩家的硬上限**凭空放宽一轮**,且**全程零报错**。调用顺序也是不变量的一部分:**先在事务外、按 `player_id` 升序、自动提交地补齐行**,**再**在事务里按升序 `FOR UPDATE` 锁双方容量行。
+实现在 `ensureFriendCapacityRows`:先 `SELECT COUNT(*) FROM friend WHERE player_id = ?` 得到权威值,再 `INSERT IGNORE INTO friend_capacity (player_id, friend_count, created_ms) VALUES (?, ?, ?)`(收尾批起是三列;`created_ms` 的含义与回收的关系见 §9.2)。收尾批之后这张表**有了删除方**(sweep 的 `SweepIdleCapacityRows`,只删零好友且足够老的行),所以 (b) 比以前更要紧:被回收的行下次就是靠这里按权威边数重建的。**为什么不能写 0**:将来若有任何路径先写了 `friend` 边再补容量行,猜 0 会让这个玩家的硬上限**凭空放宽一轮**,且**全程零报错**。调用顺序也是不变量的一部分:**先在事务外、按 `player_id` 升序、自动提交地补齐行**,**再**在事务里按升序 `FOR UPDATE` 锁双方容量行。
 (原本还有一道「`friend_capacity` 就绪闸」D-10,在 D-14 迁到独占库之后**已退役** —— 它读的台账表留在旧库 `mmorpg`,而 `config.Validate` 断言 `DBName == mmorpg_friend` 且禁跨库,那条查询恒为"表不存在"、闸门恒放行。**退役的只有这道闸,(b) 这条实质不变量原样保留。**)
 
 **(c) 所有删 friend 边的路径,都必须按 `RowsAffected` 减 `friend_count`。**
@@ -1001,3 +1009,147 @@ go-zero 的 `core/stores/redis/redis.go` 里,`GetCtx` 遇到 `redis.Nil` 时 `er
 3. "leaderboard 依赖的事件在组队会话手里 / `go/match` 归组队会话所有" —— 组队已于 09-18 全量合进 main,那两个 worktree 都没了。
 4. "mail 的附件发放要等帮会二期的通用资产账本" —— 资产通道**已经在 main 上**;真正的阻塞是 `kAssetOpCallerRules` 白名单里没有 mail(SYSTEM_CREDIT 流没开),§4.1。
 5. "friend 的收尾约 8 个文件、8 条" —— 现在是 9 条(新登记 logic 包头的过期注释),且第 7 条是 2 文件、第 8 条连带 2 个测试文件。
+
+---
+
+## §9 收尾批(2026-09-20,机器 B,接手会话)—— 现状、偏离、用户执行序列
+
+> **全部未编译、未运行、未跑测试。** 本批只做了 `gofmt -l` / `gofmt -e`(语法解析与格式),本批改过的 19 个 `.go` 输出为空。按用户 2026-09-20 的口径:Python 由用户自己装,编译 / 导表 / proto-gen / 测试由用户(或 Codex)自己跑,Claude 会话只负责把代码做完。
+
+### 9.1 三个拍板的结果
+
+| 拍板 | 结果 | 落点 |
+|---|---|---|
+| ① 装工具 | 用户自己装 / 自己起 Docker。⚠ **后来查明本机已有 Python 3.14.7**(`py -3`;`python` 是商店占位桩),真实缺口只有导表器的 4 个依赖,见 §0.2 订正行 | — |
+| ② `FriendBlocked` 文案 | **改 xlsx 为中性文案「无法添加该玩家为好友」**;代码里"不区分方向"的注释保持 | 当时以为本机没有 Python(误判),写成幂等脚本 `tools/scripts/friend_xlsx_patch.py tip-text`:按码名定位(不写死行号 —— 帮会 B5a 的脚本会在它上方插 10 行),改前改后按段计数核对,现值既非旧文案也非新文案时中止不覆盖 |
+| ③ proto-gen 带不带客户端 | **带**。用户授权修改客户端仓 | 见下方「客户端仓基线已变」—— 现状是**只差 `friend.proto` 一行,且已在客户端工作区补上(未提交)** |
+
+**⚠ 客户端仓基线已变(2026-09-20 05:48–05:50,续做时核实)**:本会话最初在客户端旧基线 `d2b165a` 上给 `gen_proto.ps1` 补了 `team` / `jubaozhai` / `friend` 三行;随后有人(stash 名是 `codex-before-client-update-20260920`)先把工作区存进 `stash@{0}`,再把客户端 **fast-forward 到 `120e2d8`**(`merge origin/main`,把机器 A 那边积压的客户端提交拉了下来)。新基线的事实:
+- `gen_proto.ps1` 的 `$files` **已自带** `proto/team/team.proto` 与 `proto/trade/jubaozhai.proto`(机器 A 的提交,另外还收了 guild / scene / trade / common / team 五个 `generated/code/proto/tip/*_error_tip.proto`);
+- `Assets/Scripts/Net/Generated/Handlers/` 已有 **92** 个 handler(Team 15 / Jubaozhai 4 / `SceneSceneClientPlayerTravelToZone` 都已生成),`Team.cs` / `Jubaozhai.cs` 也在;
+- 工作区里已有人**只**把 `proto/friend/friend.proto` 一行重新补上(未提交)—— 这就是现在缺的全部。
+- 由此:**不要 `git stash pop`**(那份 stash 基于旧基线,pop 会冲突或把 team/jubaozhai 加成重复行);跑 proto-gen 之前只需确认 `friend.proto` 那一行在。§2 第 3 步陷阱一里"客户端一次新增 31 个桩"在新基线上变成**只新增 Friend 的 11 个(92 → 103)**,`HandlerRegistry.cs` 被重写。
+- ~~`friend_error_tip.proto` 不需要加进客户端清单~~ **已更正并已加**(客户端规格复核推翻了这条):新基线里 guild / scene / trade / common / team 五个域的 `*_error_tip.proto` 都已在清单里,客户端按生成的枚举写分支(`(uint)trade_error.KTradeXxx => …`,先例 `JubaozhaiClient.DescribeTip` / `GuildClient` / `GameClient.DescribeTravelTip`),**不手抄 `Tip.xlsx` 的数字**。friend 照 trade / team 的形状成对收录,`generated/code/proto/tip/friend_error_tip.proto` 已补在客户端工作区 `friend.proto` 之后(未提交)。**时序**:这份 proto 现在只到 15006,客户端 `gen_proto.ps1` 必须在服务端导表器跑完(15007–15009 落表)之后再跑,否则 `FriendErrorTip.cs` 缺码 —— §9.4 的顺序(导表 → proto-gen → 3b 客户端生成)天然满足。
+- 两个客户端生成脚本的 `-ProtoRoot` 默认值在新基线上**仍是** `$PSScriptRoot/../../..`(按旧的子模块布局写的),两仓同级布局下仍必须显式传。
+
+另:帮会 B3a 会话确认 data_service 的 3 个 rpc、`RoleNameRule` 新表、3 个 login tip 码是终态,可以随这次一起发号 / 导出;`MessageLimiter` 已改未导的那 7 行它不认领也不反对。
+
+### 9.2 本批落了什么(相对 `6c6451359`)
+
+**`friend_capacity` 回收(§3 第 1 条,P2)—— 路线一**
+
+- `proto/friend/friend_table.proto`:`FriendCapacityRecord` 加 `uint64 created_ms = 3` 与 `OptionIndex = "friend_count,created_ms"`。`created_ms` 的含义是"**本行被(重新)建出、或最近一次 `friend_count` 减少的时刻**",回收的保留期从这一刻起算。与 `updated_ms` 相反,`created_ms = 0` 的存量行是**安全的**(零好友行被回收后按权威边数重建)。
+- `go/friend/internal/data/sweep_repo.go`:新增 `SweepIdleCapacityRows`,与 `SweepTerminalRequests` 共用同一份 `Friend.Sweep` 配置(**没有新增任何配置键**,K8s ConfigMap 的契约值不用动),入参校验与"负截止点 = 清空整表"的护栏抽成 `sweepCutoffMs` 一份。
+  **SQL 形状是防 ABBA 的关键,不许改成一条批量 DELETE**:候选用**普通读** `SELECT player_id FROM friend_capacity WHERE friend_count = 0 AND created_ms < ? LIMIT ?`,再逐行、自动提交、按主键 `DELETE ... WHERE player_id = ? AND friend_count = 0 AND created_ms < ?`(WHERE 里重复的两个条件是提交点复核)。批量 `DELETE ... LIMIT` 会在一个语句事务里按**二级索引序**锁多行守卫行,与业务写事务"按 player_id 升序"的取锁顺序不同,可以成环;逐行删时回收任一时刻至多持一把守卫锁且持锁时不再等别的锁,不可能处在等待环里。
+- `go/friend/internal/data/friend_repo.go`:四条写路径(`AddFriendRequest` / `AcceptFriend` / `RemoveFriend` / `Block`)的外层骨架收成一份 `runGuardedWrite`(事务外 ensure → `BeginTx(RC)` → ① `lockCapacityRows` → body → Commit);步骤编号、SQL 文本、哨兵、注释原样搬进闭包,事务外前置判定仍在它之前、不进重试。`lockCapacityRows` 缺行时返回包内哨兵 `errCapacityRowsMissing`,`runGuardedWrite` 回到事务外重新 ensure 并重试,**上限 `capacityGuardMaxAttempts = 3`**;用尽后哨兵原样上抛,logic 照旧定性 `ErrStorage`(fail-closed 不变)。缺行只可能发生在事务的第一条语句,此时没有任何副作用,整遍重跑安全;body 在一次调用里至多执行一次。
+- `go/friend/internal/logic/sweep.go` + `internal/metrics/metrics.go`:`SweepStore` 多一个方法;`runSweepRound` 拆成两段依次跑(前一段失败不跳过后一段,共用一个单轮预算,未知 mode 的错误日志一轮只打一次);新 Gauge `friend_sweep_idle_capacity_rows{mode}`,两个 mode 预建 0 值。
+
+**评审轮挡下的三条真问题**(六维度评审 15 条发现,逐条经独立反驳式复验,全部确认并已处理):
+
+1. **回收给事务外的 ensure 带来了 1213。** InnoDB 手册里的经典形态:一方对某主键记录持 X(sweeper 的 DELETE,或另一个事务的守卫 `FOR UPDATE`),至少两个 `INSERT IGNORE` 同时排队等同一条记录的 S;X 释放后它们同时拿到 S、又都要升 X → 互等成环,其一得 1213。回收上线之前没有人删这张表,这个形态不存在;ensure 在事务外,它的 1213 会被定性成 `ErrStorage`。修法:`ensureFriendCapacityRows` 对每个玩家的 COUNT + INSERT 这一对语句做有上限的重试(`ensureDeadlockMaxAttempts = 3`,只认 `isMySQLDeadlock` = `errors.As` 到 `*mysql.MySQLError` 且 `Number == 1213`,每遍先查 `ctx.Err()`);自动提交且幂等,重试安全。`runGuardedWrite` 里 **body 的 1213 仍不重试**。⚠ 这条是**按手册推演,未在真库复现**;回归用例 `TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock` 照手册示例确定性编排(要读 `performance_schema.data_lock_waits`,读不了时平时 SKIP、设了 `FRIEND_REQUIRE_MYSQL_TESTS` 时 Fatal)。未采用的备选:把 `INSERT IGNORE` 换成 `INSERT … ON DUPLICATE KEY UPDATE player_id = player_id`(重复键上直接取 X,从根上消掉 S→X 升级),它会改热路径的取锁强度,要在真库上评估后再定。
+2. **"删行无害"的论证不完整:回收新引入了 `friend_count` 永久偏大 1 的交错。** ensure 的 `COUNT(*)`(读到 1)与 `INSERT IGNORE` 不原子,中间夹进 `RemoveFriend` 提交(count→0)+ 回收删掉这行老行,随后 INSERT 用陈旧的 1 建行 —— 方向是 fail-closed(玩家少一个好友位),但**永久、无自愈**。修法:`deleteFriendEdges` 减计数时一并刷新 `created_ms`(签名多一个 `nowMs int64`),让"刚减过计数的行"在一个保留期内不可回收;残留是陈旧 ensure 的窗口要跨过整个 `RetentionDays`(≥ 1 天),视为不可达。**不要**改用单条 `INSERT IGNORE ... SELECT COUNT(*)` 合并 ensure:它在连接默认 RR 下会对 `friend` 表加共享 next-key 锁,违反锁序 (2),且只缩小不消除窗口。
+3. **`go/schemamigrate` 对已存在的表不补建索引**(只出 warning、退出码 0)—— 见 §2 第 7a 步新增的那条通过标准。
+
+**其余收尾项**:删 `AreFriends` / `HasPendingRequest` / `CountOutgoingPending`(#5);删 `data.FriendEntry.LastActiveMs`(#7;存量缓存里的旧 JSON 键解码兼容,不需要清 Redis);`metrics.SweepModeReportOnly/Delete` 导出并在 `TestSweepModeConstantsAreTheWireLiterals` 里钉住 config / data / metrics 三份一致(#4);`updated_ms` 注释重写、两处假绿断言改成先归零再断言(#8);`friend_logic.go` 包头与 `constants.go` 的过期注释(#9);⑤⑥ 旁"AcceptFriend 会让 pending 变大"的不严谨说法更正(#3)。
+`friend_repo.go` 在 HEAD 上本来就过不了 gofmt(顶部长注释紧贴 `const friendWriteTxIsolation` 成了 doc comment,gofmt 会把分条论证当代码块重排),本批在两者之间插了一个空行解决,原注释一字未动。
+
+**新增 / 修改的测试**(48 个新用例;`*_mysql_test.go` 与 `sweep_repo_test.go` 挂 `FRIEND_TEST_MYSQL_DSN`,其余不依赖任何库):
+
+| 文件 | 钉的是什么 |
+|---|---|
+| `data/friend_cache_test.go`(新,miniredis)| §2 第 8 步那条分支:generation 键从未写过时仍能回填(修复丢了 → 脚本恒 return 0、缓存永远写不进去、零报错);加载期间 generation 被 INCR 时不得回填旧快照 |
+| `data/session_reader_test.go`(新,miniredis)| 分批、缺席 = 离线、坏 payload 只降级该玩家、**只认 `SESSION_STATE_ONLINE`** |
+| `data/recommend_repo_mysql_test.go`(新)| 两条 query 各自的四类排除 —— 每一类都造了"排除子句失效则候选集出现该人"的数据(冒烟里那条是结构性假绿,别拿它当证据)|
+| `data/sweep_repo_test.go` | `SweepIdleCapacityRows` 八条,含 `TestDeleteIdleCapacityRow_RechecksAtCommitPoint`(提交点复核的两个条件各有一条变异必红的断言)|
+| `data/friend_guard_lock_order_mysql_test.go` | 场景从 5 个变 8 个:交叉 pending 行(今天应当绿;谁给 ⑤⑥ 补上 `FOR UPDATE` 它会红)、回收与写路径并发、ensure 撞 1213 |
+| `data/friend_repo_mysql_test.go` | 夹具 DDL 加列加索引;`TestRunGuardedWrite_ExhaustedMissingRowsFailClosed`(用 `CHECK` 约束注入"ensure 成功但行建不出来",断言哨兵、body 0 次调用、无落库;"`INSERT IGNORE` 违反 CHECK 时降为告警并跳过该行"是凭记忆写的前提,用例开头有夹具前提断言兜底,前提不成立时红因一眼可辨);`TestDeleteFriendEdges_RefreshesCreatedMsOnDecrement`(`RemoveFriend` / `Block` 两条子用例:减到 0 后**立即**回收不得删、推过保留期才删 —— 把 UPDATE 里的 `created_ms = ?` 删掉必红)|
+| `logic/sweep_test.go`(新)| 两段都被调用且入参与配置 / 固定时钟逐字一致、前段失败后段仍跑、未知 mode 不进 Gauge label、ticker 真的在跑且取消即退出 |
+
+### 9.3 对冻结规格 / 用户拍板原话的偏离(AGENTS §11 要求登记)
+
+1. **缺行重试上限是 3 遍,不是拍板选项原话里的"重试一次"(2 遍)。** 论证:一次写至多涉及两行守卫行;本表唯一的删除方是回收,而 DELETE 在提交点复核 `created_ms < cutoff`,被 ensure 重建的行 `created_ms` 是当前时刻,所以**每行至多被删一次**(副本再多也一样)→ 因回收而缺行至多发生两遍,第三遍必过。2 遍时"双方都是陈旧零好友行、两次删除各落进一个窗口"会打出一次 fault;3 遍把它变成确定性保证,代价只是真不变量破裂时在 fault 之前多跑一次 ensure 和一个空事务。前提:各副本墙钟偏差小于 `RetentionDays`(`config.Validate` 保证 ≥ 1 天)。不认可就把 `capacityGuardMaxAttempts` 改回 2,并回退 `friend_repo.go` 锁序说明 (5)、`block_repo.go` / `sweep_repo.go` / `logic/sweep.go` 文件头里"至多重试两次"的文案,以及 `TestCapacityRowReclaimRacesWithGuardedWrites` 里双陈旧组的硬断言(改回容忍)。
+2. **`created_ms` 不只在 INSERT 时写**,`deleteFriendEdges` 减计数时也刷新(原因见 9.2 评审第 2 条)。
+
+### 9.4 用户执行序列(机器 B:`D:\luyuan\wuxingqitan\mmorpg`)
+
+**顺序是硬约束。** 帮会 B5a 会话的脚本与本批的脚本都要 load→save 同一个 xlsx,**串行跑,不要并发**;顺序已与 B5a 会话对齐。
+
+```powershell
+# 0. 一次性前置。本机已有 Python 3.14.7(**用 py -3,别用 python** —— 那是商店占位桩;在 Claude 的 Bash 里敲
+#    python 不报错而是挂到 120s 超时),导表器 4 个依赖 21:57 起也已装好(dev.bat export 每次还会自己补装)。
+#    Docker Desktop 起起来(第 6 步之后才需要)
+cd D:\luyuan\wuxingqitan\mmorpg
+#    ⚠ 若 dev.bat export 已经报过"这些权威 schema 没有对应的源表:GuildDonate, GuildShop",那就是没先跑下面第 1 步的 new-tables
+
+# 1. xlsx 前置(三条都幂等,可加 --dry-run 先看)
+python tools\scripts\guild_b5a_xlsx_patch.py new-tables   # 帮会 B5a:不跑这条,导表器会因"有 schema 无 xlsx"整批失败
+python tools\scripts\guild_b5a_xlsx_patch.py tip-codes    # 帮会 B5a:guild_error 段尾插 10 行
+python tools\scripts\friend_xlsx_patch.py tip-text        # 本批:FriendBlocked 改中性文案
+
+# 2. 导表(§2 第 2 步;通过标准四条 + friend 三个枚举名与 constants.go 逐字一致)
+git status --porcelain --ignore-submodules=all data generated go/shared/generated cpp/generated/table java > ..\export-before.txt
+.\dev.bat export
+
+# 3. 全量 proto-gen(§2 第 3 步)。先确认客户端清单带着 friend.proto(见 9.1 ③ 下方「客户端仓基线已变」;
+#    team / jubaozhai 新基线已自带)。⚠ 不要 git stash pop 客户端仓的 stash@{0}:它基于旧基线
+Select-String -Path ..\mmorpg-client\tools\gen_proto.ps1 -Pattern 'proto/friend/friend.proto','proto/team/team.proto','proto/trade/jubaozhai.proto'   # 期望 3 行命中
+.\dev.bat proto            # = 校验 protoc 35.1 → proto-gen-build → proto-gen-run;绝不要只跑 proto-gen-run
+#    ⚠ 已知阻塞(2026-09-20 晚实跑撞到):proto-gen-build 报 proto2mysql v0.1.0 校验和不匹配。根因是
+#    tools/proto_generator/protogen/go.mod 是全仓唯一还 require v0.1.0 的 module,而 D-14 第 7 条禁止 v0.1.0
+#    (该 tag 被移动过,代理缓存与 tag 现指向的内容不同)。修法:照 go/schemamigrate/go.mod 改成 v0.1.1 +
+#    replace 到 github.com/luyuan-cpp/proto2mysql v0.1.1,再在该目录 go mod tidy。protogen 只用
+#    NewDB / RegisterTable / GetCreateTableSQL 三个 API,v0.1.1 都兼容。由「Data table exporter schema errors」会话处理
+#    ⚠⚠ 事故(2026-09-20 22:10:40,已发生):**走的就是 .\dev.bat proto,不是有人单跑 proto-gen-run** —— 根因在
+#    tools/scripts/dev_tools.ps1 的 Invoke-ProtoGenBuild:go build 是外部命令,失败不触发 $ErrorActionPreference=Stop,
+#    脚本照样把上一次的旧 pbgen.exe 复制成 proto-gen.exe 并以 0 退出,dev.bat 于是接着用 09-09 的陈旧生成器跑了 run。
+#    也就是说本文"先 build 再 run 就安全"的前提在当时并不成立。已修(「Data table exporter schema errors」会话,
+#    未提交):go build 之后检查 $LASTEXITCODE,非 0 即 throw,dev.bat 的 errorlevel 会拦下。
+#    结果与本文 §0.3 / 陷阱三的预言完全一致 —— scene_node_service.cpp 纯删 35 行(Agones 块 + 7 个空守护段)、
+#    .h 纯删 3 行注释;其它手写文件未被改写(已按 22:09–22:14 的改写时间逐个核过)。这次运行同时写下了
+#    message_id.txt(11 个 ClientPlayerFriend*,最大号 238 —— 含 B5a 的 5 个 guild rpc)与 Unity / robot 的 friend 桩。
+#    **下一次跑生成器之前必须先恢复这两个文件**(新生成器会回读文件里现有的守护段,块已经不在就不会写回来):
+#      git checkout HEAD -- cpp/nodes/scene/handler/grpc/scene_node_service.cpp cpp/nodes/scene/handler/grpc/scene_node_service.h
+#    (两者相对 HEAD 只有删除、0 新增,恢复不会丢任何人的在途改动。)然后照常 .\dev.bat proto:消息号按 message_id.txt 保留,
+#    robot / Unity 模板自 09-09 未变,陈旧运行建出的 friend 桩不用删。跑完 grep -c AcquireCreatePermitBlocking 应为 1。
+#    通过标准见 §2 第 3 步 ①②③;kMaxRpcMethodCount = message_id.txt 最大 id + 1(234 或 239,见该步的更正)
+#    兜底:git diff cpp/nodes/scene/handler/grpc/scene_node_service.cpp 确认 Agones 块还在
+#    本批多出的预期 diff:go/proto/friend/friend_table.pb.go 首次生成,且 FriendCapacityRecord 带 CreatedMs
+#    客户端侧预期:Handlers 92 → 103(只多 11 个 ClientPlayerFriend*),HandlerRegistry.cs 重写;多出别的域的桩就是基线又变了
+
+# 3b. 客户端(-ProtoRoot 必须显式传;protoc 不在 PATH,用 -Protoc 传绝对路径)
+cd ..\mmorpg-client
+pwsh -File tools\gen_proto.ps1      -ProtoRoot D:\luyuan\wuxingqitan\mmorpg -Protoc D:\luyuan\wuxingqitan\mmorpg\third_party\grpc\install_vs2026_dbg\bin\protoc.exe
+pwsh -File tools\gen_messageids.ps1 -ProtoRoot D:\luyuan\wuxingqitan\mmorpg
+cd ..\mmorpg
+
+# 4. 限流档位(必须在 proto-gen 之后;脚本按方法名去 proto\message_id.txt 查号,没跑 proto-gen 会直接拒绝)
+python tools\scripts\guild_b5a_xlsx_patch.py message-limiter
+python tools\scripts\friend_xlsx_patch.py message-limiter
+.\dev.bat export           # 再导一次;MessageLimiter 的 rows 期望 = 脚本打印的那个数
+
+# 5. go/friend(§2 第 5 步)
+cd go\friend
+gofmt -l .                 # 期望空(本批改过的文件已是空;别的文件若有输出,是 HEAD 的存量)
+go mod tidy                # 人工看一眼:github.com/redis/go-redis/v9 只许在 indirect 块
+go build ./...
+go vet ./...
+go test ./... -count=1     # 此时真 MySQL 用例会 SKIP,属预期
+
+# 6. 真 MySQL 并发回归(§2 第 6 步;两个环境变量都要设;必须是真 MySQL 不是 TiDB)
+go test ./internal/data -count=1 -v 2>&1 | Tee-Object -FilePath ..\..\..\friend-lockorder.log
+```
+
+第 6 步的通过标准在 §2 原有五条之上再加三条:① 锁序场景现在是 **8 个**,新增的 `TestAddFriendPendingCountsAreNotLockingReads_CrossedPendingRows` / `TestCapacityRowReclaimRacesWithGuardedWrites` / `TestEnsureCapacityRows_ConcurrentInsertOnReclaimedRowSurvivesDeadlock` 都要 PASS;② `TestCapacityRowReclaimRacesWithGuardedWrites` 若以 **SKIP** 呈现,含义是"这一轮一次缺行都没撞上、对重试没有证明力",不是失败 —— 调大迭代数或回收者数量再跑,别把它算进"零 SKIP";③ 输出里若出现 ensure 或 sweeper 的 `Error 1213`,**把原文和 `SHOW ENGINE INNODB STATUS` 的 `LATEST DETECTED DEADLOCK` 段贴回来**再裁定(9.2 评审第 1 条是推演、未复现)。
+之后按 §2 第 7–9 步原样走(7a 多一条索引核对,7b 是五个指标)。`-migrate` 之后顺手对**四**条 SQL 跑 `EXPLAIN`(§3 第 2 条的三条 + `listIdleCapacityRowsBefore` 的候选读:期望 `key` 是 `(friend_count, created_ms)` 那条索引、`type=range` 或 `ref`)。
+
+### 9.5 仍未做 / 新登记的待办
+
+| # | 条目 | 说明 |
+|---|---|---|
+| 1 | §3 第 2 条 `EXPLAIN` | 运行期核对,现为四条 |
+| 2 | ~~friend 对"缺索引"不拒绝启动~~ **✅ 已补(续做)** | 照 guild 的口径:`go/friend/friend.go` 新增 `missingIndexWarnings` / `missingIndexError`(前缀提成常量 `missingIndexWarningPrefix`),`ensureSchema` 的 Up / Plan 两个分支都调 —— Plan 分支必须**单独**判,因为 `Report.Clean()` 只看 Statements 与 Manual、不看 Warnings;`runMigration` 在 `ExitCode == ExitOK` 时把缺索引升级成 `ExitManual`(4),否则 K8s 迁移 Job 会绿着结束、随后 Pod 被拦下。测试:`friend_test.go` 的 `TestMissingIndexWarningIsBlocking`、`TestEnsureSchemaRejectsStartupWhenPlanNotClean` 新增两行、新增 `TestRunMigrationExitCodes`(`runMigration` 此前零覆盖;钉住 D-14 退出码表,含"迁移已失败时缺索引不得把 1 改善成 4")。⚠ 告警文案的前缀与 schemamigrate 的一致性**没有机械守住**(测试里是一条逐字抄来的样本,与 guild 同一取舍),真正的保障是 7a 步的真库核对 |
+| 3 | ~~`tools/scripts/k8s_deploy.ps1` 的 friend ConfigMap Sweep 段注释~~ **✅ 已改(续做)** | 改成"两类后台清理共用这一段参数",补上 `friend_sweep_idle_capacity_rows{mode}`。纯注释;PowerShell 解析器 0 错误。⚠ 该文件另有帮会 B5a 的一处未提交改动(data-service ConfigMap 的 `BootstrapTags` 加 `guild_asset_op`),两处互不相干 —— **提交时只暂存自己那一块**(`git diff` 取出那个 hunk 再 `git apply --cached`),别把对方的行卷进来 |
+| 4 | `runGuardedWrite` 重试分支没有确定性用例 | ensure 与守卫之间没有可注入的缝(为测试给生产代码开缝不值);"缺行 → 重试成功"由并发场景概率性覆盖,"耗尽 → fail-closed"有确定性用例 |
+| 5 | `INSERT … ON DUPLICATE KEY UPDATE` 替代 `INSERT IGNORE` | 见 9.2 评审第 1 条的备选,待真库评估 |
+| 6 | Unity 客户端好友功能、mail M1 | 均未开工(§4)。客户端规格已按新基线 `120e2d8` 复核订正(40 条差异全部确认,见规格文件头的复核说明;最要紧的:样板改为 `GuildClient`、tip 一律按生成枚举写、只新增 11 个桩)|
+| 7 | ~~leaderboard 设计文档~~ **✅ 已出(续做)** | `docs/design/leaderboard-system.md`(5 路侦察 → 起草 → 三视角对抗评审 28 条全部成立 → 回修)。端口 51100 / `:9250` 已复核未占用。**§9.1 七项已于 2026-09-20 全部由用户拍板**:(a) match 发评分快照(开关默认关 / 不做 outbox / 加 `rating_gen`)、恢复口径接受 7 天重放、同分先达到者在前、K8s 用独立 noeviction Redis、topic `match-rating-snapshot` 3 分区 7 天、客户端改仓已授权、K8s 开关用 `-MatchRatingSnapshotPublish`。**落码闸门仍在**:R1p 起排在 friend 的 proto-gen 与编译通过之后(该文 §9.1 末段)|

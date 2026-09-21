@@ -60,11 +60,17 @@ func LoadTables(configDir string, useBinary bool) {
     if err := GlobalVariableTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load GlobalVariable table: %v", err)
     }
+    if err := GuildDonateTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load GuildDonate table: %v", err)
+    }
     if err := GuildLevelTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load GuildLevel table: %v", err)
     }
     if err := GuildRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load GuildRule table: %v", err)
+    }
+    if err := GuildShopTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load GuildShop table: %v", err)
     }
     if err := ItemTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load Item table: %v", err)
@@ -89,6 +95,9 @@ func LoadTables(configDir string, useBinary bool) {
     }
     if err := RewardTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load Reward table: %v", err)
+    }
+    if err := RoleNameRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+        log.Fatalf("failed to load RoleNameRule table: %v", err)
     }
     if err := SkillTableManagerInstance.Load(configDir, useBinary); err != nil {
         log.Fatalf("failed to load Skill table: %v", err)
@@ -115,7 +124,7 @@ func LoadTables(configDir string, useBinary bool) {
 // useBinary: true loads .pb (proto binary), false loads .json.
 func LoadTablesAsync(configDir string, useBinary bool) {
     var wg sync.WaitGroup
-    wg.Add(31)
+    wg.Add(34)
     go func() {
         defer wg.Done()
         if err := ActivityScheduleTableManagerInstance.Load(configDir, useBinary); err != nil {
@@ -214,6 +223,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
     }()
     go func() {
         defer wg.Done()
+        if err := GuildDonateTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load GuildDonate table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
         if err := GuildLevelTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load GuildLevel table: %v", err)
         }
@@ -222,6 +237,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
         defer wg.Done()
         if err := GuildRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load GuildRule table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := GuildShopTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load GuildShop table: %v", err)
         }
     }()
     go func() {
@@ -270,6 +291,12 @@ func LoadTablesAsync(configDir string, useBinary bool) {
         defer wg.Done()
         if err := RewardTableManagerInstance.Load(configDir, useBinary); err != nil {
             log.Fatalf("failed to load Reward table: %v", err)
+        }
+    }()
+    go func() {
+        defer wg.Done()
+        if err := RoleNameRuleTableManagerInstance.Load(configDir, useBinary); err != nil {
+            log.Fatalf("failed to load RoleNameRule table: %v", err)
         }
     }()
     go func() {
@@ -382,6 +409,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     if err := newGlobalVariable.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload GlobalVariable failed: %w", err)
     }
+    newGuildDonate := NewGuildDonateTableManager()
+    if err := newGuildDonate.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload GuildDonate failed: %w", err)
+    }
     newGuildLevel := NewGuildLevelTableManager()
     if err := newGuildLevel.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload GuildLevel failed: %w", err)
@@ -389,6 +420,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     newGuildRule := NewGuildRuleTableManager()
     if err := newGuildRule.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload GuildRule failed: %w", err)
+    }
+    newGuildShop := NewGuildShopTableManager()
+    if err := newGuildShop.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload GuildShop failed: %w", err)
     }
     newItem := NewItemTableManager()
     if err := newItem.Load(configDir, useBinary); err != nil {
@@ -421,6 +456,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     newReward := NewRewardTableManager()
     if err := newReward.Load(configDir, useBinary); err != nil {
         return fmt.Errorf("reload Reward failed: %w", err)
+    }
+    newRoleNameRule := NewRoleNameRuleTableManager()
+    if err := newRoleNameRule.Load(configDir, useBinary); err != nil {
+        return fmt.Errorf("reload RoleNameRule failed: %w", err)
     }
     newSkill := NewSkillTableManager()
     if err := newSkill.Load(configDir, useBinary); err != nil {
@@ -460,8 +499,10 @@ func ReloadTables(configDir string, useBinary bool) error {
     DungeonTableManagerInstance = newDungeon
     EquipSlotTableManagerInstance = newEquipSlot
     GlobalVariableTableManagerInstance = newGlobalVariable
+    GuildDonateTableManagerInstance = newGuildDonate
     GuildLevelTableManagerInstance = newGuildLevel
     GuildRuleTableManagerInstance = newGuildRule
+    GuildShopTableManagerInstance = newGuildShop
     ItemTableManagerInstance = newItem
     MessageLimiterTableManagerInstance = newMessageLimiter
     MirrorTableManagerInstance = newMirror
@@ -470,6 +511,7 @@ func ReloadTables(configDir string, useBinary bool) error {
     PetTableManagerInstance = newPet
     PetRuleTableManagerInstance = newPetRule
     RewardTableManagerInstance = newReward
+    RoleNameRuleTableManagerInstance = newRoleNameRule
     SkillTableManagerInstance = newSkill
     SkillPermissionTableManagerInstance = newSkillPermission
     TestTableManagerInstance = newTest

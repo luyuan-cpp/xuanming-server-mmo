@@ -268,6 +268,10 @@ function Invoke-ProtoGenBuild {
         $staleCmdExePath = Join-Path $ProtoGenDir "cmd.exe"
 
         go build -v -o $legacyProtoGenExePath ./cmd
+        # go build 是外部命令,失败不会触发 $ErrorActionPreference = "Stop"。不在这里拦,下一行就会把上一次的
+        # 旧 pbgen.exe 当新产物复制过去、脚本以 0 退出,dev.bat 接着用旧生成器改写代码。
+        # 2026-09-20 就这样吞掉了 scene_node_service.cpp 的手写守护段。构建失败必须让整条 proto 流程停下。
+        if ($LASTEXITCODE -ne 0) { throw "proto generator build failed (go build exit $LASTEXITCODE); stale pbgen.exe / proto-gen.exe left untouched, do not run proto-gen-run" }
         Copy-Item -Path $legacyProtoGenExePath -Destination $primaryProtoGenExePath -Force
 
         if (Test-Path $staleCmdExePath) {

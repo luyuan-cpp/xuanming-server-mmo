@@ -14,43 +14,43 @@ namespace friendpb {
 struct FriendCompleteQueue {
     grpc::CompletionQueue cq;
 };
-#pragma region FriendServiceAddFriend
-boost::object_pool<AsyncFriendServiceAddFriendGrpcClient> FriendServiceAddFriendPool;
-using AsyncFriendServiceAddFriendHandlerFunctionType =
+#pragma region ClientPlayerFriendAddFriend
+boost::object_pool<AsyncClientPlayerFriendAddFriendGrpcClient> ClientPlayerFriendAddFriendPool;
+using AsyncClientPlayerFriendAddFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::AddFriendResponse&)>;
-AsyncFriendServiceAddFriendHandlerFunctionType AsyncFriendServiceAddFriendHandler;
+AsyncClientPlayerFriendAddFriendHandlerFunctionType AsyncClientPlayerFriendAddFriendHandler;
 
-void AsyncCompleteGrpcFriendServiceAddFriend(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+void AsyncCompleteGrpcClientPlayerFriendAddFriend(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
-        static_cast<AsyncFriendServiceAddFriendGrpcClient*>(got_tag));
+        static_cast<AsyncClientPlayerFriendAddFriendGrpcClient*>(got_tag));
     if (call->status.ok()) {
-        if (AsyncFriendServiceAddFriendHandler) {
-            AsyncFriendServiceAddFriendHandler(call->context, call->reply);
+        if (AsyncClientPlayerFriendAddFriendHandler) {
+            AsyncClientPlayerFriendAddFriendHandler(call->context, call->reply);
         }
     } else {
         LOG_ERROR << call->status.error_message();
     }
 
-	FriendServiceAddFriendPool.destroy(call);
+	ClientPlayerFriendAddFriendPool.destroy(call);
 }
 
-void SendFriendServiceAddFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AddFriendRequest& request) {
+void SendClientPlayerFriendAddFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AddFriendRequest& request) {
 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(FriendServiceAddFriendPool.construct());
+    auto call(ClientPlayerFriendAddFriendPool.construct());
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncAddFriend(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceAddFriendMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendAddFriendMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceAddFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AddFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendAddFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AddFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
 
-    auto call(FriendServiceAddFriendPool.construct());
+    auto call(ClientPlayerFriendAddFriendPool.construct());
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
@@ -59,57 +59,57 @@ void SendFriendServiceAddFriend(entt::registry& registry, entt::entity nodeEntit
     }
 
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncAddFriend(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceAddFriendMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendAddFriendMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceAddFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendAddFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
     const ::friendpb::AddFriendRequest& derived = static_cast<const ::friendpb::AddFriendRequest&>(message);
-    SendFriendServiceAddFriend(registry, nodeEntity, derived, metaKeys, metaValues);
+    SendClientPlayerFriendAddFriend(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
-#pragma region FriendServiceAcceptFriend
-boost::object_pool<AsyncFriendServiceAcceptFriendGrpcClient> FriendServiceAcceptFriendPool;
-using AsyncFriendServiceAcceptFriendHandlerFunctionType =
+#pragma region ClientPlayerFriendAcceptFriend
+boost::object_pool<AsyncClientPlayerFriendAcceptFriendGrpcClient> ClientPlayerFriendAcceptFriendPool;
+using AsyncClientPlayerFriendAcceptFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::AcceptFriendResponse&)>;
-AsyncFriendServiceAcceptFriendHandlerFunctionType AsyncFriendServiceAcceptFriendHandler;
+AsyncClientPlayerFriendAcceptFriendHandlerFunctionType AsyncClientPlayerFriendAcceptFriendHandler;
 
-void AsyncCompleteGrpcFriendServiceAcceptFriend(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+void AsyncCompleteGrpcClientPlayerFriendAcceptFriend(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
-        static_cast<AsyncFriendServiceAcceptFriendGrpcClient*>(got_tag));
+        static_cast<AsyncClientPlayerFriendAcceptFriendGrpcClient*>(got_tag));
     if (call->status.ok()) {
-        if (AsyncFriendServiceAcceptFriendHandler) {
-            AsyncFriendServiceAcceptFriendHandler(call->context, call->reply);
+        if (AsyncClientPlayerFriendAcceptFriendHandler) {
+            AsyncClientPlayerFriendAcceptFriendHandler(call->context, call->reply);
         }
     } else {
         LOG_ERROR << call->status.error_message();
     }
 
-	FriendServiceAcceptFriendPool.destroy(call);
+	ClientPlayerFriendAcceptFriendPool.destroy(call);
 }
 
-void SendFriendServiceAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AcceptFriendRequest& request) {
+void SendClientPlayerFriendAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AcceptFriendRequest& request) {
 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(FriendServiceAcceptFriendPool.construct());
+    auto call(ClientPlayerFriendAcceptFriendPool.construct());
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncAcceptFriend(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceAcceptFriendMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendAcceptFriendMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AcceptFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AcceptFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
 
-    auto call(FriendServiceAcceptFriendPool.construct());
+    auto call(ClientPlayerFriendAcceptFriendPool.construct());
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
@@ -118,57 +118,57 @@ void SendFriendServiceAcceptFriend(entt::registry& registry, entt::entity nodeEn
     }
 
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncAcceptFriend(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceAcceptFriendMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendAcceptFriendMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
     const ::friendpb::AcceptFriendRequest& derived = static_cast<const ::friendpb::AcceptFriendRequest&>(message);
-    SendFriendServiceAcceptFriend(registry, nodeEntity, derived, metaKeys, metaValues);
+    SendClientPlayerFriendAcceptFriend(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
-#pragma region FriendServiceRejectFriend
-boost::object_pool<AsyncFriendServiceRejectFriendGrpcClient> FriendServiceRejectFriendPool;
-using AsyncFriendServiceRejectFriendHandlerFunctionType =
+#pragma region ClientPlayerFriendRejectFriend
+boost::object_pool<AsyncClientPlayerFriendRejectFriendGrpcClient> ClientPlayerFriendRejectFriendPool;
+using AsyncClientPlayerFriendRejectFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::RejectFriendResponse&)>;
-AsyncFriendServiceRejectFriendHandlerFunctionType AsyncFriendServiceRejectFriendHandler;
+AsyncClientPlayerFriendRejectFriendHandlerFunctionType AsyncClientPlayerFriendRejectFriendHandler;
 
-void AsyncCompleteGrpcFriendServiceRejectFriend(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+void AsyncCompleteGrpcClientPlayerFriendRejectFriend(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
-        static_cast<AsyncFriendServiceRejectFriendGrpcClient*>(got_tag));
+        static_cast<AsyncClientPlayerFriendRejectFriendGrpcClient*>(got_tag));
     if (call->status.ok()) {
-        if (AsyncFriendServiceRejectFriendHandler) {
-            AsyncFriendServiceRejectFriendHandler(call->context, call->reply);
+        if (AsyncClientPlayerFriendRejectFriendHandler) {
+            AsyncClientPlayerFriendRejectFriendHandler(call->context, call->reply);
         }
     } else {
         LOG_ERROR << call->status.error_message();
     }
 
-	FriendServiceRejectFriendPool.destroy(call);
+	ClientPlayerFriendRejectFriendPool.destroy(call);
 }
 
-void SendFriendServiceRejectFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RejectFriendRequest& request) {
+void SendClientPlayerFriendRejectFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RejectFriendRequest& request) {
 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(FriendServiceRejectFriendPool.construct());
+    auto call(ClientPlayerFriendRejectFriendPool.construct());
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncRejectFriend(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceRejectFriendMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendRejectFriendMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceRejectFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RejectFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendRejectFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RejectFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
 
-    auto call(FriendServiceRejectFriendPool.construct());
+    auto call(ClientPlayerFriendRejectFriendPool.construct());
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
@@ -177,57 +177,57 @@ void SendFriendServiceRejectFriend(entt::registry& registry, entt::entity nodeEn
     }
 
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncRejectFriend(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceRejectFriendMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendRejectFriendMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceRejectFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendRejectFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
     const ::friendpb::RejectFriendRequest& derived = static_cast<const ::friendpb::RejectFriendRequest&>(message);
-    SendFriendServiceRejectFriend(registry, nodeEntity, derived, metaKeys, metaValues);
+    SendClientPlayerFriendRejectFriend(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
-#pragma region FriendServiceRemoveFriend
-boost::object_pool<AsyncFriendServiceRemoveFriendGrpcClient> FriendServiceRemoveFriendPool;
-using AsyncFriendServiceRemoveFriendHandlerFunctionType =
+#pragma region ClientPlayerFriendRemoveFriend
+boost::object_pool<AsyncClientPlayerFriendRemoveFriendGrpcClient> ClientPlayerFriendRemoveFriendPool;
+using AsyncClientPlayerFriendRemoveFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::RemoveFriendResponse&)>;
-AsyncFriendServiceRemoveFriendHandlerFunctionType AsyncFriendServiceRemoveFriendHandler;
+AsyncClientPlayerFriendRemoveFriendHandlerFunctionType AsyncClientPlayerFriendRemoveFriendHandler;
 
-void AsyncCompleteGrpcFriendServiceRemoveFriend(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+void AsyncCompleteGrpcClientPlayerFriendRemoveFriend(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
-        static_cast<AsyncFriendServiceRemoveFriendGrpcClient*>(got_tag));
+        static_cast<AsyncClientPlayerFriendRemoveFriendGrpcClient*>(got_tag));
     if (call->status.ok()) {
-        if (AsyncFriendServiceRemoveFriendHandler) {
-            AsyncFriendServiceRemoveFriendHandler(call->context, call->reply);
+        if (AsyncClientPlayerFriendRemoveFriendHandler) {
+            AsyncClientPlayerFriendRemoveFriendHandler(call->context, call->reply);
         }
     } else {
         LOG_ERROR << call->status.error_message();
     }
 
-	FriendServiceRemoveFriendPool.destroy(call);
+	ClientPlayerFriendRemoveFriendPool.destroy(call);
 }
 
-void SendFriendServiceRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RemoveFriendRequest& request) {
+void SendClientPlayerFriendRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RemoveFriendRequest& request) {
 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(FriendServiceRemoveFriendPool.construct());
+    auto call(ClientPlayerFriendRemoveFriendPool.construct());
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncRemoveFriend(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceRemoveFriendMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendRemoveFriendMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RemoveFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RemoveFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
 
-    auto call(FriendServiceRemoveFriendPool.construct());
+    auto call(ClientPlayerFriendRemoveFriendPool.construct());
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
@@ -236,57 +236,57 @@ void SendFriendServiceRemoveFriend(entt::registry& registry, entt::entity nodeEn
     }
 
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncRemoveFriend(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceRemoveFriendMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendRemoveFriendMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
     const ::friendpb::RemoveFriendRequest& derived = static_cast<const ::friendpb::RemoveFriendRequest&>(message);
-    SendFriendServiceRemoveFriend(registry, nodeEntity, derived, metaKeys, metaValues);
+    SendClientPlayerFriendRemoveFriend(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
-#pragma region FriendServiceGetFriendList
-boost::object_pool<AsyncFriendServiceGetFriendListGrpcClient> FriendServiceGetFriendListPool;
-using AsyncFriendServiceGetFriendListHandlerFunctionType =
+#pragma region ClientPlayerFriendGetFriendList
+boost::object_pool<AsyncClientPlayerFriendGetFriendListGrpcClient> ClientPlayerFriendGetFriendListPool;
+using AsyncClientPlayerFriendGetFriendListHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::GetFriendListResponse&)>;
-AsyncFriendServiceGetFriendListHandlerFunctionType AsyncFriendServiceGetFriendListHandler;
+AsyncClientPlayerFriendGetFriendListHandlerFunctionType AsyncClientPlayerFriendGetFriendListHandler;
 
-void AsyncCompleteGrpcFriendServiceGetFriendList(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+void AsyncCompleteGrpcClientPlayerFriendGetFriendList(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
-        static_cast<AsyncFriendServiceGetFriendListGrpcClient*>(got_tag));
+        static_cast<AsyncClientPlayerFriendGetFriendListGrpcClient*>(got_tag));
     if (call->status.ok()) {
-        if (AsyncFriendServiceGetFriendListHandler) {
-            AsyncFriendServiceGetFriendListHandler(call->context, call->reply);
+        if (AsyncClientPlayerFriendGetFriendListHandler) {
+            AsyncClientPlayerFriendGetFriendListHandler(call->context, call->reply);
         }
     } else {
         LOG_ERROR << call->status.error_message();
     }
 
-	FriendServiceGetFriendListPool.destroy(call);
+	ClientPlayerFriendGetFriendListPool.destroy(call);
 }
 
-void SendFriendServiceGetFriendList(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetFriendListRequest& request) {
+void SendClientPlayerFriendGetFriendList(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetFriendListRequest& request) {
 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(FriendServiceGetFriendListPool.construct());
+    auto call(ClientPlayerFriendGetFriendListPool.construct());
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncGetFriendList(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceGetFriendListMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendGetFriendListMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceGetFriendList(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetFriendListRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendGetFriendList(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetFriendListRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
 
-    auto call(FriendServiceGetFriendListPool.construct());
+    auto call(ClientPlayerFriendGetFriendListPool.construct());
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
@@ -295,57 +295,57 @@ void SendFriendServiceGetFriendList(entt::registry& registry, entt::entity nodeE
     }
 
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncGetFriendList(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceGetFriendListMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendGetFriendListMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceGetFriendList(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendGetFriendList(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
     const ::friendpb::GetFriendListRequest& derived = static_cast<const ::friendpb::GetFriendListRequest&>(message);
-    SendFriendServiceGetFriendList(registry, nodeEntity, derived, metaKeys, metaValues);
+    SendClientPlayerFriendGetFriendList(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
-#pragma region FriendServiceGetPendingRequests
-boost::object_pool<AsyncFriendServiceGetPendingRequestsGrpcClient> FriendServiceGetPendingRequestsPool;
-using AsyncFriendServiceGetPendingRequestsHandlerFunctionType =
+#pragma region ClientPlayerFriendGetPendingRequests
+boost::object_pool<AsyncClientPlayerFriendGetPendingRequestsGrpcClient> ClientPlayerFriendGetPendingRequestsPool;
+using AsyncClientPlayerFriendGetPendingRequestsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::GetPendingRequestsResponse&)>;
-AsyncFriendServiceGetPendingRequestsHandlerFunctionType AsyncFriendServiceGetPendingRequestsHandler;
+AsyncClientPlayerFriendGetPendingRequestsHandlerFunctionType AsyncClientPlayerFriendGetPendingRequestsHandler;
 
-void AsyncCompleteGrpcFriendServiceGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+void AsyncCompleteGrpcClientPlayerFriendGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
-        static_cast<AsyncFriendServiceGetPendingRequestsGrpcClient*>(got_tag));
+        static_cast<AsyncClientPlayerFriendGetPendingRequestsGrpcClient*>(got_tag));
     if (call->status.ok()) {
-        if (AsyncFriendServiceGetPendingRequestsHandler) {
-            AsyncFriendServiceGetPendingRequestsHandler(call->context, call->reply);
+        if (AsyncClientPlayerFriendGetPendingRequestsHandler) {
+            AsyncClientPlayerFriendGetPendingRequestsHandler(call->context, call->reply);
         }
     } else {
         LOG_ERROR << call->status.error_message();
     }
 
-	FriendServiceGetPendingRequestsPool.destroy(call);
+	ClientPlayerFriendGetPendingRequestsPool.destroy(call);
 }
 
-void SendFriendServiceGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetPendingRequestsRequest& request) {
+void SendClientPlayerFriendGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetPendingRequestsRequest& request) {
 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(FriendServiceGetPendingRequestsPool.construct());
+    auto call(ClientPlayerFriendGetPendingRequestsPool.construct());
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncGetPendingRequests(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceGetPendingRequestsMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendGetPendingRequestsMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetPendingRequestsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetPendingRequestsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
 
-    auto call(FriendServiceGetPendingRequestsPool.construct());
+    auto call(ClientPlayerFriendGetPendingRequestsPool.construct());
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
@@ -354,57 +354,57 @@ void SendFriendServiceGetPendingRequests(entt::registry& registry, entt::entity 
     }
 
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
         ->PrepareAsyncGetPendingRequests(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceGetPendingRequestsMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendGetPendingRequestsMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
     const ::friendpb::GetPendingRequestsRequest& derived = static_cast<const ::friendpb::GetPendingRequestsRequest&>(message);
-    SendFriendServiceGetPendingRequests(registry, nodeEntity, derived, metaKeys, metaValues);
+    SendClientPlayerFriendGetPendingRequests(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
-#pragma region FriendServiceNotifyOnline
-boost::object_pool<AsyncFriendServiceNotifyOnlineGrpcClient> FriendServiceNotifyOnlinePool;
-using AsyncFriendServiceNotifyOnlineHandlerFunctionType =
-    std::function<void(const ClientContext&, const ::friendpb::NotifyOnlineResponse&)>;
-AsyncFriendServiceNotifyOnlineHandlerFunctionType AsyncFriendServiceNotifyOnlineHandler;
+#pragma region ClientPlayerFriendBlock
+boost::object_pool<AsyncClientPlayerFriendBlockGrpcClient> ClientPlayerFriendBlockPool;
+using AsyncClientPlayerFriendBlockHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::friendpb::BlockResponse&)>;
+AsyncClientPlayerFriendBlockHandlerFunctionType AsyncClientPlayerFriendBlockHandler;
 
-void AsyncCompleteGrpcFriendServiceNotifyOnline(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+void AsyncCompleteGrpcClientPlayerFriendBlock(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
-        static_cast<AsyncFriendServiceNotifyOnlineGrpcClient*>(got_tag));
+        static_cast<AsyncClientPlayerFriendBlockGrpcClient*>(got_tag));
     if (call->status.ok()) {
-        if (AsyncFriendServiceNotifyOnlineHandler) {
-            AsyncFriendServiceNotifyOnlineHandler(call->context, call->reply);
+        if (AsyncClientPlayerFriendBlockHandler) {
+            AsyncClientPlayerFriendBlockHandler(call->context, call->reply);
         }
     } else {
         LOG_ERROR << call->status.error_message();
     }
 
-	FriendServiceNotifyOnlinePool.destroy(call);
+	ClientPlayerFriendBlockPool.destroy(call);
 }
 
-void SendFriendServiceNotifyOnline(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::NotifyOnlineRequest& request) {
+void SendClientPlayerFriendBlock(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::BlockRequest& request) {
 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(FriendServiceNotifyOnlinePool.construct());
+    auto call(ClientPlayerFriendBlockPool.construct());
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyOnline(&call->context, request,
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
+        ->PrepareAsyncBlock(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceNotifyOnlineMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendBlockMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceNotifyOnline(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::NotifyOnlineRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendBlock(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::BlockRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
 
-    auto call(FriendServiceNotifyOnlinePool.construct());
+    auto call(ClientPlayerFriendBlockPool.construct());
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
@@ -413,57 +413,57 @@ void SendFriendServiceNotifyOnline(entt::registry& registry, entt::entity nodeEn
     }
 
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyOnline(&call->context, request,
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
+        ->PrepareAsyncBlock(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceNotifyOnlineMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendBlockMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceNotifyOnline(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
-    const ::friendpb::NotifyOnlineRequest& derived = static_cast<const ::friendpb::NotifyOnlineRequest&>(message);
-    SendFriendServiceNotifyOnline(registry, nodeEntity, derived, metaKeys, metaValues);
+void SendClientPlayerFriendBlock(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::friendpb::BlockRequest& derived = static_cast<const ::friendpb::BlockRequest&>(message);
+    SendClientPlayerFriendBlock(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
-#pragma region FriendServiceNotifyOffline
-boost::object_pool<AsyncFriendServiceNotifyOfflineGrpcClient> FriendServiceNotifyOfflinePool;
-using AsyncFriendServiceNotifyOfflineHandlerFunctionType =
-    std::function<void(const ClientContext&, const ::friendpb::NotifyOfflineResponse&)>;
-AsyncFriendServiceNotifyOfflineHandlerFunctionType AsyncFriendServiceNotifyOfflineHandler;
+#pragma region ClientPlayerFriendUnblock
+boost::object_pool<AsyncClientPlayerFriendUnblockGrpcClient> ClientPlayerFriendUnblockPool;
+using AsyncClientPlayerFriendUnblockHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::friendpb::UnblockResponse&)>;
+AsyncClientPlayerFriendUnblockHandlerFunctionType AsyncClientPlayerFriendUnblockHandler;
 
-void AsyncCompleteGrpcFriendServiceNotifyOffline(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+void AsyncCompleteGrpcClientPlayerFriendUnblock(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
     auto call(
-        static_cast<AsyncFriendServiceNotifyOfflineGrpcClient*>(got_tag));
+        static_cast<AsyncClientPlayerFriendUnblockGrpcClient*>(got_tag));
     if (call->status.ok()) {
-        if (AsyncFriendServiceNotifyOfflineHandler) {
-            AsyncFriendServiceNotifyOfflineHandler(call->context, call->reply);
+        if (AsyncClientPlayerFriendUnblockHandler) {
+            AsyncClientPlayerFriendUnblockHandler(call->context, call->reply);
         }
     } else {
         LOG_ERROR << call->status.error_message();
     }
 
-	FriendServiceNotifyOfflinePool.destroy(call);
+	ClientPlayerFriendUnblockPool.destroy(call);
 }
 
-void SendFriendServiceNotifyOffline(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::NotifyOfflineRequest& request) {
+void SendClientPlayerFriendUnblock(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::UnblockRequest& request) {
 
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
-    auto call(FriendServiceNotifyOfflinePool.construct());
+    auto call(ClientPlayerFriendUnblockPool.construct());
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyOffline(&call->context, request,
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
+        ->PrepareAsyncUnblock(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceNotifyOfflineMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendUnblockMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceNotifyOffline(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::NotifyOfflineRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+void SendClientPlayerFriendUnblock(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::UnblockRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
 
-    auto call(FriendServiceNotifyOfflinePool.construct());
+    auto call(ClientPlayerFriendUnblockPool.construct());
     auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
 
     const size_t count = std::min(metaKeys.size(), metaValues.size());
@@ -472,53 +472,242 @@ void SendFriendServiceNotifyOffline(entt::registry& registry, entt::entity nodeE
     }
 
     call->response_reader = registry
-        .get<FriendServiceStubPtr>(nodeEntity)
-        ->PrepareAsyncNotifyOffline(&call->context, request,
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
+        ->PrepareAsyncUnblock(&call->context, request,
                                            &cq);
     call->response_reader->StartCall();
-    GrpcTag* got_tag(tagPool.construct(FriendServiceNotifyOfflineMessageId, (void*)call));
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendUnblockMessageId, (void*)call));
     call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
 
 }
 
-void SendFriendServiceNotifyOffline(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
-    const ::friendpb::NotifyOfflineRequest& derived = static_cast<const ::friendpb::NotifyOfflineRequest&>(message);
-    SendFriendServiceNotifyOffline(registry, nodeEntity, derived, metaKeys, metaValues);
+void SendClientPlayerFriendUnblock(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::friendpb::UnblockRequest& derived = static_cast<const ::friendpb::UnblockRequest&>(message);
+    SendClientPlayerFriendUnblock(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region ClientPlayerFriendListBlocks
+boost::object_pool<AsyncClientPlayerFriendListBlocksGrpcClient> ClientPlayerFriendListBlocksPool;
+using AsyncClientPlayerFriendListBlocksHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::friendpb::ListBlocksResponse&)>;
+AsyncClientPlayerFriendListBlocksHandlerFunctionType AsyncClientPlayerFriendListBlocksHandler;
+
+void AsyncCompleteGrpcClientPlayerFriendListBlocks(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncClientPlayerFriendListBlocksGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncClientPlayerFriendListBlocksHandler) {
+            AsyncClientPlayerFriendListBlocksHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	ClientPlayerFriendListBlocksPool.destroy(call);
+}
+
+void SendClientPlayerFriendListBlocks(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::ListBlocksRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(ClientPlayerFriendListBlocksPool.construct());
+    call->response_reader = registry
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
+        ->PrepareAsyncListBlocks(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendListBlocksMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendClientPlayerFriendListBlocks(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::ListBlocksRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(ClientPlayerFriendListBlocksPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
+        ->PrepareAsyncListBlocks(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendListBlocksMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendClientPlayerFriendListBlocks(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::friendpb::ListBlocksRequest& derived = static_cast<const ::friendpb::ListBlocksRequest&>(message);
+    SendClientPlayerFriendListBlocks(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region ClientPlayerFriendRecommendFriends
+boost::object_pool<AsyncClientPlayerFriendRecommendFriendsGrpcClient> ClientPlayerFriendRecommendFriendsPool;
+using AsyncClientPlayerFriendRecommendFriendsHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::friendpb::RecommendFriendsResponse&)>;
+AsyncClientPlayerFriendRecommendFriendsHandlerFunctionType AsyncClientPlayerFriendRecommendFriendsHandler;
+
+void AsyncCompleteGrpcClientPlayerFriendRecommendFriends(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncClientPlayerFriendRecommendFriendsGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncClientPlayerFriendRecommendFriendsHandler) {
+            AsyncClientPlayerFriendRecommendFriendsHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	ClientPlayerFriendRecommendFriendsPool.destroy(call);
+}
+
+void SendClientPlayerFriendRecommendFriends(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RecommendFriendsRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(ClientPlayerFriendRecommendFriendsPool.construct());
+    call->response_reader = registry
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
+        ->PrepareAsyncRecommendFriends(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendRecommendFriendsMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendClientPlayerFriendRecommendFriends(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RecommendFriendsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(ClientPlayerFriendRecommendFriendsPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
+        ->PrepareAsyncRecommendFriends(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendRecommendFriendsMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendClientPlayerFriendRecommendFriends(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::friendpb::RecommendFriendsRequest& derived = static_cast<const ::friendpb::RecommendFriendsRequest&>(message);
+    SendClientPlayerFriendRecommendFriends(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region ClientPlayerFriendNotifyFriendEvent
+boost::object_pool<AsyncClientPlayerFriendNotifyFriendEventGrpcClient> ClientPlayerFriendNotifyFriendEventPool;
+using AsyncClientPlayerFriendNotifyFriendEventHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::Empty&)>;
+AsyncClientPlayerFriendNotifyFriendEventHandlerFunctionType AsyncClientPlayerFriendNotifyFriendEventHandler;
+
+void AsyncCompleteGrpcClientPlayerFriendNotifyFriendEvent(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncClientPlayerFriendNotifyFriendEventGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncClientPlayerFriendNotifyFriendEventHandler) {
+            AsyncClientPlayerFriendNotifyFriendEventHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	ClientPlayerFriendNotifyFriendEventPool.destroy(call);
+}
+
+void SendClientPlayerFriendNotifyFriendEvent(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::FriendEventS2C& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(ClientPlayerFriendNotifyFriendEventPool.construct());
+    call->response_reader = registry
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
+        ->PrepareAsyncNotifyFriendEvent(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendNotifyFriendEventMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendClientPlayerFriendNotifyFriendEvent(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::FriendEventS2C& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(ClientPlayerFriendNotifyFriendEventPool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<ClientPlayerFriendStubPtr>(nodeEntity)
+        ->PrepareAsyncNotifyFriendEvent(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(ClientPlayerFriendNotifyFriendEventMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendClientPlayerFriendNotifyFriendEvent(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::friendpb::FriendEventS2C& derived = static_cast<const ::friendpb::FriendEventS2C&>(message);
+    SendClientPlayerFriendNotifyFriendEvent(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
 
 void HandleFriendCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag) {
         switch (grpcTag->messageId) {
-        case FriendServiceAddFriendMessageId:
-            AsyncCompleteGrpcFriendServiceAddFriend(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+        case ClientPlayerFriendAddFriendMessageId:
+            AsyncCompleteGrpcClientPlayerFriendAddFriend(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
-        case FriendServiceAcceptFriendMessageId:
-            AsyncCompleteGrpcFriendServiceAcceptFriend(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+        case ClientPlayerFriendAcceptFriendMessageId:
+            AsyncCompleteGrpcClientPlayerFriendAcceptFriend(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
-        case FriendServiceRejectFriendMessageId:
-            AsyncCompleteGrpcFriendServiceRejectFriend(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+        case ClientPlayerFriendRejectFriendMessageId:
+            AsyncCompleteGrpcClientPlayerFriendRejectFriend(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
-        case FriendServiceRemoveFriendMessageId:
-            AsyncCompleteGrpcFriendServiceRemoveFriend(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+        case ClientPlayerFriendRemoveFriendMessageId:
+            AsyncCompleteGrpcClientPlayerFriendRemoveFriend(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
-        case FriendServiceGetFriendListMessageId:
-            AsyncCompleteGrpcFriendServiceGetFriendList(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+        case ClientPlayerFriendGetFriendListMessageId:
+            AsyncCompleteGrpcClientPlayerFriendGetFriendList(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
-        case FriendServiceGetPendingRequestsMessageId:
-            AsyncCompleteGrpcFriendServiceGetPendingRequests(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+        case ClientPlayerFriendGetPendingRequestsMessageId:
+            AsyncCompleteGrpcClientPlayerFriendGetPendingRequests(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
-        case FriendServiceNotifyOnlineMessageId:
-            AsyncCompleteGrpcFriendServiceNotifyOnline(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+        case ClientPlayerFriendBlockMessageId:
+            AsyncCompleteGrpcClientPlayerFriendBlock(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
-        case FriendServiceNotifyOfflineMessageId:
-            AsyncCompleteGrpcFriendServiceNotifyOffline(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+        case ClientPlayerFriendUnblockMessageId:
+            AsyncCompleteGrpcClientPlayerFriendUnblock(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case ClientPlayerFriendListBlocksMessageId:
+            AsyncCompleteGrpcClientPlayerFriendListBlocks(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case ClientPlayerFriendRecommendFriendsMessageId:
+            AsyncCompleteGrpcClientPlayerFriendRecommendFriends(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case ClientPlayerFriendNotifyFriendEventMessageId:
+            AsyncCompleteGrpcClientPlayerFriendNotifyFriendEvent(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
         default:
@@ -528,47 +717,59 @@ void HandleFriendCompletedQueueMessage(entt::registry& registry, entt::entity no
 
 void SetFriendHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler) {
 
-    AsyncFriendServiceAddFriendHandler = handler;
-    AsyncFriendServiceAcceptFriendHandler = handler;
-    AsyncFriendServiceRejectFriendHandler = handler;
-    AsyncFriendServiceRemoveFriendHandler = handler;
-    AsyncFriendServiceGetFriendListHandler = handler;
-    AsyncFriendServiceGetPendingRequestsHandler = handler;
-    AsyncFriendServiceNotifyOnlineHandler = handler;
-    AsyncFriendServiceNotifyOfflineHandler = handler;
+    AsyncClientPlayerFriendAddFriendHandler = handler;
+    AsyncClientPlayerFriendAcceptFriendHandler = handler;
+    AsyncClientPlayerFriendRejectFriendHandler = handler;
+    AsyncClientPlayerFriendRemoveFriendHandler = handler;
+    AsyncClientPlayerFriendGetFriendListHandler = handler;
+    AsyncClientPlayerFriendGetPendingRequestsHandler = handler;
+    AsyncClientPlayerFriendBlockHandler = handler;
+    AsyncClientPlayerFriendUnblockHandler = handler;
+    AsyncClientPlayerFriendListBlocksHandler = handler;
+    AsyncClientPlayerFriendRecommendFriendsHandler = handler;
+    AsyncClientPlayerFriendNotifyFriendEventHandler = handler;
 }
 
 void SetFriendIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler) {
 
-    if (!AsyncFriendServiceAddFriendHandler) {
-        AsyncFriendServiceAddFriendHandler = handler;
+    if (!AsyncClientPlayerFriendAddFriendHandler) {
+        AsyncClientPlayerFriendAddFriendHandler = handler;
     }
-    if (!AsyncFriendServiceAcceptFriendHandler) {
-        AsyncFriendServiceAcceptFriendHandler = handler;
+    if (!AsyncClientPlayerFriendAcceptFriendHandler) {
+        AsyncClientPlayerFriendAcceptFriendHandler = handler;
     }
-    if (!AsyncFriendServiceRejectFriendHandler) {
-        AsyncFriendServiceRejectFriendHandler = handler;
+    if (!AsyncClientPlayerFriendRejectFriendHandler) {
+        AsyncClientPlayerFriendRejectFriendHandler = handler;
     }
-    if (!AsyncFriendServiceRemoveFriendHandler) {
-        AsyncFriendServiceRemoveFriendHandler = handler;
+    if (!AsyncClientPlayerFriendRemoveFriendHandler) {
+        AsyncClientPlayerFriendRemoveFriendHandler = handler;
     }
-    if (!AsyncFriendServiceGetFriendListHandler) {
-        AsyncFriendServiceGetFriendListHandler = handler;
+    if (!AsyncClientPlayerFriendGetFriendListHandler) {
+        AsyncClientPlayerFriendGetFriendListHandler = handler;
     }
-    if (!AsyncFriendServiceGetPendingRequestsHandler) {
-        AsyncFriendServiceGetPendingRequestsHandler = handler;
+    if (!AsyncClientPlayerFriendGetPendingRequestsHandler) {
+        AsyncClientPlayerFriendGetPendingRequestsHandler = handler;
     }
-    if (!AsyncFriendServiceNotifyOnlineHandler) {
-        AsyncFriendServiceNotifyOnlineHandler = handler;
+    if (!AsyncClientPlayerFriendBlockHandler) {
+        AsyncClientPlayerFriendBlockHandler = handler;
     }
-    if (!AsyncFriendServiceNotifyOfflineHandler) {
-        AsyncFriendServiceNotifyOfflineHandler = handler;
+    if (!AsyncClientPlayerFriendUnblockHandler) {
+        AsyncClientPlayerFriendUnblockHandler = handler;
+    }
+    if (!AsyncClientPlayerFriendListBlocksHandler) {
+        AsyncClientPlayerFriendListBlocksHandler = handler;
+    }
+    if (!AsyncClientPlayerFriendRecommendFriendsHandler) {
+        AsyncClientPlayerFriendRecommendFriendsHandler = handler;
+    }
+    if (!AsyncClientPlayerFriendNotifyFriendEventHandler) {
+        AsyncClientPlayerFriendNotifyFriendEventHandler = handler;
     }
 }
 
 void InitFriendGrpcNode(const std::shared_ptr<::grpc::ChannelInterface>& channel, entt::registry& registry, entt::entity nodeEntity) {
 
-    registry.emplace<FriendServiceStubPtr>(nodeEntity, FriendService::NewStub(channel));
+    registry.emplace<ClientPlayerFriendStubPtr>(nodeEntity, ClientPlayerFriend::NewStub(channel));
 
 }
 

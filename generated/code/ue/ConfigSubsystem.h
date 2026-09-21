@@ -45,8 +45,10 @@
 #include "DungeonTable.h"
 #include "EquipSlotTable.h"
 #include "GlobalVariableTable.h"
+#include "GuildDonateTable.h"
 #include "GuildLevelTable.h"
 #include "GuildRuleTable.h"
+#include "GuildShopTable.h"
 #include "ItemTable.h"
 #include "MessageLimiterTable.h"
 #include "MirrorTable.h"
@@ -55,6 +57,7 @@
 #include "PetTable.h"
 #include "PetRuleTable.h"
 #include "RewardTable.h"
+#include "RoleNameRuleTable.h"
 #include "SkillTable.h"
 #include "SkillPermissionTable.h"
 #include "TestTable.h"
@@ -98,7 +101,7 @@ class MMORPGCONFIG_API UConfigSubsystem : public UGameInstanceSubsystem
 
 public:
 	/// 本产物覆盖的表数量。
-	static constexpr int32 TableCount = 31;
+	static constexpr int32 TableCount = 34;
 
 	UFUNCTION(BlueprintPure, Category = "Config", meta = (WorldContext = "WorldContextObject"))
 	static UConfigSubsystem* Get(const UObject* WorldContextObject);
@@ -198,10 +201,16 @@ public:
 	UGlobalVariableTable* GetGlobalVariableTable() const { return GlobalVariableTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UGuildDonateTable* GetGuildDonateTable() const { return GuildDonateTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UGuildLevelTable* GetGuildLevelTable() const { return GuildLevelTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UGuildRuleTable* GetGuildRuleTable() const { return GuildRuleTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	UGuildShopTable* GetGuildShopTable() const { return GuildShopTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	UItemTable* GetItemTable() const { return ItemTable; }
@@ -226,6 +235,9 @@ public:
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	URewardTable* GetRewardTable() const { return RewardTable; }
+
+	UFUNCTION(BlueprintPure, Category = "Config|Tables")
+	URoleNameRuleTable* GetRoleNameRuleTable() const { return RoleNameRuleTable; }
 
 	UFUNCTION(BlueprintPure, Category = "Config|Tables")
 	USkillTable* GetSkillTable() const { return SkillTable; }
@@ -276,9 +288,13 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UGlobalVariableTable> GlobalVariableTable;
 	UPROPERTY(Transient)
+	TObjectPtr<UGuildDonateTable> GuildDonateTable;
+	UPROPERTY(Transient)
 	TObjectPtr<UGuildLevelTable> GuildLevelTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UGuildRuleTable> GuildRuleTable;
+	UPROPERTY(Transient)
+	TObjectPtr<UGuildShopTable> GuildShopTable;
 	UPROPERTY(Transient)
 	TObjectPtr<UItemTable> ItemTable;
 	UPROPERTY(Transient)
@@ -295,6 +311,8 @@ private:
 	TObjectPtr<UPetRuleTable> PetRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<URewardTable> RewardTable;
+	UPROPERTY(Transient)
+	TObjectPtr<URoleNameRuleTable> RoleNameRuleTable;
 	UPROPERTY(Transient)
 	TObjectPtr<USkillTable> SkillTable;
 	UPROPERTY(Transient)

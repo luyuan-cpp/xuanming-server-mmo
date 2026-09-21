@@ -70,6 +70,9 @@ enum friend_error : int {
   kFriendTargetListFull = 15004,
   kFriendNoPendingRequest = 15005,
   kFriendTooManyPending = 15006,
+  kFriendBlocked = 15007,
+  kFriendBlockListFull = 15008,
+  kFriendTargetInboxFull = 15009,
   friend_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   friend_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -80,11 +83,11 @@ extern const uint32_t friend_error_internal_data_[];
 inline constexpr friend_error friend_error_MIN =
     static_cast<friend_error>(0);
 inline constexpr friend_error friend_error_MAX =
-    static_cast<friend_error>(15006);
+    static_cast<friend_error>(15009);
 [[nodiscard]] inline bool friend_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, friend_error_internal_data_);
 }
-inline constexpr int friend_error_ARRAYSIZE = 15006 + 1;
+inline constexpr int friend_error_ARRAYSIZE = 15009 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 friend_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(friend_error) {

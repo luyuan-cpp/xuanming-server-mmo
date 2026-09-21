@@ -1135,6 +1135,183 @@ void SendDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nod
     SendDataServiceAllocateIdSegment(registry, nodeEntity, derived, metaKeys, metaValues);
 }
 #pragma endregion
+#pragma region DataServiceReservePlayerName
+boost::object_pool<AsyncDataServiceReservePlayerNameGrpcClient> DataServiceReservePlayerNamePool;
+using AsyncDataServiceReservePlayerNameHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::data_service::ReservePlayerNameResponse&)>;
+AsyncDataServiceReservePlayerNameHandlerFunctionType AsyncDataServiceReservePlayerNameHandler;
+
+void AsyncCompleteGrpcDataServiceReservePlayerName(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncDataServiceReservePlayerNameGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncDataServiceReservePlayerNameHandler) {
+            AsyncDataServiceReservePlayerNameHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	DataServiceReservePlayerNamePool.destroy(call);
+}
+
+void SendDataServiceReservePlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ReservePlayerNameRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(DataServiceReservePlayerNamePool.construct());
+    call->response_reader = registry
+        .get<DataServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncReservePlayerName(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(DataServiceReservePlayerNameMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendDataServiceReservePlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ReservePlayerNameRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(DataServiceReservePlayerNamePool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<DataServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncReservePlayerName(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(DataServiceReservePlayerNameMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendDataServiceReservePlayerName(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::data_service::ReservePlayerNameRequest& derived = static_cast<const ::data_service::ReservePlayerNameRequest&>(message);
+    SendDataServiceReservePlayerName(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region DataServiceReleasePlayerName
+boost::object_pool<AsyncDataServiceReleasePlayerNameGrpcClient> DataServiceReleasePlayerNamePool;
+using AsyncDataServiceReleasePlayerNameHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::google::protobuf::Empty&)>;
+AsyncDataServiceReleasePlayerNameHandlerFunctionType AsyncDataServiceReleasePlayerNameHandler;
+
+void AsyncCompleteGrpcDataServiceReleasePlayerName(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncDataServiceReleasePlayerNameGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncDataServiceReleasePlayerNameHandler) {
+            AsyncDataServiceReleasePlayerNameHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	DataServiceReleasePlayerNamePool.destroy(call);
+}
+
+void SendDataServiceReleasePlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ReleasePlayerNameRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(DataServiceReleasePlayerNamePool.construct());
+    call->response_reader = registry
+        .get<DataServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncReleasePlayerName(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(DataServiceReleasePlayerNameMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendDataServiceReleasePlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ReleasePlayerNameRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(DataServiceReleasePlayerNamePool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<DataServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncReleasePlayerName(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(DataServiceReleasePlayerNameMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendDataServiceReleasePlayerName(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::data_service::ReleasePlayerNameRequest& derived = static_cast<const ::data_service::ReleasePlayerNameRequest&>(message);
+    SendDataServiceReleasePlayerName(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
+#pragma region DataServiceBatchGetPlayerName
+boost::object_pool<AsyncDataServiceBatchGetPlayerNameGrpcClient> DataServiceBatchGetPlayerNamePool;
+using AsyncDataServiceBatchGetPlayerNameHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::data_service::BatchGetPlayerNameResponse&)>;
+AsyncDataServiceBatchGetPlayerNameHandlerFunctionType AsyncDataServiceBatchGetPlayerNameHandler;
+
+void AsyncCompleteGrpcDataServiceBatchGetPlayerName(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& cq, void* got_tag) {
+    auto call(
+        static_cast<AsyncDataServiceBatchGetPlayerNameGrpcClient*>(got_tag));
+    if (call->status.ok()) {
+        if (AsyncDataServiceBatchGetPlayerNameHandler) {
+            AsyncDataServiceBatchGetPlayerNameHandler(call->context, call->reply);
+        }
+    } else {
+        LOG_ERROR << call->status.error_message();
+    }
+
+	DataServiceBatchGetPlayerNamePool.destroy(call);
+}
+
+void SendDataServiceBatchGetPlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::BatchGetPlayerNameRequest& request) {
+
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+    auto call(DataServiceBatchGetPlayerNamePool.construct());
+    call->response_reader = registry
+        .get<DataServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncBatchGetPlayerName(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(DataServiceBatchGetPlayerNameMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendDataServiceBatchGetPlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::BatchGetPlayerNameRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+
+    auto call(DataServiceBatchGetPlayerNamePool.construct());
+    auto& cq = registry.get<grpc::CompletionQueue>(nodeEntity);
+
+    const size_t count = std::min(metaKeys.size(), metaValues.size());
+    for (size_t i = 0; i < count; ++i) {
+        call->context.AddMetadata(metaKeys[i], Base64Encode(metaValues[i]));
+    }
+
+    call->response_reader = registry
+        .get<DataServiceStubPtr>(nodeEntity)
+        ->PrepareAsyncBatchGetPlayerName(&call->context, request,
+                                           &cq);
+    call->response_reader->StartCall();
+    GrpcTag* got_tag(tagPool.construct(DataServiceBatchGetPlayerNameMessageId, (void*)call));
+    call->response_reader->Finish(&call->reply, &call->status, (void*)got_tag);
+
+}
+
+void SendDataServiceBatchGetPlayerName(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues){
+    const ::data_service::BatchGetPlayerNameRequest& derived = static_cast<const ::data_service::BatchGetPlayerNameRequest&>(message);
+    SendDataServiceBatchGetPlayerName(registry, nodeEntity, derived, metaKeys, metaValues);
+}
+#pragma endregion
 
 void HandleDataServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag) {
         switch (grpcTag->messageId) {
@@ -1214,6 +1391,18 @@ void HandleDataServiceCompletedQueueMessage(entt::registry& registry, entt::enti
             AsyncCompleteGrpcDataServiceAllocateIdSegment(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
 			tagPool.destroy(grpcTag);
             break;
+        case DataServiceReservePlayerNameMessageId:
+            AsyncCompleteGrpcDataServiceReservePlayerName(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case DataServiceReleasePlayerNameMessageId:
+            AsyncCompleteGrpcDataServiceReleasePlayerName(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
+        case DataServiceBatchGetPlayerNameMessageId:
+            AsyncCompleteGrpcDataServiceBatchGetPlayerName(registry, nodeEntity, completeQueueComp, grpcTag->valuePtr);
+			tagPool.destroy(grpcTag);
+            break;
         default:
             break;
         }
@@ -1240,6 +1429,9 @@ void SetDataServiceHandler(const std::function<void(const ClientContext&, const 
     AsyncDataServiceQueryTransactionLogHandler = handler;
     AsyncDataServiceCreateEventSnapshotHandler = handler;
     AsyncDataServiceAllocateIdSegmentHandler = handler;
+    AsyncDataServiceReservePlayerNameHandler = handler;
+    AsyncDataServiceReleasePlayerNameHandler = handler;
+    AsyncDataServiceBatchGetPlayerNameHandler = handler;
 }
 
 void SetDataServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler) {
@@ -1300,6 +1492,15 @@ void SetDataServiceIfEmptyHandler(const std::function<void(const ClientContext&,
     }
     if (!AsyncDataServiceAllocateIdSegmentHandler) {
         AsyncDataServiceAllocateIdSegmentHandler = handler;
+    }
+    if (!AsyncDataServiceReservePlayerNameHandler) {
+        AsyncDataServiceReservePlayerNameHandler = handler;
+    }
+    if (!AsyncDataServiceReleasePlayerNameHandler) {
+        AsyncDataServiceReleasePlayerNameHandler = handler;
+    }
+    if (!AsyncDataServiceBatchGetPlayerNameHandler) {
+        AsyncDataServiceBatchGetPlayerNameHandler = handler;
     }
 }
 

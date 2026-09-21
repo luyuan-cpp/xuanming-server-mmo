@@ -49,9 +49,13 @@ public class AllTable {
 
         GlobalVariableTableManager.getInstance().load(configDir, useBinary);
 
+        GuildDonateTableManager.getInstance().load(configDir, useBinary);
+
         GuildLevelTableManager.getInstance().load(configDir, useBinary);
 
         GuildRuleTableManager.getInstance().load(configDir, useBinary);
+
+        GuildShopTableManager.getInstance().load(configDir, useBinary);
 
         ItemTableManager.getInstance().load(configDir, useBinary);
 
@@ -68,6 +72,8 @@ public class AllTable {
         PetRuleTableManager.getInstance().load(configDir, useBinary);
 
         RewardTableManager.getInstance().load(configDir, useBinary);
+
+        RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
 
         SkillTableManager.getInstance().load(configDir, useBinary);
 
@@ -94,7 +100,7 @@ public class AllTable {
      * @param useBinary true to load .pb (proto binary), false to load .json.
      */
     public static void loadTablesAsync(String configDir, boolean useBinary) throws Exception {
-        CountDownLatch latch = new CountDownLatch(31);
+        CountDownLatch latch = new CountDownLatch(34);
 
         new Thread(() -> {
             try {
@@ -258,6 +264,16 @@ public class AllTable {
 
         new Thread(() -> {
             try {
+                GuildDonateTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load GuildDonate table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
                 GuildLevelTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load GuildLevel table", e);
@@ -271,6 +287,16 @@ public class AllTable {
                 GuildRuleTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load GuildRule table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                GuildShopTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load GuildShop table", e);
             } finally {
                 latch.countDown();
             }
@@ -351,6 +377,16 @@ public class AllTable {
                 RewardTableManager.getInstance().load(configDir, useBinary);
             } catch (Exception e) {
                 throw new RuntimeException("Failed to load Reward table", e);
+            } finally {
+                latch.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
+            } catch (Exception e) {
+                throw new RuntimeException("Failed to load RoleNameRule table", e);
             } finally {
                 latch.countDown();
             }
@@ -458,9 +494,13 @@ public class AllTable {
 
         GlobalVariableTableManager.getInstance().load(configDir, useBinary);
 
+        GuildDonateTableManager.getInstance().load(configDir, useBinary);
+
         GuildLevelTableManager.getInstance().load(configDir, useBinary);
 
         GuildRuleTableManager.getInstance().load(configDir, useBinary);
+
+        GuildShopTableManager.getInstance().load(configDir, useBinary);
 
         ItemTableManager.getInstance().load(configDir, useBinary);
 
@@ -477,6 +517,8 @@ public class AllTable {
         PetRuleTableManager.getInstance().load(configDir, useBinary);
 
         RewardTableManager.getInstance().load(configDir, useBinary);
+
+        RoleNameRuleTableManager.getInstance().load(configDir, useBinary);
 
         SkillTableManager.getInstance().load(configDir, useBinary);
 

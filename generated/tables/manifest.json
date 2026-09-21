@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
-  "version": 17,
-  "content_digest": "9fbafd4ff0e96edf2f2d48b062686a481beab2de4b723f1135a558149e34728d",
-  "generated_at": "2026-09-18T07:52:52Z",
+  "version": 18,
+  "content_digest": "186d8105cf4bde4abab2998dbeee26d598e0858d0a0d3337ea9ee48fb7b69de0",
+  "generated_at": "2026-09-21T02:39:50Z",
   "source_rev": {
-    "commit": "66c546e7099bbb439a70a4d2ac107edd515a486a",
+    "commit": "821f38a292596eb6eb667519a802ae70a8d045e9",
     "data_dirty": true
   },
-  "table_count": 31,
+  "table_count": 34,
   "tables": [
     {
       "name": "ActivitySchedule",
@@ -378,6 +378,29 @@
       ]
     },
     {
+      "name": "GuildDonate",
+      "rows": 3,
+      "source": {
+        "file": "GuildDonate.xlsx",
+        "size": 5441,
+        "sha256": "053335c5eb7dc45bbe6d896edec8cf9005ebe4a6bf109b2b765cdcf8bc5181bd"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "guilddonate.json",
+          "size": 595,
+          "sha256": "55636091453cb76d002b9d87bf55e50b3ab13eb30e12ad862c7354bbc1485d35"
+        },
+        {
+          "kind": "binary",
+          "file": "guilddonate.pb",
+          "size": 94,
+          "sha256": "0601bca03ea6288602fa5397fec091e0fe4da7659ae1503c2a4c930fa0ab35ba"
+        }
+      ]
+    },
+    {
       "name": "GuildLevel",
       "rows": 10,
       "source": {
@@ -424,6 +447,29 @@
       ]
     },
     {
+      "name": "GuildShop",
+      "rows": 11,
+      "source": {
+        "file": "GuildShop.xlsx",
+        "size": 5991,
+        "sha256": "1f899177f2b9f5658e30a53c108b4aad3dfe3011cecda73131507d1122b75cba"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "guildshop.json",
+          "size": 2284,
+          "sha256": "5479099197dafe84a6bc006c5a1aabb402832f76b022001090294f5e1c473c55"
+        },
+        {
+          "kind": "binary",
+          "file": "guildshop.pb",
+          "size": 351,
+          "sha256": "21a8ef5067d224f50315ce87c6fe031ba8701e004b1cbfe9a7d3b61ad5588e06"
+        }
+      ]
+    },
+    {
       "name": "Item",
       "rows": 28,
       "source": {
@@ -448,24 +494,24 @@
     },
     {
       "name": "MessageLimiter",
-      "rows": 46,
+      "rows": 53,
       "source": {
         "file": "MessageLimiter.xlsx",
-        "size": 5710,
-        "sha256": "9e62f407b75d14342e8daaa7753ca2a19eb2d2ea294a13c601e860da0523539b"
+        "size": 5822,
+        "sha256": "0b1a73f8d3519932fe4f0bda13002dc71751f02638d69f27ff1aa66d777df8c0"
       },
       "artifacts": [
         {
           "kind": "json",
           "file": "messagelimiter.json",
-          "size": 4117,
-          "sha256": "b4734a207eed79f06eb43970463406de7c56ed25a61d44bcc8cd026277631b50"
+          "size": 4742,
+          "sha256": "e3bd46864e2804bacaddba1c1c625ea7b965acbd8c44994ac1a4bab3376c4f19"
         },
         {
           "kind": "binary",
           "file": "messagelimiter.pb",
-          "size": 541,
-          "sha256": "b4854a50e1fc69249acfcff14c53a506ba460189f66570c0bff664a7ddd89173"
+          "size": 625,
+          "sha256": "9975479ece45ce1dcc86bbc4de56840024ed4609a737f01d9cdbe110532f7168"
         }
       ]
     },
@@ -604,6 +650,29 @@
           "file": "reward.pb",
           "size": 112,
           "sha256": "ffcf85dda3c8bef361c10650378bf4fb254a235c86662fe2006f132ca8e08028"
+        }
+      ]
+    },
+    {
+      "name": "RoleNameRule",
+      "rows": 1,
+      "source": {
+        "file": "RoleNameRule.xlsx",
+        "size": 5201,
+        "sha256": "ca4f1674b5ad25db6c151450927ef43dda33ae73478164d752cdf0e5eb56d5a4"
+      },
+      "artifacts": [
+        {
+          "kind": "json",
+          "file": "rolenamerule.json",
+          "size": 199,
+          "sha256": "b004e910ab8c5ed46d56afcdb646e0f36de8c32714252105553fd2ee39aa6d7e"
+        },
+        {
+          "kind": "binary",
+          "file": "rolenamerule.pb",
+          "size": 37,
+          "sha256": "bf1490a12a559ce1c219b74280eddddba8163aaef5228553a938d6dbcc295cf3"
         }
       ]
     },

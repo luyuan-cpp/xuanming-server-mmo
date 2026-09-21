@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -336,12 +337,66 @@ func (f *fakeSchemaRunner) run(_ context.Context, _ *sql.DB, opts schemamigrate.
 	return f.report, f.err
 }
 
+// missingIndexWarningSample 是 schemamigrate 那条"缺索引"告警的**逐字样本**,抄自
+// go/schemamigrate/plan.go 里生成它的那句 fmt.Sprintf。
+//
+// ⚠ 它与生产代码的联系只有一条前缀常量 missingIndexWarningPrefix(下面的用例断言样本以它开头),
+// schemamigrate 那边改文案时**本测试不会自动变红** —— 真正的机械保障是交接文档 §2 第 7a 步的真库
+// 核对("-migrate 的输出里不得出现 `缺索引(不会自动建)`")。这一点与 guild 的同类用例是同一个
+// 取舍:不为了一条文案去起真 MySQL。
+const missingIndexWarningSample = "缺索引(不会自动建):friend_capacity 上没有 proto 声明的索引 idx_friend_capacity_0"
+
+// TestMissingIndexWarningIsBlocking 钉住"缺索引不是告警,是阻断"。
+//
+// 为什么值得单独一条用例:schemamigrate 对**已存在的表**只 ADD COLUMN,不补建 proto 新声明的
+// 普通索引,而 Warning 不进 ExitCode。friend 这边最直接的受害者是 friend_capacity 的回收
+// (依赖 (friend_count, created_ms) 复合索引),缺了它每轮候选读都是全表扫,**全程零报错**。
+func TestMissingIndexWarningIsBlocking(t *testing.T) {
+	if !strings.HasPrefix(missingIndexWarningSample, missingIndexWarningPrefix) {
+		t.Fatalf("样本告警 %q 不以生产代码的前缀 %q 开头,missingIndexWarnings 会漏判",
+			missingIndexWarningSample, missingIndexWarningPrefix)
+	}
+
+	// 只有"缺索引"那一条被挑出来:多余列之类的告警必须继续放行,否则一次无害的 schema 漂移
+	// 就会把服务挡在启动之外。
+	report := schemamigrate.Report{Warnings: []string{
+		"extra column: friend.legacy_col 不在 proto 里",
+		missingIndexWarningSample,
+	}}
+	got := missingIndexWarnings(report)
+	if len(got) != 1 || got[0] != missingIndexWarningSample {
+		t.Fatalf("应只挑出那一条缺索引告警,实际 %v", got)
+	}
+
+	err := missingIndexError(report)
+	if err == nil {
+		t.Fatal("缺索引必须返回错误(拒绝启动 / -migrate 返回非 0)")
+	}
+	// 错误里要带上原始告警:排查的人靠它知道是哪张表的哪条索引。
+	if !strings.Contains(err.Error(), missingIndexWarningSample) {
+		t.Errorf("错误应带上原始告警原文,实际: %v", err)
+	}
+	if !strings.Contains(err.Error(), data.DatabaseName) {
+		t.Errorf("错误应点名库 %q,实际: %v", data.DatabaseName, err)
+	}
+
+	if missingIndexError(schemamigrate.Report{Warnings: []string{"extra column"}}) != nil {
+		t.Error("只有多余列告警时不得拒绝启动")
+	}
+	if missingIndexError(schemamigrate.Report{}) != nil {
+		t.Error("没有任何告警时不得拒绝启动")
+	}
+}
+
 // TestEnsureSchemaRejectsStartupWhenPlanNotClean 钉住启动期建表策略(D-14 第 4 条):
 // AutoMigrate 没写 / true 跑 Up,false 只跑只读 Plan;出错、需人工项、(Plan 下)有待执行语句
 // 都拒绝启动,Plan 拒绝时带补救命令。
 //
 // 最要紧的一条是"false + 有待执行语句必须拒启":放它过去的话,服务会带着缺列的表对外服务,
 // 每个写好友的请求都在 MySQL 报 unknown column,而启动日志里一切正常。
+//
+// "缺索引"两种模式都拒启:它落在 Warnings 里,而 Report.Clean() 不看 Warnings —— 两个分支
+// 各自都要单独判一次,漏掉任一个都会让缺索引静默放行(见 missingIndexWarnings 的说明)。
 func TestEnsureSchemaRejectsStartupWhenPlanNotClean(t *testing.T) {
 	logtest.Discard(t)
 	yes, no := true, false
@@ -359,6 +414,8 @@ func TestEnsureSchemaRejectsStartupWhenPlanNotClean(t *testing.T) {
 		{name: "Up 只有告警照常启动", autoMigrate: &yes, report: schemamigrate.Report{Warnings: []string{"extra column"}}, wantUp: true},
 		{name: "Up 出错拒绝启动", autoMigrate: &yes, err: schemamigrate.ErrLockBusy, wantUp: true, wantErr: true},
 		{name: "Up 有需人工项拒绝启动", autoMigrate: &yes, report: schemamigrate.Report{Manual: []string{"type drift"}}, wantUp: true, wantErr: true},
+		{name: "Up 缺索引拒绝启动", autoMigrate: &yes, report: schemamigrate.Report{Warnings: []string{missingIndexWarningSample}},
+			wantUp: true, wantErr: true},
 		{name: "false + 库干净", autoMigrate: &no},
 		{name: "false + 只有告警", autoMigrate: &no, report: schemamigrate.Report{Warnings: []string{"extra column"}}},
 		{name: "false + 有待执行语句", autoMigrate: &no, report: schemamigrate.Report{Statements: []string{"CREATE TABLE friend_block ..."}},
@@ -367,6 +424,12 @@ func TestEnsureSchemaRejectsStartupWhenPlanNotClean(t *testing.T) {
 			wantErr: true, wantRemedy: true},
 		{name: "false + Plan 出错", autoMigrate: &no, err: errors.New("dial tcp: connection refused"),
 			wantErr: true, wantRemedy: true},
+		// 只读核对同样要拦住缺索引:Report.Clean() 只看 Statements 与 Manual,缺索引在 Warnings 里,
+		// 所以这条走的不是上面 !Clean() 那个分支,而是它之后单独那一判。
+		// 它**不带**补救命令(migrateRemedyCommand 是"去跑 -migrate",而 -migrate 同样不补建索引,
+		// 指过去只会让人白跑一趟),所以这里 wantRemedy 为 false。
+		{name: "false + 缺索引", autoMigrate: &no, report: schemamigrate.Report{Warnings: []string{missingIndexWarningSample}},
+			wantErr: true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -407,6 +470,86 @@ func TestEnsureSchemaRejectsStartupWhenPlanNotClean(t *testing.T) {
 			}
 		})
 	}
+}
+
+// nopConnector 让 runMigration 拿到一个**非 nil** 的 *sql.DB(它会 defer db.Close()),
+// 但这个池永远不会被真正连上:runMigration 只把 db 原样交给注入的 up,而 fakeSchemaRunner 不碰它。
+// sql.OpenDB 是惰性的,不发任何连接;真有代码去连,会拿到下面这条错误而不是悄悄连上某个库。
+type nopConnector struct{}
+
+func (nopConnector) Connect(context.Context) (driver.Conn, error) {
+	return nil, errors.New("测试里的 *sql.DB 不应被连接")
+}
+
+func (nopConnector) Driver() driver.Driver { return nopDriver{} }
+
+type nopDriver struct{}
+
+func (nopDriver) Open(string) (driver.Conn, error) {
+	return nil, errors.New("测试里的 *sql.DB 不应被连接")
+}
+
+// TestRunMigrationExitCodes 钉住 `-migrate` 的退出码(D-14:0 成功 / 1 失败 / 3 锁忙 / 4 需人工)。
+//
+// K8s 的 friend-migrate Job 与部署脚本**只看退出码**,所以这张表就是它们的契约。最要紧的是
+// "缺索引 → 4":schemamigrate 把缺索引记成 Warning、ExitCode 算出来是 0,不在 runMigration 里升级的话
+// Job 会绿着结束,随后起来的 friend Pod 又被 ensureSchema 拦下 —— "迁移成功但服务起不来"。
+func TestRunMigrationExitCodes(t *testing.T) {
+	logtest.Discard(t)
+	for _, tc := range []struct {
+		name   string
+		report schemamigrate.Report
+		err    error
+		want   int
+	}{
+		{name: "建表成功", report: schemamigrate.Report{Statements: []string{"CREATE TABLE friend ..."}}, want: schemamigrate.ExitOK},
+		{name: "只有多余列告警照常成功", report: schemamigrate.Report{Warnings: []string{"extra column"}}, want: schemamigrate.ExitOK},
+		{name: "缺索引升级成需人工", report: schemamigrate.Report{Warnings: []string{missingIndexWarningSample}}, want: schemamigrate.ExitManual},
+		{name: "需人工项", report: schemamigrate.Report{Manual: []string{"type drift"}}, want: schemamigrate.ExitManual},
+		{name: "锁忙可重试", err: schemamigrate.ErrLockBusy, want: schemamigrate.ExitLockBusy},
+		{name: "迁移出错", err: errors.New("dial tcp: connection refused"), want: schemamigrate.ExitFailed},
+		// 迁移本身已经失败时,缺索引告警不得把退出码"改善"成 4:失败(1)比需人工(4)更要紧,
+		// Job 的重试策略也不同。runMigration 只在 ExitOK 时才做缺索引升级,这条钉住那个条件。
+		{name: "出错且缺索引仍按出错", report: schemamigrate.Report{Warnings: []string{missingIndexWarningSample}},
+			err: errors.New("ddl failed"), want: schemamigrate.ExitFailed},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			up := &fakeSchemaRunner{report: tc.report, err: tc.err}
+			openMySQL := func(config.MySQLConf) (*sql.DB, error) { return sql.OpenDB(nopConnector{}), nil }
+
+			got := runMigration(config.Config{}, false, openMySQL, up.run)
+
+			if got != tc.want {
+				t.Fatalf("退出码应为 %d,实际 %d", tc.want, got)
+			}
+			if up.calls != 1 {
+				t.Fatalf("应恰好跑一次 Up,实际 %d 次", up.calls)
+			}
+		})
+	}
+
+	t.Run("连库失败按失败退出且不跑迁移", func(t *testing.T) {
+		up := &fakeSchemaRunner{}
+		openMySQL := func(config.MySQLConf) (*sql.DB, error) { return nil, errors.New("unknown database") }
+
+		if got := runMigration(config.Config{}, false, openMySQL, up.run); got != schemamigrate.ExitFailed {
+			t.Fatalf("连不上库应退出 %d,实际 %d", schemamigrate.ExitFailed, got)
+		}
+		if up.calls != 0 {
+			t.Fatalf("连不上库时不得跑迁移,实际 %d 次", up.calls)
+		}
+	})
+
+	t.Run("-allow-modify 原样传给 Up", func(t *testing.T) {
+		up := &fakeSchemaRunner{}
+		openMySQL := func(config.MySQLConf) (*sql.DB, error) { return sql.OpenDB(nopConnector{}), nil }
+
+		runMigration(config.Config{}, true, openMySQL, up.run)
+
+		if !up.opts.AllowModifyColumn {
+			t.Fatal("显式 -migrate -allow-modify 时,改列授权必须传到 Up")
+		}
+	})
 }
 
 // TestValidateMigrationFlags:`-allow-modify` 不带 `-migrate` 必须报错。

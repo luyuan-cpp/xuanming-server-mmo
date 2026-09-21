@@ -22,354 +22,480 @@
 #include <grpcpp/ports_def.inc>
 namespace friendpb {
 
-static const char* FriendService_method_names[] = {
-  "/friendpb.FriendService/AddFriend",
-  "/friendpb.FriendService/AcceptFriend",
-  "/friendpb.FriendService/RejectFriend",
-  "/friendpb.FriendService/RemoveFriend",
-  "/friendpb.FriendService/GetFriendList",
-  "/friendpb.FriendService/GetPendingRequests",
-  "/friendpb.FriendService/NotifyOnline",
-  "/friendpb.FriendService/NotifyOffline",
+static const char* ClientPlayerFriend_method_names[] = {
+  "/friendpb.ClientPlayerFriend/AddFriend",
+  "/friendpb.ClientPlayerFriend/AcceptFriend",
+  "/friendpb.ClientPlayerFriend/RejectFriend",
+  "/friendpb.ClientPlayerFriend/RemoveFriend",
+  "/friendpb.ClientPlayerFriend/GetFriendList",
+  "/friendpb.ClientPlayerFriend/GetPendingRequests",
+  "/friendpb.ClientPlayerFriend/Block",
+  "/friendpb.ClientPlayerFriend/Unblock",
+  "/friendpb.ClientPlayerFriend/ListBlocks",
+  "/friendpb.ClientPlayerFriend/RecommendFriends",
+  "/friendpb.ClientPlayerFriend/NotifyFriendEvent",
 };
 
-std::unique_ptr< FriendService::Stub> FriendService::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
+std::unique_ptr< ClientPlayerFriend::Stub> ClientPlayerFriend::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
   (void)options;
-  std::unique_ptr< FriendService::Stub> stub(new FriendService::Stub(channel, options));
+  std::unique_ptr< ClientPlayerFriend::Stub> stub(new ClientPlayerFriend::Stub(channel, options));
   return stub;
 }
 
-FriendService::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options)
-  : channel_(channel), rpcmethod_AddFriend_(FriendService_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_AcceptFriend_(FriendService_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_RejectFriend_(FriendService_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_RemoveFriend_(FriendService_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_GetFriendList_(FriendService_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_GetPendingRequests_(FriendService_method_names[5], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_NotifyOnline_(FriendService_method_names[6], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
-  , rpcmethod_NotifyOffline_(FriendService_method_names[7], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+ClientPlayerFriend::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options)
+  : channel_(channel), rpcmethod_AddFriend_(ClientPlayerFriend_method_names[0], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_AcceptFriend_(ClientPlayerFriend_method_names[1], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_RejectFriend_(ClientPlayerFriend_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_RemoveFriend_(ClientPlayerFriend_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_GetFriendList_(ClientPlayerFriend_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_GetPendingRequests_(ClientPlayerFriend_method_names[5], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_Block_(ClientPlayerFriend_method_names[6], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_Unblock_(ClientPlayerFriend_method_names[7], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_ListBlocks_(ClientPlayerFriend_method_names[8], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_RecommendFriends_(ClientPlayerFriend_method_names[9], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_NotifyFriendEvent_(ClientPlayerFriend_method_names[10], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
-::grpc::Status FriendService::Stub::AddFriend(::grpc::ClientContext* context, const ::friendpb::AddFriendRequest& request, ::friendpb::AddFriendResponse* response) {
+::grpc::Status ClientPlayerFriend::Stub::AddFriend(::grpc::ClientContext* context, const ::friendpb::AddFriendRequest& request, ::friendpb::AddFriendResponse* response) {
   return ::grpc::internal::BlockingUnaryCall< ::friendpb::AddFriendRequest, ::friendpb::AddFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_AddFriend_, context, request, response);
 }
 
-void FriendService::Stub::async::AddFriend(::grpc::ClientContext* context, const ::friendpb::AddFriendRequest* request, ::friendpb::AddFriendResponse* response, std::function<void(::grpc::Status)> f) {
+void ClientPlayerFriend::Stub::async::AddFriend(::grpc::ClientContext* context, const ::friendpb::AddFriendRequest* request, ::friendpb::AddFriendResponse* response, std::function<void(::grpc::Status)> f) {
   ::grpc::internal::CallbackUnaryCall< ::friendpb::AddFriendRequest, ::friendpb::AddFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AddFriend_, context, request, response, std::move(f));
 }
 
-void FriendService::Stub::async::AddFriend(::grpc::ClientContext* context, const ::friendpb::AddFriendRequest* request, ::friendpb::AddFriendResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+void ClientPlayerFriend::Stub::async::AddFriend(::grpc::ClientContext* context, const ::friendpb::AddFriendRequest* request, ::friendpb::AddFriendResponse* response, ::grpc::ClientUnaryReactor* reactor) {
   ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AddFriend_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::AddFriendResponse>* FriendService::Stub::PrepareAsyncAddFriendRaw(::grpc::ClientContext* context, const ::friendpb::AddFriendRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::AddFriendResponse>* ClientPlayerFriend::Stub::PrepareAsyncAddFriendRaw(::grpc::ClientContext* context, const ::friendpb::AddFriendRequest& request, ::grpc::CompletionQueue* cq) {
   return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::AddFriendResponse, ::friendpb::AddFriendRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_AddFriend_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::AddFriendResponse>* FriendService::Stub::AsyncAddFriendRaw(::grpc::ClientContext* context, const ::friendpb::AddFriendRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::AddFriendResponse>* ClientPlayerFriend::Stub::AsyncAddFriendRaw(::grpc::ClientContext* context, const ::friendpb::AddFriendRequest& request, ::grpc::CompletionQueue* cq) {
   auto* result =
     this->PrepareAsyncAddFriendRaw(context, request, cq);
   result->StartCall();
   return result;
 }
 
-::grpc::Status FriendService::Stub::AcceptFriend(::grpc::ClientContext* context, const ::friendpb::AcceptFriendRequest& request, ::friendpb::AcceptFriendResponse* response) {
+::grpc::Status ClientPlayerFriend::Stub::AcceptFriend(::grpc::ClientContext* context, const ::friendpb::AcceptFriendRequest& request, ::friendpb::AcceptFriendResponse* response) {
   return ::grpc::internal::BlockingUnaryCall< ::friendpb::AcceptFriendRequest, ::friendpb::AcceptFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_AcceptFriend_, context, request, response);
 }
 
-void FriendService::Stub::async::AcceptFriend(::grpc::ClientContext* context, const ::friendpb::AcceptFriendRequest* request, ::friendpb::AcceptFriendResponse* response, std::function<void(::grpc::Status)> f) {
+void ClientPlayerFriend::Stub::async::AcceptFriend(::grpc::ClientContext* context, const ::friendpb::AcceptFriendRequest* request, ::friendpb::AcceptFriendResponse* response, std::function<void(::grpc::Status)> f) {
   ::grpc::internal::CallbackUnaryCall< ::friendpb::AcceptFriendRequest, ::friendpb::AcceptFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AcceptFriend_, context, request, response, std::move(f));
 }
 
-void FriendService::Stub::async::AcceptFriend(::grpc::ClientContext* context, const ::friendpb::AcceptFriendRequest* request, ::friendpb::AcceptFriendResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+void ClientPlayerFriend::Stub::async::AcceptFriend(::grpc::ClientContext* context, const ::friendpb::AcceptFriendRequest* request, ::friendpb::AcceptFriendResponse* response, ::grpc::ClientUnaryReactor* reactor) {
   ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AcceptFriend_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::AcceptFriendResponse>* FriendService::Stub::PrepareAsyncAcceptFriendRaw(::grpc::ClientContext* context, const ::friendpb::AcceptFriendRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::AcceptFriendResponse>* ClientPlayerFriend::Stub::PrepareAsyncAcceptFriendRaw(::grpc::ClientContext* context, const ::friendpb::AcceptFriendRequest& request, ::grpc::CompletionQueue* cq) {
   return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::AcceptFriendResponse, ::friendpb::AcceptFriendRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_AcceptFriend_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::AcceptFriendResponse>* FriendService::Stub::AsyncAcceptFriendRaw(::grpc::ClientContext* context, const ::friendpb::AcceptFriendRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::AcceptFriendResponse>* ClientPlayerFriend::Stub::AsyncAcceptFriendRaw(::grpc::ClientContext* context, const ::friendpb::AcceptFriendRequest& request, ::grpc::CompletionQueue* cq) {
   auto* result =
     this->PrepareAsyncAcceptFriendRaw(context, request, cq);
   result->StartCall();
   return result;
 }
 
-::grpc::Status FriendService::Stub::RejectFriend(::grpc::ClientContext* context, const ::friendpb::RejectFriendRequest& request, ::friendpb::RejectFriendResponse* response) {
+::grpc::Status ClientPlayerFriend::Stub::RejectFriend(::grpc::ClientContext* context, const ::friendpb::RejectFriendRequest& request, ::friendpb::RejectFriendResponse* response) {
   return ::grpc::internal::BlockingUnaryCall< ::friendpb::RejectFriendRequest, ::friendpb::RejectFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_RejectFriend_, context, request, response);
 }
 
-void FriendService::Stub::async::RejectFriend(::grpc::ClientContext* context, const ::friendpb::RejectFriendRequest* request, ::friendpb::RejectFriendResponse* response, std::function<void(::grpc::Status)> f) {
+void ClientPlayerFriend::Stub::async::RejectFriend(::grpc::ClientContext* context, const ::friendpb::RejectFriendRequest* request, ::friendpb::RejectFriendResponse* response, std::function<void(::grpc::Status)> f) {
   ::grpc::internal::CallbackUnaryCall< ::friendpb::RejectFriendRequest, ::friendpb::RejectFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RejectFriend_, context, request, response, std::move(f));
 }
 
-void FriendService::Stub::async::RejectFriend(::grpc::ClientContext* context, const ::friendpb::RejectFriendRequest* request, ::friendpb::RejectFriendResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+void ClientPlayerFriend::Stub::async::RejectFriend(::grpc::ClientContext* context, const ::friendpb::RejectFriendRequest* request, ::friendpb::RejectFriendResponse* response, ::grpc::ClientUnaryReactor* reactor) {
   ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RejectFriend_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::RejectFriendResponse>* FriendService::Stub::PrepareAsyncRejectFriendRaw(::grpc::ClientContext* context, const ::friendpb::RejectFriendRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::RejectFriendResponse>* ClientPlayerFriend::Stub::PrepareAsyncRejectFriendRaw(::grpc::ClientContext* context, const ::friendpb::RejectFriendRequest& request, ::grpc::CompletionQueue* cq) {
   return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::RejectFriendResponse, ::friendpb::RejectFriendRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_RejectFriend_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::RejectFriendResponse>* FriendService::Stub::AsyncRejectFriendRaw(::grpc::ClientContext* context, const ::friendpb::RejectFriendRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::RejectFriendResponse>* ClientPlayerFriend::Stub::AsyncRejectFriendRaw(::grpc::ClientContext* context, const ::friendpb::RejectFriendRequest& request, ::grpc::CompletionQueue* cq) {
   auto* result =
     this->PrepareAsyncRejectFriendRaw(context, request, cq);
   result->StartCall();
   return result;
 }
 
-::grpc::Status FriendService::Stub::RemoveFriend(::grpc::ClientContext* context, const ::friendpb::RemoveFriendRequest& request, ::friendpb::RemoveFriendResponse* response) {
+::grpc::Status ClientPlayerFriend::Stub::RemoveFriend(::grpc::ClientContext* context, const ::friendpb::RemoveFriendRequest& request, ::friendpb::RemoveFriendResponse* response) {
   return ::grpc::internal::BlockingUnaryCall< ::friendpb::RemoveFriendRequest, ::friendpb::RemoveFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_RemoveFriend_, context, request, response);
 }
 
-void FriendService::Stub::async::RemoveFriend(::grpc::ClientContext* context, const ::friendpb::RemoveFriendRequest* request, ::friendpb::RemoveFriendResponse* response, std::function<void(::grpc::Status)> f) {
+void ClientPlayerFriend::Stub::async::RemoveFriend(::grpc::ClientContext* context, const ::friendpb::RemoveFriendRequest* request, ::friendpb::RemoveFriendResponse* response, std::function<void(::grpc::Status)> f) {
   ::grpc::internal::CallbackUnaryCall< ::friendpb::RemoveFriendRequest, ::friendpb::RemoveFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RemoveFriend_, context, request, response, std::move(f));
 }
 
-void FriendService::Stub::async::RemoveFriend(::grpc::ClientContext* context, const ::friendpb::RemoveFriendRequest* request, ::friendpb::RemoveFriendResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+void ClientPlayerFriend::Stub::async::RemoveFriend(::grpc::ClientContext* context, const ::friendpb::RemoveFriendRequest* request, ::friendpb::RemoveFriendResponse* response, ::grpc::ClientUnaryReactor* reactor) {
   ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RemoveFriend_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::RemoveFriendResponse>* FriendService::Stub::PrepareAsyncRemoveFriendRaw(::grpc::ClientContext* context, const ::friendpb::RemoveFriendRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::RemoveFriendResponse>* ClientPlayerFriend::Stub::PrepareAsyncRemoveFriendRaw(::grpc::ClientContext* context, const ::friendpb::RemoveFriendRequest& request, ::grpc::CompletionQueue* cq) {
   return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::RemoveFriendResponse, ::friendpb::RemoveFriendRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_RemoveFriend_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::RemoveFriendResponse>* FriendService::Stub::AsyncRemoveFriendRaw(::grpc::ClientContext* context, const ::friendpb::RemoveFriendRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::RemoveFriendResponse>* ClientPlayerFriend::Stub::AsyncRemoveFriendRaw(::grpc::ClientContext* context, const ::friendpb::RemoveFriendRequest& request, ::grpc::CompletionQueue* cq) {
   auto* result =
     this->PrepareAsyncRemoveFriendRaw(context, request, cq);
   result->StartCall();
   return result;
 }
 
-::grpc::Status FriendService::Stub::GetFriendList(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest& request, ::friendpb::GetFriendListResponse* response) {
+::grpc::Status ClientPlayerFriend::Stub::GetFriendList(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest& request, ::friendpb::GetFriendListResponse* response) {
   return ::grpc::internal::BlockingUnaryCall< ::friendpb::GetFriendListRequest, ::friendpb::GetFriendListResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GetFriendList_, context, request, response);
 }
 
-void FriendService::Stub::async::GetFriendList(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest* request, ::friendpb::GetFriendListResponse* response, std::function<void(::grpc::Status)> f) {
+void ClientPlayerFriend::Stub::async::GetFriendList(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest* request, ::friendpb::GetFriendListResponse* response, std::function<void(::grpc::Status)> f) {
   ::grpc::internal::CallbackUnaryCall< ::friendpb::GetFriendListRequest, ::friendpb::GetFriendListResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetFriendList_, context, request, response, std::move(f));
 }
 
-void FriendService::Stub::async::GetFriendList(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest* request, ::friendpb::GetFriendListResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+void ClientPlayerFriend::Stub::async::GetFriendList(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest* request, ::friendpb::GetFriendListResponse* response, ::grpc::ClientUnaryReactor* reactor) {
   ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetFriendList_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::GetFriendListResponse>* FriendService::Stub::PrepareAsyncGetFriendListRaw(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::GetFriendListResponse>* ClientPlayerFriend::Stub::PrepareAsyncGetFriendListRaw(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest& request, ::grpc::CompletionQueue* cq) {
   return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::GetFriendListResponse, ::friendpb::GetFriendListRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GetFriendList_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::GetFriendListResponse>* FriendService::Stub::AsyncGetFriendListRaw(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::GetFriendListResponse>* ClientPlayerFriend::Stub::AsyncGetFriendListRaw(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest& request, ::grpc::CompletionQueue* cq) {
   auto* result =
     this->PrepareAsyncGetFriendListRaw(context, request, cq);
   result->StartCall();
   return result;
 }
 
-::grpc::Status FriendService::Stub::GetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::friendpb::GetPendingRequestsResponse* response) {
+::grpc::Status ClientPlayerFriend::Stub::GetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::friendpb::GetPendingRequestsResponse* response) {
   return ::grpc::internal::BlockingUnaryCall< ::friendpb::GetPendingRequestsRequest, ::friendpb::GetPendingRequestsResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_GetPendingRequests_, context, request, response);
 }
 
-void FriendService::Stub::async::GetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response, std::function<void(::grpc::Status)> f) {
+void ClientPlayerFriend::Stub::async::GetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response, std::function<void(::grpc::Status)> f) {
   ::grpc::internal::CallbackUnaryCall< ::friendpb::GetPendingRequestsRequest, ::friendpb::GetPendingRequestsResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetPendingRequests_, context, request, response, std::move(f));
 }
 
-void FriendService::Stub::async::GetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+void ClientPlayerFriend::Stub::async::GetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response, ::grpc::ClientUnaryReactor* reactor) {
   ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_GetPendingRequests_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::GetPendingRequestsResponse>* FriendService::Stub::PrepareAsyncGetPendingRequestsRaw(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::GetPendingRequestsResponse>* ClientPlayerFriend::Stub::PrepareAsyncGetPendingRequestsRaw(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::grpc::CompletionQueue* cq) {
   return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::GetPendingRequestsResponse, ::friendpb::GetPendingRequestsRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_GetPendingRequests_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::GetPendingRequestsResponse>* FriendService::Stub::AsyncGetPendingRequestsRaw(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::GetPendingRequestsResponse>* ClientPlayerFriend::Stub::AsyncGetPendingRequestsRaw(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::grpc::CompletionQueue* cq) {
   auto* result =
     this->PrepareAsyncGetPendingRequestsRaw(context, request, cq);
   result->StartCall();
   return result;
 }
 
-::grpc::Status FriendService::Stub::NotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::friendpb::NotifyOnlineResponse* response) {
-  return ::grpc::internal::BlockingUnaryCall< ::friendpb::NotifyOnlineRequest, ::friendpb::NotifyOnlineResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_NotifyOnline_, context, request, response);
+::grpc::Status ClientPlayerFriend::Stub::Block(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::friendpb::BlockResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::friendpb::BlockRequest, ::friendpb::BlockResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_Block_, context, request, response);
 }
 
-void FriendService::Stub::async::NotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest* request, ::friendpb::NotifyOnlineResponse* response, std::function<void(::grpc::Status)> f) {
-  ::grpc::internal::CallbackUnaryCall< ::friendpb::NotifyOnlineRequest, ::friendpb::NotifyOnlineResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyOnline_, context, request, response, std::move(f));
+void ClientPlayerFriend::Stub::async::Block(::grpc::ClientContext* context, const ::friendpb::BlockRequest* request, ::friendpb::BlockResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::friendpb::BlockRequest, ::friendpb::BlockResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_Block_, context, request, response, std::move(f));
 }
 
-void FriendService::Stub::async::NotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest* request, ::friendpb::NotifyOnlineResponse* response, ::grpc::ClientUnaryReactor* reactor) {
-  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyOnline_, context, request, response, reactor);
+void ClientPlayerFriend::Stub::async::Block(::grpc::ClientContext* context, const ::friendpb::BlockRequest* request, ::friendpb::BlockResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_Block_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOnlineResponse>* FriendService::Stub::PrepareAsyncNotifyOnlineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::grpc::CompletionQueue* cq) {
-  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::NotifyOnlineResponse, ::friendpb::NotifyOnlineRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_NotifyOnline_, context, request);
+::grpc::ClientAsyncResponseReader< ::friendpb::BlockResponse>* ClientPlayerFriend::Stub::PrepareAsyncBlockRaw(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::BlockResponse, ::friendpb::BlockRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_Block_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOnlineResponse>* FriendService::Stub::AsyncNotifyOnlineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::BlockResponse>* ClientPlayerFriend::Stub::AsyncBlockRaw(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::grpc::CompletionQueue* cq) {
   auto* result =
-    this->PrepareAsyncNotifyOnlineRaw(context, request, cq);
+    this->PrepareAsyncBlockRaw(context, request, cq);
   result->StartCall();
   return result;
 }
 
-::grpc::Status FriendService::Stub::NotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::friendpb::NotifyOfflineResponse* response) {
-  return ::grpc::internal::BlockingUnaryCall< ::friendpb::NotifyOfflineRequest, ::friendpb::NotifyOfflineResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_NotifyOffline_, context, request, response);
+::grpc::Status ClientPlayerFriend::Stub::Unblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::friendpb::UnblockResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::friendpb::UnblockRequest, ::friendpb::UnblockResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_Unblock_, context, request, response);
 }
 
-void FriendService::Stub::async::NotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest* request, ::friendpb::NotifyOfflineResponse* response, std::function<void(::grpc::Status)> f) {
-  ::grpc::internal::CallbackUnaryCall< ::friendpb::NotifyOfflineRequest, ::friendpb::NotifyOfflineResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyOffline_, context, request, response, std::move(f));
+void ClientPlayerFriend::Stub::async::Unblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest* request, ::friendpb::UnblockResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::friendpb::UnblockRequest, ::friendpb::UnblockResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_Unblock_, context, request, response, std::move(f));
 }
 
-void FriendService::Stub::async::NotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest* request, ::friendpb::NotifyOfflineResponse* response, ::grpc::ClientUnaryReactor* reactor) {
-  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyOffline_, context, request, response, reactor);
+void ClientPlayerFriend::Stub::async::Unblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest* request, ::friendpb::UnblockResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_Unblock_, context, request, response, reactor);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOfflineResponse>* FriendService::Stub::PrepareAsyncNotifyOfflineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::grpc::CompletionQueue* cq) {
-  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::NotifyOfflineResponse, ::friendpb::NotifyOfflineRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_NotifyOffline_, context, request);
+::grpc::ClientAsyncResponseReader< ::friendpb::UnblockResponse>* ClientPlayerFriend::Stub::PrepareAsyncUnblockRaw(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::UnblockResponse, ::friendpb::UnblockRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_Unblock_, context, request);
 }
 
-::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOfflineResponse>* FriendService::Stub::AsyncNotifyOfflineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::grpc::CompletionQueue* cq) {
+::grpc::ClientAsyncResponseReader< ::friendpb::UnblockResponse>* ClientPlayerFriend::Stub::AsyncUnblockRaw(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::grpc::CompletionQueue* cq) {
   auto* result =
-    this->PrepareAsyncNotifyOfflineRaw(context, request, cq);
+    this->PrepareAsyncUnblockRaw(context, request, cq);
   result->StartCall();
   return result;
 }
 
-FriendService::Service::Service() {
+::grpc::Status ClientPlayerFriend::Stub::ListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::friendpb::ListBlocksResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::friendpb::ListBlocksRequest, ::friendpb::ListBlocksResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_ListBlocks_, context, request, response);
+}
+
+void ClientPlayerFriend::Stub::async::ListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest* request, ::friendpb::ListBlocksResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::friendpb::ListBlocksRequest, ::friendpb::ListBlocksResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ListBlocks_, context, request, response, std::move(f));
+}
+
+void ClientPlayerFriend::Stub::async::ListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest* request, ::friendpb::ListBlocksResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_ListBlocks_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::friendpb::ListBlocksResponse>* ClientPlayerFriend::Stub::PrepareAsyncListBlocksRaw(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::ListBlocksResponse, ::friendpb::ListBlocksRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_ListBlocks_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::friendpb::ListBlocksResponse>* ClientPlayerFriend::Stub::AsyncListBlocksRaw(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncListBlocksRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status ClientPlayerFriend::Stub::RecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::friendpb::RecommendFriendsResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::friendpb::RecommendFriendsRequest, ::friendpb::RecommendFriendsResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_RecommendFriends_, context, request, response);
+}
+
+void ClientPlayerFriend::Stub::async::RecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest* request, ::friendpb::RecommendFriendsResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::friendpb::RecommendFriendsRequest, ::friendpb::RecommendFriendsResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RecommendFriends_, context, request, response, std::move(f));
+}
+
+void ClientPlayerFriend::Stub::async::RecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest* request, ::friendpb::RecommendFriendsResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_RecommendFriends_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::friendpb::RecommendFriendsResponse>* ClientPlayerFriend::Stub::PrepareAsyncRecommendFriendsRaw(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::friendpb::RecommendFriendsResponse, ::friendpb::RecommendFriendsRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_RecommendFriends_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::friendpb::RecommendFriendsResponse>* ClientPlayerFriend::Stub::AsyncRecommendFriendsRaw(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncRecommendFriendsRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status ClientPlayerFriend::Stub::NotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::Empty* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::friendpb::FriendEventS2C, ::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_NotifyFriendEvent_, context, request, response);
+}
+
+void ClientPlayerFriend::Stub::async::NotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C* request, ::Empty* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::friendpb::FriendEventS2C, ::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyFriendEvent_, context, request, response, std::move(f));
+}
+
+void ClientPlayerFriend::Stub::async::NotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_NotifyFriendEvent_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::Empty>* ClientPlayerFriend::Stub::PrepareAsyncNotifyFriendEventRaw(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::Empty, ::friendpb::FriendEventS2C, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_NotifyFriendEvent_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::Empty>* ClientPlayerFriend::Stub::AsyncNotifyFriendEventRaw(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncNotifyFriendEventRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+ClientPlayerFriend::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      FriendService_method_names[0],
+      ClientPlayerFriend_method_names[0],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< FriendService::Service, ::friendpb::AddFriendRequest, ::friendpb::AddFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
-          [](FriendService::Service* service,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::AddFriendRequest, ::friendpb::AddFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
              ::grpc::ServerContext* ctx,
              const ::friendpb::AddFriendRequest* req,
              ::friendpb::AddFriendResponse* resp) {
                return service->AddFriend(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      FriendService_method_names[1],
+      ClientPlayerFriend_method_names[1],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< FriendService::Service, ::friendpb::AcceptFriendRequest, ::friendpb::AcceptFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
-          [](FriendService::Service* service,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::AcceptFriendRequest, ::friendpb::AcceptFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
              ::grpc::ServerContext* ctx,
              const ::friendpb::AcceptFriendRequest* req,
              ::friendpb::AcceptFriendResponse* resp) {
                return service->AcceptFriend(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      FriendService_method_names[2],
+      ClientPlayerFriend_method_names[2],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< FriendService::Service, ::friendpb::RejectFriendRequest, ::friendpb::RejectFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
-          [](FriendService::Service* service,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::RejectFriendRequest, ::friendpb::RejectFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
              ::grpc::ServerContext* ctx,
              const ::friendpb::RejectFriendRequest* req,
              ::friendpb::RejectFriendResponse* resp) {
                return service->RejectFriend(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      FriendService_method_names[3],
+      ClientPlayerFriend_method_names[3],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< FriendService::Service, ::friendpb::RemoveFriendRequest, ::friendpb::RemoveFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
-          [](FriendService::Service* service,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::RemoveFriendRequest, ::friendpb::RemoveFriendResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
              ::grpc::ServerContext* ctx,
              const ::friendpb::RemoveFriendRequest* req,
              ::friendpb::RemoveFriendResponse* resp) {
                return service->RemoveFriend(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      FriendService_method_names[4],
+      ClientPlayerFriend_method_names[4],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< FriendService::Service, ::friendpb::GetFriendListRequest, ::friendpb::GetFriendListResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
-          [](FriendService::Service* service,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::GetFriendListRequest, ::friendpb::GetFriendListResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
              ::grpc::ServerContext* ctx,
              const ::friendpb::GetFriendListRequest* req,
              ::friendpb::GetFriendListResponse* resp) {
                return service->GetFriendList(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      FriendService_method_names[5],
+      ClientPlayerFriend_method_names[5],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< FriendService::Service, ::friendpb::GetPendingRequestsRequest, ::friendpb::GetPendingRequestsResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
-          [](FriendService::Service* service,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::GetPendingRequestsRequest, ::friendpb::GetPendingRequestsResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
              ::grpc::ServerContext* ctx,
              const ::friendpb::GetPendingRequestsRequest* req,
              ::friendpb::GetPendingRequestsResponse* resp) {
                return service->GetPendingRequests(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      FriendService_method_names[6],
+      ClientPlayerFriend_method_names[6],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< FriendService::Service, ::friendpb::NotifyOnlineRequest, ::friendpb::NotifyOnlineResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
-          [](FriendService::Service* service,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::BlockRequest, ::friendpb::BlockResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
              ::grpc::ServerContext* ctx,
-             const ::friendpb::NotifyOnlineRequest* req,
-             ::friendpb::NotifyOnlineResponse* resp) {
-               return service->NotifyOnline(ctx, req, resp);
+             const ::friendpb::BlockRequest* req,
+             ::friendpb::BlockResponse* resp) {
+               return service->Block(ctx, req, resp);
              }, this)));
   AddMethod(new ::grpc::internal::RpcServiceMethod(
-      FriendService_method_names[7],
+      ClientPlayerFriend_method_names[7],
       ::grpc::internal::RpcMethod::NORMAL_RPC,
-      new ::grpc::internal::RpcMethodHandler< FriendService::Service, ::friendpb::NotifyOfflineRequest, ::friendpb::NotifyOfflineResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
-          [](FriendService::Service* service,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::UnblockRequest, ::friendpb::UnblockResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
              ::grpc::ServerContext* ctx,
-             const ::friendpb::NotifyOfflineRequest* req,
-             ::friendpb::NotifyOfflineResponse* resp) {
-               return service->NotifyOffline(ctx, req, resp);
+             const ::friendpb::UnblockRequest* req,
+             ::friendpb::UnblockResponse* resp) {
+               return service->Unblock(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      ClientPlayerFriend_method_names[8],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::ListBlocksRequest, ::friendpb::ListBlocksResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::friendpb::ListBlocksRequest* req,
+             ::friendpb::ListBlocksResponse* resp) {
+               return service->ListBlocks(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      ClientPlayerFriend_method_names[9],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::RecommendFriendsRequest, ::friendpb::RecommendFriendsResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::friendpb::RecommendFriendsRequest* req,
+             ::friendpb::RecommendFriendsResponse* resp) {
+               return service->RecommendFriends(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      ClientPlayerFriend_method_names[10],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< ClientPlayerFriend::Service, ::friendpb::FriendEventS2C, ::Empty, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](ClientPlayerFriend::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::friendpb::FriendEventS2C* req,
+             ::Empty* resp) {
+               return service->NotifyFriendEvent(ctx, req, resp);
              }, this)));
 }
 
-FriendService::Service::~Service() {
+ClientPlayerFriend::Service::~Service() {
 }
 
-::grpc::Status FriendService::Service::AddFriend(::grpc::ServerContext* context, const ::friendpb::AddFriendRequest* request, ::friendpb::AddFriendResponse* response) {
+::grpc::Status ClientPlayerFriend::Service::AddFriend(::grpc::ServerContext* context, const ::friendpb::AddFriendRequest* request, ::friendpb::AddFriendResponse* response) {
   (void) context;
   (void) request;
   (void) response;
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status FriendService::Service::AcceptFriend(::grpc::ServerContext* context, const ::friendpb::AcceptFriendRequest* request, ::friendpb::AcceptFriendResponse* response) {
+::grpc::Status ClientPlayerFriend::Service::AcceptFriend(::grpc::ServerContext* context, const ::friendpb::AcceptFriendRequest* request, ::friendpb::AcceptFriendResponse* response) {
   (void) context;
   (void) request;
   (void) response;
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status FriendService::Service::RejectFriend(::grpc::ServerContext* context, const ::friendpb::RejectFriendRequest* request, ::friendpb::RejectFriendResponse* response) {
+::grpc::Status ClientPlayerFriend::Service::RejectFriend(::grpc::ServerContext* context, const ::friendpb::RejectFriendRequest* request, ::friendpb::RejectFriendResponse* response) {
   (void) context;
   (void) request;
   (void) response;
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status FriendService::Service::RemoveFriend(::grpc::ServerContext* context, const ::friendpb::RemoveFriendRequest* request, ::friendpb::RemoveFriendResponse* response) {
+::grpc::Status ClientPlayerFriend::Service::RemoveFriend(::grpc::ServerContext* context, const ::friendpb::RemoveFriendRequest* request, ::friendpb::RemoveFriendResponse* response) {
   (void) context;
   (void) request;
   (void) response;
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status FriendService::Service::GetFriendList(::grpc::ServerContext* context, const ::friendpb::GetFriendListRequest* request, ::friendpb::GetFriendListResponse* response) {
+::grpc::Status ClientPlayerFriend::Service::GetFriendList(::grpc::ServerContext* context, const ::friendpb::GetFriendListRequest* request, ::friendpb::GetFriendListResponse* response) {
   (void) context;
   (void) request;
   (void) response;
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status FriendService::Service::GetPendingRequests(::grpc::ServerContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response) {
+::grpc::Status ClientPlayerFriend::Service::GetPendingRequests(::grpc::ServerContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response) {
   (void) context;
   (void) request;
   (void) response;
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status FriendService::Service::NotifyOnline(::grpc::ServerContext* context, const ::friendpb::NotifyOnlineRequest* request, ::friendpb::NotifyOnlineResponse* response) {
+::grpc::Status ClientPlayerFriend::Service::Block(::grpc::ServerContext* context, const ::friendpb::BlockRequest* request, ::friendpb::BlockResponse* response) {
   (void) context;
   (void) request;
   (void) response;
   return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
 }
 
-::grpc::Status FriendService::Service::NotifyOffline(::grpc::ServerContext* context, const ::friendpb::NotifyOfflineRequest* request, ::friendpb::NotifyOfflineResponse* response) {
+::grpc::Status ClientPlayerFriend::Service::Unblock(::grpc::ServerContext* context, const ::friendpb::UnblockRequest* request, ::friendpb::UnblockResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status ClientPlayerFriend::Service::ListBlocks(::grpc::ServerContext* context, const ::friendpb::ListBlocksRequest* request, ::friendpb::ListBlocksResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status ClientPlayerFriend::Service::RecommendFriends(::grpc::ServerContext* context, const ::friendpb::RecommendFriendsRequest* request, ::friendpb::RecommendFriendsResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status ClientPlayerFriend::Service::NotifyFriendEvent(::grpc::ServerContext* context, const ::friendpb::FriendEventS2C* request, ::Empty* response) {
   (void) context;
   (void) request;
   (void) response;

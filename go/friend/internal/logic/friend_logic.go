@@ -1,6 +1,7 @@
 // Package logic 是 friend 的业务层。
 //
-// F2 已完成,剩余项见 F3。
+// F2(事务重写 + 四块新能力)与 F3(五处登记、部署链、sweep 接线)均已落码;
+// 收尾项的登记(每条的"为什么"与修法)见 docs/design/friend-handoff-20260920.md §3。
 //
 // # 错误语义(F2-1,本包全部方法一律照此)
 //
@@ -26,15 +27,17 @@
 // 一次开库:预检不持锁,两个并发请求都能通过(AGENTS.md §11.3),而且写在这里会让
 // "上限在哪里生效"变成两个地方说话。
 //
-// # F2 之后仍然开着的口子(F3)
+// # 本包与生成物的三处对接(F3 接线之后的状态)
 //
-//  1. **sweep 没有启动点**:本包的 StartSweep(见 sweep.go)在 F2 的 19 文件清单里没有调用方
-//     —— go/friend/friend.go 不属本批,不许改。所以终态申请清理目前是**死代码**,
-//     friend_request 的终态行仍不回收。接法见 sweep.go 顶部注释。
-//  2. **三个新 tip 码**(FriendBlocked / FriendBlockListFull / FriendTargetInboxFull)要等
-//     合并回 main 时改 data/tip/Tip.xlsx + 跑导表器,本批刻意不动 xlsx(二进制无法 3-way 合并,
-//     主工作区有并行会话在改同一个文件)。在那之前 constants 里那三个枚举常量不存在。
-//  3. **推送消息号常量**待 proto-gen 重新发号后核对(见 push.go)。
+//  1. **sweep 已接线**:本包的 StartSweep(见 sweep.go)由 go/friend/friend.go 的 runFriend 在
+//     metrics.Start 之后调用(F3 接上),清理循环随进程起停。默认 Sweep.Mode = report_only,
+//     只统计不删;切 delete 的前置见 sweep.go 顶部注释。
+//  2. **三个 tip 码**(FriendBlocked / FriendBlockListFull / FriendTargetInboxFull)的行已在
+//     data/tip/Tip.xlsx 的 //friend_error 段里,枚举由导表器生成。constants/constants.go 里引用的
+//     名字必须与导表器生成的枚举**逐字一致**,以(重跑导表器之后的)生成物为准:
+//     对不上就改 constants.go,不改 xlsx 去将就代码。
+//  3. **推送消息号常量**由 proto-gen 生成,名字必须与 push.go 用到的逐字一致(同样以生成物为准,
+//     见 push.go)。
 package logic
 
 import (
@@ -457,7 +460,7 @@ func (l *FriendLogic) GetFriendList(ctx context.Context, req *pb.GetFriendListRe
 		// is_online 与 last_active_ms **都**来自共享库的会话(§3.9):friend 表里只有
 		// player_id / friend_player_id / since_ms 三列,没有"最后活跃"这种显示态
 		// (显示态不进持久化记录,AGENTS.md §11.6)。查不到就留零值 = 离线 + 未知活跃时间。
-		// 也正因如此,data.FriendEntry.LastActiveMs 不进缓存 —— 每次请求都从会话现取。
+		// 也正因如此,在线态与最后活跃时刻都不进 data 层的缓存结构 —— 每次请求都从会话现取。
 		if st, hit := statuses[f.FriendPlayerID]; hit {
 			entry.IsOnline = st.Online
 			entry.LastActiveMs = st.LastActiveMs

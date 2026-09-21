@@ -49,8 +49,10 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	DungeonTable = NewObject<UDungeonTable>(this);
 	EquipSlotTable = NewObject<UEquipSlotTable>(this);
 	GlobalVariableTable = NewObject<UGlobalVariableTable>(this);
+	GuildDonateTable = NewObject<UGuildDonateTable>(this);
 	GuildLevelTable = NewObject<UGuildLevelTable>(this);
 	GuildRuleTable = NewObject<UGuildRuleTable>(this);
+	GuildShopTable = NewObject<UGuildShopTable>(this);
 	ItemTable = NewObject<UItemTable>(this);
 	MessageLimiterTable = NewObject<UMessageLimiterTable>(this);
 	MirrorTable = NewObject<UMirrorTable>(this);
@@ -59,6 +61,7 @@ void UConfigSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 	PetTable = NewObject<UPetTable>(this);
 	PetRuleTable = NewObject<UPetRuleTable>(this);
 	RewardTable = NewObject<URewardTable>(this);
+	RoleNameRuleTable = NewObject<URoleNameRuleTable>(this);
 	SkillTable = NewObject<USkillTable>(this);
 	SkillPermissionTable = NewObject<USkillPermissionTable>(this);
 	TestTable = NewObject<UTestTable>(this);
@@ -84,8 +87,10 @@ void UConfigSubsystem::Deinitialize()
 	DungeonTable = nullptr;
 	EquipSlotTable = nullptr;
 	GlobalVariableTable = nullptr;
+	GuildDonateTable = nullptr;
 	GuildLevelTable = nullptr;
 	GuildRuleTable = nullptr;
+	GuildShopTable = nullptr;
 	ItemTable = nullptr;
 	MessageLimiterTable = nullptr;
 	MirrorTable = nullptr;
@@ -94,6 +99,7 @@ void UConfigSubsystem::Deinitialize()
 	PetTable = nullptr;
 	PetRuleTable = nullptr;
 	RewardTable = nullptr;
+	RoleNameRuleTable = nullptr;
 	SkillTable = nullptr;
 	SkillPermissionTable = nullptr;
 	TestTable = nullptr;
@@ -124,8 +130,10 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UDungeonTable::FileName(),
 		UEquipSlotTable::FileName(),
 		UGlobalVariableTable::FileName(),
+		UGuildDonateTable::FileName(),
 		UGuildLevelTable::FileName(),
 		UGuildRuleTable::FileName(),
+		UGuildShopTable::FileName(),
 		UItemTable::FileName(),
 		UMessageLimiterTable::FileName(),
 		UMirrorTable::FileName(),
@@ -134,6 +142,7 @@ TArray<FString> UConfigSubsystem::TableFileNames()
 		UPetTable::FileName(),
 		UPetRuleTable::FileName(),
 		URewardTable::FileName(),
+		URoleNameRuleTable::FileName(),
 		USkillTable::FileName(),
 		USkillPermissionTable::FileName(),
 		UTestTable::FileName(),
@@ -374,6 +383,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 	{
 		bAnySwapped = true;
 	}
+	if (GuildDonateTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildDonate] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!GuildDonateTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
 	if (GuildLevelTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[GuildLevel] 管理器未创建"));
@@ -394,6 +417,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!GuildRuleTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (GuildShopTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildShop] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!GuildShopTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -506,6 +543,20 @@ bool UConfigSubsystem::LoadAll(const FString& InConfigDir)
 		bAllOk = false;
 	}
 	else if (!RewardTable->LoadFromDir(InConfigDir, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	if (RoleNameRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RoleNameRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!RoleNameRuleTable->LoadFromDir(InConfigDir, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -938,6 +989,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAnySwapped = true;
 	}
 	JsonText.Reset();
+	if (GuildDonateTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildDonate] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UGuildDonateTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildDonate] 取不到 %s"), UGuildDonateTable::FileName());
+		bAllOk = false;
+	}
+	else if (!GuildDonateTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
 	if (GuildLevelTable == nullptr)
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("[GuildLevel] 管理器未创建"));
@@ -969,6 +1040,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!GuildRuleTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (GuildShopTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildShop] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(UGuildShopTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[GuildShop] 取不到 %s"), UGuildShopTable::FileName());
+		bAllOk = false;
+	}
+	else if (!GuildShopTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;
@@ -1129,6 +1220,26 @@ bool UConfigSubsystem::LoadAllWithProvider(TFunctionRef<bool(const TCHAR*, FStri
 		bAllOk = false;
 	}
 	else if (!RewardTable->LoadFromJson(JsonText, Error))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
+		bAllOk = false;
+	}
+	else
+	{
+		bAnySwapped = true;
+	}
+	JsonText.Reset();
+	if (RoleNameRuleTable == nullptr)
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RoleNameRule] 管理器未创建"));
+		bAllOk = false;
+	}
+	else if (!TextProvider(URoleNameRuleTable::FileName(), JsonText))
+	{
+		UE_LOG(LogConfigTable, Error, TEXT("[RoleNameRule] 取不到 %s"), URoleNameRuleTable::FileName());
+		bAllOk = false;
+	}
+	else if (!RoleNameRuleTable->LoadFromJson(JsonText, Error))
 	{
 		UE_LOG(LogConfigTable, Error, TEXT("%s"), *Error);
 		bAllOk = false;

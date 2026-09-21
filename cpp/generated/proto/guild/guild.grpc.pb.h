@@ -63,13 +63,6 @@ class GuildService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetPlayerGuildResponse>> PrepareAsyncGetPlayerGuild(::grpc::ClientContext* context, const ::guildpb::GetPlayerGuildRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetPlayerGuildResponse>>(PrepareAsyncGetPlayerGuildRaw(context, request, cq));
     }
-    virtual ::grpc::Status JoinGuild(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest& request, ::guildpb::JoinGuildResponse* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::JoinGuildResponse>> AsyncJoinGuild(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::JoinGuildResponse>>(AsyncJoinGuildRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::JoinGuildResponse>> PrepareAsyncJoinGuild(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::JoinGuildResponse>>(PrepareAsyncJoinGuildRaw(context, request, cq));
-    }
     virtual ::grpc::Status LeaveGuild(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest& request, ::guildpb::LeaveGuildResponse* response) = 0;
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::LeaveGuildResponse>> AsyncLeaveGuild(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::LeaveGuildResponse>>(AsyncLeaveGuildRaw(context, request, cq));
@@ -90,6 +83,73 @@ class GuildService final {
     }
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::SetAnnouncementResponse>> PrepareAsyncSetAnnouncement(::grpc::ClientContext* context, const ::guildpb::SetAnnouncementRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::SetAnnouncementResponse>>(PrepareAsyncSetAnnouncementRaw(context, request, cq));
+    }
+    // 成员管理(B2)
+    virtual ::grpc::Status SetGuildMemberRole(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest& request, ::guildpb::SetGuildMemberRoleResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::SetGuildMemberRoleResponse>> AsyncSetGuildMemberRole(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::SetGuildMemberRoleResponse>>(AsyncSetGuildMemberRoleRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::SetGuildMemberRoleResponse>> PrepareAsyncSetGuildMemberRole(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::SetGuildMemberRoleResponse>>(PrepareAsyncSetGuildMemberRoleRaw(context, request, cq));
+    }
+    virtual ::grpc::Status KickGuildMember(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest& request, ::guildpb::KickGuildMemberResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::KickGuildMemberResponse>> AsyncKickGuildMember(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::KickGuildMemberResponse>>(AsyncKickGuildMemberRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::KickGuildMemberResponse>> PrepareAsyncKickGuildMember(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::KickGuildMemberResponse>>(PrepareAsyncKickGuildMemberRaw(context, request, cq));
+    }
+    virtual ::grpc::Status TransferGuildLeader(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest& request, ::guildpb::TransferGuildLeaderResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::TransferGuildLeaderResponse>> AsyncTransferGuildLeader(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::TransferGuildLeaderResponse>>(AsyncTransferGuildLeaderRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::TransferGuildLeaderResponse>> PrepareAsyncTransferGuildLeader(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::TransferGuildLeaderResponse>>(PrepareAsyncTransferGuildLeaderRaw(context, request, cq));
+    }
+    // 入帮申请(B2;取代直接入帮 JoinGuild)
+    virtual ::grpc::Status ApplyJoinGuild(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest& request, ::guildpb::ApplyJoinGuildResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ApplyJoinGuildResponse>> AsyncApplyJoinGuild(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ApplyJoinGuildResponse>>(AsyncApplyJoinGuildRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ApplyJoinGuildResponse>> PrepareAsyncApplyJoinGuild(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ApplyJoinGuildResponse>>(PrepareAsyncApplyJoinGuildRaw(context, request, cq));
+    }
+    virtual ::grpc::Status CancelGuildApplication(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest& request, ::guildpb::CancelGuildApplicationResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::CancelGuildApplicationResponse>> AsyncCancelGuildApplication(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::CancelGuildApplicationResponse>>(AsyncCancelGuildApplicationRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::CancelGuildApplicationResponse>> PrepareAsyncCancelGuildApplication(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::CancelGuildApplicationResponse>>(PrepareAsyncCancelGuildApplicationRaw(context, request, cq));
+    }
+    virtual ::grpc::Status ListMyGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest& request, ::guildpb::ListMyGuildApplicationsResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListMyGuildApplicationsResponse>> AsyncListMyGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListMyGuildApplicationsResponse>>(AsyncListMyGuildApplicationsRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListMyGuildApplicationsResponse>> PrepareAsyncListMyGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListMyGuildApplicationsResponse>>(PrepareAsyncListMyGuildApplicationsRaw(context, request, cq));
+    }
+    virtual ::grpc::Status ListGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest& request, ::guildpb::ListGuildApplicationsResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListGuildApplicationsResponse>> AsyncListGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListGuildApplicationsResponse>>(AsyncListGuildApplicationsRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListGuildApplicationsResponse>> PrepareAsyncListGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListGuildApplicationsResponse>>(PrepareAsyncListGuildApplicationsRaw(context, request, cq));
+    }
+    virtual ::grpc::Status ReviewGuildApplication(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest& request, ::guildpb::ReviewGuildApplicationResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ReviewGuildApplicationResponse>> AsyncReviewGuildApplication(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ReviewGuildApplicationResponse>>(AsyncReviewGuildApplicationRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ReviewGuildApplicationResponse>> PrepareAsyncReviewGuildApplication(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ReviewGuildApplicationResponse>>(PrepareAsyncReviewGuildApplicationRaw(context, request, cq));
+    }
+    // 推送占位(B2):只为分配 message id;服务端实现恒返回 Empty。
+    // **不进** go/guild session.ClientMethods —— 客户端发这个 id 会被 PermissionDenied。
+    virtual ::grpc::Status NotifyGuildChanged(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C& request, ::Empty* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> AsyncNotifyGuildChanged(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(AsyncNotifyGuildChangedRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> PrepareAsyncNotifyGuildChanged(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(PrepareAsyncNotifyGuildChangedRaw(context, request, cq));
     }
     // Ranking
     virtual ::grpc::Status UpdateGuildScore(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest& request, ::guildpb::UpdateGuildScoreResponse* response) = 0;
@@ -113,6 +173,43 @@ class GuildService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildRankByGuildResponse>> PrepareAsyncGetGuildRankByGuild(::grpc::ClientContext* context, const ::guildpb::GetGuildRankByGuildRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildRankByGuildResponse>>(PrepareAsyncGetGuildRankByGuildRaw(context, request, cq));
     }
+    // 帮会经济(B5)。五个都是客户端方法,已进 go/guild session.ClientMethods;
+    // 身份一律取会话,无会话的内部调用由 logic 拒绝。B5a 只落协议,实现在 B5b(此前回 Unimplemented)。
+    virtual ::grpc::Status GetGuildDonateOptions(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest& request, ::guildpb::GetGuildDonateOptionsResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildDonateOptionsResponse>> AsyncGetGuildDonateOptions(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildDonateOptionsResponse>>(AsyncGetGuildDonateOptionsRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildDonateOptionsResponse>> PrepareAsyncGetGuildDonateOptions(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildDonateOptionsResponse>>(PrepareAsyncGetGuildDonateOptionsRaw(context, request, cq));
+    }
+    virtual ::grpc::Status DonateToGuild(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest& request, ::guildpb::DonateToGuildResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::DonateToGuildResponse>> AsyncDonateToGuild(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::DonateToGuildResponse>>(AsyncDonateToGuildRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::DonateToGuildResponse>> PrepareAsyncDonateToGuild(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::DonateToGuildResponse>>(PrepareAsyncDonateToGuildRaw(context, request, cq));
+    }
+    virtual ::grpc::Status UpgradeGuild(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest& request, ::guildpb::UpgradeGuildResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::UpgradeGuildResponse>> AsyncUpgradeGuild(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::UpgradeGuildResponse>>(AsyncUpgradeGuildRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::UpgradeGuildResponse>> PrepareAsyncUpgradeGuild(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::UpgradeGuildResponse>>(PrepareAsyncUpgradeGuildRaw(context, request, cq));
+    }
+    virtual ::grpc::Status GetGuildShop(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest& request, ::guildpb::GetGuildShopResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildShopResponse>> AsyncGetGuildShop(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildShopResponse>>(AsyncGetGuildShopRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildShopResponse>> PrepareAsyncGetGuildShop(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildShopResponse>>(PrepareAsyncGetGuildShopRaw(context, request, cq));
+    }
+    virtual ::grpc::Status BuyGuildShopGoods(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest& request, ::guildpb::BuyGuildShopGoodsResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::BuyGuildShopGoodsResponse>> AsyncBuyGuildShopGoods(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::BuyGuildShopGoodsResponse>>(AsyncBuyGuildShopGoodsRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::BuyGuildShopGoodsResponse>> PrepareAsyncBuyGuildShopGoods(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::BuyGuildShopGoodsResponse>>(PrepareAsyncBuyGuildShopGoodsRaw(context, request, cq));
+    }
     class async_interface {
      public:
       virtual ~async_interface() {}
@@ -122,14 +219,34 @@ class GuildService final {
       virtual void GetGuild(::grpc::ClientContext* context, const ::guildpb::GetGuildRequest* request, ::guildpb::GetGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void GetPlayerGuild(::grpc::ClientContext* context, const ::guildpb::GetPlayerGuildRequest* request, ::guildpb::GetPlayerGuildResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void GetPlayerGuild(::grpc::ClientContext* context, const ::guildpb::GetPlayerGuildRequest* request, ::guildpb::GetPlayerGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      virtual void JoinGuild(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest* request, ::guildpb::JoinGuildResponse* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void JoinGuild(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest* request, ::guildpb::JoinGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void LeaveGuild(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest* request, ::guildpb::LeaveGuildResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void LeaveGuild(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest* request, ::guildpb::LeaveGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void DisbandGuild(::grpc::ClientContext* context, const ::guildpb::DisbandGuildRequest* request, ::guildpb::DisbandGuildResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void DisbandGuild(::grpc::ClientContext* context, const ::guildpb::DisbandGuildRequest* request, ::guildpb::DisbandGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void SetAnnouncement(::grpc::ClientContext* context, const ::guildpb::SetAnnouncementRequest* request, ::guildpb::SetAnnouncementResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void SetAnnouncement(::grpc::ClientContext* context, const ::guildpb::SetAnnouncementRequest* request, ::guildpb::SetAnnouncementResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 成员管理(B2)
+      virtual void SetGuildMemberRole(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest* request, ::guildpb::SetGuildMemberRoleResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void SetGuildMemberRole(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest* request, ::guildpb::SetGuildMemberRoleResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void KickGuildMember(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest* request, ::guildpb::KickGuildMemberResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void KickGuildMember(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest* request, ::guildpb::KickGuildMemberResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void TransferGuildLeader(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest* request, ::guildpb::TransferGuildLeaderResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void TransferGuildLeader(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest* request, ::guildpb::TransferGuildLeaderResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 入帮申请(B2;取代直接入帮 JoinGuild)
+      virtual void ApplyJoinGuild(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest* request, ::guildpb::ApplyJoinGuildResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void ApplyJoinGuild(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest* request, ::guildpb::ApplyJoinGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void CancelGuildApplication(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest* request, ::guildpb::CancelGuildApplicationResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void CancelGuildApplication(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest* request, ::guildpb::CancelGuildApplicationResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void ListMyGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest* request, ::guildpb::ListMyGuildApplicationsResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void ListMyGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest* request, ::guildpb::ListMyGuildApplicationsResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void ListGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest* request, ::guildpb::ListGuildApplicationsResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void ListGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest* request, ::guildpb::ListGuildApplicationsResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void ReviewGuildApplication(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest* request, ::guildpb::ReviewGuildApplicationResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void ReviewGuildApplication(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest* request, ::guildpb::ReviewGuildApplicationResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 推送占位(B2):只为分配 message id;服务端实现恒返回 Empty。
+      // **不进** go/guild session.ClientMethods —— 客户端发这个 id 会被 PermissionDenied。
+      virtual void NotifyGuildChanged(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C* request, ::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void NotifyGuildChanged(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       // Ranking
       virtual void UpdateGuildScore(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest* request, ::guildpb::UpdateGuildScoreResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void UpdateGuildScore(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest* request, ::guildpb::UpdateGuildScoreResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
@@ -137,6 +254,18 @@ class GuildService final {
       virtual void GetGuildRank(::grpc::ClientContext* context, const ::guildpb::GetGuildRankRequest* request, ::guildpb::GetGuildRankResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void GetGuildRankByGuild(::grpc::ClientContext* context, const ::guildpb::GetGuildRankByGuildRequest* request, ::guildpb::GetGuildRankByGuildResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void GetGuildRankByGuild(::grpc::ClientContext* context, const ::guildpb::GetGuildRankByGuildRequest* request, ::guildpb::GetGuildRankByGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 帮会经济(B5)。五个都是客户端方法,已进 go/guild session.ClientMethods;
+      // 身份一律取会话,无会话的内部调用由 logic 拒绝。B5a 只落协议,实现在 B5b(此前回 Unimplemented)。
+      virtual void GetGuildDonateOptions(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest* request, ::guildpb::GetGuildDonateOptionsResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void GetGuildDonateOptions(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest* request, ::guildpb::GetGuildDonateOptionsResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void DonateToGuild(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest* request, ::guildpb::DonateToGuildResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void DonateToGuild(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest* request, ::guildpb::DonateToGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void UpgradeGuild(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest* request, ::guildpb::UpgradeGuildResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void UpgradeGuild(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest* request, ::guildpb::UpgradeGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void GetGuildShop(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest* request, ::guildpb::GetGuildShopResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void GetGuildShop(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest* request, ::guildpb::GetGuildShopResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void BuyGuildShopGoods(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest* request, ::guildpb::BuyGuildShopGoodsResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void BuyGuildShopGoods(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest* request, ::guildpb::BuyGuildShopGoodsResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -148,20 +277,46 @@ class GuildService final {
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildResponse>* PrepareAsyncGetGuildRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetPlayerGuildResponse>* AsyncGetPlayerGuildRaw(::grpc::ClientContext* context, const ::guildpb::GetPlayerGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetPlayerGuildResponse>* PrepareAsyncGetPlayerGuildRaw(::grpc::ClientContext* context, const ::guildpb::GetPlayerGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::JoinGuildResponse>* AsyncJoinGuildRaw(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::JoinGuildResponse>* PrepareAsyncJoinGuildRaw(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::LeaveGuildResponse>* AsyncLeaveGuildRaw(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::LeaveGuildResponse>* PrepareAsyncLeaveGuildRaw(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::DisbandGuildResponse>* AsyncDisbandGuildRaw(::grpc::ClientContext* context, const ::guildpb::DisbandGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::DisbandGuildResponse>* PrepareAsyncDisbandGuildRaw(::grpc::ClientContext* context, const ::guildpb::DisbandGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::SetAnnouncementResponse>* AsyncSetAnnouncementRaw(::grpc::ClientContext* context, const ::guildpb::SetAnnouncementRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::SetAnnouncementResponse>* PrepareAsyncSetAnnouncementRaw(::grpc::ClientContext* context, const ::guildpb::SetAnnouncementRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::SetGuildMemberRoleResponse>* AsyncSetGuildMemberRoleRaw(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::SetGuildMemberRoleResponse>* PrepareAsyncSetGuildMemberRoleRaw(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::KickGuildMemberResponse>* AsyncKickGuildMemberRaw(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::KickGuildMemberResponse>* PrepareAsyncKickGuildMemberRaw(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::TransferGuildLeaderResponse>* AsyncTransferGuildLeaderRaw(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::TransferGuildLeaderResponse>* PrepareAsyncTransferGuildLeaderRaw(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ApplyJoinGuildResponse>* AsyncApplyJoinGuildRaw(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ApplyJoinGuildResponse>* PrepareAsyncApplyJoinGuildRaw(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::CancelGuildApplicationResponse>* AsyncCancelGuildApplicationRaw(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::CancelGuildApplicationResponse>* PrepareAsyncCancelGuildApplicationRaw(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListMyGuildApplicationsResponse>* AsyncListMyGuildApplicationsRaw(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListMyGuildApplicationsResponse>* PrepareAsyncListMyGuildApplicationsRaw(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListGuildApplicationsResponse>* AsyncListGuildApplicationsRaw(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ListGuildApplicationsResponse>* PrepareAsyncListGuildApplicationsRaw(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ReviewGuildApplicationResponse>* AsyncReviewGuildApplicationRaw(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::ReviewGuildApplicationResponse>* PrepareAsyncReviewGuildApplicationRaw(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* AsyncNotifyGuildChangedRaw(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* PrepareAsyncNotifyGuildChangedRaw(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::UpdateGuildScoreResponse>* AsyncUpdateGuildScoreRaw(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::UpdateGuildScoreResponse>* PrepareAsyncUpdateGuildScoreRaw(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildRankResponse>* AsyncGetGuildRankRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildRankRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildRankResponse>* PrepareAsyncGetGuildRankRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildRankRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildRankByGuildResponse>* AsyncGetGuildRankByGuildRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildRankByGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildRankByGuildResponse>* PrepareAsyncGetGuildRankByGuildRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildRankByGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildDonateOptionsResponse>* AsyncGetGuildDonateOptionsRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildDonateOptionsResponse>* PrepareAsyncGetGuildDonateOptionsRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::DonateToGuildResponse>* AsyncDonateToGuildRaw(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::DonateToGuildResponse>* PrepareAsyncDonateToGuildRaw(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::UpgradeGuildResponse>* AsyncUpgradeGuildRaw(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::UpgradeGuildResponse>* PrepareAsyncUpgradeGuildRaw(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildShopResponse>* AsyncGetGuildShopRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::GetGuildShopResponse>* PrepareAsyncGetGuildShopRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::BuyGuildShopGoodsResponse>* AsyncBuyGuildShopGoodsRaw(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::guildpb::BuyGuildShopGoodsResponse>* PrepareAsyncBuyGuildShopGoodsRaw(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -187,13 +342,6 @@ class GuildService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetPlayerGuildResponse>> PrepareAsyncGetPlayerGuild(::grpc::ClientContext* context, const ::guildpb::GetPlayerGuildRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetPlayerGuildResponse>>(PrepareAsyncGetPlayerGuildRaw(context, request, cq));
     }
-    ::grpc::Status JoinGuild(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest& request, ::guildpb::JoinGuildResponse* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::JoinGuildResponse>> AsyncJoinGuild(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::JoinGuildResponse>>(AsyncJoinGuildRaw(context, request, cq));
-    }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::JoinGuildResponse>> PrepareAsyncJoinGuild(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::JoinGuildResponse>>(PrepareAsyncJoinGuildRaw(context, request, cq));
-    }
     ::grpc::Status LeaveGuild(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest& request, ::guildpb::LeaveGuildResponse* response) override;
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::LeaveGuildResponse>> AsyncLeaveGuild(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::LeaveGuildResponse>>(AsyncLeaveGuildRaw(context, request, cq));
@@ -214,6 +362,69 @@ class GuildService final {
     }
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::SetAnnouncementResponse>> PrepareAsyncSetAnnouncement(::grpc::ClientContext* context, const ::guildpb::SetAnnouncementRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::SetAnnouncementResponse>>(PrepareAsyncSetAnnouncementRaw(context, request, cq));
+    }
+    ::grpc::Status SetGuildMemberRole(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest& request, ::guildpb::SetGuildMemberRoleResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::SetGuildMemberRoleResponse>> AsyncSetGuildMemberRole(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::SetGuildMemberRoleResponse>>(AsyncSetGuildMemberRoleRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::SetGuildMemberRoleResponse>> PrepareAsyncSetGuildMemberRole(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::SetGuildMemberRoleResponse>>(PrepareAsyncSetGuildMemberRoleRaw(context, request, cq));
+    }
+    ::grpc::Status KickGuildMember(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest& request, ::guildpb::KickGuildMemberResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::KickGuildMemberResponse>> AsyncKickGuildMember(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::KickGuildMemberResponse>>(AsyncKickGuildMemberRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::KickGuildMemberResponse>> PrepareAsyncKickGuildMember(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::KickGuildMemberResponse>>(PrepareAsyncKickGuildMemberRaw(context, request, cq));
+    }
+    ::grpc::Status TransferGuildLeader(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest& request, ::guildpb::TransferGuildLeaderResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::TransferGuildLeaderResponse>> AsyncTransferGuildLeader(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::TransferGuildLeaderResponse>>(AsyncTransferGuildLeaderRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::TransferGuildLeaderResponse>> PrepareAsyncTransferGuildLeader(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::TransferGuildLeaderResponse>>(PrepareAsyncTransferGuildLeaderRaw(context, request, cq));
+    }
+    ::grpc::Status ApplyJoinGuild(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest& request, ::guildpb::ApplyJoinGuildResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ApplyJoinGuildResponse>> AsyncApplyJoinGuild(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ApplyJoinGuildResponse>>(AsyncApplyJoinGuildRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ApplyJoinGuildResponse>> PrepareAsyncApplyJoinGuild(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ApplyJoinGuildResponse>>(PrepareAsyncApplyJoinGuildRaw(context, request, cq));
+    }
+    ::grpc::Status CancelGuildApplication(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest& request, ::guildpb::CancelGuildApplicationResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::CancelGuildApplicationResponse>> AsyncCancelGuildApplication(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::CancelGuildApplicationResponse>>(AsyncCancelGuildApplicationRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::CancelGuildApplicationResponse>> PrepareAsyncCancelGuildApplication(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::CancelGuildApplicationResponse>>(PrepareAsyncCancelGuildApplicationRaw(context, request, cq));
+    }
+    ::grpc::Status ListMyGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest& request, ::guildpb::ListMyGuildApplicationsResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ListMyGuildApplicationsResponse>> AsyncListMyGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ListMyGuildApplicationsResponse>>(AsyncListMyGuildApplicationsRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ListMyGuildApplicationsResponse>> PrepareAsyncListMyGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ListMyGuildApplicationsResponse>>(PrepareAsyncListMyGuildApplicationsRaw(context, request, cq));
+    }
+    ::grpc::Status ListGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest& request, ::guildpb::ListGuildApplicationsResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ListGuildApplicationsResponse>> AsyncListGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ListGuildApplicationsResponse>>(AsyncListGuildApplicationsRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ListGuildApplicationsResponse>> PrepareAsyncListGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ListGuildApplicationsResponse>>(PrepareAsyncListGuildApplicationsRaw(context, request, cq));
+    }
+    ::grpc::Status ReviewGuildApplication(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest& request, ::guildpb::ReviewGuildApplicationResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ReviewGuildApplicationResponse>> AsyncReviewGuildApplication(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ReviewGuildApplicationResponse>>(AsyncReviewGuildApplicationRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ReviewGuildApplicationResponse>> PrepareAsyncReviewGuildApplication(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::ReviewGuildApplicationResponse>>(PrepareAsyncReviewGuildApplicationRaw(context, request, cq));
+    }
+    ::grpc::Status NotifyGuildChanged(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C& request, ::Empty* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> AsyncNotifyGuildChanged(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(AsyncNotifyGuildChangedRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> PrepareAsyncNotifyGuildChanged(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(PrepareAsyncNotifyGuildChangedRaw(context, request, cq));
     }
     ::grpc::Status UpdateGuildScore(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest& request, ::guildpb::UpdateGuildScoreResponse* response) override;
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::UpdateGuildScoreResponse>> AsyncUpdateGuildScore(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest& request, ::grpc::CompletionQueue* cq) {
@@ -236,6 +447,41 @@ class GuildService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildRankByGuildResponse>> PrepareAsyncGetGuildRankByGuild(::grpc::ClientContext* context, const ::guildpb::GetGuildRankByGuildRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildRankByGuildResponse>>(PrepareAsyncGetGuildRankByGuildRaw(context, request, cq));
     }
+    ::grpc::Status GetGuildDonateOptions(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest& request, ::guildpb::GetGuildDonateOptionsResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildDonateOptionsResponse>> AsyncGetGuildDonateOptions(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildDonateOptionsResponse>>(AsyncGetGuildDonateOptionsRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildDonateOptionsResponse>> PrepareAsyncGetGuildDonateOptions(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildDonateOptionsResponse>>(PrepareAsyncGetGuildDonateOptionsRaw(context, request, cq));
+    }
+    ::grpc::Status DonateToGuild(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest& request, ::guildpb::DonateToGuildResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::DonateToGuildResponse>> AsyncDonateToGuild(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::DonateToGuildResponse>>(AsyncDonateToGuildRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::DonateToGuildResponse>> PrepareAsyncDonateToGuild(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::DonateToGuildResponse>>(PrepareAsyncDonateToGuildRaw(context, request, cq));
+    }
+    ::grpc::Status UpgradeGuild(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest& request, ::guildpb::UpgradeGuildResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::UpgradeGuildResponse>> AsyncUpgradeGuild(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::UpgradeGuildResponse>>(AsyncUpgradeGuildRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::UpgradeGuildResponse>> PrepareAsyncUpgradeGuild(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::UpgradeGuildResponse>>(PrepareAsyncUpgradeGuildRaw(context, request, cq));
+    }
+    ::grpc::Status GetGuildShop(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest& request, ::guildpb::GetGuildShopResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildShopResponse>> AsyncGetGuildShop(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildShopResponse>>(AsyncGetGuildShopRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildShopResponse>> PrepareAsyncGetGuildShop(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildShopResponse>>(PrepareAsyncGetGuildShopRaw(context, request, cq));
+    }
+    ::grpc::Status BuyGuildShopGoods(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest& request, ::guildpb::BuyGuildShopGoodsResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::BuyGuildShopGoodsResponse>> AsyncBuyGuildShopGoods(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::BuyGuildShopGoodsResponse>>(AsyncBuyGuildShopGoodsRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::BuyGuildShopGoodsResponse>> PrepareAsyncBuyGuildShopGoods(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::guildpb::BuyGuildShopGoodsResponse>>(PrepareAsyncBuyGuildShopGoodsRaw(context, request, cq));
+    }
     class async final :
       public StubInterface::async_interface {
      public:
@@ -245,20 +491,46 @@ class GuildService final {
       void GetGuild(::grpc::ClientContext* context, const ::guildpb::GetGuildRequest* request, ::guildpb::GetGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void GetPlayerGuild(::grpc::ClientContext* context, const ::guildpb::GetPlayerGuildRequest* request, ::guildpb::GetPlayerGuildResponse* response, std::function<void(::grpc::Status)>) override;
       void GetPlayerGuild(::grpc::ClientContext* context, const ::guildpb::GetPlayerGuildRequest* request, ::guildpb::GetPlayerGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
-      void JoinGuild(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest* request, ::guildpb::JoinGuildResponse* response, std::function<void(::grpc::Status)>) override;
-      void JoinGuild(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest* request, ::guildpb::JoinGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void LeaveGuild(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest* request, ::guildpb::LeaveGuildResponse* response, std::function<void(::grpc::Status)>) override;
       void LeaveGuild(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest* request, ::guildpb::LeaveGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void DisbandGuild(::grpc::ClientContext* context, const ::guildpb::DisbandGuildRequest* request, ::guildpb::DisbandGuildResponse* response, std::function<void(::grpc::Status)>) override;
       void DisbandGuild(::grpc::ClientContext* context, const ::guildpb::DisbandGuildRequest* request, ::guildpb::DisbandGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void SetAnnouncement(::grpc::ClientContext* context, const ::guildpb::SetAnnouncementRequest* request, ::guildpb::SetAnnouncementResponse* response, std::function<void(::grpc::Status)>) override;
       void SetAnnouncement(::grpc::ClientContext* context, const ::guildpb::SetAnnouncementRequest* request, ::guildpb::SetAnnouncementResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void SetGuildMemberRole(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest* request, ::guildpb::SetGuildMemberRoleResponse* response, std::function<void(::grpc::Status)>) override;
+      void SetGuildMemberRole(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest* request, ::guildpb::SetGuildMemberRoleResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void KickGuildMember(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest* request, ::guildpb::KickGuildMemberResponse* response, std::function<void(::grpc::Status)>) override;
+      void KickGuildMember(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest* request, ::guildpb::KickGuildMemberResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void TransferGuildLeader(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest* request, ::guildpb::TransferGuildLeaderResponse* response, std::function<void(::grpc::Status)>) override;
+      void TransferGuildLeader(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest* request, ::guildpb::TransferGuildLeaderResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void ApplyJoinGuild(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest* request, ::guildpb::ApplyJoinGuildResponse* response, std::function<void(::grpc::Status)>) override;
+      void ApplyJoinGuild(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest* request, ::guildpb::ApplyJoinGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void CancelGuildApplication(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest* request, ::guildpb::CancelGuildApplicationResponse* response, std::function<void(::grpc::Status)>) override;
+      void CancelGuildApplication(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest* request, ::guildpb::CancelGuildApplicationResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void ListMyGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest* request, ::guildpb::ListMyGuildApplicationsResponse* response, std::function<void(::grpc::Status)>) override;
+      void ListMyGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest* request, ::guildpb::ListMyGuildApplicationsResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void ListGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest* request, ::guildpb::ListGuildApplicationsResponse* response, std::function<void(::grpc::Status)>) override;
+      void ListGuildApplications(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest* request, ::guildpb::ListGuildApplicationsResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void ReviewGuildApplication(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest* request, ::guildpb::ReviewGuildApplicationResponse* response, std::function<void(::grpc::Status)>) override;
+      void ReviewGuildApplication(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest* request, ::guildpb::ReviewGuildApplicationResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void NotifyGuildChanged(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C* request, ::Empty* response, std::function<void(::grpc::Status)>) override;
+      void NotifyGuildChanged(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
       void UpdateGuildScore(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest* request, ::guildpb::UpdateGuildScoreResponse* response, std::function<void(::grpc::Status)>) override;
       void UpdateGuildScore(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest* request, ::guildpb::UpdateGuildScoreResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void GetGuildRank(::grpc::ClientContext* context, const ::guildpb::GetGuildRankRequest* request, ::guildpb::GetGuildRankResponse* response, std::function<void(::grpc::Status)>) override;
       void GetGuildRank(::grpc::ClientContext* context, const ::guildpb::GetGuildRankRequest* request, ::guildpb::GetGuildRankResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void GetGuildRankByGuild(::grpc::ClientContext* context, const ::guildpb::GetGuildRankByGuildRequest* request, ::guildpb::GetGuildRankByGuildResponse* response, std::function<void(::grpc::Status)>) override;
       void GetGuildRankByGuild(::grpc::ClientContext* context, const ::guildpb::GetGuildRankByGuildRequest* request, ::guildpb::GetGuildRankByGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void GetGuildDonateOptions(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest* request, ::guildpb::GetGuildDonateOptionsResponse* response, std::function<void(::grpc::Status)>) override;
+      void GetGuildDonateOptions(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest* request, ::guildpb::GetGuildDonateOptionsResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void DonateToGuild(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest* request, ::guildpb::DonateToGuildResponse* response, std::function<void(::grpc::Status)>) override;
+      void DonateToGuild(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest* request, ::guildpb::DonateToGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void UpgradeGuild(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest* request, ::guildpb::UpgradeGuildResponse* response, std::function<void(::grpc::Status)>) override;
+      void UpgradeGuild(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest* request, ::guildpb::UpgradeGuildResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void GetGuildShop(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest* request, ::guildpb::GetGuildShopResponse* response, std::function<void(::grpc::Status)>) override;
+      void GetGuildShop(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest* request, ::guildpb::GetGuildShopResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void BuyGuildShopGoods(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest* request, ::guildpb::BuyGuildShopGoodsResponse* response, std::function<void(::grpc::Status)>) override;
+      void BuyGuildShopGoods(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest* request, ::guildpb::BuyGuildShopGoodsResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -276,30 +548,69 @@ class GuildService final {
     ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildResponse>* PrepareAsyncGetGuildRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::GetPlayerGuildResponse>* AsyncGetPlayerGuildRaw(::grpc::ClientContext* context, const ::guildpb::GetPlayerGuildRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::GetPlayerGuildResponse>* PrepareAsyncGetPlayerGuildRaw(::grpc::ClientContext* context, const ::guildpb::GetPlayerGuildRequest& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::guildpb::JoinGuildResponse>* AsyncJoinGuildRaw(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::guildpb::JoinGuildResponse>* PrepareAsyncJoinGuildRaw(::grpc::ClientContext* context, const ::guildpb::JoinGuildRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::LeaveGuildResponse>* AsyncLeaveGuildRaw(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::LeaveGuildResponse>* PrepareAsyncLeaveGuildRaw(::grpc::ClientContext* context, const ::guildpb::LeaveGuildRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::DisbandGuildResponse>* AsyncDisbandGuildRaw(::grpc::ClientContext* context, const ::guildpb::DisbandGuildRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::DisbandGuildResponse>* PrepareAsyncDisbandGuildRaw(::grpc::ClientContext* context, const ::guildpb::DisbandGuildRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::SetAnnouncementResponse>* AsyncSetAnnouncementRaw(::grpc::ClientContext* context, const ::guildpb::SetAnnouncementRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::SetAnnouncementResponse>* PrepareAsyncSetAnnouncementRaw(::grpc::ClientContext* context, const ::guildpb::SetAnnouncementRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::SetGuildMemberRoleResponse>* AsyncSetGuildMemberRoleRaw(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::SetGuildMemberRoleResponse>* PrepareAsyncSetGuildMemberRoleRaw(::grpc::ClientContext* context, const ::guildpb::SetGuildMemberRoleRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::KickGuildMemberResponse>* AsyncKickGuildMemberRaw(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::KickGuildMemberResponse>* PrepareAsyncKickGuildMemberRaw(::grpc::ClientContext* context, const ::guildpb::KickGuildMemberRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::TransferGuildLeaderResponse>* AsyncTransferGuildLeaderRaw(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::TransferGuildLeaderResponse>* PrepareAsyncTransferGuildLeaderRaw(::grpc::ClientContext* context, const ::guildpb::TransferGuildLeaderRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::ApplyJoinGuildResponse>* AsyncApplyJoinGuildRaw(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::ApplyJoinGuildResponse>* PrepareAsyncApplyJoinGuildRaw(::grpc::ClientContext* context, const ::guildpb::ApplyJoinGuildRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::CancelGuildApplicationResponse>* AsyncCancelGuildApplicationRaw(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::CancelGuildApplicationResponse>* PrepareAsyncCancelGuildApplicationRaw(::grpc::ClientContext* context, const ::guildpb::CancelGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::ListMyGuildApplicationsResponse>* AsyncListMyGuildApplicationsRaw(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::ListMyGuildApplicationsResponse>* PrepareAsyncListMyGuildApplicationsRaw(::grpc::ClientContext* context, const ::guildpb::ListMyGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::ListGuildApplicationsResponse>* AsyncListGuildApplicationsRaw(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::ListGuildApplicationsResponse>* PrepareAsyncListGuildApplicationsRaw(::grpc::ClientContext* context, const ::guildpb::ListGuildApplicationsRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::ReviewGuildApplicationResponse>* AsyncReviewGuildApplicationRaw(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::ReviewGuildApplicationResponse>* PrepareAsyncReviewGuildApplicationRaw(::grpc::ClientContext* context, const ::guildpb::ReviewGuildApplicationRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::Empty>* AsyncNotifyGuildChangedRaw(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::Empty>* PrepareAsyncNotifyGuildChangedRaw(::grpc::ClientContext* context, const ::guildpb::GuildChangedS2C& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::UpdateGuildScoreResponse>* AsyncUpdateGuildScoreRaw(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::UpdateGuildScoreResponse>* PrepareAsyncUpdateGuildScoreRaw(::grpc::ClientContext* context, const ::guildpb::UpdateGuildScoreRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildRankResponse>* AsyncGetGuildRankRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildRankRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildRankResponse>* PrepareAsyncGetGuildRankRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildRankRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildRankByGuildResponse>* AsyncGetGuildRankByGuildRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildRankByGuildRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildRankByGuildResponse>* PrepareAsyncGetGuildRankByGuildRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildRankByGuildRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildDonateOptionsResponse>* AsyncGetGuildDonateOptionsRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildDonateOptionsResponse>* PrepareAsyncGetGuildDonateOptionsRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildDonateOptionsRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::DonateToGuildResponse>* AsyncDonateToGuildRaw(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::DonateToGuildResponse>* PrepareAsyncDonateToGuildRaw(::grpc::ClientContext* context, const ::guildpb::DonateToGuildRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::UpgradeGuildResponse>* AsyncUpgradeGuildRaw(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::UpgradeGuildResponse>* PrepareAsyncUpgradeGuildRaw(::grpc::ClientContext* context, const ::guildpb::UpgradeGuildRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildShopResponse>* AsyncGetGuildShopRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::GetGuildShopResponse>* PrepareAsyncGetGuildShopRaw(::grpc::ClientContext* context, const ::guildpb::GetGuildShopRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::BuyGuildShopGoodsResponse>* AsyncBuyGuildShopGoodsRaw(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::guildpb::BuyGuildShopGoodsResponse>* PrepareAsyncBuyGuildShopGoodsRaw(::grpc::ClientContext* context, const ::guildpb::BuyGuildShopGoodsRequest& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_CreateGuild_;
     const ::grpc::internal::RpcMethod rpcmethod_GetGuild_;
     const ::grpc::internal::RpcMethod rpcmethod_GetPlayerGuild_;
-    const ::grpc::internal::RpcMethod rpcmethod_JoinGuild_;
     const ::grpc::internal::RpcMethod rpcmethod_LeaveGuild_;
     const ::grpc::internal::RpcMethod rpcmethod_DisbandGuild_;
     const ::grpc::internal::RpcMethod rpcmethod_SetAnnouncement_;
+    const ::grpc::internal::RpcMethod rpcmethod_SetGuildMemberRole_;
+    const ::grpc::internal::RpcMethod rpcmethod_KickGuildMember_;
+    const ::grpc::internal::RpcMethod rpcmethod_TransferGuildLeader_;
+    const ::grpc::internal::RpcMethod rpcmethod_ApplyJoinGuild_;
+    const ::grpc::internal::RpcMethod rpcmethod_CancelGuildApplication_;
+    const ::grpc::internal::RpcMethod rpcmethod_ListMyGuildApplications_;
+    const ::grpc::internal::RpcMethod rpcmethod_ListGuildApplications_;
+    const ::grpc::internal::RpcMethod rpcmethod_ReviewGuildApplication_;
+    const ::grpc::internal::RpcMethod rpcmethod_NotifyGuildChanged_;
     const ::grpc::internal::RpcMethod rpcmethod_UpdateGuildScore_;
     const ::grpc::internal::RpcMethod rpcmethod_GetGuildRank_;
     const ::grpc::internal::RpcMethod rpcmethod_GetGuildRankByGuild_;
+    const ::grpc::internal::RpcMethod rpcmethod_GetGuildDonateOptions_;
+    const ::grpc::internal::RpcMethod rpcmethod_DonateToGuild_;
+    const ::grpc::internal::RpcMethod rpcmethod_UpgradeGuild_;
+    const ::grpc::internal::RpcMethod rpcmethod_GetGuildShop_;
+    const ::grpc::internal::RpcMethod rpcmethod_BuyGuildShopGoods_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -310,14 +621,33 @@ class GuildService final {
     virtual ::grpc::Status CreateGuild(::grpc::ServerContext* context, const ::guildpb::CreateGuildRequest* request, ::guildpb::CreateGuildResponse* response);
     virtual ::grpc::Status GetGuild(::grpc::ServerContext* context, const ::guildpb::GetGuildRequest* request, ::guildpb::GetGuildResponse* response);
     virtual ::grpc::Status GetPlayerGuild(::grpc::ServerContext* context, const ::guildpb::GetPlayerGuildRequest* request, ::guildpb::GetPlayerGuildResponse* response);
-    virtual ::grpc::Status JoinGuild(::grpc::ServerContext* context, const ::guildpb::JoinGuildRequest* request, ::guildpb::JoinGuildResponse* response);
     virtual ::grpc::Status LeaveGuild(::grpc::ServerContext* context, const ::guildpb::LeaveGuildRequest* request, ::guildpb::LeaveGuildResponse* response);
     virtual ::grpc::Status DisbandGuild(::grpc::ServerContext* context, const ::guildpb::DisbandGuildRequest* request, ::guildpb::DisbandGuildResponse* response);
     virtual ::grpc::Status SetAnnouncement(::grpc::ServerContext* context, const ::guildpb::SetAnnouncementRequest* request, ::guildpb::SetAnnouncementResponse* response);
+    // 成员管理(B2)
+    virtual ::grpc::Status SetGuildMemberRole(::grpc::ServerContext* context, const ::guildpb::SetGuildMemberRoleRequest* request, ::guildpb::SetGuildMemberRoleResponse* response);
+    virtual ::grpc::Status KickGuildMember(::grpc::ServerContext* context, const ::guildpb::KickGuildMemberRequest* request, ::guildpb::KickGuildMemberResponse* response);
+    virtual ::grpc::Status TransferGuildLeader(::grpc::ServerContext* context, const ::guildpb::TransferGuildLeaderRequest* request, ::guildpb::TransferGuildLeaderResponse* response);
+    // 入帮申请(B2;取代直接入帮 JoinGuild)
+    virtual ::grpc::Status ApplyJoinGuild(::grpc::ServerContext* context, const ::guildpb::ApplyJoinGuildRequest* request, ::guildpb::ApplyJoinGuildResponse* response);
+    virtual ::grpc::Status CancelGuildApplication(::grpc::ServerContext* context, const ::guildpb::CancelGuildApplicationRequest* request, ::guildpb::CancelGuildApplicationResponse* response);
+    virtual ::grpc::Status ListMyGuildApplications(::grpc::ServerContext* context, const ::guildpb::ListMyGuildApplicationsRequest* request, ::guildpb::ListMyGuildApplicationsResponse* response);
+    virtual ::grpc::Status ListGuildApplications(::grpc::ServerContext* context, const ::guildpb::ListGuildApplicationsRequest* request, ::guildpb::ListGuildApplicationsResponse* response);
+    virtual ::grpc::Status ReviewGuildApplication(::grpc::ServerContext* context, const ::guildpb::ReviewGuildApplicationRequest* request, ::guildpb::ReviewGuildApplicationResponse* response);
+    // 推送占位(B2):只为分配 message id;服务端实现恒返回 Empty。
+    // **不进** go/guild session.ClientMethods —— 客户端发这个 id 会被 PermissionDenied。
+    virtual ::grpc::Status NotifyGuildChanged(::grpc::ServerContext* context, const ::guildpb::GuildChangedS2C* request, ::Empty* response);
     // Ranking
     virtual ::grpc::Status UpdateGuildScore(::grpc::ServerContext* context, const ::guildpb::UpdateGuildScoreRequest* request, ::guildpb::UpdateGuildScoreResponse* response);
     virtual ::grpc::Status GetGuildRank(::grpc::ServerContext* context, const ::guildpb::GetGuildRankRequest* request, ::guildpb::GetGuildRankResponse* response);
     virtual ::grpc::Status GetGuildRankByGuild(::grpc::ServerContext* context, const ::guildpb::GetGuildRankByGuildRequest* request, ::guildpb::GetGuildRankByGuildResponse* response);
+    // 帮会经济(B5)。五个都是客户端方法,已进 go/guild session.ClientMethods;
+    // 身份一律取会话,无会话的内部调用由 logic 拒绝。B5a 只落协议,实现在 B5b(此前回 Unimplemented)。
+    virtual ::grpc::Status GetGuildDonateOptions(::grpc::ServerContext* context, const ::guildpb::GetGuildDonateOptionsRequest* request, ::guildpb::GetGuildDonateOptionsResponse* response);
+    virtual ::grpc::Status DonateToGuild(::grpc::ServerContext* context, const ::guildpb::DonateToGuildRequest* request, ::guildpb::DonateToGuildResponse* response);
+    virtual ::grpc::Status UpgradeGuild(::grpc::ServerContext* context, const ::guildpb::UpgradeGuildRequest* request, ::guildpb::UpgradeGuildResponse* response);
+    virtual ::grpc::Status GetGuildShop(::grpc::ServerContext* context, const ::guildpb::GetGuildShopRequest* request, ::guildpb::GetGuildShopResponse* response);
+    virtual ::grpc::Status BuyGuildShopGoods(::grpc::ServerContext* context, const ::guildpb::BuyGuildShopGoodsRequest* request, ::guildpb::BuyGuildShopGoodsResponse* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_CreateGuild : public BaseClass {
@@ -380,32 +710,12 @@ class GuildService final {
     }
   };
   template <class BaseClass>
-  class WithAsyncMethod_JoinGuild : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithAsyncMethod_JoinGuild() {
-      ::grpc::Service::MarkMethodAsync(3);
-    }
-    ~WithAsyncMethod_JoinGuild() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status JoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::JoinGuildRequest* /*request*/, ::guildpb::JoinGuildResponse* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestJoinGuild(::grpc::ServerContext* context, ::guildpb::JoinGuildRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::JoinGuildResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
   class WithAsyncMethod_LeaveGuild : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_LeaveGuild() {
-      ::grpc::Service::MarkMethodAsync(4);
+      ::grpc::Service::MarkMethodAsync(3);
     }
     ~WithAsyncMethod_LeaveGuild() override {
       BaseClassMustBeDerivedFromService(this);
@@ -416,7 +726,7 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestLeaveGuild(::grpc::ServerContext* context, ::guildpb::LeaveGuildRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::LeaveGuildResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -425,7 +735,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_DisbandGuild() {
-      ::grpc::Service::MarkMethodAsync(5);
+      ::grpc::Service::MarkMethodAsync(4);
     }
     ~WithAsyncMethod_DisbandGuild() override {
       BaseClassMustBeDerivedFromService(this);
@@ -436,7 +746,7 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestDisbandGuild(::grpc::ServerContext* context, ::guildpb::DisbandGuildRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::DisbandGuildResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(5, context, request, response, new_call_cq, notification_cq, tag);
+      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -445,7 +755,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_SetAnnouncement() {
-      ::grpc::Service::MarkMethodAsync(6);
+      ::grpc::Service::MarkMethodAsync(5);
     }
     ~WithAsyncMethod_SetAnnouncement() override {
       BaseClassMustBeDerivedFromService(this);
@@ -456,7 +766,187 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestSetAnnouncement(::grpc::ServerContext* context, ::guildpb::SetAnnouncementRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::SetAnnouncementResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(5, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_SetGuildMemberRole : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_SetGuildMemberRole() {
+      ::grpc::Service::MarkMethodAsync(6);
+    }
+    ~WithAsyncMethod_SetGuildMemberRole() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetGuildMemberRole(::grpc::ServerContext* /*context*/, const ::guildpb::SetGuildMemberRoleRequest* /*request*/, ::guildpb::SetGuildMemberRoleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestSetGuildMemberRole(::grpc::ServerContext* context, ::guildpb::SetGuildMemberRoleRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::SetGuildMemberRoleResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(6, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_KickGuildMember : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_KickGuildMember() {
+      ::grpc::Service::MarkMethodAsync(7);
+    }
+    ~WithAsyncMethod_KickGuildMember() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status KickGuildMember(::grpc::ServerContext* /*context*/, const ::guildpb::KickGuildMemberRequest* /*request*/, ::guildpb::KickGuildMemberResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestKickGuildMember(::grpc::ServerContext* context, ::guildpb::KickGuildMemberRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::KickGuildMemberResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_TransferGuildLeader : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_TransferGuildLeader() {
+      ::grpc::Service::MarkMethodAsync(8);
+    }
+    ~WithAsyncMethod_TransferGuildLeader() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status TransferGuildLeader(::grpc::ServerContext* /*context*/, const ::guildpb::TransferGuildLeaderRequest* /*request*/, ::guildpb::TransferGuildLeaderResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestTransferGuildLeader(::grpc::ServerContext* context, ::guildpb::TransferGuildLeaderRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::TransferGuildLeaderResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(8, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_ApplyJoinGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_ApplyJoinGuild() {
+      ::grpc::Service::MarkMethodAsync(9);
+    }
+    ~WithAsyncMethod_ApplyJoinGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ApplyJoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::ApplyJoinGuildRequest* /*request*/, ::guildpb::ApplyJoinGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestApplyJoinGuild(::grpc::ServerContext* context, ::guildpb::ApplyJoinGuildRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::ApplyJoinGuildResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(9, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_CancelGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_CancelGuildApplication() {
+      ::grpc::Service::MarkMethodAsync(10);
+    }
+    ~WithAsyncMethod_CancelGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CancelGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::CancelGuildApplicationRequest* /*request*/, ::guildpb::CancelGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestCancelGuildApplication(::grpc::ServerContext* context, ::guildpb::CancelGuildApplicationRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::CancelGuildApplicationResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(10, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_ListMyGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_ListMyGuildApplications() {
+      ::grpc::Service::MarkMethodAsync(11);
+    }
+    ~WithAsyncMethod_ListMyGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListMyGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListMyGuildApplicationsRequest* /*request*/, ::guildpb::ListMyGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestListMyGuildApplications(::grpc::ServerContext* context, ::guildpb::ListMyGuildApplicationsRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::ListMyGuildApplicationsResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(11, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_ListGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_ListGuildApplications() {
+      ::grpc::Service::MarkMethodAsync(12);
+    }
+    ~WithAsyncMethod_ListGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListGuildApplicationsRequest* /*request*/, ::guildpb::ListGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestListGuildApplications(::grpc::ServerContext* context, ::guildpb::ListGuildApplicationsRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::ListGuildApplicationsResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(12, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_ReviewGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_ReviewGuildApplication() {
+      ::grpc::Service::MarkMethodAsync(13);
+    }
+    ~WithAsyncMethod_ReviewGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReviewGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::ReviewGuildApplicationRequest* /*request*/, ::guildpb::ReviewGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestReviewGuildApplication(::grpc::ServerContext* context, ::guildpb::ReviewGuildApplicationRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::ReviewGuildApplicationResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(13, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_NotifyGuildChanged : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_NotifyGuildChanged() {
+      ::grpc::Service::MarkMethodAsync(14);
+    }
+    ~WithAsyncMethod_NotifyGuildChanged() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyGuildChanged(::grpc::ServerContext* /*context*/, const ::guildpb::GuildChangedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestNotifyGuildChanged(::grpc::ServerContext* context, ::guildpb::GuildChangedS2C* request, ::grpc::ServerAsyncResponseWriter< ::Empty>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(14, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -465,7 +955,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_UpdateGuildScore() {
-      ::grpc::Service::MarkMethodAsync(7);
+      ::grpc::Service::MarkMethodAsync(15);
     }
     ~WithAsyncMethod_UpdateGuildScore() override {
       BaseClassMustBeDerivedFromService(this);
@@ -476,7 +966,7 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestUpdateGuildScore(::grpc::ServerContext* context, ::guildpb::UpdateGuildScoreRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::UpdateGuildScoreResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
+      ::grpc::Service::RequestAsyncUnary(15, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -485,7 +975,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_GetGuildRank() {
-      ::grpc::Service::MarkMethodAsync(8);
+      ::grpc::Service::MarkMethodAsync(16);
     }
     ~WithAsyncMethod_GetGuildRank() override {
       BaseClassMustBeDerivedFromService(this);
@@ -496,7 +986,7 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestGetGuildRank(::grpc::ServerContext* context, ::guildpb::GetGuildRankRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::GetGuildRankResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(8, context, request, response, new_call_cq, notification_cq, tag);
+      ::grpc::Service::RequestAsyncUnary(16, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -505,7 +995,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_GetGuildRankByGuild() {
-      ::grpc::Service::MarkMethodAsync(9);
+      ::grpc::Service::MarkMethodAsync(17);
     }
     ~WithAsyncMethod_GetGuildRankByGuild() override {
       BaseClassMustBeDerivedFromService(this);
@@ -516,10 +1006,110 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestGetGuildRankByGuild(::grpc::ServerContext* context, ::guildpb::GetGuildRankByGuildRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::GetGuildRankByGuildResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(9, context, request, response, new_call_cq, notification_cq, tag);
+      ::grpc::Service::RequestAsyncUnary(17, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_CreateGuild<WithAsyncMethod_GetGuild<WithAsyncMethod_GetPlayerGuild<WithAsyncMethod_JoinGuild<WithAsyncMethod_LeaveGuild<WithAsyncMethod_DisbandGuild<WithAsyncMethod_SetAnnouncement<WithAsyncMethod_UpdateGuildScore<WithAsyncMethod_GetGuildRank<WithAsyncMethod_GetGuildRankByGuild<Service > > > > > > > > > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_GetGuildDonateOptions : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_GetGuildDonateOptions() {
+      ::grpc::Service::MarkMethodAsync(18);
+    }
+    ~WithAsyncMethod_GetGuildDonateOptions() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetGuildDonateOptions(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildDonateOptionsRequest* /*request*/, ::guildpb::GetGuildDonateOptionsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetGuildDonateOptions(::grpc::ServerContext* context, ::guildpb::GetGuildDonateOptionsRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::GetGuildDonateOptionsResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(18, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_DonateToGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_DonateToGuild() {
+      ::grpc::Service::MarkMethodAsync(19);
+    }
+    ~WithAsyncMethod_DonateToGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status DonateToGuild(::grpc::ServerContext* /*context*/, const ::guildpb::DonateToGuildRequest* /*request*/, ::guildpb::DonateToGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestDonateToGuild(::grpc::ServerContext* context, ::guildpb::DonateToGuildRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::DonateToGuildResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(19, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_UpgradeGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_UpgradeGuild() {
+      ::grpc::Service::MarkMethodAsync(20);
+    }
+    ~WithAsyncMethod_UpgradeGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status UpgradeGuild(::grpc::ServerContext* /*context*/, const ::guildpb::UpgradeGuildRequest* /*request*/, ::guildpb::UpgradeGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestUpgradeGuild(::grpc::ServerContext* context, ::guildpb::UpgradeGuildRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::UpgradeGuildResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(20, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_GetGuildShop : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_GetGuildShop() {
+      ::grpc::Service::MarkMethodAsync(21);
+    }
+    ~WithAsyncMethod_GetGuildShop() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetGuildShop(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildShopRequest* /*request*/, ::guildpb::GetGuildShopResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetGuildShop(::grpc::ServerContext* context, ::guildpb::GetGuildShopRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::GetGuildShopResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(21, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_BuyGuildShopGoods : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_BuyGuildShopGoods() {
+      ::grpc::Service::MarkMethodAsync(22);
+    }
+    ~WithAsyncMethod_BuyGuildShopGoods() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status BuyGuildShopGoods(::grpc::ServerContext* /*context*/, const ::guildpb::BuyGuildShopGoodsRequest* /*request*/, ::guildpb::BuyGuildShopGoodsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestBuyGuildShopGoods(::grpc::ServerContext* context, ::guildpb::BuyGuildShopGoodsRequest* request, ::grpc::ServerAsyncResponseWriter< ::guildpb::BuyGuildShopGoodsResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(22, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_CreateGuild<WithAsyncMethod_GetGuild<WithAsyncMethod_GetPlayerGuild<WithAsyncMethod_LeaveGuild<WithAsyncMethod_DisbandGuild<WithAsyncMethod_SetAnnouncement<WithAsyncMethod_SetGuildMemberRole<WithAsyncMethod_KickGuildMember<WithAsyncMethod_TransferGuildLeader<WithAsyncMethod_ApplyJoinGuild<WithAsyncMethod_CancelGuildApplication<WithAsyncMethod_ListMyGuildApplications<WithAsyncMethod_ListGuildApplications<WithAsyncMethod_ReviewGuildApplication<WithAsyncMethod_NotifyGuildChanged<WithAsyncMethod_UpdateGuildScore<WithAsyncMethod_GetGuildRank<WithAsyncMethod_GetGuildRankByGuild<WithAsyncMethod_GetGuildDonateOptions<WithAsyncMethod_DonateToGuild<WithAsyncMethod_UpgradeGuild<WithAsyncMethod_GetGuildShop<WithAsyncMethod_BuyGuildShopGoods<Service > > > > > > > > > > > > > > > > > > > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_CreateGuild : public BaseClass {
    private:
@@ -602,45 +1192,18 @@ class GuildService final {
       ::grpc::CallbackServerContext* /*context*/, const ::guildpb::GetPlayerGuildRequest* /*request*/, ::guildpb::GetPlayerGuildResponse* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithCallbackMethod_JoinGuild : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithCallbackMethod_JoinGuild() {
-      ::grpc::Service::MarkMethodCallback(3,
-          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::JoinGuildRequest, ::guildpb::JoinGuildResponse>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::guildpb::JoinGuildRequest* request, ::guildpb::JoinGuildResponse* response) { return this->JoinGuild(context, request, response); }));}
-    void SetMessageAllocatorFor_JoinGuild(
-        ::grpc::MessageAllocator< ::guildpb::JoinGuildRequest, ::guildpb::JoinGuildResponse>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(3);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::JoinGuildRequest, ::guildpb::JoinGuildResponse>*>(handler)
-              ->SetMessageAllocator(allocator);
-    }
-    ~WithCallbackMethod_JoinGuild() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status JoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::JoinGuildRequest* /*request*/, ::guildpb::JoinGuildResponse* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* JoinGuild(
-      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::JoinGuildRequest* /*request*/, ::guildpb::JoinGuildResponse* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
   class WithCallbackMethod_LeaveGuild : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithCallbackMethod_LeaveGuild() {
-      ::grpc::Service::MarkMethodCallback(4,
+      ::grpc::Service::MarkMethodCallback(3,
           new ::grpc::internal::CallbackUnaryHandler< ::guildpb::LeaveGuildRequest, ::guildpb::LeaveGuildResponse>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::guildpb::LeaveGuildRequest* request, ::guildpb::LeaveGuildResponse* response) { return this->LeaveGuild(context, request, response); }));}
     void SetMessageAllocatorFor_LeaveGuild(
         ::grpc::MessageAllocator< ::guildpb::LeaveGuildRequest, ::guildpb::LeaveGuildResponse>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(4);
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(3);
       static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::LeaveGuildRequest, ::guildpb::LeaveGuildResponse>*>(handler)
               ->SetMessageAllocator(allocator);
     }
@@ -661,13 +1224,13 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithCallbackMethod_DisbandGuild() {
-      ::grpc::Service::MarkMethodCallback(5,
+      ::grpc::Service::MarkMethodCallback(4,
           new ::grpc::internal::CallbackUnaryHandler< ::guildpb::DisbandGuildRequest, ::guildpb::DisbandGuildResponse>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::guildpb::DisbandGuildRequest* request, ::guildpb::DisbandGuildResponse* response) { return this->DisbandGuild(context, request, response); }));}
     void SetMessageAllocatorFor_DisbandGuild(
         ::grpc::MessageAllocator< ::guildpb::DisbandGuildRequest, ::guildpb::DisbandGuildResponse>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(5);
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(4);
       static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::DisbandGuildRequest, ::guildpb::DisbandGuildResponse>*>(handler)
               ->SetMessageAllocator(allocator);
     }
@@ -688,13 +1251,13 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithCallbackMethod_SetAnnouncement() {
-      ::grpc::Service::MarkMethodCallback(6,
+      ::grpc::Service::MarkMethodCallback(5,
           new ::grpc::internal::CallbackUnaryHandler< ::guildpb::SetAnnouncementRequest, ::guildpb::SetAnnouncementResponse>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::guildpb::SetAnnouncementRequest* request, ::guildpb::SetAnnouncementResponse* response) { return this->SetAnnouncement(context, request, response); }));}
     void SetMessageAllocatorFor_SetAnnouncement(
         ::grpc::MessageAllocator< ::guildpb::SetAnnouncementRequest, ::guildpb::SetAnnouncementResponse>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(6);
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(5);
       static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::SetAnnouncementRequest, ::guildpb::SetAnnouncementResponse>*>(handler)
               ->SetMessageAllocator(allocator);
     }
@@ -710,18 +1273,261 @@ class GuildService final {
       ::grpc::CallbackServerContext* /*context*/, const ::guildpb::SetAnnouncementRequest* /*request*/, ::guildpb::SetAnnouncementResponse* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
+  class WithCallbackMethod_SetGuildMemberRole : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_SetGuildMemberRole() {
+      ::grpc::Service::MarkMethodCallback(6,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::SetGuildMemberRoleRequest, ::guildpb::SetGuildMemberRoleResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::SetGuildMemberRoleRequest* request, ::guildpb::SetGuildMemberRoleResponse* response) { return this->SetGuildMemberRole(context, request, response); }));}
+    void SetMessageAllocatorFor_SetGuildMemberRole(
+        ::grpc::MessageAllocator< ::guildpb::SetGuildMemberRoleRequest, ::guildpb::SetGuildMemberRoleResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(6);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::SetGuildMemberRoleRequest, ::guildpb::SetGuildMemberRoleResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_SetGuildMemberRole() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetGuildMemberRole(::grpc::ServerContext* /*context*/, const ::guildpb::SetGuildMemberRoleRequest* /*request*/, ::guildpb::SetGuildMemberRoleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SetGuildMemberRole(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::SetGuildMemberRoleRequest* /*request*/, ::guildpb::SetGuildMemberRoleResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_KickGuildMember : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_KickGuildMember() {
+      ::grpc::Service::MarkMethodCallback(7,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::KickGuildMemberRequest, ::guildpb::KickGuildMemberResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::KickGuildMemberRequest* request, ::guildpb::KickGuildMemberResponse* response) { return this->KickGuildMember(context, request, response); }));}
+    void SetMessageAllocatorFor_KickGuildMember(
+        ::grpc::MessageAllocator< ::guildpb::KickGuildMemberRequest, ::guildpb::KickGuildMemberResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(7);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::KickGuildMemberRequest, ::guildpb::KickGuildMemberResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_KickGuildMember() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status KickGuildMember(::grpc::ServerContext* /*context*/, const ::guildpb::KickGuildMemberRequest* /*request*/, ::guildpb::KickGuildMemberResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* KickGuildMember(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::KickGuildMemberRequest* /*request*/, ::guildpb::KickGuildMemberResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_TransferGuildLeader : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_TransferGuildLeader() {
+      ::grpc::Service::MarkMethodCallback(8,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::TransferGuildLeaderRequest, ::guildpb::TransferGuildLeaderResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::TransferGuildLeaderRequest* request, ::guildpb::TransferGuildLeaderResponse* response) { return this->TransferGuildLeader(context, request, response); }));}
+    void SetMessageAllocatorFor_TransferGuildLeader(
+        ::grpc::MessageAllocator< ::guildpb::TransferGuildLeaderRequest, ::guildpb::TransferGuildLeaderResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(8);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::TransferGuildLeaderRequest, ::guildpb::TransferGuildLeaderResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_TransferGuildLeader() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status TransferGuildLeader(::grpc::ServerContext* /*context*/, const ::guildpb::TransferGuildLeaderRequest* /*request*/, ::guildpb::TransferGuildLeaderResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* TransferGuildLeader(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::TransferGuildLeaderRequest* /*request*/, ::guildpb::TransferGuildLeaderResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_ApplyJoinGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_ApplyJoinGuild() {
+      ::grpc::Service::MarkMethodCallback(9,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::ApplyJoinGuildRequest, ::guildpb::ApplyJoinGuildResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::ApplyJoinGuildRequest* request, ::guildpb::ApplyJoinGuildResponse* response) { return this->ApplyJoinGuild(context, request, response); }));}
+    void SetMessageAllocatorFor_ApplyJoinGuild(
+        ::grpc::MessageAllocator< ::guildpb::ApplyJoinGuildRequest, ::guildpb::ApplyJoinGuildResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(9);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::ApplyJoinGuildRequest, ::guildpb::ApplyJoinGuildResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_ApplyJoinGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ApplyJoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::ApplyJoinGuildRequest* /*request*/, ::guildpb::ApplyJoinGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ApplyJoinGuild(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::ApplyJoinGuildRequest* /*request*/, ::guildpb::ApplyJoinGuildResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_CancelGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_CancelGuildApplication() {
+      ::grpc::Service::MarkMethodCallback(10,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::CancelGuildApplicationRequest, ::guildpb::CancelGuildApplicationResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::CancelGuildApplicationRequest* request, ::guildpb::CancelGuildApplicationResponse* response) { return this->CancelGuildApplication(context, request, response); }));}
+    void SetMessageAllocatorFor_CancelGuildApplication(
+        ::grpc::MessageAllocator< ::guildpb::CancelGuildApplicationRequest, ::guildpb::CancelGuildApplicationResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(10);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::CancelGuildApplicationRequest, ::guildpb::CancelGuildApplicationResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_CancelGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CancelGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::CancelGuildApplicationRequest* /*request*/, ::guildpb::CancelGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* CancelGuildApplication(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::CancelGuildApplicationRequest* /*request*/, ::guildpb::CancelGuildApplicationResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_ListMyGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_ListMyGuildApplications() {
+      ::grpc::Service::MarkMethodCallback(11,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::ListMyGuildApplicationsRequest, ::guildpb::ListMyGuildApplicationsResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::ListMyGuildApplicationsRequest* request, ::guildpb::ListMyGuildApplicationsResponse* response) { return this->ListMyGuildApplications(context, request, response); }));}
+    void SetMessageAllocatorFor_ListMyGuildApplications(
+        ::grpc::MessageAllocator< ::guildpb::ListMyGuildApplicationsRequest, ::guildpb::ListMyGuildApplicationsResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(11);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::ListMyGuildApplicationsRequest, ::guildpb::ListMyGuildApplicationsResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_ListMyGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListMyGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListMyGuildApplicationsRequest* /*request*/, ::guildpb::ListMyGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ListMyGuildApplications(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::ListMyGuildApplicationsRequest* /*request*/, ::guildpb::ListMyGuildApplicationsResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_ListGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_ListGuildApplications() {
+      ::grpc::Service::MarkMethodCallback(12,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::ListGuildApplicationsRequest, ::guildpb::ListGuildApplicationsResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::ListGuildApplicationsRequest* request, ::guildpb::ListGuildApplicationsResponse* response) { return this->ListGuildApplications(context, request, response); }));}
+    void SetMessageAllocatorFor_ListGuildApplications(
+        ::grpc::MessageAllocator< ::guildpb::ListGuildApplicationsRequest, ::guildpb::ListGuildApplicationsResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(12);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::ListGuildApplicationsRequest, ::guildpb::ListGuildApplicationsResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_ListGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListGuildApplicationsRequest* /*request*/, ::guildpb::ListGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ListGuildApplications(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::ListGuildApplicationsRequest* /*request*/, ::guildpb::ListGuildApplicationsResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_ReviewGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_ReviewGuildApplication() {
+      ::grpc::Service::MarkMethodCallback(13,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::ReviewGuildApplicationRequest, ::guildpb::ReviewGuildApplicationResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::ReviewGuildApplicationRequest* request, ::guildpb::ReviewGuildApplicationResponse* response) { return this->ReviewGuildApplication(context, request, response); }));}
+    void SetMessageAllocatorFor_ReviewGuildApplication(
+        ::grpc::MessageAllocator< ::guildpb::ReviewGuildApplicationRequest, ::guildpb::ReviewGuildApplicationResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(13);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::ReviewGuildApplicationRequest, ::guildpb::ReviewGuildApplicationResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_ReviewGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReviewGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::ReviewGuildApplicationRequest* /*request*/, ::guildpb::ReviewGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ReviewGuildApplication(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::ReviewGuildApplicationRequest* /*request*/, ::guildpb::ReviewGuildApplicationResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_NotifyGuildChanged : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_NotifyGuildChanged() {
+      ::grpc::Service::MarkMethodCallback(14,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::GuildChangedS2C, ::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::GuildChangedS2C* request, ::Empty* response) { return this->NotifyGuildChanged(context, request, response); }));}
+    void SetMessageAllocatorFor_NotifyGuildChanged(
+        ::grpc::MessageAllocator< ::guildpb::GuildChangedS2C, ::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(14);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::GuildChangedS2C, ::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_NotifyGuildChanged() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyGuildChanged(::grpc::ServerContext* /*context*/, const ::guildpb::GuildChangedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* NotifyGuildChanged(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::GuildChangedS2C* /*request*/, ::Empty* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
   class WithCallbackMethod_UpdateGuildScore : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithCallbackMethod_UpdateGuildScore() {
-      ::grpc::Service::MarkMethodCallback(7,
+      ::grpc::Service::MarkMethodCallback(15,
           new ::grpc::internal::CallbackUnaryHandler< ::guildpb::UpdateGuildScoreRequest, ::guildpb::UpdateGuildScoreResponse>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::guildpb::UpdateGuildScoreRequest* request, ::guildpb::UpdateGuildScoreResponse* response) { return this->UpdateGuildScore(context, request, response); }));}
     void SetMessageAllocatorFor_UpdateGuildScore(
         ::grpc::MessageAllocator< ::guildpb::UpdateGuildScoreRequest, ::guildpb::UpdateGuildScoreResponse>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(7);
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(15);
       static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::UpdateGuildScoreRequest, ::guildpb::UpdateGuildScoreResponse>*>(handler)
               ->SetMessageAllocator(allocator);
     }
@@ -742,13 +1548,13 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithCallbackMethod_GetGuildRank() {
-      ::grpc::Service::MarkMethodCallback(8,
+      ::grpc::Service::MarkMethodCallback(16,
           new ::grpc::internal::CallbackUnaryHandler< ::guildpb::GetGuildRankRequest, ::guildpb::GetGuildRankResponse>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::guildpb::GetGuildRankRequest* request, ::guildpb::GetGuildRankResponse* response) { return this->GetGuildRank(context, request, response); }));}
     void SetMessageAllocatorFor_GetGuildRank(
         ::grpc::MessageAllocator< ::guildpb::GetGuildRankRequest, ::guildpb::GetGuildRankResponse>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(8);
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(16);
       static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::GetGuildRankRequest, ::guildpb::GetGuildRankResponse>*>(handler)
               ->SetMessageAllocator(allocator);
     }
@@ -769,13 +1575,13 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithCallbackMethod_GetGuildRankByGuild() {
-      ::grpc::Service::MarkMethodCallback(9,
+      ::grpc::Service::MarkMethodCallback(17,
           new ::grpc::internal::CallbackUnaryHandler< ::guildpb::GetGuildRankByGuildRequest, ::guildpb::GetGuildRankByGuildResponse>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::guildpb::GetGuildRankByGuildRequest* request, ::guildpb::GetGuildRankByGuildResponse* response) { return this->GetGuildRankByGuild(context, request, response); }));}
     void SetMessageAllocatorFor_GetGuildRankByGuild(
         ::grpc::MessageAllocator< ::guildpb::GetGuildRankByGuildRequest, ::guildpb::GetGuildRankByGuildResponse>* allocator) {
-      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(9);
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(17);
       static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::GetGuildRankByGuildRequest, ::guildpb::GetGuildRankByGuildResponse>*>(handler)
               ->SetMessageAllocator(allocator);
     }
@@ -790,7 +1596,142 @@ class GuildService final {
     virtual ::grpc::ServerUnaryReactor* GetGuildRankByGuild(
       ::grpc::CallbackServerContext* /*context*/, const ::guildpb::GetGuildRankByGuildRequest* /*request*/, ::guildpb::GetGuildRankByGuildResponse* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_CreateGuild<WithCallbackMethod_GetGuild<WithCallbackMethod_GetPlayerGuild<WithCallbackMethod_JoinGuild<WithCallbackMethod_LeaveGuild<WithCallbackMethod_DisbandGuild<WithCallbackMethod_SetAnnouncement<WithCallbackMethod_UpdateGuildScore<WithCallbackMethod_GetGuildRank<WithCallbackMethod_GetGuildRankByGuild<Service > > > > > > > > > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_GetGuildDonateOptions : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_GetGuildDonateOptions() {
+      ::grpc::Service::MarkMethodCallback(18,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::GetGuildDonateOptionsRequest, ::guildpb::GetGuildDonateOptionsResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::GetGuildDonateOptionsRequest* request, ::guildpb::GetGuildDonateOptionsResponse* response) { return this->GetGuildDonateOptions(context, request, response); }));}
+    void SetMessageAllocatorFor_GetGuildDonateOptions(
+        ::grpc::MessageAllocator< ::guildpb::GetGuildDonateOptionsRequest, ::guildpb::GetGuildDonateOptionsResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(18);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::GetGuildDonateOptionsRequest, ::guildpb::GetGuildDonateOptionsResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_GetGuildDonateOptions() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetGuildDonateOptions(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildDonateOptionsRequest* /*request*/, ::guildpb::GetGuildDonateOptionsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GetGuildDonateOptions(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::GetGuildDonateOptionsRequest* /*request*/, ::guildpb::GetGuildDonateOptionsResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_DonateToGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_DonateToGuild() {
+      ::grpc::Service::MarkMethodCallback(19,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::DonateToGuildRequest, ::guildpb::DonateToGuildResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::DonateToGuildRequest* request, ::guildpb::DonateToGuildResponse* response) { return this->DonateToGuild(context, request, response); }));}
+    void SetMessageAllocatorFor_DonateToGuild(
+        ::grpc::MessageAllocator< ::guildpb::DonateToGuildRequest, ::guildpb::DonateToGuildResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(19);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::DonateToGuildRequest, ::guildpb::DonateToGuildResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_DonateToGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status DonateToGuild(::grpc::ServerContext* /*context*/, const ::guildpb::DonateToGuildRequest* /*request*/, ::guildpb::DonateToGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* DonateToGuild(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::DonateToGuildRequest* /*request*/, ::guildpb::DonateToGuildResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_UpgradeGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_UpgradeGuild() {
+      ::grpc::Service::MarkMethodCallback(20,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::UpgradeGuildRequest, ::guildpb::UpgradeGuildResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::UpgradeGuildRequest* request, ::guildpb::UpgradeGuildResponse* response) { return this->UpgradeGuild(context, request, response); }));}
+    void SetMessageAllocatorFor_UpgradeGuild(
+        ::grpc::MessageAllocator< ::guildpb::UpgradeGuildRequest, ::guildpb::UpgradeGuildResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(20);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::UpgradeGuildRequest, ::guildpb::UpgradeGuildResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_UpgradeGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status UpgradeGuild(::grpc::ServerContext* /*context*/, const ::guildpb::UpgradeGuildRequest* /*request*/, ::guildpb::UpgradeGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* UpgradeGuild(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::UpgradeGuildRequest* /*request*/, ::guildpb::UpgradeGuildResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_GetGuildShop : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_GetGuildShop() {
+      ::grpc::Service::MarkMethodCallback(21,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::GetGuildShopRequest, ::guildpb::GetGuildShopResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::GetGuildShopRequest* request, ::guildpb::GetGuildShopResponse* response) { return this->GetGuildShop(context, request, response); }));}
+    void SetMessageAllocatorFor_GetGuildShop(
+        ::grpc::MessageAllocator< ::guildpb::GetGuildShopRequest, ::guildpb::GetGuildShopResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(21);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::GetGuildShopRequest, ::guildpb::GetGuildShopResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_GetGuildShop() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetGuildShop(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildShopRequest* /*request*/, ::guildpb::GetGuildShopResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GetGuildShop(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::GetGuildShopRequest* /*request*/, ::guildpb::GetGuildShopResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_BuyGuildShopGoods : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_BuyGuildShopGoods() {
+      ::grpc::Service::MarkMethodCallback(22,
+          new ::grpc::internal::CallbackUnaryHandler< ::guildpb::BuyGuildShopGoodsRequest, ::guildpb::BuyGuildShopGoodsResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::guildpb::BuyGuildShopGoodsRequest* request, ::guildpb::BuyGuildShopGoodsResponse* response) { return this->BuyGuildShopGoods(context, request, response); }));}
+    void SetMessageAllocatorFor_BuyGuildShopGoods(
+        ::grpc::MessageAllocator< ::guildpb::BuyGuildShopGoodsRequest, ::guildpb::BuyGuildShopGoodsResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(22);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::guildpb::BuyGuildShopGoodsRequest, ::guildpb::BuyGuildShopGoodsResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_BuyGuildShopGoods() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status BuyGuildShopGoods(::grpc::ServerContext* /*context*/, const ::guildpb::BuyGuildShopGoodsRequest* /*request*/, ::guildpb::BuyGuildShopGoodsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* BuyGuildShopGoods(
+      ::grpc::CallbackServerContext* /*context*/, const ::guildpb::BuyGuildShopGoodsRequest* /*request*/, ::guildpb::BuyGuildShopGoodsResponse* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_CreateGuild<WithCallbackMethod_GetGuild<WithCallbackMethod_GetPlayerGuild<WithCallbackMethod_LeaveGuild<WithCallbackMethod_DisbandGuild<WithCallbackMethod_SetAnnouncement<WithCallbackMethod_SetGuildMemberRole<WithCallbackMethod_KickGuildMember<WithCallbackMethod_TransferGuildLeader<WithCallbackMethod_ApplyJoinGuild<WithCallbackMethod_CancelGuildApplication<WithCallbackMethod_ListMyGuildApplications<WithCallbackMethod_ListGuildApplications<WithCallbackMethod_ReviewGuildApplication<WithCallbackMethod_NotifyGuildChanged<WithCallbackMethod_UpdateGuildScore<WithCallbackMethod_GetGuildRank<WithCallbackMethod_GetGuildRankByGuild<WithCallbackMethod_GetGuildDonateOptions<WithCallbackMethod_DonateToGuild<WithCallbackMethod_UpgradeGuild<WithCallbackMethod_GetGuildShop<WithCallbackMethod_BuyGuildShopGoods<Service > > > > > > > > > > > > > > > > > > > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_CreateGuild : public BaseClass {
@@ -844,29 +1785,12 @@ class GuildService final {
     }
   };
   template <class BaseClass>
-  class WithGenericMethod_JoinGuild : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithGenericMethod_JoinGuild() {
-      ::grpc::Service::MarkMethodGeneric(3);
-    }
-    ~WithGenericMethod_JoinGuild() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status JoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::JoinGuildRequest* /*request*/, ::guildpb::JoinGuildResponse* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-  };
-  template <class BaseClass>
   class WithGenericMethod_LeaveGuild : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_LeaveGuild() {
-      ::grpc::Service::MarkMethodGeneric(4);
+      ::grpc::Service::MarkMethodGeneric(3);
     }
     ~WithGenericMethod_LeaveGuild() override {
       BaseClassMustBeDerivedFromService(this);
@@ -883,7 +1807,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_DisbandGuild() {
-      ::grpc::Service::MarkMethodGeneric(5);
+      ::grpc::Service::MarkMethodGeneric(4);
     }
     ~WithGenericMethod_DisbandGuild() override {
       BaseClassMustBeDerivedFromService(this);
@@ -900,7 +1824,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_SetAnnouncement() {
-      ::grpc::Service::MarkMethodGeneric(6);
+      ::grpc::Service::MarkMethodGeneric(5);
     }
     ~WithGenericMethod_SetAnnouncement() override {
       BaseClassMustBeDerivedFromService(this);
@@ -912,12 +1836,165 @@ class GuildService final {
     }
   };
   template <class BaseClass>
+  class WithGenericMethod_SetGuildMemberRole : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_SetGuildMemberRole() {
+      ::grpc::Service::MarkMethodGeneric(6);
+    }
+    ~WithGenericMethod_SetGuildMemberRole() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetGuildMemberRole(::grpc::ServerContext* /*context*/, const ::guildpb::SetGuildMemberRoleRequest* /*request*/, ::guildpb::SetGuildMemberRoleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_KickGuildMember : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_KickGuildMember() {
+      ::grpc::Service::MarkMethodGeneric(7);
+    }
+    ~WithGenericMethod_KickGuildMember() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status KickGuildMember(::grpc::ServerContext* /*context*/, const ::guildpb::KickGuildMemberRequest* /*request*/, ::guildpb::KickGuildMemberResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_TransferGuildLeader : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_TransferGuildLeader() {
+      ::grpc::Service::MarkMethodGeneric(8);
+    }
+    ~WithGenericMethod_TransferGuildLeader() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status TransferGuildLeader(::grpc::ServerContext* /*context*/, const ::guildpb::TransferGuildLeaderRequest* /*request*/, ::guildpb::TransferGuildLeaderResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_ApplyJoinGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_ApplyJoinGuild() {
+      ::grpc::Service::MarkMethodGeneric(9);
+    }
+    ~WithGenericMethod_ApplyJoinGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ApplyJoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::ApplyJoinGuildRequest* /*request*/, ::guildpb::ApplyJoinGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_CancelGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_CancelGuildApplication() {
+      ::grpc::Service::MarkMethodGeneric(10);
+    }
+    ~WithGenericMethod_CancelGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CancelGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::CancelGuildApplicationRequest* /*request*/, ::guildpb::CancelGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_ListMyGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_ListMyGuildApplications() {
+      ::grpc::Service::MarkMethodGeneric(11);
+    }
+    ~WithGenericMethod_ListMyGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListMyGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListMyGuildApplicationsRequest* /*request*/, ::guildpb::ListMyGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_ListGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_ListGuildApplications() {
+      ::grpc::Service::MarkMethodGeneric(12);
+    }
+    ~WithGenericMethod_ListGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListGuildApplicationsRequest* /*request*/, ::guildpb::ListGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_ReviewGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_ReviewGuildApplication() {
+      ::grpc::Service::MarkMethodGeneric(13);
+    }
+    ~WithGenericMethod_ReviewGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReviewGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::ReviewGuildApplicationRequest* /*request*/, ::guildpb::ReviewGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_NotifyGuildChanged : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_NotifyGuildChanged() {
+      ::grpc::Service::MarkMethodGeneric(14);
+    }
+    ~WithGenericMethod_NotifyGuildChanged() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyGuildChanged(::grpc::ServerContext* /*context*/, const ::guildpb::GuildChangedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
   class WithGenericMethod_UpdateGuildScore : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_UpdateGuildScore() {
-      ::grpc::Service::MarkMethodGeneric(7);
+      ::grpc::Service::MarkMethodGeneric(15);
     }
     ~WithGenericMethod_UpdateGuildScore() override {
       BaseClassMustBeDerivedFromService(this);
@@ -934,7 +2011,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_GetGuildRank() {
-      ::grpc::Service::MarkMethodGeneric(8);
+      ::grpc::Service::MarkMethodGeneric(16);
     }
     ~WithGenericMethod_GetGuildRank() override {
       BaseClassMustBeDerivedFromService(this);
@@ -951,13 +2028,98 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_GetGuildRankByGuild() {
-      ::grpc::Service::MarkMethodGeneric(9);
+      ::grpc::Service::MarkMethodGeneric(17);
     }
     ~WithGenericMethod_GetGuildRankByGuild() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
     ::grpc::Status GetGuildRankByGuild(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildRankByGuildRequest* /*request*/, ::guildpb::GetGuildRankByGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_GetGuildDonateOptions : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_GetGuildDonateOptions() {
+      ::grpc::Service::MarkMethodGeneric(18);
+    }
+    ~WithGenericMethod_GetGuildDonateOptions() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetGuildDonateOptions(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildDonateOptionsRequest* /*request*/, ::guildpb::GetGuildDonateOptionsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_DonateToGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_DonateToGuild() {
+      ::grpc::Service::MarkMethodGeneric(19);
+    }
+    ~WithGenericMethod_DonateToGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status DonateToGuild(::grpc::ServerContext* /*context*/, const ::guildpb::DonateToGuildRequest* /*request*/, ::guildpb::DonateToGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_UpgradeGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_UpgradeGuild() {
+      ::grpc::Service::MarkMethodGeneric(20);
+    }
+    ~WithGenericMethod_UpgradeGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status UpgradeGuild(::grpc::ServerContext* /*context*/, const ::guildpb::UpgradeGuildRequest* /*request*/, ::guildpb::UpgradeGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_GetGuildShop : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_GetGuildShop() {
+      ::grpc::Service::MarkMethodGeneric(21);
+    }
+    ~WithGenericMethod_GetGuildShop() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetGuildShop(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildShopRequest* /*request*/, ::guildpb::GetGuildShopResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_BuyGuildShopGoods : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_BuyGuildShopGoods() {
+      ::grpc::Service::MarkMethodGeneric(22);
+    }
+    ~WithGenericMethod_BuyGuildShopGoods() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status BuyGuildShopGoods(::grpc::ServerContext* /*context*/, const ::guildpb::BuyGuildShopGoodsRequest* /*request*/, ::guildpb::BuyGuildShopGoodsResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -1023,32 +2185,12 @@ class GuildService final {
     }
   };
   template <class BaseClass>
-  class WithRawMethod_JoinGuild : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawMethod_JoinGuild() {
-      ::grpc::Service::MarkMethodRaw(3);
-    }
-    ~WithRawMethod_JoinGuild() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status JoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::JoinGuildRequest* /*request*/, ::guildpb::JoinGuildResponse* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    void RequestJoinGuild(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
-    }
-  };
-  template <class BaseClass>
   class WithRawMethod_LeaveGuild : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_LeaveGuild() {
-      ::grpc::Service::MarkMethodRaw(4);
+      ::grpc::Service::MarkMethodRaw(3);
     }
     ~WithRawMethod_LeaveGuild() override {
       BaseClassMustBeDerivedFromService(this);
@@ -1059,7 +2201,7 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestLeaveGuild(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
+      ::grpc::Service::RequestAsyncUnary(3, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -1068,7 +2210,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_DisbandGuild() {
-      ::grpc::Service::MarkMethodRaw(5);
+      ::grpc::Service::MarkMethodRaw(4);
     }
     ~WithRawMethod_DisbandGuild() override {
       BaseClassMustBeDerivedFromService(this);
@@ -1079,7 +2221,7 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestDisbandGuild(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(5, context, request, response, new_call_cq, notification_cq, tag);
+      ::grpc::Service::RequestAsyncUnary(4, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -1088,7 +2230,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_SetAnnouncement() {
-      ::grpc::Service::MarkMethodRaw(6);
+      ::grpc::Service::MarkMethodRaw(5);
     }
     ~WithRawMethod_SetAnnouncement() override {
       BaseClassMustBeDerivedFromService(this);
@@ -1099,7 +2241,187 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestSetAnnouncement(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(5, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_SetGuildMemberRole : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_SetGuildMemberRole() {
+      ::grpc::Service::MarkMethodRaw(6);
+    }
+    ~WithRawMethod_SetGuildMemberRole() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetGuildMemberRole(::grpc::ServerContext* /*context*/, const ::guildpb::SetGuildMemberRoleRequest* /*request*/, ::guildpb::SetGuildMemberRoleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestSetGuildMemberRole(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(6, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_KickGuildMember : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_KickGuildMember() {
+      ::grpc::Service::MarkMethodRaw(7);
+    }
+    ~WithRawMethod_KickGuildMember() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status KickGuildMember(::grpc::ServerContext* /*context*/, const ::guildpb::KickGuildMemberRequest* /*request*/, ::guildpb::KickGuildMemberResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestKickGuildMember(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_TransferGuildLeader : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_TransferGuildLeader() {
+      ::grpc::Service::MarkMethodRaw(8);
+    }
+    ~WithRawMethod_TransferGuildLeader() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status TransferGuildLeader(::grpc::ServerContext* /*context*/, const ::guildpb::TransferGuildLeaderRequest* /*request*/, ::guildpb::TransferGuildLeaderResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestTransferGuildLeader(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(8, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_ApplyJoinGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_ApplyJoinGuild() {
+      ::grpc::Service::MarkMethodRaw(9);
+    }
+    ~WithRawMethod_ApplyJoinGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ApplyJoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::ApplyJoinGuildRequest* /*request*/, ::guildpb::ApplyJoinGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestApplyJoinGuild(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(9, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_CancelGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_CancelGuildApplication() {
+      ::grpc::Service::MarkMethodRaw(10);
+    }
+    ~WithRawMethod_CancelGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CancelGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::CancelGuildApplicationRequest* /*request*/, ::guildpb::CancelGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestCancelGuildApplication(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(10, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_ListMyGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_ListMyGuildApplications() {
+      ::grpc::Service::MarkMethodRaw(11);
+    }
+    ~WithRawMethod_ListMyGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListMyGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListMyGuildApplicationsRequest* /*request*/, ::guildpb::ListMyGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestListMyGuildApplications(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(11, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_ListGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_ListGuildApplications() {
+      ::grpc::Service::MarkMethodRaw(12);
+    }
+    ~WithRawMethod_ListGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListGuildApplicationsRequest* /*request*/, ::guildpb::ListGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestListGuildApplications(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(12, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_ReviewGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_ReviewGuildApplication() {
+      ::grpc::Service::MarkMethodRaw(13);
+    }
+    ~WithRawMethod_ReviewGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReviewGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::ReviewGuildApplicationRequest* /*request*/, ::guildpb::ReviewGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestReviewGuildApplication(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(13, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_NotifyGuildChanged : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_NotifyGuildChanged() {
+      ::grpc::Service::MarkMethodRaw(14);
+    }
+    ~WithRawMethod_NotifyGuildChanged() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyGuildChanged(::grpc::ServerContext* /*context*/, const ::guildpb::GuildChangedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestNotifyGuildChanged(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(14, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -1108,7 +2430,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_UpdateGuildScore() {
-      ::grpc::Service::MarkMethodRaw(7);
+      ::grpc::Service::MarkMethodRaw(15);
     }
     ~WithRawMethod_UpdateGuildScore() override {
       BaseClassMustBeDerivedFromService(this);
@@ -1119,7 +2441,7 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestUpdateGuildScore(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
+      ::grpc::Service::RequestAsyncUnary(15, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -1128,7 +2450,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_GetGuildRank() {
-      ::grpc::Service::MarkMethodRaw(8);
+      ::grpc::Service::MarkMethodRaw(16);
     }
     ~WithRawMethod_GetGuildRank() override {
       BaseClassMustBeDerivedFromService(this);
@@ -1139,7 +2461,7 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestGetGuildRank(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(8, context, request, response, new_call_cq, notification_cq, tag);
+      ::grpc::Service::RequestAsyncUnary(16, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -1148,7 +2470,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_GetGuildRankByGuild() {
-      ::grpc::Service::MarkMethodRaw(9);
+      ::grpc::Service::MarkMethodRaw(17);
     }
     ~WithRawMethod_GetGuildRankByGuild() override {
       BaseClassMustBeDerivedFromService(this);
@@ -1159,7 +2481,107 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     void RequestGetGuildRankByGuild(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
-      ::grpc::Service::RequestAsyncUnary(9, context, request, response, new_call_cq, notification_cq, tag);
+      ::grpc::Service::RequestAsyncUnary(17, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_GetGuildDonateOptions : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_GetGuildDonateOptions() {
+      ::grpc::Service::MarkMethodRaw(18);
+    }
+    ~WithRawMethod_GetGuildDonateOptions() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetGuildDonateOptions(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildDonateOptionsRequest* /*request*/, ::guildpb::GetGuildDonateOptionsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetGuildDonateOptions(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(18, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_DonateToGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_DonateToGuild() {
+      ::grpc::Service::MarkMethodRaw(19);
+    }
+    ~WithRawMethod_DonateToGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status DonateToGuild(::grpc::ServerContext* /*context*/, const ::guildpb::DonateToGuildRequest* /*request*/, ::guildpb::DonateToGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestDonateToGuild(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(19, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_UpgradeGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_UpgradeGuild() {
+      ::grpc::Service::MarkMethodRaw(20);
+    }
+    ~WithRawMethod_UpgradeGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status UpgradeGuild(::grpc::ServerContext* /*context*/, const ::guildpb::UpgradeGuildRequest* /*request*/, ::guildpb::UpgradeGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestUpgradeGuild(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(20, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_GetGuildShop : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_GetGuildShop() {
+      ::grpc::Service::MarkMethodRaw(21);
+    }
+    ~WithRawMethod_GetGuildShop() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetGuildShop(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildShopRequest* /*request*/, ::guildpb::GetGuildShopResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestGetGuildShop(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(21, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_BuyGuildShopGoods : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_BuyGuildShopGoods() {
+      ::grpc::Service::MarkMethodRaw(22);
+    }
+    ~WithRawMethod_BuyGuildShopGoods() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status BuyGuildShopGoods(::grpc::ServerContext* /*context*/, const ::guildpb::BuyGuildShopGoodsRequest* /*request*/, ::guildpb::BuyGuildShopGoodsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestBuyGuildShopGoods(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(22, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -1229,34 +2651,12 @@ class GuildService final {
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithRawCallbackMethod_JoinGuild : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithRawCallbackMethod_JoinGuild() {
-      ::grpc::Service::MarkMethodRawCallback(3,
-          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
-            [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->JoinGuild(context, request, response); }));
-    }
-    ~WithRawCallbackMethod_JoinGuild() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable synchronous version of this method
-    ::grpc::Status JoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::JoinGuildRequest* /*request*/, ::guildpb::JoinGuildResponse* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    virtual ::grpc::ServerUnaryReactor* JoinGuild(
-      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
-  };
-  template <class BaseClass>
   class WithRawCallbackMethod_LeaveGuild : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawCallbackMethod_LeaveGuild() {
-      ::grpc::Service::MarkMethodRawCallback(4,
+      ::grpc::Service::MarkMethodRawCallback(3,
           new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->LeaveGuild(context, request, response); }));
@@ -1278,7 +2678,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawCallbackMethod_DisbandGuild() {
-      ::grpc::Service::MarkMethodRawCallback(5,
+      ::grpc::Service::MarkMethodRawCallback(4,
           new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->DisbandGuild(context, request, response); }));
@@ -1300,7 +2700,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawCallbackMethod_SetAnnouncement() {
-      ::grpc::Service::MarkMethodRawCallback(6,
+      ::grpc::Service::MarkMethodRawCallback(5,
           new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->SetAnnouncement(context, request, response); }));
@@ -1317,12 +2717,210 @@ class GuildService final {
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
+  class WithRawCallbackMethod_SetGuildMemberRole : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_SetGuildMemberRole() {
+      ::grpc::Service::MarkMethodRawCallback(6,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->SetGuildMemberRole(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_SetGuildMemberRole() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetGuildMemberRole(::grpc::ServerContext* /*context*/, const ::guildpb::SetGuildMemberRoleRequest* /*request*/, ::guildpb::SetGuildMemberRoleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SetGuildMemberRole(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_KickGuildMember : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_KickGuildMember() {
+      ::grpc::Service::MarkMethodRawCallback(7,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->KickGuildMember(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_KickGuildMember() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status KickGuildMember(::grpc::ServerContext* /*context*/, const ::guildpb::KickGuildMemberRequest* /*request*/, ::guildpb::KickGuildMemberResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* KickGuildMember(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_TransferGuildLeader : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_TransferGuildLeader() {
+      ::grpc::Service::MarkMethodRawCallback(8,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->TransferGuildLeader(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_TransferGuildLeader() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status TransferGuildLeader(::grpc::ServerContext* /*context*/, const ::guildpb::TransferGuildLeaderRequest* /*request*/, ::guildpb::TransferGuildLeaderResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* TransferGuildLeader(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_ApplyJoinGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_ApplyJoinGuild() {
+      ::grpc::Service::MarkMethodRawCallback(9,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->ApplyJoinGuild(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_ApplyJoinGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ApplyJoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::ApplyJoinGuildRequest* /*request*/, ::guildpb::ApplyJoinGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ApplyJoinGuild(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_CancelGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_CancelGuildApplication() {
+      ::grpc::Service::MarkMethodRawCallback(10,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->CancelGuildApplication(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_CancelGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CancelGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::CancelGuildApplicationRequest* /*request*/, ::guildpb::CancelGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* CancelGuildApplication(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_ListMyGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_ListMyGuildApplications() {
+      ::grpc::Service::MarkMethodRawCallback(11,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->ListMyGuildApplications(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_ListMyGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListMyGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListMyGuildApplicationsRequest* /*request*/, ::guildpb::ListMyGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ListMyGuildApplications(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_ListGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_ListGuildApplications() {
+      ::grpc::Service::MarkMethodRawCallback(12,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->ListGuildApplications(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_ListGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListGuildApplicationsRequest* /*request*/, ::guildpb::ListGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ListGuildApplications(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_ReviewGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_ReviewGuildApplication() {
+      ::grpc::Service::MarkMethodRawCallback(13,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->ReviewGuildApplication(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_ReviewGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReviewGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::ReviewGuildApplicationRequest* /*request*/, ::guildpb::ReviewGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ReviewGuildApplication(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_NotifyGuildChanged : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_NotifyGuildChanged() {
+      ::grpc::Service::MarkMethodRawCallback(14,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->NotifyGuildChanged(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_NotifyGuildChanged() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyGuildChanged(::grpc::ServerContext* /*context*/, const ::guildpb::GuildChangedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* NotifyGuildChanged(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
   class WithRawCallbackMethod_UpdateGuildScore : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawCallbackMethod_UpdateGuildScore() {
-      ::grpc::Service::MarkMethodRawCallback(7,
+      ::grpc::Service::MarkMethodRawCallback(15,
           new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->UpdateGuildScore(context, request, response); }));
@@ -1344,7 +2942,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawCallbackMethod_GetGuildRank() {
-      ::grpc::Service::MarkMethodRawCallback(8,
+      ::grpc::Service::MarkMethodRawCallback(16,
           new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetGuildRank(context, request, response); }));
@@ -1366,7 +2964,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawCallbackMethod_GetGuildRankByGuild() {
-      ::grpc::Service::MarkMethodRawCallback(9,
+      ::grpc::Service::MarkMethodRawCallback(17,
           new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
                    ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetGuildRankByGuild(context, request, response); }));
@@ -1380,6 +2978,116 @@ class GuildService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* GetGuildRankByGuild(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_GetGuildDonateOptions : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_GetGuildDonateOptions() {
+      ::grpc::Service::MarkMethodRawCallback(18,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetGuildDonateOptions(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_GetGuildDonateOptions() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetGuildDonateOptions(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildDonateOptionsRequest* /*request*/, ::guildpb::GetGuildDonateOptionsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GetGuildDonateOptions(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_DonateToGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_DonateToGuild() {
+      ::grpc::Service::MarkMethodRawCallback(19,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->DonateToGuild(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_DonateToGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status DonateToGuild(::grpc::ServerContext* /*context*/, const ::guildpb::DonateToGuildRequest* /*request*/, ::guildpb::DonateToGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* DonateToGuild(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_UpgradeGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_UpgradeGuild() {
+      ::grpc::Service::MarkMethodRawCallback(20,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->UpgradeGuild(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_UpgradeGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status UpgradeGuild(::grpc::ServerContext* /*context*/, const ::guildpb::UpgradeGuildRequest* /*request*/, ::guildpb::UpgradeGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* UpgradeGuild(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_GetGuildShop : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_GetGuildShop() {
+      ::grpc::Service::MarkMethodRawCallback(21,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->GetGuildShop(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_GetGuildShop() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status GetGuildShop(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildShopRequest* /*request*/, ::guildpb::GetGuildShopResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* GetGuildShop(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_BuyGuildShopGoods : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_BuyGuildShopGoods() {
+      ::grpc::Service::MarkMethodRawCallback(22,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->BuyGuildShopGoods(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_BuyGuildShopGoods() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status BuyGuildShopGoods(::grpc::ServerContext* /*context*/, const ::guildpb::BuyGuildShopGoodsRequest* /*request*/, ::guildpb::BuyGuildShopGoodsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* BuyGuildShopGoods(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -1464,39 +3172,12 @@ class GuildService final {
     virtual ::grpc::Status StreamedGetPlayerGuild(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::GetPlayerGuildRequest,::guildpb::GetPlayerGuildResponse>* server_unary_streamer) = 0;
   };
   template <class BaseClass>
-  class WithStreamedUnaryMethod_JoinGuild : public BaseClass {
-   private:
-    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
-   public:
-    WithStreamedUnaryMethod_JoinGuild() {
-      ::grpc::Service::MarkMethodStreamed(3,
-        new ::grpc::internal::StreamedUnaryHandler<
-          ::guildpb::JoinGuildRequest, ::guildpb::JoinGuildResponse>(
-            [this](::grpc::ServerContext* context,
-                   ::grpc::ServerUnaryStreamer<
-                     ::guildpb::JoinGuildRequest, ::guildpb::JoinGuildResponse>* streamer) {
-                       return this->StreamedJoinGuild(context,
-                         streamer);
-                  }));
-    }
-    ~WithStreamedUnaryMethod_JoinGuild() override {
-      BaseClassMustBeDerivedFromService(this);
-    }
-    // disable regular version of this method
-    ::grpc::Status JoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::JoinGuildRequest* /*request*/, ::guildpb::JoinGuildResponse* /*response*/) override {
-      abort();
-      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
-    }
-    // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedJoinGuild(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::JoinGuildRequest,::guildpb::JoinGuildResponse>* server_unary_streamer) = 0;
-  };
-  template <class BaseClass>
   class WithStreamedUnaryMethod_LeaveGuild : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_LeaveGuild() {
-      ::grpc::Service::MarkMethodStreamed(4,
+      ::grpc::Service::MarkMethodStreamed(3,
         new ::grpc::internal::StreamedUnaryHandler<
           ::guildpb::LeaveGuildRequest, ::guildpb::LeaveGuildResponse>(
             [this](::grpc::ServerContext* context,
@@ -1523,7 +3204,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_DisbandGuild() {
-      ::grpc::Service::MarkMethodStreamed(5,
+      ::grpc::Service::MarkMethodStreamed(4,
         new ::grpc::internal::StreamedUnaryHandler<
           ::guildpb::DisbandGuildRequest, ::guildpb::DisbandGuildResponse>(
             [this](::grpc::ServerContext* context,
@@ -1550,7 +3231,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_SetAnnouncement() {
-      ::grpc::Service::MarkMethodStreamed(6,
+      ::grpc::Service::MarkMethodStreamed(5,
         new ::grpc::internal::StreamedUnaryHandler<
           ::guildpb::SetAnnouncementRequest, ::guildpb::SetAnnouncementResponse>(
             [this](::grpc::ServerContext* context,
@@ -1572,12 +3253,255 @@ class GuildService final {
     virtual ::grpc::Status StreamedSetAnnouncement(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::SetAnnouncementRequest,::guildpb::SetAnnouncementResponse>* server_unary_streamer) = 0;
   };
   template <class BaseClass>
+  class WithStreamedUnaryMethod_SetGuildMemberRole : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_SetGuildMemberRole() {
+      ::grpc::Service::MarkMethodStreamed(6,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::SetGuildMemberRoleRequest, ::guildpb::SetGuildMemberRoleResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::SetGuildMemberRoleRequest, ::guildpb::SetGuildMemberRoleResponse>* streamer) {
+                       return this->StreamedSetGuildMemberRole(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_SetGuildMemberRole() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status SetGuildMemberRole(::grpc::ServerContext* /*context*/, const ::guildpb::SetGuildMemberRoleRequest* /*request*/, ::guildpb::SetGuildMemberRoleResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedSetGuildMemberRole(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::SetGuildMemberRoleRequest,::guildpb::SetGuildMemberRoleResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_KickGuildMember : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_KickGuildMember() {
+      ::grpc::Service::MarkMethodStreamed(7,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::KickGuildMemberRequest, ::guildpb::KickGuildMemberResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::KickGuildMemberRequest, ::guildpb::KickGuildMemberResponse>* streamer) {
+                       return this->StreamedKickGuildMember(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_KickGuildMember() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status KickGuildMember(::grpc::ServerContext* /*context*/, const ::guildpb::KickGuildMemberRequest* /*request*/, ::guildpb::KickGuildMemberResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedKickGuildMember(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::KickGuildMemberRequest,::guildpb::KickGuildMemberResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_TransferGuildLeader : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_TransferGuildLeader() {
+      ::grpc::Service::MarkMethodStreamed(8,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::TransferGuildLeaderRequest, ::guildpb::TransferGuildLeaderResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::TransferGuildLeaderRequest, ::guildpb::TransferGuildLeaderResponse>* streamer) {
+                       return this->StreamedTransferGuildLeader(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_TransferGuildLeader() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status TransferGuildLeader(::grpc::ServerContext* /*context*/, const ::guildpb::TransferGuildLeaderRequest* /*request*/, ::guildpb::TransferGuildLeaderResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedTransferGuildLeader(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::TransferGuildLeaderRequest,::guildpb::TransferGuildLeaderResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_ApplyJoinGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_ApplyJoinGuild() {
+      ::grpc::Service::MarkMethodStreamed(9,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::ApplyJoinGuildRequest, ::guildpb::ApplyJoinGuildResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::ApplyJoinGuildRequest, ::guildpb::ApplyJoinGuildResponse>* streamer) {
+                       return this->StreamedApplyJoinGuild(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_ApplyJoinGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status ApplyJoinGuild(::grpc::ServerContext* /*context*/, const ::guildpb::ApplyJoinGuildRequest* /*request*/, ::guildpb::ApplyJoinGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedApplyJoinGuild(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::ApplyJoinGuildRequest,::guildpb::ApplyJoinGuildResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_CancelGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_CancelGuildApplication() {
+      ::grpc::Service::MarkMethodStreamed(10,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::CancelGuildApplicationRequest, ::guildpb::CancelGuildApplicationResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::CancelGuildApplicationRequest, ::guildpb::CancelGuildApplicationResponse>* streamer) {
+                       return this->StreamedCancelGuildApplication(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_CancelGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status CancelGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::CancelGuildApplicationRequest* /*request*/, ::guildpb::CancelGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedCancelGuildApplication(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::CancelGuildApplicationRequest,::guildpb::CancelGuildApplicationResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_ListMyGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_ListMyGuildApplications() {
+      ::grpc::Service::MarkMethodStreamed(11,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::ListMyGuildApplicationsRequest, ::guildpb::ListMyGuildApplicationsResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::ListMyGuildApplicationsRequest, ::guildpb::ListMyGuildApplicationsResponse>* streamer) {
+                       return this->StreamedListMyGuildApplications(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_ListMyGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status ListMyGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListMyGuildApplicationsRequest* /*request*/, ::guildpb::ListMyGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedListMyGuildApplications(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::ListMyGuildApplicationsRequest,::guildpb::ListMyGuildApplicationsResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_ListGuildApplications : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_ListGuildApplications() {
+      ::grpc::Service::MarkMethodStreamed(12,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::ListGuildApplicationsRequest, ::guildpb::ListGuildApplicationsResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::ListGuildApplicationsRequest, ::guildpb::ListGuildApplicationsResponse>* streamer) {
+                       return this->StreamedListGuildApplications(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_ListGuildApplications() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status ListGuildApplications(::grpc::ServerContext* /*context*/, const ::guildpb::ListGuildApplicationsRequest* /*request*/, ::guildpb::ListGuildApplicationsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedListGuildApplications(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::ListGuildApplicationsRequest,::guildpb::ListGuildApplicationsResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_ReviewGuildApplication : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_ReviewGuildApplication() {
+      ::grpc::Service::MarkMethodStreamed(13,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::ReviewGuildApplicationRequest, ::guildpb::ReviewGuildApplicationResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::ReviewGuildApplicationRequest, ::guildpb::ReviewGuildApplicationResponse>* streamer) {
+                       return this->StreamedReviewGuildApplication(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_ReviewGuildApplication() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status ReviewGuildApplication(::grpc::ServerContext* /*context*/, const ::guildpb::ReviewGuildApplicationRequest* /*request*/, ::guildpb::ReviewGuildApplicationResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedReviewGuildApplication(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::ReviewGuildApplicationRequest,::guildpb::ReviewGuildApplicationResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_NotifyGuildChanged : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_NotifyGuildChanged() {
+      ::grpc::Service::MarkMethodStreamed(14,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::GuildChangedS2C, ::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::GuildChangedS2C, ::Empty>* streamer) {
+                       return this->StreamedNotifyGuildChanged(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_NotifyGuildChanged() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status NotifyGuildChanged(::grpc::ServerContext* /*context*/, const ::guildpb::GuildChangedS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedNotifyGuildChanged(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::GuildChangedS2C,::Empty>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
   class WithStreamedUnaryMethod_UpdateGuildScore : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_UpdateGuildScore() {
-      ::grpc::Service::MarkMethodStreamed(7,
+      ::grpc::Service::MarkMethodStreamed(15,
         new ::grpc::internal::StreamedUnaryHandler<
           ::guildpb::UpdateGuildScoreRequest, ::guildpb::UpdateGuildScoreResponse>(
             [this](::grpc::ServerContext* context,
@@ -1604,7 +3528,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_GetGuildRank() {
-      ::grpc::Service::MarkMethodStreamed(8,
+      ::grpc::Service::MarkMethodStreamed(16,
         new ::grpc::internal::StreamedUnaryHandler<
           ::guildpb::GetGuildRankRequest, ::guildpb::GetGuildRankResponse>(
             [this](::grpc::ServerContext* context,
@@ -1631,7 +3555,7 @@ class GuildService final {
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_GetGuildRankByGuild() {
-      ::grpc::Service::MarkMethodStreamed(9,
+      ::grpc::Service::MarkMethodStreamed(17,
         new ::grpc::internal::StreamedUnaryHandler<
           ::guildpb::GetGuildRankByGuildRequest, ::guildpb::GetGuildRankByGuildResponse>(
             [this](::grpc::ServerContext* context,
@@ -1652,9 +3576,144 @@ class GuildService final {
     // replace default version of method with streamed unary
     virtual ::grpc::Status StreamedGetGuildRankByGuild(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::GetGuildRankByGuildRequest,::guildpb::GetGuildRankByGuildResponse>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_CreateGuild<WithStreamedUnaryMethod_GetGuild<WithStreamedUnaryMethod_GetPlayerGuild<WithStreamedUnaryMethod_JoinGuild<WithStreamedUnaryMethod_LeaveGuild<WithStreamedUnaryMethod_DisbandGuild<WithStreamedUnaryMethod_SetAnnouncement<WithStreamedUnaryMethod_UpdateGuildScore<WithStreamedUnaryMethod_GetGuildRank<WithStreamedUnaryMethod_GetGuildRankByGuild<Service > > > > > > > > > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_GetGuildDonateOptions : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_GetGuildDonateOptions() {
+      ::grpc::Service::MarkMethodStreamed(18,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::GetGuildDonateOptionsRequest, ::guildpb::GetGuildDonateOptionsResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::GetGuildDonateOptionsRequest, ::guildpb::GetGuildDonateOptionsResponse>* streamer) {
+                       return this->StreamedGetGuildDonateOptions(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_GetGuildDonateOptions() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status GetGuildDonateOptions(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildDonateOptionsRequest* /*request*/, ::guildpb::GetGuildDonateOptionsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedGetGuildDonateOptions(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::GetGuildDonateOptionsRequest,::guildpb::GetGuildDonateOptionsResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_DonateToGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_DonateToGuild() {
+      ::grpc::Service::MarkMethodStreamed(19,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::DonateToGuildRequest, ::guildpb::DonateToGuildResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::DonateToGuildRequest, ::guildpb::DonateToGuildResponse>* streamer) {
+                       return this->StreamedDonateToGuild(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_DonateToGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status DonateToGuild(::grpc::ServerContext* /*context*/, const ::guildpb::DonateToGuildRequest* /*request*/, ::guildpb::DonateToGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedDonateToGuild(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::DonateToGuildRequest,::guildpb::DonateToGuildResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_UpgradeGuild : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_UpgradeGuild() {
+      ::grpc::Service::MarkMethodStreamed(20,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::UpgradeGuildRequest, ::guildpb::UpgradeGuildResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::UpgradeGuildRequest, ::guildpb::UpgradeGuildResponse>* streamer) {
+                       return this->StreamedUpgradeGuild(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_UpgradeGuild() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status UpgradeGuild(::grpc::ServerContext* /*context*/, const ::guildpb::UpgradeGuildRequest* /*request*/, ::guildpb::UpgradeGuildResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedUpgradeGuild(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::UpgradeGuildRequest,::guildpb::UpgradeGuildResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_GetGuildShop : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_GetGuildShop() {
+      ::grpc::Service::MarkMethodStreamed(21,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::GetGuildShopRequest, ::guildpb::GetGuildShopResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::GetGuildShopRequest, ::guildpb::GetGuildShopResponse>* streamer) {
+                       return this->StreamedGetGuildShop(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_GetGuildShop() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status GetGuildShop(::grpc::ServerContext* /*context*/, const ::guildpb::GetGuildShopRequest* /*request*/, ::guildpb::GetGuildShopResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedGetGuildShop(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::GetGuildShopRequest,::guildpb::GetGuildShopResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_BuyGuildShopGoods : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_BuyGuildShopGoods() {
+      ::grpc::Service::MarkMethodStreamed(22,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::guildpb::BuyGuildShopGoodsRequest, ::guildpb::BuyGuildShopGoodsResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::guildpb::BuyGuildShopGoodsRequest, ::guildpb::BuyGuildShopGoodsResponse>* streamer) {
+                       return this->StreamedBuyGuildShopGoods(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_BuyGuildShopGoods() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status BuyGuildShopGoods(::grpc::ServerContext* /*context*/, const ::guildpb::BuyGuildShopGoodsRequest* /*request*/, ::guildpb::BuyGuildShopGoodsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedBuyGuildShopGoods(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::guildpb::BuyGuildShopGoodsRequest,::guildpb::BuyGuildShopGoodsResponse>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_CreateGuild<WithStreamedUnaryMethod_GetGuild<WithStreamedUnaryMethod_GetPlayerGuild<WithStreamedUnaryMethod_LeaveGuild<WithStreamedUnaryMethod_DisbandGuild<WithStreamedUnaryMethod_SetAnnouncement<WithStreamedUnaryMethod_SetGuildMemberRole<WithStreamedUnaryMethod_KickGuildMember<WithStreamedUnaryMethod_TransferGuildLeader<WithStreamedUnaryMethod_ApplyJoinGuild<WithStreamedUnaryMethod_CancelGuildApplication<WithStreamedUnaryMethod_ListMyGuildApplications<WithStreamedUnaryMethod_ListGuildApplications<WithStreamedUnaryMethod_ReviewGuildApplication<WithStreamedUnaryMethod_NotifyGuildChanged<WithStreamedUnaryMethod_UpdateGuildScore<WithStreamedUnaryMethod_GetGuildRank<WithStreamedUnaryMethod_GetGuildRankByGuild<WithStreamedUnaryMethod_GetGuildDonateOptions<WithStreamedUnaryMethod_DonateToGuild<WithStreamedUnaryMethod_UpgradeGuild<WithStreamedUnaryMethod_GetGuildShop<WithStreamedUnaryMethod_BuyGuildShopGoods<Service > > > > > > > > > > > > > > > > > > > > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_CreateGuild<WithStreamedUnaryMethod_GetGuild<WithStreamedUnaryMethod_GetPlayerGuild<WithStreamedUnaryMethod_JoinGuild<WithStreamedUnaryMethod_LeaveGuild<WithStreamedUnaryMethod_DisbandGuild<WithStreamedUnaryMethod_SetAnnouncement<WithStreamedUnaryMethod_UpdateGuildScore<WithStreamedUnaryMethod_GetGuildRank<WithStreamedUnaryMethod_GetGuildRankByGuild<Service > > > > > > > > > > StreamedService;
+  typedef WithStreamedUnaryMethod_CreateGuild<WithStreamedUnaryMethod_GetGuild<WithStreamedUnaryMethod_GetPlayerGuild<WithStreamedUnaryMethod_LeaveGuild<WithStreamedUnaryMethod_DisbandGuild<WithStreamedUnaryMethod_SetAnnouncement<WithStreamedUnaryMethod_SetGuildMemberRole<WithStreamedUnaryMethod_KickGuildMember<WithStreamedUnaryMethod_TransferGuildLeader<WithStreamedUnaryMethod_ApplyJoinGuild<WithStreamedUnaryMethod_CancelGuildApplication<WithStreamedUnaryMethod_ListMyGuildApplications<WithStreamedUnaryMethod_ListGuildApplications<WithStreamedUnaryMethod_ReviewGuildApplication<WithStreamedUnaryMethod_NotifyGuildChanged<WithStreamedUnaryMethod_UpdateGuildScore<WithStreamedUnaryMethod_GetGuildRank<WithStreamedUnaryMethod_GetGuildRankByGuild<WithStreamedUnaryMethod_GetGuildDonateOptions<WithStreamedUnaryMethod_DonateToGuild<WithStreamedUnaryMethod_UpgradeGuild<WithStreamedUnaryMethod_GetGuildShop<WithStreamedUnaryMethod_BuyGuildShopGoods<Service > > > > > > > > > > > > > > > > > > > > > > > StreamedService;
 };
 
 }  // namespace guildpb

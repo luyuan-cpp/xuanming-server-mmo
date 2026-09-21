@@ -90,6 +90,18 @@ func seedSceneOnNode(mr *miniredis.Miniredis, zoneID uint32, sceneID uint64, nod
 	mr.Set(fmt.Sprintf(InstancePlayerCountKey, sceneID), playerCount)
 }
 
+// defaultWorldTestConf 是单测里顶替「World 表第一行」的默认大世界 conf。
+const defaultWorldTestConf = uint64(3300)
+
+// seedDefaultWorldChannel 让 zoneID 开着默认大世界:World 表覆盖成 {defaultWorldTestConf},并在该 zone 的
+// 频道集合里登记一个频道。没指定地图(scene_conf_id = 0)的跨 zone 第一条腿会先只读预检这一点;
+// 预检只看集合是否为空,所以不摆 scene→node 映射,也不会被预占人数。
+func seedDefaultWorldChannel(t *testing.T, mr *miniredis.Miniredis, zoneID uint32) {
+	t.Helper()
+	t.Cleanup(SetWorldConfIdsForTest([]uint64{defaultWorldTestConf}))
+	mr.SAdd(worldChannelsKey(zoneID, defaultWorldTestConf), "7300")
+}
+
 // writeHandoffMarker 模拟 C++ 源 scene 在 Redis 落地回调之后写出的交接标记。
 func writeHandoffMarker(t *testing.T, sc *svc.ServiceContext, playerID uint64, epoch uint64) {
 	t.Helper()
@@ -306,6 +318,8 @@ func TestEnterScene_CrossZoneWithCurrentMarkerReleasesToAwaitingPlacement(t *tes
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
 	writeHandoffMarker(t, sc, playerID, 1)
+	// 请求不指定地图(conf=0):第一条腿预检目标 zone 的默认大世界,这里让它开着。
+	seedDefaultWorldChannel(t, mr, 2)
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
 	logic.assignGateForZone = func(_ context.Context, _ *svc.ServiceContext, zone uint32, pid uint64) (*scene_manager.RedirectToGateInfo, error) {
@@ -346,6 +360,7 @@ func TestEnterScene_CrossZoneRedirectKafkaFailureRestoresLocationAndEpoch(t *tes
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
 	writeHandoffMarker(t, sc, playerID, 1)
+	seedDefaultWorldChannel(t, mr, 2)
 	oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(playerID))
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
@@ -415,6 +430,8 @@ func TestEnterScene_AwaitingPlacementCrossZoneAgainIsAllowedWithoutMarker(t *tes
 	placed, err := placePlayerLocation(sc, playerID, 0, "", 2, placementGuard{observedEpoch: 0, mint: true})
 	require.NoError(t, err)
 	require.Equal(t, uint64(1), placed.epoch)
+	// 再次重定向同样是「要离开 zone 2」:不指定地图时预检 zone 3 的默认大世界。
+	seedDefaultWorldChannel(t, mr, 3)
 
 	// 玩家没跟着票据去 zone 2,而是从 zone 1 的 Gate 再次登录并要去 zone 3。
 	logic := NewEnterSceneLogic(context.Background(), sc)
@@ -740,6 +757,106 @@ func TestEnterScene_TravelToUnopenedMapIsRejectedBeforeReleasingOwnership(t *tes
 	oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, oldScene))
 	assert.Equal(t, "3", oldCount)
 	assert.Empty(t, *captured, "被拒的传送不得发出 RedirectToGateEvent")
+}
+
+// 第一条腿:请求没指定地图(scene_conf_id = 0 = 由目标 zone 挑默认大世界),而目标 zone 的默认大世界
+// 一个频道都没有,或者根本没配默认大世界(World 表为空)→ 同样在不可回头点之前拒绝,一个字节都不改。
+// 第二条腿对 conf=0 只找默认大世界、不回落,放行就是让源实体销毁后落不了地。
+// 标记已就绪、gate 也签得出票据:能挡住这次放行的只有地图预检。
+func TestEnterScene_TravelWithoutMapRejectedWhenTargetDefaultWorldUnavailable(t *testing.T) {
+	cases := []struct {
+		name     string
+		worldIDs []uint64 // World 表覆盖值;空切片 = 没配默认大世界
+		playerID uint64
+		oldScene uint64
+	}{
+		// 默认大世界配了,但只在 zone 1 开着频道:按「目标 zone」查,不能被源 zone 的频道糊弄过去。
+		{name: "default_world_has_no_channel_in_target_zone", worldIDs: []uint64{defaultWorldTestConf}, playerID: 6160, oldScene: 7160},
+		{name: "default_world_unconfigured", worldIDs: []uint64{}, playerID: 6161, oldScene: 7161},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			sc, mr := newTestSvcCtxWithWorldScenes(t)
+			captured := capturingKafkaWriter(sc)
+			t.Cleanup(SetWorldConfIdsForTest(tc.worldIDs))
+			mr.SAdd(worldChannelsKey(1, defaultWorldTestConf), "7300")
+
+			seedSceneOnNode(mr, 1, tc.oldScene, "10", "3")
+			require.NoError(t, UpdatePlayerLocation(context.Background(), sc, tc.playerID, tc.oldScene, "10", 1))
+			writeHandoffMarker(t, sc, tc.playerID, 1)
+			oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
+			markerRaw, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
+			before := enterSceneRejectedCount(t, 2, rejectReasonTravelMapUnavailable)
+
+			logic := NewEnterSceneLogic(context.Background(), sc)
+			logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+				t.Error("地图预检不过就不该去签目标 zone 的票据")
+				return nil, errors.New("unexpected redirect")
+			}
+			resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+				PlayerId: tc.playerID, ZoneId: 2, SceneConfId: 0,
+				GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test", RequestId: "travel-no-default-world",
+			})
+			require.NoError(t, err)
+			assert.Equal(t, constants.ErrNoAvailableNode, resp.ErrorCode)
+			assert.Nil(t, resp.Redirect)
+			assert.Equal(t, before+1, enterSceneRejectedCount(t, 2, rejectReasonTravelMapUnavailable),
+				"沿用 travel_map_unavailable,告警 SceneManagerZoneTravelMapUnavailable 才看得见")
+
+			// 源 scene 仍持有玩家并将据此解冻:epoch(1)、location、标记、旧场景人数都必须原样。
+			assert.Equal(t, "1", ownerEpochRaw(t, sc, tc.playerID), "被拒的传送不得铸造 epoch")
+			raw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
+			assert.Equal(t, oldRaw, raw, "被拒的传送不得留下等待落点")
+			markerAfter, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
+			assert.Equal(t, markerRaw, markerAfter)
+			oldCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, tc.oldScene))
+			assert.Equal(t, "3", oldCount)
+			assert.Empty(t, *captured, "被拒的传送不得发出 RedirectToGateEvent")
+			exists, existsErr := sc.Redis.Exists(fmt.Sprintf("enter_scene:dedup:%d:travel-no-default-world", tc.playerID))
+			require.NoError(t, existsErr)
+			assert.False(t, exists, "拒绝必须释放 request_id 占位")
+		})
+	}
+}
+
+// 第一条腿:请求没指定地图,目标 zone 的默认大世界开着 → 照常放行到等待落点。预检只读:不预占频道
+// 人数,也不把解析出的默认 conf 写进等待落点(pending 仍为 0,第二条腿按同一口径自己解析)。
+func TestEnterScene_TravelWithoutMapReleasesWhenTargetDefaultWorldIsOpen(t *testing.T) {
+	sc, mr := newTestSvcCtxWithWorldScenes(t)
+	captured := capturingKafkaWriter(sc)
+
+	const (
+		playerID = uint64(6162)
+		oldScene = uint64(7162)
+	)
+	seedSceneOnNode(mr, 1, oldScene, "10", "3")
+	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
+	writeHandoffMarker(t, sc, playerID, 1)
+	seedDefaultWorldChannel(t, mr, 2)
+	before := enterSceneRejectedCount(t, 2, rejectReasonTravelMapUnavailable)
+
+	logic := NewEnterSceneLogic(context.Background(), sc)
+	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {
+		return &scene_manager.RedirectToGateInfo{TargetGateIp: "10.2.0.8", TargetGatePort: 7001}, nil
+	}
+	resp, err := logic.EnterScene(&scene_manager.EnterSceneRequest{
+		PlayerId: playerID, ZoneId: 2, SceneConfId: 0,
+		GateZoneId: 1, GateId: "1", GateInstanceId: "gate-uuid-test",
+	})
+	require.NoError(t, err)
+	require.Equal(t, uint32(0), resp.ErrorCode)
+	require.NotNil(t, resp.Redirect)
+	assert.Equal(t, before, enterSceneRejectedCount(t, 2, rejectReasonTravelMapUnavailable))
+
+	assert.Equal(t, "2", ownerEpochRaw(t, sc, playerID))
+	loc, _ := GetPlayerLocation(context.Background(), sc, playerID)
+	require.NotNil(t, loc)
+	assert.Equal(t, uint32(2), loc.ZoneId)
+	assert.Equal(t, "", loc.NodeId)
+	assert.Equal(t, uint64(0), loc.PendingSceneConfId, "没指定地图:等待落点不记 pending,由第二条腿按默认大世界口径解析")
+	reservedCount, _ := sc.Redis.Get(fmt.Sprintf(InstancePlayerCountKey, uint64(7300)))
+	assert.Equal(t, "", reservedCount, "地图预检是只读的,不得预占默认大世界频道人数")
+	require.Len(t, *captured, 1, "RedirectToGateEvent 推给当前 Gate")
 }
 
 // 第二条腿:等待落点里记的目标地图在本 zone 解析不出来(两条腿之间频道被回收,或第一条腿的预检
@@ -1098,6 +1215,8 @@ func TestEnterScene_TravelFirstLegRejectsUnmappedHomeZoneWithoutSideEffects(t *t
 			seedSceneOnNode(mr, 1, tc.oldScene, "10", "3")
 			require.NoError(t, UpdatePlayerLocation(context.Background(), sc, tc.playerID, tc.oldScene, "10", 1))
 			writeHandoffMarker(t, sc, tc.playerID, 1)
+			// 地图预检(先于归属检查)要过:目标 zone 开着默认大世界,能挡住这次放行的只剩归属。
+			seedDefaultWorldChannel(t, mr, 2)
 			oldRaw, _ := sc.Redis.Get(getPlayerLocationKey(tc.playerID))
 			markerRaw, _ := sc.Redis.Get(ownerepoch.HandoffKey(tc.playerID))
 
@@ -1145,6 +1264,7 @@ func TestEnterScene_TravelFirstLegWithMappedHomeZoneStillReleases(t *testing.T) 
 	seedSceneOnNode(mr, 1, oldScene, "10", "3")
 	require.NoError(t, UpdatePlayerLocation(context.Background(), sc, playerID, oldScene, "10", 1))
 	writeHandoffMarker(t, sc, playerID, 1)
+	seedDefaultWorldChannel(t, mr, 2)
 
 	logic := NewEnterSceneLogic(context.Background(), sc)
 	logic.assignGateForZone = func(context.Context, *svc.ServiceContext, uint32, uint64) (*scene_manager.RedirectToGateInfo, error) {

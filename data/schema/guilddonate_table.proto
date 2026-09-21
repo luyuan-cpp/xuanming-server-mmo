@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+// GuildDonate 表的权威 schema。源表 data/GuildDonate.xlsx。
+//
+// 本文件不参与 protoc 编译,也不进任何语言的构建;导表器直接文本解析它。
+// 字段号只增不改、删字段用 reserved(data/AGENTS.md)。
+//
+// 导表报"这些权威 schema 没有对应的源表:GuildDonate"= 源表还没生成(schema 与 xlsx 必须成对):
+// 先跑 python tools/scripts/guild_b5a_xlsx_patch.py new-tables。
+//
+// 帮会捐献选项:一行 = 捐献页上的一个按钮。只由 go/guild 读取(C++ 节点照例全量加载)。
+// 客户端不加载配表,选项经 GetGuildDonateOptions 由服务端下发。
+//
+// 启动校验(go/guild ValidateEconomyTables,fail-closed):currency_type 只许 0 / 1;
+// 每种货币至多 2 行 —— 客户端一个货币面板只放两个按钮,第三行会被静默画不出来。
+
+package mmorpg.cfgtable.v1;
+
+import "cfg_options.proto";
+
+message GuildDonateTable {
+  option (cfg_sheet)       = "GuildDonate";
+  option (cfg_source_file) = "GuildDonate.xlsx";
+  option (cfg_primary_key) = "id";
+
+  // 捐献选项 id
+  uint32 id = 1;
+  // 展示名
+  string name = 2;
+  // 货币类型:0 银两(kCurrencyGold)/ 1 灵石(kCurrencyDiamond)
+  // 绑定灵石不能捐;其它值启动拒绝
+  uint32 currency_type = 3;
+  // 每次扣除的货币数量(1..int64 上限,scene Debit 的要求)
+  uint64 cost_amount = 4;
+  // 每次获得的个人帮贡(累计与可用同加)
+  // contribution_gain 与 funds_gain 至少一个 > 0
+  uint64 contribution_gain = 5;
+  // 每次增加的帮会资金
+  uint64 funds_gain = 6;
+  // 每游戏日次数上限(>=1);游戏日 = UTC+8 每天 05:00 切日
+  uint32 daily_limit = 7;
+  // 需要的帮会等级(1..GuildLevel 最高级)
+  uint32 min_guild_level = 8;
+}

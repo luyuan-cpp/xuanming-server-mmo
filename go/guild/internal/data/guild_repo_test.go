@@ -119,7 +119,10 @@ func TestUpdateAnnouncementAuthorizedRejectsStalePrivilegedCache(t *testing.T) {
 }
 
 // guildTestDropTables:本服务全部表 + schemamigrate 台账。新增表时同步追加(TestDropListCoversTables 守数量)。
-var guildTestDropTables = []string{"guild_application", "guild_member", "guild_player_state", "guild", "schema_migrations"}
+var guildTestDropTables = []string{
+	"guild_daily_counter", "guild_asset_op", "guild_player_op_seq", // B5a 资产三表
+	"guild_application", "guild_member", "guild_player_state", "guild", "schema_migrations",
+}
 
 // guildTestDBNamePattern:测试只许碰这两类一次性库。appuser 对 testdb / zone_N_db / mmorpg_trade 也有 ALL 权限,
 // 黑名单挡不住 DSN 指错,所以用白名单。

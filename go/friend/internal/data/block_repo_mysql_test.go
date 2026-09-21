@@ -121,6 +121,17 @@ func TestBlock_CancelsPendingInBothDirections(t *testing.T) {
 	seedPending(t, ctx, db, me, target) // 我也申请过他
 	seedPending(t, ctx, db, bystander, me)
 
+	// seedPending 直写的 updated_ms 是"现在"(非零)。不先归零的话,下面两条 NotZero 断言
+	// 结构性不可能失败 —— Block 的 ⑥ 哪怕漏写 updated_ms 也照绿(handoff §3 第 8 条登记的假绿)。
+	// 手法照 TestAddFriend_WritesUpdatedMs:两个方向都直写归零,再看状态迁移是否**重新**写上。
+	_, err := db.ExecContext(ctx,
+		`UPDATE friend_request SET updated_ms=0
+		 WHERE (from_player_id=? AND to_player_id=?) OR (from_player_id=? AND to_player_id=?)`,
+		target, me, me, target)
+	require.NoError(t, err)
+	require.Zero(t, readRequestUpdatedMs(t, ctx, db, target, me), "前置条件:归零必须真的生效,否则下面的 NotZero 没有鉴别力")
+	require.Zero(t, readRequestUpdatedMs(t, ctx, db, me, target), "前置条件:归零必须真的生效,否则下面的 NotZero 没有鉴别力")
+
 	require.NoError(t, callBlock(ctx, repo, me, target, lim))
 
 	// 断言**精确值**而不是"不等于 pending":置成 accepted(2) 同样能过 NotEqual,

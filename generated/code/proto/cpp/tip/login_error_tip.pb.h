@@ -95,6 +95,9 @@ enum login_error : int {
   kLoginAccountDataLoadFailed = 2029,
   kLoginFsmInvalidEvent = 2030,
   kLoginTimeout = 2031,
+  kRoleNameInvalid = 2032,
+  kRoleNameTaken = 2033,
+  kRoleNameSensitive = 2034,
   login_error_INT_MIN_SENTINEL_DO_NOT_USE_ =
       ::std::numeric_limits<::int32_t>::min(),
   login_error_INT_MAX_SENTINEL_DO_NOT_USE_ =
@@ -105,11 +108,11 @@ extern const uint32_t login_error_internal_data_[];
 inline constexpr login_error login_error_MIN =
     static_cast<login_error>(0);
 inline constexpr login_error login_error_MAX =
-    static_cast<login_error>(2031);
+    static_cast<login_error>(2034);
 [[nodiscard]] inline bool login_error_IsValid(int value) {
   return ::google::protobuf::internal::ValidateEnum(value, login_error_internal_data_);
 }
-inline constexpr int login_error_ARRAYSIZE = 2031 + 1;
+inline constexpr int login_error_ARRAYSIZE = 2034 + 1;
 [[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
 login_error_descriptor();
 [[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(login_error) {

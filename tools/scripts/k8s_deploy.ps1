@@ -2270,7 +2270,7 @@ Schema:
 # 用 INSERT IGNORE 预建这些 biz_tag 行,幂等、绝不降低已有行的 max_id;新增永久身份两边同加。
 IdSegment:
   AllowAutoSeed: ${dataServiceAllowAutoSeed}
-  BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing]
+  BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing, guild_asset_op]
 # C++ scene 产出的交易流水 / 玩家快照落库消费者。topic 名与分区数是不可变契约,值来自服务 yaml。
 # Kafka 不可达不影响 Load/Save,只记日志并每 30s 后台重试。
 # TopicGeneration 是分区契约的代号,进有效 topic 名(<基名>_g<N>);从服务 yaml 镜像过来,当前集群
@@ -2830,8 +2830,9 @@ Friend:
   RequestQuotaPerMinute: ${friendRequestQuotaPerMinute}
   ListReadHardLimit: ${friendListReadHardLimit}
   CacheTTL: ${friendCacheTTL}
-  # 终态申请行的后台清理。默认 report_only:只出指标 friend_sweep_pending_rows{mode} 并打 WARN,**不删任何数据**;
-  # 清的是权威数据,新环境先观察"待清理行数"合理再改 delete。四个键必须全写:Sweep 段标了 optional,
+  # 两类后台清理共用这一段参数(不另设配置键):终态好友申请行,以及零好友且超过保留期的 friend_capacity 行。
+  # 默认 report_only:只出指标 friend_sweep_pending_rows{mode} / friend_sweep_idle_capacity_rows{mode} 并打 WARN,
+  # **不删任何数据**;清的是权威数据,新环境先观察两个"待清理行数"合理再改 delete。四个键必须全写:Sweep 段标了 optional,
   # go-zero 不下钻整段缺失的 optional 嵌套结构、default 不回填,漏写会让 Mode 变空串并被 Validate 拒。
   Sweep:
     Mode: ${friendSweepMode}

@@ -1,4 +1,5 @@
-// Package metrics 暴露 friend 服务的 Prometheus 指标:S2C 推送、申请频控、在线查询与 sweep 积压。
+// Package metrics 暴露 friend 服务的 Prometheus 指标:S2C 推送、申请频控、在线查询、
+// sweep 积压(终态好友申请)与 sweep 看到的可回收零好友容量行,共五个。
 // 端口约定见契约 §7 分工表:friend 的 /metrics 是 :9180(`etc/friend.yaml` 的 MetricsListenAddr)。
 //
 // 两条硬约束(AGENTS.md §9):
@@ -47,9 +48,16 @@ const (
 // 这里刻意重复了字面量而没有 import friend/internal/config:metrics 必须保持叶子包 ——
 // 一旦 config 将来想记一个"配置被降级"之类的指标,import 就成了循环依赖。
 // 代价是这两个字面量与 config 的枚举必须同改(config.Validate 的 options 标签是它们的事实源)。
+//
+// 为什么导出:生产代码里这对字面量共三份(config / data / 本包),本包这份原先不可导出,
+// 对齐断言够不到它。而它漂移时是**静默的** —— register() 预建的 0 值序列落在一个 label 上、
+// Set* 写的是另一个,"序列长期不更新 = sweep 根本没在跑"这个唯一信号就此失效。
+// 导出之后由 logic 包的测试(friend_logic_test.go 的 TestSweepModeConstantsAreTheWireLiterals,
+// logic 本来就 import 本包,不成环)机械钉住三份逐字一致。
+// 导出**不是**让调用方拿它当 mode 传:写侧仍然传 config.SweepMode*(见 Set* 的注释)。
 const (
-	sweepModeReportOnly = "report_only"
-	sweepModeDelete     = "delete"
+	SweepModeReportOnly = "report_only"
+	SweepModeDelete     = "delete"
 )
 
 var (
@@ -87,6 +95,17 @@ var (
 		Help:      "Rows the last sweep pass found eligible for cleanup, by sweep mode (report_only|delete).",
 	}, []string{"mode"})
 
+	// sweepIdleCapacityRows:上一轮 sweep 看到的"零好友且超过保留期"的 friend_capacity 行数。
+	// 与 sweepPendingRows 分成两个指标而不是加一个 table label:两者的告警含义不同 ——
+	// 终态申请行随正常社交行为自然累积;零好友容量行的增长可由客户端驱动(对任意 target 发申请
+	// 就会建行,见 logic/sweep.go 文件头),它在 report_only 下持续上涨就是"有人在刷"的信号。
+	// ⚠ 同样受 BatchLimit 封顶:等于 BatchLimit 只说明"可回收行 ≥ 一批",不是精确值。
+	sweepIdleCapacityRows = prometheus.NewGaugeVec(prometheus.GaugeOpts{
+		Subsystem: subsystem,
+		Name:      "sweep_idle_capacity_rows",
+		Help:      "friend_capacity rows with zero friends and older than the retention period that the last sweep pass saw, capped at BatchLimit, by sweep mode (report_only|delete).",
+	}, []string{"mode"})
+
 	registerOnce sync.Once
 )
 
@@ -117,15 +136,22 @@ func SetSweepPendingRows(mode string, rows float64) {
 	sweepPendingRows.WithLabelValues(mode).Set(rows)
 }
 
+// SetSweepIdleCapacityRows 刷新某个 sweep 模式下"零好友且超过保留期"的 friend_capacity 行数。
+// mode 与 rows 的约定同 SetSweepPendingRows:mode 只许是两个合法模式之一(未知模式不要调,
+// 拿拼错的串当 label 会造出一条没人认识的序列);合法模式下每轮都要调,**包括 0**。
+func SetSweepIdleCapacityRows(mode string, rows float64) {
+	sweepIdleCapacityRows.WithLabelValues(mode).Set(rows)
+}
+
 // register 把指标注册进默认 registry,并预建全部 label 组合的 0 值序列。
 //
 // 为什么必须预建:Prometheus 里"从未发生过"的序列**根本不存在**,
 // `rate(friend_push_total{outcome="error"}[5m]) > 0` 这类规则在序列缺失时既不报警也不报错,
 // 与"一切正常"长得完全一样。预建成 0 之后,缺失就只可能是抓取本身出了问题。
 //
-// 注意 sweepPendingRows 的两个 mode 都会被预建:某个 mode 的值为 0 只代表
+// 注意 sweepPendingRows / sweepIdleCapacityRows 的两个 mode 都会被预建:某个 mode 的值为 0 只代表
 // "这个模式下没有积压或没启用",**不能**用它判断当前生效的是哪个模式
-// (生效模式看配置与启动日志)。"sweep 根本没在跑"要靠这个 Gauge 长期不更新来判断。
+// (生效模式看配置与启动日志)。"sweep 根本没在跑"要靠这两个 Gauge 长期不更新来判断。
 func register() {
 	registerOnce.Do(func() {
 		prometheus.MustRegister(
@@ -133,6 +159,7 @@ func register() {
 			rateQuotaTotal,
 			onlineLookupTotal,
 			sweepPendingRows,
+			sweepIdleCapacityRows,
 		)
 		for _, reason := range []string{ReasonRequestReceived, ReasonRequestAccepted} {
 			for _, outcome := range []string{OutcomeOK, OutcomeOffline, OutcomeError} {
@@ -145,8 +172,9 @@ func register() {
 		for _, outcome := range []string{OutcomeOK, OutcomeOffline, OutcomeError} {
 			onlineLookupTotal.WithLabelValues(outcome)
 		}
-		for _, mode := range []string{sweepModeReportOnly, sweepModeDelete} {
+		for _, mode := range []string{SweepModeReportOnly, SweepModeDelete} {
 			sweepPendingRows.WithLabelValues(mode)
+			sweepIdleCapacityRows.WithLabelValues(mode)
 		}
 	})
 }

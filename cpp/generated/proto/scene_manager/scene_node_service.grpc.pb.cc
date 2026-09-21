@@ -28,6 +28,9 @@ static const char* SceneNodeGrpc_method_names[] = {
   "/scene_node.SceneNodeGrpc/ReleasePlayer",
   "/scene_node.SceneNodeGrpc/PrepareBattle",
   "/scene_node.SceneNodeGrpc/CancelBattlePrepare",
+  "/scene_node.SceneNodeGrpc/AssetDebit",
+  "/scene_node.SceneNodeGrpc/AssetAbortDebit",
+  "/scene_node.SceneNodeGrpc/AssetCredit",
 };
 
 std::unique_ptr< SceneNodeGrpc::Stub> SceneNodeGrpc::NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options) {
@@ -42,6 +45,9 @@ SceneNodeGrpc::Stub::Stub(const std::shared_ptr< ::grpc::ChannelInterface>& chan
   , rpcmethod_ReleasePlayer_(SceneNodeGrpc_method_names[2], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_PrepareBattle_(SceneNodeGrpc_method_names[3], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   , rpcmethod_CancelBattlePrepare_(SceneNodeGrpc_method_names[4], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_AssetDebit_(SceneNodeGrpc_method_names[5], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_AssetAbortDebit_(SceneNodeGrpc_method_names[6], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
+  , rpcmethod_AssetCredit_(SceneNodeGrpc_method_names[7], options.suffix_for_stats(),::grpc::internal::RpcMethod::NORMAL_RPC, channel)
   {}
 
 ::grpc::Status SceneNodeGrpc::Stub::CreateScene(::grpc::ClientContext* context, const ::CreateSceneRequest& request, ::CreateSceneResponse* response) {
@@ -159,6 +165,75 @@ void SceneNodeGrpc::Stub::async::CancelBattlePrepare(::grpc::ClientContext* cont
   return result;
 }
 
+::grpc::Status SceneNodeGrpc::Stub::AssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::AssetOpResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::AssetOpRequest, ::AssetOpResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_AssetDebit_, context, request, response);
+}
+
+void SceneNodeGrpc::Stub::async::AssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::AssetOpRequest, ::AssetOpResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AssetDebit_, context, request, response, std::move(f));
+}
+
+void SceneNodeGrpc::Stub::async::AssetDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AssetDebit_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* SceneNodeGrpc::Stub::PrepareAsyncAssetDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::AssetOpResponse, ::AssetOpRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_AssetDebit_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* SceneNodeGrpc::Stub::AsyncAssetDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncAssetDebitRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status SceneNodeGrpc::Stub::AssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::AssetOpResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::AssetOpRequest, ::AssetOpResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_AssetAbortDebit_, context, request, response);
+}
+
+void SceneNodeGrpc::Stub::async::AssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::AssetOpRequest, ::AssetOpResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AssetAbortDebit_, context, request, response, std::move(f));
+}
+
+void SceneNodeGrpc::Stub::async::AssetAbortDebit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AssetAbortDebit_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* SceneNodeGrpc::Stub::PrepareAsyncAssetAbortDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::AssetOpResponse, ::AssetOpRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_AssetAbortDebit_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* SceneNodeGrpc::Stub::AsyncAssetAbortDebitRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncAssetAbortDebitRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
+::grpc::Status SceneNodeGrpc::Stub::AssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::AssetOpResponse* response) {
+  return ::grpc::internal::BlockingUnaryCall< ::AssetOpRequest, ::AssetOpResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), rpcmethod_AssetCredit_, context, request, response);
+}
+
+void SceneNodeGrpc::Stub::async::AssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, std::function<void(::grpc::Status)> f) {
+  ::grpc::internal::CallbackUnaryCall< ::AssetOpRequest, ::AssetOpResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AssetCredit_, context, request, response, std::move(f));
+}
+
+void SceneNodeGrpc::Stub::async::AssetCredit(::grpc::ClientContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response, ::grpc::ClientUnaryReactor* reactor) {
+  ::grpc::internal::ClientCallbackUnaryFactory::Create< ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(stub_->channel_.get(), stub_->rpcmethod_AssetCredit_, context, request, response, reactor);
+}
+
+::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* SceneNodeGrpc::Stub::PrepareAsyncAssetCreditRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+  return ::grpc::internal::ClientAsyncResponseReaderHelper::Create< ::AssetOpResponse, ::AssetOpRequest, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(channel_.get(), cq, rpcmethod_AssetCredit_, context, request);
+}
+
+::grpc::ClientAsyncResponseReader< ::AssetOpResponse>* SceneNodeGrpc::Stub::AsyncAssetCreditRaw(::grpc::ClientContext* context, const ::AssetOpRequest& request, ::grpc::CompletionQueue* cq) {
+  auto* result =
+    this->PrepareAsyncAssetCreditRaw(context, request, cq);
+  result->StartCall();
+  return result;
+}
+
 SceneNodeGrpc::Service::Service() {
   AddMethod(new ::grpc::internal::RpcServiceMethod(
       SceneNodeGrpc_method_names[0],
@@ -210,6 +285,36 @@ SceneNodeGrpc::Service::Service() {
              ::Empty* resp) {
                return service->CancelBattlePrepare(ctx, req, resp);
              }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      SceneNodeGrpc_method_names[5],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< SceneNodeGrpc::Service, ::AssetOpRequest, ::AssetOpResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](SceneNodeGrpc::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::AssetOpRequest* req,
+             ::AssetOpResponse* resp) {
+               return service->AssetDebit(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      SceneNodeGrpc_method_names[6],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< SceneNodeGrpc::Service, ::AssetOpRequest, ::AssetOpResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](SceneNodeGrpc::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::AssetOpRequest* req,
+             ::AssetOpResponse* resp) {
+               return service->AssetAbortDebit(ctx, req, resp);
+             }, this)));
+  AddMethod(new ::grpc::internal::RpcServiceMethod(
+      SceneNodeGrpc_method_names[7],
+      ::grpc::internal::RpcMethod::NORMAL_RPC,
+      new ::grpc::internal::RpcMethodHandler< SceneNodeGrpc::Service, ::AssetOpRequest, ::AssetOpResponse, ::grpc::protobuf::MessageLite, ::grpc::protobuf::MessageLite>(
+          [](SceneNodeGrpc::Service* service,
+             ::grpc::ServerContext* ctx,
+             const ::AssetOpRequest* req,
+             ::AssetOpResponse* resp) {
+               return service->AssetCredit(ctx, req, resp);
+             }, this)));
 }
 
 SceneNodeGrpc::Service::~Service() {
@@ -244,6 +349,27 @@ SceneNodeGrpc::Service::~Service() {
 }
 
 ::grpc::Status SceneNodeGrpc::Service::CancelBattlePrepare(::grpc::ServerContext* context, const ::CancelBattlePrepareRequest* request, ::Empty* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status SceneNodeGrpc::Service::AssetDebit(::grpc::ServerContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status SceneNodeGrpc::Service::AssetAbortDebit(::grpc::ServerContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response) {
+  (void) context;
+  (void) request;
+  (void) response;
+  return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+}
+
+::grpc::Status SceneNodeGrpc::Service::AssetCredit(::grpc::ServerContext* context, const ::AssetOpRequest* request, ::AssetOpResponse* response) {
   (void) context;
   (void) request;
   (void) response;

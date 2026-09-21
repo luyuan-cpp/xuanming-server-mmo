@@ -43,6 +43,8 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerUint32Comp
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto, /* tracker*/ nullptr,},
+        // ::PlayerProfileComp
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerStressTestProbe
         {&::_pbi::kDescriptorMethods, &::descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto, /* tracker*/ nullptr,},
         // ::PlayerMergeStateComp
@@ -572,7 +574,7 @@ constexpr auto PlayerStressTestProbe::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[7],
+      &file_reflection_data[8],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
@@ -619,6 +621,152 @@ const ::_pbi::ClassData* PlayerStressTestProbe_get_class_data() {
   return PlayerStressTestProbe_globals_.GetClassData();
 #else
   return PlayerStressTestProbe_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class PlayerProfileComp::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<PlayerProfileComp>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_._has_bits_);
+};
+
+constexpr PlayerProfileComp::ParseTableT_ PlayerProfileComp::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::GenericFallback,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::PlayerProfileComp>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string name = 1;
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.name_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string name = 1;
+      {PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_.name_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\21\4\0\0\0\0\0\0"
+      "PlayerProfileComp"
+      "name"
+    }},
+  };
+}
+
+
+inline constexpr PlayerProfileComp::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : _cached_size_{0},
+        name_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()) {}
+
+template <typename>
+constexpr PlayerProfileComp::PlayerProfileComp(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : ::google::protobuf::Message(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL PlayerProfileComp::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) PlayerProfileComp(arena);
+}
+constexpr auto PlayerProfileComp::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(PlayerProfileComp), alignof(PlayerProfileComp));
+}
+constexpr auto PlayerProfileComp::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &PlayerProfileComp::MergeImpl,
+          ::google::protobuf::Message::GetNewImpl<PlayerProfileComp>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &PlayerProfileComp::SharedDtor,
+          ::google::protobuf::Message::GetClearImpl<PlayerProfileComp>(), &PlayerProfileComp::ByteSizeLong,
+              &PlayerProfileComp::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(PlayerProfileComp, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[7],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct PlayerProfileCompGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr PlayerProfileCompGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 PlayerProfileComp_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(PlayerProfileComp::InternalGenerateClassData_(
+            _default, &PlayerProfileComp_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<PlayerProfileComp>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~PlayerProfileCompGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) PlayerProfileComp _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<PlayerProfileComp>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(PlayerProfileCompGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST PlayerProfileCompGlobalsTypeInternal PlayerProfileComp_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* PlayerProfileComp_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return PlayerProfileComp_globals_.GetClassData();
+#else
+  return PlayerProfileComp_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -728,7 +876,7 @@ constexpr auto PlayerMergeStateComp::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[9],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
@@ -1328,6 +1476,11 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::PlayerUint32Comp, _impl_.class__),
         0,
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::PlayerProfileComp, _impl_.name_),
+        0,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::PlayerStressTestProbe, _impl_._has_bits_),
         5, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::PlayerStressTestProbe, _impl_.test_seq_),
@@ -1354,8 +1507,9 @@ static const ::_pbi::MigrationSchema
         {8, sizeof(::UnregisterPlayer)},
         {13, sizeof(::PlayerUint64Comp)},
         {18, sizeof(::PlayerUint32Comp)},
-        {23, sizeof(::PlayerStressTestProbe)},
-        {30, sizeof(::PlayerMergeStateComp)},
+        {23, sizeof(::PlayerProfileComp)},
+        {28, sizeof(::PlayerStressTestProbe)},
+        {35, sizeof(::PlayerMergeStateComp)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -1366,6 +1520,7 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::UnregisterPlayer_globals_,
         &::PlayerUint64Comp_globals_,
         &::PlayerUint32Comp_globals_,
+        &::PlayerProfileComp_globals_,
         &::PlayerStressTestProbe_globals_,
         &::PlayerMergeStateComp_globals_,
 };
@@ -1377,24 +1532,25 @@ const char descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fcomp_
     "terPlayer\022\033\n\023logout_initiated_ms\030\001 \001(\003\"2"
     "\n\020PlayerUint64Comp\022\036\n\026registration_times"
     "tamp\030\001 \001(\004\"!\n\020PlayerUint32Comp\022\r\n\005class\030"
-    "\001 \001(\r\";\n\025PlayerStressTestProbe\022\020\n\010test_s"
-    "eq\030\001 \001(\004\022\020\n\010test_sig\030\002 \001(\014\"y\n\024PlayerMerg"
-    "eStateComp\022\035\n\025force_rename_required\030\001 \001("
-    "\010\022\037\n\027force_rename_stamped_ms\030\002 \001(\003\022!\n\031po"
-    "st_merge_notice_seen_ms\030\003 \001(\003B\022Z\020common/"
-    "componentb\006proto3"
+    "\001 \001(\r\"!\n\021PlayerProfileComp\022\014\n\004name\030\001 \001(\t"
+    "\";\n\025PlayerStressTestProbe\022\020\n\010test_seq\030\001 "
+    "\001(\004\022\020\n\010test_sig\030\002 \001(\014\"y\n\024PlayerMergeStat"
+    "eComp\022\035\n\025force_rename_required\030\001 \001(\010\022\037\n\027"
+    "force_rename_stamped_ms\030\002 \001(\003\022!\n\031post_me"
+    "rge_notice_seen_ms\030\003 \001(\003B\022Z\020common/compo"
+    "nentb\006proto3"
 };
 static ::absl::once_flag descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto = {
     false,
     false,
-    457,
+    492,
     descriptor_table_protodef_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto,
     "proto/common/component/player_comp.proto",
     &descriptor_table_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto_once,
     nullptr,
     0,
-    9,
+    10,
     schemas,
     file_message_globals,
     TableStruct_proto_2fcommon_2fcomponent_2fplayer_5fcomp_2eproto::offsets,
@@ -2369,6 +2525,220 @@ void PlayerUint32Comp::InternalSwap(PlayerUint32Comp* PROTOBUF_RESTRICT PROTOBUF
 }
 
 ::google::protobuf::Metadata PlayerUint32Comp::GetMetadata() const {
+  return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+PlayerProfileComp::PlayerProfileComp(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerProfileComp_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:PlayerProfileComp)
+}
+PROTOBUF_NDEBUG_INLINE PlayerProfileComp::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::PlayerProfileComp& from_msg)
+      : _has_bits_{from._has_bits_},
+        _cached_size_{0},
+        name_(arena, from.name_) {}
+
+PlayerProfileComp::PlayerProfileComp(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const PlayerProfileComp& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : ::google::protobuf::Message(arena, PlayerProfileComp_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : ::google::protobuf::Message(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  PlayerProfileComp* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:PlayerProfileComp)
+}
+PROTOBUF_NDEBUG_INLINE PlayerProfileComp::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : _cached_size_{0},
+        name_(arena) {}
+
+inline void PlayerProfileComp::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+PlayerProfileComp::~PlayerProfileComp() {
+  // @@protoc_insertion_point(destructor:PlayerProfileComp)
+  SharedDtor(*this);
+}
+inline void PlayerProfileComp::SharedDtor(MessageLite& self) {
+  PlayerProfileComp& this_ = static_cast<PlayerProfileComp&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.name_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull PlayerProfileComp_class_data_ =
+        PlayerProfileComp::InternalGenerateClassData_(PlayerProfileComp_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerProfileComp::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerProfileComp_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(PlayerProfileComp_class_data_.tc_table);
+  return PlayerProfileComp_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+PlayerProfileComp::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&PlayerProfileComp_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&PlayerProfileComp_globals_));
+  return PlayerProfileComp_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const PlayerProfileComp::ParseTableT_
+    PlayerProfileComp::_table_ =
+        PlayerProfileComp::InternalGenerateParseTable_(PlayerProfileComp_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void PlayerProfileComp::Clear() {
+// @@protoc_insertion_point(message_clear_start:PlayerProfileComp)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
+  cached_has_bits = _impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    _impl_.name_.ClearNonDefaultToEmpty();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL PlayerProfileComp::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const PlayerProfileComp& this_ = static_cast<const PlayerProfileComp&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL PlayerProfileComp::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const PlayerProfileComp& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:PlayerProfileComp)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string name = 1;
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_name().empty()) {
+      const ::std::string& _s = this_._internal_name();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "PlayerProfileComp.name");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:PlayerProfileComp)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t PlayerProfileComp::ByteSizeLong(const MessageLite& base) {
+  const PlayerProfileComp& this_ = static_cast<const PlayerProfileComp&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t PlayerProfileComp::ByteSizeLong() const {
+  const PlayerProfileComp& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:PlayerProfileComp)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void)cached_has_bits;
+
+   {
+    // string name = 1;
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_name().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_name());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void PlayerProfileComp::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<PlayerProfileComp*>(&to_msg);
+  auto& from = static_cast<const PlayerProfileComp&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:PlayerProfileComp)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!from._internal_name().empty()) {
+      _this->_internal_set_name(from._internal_name());
+    } else {
+      if (_this->_impl_.name_.IsDefault()) {
+        _this->_internal_set_name("");
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void PlayerProfileComp::CopyFrom(const PlayerProfileComp& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:PlayerProfileComp)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void PlayerProfileComp::InternalSwap(PlayerProfileComp* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.name_, &other->_impl_.name_, arena);
+}
+
+::google::protobuf::Metadata PlayerProfileComp::GetMetadata() const {
   return ::google::protobuf::Message::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

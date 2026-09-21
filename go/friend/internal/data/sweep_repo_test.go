@@ -1,6 +1,7 @@
 package data
 
-// sweep_repo_test.go —— 终态申请清理(规格 §3.8)的回归。
+// sweep_repo_test.go —— 终态申请清理(规格 §3.8)与零好友容量行回收的回归。
+// 上半个文件是 SweepTerminalRequests,下半个(⑤–⑦,文件后段另有说明)是 SweepIdleCapacityRows。
 //
 // ⚠ 文件名按规格 §5 第 19 项给的是 `sweep_repo_test.go`(没有 `_mysql` 后缀),但内容必须
 // 打真 MySQL:要验的正是 `DELETE ... WHERE status IN (2, 3) AND updated_ms < ? LIMIT ?` 这条 SQL
@@ -74,10 +75,10 @@ func seedRequestRow(t *testing.T, ctx context.Context, db *sql.DB, from, to uint
 func sweepFixture(t *testing.T, ctx context.Context, db *sql.DB, nowMs int64, retentionDays int) {
 	t.Helper()
 	cutoff := nowMs - int64(retentionDays)*testDayMs
-	seedRequestRow(t, ctx, db, 41001, 41002, testStatusAccepted, cutoff-testDayMs)       // 超期 1 天
-	seedRequestRow(t, ctx, db, 41003, 41004, testStatusRejected, cutoff-30*testDayMs)    // 超期 30 天
+	seedRequestRow(t, ctx, db, 41001, 41002, testStatusAccepted, cutoff-testDayMs)    // 超期 1 天
+	seedRequestRow(t, ctx, db, 41003, 41004, testStatusRejected, cutoff-30*testDayMs) // 超期 30 天
 	seedRequestRow(t, ctx, db, 41005, 41006, testStatusAccepted, nowMs-time.Hour.Milliseconds())
-	seedRequestRow(t, ctx, db, 41007, 41008, testStatusPending, nowMs-365*testDayMs)     // 极老的 pending
+	seedRequestRow(t, ctx, db, 41007, 41008, testStatusPending, nowMs-365*testDayMs) // 极老的 pending
 }
 
 func totalRequestRows(t *testing.T, ctx context.Context, db *sql.DB) int64 {
@@ -281,4 +282,336 @@ func TestSweep_UnknownModeDeletesNothing(t *testing.T) {
 		assert.Zero(t, deleted, "未知模式 %q 不得删行:拼错模式必须退到只统计", mode)
 	}
 	assert.Equal(t, int64(4), totalRequestRows(t, ctx, db))
+}
+
+// ── 第二类清理对象:零好友的 friend_capacity 行(SweepIdleCapacityRows)──────────
+//
+// 与上半个文件同一套纪律(nowMs 显式注入、created_ms 直写绝对值、逐行点名而不只看总数),
+// 但判据换了,危险的方向也跟着换:
+//
+//	⑤ 只删 `friend_count = 0` 的行。friend_capacity 是好友数的**权威计数行**(D-10),删掉一行有好友的
+//	   计数 —— 虽然 ensure 能按边数重算回来 —— 等于让"只删零好友行"这条前提靠运气成立;
+//	⑥ 只删 `created_ms < 截止点` 的行。刚建出来的守卫行被立刻回收,写路径就会反复撞上守卫缺行;
+//	⑦ **created_ms = 0 的零好友行会被回收** —— 与 updated_ms 的保险(④)方向正好相反。
+//	   updated_ms=0 意味着"写入方漏写",拿它判过期会清空整表,所以拒删;
+//	   created_ms=0 只意味着"从旧库搬来的存量行",而零好友的存量行删掉没有任何语义损失
+//	   (ensure 补行时按 friend 表的权威边数重算,见 TestMissingCapacityRowUsesAuthoritativeFriendCount)。
+//	   谁照着 ④ 给回收也"补"一道 created_ms=0 拒删,存量空行就永远回收不掉。
+
+// callSweepIdleCapacity —— 与 friend_repo_mysql_test.go 的 callSweep 同一个用途:
+// 对生产签名的假设只出现在这一处。
+func callSweepIdleCapacity(ctx context.Context, repo *FriendRepo, mode string, retentionDays, batchLimit int, nowMs int64) (idle int64, deleted int64, err error) {
+	return repo.SweepIdleCapacityRows(ctx, mode, retentionDays, batchLimit, nowMs)
+}
+
+// seedIdleCapacityRow 直写一行零好友的容量行,created_ms 给绝对值。
+// 直写而不是走 ensure:ensure 写的 created_ms 永远是"现在",造不出"7 天前",也造不出存量行的 0。
+func seedIdleCapacityRow(t *testing.T, ctx context.Context, db *sql.DB, playerID uint64, createdMs int64) {
+	t.Helper()
+	_, err := db.ExecContext(ctx,
+		"INSERT INTO friend_capacity (player_id, friend_count, created_ms) VALUES (?, 0, ?)", playerID, createdMs)
+	require.NoError(t, err)
+}
+
+// seedBefriendedCapacityRow 造一行**有好友**的容量行(边是真的,计数与边数一致),再把 created_ms 改成给定值。
+// 不直接写一个 friend_count=2 的光杆行:那样 assertFriendInvariants 会先因为"计数与边数不一致"变红,
+// 把本用例真正要看的"这行有没有被误删"盖住。
+func seedBefriendedCapacityRow(t *testing.T, ctx context.Context, db *sql.DB, playerID uint64, createdMs int64, friendIDs ...uint64) {
+	t.Helper()
+	seedFriendEdges(t, ctx, db, playerID, friendIDs...)
+	_, err := db.ExecContext(ctx,
+		"UPDATE friend_capacity SET created_ms=? WHERE player_id=?", createdMs, playerID)
+	require.NoError(t, err)
+}
+
+func capacityRowCount(t *testing.T, ctx context.Context, db *sql.DB, playerID uint64) int64 {
+	t.Helper()
+	return mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_capacity WHERE player_id=?", playerID)
+}
+
+func totalCapacityRows(t *testing.T, ctx context.Context, db *sql.DB) int64 {
+	t.Helper()
+	return mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_capacity")
+}
+
+// 容量行夹具的玩家 id(逐行点名用)。
+const (
+	capExpiredIdleA      uint64 = 45001 // 零好友 + 超期 1 天   → delete 该删
+	capExpiredIdleB      uint64 = 45002 // 零好友 + 超期 30 天  → delete 该删
+	capFreshIdle         uint64 = 45003 // 零好友 + 未超期      → 不该删(⑥)
+	capBoundaryIdle      uint64 = 45004 // 零好友 + created_ms 恰好等于截止点 → 不该删(判据是 <,不是 <=)
+	capExpiredBefriended uint64 = 45005 // 有好友 + 超期 30 天  → **任何模式都不该删**(⑤)
+)
+
+// capacitySweepFixture 造五行,覆盖"该删 / 不该删"的各个象限;可回收的恰好是两行。
+func capacitySweepFixture(t *testing.T, ctx context.Context, db *sql.DB, nowMs int64, retentionDays int) {
+	t.Helper()
+	cutoff := nowMs - int64(retentionDays)*testDayMs
+	seedIdleCapacityRow(t, ctx, db, capExpiredIdleA, cutoff-testDayMs)
+	seedIdleCapacityRow(t, ctx, db, capExpiredIdleB, cutoff-30*testDayMs)
+	seedIdleCapacityRow(t, ctx, db, capFreshIdle, nowMs-time.Hour.Milliseconds())
+	seedIdleCapacityRow(t, ctx, db, capBoundaryIdle, cutoff)
+	seedBefriendedCapacityRow(t, ctx, db, capExpiredBefriended, cutoff-30*testDayMs, 45101, 45102)
+}
+
+// TestSweepIdleCapacity_ReportOnlyCountsButNeverDeletes:默认模式只数不删(与 ② 同一道拦网)。
+func TestSweepIdleCapacity_ReportOnlyCountsButNeverDeletes(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	nowMs := time.Now().UnixMilli()
+	const retentionDays = 7
+	capacitySweepFixture(t, ctx, db, nowMs, retentionDays)
+	require.Equal(t, int64(5), totalCapacityRows(t, ctx, db))
+
+	idle, deleted, err := callSweepIdleCapacity(ctx, repo, testSweepModeReportOnly, retentionDays, 1000, nowMs)
+	require.NoError(t, err)
+	assert.Zero(t, deleted, "report_only 一行都不许删")
+	assert.Equal(t, int64(2), idle,
+		"可回收行数必须只数零好友且超期的那两行(数多了说明 friend_count 或 created_ms 的过滤有一处没写)")
+	assert.Equal(t, int64(5), totalCapacityRows(t, ctx, db), "report_only 之后表里仍是 5 行")
+
+	// 再跑一次:report_only 必须是纯读。
+	idleAgain, deletedAgain, err := callSweepIdleCapacity(ctx, repo, testSweepModeReportOnly, retentionDays, 1000, nowMs)
+	require.NoError(t, err)
+	assert.Zero(t, deletedAgain)
+	assert.Equal(t, idle, idleAgain)
+	assert.Equal(t, int64(5), totalCapacityRows(t, ctx, db))
+}
+
+// TestSweepIdleCapacity_DeleteOnlyRemovesIdleExpiredRows 钉 ⑤ 与 ⑥。
+func TestSweepIdleCapacity_DeleteOnlyRemovesIdleExpiredRows(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	nowMs := time.Now().UnixMilli()
+	const retentionDays = 7
+	capacitySweepFixture(t, ctx, db, nowMs, retentionDays)
+	// 旁边放一条**超期的终态申请行**:两个 Sweep 方法共用截止点与模式,最容易出的错是复制粘贴时
+	// 表名没换干净。容量行回收一行 friend_request 都不许碰。
+	seedRequestRow(t, ctx, db, 45201, 45202, testStatusRejected, nowMs-365*testDayMs)
+
+	idle, deleted, err := callSweepIdleCapacity(ctx, repo, testSweepModeDelete, retentionDays, 1000, nowMs)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), idle)
+	assert.Equal(t, int64(2), deleted, "只该删零好友且超期的那两行")
+
+	// 逐行点名,不只看总数:总数对而删错行是最难发现的一类错。
+	assert.Zero(t, capacityRowCount(t, ctx, db, capExpiredIdleA), "零好友 + 超期 应被回收")
+	assert.Zero(t, capacityRowCount(t, ctx, db, capExpiredIdleB), "零好友 + 超期 应被回收")
+	assert.Equal(t, int64(1), capacityRowCount(t, ctx, db, capFreshIdle),
+		"未超期的零好友行不许删:刚建出来的守卫行被立刻回收,写路径会反复撞上守卫缺行(⑥)")
+	assert.Equal(t, int64(1), capacityRowCount(t, ctx, db, capBoundaryIdle),
+		"created_ms 恰好等于截止点的行不许删:判据是 created_ms < 截止点,与 updated_ms 那一半同一个口径")
+	assert.Equal(t, int64(1), capacityRowCount(t, ctx, db, capExpiredBefriended),
+		"有好友的行无论多老都不许删:它是该玩家好友数的权威计数(⑤)")
+	assert.Equal(t, int64(2), mustCount(t, ctx, db,
+		"SELECT friend_count FROM friend_capacity WHERE player_id=?", capExpiredBefriended),
+		"没被删还不够,计数也不许被动过")
+	assert.Equal(t, int64(1), totalRequestRows(t, ctx, db), "容量行回收不得碰 friend_request")
+
+	// 幂等:再跑一次没有新的候选,删 0 行且不报错(多副本各跑各的 ticker,必然会重复执行)。
+	idleAgain, deletedAgain, err := callSweepIdleCapacity(ctx, repo, testSweepModeDelete, retentionDays, 1000, nowMs)
+	require.NoError(t, err)
+	assert.Zero(t, idleAgain)
+	assert.Zero(t, deletedAgain)
+
+	assertFriendInvariants(t, ctx, db)
+}
+
+// TestSweepIdleCapacity_DeleteRespectsBatchLimit:两个返回值都受 BatchLimit 封顶。
+//
+// 回收是逐行删的,所以这里的上限不只保护 MySQL,还直接决定单轮的语句条数 ——
+// 候选查询漏了 LIMIT 时,一次误配就是一轮几十万条 DELETE。
+func TestSweepIdleCapacity_DeleteRespectsBatchLimit(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	nowMs := time.Now().UnixMilli()
+	const retentionDays = 7
+	cutoff := nowMs - int64(retentionDays)*testDayMs
+	// 5 行可回收 + 5 行未超期。
+	for i := 0; i < 5; i++ {
+		seedIdleCapacityRow(t, ctx, db, uint64(45300+i), cutoff-testDayMs)
+		seedIdleCapacityRow(t, ctx, db, uint64(45400+i), nowMs)
+	}
+
+	idle, deleted, err := callSweepIdleCapacity(ctx, repo, testSweepModeDelete, retentionDays, 2, nowMs)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), idle, "看到的可回收行数在 BatchLimit 处饱和:等于上限只说明积压 ≥ 一批")
+	assert.Equal(t, int64(2), deleted, "单轮删除必须受 BatchLimit 限制(候选查询里要有 LIMIT)")
+	assert.Equal(t, int64(8), totalCapacityRows(t, ctx, db))
+
+	// report_only 同样封顶:它与 delete 共用候选查询,但单独钉一下,免得有人给它换成无界的 COUNT(*)。
+	idle, _, err = callSweepIdleCapacity(ctx, repo, testSweepModeReportOnly, retentionDays, 2, nowMs)
+	require.NoError(t, err)
+	assert.Equal(t, int64(2), idle, "report_only 的计数同样在 BatchLimit 处饱和(剩 3 行可回收,只报 2)")
+
+	// 剩下的在后续轮次里清掉:两轮之后 5 行候选清完,未超期的 5 行一行不动。
+	for i := 0; i < 2; i++ {
+		if _, _, err := callSweepIdleCapacity(ctx, repo, testSweepModeDelete, retentionDays, 2, nowMs); err != nil {
+			t.Fatalf("第 %d 轮容量行回收失败: %v", i+2, err)
+		}
+	}
+	assert.Equal(t, int64(5), totalCapacityRows(t, ctx, db), "多轮之后恰好剩下未超期的 5 行")
+	assert.Equal(t, int64(5), mustCount(t, ctx, db,
+		"SELECT COUNT(*) FROM friend_capacity WHERE player_id BETWEEN 45400 AND 45404"), "剩下的必须正是未超期的那 5 行")
+}
+
+// TestSweepIdleCapacity_RefusesNonPositiveCutoff:与 TestSweep_RefusesNonPositiveCutoff 同一道护栏
+// (两个方法共用 sweepCutoffMs),但必须各验一遍 —— 护栏共用是实现细节,谁把回收改回自己算截止点,
+// 只有这条会红。created_ms 同样是 bigint unsigned,负截止点同样会被解释成"匹配全表"。
+func TestSweepIdleCapacity_RefusesNonPositiveCutoff(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	const retentionDays = 7
+	// created_ms 都很小(含存量行的 0):护栏失守时它们会全部匹配上并被删掉。
+	seedIdleCapacityRow(t, ctx, db, 45501, 0)
+	seedIdleCapacityRow(t, ctx, db, 45502, 1)
+	seedIdleCapacityRow(t, ctx, db, 45503, 2)
+
+	// nowMs 只有 1000ms(进程时钟没设对的典型形态),远小于 7 天。
+	idle, deleted, err := callSweepIdleCapacity(ctx, repo, testSweepModeDelete, retentionDays, 1000, 1000)
+	require.NoError(t, err, "时钟没设对不是故障,本轮什么也不做即可")
+	assert.Zero(t, idle)
+	assert.Zero(t, deleted)
+	assert.Equal(t, int64(3), totalCapacityRows(t, ctx, db), "截止点非正时一行都不许删")
+}
+
+// TestSweepIdleCapacity_RejectsInvalidParameters:batchLimit <= 0 与越界的 retentionDays 必须 fail-fast。
+// batchLimit=0 在这里的后果比终态申请那一半更直接:`LIMIT 0` 会让回收静默地永远什么都不做,
+// 而"当成不限"则是一轮删光全部候选;两种都不许,只能报错。
+func TestSweepIdleCapacity_RejectsInvalidParameters(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	nowMs := time.Now().UnixMilli()
+	const retentionDays = 7
+	capacitySweepFixture(t, ctx, db, nowMs, retentionDays)
+	before := totalCapacityRows(t, ctx, db)
+
+	for _, batchLimit := range []int{0, -1} {
+		_, deleted, err := callSweepIdleCapacity(ctx, repo, testSweepModeDelete, retentionDays, batchLimit, nowMs)
+		require.Error(t, err, "batchLimit=%d 必须 fail-fast,不许当默认值", batchLimit)
+		assert.Zero(t, deleted)
+	}
+	// retentionDays=0 会把刚建的守卫行立刻判成可回收;超过 maxRetentionDays 的值是溢出护栏
+	// (乘上每天毫秒数会在 int64 上回绕成负数)。
+	for _, days := range []int{0, -1, maxRetentionDays + 1} {
+		_, deleted, err := callSweepIdleCapacity(ctx, repo, testSweepModeDelete, days, 1000, nowMs)
+		require.Error(t, err, "retentionDays=%d 必须 fail-fast", days)
+		assert.Zero(t, deleted)
+	}
+	assert.Equal(t, before, totalCapacityRows(t, ctx, db), "护栏触发时一行都不许被删")
+}
+
+// TestSweepIdleCapacity_UnknownModeDeletesNothing:未知模式只数不删(理由同 TestSweep_UnknownModeDeletesNothing)。
+func TestSweepIdleCapacity_UnknownModeDeletesNothing(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	nowMs := time.Now().UnixMilli()
+	const retentionDays = 7
+	capacitySweepFixture(t, ctx, db, nowMs, retentionDays)
+
+	for _, mode := range []string{"", "Delete", "DELETE", "report-only", "purge"} {
+		idle, deleted, err := callSweepIdleCapacity(ctx, repo, mode, retentionDays, 1000, nowMs)
+		require.NoError(t, err, "未知模式按 report_only 处理,不是故障(模式 %q)", mode)
+		assert.Zero(t, deleted, "未知模式 %q 不得删行:拼错模式必须退到只统计", mode)
+		assert.Equal(t, int64(2), idle, "未知模式 %q 仍要如实统计:否则拼错模式会同时把积压指标抹成 0", mode)
+	}
+	assert.Equal(t, int64(5), totalCapacityRows(t, ctx, db))
+}
+
+// TestSweepIdleCapacity_ReclaimsLegacyRowsWithZeroCreatedMs 钉 ⑦ —— 与 ④ 方向**相反**的那条。
+//
+// 见本节开头的说明:created_ms=0 是"从旧库搬来的存量行"的形态,零好友的存量行应当被回收。
+// 这条用例存在的意义是拦住一次好心的"对称化":照着 SweepTerminalRequests 给回收也加一道
+// "发现 0 就拒删",结果是存量空行永远删不掉,而且没有任何报错。
+func TestSweepIdleCapacity_ReclaimsLegacyRowsWithZeroCreatedMs(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	nowMs := time.Now().UnixMilli()
+	const retentionDays = 7
+	const legacyIdle, legacyBefriended, freshIdle uint64 = 45601, 45602, 45603
+	seedIdleCapacityRow(t, ctx, db, legacyIdle, 0)
+	// 对照一:同样是 created_ms=0,但有好友 → 不许删(⑤ 不因为"存量行"而放宽)。
+	seedBefriendedCapacityRow(t, ctx, db, legacyBefriended, 0, 45701)
+	// 对照二:混着 0 行的表里,正常的未超期行照样不删、正常流程照样进行 ——
+	// 回收没有 ④ 那种"发现 0 就整轮拒删"的行为。
+	seedIdleCapacityRow(t, ctx, db, freshIdle, nowMs)
+
+	idle, deleted, err := callSweepIdleCapacity(ctx, repo, testSweepModeDelete, retentionDays, 1000, nowMs)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), idle)
+	assert.Equal(t, int64(1), deleted, "created_ms=0 的零好友存量行必须被回收(与 updated_ms=0 的拒删相反)")
+	assert.Zero(t, capacityRowCount(t, ctx, db, legacyIdle))
+	assert.Equal(t, int64(1), capacityRowCount(t, ctx, db, legacyBefriended), "有好友的存量行不许删")
+	assert.Equal(t, int64(1), capacityRowCount(t, ctx, db, freshIdle))
+
+	// 删掉之后写路径照常能把它建回来,且新行带着真实的 created_ms —— "删行无害"的另一半。
+	require.NoError(t, repo.ensureFriendCapacityRows(ctx, legacyIdle))
+	assert.NotZero(t, readCapacityCreatedMs(t, ctx, db, legacyIdle))
+	assertFriendInvariants(t, ctx, db)
+}
+
+// TestDeleteIdleCapacityRow_RechecksAtCommitPoint 直调 deleteIdleCapacityRow,钉它 WHERE 里的提交点复核。
+//
+// 为什么上面那几条 TestSweepIdleCapacity_* 钉不住它:它们全部经由 SweepIdleCapacityRows 进来,候选名单来自
+// listIdleCapacityRowsBefore(`friend_count = 0 AND created_ms < ?`),有好友的行 / 未超期的行在名单里就被
+// 滤掉了 —— 单线程下交给 DELETE 的永远是本来就满足条件的行。把 DELETE 改成 `WHERE player_id = ?`,
+// capExpiredBefriended / capFreshIdle / capBoundaryIdle / legacyBefriended 的断言一条都不会红。
+// 复核要挡的是"候选读之后、DELETE 之前这行变了"(被 AcceptFriend 加了好友、或被删后由 ensure 重建);
+// 那个时序在并发场景 (f) 里只能碰运气撞上,这里绕开名单直接把"已经变了的行"递给 DELETE,确定性地验。
+func TestDeleteIdleCapacityRow_RechecksAtCommitPoint(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	nowMs := time.Now().UnixMilli()
+	cutoff := uint64(nowMs - 7*testDayMs)
+	const (
+		befriendedOld uint64 = 45801 // 名单读出之后被加了好友的老行
+		rebuiltFresh  uint64 = 45802 // 被别的回收者删掉、又由 ensure 重建出来的新行
+		boundaryIdle  uint64 = 45803 // created_ms 恰好等于截止点
+		expiredIdle   uint64 = 45804 // 正向对照:真的该删
+		friendA       uint64 = 45811
+		friendB       uint64 = 45812
+	)
+
+	// ① 有好友的老行不许删。
+	seedBefriendedCapacityRow(t, ctx, db, befriendedOld, 1, friendA, friendB)
+	removed, err := repo.deleteIdleCapacityRow(ctx, befriendedOld, cutoff)
+	require.NoError(t, err)
+	assert.Zero(t, removed, "DELETE 漏了 `friend_count = 0` 提交点复核:删掉了一行有好友的权威计数")
+	assert.Equal(t, int64(1), capacityRowCount(t, ctx, db, befriendedOld),
+		"DELETE 漏了 `friend_count = 0` 提交点复核:有好友的容量行不见了")
+	assert.Equal(t, int64(2), mustCount(t, ctx, db,
+		"SELECT friend_count FROM friend_capacity WHERE player_id=?", befriendedOld), "复核挡下的行必须原样不动")
+
+	// ② 重建的新行不许删。
+	seedIdleCapacityRow(t, ctx, db, rebuiltFresh, nowMs)
+	removed, err = repo.deleteIdleCapacityRow(ctx, rebuiltFresh, cutoff)
+	require.NoError(t, err)
+	assert.Zero(t, removed, "DELETE 漏了 `created_ms < ?` 提交点复核:删掉了刚由 ensure 重建的守卫行")
+	assert.Equal(t, int64(1), capacityRowCount(t, ctx, db, rebuiltFresh),
+		"DELETE 漏了 `created_ms < ?` 提交点复核:刚重建的守卫行不见了(写路径会因此反复撞上守卫缺行)")
+
+	// ②' 边界行不许删:DELETE 自己的判据也必须是 <,不是 <=。
+	// (capBoundaryIdle 那条断言同样只由名单的 WHERE 守着,管不到 DELETE 这一侧。)
+	seedIdleCapacityRow(t, ctx, db, boundaryIdle, int64(cutoff))
+	removed, err = repo.deleteIdleCapacityRow(ctx, boundaryIdle, cutoff)
+	require.NoError(t, err)
+	assert.Zero(t, removed, "DELETE 的 created_ms 判据必须是 <(与候选名单一致),恰好等于截止点的行不删")
+	assert.Equal(t, int64(1), capacityRowCount(t, ctx, db, boundaryIdle))
+
+	// ③ 正向对照:没有这一支,上面三条在"deleteIdleCapacityRow 恒不删"的坏实现下也照绿。
+	seedIdleCapacityRow(t, ctx, db, expiredIdle, int64(cutoff)-1)
+	removed, err = repo.deleteIdleCapacityRow(ctx, expiredIdle, cutoff)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), removed, "零好友且 created_ms 早于截止点的行必须被删掉")
+	assert.Zero(t, capacityRowCount(t, ctx, db, expiredIdle))
+
+	assertFriendInvariants(t, ctx, db)
 }

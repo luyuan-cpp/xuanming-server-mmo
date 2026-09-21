@@ -24,29 +24,39 @@ const (
 type GuildError int32
 
 const (
-	GuildError_kGuild_errorOK             GuildError = 0
-	GuildError_kGuildAlreadyInGuild       GuildError = 14000
-	GuildError_kGuildNotFound             GuildError = 14001
-	GuildError_kGuildNotInGuild           GuildError = 14002
-	GuildError_kGuildFull                 GuildError = 14003
-	GuildError_kGuildLeaderCantLeave      GuildError = 14004
-	GuildError_kGuildNotLeader            GuildError = 14005
-	GuildError_kGuildNoPermission         GuildError = 14006
-	GuildError_kGuildNotRanked            GuildError = 14007
-	GuildError_kGuildIdGenUnavailable     GuildError = 14008
-	GuildError_kGuildNameInvalid          GuildError = 14009
-	GuildError_kGuildNameTaken            GuildError = 14010
-	GuildError_kGuildAnnouncementTooLong  GuildError = 14011
-	GuildError_kGuildHomeZoneUnknown      GuildError = 14012
-	GuildError_kGuildZoneMerging          GuildError = 14013
-	GuildError_kGuildTargetNotMember      GuildError = 14014
-	GuildError_kGuildCannotTargetSelf     GuildError = 14015
-	GuildError_kGuildRankTooLow           GuildError = 14016
-	GuildError_kGuildOfficerLimit         GuildError = 14017
-	GuildError_kGuildApplicationNotFound  GuildError = 14018
-	GuildError_kGuildApplicationLimit     GuildError = 14019
-	GuildError_kGuildApplicationQueueFull GuildError = 14020
-	GuildError_kGuildBusyRetry            GuildError = 14021
+	GuildError_kGuild_errorOK                 GuildError = 0
+	GuildError_kGuildAlreadyInGuild           GuildError = 14000
+	GuildError_kGuildNotFound                 GuildError = 14001
+	GuildError_kGuildNotInGuild               GuildError = 14002
+	GuildError_kGuildFull                     GuildError = 14003
+	GuildError_kGuildLeaderCantLeave          GuildError = 14004
+	GuildError_kGuildNotLeader                GuildError = 14005
+	GuildError_kGuildNoPermission             GuildError = 14006
+	GuildError_kGuildNotRanked                GuildError = 14007
+	GuildError_kGuildIdGenUnavailable         GuildError = 14008
+	GuildError_kGuildNameInvalid              GuildError = 14009
+	GuildError_kGuildNameTaken                GuildError = 14010
+	GuildError_kGuildAnnouncementTooLong      GuildError = 14011
+	GuildError_kGuildHomeZoneUnknown          GuildError = 14012
+	GuildError_kGuildZoneMerging              GuildError = 14013
+	GuildError_kGuildTargetNotMember          GuildError = 14014
+	GuildError_kGuildCannotTargetSelf         GuildError = 14015
+	GuildError_kGuildRankTooLow               GuildError = 14016
+	GuildError_kGuildOfficerLimit             GuildError = 14017
+	GuildError_kGuildApplicationNotFound      GuildError = 14018
+	GuildError_kGuildApplicationLimit         GuildError = 14019
+	GuildError_kGuildApplicationQueueFull     GuildError = 14020
+	GuildError_kGuildBusyRetry                GuildError = 14021
+	GuildError_kGuildFundsInsufficient        GuildError = 14022
+	GuildError_kGuildMaxLevel                 GuildError = 14023
+	GuildError_kGuildDonateLimit              GuildError = 14024
+	GuildError_kGuildCurrencyInsufficient     GuildError = 14025
+	GuildError_kGuildAssetPending             GuildError = 14026
+	GuildError_kGuildAssetRejected            GuildError = 14027
+	GuildError_kGuildShopGoodsNotFound        GuildError = 14028
+	GuildError_kGuildShopLevelTooLow          GuildError = 14029
+	GuildError_kGuildShopLimit                GuildError = 14030
+	GuildError_kGuildContributionInsufficient GuildError = 14031
 )
 
 // Enum value maps for GuildError.
@@ -75,31 +85,51 @@ var (
 		14019: "kGuildApplicationLimit",
 		14020: "kGuildApplicationQueueFull",
 		14021: "kGuildBusyRetry",
+		14022: "kGuildFundsInsufficient",
+		14023: "kGuildMaxLevel",
+		14024: "kGuildDonateLimit",
+		14025: "kGuildCurrencyInsufficient",
+		14026: "kGuildAssetPending",
+		14027: "kGuildAssetRejected",
+		14028: "kGuildShopGoodsNotFound",
+		14029: "kGuildShopLevelTooLow",
+		14030: "kGuildShopLimit",
+		14031: "kGuildContributionInsufficient",
 	}
 	GuildError_value = map[string]int32{
-		"kGuild_errorOK":             0,
-		"kGuildAlreadyInGuild":       14000,
-		"kGuildNotFound":             14001,
-		"kGuildNotInGuild":           14002,
-		"kGuildFull":                 14003,
-		"kGuildLeaderCantLeave":      14004,
-		"kGuildNotLeader":            14005,
-		"kGuildNoPermission":         14006,
-		"kGuildNotRanked":            14007,
-		"kGuildIdGenUnavailable":     14008,
-		"kGuildNameInvalid":          14009,
-		"kGuildNameTaken":            14010,
-		"kGuildAnnouncementTooLong":  14011,
-		"kGuildHomeZoneUnknown":      14012,
-		"kGuildZoneMerging":          14013,
-		"kGuildTargetNotMember":      14014,
-		"kGuildCannotTargetSelf":     14015,
-		"kGuildRankTooLow":           14016,
-		"kGuildOfficerLimit":         14017,
-		"kGuildApplicationNotFound":  14018,
-		"kGuildApplicationLimit":     14019,
-		"kGuildApplicationQueueFull": 14020,
-		"kGuildBusyRetry":            14021,
+		"kGuild_errorOK":                 0,
+		"kGuildAlreadyInGuild":           14000,
+		"kGuildNotFound":                 14001,
+		"kGuildNotInGuild":               14002,
+		"kGuildFull":                     14003,
+		"kGuildLeaderCantLeave":          14004,
+		"kGuildNotLeader":                14005,
+		"kGuildNoPermission":             14006,
+		"kGuildNotRanked":                14007,
+		"kGuildIdGenUnavailable":         14008,
+		"kGuildNameInvalid":              14009,
+		"kGuildNameTaken":                14010,
+		"kGuildAnnouncementTooLong":      14011,
+		"kGuildHomeZoneUnknown":          14012,
+		"kGuildZoneMerging":              14013,
+		"kGuildTargetNotMember":          14014,
+		"kGuildCannotTargetSelf":         14015,
+		"kGuildRankTooLow":               14016,
+		"kGuildOfficerLimit":             14017,
+		"kGuildApplicationNotFound":      14018,
+		"kGuildApplicationLimit":         14019,
+		"kGuildApplicationQueueFull":     14020,
+		"kGuildBusyRetry":                14021,
+		"kGuildFundsInsufficient":        14022,
+		"kGuildMaxLevel":                 14023,
+		"kGuildDonateLimit":              14024,
+		"kGuildCurrencyInsufficient":     14025,
+		"kGuildAssetPending":             14026,
+		"kGuildAssetRejected":            14027,
+		"kGuildShopGoodsNotFound":        14028,
+		"kGuildShopLevelTooLow":          14029,
+		"kGuildShopLimit":                14030,
+		"kGuildContributionInsufficient": 14031,
 	}
 )
 
@@ -134,7 +164,7 @@ var File_guild_error_tip_proto protoreflect.FileDescriptor
 
 const file_guild_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15guild_error_tip.proto*\xd6\x04\n" +
+	"\x15guild_error_tip.proto*\xea\x06\n" +
 	"\vguild_error\x12\x12\n" +
 	"\x0ekGuild_errorOK\x10\x00\x12\x19\n" +
 	"\x14kGuildAlreadyInGuild\x10\xb0m\x12\x13\n" +
@@ -159,7 +189,17 @@ const file_guild_error_tip_proto_rawDesc = "" +
 	"\x19kGuildApplicationNotFound\x10\xc2m\x12\x1b\n" +
 	"\x16kGuildApplicationLimit\x10\xc3m\x12\x1f\n" +
 	"\x1akGuildApplicationQueueFull\x10\xc4m\x12\x14\n" +
-	"\x0fkGuildBusyRetry\x10\xc5mB$\n" +
+	"\x0fkGuildBusyRetry\x10\xc5m\x12\x1c\n" +
+	"\x17kGuildFundsInsufficient\x10\xc6m\x12\x13\n" +
+	"\x0ekGuildMaxLevel\x10\xc7m\x12\x16\n" +
+	"\x11kGuildDonateLimit\x10\xc8m\x12\x1f\n" +
+	"\x1akGuildCurrencyInsufficient\x10\xc9m\x12\x17\n" +
+	"\x12kGuildAssetPending\x10\xcam\x12\x18\n" +
+	"\x13kGuildAssetRejected\x10\xcbm\x12\x1c\n" +
+	"\x17kGuildShopGoodsNotFound\x10\xccm\x12\x1a\n" +
+	"\x15kGuildShopLevelTooLow\x10\xcdm\x12\x14\n" +
+	"\x0fkGuildShopLimit\x10\xcem\x12#\n" +
+	"\x1ekGuildContributionInsufficient\x10\xcfmB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

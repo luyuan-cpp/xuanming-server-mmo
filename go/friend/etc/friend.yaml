@@ -32,7 +32,8 @@ LeaseTTL: 60
 # 置空关闭。必须是顶层单行:-Zone 的端口位移正则只认这个形状
 #   (原来的嵌套 `Prometheus: {Host, Port, Path}` 段不被位移,双 zone / 多副本会撞端口,已删)。
 # 指标:friend_push_total{reason,outcome} / friend_rate_quota_total{outcome} /
-#   friend_online_lookup_total{outcome} / friend_sweep_pending_rows{mode},
+#   friend_online_lookup_total{outcome} / friend_sweep_pending_rows{mode} /
+#   friend_sweep_idle_capacity_rows{mode},
 #   以及 shared/serverbase 的 rpc_inband_*、shared/killswitch 的 killswitch_blocked_total、
 #   shared/safego 的 safego_panic_total{point}(压测期应恒 0)。
 MetricsListenAddr: ":9180"
@@ -146,6 +147,10 @@ Friend:
   # friend_request 表过期行的后台清理(F2 批实现循环,本批只定配置契约)。
   # ⚠ 四个键必须全写:Sweep 段在 config 里标了 optional,而 go-zero **不下钻整段缺失的
   #   optional 嵌套结构**,default 标签不会回填 —— 漏写整段会让 Mode 变空串并被 Validate 拒。
+  # 同一份参数也用于 friend_capacity 零好友行的回收(对任意 target 发申请都会建一行容量行,
+  # 不回收就单调增长,见 internal/logic/sweep.go 文件头):Mode 决定删不删
+  # (指标 friend_sweep_idle_capacity_rows{mode}),RetentionDays 是建行后至少保留多久,
+  # BatchLimit 是单轮回收行数上限。刻意不新增配置键 —— 两段是同一个"先观察再真删"的开关。
   Sweep:
     # report_only 只出指标 friend_sweep_pending_rows{mode} 不删数据;delete 真删。
     # 新环境先跑观察模式确认"待清理行数"符合预期,再改 delete —— 清的是权威数据。

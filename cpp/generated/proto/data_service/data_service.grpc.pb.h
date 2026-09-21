@@ -182,6 +182,32 @@ class DataService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::data_service::AllocateIdSegmentResponse>> PrepareAsyncAllocateIdSegment(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::data_service::AllocateIdSegmentResponse>>(PrepareAsyncAllocateIdSegmentRaw(context, request, cq));
     }
+    // ── Player name registry(角色名全服唯一)──────────────────────
+    // 真源是全局库 player_name 表(rollback_database_table.proto);zone 库
+    // player_database.profile_component 与 AccountSimplePlayer.name 都只是副本。
+    // 唯一性只有"全服一张表"才成立,所以登记必须过 data_service,不能各 zone 自己判重。
+    // 设计见 docs/design/guild-phase2/03-names.md §3.1。
+    virtual ::grpc::Status ReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::data_service::ReservePlayerNameResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::data_service::ReservePlayerNameResponse>> AsyncReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::data_service::ReservePlayerNameResponse>>(AsyncReservePlayerNameRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::data_service::ReservePlayerNameResponse>> PrepareAsyncReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::data_service::ReservePlayerNameResponse>>(PrepareAsyncReservePlayerNameRaw(context, request, cq));
+    }
+    virtual ::grpc::Status ReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::google::protobuf::Empty* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::Empty>> AsyncReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::Empty>>(AsyncReleasePlayerNameRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::Empty>> PrepareAsyncReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::Empty>>(PrepareAsyncReleasePlayerNameRaw(context, request, cq));
+    }
+    virtual ::grpc::Status BatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::data_service::BatchGetPlayerNameResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::data_service::BatchGetPlayerNameResponse>> AsyncBatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::data_service::BatchGetPlayerNameResponse>>(AsyncBatchGetPlayerNameRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::data_service::BatchGetPlayerNameResponse>> PrepareAsyncBatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::data_service::BatchGetPlayerNameResponse>>(PrepareAsyncBatchGetPlayerNameRaw(context, request, cq));
+    }
     class async_interface {
      public:
       virtual ~async_interface() {}
@@ -233,6 +259,17 @@ class DataService final {
       // 见 docs/design/node-id-overhaul-plan-20260908.md §6。
       virtual void AllocateIdSegment(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest* request, ::data_service::AllocateIdSegmentResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void AllocateIdSegment(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest* request, ::data_service::AllocateIdSegmentResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // ── Player name registry(角色名全服唯一)──────────────────────
+      // 真源是全局库 player_name 表(rollback_database_table.proto);zone 库
+      // player_database.profile_component 与 AccountSimplePlayer.name 都只是副本。
+      // 唯一性只有"全服一张表"才成立,所以登记必须过 data_service,不能各 zone 自己判重。
+      // 设计见 docs/design/guild-phase2/03-names.md §3.1。
+      virtual void ReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest* request, ::data_service::ReservePlayerNameResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void ReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest* request, ::data_service::ReservePlayerNameResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void ReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void ReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void BatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest* request, ::data_service::BatchGetPlayerNameResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void BatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest* request, ::data_service::BatchGetPlayerNameResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -276,6 +313,12 @@ class DataService final {
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::data_service::CreateEventSnapshotResponse>* PrepareAsyncCreateEventSnapshotRaw(::grpc::ClientContext* context, const ::data_service::CreateEventSnapshotRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::data_service::AllocateIdSegmentResponse>* AsyncAllocateIdSegmentRaw(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::data_service::AllocateIdSegmentResponse>* PrepareAsyncAllocateIdSegmentRaw(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::data_service::ReservePlayerNameResponse>* AsyncReservePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::data_service::ReservePlayerNameResponse>* PrepareAsyncReservePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::Empty>* AsyncReleasePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::Empty>* PrepareAsyncReleasePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::data_service::BatchGetPlayerNameResponse>* AsyncBatchGetPlayerNameRaw(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::data_service::BatchGetPlayerNameResponse>* PrepareAsyncBatchGetPlayerNameRaw(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -413,6 +456,27 @@ class DataService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::data_service::AllocateIdSegmentResponse>> PrepareAsyncAllocateIdSegment(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::data_service::AllocateIdSegmentResponse>>(PrepareAsyncAllocateIdSegmentRaw(context, request, cq));
     }
+    ::grpc::Status ReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::data_service::ReservePlayerNameResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::data_service::ReservePlayerNameResponse>> AsyncReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::data_service::ReservePlayerNameResponse>>(AsyncReservePlayerNameRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::data_service::ReservePlayerNameResponse>> PrepareAsyncReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::data_service::ReservePlayerNameResponse>>(PrepareAsyncReservePlayerNameRaw(context, request, cq));
+    }
+    ::grpc::Status ReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::google::protobuf::Empty* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::Empty>> AsyncReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::Empty>>(AsyncReleasePlayerNameRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::Empty>> PrepareAsyncReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::Empty>>(PrepareAsyncReleasePlayerNameRaw(context, request, cq));
+    }
+    ::grpc::Status BatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::data_service::BatchGetPlayerNameResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::data_service::BatchGetPlayerNameResponse>> AsyncBatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::data_service::BatchGetPlayerNameResponse>>(AsyncBatchGetPlayerNameRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::data_service::BatchGetPlayerNameResponse>> PrepareAsyncBatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::data_service::BatchGetPlayerNameResponse>>(PrepareAsyncBatchGetPlayerNameRaw(context, request, cq));
+    }
     class async final :
       public StubInterface::async_interface {
      public:
@@ -454,6 +518,12 @@ class DataService final {
       void CreateEventSnapshot(::grpc::ClientContext* context, const ::data_service::CreateEventSnapshotRequest* request, ::data_service::CreateEventSnapshotResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void AllocateIdSegment(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest* request, ::data_service::AllocateIdSegmentResponse* response, std::function<void(::grpc::Status)>) override;
       void AllocateIdSegment(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest* request, ::data_service::AllocateIdSegmentResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void ReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest* request, ::data_service::ReservePlayerNameResponse* response, std::function<void(::grpc::Status)>) override;
+      void ReservePlayerName(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest* request, ::data_service::ReservePlayerNameResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void ReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) override;
+      void ReleasePlayerName(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void BatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest* request, ::data_service::BatchGetPlayerNameResponse* response, std::function<void(::grpc::Status)>) override;
+      void BatchGetPlayerName(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest* request, ::data_service::BatchGetPlayerNameResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -503,6 +573,12 @@ class DataService final {
     ::grpc::ClientAsyncResponseReader< ::data_service::CreateEventSnapshotResponse>* PrepareAsyncCreateEventSnapshotRaw(::grpc::ClientContext* context, const ::data_service::CreateEventSnapshotRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::data_service::AllocateIdSegmentResponse>* AsyncAllocateIdSegmentRaw(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::data_service::AllocateIdSegmentResponse>* PrepareAsyncAllocateIdSegmentRaw(::grpc::ClientContext* context, const ::data_service::AllocateIdSegmentRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::data_service::ReservePlayerNameResponse>* AsyncReservePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::data_service::ReservePlayerNameResponse>* PrepareAsyncReservePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReservePlayerNameRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::google::protobuf::Empty>* AsyncReleasePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::google::protobuf::Empty>* PrepareAsyncReleasePlayerNameRaw(::grpc::ClientContext* context, const ::data_service::ReleasePlayerNameRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::data_service::BatchGetPlayerNameResponse>* AsyncBatchGetPlayerNameRaw(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::data_service::BatchGetPlayerNameResponse>* PrepareAsyncBatchGetPlayerNameRaw(::grpc::ClientContext* context, const ::data_service::BatchGetPlayerNameRequest& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_LoadPlayerData_;
     const ::grpc::internal::RpcMethod rpcmethod_SavePlayerData_;
     const ::grpc::internal::RpcMethod rpcmethod_GetPlayerField_;
@@ -522,6 +598,9 @@ class DataService final {
     const ::grpc::internal::RpcMethod rpcmethod_QueryTransactionLog_;
     const ::grpc::internal::RpcMethod rpcmethod_CreateEventSnapshot_;
     const ::grpc::internal::RpcMethod rpcmethod_AllocateIdSegment_;
+    const ::grpc::internal::RpcMethod rpcmethod_ReservePlayerName_;
+    const ::grpc::internal::RpcMethod rpcmethod_ReleasePlayerName_;
+    const ::grpc::internal::RpcMethod rpcmethod_BatchGetPlayerName_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -558,6 +637,14 @@ class DataService final {
     // C++ scene 没有 MySQL 客户端,永久 ID(item guid 等)的号段经这里从 id_segment 表领取。
     // 见 docs/design/node-id-overhaul-plan-20260908.md §6。
     virtual ::grpc::Status AllocateIdSegment(::grpc::ServerContext* context, const ::data_service::AllocateIdSegmentRequest* request, ::data_service::AllocateIdSegmentResponse* response);
+    // ── Player name registry(角色名全服唯一)──────────────────────
+    // 真源是全局库 player_name 表(rollback_database_table.proto);zone 库
+    // player_database.profile_component 与 AccountSimplePlayer.name 都只是副本。
+    // 唯一性只有"全服一张表"才成立,所以登记必须过 data_service,不能各 zone 自己判重。
+    // 设计见 docs/design/guild-phase2/03-names.md §3.1。
+    virtual ::grpc::Status ReservePlayerName(::grpc::ServerContext* context, const ::data_service::ReservePlayerNameRequest* request, ::data_service::ReservePlayerNameResponse* response);
+    virtual ::grpc::Status ReleasePlayerName(::grpc::ServerContext* context, const ::data_service::ReleasePlayerNameRequest* request, ::google::protobuf::Empty* response);
+    virtual ::grpc::Status BatchGetPlayerName(::grpc::ServerContext* context, const ::data_service::BatchGetPlayerNameRequest* request, ::data_service::BatchGetPlayerNameResponse* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_LoadPlayerData : public BaseClass {
@@ -939,7 +1026,67 @@ class DataService final {
       ::grpc::Service::RequestAsyncUnary(18, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_LoadPlayerData<WithAsyncMethod_SavePlayerData<WithAsyncMethod_GetPlayerField<WithAsyncMethod_SetPlayerField<WithAsyncMethod_RegisterPlayerZone<WithAsyncMethod_GetPlayerHomeZone<WithAsyncMethod_BatchGetPlayerHomeZone<WithAsyncMethod_RemapHomeZoneForMerge<WithAsyncMethod_DeletePlayerData<WithAsyncMethod_CreatePlayerSnapshot<WithAsyncMethod_ListPlayerSnapshots<WithAsyncMethod_GetPlayerSnapshotDiff<WithAsyncMethod_RollbackPlayer<WithAsyncMethod_RollbackZone<WithAsyncMethod_RollbackAll<WithAsyncMethod_BatchRecallItems<WithAsyncMethod_QueryTransactionLog<WithAsyncMethod_CreateEventSnapshot<WithAsyncMethod_AllocateIdSegment<Service > > > > > > > > > > > > > > > > > > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_ReservePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_ReservePlayerName() {
+      ::grpc::Service::MarkMethodAsync(19);
+    }
+    ~WithAsyncMethod_ReservePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReservePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReservePlayerNameRequest* /*request*/, ::data_service::ReservePlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestReservePlayerName(::grpc::ServerContext* context, ::data_service::ReservePlayerNameRequest* request, ::grpc::ServerAsyncResponseWriter< ::data_service::ReservePlayerNameResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(19, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_ReleasePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_ReleasePlayerName() {
+      ::grpc::Service::MarkMethodAsync(20);
+    }
+    ~WithAsyncMethod_ReleasePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReleasePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReleasePlayerNameRequest* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestReleasePlayerName(::grpc::ServerContext* context, ::data_service::ReleasePlayerNameRequest* request, ::grpc::ServerAsyncResponseWriter< ::google::protobuf::Empty>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(20, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_BatchGetPlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_BatchGetPlayerName() {
+      ::grpc::Service::MarkMethodAsync(21);
+    }
+    ~WithAsyncMethod_BatchGetPlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status BatchGetPlayerName(::grpc::ServerContext* /*context*/, const ::data_service::BatchGetPlayerNameRequest* /*request*/, ::data_service::BatchGetPlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestBatchGetPlayerName(::grpc::ServerContext* context, ::data_service::BatchGetPlayerNameRequest* request, ::grpc::ServerAsyncResponseWriter< ::data_service::BatchGetPlayerNameResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(21, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_LoadPlayerData<WithAsyncMethod_SavePlayerData<WithAsyncMethod_GetPlayerField<WithAsyncMethod_SetPlayerField<WithAsyncMethod_RegisterPlayerZone<WithAsyncMethod_GetPlayerHomeZone<WithAsyncMethod_BatchGetPlayerHomeZone<WithAsyncMethod_RemapHomeZoneForMerge<WithAsyncMethod_DeletePlayerData<WithAsyncMethod_CreatePlayerSnapshot<WithAsyncMethod_ListPlayerSnapshots<WithAsyncMethod_GetPlayerSnapshotDiff<WithAsyncMethod_RollbackPlayer<WithAsyncMethod_RollbackZone<WithAsyncMethod_RollbackAll<WithAsyncMethod_BatchRecallItems<WithAsyncMethod_QueryTransactionLog<WithAsyncMethod_CreateEventSnapshot<WithAsyncMethod_AllocateIdSegment<WithAsyncMethod_ReservePlayerName<WithAsyncMethod_ReleasePlayerName<WithAsyncMethod_BatchGetPlayerName<Service > > > > > > > > > > > > > > > > > > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_LoadPlayerData : public BaseClass {
    private:
@@ -1453,7 +1600,88 @@ class DataService final {
     virtual ::grpc::ServerUnaryReactor* AllocateIdSegment(
       ::grpc::CallbackServerContext* /*context*/, const ::data_service::AllocateIdSegmentRequest* /*request*/, ::data_service::AllocateIdSegmentResponse* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_LoadPlayerData<WithCallbackMethod_SavePlayerData<WithCallbackMethod_GetPlayerField<WithCallbackMethod_SetPlayerField<WithCallbackMethod_RegisterPlayerZone<WithCallbackMethod_GetPlayerHomeZone<WithCallbackMethod_BatchGetPlayerHomeZone<WithCallbackMethod_RemapHomeZoneForMerge<WithCallbackMethod_DeletePlayerData<WithCallbackMethod_CreatePlayerSnapshot<WithCallbackMethod_ListPlayerSnapshots<WithCallbackMethod_GetPlayerSnapshotDiff<WithCallbackMethod_RollbackPlayer<WithCallbackMethod_RollbackZone<WithCallbackMethod_RollbackAll<WithCallbackMethod_BatchRecallItems<WithCallbackMethod_QueryTransactionLog<WithCallbackMethod_CreateEventSnapshot<WithCallbackMethod_AllocateIdSegment<Service > > > > > > > > > > > > > > > > > > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_ReservePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_ReservePlayerName() {
+      ::grpc::Service::MarkMethodCallback(19,
+          new ::grpc::internal::CallbackUnaryHandler< ::data_service::ReservePlayerNameRequest, ::data_service::ReservePlayerNameResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::data_service::ReservePlayerNameRequest* request, ::data_service::ReservePlayerNameResponse* response) { return this->ReservePlayerName(context, request, response); }));}
+    void SetMessageAllocatorFor_ReservePlayerName(
+        ::grpc::MessageAllocator< ::data_service::ReservePlayerNameRequest, ::data_service::ReservePlayerNameResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(19);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::data_service::ReservePlayerNameRequest, ::data_service::ReservePlayerNameResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_ReservePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReservePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReservePlayerNameRequest* /*request*/, ::data_service::ReservePlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ReservePlayerName(
+      ::grpc::CallbackServerContext* /*context*/, const ::data_service::ReservePlayerNameRequest* /*request*/, ::data_service::ReservePlayerNameResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_ReleasePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_ReleasePlayerName() {
+      ::grpc::Service::MarkMethodCallback(20,
+          new ::grpc::internal::CallbackUnaryHandler< ::data_service::ReleasePlayerNameRequest, ::google::protobuf::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::data_service::ReleasePlayerNameRequest* request, ::google::protobuf::Empty* response) { return this->ReleasePlayerName(context, request, response); }));}
+    void SetMessageAllocatorFor_ReleasePlayerName(
+        ::grpc::MessageAllocator< ::data_service::ReleasePlayerNameRequest, ::google::protobuf::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(20);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::data_service::ReleasePlayerNameRequest, ::google::protobuf::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_ReleasePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReleasePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReleasePlayerNameRequest* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ReleasePlayerName(
+      ::grpc::CallbackServerContext* /*context*/, const ::data_service::ReleasePlayerNameRequest* /*request*/, ::google::protobuf::Empty* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_BatchGetPlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_BatchGetPlayerName() {
+      ::grpc::Service::MarkMethodCallback(21,
+          new ::grpc::internal::CallbackUnaryHandler< ::data_service::BatchGetPlayerNameRequest, ::data_service::BatchGetPlayerNameResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::data_service::BatchGetPlayerNameRequest* request, ::data_service::BatchGetPlayerNameResponse* response) { return this->BatchGetPlayerName(context, request, response); }));}
+    void SetMessageAllocatorFor_BatchGetPlayerName(
+        ::grpc::MessageAllocator< ::data_service::BatchGetPlayerNameRequest, ::data_service::BatchGetPlayerNameResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(21);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::data_service::BatchGetPlayerNameRequest, ::data_service::BatchGetPlayerNameResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_BatchGetPlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status BatchGetPlayerName(::grpc::ServerContext* /*context*/, const ::data_service::BatchGetPlayerNameRequest* /*request*/, ::data_service::BatchGetPlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* BatchGetPlayerName(
+      ::grpc::CallbackServerContext* /*context*/, const ::data_service::BatchGetPlayerNameRequest* /*request*/, ::data_service::BatchGetPlayerNameResponse* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_LoadPlayerData<WithCallbackMethod_SavePlayerData<WithCallbackMethod_GetPlayerField<WithCallbackMethod_SetPlayerField<WithCallbackMethod_RegisterPlayerZone<WithCallbackMethod_GetPlayerHomeZone<WithCallbackMethod_BatchGetPlayerHomeZone<WithCallbackMethod_RemapHomeZoneForMerge<WithCallbackMethod_DeletePlayerData<WithCallbackMethod_CreatePlayerSnapshot<WithCallbackMethod_ListPlayerSnapshots<WithCallbackMethod_GetPlayerSnapshotDiff<WithCallbackMethod_RollbackPlayer<WithCallbackMethod_RollbackZone<WithCallbackMethod_RollbackAll<WithCallbackMethod_BatchRecallItems<WithCallbackMethod_QueryTransactionLog<WithCallbackMethod_CreateEventSnapshot<WithCallbackMethod_AllocateIdSegment<WithCallbackMethod_ReservePlayerName<WithCallbackMethod_ReleasePlayerName<WithCallbackMethod_BatchGetPlayerName<Service > > > > > > > > > > > > > > > > > > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_LoadPlayerData : public BaseClass {
@@ -1774,6 +2002,57 @@ class DataService final {
     }
     // disable synchronous version of this method
     ::grpc::Status AllocateIdSegment(::grpc::ServerContext* /*context*/, const ::data_service::AllocateIdSegmentRequest* /*request*/, ::data_service::AllocateIdSegmentResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_ReservePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_ReservePlayerName() {
+      ::grpc::Service::MarkMethodGeneric(19);
+    }
+    ~WithGenericMethod_ReservePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReservePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReservePlayerNameRequest* /*request*/, ::data_service::ReservePlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_ReleasePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_ReleasePlayerName() {
+      ::grpc::Service::MarkMethodGeneric(20);
+    }
+    ~WithGenericMethod_ReleasePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReleasePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReleasePlayerNameRequest* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_BatchGetPlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_BatchGetPlayerName() {
+      ::grpc::Service::MarkMethodGeneric(21);
+    }
+    ~WithGenericMethod_BatchGetPlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status BatchGetPlayerName(::grpc::ServerContext* /*context*/, const ::data_service::BatchGetPlayerNameRequest* /*request*/, ::data_service::BatchGetPlayerNameResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -2156,6 +2435,66 @@ class DataService final {
     }
     void RequestAllocateIdSegment(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(18, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_ReservePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_ReservePlayerName() {
+      ::grpc::Service::MarkMethodRaw(19);
+    }
+    ~WithRawMethod_ReservePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReservePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReservePlayerNameRequest* /*request*/, ::data_service::ReservePlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestReservePlayerName(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(19, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_ReleasePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_ReleasePlayerName() {
+      ::grpc::Service::MarkMethodRaw(20);
+    }
+    ~WithRawMethod_ReleasePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReleasePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReleasePlayerNameRequest* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestReleasePlayerName(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(20, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_BatchGetPlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_BatchGetPlayerName() {
+      ::grpc::Service::MarkMethodRaw(21);
+    }
+    ~WithRawMethod_BatchGetPlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status BatchGetPlayerName(::grpc::ServerContext* /*context*/, const ::data_service::BatchGetPlayerNameRequest* /*request*/, ::data_service::BatchGetPlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestBatchGetPlayerName(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(21, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -2574,6 +2913,72 @@ class DataService final {
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     virtual ::grpc::ServerUnaryReactor* AllocateIdSegment(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_ReservePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_ReservePlayerName() {
+      ::grpc::Service::MarkMethodRawCallback(19,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->ReservePlayerName(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_ReservePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReservePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReservePlayerNameRequest* /*request*/, ::data_service::ReservePlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ReservePlayerName(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_ReleasePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_ReleasePlayerName() {
+      ::grpc::Service::MarkMethodRawCallback(20,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->ReleasePlayerName(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_ReleasePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ReleasePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReleasePlayerNameRequest* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ReleasePlayerName(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_BatchGetPlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_BatchGetPlayerName() {
+      ::grpc::Service::MarkMethodRawCallback(21,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->BatchGetPlayerName(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_BatchGetPlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status BatchGetPlayerName(::grpc::ServerContext* /*context*/, const ::data_service::BatchGetPlayerNameRequest* /*request*/, ::data_service::BatchGetPlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* BatchGetPlayerName(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -3089,9 +3494,90 @@ class DataService final {
     // replace default version of method with streamed unary
     virtual ::grpc::Status StreamedAllocateIdSegment(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::data_service::AllocateIdSegmentRequest,::data_service::AllocateIdSegmentResponse>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_LoadPlayerData<WithStreamedUnaryMethod_SavePlayerData<WithStreamedUnaryMethod_GetPlayerField<WithStreamedUnaryMethod_SetPlayerField<WithStreamedUnaryMethod_RegisterPlayerZone<WithStreamedUnaryMethod_GetPlayerHomeZone<WithStreamedUnaryMethod_BatchGetPlayerHomeZone<WithStreamedUnaryMethod_RemapHomeZoneForMerge<WithStreamedUnaryMethod_DeletePlayerData<WithStreamedUnaryMethod_CreatePlayerSnapshot<WithStreamedUnaryMethod_ListPlayerSnapshots<WithStreamedUnaryMethod_GetPlayerSnapshotDiff<WithStreamedUnaryMethod_RollbackPlayer<WithStreamedUnaryMethod_RollbackZone<WithStreamedUnaryMethod_RollbackAll<WithStreamedUnaryMethod_BatchRecallItems<WithStreamedUnaryMethod_QueryTransactionLog<WithStreamedUnaryMethod_CreateEventSnapshot<WithStreamedUnaryMethod_AllocateIdSegment<Service > > > > > > > > > > > > > > > > > > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_ReservePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_ReservePlayerName() {
+      ::grpc::Service::MarkMethodStreamed(19,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::data_service::ReservePlayerNameRequest, ::data_service::ReservePlayerNameResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::data_service::ReservePlayerNameRequest, ::data_service::ReservePlayerNameResponse>* streamer) {
+                       return this->StreamedReservePlayerName(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_ReservePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status ReservePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReservePlayerNameRequest* /*request*/, ::data_service::ReservePlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedReservePlayerName(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::data_service::ReservePlayerNameRequest,::data_service::ReservePlayerNameResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_ReleasePlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_ReleasePlayerName() {
+      ::grpc::Service::MarkMethodStreamed(20,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::data_service::ReleasePlayerNameRequest, ::google::protobuf::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::data_service::ReleasePlayerNameRequest, ::google::protobuf::Empty>* streamer) {
+                       return this->StreamedReleasePlayerName(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_ReleasePlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status ReleasePlayerName(::grpc::ServerContext* /*context*/, const ::data_service::ReleasePlayerNameRequest* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedReleasePlayerName(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::data_service::ReleasePlayerNameRequest,::google::protobuf::Empty>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_BatchGetPlayerName : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_BatchGetPlayerName() {
+      ::grpc::Service::MarkMethodStreamed(21,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::data_service::BatchGetPlayerNameRequest, ::data_service::BatchGetPlayerNameResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::data_service::BatchGetPlayerNameRequest, ::data_service::BatchGetPlayerNameResponse>* streamer) {
+                       return this->StreamedBatchGetPlayerName(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_BatchGetPlayerName() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status BatchGetPlayerName(::grpc::ServerContext* /*context*/, const ::data_service::BatchGetPlayerNameRequest* /*request*/, ::data_service::BatchGetPlayerNameResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedBatchGetPlayerName(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::data_service::BatchGetPlayerNameRequest,::data_service::BatchGetPlayerNameResponse>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_LoadPlayerData<WithStreamedUnaryMethod_SavePlayerData<WithStreamedUnaryMethod_GetPlayerField<WithStreamedUnaryMethod_SetPlayerField<WithStreamedUnaryMethod_RegisterPlayerZone<WithStreamedUnaryMethod_GetPlayerHomeZone<WithStreamedUnaryMethod_BatchGetPlayerHomeZone<WithStreamedUnaryMethod_RemapHomeZoneForMerge<WithStreamedUnaryMethod_DeletePlayerData<WithStreamedUnaryMethod_CreatePlayerSnapshot<WithStreamedUnaryMethod_ListPlayerSnapshots<WithStreamedUnaryMethod_GetPlayerSnapshotDiff<WithStreamedUnaryMethod_RollbackPlayer<WithStreamedUnaryMethod_RollbackZone<WithStreamedUnaryMethod_RollbackAll<WithStreamedUnaryMethod_BatchRecallItems<WithStreamedUnaryMethod_QueryTransactionLog<WithStreamedUnaryMethod_CreateEventSnapshot<WithStreamedUnaryMethod_AllocateIdSegment<WithStreamedUnaryMethod_ReservePlayerName<WithStreamedUnaryMethod_ReleasePlayerName<WithStreamedUnaryMethod_BatchGetPlayerName<Service > > > > > > > > > > > > > > > > > > > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_LoadPlayerData<WithStreamedUnaryMethod_SavePlayerData<WithStreamedUnaryMethod_GetPlayerField<WithStreamedUnaryMethod_SetPlayerField<WithStreamedUnaryMethod_RegisterPlayerZone<WithStreamedUnaryMethod_GetPlayerHomeZone<WithStreamedUnaryMethod_BatchGetPlayerHomeZone<WithStreamedUnaryMethod_RemapHomeZoneForMerge<WithStreamedUnaryMethod_DeletePlayerData<WithStreamedUnaryMethod_CreatePlayerSnapshot<WithStreamedUnaryMethod_ListPlayerSnapshots<WithStreamedUnaryMethod_GetPlayerSnapshotDiff<WithStreamedUnaryMethod_RollbackPlayer<WithStreamedUnaryMethod_RollbackZone<WithStreamedUnaryMethod_RollbackAll<WithStreamedUnaryMethod_BatchRecallItems<WithStreamedUnaryMethod_QueryTransactionLog<WithStreamedUnaryMethod_CreateEventSnapshot<WithStreamedUnaryMethod_AllocateIdSegment<Service > > > > > > > > > > > > > > > > > > > StreamedService;
+  typedef WithStreamedUnaryMethod_LoadPlayerData<WithStreamedUnaryMethod_SavePlayerData<WithStreamedUnaryMethod_GetPlayerField<WithStreamedUnaryMethod_SetPlayerField<WithStreamedUnaryMethod_RegisterPlayerZone<WithStreamedUnaryMethod_GetPlayerHomeZone<WithStreamedUnaryMethod_BatchGetPlayerHomeZone<WithStreamedUnaryMethod_RemapHomeZoneForMerge<WithStreamedUnaryMethod_DeletePlayerData<WithStreamedUnaryMethod_CreatePlayerSnapshot<WithStreamedUnaryMethod_ListPlayerSnapshots<WithStreamedUnaryMethod_GetPlayerSnapshotDiff<WithStreamedUnaryMethod_RollbackPlayer<WithStreamedUnaryMethod_RollbackZone<WithStreamedUnaryMethod_RollbackAll<WithStreamedUnaryMethod_BatchRecallItems<WithStreamedUnaryMethod_QueryTransactionLog<WithStreamedUnaryMethod_CreateEventSnapshot<WithStreamedUnaryMethod_AllocateIdSegment<WithStreamedUnaryMethod_ReservePlayerName<WithStreamedUnaryMethod_ReleasePlayerName<WithStreamedUnaryMethod_BatchGetPlayerName<Service > > > > > > > > > > > > > > > > > > > > > > StreamedService;
 };
 
 }  // namespace data_service

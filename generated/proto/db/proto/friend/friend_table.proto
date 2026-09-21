@@ -1,0 +1,145 @@
+syntax = "proto3";
+package friendpb;
+
+option go_package = "db/proto/friend";
+
+import "proto/db/proto_option.proto";
+
+// friend 独占库 mmorpg_friend 的表结构,唯一事实源(port-decisions D-14)。
+// - 建表 / 加列只经 go/schemamigrate 的 ProtoSource(go/friend/internal/data/tables.go 列清单),
+//   本仓任何地方都不再手写 friend 的 DDL;行直接扫进本文件的 message,不另写 Go struct(AGENTS §3)。
+// - D-14 §2 约束:主键只用整数列;每表至多一个唯一键;string 列不进主键 —— 所以这里四张表
+//   全部是 uint64 / uint32 主键,且都没有 UNIQUE KEY(需要唯一性的地方由主键本身保证)。
+// - proto2mysql 按字段号识别列:字段号上线后不复用,删列写 reserved(AGENTS §4)。
+//   schemamigrate 会拒绝 sint* / fixed* / sfixed*(那些类型在 proto2mysql 里静默回落成 TEXT,
+//   建表成功、第一次写入才炸),所以时间戳一律 uint64、计数一律 uint32。
+// - 本文件不进客户端 gen_proto.ps1 清单:它是纯服务端存储结构,客户端看到的是 friend.proto。
+//
+// ⚠ 与 deploy/mysql-init/guild_friend_tables.sql(旧形态:表建在共享库 mmorpg 里)的对齐程度
+//   **三张表不一样**,搬数据前必须逐表看清:
+//   - friend:列名与类型逐字一致,可以直接 `INSERT ... SELECT *`。
+//   - friend_capacity:**不能**再 `SELECT *`。新表多出 created_ms(旧表只有 player_id / friend_count 两列),
+//     列数对不上,搬迁必须显式枚举列。created_ms 可以留 0:与下面的 updated_ms 相反,0 在这里是
+//     安全的(理由见 FriendCapacityRecord.created_ms 的注释)。
+//   - friend_request:**不能**直接搬。新表多出 updated_ms(旧表只有四列),且 status 由旧表的
+//     TINYINT UNSIGNED 变成本文件的 uint32(建出来是 int unsigned)。搬迁必须显式枚举列,
+//     并为 updated_ms 赋值 —— 建议取 request_time_ms(它至少不晚于状态最后一次变更,
+//     用 0 会让 sweep 立刻把整表判成过期)。
+//   mmorpg_friend 是新库、由 schemamigrate 建;这份对齐只是为了万一要搬旧库数据时少改列名,
+//   不是保证两边 schema 相同。
+
+// 好友关系边。刻意存成**双向两行**(A→B 与 B→A 各一行)而不是一行存一对:
+// 查"我的好友列表"只需要一次 player_id 前缀扫描,不必 UNION 两个方向。
+// 代价是加 / 删好友必须在同一个事务里改两行,否则会出现单边好友。
+message FriendEdgeRecord {
+  option(OptionTableName) = "friend";
+  option(OptionPrimaryKey) = "player_id,friend_player_id";
+  // 反向索引:被删号 / 封号时要按 friend_player_id 找到所有把他当好友的人。
+  option(OptionIndex) = "friend_player_id";
+  // 复合整数主键 + 追加写为主,按 TiDB 决策 D3 处方 NONCLUSTERED + 打散,
+  // 避免 player_id 单调递增时写入全压在同一个 region 上。
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint64 friend_player_id = 2;
+  uint64 since_ms = 3;            // 结为好友的时刻
+}
+
+// 好友请求。一对 (from,to) 只留一行,靠主键做幂等:重复点"加好友"是 REPLACE 语义,
+// 不会堆出多行待处理请求。
+message FriendRequestRecord {
+  option(OptionTableName) = "friend_request";
+  option(OptionPrimaryKey) = "from_player_id,to_player_id";
+  // 两条索引各有其查询:
+  // (to_player_id,status) —— 拉"我收到的待处理请求"(GetPendingRequests 的主路径);
+  // (status,updated_ms)   —— sweep 扫"已处理且过期"的行做清理,没有这条索引就得全表扫。
+  option(OptionIndex) = "to_player_id,status;status,updated_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 from_player_id = 1;
+  uint64 to_player_id = 2;
+  uint64 request_time_ms = 3;     // 首次发起时刻,不随状态变更改写
+  // 状态取值:1=pending、2=accepted、3=rejected(与 friend.proto 的 FriendRequestStatus 同码)。
+  // 这里用 uint32 而不是那个 enum:存储列的取值集合要能在不重新发布 proto 的前提下扩,
+  // 而 enum 列一旦被业务写入未知值,protoreflect 扫行时会落到 0 值上,分不清"未知"与"UNKNOWN"。
+  uint32 status = 4;
+  // 本批新增列:状态最后一次变更的时刻。sweep 靠 (status,updated_ms) 判"处理完够久了",
+  // 不能复用 request_time_ms —— 那是发起时刻,一条刚被拒的老请求会被误判成该立刻清掉。
+  //
+  // 写入方已齐(F2 批,四条路径 / 五条语句,凡是改 status 的语句都同句写本列):
+  //   1. AddFriendRequest 的 upsert(INSERT ... ON DUPLICATE KEY UPDATE ... updated_ms=VALUES(updated_ms));
+  //   2. AcceptFriend 的正向 UPDATE(status=2);
+  //   3. AcceptFriend 的反向 UPDATE(把反向 pending 一并收敛成 accepted);
+  //   4. RejectFriend 的 CAS(status=3);
+  //   5. Block 取消两个方向的 pending(go/friend/internal/data/block_repo.go)。
+  //   前四条在 go/friend/internal/data/friend_repo.go。新增任何改 status 的写路径必须照此同句写本列。
+  //
+  // ⚠ 把 Sweep.Mode 配成 delete 的**剩余前置只有一条**:从旧共享库 mmorpg 搬来的存量行。
+  // 旧表没有这一列,uint64 建出来是 bigint unsigned DEFAULT 0,搬过来的行 updated_ms 会是 0;
+  // 拿 0 当"最后变更时刻",每一行终态行都会被判成早已过期。搬迁必须显式赋值,建议取
+  // request_time_ms(它至少不晚于状态最后一次变更)。
+  // SQL 侧已有保险:go/friend/internal/data/sweep_repo.go 的 SweepTerminalRequests 发现
+  // "终态且 updated_ms=0"的行时只统计不删,并打一条带存量修法 SQL 的错误日志。
+  uint64 updated_ms = 5;
+}
+
+// 好友上限的显式计数行。AcceptFriend 事务里锁双方的 capacity 行来判上限,
+// 不依赖 COUNT(*) ... FOR UPDATE 在特定隔离级别下是否产生 gap lock ——
+// 那个行为随隔离级别与存储引擎变,靠它做并发上限校验会在高并发下超卖好友位。
+message FriendCapacityRecord {
+  option(OptionTableName) = "friend_capacity";
+  option(OptionPrimaryKey) = "player_id";
+  // (friend_count,created_ms) —— sweep 回收"零好友且建出来够久"的容量行
+  // (SQL 在 go/friend/internal/data/sweep_repo.go 的 SweepIdleCapacityRows)。
+  // 为什么是这两列、这个顺序:候选查询是 `friend_count = 0 AND created_ms < ?`,第一列等值、
+  // 第二列区间,扫描量恒等于命中行数。只建 created_ms 单列索引不行 —— 老行绝大多数是有好友的
+  // 真实玩家,LIMIT 永远取不满,每轮都会扫完全部老行。
+  // 代价:friend_count 每次增减要多维护一个二级索引项(加 / 删好友是低频写,可接受)。
+  // ⚠ "扫描量恒等于命中行数"的前提是该索引真实存在。go/schemamigrate 对**已存在的表**只 ADD COLUMN,
+  // 缺普通索引只出一条 warning"缺索引(不会自动建)"、退出码仍是 0(见 plan.go 的 drift);索引只在
+  // 建表时随 CREATE TABLE 建出。本批之前已建过 friend_capacity 的环境必须手工执行
+  // `ALTER TABLE friend_capacity ADD INDEX idx_friend_capacity_0 (friend_count, created_ms);`
+  // (索引名以 -migrate 的 warning 原文为准),否则回收的候选读每轮全表扫;
+  // friend 未上线、无存量,也可以直接删库重建。
+  option(OptionIndex) = "friend_count,created_ms";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint32 friend_count = 2;        // 权威好友数;与 friend 表的行数必须在同一事务里同增同减
+  // 本行被(重新)建出、或最近一次 friend_count 减少的时刻;回收的保留期从这一刻起算。
+  // 写入方两处:ensureFriendCapacityRows 的 INSERT IGNORE(撞上已有行是空操作,不刷新),以及
+  // deleteFriendEdges 减 friend_count 的那条 UPDATE。后者挡的是一条交错:ensure 的 COUNT 与 INSERT
+  // 不原子,若"刚减到 0 的老行"立刻可回收,则"ensure 读到 COUNT=1 → RemoveFriend 提交 → 回收删行 →
+  // 陈旧 INSERT (P,1) 落地"会把计数永久写大 1(上限少 1、零报错、无自愈)。
+  // 残留:陈旧窗口跨过整个 RetentionDays 才可能复现,视为不可达。
+  // 只服务于 sweep 的容量行回收:AddFriend 为了拿容量守卫会给**任意** target 建行(friend 服务
+  // 没有玩家名册,无法验证 target 是否存在),不回收的话本表随"被申请过的 id 个数"单调增长。
+  //
+  // 与 FriendRequestRecord.updated_ms **相反**:本列为 0(从旧共享库搬来的存量行)是**安全的**。
+  // 回收只删 friend_count = 0 的行,而缺行时 ensureFriendCapacityRows 按 friend 表的权威边数
+  // 重新建行、绝不猜 0 —— 零好友的存量行被立刻回收没有任何语义损失,所以回收 SQL 不需要
+  // updated_ms 那种"发现 0 就拒删"的保险,搬迁时本列也不必赋值。
+  uint64 created_ms = 3;
+}
+
+// 拉黑名单。与 friend 表分开而不是在边上加一个 flag:拉黑关系是单向的,
+// 且被拉黑的人不一定是(甚至通常不是)好友,塞进好友边会让"非好友的拉黑"无处存放。
+message FriendBlockRecord {
+  option(OptionTableName) = "friend_block";
+  option(OptionPrimaryKey) = "player_id,blocked_player_id";
+  // 反向索引:判"对方是否拉黑了我"要按 blocked_player_id 查(AddFriend 的前置检查)。
+  option(OptionIndex) = "blocked_player_id";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id = 1;
+  uint64 blocked_player_id = 2;
+  uint64 since_ms = 3;            // 拉黑时刻
+}

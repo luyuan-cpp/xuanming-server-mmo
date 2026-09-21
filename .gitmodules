@@ -22,10 +22,10 @@
 	branch = v1.x
 [submodule "third_party/ue5navmesh"]
 	path = third_party/ue5navmesh
-	url = https://github.com/luyuancpp/ue5navmesh.git
+	url = https://github.com/luyuan-cpp/ue5navmesh.git
 [submodule "pkg/muduo_windows/src"]
 	path = cpp/libs/engine/muduo_windows/src/muduo/net
-	url = https://github.com/luyuancpp/muduo-windows.git
+	url = https://github.com/luyuan-cpp/muduo-windows.git
 	ignore = dirty
 [submodule "third_party/zlib"]
 	path = third_party/zlib
@@ -34,7 +34,7 @@
 	ignore = dirty
 [submodule "third_party/hexagons_grids"]
 	path = third_party/hexagons_grids
-	url = https://github.com/luyuancpp/game_hexagons_grids.git
+	url = https://github.com/luyuan-cpp/game_hexagons_grids.git
 [submodule "third_party/exprtk"]
 	path = third_party/exprtk
 	url = https://github.com/ArashPartow/exprtk.git

@@ -6,7 +6,7 @@ package data
 // RowsAffected 的 fail-closed 门禁)。mock 出来的"锁"只能复述我们自己的假设,
 // 不可能复现 1213、也不可能复现 RC 下"普通 SELECT 读语句快照"这条真正咬人的性质。
 // 所以本文件与同目录的 friend_guard_lock_order_mysql_test.go / block_repo_mysql_test.go /
-// sweep_repo_test.go 一律用 FRIEND_TEST_MYSQL_DSN 门控,未设置就 Skip。
+// sweep_repo_test.go / recommend_repo_mysql_test.go 一律用 FRIEND_TEST_MYSQL_DSN 门控,未设置就 Skip。
 //
 // ⚠ 本文件同时是本包所有集成用例的**公共夹具所有者**:schema 重建、临时 repo、
 // 不变量断言都在这里,其它测试文件直接用(同包)。改 schema 只改这一处。
@@ -112,16 +112,17 @@ const friendRequireMySQLEnv = "FRIEND_REQUIRE_MYSQL_TESTS"
 
 // TestFriendIntegrationGateIsHonored 是"全体 Skip 不算通过"的机械保障。
 //
-// 本包有 19 条集成用例(含 4 个并发锁序场景)全部挂在 openFriendTestDB 的 Skip 上;
-// 不走 MySQL 的只剩 3 条缓存用例。没有这条标记用例时,"DSN 忘了设"与"锁序全对"
-// 在 CI 报告里是同一个绿。
+// 本包的集成用例(含 friend_guard_lock_order_mysql_test.go 的 8 个并发锁序场景、sweep 两类清理、
+// 推荐三段 SQL)全部挂在 openFriendTestDB 的 Skip 上;不走 MySQL 的只有缓存与 session_reader 那几条。
+// 没有这条标记用例时,"DSN 忘了设"与"锁序全对"在 CI 报告里是同一个绿。
+// (这里刻意不写用例总数:收尾批把它从 19 条加到了 50 多条,写死的数字只会再过期一次。)
 func TestFriendIntegrationGateIsHonored(t *testing.T) {
 	if os.Getenv(friendRequireMySQLEnv) == "" {
 		t.Skipf("%s 未设置:本用例只在验收时启用", friendRequireMySQLEnv)
 	}
 	if strings.TrimSpace(os.Getenv(friendTestDSNEnv)) == "" {
-		t.Fatalf("%s 要求跑 MySQL 集成用例,但 %s 为空 —— 本包的 19 条集成用例(含 4 个并发锁序场景)"+
-			"会全部静默 Skip", friendRequireMySQLEnv, friendTestDSNEnv)
+		t.Fatalf("%s 要求跑 MySQL 集成用例,但 %s 为空 —— 本包的全部集成用例(含 8 个并发锁序场景)"+
+			"会静默 Skip", friendRequireMySQLEnv, friendTestDSNEnv)
 	}
 }
 
@@ -277,7 +278,9 @@ func assertFriendInvariants(t *testing.T, ctx context.Context, db *sql.DB) {
 //
 // 不这样做的后果(A 仓 2026-08-11 的原始症状):死锁被包进一句"意外错误",
 // 看起来像业务失败,没人想到去查锁序。1213 是**可重试**错误,所以它也绝不能被
-// 当成"偶发抖动"忽略 —— 本层不重试,一次 1213 就是一次玩家可见的失败。
+// 当成"偶发抖动"忽略 —— 写事务本身不重试 1213,一次 1213 就是一次玩家可见的失败。
+// (唯一的例外是事务外的 ensureFriendCapacityRows:回收引入 delete-marked 记录之后,并发 INSERT IGNORE
+// 会 S→X 成环,那一处有上限地重试,见锁序文件的场景 (g)。)
 func isInnoDBDeadlock(err error) bool {
 	if err == nil {
 		return false
@@ -302,10 +305,19 @@ func assertNoDeadlock(t *testing.T, err error, what string) {
 
 // resetFriendIntegrationSchema 重建四张表。
 //
-// 列名与索引与 proto/friend/friend_table.proto 逐字对齐(那是唯一事实源,由 go/schemamigrate 建表):
+// 事实源是 proto/friend/friend_table.proto(由 go/schemamigrate 经 proto2mysql 建表)。对齐口径:
+// 列名、列类型、NOT NULL/DEFAULT、主键与索引列与 proto2mysql 对该 proto 的输出一致;索引名、
+// 表级选项(CHARSET/COLLATE、TiDB 选项)与列 COMMENT 'pb:N' 夹具不复刻,被测 SQL 不依赖它们。
+// proto2mysql 对 uint64 / uint32 一律出 `NOT NULL DEFAULT 0`,**主键列与 status 也不例外** ——
+// 夹具曾把 status 写成 DEFAULT 1:某条 INSERT 漏写 status 时夹具里得到 1(pending,用例照绿)、
+// 生产得到 0(非法状态),夹具比生产宽松就是在替缺陷打掩护。
 //   - friend_request 的 updated_ms 是 F2 新增列,sweep 的 (status, updated_ms) 索引靠它;
 //     没有这列,sweep 的保留期过滤退化成"全表都过期"。
 //   - friend_block 是 F2 新增表。
+//   - friend_capacity 的 created_ms 与 (friend_count, created_ms) 复合索引是收尾批新增,
+//     sweep 的容量行回收(SweepIdleCapacityRows)靠它们。DEFAULT 0 与生产一致:夹具里不写
+//     created_ms 的直写(seedFriendEdges)造出来的就是"存量搬迁行"的形态。
+//     索引名是夹具自取的(生产的名字由 schemamigrate 生成),被测 SQL 不按名字引用索引。
 //   - status 用 INT UNSIGNED(表 proto 里是 uint32),不是原来的 TINYINT:
 //     测试 schema 与生产 schema 的类型不一致会让"列宽相关"的缺陷只在生产出现。
 func resetFriendIntegrationSchema(t *testing.T, ctx context.Context, db *sql.DB) {
@@ -316,30 +328,32 @@ func resetFriendIntegrationSchema(t *testing.T, ctx context.Context, db *sql.DB)
 		"DROP TABLE IF EXISTS friend_request",
 		"DROP TABLE IF EXISTS friend",
 		`CREATE TABLE friend (
-            player_id BIGINT UNSIGNED NOT NULL,
-            friend_player_id BIGINT UNSIGNED NOT NULL,
+            player_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            friend_player_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             since_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
             PRIMARY KEY (player_id, friend_player_id),
             KEY idx_friend_player (friend_player_id)
         ) ENGINE=InnoDB`,
 		`CREATE TABLE friend_request (
-            from_player_id BIGINT UNSIGNED NOT NULL,
-            to_player_id BIGINT UNSIGNED NOT NULL,
+            from_player_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            to_player_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             request_time_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
-            status INT UNSIGNED NOT NULL DEFAULT 1,
+            status INT UNSIGNED NOT NULL DEFAULT 0,
             updated_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
             PRIMARY KEY (from_player_id, to_player_id),
             KEY idx_to_player (to_player_id, status),
             KEY idx_status_updated (status, updated_ms)
         ) ENGINE=InnoDB`,
 		`CREATE TABLE friend_capacity (
-            player_id BIGINT UNSIGNED NOT NULL,
+            player_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             friend_count INT UNSIGNED NOT NULL DEFAULT 0,
-            PRIMARY KEY (player_id)
+            created_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            PRIMARY KEY (player_id),
+            KEY idx_count_created (friend_count, created_ms)
         ) ENGINE=InnoDB`,
 		`CREATE TABLE friend_block (
-            player_id BIGINT UNSIGNED NOT NULL,
-            blocked_player_id BIGINT UNSIGNED NOT NULL,
+            player_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            blocked_player_id BIGINT UNSIGNED NOT NULL DEFAULT 0,
             since_ms BIGINT UNSIGNED NOT NULL DEFAULT 0,
             PRIMARY KEY (player_id, blocked_player_id),
             KEY idx_blocked_player (blocked_player_id)
@@ -672,6 +686,14 @@ func TestAcceptFriend_AlsoResolvesReversePending(t *testing.T) {
 	seedPending(t, ctx, db, a, b)
 	seedPending(t, ctx, db, b, a) // 互相申请:两人同时点了"加好友"
 
+	// seedPending 直写的 updated_ms 是"现在"(非零)。不先把**反向**行归零,下面那条 NotZero
+	// 结构性不可能失败 —— AcceptFriend 的 ⑥ 反向 UPDATE 哪怕漏写 updated_ms 也照绿
+	// (handoff §3 第 8 条登记的假绿)。手法照 TestAddFriend_WritesUpdatedMs。
+	_, err := db.ExecContext(ctx,
+		"UPDATE friend_request SET updated_ms=0 WHERE from_player_id=? AND to_player_id=?", b, a)
+	require.NoError(t, err)
+	require.Zero(t, readRequestUpdatedMs(t, ctx, db, b, a), "前置条件:归零必须真的生效,否则下面的 NotZero 没有鉴别力")
+
 	require.NoError(t, repo.AcceptFriend(ctx, a, b, 100))
 
 	assert.Equal(t, int64(2), readRequestStatus(t, ctx, db, a, b), "正向申请必须变 accepted")
@@ -819,6 +841,317 @@ func TestMissingCapacityRowUsesAuthoritativeFriendCount(t *testing.T) {
 	assert.Equal(t, int64(3), mustCount(t, ctx, db,
 		"SELECT friend_count FROM friend_capacity WHERE player_id=?", playerID),
 		"缺行必须从 friend 权威边计数，不能初始化为 0")
+}
+
+// ── friend_capacity 的 created_ms 与守卫缺行(收尾批:容量行回收的数据层前提)──────────
+//
+// 回收(sweep_repo.go 的 SweepIdleCapacityRows)删的是 `friend_count = 0 AND created_ms < 截止点` 的行。
+// 它对写路径提了三条要求,各有一条用例钉住。created_ms 的含义是"本行被(重新)建出、或最近一次
+// friend_count 减少的时刻",写它的只有两处,前两条各管一处:
+//   - **ensure 不刷新**:建行时写成"现在";之后再 ensure 撞上已有行,INSERT IGNORE 整条是空操作,既不刷新
+//     也不清零(否则要么刚建的行被立刻回收、要么陈旧的零好友行永远回收不掉)
+//     —— TestEnsureCapacityRows_StampsCreatedMsOnceAndNeverRefreshes;
+//   - **deleteFriendEdges 减计数时刷新**:ensure 的 COUNT 与 INSERT IGNORE 不原子,不刷新的话"刚减到 0 的老行"
+//     立即可回收,夹在中间的陈旧 INSERT 会把 friend_count 永久写大 1;刷新让它在一个保留期内不可回收
+//     —— TestDeleteFriendEdges_RefreshesCreatedMsOnDecrement;
+//   - 守卫缺行必须以 errCapacityRowsMissing 这个**可识别**的哨兵报出来 —— runGuardedWrite 只认它来
+//     决定"重新 ensure 并重试(至多重试两次,上限 capacityGuardMaxAttempts 遍)";换成一条普通 error,
+//     回收竞态会把正常请求直接打成 ErrStorage。
+//
+// 重试本身的两半各在一处:"重试用尽仍缺行 → fail-closed、body 不执行、遍数有界"是确定性的,
+// 见下面的 TestRunGuardedWrite_ExhaustedMissingRowsFailClosed;"回收与写路径真并发、重试真的救回请求"
+// 只能概率性地验,在 friend_guard_lock_order_mysql_test.go(场景 (f))。
+
+func readCapacityCreatedMs(t *testing.T, ctx context.Context, db *sql.DB, playerID uint64) uint64 {
+	t.Helper()
+	var v uint64
+	require.NoError(t, db.QueryRowContext(ctx,
+		"SELECT created_ms FROM friend_capacity WHERE player_id=?", playerID).Scan(&v))
+	return v
+}
+
+// TestEnsureCapacityRows_StampsCreatedMsOnceAndNeverRefreshes 钉 created_ms 在 **ensure 这一侧**的两半语义
+// (建行时写、撞已有行不刷新)。减计数那一侧的刷新由下面的
+// TestDeleteFriendEdges_RefreshesCreatedMsOnDecrement 钉,两条互不替代。
+func TestEnsureCapacityRows_StampsCreatedMsOnceAndNeverRefreshes(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	// 直接调 ensure:建出来的行 created_ms 必须落在调用前后的墙钟窗口里。
+	// 只断言 NotZero 不够 —— 写成秒级时间戳、或写成某个常量都能过 NotZero,而那两种写法在
+	// "created_ms < 毫秒截止点"的比较里都等于"早就过期",刚建的守卫行会被下一轮回收立刻删掉。
+	// (这里读墙钟只是给被测代码自己取的 time.Now 框一个上下界,不是拿 sleep 等时间过去。)
+	const fresh uint64 = 46001
+	beforeMs := uint64(time.Now().UnixMilli())
+	require.NoError(t, repo.ensureFriendCapacityRows(ctx, fresh))
+	afterMs := uint64(time.Now().UnixMilli())
+	created := readCapacityCreatedMs(t, ctx, db, fresh)
+	assert.GreaterOrEqual(t, created, beforeMs, "ensure 建行必须把 created_ms 写成毫秒级的当前时刻")
+	assert.LessOrEqual(t, created, afterMs, "ensure 建行必须把 created_ms 写成毫秒级的当前时刻")
+
+	// 既有行不刷新:把 created_ms 直写成一个很老的值,再 ensure 一次,必须原样不动。
+	// 反过来的实现(ON DUPLICATE KEY UPDATE created_ms=...)会让每次写路径都把这行"续命",
+	// 一个被反复骚扰的 id 的零好友行就永远回收不掉 —— 而那正是回收要解决的增长面。
+	const stale uint64 = 46002
+	_, err := db.ExecContext(ctx,
+		"INSERT INTO friend_capacity (player_id, friend_count, created_ms) VALUES (?, 0, 12345)", stale)
+	require.NoError(t, err)
+	require.NoError(t, repo.ensureFriendCapacityRows(ctx, stale))
+	assert.EqualValues(t, 12345, readCapacityCreatedMs(t, ctx, db, stale),
+		"ensure 撞上已有行必须是空操作:刷新 created_ms 会让陈旧的零好友行永远不过期")
+
+	// 经由真实写路径建出来的行同样要有 created_ms(四条写路径共用 runGuardedWrite 里的同一个 ensure,
+	// 这里取最常见的 AddFriend 走一遍,钉的是"写路径没有绕开 ensure 自己建行")。
+	const from, to uint64 = 46003, 46004
+	require.NoError(t, callAddFriend(ctx, repo, from, to, defaultTestLimits()))
+	assert.GreaterOrEqual(t, readCapacityCreatedMs(t, ctx, db, from), beforeMs)
+	assert.GreaterOrEqual(t, readCapacityCreatedMs(t, ctx, db, to), beforeMs,
+		"被申请的 target 那一行正是回收的主要对象,它的 created_ms 为 0 虽然无害,但说明建行没走 ensure")
+}
+
+// TestDeleteFriendEdges_RefreshesCreatedMsOnDecrement 钉 created_ms 的另一处写入:deleteFriendEdges 减计数的
+// 那条 UPDATE 必须同时把 created_ms 刷成当前时刻,让"刚减过计数的行"在一个完整保留期内不是回收候选。
+//
+// 它挡的交错(friend_repo.go 顶部锁序说明 (5) 的"为什么删行也不会让计数偏大"):ensure 读到 COUNT=1 →
+// RemoveFriend 提交(行变成 friend_count=0,created_ms 仍很老)→ 回收删掉这行 → 陈旧的 INSERT IGNORE (P, 1)
+// 落地。结果是 friend_count=1 而真实边数为 0:之后无边可删、减不到它,非零行也永不再进回收 ——
+// 上限永久少 1、零报错、无自愈。那个三方交错本身摆不出确定性的时序,所以这里钉的是挡住它的**前提**:
+// 减完计数的行立刻去回收,一行都不许删。把 UPDATE 里的 `created_ms = ?` 删掉,本用例必红,其余用例照绿。
+//
+// 两条写路径各验一遍:RemoveFriend 在 body 里自己取时刻,Block 复用它"一个事务只取一次"的 nowMs ——
+// 共用 deleteFriendEdges 是实现细节,谁给其中一条传了 0 或别的陈旧时刻,只有对应的那条子用例会红。
+//
+// 回收的 nowMs 用真实时刻(与锁序文件场景 (f) 同一个理由):拨到未来的话,刷新过的行同样过期,
+// "没删"这条断言就失去了鉴别力;拨到未来只用在末尾的正向对照里。
+func TestDeleteFriendEdges_RefreshesCreatedMsOnDecrement(t *testing.T) {
+	const retentionDays = 7
+
+	cases := []struct {
+		name  string
+		a, b  uint64
+		write func(ctx context.Context, repo *FriendRepo, a, b uint64) error
+	}{
+		{"RemoveFriend", 46101, 46102, func(ctx context.Context, repo *FriendRepo, a, b uint64) error {
+			return repo.RemoveFriend(ctx, a, b)
+		}},
+		{"Block", 46103, 46104, func(ctx context.Context, repo *FriendRepo, a, b uint64) error {
+			return callBlock(ctx, repo, a, b, defaultTestLimits())
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, ctx := openFriendTestDB(t)
+			repo, _ := newFriendTestRepo(t, db)
+			pair := []uint64{tc.a, tc.b}
+
+			// 夹具:一对互为好友的老玩家,双方容量行的 created_ms 都远早于回收截止点,friend_count 与边数一致(各 1)。
+			// 此刻它们不是回收候选只因为 friend_count != 0 —— 减到 0 的那一刻若不刷新,立即就是。
+			beforeWriteMs := time.Now().UnixMilli()
+			staleMs := beforeWriteMs - int64(retentionDays+30)*testDayMs
+			seedBefriendedCapacityRow(t, ctx, db, tc.a, staleMs, tc.b)
+			seedBefriendedCapacityRow(t, ctx, db, tc.b, staleMs, tc.a)
+
+			require.NoError(t, tc.write(ctx, repo, tc.a, tc.b))
+			afterWriteMs := time.Now().UnixMilli()
+			// 前置条件(不可省):双方都真的减到了 0。计数还是 1 的话,下面"回收一行都没删"会因为
+			// friend_count != 0 而绿,与 created_ms 刷没刷新无关。
+			for _, id := range pair {
+				require.Equal(t, int64(0), mustCount(t, ctx, db,
+					"SELECT friend_count FROM friend_capacity WHERE player_id=?", id),
+					"前置条件:%s 之后 player %d 的 friend_count 必须减到 0", tc.name, id)
+			}
+
+			// 主断言:立即以 delete 模式、真实 nowMs 跑回收,两行都必须活着。
+			nowMs := time.Now().UnixMilli()
+			idle, deleted, err := callSweepIdleCapacity(ctx, repo, testSweepModeDelete, retentionDays, 1000, nowMs)
+			require.NoError(t, err)
+			assert.Zero(t, idle, "刚减过计数的行不该出现在回收候选里")
+			assert.Zero(t, deleted,
+				"deleteFriendEdges 的 UPDATE 漏了 created_ms = ?:刚减到 0 的老行被立即回收,"+
+					"夹在 ensure 的 COUNT 与 INSERT 之间时,陈旧的 INSERT 会把 friend_count 永久写大 1")
+			for _, id := range pair {
+				// require:行已经不在时,后面读 created_ms 只会报一条 sql.ErrNoRows,把真正的红因盖住。
+				require.Equal(t, int64(1), capacityRowCount(t, ctx, db, id),
+					"deleteFriendEdges 的 UPDATE 漏了 created_ms = ?:player %d 刚减到 0 的容量行被立即回收了", id)
+				// 直接钉刷新后的值,不只看"没被删":写成 0、秒级时间戳或别的陈旧时刻都在下界红;
+				// 上界挡的是反方向 —— 写成一个未来的时刻,这行就永远回收不掉。
+				created := readCapacityCreatedMs(t, ctx, db, id)
+				assert.GreaterOrEqual(t, created, uint64(beforeWriteMs),
+					"player %d:减计数时必须把 created_ms 刷成毫秒级的当前时刻(夹具里的旧值是 %d)", id, staleMs)
+				assert.LessOrEqual(t, created, uint64(afterWriteMs),
+					"player %d:减计数时必须把 created_ms 刷成毫秒级的当前时刻,不能是未来的时刻", id)
+			}
+
+			// 正向对照:nowMs 推过保留期,这两行必须被回收。没有这一支,上面的"没删"在回收本身坏掉
+			// (或刷新写成了一个永不过期的值)时也照绿。
+			laterMs := nowMs + int64(retentionDays+1)*testDayMs
+			_, deleted, err = callSweepIdleCapacity(ctx, repo, testSweepModeDelete, retentionDays, 1000, laterMs)
+			require.NoError(t, err)
+			assert.Equal(t, int64(2), deleted, "保留期从最近一次减计数起算:过了保留期,这两行零好友行必须被回收")
+			for _, id := range pair {
+				assert.Zero(t, capacityRowCount(t, ctx, db, id), "过了保留期之后 player %d 的零好友行应被回收", id)
+			}
+			assertFriendInvariants(t, ctx, db)
+		})
+	}
+}
+
+// TestLockCapacityRows_MissingRowIsTheRecognizableSentinel 钉守卫缺行的错误**身份**。
+//
+// runGuardedWrite 的重试只认 errors.Is(err, errCapacityRowsMissing)。缺行若以别的 error 报出来,
+// 回收竞态下的正常请求不会被重试、直接 fail-closed 成 ErrStorage 并触发告警 —— 而这在没有并发
+// 回收的环境里永远看不出来,所以单独钉一条确定性的。
+func TestLockCapacityRows_MissingRowIsTheRecognizableSentinel(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	const a, b uint64 = 47001, 47002
+
+	lockOnce := func() (map[uint64]uint32, error) {
+		tx, err := repo.beginWriteTx(ctx)
+		require.NoError(t, err)
+		// 只读不写,一律回滚;不回滚会把守卫锁一直占到连接被回收。
+		defer tx.Rollback()
+		return lockCapacityRows(ctx, tx, a, b)
+	}
+
+	// 两行都缺。
+	counts, err := lockOnce()
+	require.Error(t, err, "缺行绝不能被当成 friend_count=0 放行:那会把好友硬上限凭空放宽一轮")
+	assert.ErrorIs(t, err, errCapacityRowsMissing)
+	assert.Nil(t, counts, "缺行时不得返回半份 counts:调用方拿到它就可能按 0 去判上限")
+
+	// 只缺一行(回收只删掉了其中一方,这是竞态里更常见的形态)。
+	require.NoError(t, repo.ensureFriendCapacityRows(ctx, a))
+	_, err = lockOnce()
+	assert.ErrorIs(t, err, errCapacityRowsMissing, "只缺一方同样是缺行:len(counts) != len(ids) 必须按哨兵报")
+
+	// 对照组:两行齐了就必须成功,且读回的是库里的值 —— 没有这一支,上面两条在
+	// "lockCapacityRows 恒返回该哨兵"的坏实现下也照绿。
+	seedFriendEdges(t, ctx, db, b, 47101, 47102)
+	counts, err = lockOnce()
+	require.NoError(t, err)
+	assert.Equal(t, map[uint64]uint32{a: 0, b: 2}, counts)
+}
+
+// TestGuardedWrites_SucceedAfterCapacityRowsWereReclaimed:回收删掉零好友行之后,四条写路径
+// 都必须照常成功,且补回来的 friend_count 与边数一致。
+//
+// 这里用直写 DELETE 模拟"回收已经发生过"(确定性的那一半);"回收正在发生"的竞态那一半
+// 在锁序文件的场景 (f)。哪条写路径绕开了 runGuardedWrite 的 ensure,就会在这里以缺行报错。
+func TestGuardedWrites_SucceedAfterCapacityRowsWereReclaimed(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+	lim := defaultTestLimits()
+
+	const a, b uint64 = 48001, 48002
+	reclaim := func() {
+		t.Helper()
+		// 与回收同一个前提:只删零好友行。
+		_, err := db.ExecContext(ctx, "DELETE FROM friend_capacity WHERE friend_count = 0")
+		require.NoError(t, err)
+	}
+
+	require.NoError(t, callAddFriend(ctx, repo, a, b, lim))
+	reclaim()
+	require.Zero(t, mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_capacity"), "前置条件:容量行确实被删光了")
+
+	require.NoError(t, repo.AcceptFriend(ctx, a, b, lim.MaxFriends), "AcceptFriend 必须自己把容量行补回来")
+	assert.Equal(t, int64(1), mustCount(t, ctx, db, "SELECT friend_count FROM friend_capacity WHERE player_id=?", a))
+	assert.Equal(t, int64(1), mustCount(t, ctx, db, "SELECT friend_count FROM friend_capacity WHERE player_id=?", b))
+
+	require.NoError(t, repo.RemoveFriend(ctx, a, b))
+	reclaim()
+	require.NoError(t, callBlock(ctx, repo, a, b, lim), "Block 必须自己把容量行补回来")
+	require.NoError(t, callUnblock(ctx, repo, a, b))
+
+	reclaim()
+	require.NoError(t, callAddFriend(ctx, repo, b, a, lim), "AddFriend 必须自己把容量行补回来")
+
+	// RemoveFriend 的缺行形态:两人是好友、容量行却不在(只可能来自回收之外的误删,
+	// 但 ensure 按权威边数补行的承诺对它同样成立)。
+	// a 另有一个无关好友在场:只有这样"按权威边数 2 补行再减 1"与"猜 0 补行、减法被下溢保护夹住"
+	// 才会得出不同的结果(1 对 0)。只有 a-b 一条边时两种实现都得 0,断言没有鉴别力。
+	require.NoError(t, repo.AcceptFriend(ctx, b, a, lim.MaxFriends))
+	seedFriendEdges(t, ctx, db, a, 48101)
+	_, err := db.ExecContext(ctx, "DELETE FROM friend_capacity WHERE player_id IN (?, ?)", a, b)
+	require.NoError(t, err)
+	require.NoError(t, repo.RemoveFriend(ctx, a, b), "RemoveFriend 必须按权威边数补行后再删边减计数")
+	assert.Zero(t, mustCount(t, ctx, db,
+		"SELECT COUNT(*) FROM friend WHERE (player_id=? AND friend_player_id=?) OR (player_id=? AND friend_player_id=?)",
+		a, b, b, a))
+	assert.Equal(t, int64(1), mustCount(t, ctx, db, "SELECT friend_count FROM friend_capacity WHERE player_id=?", a),
+		"补行必须按权威边数(2)建、删一条边后剩 1;猜 0 建行时减法被下溢保护夹住,这里会读到 0")
+	assertFriendInvariants(t, ctx, db)
+}
+
+// TestRunGuardedWrite_ExhaustedMissingRowsFailClosed 钉 runGuardedWrite 重试的**另一半**:
+// 守卫行怎么 ensure 都建不出来时,必须在有界的遍数之后 fail-closed,且 body 一次都不执行。
+//
+// 没有这条用例时,下面两种坏实现全套照绿:
+//   - 把循环写成无界重试("缺行就一直 ensure"):请求挂到 ctx 超时,连接被一直占着;
+//   - 末次缺行时放行(把缺行当 friend_count=0 继续跑 body):好友硬上限被凭空放宽一轮。
+//
+// # 怎么确定性地造出"ensure 成功、行却不在"
+//
+// 给 friend_capacity 临时加一条 CHECK (player_id <> 49001)。INSERT IGNORE 违反 CHECK(错误 3819)时
+// MySQL 的行为是"降成告警并跳过该行",于是 ensure 返回 nil、49001 的行永远建不出来,每一遍守卫都缺行。
+// CHECK **只是测试注入手段**,生产表没有任何 CHECK 约束。TiDB 默认不启用 CHECK 约束
+// (tidb_enable_check_constraint=OFF 时 ADD CONSTRAINT 被解析后忽略),本用例只对 MySQL DSN 有意义;
+// 在 TiDB 上它会停在下面的"夹具前提"断言上,红因一眼可辨,不会被误读成产品缺陷。
+func TestRunGuardedWrite_ExhaustedMissingRowsFailClosed(t *testing.T) {
+	db, ctx := openFriendTestDB(t)
+	repo, _ := newFriendTestRepo(t, db)
+
+	const blocked, other uint64 = 49001, 49002
+	_, err := db.ExecContext(ctx,
+		"ALTER TABLE friend_capacity ADD CONSTRAINT chk_block_49001 CHECK (player_id <> 49001)")
+	require.NoError(t, err, "夹具:给 friend_capacity 加测试用 CHECK 约束")
+	// 下一条用例的 resetFriendIntegrationSchema 会整表重建,这里仍然自己摘掉:用例结束后表是留着的
+	// (只 TRUNCATE),一条来历不明的 CHECK 会误导人工排障。t.Cleanup 是 LIFO,这一步先于连接关闭执行。
+	t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		if _, err := db.ExecContext(cleanupCtx, "ALTER TABLE friend_capacity DROP CHECK chk_block_49001"); err != nil {
+			t.Logf("摘除测试用 CHECK 约束失败(下一条用例会重建整表,不影响结论): %v", err)
+		}
+	})
+
+	// 夹具前提(不可省):ensure 必须**静默**跳过被 CHECK 拦住的那一行。若这个 MySQL 版本让 INSERT IGNORE
+	// 直接报错,下面的主断言会以"不是 errCapacityRowsMissing"这种误导性的方式红,所以先在这里把话说清楚。
+	if err := repo.ensureFriendCapacityRows(ctx, blocked, other); err != nil {
+		t.Fatalf("夹具前提不成立:INSERT IGNORE 未静默跳过 CHECK 违例(ensure 返回了 error,本用例的注入手段在这个库上不可用): %v", err)
+	}
+	if got := capacityRowCount(t, ctx, db, blocked); got != 0 {
+		t.Fatalf("夹具前提不成立:INSERT IGNORE 未静默跳过 CHECK 违例(player %d 的容量行居然建出来了,got %d 行;"+
+			"多半是该库没有启用 CHECK 约束,例如 TiDB 默认配置)", blocked, got)
+	}
+	require.Equal(t, int64(1), capacityRowCount(t, ctx, db, other), "夹具前提:未被 CHECK 拦住的那一行必须照常建出来")
+	require.Equal(t, int64(1), totalCapacityRows(t, ctx, db))
+
+	// 主断言。子 ctx 只给 5s(不吃满用例的 60s 预算):无界重试会在这里以 context deadline exceeded 返回,
+	// 而不是 errCapacityRowsMissing —— "遍数有界"就是这样被钉住的。
+	subCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	bodyCalls := 0
+	err = repo.runGuardedWrite(subCtx, blocked, other, func(context.Context, *sql.Tx, map[uint64]uint32) error {
+		bodyCalls++
+		return nil
+	})
+	require.Error(t, err, "守卫行始终缺失时必须 fail-closed,绝不能当作 friend_count=0 放行")
+	assert.ErrorIs(t, err, errCapacityRowsMissing,
+		"重试用尽后必须把缺行哨兵原样上抛(logic 据此定性 ErrStorage);若这里是 context deadline exceeded,说明重试没有上限")
+	assert.Zero(t, bodyCalls, "缺行时 body 一次都不许执行:哪怕只在最后一遍放行,好友硬上限也被凭空放宽了一轮")
+	assert.Zero(t, capacityRowCount(t, ctx, db, blocked))
+	assert.Equal(t, int64(1), totalCapacityRows(t, ctx, db), "重试不得凭空多造容量行")
+	assert.Zero(t, mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend"), "fail-closed 的写不得留下好友边")
+	assert.Zero(t, mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_request"), "fail-closed 的写不得留下申请行")
+
+	// 再走一条真实写路径:骨架的 fail-closed 必须原样穿透到导出方法,不被哪条写路径就地吞掉或改写成业务哨兵。
+	// (logic 层把它定性成 ErrStorage 是 logic 包的事,不在 data 包的用例里断言。)
+	err = callAddFriend(subCtx, repo, blocked, other, defaultTestLimits())
+	assert.ErrorIs(t, err, errCapacityRowsMissing, "AddFriendRequest 必须把守卫缺行原样上抛")
+	assert.Zero(t, mustCount(t, ctx, db, "SELECT COUNT(*) FROM friend_request"), "守卫缺行的 AddFriend 不得落库")
 }
 
 func TestVersionedCache_RejectsStaleFillAfterWriteInvalidation(t *testing.T) {

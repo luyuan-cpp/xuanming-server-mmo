@@ -79,9 +79,10 @@ func recommendExcludeClause(col string, exclude []uint64) (string, []any) {
 func (r *FriendRepo) RecommendByMutual(ctx context.Context, playerID uint64, exclude []uint64, limit uint32) ([]RecommendCandidate, error) {
 	excludeClause, excludeArgs := recommendExcludeClause("f2.friend_player_id", exclude)
 	// friend_request 的 status=1 是 pending(取值见 proto/friend/friend_table.proto)。
-	// 这里沿用本包既有写法把 1 直接写进 SQL 而不是引一个包级常量:本包其它查询
-	// (loadPendingRequestsFromMySQL / HasPendingRequest 等)也是字面量,加一个常量只会
-	// 变成"一半用常量一半用字面量"。
+	// 这里把 1 直接写进 SQL 文本,而 friend_repo.go 的查询(loadPendingRequestsFromMySQL 等)
+	// 是把 requestStatusPending 当参数传 —— 两种写法指的是同一个值。本文件两处字面量
+	// (这里与 recommendAnchor)没有改成参数,是因为占位符已经有七个同值的 playerID,
+	// 再插一个不同含义的参数最容易数错位;改 pending 的编号时必须连这两处一起改。
 	query := `SELECT f2.friend_player_id, COUNT(*) AS mutual
 FROM friend f1
 JOIN friend f2 ON f1.friend_player_id = f2.player_id

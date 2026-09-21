@@ -219,6 +219,125 @@ message GuildChangedS2C {
   uint64 target_player_id = 4;  // 被操作者;无则 0
 }
 
+// ── 帮会经济(B5):捐献 / 升级 / 商店 ─────────────────────────────
+// 以下请求同样不带 player_id / guild_id:操作者与所在帮会一律取 gate 会话。
+// "结算中 / 待发放"不是错误:它用视图里的 status 表达,**不进** error_message ——
+// 客户端遇到任何非 0 tip 都会中断后续刷新,PENDING 塞进去会让一笔正常的单看起来像失败。
+
+// 客户端可见的资产订单状态。guild_db.proto 的 GuildAssetOpStatus 是库内状态、不下发客户端,
+// 这里另起一个;两者数值逐项相同,服务端按值直接转换(新增状态必须两边同加)。
+enum GuildAssetOrderStatus {
+  GUILD_ASSET_ORDER_STATUS_UNSPECIFIED     = 0;
+  GUILD_ASSET_ORDER_STATUS_PENDING         = 1;  // 结算中 / 待发放
+  GUILD_ASSET_ORDER_STATUS_APPLIED         = 2;
+  GUILD_ASSET_ORDER_STATUS_REJECTED        = 3;
+  GUILD_ASSET_ORDER_STATUS_ABORTED         = 4;  // 超时或人工撤销
+  GUILD_ASSET_ORDER_STATUS_APPLIED_PARTIAL = 5;  // 已部分发放,转人工补偿(90 清单 X-15)
+}
+
+// 一笔捐献(DonateToGuild 的回包;GetGuildDonateOptions 的待结算列表与最近结果)。
+message GuildDonationView {
+  uint64 op_id                 = 1;
+  uint32 donate_id             = 2;  // GuildDonate.id
+  GuildAssetOrderStatus status = 3;
+  uint32 currency_type         = 4;  // 0 银两 / 1 灵石
+  uint64 cost_amount           = 5;
+  uint64 contribution_gain     = 6;
+  uint64 funds_gain            = 7;
+  uint32 reason_tip_id         = 8;  // PENDING:最近一次暂时原因(资产段 tip,0 = 刚提交);REJECTED:拒绝原因
+  uint64 created_ms            = 9;
+}
+
+// 捐献页的一个选项(配表行 + 本人今日用量)。客户端不加载配表,选项只能由服务端下发。
+message GuildDonateOptionView {
+  uint32 donate_id         = 1;
+  string name              = 2;
+  uint32 currency_type     = 3;
+  uint64 cost_amount       = 4;
+  uint64 contribution_gain = 5;
+  uint64 funds_gain        = 6;
+  uint32 daily_limit       = 7;
+  uint32 used_today        = 8;   // 含结算中的占用
+  uint32 min_guild_level   = 9;
+  bool   unlocked          = 10;  // 帮会等级 >= min_guild_level
+}
+
+message GuildShopGoodsView {
+  uint32 goods_id             = 1;
+  string name                 = 2;
+  uint32 category             = 3;   // 1 修行补给 / 2 帮会珍藏 / 3 节庆好礼
+  uint32 item_id              = 4;
+  uint32 item_count           = 5;   // 每份物品数
+  uint64 cost_contribution    = 6;   // 每份帮贡
+  uint32 required_guild_level = 7;
+  bool   unlocked             = 8;
+  uint32 limit_period         = 9;   // 0 不限 / 1 每游戏日 / 2 每周
+  uint32 limit_count          = 10;  // limit_period=0 时为 0
+  uint32 used_count           = 11;  // 本周期已兑换份数(含待发放)
+  uint32 max_buy_count        = 12;  // 单次最多份数(服务端按物品堆叠上限算出;堆叠 1 的物品恒为 1)
+}
+
+message GuildShopOrderView {
+  uint64 op_id                 = 1;
+  uint32 goods_id              = 2;
+  uint32 count                 = 3;  // 份数
+  GuildAssetOrderStatus status = 4;
+  uint64 cost_contribution     = 5;  // 本单总帮贡
+  uint32 reason_tip_id         = 6;
+  uint64 created_ms            = 7;
+}
+
+message GetGuildDonateOptionsRequest {}
+message GetGuildDonateOptionsResponse {
+  TipInfoMessage error_message                 = 1;
+  repeated GuildDonateOptionView options       = 2;  // 按 donate_id 升序
+  repeated GuildDonationView pending_donations = 3;  // 本人本帮 PENDING,按 (stream_epoch, seq) 升序,<=16
+  uint64 contribution_total                    = 4;
+  uint64 contribution_balance                  = 5;
+  uint64 next_daily_reset_ms                   = 6;  // 下一个游戏日切点(UTC+8 05:00),Unix 毫秒
+  repeated GuildDonationView recent_results    = 7;  // 本人 10 分钟内进入终态的捐献,<=5,新的在前
+}
+
+message DonateToGuildRequest {
+  uint32 donate_id = 1;
+}
+message DonateToGuildResponse {
+  TipInfoMessage error_message = 1;
+  GuildDonationView donation   = 2;  // 已写入指令时必填(含 REJECTED)
+  GuildInfo guild              = 3;  // 请求者仍在帮时必填(含 PENDING)
+}
+
+// expected_level:客户端看到的当前等级。与库里不一致 = 已被他人升级,
+// 回成功 + 最新 GuildInfo,不再扣资金(重复点击不会连升两级)。
+message UpgradeGuildRequest {
+  uint32 expected_level = 1;
+}
+message UpgradeGuildResponse {
+  TipInfoMessage error_message = 1;
+  GuildInfo guild              = 2;  // 请求者仍在帮时必填(含业务失败,如资金不足)
+}
+
+message GetGuildShopRequest {}
+message GetGuildShopResponse {
+  TipInfoMessage error_message               = 1;
+  repeated GuildShopGoodsView goods          = 2;  // 按 category、goods_id 升序
+  uint64 contribution_balance                = 3;
+  repeated GuildShopOrderView pending_orders = 4;  // 本人 SHOP 类 PENDING,<=16
+  uint64 next_daily_reset_ms                 = 5;
+  uint64 next_weekly_reset_ms                = 6;  // 下一个周切点(UTC+8 周一 05:00),Unix 毫秒
+  repeated GuildShopOrderView recent_orders  = 7;  // 本人 10 分钟内进入终态的兑换,<=5,新的在前
+}
+
+message BuyGuildShopGoodsRequest {
+  uint32 goods_id = 1;
+  uint32 count    = 2;  // 份数,1..GuildShopGoodsView.max_buy_count
+}
+message BuyGuildShopGoodsResponse {
+  TipInfoMessage error_message = 1;
+  GuildShopOrderView order     = 2;
+  uint64 contribution_balance  = 3;  // 提交后的余额(REJECTED 时已退回)
+}
+
 // ── Ranking ───────────────────────────────────────────────────
 
 // Guild summary in ranking (without full member list)
@@ -303,4 +422,12 @@ service GuildService {
   rpc UpdateGuildScore (UpdateGuildScoreRequest) returns (UpdateGuildScoreResponse);
   rpc GetGuildRank (GetGuildRankRequest) returns (GetGuildRankResponse);
   rpc GetGuildRankByGuild (GetGuildRankByGuildRequest) returns (GetGuildRankByGuildResponse);
+
+  // 帮会经济(B5)。五个都是客户端方法,已进 go/guild session.ClientMethods;
+  // 身份一律取会话,无会话的内部调用由 logic 拒绝。B5a 只落协议,实现在 B5b(此前回 Unimplemented)。
+  rpc GetGuildDonateOptions (GetGuildDonateOptionsRequest) returns (GetGuildDonateOptionsResponse);
+  rpc DonateToGuild (DonateToGuildRequest) returns (DonateToGuildResponse);
+  rpc UpgradeGuild (UpgradeGuildRequest) returns (UpgradeGuildResponse);
+  rpc GetGuildShop (GetGuildShopRequest) returns (GetGuildShopResponse);
+  rpc BuyGuildShopGoods (BuyGuildShopGoodsRequest) returns (BuyGuildShopGoodsResponse);
 }

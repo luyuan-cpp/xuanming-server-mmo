@@ -73,4 +73,10 @@ enum login_error {
 
   kLoginTimeout = 2031;
 
+  kRoleNameInvalid = 2032;
+
+  kRoleNameTaken = 2033;
+
+  kRoleNameSensitive = 2034;
+
 };

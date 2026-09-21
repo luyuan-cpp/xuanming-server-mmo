@@ -1,0 +1,125 @@
+{
+ "data": [
+  {
+   "category": 1,
+   "cost_contribution": 30,
+   "id": 101,
+   "item_count": 5,
+   "item_id": 15,
+   "limit_count": 10,
+   "limit_period": 1,
+   "name": "培元丹",
+   "required_guild_level": 1
+  },
+  {
+   "category": 1,
+   "cost_contribution": 30,
+   "id": 102,
+   "item_count": 5,
+   "item_id": 16,
+   "limit_count": 10,
+   "limit_period": 1,
+   "name": "回灵散",
+   "required_guild_level": 1
+  },
+  {
+   "category": 1,
+   "cost_contribution": 80,
+   "id": 103,
+   "item_count": 1,
+   "item_id": 17,
+   "limit_count": 5,
+   "limit_period": 1,
+   "name": "精炼石",
+   "required_guild_level": 2
+  },
+  {
+   "category": 1,
+   "cost_contribution": 150,
+   "id": 104,
+   "item_count": 1,
+   "item_id": 18,
+   "limit_count": 5,
+   "limit_period": 2,
+   "name": "修行秘录残页",
+   "required_guild_level": 3
+  },
+  {
+   "category": 2,
+   "cost_contribution": 300,
+   "id": 201,
+   "item_count": 1,
+   "item_id": 19,
+   "limit_count": 3,
+   "limit_period": 2,
+   "name": "帮会令牌",
+   "required_guild_level": 3
+  },
+  {
+   "category": 2,
+   "cost_contribution": 800,
+   "id": 202,
+   "item_count": 1,
+   "item_id": 12,
+   "limit_count": 1,
+   "limit_period": 2,
+   "name": "玄铁护符",
+   "required_guild_level": 4
+  },
+  {
+   "category": 2,
+   "cost_contribution": 120,
+   "id": 203,
+   "item_count": 10,
+   "item_id": 20,
+   "limit_count": 3,
+   "limit_period": 1,
+   "name": "灵兽口粮",
+   "required_guild_level": 2
+  },
+  {
+   "category": 2,
+   "cost_contribution": 1500,
+   "id": 204,
+   "item_count": 1,
+   "item_id": 13,
+   "limit_count": 1,
+   "limit_period": 2,
+   "name": "藏经阁手札",
+   "required_guild_level": 6
+  },
+  {
+   "category": 3,
+   "cost_contribution": 50,
+   "id": 301,
+   "item_count": 1,
+   "item_id": 21,
+   "limit_count": 5,
+   "limit_period": 1,
+   "name": "花灯",
+   "required_guild_level": 1
+  },
+  {
+   "category": 3,
+   "cost_contribution": 100,
+   "id": 302,
+   "item_count": 1,
+   "item_id": 22,
+   "limit_count": 7,
+   "limit_period": 2,
+   "name": "月饼礼盒",
+   "required_guild_level": 1
+  },
+  {
+   "category": 3,
+   "cost_contribution": 200,
+   "id": 303,
+   "item_count": 1,
+   "item_id": 23,
+   "limit_count": 0,
+   "limit_period": 0,
+   "name": "同心结",
+   "required_guild_level": 5
+  }
+ ]
+}

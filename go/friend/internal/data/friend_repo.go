@@ -10,6 +10,9 @@ import (
 	"sync"
 	"time"
 
+	// 只为识别 1213(isMySQLDeadlock)。驱动本来就在 go.mod 的直接 require 里
+	// (internal/svc/servicecontext.go 空白导入注册),这里不新增依赖。
+	drivermysql "github.com/go-sql-driver/mysql"
 	"github.com/zeromicro/go-zero/core/logx"
 	// Redis 句柄统一用 go-zero 的封装(契约 §4):同进程混用 go-zero 与裸 go-redis
 	// 会出现两套连接池、两套超时与熔断语义,排障时指标和日志对不上账。
@@ -96,19 +99,24 @@ type AddFriendLimits struct {
 
 // ── 全局锁序与隔离级别(F2 §2;**改任何写路径之前必须读完这一段**)────────────────
 //
-// 本域所有写事务逐字遵守同一条锁序,**顺序本身就是正确性**,不是风格:
+// 本域所有写事务逐字遵守同一条锁序,**顺序本身就是正确性**,不是风格。
+// 骨架只有一份实现 —— runGuardedWrite;四条写路径(AddFriendRequest / AcceptFriend /
+// RemoveFriend / Block)都只提供"守卫之后做什么"的 body,不各自再写一遍外层:
 //
-//	事务外:按 player_id 升序 INSERT IGNORE 补齐双方 friend_capacity 行(自动提交)
-//	BeginTx(READ COMMITTED)
-//	  ① 容量守卫:SELECT ... FROM friend_capacity WHERE player_id IN (...) ORDER BY player_id FOR UPDATE
-//	  ② 一切与"能不能做"有关的判定读(拉黑 / 好友边 / 申请行)都在守卫之后
-//	  ③ 写入
-//	Commit
+//	事务外:各方法自己的前置判定(普通读;不进 runGuardedWrite,也就不进重试)
+//	runGuardedWrite(至多 capacityGuardMaxAttempts 遍,见 (5)):
+//	  事务外:按 player_id 升序 INSERT IGNORE 补齐双方 friend_capacity 行(自动提交)
+//	  BeginTx(READ COMMITTED)
+//	    ① 容量守卫:SELECT ... FROM friend_capacity WHERE player_id IN (...) ORDER BY player_id FOR UPDATE
+//	    body:
+//	      ② 一切与"能不能做"有关的判定读(拉黑 / 好友边 / 申请行)都在守卫之后
+//	      ③ 写入
+//	  Commit
 //	提交后:失效缓存(invalidateCachesAfterCommit);S2C 推送由 logic 层在事务外做
 //	        ↑ **提交之后的任何失败都不得改变方法的返回值**:写已经落库且不可撤销,
 //	          把失效失败上抛会让一次成功的写被定性成 fault 码 ErrStorage(理由见该方法)。
 //
-// 四条"为什么",每条都对应一次真实的 1213:
+// 前四条"为什么",每条都对应一次真实的 1213;第五条是容量行回收带来的新约束:
 //
 // (1) **ensure 必须在事务外**。把双方的 INSERT IGNORE 放进事务里,多个请求各持有自己刚插入的
 //     新行、又都去抢同一个接收者行,真实 InnoDB 会形成 insert-intention 死锁。
@@ -135,6 +143,47 @@ type AddFriendLimits struct {
 //     RC 下的探针自己**挡不住**并发插入(没有间隙锁),挡住并发的是这把守卫。
 //     新增任何写路径时**先拿守卫**,否则本文件所有"权威判定"会静默退化成 check-then-act。
 //
+// (5) **回收与写路径的关系**。sweep 的 SweepIdleCapacityRows(sweep_repo.go)会删掉
+//     "friend_count = 0 且 created_ms 早于保留期"的容量行,它是本表唯一的删除方。
+//     - 为什么不会成环:回收**逐行、自动提交、按主键**删,任一时刻至多持有一把守卫锁,
+//       且持锁时不再等任何别的锁 —— 一个不"持有并等待"的参与者不可能处在等待环里。
+//       写成一条批量 `DELETE ... LIMIT ?` 就不行:那条语句在一个语句事务里按**二级索引序**
+//       锁多行守卫行,与这里"按 player_id 升序"的取锁顺序不同,可以成环(1213)。
+//     - 为什么缺行要重试、且至多 3 遍(capacityGuardMaxAttempts)严格充分:ensure 在事务外自动提交,
+//       回收可以插进两个窗口 —— "ensure(行已在,INSERT IGNORE 空操作)→ 回收删行 → 取守卫缺行",
+//       以及"FOR UPDATE 正等着这行、回收提交后该行消失"。这是预期内的竞态,不是故障:
+//       runGuardedWrite 回到事务外重新 ensure 再跑一遍。缺行只可能发生在事务的**第一条语句**
+//       (守卫),此时事务还没有任何副作用,整遍重跑是安全的。
+//       为什么恰好是 3:一次写至多涉及两行守卫行;本表唯一的删除方是回收,而回收的 DELETE 在
+//       提交点复核 `created_ms < 截止点`,被 ensure 重建出来的行 created_ms 是当前时刻,在本次请求的
+//       时间尺度内不可能再被回收 —— 所以**每行至多被删一次**(副本再多也一样:每行在被重建之前
+//       只能被删一次)。最坏时序是双方都是陈旧零好友行、各被删一次:第 1、2 遍缺行,第 3 遍必过。
+//       前提:各副本(跑写路径的 friend 进程与跑 sweep 的进程)之间的墙钟偏差小于 RetentionDays
+//       (config.Validate 保证它至少 1 天);sweeper 时钟错到 1970 由 sweepCutoffMs 的"截止点非正"挡住。
+//       第 3 遍仍缺行 = 有回收之外的东西在删这张表,或时钟前提被破坏 —— 那才是不变量破裂,
+//       照旧 fail-closed(ErrStorage)。相对"只重试一次",代价只是 fault 之前多一次 ensure 和一个空事务。
+//       1213 不属于缺行哨兵,不在本重试范围内(ensure 自己那条 1213 见下一条)。
+//     - 回收给 ensure 带来的 1213:HEAD 从不删容量行,并发 INSERT IGNORE 同键时后到者等到 S 锁后
+//       看到的是**活的**重复键,IGNORE 即可、不再要 X,成不了环。有了回收的 DELETE 就会出现
+//       delete-marked 的主键记录:INSERT 对它做重复键检查先取 S,发现是已提交的删除标记、不算重复,
+//       要在该记录上就地复活就得再取 X。成环的前提是"**至少两个** INSERT 同时排队等同一条
+//       delete-marked 或被 X 锁住的主键记录的 S" —— 压住 X 的一方可以是 sweeper 的 DELETE,也可以是
+//       另一个事务的守卫 FOR UPDATE;压住的一方一提交,等待者同时拿到 S、又都要 X,互等(手册
+//       "Deadlocks in InnoDB" 的例子)。InnoDB 牺牲其一报 1213。这条 1213 发生在事务外的 ensure 里,
+//       此时没有任何副作用,所以由 ensureFriendCapacityRows **自己**有上限地重试
+//       (ensureDeadlockMaxAttempts),不进 runGuardedWrite 的缺行重试,也不改"body 的 1213 不重试"的口径。
+//       (取锁细节按手册与已知行为推演,未在真库上复现;回归用例见 friend_repo_mysql_test.go。)
+//     - 为什么删行不放宽好友数上限:回收只删 friend_count = 0 的行(即权威边数为 0),而 ensure 补行时
+//       从 friend 表的权威边数重算初值、绝不猜 0(见 ensureFriendCapacityRows)。行缺失期间任何加边
+//       路径都必须先 ensure 把行建回来,所以一个读到较小 COUNT 的陈旧 ensure 不可能落地成偏小的计数。
+//     - 为什么删行也不会让计数**偏大**(需要 created_ms 配合):ensure 的 COUNT 与 INSERT 是两条各自
+//       自动提交的语句,不原子。交错"ensure 读到 COUNT=1 → RemoveFriend 提交(边数 0、行变成
+//       friend_count=0)→ 回收删行 → 陈旧的 INSERT IGNORE (P, 1) 落地"会留下 friend_count=1 而真实
+//       边数为 0 的行:之后无边可删、减不到它,friend_count≠0 的行也永不再进回收 —— 上限永久少 1、
+//       零报错。挡法:deleteFriendEdges 减计数时**同时把 created_ms 刷成当前时刻**,于是"刚减到 0 的行"
+//       要再过一个完整保留期才是回收候选,上面那条交错里的"回收删行"不可能落进 ensure 两条语句
+//       之间。残留:陈旧窗口(COUNT 与 INSERT 之间)跨过整个 RetentionDays 才可能复现,视为不可达。
+//
 // 隔离级别固定 READ COMMITTED(照 A 仓):
 //   - RR 的间隙锁会让"同一玩家并发拉黑 16 个不同目标"这类**只碰不同行**的事务互相挡:
 //     未命中的 FOR UPDATE 拿到的是同一个间隙锁(间隙锁彼此相容,N 个事务都能拿到),
@@ -148,15 +197,21 @@ type AddFriendLimits struct {
 //     ⚠ 已核对本仓配置:`deploy/k8s/manifests/infra/mysql.yaml:60` 显式写了 `binlog_format = ROW`
 //     (同段还有 `binlog_row_image = FULL`);`deploy/` 下**没有别的**地方设置这一项,
 //     本地 docker-compose 未显式设置,取 MySQL 8.4 的默认值(也是 ROW)。
+
+// friendWriteTxIsolation 是本域写事务的隔离级别,理由见上面那段「隔离级别固定 READ COMMITTED」。
+// (上面的空行是刻意的:那段说明若紧贴本常量就成了 doc comment,gofmt 会把其中用空格缩进的
+// 续行当成代码块重排,把分条论证打散。)
 const friendWriteTxIsolation = sql.LevelReadCommitted
 
 // FriendEntry 是好友列表缓存里的一条(JSON 形状,不是表结构的事实源)。
-// LastActiveMs 由 logic 层用 session_reader 从共享库的 player:session:<id> 填,
-// **不进缓存**:它是每次请求都会变的展示态,写进 30 分钟 TTL 的缓存等于故意返回过期在线状态。
+// 在线态与最后活跃时刻都**不在**本结构里 —— 它们由 logic 层从 session_reader 现取
+// (见 logic/friend_logic.go 的 GetFriendList)。本结构会被整个 json.Marshal 进 30 分钟 TTL 的缓存,
+// 任何每次请求都会变的展示态一旦放进来,就等于故意返回过期的在线状态。
+// 存量缓存里的旧 payload 可能还带着已删除的 last_active_ms 键:encoding/json 忽略未知字段,
+// 解码兼容,不需要为此清 Redis。
 type FriendEntry struct {
 	FriendPlayerID uint64 `json:"friend_player_id"`
 	SinceMs        int64  `json:"since_ms"`
-	LastActiveMs   int64  `json:"last_active_ms"`
 }
 
 type FriendRequestEntry struct {
@@ -282,134 +337,127 @@ func (r *FriendRepo) AddFriendRequest(ctx context.Context, fromPlayerID, toPlaye
 
 	// 容量行在主事务之前、按 player_id 升序自动提交地补齐(理由见顶部锁序说明 (1))。
 	// AddFriend 自己不改 friend_count,补行只为拿到守卫载体;副作用是"任意 target 都会
-	// 被建出一行 friend_capacity"—— 挡它的是 §3.6 的每分钟配额与 MaxPendingRequests,
-	// 不是这里(friend 服务没有玩家名册可以验证 target 是否真实存在)。
-	if err := r.ensureFriendCapacityRows(ctx, fromPlayerID, toPlayerID); err != nil {
-		return err
-	}
-
-	tx, err := r.beginWriteTx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// ① 容量守卫:本事务的第一把锁,顺带把双方当前的 friend_count 读回来
-	//    (守卫锁在手,这两个值到 Commit 之前不可能被别人改,⑦ 直接用,不必再查一次)。
-	counts, err := lockCapacityRows(ctx, tx, fromPlayerID, toPlayerID)
-	if err != nil {
-		return err
-	}
-
-	// ② 拉黑(两个方向,锁定读)。任一方向命中就拒:被拉黑的人不该能继续发申请,
-	//    拉黑了别人的人也不该收到对方的申请。
-	blocked, err := blockedEitherWay(ctx, tx, fromPlayerID, toPlayerID)
-	if err != nil {
-		return err
-	}
-	if blocked {
-		return ErrBlocked
-	}
-
-	// ③ 已是好友(任一方向的边存在即算,锁定读)。双向两行本该同增同减,
-	//    但只要有一边在就不该再发申请 —— 单边残留应由修复流程处理,不该靠再发一次申请去补。
-	alreadyFriends, err := friendEdgeExistsForUpdate(ctx, tx, fromPlayerID, toPlayerID)
-	if err != nil {
-		return err
-	}
-	if alreadyFriends {
-		return ErrAlreadyFriends
-	}
-
-	// ④ 本方向的申请行(按主键单行锁定读)。已经 pending 就直接拒,不刷新时间 ——
-	//    否则"反复点加好友"能把自己的申请一直顶到对方列表最前面。
-	var existingStatus int32
-	err = tx.QueryRowContext(ctx,
-		"SELECT status FROM friend_request WHERE from_player_id=? AND to_player_id=? FOR UPDATE",
-		fromPlayerID, toPlayerID).Scan(&existingStatus)
-	switch {
-	case err == nil:
-		if existingStatus == requestStatusPending {
-			return ErrRequestAlreadySent
-		}
-	case errors.Is(err, sql.ErrNoRows):
-		// 无历史申请,走下面的 INSERT 分支。
-	default:
-		return fmt.Errorf("lock friend request %d->%d: %w", fromPlayerID, toPlayerID, err)
-	}
-
-	// ⑤⑥ 两个 pending 计数。**这两条刻意用普通读,不加 FOR UPDATE**,与 §2.2 ② 的字面要求
-	// 有一处偏离,理由必须看完再改:
+	// 被建出一行 friend_capacity"—— 挡增长**速度**的是 §3.6 的每分钟配额与 MaxPendingRequests,
+	// 不是这里(friend 服务没有玩家名册可以验证 target 是否真实存在);建出来的零好友行
+	// 由 sweep 的 SweepIdleCapacityRows 在保留期后回收(sweep_repo.go)。
+	// ensure、BeginTx、① 与 Commit 都在 runGuardedWrite 里(本域写事务的唯一骨架)。
 	//
-	//   - 为什么普通读在这里就是权威读:RC 下**每条语句各取一份新快照**,所以这条 SELECT 看得到
-	//     守卫等待期间别的事务已提交的写(这与 RR 不同,RR 的快照固定在事务第一条普通 SELECT)。
-	//     而能让这两个计数**变大**的写者只有 AddFriendRequest 与 AcceptFriend,它们都必须先持有
-	//     对应玩家的容量守卫行 —— 我们此刻正握着 from 与 to 两行,所以在 Commit 之前
-	//     谁也插不进新的 pending。会让计数变小的写者(RejectFriend、Block 取消 pending、sweep)
-	//     只会让上限更宽松,不影响 fail-closed。
-	//   - 为什么不能加 FOR UPDATE:两条 COUNT 的加锁集合分别是"from_player_id=A 的行"与
-	//     "to_player_id=T 的行",它们**跨玩家对交叉**,而容量守卫只串行化共享玩家的事务。
-	//     于是两个完全不相干的申请可以成环:
-	//         TRX1 = AddFriend(A→T) 先锁 (A,*) 里的 (A,C),再要 (*,T) 里的 (B,T);
-	//         TRX2 = AddFriend(B→C) 先锁 (B,*) 里的 (B,T),再要 (*,C) 里的 (A,C)。
-	//     两者没有共享的容量行,守卫拦不住 → 1213。按 player_id 排序也解不掉:
-	//     两个集合的索引维度不同(一个按 from、一个按 to),不存在统一的全序。
-	//   - 因此这里维持一条**必须被后来者保住的不变量**:任何会让 pending 计数**增加**的写路径,
-	//     都必须先持有对应玩家的容量守卫行。新增写路径时若违反它,这两处判定会静默退化。
-	if lim.MaxPendingRequests > 0 {
-		var outgoing uint32
-		if err := tx.QueryRowContext(ctx,
-			"SELECT COUNT(*) FROM friend_request WHERE from_player_id=? AND status=?",
-			fromPlayerID, requestStatusPending).Scan(&outgoing); err != nil {
-			return fmt.Errorf("count outgoing pending %d: %w", fromPlayerID, err)
+	// ① 容量守卫:本事务的第一把锁(runGuardedWrite 取),顺带把双方当前的 friend_count 读回来、
+	//    以 counts 传进闭包(守卫锁在手,这两个值到 Commit 之前不可能被别人改,⑦ 直接用,不必再查一次)。
+	// 闭包里 return 的哨兵由 runGuardedWrite 回滚后原样上抛。
+	err := r.runGuardedWrite(ctx, fromPlayerID, toPlayerID, func(ctx context.Context, tx *sql.Tx, counts map[uint64]uint32) error {
+		// ② 拉黑(两个方向,锁定读)。任一方向命中就拒:被拉黑的人不该能继续发申请,
+		//    拉黑了别人的人也不该收到对方的申请。
+		blocked, err := blockedEitherWay(ctx, tx, fromPlayerID, toPlayerID)
+		if err != nil {
+			return err
 		}
-		// >= 而不是 >:本次要新增一条,等于上限时再加就超了。
-		if outgoing >= lim.MaxPendingRequests {
-			return ErrTooManyPending
+		if blocked {
+			return ErrBlocked
 		}
-	}
-	if lim.MaxIncomingRequests > 0 {
-		var incoming uint32
-		if err := tx.QueryRowContext(ctx,
-			"SELECT COUNT(*) FROM friend_request WHERE to_player_id=? AND status=?",
-			toPlayerID, requestStatusPending).Scan(&incoming); err != nil {
-			return fmt.Errorf("count incoming pending %d: %w", toPlayerID, err)
-		}
-		if incoming >= lim.MaxIncomingRequests {
-			return ErrTargetInboxFull
-		}
-	}
 
-	// ⑦ 好友数上限。双方都查:自己满了发了也没用,对方满了同意不了 ——
-	//    让申请挂在那里比当场拒更糟(对方每次打开列表都看到一条注定失败的申请)。
-	//    哨兵按**角色**回(见顶部映射表):这里的 from 是 Sender、to 是 Acceptor。
-	if lim.MaxFriends > 0 {
-		if counts[fromPlayerID] >= lim.MaxFriends {
-			return ErrSenderFriendsFull
+		// ③ 已是好友(任一方向的边存在即算,锁定读)。双向两行本该同增同减,
+		//    但只要有一边在就不该再发申请 —— 单边残留应由修复流程处理,不该靠再发一次申请去补。
+		alreadyFriends, err := friendEdgeExistsForUpdate(ctx, tx, fromPlayerID, toPlayerID)
+		if err != nil {
+			return err
 		}
-		if counts[toPlayerID] >= lim.MaxFriends {
-			return ErrAcceptorFriendsFull
+		if alreadyFriends {
+			return ErrAlreadyFriends
 		}
-	}
 
-	// ⑧ upsert 申请行。历史终态行(rejected / accepted)复用同一行改回 pending,
-	//    靠主键天然幂等;request_time_ms 刷新成本次发起时刻(这是**新一次**申请,
-	//    列表按它排序,沿用首次时间会把重新申请排到陈旧位置)。
-	//    updated_ms 必须一起写(F2-14):sweep 用 (status,updated_ms) 判保留期,
-	//    漏写会让这一行永远停在 0、在 delete 模式下被当成"早就过期"。
-	//    ⚠ 用 VALUES() 取待插入值而不是 MySQL 8.0.20+ 新增的行别名(`... AS new`):
-	//    VALUES() 虽被标记 deprecated,但四张表都带着 TiDB 打散选项(friend_table.proto),
-	//    数据层迁 TiDB 是既定方向,而行别名语法的 TiDB 支持面不确定 —— 这里选可移植的那个。
-	now := time.Now().UnixMilli()
-	if _, err := tx.ExecContext(ctx,
-		`INSERT INTO friend_request (from_player_id, to_player_id, request_time_ms, status, updated_ms)
+		// ④ 本方向的申请行(按主键单行锁定读)。已经 pending 就直接拒,不刷新时间 ——
+		//    否则"反复点加好友"能把自己的申请一直顶到对方列表最前面。
+		var existingStatus int32
+		err = tx.QueryRowContext(ctx,
+			"SELECT status FROM friend_request WHERE from_player_id=? AND to_player_id=? FOR UPDATE",
+			fromPlayerID, toPlayerID).Scan(&existingStatus)
+		switch {
+		case err == nil:
+			if existingStatus == requestStatusPending {
+				return ErrRequestAlreadySent
+			}
+		case errors.Is(err, sql.ErrNoRows):
+			// 无历史申请,走下面的 INSERT 分支。
+		default:
+			return fmt.Errorf("lock friend request %d->%d: %w", fromPlayerID, toPlayerID, err)
+		}
+
+		// ⑤⑥ 两个 pending 计数。**这两条刻意用普通读,不加 FOR UPDATE**,与 §2.2 ② 的字面要求
+		// 有一处偏离,理由必须看完再改:
+		//
+		//   - 为什么普通读在这里就是权威读:RC 下**每条语句各取一份新快照**,所以这条 SELECT 看得到
+		//     守卫等待期间别的事务已提交的写(这与 RR 不同,RR 的快照固定在事务第一条普通 SELECT)。
+		//     而能让这两个计数**变大**的写语句全仓只有一条:AddFriendRequest 自己的 ⑧ upsert,
+		//     它必须先持有对应玩家的容量守卫行 —— 我们此刻正握着 from 与 to 两行,所以在 Commit 之前
+		//     谁也插不进新的 pending。其余对 friend_request 的写(AcceptFriend 的正 / 反向 UPDATE、
+		//     RejectFriend 的 CAS、Block 取消双向 pending、sweep 的 DELETE)都只让 pending 变小
+		//     或只碰终态行 —— AcceptFriend 增加的是 friend_count,不是 pending 数 ——
+		//     只会让上限更宽松,不影响 fail-closed。
+		//   - 为什么不能加 FOR UPDATE:两条 COUNT 的加锁集合分别是"from_player_id=A 的行"与
+		//     "to_player_id=T 的行",它们**跨玩家对交叉**,而容量守卫只串行化共享玩家的事务。
+		//     于是两个完全不相干的申请可以成环:
+		//         TRX1 = AddFriend(A→T) 先锁 (A,*) 里的 (A,C),再要 (*,T) 里的 (B,T);
+		//         TRX2 = AddFriend(B→C) 先锁 (B,*) 里的 (B,T),再要 (*,C) 里的 (A,C)。
+		//     两者没有共享的容量行,守卫拦不住 → 1213。按 player_id 排序也解不掉:
+		//     两个集合的索引维度不同(一个按 from、一个按 to),不存在统一的全序。
+		//   - 因此这里维持一条**必须被后来者保住的不变量**:任何会让 pending 计数**增加**的写路径,
+		//     都必须先持有对应玩家的容量守卫行。新增写路径时若违反它,这两处判定会静默退化。
+		if lim.MaxPendingRequests > 0 {
+			var outgoing uint32
+			if err := tx.QueryRowContext(ctx,
+				"SELECT COUNT(*) FROM friend_request WHERE from_player_id=? AND status=?",
+				fromPlayerID, requestStatusPending).Scan(&outgoing); err != nil {
+				return fmt.Errorf("count outgoing pending %d: %w", fromPlayerID, err)
+			}
+			// >= 而不是 >:本次要新增一条,等于上限时再加就超了。
+			if outgoing >= lim.MaxPendingRequests {
+				return ErrTooManyPending
+			}
+		}
+		if lim.MaxIncomingRequests > 0 {
+			var incoming uint32
+			if err := tx.QueryRowContext(ctx,
+				"SELECT COUNT(*) FROM friend_request WHERE to_player_id=? AND status=?",
+				toPlayerID, requestStatusPending).Scan(&incoming); err != nil {
+				return fmt.Errorf("count incoming pending %d: %w", toPlayerID, err)
+			}
+			if incoming >= lim.MaxIncomingRequests {
+				return ErrTargetInboxFull
+			}
+		}
+
+		// ⑦ 好友数上限。双方都查:自己满了发了也没用,对方满了同意不了 ——
+		//    让申请挂在那里比当场拒更糟(对方每次打开列表都看到一条注定失败的申请)。
+		//    哨兵按**角色**回(见顶部映射表):这里的 from 是 Sender、to 是 Acceptor。
+		if lim.MaxFriends > 0 {
+			if counts[fromPlayerID] >= lim.MaxFriends {
+				return ErrSenderFriendsFull
+			}
+			if counts[toPlayerID] >= lim.MaxFriends {
+				return ErrAcceptorFriendsFull
+			}
+		}
+
+		// ⑧ upsert 申请行。历史终态行(rejected / accepted)复用同一行改回 pending,
+		//    靠主键天然幂等;request_time_ms 刷新成本次发起时刻(这是**新一次**申请,
+		//    列表按它排序,沿用首次时间会把重新申请排到陈旧位置)。
+		//    updated_ms 必须一起写(F2-14):sweep 用 (status,updated_ms) 判保留期,
+		//    漏写会让这一行永远停在 0、在 delete 模式下被当成"早就过期"。
+		//    ⚠ 用 VALUES() 取待插入值而不是 MySQL 8.0.20+ 新增的行别名(`... AS new`):
+		//    VALUES() 虽被标记 deprecated,但四张表都带着 TiDB 打散选项(friend_table.proto),
+		//    数据层迁 TiDB 是既定方向,而行别名语法的 TiDB 支持面不确定 —— 这里选可移植的那个。
+		now := time.Now().UnixMilli()
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO friend_request (from_player_id, to_player_id, request_time_ms, status, updated_ms)
 		 VALUES (?, ?, ?, ?, ?)
 		 ON DUPLICATE KEY UPDATE status=VALUES(status), request_time_ms=VALUES(request_time_ms), updated_ms=VALUES(updated_ms)`,
-		fromPlayerID, toPlayerID, now, requestStatusPending, now); err != nil {
-		return fmt.Errorf("upsert friend request %d->%d: %w", fromPlayerID, toPlayerID, err)
-	}
-
-	if err := tx.Commit(); err != nil {
+			fromPlayerID, toPlayerID, now, requestStatusPending, now); err != nil {
+			return fmt.Errorf("upsert friend request %d->%d: %w", fromPlayerID, toPlayerID, err)
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 
@@ -446,120 +494,111 @@ func (r *FriendRepo) AcceptFriend(ctx context.Context, fromPlayerID, toPlayerID 
 	}
 	// capacity 行在主事务前逐行、按 player_id 顺序自动提交地确保存在(顶部锁序说明 (1))。
 	// 缺行不能猜 0:ensure 用普通一致性读从 friend 表的权威边数算出初值(见 ensureFriendCapacityRows)。
-	if err := r.ensureFriendCapacityRows(ctx, fromPlayerID, toPlayerID); err != nil {
-		return err
-	}
-
-	tx, err := r.beginWriteTx(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// ① 容量守卫先行。好友数上限由始终存在的 friend_capacity 行保护,不依赖
+	// ensure、BeginTx、① 与 Commit 都在 runGuardedWrite 里;上面的 pending 预检在它之外,
+	// 不随回收竞态的重试重跑(重跑的那一遍由事务内 ③ 的锁定读复核兜住)。
+	//
+	// ① 容量守卫先行(runGuardedWrite 取,读回的 friend_count 以 counts 传进闭包)。
+	// 好友数上限由 friend_capacity 行保护,不依赖
 	// COUNT ... FOR UPDATE 的 gap-lock 行为(它会随隔离级别变化);双方始终按 player_id
 	// 升序加锁,避免反向申请同时接受时 ABBA。
-	counts, err := lockCapacityRows(ctx, tx, fromPlayerID, toPlayerID)
-	if err != nil {
-		return err
-	}
+	err := r.runGuardedWrite(ctx, fromPlayerID, toPlayerID, func(ctx context.Context, tx *sql.Tx, counts map[uint64]uint32) error {
+		// ② 拉黑复核(F2 §3.2 新增)。没有这一步,"Block 删边 → Accept 插边"可以交错出
+		// "既是好友又在黑名单里"的状态:Block 与 Accept 现在锁同一对容量行,任一先行另一必见其果。
+		blocked, err := blockedEitherWay(ctx, tx, fromPlayerID, toPlayerID)
+		if err != nil {
+			return err
+		}
+		if blocked {
+			return ErrBlocked
+		}
 
-	// ② 拉黑复核(F2 §3.2 新增)。没有这一步,"Block 删边 → Accept 插边"可以交错出
-	// "既是好友又在黑名单里"的状态:Block 与 Accept 现在锁同一对容量行,任一先行另一必见其果。
-	blocked, err := blockedEitherWay(ctx, tx, fromPlayerID, toPlayerID)
-	if err != nil {
-		return err
-	}
-	if blocked {
-		return ErrBlocked
-	}
-
-	// ③ 申请行按主键单行锁定读并复核仍是 pending。
-	//
-	// ⚠ 这条 SELECT **必须留在容量守卫之后**(F2 §2.2 的裁定)。它原先排在守卫之前,
-	// 与 F2 新增的 AddFriend 权威事务正好互为 ABBA(顶部锁序说明 (3))。
-	// 下移不会把 B 仓当初修掉的 1213 引回来:那次的根因是"过早把 status 从 1 改成 2,
-	// 让并发事务在 idx_to_player 前缀上删/插",修法是**把 UPDATE 延后到容量锁之后** ——
-	// 下面的 UPDATE 仍在守卫之后,这里下移的只是一条主键单行的 SELECT,
-	// 它锁的是 (from,to) 这一行、不碰 idx_to_player 的范围。
-	var requestStatus int32
-	if err := tx.QueryRowContext(ctx,
-		"SELECT status FROM friend_request WHERE from_player_id=? AND to_player_id=? FOR UPDATE",
-		fromPlayerID, toPlayerID).Scan(&requestStatus); err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
+		// ③ 申请行按主键单行锁定读并复核仍是 pending。
+		//
+		// ⚠ 这条 SELECT **必须留在容量守卫之后**(F2 §2.2 的裁定)。它原先排在守卫之前,
+		// 与 F2 新增的 AddFriend 权威事务正好互为 ABBA(顶部锁序说明 (3))。
+		// 下移不会把 B 仓当初修掉的 1213 引回来:那次的根因是"过早把 status 从 1 改成 2,
+		// 让并发事务在 idx_to_player 前缀上删/插",修法是**把 UPDATE 延后到容量锁之后** ——
+		// 下面的 UPDATE 仍在守卫之后,这里下移的只是一条主键单行的 SELECT,
+		// 它锁的是 (from,to) 这一行、不碰 idx_to_player 的范围。
+		var requestStatus int32
+		if err := tx.QueryRowContext(ctx,
+			"SELECT status FROM friend_request WHERE from_player_id=? AND to_player_id=? FOR UPDATE",
+			fromPlayerID, toPlayerID).Scan(&requestStatus); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return ErrRequestNotFound
+			}
+			return err
+		}
+		if requestStatus != requestStatusPending {
 			return ErrRequestNotFound
 		}
-		return err
-	}
-	if requestStatus != requestStatusPending {
-		return ErrRequestNotFound
-	}
 
-	// ④ 上限判定用守卫读回来的 friend_count(锁在手,值不会变)。
-	// maxFriends == 0 按"未配置"放行,与 AddFriendRequest ⑦、Block ③ 的约定一致 ——
-	// 生产不会出现(config.Validate 拒 0 阈值),但本层只许有一种约定:0 = 不限,不是 0 = 一个都不许。
-	if maxFriends > 0 {
-		if counts[fromPlayerID] >= maxFriends {
-			return ErrSenderFriendsFull
-		}
-		if counts[toPlayerID] >= maxFriends {
-			return ErrAcceptorFriendsFull
-		}
-	}
-
-	now := time.Now().UnixMilli()
-
-	// ⑤ 推进申请状态。保留 RowsAffected 的 fail-closed 门禁(WHERE status=pending),
-	// 并补写 updated_ms(F2-14:不写它 sweep 就没有可用的保留期依据)。
-	res, err := tx.ExecContext(ctx,
-		"UPDATE friend_request SET status=?, updated_ms=? WHERE from_player_id=? AND to_player_id=? AND status=?",
-		requestStatusAccepted, now, fromPlayerID, toPlayerID, requestStatusPending)
-	if err != nil {
-		return err
-	}
-	affected, err := res.RowsAffected()
-	if err != nil {
-		return err
-	}
-	if affected != 1 {
-		return ErrRequestNotFound
-	}
-
-	// ⑥ 反向 pending 一并收敛成 accepted(F2 §3.2 新增)。A→B 与 B→A 可以各自 pending;
-	// 本次接受已经让双方成为好友,反向申请的结果同样是"好友已建立"。不收敛的话它会永远挂在
-	// from 的收件箱里,而且被接受时会对已是好友的两人再走一遍建边流程。
-	// 这里不校验 RowsAffected:没有反向申请是最常见的情况,0 行是正常结果。
-	if _, err := tx.ExecContext(ctx,
-		"UPDATE friend_request SET status=?, updated_ms=? WHERE from_player_id=? AND to_player_id=? AND status=?",
-		requestStatusAccepted, now, toPlayerID, fromPlayerID, requestStatusPending); err != nil {
-		return fmt.Errorf("resolve reverse pending %d->%d: %w", toPlayerID, fromPlayerID, err)
-	}
-
-	// ⑦ 分向插入并按实际 RowsAffected 更新各自容量;已存在的方向不会重复计数。
-	for _, edge := range [][2]uint64{{fromPlayerID, toPlayerID}, {toPlayerID, fromPlayerID}} {
-		result, err := tx.ExecContext(ctx,
-			"INSERT IGNORE INTO friend (player_id, friend_player_id, since_ms) VALUES (?, ?, ?)",
-			edge[0], edge[1], now)
-		if err != nil {
-			return err
-		}
-		inserted, err := result.RowsAffected()
-		if err != nil {
-			return err
-		}
-		if inserted > 1 {
-			return fmt.Errorf("unexpected friend insert count %d for %d -> %d", inserted, edge[0], edge[1])
-		}
-		if inserted == 1 {
-			if _, err := tx.ExecContext(ctx,
-				"UPDATE friend_capacity SET friend_count = friend_count + 1 WHERE player_id = ?",
-				edge[0]); err != nil {
-				return err
+		// ④ 上限判定用守卫读回来的 friend_count(锁在手,值不会变)。
+		// maxFriends == 0 按"未配置"放行,与 AddFriendRequest ⑦、Block ③ 的约定一致 ——
+		// 生产不会出现(config.Validate 拒 0 阈值),但本层只许有一种约定:0 = 不限,不是 0 = 一个都不许。
+		if maxFriends > 0 {
+			if counts[fromPlayerID] >= maxFriends {
+				return ErrSenderFriendsFull
+			}
+			if counts[toPlayerID] >= maxFriends {
+				return ErrAcceptorFriendsFull
 			}
 		}
-	}
 
-	if err := tx.Commit(); err != nil {
+		now := time.Now().UnixMilli()
+
+		// ⑤ 推进申请状态。保留 RowsAffected 的 fail-closed 门禁(WHERE status=pending),
+		// 并补写 updated_ms(F2-14:不写它 sweep 就没有可用的保留期依据)。
+		res, err := tx.ExecContext(ctx,
+			"UPDATE friend_request SET status=?, updated_ms=? WHERE from_player_id=? AND to_player_id=? AND status=?",
+			requestStatusAccepted, now, fromPlayerID, toPlayerID, requestStatusPending)
+		if err != nil {
+			return err
+		}
+		affected, err := res.RowsAffected()
+		if err != nil {
+			return err
+		}
+		if affected != 1 {
+			return ErrRequestNotFound
+		}
+
+		// ⑥ 反向 pending 一并收敛成 accepted(F2 §3.2 新增)。A→B 与 B→A 可以各自 pending;
+		// 本次接受已经让双方成为好友,反向申请的结果同样是"好友已建立"。不收敛的话它会永远挂在
+		// from 的收件箱里,而且被接受时会对已是好友的两人再走一遍建边流程。
+		// 这里不校验 RowsAffected:没有反向申请是最常见的情况,0 行是正常结果。
+		if _, err := tx.ExecContext(ctx,
+			"UPDATE friend_request SET status=?, updated_ms=? WHERE from_player_id=? AND to_player_id=? AND status=?",
+			requestStatusAccepted, now, toPlayerID, fromPlayerID, requestStatusPending); err != nil {
+			return fmt.Errorf("resolve reverse pending %d->%d: %w", toPlayerID, fromPlayerID, err)
+		}
+
+		// ⑦ 分向插入并按实际 RowsAffected 更新各自容量;已存在的方向不会重复计数。
+		for _, edge := range [][2]uint64{{fromPlayerID, toPlayerID}, {toPlayerID, fromPlayerID}} {
+			result, err := tx.ExecContext(ctx,
+				"INSERT IGNORE INTO friend (player_id, friend_player_id, since_ms) VALUES (?, ?, ?)",
+				edge[0], edge[1], now)
+			if err != nil {
+				return err
+			}
+			inserted, err := result.RowsAffected()
+			if err != nil {
+				return err
+			}
+			if inserted > 1 {
+				return fmt.Errorf("unexpected friend insert count %d for %d -> %d", inserted, edge[0], edge[1])
+			}
+			if inserted == 1 {
+				if _, err := tx.ExecContext(ctx,
+					"UPDATE friend_capacity SET friend_count = friend_count + 1 WHERE player_id = ?",
+					edge[0]); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
 		return err
 	}
 
@@ -604,7 +643,9 @@ func (r *FriendRepo) RemoveFriend(ctx context.Context, playerID, targetPlayerID 
 
 	// F2-15:**先判是不是好友,再 ensure 容量行**。
 	// 原先直接 ensure,于是任意 target_player_id 每次调用都会凭空造出 2 行 friend_capacity ——
-	// 客户端可以用互不相同的 target 无界撑大那张表(它没有 TTL 也不在 sweep 范围里)。
+	// 客户端可以用互不相同的 target 撑大那张表。零好友的容量行现在由 sweep 的
+	// SweepIdleCapacityRows 在保留期后回收(sweep_repo.go),但这道前置判定仍然保留:
+	// 它挡的是回收周期**之内**的增长速度,回收只管得了保留期之后的存量。
 	//
 	// 这一探是**普通读**而不是锁定读,有意为之:此刻还没有容量守卫,按顶部锁序 (2)
 	// 不允许做锁定读。漏判的唯一情形是"边正好在这一瞬间由 AcceptFriend 提交",
@@ -619,25 +660,14 @@ func (r *FriendRepo) RemoveFriend(ctx context.Context, playerID, targetPlayerID 
 	}
 
 	cacheKeys := []string{friendListKey(playerID), friendListKey(targetPlayerID)}
-	if err := r.ensureFriendCapacityRows(ctx, playerID, targetPlayerID); err != nil {
-		return err
-	}
-	tx, err := r.beginWriteTx(ctx)
+	// 容量守卫(runGuardedWrite 取)。这里不需要 friend_count 的值(只做增减,所以闭包不收 counts),
+	// 但锁必须照样先拿:它同时是"这一对玩家"的串行化载体,Block 与 AcceptFriend 都锁同一对行。
+	// 上面的 friendEdgeExists 在 runGuardedWrite 之外,不随回收竞态的重试重跑。
+	err = r.runGuardedWrite(ctx, playerID, targetPlayerID, func(ctx context.Context, tx *sql.Tx, _ map[uint64]uint32) error {
+		// 时刻取在闭包里:它属于真正拿到守卫的那一遍尝试(与 Block 同一个口径)。
+		return deleteFriendEdges(ctx, tx, playerID, targetPlayerID, time.Now().UnixMilli())
+	})
 	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-
-	// 容量守卫。这里不需要 friend_count 的值(只做增减),但锁必须照样先拿:
-	// 它同时是"这一对玩家"的串行化载体,Block 与 AcceptFriend 都锁同一对行。
-	if _, err := lockCapacityRows(ctx, tx, playerID, targetPlayerID); err != nil {
-		return err
-	}
-
-	if err := deleteFriendEdges(ctx, tx, playerID, targetPlayerID); err != nil {
-		return err
-	}
-	if err := tx.Commit(); err != nil {
 		return err
 	}
 	r.invalidateCachesAfterCommit(ctx, cacheKeys...)
@@ -645,6 +675,94 @@ func (r *FriendRepo) RemoveFriend(ctx context.Context, playerID, targetPlayerID 
 }
 
 // ── 写事务的公共步骤(block_repo.go 也用这几个,别各写一份)──────────────────────
+
+// errCapacityRowsMissing:容量守卫发现缺行。包内哨兵,**不导出**、不进 logic 的映射表 ——
+// 它只服务于 runGuardedWrite 的"重新 ensure 并有上限地重试"(至多重试两次);用尽后仍缺行时原样上抛,
+// logic 层照旧把它定性成 ErrStorage(fail-closed 不变)。
+var errCapacityRowsMissing = errors.New("friend capacity rows missing")
+
+// capacityGuardMaxAttempts:ensure + 写事务最多跑几遍(= 1 次正常 + 至多 2 次回收竞态重试)。
+// 为什么恰好是 3,见顶部锁序说明 (5)。
+const capacityGuardMaxAttempts = 3
+
+// ensureDeadlockMaxAttempts:ensureFriendCapacityRows 对**单个玩家**的"COUNT + INSERT IGNORE"
+// 撞上 1213 时最多跑几遍。成因见顶部锁序说明 (5) 的"回收给 ensure 带来的 1213"。
+// 通常一遍收敛,但不保证:N 个等待者同时拿到 S 时 InnoDB 每次只牺牲一个,可能连续几轮;
+// 牺牲者重跑时若记录仍是 delete-marked(purge 还没清)且又有多个等待者,也可能再撞一次。
+// 所以给上限 3,用尽后 fail-closed(1213 原样上抛,logic 定性 ErrStorage)。
+const ensureDeadlockMaxAttempts = 3
+
+// guardedWriteBody 是写事务在**已持有容量守卫**之后要做的事。counts 是守卫读回的双方 friend_count。
+// 返回 nil → 提交;返回任何 error → 回滚并原样上抛(哨兵照旧穿透)。
+//
+// body 在一次 runGuardedWrite 里**至多执行一次**:重试只由守卫缺行触发,而守卫在 body 之前。
+// 但 body 返回 nil 之后 Commit 仍可能失败,所以里面只许有**本事务之内**的副作用 ——
+// 缓存失效、推送一律由调用方在 runGuardedWrite 返回 nil 之后做。
+type guardedWriteBody func(ctx context.Context, tx *sql.Tx, counts map[uint64]uint32) error
+
+// runGuardedWrite 是本域所有"要拿容量守卫的写事务"的唯一骨架:
+//
+//	事务外 ensure(升序、自动提交)→ BeginTx(RC)→ ① lockCapacityRows → body → Commit。
+//
+// 守卫缺行(errCapacityRowsMissing)时回到事务外重新 ensure,至多重试到 capacityGuardMaxAttempts。
+// 调用方在它返回 nil 之后自己做 invalidateCachesAfterCommit。
+//
+// 为什么重试是安全的:缺行只可能由事务的**第一条语句**(守卫)报出来,此时 body 还没跑、
+// 事务没有任何副作用,回滚掉的是一个空事务。**只有**这一种错误会触发重试 —— body 返回的
+// 任何 error(含 1213、哨兵)都原样上抛,不在这里吞,也不在这里重试:
+// 后台靠节拍自愈、在线请求靠客户端重试,是本域既有的口径。
+// (ensure 自己那条 1213 是另一回事:它在事务外、没有副作用,由 ensureFriendCapacityRows 内部
+// 有上限地重试,用尽后照样原样上抛到这里、再原样上抛出去。)
+// 调用方各自的事务外前置判定(AcceptFriend 的 pending 预检、RemoveFriend 的 friendEdgeExists、
+// Block 的名额探针)刻意留在本函数之外:它们挡的是"要不要 ensure",重试时不必重判 ——
+// 权威复核都在 body 里、守卫之后。
+func (r *FriendRepo) runGuardedWrite(ctx context.Context, playerA, playerB uint64, body guardedWriteBody) error {
+	var lastErr error
+	for attempt := 1; attempt <= capacityGuardMaxAttempts; attempt++ {
+		err := r.runGuardedWriteOnce(ctx, playerA, playerB, body)
+		if !errors.Is(err, errCapacityRowsMissing) {
+			return err
+		}
+		lastErr = err
+		if attempt < capacityGuardMaxAttempts {
+			// 让"回收竞态"可观测:正常情况下这条日志应当极少出现,持续出现说明回收的保留期
+			// 配得太短,或者有回收之外的东西在删 friend_capacity。玩家 id 只进日志、不进指标 label。
+			// 按仓内先例用 Errorf 打 "WARN " 前缀。
+			logx.WithContext(ctx).Errorf("[friend] WARN 容量守卫缺行(多半是 sweep 回收竞态),重新 ensure 后重试 "+
+				"players=(%d,%d) attempt=%d/%d: %v", playerA, playerB, attempt, capacityGuardMaxAttempts, err)
+		}
+	}
+	// 每一遍都缺行:两行各至多被回收一次,3 遍之内必过(顶部锁序说明 (5)),
+	// 所以这不是回收竞态能解释的,照旧 fail-closed(logic 定性 ErrStorage)。
+	return lastErr
+}
+
+// runGuardedWriteOnce 跑一遍"ensure → 事务"。拆成独立函数是为了让 defer tx.Rollback()
+// 在**每一遍**结束时就执行 —— 写在 runGuardedWrite 的循环体里,defer 会攒到整个函数返回,
+// 前面各遍那些已经没用的事务(连同它们的连接)会被一直占到后续各遍结束。
+func (r *FriendRepo) runGuardedWriteOnce(ctx context.Context, playerA, playerB uint64, body guardedWriteBody) error {
+	// 容量行在主事务之前、按 player_id 升序自动提交地补齐(顶部锁序说明 (1))。
+	if err := r.ensureFriendCapacityRows(ctx, playerA, playerB); err != nil {
+		return err
+	}
+
+	tx, err := r.beginWriteTx(ctx)
+	if err != nil {
+		return err
+	}
+	// Commit 成功之后的 Rollback 返回 sql.ErrTxDone,无害,照 database/sql 的惯用法不检查。
+	defer tx.Rollback()
+
+	// ① 容量守卫:本事务的第一把锁(顶部锁序说明 (2)(4))。
+	counts, err := lockCapacityRows(ctx, tx, playerA, playerB)
+	if err != nil {
+		return err
+	}
+	if err := body(ctx, tx, counts); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
 
 // beginWriteTx 开一个 friend 写事务。隔离级别固定 READ COMMITTED,理由见 friendWriteTxIsolation。
 func (r *FriendRepo) beginWriteTx(ctx context.Context) (*sql.Tx, error) {
@@ -656,9 +774,13 @@ func (r *FriendRepo) beginWriteTx(ctx context.Context) (*sql.Tx, error) {
 //
 // 这是每个写事务的第一把锁(顶部锁序说明 (2)(4))。升序是防 ABBA 的全部依据:
 // 只要所有路径都按同一个全序取锁,涉及同一个玩家的事务就不可能互等成环。
-// 缺行返回错误而不是当 0:ensure 刚刚补过行,此时还缺行说明有人在并发删这张表
-// (或者表被别的服务动了)—— 那是不变量破裂,必须 fail-closed 让调用方回 ErrStorage,
-// 绝不能"当作 0"继续写,那会把好友硬上限凭空放宽一轮。
+// 缺行返回错误(用 %w 包着 errCapacityRowsMissing)而不是当 0。ensure 刚刚补过行、此时还缺行,
+// 现在有一个**预期内**的来源:sweep 的 SweepIdleCapacityRows 会回收陈旧的零好友行,它可以
+// 插在 ensure 与守卫之间,也可以在守卫的 FOR UPDATE 正等着这行时把它删掉。单次缺行因此
+// 不是故障 —— runGuardedWrite 认这个哨兵,回到事务外重新 ensure 并重试(至多重试两次,
+// 共 capacityGuardMaxAttempts 遍)。每一遍都缺行才是不变量破裂(有回收之外的东西在删这张表,或者表被别的服务动了):
+// 哨兵原样上抛、logic 定性 ErrStorage,fail-closed。
+// 无论哪种,都绝不能"当作 0"继续写,那会把好友硬上限凭空放宽一轮。
 func lockCapacityRows(ctx context.Context, tx *sql.Tx, playerIDs ...uint64) (map[uint64]uint32, error) {
 	ids := ascendingUniqueIDs(playerIDs)
 	if len(ids) == 0 {
@@ -693,7 +815,7 @@ func lockCapacityRows(ctx context.Context, tx *sql.Tx, playerIDs ...uint64) (map
 		return nil, err
 	}
 	if len(counts) != len(ids) {
-		return nil, fmt.Errorf("friend capacity rows missing for players %v (got %d)", ids, len(counts))
+		return nil, fmt.Errorf("%w: players %v (got %d)", errCapacityRowsMissing, ids, len(counts))
 	}
 	return counts, nil
 }
@@ -759,7 +881,13 @@ func (r *FriendRepo) friendEdgeExists(ctx context.Context, a, b uint64) (bool, e
 // 下溢保护写成 `AND friend_count > 0` 而不是 IF():uint 列减到负数会回绕成天文数字、
 // 直接把上限判定废掉,两种写法都挡得住,但 WHERE 版本能通过 RowsAffected **看见**这件事
 // (详见下面那条日志)。调用方必须已持有双方的容量守卫。
-func deleteFriendEdges(ctx context.Context, tx *sql.Tx, a, b uint64) error {
+//
+// nowMs 由调用方给(RemoveFriend 在 body 里取,Block 复用它那个"一个事务只取一次"的时刻),
+// 减计数时一并写进 created_ms:保留期要从"最近一次 friend_count 减少"起算,否则老玩家删掉最后
+// 一个好友的那一刻,他的行(0, 很老的 created_ms)立即就是回收候选,陈旧 ensure 会把计数
+// 永久写大 1(完整交错见顶部锁序说明 (5) 的"为什么删行也不会让计数偏大")。
+// 这偏离了收尾批冻结规格里"created_ms 只在 INSERT 写"的表述,原因即上述交错,已登记进交付说明。
+func deleteFriendEdges(ctx context.Context, tx *sql.Tx, a, b uint64, nowMs int64) error {
 	for _, edge := range [][2]uint64{{a, b}, {b, a}} {
 		result, err := tx.ExecContext(ctx,
 			"DELETE FROM friend WHERE player_id=? AND friend_player_id=?", edge[0], edge[1])
@@ -776,8 +904,8 @@ func deleteFriendEdges(ctx context.Context, tx *sql.Tx, a, b uint64) error {
 			// 已经脱节,是本域最要命的那类不变量破裂,静默抹平会让它只能靠玩家报"好友加不满"暴露。
 			// 不 fail-closed:此刻边已经删掉了,回滚整个事务反而把一次正确的删好友变成失败。
 			res, err := tx.ExecContext(ctx,
-				"UPDATE friend_capacity SET friend_count = friend_count - 1 WHERE player_id = ? AND friend_count > 0",
-				edge[0])
+				"UPDATE friend_capacity SET friend_count = friend_count - 1, created_ms = ? WHERE player_id = ? AND friend_count > 0",
+				nowMs, edge[0])
 			if err != nil {
 				return fmt.Errorf("decrement friend count %d: %w", edge[0], err)
 			}
@@ -863,71 +991,78 @@ func (r *FriendRepo) invalidateCachesAfterCommit(ctx context.Context, keys ...st
 // **退役的只有这道闸**。D-10 的实质不变量原样保留:friend_capacity 的显式计数锁行仍是好友数的
 // 硬上限;缺行时仍按 friend 表的权威边数建行、**绝不猜 0**(猜 0 会让已满的列表被再撑大一轮);
 // 先在事务外补齐行、再在事务内按 player_id 升序 FOR UPDATE 锁双方容量行的顺序也不变。
+//
+// created_ms 是"本行被(重新)建出、或最近一次 friend_count 减少的时刻";回收的保留期从这一刻起算。
+// 写它的只有两处:这里的 INSERT,以及 deleteFriendEdges 减计数的那条 UPDATE。INSERT IGNORE 撞上
+// 已有行时整条语句是空操作,既有行的 created_ms 不会被 ensure 刷新(刷新会让陈旧的零好友行永远
+// 不过期)。为什么减计数也要写:本函数的 COUNT 与 INSERT 是两条各自自动提交的语句、不原子,
+// 不刷新的话"刚减到 0 的老行"立刻可回收,陈旧的 INSERT 会把计数永久写大 1 —— 完整交错与残留
+// (陈旧窗口跨过整个 RetentionDays 才可能复现,视为不可达)见顶部锁序说明 (5)。
+// 它只服务于 sweep 的容量行回收(SweepIdleCapacityRows:friend_count = 0 且 created_ms 早于保留期
+// 的行),不参与任何业务判定。
+//
+// 1213:回收的 DELETE 会留下 delete-marked 的主键记录,并发 INSERT IGNORE 同一个玩家时可能在它上面
+// S→X 互等成环(顶部锁序说明 (5))。此时还在事务外、没有任何副作用,所以对**单个玩家**的
+// "COUNT + INSERT"这一对语句有上限地重跑(ensureDeadlockMaxAttempts):COUNT 必须一起重跑,
+// 否则重试写下去的是上一遍的陈旧边数。只认 1213,其它错误一律原样上抛;每遍之前先看 ctx。
 func (r *FriendRepo) ensureFriendCapacityRows(ctx context.Context, playerIDs ...uint64) error {
 	for _, playerID := range ascendingUniqueIDs(playerIDs) {
-		// 缺行几乎都是从未有过好友的新玩家(COUNT 返回 0)。但初值仍然只能从 friend 表
-		// 的权威边数来,**绝不能直接写 0**:将来若有任何路径先写了 friend 边再补容量行,
-		// 猜 0 会让这个玩家的硬上限凭空放宽一轮,且全程零报错。
-		// 普通一致性读不持有 gap lock;所有写路径都先 ensure 同一 capacity 行,
-		// 再在事务里加锁并更新计数。
-		var authoritativeCount uint32
-		if err := r.db.QueryRowContext(ctx,
-			"SELECT COUNT(*) FROM friend WHERE player_id = ?", playerID).Scan(&authoritativeCount); err != nil {
-			return fmt.Errorf("count authoritative friends for player %d: %w", playerID, err)
+		var err error
+		for attempt := 1; attempt <= ensureDeadlockMaxAttempts; attempt++ {
+			// 请求已超时 / 已取消就别再去抢锁:带着取消的 ctx 重试只会换来一条含糊的驱动错误,
+			// 把真正的原因(上一遍的 1213)盖掉。
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				if err != nil {
+					return fmt.Errorf("%w(重试前 ctx 已结束: %v)", err, ctxErr)
+				}
+				return ctxErr
+			}
+			err = r.ensureFriendCapacityRow(ctx, playerID)
+			if !isMySQLDeadlock(err) {
+				break
+			}
+			if attempt < ensureDeadlockMaxAttempts {
+				// 与守卫缺行那条 WARN 同一个目的:让回收带来的竞态可观测。持续出现说明同一玩家上的
+				// 并发 ensure 很密(热点 target),那时值得评估把 INSERT IGNORE 换成直接取 X 的写法。
+				logx.WithContext(ctx).Errorf("[friend] WARN ensure 容量行撞上 1213(多半是回收留下的 delete-marked 记录),"+
+					"重跑 COUNT+INSERT player=%d attempt=%d/%d: %v", playerID, attempt, ensureDeadlockMaxAttempts, err)
+			}
 		}
-		if _, err := r.db.ExecContext(ctx,
-			"INSERT IGNORE INTO friend_capacity (player_id, friend_count) VALUES (?, ?)",
-			playerID, authoritativeCount); err != nil {
-			return fmt.Errorf("ensure friend capacity row for player %d: %w", playerID, err)
+		if err != nil {
+			// 含"重试用尽仍是 1213":fail-closed,原样上抛(logic 定性 ErrStorage)。
+			return err
 		}
 	}
 	return nil
 }
 
-// ── 事务外的非权威探针(只配 logic 层做快速失败用)────────────────────────────────
-//
-// 下面三个都**不是**权威判定:它们在事务外、没有守卫,读到的结论可能在返回途中就失效。
-// 保留它们只为省掉"明显不可能成功"的开库(例如已经是好友时不必进事务)。
-// AGENTS §11.3:预检不得替代提交点的复核 —— 真正的门禁在上面各写事务里。
-
-// AreFriends 走好友列表缓存,所以还可能读到最多 CacheTTL 之久的旧视图。
-// 需要权威结论的地方用事务内的 friendEdgeExistsForUpdate。
-func (r *FriendRepo) AreFriends(ctx context.Context, playerID, targetID uint64) (bool, error) {
-	friends, err := r.GetFriendList(ctx, playerID)
-	if err != nil {
-		return false, err
+// ensureFriendCapacityRow 对单个玩家跑一遍"按权威边数算初值 → INSERT IGNORE"。
+// 拆出来只为让 ensureFriendCapacityRows 的 1213 重试能把这一对语句**整体**重跑。
+func (r *FriendRepo) ensureFriendCapacityRow(ctx context.Context, playerID uint64) error {
+	// 缺行几乎都是从未有过好友的新玩家(COUNT 返回 0)。但初值仍然只能从 friend 表
+	// 的权威边数来,**绝不能直接写 0**:将来若有任何路径先写了 friend 边再补容量行,
+	// 猜 0 会让这个玩家的硬上限凭空放宽一轮,且全程零报错。
+	// 普通一致性读不持有 gap lock;所有写路径都先 ensure 同一 capacity 行,
+	// 再在事务里加锁并更新计数。
+	var authoritativeCount uint32
+	if err := r.db.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM friend WHERE player_id = ?", playerID).Scan(&authoritativeCount); err != nil {
+		return fmt.Errorf("count authoritative friends for player %d: %w", playerID, err)
 	}
-	for _, f := range friends {
-		if f.FriendPlayerID == targetID {
-			return true, nil
-		}
+	if _, err := r.db.ExecContext(ctx,
+		"INSERT IGNORE INTO friend_capacity (player_id, friend_count, created_ms) VALUES (?, ?, ?)",
+		playerID, authoritativeCount, time.Now().UnixMilli()); err != nil {
+		return fmt.Errorf("ensure friend capacity row for player %d: %w", playerID, err)
 	}
-	return false, nil
+	return nil
 }
 
-// HasPendingRequest 报告 (from,to) 方向是否已有 pending 申请。
-func (r *FriendRepo) HasPendingRequest(ctx context.Context, fromID, toID uint64) (bool, error) {
-	var count int
-	err := r.db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM friend_request WHERE from_player_id=? AND to_player_id=? AND status=?",
-		fromID, toID, requestStatusPending).Scan(&count)
-	if err != nil {
-		return false, err
-	}
-	return count > 0, nil
-}
-
-// CountOutgoingPending 返回该玩家发出的、仍处于 pending 的申请条数。
-// 只统计 pending 才不会把历史终态行算进去(reject/accept 只翻 status 不删行)。
-func (r *FriendRepo) CountOutgoingPending(ctx context.Context, fromID uint64) (uint32, error) {
-	var count uint32
-	err := r.db.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM friend_request WHERE from_player_id=? AND status=?",
-		fromID, requestStatusPending).Scan(&count)
-	if err != nil {
-		return 0, err
-	}
-	return count, nil
+// isMySQLDeadlock 报告 err 是不是 InnoDB 的死锁牺牲(错误号 1213)。errors.As 能穿透本层的 %w 包装。
+// 只认错误号、不做文本兜底:生产路径上的包装全是 %w,链不会断;文本匹配会把别处拼进来的
+// "1213" 字样误判成可重试。
+func isMySQLDeadlock(err error) bool {
+	var my *drivermysql.MySQLError
+	return errors.As(err, &my) && my.Number == 1213
 }
 
 // ── Cache helpers ──────────────────────────────────────────────

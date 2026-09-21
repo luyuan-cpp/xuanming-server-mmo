@@ -20,8 +20,10 @@
 #include "dungeon_table.h"
 #include "equipslot_table.h"
 #include "globalvariable_table.h"
+#include "guilddonate_table.h"
 #include "guildlevel_table.h"
 #include "guildrule_table.h"
+#include "guildshop_table.h"
 #include "item_table.h"
 #include "messagelimiter_table.h"
 #include "mirror_table.h"
@@ -30,6 +32,7 @@
 #include "pet_table.h"
 #include "petrule_table.h"
 #include "reward_table.h"
+#include "rolenamerule_table.h"
 #include "skill_table.h"
 #include "skillpermission_table.h"
 #include "test_table.h"
@@ -73,9 +76,13 @@ void LoadTables() {
 
     GlobalVariableTableManager::Instance().Load();
 
+    GuildDonateTableManager::Instance().Load();
+
     GuildLevelTableManager::Instance().Load();
 
     GuildRuleTableManager::Instance().Load();
+
+    GuildShopTableManager::Instance().Load();
 
     ItemTableManager::Instance().Load();
 
@@ -92,6 +99,8 @@ void LoadTables() {
     PetRuleTableManager::Instance().Load();
 
     RewardTableManager::Instance().Load();
+
+    RoleNameRuleTableManager::Instance().Load();
 
     SkillTableManager::Instance().Load();
 
@@ -137,9 +146,13 @@ void LoadTables() {
 
     GlobalVariableTableManager::Instance().LoadSuccess();
 
+    GuildDonateTableManager::Instance().LoadSuccess();
+
     GuildLevelTableManager::Instance().LoadSuccess();
 
     GuildRuleTableManager::Instance().LoadSuccess();
+
+    GuildShopTableManager::Instance().LoadSuccess();
 
     ItemTableManager::Instance().LoadSuccess();
 
@@ -156,6 +169,8 @@ void LoadTables() {
     PetRuleTableManager::Instance().LoadSuccess();
 
     RewardTableManager::Instance().LoadSuccess();
+
+    RoleNameRuleTableManager::Instance().LoadSuccess();
 
     SkillTableManager::Instance().LoadSuccess();
 
@@ -174,7 +189,7 @@ void LoadTables() {
 }
 
 void LoadTablesAsync() {
-    static muduo::CountDownLatch latch(31);
+    static muduo::CountDownLatch latch(34);
 
     std::thread ActivityScheduleLoadThread([]() {
         void InitThreadLocalConfig();
@@ -304,6 +319,14 @@ void LoadTablesAsync() {
     });
     GlobalVariableLoadThread.detach();
 
+    std::thread GuildDonateLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        GuildDonateTableManager::Instance().Load();
+        latch.countDown();
+    });
+    GuildDonateLoadThread.detach();
+
     std::thread GuildLevelLoadThread([]() {
         void InitThreadLocalConfig();
         InitThreadLocalConfig();
@@ -319,6 +342,14 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     GuildRuleLoadThread.detach();
+
+    std::thread GuildShopLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        GuildShopTableManager::Instance().Load();
+        latch.countDown();
+    });
+    GuildShopLoadThread.detach();
 
     std::thread ItemLoadThread([]() {
         void InitThreadLocalConfig();
@@ -383,6 +414,14 @@ void LoadTablesAsync() {
         latch.countDown();
     });
     RewardLoadThread.detach();
+
+    std::thread RoleNameRuleLoadThread([]() {
+        void InitThreadLocalConfig();
+        InitThreadLocalConfig();
+        RoleNameRuleTableManager::Instance().Load();
+        latch.countDown();
+    });
+    RoleNameRuleLoadThread.detach();
 
     std::thread SkillLoadThread([]() {
         void InitThreadLocalConfig();
@@ -459,9 +498,13 @@ void LoadTablesAsync() {
 
     GlobalVariableTableManager::Instance().LoadSuccess();
 
+    GuildDonateTableManager::Instance().LoadSuccess();
+
     GuildLevelTableManager::Instance().LoadSuccess();
 
     GuildRuleTableManager::Instance().LoadSuccess();
+
+    GuildShopTableManager::Instance().LoadSuccess();
 
     ItemTableManager::Instance().LoadSuccess();
 
@@ -478,6 +521,8 @@ void LoadTablesAsync() {
     PetRuleTableManager::Instance().LoadSuccess();
 
     RewardTableManager::Instance().LoadSuccess();
+
+    RoleNameRuleTableManager::Instance().LoadSuccess();
 
     SkillTableManager::Instance().LoadSuccess();
 

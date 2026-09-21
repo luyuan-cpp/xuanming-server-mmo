@@ -55,6 +55,7 @@ B5c 先以默认参数形式改签名,B6a-cli 只插一行,两批的 `GuildUiRoo
 **X-08 Go 推送枚举名写错(阻断)**。S2 枚举值带前缀,生成的 Go 常量是 `pb.GuildChangeKind_GUILD_CHANGE_KIND_FUNDS_CHANGED`;S5 §5.30 写 `pb.GuildChangeKind_FUNDS_CHANGED`、S6 正文写 `ACTIVITY_CHANGED`,均按前缀名落码。
 
 **X-09 B1 测试写死表数量,后续批次必挂(阻断)**。S1 `TestSchemaOptionsTargetsGuildDatabase` 断言 `len(Tables)==4`,`TestDropListCoversTables` 与 `TestSchemaMigrateProducesExpectedGuildShape` 依赖手写 `guildTestDropTables`;而 B5/B6 的文件清单都没列 `guild_test.go`、`guild_repo_test.go`(B5 连 `tables.go` 也没列)。**修正在 B1**:`guildTestDropTables` 改为由 `Tables()` 经 protoreflect 读 `OptionTableName` 逆序生成再加 `schema_migrations`;`len==4` 改为 `len(opts.Tables)==len(data.Tables())`;形状测试的 `STATISTICS` 只比对 B1 自己的 4 张表。后续批次在各自集成测试里断言新表形状;**B5b 清单加 `go/guild/internal/data/tables.go`**。
+> 2026-09-20 落码订正:`tables.go` 已随 **B5a** 追加(加表而不进 `Tables()`,schemamigrate 不会建表)。另外 B1 只把 `guild_test.go` 的表数断言改成了由 `Tables()` 派生;`internal/data/guild_repo_test.go` 的 `guildTestDropTables` **仍是手写清单**,`TestDropListCoversTables` 守 `len(Tables())+1`——B6a / B6b 加表时必须同步追加,否则该测试红、集成用例在残留表上跑。B5a 的新表形状断言在 `asset_tables_shape_test.go`。
 
 **X-10 B2 申请没用 `guild_player_state`(阻断:TiDB 上上限可被突破)**。S2 §8.2 靠 RR 间隙锁/插入意向锁死锁串行化同一玩家的并发申请,与 S1 §2.1 规则 3/4 冲突。**修正**(B2s,同文件):ApplyToGuild 事务外先 `INSERT IGNORE INTO guild_player_state (player_id, updated_ms)`;事务内锁序 `guild FOR UPDATE → SELECT player_id FROM guild_player_state WHERE player_id=? FOR UPDATE → 非锁定成员检查 → 删过期 → 加锁计数 → INSERT`;ReviewApplication 通过分支与 CreateGuild 在插成员行前同样锁申请人/建帮者的 `guild_player_state`(事务外先 INSERT IGNORE)。§8.9 并发表按"同一玩家的申请/审批/建帮在状态行上串行、不再死锁"改写;`TestConcurrentApproveSameApplicant` 失败集合去掉 `ErrWriteConflict` 的期望依赖。
 
@@ -93,7 +94,7 @@ enum GuildAssetOpKind {
   GUILD_ASSET_OP_KIND_DONATE = 1;
   GUILD_ASSET_OP_KIND_SHOP = 2;
   GUILD_ASSET_OP_KIND_ACTIVITY_REWARD = 3;     // S6 I8 断言 kind=3
-  GUILD_ASSET_OP_KIND_DONATE_REFUND = 4;       // D2
+  GUILD_ASSET_OP_KIND_DONATE_REFUND = 4;       // D2 —— **本行作废**:README §3 的 D2 终裁是"不退款",B5a 落码时未加,4 号未占用
 }
 enum GuildDailyCounterKind {
   GUILD_DAILY_COUNTER_KIND_UNSPECIFIED = 0;
@@ -162,7 +163,7 @@ message GuildDailyCounterRecord {   // 锁序位置 7
 }
 ```
 
-- `data.Tables()` 最终顺序 = 锁序:guild、guild_player_state、guild_member、guild_application、guild_player_op_seq、guild_asset_op、guild_daily_counter(B5b 追加)、guild_activity_progress(B6a)、guild_trial_battle、guild_trial_reward_owed(B6b)。
+- `data.Tables()` 最终顺序 = 锁序:guild、guild_player_state、guild_member、guild_application、guild_player_op_seq、guild_asset_op、guild_daily_counter(B5a 已追加)、guild_activity_progress(B6a)、guild_trial_battle、guild_trial_reward_owed(B6b)。
 - Store 用一个 `statusToDB/statusFromDB` switch 在 `assetop.Status` 与本枚举之间映射,单测覆盖 5 个值;`assetop.NewSeqTables("guild_player_op_seq","guild_asset_op", uint32(pb.GuildAssetOpStatus_GUILD_ASSET_OP_STATUS_PENDING))`。
 - Codex 核对 `OptionUniqueKey` 复合列是否被 proto2mysql 支持:`SHOW CREATE TABLE` 必须出现 `UNIQUE KEY uk_guild_asset_op (player_id,stream,stream_epoch,seq)`;不支持就停下报告,不得退化成单列。
 

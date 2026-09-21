@@ -59,6 +59,8 @@ extern "C" {
 extern const ::google::protobuf::internal::DescriptorTable descriptor_table_proto_2fguild_2fguild_2eproto;
 }  // extern "C"
 namespace guildpb {
+enum GuildAssetOrderStatus : int;
+extern const uint32_t GuildAssetOrderStatus_internal_data_[];
 enum GuildChangeKind : int;
 extern const uint32_t GuildChangeKind_internal_data_[];
 class ApplyJoinGuildRequest;
@@ -76,6 +78,22 @@ extern ApplyJoinGuildResponseGlobalsTypeInternal ApplyJoinGuildResponse_globals_
 extern const ::google::protobuf::internal::ClassDataFull ApplyJoinGuildResponse_class_data_;
 #else
 extern const ApplyJoinGuildResponseGlobalsTypeInternal ApplyJoinGuildResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BuyGuildShopGoodsRequest;
+struct BuyGuildShopGoodsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BuyGuildShopGoodsRequestGlobalsTypeInternal BuyGuildShopGoodsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BuyGuildShopGoodsRequest_class_data_;
+#else
+extern const BuyGuildShopGoodsRequestGlobalsTypeInternal BuyGuildShopGoodsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class BuyGuildShopGoodsResponse;
+struct BuyGuildShopGoodsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern BuyGuildShopGoodsResponseGlobalsTypeInternal BuyGuildShopGoodsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull BuyGuildShopGoodsResponse_class_data_;
+#else
+extern const BuyGuildShopGoodsResponseGlobalsTypeInternal BuyGuildShopGoodsResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class CancelGuildApplicationRequest;
 struct CancelGuildApplicationRequestGlobalsTypeInternal;
@@ -125,6 +143,38 @@ extern const ::google::protobuf::internal::ClassDataFull DisbandGuildResponse_cl
 #else
 extern const DisbandGuildResponseGlobalsTypeInternal DisbandGuildResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class DonateToGuildRequest;
+struct DonateToGuildRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern DonateToGuildRequestGlobalsTypeInternal DonateToGuildRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull DonateToGuildRequest_class_data_;
+#else
+extern const DonateToGuildRequestGlobalsTypeInternal DonateToGuildRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class DonateToGuildResponse;
+struct DonateToGuildResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern DonateToGuildResponseGlobalsTypeInternal DonateToGuildResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull DonateToGuildResponse_class_data_;
+#else
+extern const DonateToGuildResponseGlobalsTypeInternal DonateToGuildResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetGuildDonateOptionsRequest;
+struct GetGuildDonateOptionsRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetGuildDonateOptionsRequestGlobalsTypeInternal GetGuildDonateOptionsRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetGuildDonateOptionsRequest_class_data_;
+#else
+extern const GetGuildDonateOptionsRequestGlobalsTypeInternal GetGuildDonateOptionsRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetGuildDonateOptionsResponse;
+struct GetGuildDonateOptionsResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetGuildDonateOptionsResponseGlobalsTypeInternal GetGuildDonateOptionsResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetGuildDonateOptionsResponse_class_data_;
+#else
+extern const GetGuildDonateOptionsResponseGlobalsTypeInternal GetGuildDonateOptionsResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetGuildRankByGuildRequest;
 struct GetGuildRankByGuildRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -173,6 +223,22 @@ extern const ::google::protobuf::internal::ClassDataFull GetGuildResponse_class_
 #else
 extern const GetGuildResponseGlobalsTypeInternal GetGuildResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetGuildShopRequest;
+struct GetGuildShopRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetGuildShopRequestGlobalsTypeInternal GetGuildShopRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetGuildShopRequest_class_data_;
+#else
+extern const GetGuildShopRequestGlobalsTypeInternal GetGuildShopRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GetGuildShopResponse;
+struct GetGuildShopResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GetGuildShopResponseGlobalsTypeInternal GetGuildShopResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GetGuildShopResponse_class_data_;
+#else
+extern const GetGuildShopResponseGlobalsTypeInternal GetGuildShopResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GetPlayerGuildRequest;
 struct GetPlayerGuildRequestGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -213,6 +279,22 @@ extern const ::google::protobuf::internal::ClassDataFull GuildChangedS2C_class_d
 #else
 extern const GuildChangedS2CGlobalsTypeInternal GuildChangedS2C_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class GuildDonateOptionView;
+struct GuildDonateOptionViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GuildDonateOptionViewGlobalsTypeInternal GuildDonateOptionView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GuildDonateOptionView_class_data_;
+#else
+extern const GuildDonateOptionViewGlobalsTypeInternal GuildDonateOptionView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GuildDonationView;
+struct GuildDonationViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GuildDonationViewGlobalsTypeInternal GuildDonationView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GuildDonationView_class_data_;
+#else
+extern const GuildDonationViewGlobalsTypeInternal GuildDonationView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class GuildInfo;
 struct GuildInfoGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -236,6 +318,22 @@ extern GuildRankEntryGlobalsTypeInternal GuildRankEntry_globals_;
 extern const ::google::protobuf::internal::ClassDataFull GuildRankEntry_class_data_;
 #else
 extern const GuildRankEntryGlobalsTypeInternal GuildRankEntry_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GuildShopGoodsView;
+struct GuildShopGoodsViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GuildShopGoodsViewGlobalsTypeInternal GuildShopGoodsView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GuildShopGoodsView_class_data_;
+#else
+extern const GuildShopGoodsViewGlobalsTypeInternal GuildShopGoodsView_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class GuildShopOrderView;
+struct GuildShopOrderViewGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern GuildShopOrderViewGlobalsTypeInternal GuildShopOrderView_globals_;
+extern const ::google::protobuf::internal::ClassDataFull GuildShopOrderView_class_data_;
+#else
+extern const GuildShopOrderViewGlobalsTypeInternal GuildShopOrderView_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 class KickGuildMemberRequest;
 struct KickGuildMemberRequestGlobalsTypeInternal;
@@ -381,9 +479,28 @@ extern const ::google::protobuf::internal::ClassDataFull UpdateGuildScoreRespons
 #else
 extern const UpdateGuildScoreResponseGlobalsTypeInternal UpdateGuildScoreResponse_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class UpgradeGuildRequest;
+struct UpgradeGuildRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern UpgradeGuildRequestGlobalsTypeInternal UpgradeGuildRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull UpgradeGuildRequest_class_data_;
+#else
+extern const UpgradeGuildRequestGlobalsTypeInternal UpgradeGuildRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class UpgradeGuildResponse;
+struct UpgradeGuildResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern UpgradeGuildResponseGlobalsTypeInternal UpgradeGuildResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull UpgradeGuildResponse_class_data_;
+#else
+extern const UpgradeGuildResponseGlobalsTypeInternal UpgradeGuildResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 }  // namespace guildpb
 namespace google {
 namespace protobuf {
+template <>
+internal::EnumTraitsT<::guildpb::GuildAssetOrderStatus_internal_data_>
+    internal::EnumTraitsImpl::value<::guildpb::GuildAssetOrderStatus>;
 template <>
 internal::EnumTraitsT<::guildpb::GuildChangeKind_internal_data_>
     internal::EnumTraitsImpl::value<::guildpb::GuildChangeKind>;
@@ -443,12 +560,257 @@ template <>
   return ::google::protobuf::internal::ParseNamedEnum<GuildChangeKind>(GuildChangeKind_descriptor(), name,
                                            value);
 }
+enum GuildAssetOrderStatus : int {
+  GUILD_ASSET_ORDER_STATUS_UNSPECIFIED = 0,
+  GUILD_ASSET_ORDER_STATUS_PENDING = 1,
+  GUILD_ASSET_ORDER_STATUS_APPLIED = 2,
+  GUILD_ASSET_ORDER_STATUS_REJECTED = 3,
+  GUILD_ASSET_ORDER_STATUS_ABORTED = 4,
+  GUILD_ASSET_ORDER_STATUS_APPLIED_PARTIAL = 5,
+  GuildAssetOrderStatus_INT_MIN_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::min(),
+  GuildAssetOrderStatus_INT_MAX_SENTINEL_DO_NOT_USE_ =
+      ::std::numeric_limits<::int32_t>::max(),
+};
+
+extern const uint32_t GuildAssetOrderStatus_internal_data_[];
+inline constexpr GuildAssetOrderStatus GuildAssetOrderStatus_MIN =
+    static_cast<GuildAssetOrderStatus>(0);
+inline constexpr GuildAssetOrderStatus GuildAssetOrderStatus_MAX =
+    static_cast<GuildAssetOrderStatus>(5);
+[[nodiscard]] inline bool GuildAssetOrderStatus_IsValid(int value) {
+  return 0 <= value && value <= 5;
+}
+inline constexpr int GuildAssetOrderStatus_ARRAYSIZE = 5 + 1;
+[[nodiscard]] const ::google::protobuf::EnumDescriptor* PROTOBUF_NONNULL
+GuildAssetOrderStatus_descriptor();
+[[nodiscard]] inline auto ProtobufInternalGetEnumDescriptor(GuildAssetOrderStatus) {
+  return GuildAssetOrderStatus_descriptor();
+}
+template <typename T>
+[[nodiscard]] const ::std::string& GuildAssetOrderStatus_Name(T value) {
+  static_assert(::std::is_same<T, GuildAssetOrderStatus>::value ||
+                    ::std::is_integral<T>::value,
+                "Incorrect type passed to GuildAssetOrderStatus_Name().");
+  return GuildAssetOrderStatus_Name(static_cast<GuildAssetOrderStatus>(value));
+}
+template <>
+[[nodiscard]] inline const ::std::string& GuildAssetOrderStatus_Name(GuildAssetOrderStatus value) {
+  return ::google::protobuf::internal::NameOfDenseEnum<GuildAssetOrderStatus_descriptor, 0, 5>(
+      static_cast<int>(value));
+}
+[[nodiscard]] inline bool GuildAssetOrderStatus_Parse(
+    ::absl::string_view name, GuildAssetOrderStatus* PROTOBUF_NONNULL value) {
+  return ::google::protobuf::internal::ParseNamedEnum<GuildAssetOrderStatus>(GuildAssetOrderStatus_descriptor(), name,
+                                           value);
+}
 using ::google::protobuf::internal::generated_enum::AbslParseFlag;
 using ::google::protobuf::internal::generated_enum::AbslUnparseFlag;
 
 // ===================================================================
 
 
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeGuildRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.UpgradeGuildRequest) */ {
+ public:
+  inline UpgradeGuildRequest() : UpgradeGuildRequest(nullptr) {}
+  ~UpgradeGuildRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(UpgradeGuildRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(UpgradeGuildRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr UpgradeGuildRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline UpgradeGuildRequest(const UpgradeGuildRequest& from) : UpgradeGuildRequest(nullptr, from) {}
+  inline UpgradeGuildRequest(UpgradeGuildRequest&& from) noexcept : UpgradeGuildRequest(nullptr, ::std::move(from)) {}
+  inline UpgradeGuildRequest& operator=(const UpgradeGuildRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline UpgradeGuildRequest& operator=(UpgradeGuildRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const UpgradeGuildRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpgradeGuildRequest>(&UpgradeGuildRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 41;
+  friend void swap(UpgradeGuildRequest& a, UpgradeGuildRequest& b) { a.Swap(&b); }
+  inline void Swap(UpgradeGuildRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(UpgradeGuildRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] UpgradeGuildRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<UpgradeGuildRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const UpgradeGuildRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const UpgradeGuildRequest& from) { UpgradeGuildRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(UpgradeGuildRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.UpgradeGuildRequest"; }
+
+  explicit UpgradeGuildRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  UpgradeGuildRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UpgradeGuildRequest& from);
+  UpgradeGuildRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, UpgradeGuildRequest&& from) noexcept
+      : UpgradeGuildRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kExpectedLevelFieldNumber = 1,
+  };
+  // uint32 expected_level = 1;
+  void clear_expected_level() ;
+  [[nodiscard]] ::uint32_t expected_level() const;
+  void set_expected_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_expected_level() const;
+  void _internal_set_expected_level(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.UpgradeGuildRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const UpgradeGuildRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t expected_level_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
 // -------------------------------------------------------------------
 
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateGuildScoreRequest final : public ::google::protobuf::Message
@@ -507,7 +869,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateGuildScoreRequest final : pub
   [[nodiscard]] static const UpdateGuildScoreRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpdateGuildScoreRequest>(&UpdateGuildScoreRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 34;
+  static constexpr int kIndexInFileMessages = 48;
   friend void swap(UpdateGuildScoreRequest& a, UpdateGuildScoreRequest& b) { a.Swap(&b); }
   inline void Swap(UpdateGuildScoreRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2211,6 +2573,617 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED KickGuildMemberRequest final : publ
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildShopOrderView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.GuildShopOrderView) */ {
+ public:
+  inline GuildShopOrderView() : GuildShopOrderView(nullptr) {}
+  ~GuildShopOrderView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GuildShopOrderView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GuildShopOrderView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GuildShopOrderView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GuildShopOrderView(const GuildShopOrderView& from) : GuildShopOrderView(nullptr, from) {}
+  inline GuildShopOrderView(GuildShopOrderView&& from) noexcept : GuildShopOrderView(nullptr, ::std::move(from)) {}
+  inline GuildShopOrderView& operator=(const GuildShopOrderView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GuildShopOrderView& operator=(GuildShopOrderView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GuildShopOrderView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildShopOrderView>(&GuildShopOrderView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 36;
+  friend void swap(GuildShopOrderView& a, GuildShopOrderView& b) { a.Swap(&b); }
+  inline void Swap(GuildShopOrderView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GuildShopOrderView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GuildShopOrderView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GuildShopOrderView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GuildShopOrderView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GuildShopOrderView& from) { GuildShopOrderView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GuildShopOrderView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.GuildShopOrderView"; }
+
+  explicit GuildShopOrderView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GuildShopOrderView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GuildShopOrderView& from);
+  GuildShopOrderView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GuildShopOrderView&& from) noexcept
+      : GuildShopOrderView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOpIdFieldNumber = 1,
+    kGoodsIdFieldNumber = 2,
+    kCountFieldNumber = 3,
+    kCostContributionFieldNumber = 5,
+    kStatusFieldNumber = 4,
+    kReasonTipIdFieldNumber = 6,
+    kCreatedMsFieldNumber = 7,
+  };
+  // uint64 op_id = 1;
+  void clear_op_id() ;
+  [[nodiscard]] ::uint64_t op_id() const;
+  void set_op_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_op_id() const;
+  void _internal_set_op_id(::uint64_t value);
+
+  public:
+  // uint32 goods_id = 2;
+  void clear_goods_id() ;
+  [[nodiscard]] ::uint32_t goods_id() const;
+  void set_goods_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_goods_id() const;
+  void _internal_set_goods_id(::uint32_t value);
+
+  public:
+  // uint32 count = 3;
+  void clear_count() ;
+  [[nodiscard]] ::uint32_t count() const;
+  void set_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_count() const;
+  void _internal_set_count(::uint32_t value);
+
+  public:
+  // uint64 cost_contribution = 5;
+  void clear_cost_contribution() ;
+  [[nodiscard]] ::uint64_t cost_contribution() const;
+  void set_cost_contribution(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_cost_contribution() const;
+  void _internal_set_cost_contribution(::uint64_t value);
+
+  public:
+  // .guildpb.GuildAssetOrderStatus status = 4;
+  void clear_status() ;
+  [[nodiscard]] ::guildpb::GuildAssetOrderStatus status() const;
+  void set_status(::guildpb::GuildAssetOrderStatus value);
+
+  private:
+  ::guildpb::GuildAssetOrderStatus _internal_status() const;
+  void _internal_set_status(::guildpb::GuildAssetOrderStatus value);
+
+  public:
+  // uint32 reason_tip_id = 6;
+  void clear_reason_tip_id() ;
+  [[nodiscard]] ::uint32_t reason_tip_id() const;
+  void set_reason_tip_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reason_tip_id() const;
+  void _internal_set_reason_tip_id(::uint32_t value);
+
+  public:
+  // uint64 created_ms = 7;
+  void clear_created_ms() ;
+  [[nodiscard]] ::uint64_t created_ms() const;
+  void set_created_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_created_ms() const;
+  void _internal_set_created_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.GuildShopOrderView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GuildShopOrderView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t op_id_;
+    ::uint32_t goods_id_;
+    ::uint32_t count_;
+    ::uint64_t cost_contribution_;
+    int status_;
+    ::uint32_t reason_tip_id_;
+    ::uint64_t created_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildShopGoodsView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.GuildShopGoodsView) */ {
+ public:
+  inline GuildShopGoodsView() : GuildShopGoodsView(nullptr) {}
+  ~GuildShopGoodsView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GuildShopGoodsView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GuildShopGoodsView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GuildShopGoodsView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GuildShopGoodsView(const GuildShopGoodsView& from) : GuildShopGoodsView(nullptr, from) {}
+  inline GuildShopGoodsView(GuildShopGoodsView&& from) noexcept : GuildShopGoodsView(nullptr, ::std::move(from)) {}
+  inline GuildShopGoodsView& operator=(const GuildShopGoodsView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GuildShopGoodsView& operator=(GuildShopGoodsView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GuildShopGoodsView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildShopGoodsView>(&GuildShopGoodsView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 35;
+  friend void swap(GuildShopGoodsView& a, GuildShopGoodsView& b) { a.Swap(&b); }
+  inline void Swap(GuildShopGoodsView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GuildShopGoodsView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GuildShopGoodsView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GuildShopGoodsView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GuildShopGoodsView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GuildShopGoodsView& from) { GuildShopGoodsView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GuildShopGoodsView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.GuildShopGoodsView"; }
+
+  explicit GuildShopGoodsView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GuildShopGoodsView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GuildShopGoodsView& from);
+  GuildShopGoodsView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GuildShopGoodsView&& from) noexcept
+      : GuildShopGoodsView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 2,
+    kGoodsIdFieldNumber = 1,
+    kCategoryFieldNumber = 3,
+    kItemIdFieldNumber = 4,
+    kItemCountFieldNumber = 5,
+    kCostContributionFieldNumber = 6,
+    kRequiredGuildLevelFieldNumber = 7,
+    kUnlockedFieldNumber = 8,
+    kLimitPeriodFieldNumber = 9,
+    kLimitCountFieldNumber = 10,
+    kUsedCountFieldNumber = 11,
+    kMaxBuyCountFieldNumber = 12,
+  };
+  // string name = 2;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint32 goods_id = 1;
+  void clear_goods_id() ;
+  [[nodiscard]] ::uint32_t goods_id() const;
+  void set_goods_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_goods_id() const;
+  void _internal_set_goods_id(::uint32_t value);
+
+  public:
+  // uint32 category = 3;
+  void clear_category() ;
+  [[nodiscard]] ::uint32_t category() const;
+  void set_category(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_category() const;
+  void _internal_set_category(::uint32_t value);
+
+  public:
+  // uint32 item_id = 4;
+  void clear_item_id() ;
+  [[nodiscard]] ::uint32_t item_id() const;
+  void set_item_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_id() const;
+  void _internal_set_item_id(::uint32_t value);
+
+  public:
+  // uint32 item_count = 5;
+  void clear_item_count() ;
+  [[nodiscard]] ::uint32_t item_count() const;
+  void set_item_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_item_count() const;
+  void _internal_set_item_count(::uint32_t value);
+
+  public:
+  // uint64 cost_contribution = 6;
+  void clear_cost_contribution() ;
+  [[nodiscard]] ::uint64_t cost_contribution() const;
+  void set_cost_contribution(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_cost_contribution() const;
+  void _internal_set_cost_contribution(::uint64_t value);
+
+  public:
+  // uint32 required_guild_level = 7;
+  void clear_required_guild_level() ;
+  [[nodiscard]] ::uint32_t required_guild_level() const;
+  void set_required_guild_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_required_guild_level() const;
+  void _internal_set_required_guild_level(::uint32_t value);
+
+  public:
+  // bool unlocked = 8;
+  void clear_unlocked() ;
+  [[nodiscard]] bool unlocked() const;
+  void set_unlocked(bool value);
+
+  private:
+  bool _internal_unlocked() const;
+  void _internal_set_unlocked(bool value);
+
+  public:
+  // uint32 limit_period = 9;
+  void clear_limit_period() ;
+  [[nodiscard]] ::uint32_t limit_period() const;
+  void set_limit_period(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_limit_period() const;
+  void _internal_set_limit_period(::uint32_t value);
+
+  public:
+  // uint32 limit_count = 10;
+  void clear_limit_count() ;
+  [[nodiscard]] ::uint32_t limit_count() const;
+  void set_limit_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_limit_count() const;
+  void _internal_set_limit_count(::uint32_t value);
+
+  public:
+  // uint32 used_count = 11;
+  void clear_used_count() ;
+  [[nodiscard]] ::uint32_t used_count() const;
+  void set_used_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_used_count() const;
+  void _internal_set_used_count(::uint32_t value);
+
+  public:
+  // uint32 max_buy_count = 12;
+  void clear_max_buy_count() ;
+  [[nodiscard]] ::uint32_t max_buy_count() const;
+  void set_max_buy_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_max_buy_count() const;
+  void _internal_set_max_buy_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.GuildShopGoodsView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 12,
+                          0, 47,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GuildShopGoodsView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint32_t goods_id_;
+    ::uint32_t category_;
+    ::uint32_t item_id_;
+    ::uint32_t item_count_;
+    ::uint64_t cost_contribution_;
+    ::uint32_t required_guild_level_;
+    bool unlocked_;
+    ::uint32_t limit_period_;
+    ::uint32_t limit_count_;
+    ::uint32_t used_count_;
+    ::uint32_t max_buy_count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRankEntry final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:guildpb.GuildRankEntry) */ {
  public:
@@ -2267,7 +3240,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildRankEntry final : public ::goo
   [[nodiscard]] static const GuildRankEntry& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildRankEntry>(&GuildRankEntry_globals_);
   }
-  static constexpr int kIndexInFileMessages = 33;
+  static constexpr int kIndexInFileMessages = 47;
   friend void swap(GuildRankEntry& a, GuildRankEntry& b) { a.Swap(&b); }
   inline void Swap(GuildRankEntry* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2789,6 +3762,617 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildMember final : public ::google
     bool online_;
     ::uint64_t contribution_total_;
     ::uint64_t contribution_balance_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildDonationView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.GuildDonationView) */ {
+ public:
+  inline GuildDonationView() : GuildDonationView(nullptr) {}
+  ~GuildDonationView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GuildDonationView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GuildDonationView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GuildDonationView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GuildDonationView(const GuildDonationView& from) : GuildDonationView(nullptr, from) {}
+  inline GuildDonationView(GuildDonationView&& from) noexcept : GuildDonationView(nullptr, ::std::move(from)) {}
+  inline GuildDonationView& operator=(const GuildDonationView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GuildDonationView& operator=(GuildDonationView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GuildDonationView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildDonationView>(&GuildDonationView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 33;
+  friend void swap(GuildDonationView& a, GuildDonationView& b) { a.Swap(&b); }
+  inline void Swap(GuildDonationView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GuildDonationView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GuildDonationView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GuildDonationView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GuildDonationView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GuildDonationView& from) { GuildDonationView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GuildDonationView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.GuildDonationView"; }
+
+  explicit GuildDonationView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GuildDonationView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GuildDonationView& from);
+  GuildDonationView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GuildDonationView&& from) noexcept
+      : GuildDonationView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOpIdFieldNumber = 1,
+    kDonateIdFieldNumber = 2,
+    kStatusFieldNumber = 3,
+    kCostAmountFieldNumber = 5,
+    kContributionGainFieldNumber = 6,
+    kCurrencyTypeFieldNumber = 4,
+    kReasonTipIdFieldNumber = 8,
+    kFundsGainFieldNumber = 7,
+    kCreatedMsFieldNumber = 9,
+  };
+  // uint64 op_id = 1;
+  void clear_op_id() ;
+  [[nodiscard]] ::uint64_t op_id() const;
+  void set_op_id(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_op_id() const;
+  void _internal_set_op_id(::uint64_t value);
+
+  public:
+  // uint32 donate_id = 2;
+  void clear_donate_id() ;
+  [[nodiscard]] ::uint32_t donate_id() const;
+  void set_donate_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_donate_id() const;
+  void _internal_set_donate_id(::uint32_t value);
+
+  public:
+  // .guildpb.GuildAssetOrderStatus status = 3;
+  void clear_status() ;
+  [[nodiscard]] ::guildpb::GuildAssetOrderStatus status() const;
+  void set_status(::guildpb::GuildAssetOrderStatus value);
+
+  private:
+  ::guildpb::GuildAssetOrderStatus _internal_status() const;
+  void _internal_set_status(::guildpb::GuildAssetOrderStatus value);
+
+  public:
+  // uint64 cost_amount = 5;
+  void clear_cost_amount() ;
+  [[nodiscard]] ::uint64_t cost_amount() const;
+  void set_cost_amount(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_cost_amount() const;
+  void _internal_set_cost_amount(::uint64_t value);
+
+  public:
+  // uint64 contribution_gain = 6;
+  void clear_contribution_gain() ;
+  [[nodiscard]] ::uint64_t contribution_gain() const;
+  void set_contribution_gain(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_contribution_gain() const;
+  void _internal_set_contribution_gain(::uint64_t value);
+
+  public:
+  // uint32 currency_type = 4;
+  void clear_currency_type() ;
+  [[nodiscard]] ::uint32_t currency_type() const;
+  void set_currency_type(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_currency_type() const;
+  void _internal_set_currency_type(::uint32_t value);
+
+  public:
+  // uint32 reason_tip_id = 8;
+  void clear_reason_tip_id() ;
+  [[nodiscard]] ::uint32_t reason_tip_id() const;
+  void set_reason_tip_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_reason_tip_id() const;
+  void _internal_set_reason_tip_id(::uint32_t value);
+
+  public:
+  // uint64 funds_gain = 7;
+  void clear_funds_gain() ;
+  [[nodiscard]] ::uint64_t funds_gain() const;
+  void set_funds_gain(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_funds_gain() const;
+  void _internal_set_funds_gain(::uint64_t value);
+
+  public:
+  // uint64 created_ms = 9;
+  void clear_created_ms() ;
+  [[nodiscard]] ::uint64_t created_ms() const;
+  void set_created_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_created_ms() const;
+  void _internal_set_created_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.GuildDonationView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GuildDonationView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t op_id_;
+    ::uint32_t donate_id_;
+    int status_;
+    ::uint64_t cost_amount_;
+    ::uint64_t contribution_gain_;
+    ::uint32_t currency_type_;
+    ::uint32_t reason_tip_id_;
+    ::uint64_t funds_gain_;
+    ::uint64_t created_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildDonateOptionView final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.GuildDonateOptionView) */ {
+ public:
+  inline GuildDonateOptionView() : GuildDonateOptionView(nullptr) {}
+  ~GuildDonateOptionView() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GuildDonateOptionView* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GuildDonateOptionView));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GuildDonateOptionView(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GuildDonateOptionView(const GuildDonateOptionView& from) : GuildDonateOptionView(nullptr, from) {}
+  inline GuildDonateOptionView(GuildDonateOptionView&& from) noexcept : GuildDonateOptionView(nullptr, ::std::move(from)) {}
+  inline GuildDonateOptionView& operator=(const GuildDonateOptionView& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GuildDonateOptionView& operator=(GuildDonateOptionView&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GuildDonateOptionView& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GuildDonateOptionView>(&GuildDonateOptionView_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 34;
+  friend void swap(GuildDonateOptionView& a, GuildDonateOptionView& b) { a.Swap(&b); }
+  inline void Swap(GuildDonateOptionView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GuildDonateOptionView* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GuildDonateOptionView* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GuildDonateOptionView>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GuildDonateOptionView& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GuildDonateOptionView& from) { GuildDonateOptionView::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GuildDonateOptionView* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.GuildDonateOptionView"; }
+
+  explicit GuildDonateOptionView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GuildDonateOptionView(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GuildDonateOptionView& from);
+  GuildDonateOptionView(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GuildDonateOptionView&& from) noexcept
+      : GuildDonateOptionView(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 2,
+    kDonateIdFieldNumber = 1,
+    kCurrencyTypeFieldNumber = 3,
+    kCostAmountFieldNumber = 4,
+    kContributionGainFieldNumber = 5,
+    kFundsGainFieldNumber = 6,
+    kDailyLimitFieldNumber = 7,
+    kUsedTodayFieldNumber = 8,
+    kMinGuildLevelFieldNumber = 9,
+    kUnlockedFieldNumber = 10,
+  };
+  // string name = 2;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // uint32 donate_id = 1;
+  void clear_donate_id() ;
+  [[nodiscard]] ::uint32_t donate_id() const;
+  void set_donate_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_donate_id() const;
+  void _internal_set_donate_id(::uint32_t value);
+
+  public:
+  // uint32 currency_type = 3;
+  void clear_currency_type() ;
+  [[nodiscard]] ::uint32_t currency_type() const;
+  void set_currency_type(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_currency_type() const;
+  void _internal_set_currency_type(::uint32_t value);
+
+  public:
+  // uint64 cost_amount = 4;
+  void clear_cost_amount() ;
+  [[nodiscard]] ::uint64_t cost_amount() const;
+  void set_cost_amount(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_cost_amount() const;
+  void _internal_set_cost_amount(::uint64_t value);
+
+  public:
+  // uint64 contribution_gain = 5;
+  void clear_contribution_gain() ;
+  [[nodiscard]] ::uint64_t contribution_gain() const;
+  void set_contribution_gain(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_contribution_gain() const;
+  void _internal_set_contribution_gain(::uint64_t value);
+
+  public:
+  // uint64 funds_gain = 6;
+  void clear_funds_gain() ;
+  [[nodiscard]] ::uint64_t funds_gain() const;
+  void set_funds_gain(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_funds_gain() const;
+  void _internal_set_funds_gain(::uint64_t value);
+
+  public:
+  // uint32 daily_limit = 7;
+  void clear_daily_limit() ;
+  [[nodiscard]] ::uint32_t daily_limit() const;
+  void set_daily_limit(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_daily_limit() const;
+  void _internal_set_daily_limit(::uint32_t value);
+
+  public:
+  // uint32 used_today = 8;
+  void clear_used_today() ;
+  [[nodiscard]] ::uint32_t used_today() const;
+  void set_used_today(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_used_today() const;
+  void _internal_set_used_today(::uint32_t value);
+
+  public:
+  // uint32 min_guild_level = 9;
+  void clear_min_guild_level() ;
+  [[nodiscard]] ::uint32_t min_guild_level() const;
+  void set_min_guild_level(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_min_guild_level() const;
+  void _internal_set_min_guild_level(::uint32_t value);
+
+  public:
+  // bool unlocked = 10;
+  void clear_unlocked() ;
+  [[nodiscard]] bool unlocked() const;
+  void set_unlocked(bool value);
+
+  private:
+  bool _internal_unlocked() const;
+  void _internal_set_unlocked(bool value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.GuildDonateOptionView)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<4, 10,
+                          0, 50,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GuildDonateOptionView& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::uint32_t donate_id_;
+    ::uint32_t currency_type_;
+    ::uint64_t cost_amount_;
+    ::uint64_t contribution_gain_;
+    ::uint64_t funds_gain_;
+    ::uint32_t daily_limit_;
+    ::uint32_t used_today_;
+    ::uint32_t min_guild_level_;
+    bool unlocked_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -3795,6 +5379,144 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetPlayerGuildRequest final : publi
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildShopRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:guildpb.GetGuildShopRequest) */ {
+ public:
+  inline GetGuildShopRequest() : GetGuildShopRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetGuildShopRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetGuildShopRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetGuildShopRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetGuildShopRequest(const GetGuildShopRequest& from) : GetGuildShopRequest(nullptr, from) {}
+  inline GetGuildShopRequest(GetGuildShopRequest&& from) noexcept : GetGuildShopRequest(nullptr, ::std::move(from)) {}
+  inline GetGuildShopRequest& operator=(const GetGuildShopRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetGuildShopRequest& operator=(GetGuildShopRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetGuildShopRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildShopRequest>(&GetGuildShopRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 43;
+  friend void swap(GetGuildShopRequest& a, GetGuildShopRequest& b) { a.Swap(&b); }
+  inline void Swap(GetGuildShopRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetGuildShopRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetGuildShopRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<GetGuildShopRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const GetGuildShopRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const GetGuildShopRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.GetGuildShopRequest"; }
+
+  explicit GetGuildShopRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetGuildShopRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetGuildShopRequest& from);
+  GetGuildShopRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetGuildShopRequest&& from) noexcept
+      : GetGuildShopRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:guildpb.GetGuildShopRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:guildpb.GetGuildRequest) */ {
  public:
@@ -4052,7 +5774,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankRequest final : public 
   [[nodiscard]] static const GetGuildRankRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildRankRequest>(&GetGuildRankRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 36;
+  static constexpr int kIndexInFileMessages = 50;
   friend void swap(GetGuildRankRequest& a, GetGuildRankRequest& b) { a.Swap(&b); }
   inline void Swap(GetGuildRankRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4277,7 +5999,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankByGuildRequest final : 
   [[nodiscard]] static const GetGuildRankByGuildRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildRankByGuildRequest>(&GetGuildRankByGuildRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 38;
+  static constexpr int kIndexInFileMessages = 52;
   friend void swap(GetGuildRankByGuildRequest& a, GetGuildRankByGuildRequest& b) { a.Swap(&b); }
   inline void Swap(GetGuildRankByGuildRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4427,6 +6149,345 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankByGuildRequest final : 
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::uint64_t guild_id_;
     ::uint32_t zone_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildDonateOptionsRequest final : public ::google::protobuf::internal::ZeroFieldsBase
+/* @@protoc_insertion_point(class_definition:guildpb.GetGuildDonateOptionsRequest) */ {
+ public:
+  inline GetGuildDonateOptionsRequest() : GetGuildDonateOptionsRequest(nullptr) {}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetGuildDonateOptionsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetGuildDonateOptionsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetGuildDonateOptionsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetGuildDonateOptionsRequest(const GetGuildDonateOptionsRequest& from) : GetGuildDonateOptionsRequest(nullptr, from) {}
+  inline GetGuildDonateOptionsRequest(GetGuildDonateOptionsRequest&& from) noexcept : GetGuildDonateOptionsRequest(nullptr, ::std::move(from)) {}
+  inline GetGuildDonateOptionsRequest& operator=(const GetGuildDonateOptionsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetGuildDonateOptionsRequest& operator=(GetGuildDonateOptionsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetGuildDonateOptionsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildDonateOptionsRequest>(&GetGuildDonateOptionsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 37;
+  friend void swap(GetGuildDonateOptionsRequest& a, GetGuildDonateOptionsRequest& b) { a.Swap(&b); }
+  inline void Swap(GetGuildDonateOptionsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetGuildDonateOptionsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetGuildDonateOptionsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::internal::ZeroFieldsBase::DefaultConstruct<GetGuildDonateOptionsRequest>(arena);
+  }
+  using ::google::protobuf::internal::ZeroFieldsBase::CopyFrom;
+  inline void CopyFrom(const GetGuildDonateOptionsRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::CopyImpl(*this, from); }
+  using ::google::protobuf::internal::ZeroFieldsBase::MergeFrom;
+  void MergeFrom(const GetGuildDonateOptionsRequest& from) { ::google::protobuf::internal::ZeroFieldsBase::MergeImpl(*this, from); }
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.GetGuildDonateOptionsRequest"; }
+
+  explicit GetGuildDonateOptionsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetGuildDonateOptionsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetGuildDonateOptionsRequest& from);
+  GetGuildDonateOptionsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetGuildDonateOptionsRequest&& from) noexcept
+      : GetGuildDonateOptionsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  // @@protoc_insertion_point(class_scope:guildpb.GetGuildDonateOptionsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 0,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DonateToGuildRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.DonateToGuildRequest) */ {
+ public:
+  inline DonateToGuildRequest() : DonateToGuildRequest(nullptr) {}
+  ~DonateToGuildRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DonateToGuildRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DonateToGuildRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr DonateToGuildRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline DonateToGuildRequest(const DonateToGuildRequest& from) : DonateToGuildRequest(nullptr, from) {}
+  inline DonateToGuildRequest(DonateToGuildRequest&& from) noexcept : DonateToGuildRequest(nullptr, ::std::move(from)) {}
+  inline DonateToGuildRequest& operator=(const DonateToGuildRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DonateToGuildRequest& operator=(DonateToGuildRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const DonateToGuildRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DonateToGuildRequest>(&DonateToGuildRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 39;
+  friend void swap(DonateToGuildRequest& a, DonateToGuildRequest& b) { a.Swap(&b); }
+  inline void Swap(DonateToGuildRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DonateToGuildRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] DonateToGuildRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DonateToGuildRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DonateToGuildRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DonateToGuildRequest& from) { DonateToGuildRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DonateToGuildRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.DonateToGuildRequest"; }
+
+  explicit DonateToGuildRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  DonateToGuildRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DonateToGuildRequest& from);
+  DonateToGuildRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DonateToGuildRequest&& from) noexcept
+      : DonateToGuildRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kDonateIdFieldNumber = 1,
+  };
+  // uint32 donate_id = 1;
+  void clear_donate_id() ;
+  [[nodiscard]] ::uint32_t donate_id() const;
+  void set_donate_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_donate_id() const;
+  void _internal_set_donate_id(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.DonateToGuildRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const DonateToGuildRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t donate_id_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5066,6 +7127,219 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelGuildApplicationRequest final
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyGuildShopGoodsRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.BuyGuildShopGoodsRequest) */ {
+ public:
+  inline BuyGuildShopGoodsRequest() : BuyGuildShopGoodsRequest(nullptr) {}
+  ~BuyGuildShopGoodsRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BuyGuildShopGoodsRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BuyGuildShopGoodsRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BuyGuildShopGoodsRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BuyGuildShopGoodsRequest(const BuyGuildShopGoodsRequest& from) : BuyGuildShopGoodsRequest(nullptr, from) {}
+  inline BuyGuildShopGoodsRequest(BuyGuildShopGoodsRequest&& from) noexcept : BuyGuildShopGoodsRequest(nullptr, ::std::move(from)) {}
+  inline BuyGuildShopGoodsRequest& operator=(const BuyGuildShopGoodsRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BuyGuildShopGoodsRequest& operator=(BuyGuildShopGoodsRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BuyGuildShopGoodsRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BuyGuildShopGoodsRequest>(&BuyGuildShopGoodsRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 45;
+  friend void swap(BuyGuildShopGoodsRequest& a, BuyGuildShopGoodsRequest& b) { a.Swap(&b); }
+  inline void Swap(BuyGuildShopGoodsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BuyGuildShopGoodsRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BuyGuildShopGoodsRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BuyGuildShopGoodsRequest>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BuyGuildShopGoodsRequest& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BuyGuildShopGoodsRequest& from) { BuyGuildShopGoodsRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BuyGuildShopGoodsRequest* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.BuyGuildShopGoodsRequest"; }
+
+  explicit BuyGuildShopGoodsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BuyGuildShopGoodsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BuyGuildShopGoodsRequest& from);
+  BuyGuildShopGoodsRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BuyGuildShopGoodsRequest&& from) noexcept
+      : BuyGuildShopGoodsRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kGoodsIdFieldNumber = 1,
+    kCountFieldNumber = 2,
+  };
+  // uint32 goods_id = 1;
+  void clear_goods_id() ;
+  [[nodiscard]] ::uint32_t goods_id() const;
+  void set_goods_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_goods_id() const;
+  void _internal_set_goods_id(::uint32_t value);
+
+  public:
+  // uint32 count = 2;
+  void clear_count() ;
+  [[nodiscard]] ::uint32_t count() const;
+  void set_count(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_count() const;
+  void _internal_set_count(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.BuyGuildShopGoodsRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BuyGuildShopGoodsRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint32_t goods_id_;
+    ::uint32_t count_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyJoinGuildRequest final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:guildpb.ApplyJoinGuildRequest) */ {
  public:
@@ -5323,7 +7597,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpdateGuildScoreResponse final : pu
   [[nodiscard]] static const UpdateGuildScoreResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpdateGuildScoreResponse>(&UpdateGuildScoreResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 35;
+  static constexpr int kIndexInFileMessages = 49;
   friend void swap(UpdateGuildScoreResponse& a, UpdateGuildScoreResponse& b) { a.Swap(&b); }
   inline void Swap(UpdateGuildScoreResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6536,6 +8810,318 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GuildInfo final : public ::google::
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildShopResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.GetGuildShopResponse) */ {
+ public:
+  inline GetGuildShopResponse() : GetGuildShopResponse(nullptr) {}
+  ~GetGuildShopResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetGuildShopResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetGuildShopResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetGuildShopResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetGuildShopResponse(const GetGuildShopResponse& from) : GetGuildShopResponse(nullptr, from) {}
+  inline GetGuildShopResponse(GetGuildShopResponse&& from) noexcept : GetGuildShopResponse(nullptr, ::std::move(from)) {}
+  inline GetGuildShopResponse& operator=(const GetGuildShopResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetGuildShopResponse& operator=(GetGuildShopResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetGuildShopResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildShopResponse>(&GetGuildShopResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 44;
+  friend void swap(GetGuildShopResponse& a, GetGuildShopResponse& b) { a.Swap(&b); }
+  inline void Swap(GetGuildShopResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetGuildShopResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetGuildShopResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetGuildShopResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetGuildShopResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetGuildShopResponse& from) { GetGuildShopResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetGuildShopResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.GetGuildShopResponse"; }
+
+  explicit GetGuildShopResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetGuildShopResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetGuildShopResponse& from);
+  GetGuildShopResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetGuildShopResponse&& from) noexcept
+      : GetGuildShopResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kGoodsFieldNumber = 2,
+    kPendingOrdersFieldNumber = 4,
+    kRecentOrdersFieldNumber = 7,
+    kErrorMessageFieldNumber = 1,
+    kContributionBalanceFieldNumber = 3,
+    kNextDailyResetMsFieldNumber = 5,
+    kNextWeeklyResetMsFieldNumber = 6,
+  };
+  // repeated .guildpb.GuildShopGoodsView goods = 2;
+  [[nodiscard]] int goods_size()
+      const;
+  private:
+  int _internal_goods_size() const;
+
+  public:
+  void clear_goods() ;
+  [[nodiscard]] const ::guildpb::GuildShopGoodsView& goods(int index) const;
+  [[nodiscard]] ::guildpb::GuildShopGoodsView* PROTOBUF_NONNULL mutable_goods(int index);
+  ::guildpb::GuildShopGoodsView* PROTOBUF_NONNULL add_goods();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopGoodsView>&
+  goods() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopGoodsView>* PROTOBUF_NONNULL
+  mutable_goods();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopGoodsView>& _internal_goods() const;
+  ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopGoodsView>* PROTOBUF_NONNULL _internal_mutable_goods();
+
+  public:
+  // repeated .guildpb.GuildShopOrderView pending_orders = 4;
+  [[nodiscard]] int pending_orders_size()
+      const;
+  private:
+  int _internal_pending_orders_size() const;
+
+  public:
+  void clear_pending_orders() ;
+  [[nodiscard]] const ::guildpb::GuildShopOrderView& pending_orders(int index) const;
+  [[nodiscard]] ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL mutable_pending_orders(int index);
+  ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL add_pending_orders();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>&
+  pending_orders() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>* PROTOBUF_NONNULL
+  mutable_pending_orders();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>& _internal_pending_orders() const;
+  ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>* PROTOBUF_NONNULL _internal_mutable_pending_orders();
+
+  public:
+  // repeated .guildpb.GuildShopOrderView recent_orders = 7;
+  [[nodiscard]] int recent_orders_size()
+      const;
+  private:
+  int _internal_recent_orders_size() const;
+
+  public:
+  void clear_recent_orders() ;
+  [[nodiscard]] const ::guildpb::GuildShopOrderView& recent_orders(int index) const;
+  [[nodiscard]] ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL mutable_recent_orders(int index);
+  ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL add_recent_orders();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>&
+  recent_orders() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>* PROTOBUF_NONNULL
+  mutable_recent_orders();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>& _internal_recent_orders() const;
+  ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>* PROTOBUF_NONNULL _internal_mutable_recent_orders();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // uint64 contribution_balance = 3;
+  void clear_contribution_balance() ;
+  [[nodiscard]] ::uint64_t contribution_balance() const;
+  void set_contribution_balance(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_contribution_balance() const;
+  void _internal_set_contribution_balance(::uint64_t value);
+
+  public:
+  // uint64 next_daily_reset_ms = 5;
+  void clear_next_daily_reset_ms() ;
+  [[nodiscard]] ::uint64_t next_daily_reset_ms() const;
+  void set_next_daily_reset_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_daily_reset_ms() const;
+  void _internal_set_next_daily_reset_ms(::uint64_t value);
+
+  public:
+  // uint64 next_weekly_reset_ms = 6;
+  void clear_next_weekly_reset_ms() ;
+  [[nodiscard]] ::uint64_t next_weekly_reset_ms() const;
+  void set_next_weekly_reset_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_weekly_reset_ms() const;
+  void _internal_set_next_weekly_reset_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.GetGuildShopResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          4, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetGuildShopResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::guildpb::GuildShopGoodsView > goods_;
+    ::google::protobuf::RepeatedPtrField< ::guildpb::GuildShopOrderView > pending_orders_;
+    ::google::protobuf::RepeatedPtrField< ::guildpb::GuildShopOrderView > recent_orders_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::uint64_t contribution_balance_;
+    ::uint64_t next_daily_reset_ms_;
+    ::uint64_t next_weekly_reset_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:guildpb.GetGuildRankResponse) */ {
  public:
@@ -6592,7 +9178,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankResponse final : public
   [[nodiscard]] static const GetGuildRankResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildRankResponse>(&GetGuildRankResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 37;
+  static constexpr int kIndexInFileMessages = 51;
   friend void swap(GetGuildRankResponse& a, GetGuildRankResponse& b) { a.Swap(&b); }
   inline void Swap(GetGuildRankResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6858,7 +9444,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankByGuildResponse final :
   [[nodiscard]] static const GetGuildRankByGuildResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildRankByGuildResponse>(&GetGuildRankByGuildResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 39;
+  static constexpr int kIndexInFileMessages = 53;
   friend void swap(GetGuildRankByGuildResponse& a, GetGuildRankByGuildResponse& b) { a.Swap(&b); }
   inline void Swap(GetGuildRankByGuildResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -7020,6 +9606,318 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildRankByGuildResponse final :
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
     ::guildpb::GuildRankEntry* PROTOBUF_NULLABLE entry_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildDonateOptionsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.GetGuildDonateOptionsResponse) */ {
+ public:
+  inline GetGuildDonateOptionsResponse() : GetGuildDonateOptionsResponse(nullptr) {}
+  ~GetGuildDonateOptionsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(GetGuildDonateOptionsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(GetGuildDonateOptionsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr GetGuildDonateOptionsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline GetGuildDonateOptionsResponse(const GetGuildDonateOptionsResponse& from) : GetGuildDonateOptionsResponse(nullptr, from) {}
+  inline GetGuildDonateOptionsResponse(GetGuildDonateOptionsResponse&& from) noexcept : GetGuildDonateOptionsResponse(nullptr, ::std::move(from)) {}
+  inline GetGuildDonateOptionsResponse& operator=(const GetGuildDonateOptionsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline GetGuildDonateOptionsResponse& operator=(GetGuildDonateOptionsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const GetGuildDonateOptionsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<GetGuildDonateOptionsResponse>(&GetGuildDonateOptionsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 38;
+  friend void swap(GetGuildDonateOptionsResponse& a, GetGuildDonateOptionsResponse& b) { a.Swap(&b); }
+  inline void Swap(GetGuildDonateOptionsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(GetGuildDonateOptionsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] GetGuildDonateOptionsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<GetGuildDonateOptionsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const GetGuildDonateOptionsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const GetGuildDonateOptionsResponse& from) { GetGuildDonateOptionsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(GetGuildDonateOptionsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.GetGuildDonateOptionsResponse"; }
+
+  explicit GetGuildDonateOptionsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  GetGuildDonateOptionsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const GetGuildDonateOptionsResponse& from);
+  GetGuildDonateOptionsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, GetGuildDonateOptionsResponse&& from) noexcept
+      : GetGuildDonateOptionsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kOptionsFieldNumber = 2,
+    kPendingDonationsFieldNumber = 3,
+    kRecentResultsFieldNumber = 7,
+    kErrorMessageFieldNumber = 1,
+    kContributionTotalFieldNumber = 4,
+    kContributionBalanceFieldNumber = 5,
+    kNextDailyResetMsFieldNumber = 6,
+  };
+  // repeated .guildpb.GuildDonateOptionView options = 2;
+  [[nodiscard]] int options_size()
+      const;
+  private:
+  int _internal_options_size() const;
+
+  public:
+  void clear_options() ;
+  [[nodiscard]] const ::guildpb::GuildDonateOptionView& options(int index) const;
+  [[nodiscard]] ::guildpb::GuildDonateOptionView* PROTOBUF_NONNULL mutable_options(int index);
+  ::guildpb::GuildDonateOptionView* PROTOBUF_NONNULL add_options();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonateOptionView>&
+  options() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonateOptionView>* PROTOBUF_NONNULL
+  mutable_options();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonateOptionView>& _internal_options() const;
+  ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonateOptionView>* PROTOBUF_NONNULL _internal_mutable_options();
+
+  public:
+  // repeated .guildpb.GuildDonationView pending_donations = 3;
+  [[nodiscard]] int pending_donations_size()
+      const;
+  private:
+  int _internal_pending_donations_size() const;
+
+  public:
+  void clear_pending_donations() ;
+  [[nodiscard]] const ::guildpb::GuildDonationView& pending_donations(int index) const;
+  [[nodiscard]] ::guildpb::GuildDonationView* PROTOBUF_NONNULL mutable_pending_donations(int index);
+  ::guildpb::GuildDonationView* PROTOBUF_NONNULL add_pending_donations();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>&
+  pending_donations() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>* PROTOBUF_NONNULL
+  mutable_pending_donations();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>& _internal_pending_donations() const;
+  ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>* PROTOBUF_NONNULL _internal_mutable_pending_donations();
+
+  public:
+  // repeated .guildpb.GuildDonationView recent_results = 7;
+  [[nodiscard]] int recent_results_size()
+      const;
+  private:
+  int _internal_recent_results_size() const;
+
+  public:
+  void clear_recent_results() ;
+  [[nodiscard]] const ::guildpb::GuildDonationView& recent_results(int index) const;
+  [[nodiscard]] ::guildpb::GuildDonationView* PROTOBUF_NONNULL mutable_recent_results(int index);
+  ::guildpb::GuildDonationView* PROTOBUF_NONNULL add_recent_results();
+  [[nodiscard]] const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>&
+  recent_results() const;
+  [[nodiscard]] ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>* PROTOBUF_NONNULL
+  mutable_recent_results();
+
+  private:
+  const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>& _internal_recent_results() const;
+  ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>* PROTOBUF_NONNULL _internal_mutable_recent_results();
+
+  public:
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // uint64 contribution_total = 4;
+  void clear_contribution_total() ;
+  [[nodiscard]] ::uint64_t contribution_total() const;
+  void set_contribution_total(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_contribution_total() const;
+  void _internal_set_contribution_total(::uint64_t value);
+
+  public:
+  // uint64 contribution_balance = 5;
+  void clear_contribution_balance() ;
+  [[nodiscard]] ::uint64_t contribution_balance() const;
+  void set_contribution_balance(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_contribution_balance() const;
+  void _internal_set_contribution_balance(::uint64_t value);
+
+  public:
+  // uint64 next_daily_reset_ms = 6;
+  void clear_next_daily_reset_ms() ;
+  [[nodiscard]] ::uint64_t next_daily_reset_ms() const;
+  void set_next_daily_reset_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_next_daily_reset_ms() const;
+  void _internal_set_next_daily_reset_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.GetGuildDonateOptionsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 7,
+                          4, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const GetGuildDonateOptionsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::RepeatedPtrField< ::guildpb::GuildDonateOptionView > options_;
+    ::google::protobuf::RepeatedPtrField< ::guildpb::GuildDonationView > pending_donations_;
+    ::google::protobuf::RepeatedPtrField< ::guildpb::GuildDonationView > recent_results_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::uint64_t contribution_total_;
+    ::uint64_t contribution_balance_;
+    ::uint64_t next_daily_reset_ms_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -7441,6 +10339,243 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CancelGuildApplicationResponse fina
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED BuyGuildShopGoodsResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.BuyGuildShopGoodsResponse) */ {
+ public:
+  inline BuyGuildShopGoodsResponse() : BuyGuildShopGoodsResponse(nullptr) {}
+  ~BuyGuildShopGoodsResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(BuyGuildShopGoodsResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(BuyGuildShopGoodsResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr BuyGuildShopGoodsResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline BuyGuildShopGoodsResponse(const BuyGuildShopGoodsResponse& from) : BuyGuildShopGoodsResponse(nullptr, from) {}
+  inline BuyGuildShopGoodsResponse(BuyGuildShopGoodsResponse&& from) noexcept : BuyGuildShopGoodsResponse(nullptr, ::std::move(from)) {}
+  inline BuyGuildShopGoodsResponse& operator=(const BuyGuildShopGoodsResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline BuyGuildShopGoodsResponse& operator=(BuyGuildShopGoodsResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const BuyGuildShopGoodsResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<BuyGuildShopGoodsResponse>(&BuyGuildShopGoodsResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 46;
+  friend void swap(BuyGuildShopGoodsResponse& a, BuyGuildShopGoodsResponse& b) { a.Swap(&b); }
+  inline void Swap(BuyGuildShopGoodsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(BuyGuildShopGoodsResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] BuyGuildShopGoodsResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<BuyGuildShopGoodsResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const BuyGuildShopGoodsResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const BuyGuildShopGoodsResponse& from) { BuyGuildShopGoodsResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(BuyGuildShopGoodsResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.BuyGuildShopGoodsResponse"; }
+
+  explicit BuyGuildShopGoodsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  BuyGuildShopGoodsResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const BuyGuildShopGoodsResponse& from);
+  BuyGuildShopGoodsResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, BuyGuildShopGoodsResponse&& from) noexcept
+      : BuyGuildShopGoodsResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kOrderFieldNumber = 2,
+    kContributionBalanceFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .guildpb.GuildShopOrderView order = 2;
+  [[nodiscard]] bool has_order()
+      const;
+  void clear_order() ;
+  [[nodiscard]] const ::guildpb::GuildShopOrderView& order() const;
+  [[nodiscard]] ::guildpb::GuildShopOrderView* PROTOBUF_NULLABLE release_order();
+  ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL mutable_order();
+  void set_allocated_order(::guildpb::GuildShopOrderView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_order(::guildpb::GuildShopOrderView* PROTOBUF_NULLABLE value);
+  ::guildpb::GuildShopOrderView* PROTOBUF_NULLABLE unsafe_arena_release_order();
+
+  private:
+  const ::guildpb::GuildShopOrderView& _internal_order() const;
+  ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL _internal_mutable_order();
+
+  public:
+  // uint64 contribution_balance = 3;
+  void clear_contribution_balance() ;
+  [[nodiscard]] ::uint64_t contribution_balance() const;
+  void set_contribution_balance(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_contribution_balance() const;
+  void _internal_set_contribution_balance(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.BuyGuildShopGoodsResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const BuyGuildShopGoodsResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::guildpb::GuildShopOrderView* PROTOBUF_NULLABLE order_;
+    ::uint64_t contribution_balance_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyJoinGuildResponse final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:guildpb.ApplyJoinGuildResponse) */ {
  public:
@@ -7641,6 +10776,231 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ApplyJoinGuildResponse final : publ
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED UpgradeGuildResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.UpgradeGuildResponse) */ {
+ public:
+  inline UpgradeGuildResponse() : UpgradeGuildResponse(nullptr) {}
+  ~UpgradeGuildResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(UpgradeGuildResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(UpgradeGuildResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr UpgradeGuildResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline UpgradeGuildResponse(const UpgradeGuildResponse& from) : UpgradeGuildResponse(nullptr, from) {}
+  inline UpgradeGuildResponse(UpgradeGuildResponse&& from) noexcept : UpgradeGuildResponse(nullptr, ::std::move(from)) {}
+  inline UpgradeGuildResponse& operator=(const UpgradeGuildResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline UpgradeGuildResponse& operator=(UpgradeGuildResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const UpgradeGuildResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<UpgradeGuildResponse>(&UpgradeGuildResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 42;
+  friend void swap(UpgradeGuildResponse& a, UpgradeGuildResponse& b) { a.Swap(&b); }
+  inline void Swap(UpgradeGuildResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(UpgradeGuildResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] UpgradeGuildResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<UpgradeGuildResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const UpgradeGuildResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const UpgradeGuildResponse& from) { UpgradeGuildResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(UpgradeGuildResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.UpgradeGuildResponse"; }
+
+  explicit UpgradeGuildResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  UpgradeGuildResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const UpgradeGuildResponse& from);
+  UpgradeGuildResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, UpgradeGuildResponse&& from) noexcept
+      : UpgradeGuildResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kGuildFieldNumber = 2,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .guildpb.GuildInfo guild = 2;
+  [[nodiscard]] bool has_guild()
+      const;
+  void clear_guild() ;
+  [[nodiscard]] const ::guildpb::GuildInfo& guild() const;
+  [[nodiscard]] ::guildpb::GuildInfo* PROTOBUF_NULLABLE release_guild();
+  ::guildpb::GuildInfo* PROTOBUF_NONNULL mutable_guild();
+  void set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value);
+  ::guildpb::GuildInfo* PROTOBUF_NULLABLE unsafe_arena_release_guild();
+
+  private:
+  const ::guildpb::GuildInfo& _internal_guild() const;
+  ::guildpb::GuildInfo* PROTOBUF_NONNULL _internal_mutable_guild();
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.UpgradeGuildResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<1, 2,
+                          2, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const UpgradeGuildResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::guildpb::GuildInfo* PROTOBUF_NULLABLE guild_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -9215,6 +12575,249 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED GetGuildResponse final : public ::g
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
     ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::guildpb::GuildInfo* PROTOBUF_NULLABLE guild_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_proto_2fguild_2fguild_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DonateToGuildResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:guildpb.DonateToGuildResponse) */ {
+ public:
+  inline DonateToGuildResponse() : DonateToGuildResponse(nullptr) {}
+  ~DonateToGuildResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(DonateToGuildResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(DonateToGuildResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr DonateToGuildResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline DonateToGuildResponse(const DonateToGuildResponse& from) : DonateToGuildResponse(nullptr, from) {}
+  inline DonateToGuildResponse(DonateToGuildResponse&& from) noexcept : DonateToGuildResponse(nullptr, ::std::move(from)) {}
+  inline DonateToGuildResponse& operator=(const DonateToGuildResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline DonateToGuildResponse& operator=(DonateToGuildResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const DonateToGuildResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<DonateToGuildResponse>(&DonateToGuildResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 40;
+  friend void swap(DonateToGuildResponse& a, DonateToGuildResponse& b) { a.Swap(&b); }
+  inline void Swap(DonateToGuildResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(DonateToGuildResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] DonateToGuildResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return ::google::protobuf::Message::DefaultConstruct<DonateToGuildResponse>(arena);
+  }
+  using ::google::protobuf::Message::CopyFrom;
+  void CopyFrom(const DonateToGuildResponse& from);
+  using ::google::protobuf::Message::MergeFrom;
+  void MergeFrom(const DonateToGuildResponse& from) { DonateToGuildResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(DonateToGuildResponse* PROTOBUF_NONNULL other);
+ private:
+  template <typename T>
+  friend ::absl::string_view(::google::protobuf::internal::GetAnyMessageName)();
+  static ::absl::string_view FullMessageName() { return "guildpb.DonateToGuildResponse"; }
+
+  explicit DonateToGuildResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  DonateToGuildResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const DonateToGuildResponse& from);
+  DonateToGuildResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, DonateToGuildResponse&& from) noexcept
+      : DonateToGuildResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kErrorMessageFieldNumber = 1,
+    kDonationFieldNumber = 2,
+    kGuildFieldNumber = 3,
+  };
+  // .TipInfoMessage error_message = 1;
+  [[nodiscard]] bool has_error_message()
+      const;
+  void clear_error_message() ;
+  [[nodiscard]] const ::TipInfoMessage& error_message() const;
+  [[nodiscard]] ::TipInfoMessage* PROTOBUF_NULLABLE release_error_message();
+  ::TipInfoMessage* PROTOBUF_NONNULL mutable_error_message();
+  void set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value);
+  ::TipInfoMessage* PROTOBUF_NULLABLE unsafe_arena_release_error_message();
+
+  private:
+  const ::TipInfoMessage& _internal_error_message() const;
+  ::TipInfoMessage* PROTOBUF_NONNULL _internal_mutable_error_message();
+
+  public:
+  // .guildpb.GuildDonationView donation = 2;
+  [[nodiscard]] bool has_donation()
+      const;
+  void clear_donation() ;
+  [[nodiscard]] const ::guildpb::GuildDonationView& donation() const;
+  [[nodiscard]] ::guildpb::GuildDonationView* PROTOBUF_NULLABLE release_donation();
+  ::guildpb::GuildDonationView* PROTOBUF_NONNULL mutable_donation();
+  void set_allocated_donation(::guildpb::GuildDonationView* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_donation(::guildpb::GuildDonationView* PROTOBUF_NULLABLE value);
+  ::guildpb::GuildDonationView* PROTOBUF_NULLABLE unsafe_arena_release_donation();
+
+  private:
+  const ::guildpb::GuildDonationView& _internal_donation() const;
+  ::guildpb::GuildDonationView* PROTOBUF_NONNULL _internal_mutable_donation();
+
+  public:
+  // .guildpb.GuildInfo guild = 3;
+  [[nodiscard]] bool has_guild()
+      const;
+  void clear_guild() ;
+  [[nodiscard]] const ::guildpb::GuildInfo& guild() const;
+  [[nodiscard]] ::guildpb::GuildInfo* PROTOBUF_NULLABLE release_guild();
+  ::guildpb::GuildInfo* PROTOBUF_NONNULL mutable_guild();
+  void set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value);
+  ::guildpb::GuildInfo* PROTOBUF_NULLABLE unsafe_arena_release_guild();
+
+  private:
+  const ::guildpb::GuildInfo& _internal_guild() const;
+  ::guildpb::GuildInfo* PROTOBUF_NONNULL _internal_mutable_guild();
+
+  public:
+  // @@protoc_insertion_point(class_scope:guildpb.DonateToGuildResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          3, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const DonateToGuildResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::TipInfoMessage* PROTOBUF_NULLABLE error_message_;
+    ::guildpb::GuildDonationView* PROTOBUF_NULLABLE donation_;
     ::guildpb::GuildInfo* PROTOBUF_NULLABLE guild_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -13596,6 +17199,2505 @@ inline void GuildChangedS2C::_internal_set_target_player_id(::uint64_t value) {
 
 // -------------------------------------------------------------------
 
+// GuildDonationView
+
+// uint64 op_id = 1;
+inline void GuildDonationView::clear_op_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.op_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GuildDonationView::op_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonationView.op_id)
+  return _internal_op_id();
+}
+inline void GuildDonationView::set_op_id(::uint64_t value) {
+  _internal_set_op_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonationView.op_id)
+}
+inline ::uint64_t GuildDonationView::_internal_op_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.op_id_;
+}
+inline void GuildDonationView::_internal_set_op_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.op_id_ = value;
+}
+
+// uint32 donate_id = 2;
+inline void GuildDonationView::clear_donate_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.donate_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t GuildDonationView::donate_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonationView.donate_id)
+  return _internal_donate_id();
+}
+inline void GuildDonationView::set_donate_id(::uint32_t value) {
+  _internal_set_donate_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonationView.donate_id)
+}
+inline ::uint32_t GuildDonationView::_internal_donate_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.donate_id_;
+}
+inline void GuildDonationView::_internal_set_donate_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.donate_id_ = value;
+}
+
+// .guildpb.GuildAssetOrderStatus status = 3;
+inline void GuildDonationView::clear_status() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.status_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::guildpb::GuildAssetOrderStatus GuildDonationView::status() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonationView.status)
+  return _internal_status();
+}
+inline void GuildDonationView::set_status(::guildpb::GuildAssetOrderStatus value) {
+  _internal_set_status(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonationView.status)
+}
+inline ::guildpb::GuildAssetOrderStatus GuildDonationView::_internal_status() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::guildpb::GuildAssetOrderStatus>(_impl_.status_);
+}
+inline void GuildDonationView::_internal_set_status(::guildpb::GuildAssetOrderStatus value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.status_ = value;
+}
+
+// uint32 currency_type = 4;
+inline void GuildDonationView::clear_currency_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.currency_type_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t GuildDonationView::currency_type() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonationView.currency_type)
+  return _internal_currency_type();
+}
+inline void GuildDonationView::set_currency_type(::uint32_t value) {
+  _internal_set_currency_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonationView.currency_type)
+}
+inline ::uint32_t GuildDonationView::_internal_currency_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.currency_type_;
+}
+inline void GuildDonationView::_internal_set_currency_type(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.currency_type_ = value;
+}
+
+// uint64 cost_amount = 5;
+inline void GuildDonationView::clear_cost_amount() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cost_amount_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t GuildDonationView::cost_amount() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonationView.cost_amount)
+  return _internal_cost_amount();
+}
+inline void GuildDonationView::set_cost_amount(::uint64_t value) {
+  _internal_set_cost_amount(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonationView.cost_amount)
+}
+inline ::uint64_t GuildDonationView::_internal_cost_amount() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cost_amount_;
+}
+inline void GuildDonationView::_internal_set_cost_amount(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cost_amount_ = value;
+}
+
+// uint64 contribution_gain = 6;
+inline void GuildDonationView::clear_contribution_gain() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_gain_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t GuildDonationView::contribution_gain() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonationView.contribution_gain)
+  return _internal_contribution_gain();
+}
+inline void GuildDonationView::set_contribution_gain(::uint64_t value) {
+  _internal_set_contribution_gain(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonationView.contribution_gain)
+}
+inline ::uint64_t GuildDonationView::_internal_contribution_gain() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.contribution_gain_;
+}
+inline void GuildDonationView::_internal_set_contribution_gain(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_gain_ = value;
+}
+
+// uint64 funds_gain = 7;
+inline void GuildDonationView::clear_funds_gain() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.funds_gain_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint64_t GuildDonationView::funds_gain() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonationView.funds_gain)
+  return _internal_funds_gain();
+}
+inline void GuildDonationView::set_funds_gain(::uint64_t value) {
+  _internal_set_funds_gain(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonationView.funds_gain)
+}
+inline ::uint64_t GuildDonationView::_internal_funds_gain() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.funds_gain_;
+}
+inline void GuildDonationView::_internal_set_funds_gain(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.funds_gain_ = value;
+}
+
+// uint32 reason_tip_id = 8;
+inline void GuildDonationView::clear_reason_tip_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_tip_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t GuildDonationView::reason_tip_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonationView.reason_tip_id)
+  return _internal_reason_tip_id();
+}
+inline void GuildDonationView::set_reason_tip_id(::uint32_t value) {
+  _internal_set_reason_tip_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonationView.reason_tip_id)
+}
+inline ::uint32_t GuildDonationView::_internal_reason_tip_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reason_tip_id_;
+}
+inline void GuildDonationView::_internal_set_reason_tip_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_tip_id_ = value;
+}
+
+// uint64 created_ms = 9;
+inline void GuildDonationView::clear_created_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint64_t GuildDonationView::created_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonationView.created_ms)
+  return _internal_created_ms();
+}
+inline void GuildDonationView::set_created_ms(::uint64_t value) {
+  _internal_set_created_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonationView.created_ms)
+}
+inline ::uint64_t GuildDonationView::_internal_created_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.created_ms_;
+}
+inline void GuildDonationView::_internal_set_created_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GuildDonateOptionView
+
+// uint32 donate_id = 1;
+inline void GuildDonateOptionView::clear_donate_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.donate_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t GuildDonateOptionView::donate_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonateOptionView.donate_id)
+  return _internal_donate_id();
+}
+inline void GuildDonateOptionView::set_donate_id(::uint32_t value) {
+  _internal_set_donate_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonateOptionView.donate_id)
+}
+inline ::uint32_t GuildDonateOptionView::_internal_donate_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.donate_id_;
+}
+inline void GuildDonateOptionView::_internal_set_donate_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.donate_id_ = value;
+}
+
+// string name = 2;
+inline void GuildDonateOptionView::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& GuildDonateOptionView::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonateOptionView.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GuildDonateOptionView::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonateOptionView.name)
+}
+inline ::std::string* PROTOBUF_NONNULL GuildDonateOptionView::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:guildpb.GuildDonateOptionView.name)
+  return _s;
+}
+inline const ::std::string& GuildDonateOptionView::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void GuildDonateOptionView::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GuildDonateOptionView::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GuildDonateOptionView::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.GuildDonateOptionView.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GuildDonateOptionView::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:guildpb.GuildDonateOptionView.name)
+}
+
+// uint32 currency_type = 3;
+inline void GuildDonateOptionView::clear_currency_type() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.currency_type_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t GuildDonateOptionView::currency_type() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonateOptionView.currency_type)
+  return _internal_currency_type();
+}
+inline void GuildDonateOptionView::set_currency_type(::uint32_t value) {
+  _internal_set_currency_type(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonateOptionView.currency_type)
+}
+inline ::uint32_t GuildDonateOptionView::_internal_currency_type() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.currency_type_;
+}
+inline void GuildDonateOptionView::_internal_set_currency_type(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.currency_type_ = value;
+}
+
+// uint64 cost_amount = 4;
+inline void GuildDonateOptionView::clear_cost_amount() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cost_amount_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t GuildDonateOptionView::cost_amount() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonateOptionView.cost_amount)
+  return _internal_cost_amount();
+}
+inline void GuildDonateOptionView::set_cost_amount(::uint64_t value) {
+  _internal_set_cost_amount(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonateOptionView.cost_amount)
+}
+inline ::uint64_t GuildDonateOptionView::_internal_cost_amount() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cost_amount_;
+}
+inline void GuildDonateOptionView::_internal_set_cost_amount(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cost_amount_ = value;
+}
+
+// uint64 contribution_gain = 5;
+inline void GuildDonateOptionView::clear_contribution_gain() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_gain_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t GuildDonateOptionView::contribution_gain() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonateOptionView.contribution_gain)
+  return _internal_contribution_gain();
+}
+inline void GuildDonateOptionView::set_contribution_gain(::uint64_t value) {
+  _internal_set_contribution_gain(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonateOptionView.contribution_gain)
+}
+inline ::uint64_t GuildDonateOptionView::_internal_contribution_gain() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.contribution_gain_;
+}
+inline void GuildDonateOptionView::_internal_set_contribution_gain(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_gain_ = value;
+}
+
+// uint64 funds_gain = 6;
+inline void GuildDonateOptionView::clear_funds_gain() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.funds_gain_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t GuildDonateOptionView::funds_gain() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonateOptionView.funds_gain)
+  return _internal_funds_gain();
+}
+inline void GuildDonateOptionView::set_funds_gain(::uint64_t value) {
+  _internal_set_funds_gain(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonateOptionView.funds_gain)
+}
+inline ::uint64_t GuildDonateOptionView::_internal_funds_gain() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.funds_gain_;
+}
+inline void GuildDonateOptionView::_internal_set_funds_gain(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.funds_gain_ = value;
+}
+
+// uint32 daily_limit = 7;
+inline void GuildDonateOptionView::clear_daily_limit() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.daily_limit_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t GuildDonateOptionView::daily_limit() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonateOptionView.daily_limit)
+  return _internal_daily_limit();
+}
+inline void GuildDonateOptionView::set_daily_limit(::uint32_t value) {
+  _internal_set_daily_limit(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonateOptionView.daily_limit)
+}
+inline ::uint32_t GuildDonateOptionView::_internal_daily_limit() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.daily_limit_;
+}
+inline void GuildDonateOptionView::_internal_set_daily_limit(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.daily_limit_ = value;
+}
+
+// uint32 used_today = 8;
+inline void GuildDonateOptionView::clear_used_today() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.used_today_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline ::uint32_t GuildDonateOptionView::used_today() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonateOptionView.used_today)
+  return _internal_used_today();
+}
+inline void GuildDonateOptionView::set_used_today(::uint32_t value) {
+  _internal_set_used_today(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonateOptionView.used_today)
+}
+inline ::uint32_t GuildDonateOptionView::_internal_used_today() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.used_today_;
+}
+inline void GuildDonateOptionView::_internal_set_used_today(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.used_today_ = value;
+}
+
+// uint32 min_guild_level = 9;
+inline void GuildDonateOptionView::clear_min_guild_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_guild_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t GuildDonateOptionView::min_guild_level() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonateOptionView.min_guild_level)
+  return _internal_min_guild_level();
+}
+inline void GuildDonateOptionView::set_min_guild_level(::uint32_t value) {
+  _internal_set_min_guild_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonateOptionView.min_guild_level)
+}
+inline ::uint32_t GuildDonateOptionView::_internal_min_guild_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.min_guild_level_;
+}
+inline void GuildDonateOptionView::_internal_set_min_guild_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.min_guild_level_ = value;
+}
+
+// bool unlocked = 10;
+inline void GuildDonateOptionView::clear_unlocked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline bool GuildDonateOptionView::unlocked() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildDonateOptionView.unlocked)
+  return _internal_unlocked();
+}
+inline void GuildDonateOptionView::set_unlocked(bool value) {
+  _internal_set_unlocked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildDonateOptionView.unlocked)
+}
+inline bool GuildDonateOptionView::_internal_unlocked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unlocked_;
+}
+inline void GuildDonateOptionView::_internal_set_unlocked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GuildShopGoodsView
+
+// uint32 goods_id = 1;
+inline void GuildShopGoodsView::clear_goods_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.goods_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t GuildShopGoodsView::goods_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.goods_id)
+  return _internal_goods_id();
+}
+inline void GuildShopGoodsView::set_goods_id(::uint32_t value) {
+  _internal_set_goods_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.goods_id)
+}
+inline ::uint32_t GuildShopGoodsView::_internal_goods_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.goods_id_;
+}
+inline void GuildShopGoodsView::_internal_set_goods_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.goods_id_ = value;
+}
+
+// string name = 2;
+inline void GuildShopGoodsView::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& GuildShopGoodsView::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void GuildShopGoodsView::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.name)
+}
+inline ::std::string* PROTOBUF_NONNULL GuildShopGoodsView::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:guildpb.GuildShopGoodsView.name)
+  return _s;
+}
+inline const ::std::string& GuildShopGoodsView::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void GuildShopGoodsView::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL GuildShopGoodsView::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE GuildShopGoodsView::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.GuildShopGoodsView.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void GuildShopGoodsView::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:guildpb.GuildShopGoodsView.name)
+}
+
+// uint32 category = 3;
+inline void GuildShopGoodsView::clear_category() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.category_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t GuildShopGoodsView::category() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.category)
+  return _internal_category();
+}
+inline void GuildShopGoodsView::set_category(::uint32_t value) {
+  _internal_set_category(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.category)
+}
+inline ::uint32_t GuildShopGoodsView::_internal_category() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.category_;
+}
+inline void GuildShopGoodsView::_internal_set_category(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.category_ = value;
+}
+
+// uint32 item_id = 4;
+inline void GuildShopGoodsView::clear_item_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t GuildShopGoodsView::item_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.item_id)
+  return _internal_item_id();
+}
+inline void GuildShopGoodsView::set_item_id(::uint32_t value) {
+  _internal_set_item_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.item_id)
+}
+inline ::uint32_t GuildShopGoodsView::_internal_item_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_id_;
+}
+inline void GuildShopGoodsView::_internal_set_item_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_id_ = value;
+}
+
+// uint32 item_count = 5;
+inline void GuildShopGoodsView::clear_item_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint32_t GuildShopGoodsView::item_count() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.item_count)
+  return _internal_item_count();
+}
+inline void GuildShopGoodsView::set_item_count(::uint32_t value) {
+  _internal_set_item_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.item_count)
+}
+inline ::uint32_t GuildShopGoodsView::_internal_item_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.item_count_;
+}
+inline void GuildShopGoodsView::_internal_set_item_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.item_count_ = value;
+}
+
+// uint64 cost_contribution = 6;
+inline void GuildShopGoodsView::clear_cost_contribution() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cost_contribution_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t GuildShopGoodsView::cost_contribution() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.cost_contribution)
+  return _internal_cost_contribution();
+}
+inline void GuildShopGoodsView::set_cost_contribution(::uint64_t value) {
+  _internal_set_cost_contribution(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.cost_contribution)
+}
+inline ::uint64_t GuildShopGoodsView::_internal_cost_contribution() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cost_contribution_;
+}
+inline void GuildShopGoodsView::_internal_set_cost_contribution(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cost_contribution_ = value;
+}
+
+// uint32 required_guild_level = 7;
+inline void GuildShopGoodsView::clear_required_guild_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_guild_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint32_t GuildShopGoodsView::required_guild_level() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.required_guild_level)
+  return _internal_required_guild_level();
+}
+inline void GuildShopGoodsView::set_required_guild_level(::uint32_t value) {
+  _internal_set_required_guild_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.required_guild_level)
+}
+inline ::uint32_t GuildShopGoodsView::_internal_required_guild_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.required_guild_level_;
+}
+inline void GuildShopGoodsView::_internal_set_required_guild_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.required_guild_level_ = value;
+}
+
+// bool unlocked = 8;
+inline void GuildShopGoodsView::clear_unlocked() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_ = false;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
+inline bool GuildShopGoodsView::unlocked() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.unlocked)
+  return _internal_unlocked();
+}
+inline void GuildShopGoodsView::set_unlocked(bool value) {
+  _internal_set_unlocked(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.unlocked)
+}
+inline bool GuildShopGoodsView::_internal_unlocked() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.unlocked_;
+}
+inline void GuildShopGoodsView::_internal_set_unlocked(bool value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.unlocked_ = value;
+}
+
+// uint32 limit_period = 9;
+inline void GuildShopGoodsView::clear_limit_period() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_period_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
+}
+inline ::uint32_t GuildShopGoodsView::limit_period() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.limit_period)
+  return _internal_limit_period();
+}
+inline void GuildShopGoodsView::set_limit_period(::uint32_t value) {
+  _internal_set_limit_period(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.limit_period)
+}
+inline ::uint32_t GuildShopGoodsView::_internal_limit_period() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.limit_period_;
+}
+inline void GuildShopGoodsView::_internal_set_limit_period(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_period_ = value;
+}
+
+// uint32 limit_count = 10;
+inline void GuildShopGoodsView::clear_limit_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000200U);
+}
+inline ::uint32_t GuildShopGoodsView::limit_count() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.limit_count)
+  return _internal_limit_count();
+}
+inline void GuildShopGoodsView::set_limit_count(::uint32_t value) {
+  _internal_set_limit_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000200U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.limit_count)
+}
+inline ::uint32_t GuildShopGoodsView::_internal_limit_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.limit_count_;
+}
+inline void GuildShopGoodsView::_internal_set_limit_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.limit_count_ = value;
+}
+
+// uint32 used_count = 11;
+inline void GuildShopGoodsView::clear_used_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.used_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000400U);
+}
+inline ::uint32_t GuildShopGoodsView::used_count() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.used_count)
+  return _internal_used_count();
+}
+inline void GuildShopGoodsView::set_used_count(::uint32_t value) {
+  _internal_set_used_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000400U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.used_count)
+}
+inline ::uint32_t GuildShopGoodsView::_internal_used_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.used_count_;
+}
+inline void GuildShopGoodsView::_internal_set_used_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.used_count_ = value;
+}
+
+// uint32 max_buy_count = 12;
+inline void GuildShopGoodsView::clear_max_buy_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_buy_count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000800U);
+}
+inline ::uint32_t GuildShopGoodsView::max_buy_count() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopGoodsView.max_buy_count)
+  return _internal_max_buy_count();
+}
+inline void GuildShopGoodsView::set_max_buy_count(::uint32_t value) {
+  _internal_set_max_buy_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000800U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopGoodsView.max_buy_count)
+}
+inline ::uint32_t GuildShopGoodsView::_internal_max_buy_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.max_buy_count_;
+}
+inline void GuildShopGoodsView::_internal_set_max_buy_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.max_buy_count_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GuildShopOrderView
+
+// uint64 op_id = 1;
+inline void GuildShopOrderView::clear_op_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.op_id_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t GuildShopOrderView::op_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopOrderView.op_id)
+  return _internal_op_id();
+}
+inline void GuildShopOrderView::set_op_id(::uint64_t value) {
+  _internal_set_op_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopOrderView.op_id)
+}
+inline ::uint64_t GuildShopOrderView::_internal_op_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.op_id_;
+}
+inline void GuildShopOrderView::_internal_set_op_id(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.op_id_ = value;
+}
+
+// uint32 goods_id = 2;
+inline void GuildShopOrderView::clear_goods_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.goods_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t GuildShopOrderView::goods_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopOrderView.goods_id)
+  return _internal_goods_id();
+}
+inline void GuildShopOrderView::set_goods_id(::uint32_t value) {
+  _internal_set_goods_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopOrderView.goods_id)
+}
+inline ::uint32_t GuildShopOrderView::_internal_goods_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.goods_id_;
+}
+inline void GuildShopOrderView::_internal_set_goods_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.goods_id_ = value;
+}
+
+// uint32 count = 3;
+inline void GuildShopOrderView::clear_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t GuildShopOrderView::count() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopOrderView.count)
+  return _internal_count();
+}
+inline void GuildShopOrderView::set_count(::uint32_t value) {
+  _internal_set_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopOrderView.count)
+}
+inline ::uint32_t GuildShopOrderView::_internal_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.count_;
+}
+inline void GuildShopOrderView::_internal_set_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = value;
+}
+
+// .guildpb.GuildAssetOrderStatus status = 4;
+inline void GuildShopOrderView::clear_status() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.status_ = 0;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::guildpb::GuildAssetOrderStatus GuildShopOrderView::status() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopOrderView.status)
+  return _internal_status();
+}
+inline void GuildShopOrderView::set_status(::guildpb::GuildAssetOrderStatus value) {
+  _internal_set_status(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopOrderView.status)
+}
+inline ::guildpb::GuildAssetOrderStatus GuildShopOrderView::_internal_status() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return static_cast<::guildpb::GuildAssetOrderStatus>(_impl_.status_);
+}
+inline void GuildShopOrderView::_internal_set_status(::guildpb::GuildAssetOrderStatus value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.status_ = value;
+}
+
+// uint64 cost_contribution = 5;
+inline void GuildShopOrderView::clear_cost_contribution() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cost_contribution_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint64_t GuildShopOrderView::cost_contribution() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopOrderView.cost_contribution)
+  return _internal_cost_contribution();
+}
+inline void GuildShopOrderView::set_cost_contribution(::uint64_t value) {
+  _internal_set_cost_contribution(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopOrderView.cost_contribution)
+}
+inline ::uint64_t GuildShopOrderView::_internal_cost_contribution() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cost_contribution_;
+}
+inline void GuildShopOrderView::_internal_set_cost_contribution(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cost_contribution_ = value;
+}
+
+// uint32 reason_tip_id = 6;
+inline void GuildShopOrderView::clear_reason_tip_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_tip_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint32_t GuildShopOrderView::reason_tip_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopOrderView.reason_tip_id)
+  return _internal_reason_tip_id();
+}
+inline void GuildShopOrderView::set_reason_tip_id(::uint32_t value) {
+  _internal_set_reason_tip_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopOrderView.reason_tip_id)
+}
+inline ::uint32_t GuildShopOrderView::_internal_reason_tip_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.reason_tip_id_;
+}
+inline void GuildShopOrderView::_internal_set_reason_tip_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.reason_tip_id_ = value;
+}
+
+// uint64 created_ms = 7;
+inline void GuildShopOrderView::clear_created_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t GuildShopOrderView::created_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GuildShopOrderView.created_ms)
+  return _internal_created_ms();
+}
+inline void GuildShopOrderView::set_created_ms(::uint64_t value) {
+  _internal_set_created_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:guildpb.GuildShopOrderView.created_ms)
+}
+inline ::uint64_t GuildShopOrderView::_internal_created_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.created_ms_;
+}
+inline void GuildShopOrderView::_internal_set_created_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.created_ms_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// GetGuildDonateOptionsRequest
+
+// -------------------------------------------------------------------
+
+// GetGuildDonateOptionsResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool GetGuildDonateOptionsResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& GetGuildDonateOptionsResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& GetGuildDonateOptionsResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildDonateOptionsResponse.error_message)
+  return _internal_error_message();
+}
+inline void GetGuildDonateOptionsResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.GetGuildDonateOptionsResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetGuildDonateOptionsResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetGuildDonateOptionsResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.GetGuildDonateOptionsResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetGuildDonateOptionsResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetGuildDonateOptionsResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:guildpb.GetGuildDonateOptionsResponse.error_message)
+  return _msg;
+}
+inline void GetGuildDonateOptionsResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.GetGuildDonateOptionsResponse.error_message)
+}
+
+// repeated .guildpb.GuildDonateOptionView options = 2;
+inline int GetGuildDonateOptionsResponse::_internal_options_size() const {
+  return _internal_options().size();
+}
+inline int GetGuildDonateOptionsResponse::options_size() const {
+  return _internal_options_size();
+}
+inline void GetGuildDonateOptionsResponse::clear_options() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.options_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::guildpb::GuildDonateOptionView& GetGuildDonateOptionsResponse::options(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildDonateOptionsResponse.options)
+  return _internal_options().Get(index);
+}
+inline ::guildpb::GuildDonateOptionView* PROTOBUF_NONNULL GetGuildDonateOptionsResponse::mutable_options(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:guildpb.GetGuildDonateOptionsResponse.options)
+  return _internal_mutable_options()->Mutable(index);
+}
+inline ::guildpb::GuildDonateOptionView* PROTOBUF_NONNULL GetGuildDonateOptionsResponse::add_options()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::guildpb::GuildDonateOptionView* _add =
+      _internal_mutable_options()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:guildpb.GetGuildDonateOptionsResponse.options)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonateOptionView>& GetGuildDonateOptionsResponse::options() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:guildpb.GetGuildDonateOptionsResponse.options)
+  return _internal_options();
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonateOptionView>* PROTOBUF_NONNULL
+GetGuildDonateOptionsResponse::mutable_options() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:guildpb.GetGuildDonateOptionsResponse.options)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_options();
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonateOptionView>&
+GetGuildDonateOptionsResponse::_internal_options() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.options_;
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonateOptionView>* PROTOBUF_NONNULL
+GetGuildDonateOptionsResponse::_internal_mutable_options() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.options_;
+}
+
+// repeated .guildpb.GuildDonationView pending_donations = 3;
+inline int GetGuildDonateOptionsResponse::_internal_pending_donations_size() const {
+  return _internal_pending_donations().size();
+}
+inline int GetGuildDonateOptionsResponse::pending_donations_size() const {
+  return _internal_pending_donations_size();
+}
+inline void GetGuildDonateOptionsResponse::clear_pending_donations() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_donations_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::guildpb::GuildDonationView& GetGuildDonateOptionsResponse::pending_donations(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildDonateOptionsResponse.pending_donations)
+  return _internal_pending_donations().Get(index);
+}
+inline ::guildpb::GuildDonationView* PROTOBUF_NONNULL GetGuildDonateOptionsResponse::mutable_pending_donations(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:guildpb.GetGuildDonateOptionsResponse.pending_donations)
+  return _internal_mutable_pending_donations()->Mutable(index);
+}
+inline ::guildpb::GuildDonationView* PROTOBUF_NONNULL GetGuildDonateOptionsResponse::add_pending_donations()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::guildpb::GuildDonationView* _add =
+      _internal_mutable_pending_donations()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:guildpb.GetGuildDonateOptionsResponse.pending_donations)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>& GetGuildDonateOptionsResponse::pending_donations() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:guildpb.GetGuildDonateOptionsResponse.pending_donations)
+  return _internal_pending_donations();
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>* PROTOBUF_NONNULL
+GetGuildDonateOptionsResponse::mutable_pending_donations() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:guildpb.GetGuildDonateOptionsResponse.pending_donations)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_pending_donations();
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>&
+GetGuildDonateOptionsResponse::_internal_pending_donations() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_donations_;
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>* PROTOBUF_NONNULL
+GetGuildDonateOptionsResponse::_internal_mutable_pending_donations() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.pending_donations_;
+}
+
+// uint64 contribution_total = 4;
+inline void GetGuildDonateOptionsResponse::clear_contribution_total() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_total_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t GetGuildDonateOptionsResponse::contribution_total() const {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildDonateOptionsResponse.contribution_total)
+  return _internal_contribution_total();
+}
+inline void GetGuildDonateOptionsResponse::set_contribution_total(::uint64_t value) {
+  _internal_set_contribution_total(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:guildpb.GetGuildDonateOptionsResponse.contribution_total)
+}
+inline ::uint64_t GetGuildDonateOptionsResponse::_internal_contribution_total() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.contribution_total_;
+}
+inline void GetGuildDonateOptionsResponse::_internal_set_contribution_total(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_total_ = value;
+}
+
+// uint64 contribution_balance = 5;
+inline void GetGuildDonateOptionsResponse::clear_contribution_balance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_balance_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t GetGuildDonateOptionsResponse::contribution_balance() const {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildDonateOptionsResponse.contribution_balance)
+  return _internal_contribution_balance();
+}
+inline void GetGuildDonateOptionsResponse::set_contribution_balance(::uint64_t value) {
+  _internal_set_contribution_balance(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:guildpb.GetGuildDonateOptionsResponse.contribution_balance)
+}
+inline ::uint64_t GetGuildDonateOptionsResponse::_internal_contribution_balance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.contribution_balance_;
+}
+inline void GetGuildDonateOptionsResponse::_internal_set_contribution_balance(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_balance_ = value;
+}
+
+// uint64 next_daily_reset_ms = 6;
+inline void GetGuildDonateOptionsResponse::clear_next_daily_reset_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_daily_reset_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t GetGuildDonateOptionsResponse::next_daily_reset_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildDonateOptionsResponse.next_daily_reset_ms)
+  return _internal_next_daily_reset_ms();
+}
+inline void GetGuildDonateOptionsResponse::set_next_daily_reset_ms(::uint64_t value) {
+  _internal_set_next_daily_reset_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:guildpb.GetGuildDonateOptionsResponse.next_daily_reset_ms)
+}
+inline ::uint64_t GetGuildDonateOptionsResponse::_internal_next_daily_reset_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_daily_reset_ms_;
+}
+inline void GetGuildDonateOptionsResponse::_internal_set_next_daily_reset_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_daily_reset_ms_ = value;
+}
+
+// repeated .guildpb.GuildDonationView recent_results = 7;
+inline int GetGuildDonateOptionsResponse::_internal_recent_results_size() const {
+  return _internal_recent_results().size();
+}
+inline int GetGuildDonateOptionsResponse::recent_results_size() const {
+  return _internal_recent_results_size();
+}
+inline void GetGuildDonateOptionsResponse::clear_recent_results() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recent_results_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::guildpb::GuildDonationView& GetGuildDonateOptionsResponse::recent_results(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildDonateOptionsResponse.recent_results)
+  return _internal_recent_results().Get(index);
+}
+inline ::guildpb::GuildDonationView* PROTOBUF_NONNULL GetGuildDonateOptionsResponse::mutable_recent_results(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:guildpb.GetGuildDonateOptionsResponse.recent_results)
+  return _internal_mutable_recent_results()->Mutable(index);
+}
+inline ::guildpb::GuildDonationView* PROTOBUF_NONNULL GetGuildDonateOptionsResponse::add_recent_results()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::guildpb::GuildDonationView* _add =
+      _internal_mutable_recent_results()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:guildpb.GetGuildDonateOptionsResponse.recent_results)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>& GetGuildDonateOptionsResponse::recent_results() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:guildpb.GetGuildDonateOptionsResponse.recent_results)
+  return _internal_recent_results();
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>* PROTOBUF_NONNULL
+GetGuildDonateOptionsResponse::mutable_recent_results() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:guildpb.GetGuildDonateOptionsResponse.recent_results)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_recent_results();
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>&
+GetGuildDonateOptionsResponse::_internal_recent_results() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recent_results_;
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildDonationView>* PROTOBUF_NONNULL
+GetGuildDonateOptionsResponse::_internal_mutable_recent_results() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.recent_results_;
+}
+
+// -------------------------------------------------------------------
+
+// DonateToGuildRequest
+
+// uint32 donate_id = 1;
+inline void DonateToGuildRequest::clear_donate_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.donate_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t DonateToGuildRequest::donate_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.DonateToGuildRequest.donate_id)
+  return _internal_donate_id();
+}
+inline void DonateToGuildRequest::set_donate_id(::uint32_t value) {
+  _internal_set_donate_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:guildpb.DonateToGuildRequest.donate_id)
+}
+inline ::uint32_t DonateToGuildRequest::_internal_donate_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.donate_id_;
+}
+inline void DonateToGuildRequest::_internal_set_donate_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.donate_id_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// DonateToGuildResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool DonateToGuildResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& DonateToGuildResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& DonateToGuildResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.DonateToGuildResponse.error_message)
+  return _internal_error_message();
+}
+inline void DonateToGuildResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.DonateToGuildResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE DonateToGuildResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE DonateToGuildResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.DonateToGuildResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL DonateToGuildResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL DonateToGuildResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:guildpb.DonateToGuildResponse.error_message)
+  return _msg;
+}
+inline void DonateToGuildResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.DonateToGuildResponse.error_message)
+}
+
+// .guildpb.GuildDonationView donation = 2;
+inline bool DonateToGuildResponse::has_donation() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.donation_ != nullptr);
+  return value;
+}
+inline void DonateToGuildResponse::clear_donation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.donation_ != nullptr) _impl_.donation_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::guildpb::GuildDonationView& DonateToGuildResponse::_internal_donation() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::guildpb::GuildDonationView* p = _impl_.donation_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::guildpb::GuildDonationView>(&::guildpb::GuildDonationView_globals_);
+}
+inline const ::guildpb::GuildDonationView& DonateToGuildResponse::donation() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.DonateToGuildResponse.donation)
+  return _internal_donation();
+}
+inline void DonateToGuildResponse::unsafe_arena_set_allocated_donation(
+    ::guildpb::GuildDonationView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.donation_);
+  }
+  _impl_.donation_ = reinterpret_cast<::guildpb::GuildDonationView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.DonateToGuildResponse.donation)
+}
+inline ::guildpb::GuildDonationView* PROTOBUF_NULLABLE DonateToGuildResponse::release_donation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildDonationView* released = _impl_.donation_;
+  _impl_.donation_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::guildpb::GuildDonationView* PROTOBUF_NULLABLE DonateToGuildResponse::unsafe_arena_release_donation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.DonateToGuildResponse.donation)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildDonationView* temp = _impl_.donation_;
+  _impl_.donation_ = nullptr;
+  return temp;
+}
+inline ::guildpb::GuildDonationView* PROTOBUF_NONNULL DonateToGuildResponse::_internal_mutable_donation() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.donation_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::guildpb::GuildDonationView>(GetArena());
+    _impl_.donation_ = reinterpret_cast<::guildpb::GuildDonationView*>(p);
+  }
+  return _impl_.donation_;
+}
+inline ::guildpb::GuildDonationView* PROTOBUF_NONNULL DonateToGuildResponse::mutable_donation()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildDonationView* _msg = _internal_mutable_donation();
+  // @@protoc_insertion_point(field_mutable:guildpb.DonateToGuildResponse.donation)
+  return _msg;
+}
+inline void DonateToGuildResponse::set_allocated_donation(::guildpb::GuildDonationView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.donation_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.donation_ = reinterpret_cast<::guildpb::GuildDonationView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.DonateToGuildResponse.donation)
+}
+
+// .guildpb.GuildInfo guild = 3;
+inline bool DonateToGuildResponse::has_guild() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000004U);
+  PROTOBUF_ASSUME(!value || _impl_.guild_ != nullptr);
+  return value;
+}
+inline void DonateToGuildResponse::clear_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_ != nullptr) _impl_.guild_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::guildpb::GuildInfo& DonateToGuildResponse::_internal_guild() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::guildpb::GuildInfo* p = _impl_.guild_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::guildpb::GuildInfo>(&::guildpb::GuildInfo_globals_);
+}
+inline const ::guildpb::GuildInfo& DonateToGuildResponse::guild() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.DonateToGuildResponse.guild)
+  return _internal_guild();
+}
+inline void DonateToGuildResponse::unsafe_arena_set_allocated_guild(
+    ::guildpb::GuildInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_);
+  }
+  _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.DonateToGuildResponse.guild)
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NULLABLE DonateToGuildResponse::release_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::guildpb::GuildInfo* released = _impl_.guild_;
+  _impl_.guild_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NULLABLE DonateToGuildResponse::unsafe_arena_release_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.DonateToGuildResponse.guild)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::guildpb::GuildInfo* temp = _impl_.guild_;
+  _impl_.guild_ = nullptr;
+  return temp;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NONNULL DonateToGuildResponse::_internal_mutable_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::guildpb::GuildInfo>(GetArena());
+    _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(p);
+  }
+  return _impl_.guild_;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NONNULL DonateToGuildResponse::mutable_guild()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  ::guildpb::GuildInfo* _msg = _internal_mutable_guild();
+  // @@protoc_insertion_point(field_mutable:guildpb.DonateToGuildResponse.guild)
+  return _msg;
+}
+inline void DonateToGuildResponse::set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+  }
+
+  _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.DonateToGuildResponse.guild)
+}
+
+// -------------------------------------------------------------------
+
+// UpgradeGuildRequest
+
+// uint32 expected_level = 1;
+inline void UpgradeGuildRequest::clear_expected_level() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_level_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t UpgradeGuildRequest::expected_level() const {
+  // @@protoc_insertion_point(field_get:guildpb.UpgradeGuildRequest.expected_level)
+  return _internal_expected_level();
+}
+inline void UpgradeGuildRequest::set_expected_level(::uint32_t value) {
+  _internal_set_expected_level(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:guildpb.UpgradeGuildRequest.expected_level)
+}
+inline ::uint32_t UpgradeGuildRequest::_internal_expected_level() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.expected_level_;
+}
+inline void UpgradeGuildRequest::_internal_set_expected_level(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.expected_level_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// UpgradeGuildResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool UpgradeGuildResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& UpgradeGuildResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& UpgradeGuildResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.UpgradeGuildResponse.error_message)
+  return _internal_error_message();
+}
+inline void UpgradeGuildResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.UpgradeGuildResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE UpgradeGuildResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE UpgradeGuildResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.UpgradeGuildResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL UpgradeGuildResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL UpgradeGuildResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:guildpb.UpgradeGuildResponse.error_message)
+  return _msg;
+}
+inline void UpgradeGuildResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.UpgradeGuildResponse.error_message)
+}
+
+// .guildpb.GuildInfo guild = 2;
+inline bool UpgradeGuildResponse::has_guild() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.guild_ != nullptr);
+  return value;
+}
+inline void UpgradeGuildResponse::clear_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_ != nullptr) _impl_.guild_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::guildpb::GuildInfo& UpgradeGuildResponse::_internal_guild() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::guildpb::GuildInfo* p = _impl_.guild_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::guildpb::GuildInfo>(&::guildpb::GuildInfo_globals_);
+}
+inline const ::guildpb::GuildInfo& UpgradeGuildResponse::guild() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.UpgradeGuildResponse.guild)
+  return _internal_guild();
+}
+inline void UpgradeGuildResponse::unsafe_arena_set_allocated_guild(
+    ::guildpb::GuildInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_);
+  }
+  _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.UpgradeGuildResponse.guild)
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NULLABLE UpgradeGuildResponse::release_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* released = _impl_.guild_;
+  _impl_.guild_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NULLABLE UpgradeGuildResponse::unsafe_arena_release_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.UpgradeGuildResponse.guild)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* temp = _impl_.guild_;
+  _impl_.guild_ = nullptr;
+  return temp;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NONNULL UpgradeGuildResponse::_internal_mutable_guild() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.guild_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::guildpb::GuildInfo>(GetArena());
+    _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(p);
+  }
+  return _impl_.guild_;
+}
+inline ::guildpb::GuildInfo* PROTOBUF_NONNULL UpgradeGuildResponse::mutable_guild()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildInfo* _msg = _internal_mutable_guild();
+  // @@protoc_insertion_point(field_mutable:guildpb.UpgradeGuildResponse.guild)
+  return _msg;
+}
+inline void UpgradeGuildResponse::set_allocated_guild(::guildpb::GuildInfo* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.guild_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.guild_ = reinterpret_cast<::guildpb::GuildInfo*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.UpgradeGuildResponse.guild)
+}
+
+// -------------------------------------------------------------------
+
+// GetGuildShopRequest
+
+// -------------------------------------------------------------------
+
+// GetGuildShopResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool GetGuildShopResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000008U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& GetGuildShopResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& GetGuildShopResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildShopResponse.error_message)
+  return _internal_error_message();
+}
+inline void GetGuildShopResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.GetGuildShopResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetGuildShopResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE GetGuildShopResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.GetGuildShopResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetGuildShopResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL GetGuildShopResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:guildpb.GetGuildShopResponse.error_message)
+  return _msg;
+}
+inline void GetGuildShopResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.GetGuildShopResponse.error_message)
+}
+
+// repeated .guildpb.GuildShopGoodsView goods = 2;
+inline int GetGuildShopResponse::_internal_goods_size() const {
+  return _internal_goods().size();
+}
+inline int GetGuildShopResponse::goods_size() const {
+  return _internal_goods_size();
+}
+inline void GetGuildShopResponse::clear_goods() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.goods_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::guildpb::GuildShopGoodsView& GetGuildShopResponse::goods(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildShopResponse.goods)
+  return _internal_goods().Get(index);
+}
+inline ::guildpb::GuildShopGoodsView* PROTOBUF_NONNULL GetGuildShopResponse::mutable_goods(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:guildpb.GetGuildShopResponse.goods)
+  return _internal_mutable_goods()->Mutable(index);
+}
+inline ::guildpb::GuildShopGoodsView* PROTOBUF_NONNULL GetGuildShopResponse::add_goods()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::guildpb::GuildShopGoodsView* _add =
+      _internal_mutable_goods()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_add:guildpb.GetGuildShopResponse.goods)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopGoodsView>& GetGuildShopResponse::goods() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:guildpb.GetGuildShopResponse.goods)
+  return _internal_goods();
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopGoodsView>* PROTOBUF_NONNULL
+GetGuildShopResponse::mutable_goods() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_mutable_list:guildpb.GetGuildShopResponse.goods)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_goods();
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopGoodsView>&
+GetGuildShopResponse::_internal_goods() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.goods_;
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopGoodsView>* PROTOBUF_NONNULL
+GetGuildShopResponse::_internal_mutable_goods() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.goods_;
+}
+
+// uint64 contribution_balance = 3;
+inline void GetGuildShopResponse::clear_contribution_balance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_balance_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t GetGuildShopResponse::contribution_balance() const {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildShopResponse.contribution_balance)
+  return _internal_contribution_balance();
+}
+inline void GetGuildShopResponse::set_contribution_balance(::uint64_t value) {
+  _internal_set_contribution_balance(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:guildpb.GetGuildShopResponse.contribution_balance)
+}
+inline ::uint64_t GetGuildShopResponse::_internal_contribution_balance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.contribution_balance_;
+}
+inline void GetGuildShopResponse::_internal_set_contribution_balance(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_balance_ = value;
+}
+
+// repeated .guildpb.GuildShopOrderView pending_orders = 4;
+inline int GetGuildShopResponse::_internal_pending_orders_size() const {
+  return _internal_pending_orders().size();
+}
+inline int GetGuildShopResponse::pending_orders_size() const {
+  return _internal_pending_orders_size();
+}
+inline void GetGuildShopResponse::clear_pending_orders() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.pending_orders_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::guildpb::GuildShopOrderView& GetGuildShopResponse::pending_orders(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildShopResponse.pending_orders)
+  return _internal_pending_orders().Get(index);
+}
+inline ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL GetGuildShopResponse::mutable_pending_orders(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:guildpb.GetGuildShopResponse.pending_orders)
+  return _internal_mutable_pending_orders()->Mutable(index);
+}
+inline ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL GetGuildShopResponse::add_pending_orders()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::guildpb::GuildShopOrderView* _add =
+      _internal_mutable_pending_orders()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_add:guildpb.GetGuildShopResponse.pending_orders)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>& GetGuildShopResponse::pending_orders() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:guildpb.GetGuildShopResponse.pending_orders)
+  return _internal_pending_orders();
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>* PROTOBUF_NONNULL
+GetGuildShopResponse::mutable_pending_orders() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_mutable_list:guildpb.GetGuildShopResponse.pending_orders)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_pending_orders();
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>&
+GetGuildShopResponse::_internal_pending_orders() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.pending_orders_;
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>* PROTOBUF_NONNULL
+GetGuildShopResponse::_internal_mutable_pending_orders() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.pending_orders_;
+}
+
+// uint64 next_daily_reset_ms = 5;
+inline void GetGuildShopResponse::clear_next_daily_reset_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_daily_reset_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
+inline ::uint64_t GetGuildShopResponse::next_daily_reset_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildShopResponse.next_daily_reset_ms)
+  return _internal_next_daily_reset_ms();
+}
+inline void GetGuildShopResponse::set_next_daily_reset_ms(::uint64_t value) {
+  _internal_set_next_daily_reset_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  // @@protoc_insertion_point(field_set:guildpb.GetGuildShopResponse.next_daily_reset_ms)
+}
+inline ::uint64_t GetGuildShopResponse::_internal_next_daily_reset_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_daily_reset_ms_;
+}
+inline void GetGuildShopResponse::_internal_set_next_daily_reset_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_daily_reset_ms_ = value;
+}
+
+// uint64 next_weekly_reset_ms = 6;
+inline void GetGuildShopResponse::clear_next_weekly_reset_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_weekly_reset_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+}
+inline ::uint64_t GetGuildShopResponse::next_weekly_reset_ms() const {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildShopResponse.next_weekly_reset_ms)
+  return _internal_next_weekly_reset_ms();
+}
+inline void GetGuildShopResponse::set_next_weekly_reset_ms(::uint64_t value) {
+  _internal_set_next_weekly_reset_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  // @@protoc_insertion_point(field_set:guildpb.GetGuildShopResponse.next_weekly_reset_ms)
+}
+inline ::uint64_t GetGuildShopResponse::_internal_next_weekly_reset_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.next_weekly_reset_ms_;
+}
+inline void GetGuildShopResponse::_internal_set_next_weekly_reset_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.next_weekly_reset_ms_ = value;
+}
+
+// repeated .guildpb.GuildShopOrderView recent_orders = 7;
+inline int GetGuildShopResponse::_internal_recent_orders_size() const {
+  return _internal_recent_orders().size();
+}
+inline int GetGuildShopResponse::recent_orders_size() const {
+  return _internal_recent_orders_size();
+}
+inline void GetGuildShopResponse::clear_recent_orders() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.recent_orders_.Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline const ::guildpb::GuildShopOrderView& GetGuildShopResponse::recent_orders(int index) const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.GetGuildShopResponse.recent_orders)
+  return _internal_recent_orders().Get(index);
+}
+inline ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL GetGuildShopResponse::mutable_recent_orders(int index)
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_mutable:guildpb.GetGuildShopResponse.recent_orders)
+  return _internal_mutable_recent_orders()->Mutable(index);
+}
+inline ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL GetGuildShopResponse::add_recent_orders()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::guildpb::GuildShopOrderView* _add =
+      _internal_mutable_recent_orders()->InternalAddWithArena(
+          ::google::protobuf::MessageLite::internal_visibility(), GetArena());
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_add:guildpb.GetGuildShopResponse.recent_orders)
+  return _add;
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>& GetGuildShopResponse::recent_orders() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_list:guildpb.GetGuildShopResponse.recent_orders)
+  return _internal_recent_orders();
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>* PROTOBUF_NONNULL
+GetGuildShopResponse::mutable_recent_orders() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_mutable_list:guildpb.GetGuildShopResponse.recent_orders)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _internal_mutable_recent_orders();
+}
+inline const ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>&
+GetGuildShopResponse::_internal_recent_orders() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.recent_orders_;
+}
+inline ::google::protobuf::RepeatedPtrField<::guildpb::GuildShopOrderView>* PROTOBUF_NONNULL
+GetGuildShopResponse::_internal_mutable_recent_orders() {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return &_impl_.recent_orders_;
+}
+
+// -------------------------------------------------------------------
+
+// BuyGuildShopGoodsRequest
+
+// uint32 goods_id = 1;
+inline void BuyGuildShopGoodsRequest::clear_goods_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.goods_id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint32_t BuyGuildShopGoodsRequest::goods_id() const {
+  // @@protoc_insertion_point(field_get:guildpb.BuyGuildShopGoodsRequest.goods_id)
+  return _internal_goods_id();
+}
+inline void BuyGuildShopGoodsRequest::set_goods_id(::uint32_t value) {
+  _internal_set_goods_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:guildpb.BuyGuildShopGoodsRequest.goods_id)
+}
+inline ::uint32_t BuyGuildShopGoodsRequest::_internal_goods_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.goods_id_;
+}
+inline void BuyGuildShopGoodsRequest::_internal_set_goods_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.goods_id_ = value;
+}
+
+// uint32 count = 2;
+inline void BuyGuildShopGoodsRequest::clear_count() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline ::uint32_t BuyGuildShopGoodsRequest::count() const {
+  // @@protoc_insertion_point(field_get:guildpb.BuyGuildShopGoodsRequest.count)
+  return _internal_count();
+}
+inline void BuyGuildShopGoodsRequest::set_count(::uint32_t value) {
+  _internal_set_count(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  // @@protoc_insertion_point(field_set:guildpb.BuyGuildShopGoodsRequest.count)
+}
+inline ::uint32_t BuyGuildShopGoodsRequest::_internal_count() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.count_;
+}
+inline void BuyGuildShopGoodsRequest::_internal_set_count(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.count_ = value;
+}
+
+// -------------------------------------------------------------------
+
+// BuyGuildShopGoodsResponse
+
+// .TipInfoMessage error_message = 1;
+inline bool BuyGuildShopGoodsResponse::has_error_message() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000001U);
+  PROTOBUF_ASSUME(!value || _impl_.error_message_ != nullptr);
+  return value;
+}
+inline const ::TipInfoMessage& BuyGuildShopGoodsResponse::_internal_error_message() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::TipInfoMessage* p = _impl_.error_message_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::TipInfoMessage>(&::TipInfoMessage_globals_);
+}
+inline const ::TipInfoMessage& BuyGuildShopGoodsResponse::error_message() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.BuyGuildShopGoodsResponse.error_message)
+  return _internal_error_message();
+}
+inline void BuyGuildShopGoodsResponse::unsafe_arena_set_allocated_error_message(
+    ::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.BuyGuildShopGoodsResponse.error_message)
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE BuyGuildShopGoodsResponse::release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* released = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::TipInfoMessage* PROTOBUF_NULLABLE BuyGuildShopGoodsResponse::unsafe_arena_release_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.BuyGuildShopGoodsResponse.error_message)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* temp = _impl_.error_message_;
+  _impl_.error_message_ = nullptr;
+  return temp;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL BuyGuildShopGoodsResponse::_internal_mutable_error_message() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.error_message_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::TipInfoMessage>(GetArena());
+    _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(p);
+  }
+  return _impl_.error_message_;
+}
+inline ::TipInfoMessage* PROTOBUF_NONNULL BuyGuildShopGoodsResponse::mutable_error_message()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::TipInfoMessage* _msg = _internal_mutable_error_message();
+  // @@protoc_insertion_point(field_mutable:guildpb.BuyGuildShopGoodsResponse.error_message)
+  return _msg;
+}
+inline void BuyGuildShopGoodsResponse::set_allocated_error_message(::TipInfoMessage* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.error_message_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+
+  _impl_.error_message_ = reinterpret_cast<::TipInfoMessage*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.BuyGuildShopGoodsResponse.error_message)
+}
+
+// .guildpb.GuildShopOrderView order = 2;
+inline bool BuyGuildShopGoodsResponse::has_order() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.order_ != nullptr);
+  return value;
+}
+inline void BuyGuildShopGoodsResponse::clear_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.order_ != nullptr) _impl_.order_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::guildpb::GuildShopOrderView& BuyGuildShopGoodsResponse::_internal_order() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::guildpb::GuildShopOrderView* p = _impl_.order_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::guildpb::GuildShopOrderView>(&::guildpb::GuildShopOrderView_globals_);
+}
+inline const ::guildpb::GuildShopOrderView& BuyGuildShopGoodsResponse::order() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:guildpb.BuyGuildShopGoodsResponse.order)
+  return _internal_order();
+}
+inline void BuyGuildShopGoodsResponse::unsafe_arena_set_allocated_order(
+    ::guildpb::GuildShopOrderView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.order_);
+  }
+  _impl_.order_ = reinterpret_cast<::guildpb::GuildShopOrderView*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:guildpb.BuyGuildShopGoodsResponse.order)
+}
+inline ::guildpb::GuildShopOrderView* PROTOBUF_NULLABLE BuyGuildShopGoodsResponse::release_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildShopOrderView* released = _impl_.order_;
+  _impl_.order_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::guildpb::GuildShopOrderView* PROTOBUF_NULLABLE BuyGuildShopGoodsResponse::unsafe_arena_release_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:guildpb.BuyGuildShopGoodsResponse.order)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildShopOrderView* temp = _impl_.order_;
+  _impl_.order_ = nullptr;
+  return temp;
+}
+inline ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL BuyGuildShopGoodsResponse::_internal_mutable_order() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.order_ == nullptr) {
+    auto* p = ::google::protobuf::Message::DefaultConstruct<::guildpb::GuildShopOrderView>(GetArena());
+    _impl_.order_ = reinterpret_cast<::guildpb::GuildShopOrderView*>(p);
+  }
+  return _impl_.order_;
+}
+inline ::guildpb::GuildShopOrderView* PROTOBUF_NONNULL BuyGuildShopGoodsResponse::mutable_order()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::guildpb::GuildShopOrderView* _msg = _internal_mutable_order();
+  // @@protoc_insertion_point(field_mutable:guildpb.BuyGuildShopGoodsResponse.order)
+  return _msg;
+}
+inline void BuyGuildShopGoodsResponse::set_allocated_order(::guildpb::GuildShopOrderView* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.order_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = value->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.order_ = reinterpret_cast<::guildpb::GuildShopOrderView*>(value);
+  // @@protoc_insertion_point(field_set_allocated:guildpb.BuyGuildShopGoodsResponse.order)
+}
+
+// uint64 contribution_balance = 3;
+inline void BuyGuildShopGoodsResponse::clear_contribution_balance() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_balance_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint64_t BuyGuildShopGoodsResponse::contribution_balance() const {
+  // @@protoc_insertion_point(field_get:guildpb.BuyGuildShopGoodsResponse.contribution_balance)
+  return _internal_contribution_balance();
+}
+inline void BuyGuildShopGoodsResponse::set_contribution_balance(::uint64_t value) {
+  _internal_set_contribution_balance(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:guildpb.BuyGuildShopGoodsResponse.contribution_balance)
+}
+inline ::uint64_t BuyGuildShopGoodsResponse::_internal_contribution_balance() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.contribution_balance_;
+}
+inline void BuyGuildShopGoodsResponse::_internal_set_contribution_balance(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.contribution_balance_ = value;
+}
+
+// -------------------------------------------------------------------
+
 // GuildRankEntry
 
 // uint64 guild_id = 1;
@@ -14606,6 +20708,12 @@ struct is_proto_enum<::guildpb::GuildChangeKind> : std::true_type {};
 template <>
 inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::guildpb::GuildChangeKind>() {
   return ::guildpb::GuildChangeKind_descriptor();
+}
+template <>
+struct is_proto_enum<::guildpb::GuildAssetOrderStatus> : std::true_type {};
+template <>
+inline const EnumDescriptor* PROTOBUF_NONNULL GetEnumDescriptor<::guildpb::GuildAssetOrderStatus>() {
+  return ::guildpb::GuildAssetOrderStatus_descriptor();
 }
 
 }  // namespace protobuf

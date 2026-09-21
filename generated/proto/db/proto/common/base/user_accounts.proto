@@ -9,6 +9,12 @@ message AccountSimplePlayer
   uint32 class_id = 2;   // 职业(Class 配表 id);0 = 旧数据未设置
   uint32 gender = 3;     // 1=男 2=女;0 = 旧数据未设置
   uint32 zone_id = 4;    // 建角归属区(建角时的 Node.ZoneId);0 = 旧数据未设置
+  // 角色名副本,建角时写入,只读(v1 无改名,内容不会变)。
+  // 真源是 data_service 全局库的 player_name 表(全服唯一)。
+  // 可能为空:self-heal 补出来的账号记录、早于名字功能的旧角色都没有这一份,
+  // 所以角色列表读到空名要回源 BatchGetPlayerName 补齐,不能直接显示空白。
+  // 见 docs/design/guild-phase2/03-names.md §3.9 / §3.12。
+  string name = 5;
 }
 
 message AccountSimplePlayerList

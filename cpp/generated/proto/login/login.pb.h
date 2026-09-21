@@ -2781,9 +2781,25 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreatePlayerRequest final : public 
 
   // accessors -------------------------------------------------------
   enum : int {
+    kNameFieldNumber = 3,
     kClassIdFieldNumber = 1,
     kGenderFieldNumber = 2,
   };
+  // string name = 3;
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
   // uint32 class_id = 1;
   void clear_class_id() ;
   [[nodiscard]] ::uint32_t class_id() const;
@@ -2808,8 +2824,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreatePlayerRequest final : public 
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<1, 2,
-                          0, 0,
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          0, 40,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -2837,6 +2853,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CreatePlayerRequest final : public 
         const CreatePlayerRequest& from_msg);
     ::google::protobuf::internal::HasBits<1> _has_bits_;
     ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
     ::uint32_t class_id_;
     ::uint32_t gender_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -6166,7 +6183,7 @@ TestResponse::_internal_mutable_testint() {
 inline void CreatePlayerRequest::clear_class_id() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.class_id_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
 }
 inline ::uint32_t CreatePlayerRequest::class_id() const {
   // @@protoc_insertion_point(field_get:loginpb.CreatePlayerRequest.class_id)
@@ -6174,7 +6191,7 @@ inline ::uint32_t CreatePlayerRequest::class_id() const {
 }
 inline void CreatePlayerRequest::set_class_id(::uint32_t value) {
   _internal_set_class_id(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
   // @@protoc_insertion_point(field_set:loginpb.CreatePlayerRequest.class_id)
 }
 inline ::uint32_t CreatePlayerRequest::_internal_class_id() const {
@@ -6190,7 +6207,7 @@ inline void CreatePlayerRequest::_internal_set_class_id(::uint32_t value) {
 inline void CreatePlayerRequest::clear_gender() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gender_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
 inline ::uint32_t CreatePlayerRequest::gender() const {
   // @@protoc_insertion_point(field_get:loginpb.CreatePlayerRequest.gender)
@@ -6198,7 +6215,7 @@ inline ::uint32_t CreatePlayerRequest::gender() const {
 }
 inline void CreatePlayerRequest::set_gender(::uint32_t value) {
   _internal_set_gender(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
   // @@protoc_insertion_point(field_set:loginpb.CreatePlayerRequest.gender)
 }
 inline ::uint32_t CreatePlayerRequest::_internal_gender() const {
@@ -6208,6 +6225,70 @@ inline ::uint32_t CreatePlayerRequest::_internal_gender() const {
 inline void CreatePlayerRequest::_internal_set_gender(::uint32_t value) {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.gender_ = value;
+}
+
+// string name = 3;
+inline void CreatePlayerRequest::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& CreatePlayerRequest::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loginpb.CreatePlayerRequest.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void CreatePlayerRequest::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loginpb.CreatePlayerRequest.name)
+}
+inline ::std::string* PROTOBUF_NONNULL CreatePlayerRequest::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:loginpb.CreatePlayerRequest.name)
+  return _s;
+}
+inline const ::std::string& CreatePlayerRequest::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void CreatePlayerRequest::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL CreatePlayerRequest::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE CreatePlayerRequest::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loginpb.CreatePlayerRequest.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void CreatePlayerRequest::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loginpb.CreatePlayerRequest.name)
 }
 
 // -------------------------------------------------------------------

@@ -2893,6 +2893,269 @@ func (x *AllocateIdSegmentResponse) GetHi() uint64 {
 	return 0
 }
 
+type ReservePlayerNameRequest struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// 调用方(login)已按 RoleNameRule 归一化并校验过;服务端再校验一遍,
+	// 因为"规则包版本不一致"时必须以服务端为准,否则会写进唯一键一个不合规的名字。
+	Name          string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReservePlayerNameRequest) Reset() {
+	*x = ReservePlayerNameRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[41]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReservePlayerNameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReservePlayerNameRequest) ProtoMessage() {}
+
+func (x *ReservePlayerNameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[41]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReservePlayerNameRequest.ProtoReflect.Descriptor instead.
+func (*ReservePlayerNameRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{41}
+}
+
+func (x *ReservePlayerNameRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *ReservePlayerNameRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+// result 走自己的小常量轴(go/shared/playername),不是 tip 码、也不是 error_code:
+//
+//	0 = 成功(含"同 player_id 同名"的幂等重试)
+//	1 = 已被别人占用
+//	2 = 不合规(长度 / 字符集 / 敏感词)
+//
+// 常量定义在 go/shared/playername,data_service 与 login 共用,proto 里不写数字。
+type ReservePlayerNameResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Result uint32                 `protobuf:"varint,1,opt,name=result,proto3" json:"result,omitempty"`
+	// 仅 result=1 时填占用者 player_id。只给 login 判"是不是我自己丢了响应后的重试",
+	// **不得下发客户端**:把占用者 id 透出去等于给了一条按名字查人的旁路。
+	OwnerPlayerId uint64 `protobuf:"varint,2,opt,name=owner_player_id,json=ownerPlayerId,proto3" json:"owner_player_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReservePlayerNameResponse) Reset() {
+	*x = ReservePlayerNameResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[42]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReservePlayerNameResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReservePlayerNameResponse) ProtoMessage() {}
+
+func (x *ReservePlayerNameResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[42]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReservePlayerNameResponse.ProtoReflect.Descriptor instead.
+func (*ReservePlayerNameResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{42}
+}
+
+func (x *ReservePlayerNameResponse) GetResult() uint32 {
+	if x != nil {
+		return x.Result
+	}
+	return 0
+}
+
+func (x *ReservePlayerNameResponse) GetOwnerPlayerId() uint64 {
+	if x != nil {
+		return x.OwnerPlayerId
+	}
+	return 0
+}
+
+// 条件删除:player_id 与 name 归一化后的 name_norm 都匹配才删 —— 只带 player_id 会
+// 在"建角失败补偿"与"后来重登记了别的名字"撞车时删错行。
+// 不带 x-admin-token:只删 created_ms 落在 PlayerName.ReleaseWindow 内的行(login 建角补偿);
+// 带合法 x-admin-token:不限登记时间(运维按日志清孤儿)。
+type ReleasePlayerNameRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	Name          string                 `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReleasePlayerNameRequest) Reset() {
+	*x = ReleasePlayerNameRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[43]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReleasePlayerNameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReleasePlayerNameRequest) ProtoMessage() {}
+
+func (x *ReleasePlayerNameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[43]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReleasePlayerNameRequest.ProtoReflect.Descriptor instead.
+func (*ReleasePlayerNameRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{43}
+}
+
+func (x *ReleasePlayerNameRequest) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *ReleasePlayerNameRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+// 一次最多 500 个 id;超了返回 InvalidArgument,不做截断 —— 静默截断会让调用方
+// 把"没返回"当成"没登记",给玩家显示空名。
+type BatchGetPlayerNameRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PlayerIds     []uint64               `protobuf:"varint,1,rep,packed,name=player_ids,json=playerIds,proto3" json:"player_ids,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchGetPlayerNameRequest) Reset() {
+	*x = BatchGetPlayerNameRequest{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[44]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchGetPlayerNameRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchGetPlayerNameRequest) ProtoMessage() {}
+
+func (x *BatchGetPlayerNameRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[44]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchGetPlayerNameRequest.ProtoReflect.Descriptor instead.
+func (*BatchGetPlayerNameRequest) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{44}
+}
+
+func (x *BatchGetPlayerNameRequest) GetPlayerIds() []uint64 {
+	if x != nil {
+		return x.PlayerIds
+	}
+	return nil
+}
+
+// 缺席的 id(未登记 / 已释放)不出现在 map 里,不是错误(与 BatchGetPlayerHomeZone 同口径)。
+// 但 SQL 失败时不回部分结果:半份结果无法与"这些 id 确实没名字"区分。
+type BatchGetPlayerNameResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Names         map[uint64]string      `protobuf:"bytes,1,rep,name=names,proto3" json:"names,omitempty" protobuf_key:"varint,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *BatchGetPlayerNameResponse) Reset() {
+	*x = BatchGetPlayerNameResponse{}
+	mi := &file_proto_data_service_data_service_proto_msgTypes[45]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *BatchGetPlayerNameResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BatchGetPlayerNameResponse) ProtoMessage() {}
+
+func (x *BatchGetPlayerNameResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_data_service_data_service_proto_msgTypes[45]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BatchGetPlayerNameResponse.ProtoReflect.Descriptor instead.
+func (*BatchGetPlayerNameResponse) Descriptor() ([]byte, []int) {
+	return file_proto_data_service_data_service_proto_rawDescGZIP(), []int{45}
+}
+
+func (x *BatchGetPlayerNameResponse) GetNames() map[uint64]string {
+	if x != nil {
+		return x.Names
+	}
+	return nil
+}
+
 var File_proto_data_service_data_service_proto protoreflect.FileDescriptor
 
 const file_proto_data_service_data_service_proto_rawDesc = "" +
@@ -3142,7 +3405,25 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\n" +
 	"error_code\x18\x01 \x01(\rR\terrorCode\x12\x0e\n" +
 	"\x02lo\x18\x02 \x01(\x04R\x02lo\x12\x0e\n" +
-	"\x02hi\x18\x03 \x01(\x04R\x02hi*\x87\x01\n" +
+	"\x02hi\x18\x03 \x01(\x04R\x02hi\"K\n" +
+	"\x18ReservePlayerNameRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\"[\n" +
+	"\x19ReservePlayerNameResponse\x12\x16\n" +
+	"\x06result\x18\x01 \x01(\rR\x06result\x12&\n" +
+	"\x0fowner_player_id\x18\x02 \x01(\x04R\rownerPlayerId\"K\n" +
+	"\x18ReleasePlayerNameRequest\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\":\n" +
+	"\x19BatchGetPlayerNameRequest\x12\x1d\n" +
+	"\n" +
+	"player_ids\x18\x01 \x03(\x04R\tplayerIds\"\xa1\x01\n" +
+	"\x1aBatchGetPlayerNameResponse\x12I\n" +
+	"\x05names\x18\x01 \x03(\v23.data_service.BatchGetPlayerNameResponse.NamesEntryR\x05names\x1a8\n" +
+	"\n" +
+	"NamesEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\x04R\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01*\x87\x01\n" +
 	"\fSnapshotType\x12\x13\n" +
 	"\x0fSNAPSHOT_MANUAL\x10\x00\x12\x15\n" +
 	"\x11SNAPSHOT_PERIODIC\x10\x01\x12\x1c\n" +
@@ -3157,7 +3438,7 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x0eEVENT_RECHARGE\x10\x01\x12\x19\n" +
 	"\x15EVENT_PRE_MAINTENANCE\x10\x02\x12\x12\n" +
 	"\x0eEVENT_LEVEL_UP\x10\x03\x12\x15\n" +
-	"\x11EVENT_FIRST_LOGIN\x10\x042\xa4\x0f\n" +
+	"\x11EVENT_FIRST_LOGIN\x10\x042\xce\x11\n" +
 	"\vDataService\x12]\n" +
 	"\x0eLoadPlayerData\x12#.data_service.LoadPlayerDataRequest\x1a$.data_service.LoadPlayerDataResponse\"\x00\x12]\n" +
 	"\x0eSavePlayerData\x12#.data_service.SavePlayerDataRequest\x1a$.data_service.SavePlayerDataResponse\"\x00\x12]\n" +
@@ -3177,7 +3458,10 @@ const file_proto_data_service_data_service_proto_rawDesc = "" +
 	"\x10BatchRecallItems\x12%.data_service.BatchRecallItemsRequest\x1a&.data_service.BatchRecallItemsResponse\"\x00\x12l\n" +
 	"\x13QueryTransactionLog\x12(.data_service.QueryTransactionLogRequest\x1a).data_service.QueryTransactionLogResponse\"\x00\x12l\n" +
 	"\x13CreateEventSnapshot\x12(.data_service.CreateEventSnapshotRequest\x1a).data_service.CreateEventSnapshotResponse\"\x00\x12f\n" +
-	"\x11AllocateIdSegment\x12&.data_service.AllocateIdSegmentRequest\x1a'.data_service.AllocateIdSegmentResponse\"\x00B\x14Z\x12proto/data_serviceb\x06proto3"
+	"\x11AllocateIdSegment\x12&.data_service.AllocateIdSegmentRequest\x1a'.data_service.AllocateIdSegmentResponse\"\x00\x12f\n" +
+	"\x11ReservePlayerName\x12&.data_service.ReservePlayerNameRequest\x1a'.data_service.ReservePlayerNameResponse\"\x00\x12U\n" +
+	"\x11ReleasePlayerName\x12&.data_service.ReleasePlayerNameRequest\x1a\x16.google.protobuf.Empty\"\x00\x12i\n" +
+	"\x12BatchGetPlayerName\x12'.data_service.BatchGetPlayerNameRequest\x1a(.data_service.BatchGetPlayerNameResponse\"\x00B\x14Z\x12proto/data_serviceb\x06proto3"
 
 var (
 	file_proto_data_service_data_service_proto_rawDescOnce sync.Once
@@ -3192,7 +3476,7 @@ func file_proto_data_service_data_service_proto_rawDescGZIP() []byte {
 }
 
 var file_proto_data_service_data_service_proto_enumTypes = make([]protoimpl.EnumInfo, 3)
-var file_proto_data_service_data_service_proto_msgTypes = make([]protoimpl.MessageInfo, 44)
+var file_proto_data_service_data_service_proto_msgTypes = make([]protoimpl.MessageInfo, 50)
 var file_proto_data_service_data_service_proto_goTypes = []any{
 	(SnapshotType)(0),                      // 0: data_service.SnapshotType
 	(RollbackScope)(0),                     // 1: data_service.RollbackScope
@@ -3238,15 +3522,21 @@ var file_proto_data_service_data_service_proto_goTypes = []any{
 	(*CreateEventSnapshotResponse)(nil),    // 41: data_service.CreateEventSnapshotResponse
 	(*AllocateIdSegmentRequest)(nil),       // 42: data_service.AllocateIdSegmentRequest
 	(*AllocateIdSegmentResponse)(nil),      // 43: data_service.AllocateIdSegmentResponse
-	nil,                                    // 44: data_service.LoadPlayerDataResponse.DataEntry
-	nil,                                    // 45: data_service.SavePlayerDataRequest.DataEntry
-	nil,                                    // 46: data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
-	(*emptypb.Empty)(nil),                  // 47: google.protobuf.Empty
+	(*ReservePlayerNameRequest)(nil),       // 44: data_service.ReservePlayerNameRequest
+	(*ReservePlayerNameResponse)(nil),      // 45: data_service.ReservePlayerNameResponse
+	(*ReleasePlayerNameRequest)(nil),       // 46: data_service.ReleasePlayerNameRequest
+	(*BatchGetPlayerNameRequest)(nil),      // 47: data_service.BatchGetPlayerNameRequest
+	(*BatchGetPlayerNameResponse)(nil),     // 48: data_service.BatchGetPlayerNameResponse
+	nil,                                    // 49: data_service.LoadPlayerDataResponse.DataEntry
+	nil,                                    // 50: data_service.SavePlayerDataRequest.DataEntry
+	nil,                                    // 51: data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
+	nil,                                    // 52: data_service.BatchGetPlayerNameResponse.NamesEntry
+	(*emptypb.Empty)(nil),                  // 53: google.protobuf.Empty
 }
 var file_proto_data_service_data_service_proto_depIdxs = []int32{
-	44, // 0: data_service.LoadPlayerDataResponse.data:type_name -> data_service.LoadPlayerDataResponse.DataEntry
-	45, // 1: data_service.SavePlayerDataRequest.data:type_name -> data_service.SavePlayerDataRequest.DataEntry
-	46, // 2: data_service.BatchGetPlayerHomeZoneResponse.player_zone_map:type_name -> data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
+	49, // 0: data_service.LoadPlayerDataResponse.data:type_name -> data_service.LoadPlayerDataResponse.DataEntry
+	50, // 1: data_service.SavePlayerDataRequest.data:type_name -> data_service.SavePlayerDataRequest.DataEntry
+	51, // 2: data_service.BatchGetPlayerHomeZoneResponse.player_zone_map:type_name -> data_service.BatchGetPlayerHomeZoneResponse.PlayerZoneMapEntry
 	0,  // 3: data_service.CreatePlayerSnapshotRequest.type:type_name -> data_service.SnapshotType
 	0,  // 4: data_service.SnapshotInfo.type:type_name -> data_service.SnapshotType
 	23, // 5: data_service.ListPlayerSnapshotsResponse.snapshots:type_name -> data_service.SnapshotInfo
@@ -3255,49 +3545,56 @@ var file_proto_data_service_data_service_proto_depIdxs = []int32{
 	35, // 8: data_service.BatchRecallItemsResponse.results:type_name -> data_service.RecallResult
 	38, // 9: data_service.QueryTransactionLogResponse.rows:type_name -> data_service.TransactionLogRow
 	2,  // 10: data_service.CreateEventSnapshotRequest.event_type:type_name -> data_service.SnapshotEventType
-	3,  // 11: data_service.DataService.LoadPlayerData:input_type -> data_service.LoadPlayerDataRequest
-	5,  // 12: data_service.DataService.SavePlayerData:input_type -> data_service.SavePlayerDataRequest
-	7,  // 13: data_service.DataService.GetPlayerField:input_type -> data_service.GetPlayerFieldRequest
-	9,  // 14: data_service.DataService.SetPlayerField:input_type -> data_service.SetPlayerFieldRequest
-	11, // 15: data_service.DataService.RegisterPlayerZone:input_type -> data_service.RegisterPlayerZoneRequest
-	12, // 16: data_service.DataService.GetPlayerHomeZone:input_type -> data_service.GetPlayerHomeZoneRequest
-	14, // 17: data_service.DataService.BatchGetPlayerHomeZone:input_type -> data_service.BatchGetPlayerHomeZoneRequest
-	16, // 18: data_service.DataService.RemapHomeZoneForMerge:input_type -> data_service.RemapHomeZoneForMergeRequest
-	18, // 19: data_service.DataService.DeletePlayerData:input_type -> data_service.DeletePlayerDataRequest
-	20, // 20: data_service.DataService.CreatePlayerSnapshot:input_type -> data_service.CreatePlayerSnapshotRequest
-	22, // 21: data_service.DataService.ListPlayerSnapshots:input_type -> data_service.ListPlayerSnapshotsRequest
-	25, // 22: data_service.DataService.GetPlayerSnapshotDiff:input_type -> data_service.GetPlayerSnapshotDiffRequest
-	28, // 23: data_service.DataService.RollbackPlayer:input_type -> data_service.RollbackPlayerRequest
-	30, // 24: data_service.DataService.RollbackZone:input_type -> data_service.RollbackZoneRequest
-	32, // 25: data_service.DataService.RollbackAll:input_type -> data_service.RollbackAllRequest
-	34, // 26: data_service.DataService.BatchRecallItems:input_type -> data_service.BatchRecallItemsRequest
-	37, // 27: data_service.DataService.QueryTransactionLog:input_type -> data_service.QueryTransactionLogRequest
-	40, // 28: data_service.DataService.CreateEventSnapshot:input_type -> data_service.CreateEventSnapshotRequest
-	42, // 29: data_service.DataService.AllocateIdSegment:input_type -> data_service.AllocateIdSegmentRequest
-	4,  // 30: data_service.DataService.LoadPlayerData:output_type -> data_service.LoadPlayerDataResponse
-	6,  // 31: data_service.DataService.SavePlayerData:output_type -> data_service.SavePlayerDataResponse
-	8,  // 32: data_service.DataService.GetPlayerField:output_type -> data_service.GetPlayerFieldResponse
-	10, // 33: data_service.DataService.SetPlayerField:output_type -> data_service.SetPlayerFieldResponse
-	47, // 34: data_service.DataService.RegisterPlayerZone:output_type -> google.protobuf.Empty
-	13, // 35: data_service.DataService.GetPlayerHomeZone:output_type -> data_service.GetPlayerHomeZoneResponse
-	15, // 36: data_service.DataService.BatchGetPlayerHomeZone:output_type -> data_service.BatchGetPlayerHomeZoneResponse
-	17, // 37: data_service.DataService.RemapHomeZoneForMerge:output_type -> data_service.RemapHomeZoneForMergeResponse
-	19, // 38: data_service.DataService.DeletePlayerData:output_type -> data_service.DeletePlayerDataResponse
-	21, // 39: data_service.DataService.CreatePlayerSnapshot:output_type -> data_service.CreatePlayerSnapshotResponse
-	24, // 40: data_service.DataService.ListPlayerSnapshots:output_type -> data_service.ListPlayerSnapshotsResponse
-	27, // 41: data_service.DataService.GetPlayerSnapshotDiff:output_type -> data_service.GetPlayerSnapshotDiffResponse
-	29, // 42: data_service.DataService.RollbackPlayer:output_type -> data_service.RollbackPlayerResponse
-	31, // 43: data_service.DataService.RollbackZone:output_type -> data_service.RollbackZoneResponse
-	33, // 44: data_service.DataService.RollbackAll:output_type -> data_service.RollbackAllResponse
-	36, // 45: data_service.DataService.BatchRecallItems:output_type -> data_service.BatchRecallItemsResponse
-	39, // 46: data_service.DataService.QueryTransactionLog:output_type -> data_service.QueryTransactionLogResponse
-	41, // 47: data_service.DataService.CreateEventSnapshot:output_type -> data_service.CreateEventSnapshotResponse
-	43, // 48: data_service.DataService.AllocateIdSegment:output_type -> data_service.AllocateIdSegmentResponse
-	30, // [30:49] is the sub-list for method output_type
-	11, // [11:30] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	52, // 11: data_service.BatchGetPlayerNameResponse.names:type_name -> data_service.BatchGetPlayerNameResponse.NamesEntry
+	3,  // 12: data_service.DataService.LoadPlayerData:input_type -> data_service.LoadPlayerDataRequest
+	5,  // 13: data_service.DataService.SavePlayerData:input_type -> data_service.SavePlayerDataRequest
+	7,  // 14: data_service.DataService.GetPlayerField:input_type -> data_service.GetPlayerFieldRequest
+	9,  // 15: data_service.DataService.SetPlayerField:input_type -> data_service.SetPlayerFieldRequest
+	11, // 16: data_service.DataService.RegisterPlayerZone:input_type -> data_service.RegisterPlayerZoneRequest
+	12, // 17: data_service.DataService.GetPlayerHomeZone:input_type -> data_service.GetPlayerHomeZoneRequest
+	14, // 18: data_service.DataService.BatchGetPlayerHomeZone:input_type -> data_service.BatchGetPlayerHomeZoneRequest
+	16, // 19: data_service.DataService.RemapHomeZoneForMerge:input_type -> data_service.RemapHomeZoneForMergeRequest
+	18, // 20: data_service.DataService.DeletePlayerData:input_type -> data_service.DeletePlayerDataRequest
+	20, // 21: data_service.DataService.CreatePlayerSnapshot:input_type -> data_service.CreatePlayerSnapshotRequest
+	22, // 22: data_service.DataService.ListPlayerSnapshots:input_type -> data_service.ListPlayerSnapshotsRequest
+	25, // 23: data_service.DataService.GetPlayerSnapshotDiff:input_type -> data_service.GetPlayerSnapshotDiffRequest
+	28, // 24: data_service.DataService.RollbackPlayer:input_type -> data_service.RollbackPlayerRequest
+	30, // 25: data_service.DataService.RollbackZone:input_type -> data_service.RollbackZoneRequest
+	32, // 26: data_service.DataService.RollbackAll:input_type -> data_service.RollbackAllRequest
+	34, // 27: data_service.DataService.BatchRecallItems:input_type -> data_service.BatchRecallItemsRequest
+	37, // 28: data_service.DataService.QueryTransactionLog:input_type -> data_service.QueryTransactionLogRequest
+	40, // 29: data_service.DataService.CreateEventSnapshot:input_type -> data_service.CreateEventSnapshotRequest
+	42, // 30: data_service.DataService.AllocateIdSegment:input_type -> data_service.AllocateIdSegmentRequest
+	44, // 31: data_service.DataService.ReservePlayerName:input_type -> data_service.ReservePlayerNameRequest
+	46, // 32: data_service.DataService.ReleasePlayerName:input_type -> data_service.ReleasePlayerNameRequest
+	47, // 33: data_service.DataService.BatchGetPlayerName:input_type -> data_service.BatchGetPlayerNameRequest
+	4,  // 34: data_service.DataService.LoadPlayerData:output_type -> data_service.LoadPlayerDataResponse
+	6,  // 35: data_service.DataService.SavePlayerData:output_type -> data_service.SavePlayerDataResponse
+	8,  // 36: data_service.DataService.GetPlayerField:output_type -> data_service.GetPlayerFieldResponse
+	10, // 37: data_service.DataService.SetPlayerField:output_type -> data_service.SetPlayerFieldResponse
+	53, // 38: data_service.DataService.RegisterPlayerZone:output_type -> google.protobuf.Empty
+	13, // 39: data_service.DataService.GetPlayerHomeZone:output_type -> data_service.GetPlayerHomeZoneResponse
+	15, // 40: data_service.DataService.BatchGetPlayerHomeZone:output_type -> data_service.BatchGetPlayerHomeZoneResponse
+	17, // 41: data_service.DataService.RemapHomeZoneForMerge:output_type -> data_service.RemapHomeZoneForMergeResponse
+	19, // 42: data_service.DataService.DeletePlayerData:output_type -> data_service.DeletePlayerDataResponse
+	21, // 43: data_service.DataService.CreatePlayerSnapshot:output_type -> data_service.CreatePlayerSnapshotResponse
+	24, // 44: data_service.DataService.ListPlayerSnapshots:output_type -> data_service.ListPlayerSnapshotsResponse
+	27, // 45: data_service.DataService.GetPlayerSnapshotDiff:output_type -> data_service.GetPlayerSnapshotDiffResponse
+	29, // 46: data_service.DataService.RollbackPlayer:output_type -> data_service.RollbackPlayerResponse
+	31, // 47: data_service.DataService.RollbackZone:output_type -> data_service.RollbackZoneResponse
+	33, // 48: data_service.DataService.RollbackAll:output_type -> data_service.RollbackAllResponse
+	36, // 49: data_service.DataService.BatchRecallItems:output_type -> data_service.BatchRecallItemsResponse
+	39, // 50: data_service.DataService.QueryTransactionLog:output_type -> data_service.QueryTransactionLogResponse
+	41, // 51: data_service.DataService.CreateEventSnapshot:output_type -> data_service.CreateEventSnapshotResponse
+	43, // 52: data_service.DataService.AllocateIdSegment:output_type -> data_service.AllocateIdSegmentResponse
+	45, // 53: data_service.DataService.ReservePlayerName:output_type -> data_service.ReservePlayerNameResponse
+	53, // 54: data_service.DataService.ReleasePlayerName:output_type -> google.protobuf.Empty
+	48, // 55: data_service.DataService.BatchGetPlayerName:output_type -> data_service.BatchGetPlayerNameResponse
+	34, // [34:56] is the sub-list for method output_type
+	12, // [12:34] is the sub-list for method input_type
+	12, // [12:12] is the sub-list for extension type_name
+	12, // [12:12] is the sub-list for extension extendee
+	0,  // [0:12] is the sub-list for field type_name
 }
 
 func init() { file_proto_data_service_data_service_proto_init() }
@@ -3311,7 +3608,7 @@ func file_proto_data_service_data_service_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_data_service_data_service_proto_rawDesc), len(file_proto_data_service_data_service_proto_rawDesc)),
 			NumEnums:      3,
-			NumMessages:   44,
+			NumMessages:   50,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

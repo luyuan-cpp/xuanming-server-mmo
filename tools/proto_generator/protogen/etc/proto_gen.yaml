@@ -504,6 +504,10 @@ domain_meta:
   # 不得用本默认配置跑 proto 生成(dev.bat proto / dev.bat gen):enable_unity_client 没有按域开关,
   # 会往客户端写 15 个 ClientPlayerTeam*Handler.cs 并重写 HandlerRegistry.cs,引用的 Teampb.* 不存在 → 客户端 CS0246。
   # 期间一律用 enable_unity_client: false 的副本跑 proto-gen-run(设计 §B.5 / §I.6 / R.4)。
+  # 门禁状态(2026-09-20):客户端 main(120e2d8 起)的 gen_proto.ps1 已收录 team / jubaozhai;friend 一行
+  # 由 friend 收尾批补在客户端工作区(用户授权,截至本注释写下时未提交)。**客户端清单不随本仓走**:
+  # 跑默认配置之前先确认你手上的客户端 gen_proto.ps1 同时有 proto/team/team.proto、proto/trade/jubaozhai.proto、
+  # proto/friend/friend.proto 三行(缺哪个就是哪个域的 handler 桩 CS0246);缺了就仍按上一行用副本跑。
   # 不要为规避而删掉本块(DV-5:未解析的域会丢号),也不要在本文件关掉 enable_unity_client(其他域的客户端 handler 会失去同步)。
   team:
     source: "{{proto_dir}}team/"

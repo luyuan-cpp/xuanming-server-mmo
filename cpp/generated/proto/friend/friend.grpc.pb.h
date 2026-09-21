@@ -28,12 +28,17 @@
 
 namespace friendpb {
 
-// ── Service definition ─────────────────────────────────────────────────────
+// ── 服务声明 ─────────────────────────────────────────────────────────
 //
-class FriendService final {
+// 服务名从 FriendService 改成 ClientPlayerFriend:见上面 S2C 段的注释 ——
+// 生成器靠服务名里的 ClientPlayer 前缀决定是否给客户端出推送 handler,
+// 改名是本期新增 S2C 推送的前提,不是为了好看。
+// NotifyOnline / NotifyOffline 两个 rpc 与它们的四个 message 已删除:全仓非生成
+// 代码里零调用方(已 Grep 确认),在线状态改读契约 key player:session:{id}。
+class ClientPlayerFriend final {
  public:
   static constexpr char const* service_full_name() {
-    return "friendpb.FriendService";
+    return "friendpb.ClientPlayerFriend";
   }
   class StubInterface {
    public:
@@ -80,19 +85,43 @@ class FriendService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::GetPendingRequestsResponse>> PrepareAsyncGetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::GetPendingRequestsResponse>>(PrepareAsyncGetPendingRequestsRaw(context, request, cq));
     }
-    virtual ::grpc::Status NotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::friendpb::NotifyOnlineResponse* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOnlineResponse>> AsyncNotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOnlineResponse>>(AsyncNotifyOnlineRaw(context, request, cq));
+    virtual ::grpc::Status Block(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::friendpb::BlockResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::BlockResponse>> AsyncBlock(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::BlockResponse>>(AsyncBlockRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOnlineResponse>> PrepareAsyncNotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOnlineResponse>>(PrepareAsyncNotifyOnlineRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::BlockResponse>> PrepareAsyncBlock(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::BlockResponse>>(PrepareAsyncBlockRaw(context, request, cq));
     }
-    virtual ::grpc::Status NotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::friendpb::NotifyOfflineResponse* response) = 0;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOfflineResponse>> AsyncNotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOfflineResponse>>(AsyncNotifyOfflineRaw(context, request, cq));
+    virtual ::grpc::Status Unblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::friendpb::UnblockResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::UnblockResponse>> AsyncUnblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::UnblockResponse>>(AsyncUnblockRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOfflineResponse>> PrepareAsyncNotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOfflineResponse>>(PrepareAsyncNotifyOfflineRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::UnblockResponse>> PrepareAsyncUnblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::UnblockResponse>>(PrepareAsyncUnblockRaw(context, request, cq));
+    }
+    virtual ::grpc::Status ListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::friendpb::ListBlocksResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::ListBlocksResponse>> AsyncListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::ListBlocksResponse>>(AsyncListBlocksRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::ListBlocksResponse>> PrepareAsyncListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::ListBlocksResponse>>(PrepareAsyncListBlocksRaw(context, request, cq));
+    }
+    virtual ::grpc::Status RecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::friendpb::RecommendFriendsResponse* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::RecommendFriendsResponse>> AsyncRecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::RecommendFriendsResponse>>(AsyncRecommendFriendsRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::RecommendFriendsResponse>> PrepareAsyncRecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::RecommendFriendsResponse>>(PrepareAsyncRecommendFriendsRaw(context, request, cq));
+    }
+    // 推送方向是服务端 → 客户端。它与上面 10 个 C2S 方法同处一个 service,
+    // 所以服务端**必须**在会话拦截器的方法白名单里排除它:否则客户端可以直接
+    // 调这个方法伪造一条好友事件。服务端也不实现它(继承 Unimplemented)。
+    virtual ::grpc::Status NotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::Empty* response) = 0;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> AsyncNotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(AsyncNotifyFriendEventRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>> PrepareAsyncNotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::Empty>>(PrepareAsyncNotifyFriendEventRaw(context, request, cq));
     }
     class async_interface {
      public:
@@ -109,10 +138,19 @@ class FriendService final {
       virtual void GetFriendList(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest* request, ::friendpb::GetFriendListResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void GetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response, std::function<void(::grpc::Status)>) = 0;
       virtual void GetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      virtual void NotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest* request, ::friendpb::NotifyOnlineResponse* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void NotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest* request, ::friendpb::NotifyOnlineResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
-      virtual void NotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest* request, ::friendpb::NotifyOfflineResponse* response, std::function<void(::grpc::Status)>) = 0;
-      virtual void NotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest* request, ::friendpb::NotifyOfflineResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void Block(::grpc::ClientContext* context, const ::friendpb::BlockRequest* request, ::friendpb::BlockResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void Block(::grpc::ClientContext* context, const ::friendpb::BlockRequest* request, ::friendpb::BlockResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void Unblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest* request, ::friendpb::UnblockResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void Unblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest* request, ::friendpb::UnblockResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void ListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest* request, ::friendpb::ListBlocksResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void ListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest* request, ::friendpb::ListBlocksResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      virtual void RecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest* request, ::friendpb::RecommendFriendsResponse* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void RecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest* request, ::friendpb::RecommendFriendsResponse* response, ::grpc::ClientUnaryReactor* reactor) = 0;
+      // 推送方向是服务端 → 客户端。它与上面 10 个 C2S 方法同处一个 service,
+      // 所以服务端**必须**在会话拦截器的方法白名单里排除它:否则客户端可以直接
+      // 调这个方法伪造一条好友事件。服务端也不实现它(继承 Unimplemented)。
+      virtual void NotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C* request, ::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void NotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
     typedef class async_interface experimental_async_interface;
     virtual class async_interface* async() { return nullptr; }
@@ -130,10 +168,16 @@ class FriendService final {
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::GetFriendListResponse>* PrepareAsyncGetFriendListRaw(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::GetPendingRequestsResponse>* AsyncGetPendingRequestsRaw(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::grpc::CompletionQueue* cq) = 0;
     virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::GetPendingRequestsResponse>* PrepareAsyncGetPendingRequestsRaw(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOnlineResponse>* AsyncNotifyOnlineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOnlineResponse>* PrepareAsyncNotifyOnlineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOfflineResponse>* AsyncNotifyOfflineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::grpc::CompletionQueue* cq) = 0;
-    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::NotifyOfflineResponse>* PrepareAsyncNotifyOfflineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::BlockResponse>* AsyncBlockRaw(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::BlockResponse>* PrepareAsyncBlockRaw(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::UnblockResponse>* AsyncUnblockRaw(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::UnblockResponse>* PrepareAsyncUnblockRaw(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::ListBlocksResponse>* AsyncListBlocksRaw(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::ListBlocksResponse>* PrepareAsyncListBlocksRaw(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::RecommendFriendsResponse>* AsyncRecommendFriendsRaw(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::friendpb::RecommendFriendsResponse>* PrepareAsyncRecommendFriendsRaw(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* AsyncNotifyFriendEventRaw(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::grpc::CompletionQueue* cq) = 0;
+    virtual ::grpc::ClientAsyncResponseReaderInterface< ::Empty>* PrepareAsyncNotifyFriendEventRaw(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::grpc::CompletionQueue* cq) = 0;
   };
   class Stub final : public StubInterface {
    public:
@@ -180,19 +224,40 @@ class FriendService final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::GetPendingRequestsResponse>> PrepareAsyncGetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::GetPendingRequestsResponse>>(PrepareAsyncGetPendingRequestsRaw(context, request, cq));
     }
-    ::grpc::Status NotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::friendpb::NotifyOnlineResponse* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOnlineResponse>> AsyncNotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOnlineResponse>>(AsyncNotifyOnlineRaw(context, request, cq));
+    ::grpc::Status Block(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::friendpb::BlockResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::BlockResponse>> AsyncBlock(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::BlockResponse>>(AsyncBlockRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOnlineResponse>> PrepareAsyncNotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOnlineResponse>>(PrepareAsyncNotifyOnlineRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::BlockResponse>> PrepareAsyncBlock(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::BlockResponse>>(PrepareAsyncBlockRaw(context, request, cq));
     }
-    ::grpc::Status NotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::friendpb::NotifyOfflineResponse* response) override;
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOfflineResponse>> AsyncNotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOfflineResponse>>(AsyncNotifyOfflineRaw(context, request, cq));
+    ::grpc::Status Unblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::friendpb::UnblockResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::UnblockResponse>> AsyncUnblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::UnblockResponse>>(AsyncUnblockRaw(context, request, cq));
     }
-    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOfflineResponse>> PrepareAsyncNotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::grpc::CompletionQueue* cq) {
-      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOfflineResponse>>(PrepareAsyncNotifyOfflineRaw(context, request, cq));
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::UnblockResponse>> PrepareAsyncUnblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::UnblockResponse>>(PrepareAsyncUnblockRaw(context, request, cq));
+    }
+    ::grpc::Status ListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::friendpb::ListBlocksResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::ListBlocksResponse>> AsyncListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::ListBlocksResponse>>(AsyncListBlocksRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::ListBlocksResponse>> PrepareAsyncListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::ListBlocksResponse>>(PrepareAsyncListBlocksRaw(context, request, cq));
+    }
+    ::grpc::Status RecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::friendpb::RecommendFriendsResponse* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::RecommendFriendsResponse>> AsyncRecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::RecommendFriendsResponse>>(AsyncRecommendFriendsRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::RecommendFriendsResponse>> PrepareAsyncRecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::friendpb::RecommendFriendsResponse>>(PrepareAsyncRecommendFriendsRaw(context, request, cq));
+    }
+    ::grpc::Status NotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::Empty* response) override;
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> AsyncNotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(AsyncNotifyFriendEventRaw(context, request, cq));
+    }
+    std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>> PrepareAsyncNotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::grpc::CompletionQueue* cq) {
+      return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::Empty>>(PrepareAsyncNotifyFriendEventRaw(context, request, cq));
     }
     class async final :
       public StubInterface::async_interface {
@@ -209,10 +274,16 @@ class FriendService final {
       void GetFriendList(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest* request, ::friendpb::GetFriendListResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
       void GetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response, std::function<void(::grpc::Status)>) override;
       void GetPendingRequests(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
-      void NotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest* request, ::friendpb::NotifyOnlineResponse* response, std::function<void(::grpc::Status)>) override;
-      void NotifyOnline(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest* request, ::friendpb::NotifyOnlineResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
-      void NotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest* request, ::friendpb::NotifyOfflineResponse* response, std::function<void(::grpc::Status)>) override;
-      void NotifyOffline(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest* request, ::friendpb::NotifyOfflineResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void Block(::grpc::ClientContext* context, const ::friendpb::BlockRequest* request, ::friendpb::BlockResponse* response, std::function<void(::grpc::Status)>) override;
+      void Block(::grpc::ClientContext* context, const ::friendpb::BlockRequest* request, ::friendpb::BlockResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void Unblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest* request, ::friendpb::UnblockResponse* response, std::function<void(::grpc::Status)>) override;
+      void Unblock(::grpc::ClientContext* context, const ::friendpb::UnblockRequest* request, ::friendpb::UnblockResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void ListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest* request, ::friendpb::ListBlocksResponse* response, std::function<void(::grpc::Status)>) override;
+      void ListBlocks(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest* request, ::friendpb::ListBlocksResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void RecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest* request, ::friendpb::RecommendFriendsResponse* response, std::function<void(::grpc::Status)>) override;
+      void RecommendFriends(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest* request, ::friendpb::RecommendFriendsResponse* response, ::grpc::ClientUnaryReactor* reactor) override;
+      void NotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C* request, ::Empty* response, std::function<void(::grpc::Status)>) override;
+      void NotifyFriendEvent(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C* request, ::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
       explicit async(Stub* stub): stub_(stub) { }
@@ -236,18 +307,27 @@ class FriendService final {
     ::grpc::ClientAsyncResponseReader< ::friendpb::GetFriendListResponse>* PrepareAsyncGetFriendListRaw(::grpc::ClientContext* context, const ::friendpb::GetFriendListRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::friendpb::GetPendingRequestsResponse>* AsyncGetPendingRequestsRaw(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::grpc::CompletionQueue* cq) override;
     ::grpc::ClientAsyncResponseReader< ::friendpb::GetPendingRequestsResponse>* PrepareAsyncGetPendingRequestsRaw(::grpc::ClientContext* context, const ::friendpb::GetPendingRequestsRequest& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOnlineResponse>* AsyncNotifyOnlineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOnlineResponse>* PrepareAsyncNotifyOnlineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOnlineRequest& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOfflineResponse>* AsyncNotifyOfflineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::grpc::CompletionQueue* cq) override;
-    ::grpc::ClientAsyncResponseReader< ::friendpb::NotifyOfflineResponse>* PrepareAsyncNotifyOfflineRaw(::grpc::ClientContext* context, const ::friendpb::NotifyOfflineRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::friendpb::BlockResponse>* AsyncBlockRaw(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::friendpb::BlockResponse>* PrepareAsyncBlockRaw(::grpc::ClientContext* context, const ::friendpb::BlockRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::friendpb::UnblockResponse>* AsyncUnblockRaw(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::friendpb::UnblockResponse>* PrepareAsyncUnblockRaw(::grpc::ClientContext* context, const ::friendpb::UnblockRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::friendpb::ListBlocksResponse>* AsyncListBlocksRaw(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::friendpb::ListBlocksResponse>* PrepareAsyncListBlocksRaw(::grpc::ClientContext* context, const ::friendpb::ListBlocksRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::friendpb::RecommendFriendsResponse>* AsyncRecommendFriendsRaw(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::friendpb::RecommendFriendsResponse>* PrepareAsyncRecommendFriendsRaw(::grpc::ClientContext* context, const ::friendpb::RecommendFriendsRequest& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::Empty>* AsyncNotifyFriendEventRaw(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::grpc::CompletionQueue* cq) override;
+    ::grpc::ClientAsyncResponseReader< ::Empty>* PrepareAsyncNotifyFriendEventRaw(::grpc::ClientContext* context, const ::friendpb::FriendEventS2C& request, ::grpc::CompletionQueue* cq) override;
     const ::grpc::internal::RpcMethod rpcmethod_AddFriend_;
     const ::grpc::internal::RpcMethod rpcmethod_AcceptFriend_;
     const ::grpc::internal::RpcMethod rpcmethod_RejectFriend_;
     const ::grpc::internal::RpcMethod rpcmethod_RemoveFriend_;
     const ::grpc::internal::RpcMethod rpcmethod_GetFriendList_;
     const ::grpc::internal::RpcMethod rpcmethod_GetPendingRequests_;
-    const ::grpc::internal::RpcMethod rpcmethod_NotifyOnline_;
-    const ::grpc::internal::RpcMethod rpcmethod_NotifyOffline_;
+    const ::grpc::internal::RpcMethod rpcmethod_Block_;
+    const ::grpc::internal::RpcMethod rpcmethod_Unblock_;
+    const ::grpc::internal::RpcMethod rpcmethod_ListBlocks_;
+    const ::grpc::internal::RpcMethod rpcmethod_RecommendFriends_;
+    const ::grpc::internal::RpcMethod rpcmethod_NotifyFriendEvent_;
   };
   static std::unique_ptr<Stub> NewStub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
 
@@ -261,8 +341,14 @@ class FriendService final {
     virtual ::grpc::Status RemoveFriend(::grpc::ServerContext* context, const ::friendpb::RemoveFriendRequest* request, ::friendpb::RemoveFriendResponse* response);
     virtual ::grpc::Status GetFriendList(::grpc::ServerContext* context, const ::friendpb::GetFriendListRequest* request, ::friendpb::GetFriendListResponse* response);
     virtual ::grpc::Status GetPendingRequests(::grpc::ServerContext* context, const ::friendpb::GetPendingRequestsRequest* request, ::friendpb::GetPendingRequestsResponse* response);
-    virtual ::grpc::Status NotifyOnline(::grpc::ServerContext* context, const ::friendpb::NotifyOnlineRequest* request, ::friendpb::NotifyOnlineResponse* response);
-    virtual ::grpc::Status NotifyOffline(::grpc::ServerContext* context, const ::friendpb::NotifyOfflineRequest* request, ::friendpb::NotifyOfflineResponse* response);
+    virtual ::grpc::Status Block(::grpc::ServerContext* context, const ::friendpb::BlockRequest* request, ::friendpb::BlockResponse* response);
+    virtual ::grpc::Status Unblock(::grpc::ServerContext* context, const ::friendpb::UnblockRequest* request, ::friendpb::UnblockResponse* response);
+    virtual ::grpc::Status ListBlocks(::grpc::ServerContext* context, const ::friendpb::ListBlocksRequest* request, ::friendpb::ListBlocksResponse* response);
+    virtual ::grpc::Status RecommendFriends(::grpc::ServerContext* context, const ::friendpb::RecommendFriendsRequest* request, ::friendpb::RecommendFriendsResponse* response);
+    // 推送方向是服务端 → 客户端。它与上面 10 个 C2S 方法同处一个 service,
+    // 所以服务端**必须**在会话拦截器的方法白名单里排除它:否则客户端可以直接
+    // 调这个方法伪造一条好友事件。服务端也不实现它(继承 Unimplemented)。
+    virtual ::grpc::Status NotifyFriendEvent(::grpc::ServerContext* context, const ::friendpb::FriendEventS2C* request, ::Empty* response);
   };
   template <class BaseClass>
   class WithAsyncMethod_AddFriend : public BaseClass {
@@ -385,46 +471,106 @@ class FriendService final {
     }
   };
   template <class BaseClass>
-  class WithAsyncMethod_NotifyOnline : public BaseClass {
+  class WithAsyncMethod_Block : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithAsyncMethod_NotifyOnline() {
+    WithAsyncMethod_Block() {
       ::grpc::Service::MarkMethodAsync(6);
     }
-    ~WithAsyncMethod_NotifyOnline() override {
+    ~WithAsyncMethod_Block() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status NotifyOnline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOnlineRequest* /*request*/, ::friendpb::NotifyOnlineResponse* /*response*/) override {
+    ::grpc::Status Block(::grpc::ServerContext* /*context*/, const ::friendpb::BlockRequest* /*request*/, ::friendpb::BlockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestNotifyOnline(::grpc::ServerContext* context, ::friendpb::NotifyOnlineRequest* request, ::grpc::ServerAsyncResponseWriter< ::friendpb::NotifyOnlineResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestBlock(::grpc::ServerContext* context, ::friendpb::BlockRequest* request, ::grpc::ServerAsyncResponseWriter< ::friendpb::BlockResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(6, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
-  class WithAsyncMethod_NotifyOffline : public BaseClass {
+  class WithAsyncMethod_Unblock : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithAsyncMethod_NotifyOffline() {
+    WithAsyncMethod_Unblock() {
       ::grpc::Service::MarkMethodAsync(7);
     }
-    ~WithAsyncMethod_NotifyOffline() override {
+    ~WithAsyncMethod_Unblock() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status NotifyOffline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOfflineRequest* /*request*/, ::friendpb::NotifyOfflineResponse* /*response*/) override {
+    ::grpc::Status Unblock(::grpc::ServerContext* /*context*/, const ::friendpb::UnblockRequest* /*request*/, ::friendpb::UnblockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestNotifyOffline(::grpc::ServerContext* context, ::friendpb::NotifyOfflineRequest* request, ::grpc::ServerAsyncResponseWriter< ::friendpb::NotifyOfflineResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestUnblock(::grpc::ServerContext* context, ::friendpb::UnblockRequest* request, ::grpc::ServerAsyncResponseWriter< ::friendpb::UnblockResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
-  typedef WithAsyncMethod_AddFriend<WithAsyncMethod_AcceptFriend<WithAsyncMethod_RejectFriend<WithAsyncMethod_RemoveFriend<WithAsyncMethod_GetFriendList<WithAsyncMethod_GetPendingRequests<WithAsyncMethod_NotifyOnline<WithAsyncMethod_NotifyOffline<Service > > > > > > > > AsyncService;
+  template <class BaseClass>
+  class WithAsyncMethod_ListBlocks : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_ListBlocks() {
+      ::grpc::Service::MarkMethodAsync(8);
+    }
+    ~WithAsyncMethod_ListBlocks() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListBlocks(::grpc::ServerContext* /*context*/, const ::friendpb::ListBlocksRequest* /*request*/, ::friendpb::ListBlocksResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestListBlocks(::grpc::ServerContext* context, ::friendpb::ListBlocksRequest* request, ::grpc::ServerAsyncResponseWriter< ::friendpb::ListBlocksResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(8, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_RecommendFriends : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_RecommendFriends() {
+      ::grpc::Service::MarkMethodAsync(9);
+    }
+    ~WithAsyncMethod_RecommendFriends() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RecommendFriends(::grpc::ServerContext* /*context*/, const ::friendpb::RecommendFriendsRequest* /*request*/, ::friendpb::RecommendFriendsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRecommendFriends(::grpc::ServerContext* context, ::friendpb::RecommendFriendsRequest* request, ::grpc::ServerAsyncResponseWriter< ::friendpb::RecommendFriendsResponse>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(9, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithAsyncMethod_NotifyFriendEvent : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithAsyncMethod_NotifyFriendEvent() {
+      ::grpc::Service::MarkMethodAsync(10);
+    }
+    ~WithAsyncMethod_NotifyFriendEvent() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyFriendEvent(::grpc::ServerContext* /*context*/, const ::friendpb::FriendEventS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestNotifyFriendEvent(::grpc::ServerContext* context, ::friendpb::FriendEventS2C* request, ::grpc::ServerAsyncResponseWriter< ::Empty>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(10, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  typedef WithAsyncMethod_AddFriend<WithAsyncMethod_AcceptFriend<WithAsyncMethod_RejectFriend<WithAsyncMethod_RemoveFriend<WithAsyncMethod_GetFriendList<WithAsyncMethod_GetPendingRequests<WithAsyncMethod_Block<WithAsyncMethod_Unblock<WithAsyncMethod_ListBlocks<WithAsyncMethod_RecommendFriends<WithAsyncMethod_NotifyFriendEvent<Service > > > > > > > > > > > AsyncService;
   template <class BaseClass>
   class WithCallbackMethod_AddFriend : public BaseClass {
    private:
@@ -588,60 +734,141 @@ class FriendService final {
       ::grpc::CallbackServerContext* /*context*/, const ::friendpb::GetPendingRequestsRequest* /*request*/, ::friendpb::GetPendingRequestsResponse* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithCallbackMethod_NotifyOnline : public BaseClass {
+  class WithCallbackMethod_Block : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithCallbackMethod_NotifyOnline() {
+    WithCallbackMethod_Block() {
       ::grpc::Service::MarkMethodCallback(6,
-          new ::grpc::internal::CallbackUnaryHandler< ::friendpb::NotifyOnlineRequest, ::friendpb::NotifyOnlineResponse>(
+          new ::grpc::internal::CallbackUnaryHandler< ::friendpb::BlockRequest, ::friendpb::BlockResponse>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::friendpb::NotifyOnlineRequest* request, ::friendpb::NotifyOnlineResponse* response) { return this->NotifyOnline(context, request, response); }));}
-    void SetMessageAllocatorFor_NotifyOnline(
-        ::grpc::MessageAllocator< ::friendpb::NotifyOnlineRequest, ::friendpb::NotifyOnlineResponse>* allocator) {
+                   ::grpc::CallbackServerContext* context, const ::friendpb::BlockRequest* request, ::friendpb::BlockResponse* response) { return this->Block(context, request, response); }));}
+    void SetMessageAllocatorFor_Block(
+        ::grpc::MessageAllocator< ::friendpb::BlockRequest, ::friendpb::BlockResponse>* allocator) {
       ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(6);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::friendpb::NotifyOnlineRequest, ::friendpb::NotifyOnlineResponse>*>(handler)
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::friendpb::BlockRequest, ::friendpb::BlockResponse>*>(handler)
               ->SetMessageAllocator(allocator);
     }
-    ~WithCallbackMethod_NotifyOnline() override {
+    ~WithCallbackMethod_Block() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status NotifyOnline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOnlineRequest* /*request*/, ::friendpb::NotifyOnlineResponse* /*response*/) override {
+    ::grpc::Status Block(::grpc::ServerContext* /*context*/, const ::friendpb::BlockRequest* /*request*/, ::friendpb::BlockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    virtual ::grpc::ServerUnaryReactor* NotifyOnline(
-      ::grpc::CallbackServerContext* /*context*/, const ::friendpb::NotifyOnlineRequest* /*request*/, ::friendpb::NotifyOnlineResponse* /*response*/)  { return nullptr; }
+    virtual ::grpc::ServerUnaryReactor* Block(
+      ::grpc::CallbackServerContext* /*context*/, const ::friendpb::BlockRequest* /*request*/, ::friendpb::BlockResponse* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithCallbackMethod_NotifyOffline : public BaseClass {
+  class WithCallbackMethod_Unblock : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithCallbackMethod_NotifyOffline() {
+    WithCallbackMethod_Unblock() {
       ::grpc::Service::MarkMethodCallback(7,
-          new ::grpc::internal::CallbackUnaryHandler< ::friendpb::NotifyOfflineRequest, ::friendpb::NotifyOfflineResponse>(
+          new ::grpc::internal::CallbackUnaryHandler< ::friendpb::UnblockRequest, ::friendpb::UnblockResponse>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::friendpb::NotifyOfflineRequest* request, ::friendpb::NotifyOfflineResponse* response) { return this->NotifyOffline(context, request, response); }));}
-    void SetMessageAllocatorFor_NotifyOffline(
-        ::grpc::MessageAllocator< ::friendpb::NotifyOfflineRequest, ::friendpb::NotifyOfflineResponse>* allocator) {
+                   ::grpc::CallbackServerContext* context, const ::friendpb::UnblockRequest* request, ::friendpb::UnblockResponse* response) { return this->Unblock(context, request, response); }));}
+    void SetMessageAllocatorFor_Unblock(
+        ::grpc::MessageAllocator< ::friendpb::UnblockRequest, ::friendpb::UnblockResponse>* allocator) {
       ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(7);
-      static_cast<::grpc::internal::CallbackUnaryHandler< ::friendpb::NotifyOfflineRequest, ::friendpb::NotifyOfflineResponse>*>(handler)
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::friendpb::UnblockRequest, ::friendpb::UnblockResponse>*>(handler)
               ->SetMessageAllocator(allocator);
     }
-    ~WithCallbackMethod_NotifyOffline() override {
+    ~WithCallbackMethod_Unblock() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status NotifyOffline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOfflineRequest* /*request*/, ::friendpb::NotifyOfflineResponse* /*response*/) override {
+    ::grpc::Status Unblock(::grpc::ServerContext* /*context*/, const ::friendpb::UnblockRequest* /*request*/, ::friendpb::UnblockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    virtual ::grpc::ServerUnaryReactor* NotifyOffline(
-      ::grpc::CallbackServerContext* /*context*/, const ::friendpb::NotifyOfflineRequest* /*request*/, ::friendpb::NotifyOfflineResponse* /*response*/)  { return nullptr; }
+    virtual ::grpc::ServerUnaryReactor* Unblock(
+      ::grpc::CallbackServerContext* /*context*/, const ::friendpb::UnblockRequest* /*request*/, ::friendpb::UnblockResponse* /*response*/)  { return nullptr; }
   };
-  typedef WithCallbackMethod_AddFriend<WithCallbackMethod_AcceptFriend<WithCallbackMethod_RejectFriend<WithCallbackMethod_RemoveFriend<WithCallbackMethod_GetFriendList<WithCallbackMethod_GetPendingRequests<WithCallbackMethod_NotifyOnline<WithCallbackMethod_NotifyOffline<Service > > > > > > > > CallbackService;
+  template <class BaseClass>
+  class WithCallbackMethod_ListBlocks : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_ListBlocks() {
+      ::grpc::Service::MarkMethodCallback(8,
+          new ::grpc::internal::CallbackUnaryHandler< ::friendpb::ListBlocksRequest, ::friendpb::ListBlocksResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::friendpb::ListBlocksRequest* request, ::friendpb::ListBlocksResponse* response) { return this->ListBlocks(context, request, response); }));}
+    void SetMessageAllocatorFor_ListBlocks(
+        ::grpc::MessageAllocator< ::friendpb::ListBlocksRequest, ::friendpb::ListBlocksResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(8);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::friendpb::ListBlocksRequest, ::friendpb::ListBlocksResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_ListBlocks() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListBlocks(::grpc::ServerContext* /*context*/, const ::friendpb::ListBlocksRequest* /*request*/, ::friendpb::ListBlocksResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ListBlocks(
+      ::grpc::CallbackServerContext* /*context*/, const ::friendpb::ListBlocksRequest* /*request*/, ::friendpb::ListBlocksResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_RecommendFriends : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_RecommendFriends() {
+      ::grpc::Service::MarkMethodCallback(9,
+          new ::grpc::internal::CallbackUnaryHandler< ::friendpb::RecommendFriendsRequest, ::friendpb::RecommendFriendsResponse>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::friendpb::RecommendFriendsRequest* request, ::friendpb::RecommendFriendsResponse* response) { return this->RecommendFriends(context, request, response); }));}
+    void SetMessageAllocatorFor_RecommendFriends(
+        ::grpc::MessageAllocator< ::friendpb::RecommendFriendsRequest, ::friendpb::RecommendFriendsResponse>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(9);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::friendpb::RecommendFriendsRequest, ::friendpb::RecommendFriendsResponse>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_RecommendFriends() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RecommendFriends(::grpc::ServerContext* /*context*/, const ::friendpb::RecommendFriendsRequest* /*request*/, ::friendpb::RecommendFriendsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RecommendFriends(
+      ::grpc::CallbackServerContext* /*context*/, const ::friendpb::RecommendFriendsRequest* /*request*/, ::friendpb::RecommendFriendsResponse* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_NotifyFriendEvent : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_NotifyFriendEvent() {
+      ::grpc::Service::MarkMethodCallback(10,
+          new ::grpc::internal::CallbackUnaryHandler< ::friendpb::FriendEventS2C, ::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::friendpb::FriendEventS2C* request, ::Empty* response) { return this->NotifyFriendEvent(context, request, response); }));}
+    void SetMessageAllocatorFor_NotifyFriendEvent(
+        ::grpc::MessageAllocator< ::friendpb::FriendEventS2C, ::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(10);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::friendpb::FriendEventS2C, ::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_NotifyFriendEvent() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyFriendEvent(::grpc::ServerContext* /*context*/, const ::friendpb::FriendEventS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* NotifyFriendEvent(
+      ::grpc::CallbackServerContext* /*context*/, const ::friendpb::FriendEventS2C* /*request*/, ::Empty* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_AddFriend<WithCallbackMethod_AcceptFriend<WithCallbackMethod_RejectFriend<WithCallbackMethod_RemoveFriend<WithCallbackMethod_GetFriendList<WithCallbackMethod_GetPendingRequests<WithCallbackMethod_Block<WithCallbackMethod_Unblock<WithCallbackMethod_ListBlocks<WithCallbackMethod_RecommendFriends<WithCallbackMethod_NotifyFriendEvent<Service > > > > > > > > > > > CallbackService;
   typedef CallbackService ExperimentalCallbackService;
   template <class BaseClass>
   class WithGenericMethod_AddFriend : public BaseClass {
@@ -746,35 +973,86 @@ class FriendService final {
     }
   };
   template <class BaseClass>
-  class WithGenericMethod_NotifyOnline : public BaseClass {
+  class WithGenericMethod_Block : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithGenericMethod_NotifyOnline() {
+    WithGenericMethod_Block() {
       ::grpc::Service::MarkMethodGeneric(6);
     }
-    ~WithGenericMethod_NotifyOnline() override {
+    ~WithGenericMethod_Block() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status NotifyOnline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOnlineRequest* /*request*/, ::friendpb::NotifyOnlineResponse* /*response*/) override {
+    ::grpc::Status Block(::grpc::ServerContext* /*context*/, const ::friendpb::BlockRequest* /*request*/, ::friendpb::BlockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
   };
   template <class BaseClass>
-  class WithGenericMethod_NotifyOffline : public BaseClass {
+  class WithGenericMethod_Unblock : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithGenericMethod_NotifyOffline() {
+    WithGenericMethod_Unblock() {
       ::grpc::Service::MarkMethodGeneric(7);
     }
-    ~WithGenericMethod_NotifyOffline() override {
+    ~WithGenericMethod_Unblock() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status NotifyOffline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOfflineRequest* /*request*/, ::friendpb::NotifyOfflineResponse* /*response*/) override {
+    ::grpc::Status Unblock(::grpc::ServerContext* /*context*/, const ::friendpb::UnblockRequest* /*request*/, ::friendpb::UnblockResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_ListBlocks : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_ListBlocks() {
+      ::grpc::Service::MarkMethodGeneric(8);
+    }
+    ~WithGenericMethod_ListBlocks() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListBlocks(::grpc::ServerContext* /*context*/, const ::friendpb::ListBlocksRequest* /*request*/, ::friendpb::ListBlocksResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_RecommendFriends : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_RecommendFriends() {
+      ::grpc::Service::MarkMethodGeneric(9);
+    }
+    ~WithGenericMethod_RecommendFriends() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RecommendFriends(::grpc::ServerContext* /*context*/, const ::friendpb::RecommendFriendsRequest* /*request*/, ::friendpb::RecommendFriendsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+  };
+  template <class BaseClass>
+  class WithGenericMethod_NotifyFriendEvent : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithGenericMethod_NotifyFriendEvent() {
+      ::grpc::Service::MarkMethodGeneric(10);
+    }
+    ~WithGenericMethod_NotifyFriendEvent() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyFriendEvent(::grpc::ServerContext* /*context*/, const ::friendpb::FriendEventS2C* /*request*/, ::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -900,43 +1178,103 @@ class FriendService final {
     }
   };
   template <class BaseClass>
-  class WithRawMethod_NotifyOnline : public BaseClass {
+  class WithRawMethod_Block : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithRawMethod_NotifyOnline() {
+    WithRawMethod_Block() {
       ::grpc::Service::MarkMethodRaw(6);
     }
-    ~WithRawMethod_NotifyOnline() override {
+    ~WithRawMethod_Block() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status NotifyOnline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOnlineRequest* /*request*/, ::friendpb::NotifyOnlineResponse* /*response*/) override {
+    ::grpc::Status Block(::grpc::ServerContext* /*context*/, const ::friendpb::BlockRequest* /*request*/, ::friendpb::BlockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestNotifyOnline(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestBlock(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(6, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
-  class WithRawMethod_NotifyOffline : public BaseClass {
+  class WithRawMethod_Unblock : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithRawMethod_NotifyOffline() {
+    WithRawMethod_Unblock() {
       ::grpc::Service::MarkMethodRaw(7);
     }
-    ~WithRawMethod_NotifyOffline() override {
+    ~WithRawMethod_Unblock() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status NotifyOffline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOfflineRequest* /*request*/, ::friendpb::NotifyOfflineResponse* /*response*/) override {
+    ::grpc::Status Unblock(::grpc::ServerContext* /*context*/, const ::friendpb::UnblockRequest* /*request*/, ::friendpb::UnblockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    void RequestNotifyOffline(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+    void RequestUnblock(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
       ::grpc::Service::RequestAsyncUnary(7, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_ListBlocks : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_ListBlocks() {
+      ::grpc::Service::MarkMethodRaw(8);
+    }
+    ~WithRawMethod_ListBlocks() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListBlocks(::grpc::ServerContext* /*context*/, const ::friendpb::ListBlocksRequest* /*request*/, ::friendpb::ListBlocksResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestListBlocks(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(8, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_RecommendFriends : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_RecommendFriends() {
+      ::grpc::Service::MarkMethodRaw(9);
+    }
+    ~WithRawMethod_RecommendFriends() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RecommendFriends(::grpc::ServerContext* /*context*/, const ::friendpb::RecommendFriendsRequest* /*request*/, ::friendpb::RecommendFriendsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestRecommendFriends(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(9, context, request, response, new_call_cq, notification_cq, tag);
+    }
+  };
+  template <class BaseClass>
+  class WithRawMethod_NotifyFriendEvent : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawMethod_NotifyFriendEvent() {
+      ::grpc::Service::MarkMethodRaw(10);
+    }
+    ~WithRawMethod_NotifyFriendEvent() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyFriendEvent(::grpc::ServerContext* /*context*/, const ::friendpb::FriendEventS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    void RequestNotifyFriendEvent(::grpc::ServerContext* context, ::grpc::ByteBuffer* request, ::grpc::ServerAsyncResponseWriter< ::grpc::ByteBuffer>* response, ::grpc::CompletionQueue* new_call_cq, ::grpc::ServerCompletionQueue* notification_cq, void *tag) {
+      ::grpc::Service::RequestAsyncUnary(10, context, request, response, new_call_cq, notification_cq, tag);
     }
   };
   template <class BaseClass>
@@ -1072,47 +1410,113 @@ class FriendService final {
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithRawCallbackMethod_NotifyOnline : public BaseClass {
+  class WithRawCallbackMethod_Block : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithRawCallbackMethod_NotifyOnline() {
+    WithRawCallbackMethod_Block() {
       ::grpc::Service::MarkMethodRawCallback(6,
           new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->NotifyOnline(context, request, response); }));
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->Block(context, request, response); }));
     }
-    ~WithRawCallbackMethod_NotifyOnline() override {
+    ~WithRawCallbackMethod_Block() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status NotifyOnline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOnlineRequest* /*request*/, ::friendpb::NotifyOnlineResponse* /*response*/) override {
+    ::grpc::Status Block(::grpc::ServerContext* /*context*/, const ::friendpb::BlockRequest* /*request*/, ::friendpb::BlockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    virtual ::grpc::ServerUnaryReactor* NotifyOnline(
+    virtual ::grpc::ServerUnaryReactor* Block(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
-  class WithRawCallbackMethod_NotifyOffline : public BaseClass {
+  class WithRawCallbackMethod_Unblock : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithRawCallbackMethod_NotifyOffline() {
+    WithRawCallbackMethod_Unblock() {
       ::grpc::Service::MarkMethodRawCallback(7,
           new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
             [this](
-                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->NotifyOffline(context, request, response); }));
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->Unblock(context, request, response); }));
     }
-    ~WithRawCallbackMethod_NotifyOffline() override {
+    ~WithRawCallbackMethod_Unblock() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status NotifyOffline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOfflineRequest* /*request*/, ::friendpb::NotifyOfflineResponse* /*response*/) override {
+    ::grpc::Status Unblock(::grpc::ServerContext* /*context*/, const ::friendpb::UnblockRequest* /*request*/, ::friendpb::UnblockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
-    virtual ::grpc::ServerUnaryReactor* NotifyOffline(
+    virtual ::grpc::ServerUnaryReactor* Unblock(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_ListBlocks : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_ListBlocks() {
+      ::grpc::Service::MarkMethodRawCallback(8,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->ListBlocks(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_ListBlocks() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status ListBlocks(::grpc::ServerContext* /*context*/, const ::friendpb::ListBlocksRequest* /*request*/, ::friendpb::ListBlocksResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* ListBlocks(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_RecommendFriends : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_RecommendFriends() {
+      ::grpc::Service::MarkMethodRawCallback(9,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->RecommendFriends(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_RecommendFriends() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status RecommendFriends(::grpc::ServerContext* /*context*/, const ::friendpb::RecommendFriendsRequest* /*request*/, ::friendpb::RecommendFriendsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* RecommendFriends(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_NotifyFriendEvent : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_NotifyFriendEvent() {
+      ::grpc::Service::MarkMethodRawCallback(10,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->NotifyFriendEvent(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_NotifyFriendEvent() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status NotifyFriendEvent(::grpc::ServerContext* /*context*/, const ::friendpb::FriendEventS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* NotifyFriendEvent(
       ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
   };
   template <class BaseClass>
@@ -1278,62 +1682,143 @@ class FriendService final {
     virtual ::grpc::Status StreamedGetPendingRequests(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::friendpb::GetPendingRequestsRequest,::friendpb::GetPendingRequestsResponse>* server_unary_streamer) = 0;
   };
   template <class BaseClass>
-  class WithStreamedUnaryMethod_NotifyOnline : public BaseClass {
+  class WithStreamedUnaryMethod_Block : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithStreamedUnaryMethod_NotifyOnline() {
+    WithStreamedUnaryMethod_Block() {
       ::grpc::Service::MarkMethodStreamed(6,
         new ::grpc::internal::StreamedUnaryHandler<
-          ::friendpb::NotifyOnlineRequest, ::friendpb::NotifyOnlineResponse>(
+          ::friendpb::BlockRequest, ::friendpb::BlockResponse>(
             [this](::grpc::ServerContext* context,
                    ::grpc::ServerUnaryStreamer<
-                     ::friendpb::NotifyOnlineRequest, ::friendpb::NotifyOnlineResponse>* streamer) {
-                       return this->StreamedNotifyOnline(context,
+                     ::friendpb::BlockRequest, ::friendpb::BlockResponse>* streamer) {
+                       return this->StreamedBlock(context,
                          streamer);
                   }));
     }
-    ~WithStreamedUnaryMethod_NotifyOnline() override {
+    ~WithStreamedUnaryMethod_Block() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status NotifyOnline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOnlineRequest* /*request*/, ::friendpb::NotifyOnlineResponse* /*response*/) override {
+    ::grpc::Status Block(::grpc::ServerContext* /*context*/, const ::friendpb::BlockRequest* /*request*/, ::friendpb::BlockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedNotifyOnline(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::friendpb::NotifyOnlineRequest,::friendpb::NotifyOnlineResponse>* server_unary_streamer) = 0;
+    virtual ::grpc::Status StreamedBlock(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::friendpb::BlockRequest,::friendpb::BlockResponse>* server_unary_streamer) = 0;
   };
   template <class BaseClass>
-  class WithStreamedUnaryMethod_NotifyOffline : public BaseClass {
+  class WithStreamedUnaryMethod_Unblock : public BaseClass {
    private:
     void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
-    WithStreamedUnaryMethod_NotifyOffline() {
+    WithStreamedUnaryMethod_Unblock() {
       ::grpc::Service::MarkMethodStreamed(7,
         new ::grpc::internal::StreamedUnaryHandler<
-          ::friendpb::NotifyOfflineRequest, ::friendpb::NotifyOfflineResponse>(
+          ::friendpb::UnblockRequest, ::friendpb::UnblockResponse>(
             [this](::grpc::ServerContext* context,
                    ::grpc::ServerUnaryStreamer<
-                     ::friendpb::NotifyOfflineRequest, ::friendpb::NotifyOfflineResponse>* streamer) {
-                       return this->StreamedNotifyOffline(context,
+                     ::friendpb::UnblockRequest, ::friendpb::UnblockResponse>* streamer) {
+                       return this->StreamedUnblock(context,
                          streamer);
                   }));
     }
-    ~WithStreamedUnaryMethod_NotifyOffline() override {
+    ~WithStreamedUnaryMethod_Unblock() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status NotifyOffline(::grpc::ServerContext* /*context*/, const ::friendpb::NotifyOfflineRequest* /*request*/, ::friendpb::NotifyOfflineResponse* /*response*/) override {
+    ::grpc::Status Unblock(::grpc::ServerContext* /*context*/, const ::friendpb::UnblockRequest* /*request*/, ::friendpb::UnblockResponse* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
     // replace default version of method with streamed unary
-    virtual ::grpc::Status StreamedNotifyOffline(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::friendpb::NotifyOfflineRequest,::friendpb::NotifyOfflineResponse>* server_unary_streamer) = 0;
+    virtual ::grpc::Status StreamedUnblock(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::friendpb::UnblockRequest,::friendpb::UnblockResponse>* server_unary_streamer) = 0;
   };
-  typedef WithStreamedUnaryMethod_AddFriend<WithStreamedUnaryMethod_AcceptFriend<WithStreamedUnaryMethod_RejectFriend<WithStreamedUnaryMethod_RemoveFriend<WithStreamedUnaryMethod_GetFriendList<WithStreamedUnaryMethod_GetPendingRequests<WithStreamedUnaryMethod_NotifyOnline<WithStreamedUnaryMethod_NotifyOffline<Service > > > > > > > > StreamedUnaryService;
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_ListBlocks : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_ListBlocks() {
+      ::grpc::Service::MarkMethodStreamed(8,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::friendpb::ListBlocksRequest, ::friendpb::ListBlocksResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::friendpb::ListBlocksRequest, ::friendpb::ListBlocksResponse>* streamer) {
+                       return this->StreamedListBlocks(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_ListBlocks() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status ListBlocks(::grpc::ServerContext* /*context*/, const ::friendpb::ListBlocksRequest* /*request*/, ::friendpb::ListBlocksResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedListBlocks(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::friendpb::ListBlocksRequest,::friendpb::ListBlocksResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_RecommendFriends : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_RecommendFriends() {
+      ::grpc::Service::MarkMethodStreamed(9,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::friendpb::RecommendFriendsRequest, ::friendpb::RecommendFriendsResponse>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::friendpb::RecommendFriendsRequest, ::friendpb::RecommendFriendsResponse>* streamer) {
+                       return this->StreamedRecommendFriends(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_RecommendFriends() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status RecommendFriends(::grpc::ServerContext* /*context*/, const ::friendpb::RecommendFriendsRequest* /*request*/, ::friendpb::RecommendFriendsResponse* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedRecommendFriends(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::friendpb::RecommendFriendsRequest,::friendpb::RecommendFriendsResponse>* server_unary_streamer) = 0;
+  };
+  template <class BaseClass>
+  class WithStreamedUnaryMethod_NotifyFriendEvent : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithStreamedUnaryMethod_NotifyFriendEvent() {
+      ::grpc::Service::MarkMethodStreamed(10,
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::friendpb::FriendEventS2C, ::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::friendpb::FriendEventS2C, ::Empty>* streamer) {
+                       return this->StreamedNotifyFriendEvent(context,
+                         streamer);
+                  }));
+    }
+    ~WithStreamedUnaryMethod_NotifyFriendEvent() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable regular version of this method
+    ::grpc::Status NotifyFriendEvent(::grpc::ServerContext* /*context*/, const ::friendpb::FriendEventS2C* /*request*/, ::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    // replace default version of method with streamed unary
+    virtual ::grpc::Status StreamedNotifyFriendEvent(::grpc::ServerContext* context, ::grpc::ServerUnaryStreamer< ::friendpb::FriendEventS2C,::Empty>* server_unary_streamer) = 0;
+  };
+  typedef WithStreamedUnaryMethod_AddFriend<WithStreamedUnaryMethod_AcceptFriend<WithStreamedUnaryMethod_RejectFriend<WithStreamedUnaryMethod_RemoveFriend<WithStreamedUnaryMethod_GetFriendList<WithStreamedUnaryMethod_GetPendingRequests<WithStreamedUnaryMethod_Block<WithStreamedUnaryMethod_Unblock<WithStreamedUnaryMethod_ListBlocks<WithStreamedUnaryMethod_RecommendFriends<WithStreamedUnaryMethod_NotifyFriendEvent<Service > > > > > > > > > > > StreamedUnaryService;
   typedef Service SplitStreamedService;
-  typedef WithStreamedUnaryMethod_AddFriend<WithStreamedUnaryMethod_AcceptFriend<WithStreamedUnaryMethod_RejectFriend<WithStreamedUnaryMethod_RemoveFriend<WithStreamedUnaryMethod_GetFriendList<WithStreamedUnaryMethod_GetPendingRequests<WithStreamedUnaryMethod_NotifyOnline<WithStreamedUnaryMethod_NotifyOffline<Service > > > > > > > > StreamedService;
+  typedef WithStreamedUnaryMethod_AddFriend<WithStreamedUnaryMethod_AcceptFriend<WithStreamedUnaryMethod_RejectFriend<WithStreamedUnaryMethod_RemoveFriend<WithStreamedUnaryMethod_GetFriendList<WithStreamedUnaryMethod_GetPendingRequests<WithStreamedUnaryMethod_Block<WithStreamedUnaryMethod_Unblock<WithStreamedUnaryMethod_ListBlocks<WithStreamedUnaryMethod_RecommendFriends<WithStreamedUnaryMethod_NotifyFriendEvent<Service > > > > > > > > > > > StreamedService;
 };
 
 }  // namespace friendpb

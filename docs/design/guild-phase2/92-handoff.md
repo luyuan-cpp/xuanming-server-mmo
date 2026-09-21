@@ -6,6 +6,7 @@
 ## 0. 一句话状态
 
 > **2026-09-20 更新**:换机接手后又落了 **B3a-2** 与 **B3b 的服务端部分**,现状以 §8 为准(含客户端仓与本机 Python 两个阻塞)。
+> **2026-09-20 更新(二)**:**B5a 的 18 个非 xlsx 文件已落码**(4 个 xlsx 的内容与步骤已写成幂等脚本,待依赖装齐后执行),**B5d 详细设计已写**(`07-rollback-fail-closed.md`)。现状以 **§10** 为准;**导表前必须先跑 `guild_b5a_xlsx_patch.py new-tables`**(§10.0)。
 
 帮会二期 20 个批次里,**6 批已落码**(B1、B1b、B2s、B2c、B3a-1、B4a-client),
 资产通道 **B4a-1 / B4b 由聚宝斋会话按本期设计落码**;**全部未编译、未跑测试、未跑导表器与 proto-gen**。
@@ -45,10 +46,10 @@
 |---|---|---|---|---|
 | ~~1~~ | ~~**B3a-2**~~ | 24 | B3a-1 | **已落码 2026-09-20**,待 Codex 验证(§8.3) |
 | 2 | **B3b 客户端** | 12 | B2c、B3a-2 | `03-names.md` §3.22–§3.23;服务端 7+1 个文件已落码。**被客户端仓阻塞**(§8.0) |
-| 3 | **B5a** | 20 | B2c、B4b | `05-economy.md` + `90-consistency.md` part2 §1 |
-| 4 | **B5b** | 23 | B5a | `05-economy.md` §5.15–§5.29 + 顶部「接口终稿」块 |
+| ~~3~~ | ~~**B5a**~~ | 22 | B2c、B4b | **18 个已落码 2026-09-20**,4 个 xlsx 待跑脚本(§10.0);待用户验证(§10.4) |
+| 4 | **B5b** | 21 | B5a | `05-economy.md` §5.15–§5.29 + 顶部「接口终稿」块 |
 | 5 | **B5c** | 12 | B5b | `05-economy.md` §5.34–§5.40 |
-| 6 | **B5d** | ≤18 | B5b | **需先补详细设计**(S4 4.38/4.39 只给了接口) |
+| 6 | **B5d** | ≤18 | B5b | 详细设计已补:`07-rollback-fail-closed.md`(2026-09-20);落码前先让用户确认其中的拍板项 |
 | 7 | **B6a-srv** | 30 | B5b | `06-activities.md` |
 | 8 | **B6a-cli** | 9 | B6a-srv | 同上 |
 | 9 | **B6b-srv1** | 17 | B6a-srv | 同上;与组队、属性会话协调 |
@@ -165,9 +166,12 @@
    ——机器 A 的客户端领先约 542MB(含一个 320MB 的 PNG 提交),上行慢,整包推送在 100% 后被远端挂断(需分段推 + 调大 `http.postBuffer` + 钉 HTTP/1.1)。
    **在那几个提交落到远端之前,不要在本机旧基线上写任何客户端批次**(B3b 客户端、B5c、B6a-cli、B6b-cli):那会造出第二份分叉的 `GuildClient.cs`。
    接手前先 `git fetch` 客户端仓,确认 `GuildClient.cs` 已含 `ApplyJoinGuild` / `NotifyGuildChanged` 再动手。
-2. **本机没有 Python**(`py -3` 报 No Installed Pythons Found):导表器跑不了,B5a / B6a-srv 要用 openpyxl 改的 `Tip.xlsx`、`MessageLimiter.xlsx`
-   与新建的 `GuildDonate.xlsx` / `GuildShop.xlsx` / `GuildActivity.xlsx` 也做不了。装工具按 `AGENTS.md §10.2` 需用户授权(Python 3.12 + openpyxl)。
-   不要为了绕开它去手拆 xlsx 的 zip/XML——那是多会话共写的二进制,写坏了没有 3-way 合并可救。
+2. ~~**本机没有 Python**~~ —— **2026-09-20 晚已作废,当时的判断是错的**。本机有 **Python 3.14.7 + pip 26.2.1**(`py -3 -V` / `py -0` 都能看到;之前那句 `No Installed Pythons Found` 大概率是在 PATH 上撞到了 WindowsApps 的商店占位桩,没走 `py -3`)。
+   真实缺口只有一个:**导表器的 4 个依赖一个都没装**(`openpyxl` / `Jinja2` / `PyYAML` / `protobuf`,清单见 `tools/data_table_exporter/requirements.txt`)。一条命令补齐:
+   ```
+   py -3 -m pip install -r tools/data_table_exporter/requirements.txt
+   ```
+   装完之后 xlsx 与导表器都不再是阻塞。仍然不要为了绕开依赖去手拆 xlsx 的 zip/XML——那是多会话共写的二进制,写坏了没有 3-way 合并可救。
 
 ### 8.1 B3a-2 落码要点与欠账
 
@@ -460,6 +464,7 @@
 - **`proto/guild/guild_db.proto` 现在只有 4 个 message**(`guild` / `guild_player_state` / `guild_member` / `guild_application`),**资产三表一行都没有**。按 X-01,`guild_asset_op` / `guild_player_op_seq` / `guild_daily_counter` 的完整定义由 B5a 照 **`90-consistency.md` part2 §1** 原样写入 —— 不要去 S1 或 §5.6 找"增量列",那两处都不全。
 - **`go/guild/internal/data/tables.go` 的 `Tables()` 现在返回 4 张表**,新表要按 part2 §1 末尾给的**锁序**追加:guild → guild_player_state → guild_member → guild_application → guild_player_op_seq → guild_asset_op → guild_daily_counter。顺序即锁序,不能随便排。
 - B1 的测试已按 X-09 改成由 `Tables()` 派生,所以加表**不会**打挂 `len(Tables)==4` 那类断言;但新表形状的断言要自己在集成测试里补。
+  **(落码后订正,见 §10.2 ①:只有 `guild_test.go:228` 的表数断言是派生的;`guild_repo_test.go` 的 `guildTestDropTables` 仍是手写清单,加表必须同步追加。)**
 - `go/shared/assetop`、`go/shared/scenenode` 已由聚宝斋会话落码(`795ea9f6a`),**签名以磁盘上的 `go/shared/assetop/reconcile.go` 为准**,别照正文抄。
 
 ### 9.4 文件数与清单(正文的 21 是旧数)
@@ -473,7 +478,7 @@
 
 ### 9.5 按"要不要 Python"把 B5a 切成两半
 
-用户已拍板:**Python 由用户自己装,导表器 / proto-gen / 编译 / 测试也由用户自己跑**;Claude 只写代码与配表内容。本机目前 `py -3` 报 `No Installed Pythons Found`,所以:
+用户已拍板:**Python 由用户自己装,导表器 / proto-gen / 编译 / 测试也由用户自己跑**;Claude 只写代码与配表内容。(**2026-09-20 晚订正**:本机其实有 Python 3.14.7,缺的只是导表器的 4 个依赖,见 §8.0 阻塞 2;下面这条"两半"的切法仍然成立,B 半只是从"等装 Python"变成"等装依赖 + 等 proto-gen 发号"。)所以:
 
 **A. 现在就能做(不需要 Python,15 个左右)**
 
@@ -485,7 +490,7 @@
 - `cpp/generated/table/CMakeLists.txt` / `table.vcxproj` / `.filters` —— 登记两张新表的 `.cpp/.pb.cc/.h`。
 - `go/data_service` 的 `config.go` / `id_segment_store.go` / `etc/data_service.yaml` + `tools/scripts/k8s_deploy.ps1` —— `BootstrapTags` 加 `guild_asset_op` 号段(G-04)。**这四个文件必须与 B5b 同次或更早部署**,否则 guild 取不到号段,经济写 RPC 全挂。注意 Y-14:data_service 这几个文件多批共改,错误码一律"落码时末码 +1",不写死数字。
 
-**B. 等用户装完 Python 才能做(4 个 xlsx)**
+**B. 等依赖装齐才能做(4 个 xlsx)**
 
 - `data/GuildDonate.xlsx`(新,3 档)、`data/GuildShop.xlsx`(新,11 件)—— 默认数值见 `README.md` §4。
 - `data/tip/Tip.xlsx` —— `//guild_error` 组尾追加 10 个码(§5.12 / Y-05 的 B5a 一行)。
@@ -516,3 +521,216 @@
 ### 9.8 交付时必须写清
 
 按 `AGENTS.md §10.1`:Claude 不跑构建 / 测试 / 导表 / proto-gen,交付说明必须如实写「**未编译,待用户验证**」,并给出用户可直接执行的命令序列(工作目录、命令、前置清理、期望产物、通过标准、失败时保留什么)。B5a 的验证序列骨架在 `05-economy.md §5.42`,但**路径要换成本机 `D:\luyuan\wuxingqitan\mmorpg`**,且第 6 步的 `SHOW CREATE TABLE` 断言按 X-02 改成 `idx_guild_asset_op_2`。
+
+---
+
+## 10. B5a 落码记录(2026-09-20,机器 B;**未编译、未导表、未 proto-gen,待用户验证**)
+
+> 基线 `aecea79b0`。本节与 §9 冲突时以本节为准(§9 是开工前写的工作单,本节是落码后的事实)。
+> `05-economy.md` 正文被本批证伪的句子,汇总在该文件顶部新增的「B5a 落地订正」覆盖块里。
+> B5d 的详细设计另见 [07-rollback-fail-closed.md](./07-rollback-fail-closed.md)。
+
+### 10.0 先看这一条:导表前必须先建两个 xlsx
+
+`data/schema/guilddonate_table.proto`、`guildshop_table.proto` 已落盘,但 `data/GuildDonate.xlsx`、`GuildShop.xlsx` 当时还没有。**2026-09-20 晚已由用户跑 `new-tables` 生成,这条阻塞已解除**;下文保留作原因说明。
+**导表器要求 schema 与 xlsx 成对**(`tools/data_table_exporter/core/table_source.py:113-116`):现在任何人跑 `dev.bat gen` / `dev.bat export` /
+`gen_schema_index.py`,都会以「这些权威 schema 没有对应的源表:GuildDonate, GuildShop」整批失败,产物一个字节不落盘(读表在管线最前,连 Tip 发号都跑不到)。
+
+- 解法只有一步:`python tools/scripts/guild_b5a_xlsx_patch.py new-tables`(幂等)。两份 schema 的文件头也写了这句话,撞到报错的人打开 schema 就能看到。
+- **每小时自动 WIP 提交会把两份 schema 先单独带进 main**。另一台有 Python 的机器拉到后导表会失败,属预期;**两个 xlsx 只在一台机器上生成并提交**
+  (openpyxl 每次写出的字节都不同,两台各生成一份会撞成二进制 add/add 冲突),其它机器等 pull。
+- 同理,C++ 表工程已登记 12 个**尚不存在**的生成物(另有 B3a-1 登记的 `rolenamerule_*` 同样从未产出),所以**导表之前编 `table.vcxproj` 必然 C1083**,
+  而 scene / gate 都依赖它。顺序只能是:建 xlsx → 导表 → 才允许任何 C++ 构建。要在导表之前先编别的会话的 C++,用 `git worktree add` 到一个不含这三处登记的提交上编,
+  **不要在共用主工作树里 `git stash`**(期间文件会被别的会话改、被 WIP 任务卷走)。
+
+### 10.1 实际手改清单(A 半 18 个,已落;B 半 4 个 xlsx,待跑脚本)
+
+| # | 文件 | 改了什么 |
+|---|---|---|
+| 1 | `proto/guild/guild.proto` | 经济段:`GuildAssetOrderStatus`(含 `APPLIED_PARTIAL = 5`,X-15)、4 个视图、10 个请求/响应;`GuildService` 末尾 5 个 rpc |
+| 2 | `proto/guild/guild_db.proto` | 3 个枚举 + 资产三表,照 90 part2 §1;**没有** `DONATE_REFUND`(D2),4 号留空并写明原因 |
+| 3–4 | `data/schema/guilddonate_table.proto`、`guildshop_table.proto`(新) | 配表 schema |
+| 5–6 | `go/shared/gameday/gameday.go`、`gameday_test.go`(新) | 游戏日 / 游戏周;另导出 `PeriodNone/Daily/Weekly` 三个常量(与 `GuildShop.limit_period` 同值,免得 B5b 写魔法数) |
+| 7 | `go/guild/internal/data/tables.go` | `Tables()` 按锁序追加三表 |
+| 8 | `go/guild/internal/data/guild_repo_test.go` | **清单外 +1**:`guildTestDropTables` 加三表(10.2 ①) |
+| 9 | `go/guild/internal/session/session.go` | **从 B5b 提前**:`ClientMethods` 登记 5 个新方法(10.2 ②) |
+| 10 | `go/guild/internal/data/asset_tables_shape_test.go`(新) | **清单外 +1**:真库断言三表的键与索引(10.2 ③) |
+| 11–13 | `cpp/generated/table/CMakeLists.txt`、`table.vcxproj`、`table.vcxproj.filters` | 登记两张表的生成物:guilddonate 5 个文件、guildshop 7 个(带外键,多 `_fk.h/.cpp`);纯新增 53 行、0 删除 |
+| 14–17 | `go/data_service/internal/config/config.go`、`internal/store/id_segment_store.go`、`etc/data_service.yaml`、`tools/scripts/k8s_deploy.ps1` | `BootstrapTags` 加 `guild_asset_op` |
+| 18 | `tools/scripts/guild_b5a_xlsx_patch.py`(新) | B 半的配表内容 + 三个幂等子命令;**从未运行过**(静态评审过一轮,5 条意见已改) |
+| B1–B2 | `data/GuildDonate.xlsx`、`data/GuildShop.xlsx`(新) | **已生成(2026-09-20 晚,用户在终端跑 `new-tables`)**:3 行 / 11 行;读回逐格核对无误,`--dry-run` 复跑报"已是目标状态";`gen_schema_index.py` 已跑,索引 31 → 34 张(+RoleNameRule +GuildDonate +GuildShop),与预期一致 |
+| B3 | `data/tip/Tip.xlsx` | 脚本 `tip-codes` 在 `//guild_error` 组尾 insert_rows 10 行(预期发号 14022–14031) |
+| B4 | `data/MessageLimiter.xlsx` | 脚本 `message-limiter` 追加 5 行,**必须在 proto-gen 之后** |
+
+**最终数 = 18 + 4 = 22。** 相对 §5.41 的 21:−`GuildLevel.xlsx`(X-04)−`transaction_log.proto`(D2)−scene 白名单 −其测试
+(D2 复核:`asset_op_system.cpp` 的 `kAssetOpStreamRules` GUILD_CREDIT 行已含 `TX_GUILD_SHOP / TX_GUILD_ACTIVITY_REWARD`,确实不用动;§5.41 写的 `player_asset_op.cpp` 不存在)
++`tables.go` +`guild_repo_test.go` +`session.go` +形状测试 +脚本。
+文档(不计名额):号段清单的四处镜像(`deploy/k8s/README.md`、`deploy/k8s/AGENTS.md`、`docs/design/data_service_role_and_scope.md`、
+`xuanming-port-decisions-20260910.md` 的 D-14 补笔,G-07)、`05-economy.md` 顶部订正块、`90-consistency.md` 三处加注、`06-activities.md:455` 的索引名、`91` 的 B5a / B5b 两行。
+
+### 10.2 与工作单 / 设计不同的地方(都有依据)
+
+① **§9.3 说"加表不会打挂 `len(Tables)==4` 那类断言"——只对了一半。** `go/guild/guild_test.go:228` 确实已改成与 `data.Tables()` 比;
+但 `internal/data/guild_repo_test.go` 的 `guildTestDropTables` **仍是手写清单**,`TestDropListCoversTables` 断言 `len(Tables())+1`。不加就红,且集成用例会在残留表上跑。B6a / B6b 加表时同理。
+
+② **`session.go` 提前到 B5a。** `session_test.go` 的 `TestClientMethodsCoverEveryRPCExceptScoreWrites` 遍历 `ServiceDesc.Methods`,要求每个 rpc 要么在 `ClientMethods`、
+要么在 `internalOnly`——这条测试的设计意图就是"新增 rpc 必须当场表态"。五个方法语义上就是客户端方法(§5.5.3),所以与 proto 同批登记;
+B5b 落实现之前,它们过了会话闸门后由 `UnimplementedGuildServiceServer` 回 `Unimplemented`。客户端在 B5c 之前不会发这 5 个号。**B5b 清单相应 −1。**
+
+③ **形状测试。** X-09 要求"后续批次在各自集成测试里断言新表形状",part2 §1 末条要求核对复合唯一键真的建出来。与其留给人工 `SHOW CREATE TABLE`,
+不如写成断言:索引集合、每个索引的列序与唯一性、三个枚举列的类型。需 `GUILD_TEST_MYSQL_DSN`,未设即 Skip。
+
+④ **enum 列保持 enum,没有降成 uint32。** 核过 proto2mysql v0.1.1:enum → `int NOT NULL DEFAULT 0`;`go/schemamigrate/plan.go` 的主键类型白名单含 `EnumKind` 且有单测。
+trade 已有 enum 列进索引的先例;**enum 进复合主键(`guild_daily_counter.counter_kind`)在本仓生产 proto 里是第一次**,形状测试覆盖它。
+
+⑤ `GuildAssetOrderStatus` 补了 `APPLIED_PARTIAL = 5`(X-15);tip 文案标点随 `Tip.xlsx` 既有行用全角;GuildShop 204 的等级要求按 X-04 取 **6**。
+
+### 10.3 本批查出来、工作单里没有的事
+
+1. **schema 与 xlsx 必须成对**(10.0)。§9.5 那句"schema 是 .proto 文本文件,现在就能写"没提这个后果。已通知 friend 会话,它的用户执行序列会把 `new-tables` 排在最前。
+2. **Tip 的号不是按行位置发的。** 导表器把已发的号按码名持久化在 `tools/data_table_exporter/state/mapping/tip_enum_ids/tip_enum_ids.json`,新码名按表内出现顺序取本段最小空位
+   (`enum_gen._assign_tip_ids`)。所以"插到中间会让后面的码错位"是误解;"只追加在组尾"是 Y-05 的批次约定。**多会话各自导表时真正的冲突点是这份 state 文件**:
+   两边给新码发了同一个空位时,后合入的一方重导,不要手改 state。组头与说明行的判据是"`//` 后是否紧贴非空白"(不是"有没有 `base=`")。
+3. **聚宝斋的 `trade_asset_op` 号段从未登记。** `go/trade/internal/svc/assetchannel.go:47-54` 写明"必须登记四处",但四处清单里都没有它
+   (`git log -S'trade_asset_op' -- go/data_service tools/scripts/k8s_deploy.ps1` 为空)。staging / prod 的 `AllowAutoSeed=false` 下 trade 的资产指令取不到号。
+   **没替它加**(不是帮会线,且会与聚宝斋会话改同一行);挂给聚宝斋会话 / 用户。
+4. `data/AGENTS.md` 的配表索引现在就是陈旧的(写 31 张,缺 `RoleNameRule`);导表后跑 `gen_schema_index.py`,预期 31 → **34** 张(+RoleNameRule +GuildDonate +GuildShop),以生成器为准。
+5. 资产表里 `payload` / `resolved_by` / `resolve_reason` 会建成**可空**的 `MEDIUMBLOB` / `MEDIUMTEXT`(没有 NOT NULL、没有默认值)。B5b 的 INSERT 要显式写空值,
+   否则读出来是 NULL,`Scan` 进 `string` / `[]byte` 以外的类型会失败。trade 的同形表是同样的约束。
+
+### 10.4 用户验证序列(工作目录 `D:\luyuan\wuxingqitan\mmorpg`;全部未执行)
+
+```text
+【总则】串行执行;任何一步失败就停,保留该步完整输出(导表器 / 生成器末 200 行、第一个编译错误的上下文、失败用例输出)。
+        与 friend 会话的序列合并时,顺序为:本批 new-tables → 本批 tip-codes → friend tip-text → 导表 → proto-gen
+        → 两边各自的 message-limiter → 再导表。两份 xlsx 脚本都要 load→save 同一个文件,不得并发。
+        开始前:git status --short data/tip/Tip.xlsx data/MessageLimiter.xlsx 必须为空(90 清单 G-08)。
+
+0. 前置(**2026-09-20 晚实测**):本机已有 **Python 3.14.7 + pip 26.2.1**,但导表器的 4 个依赖一个都没装(`py -3 -m pip list` 只有 3 行)。一条命令补齐:
+     ```
+     py -3 -m pip install -r tools/data_table_exporter/requirements.txt
+     ```
+   `where python` 的第一条命中是 `WindowsAppspython.exe`(商店占位桩),所以**下面各步的 `python` 一律写 `py -3`**;§8.0 当初那句 "No Installed Pythons Found" 多半就是撞上了这个桩。
+   依赖清单含 `protobuf>=7.35.1,<8`(checked-in protoc 35.1 的 gencode 要求);openpyxl 在 3.14 上是纯 Python 包,装最新版即可。
+   要把脚本输出重定向进日志时,先执行 [Console]::OutputEncoding=[Text.Encoding]::UTF8(脚本强制 utf-8 输出,PowerShell 管道默认按 cp936 解码会显示乱码;只影响显示)。
+
+1. 建两张新配表(任何导表之前):
+     python tools/scripts/guild_b5a_xlsx_patch.py new-tables --dry-run
+     python tools/scripts/guild_b5a_xlsx_patch.py new-tables
+   期望:data/GuildDonate.xlsx、data/GuildShop.xlsx 出现;再跑一次输出"已是目标状态"。
+   失败保留:脚本输出。脚本从未运行过,异常栈若指向脚本自身的行号,把栈贴回来即可。
+
+2. Tip 加 10 个码:
+     python tools/scripts/guild_b5a_xlsx_patch.py tip-codes --dry-run     # 先看插入位置:应在 //friend_error 组头之前(现第 203 行)
+     python tools/scripts/guild_b5a_xlsx_patch.py tip-codes
+   期望:"//guild_error 段 22 -> 32 个码,其余 N 个段与原有 M 行逐格一致"。
+
+3. 导表:
+     dev.bat export
+     py tools/data_table_exporter/tools/gen_schema_index.py
+   通过标准:generated/tables/guilddonate.json 3 行、guildshop.json 11 行(204 的 required_guild_level = 6);
+     guild_error 的 tip 产物含 kGuildFundsInsufficient … kGuildContributionInsufficient 共 10 个新码,id = 14022..14031;
+     tip_enum_ids.json 的 diff 只增不改;
+     cpp/generated/table 下出现 code/guilddonate_table.{h,cpp}、code/guilddonate_table_comp.h、proto/guilddonate_table.pb.{h,cc}、
+     code/guildshop_table.{h,cpp}、code/guildshop_table_comp.h、code/guildshop_table_fk.{h,cpp}、proto/guildshop_table.pb.{h,cc}
+     (12 个,与工程登记逐一对上,缺任何一个都要回报);
+     data/AGENTS.md 索引出现 GuildDonate(8 列 / 3 行)、GuildShop(9 列 / 11 行 / 外键 item_id→Item.id)。
+   然后把两份 schema 与两个 xlsx 用同一条提交进库(如果 WIP 任务还没把 schema 带走;未跟踪文件要先 add,单用 commit -- <路径> 会报 pathspec 不匹配):
+     git add data/schema/guilddonate_table.proto data/schema/guildshop_table.proto data/GuildDonate.xlsx data/GuildShop.xlsx
+     git commit -- data/schema/guilddonate_table.proto data/schema/guildshop_table.proto data/GuildDonate.xlsx data/GuildShop.xlsx
+
+4. proto-gen(dev.bat proto 会先重建 proto-gen.exe;本机那份是 09-09 的旧构建,不重建会吞掉 scene_node_service.cpp 的 Agones 块):
+   【2026-09-20 晚实况,先读】22:10:40 有一次 proto-gen 是**旧的 09-09 生成器**跑的(当时 proto-gen-build 因 protogen 仍 require
+   被移动过的 proto2mysql v0.1.0 而失败,旧版 dev_tools.ps1 没中止、照旧拿旧 exe 跑)。后果与处置:
+   - protogen 已由"Data table exporter schema errors"会话按 D-14 改到 v0.1.1 + replace(未编译);dev_tools.ps1 的 Invoke-ProtoGenBuild
+     已改成 go build 失败即 throw。protogen 目录要先跑一次 go mod tidy 补全 go.sum(v0.1.1 新带 gorm / go-sql-driver 等)。
+   - **scene_node_service.cpp 的 Agones 块被吞了**(本机 git diff:-35 行,AcquireCreatePermitBlocking 命中 0)。
+     任何 C++ 构建之前必须先恢复,并在正确的生成器跑完后复查仍命中。
+   - 那次运行已把本批 5 个方法写进 proto/message_id.txt,**下次运行保留这些号**:
+       GuildServiceDonateToGuild=53、GuildServiceUpgradeGuild=76、GuildServiceGetGuildDonateOptions=120、
+       GuildServiceGetGuildShop=228、GuildServiceBuyGuildShopGoods=233。
+     其中 53 / 76 / 120 是 friend 改名(FriendService → ClientPlayerFriend)释放出来、被生成器重新发出的号。
+     项目未上线,可以接受;代价是**旧客户端构建若还发旧的 FriendService 号,会落到帮会经济方法上**,客户端必须随 B5c 重生 MessageIds.cs。
+     MessageLimiter.xlsx 里这 5 个号目前都没有行(已核),message-limiter 会干净追加 5 行。
+   - 当前 message_id.txt 最大 id = 238,正确生成器跑完后 kMaxRpcMethodCount 应为 239。
+
+     dev.bat proto
+   通过标准:git diff proto/message_id.txt 里属于本批的新增恰好 5 行
+     GuildService{GetGuildDonateOptions,DonateToGuild,UpgradeGuild,GetGuildShop,BuyGuildShopGoods},且号码与上面记下的 53/76/120/228/233 一致;
+     除 friend 改名(FriendService* 行被 ClientPlayerFriend* 取代)与 data_service 三个名字 rpc 之外,已有行的号一个不变;
+     go/proto/guild/guild.pb.go 含 GuildShopOrderView 与 GUILD_ASSET_ORDER_STATUS_APPLIED_PARTIAL,
+     guild_db.pb.go 含 GuildAssetOpRecord / GuildPlayerOpSeqRecord / GuildDailyCounterRecord;
+     git grep -n DONATE_REFUND -- proto go/proto 为 0 行(D2);
+     记录 kMaxRpcMethodCount,应 = message_id.txt 最大 id + 1(G-06:生成器报容量错就停,不手改上限);
+     Select-String cpp/nodes/scene/handler/grpc/scene_node_service.cpp -Pattern AcquireCreatePermitBlocking 必须命中(G-08)。
+
+5. 限流行(proto-gen 之后):
+     python tools/scripts/guild_b5a_xlsx_patch.py message-limiter --dry-run
+     python tools/scripts/guild_b5a_xlsx_patch.py message-limiter
+     dev.bat export
+   通过标准:generated/tables/messagelimiter.json 能查到这 5 个 id(读 10 / 写 5,窗口 1s,tip 1000)。
+
+6. Go(各自目录;gofmt 只看本批文件):
+     cd go\shared       ; gofmt -l gameday ; go vet ./gameday/... ; go test ./gameday/... -count=1
+     cd go\data_service ; go vet ./internal/config/... ./internal/store/... ; go test ./internal/config/... ./internal/store/... -count=1
+     cd go\guild        ; gofmt -l internal/data/tables.go internal/data/guild_repo_test.go internal/data/asset_tables_shape_test.go internal/session/session.go
+                          go build ./... ; go vet ./... ; go test ./... -count=1
+   通过标准:gofmt -l 无输出(有输出只对**列出的那几个本批文件**跑 gofmt -w,不要整目录格式化);gameday 全绿;
+     go/guild 里 TestDropListCoversTables、TestClientMethodsCoverEveryRPCExceptScoreWrites、TestNotifyPlaceholdersAreNeverClientCallable 绿;
+     未设 DSN 时真库用例为 SKIP。
+   注意:go/guild 还叠着 B2s / B3b 等从未编译过的批次,编译错误先看文件归属——不在 10.1 的 #7–#10 里的不是 B5a 引入的。
+
+7. 真库形状(本地 dev 账号,DSN 不写进文件;库名只能是 guild_test 或 guild_it_<pid>_<n>):
+     $env:GUILD_TEST_MYSQL_DSN = "<user>:<pass>@tcp(127.0.0.1:3306)/guild_test?parseTime=true"
+     cd go\guild ; go test ./internal/data -run TestAssetTablesShape -count=1 -v
+   通过标准:PASS。它断言 uk_guild_asset_op、idx_guild_asset_op_0/1/2 的列序、idx_guild_daily_counter_0、三个枚举列为 int。
+     失败 = proto2mysql 对复合唯一键 / 枚举主键的支持与预期不符:停下回报,不要退化成单列唯一键。
+
+8. 开发库(新表由 schemamigrate 自动补建,**不需要** DROP DATABASE):
+     cd go\data_service ; go run . -f etc/data_service.yaml -migrate
+     cd go\guild        ; go run . -f etc/guild.yaml -migrate
+   通过标准:全局库 SELECT biz_tag FROM id_segment WHERE biz_tag='guild_asset_op' 返回 1 行;
+     SHOW TABLES FROM mmorpg_guild 含 guild_player_op_seq / guild_asset_op / guild_daily_counter;
+     guild -migrate 退出码 0(3 = 迁移锁被占,4 = 有需人工项,保留输出)。
+
+9. C++(必须串行,且必须在第 3 步之后):
+     msbuild cpp\generated\table\table.vcxproj /m:1 /nr:false /p:Configuration=Debug /p:Platform=x64
+   通过标准:0 error。C1083 找不到 rolenamerule_* / guilddonate_* / guildshop_* = 第 3 步没产出对应文件,回到第 3 步查。
+
+10. robot(90 清单 Y-10:本批改了 robot 会 import 的 proto,须 vendor;05 §5.42 第 8 步"不要擅自 vendor"的说法被 Y-10 覆盖):
+     cd robot ; go mod vendor ; git status --short robot/vendor
+    通过标准:只出现 robot/vendor/proto/guild 下的生成文件(robot 现在不 import gameday);出现别的路径就停。
+
+部署顺序(Y-12,新增了客户端消息号):路由服 → gate(重载 MessageLimiter)→ guild。
+data_service 的四个号段文件必须与 B5b 同次或更早部署;存量环境先跑一次 data_service -migrate 建出 guild_asset_op 行。
+```
+
+### 10.5 给 B5b 的接口备忘
+
+- `GuildAssetOrderStatus`(客户端)与 `GuildAssetOpStatus`(库)数值逐项相同,视图装配可按值转换;新增状态两边同加。
+- `gameday.PeriodKey(row.limit_period, now)`:`ok=false` 当配置错误拒绝;`key=0` 表示不占计数行。一次请求只取一次 `now`。
+- `resolved_by` ≤64、`resolve_reason` ≤191 的长度库不保证(string 列是 `MEDIUMTEXT`),`assetopfix` 写入前自己校验;这三列可空,见 10.3 第 5 条。
+- op_id 号段的 biz_tag 在 `idsegment.Options.BizTag`(**不是** `Minter.Name`,后者只进日志);常量值 `"guild_asset_op"`。
+- B5b 清单:−`session.go`、−`tables.go`(都已随 B5a 落;X-09 让 B5b 加 `tables.go` 的那一项作废)。
+- **`GuildAssetStore.Finalize` 必须同写 `next_attempt_ms = nowMs`(B5d 设计 U5b,漏了是 fail-open)。** 05 §5.19.3 的 SQL 写了 `next_attempt_ms = ?now, updated_ms = ?now`,但 B5b 实现者真正照着写的 Store 契约——`go/shared/assetop/reconcile.go:136-138` 的 `Finalize` 注释——只列了 `status / durable / last_outcome / last_reason / updated_ms`,**没有 `next_attempt_ms`**(已核实)。照注释落码,终态行的 `next_attempt_ms` 会停在最后一次重排时刻,B5d 的回档检查(`next_attempt_ms > since`)漏行 = 回档复制资产,§5.22 的清理判龄也偏早。`assetopfix` 的人工终结同理。以 05 §5.19.3 为准;那条注释属 shared/assetop 的持有会话(聚宝斋),本批没改,B5b 交付前点名核对。
+- B6a 注意:`06-activities.md:1862` 评审表里仍有一处 `idx_guild_asset_op_3`(历史记录,未改),正文 :455 已订正为 `_2`。
+
+### 10.6 评审记录
+
+五个维度并行评审 + 逐维度对抗复核(默认每条发现是错的,证实才保留):协议与建表、gameday(含逐条手算 30 余个日期期望值)、工程 / 号段 / 表清单 / 白名单三个维度**零发现**;
+xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核对覆盖面、组头判据、措辞)全部已改;完整性 8 条(schema/xlsx 配对窗口、C++ 登记的顺序约束、
+交接记录缺失、验证序列漏项、四条文档过期)全部已处理,其中 1 条部分证伪(91 的 B5a 行当时已改)。
+
+### 10.7 提交
+
+本批**未提交**(等用户发话;每小时 WIP 任务可能先把它们带走,那是既成事实)。自己提交时按 §9.7:`git add` 逐路径 → `git diff --cached` 逐行看 → `git commit`。
+未跟踪的新文件要逐个列:`data/schema/guilddonate_table.proto`、`data/schema/guildshop_table.proto`、`go/shared/gameday/gameday.go`、`go/shared/gameday/gameday_test.go`、
+`go/guild/internal/data/asset_tables_shape_test.go`、`tools/scripts/guild_b5a_xlsx_patch.py`、`docs/design/guild-phase2/07-rollback-fail-closed.md`。
+不要带上 `tools/scripts/friend_xlsx_patch.py`(friend 会话的)。
+
+**两个与 friend 会话共用、不能整文件提交的文件**(2026-09-20 晚核实):
+- `tools/scripts/k8s_deploy.ps1` 有两个互不相干的未提交 hunk:**本批只有约 2273 行那一行**(`BootstrapTags` 加 `guild_asset_op`);约 2833 行 friend ConfigMap 的 Sweep 段注释是 friend 会话的。只暂存自己那一块:
+  - 手工:`git add -p tools/scripts/k8s_deploy.ps1`,对含 `guild_asset_op` 的 hunk 答 `y`、其余答 `n`;
+  - 或非交互:`git diff -U0 -- tools/scripts/k8s_deploy.ps1 > k8s.patch`,手删掉 `@@ -2833` 起的那个 hunk,再 `git apply --cached --unidiff-zero k8s.patch`。
+  - 暂存后 `git diff --cached -- tools/scripts/k8s_deploy.ps1` 必须只剩 1 删 1 增。
+- `PROGRESS.md` 末尾是两条相邻的未提交条目(本批 B5a 一条、friend 一条)。两边已约定:谁先提交就一并带走对方那条,但提交说明里只写自己的工作。

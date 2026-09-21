@@ -413,8 +413,9 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   - `Kafka.TopicGeneration`:同样从服务 yaml 镜像(当前 `1`),有效 topic 名 = `<基名>_g<N>`,当前集群消费第几代 topic 在 ConfigMap 里一眼可见;
     改分区数 = 这个数 +1,绝不原地扩分区,见下面「Kafka 审计 topic 预建」。
   - `IdSegment`:`AllowAutoSeed` dev 档取服务 yaml 的值(`true`),staging / prod 固定 `false`(与 `Schema.AutoMigrate` 同一条纪律;为什么见下面「恢复全局库」一条);
-    `BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing]` 与服务 yaml / Go 的 `DefaultIdSegmentBootstrapTags` 同一份清单,新增永久身份两边同加
-    (`trade_listing` = 聚宝斋 listing_id,2026-09-14 加,见下面「聚宝斋 trade」)。
+    `BootstrapTags: [player, guild, item, txlog, snapshot, trade_listing, guild_asset_op]` 与服务 yaml / Go 的 `DefaultIdSegmentBootstrapTags` 同一份清单,新增永久身份两边同加
+    (`trade_listing` = 聚宝斋 listing_id,2026-09-14 加,见下面「聚宝斋 trade」;`guild_asset_op` = 帮会资产指令 op_id,2026-09-20 帮会二期 B5a 加,
+    消费表在独占库 `mmorpg_guild`。**存量集群要先让 data-service 跑一次 `-migrate` 建出这一行,再上 guild 的经济功能**,否则 guild 取不到号、经济写 RPC 全部失败)。
   - `manifests/go-svc/data-service.yaml` 的 Deployment 现在是 `strategy: Recreate` + `replicas: 1`:快照消费者按 guid 去重是「单条语句 + 间隙锁」,
     两个实例重叠不会写坏数据,但会互相等锁、消费组反复 rebalance,没有任何好处;换版本时短暂停一下,消息留在 topic 里(30 天保留期)。
 - **全局库预建**:`infra-up` 的 `mysql-init-sql` ConfigMap 现在多生成一份 `02_k8s_global_db.sql`
@@ -425,7 +426,7 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   否则 data-service 只剩 `schema auto-migrate failed`,login 建角全部失败。
   本地 compose 的对应物是 `deploy/mysql-init/00_init_zone_dbs.sql` 顺带建的 `testdb`(`go/data_service/etc/data_service.yaml` 用),同样只对空数据卷生效。
 - **恢复全局库前须先核对 `id_segment.max_id` ≥ 消费表最大号(这是 ID 安全事件,不是普通的库恢复)**:`id_segment` 每行是一种永久身份的发号水位
-  (`biz_tag` = `player` / `guild` / `item` / `txlog` / `snapshot` / `trade_listing`;`max_id` 是下一个要发出去的号,领段 = `SELECT ... FOR UPDATE` 后 `max_id += step`)。
+  (`biz_tag` = `player` / `guild` / `item` / `txlog` / `snapshot` / `trade_listing` / `guild_asset_op`;`max_id` 是下一个要发出去的号,领段 = `SELECT ... FOR UPDATE` 后 `max_id += step`)。
   把 `mmorpg_global` 从备份恢复,就是把水位倒回备份时刻,而备份之后领走的号早已成了消费侧的真实主键(各 zone 库 `player_database.player_id`、
   `guild.guild_id`、玩家 blob 里 bag 的 item guid、Kafka 两个 topic 里的 tx_id / snapshot_id)—— 水位一回退,下一次领段就把这些号**再发一遍**:
   login 的 `INSERT ... ON DUPLICATE KEY UPDATE` 会静默覆盖别人的角色行,流水表的 `INSERT IGNORE` 会静默丢掉**新**流水。顺序必须是:
@@ -433,7 +434,8 @@ pwsh -File tools/scripts/dev_tools.ps1 -Command k8s-all-down -ZonesConfigPath de
   2. 对每个 `biz_tag` 拿到消费侧最大号:`player` = **每个 zone 库**的 `SELECT MAX(player_id) FROM player_database` 取最大;`guild` = `SELECT MAX(guild_id) FROM guild`;
      `item` = 各 zone 库玩家 blob 里 bag 的最大 guid;`txlog` / `snapshot` = Kafka `transaction_log_topic_g<N>` / `player_snapshot_topic_g<N>` 里的最大 tx_id / snapshot_id
      (`transaction_log` / `player_snapshot` 表与 `id_segment` 同库,恢复后同库 `MAX()` 不是独立证据);
-     `trade_listing` = `SELECT MAX(listing_id) FROM mmorpg_trade.trade_listing`(独占库,不在全局库里,`-migrate` 不会替你查)。
+     `trade_listing` = `SELECT MAX(listing_id) FROM mmorpg_trade.trade_listing`(独占库,不在全局库里,`-migrate` 不会替你查);
+     `guild_asset_op` = `SELECT MAX(op_id) FROM mmorpg_guild.guild_asset_op`(同样是独占库;op_id 重发会撞 `guild_asset_op` 主键,捐献 / 兑换写不进去)。
      登记 / 核对 / 恢复这些库时,聚宝斋独占库 `mmorpg_trade`、好友独占库 `mmorpg_friend` 与 `mmorpg_global` 要分开处理,别只恢复其中一个
      (`mmorpg_friend` 不产号、没有 `id_segment` 水位问题,但它与各 zone 库的 `player_database` 有引用关系:
      只恢复好友库会留下指向已不存在玩家的好友边 —— 那是 `tools/data_consistency_check` 的 `checkFriendOrphans` 要查的东西)。

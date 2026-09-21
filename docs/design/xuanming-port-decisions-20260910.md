@@ -378,6 +378,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
    - `go/schemamigrate` 必须 require 一个**未被移动过、至少含 TiDB 选项和 191 索引前缀**的 tag(≥ `v0.1.1`)。
    - 不许 require `v0.1.0`:这个 tag 被移动过。
    - **2026-09-16 实测补充**:旧 module 路径 `github.com/luyuancpp/proto2mysql@v0.1.1` 的代理缓存仍是无 TiDB / unknown-fields 解码的旧内容,不能仅按版本字符串验收。`go/schemamigrate` 与主调用模块 `go/trade` 均保留旧 import/require,使用版本限定的远程映射 `replace github.com/luyuancpp/proto2mysql v0.1.1 => github.com/luyuan-cpp/proto2mysql v0.1.1`。新仓名发布包由官方 Go 代理核验到 `e90a5f0360eaf65794550713514a77f5a57c52a8`,包校验值 `h1:GsmiAKiXCiGjZaRCVutAsrlpShyZRcz71mVrAf+7U5A=`;两份 go.sum 由正常 tidy 生成,不关闭校验。以后新增主调用模块也须声明这条映射,因为依赖 module 的 replace 不传递。
+   - **2026-09-20 补:`tools/proto_generator/protogen` 也是主调用模块,当时漏了**(`internal/generator/go/db_model.go` 用 `NewDB` / `RegisterTable` / `GetCreateTableSQL`)。它一直 require `v0.1.0`,go.sum 在两台机器之间来回改(`c149b7c57` 改 `JrtG…`、`d5f5a32ed` 改回 `da7Y…`,后者才是 sumdb 记录的原文)。缓存里没有 zip 的新机器,代理对该版本返回 404,只能回落 direct 拉移动后的 tag,每次都报 `SECURITY ERROR`。已改为 require `v0.1.1`,加同一条 replace,go.sum 换成 `GsmiAK…` / `090lb…` 两行。v0.1.1 的 go.mod 与 v0.1.0 逐字相同,依赖图不变,无需 tidy。换版本不改变任何入库文件:SQL 落盘分支因路径拼接问题从不执行,只在控制台多出 3 行 unique-key 警告。新加任何 import proto2mysql 的 module,先 `git grep -n proto2mysql -- '*go.mod'` 对齐这条映射。
    - 不许 replace 到仓库外目录。
    - **replace 只在主模块生效**(2026-09-17 补,帮会二期 B1):`go/schemamigrate` 若以 module 路径 replace 解析
      proto2mysql(例如 `=> github.com/luyuan-cpp/proto2mysql v0.1.1`),依赖它的建表服务 module(trade、guild)
@@ -395,7 +396,7 @@ A 的 `pkg/` 里有四件**文件头自陈「抽自 mmorpg」**,它们是 B 的�
      tools/merge_zone 与 data_consistency_check 经 `-guild-schema`(默认 `mmorpg_guild`)限定库名(B1b)。
    - 开发期改表纪律(只追加;索引组只追加到末尾;缺普通索引即拒启)见 `docs/design/guild-phase2/01-storage.md` §6.4。
    - §9 清单对 `mmorpg_guild` 的结论:带 zone 的行只有 `guild.zone_id`(merge_zone 步骤 3 已覆盖);
-     biz_tag `guild` 已在 BootstrapTags,`guild_asset_op` 随 B5 加入;TiDB BR 按库恢复清单加入 `mmorpg_guild`。
+     biz_tag `guild` 已在 BootstrapTags,`guild_asset_op` 已于 B5a(2026-09-20)加入四处清单(config / store / 服务 yaml / k8s_deploy.ps1);TiDB BR 按库恢复清单加入 `mmorpg_guild`。
    - TiDB Phase 1 是逻辑库对逻辑库迁移,库名不改。
    - data_service 和 go/db 本轮不改迁移路径(见遗留)。
 9. **每个新库的上线清单**

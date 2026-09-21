@@ -374,6 +374,63 @@ void SendDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nod
 void SendDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nodeEntity, const ::data_service::AllocateIdSegmentRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 void SendDataServiceAllocateIdSegment(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
+#pragma region DataServiceReservePlayerName
+
+struct AsyncDataServiceReservePlayerNameGrpcClient {
+    uint32_t messageId{ DataServiceReservePlayerNameMessageId };
+    ClientContext context;
+    Status status;
+    ::data_service::ReservePlayerNameResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::data_service::ReservePlayerNameResponse>> response_reader;
+};
+
+class ::data_service::ReservePlayerNameRequest;
+using AsyncDataServiceReservePlayerNameHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::data_service::ReservePlayerNameResponse&)>;
+extern AsyncDataServiceReservePlayerNameHandlerFunctionType AsyncDataServiceReservePlayerNameHandler;
+
+void SendDataServiceReservePlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ReservePlayerNameRequest& request);
+void SendDataServiceReservePlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ReservePlayerNameRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendDataServiceReservePlayerName(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region DataServiceReleasePlayerName
+
+struct AsyncDataServiceReleasePlayerNameGrpcClient {
+    uint32_t messageId{ DataServiceReleasePlayerNameMessageId };
+    ClientContext context;
+    Status status;
+    ::google::protobuf::Empty reply;
+    std::unique_ptr<ClientAsyncResponseReader<::google::protobuf::Empty>> response_reader;
+};
+
+class ::data_service::ReleasePlayerNameRequest;
+using AsyncDataServiceReleasePlayerNameHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::google::protobuf::Empty&)>;
+extern AsyncDataServiceReleasePlayerNameHandlerFunctionType AsyncDataServiceReleasePlayerNameHandler;
+
+void SendDataServiceReleasePlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ReleasePlayerNameRequest& request);
+void SendDataServiceReleasePlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::ReleasePlayerNameRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendDataServiceReleasePlayerName(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region DataServiceBatchGetPlayerName
+
+struct AsyncDataServiceBatchGetPlayerNameGrpcClient {
+    uint32_t messageId{ DataServiceBatchGetPlayerNameMessageId };
+    ClientContext context;
+    Status status;
+    ::data_service::BatchGetPlayerNameResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::data_service::BatchGetPlayerNameResponse>> response_reader;
+};
+
+class ::data_service::BatchGetPlayerNameRequest;
+using AsyncDataServiceBatchGetPlayerNameHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::data_service::BatchGetPlayerNameResponse&)>;
+extern AsyncDataServiceBatchGetPlayerNameHandlerFunctionType AsyncDataServiceBatchGetPlayerNameHandler;
+
+void SendDataServiceBatchGetPlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::BatchGetPlayerNameRequest& request);
+void SendDataServiceBatchGetPlayerName(entt::registry& registry, entt::entity nodeEntity, const ::data_service::BatchGetPlayerNameRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendDataServiceBatchGetPlayerName(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
 void SetDataServiceHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void SetDataServiceIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void HandleDataServiceCompletedQueueMessage(entt::registry& registry, entt::entity nodeEntity, grpc::CompletionQueue& completeQueueComp, GrpcTag* grpcTag);

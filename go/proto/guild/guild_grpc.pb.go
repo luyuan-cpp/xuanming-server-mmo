@@ -38,6 +38,11 @@ const (
 	GuildService_UpdateGuildScore_FullMethodName        = "/guildpb.GuildService/UpdateGuildScore"
 	GuildService_GetGuildRank_FullMethodName            = "/guildpb.GuildService/GetGuildRank"
 	GuildService_GetGuildRankByGuild_FullMethodName     = "/guildpb.GuildService/GetGuildRankByGuild"
+	GuildService_GetGuildDonateOptions_FullMethodName   = "/guildpb.GuildService/GetGuildDonateOptions"
+	GuildService_DonateToGuild_FullMethodName           = "/guildpb.GuildService/DonateToGuild"
+	GuildService_UpgradeGuild_FullMethodName            = "/guildpb.GuildService/UpgradeGuild"
+	GuildService_GetGuildShop_FullMethodName            = "/guildpb.GuildService/GetGuildShop"
+	GuildService_BuyGuildShopGoods_FullMethodName       = "/guildpb.GuildService/BuyGuildShopGoods"
 )
 
 // GuildServiceClient is the client API for GuildService service.
@@ -72,6 +77,13 @@ type GuildServiceClient interface {
 	UpdateGuildScore(ctx context.Context, in *UpdateGuildScoreRequest, opts ...grpc.CallOption) (*UpdateGuildScoreResponse, error)
 	GetGuildRank(ctx context.Context, in *GetGuildRankRequest, opts ...grpc.CallOption) (*GetGuildRankResponse, error)
 	GetGuildRankByGuild(ctx context.Context, in *GetGuildRankByGuildRequest, opts ...grpc.CallOption) (*GetGuildRankByGuildResponse, error)
+	// 帮会经济(B5)。五个都是客户端方法,已进 go/guild session.ClientMethods;
+	// 身份一律取会话,无会话的内部调用由 logic 拒绝。B5a 只落协议,实现在 B5b(此前回 Unimplemented)。
+	GetGuildDonateOptions(ctx context.Context, in *GetGuildDonateOptionsRequest, opts ...grpc.CallOption) (*GetGuildDonateOptionsResponse, error)
+	DonateToGuild(ctx context.Context, in *DonateToGuildRequest, opts ...grpc.CallOption) (*DonateToGuildResponse, error)
+	UpgradeGuild(ctx context.Context, in *UpgradeGuildRequest, opts ...grpc.CallOption) (*UpgradeGuildResponse, error)
+	GetGuildShop(ctx context.Context, in *GetGuildShopRequest, opts ...grpc.CallOption) (*GetGuildShopResponse, error)
+	BuyGuildShopGoods(ctx context.Context, in *BuyGuildShopGoodsRequest, opts ...grpc.CallOption) (*BuyGuildShopGoodsResponse, error)
 }
 
 type guildServiceClient struct {
@@ -262,6 +274,56 @@ func (c *guildServiceClient) GetGuildRankByGuild(ctx context.Context, in *GetGui
 	return out, nil
 }
 
+func (c *guildServiceClient) GetGuildDonateOptions(ctx context.Context, in *GetGuildDonateOptionsRequest, opts ...grpc.CallOption) (*GetGuildDonateOptionsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetGuildDonateOptionsResponse)
+	err := c.cc.Invoke(ctx, GuildService_GetGuildDonateOptions_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) DonateToGuild(ctx context.Context, in *DonateToGuildRequest, opts ...grpc.CallOption) (*DonateToGuildResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DonateToGuildResponse)
+	err := c.cc.Invoke(ctx, GuildService_DonateToGuild_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) UpgradeGuild(ctx context.Context, in *UpgradeGuildRequest, opts ...grpc.CallOption) (*UpgradeGuildResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpgradeGuildResponse)
+	err := c.cc.Invoke(ctx, GuildService_UpgradeGuild_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) GetGuildShop(ctx context.Context, in *GetGuildShopRequest, opts ...grpc.CallOption) (*GetGuildShopResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetGuildShopResponse)
+	err := c.cc.Invoke(ctx, GuildService_GetGuildShop_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *guildServiceClient) BuyGuildShopGoods(ctx context.Context, in *BuyGuildShopGoodsRequest, opts ...grpc.CallOption) (*BuyGuildShopGoodsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BuyGuildShopGoodsResponse)
+	err := c.cc.Invoke(ctx, GuildService_BuyGuildShopGoods_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // GuildServiceServer is the server API for GuildService service.
 // All implementations must embed UnimplementedGuildServiceServer
 // for forward compatibility.
@@ -294,6 +356,13 @@ type GuildServiceServer interface {
 	UpdateGuildScore(context.Context, *UpdateGuildScoreRequest) (*UpdateGuildScoreResponse, error)
 	GetGuildRank(context.Context, *GetGuildRankRequest) (*GetGuildRankResponse, error)
 	GetGuildRankByGuild(context.Context, *GetGuildRankByGuildRequest) (*GetGuildRankByGuildResponse, error)
+	// 帮会经济(B5)。五个都是客户端方法,已进 go/guild session.ClientMethods;
+	// 身份一律取会话,无会话的内部调用由 logic 拒绝。B5a 只落协议,实现在 B5b(此前回 Unimplemented)。
+	GetGuildDonateOptions(context.Context, *GetGuildDonateOptionsRequest) (*GetGuildDonateOptionsResponse, error)
+	DonateToGuild(context.Context, *DonateToGuildRequest) (*DonateToGuildResponse, error)
+	UpgradeGuild(context.Context, *UpgradeGuildRequest) (*UpgradeGuildResponse, error)
+	GetGuildShop(context.Context, *GetGuildShopRequest) (*GetGuildShopResponse, error)
+	BuyGuildShopGoods(context.Context, *BuyGuildShopGoodsRequest) (*BuyGuildShopGoodsResponse, error)
 	mustEmbedUnimplementedGuildServiceServer()
 }
 
@@ -357,6 +426,21 @@ func (UnimplementedGuildServiceServer) GetGuildRank(context.Context, *GetGuildRa
 }
 func (UnimplementedGuildServiceServer) GetGuildRankByGuild(context.Context, *GetGuildRankByGuildRequest) (*GetGuildRankByGuildResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetGuildRankByGuild not implemented")
+}
+func (UnimplementedGuildServiceServer) GetGuildDonateOptions(context.Context, *GetGuildDonateOptionsRequest) (*GetGuildDonateOptionsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetGuildDonateOptions not implemented")
+}
+func (UnimplementedGuildServiceServer) DonateToGuild(context.Context, *DonateToGuildRequest) (*DonateToGuildResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DonateToGuild not implemented")
+}
+func (UnimplementedGuildServiceServer) UpgradeGuild(context.Context, *UpgradeGuildRequest) (*UpgradeGuildResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpgradeGuild not implemented")
+}
+func (UnimplementedGuildServiceServer) GetGuildShop(context.Context, *GetGuildShopRequest) (*GetGuildShopResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetGuildShop not implemented")
+}
+func (UnimplementedGuildServiceServer) BuyGuildShopGoods(context.Context, *BuyGuildShopGoodsRequest) (*BuyGuildShopGoodsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BuyGuildShopGoods not implemented")
 }
 func (UnimplementedGuildServiceServer) mustEmbedUnimplementedGuildServiceServer() {}
 func (UnimplementedGuildServiceServer) testEmbeddedByValue()                      {}
@@ -703,6 +787,96 @@ func _GuildService_GetGuildRankByGuild_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _GuildService_GetGuildDonateOptions_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGuildDonateOptionsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).GetGuildDonateOptions(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_GetGuildDonateOptions_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).GetGuildDonateOptions(ctx, req.(*GetGuildDonateOptionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_DonateToGuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DonateToGuildRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).DonateToGuild(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_DonateToGuild_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).DonateToGuild(ctx, req.(*DonateToGuildRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_UpgradeGuild_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpgradeGuildRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).UpgradeGuild(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_UpgradeGuild_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).UpgradeGuild(ctx, req.(*UpgradeGuildRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_GetGuildShop_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetGuildShopRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).GetGuildShop(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_GetGuildShop_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).GetGuildShop(ctx, req.(*GetGuildShopRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _GuildService_BuyGuildShopGoods_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BuyGuildShopGoodsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(GuildServiceServer).BuyGuildShopGoods(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: GuildService_BuyGuildShopGoods_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(GuildServiceServer).BuyGuildShopGoods(ctx, req.(*BuyGuildShopGoodsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // GuildService_ServiceDesc is the grpc.ServiceDesc for GuildService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -781,6 +955,26 @@ var GuildService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetGuildRankByGuild",
 			Handler:    _GuildService_GetGuildRankByGuild_Handler,
+		},
+		{
+			MethodName: "GetGuildDonateOptions",
+			Handler:    _GuildService_GetGuildDonateOptions_Handler,
+		},
+		{
+			MethodName: "DonateToGuild",
+			Handler:    _GuildService_DonateToGuild_Handler,
+		},
+		{
+			MethodName: "UpgradeGuild",
+			Handler:    _GuildService_UpgradeGuild_Handler,
+		},
+		{
+			MethodName: "GetGuildShop",
+			Handler:    _GuildService_GetGuildShop_Handler,
+		},
+		{
+			MethodName: "BuyGuildShopGoods",
+			Handler:    _GuildService_BuyGuildShopGoods_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

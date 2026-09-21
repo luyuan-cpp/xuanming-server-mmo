@@ -38,6 +38,25 @@
 >   `MMORPG_ASSET_OP_SECRET_GUILD` 时**必须从该文件取**,90 清单 G-04 里原来写死的
 >   `change-me-dev-asset-op-guild-secret-000000` 已作废 —— 写死值会被人抄进预发环境。
 
+> ## B5a 落地订正(2026-09-20,效力高于本节正文;落码事实与验证序列见 92-handoff.md §10)
+>
+> B5a 已落码(未编译)。正文里下列句子**已作废**,B5b / B5c / B6 不要照抄:
+>
+> | 位置 | 作废的写法 | 以此为准 |
+> |---|---|---|
+> | §5.2 B1 行、§5.6 全节、§5.43-1 | "B1 建 8 张表""21–25 增量列""缺列由 B5a 补" | 资产三表由 B5a 照 90 清单 part2 §1 **整体新建**(`guild_db.proto`),没有增量列一说 |
+> | §5.6 / §5.15 / §5.19 / §5.21 / §5.42 第 6 步 | `idx_guild_asset_op_3 (player_id,stream,status,seq)` | **`idx_guild_asset_op_2 (player_id,stream,stream_epoch,status,seq)`**(索引名从 0 起,X-02;列序含 `stream_epoch`)。形状由 `go/guild/internal/data/asset_tables_shape_test.go` 断言,不要手抄 `SHOW CREATE TABLE` 字面量 |
+> | §5.6 `DONATE_REFUND = 4`、§5.7 全节、§5.8 末句"退款指令同样从这个号段取 id" | 退款分支 | D2:不做。`GuildAssetOpKind` 的 4 号未占用;`transaction_log.proto` 与 scene 白名单不动(白名单实际在 `asset_op_system.cpp` 的 `kAssetOpStreamRules`,§5.41 写的 `player_asset_op.cpp` 不存在) |
+> | §5.5.1 `GuildAssetOrderStatus` | 只到 `ABORTED = 4` | 另有 `APPLIED_PARTIAL = 5`(X-15,已落) |
+> | §5.8 的四个行号 | `config.go:94-99` 等 | 行号已漂移,按符号名 `DefaultIdSegmentBootstrapTags` / `BootstrapTags` 找;四处已加 `guild_asset_op` |
+> | §5.9 引言 | "第 5 行由导表器按 schema 注释回填""只改 `GuildLevel.xlsx` 的 `upgrade_cost_funds`" | 导表器不回写 xlsx;第 5 行是 schema 注释首行的投影,由 `strip_header_rows.py --decorate` 或 `tools/scripts/guild_b5a_xlsx_patch.py new-tables` 写。B5a **不改** `GuildLevel.xlsx`(X-04 / D1) |
+> | §5.10 GuildRule 行、GuildLevel 5 级改列表与"630,000"估算 | B2 旧稿 | 以 `02-management.md` §3.1 与现行 `data/GuildRule.xlsx` / `GuildLevel.xlsx`(10 级,累计 4,050,000)为准,B5 不改这两张表 |
+> | §5.10 GuildShop 204 | `required_guild_level` 5,"从 6 改为 5" | **6**(X-04;GuildLevel 有 10 级) |
+> | §5.12 文案 | 半角标点 | 随 `Tip.xlsx` 既有行用全角;10 个码与顺序以 90 清单 Y-05 的 B5a 一行为准 |
+> | §5.41 B5a 清单"手改 21" | 21 个文件 | 实际 18 + 4 个 xlsx,明细见 92-handoff.md §10.1;`session.go` 与 `tables.go` 已随 B5a 落,B5b 清单相应删去 |
+> | §5.42 | 工作目录 `E:work...`、`guildlevel.json … 20000`、`transaction_log.pb.go 含 TX_GUILD_DONATE_REFUND`、第 8 步"不要擅自 go mod vendor" | 验证序列以 92-handoff.md §10.4 为准;B5a 属于须 `go mod vendor` 的批次(90 清单 Y-10 效力高于本节) |
+> | **新增约束** | — | **配表 schema 与 xlsx 必须成对**:只有 `data/schema/*_table.proto` 而没有对应 xlsx,全仓导表整批失败。新加配表的批次(B6a 的 `GuildActivity`)必须让两者同一次提交 |
+
 # S5 捐献、帮会升级与帮会商店(B5a-d)
 > 本节由 9 个分部合并而成(原分部名保留在小标题里),另附对抗评审处理记录。
 

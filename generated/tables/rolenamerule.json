@@ -1,0 +1,13 @@
+{
+ "data": [
+  {
+   "desc": "角色名规则",
+   "generated_prefix": "道友",
+   "generated_suffix_len": 6,
+   "id": 1,
+   "max_chars": 12,
+   "max_generate_attempts": 5,
+   "min_chars": 2
+  }
+ ]
+}

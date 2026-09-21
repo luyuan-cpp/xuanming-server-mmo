@@ -349,13 +349,16 @@ func (l *EnterSceneLogic) EnterScene(in *scene_manager.EnterSceneRequest) (respo
 		//  没有位置记录(干净登出后的首次落点)同样只送连接,由第二条腿铸造。
 		//  currentZoneID == 0(旧位置无法确定 zone)≠ 任何目标 zone,按 b) 过门,fail-closed。
 		leavingZone := currentLoc != nil && currentZoneID != targetZoneId
-		// 指定了目标地图、且真的要动归属的放行,在不可回头点之前先**只读**看一眼这张图在目标 zone
+		// 真的要动归属的放行(无论是否指定地图),在不可回头点之前先**只读**看一眼这张图在目标 zone
 		// 开没开(CZ-5:失败要回源 scene 解冻并回 tip)。过了这一步就要铸 epoch、写等待落点、发 124,
 		// 源 scene 随即销毁实体 —— 地图问题留到第二条腿才发现,玩家已经没有"原地"可回。
 		// 与上面「不先解析场景」的约束不冲突:那条约束防的是预占式解析把**登录**重定向卡死在目标区的
-		// 过渡窗口里;login 发来的请求从不带 SceneConfId,只有 scene 替在线玩家发的跨 zone 传送会带,
-		// 拒绝它的后果只是玩家留在原地收到一条 tip。只送连接(!leavingZone)的重定向不写等待落点,不查。
-		if leavingZone && in.SceneConfId != 0 {
+		// 过渡窗口里;这里只看频道集合是否为空、不解析不预占,过渡窗口(频道在、暂时不可用)照常放行。
+		// 没指定地图(scene_conf_id = 0,proto 明文支持:由目标 zone 挑默认大世界;DevAutoPilot / robot、
+		// 以及要动归属的 login 重定向都是这个形态)同样要查:第二条腿对 conf=0 只找默认大世界、不回落,
+		// 这里放过一张没开的默认大世界,玩家就会在源实体已销毁之后落不了地。口径见 rejectTravelToUnopenedMap。
+		// 只送连接(!leavingZone)的重定向不写等待落点,不查。
+		if leavingZone {
 			if resp := l.rejectTravelToUnopenedMap(in, targetZoneId); resp != nil {
 				return resp, nil
 			}
@@ -823,25 +826,44 @@ func awaitingPlacementExpired(loc *scene_manager.PlayerLocation, now time.Time) 
 //   - 集合为空 = 这张图此刻没在目标 zone 开着。副本 / 镜像的 conf id、客户端乱填的 id、只在别的
 //     zone 开的图都落在这里(频道集合只登记 World 表里的图,由世界频道初始化与自动扩缩容维护);
 //   - 集合非空但频道暂时全不可用(节点刚换代、满员)照常放行:陈旧频道由第二条腿的解析懒修复,
-//     真落不进去时第二条腿回落默认大世界。这里拒它,就把目标区的过渡窗口变成了"传送不可用"。
+//     指定了地图(conf≠0)时真落不进去,第二条腿回落默认大世界;conf=0 本身就是默认大世界,
+//     没有回落(见下)。这里拒它,就把目标区的过渡窗口变成了"传送不可用"。
+//
+// 查哪张图 —— 必须与第二条腿解析时用的是同一张:
+//   - 请求指定了地图(conf≠0):就是它。第一条腿把它记进等待落点,第二条腿读出来解析。
+//   - 没指定(conf=0):第一条腿记下的 pending 也是 0,第二条腿走 resolveSceneForEnter(0, 0, zone),
+//     只找 defaultWorldConfID() 这一张图的频道,**不回落**(confFromPending=false)。所以这里也只查它,
+//     取值走同一个函数,两边不会各看一张图。World 表为空 = 第二条腿必然解析失败,fail-closed 拒绝。
 //
 // Redis 读失败按放行处理(fail-open):这道检查只为给玩家一个更早、更准的拒绝,不是安全门;
-// 归属安全由后面的换手门与 epoch CAS 保证,地图兜底由第二条腿的回落保证。
+// 归属安全由后面的换手门与 epoch CAS 保证。
 func (l *EnterSceneLogic) rejectTravelToUnopenedMap(in *scene_manager.EnterSceneRequest, targetZoneId uint32) *scene_manager.EnterSceneResponse {
-	channels, err := l.svcCtx.Redis.Scard(worldChannelsKey(targetZoneId, in.SceneConfId))
+	confID, mapKind := in.SceneConfId, "指定地图"
+	if confID == 0 {
+		mapKind = "默认大世界"
+		var ok bool
+		if confID, ok = defaultWorldConfID(); !ok {
+			metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonTravelMapUnavailable)
+			l.Logger.Errorf("[Travel] 跨 zone 传送被拒:请求未指定地图,而默认大世界未配置(World 表为空),未改任何状态: player=%d gate_zone=%d target_zone=%d",
+				in.PlayerId, in.GateZoneId, targetZoneId)
+			return errResp(constants.ErrNoAvailableNode,
+				fmt.Sprintf("no default world scene configured for target zone %d; player state untouched", targetZoneId))
+		}
+	}
+	channels, err := l.svcCtx.Redis.Scard(worldChannelsKey(targetZoneId, confID))
 	if err != nil {
-		l.Logger.Errorf("[Travel] 读目标 zone 的世界频道集合失败,跳过地图预检(第二条腿有回落兜底): player=%d target_zone=%d scene_conf_id=%d err=%v",
-			in.PlayerId, targetZoneId, in.SceneConfId, err)
+		l.Logger.Errorf("[Travel] 读目标 zone 的世界频道集合失败,跳过地图预检(由第二条腿自己解析): player=%d target_zone=%d map=%s scene_conf_id=%d err=%v",
+			in.PlayerId, targetZoneId, mapKind, confID, err)
 		return nil
 	}
 	if channels > 0 {
 		return nil
 	}
 	metrics.ObserveEnterSceneRejected(targetZoneId, rejectReasonTravelMapUnavailable)
-	l.Logger.Errorf("[Travel] 跨 zone 传送被拒:目标 zone 没有这张图的世界频道,未改任何状态: player=%d gate_zone=%d target_zone=%d scene_conf_id=%d",
-		in.PlayerId, in.GateZoneId, targetZoneId, in.SceneConfId)
+	l.Logger.Errorf("[Travel] 跨 zone 传送被拒:目标 zone 没有这张图的世界频道,未改任何状态: player=%d gate_zone=%d target_zone=%d map=%s scene_conf_id=%d",
+		in.PlayerId, in.GateZoneId, targetZoneId, mapKind, confID)
 	return errResp(constants.ErrNoAvailableNode,
-		fmt.Sprintf("no world channel for conf %d in target zone %d; player state untouched", in.SceneConfId, targetZoneId))
+		fmt.Sprintf("no world channel for conf %d in target zone %d; player state untouched", confID, targetZoneId))
 }
 
 // crossZonePlacement 描述跨 zone 重定向要不要动归属(由 EnterScene 第 2 步判定)。
@@ -1084,11 +1106,11 @@ func (l *EnterSceneLogic) resolveScene(sceneId uint64, sceneConfId uint64, zoneI
 
 	// Need a scene_conf_id to allocate.
 	if sceneConfId == 0 {
-		if wids := worldConfIds(); len(wids) > 0 {
-			sceneConfId = wids[0]
-		} else {
+		defaultConf, ok := defaultWorldConfID()
+		if !ok {
 			return 0, "", fmt.Errorf("no scene_conf_id provided and no default world scene configured")
 		}
+		sceneConfId = defaultConf
 	}
 
 	// Case 2: auto-select least-loaded channel.
@@ -1106,11 +1128,11 @@ func (l *EnterSceneLogic) resolveSceneForEnter(sceneId uint64, sceneConfId uint6
 	}
 
 	if sceneConfId == 0 {
-		if wids := worldConfIds(); len(wids) > 0 {
-			sceneConfId = wids[0]
-		} else {
+		defaultConf, ok := defaultWorldConfID()
+		if !ok {
 			return 0, "", false, fmt.Errorf("no scene_conf_id provided and no default world scene configured")
 		}
+		sceneConfId = defaultConf
 	}
 
 	sid, nid, err := ReserveBestWorldChannelForEnter(l.ctx, l.svcCtx, sceneConfId, zoneId)
@@ -1118,6 +1140,18 @@ func (l *EnterSceneLogic) resolveSceneForEnter(sceneId uint64, sceneConfId uint6
 		return 0, "", false, fmt.Errorf("no available channel for conf %d in zone %d", sceneConfId, zoneId)
 	}
 	return sid, nid, true, nil
+}
+
+// defaultWorldConfID 是「请求没指定地图(scene_conf_id = 0)时落哪张图」的唯一口径:World 表第一行
+// (FindAll 返回的是按表序的切片,顺序确定)。场景解析(resolveScene / resolveSceneForEnter)与跨 zone
+// 第一条腿的地图预检(rejectTravelToUnopenedMap)都从这里取 —— 预检与第二条腿必须看同一张图。
+// ok=false:World 表为空,没有默认大世界可落。
+func defaultWorldConfID() (uint64, bool) {
+	wids := worldConfIds()
+	if len(wids) == 0 {
+		return 0, false
+	}
+	return wids[0], true
 }
 
 // routePlayerToGate builds a GateCommand and pushes it to the gate's Kafka topic.

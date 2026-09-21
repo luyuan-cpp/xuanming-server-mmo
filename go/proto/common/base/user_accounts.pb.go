@@ -22,11 +22,17 @@ const (
 )
 
 type AccountSimplePlayer struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	PlayerId      uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
-	ClassId       uint32                 `protobuf:"varint,2,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"` // 职业(Class 配表 id);0 = 旧数据未设置
-	Gender        uint32                 `protobuf:"varint,3,opt,name=gender,proto3" json:"gender,omitempty"`                  // 1=男 2=女;0 = 旧数据未设置
-	ZoneId        uint32                 `protobuf:"varint,4,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`    // 建角归属区(建角时的 Node.ZoneId);0 = 旧数据未设置
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	ClassId  uint32                 `protobuf:"varint,2,opt,name=class_id,json=classId,proto3" json:"class_id,omitempty"` // 职业(Class 配表 id);0 = 旧数据未设置
+	Gender   uint32                 `protobuf:"varint,3,opt,name=gender,proto3" json:"gender,omitempty"`                  // 1=男 2=女;0 = 旧数据未设置
+	ZoneId   uint32                 `protobuf:"varint,4,opt,name=zone_id,json=zoneId,proto3" json:"zone_id,omitempty"`    // 建角归属区(建角时的 Node.ZoneId);0 = 旧数据未设置
+	// 角色名副本,建角时写入,只读(v1 无改名,内容不会变)。
+	// 真源是 data_service 全局库的 player_name 表(全服唯一)。
+	// 可能为空:self-heal 补出来的账号记录、早于名字功能的旧角色都没有这一份,
+	// 所以角色列表读到空名要回源 BatchGetPlayerName 补齐,不能直接显示空白。
+	// 见 docs/design/guild-phase2/03-names.md §3.9 / §3.12。
+	Name          string `protobuf:"bytes,5,opt,name=name,proto3" json:"name,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,6 +95,13 @@ func (x *AccountSimplePlayer) GetZoneId() uint32 {
 	return 0
 }
 
+func (x *AccountSimplePlayer) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 type AccountSimplePlayerList struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Players       []*AccountSimplePlayer `protobuf:"bytes,1,rep,name=players,proto3" json:"players,omitempty"`
@@ -137,12 +150,13 @@ var File_proto_common_base_user_accounts_proto protoreflect.FileDescriptor
 
 const file_proto_common_base_user_accounts_proto_rawDesc = "" +
 	"\n" +
-	"%proto/common/base/user_accounts.proto\"~\n" +
+	"%proto/common/base/user_accounts.proto\"\x92\x01\n" +
 	"\x13AccountSimplePlayer\x12\x1b\n" +
 	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x19\n" +
 	"\bclass_id\x18\x02 \x01(\rR\aclassId\x12\x16\n" +
 	"\x06gender\x18\x03 \x01(\rR\x06gender\x12\x17\n" +
-	"\azone_id\x18\x04 \x01(\rR\x06zoneId\"I\n" +
+	"\azone_id\x18\x04 \x01(\rR\x06zoneId\x12\x12\n" +
+	"\x04name\x18\x05 \x01(\tR\x04name\"I\n" +
 	"\x17AccountSimplePlayerList\x12.\n" +
 	"\aplayers\x18\x01 \x03(\v2\x14.AccountSimplePlayerR\aplayersB\x13Z\x11proto/common/baseb\x06proto3"
 

@@ -53,8 +53,11 @@ set(SOURCE_FILES
     code/equipslot_table.cpp
     code/dungeon_table_fk.cpp
     code/globalvariable_table.cpp
+    code/guilddonate_table.cpp
     code/guildlevel_table.cpp
     code/guildrule_table.cpp
+    code/guildshop_table.cpp
+    code/guildshop_table_fk.cpp
     code/item_table.cpp
     code/messagelimiter_table.cpp
     code/mirror_table.cpp
@@ -92,8 +95,10 @@ set(SOURCE_FILES
     proto/dungeon_table.pb.cc
     proto/equipslot_table.pb.cc
     proto/globalvariable_table.pb.cc
+    proto/guilddonate_table.pb.cc
     proto/guildlevel_table.pb.cc
     proto/guildrule_table.pb.cc
+    proto/guildshop_table.pb.cc
     proto/item_table.pb.cc
     proto/messagelimiter_table.pb.cc
     proto/mirror_table.pb.cc

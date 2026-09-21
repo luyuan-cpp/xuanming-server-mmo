@@ -39,6 +39,9 @@ const (
 	DataService_QueryTransactionLog_FullMethodName    = "/data_service.DataService/QueryTransactionLog"
 	DataService_CreateEventSnapshot_FullMethodName    = "/data_service.DataService/CreateEventSnapshot"
 	DataService_AllocateIdSegment_FullMethodName      = "/data_service.DataService/AllocateIdSegment"
+	DataService_ReservePlayerName_FullMethodName      = "/data_service.DataService/ReservePlayerName"
+	DataService_ReleasePlayerName_FullMethodName      = "/data_service.DataService/ReleasePlayerName"
+	DataService_BatchGetPlayerName_FullMethodName     = "/data_service.DataService/BatchGetPlayerName"
 )
 
 // DataServiceClient is the client API for DataService service.
@@ -78,6 +81,14 @@ type DataServiceClient interface {
 	// C++ scene 没有 MySQL 客户端,永久 ID(item guid 等)的号段经这里从 id_segment 表领取。
 	// 见 docs/design/node-id-overhaul-plan-20260908.md §6。
 	AllocateIdSegment(ctx context.Context, in *AllocateIdSegmentRequest, opts ...grpc.CallOption) (*AllocateIdSegmentResponse, error)
+	// ── Player name registry(角色名全服唯一)──────────────────────
+	// 真源是全局库 player_name 表(rollback_database_table.proto);zone 库
+	// player_database.profile_component 与 AccountSimplePlayer.name 都只是副本。
+	// 唯一性只有"全服一张表"才成立,所以登记必须过 data_service,不能各 zone 自己判重。
+	// 设计见 docs/design/guild-phase2/03-names.md §3.1。
+	ReservePlayerName(ctx context.Context, in *ReservePlayerNameRequest, opts ...grpc.CallOption) (*ReservePlayerNameResponse, error)
+	ReleasePlayerName(ctx context.Context, in *ReleasePlayerNameRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	BatchGetPlayerName(ctx context.Context, in *BatchGetPlayerNameRequest, opts ...grpc.CallOption) (*BatchGetPlayerNameResponse, error)
 }
 
 type dataServiceClient struct {
@@ -278,6 +289,36 @@ func (c *dataServiceClient) AllocateIdSegment(ctx context.Context, in *AllocateI
 	return out, nil
 }
 
+func (c *dataServiceClient) ReservePlayerName(ctx context.Context, in *ReservePlayerNameRequest, opts ...grpc.CallOption) (*ReservePlayerNameResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ReservePlayerNameResponse)
+	err := c.cc.Invoke(ctx, DataService_ReservePlayerName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) ReleasePlayerName(ctx context.Context, in *ReleasePlayerNameRequest, opts ...grpc.CallOption) (*emptypb.Empty, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(emptypb.Empty)
+	err := c.cc.Invoke(ctx, DataService_ReleasePlayerName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *dataServiceClient) BatchGetPlayerName(ctx context.Context, in *BatchGetPlayerNameRequest, opts ...grpc.CallOption) (*BatchGetPlayerNameResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(BatchGetPlayerNameResponse)
+	err := c.cc.Invoke(ctx, DataService_BatchGetPlayerName_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // DataServiceServer is the server API for DataService service.
 // All implementations must embed UnimplementedDataServiceServer
 // for forward compatibility.
@@ -315,6 +356,14 @@ type DataServiceServer interface {
 	// C++ scene 没有 MySQL 客户端,永久 ID(item guid 等)的号段经这里从 id_segment 表领取。
 	// 见 docs/design/node-id-overhaul-plan-20260908.md §6。
 	AllocateIdSegment(context.Context, *AllocateIdSegmentRequest) (*AllocateIdSegmentResponse, error)
+	// ── Player name registry(角色名全服唯一)──────────────────────
+	// 真源是全局库 player_name 表(rollback_database_table.proto);zone 库
+	// player_database.profile_component 与 AccountSimplePlayer.name 都只是副本。
+	// 唯一性只有"全服一张表"才成立,所以登记必须过 data_service,不能各 zone 自己判重。
+	// 设计见 docs/design/guild-phase2/03-names.md §3.1。
+	ReservePlayerName(context.Context, *ReservePlayerNameRequest) (*ReservePlayerNameResponse, error)
+	ReleasePlayerName(context.Context, *ReleasePlayerNameRequest) (*emptypb.Empty, error)
+	BatchGetPlayerName(context.Context, *BatchGetPlayerNameRequest) (*BatchGetPlayerNameResponse, error)
 	mustEmbedUnimplementedDataServiceServer()
 }
 
@@ -381,6 +430,15 @@ func (UnimplementedDataServiceServer) CreateEventSnapshot(context.Context, *Crea
 }
 func (UnimplementedDataServiceServer) AllocateIdSegment(context.Context, *AllocateIdSegmentRequest) (*AllocateIdSegmentResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method AllocateIdSegment not implemented")
+}
+func (UnimplementedDataServiceServer) ReservePlayerName(context.Context, *ReservePlayerNameRequest) (*ReservePlayerNameResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReservePlayerName not implemented")
+}
+func (UnimplementedDataServiceServer) ReleasePlayerName(context.Context, *ReleasePlayerNameRequest) (*emptypb.Empty, error) {
+	return nil, status.Error(codes.Unimplemented, "method ReleasePlayerName not implemented")
+}
+func (UnimplementedDataServiceServer) BatchGetPlayerName(context.Context, *BatchGetPlayerNameRequest) (*BatchGetPlayerNameResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method BatchGetPlayerName not implemented")
 }
 func (UnimplementedDataServiceServer) mustEmbedUnimplementedDataServiceServer() {}
 func (UnimplementedDataServiceServer) testEmbeddedByValue()                     {}
@@ -745,6 +803,60 @@ func _DataService_AllocateIdSegment_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataService_ReservePlayerName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReservePlayerNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).ReservePlayerName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_ReservePlayerName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).ReservePlayerName(ctx, req.(*ReservePlayerNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_ReleasePlayerName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReleasePlayerNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).ReleasePlayerName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_ReleasePlayerName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).ReleasePlayerName(ctx, req.(*ReleasePlayerNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _DataService_BatchGetPlayerName_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BatchGetPlayerNameRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataServiceServer).BatchGetPlayerName(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataService_BatchGetPlayerName_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataServiceServer).BatchGetPlayerName(ctx, req.(*BatchGetPlayerNameRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // DataService_ServiceDesc is the grpc.ServiceDesc for DataService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -827,6 +939,18 @@ var DataService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AllocateIdSegment",
 			Handler:    _DataService_AllocateIdSegment_Handler,
+		},
+		{
+			MethodName: "ReservePlayerName",
+			Handler:    _DataService_ReservePlayerName_Handler,
+		},
+		{
+			MethodName: "ReleasePlayerName",
+			Handler:    _DataService_ReleasePlayerName_Handler,
+		},
+		{
+			MethodName: "BatchGetPlayerName",
+			Handler:    _DataService_BatchGetPlayerName_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

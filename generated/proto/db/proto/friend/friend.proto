@@ -3,9 +3,47 @@ package friendpb;
 
 option go_package = "db/proto/friend";
 
+import "proto/db/proto_option.proto";
+import "proto/common/base/empty.proto";
 import "proto/common/base/tip.proto";
 
-// ── Friend relation data ─────────────────────────────────────────────
+// friend 客户端协议(移植批次 F1)。
+//
+// 链路:客户端 → gate → 客户端 RPC 路由服 → friend 服务(D-12 只承诺路由服模式,
+// 不开 gate 直连白名单)。路由表由 protogen 按 OptionIsClientProtocolService +
+// 节点类型生成到 client_rpc_router/generated,本文件改完必须重跑 proto-gen 才生效。
+//
+// 节点类型:本文件**刻意没有** `option (OptionFileDefaultNode)`(chat / trade / match 都写了),
+// 因为 proto/db/proto_option.proto 的 NodeType 枚举里还没有 NODE_FRIEND(最大到
+// NODE_CLIENT_RPC_ROUTER=31)—— 没有可填的枚举值,写了就编不过。guild 同样没写。
+// 这不是漏项:节点类型由 protogen 的三级回落(internal/model.go 的 NodeServiceForCpp:
+// 服务名 → proto package 名 → **目录名**)按目录名 friend 派生成 FriendNodeService,
+// 它在 proto/common/base/node.proto 里 = 27,所以路由与 etcd 注册前缀都不受影响。
+// 代价只有一处:按该 option 过滤的生成分支会把 friend 当 NODE_UNSPECIFIED。
+// 给枚举补 NODE_FRIEND 并回填本 option 留给 F3 评估(动枚举会牵动 C++ 侧的节点表)。
+//
+// 身份口径(port-decisions D-9):请求体里**不带自己的 player_id**,"我是谁"只从
+// gate 注入的会话 metadata 取(go/friend/internal/session)。原因是请求体里的
+// player_id 是客户端可伪造的字段,拿它做权威身份等于把"以他人身份加好友 / 删好友"
+// 的能力交给客户端。目标方的 id 仍走请求体 —— 它本来就是用户输入。
+//
+// 消息号风险:message_id 由 proto-gen 按 "<Service><Method>" 重新分配。本次把
+// FriendService 改名成 ClientPlayerFriend、并删掉 NotifyOnline / NotifyOffline,
+// 会释放旧号 2 / 7 / 11 / 12 / 53 / 76 / 119 / 120 并为 10 个 C2S + 1 个 S2C 方法
+// 重新发号。**不要手改 proto/message_id.txt**(它是生成物,手改会与生成器下一次
+// 重算冲突,且客户端与服务端各自重生成后号会对不上)。未上线、无老客户端,
+// 所以本期允许号段整体变动(AGENTS §4.3)。
+//
+// ⚠ 那 8 个旧号**不是作废、而是语义会变**:InitMessageId
+// (tools/proto_generator/protogen/internal/generator/cpp/service_register_info.go 里
+// "把未占用号灌进 unUseMessageId,再 `for uk := range unUseMessageId { mv.Id = uk; break }`")
+// 会把空号当成可用号池分给需要发号的新方法,取到哪个由 Go map 的迭代顺序定 —— 也就是说
+// 同一个号在这次生成后指向的是另一个方法,而且每次生成的具体落位都可能不同。
+// 由此产生一条硬约束:gate 的 rpc_event_registry、client_rpc_router 的 route_table、
+// Unity 与 robot 的消息号必须来自**同一次** proto-gen 并同批发布。混用两次生成的产物
+// 不会报错,只会让消息号静默错位(客户端发 AddFriend、服务端按别的方法解包)。
+
+// ── 好友关系数据 ─────────────────────────────────────────────────────
 
 enum FriendRequestStatus {
   FRIEND_REQUEST_UNKNOWN  = 0;
@@ -14,9 +52,13 @@ enum FriendRequestStatus {
   FRIEND_REQUEST_REJECTED = 3;
 }
 
+// FriendEntry / FriendRequest / FriendRequestStatus 的字段号一律不动:它们是
+// 列表返回体,改号会让"客户端已适配"的部分白做。
+// 这里刻意不加 display_name(昵称):昵称的权威来源属帮会二期的玩家档案,
+// 那套落地后在这里 append 新字段即可,提前占号反而会占出一个永远填不满的字段。
 message FriendEntry {
   uint64 friend_player_id = 1;
-  int64  since_ms         = 2;  // Friendship start time
+  int64  since_ms         = 2;  // 结为好友的时刻
   int64  last_active_ms   = 3;
   bool   is_online        = 4;
 }
@@ -28,10 +70,17 @@ message FriendRequest {
   FriendRequestStatus status = 4;
 }
 
-// ── Request/Response ────────────────────────────────────────────────
+// ── 请求 / 响应 ──────────────────────────────────────────────────────
+//
+// 六个老请求体里的 `uint64 player_id = 1` 全部删除(D-9,改由会话取)。删字段而不是
+// 留着不读,是因为"字段还在但服务端忽略"最容易让人以为它有效。开发期允许删字段
+// (AGENTS §4.3:未上线、没有老号)。但必须写 reserved:1 号一旦被将来的新字段复用,
+// 旧客户端发来的 player_id 会被当成那个新字段的值解出来,是静默的错数据。
+// target_player_id / from_player_id 的字段号不动。
 
 message AddFriendRequest {
-  uint64 player_id        = 1;
+  reserved 1;
+  reserved "player_id";
   uint64 target_player_id = 2;
 }
 
@@ -40,7 +89,8 @@ message AddFriendResponse {
 }
 
 message AcceptFriendRequest {
-  uint64 player_id        = 1;
+  reserved 1;
+  reserved "player_id";
   uint64 from_player_id   = 2;
 }
 
@@ -49,7 +99,8 @@ message AcceptFriendResponse {
 }
 
 message RejectFriendRequest {
-  uint64 player_id        = 1;
+  reserved 1;
+  reserved "player_id";
   uint64 from_player_id   = 2;
 }
 
@@ -58,7 +109,8 @@ message RejectFriendResponse {
 }
 
 message RemoveFriendRequest {
-  uint64 player_id        = 1;
+  reserved 1;
+  reserved "player_id";
   uint64 target_player_id = 2;
 }
 
@@ -67,7 +119,8 @@ message RemoveFriendResponse {
 }
 
 message GetFriendListRequest {
-  uint64 player_id = 1;
+  reserved 1;
+  reserved "player_id";
 }
 
 message GetFriendListResponse {
@@ -76,7 +129,8 @@ message GetFriendListResponse {
 }
 
 message GetPendingRequestsRequest {
-  uint64 player_id = 1;
+  reserved 1;
+  reserved "player_id";
 }
 
 message GetPendingRequestsResponse {
@@ -84,30 +138,112 @@ message GetPendingRequestsResponse {
   repeated FriendRequest requests = 2;
 }
 
-// ── Online/Offline notifications ──────────────────────────────────────────
+// ── 拉黑 ────────────────────────────────────────────────────────────
+//
+// 拉黑是"拒绝对方发起好友请求"的开关,与删好友是两件事:删好友只断当前关系,
+// 对方可以立刻再加回来。所以拉黑必须落自己的表(friend_block),不能用
+// "删好友 + 客户端记一笔"实现。
 
-message NotifyOnlineRequest {
-  uint64 player_id    = 1;
-  uint32 gate_node_id = 2;
+message BlockRequest {
+  uint64 target_player_id = 1;
 }
 
-message NotifyOnlineResponse {}
-
-message NotifyOfflineRequest {
-  uint64 player_id = 1;
+message BlockResponse {
+  TipInfoMessage error_message = 1;
 }
 
-message NotifyOfflineResponse {}
+message UnblockRequest {
+  uint64 target_player_id = 1;
+}
 
-// ── Service definition ─────────────────────────────────────────────────────
+message UnblockResponse {
+  TipInfoMessage error_message = 1;
+}
 
-service FriendService {
+message ListBlocksRequest {
+}
+
+// BlockEntry 只回 id 与拉黑时刻:昵称由客户端按 id 另查(理由同 FriendEntry)。
+message BlockEntry {
+  uint64 blocked_player_id = 1;
+  int64  since_ms          = 2;
+}
+
+message ListBlocksResponse {
+  TipInfoMessage error_message = 1;
+  repeated BlockEntry blocks = 2;
+}
+
+// ── 好友推荐 ─────────────────────────────────────────────────────────
+
+// limit 为 0 时服务端按配置的默认值处理;超过配置上限会被截断而不是报错 ——
+// 推荐是可降级的展示功能,为一个越界的 limit 让整个面板打不开不划算。
+// exclude_player_ids 是客户端"换一批"时把已看过的人排掉用的,长度有上限
+// (配置 RecommendMaxExclude):不设上限的话客户端可以用一个巨大的排除列表
+// 把服务端的候选扫描放大成一次慢查询。
+message RecommendFriendsRequest {
+  uint32 limit = 1;
+  repeated uint64 exclude_player_ids = 2;
+}
+
+message RecommendEntry {
+  uint64 candidate_player_id = 1;
+  uint32 mutual_friends      = 2;  // 共同好友数,排序权重
+  bool   is_online           = 3;
+  int64  last_active_ms      = 4;
+}
+
+message RecommendFriendsResponse {
+  TipInfoMessage error_message = 1;
+  repeated RecommendEntry candidates = 2;
+}
+
+// ── 服务端推送(S2C) ─────────────────────────────────────────────────
+//
+// 推送必须声明在这个**客户端服务**里而不是另起一个服务:Unity / robot 的推送
+// handler 只对服务名含 ClientPlayer / GamePlayer 的服务生成
+// (tools/proto_generator/.../unity/unity_client_handler.go:183-186、
+//  generator/go/robot_case.go:137-138),放错地方就没有客户端收件人。
+// 推送经 kafkautil.PushToPlayer → gate-cmd_g<N>,at-most-once:玩家刚好掉线时
+// 这条事件会丢,所以推送只用来"立刻刷红点",真相仍要靠 GetPendingRequests 拉取。
+
+enum FriendEventReason {
+  FRIEND_EVENT_REASON_UNSPECIFIED      = 0;
+  FRIEND_EVENT_REASON_REQUEST_RECEIVED = 1;  // 收到别人的好友请求
+  FRIEND_EVENT_REASON_REQUEST_ACCEPTED = 2;  // 自己发出的请求被同意
+}
+
+// 事件体刻意只带 reason + by_player_id + ts_ms:推送不做数据同步,客户端收到后
+// 自行决定是否拉列表。带上整份列表会让每条推送都可能超过 gate 的单包上限。
+message FriendEventS2C {
+  FriendEventReason reason = 1;
+  uint64 by_player_id      = 2;  // 触发这条事件的对方玩家
+  int64  ts_ms             = 3;
+}
+
+// ── 服务声明 ─────────────────────────────────────────────────────────
+//
+// 服务名从 FriendService 改成 ClientPlayerFriend:见上面 S2C 段的注释 ——
+// 生成器靠服务名里的 ClientPlayer 前缀决定是否给客户端出推送 handler,
+// 改名是本期新增 S2C 推送的前提,不是为了好看。
+// NotifyOnline / NotifyOffline 两个 rpc 与它们的四个 message 已删除:全仓非生成
+// 代码里零调用方(已 Grep 确认),在线状态改读契约 key player:session:{id}。
+service ClientPlayerFriend {
+  option (OptionIsClientProtocolService) = true;
+
   rpc AddFriend (AddFriendRequest) returns (AddFriendResponse);
   rpc AcceptFriend (AcceptFriendRequest) returns (AcceptFriendResponse);
   rpc RejectFriend (RejectFriendRequest) returns (RejectFriendResponse);
   rpc RemoveFriend (RemoveFriendRequest) returns (RemoveFriendResponse);
   rpc GetFriendList (GetFriendListRequest) returns (GetFriendListResponse);
   rpc GetPendingRequests (GetPendingRequestsRequest) returns (GetPendingRequestsResponse);
-  rpc NotifyOnline (NotifyOnlineRequest) returns (NotifyOnlineResponse);
-  rpc NotifyOffline (NotifyOfflineRequest) returns (NotifyOfflineResponse);
+  rpc Block (BlockRequest) returns (BlockResponse);
+  rpc Unblock (UnblockRequest) returns (UnblockResponse);
+  rpc ListBlocks (ListBlocksRequest) returns (ListBlocksResponse);
+  rpc RecommendFriends (RecommendFriendsRequest) returns (RecommendFriendsResponse);
+
+  // 推送方向是服务端 → 客户端。它与上面 10 个 C2S 方法同处一个 service,
+  // 所以服务端**必须**在会话拦截器的方法白名单里排除它:否则客户端可以直接
+  // 调这个方法伪造一条好友事件。服务端也不实现它(继承 Unimplemented)。
+  rpc NotifyFriendEvent (FriendEventS2C) returns (Empty);
 }

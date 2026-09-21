@@ -1,0 +1,24 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "GuildDonateTableOuterClass";
+option java_multiple_files = true;
+
+
+message GuildDonateTable {
+	uint32 id = 1;
+	string name = 2;
+	uint32 currency_type = 3;
+	uint64 cost_amount = 4;
+	uint64 contribution_gain = 5;
+	uint64 funds_gain = 6;
+	uint32 daily_limit = 7;
+	uint32 min_guild_level = 8;
+}
+
+message GuildDonateTableData {
+	repeated GuildDonateTable data = 1;
+}

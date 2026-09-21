@@ -21,6 +21,8 @@
 | [04-asset-channel.md](./04-asset-channel.md) | 通用资产通道:玩家资产指令账本 + scene 三个 RPC + Go 侧重投 |
 | [05-economy.md](./05-economy.md) | 捐献、帮会升级、帮会商店 |
 | [06-activities.md](./06-activities.md) | 元宵灯会、中秋团圆、同道历练 |
+| [07-rollback-fail-closed.md](./07-rollback-fail-closed.md) | B5d 详细设计:回档前查帮会已应用的资产操作,默认拒绝(D3);落码前需用户拍板其 §7.11 的 U1 / U9 / U10 |
+| [92-handoff.md](./92-handoff.md) | 交接说明:到今天为止实际落了什么、从哪接着写;**§10 = B5a 落码记录与用户验证序列** |
 | [00-contract.md](./00-contract.md) | 起草期命名契约(已被各节偏差与 90 清单覆盖的部分以后者为准) |
 
 每节都经过"起草 → 对抗式评审 → 修订"三轮(共 96 条评审意见,逐条采纳或驳回,记录在各节附录)。

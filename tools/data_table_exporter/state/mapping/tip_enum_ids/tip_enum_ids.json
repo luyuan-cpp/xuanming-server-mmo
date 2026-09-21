@@ -62,7 +62,10 @@
         "LoginSessionNotFound": 2028,
         "LoginAccountDataLoadFailed": 2029,
         "LoginFsmInvalidEvent": 2030,
-        "LoginTimeout": 2031
+        "LoginTimeout": 2031,
+        "RoleNameInvalid": 2032,
+        "RoleNameTaken": 2033,
+        "RoleNameSensitive": 2034
       }
     },
     "scene_error": {
@@ -251,7 +254,17 @@
         "GuildApplicationNotFound": 14018,
         "GuildApplicationLimit": 14019,
         "GuildApplicationQueueFull": 14020,
-        "GuildBusyRetry": 14021
+        "GuildBusyRetry": 14021,
+        "GuildFundsInsufficient": 14022,
+        "GuildMaxLevel": 14023,
+        "GuildDonateLimit": 14024,
+        "GuildCurrencyInsufficient": 14025,
+        "GuildAssetPending": 14026,
+        "GuildAssetRejected": 14027,
+        "GuildShopGoodsNotFound": 14028,
+        "GuildShopLevelTooLow": 14029,
+        "GuildShopLimit": 14030,
+        "GuildContributionInsufficient": 14031
       }
     },
     "friend_error": {
@@ -264,7 +277,10 @@
         "FriendRequestAlreadySent": 15003,
         "FriendTargetListFull": 15004,
         "FriendNoPendingRequest": 15005,
-        "FriendTooManyPending": 15006
+        "FriendTooManyPending": 15006,
+        "FriendBlocked": 15007,
+        "FriendBlockListFull": 15008,
+        "FriendTargetInboxFull": 15009
       }
     },
     "match_error": {

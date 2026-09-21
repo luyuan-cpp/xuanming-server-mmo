@@ -1102,11 +1102,13 @@ func TestGetPendingRequestsMapsStatus(t *testing.T) {
 // config 要 import data 取 DatabaseName,包内测试反向 import 就是 import cycle),
 // 所以两侧靠这一条对齐。yaml 的 options 标签也是这两个拼法。
 //
-// ⚠ 全仓其实有**三份**副本:config.SweepMode*、data.SweepMode*,以及
-// internal/metrics/metrics.go:51-52 那对**不可导出**的 sweepModeReportOnly / sweepModeDelete
-// (Gauge 预建用)。本断言够不到第三份 —— 它不可导出,而 metrics 刻意保持叶子包。
-// 第三份漂移时的表现:预建的 0 值序列落在一个 label 上、SetSweepPendingRows 写的是另一个,
-// "sweep 没在跑"这个唯一信号静默失效。已登记给 F3 处理。
+// ⚠ 生产代码里这对字面量共**三份**:config.SweepMode*、data.SweepMode*、metrics.SweepMode*
+// (Gauge 预建用)。三个包互相都不能(或刻意不)import 对方 —— data 见上;metrics 要保持叶子包,
+// 理由写在 metrics.go 那对常量上方 —— 而 logic 本来就同时 import 这三个包,
+// 所以本用例是全仓唯一能把三份机械钉成逐字相等的地方。
+// metrics 那份漂移时的表现:register() 预建的 0 值序列落在一个 label 上、Set* 写的是另一个,
+// "Gauge 长期不更新 = sweep 根本没在跑"这个唯一信号静默失效,全程零报错。
+// 它原先不可导出、本断言够不到,收尾批(handoff §3 第 4 条)为此把它导出。
 func TestSweepModeConstantsAreTheWireLiterals(t *testing.T) {
 	assert.Equal(t, "report_only", config.SweepModeReportOnly)
 	assert.Equal(t, "delete", config.SweepModeDelete)
@@ -1115,6 +1117,10 @@ func TestSweepModeConstantsAreTheWireLiterals(t *testing.T) {
 	// 拼错时的表现是 delete 模式静默退化成 report_only(data/sweep_repo.go 的判定点)。
 	assert.Equal(t, config.SweepModeReportOnly, data.SweepModeReportOnly)
 	assert.Equal(t, config.SweepModeDelete, data.SweepModeDelete)
+	// 第三份:metrics 的 mode label。写侧(sweep.go)传给 Set* 的是 config.SweepMode*,
+	// 预建用的是 metrics.SweepMode*,两者不等就是上面说的"两条序列"。
+	assert.Equal(t, config.SweepModeReportOnly, metrics.SweepModeReportOnly)
+	assert.Equal(t, config.SweepModeDelete, metrics.SweepModeDelete)
 	assert.Equal(t, config.SweepModeReportOnly, testFriendConf().Sweep.Mode,
 		"默认模式必须是 report_only:updated_ms 的写入方是本批刚补的,delete 是有风险的选择")
 }

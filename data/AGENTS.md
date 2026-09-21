@@ -146,22 +146,25 @@ cd tools/data_table_exporter && py -m pytest -q
 | **Dungeon** | `Dungeon.xlsx` | `dungeon_table.proto` | 7 | 5 | 3 | — | — | `scene_id` | `scene_id→BaseScene.id` `monster→Monster.id` | — | — | — |
 | **EquipSlot** | `EquipSlot.xlsx` | `equipslot_table.proto` | 2 | 2 | 3 | — | — | — | — | — | — | — |
 | **GlobalVariable** | `GlobalVariable.xlsx` | `globalvariable_table.proto` | 8 | 1 | 16 | — | — | — | — | — | — | — |
+| **GuildDonate** | `GuildDonate.xlsx` | `guilddonate_table.proto` | 8 | 8 | 3 | — | — | — | — | — | — | — |
 | **GuildLevel** | `GuildLevel.xlsx` | `guildlevel_table.proto` | 4 | 4 | 10 | — | — | — | — | — | — | — |
 | **GuildRule** | `GuildRule.xlsx` | `guildrule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
+| **GuildShop** | `GuildShop.xlsx` | `guildshop_table.proto` | 9 | 9 | 11 | — | — | `item_id` | `item_id→Item.id` | — | — | — |
 | **Item** | `Item.xlsx` | `item_table.proto` | 6 | 6 | 28 | — | — | — | — | — | — | — |
-| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 46 | — | — | — | — | — | — | — |
+| **MessageLimiter** | `MessageLimiter.xlsx` | `messagelimiter_table.proto` | 4 | 4 | 53 | — | — | — | — | — | — | — |
 | **Mirror** | `Mirror.xlsx` | `mirror_table.proto` | 3 | 3 | 2 | — | — | `scene_id` `main_scene_id` | `scene_id→BaseScene.id` `main_scene_id→World.id` | — | — | — |
 | **Mission** | `Mission.xlsx` | `mission_table.proto` | 15 | 9 | 17 | — | — | `reward_id` | `reward_id→Reward.id` `condition_id→Condition.id(组)` | `id` | — | — |
 | **Monster** | `Monster.xlsx` | `monster_table.proto` | 16 | 10 | 16 | — | — | — | — | — | — | `drop` |
 | **Pet** | `Pet.xlsx` | `pet_table.proto` | 22 | 13 | 4 | — | — | — | — | — | — | — |
 | **PetRule** | `PetRule.xlsx` | `petrule_table.proto` | 6 | 6 | 1 | — | — | — | — | — | — | — |
 | **Reward** | `Reward.xlsx` | `reward_table.proto` | 5 | 2 | 7 | — | — | — | — | `id` | — | `reward` |
+| **RoleNameRule** | `RoleNameRule.xlsx` | `rolenamerule_table.proto` | 7 | 7 | 1 | — | — | — | — | — | — | — |
 | **Skill** | `Skill.xlsx` | `skill_table.proto` | 47 | 25 | 13 | — | — | — | — | — | `damage:double` | `cost_resource` `required_item` `required_resource` |
 | **SkillPermission** | `SkillPermission.xlsx` | `skillpermission_table.proto` | 7 | 2 | 3 | — | — | — | — | — | — | — |
 | **Test** | `Test.xlsx` | `test_table.proto` | 24 | 6 | 6 | — | — | — | — | — | — | `testobj` |
 | **TestMultiKey** | `TestMultiKey.xlsx` | `testmultikey_table.proto` | 33 | 14 | 6 | `string_key` `uint32_key` `int32_key` | `m_string_key` `m_uint32_key` `m_int32_key` | `level` `test_ref` | `test_ref→Test.id` `test_refs→Test.id(组)` | — | — | `testobj1` |
 | **World** | `World.xlsx` | `world_table.proto` | 2 | 2 | 16 | — | — | `scene_id` | `scene_id→BaseScene.id` | — | — | — |
 
-合计 **31** 张表、**361** 个物理列、**222** 个进产物的字段。
+合计 **34** 张表、**385** 个物理列、**246** 个进产物的字段。
 
 <!-- END GENERATED -->

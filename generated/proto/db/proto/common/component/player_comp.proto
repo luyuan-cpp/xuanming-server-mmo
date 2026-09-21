@@ -46,6 +46,19 @@ message PlayerUint32Comp
 	uint32 class  = 1;
 }
 
+// 角色展示资料(名字)。
+// 真源是 data_service 全局库的 player_name 表(全服唯一,docs/design/guild-phase2/03-names.md §3.0);
+// 这里是随 player_database 一起走的只读副本,由 login 首次入场补齐
+// (go/login/.../player_class_backfill.go backfillPlayerIdentity)。
+// scene 只读、只原样存回:战斗快照 player_battle.cpp 取的就是这一份,
+// 组件缺失 / name 为空时快照留空,battle 照常结算(名字是展示数据,fail-open)。
+// v1 无改名,所以副本内容不会变;但副本可能缺失(self-heal 恢复出的空记录、
+// 早于首次入场的回档快照),任何"要拿到名字"的读侧都必须能回源 BatchGetPlayerName。
+message PlayerProfileComp
+{
+	string name = 1;
+}
+
 // Stress-test instrumentation for player-data persistence.
 //
 // Stamped by the producer (Scene's SavePlayerToRedis when an env-var probe

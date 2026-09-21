@@ -452,7 +452,7 @@ func (l *GuildLogic) activityPrelude(ctx context.Context, write bool) (*activity
 6. 历练行(B6b):
    - `v, err := LocatorRedis.Get("battle:lock:{pid}")`:值解析为 uint64 且非 0 → `SELECT state FROM guild_trial_battle WHERE battle_id=?`;state=STARTED → `my_trial_battle_id = v`。锁不在、行不在、非 STARTED → 0。
    - 房间:`Lobby.LoadForPlayer(ctx, pid, nowMs)`(第 7 部分 6.20.4);`lobby.GuildID == gid && lobby.ActivityID == row.Id` 才填 `trial_lobby`。
-7. 待发物品(两条都走 `idx_guild_asset_op_3 (player_id,stream,status,seq)`):
+7. 待发物品(两条都走 `idx_guild_asset_op_2 (player_id,stream,stream_epoch,status,seq)` —— 原文写的 `_3` 与四列列序按 90 清单 X-02 订正;查询按 part2 §3 带 `stream_epoch`):
    ```sql
    -- 7a 待发:至多 16 行
    SELECT ref_id, last_reason FROM guild_asset_op

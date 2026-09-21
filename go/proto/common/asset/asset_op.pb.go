@@ -247,25 +247,28 @@ type AssetBundle struct {
 	Items      []*ItemGrant           `protobuf:"bytes,2,rep,name=items,proto3" json:"items,omitempty"`
 	// ---- 聚宝斋 P2 追加(帮会不使用,帮会一律留空)----
 	//
-	// **签名前置(硬前置,未做完不得启用 P2)**:§4.32 的 canonical 串第 10 行
-	// `<bundle>` 目前只有 `"c=" 货币 ";i=" 物品(config_id:count)` 两段,**不覆盖**
-	// 下面这两个字段。而它们是会真改玩家资产的输入(按 guid 扣装备 / 扣宝宝),
-	// scene gRPC 又是 `InsecureServerCredentials()`(node.cpp:623),集群内任意进程
-	// 可连可嗅:攻击者截下一条合法 TRADE_DEBIT,只把 item_uuids 换成玩家的其它
-	// 装备再发出,该 seq 未见过、签名照样通过,scene 会扣掉被换的那件。seq 幂等
-	// 与 300s 时间窗都挡不住这种"同 seq 抢跑改载荷"。
-	// 因此 TRADE_* 流启用前必须先把 canonical 扩成
+	// **签名已覆盖这两个字段**(2026-09-19 补齐,原先的硬前置已解除)。
 	//
-	//	`…;i=<config_id:count,…>;u=<item_uuid,…>;p=<pet_id>`(空则 `;u=;p=0`),
+	// 背景值得留着:它们会真改玩家资产(按 guid 扣装备 / 扣宝宝),而 scene 的 gRPC 是
+	// `InsecureServerCredentials()`(node.cpp:623),集群内任意进程可连可嗅。早先 §4.32 的
+	// canonical 串只有 `"c=" 货币 ";i=" 物品(config_id:count)` 两段,**不覆盖**下面这两个
+	// 字段,于是攻击者可以截下一条合法 TRADE_DEBIT、只把 item_uuids 换成玩家的其它装备再发出,
+	// 该 seq 未见过、签名照样通过,scene 就会扣掉被换的那件 —— seq 幂等与 300s 时间窗
+	// 都挡不住这种"同 seq 抢跑改载荷"。
 	//
-	// 并同批改 C++ `AssetOpCanonical`、Go `assetop.Canonical` 与两边共用的 golden
-	// 字面量(§4.32 末尾那一条)。帮会(GUILD_* 流)一律留空,不受影响。
+	// 现在 canonical 是 `…;i=<config_id:count,…>;u=<item_uuid,…>;p=<pet_id>`(空则 `;u=;p=0`),
+	// C++ `AssetOpCanonical`、Go `assetop.Canonical` 与两边 golden 已同批改完;改这两个字段的
+	// **任何一位**都会让签名失效,守卫用例见 `AssetOpAuthTest.SignatureCoversGuidAndPetTamper`
+	// 与 Go `TestSignatureCoversGuidAndPetTamper`。帮会走 GUILD_* 流、这两段恒为空,不受影响。
+	//
+	// **仍未解除的是另一件事**:v1 的 scene 还没实现按 guid 扣物 / 扣宝宝(P3 托管的活),
+	// 所以带这两个字段的包目前一律记成终局 REJECTED(`kAssetInvalidBundle`)。
 	//
 	// 按 guid 全或无扣出:列出的每个 item_uuid 都必须在背包里、且属于**不可叠加**
 	// 物品(装备一类,stack_size 恒为 1),少一个就整批拒,不做部分扣出。
 	// 可叠加物品按 config_id + count 走 items 字段,不进本字段。
 	ItemUuids []uint64 `protobuf:"varint,3,rep,packed,name=item_uuids,json=itemUuids,proto3" json:"item_uuids,omitempty"`
-	// 按 guid 扣出/入账一只宝宝;0 = 不涉及宝宝。同样未进签名串,见上。
+	// 按 guid 扣出/入账一只宝宝;0 = 不涉及宝宝。同样已进签名串(`;p=` 段),见上。
 	PetId         uint64 `protobuf:"varint,4,opt,name=pet_id,json=petId,proto3" json:"pet_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -493,6 +496,15 @@ func (x *AssetOpRequest) GetAuth() *AssetOpAuth {
 
 // ---- 聚宝斋 P2 追加(帮会不使用)----
 //
+// **当前状态:纯预留,v1 既不填也不读。**(2026-09-19 跨包审稿 minor)
+// 下面三个 message 与 AssetOpResponse.snapshot 至今**零写者、零读者**:scene 侧
+// 没有任何 mutable_snapshot(...) 调用,Go 侧 assetop / trade 也没有 GetSnapshot(...)。
+// 留着是为了把字段号先钉死(§4.3.1「扩展一律追加」),不是"对账快照已经可用"。
+// 解锁条件:canonical 的 `;u=;p=` 两段已于 2026-09-19 补齐,剩下的是 scene 的填充与
+// trade 的读取(随 P3 托管一起落)。**在那之前谁都不要按"响应里已经
+// 有库存快照"去接线** —— 读到的一定是空 message,而空 message 与"本次没动任何
+// 库存"在 proto3 上不可区分,静默走错分支。
+//
 // 快照用的两个精简形状:本文件必须是叶子包(见文件头),不能 import
 // bag_quest_mail_data.proto 的 ItemEntry / player_pet_comp.proto 的 PetInstance。
 // 只取交易展示与对账需要的字段;pos / bag_type / allocated / aptitude 等
@@ -625,8 +637,9 @@ func (x *AssetPetInstance) GetLevel() uint32 {
 	return 0
 }
 
-// 这一次指令实际动到的那份库存,交易侧用它做"寄售快照 / 收货确认"的展示与对账。
-// 帮会的 Debit/Credit 不填此字段(scene 只在 TRADE_* 流上填充)。
+// 【P2 预留,v1 不填不读】这一次指令实际动到的那份库存。将来交易侧用它做
+// "寄售快照 / 收货确认"的展示与对账;帮会的 Debit/Credit 永远不填此字段
+// (填充只会发生在 TRADE_* 流上)。解锁条件见上面那段。
 type AssetSnapshot struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 本次扣出(Debit)或入账(Credit)的物品条目。
@@ -697,7 +710,9 @@ type AssetOpResponse struct {
 	Durable bool                   `protobuf:"varint,3,opt,name=durable,proto3" json:"durable,omitempty"` // 该 seq 的结局已在"最后一次成功写入 Redis 的玩家数据"里
 	Partial bool                   `protobuf:"varint,4,opt,name=partial,proto3" json:"partial,omitempty"` // APPLIED 但只发放了一部分(reason=kAssetPartialApplied);Go 不做对侧入账,转人工补偿
 	// ---- 聚宝斋 P2 追加字段从 5 起(帮会不使用)----
-	Snapshot      *AssetSnapshot `protobuf:"bytes,5,opt,name=snapshot,proto3" json:"snapshot,omitempty"` // 交易库存快照;只在 TRADE_* 流上填充,其余流留空
+	// 【P2 预留,v1 不填不读】交易库存快照。当前 scene 不填、Go 不读,解锁条件见
+	// AssetSnapshot 上方那段。占号在先,避免 P2 动手时再抢 5。
+	Snapshot      *AssetSnapshot `protobuf:"bytes,5,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }

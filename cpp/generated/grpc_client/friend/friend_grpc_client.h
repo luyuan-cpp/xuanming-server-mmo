@@ -12,11 +12,11 @@ using grpc::Status;
 using grpc::ClientAsyncResponseReader;
 
 namespace friendpb {
-using FriendServiceStubPtr = std::unique_ptr<FriendService::Stub>;
-#pragma region FriendServiceAddFriend
+using ClientPlayerFriendStubPtr = std::unique_ptr<ClientPlayerFriend::Stub>;
+#pragma region ClientPlayerFriendAddFriend
 
-struct AsyncFriendServiceAddFriendGrpcClient {
-    uint32_t messageId{ FriendServiceAddFriendMessageId };
+struct AsyncClientPlayerFriendAddFriendGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendAddFriendMessageId };
     ClientContext context;
     Status status;
     ::friendpb::AddFriendResponse reply;
@@ -24,18 +24,18 @@ struct AsyncFriendServiceAddFriendGrpcClient {
 };
 
 class ::friendpb::AddFriendRequest;
-using AsyncFriendServiceAddFriendHandlerFunctionType =
+using AsyncClientPlayerFriendAddFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::AddFriendResponse&)>;
-extern AsyncFriendServiceAddFriendHandlerFunctionType AsyncFriendServiceAddFriendHandler;
+extern AsyncClientPlayerFriendAddFriendHandlerFunctionType AsyncClientPlayerFriendAddFriendHandler;
 
-void SendFriendServiceAddFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AddFriendRequest& request);
-void SendFriendServiceAddFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AddFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
-void SendFriendServiceAddFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendAddFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AddFriendRequest& request);
+void SendClientPlayerFriendAddFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AddFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendAddFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
-#pragma region FriendServiceAcceptFriend
+#pragma region ClientPlayerFriendAcceptFriend
 
-struct AsyncFriendServiceAcceptFriendGrpcClient {
-    uint32_t messageId{ FriendServiceAcceptFriendMessageId };
+struct AsyncClientPlayerFriendAcceptFriendGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendAcceptFriendMessageId };
     ClientContext context;
     Status status;
     ::friendpb::AcceptFriendResponse reply;
@@ -43,18 +43,18 @@ struct AsyncFriendServiceAcceptFriendGrpcClient {
 };
 
 class ::friendpb::AcceptFriendRequest;
-using AsyncFriendServiceAcceptFriendHandlerFunctionType =
+using AsyncClientPlayerFriendAcceptFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::AcceptFriendResponse&)>;
-extern AsyncFriendServiceAcceptFriendHandlerFunctionType AsyncFriendServiceAcceptFriendHandler;
+extern AsyncClientPlayerFriendAcceptFriendHandlerFunctionType AsyncClientPlayerFriendAcceptFriendHandler;
 
-void SendFriendServiceAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AcceptFriendRequest& request);
-void SendFriendServiceAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AcceptFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
-void SendFriendServiceAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AcceptFriendRequest& request);
+void SendClientPlayerFriendAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::AcceptFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendAcceptFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
-#pragma region FriendServiceRejectFriend
+#pragma region ClientPlayerFriendRejectFriend
 
-struct AsyncFriendServiceRejectFriendGrpcClient {
-    uint32_t messageId{ FriendServiceRejectFriendMessageId };
+struct AsyncClientPlayerFriendRejectFriendGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendRejectFriendMessageId };
     ClientContext context;
     Status status;
     ::friendpb::RejectFriendResponse reply;
@@ -62,18 +62,18 @@ struct AsyncFriendServiceRejectFriendGrpcClient {
 };
 
 class ::friendpb::RejectFriendRequest;
-using AsyncFriendServiceRejectFriendHandlerFunctionType =
+using AsyncClientPlayerFriendRejectFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::RejectFriendResponse&)>;
-extern AsyncFriendServiceRejectFriendHandlerFunctionType AsyncFriendServiceRejectFriendHandler;
+extern AsyncClientPlayerFriendRejectFriendHandlerFunctionType AsyncClientPlayerFriendRejectFriendHandler;
 
-void SendFriendServiceRejectFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RejectFriendRequest& request);
-void SendFriendServiceRejectFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RejectFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
-void SendFriendServiceRejectFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendRejectFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RejectFriendRequest& request);
+void SendClientPlayerFriendRejectFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RejectFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendRejectFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
-#pragma region FriendServiceRemoveFriend
+#pragma region ClientPlayerFriendRemoveFriend
 
-struct AsyncFriendServiceRemoveFriendGrpcClient {
-    uint32_t messageId{ FriendServiceRemoveFriendMessageId };
+struct AsyncClientPlayerFriendRemoveFriendGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendRemoveFriendMessageId };
     ClientContext context;
     Status status;
     ::friendpb::RemoveFriendResponse reply;
@@ -81,18 +81,18 @@ struct AsyncFriendServiceRemoveFriendGrpcClient {
 };
 
 class ::friendpb::RemoveFriendRequest;
-using AsyncFriendServiceRemoveFriendHandlerFunctionType =
+using AsyncClientPlayerFriendRemoveFriendHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::RemoveFriendResponse&)>;
-extern AsyncFriendServiceRemoveFriendHandlerFunctionType AsyncFriendServiceRemoveFriendHandler;
+extern AsyncClientPlayerFriendRemoveFriendHandlerFunctionType AsyncClientPlayerFriendRemoveFriendHandler;
 
-void SendFriendServiceRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RemoveFriendRequest& request);
-void SendFriendServiceRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RemoveFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
-void SendFriendServiceRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RemoveFriendRequest& request);
+void SendClientPlayerFriendRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RemoveFriendRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendRemoveFriend(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
-#pragma region FriendServiceGetFriendList
+#pragma region ClientPlayerFriendGetFriendList
 
-struct AsyncFriendServiceGetFriendListGrpcClient {
-    uint32_t messageId{ FriendServiceGetFriendListMessageId };
+struct AsyncClientPlayerFriendGetFriendListGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendGetFriendListMessageId };
     ClientContext context;
     Status status;
     ::friendpb::GetFriendListResponse reply;
@@ -100,18 +100,18 @@ struct AsyncFriendServiceGetFriendListGrpcClient {
 };
 
 class ::friendpb::GetFriendListRequest;
-using AsyncFriendServiceGetFriendListHandlerFunctionType =
+using AsyncClientPlayerFriendGetFriendListHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::GetFriendListResponse&)>;
-extern AsyncFriendServiceGetFriendListHandlerFunctionType AsyncFriendServiceGetFriendListHandler;
+extern AsyncClientPlayerFriendGetFriendListHandlerFunctionType AsyncClientPlayerFriendGetFriendListHandler;
 
-void SendFriendServiceGetFriendList(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetFriendListRequest& request);
-void SendFriendServiceGetFriendList(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetFriendListRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
-void SendFriendServiceGetFriendList(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendGetFriendList(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetFriendListRequest& request);
+void SendClientPlayerFriendGetFriendList(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetFriendListRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendGetFriendList(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
-#pragma region FriendServiceGetPendingRequests
+#pragma region ClientPlayerFriendGetPendingRequests
 
-struct AsyncFriendServiceGetPendingRequestsGrpcClient {
-    uint32_t messageId{ FriendServiceGetPendingRequestsMessageId };
+struct AsyncClientPlayerFriendGetPendingRequestsGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendGetPendingRequestsMessageId };
     ClientContext context;
     Status status;
     ::friendpb::GetPendingRequestsResponse reply;
@@ -119,51 +119,108 @@ struct AsyncFriendServiceGetPendingRequestsGrpcClient {
 };
 
 class ::friendpb::GetPendingRequestsRequest;
-using AsyncFriendServiceGetPendingRequestsHandlerFunctionType =
+using AsyncClientPlayerFriendGetPendingRequestsHandlerFunctionType =
     std::function<void(const ClientContext&, const ::friendpb::GetPendingRequestsResponse&)>;
-extern AsyncFriendServiceGetPendingRequestsHandlerFunctionType AsyncFriendServiceGetPendingRequestsHandler;
+extern AsyncClientPlayerFriendGetPendingRequestsHandlerFunctionType AsyncClientPlayerFriendGetPendingRequestsHandler;
 
-void SendFriendServiceGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetPendingRequestsRequest& request);
-void SendFriendServiceGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetPendingRequestsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
-void SendFriendServiceGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetPendingRequestsRequest& request);
+void SendClientPlayerFriendGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::GetPendingRequestsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendGetPendingRequests(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
-#pragma region FriendServiceNotifyOnline
+#pragma region ClientPlayerFriendBlock
 
-struct AsyncFriendServiceNotifyOnlineGrpcClient {
-    uint32_t messageId{ FriendServiceNotifyOnlineMessageId };
+struct AsyncClientPlayerFriendBlockGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendBlockMessageId };
     ClientContext context;
     Status status;
-    ::friendpb::NotifyOnlineResponse reply;
-    std::unique_ptr<ClientAsyncResponseReader<::friendpb::NotifyOnlineResponse>> response_reader;
+    ::friendpb::BlockResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::friendpb::BlockResponse>> response_reader;
 };
 
-class ::friendpb::NotifyOnlineRequest;
-using AsyncFriendServiceNotifyOnlineHandlerFunctionType =
-    std::function<void(const ClientContext&, const ::friendpb::NotifyOnlineResponse&)>;
-extern AsyncFriendServiceNotifyOnlineHandlerFunctionType AsyncFriendServiceNotifyOnlineHandler;
+class ::friendpb::BlockRequest;
+using AsyncClientPlayerFriendBlockHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::friendpb::BlockResponse&)>;
+extern AsyncClientPlayerFriendBlockHandlerFunctionType AsyncClientPlayerFriendBlockHandler;
 
-void SendFriendServiceNotifyOnline(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::NotifyOnlineRequest& request);
-void SendFriendServiceNotifyOnline(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::NotifyOnlineRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
-void SendFriendServiceNotifyOnline(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendBlock(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::BlockRequest& request);
+void SendClientPlayerFriendBlock(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::BlockRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendBlock(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
-#pragma region FriendServiceNotifyOffline
+#pragma region ClientPlayerFriendUnblock
 
-struct AsyncFriendServiceNotifyOfflineGrpcClient {
-    uint32_t messageId{ FriendServiceNotifyOfflineMessageId };
+struct AsyncClientPlayerFriendUnblockGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendUnblockMessageId };
     ClientContext context;
     Status status;
-    ::friendpb::NotifyOfflineResponse reply;
-    std::unique_ptr<ClientAsyncResponseReader<::friendpb::NotifyOfflineResponse>> response_reader;
+    ::friendpb::UnblockResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::friendpb::UnblockResponse>> response_reader;
 };
 
-class ::friendpb::NotifyOfflineRequest;
-using AsyncFriendServiceNotifyOfflineHandlerFunctionType =
-    std::function<void(const ClientContext&, const ::friendpb::NotifyOfflineResponse&)>;
-extern AsyncFriendServiceNotifyOfflineHandlerFunctionType AsyncFriendServiceNotifyOfflineHandler;
+class ::friendpb::UnblockRequest;
+using AsyncClientPlayerFriendUnblockHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::friendpb::UnblockResponse&)>;
+extern AsyncClientPlayerFriendUnblockHandlerFunctionType AsyncClientPlayerFriendUnblockHandler;
 
-void SendFriendServiceNotifyOffline(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::NotifyOfflineRequest& request);
-void SendFriendServiceNotifyOffline(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::NotifyOfflineRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
-void SendFriendServiceNotifyOffline(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendUnblock(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::UnblockRequest& request);
+void SendClientPlayerFriendUnblock(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::UnblockRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendUnblock(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region ClientPlayerFriendListBlocks
+
+struct AsyncClientPlayerFriendListBlocksGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendListBlocksMessageId };
+    ClientContext context;
+    Status status;
+    ::friendpb::ListBlocksResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::friendpb::ListBlocksResponse>> response_reader;
+};
+
+class ::friendpb::ListBlocksRequest;
+using AsyncClientPlayerFriendListBlocksHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::friendpb::ListBlocksResponse&)>;
+extern AsyncClientPlayerFriendListBlocksHandlerFunctionType AsyncClientPlayerFriendListBlocksHandler;
+
+void SendClientPlayerFriendListBlocks(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::ListBlocksRequest& request);
+void SendClientPlayerFriendListBlocks(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::ListBlocksRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendListBlocks(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region ClientPlayerFriendRecommendFriends
+
+struct AsyncClientPlayerFriendRecommendFriendsGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendRecommendFriendsMessageId };
+    ClientContext context;
+    Status status;
+    ::friendpb::RecommendFriendsResponse reply;
+    std::unique_ptr<ClientAsyncResponseReader<::friendpb::RecommendFriendsResponse>> response_reader;
+};
+
+class ::friendpb::RecommendFriendsRequest;
+using AsyncClientPlayerFriendRecommendFriendsHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::friendpb::RecommendFriendsResponse&)>;
+extern AsyncClientPlayerFriendRecommendFriendsHandlerFunctionType AsyncClientPlayerFriendRecommendFriendsHandler;
+
+void SendClientPlayerFriendRecommendFriends(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RecommendFriendsRequest& request);
+void SendClientPlayerFriendRecommendFriends(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::RecommendFriendsRequest& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendRecommendFriends(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+#pragma endregion
+#pragma region ClientPlayerFriendNotifyFriendEvent
+
+struct AsyncClientPlayerFriendNotifyFriendEventGrpcClient {
+    uint32_t messageId{ ClientPlayerFriendNotifyFriendEventMessageId };
+    ClientContext context;
+    Status status;
+    ::Empty reply;
+    std::unique_ptr<ClientAsyncResponseReader<::Empty>> response_reader;
+};
+
+class ::friendpb::FriendEventS2C;
+using AsyncClientPlayerFriendNotifyFriendEventHandlerFunctionType =
+    std::function<void(const ClientContext&, const ::Empty&)>;
+extern AsyncClientPlayerFriendNotifyFriendEventHandlerFunctionType AsyncClientPlayerFriendNotifyFriendEventHandler;
+
+void SendClientPlayerFriendNotifyFriendEvent(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::FriendEventS2C& request);
+void SendClientPlayerFriendNotifyFriendEvent(entt::registry& registry, entt::entity nodeEntity, const ::friendpb::FriendEventS2C& request, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
+void SendClientPlayerFriendNotifyFriendEvent(entt::registry& registry, entt::entity nodeEntity, const google::protobuf::Message& message, const std::vector<std::string>& metaKeys, const std::vector<std::string>& metaValues);
 #pragma endregion
 void SetFriendHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);
 void SetFriendIfEmptyHandler(const std::function<void(const ClientContext&, const ::google::protobuf::Message& reply)>& handler);

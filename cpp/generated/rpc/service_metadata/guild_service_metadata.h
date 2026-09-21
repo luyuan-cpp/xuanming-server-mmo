@@ -74,3 +74,23 @@ constexpr uint32_t GuildServiceGetGuildRankIndex = 16;
 constexpr uint32_t GuildServiceGetGuildRankByGuildMessageId = 52;
 constexpr uint32_t GuildServiceGetGuildRankByGuildIndex = 17;
 #define GuildServiceGetGuildRankByGuildMethod  ::GuildService_Stub::descriptor()->method(17)
+
+constexpr uint32_t GuildServiceGetGuildDonateOptionsMessageId = 120;
+constexpr uint32_t GuildServiceGetGuildDonateOptionsIndex = 18;
+#define GuildServiceGetGuildDonateOptionsMethod  ::GuildService_Stub::descriptor()->method(18)
+
+constexpr uint32_t GuildServiceDonateToGuildMessageId = 53;
+constexpr uint32_t GuildServiceDonateToGuildIndex = 19;
+#define GuildServiceDonateToGuildMethod  ::GuildService_Stub::descriptor()->method(19)
+
+constexpr uint32_t GuildServiceUpgradeGuildMessageId = 76;
+constexpr uint32_t GuildServiceUpgradeGuildIndex = 20;
+#define GuildServiceUpgradeGuildMethod  ::GuildService_Stub::descriptor()->method(20)
+
+constexpr uint32_t GuildServiceGetGuildShopMessageId = 228;
+constexpr uint32_t GuildServiceGetGuildShopIndex = 21;
+#define GuildServiceGetGuildShopMethod  ::GuildService_Stub::descriptor()->method(21)
+
+constexpr uint32_t GuildServiceBuyGuildShopGoodsMessageId = 233;
+constexpr uint32_t GuildServiceBuyGuildShopGoodsIndex = 22;
+#define GuildServiceBuyGuildShopGoodsMethod  ::GuildService_Stub::descriptor()->method(22)

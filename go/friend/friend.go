@@ -182,9 +182,10 @@ func runFriend(c config.Config) (runErr error) {
 	// Prometheus /metrics(MetricsListenAddr 为空则不开)。指标本身是懒注册的,不调 Start 也能安全 Inc。
 	metrics.Start(c.MetricsListenAddr)
 
-	// friend_request 终态行的后台清理循环。接法按 internal/logic/sweep.go 顶部注释给的位置:
+	// 后台清理循环,两类对象:friend_request 的终态行 + friend_capacity 的零好友行(同一份 Sweep 参数)。
+	// 接法按 internal/logic/sweep.go 顶部注释给的位置:
 	// `deps := logic.NewDeps(svcCtx)` 之后、metrics.Start 附近 —— 放在 metrics.Start 之后,
-	// 是为了让第一轮刷出的 friend_sweep_pending_rows 一开始就能被抓到。
+	// 是为了让第一轮刷出的 friend_sweep_pending_rows / friend_sweep_idle_capacity_rows 一开始就能被抓到。
 	//
 	// ⚠ 默认 Sweep.Mode = report_only:接上之后**不会删任何数据**,只 COUNT + 打 WARN + 刷 gauge。
 	// 真删必须显式把配置改成 delete;当前模式与间隔在下面的启动横幅 "sweep:" 那一行,运维一眼可见。
@@ -384,10 +385,49 @@ func schemaOptions() schemamigrate.Options {
 	}
 }
 
+// missingIndexWarningPrefix 是 schemamigrate 那条"缺索引"告警的前缀,逐字取自
+// go/schemamigrate/plan.go(`缺索引(不会自动建):<表> 上没有 proto 声明的索引 <名>`)。
+// 提成常量是为了让 friend_test.go 能引用同一份字面量,而不是在测试里抄第二份。
+const missingIndexWarningPrefix = "缺索引"
+
+// missingIndexWarnings 挑出"缺索引"告警。
+//
+// schemamigrate 对**已存在的表**只 ADD COLUMN,不会补建 proto 新声明的普通索引 —— 它把这件事
+// 记成 Warning,而 Warning 不进 ExitCode。放过去等于带着缺索引的表对外服务:friend 这边最直接的
+// 受害者是 friend_capacity 的回收(sweep_repo.go 的 listIdleCapacityRowsBefore 依赖
+// (friend_count, created_ms) 复合索引),缺了它每轮候选读都是全表扫,而且 report_only 模式下
+// 同样在扫 —— 全程零报错,只有翻慢查询日志才看得出来。
+// 口径与 guild 一致(go/guild/guild.go 的同名函数),别在 friend 这边单独放宽。
+func missingIndexWarnings(r schemamigrate.Report) []string {
+	var missing []string
+	for _, w := range r.Warnings {
+		if strings.HasPrefix(w, missingIndexWarningPrefix) {
+			missing = append(missing, w)
+		}
+	}
+	return missing
+}
+
+// missingIndexError 把"缺索引"从告警升级成阻断错误;没有缺索引时返回 nil。
+//
+// 补救给的是 ALTER 而不是"删库重建":friend 库虽然从未上线(全新空库走 CREATE TABLE,索引随表建出,
+// 走不到这条路径),但真在存量库上撞见时,ALTER 是唯一不丢数据的办法。
+func missingIndexError(r schemamigrate.Report) error {
+	missing := missingIndexWarnings(r)
+	if len(missing) == 0 {
+		return nil
+	}
+	return fmt.Errorf("[friend] 库 %s 缺 %d 个 proto 声明的普通索引,拒绝启动"+
+		"(schemamigrate 对已存在的表不自动补建;按告警里的表名与索引列手工 "+
+		"`ALTER TABLE <表> ADD INDEX <索引名> (<列...>);`,或在开发期直接删库重建): %s",
+		data.DatabaseName, len(missing), strings.Join(missing, "; "))
+}
+
 // ensureSchema 是启动期建表策略(D-14 第 4 条):
 //   - Schema.AutoMigrate 没写或 true:跑 Up;err 非 nil 或出现需人工项 → 返回错误(调用方拒绝启动)。
 //     多副本同时起:Up 内部 GET_LOCK 串行化;等锁超时返回 ErrLockBusy,本副本拒启动后由进程拉起方重试。
 //   - false:只跑只读 Plan;有待执行语句或需人工项 → 返回错误,并带上补救命令。
+//   - 两种模式都额外把"缺普通索引"从 Warning 升级成阻断(见 missingIndexWarnings)。
 func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan schemaRunner) error {
 	opts := schemaOptions()
 	if c.ShouldAutoMigrate() {
@@ -400,7 +440,7 @@ func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan sch
 			return fmt.Errorf("[friend] 启动期建表发现 %d 项需人工处理(库 %s),拒绝启动: %s",
 				len(report.Manual), data.DatabaseName, strings.Join(report.Manual, "; "))
 		}
-		return nil
+		return missingIndexError(report)
 	}
 
 	report, err := plan(ctx, db, opts)
@@ -414,7 +454,9 @@ func ensureSchema(ctx context.Context, db *sql.DB, c config.Config, up, plan sch
 			"(待执行 %d 条、需人工 %d 项),拒绝启动;先执行 %s",
 			data.DatabaseName, len(report.Statements), len(report.Manual), migrateRemedyCommand)
 	}
-	return nil
+	// Report.Clean() 只看 Statements 与 Manual,不看 Warnings —— 缺索引落在 Warnings 里,
+	// 所以这一步必须单独判,否则 AutoMigrate=false 的只读核对会把缺索引放行。
+	return missingIndexError(report)
 }
 
 // runMigration 是 -migrate 的实现:只连 MySQL,不起 gRPC、不连 etcd。
@@ -435,6 +477,17 @@ func runMigration(c config.Config, allowModify bool, openMySQL func(config.MySQL
 	report, err := up(context.Background(), db, opts)
 	printReport(os.Stdout, report)
 	code := schemamigrate.ExitCode(report, err)
+	// 缺索引在 schemamigrate 里只是 Warning,不进 ExitCode(见 missingIndexWarnings)。
+	// K8s 的 friend-migrate Job 只看退出码:这里不升级成 ExitManual 的话,Job 会绿着结束,
+	// 随后起来的 friend Pod 又会被 ensureSchema 拦下 —— 现象是"迁移成功但服务起不来",
+	// 排查要多绕一圈。所以两条路径用同一个判据。
+	if code == schemamigrate.ExitOK {
+		if missErr := missingIndexError(report); missErr != nil {
+			fmt.Fprintf(os.Stderr, "schema migration needs manual action (exit %d): %v\n",
+				schemamigrate.ExitManual, missErr)
+			return schemamigrate.ExitManual
+		}
+	}
 	switch {
 	case err != nil:
 		fmt.Fprintf(os.Stderr, "schema migration FAILED (exit %d): %v\n", code, err)

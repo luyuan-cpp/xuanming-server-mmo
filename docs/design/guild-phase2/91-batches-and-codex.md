@@ -20,8 +20,8 @@
 | 9 | B4a-2 | 客户端 GM 统一闸门 | 6 | = | B4a-1 |
 | 10 | B4a-client | Pet/Attribute 客户端 27000–27008 镜像 | 2 | = | B4a-1 |
 | 11 | B4b | `go/shared/scenenode`、`go/shared/assetop`、聚宝斋文档改名 | 22 | −3(文档不计) | B4a-1 |
-| 12 | B5a | guild_db 资产三表完整定义(part2 §1)、guild.proto 经济 RPC、GuildDonate/GuildShop、TX_GUILD_DONATE_REFUND、白名单、gameday、号段登记 | 20 | −1(不改 GuildLevel.xlsx) | B2c、B4b |
-| 13 | B5b | guild 经济服务:仓库、Store(ListDue+Claim、纪元、签名)、离帮提前截止、assetopfix、`go_services.ps1` 密钥 | 23 | 净 0(−`guild_manage_logic.go` −`push.go` +`tables.go` +`go_services.ps1`) | B5a |
+| 12 | B5a | guild_db 资产三表完整定义(part2 §1)、guild.proto 经济 RPC、GuildDonate/GuildShop、gameday、号段登记、`session.ClientMethods` 登记、表清单与形状测试、xlsx 补丁脚本(~~TX_GUILD_DONATE_REFUND、白名单~~:D2 删退款分支,不做) | 22(18 已落 2026-09-20 + 4 个 xlsx 待 Python) | 净 +1:−`GuildLevel.xlsx` −`transaction_log.proto` −`asset_op_system.cpp` −其测试 +`tables.go` +`guild_repo_test.go` +`session.go` +形状测试 +脚本;明细见 92 §10.1 | B2c、B4b |
+| 13 | B5b | guild 经济服务:仓库、Store(ListDue+Claim、纪元、签名)、离帮提前截止、assetopfix、`go_services.ps1` 密钥 | 21 | −2(−`guild_manage_logic.go` −`push.go` +`go_services.ps1`;`tables.go` 与 `session.go` 已随 B5a 落) | B5a |
 | 14 | B5c | robot 经济冒烟、客户端捐献/商店/总览、货币改名 | 12 | = | B5b |
 | 15 | B5d | 回档 fail-closed:guild `GuildInternal.ListAppliedAssetOpsSince`、data_service `GetPlayerAssetOpLedger` 与 Rollback 前置检查、guild `LedgerReader` 接线 | 估 ≤18 | 新增(D3) | B5b;**需先补详细设计**(S4 4.38/4.39 只给了接口) |
 | 16 | B6a-srv | GuildActivity 表、灯会/团圆、活动 tip 10 行、MessageLimiter 5 行;#18 改为 `guild_manage_repo.go` | 30 | = | B5b |

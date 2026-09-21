@@ -1,0 +1,25 @@
+
+syntax = "proto3";
+
+option go_package = "generated/pb/table";
+
+option java_package = "com.game.table";
+option java_outer_classname = "GuildShopTableOuterClass";
+option java_multiple_files = true;
+
+
+message GuildShopTable {
+	uint32 id = 1;
+	string name = 2;
+	uint32 category = 3;
+	uint32 item_id = 4;
+	uint32 item_count = 5;
+	uint64 cost_contribution = 6;
+	uint32 required_guild_level = 7;
+	uint32 limit_period = 8;
+	uint32 limit_count = 9;
+}
+
+message GuildShopTableData {
+	repeated GuildShopTable data = 1;
+}

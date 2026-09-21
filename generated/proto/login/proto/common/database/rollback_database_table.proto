@@ -188,3 +188,43 @@ message id_segment
   uint32 step = 3;      // 每次领段的长度,按"10 分钟峰值发号量"配
   uint64 version = 4;   // CAS 版本号,每次领段 +1
 }
+
+// ============================================================================
+// Player Name — 玩家名字注册表(全服唯一)。
+// 放在本文件而不是 mysql_database_table.proto:导表器按那个文件的 message 成员生成
+// go/db 的 zone 库建表清单(generated/data/mysql_database_table_list.json),而名字
+// 唯一性只有"全服一张表"才成立 —— 每个 zone 一份就变成"区内唯一",跨区重名。
+// 真源在这里;zone 库 player_database.profile_component 与账号记录
+// AccountSimplePlayer.name 都只是只读副本,可能缺失,读侧回源 BatchGetPlayerName。
+//
+// 【为什么这张表不靠 proto2mysql 建】proto2mysql v0.1.0 把 string 渲染成 MEDIUMTEXT
+// (proto2mysql.go:259),而 TEXT 列上建 UNIQUE KEY 会被 MySQL 以 1170(BLOB/TEXT
+// column used in key specification without a key length)拒掉。所以本表和 id_segment
+// 一样走 store/schema.go 的 bootstrap DDL(name/name_norm 建成 VARCHAR),本 message
+// 只作为列漂移校验的事实源 —— 改了这里就必须同步改 bootstrap DDL,否则启动校验会报。
+// VARCHAR 长度 < 191,唯一键覆盖整列,不需要 D-14 §2 的 191 前缀写法。
+//
+// D-14 §2 复核:主键是整数列 player_id;全表只有一个唯一键(name_norm);
+// 按 §D3 声明 NONCLUSTERED + 打散(雪花 player_id 做主键 = 写热点)。
+// 设计见 docs/design/guild-phase2/03-names.md §3.2 / §3.3。
+// ============================================================================
+message player_name
+{
+  option(OptionTableName) = "player_name";
+  option(OptionPrimaryKey) = "player_id";
+  option(OptionUniqueKey) = "name_norm";
+  option(OptionTiDBNonclusteredPK) = true;
+  option(OptionTiDBShardRowIDBits) = 4;
+  option(OptionTiDBPreSplitRegions) = 4;
+
+  uint64 player_id  = 1;
+  // NFKC 归一 + 去首尾空白后的展示名(保留大小写),下发客户端的就是这一份。
+  string name       = 2;
+  // name 再转小写;唯一性只看它。展示名与唯一键分列是为了"显示保留大小写、
+  // 判重忽略大小写",两列必须由同一套规则包(go/shared/playername)一起算出来。
+  string name_norm  = 3;
+  // 登记时刻 Unix 毫秒(data_service 进程时钟)。ReleasePlayerName 的无 token 分支
+  // 只删落在 PlayerName.ReleaseWindow 内的行(login 建角失败的补偿),
+  // 超窗的孤儿行只能由运维带 x-admin-token 清 —— 没有这一列就没法区分两者。
+  uint64 created_ms = 4;
+}

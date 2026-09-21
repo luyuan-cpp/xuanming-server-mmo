@@ -78,3 +78,15 @@ constexpr uint32_t DataServiceCreateEventSnapshotIndex = 17;
 constexpr uint32_t DataServiceAllocateIdSegmentMessageId = 180;
 constexpr uint32_t DataServiceAllocateIdSegmentIndex = 18;
 #define DataServiceAllocateIdSegmentMethod  ::DataService_Stub::descriptor()->method(18)
+
+constexpr uint32_t DataServiceReservePlayerNameMessageId = 229;
+constexpr uint32_t DataServiceReservePlayerNameIndex = 19;
+#define DataServiceReservePlayerNameMethod  ::DataService_Stub::descriptor()->method(19)
+
+constexpr uint32_t DataServiceReleasePlayerNameMessageId = 237;
+constexpr uint32_t DataServiceReleasePlayerNameIndex = 20;
+#define DataServiceReleasePlayerNameMethod  ::DataService_Stub::descriptor()->method(20)
+
+constexpr uint32_t DataServiceBatchGetPlayerNameMessageId = 231;
+constexpr uint32_t DataServiceBatchGetPlayerNameIndex = 21;
+#define DataServiceBatchGetPlayerNameMethod  ::DataService_Stub::descriptor()->method(21)

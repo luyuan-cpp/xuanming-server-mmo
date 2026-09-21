@@ -21,5 +21,9 @@ func Tables() []proto.Message {
 		&pb.GuildPlayerStateRecord{},
 		&pb.GuildMemberRecord{},
 		&pb.GuildApplicationRecord{},
+		// B5a:资产三表。先 seq 行、再指令行、最后计数行 —— 经济事务按这个顺序第一次触碰各表。
+		&pb.GuildPlayerOpSeqRecord{},
+		&pb.GuildAssetOpRecord{},
+		&pb.GuildDailyCounterRecord{},
 	}
 }

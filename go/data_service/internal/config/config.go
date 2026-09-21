@@ -103,7 +103,9 @@ type IdSegmentConfig struct {
 // 与 store.DefaultIdSegmentBootstrapTags **必须一致**(config 不能 import store,只能两处各写一份),
 // 还要与 etc/data_service.yaml 的 IdSegment.BootstrapTags、k8s_deploy.ps1 data-service ConfigMap 同步。
 // trade_listing 的消费表在独占库 mmorpg_trade,不在本服务全局库里,所以不进 schema.go 的水位地板校验。
-var DefaultIdSegmentBootstrapTags = []string{"player", "guild", "item", "txlog", "snapshot", "trade_listing"}
+// guild_asset_op:帮会资产指令的 op_id(Go guild,同时作资产通道的 correlation_id;
+// docs/design/guild-phase2/05-economy.md §5.8)。消费表在独占库 mmorpg_guild,同理不做地板校验。
+var DefaultIdSegmentBootstrapTags = []string{"player", "guild", "item", "txlog", "snapshot", "trade_listing", "guild_asset_op"}
 
 // EffectiveBootstrapTags 是迁移路径实际预建的 tag 清单:没配 = 默认清单。
 // 返回副本,免得调用方改到包级默认值。

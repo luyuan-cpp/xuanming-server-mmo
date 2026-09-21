@@ -71,8 +71,10 @@ dirty-flag 解决的是"写太频繁，需要攒批"的问题。Friend/Guild 每
 -- 事务外(自动提交):按 player_id 升序补齐双方容量行。
 -- 必须在事务外:放进事务会让多个请求各持自己刚插入的新行、又都抢同一个接收者行,
 -- 形成 insert-intention 死锁。缺行时按 friend 表的权威边数算初值,绝不猜 0。
-INSERT IGNORE INTO friend_capacity (player_id, friend_count)
-  SELECT ?, COUNT(*) FROM friend WHERE player_id = ?;
+-- (示意;实现是 COUNT 与 INSERT 两条语句,不是一条 INSERT…SELECT:后者在连接默认 RR 下会对 friend 表
+--  加共享 next-key 锁,违反下一节的锁序。created_ms 自 2026-09-20 收尾批起写入,见「容量行回收」。)
+INSERT IGNORE INTO friend_capacity (player_id, friend_count, created_ms)
+  VALUES (?, <SELECT COUNT(*) FROM friend WHERE player_id = ?>, <now_ms>);
 
 BEGIN;  -- READ COMMITTED
 -- ① 容量守卫必须是事务里的第一把锁(见下一节的锁序纪律)
@@ -115,6 +117,38 @@ COMMIT;
 
 回归证据在 `go/friend/internal/data/friend_guard_lock_order_mysql_test.go`(真 MySQL 门控,
 `FRIEND_TEST_MYSQL_DSN`)。**全体 SKIP 时 `go test` 退出码仍是 0**,所以验收必须确认看到 PASS。
+
+### 容量行回收(2026-09-20 收尾批新增,未编译未运行)
+
+`AddFriend` 为了拿守卫会给**任意** target 建一行 `friend_capacity`(friend 没有玩家名册,验证不了 target
+是否存在),`Block → Unblock` 反复换目标同理;这张表原先没有 TTL、不在 sweep 范围内,增长可由客户端驱动,
+唯一的闸(每分钟配额)在 Redis 故障时按设计 fail-open。现在由 sweep 回收:
+
+- **schema**:`friend_capacity` 加 `created_ms`(本行被(重新)建出、或最近一次 `friend_count` **减少**的
+  时刻)与复合索引 `(friend_count, created_ms)`。只建 `created_ms` 单列索引不行 —— 老行绝大多数是有好友的
+  真实玩家,`LIMIT` 永远取不满,每轮都会扫完全部老行。`created_ms = 0` 的存量行是**安全的**(与
+  `friend_request.updated_ms` 相反):零好友行被回收后,ensure 按权威边数重建。
+- **SQL 形状(防 ABBA 的关键,不许改成一条批量 DELETE)**:候选用普通读
+  `SELECT player_id ... WHERE friend_count = 0 AND created_ms < ? LIMIT ?`,再**逐行、自动提交、按主键**
+  `DELETE ... WHERE player_id = ? AND friend_count = 0 AND created_ms < ?`(重复的两个条件是提交点复核)。
+  批量 `DELETE ... LIMIT` 会在一个语句事务里按二级索引序锁多行守卫行,与写事务"按 player_id 升序"的取锁
+  顺序不同,可以成环;逐行删时回收任一时刻至多持一把守卫锁、且持锁时不再等别的锁,不可能处在等待环里。
+- **与"缺行 fail-closed"的配合**:守卫缺行现在有一个预期内的来源(回收插在 ensure 与守卫之间,或在守卫
+  `FOR UPDATE` 正等着这行时把它删掉)。写事务的外层骨架收成一份 `runGuardedWrite`:缺行(包内哨兵
+  `errCapacityRowsMissing`)时回到事务外重新 ensure 再跑,上限 3 遍 —— 每行至多被回收一次(重建的行
+  `created_ms` 是当前时刻,DELETE 在提交点复核它),一次写至多两行,所以第三遍必过;三遍仍缺行才是
+  不变量破裂,照旧 fail-closed(`ErrStorage`)。缺行只可能出现在事务的第一条语句,重跑没有副作用。
+- **回收带来的两条新约束**(评审轮推演出来的,前一条未在真库复现):
+  1. 事务外的 ensure 可能吃 1213 —— 一方对某条主键记录持 X(回收的 DELETE,或别的事务的守卫),至少两个
+     `INSERT IGNORE` 同时排队等它的 S,X 释放后同时拿到 S 又都要升 X。ensure 因此对每个玩家的
+     COUNT + INSERT 做有上限的 1213 重试(自动提交、幂等,重试安全)。事务 body 里的 1213 仍不重试。
+  2. ensure 的 COUNT 与 INSERT 不原子:COUNT 读到 1 → `RemoveFriend` 提交(count→0)→ 回收删掉这行
+     老行 → INSERT 用陈旧的 1 建行,`friend_count` 从此**永久偏大 1**且无自愈。所以
+     `deleteFriendEdges` 减计数时一并刷新 `created_ms`,让刚减过计数的行在一个保留期内不可回收。
+- **配置与观测**:复用 `Friend.Sweep` 的 Mode / RetentionDays / BatchLimit,没有新增配置键;新 Gauge
+  `friend_sweep_idle_capacity_rows{mode}`。默认 `report_only` 同样只数不删。
+- **存量库注意**:`go/schemamigrate` 对已存在的表只 `ADD COLUMN`、不补建索引(只出 warning)。friend 库
+  从未上线,全新空库随 `CREATE TABLE` 建出索引;真遇到存量表要手工 `ADD INDEX`,否则候选读是全表扫。
 
 ### 拉黑表 `friend_block`(2026-09-18 新增)
 

@@ -35,20 +35,22 @@ static constexpr ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const* PROTOBUF_NU
     file_message_globals = nullptr;
 const char descriptor_table_protodef_friend_5ferror_5ftip_2eproto[] ABSL_ATTRIBUTE_SECTION_VARIABLE(
     protodesc_cold) = {
-    "\n\026friend_error_tip.proto*\346\001\n\014friend_erro"
+    "\n\026friend_error_tip.proto*\263\002\n\014friend_erro"
     "r\022\023\n\017kFriend_errorOK\020\000\022\031\n\024kFriendCannotA"
     "ddSelf\020\230u\022\032\n\025kFriendAlreadyFriends\020\231u\022\024\n"
     "\017kFriendListFull\020\232u\022\036\n\031kFriendRequestAlr"
     "eadySent\020\233u\022\032\n\025kFriendTargetListFull\020\234u\022"
     "\034\n\027kFriendNoPendingRequest\020\235u\022\032\n\025kFriend"
-    "TooManyPending\020\236uB$\n\016com.game.tableZ\022gen"
-    "erated/pb/tableb\006proto3"
+    "TooManyPending\020\236u\022\023\n\016kFriendBlocked\020\237u\022\031"
+    "\n\024kFriendBlockListFull\020\240u\022\033\n\026kFriendTarg"
+    "etInboxFull\020\241uB$\n\016com.game.tableZ\022genera"
+    "ted/pb/tableb\006proto3"
 };
 static ::absl::once_flag descriptor_table_friend_5ferror_5ftip_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_friend_5ferror_5ftip_2eproto = {
     false,
     false,
-    303,
+    380,
     descriptor_table_protodef_friend_5ferror_5ftip_2eproto,
     "friend_error_tip.proto",
     &descriptor_table_friend_5ferror_5ftip_2eproto_once,
@@ -67,7 +69,7 @@ friend_error_descriptor() {
   return file_level_enum_descriptors_friend_5ferror_5ftip_2eproto[0];
 }
 PROTOBUF_CONSTINIT const uint32_t friend_error_internal_data_[] = {
-    65536u, 458752u, 15003u, 15001u, 15005u, 15000u, 15002u, 15004u, 15006u, };
+    65536u, 655360u, 15006u, 15003u, 15008u, 15001u, 15005u, 15007u, 15009u, 15000u, 15002u, 15004u, };
 // @@protoc_insertion_point(namespace_scope)
 namespace google {
 namespace protobuf {

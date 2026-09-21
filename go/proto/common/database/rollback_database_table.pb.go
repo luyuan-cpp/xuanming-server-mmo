@@ -802,6 +802,99 @@ func (x *IdSegment) GetVersion() uint64 {
 	return 0
 }
 
+// ============================================================================
+// Player Name — 玩家名字注册表(全服唯一)。
+// 放在本文件而不是 mysql_database_table.proto:导表器按那个文件的 message 成员生成
+// go/db 的 zone 库建表清单(generated/data/mysql_database_table_list.json),而名字
+// 唯一性只有"全服一张表"才成立 —— 每个 zone 一份就变成"区内唯一",跨区重名。
+// 真源在这里;zone 库 player_database.profile_component 与账号记录
+// AccountSimplePlayer.name 都只是只读副本,可能缺失,读侧回源 BatchGetPlayerName。
+//
+// 【为什么这张表不靠 proto2mysql 建】proto2mysql v0.1.0 把 string 渲染成 MEDIUMTEXT
+// (proto2mysql.go:259),而 TEXT 列上建 UNIQUE KEY 会被 MySQL 以 1170(BLOB/TEXT
+// column used in key specification without a key length)拒掉。所以本表和 id_segment
+// 一样走 store/schema.go 的 bootstrap DDL(name/name_norm 建成 VARCHAR),本 message
+// 只作为列漂移校验的事实源 —— 改了这里就必须同步改 bootstrap DDL,否则启动校验会报。
+// VARCHAR 长度 < 191,唯一键覆盖整列,不需要 D-14 §2 的 191 前缀写法。
+//
+// D-14 §2 复核:主键是整数列 player_id;全表只有一个唯一键(name_norm);
+// 按 §D3 声明 NONCLUSTERED + 打散(雪花 player_id 做主键 = 写热点)。
+// 设计见 docs/design/guild-phase2/03-names.md §3.2 / §3.3。
+// ============================================================================
+type PlayerName struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	PlayerId uint64                 `protobuf:"varint,1,opt,name=player_id,json=playerId,proto3" json:"player_id,omitempty"`
+	// NFKC 归一 + 去首尾空白后的展示名(保留大小写),下发客户端的就是这一份。
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// name 再转小写;唯一性只看它。展示名与唯一键分列是为了"显示保留大小写、
+	// 判重忽略大小写",两列必须由同一套规则包(go/shared/playername)一起算出来。
+	NameNorm string `protobuf:"bytes,3,opt,name=name_norm,json=nameNorm,proto3" json:"name_norm,omitempty"`
+	// 登记时刻 Unix 毫秒(data_service 进程时钟)。ReleasePlayerName 的无 token 分支
+	// 只删落在 PlayerName.ReleaseWindow 内的行(login 建角失败的补偿),
+	// 超窗的孤儿行只能由运维带 x-admin-token 清 —— 没有这一列就没法区分两者。
+	CreatedMs     uint64 `protobuf:"varint,4,opt,name=created_ms,json=createdMs,proto3" json:"created_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerName) Reset() {
+	*x = PlayerName{}
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[6]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerName) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerName) ProtoMessage() {}
+
+func (x *PlayerName) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_database_rollback_database_table_proto_msgTypes[6]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerName.ProtoReflect.Descriptor instead.
+func (*PlayerName) Descriptor() ([]byte, []int) {
+	return file_proto_common_database_rollback_database_table_proto_rawDescGZIP(), []int{6}
+}
+
+func (x *PlayerName) GetPlayerId() uint64 {
+	if x != nil {
+		return x.PlayerId
+	}
+	return 0
+}
+
+func (x *PlayerName) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *PlayerName) GetNameNorm() string {
+	if x != nil {
+		return x.NameNorm
+	}
+	return ""
+}
+
+func (x *PlayerName) GetCreatedMs() uint64 {
+	if x != nil {
+		return x.CreatedMs
+	}
+	return 0
+}
+
 var File_proto_common_database_rollback_database_table_proto protoreflect.FileDescriptor
 
 const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
@@ -897,7 +990,13 @@ const file_proto_common_database_rollback_database_table_proto_rawDesc = "" +
 	"\x06max_id\x18\x02 \x01(\x04R\x05maxId\x12\x12\n" +
 	"\x04step\x18\x03 \x01(\rR\x04step\x12\x18\n" +
 	"\aversion\x18\x04 \x01(\x04R\aversion:*\x8a\x92\xf4\x01\n" +
-	"id_segment\x92\x92\xf4\x01\abiz_tag\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04B\x17Z\x15proto/common/databaseb\x06proto3"
+	"id_segment\x92\x92\xf4\x01\abiz_tag\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04\"\xb7\x01\n" +
+	"\vplayer_name\x12\x1b\n" +
+	"\tplayer_id\x18\x01 \x01(\x04R\bplayerId\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1b\n" +
+	"\tname_norm\x18\x03 \x01(\tR\bnameNorm\x12\x1d\n" +
+	"\n" +
+	"created_ms\x18\x04 \x01(\x04R\tcreatedMs:;\x8a\x92\xf4\x01\vplayer_name\x92\x92\xf4\x01\tplayer_id\xe2\x92\xf4\x01\tname_norm\xa8\x93\xf4\x01\x01\xb0\x93\xf4\x01\x04\xb8\x93\xf4\x01\x04B\x17Z\x15proto/common/databaseb\x06proto3"
 
 var (
 	file_proto_common_database_rollback_database_table_proto_rawDescOnce sync.Once
@@ -911,7 +1010,7 @@ func file_proto_common_database_rollback_database_table_proto_rawDescGZIP() []by
 	return file_proto_common_database_rollback_database_table_proto_rawDescData
 }
 
-var file_proto_common_database_rollback_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 6)
+var file_proto_common_database_rollback_database_table_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
 var file_proto_common_database_rollback_database_table_proto_goTypes = []any{
 	(*TransactionLog)(nil),   // 0: transaction_log
 	(*PlayerSnapshot)(nil),   // 1: player_snapshot
@@ -919,6 +1018,7 @@ var file_proto_common_database_rollback_database_table_proto_goTypes = []any{
 	(*PlayerDebt)(nil),       // 3: player_debt
 	(*RollbackAudit)(nil),    // 4: rollback_audit
 	(*IdSegment)(nil),        // 5: id_segment
+	(*PlayerName)(nil),       // 6: player_name
 }
 var file_proto_common_database_rollback_database_table_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -939,7 +1039,7 @@ func file_proto_common_database_rollback_database_table_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_database_rollback_database_table_proto_rawDesc), len(file_proto_common_database_rollback_database_table_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   6,
+			NumMessages:   7,
 			NumExtensions: 0,
 			NumServices:   0,
 		},
