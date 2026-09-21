@@ -1,0 +1,72 @@
+# Prometheus alert rules for the owner_epoch save fence (玩家存盘属主围栏).
+#
+# 来源:docs/design/guild-phase2/08-save-owner-fence.md §8.2.4(帮会二期 B4c);
+#       机制本身见 docs/design/scene-owner-reentry-barrier.md §3.3 / §6.3。
+#
+# Install as a PrometheusRule CR (kube-prometheus stack),与 scene-manager-alerts.yaml 同法:
+#   kubectl apply -n observability -f deploy/k8s/owner-epoch-alerts.yaml
+#
+# Scrape prerequisites:
+#   - go/db 的 MetricsListenAddr 已配置(本地惯例 ":9160",AGENTS.md §6.1)。
+#   - A ServiceMonitor or PodMonitor pointed at that port.
+#
+# scene 侧的对应信号(owner_epoch_unknown、资产操作因 epoch = 0 被挡、"save outran reconnect lease")
+# 只存在于 scene 日志:scene 的计数不进 Prometheus,而仓库里 Loki 的 ruler 目前没有挂载规则目录、
+# 也没有 alertmanager_url,不存在能生效的日志告警通路。那几条 LogQL 写在
+# docs/ops/cross-zone-failure-test-runbook.md,作为值班固定查询;ruler 接线归上线批 BK8s。
+#
+# Severity conventions(与 scene-manager-alerts.yaml 相同):
+#   critical = pager, someone wakes up
+#   warning  = next-business-hours channel
+#   info     = dashboard annotation / trend signal
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: owner-epoch-alerts
+  labels:
+    app: db
+    prometheus: kube-prometheus
+    role: alert-rules
+spec:
+  groups:
+    - name: owner-epoch.save-fence
+      interval: 30s
+      rules:
+        # 旧持有者的 DBTask 被 db 按 applied_epoch 拒绝。
+        # 两种来源都要看:① 僵尸 / 双主(不该发生);② K1 被正确拦下 —— 旧节点的退出存盘迟到,
+        # 新节点已铸出更高的 epoch。区分方法见 runbook(被拒前该玩家在旧节点上是否已进入退出链)。
+        # 这是无 label 的 Counter,注册时即以 0 值导出,increase 能抓到第一次。
+        - alert: DbStaleOwnerWriteRejected
+          expr: |
+            sum(increase(db_stale_owner_write_rejected_total[10m])) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "db 拒绝了旧 owner_epoch 的写入"
+            description: >-
+              过去 10 分钟约 {{ $value | printf "%.0f" }} 次 DBTask 因 owner_epoch 落后于已落库的 epoch 被 db 丢弃。
+              可能是僵尸 / 双主,也可能是旧节点退出存盘迟到被正确拦下(K1)。
+              按 docs/ops/cross-zone-failure-test-runbook.md 的区分方法核对 scene 日志
+              `HandlePlayerSaveRejected` 与该玩家在旧节点上的退出链。
+
+        # epoch = 0 的写进了 MySQL:owner_epoch 兼容窗口仍在(旧版 scene_manager / 存量 location /
+        # Redis 丢了 owner_epoch 键 / dev 旁路)。帮会二期要求"共享 / 预发环境开启帮会资产操作"时它恒为 0
+        # (08-save-owner-fence.md §8.3 第 5 条):epoch = 0 的实体存盘没有围栏。
+        # 用绝对值而不是 increase:这是 CounterVec,legacy_zero 这条序列要等第一次发生才出现,
+        # increase 对"从无到 1"只有一个样本、恰好漏掉第一次(92-handoff §8.1 踩过同一个坑)。
+        # 代价是进程重启之前一直处于告警态 —— 对"应当恒为 0"的门禁不变量,这正是想要的。
+        - alert: DbOwnerEpochLegacyZero
+          expr: |
+            sum(db_owner_epoch_guard_total{outcome="legacy_zero"}) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "有 owner_epoch = 0 的写入进了 MySQL"
+            description: >-
+              所有 db 实例累计(各自从自己启动时起算)已放行 {{ $value }} 次 owner_epoch = 0 的写入(legacy_zero);要定位实例,去掉 sum 按 pod 查询。
+              epoch = 0 的实体存盘不带归属围栏;帮会资产操作在该环境不得开启
+              (docs/design/guild-phase2/08-save-owner-fence.md §8.3 第 5 条)。
+              对照 scene 日志的 `[OwnerEpoch]` 行与 `[AssetOp] blocked: owner_epoch unknown`。

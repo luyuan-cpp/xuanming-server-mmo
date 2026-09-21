@@ -1074,6 +1074,14 @@ go-zero 的 `core/stores/redis/redis.go` 里,`GetCtx` 遇到 `redis.Nil` 时 `er
 
 **顺序是硬约束。** 帮会 B5a 会话的脚本与本批的脚本都要 load→save 同一个 xlsx,**串行跑,不要并发**;顺序已与 B5a 会话对齐。
 
+> **进度(2026-09-20 晚,按文件时间与生成物只读核实)**:
+> - ✅ 第 0 步:Python 与导表依赖都在。
+> - ✅ 第 1 步:`new-tables` / `tip-codes` / `tip-text` 都已跑(guild 段 22 → 32 码;`FriendBlocked` 已是中性文案)。
+> - ✅ 第 2 步:导表(22:39)。
+> - ✅ 第 3 步:proto-gen(22:41,新生成器;22:38 先恢复了 `scene_node_service.{cpp,h}`,Agones 块计数 1)。开头"五类悬空引用"已逐项核对,**全部补齐**(PROGRESS 同日「friend 生成物逐项验收」条)。
+> - ❌ **第 3b 步(客户端生成)未跑,且客户端当前提交编译不过**:自动保存 `2ca620e` 已把 11 个 `ClientPlayerFriend*Handler.cs` 提交进客户端,但 `Friend.cs` / `FriendErrorTip.cs` 还没生成。先跑 3b,生成物一起提交,再推。
+> - ❌ 第 4 步(两个 `message-limiter` + 第二次导表)、第 5 步起的编译 / 测试未跑;robot 的 `go mod vendor` 未跑(`robot/vendor/proto/` 下仍无 `friend`)。
+
 ```powershell
 # 0. 一次性前置。本机已有 Python 3.14.7(**用 py -3,别用 python** —— 那是商店占位桩;在 Claude 的 Bash 里敲
 #    python 不报错而是挂到 120s 超时),导表器 4 个依赖 21:57 起也已装好(dev.bat export 每次还会自己补装)。

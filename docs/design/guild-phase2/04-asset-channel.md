@@ -14,7 +14,7 @@
 - **不在 gRPC 线程上等存盘**:生成器模板在 `future.get()` 之后没有守护段(`tools/proto_generator/protogen/internal/grpc_handler_gen.go:130-141`),硬塞等待会被重生成吞掉。改为:scene 应用后立刻 `SavePlayerToRedis`,响应里如实报 `durable`;Go 用**同一 seq** 按 100/200/400ms 重查,重查时 scene 只读答复(不会重办)。实测 Redis SET 为毫秒级,一般第二次就拿到 `durable=true`。
 - **durable 的判定只看"确实落盘的字节"**:`PlayerLastPersistedSnapshotComp.snapshot` 是 `HandlePlayerAsyncSaved` 回调里写入的、刚写进 Redis 的整份 `PlayerAllData`(`player_lifecycle.cpp:315-319`,`last_persisted_snapshot_comp.h:9-16`)。某 seq 的结局出现在这份快照的账本里 = durable。不另建"已持久化水位"状态,不存在两份真相。
 - **账本窗口**:每条流一个 1024 位窗口,窗口上沿始终跟着"见过的最大 seq"滑动;Go 端用"每流未决 ≤16 行、未决跨度 <512"守卫,保证任何仍未决的 seq 永远在窗口内(证明见第 2 部分)。
-- **第二轮评审补强**(第 8–11 部分,优先于前文):seq 空间加"流纪元" `stream_epoch`,帮会库重建/恢复后旧 seq 不会被误认,另有跳号上限;请求体带 HMAC 签名,每条流只认对应服务;Credit 部分发放如实报 `partial`;客户端 `Gm*` 指令在分发入口统一闸住;单写者只在重连租约内成立,根治放新批次 B4c。
+- **第二轮评审补强**(第 8–11 部分,优先于前文):seq 空间加"流纪元" `stream_epoch`,帮会库重建/恢复后旧 seq 不会被误认,另有跳号上限;请求体带 HMAC 签名,每条流只认对应服务;Credit 部分发放如实报 `partial`;客户端 `Gm*` 指令在分发入口统一闸住;单写者只在重连租约内成立,根治放新批次 B4c(**2026-09-21 订正**:已被 [08-save-owner-fence.md](./08-save-owner-fence.md) 取代,不造 token 围栏;共享环境门禁见 08 §8.3)。
 
 ## 4.1 已核验的现状(本节依赖的事实)
 
@@ -41,7 +41,7 @@
 
 ## 4.2 不变量(违反即拒合)
 
-- **I1 单写者(在重连租约内成立)**:某玩家的资产与账本任一时刻只在一个 scene 实体上被**改**。改动类操作(应用、中止占位)要求:在本节点、无 `PlayerFrozenComp`、无 `UnregisterPlayer`。只读答复(已见 seq)不受限。**边界**:旧节点退出存盘超过 player_locator 30s 租约时,晚到的旧存盘可覆盖新节点已确认的数据(已知风险 K1,第 9 部分 4.35),由 B4c 存盘属主围栏根治。
+- **I1 单写者(在重连租约内成立)**(**2026-09-21 订正**:本条已被 [08-save-owner-fence.md](./08-save-owner-fence.md) 取代 —— owner_epoch 机制已堵住跨节点版 K1,B4c 改为补它的缺口,不造 token 围栏;共享环境门禁见 08 §8.3):某玩家的资产与账本任一时刻只在一个 scene 实体上被**改**。改动类操作(应用、中止占位)要求:在本节点、无 `PlayerFrozenComp`、无 `UnregisterPlayer`。只读答复(已见 seq)不受限。**边界**:旧节点退出存盘超过 player_locator 30s 租约时,晚到的旧存盘可覆盖新节点已确认的数据(已知风险 K1,第 9 部分 4.35),由 B4c 存盘属主围栏根治。
 - **I2 结局固定**:某 (player, stream, seq) 一旦记为 APPLIED 或 REJECTED,之后任何 RPC 都回同一结局。RETRY / NOT_HERE / UNKNOWN 永不记账。
 - **I3 同记录**:账本组件和 `currency`、`bag_component` 同在 `player_database`,由同一次 Marshal、同一次 Redis SET 写出,不存在"资产落了账本没落"的中间态。
 - **I4 Go 终结须 durable**:Go 只有拿到 `(APPLIED|REJECTED) && durable` 才把行从 PENDING 改走(比契约 §3.3 更严:REJECTED 也要 durable,理由见第 2 部分 C9)。
@@ -356,7 +356,7 @@ return wrote
 | C10 | 数据服务回档(RollbackPlayer / Zone / All) | blob 与账本一起回到旧快照;已终结的 guild 行不回滚(`rollback_logic.go:378-382`),会复制帮会资金与帮贡。**必须 fail-closed**:回档前查帮会侧已应用操作,有则默认拒绝(第 10 部分 4.39,B5 落地;过渡期手册禁止对有帮会资产操作的 zone 做批量回档)。PENDING 行在回档后按旧余额重新应用,结果一致 |
 | C11 | 滑窗后旧 seq 重查 | kBehindWindow → UNKNOWN。I5 保证不会发生在未决行上;若发生说明 Go 守卫失效或回档,Go 计 `assetop_unknown_total` 并告警,不终结 |
 | C13 | 帮会库删库重建 / 按库恢复 / 测试助手重置 | next_seq 回到小号;新纪元 > 账本纪元 → 该流重置后按新操作处理;恢复出来的旧纪元未决行拿到真实旧结局或 UNKNOWN(转人工)。手册见第 8 部分 4.31 ✓ |
-| C14 | 旧节点退出存盘超过 30s 租约后才落地(K1) | 可能覆盖新节点已 durable 的数据 → 复制。B4a 只告警,B4c 存盘属主围栏根治(第 9 部分 4.35)。✗ 已知风险 |
+| C14 | 旧节点退出存盘超过 30s 租约后才落地(K1) | 可能覆盖新节点已 durable 的数据 → 复制。B4a 只告警,B4c 存盘属主围栏根治(第 9 部分 4.35)。✗ 已知风险 → **2026-09-21:epoch 非 0 时已由 owner_epoch 堵住;epoch = 0、Z1、GO-2 等残余见 [08](./08-save-owner-fence.md) §8.2 / §8.3** |
 
 <!-- s4_asset_part3.md -->
 
@@ -1380,6 +1380,8 @@ inline bool IsClientGmMethodName(std::string_view name) {
 
 ## 4.35 单写者(I1)的真实边界:已知风险 K1 与 B4c
 
+> **2026-09-21 覆盖(效力高于本节下文)**:本节写于 owner_epoch 机制落地之前。下文的 `kClaimAndLoadLuaScript` / `kFencedSaveLuaScript` / `<blob>:owner` / `PlayerSaveOwnerComp` / `PlayerSaveFencedComp` / 搬 DBTask / `redis_fence_test` **一律不实施** —— 它们已由 owner_epoch(`kSaveIfGuardLuaScript`、`player:{id}:owner_epoch`、`PlayerOwnerEpochComp`、`HandlePlayerSaveRejected`、DBTask.owner_epoch)覆盖,再造一套违反 AGENTS §11.5-3。逐项对照、B4c 实际要补的四处缺口与新的共享环境门禁,见 [08-save-owner-fence.md](./08-save-owner-fence.md)。
+
 **已核实**:
 - `HandlePlayerAsyncSaved` 只对超过 30s 重连租约的退出存盘打 WARN "save outran reconnect lease"(`player_lifecycle.cpp:267-284`);:610-627 注释承认"存盘超租约时玩家可能已在新节点读到旧数据"。
 - 存盘脚本是无围栏的普通 SET(`redis_client.h:18-22`),`IssueSave` 以 1 个 key 调用(:459-474);失败无限重试(`HandlePlayerAsyncSaveFailed`,:154-183)。
@@ -1629,7 +1631,7 @@ type ManualResolver interface {
 
 **B4b 通用资产通道 Go(手改 25)**:`go/shared/go.mod`;`scenenode/` 的 watcher/conn/locator/metrics 与 2 个测试;`assetop/` 的 types/seq/caller/decide/reconcile/metrics/auth/classify 8 个;测试 decide/caller/reconcile/seq_integration/scene_smoke/auth/classify 7 个;`docs/design/jubaozhai-market.md`;`docs/design/guild-phase2.md`;`PROGRESS.md`。metrics.go 在第 5 部分基础上追加 `assetop_partial_total{service,stream}`、`assetop_claim_total{service,result}`(claimed/lost/poison)、`assetop_ledger_read_total{service,result}`、`assetop_manual_resolve_total{service,status}`,`assetop_store_errors_total` 的 op 增 list / decode / ledger_read。
 
-**B4c 玩家存盘属主围栏(≤12,单独评审与授权)**:见第 9 部分 4.35。
+**B4c 玩家存盘属主围栏(≤12,单独评审与授权)**:见第 9 部分 4.35。**2026-09-21 起以 [08-save-owner-fence.md](./08-save-owner-fence.md) 为准(5 个手改文件)。**
 
 ## 4.42 Codex 验证增补(在第 4 部分 4.16 与第 6 部分 4.23 基础上)
 
@@ -1660,7 +1662,7 @@ type ManualResolver interface {
 
 20. **流纪元**:`AssetOpRequest.stream_epoch = 7`、账本 `stream_epoch = 7`;`guild_player_op_seq.epoch = 5`、`guild_asset_op.stream_epoch = 26`;`guild_asset_op` 的 UNIQUE 改为 `player_id,stream,stream_epoch,seq`,第 3 索引改为 `player_id,stream,stream_epoch,status,seq`。S1/S5 表 message 需同步。
 21. **新增 2 个 asset tip**:`AssetPartialApplied`(27007,fault=1)、`AssetAuthFailed`(27008,fault=1);`AssetOpResponse.partial = 4`、账本 `partial_seqs = 8`;表状态枚举追加 APPLIED_PARTIAL。契约 §4 原列 7 个。
-22. **已知风险 K1**:单写者只在 30s 重连租约内成立;根治靠新批次 B4c。建议把"任何共享环境打开帮会资产操作"列为 B4c 的硬前置。
+22. **已知风险 K1**:单写者只在 30s 重连租约内成立;根治靠新批次 B4c。建议把"任何共享环境打开帮会资产操作"列为 B4c 的硬前置。(**2026-09-21 订正**:本条已被 [08-save-owner-fence.md](./08-save-owner-fence.md) 取代 —— owner_epoch 机制已堵住跨节点版 K1,B4c 改为补它的缺口,不造 token 围栏;共享环境门禁见 08 §8.3)。
 23. **assetop.Status 不绑数据库数值**:S1(1 基)与 S5 偏差 #1(0 基)冲突,请主设计裁决帮会表取值;assetop 经 `SeqTables.PendingStatus` 与 Store 映射兼容两者。第 7 部分 E1 的"trade 必须用同一编号"作废。
 24. **卡死行处置交 B5**:`ResolveAssetOp` 管理 RPC、`guild_asset_op.resolved_by = 27 / resolve_reason = 28`、data_service `GetPlayerAssetOpLedger`、三条告警规则(4.38)。
 25. **回档 fail-closed 交 B5**:guild `ListAppliedAssetOpsSince` + data_service `Rollback*` 前置检查与 `accept_guild_divergence`(4.39)。取代原偏差 #13。
@@ -1683,7 +1685,7 @@ type ManualResolver interface {
 | 1 | 阻断 | seq 与操作无绑定,帮会库重置/恢复后复制或丢失 | **已采纳** | `s1_storage_part5.md:166` 确把 `mmorpg_guild` 列入 BR 按库恢复;账本只按位图答复。采纳纪元 + 跳号上限 + 恢复手册 + 单测。在评审建议之外补了两处:`guild_asset_op` 的 UNIQUE 必须并入 `stream_epoch`(否则 next_seq 回 1 后与恢复出的旧行撞键);I5 改为只数本纪元未决行,旧纪元残行不挡新操作 | 第 8 部分 4.29–4.31;第 1 部分 proto;第 2 部分 Classify/Record/Validate/IsDurable、C13;第 7 部分 E2 修订 |
 | 2 | 主要 | 冒烟用 robot_9219 + Unix 秒作 seq,永久卡死帮会冒烟账号 | **已采纳** | 契约 §6 确把 9211–9219 划给 guild_smoke。改用专用 `robot_9501`(已 grep robot/tools/docs 与本设计目录,95xx 无人用),每次运行取新纪元、seq 从 1 起;删去"测试账号可以接受" | 第 11 部分 4.40;第 6 部分 4.24 标作废;偏差 #28 |
 | 3 | 主要 | AssetCredit/AssetDebit 无鉴权,集群内可任意发币 | **已采纳(实现方式调整)** | `node.cpp:623` 明文不安全凭据属实。调整三点:① 签名放**请求消息体** `AssetOpRequest.auth`,不放 metadata——`grpc_handler_gen.go:125` 把 context 注释成 `/*context*/`,读 metadata 要改生成器并重生成全部 gRPC 包装,安全性等价而改动面小得多;② **每个调用方一把密钥**(GUILD/TRADE 分开),比共用一把更能隔离流;③ 不设 nonce:同 seq 重放要么只读、要么就是唯一一次应用,Go 总以 scene 结局为准,只保留 5 分钟时间窗。密钥未配时**一律拒绝**,不做 dev 放行,本地脚本显式注入开发值。NetworkPolicy:仓库内无任何 NetworkPolicy 清单,列为上线项 | 第 8 部分 4.32;第 3 部分 4.9 第 1b 步、4.10;偏差 #26、#29 |
-| 4 | 主要 | I1 单写者只靠 30s 租约,晚到旧存盘可覆盖 | **部分采纳** | `player_lifecycle.cpp:267-284` 的 WARN、:610-627 注释、`redis_client.h:18-22` 无围栏 SET、失败无限重试均属实。采纳:① I1 改写为"租约内成立"并列已知风险 K1;② 告警(scene 以日志为指标源,给出 LogQL)。**驳回 ③"加载后 N 秒内资产改动回 RETRY"**:旧节点存盘无限重试,N 取多少都不成立;同 zone 每次过图都要挨 N 秒,代价大且保护不完整。根治方案设计为新批次 **B4c 存盘属主围栏**(认领式加载 + 带属主比较的存盘 Lua、DBTask 挪到存盘成功后),并要求任何共享环境打开帮会资产操作前必须先落 B4c | 第 9 部分 4.35;第 1 部分 I1;第 2 部分 C8、C14;偏差 #22 |
+| 4 | 主要 | I1 单写者只靠 30s 租约,晚到旧存盘可覆盖 | **部分采纳** | `player_lifecycle.cpp:267-284` 的 WARN、:610-627 注释、`redis_client.h:18-22` 无围栏 SET、失败无限重试均属实。采纳:① I1 改写为"租约内成立"并列已知风险 K1;② 告警(scene 以日志为指标源,给出 LogQL)。**驳回 ③"加载后 N 秒内资产改动回 RETRY"**:旧节点存盘无限重试,N 取多少都不成立;同 zone 每次过图都要挨 N 秒,代价大且保护不完整。根治方案设计为新批次 **B4c 存盘属主围栏**(认领式加载 + 带属主比较的存盘 Lua、DBTask 挪到存盘成功后),并要求任何共享环境打开帮会资产操作前必须先落 B4c(**2026-09-21 订正**:已被 [08-save-owner-fence.md](./08-save-owner-fence.md) 取代,不造 token 围栏;共享环境门禁见 08 §8.3) | 第 9 部分 4.35;第 1 部分 I1;第 2 部分 C8、C14;偏差 #22 |
 | 5 | 主要 | player_database 加列没有 MySQL 迁移 | **已采纳** | `go/db/etc/db.yaml:62` `AutoMigrateSchema: false`、`key_ordered_consumer.go:597` 全列写、`go/db/cmd/migrate` 存在(`-command plan/up`)均属实。验证加第 1b 步:plan → up(不加 `-allow-modify`)→ 每个 zone 库 `SHOW COLUMNS` 确认;K8s 走 migrate Job | 第 11 部分 4.42;第 1 部分 4.3.4 |
 | 6 | 主要 | GM 闸门漏口多,逐 handler 加闸必漏 | **已采纳** | grep 实得客户端可调 `Gm*` 18 个(货币 4、宠物 1、属性 1、回档/欠款 12)。统一闸门放在唯一客户端入口 `ProcessClientPlayerMessage`(gate 经 `client_message_processor.cpp:699-711` 只走它),在 `CallMethod`(:418)前按 `Gm+大写` 前缀拦截;`InvokePlayerService`/`SendMessageToPlayer` 是节点路由,不加闸并写明约束。补描述符扫描测试防 `GMGrant` 类绕过。为守 30 文件上限拆出 B4a-2 | 第 9 部分 4.34;第 3 部分 4.12 标作废;第 1 部分 I8;偏差 #27 |
 | 7 | 主要 | Credit 部分失败仍记 APPLIED,伪装成功 | **已采纳** | 原稿 4.9 第 10(b)(c) 步属实,违反 AGENTS §11.3。响应加 `partial`、tip `AssetPartialApplied`(fault=1)、账本 `partial_seqs`、Go 终态 APPLIED_PARTIAL(不入账不退款,计数并转人工);失败面前移:guid 号段余量预检(`guid_segment_client.h:158` `Available()`)。货币封禁预检原稿已有。无改动时失败回 RETRY 不记账 | 第 9 部分 4.33;第 3 部分 4.9、4.10;第 1 部分 proto 与 tip;偏差 #21 |
@@ -1703,6 +1705,6 @@ type ManualResolver interface {
 1. **S1 与 S5 的 `GuildAssetOpStatus` 数值冲突**:S1 定 1 基(`s1_storage_part2.md:32-38`),S5 偏差 #1(`s5_economy_part7.md:95`)提议 0 基。S4 已改为不绑数值(偏差 #23),请主设计裁决帮会表取值,并在 ABORTED 之后追加 APPLIED_PARTIAL。
 2. **S5 要跟改**:`s5_economy_part4.md:126-137` 仍是单条范围 `UPDATE … LIMIT` 的 ClaimDue 与 `status = 0`,须换成 `ListDue + Claim`;`guild_asset_op` 追加 26–28 列、UNIQUE 与第 3 索引并入 `stream_epoch`;`guild_player_op_seq.epoch = 5`;业务写路径包 `WithTxRetry`;接 `Signer`(`MMORPG_ASSET_OP_SECRET_GUILD`,`go_services.ps1` 注入开发值);实现 `ResolveAssetOp`、`ListAppliedAssetOpsSince`、`LedgerReader`(data_service `GetPlayerAssetOpLedger`)与告警规则;APPLIED_PARTIAL 不入账不退款。
 3. **S6**:给离线成员发活动奖励时,离线未见的行会一直 PENDING 并占 I5 名额(每流 16),发奖批量需考虑;已见结局可经 LedgerReader 离线终结。
-4. **新批次 B4c**(存盘属主围栏)需用户单独授权;建议列为"任何共享/预发环境开放帮会资产操作"的硬前置。
+4. **新批次 B4c**(存盘属主围栏)需用户单独授权;建议列为"任何共享/预发环境开放帮会资产操作"的硬前置。(**2026-09-21 订正**:已被 [08-save-owner-fence.md](./08-save-owner-fence.md) 取代,不造 token 围栏;共享环境门禁见 08 §8.3)。
 5. **契约 §6** 建议补一行:`robot_95xx` 归资产通道冒烟。
 6. **上线项**:K8s 注入两把资产密钥(`Resolve-InjectedSecret -MinLength 32`,不得与其它密钥复用);scene gRPC 端口 NetworkPolicy 只放行 scene_manager / match / guild / trade。

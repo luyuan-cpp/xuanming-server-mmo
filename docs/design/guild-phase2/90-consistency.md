@@ -19,7 +19,7 @@
 | D5 | S6 U1(当期=档期)、U2(阵亡不得奖) | S6 part11 | 按 S6 默认 |
 | D6 | 写冲突统一回 tip `GuildBusyRetry`(契约外) | S2 用它;S5 用 `GuildAssetPending`;S6 回 gRPC err(客户端会被强制重连) | 采纳,见 Y-02 |
 | D7 | 事务隔离级别 | S2 默认 RR 并依赖间隙锁死锁来守申请上限;S5 经济事务 RC;S6 未写 | 全部帮会写事务统一 **READ COMMITTED**;B2 申请上限改靠 `guild_player_state` 锁行(X-10)。前提 `binlog_format=ROW` |
-| D8 | B4c 存盘属主围栏 | S4 K1 | B5 代码可先落;任何共享/预发环境开启帮会资产操作前必须先落 B4c |
+| D8 | B4c 存盘属主围栏 | S4 K1 | B5 代码可先落;任何共享/预发环境开启帮会资产操作前必须先落 B4c。**2026-09-21 订正:门禁改为 [08-save-owner-fence.md](./08-save-owner-fence.md) §8.3 的六条(B4c、Z1 修复、GO-2 修复、`AllowUnsafeCrossNodeHandoff=false`、`owner_epoch_unknown` 与 `legacy_zero` 恒 0、blob 与 owner_epoch 同一非 Cluster Redis 实例)** |
 | D9 | 契约外新增 tip 共 8 个 | S2 `GuildBusyRetry`;S4 `AssetPartialApplied`、`AssetAuthFailed`;S6 `GuildActivityJoinTooRecent`、`GuildTrialInviteExpired/Declined/Cooldown`、`GuildTrialServiceBusy` | 一次性批准,顺序见 part3 Y-07 |
 | D10 | `guild.proto` 时间戳类型 | 契约 §2 要 uint64;S2 保留 int64(`GuildMember.join_time_ms/last_active_ms`、`GuildInfo.create_time_ms`) | B2s 同号改 uint64(非负 varint 线格式兼容);B2c 客户端同步类型 |
 
@@ -290,7 +290,7 @@ S6 `ActivityDeps` 删 `Notifier`(用 `l.notify`),`OpIDs` 类型改 `data.OpIDMin
 
 ## G-05 K8s 上线批 BK8s(本期不落地,单独授权;各节零散"上线项"汇总)
 
-guild:Deployment + ConfigMap(DSN 库 `mmorpg_guild`、appuser、`Schema.AutoMigrate=false`、`Timeout 4000`、`DataServiceRpc.Timeout 2000`、`AssetOp`、`MatchRpc`、`Activity`、`PlayerLocatorRedis` 指 SharedRedis)、`guild-migrate` Job(照 trade-migrate);密钥 `MMORPG_ASSET_OP_SECRET_GUILD/_TRADE`(`Resolve-InjectedSecret -MinLength 32`,注入 guild、trade、scene);NetworkPolicy(scene gRPC 只放 scene_manager/match/guild/trade;match gRPC 只放路由服与 guild);db migrate Job 先于 db/scene 滚动(两条新列);data-service ConfigMap 的 BootstrapTags;mysql-init ConfigMap 含 `mmorpg_guild`;TiDB BR 按库恢复清单加 `mmorpg_guild`;scene 永不设 `MMORPG_ALLOW_CLIENT_GM`;告警规则上线(G-07)。前置:B4c 已落地(D8)。
+guild:Deployment + ConfigMap(DSN 库 `mmorpg_guild`、appuser、`Schema.AutoMigrate=false`、`Timeout 4000`、`DataServiceRpc.Timeout 2000`、`AssetOp`、`MatchRpc`、`Activity`、`PlayerLocatorRedis` 指 SharedRedis)、`guild-migrate` Job(照 trade-migrate);密钥 `MMORPG_ASSET_OP_SECRET_GUILD/_TRADE`(`Resolve-InjectedSecret -MinLength 32`,注入 guild、trade、scene);NetworkPolicy(scene gRPC 只放 scene_manager/match/guild/trade;match gRPC 只放路由服与 guild);db migrate Job 先于 db/scene 滚动(两条新列);data-service ConfigMap 的 BootstrapTags;mysql-init ConfigMap 含 `mmorpg_guild`;TiDB BR 按库恢复清单加 `mmorpg_guild`;scene 永不设 `MMORPG_ALLOW_CLIENT_GM`;告警规则上线(G-07,含 `deploy/k8s/owner-epoch-alerts.yaml`);**Loki ruler 接线**(挂载规则目录 + `alertmanager_url`;仓库里 ruler 已配 local 存储但未挂规则、未接告警),接上后把 `docs/ops/cross-zone-failure-test-runbook.md` §9 的三条 LogQL 转为规则(2026-09-21 B4c 补)。前置:B4c 已落地(D8;**2026-09-21 起为 [08](./08-save-owner-fence.md) §8.3 六条**)。
 
 ## G-06 proto-gen 容量
 
@@ -301,7 +301,7 @@ guild:Deployment + ConfigMap(DSN 库 `mmorpg_guild`、appuser、`Schema.AutoMigr
 | 文档 | 批次与内容 |
 |---|---|
 | `docs/design/guild-phase2.md` | **B1 新建**:契约摘要 + 本清单 D1–D10 裁决 + §S1;之后每批追加本节正文(清理 Y-17 旧引用) |
-| 同上"运维"节 | B5b:assetopfix、库恢复/抬纪元手册(S4 4.31)、告警 `assetop_unknown_total`、`assetop_pending_oldest_age_seconds`、`assetop_partial_total`、`guild_asset_refund_blocked_total`、`guild_cache_invalidate_failed_total`;B5d:回档拒绝与 `accept_guild_divergence`;B6b-srv2:毒消息、EXPIRED、owed 积压、`guild_trial_result_overdue`、`battle_activity_result_undelivered/not_durable`;B4c:`save outran reconnect lease`;B3a-2:名字孤儿 `login_create_player_name_orphan_total` |
+| 同上"运维"节 | B5b:assetopfix、库恢复/抬纪元手册(S4 4.31)、告警 `assetop_unknown_total`、`assetop_pending_oldest_age_seconds`、`assetop_partial_total`、`guild_asset_refund_blocked_total`、`guild_cache_invalidate_failed_total`;B5d:回档拒绝与 `accept_guild_divergence`;B6b-srv2:毒消息、EXPIRED、owed 积压、`guild_trial_result_overdue`、`battle_activity_result_undelivered/not_durable`;B4c:`deploy/k8s/owner-epoch-alerts.yaml`(`DbStaleOwnerWriteRejected` / `DbOwnerEpochLegacyZero`)与 runbook §9 三条值班 LogQL(`[AssetOp] blocked: owner_epoch unknown`、`[OwnerEpoch] … owner_epoch_unknown=N`、`save outran reconnect lease`),见 [08](./08-save-owner-fence.md) §8.2.4;B3a-2:名字孤儿 `login_create_player_name_orphan_total` |
 | `xuanming-port-decisions-20260910.md` D-14 | B1(§5/§7/§8,S1 §20);B5a 补 §9 biz_tag `guild_asset_op` |
 | `guild-zone-client-access.md` | B1 存储段;B2c §5 客户端写 RPC 清单(删 JoinGuild) |
 | `jubaozhai-market.md` §6.4 | B4b(先 diff 交易会话未提交内容);§6.3 `TransferPlayer` 带 name 由交易会话合入 |

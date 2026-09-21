@@ -29,7 +29,7 @@
 | 18 | B6b-srv1 | battle 回显与结果持久化、match `MatchInternal` | 17(+≤3 生成工程登记) | = | B6a-srv;与组队、属性会话协调 |
 | 19 | B6b-srv2 | guild 历练:邀请房间、结果消费、结算、owed 循环、巡检器 | 21 | −1(文档不计) | B6b-srv1 |
 | 20 | B6b-cli | 历练选人与邀请客户端、robot S9–S15 | 6 | −1(PROGRESS 不计) | B6b-srv2 |
-| 门禁 | B4c | 玩家存盘属主围栏 | ≤12 | 单独评审 | B4a-1;**任何共享/预发环境开启帮会资产操作之前** |
+| 门禁 | B4c | 玩家存盘属主围栏:在既有 owner_epoch 上补缺口(epoch = 0 资产闸、存盘队列新旧颠倒、围栏用例、告警),**不造 token 围栏**;详见 [08](./08-save-owner-fence.md) | 5(2026-09-21 落码,未编译) | 设计 + 对抗复核 + 与跨 zone 会话逐条核对 | B4a-1;**任何共享/预发环境开启帮会资产操作之前**,且须同时满足 08 §8.3 的其余五条 |
 | 上线 | BK8s | 见 `90_consistency_part4.md` G-05 | 另计 | — | B4c |
 
 **可调整的顺序**:B3(序 5–7)与 B4(序 8–11)互不依赖,可整体对调以尽早开工 B5;对调后 `asset_op_ledger` 取 15、`profile_component` 取 16(G-03 规则不变)。
@@ -53,7 +53,7 @@
 | B6a-srv 前 | U1(当期=档期)、U2(阵亡不得奖);活动 tip 5 个契约外新码;邀请确认制 |
 | B6a-cli 冒烟 | 对 4 个测试账号执行 `DELETE FROM mmorpg_guild.guild_daily_counter …`(S6 §6.44,永久删行) |
 | B6b-srv1 前 | 与组队会话确认 `gather.go` 改动方式,与属性会话确认 `battle_data.proto` 已提交;Kafka 结果事件新增字段 |
-| 共享环境前 | B4c 已落地并验证 |
+| 共享环境前 | B4c 已落地并验证;**2026-09-21 起为 [08](./08-save-owner-fence.md) §8.3 的六条全部满足**(含跨 zone 会话的 Z1 与 GO-2 修复) |
 | 上线前 | BK8s 清单、密钥注入、NetworkPolicy |
 
 ## 3. 每批合入前的公共检查(Codex 与实现方共同遵守)

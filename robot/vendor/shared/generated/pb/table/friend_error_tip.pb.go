@@ -32,6 +32,9 @@ const (
 	FriendError_kFriendTargetListFull     FriendError = 15004
 	FriendError_kFriendNoPendingRequest   FriendError = 15005
 	FriendError_kFriendTooManyPending     FriendError = 15006
+	FriendError_kFriendBlocked            FriendError = 15007
+	FriendError_kFriendBlockListFull      FriendError = 15008
+	FriendError_kFriendTargetInboxFull    FriendError = 15009
 )
 
 // Enum value maps for FriendError.
@@ -45,6 +48,9 @@ var (
 		15004: "kFriendTargetListFull",
 		15005: "kFriendNoPendingRequest",
 		15006: "kFriendTooManyPending",
+		15007: "kFriendBlocked",
+		15008: "kFriendBlockListFull",
+		15009: "kFriendTargetInboxFull",
 	}
 	FriendError_value = map[string]int32{
 		"kFriend_errorOK":           0,
@@ -55,6 +61,9 @@ var (
 		"kFriendTargetListFull":     15004,
 		"kFriendNoPendingRequest":   15005,
 		"kFriendTooManyPending":     15006,
+		"kFriendBlocked":            15007,
+		"kFriendBlockListFull":      15008,
+		"kFriendTargetInboxFull":    15009,
 	}
 )
 
@@ -89,7 +98,7 @@ var File_friend_error_tip_proto protoreflect.FileDescriptor
 
 const file_friend_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x16friend_error_tip.proto*\xe6\x01\n" +
+	"\x16friend_error_tip.proto*\xb3\x02\n" +
 	"\ffriend_error\x12\x13\n" +
 	"\x0fkFriend_errorOK\x10\x00\x12\x19\n" +
 	"\x14kFriendCannotAddSelf\x10\x98u\x12\x1a\n" +
@@ -98,7 +107,10 @@ const file_friend_error_tip_proto_rawDesc = "" +
 	"\x19kFriendRequestAlreadySent\x10\x9bu\x12\x1a\n" +
 	"\x15kFriendTargetListFull\x10\x9cu\x12\x1c\n" +
 	"\x17kFriendNoPendingRequest\x10\x9du\x12\x1a\n" +
-	"\x15kFriendTooManyPending\x10\x9euB$\n" +
+	"\x15kFriendTooManyPending\x10\x9eu\x12\x13\n" +
+	"\x0ekFriendBlocked\x10\x9fu\x12\x19\n" +
+	"\x14kFriendBlockListFull\x10\xa0u\x12\x1b\n" +
+	"\x16kFriendTargetInboxFull\x10\xa1uB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

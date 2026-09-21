@@ -472,7 +472,7 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 
 **T2 PENDING 行在回档后重投。** §7.1.1 注 1 已论证自洽。补一条边界:回档后账本 `max_seq` 变小,guild 的 `next_seq` 不变,差距 ≤ 1024 时新 seq 判 Unseen 正常应用(`go/shared/assetop/classify.go:79-131`);> 1024 判 JumpTooFar → UNKNOWN(04:1187),见 §7.8.1。
 
-**T3 与 B4c 存盘属主围栏的关系。** 回档要真正作用到 scene 读的 blob,必须(a)写 PlayerAllData key,(b)先把属主 SET 为 `rollback:<毫秒>`(04:1414),否则旧 scene 的晚到存盘会把回档结果盖掉——盖掉之后玩家侧其实**没回档**,而 guild 侧的"分歧已放行"日志却说回了,补偿就会补错。这两件事都不在 B5d:B5d 的闸不依赖它们,但**手册写明**:B4c 与"回档写 PlayerAllData"落地之前,放行日志只能当线索,补偿前必须人工核对玩家当前资产(§7.9.3)。
+**T3 与 B4c 存盘属主围栏的关系。** 回档要真正作用到 scene 读的 blob,必须(a)写 PlayerAllData key,(b)经 owner_epoch 守卫写入(推进 / 校验 `player:{id}:owner_epoch`;原 04 §4.35 的 `rollback:<毫秒>` 属主已作废,见 [08-save-owner-fence.md](./08-save-owner-fence.md) §8.1 末行),否则旧 scene 的晚到存盘会把回档结果盖掉——盖掉之后玩家侧其实**没回档**,而 guild 侧的"分歧已放行"日志却说回了,补偿就会补错。这两件事都不在 B5d:B5d 的闸不依赖它们,但**手册写明**:B4c 与"回档写 PlayerAllData"落地之前,放行日志只能当线索,补偿前必须人工核对玩家当前资产(§7.9.3)。
 
 ---
 
@@ -692,7 +692,7 @@ GuildCheckBudgetSeconds int64 `json:",default=120"`    // 只罩检查阶段
 - **U5b `Store.Finalize` 同写 `next_attempt_ms`**(§7.4.1):05:690 写了,`go/shared/assetop/reconcile.go:136-138` 的契约注释没写。属 B5b / shared/assetop 持有会话的范围;B5d 只提硬要求并由 G5b 钉住。**漏了是 fail-open**,比 U5 严重,B5b 交付前请点名核对。
 - **U9 保留期不可证明能否被放行覆盖**(R2b、§7.5.4):本文定为**能**(同一个开关、同样要 token + reason + operator),依据是 90:191 的"**默认**拒绝"与"不给出口就逼出绕闸"。这比前稿放宽了一档,请确认。若你要维持"不可覆盖":最小改法 = §7.6.4 表里"有不可证明玩家"一行改回 `CheckFailed`、放行无效,钳位重查与 `guild_unprovable_player_count` 保留(让运维至少看得见是谁挡的);**不改的风险** = 开服满 30 天后 `RollbackZone / RollbackAll` 基本不可用,只剩逐玩家回档。
 - **U10 data_service 如何发现 guild**(§7.5.5):推荐 (c) 静态 `Endpoints`(dev)/ Service DNS(k8s),零额外文件;(a) 给 guild 加 go-zero `Etcd.Key` 要推翻 D-13;(b) 自建 NodeInfo resolver 不值。三条的失败方向都是拒绝。
-- **U6 回档实际不作用于 scene 读的 blob**(§结论第二条、T3):不在 B5d,但它决定了"复制资产"何时从理论变成现实,也决定放行日志何时可以直接当补偿单用。需要有人认领一个独立批次(回档写 PlayerAllData + B4c 属主围栏 + `RollbackFence` 生产实现),建议在 PROGRESS 里挂账。
+- **U6 回档实际不作用于 scene 读的 blob**(§结论第二条、T3):不在 B5d,但它决定了"复制资产"何时从理论变成现实,也决定放行日志何时可以直接当补偿单用。需要有人认领一个独立批次(回档写 PlayerAllData 且经 owner_epoch 守卫(08 §8.1)+ `RollbackFence` 生产实现),建议在 PROGRESS 里挂账。
 - **U7 data_service 的 `/metrics` 在 k8s 未开**、guild 无 k8s manifest(D-14):B5d 的指标告警在 k8s 环境实际不可用,以日志关键字告警过渡。
 - **U8 回档前安全快照的清理**:被本闸拒绝的回档不产生安全快照(检查在它之前),无新增垃圾;放行后写后复查失败的那次,安全快照保留,属预期。
 

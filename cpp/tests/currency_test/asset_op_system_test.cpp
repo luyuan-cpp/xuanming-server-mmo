@@ -149,6 +149,9 @@ protected:
 		tlsEcs.actorRegistry.emplace<CurrencyComp>(player_);
 		tlsEcs.actorRegistry.emplace<PlayerCurrencyComp>(player_);
 		tlsEcs.actorRegistry.emplace<PlayerAssetOpLedgerComp>(player_);
+		// 资产通道只在存盘带归属围栏的实体上记账(B4c,08-save-owner-fence.md §8.2.1):
+		// 默认给一个已铸造的 epoch,epoch == 0 / 组件缺失的行为由 OwnerEpoch* 用例单独覆盖。
+		tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player_).epoch = 1;
 		tlsEcs.playerList[kTestPlayerId] = player_;
 
 		ArmItemSegment();
@@ -854,5 +857,86 @@ TEST_F(AssetOpSystemTest, AbortDurableAfterSave)
 	const auto again = CallAbort(5);
 	EXPECT_EQ(ASSET_OP_OUTCOME_REJECTED, again.outcome());
 	EXPECT_TRUE(again.durable()) << "REJECTED 也必须 durable 才允许 Go 终结(I4 / C9)";
+}
+
+// ── 归属围栏(B4c,08-save-owner-fence.md §8.2.1)──────────────────────────────
+//
+// owner_epoch == 0 时 SavePlayerToRedis 走无守卫的旧 Save:记下的结局可能被旧节点晚到的退出存盘
+// 抹掉,而 Go 已据 durable 终结 —— 帮会记了资金,玩家侧的扣款却没了(04 K1)。所以改动类 RPC
+// 在无围栏的实体上一律 RETRY、不记账、不触发存盘。
+
+// E1:epoch == 0 时 Debit / Credit / AbortDebit 都不记账。
+TEST_F(AssetOpSystemTest, OwnerEpochZeroRetryNotRecorded)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = 0;
+
+	const auto debit = CallDebit(1, 30);
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, debit.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetFrozen), debit.reason().id())
+		<< "对玩家是\"角色迁移中,稍后自动重试\";kAssetBlocked 是货币封禁的文案";
+	EXPECT_FALSE(debit.durable());
+
+	const auto credit = CallCredit(MakeCurrencyRequest(ASSET_OP_STREAM_GUILD_CREDIT, 1, 30, TX_GUILD_SHOP));
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, credit.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetFrozen), credit.reason().id());
+
+	const auto aborted = CallAbort(2);
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, aborted.outcome()) << "中止占位也是一笔账本改动,同样会被抹掉";
+	EXPECT_EQ(static_cast<uint32_t>(kAssetFrozen), aborted.reason().id());
+
+	EXPECT_EQ(100u, Gold());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_DEBIT)) << "RETRY 不记账";
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_CREDIT));
+	EXPECT_EQ(0, g_persistCalls) << "资产通道不在无围栏的实体上引发存盘";
+}
+
+// E2:组件缺失与 epoch == 0 同样处理(fail-closed)。
+TEST_F(AssetOpSystemTest, OwnerEpochMissingRetryNotRecorded)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	tlsEcs.actorRegistry.remove<PlayerOwnerEpochComp>(player_);
+
+	const auto debit = CallDebit(1, 30);
+	EXPECT_EQ(ASSET_OP_OUTCOME_RETRY, debit.outcome());
+	EXPECT_EQ(static_cast<uint32_t>(kAssetFrozen), debit.reason().id());
+	EXPECT_EQ(100u, Gold());
+	EXPECT_EQ(nullptr, Ledger(ASSET_OP_STREAM_GUILD_DEBIT));
+	EXPECT_EQ(0, g_persistCalls);
+}
+
+// E3:已见 seq 的只读答复不受闸影响,但 epoch == 0 时不补存 —— 补存同样是一份无守卫的写。
+TEST_F(AssetOpSystemTest, OwnerEpochZeroSeenSeqAnswersWithoutResave)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	ASSERT_EQ(ASSET_OP_OUTCOME_APPLIED, CallDebit(1, 30).outcome()) << "epoch == 1 时照常记账";
+	const int persistAfterApply = g_persistCalls;
+
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = 0;
+	g_fakeNowMs += kAssetOpResaveMinIntervalMs; // 限频窗口已过,若不设闸本该补存
+
+	const auto seen = CallDebit(1, 30);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, seen.outcome()) << "已见 seq 回原结局,不经改动闸";
+	EXPECT_FALSE(seen.durable()) << "快照里还没有这笔,如实报未落盘";
+	EXPECT_EQ(persistAfterApply, g_persistCalls) << "无围栏时不补存";
+	EXPECT_EQ(70u, Gold()) << "绝不重扣";
+
+	CompleteFakeSave();
+	const auto afterSave = CallDebit(1, 30);
+	EXPECT_TRUE(afterSave.durable()) << "durable 只看快照,与 epoch 无关";
+}
+
+// E4:闸只看当前 epoch,不留粘性状态 —— 铸造之后同一 seq 重投照常应用。
+TEST_F(AssetOpSystemTest, OwnerEpochMintedLaterAppliesSameSeq)
+{
+	ASSERT_EQ(kSuccess, CurrencySystem::AddCurrency(player_, kCurrencyGold, 100));
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = 0;
+	ASSERT_EQ(ASSET_OP_OUTCOME_RETRY, CallDebit(1, 30).outcome());
+
+	tlsEcs.actorRegistry.get<PlayerOwnerEpochComp>(player_).epoch = 7;
+	const auto applied = CallDebit(1, 30);
+	EXPECT_EQ(ASSET_OP_OUTCOME_APPLIED, applied.outcome());
+	EXPECT_EQ(70u, Gold());
+	EXPECT_EQ(1, g_persistCalls);
 }
 } // namespace

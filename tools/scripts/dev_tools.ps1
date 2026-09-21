@@ -1,6 +1,6 @@
 ﻿param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-grpc-build", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "kafka-offset-reset", "git-stats")]
+    [ValidateSet("help", "pbgen-build", "pbgen-run", "proto-gen-build", "proto-gen-run", "tree", "naming-audit", "naming-apply", "third-party-grpc-build", "no-raw-pointer-setup", "iwyu-run", "k8s-infra-up", "k8s-infra-down", "k8s-infra-status", "k8s-zone-up", "k8s-zone-down", "k8s-zone-status", "k8s-zone-rollback", "k8s-all-up", "k8s-all-down", "k8s-all-status", "k8s-build-all", "k8s-exposure-preflight", "k8s-stage-runtime", "k8s-image-preflight", "k8s-build-image", "k8s-push-image", "k8s-release-zone", "k8s-release-all", "go-svc-start", "go-svc-start-exe", "go-svc-stop", "go-svc-status", "go-svc-list", "go-svc-build", "go-svc-build-images", "go-svc-push-images", "java-svc-build-image", "java-svc-push-image", "cpp-node-start", "cpp-node-stop", "cpp-node-status", "cpp-node-list", "dev-start", "dev-start-exe", "dev-start-zones", "dev-stop", "dev-status", "dev-robot-zones", "merge-zone", "merge-zone-audit", "merge-zone-unmerge", "kafka-offset-reset", "git-stats")]
     [string]$Command,
 
     [string]$ConfigPath = "",
@@ -120,6 +120,10 @@
     # explicit address, 'loopback', or 'engine'.
     [string]$NodeIp = "",
     [switch]$UseVSGenerator,
+
+    # no-raw-pointer-setup：可复用已有完整 LLVM 开发库，或只下载不编译。
+    [string]$LlvmRoot = "",
+    [switch]$DownloadOnly,
 
     # Local multi-zone stress launch (dev-start-zones).
     # Accepts comma-separated ints, e.g. -Zones "1,2" or -Zones 1,2.
@@ -908,6 +912,8 @@ Other common commands:
     -Command naming-audit
     -Command naming-apply
     -Command third-party-grpc-build
+    -Command no-raw-pointer-setup [-LlvmRoot <path>] [-DownloadOnly] [-DryRun]
+        自动下载 LLVM/Clang 开发库并串行编译裸指针成员检查器。
     -Command iwyu-run
     -Command k8s-build-all
         Build all Docker images (C++ node + Go services + Java auth) before deployment.
@@ -954,6 +960,9 @@ switch ($Command) {
     "naming-audit" { Invoke-NamingAudit }
     "naming-apply" { Invoke-NamingApply }
     "third-party-grpc-build" { Invoke-ThirdPartyGrpcBuild }
+    "no-raw-pointer-setup" {
+        & (Join-Path $ScriptDir "third_party/setup_no_raw_pointer_check.ps1") -LlvmRoot $LlvmRoot -DownloadOnly:$DownloadOnly -DryRun:$DryRun
+    }
     "iwyu-run"              { Invoke-IwyuRun }
     "k8s-infra-up" { Invoke-K8sDeploy -K8sCommand "infra-up" }
     "k8s-infra-down" { Invoke-K8sDeploy -K8sCommand "infra-down" }

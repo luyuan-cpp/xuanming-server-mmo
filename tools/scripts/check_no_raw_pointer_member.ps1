@@ -142,8 +142,13 @@ function Invoke-StandaloneTool {
             if (Test-Path $inc) { $lines.Add("--extra-arg=-isystem$inc") }
         }
 
-        [System.IO.File]::WriteAllLines($respFile, $lines)
-        & $toolExe "@$respFile"
+        # LLVM 按 Windows 命令行规则拆响应文件；路径中的空格和末尾反斜杠必须保留。
+        $quotedLines = @($lines | ForEach-Object {
+            '"' + ($_ -replace '(\\*)"', '$1$1\"' -replace '(\\+)$', '$1$1') + '"'
+        })
+        [System.IO.File]::WriteAllLines($respFile, $quotedLines)
+        # 函数只返回退出码，不能把工具 stdout 混进 $ec 变成数组。
+        & $toolExe "@$respFile" | ForEach-Object { Write-Host $_ }
         return $LASTEXITCODE
     }
     finally {

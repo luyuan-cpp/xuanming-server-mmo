@@ -12,6 +12,7 @@
 #include "modules/currency/system/currency_system.h"
 #include "proto/battle/battle_data.pb.h"
 #include "table/code/item_table.h"
+#include "table/proto/tip/common_error_tip.pb.h"
 #include "proto/common/component/actor_comp.pb.h"
 #include "proto/common/component/battle_comp.pb.h"
 #include "proto/common/component/currency_comp.pb.h"

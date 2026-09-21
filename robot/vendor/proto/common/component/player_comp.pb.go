@@ -310,6 +310,58 @@ func (x *PlayerUint32Comp) GetClass() uint32 {
 	return 0
 }
 
+// 角色展示资料(名字)。
+// 真源是 data_service 全局库的 player_name 表(全服唯一,docs/design/guild-phase2/03-names.md §3.0);
+// 这里是随 player_database 一起走的只读副本,由 login 首次入场补齐
+// (go/login/.../player_class_backfill.go backfillPlayerIdentity)。
+// scene 只读、只原样存回:战斗快照 player_battle.cpp 取的就是这一份,
+// 组件缺失 / name 为空时快照留空,battle 照常结算(名字是展示数据,fail-open)。
+// v1 无改名,所以副本内容不会变;但副本可能缺失(self-heal 恢复出的空记录、
+// 早于首次入场的回档快照),任何"要拿到名字"的读侧都必须能回源 BatchGetPlayerName。
+type PlayerProfileComp struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *PlayerProfileComp) Reset() {
+	*x = PlayerProfileComp{}
+	mi := &file_proto_common_component_player_comp_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PlayerProfileComp) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PlayerProfileComp) ProtoMessage() {}
+
+func (x *PlayerProfileComp) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_common_component_player_comp_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PlayerProfileComp.ProtoReflect.Descriptor instead.
+func (*PlayerProfileComp) Descriptor() ([]byte, []int) {
+	return file_proto_common_component_player_comp_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *PlayerProfileComp) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
 // Stress-test instrumentation for player-data persistence.
 //
 // Stamped by the producer (Scene's SavePlayerToRedis when an env-var probe
@@ -334,7 +386,7 @@ type PlayerStressTestProbe struct {
 
 func (x *PlayerStressTestProbe) Reset() {
 	*x = PlayerStressTestProbe{}
-	mi := &file_proto_common_component_player_comp_proto_msgTypes[7]
+	mi := &file_proto_common_component_player_comp_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -346,7 +398,7 @@ func (x *PlayerStressTestProbe) String() string {
 func (*PlayerStressTestProbe) ProtoMessage() {}
 
 func (x *PlayerStressTestProbe) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_comp_proto_msgTypes[7]
+	mi := &file_proto_common_component_player_comp_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -359,7 +411,7 @@ func (x *PlayerStressTestProbe) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerStressTestProbe.ProtoReflect.Descriptor instead.
 func (*PlayerStressTestProbe) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_comp_proto_rawDescGZIP(), []int{7}
+	return file_proto_common_component_player_comp_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *PlayerStressTestProbe) GetTestSeq() uint64 {
@@ -438,7 +490,7 @@ type PlayerMergeStateComp struct {
 
 func (x *PlayerMergeStateComp) Reset() {
 	*x = PlayerMergeStateComp{}
-	mi := &file_proto_common_component_player_comp_proto_msgTypes[8]
+	mi := &file_proto_common_component_player_comp_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -450,7 +502,7 @@ func (x *PlayerMergeStateComp) String() string {
 func (*PlayerMergeStateComp) ProtoMessage() {}
 
 func (x *PlayerMergeStateComp) ProtoReflect() protoreflect.Message {
-	mi := &file_proto_common_component_player_comp_proto_msgTypes[8]
+	mi := &file_proto_common_component_player_comp_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -463,7 +515,7 @@ func (x *PlayerMergeStateComp) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlayerMergeStateComp.ProtoReflect.Descriptor instead.
 func (*PlayerMergeStateComp) Descriptor() ([]byte, []int) {
-	return file_proto_common_component_player_comp_proto_rawDescGZIP(), []int{8}
+	return file_proto_common_component_player_comp_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *PlayerMergeStateComp) GetForceRenameRequired() bool {
@@ -503,7 +555,9 @@ const file_proto_common_component_player_comp_proto_rawDesc = "" +
 	"\x10PlayerUint64Comp\x125\n" +
 	"\x16registration_timestamp\x18\x01 \x01(\x04R\x15registrationTimestamp\"(\n" +
 	"\x10PlayerUint32Comp\x12\x14\n" +
-	"\x05class\x18\x01 \x01(\rR\x05class\"M\n" +
+	"\x05class\x18\x01 \x01(\rR\x05class\"'\n" +
+	"\x11PlayerProfileComp\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"M\n" +
 	"\x15PlayerStressTestProbe\x12\x19\n" +
 	"\btest_seq\x18\x01 \x01(\x04R\atestSeq\x12\x19\n" +
 	"\btest_sig\x18\x02 \x01(\fR\atestSig\"\xbb\x01\n" +
@@ -524,7 +578,7 @@ func file_proto_common_component_player_comp_proto_rawDescGZIP() []byte {
 	return file_proto_common_component_player_comp_proto_rawDescData
 }
 
-var file_proto_common_component_player_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_common_component_player_comp_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_proto_common_component_player_comp_proto_goTypes = []any{
 	(*NormalLogin)(nil),           // 0: NormalLogin
 	(*CoverLogin)(nil),            // 1: CoverLogin
@@ -533,8 +587,9 @@ var file_proto_common_component_player_comp_proto_goTypes = []any{
 	(*UnregisterPlayer)(nil),      // 4: UnregisterPlayer
 	(*PlayerUint64Comp)(nil),      // 5: PlayerUint64Comp
 	(*PlayerUint32Comp)(nil),      // 6: PlayerUint32Comp
-	(*PlayerStressTestProbe)(nil), // 7: PlayerStressTestProbe
-	(*PlayerMergeStateComp)(nil),  // 8: PlayerMergeStateComp
+	(*PlayerProfileComp)(nil),     // 7: PlayerProfileComp
+	(*PlayerStressTestProbe)(nil), // 8: PlayerStressTestProbe
+	(*PlayerMergeStateComp)(nil),  // 9: PlayerMergeStateComp
 }
 var file_proto_common_component_player_comp_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for method output_type
@@ -555,7 +610,7 @@ func file_proto_common_component_player_comp_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_common_component_player_comp_proto_rawDesc), len(file_proto_common_component_player_comp_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

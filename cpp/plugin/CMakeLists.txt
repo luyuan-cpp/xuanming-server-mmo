@@ -49,5 +49,5 @@ target_link_libraries(no_raw_ptr_check PRIVATE
 )
 
 if(MSVC)
-    target_compile_options(no_raw_ptr_check PRIVATE /bigobj /EHsc)
+    target_compile_options(no_raw_ptr_check PRIVATE /bigobj /EHsc /utf-8)
 endif()

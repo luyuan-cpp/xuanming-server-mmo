@@ -146,6 +146,18 @@ void Answer(::AssetOpResponse& response, ::AssetOpOutcome outcome, uint32_t tipI
 
 // ── 可改判定 ────────────────────────────────────────────────────────────────
 
+// 本实体的存盘是否受 owner_epoch 围栏保护(docs/design/guild-phase2/08-save-owner-fence.md §8.2.1)。
+//
+// epoch 由 scene_manager 铸造、随路由事件下发(PlayerOwnerEpochComp)。epoch == 0 是滚动升级的兼容窗口:
+// SavePlayerToRedis 走**无守卫**的旧 Save,db 侧按 legacy_zero 放行。此时若记账并上报 durable,
+// 旧节点晚到的退出存盘能原样盖掉这笔改动 —— 帮会已据 durable 记了资金,玩家侧的扣款却被抹掉(04 K1)。
+// 所以资产通道在无围栏的实体上不引发任何写入。组件缺失与 epoch == 0 一律按无围栏处理(fail-closed)。
+bool HasFencedOwnership(entt::entity player)
+{
+	const auto* ownerEpoch = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
+	return ownerEpoch != nullptr && ownerEpoch->epoch != 0;
+}
+
 // 该实体此刻能不能被改(不变量 I1 单写者的本地一侧)。
 //
 // **刻意不复用 PlayerLifecycleSystem::IsCrossZoneFrozen**:它只看 PlayerFrozenComp,
@@ -156,9 +168,14 @@ void Answer(::AssetOpResponse& response, ::AssetOpOutcome outcome, uint32_t tipI
 // 若在交接在途时记账,这个 false 会被误当成"结局已在盘上",把没落地的结局报成 durable,
 // Go 随即终结,而这份内存态马上会随实体销毁一起丢。所以交接一挂上就必须在**记账之前**
 // 回 RETRY。UnregisterPlayer(退出存盘在途)同理:退出优先,不接受新改动。
+// 另一条:本实体的存盘必须带归属围栏(HasFencedOwnership,见上)。
+//
+// 调用点只有 AnswerSeenSeq 的补存。Decide 第 5 步的改动闸**不**调用它,而是逐条内联同样的判定
+// (为了按原因回不同的 reason:kAssetFrozen / kAssetPlayerNotHere);新增可改判定时两处要同改。
 bool IsPlayerMutable(entt::entity player)
 {
-	return !tlsEcs.actorRegistry.any_of<PlayerFrozenComp, PlayerTravelHandoffComp, UnregisterPlayer>(player);
+	return !tlsEcs.actorRegistry.any_of<PlayerFrozenComp, PlayerTravelHandoffComp, UnregisterPlayer>(player) &&
+		   HasFencedOwnership(player);
 }
 
 // ── durable 判定(§4.6)─────────────────────────────────────────────────────
@@ -745,6 +762,21 @@ void Decide(AssetOpRpc rpc, const ::AssetOpRequest& request, ::AssetOpResponse& 
 	{
 		// 退出存盘在途:退出优先,不接受新改动。玩家重新上线后 Go 重投同一 seq。
 		Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetPlayerNotHere);
+		return;
+	}
+	if (!HasFencedOwnership(player))
+	{
+		// 归属未铸造(owner_epoch == 0 或组件缺失):本实体的存盘没有围栏,记下的结局可能被旧节点晚到的
+		// 退出存盘抹掉。放在第 6 步之前 —— 中止占位的 REJECTED 也是一笔账本改动,同样会被抹掉。
+		// reason 用 kAssetFrozen("角色迁移中,稍后自动重试"):对玩家就是"换一次节点就好";
+		// 不用 kAssetBlocked,那是货币封禁的文案。区分靠下面这行日志的固定关键字(告警按它计数,
+		// 08-save-owner-fence.md §8.2.4)。WARN 而非 ERROR:兼容窗口内这是预期状态,该响的是它在共享环境出现。
+		const auto* ownerEpoch = tlsEcs.actorRegistry.try_get<PlayerOwnerEpochComp>(player);
+		LOG_WARN << "[AssetOp] blocked: owner_epoch unknown rpc=" << RpcName(rpc)
+				 << " player_id=" << request.player_id() << " stream=" << static_cast<int>(request.stream())
+				 << " seq=" << request.seq()
+				 << " epoch_comp=" << (ownerEpoch == nullptr ? "missing" : "zero");
+		Answer(response, ASSET_OP_OUTCOME_RETRY, kAssetFrozen);
 		return;
 	}
 

@@ -5539,3 +5539,42 @@ friend 移植会话(机器 A,`E:\work\xuanming-server-mmo`)写交接文档写到
 - **用户实跑结果**(以文件时间为证):22:38:52 恢复 `scene_node_service.{cpp,h}` → 22:39 导表(`guilddonate.json` / `guildshop.json` 与 `cpp/generated/table` 下的 guild 生成物已出现)→ 22:40:34 新生成器编出 → 22:41 生成。`AcquireCreatePermitBlocking` 命中 1;`message_id.txt` 未改写,沿用 22:10 的发号。
 - **未处理,待用户拍板**:导表器每次警告的 GlobalVariable 5 列 `(cfg_owner) = ""`。这 5 列由迁移时原样继承旧表头的空 owner,迁移前后都没导出过。源表唯一有值的是 id=1 `Abnormal_logout` 的 `to_double = 1200`;仓库里没有手写代码读 GlobalVariable,运行期不受影响。
 - **未验证**:两个 message-limiter 与第二次导表尚未跑;C++ / Go / robot 构建与测试均未跑。
+
+## 2026-09-20 friend 生成物逐项验收 + leaderboard / mail 两份设计拍板定稿(Claude,机器 B,**只读验收与文档,未编译**)
+
+- **friend 生成物验收(只读 grep,按交接文档开头"五类悬空引用"逐项)**:22:41 那次用新生成器的 proto-gen 之后,五类**全部补齐**:`ClientPlayerFriend_ServiceDesc` 11 个方法、`ServiceName` = `friendpb.ClientPlayerFriend`;`BlockRequest` 等 12 个新 message 与 `FriendEventReason` 在 `friend.pb.go`;`friend_table.pb.go` 首次生成,`FriendCapacityRecord` 带 `GetCreatedMs`;`friend_error` 段 15007–15009 三码生成,`segments.go` 为 `Hi: 15009, Count: 10`,`faults.go` 不含它们;`constants.go` 用的 10 个 `table.FriendError_k*` 与生成物逐字一致;两份 `message_id.go` 各 11 个 `ClientPlayerFriend*MessageId`、0 个 `FriendService*`,代码(`go/friend` 与 `robot/friend_smoke_scenario.go`)点名的 11 个常量全部存在;路由表 11 行全为 `/friendpb.ClientPlayerFriend/*` 且 `ClientProtocol: true`;`kMaxRpcMethodCount = 239` = 最大号 238 + 1(234 + 帮会 B5a 的 5 个 rpc)。`FriendBlocked` 文案已是「无法添加该玩家为好友」(`generated/tables/tip_text.json` 同)。`friend_grpc.pb.go` 里 2 处 `NotifyOnline` 命中是 proto 删除说明的注释,无害。
+- **仍欠的用户步骤**:① **客户端仓当前提交编译不过** —— 自动保存 WIP `2ca620e`(客户端,未推送)带进了 11 个 `ClientPlayerFriend*Handler.cs` 与 `HandlerRegistry.cs` 的 11 行,但 `Friend.cs` / `FriendErrorTip.cs` 还没生成,handler 引用的 `Friendpb.*` 缺类型(CS0246)。补救 = 交接文档 §9.4 第 3b 步:客户端跑 `gen_proto.ps1` / `gen_messageids.ps1`(显式 `-ProtoRoot`,`-Protoc` 传仓内 protoc 35.1 绝对路径),生成物一并提交后再推。② 两个 `message-limiter` + 第二次导表。③ `robot/vendor/proto/` 下仍无 `friend`,robot 编译前要 `go mod tidy; go mod vendor`。④ `go/friend` 编译与测试、真 MySQL 并发回归(§2 第 5、6 步)。
+- **提交状态**:本会话此前的在途文件已由自动保存 `4624ddf9e`(22:58)与 `741838ea7`(23:42)全部提交;服务端 main 领先 origin 2 个、客户端领先 1 个,都未推送。
+- **leaderboard 设计(`docs/design/leaderboard-system.md`)§9.1 七项全部由用户拍板**:(a) match 发评分快照(开关默认关、不做 outbox、加 `rating_gen`);恢复口径接受 7 天 offset 重放;同分先达到者在前、名次连续;K8s 私有 Redis 用独立 noeviction 实例;topic `match-rating-snapshot` / 3 分区 / 7 天(分区数要改只能走"代号 +1");客户端改仓已授权;K8s 开关 `-MatchRatingSnapshotPublish '0'|'1'`。§9.1 已改写为拍板记录表。
+- **mail M1 设计(`docs/design/mail-system.md`,新)**:5 路侦察 → 起草 → 三视角对抗评审 27 条(25 确认、2 部分采纳)→ 回修。关键设计:系统邮件**读时合并 + 按需物化 state 行**(不做写时扇出,friend / mail 都没有玩家名册);定向邮件**软删**(`deleted_ms`),让发件幂等键活到过期 + 保留期,不随玩家删信消失 —— 否则 M2 有附件时同一 `request_id` 重放会重复发物(评审挡下的 blocker);邮箱上限用"守卫行 + 现数"、只数未删未过期的行;附件用 mail 自有 `MailCurrency` / `MailItem`,不把内部资产 schema 带进客户端;领取方法 M1 定义但回 `MailClaimNotOpen`。**§11.1 的 18 项已由用户拍板**(发件入口选运维可用的 `MailAdmin` + CLI + 令牌;客户端改仓已授权、与 proto-gen 同批;其余按推荐;原第 11 条"friend 只 WARN"已过期 —— friend 已改为缺索引拒启,不再需要拍板)。分四批 M1a 16 / M1b 25 / M1c 18 / M1d 18 个文件。
+- **落码闸门(两份设计相同)**:都排在 friend 的编译与测试通过之后(交接文档 §4.0 / §4.5);leaderboard 的 R1 另需 match 那批组队代码先编译通过一次,mail 的 M1a 另需先核 U1 / U2。
+- **未验证**:全部。本条的"补齐"只是生成物里符号存在,不等于编译通过。
+
+## 2026-09-21 帮会二期 B4c:玩家存盘属主围栏 —— 在 owner_epoch 上补缺口,不造第二套围栏(Claude,机器 B,**未编译、未跑测试**)
+
+交接入口:`docs/design/guild-phase2/08-save-owner-fence.md`(设计、论证、验证序列 §8.6、评审记录 §8.9)与 `92-handoff.md` §11。
+
+- **先说结论**:04 §4.35 当初设计的 B4c(加载时认领 `<blob>:owner` token、按 token 围栏存盘)**不实施**。它写于跨 zone 会话落 owner_epoch 之前;owner_epoch(scene_manager 铸造、守卫 Lua、被拒自毁、DBTask 带 epoch、durable 只认成功回调的快照)已经堵住**跨节点版 K1**。照 §4.35 再造一套就是平行框架(AGENTS §11.5-3)。
+- **B4c 补的四处缺口(5 个手改文件,远低于原估 ≤12)**:① owner_epoch = 0(兼容窗口,存盘不设防)时资产改动类 RPC 回 RETRY + `kAssetFrozen`、不记账、不触发存盘,日志关键字 `[AssetOp] blocked: owner_epoch unknown`(`asset_op_system.cpp`);② `redis_client.h` 同 key 存盘新旧颠倒:一份写失败在等退避时,新值会绕过它直接发出、之后旧值被当成"更新的值"盖回来 —— 修 `EnqueueSave` 入口(顶替并继承退避),并新增只读 `HasUnsettledSave` 给跨 zone 会话的 Z1 修复复用;③ 守卫 Lua 与 epoch 闸补用例(`currency_test` 工程内,含 2 个读 `MMORPG_TEST_REDIS_ADDR` 的真 Redis 用例);④ `deploy/k8s/owner-epoch-alerts.yaml` 两条 PrometheusRule,scene 侧三条值班 LogQL 写进跨 zone 会话 runbook 末尾 §9(Loki ruler 未接线,归 BK8s)。
+- **门禁变了**:"共享 / 预发环境开启帮会资产操作"之前,从"先落 B4c"改为 08 §8.3 的**六条**:B4c、**Z1 修复**、**GO-2 修复**(二者归跨 zone 会话,是同节点上真正会复制资产的路径)、`AllowUnsafeCrossNodeHandoff=false`、`owner_epoch_unknown` 与 `legacy_zero` 恒 0、玩家 blob 与 owner_epoch 同一非 Cluster Redis 实例。90 D8 / 91 已同步。
+- **颠倒对资产的后果写准了**:它让 Redis 暂时回退、丢掉未 durable 的最新进度,**单靠它不会复制资产**(成功回调只在排队为空时发布,durable 的依据不会被更旧的值覆盖);跨 zone 会话独立复核同意。仍要修:它破坏 durable 推理依赖的队列不变量,也是 Z1 修复的前置。
+- **做法**:缺口分析(4 路侦察 + 综合 + 逐条对抗复核,6 条候选 5 条成立)→ 与跨 zone 会话逐条核对并约定分工(对方 `cross-zone-scene-travel.md` §12.6.9)→ 设计 → 落码 → 三视角对抗评审(**无 blocker**;16 条注释 / 文档口径订正,2 条证伪)。
+- **顺带发现、未处理**:login 预加载 EXISTS → 无条件 SET(`ensure_player_all_data_async.go` + `sync_loader.go`),Redis 丢键且玩家在线时可用旧数据盖掉已 durable 的 blob;修法 `SetNX`,归 login 批次(08 §8.4)。
+- **B5a 进展(同日核对)**:本机有 Python 3.14.7,用户已跑完 B5a 的四个 xlsx 步骤与生成链 —— `//guild_error` 新码 14022–14031、5 个消息号 53 / 76 / 120 / 228 / 233、12 个表生成物与工程登记对上、Agones 块已恢复。B5a 的 Go / 真库 / C++ 验证(92 §10.4 第 6–10 步)仍未跑;`MessageLimiter.xlsx` 及其导表产物仍未提交。
+- **未验证**:B4c 全部。在用户按 08 §8.6 跑出结果之前,不得声称编译或测试通过。
+
+## 2026-09-21 Debug x64 编译失败修复与验证(Codex)
+
+- 修复 `cpp/tests/bag_test/player_battle_settlement_test.cpp` 缺少公共错误码头文件的问题。单文件编译先复现 `C2065: kSuccess 未声明`,补充 `table/proto/tip/common_error_tip.pb.h` 后同一命令通过。
+- 按 §10.1 使用 MSBuild `/m:1 /nr:false /p:Configuration=Debug /p:Platform=x64` 构建整个 `game.sln`,退出码 0。原日志中的 C1041、LNK1104、LNK2001/2019/2005 未再出现。旧 scene 库引用的三参数货币接口、196 项 RPC 注册表在相关库成功重编后更新,未改业务接口或生成代码。
+- 运行 `bag_test.exe --gtest_filter=PlayerBattleSettlementTest.*:PlayerBattleSettlementItemTest.*`,10/10 通过,退出码 0。验证仅覆盖这 10 个进程内单测,没有执行完整测试集、数据库/Redis/Kafka 联调或客户端 E2E。
+- 仍有第三方调试符号缺失的 LNK4099 等警告;no-raw-pointer-member 检查因工具缺失显示 SKIP,不能算静态门禁通过。未修改并行构建配置,继续遵守 `/m:1`。
+- 日志保存在本机 `build/diagnostics/20260921/build-serial.log` 和 `settlement-test.log`。保留工作区既有改动,未提交或推送。
+
+## 2026-09-21 LLVM 开发库自动准备与裸指针检查器构建(Codex)
+
+- 新增统一入口 `pwsh -File tools/scripts/dev_tools.ps1 -Command no-raw-pointer-setup`:已有完整 LLVM/Clang SDK 就复用,缺少时下载固定版本 23.1.1 官方开发包并校验 SHA256;归档缓存、断点续传和本地 SDK 路径均支持。zlib、zstd、libxml2 也按固定版本与校验值准备,已有完整安装产物则跳过。产物位于忽略的构建目录,不修改系统 PATH。
+- 本机实际下载、校验、解压并使用 Visual Studio 串行编译成功,生成 `cpp/plugin/build/Release/no_raw_ptr_check.exe`。最终再次运行统一入口,SDK 与三项依赖全部复用,没有重新下载,检查器增量构建成功。日志:`build/diagnostics/20260921/no-raw-pointer-setup-final.log`。
+- 实测发现并修复检查器忽略 Clang 解析错误而误报通过的问题;修复 PowerShell 构建钩子把工具标准输出混入退出码的问题,以及响应文件含空格路径引用。检查器增加 MSVC UTF-8 编译选项。
+- 验证:下载入口 6 项隔离用例通过;检查器合法成员、裸指针成员、解析失败 3 项行为通过;真实构建钩子成功缓存、拒绝违规并移除旧缓存 2 项通过(含空格路径)。脚本语法检查通过。
+- 验证范围是依赖准备、检查器构建与上述用例;本次没有重新扫描整个 scene/game.sln,没有数据库或服务器 E2E 证据,不能把工具就绪当成项目静态门禁通过。保留工作区既有改动,未提交或推送。

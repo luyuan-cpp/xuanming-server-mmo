@@ -185,6 +185,7 @@ proto/common/component
 proto/common/options
 proto/common/rollback
 proto/db
+proto/friend
 proto/guild
 proto/login
 proto/match

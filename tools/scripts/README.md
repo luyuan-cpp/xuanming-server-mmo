@@ -38,6 +38,7 @@ Supported commands include:
 - `naming-audit`
 - `naming-apply`
 - `third-party-grpc-build`
+- `no-raw-pointer-setup`
 - `iwyu-run`
 - `k8s-*`
 
@@ -45,6 +46,35 @@ Proto generator naming references:
 
 - Current naming-state snapshot: `../docs/proto_gen_naming_audit.md`
 - Compatibility boundary and migration rules: `../docs/proto_gen_naming_migration.md`
+
+### no-raw-pointer-setup（裸指针成员检查器）
+
+在仓库根目录执行：
+
+```powershell
+pwsh -File tools/scripts/dev_tools.ps1 -Command no-raw-pointer-setup
+```
+
+自动下载固定版本 LLVM/Clang 23.1.1 Windows x64 **开发包**，校验固定 SHA256，
+解压到 `build/deps/llvm-23.1.1`，然后用本机 Visual Studio 和 CMake 串行构建
+`cpp/plugin/build/Release/no_raw_ptr_check.exe`。现有 MSBuild 钩子会自动发现该文件。
+开发包约 860 MiB，首次下载和解压需要时间与数 GB 磁盘空间；重跑复用开发库并增量编译。
+下载中断保留 `.part` 文件，下次续传。校验失败会明确报错，不运行未校验的开发包。
+下载及构建产物均在已忽略的构建目录，不安装系统软件、不修改全局 PATH。
+LLVM 官方静态库还需要 zlib、zstd、libxml2；入口同样按固定版本和 SHA256 准备它们，
+编译到 `build/deps/llvm-23.1.1-support`，已有完整产物则复用。DIA SDK 自动取自本机 Visual Studio。
+编译后自动验证合法成员通过、裸指针成员拒绝、解析失败拒绝三个行为。
+同时验证真实构建钩子的含空格路径、成功缓存和失败时清除旧缓存。
+
+- 预览路径与下载地址：增加 `-DryRun`。
+- 只准备开发库：增加 `-DownloadOnly`。
+- 已有完整开发库：增加 `-LlvmRoot 'E:/llvm-sdk'`，跳过下载。
+  未指定时也会检查 `LLVM_ROOT` 环境变量、`Program Files/LLVM` 和原工程的 `D:/game/llvm`。
+- 前置：PowerShell 7、Windows x64、Visual Studio C++ 工具、CMake、系统 `curl.exe` 与 `tar.exe`。
+  CMake 不在 PATH 时自动查找 Visual Studio 内置版本。
+- 普通 LLVM 安装器不能替代此开发包。官方包说明见
+  [LLVM 23.1.1 Release](https://github.com/llvm/llvm-project/releases/tag/llvmorg-23.1.1)。
+- 构建检查器成功不等于项目静态检查通过；项目扫描结果以之后的 MSBuild 检查输出为准。
 
 ### iwyu_run.ps1 / iwyu_run.sh
 

@@ -55,7 +55,7 @@
 | 9 | **B6b-srv1** | 17 | B6a-srv | 同上;与组队、属性会话协调 |
 | 10 | **B6b-srv2** | 21 | B6b-srv1 | 同上 |
 | 11 | **B6b-cli** | 6 | B6b-srv2 | 同上 |
-| 门禁 | **B4c** | ≤12 | B4a-1 | 玩家存盘属主围栏。**任何共享/预发环境开启帮会资产操作之前必须先落** |
+| 门禁 | ~~**B4c**~~ | 5 | B4a-1 | **已落码 2026-09-21**(未编译):在既有 owner_epoch 上补缺口,不造 token 围栏,见 [08](./08-save-owner-fence.md) 与 §11。共享 / 预发环境开启帮会资产操作前须满足 **08 §8.3 六条**(含跨 zone 会话的 Z1 / GO-2 修复) |
 | 上线 | **BK8s** | 另计 | B4c | `90-consistency.md` G-05 |
 
 ### 每批的关键坑(照这个查,别只看正文)
@@ -734,3 +734,47 @@ xlsx 脚本 5 条(1 major:发号机制的注释写错;4 minor:幂等判定、核
   - 或非交互:`git diff -U0 -- tools/scripts/k8s_deploy.ps1 > k8s.patch`,手删掉 `@@ -2833` 起的那个 hunk,再 `git apply --cached --unidiff-zero k8s.patch`。
   - 暂存后 `git diff --cached -- tools/scripts/k8s_deploy.ps1` 必须只剩 1 删 1 增。
 - `PROGRESS.md` 末尾是两条相邻的未提交条目(本批 B5a 一条、friend 一条)。两边已约定:谁先提交就一并带走对方那条,但提交说明里只写自己的工作。
+
+---
+
+## 11. 2026-09-21 进展:B5a 生成链已跑通 + B4c 落码(机器 B;**B4c 未编译**)
+
+### 11.1 B5a:四个 xlsx 与生成链都已完成(用户在终端执行)
+
+- 本机其实有 Python 3.14.7(§8.0 阻塞 2 已作废);依赖装齐后用户跑了 `new-tables` / `tip-codes` / 导表 / proto-gen / `message-limiter` / 再导表。
+- 已核对(只读):`GuildDonate.xlsx` 3 行、`GuildShop.xlsx` 11 行(204 等级 6);`//guild_error` 新码 id = **14022–14031**;
+  `cpp/generated/table` 下 12 个新生成物与 B5a 的工程登记逐一对上(`rolenamerule_*` 也已产出);
+  5 个消息号 = **DonateToGuild 53 / UpgradeGuild 76 / GetGuildDonateOptions 120 / GetGuildShop 228 / BuyGuildShopGoods 233**(与 §10.4 实况一致,未变);
+  `scene_node_service.cpp` 的 Agones 块已恢复(`AcquireCreatePermitBlocking` 命中 1);`go/proto/guild/guild.pb.go` 含经济段新消息。
+- 提交状态:B5a 的代码、schema、两个新 xlsx、`Tip.xlsx` 已被每小时 WIP 提交 `4624ddf9e` 带进 main;**`data/MessageLimiter.xlsx` 与它的导表产物(`generated/tables/messagelimiter.*`、`manifest.json`)此刻仍未提交**。
+- **仍未跑的 B5a 验证**:§10.4 第 6–10 步(Go 测试、`TestAssetTablesShape` 真库形状、两个 `-migrate`、`table.vcxproj` 编译、robot vendor)。
+
+### 11.2 B4c:玩家存盘属主围栏(5 个手改文件,未编译)
+
+设计与全部论证在 [08-save-owner-fence.md](./08-save-owner-fence.md)。一句话:**04 §4.35 的 token 围栏不实施** —— 跨 zone 会话后来落的 owner_epoch 机制
+(scene_manager 铸造 epoch、守卫 Lua、被拒自毁、DBTask 带 epoch)已经堵住跨节点版 K1;B4c 只补它的四处缺口。
+
+| # | 文件 | 改了什么 |
+|---|---|---|
+| 1 | `cpp/libs/services/scene/player/system/asset_op_system.cpp` | `HasFencedOwnership`;`IsPlayerMutable` 追加;`Decide` 第 5 步加一支:owner_epoch = 0 / 组件缺失时改动类 RPC 回 RETRY + `kAssetFrozen`,打 `[AssetOp] blocked: owner_epoch unknown` |
+| 2 | `cpp/libs/engine/infra/storage/redis_client/redis_client.h` | 修同 key 存盘新旧颠倒(`EnqueueSave` 顶替排队旧值、继承退避);新增只读 `HasUnsettledSave`(给跨 zone 会话的 Z1 修复复用,接口已经对方确认) |
+| 3 | `cpp/tests/currency_test/asset_op_system_test.cpp` | 夹具补 epoch = 1;`OwnerEpoch*` 四个用例 |
+| 4 | `cpp/tests/currency_test/currency_test.cpp` | 队列顺序 / `HasUnsettledSave` / 守卫脚本结构 5 个纯内存用例;2 个真 Redis 用例(读 `MMORPG_TEST_REDIS_ADDR`,未设跳过) |
+| 5 | `deploy/k8s/owner-epoch-alerts.yaml`(新) | `DbStaleOwnerWriteRejected`、`DbOwnerEpochLegacyZero` 两条 PrometheusRule |
+
+文档(不计名额):08(新)、04 / 90 / 91 / 07 的订正标注、跨 zone 会话 runbook 末尾追加 §9(scene 侧三条值班 LogQL,判定不变)。
+
+**要用户知道的三件事**
+
+1. **门禁变了**(08 §8.3):共享 / 预发环境开启帮会资产操作前,除 B4c 外还要:Z1 修复、GO-2 修复(都归跨 zone 会话,同属"帮会已记账、玩家侧被旧数据盖回"的复制路径)、
+   `AllowUnsafeCrossNodeHandoff = false`、`owner_epoch_unknown` 与 `legacy_zero` 恒 0、玩家 blob 与 owner_epoch 在同一非 Cluster Redis 实例。
+2. **epoch = 0 的代价**:卡在 0 的存量玩家(存量 location + 一直落回同节点)在换一次节点之前资产操作会一直 RETRY;根治是 scene_manager 观察值为 0 时同节点也铸造(跨 zone 会话的一行改动,排在首次编译之后)。dev 压测前清 Redis 即不受影响。
+3. **评审发现的一条既有残余**:login 预加载 EXISTS → 无条件 SET,Redis 丢键且玩家在线时可用旧数据盖掉已 durable 的 blob;修法 `SetNX`,归 login 批次(08 §8.4)。
+
+**做法**:4 路只读侦察 + 综合 + 逐条对抗复核的缺口分析(6 条候选、5 条成立)→ 与跨 zone 会话逐条核对并约定分工(对方 `cross-zone-scene-travel.md` §12.6.9)→ 设计 → 落码 →
+三视角对抗评审 + 逐条证伪(**无 blocker**,代码行为全部核对成立;16 条注释 / 文档口径已订正,2 条证伪,记录在 08 §8.9)。
+
+**验证**:序列在 08 §8.6,全部未执行。C++ 编译必须在导表之后(已满足)、MSBuild 串行 `/m:1`。真 Redis 用例建议做一次"注释掉顶替分支应当变红"的回归证据。
+
+**提交**:B4c 未提交。自己提交时逐路径 add;`docs/ops/cross-zone-failure-test-runbook.md` 虽是跨 zone 会话的文件,§9 那段算本批(对方已确认由本批提交)。
+

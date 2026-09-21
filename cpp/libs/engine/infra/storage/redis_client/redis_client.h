@@ -352,6 +352,22 @@ public:
 	// Number of SETs whose reply has not yet been received.
 	size_t in_flight_save_count() const { return saving_queue_.size(); }
 
+	// 该 key 是否还有未落地的存盘:在途(已发出、等回包),或排队(等在途完成 / 等退避重试 / 等重连)。
+	// 只读,不改队列。给"销毁实体前确认内存态已全部落地"这类判断用
+	// (docs/design/cross-zone-scene-travel.md §12.6 Z1 / M4;docs/design/guild-phase2/08-save-owner-fence.md §8.2.2)。
+	// 两条使用约束:
+	//   - 在 save_callback_ 里调用它恒为 false:OnSaved 成功路径先摘在途,有排队值就直接发新值且**不**回调,
+	//     只有排队为空才回调。所以它不能在回调里当"还有没有更新值"的信号;它的用处在回调**之外**,
+	//     例如快路径退出时,内存虽等于上次落地的快照,但还有一笔内容不同的存盘在途或排队 ——
+	//     此刻销毁实体,那笔写落地后会把盘改回去。
+	//   - 只看存盘的两个队列(saving_queue_ / pending_save_queue_),不看 pending_retry_queue_(那是载入的)。
+	bool HasUnsettledSave(const MessageKey& key) const
+	{
+		const std::string redisKey = full_name() + ":" + std::to_string(key);
+		return saving_queue_.find(redisKey) != saving_queue_.end() ||
+			   pending_save_queue_.find(redisKey) != pending_save_queue_.end();
+	}
+
 	// Convenience: log a one-shot snapshot of all three queue lengths. Useful
 	// when bolting MessageAsyncClient onto a periodic reporter.
 	void LogQueueSnapshot(const char *tag) const
@@ -455,6 +471,16 @@ private:
 	};
 
 	// 两条 Save 重载共用的入队逻辑;guardKey 为空即无校验。
+	//
+	// 同 key 写入的不变量:在途(saving_queue_)至多一份,排队(pending_save_queue_)至多一份,
+	// 且**排队的那份永远比在途的新**。成功回调(发排队值并压住本次回调)、ERROR 重试
+	// (发排队值并丢掉失败的那份)、重连回收(排队值在就丢掉在途那份)三条路径都把"排队的"
+	// 当成更新的值处理,正确性全靠这一条。写入排队的路径分两类:
+	//   - 有在途时写入的新值(本函数首支、IssueSave 的在途防御分支放回):它就是最新快照;
+	//   - 无在途时写入的值(本函数的顶替分支 / 未连接分支、IssueSave 的未连接分支、QueueSaveForRetry
+	//     与 OnReconnected 各自在当时无排队值时):写入那一刻没有在途,不变量天然成立。
+	// 新增入队路径时必须守住它 —— 历史上唯一破坏它的就是本函数"无在途但有排队旧值时直接发新值"
+	// 那一支,见下方顶替分支与 docs/design/guild-phase2/08-save-owner-fence.md §8.2.2。
 	void EnqueueSave(const MessageValuePtr& message, const MessageKey& key,
 					 const std::string& guardKey, const std::string& guardExpected)
 	{
@@ -481,6 +507,22 @@ private:
 		if (saving_queue_.find(element->redis_key) != saving_queue_.end())
 		{
 			pending_save_queue_[element->redis_key] = element;
+			return;
+		}
+
+		// 没有在途,但排队里还有一份旧值(上次写失败后在等退避,或断线时停放):新值顶替它,并继承它的退避进度,
+		// 由定时器(RetryDuePending)按原节奏发出,这里**不**直接发。
+		// 直接发会让排队里留着更旧的值:新值落地后成功路径会把它当"更新的值"再发一遍、压住新值的
+		// 回调,新值失败时 ERROR 路径会发它并丢掉新值,断线时重连回收会留它丢新值 —— 旧值盖掉新值
+		// (同 key 新旧颠倒)。继承而不是重置退避:那份旧值刚失败,Redis 此刻多半仍不可写,立即发只会
+		// 在同一个故障上再失败一次;save_failure_notified 一并继承,同一个 key 的同一段故障不重复告警。
+		// 无论是否已连接都走这里:未连接时效果与下面那支相同(新值进排队),只是不丢退避进度。
+		if (auto pending = pending_save_queue_.find(element->redis_key); pending != pending_save_queue_.end())
+		{
+			element->retry_count = pending->second->retry_count;
+			element->next_retry_at = pending->second->next_retry_at;
+			element->save_failure_notified = pending->second->save_failure_notified;
+			pending->second = element;
 			return;
 		}
 

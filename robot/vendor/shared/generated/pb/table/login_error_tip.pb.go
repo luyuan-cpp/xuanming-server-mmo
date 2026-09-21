@@ -57,6 +57,9 @@ const (
 	LoginError_kLoginAccountDataLoadFailed               LoginError = 2029
 	LoginError_kLoginFsmInvalidEvent                     LoginError = 2030
 	LoginError_kLoginTimeout                             LoginError = 2031
+	LoginError_kRoleNameInvalid                          LoginError = 2032
+	LoginError_kRoleNameTaken                            LoginError = 2033
+	LoginError_kRoleNameSensitive                        LoginError = 2034
 )
 
 // Enum value maps for LoginError.
@@ -95,6 +98,9 @@ var (
 		2029: "kLoginAccountDataLoadFailed",
 		2030: "kLoginFsmInvalidEvent",
 		2031: "kLoginTimeout",
+		2032: "kRoleNameInvalid",
+		2033: "kRoleNameTaken",
+		2034: "kRoleNameSensitive",
 	}
 	LoginError_value = map[string]int32{
 		"kLogin_errorOK":                            0,
@@ -130,6 +136,9 @@ var (
 		"kLoginAccountDataLoadFailed":               2029,
 		"kLoginFsmInvalidEvent":                     2030,
 		"kLoginTimeout":                             2031,
+		"kRoleNameInvalid":                          2032,
+		"kRoleNameTaken":                            2033,
+		"kRoleNameSensitive":                        2034,
 	}
 )
 
@@ -164,7 +173,7 @@ var File_login_error_tip_proto protoreflect.FileDescriptor
 
 const file_login_error_tip_proto_rawDesc = "" +
 	"\n" +
-	"\x15login_error_tip.proto*\xbf\a\n" +
+	"\x15login_error_tip.proto*\x84\b\n" +
 	"\vlogin_error\x12\x12\n" +
 	"\x0ekLogin_errorOK\x10\x00\x12\x1a\n" +
 	"\x15kLoginAccountNotFound\x10\xd0\x0f\x12\x1c\n" +
@@ -198,7 +207,10 @@ const file_login_error_tip_proto_rawDesc = "" +
 	"\x15kLoginSessionNotFound\x10\xec\x0f\x12 \n" +
 	"\x1bkLoginAccountDataLoadFailed\x10\xed\x0f\x12\x1a\n" +
 	"\x15kLoginFsmInvalidEvent\x10\xee\x0f\x12\x12\n" +
-	"\rkLoginTimeout\x10\xef\x0fB$\n" +
+	"\rkLoginTimeout\x10\xef\x0f\x12\x15\n" +
+	"\x10kRoleNameInvalid\x10\xf0\x0f\x12\x13\n" +
+	"\x0ekRoleNameTaken\x10\xf1\x0f\x12\x17\n" +
+	"\x12kRoleNameSensitive\x10\xf2\x0fB$\n" +
 	"\x0ecom.game.tableZ\x12generated/pb/tableb\x06proto3"
 
 var (

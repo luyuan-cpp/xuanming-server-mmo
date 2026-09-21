@@ -52,8 +52,6 @@ int main(int argc, const char** argv) {
     std::vector<std::string> Srcs(SourcePaths.begin(), SourcePaths.end());
 
     ClangTool Tool(CDB, Srcs);
-    // Suppress parse diagnostics -- we only care about matched FieldDecls.
-    Tool.setDiagnosticConsumer(new IgnoringDiagConsumer());
 
     std::vector<std::string> SkipVec(SkipPaths.begin(), SkipPaths.end());
     NoMemberRawPointerCheck Checker(std::move(SkipVec));
@@ -63,7 +61,11 @@ int main(int argc, const char** argv) {
         fieldDecl(hasType(pointerType())).bind("ptrField"),
         &Checker);
 
-    Tool.run(newFrontendActionFactory(&Finder).get());
+    // 解析失败时 AST 不完整，不能把“没有匹配到字段”当作检查通过。
+    if (Tool.run(newFrontendActionFactory(&Finder).get()) != 0) {
+        llvm::errs() << "[no-raw-pointer-member] FAILED: source parsing failed\n";
+        return 2;
+    }
 
     if (Checker.violationCount() > 0) {
         llvm::errs() << "\nFound " << Checker.violationCount()

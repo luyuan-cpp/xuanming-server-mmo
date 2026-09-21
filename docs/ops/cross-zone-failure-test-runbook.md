@@ -405,7 +405,7 @@ cd robot
   - ✅ `db_stale_owner_write_rejected_total == 0`、无 `[OwnerEpoch]` 行(死节点写不了任何东西);
   - ✅ 数据 = 死节点最后一次成功存盘(周期存盘默认 300s,`redis.cpp:84-86`;这段进度丢失是崩溃固有代价,**不算失败**)。
 - **判定要的是正面证据**:scene_manager 在屏障窗口内重启过的话,新进程没有"亲眼看到节点消失"的本地记录(`load_reporter.go:125-170` `nodeGoneObservedAt`),会多等;这属于 fail-closed,记现象不算失败。
-- **未设计注入手法的反面**:节点没死、只是丢了 etcd 租约(僵尸)。预期是老进程 `[EmergencyRelocate] node identity lost; …` 自己存盘 + 写标记 + 请求改派;若它没来得及、又被接管铸了新 epoch,它之后的存盘会被 `HandlePlayerSaveRejected … (metric=stale_owner_write_rejected)` 拒绝并自毁——**这是全文唯一一处 `stale_owner_write_rejected` 非 0 属于预期的情形**。
+- **未设计注入手法的反面**:节点没死、只是丢了 etcd 租约(僵尸)。预期是老进程 `[EmergencyRelocate] node identity lost; …` 自己存盘 + 写标记 + 请求改派;若它没来得及、又被接管铸了新 epoch,它之后的存盘会被 `HandlePlayerSaveRejected … (metric=stale_owner_write_rejected)` 拒绝并自毁——**这是全文唯一一处 `stale_owner_write_rejected` 非 0 属于预期的情形**。(限本 runbook 的故障注入场景;一般运行中的另一种预期来源 —— 旧节点退出存盘迟到被守卫拒 —— 见 §9。)
 
 ### 场景 F:zone Redis 在交接窗口内断开
 
@@ -517,8 +517,35 @@ F3 的冻结上限一栏在 D-2 修掉之前**只能**填 `KNOWN-FAIL`。标记�
 
 ---
 
+## 9. 与帮会资产通道相关的归属信号(帮会二期 B4c)
+
+来源:`docs/design/guild-phase2/08-save-owner-fence.md` §8.2.4、§8.3。本节只补充,不改上文各场景的判定。
+
+**`stale_owner_write_rejected` 的第二种预期来源。** 上文(§2.3 / §2.4 表格、§5 第 1 条)把 `HandlePlayerSaveRejected … (metric=stale_owner_write_rejected)` 与
+`db_stale_owner_write_rejected_total` 非 0 视为"曾经双主"。在**本 runbook 的故障注入场景里**这个判定不变;但在一般运行中还有一种合法来源:
+**旧节点的退出存盘超过重连租约才落地,此时玩家已在别的节点铸出更高的 epoch,旧存盘被守卫拒掉** —— 这是帮会资产通道要防的 K1 被正确拦下,不是事故。
+区分方法:看被拒的那个 scene 节点上,该玩家在被拒之前是否已进入退出链 —— 同一 player_id 的 `HandleExitGameNode: Player <P> is exiting the scene node` 早于被拒那一行 `HandlePlayerSaveRejected: owner_epoch CAS rejected save for player <P>`(退出链上没有含 `UnregisterPlayer` 字样的日志,别按它搜)。Z1 僵尸被拒后自清也归入这一类,判定相同。
+是 → K1 被拦下,记录即可;否 → 按"曾经双主"处理。
+
+**scene 侧只能靠日志的三条查询**(scene 的计数不进 Prometheus;Loki 的 ruler 目前没有挂载规则目录、也没有 `alertmanager_url`,
+所以这三条是值班固定查询,不是自动告警;ruler 接线归上线批 BK8s):
+
+```logql
+# 资产操作因 owner_epoch = 0 被挡(资产通道在无围栏的实体上一律回 RETRY)
+sum(count_over_time({service="scene"} |= "[AssetOp] blocked: owner_epoch unknown" [10m])) > 0
+
+# 有 owner_epoch = 0 的存盘(兼容窗口仍在;共享 / 预发环境开启帮会资产操作时必须恒为 0)
+sum(count_over_time({service="scene"} |= "[OwnerEpoch]" |~ "owner_epoch_unknown=[1-9]" [10m])) > 0
+
+# 退出存盘超过重连租约才落地(epoch 非 0 时不再意味着覆盖,保留作辅助信号)
+sum(count_over_time({service="scene"} |= "save outran reconnect lease" [10m])) > 0
+```
+
+Go 侧的两条(`DbStaleOwnerWriteRejected`、`DbOwnerEpochLegacyZero`)是可部署的 PrometheusRule,见 `deploy/k8s/owner-epoch-alerts.yaml`。
+
 ## Changelog
 
+- **2026-09-21 v2.3**:新增 §9(帮会二期 B4c):`stale_owner_write_rejected` 的第二种预期来源(K1 被正确拦下)与区分方法;scene 侧三条值班 LogQL;指向 `deploy/k8s/owner-epoch-alerts.yaml`。上文各场景的判定不变。
 - **2026-09-21 v2.2**:S3L1-1 第二层出口 + 铸造重放识别落码(设计文档 §12.5.6,未编译未验证)。§2.3 `[TravelHandoff]` 行按 `player_lifecycle.cpp:238-252` 实际输出重写(补 `withdraw_deferred` / `withdraw_expired` / `granted_client_reset`),新增指标 `scene_manager_enter_scene_rollback_total{outcome}`;§2.4 新增 `[ZoneTravel][ClientReset]` 两条、`GET owner_epoch failed` 改为 `MGET owner_epoch/location failed or malformed`、`was granted although …` 带 `evidence=`;scene_manager 回滚日志改为 `[RouteRollback] outcome=` 前缀,**旧原文 grep 口径作废**;robot 补 `kicked by server` 口径;§1 机制补踢线分支;B2 期望改成"踢线 / 退出优先"二选一;新增 **B3**(Kafka pause + 回滚注入 Redis 错误);§5 不变量 6 与 §7 结果表同步。
 - **2026-09-20 v2.1**:缺陷 D-1(Redis 断开时 handoff 标记撤不回)的修复已落码(未编译未验证):C2 / F3 / §6 / §7 按 `WithdrawHandoffMark` 的日志与计数改写,F3 拆成「标记撤回:可判 PASS/FAIL」与「冻结上限:仍 KNOWN-FAIL(D-2)」;原缺口 G3 关闭;`enter_scene_rejected_total` 的 reason 补 `home_zone_unmapped_travel` / `scene_gone`。前置新增:测试号必须有 `player:zone` 映射(新建角色自带;存量号先跑 `merge_zone -backfill-home-zone`),否则 TravelToZone 第一条腿直接回 20。
 - **2026-09-20 v2**:整篇重写。v1 的 A–D 四个场景(Kafka 暂不可达 / 目的节点持续不可达 / 源节点重启 / Kafka 重复投递)全部针对已下线的 `player_migrate` + ACK + `CrossZoneReaper` 链,作废。新场景 A–F 面向 handoff 标记 + `owner_epoch` 两道门、两道 30s 看门狗、"退出优先"与属主接管。依据 `main`@`d9e471b80` 静态编写,**链路未编译、未实跑,本文未经执行验证**。F3 标注为当前预期失败(D-1 退出路径 `DEL` 被 `connected()` 守卫;D-2 冻结无服务端上限)。移除对已不存在的 `robot/clients/cmd/multi_zone_seeder`、`single_player` 的引用。
