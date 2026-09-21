@@ -620,6 +620,21 @@ bool EtcdService::IsLeasePresumablyExpired() const
 	return elapsedSeconds > leaseTtlSeconds_;
 }
 
+bool EtcdService::IsIdentityConfirmedFresh() const
+{
+	if (registrationStopped_ || leaseId <= 0 || leaseTtlSeconds_ <= 0)
+	{
+		return false;
+	}
+	if (registrationMode_ == RegistrationMode::kReRegisterExisting)
+	{
+		return false;
+	}
+	const auto elapsed = std::chrono::steady_clock::now() - lastKeepAliveAckTime_;
+	const auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+	return elapsedMs * 2 <= leaseTtlSeconds_ * 1000;
+}
+
 // 2026-09-08 起这里不再激活任何发号器(旧 ActivateSnowFlakeAfterGuard:读分 zone Redis
 // 的 guard 后 OnNodeStart(路由 node_id) 再 StartRpcServer)。永久 guid 改走号段
 // (docs/design/node-id-overhaul-plan-20260908.md §6 / §7.5),由 scene 的 GuidSegmentRegistry

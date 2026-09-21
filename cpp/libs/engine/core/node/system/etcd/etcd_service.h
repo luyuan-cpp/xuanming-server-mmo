@@ -52,6 +52,17 @@ public:
     // meaning etcd has likely expired our lease and another node could claim our ID.
     bool IsLeasePresumablyExpired() const;
 
+    // 本节点路由身份"当前确认有效"的只读判定,给要写跨进程放行凭证的调用方用
+    // (scene 的断线释放标记 A1′,docs/design/cross-zone-scene-travel.md §12.6.4 M3)。
+    // 比 IsLeasePresumablyExpired 严格,四条全部满足才为 true:
+    //   ① lease 已授予(没授予 = 身份还没确认,不能当成"没过期");
+    //   ② 不在重注册中:keepalive 回 TTL<=0 之后、分配键 CAS 裁定之前身份悬而未决,而重新授予 lease 时
+    //      OnLeaseGranted 会把 ACK 时间置为 now —— 只看 ACK 会在这段窗口里误判有效;
+    //   ③ 注册流没有被永久停掉(身份冲突收尾中);
+    //   ④ 最近一次 keepalive ACK 距今 ≤ TTL/2(毫秒精度,给 etcd 侧过期留出余量)。
+    // 线程模型同本类其余成员:只在本节点 loop 线程调用。
+    bool IsIdentityConfirmedFresh() const;
+
 private:
     enum class RegistrationMode : uint8_t {
         kInitialBoot,

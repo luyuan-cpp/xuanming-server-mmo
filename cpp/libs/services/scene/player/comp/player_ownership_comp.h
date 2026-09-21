@@ -15,9 +15,17 @@
 // ── Redis 键契约(Go 与 C++ 两边必须一字不差,改任何一边都要同步另一边)──
 //   player:{player_id}:owner_epoch  纯十进制整数字符串。只由 scene_manager 用 INCR
 //                                    铸造,单调递增。节点存盘时用它做 CAS 守卫。
-//   player:{player_id}:handoff      值 "{epoch}:{saved_at_ms}",源 scene 在 Redis 落地
-//                                    回调之后写,EX 300 秒。scene_manager 只比对不删除
-//                                    (placement 之后它自然过时,靠 TTL 回收)。
+//   player:{player_id}:handoff      值 "{epoch}:{saved_at_ms}",语义 = 这一刻的状态已落盘、写它的节点
+//                                    不再持有;EX 300 秒。scene_manager 只比对不删除。
+//                                    **写入方与删除方不止一处**(完整清单与理由见 exit_release_mark.h 开头):
+//                                    写:BeginTravelHandoff(交接,存盘落地回调之后)、DispatchEmergencyRelocate
+//                                        (疏散 / 排空改派)、A1′(干净退出收敛、实体销毁前,owner_epoch 条件写)、
+//                                        A2′ 放弃补写(载入被放弃时把删掉的当前代际写回,owner_epoch 条件写)。
+//                                    删:WithdrawHandoffMark(按原文条件删)、ResolveTravelOutcome(DEL)、
+//                                        A2′(新载入建实体之前,核对 owner_epoch 后删代际 ≤N 的;路由不带
+//                                        owner_epoch 时删 ≤ 当前 owner_epoch 的)。
+//                                    不要假设"同节点新实体上不可能有有效标记":上一任的 A1′ 就写在同节点上,
+//                                    只有 A2′ 能保证新持有期间不留有效标记。
 //   player:{player_id}:location     PlayerLocation proto 二进制(Go 写),含 owner_epoch。
 //
 // ── epoch 的 0 语义 ──

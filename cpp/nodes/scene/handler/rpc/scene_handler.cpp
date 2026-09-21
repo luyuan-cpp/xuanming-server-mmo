@@ -193,11 +193,12 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 		// 销毁会改 playerList,迭代器已失效,不得再用。
 		playerIt = tlsEcs.playerList.end();
 	}
-	// 1.6 同一套路,针对仍在退出中(UnregisterPlayer)的旧实体:owner_epoch 至少比它缓存的大 2 = 中间有别的
-	//     持有者(退出被保留到租约之后,玩家在别处玩过又被派回来),复用它同样是回档,按"被废黜"销毁后重载。
-	//     恰好 +1(落回本节点这一次自己铸的)照旧复用,EnterScene 第 0 步取消退出(cross-zone-scene-travel.md §12.6)。
+	// 1.6 同一套路,针对其余旧实体(仍在退出中的,或没退出的活僵尸):owner_epoch 至少比它缓存的大 2 = 中间有别的
+	//     持有者(退出被保留到租约之后 / 僵尸没退出,玩家在别处玩过又被派回来),复用它同样是回档,按"被废黜"
+	//     销毁后重载。恰好 +1(落回本节点这一次自己铸的)照旧复用,退出中的由 EnterScene 第 0 步取消退出
+	//     (cross-zone-scene-travel.md §12.6)。
 	else if (playerIt != tlsEcs.playerList.end() &&
-		PlayerLifecycleSystem::DiscardDeposedExitingEntity(playerIt->second, ctx.ownerEpoch))
+		PlayerLifecycleSystem::DiscardDeposedEntityOnReentry(playerIt->second, ctx.ownerEpoch))
 	{
 		playerIt = tlsEcs.playerList.end();
 	}
@@ -251,7 +252,8 @@ void SceneHandler::PlayerEnterGameNode(::google::protobuf::RpcController* contro
 
 	// 3.5 A2′:载入之前"先核归属再删"继承来的 handoff 标记(owner_epoch ≠ ctx.ownerEpoch 一个都不删)。
 	//     必须在登记待入场上下文之后(应答按 player_id 找它)、AsyncLoad 之前(同一条 zone Redis 连接 FIFO,
-	//     EVAL 排在 GET 前面)。结果决定 HandlePlayerAsyncLoaded 建不建实体;ctx.ownerEpoch == 0 时什么都不做。
+	//     EVAL 排在 GET 前面)。结果决定 HandlePlayerAsyncLoaded 建不建实体;ctx.ownerEpoch == 0(旧版路由)
+	//     改为不核对归属、删 ≤ 当前 owner_epoch 的标记,闸门同样等它确认。
 	PlayerLifecycleSystem::BeginInheritedMarkClear(request->player_id());
 
 	tlsRedisSystem.GetPlayerDataRedis()->AsyncLoad(request->player_id());

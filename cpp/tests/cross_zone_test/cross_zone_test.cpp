@@ -607,6 +607,9 @@ TEST(TravelOutcomeReset, NoRecordedEvidenceKeepsIncoming)
 #include "proto/common/component/player_comp.pb.h"         // UnregisterPlayer
 #include "proto/common/component/player_network_comp.pb.h" // PlayerSessionSnapshotComp
 #include "type_alias/player_session_type_alias.h"          // SessionMap
+#include "muduo/base/Logging.h"                            // Logger::setOutput:数 WARN 条数
+#include <cstdio>
+#include <string_view>
 
 namespace
 {
@@ -722,14 +725,15 @@ TEST(ExitPersistDecision, RekickOnlyWhenExhaustedAndSettled)
 
 TEST(ExitPersistReentry, DeposedOnlyWhenEpochJumpsByAtLeastTwo)
 {
-    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(5, 0)) << "上游未填,无从判断";
-    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(5, 4)) << "乱序的旧路由";
-    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(5, 5)) << "同节点重连不铸造";
-    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(5, 6)) << "落回本节点这一次自己铸的,内存仍是真身";
-    EXPECT_TRUE(player_exit::IsDeposedWhileExiting(5, 7)) << "别处落点铸一次 + 回到本节点再铸一次";
-    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(0, 1)) << "epoch 0 的同节点落点铸造(§12.6.9)不是被废黜";
-    EXPECT_TRUE(player_exit::IsDeposedWhileExiting(0, 2));
-    EXPECT_FALSE(player_exit::IsDeposedWhileExiting(std::numeric_limits<uint64_t>::max(), 1))
+    EXPECT_FALSE(player_exit::IsDeposedOnReentry(5, 0)) << "上游未填,无从判断";
+    EXPECT_FALSE(player_exit::IsDeposedOnReentry(5, 4)) << "乱序的旧路由";
+    EXPECT_FALSE(player_exit::IsDeposedOnReentry(5, 5)) << "同节点重连不铸造";
+    EXPECT_FALSE(player_exit::IsDeposedOnReentry(5, 6)) << "落回本节点这一次自己铸的,内存仍是真身";
+    EXPECT_TRUE(player_exit::IsDeposedOnReentry(5, 7)) << "别处落点铸一次 + 回到本节点再铸一次";
+    EXPECT_FALSE(player_exit::IsDeposedOnReentry(0, 1)) << "缓存 0 = 未知,无从判断";
+    EXPECT_FALSE(player_exit::IsDeposedOnReentry(0, 5))
+        << "缓存 0 = 未知(兼容窗口经旧 gate 首登),Redis 真实值可能早已是 5:不能拿 0 当基数判被废黜";
+    EXPECT_FALSE(player_exit::IsDeposedOnReentry(std::numeric_limits<uint64_t>::max(), 1))
         << "不新就不废黜,减法不得回绕";
 }
 
@@ -833,6 +837,53 @@ TEST(ExitPersistEcs, NewerSessionKeepsEntityAndClearsExitMarkers)
     const auto* snapshot = tlsEcs.actorRegistry.try_get<PlayerLastPersistedSnapshotComp>(player);
     ASSERT_NE(snapshot, nullptr) << "这份字节确实落了盘,快照照常更新";
     EXPECT_TRUE(snapshot->HasSnapshot());
+}
+
+namespace
+{
+// 数 muduo 日志里 "save outran reconnect lease" 出现的条数(帮会值班 LogQL 按这段原文计事件数,§12.6.9)。
+int g_leaseOverrunWarnLines = 0;
+
+void CountLeaseOverrunWarn(const char* msg, int len)
+{
+    if (std::string_view(msg, static_cast<std::size_t>(len)).find("save outran reconnect lease") !=
+        std::string_view::npos)
+    {
+        ++g_leaseOverrunWarnLines;
+    }
+    std::fwrite(msg, 1, static_cast<std::size_t>(len), stdout);
+}
+
+void WriteLogToStdout(const char* msg, int len)
+{
+    std::fwrite(msg, 1, static_cast<std::size_t>(len), stdout);
+}
+} // namespace
+
+TEST(ExitPersistEcs, LeaseOverrunWarnIsLoggedOncePerExit)
+{
+    // 复审 liveness-minor:一次退出可能落地多次,"save outran reconnect lease" 只许每次退出打一条(§12.6.9)。
+    // 走"超限保留"分支:不碰 Redis、实体与意图组件都留着,同一次退出可以连续落地两次。
+    const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
+    tlsEcs.actorRegistry.get<UnregisterPlayer>(player).set_logout_initiated_ms(1); // 远早于租约
+    tlsEcs.actorRegistry.get<PlayerExitIntentComp>(player).resaveRounds = player_exit::kMaxExitResaveRounds;
+    PlayerAllData landed = MarshalAsSaved(player);
+    landed.mutable_player_database_data()->mutable_level_component()->set_level(999); // 不收敛
+
+    g_leaseOverrunWarnLines = 0;
+    muduo::Logger::setOutput(CountLeaseOverrunWarn);
+    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed);
+    const int afterFirst = g_leaseOverrunWarnLines;
+    PlayerLifecycleSystem::HandlePlayerAsyncSaved(kExitPlayerId, landed); // 同一次退出的第二次落地
+    const int afterSecond = g_leaseOverrunWarnLines;
+    muduo::Logger::setOutput(WriteLogToStdout);
+
+    ASSERT_TRUE(tlsEcs.actorRegistry.valid(player)) << "不收敛且已到上限:保留实体";
+    const auto* intent = tlsEcs.actorRegistry.try_get<PlayerExitIntentComp>(player);
+    ASSERT_NE(intent, nullptr);
+    EXPECT_TRUE(intent->leaseOverrunWarned);
+    EXPECT_EQ(afterFirst, 1) << "第一次超租约落地打一条,原文不变";
+    EXPECT_EQ(afterSecond, 1) << "同一次退出的后续落地不再打";
 }
 
 TEST(ExitPersistEcs, MissingIntentFailsClosed)
@@ -956,18 +1007,31 @@ TEST(ExitPersistEcs, ReentryDiscardsExitingEntityOnlyWhenDeposed)
     {
         const auto player = MakeExitingPlayer(kSessionAtExit, kSessionAtExit);
         tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
-        EXPECT_FALSE(PlayerLifecycleSystem::DiscardDeposedExitingEntity(player, 6))
+        EXPECT_FALSE(PlayerLifecycleSystem::DiscardDeposedEntityOnReentry(player, 6))
             << "恰好 +1:落回本节点这一次自己铸的,照常复用";
         EXPECT_TRUE(tlsEcs.actorRegistry.valid(player));
-        EXPECT_TRUE(PlayerLifecycleSystem::DiscardDeposedExitingEntity(player, 7));
+        EXPECT_TRUE(PlayerLifecycleSystem::DiscardDeposedEntityOnReentry(player, 7));
         EXPECT_FALSE(tlsEcs.actorRegistry.valid(player)) << "中间有别的持有者:不存盘销毁,调用方重载";
         EXPECT_EQ(tlsEcs.playerList.count(kExitPlayerId), 0u);
     }
     {
+        // 复审 ownership-minor:不带 UnregisterPlayer 的活僵尸(意图缺失分支保留的 / gate 崩溃没代发 ExitGame)
+        // 同样不得在中间有别的持有者时被复用。
         const auto player = MakeOnlinePlayer(kNewerSession);
         tlsEcs.actorRegistry.emplace<PlayerOwnerEpochComp>(player).epoch = 5;
-        EXPECT_FALSE(PlayerLifecycleSystem::DiscardDeposedExitingEntity(player, 9))
-            << "不在退出中的实体不归这条路径管";
+        EXPECT_FALSE(PlayerLifecycleSystem::DiscardDeposedEntityOnReentry(player, 6))
+            << "活实体恰好 +1:落回本节点这一次自己铸的,照常复用";
+        EXPECT_FALSE(PlayerLifecycleSystem::DiscardDeposedEntityOnReentry(player, 5)) << "同节点重连不铸造";
+        EXPECT_TRUE(tlsEcs.actorRegistry.valid(player));
+        EXPECT_TRUE(PlayerLifecycleSystem::DiscardDeposedEntityOnReentry(player, 7))
+            << "活僵尸遇到 ≥2 跳:中间有别的持有者,不存盘销毁";
+        EXPECT_FALSE(tlsEcs.actorRegistry.valid(player));
+        EXPECT_EQ(tlsEcs.playerList.count(kExitPlayerId), 0u);
+    }
+    {
+        const auto player = MakeOnlinePlayer(kNewerSession);
+        EXPECT_FALSE(PlayerLifecycleSystem::DiscardDeposedEntityOnReentry(player, 9))
+            << "缓存 epoch 缺失(按 0 = 未知):无从判断,照常复用";
         EXPECT_TRUE(tlsEcs.actorRegistry.valid(player));
     }
 }
@@ -1158,6 +1222,21 @@ TEST(ExitReleaseInheritClear, LuaComparesOwnerEpochFirstAndOnlyDeletesUpToN)
     EXPECT_EQ(lua.find("tonumber"), std::string::npos) << "uint64 代际不能过 tonumber(2^53 以上丢精度)";
 }
 
+TEST(ExitReleaseInheritClear, UnknownEpochLuaNeverRefusesAndOnlyDeletesUpToCurrent)
+{
+    // 复审 ownership-major:路由不带 owner_epoch 时照样清,以 Redis 里当前的 owner_epoch 代替 N。
+    const std::string lua = erm::kLuaInheritClearUnknownEpoch;
+    EXPECT_EQ(lua.find("return -1"), std::string::npos) << "无从核对归属:不返回 -1";
+    EXPECT_EQ(lua.find("ARGV"), std::string::npos) << "没有 N 可传";
+    EXPECT_NE(lua.find("if cur == false then cur = '0' end"), std::string::npos) << "owner_epoch 缺键按 0";
+    const auto keepNewer = lua.find("then return 3 end");
+    const auto lastDel = lua.rfind("redis.call('DEL', KEYS[2])");
+    ASSERT_NE(keepNewer, std::string::npos);
+    ASSERT_NE(lastDel, std::string::npos);
+    EXPECT_LT(keepNewer, lastDel) << "代际比当前新的标记先返回 3、不删:只删 ≤ 当前代际";
+    EXPECT_EQ(lua.find("tonumber"), std::string::npos) << "uint64 代际不能过 tonumber";
+}
+
 TEST(ExitReleaseInheritClear, ReplyClassification)
 {
     using R = erm::InheritClearResult;
@@ -1193,7 +1272,12 @@ TEST(ExitReleaseInheritClear, GateHasThreeStates)
 {
     using P = erm::InheritClearPhase;
     using G = erm::InheritGateDecision;
-    EXPECT_EQ(erm::DecideInheritGate(0, 0, P::kNone), G::kProceed) << "旧版路由没有 owner_epoch:放行";
+    // 旧版路由(ctxEpoch 0)不再直接放行(复审 ownership-major):同样要等针对 0 的那一次清理确认。
+    EXPECT_EQ(erm::DecideInheritGate(0, 0, P::kNone), G::kRefuse) << "旧版路由也没发过清理:fail-closed";
+    EXPECT_EQ(erm::DecideInheritGate(0, 0, P::kConfirmed), G::kProceed);
+    EXPECT_EQ(erm::DecideInheritGate(0, 0, P::kInFlight), G::kWait);
+    EXPECT_EQ(erm::DecideInheritGate(0, 5, P::kConfirmed), G::kRefuse) << "针对 5 的确认不能冒充针对 0 的";
+    EXPECT_EQ(erm::DecideInheritGate(5, 0, P::kConfirmed), G::kRefuse) << "针对 0 的确认不能冒充针对 5 的";
     EXPECT_EQ(erm::DecideInheritGate(5, 5, P::kConfirmed), G::kProceed);
     EXPECT_EQ(erm::DecideInheritGate(5, 5, P::kInFlight), G::kWait) << "EVAL 在途:暂存载入结果";
     EXPECT_EQ(erm::DecideInheritGate(5, 5, P::kRetryWait), G::kWait) << "失败待重发:暂存载入结果";
@@ -1213,6 +1297,18 @@ TEST(ExitReleaseInheritClear, RetryIsBoundedByAttemptsAndDeadline)
     EXPECT_EQ(erm::InheritClearRetryDelay(2), 500ms);
     EXPECT_EQ(erm::InheritClearRetryDelay(3), 1000ms);
     EXPECT_EQ(erm::InheritClearRetryDelay(9), 1000ms) << "退避封顶";
+}
+
+TEST(ExitReleaseInheritClear, AbandonedLateReplyNeverRewritesOverANewerHolder)
+{
+    // 复审 ownership-major:已放弃那一轮(L1)的 A2′ 晚到应答删掉了 epoch N 的标记,而同节点更新一轮(L2,
+    // 同为 epoch N、不铸造)已在载入或已建实体。当场补写会给 L2 留下对它有效的"已落盘、不再持有"标记。
+    using D = erm::AbandonedRewriteDecision;
+    EXPECT_EQ(erm::DecideAbandonedRewrite(/*nodeHoldsPlayer=*/false, /*newerLoadPending=*/false), D::kRewriteNow);
+    EXPECT_EQ(erm::DecideAbandonedRewrite(false, true), D::kHandToNewerLoad)
+        << "L2 还在载入:补写移交给 L2(L2 建出实体即作废,L2 也放弃时才补写)";
+    EXPECT_EQ(erm::DecideAbandonedRewrite(true, false), D::kDropNodeHolds) << "L2 已建实体:本节点就是持有者";
+    EXPECT_EQ(erm::DecideAbandonedRewrite(true, true), D::kDropNodeHolds) << "有实体一律不补写";
 }
 
 // ── ECS 级接缝(M15):宿主里没有 zone Redis(tlsRedis.GetZoneRedis() 为空)──
@@ -1281,6 +1377,30 @@ TEST(ExitReleaseEcs, LoadWithoutClearForItsEpochIsRefused)
     EXPECT_EQ(PlayerLifecycleSystem::GetPendingEnterMap().count(kReleasePlayerId), 0u) << "待入场条目已擦掉";
     EXPECT_EQ(tlsEcs.playerList.count(kReleasePlayerId), 0u) << "没有建实体";
     EXPECT_EQ(exit_release_stats::Read().inheritRefused, before.inheritRefused + 1);
+}
+
+TEST(ExitReleaseEcs, RouteWithoutOwnerEpochStillWaitsForTheClear)
+{
+    // 复审 ownership-major:旧版路由(owner_epoch 0)以前跳过 A2′、闸门直接放行,上一任的 A1′ 标记因此存活。
+    RegisterPendingEnter(/*ownerEpoch=*/0);
+    const auto before = exit_release_stats::Read();
+    PlayerLifecycleSystem::HandlePlayerAsyncLoaded(kReleasePlayerId, PlayerAllData{});
+    EXPECT_EQ(PlayerLifecycleSystem::GetPendingEnterMap().count(kReleasePlayerId), 0u) << "没发过清理:拒建实体";
+    EXPECT_EQ(tlsEcs.playerList.count(kReleasePlayerId), 0u);
+    EXPECT_EQ(exit_release_stats::Read().inheritRefused, before.inheritRefused + 1);
+
+    RegisterPendingEnter(/*ownerEpoch=*/0);
+    PlayerLifecycleSystem::BeginInheritedMarkClear(kReleasePlayerId);
+    auto& pending = PlayerLifecycleSystem::GetPendingEnterMap();
+    ASSERT_EQ(pending.count(kReleasePlayerId), 1u);
+    const auto& state = pending.at(kReleasePlayerId).inheritClear;
+    EXPECT_EQ(state.targetEpoch, 0u) << "针对\"路由不带 owner_epoch\"的那一种清理";
+    EXPECT_EQ(state.phase, erm::InheritClearPhase::kRetryWait) << "照样发了(zone Redis 不可用 = 失败,等重发)";
+    EXPECT_EQ(state.attemptsSent, 1u);
+    PlayerLifecycleSystem::HandlePlayerAsyncLoaded(kReleasePlayerId, PlayerAllData{});
+    ASSERT_EQ(pending.count(kReleasePlayerId), 1u) << "等清理期间保留载入结果,不建实体";
+    EXPECT_NE(pending.at(kReleasePlayerId).inheritClear.stashedLoad, nullptr);
+    EXPECT_EQ(tlsEcs.playerList.count(kReleasePlayerId), 0u);
 }
 
 TEST(ExitReleaseEcs, FailingClearKeepsTheLoadThenRefusesWhenExhausted)

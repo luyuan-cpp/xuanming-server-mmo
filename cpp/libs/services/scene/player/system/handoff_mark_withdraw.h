@@ -29,6 +29,11 @@
 //     放弃重试是安全的,但要计数(withdraw_expired)。
 //   * 表只活在 scene 逻辑线程的 thread_local 里。进程退出丢表无害:location 指向已死节点,
 //     scene_manager 接管时必然铸造新 epoch,旧标记自然失配。
+//   * 本表只管"交接作废后撤回"这一种删除。handoff 键的完整写入方 / 删除方清单是键契约的一部分,
+//     见 player_ownership_comp.h 与 exit_release_mark.h 文件头:断线释放标记(A1′,干净退出收敛后写)
+//     **不进本表** —— 它的语义本来就是"已落盘、本节点不再持有",无需撤回;玩家重登载入时由 A2′ 按
+//     owner_epoch 条件删 ≤N 的标记(含本表没来得及撤回的那一份)。所以同节点新建的实体上也可能挂着
+//     一份有效标记,不能据"刚载入"省掉任何清理。
 //
 // 时间一律由调用方传入(显式依赖,AGENTS §11.2),本文件不读任何时钟。
 namespace handoff_mark_withdraw

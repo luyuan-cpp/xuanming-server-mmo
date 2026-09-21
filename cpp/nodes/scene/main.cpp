@@ -81,10 +81,14 @@ int main(int argc, char *argv[])
         node::entry::detail::ApplyPostConstructionHooks<SceneNodeHooks>(node);
 
         // 断线释放标记(A1′)的"本节点身份当前有效"探针(cross-zone-scene-travel.md §12.6.4 M3):
-        // etcd 租约没有推定过期(最近一次 keepalive ACK 在租约 TTL 内)。scene 库不直接依赖 Node,由这里注入;
+        // EtcdService::IsIdentityConfirmedFresh —— lease 已授予、不在重注册中(分配键 CAS 尚未裁定)、
+        // 注册流未停、最近一次 keepalive ACK 在 TTL/2 内。scene 库不直接依赖 Node,由这里注入;
         // 捕获的 node 活到本作用域结束(含析构里的兜底 drain 循环),作用域之后立即清掉。
+        // 本地 ACK 在 TTL/2 内时 etcd 侧租约至少还剩 TTL/2,正常不可能已被别的进程接手;残余(§12.6.8)只剩
+        // 租约被 etcd 提前撤销(人工 revoke / etcd 数据恢复)、本地尚未收到 TTL<=0 的窗口。同一窗口里旧进程
+        // 迟到的同代存盘本身已会覆盖新进程(GO-3 既有问题),A1′ 只是多一个来源。
         PlayerLifecycleSystem::SetNodeIdentityProbe([&node]()
-            { return !node.GetServiceDiscoveryManager().etcdService.IsLeasePresumablyExpired(); });
+            { return node.GetServiceDiscoveryManager().etcdService.IsIdentityConfirmedFresh(); });
 
         node.RegisterGrpcService(&context->grpcService);
 

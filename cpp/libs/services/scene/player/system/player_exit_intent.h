@@ -61,6 +61,9 @@ struct PlayerExitIntentComp
 	// skip_handoff_inflight)—— 新标记会被在途的 EnterScene 用掉,放行到一个会话已断的目标节点。
 	// FinishExitAfterPersist 自己的"退出优先"分支用局部变量判,不经这里。
 	bool travelHandoffMarkIssued{false};
+	// 本次退出已打过一次 "save outran reconnect lease" WARN。退出分支现在一次退出可能落地多次(重存轮次、
+	// 超限保留后的周期存盘 / rekick),该 WARN 被帮会值班 LogQL 按"事件数"引用(§12.6.9),只许每次退出打一条。
+	bool leaseOverrunWarned{false};
 };
 
 namespace player_exit
@@ -185,19 +188,25 @@ namespace player_exit
 		return resaveRounds >= maxResaveRounds && !hasUnsettledSave;
 	}
 
-	// 进场路由命中本节点上一个仍在退出中(UnregisterPlayer)的旧实体时,它是否已被别的持有者废黜过、
+	// 进场路由命中本节点上一个旧实体(仍在退出中的,或不在交接中的活实体)时,它是否已被别的持有者废黜过、
 	// 不得复用(复用 = 旧内存成真身,下一次带新 epoch 的存盘覆盖别处的进度,§12.6.1(d) 回档)。
+	// 活实体同样适用(复审 ownership-minor):中间有别的持有者时,它未落盘的改动带旧 epoch,本来也会被 CAS 拒。
 	//
 	// 判据:这次路由带来的 owner_epoch 比实体缓存的值**至少大 2**。推导(实体缓存 = 上一次落在本节点
 	// 那次路由给的值 E,本节点离开 location 之后的每一次落点都要铸造):
 	//   * 落回本节点的这一次本身至多铸一次(同节点不铸造;location 被租约到期的 LeaveScene 删掉后的
-	//     首次落点、以及 epoch 为 0 的同节点落点铸一次)→ 恰好 E+1,中间没有别的持有者,内存仍是真身,
+	//     首次落点铸一次)→ 恰好 E+1,中间没有别的持有者,内存仍是真身,
 	//     照常复用(旧代际在途写被拒时 HandlePlayerSaveRejected 会用新 epoch 重存);
 	//   * 中间有别的持有者 Z:Z 落点铸一次(E+1),再从 Z 回到本节点又铸一次(E+2)→ ≥ E+2。
 	//   * incoming 为 0(上游未填)或不大于缓存值(乱序的旧路由):无从判断 / 不新,照常复用。
+	//   * 缓存值为 0 同样无从判断,照常复用(与 incoming 为 0 对称,复审 liveness-minor):0 的约定语义是
+	//     "未知 / 上游未填"(player_ownership_comp.h),scene_manager 对 epoch 0 的落点一律铸造(§12.6.9 ③),
+	//     实体缓存 0 只会出现在新旧 gate / scene_manager 混跑的兼容窗口 —— 那时 Redis 里的真实值可能早已是 5,
+	//     拿 0 当基数会把"同节点租约内重登"误判成被废黜、不存盘销毁(在途的无 guard 存盘可能晚于重载的 GET)。
+	//     兼容窗口内这类实体的存盘本来就跳过 CAS 并计 owner_epoch_unknown,不在这里另开一条判据。
 	// 已知盲区:dev 旁路 AllowUnsafeCrossNodeHandoff 放行不铸造,识别不了(只在开发环境打开)。
-	constexpr bool IsDeposedWhileExiting(uint64_t cachedEpoch, uint64_t incomingEpoch)
+	constexpr bool IsDeposedOnReentry(uint64_t cachedEpoch, uint64_t incomingEpoch)
 	{
-		return incomingEpoch != 0 && incomingEpoch > cachedEpoch && incomingEpoch - cachedEpoch >= 2;
+		return cachedEpoch != 0 && incomingEpoch != 0 && incomingEpoch > cachedEpoch && incomingEpoch - cachedEpoch >= 2;
 	}
 } // namespace player_exit

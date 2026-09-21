@@ -297,6 +297,8 @@ namespace
 		append("inherit_rewritten", stats.inheritRewritten);
 		append("inherit_rewrite_skipped", stats.inheritRewriteSkipped);
 		append("inherit_rewrite_failed", stats.inheritRewriteFailed);
+		append("inherit_rewrite_dropped_node_holds", stats.inheritRewriteDroppedNodeHolds);
+		append("inherit_rewrite_handed_over", stats.inheritRewriteHandedOver);
 		return line;
 	}
 
@@ -328,14 +330,14 @@ namespace
 				return;
 			}
 			lastLogged = stats;
-			LOG_INFO << "[ExitPersist] superseded=" << stats.superseded
-					 << " intent_missing=" << stats.intentMissing
-					 << " resave=" << stats.resave
-					 << " resave_exhausted=" << stats.resaveExhausted
-					 << " exhausted_rekick=" << stats.exhaustedRekick
-					 << " fastpath_deferred=" << stats.fastpathDeferred
-					 << " client_msg_rejected=" << stats.clientMsgRejected
-					 << " deposed_on_reentry=" << stats.deposedOnReentry;
+			LOG_INFO << "[ExitPersist] exit_superseded=" << stats.superseded
+					 << " exit_intent_missing=" << stats.intentMissing
+					 << " exit_resave=" << stats.resave
+					 << " exit_resave_capped=" << stats.resaveExhausted
+					 << " exit_exhausted_rekick=" << stats.exhaustedRekick
+					 << " exit_fastpath_deferred=" << stats.fastpathDeferred
+					 << " exit_client_msg_rejected=" << stats.clientMsgRejected
+					 << " exit_deposed_on_reentry=" << stats.deposedOnReentry;
 		});
 	}
 
@@ -869,10 +871,39 @@ namespace
 			{
 				return;
 			}
-			if (exit_release_mark::MayHaveDeletedCurrent(result))
+			// epoch == 0(路由不带 owner_epoch 的那一种清理)不知道删掉的是哪一代,无从补写:只记账(见 exit_release_mark.h)。
+			if (epoch != 0 && exit_release_mark::MayHaveDeletedCurrent(result))
 			{
 				const Guid abandonedPlayer = abandonedIt->second.playerId;
 				tlsAbandonedInheritClears.erase(abandonedIt);
+				// 补写前先看本节点是否已由更新的一轮接手(判定与理由见 exit_release_mark::DecideAbandonedRewrite)。
+				// 移交时:更新一轮建出实体即作废;它也放弃时由 AbandonInheritClear 补写,那时补写必然排在任何
+				// 更后一轮的 A2′ 之前(同一条连接 FIFO)。它自己的 A2′ 删掉当前代际时会覆盖 rewriteEpoch,
+				// 两者都是 owner_epoch 条件写,取哪一个都只在归属未变时生效。
+				const auto newerIt = tlsPendingEnterMap.find(abandonedPlayer);
+				const auto rewriteDecision = exit_release_mark::DecideAbandonedRewrite(
+					tlsEcs.actorRegistry.valid(tlsEcs.GetPlayer(abandonedPlayer)), newerIt != tlsPendingEnterMap.end());
+				if (rewriteDecision == exit_release_mark::AbandonedRewriteDecision::kDropNodeHolds)
+				{
+					exit_release_stats::Inc(exit_release_stats::Get().inheritRewriteDroppedNodeHolds);
+					LOG_INFO << "[ExitRelease][InheritClear] late reply for an abandoned load deleted (or may have"
+							 << " deleted) the mark of epoch " << epoch << ", but this node already holds the"
+							 << " player; not re-writing it player=" << abandonedPlayer;
+					return;
+				}
+				if (rewriteDecision == exit_release_mark::AbandonedRewriteDecision::kHandToNewerLoad)
+				{
+					auto &newerState = newerIt->second.inheritClear;
+					if (newerState.rewriteEpoch == 0)
+					{
+						newerState.rewriteEpoch = epoch;
+					}
+					exit_release_stats::Inc(exit_release_stats::Get().inheritRewriteHandedOver);
+					LOG_INFO << "[ExitRelease][InheritClear] late reply for an abandoned load deleted (or may have"
+							 << " deleted) the mark of epoch " << epoch << "; a newer load (lifecycle "
+							 << newerState.lifecycle << ") now owns the re-write player=" << abandonedPlayer;
+					return;
+				}
 				LOG_INFO << "[ExitRelease][InheritClear] late reply for an abandoned load deleted (or may have deleted)"
 						 << " the mark of epoch " << epoch << "; re-writing it player=" << abandonedPlayer;
 				SendConditionalMarkWrite(abandonedPlayer, epoch, MarkWriteSite::kInheritRewrite);
@@ -894,9 +925,9 @@ namespace
 		{
 			--state.outstandingReplies;
 		}
-		if (exit_release_mark::MayHaveDeletedCurrent(result))
+		if (epoch != 0 && exit_release_mark::MayHaveDeletedCurrent(result))
 		{
-			state.rewriteEpoch = epoch;
+			state.rewriteEpoch = epoch; // epoch == 0 的清理不知道删掉的是哪一代,不补写(只影响活性)
 		}
 		if (seq != state.attemptSeq || epoch != state.targetEpoch)
 		{
@@ -955,16 +986,19 @@ namespace
 		const std::string handoffKey = player_ownership::HandoffRedisKey(playerId);
 		const std::string epochText = std::to_string(epoch);
 		++state.outstandingReplies;
-		const int ret = redis->command(
-			[playerId, lifecycle, epoch, seq](hiredis::Hiredis *, redisReply *reply)
-			{
-				HandleInheritClearReply(
-					playerId, lifecycle, epoch, seq,
-					exit_release_mark::ClassifyInheritClearReply(ToReplyShape(reply), ReplyInteger(reply)),
-					ReplyFailureSuffix(reply));
-			},
-			"EVAL %s 2 %s %s %s", exit_release_mark::kLuaInheritClear, ownerEpochKey.c_str(), handoffKey.c_str(),
-			epochText.c_str());
+		const auto onReply = [playerId, lifecycle, epoch, seq](hiredis::Hiredis *, redisReply *reply)
+		{
+			HandleInheritClearReply(
+				playerId, lifecycle, epoch, seq,
+				exit_release_mark::ClassifyInheritClearReply(ToReplyShape(reply), ReplyInteger(reply)),
+				ReplyFailureSuffix(reply));
+		};
+		// epoch == 0:路由不带 owner_epoch(兼容窗口),无从核对,改删 ≤ 当前 owner_epoch 的标记(见 exit_release_mark.h)。
+		const int ret = epoch == 0
+							? redis->command(onReply, "EVAL %s 2 %s %s", exit_release_mark::kLuaInheritClearUnknownEpoch,
+											 ownerEpochKey.c_str(), handoffKey.c_str())
+							: redis->command(onReply, "EVAL %s 2 %s %s %s", exit_release_mark::kLuaInheritClear,
+											 ownerEpochKey.c_str(), handoffKey.c_str(), epochText.c_str());
 		if (ret != REDIS_OK)
 		{
 			// 命令没发出去,回调不会来。command() 期间没有改过待入场表,state 引用仍有效。
@@ -1198,8 +1232,17 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 		{
 			constexpr int64_t kReconnectLeaseMs = 30 * 1000;
 			const int64_t elapsedMs = TimeSystem::NowMillisecondsUTC() - logoutMs;
-			if (elapsedMs > kReconnectLeaseMs)
+			// 每次退出只打一条(意图组件上的 leaseOverrunWarned):Z1 修复后一次退出可能落地多次,
+			// 不去重的话帮会值班 LogQL 的计数会从"事件数"变成"落地数"(§12.6.9 承诺保留的是原文与口径)。
+			// 意图组件缺失(成对约定被破坏,下面 fail-closed)时无处去重,照旧打。
+			auto *warnIntent = tlsEcs.actorRegistry.try_get<PlayerExitIntentComp>(playerEntity);
+			const bool alreadyWarned = warnIntent != nullptr && warnIntent->leaseOverrunWarned;
+			if (elapsedMs > kReconnectLeaseMs && !alreadyWarned)
 			{
+				if (warnIntent != nullptr)
+				{
+					warnIntent->leaseOverrunWarned = true;
+				}
 				LOG_WARN << "HandlePlayerAsyncSaved: save outran reconnect lease for player "
 						 << playerId << " — elapsed_ms=" << elapsedMs
 						 << " lease_ms=" << kReconnectLeaseMs
@@ -1254,11 +1297,13 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 		{
 			// 3. 收敛判定(M1 "比对后才销毁"):落地的 payload 未必等于此刻的内存 —— 存盘在途期间的改动
 			//    (停机期间照收的客户端操作、战斗结算,Redis ERROR 时的新旧颠倒)今天靠僵尸的周期存盘补回,
-			//    改成"落地即销毁"会让它们永久丢失。所以只在"刚落地的就是当前内存,且该 key 没有未落地的
-			//    存盘"时才销毁。
+			//    改成"落地即销毁"会让它们永久丢失。所以只在"刚落地的就是当前内存"时才销毁。
 			PlayerAllData current;
 			MarshalPlayerForSave(playerEntity, playerId, current);
 			const bool payloadCurrent = player_exit::IsPersistedPayloadCurrent(message, current);
+			// 在落地回调里这个值恒为 false(redis_client.h HasUnsettledSave 的使用约束:有排队值时 OnSaved 直接发新值、
+			// 不回调),收敛实际只看 payloadCurrent。仍然传入,只为与回调之外的收尾口(HandleExitGameNode 快路径 /
+			// rekick)共用 DecideAfterPersist 这一把尺子;日志里的 unsettled_save= 在这里恒为 0。
 			const bool unsettledSave = HasUnsettledPlayerSave(playerId);
 			switch (player_exit::DecideAfterPersist(payloadCurrent, unsettledSave, exitIntent->resaveRounds,
 													player_exit::kMaxExitResaveRounds))
@@ -1286,7 +1331,8 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 					return; // 等这次存盘的落地回调
 				}
 				// 没写盘:快路径判"盘上已是同一份",或交接已发起不得再写。还有未落地的存盘就等它的落地回调;
-				// 否则盘上此刻就是当前内存,直接收尾。
+				// 否则盘上此刻就是当前内存,直接收尾。(本分支在落地回调里,按 redis_client.h 的约束下面的查询
+				// 恒为 false;留着是防御:将来若有回调之外的调用方走到这里,仍然 fail-closed。)
 				if (HasUnsettledPlayerSave(playerId))
 				{
 					LOG_INFO << "HandlePlayerAsyncSaved: exiting player " << playerId
@@ -1304,13 +1350,13 @@ void PlayerLifecycleSystem::HandlePlayerAsyncSaved(Guid playerId, PlayerAllData 
 				// 不销毁、不丢差额;IsSaveInFlight 保持为真。出口:之后的任何一次落地(例如周期存盘)只要收敛了
 				// 照样收尾;再来一次退出请求(停机 exitAllPlayers / s2s LeaveScene / 排空)会补发一次存盘
 				// (HandleExitGameNode 的"已在退出中"分支);都不收敛时停机由 Node 的有界 drain 看门狗裁决;
-				// 保留期间玩家若在别处玩过又被派回本节点,由 DiscardDeposedExitingEntity 丢弃重载、不复用。
+				// 保留期间玩家若在别处玩过又被派回本节点,由 DiscardDeposedEntityOnReentry 丢弃重载、不复用。
 				// 快照照常在函数末尾更新。
 				LOG_ERROR << "HandlePlayerAsyncSaved: exiting player " << playerId << " did not converge after "
 						  << static_cast<uint32_t>(exitIntent->resaveRounds)
 						  << " re-save round(s) (payload_current=" << payloadCurrent
 						  << " unsettled_save=" << unsettledSave
-						  << "); keeping the entity, the node drain watchdog decides (metric=exit_resave_exhausted)";
+						  << "); keeping the entity, the node drain watchdog decides (metric=exit_resave_capped)";
 				exit_persist_stats::Inc(exit_persist_stats::Get().resaveExhausted);
 				break;
 			}
@@ -2788,9 +2834,12 @@ bool PlayerLifecycleSystem::DiscardStaleHandoffEntity(entt::entity player, uint6
 	return true;
 }
 
-bool PlayerLifecycleSystem::DiscardDeposedExitingEntity(entt::entity player, uint64_t incomingOwnerEpoch)
+bool PlayerLifecycleSystem::DiscardDeposedEntityOnReentry(entt::entity player, uint64_t incomingOwnerEpoch)
 {
-	if (!tlsEcs.actorRegistry.valid(player) || !tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player))
+	// 不限定"退出中"(复审 ownership-minor):不带 UnregisterPlayer 的活僵尸同样会被复用成真身 —— 意图缺失分支
+	// 摘掉 UnregisterPlayer 后保留的实体(M9),或 gate 崩溃没代发 ExitGame 的实体。它们内存不再变化,周期存盘
+	// 一直走快路径不写盘,永远不会被 CAS 拒掉而自行销毁。交接已发起的实体由 DiscardStaleHandoffEntity 先处理。
+	if (!tlsEcs.actorRegistry.valid(player))
 	{
 		return false;
 	}
@@ -2799,10 +2848,10 @@ bool PlayerLifecycleSystem::DiscardDeposedExitingEntity(entt::entity player, uin
 	{
 		cachedEpoch = epochComp->epoch;
 	}
-	if (!player_exit::IsDeposedWhileExiting(cachedEpoch, incomingOwnerEpoch))
+	if (!player_exit::IsDeposedOnReentry(cachedEpoch, incomingOwnerEpoch))
 	{
-		// 恰好 +1(落回本节点这一次自己铸的)/ 不新 / 上游未填:内存仍是真身,照常复用,
-		// EnterScene 第 0 步取消退出(判据推导见 player_exit::IsDeposedWhileExiting)。
+		// 恰好 +1(落回本节点这一次自己铸的)/ 不新 / 上游未填或缓存为 0(未知):照常复用,
+		// 退出中的由 EnterScene 第 0 步取消退出(判据推导见 player_exit::IsDeposedOnReentry)。
 		return false;
 	}
 	const auto *guid = tlsEcs.actorRegistry.try_get<Guid>(player);
@@ -2811,15 +2860,17 @@ bool PlayerLifecycleSystem::DiscardDeposedExitingEntity(entt::entity player, uin
 		return false;
 	}
 	const Guid playerId = *guid;
-	// 这个退出曾被保留到租约之后(重存超限 / 存盘失败重试中),期间 location 被删、玩家在别的节点玩过
-	// 又被派回本节点。盘上是别处的最新状态,本实体是旧状态:复用它 = 旧内存成真身,下一次带新 epoch 的
-	// 存盘覆盖别处的进度(§12.6.1(d) 回档)。它自己带旧 epoch 的在途 / 之后的写本来就会被 CAS 拒。
+	const bool exiting = tlsEcs.actorRegistry.any_of<UnregisterPlayer>(player);
+	// 退出中:这个退出曾被保留到租约之后(重存超限 / 存盘失败重试中);活实体:本节点上留着没退出的僵尸。
+	// 两者都是期间 location 被删、玩家在别的节点玩过又被派回本节点。盘上是别处的最新状态,本实体是旧状态:
+	// 复用它 = 旧内存成真身,下一次带新 epoch 的存盘覆盖别处的进度(§12.6.1(d) 回档)。它自己带旧 epoch 的
+	// 在途 / 之后的写本来就会被 CAS 拒,丢弃不会丢掉任何本可以落盘的改动。
 	LOG_WARN << "HandleReentry: player " << playerId << " re-entered with owner_epoch " << incomingOwnerEpoch
-			 << " while a stale exiting entity (cached " << cachedEpoch
+			 << " while a stale " << (exiting ? "exiting" : "live") << " entity (cached " << cachedEpoch
 			 << ") was still retained; discarding it so the player is reloaded from storage"
 			 << " (metric=exit_deposed_on_reentry)";
 	exit_persist_stats::Inc(exit_persist_stats::Get().deposedOnReentry);
-	DestroyDeposedPlayer(playerId, "exit_superseded_by_reentry");
+	DestroyDeposedPlayer(playerId, exiting ? "exit_superseded_by_reentry" : "live_superseded_by_reentry");
 	return true;
 }
 
@@ -3357,12 +3408,9 @@ void PlayerLifecycleSystem::BeginInheritedMarkClear(Guid playerId)
 	{
 		state.lifecycle = ++tlsInheritClearLifecycleSeq;
 	}
-	if (ctx.ownerEpoch == 0)
-	{
-		// 旧版路由没有 owner_epoch:无从核对归属,不删任何标记,闸门放行(兼容窗口)。
-		LOG_DEBUG << "[ExitRelease][InheritClear] skipped for player " << playerId << ": route carries no owner_epoch";
-		return;
-	}
+	// ctx.ownerEpoch == 0(旧版 gate / scene_manager 的路由,兼容窗口)同样要清,只是换成不核对归属、删 ≤ 当前
+	// owner_epoch 的那一段(SendInheritClear 按 targetEpoch == 0 选脚本)。跳过的话上一任在本节点写下的 A1′
+	// 标记会在新持有期间一直有效,下一次跨节点落点凭它免存盘过门(复审 ownership-major)。
 	if (state.targetEpoch == ctx.ownerEpoch && state.phase != exit_release_mark::InheritClearPhase::kNone)
 	{
 		return; // 本生命周期已针对这个 epoch 发过(在途 / 等重发 / 已确认),重连覆盖上下文时不重复发
@@ -3374,6 +3422,11 @@ void PlayerLifecycleSystem::BeginInheritedMarkClear(Guid playerId)
 	state.attemptsSent = 0;
 	state.firstSentAt = {};
 	state.nextRetryAt = {};
+	if (ctx.ownerEpoch == 0)
+	{
+		LOG_INFO << "[ExitRelease][InheritClear] route for player " << playerId
+				 << " carries no owner_epoch; clearing marks up to the current owner_epoch instead";
+	}
 	SendInheritClear(playerId);
 }
 

@@ -256,22 +256,24 @@ namespace travel_handoff_stats
 // [TravelHandoff] 同款的 30s 定时器(第一次有玩家退出时挂上)打成一行 [ExitPersist]:key=value 平铺、
 // 进程启动以来的累计值,有变化才打,级别 INFO。
 //
-//   superseded             退出存盘落地时发现已被一个更新的会话取代(player_exit::IsSupersedingSession),
+//   exit_superseded        退出存盘落地时发现已被一个更新的会话取代(player_exit::IsSupersedingSession),
 //                          保留实体、摘退出标记。正常重连在 EnterScene 第 0 步就摘了标记,走不到这里,应接近 0
-//   intent_missing         带 UnregisterPlayer 却没有 PlayerExitIntentComp(成对约定被破坏)。fail-closed
+//   exit_intent_missing    带 UnregisterPlayer 却没有 PlayerExitIntentComp(成对约定被破坏)。fail-closed
 //                          保留实体、摘 UnregisterPlayer。应恒 0,非 0 = 有路径漏挂 / 漏摘
-//   resave                 落地内容与当前内存不一致(或还有未落地的存盘),更新快照后重存。
+//   exit_resave            落地内容与当前内存不一致,更新快照后重存。("还有未落地的存盘"只在落地回调之外的
+//                          收尾口成立;落地回调里 HasUnsettledSave 恒为 false,见 redis_client.h 的说明)
 //                          偶发正常(退出存盘在途时的战斗结算 / 客户端操作已被拦,但仍有别的改动来源)
-//   resave_exhausted       重存到上限仍不收敛,fail-closed 保留实体(交周期存盘 / 再次退出请求 / 停机看门狗)。
+//   exit_resave_capped     重存到上限仍不收敛,fail-closed 保留实体(交周期存盘 / 再次退出请求 / 停机看门狗)。
 //                          已知的逐帧改动源(客户端消息、战斗结算、移动积分)都已关掉,应接近 0;持续非 0 =
 //                          还有未识别的改动源在改退出中的实体
-//   exhausted_rekick       超限保留的实体又收到一次退出请求(停机 exitAllPlayers 等),补发了一次存盘
-//   fastpath_deferred      退出时 dirty-save 快路径判"盘上已是同一份",但该 key 还有在途 / 排队中的存盘,
+//   exit_exhausted_rekick  超限保留的实体又收到一次退出请求(停机 exitAllPlayers 等),补发了一次存盘
+//   exit_fastpath_deferred 退出时 dirty-save 快路径判"盘上已是同一份",但该 key 还有在途 / 排队中的存盘,
 //                          改走一次真实存盘、等落地回调收尾(M4)
-//   client_msg_rejected    退出中的实体收到 ExitGame 以外的客户端消息,被丢弃(已回 tip 的与只丢弃的都计)
-//   deposed_on_reentry     进场路由命中本节点上仍在退出中的旧实体,且 owner_epoch 显示中间有别的持有者
-//                          (player_exit::IsDeposedWhileExiting),不存盘销毁后从盘上重载。非 0 = 有退出
-//                          曾被保留到租约之后(看 resave_exhausted / save outran reconnect lease)
+//   exit_client_msg_rejected 退出中的实体收到 ExitGame 以外的客户端消息,被丢弃(已回 tip 的与只丢弃的都计)
+//   exit_deposed_on_reentry 进场路由命中本节点上的旧实体(退出中,或不在交接中的活实体),且 owner_epoch 显示
+//                          中间有别的持有者(player_exit::IsDeposedOnReentry),不存盘销毁后从盘上重载。非 0 = 有退出
+//                          曾被保留到租约之后(看 exit_resave_capped / save outran reconnect lease),或本节点上
+//                          留着没退出的僵尸实体(意图缺失分支保留的实体 / gate 崩溃没代发 ExitGame)
 namespace exit_persist_stats
 {
 	struct Counters
@@ -335,8 +337,12 @@ namespace exit_persist_stats
 //   inheritResults[]      A2′ 每一次 EVAL 的结果,key 见 exit_release_mark::kInheritClearResultNames
 //   inherit_failed        A2′ 失败(应答失败 + 派发失败),会有上限地重发
 //   inherit_refused       闸门拒建实体(核对不过 / 重发耗尽 / 没有针对本 epoch 的 A2′),已回 kEnterSceneFailed
-//   inherit_rewritten     载入被放弃时补写成功(M7);inherit_rewrite_skipped = owner_epoch 已变没写;
+//   inherit_rewritten     载入被放弃时补写成功(M7);inherit_rewrite_skipped = 条件写发现 owner_epoch 已变没写;
 //                         inherit_rewrite_failed = 补写失败(不重试)
+//   inherit_rewrite_dropped_node_holds  已放弃那一轮的晚到应答要补写,但本节点已建出该玩家实体(本节点就是
+//                         持有者),丢弃补写(exit_release_mark::DecideAbandonedRewrite)
+//   inherit_rewrite_handed_over         同上,但更新的一轮还在载入:补写责任移交给它(它建出实体即作废,
+//                         它也放弃时由它补写,计入 inherit_rewritten / skipped / failed)
 namespace exit_release_stats
 {
 	struct Counters
@@ -351,6 +357,8 @@ namespace exit_release_stats
 		std::atomic<uint64_t> inheritRewritten{0};
 		std::atomic<uint64_t> inheritRewriteSkipped{0};
 		std::atomic<uint64_t> inheritRewriteFailed{0};
+		std::atomic<uint64_t> inheritRewriteDroppedNodeHolds{0};
+		std::atomic<uint64_t> inheritRewriteHandedOver{0};
 	};
 
 	inline Counters& Get()
@@ -373,6 +381,8 @@ namespace exit_release_stats
 		uint64_t inheritRewritten{0};
 		uint64_t inheritRewriteSkipped{0};
 		uint64_t inheritRewriteFailed{0};
+		uint64_t inheritRewriteDroppedNodeHolds{0};
+		uint64_t inheritRewriteHandedOver{0};
 
 		bool operator==(const Snapshot&) const = default;
 	};
@@ -397,6 +407,8 @@ namespace exit_release_stats
 		snapshot.inheritRewritten = counters.inheritRewritten.load(std::memory_order_relaxed);
 		snapshot.inheritRewriteSkipped = counters.inheritRewriteSkipped.load(std::memory_order_relaxed);
 		snapshot.inheritRewriteFailed = counters.inheritRewriteFailed.load(std::memory_order_relaxed);
+		snapshot.inheritRewriteDroppedNodeHolds = counters.inheritRewriteDroppedNodeHolds.load(std::memory_order_relaxed);
+		snapshot.inheritRewriteHandedOver = counters.inheritRewriteHandedOver.load(std::memory_order_relaxed);
 		return snapshot;
 	}
 } // namespace exit_release_stats
@@ -547,11 +559,11 @@ public:
 	// (player_exit_intent.h 的成对约定)。两者都不在时 no-op。公开只为单测能直接验证成对摘除。
 	static void CancelExitOnReconnect(entt::entity player);
 
-	// 进场路由命中本节点上仍在退出中的旧实体、且 owner_epoch 显示中间有别的持有者
-	// (player_exit::IsDeposedWhileExiting)时,按"被废黜"不存盘销毁它并返回 true,调用方随后从盘上重载。
+	// 进场路由命中本节点上的旧实体(退出中的,或不在交接中的活实体)、且 owner_epoch 显示中间有别的持有者
+	// (player_exit::IsDeposedOnReentry)时,按"被废黜"不存盘销毁它并返回 true,调用方随后从盘上重载。
 	// 其余情况返回 false、什么都不做(照常复用实体)。只由 SceneHandler::PlayerEnterGameNode 调用,
-	// 与 DiscardStaleHandoffEntity 同一位置、同一套路。
-	static bool DiscardDeposedExitingEntity(entt::entity player, uint64_t incomingOwnerEpoch);
+	// 排在 DiscardStaleHandoffEntity 之后(交接已发起的实体由它先处理,任何更新的 epoch 都丢弃)。
+	static bool DiscardDeposedEntityOnReentry(entt::entity player, uint64_t incomingOwnerEpoch);
 
 	// ── A2′:新载入前"先核归属再删"继承来的 handoff 标记(§12.6.3 第三步,M2 / M7 / M10)──
 	// SceneHandler::PlayerEnterGameNode 的新载入分支在登记待入场上下文之后、AsyncLoad 之前调用。
@@ -559,7 +571,8 @@ public:
 	// (exit_release_mark::kLuaInheritClear):owner_epoch ≠ N 返回 -1、一个标记都不删;相等才删 epoch ≤ N 的标记。
 	// 结果决定 HandlePlayerAsyncLoaded 的闸门(exit_release_mark::DecideInheritGate):已确认 → 建实体;
 	// 在途 / 等重发 → 暂存载入结果;-1 / 重发耗尽 → 立即拒建实体、回 kEnterSceneFailed、擦掉预登记会话。
-	// ctx.ownerEpoch == 0(旧版路由)什么都不做,闸门放行。待入场条目不存在时 no-op。
+	// ctx.ownerEpoch == 0(旧版路由)改发 exit_release_mark::kLuaInheritClearUnknownEpoch:不核对归属、删 ≤ 当前
+	// owner_epoch 的标记,闸门同样等它确认(复审 ownership-major)。待入场条目不存在时 no-op。
 	static void BeginInheritedMarkClear(Guid playerId);
 
 	// 有上限地重发失败的 A2′,并对超过截止时刻的(失败或在途)拒建实体。由 RedisSystem 驱动:

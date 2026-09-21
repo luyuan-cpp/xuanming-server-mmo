@@ -23,11 +23,16 @@
 // 标记被消费后并不会被 scene_manager 删掉(只比对不删除,靠 TTL 回收)。新载入的节点若不清掉继承来的
 // 标记,本节点之后的一次跨节点换图会凭这份旧标记免存盘过门(回档)。删之前必须核对 owner_epoch 仍是
 // 本次路由给的值(M2):不等说明这次路由已过时,节点建出的实体"出生即被废黜",一个标记都不许删。
+// 路由没带 owner_epoch(新旧 gate / scene_manager 混跑的兼容窗口)时无从核对,但**照样清**:改用
+// kLuaInheritClearUnknownEpoch 删掉代际 ≤ 当前 owner_epoch 的标记(复审 ownership-major:跳过清理会让
+// 上一任的 A1′ 标记在新持有期间一直有效,下一次跨节点落点不存盘就被放行)。删标记只影响活性、不会造出
+// 第二个持有者,所以这一段不需要 -1 闸;闸门同样等它确认后才建实体。
 //
 // ── handoff 键的写入方 / 删除方(与 player_ownership_comp.h 的键契约一起看)──
 //   写:BeginTravelHandoff(交接)、DispatchEmergencyRelocate(疏散 / 排空改派)、A1′(本文件,干净退出)、
 //       A2′ 放弃补写(本文件,载入被放弃时把删掉的那一份写回)。
-//   删:WithdrawHandoffMark(按原文条件删)、ResolveTravelOutcome(DEL)、A2′(本文件,核对 owner_epoch 后删 ≤N)。
+//   删:WithdrawHandoffMark(按原文条件删)、ResolveTravelOutcome(DEL)、A2′(本文件,核对 owner_epoch 后删 ≤N;
+//       路由不带 owner_epoch 时删 ≤ 当前 owner_epoch)。
 namespace exit_release_mark
 {
 	// ── A1′:退出收尾时写不写 ─────────────────────────────────────────────────
@@ -221,6 +226,9 @@ namespace exit_release_mark
 	// 环境变量名。
 	//   kEnvExitReleaseMark      A1′ 总开关,默认开。回滚步骤:先把它置 0 滚动重启 → 等 ≥ kHandoffMarkTtlSec(300s)
 	//                            → 再回滚二进制(旧版没有 A2′,新版写下的标记 300s 内对旧版进程上的同代持有有效)。
+	//                            路由链(gate / scene_manager)新旧混跑、PlayerEnterGameNodeRequest.owner_epoch 为 0
+	//                            的窗口不需要关它:A2′ 对这种路由改走 kLuaInheritClearUnknownEpoch 照样清(见上)。
+	//                            该窗口的代价只剩活性:删掉当前代际后载入又被放弃时不补写(不知道 N,见 M7)。
 	//   kEnvDevUnsafeCrossNode   dev 旁路开关,默认关。必须与 scene_manager 的 AllowUnsafeCrossNodeHandoff 同步打开:
 	//                            旁路下 ReleasePlayer 之后的落点不铸造,A1′ 的 owner_epoch 条件拦不住,
 	//                            开着时"退出中又收到 ReleasePlayer"会粘性压制 A1′(M6)。
@@ -249,6 +257,26 @@ namespace exit_release_mark
 		"if e == n then return 2 end "
 		"return 1";
 
+	// 路由不带 owner_epoch(ctx.ownerEpoch == 0,兼容窗口)时的 A2′。KEYS 同上,没有 ARGV。
+	// 不核对归属(无从核对,永不返回 -1),以 Redis 里当前的 owner_epoch(缺键按 0)代替 N:
+	//   0 = 没有标记;1 = 删掉的是更旧代际;2 = 删掉的恰好是当前代际;3 = 标记代际比当前新,保留;4 = 写坏了,删掉。
+	// 返回码与 kLuaInheritClear 共用 ClassifyInheritClearReply。删标记只影响活性(之后一次跨节点落点回 18、
+	// 由交接或租约到期兜底),不会造出第二个持有者,所以删到"≤ 当前代际"是安全的上界。
+	// 代际比较同上:去掉前导零后先比长度、再按字典序比,不用 tonumber。
+	inline constexpr const char *kLuaInheritClearUnknownEpoch =
+		"local cur = redis.call('GET', KEYS[1]) "
+		"if cur == false then cur = '0' end "
+		"cur = (string.gsub(cur, '^0+(%d)', '%1')) "
+		"local mark = redis.call('GET', KEYS[2]) "
+		"if mark == false then return 0 end "
+		"local e = string.match(mark, '^(%d+):%d+$') "
+		"if e == nil then redis.call('DEL', KEYS[2]) return 4 end "
+		"e = (string.gsub(e, '^0+(%d)', '%1')) "
+		"if #e > #cur or (#e == #cur and e > cur) then return 3 end "
+		"redis.call('DEL', KEYS[2]) "
+		"if e == cur then return 2 end "
+		"return 1";
+
 	// A2′ 一次 EVAL 的结果。前五种是"核对通过"(闸门可放行),kEpochMismatch 是"核对不过"(拒建实体、不补发),
 	// 最后两种是失败(有上限重发)。
 	enum class InheritClearResult : uint8_t
@@ -270,7 +298,7 @@ namespace exit_release_mark
 	inline constexpr const char *kInheritClearResultNames[] = {
 		"inherit_absent",
 		"inherit_deleted_older",
-		"inherit_deleted_current",
+		"inherit_deleted_exact",  // 与 §12.6.3 配套清单 / 验证步骤 6 的名字一致
 		"inherit_kept_newer",
 		"inherit_deleted_malformed",
 		"inherit_epoch_mismatch",
@@ -335,10 +363,31 @@ namespace exit_release_mark
 		return result == InheritClearResult::kDeletedCurrent || result == InheritClearResult::kReplyLost;
 	}
 
+	// 已放弃那一轮载入的 A2′ 晚到应答删掉了(或可能删掉了)epoch == N 的标记时怎么补写(M7 + 复审 ownership-major)。
+	// 同节点重登不铸造,更新的一轮与已放弃的那一轮同为 epoch N,补写的 owner_epoch == N 条件拦不住;更新一轮的
+	// A2′ 若排在已放弃那一轮的 EVAL 之后,它看不到标记就放行建实体,此刻当场补写等于给活持有者发放行证(回档)。
+	enum class AbandonedRewriteDecision : uint8_t
+	{
+		kRewriteNow,		// 本节点既没有该玩家实体、也没有更新一轮的载入:当场条件补写
+		kHandToNewerLoad,	// 有更新一轮的待入场条目:把补写责任交给它(建出实体即作废,也放弃时由它补写)
+		kDropNodeHolds,		// 本节点已有该玩家实体 = 本节点就是持有者:丢弃补写(少一枚标记只会让一次重登回 18)
+
+		kCount
+	};
+
+	constexpr AbandonedRewriteDecision DecideAbandonedRewrite(bool nodeHoldsPlayer, bool newerLoadPending)
+	{
+		if (nodeHoldsPlayer)
+		{
+			return AbandonedRewriteDecision::kDropNodeHolds;
+		}
+		return newerLoadPending ? AbandonedRewriteDecision::kHandToNewerLoad : AbandonedRewriteDecision::kRewriteNow;
+	}
+
 	// 一次载入生命周期里 A2′ 的进度(只描述"针对 targetEpoch 的那一次",targetEpoch 变了就重新开始)。
 	enum class InheritClearPhase : uint8_t
 	{
-		kNone,		// 没发过(ctx.ownerEpoch == 0,或还没来得及发)
+		kNone,		// 没发过(还没来得及发)
 		kInFlight,	// EVAL 已发出、应答未到
 		kRetryWait, // 上一次失败,等下一次重发
 		kConfirmed, // 本 targetEpoch 的这一次返回了非 -1
@@ -356,17 +405,14 @@ namespace exit_release_mark
 		kCount
 	};
 
-	// ctxEpoch    这次待入场上下文带来的 owner_epoch(0 = 旧版路由,跳过 A2′、放行)
-	// targetEpoch A2′ 当前针对的 epoch
+	// ctxEpoch    这次待入场上下文带来的 owner_epoch(0 = 旧版路由,A2′ 改用 kLuaInheritClearUnknownEpoch)
+	// targetEpoch A2′ 当前针对的 epoch(0 = 针对"路由不带 owner_epoch"的那一种清理)
 	// phase       A2′ 针对 targetEpoch 的进度
 	// 只认"本 ctx.ownerEpoch 的那一次":targetEpoch ≠ ctxEpoch 时不能拿别的 epoch 的确认冒充(M2 / M10)。
+	// ctxEpoch == 0 不再直接放行(复审 ownership-major):同样要等针对 0 的那一次清理确认,没发过就拒。
 	// 核对不过(-1)与重发耗尽不在这里判:它们在应答 / 定时器里当场拒绝,待入场条目随之擦除,走不到闸门。
 	constexpr InheritGateDecision DecideInheritGate(uint64_t ctxEpoch, uint64_t targetEpoch, InheritClearPhase phase)
 	{
-		if (ctxEpoch == 0)
-		{
-			return InheritGateDecision::kProceed;
-		}
 		if (targetEpoch != ctxEpoch)
 		{
 			return InheritGateDecision::kRefuse; // 没有针对这个 epoch 发过 A2′:fail-closed
