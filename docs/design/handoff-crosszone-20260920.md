@@ -11,6 +11,7 @@
 - 服务端:上一会话留下的 4 个 P1 已全部处理,另外一轮只读审计 + 反驳式核实又确认了 8 条缺陷,其中 3 条已落码、5 条 + 若干 P3 写成已知限制(§12.3),全部在 `origin/main`。
 - 客户端(`mmorpg-client`):**已推上去**(2026-09-20 晚,远端 `main = 120e2d8`,比 09-14 的 `d2b165a` 多 26 个提交;机器 B 已同步)。客户端那半条链已只读核查:主链闭环,另有 1 条 P1 + 4 条 P2 + 3 条 P3 未改,见设计文档 §12.5.4 与本文 §2.2。
 - 传送**后半程**(第二条腿及之后)失败的出口与"回家入口会消失"两处,已按用户要求两端落码(设计文档 §12.5.5):新契约是"`EnterGame` 应答无错 = 已受理,之后进场没成服务端推 3023";客户端收到即秒级收口并显示原因,"当前所在区"改由 `GameClient.CurrentZoneId` 单一真源。**未编译、Unity 未跑**。
+- **2026-09-21 追加(均已落码、待验证,未编译、Unity 未跑)**:S3L1-1 的第二层出口(跨 zone 第一条腿已被放行却没拿到放行应答时,源 scene 在销毁实体之前发 tip 3027 + 踢线 34,客户端显示原因并回选服重登)与 scene_manager 回滚 / 铸造 Lua 的 go-redis 重放识别(设计文档 §12.5.6);CL-2(客户端不再用本机时钟拦截票据过期)、S7-1(第一条腿 `scene_config_id=0` 也预检默认大世界)、CL-7(`SceneErrorTip.cs.meta` 入库)已随两仓的自动保存提交进库。**新发现 Z1**:真写盘的正常断线退出不销毁实体(僵尸),它与 CL-5 / GO-5 的根因修复一起写成规格放在设计文档 §12.6,**待决、未落码**。**新的上线前置**:K8s 的 scene-manager ConfigMap 必须配 zrpc `Timeout`(§12.2)。
 - 最高优先级永远是**把它编出来**(§4),其余一切结论都悬在这上面。
 
 ## 1. 环境事实(不读会踩)
@@ -59,19 +60,22 @@
 - **审计新增并已落码**:未映射玩家跨 zone 传送会把访客存盘写进目标 zone 的库(GO-1);gate 对"同 scene_id、不同节点"的路由不转发进场(CPP-1)。
 - **§10.2 的 R7 声称已解决"访客掉线后从别区 gate 登录",实际从 login 走不到**(login 恒发 `ZoneId = 本 zone`),见 §12.3 GO-5。
 
-**新增上线前置**:对存量号开放跨 zone 传送之前,必须先跑完 `tools/merge_zone -backfill-home-zone`(§12.2)。
+**新增上线前置**:对存量号开放跨 zone 传送之前,必须先跑完 `tools/merge_zone -backfill-home-zone`(§12.2)。**2026-09-21 再加一条**:K8s 的 scene-manager ConfigMap 必须配 zrpc `Timeout` ≥ `KafkaWriteTimeoutSeconds` + 回滚余量(例如 8000),或用 `MethodTimeouts` 只放宽 `EnterScene`;现状落到 go-zero 默认 2000ms,任何超过 2s 的第一条腿都会让源端冻满 30s,gate-cmd 滞后时还会被误踢(§12.2)。`tools/scripts/k8s_deploy.ps1` 由有权限的会话去改,尚未改。
 
 ## 4. 服务端:剩余工作(按优先级)
 
 0. **实跑验证 §12.5.1 的 P0 修复**(编译之后第一件事)。它激活了约 150 行从未执行过的代码。两条最小验证:① 同 zone 起 2 个 scene 节点 + `AllowUnsafeCrossNodeHandoff=false` 跑一次跨节点换图,scene 日志应出现 `SceneManager.EnterScene deferred (handoff pending)` 并随后起交接重发(修复前这条日志**从不出现**);② 进一次副本 / 镜像场景,确认玩家真的被自动带进去(修复前是"请求发出、无任何后续")。
-0b. ~~**补上传送后半程的失败出口**~~ **已落码,待验证**(设计文档 §12.5.5,验证步骤在该节末尾;联调用例 a–d 缺一不可)。以下为落码前的原始描述,留作背景:(§12.5.2,4 条同根;客户端面是 §12.5.4 的 CL-1)。客户端核查更正了一点:玩家**不会永远卡住**,客户端等进场有 60s 硬上限,到期打回选服——但看不到失败原因,服务端刻意保留的登录会话 / 票据客户端也完全用不上,所以两端要一起定方案。最小做法是复用 login 已有的 `KickSessionOnGate` 让客户端明确回登录,或在 gate 侧加"已绑会话但 N 秒没收到 RoutePlayerEvent 就踢"的看门狗(顺带兜住 §12.3 的 CPP-2)。`go/login/**` 有别的会话在改,动手前先对范围。其中 S7-1 可单独低成本收敛:第一条腿在 `SceneConfId == 0`(回家的典型形态)时也做一次"目标 zone 有没有任何世界频道"的只读预检。
+0b. ~~**补上传送后半程的失败出口**~~ **已落码,待验证**(设计文档 §12.5.5,验证步骤在该节末尾;联调用例 a–d 缺一不可)。以下为落码前的原始描述,留作背景:(§12.5.2,4 条同根;客户端面是 §12.5.4 的 CL-1)。客户端核查更正了一点:玩家**不会永远卡住**,客户端等进场有 60s 硬上限,到期打回选服——但看不到失败原因,服务端刻意保留的登录会话 / 票据客户端也完全用不上,所以两端要一起定方案。最小做法是复用 login 已有的 `KickSessionOnGate` 让客户端明确回登录,或在 gate 侧加"已绑会话但 N 秒没收到 RoutePlayerEvent 就踢"的看门狗(顺带兜住 §12.3 的 CPP-2)。`go/login/**` 有别的会话在改,动手前先对范围。其中 S7-1 可单独低成本收敛:第一条腿在 `SceneConfId == 0`(回家的典型形态)时也做一次"目标 zone 有没有任何世界频道"的只读预检。*(2026-09-21:S7-1 已落码,见 0c。)*
+0c. **2026-09-21 已落码、待验证**(设计文档 §12.5.6,验证步骤在该节末尾;故障注入是 runbook 新场景 B3):S3L1-1 第二层出口(C++ 证据枚举 + 单条 `MGET owner_epoch location` + 五条运行期条件满足才发 tip 3027 + 踢线 34;客户端按踢线原因显示文案)、scene_manager 回滚 Lua 三态 + 铸造 Lua 重放识别 + `scene_manager_enter_scene_rollback_total` 与告警;CL-2 / S7-1 / CL-7 已随自动保存提交(服务端 `4624ddf9e`、客户端 `2ca620e`)进库。铸造重放识别有计数 `enter_scene_mint_replay_recognized_total` 与日志 `[MintReplay]`。已知缺口:同 zone 的回滚 `redis_error` / 铸造后路由失败仍是哑连接。
+0d. **待决(需用户拍板,未落码)**:新发现的 **Z1**(真写盘的正常断线退出不销毁实体,留下僵尸;有实跑日志)与 **CL-5 / GO-5 的根因修复**(断线释放标记 A1′ + 新载入前原子核归属再删 A2′),完整规格、两名复审的 15 条必须改项、替代方案与"为什么本轮不落码"都在设计文档 §12.6。建议顺序:先编译现有代码 → 复现 Z1 → 落 Z1 → 落 A′。**注意**:不能把 Z1 简单修成"落地即销毁"——今天的僵尸在几种竞态下正在补存差额(§12.6.1)。
+0e. **新的上线前置**:K8s scene-manager ConfigMap 配 zrpc `Timeout`(设计文档 §12.2),改 `tools/scripts/k8s_deploy.ps1`,需有权限的会话。
 1. **编译 + 单测 + 冒烟**(阻塞其余一切)。命令、通过标准、失败时保留什么:设计文档 §12.4,在 §9 / §11.4 基础上追加。main 上还叠着组队、战斗 G1–G9、帮会二期、聚宝斋、friend 等多批未编译代码,总顺序见 `turn-battle-gap-closure.md` §7;C++ 必须串行 `msbuild … /m:1 /nr:false`。
 2. **§12.3 的 P2 五条**,每条都写了"为什么没修 / 修法":
    - GO-2 回滚让 epoch 回退、毒化 db 守卫——要改 proto(`EnterSceneResponse` 回显 epoch)或调 C++ 发 DBTask 的时机;
    - GO-3 同 node_id 重注册后死节点接管永不触发——要在 `PlayerLocation` 里记进程实例标识(proto);
-   - GO-5 R7 / R8 从 login 不可达——要动 `go/login`(本轮有「帮会二期」会话在改那个目录,先对一下);
+   - GO-5 R7 / R8 从 login 不可达——要动 `go/login`(本轮有「帮会二期」会话在改那个目录,先对一下);*2026-09-21:其中"访客 / 快速重登卡在 18"的根因修复不在 login,而在 C++ scene(Z1 + 断线释放标记),见 0d / 设计文档 §12.6;GO-3 的 300s 内缓解同在 §12.6*;
    - CPP-2 gate 丢路由无补发、CPP-3 疏散改派 fire-and-forget——都需要"补发 / 待确认表 + 超限发 tip 并踢线"的设计。它们与冻结硬上限共用的前置 C-5 **已解除**(客户端收到 34 一定回选服),三者现在都可以落。
-   - 客户端侧:CL-3 / CL-4(回家入口消失)已随 §12.5.5 修复;**CL-2(本机时钟预判票据过期,时钟快 5 分钟的玩家每次传送必败)仍未修**,是客户端现在最该先修的一处,修法写在 §12.5.4。
+   - 客户端侧:CL-3 / CL-4(回家入口消失)已随 §12.5.5 修复;~~CL-2 仍未修~~ **CL-2 已落码待验证**(2026-09-21,`ValidateRedirectTarget` 只打日志不拦截,以 gate(B) 验票为准,§12.5.6);CL-7 已入库;CL-5(手动重进无冷却)的根因修复见 0d。
 3. **需要随一次全量 regen 做的**:真删 `proto/common/event/player_migration_event.proto`(整条 DEPRECATED、无调用方,仍占着 event id 27 / 41,清单写在该文件头注释里);`proto/common/database/player_cache.proto:7` 与 `bag_quest_mail_data.proto:7-8` 的注释仍把 `PlayerAllData` 说成"跨 zone 迁移携带的快照"。「Friend 服务移植后续工作」会话计划跑 regen,可与它同批。
 4. **本轮因归属没碰、只登记的过期文字**:`go/login/internal/logic/clientplayerlogin/entergamelogic.go:470`、`:575` 附近(仍写 14 `ErrUnsafeCrossNodeHandoff` 与"重定向前先解析场景");`docs/design/guild-phase2/04-asset-channel.md:29 / :300 / :335 / :352`(C6 的正确性论证依赖已删的"迁移包");`cpp/libs/services/scene/battle/system/player_battle.cpp:838`;`docs/notes/` 下 3 处。
 5. **P3**:GO-6(`death_at` 写失败仍 ZREM——注意"写失败就不 ZREM"是错的修法)、GO-4 残余(`LeaveScene` 改 compare-and-delete)、告警盲区(整 zone 节点全灭无从触发)、`Hiredis.cc` 在 `redisvAsyncCommand` 返回 ERR 时泄漏 `CommandCallback`、`robot/connected()` 是个被 git 跟踪的 0 字节空文件(疑似 shell 重定向误操作残留)。
